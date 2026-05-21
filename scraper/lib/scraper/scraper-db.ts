@@ -300,6 +300,69 @@ function initSchema(db: Database): void {
   `);
   db.run(`CREATE INDEX IF NOT EXISTS idx_product_outputs_permit ON product_outputs(permit_id)`);
 
+  db.run(`
+    CREATE TABLE IF NOT EXISTS legal_entities (
+      entity_id TEXT PRIMARY KEY,
+      entity_name TEXT NOT NULL,
+      business_registration_no TEXT,
+      address TEXT,
+      phone_number TEXT,
+      memo TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_legal_entities_name ON legal_entities(entity_name)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_legal_entities_brn ON legal_entities(business_registration_no)`);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS facility_operating_entities (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      facility_id TEXT NOT NULL,
+      entity_id TEXT NOT NULL,
+      relation_type TEXT NOT NULL DEFAULT 'operating_entity',
+      started_at TEXT,
+      ended_at TEXT,
+      is_primary INTEGER NOT NULL DEFAULT 1,
+      memo TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (facility_id) REFERENCES facilities(facility_id) ON DELETE CASCADE,
+      FOREIGN KEY (entity_id) REFERENCES legal_entities(entity_id) ON DELETE RESTRICT
+    )
+  `);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_facility_operating_entities_facility ON facility_operating_entities(facility_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_facility_operating_entities_entity ON facility_operating_entities(entity_id)`);
+  db.run(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_facility_operating_entities_primary
+      ON facility_operating_entities(facility_id, relation_type)
+      WHERE ended_at IS NULL AND is_primary = 1
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS contracts (
+      contract_id TEXT PRIMARY KEY,
+      facility_id TEXT,
+      counterparty_entity_id TEXT NOT NULL,
+      operating_relation_id INTEGER,
+      contract_title TEXT NOT NULL,
+      service_type TEXT,
+      contract_status TEXT NOT NULL DEFAULT 'draft',
+      contract_amount REAL,
+      started_at TEXT,
+      ended_at TEXT,
+      memo TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (facility_id) REFERENCES facilities(facility_id) ON DELETE SET NULL,
+      FOREIGN KEY (counterparty_entity_id) REFERENCES legal_entities(entity_id) ON DELETE RESTRICT,
+      FOREIGN KEY (operating_relation_id) REFERENCES facility_operating_entities(id) ON DELETE SET NULL
+    )
+  `);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_contracts_facility ON contracts(facility_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_contracts_counterparty ON contracts(counterparty_entity_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_contracts_status ON contracts(contract_status)`);
+
   // facility_annual_reports: 사업장당 가장 최근 연간(점검)보고서 1건의 스냅샷.
   //   permits 는 "허가" 단위이므로 연간보고서를 별도 permit 행으로 적재하면
   //   같은 사업장에 가짜 허가가 매년 누적되는 구조 문제가 있다.

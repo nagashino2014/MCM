@@ -1,4 +1,5 @@
 import type { FacilityGroupInfo } from "./facility-group";
+import type { FacilityOperatingEntityInfo } from "./legal-entity";
 import type {
   FacilityAlias,
   FacilityCompanySize,
@@ -108,6 +109,7 @@ export interface FacilityDetail {
   companySize: FacilityCompanySize | null;
   manualProducts: FacilityManualProduct[];
   groupInfo: FacilityGroupInfo | null;
+  operatingEntityInfo: FacilityOperatingEntityInfo | null;
   createdAt: string;
   updatedAt: string;
   permits: PermitDetail[];

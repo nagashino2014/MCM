@@ -143,6 +143,7 @@ export async function DELETE(_: NextRequest, ctx: RouteContext) {
       await db.run("DELETE FROM facility_service_categories WHERE facility_id = $1", [id]);
       await db.run("DELETE FROM facility_manual_products WHERE facility_id = $1", [id]);
       await db.run("DELETE FROM facility_group_memberships WHERE facility_id = $1", [id]);
+      await db.run("DELETE FROM facility_operating_entities WHERE facility_id = $1", [id]);
       await db.run("DELETE FROM facility_contact_main_numbers WHERE facility_id = $1", [id]);
       await db.run("DELETE FROM facility_contact_logs WHERE facility_id = $1", [id]);
       await db.run("DELETE FROM facility_contact_people WHERE facility_id = $1", [id]);

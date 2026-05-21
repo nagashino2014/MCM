@@ -26,6 +26,7 @@ import type {
   FacilityGroupMembershipRelationType,
   FacilityGroupTree,
 } from "@/lib/ieps/facility-group";
+import type { FacilityOperatingRelationType, LegalEntity } from "@/lib/ieps/legal-entity";
 
 const GROUP_COMPANY_ROLE_LABELS: Record<FacilityGroupCompanyRole, string> = {
   group_representative: "그룹 대표기업",
@@ -45,6 +46,13 @@ const EDITABLE_MEMBERSHIP_RELATION_TYPES: FacilityGroupMembershipRelationType[] 
   "owner_company",
   "other",
 ];
+
+const OPERATING_RELATION_LABELS: Record<FacilityOperatingRelationType, string> = {
+  operating_entity: "운영 주체",
+  owner_entity: "소유 주체",
+  manager_entity: "관리 주체",
+  other: "기타 관계",
+};
 
 interface Props {
   facilityId: string | null;
@@ -700,6 +708,34 @@ function GroupInfoCard({ detail }: { detail: FacilityDetail }) {
         </div>
       ) : (
         <div className="text-sm text-stone-400">그룹 정보 없음</div>
+      )}
+    </div>
+  );
+}
+
+function OperatingEntityCard({ detail }: { detail: FacilityDetail }) {
+  const info = detail.operatingEntityInfo;
+  return (
+    <div className="flex flex-col gap-1 bg-white/40 border border-white/50 rounded-xl p-3 sm:col-span-2">
+      <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wide flex items-center gap-1">
+        <Briefcase className="w-3 h-3" /> 운영 주체
+      </span>
+      {info ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-stone-700">
+          <div>
+            법인명: <b>{formatCompanyName(info.entity.entityName)}</b>
+          </div>
+          <div>
+            관계: <b>{OPERATING_RELATION_LABELS[info.relation.relationType]}</b>
+          </div>
+          <div>사업자번호: <b>{formatBusinessRegistrationNo(info.entity.businessRegistrationNo) ?? "—"}</b></div>
+          <div>전화번호: <b>{info.entity.phoneNumber ?? "—"}</b></div>
+          <div className="sm:col-span-2">
+            소재지: <b>{formatAddress(info.entity.address) ?? "—"}</b>
+          </div>
+        </div>
+      ) : (
+        <div className="text-sm text-stone-400">운영 주체 정보 없음</div>
       )}
     </div>
   );
@@ -1621,6 +1657,7 @@ function ReadView({
         </div>
       </div>
       <DetailField icon={Layers} label="허가 건수" value={String(detail.permits.length)} />
+      <OperatingEntityCard detail={detail} />
       <GroupInfoCard detail={detail} />
     </div>
   );
@@ -1684,6 +1721,7 @@ function EditView({
       : [{ productName: "", amount: "", unit: "", note: "" }]
   );
   const [groupOpen, setGroupOpen] = useState(false);
+  const [operatingOpen, setOperatingOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const hasIntegratedService = serviceCategories.includes("integrated");
@@ -1985,6 +2023,31 @@ function EditView({
         />
       )}
 
+      <div className="sm:col-span-2 bg-white/40 border border-white/50 rounded-xl p-3 flex items-center justify-between gap-3">
+        <div className="text-xs text-stone-600">
+          <b className="text-stone-800">운영 주체</b>
+          <div>
+            {detail.operatingEntityInfo
+              ? `${detail.operatingEntityInfo.entity.entityName} · ${OPERATING_RELATION_LABELS[detail.operatingEntityInfo.relation.relationType]}`
+              : "연결된 운영 주체 없음"}
+          </div>
+        </div>
+        <button type="button" onClick={() => setOperatingOpen(true)} className="glass-button rounded-xl px-3 py-2 text-xs font-bold text-stone-700">
+          운영 주체 관리
+        </button>
+      </div>
+
+      {operatingOpen && (
+        <OperatingEntityModal
+          facility={detail}
+          onClose={() => setOperatingOpen(false)}
+          onChanged={() => {
+            setOperatingOpen(false);
+            onSaved();
+          }}
+        />
+      )}
+
       {error && (
         <div className="sm:col-span-2 text-xs font-bold text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
           {error}
@@ -2011,6 +2074,234 @@ function EditView({
       </div>
     </div>
   );
+}
+
+function OperatingEntityModal({
+  facility,
+  onClose,
+  onChanged,
+}: {
+  facility: FacilityDetail;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const [entities, setEntities] = useState<LegalEntity[]>([]);
+  const [selectedEntityId, setSelectedEntityId] = useState(facility.operatingEntityInfo?.entity.entityId ?? "");
+  const [relationType, setRelationType] = useState<FacilityOperatingRelationType>(
+    facility.operatingEntityInfo?.relation.relationType ?? "operating_entity"
+  );
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [entityName, setEntityName] = useState("");
+  const [entityBrn, setEntityBrn] = useState("");
+  const [entityAddress, setEntityAddress] = useState("");
+  const [entityPhone, setEntityPhone] = useState("");
+  const [entityMemo, setEntityMemo] = useState("");
+  const [editName, setEditName] = useState("");
+  const [editBrn, setEditBrn] = useState("");
+  const [editAddress, setEditAddress] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editMemo, setEditMemo] = useState("");
+  const selectedEntity = entities.find((entity) => entity.entityId === selectedEntityId);
+
+  const reload = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/legal-entities", { cache: "no-store" });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const body = (await res.json()) as { items: LegalEntity[] };
+      setEntities(body.items ?? []);
+    } catch (err) {
+      alert("법인 마스터 조회 실패: " + (err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    reload();
+  }, [reload]);
+
+  useEffect(() => {
+    if (!selectedEntity) {
+      setEditName("");
+      setEditBrn("");
+      setEditAddress("");
+      setEditPhone("");
+      setEditMemo("");
+      return;
+    }
+    setEditName(selectedEntity.entityName);
+    setEditBrn(selectedEntity.businessRegistrationNo ?? "");
+    setEditAddress(selectedEntity.address ?? "");
+    setEditPhone(selectedEntity.phoneNumber ?? "");
+    setEditMemo(selectedEntity.memo ?? "");
+  }, [selectedEntity]);
+
+  const createAndLink = async () => {
+    if (!entityName.trim()) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/facilities/" + facility.facilityId + "/operating-entity", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          entityName,
+          businessRegistrationNo: entityBrn,
+          address: entityAddress,
+          phoneNumber: entityPhone,
+          memo: entityMemo,
+          relationType,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? "HTTP " + res.status);
+      }
+      onChanged();
+    } catch (err) {
+      alert("운영 주체 등록 실패: " + (err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const linkSelectedEntity = async () => {
+    if (!selectedEntityId) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/facilities/" + facility.facilityId + "/operating-entity", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ entityId: selectedEntityId, relationType }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? "HTTP " + res.status);
+      }
+      onChanged();
+    } catch (err) {
+      alert("운영 주체 연결 실패: " + (err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateSelectedEntity = async () => {
+    if (!selectedEntityId || !editName.trim()) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/legal-entities/" + selectedEntityId, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          entityName: editName,
+          businessRegistrationNo: editBrn,
+          address: editAddress,
+          phoneNumber: editPhone,
+          memo: editMemo,
+        }),
+      });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      await reload();
+    } catch (err) {
+      alert("법인 마스터 수정 실패: " + (err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const clearOperatingEntity = async () => {
+    if (!facility.operatingEntityInfo || !window.confirm("현재 사업장에 연결된 운영 주체 정보를 해제할까요? 법인 마스터는 삭제되지 않습니다.")) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/facilities/" + facility.facilityId + "/operating-entity", { method: "DELETE" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? "HTTP " + res.status);
+      }
+      onChanged();
+    } catch (err) {
+      alert("운영 주체 연결 해제 실패: " + (err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const modal = (
+    <div className="fixed inset-0 z-50 bg-stone-950/20 flex items-center justify-center p-4">
+      <div className="glass-panel rounded-3xl p-5 w-[min(980px,calc(100vw-32px))] max-h-[min(780px,calc(100vh-32px))] overflow-y-auto scrollbar-hide shadow-2xl">
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div>
+            <h3 className="text-xl font-bold text-stone-800">운영 주체 관리</h3>
+            <p className="text-xs text-stone-500 mt-1">
+              허가 대상 사업장과 실제 계약 상대 법인을 분리해 관리합니다.
+            </p>
+          </div>
+          <button type="button" onClick={onClose} className="glass-button rounded-xl px-3 py-2 text-xs font-bold text-stone-700">
+            닫기
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <section className="bg-white/45 border border-white/60 rounded-2xl p-3 flex flex-col gap-2">
+            <h4 className="text-sm font-bold text-stone-800">기존 법인 연결</h4>
+            {loading && <div className="text-sm text-stone-400 py-3">불러오는 중…</div>}
+            <select className="ui-select" value={selectedEntityId} onChange={(e) => setSelectedEntityId(e.target.value)}>
+              <option value="">법인 선택</option>
+              {entities.map((entity) => (
+                <option key={entity.entityId} value={entity.entityId}>
+                  {entity.entityName}
+                </option>
+              ))}
+            </select>
+            <select className="ui-select" value={relationType} onChange={(e) => setRelationType(e.target.value as FacilityOperatingRelationType)}>
+              <option value="operating_entity">운영 주체</option>
+              <option value="owner_entity">소유 주체</option>
+              <option value="manager_entity">관리 주체</option>
+              <option value="other">기타 관계</option>
+            </select>
+            <button type="button" onClick={linkSelectedEntity} disabled={saving || !selectedEntityId} className="rounded-xl px-3 py-2 text-xs font-bold text-white bg-primary disabled:opacity-50">
+              선택 법인 연결
+            </button>
+            {facility.operatingEntityInfo && (
+              <button type="button" onClick={clearOperatingEntity} disabled={saving} className="rounded-xl px-3 py-2 text-xs font-bold text-amber-800 bg-amber-50 border border-amber-200 disabled:opacity-50">
+                현재 운영 주체 연결 해제
+              </button>
+            )}
+          </section>
+
+          <section className="bg-white/45 border border-white/60 rounded-2xl p-3 flex flex-col gap-2">
+            <h4 className="text-sm font-bold text-stone-800">신규 법인 등록 후 연결</h4>
+            <input className="input-field" value={entityName} onChange={(e) => setEntityName(e.target.value)} placeholder="법인명 예: 한솔제지(주)" />
+            <input className="input-field" value={entityBrn} onChange={(e) => setEntityBrn(e.target.value)} placeholder="사업자번호" />
+            <input className="input-field" value={entityAddress} onChange={(e) => setEntityAddress(e.target.value)} placeholder="소재지" />
+            <input className="input-field" value={entityPhone} onChange={(e) => setEntityPhone(e.target.value)} placeholder="전화번호" />
+            <input className="input-field" value={entityMemo} onChange={(e) => setEntityMemo(e.target.value)} placeholder="메모" />
+            <button type="button" onClick={createAndLink} disabled={saving || !entityName.trim()} className="rounded-xl px-3 py-2 text-xs font-bold text-white bg-primary disabled:opacity-50">
+              신규 법인 등록 및 연결
+            </button>
+          </section>
+
+          <section className="lg:col-span-2 bg-white/45 border border-white/60 rounded-2xl p-3">
+            <h4 className="text-sm font-bold text-stone-800 mb-2">선택 법인 마스터 수정</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <input className="input-field" value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="법인명" disabled={!selectedEntity} />
+              <input className="input-field" value={editBrn} onChange={(e) => setEditBrn(e.target.value)} placeholder="사업자번호" disabled={!selectedEntity} />
+              <input className="input-field" value={editAddress} onChange={(e) => setEditAddress(e.target.value)} placeholder="소재지" disabled={!selectedEntity} />
+              <input className="input-field" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} placeholder="전화번호" disabled={!selectedEntity} />
+              <input className="input-field md:col-span-2" value={editMemo} onChange={(e) => setEditMemo(e.target.value)} placeholder="메모" disabled={!selectedEntity} />
+            </div>
+            <button type="button" onClick={updateSelectedEntity} disabled={saving || !selectedEntity || !editName.trim()} className="mt-2 rounded-xl px-4 py-2 text-xs font-bold text-white bg-primary disabled:opacity-50">
+              법인 정보 저장
+            </button>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+
+  return createPortal(modal, document.body);
 }
 
 function GroupManagementModal({

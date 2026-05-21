@@ -16,6 +16,7 @@ import {
   type IndustryDisplay,
 } from "./formatters";
 import type { FacilityGroupCompanyRole, FacilityGroupInfo, FacilityGroupMembershipRelationType } from "./facility-group";
+import type { FacilityOperatingEntityInfo, FacilityOperatingRelationType } from "./legal-entity";
 import {
   FACILITY_COMPANY_SIZE_LABELS,
   FACILITY_SERVICE_LABELS,
@@ -149,6 +150,65 @@ function normalizeMembershipRelationType(value: unknown): FacilityGroupMembershi
     return relationType;
   }
   return "site";
+}
+
+function normalizeOperatingRelationType(value: unknown): FacilityOperatingRelationType {
+  const relationType = String(value ?? "operating_entity");
+  if (relationType === "operating_entity" || relationType === "owner_entity" || relationType === "manager_entity" || relationType === "other") {
+    return relationType;
+  }
+  return "operating_entity";
+}
+
+async function loadOperatingEntityInfo(db: DbHandle, facilityId: string): Promise<FacilityOperatingEntityInfo | null> {
+  try {
+    const rows = rowsToObjects(
+      await db.exec(
+        `SELECT
+           r.id, r.facility_id, r.entity_id, r.relation_type, r.started_at, r.ended_at,
+           r.is_primary, r.memo AS relation_memo, r.created_at AS relation_created_at, r.updated_at AS relation_updated_at,
+           e.entity_name, e.business_registration_no, e.address, e.phone_number, e.memo AS entity_memo,
+           e.created_at AS entity_created_at, e.updated_at AS entity_updated_at
+         FROM facility_operating_entities r
+         JOIN legal_entities e ON e.entity_id = r.entity_id
+         WHERE r.facility_id = $1
+           AND r.ended_at IS NULL
+           AND r.is_primary = 1
+         ORDER BY r.updated_at DESC
+         LIMIT 1`,
+        [facilityId]
+      )
+    );
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      entity: {
+        entityId: String(row.entity_id ?? ""),
+        entityName: formatCompanyName(String(row.entity_name ?? "")) ?? "",
+        businessRegistrationNo:
+          row.business_registration_no != null ? formatBusinessRegistrationNo(String(row.business_registration_no)) : null,
+        address: row.address != null ? formatAddress(String(row.address)) : null,
+        phoneNumber: row.phone_number != null ? String(row.phone_number) : null,
+        memo: row.entity_memo != null ? String(row.entity_memo) : null,
+        createdAt: String(row.entity_created_at ?? ""),
+        updatedAt: String(row.entity_updated_at ?? ""),
+      },
+      relation: {
+        id: Number(row.id ?? 0),
+        facilityId: String(row.facility_id ?? ""),
+        entityId: String(row.entity_id ?? ""),
+        relationType: normalizeOperatingRelationType(row.relation_type),
+        startedAt: row.started_at != null ? String(row.started_at) : null,
+        endedAt: row.ended_at != null ? String(row.ended_at) : null,
+        isPrimary: Number(row.is_primary ?? 0) === 1,
+        memo: row.relation_memo != null ? String(row.relation_memo) : null,
+        createdAt: String(row.relation_created_at ?? ""),
+        updatedAt: String(row.relation_updated_at ?? ""),
+      },
+    };
+  } catch {
+    return null;
+  }
 }
 
 async function loadGroupInfo(db: DbHandle, facilityId: string): Promise<FacilityGroupInfo | null> {
@@ -966,6 +1026,7 @@ export interface FacilityDetail {
   companySize: FacilityCompanySize | null;
   manualProducts: FacilityManualProduct[];
   groupInfo: FacilityGroupInfo | null;
+  operatingEntityInfo: FacilityOperatingEntityInfo | null;
   createdAt: string;
   updatedAt: string;
   permits: PermitDetail[];
@@ -1194,6 +1255,7 @@ export async function getFacilityDetail(facilityId: string): Promise<FacilityDet
     companySize: normalizeFacilityCompanySize(f.company_size),
     manualProducts: await loadManualProducts(db, facilityId),
     groupInfo: await loadGroupInfo(db, facilityId),
+    operatingEntityInfo: await loadOperatingEntityInfo(db, facilityId),
     createdAt: String(f.created_at ?? ""),
     updatedAt: String(f.updated_at ?? ""),
     permits,

@@ -2117,7 +2117,7 @@ function GroupManagementModal({
   };
 
   const deleteSelectedCompany = async () => {
-    if (!selectedGroupId || !selectedCompanyId || !window.confirm("선택한 그룹 소속 법인을 삭제할까요?")) return;
+    if (!selectedGroupId || !selectedCompanyId || !window.confirm("선택한 법인 마스터를 그룹에서 삭제할까요? 이 법인을 참조하는 사업장 연결도 함께 삭제됩니다.")) return;
     setSaving(true);
     try {
       const res = await fetch(
@@ -2128,7 +2128,7 @@ function GroupManagementModal({
       setSelectedCompanyId("");
       await reload();
     } catch (err) {
-      alert("그룹 소속 법인 삭제 실패: " + (err as Error).message);
+      alert("법인 마스터 삭제 실패: " + (err as Error).message);
     } finally {
       setSaving(false);
     }
@@ -2206,6 +2206,26 @@ function GroupManagementModal({
       onChanged();
     } catch (err) {
       alert("그룹 연결 저장 실패: " + (err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const clearMembership = async () => {
+    if (!facility.groupInfo || !window.confirm("현재 사업장에 연결된 운영 법인 정보를 해제할까요? 그룹과 법인 마스터는 삭제되지 않습니다.")) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/facilities/" + facility.facilityId + "/group-membership", {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? "HTTP " + res.status);
+      }
+      setSelectedCompanyId("");
+      onChanged();
+    } catch (err) {
+      alert("사업장 운영 법인 연결 해제 실패: " + (err as Error).message);
     } finally {
       setSaving(false);
     }
@@ -2327,12 +2347,20 @@ function GroupManagementModal({
                   연결 저장
                 </button>
               </div>
+              {facility.groupInfo && (
+                <div className="mt-2 text-[11px] text-stone-500">
+                  현재 연결: {facility.groupInfo.group.groupName} · {facility.groupInfo.company.companyName} ({MEMBERSHIP_RELATION_LABELS[facility.groupInfo.membership.relationType]})
+                </div>
+              )}
               <div className="flex flex-wrap gap-2 mt-2">
+                <button type="button" onClick={clearMembership} disabled={saving || !facility.groupInfo} className="rounded-lg px-2 py-1 text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-200 disabled:opacity-50">
+                  현재 사업장 연결 해제
+                </button>
                 <button type="button" onClick={renameSelectedGroup} disabled={saving || !selectedGroupId} className="glass-button rounded-lg px-2 py-1 text-[11px] font-bold text-stone-700 disabled:opacity-50">
                   그룹명 수정
                 </button>
                 <button type="button" onClick={deleteSelectedCompany} disabled={saving || !selectedCompanyId} className="rounded-lg px-2 py-1 text-[11px] font-bold text-red-700 bg-red-50 border border-red-200 disabled:opacity-50">
-                  그룹 소속 법인 삭제
+                  법인 마스터 삭제
                 </button>
                 <button type="button" onClick={deleteSelectedGroup} disabled={saving || !selectedGroupId} className="rounded-lg px-2 py-1 text-[11px] font-bold text-red-700 bg-red-50 border border-red-200 disabled:opacity-50">
                   그룹 삭제

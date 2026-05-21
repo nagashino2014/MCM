@@ -1,0 +1,172 @@
+#!/usr/bin/env python3
+"""
+Apply a PostgreSQL SQL file from a private VPC bastion via AWS SSM send-command.
+
+The local machine does not need direct network access to Aurora. The script:
+1. Temporarily grants the bastion role read access to the app secret.
+2. Sends a shell script to the bastion through SSM.
+3. Installs psql if needed, reads DATABASE_URL from Secrets Manager, applies SQL.
+4. Removes the temporary inline IAM policy unless --keep-policy is specified.
+"""
+
+from __future__ import annotations
+
+import argparse
+import base64
+import json
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+
+def run_aws(args: list[str], *, profile: str, region: str) -> str:
+    cmd = ["aws", *args, "--profile", profile, "--region", region]
+    proc = subprocess.run(cmd, text=True, capture_output=True)
+    if proc.returncode != 0:
+        raise SystemExit(proc.stderr.strip() or proc.stdout.strip())
+    return proc.stdout
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Apply SQL to private Aurora through SSM bastion.")
+    parser.add_argument("--profile", default="mcm-kesi-staging")
+    parser.add_argument("--region", default="ap-northeast-2")
+    parser.add_argument("--instance-id", required=True)
+    parser.add_argument("--bastion-role", required=True)
+    parser.add_argument("--secret-id", required=True)
+    parser.add_argument("--sql", required=True)
+    parser.add_argument("--policy-name", default="McmTemporaryReadAppSecretForSqlMigration")
+    parser.add_argument("--keep-policy", action="store_true")
+    args = parser.parse_args()
+
+    sql_path = Path(args.sql)
+    sql_text = sql_path.read_text(encoding="utf-8")
+    sql_b64 = base64.b64encode(sql_text.encode("utf-8")).decode("ascii")
+
+    policy_doc = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Action": "secretsmanager:GetSecretValue",
+                "Resource": "*",
+            }
+        ],
+    }
+
+    print("Attaching temporary secret-read policy to bastion role...")
+    run_aws(
+        [
+            "iam",
+            "put-role-policy",
+            "--role-name",
+            args.bastion_role,
+            "--policy-name",
+            args.policy_name,
+            "--policy-document",
+            json.dumps(policy_doc),
+        ],
+        profile=args.profile,
+        region=args.region,
+    )
+    # IAM inline policy propagation is eventually consistent. Without a short
+    # wait the SSM command can start before the bastion role can read the secret.
+    time.sleep(15)
+
+    remote_script = f"""set -euo pipefail
+if ! command -v psql >/dev/null 2>&1; then
+  dnf -y install postgresql15 >/tmp/mcm-psql-install.log 2>&1 || dnf -y install postgresql >/tmp/mcm-psql-install.log 2>&1
+fi
+cat >/tmp/mcm-contract-management.sql.b64 <<'B64'
+{sql_b64}
+B64
+base64 -d /tmp/mcm-contract-management.sql.b64 >/tmp/mcm-contract-management.sql
+SECRET_JSON=$(aws secretsmanager get-secret-value --region {args.region} --secret-id {args.secret_id} --query SecretString --output text)
+export SECRET_JSON
+DB_URL=$(python3 - <<'PY'
+import json
+import os
+secret = json.loads(os.environ["SECRET_JSON"])
+url = secret["DATABASE_URL"].replace("sslmode=no-verify", "sslmode=require")
+print(url)
+PY
+)
+psql "$DB_URL" -v ON_ERROR_STOP=1 -f /tmp/mcm-contract-management.sql
+rm -f /tmp/mcm-contract-management.sql /tmp/mcm-contract-management.sql.b64
+"""
+
+    print("Sending SQL apply command through SSM...")
+    out = run_aws(
+        [
+            "ssm",
+            "send-command",
+            "--instance-ids",
+            args.instance_id,
+            "--document-name",
+            "AWS-RunShellScript",
+            "--parameters",
+            json.dumps({"commands": remote_script.splitlines()}),
+            "--query",
+            "Command.CommandId",
+            "--output",
+            "text",
+        ],
+        profile=args.profile,
+        region=args.region,
+    )
+    command_id = out.strip()
+    print(f"CommandId: {command_id}")
+
+    status = "Pending"
+    invocation: dict[str, str] = {}
+    while status in {"Pending", "InProgress", "Delayed"}:
+        time.sleep(5)
+        raw = run_aws(
+            [
+                "ssm",
+                "get-command-invocation",
+                "--command-id",
+                command_id,
+                "--instance-id",
+                args.instance_id,
+                "--output",
+                "json",
+            ],
+            profile=args.profile,
+            region=args.region,
+        )
+        invocation = json.loads(raw)
+        status = invocation["Status"]
+        print(f"Status: {status}")
+
+    stdout = invocation.get("StandardOutputContent", "")
+    stderr = invocation.get("StandardErrorContent", "")
+    if stdout:
+        print("--- stdout ---")
+        print(stdout)
+    if stderr:
+        print("--- stderr ---", file=sys.stderr)
+        print(stderr, file=sys.stderr)
+
+    if not args.keep_policy:
+        print("Removing temporary secret-read policy...")
+        run_aws(
+            [
+                "iam",
+                "delete-role-policy",
+                "--role-name",
+                args.bastion_role,
+                "--policy-name",
+                args.policy_name,
+            ],
+            profile=args.profile,
+            region=args.region,
+        )
+
+    if status != "Success":
+        raise SystemExit(f"SSM command failed with status: {status}")
+
+
+if __name__ == "__main__":
+    main()

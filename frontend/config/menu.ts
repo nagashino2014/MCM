@@ -32,7 +32,10 @@ export const MENU_ITEMS: MenuItem[] = [
     title: "계약",
     href: "/contracts",
     icon: FileSignature,
-    comingSoon: true,
+    submenu: [
+      { title: "계약 현황", href: "/contracts" },
+      { title: "Dashboard", href: "/contracts/dashboard" },
+    ],
     group: "main",
   },
   {

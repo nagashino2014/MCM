@@ -1,0 +1,16 @@
+**/node_modules
+**/.next
+**/dist
+**/.venv
+**/__pycache__
+**/.pytest_cache
+data/ieps/raw
+data/ieps/extracted
+data/ieps/logs
+data/ieps/db.sqlite
+frontend/public/uploads
+frontend/data/chromadb
+backend/data/jobs
+*.env
+.env
+.env.local

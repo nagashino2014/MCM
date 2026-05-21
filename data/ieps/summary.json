@@ -1,0 +1,75 @@
+{
+  "executedAt": "2026-05-12T09:51:56.916Z",
+  "board": {
+    "id": "ieps-integrated-permit",
+    "name": "IEPS 정보공개 - 통합허가"
+  },
+  "org": {
+    "id": "nier-ieps",
+    "name": "국립환경과학원 IEPS"
+  },
+  "options": {
+    "boardId": "ieps-integrated-permit",
+    "maxPages": 5,
+    "configPath": null,
+    "backendUrl": "http://127.0.0.1:8001",
+    "skipDownload": false,
+    "skipParse": false,
+    "dryRun": false,
+    "fromDate": null,
+    "showHelp": false,
+    "jsonProgress": false,
+    "playwrightEnabled": true,
+    "playwrightHeadless": true,
+    "playwrightTimeoutMs": 60000,
+    "downloadOnly": false,
+    "parseOnly": null,
+    "migrateAnnualReports": false,
+    "cleanupOrphanParsedFields": false,
+    "reconcileFacilities": false
+  },
+  "config": {
+    "extractionRange": {
+      "mode": "partial",
+      "startPage": 1,
+      "endPage": 15
+    },
+    "ruleCount": 9,
+    "activeRuleCount": 9
+  },
+  "scrape": {
+    "articles": 0,
+    "attachments": 0,
+    "firstPermitArticles": 0,
+    "pdfBundles": 0,
+    "errors": [
+      "페이지 1 로드 실패: fetch failed"
+    ]
+  },
+  "download": {
+    "totalAttachments": 0,
+    "httpSucceeded": 0,
+    "playwrightSucceeded": 0,
+    "failed": 0,
+    "playwrightEnabled": true
+  },
+  "ops": {
+    "jobId": "cli_1778579516077_v47c0d",
+    "attemptEvents": 0,
+    "alertsRaised": 0
+  },
+  "parse": {
+    "attempted": 0,
+    "succeeded": 0,
+    "failed": 0,
+    "jsonFiles": [],
+    "failures": []
+  },
+  "upsert": {
+    "facilitiesCreated": 0,
+    "facilitiesUpdated": 0,
+    "permitsCreated": 0,
+    "permitsUpdated": 0,
+    "needsReview": 0
+  }
+}

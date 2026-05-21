@@ -1,0 +1,827 @@
+[
+  {
+    "attachmentId": "file_ieps-integrated-permit_545ba1031aa22027_927d4e3f51e9",
+    "fileName": "012-02. 배출시설등 설치·운영허가(변경) 검토결과서((주)신승에너지).pdf",
+    "pdf_exists": true,
+    "failed": [
+      "decision_no"
+    ],
+    "page_count": 126,
+    "avg_chars_per_page": 381.4,
+    "text_quality": "ok",
+    "decision_no": {
+      "status": "ok",
+      "value": "제 0012-02호"
+    },
+    "permit_date": {
+      "status": "ok",
+      "value": "2020-10-15"
+    },
+    "business_registration_no": "ok"
+  },
+  {
+    "attachmentId": "file_ieps-integrated-permit_5a0dec68d6a7592b_2003f0f92018",
+    "fileName": "Dec_230630_배출시설등 설치운영허가 검토 결과서_에스케이실트론(주) 청주공장_비공개ver.pdf",
+    "pdf_exists": true,
+    "failed": [
+      "decision_no",
+      "business_registration_no",
+      "site_address",
+      "permit_date"
+    ],
+    "page_count": 122,
+    "avg_chars_per_page": 535.9,
+    "text_quality": "ok",
+    "decision_no": {
+      "status": "ok",
+      "value": "제0557-02호"
+    },
+    "permit_date": {
+      "status": "ok",
+      "value": "2023-06-12"
+    },
+    "business_registration_no": "ok"
+  },
+  {
+    "attachmentId": "file_ieps-integrated-permit_d750df49f9268e50_c8da61c15702",
+    "fileName": "0727_02_배출시설등_설치운영_허가_검토_결과서_㈜이수스페셜티케미컬_231113비공개반영.pdf",
+    "pdf_exists": true,
+    "failed": [
+      "decision_no",
+      "permit_date"
+    ],
+    "page_count": 301,
+    "avg_chars_per_page": 1532.0,
+    "text_quality": "ok",
+    "decision_no": {
+      "status": "ok",
+      "value": "제0727-02호"
+    },
+    "permit_date": {
+      "status": "no_match",
+      "has_부로": false,
+      "has_환경부": true,
+      "loose_date_count": 0,
+      "loose_date_samples": [],
+      "context_samples": [
+        "정⏎1. 허가결정⏎환경부 장관은 환경오염시설의 통합관리에 관한 법률 이하 환경오염시설법 이라 한다 제⏎조제 항에 따라 이수스페셜티케미컬이 년 월 일 제출한 신규 변경 허가 신청에 대하여⏎년 월 일 허가한다⏎허가대상 사업장의 현황은 다",
+        " 한다⏎년 월 일⏎환경부 장관⏎• 3 •⏎배출시설등 설치·운영허가 검토 결과서⏎㈜이수스페셜티케미컬⏎[참고자료1] 법인 분할(6.16)에 따른 배출시설등 현황⏎1. 배출시설등 분할 현황⏎(㈜이수화학 온산공장 ㈜이수스페셜티케미컬⏎No.⏎"
+      ]
+    },
+    "business_registration_no": "ok"
+  },
+  {
+    "attachmentId": "file_ieps-integrated-permit_ddf65a1e942e4890_b1078a2dc281",
+    "fileName": "0727_03_배출시설등_설치운영_허가_검토_결과서_㈜이수스페셜티케미컬_240419비공개심의반영.pdf",
+    "pdf_exists": true,
+    "failed": [
+      "decision_no",
+      "permit_date",
+      "permit_scale"
+    ],
+    "page_count": 323,
+    "avg_chars_per_page": 1534.2,
+    "text_quality": "ok",
+    "decision_no": {
+      "status": "ok",
+      "value": "제0727-03호"
+    },
+    "permit_date": {
+      "status": "no_match",
+      "has_부로": false,
+      "has_환경부": true,
+      "loose_date_count": 0,
+      "loose_date_samples": [],
+      "context_samples": [
+        "정⏎1. 허가결정⏎환경부 장관은 환경오염시설의 통합관리에 관한 법률 이하 환경오염시설법 이라 한다 제⏎조제 항에 따라 이수스페셜티케미컬이 년 월 일 제출한 신규 변경 허가 신청에 대하여⏎년 월 일 허가한다⏎허가대상 사업장의 현황은 다",
+        " 한다⏎년 월 일⏎환경부 장관⏎• 3 •⏎배출시설등 설치·운영허가 검토 결과서⏎㈜이수스페셜티케미컬⏎[참고자료1] 법인 분할(6.16)에 따른 배출시설등 현황⏎1. 배출시설등 분할 현황⏎(㈜이수화학 온산공장 ㈜이수스페셜티케미컬⏎No.⏎"
+      ]
+    },
+    "business_registration_no": "ok"
+  },
+  {
+    "attachmentId": "file_ieps-integrated-permit_2b0c83c2a3c13934_5d3298a9479c",
+    "fileName": "0683-05. 배출시설등 설치운영허가 검토 결과서_에이치디현대오일뱅크_231201_정보공개본_R2.pdf",
+    "pdf_exists": true,
+    "failed": [
+      "permit_date"
+    ],
+    "page_count": 719,
+    "avg_chars_per_page": 797.5,
+    "text_quality": "ok",
+    "decision_no": {
+      "status": "ok",
+      "value": "제0683-05호"
+    },
+    "permit_date": {
+      "status": "no_match",
+      "has_부로": true,
+      "has_환경부": true,
+      "loose_date_count": 1,
+      "loose_date_samples": [
+        "3106-12-02"
+      ],
+      "context_samples": [
+        " 생산된 제품을 외부로 출하하는 공정(육상출하, 해상출하)⏎유틸리티⏎공정⏎Raw Water를 공급받아 자체 정수 처리장을 거쳐 공정에 필요한 용수 및 냉각수를 생산, 공급⏎PU-04 용수 및 냉각수 공급공정⏎하는 공정⏎자체 보일러(총",
+        "2023. 11.⏎환경부⏎⏎1. 허가결정 ···························································································· 1⏎2. 허가대상 ····",
+        "정⏎1. 허가결정⏎환경부 장관은 환경오염시설의 통합관리에 관한 법률(이하 ‘환경오염시설법’이라한다.) 제6조⏎제1항에 따라 에이치디현대오일뱅크가 2023년 XX월 XX일 제출한(신규, 변경) 허가 신청에 대하여 2023년⏎XX월 XX",
+        "년 XX월 XX일⏎환경부 장관⏎- 3 -⏎배출시설등 설치·운영허가 검토 결과서⏎에이치디현대오일뱅크⏎- 4 -⏎2. 허가대상⏎⏎2. 허가대상⏎2. 허가대상⏎2.1 공정 대분류 및 위치도⏎- 7 -⏎배출시설등 설치·운영허가 검토 결과서⏎"
+      ]
+    },
+    "business_registration_no": "ok"
+  },
+  {
+    "attachmentId": "file_ieps-integrated-permit_257ab8ef15fc31c4_c40fb710432c",
+    "fileName": "(제0629-02호) 배출시설등 설치·운영허가 검토결과서[한화에어로스페이스(주) 여수사업장]_변경허가(23.08)_비공개수정_250206(최종).pdf",
+    "pdf_exists": true,
+    "failed": [
+      "decision_no",
+      "permit_date"
+    ],
+    "page_count": 527,
+    "avg_chars_per_page": 544.7,
+    "text_quality": "ok",
+    "decision_no": {
+      "status": "ok",
+      "value": "제 0629-02호"
+    },
+    "permit_date": {
+      "status": "no_match",
+      "has_부로": false,
+      "has_환경부": true,
+      "loose_date_count": 2,
+      "loose_date_samples": [
+        "2022-11-25",
+        "2023-08-16"
+      ],
+      "context_samples": [
+        ". 최초 통합허가 환경부 장관⏎2023.08.16. 1차 변경허가 <5.1.3 참조> 정래헌 주무관⏎<처분사항>⏎확 인⏎일 자 내 용⏎(서명 또는 인)⏎<참고사항>⏎확 인⏎일 자 내 용⏎(서명 또는 인)⏎배출시설등 설치·운영 허가 명",
+        "정⏎1. 허가결정⏎환경부 장관은 환경오염시설의 통합관리에 관한 법률 이하 환경오염시설법이라한다 제 조⏎제 항에 따라 한화에에로스페이스 여수사업장 신규 변경허가 신청에 대하여 년 월 일⏎허가한다⏎허가대상 사업장의 현황은 다음과 같다⏎상",
+        "가 차 년 월 일⏎환경부 장관⏎• 3 •⏎⏎2. 허가대상⏎• 5 •⏎⏎2. 허가대상⏎2. 허가대상⏎2.1 통합허가 공정의 대분류⏎• 7 •⏎배출시설등 설치·운영허가 검토 결과서⏎(주)한화방산 여수사업장⏎2.2 통합허가 대분류 공정 설"
+      ]
+    },
+    "business_registration_no": "ok"
+  },
+  {
+    "attachmentId": "file_ieps-integrated-permit_b69e3eb37a79158f_1794ec9887a4",
+    "fileName": "(제0672-02호) 배출시설등 설치·운영허가 검토결과서[미원상사(주) 전주2공장]_변경허가 230914_비공개.pdf",
+    "pdf_exists": true,
+    "failed": [
+      "decision_no",
+      "permit_date"
+    ],
+    "page_count": 471,
+    "avg_chars_per_page": 559.0,
+    "text_quality": "ok",
+    "decision_no": {
+      "status": "ok",
+      "value": "제 0672-02호"
+    },
+    "permit_date": {
+      "status": "no_match",
+      "has_부로": false,
+      "has_환경부": true,
+      "loose_date_count": 0,
+      "loose_date_samples": [],
+      "context_samples": [
+        "⏎⏎1. 허가결정⏎환경부 장관은 환경오염시설의 통합관리에 관한 법률 이하 환경오염시설법이라한다 제 조⏎제 항에 따라 미원상사주 전주 공장 신규 변경허가 신청에 대하여 허가한다⏎허가대상 사업장의 현황은 다음과 같다⏎상호(사업장) 미원상",
+        "가 차 년 월 일⏎환경부 장관⏎배출시설등 설치·운영허가 검토 결과서⏎미원상사(주) 전주2공장⏎• 4 •⏎2. 허가대상⏎• 5 •⏎⏎2. 허가대상⏎2. 허가대상⏎2.1 통합허가 공정의 대분류⏎• 7 •⏎배출시설등 설치·운영허가 검토 결"
+      ]
+    },
+    "business_registration_no": "ok"
+  },
+  {
+    "attachmentId": "file_ieps-integrated-permit_1c3c2dd448cf1248_b8589e0e00f9",
+    "fileName": "(24.03.19) (장안) 배출시설등 설치·운영허가 검토결과서 (한국지역난방공사 수원지사 장안열원)_ 시설정보 비공개.pdf",
+    "pdf_exists": true,
+    "failed": [
+      "decision_no",
+      "company_name",
+      "business_registration_no",
+      "site_address",
+      "industry_code_name",
+      "permit_date",
+      "permit_scale"
+    ],
+    "page_count": 104,
+    "avg_chars_per_page": 194.0,
+    "text_quality": "low_text",
+    "decision_no": {
+      "status": "ok",
+      "value": "제 0044-02호"
+    },
+    "permit_date": {
+      "status": "no_match",
+      "has_부로": false,
+      "has_환경부": true,
+      "loose_date_count": 0,
+      "loose_date_samples": [],
+      "context_samples": [
+        "정⏎1. 허가결정⏎환경부장관은 환경오염시설의 통합관리에 관한 법률이하 통합법이라 한다 제 조제 항에 따라⏎한국지역난방공사 수원지사 장안열원이 년 월 일 제출한 신규 변경 허가 신청에 대하여⏎년 월 일 설치 운영을 허가한다⏎허가대상 사",
+        "⏎한다⏎년 월 일⏎환경부장관⏎• 3 •⏎⏎2. 허가대상⏎• 5 •⏎⏎2. 허가대상⏎2. 허가대상⏎• 7 •⏎배출시설등 설치·운영허가 검토 결과서⏎한국지역난방공사 수원지사 장안열원⏎• 8 •⏎2. 허가대상⏎사업자가 통합법 제 조제 항에"
+      ]
+    },
+    "business_registration_no": "no_match"
+  },
+  {
+    "attachmentId": "file_ieps-integrated-permit_08ea619e9c26bc79_ed93ce715fa2",
+    "fileName": "0629-03 배출시설등 설치·운영허가 검토결과서[한화에어로스페이스(주) 여수사업장]_변경허가(2차)(24.06)_비공개수정_250206(최종).pdf",
+    "pdf_exists": true,
+    "failed": [
+      "decision_no",
+      "permit_date",
+      "permit_scale"
+    ],
+    "page_count": 555,
+    "avg_chars_per_page": 480.4,
+    "text_quality": "ok",
+    "decision_no": {
+      "status": "ok",
+      "value": "제 0629-03호"
+    },
+    "permit_date": {
+      "status": "no_match",
+      "has_부로": false,
+      "has_환경부": true,
+      "loose_date_count": 0,
+      "loose_date_samples": [],
+      "context_samples": [
+        "정⏎1. 허가결정⏎환경부 장관은 환경오염시설의 통합관리에 관한 법률 이하 환경오염시설법이라한다 제 조⏎제 항에 따라 한화에어로스페이스 여수사업장 신규 변경허가 신청에 대하여 년 월 일⏎허가한다⏎허가대상 사업장의 현황은 다음과 같다⏎상",
+        " 한다⏎년 월 일⏎환경부 장관⏎• 3 •⏎⏎2. 허가대상⏎• 5 •⏎⏎2. 허가대상⏎2. 허가대상⏎2.1 통합허가 공정의 대분류⏎• 7 •⏎배출시설등 설치·운영허가 검토 결과서⏎한화에어로스페이스(주) 여수사업장⏎2.2 통합허가 대분류"
+      ]
+    },
+    "business_registration_no": "ok"
+  },
+  {
+    "attachmentId": "file_ieps-integrated-permit_a5afd58fe3a4bd9c_dbbedabb8614",
+    "fileName": "0708-02. 배출시설 등 설치운영허가 검토 결과서_오씨아이 주식회사 광양공장(비공개).pdf",
+    "pdf_exists": true,
+    "failed": [
+      "decision_no",
+      "business_registration_no",
+      "site_address",
+      "industry_code_name",
+      "permit_date",
+      "permit_scale"
+    ],
+    "page_count": 104,
+    "avg_chars_per_page": 452.8,
+    "text_quality": "ok",
+    "decision_no": {
+      "status": "ok",
+      "value": "제0708-02호"
+    },
+    "permit_date": {
+      "status": "no_match",
+      "has_부로": false,
+      "has_환경부": false,
+      "loose_date_count": 0,
+      "loose_date_samples": [],
+      "context_samples": []
+    },
+    "business_registration_no": "no_match"
+  },
+  {
+    "attachmentId": "file_ieps-integrated-permit_f09645587d1b949e_28a4af9a64cd",
+    "fileName": "343-01. 배출시설등 설치·운영허가 검토결과서((주)동남 서산공장).pdf",
+    "pdf_exists": true,
+    "failed": [
+      "business_registration_no"
+    ],
+    "page_count": 130,
+    "avg_chars_per_page": 337.6,
+    "text_quality": "ok",
+    "decision_no": {
+      "status": "ok",
+      "value": "제 0343-01호"
+    },
+    "permit_date": {
+      "status": "ok",
+      "value": "2021-05-28"
+    },
+    "business_registration_no": "no_match"
+  },
+  {
+    "attachmentId": "file_ieps-integrated-permit_c19ffbe9629b6094_b2de3fc21091",
+    "fileName": "403-01. 배출시설등 설치·운영허가 검토결과서((주)청우스틸).pdf",
+    "pdf_exists": true,
+    "failed": [
+      "business_registration_no"
+    ],
+    "page_count": 68,
+    "avg_chars_per_page": 274.8,
+    "text_quality": "ok",
+    "decision_no": {
+      "status": "ok",
+      "value": "제 0403-01호"
+    },
+    "permit_date": {
+      "status": "ok",
+      "value": "2021-09-13"
+    },
+    "business_registration_no": "no_match"
+  },
+  {
+    "attachmentId": "file_ieps-integrated-permit_230f59bdb3e03821_ef5beddaba1a",
+    "fileName": "321-01. 배출시설등 설치·운영허가 검토결과서(엠에코에너지(주)).pdf",
+    "pdf_exists": true,
+    "failed": [
+      "decision_no"
+    ],
+    "page_count": 137,
+    "avg_chars_per_page": 593.5,
+    "text_quality": "ok",
+    "decision_no": {
+      "status": "keyword_not_found",
+      "keyword_hits": 0,
+      "loose_regex_hits": []
+    },
+    "permit_date": {
+      "status": "ok",
+      "value": "2021-04-13"
+    },
+    "business_registration_no": "ok"
+  },
+  {
+    "attachmentId": "file_ieps-integrated-permit_198c1e67c31c5dcf_43811178d890",
+    "fileName": "[미원화학(주) 울산공장] 배출시설등 설치·운영허가 검토결과서_정보공개용 자료.pdf",
+    "pdf_exists": true,
+    "failed": [
+      "industry_code_name"
+    ],
+    "page_count": 290,
+    "avg_chars_per_page": 446.0,
+    "text_quality": "ok",
+    "decision_no": {
+      "status": "ok",
+      "value": "제 0678-01호"
+    },
+    "permit_date": {
+      "status": "ok",
+      "value": "2022-12-23"
+    },
+    "business_registration_no": "ok"
+  },
+  {
+    "attachmentId": "file_ieps-integrated-permit_3b3e613fa5f239b9_4d6f7897275f",
+    "fileName": "1238-01. 배출시설등 설치운영허가 검토 결과서_스템코(주)_241231_관인_정보비공개.pdf",
+    "pdf_exists": true,
+    "failed": [
+      "decision_no",
+      "permit_date"
+    ],
+    "page_count": 231,
+    "avg_chars_per_page": 887.9,
+    "text_quality": "ok",
+    "decision_no": {
+      "status": "ok",
+      "value": "제1238-01호"
+    },
+    "permit_date": {
+      "status": "no_match",
+      "has_부로": false,
+      "has_환경부": true,
+      "loose_date_count": 0,
+      "loose_date_samples": [],
+      "context_samples": [
+        "정⏎1. 허가결정⏎환경부 장관은 환경오염시설의 통합관리에 관한 법률 이하 환경오염시설법이라 한다 제 조제⏎항에 따라 스템코 주 가 년 월 일 제출한 신규 변경 허가 신청에 대하여 년 월 일⏎허가한다⏎허가대상 사업장의 현황은 다음과 같",
+        " 한다⏎년 월 일⏎환경부장관⏎• 3 •⏎배출시설등 설치·운영허가 검토 결과서⏎스템코(주)⏎• 4 •⏎2. 허가대상⏎• 5 •⏎배출시설등 설치·운영허가 검토 결과서⏎스템코(주)⏎• 6 •⏎2. 허가대상⏎2. 허가대상⏎2.1 통합허가 공"
+      ]
+    },
+    "business_registration_no": "ok"
+  },
+  {
+    "attachmentId": "file_ieps-integrated-permit_37cfd85b65e18a82_ddf675807840",
+    "fileName": "0630-01. 배출시설등 설치운영허가 검토 결과서_(주)팜한농 울산공장_230213.pdf",
+    "pdf_exists": true,
+    "failed": [
+      "decision_no"
+    ],
+    "page_count": 154,
+    "avg_chars_per_page": 1496.8,
+    "text_quality": "ok",
+    "decision_no": {
+      "status": "ok",
+      "value": "제 0630-01호"
+    },
+    "permit_date": {
+      "status": "ok",
+      "value": "2022-11-25"
+    },
+    "business_registration_no": "ok"
+  },
+  {
+    "attachmentId": "file_ieps-integrated-permit_113b9d37b34ee005_432e1aeb0bac",
+    "fileName": "(제0672-01호) 배출시설등 설치·운영허가 검토결과서[미원상사(주) 전주2공장]_230202_비공개.pdf",
+    "pdf_exists": true,
+    "failed": [
+      "decision_no",
+      "permit_date"
+    ],
+    "page_count": 437,
+    "avg_chars_per_page": 531.5,
+    "text_quality": "ok",
+    "decision_no": {
+      "status": "ok",
+      "value": "제 0672-01호"
+    },
+    "permit_date": {
+      "status": "no_match",
+      "has_부로": false,
+      "has_환경부": true,
+      "loose_date_count": 0,
+      "loose_date_samples": [],
+      "context_samples": [
+        "⏎⏎1. 허가결정⏎환경부 장관은 환경오염시설의 통합관리에 관한 법률 이하 환경오염시설법이라한다 제 조⏎제 항에 따라 미원상사주 전주 공장이 년 월 일 제출한 신규 변경허가 신청에 대하여⏎년 월 일 허가한다⏎허가대상 사업장의 현황은 다",
+        " 한다⏎년 월 일⏎환경부 장관⏎배출시설등 설치·운영허가 검토 결과서⏎미원상사(주) 전주2공장⏎• 4 •⏎2. 허가대상⏎• 5 •⏎⏎2. 허가대상⏎2. 허가대상⏎2.1 통합허가 공정의 대분류⏎• 7 •⏎배출시설등 설치·운영허가 검토 결"
+      ]
+    },
+    "business_registration_no": "ok"
+  },
+  {
+    "attachmentId": "file_ieps-integrated-permit_3390cf2018f8aac6_b6b9dd2110fe",
+    "fileName": "0700-01. 배출시설등 설치운영허가 검토결과서(고려아연(주) 온산제련소)_비공개 Ⅱ.pdf",
+    "pdf_exists": true,
+    "failed": [
+      "decision_no",
+      "company_name",
+      "business_registration_no",
+      "site_address",
+      "industry_code_name",
+      "permit_date",
+      "permit_scale"
+    ],
+    "page_count": 774,
+    "avg_chars_per_page": 813.8,
+    "text_quality": "ok",
+    "decision_no": {
+      "status": "ok",
+      "value": "제0700-01호"
+    },
+    "permit_date": {
+      "status": "no_match",
+      "has_부로": false,
+      "has_환경부": false,
+      "loose_date_count": 0,
+      "loose_date_samples": [],
+      "context_samples": []
+    },
+    "business_registration_no": "no_match"
+  },
+  {
+    "attachmentId": "file_ieps-integrated-permit_96fffcce28f29f00_5a8c5d1d9933",
+    "fileName": "553-01. 배출시설등 설치·운영허가 검토결과서_SK머티리얼즈그룹포틴(비공개).pdf",
+    "pdf_exists": true,
+    "failed": [
+      "decision_no"
+    ],
+    "page_count": 105,
+    "avg_chars_per_page": 536.9,
+    "text_quality": "ok",
+    "decision_no": {
+      "status": "ok",
+      "value": "제 0553-01호"
+    },
+    "permit_date": {
+      "status": "ok",
+      "value": "2022-05-26"
+    },
+    "business_registration_no": "ok"
+  },
+  {
+    "attachmentId": "file_ieps-integrated-permit_6acb1c214e1ccbb6_7680914dad3d",
+    "fileName": "0643-01 배출시설등 설치·운영허가 검토결과서_솔베이실리카코리아(주)(비공개).pdf",
+    "pdf_exists": true,
+    "failed": [
+      "decision_no"
+    ],
+    "page_count": 118,
+    "avg_chars_per_page": 509.5,
+    "text_quality": "ok",
+    "decision_no": {
+      "status": "ok",
+      "value": "제0643-01호"
+    },
+    "permit_date": {
+      "status": "ok",
+      "value": "2022-12-08"
+    },
+    "business_registration_no": "ok"
+  },
+  {
+    "attachmentId": "file_ieps-integrated-permit_374da77c93254959_b4937b1f5162",
+    "fileName": "0687-01. 배출시설등 설치·운영허가 검토결과서_(주)선구(비공개).pdf",
+    "pdf_exists": true,
+    "failed": [
+      "decision_no",
+      "permit_date"
+    ],
+    "page_count": 150,
+    "avg_chars_per_page": 442.4,
+    "text_quality": "ok",
+    "decision_no": {
+      "status": "ok",
+      "value": "제0687-01호"
+    },
+    "permit_date": {
+      "status": "no_match",
+      "has_부로": false,
+      "has_환경부": true,
+      "loose_date_count": 0,
+      "loose_date_samples": [],
+      "context_samples": [
+        "운영 허가 명세서⏎환경부⏎배출시설등 설치·운영허가 검토 결과서⏎㈜선구⏎허가결정⏎허가대상⏎통합허가 공정의 대분류⏎통합허가 대분류 공정 설명⏎통합허가 대상시설 등⏎명세자료 대상시설⏎명세자료 폐수 배출시설 및 방지시설⏎명세자료 배출 방지시",
+        "구⏎1. 허가결정⏎환경부 장관은 환경오염시설의 통합관리에 관한 법률이하 환경오염시설법이라한다 제 조제 항에 따라⏎선구에서 년 월 일 제출한 신규 변경허가 신청에 대하여 년 월 일 허가한다⏎허가대상 사업장의 현황은 다음과 같다⏎상호(사",
+        " 한다⏎년 월 일⏎환경부 장관⏎배출시설등 설치·운영허가 검토 결과서⏎㈜선구⏎2. 허가대상⏎5⏎배출시설등 설치·운영허가 검토 결과서⏎㈜선구⏎2. 허가대상⏎2.1 통합허가 공정의 대분류⏎대분류 공정계통도⏎[유틸리티 공정] [제품제조공정]"
+      ]
+    },
+    "business_registration_no": "ok"
+  },
+  {
+    "attachmentId": "file_ieps-integrated-permit_0f5bd4389c4088dd_f9c22d2b4288",
+    "fileName": "0693-01. 배출시설등 설치·운영허가 검토결과서_(주)한화방산 보은사업장(비공개).pdf",
+    "pdf_exists": true,
+    "failed": [
+      "decision_no",
+      "company_name",
+      "business_registration_no",
+      "site_address",
+      "industry_code_name",
+      "permit_date",
+      "permit_scale"
+    ],
+    "page_count": 380,
+    "avg_chars_per_page": 0.0,
+    "text_quality": "scanned_or_image",
+    "decision_no": {
+      "status": "keyword_not_found",
+      "keyword_hits": 0,
+      "loose_regex_hits": []
+    },
+    "permit_date": {
+      "status": "no_match",
+      "has_부로": false,
+      "has_환경부": false,
+      "loose_date_count": 0,
+      "loose_date_samples": [],
+      "context_samples": []
+    },
+    "business_registration_no": "no_match"
+  },
+  {
+    "attachmentId": "file_ieps-integrated-permit_48b6c88ec2749d99_b0e3c686684d",
+    "fileName": "0629-01. 배출시설등 설치·운영허가 검토결과서_(주)한화방산 여수사업장(비공개).pdf",
+    "pdf_exists": true,
+    "failed": [
+      "decision_no",
+      "permit_date"
+    ],
+    "page_count": 520,
+    "avg_chars_per_page": 594.4,
+    "text_quality": "ok",
+    "decision_no": {
+      "status": "ok",
+      "value": "제0629-01호"
+    },
+    "permit_date": {
+      "status": "no_match",
+      "has_부로": false,
+      "has_환경부": true,
+      "loose_date_count": 0,
+      "loose_date_samples": [],
+      "context_samples": [
+        "정⏎1. 허가결정⏎환경부 장관은 환경오염시설의 통합관리에 관한 법률 이하 환경오염시설법이라한다 제 조⏎제 항에 따라 한화 여수사업장이 년 월 일 제출한 신규 변경허가 신청에 대하여 년⏎월 일 허가한다⏎허가대상 사업장의 현황은 다음과 ",
+        " 한다⏎년 월 일⏎환경부 장관⏎• 3 •⏎⏎2. 허가대상⏎• 5 •⏎⏎2. 허가대상⏎2. 허가대상⏎2.1 통합허가 공정의 대분류⏎• 7 •⏎배출시설등 설치·운영허가 검토 결과서⏎(주)한화방산 여수사업장⏎2.2 통합허가 대분류 공정 설"
+      ]
+    },
+    "business_registration_no": "ok"
+  },
+  {
+    "attachmentId": "file_ieps-integrated-permit_1ec6a6cc6ea4cf36_0b4b3806871f",
+    "fileName": "0650-01. 배출시설등 설치운영허가 검토 결과서_SK인천석유화학(주)(비공개).pdf",
+    "pdf_exists": true,
+    "failed": [
+      "decision_no"
+    ],
+    "page_count": 363,
+    "avg_chars_per_page": 945.2,
+    "text_quality": "ok",
+    "decision_no": {
+      "status": "ok",
+      "value": "제0650-01호"
+    },
+    "permit_date": {
+      "status": "ok",
+      "value": "2022-12-05"
+    },
+    "business_registration_no": "ok"
+  },
+  {
+    "attachmentId": "file_ieps-integrated-permit_410e79ef634a983d_b5b725d7c69e",
+    "fileName": "0690-01. 배출시설등 설치운영허가 검토 결과서_미원스페셜티케미칼(주) 전주공장(비공개).pdf",
+    "pdf_exists": true,
+    "failed": [
+      "decision_no",
+      "permit_date"
+    ],
+    "page_count": 287,
+    "avg_chars_per_page": 383.1,
+    "text_quality": "ok",
+    "decision_no": {
+      "status": "ok",
+      "value": "제 0690-01호"
+    },
+    "permit_date": {
+      "status": "no_match",
+      "has_부로": false,
+      "has_환경부": false,
+      "loose_date_count": 0,
+      "loose_date_samples": [],
+      "context_samples": []
+    },
+    "business_registration_no": "ok"
+  },
+  {
+    "attachmentId": "file_ieps-integrated-permit_e0652cdbf5bb7eec_a132852becec",
+    "fileName": "355-01. 배출시설등 설치·운영허가 검토결과서_현대제철(주)인천공장(비공개).pdf",
+    "pdf_exists": true,
+    "failed": [
+      "decision_no"
+    ],
+    "page_count": 211,
+    "avg_chars_per_page": 976.4,
+    "text_quality": "ok",
+    "decision_no": {
+      "status": "ok",
+      "value": "제 0355-01호"
+    },
+    "permit_date": {
+      "status": "ok",
+      "value": "2021-06-18"
+    },
+    "business_registration_no": "ok"
+  },
+  {
+    "attachmentId": "file_ieps-integrated-permit_4db5b5b8bb60bb34_c8c1b7e6eaa3",
+    "fileName": "0585-01. 배출시설등 설치 운영허가 검토결과서_토소남해실리카(주)(비공개).pdf",
+    "pdf_exists": true,
+    "failed": [
+      "decision_no",
+      "company_name",
+      "business_registration_no",
+      "site_address",
+      "industry_code_name",
+      "permit_date",
+      "permit_scale"
+    ],
+    "page_count": 106,
+    "avg_chars_per_page": 0.0,
+    "text_quality": "scanned_or_image",
+    "decision_no": {
+      "status": "keyword_not_found",
+      "keyword_hits": 0,
+      "loose_regex_hits": []
+    },
+    "permit_date": {
+      "status": "no_match",
+      "has_부로": false,
+      "has_환경부": false,
+      "loose_date_count": 0,
+      "loose_date_samples": [],
+      "context_samples": []
+    },
+    "business_registration_no": "no_match"
+  },
+  {
+    "attachmentId": "file_ieps-integrated-permit_3ebcf4eb67672502_0d4485933e7f",
+    "fileName": "0526.-01.배출시설등 설치·운영허가 검토결과서_현대제철(주)포항1공장(비공개).pdf",
+    "pdf_exists": true,
+    "failed": [
+      "decision_no"
+    ],
+    "page_count": 215,
+    "avg_chars_per_page": 910.1,
+    "text_quality": "ok",
+    "decision_no": {
+      "status": "ok",
+      "value": "제 0526-01호"
+    },
+    "permit_date": {
+      "status": "ok",
+      "value": "2021-12-28"
+    },
+    "business_registration_no": "ok"
+  },
+  {
+    "attachmentId": "file_ieps-integrated-permit_d0027a975993dd35_4762eadc479c",
+    "fileName": "0338-01.배출시설등 설치·운영허가 검토결과서_현대제철(주)포항2공장(비공개).pdf",
+    "pdf_exists": true,
+    "failed": [
+      "decision_no"
+    ],
+    "page_count": 110,
+    "avg_chars_per_page": 531.0,
+    "text_quality": "ok",
+    "decision_no": {
+      "status": "ok",
+      "value": "제 0338-01호"
+    },
+    "permit_date": {
+      "status": "ok",
+      "value": "2021-05-14"
+    },
+    "business_registration_no": "ok"
+  },
+  {
+    "attachmentId": "file_ieps-integrated-permit_30810503d899a760_423955cc0278",
+    "fileName": "0326-01. 배출시설등 설치 운영허가 검토결과서_현대스틸파이프(비공개).pdf",
+    "pdf_exists": true,
+    "failed": [
+      "decision_no",
+      "site_address",
+      "industry_code_name",
+      "permit_date",
+      "permit_scale"
+    ],
+    "page_count": 123,
+    "avg_chars_per_page": 381.1,
+    "text_quality": "ok",
+    "decision_no": {
+      "status": "keyword_not_found",
+      "keyword_hits": 0,
+      "loose_regex_hits": []
+    },
+    "permit_date": {
+      "status": "no_match",
+      "has_부로": false,
+      "has_환경부": true,
+      "loose_date_count": 0,
+      "loose_date_samples": [],
+      "context_samples": [
+        "정⏎1. 허가결정⏎환경부장관은 환경오염시설의 통합관리에 관한 법률이하 통합법이라 한다 제 조제 항에 따라⏎현대제철주 울산공장이 년 월 일 제출한 신규 변경 허가 신청에 대하여 년 월 일⏎설치 운영을 허가한다⏎허가대상 사업장의 현황은 ",
+        "⏎한다⏎년 월 일⏎환경부장관⏎• 3 •⏎⏎2. 허가대상⏎• 5 •⏎⏎2. 허가대상⏎2. 허가대상⏎• 7 •⏎배출시설등 설치·운영허가 검토 결과서⏎현대제철(주) 울산공장⏎• 8 •⏎2. 허가대상⏎• 9 •⏎배출시설등 설치·운영허가 검토"
+      ]
+    },
+    "business_registration_no": "ok"
+  },
+  {
+    "attachmentId": "file_ieps-integrated-permit_6091157bb587eeba_870215706f61",
+    "fileName": "0699-01. 배출시설등 설치 운영허가 검토결과서_(주)이수화학 온산공장(비공개).pdf",
+    "pdf_exists": true,
+    "failed": [
+      "decision_no",
+      "company_name",
+      "business_registration_no",
+      "site_address",
+      "industry_code_name",
+      "permit_date",
+      "permit_scale"
+    ],
+    "page_count": 4,
+    "avg_chars_per_page": 242.5,
+    "text_quality": "ok",
+    "decision_no": {
+      "status": "keyword_not_found",
+      "keyword_hits": 0,
+      "loose_regex_hits": []
+    },
+    "permit_date": {
+      "status": "no_match",
+      "has_부로": false,
+      "has_환경부": false,
+      "loose_date_count": 0,
+      "loose_date_samples": [],
+      "context_samples": []
+    },
+    "business_registration_no": "ok"
+  },
+  {
+    "attachmentId": "file_ieps-integrated-permit_43d2b967c3b44535_ac41b6bb6318",
+    "fileName": "(0671-01) 배출시설등 설치운영허가 검토결과서_미원스페셜티케미칼 충주공장(비공개).pdf",
+    "pdf_exists": true,
+    "failed": [
+      "industry_code_name",
+      "permit_date"
+    ],
+    "page_count": 594,
+    "avg_chars_per_page": 512.5,
+    "text_quality": "ok",
+    "decision_no": {
+      "status": "ok",
+      "value": "제 0671-01호"
+    },
+    "permit_date": {
+      "status": "no_match",
+      "has_부로": false,
+      "has_환경부": false,
+      "loose_date_count": 3,
+      "loose_date_samples": [
+        "2022-10-24",
+        "2022-12-16",
+        "2022-12-16"
+      ],
+      "context_samples": []
+    },
+    "business_registration_no": "ok"
+  }
+]

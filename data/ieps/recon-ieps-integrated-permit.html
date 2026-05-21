@@ -1,0 +1,1651 @@
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+	<meta name="googlebot" content="noindex">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>통합환경허가시스템 :통합허가</title>
+    <!-- Global site tag (gtag.js) - Google Analytics -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-M9NT38LJ0H"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+
+        function gtag() {
+            dataLayer.push(arguments);
+        }
+
+        gtag('js', new Date());
+
+        gtag('config', 'G-M9NT38LJ0H');
+    </script>
+
+    <link rel="icon" href="/web/main/img/favicon.svg" sizes="any" type="image/svg+xml">
+    <link rel="stylesheet/less" type="text/css" href="/web/main/styles/style.less"/>
+    <script src="/web/main/js/less.js"></script>
+    <link href="/web/main/styles/slick.css" rel="stylesheet" type="text/css"/>
+
+    <script src="/web/main/js/jquery-3.5.1.js"></script>
+    <script type="text/javascript" src="/web/main/js/style.js"></script>
+    <script src="/web/main/js/bootstrap.js"></script>
+    <script src="/web/main/js/slick.js"></script>
+
+    <script src="/js/jquery.form.js;jsessionid=k8OLb1mMYQFPwQVaZuBnxLqXX5ib1ORYf9LocmPpKbvhQR1ktXj1iDtuAI0o4mju.epiwas1-nier_servlet_engine1"></script>
+    <script src="/js/frm.js"></script>
+
+    <link type="text/css" rel="stylesheet" href="/js/cal/themes/base/jquery.ui.all.css"/>
+    <script src="/js/cal/ui/jquery.ui.core.js"></script>
+    <script src="/js/cal/ui/jquery.ui.widget.js"></script>
+    
+        <script src="/js/common.js?v=20210924"></script>
+        <script src="/js/cmnReady.js"></script>
+        <script src="/js/customCmFile.js"></script>
+        <script src="/js/cal/ui/jquery.ui.datepicker.js"></script>
+        <script src="/js/realGrid/realgridjs-lic.js;jsessionid=k8OLb1mMYQFPwQVaZuBnxLqXX5ib1ORYf9LocmPpKbvhQR1ktXj1iDtuAI0o4mju.epiwas1-nier_servlet_engine1"></script>
+        <script src="/js/realGrid/realgridjs.1.1.27.min.js;jsessionid=k8OLb1mMYQFPwQVaZuBnxLqXX5ib1ORYf9LocmPpKbvhQR1ktXj1iDtuAI0o4mju.epiwas1-nier_servlet_engine1"></script>
+        <script src="/js/realGrid/realgridjs-api.1.1.27.js;jsessionid=k8OLb1mMYQFPwQVaZuBnxLqXX5ib1ORYf9LocmPpKbvhQR1ktXj1iDtuAI0o4mju.epiwas1-nier_servlet_engine1"></script>
+        <script src="/js/realGrid/jszip.min.js;jsessionid=k8OLb1mMYQFPwQVaZuBnxLqXX5ib1ORYf9LocmPpKbvhQR1ktXj1iDtuAI0o4mju.epiwas1-nier_servlet_engine1"></script>
+        <script src="/js/cal/ui/jquery.ui.autocomplete.js"></script>
+        <link type="text/css" rel="stylesheet" href="/js/cal/themes/base/jquery.ui.autocomplete.css"/>
+        <!-- 3.5.1쓰는 js 끝 -->
+    
+
+    <script type="text/javascript">
+        var FIX_AUTH_CODE = "";
+        var msg = "";
+        if (msg != null && msg != "") {
+            alert(msg);
+        }
+
+        function MenuMove(url, id) {
+            if (id != "" && id != null) {
+                document.hiddenForm.pMENUMST_ID.value = id;
+                document.hiddenForm.action = url;
+                document.hiddenForm.submit();
+            } else {
+                alert("에러");
+            }
+        }
+
+        // 해당이름의 쿠키를 가져온다.
+        function getCookie(cookie_name) {
+            var isCookie = false;
+            var start, end;
+            var i = 0;
+
+            // cookie 문자열 전체를 검색
+            while (i <= document.cookie.length) {
+                start = i;
+                end = start + cookie_name.length;
+                // cookie_name과 동일한 문자가 있다면
+                if (document.cookie.substring(start, end) == cookie_name) {
+                    isCookie = true;
+                    break;
+                }
+                i++;
+            }
+
+            // cookie_name 문자열을 cookie에서 찾았다면
+            if (isCookie) {
+                start = end + 1;
+                end = document.cookie.indexOf(";", start);
+                // 마지막 부분이라는 것을 의미(마지막에는 ";"가 없다)
+                if (end < start)
+                    end = document.cookie.length;
+                // cookie_name에 해당하는 value값을 추출하여 리턴한다.
+                return document.cookie.substring(start, end);
+            }
+            // 찾지 못했다면
+            return "";
+        }
+
+        function openMsgBox() {
+            var eventCookie = getCookie("event_condo");
+            // 	var eventCookie_two=getCookie("notice_popup");
+            var leftMenuList = "[{INS_IP=null, INS_DT=2015-09-01 09:43:19.0, CNT=1, GUEST_VIEW_YN=Y, DLT_YN=N, CNTNS_ID=null, TOP_YN=Y, UPD_DT=null, MENU_ORD=3, DMNMST_ID=1, LINK_URL=#, INS_ID=cetech, PGM_ID=null, NUM=1, MENU_ENG_NM=null, UPD_IP=null, IS_DISPLAY=A, MENU_NM=정보공개, LEVEL=1, CNTNS_TYP=D, UPD_ID=null, MENUMST_ID=62, SPIR_ID=0, NEW_WIN_YN=N, CNTNS_TYP_NM=null, MENU_EXPL=허가현황, BLBD_ID=null, MENU_DPT=1}, {INS_IP=null, INS_DT=2015-09-01 09:43:19.0, CNT=0, GUEST_VIEW_YN=Y, DLT_YN=N, CNTNS_ID=null, TOP_YN=N, UPD_DT=2015-09-08 18:03:16.0, MENU_ORD=1, DMNMST_ID=1, LINK_URL=/web/board/7, INS_ID=cetech, PGM_ID=null, NUM=2, MENU_ENG_NM=test, UPD_IP=127.0.0.1, IS_DISPLAY=A, MENU_NM=통합허가, LEVEL=2, CNTNS_TYP=L, UPD_ID=cetech, MENUMST_ID=176, SPIR_ID=62, NEW_WIN_YN=N, CNTNS_TYP_NM=null, MENU_EXPL=통합허가, BLBD_ID=null, MENU_DPT=2}]";
+
+            if (leftMenuList == "" || leftMenuList == null) {
+                // 쿠키가 없을 경우에만 (다시 보지 않기를 선택하지 않았을 경우.)
+                if (eventCookie != "no") {
+                    //			window.open('/web/main/popup/open_popup_1.html',"",'width=517,height=417,resizable=no,menubar=1,toolbar=no,scrollbars=1,status=1,left=0, top=0');
+                    // 			window.open('/web/main/popup/open_popup_2.html',"",'width=517,height=417,resizable=no,menubar=1,toolbar=no,scrollbars=1,status=1,left=100, top=0');
+                    // 			window.open('/web/main/popup/open_popup_3.html',"",'width=517,height=417,resizable=no,menubar=1,toolbar=no,scrollbars=1,status=1,left=200, top=0');
+                }
+
+                // 		if (eventCookie_two != "no"){
+                // 			window.open('/web/main/popup/open_popup_two.html',"",'width=517,height=417,resizable=no,menubar=1,toolbar=1,scrollbars=1,status=1,left=100, top=100');
+                // 		}
+            }
+        }
+
+        openMsgBox(); // 팝업창을 띄운다.
+
+        //]]>
+    </script>
+
+</head>
+<body>
+<!-- 바로가기 메뉴 시작 (메인용) -->
+
+<!--// 바로가기 메뉴 끝 -->
+<!-- 바로가기 메뉴 시작 (서브용) -->
+
+    <div id="skip" class="type_sub">
+        <a href="#cont_area" tabindex="1">
+            <span>본문내용으로 바로가기</span>
+        </a>
+    </div>
+
+<!--// 바로가기 메뉴 끝 -->
+<div id="wrap">
+
+    <div id="modalBox" class="is_none" style="max-height: 80%; overflow: auto;"></div>
+    <div id="modalBox_bg_block" class="is_none"></div>
+    <div id="loadingBox" class="is_none">
+        <div class="inner">
+            <div class="spinner-grow text-light" style="width: 3rem; height: 3rem" role="status">
+                <span class="sr-only">Loading...</span>
+            </div>
+            <p>
+                처리중입니다.<br/>잠시만 기다려주세요.
+            </p>
+        </div>
+    </div>
+
+    <!--head-->
+    
+
+
+
+
+
+
+
+
+
+
+
+<script type="text/javascript">
+	$(document).ready(function() {		
+		if(document.querySelector("#searchResult")){
+			document.querySelector("#searchResult").addEventListener("click",function(){
+				searchResult();
+			});
+		}
+	});
+	
+	function searchResult(){
+		modalShow(
+			"<div>통합허가 허가결과서 검색어를 입력해주세요</br>"
+			+ "<textarea id='searchText' style='width:520px;' ></textarea></div>"
+			+ "<button type='button' class='btn btn-outline-secondary' id='btnReq'>검색</button>"
+			+ "<button type='button' class='btn btn-outline-secondary' id='btnCan'>닫기</button>"
+		);
+		document.querySelector("#btnCan").addEventListener("click",function(){
+			modalHide();
+		});
+		document.querySelector("#btnReq").addEventListener("click",function(){
+			if(document.querySelector("#searchText").value.length>1){
+				searchResult2();
+			} else {
+				alert("검색어는 2자 이상 입력해주세요.");
+			}
+		});
+	}
+	
+	function searchResult2(){
+		let url = "http://stg.safehub.co.kr/api/ieps-search?start=0&size=&sw="+document.querySelector("#searchText").value;
+		$.ajax({
+			type: "GET",
+			url: url,
+			dataType: 'json',
+			//async : false,
+			success: function (data) {
+				let resultCnt = data.hits.hit.length;
+				alert(resultCnt+"건 조회 성공");
+
+				// 검색 결과표 생성
+				let resultTable =
+				'<div class="type_sticky">' +
+				'<button id="modalClose" class="btn btn-outline-secondary btn-sm">닫기</button>' +
+				'<table id="TABLE_BPLC_INFO" class="table_04_4">' +
+				'<colgroup>' +
+				'<col width="25%">' +
+				'<col width="*%">' +
+				'</colgroup>' +
+				'<tbody>' +
+				'<tr class="is_sticky">' +
+				'<th><label for="1">문서제목</label></th>' +
+				'<th><label for="1">내용</label></th>' +
+				'</tr>';
+
+				for (let i = 0; i < resultCnt; i++) {
+					let result = data.hits.hit[i];
+					resultTable = resultTable.concat("<tr id = r" + result.id + ' style="height:40px; cursor: pointer;">');
+					resultTable = resultTable.concat("<td>" + result.fields.title + "</td>");
+					resultTable = resultTable.concat("<td>" + result.highlights.content.substr(0,500) + "...... </td>");
+					resultTable = resultTable.concat("</tr>");
+				}
+				resultTable = resultTable.concat("</tbody></table>");
+				resultTable = resultTable.concat("</div>");
+
+				modalHide();
+				modalShow(resultTable);
+
+				// 검색 결과에 검색어 강조				
+				let spans = document.querySelectorAll("#TABLE_BPLC_INFO span");
+				for (let i = 0; i < spans.length; i++) {
+					const span = spans[i];
+					span.style.color = "red";
+					span.style.fontWeight = "bold";
+				}
+
+				document.querySelector("#modalBox").style.width = "60rem";
+
+
+				// 검색 이후 클릭 이벤트 생성
+				for (let i = 0; i < resultCnt; i++) {
+					let result = data.hits.hit[i];
+					let resultId = result.id;
+					let bplcCd = resultId.substr(0,8);
+					let prmsn = resultId.substr(9,1);
+					let reqstSn = resultId.substr(11);
+					console.log(resultId);
+					document.querySelector("#r"+resultId).addEventListener("click",function(){
+						switch (Number(prmsn)) {
+							case 0:
+								$.ajax({
+									type: "POST",
+									url: "/web/issPrc/appPerMgt/searchResult_ajax",
+									dataType: 'json',
+									data : {
+										BPLC_CD : bplcCd,
+										PRMSN : prmsn,
+										REQST_SN : reqstSn
+									},
+									//async : false,
+									success: function (rData) {
+										location.href = 
+										"/web/issPrc/sadPlnMgt/sadPln?pMENUMST_ID=260&BPLC_CODE="
+										+ rData.BPLC_CD + "&REQST_YEAR=" + rData.REQST_YEAR + "&REQST_SN="+ rData.REQST_SN +"&GRID_YN=Y";
+									}
+								});
+								break;
+							case 1:
+								
+								$.ajax({
+									type: "POST",
+									url: "/web/issPrc/appPerMgt/searchResult_ajax",
+									dataType: 'json',
+									data : {
+										BPLC_CD : bplcCd,
+										PRMSN : prmsn,
+										REQST_SN : reqstSn
+									},
+									//async : false,
+									success: function (rData) {
+										location.href = 
+										"/web/issPrc/result/result_C_02?pMENUMST_ID=314&BPLC_CODE="
+										+ rData.BPLC_CD + "&REQST_YEAR="+ rData.REQST_YEAR + "&REQST_SN=" + rData.REQST_SN;
+									}
+								});
+								break;
+							case 2:
+
+								$.ajax({
+									type: "POST",
+									url: "/web/issPrc/appPerMgt/searchResult_ajax",
+									dataType: 'json',
+									data : {
+										BPLC_CD : bplcCd,
+										BPLC_CODE : bplcCd,
+										PRMSN : prmsn,
+										REPORT_YEAR : reqstSn
+									},
+									//async : false,
+									success: function (rData) {
+										console.log(rData);
+										if(confirm("보고서 파일을 다운로드 하시겠습니까?")){
+											downLoadAtchFile(rData.FILE_NO,"FYER");
+										}
+										// location.href = 
+										// "/web/issPrc/fyerReprt/fyerReprt_01/?pMENUMST_ID=346&BPLC_CODE="
+										// + bplcCd + "&REPRT_SN="+ data.REPRT_SN;
+									}
+								});
+
+
+								break;
+
+							default:
+								break;
+						}
+					});
+				}
+
+				document.getElementById("modalClose").addEventListener("click", function(){
+					modalHide();
+				});
+			},
+			error: function (request, status, errorThrown) {
+				ajaxErrorHandler(request.status, errorThrown);
+			}
+		});
+	}
+	
+	//로그인 후 바로 마이환경허가를 클릭하지 않고 뒤로 가기 버튼으로 이동 후 마이환경허가를 클릭하면 세션은 연결되었지만 사용자정보를 갖고 있지 않으므로 메인화면으로 이동. 그렇지 않으면 권한관계없이통합허가목록이 먼저 나타남..
+	function fnCilkMyEnv() {
+		const auth = "";
+		if (auth == null || auth == "") {
+			location.href = '/web/main';
+		} else {
+			location.href = '/web/issPrc/prcMgt_R_01/?pMENUMST_ID=202';
+		}
+	}
+</script>
+<!-- main에서만 표출되게  -->
+
+<div id="newHead">
+	<div class="cont">
+		<div class="topMenu">
+			<div>
+				<!--  -->
+				<div class="i_wrap">
+					
+						
+						
+							
+								<a href="/web/mypage/selectlMemberloginForm/?pMENUMST_ID=101" tabindex="3">로그인</a>
+							
+						
+					
+					
+						
+							<a href="/web/link/?pMENUMST_ID=64" tabindex="4">회원가입</a>
+						
+					
+					
+					
+					
+					
+				</div>
+			</div>
+		</div>
+		<!-- ### GNB ###-->
+		<div id="newGnb">
+			<a href="/web/main" class="logo" tabindex="5">
+				<img src="/web/main/img/logo_type01.svg" alt="" />
+			</a>
+			<ul>
+				<li class="gnb00"><a href="/web/main" class="hvr_line" tabindex="6">처음으로</a></li>
+				
+					
+						<li class="gnb01">
+								
+									<a tabindex="7" href="/web/link/?pMENUMST_ID=59" title="통합환경허가 소개" class="hvr_line">
+										통합환경허가 소개
+									</a>
+								
+								
+							 
+							<ul class="s_nav01" >
+								
+									<li></li>
+								
+									<li>
+											
+											
+												
+													
+														<a href="/web/integratedEnvironment/systemOutline?pMENUMST_ID=113" 
+															title="제도개요"
+														>
+															제도개요
+														</a>
+													
+												
+											
+										</li>
+								
+									<li>
+											
+											
+												
+													
+														<a href="/web/integratedEnvironment/foreignTrend?pMENUMST_ID=119" 
+															title="해외동향"
+														>
+															해외동향
+														</a>
+													
+												
+											
+										</li>
+								
+									<li>
+											
+											
+												
+													
+														<a href="/web/integratedEnvironment/improveSollution?pMENUMST_ID=125" 
+															title="개선효과"
+														>
+															개선효과
+														</a>
+													
+												
+											
+										</li>
+								
+									<li>
+											
+											
+												
+													
+														<a href="/web/integratedEnvironment/direction?pMENUMST_ID=129" 
+															title="방향 및 경과"
+														>
+															방향 및 경과
+														</a>
+													
+												
+											
+										</li>
+								
+									<li>
+											
+											
+												
+													
+														<a href="/web/integratedEnvironment/dictionary?pMENUMST_ID=135" 
+															title="용어사전"
+														>
+															용어사전
+														</a>
+													
+												
+											
+										</li>
+								
+							</ul></li>
+
+					
+				
+					
+						<li class="gnb02">
+								
+									<a tabindex="8" href="/web/link/?pMENUMST_ID=61" title="알림마당" class="hvr_line">
+										알림마당
+									</a>
+								
+								
+							 
+							<ul class="s_nav02" >
+								
+									<li></li>
+								
+									<li>
+											
+											
+												
+													
+														<a href="/web/board/1?pMENUMST_ID=91" 
+															title="공지사항"
+														>
+															공지사항
+														</a>
+													
+												
+											
+										</li>
+								
+									<li>
+											
+											
+												
+													
+												
+											
+										</li>
+								
+									<li>
+											
+											
+												
+													
+														<a href="/web/board/3?pMENUMST_ID=93" 
+															title="자주하는 질문"
+														>
+															자주하는 질문
+														</a>
+													
+												
+											
+										</li>
+								
+									<li>
+											
+											
+												
+													
+														<a href="/web/board/5?pMENUMST_ID=95" 
+															title="자료실"
+														>
+															자료실
+														</a>
+													
+												
+											
+										</li>
+								
+									<li>
+											
+											
+												
+													
+														<a href="/web/board/9?pMENUMST_ID=531" 
+															title="동영상.엑셀양식/지침"
+														>
+															동영상.엑셀양식/지침
+														</a>
+													
+												
+											
+										</li>
+								
+									<li>
+											
+											
+												
+													
+														<a href="/web/board/agencyList?pMENUMST_ID=597" 
+															title="대행업체등록현황"
+														>
+															대행업체등록현황
+														</a>
+													
+												
+											
+										</li>
+								
+									<li>
+											
+											
+												
+													
+														<a href="/web/board/agencyAsesList?pMENUMST_ID=598" 
+															title="대행업체영업수행능력"
+														>
+															대행업체영업수행능력
+														</a>
+													
+												
+											
+										</li>
+								
+							</ul></li>
+
+					
+				
+					
+						<li class="gnb03">
+								
+									<a tabindex="9" href="/web/link/?pMENUMST_ID=62" title="정보공개" class="hvr_line">
+										정보공개
+									</a>
+								
+								
+							 
+							<ul class="s_nav03" >
+								
+									<li></li>
+								
+									<li>
+											
+											
+												
+													
+														<a href="/web/board/7?pMENUMST_ID=176" 
+															title="통합허가"
+														>
+															통합허가
+														</a>
+													
+												
+											
+										</li>
+								
+							</ul></li>
+
+					
+				
+					
+						<li class="gnb04">
+								
+								
+									
+									
+										
+												
+											 								
+											
+											 
+												
+											
+																					
+											
+												<!-- <a tabindex="10" href="/web/issPrc/prcMgt_R_01/?pMENUMST_ID=202" title="My 환경허가"> -->
+												<a tabindex="10" href="#" onclick="fnCilkMyEnv();return;" title="My 환경허가">
+													My 환경허가
+												</a>
+											
+										
+										<!-- 
+		                			
+		                			
+		                			<a href="/web/issPrc/prcMgt_R_01/?pMENUMST_ID=202" title="My 환경허가">My 환경허가</a>
+		                			
+		                			 -->
+									
+								
+							 
+							<ul class="s_nav04" >
+								
+									<li></li>
+								
+									<li></li>
+								
+							</ul></li>
+
+					
+				
+				<li class="i_hamburger">
+					<a href="#" tabindex="9">
+						<span class="line"></span> <span class="line"></span> <span class="line"></span>
+					</a>
+				</li>
+			</ul>
+		</div>
+		<div class="i_gnb_bg"></div>
+	</div>
+</div>
+
+
+
+    <!--//head-->
+
+    <!--contents-->
+    <!-- lnb -->
+    
+        <div id="contents">
+            <div class="cont">
+                
+
+
+
+
+
+
+
+
+
+
+
+<!-- 기존 -->
+<div id="cont_area">
+    <!-- 기존 title_aera -> title_area -->
+    <div class="title_area">
+        <h2>통합허가</h2>
+        
+            <div class="location">
+                <a href="/web/main" title="홈" class="i_home"></a>
+                <span>&gt;</span>
+                
+                    <a href="/web/link/?pMENUMST_ID="
+                       title="">
+                        
+                    </a>
+                
+                
+                
+                    <span>&gt;</span> 
+                
+                <span>&gt;</span> 통합허가
+            </div>
+        
+    </div>
+    <div id="cont_body">
+        <!-- 컨텐츠 영역 -->
+        <!--게시판-->
+        
+
+
+
+
+
+
+
+
+<div id="wraps">
+    <div id="conts_body">
+        <script type="text/javascript">        
+        $(document).ready(function() {
+       		
+       		var optArr = "" == "" ? ""	: "".split(",");  
+       	        
+       		$("input:checkbox[name=INFO_OTHBC_CD]").each(function() {
+     			for (var i = 0; i < optArr.length; i++) {
+     				if (optArr[i] == $(this).val()) {
+     					$(this).attr("checked",	true);
+     				}
+     			}
+     		});
+       	
+       		if (optArr == "" || optArr.length==3) {
+       			$("input:checkbox[name='checkboxAll']").prop("checked", true);
+       			$("input:checkbox[name='INFO_OTHBC_CD']").prop("checked", true);
+       		} 
+       		//전체 체크박스 선택
+       		$("input:checkbox[name='checkboxAll']").click(function(){ 
+       			
+       			if($(this).is(":checked")){
+       			
+       				$("input:checkbox[name='INFO_OTHBC_CD']").prop("checked", true);
+       			
+       			} else {
+       				
+       				$("input:checkbox[name='INFO_OTHBC_CD']").prop("checked", false);
+       			}
+       		});
+       		
+       		// 개별 체크박스 클릭 시 전체 체크박스 선택
+       		$("input:checkbox[name='INFO_OTHBC_CD']").click(function(){        						
+       			var chkboxLen 	   = $("input:checkbox[name='INFO_OTHBC_CD']").length; 			// 개별 체크박스의 개수
+       			var checkedLen = $("input:checkbox[name='INFO_OTHBC_CD']:checked").length; 	// 개별 체크박스 중 선택된 체크박스의 개수
+       			
+       			if(chkboxLen == checkedLen){       				
+       				$("input:checkbox[name='checkboxAll']").prop("checked", true);
+       				
+       			} else {       				
+       				$("input:checkbox[name='checkboxAll']").prop("checked", false);
+       			}
+       			
+       		}); 
+       		
+       		//$("input:checkbox[name='checkboxAll']").prop("checked", true);
+       		//$("input:checkbox[name='INFO_OTHBC_CD']").prop("checked", true);
+    	});
+        
+       
+        
+            function goChoSungSearch(idx) {
+
+                var choArr = ['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅅ', 'ㅇ', 'ㅈ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
+                var pMENUMST_ID = $("#pMENUMST_ID").val();
+                var key = Number(idx) - 1;
+                if (key == null || key < 0) {
+                    return;
+                }
+                var chosung = choArr[key];
+                $("#CHOSUNG").val(chosung);
+
+                var url = "/web/board/7;jsessionid=k8OLb1mMYQFPwQVaZuBnxLqXX5ib1ORYf9LocmPpKbvhQR1ktXj1iDtuAI0o4mju.epiwas1-nier_servlet_engine1?pMENUMST_ID=176&searchType=&searchWord=";
+                var fm = document.searchForm;
+                fm.target = "_self";
+                fm.action = url;
+                fm.method = "post";
+                fm.submit();
+            }
+
+            function goSearch() {
+
+                var pMENUMST_ID = $("#pMENUMST_ID").val();
+                var searchType = $("#searchType").val();
+                var searchWord = $("#searchWord").val();
+                var batIndutyCd = $("#batIndutyCd").val();
+                
+                var infoGubunList = [];
+        		$("input[name='INFO_OTHBC_CD']:checked").each(function(i) {
+        			infoGubunList.push($(this).val());
+        	     });
+        		
+                var url = "/web/board/"+7+
+                "?pMENUMST_ID=" + 176 +"&searchType=" + searchType + "&searchWord=" + encodeURI(encodeURIComponent(searchWord)) + "&gubunList=" + infoGubunList.join() + "&batIndutyCd=" + batIndutyCd;
+                location.href = url;
+            }
+
+            function goClear() {
+                jQuery("#searchType").val('ALL');
+                jQuery("#searchWord").val('');
+                jQuery("#searchForm").submit();
+            }
+
+            function fn_fileCheckDown(id) {
+
+                $.ajax({
+                    type: "post",
+                    url: "/web/board/file/fileCheck_Ajax",
+                    cache: false,
+//		dataType: 'json',
+                    data: {
+                        FILE_ID: id
+                    },
+                    success: function (data) {
+                        if (data.fileList.length >= 2) {
+                            alert("여러 건의 첨부파일이 있습니다. \n상세페이지에서 다운로드 받으시기 바랍니다.")
+                        } else {
+                            var fileInfo = data.fileList;
+
+                            var url = "/jfile/readDownloadFile.do?fileId=" + fileInfo[0].fileId + "&amp;fileSeq=" + fileInfo[0].fileSeq + "&amp;useSecurity=" + fileInfo[0].useSecurity + "&amp;uploadMode=" + fileInfo[0].uploadMode;
+                            goPage(url);
+                        }
+                    },
+                    error: function (request, status, errorThrown) {
+                        ajaxErrorHandler(request.status, errorThrown);
+                    },
+                });
+
+            }
+
+            function showMsg() {
+                alert("비공개는 작성자만 읽을수있습니다.");
+            }
+
+            function goPage(url) {
+                location.href = url;
+            }
+
+            window.onkeydown = function () {
+                var kcode = event.keyCode;
+
+                if (kcode == 13) {
+                    goSearch();
+                    return false;
+                }
+
+            }
+
+            
+
+        </script>
+        <div class="user_search">
+            
+                
+                <form name="searchForm" id="searchForm"
+                      action="/web/board/7?pMENUMST_ID=176" onsubmit="goSearch();"
+                      method="post">
+                    <input type="hidden" name="pMENUMST_ID" value="176"/>
+                    <input type="hidden" id="CHOSUNG" name="CHOSUNG" value=""/>
+                    <div class="input-group">
+                        <label for="searchType" class="hidden">검색조건</label>
+                        <select name="searchType" id="searchType" title="검색조건" class="custom-select">
+    <option value="ALL">전체</option>
+    <option value="TITL">제목</option>
+    <option value="NM">작성자</option>
+    <option value="ARTC_CNTNS">내용</option>
+</select>
+
+                        <label for="searchWord" class="hidden">검색내용입력</label>
+                        <input type="text" name="searchWord" id="searchWord" title="조회" class="form-control"
+                               value=""/>
+                              
+                        <select name="batIndutyCd" id="batIndutyCd" title="BAT업종코드" class="custom-select w_150"  placeholder="업종 선택">
+							<option value="">업종 전체</option>
+							
+							<option value="134001" >발전</option>
+							
+							<option value="134002" >폐기물소각</option>
+							
+							<option value="134003" >철강</option>
+							
+							<option value="134004" >비철</option>
+							
+							<option value="134005" >유기</option>
+							
+							<option value="134006" >석유정제</option>
+							
+							<option value="134007" >무기화학</option>
+							
+							<option value="134008" >정밀화학</option>
+							
+							<option value="134009" >비료및질소화합물</option>
+							
+							<option value="134010" >펄프종이및판지</option>
+							
+							<option value="134011" >전자부품</option>
+							
+							<option value="134012" >반도체</option>
+							
+							<option value="134013" >섬유염색및가공처리업</option>
+							
+							<option value="134014" >도축육류가공및저장처리업</option>
+							
+							<option value="134015" >알콜음료제조업</option>
+							
+							<option value="134016" >플라스틱제품제조업</option>
+							
+							<option value="134017" >자동차부품제조업</option>
+							
+							<option value="134018" >폐기물처리업</option>
+							
+							<option value="134019" >시멘트 제조업</option>
+														
+						</select>	
+						
+                        <div class="input-group-append is_b_gr">
+                            <button class="btn btn-outline-secondary" type="button" onclick="goSearch();return false;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="1rem" height="1rem" fill="currentColor"
+                                     class="bi bi-search" viewBox="0 0 16 16">
+                                    <path
+                                            d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"
+                                    />
+                                </svg>
+                                조회
+                            </button>
+                        </div>
+                    </div>
+                <!-- 정보공개 조회조건 공개형식 구분 Start -->
+             	      
+					<div class="input-group mt_10">
+						<input type="checkbox" id="checkboxAll" name="checkboxAll"  value="all" />&nbsp;
+							<label for="checkboxAll">전체</label>
+						
+							<div class="input-group-prepend mr_20 ml_20">
+							<input type="checkbox" name="INFO_OTHBC_CD" id="INFO_OTHBC_CD_136001" value="136001"/>&nbsp;
+							<label for="INFO_OTHBC_CD_136001">통합허가 </label>
+							</div>
+						
+							<div class="input-group-prepend mr_20 ml_20">
+							<input type="checkbox" name="INFO_OTHBC_CD" id="INFO_OTHBC_CD_136002" value="136002"/>&nbsp;
+							<label for="INFO_OTHBC_CD_136002">변경허가 </label>
+							</div>
+						
+							<div class="input-group-prepend mr_20 ml_20">
+							<input type="checkbox" name="INFO_OTHBC_CD" id="INFO_OTHBC_CD_136004" value="136004"/>&nbsp;
+							<label for="INFO_OTHBC_CD_136004">연간보고서 </label>
+							</div>
+													
+					</div>
+				
+				<!-- 정보공개 조회조건 공개형식 구분 End -->
+                </form>
+            
+            <form name="listForm" action="/web/board/7/form/" method="post" class="is_ml_auto">
+                <input type="hidden" name="pMENUMST_ID" value="176"/>
+                <input type="hidden" name="BLBD_ID" id="BLBD_ID" value="7"/>
+                <input type="hidden" name="MODE" value="write"/>
+                
+            </form>
+        </div>
+
+        
+        
+        
+        
+        
+        
+        
+
+        <table summary="번호,제목,작성자,작성일,첨무,상태,처리일자" class="table table-striped mt_30 i_table i_btm_border">
+            <caption>게시판</caption>
+            <thead>
+            
+            <tr>
+                <th scope="col" style="width:8%">#</th>
+                
+                <th scope="col" style="width:*">제목</th>
+                
+                    
+                    <th scope="col" style="width:10%">첨부</th>
+                
+                <th scope="col" style="width:10%">작성자</th>
+                <th scope="col" style="width:10%">등록일</th>
+                <th scope="col" style="width:8%">조회수</th>
+            </tr>
+            </thead>
+            <tbody>
+            
+                
+                    
+                    
+                        <tr>
+                            <td>
+                                2813
+                            </td>
+                            
+                            <td class="t_left">
+                                
+                                
+                                <a href="/web/board/7/3529/?pMENUMST_ID=176&amp;searchType=&amp;searchWord=&amp;gubunList=&amp;batIndutyCd=&amp;REPLY_STATE=">
+                                    
+                                    [통합허가, 섬유]주식회사 부성티에프시 대구공장 정보공개(제1169-01호)
+                                    
+                                </a>
+                                
+                            </td>
+                            
+                                <td>
+                                    
+                                        <a href="javascript:;" onclick="fn_fileCheckDown('1992c9291e767');"
+                                           class="i_down_clip"></a>
+                                    
+                                </td>
+                            
+                            <td>
+                                과학원
+                            </td>
+                            <td>
+                                2025-09-09
+                            </td>
+                            <td>
+                                809
+                            </td>
+                        </tr>
+                    
+                
+            
+                
+                    
+                    
+                        <tr>
+                            <td>
+                                2812
+                            </td>
+                            
+                            <td class="t_left">
+                                
+                                
+                                <a href="/web/board/7/3528/?pMENUMST_ID=176&amp;searchType=&amp;searchWord=&amp;gubunList=&amp;batIndutyCd=&amp;REPLY_STATE=">
+                                    
+                                    [통합허가, 섬유]미래섬유 정보공개(제1166-01호)
+                                    
+                                </a>
+                                
+                            </td>
+                            
+                                <td>
+                                    
+                                        <a href="javascript:;" onclick="fn_fileCheckDown('1992c9078bf8');"
+                                           class="i_down_clip"></a>
+                                    
+                                </td>
+                            
+                            <td>
+                                과학원
+                            </td>
+                            <td>
+                                2025-09-09
+                            </td>
+                            <td>
+                                466
+                            </td>
+                        </tr>
+                    
+                
+            
+                
+                    
+                    
+                        <tr>
+                            <td>
+                                2811
+                            </td>
+                            
+                            <td class="t_left">
+                                
+                                
+                                <a href="/web/board/7/3527/?pMENUMST_ID=176&amp;searchType=&amp;searchWord=&amp;gubunList=&amp;batIndutyCd=&amp;REPLY_STATE=">
+                                    
+                                    [통합허가, 섬유]달성다이텍 주식회사 정보공개(제1164-01호)
+                                    
+                                </a>
+                                
+                            </td>
+                            
+                                <td>
+                                    
+                                        <a href="javascript:;" onclick="fn_fileCheckDown('1992c8ee41197');"
+                                           class="i_down_clip"></a>
+                                    
+                                </td>
+                            
+                            <td>
+                                과학원
+                            </td>
+                            <td>
+                                2025-09-09
+                            </td>
+                            <td>
+                                359
+                            </td>
+                        </tr>
+                    
+                
+            
+                
+                    
+                    
+                        <tr>
+                            <td>
+                                2810
+                            </td>
+                            
+                            <td class="t_left">
+                                
+                                
+                                <a href="/web/board/7/3526/?pMENUMST_ID=176&amp;searchType=&amp;searchWord=&amp;gubunList=&amp;batIndutyCd=&amp;REPLY_STATE=">
+                                    
+                                    [통합허가, 섬유](주)무길염공 정보공개(제1144-01호)
+                                    
+                                </a>
+                                
+                            </td>
+                            
+                                <td>
+                                    
+                                        <a href="javascript:;" onclick="fn_fileCheckDown('1992c8d072782');"
+                                           class="i_down_clip"></a>
+                                    
+                                </td>
+                            
+                            <td>
+                                과학원
+                            </td>
+                            <td>
+                                2025-09-09
+                            </td>
+                            <td>
+                                284
+                            </td>
+                        </tr>
+                    
+                
+            
+                
+                    
+                    
+                        <tr>
+                            <td>
+                                2809
+                            </td>
+                            
+                            <td class="t_left">
+                                
+                                
+                                <a href="/web/board/7/3525/?pMENUMST_ID=176&amp;searchType=&amp;searchWord=&amp;gubunList=&amp;batIndutyCd=&amp;REPLY_STATE=">
+                                    
+                                    [통합허가, 섬유](주)앤디아이 정보공개(제1138-01호)
+                                    
+                                </a>
+                                
+                            </td>
+                            
+                                <td>
+                                    
+                                        <a href="javascript:;" onclick="fn_fileCheckDown('1992c8b515e74');"
+                                           class="i_down_clip"></a>
+                                    
+                                </td>
+                            
+                            <td>
+                                과학원
+                            </td>
+                            <td>
+                                2025-09-09
+                            </td>
+                            <td>
+                                306
+                            </td>
+                        </tr>
+                    
+                
+            
+                
+                    
+                    
+                        <tr>
+                            <td>
+                                2808
+                            </td>
+                            
+                            <td class="t_left">
+                                
+                                
+                                <a href="/web/board/7/3524/?pMENUMST_ID=176&amp;searchType=&amp;searchWord=&amp;gubunList=&amp;batIndutyCd=&amp;REPLY_STATE=">
+                                    
+                                    [통합허가, 섬유]삼부염직공업사 정보공개(제1123-01호)
+                                    
+                                </a>
+                                
+                            </td>
+                            
+                                <td>
+                                    
+                                        <a href="javascript:;" onclick="fn_fileCheckDown('1992c89d7af15');"
+                                           class="i_down_clip"></a>
+                                    
+                                </td>
+                            
+                            <td>
+                                과학원
+                            </td>
+                            <td>
+                                2025-09-09
+                            </td>
+                            <td>
+                                282
+                            </td>
+                        </tr>
+                    
+                
+            
+                
+                    
+                    
+                        <tr>
+                            <td>
+                                2807
+                            </td>
+                            
+                            <td class="t_left">
+                                
+                                
+                                <a href="/web/board/7/3523/?pMENUMST_ID=176&amp;searchType=&amp;searchWord=&amp;gubunList=&amp;batIndutyCd=&amp;REPLY_STATE=">
+                                    
+                                    [통합허가, 섬유](주)명지특수가공 정보공개(제1122-01호)
+                                    
+                                </a>
+                                
+                            </td>
+                            
+                                <td>
+                                    
+                                        <a href="javascript:;" onclick="fn_fileCheckDown('1992c8838e747');"
+                                           class="i_down_clip"></a>
+                                    
+                                </td>
+                            
+                            <td>
+                                과학원
+                            </td>
+                            <td>
+                                2025-09-09
+                            </td>
+                            <td>
+                                279
+                            </td>
+                        </tr>
+                    
+                
+            
+                
+                    
+                    
+                        <tr>
+                            <td>
+                                2806
+                            </td>
+                            
+                            <td class="t_left">
+                                
+                                
+                                <a href="/web/board/7/3522/?pMENUMST_ID=176&amp;searchType=&amp;searchWord=&amp;gubunList=&amp;batIndutyCd=&amp;REPLY_STATE=">
+                                    
+                                    [통합허가, 섬유]원창머티리얼(주) 비산공장 정보공개(제1120-01호)
+                                    
+                                </a>
+                                
+                            </td>
+                            
+                                <td>
+                                    
+                                        <a href="javascript:;" onclick="fn_fileCheckDown('1992c86b9cd72');"
+                                           class="i_down_clip"></a>
+                                    
+                                </td>
+                            
+                            <td>
+                                과학원
+                            </td>
+                            <td>
+                                2025-09-09
+                            </td>
+                            <td>
+                                345
+                            </td>
+                        </tr>
+                    
+                
+            
+                
+                    
+                    
+                        <tr>
+                            <td>
+                                2805
+                            </td>
+                            
+                            <td class="t_left">
+                                
+                                
+                                <a href="/web/board/7/3521/?pMENUMST_ID=176&amp;searchType=&amp;searchWord=&amp;gubunList=&amp;batIndutyCd=&amp;REPLY_STATE=">
+                                    
+                                    [통합허가, 섬유]디이에이텍스타일 정보공개(제1120-01호)
+                                    
+                                </a>
+                                
+                            </td>
+                            
+                                <td>
+                                    
+                                        <a href="javascript:;" onclick="fn_fileCheckDown('1992c854f3491');"
+                                           class="i_down_clip"></a>
+                                    
+                                </td>
+                            
+                            <td>
+                                과학원
+                            </td>
+                            <td>
+                                2025-09-09
+                            </td>
+                            <td>
+                                321
+                            </td>
+                        </tr>
+                    
+                
+            
+                
+                    
+                    
+                        <tr>
+                            <td>
+                                2804
+                            </td>
+                            
+                            <td class="t_left">
+                                
+                                
+                                <a href="/web/board/7/3520/?pMENUMST_ID=176&amp;searchType=&amp;searchWord=&amp;gubunList=&amp;batIndutyCd=&amp;REPLY_STATE=">
+                                    
+                                    [통합허가, 섬유]삼일염직(주) 정보공개(제1119-01호)
+                                    
+                                </a>
+                                
+                            </td>
+                            
+                                <td>
+                                    
+                                        <a href="javascript:;" onclick="fn_fileCheckDown('1992c83b9d096');"
+                                           class="i_down_clip"></a>
+                                    
+                                </td>
+                            
+                            <td>
+                                과학원
+                            </td>
+                            <td>
+                                2025-09-09
+                            </td>
+                            <td>
+                                306
+                            </td>
+                        </tr>
+                    
+                
+            
+            
+            </tbody>
+        </table>
+        
+        <div class="page_list" title="페이지 번호">
+            
+
+
+
+<nav class="mt_50 is_right"> 
+<ul class="pagination" style="justify-content:flex-end">
+
+
+    
+        
+        <li class="page-item active">
+            <a class="page-link">1</a>
+            </li>
+        
+        
+    
+
+    
+        
+        
+            
+            
+            
+            <li class="page-item">
+            <a href="/web/board/7?pMENUMST_ID=176&amp;page=2" class="page-link">2</a>
+            </li>
+        
+    
+
+    
+        
+        
+            
+            
+            
+            <li class="page-item">
+            <a href="/web/board/7?pMENUMST_ID=176&amp;page=3" class="page-link">3</a>
+            </li>
+        
+    
+
+    
+        
+        
+            
+            
+            
+            <li class="page-item">
+            <a href="/web/board/7?pMENUMST_ID=176&amp;page=4" class="page-link">4</a>
+            </li>
+        
+    
+
+    
+        
+        
+            
+            
+            
+            <li class="page-item">
+            <a href="/web/board/7?pMENUMST_ID=176&amp;page=5" class="page-link">5</a>
+            </li>
+        
+    
+
+    
+        
+        
+            
+            
+            
+            <li class="page-item">
+            <a href="/web/board/7?pMENUMST_ID=176&amp;page=6" class="page-link">6</a>
+            </li>
+        
+    
+
+    
+        
+        
+            
+            
+            
+            <li class="page-item">
+            <a href="/web/board/7?pMENUMST_ID=176&amp;page=7" class="page-link">7</a>
+            </li>
+        
+    
+
+    
+        
+        
+            
+            
+            
+            <li class="page-item">
+            <a href="/web/board/7?pMENUMST_ID=176&amp;page=8" class="page-link">8</a>
+            </li>
+        
+    
+
+    
+        
+        
+            
+            
+            
+            <li class="page-item">
+            <a href="/web/board/7?pMENUMST_ID=176&amp;page=9" class="page-link">9</a>
+            </li>
+        
+    
+
+    
+        
+        
+            
+            
+            
+            <li class="page-item">
+            <a href="/web/board/7?pMENUMST_ID=176&amp;page=10" class="page-link">10</a>
+            </li>
+        
+    
+
+
+    
+        
+    
+    <li class="page-item">
+    <a href="/web/board/7?pMENUMST_ID=176&amp;page=11" class="page-link">다음</a>
+    </li>
+    
+        
+    
+    <li class="page-item">
+    <a href="/web/board/7?pMENUMST_ID=176&amp;page=282" class="page-link">맨끝</a>
+    </li>
+
+</ul>
+</nav>
+        </div>
+    </div>
+</div>
+        <!--//게시판-->
+        <!--// 컨텐츠 영역 -->
+    </div>
+</div>
+
+<div id="lnb">
+    <h2>정보공개</h2>
+    <ul>
+        
+            
+        
+            
+                
+                
+                <!-- My환경허가 메뉴 뎁스 문제로 분기처리 -->
+                
+                
+                
+                    
+                
+                
+                <li  class='is_active'>
+                    
+                    
+                    
+                    
+                        
+                        
+                            
+                        
+                        
+                            
+                                <!-- 신청서 작성 여부에 따라 신청서 제출 메뉴 노출 변경 추가 19.12.05-->
+                                
+                                    <a href="/web/board/7?pMENUMST_ID=176"
+                                            
+                                       title="통합허가"  class='is_active'>통합허가</a>
+                                
+                                
+                            
+                        
+                    
+                  <!-- 20170301 추가 --> </li>
+            
+        
+
+    </ul>
+    <span class="i_customer"> <b>문의전화 1522-8272</b> <small>평일 09:00 - 18:00 (국공휴일 휴무)</small>
+	</span>
+    <div class="i_site">
+        <div class="input-group i_go_select_url">
+            <label for="i_site_rnb" class="a11y_hidden">관련사이트 바로가기</label>
+            <select class="custom-select" id="i_site_rnb">
+                <option>관련사이트 바로가기</option>
+                <option value="http://me.go.kr/home/web/main.do">기후에너지환경부</option>
+                <option value="">--기후에너지환경부 산하공공기관--</option>
+                <option value="https://www.nier.go.kr">국립환경과학원</option>
+                <option value="https://www.keco.or.kr">한국환경공단</option>
+                <option value="http://me.go.kr/hg/web/main.do">한강유역환경청</option>
+                <option value="http://me.go.kr/ndg/web/main.do">낙동강유역환경청</option>
+                <option value="http://me.go.kr/gg/web/main.do">금강유역환경청</option>
+                <option value="http://me.go.kr/ysg/web/main.do">영산강유역환경청</option>
+                <option value="http://me.go.kr/mamo/web/main.do">수도권대기환경청</option>
+                <option value="http://me.go.kr/wonju/web/main.do">원주지방환경청</option>
+                <option value="http://me.go.kr/daegu/web/main.do">대구지방환경청</option>
+                <option value="http://me.go.kr/smg/web/main.do">전북지방환경청</option>
+                <option value="">--관련사이트--</option>
+                <option value="https://sems.air.go.kr">대기배출원관리시스템(SEMS)</option>
+                <option value="https://wems.nier.go.kr/">전국오염원조사(WEMS)</option>
+                <option value="https://allbaro.or.kr/index.jsp">폐기물적법처리시스템(Allbaro)</option>
+                <option value="https://cleansys.or.kr/index.do">CleanSYS</option>
+            </select>
+            <div class="input-group-append">
+                <button class="btn btn-outline-secondary" type="button">이동</button>
+            </div>
+        </div>
+        <a target="_blank"
+           href="https://www.law.go.kr/LSW//lsSc.do?section=&menuId=1&subMenuId=15&tabMenuId=81&eventGubun=060101&query=%ED%99%98%EA%B2%BD%EC%98%A4%EC%97%BC%EC%8B%9C%EC%84%A4%EC%9D%98+%ED%86%B5%ED%95%A9%EA%B4%80%EB%A6%AC%EC%97%90+%EA%B4%80%ED%95%9C+%EB%B2%95%EB%A5%A0#undefined"
+        >법률사이트 새창 열기</a>
+    </div>
+</div>
+            </div>
+        </div>
+    
+    
+
+
+    <!--//contents-->
+
+    <!-- footer -->
+    
+    <!-- footer -->
+</div>
+
+</body>
+</html>

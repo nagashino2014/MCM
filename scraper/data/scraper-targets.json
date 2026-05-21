@@ -1,0 +1,63 @@
+{
+  "orgs": [
+    {
+      "org_id": "nier-ieps",
+      "org_name": "국립환경과학원 IEPS",
+      "base_url": "https://ieps.nier.go.kr"
+    }
+  ],
+  "boards": [
+    {
+      "board_id": "ieps-integrated-permit",
+      "org_id": "nier-ieps",
+      "board_name": "IEPS 정보공개 - 통합허가",
+      "access_mode": "static_html",
+      "doc_type": "통합환경허가",
+      "list_url": "https://ieps.nier.go.kr/web/board/7?pMENUMST_ID=176",
+      "enabled": true,
+      "web_config": {
+        "rendering": "static_html",
+        "list": {
+          "container_selector": "table",
+          "item_selector": "tbody tr",
+          "pagination": {
+            "type": "page_param",
+            "param": "page",
+            "start": 1,
+            "max_pages": 5
+          }
+        },
+        "parse_rules": {
+          "title": "td.title a, td.subject a, td a, a",
+          "date": "td.date, td.regdate, td:nth-child(5), td:nth-child(4)",
+          "link": "td.title a, td.subject a, td a, a"
+        },
+        "detail": {
+          "content_selector": ".board_view, .view_content, .bbs_view, .view_cont, .view_content, article",
+          "attachments_selector": ".file_list a, .attach a, .file a, a[href*='atchFile'], a[onclick*='atchFile'], a[href*='downloadFile'], a[onclick*='downloadFile'], a[href*='download']"
+        },
+        "attachments": {
+          "enabled": true,
+          "collect_all": false,
+          "file_types": ["pdf"]
+        },
+        "collect_body": true
+      },
+      "collection_targets": {
+        "title_body": true,
+        "attachments": {
+          "enabled": true,
+          "all": false,
+          "pdf": true
+        },
+        "tabs": ["통합허가"],
+        "title_keywords": ["최초허가", "최초"]
+      },
+      "browser_config": {
+        "browser_type": "chromium",
+        "headless": true,
+        "wait_time": 1500
+      }
+    }
+  ]
+}

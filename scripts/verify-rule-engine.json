@@ -1,0 +1,472 @@
+[
+  {
+    "file": "012-02. 배출시설등 설치·운영허가(변경) 검토결과서((주)신승에너지).pdf",
+    "before_failed": [
+      "decision_no"
+    ],
+    "after_failed": [],
+    "recovered": [
+      "decision_no"
+    ],
+    "newly_failed": []
+  },
+  {
+    "file": "Dec_230630_배출시설등 설치운영허가 검토 결과서_에스케이실트론(주) 청주공장_비공개ver.pdf",
+    "before_failed": [
+      "business_registration_no",
+      "decision_no",
+      "permit_date",
+      "site_address"
+    ],
+    "after_failed": [
+      "site_address"
+    ],
+    "recovered": [
+      "business_registration_no",
+      "decision_no",
+      "permit_date"
+    ],
+    "newly_failed": []
+  },
+  {
+    "file": "0727_02_배출시설등_설치운영_허가_검토_결과서_㈜이수스페셜티케미컬_231113비공개반영.pdf",
+    "before_failed": [
+      "decision_no",
+      "permit_date"
+    ],
+    "after_failed": [],
+    "recovered": [
+      "decision_no",
+      "permit_date"
+    ],
+    "newly_failed": []
+  },
+  {
+    "file": "0727_03_배출시설등_설치운영_허가_검토_결과서_㈜이수스페셜티케미컬_240419비공개심의반영.pdf",
+    "before_failed": [
+      "decision_no",
+      "permit_date",
+      "permit_scale"
+    ],
+    "after_failed": [
+      "permit_scale"
+    ],
+    "recovered": [
+      "decision_no",
+      "permit_date"
+    ],
+    "newly_failed": []
+  },
+  {
+    "file": "0683-05. 배출시설등 설치운영허가 검토 결과서_에이치디현대오일뱅크_231201_정보공개본_R2.pdf",
+    "before_failed": [
+      "permit_date"
+    ],
+    "after_failed": [],
+    "recovered": [
+      "permit_date"
+    ],
+    "newly_failed": []
+  },
+  {
+    "file": "(제0629-02호) 배출시설등 설치·운영허가 검토결과서[한화에어로스페이스(주) 여수사업장]_변경허가(23.08)_비공개수정_250206(최종).pdf",
+    "before_failed": [
+      "decision_no",
+      "permit_date"
+    ],
+    "after_failed": [],
+    "recovered": [
+      "decision_no",
+      "permit_date"
+    ],
+    "newly_failed": []
+  },
+  {
+    "file": "(제0672-02호) 배출시설등 설치·운영허가 검토결과서[미원상사(주) 전주2공장]_변경허가 230914_비공개.pdf",
+    "before_failed": [
+      "decision_no",
+      "permit_date"
+    ],
+    "after_failed": [],
+    "recovered": [
+      "decision_no",
+      "permit_date"
+    ],
+    "newly_failed": []
+  },
+  {
+    "file": "(24.03.19) (장안) 배출시설등 설치·운영허가 검토결과서 (한국지역난방공사 수원지사 장안열원)_ 시설정보 비공개.pdf",
+    "before_failed": [
+      "business_registration_no",
+      "company_name",
+      "decision_no",
+      "industry_code_name",
+      "permit_date",
+      "permit_scale",
+      "site_address"
+    ],
+    "after_failed": [
+      "business_registration_no",
+      "industry_code_name",
+      "permit_scale",
+      "site_address"
+    ],
+    "recovered": [
+      "company_name",
+      "decision_no",
+      "permit_date"
+    ],
+    "newly_failed": []
+  },
+  {
+    "file": "0629-03 배출시설등 설치·운영허가 검토결과서[한화에어로스페이스(주) 여수사업장]_변경허가(2차)(24.06)_비공개수정_250206(최종).pdf",
+    "before_failed": [
+      "decision_no",
+      "permit_date",
+      "permit_scale"
+    ],
+    "after_failed": [
+      "permit_scale"
+    ],
+    "recovered": [
+      "decision_no",
+      "permit_date"
+    ],
+    "newly_failed": []
+  },
+  {
+    "file": "0708-02. 배출시설 등 설치운영허가 검토 결과서_오씨아이 주식회사 광양공장(비공개).pdf",
+    "before_failed": [
+      "business_registration_no",
+      "decision_no",
+      "industry_code_name",
+      "permit_date",
+      "permit_scale",
+      "site_address"
+    ],
+    "after_failed": [
+      "business_registration_no",
+      "industry_code_name",
+      "permit_date",
+      "permit_scale",
+      "site_address"
+    ],
+    "recovered": [
+      "decision_no"
+    ],
+    "newly_failed": []
+  },
+  {
+    "file": "343-01. 배출시설등 설치·운영허가 검토결과서((주)동남 서산공장).pdf",
+    "before_failed": [
+      "business_registration_no"
+    ],
+    "after_failed": [
+      "business_registration_no"
+    ],
+    "recovered": [],
+    "newly_failed": []
+  },
+  {
+    "file": "403-01. 배출시설등 설치·운영허가 검토결과서((주)청우스틸).pdf",
+    "before_failed": [
+      "business_registration_no"
+    ],
+    "after_failed": [
+      "business_registration_no"
+    ],
+    "recovered": [],
+    "newly_failed": []
+  },
+  {
+    "file": "321-01. 배출시설등 설치·운영허가 검토결과서(엠에코에너지(주)).pdf",
+    "before_failed": [
+      "decision_no"
+    ],
+    "after_failed": [],
+    "recovered": [
+      "decision_no"
+    ],
+    "newly_failed": []
+  },
+  {
+    "file": "[미원화학(주) 울산공장] 배출시설등 설치·운영허가 검토결과서_정보공개용 자료.pdf",
+    "before_failed": [
+      "industry_code_name"
+    ],
+    "after_failed": [
+      "industry_code_name"
+    ],
+    "recovered": [],
+    "newly_failed": []
+  },
+  {
+    "file": "1238-01. 배출시설등 설치운영허가 검토 결과서_스템코(주)_241231_관인_정보비공개.pdf",
+    "before_failed": [
+      "decision_no",
+      "permit_date"
+    ],
+    "after_failed": [],
+    "recovered": [
+      "decision_no",
+      "permit_date"
+    ],
+    "newly_failed": []
+  },
+  {
+    "file": "0630-01. 배출시설등 설치운영허가 검토 결과서_(주)팜한농 울산공장_230213.pdf",
+    "before_failed": [
+      "decision_no"
+    ],
+    "after_failed": [],
+    "recovered": [
+      "decision_no"
+    ],
+    "newly_failed": []
+  },
+  {
+    "file": "(제0672-01호) 배출시설등 설치·운영허가 검토결과서[미원상사(주) 전주2공장]_230202_비공개.pdf",
+    "before_failed": [
+      "decision_no",
+      "permit_date"
+    ],
+    "after_failed": [],
+    "recovered": [
+      "decision_no",
+      "permit_date"
+    ],
+    "newly_failed": []
+  },
+  {
+    "file": "0700-01. 배출시설등 설치운영허가 검토결과서(고려아연(주) 온산제련소)_비공개 Ⅱ.pdf",
+    "before_failed": [
+      "business_registration_no",
+      "company_name",
+      "decision_no",
+      "industry_code_name",
+      "permit_date",
+      "permit_scale",
+      "site_address"
+    ],
+    "after_failed": [
+      "business_registration_no",
+      "company_name",
+      "industry_code_name",
+      "permit_date",
+      "permit_scale",
+      "site_address"
+    ],
+    "recovered": [
+      "decision_no"
+    ],
+    "newly_failed": []
+  },
+  {
+    "file": "553-01. 배출시설등 설치·운영허가 검토결과서_SK머티리얼즈그룹포틴(비공개).pdf",
+    "before_failed": [
+      "decision_no"
+    ],
+    "after_failed": [],
+    "recovered": [
+      "decision_no"
+    ],
+    "newly_failed": []
+  },
+  {
+    "file": "0643-01 배출시설등 설치·운영허가 검토결과서_솔베이실리카코리아(주)(비공개).pdf",
+    "before_failed": [
+      "decision_no"
+    ],
+    "after_failed": [],
+    "recovered": [
+      "decision_no"
+    ],
+    "newly_failed": []
+  },
+  {
+    "file": "0687-01. 배출시설등 설치·운영허가 검토결과서_(주)선구(비공개).pdf",
+    "before_failed": [
+      "decision_no",
+      "permit_date"
+    ],
+    "after_failed": [],
+    "recovered": [
+      "decision_no",
+      "permit_date"
+    ],
+    "newly_failed": []
+  },
+  {
+    "file": "0693-01. 배출시설등 설치·운영허가 검토결과서_(주)한화방산 보은사업장(비공개).pdf",
+    "before_failed": [
+      "business_registration_no",
+      "company_name",
+      "decision_no",
+      "industry_code_name",
+      "permit_date",
+      "permit_scale",
+      "site_address"
+    ],
+    "after_failed": [
+      "business_registration_no",
+      "company_name",
+      "decision_no",
+      "industry_code_name",
+      "permit_date",
+      "permit_scale",
+      "site_address"
+    ],
+    "recovered": [],
+    "newly_failed": []
+  },
+  {
+    "file": "0629-01. 배출시설등 설치·운영허가 검토결과서_(주)한화방산 여수사업장(비공개).pdf",
+    "before_failed": [
+      "decision_no",
+      "permit_date"
+    ],
+    "after_failed": [],
+    "recovered": [
+      "decision_no",
+      "permit_date"
+    ],
+    "newly_failed": []
+  },
+  {
+    "file": "0650-01. 배출시설등 설치운영허가 검토 결과서_SK인천석유화학(주)(비공개).pdf",
+    "before_failed": [
+      "decision_no"
+    ],
+    "after_failed": [],
+    "recovered": [
+      "decision_no"
+    ],
+    "newly_failed": []
+  },
+  {
+    "file": "0690-01. 배출시설등 설치운영허가 검토 결과서_미원스페셜티케미칼(주) 전주공장(비공개).pdf",
+    "before_failed": [
+      "decision_no",
+      "permit_date"
+    ],
+    "after_failed": [
+      "permit_date"
+    ],
+    "recovered": [
+      "decision_no"
+    ],
+    "newly_failed": []
+  },
+  {
+    "file": "355-01. 배출시설등 설치·운영허가 검토결과서_현대제철(주)인천공장(비공개).pdf",
+    "before_failed": [
+      "decision_no"
+    ],
+    "after_failed": [],
+    "recovered": [
+      "decision_no"
+    ],
+    "newly_failed": []
+  },
+  {
+    "file": "0585-01. 배출시설등 설치 운영허가 검토결과서_토소남해실리카(주)(비공개).pdf",
+    "before_failed": [
+      "business_registration_no",
+      "company_name",
+      "decision_no",
+      "industry_code_name",
+      "permit_date",
+      "permit_scale",
+      "site_address"
+    ],
+    "after_failed": [
+      "business_registration_no",
+      "company_name",
+      "decision_no",
+      "industry_code_name",
+      "permit_date",
+      "permit_scale",
+      "site_address"
+    ],
+    "recovered": [],
+    "newly_failed": []
+  },
+  {
+    "file": "0526.-01.배출시설등 설치·운영허가 검토결과서_현대제철(주)포항1공장(비공개).pdf",
+    "before_failed": [
+      "decision_no"
+    ],
+    "after_failed": [],
+    "recovered": [
+      "decision_no"
+    ],
+    "newly_failed": []
+  },
+  {
+    "file": "0338-01.배출시설등 설치·운영허가 검토결과서_현대제철(주)포항2공장(비공개).pdf",
+    "before_failed": [
+      "decision_no"
+    ],
+    "after_failed": [],
+    "recovered": [
+      "decision_no"
+    ],
+    "newly_failed": []
+  },
+  {
+    "file": "0326-01. 배출시설등 설치 운영허가 검토결과서_현대스틸파이프(비공개).pdf",
+    "before_failed": [
+      "decision_no",
+      "industry_code_name",
+      "permit_date",
+      "permit_scale",
+      "site_address"
+    ],
+    "after_failed": [
+      "decision_no",
+      "industry_code_name",
+      "permit_date",
+      "permit_scale",
+      "site_address"
+    ],
+    "recovered": [],
+    "newly_failed": []
+  },
+  {
+    "file": "0699-01. 배출시설등 설치 운영허가 검토결과서_(주)이수화학 온산공장(비공개).pdf",
+    "before_failed": [
+      "business_registration_no",
+      "company_name",
+      "decision_no",
+      "industry_code_name",
+      "permit_date",
+      "permit_scale",
+      "site_address"
+    ],
+    "after_failed": [
+      "decision_no"
+    ],
+    "recovered": [
+      "business_registration_no",
+      "company_name",
+      "industry_code_name",
+      "permit_date",
+      "permit_scale",
+      "site_address"
+    ],
+    "newly_failed": []
+  },
+  {
+    "file": "(0671-01) 배출시설등 설치운영허가 검토결과서_미원스페셜티케미칼 충주공장(비공개).pdf",
+    "before_failed": [
+      "industry_code_name",
+      "permit_date"
+    ],
+    "after_failed": [
+      "industry_code_name",
+      "permit_date"
+    ],
+    "recovered": [],
+    "newly_failed": []
+  }
+]

@@ -1,0 +1,33 @@
+{
+  "name": "mcm-ieps-scraper",
+  "version": "0.1.0",
+  "private": true,
+  "description": "IEPS 통합환경허가 게시판 수집/다운로드/파싱 CLI",
+  "scripts": {
+    "collect": "ts-node --project tsconfig.json scripts/cli-collect.ts",
+    "worker:aws": "ts-node --project tsconfig.json scripts/aws-worker.ts",
+    "recon": "ts-node --project tsconfig.json scripts/cli-recon.ts",
+    "scrape": "ts-node --project tsconfig.json scripts/cli-scraper.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-sqs": "^3.1048.0",
+    "@types/adm-zip": "^0.5.5",
+    "adm-zip": "^0.5.16",
+    "better-sqlite3": "^12.6.2",
+    "cheerio": "^1.0.0-rc.12",
+    "iconv-lite": "^0.6.3",
+    "node-cron": "^4.2.1",
+    "playwright": "^1.57.0",
+    "sql.js": "^1.13.0",
+    "uuid": "^13.0.0",
+    "xml2js": "^0.6.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/node-cron": "^3.0.11",
+    "@types/uuid": "^10.0.0",
+    "@types/xml2js": "^0.4.14",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.0"
+  }
+}

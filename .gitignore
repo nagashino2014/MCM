@@ -1,0 +1,52 @@
+# Dependencies
+**/node_modules/
+
+# Build outputs
+**/.next/
+**/dist/
+**/build/
+**/coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+# Python environments and caches
+.venv*/
+venv*/
+**/__pycache__/
+**/.pytest_cache/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+*.pem
+ADMIN_PASSWOR.txt
+
+# Local data and generated artifacts
+data/ieps/raw/
+data/ieps/extracted/
+data/ieps/logs/
+data/ieps/scrape/
+data/ieps/db.sqlite
+table_cache/
+frontend/public/uploads/
+frontend/data/chromadb/
+frontend/save/ExtractedData/
+backend/data/jobs/
+backend/test_cache*/
+backend/tests/frontend/save/ExtractedData/
+backend/tests/test_output/
+
+# Terraform local state and providers
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+
+# OS/editor
+.DS_Store
+Thumbs.db

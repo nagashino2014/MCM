@@ -1,0 +1,3982 @@
+{
+  "generated_at": "2026-05-20T08:49:02.550539+00:00",
+  "workspace": "C:\\CodingProject\\MCM",
+  "database": {
+    "exists": true,
+    "path": "data\\ieps\\db.sqlite",
+    "bytes": 31059968,
+    "integrity_check": "ok",
+    "foreign_key_check": [
+      {
+        "table": "product_outputs",
+        "rowid": 236,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 237,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 238,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 239,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 245,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 266,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 267,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 280,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 299,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 300,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 301,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 302,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 303,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 304,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 305,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 306,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 307,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 308,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 309,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 310,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 311,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 312,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 313,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 314,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 315,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 316,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 317,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 318,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 319,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 320,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 321,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 322,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 323,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 324,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 325,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 326,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 327,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 328,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 329,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 330,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 331,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 332,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 333,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 339,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 340,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 341,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 342,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 343,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 344,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 345,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 346,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 347,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 348,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 353,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 354,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 355,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 356,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 357,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 358,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 359,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 360,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 361,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 362,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 363,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 364,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 365,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 366,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 367,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 368,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 369,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 370,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 371,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 372,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 373,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 374,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 375,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 376,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 377,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 378,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 399,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 400,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 401,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 402,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 403,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 422,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 424,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 425,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 426,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 427,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 428,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 429,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 446,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 447,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 448,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 449,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 450,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 460,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 461,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 462,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 718,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 719,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 720,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 721,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 722,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 723,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 724,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 725,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 726,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 727,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 1205,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 1206,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 1207,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 1208,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 1209,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 1210,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 1211,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 1212,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 1213,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 1214,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 1215,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 1216,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 1217,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 1218,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 1219,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 1220,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 1221,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 1222,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 1223,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 1696,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 1697,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 1698,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 1699,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 1700,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 1701,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 2203,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 2204,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 2247,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 2251,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 2252,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "product_outputs",
+        "rowid": 18550,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "permits",
+        "rowid": 989,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "permits",
+        "rowid": 990,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "permits",
+        "rowid": 1369,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "permits",
+        "rowid": 1374,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "permit_scales",
+        "rowid": 1018,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "permit_scales",
+        "rowid": 1024,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "permit_scales",
+        "rowid": 1028,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "permit_scales",
+        "rowid": 1032,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "permit_scales",
+        "rowid": 1038,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "permit_scales",
+        "rowid": 1039,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "permit_scales",
+        "rowid": 1041,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "permit_scales",
+        "rowid": 1042,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "permit_scales",
+        "rowid": 1043,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "permit_scales",
+        "rowid": 1044,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "permit_scales",
+        "rowid": 1047,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "permit_scales",
+        "rowid": 1048,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "permit_scales",
+        "rowid": 1049,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "permit_scales",
+        "rowid": 1050,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "permit_scales",
+        "rowid": 1053,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "permit_scales",
+        "rowid": 1054,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "permit_scales",
+        "rowid": 1055,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "permit_scales",
+        "rowid": 1056,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "permit_scales",
+        "rowid": 1057,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "permit_scales",
+        "rowid": 1058,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "permit_scales",
+        "rowid": 1065,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "permit_scales",
+        "rowid": 1066,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "permit_scales",
+        "rowid": 1067,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "permit_scales",
+        "rowid": 1071,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "permit_scales",
+        "rowid": 1073,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "permit_scales",
+        "rowid": 1077,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "permit_scales",
+        "rowid": 1079,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "permit_scales",
+        "rowid": 1135,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "permit_scales",
+        "rowid": 1229,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "permit_scales",
+        "rowid": 1293,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "permit_scales",
+        "rowid": 1377,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "permit_scales",
+        "rowid": 1405,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "permit_scales",
+        "rowid": 1408,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "permit_scales",
+        "rowid": 1434,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "permit_scales",
+        "rowid": 7512,
+        "parent": "permits",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 2,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 5,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 38,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 39,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 44,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 71,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 91,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 109,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 111,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 119,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 129,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 131,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 141,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 145,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 153,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 154,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 186,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 191,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 218,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 221,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 232,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 237,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 245,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 275,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 285,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 321,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 328,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 340,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 342,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 363,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 382,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 385,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 387,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 407,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 413,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 436,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 445,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 446,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 472,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 475,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 478,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 483,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 506,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 536,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 598,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 608,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 617,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 632,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 659,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 730,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 746,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 758,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 812,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 822,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 823,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 830,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 842,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 848,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 851,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 852,
+        "parent": "facilities",
+        "fkid": 0
+      },
+      {
+        "table": "facility_annual_reports",
+        "rowid": 855,
+        "parent": "facilities",
+        "fkid": 0
+      }
+    ],
+    "tables": {
+      "alerts": {
+        "row_count": 0,
+        "columns": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": null,
+            "primary_key": true
+          },
+          {
+            "name": "severity",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "source",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "code",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "title",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "body",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "payload_json",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "job_id",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "created_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "acknowledged_at",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "acknowledged_by",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          }
+        ]
+      },
+      "attachments": {
+        "row_count": 3850,
+        "columns": [
+          {
+            "name": "file_id",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": true
+          },
+          {
+            "name": "doc_id",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "file_name",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "file_type",
+            "type": "TEXT",
+            "notnull": false,
+            "default": "''",
+            "primary_key": false
+          },
+          {
+            "name": "file_size",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "download_url",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "local_path",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "downloaded_at",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "status",
+            "type": "TEXT",
+            "notnull": false,
+            "default": "'pending'",
+            "primary_key": false
+          },
+          {
+            "name": "download_method",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "download_attempts",
+            "type": "INTEGER",
+            "notnull": true,
+            "default": "0",
+            "primary_key": false
+          },
+          {
+            "name": "last_error",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          }
+        ]
+      },
+      "audit_log": {
+        "row_count": 300,
+        "columns": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": null,
+            "primary_key": true
+          },
+          {
+            "name": "actor_user_id",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "action",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "target_table",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "target_id",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "before_json",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "after_json",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "created_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          }
+        ]
+      },
+      "collection_configs": {
+        "row_count": 3,
+        "columns": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": null,
+            "primary_key": true
+          },
+          {
+            "name": "name",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "config_json",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "is_default",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": "0",
+            "primary_key": false
+          },
+          {
+            "name": "created_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "updated_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          }
+        ]
+      },
+      "documents": {
+        "row_count": 2812,
+        "columns": [
+          {
+            "name": "doc_id",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": true
+          },
+          {
+            "name": "board_id",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "org_id",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "title",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "content",
+            "type": "TEXT",
+            "notnull": false,
+            "default": "''",
+            "primary_key": false
+          },
+          {
+            "name": "published_date",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "source_url",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "scraped_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "updated_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "metadata",
+            "type": "TEXT",
+            "notnull": false,
+            "default": "'{}'",
+            "primary_key": false
+          }
+        ]
+      },
+      "download_events": {
+        "row_count": 611,
+        "columns": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": null,
+            "primary_key": true
+          },
+          {
+            "name": "file_id",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "download_url",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "method",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "status",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "attempt_no",
+            "type": "INTEGER",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "bytes",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "error",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "job_id",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "occurred_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          }
+        ]
+      },
+      "facilities": {
+        "row_count": 1403,
+        "columns": [
+          {
+            "name": "facility_id",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": true
+          },
+          {
+            "name": "company_name",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "business_registration_no",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "site_address",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "phone_number",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "industry_code",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "industry_name",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "normalized_company_name",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "normalized_address",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "created_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "updated_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "region_sido",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "region_sigungu",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "source",
+            "type": "TEXT",
+            "notnull": true,
+            "default": "'ieps'",
+            "primary_key": false
+          },
+          {
+            "name": "memo",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "source_doc_type",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "logo_path",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "company_size",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          }
+        ]
+      },
+      "facility_aliases": {
+        "row_count": 2,
+        "columns": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": null,
+            "primary_key": true
+          },
+          {
+            "name": "facility_id",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "alias",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "alias_type",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "note",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "is_primary",
+            "type": "INTEGER",
+            "notnull": true,
+            "default": "0",
+            "primary_key": false
+          },
+          {
+            "name": "created_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "updated_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          }
+        ]
+      },
+      "facility_annual_reports": {
+        "row_count": 846,
+        "columns": [
+          {
+            "name": "facility_id",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": true
+          },
+          {
+            "name": "report_year",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "air_class",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "air_amount_ton_per_year",
+            "type": "REAL",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "water_class",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "wastewater_amount_m3_per_day",
+            "type": "REAL",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "product_outputs_json",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "source_doc_id",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "source_attachment_id",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "source_pdf_path",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "source_page_scale",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "source_page_product",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "parsed_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "updated_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          }
+        ]
+      },
+      "facility_contact_departments": {
+        "row_count": 1,
+        "columns": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": null,
+            "primary_key": true
+          },
+          {
+            "name": "facility_id",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "department_name",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "phone_number",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "fax_number",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "duties",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "created_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "updated_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          }
+        ]
+      },
+      "facility_contact_logs": {
+        "row_count": 2,
+        "columns": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": null,
+            "primary_key": true
+          },
+          {
+            "name": "facility_id",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "department_id",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "person_id",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "event_type",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "event_date",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "memo",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "created_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          }
+        ]
+      },
+      "facility_contact_people": {
+        "row_count": 1,
+        "columns": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": null,
+            "primary_key": true
+          },
+          {
+            "name": "facility_id",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "department_id",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "person_name",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "title",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "office_phone",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "mobile_phone",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "email",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "duties",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "status",
+            "type": "TEXT",
+            "notnull": true,
+            "default": "'active'",
+            "primary_key": false
+          },
+          {
+            "name": "appointed_at",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "transferred_at",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "resigned_at",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "created_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "updated_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          }
+        ]
+      },
+      "facility_group_companies": {
+        "row_count": 0,
+        "columns": [
+          {
+            "name": "company_id",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": true
+          },
+          {
+            "name": "group_id",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "division_id",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "company_name",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "business_registration_no",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "address",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "phone_number",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "logo_path",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "is_headquarters",
+            "type": "INTEGER",
+            "notnull": true,
+            "default": "0",
+            "primary_key": false
+          },
+          {
+            "name": "created_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "updated_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          }
+        ]
+      },
+      "facility_group_divisions": {
+        "row_count": 2,
+        "columns": [
+          {
+            "name": "division_id",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": true
+          },
+          {
+            "name": "group_id",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "division_name",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "sort_order",
+            "type": "INTEGER",
+            "notnull": true,
+            "default": "0",
+            "primary_key": false
+          },
+          {
+            "name": "created_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "updated_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          }
+        ]
+      },
+      "facility_group_memberships": {
+        "row_count": 0,
+        "columns": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": null,
+            "primary_key": true
+          },
+          {
+            "name": "facility_id",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "group_id",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "company_id",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "relation_type",
+            "type": "TEXT",
+            "notnull": true,
+            "default": "'site'",
+            "primary_key": false
+          },
+          {
+            "name": "started_at",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "ended_at",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "created_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "updated_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          }
+        ]
+      },
+      "facility_groups": {
+        "row_count": 1,
+        "columns": [
+          {
+            "name": "group_id",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": true
+          },
+          {
+            "name": "group_name",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "logo_path",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "total_revenue",
+            "type": "REAL",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "employee_count",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "description",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "created_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "updated_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          }
+        ]
+      },
+      "facility_history_events": {
+        "row_count": 15,
+        "columns": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": null,
+            "primary_key": true
+          },
+          {
+            "name": "facility_id",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "event_type",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "event_date",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "previous_company_name",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "new_company_name",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "previous_business_registration_no",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "new_business_registration_no",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "previous_group_name",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "new_group_name",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "related_company_name",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "source_facility_id",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "memo",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "source",
+            "type": "TEXT",
+            "notnull": true,
+            "default": "'manual'",
+            "primary_key": false
+          },
+          {
+            "name": "created_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "created_by",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          }
+        ]
+      },
+      "facility_manual_products": {
+        "row_count": 0,
+        "columns": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": null,
+            "primary_key": true
+          },
+          {
+            "name": "facility_id",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "product_name",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "amount",
+            "type": "REAL",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "unit",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "note",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "created_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "updated_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          }
+        ]
+      },
+      "facility_merge_aliases": {
+        "row_count": 106,
+        "columns": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": null,
+            "primary_key": true
+          },
+          {
+            "name": "target_facility_id",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "source_facility_id",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "previous_company_name",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "previous_business_registration_no",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "merge_reason",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "created_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "created_by",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          }
+        ]
+      },
+      "facility_merge_exclusions": {
+        "row_count": 1,
+        "columns": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": null,
+            "primary_key": true
+          },
+          {
+            "name": "match_type",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "match_value",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "facility_ids_key",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "facility_ids_json",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "reason",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "created_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "created_by",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          }
+        ]
+      },
+      "facility_permit_successions": {
+        "row_count": 3,
+        "columns": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": null,
+            "primary_key": true
+          },
+          {
+            "name": "target_facility_id",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "source_facility_id",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "permit_id",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "decision_no",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "permit_type",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "permit_date",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "previous_company_name",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "previous_business_registration_no",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "merge_reason",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "created_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "created_by",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          }
+        ]
+      },
+      "facility_service_categories": {
+        "row_count": 4,
+        "columns": [
+          {
+            "name": "facility_id",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": true
+          },
+          {
+            "name": "category",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": true
+          },
+          {
+            "name": "created_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "created_by",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          }
+        ]
+      },
+      "parsed_fields": {
+        "row_count": 22116,
+        "columns": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": null,
+            "primary_key": true
+          },
+          {
+            "name": "attachment_id",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "doc_id",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "rule_id",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "field_label",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "raw_value",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "normalized_value",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "source_page",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "source_text",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "confidence",
+            "type": "REAL",
+            "notnull": false,
+            "default": "0",
+            "primary_key": false
+          },
+          {
+            "name": "needs_review",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": "0",
+            "primary_key": false
+          },
+          {
+            "name": "reviewed_value",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "created_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "error",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "file_name",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "pdf_path",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          }
+        ]
+      },
+      "permit_scales": {
+        "row_count": 1297,
+        "columns": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": null,
+            "primary_key": true
+          },
+          {
+            "name": "permit_id",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "air_class",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "air_amount_ton_per_year",
+            "type": "REAL",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "water_class",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "wastewater_amount_m3_per_day",
+            "type": "REAL",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "source_page",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "source_text",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          }
+        ]
+      },
+      "permits": {
+        "row_count": 1338,
+        "columns": [
+          {
+            "name": "permit_id",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": true
+          },
+          {
+            "name": "facility_id",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "decision_no",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "permit_type",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "permit_date",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "is_first_permit",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": "0",
+            "primary_key": false
+          },
+          {
+            "name": "source_doc_id",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "source_attachment_id",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "created_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "updated_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          }
+        ]
+      },
+      "product_outputs": {
+        "row_count": 4109,
+        "columns": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": null,
+            "primary_key": true
+          },
+          {
+            "name": "permit_id",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "product_name",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "production_amount",
+            "type": "REAL",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "production_unit",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "source_page",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "source_text",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "source_industry_code",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          }
+        ]
+      },
+      "scrape_logs": {
+        "row_count": 7,
+        "columns": [
+          {
+            "name": "log_id",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": true
+          },
+          {
+            "name": "board_id",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "schedule_id",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "started_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "finished_at",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "status",
+            "type": "TEXT",
+            "notnull": false,
+            "default": "'running'",
+            "primary_key": false
+          },
+          {
+            "name": "docs_scraped",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": "0",
+            "primary_key": false
+          },
+          {
+            "name": "docs_skipped",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": "0",
+            "primary_key": false
+          },
+          {
+            "name": "docs_failed",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": "0",
+            "primary_key": false
+          },
+          {
+            "name": "pages_processed",
+            "type": "INTEGER",
+            "notnull": false,
+            "default": "0",
+            "primary_key": false
+          },
+          {
+            "name": "error_message",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          }
+        ]
+      },
+      "users": {
+        "row_count": 3,
+        "columns": [
+          {
+            "name": "user_id",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": true
+          },
+          {
+            "name": "email",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "password_hash",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "name",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "role",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "status",
+            "type": "TEXT",
+            "notnull": true,
+            "default": "'active'",
+            "primary_key": false
+          },
+          {
+            "name": "created_by",
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "created_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          },
+          {
+            "name": "updated_at",
+            "type": "TEXT",
+            "notnull": true,
+            "default": null,
+            "primary_key": false
+          }
+        ]
+      }
+    },
+    "indexes": [
+      {
+        "name": "idx_alerts_created",
+        "tbl_name": "alerts",
+        "sql": "CREATE INDEX idx_alerts_created ON alerts(created_at)"
+      },
+      {
+        "name": "idx_alerts_open",
+        "tbl_name": "alerts",
+        "sql": "CREATE INDEX idx_alerts_open ON alerts(acknowledged_at)"
+      },
+      {
+        "name": "idx_alerts_severity",
+        "tbl_name": "alerts",
+        "sql": "CREATE INDEX idx_alerts_severity ON alerts(severity)"
+      },
+      {
+        "name": "idx_attachments_doc",
+        "tbl_name": "attachments",
+        "sql": "CREATE INDEX idx_attachments_doc ON attachments(doc_id)"
+      },
+      {
+        "name": "idx_attachments_method",
+        "tbl_name": "attachments",
+        "sql": "CREATE INDEX idx_attachments_method ON attachments(download_method)"
+      },
+      {
+        "name": "idx_attachments_status",
+        "tbl_name": "attachments",
+        "sql": "CREATE INDEX idx_attachments_status ON attachments(status)"
+      },
+      {
+        "name": "idx_audit_log_action",
+        "tbl_name": "audit_log",
+        "sql": "CREATE INDEX idx_audit_log_action ON audit_log(action)"
+      },
+      {
+        "name": "idx_audit_log_actor",
+        "tbl_name": "audit_log",
+        "sql": "CREATE INDEX idx_audit_log_actor ON audit_log(actor_user_id)"
+      },
+      {
+        "name": "idx_audit_log_target",
+        "tbl_name": "audit_log",
+        "sql": "CREATE INDEX idx_audit_log_target ON audit_log(target_table, target_id)"
+      },
+      {
+        "name": "idx_collection_configs_default",
+        "tbl_name": "collection_configs",
+        "sql": "CREATE INDEX idx_collection_configs_default ON collection_configs(is_default)"
+      },
+      {
+        "name": "idx_documents_board",
+        "tbl_name": "documents",
+        "sql": "CREATE INDEX idx_documents_board ON documents(board_id)"
+      },
+      {
+        "name": "idx_documents_date",
+        "tbl_name": "documents",
+        "sql": "CREATE INDEX idx_documents_date ON documents(published_date)"
+      },
+      {
+        "name": "idx_documents_org",
+        "tbl_name": "documents",
+        "sql": "CREATE INDEX idx_documents_org ON documents(org_id)"
+      },
+      {
+        "name": "idx_documents_url",
+        "tbl_name": "documents",
+        "sql": "CREATE INDEX idx_documents_url ON documents(source_url)"
+      },
+      {
+        "name": "idx_download_events_job",
+        "tbl_name": "download_events",
+        "sql": "CREATE INDEX idx_download_events_job ON download_events(job_id)"
+      },
+      {
+        "name": "idx_download_events_method_status",
+        "tbl_name": "download_events",
+        "sql": "CREATE INDEX idx_download_events_method_status ON download_events(method, status)"
+      },
+      {
+        "name": "idx_download_events_time",
+        "tbl_name": "download_events",
+        "sql": "CREATE INDEX idx_download_events_time ON download_events(occurred_at)"
+      },
+      {
+        "name": "idx_facilities_address",
+        "tbl_name": "facilities",
+        "sql": "CREATE INDEX idx_facilities_address ON facilities(normalized_address)"
+      },
+      {
+        "name": "idx_facilities_brn_company_address",
+        "tbl_name": "facilities",
+        "sql": "CREATE INDEX idx_facilities_brn_company_address\n    ON facilities(business_registration_no, normalized_company_name, normalized_address)\n    WHERE business_registration_no IS NOT NULL\n      AND normalized_company_name IS NOT NULL\n      AND normalized_address IS NOT NULL\n  "
+      },
+      {
+        "name": "idx_facilities_company",
+        "tbl_name": "facilities",
+        "sql": "CREATE INDEX idx_facilities_company ON facilities(normalized_company_name)"
+      },
+      {
+        "name": "idx_facilities_company_size",
+        "tbl_name": "facilities",
+        "sql": "CREATE INDEX idx_facilities_company_size ON facilities(company_size)"
+      },
+      {
+        "name": "idx_facilities_sido",
+        "tbl_name": "facilities",
+        "sql": "CREATE INDEX idx_facilities_sido ON facilities(region_sido)"
+      },
+      {
+        "name": "idx_facilities_sigungu",
+        "tbl_name": "facilities",
+        "sql": "CREATE INDEX idx_facilities_sigungu ON facilities(region_sigungu)"
+      },
+      {
+        "name": "idx_facilities_source",
+        "tbl_name": "facilities",
+        "sql": "CREATE INDEX idx_facilities_source ON facilities(source)"
+      },
+      {
+        "name": "idx_facility_aliases_facility",
+        "tbl_name": "facility_aliases",
+        "sql": "CREATE INDEX idx_facility_aliases_facility ON facility_aliases(facility_id)"
+      },
+      {
+        "name": "idx_far_year",
+        "tbl_name": "facility_annual_reports",
+        "sql": "CREATE INDEX idx_far_year ON facility_annual_reports(report_year)"
+      },
+      {
+        "name": "idx_facility_contact_departments_facility",
+        "tbl_name": "facility_contact_departments",
+        "sql": "CREATE INDEX idx_facility_contact_departments_facility ON facility_contact_departments(facility_id)"
+      },
+      {
+        "name": "idx_facility_contact_logs_department",
+        "tbl_name": "facility_contact_logs",
+        "sql": "CREATE INDEX idx_facility_contact_logs_department ON facility_contact_logs(department_id)"
+      },
+      {
+        "name": "idx_facility_contact_logs_facility",
+        "tbl_name": "facility_contact_logs",
+        "sql": "CREATE INDEX idx_facility_contact_logs_facility ON facility_contact_logs(facility_id)"
+      },
+      {
+        "name": "idx_facility_contact_logs_person",
+        "tbl_name": "facility_contact_logs",
+        "sql": "CREATE INDEX idx_facility_contact_logs_person ON facility_contact_logs(person_id)"
+      },
+      {
+        "name": "idx_facility_contact_people_department",
+        "tbl_name": "facility_contact_people",
+        "sql": "CREATE INDEX idx_facility_contact_people_department ON facility_contact_people(department_id)"
+      },
+      {
+        "name": "idx_facility_contact_people_facility",
+        "tbl_name": "facility_contact_people",
+        "sql": "CREATE INDEX idx_facility_contact_people_facility ON facility_contact_people(facility_id)"
+      },
+      {
+        "name": "idx_facility_group_companies_division",
+        "tbl_name": "facility_group_companies",
+        "sql": "CREATE INDEX idx_facility_group_companies_division ON facility_group_companies(division_id)"
+      },
+      {
+        "name": "idx_facility_group_companies_group",
+        "tbl_name": "facility_group_companies",
+        "sql": "CREATE INDEX idx_facility_group_companies_group ON facility_group_companies(group_id)"
+      },
+      {
+        "name": "idx_facility_group_divisions_group",
+        "tbl_name": "facility_group_divisions",
+        "sql": "CREATE INDEX idx_facility_group_divisions_group ON facility_group_divisions(group_id)"
+      },
+      {
+        "name": "idx_facility_group_memberships_company",
+        "tbl_name": "facility_group_memberships",
+        "sql": "CREATE INDEX idx_facility_group_memberships_company ON facility_group_memberships(company_id)"
+      },
+      {
+        "name": "idx_facility_group_memberships_group",
+        "tbl_name": "facility_group_memberships",
+        "sql": "CREATE INDEX idx_facility_group_memberships_group ON facility_group_memberships(group_id)"
+      },
+      {
+        "name": "idx_facility_groups_name",
+        "tbl_name": "facility_groups",
+        "sql": "CREATE INDEX idx_facility_groups_name ON facility_groups(group_name)"
+      },
+      {
+        "name": "idx_facility_history_events_facility",
+        "tbl_name": "facility_history_events",
+        "sql": "CREATE INDEX idx_facility_history_events_facility ON facility_history_events(facility_id)"
+      },
+      {
+        "name": "idx_facility_history_events_type",
+        "tbl_name": "facility_history_events",
+        "sql": "CREATE INDEX idx_facility_history_events_type ON facility_history_events(event_type)"
+      },
+      {
+        "name": "idx_facility_manual_products_facility",
+        "tbl_name": "facility_manual_products",
+        "sql": "CREATE INDEX idx_facility_manual_products_facility ON facility_manual_products(facility_id)"
+      },
+      {
+        "name": "idx_facility_merge_aliases_source",
+        "tbl_name": "facility_merge_aliases",
+        "sql": "CREATE INDEX idx_facility_merge_aliases_source ON facility_merge_aliases(source_facility_id)"
+      },
+      {
+        "name": "idx_facility_merge_aliases_target",
+        "tbl_name": "facility_merge_aliases",
+        "sql": "CREATE INDEX idx_facility_merge_aliases_target ON facility_merge_aliases(target_facility_id)"
+      },
+      {
+        "name": "idx_facility_merge_exclusions_match",
+        "tbl_name": "facility_merge_exclusions",
+        "sql": "CREATE INDEX idx_facility_merge_exclusions_match ON facility_merge_exclusions(match_type, facility_ids_key)"
+      },
+      {
+        "name": "idx_facility_permit_successions_permit",
+        "tbl_name": "facility_permit_successions",
+        "sql": "CREATE INDEX idx_facility_permit_successions_permit ON facility_permit_successions(permit_id)"
+      },
+      {
+        "name": "idx_facility_permit_successions_source",
+        "tbl_name": "facility_permit_successions",
+        "sql": "CREATE INDEX idx_facility_permit_successions_source ON facility_permit_successions(source_facility_id)"
+      },
+      {
+        "name": "idx_facility_permit_successions_target",
+        "tbl_name": "facility_permit_successions",
+        "sql": "CREATE INDEX idx_facility_permit_successions_target ON facility_permit_successions(target_facility_id)"
+      },
+      {
+        "name": "idx_facility_service_categories_category",
+        "tbl_name": "facility_service_categories",
+        "sql": "CREATE INDEX idx_facility_service_categories_category ON facility_service_categories(category)"
+      },
+      {
+        "name": "idx_parsed_fields_attachment",
+        "tbl_name": "parsed_fields",
+        "sql": "CREATE INDEX idx_parsed_fields_attachment ON parsed_fields(attachment_id)"
+      },
+      {
+        "name": "idx_parsed_fields_review",
+        "tbl_name": "parsed_fields",
+        "sql": "CREATE INDEX idx_parsed_fields_review ON parsed_fields(needs_review)"
+      },
+      {
+        "name": "idx_parsed_fields_rule",
+        "tbl_name": "parsed_fields",
+        "sql": "CREATE INDEX idx_parsed_fields_rule ON parsed_fields(rule_id)"
+      },
+      {
+        "name": "idx_permit_scales_permit",
+        "tbl_name": "permit_scales",
+        "sql": "CREATE INDEX idx_permit_scales_permit ON permit_scales(permit_id)"
+      },
+      {
+        "name": "idx_permits_decision",
+        "tbl_name": "permits",
+        "sql": "CREATE UNIQUE INDEX idx_permits_decision ON permits(decision_no)"
+      },
+      {
+        "name": "idx_permits_facility",
+        "tbl_name": "permits",
+        "sql": "CREATE INDEX idx_permits_facility ON permits(facility_id)"
+      },
+      {
+        "name": "idx_product_outputs_permit",
+        "tbl_name": "product_outputs",
+        "sql": "CREATE INDEX idx_product_outputs_permit ON product_outputs(permit_id)"
+      },
+      {
+        "name": "idx_product_outputs_source_industry",
+        "tbl_name": "product_outputs",
+        "sql": "CREATE INDEX idx_product_outputs_source_industry ON product_outputs(source_industry_code)"
+      },
+      {
+        "name": "idx_logs_board",
+        "tbl_name": "scrape_logs",
+        "sql": "CREATE INDEX idx_logs_board ON scrape_logs(board_id)"
+      },
+      {
+        "name": "idx_logs_started",
+        "tbl_name": "scrape_logs",
+        "sql": "CREATE INDEX idx_logs_started ON scrape_logs(started_at)"
+      },
+      {
+        "name": "idx_logs_status",
+        "tbl_name": "scrape_logs",
+        "sql": "CREATE INDEX idx_logs_status ON scrape_logs(status)"
+      },
+      {
+        "name": "idx_users_email",
+        "tbl_name": "users",
+        "sql": "CREATE INDEX idx_users_email ON users(email)"
+      },
+      {
+        "name": "idx_users_role",
+        "tbl_name": "users",
+        "sql": "CREATE INDEX idx_users_role ON users(role)"
+      }
+    ]
+  },
+  "files": {
+    "ieps_raw": {
+      "exists": true,
+      "files": 579,
+      "bytes": 3513389914,
+      "suffix_counts": {
+        ".pdf": 579
+      }
+    },
+    "ieps_extracted": {
+      "exists": true,
+      "files": 2741,
+      "bytes": 10774507,
+      "suffix_counts": {
+        ".json": 2741
+      }
+    },
+    "ieps_logs": {
+      "exists": true,
+      "files": 0,
+      "bytes": 0,
+      "suffix_counts": {}
+    },
+    "ieps_summary": {
+      "exists": true,
+      "files": 1,
+      "bytes": 1630
+    },
+    "logos": {
+      "exists": true,
+      "files": 1,
+      "bytes": 8396,
+      "suffix_counts": {
+        ".jpg": 1
+      }
+    },
+    "ksic": {
+      "exists": true,
+      "files": 1,
+      "bytes": 174223
+    },
+    "chromadb": {
+      "exists": false,
+      "files": 0,
+      "bytes": 0
+    },
+    "backend_jobs": {
+      "exists": true,
+      "files": 13,
+      "bytes": 12238,
+      "suffix_counts": {
+        ".json": 13
+      }
+    }
+  },
+  "environment": {
+    "IEPS_DB_PATH": {
+      "present": false,
+      "secret": false
+    },
+    "SCRAPER_DB_PATH": {
+      "present": false,
+      "secret": false
+    },
+    "IEPS_BACKEND_URL": {
+      "present": false,
+      "secret": false
+    },
+    "IEPS_PLAYWRIGHT": {
+      "present": false,
+      "secret": false
+    },
+    "AUTH_SECRET": {
+      "present": false,
+      "secret": true
+    },
+    "ADMIN_EMAIL": {
+      "present": false,
+      "secret": false
+    },
+    "ADMIN_PASSWORD": {
+      "present": false,
+      "secret": true
+    },
+    "ADMIN_NAME": {
+      "present": false,
+      "secret": false
+    },
+    "OCR_USE_GPU": {
+      "present": false,
+      "secret": false
+    },
+    "DOCKER_ENV": {
+      "present": false,
+      "secret": false
+    },
+    "KSIC_JSON_PATH": {
+      "present": false,
+      "secret": false
+    },
+    "OPENAI_API_KEY": {
+      "present": false,
+      "secret": true
+    },
+    "R2_ENDPOINT": {
+      "present": false,
+      "secret": false
+    },
+    "R2_ACCESS_KEY_ID": {
+      "present": false,
+      "secret": true
+    },
+    "R2_SECRET_ACCESS_KEY": {
+      "present": false,
+      "secret": true
+    },
+    "R2_BUCKET_NAME": {
+      "present": false,
+      "secret": false
+    }
+  }
+}

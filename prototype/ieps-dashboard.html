@@ -1,0 +1,1447 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PermitIQ — IEPS 통합허가 대상사업장 관리</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            background: "#F2F4F7",
+            foreground: "#171717",
+            primary: "#16A34A",
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    :root {
+      --background: #F2F4F7;
+      --foreground: #171717;
+      --primary: #16A34A;
+    }
+
+    html, body {
+      background: var(--background);
+      color: var(--foreground);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    /* Glass morphism utilities (Web Scraper Final 동일) */
+    .glass-panel {
+      background: rgba(255, 255, 255, 0.7);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.6);
+      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05);
+    }
+
+    .glass-card {
+      background: rgba(255, 255, 255, 0.55);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.6);
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+    }
+
+    .glass-button {
+      background: rgba(255, 255, 255, 0.5);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.7);
+      transition: all 0.2s ease;
+    }
+    .glass-button:hover {
+      background: rgba(255, 255, 255, 0.85);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    }
+
+    /* Custom scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.2); }
+
+    /* Brand placeholder (KESI 자리) */
+    .brand-mark {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      letter-spacing: -0.02em;
+    }
+
+    /* Dot grid background hint behind content (very subtle) */
+    .dot-bg {
+      background-image: radial-gradient(rgba(0,0,0,0.06) 1px, transparent 1px);
+      background-size: 18px 18px;
+    }
+
+    /* Subtle staggered reveal */
+    .reveal { opacity: 0; transform: translateY(8px); animation: reveal .5s ease forwards; }
+    .delay-1 { animation-delay: .05s; }
+    .delay-2 { animation-delay: .12s; }
+    .delay-3 { animation-delay: .19s; }
+    .delay-4 { animation-delay: .26s; }
+    .delay-5 { animation-delay: .33s; }
+    @keyframes reveal { to { opacity: 1; transform: translateY(0); } }
+
+    /* Form utilities (Web Scraper Final 동일) */
+    .input-field {
+      width: 100%;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.75rem;
+      border-radius: 0.625rem;
+      background: rgba(255, 255, 255, 0.85);
+      border: 1px solid #e7e5e4;
+      color: #292524;
+      transition: all 0.2s ease;
+    }
+    .input-field::placeholder { color: #a8a29e; }
+    .input-field:focus {
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.2);
+      border-color: var(--primary);
+    }
+    .input-field:disabled {
+      background: rgba(245, 244, 243, 0.7);
+      color: #a8a29e;
+      cursor: not-allowed;
+    }
+
+    .ui-textarea {
+      width: 100%;
+      padding: 0.625rem 0.75rem;
+      font-size: 0.8125rem;
+      border-radius: 0.75rem;
+      background: rgba(255, 255, 255, 0.85);
+      border: 1px solid #e7e5e4;
+      color: #292524;
+      transition: all 0.2s ease;
+      resize: vertical;
+      min-height: 64px;
+    }
+    .ui-textarea:focus {
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.2);
+      border-color: var(--primary);
+    }
+
+    .ui-select {
+      width: 100%;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.8125rem;
+      border-radius: 0.625rem;
+      background: rgba(255, 255, 255, 0.85);
+      border: 1px solid #e7e5e4;
+      color: #292524;
+      transition: all 0.2s ease;
+    }
+    .ui-select:focus {
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.2);
+      border-color: var(--primary);
+    }
+    .ui-select:disabled {
+      background: rgba(245, 244, 243, 0.7);
+      color: #a8a29e;
+      cursor: not-allowed;
+    }
+
+    /* Chip pattern */
+    .ui-chip {
+      padding: 0.375rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      background: rgba(255, 255, 255, 0.6);
+      color: #57534e;
+      border: 1px solid rgba(255, 255, 255, 0.7);
+      line-height: 1;
+    }
+    .ui-chip:hover {
+      background: rgba(255, 255, 255, 0.85);
+    }
+    .ui-chip[data-active="true"] {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+      box-shadow: 0 2px 8px rgba(22, 163, 74, 0.25);
+    }
+
+    /* Toggle (segmented) for extraction range */
+    #extractionRangeChips button[data-active="true"] {
+      background: white;
+      color: var(--primary);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+    #extractionRangeChips button[data-active="false"] {
+      color: #78716c;
+    }
+
+    /* Rule chip with edit pencil */
+    .rule-chip {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+      padding: 0.375rem 0.625rem 0.375rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      background: rgba(255, 255, 255, 0.6);
+      color: #57534e;
+      border: 1px solid rgba(255, 255, 255, 0.7);
+      line-height: 1;
+    }
+    .rule-chip:hover { background: rgba(255, 255, 255, 0.9); }
+    .rule-chip[data-active="true"] {
+      background: rgba(22, 163, 74, 0.12);
+      color: var(--primary);
+      border-color: rgba(22, 163, 74, 0.3);
+    }
+    .rule-chip[data-active="false"] {
+      opacity: 0.55;
+    }
+    .rule-chip .edit-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      border-radius: 9999px;
+      background: rgba(0, 0, 0, 0.05);
+      transition: background 0.2s ease;
+    }
+    .rule-chip .edit-btn:hover {
+      background: rgba(22, 163, 74, 0.18);
+      color: var(--primary);
+    }
+    .rule-add-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0.375rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #78716c;
+      background: transparent;
+      border: 1px dashed #d6d3d1;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      line-height: 1;
+    }
+    .rule-add-btn:hover {
+      color: var(--primary);
+      border-color: var(--primary);
+      background: rgba(22, 163, 74, 0.06);
+    }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      background: rgba(28, 25, 23, 0.45);
+      backdrop-filter: blur(6px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .modal-overlay.is-open { display: flex; animation: fadeIn 0.18s ease; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    /* Switch */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 36px;
+      height: 20px;
+      cursor: pointer;
+    }
+    .switch input { display: none; }
+    .switch-slider {
+      position: absolute;
+      inset: 0;
+      background: #d6d3d1;
+      border-radius: 9999px;
+      transition: background 0.2s ease;
+    }
+    .switch-slider::before {
+      content: "";
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 16px;
+      height: 16px;
+      background: white;
+      border-radius: 9999px;
+      transition: transform 0.2s ease;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+    }
+    .switch input:checked + .switch-slider { background: var(--primary); }
+    .switch input:checked + .switch-slider::before { transform: translateX(16px); }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      right: 1.5rem;
+      bottom: 1.5rem;
+      z-index: 150;
+      padding: 0.75rem 1rem;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: #292524;
+      display: none;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .toast.is-visible { display: inline-flex; animation: toastIn 0.22s ease; }
+    @keyframes toastIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  </style>
+</head>
+<body class="antialiased">
+  <div class="flex h-screen bg-background p-4 gap-4">
+
+    <!-- Sidebar -->
+    <aside class="w-72 h-[calc(100vh-2rem)] sticky top-4 left-4 glass-panel rounded-3xl flex flex-col p-6 overflow-y-auto hidden xl:flex shrink-0">
+      <div class="mb-6 px-2">
+        <div class="flex items-center gap-2">
+          <div class="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
+            <i data-lucide="shield-check" class="w-5 h-5 text-primary"></i>
+          </div>
+          <div class="flex flex-col leading-tight">
+            <span class="brand-mark text-[18px] font-extrabold text-stone-800">PermitIQ</span>
+            <span class="text-[11px] font-semibold text-stone-400">IEPS Permit Intelligence</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-4">
+        <!-- 사업장 -->
+        <a href="#" class="flex items-center justify-between w-full px-3 py-3 rounded-xl text-sm font-semibold transition-all group mb-1 text-stone-600 hover:text-stone-900">
+          <div class="flex items-center gap-3">
+            <div class="p-2 rounded-lg shadow-sm bg-white text-stone-500">
+              <i data-lucide="factory" class="w-4 h-4"></i>
+            </div>
+            <span>사업장</span>
+          </div>
+        </a>
+
+        <!-- 계약 -->
+        <a href="#" class="flex items-center justify-between w-full px-3 py-3 rounded-xl text-sm font-semibold transition-all group mb-1 text-stone-600 hover:text-stone-900">
+          <div class="flex items-center gap-3">
+            <div class="p-2 rounded-lg shadow-sm bg-white text-stone-500">
+              <i data-lucide="file-signature" class="w-4 h-4"></i>
+            </div>
+            <span>계약</span>
+          </div>
+        </a>
+
+        <!-- 영업/마케팅 -->
+        <a href="#" class="flex items-center justify-between w-full px-3 py-3 rounded-xl text-sm font-semibold transition-all group mb-1 text-stone-600 hover:text-stone-900">
+          <div class="flex items-center gap-3">
+            <div class="p-2 rounded-lg shadow-sm bg-white text-stone-500">
+              <i data-lucide="briefcase" class="w-4 h-4"></i>
+            </div>
+            <span>영업/마케팅</span>
+          </div>
+        </a>
+
+        <!-- 데이터 (active, 아코디언 열림) -->
+        <div class="flex flex-col">
+          <button id="dataAccordionToggle" class="flex items-center justify-between w-full px-3 py-3 rounded-xl text-sm font-semibold transition-all group mb-1 text-primary">
+            <div class="flex items-center gap-3">
+              <div class="p-2 rounded-lg shadow-sm bg-primary text-white">
+                <i data-lucide="database" class="w-4 h-4"></i>
+              </div>
+              <span>데이터</span>
+            </div>
+            <i id="dataAccordionIcon" data-lucide="chevron-down" class="w-4 h-4 opacity-40"></i>
+          </button>
+          <div id="dataAccordionPanel" class="flex flex-col gap-1 pl-4 relative">
+            <div class="absolute left-6 top-0 bottom-0 w-px bg-stone-200"></div>
+            <a href="#" class="relative block px-3 py-2 text-sm rounded-lg ml-4 bg-primary/10 text-primary font-medium">수집 현황</a>
+            <a href="#" class="relative block px-3 py-2 text-sm rounded-lg ml-4 text-stone-500 hover:text-stone-800 hover:bg-stone-100/50">검수 대기열</a>
+            <a href="#" class="relative block px-3 py-2 text-sm rounded-lg ml-4 text-stone-500 hover:text-stone-800 hover:bg-stone-100/50">설정</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-auto pt-6">
+        <div class="rounded-2xl border border-stone-200/60 bg-white/60 p-3 flex items-center gap-3">
+          <div class="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+            <i data-lucide="zap" class="w-4 h-4"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="text-xs font-bold text-stone-700 truncate">자동 수집 ON</div>
+            <div class="text-[11px] text-stone-400 truncate">매일 09:00 IEPS 점검</div>
+          </div>
+          <div class="w-8 h-4 rounded-full bg-primary/80 relative">
+            <div class="absolute top-0.5 right-0.5 w-3 h-3 bg-white rounded-full shadow"></div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main column -->
+    <div class="flex-1 flex flex-col min-w-0 min-h-0">
+
+      <!-- TopBar -->
+      <header class="h-16 glass-panel rounded-2xl flex items-center justify-between px-6 sticky top-0 z-50 mb-4 shrink-0">
+        <div class="flex items-center gap-2 shrink-0 cursor-pointer">
+          <i data-lucide="workflow" class="w-7 h-7 text-primary"></i>
+          <span class="text-xl font-extrabold text-stone-800">
+            Permit<span class="text-primary">IQ</span>
+          </span>
+        </div>
+
+        <nav class="hidden xl:flex flex-1 justify-center h-full">
+          <ul class="flex items-center gap-2 h-full">
+            <li class="relative h-full flex items-center">
+              <a class="flex items-center gap-1.5 text-sm font-bold transition-colors px-4 py-2 rounded-xl text-stone-600 hover:text-stone-900 hover:bg-stone-100/60">
+                <i data-lucide="factory" class="w-4 h-4"></i> 사업장
+              </a>
+            </li>
+            <li class="relative h-full flex items-center">
+              <a class="flex items-center gap-1.5 text-sm font-bold transition-colors px-4 py-2 rounded-xl text-stone-600 hover:text-stone-900 hover:bg-stone-100/60">
+                <i data-lucide="file-signature" class="w-4 h-4"></i> 계약
+              </a>
+            </li>
+            <li class="relative h-full flex items-center">
+              <a class="flex items-center gap-1.5 text-sm font-bold transition-colors px-4 py-2 rounded-xl text-stone-600 hover:text-stone-900 hover:bg-stone-100/60">
+                <i data-lucide="briefcase" class="w-4 h-4"></i> 영업/마케팅
+              </a>
+            </li>
+            <li class="relative h-full flex items-center">
+              <a class="flex items-center gap-1.5 text-sm font-bold transition-colors px-4 py-2 rounded-xl text-primary bg-primary/10">
+                <i data-lucide="database" class="w-4 h-4"></i> 데이터
+                <i data-lucide="chevron-down" class="w-3 h-3 opacity-40"></i>
+              </a>
+            </li>
+          </ul>
+        </nav>
+
+        <div class="flex items-center gap-3 shrink-0">
+          <button class="relative p-2.5 rounded-xl hover:bg-white/50 transition-colors text-stone-500 hover:text-stone-800 border border-transparent hover:border-white/50">
+            <i data-lucide="bell" class="w-5 h-5"></i>
+            <span class="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+          </button>
+          <div class="relative">
+            <button class="flex items-center gap-2 pl-1 pr-3 py-1 rounded-full hover:bg-white/50 border border-transparent hover:border-white/60 transition-all group">
+              <div class="w-9 h-9 rounded-full bg-gradient-to-br from-stone-100 to-stone-200 border border-white flex items-center justify-center text-stone-500 shadow-sm">
+                <i data-lucide="user" class="w-5 h-5"></i>
+              </div>
+              <div class="flex flex-col items-start hidden sm:flex">
+                <span class="text-sm font-bold text-stone-700 leading-none">관리자</span>
+                <span class="text-[10px] text-stone-400 font-medium">Admin</span>
+              </div>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <!-- Main content -->
+      <main class="flex-1 mt-4 min-h-0 relative rounded-3xl overflow-y-auto">
+        <div class="flex flex-col gap-6 p-2">
+
+          <!-- Welcome Section -->
+          <section class="glass-panel p-8 rounded-3xl relative overflow-hidden reveal">
+            <div class="relative z-10">
+              <h1 class="text-3xl font-bold text-stone-800 mb-2">환영합니다</h1>
+              <p class="text-stone-600 text-lg">
+                이번 주에 <span class="text-primary font-bold">신규 최초허가 6건</span>이 IEPS에 게재되었습니다.
+                검토결과서 PDF의 1~10페이지에서 핵심 9개 필드를 자동 추출했습니다.
+              </p>
+            </div>
+            <div class="absolute right-0 top-0 bottom-0 w-1/3 bg-gradient-to-l from-primary/10 to-transparent pointer-events-none"></div>
+          </section>
+
+          <!-- Main Grid: 3 Columns -->
+          <div class="grid grid-cols-1 lg:grid-cols-[1.45fr_0.8fr_0.75fr] gap-6">
+
+            <!-- 1. 수집 파이프라인 카드 -->
+            <div class="glass-card p-6 rounded-3xl flex flex-col gap-4 reveal delay-1">
+              <div class="flex items-center justify-between">
+                <h3 class="font-bold text-stone-700 flex items-center gap-2">
+                  <i data-lucide="radar" class="w-5 h-5 text-primary"></i>
+                  IEPS 수집 파이프라인
+                </h3>
+                <span class="text-[11px] font-bold text-stone-500 bg-white/60 border border-white/70 px-2 py-1 rounded-md">
+                  마지막 동기화 13:42
+                </span>
+              </div>
+
+              <div class="flex-1 flex gap-4">
+                <!-- 좌: 단계 진행 -->
+                <div class="flex-[1.1] bg-white/50 rounded-2xl p-4 border border-white/60 flex flex-col gap-3">
+                  <!-- 단계 1 -->
+                  <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                      <i data-lucide="list" class="w-4 h-4"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <div class="text-xs font-bold text-stone-700">목록 수집</div>
+                      <div class="text-[11px] text-stone-500">정보공개 게시판 1~12p</div>
+                    </div>
+                    <span class="text-[10px] font-bold text-primary bg-primary/10 px-2 py-1 rounded-full">완료</span>
+                  </div>
+                  <!-- 단계 2 -->
+                  <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                      <i data-lucide="filter" class="w-4 h-4"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <div class="text-xs font-bold text-stone-700">최초허가 필터</div>
+                      <div class="text-[11px] text-stone-500">제목·본문·첨부명 키워드</div>
+                    </div>
+                    <span class="text-[10px] font-bold text-primary bg-primary/10 px-2 py-1 rounded-full">완료</span>
+                  </div>
+                  <!-- 단계 3 -->
+                  <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+                      <i data-lucide="download" class="w-4 h-4"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <div class="text-xs font-bold text-stone-700">검토결과서 다운로드</div>
+                      <div class="text-[11px] text-stone-500">PDF 42건 · 중복 3건 제외</div>
+                    </div>
+                    <span class="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-1 rounded-full">진행</span>
+                  </div>
+                  <!-- 단계 4 -->
+                  <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                      <i data-lucide="scan-text" class="w-4 h-4"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <div class="text-xs font-bold text-stone-700">1~10p OCR 추출</div>
+                      <div class="text-[11px] text-stone-500">갑지 3~5p · 허가결정 탐색</div>
+                    </div>
+                    <span class="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-1 rounded-full">검수 4</span>
+                  </div>
+                  <!-- 단계 5 -->
+                  <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-stone-100 text-stone-500 flex items-center justify-center shrink-0">
+                      <i data-lucide="users" class="w-4 h-4"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <div class="text-xs font-bold text-stone-700">CRM 반영</div>
+                      <div class="text-[11px] text-stone-500">사업장·계약 보드 동기화</div>
+                    </div>
+                    <span class="text-[10px] font-bold text-stone-500 bg-stone-100 px-2 py-1 rounded-full">대기</span>
+                  </div>
+                </div>
+
+                <!-- 우: 요약 KPI -->
+                <div class="flex-[0.95] flex flex-col justify-between gap-3">
+                  <div>
+                    <div class="text-xs text-stone-400 font-semibold uppercase">Today</div>
+                    <div class="text-sm font-bold text-stone-800 mt-1">2026-05-05 · 자동 수집</div>
+                    <div class="h-px bg-stone-200 my-3"></div>
+                    <div class="grid grid-cols-2 gap-3">
+                      <div class="col-span-2 rounded-xl bg-gradient-to-br from-primary/15 via-white/70 to-white/40 border border-white/70 p-3 shadow-sm">
+                        <div class="flex items-center justify-between">
+                          <div class="text-[10px] font-bold text-primary uppercase tracking-wide">누적 수집 사업장</div>
+                          <i data-lucide="factory" class="w-3.5 h-3.5 text-primary/80"></i>
+                        </div>
+                        <div class="text-3xl font-extrabold text-stone-900 mt-1 leading-tight">512</div>
+                        <div class="text-[10px] text-stone-500 font-medium mt-0.5">IEPS 정보공개 기준 누적</div>
+                      </div>
+                      <div class="rounded-xl bg-white/60 border border-white/70 p-3">
+                        <div class="text-[10px] font-bold text-stone-400 uppercase">신규 게시</div>
+                        <div class="text-2xl font-extrabold text-stone-800 mt-1">18</div>
+                      </div>
+                      <div class="rounded-xl bg-white/60 border border-white/70 p-3">
+                        <div class="text-[10px] font-bold text-stone-400 uppercase">최초허가</div>
+                        <div class="text-2xl font-extrabold text-primary mt-1">6</div>
+                      </div>
+                      <div class="rounded-xl bg-white/60 border border-white/70 p-3">
+                        <div class="text-[10px] font-bold text-stone-400 uppercase">PDF 성공</div>
+                        <div class="text-2xl font-extrabold text-stone-800 mt-1">42</div>
+                      </div>
+                      <div class="rounded-xl bg-white/60 border border-white/70 p-3">
+                        <div class="text-[10px] font-bold text-stone-400 uppercase">필드 추출</div>
+                        <div class="text-2xl font-extrabold text-stone-800 mt-1">91<span class="text-sm">%</span></div>
+                      </div>
+                    </div>
+                  </div>
+                  <button class="glass-button rounded-xl px-3 py-2 text-xs font-bold text-stone-700 flex items-center justify-center gap-2">
+                    <i data-lucide="play" class="w-3.5 h-3.5 text-primary"></i>
+                    지금 수집 실행
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 2. 필수 추출 필드 진행도 카드 -->
+            <div class="glass-card p-6 rounded-3xl flex flex-col gap-4 reveal delay-2">
+              <h3 class="font-bold text-stone-700 flex items-center gap-2">
+                <i data-lucide="bar-chart-3" class="w-5 h-5 text-amber-600"></i>
+                필수 9필드 추출
+              </h3>
+              <div class="flex-1 flex flex-col gap-2.5">
+                <!-- 필드 행 템플릿 -->
+                <!-- 1 -->
+                <div class="flex items-center gap-2">
+                  <span class="text-[11px] font-bold text-stone-600 w-24 truncate">결정번호</span>
+                  <div class="flex-1 h-2 rounded-full bg-stone-200/70 overflow-hidden">
+                    <div class="h-full bg-gradient-to-r from-primary/70 to-primary rounded-full" style="width: 96%"></div>
+                  </div>
+                  <span class="text-[11px] font-bold text-stone-700 w-10 text-right">96%</span>
+                </div>
+                <!-- 2 -->
+                <div class="flex items-center gap-2">
+                  <span class="text-[11px] font-bold text-stone-600 w-24 truncate">상호</span>
+                  <div class="flex-1 h-2 rounded-full bg-stone-200/70 overflow-hidden">
+                    <div class="h-full bg-gradient-to-r from-primary/70 to-primary rounded-full" style="width: 98%"></div>
+                  </div>
+                  <span class="text-[11px] font-bold text-stone-700 w-10 text-right">98%</span>
+                </div>
+                <!-- 3 -->
+                <div class="flex items-center gap-2">
+                  <span class="text-[11px] font-bold text-stone-600 w-24 truncate">사업자등록번호</span>
+                  <div class="flex-1 h-2 rounded-full bg-stone-200/70 overflow-hidden">
+                    <div class="h-full bg-gradient-to-r from-primary/70 to-primary rounded-full" style="width: 92%"></div>
+                  </div>
+                  <span class="text-[11px] font-bold text-stone-700 w-10 text-right">92%</span>
+                </div>
+                <!-- 4 -->
+                <div class="flex items-center gap-2">
+                  <span class="text-[11px] font-bold text-stone-600 w-24 truncate">사업장소재지</span>
+                  <div class="flex-1 h-2 rounded-full bg-stone-200/70 overflow-hidden">
+                    <div class="h-full bg-gradient-to-r from-primary/70 to-primary rounded-full" style="width: 94%"></div>
+                  </div>
+                  <span class="text-[11px] font-bold text-stone-700 w-10 text-right">94%</span>
+                </div>
+                <!-- 5 -->
+                <div class="flex items-center gap-2">
+                  <span class="text-[11px] font-bold text-stone-600 w-24 truncate">전화번호</span>
+                  <div class="flex-1 h-2 rounded-full bg-stone-200/70 overflow-hidden">
+                    <div class="h-full bg-gradient-to-r from-amber-300 to-amber-500 rounded-full" style="width: 78%"></div>
+                  </div>
+                  <span class="text-[11px] font-bold text-amber-600 w-10 text-right">78%</span>
+                </div>
+                <!-- 6 -->
+                <div class="flex items-center gap-2">
+                  <span class="text-[11px] font-bold text-stone-600 w-24 truncate">업종(코드/명)</span>
+                  <div class="flex-1 h-2 rounded-full bg-stone-200/70 overflow-hidden">
+                    <div class="h-full bg-gradient-to-r from-primary/70 to-primary rounded-full" style="width: 90%"></div>
+                  </div>
+                  <span class="text-[11px] font-bold text-stone-700 w-10 text-right">90%</span>
+                </div>
+                <!-- 7 -->
+                <div class="flex items-center gap-2">
+                  <span class="text-[11px] font-bold text-stone-600 w-24 truncate">허가일자</span>
+                  <div class="flex-1 h-2 rounded-full bg-stone-200/70 overflow-hidden">
+                    <div class="h-full bg-gradient-to-r from-primary/70 to-primary rounded-full" style="width: 95%"></div>
+                  </div>
+                  <span class="text-[11px] font-bold text-stone-700 w-10 text-right">95%</span>
+                </div>
+                <!-- 8 -->
+                <div class="flex items-center gap-2">
+                  <span class="text-[11px] font-bold text-stone-600 w-24 truncate">종 규모</span>
+                  <div class="flex-1 h-2 rounded-full bg-stone-200/70 overflow-hidden">
+                    <div class="h-full bg-gradient-to-r from-amber-300 to-amber-500 rounded-full" style="width: 84%"></div>
+                  </div>
+                  <span class="text-[11px] font-bold text-amber-600 w-10 text-right">84%</span>
+                </div>
+                <!-- 9 -->
+                <div class="flex items-center gap-2">
+                  <span class="text-[11px] font-bold text-stone-600 w-24 truncate">생산품</span>
+                  <div class="flex-1 h-2 rounded-full bg-stone-200/70 overflow-hidden">
+                    <div class="h-full bg-gradient-to-r from-amber-300 to-amber-500 rounded-full" style="width: 81%"></div>
+                  </div>
+                  <span class="text-[11px] font-bold text-amber-600 w-10 text-right">81%</span>
+                </div>
+              </div>
+
+              <div class="flex items-center justify-between pt-2 border-t border-stone-200/70">
+                <div class="text-[11px] text-stone-500 font-medium">기준: PDF 1~10p · 갑지 3~5p</div>
+                <button class="text-[11px] font-bold text-primary hover:underline">검수 4건 →</button>
+              </div>
+            </div>
+
+            <!-- 3. 빠른 실행 카드 -->
+            <div class="glass-card p-6 rounded-3xl flex flex-col gap-4 reveal delay-3">
+              <h3 class="font-bold text-stone-700">빠른 실행</h3>
+              <div class="grid grid-cols-4 grid-rows-2 gap-3 h-full">
+                <button class="flex flex-col items-center justify-center gap-2 p-3 rounded-xl bg-white/40 hover:bg-white/80 transition-all border border-transparent hover:border-white/50 active:scale-95 group">
+                  <div class="w-11 h-11 rounded-full flex items-center justify-center shadow-md bg-gradient-to-br from-primary/25 via-white/70 to-white/30 border border-white/70 backdrop-blur-xl">
+                    <i data-lucide="play" class="w-5 h-5 text-primary"></i>
+                  </div>
+                  <span class="text-[12px] font-bold text-stone-600 text-center leading-tight">수집 실행</span>
+                </button>
+                <button class="flex flex-col items-center justify-center gap-2 p-3 rounded-xl bg-white/40 hover:bg-white/80 transition-all border border-transparent hover:border-white/50 active:scale-95 group">
+                  <div class="w-11 h-11 rounded-full flex items-center justify-center shadow-md bg-gradient-to-br from-amber-200/70 via-white/70 to-white/30 border border-white/70 backdrop-blur-xl">
+                    <i data-lucide="clipboard-check" class="w-5 h-5 text-amber-700"></i>
+                  </div>
+                  <span class="text-[12px] font-bold text-stone-600 text-center leading-tight">검수 대기열</span>
+                </button>
+                <button class="flex flex-col items-center justify-center gap-2 p-3 rounded-xl bg-white/40 hover:bg-white/80 transition-all border border-transparent hover:border-white/50 active:scale-95 group">
+                  <div class="w-11 h-11 rounded-full flex items-center justify-center shadow-md bg-gradient-to-br from-blue-200/70 via-white/70 to-white/30 border border-white/70 backdrop-blur-xl">
+                    <i data-lucide="file-text" class="w-5 h-5 text-blue-700"></i>
+                  </div>
+                  <span class="text-[12px] font-bold text-stone-600 text-center leading-tight">PDF 원문</span>
+                </button>
+                <button class="flex flex-col items-center justify-center gap-2 p-3 rounded-xl bg-white/40 hover:bg-white/80 transition-all border border-transparent hover:border-white/50 active:scale-95 group">
+                  <div class="w-11 h-11 rounded-full flex items-center justify-center shadow-md bg-gradient-to-br from-purple-200/70 via-white/70 to-white/30 border border-white/70 backdrop-blur-xl">
+                    <i data-lucide="database" class="w-5 h-5 text-purple-700"></i>
+                  </div>
+                  <span class="text-[12px] font-bold text-stone-600 text-center leading-tight">사업장 DB</span>
+                </button>
+
+                <button class="flex flex-col items-center justify-center gap-2 p-3 rounded-xl bg-white/40 hover:bg-white/80 transition-all border border-transparent hover:border-white/50 active:scale-95 group">
+                  <div class="w-11 h-11 rounded-full flex items-center justify-center shadow-md bg-gradient-to-br from-rose-200/70 via-white/70 to-white/30 border border-white/70 backdrop-blur-xl">
+                    <i data-lucide="briefcase" class="w-5 h-5 text-rose-700"></i>
+                  </div>
+                  <span class="text-[12px] font-bold text-stone-600 text-center leading-tight">영업 보드</span>
+                </button>
+                <button class="flex flex-col items-center justify-center gap-2 p-3 rounded-xl bg-white/40 hover:bg-white/80 transition-all border border-transparent hover:border-white/50 active:scale-95 group">
+                  <div class="w-11 h-11 rounded-full flex items-center justify-center shadow-md bg-gradient-to-br from-teal-200/70 via-white/70 to-white/30 border border-white/70 backdrop-blur-xl">
+                    <i data-lucide="megaphone" class="w-5 h-5 text-teal-700"></i>
+                  </div>
+                  <span class="text-[12px] font-bold text-stone-600 text-center leading-tight">캠페인</span>
+                </button>
+                <button class="flex flex-col items-center justify-center gap-2 p-3 rounded-xl bg-white/40 hover:bg-white/80 transition-all border border-transparent hover:border-white/50 active:scale-95 group">
+                  <div class="w-11 h-11 rounded-full flex items-center justify-center shadow-md bg-gradient-to-br from-indigo-200/70 via-white/70 to-white/30 border border-white/70 backdrop-blur-xl">
+                    <i data-lucide="file-spreadsheet" class="w-5 h-5 text-indigo-700"></i>
+                  </div>
+                  <span class="text-[12px] font-bold text-stone-600 text-center leading-tight">엑셀 내보내기</span>
+                </button>
+                <button class="flex flex-col items-center justify-center gap-2 p-3 rounded-xl bg-white/40 hover:bg-white/80 transition-all border border-transparent hover:border-white/50 active:scale-95 group">
+                  <div class="w-11 h-11 rounded-full flex items-center justify-center shadow-md bg-gradient-to-br from-stone-200/70 via-white/70 to-white/30 border border-white/70 backdrop-blur-xl">
+                    <i data-lucide="settings" class="w-5 h-5 text-stone-700"></i>
+                  </div>
+                  <span class="text-[12px] font-bold text-stone-600 text-center leading-tight">설정</span>
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Bottom Grid: 수집 결과 + 수집 옵션 -->
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            <!-- 수집 결과 (span 2) -->
+            <section class="glass-panel p-6 rounded-3xl lg:col-span-2 reveal delay-4">
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="font-bold text-stone-700 flex items-center gap-2">
+                  <i data-lucide="list-checks" class="w-5 h-5 text-primary"></i>
+                  수집 결과
+                </h3>
+                <button class="text-xs font-semibold text-stone-500 hover:text-primary transition-colors flex items-center gap-1 group">
+                  모두 보기
+                  <i data-lucide="arrow-up-right" class="w-3 h-3 group-hover:translate-x-0.5 transition-transform"></i>
+                </button>
+              </div>
+
+              <!-- 헤더 행 -->
+              <div class="hidden md:grid grid-cols-[1.5fr_1fr_1fr_0.8fr] gap-3 px-3 py-2 text-[10px] font-bold uppercase text-stone-400 tracking-wide">
+                <div>상호 / 소재지</div>
+                <div>결정번호 · 허가일</div>
+                <div>업종</div>
+                <div>종 규모</div>
+              </div>
+
+              <div class="flex flex-col gap-2">
+                <!-- Row 1 -->
+                <div class="grid grid-cols-[1.5fr_1fr_1fr_0.8fr] gap-3 items-center p-3 rounded-xl bg-white/40 hover:bg-white/70 transition-colors border border-white/50 group cursor-pointer">
+                  <div class="min-w-0">
+                    <div class="text-sm font-bold text-stone-800 truncate">에코메탈케미칼 주식회사</div>
+                    <div class="text-[11px] text-stone-500 truncate">충북 청주시 흥덕구 산업단지로 42</div>
+                  </div>
+                  <div>
+                    <div class="text-xs font-bold text-stone-700">제 2026-01호</div>
+                    <div class="text-[11px] text-stone-500">2026.03.28</div>
+                  </div>
+                  <div>
+                    <div class="text-xs font-bold text-stone-700">20499</div>
+                    <div class="text-[11px] text-stone-500 truncate">기타 화학제품 제조</div>
+                  </div>
+                  <div class="flex flex-col gap-1">
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 w-fit">대기 2종</span>
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-800 w-fit">수질 3종</span>
+                  </div>
+                </div>
+                <!-- Row 2 -->
+                <div class="grid grid-cols-[1.5fr_1fr_1fr_0.8fr] gap-3 items-center p-3 rounded-xl bg-white/40 hover:bg-white/70 transition-colors border border-white/50 group cursor-pointer">
+                  <div class="min-w-0">
+                    <div class="text-sm font-bold text-stone-800 truncate">동해그린소재</div>
+                    <div class="text-[11px] text-stone-500 truncate">강원 동해시 공단7로 19</div>
+                  </div>
+                  <div>
+                    <div class="text-xs font-bold text-stone-700">제 2026-04호</div>
+                    <div class="text-[11px] text-stone-500">2026.04.11</div>
+                  </div>
+                  <div>
+                    <div class="text-xs font-bold text-stone-700">23993</div>
+                    <div class="text-[11px] text-stone-500 truncate">비금속 광물제품</div>
+                  </div>
+                  <div class="flex flex-col gap-1">
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 w-fit">대기 3종</span>
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-800 w-fit">수질 5종</span>
+                  </div>
+                </div>
+                <!-- Row 3 -->
+                <div class="grid grid-cols-[1.5fr_1fr_1fr_0.8fr] gap-3 items-center p-3 rounded-xl bg-white/40 hover:bg-white/70 transition-colors border border-white/50 group cursor-pointer">
+                  <div class="min-w-0">
+                    <div class="text-sm font-bold text-stone-800 truncate">남부바이오에너지</div>
+                    <div class="text-[11px] text-stone-500 truncate">전남 여수시 산단중앙로 108</div>
+                  </div>
+                  <div>
+                    <div class="text-xs font-bold text-stone-700">제 2026-08호</div>
+                    <div class="text-[11px] text-stone-500">2026.04.22</div>
+                  </div>
+                  <div>
+                    <div class="text-xs font-bold text-stone-700">35114</div>
+                    <div class="text-[11px] text-stone-500 truncate">바이오매스 발전</div>
+                  </div>
+                  <div class="flex flex-col gap-1">
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 w-fit">대기 1종</span>
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-800 w-fit">수질 4종</span>
+                  </div>
+                </div>
+                <!-- Row 4 -->
+                <div class="grid grid-cols-[1.5fr_1fr_1fr_0.8fr] gap-3 items-center p-3 rounded-xl bg-white/40 hover:bg-white/70 transition-colors border border-white/50 group cursor-pointer">
+                  <div class="min-w-0">
+                    <div class="text-sm font-bold text-stone-800 truncate">한일정밀화학</div>
+                    <div class="text-[11px] text-stone-500 truncate">울산 남구 여천로 88</div>
+                  </div>
+                  <div>
+                    <div class="text-xs font-bold text-stone-700">제 2026-11호</div>
+                    <div class="text-[11px] text-stone-500">2026.04.30</div>
+                  </div>
+                  <div>
+                    <div class="text-xs font-bold text-stone-700">20302</div>
+                    <div class="text-[11px] text-stone-500 truncate">합성고무 제조</div>
+                  </div>
+                  <div class="flex flex-col gap-1">
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 w-fit">대기 1종</span>
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-800 w-fit">수질 2종</span>
+                  </div>
+                </div>
+                <!-- Row 5 -->
+                <div class="grid grid-cols-[1.5fr_1fr_1fr_0.8fr] gap-3 items-center p-3 rounded-xl bg-white/40 hover:bg-white/70 transition-colors border border-white/50 group cursor-pointer">
+                  <div class="min-w-0">
+                    <div class="text-sm font-bold text-stone-800 truncate">중부펄프제지</div>
+                    <div class="text-[11px] text-stone-500 truncate">충남 아산시 둔포면 산단로 5</div>
+                  </div>
+                  <div>
+                    <div class="text-xs font-bold text-stone-700">제 2026-13호</div>
+                    <div class="text-[11px] text-stone-500">2026.05.02</div>
+                  </div>
+                  <div>
+                    <div class="text-xs font-bold text-stone-700">17110</div>
+                    <div class="text-[11px] text-stone-500 truncate">펄프 제조</div>
+                  </div>
+                  <div class="flex flex-col gap-1">
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 w-fit">대기 1종</span>
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-800 w-fit">수질 1종</span>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- 수집 옵션 (span 1) -->
+            <section id="collectionOptionCard" class="glass-panel p-6 rounded-3xl flex flex-col gap-4 reveal delay-5">
+              <div class="flex items-center justify-between">
+                <h3 class="font-bold text-stone-700 flex items-center gap-2">
+                  <i data-lucide="sliders-horizontal" class="w-5 h-5 text-primary"></i>
+                  수집 옵션
+                </h3>
+                <div class="flex items-center gap-2">
+                  <button id="resetOptionsBtn" class="glass-button rounded-xl px-3 py-1.5 text-xs font-bold text-stone-700 flex items-center gap-1">
+                    <i data-lucide="rotate-ccw" class="w-3 h-3"></i> 초기화
+                  </button>
+                  <button id="saveOptionsBtn" class="rounded-xl px-3 py-1.5 text-xs font-bold text-white bg-primary hover:bg-primary/90 flex items-center gap-1 shadow-sm">
+                    <i data-lucide="save" class="w-3 h-3"></i> 저장
+                  </button>
+                </div>
+              </div>
+
+              <!-- 1. 수집 범위 -->
+              <div class="bg-white/40 border border-white/60 rounded-2xl p-4 flex flex-col gap-3">
+                <div class="flex items-center gap-2">
+                  <i data-lucide="calendar-range" class="w-4 h-4 text-stone-500"></i>
+                  <span class="text-xs font-bold text-stone-700">수집 범위</span>
+                  <span class="text-[10px] text-stone-400 font-medium ml-auto">게재일 기준</span>
+                </div>
+                <div id="scrapeRangeChips" class="flex flex-wrap gap-2">
+                  <button class="ui-chip" data-preset="1m">1개월</button>
+                  <button class="ui-chip" data-preset="3m">3개월</button>
+                  <button class="ui-chip" data-preset="6m">6개월</button>
+                  <button class="ui-chip" data-preset="1y">1년</button>
+                  <button class="ui-chip" data-preset="2y">2년</button>
+                  <button class="ui-chip" data-preset="all">전체</button>
+                </div>
+                <div class="flex items-center gap-2">
+                  <input id="scrapeStart" type="date" class="input-field text-xs flex-1" />
+                  <span class="text-stone-400 text-xs">~</span>
+                  <input id="scrapeEnd" type="date" class="input-field text-xs flex-1" />
+                </div>
+              </div>
+
+              <!-- 2. 수집 필터 -->
+              <div class="bg-white/40 border border-white/60 rounded-2xl p-4 flex flex-col gap-3">
+                <div class="flex items-center gap-2">
+                  <i data-lucide="filter" class="w-4 h-4 text-stone-500"></i>
+                  <span class="text-xs font-bold text-stone-700">수집 필터</span>
+                  <span class="text-[10px] text-stone-400 font-medium ml-auto">항목별 (다중 선택)</span>
+                </div>
+                <div id="filterChips" class="flex flex-wrap gap-2">
+                  <button class="ui-chip" data-filter="integratedFirst">통합허가</button>
+                  <button class="ui-chip" data-filter="integratedChange">변경허가</button>
+                  <button class="ui-chip" data-filter="annualReport">연간보고서</button>
+                  <button class="ui-chip" data-filter="all">전체</button>
+                </div>
+              </div>
+
+              <!-- 3. 추출 범위 -->
+              <div class="bg-white/40 border border-white/60 rounded-2xl p-4 flex flex-col gap-3">
+                <div class="flex items-center gap-2">
+                  <i data-lucide="file-search" class="w-4 h-4 text-stone-500"></i>
+                  <span class="text-xs font-bold text-stone-700">추출 범위</span>
+                  <span class="text-[10px] text-stone-400 font-medium ml-auto">검토결과서 PDF</span>
+                </div>
+                <div id="extractionRangeChips" class="inline-flex rounded-xl bg-white/60 border border-white/70 p-1 w-fit gap-1">
+                  <button class="rounded-lg px-3 py-1 text-xs font-bold transition-colors" data-mode="partial">일부</button>
+                  <button class="rounded-lg px-3 py-1 text-xs font-bold transition-colors" data-mode="all">전체</button>
+                </div>
+                <div id="extractionRangeInputs" class="flex items-center gap-2">
+                  <input id="extractStart" type="number" min="1" class="input-field text-xs w-20 text-center" />
+                  <span class="text-stone-400 text-xs">~</span>
+                  <input id="extractEnd" type="number" min="1" class="input-field text-xs w-20 text-center" />
+                  <span class="text-[10px] text-stone-400 font-medium">페이지</span>
+                </div>
+                <div id="extractionRangeAllNote" class="hidden text-[11px] text-stone-500 font-medium">
+                  검토결과서 전체 페이지에서 추출
+                </div>
+              </div>
+
+              <!-- 4. 추출 설정 -->
+              <div class="bg-white/40 border border-white/60 rounded-2xl p-4 flex flex-col gap-3">
+                <div class="flex items-center gap-2">
+                  <i data-lucide="scan-line" class="w-4 h-4 text-stone-500"></i>
+                  <span class="text-xs font-bold text-stone-700">추출 설정</span>
+                  <span id="activeRuleCount" class="text-[10px] text-stone-400 font-medium ml-auto">활성 항목 9 / 9</span>
+                </div>
+                <div id="ruleChips" class="flex flex-wrap gap-2">
+                  <!-- 칩은 JS로 동적 렌더 -->
+                </div>
+              </div>
+            </section>
+          </div>
+
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Modal: 추출 항목 추가 / 편집 -->
+  <div id="ruleModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="ruleModalTitle">
+    <div class="glass-panel rounded-3xl w-[560px] max-w-[92vw] p-6 flex flex-col gap-5 max-h-[88vh] overflow-y-auto">
+      <!-- 헤더 -->
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 id="ruleModalTitle" class="font-bold text-stone-800 text-lg">추출 항목 추가</h3>
+          <p id="ruleModalSubtitle" class="text-xs text-stone-500 font-medium mt-1">검토결과서 PDF에서 자동 추출할 항목 규칙을 정의합니다.</p>
+        </div>
+        <button id="ruleModalClose" class="glass-button rounded-xl w-9 h-9 flex items-center justify-center text-stone-600">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- 본문 폼 -->
+      <div class="flex flex-col gap-4">
+        <!-- 항목명 -->
+        <div class="flex flex-col gap-1.5">
+          <label class="text-[11px] font-bold text-stone-500 uppercase tracking-wide">항목명</label>
+          <input id="ruleLabel" type="text" class="input-field" placeholder="예: 대표자" />
+        </div>
+
+        <!-- 페이지 범위 -->
+        <div class="flex flex-col gap-1.5">
+          <label class="text-[11px] font-bold text-stone-500 uppercase tracking-wide">페이지 범위</label>
+          <div class="flex items-center gap-2">
+            <input id="rulePageStart" type="number" min="1" class="input-field w-24 text-center" />
+            <span class="text-stone-400 text-xs">~</span>
+            <input id="rulePageEnd" type="number" min="1" class="input-field w-24 text-center" />
+            <span class="text-[11px] text-stone-400 font-medium">페이지</span>
+            <span id="rulePageRangeHint" class="text-[10px] text-stone-400 ml-auto"></span>
+          </div>
+        </div>
+
+        <!-- 검색 키워드 -->
+        <div class="flex flex-col gap-1.5">
+          <label class="text-[11px] font-bold text-stone-500 uppercase tracking-wide">검색 키워드</label>
+          <input id="rulePrimary" type="text" class="input-field" placeholder="예: 대표자" />
+        </div>
+
+        <!-- 보조 키워드 -->
+        <div class="flex flex-col gap-1.5">
+          <label class="text-[11px] font-bold text-stone-500 uppercase tracking-wide">보조 키워드 <span class="text-stone-400 font-medium normal-case">(선택)</span></label>
+          <input id="ruleSecondary" type="text" class="input-field" placeholder="동일 행 또는 페이지에 함께 등장할 보강 키워드" />
+        </div>
+
+        <!-- 추출 위치 규칙 -->
+        <div class="flex flex-col gap-1.5">
+          <label class="text-[11px] font-bold text-stone-500 uppercase tracking-wide">추출 위치 규칙</label>
+          <select id="ruleLocator" class="ui-select">
+            <option value="rightOfKeyword">키워드 우측 텍스트</option>
+            <option value="leftOfKeyword">키워드 좌측 텍스트</option>
+            <option value="sameRowNext">같은 행 다음 셀</option>
+            <option value="nextLine">다음 줄 텍스트</option>
+            <option value="regex">정규식 매칭</option>
+          </select>
+        </div>
+
+        <!-- 정규식 패턴 (조건부) -->
+        <div id="ruleRegexWrapper" class="flex flex-col gap-1.5 hidden">
+          <label class="text-[11px] font-bold text-stone-500 uppercase tracking-wide">정규식 패턴</label>
+          <input id="ruleRegex" type="text" class="input-field font-mono" placeholder="예: \d{3}-\d{2}-\d{5}" />
+        </div>
+
+        <!-- 결과 형식 -->
+        <div class="flex flex-col gap-1.5">
+          <label class="text-[11px] font-bold text-stone-500 uppercase tracking-wide">결과 형식</label>
+          <select id="ruleResultType" class="ui-select">
+            <option value="string">문자열</option>
+            <option value="number">숫자</option>
+            <option value="date">날짜</option>
+            <option value="codeName">코드+명칭</option>
+          </select>
+        </div>
+
+        <!-- 필수 여부 -->
+        <div class="flex items-center justify-between bg-white/40 border border-white/60 rounded-xl px-4 py-3">
+          <div>
+            <div class="text-xs font-bold text-stone-700">필수 항목</div>
+            <div class="text-[11px] text-stone-500 mt-0.5">활성 시 OCR 실패 항목을 검수 대기열에 자동 등록</div>
+          </div>
+          <label class="switch">
+            <input id="ruleRequired" type="checkbox" />
+            <span class="switch-slider"></span>
+          </label>
+        </div>
+
+        <!-- 메모 -->
+        <div class="flex flex-col gap-1.5">
+          <label class="text-[11px] font-bold text-stone-500 uppercase tracking-wide">메모 <span class="text-stone-400 font-medium normal-case">(선택)</span></label>
+          <textarea id="ruleNote" class="ui-textarea" placeholder="운영 메모, 예외 케이스 설명"></textarea>
+        </div>
+
+        <!-- 검증 메시지 -->
+        <div id="ruleError" class="hidden text-xs font-bold text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2"></div>
+      </div>
+
+      <!-- 푸터 -->
+      <div class="flex items-center justify-between pt-2 border-t border-stone-200/70">
+        <button id="ruleDeleteBtn" class="hidden text-xs font-bold text-red-600 hover:text-red-700 flex items-center gap-1">
+          <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> 삭제
+        </button>
+        <div class="flex items-center gap-2 ml-auto">
+          <button id="ruleCancelBtn" class="glass-button rounded-xl px-4 py-2 text-sm font-bold text-stone-700">취소</button>
+          <button id="ruleSaveBtn" class="rounded-xl px-4 py-2 text-sm font-bold text-white bg-primary hover:bg-primary/90 shadow-sm">저장</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="toast glass-panel rounded-xl">
+    <i data-lucide="check-circle-2" class="w-4 h-4 text-primary"></i>
+    <span id="toastMessage">저장되었습니다.</span>
+  </div>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    // ===========================================================
+    // 상태 / 기본값 정의
+    // ===========================================================
+    const DEFAULT_STATE = {
+      scrapeRange: { mode: "preset", preset: "1y", customStart: null, customEnd: null },
+      filters: { permitTypes: ["integratedFirst"] },
+      extractionRange: { mode: "partial", startPage: 1, endPage: 10 },
+      extractionRules: [
+        { id: "r1", label: "결정번호", isBuiltIn: true, pageStart: 3, pageEnd: 5, primaryKeyword: "결정번호", secondaryKeyword: null, locator: "rightOfKeyword", regexPattern: null, resultType: "string", required: true, note: "제 OOOO-O1호 형식" },
+        { id: "r2", label: "상호", isBuiltIn: true, pageStart: 3, pageEnd: 5, primaryKeyword: "상호", secondaryKeyword: null, locator: "rightOfKeyword", regexPattern: null, resultType: "string", required: true, note: "갑지 페이지의 사업장 명칭" },
+        { id: "r3", label: "사업자번호", isBuiltIn: true, pageStart: 3, pageEnd: 5, primaryKeyword: "사업자등록번호", secondaryKeyword: null, locator: "regex", regexPattern: "\\d{3}-\\d{2}-\\d{5}", resultType: "string", required: true, note: "OOO-OO-OOOOO 형식" },
+        { id: "r4", label: "소재지", isBuiltIn: true, pageStart: 3, pageEnd: 5, primaryKeyword: "사업장소재지", secondaryKeyword: null, locator: "rightOfKeyword", regexPattern: null, resultType: "string", required: true, note: "갑지 페이지 사업장 주소" },
+        { id: "r5", label: "전화번호", isBuiltIn: true, pageStart: 3, pageEnd: 5, primaryKeyword: "전화번호", secondaryKeyword: null, locator: "rightOfKeyword", regexPattern: null, resultType: "string", required: false, note: "지역/대표/휴대 전화 모두 허용" },
+        { id: "r6", label: "업종명/코드", isBuiltIn: true, pageStart: 3, pageEnd: 5, primaryKeyword: "업종", secondaryKeyword: null, locator: "rightOfKeyword", regexPattern: null, resultType: "codeName", required: true, note: "5자리 업종코드와 업종명을 함께 추출" },
+        { id: "r7", label: "허가일자", isBuiltIn: true, pageStart: 3, pageEnd: 5, primaryKeyword: "허가일자", secondaryKeyword: null, locator: "rightOfKeyword", regexPattern: null, resultType: "date", required: true, note: "갑지 페이지 하단 날짜" },
+        { id: "r8", label: "종규모/배출량", isBuiltIn: true, pageStart: 1, pageEnd: 10, primaryKeyword: "1.허가결정", secondaryKeyword: "종 규모", locator: "nextLine", regexPattern: null, resultType: "string", required: true, note: "대기 O종 (톤/년), 수질 O종 (m3/일)" },
+        { id: "r9", label: "생산품명/수량", isBuiltIn: true, pageStart: 1, pageEnd: 10, primaryKeyword: "생산품", secondaryKeyword: null, locator: "rightOfKeyword", regexPattern: null, resultType: "string", required: true, note: "1.허가결정 첫 페이지" }
+      ],
+      activeRuleIds: ["r1","r2","r3","r4","r5","r6","r7","r8","r9"]
+    };
+
+    let state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+    let editingRuleId = null;
+
+    const $ = (sel) => document.querySelector(sel);
+    const $$ = (sel) => document.querySelectorAll(sel);
+
+    // ===========================================================
+    // 렌더링
+    // ===========================================================
+    function renderScrapeRange() {
+      $$("#scrapeRangeChips .ui-chip").forEach((chip) => {
+        const isActive = state.scrapeRange.mode === "preset" && chip.dataset.preset === state.scrapeRange.preset;
+        chip.dataset.active = isActive ? "true" : "false";
+      });
+      const start = $("#scrapeStart");
+      const end = $("#scrapeEnd");
+      start.value = state.scrapeRange.customStart || "";
+      end.value = state.scrapeRange.customEnd || "";
+    }
+
+    function renderFilters() {
+      $$("#filterChips .ui-chip").forEach((chip) => {
+        const key = chip.dataset.filter;
+        chip.dataset.active = state.filters.permitTypes.includes(key) ? "true" : "false";
+      });
+    }
+
+    function renderExtractionRange() {
+      $$("#extractionRangeChips button").forEach((btn) => {
+        btn.dataset.active = btn.dataset.mode === state.extractionRange.mode ? "true" : "false";
+      });
+      const startInput = $("#extractStart");
+      const endInput = $("#extractEnd");
+      const inputsWrap = $("#extractionRangeInputs");
+      const note = $("#extractionRangeAllNote");
+      startInput.value = state.extractionRange.startPage;
+      endInput.value = state.extractionRange.endPage;
+      const isAll = state.extractionRange.mode === "all";
+      startInput.disabled = isAll;
+      endInput.disabled = isAll;
+      inputsWrap.classList.toggle("hidden", isAll);
+      note.classList.toggle("hidden", !isAll);
+    }
+
+    function renderRules() {
+      const wrap = $("#ruleChips");
+      wrap.innerHTML = "";
+      state.extractionRules.forEach((rule) => {
+        const isActive = state.activeRuleIds.includes(rule.id);
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "rule-chip";
+        chip.dataset.active = isActive ? "true" : "false";
+        chip.dataset.ruleId = rule.id;
+        chip.innerHTML = `
+          <span class="rule-label">${escapeHtml(rule.label)}</span>
+          <span class="edit-btn" data-role="edit" title="편집">
+            <i data-lucide="pencil" class="w-3 h-3"></i>
+          </span>
+        `;
+        chip.addEventListener("click", (e) => {
+          if (e.target.closest('[data-role="edit"]')) {
+            openRuleModal(rule.id);
+          } else {
+            toggleRuleActive(rule.id);
+          }
+        });
+        wrap.appendChild(chip);
+      });
+
+      const addBtn = document.createElement("button");
+      addBtn.type = "button";
+      addBtn.className = "rule-add-btn";
+      addBtn.id = "addRuleBtn";
+      addBtn.innerHTML = `<i data-lucide="plus" class="w-3.5 h-3.5"></i> 추가`;
+      addBtn.addEventListener("click", () => openRuleModal(null));
+      wrap.appendChild(addBtn);
+
+      $("#activeRuleCount").textContent = `활성 항목 ${state.activeRuleIds.length} / ${state.extractionRules.length}`;
+      lucide.createIcons();
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+    }
+
+    // ===========================================================
+    // 인터랙션
+    // ===========================================================
+    function bindScrapeRangeChips() {
+      $("#scrapeRangeChips").addEventListener("click", (e) => {
+        const chip = e.target.closest(".ui-chip");
+        if (!chip) return;
+        state.scrapeRange.mode = "preset";
+        state.scrapeRange.preset = chip.dataset.preset;
+        state.scrapeRange.customStart = null;
+        state.scrapeRange.customEnd = null;
+        renderScrapeRange();
+      });
+      ["#scrapeStart", "#scrapeEnd"].forEach((sel) => {
+        $(sel).addEventListener("change", () => {
+          state.scrapeRange.mode = "custom";
+          state.scrapeRange.preset = null;
+          state.scrapeRange.customStart = $("#scrapeStart").value || null;
+          state.scrapeRange.customEnd = $("#scrapeEnd").value || null;
+          renderScrapeRange();
+        });
+      });
+    }
+
+    function bindFilterChips() {
+      $("#filterChips").addEventListener("click", (e) => {
+        const chip = e.target.closest(".ui-chip");
+        if (!chip) return;
+        const key = chip.dataset.filter;
+        if (key === "all") {
+          state.filters.permitTypes = ["all"];
+        } else {
+          state.filters.permitTypes = state.filters.permitTypes.filter((k) => k !== "all");
+          if (state.filters.permitTypes.includes(key)) {
+            state.filters.permitTypes = state.filters.permitTypes.filter((k) => k !== key);
+          } else {
+            state.filters.permitTypes.push(key);
+          }
+          if (state.filters.permitTypes.length === 0) {
+            state.filters.permitTypes = ["all"];
+          }
+        }
+        renderFilters();
+      });
+    }
+
+    function bindExtractionRange() {
+      $("#extractionRangeChips").addEventListener("click", (e) => {
+        const btn = e.target.closest("button[data-mode]");
+        if (!btn) return;
+        state.extractionRange.mode = btn.dataset.mode;
+        renderExtractionRange();
+      });
+      ["#extractStart", "#extractEnd"].forEach((sel) => {
+        $(sel).addEventListener("change", () => {
+          const s = parseInt($("#extractStart").value, 10);
+          const e = parseInt($("#extractEnd").value, 10);
+          if (!Number.isNaN(s) && s >= 1) state.extractionRange.startPage = s;
+          if (!Number.isNaN(e) && e >= 1) state.extractionRange.endPage = e;
+          if (state.extractionRange.endPage < state.extractionRange.startPage) {
+            state.extractionRange.endPage = state.extractionRange.startPage;
+          }
+          renderExtractionRange();
+        });
+      });
+    }
+
+    function toggleRuleActive(id) {
+      if (state.activeRuleIds.includes(id)) {
+        state.activeRuleIds = state.activeRuleIds.filter((rid) => rid !== id);
+      } else {
+        state.activeRuleIds.push(id);
+      }
+      renderRules();
+    }
+
+    // ===========================================================
+    // 모달
+    // ===========================================================
+    function openRuleModal(ruleId) {
+      editingRuleId = ruleId;
+      const isEdit = !!ruleId;
+      const rule = isEdit ? state.extractionRules.find((r) => r.id === ruleId) : null;
+
+      $("#ruleModalTitle").textContent = isEdit ? `추출 항목 편집 - ${rule.label}` : "추출 항목 추가";
+      $("#ruleModalSubtitle").textContent = isEdit
+        ? "기존 항목 규칙을 수정합니다. 기본 9개 항목도 동일한 방식으로 편집할 수 있습니다."
+        : "검토결과서 PDF에서 자동 추출할 새로운 항목 규칙을 정의합니다.";
+
+      $("#ruleLabel").value = rule?.label || "";
+      $("#rulePageStart").value = rule?.pageStart ?? state.extractionRange.startPage;
+      $("#rulePageEnd").value = rule?.pageEnd ?? state.extractionRange.endPage;
+      $("#rulePrimary").value = rule?.primaryKeyword || "";
+      $("#ruleSecondary").value = rule?.secondaryKeyword || "";
+      $("#ruleLocator").value = rule?.locator || "rightOfKeyword";
+      $("#ruleRegex").value = rule?.regexPattern || "";
+      $("#ruleResultType").value = rule?.resultType || "string";
+      $("#ruleRequired").checked = !!rule?.required;
+      $("#ruleNote").value = rule?.note || "";
+
+      $("#rulePageRangeHint").textContent = `추출 범위 ${state.extractionRange.startPage}~${state.extractionRange.endPage}p 안에 포함되어야 합니다`;
+
+      toggleRegexField();
+      $("#ruleError").classList.add("hidden");
+      $("#ruleDeleteBtn").classList.toggle("hidden", !isEdit || !!rule?.isBuiltIn);
+
+      $("#ruleModal").classList.add("is-open");
+      lucide.createIcons();
+      setTimeout(() => $("#ruleLabel").focus(), 30);
+    }
+
+    function closeRuleModal() {
+      $("#ruleModal").classList.remove("is-open");
+      editingRuleId = null;
+    }
+
+    function toggleRegexField() {
+      const isRegex = $("#ruleLocator").value === "regex";
+      $("#ruleRegexWrapper").classList.toggle("hidden", !isRegex);
+    }
+
+    function validateRuleForm() {
+      const label = $("#ruleLabel").value.trim();
+      const ps = parseInt($("#rulePageStart").value, 10);
+      const pe = parseInt($("#rulePageEnd").value, 10);
+      const primary = $("#rulePrimary").value.trim();
+      const locator = $("#ruleLocator").value;
+      const regex = $("#ruleRegex").value.trim();
+
+      if (!label) return "항목명을 입력하세요.";
+      if (Number.isNaN(ps) || Number.isNaN(pe) || ps < 1 || pe < 1) return "유효한 페이지 범위를 입력하세요.";
+      if (pe < ps) return "종료 페이지는 시작 페이지 이상이어야 합니다.";
+      if (state.extractionRange.mode === "partial") {
+        if (ps < state.extractionRange.startPage || pe > state.extractionRange.endPage) {
+          return `페이지 범위는 카드의 추출 범위 ${state.extractionRange.startPage}~${state.extractionRange.endPage}p 안이어야 합니다.`;
+        }
+      }
+      if (locator !== "regex" && !primary) return "검색 키워드를 입력하세요.";
+      if (locator === "regex" && !regex) return "정규식 패턴을 입력하세요.";
+      return null;
+    }
+
+    function saveRuleFromModal() {
+      const err = validateRuleForm();
+      const errBox = $("#ruleError");
+      if (err) {
+        errBox.textContent = err;
+        errBox.classList.remove("hidden");
+        return;
+      }
+      errBox.classList.add("hidden");
+
+      const payload = {
+        label: $("#ruleLabel").value.trim(),
+        pageStart: parseInt($("#rulePageStart").value, 10),
+        pageEnd: parseInt($("#rulePageEnd").value, 10),
+        primaryKeyword: $("#rulePrimary").value.trim() || null,
+        secondaryKeyword: $("#ruleSecondary").value.trim() || null,
+        locator: $("#ruleLocator").value,
+        regexPattern: $("#ruleLocator").value === "regex" ? ($("#ruleRegex").value.trim() || null) : null,
+        resultType: $("#ruleResultType").value,
+        required: $("#ruleRequired").checked,
+        note: $("#ruleNote").value.trim() || ""
+      };
+
+      if (editingRuleId) {
+        const idx = state.extractionRules.findIndex((r) => r.id === editingRuleId);
+        if (idx >= 0) state.extractionRules[idx] = { ...state.extractionRules[idx], ...payload };
+      } else {
+        const newId = "u" + Date.now().toString(36);
+        state.extractionRules.push({ id: newId, isBuiltIn: false, ...payload });
+        state.activeRuleIds.push(newId);
+      }
+
+      renderRules();
+      closeRuleModal();
+      showToast(editingRuleId ? "항목이 수정되었습니다." : "새 항목이 추가되었습니다.");
+    }
+
+    function deleteRuleFromModal() {
+      if (!editingRuleId) return;
+      const rule = state.extractionRules.find((r) => r.id === editingRuleId);
+      if (!rule || rule.isBuiltIn) return;
+      state.extractionRules = state.extractionRules.filter((r) => r.id !== editingRuleId);
+      state.activeRuleIds = state.activeRuleIds.filter((rid) => rid !== editingRuleId);
+      renderRules();
+      closeRuleModal();
+      showToast("항목이 삭제되었습니다.");
+    }
+
+    function bindModal() {
+      $("#ruleModalClose").addEventListener("click", closeRuleModal);
+      $("#ruleCancelBtn").addEventListener("click", closeRuleModal);
+      $("#ruleSaveBtn").addEventListener("click", saveRuleFromModal);
+      $("#ruleDeleteBtn").addEventListener("click", deleteRuleFromModal);
+      $("#ruleLocator").addEventListener("change", toggleRegexField);
+      $("#ruleModal").addEventListener("click", (e) => {
+        if (e.target.id === "ruleModal") closeRuleModal();
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && $("#ruleModal").classList.contains("is-open")) closeRuleModal();
+      });
+    }
+
+    // ===========================================================
+    // 저장 / 초기화 / 토스트
+    // ===========================================================
+    function bindSaveReset() {
+      $("#saveOptionsBtn").addEventListener("click", () => {
+        const config = {
+          scrapeRange: state.scrapeRange,
+          filters: state.filters,
+          extractionRange: state.extractionRange,
+          extractionRules: state.extractionRules,
+          activeRuleIds: state.activeRuleIds
+        };
+        console.log("[CollectionConfig 저장]", config);
+        showToast("수집 옵션이 저장되었습니다.");
+      });
+      $("#resetOptionsBtn").addEventListener("click", () => {
+        state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+        renderAll();
+        showToast("기본값으로 초기화되었습니다.");
+      });
+    }
+
+    let toastTimer;
+    function showToast(message) {
+      const toast = $("#toast");
+      $("#toastMessage").textContent = message;
+      toast.classList.add("is-visible");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove("is-visible"), 2200);
+    }
+
+    // ===========================================================
+    // 사이드바 아코디언
+    // ===========================================================
+    function bindSidebarAccordion() {
+      const toggle = $("#dataAccordionToggle");
+      const panel = $("#dataAccordionPanel");
+      const icon = $("#dataAccordionIcon");
+      if (!toggle || !panel) return;
+      toggle.addEventListener("click", () => {
+        const isOpen = !panel.classList.contains("hidden");
+        panel.classList.toggle("hidden", isOpen);
+        if (icon) {
+          icon.setAttribute("data-lucide", isOpen ? "chevron-right" : "chevron-down");
+          lucide.createIcons();
+        }
+      });
+    }
+
+    // ===========================================================
+    // 초기화
+    // ===========================================================
+    function renderAll() {
+      renderScrapeRange();
+      renderFilters();
+      renderExtractionRange();
+      renderRules();
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      lucide.createIcons();
+      renderAll();
+      bindScrapeRangeChips();
+      bindFilterChips();
+      bindExtractionRange();
+      bindModal();
+      bindSaveReset();
+      bindSidebarAccordion();
+    });
+  </script>
+</body>
+</html>

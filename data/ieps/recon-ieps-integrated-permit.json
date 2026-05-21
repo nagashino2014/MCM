@@ -1,0 +1,73 @@
+{
+  "fetchedAt": "2026-05-06T05:07:04.022Z",
+  "boardId": "ieps-integrated-permit",
+  "listUrl": "https://ieps.nier.go.kr/web/board/7?pMENUMST_ID=176",
+  "htmlBytes": 55545,
+  "containerCandidates": {
+    "table": 1
+  },
+  "rowCandidates": {
+    "table tbody tr": 10,
+    "table tr": 11
+  },
+  "linkSamples": [
+    {
+      "href": "#cont_area",
+      "onclick": "",
+      "text": "본문내용으로 바로가기"
+    },
+    {
+      "href": "/web/mypage/selectlMemberloginForm/?pMENUMST_ID=101",
+      "onclick": "",
+      "text": "로그인"
+    },
+    {
+      "href": "/web/link/?pMENUMST_ID=64",
+      "onclick": "",
+      "text": "회원가입"
+    },
+    {
+      "href": "/web/main",
+      "onclick": "",
+      "text": "처음으로"
+    },
+    {
+      "href": "/web/link/?pMENUMST_ID=59",
+      "onclick": "",
+      "text": "통합환경허가 소개"
+    },
+    {
+      "href": "/web/integratedEnvironment/systemOutline?pMENUMST_ID=113",
+      "onclick": "",
+      "text": "제도개요"
+    },
+    {
+      "href": "/web/integratedEnvironment/foreignTrend?pMENUMST_ID=119",
+      "onclick": "",
+      "text": "해외동향"
+    },
+    {
+      "href": "/web/integratedEnvironment/improveSollution?pMENUMST_ID=125",
+      "onclick": "",
+      "text": "개선효과"
+    },
+    {
+      "href": "/web/integratedEnvironment/direction?pMENUMST_ID=129",
+      "onclick": "",
+      "text": "방향 및 경과"
+    },
+    {
+      "href": "/web/integratedEnvironment/dictionary?pMENUMST_ID=135",
+      "onclick": "",
+      "text": "용어사전"
+    }
+  ],
+  "paginationHints": [
+    "page=\\d+",
+    "goPage\\("
+  ],
+  "attachmentHints": [
+    "atchFile",
+    "downloadFile"
+  ]
+}

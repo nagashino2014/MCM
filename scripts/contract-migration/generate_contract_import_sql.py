@@ -62,6 +62,7 @@ CONTRACT_HEADERS = {
     "previous_amount": 26,
     "delta_amount": 27,
     "change_detail": 28,
+    "service_subtype": 79,
 }
 
 MILESTONE_COLUMNS = [
@@ -321,7 +322,8 @@ def main() -> None:
         current_amount = number(item["changed_amount"]) or order_amount
         lines.append(
             "INSERT INTO contracts "
-            "(contract_id, facility_id, counterparty_entity_id, contract_title, service_type, contract_status, contract_amount, "
+            "(contract_id, facility_id, counterparty_entity_id, contract_title, service_type, service_subtype, contract_kind, "
+            "collection_progress_label, contract_status, contract_amount, "
             "started_at, ended_at, memo, created_at, updated_at, legacy_contract_no, legacy_company_id, contract_direction, "
             "industry_category, contract_date, original_amount, current_amount, source_workbook, source_sheet, source_row, migration_batch_id) VALUES ("
             + ", ".join(
@@ -331,6 +333,9 @@ def main() -> None:
                     sql_value(entity_id),
                     sql_value(item["contract_title"]),
                     sql_value(item["service_type"]),
+                    sql_value(item.get("service_subtype")),
+                    sql_value("standard"),
+                    sql_value(item.get("collection_progress")),
                     sql_value("active"),
                     sql_value(order_amount),
                     sql_value(as_iso_date(item["started_at"])),
@@ -352,7 +357,10 @@ def main() -> None:
                 ]
             )
             + ") ON CONFLICT (contract_id) DO UPDATE SET "
-            + "contract_title = EXCLUDED.contract_title, service_type = EXCLUDED.service_type, contract_amount = EXCLUDED.contract_amount, "
+            + "contract_title = EXCLUDED.contract_title, service_type = EXCLUDED.service_type, "
+            + "service_subtype = EXCLUDED.service_subtype, "
+            + "collection_progress_label = COALESCE(EXCLUDED.collection_progress_label, contracts.collection_progress_label), "
+            + "contract_amount = EXCLUDED.contract_amount, "
             + "started_at = EXCLUDED.started_at, ended_at = EXCLUDED.ended_at, current_amount = EXCLUDED.current_amount, updated_at = EXCLUDED.updated_at;"
         )
 

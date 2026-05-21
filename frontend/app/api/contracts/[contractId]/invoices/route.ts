@@ -27,6 +27,9 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     const vatAmount = toNullableNumber(form.get("vatAmount"));
     const paymentCollected = String(form.get("paymentCollected") ?? "0") === "1";
     const paymentCollectedAt = String(form.get("paymentCollectedAt") ?? "").trim() || null;
+    const collectionRatio = toNullableNumber(form.get("collectionRatio"));
+    const collectedAmount = toNullableNumber(form.get("collectedAmount"));
+    const paymentTerms = String(form.get("paymentTerms") ?? "").trim() || null;
     const memo = String(form.get("memo") ?? "").trim() || null;
 
     if (!(file instanceof File)) {
@@ -123,11 +126,24 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
                invoice_amount = COALESCE($2, invoice_amount, amount),
                payment_collected = $3,
                payment_collected_at = COALESCE($4, payment_collected_at),
-               collected_amount = CASE WHEN $3 = 1 THEN COALESCE($2, collected_amount, amount) ELSE collected_amount END,
-               updated_at = $5
-           WHERE milestone_id = $6
-             AND contract_id = $7`,
-          [issueDate, invoiceAmount, paymentCollected ? 1 : 0, paymentCollectedAt, now, milestoneId, contractId]
+               collection_ratio = CASE WHEN $3 = 1 THEN COALESCE($5, collection_ratio, 1.0) ELSE collection_ratio END,
+               collected_amount = CASE WHEN $3 = 1 THEN COALESCE($6, $2, collected_amount, amount) ELSE collected_amount END,
+               payment_terms = COALESCE($7, payment_terms),
+               updated_at = $8
+           WHERE milestone_id = $9
+             AND contract_id = $10`,
+          [
+            issueDate,
+            invoiceAmount,
+            paymentCollected ? 1 : 0,
+            paymentCollectedAt,
+            collectionRatio,
+            collectedAmount,
+            paymentTerms,
+            now,
+            milestoneId,
+            contractId,
+          ]
         );
       }
       await recordAuditLogInline(db, {

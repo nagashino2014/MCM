@@ -2,27 +2,49 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { BarChart3, CalendarDays, FileSignature, Paperclip, RefreshCw, Search, WalletCards } from "lucide-react";
+import {
+  BarChart3,
+  ChevronDown,
+  ChevronRight,
+  FileSignature,
+  FileText,
+  Paperclip,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Search,
+  Trash2,
+  WalletCards,
+  X,
+} from "lucide-react";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
+import { resolveServiceTypeStyle } from "@/lib/ieps/contract-tree-style";
+import ContractChangeModal from "@/components/contracts/ContractChangeModal";
 
-interface ContractListItem {
+interface ContractTreeContractNode {
   contractId: string;
   contractTitle: string;
   counterpartyName: string;
-  facilityName: string | null;
-  legacyCompanyId: string | null;
   serviceType: string | null;
-  contractStatus: string;
+  serviceSubtype: string | null;
+  contractKind: string;
+  contractAmount: number | null;
   currentAmount: number | null;
   contractDate: string | null;
-  startedAt: string | null;
-  endedAt: string | null;
-  milestoneCount: number;
-  issuedCount: number;
-  collectedCount: number;
-  totalMilestoneAmount: number;
-  totalIssuedAmount: number;
-  totalCollectedAmount: number;
+  collectionRate: number;
+  collectionProgressLabel: string | null;
+}
+
+interface ContractTreeServiceGroup {
+  serviceType: string;
+  contracts: ContractTreeContractNode[];
+}
+
+interface ContractTreePayload {
+  year: string | null;
+  totalCount: number;
+  availableYears: string[];
+  groups: ContractTreeServiceGroup[];
 }
 
 interface ContractDetail {
@@ -35,11 +57,32 @@ interface ContractDetail {
 interface InvoiceModalState {
   milestoneId: string;
   stageLabel: string;
+  baseAmount: number;
   issueDate: string;
   invoiceAmount: string;
   paymentCollected: boolean;
   paymentCollectedAt: string;
+  collectionRatio: string;
+  collectedAmount: string;
+  paymentTerms: string;
+  memo: string;
   file: File | null;
+}
+
+interface NewStageModalState {
+  stageLabel: string;
+  amount: string;
+  paymentTerms: string;
+}
+
+interface PartialPaymentModalState {
+  milestoneId: string;
+  stageLabel: string;
+  baseAmount: number;
+  collectedAt: string;
+  amount: string;
+  ratio: string;
+  memo: string;
 }
 
 export default function ContractsPage() {
@@ -52,41 +95,50 @@ export default function ContractsPage() {
 
 function ContractsInner() {
   const toast = useToast();
-  const [items, setItems] = useState<ContractListItem[]>([]);
-  const [total, setTotal] = useState(0);
+  const [tree, setTree] = useState<ContractTreePayload | null>(null);
+  const [year, setYear] = useState<string>("");
+  const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ContractDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState({ q: "", year: "", serviceType: "", collection: "" });
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [invoiceModal, setInvoiceModal] = useState<InvoiceModalState | null>(null);
+  const [newStageModal, setNewStageModal] = useState<NewStageModalState | null>(null);
+  const [partialModal, setPartialModal] = useState<PartialPaymentModalState | null>(null);
+  const [changeModalOpen, setChangeModalOpen] = useState(false);
 
-  const reload = useCallback(async () => {
+  const reloadTree = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams();
-      if (filter.q) params.set("q", filter.q);
-      if (filter.year) params.set("year", filter.year);
-      if (filter.serviceType) params.set("serviceType", filter.serviceType);
-      if (filter.collection) params.set("collection", filter.collection);
-      params.set("limit", "50");
-      const res = await fetch("/api/contracts?" + params.toString(), { cache: "no-store" });
+      if (year) params.set("year", year);
+      const res = await fetch("/api/contracts/tree?" + params.toString(), { cache: "no-store" });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body?.error ?? "HTTP " + res.status);
       }
-      const json = (await res.json()) as { items: ContractListItem[]; total: number };
-      setItems(json.items ?? []);
-      setTotal(json.total ?? 0);
-      setSelectedId((current) => current ?? json.items?.[0]?.contractId ?? null);
+      const json = (await res.json()) as ContractTreePayload;
+      setTree(json);
+      setExpanded((prev) => {
+        const next = { ...prev };
+        for (const group of json.groups) {
+          if (next[group.serviceType] === undefined) next[group.serviceType] = true;
+        }
+        return next;
+      });
+      setSelectedId((current) => {
+        if (current && json.groups.some((g) => g.contracts.some((c) => c.contractId === current))) return current;
+        return json.groups[0]?.contracts[0]?.contractId ?? null;
+      });
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [filter]);
+  }, [year]);
 
   const loadDetail = useCallback(async (contractId: string) => {
     setDetailLoading(true);
@@ -105,17 +157,43 @@ function ContractsInner() {
   }, [toast]);
 
   useEffect(() => {
-    reload();
-  }, [reload]);
+    reloadTree();
+  }, [reloadTree]);
 
   useEffect(() => {
     if (selectedId) loadDetail(selectedId);
   }, [selectedId, loadDetail]);
 
-  const selected = useMemo(
-    () => items.find((item) => item.contractId === selectedId) ?? null,
-    [items, selectedId]
+  const filteredGroups = useMemo(() => {
+    if (!tree) return [];
+    const q = search.trim().toLowerCase();
+    if (!q) return tree.groups;
+    return tree.groups
+      .map((group) => ({
+        serviceType: group.serviceType,
+        contracts: group.contracts.filter((c) =>
+          c.contractTitle.toLowerCase().includes(q) ||
+          c.counterpartyName.toLowerCase().includes(q) ||
+          (c.serviceSubtype ?? "").toLowerCase().includes(q)
+        ),
+      }))
+      .filter((group) => group.contracts.length > 0);
+  }, [tree, search]);
+
+  const totalCount = useMemo(
+    () => filteredGroups.reduce((acc, g) => acc + g.contracts.length, 0),
+    [filteredGroups]
   );
+
+  const selected = useMemo(() => {
+    if (!tree) return null;
+    for (const group of tree.groups) {
+      for (const c of group.contracts) {
+        if (c.contractId === selectedId) return c;
+      }
+    }
+    return null;
+  }, [tree, selectedId]);
 
   return (
     <div className="flex flex-col gap-6 p-2">
@@ -142,7 +220,7 @@ function ContractsInner() {
             </Link>
             <button
               type="button"
-              onClick={reload}
+              onClick={reloadTree}
               className="rounded-xl px-3 py-2 text-xs font-bold border border-stone-500/40 text-stone-100 hover:bg-white/10 flex items-center gap-1"
             >
               <RefreshCw className={"w-3.5 h-3.5 " + (loading ? "animate-spin" : "")} />
@@ -152,91 +230,92 @@ function ContractsInner() {
         </div>
       </section>
 
-      <section className="glass-card rounded-2xl p-4 reveal delay-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-2 flex-1 min-w-[260px]">
-            <Search className="w-4 h-4 text-stone-400" />
-            <input
-              type="text"
-              className="input-field"
-              placeholder="계약명 / 거래처 / 업체ID 검색"
-              value={filter.q}
-              onChange={(e) => setFilter({ ...filter, q: e.target.value })}
-            />
-          </div>
-          <select className="ui-select text-xs w-28" value={filter.year} onChange={(e) => setFilter({ ...filter, year: e.target.value })}>
-            <option value="">전체 연도</option>
-            {Array.from({ length: 11 }, (_, index) => 2026 - index).map((year) => (
-              <option key={year} value={String(year)}>
-                {year}년
-              </option>
-            ))}
-          </select>
-          <select className="ui-select text-xs w-36" value={filter.serviceType} onChange={(e) => setFilter({ ...filter, serviceType: e.target.value })}>
-            <option value="">전체 용역</option>
-            {["HAPs", "통합허가", "장외&화관법", "ESG탄소중립", "기타"].map((type) => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
-          </select>
-          <select className="ui-select text-xs w-36" value={filter.collection} onChange={(e) => setFilter({ ...filter, collection: e.target.value })}>
-            <option value="">전체 수금상태</option>
-            <option value="unissued">미발행 있음</option>
-            <option value="uncollected">미수금 있음</option>
-            <option value="issued">발행 있음</option>
-            <option value="collected">수금 있음</option>
-          </select>
-        </div>
-      </section>
-
       {error ? (
         <div className="glass-card rounded-2xl p-6 text-sm text-red-600">
-          계약 데이터를 불러오지 못했습니다. `infra/aws/004_contract_management.sql` 적용 여부와 DB 연결을 확인하세요.
+          계약 데이터를 불러오지 못했습니다. `infra/aws/005_contract_management_round2.sql` 적용 여부와 DB 연결을 확인하세요.
           <div className="mt-2 font-mono text-xs">{error}</div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 xl:grid-cols-[minmax(360px,0.9fr)_minmax(520px,1.3fr)] gap-5">
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(360px,0.9fr)_minmax(560px,1.4fr)] gap-5">
           <section className="glass-card rounded-3xl overflow-hidden reveal delay-2">
-            <div className="p-4 border-b border-stone-200/70 flex items-center justify-between">
+            <div className="p-4 border-b border-stone-200/70 flex items-center justify-between gap-2 flex-wrap">
               <div>
-                <h2 className="font-black text-stone-800">계약 원장</h2>
-                <p className="text-xs text-stone-500">총 {total.toLocaleString()}건</p>
+                <h2 className="font-black text-stone-800 flex items-center gap-2">
+                  <WalletCards className="w-4 h-4 text-amber-600" />
+                  계약 원장
+                </h2>
+                <p className="text-xs text-stone-500">총 {totalCount.toLocaleString()}건</p>
               </div>
-              <WalletCards className="w-5 h-5 text-amber-600" />
+              <select
+                className="ui-select text-xs w-28"
+                value={year}
+                onChange={(e) => setYear(e.target.value)}
+              >
+                <option value="">전체 연도</option>
+                {(tree?.availableYears ?? []).map((y) => (
+                  <option key={y} value={y}>{y}년</option>
+                ))}
+              </select>
             </div>
-            <div className="max-h-[720px] overflow-auto divide-y divide-stone-200/70">
-              {items.map((item) => (
-                <button
-                  type="button"
-                  key={item.contractId}
-                  onClick={() => setSelectedId(item.contractId)}
-                  className={
-                    "w-full text-left p-4 hover:bg-amber-50/70 transition " +
-                    (item.contractId === selectedId ? "bg-amber-50 border-l-4 border-amber-500" : "border-l-4 border-transparent")
-                  }
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-bold text-sm text-stone-800 line-clamp-2">{item.contractTitle}</p>
-                      <p className="text-xs text-stone-500 mt-1">
-                        {item.counterpartyName} · {item.serviceType ?? "미분류"}
-                      </p>
-                    </div>
-                    <span className="text-[11px] font-black text-stone-600 bg-white/70 rounded-full px-2 py-1 whitespace-nowrap">
-                      {formatMoney(item.currentAmount)}
-                    </span>
-                  </div>
-                  <div className="mt-3 grid grid-cols-3 gap-2 text-[11px] text-stone-500">
-                    <span>발행 {item.issuedCount}/{item.milestoneCount}</span>
-                    <span>수금 {item.collectedCount}/{item.milestoneCount}</span>
-                    <span>{item.contractDate ?? item.startedAt ?? "-"}</span>
-                  </div>
-                </button>
-              ))}
-              {!loading && items.length === 0 && (
+            <div className="px-4 py-3 border-b border-stone-200/70 flex items-center gap-2">
+              <Search className="w-4 h-4 text-stone-400" />
+              <input
+                type="text"
+                className="input-field text-xs"
+                placeholder="계약명 / 거래처 / 세분류 검색"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <div className="max-h-[720px] overflow-auto">
+              {filteredGroups.length === 0 && !loading && (
                 <div className="p-10 text-center text-sm text-stone-500">조건에 맞는 계약이 없습니다.</div>
               )}
+              {filteredGroups.map((group) => {
+                const style = resolveServiceTypeStyle(group.serviceType);
+                const ParentIcon = style.parentIcon;
+                const ChildIcon = style.childIcon;
+                const isOpen = expanded[group.serviceType] !== false;
+                return (
+                  <div key={group.serviceType} className="border-b border-stone-200/70">
+                    <button
+                      type="button"
+                      onClick={() => setExpanded((prev) => ({ ...prev, [group.serviceType]: !isOpen }))}
+                      className={"w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-stone-50 " + style.parentChip}
+                    >
+                      {isOpen ? <ChevronDown className="w-4 h-4 text-stone-500" /> : <ChevronRight className="w-4 h-4 text-stone-500" />}
+                      <ParentIcon className={"w-4 h-4 " + style.parentText} />
+                      <span className="font-black text-sm text-stone-800">{group.serviceType}</span>
+                      <span className="text-[11px] font-bold text-stone-500 ml-auto">{group.contracts.length}건</span>
+                    </button>
+                    {isOpen && (
+                      <div className="bg-white/40">
+                        {group.contracts.map((c) => {
+                          const isSelected = c.contractId === selectedId;
+                          return (
+                            <button
+                              type="button"
+                              key={c.contractId}
+                              onClick={() => setSelectedId(c.contractId)}
+                              className={
+                                "w-full flex items-center gap-2 pl-9 pr-3 py-2 text-left text-xs hover:bg-amber-50/70 " +
+                                (isSelected ? "bg-amber-50 border-l-4 border-amber-500" : "border-l-4 border-transparent")
+                              }
+                            >
+                              <ChildIcon className={"w-3.5 h-3.5 " + style.childText} />
+                              <span className="flex-1 truncate font-bold text-stone-800">{c.contractTitle}</span>
+                              <span className="text-[10px] font-mono text-stone-500 ml-2">{formatMoney(c.currentAmount)}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="p-3 text-xs text-stone-500 text-right border-t border-stone-200/70">
+              계약 건수: {tree?.totalCount.toLocaleString() ?? 0}
             </div>
           </section>
 
@@ -246,7 +325,31 @@ function ContractsInner() {
             ) : detailLoading || !detail ? (
               <div className="h-full flex items-center justify-center text-sm text-stone-500">상세 정보를 불러오는 중입니다.</div>
             ) : (
-              <ContractDetailPanel detail={detail} onOpenInvoice={setInvoiceModal} />
+              <ContractDetailPanel
+                detail={detail}
+                onOpenInvoice={setInvoiceModal}
+                onOpenNewStage={() => setNewStageModal({ stageLabel: "", amount: "", paymentTerms: "" })}
+                onOpenPartial={setPartialModal}
+                onOpenChange={() => setChangeModalOpen(true)}
+                onDeleteStage={async (milestoneId) => {
+                  if (!selected) return;
+                  if (!confirm("해당 단계를 삭제하시겠습니까?")) return;
+                  try {
+                    const res = await fetch(
+                      `/api/contracts/${encodeURIComponent(selected.contractId)}/milestones/${encodeURIComponent(milestoneId)}`,
+                      { method: "DELETE" }
+                    );
+                    if (!res.ok) {
+                      const body = await res.json().catch(() => ({}));
+                      throw new Error(body?.error ?? "HTTP " + res.status);
+                    }
+                    toast.show("단계가 삭제되었습니다.", "success");
+                    loadDetail(selected.contractId);
+                  } catch (err) {
+                    toast.show("삭제 실패: " + (err as Error).message, "error");
+                  }
+                }}
+              />
             )}
           </section>
         </div>
@@ -261,7 +364,58 @@ function ContractsInner() {
           onSaved={() => {
             setInvoiceModal(null);
             if (selectedId) loadDetail(selectedId);
-            reload();
+            reloadTree();
+          }}
+        />
+      )}
+
+      {newStageModal && selectedId && (
+        <NewStageModal
+          contractId={selectedId}
+          state={newStageModal}
+          onChange={setNewStageModal}
+          onClose={() => setNewStageModal(null)}
+          onSaved={() => {
+            setNewStageModal(null);
+            if (selectedId) loadDetail(selectedId);
+          }}
+        />
+      )}
+
+      {partialModal && selectedId && (
+        <PartialPaymentModal
+          contractId={selectedId}
+          state={partialModal}
+          onChange={setPartialModal}
+          onClose={() => setPartialModal(null)}
+          onSaved={() => {
+            setPartialModal(null);
+            if (selectedId) loadDetail(selectedId);
+            reloadTree();
+          }}
+        />
+      )}
+
+      {changeModalOpen && selected && detail && (
+        <ContractChangeModal
+          contractId={selected.contractId}
+          contractTitle={selected.contractTitle}
+          counterpartyName={selected.counterpartyName}
+          contractDate={selected.contractDate}
+          initialMilestones={detail.milestones.map((m) => ({
+            stageLabel: String(m.stage_label ?? ""),
+            amount: Number(m.amount ?? 0),
+            paymentTerms: String(m.payment_terms ?? ""),
+          }))}
+          initialServiceType={selected.serviceType ?? ""}
+          initialServiceSubtype={selected.serviceSubtype ?? ""}
+          initialEndedAt={String(detail.contract.ended_at ?? "") || null}
+          initialCurrentAmount={selected.currentAmount}
+          onClose={() => setChangeModalOpen(false)}
+          onSaved={() => {
+            setChangeModalOpen(false);
+            if (selectedId) loadDetail(selectedId);
+            reloadTree();
           }}
         />
       )}
@@ -272,11 +426,27 @@ function ContractsInner() {
 function ContractDetailPanel({
   detail,
   onOpenInvoice,
+  onOpenNewStage,
+  onOpenPartial,
+  onOpenChange,
+  onDeleteStage,
 }: {
   detail: ContractDetail;
   onOpenInvoice: (state: InvoiceModalState) => void;
+  onOpenNewStage: () => void;
+  onOpenPartial: (state: PartialPaymentModalState) => void;
+  onOpenChange: () => void;
+  onDeleteStage: (milestoneId: string) => void;
 }) {
   const contract = detail.contract;
+  const baseAmount = Number(contract.current_amount ?? contract.contract_amount ?? 0);
+  const collectedAmount = detail.milestones.reduce(
+    (acc, m) => acc + Number(m.collected_amount ?? 0),
+    0
+  );
+  const collectionRate = baseAmount > 0 ? Math.min(1, collectedAmount / baseAmount) : 0;
+  const contractKindLabel = String(contract.contract_kind ?? "standard") === "unit_price" ? "단가 계약" : "일반 계약";
+
   return (
     <div className="flex flex-col gap-5">
       <div className="flex items-start justify-between gap-4">
@@ -287,69 +457,158 @@ function ContractDetailPanel({
             {String(contract.counterparty_name ?? "")} · 업체ID {String(contract.legacy_company_id ?? "-")}
           </p>
         </div>
-        <div className="text-right">
-          <p className="text-xs text-stone-500">계약금액</p>
-          <p className="text-xl font-black text-stone-900">{formatMoney(contract.current_amount ?? contract.contract_amount)}</p>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="rounded-xl px-3 py-2 text-xs font-bold border border-stone-300 text-stone-700 hover:bg-stone-100 flex items-center gap-1"
+            onClick={() => {
+              const path = String(detail.invoices?.[0]?.public_path ?? "");
+              if (!path) {
+                alert("등록된 계약서 PDF가 없습니다. 먼저 계약서 PDF를 업로드해 주세요.");
+                return;
+              }
+              window.open(path, "_blank", "noopener");
+            }}
+          >
+            <FileText className="w-3.5 h-3.5" />
+            계약서 보기
+          </button>
+          <button
+            type="button"
+            onClick={onOpenChange}
+            className="rounded-xl px-3 py-2 text-xs font-bold bg-amber-500 text-white hover:bg-amber-600 flex items-center gap-1"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+            변경계약 입력
+          </button>
         </div>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Info label="계약일" value={contract.contract_date ?? contract.started_at} />
-        <Info label="준공일" value={contract.ended_at} />
+        <Info
+          label="계약금액"
+          value={baseAmount ? formatMoney(baseAmount) : "-"}
+          highlight
+        />
+        <Info label="업체명" value={contract.counterparty_name} />
+        <Info label="계약 종류" value={contractKindLabel} />
         <Info label="용역분류" value={contract.service_type} />
-        <Info label="상태" value={contract.contract_status} />
-        <Info label="법인번호" value={contract.counterparty_corporate_registration_no} />
-        <Info label="대표자" value={contract.counterparty_representative_name} />
-        <Info label="사업장" value={contract.facility_name} />
-        <Info label="통합허가 대상" value={contract.facility_integrated_permit_target} />
+        <Info label="용역세분류" value={contract.service_subtype} />
+        <Info label="준공일" value={contract.ended_at} />
+        <Info
+          label="수금 진척도"
+          value={`${Math.round(collectionRate * 100)}% (${formatMoney(collectedAmount)} / ${formatMoney(baseAmount)})`}
+        />
       </div>
 
       <div>
-        <h3 className="font-black text-stone-800 mb-3">청구·수금 단계</h3>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-black text-stone-800">청구·수금 단계</h3>
+          <button
+            type="button"
+            onClick={onOpenNewStage}
+            className="rounded-lg px-3 py-1.5 text-xs font-bold bg-amber-500 text-white hover:bg-amber-600 flex items-center gap-1"
+          >
+            <Plus className="w-3 h-3" />
+            단계 추가
+          </button>
+        </div>
         <div className="overflow-hidden rounded-2xl border border-stone-200/80">
-          <table className="w-full text-sm">
-            <thead className="bg-stone-900 text-stone-100 text-xs">
+          <table className="w-full text-xs">
+            <thead className="bg-stone-900 text-stone-100 text-[11px]">
               <tr>
-                <th className="text-left p-3">단계</th>
-                <th className="text-right p-3">금액</th>
-                <th className="text-center p-3">발행</th>
-                <th className="text-center p-3">수금</th>
-                <th className="text-right p-3">계산서</th>
+                <th className="text-left p-2.5">차수</th>
+                <th className="text-left p-2.5">단계명</th>
+                <th className="text-right p-2.5">청구금액</th>
+                <th className="text-left p-2.5">대금 지급 조건</th>
+                <th className="text-center p-2.5">발행일</th>
+                <th className="text-center p-2.5">수금일</th>
+                <th className="text-right p-2.5">수금비율</th>
+                <th className="text-right p-2.5">수금금액</th>
+                <th className="text-right p-2.5">작업</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-200/70">
-              {detail.milestones.map((milestone) => (
-                <tr key={String(milestone.milestone_id)} className="bg-white/60">
-                  <td className="p-3 font-bold text-stone-800">{String(milestone.stage_label ?? "")}</td>
-                  <td className="p-3 text-right font-mono">{formatMoney(milestone.amount)}</td>
-                  <td className="p-3 text-center">{Number(milestone.invoice_issued ?? 0) === 1 ? "발행" : "대기"}</td>
-                  <td className="p-3 text-center">{Number(milestone.payment_collected ?? 0) === 1 ? "수금" : "미수"}</td>
-                  <td className="p-3 text-right">
-                    <button
-                      type="button"
-                      className="rounded-lg px-2 py-1 text-xs font-bold bg-amber-400 text-zinc-950 hover:bg-amber-300 inline-flex items-center gap-1"
-                      onClick={() =>
-                        onOpenInvoice({
-                          milestoneId: String(milestone.milestone_id ?? ""),
-                          stageLabel: String(milestone.stage_label ?? ""),
-                          issueDate: new Date().toISOString().slice(0, 10),
-                          invoiceAmount: String(milestone.amount ?? ""),
-                          paymentCollected: Number(milestone.payment_collected ?? 0) === 1,
-                          paymentCollectedAt: String(milestone.payment_collected_at ?? ""),
-                          file: null,
-                        })
-                      }
-                    >
-                      <Paperclip className="w-3 h-3" />
-                      등록
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {detail.milestones.map((milestone) => {
+                const milestoneId = String(milestone.milestone_id ?? "");
+                const stageAmount = Number(milestone.amount ?? 0);
+                const collectionRatio = Number(milestone.collection_ratio ?? 0);
+                const ratioLabel = collectionRatio > 0
+                  ? `${Math.round(collectionRatio * 1000) / 10}%`
+                  : Number(milestone.payment_collected ?? 0) === 1 ? "100%" : "-";
+                return (
+                  <tr key={milestoneId} className="bg-white/60">
+                    <td className="p-2.5 font-mono text-stone-600">{String(milestone.stage_order ?? "")}</td>
+                    <td className="p-2.5 font-bold text-stone-800">{String(milestone.stage_label ?? "")}</td>
+                    <td className="p-2.5 text-right font-mono">{formatMoney(stageAmount)}</td>
+                    <td className="p-2.5 text-stone-600 max-w-[220px] truncate" title={String(milestone.payment_terms ?? "")}>
+                      {String(milestone.payment_terms ?? "-") || "-"}
+                    </td>
+                    <td className="p-2.5 text-center text-stone-600">{String(milestone.invoice_issued_at ?? "-") || "-"}</td>
+                    <td className="p-2.5 text-center text-stone-600">{String(milestone.payment_collected_at ?? "-") || "-"}</td>
+                    <td className="p-2.5 text-right font-mono">{ratioLabel}</td>
+                    <td className="p-2.5 text-right font-mono">{formatMoney(milestone.collected_amount)}</td>
+                    <td className="p-2.5 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          type="button"
+                          className="rounded-lg px-2 py-1 text-[11px] font-bold bg-amber-400 text-zinc-950 hover:bg-amber-300 inline-flex items-center gap-1"
+                          onClick={() =>
+                            onOpenInvoice({
+                              milestoneId,
+                              stageLabel: String(milestone.stage_label ?? ""),
+                              baseAmount: stageAmount,
+                              issueDate: String(milestone.invoice_issued_at ?? new Date().toISOString().slice(0, 10)),
+                              invoiceAmount: String(milestone.invoice_amount ?? milestone.amount ?? ""),
+                              paymentCollected: Number(milestone.payment_collected ?? 0) === 1,
+                              paymentCollectedAt: String(milestone.payment_collected_at ?? ""),
+                              collectionRatio: String(milestone.collection_ratio ?? "1"),
+                              collectedAmount: String(milestone.collected_amount ?? milestone.amount ?? ""),
+                              paymentTerms: String(milestone.payment_terms ?? ""),
+                              memo: "",
+                              file: null,
+                            })
+                          }
+                        >
+                          <Paperclip className="w-3 h-3" />
+                          발행/수금
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-lg px-2 py-1 text-[11px] font-bold border border-stone-300 text-stone-700 hover:bg-stone-100"
+                          onClick={() =>
+                            onOpenPartial({
+                              milestoneId,
+                              stageLabel: String(milestone.stage_label ?? ""),
+                              baseAmount: stageAmount,
+                              collectedAt: new Date().toISOString().slice(0, 10),
+                              amount: "",
+                              ratio: "",
+                              memo: "",
+                            })
+                          }
+                          title="부분수금 추가"
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-lg p-1 text-[11px] font-bold text-rose-600 hover:bg-rose-50"
+                          onClick={() => onDeleteStage(milestoneId)}
+                          title="단계 삭제"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
               {detail.milestones.length === 0 && (
                 <tr>
-                  <td className="p-6 text-center text-stone-500" colSpan={5}>
-                    등록된 청구 단계가 없습니다.
+                  <td className="p-6 text-center text-stone-500" colSpan={9}>
+                    등록된 청구 단계가 없습니다. 우상단의 `단계 추가` 버튼으로 추가하세요.
                   </td>
                 </tr>
               )}
@@ -409,6 +668,10 @@ function InvoiceUploadModal({
       form.set("invoiceAmount", state.invoiceAmount);
       form.set("paymentCollected", state.paymentCollected ? "1" : "0");
       form.set("paymentCollectedAt", state.paymentCollectedAt);
+      form.set("collectionRatio", state.collectionRatio);
+      form.set("collectedAmount", state.collectedAmount);
+      form.set("paymentTerms", state.paymentTerms);
+      form.set("memo", state.memo);
       form.set("file", state.file);
       const res = await fetch(`/api/contracts/${encodeURIComponent(contractId)}/invoices`, { method: "POST", body: form });
       if (!res.ok) {
@@ -425,65 +688,274 @@ function InvoiceUploadModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-zinc-950/50 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="w-full max-w-xl rounded-3xl bg-[#24251f] text-stone-100 shadow-2xl border border-amber-300/20 overflow-hidden">
-        <div className="p-5 border-b border-white/10 flex items-center justify-between">
-          <div>
-            <p className="text-xs font-black text-amber-300 tracking-[0.18em] uppercase">Tax Invoice</p>
-            <h2 className="text-xl font-black mt-1">{state.stageLabel} 세금계산서 등록</h2>
-          </div>
-          <CalendarDays className="w-6 h-6 text-amber-300" />
-        </div>
-        <div className="p-5 grid gap-4">
-          <label className="grid gap-1 text-sm">
-            <span className="font-bold text-stone-300">계산서 발행일</span>
-            <input type="date" className="input-field text-stone-900" value={state.issueDate} onChange={(e) => onChange({ ...state, issueDate: e.target.value })} />
-          </label>
-          <label className="grid gap-1 text-sm">
-            <span className="font-bold text-stone-300">발행금액</span>
-            <input type="number" className="input-field text-stone-900" value={state.invoiceAmount} onChange={(e) => onChange({ ...state, invoiceAmount: e.target.value })} />
-          </label>
-          <label className="grid gap-1 text-sm">
-            <span className="font-bold text-stone-300">계산서 PDF 첨부</span>
-            <input
-              type="file"
-              accept="application/pdf,.pdf"
-              className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-amber-300 file:px-3 file:py-2 file:text-xs file:font-black file:text-zinc-950"
-              onChange={(e) => onChange({ ...state, file: e.target.files?.[0] ?? null })}
-            />
-          </label>
-          <label className="flex items-center gap-2 text-sm font-bold text-stone-300">
-            <input type="checkbox" checked={state.paymentCollected} onChange={(e) => onChange({ ...state, paymentCollected: e.target.checked })} />
-            수금 완료로 함께 등록
-          </label>
-          {state.paymentCollected && (
+    <ModalShell title={`${state.stageLabel} 발행/수금 정보 입력`} onClose={onClose}>
+      <div className="grid gap-3 grid-cols-2">
+        <label className="grid gap-1 text-sm col-span-2">
+          <span className="font-bold text-stone-300">계산서 발행일</span>
+          <input type="date" className="input-field text-stone-900" value={state.issueDate} onChange={(e) => onChange({ ...state, issueDate: e.target.value })} />
+        </label>
+        <label className="grid gap-1 text-sm">
+          <span className="font-bold text-stone-300">발행금액</span>
+          <input type="number" className="input-field text-stone-900" value={state.invoiceAmount} onChange={(e) => onChange({ ...state, invoiceAmount: e.target.value })} />
+        </label>
+        <label className="grid gap-1 text-sm">
+          <span className="font-bold text-stone-300">대금 지급 조건</span>
+          <input type="text" className="input-field text-stone-900" placeholder="예: 세금계산서 발행 후 30일 이내 지급"
+            value={state.paymentTerms} onChange={(e) => onChange({ ...state, paymentTerms: e.target.value })} />
+        </label>
+        <label className="grid gap-1 text-sm col-span-2">
+          <span className="font-bold text-stone-300">계산서 PDF 첨부</span>
+          <input
+            type="file"
+            accept="application/pdf,.pdf"
+            className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-amber-300 file:px-3 file:py-2 file:text-xs file:font-black file:text-zinc-950"
+            onChange={(e) => onChange({ ...state, file: e.target.files?.[0] ?? null })}
+          />
+        </label>
+        <label className="flex items-center gap-2 text-sm font-bold text-stone-300 col-span-2">
+          <input type="checkbox" checked={state.paymentCollected} onChange={(e) => onChange({ ...state, paymentCollected: e.target.checked })} />
+          수금 정보도 함께 등록
+        </label>
+        {state.paymentCollected && (
+          <>
             <label className="grid gap-1 text-sm">
               <span className="font-bold text-stone-300">수금일</span>
               <input type="date" className="input-field text-stone-900" value={state.paymentCollectedAt} onChange={(e) => onChange({ ...state, paymentCollectedAt: e.target.value })} />
             </label>
-          )}
-          <p className="text-xs text-stone-400">
-            저장 경로는 발행일 기준 `매출계산서/년도/분기` 논리 경로로 생성됩니다.
-          </p>
-        </div>
-        <div className="p-5 border-t border-white/10 flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-xl px-4 py-2 text-sm font-bold border border-white/20">
-            닫기
+            <label className="grid gap-1 text-sm">
+              <span className="font-bold text-stone-300">수금비율 (0~1)</span>
+              <input type="number" step="0.01" min="0" max="1" className="input-field text-stone-900" value={state.collectionRatio}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  const ratio = Number(v);
+                  const auto = Number.isFinite(ratio) && state.baseAmount > 0
+                    ? String(Math.round(state.baseAmount * ratio))
+                    : state.collectedAmount;
+                  onChange({ ...state, collectionRatio: v, collectedAmount: auto });
+                }} />
+            </label>
+            <label className="grid gap-1 text-sm col-span-2">
+              <span className="font-bold text-stone-300">수금금액</span>
+              <input type="number" className="input-field text-stone-900" value={state.collectedAmount}
+                onChange={(e) => onChange({ ...state, collectedAmount: e.target.value })} />
+            </label>
+          </>
+        )}
+        <p className="text-xs text-stone-400 col-span-2">
+          저장 경로는 발행일 기준 `매출계산서/년도/분기` 논리 경로로 생성됩니다.
+        </p>
+      </div>
+      <div className="p-5 pt-3 border-t border-white/10 flex justify-end gap-2">
+        <button type="button" onClick={onClose} className="rounded-xl px-4 py-2 text-sm font-bold border border-white/20">닫기</button>
+        <button type="button" onClick={submit} disabled={saving} className="rounded-xl px-4 py-2 text-sm font-black bg-amber-300 text-zinc-950 disabled:opacity-60">
+          {saving ? "저장 중..." : "입력"}
+        </button>
+      </div>
+    </ModalShell>
+  );
+}
+
+function NewStageModal({
+  contractId,
+  state,
+  onChange,
+  onClose,
+  onSaved,
+}: {
+  contractId: string;
+  state: NewStageModalState;
+  onChange: (state: NewStageModalState) => void;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const toast = useToast();
+  const [saving, setSaving] = useState(false);
+
+  const submit = async () => {
+    if (!state.stageLabel.trim()) {
+      toast.show("단계명을 입력하세요.", "error");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/contracts/${encodeURIComponent(contractId)}/milestones`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          stageLabel: state.stageLabel,
+          amount: state.amount ? Number(state.amount) : null,
+          paymentTerms: state.paymentTerms || null,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? "HTTP " + res.status);
+      }
+      toast.show("새 단계가 추가되었습니다.", "success");
+      onSaved();
+    } catch (err) {
+      toast.show("추가 실패: " + (err as Error).message, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <ModalShell title="청구·수금 단계 추가" onClose={onClose}>
+      <div className="grid gap-3">
+        <label className="grid gap-1 text-sm">
+          <span className="font-bold text-stone-300">단계명</span>
+          <input type="text" className="input-field text-stone-900" placeholder="예: 1차 기성금"
+            value={state.stageLabel} onChange={(e) => onChange({ ...state, stageLabel: e.target.value })} />
+        </label>
+        <label className="grid gap-1 text-sm">
+          <span className="font-bold text-stone-300">청구금액</span>
+          <input type="number" className="input-field text-stone-900" value={state.amount} onChange={(e) => onChange({ ...state, amount: e.target.value })} />
+        </label>
+        <label className="grid gap-1 text-sm">
+          <span className="font-bold text-stone-300">대금 지급 조건</span>
+          <input type="text" className="input-field text-stone-900" placeholder="예: 세금계산서 발행 후 30일 이내 지급"
+            value={state.paymentTerms} onChange={(e) => onChange({ ...state, paymentTerms: e.target.value })} />
+        </label>
+      </div>
+      <div className="p-5 pt-3 border-t border-white/10 flex justify-end gap-2">
+        <button type="button" onClick={onClose} className="rounded-xl px-4 py-2 text-sm font-bold border border-white/20">닫기</button>
+        <button type="button" onClick={submit} disabled={saving} className="rounded-xl px-4 py-2 text-sm font-black bg-amber-300 text-zinc-950 disabled:opacity-60">
+          {saving ? "저장 중..." : "추가"}
+        </button>
+      </div>
+    </ModalShell>
+  );
+}
+
+function PartialPaymentModal({
+  contractId,
+  state,
+  onChange,
+  onClose,
+  onSaved,
+}: {
+  contractId: string;
+  state: PartialPaymentModalState;
+  onChange: (state: PartialPaymentModalState) => void;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const toast = useToast();
+  const [saving, setSaving] = useState(false);
+
+  const submit = async () => {
+    if (!state.collectedAt) {
+      toast.show("수금일을 입력하세요.", "error");
+      return;
+    }
+    if (!state.amount && !state.ratio) {
+      toast.show("수금금액 또는 수금비율 중 하나는 입력하세요.", "error");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(
+        `/api/contracts/${encodeURIComponent(contractId)}/milestones/${encodeURIComponent(state.milestoneId)}/payments`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            collectedAt: state.collectedAt,
+            amount: state.amount ? Number(state.amount) : null,
+            ratio: state.ratio ? Number(state.ratio) : null,
+            memo: state.memo || null,
+          }),
+        }
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? "HTTP " + res.status);
+      }
+      toast.show("부분수금이 추가되었습니다.", "success");
+      onSaved();
+    } catch (err) {
+      toast.show("저장 실패: " + (err as Error).message, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <ModalShell title={`${state.stageLabel} 부분수금 추가`} onClose={onClose}>
+      <div className="grid gap-3 grid-cols-2">
+        <label className="grid gap-1 text-sm col-span-2">
+          <span className="font-bold text-stone-300">수금일</span>
+          <input type="date" className="input-field text-stone-900" value={state.collectedAt} onChange={(e) => onChange({ ...state, collectedAt: e.target.value })} />
+        </label>
+        <label className="grid gap-1 text-sm">
+          <span className="font-bold text-stone-300">수금금액</span>
+          <input type="number" className="input-field text-stone-900" value={state.amount}
+            onChange={(e) => {
+              const v = e.target.value;
+              const amt = Number(v);
+              const ratio = Number.isFinite(amt) && state.baseAmount > 0
+                ? String(Math.round((amt / state.baseAmount) * 10000) / 10000)
+                : state.ratio;
+              onChange({ ...state, amount: v, ratio });
+            }} />
+        </label>
+        <label className="grid gap-1 text-sm">
+          <span className="font-bold text-stone-300">수금비율 (0~1)</span>
+          <input type="number" step="0.0001" min="0" max="1" className="input-field text-stone-900" value={state.ratio}
+            onChange={(e) => {
+              const v = e.target.value;
+              const ratio = Number(v);
+              const amount = Number.isFinite(ratio) && state.baseAmount > 0
+                ? String(Math.round(state.baseAmount * ratio))
+                : state.amount;
+              onChange({ ...state, ratio: v, amount });
+            }} />
+        </label>
+        <label className="grid gap-1 text-sm col-span-2">
+          <span className="font-bold text-stone-300">메모</span>
+          <input type="text" className="input-field text-stone-900" value={state.memo} onChange={(e) => onChange({ ...state, memo: e.target.value })} />
+        </label>
+        <p className="text-xs text-stone-400 col-span-2">
+          이 단계의 청구금액({formatMoney(state.baseAmount)})에 대해 누적 수금비율과 수금금액이 자동 갱신됩니다.
+        </p>
+      </div>
+      <div className="p-5 pt-3 border-t border-white/10 flex justify-end gap-2">
+        <button type="button" onClick={onClose} className="rounded-xl px-4 py-2 text-sm font-bold border border-white/20">닫기</button>
+        <button type="button" onClick={submit} disabled={saving} className="rounded-xl px-4 py-2 text-sm font-black bg-amber-300 text-zinc-950 disabled:opacity-60">
+          {saving ? "저장 중..." : "추가"}
+        </button>
+      </div>
+    </ModalShell>
+  );
+}
+
+function ModalShell({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div className="fixed inset-0 z-50 bg-zinc-950/50 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="w-full max-w-xl rounded-3xl bg-[#24251f] text-stone-100 shadow-2xl border border-amber-300/20 overflow-hidden">
+        <div className="p-5 border-b border-white/10 flex items-center justify-between">
+          <div>
+            <p className="text-xs font-black text-amber-300 tracking-[0.18em] uppercase">Contract</p>
+            <h2 className="text-xl font-black mt-1">{title}</h2>
+          </div>
+          <button type="button" onClick={onClose} className="text-stone-300 hover:text-white">
+            <X className="w-5 h-5" />
           </button>
-          <button type="button" onClick={submit} disabled={saving} className="rounded-xl px-4 py-2 text-sm font-black bg-amber-300 text-zinc-950 disabled:opacity-60">
-            {saving ? "저장 중..." : "입력"}
-          </button>
         </div>
+        <div className="p-5">{children}</div>
       </div>
     </div>
   );
 }
 
-function Info({ label, value }: { label: string; value: unknown }) {
+function Info({ label, value, highlight }: { label: string; value: unknown; highlight?: boolean }) {
   return (
-    <div className="rounded-2xl bg-white/60 border border-stone-200/80 p-3">
+    <div className={"rounded-2xl border p-3 " + (highlight ? "bg-amber-50 border-amber-200" : "bg-white/60 border-stone-200/80")}>
       <p className="text-[11px] font-black text-stone-400">{label}</p>
-      <p className="text-sm font-bold text-stone-800 mt-1 truncate">{value == null || value === "" ? "-" : String(value)}</p>
+      <p className={"text-sm font-bold mt-1 truncate " + (highlight ? "text-amber-900" : "text-stone-800")}>
+        {value == null || value === "" ? "-" : String(value)}
+      </p>
     </div>
   );
 }

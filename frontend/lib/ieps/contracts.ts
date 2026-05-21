@@ -20,6 +20,9 @@ export interface ContractListItem {
   facilityName: string | null;
   legacyCompanyId: string | null;
   serviceType: string | null;
+  serviceSubtype: string | null;
+  contractKind: string;
+  collectionProgressLabel: string | null;
   contractStatus: string;
   contractAmount: number | null;
   currentAmount: number | null;
@@ -32,7 +35,34 @@ export interface ContractListItem {
   totalMilestoneAmount: number;
   totalIssuedAmount: number;
   totalCollectedAmount: number;
+  collectionRate: number;
   updatedAt: string;
+}
+
+export interface ContractTreeContractNode {
+  contractId: string;
+  contractTitle: string;
+  counterpartyName: string;
+  serviceType: string | null;
+  serviceSubtype: string | null;
+  contractKind: string;
+  contractAmount: number | null;
+  currentAmount: number | null;
+  contractDate: string | null;
+  collectionRate: number;
+  collectionProgressLabel: string | null;
+}
+
+export interface ContractTreeServiceGroup {
+  serviceType: string;
+  contracts: ContractTreeContractNode[];
+}
+
+export interface ContractTreePayload {
+  year: string | null;
+  totalCount: number;
+  availableYears: string[];
+  groups: ContractTreeServiceGroup[];
 }
 
 export interface ContractDashboard {
@@ -58,6 +88,12 @@ export interface ContractDashboard {
 }
 
 export function mapContractListItem(row: Record<string, unknown>): ContractListItem {
+  const totalMilestoneAmount = toNumber(row.total_milestone_amount);
+  const totalCollectedAmount = toNumber(row.total_collected_amount);
+  const baseAmount = toNumber(row.current_amount) || toNumber(row.contract_amount) || totalMilestoneAmount;
+  const collectionRate = baseAmount > 0
+    ? Math.min(1, Math.round((totalCollectedAmount / baseAmount) * 1000) / 1000)
+    : 0;
   return {
     contractId: String(row.contract_id ?? ""),
     contractTitle: String(row.contract_title ?? ""),
@@ -67,6 +103,9 @@ export function mapContractListItem(row: Record<string, unknown>): ContractListI
     facilityName: row.facility_name != null ? String(row.facility_name) : null,
     legacyCompanyId: row.legacy_company_id != null ? String(row.legacy_company_id) : null,
     serviceType: row.service_type != null ? String(row.service_type) : null,
+    serviceSubtype: row.service_subtype != null ? String(row.service_subtype) : null,
+    contractKind: String(row.contract_kind ?? "standard"),
+    collectionProgressLabel: row.collection_progress_label != null ? String(row.collection_progress_label) : null,
     contractStatus: String(row.contract_status ?? "draft"),
     contractAmount: toNumberOrNull(row.contract_amount),
     currentAmount: toNumberOrNull(row.current_amount),
@@ -76,9 +115,10 @@ export function mapContractListItem(row: Record<string, unknown>): ContractListI
     milestoneCount: toNumber(row.milestone_count),
     issuedCount: toNumber(row.issued_count),
     collectedCount: toNumber(row.collected_count),
-    totalMilestoneAmount: toNumber(row.total_milestone_amount),
+    totalMilestoneAmount,
     totalIssuedAmount: toNumber(row.total_issued_amount),
-    totalCollectedAmount: toNumber(row.total_collected_amount),
+    totalCollectedAmount,
+    collectionRate,
     updatedAt: String(row.updated_at ?? ""),
   };
 }
@@ -158,6 +198,9 @@ export async function listContracts(filter: ContractListFilter) {
               f.company_name AS facility_name,
               c.legacy_company_id,
               c.service_type,
+              c.service_subtype,
+              c.contract_kind,
+              c.collection_progress_label,
               c.contract_status,
               c.contract_amount,
               COALESCE(c.current_amount, c.contract_amount) AS current_amount,
@@ -197,6 +240,93 @@ export async function listContracts(filter: ContractListFilter) {
   return {
     items: listRows.map(mapContractListItem),
     total: toNumber(countRows[0]?.total),
+  };
+}
+
+export async function listContractsForTree(year: string | null): Promise<ContractTreePayload> {
+  const db = await getDb();
+  const yearsRows = rowsToObjects(
+    await db.exec(
+      `SELECT DISTINCT SUBSTRING(COALESCE(NULLIF(contract_date, ''), started_at, created_at), 1, 4) AS year
+       FROM contracts
+       WHERE COALESCE(NULLIF(contract_date, ''), started_at, created_at) IS NOT NULL`
+    )
+  );
+  const availableYears = yearsRows
+    .map((row) => String(row.year ?? ""))
+    .filter((y) => /^\d{4}$/.test(y))
+    .sort((a, b) => Number(b) - Number(a));
+
+  const params: unknown[] = [];
+  const where: string[] = [];
+  if (year && /^\d{4}$/.test(year)) {
+    params.push(year);
+    where.push(`COALESCE(NULLIF(c.contract_date, ''), c.started_at, c.created_at) LIKE $${params.length} || '%'`);
+  }
+  const whereSql = where.length ? "WHERE " + where.join(" AND ") : "";
+
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT c.contract_id,
+              c.contract_title,
+              e.entity_name AS counterparty_name,
+              c.service_type,
+              c.service_subtype,
+              c.contract_kind,
+              c.contract_amount,
+              COALESCE(c.current_amount, c.contract_amount) AS current_amount,
+              c.contract_date,
+              c.collection_progress_label,
+              COALESCE(ms.total_milestone_amount, 0) AS total_milestone_amount,
+              COALESCE(ms.total_collected_amount, 0) AS total_collected_amount
+       FROM contracts c
+       JOIN legal_entities e ON e.entity_id = c.counterparty_entity_id
+       LEFT JOIN (
+         SELECT contract_id,
+                SUM(COALESCE(amount, 0)) AS total_milestone_amount,
+                SUM(CASE WHEN payment_collected = 1 THEN COALESCE(collected_amount, amount, 0) ELSE 0 END) AS total_collected_amount
+         FROM contract_payment_milestones
+         GROUP BY contract_id
+       ) ms ON ms.contract_id = c.contract_id
+       ${whereSql}
+       ORDER BY c.service_type ASC NULLS LAST, c.contract_title ASC`,
+      params
+    )
+  );
+
+  const groupMap = new Map<string, ContractTreeContractNode[]>();
+  for (const row of rows) {
+    const serviceType = row.service_type != null && String(row.service_type).trim().length > 0
+      ? String(row.service_type)
+      : "기타";
+    const baseAmount = toNumber(row.current_amount) || toNumber(row.contract_amount) || toNumber(row.total_milestone_amount);
+    const collected = toNumber(row.total_collected_amount);
+    const node: ContractTreeContractNode = {
+      contractId: String(row.contract_id ?? ""),
+      contractTitle: String(row.contract_title ?? ""),
+      counterpartyName: String(row.counterparty_name ?? ""),
+      serviceType: row.service_type != null ? String(row.service_type) : null,
+      serviceSubtype: row.service_subtype != null ? String(row.service_subtype) : null,
+      contractKind: String(row.contract_kind ?? "standard"),
+      contractAmount: toNumberOrNull(row.contract_amount),
+      currentAmount: toNumberOrNull(row.current_amount),
+      contractDate: row.contract_date != null ? String(row.contract_date) : null,
+      collectionRate: baseAmount > 0 ? Math.min(1, Math.round((collected / baseAmount) * 1000) / 1000) : 0,
+      collectionProgressLabel: row.collection_progress_label != null ? String(row.collection_progress_label) : null,
+    };
+    if (!groupMap.has(serviceType)) groupMap.set(serviceType, []);
+    groupMap.get(serviceType)!.push(node);
+  }
+
+  const groups: ContractTreeServiceGroup[] = Array.from(groupMap.entries())
+    .map(([serviceType, contracts]) => ({ serviceType, contracts }))
+    .sort((a, b) => a.serviceType.localeCompare(b.serviceType, "ko"));
+
+  return {
+    year: year && /^\d{4}$/.test(year) ? year : null,
+    totalCount: rows.length,
+    availableYears,
+    groups,
   };
 }
 

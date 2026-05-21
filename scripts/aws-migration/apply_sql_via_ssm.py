@@ -36,6 +36,8 @@ def main() -> None:
     parser.add_argument("--bastion-role", required=True)
     parser.add_argument("--secret-id", required=True)
     parser.add_argument("--sql", required=True)
+    parser.add_argument("--s3-bucket", help="Optional temporary S3 bucket for large SQL files")
+    parser.add_argument("--s3-key", help="Temporary S3 key. Defaults to tmp/sql-migrations/<filename>")
     parser.add_argument("--policy-name", default="McmTemporaryReadAppSecretForSqlMigration")
     parser.add_argument("--keep-policy", action="store_true")
     args = parser.parse_args()
@@ -43,6 +45,10 @@ def main() -> None:
     sql_path = Path(args.sql)
     sql_text = sql_path.read_text(encoding="utf-8")
     sql_b64 = base64.b64encode(sql_text.encode("utf-8")).decode("ascii")
+    s3_key = args.s3_key or f"tmp/sql-migrations/{int(time.time())}-{sql_path.name}"
+    use_s3 = bool(args.s3_bucket) or len(sql_b64) > 20000
+    if use_s3 and not args.s3_bucket:
+        raise SystemExit("--s3-bucket is required for large SQL files")
 
     policy_doc = {
         "Version": "2012-10-17",
@@ -51,9 +57,28 @@ def main() -> None:
                 "Effect": "Allow",
                 "Action": "secretsmanager:GetSecretValue",
                 "Resource": "*",
-            }
+            },
+            *(
+                [
+                    {
+                        "Effect": "Allow",
+                        "Action": "s3:GetObject",
+                        "Resource": f"arn:aws:s3:::{args.s3_bucket}/{s3_key}",
+                    }
+                ]
+                if use_s3
+                else []
+            ),
         ],
     }
+
+    if use_s3:
+        print(f"Uploading SQL to s3://{args.s3_bucket}/{s3_key}...")
+        run_aws(
+            ["s3", "cp", str(sql_path), f"s3://{args.s3_bucket}/{s3_key}"],
+            profile=args.profile,
+            region=args.region,
+        )
 
     print("Attaching temporary secret-read policy to bastion role...")
     run_aws(
@@ -74,14 +99,19 @@ def main() -> None:
     # wait the SSM command can start before the bastion role can read the secret.
     time.sleep(15)
 
+    if use_s3:
+        sql_fetch_commands = f"""aws s3 cp s3://{args.s3_bucket}/{s3_key} /tmp/mcm-contract-management.sql --region {args.region}"""
+    else:
+        sql_fetch_commands = f"""cat >/tmp/mcm-contract-management.sql.b64 <<'B64'
+{sql_b64}
+B64
+base64 -d /tmp/mcm-contract-management.sql.b64 >/tmp/mcm-contract-management.sql"""
+
     remote_script = f"""set -euo pipefail
 if ! command -v psql >/dev/null 2>&1; then
   dnf -y install postgresql15 >/tmp/mcm-psql-install.log 2>&1 || dnf -y install postgresql >/tmp/mcm-psql-install.log 2>&1
 fi
-cat >/tmp/mcm-contract-management.sql.b64 <<'B64'
-{sql_b64}
-B64
-base64 -d /tmp/mcm-contract-management.sql.b64 >/tmp/mcm-contract-management.sql
+{sql_fetch_commands}
 SECRET_JSON=$(aws secretsmanager get-secret-value --region {args.region} --secret-id {args.secret_id} --query SecretString --output text)
 export SECRET_JSON
 DB_URL=$(python3 - <<'PY'
@@ -160,6 +190,13 @@ rm -f /tmp/mcm-contract-management.sql /tmp/mcm-contract-management.sql.b64
                 "--policy-name",
                 args.policy_name,
             ],
+            profile=args.profile,
+            region=args.region,
+        )
+    if use_s3:
+        print(f"Removing temporary SQL object s3://{args.s3_bucket}/{s3_key}...")
+        run_aws(
+            ["s3", "rm", f"s3://{args.s3_bucket}/{s3_key}"],
             profile=args.profile,
             region=args.region,
         )

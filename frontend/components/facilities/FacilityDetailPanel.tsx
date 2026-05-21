@@ -2033,13 +2033,21 @@ function GroupManagementModal({
   const [companyBrn, setCompanyBrn] = useState("");
   const [companyAddress, setCompanyAddress] = useState("");
   const [companyPhone, setCompanyPhone] = useState("");
+  const [companyDivisionId, setCompanyDivisionId] = useState("");
   const [companyRole, setCompanyRole] = useState<FacilityGroupCompanyRole>("affiliate");
+  const [editCompanyName, setEditCompanyName] = useState("");
+  const [editCompanyBrn, setEditCompanyBrn] = useState("");
+  const [editCompanyAddress, setEditCompanyAddress] = useState("");
+  const [editCompanyPhone, setEditCompanyPhone] = useState("");
+  const [editCompanyDivisionId, setEditCompanyDivisionId] = useState("");
+  const [editCompanyRole, setEditCompanyRole] = useState<FacilityGroupCompanyRole>("affiliate");
   const [relationType, setRelationType] = useState<FacilityGroupMembershipRelationType>(
     facility.groupInfo?.membership.relationType === "site"
       ? "operating_company"
       : facility.groupInfo?.membership.relationType ?? "operating_company"
   );
   const selectedGroup = groups.find((group) => group.groupId === selectedGroupId);
+  const selectedCompany = selectedGroup?.companies.find((company) => company.companyId === selectedCompanyId);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -2058,6 +2066,24 @@ function GroupManagementModal({
   useEffect(() => {
     reload();
   }, [reload]);
+
+  useEffect(() => {
+    if (!selectedCompany) {
+      setEditCompanyName("");
+      setEditCompanyBrn("");
+      setEditCompanyAddress("");
+      setEditCompanyPhone("");
+      setEditCompanyDivisionId("");
+      setEditCompanyRole("affiliate");
+      return;
+    }
+    setEditCompanyName(selectedCompany.companyName);
+    setEditCompanyBrn(selectedCompany.businessRegistrationNo ?? "");
+    setEditCompanyAddress(selectedCompany.address ?? "");
+    setEditCompanyPhone(selectedCompany.phoneNumber ?? "");
+    setEditCompanyDivisionId(selectedCompany.divisionId ?? "");
+    setEditCompanyRole(selectedCompany.groupRole);
+  }, [selectedCompany]);
 
   const createGroup = async () => {
     if (!groupName.trim()) return;
@@ -2157,12 +2183,14 @@ function GroupManagementModal({
     if (!selectedGroupId || !companyName.trim()) return;
     setSaving(true);
     try {
-      const firstDivision = selectedGroup?.divisions[0]?.divisionId ?? null;
+      const selectedDivisionId = selectedGroup?.divisions.some((division) => division.divisionId === companyDivisionId)
+        ? companyDivisionId
+        : null;
       const res = await fetch("/api/facility-groups/" + selectedGroupId + "/companies", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          divisionId: firstDivision,
+          divisionId: selectedDivisionId,
           companyName,
           businessRegistrationNo: companyBrn,
           address: companyAddress,
@@ -2181,6 +2209,35 @@ function GroupManagementModal({
       await reload();
     } catch (err) {
       alert("그룹 소속 법인 생성 실패: " + (err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateSelectedCompany = async () => {
+    if (!selectedGroupId || !selectedCompanyId || !editCompanyName.trim()) return;
+    setSaving(true);
+    try {
+      const res = await fetch(
+        "/api/facility-groups/" + selectedGroupId + "/companies/" + selectedCompanyId,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            divisionId: editCompanyDivisionId || null,
+            companyName: editCompanyName,
+            businessRegistrationNo: editCompanyBrn,
+            address: editCompanyAddress,
+            phoneNumber: editCompanyPhone,
+            groupRole: editCompanyRole,
+            isHeadquarters: editCompanyRole === "group_representative",
+          }),
+        }
+      );
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      await reload();
+    } catch (err) {
+      alert("법인 마스터 수정 실패: " + (err as Error).message);
     } finally {
       setSaving(false);
     }
@@ -2258,6 +2315,7 @@ function GroupManagementModal({
                   onClick={() => {
                     setSelectedGroupId(group.groupId);
                     setSelectedCompanyId(group.companies[0]?.companyId ?? "");
+                    setCompanyDivisionId("");
                   }}
                   className={cn("text-left rounded-xl border p-3", selectedGroupId === group.groupId ? "border-primary/40 bg-primary/10" : "border-white/60 bg-white/50")}
                 >
@@ -2306,6 +2364,14 @@ function GroupManagementModal({
                 <input className="input-field" value={companyBrn} onChange={(e) => setCompanyBrn(e.target.value)} placeholder="사업자번호" />
                 <input className="input-field" value={companyAddress} onChange={(e) => setCompanyAddress(e.target.value)} placeholder="소재지" />
                 <input className="input-field" value={companyPhone} onChange={(e) => setCompanyPhone(e.target.value)} placeholder="전화번호" />
+                <select className="ui-select" value={companyDivisionId} onChange={(e) => setCompanyDivisionId(e.target.value)}>
+                  <option value="">부문 없음</option>
+                  {selectedGroup?.divisions.map((division) => (
+                    <option key={division.divisionId} value={division.divisionId}>
+                      {division.divisionName}
+                    </option>
+                  ))}
+                </select>
                 <select
                   className="ui-select"
                   value={companyRole}
@@ -2364,6 +2430,42 @@ function GroupManagementModal({
                 </button>
                 <button type="button" onClick={deleteSelectedGroup} disabled={saving || !selectedGroupId} className="rounded-lg px-2 py-1 text-[11px] font-bold text-red-700 bg-red-50 border border-red-200 disabled:opacity-50">
                   그룹 삭제
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-white/45 border border-white/60 rounded-2xl p-3">
+              <h4 className="text-sm font-bold text-stone-800 mb-2">선택 법인 마스터 수정</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <input className="input-field" value={editCompanyName} onChange={(e) => setEditCompanyName(e.target.value)} placeholder="상호" disabled={!selectedCompany} />
+                <select className="ui-select" value={editCompanyDivisionId} onChange={(e) => setEditCompanyDivisionId(e.target.value)} disabled={!selectedCompany}>
+                  <option value="">부문 없음</option>
+                  {selectedGroup?.divisions.map((division) => (
+                    <option key={division.divisionId} value={division.divisionId}>
+                      {division.divisionName}
+                    </option>
+                  ))}
+                </select>
+                <input className="input-field" value={editCompanyBrn} onChange={(e) => setEditCompanyBrn(e.target.value)} placeholder="사업자번호" disabled={!selectedCompany} />
+                <select
+                  className="ui-select"
+                  value={editCompanyRole}
+                  onChange={(e) => setEditCompanyRole(e.target.value as FacilityGroupCompanyRole)}
+                  disabled={!selectedCompany}
+                >
+                  <option value="group_representative">그룹 대표기업</option>
+                  <option value="affiliate">그룹 소속 법인</option>
+                  <option value="other">기타 법인</option>
+                </select>
+                <input className="input-field" value={editCompanyAddress} onChange={(e) => setEditCompanyAddress(e.target.value)} placeholder="소재지" disabled={!selectedCompany} />
+                <input className="input-field" value={editCompanyPhone} onChange={(e) => setEditCompanyPhone(e.target.value)} placeholder="전화번호" disabled={!selectedCompany} />
+              </div>
+              <div className="flex items-center justify-between gap-2 mt-2">
+                <p className="text-[11px] text-stone-500">
+                  선택한 법인의 그룹 내 역할과 부문 소속을 수정합니다. 사업장 연결은 별도로 저장해야 합니다.
+                </p>
+                <button type="button" onClick={updateSelectedCompany} disabled={saving || !selectedCompany || !editCompanyName.trim()} className="rounded-xl px-4 py-2 text-xs font-bold text-white bg-primary disabled:opacity-50">
+                  법인 정보 저장
                 </button>
               </div>
             </div>

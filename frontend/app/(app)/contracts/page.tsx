@@ -2,7 +2,6 @@
 
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Virtuoso } from "react-virtuoso";
-import type { LucideIcon } from "lucide-react";
 import type { ServiceTypeStyle } from "@/lib/ieps/contract-tree-style";
 import Link from "next/link";
 import {
@@ -11,6 +10,9 @@ import {
   ChevronRight,
   FileSignature,
   FileText,
+  Folder,
+  FolderClosed,
+  FolderOpen,
   Paperclip,
   Pencil,
   Plus,
@@ -167,8 +169,17 @@ function ContractsInner() {
   }, [selectedId, loadDetail]);
 
   const selectContract = useCallback((id: string) => setSelectedId(id), []);
+  // Accordion behavior: opening a group automatically collapses all other
+  // open groups so that the user only ever scrolls within a single service
+  // section at a time.
   const toggleGroup = useCallback((serviceType: string) => {
-    setExpanded((prev) => ({ ...prev, [serviceType]: !prev[serviceType] }));
+    setExpanded((prev) => {
+      const wasOpen = prev[serviceType] === true;
+      const next: Record<string, boolean> = {};
+      for (const key of Object.keys(prev)) next[key] = false;
+      next[serviceType] = !wasOpen;
+      return next;
+    });
   }, []);
 
   const filteredGroups = useMemo(() => {
@@ -344,8 +355,7 @@ function ContractsInner() {
                       contract={row.contract}
                       isSelected={row.contract.contractId === selectedId}
                       isLastChild={row.isLastChild}
-                      childIconClass={row.style.childText}
-                      ChildIcon={row.style.childIcon}
+                      childColor={row.style.childColor}
                       onSelect={selectContract}
                     />
                   )
@@ -578,14 +588,14 @@ function ContractDetailPanel({
                   <tr key={milestoneId} className="bg-white/60">
                     <td className="p-2.5 font-mono text-stone-600">{idx + 1}</td>
                     <td className="p-2.5 font-bold text-stone-800">{String(milestone.stage_label ?? "")}</td>
-                    <td className="p-2.5 text-right font-mono">{formatMoney(stageAmount)}</td>
+                    <td className="p-2.5 text-right font-mono tabular-nums">{formatExactAmount(stageAmount)}</td>
                     <td className="p-2.5 text-stone-600 max-w-[220px] truncate" title={String(milestone.payment_terms ?? "")}>
                       {String(milestone.payment_terms ?? "-") || "-"}
                     </td>
                     <td className="p-2.5 text-center text-stone-600">{String(milestone.invoice_issued_at ?? "-") || "-"}</td>
                     <td className="p-2.5 text-center text-stone-600">{String(milestone.payment_collected_at ?? "-") || "-"}</td>
                     <td className="p-2.5 text-right font-mono">{ratioLabel}</td>
-                    <td className="p-2.5 text-right font-mono">{formatMoney(milestone.collected_amount)}</td>
+                    <td className="p-2.5 text-right font-mono tabular-nums">{formatExactAmount(milestone.collected_amount)}</td>
                     <td className="p-2.5 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <button
@@ -1032,7 +1042,9 @@ const TreeGroupHeader = memo(function TreeGroupHeader({
   style,
   onToggle,
 }: TreeGroupHeaderProps) {
-  const ParentIcon = style.parentIcon;
+  // Switch the parent folder icon between closed and open variants so that
+  // expanding a group is reinforced visually beyond the chevron rotation.
+  const ParentIcon = isOpen ? FolderOpen : Folder;
   const handleClick = useCallback(() => onToggle(serviceType), [onToggle, serviceType]);
   return (
     <button
@@ -1045,7 +1057,10 @@ const TreeGroupHeader = memo(function TreeGroupHeader({
       ) : (
         <ChevronRight className="w-4 h-4 text-stone-500" />
       )}
-      <ParentIcon className={"w-4 h-4 fill-current " + style.parentText} />
+      <ParentIcon
+        className="w-4 h-4 fill-current transition-transform"
+        style={{ color: style.parentColor }}
+      />
       <span className="font-black text-sm text-stone-800">{serviceType}</span>
       <span className="text-[11px] font-bold text-stone-500 ml-auto">{count}건</span>
     </button>
@@ -1056,8 +1071,7 @@ interface TreeChildRowProps {
   contract: ContractTreeContractNode;
   isSelected: boolean;
   isLastChild: boolean;
-  childIconClass: string;
-  ChildIcon: LucideIcon;
+  childColor: string;
   onSelect: (contractId: string) => void;
 }
 
@@ -1065,11 +1079,13 @@ const TreeChildRow = memo(function TreeChildRow({
   contract,
   isSelected,
   isLastChild,
-  childIconClass,
-  ChildIcon,
+  childColor,
   onSelect,
 }: TreeChildRowProps) {
   const handleClick = useCallback(() => onSelect(contract.contractId), [onSelect, contract.contractId]);
+  // Selected child rows show an "open folder" icon to mirror the active-state
+  // metaphor used by the parent group header.
+  const ChildIcon = isSelected ? FolderOpen : FolderClosed;
   return (
     <button
       type="button"
@@ -1090,14 +1106,18 @@ const TreeChildRow = memo(function TreeChildRow({
         aria-hidden
         className="pointer-events-none absolute left-7 top-1/2 w-3 h-px bg-stone-300"
       />
-      <ChildIcon className={"w-3.5 h-3.5 fill-current shrink-0 " + childIconClass} />
+      <ChildIcon
+        className="w-3.5 h-3.5 fill-current shrink-0"
+        style={{ color: childColor }}
+      />
       <span className="flex items-center gap-1.5 flex-1 min-w-0">
         <span className="truncate text-stone-800">{contract.contractTitle}</span>
         {contract.isFullyCollected && (
           <span
             aria-label="수금 완료"
             title="수금 완료"
-            className={"shrink-0 w-1.5 h-1.5 rounded-full bg-current " + childIconClass}
+            className="shrink-0 w-1.5 h-1.5 rounded-full"
+            style={{ background: childColor }}
           />
         )}
       </span>
@@ -1133,4 +1153,15 @@ function formatMoney(value: unknown): string {
   if (Math.abs(n) >= 100000000) return (n / 100000000).toFixed(1).replace(/\.0$/, "") + "억";
   if (Math.abs(n) >= 10000) return Math.round(n / 10000).toLocaleString() + "만";
   return n.toLocaleString();
+}
+
+/**
+ * Render the exact amount with thousands separators (e.g. `8,640,000`).
+ * Used in milestone tables where the user wants the full claim/collection
+ * amount visible rather than the abbreviated 만/억 form.
+ */
+function formatExactAmount(value: unknown): string {
+  const n = typeof value === "number" ? value : Number(value ?? 0);
+  if (!Number.isFinite(n) || n === 0) return "-";
+  return Math.round(n).toLocaleString("en-US");
 }

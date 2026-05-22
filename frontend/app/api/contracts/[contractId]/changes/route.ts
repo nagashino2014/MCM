@@ -90,6 +90,9 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       if (body.newServiceSubtype !== undefined) {
         pushSet("service_subtype", body.newServiceSubtype || null);
       }
+      if (body.newIndustryCategory !== undefined) {
+        pushSet("industry_category", body.newIndustryCategory || null);
+      }
       if (body.contractTerminatedAt !== undefined) {
         pushSet("contract_terminated_at", body.contractTerminatedAt || null);
         pushSet("contract_termination_reason", body.contractTerminationReason || null);

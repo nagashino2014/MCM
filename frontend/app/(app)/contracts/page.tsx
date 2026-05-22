@@ -105,6 +105,7 @@ interface NewContractModalState {
   startedAt: string;
   endedAt: string;
   currentAmount: string;
+  industryCategory: string;
   memo: string;
   milestones: ContractMilestoneDraft[];
   outsourcing: OutsourcingDraft;
@@ -145,7 +146,7 @@ interface PdfViewerState {
 const CONTRACT_SERVICE_OPTIONS = [
   {
     type: "통합허가",
-    subtypes: ["통합허가", "영업허가", "변경허가", "변경신고", "통합교육", "사후관리", "재검토"],
+    subtypes: ["최초허가", "영업허가", "변경허가", "변경신고", "통합교육", "사후관리", "재검토"],
   },
   {
     type: "장외&화관법",
@@ -177,6 +178,28 @@ const CONTRACT_SERVICE_OPTIONS = [
 ] as const;
 
 const DEFAULT_OUTSOURCING_TYPES = ["도면 작성", "산업안전 관련", "측정/분석", "디자인", "번역"];
+const CONTRACT_INDUSTRY_OPTIONS = [
+  "발전",
+  "폐기물소각",
+  "철강",
+  "비철",
+  "유기",
+  "석유정제",
+  "무기화학",
+  "정밀화학",
+  "비료및질소화합물",
+  "펄프종이및판지",
+  "전자부품",
+  "반도체",
+  "섬유염색및가공처리업",
+  "도축육류가공및저장처리업",
+  "알콜음료제조업",
+  "플라스틱제품제조업",
+  "자동차부품제조업",
+  "폐기물처리업",
+  "시멘트 제조업",
+  "이차전지 제조업",
+];
 
 export default function ContractsPage() {
   return (
@@ -570,6 +593,7 @@ function ContractsInner() {
           }))}
           initialServiceType={String(detail.contract.service_type ?? "") || ""}
           initialServiceSubtype={String(detail.contract.service_subtype ?? "") || ""}
+          initialIndustryCategory={String(detail.contract.industry_category ?? "") || ""}
           initialEndedAt={String(detail.contract.ended_at ?? "") || null}
           initialCurrentAmount={selected.currentAmount}
           onClose={() => setChangeModalOpen(false)}
@@ -719,6 +743,7 @@ function ContractDetailPanel({
         <Info label="용역세분류" value={contract.service_subtype} />
         <Info label="준공일" value={contract.ended_at} />
         <Info label="계약 상태" value={statusLabel} highlight={statusLabel !== "진행중"} />
+        <Info label="업종" value={contract.industry_category} />
         <Info label="외주 용역" value={outsourcingCount > 0 ? `${outsourcingCount}건 등록` : "없음"} highlight={outsourcingCount > 0} />
         <Info
           label="수금 진척도"
@@ -1149,6 +1174,7 @@ function NewContractModal({
           serviceType: state.serviceType || null,
           serviceSubtype: state.serviceSubtype || null,
           contractKind: state.contractKind,
+          industryCategory: state.industryCategory || null,
           contractDate: state.contractDate,
           startedAt: state.startedAt || state.contractDate,
           endedAt: state.endedAt || null,
@@ -1330,6 +1356,15 @@ function NewContractModal({
               <select className="ui-select" value={state.contractKind} onChange={(e) => onChange({ ...state, contractKind: e.target.value as "standard" | "unit_price" })}>
                 <option value="standard">일반 계약</option>
                 <option value="unit_price">단가 계약</option>
+              </select>
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="font-bold text-stone-700">업종</span>
+              <select className="ui-select" value={state.industryCategory} onChange={(e) => onChange({ ...state, industryCategory: e.target.value })}>
+                <option value="">업종 선택</option>
+                {CONTRACT_INDUSTRY_OPTIONS.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
               </select>
             </label>
             <label className="grid gap-1 text-sm">
@@ -2138,6 +2173,7 @@ function createEmptyContractState(): NewContractModalState {
     startedAt: "",
     endedAt: "",
     currentAmount: "",
+    industryCategory: "",
     memo: "",
     milestones: [
       { ...createMilestoneDraft(), stageLabel: "선급금" },

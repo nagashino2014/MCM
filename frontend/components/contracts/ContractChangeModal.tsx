@@ -8,7 +8,7 @@ export interface ContractChangePayload {
   amounts: Array<{ stageLabel: string; previousAmount: string; nextAmount: string }>;
   servicePeriod: { previous: string; next: string };
   paymentTerms: Array<{ stageLabel: string; previous: string; next: string }>;
-  serviceCategory: { previousType: string; previousSubtype: string; nextType: string; nextSubtype: string; changed: boolean };
+  serviceCategory: { previousType: string; previousSubtype: string; previousIndustry: string; nextType: string; nextSubtype: string; nextIndustry: string; changed: boolean };
   closing: { completionDate: string; permitAcquiredAt: string; etc: string };
   termination: { terminatedAt: string; terminationReason: string; suspendedAt: string; suspensionReason: string };
   outsourcing: { outsourcingTitle: string; counterpartyName: string; serviceType: string; contractDate: string; endedAt: string; amount: string; memo: string };
@@ -23,6 +23,7 @@ interface ContractChangeModalProps {
   initialMilestones: Array<{ stageLabel: string; amount: number; paymentTerms: string }>;
   initialServiceType: string;
   initialServiceSubtype: string;
+  initialIndustryCategory: string;
   initialEndedAt: string | null;
   initialCurrentAmount: number | null;
   onClose: () => void;
@@ -44,6 +45,28 @@ const TABS: Array<{ key: TabKey; label: string }> = [
 const DEFAULT_OUTSOURCING_TYPES = ["도면 작성", "산업안전 관련", "측정/분석", "디자인", "번역"];
 const DEFAULT_TERMINATION_REASONS = ["사업장 폐쇄", "허가대상 제외", "대금 미지급"];
 const DEFAULT_SUSPENSION_REASONS = ["사업추진 유보", "가동 지연", "관련허가 지연", "대금 미지급"];
+const CONTRACT_INDUSTRY_OPTIONS = [
+  "발전",
+  "폐기물소각",
+  "철강",
+  "비철",
+  "유기",
+  "석유정제",
+  "무기화학",
+  "정밀화학",
+  "비료및질소화합물",
+  "펄프종이및판지",
+  "전자부품",
+  "반도체",
+  "섬유염색및가공처리업",
+  "도축육류가공및저장처리업",
+  "알콜음료제조업",
+  "플라스틱제품제조업",
+  "자동차부품제조업",
+  "폐기물처리업",
+  "시멘트 제조업",
+  "이차전지 제조업",
+];
 
 export default function ContractChangeModal(props: ContractChangeModalProps) {
   const toast = useToast();
@@ -77,8 +100,10 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
   const [serviceCategory, setServiceCategory] = useState({
     previousType: props.initialServiceType ?? "",
     previousSubtype: props.initialServiceSubtype ?? "",
+    previousIndustry: props.initialIndustryCategory ?? "",
     nextType: "",
     nextSubtype: "",
+    nextIndustry: "",
     changed: false,
   });
   const [closing, setClosing] = useState({ completionDate: "", permitAcquiredAt: "", etc: "" });
@@ -127,7 +152,7 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
       if (amounts.some((a) => a.nextAmount !== "")) changedFields.push("amounts");
       if (servicePeriod.next) changedFields.push("servicePeriod");
       if (paymentTerms.some((t) => t.next !== "")) changedFields.push("paymentTerms");
-      if (serviceCategory.changed || serviceCategory.nextType || serviceCategory.nextSubtype) changedFields.push("serviceCategory");
+      if (serviceCategory.changed || serviceCategory.nextType || serviceCategory.nextSubtype || serviceCategory.nextIndustry) changedFields.push("serviceCategory");
       if (closing.completionDate || closing.permitAcquiredAt || closing.etc) changedFields.push("closing");
       if (lifecycle.terminatedAt || lifecycle.suspendedAt) changedFields.push("termination");
       if (outsourcing.outsourcingTitle) changedFields.push("outsourcing");
@@ -151,6 +176,7 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
           newEndedAt: lifecycle.terminatedAt || closing.completionDate || servicePeriod.next || undefined,
           newServiceType: serviceCategory.changed ? serviceCategory.nextType : undefined,
           newServiceSubtype: serviceCategory.changed ? serviceCategory.nextSubtype : undefined,
+          newIndustryCategory: serviceCategory.changed ? serviceCategory.nextIndustry : undefined,
           contractTerminatedAt: lifecycle.terminatedAt || undefined,
           contractTerminationReason: lifecycle.terminatedAt ? lifecycle.terminationReason : undefined,
           contractSuspendedAt: lifecycle.suspendedAt || undefined,
@@ -346,6 +372,11 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
                   <input type="text" disabled className="input-field disabled:opacity-60"
                     value={serviceCategory.previousSubtype} />
                 </label>
+                <label className="grid gap-1 text-sm col-span-2">
+                  <span className="font-bold text-stone-700">기존 업종</span>
+                  <input type="text" disabled className="input-field disabled:opacity-60"
+                    value={serviceCategory.previousIndustry} />
+                </label>
                 <label className="grid gap-1 text-sm">
                   <span className="font-bold text-stone-700">변경 대분류</span>
                   <input type="text" className="input-field"
@@ -357,6 +388,17 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
                   <input type="text" className="input-field"
                     value={serviceCategory.nextSubtype}
                     onChange={(e) => setServiceCategory({ ...serviceCategory, nextSubtype: e.target.value })} />
+                </label>
+                <label className="grid gap-1 text-sm col-span-2">
+                  <span className="font-bold text-stone-700">변경 업종</span>
+                  <select className="ui-select"
+                    value={serviceCategory.nextIndustry}
+                    onChange={(e) => setServiceCategory({ ...serviceCategory, nextIndustry: e.target.value })}>
+                    <option value="">업종 선택</option>
+                    {CONTRACT_INDUSTRY_OPTIONS.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
                 </label>
               </div>
             </div>

@@ -140,8 +140,9 @@ export default function ContractDownloadsPage() {
     for (const group of tree?.groups ?? []) {
       if (serviceTypeFilter && group.serviceType !== serviceTypeFilter) continue;
       for (const contract of group.contracts) {
-        if (contract.serviceSubtype) values.add(contract.serviceSubtype);
+        if (contract.serviceSubtype) values.add(canonicalServiceSubtype(contract.serviceSubtype));
       }
+      if (group.serviceType === "통합허가") values.add("최초허가");
     }
     return Array.from(values).sort((a, b) => a.localeCompare(b, "ko"));
   }, [tree, serviceTypeFilter]);
@@ -163,8 +164,8 @@ export default function ContractDownloadsPage() {
           const textMatch = !q ||
             contract.contractTitle.toLowerCase().includes(q) ||
             contract.counterpartyName.toLowerCase().includes(q) ||
-            (contract.serviceSubtype ?? "").toLowerCase().includes(q);
-          const subtypeMatch = !serviceSubtypeFilter || contract.serviceSubtype === serviceSubtypeFilter;
+            canonicalServiceSubtype(contract.serviceSubtype).toLowerCase().includes(q);
+          const subtypeMatch = !serviceSubtypeFilter || canonicalServiceSubtype(contract.serviceSubtype) === serviceSubtypeFilter;
           const industryMatch = !industryFilter || matchesIndustry(contract, industryFilter);
           return textMatch && subtypeMatch && industryMatch;
         }),
@@ -357,9 +358,9 @@ export default function ContractDownloadsPage() {
           </div>
 
           <div className="grid grid-cols-1 2xl:grid-cols-2 gap-5">
-            <div className="rounded-2xl border border-stone-200/80 bg-white/50 p-4 h-[360px] overflow-hidden">
+            <div className="rounded-2xl border border-stone-200/80 bg-white/50 p-3 h-[360px] overflow-hidden">
               <h3 className="font-bold text-stone-800 mb-3">병합 옵션</h3>
-              <div className="grid grid-cols-1 gap-3">
+              <div className="grid grid-cols-1 gap-2">
                 <OptionCard
                   title="병합 없이 개별 저장"
                   description="선택한 계약 1건의 PDF를 ZIP으로 묶어 다운로드"
@@ -391,11 +392,12 @@ export default function ContractDownloadsPage() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-stone-200/80 bg-white/50 p-4 h-[360px] overflow-hidden">
+            <div className="rounded-2xl border border-stone-200/80 bg-white/50 p-3 h-[360px] overflow-hidden flex flex-col">
               <h3 className="font-bold text-stone-800 mb-3">병합 대상 파일 목록</h3>
               {isSingleTarget && detail ? (
-                <div className="h-[calc(100%-32px)] overflow-y-auto pr-1 scrollbar-hide">
-                  <div className="flex flex-wrap gap-2">
+                <div className="flex min-h-0 flex-1 flex-col">
+                  <div className="flex-1 overflow-y-auto pr-1 scrollbar-hide">
+                    <div className="flex flex-wrap gap-2">
                     <DocumentTag
                       title="계약서"
                       count={contractDocs.length}
@@ -421,30 +423,42 @@ export default function ContractDownloadsPage() {
                         />
                       );
                     })}
+                    </div>
                   </div>
-                  <div className="mt-4 flex flex-wrap justify-end gap-2">
-                    <DownloadButton disabled={contractDocs.length === 0 || downloading} onClick={() => download(singleMode, { kind: "contract" })}>계약서</DownloadButton>
-                    <DownloadButton disabled={amendmentDocs.length === 0 || downloading} onClick={() => download(singleMode, { kind: "amendment" })}>변경계약</DownloadButton>
-                    <DownloadButton disabled={downloading} primary onClick={() => download(singleMode)}>전체</DownloadButton>
+                  <div className="mt-3 flex items-center justify-between gap-2">
+                    <div className="flex flex-wrap gap-2">
+                      <DownloadButton disabled={contractDocs.length === 0 || downloading} onClick={() => download(singleMode, { kind: "contract" })}>계약서</DownloadButton>
+                      <DownloadButton disabled={amendmentDocs.length === 0 || downloading} onClick={() => download(singleMode, { kind: "amendment" })}>변경계약</DownloadButton>
+                      <DownloadButton disabled={downloading} onClick={() => download(singleMode)}>전체</DownloadButton>
+                    </div>
+                    <DownloadButton
+                      primary
+                      disabled={targetIds.length === 0 || downloading}
+                      onClick={() => download(isSingleTarget ? singleMode : multiMode)}
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      {downloading ? "생성 중..." : "전체 다운로드"}
+                    </DownloadButton>
                   </div>
                 </div>
               ) : (
-                <div className="rounded-2xl border border-stone-200/80 bg-white/60 p-6 text-sm text-stone-500">
-                  {targetIds.length > 1 ? "복수 계약 선택 중입니다. 전체 다운로드 버튼만 사용할 수 있습니다." : "좌측 트리에서 계약을 선택하세요."}
+                <div className="flex min-h-0 flex-1 flex-col justify-between gap-3">
+                  <div className="rounded-2xl border border-stone-200/80 bg-white/60 p-6 text-sm text-stone-500">
+                    {targetIds.length > 1 ? "복수 계약 선택 중입니다. 전체 다운로드 버튼만 사용할 수 있습니다." : "좌측 트리에서 계약을 선택하세요."}
+                  </div>
+                  <div className="flex justify-end">
+                    <DownloadButton
+                      primary
+                      disabled={targetIds.length === 0 || downloading}
+                      onClick={() => download(isSingleTarget ? singleMode : multiMode)}
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      {downloading ? "생성 중..." : "전체 다운로드"}
+                    </DownloadButton>
+                  </div>
                 </div>
               )}
             </div>
-          </div>
-
-          <div className="mt-6 flex justify-end">
-            <DownloadButton
-              primary
-              disabled={targetIds.length === 0 || downloading}
-              onClick={() => download(isSingleTarget ? singleMode : multiMode)}
-            >
-              <Download className="w-3.5 h-3.5" />
-              {downloading ? "생성 중..." : "전체 다운로드"}
-            </DownloadButton>
           </div>
         </section>
       </div>
@@ -471,12 +485,12 @@ function OptionCard({
       disabled={disabled}
       onClick={onClick}
       className={
-        "rounded-2xl border p-4 text-left transition disabled:opacity-40 disabled:cursor-not-allowed " +
+        "rounded-xl border px-3 py-2.5 text-left transition disabled:opacity-40 disabled:cursor-not-allowed " +
         (active ? "border-primary bg-primary/5" : "border-stone-200/80 bg-white/60 hover:bg-primary/5")
       }
     >
-      <p className="text-sm text-stone-800">{title}</p>
-      <p className="text-xs text-stone-500 mt-1">{description}</p>
+      <p className="text-sm leading-tight text-stone-800">{title}</p>
+      <p className="text-[11px] leading-snug text-stone-500 mt-1">{description}</p>
     </button>
   );
 }
@@ -554,6 +568,10 @@ function matchesIndustry(contract: ContractTreeContractNode, label: string): boo
     contract.facilityIndustryCode,
   ].filter(Boolean).join(" "));
   return target.keywords.some((keyword) => haystack.includes(normalizeFilterText(keyword)));
+}
+
+function canonicalServiceSubtype(value: string | null): string {
+  return value === "통합허가" ? "최초허가" : (value ?? "");
 }
 
 function normalizeFilterText(value: string): string {

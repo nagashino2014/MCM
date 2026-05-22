@@ -124,6 +124,11 @@ interface LegalEntitySearchItem {
   businessRegistrationNo: string | null;
 }
 
+interface PdfViewerState {
+  title: string;
+  url: string;
+}
+
 export default function ContractsPage() {
   return (
     <ToastProvider>
@@ -150,6 +155,7 @@ function ContractsInner() {
   const [newContractModal, setNewContractModal] = useState<NewContractModalState | null>(null);
   const [newStageModal, setNewStageModal] = useState<NewStageModalState | null>(null);
   const [editMilestoneModal, setEditMilestoneModal] = useState<EditMilestoneModalState | null>(null);
+  const [pdfViewer, setPdfViewer] = useState<PdfViewerState | null>(null);
   const [changeModalOpen, setChangeModalOpen] = useState(false);
 
   const reloadTree = useCallback(async () => {
@@ -426,6 +432,7 @@ function ContractsInner() {
                 onOpenNewStage={() => setNewStageModal({ stageLabel: "", amount: "", paymentTerms: "" })}
                 onOpenEditStage={setEditMilestoneModal}
                 onOpenChange={() => setChangeModalOpen(true)}
+                onOpenPdf={setPdfViewer}
                 onDeleteStage={async (milestoneId) => {
                   if (!selected) return;
                   if (!confirm("해당 단계를 삭제하시겠습니까?")) return;
@@ -528,6 +535,14 @@ function ContractsInner() {
           }}
         />
       )}
+
+      {pdfViewer && (
+        <DraggablePdfViewer
+          title={pdfViewer.title}
+          url={pdfViewer.url}
+          onClose={() => setPdfViewer(null)}
+        />
+      )}
     </div>
   );
 }
@@ -538,6 +553,7 @@ function ContractDetailPanel({
   onOpenNewStage,
   onOpenEditStage,
   onOpenChange,
+  onOpenPdf,
   onDeleteStage,
 }: {
   detail: ContractDetail;
@@ -545,6 +561,7 @@ function ContractDetailPanel({
   onOpenNewStage: () => void;
   onOpenEditStage: (state: EditMilestoneModalState) => void;
   onOpenChange: () => void;
+  onOpenPdf: (state: PdfViewerState) => void;
   onDeleteStage: (milestoneId: string) => void;
 }) {
   const contract = detail.contract;
@@ -585,7 +602,10 @@ function ContractDetailPanel({
                 alert("등록된 계약서 PDF가 없습니다. 먼저 계약서 PDF를 업로드해 주세요.");
                 return;
               }
-              window.open(path, "_blank", "noopener");
+              onOpenPdf({
+                title: String(contract.contract_title ?? "계약서 PDF"),
+                url: path,
+              });
             }}
           >
             <FileText className="w-3.5 h-3.5" />
@@ -745,18 +765,22 @@ function ContractDetailPanel({
       <div>
         <h3 className="font-bold text-stone-800 mb-3">세금계산서 파일</h3>
         <div className="grid gap-2">
-          {detail.invoices.map((invoice) => (
-            <a
+          {detail.invoices.map((invoice) => {
+            const title = String(invoice.document_display_name ?? invoice.invoice_id);
+            const url = String(invoice.public_path ?? "");
+            return (
+            <button
               key={String(invoice.invoice_id)}
-              href={String(invoice.public_path ?? "#")}
-              target="_blank"
-              rel="noreferrer"
+              type="button"
+              disabled={!url}
+              onClick={() => url && onOpenPdf({ title, url })}
               className="rounded-xl border border-stone-200/80 bg-white/60 px-3 py-2 text-sm hover:bg-primary/5 flex items-center justify-between gap-3"
             >
-              <span>{String(invoice.document_display_name ?? invoice.invoice_id)}</span>
+              <span>{title}</span>
               <span className="text-xs text-stone-500">{String(invoice.issue_date ?? "")}</span>
-            </a>
-          ))}
+            </button>
+          );
+          })}
           {detail.invoices.length === 0 && <p className="text-sm text-stone-500">등록된 세금계산서 PDF가 없습니다.</p>}
         </div>
       </div>
@@ -1408,6 +1432,88 @@ function NewStageModal({
         </button>
       </div>
     </ModalShell>
+  );
+}
+
+function DraggablePdfViewer({
+  title,
+  url,
+  onClose,
+}: {
+  title: string;
+  url: string;
+  onClose: () => void;
+}) {
+  const [position, setPosition] = useState(() => ({
+    x: typeof window === "undefined"
+      ? 96
+      : Math.max(24, Math.round((window.innerWidth - Math.min(980, window.innerWidth - 48)) / 2)),
+    y: 72,
+  }));
+  const dragOffset = useRef<{ x: number; y: number } | null>(null);
+
+  const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    dragOffset.current = {
+      x: event.clientX - position.x,
+      y: event.clientY - position.y,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const moveDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragOffset.current) return;
+    const width = Math.min(980, window.innerWidth - 48);
+    const height = Math.min(760, window.innerHeight - 48);
+    setPosition({
+      x: Math.min(Math.max(12, event.clientX - dragOffset.current.x), Math.max(12, window.innerWidth - width - 12)),
+      y: Math.min(Math.max(12, event.clientY - dragOffset.current.y), Math.max(12, window.innerHeight - height - 12)),
+    });
+  };
+
+  const stopDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    dragOffset.current = null;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+
+  return (
+    <div
+      className="fixed z-[60] rounded-3xl border border-stone-200 bg-white shadow-2xl overflow-hidden"
+      style={{
+        left: position.x,
+        top: position.y,
+        width: "min(980px, calc(100vw - 48px))",
+        height: "min(760px, calc(100vh - 48px))",
+      }}
+    >
+      <div
+        className="h-12 px-4 border-b border-stone-200 bg-stone-50 flex items-center justify-between gap-3 cursor-move select-none"
+        onPointerDown={startDrag}
+        onPointerMove={moveDrag}
+        onPointerUp={stopDrag}
+        onPointerCancel={stopDrag}
+      >
+        <div className="min-w-0 flex items-center gap-2">
+          <FileText className="w-4 h-4 text-primary shrink-0" />
+          <span className="text-sm text-stone-800 truncate">{title}</span>
+        </div>
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onClose();
+          }}
+          className="rounded-lg p-1 text-stone-500 hover:bg-stone-200 hover:text-stone-800"
+          title="닫기"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+      <iframe
+        title={title}
+        src={url}
+        className="w-full h-[calc(100%-48px)] bg-stone-100"
+      />
+    </div>
   );
 }
 

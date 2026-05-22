@@ -69,7 +69,6 @@ interface InvoiceModalState {
   paymentTerms: string;
   partialPaymentMemo: string;
   memo: string;
-  file: File | null;
 }
 
 interface ContractMilestoneDraft {
@@ -93,7 +92,6 @@ interface NewContractModalState {
   currentAmount: string;
   memo: string;
   milestones: ContractMilestoneDraft[];
-  documentFile: File | null;
 }
 
 interface NewStageModalState {
@@ -115,7 +113,6 @@ interface EditMilestoneModalState {
   collectedAmount: string;
   collectionRatio: string;
   partialPaymentMemo: string;
-  invoiceFile: File | null;
 }
 
 interface LegalEntitySearchItem {
@@ -128,6 +125,40 @@ interface PdfViewerState {
   title: string;
   url: string;
 }
+
+const CONTRACT_SERVICE_OPTIONS = [
+  {
+    type: "통합허가",
+    subtypes: ["통합허가", "영업허가", "변경허가", "변경신고", "통합교육", "사후관리", "재검토"],
+  },
+  {
+    type: "장외&화관법",
+    subtypes: [
+      "장외&화관법",
+      "장외영향평가",
+      "설치검사",
+      "화관법기준",
+      "위해관리계획",
+      "배출저감계획",
+      "배출량조사",
+      "판매업허가",
+      "정기검사",
+      "안전진단",
+    ],
+  },
+  {
+    type: "HAPs",
+    subtypes: ["HAPs", "HAPs최초", "HAPs변경", "HAPs연간", "시설구축", "명판부착", "배출저감", "정기점검대응"],
+  },
+  {
+    type: "ESG탄소중립",
+    subtypes: ["ESG탄소중립", "ESG경영", "CBAM", "공급망실사", "LCA평가", "배출량산정", "배출권관련"],
+  },
+  {
+    type: "기타",
+    subtypes: ["기타", "총량제신고", "매체별인허가", "환경자문", "환경R&D", "기타인허가"],
+  },
+] as const;
 
 export default function ContractsPage() {
   return (
@@ -706,7 +737,6 @@ function ContractDetailPanel({
                               paymentTerms: String(milestone.payment_terms ?? ""),
                               partialPaymentMemo: "",
                               memo: "",
-                              file: null,
                             })
                           }
                         >
@@ -730,7 +760,6 @@ function ContractDetailPanel({
                               collectedAmount: String(milestone.collected_amount ?? ""),
                               collectionRatio: String(milestone.collection_ratio ?? ""),
                               partialPaymentMemo: firstPartialPaymentMemo(milestone.partial_payments_json),
-                              invoiceFile: null,
                             })
                           }
                           title="단계 수정"
@@ -803,9 +832,12 @@ function InvoiceUploadModal({
 }) {
   const toast = useToast();
   const [saving, setSaving] = useState(false);
+  const fileRef = useRef<File | null>(null);
+  const [fileName, setFileName] = useState("");
 
   const submit = async () => {
-    if (!state.file) {
+    const selectedFile = fileRef.current;
+    if (!selectedFile) {
       toast.show("세금계산서 PDF 파일을 선택하세요.", "error");
       return;
     }
@@ -822,7 +854,7 @@ function InvoiceUploadModal({
       form.set("paymentTerms", state.paymentTerms);
       form.set("partialPaymentMemo", state.partialPaymentMemo);
       form.set("memo", state.memo);
-      form.set("file", state.file);
+      form.set("file", selectedFile);
       const res = await fetch(`/api/contracts/${encodeURIComponent(contractId)}/invoices`, { method: "POST", body: form });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -865,8 +897,13 @@ function InvoiceUploadModal({
             type="file"
             accept="application/pdf,.pdf"
             className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-2 file:text-xs file:font-bold file:text-white"
-            onChange={(e) => onChange({ ...state, file: e.target.files?.[0] ?? null })}
+            onChange={(e) => {
+              const nextFile = e.target.files?.[0] ?? null;
+              fileRef.current = nextFile;
+              setFileName(nextFile?.name ?? "");
+            }}
           />
+          {fileName && <span className="text-xs text-stone-500">선택됨: {fileName}</span>}
         </label>
         <label className="flex items-center gap-2 text-sm font-bold text-stone-700 col-span-2">
           <input type="checkbox" checked={state.paymentCollected} onChange={(e) => onChange({ ...state, paymentCollected: e.target.checked })} />
@@ -937,6 +974,12 @@ function NewContractModal({
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState<"basic" | "milestones" | "document">("basic");
   const [entityOptions, setEntityOptions] = useState<LegalEntitySearchItem[]>([]);
+  const documentFileRef = useRef<File | null>(null);
+  const [documentFileName, setDocumentFileName] = useState("");
+  const subtypeOptions = useMemo(
+    () => CONTRACT_SERVICE_OPTIONS.find((item) => item.type === state.serviceType)?.subtypes ?? [],
+    [state.serviceType]
+  );
 
   useEffect(() => {
     const q = state.counterpartyQuery.trim();
@@ -1032,11 +1075,12 @@ function NewContractModal({
         }
       }
 
-      if (state.documentFile) {
+      const documentFile = documentFileRef.current;
+      if (documentFile) {
         const form = new FormData();
         form.set("documentType", "contract");
         form.set("documentDate", state.contractDate);
-        form.set("file", state.documentFile);
+        form.set("file", documentFile);
         const res = await fetch(`/api/contracts/${encodeURIComponent(contractId)}/documents`, {
           method: "POST",
           body: form,
@@ -1119,11 +1163,37 @@ function NewContractModal({
             </label>
             <label className="grid gap-1 text-sm">
               <span className="font-bold text-stone-700">용역분류</span>
-              <input className="input-field" value={state.serviceType} onChange={(e) => onChange({ ...state, serviceType: e.target.value })} placeholder="예: 통합허가" />
+              <select
+                className="ui-select"
+                value={state.serviceType}
+                onChange={(e) => {
+                  const nextType = e.target.value;
+                  const nextSubtypes = CONTRACT_SERVICE_OPTIONS.find((item) => item.type === nextType)?.subtypes ?? [];
+                  onChange({
+                    ...state,
+                    serviceType: nextType,
+                    serviceSubtype: nextSubtypes.some((subtype) => subtype === state.serviceSubtype)
+                      ? state.serviceSubtype
+                      : nextSubtypes[0] ?? "",
+                  });
+                }}
+              >
+                {CONTRACT_SERVICE_OPTIONS.map((option) => (
+                  <option key={option.type} value={option.type}>{option.type}</option>
+                ))}
+              </select>
             </label>
             <label className="grid gap-1 text-sm">
               <span className="font-bold text-stone-700">용역세분류</span>
-              <input className="input-field" value={state.serviceSubtype} onChange={(e) => onChange({ ...state, serviceSubtype: e.target.value })} placeholder="예: 변경허가" />
+              <select
+                className="ui-select"
+                value={state.serviceSubtype}
+                onChange={(e) => onChange({ ...state, serviceSubtype: e.target.value })}
+              >
+                {subtypeOptions.map((subtype) => (
+                  <option key={subtype} value={subtype}>{subtype}</option>
+                ))}
+              </select>
             </label>
             <label className="grid gap-1 text-sm">
               <span className="font-bold text-stone-700">계약 종류</span>
@@ -1192,8 +1262,13 @@ function NewContractModal({
                 type="file"
                 accept="application/pdf,.pdf"
                 className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-2 file:text-xs file:font-bold file:text-white"
-                onChange={(e) => onChange({ ...state, documentFile: e.target.files?.[0] ?? null })}
+                onChange={(e) => {
+                  const nextFile = e.target.files?.[0] ?? null;
+                  documentFileRef.current = nextFile;
+                  setDocumentFileName(nextFile?.name ?? "");
+                }}
               />
+              {documentFileName && <span className="text-xs text-stone-500">선택됨: {documentFileName}</span>}
             </label>
             <p className="text-xs text-stone-500">
               저장 경로는 계약일 기준 <code>매출계약서/년도/(계약일) 계약명</code> 논리 경로로 생성됩니다.
@@ -1227,9 +1302,12 @@ function EditMilestoneModal({
 }) {
   const toast = useToast();
   const [saving, setSaving] = useState(false);
+  const invoiceFileRef = useRef<File | null>(null);
+  const [invoiceFileName, setInvoiceFileName] = useState("");
 
   const submit = async () => {
     setSaving(true);
+    const invoiceFile = invoiceFileRef.current;
     try {
       const patchRes = await fetch(
         `/api/contracts/${encodeURIComponent(contractId)}/milestones/${encodeURIComponent(state.milestoneId)}`,
@@ -1247,7 +1325,7 @@ function EditMilestoneModal({
             paymentCollectedAt: state.paymentCollectedAt || null,
             collectionRatio: state.collectionRatio ? Number(state.collectionRatio) : null,
             collectedAmount: state.collectedAmount ? Number(state.collectedAmount) : null,
-            partialPaymentMemo: state.paymentCollected && !state.invoiceFile ? state.partialPaymentMemo : undefined,
+            partialPaymentMemo: state.paymentCollected && !invoiceFile ? state.partialPaymentMemo : undefined,
           }),
         }
       );
@@ -1256,7 +1334,7 @@ function EditMilestoneModal({
         throw new Error(body?.error ?? "HTTP " + patchRes.status);
       }
 
-      if (state.invoiceFile) {
+      if (invoiceFile) {
         const form = new FormData();
         form.set("milestoneId", state.milestoneId);
         form.set("issueDate", state.issueDate);
@@ -1267,7 +1345,7 @@ function EditMilestoneModal({
         form.set("collectedAmount", state.collectedAmount);
         form.set("paymentTerms", state.paymentTerms);
         form.set("partialPaymentMemo", state.partialPaymentMemo);
-        form.set("file", state.invoiceFile);
+        form.set("file", invoiceFile);
         const uploadRes = await fetch(`/api/contracts/${encodeURIComponent(contractId)}/invoices`, {
           method: "POST",
           body: form,
@@ -1316,8 +1394,13 @@ function EditMilestoneModal({
             type="file"
             accept="application/pdf,.pdf"
             className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-2 file:text-xs file:font-bold file:text-white"
-            onChange={(e) => onChange({ ...state, invoiceFile: e.target.files?.[0] ?? null })}
+            onChange={(e) => {
+              const nextFile = e.target.files?.[0] ?? null;
+              invoiceFileRef.current = nextFile;
+              setInvoiceFileName(nextFile?.name ?? "");
+            }}
           />
+          {invoiceFileName && <span className="text-xs text-stone-500">선택됨: {invoiceFileName}</span>}
           <span className="text-xs text-stone-500">파일을 선택하면 새 계산서 PDF가 같은 단계의 최신 계산서로 추가 등록됩니다.</span>
         </label>
         <label className="flex items-center gap-2 text-sm font-bold text-stone-700 col-span-2">
@@ -1447,8 +1530,8 @@ function DraggablePdfViewer({
   const [position, setPosition] = useState(() => ({
     x: typeof window === "undefined"
       ? 96
-      : Math.max(24, Math.round((window.innerWidth - Math.min(980, window.innerWidth - 48)) / 2)),
-    y: 72,
+      : Math.max(16, Math.round((window.innerWidth - Math.min(1280, window.innerWidth - 32)) / 2)),
+    y: 24,
   }));
   const dragOffset = useRef<{ x: number; y: number } | null>(null);
 
@@ -1462,11 +1545,11 @@ function DraggablePdfViewer({
 
   const moveDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!dragOffset.current) return;
-    const width = Math.min(980, window.innerWidth - 48);
-    const height = Math.min(760, window.innerHeight - 48);
+    const width = Math.min(1280, window.innerWidth - 32);
+    const height = Math.min(900, window.innerHeight - 32);
     setPosition({
-      x: Math.min(Math.max(12, event.clientX - dragOffset.current.x), Math.max(12, window.innerWidth - width - 12)),
-      y: Math.min(Math.max(12, event.clientY - dragOffset.current.y), Math.max(12, window.innerHeight - height - 12)),
+      x: Math.min(Math.max(8, event.clientX - dragOffset.current.x), Math.max(8, window.innerWidth - width - 8)),
+      y: Math.min(Math.max(8, event.clientY - dragOffset.current.y), Math.max(8, window.innerHeight - height - 8)),
     });
   };
 
@@ -1481,8 +1564,8 @@ function DraggablePdfViewer({
       style={{
         left: position.x,
         top: position.y,
-        width: "min(980px, calc(100vw - 48px))",
-        height: "min(760px, calc(100vh - 48px))",
+        width: "min(1280px, calc(100vw - 32px))",
+        height: "min(900px, calc(100vh - 32px))",
       }}
     >
       <div
@@ -1498,6 +1581,7 @@ function DraggablePdfViewer({
         </div>
         <button
           type="button"
+          onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => {
             event.stopPropagation();
             onClose();
@@ -1510,11 +1594,16 @@ function DraggablePdfViewer({
       </div>
       <iframe
         title={title}
-        src={url}
+        src={withPdfViewerDefaults(url)}
         className="w-full h-[calc(100%-48px)] bg-stone-100"
       />
     </div>
   );
+}
+
+function withPdfViewerDefaults(url: string): string {
+  const [base] = url.split("#", 1);
+  return `${base}#toolbar=1&navpanes=0&view=FitH`;
 }
 
 function ModalShell({ title, onClose, children, wide }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
@@ -1713,13 +1802,14 @@ function createMilestoneDraft(): ContractMilestoneDraft {
 }
 
 function createEmptyContractState(): NewContractModalState {
+  const defaultService = CONTRACT_SERVICE_OPTIONS[0];
   return {
     contractTitle: "",
     counterpartyQuery: "",
     counterpartyEntityId: "",
     counterpartyName: "",
-    serviceType: "",
-    serviceSubtype: "",
+    serviceType: defaultService.type,
+    serviceSubtype: defaultService.subtypes[0],
     contractKind: "standard",
     contractDate: new Date().toISOString().slice(0, 10),
     startedAt: "",
@@ -1730,7 +1820,6 @@ function createEmptyContractState(): NewContractModalState {
       { ...createMilestoneDraft(), stageLabel: "선급금" },
       { ...createMilestoneDraft(), stageLabel: "준공금" },
     ],
-    documentFile: null,
   };
 }
 

@@ -11,7 +11,7 @@ export interface ContractChangePayload {
   serviceCategory: { previousType: string; previousSubtype: string; nextType: string; nextSubtype: string; changed: boolean };
   closing: { completionDate: string; permitAcquiredAt: string; etc: string };
   termination: { terminatedAt: string; terminationReason: string; suspendedAt: string; suspensionReason: string };
-  outsourcing: { outsourcingTitle: string; counterpartyName: string; serviceType: string; contractDate: string; endedAt: string; memo: string };
+  outsourcing: { outsourcingTitle: string; counterpartyName: string; serviceType: string; contractDate: string; endedAt: string; amount: string; memo: string };
   meta: { changedAt: string; enteredAt: string; memo: string };
 }
 
@@ -89,6 +89,7 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
     serviceType: DEFAULT_OUTSOURCING_TYPES[0],
     contractDate: "",
     endedAt: "",
+    amount: "",
     memo: "",
   });
   const [lifecycle, setLifecycle] = useState({
@@ -193,6 +194,7 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
         outsourcingForm.set("serviceType", outsourcing.serviceType);
         outsourcingForm.set("contractDate", outsourcing.contractDate);
         outsourcingForm.set("endedAt", outsourcing.endedAt);
+        outsourcingForm.set("amount", outsourcing.amount);
         outsourcingForm.set("memo", outsourcing.memo);
         const file = outsourcingFileRef.current;
         if (file) outsourcingForm.set("file", file);
@@ -374,12 +376,12 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
               </label>
               <label className="grid gap-1 text-sm">
                 <span className="font-bold text-stone-700">용역분류</span>
-                <select className="ui-select" value={outsourcing.serviceType}
+                <select className="ui-select max-w-[220px]" value={outsourcing.serviceType}
                   onChange={(e) => setOutsourcing({ ...outsourcing, serviceType: e.target.value })}>
                   {outsourcingTypes.map((type) => <option key={type} value={type}>{type}</option>)}
                 </select>
               </label>
-              <div className="flex items-end gap-2">
+              <div className="flex items-end justify-start gap-2">
                 <button type="button" className="glass-button rounded-xl px-3 py-2 text-xs text-stone-700"
                   onClick={() => {
                     const next = prompt("추가할 외주 용역 분류명을 입력하세요.");
@@ -399,6 +401,11 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
                   삭제
                 </button>
               </div>
+              <label className="grid gap-1 text-sm">
+                <span className="font-bold text-stone-700">계약금액</span>
+                <input className="input-field tabular-nums" inputMode="numeric" value={formatThousands(outsourcing.amount)}
+                  onChange={(e) => setOutsourcing({ ...outsourcing, amount: stripDigits(e.target.value) })} />
+              </label>
               <label className="grid gap-1 text-sm">
                 <span className="font-bold text-stone-700">계약일</span>
                 <input type="date" className="input-field" value={outsourcing.contractDate}
@@ -529,6 +536,16 @@ function updateAt<T>(list: T[], setter: (next: T[]) => void, idx: number, patch:
   const next = list.slice();
   next[idx] = { ...next[idx], ...patch };
   setter(next);
+}
+
+function formatThousands(value: string): string {
+  const digits = stripDigits(value);
+  if (!digits) return "";
+  return Number(digits).toLocaleString("en-US");
+}
+
+function stripDigits(value: string): string {
+  return value.replace(/[^0-9]/g, "");
 }
 
 function ListEditorButtons({

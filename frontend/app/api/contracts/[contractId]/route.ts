@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "node:crypto";
 import { authErrorToResponse, requireAuthenticated, requireEditor } from "@/lib/auth/guards";
 import { withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
@@ -87,20 +88,42 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
   }
 }
 
-export async function DELETE(_: NextRequest, ctx: RouteContext) {
+const DELETE_REASONS = new Set(["중복 입력 삭제", "계약 무산", "계약 포기"]);
+const newDeleteLogId = () => "cdel_" + crypto.randomUUID().replace(/-/g, "").slice(0, 16);
+
+export async function DELETE(req: NextRequest, ctx: RouteContext) {
   try {
     const actor = await requireEditor();
     const { contractId } = await ctx.params;
+    const body = await req.json().catch(() => ({}));
+    const deleteReason = String(body?.deleteReason ?? "").trim();
+    if (!DELETE_REASONS.has(deleteReason)) {
+      return NextResponse.json({ error: "삭제 사유를 선택하세요." }, { status: 400 });
+    }
     const before = await getContractDetail(contractId);
     if (!before) return NextResponse.json({ error: "not found" }, { status: 404 });
     await withDbWrite(async (db) => {
+      await db.run(
+        `INSERT INTO contract_delete_logs
+          (delete_log_id, contract_id, contract_title, delete_reason, before_json, created_by, created_at)
+         VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)`,
+        [
+          newDeleteLogId(),
+          contractId,
+          String(before.contract.contract_title ?? ""),
+          deleteReason,
+          JSON.stringify(before),
+          actor.userId,
+          new Date().toISOString(),
+        ]
+      );
       await recordAuditLogInline(db, {
         actorUserId: actor.userId,
         action: "contract_delete",
         targetTable: "contracts",
         targetId: contractId,
         before,
-        after: { deleted: true },
+        after: { deleted: true, deleteReason },
       });
       await db.run("DELETE FROM contracts WHERE contract_id = $1", [contractId]);
     });

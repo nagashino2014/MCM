@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, BarChart3, CircleDollarSign, FileWarning, RefreshCw, TrendingUp } from "lucide-react";
+import { BarChart3, CircleDollarSign, FileWarning, RefreshCw, TrendingUp } from "lucide-react";
 
 interface DashboardData {
   kpis: {
@@ -77,10 +77,6 @@ export default function ContractDashboardPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Link href="/contracts" className="rounded-xl px-3 py-2 text-xs font-bold border border-stone-500/40 text-stone-100 hover:bg-white/10 flex items-center gap-1">
-              <ArrowLeft className="w-3.5 h-3.5" />
-              계약 현황
-            </Link>
             <button type="button" onClick={reload} className="rounded-xl px-3 py-2 text-xs font-black bg-amber-300 text-zinc-950 hover:bg-amber-200 flex items-center gap-1">
               <RefreshCw className={"w-3.5 h-3.5 " + (loading ? "animate-spin" : "")} />
               새로고침

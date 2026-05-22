@@ -31,6 +31,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     const serviceType = String(form.get("serviceType") ?? "").trim() || null;
     const contractDate = String(form.get("contractDate") ?? "").trim() || null;
     const endedAt = String(form.get("endedAt") ?? "").trim() || null;
+    const amount = toNullableNumber(form.get("amount"));
     const memo = String(form.get("memo") ?? "").trim() || null;
     const file = form.get("file");
 
@@ -143,12 +144,12 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       await txn.run(
         `INSERT INTO contract_outsourcing
           (outsourcing_id, contract_id, outsourcing_title, counterparty_entity_id,
-           counterparty_name, service_type, contract_date, ended_at, memo, document_id,
+           counterparty_name, service_type, contract_date, ended_at, amount, memo, document_id,
            created_by, created_at, updated_at)
          VALUES
           ($1, $2, $3, $4,
-           $5, $6, $7, $8, $9, $10,
-           $11, $12, $13)`,
+           $5, $6, $7, $8, $9, $10, $11,
+           $12, $13, $14)`,
         [
           outsourcingId,
           contractId,
@@ -158,6 +159,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
           serviceType,
           contractDate,
           endedAt,
+          amount,
           memo,
           documentId,
           actor.userId,
@@ -171,7 +173,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
         action: "contract_outsourcing_update",
         targetTable: "contract_outsourcing",
         targetId: outsourcingId,
-        after: { contractId, outsourcingTitle, counterpartyEntityId, counterpartyName, serviceType, contractDate, documentId },
+        after: { contractId, outsourcingTitle, counterpartyEntityId, counterpartyName, serviceType, contractDate, amount, documentId },
       });
     });
 
@@ -179,4 +181,10 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
   } catch (err) {
     return authErrorToResponse(err);
   }
+}
+
+function toNullableNumber(value: FormDataEntryValue | null): number | null {
+  if (value == null || value === "") return null;
+  const n = Number(String(value).replace(/,/g, ""));
+  return Number.isFinite(n) ? n : null;
 }

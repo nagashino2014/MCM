@@ -3,9 +3,7 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Virtuoso } from "react-virtuoso";
 import type { ServiceTypeStyle } from "@/lib/ieps/contract-tree-style";
-import Link from "next/link";
 import {
-  BarChart3,
   ChevronDown,
   ChevronRight,
   FileSignature,
@@ -88,6 +86,7 @@ interface OutsourcingDraft {
   serviceType: string;
   contractDate: string;
   endedAt: string;
+  amount: string;
   memo: string;
 }
 
@@ -203,6 +202,7 @@ function ContractsInner() {
   const [newStageModal, setNewStageModal] = useState<NewStageModalState | null>(null);
   const [editMilestoneModal, setEditMilestoneModal] = useState<EditMilestoneModalState | null>(null);
   const [pdfViewer, setPdfViewer] = useState<PdfViewerState | null>(null);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [changeModalOpen, setChangeModalOpen] = useState(false);
 
   const reloadTree = useCallback(async () => {
@@ -342,7 +342,7 @@ function ContractsInner() {
   }, [tree, selectedId]);
 
   return (
-    <div className="flex flex-col gap-6 p-2">
+    <div className="flex h-full min-h-0 flex-col gap-6 p-2">
       <section className="glass-panel p-8 rounded-3xl relative overflow-hidden reveal">
         <div className="relative z-10 flex items-start justify-between gap-4 flex-wrap">
           <div>
@@ -351,8 +351,7 @@ function ContractsInner() {
               계약 관리
             </h1>
             <p className="text-stone-600 text-base max-w-3xl">
-              엑셀 계약현황의 원장 구조를 웹으로 이전해 계약, 단계별 청구·수금, 세금계산서 PDF를 함께 관리합니다.
-              상세 패널에서 청구·수금 단계 관리와 변경계약 입력이 가능합니다.
+              신규/변경 계약 입력, 계산서 및 수금 정보 등록 기능
             </p>
           </div>
           <div className="flex items-center gap-2 mt-2">
@@ -372,13 +371,6 @@ function ContractsInner() {
               <RefreshCw className={"w-3 h-3 " + (loading ? "animate-spin" : "")} />
               새로고침
             </button>
-            <Link
-              href="/contracts/dashboard"
-              className="rounded-xl px-3 py-2 text-xs font-bold text-white bg-primary hover:bg-primary/90 shadow-sm flex items-center gap-1"
-            >
-              <BarChart3 className="w-3.5 h-3.5" />
-              Dashboard
-            </Link>
           </div>
         </div>
         <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-gradient-to-l from-primary/10 to-transparent pointer-events-none" />
@@ -390,8 +382,8 @@ function ContractsInner() {
           <div className="mt-2 font-mono text-xs text-stone-600">{error}</div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 xl:grid-cols-[minmax(360px,0.9fr)_minmax(560px,1.4fr)] gap-5">
-          <section className="glass-card rounded-3xl overflow-hidden reveal delay-2">
+        <div className="grid min-h-0 flex-1 grid-cols-1 xl:grid-cols-[minmax(360px,0.9fr)_minmax(560px,1.4fr)] gap-5">
+          <section className="glass-card rounded-3xl overflow-hidden reveal delay-2 flex min-h-0 flex-col">
             <div className="p-4 border-b border-stone-200/70 flex items-center justify-between gap-3">
               <div>
                 <h2 className="font-bold text-stone-800 flex items-center gap-2">
@@ -431,43 +423,45 @@ function ContractsInner() {
                 ))}
               </select>
             </div>
-            {filteredGroups.length === 0 && !loading ? (
-              <div className="p-10 text-center text-sm text-stone-500">조건에 맞는 계약이 없습니다.</div>
-            ) : (
-              <Virtuoso
-                style={{ height: 720 }}
-                data={deferredFlatRows}
-                increaseViewportBy={400}
-                computeItemKey={(_, row) =>
-                  row.kind === "group" ? "g:" + row.serviceType : "c:" + row.contract.contractId
-                }
-                itemContent={(_, row) =>
-                  row.kind === "group" ? (
-                    <TreeGroupHeader
-                      serviceType={row.serviceType}
-                      count={row.count}
-                      isOpen={row.isOpen}
-                      style={row.style}
-                      onToggle={toggleGroup}
-                    />
-                  ) : (
-                    <TreeChildRow
-                      contract={row.contract}
-                      isSelected={row.contract.contractId === selectedId}
-                      isLastChild={row.isLastChild}
-                      childColor={row.style.childColor}
-                      onSelect={selectContract}
-                    />
-                  )
-                }
-              />
-            )}
+            <div className="flex-1 min-h-0">
+              {filteredGroups.length === 0 && !loading ? (
+                <div className="h-full p-10 text-center text-sm text-stone-500">조건에 맞는 계약이 없습니다.</div>
+              ) : (
+                <Virtuoso
+                  style={{ height: "100%", minHeight: 0 }}
+                  data={deferredFlatRows}
+                  increaseViewportBy={400}
+                  computeItemKey={(_, row) =>
+                    row.kind === "group" ? "g:" + row.serviceType : "c:" + row.contract.contractId
+                  }
+                  itemContent={(_, row) =>
+                    row.kind === "group" ? (
+                      <TreeGroupHeader
+                        serviceType={row.serviceType}
+                        count={row.count}
+                        isOpen={row.isOpen}
+                        style={row.style}
+                        onToggle={toggleGroup}
+                      />
+                    ) : (
+                      <TreeChildRow
+                        contract={row.contract}
+                        isSelected={row.contract.contractId === selectedId}
+                        isLastChild={row.isLastChild}
+                        childColor={row.style.childColor}
+                        onSelect={selectContract}
+                      />
+                    )
+                  }
+                />
+              )}
+            </div>
             <div className="p-3 text-xs text-stone-500 text-right border-t border-stone-200/70">
               계약 건수: {tree?.totalCount.toLocaleString() ?? 0}
             </div>
           </section>
 
-          <section className="glass-card rounded-3xl p-5 reveal delay-3 min-h-[720px]">
+          <section className="glass-card rounded-3xl p-5 reveal delay-3 min-h-0 overflow-y-auto scrollbar-hide">
             {!selected ? (
               <div className="h-full flex items-center justify-center text-sm text-stone-500">계약을 선택하세요.</div>
             ) : detailLoading || !detail ? (
@@ -480,6 +474,7 @@ function ContractsInner() {
                 onOpenEditStage={setEditMilestoneModal}
                 onOpenChange={() => setChangeModalOpen(true)}
                 onOpenPdf={setPdfViewer}
+                onDeleteContract={() => setDeleteModalOpen(true)}
                 onDeleteStage={async (milestoneId) => {
                   if (!selected) return;
                   if (!confirm("해당 단계를 삭제하시겠습니까?")) return;
@@ -583,6 +578,33 @@ function ContractsInner() {
         />
       )}
 
+      {deleteModalOpen && selected && (
+        <ContractDeleteModal
+          contractTitle={selected.contractTitle}
+          onClose={() => setDeleteModalOpen(false)}
+          onDelete={async (deleteReason) => {
+            try {
+              const res = await fetch(`/api/contracts/${encodeURIComponent(selected.contractId)}`, {
+                method: "DELETE",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ deleteReason }),
+              });
+              if (!res.ok) {
+                const body = await res.json().catch(() => ({}));
+                throw new Error(body?.error ?? "HTTP " + res.status);
+              }
+              toast.show("계약이 삭제되었습니다.", "success");
+              setDeleteModalOpen(false);
+              setSelectedId(null);
+              setDetail(null);
+              reloadTree();
+            } catch (err) {
+              toast.show("계약 삭제 실패: " + (err as Error).message, "error");
+            }
+          }}
+        />
+      )}
+
       {pdfViewer && (
         <DraggablePdfViewer
           title={pdfViewer.title}
@@ -601,6 +623,7 @@ function ContractDetailPanel({
   onOpenEditStage,
   onOpenChange,
   onOpenPdf,
+  onDeleteContract,
   onDeleteStage,
 }: {
   detail: ContractDetail;
@@ -609,6 +632,7 @@ function ContractDetailPanel({
   onOpenEditStage: (state: EditMilestoneModalState) => void;
   onOpenChange: () => void;
   onOpenPdf: (state: PdfViewerState) => void;
+  onDeleteContract: () => void;
   onDeleteStage: (milestoneId: string) => void;
 }) {
   const contract = detail.contract;
@@ -667,6 +691,14 @@ function ContractDetailPanel({
           >
             <Pencil className="w-3.5 h-3.5" />
             변경계약 입력
+          </button>
+          <button
+            type="button"
+            onClick={onDeleteContract}
+            className="rounded-xl px-3 py-2 text-xs text-white bg-rose-500 hover:bg-rose-600 shadow-sm flex items-center gap-1"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            계약 삭제
           </button>
         </div>
       </div>
@@ -1149,6 +1181,7 @@ function NewContractModal({
         outsourcingForm.set("serviceType", state.outsourcing.serviceType);
         outsourcingForm.set("contractDate", state.outsourcing.contractDate);
         outsourcingForm.set("endedAt", state.outsourcing.endedAt);
+        outsourcingForm.set("amount", state.outsourcing.amount);
         outsourcingForm.set("memo", state.outsourcing.memo);
         const outsourcingFile = outsourcingFileRef.current;
         if (outsourcingFile) outsourcingForm.set("file", outsourcingFile);
@@ -1382,7 +1415,7 @@ function NewContractModal({
             <label className="grid gap-1 text-sm">
               <span className="font-bold text-stone-700">용역분류</span>
               <select
-                className="ui-select"
+                className="ui-select max-w-[220px]"
                 value={state.outsourcing.serviceType}
                 onChange={(e) => onChange({ ...state, outsourcing: { ...state.outsourcing, serviceType: e.target.value } })}
               >
@@ -1391,7 +1424,7 @@ function NewContractModal({
                 ))}
               </select>
             </label>
-            <div className="flex items-end">
+            <div className="flex items-end justify-start">
               <button
                 type="button"
                 className="glass-button rounded-xl px-3 py-2 text-xs text-stone-700"
@@ -1417,6 +1450,15 @@ function NewContractModal({
                 삭제
               </button>
             </div>
+            <label className="grid gap-1 text-sm">
+              <span className="font-bold text-stone-700">계약금액</span>
+              <input
+                className="input-field tabular-nums"
+                inputMode="numeric"
+                value={formatThousands(state.outsourcing.amount)}
+                onChange={(e) => onChange({ ...state, outsourcing: { ...state.outsourcing, amount: stripDigits(e.target.value) } })}
+              />
+            </label>
             <label className="grid gap-1 text-sm">
               <span className="font-bold text-stone-700">계약일</span>
               <DateInput value={state.outsourcing.contractDate} onChange={(contractDate) => onChange({ ...state, outsourcing: { ...state.outsourcing, contractDate } })} />
@@ -1802,6 +1844,56 @@ function withPdfViewerDefaults(url: string): string {
   return `${base}#toolbar=1&navpanes=0&view=FitH`;
 }
 
+function ContractDeleteModal({
+  contractTitle,
+  onClose,
+  onDelete,
+}: {
+  contractTitle: string;
+  onClose: () => void;
+  onDelete: (deleteReason: string) => Promise<void>;
+}) {
+  const [deleteReason, setDeleteReason] = useState("중복 입력 삭제");
+  const [saving, setSaving] = useState(false);
+  return (
+    <ModalShell title="계약 삭제" onClose={onClose}>
+      <div className="p-5 grid gap-4">
+        <p className="text-sm text-stone-600">
+          <span className="text-stone-900">{contractTitle}</span> 계약을 삭제합니다. 삭제 사유는 별도 로그로 저장됩니다.
+        </p>
+        <label className="grid gap-1 text-sm">
+          <span className="font-bold text-stone-700">삭제 사유</span>
+          <select className="ui-select" value={deleteReason} onChange={(e) => setDeleteReason(e.target.value)}>
+            <option value="중복 입력 삭제">중복 입력 삭제</option>
+            <option value="계약 무산">계약 무산</option>
+            <option value="계약 포기">계약 포기</option>
+          </select>
+        </label>
+        <div className="flex justify-end gap-2 pt-2 border-t border-stone-200/70">
+          <button type="button" onClick={onClose} className="glass-button rounded-xl px-4 py-2 text-sm font-bold text-stone-700">
+            닫기
+          </button>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={async () => {
+              setSaving(true);
+              try {
+                await onDelete(deleteReason);
+              } finally {
+                setSaving(false);
+              }
+            }}
+            className="rounded-xl px-4 py-2 text-sm font-bold text-white bg-rose-500 hover:bg-rose-600 disabled:opacity-60"
+          >
+            {saving ? "삭제 중..." : "삭제"}
+          </button>
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
 function ModalShell({ title, onClose, children, wide }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
   return (
     <div className="fixed inset-0 z-50 bg-stone-950/20 flex items-center justify-center p-4">
@@ -2034,6 +2126,7 @@ function createEmptyContractState(): NewContractModalState {
       serviceType: DEFAULT_OUTSOURCING_TYPES[0],
       contractDate: "",
       endedAt: "",
+      amount: "",
       memo: "",
     },
   };

@@ -1,6 +1,9 @@
 "use client";
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { Virtuoso } from "react-virtuoso";
+import type { LucideIcon } from "lucide-react";
+import type { ServiceTypeStyle } from "@/lib/ieps/contract-tree-style";
 import Link from "next/link";
 import {
   BarChart3,
@@ -25,14 +28,9 @@ interface ContractTreeContractNode {
   contractId: string;
   contractTitle: string;
   counterpartyName: string;
-  serviceType: string | null;
   serviceSubtype: string | null;
-  contractKind: string;
-  contractAmount: number | null;
   currentAmount: number | null;
   contractDate: string | null;
-  collectionRate: number;
-  collectionProgressLabel: string | null;
 }
 
 interface ContractTreeServiceGroup {
@@ -96,7 +94,7 @@ export default function ContractsPage() {
 function ContractsInner() {
   const toast = useToast();
   const [tree, setTree] = useState<ContractTreePayload | null>(null);
-  const [year, setYear] = useState<string>("");
+  const [year, setYear] = useState<string>(() => String(new Date().getFullYear()));
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [, startSearchTransition] = useTransition();
@@ -168,6 +166,9 @@ function ContractsInner() {
   }, [selectedId, loadDetail]);
 
   const selectContract = useCallback((id: string) => setSelectedId(id), []);
+  const toggleGroup = useCallback((serviceType: string) => {
+    setExpanded((prev) => ({ ...prev, [serviceType]: !prev[serviceType] }));
+  }, []);
 
   const filteredGroups = useMemo(() => {
     if (!tree) return [];
@@ -189,6 +190,42 @@ function ContractsInner() {
     () => filteredGroups.reduce((acc, g) => acc + g.contracts.length, 0),
     [filteredGroups]
   );
+
+  /**
+   * Flatten the tree into a single ordered list of rows for the virtual
+   * scroller. Group headers are always emitted; child rows are emitted only
+   * when the group is currently expanded. Per-row `style` is precomputed once
+   * so that the row component does not redo the lookup on every render.
+   */
+  const flatRows = useMemo<TreeFlatRow[]>(() => {
+    const rows: TreeFlatRow[] = [];
+    for (const group of filteredGroups) {
+      const style = resolveServiceTypeStyle(group.serviceType);
+      const isOpen = expanded[group.serviceType] === true;
+      rows.push({
+        kind: "group",
+        serviceType: group.serviceType,
+        count: group.contracts.length,
+        isOpen,
+        style,
+      });
+      if (isOpen) {
+        for (let i = 0; i < group.contracts.length; i++) {
+          rows.push({
+            kind: "child",
+            contract: group.contracts[i],
+            isLastChild: i === group.contracts.length - 1,
+            style,
+          });
+        }
+      }
+    }
+    return rows;
+  }, [filteredGroups, expanded]);
+
+  // Defer the heavy child portion of the list to keep group toggle / search
+  // input feeling instantaneous; the headers are still computed synchronously.
+  const deferredFlatRows = useDeferredValue(flatRows);
 
   const selected = useMemo(() => {
     if (!tree) return null;
@@ -282,46 +319,38 @@ function ContractsInner() {
                 ))}
               </select>
             </div>
-            <div className="max-h-[720px] overflow-auto">
-              {filteredGroups.length === 0 && !loading && (
-                <div className="p-10 text-center text-sm text-stone-500">조건에 맞는 계약이 없습니다.</div>
-              )}
-              {filteredGroups.map((group) => {
-                const style = resolveServiceTypeStyle(group.serviceType);
-                const ParentIcon = style.parentIcon;
-                const ChildIcon = style.childIcon;
-                const isOpen = expanded[group.serviceType] === true;
-                return (
-                  <div key={group.serviceType} className="border-b border-stone-200/70">
-                    <button
-                      type="button"
-                      onClick={() => setExpanded((prev) => ({ ...prev, [group.serviceType]: !isOpen }))}
-                      className={"w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-stone-50 " + style.parentChip}
-                    >
-                      {isOpen ? <ChevronDown className="w-4 h-4 text-stone-500" /> : <ChevronRight className="w-4 h-4 text-stone-500" />}
-                      <ParentIcon className={"w-4 h-4 fill-current " + style.parentText} />
-                      <span className="font-black text-sm text-stone-800">{group.serviceType}</span>
-                      <span className="text-[11px] font-bold text-stone-500 ml-auto">{group.contracts.length}건</span>
-                    </button>
-                    {isOpen && (
-                      <div className="bg-white/40">
-                        {group.contracts.map((c, idx, arr) => (
-                          <TreeChildRow
-                            key={c.contractId}
-                            contract={c}
-                            isSelected={c.contractId === selectedId}
-                            isLastChild={idx === arr.length - 1}
-                            childIconClass={style.childText}
-                            ChildIcon={ChildIcon}
-                            onSelect={selectContract}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+            {filteredGroups.length === 0 && !loading ? (
+              <div className="p-10 text-center text-sm text-stone-500">조건에 맞는 계약이 없습니다.</div>
+            ) : (
+              <Virtuoso
+                style={{ height: 720 }}
+                data={deferredFlatRows}
+                increaseViewportBy={400}
+                computeItemKey={(_, row) =>
+                  row.kind === "group" ? "g:" + row.serviceType : "c:" + row.contract.contractId
+                }
+                itemContent={(_, row) =>
+                  row.kind === "group" ? (
+                    <TreeGroupHeader
+                      serviceType={row.serviceType}
+                      count={row.count}
+                      isOpen={row.isOpen}
+                      style={row.style}
+                      onToggle={toggleGroup}
+                    />
+                  ) : (
+                    <TreeChildRow
+                      contract={row.contract}
+                      isSelected={row.contract.contractId === selectedId}
+                      isLastChild={row.isLastChild}
+                      childIconClass={row.style.childText}
+                      ChildIcon={row.style.childIcon}
+                      onSelect={selectContract}
+                    />
+                  )
+                }
+              />
+            )}
             <div className="p-3 text-xs text-stone-500 text-right border-t border-stone-200/70">
               계약 건수: {tree?.totalCount.toLocaleString() ?? 0}
             </div>
@@ -415,8 +444,8 @@ function ContractsInner() {
             amount: Number(m.amount ?? 0),
             paymentTerms: String(m.payment_terms ?? ""),
           }))}
-          initialServiceType={selected.serviceType ?? ""}
-          initialServiceSubtype={selected.serviceSubtype ?? ""}
+          initialServiceType={String(detail.contract.service_type ?? "") || ""}
+          initialServiceSubtype={String(detail.contract.service_subtype ?? "") || ""}
           initialEndedAt={String(detail.contract.ended_at ?? "") || null}
           initialCurrentAmount={selected.currentAmount}
           onClose={() => setChangeModalOpen(false)}
@@ -964,12 +993,65 @@ function Info({ label, value, highlight }: { label: string; value: unknown; high
   );
 }
 
+type TreeFlatRow =
+  | {
+      kind: "group";
+      serviceType: string;
+      count: number;
+      isOpen: boolean;
+      style: ServiceTypeStyle;
+    }
+  | {
+      kind: "child";
+      contract: ContractTreeContractNode;
+      isLastChild: boolean;
+      style: ServiceTypeStyle;
+    };
+
+interface TreeGroupHeaderProps {
+  serviceType: string;
+  count: number;
+  isOpen: boolean;
+  style: ServiceTypeStyle;
+  onToggle: (serviceType: string) => void;
+}
+
+const TreeGroupHeader = memo(function TreeGroupHeader({
+  serviceType,
+  count,
+  isOpen,
+  style,
+  onToggle,
+}: TreeGroupHeaderProps) {
+  const ParentIcon = style.parentIcon;
+  const handleClick = useCallback(() => onToggle(serviceType), [onToggle, serviceType]);
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      className={
+        "w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-stone-50 border-b border-stone-200/70 " +
+        style.parentChip
+      }
+    >
+      {isOpen ? (
+        <ChevronDown className="w-4 h-4 text-stone-500" />
+      ) : (
+        <ChevronRight className="w-4 h-4 text-stone-500" />
+      )}
+      <ParentIcon className={"w-4 h-4 fill-current " + style.parentText} />
+      <span className="font-black text-sm text-stone-800">{serviceType}</span>
+      <span className="text-[11px] font-bold text-stone-500 ml-auto">{count}건</span>
+    </button>
+  );
+});
+
 interface TreeChildRowProps {
   contract: ContractTreeContractNode;
   isSelected: boolean;
   isLastChild: boolean;
   childIconClass: string;
-  ChildIcon: React.ComponentType<{ className?: string }>;
+  ChildIcon: LucideIcon;
   onSelect: (contractId: string) => void;
 }
 
@@ -987,7 +1069,7 @@ const TreeChildRow = memo(function TreeChildRow({
       type="button"
       onClick={handleClick}
       className={
-        "relative w-full flex items-center gap-2 pl-12 pr-3 py-2 text-left text-xs hover:bg-primary/5 " +
+        "relative w-full flex items-center gap-2 pl-12 pr-3 py-2 text-left text-xs bg-white/40 hover:bg-primary/5 " +
         (isSelected ? "bg-primary/10 border-l-4 border-primary" : "border-l-4 border-transparent")
       }
     >

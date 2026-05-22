@@ -39,18 +39,19 @@ export interface ContractListItem {
   updatedAt: string;
 }
 
+/**
+ * Slim node payload tailored for the contract tree view (left ledger pane).
+ * Only fields that the tree row needs for display, sorting or in-page text
+ * search are included; richer metadata (service type, kind, collection rate,
+ * progress label, etc.) is fetched on demand by the detail panel.
+ */
 export interface ContractTreeContractNode {
   contractId: string;
   contractTitle: string;
   counterpartyName: string;
-  serviceType: string | null;
   serviceSubtype: string | null;
-  contractKind: string;
-  contractAmount: number | null;
   currentAmount: number | null;
   contractDate: string | null;
-  collectionRate: number;
-  collectionProgressLabel: string | null;
 }
 
 export interface ContractTreeServiceGroup {
@@ -272,22 +273,10 @@ export async function listContractsForTree(year: string | null): Promise<Contrac
               e.entity_name AS counterparty_name,
               c.service_type,
               c.service_subtype,
-              c.contract_kind,
-              c.contract_amount,
               COALESCE(c.current_amount, c.contract_amount) AS current_amount,
-              c.contract_date,
-              c.collection_progress_label,
-              COALESCE(ms.total_milestone_amount, 0) AS total_milestone_amount,
-              COALESCE(ms.total_collected_amount, 0) AS total_collected_amount
+              c.contract_date
        FROM contracts c
        JOIN legal_entities e ON e.entity_id = c.counterparty_entity_id
-       LEFT JOIN (
-         SELECT contract_id,
-                SUM(COALESCE(amount, 0)) AS total_milestone_amount,
-                SUM(CASE WHEN payment_collected = 1 THEN COALESCE(collected_amount, amount, 0) ELSE 0 END) AS total_collected_amount
-         FROM contract_payment_milestones
-         GROUP BY contract_id
-       ) ms ON ms.contract_id = c.contract_id
        ${whereSql}
        ORDER BY
          COALESCE(NULLIF(c.contract_date, ''), c.started_at, c.created_at) ASC NULLS LAST,
@@ -301,20 +290,13 @@ export async function listContractsForTree(year: string | null): Promise<Contrac
     const serviceType = row.service_type != null && String(row.service_type).trim().length > 0
       ? String(row.service_type)
       : "기타";
-    const baseAmount = toNumber(row.current_amount) || toNumber(row.contract_amount) || toNumber(row.total_milestone_amount);
-    const collected = toNumber(row.total_collected_amount);
     const node: ContractTreeContractNode = {
       contractId: String(row.contract_id ?? ""),
       contractTitle: String(row.contract_title ?? ""),
       counterpartyName: String(row.counterparty_name ?? ""),
-      serviceType: row.service_type != null ? String(row.service_type) : null,
       serviceSubtype: row.service_subtype != null ? String(row.service_subtype) : null,
-      contractKind: String(row.contract_kind ?? "standard"),
-      contractAmount: toNumberOrNull(row.contract_amount),
       currentAmount: toNumberOrNull(row.current_amount),
       contractDate: row.contract_date != null ? String(row.contract_date) : null,
-      collectionRate: baseAmount > 0 ? Math.min(1, Math.round((collected / baseAmount) * 1000) / 1000) : 0,
-      collectionProgressLabel: row.collection_progress_label != null ? String(row.collection_progress_label) : null,
     };
     if (!groupMap.has(serviceType)) groupMap.set(serviceType, []);
     groupMap.get(serviceType)!.push(node);

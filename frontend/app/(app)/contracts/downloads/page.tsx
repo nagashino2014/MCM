@@ -10,6 +10,9 @@ interface ContractTreeContractNode {
   contractTitle: string;
   counterpartyName: string;
   serviceSubtype: string | null;
+  industryCategory: string | null;
+  facilityIndustryName: string | null;
+  facilityIndustryCode: string | null;
   currentAmount: number | null;
   contractDate: string | null;
   contractStatus: string;
@@ -43,10 +46,36 @@ type Scope =
 type SingleMode = "individualZip" | "mergedSingle";
 type MultiMode = "perContractMergedZip" | "mergedAll";
 
+const INTEGRATED_PERMIT_INDUSTRIES = [
+  { label: "발전", keywords: ["발전", "화력", "기타 발전", "증기", "냉온수"] },
+  { label: "폐기물소각", keywords: ["폐기물소각", "소각"] },
+  { label: "철강", keywords: ["철강", "1차 철강"] },
+  { label: "비철", keywords: ["비철", "비철금속"] },
+  { label: "유기", keywords: ["유기", "석유화학계", "기초 유기"] },
+  { label: "석유정제", keywords: ["석유정제", "석유 정제품"] },
+  { label: "무기화학", keywords: ["무기화학", "무기 화학", "무기안료", "금속 산화물"] },
+  { label: "정밀화학", keywords: ["정밀화학", "합성염료", "농업용 약제", "도료", "계면활성제", "화장품", "접착제", "화약", "세제"] },
+  { label: "비료및질소화합물", keywords: ["비료", "질소화합물"] },
+  { label: "펄프종이및판지", keywords: ["펄프", "종이", "판지"] },
+  { label: "전자부품", keywords: ["전자부품", "회로기판", "평판"] },
+  { label: "반도체", keywords: ["반도체"] },
+  { label: "섬유염색및가공처리업", keywords: ["섬유", "염색", "마무리 가공"] },
+  { label: "도축육류가공및저장처리업", keywords: ["도축", "육류가공", "저장처리"] },
+  { label: "알콜음료제조업", keywords: ["알콜", "알코올", "주류", "음료 제조"] },
+  { label: "플라스틱제품제조업", keywords: ["플라스틱"] },
+  { label: "자동차부품제조업", keywords: ["자동차부품", "자동차 부품"] },
+  { label: "폐기물처리업", keywords: ["폐기물 처리", "지정 폐기물"] },
+  { label: "시멘트 제조업", keywords: ["시멘트"] },
+  { label: "이차전지 제조업", keywords: ["이차전지", "2차전지", "축전지", "배터리"] },
+];
+
 export default function ContractDownloadsPage() {
   const [tree, setTree] = useState<ContractTreePayload | null>(null);
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const [search, setSearch] = useState("");
+  const [serviceTypeFilter, setServiceTypeFilter] = useState("");
+  const [serviceSubtypeFilter, setServiceSubtypeFilter] = useState("");
+  const [industryFilter, setIndustryFilter] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -102,25 +131,62 @@ export default function ContractDownloadsPage() {
     };
   }, [activeSingleId]);
 
+  const serviceTypeOptions = useMemo(
+    () => (tree?.groups ?? []).map((group) => group.serviceType),
+    [tree]
+  );
+  const serviceSubtypeOptions = useMemo(() => {
+    const values = new Set<string>();
+    for (const group of tree?.groups ?? []) {
+      if (serviceTypeFilter && group.serviceType !== serviceTypeFilter) continue;
+      for (const contract of group.contracts) {
+        if (contract.serviceSubtype) values.add(contract.serviceSubtype);
+      }
+    }
+    return Array.from(values).sort((a, b) => a.localeCompare(b, "ko"));
+  }, [tree, serviceTypeFilter]);
+
+  useEffect(() => {
+    if (serviceSubtypeFilter && !serviceSubtypeOptions.includes(serviceSubtypeFilter)) {
+      setServiceSubtypeFilter("");
+    }
+  }, [serviceSubtypeFilter, serviceSubtypeOptions]);
+
   const filteredGroups = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!tree || !q) return tree?.groups ?? [];
+    if (!tree) return [];
     return tree.groups
+      .filter((group) => !serviceTypeFilter || group.serviceType === serviceTypeFilter)
       .map((group) => ({
         ...group,
-        contracts: group.contracts.filter((contract) =>
-          contract.contractTitle.toLowerCase().includes(q) ||
-          contract.counterpartyName.toLowerCase().includes(q) ||
-          (contract.serviceSubtype ?? "").toLowerCase().includes(q)
-        ),
+        contracts: group.contracts.filter((contract) => {
+          const textMatch = !q ||
+            contract.contractTitle.toLowerCase().includes(q) ||
+            contract.counterpartyName.toLowerCase().includes(q) ||
+            (contract.serviceSubtype ?? "").toLowerCase().includes(q);
+          const subtypeMatch = !serviceSubtypeFilter || contract.serviceSubtype === serviceSubtypeFilter;
+          const industryMatch = !industryFilter || matchesIndustry(contract, industryFilter);
+          return textMatch && subtypeMatch && industryMatch;
+        }),
       }))
       .filter((group) => group.contracts.length > 0);
-  }, [tree, search]);
+  }, [tree, search, serviceTypeFilter, serviceSubtypeFilter, industryFilter]);
 
   const targetIds = useMemo(() => {
     if (checked.size > 0) return Array.from(checked);
     return selectedId ? [selectedId] : [];
   }, [checked, selectedId]);
+  const visibleContractIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const group of filteredGroups) {
+      for (const contract of group.contracts) ids.add(contract.contractId);
+    }
+    return ids;
+  }, [filteredGroups]);
+  const hiddenSelectedCount = useMemo(
+    () => Array.from(checked).filter((id) => !visibleContractIds.has(id)).length,
+    [checked, visibleContractIds]
+  );
   const isSingleTarget = targetIds.length === 1;
   const selectedContract = useMemo(() => {
     if (!tree || !activeSingleId) return null;
@@ -195,19 +261,42 @@ export default function ContractDownloadsPage() {
                 <CheckSquare className="w-4 h-4 text-primary" />
                 계약 선택
               </h2>
-              <p className="text-xs text-stone-500">선택 {targetIds.length.toLocaleString()}건 / 전체 {tree?.totalCount.toLocaleString() ?? 0}건</p>
+              <p className="text-xs text-stone-500">
+                선택 {targetIds.length.toLocaleString()}건 / 현재 목록 {filteredGroups.reduce((acc, group) => acc + group.contracts.length, 0).toLocaleString()}건
+              </p>
             </div>
             <button type="button" className="glass-button rounded-lg px-3 py-1.5 text-xs text-stone-700" onClick={() => setChecked(new Set())}>
               선택 해제
             </button>
           </div>
-          <div className="px-4 py-3 border-b border-stone-200/70 flex items-center gap-2">
-            <Search className="w-4 h-4 text-stone-400 shrink-0" />
-            <input className="input-field text-xs flex-1" placeholder="계약명 / 거래처 / 세분류 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
-            <select className="ui-select text-xs shrink-0" style={{ width: "17ch" }} value={year} onChange={(e) => setYear(e.target.value)}>
-              <option value="">전체 연도</option>
-              {(tree?.availableYears ?? []).map((item) => <option key={item} value={item}>{item}년</option>)}
-            </select>
+          <div className="px-4 py-3 border-b border-stone-200/70 grid gap-2">
+            <div className="flex items-center gap-2">
+              <Search className="w-4 h-4 text-stone-400 shrink-0" />
+              <input className="input-field text-xs flex-1" placeholder="계약명 / 거래처 / 세분류 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
+              <select className="ui-select text-xs shrink-0" style={{ width: "17ch" }} value={year} onChange={(e) => setYear(e.target.value)}>
+                <option value="">전체 연도</option>
+                {(tree?.availableYears ?? []).map((item) => <option key={item} value={item}>{item}년</option>)}
+              </select>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 pl-6">
+              <select className="ui-select text-xs" value={serviceTypeFilter} onChange={(e) => setServiceTypeFilter(e.target.value)}>
+                <option value="">용역분류 전체</option>
+                {serviceTypeOptions.map((item) => <option key={item} value={item}>{item}</option>)}
+              </select>
+              <select className="ui-select text-xs" value={serviceSubtypeFilter} onChange={(e) => setServiceSubtypeFilter(e.target.value)}>
+                <option value="">용역세분류 전체</option>
+                {serviceSubtypeOptions.map((item) => <option key={item} value={item}>{item}</option>)}
+              </select>
+              <select className="ui-select text-xs" value={industryFilter} onChange={(e) => setIndustryFilter(e.target.value)}>
+                <option value="">업종 전체</option>
+                {INTEGRATED_PERMIT_INDUSTRIES.map((item) => <option key={item.label} value={item.label}>{item.label}</option>)}
+              </select>
+            </div>
+            {hiddenSelectedCount > 0 && (
+              <p className="pl-6 text-[11px] text-primary">
+                현재 연도/필터 목록에 보이지 않는 선택 계약 {hiddenSelectedCount}건도 다운로드 대상에 유지됩니다.
+              </p>
+            )}
           </div>
           <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide">
             {loading ? (
@@ -257,7 +346,9 @@ export default function ContractDownloadsPage() {
         <section className="glass-card rounded-3xl p-5 reveal delay-2 min-h-0 overflow-y-auto scrollbar-hide">
           <div className="flex items-start justify-between gap-4 mb-5">
             <div>
-              <h2 className="text-xl font-bold text-stone-800">{selectedContract?.contractTitle ?? "계약을 선택하세요"}</h2>
+              <h2 className="text-xl font-bold text-stone-800">
+                {selectedContract?.contractTitle ?? String(detail?.contract.contract_title ?? "계약을 선택하세요")}
+              </h2>
               <p className="text-xs text-stone-500 mt-1">
                 {isSingleTarget ? "단일 계약은 개별 문서 또는 전체 증빙을 다운로드할 수 있습니다." : "복수 계약은 전체 증빙 다운로드만 가능합니다."}
               </p>
@@ -265,75 +356,85 @@ export default function ContractDownloadsPage() {
             <FileArchive className="w-6 h-6 text-primary" />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
-            <OptionCard
-              title="병합 없이 개별 저장"
-              description="선택한 계약 1건의 PDF를 ZIP으로 묶어 다운로드"
-              disabled={!isSingleTarget}
-              active={singleMode === "individualZip"}
-              onClick={() => setSingleMode("individualZip")}
-            />
-            <OptionCard
-              title="병합하여 하나의 파일로 저장"
-              description="선택한 계약 1건의 계약서/계산서를 PDF 하나로 병합"
-              disabled={!isSingleTarget}
-              active={singleMode === "mergedSingle"}
-              onClick={() => setSingleMode("mergedSingle")}
-            />
-            <OptionCard
-              title="개별 용역별로 병합 후 저장"
-              description="계약별 병합 PDF를 만들고 ZIP으로 다운로드"
-              disabled={isSingleTarget || targetIds.length === 0}
-              active={multiMode === "perContractMergedZip"}
-              onClick={() => setMultiMode("perContractMergedZip")}
-            />
-            <OptionCard
-              title="선택된 모든 용역을 하나로 병합 후 저장"
-              description="계약일 순서대로 모든 증빙을 단일 PDF로 병합"
-              disabled={isSingleTarget || targetIds.length === 0}
-              active={multiMode === "mergedAll"}
-              onClick={() => setMultiMode("mergedAll")}
-            />
-          </div>
+          <div className="grid grid-cols-1 2xl:grid-cols-2 gap-5">
+            <div className="rounded-2xl border border-stone-200/80 bg-white/50 p-4 h-[360px] overflow-hidden">
+              <h3 className="font-bold text-stone-800 mb-3">병합 옵션</h3>
+              <div className="grid grid-cols-1 gap-3">
+                <OptionCard
+                  title="병합 없이 개별 저장"
+                  description="선택한 계약 1건의 PDF를 ZIP으로 묶어 다운로드"
+                  disabled={!isSingleTarget}
+                  active={singleMode === "individualZip"}
+                  onClick={() => setSingleMode("individualZip")}
+                />
+                <OptionCard
+                  title="병합하여 하나의 파일로 저장"
+                  description="선택한 계약 1건의 계약서/계산서를 PDF 하나로 병합"
+                  disabled={!isSingleTarget}
+                  active={singleMode === "mergedSingle"}
+                  onClick={() => setSingleMode("mergedSingle")}
+                />
+                <OptionCard
+                  title="개별 용역별로 병합 후 저장"
+                  description="계약별 병합 PDF를 만들고 ZIP으로 다운로드"
+                  disabled={isSingleTarget || targetIds.length === 0}
+                  active={multiMode === "perContractMergedZip"}
+                  onClick={() => setMultiMode("perContractMergedZip")}
+                />
+                <OptionCard
+                  title="선택된 모든 용역을 하나로 병합 후 저장"
+                  description="계약일 순서대로 모든 증빙을 단일 PDF로 병합"
+                  disabled={isSingleTarget || targetIds.length === 0}
+                  active={multiMode === "mergedAll"}
+                  onClick={() => setMultiMode("mergedAll")}
+                />
+              </div>
+            </div>
 
-          {isSingleTarget && detail ? (
-            <div className="grid gap-4">
-              <DocumentStatus title="계약서" count={contractDocs.length} />
-              <DocumentStatus title="변경계약서" count={amendmentDocs.length} />
-              <div className="rounded-2xl border border-stone-200/80 overflow-hidden">
-                <div className="bg-stone-100 px-3 py-2 text-xs text-stone-600">대금지급조건별 계산서</div>
-                <div className="divide-y divide-stone-200/70">
-                  {detail.milestones.map((milestone) => {
-                    const milestoneId = String(milestone.milestone_id ?? "");
-                    const invoiceCount = detail.invoices.filter((invoice) => String(invoice.milestone_id ?? "") === milestoneId).length;
-                    return (
-                      <div key={milestoneId} className="px-3 py-2 flex items-center justify-between gap-3 text-sm">
-                        <span>{String(milestone.stage_label ?? "-")}</span>
-                        <div className="flex items-center gap-2">
-                          <span className={invoiceCount > 0 ? "text-primary text-xs" : "text-stone-400 text-xs"}>{invoiceCount > 0 ? `${invoiceCount}개` : "없음"}</span>
-                          <DownloadButton
-                            disabled={invoiceCount === 0 || downloading}
-                            onClick={() => download(singleMode, { kind: "invoice", milestoneId })}
-                          >
-                            다운로드
-                          </DownloadButton>
-                        </div>
-                      </div>
-                    );
-                  })}
+            <div className="rounded-2xl border border-stone-200/80 bg-white/50 p-4 h-[360px] overflow-hidden">
+              <h3 className="font-bold text-stone-800 mb-3">병합 대상 파일 목록</h3>
+              {isSingleTarget && detail ? (
+                <div className="h-[calc(100%-32px)] overflow-y-auto pr-1 scrollbar-hide">
+                  <div className="flex flex-wrap gap-2">
+                    <DocumentTag
+                      title="계약서"
+                      count={contractDocs.length}
+                      disabled={contractDocs.length === 0 || downloading}
+                      onClick={() => download(singleMode, { kind: "contract" })}
+                    />
+                    <DocumentTag
+                      title="변경계약서"
+                      count={amendmentDocs.length}
+                      disabled={amendmentDocs.length === 0 || downloading}
+                      onClick={() => download(singleMode, { kind: "amendment" })}
+                    />
+                    {detail.milestones.map((milestone) => {
+                      const milestoneId = String(milestone.milestone_id ?? "");
+                      const invoiceCount = detail.invoices.filter((invoice) => String(invoice.milestone_id ?? "") === milestoneId).length;
+                      return (
+                        <DocumentTag
+                          key={milestoneId}
+                          title={String(milestone.stage_label ?? "-")}
+                          count={invoiceCount}
+                          disabled={invoiceCount === 0 || downloading}
+                          onClick={() => download(singleMode, { kind: "invoice", milestoneId })}
+                        />
+                      );
+                    })}
+                  </div>
+                  <div className="mt-4 flex flex-wrap justify-end gap-2">
+                    <DownloadButton disabled={contractDocs.length === 0 || downloading} onClick={() => download(singleMode, { kind: "contract" })}>계약서</DownloadButton>
+                    <DownloadButton disabled={amendmentDocs.length === 0 || downloading} onClick={() => download(singleMode, { kind: "amendment" })}>변경계약</DownloadButton>
+                    <DownloadButton disabled={downloading} primary onClick={() => download(singleMode)}>전체</DownloadButton>
+                  </div>
                 </div>
-              </div>
-              <div className="flex flex-wrap justify-end gap-2">
-                <DownloadButton disabled={contractDocs.length === 0 || downloading} onClick={() => download(singleMode, { kind: "contract" })}>계약서</DownloadButton>
-                <DownloadButton disabled={amendmentDocs.length === 0 || downloading} onClick={() => download(singleMode, { kind: "amendment" })}>변경계약</DownloadButton>
-                <DownloadButton disabled={downloading} primary onClick={() => download(singleMode)}>전체</DownloadButton>
-              </div>
+              ) : (
+                <div className="rounded-2xl border border-stone-200/80 bg-white/60 p-6 text-sm text-stone-500">
+                  {targetIds.length > 1 ? "복수 계약 선택 중입니다. 전체 다운로드 버튼만 사용할 수 있습니다." : "좌측 트리에서 계약을 선택하세요."}
+                </div>
+              )}
             </div>
-          ) : (
-            <div className="rounded-2xl border border-stone-200/80 bg-white/60 p-6 text-sm text-stone-500">
-              {targetIds.length > 1 ? "복수 계약 선택 중입니다. 전체 다운로드 버튼만 사용할 수 있습니다." : "좌측 트리에서 계약을 선택하세요."}
-            </div>
-          )}
+          </div>
 
           <div className="mt-6 flex justify-end">
             <DownloadButton
@@ -380,15 +481,34 @@ function OptionCard({
   );
 }
 
-function DocumentStatus({ title, count }: { title: string; count: number }) {
+function DocumentTag({
+  title,
+  count,
+  disabled,
+  onClick,
+}: {
+  title: string;
+  count: number;
+  disabled: boolean;
+  onClick: () => void;
+}) {
   return (
-    <div className="rounded-2xl border border-stone-200/80 bg-white/60 px-3 py-2 flex items-center justify-between text-sm">
-      <span className="inline-flex items-center gap-2 text-stone-800">
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={
+        "inline-flex max-w-full items-center gap-2 rounded-full border px-3 py-1.5 text-xs transition disabled:cursor-not-allowed " +
+        (count > 0
+          ? "border-primary/30 bg-primary/5 text-stone-800 hover:bg-primary/10"
+          : "border-stone-200 bg-white/50 text-stone-400")
+      }
+      title={count > 0 ? `${title} ${count}개` : `${title} 없음`}
+    >
         <FileText className="w-4 h-4 text-primary" />
-        {title}
-      </span>
-      <span className={count > 0 ? "text-primary text-xs" : "text-stone-400 text-xs"}>{count > 0 ? `${count}개` : "없음"}</span>
-    </div>
+        <span className="truncate">{title}</span>
+        <span className={count > 0 ? "text-primary" : "text-stone-400"}>{count > 0 ? `${count}개` : "없음"}</span>
+      </button>
   );
 }
 
@@ -423,4 +543,19 @@ function getDownloadFileName(disposition: string | null): string | null {
   const match = disposition.match(/filename\*=UTF-8''([^;]+)/);
   if (match) return decodeURIComponent(match[1]);
   return null;
+}
+
+function matchesIndustry(contract: ContractTreeContractNode, label: string): boolean {
+  const target = INTEGRATED_PERMIT_INDUSTRIES.find((item) => item.label === label);
+  if (!target) return true;
+  const haystack = normalizeFilterText([
+    contract.industryCategory,
+    contract.facilityIndustryName,
+    contract.facilityIndustryCode,
+  ].filter(Boolean).join(" "));
+  return target.keywords.some((keyword) => haystack.includes(normalizeFilterText(keyword)));
+}
+
+function normalizeFilterText(value: string): string {
+  return value.replace(/[\s·•\-‐‑‒–—―−.,:;()\[\]{}（）「」『』〈〉《》/&]+/g, "").toLowerCase();
 }

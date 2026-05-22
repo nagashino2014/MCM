@@ -50,6 +50,9 @@ export interface ContractTreeContractNode {
   contractTitle: string;
   counterpartyName: string;
   serviceSubtype: string | null;
+  industryCategory: string | null;
+  facilityIndustryName: string | null;
+  facilityIndustryCode: string | null;
   currentAmount: number | null;
   contractDate: string | null;
   contractStatus: string;
@@ -276,6 +279,9 @@ export async function listContractsForTree(year: string | null): Promise<Contrac
               e.entity_name AS counterparty_name,
               c.service_type,
               c.service_subtype,
+              c.industry_category,
+              f.industry_name AS facility_industry_name,
+              f.industry_code AS facility_industry_code,
               c.contract_status,
               COALESCE(c.current_amount, c.contract_amount) AS current_amount,
               c.contract_date,
@@ -283,6 +289,7 @@ export async function listContractsForTree(year: string | null): Promise<Contrac
               COALESCE(ms.total_collected_amount, 0) AS total_collected_amount
        FROM contracts c
        JOIN legal_entities e ON e.entity_id = c.counterparty_entity_id
+       LEFT JOIN facilities f ON f.facility_id = c.facility_id
        LEFT JOIN (
          SELECT contract_id,
                 SUM(COALESCE(amount, 0)) AS total_milestone_amount,
@@ -310,6 +317,9 @@ export async function listContractsForTree(year: string | null): Promise<Contrac
       contractTitle: String(row.contract_title ?? ""),
       counterpartyName: String(row.counterparty_name ?? ""),
       serviceSubtype: row.service_subtype != null ? String(row.service_subtype) : null,
+      industryCategory: row.industry_category != null ? String(row.industry_category) : null,
+      facilityIndustryName: row.facility_industry_name != null ? String(row.facility_industry_name) : null,
+      facilityIndustryCode: row.facility_industry_code != null ? String(row.facility_industry_code) : null,
       currentAmount: toNumberOrNull(row.current_amount),
       contractDate: row.contract_date != null ? String(row.contract_date) : null,
       contractStatus: String(row.contract_status ?? "active"),

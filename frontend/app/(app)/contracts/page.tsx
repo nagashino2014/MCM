@@ -29,6 +29,9 @@ interface ContractTreeContractNode {
   contractTitle: string;
   counterpartyName: string;
   serviceSubtype: string | null;
+  industryCategory: string | null;
+  facilityIndustryName: string | null;
+  facilityIndustryCode: string | null;
   currentAmount: number | null;
   contractDate: string | null;
   contractStatus: string;

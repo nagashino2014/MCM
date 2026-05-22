@@ -545,7 +545,7 @@ function ContractDetailPanel({
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-200/70">
-              {detail.milestones.map((milestone) => {
+              {detail.milestones.map((milestone, idx) => {
                 const milestoneId = String(milestone.milestone_id ?? "");
                 const stageAmount = Number(milestone.amount ?? 0);
                 const collectionRatio = Number(milestone.collection_ratio ?? 0);
@@ -554,7 +554,7 @@ function ContractDetailPanel({
                   : Number(milestone.payment_collected ?? 0) === 1 ? "100%" : "-";
                 return (
                   <tr key={milestoneId} className="bg-white/60">
-                    <td className="p-2.5 font-mono text-stone-600">{String(milestone.stage_order ?? "")}</td>
+                    <td className="p-2.5 font-mono text-stone-600">{idx + 1}</td>
                     <td className="p-2.5 font-bold text-stone-800">{String(milestone.stage_label ?? "")}</td>
                     <td className="p-2.5 text-right font-mono">{formatMoney(stageAmount)}</td>
                     <td className="p-2.5 text-stone-600 max-w-[220px] truncate" title={String(milestone.payment_terms ?? "")}>

@@ -643,7 +643,7 @@ function ContractDetailPanel({
   );
   const collectionRate = baseAmount > 0 ? Math.min(1, collectedAmount / baseAmount) : 0;
   const contractKindLabel = String(contract.contract_kind ?? "standard") === "unit_price" ? "단가 계약" : "일반 계약";
-  const statusLabel = getContractStatusLabel(String(contract.contract_status ?? "active"));
+  const statusLabel = getContractStatusLabel(detail);
   const outsourcingCount = detail.outsourcing?.length ?? 0;
 
   return (
@@ -715,13 +715,35 @@ function ContractDetailPanel({
         <Info label="용역분류" value={contract.service_type} />
         <Info label="용역세분류" value={contract.service_subtype} />
         <Info label="준공일" value={contract.ended_at} />
-        <Info label="계약 상태" value={statusLabel} highlight={String(contract.contract_status ?? "") !== "active"} />
+        <Info label="계약 상태" value={statusLabel} highlight={statusLabel !== "진행중"} />
         <Info label="외주 용역" value={outsourcingCount > 0 ? `${outsourcingCount}건 등록` : "없음"} highlight={outsourcingCount > 0} />
         <Info
           label="수금 진척도"
           value={`${Math.round(collectionRate * 100)}% (${formatExactAmount(collectedAmount)} / ${formatExactAmount(baseAmount)})`}
         />
       </div>
+
+      {outsourcingCount > 0 && (
+        <div className="rounded-2xl border border-stone-200/80 bg-white/60 p-4">
+          <h3 className="font-bold text-stone-800 mb-3">외주 용역</h3>
+          <div className="grid gap-2">
+            {detail.outsourcing.map((item) => (
+              <div key={String(item.outsourcing_id)} className="rounded-xl border border-stone-200/70 bg-white/70 px-3 py-2 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-stone-800">{String(item.outsourcing_title ?? "-")}</span>
+                  <span className="font-mono text-xs text-stone-500">
+                    {item.amount ? formatExactAmount(item.amount) : ""}
+                  </span>
+                </div>
+                <p className="text-xs text-stone-500 mt-1">
+                  {String(item.counterparty_entity_name ?? item.counterparty_name ?? "-")}
+                  {item.contract_date ? ` · 계약일 ${String(item.contract_date)}` : ""}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div>
         <div className="flex items-center justify-between mb-3">
@@ -2146,12 +2168,24 @@ function firstPartialPaymentMemo(value: unknown): string {
   }
 }
 
-function getContractStatusLabel(status: string): string {
-  if (status === "terminated") return "계약해지";
-  if (status === "suspended") return "계약중지";
-  if (status === "completed") return "완료";
+function getContractStatusLabel(detail: ContractDetail): string {
+  const contract = detail.contract;
+  const status = String(contract.contract_status ?? "active");
+  if (status === "terminated" || contract.contract_terminated_at) return "계약해지";
+  if (status === "suspended" || contract.contract_suspended_at) return "계약중지";
+  const lastMilestone = detail.milestones[detail.milestones.length - 1];
+  if (lastMilestone && isMilestoneFullyCollected(lastMilestone)) return "수행 완료";
+  if (status === "completed") return "수행 완료";
   if (status === "draft") return "초안";
   return "진행중";
+}
+
+function isMilestoneFullyCollected(milestone: Record<string, unknown>): boolean {
+  const amount = Number(milestone.amount ?? 0);
+  const collectedAmount = Number(milestone.collected_amount ?? 0);
+  if (Number(milestone.payment_collected ?? 0) === 1) return true;
+  if (Number(milestone.collection_ratio ?? 0) >= 1) return true;
+  return amount > 0 && collectedAmount >= amount;
 }
 
 /**

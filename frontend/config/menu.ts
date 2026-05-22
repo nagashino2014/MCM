@@ -35,6 +35,7 @@ export const MENU_ITEMS: MenuItem[] = [
     submenu: [
       { title: "계약 관리", href: "/contracts" },
       { title: "Dashboard", href: "/contracts/dashboard" },
+      { title: "다운로드/증명서 생성", href: "/contracts/downloads" },
     ],
     group: "main",
   },

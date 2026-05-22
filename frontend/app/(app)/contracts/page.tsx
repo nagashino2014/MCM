@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   BarChart3,
@@ -97,7 +97,10 @@ function ContractsInner() {
   const toast = useToast();
   const [tree, setTree] = useState<ContractTreePayload | null>(null);
   const [year, setYear] = useState<string>("");
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
+  const [, startSearchTransition] = useTransition();
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ContractDetail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -125,13 +128,13 @@ function ContractsInner() {
       setExpanded((prev) => {
         const next = { ...prev };
         for (const group of json.groups) {
-          if (next[group.serviceType] === undefined) next[group.serviceType] = true;
+          if (next[group.serviceType] === undefined) next[group.serviceType] = false;
         }
         return next;
       });
       setSelectedId((current) => {
         if (current && json.groups.some((g) => g.contracts.some((c) => c.contractId === current))) return current;
-        return json.groups[0]?.contracts[0]?.contractId ?? null;
+        return null;
       });
     } catch (err) {
       setError((err as Error).message);
@@ -163,6 +166,8 @@ function ContractsInner() {
   useEffect(() => {
     if (selectedId) loadDetail(selectedId);
   }, [selectedId, loadDetail]);
+
+  const selectContract = useCallback((id: string) => setSelectedId(id), []);
 
   const filteredGroups = useMemo(() => {
     if (!tree) return [];
@@ -254,19 +259,26 @@ function ContractsInner() {
                   type="text"
                   className="input-field text-xs"
                   placeholder="계약명 / 거래처 / 세분류 검색"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  value={searchInput}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setSearchInput(value);
+                    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+                    searchDebounceRef.current = setTimeout(() => {
+                      startSearchTransition(() => setSearch(value));
+                    }, 180);
+                  }}
                 />
               </div>
               <select
                 className="ui-select text-xs shrink-0"
-                style={{ width: "8.5ch" }}
+                style={{ width: "17ch" }}
                 value={year}
                 onChange={(e) => setYear(e.target.value)}
               >
-                <option value="">전체</option>
+                <option value="">전체 연도</option>
                 {(tree?.availableYears ?? []).map((y) => (
-                  <option key={y} value={y}>{y}</option>
+                  <option key={y} value={y}>{y}년</option>
                 ))}
               </select>
             </div>
@@ -278,7 +290,7 @@ function ContractsInner() {
                 const style = resolveServiceTypeStyle(group.serviceType);
                 const ParentIcon = style.parentIcon;
                 const ChildIcon = style.childIcon;
-                const isOpen = expanded[group.serviceType] !== false;
+                const isOpen = expanded[group.serviceType] === true;
                 return (
                   <div key={group.serviceType} className="border-b border-stone-200/70">
                     <button
@@ -293,37 +305,17 @@ function ContractsInner() {
                     </button>
                     {isOpen && (
                       <div className="bg-white/40">
-                        {group.contracts.map((c, idx, arr) => {
-                          const isSelected = c.contractId === selectedId;
-                          const isLastChild = idx === arr.length - 1;
-                          return (
-                            <button
-                              type="button"
-                              key={c.contractId}
-                              onClick={() => setSelectedId(c.contractId)}
-                              className={
-                                "relative w-full flex items-center gap-2 pl-12 pr-3 py-2 text-left text-xs hover:bg-primary/5 " +
-                                (isSelected ? "bg-primary/10 border-l-4 border-primary" : "border-l-4 border-transparent")
-                              }
-                            >
-                              <span
-                                aria-hidden
-                                className={
-                                  "pointer-events-none absolute left-7 w-px bg-stone-300 " +
-                                  (isLastChild ? "top-0 h-1/2" : "top-0 bottom-0")
-                                }
-                              />
-                              <span
-                                aria-hidden
-                                className="pointer-events-none absolute left-7 top-1/2 w-3 h-px bg-stone-300"
-                              />
-                              <ChildIcon className={"w-3.5 h-3.5 fill-current " + style.childText} />
-                              <span className="flex-1 truncate font-bold text-stone-800">{c.contractTitle}</span>
-                              <span className="text-[10px] font-mono text-stone-400 ml-2 shrink-0">{c.contractDate ?? "-"}</span>
-                              <span className="text-[10px] font-mono text-stone-500 ml-1 shrink-0">{formatMoney(c.currentAmount)}</span>
-                            </button>
-                          );
-                        })}
+                        {group.contracts.map((c, idx, arr) => (
+                          <TreeChildRow
+                            key={c.contractId}
+                            contract={c}
+                            isSelected={c.contractId === selectedId}
+                            isLastChild={idx === arr.length - 1}
+                            childIconClass={style.childText}
+                            ChildIcon={ChildIcon}
+                            onSelect={selectContract}
+                          />
+                        ))}
                       </div>
                     )}
                   </div>
@@ -971,6 +963,56 @@ function Info({ label, value, highlight }: { label: string; value: unknown; high
     </div>
   );
 }
+
+interface TreeChildRowProps {
+  contract: ContractTreeContractNode;
+  isSelected: boolean;
+  isLastChild: boolean;
+  childIconClass: string;
+  ChildIcon: React.ComponentType<{ className?: string }>;
+  onSelect: (contractId: string) => void;
+}
+
+const TreeChildRow = memo(function TreeChildRow({
+  contract,
+  isSelected,
+  isLastChild,
+  childIconClass,
+  ChildIcon,
+  onSelect,
+}: TreeChildRowProps) {
+  const handleClick = useCallback(() => onSelect(contract.contractId), [onSelect, contract.contractId]);
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      className={
+        "relative w-full flex items-center gap-2 pl-12 pr-3 py-2 text-left text-xs hover:bg-primary/5 " +
+        (isSelected ? "bg-primary/10 border-l-4 border-primary" : "border-l-4 border-transparent")
+      }
+    >
+      <span
+        aria-hidden
+        className={
+          "pointer-events-none absolute left-7 w-px bg-stone-300 " +
+          (isLastChild ? "top-0 h-1/2" : "top-0 bottom-0")
+        }
+      />
+      <span
+        aria-hidden
+        className="pointer-events-none absolute left-7 top-1/2 w-3 h-px bg-stone-300"
+      />
+      <ChildIcon className={"w-3.5 h-3.5 fill-current shrink-0 " + childIconClass} />
+      <span className="flex-1 truncate font-bold text-stone-800">{contract.contractTitle}</span>
+      <span className="w-[88px] text-right text-[10px] font-mono text-stone-400 ml-2 shrink-0 tabular-nums">
+        {contract.contractDate ?? "-"}
+      </span>
+      <span className="w-[72px] text-right text-[10px] font-mono text-stone-500 ml-1 shrink-0 tabular-nums">
+        {formatMoney(contract.currentAmount)}
+      </span>
+    </button>
+  );
+});
 
 function formatMoney(value: unknown): string {
   const n = typeof value === "number" ? value : Number(value ?? 0);

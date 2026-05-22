@@ -14,34 +14,39 @@ export interface ServiceTypeStyle {
 }
 
 const FALLBACK: ServiceTypeStyle = {
-  parentColor: "#BFBFBF",
-  childColor: "#D9D9D9",
+  parentColor: "#7F7F7F",
+  childColor: "#BFBFBF",
 };
 
 /**
  * Lookup table by service-type keyword. The first entry whose `keys` substring
  * matches the contract's service_type wins.
+ *
+ * Each pair uses the Office "Accent + Lighter 40%" tonal pairing so the parent
+ * row is the saturated/darker variant and the child rows pick up the softer
+ * SERVICE_PALETTE shade used by the dashboard pie chart. This keeps the tree
+ * legible at a glance while still echoing the analytics palette.
  */
 const STYLE_TABLE: Array<{ keys: string[]; style: ServiceTypeStyle }> = [
   {
     keys: ["통합허가", "통합환경허가"],
-    style: { parentColor: "#F4B084", childColor: "#FBDDC7" },
+    style: { parentColor: "#ED7D31", childColor: "#F4B084" },
   },
   {
     keys: ["장외", "화관법", "장외&화관법", "장외영향평가", "유해화학물질"],
-    style: { parentColor: "#FFD966", childColor: "#FFEAA8" },
+    style: { parentColor: "#FFC000", childColor: "#FFD966" },
   },
   {
     keys: ["HAPs"],
-    style: { parentColor: "#A9D08E", childColor: "#D2E5C2" },
+    style: { parentColor: "#70AD47", childColor: "#A9D08E" },
   },
   {
     keys: ["ESG", "탄소중립", "ESG탄소중립"],
-    style: { parentColor: "#9BC2E6", childColor: "#CADBED" },
+    style: { parentColor: "#5B9BD5", childColor: "#9BC2E6" },
   },
   {
     keys: ["기술진단", "진단"],
-    style: { parentColor: "#F4A8A0", childColor: "#F8CFCB" },
+    style: { parentColor: "#E06666", childColor: "#F4A8A0" },
   },
   {
     keys: ["기타"],

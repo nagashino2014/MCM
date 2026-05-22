@@ -67,8 +67,33 @@ interface InvoiceModalState {
   collectionRatio: string;
   collectedAmount: string;
   paymentTerms: string;
+  partialPaymentMemo: string;
   memo: string;
   file: File | null;
+}
+
+interface ContractMilestoneDraft {
+  id: string;
+  stageLabel: string;
+  amount: string;
+  paymentTerms: string;
+}
+
+interface NewContractModalState {
+  contractTitle: string;
+  counterpartyQuery: string;
+  counterpartyEntityId: string;
+  counterpartyName: string;
+  serviceType: string;
+  serviceSubtype: string;
+  contractKind: "standard" | "unit_price";
+  contractDate: string;
+  startedAt: string;
+  endedAt: string;
+  currentAmount: string;
+  memo: string;
+  milestones: ContractMilestoneDraft[];
+  documentFile: File | null;
 }
 
 interface NewStageModalState {
@@ -77,14 +102,26 @@ interface NewStageModalState {
   paymentTerms: string;
 }
 
-interface PartialPaymentModalState {
+interface EditMilestoneModalState {
   milestoneId: string;
   stageLabel: string;
   baseAmount: number;
-  collectedAt: string;
   amount: string;
-  ratio: string;
-  memo: string;
+  paymentTerms: string;
+  issueDate: string;
+  invoiceAmount: string;
+  paymentCollected: boolean;
+  paymentCollectedAt: string;
+  collectedAmount: string;
+  collectionRatio: string;
+  partialPaymentMemo: string;
+  invoiceFile: File | null;
+}
+
+interface LegalEntitySearchItem {
+  entityId: string;
+  entityName: string;
+  businessRegistrationNo: string | null;
 }
 
 export default function ContractsPage() {
@@ -110,8 +147,9 @@ function ContractsInner() {
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [invoiceModal, setInvoiceModal] = useState<InvoiceModalState | null>(null);
+  const [newContractModal, setNewContractModal] = useState<NewContractModalState | null>(null);
   const [newStageModal, setNewStageModal] = useState<NewStageModalState | null>(null);
-  const [partialModal, setPartialModal] = useState<PartialPaymentModalState | null>(null);
+  const [editMilestoneModal, setEditMilestoneModal] = useState<EditMilestoneModalState | null>(null);
   const [changeModalOpen, setChangeModalOpen] = useState(false);
 
   const reloadTree = useCallback(async () => {
@@ -267,6 +305,14 @@ function ContractsInner() {
           <div className="flex items-center gap-2 mt-2">
             <button
               type="button"
+              onClick={() => setNewContractModal(createEmptyContractState())}
+              className="rounded-xl px-3 py-2 text-xs font-bold text-white bg-primary hover:bg-primary/90 shadow-sm flex items-center gap-1"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              신규 계약
+            </button>
+            <button
+              type="button"
               onClick={reloadTree}
               className="glass-button rounded-xl px-3 py-2 text-xs font-bold text-stone-700 flex items-center gap-1"
             >
@@ -378,7 +424,7 @@ function ContractsInner() {
                 detail={detail}
                 onOpenInvoice={setInvoiceModal}
                 onOpenNewStage={() => setNewStageModal({ stageLabel: "", amount: "", paymentTerms: "" })}
-                onOpenPartial={setPartialModal}
+                onOpenEditStage={setEditMilestoneModal}
                 onOpenChange={() => setChangeModalOpen(true)}
                 onDeleteStage={async (milestoneId) => {
                   if (!selected) return;
@@ -431,16 +477,30 @@ function ContractsInner() {
         />
       )}
 
-      {partialModal && selectedId && (
-        <PartialPaymentModal
+      {editMilestoneModal && selectedId && (
+        <EditMilestoneModal
           contractId={selectedId}
-          state={partialModal}
-          onChange={setPartialModal}
-          onClose={() => setPartialModal(null)}
+          state={editMilestoneModal}
+          onChange={setEditMilestoneModal}
+          onClose={() => setEditMilestoneModal(null)}
           onSaved={() => {
-            setPartialModal(null);
+            setEditMilestoneModal(null);
             if (selectedId) loadDetail(selectedId);
             reloadTree();
+          }}
+        />
+      )}
+
+      {newContractModal && (
+        <NewContractModal
+          state={newContractModal}
+          onChange={setNewContractModal}
+          onClose={() => setNewContractModal(null)}
+          onSaved={(contractId) => {
+            setNewContractModal(null);
+            setSelectedId(contractId);
+            reloadTree();
+            loadDetail(contractId);
           }}
         />
       )}
@@ -476,14 +536,14 @@ function ContractDetailPanel({
   detail,
   onOpenInvoice,
   onOpenNewStage,
-  onOpenPartial,
+  onOpenEditStage,
   onOpenChange,
   onDeleteStage,
 }: {
   detail: ContractDetail;
   onOpenInvoice: (state: InvoiceModalState) => void;
   onOpenNewStage: () => void;
-  onOpenPartial: (state: PartialPaymentModalState) => void;
+  onOpenEditStage: (state: EditMilestoneModalState) => void;
   onOpenChange: () => void;
   onDeleteStage: (milestoneId: string) => void;
 }) {
@@ -546,7 +606,7 @@ function ContractDetailPanel({
         <Info label="계약일" value={contract.contract_date ?? contract.started_at} />
         <Info
           label="계약금액"
-          value={baseAmount ? formatMoney(baseAmount) : "-"}
+          value={baseAmount ? formatExactAmount(baseAmount) : "-"}
           highlight
         />
         <Info label="업체명" value={contract.counterparty_name} />
@@ -556,7 +616,7 @@ function ContractDetailPanel({
         <Info label="준공일" value={contract.ended_at} />
         <Info
           label="수금 진척도"
-          value={`${Math.round(collectionRate * 100)}% (${formatMoney(collectedAmount)} / ${formatMoney(baseAmount)})`}
+          value={`${Math.round(collectionRate * 100)}% (${formatExactAmount(collectedAmount)} / ${formatExactAmount(baseAmount)})`}
         />
       </div>
 
@@ -624,6 +684,7 @@ function ContractDetailPanel({
                               collectionRatio: String(milestone.collection_ratio ?? "1"),
                               collectedAmount: String(milestone.collected_amount ?? milestone.amount ?? ""),
                               paymentTerms: String(milestone.payment_terms ?? ""),
+                              partialPaymentMemo: "",
                               memo: "",
                               file: null,
                             })
@@ -636,19 +697,25 @@ function ContractDetailPanel({
                           type="button"
                           className="rounded-lg px-2 py-1 text-[11px] border border-stone-300 text-stone-700 hover:bg-stone-100"
                           onClick={() =>
-                            onOpenPartial({
+                            onOpenEditStage({
                               milestoneId,
                               stageLabel: String(milestone.stage_label ?? ""),
                               baseAmount: stageAmount,
-                              collectedAt: new Date().toISOString().slice(0, 10),
-                              amount: "",
-                              ratio: "",
-                              memo: "",
+                              amount: String(milestone.amount ?? ""),
+                              paymentTerms: String(milestone.payment_terms ?? ""),
+                              issueDate: String(milestone.invoice_issued_at ?? ""),
+                              invoiceAmount: String(milestone.invoice_amount ?? milestone.amount ?? ""),
+                              paymentCollected: Number(milestone.payment_collected ?? 0) === 1,
+                              paymentCollectedAt: String(milestone.payment_collected_at ?? ""),
+                              collectedAmount: String(milestone.collected_amount ?? ""),
+                              collectionRatio: String(milestone.collection_ratio ?? ""),
+                              partialPaymentMemo: firstPartialPaymentMemo(milestone.partial_payments_json),
+                              invoiceFile: null,
                             })
                           }
-                          title="부분수금 추가"
+                          title="단계 수정"
                         >
-                          <Pencil className="w-3 h-3" />
+                          수정
                         </button>
                         <button
                           type="button"
@@ -729,6 +796,7 @@ function InvoiceUploadModal({
       form.set("collectionRatio", state.collectionRatio);
       form.set("collectedAmount", state.collectedAmount);
       form.set("paymentTerms", state.paymentTerms);
+      form.set("partialPaymentMemo", state.partialPaymentMemo);
       form.set("memo", state.memo);
       form.set("file", state.file);
       const res = await fetch(`/api/contracts/${encodeURIComponent(contractId)}/invoices`, { method: "POST", body: form });
@@ -750,7 +818,7 @@ function InvoiceUploadModal({
       <div className="p-5 grid gap-3 grid-cols-2">
         <label className="grid gap-1 text-sm col-span-2">
           <span className="font-bold text-stone-700">계산서 발행일</span>
-          <input type="date" className="input-field" value={state.issueDate} onChange={(e) => onChange({ ...state, issueDate: e.target.value })} />
+          <DateInput value={state.issueDate} onChange={(issueDate) => onChange({ ...state, issueDate })} />
         </label>
         <label className="grid gap-1 text-sm">
           <span className="font-bold text-stone-700">발행금액</span>
@@ -784,7 +852,7 @@ function InvoiceUploadModal({
           <>
             <label className="grid gap-1 text-sm">
               <span className="font-bold text-stone-700">수금일</span>
-              <input type="date" className="input-field" value={state.paymentCollectedAt} onChange={(e) => onChange({ ...state, paymentCollectedAt: e.target.value })} />
+              <DateInput value={state.paymentCollectedAt} onChange={(paymentCollectedAt) => onChange({ ...state, paymentCollectedAt })} />
             </label>
             <label className="grid gap-1 text-sm">
               <span className="font-bold text-stone-700">수금금액</span>
@@ -805,6 +873,15 @@ function InvoiceUploadModal({
                 }}
               />
             </label>
+            <label className="grid gap-1 text-sm col-span-2">
+              <span className="font-bold text-stone-700">부분입금 사유</span>
+              <textarea
+                className="input-field min-h-[84px]"
+                placeholder="예: 업체 자금 사정으로 일부만 입금, 착오입금 후 잔액 추후 입금 예정 등"
+                value={state.partialPaymentMemo}
+                onChange={(e) => onChange({ ...state, partialPaymentMemo: e.target.value })}
+              />
+            </label>
           </>
         )}
         <p className="text-xs text-stone-500 col-span-2">
@@ -815,6 +892,446 @@ function InvoiceUploadModal({
         <button type="button" onClick={onClose} className="glass-button rounded-xl px-4 py-2 text-sm font-bold text-stone-700">닫기</button>
         <button type="button" onClick={submit} disabled={saving} className="rounded-xl px-4 py-2 text-sm font-bold text-white bg-primary hover:bg-primary/90 shadow-sm disabled:opacity-60">
           {saving ? "저장 중..." : "입력"}
+        </button>
+      </div>
+    </ModalShell>
+  );
+}
+
+function NewContractModal({
+  state,
+  onChange,
+  onClose,
+  onSaved,
+}: {
+  state: NewContractModalState;
+  onChange: (state: NewContractModalState) => void;
+  onClose: () => void;
+  onSaved: (contractId: string) => void;
+}) {
+  const toast = useToast();
+  const [saving, setSaving] = useState(false);
+  const [tab, setTab] = useState<"basic" | "milestones" | "document">("basic");
+  const [entityOptions, setEntityOptions] = useState<LegalEntitySearchItem[]>([]);
+
+  useEffect(() => {
+    const q = state.counterpartyQuery.trim();
+    if (q.length < 2) {
+      setEntityOptions([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/legal-entities?q=${encodeURIComponent(q)}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!res.ok) return;
+        const json = (await res.json()) as { items?: LegalEntitySearchItem[] };
+        setEntityOptions(json.items ?? []);
+      } catch {
+        if (!controller.signal.aborted) setEntityOptions([]);
+      }
+    }, 160);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [state.counterpartyQuery]);
+
+  const updateMilestone = (id: string, patch: Partial<ContractMilestoneDraft>) => {
+    onChange({
+      ...state,
+      milestones: state.milestones.map((m) => (m.id === id ? { ...m, ...patch } : m)),
+    });
+  };
+
+  const submit = async () => {
+    if (!state.contractTitle.trim()) {
+      toast.show("계약명을 입력하세요.", "error");
+      setTab("basic");
+      return;
+    }
+    if (!state.counterpartyEntityId) {
+      toast.show("계약상대 업체를 선택하세요.", "error");
+      setTab("basic");
+      return;
+    }
+    if (!state.contractDate) {
+      toast.show("계약일을 입력하세요.", "error");
+      setTab("basic");
+      return;
+    }
+    const validMilestones = state.milestones.filter((m) => m.stageLabel.trim());
+    setSaving(true);
+    try {
+      const createRes = await fetch("/api/contracts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contractTitle: state.contractTitle,
+          counterpartyEntityId: state.counterpartyEntityId,
+          serviceType: state.serviceType || null,
+          serviceSubtype: state.serviceSubtype || null,
+          contractKind: state.contractKind,
+          contractDate: state.contractDate,
+          startedAt: state.startedAt || state.contractDate,
+          endedAt: state.endedAt || null,
+          contractAmount: state.currentAmount ? Number(state.currentAmount) : null,
+          originalAmount: state.currentAmount ? Number(state.currentAmount) : null,
+          currentAmount: state.currentAmount ? Number(state.currentAmount) : null,
+          memo: state.memo || null,
+        }),
+      });
+      if (!createRes.ok) {
+        const body = await createRes.json().catch(() => ({}));
+        throw new Error(body?.error ?? "HTTP " + createRes.status);
+      }
+      const { contractId } = (await createRes.json()) as { contractId: string };
+
+      for (let i = 0; i < validMilestones.length; i++) {
+        const m = validMilestones[i];
+        const res = await fetch(`/api/contracts/${encodeURIComponent(contractId)}/milestones`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            stageLabel: m.stageLabel,
+            stageOrder: i + 1,
+            amount: m.amount ? Number(m.amount) : null,
+            paymentTerms: m.paymentTerms || null,
+          }),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body?.error ?? "단계 저장 실패");
+        }
+      }
+
+      if (state.documentFile) {
+        const form = new FormData();
+        form.set("documentType", "contract");
+        form.set("documentDate", state.contractDate);
+        form.set("file", state.documentFile);
+        const res = await fetch(`/api/contracts/${encodeURIComponent(contractId)}/documents`, {
+          method: "POST",
+          body: form,
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body?.error ?? "계약서 업로드 실패");
+        }
+      }
+
+      toast.show("신규 계약이 등록되었습니다.", "success");
+      onSaved(contractId);
+    } catch (err) {
+      toast.show("등록 실패: " + (err as Error).message, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <ModalShell title="신규 계약 입력" onClose={onClose} wide>
+      <div className="border-b border-stone-200/70 px-5 pt-4 flex gap-2">
+        {[
+          ["basic", "계약 상세정보"],
+          ["milestones", "청구·수금 단계"],
+          ["document", "계약서 PDF"],
+        ].map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setTab(key as typeof tab)}
+            className={
+              "rounded-t-xl px-3 py-2 text-xs border border-b-0 " +
+              (tab === key ? "bg-white text-primary border-primary/30" : "bg-stone-50 text-stone-500 border-stone-200")
+            }
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="p-5 min-h-[520px]">
+        {tab === "basic" && (
+          <div className="grid grid-cols-2 gap-3">
+            <label className="grid gap-1 text-sm col-span-2">
+              <span className="font-bold text-stone-700">계약명</span>
+              <input className="input-field" value={state.contractTitle} onChange={(e) => onChange({ ...state, contractTitle: e.target.value })} />
+            </label>
+            <label className="grid gap-1 text-sm col-span-2 relative">
+              <span className="font-bold text-stone-700">계약상대 업체</span>
+              <input
+                className="input-field"
+                placeholder="업체명 또는 사업자번호 검색"
+                value={state.counterpartyQuery}
+                onChange={(e) => onChange({ ...state, counterpartyQuery: e.target.value, counterpartyEntityId: "", counterpartyName: "" })}
+              />
+              {state.counterpartyName && <p className="text-xs text-primary">선택됨: {state.counterpartyName}</p>}
+              {entityOptions.length > 0 && !state.counterpartyEntityId && (
+                <div className="absolute z-10 top-[70px] left-0 right-0 rounded-xl border border-stone-200 bg-white shadow-lg max-h-56 overflow-y-auto">
+                  {entityOptions.map((entity) => (
+                    <button
+                      key={entity.entityId}
+                      type="button"
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-primary/5"
+                      onClick={() =>
+                        onChange({
+                          ...state,
+                          counterpartyEntityId: entity.entityId,
+                          counterpartyName: entity.entityName,
+                          counterpartyQuery: entity.entityName,
+                        })
+                      }
+                    >
+                      <span className="text-stone-800">{entity.entityName}</span>
+                      <span className="ml-2 text-xs text-stone-400">{entity.businessRegistrationNo ?? ""}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="font-bold text-stone-700">용역분류</span>
+              <input className="input-field" value={state.serviceType} onChange={(e) => onChange({ ...state, serviceType: e.target.value })} placeholder="예: 통합허가" />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="font-bold text-stone-700">용역세분류</span>
+              <input className="input-field" value={state.serviceSubtype} onChange={(e) => onChange({ ...state, serviceSubtype: e.target.value })} placeholder="예: 변경허가" />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="font-bold text-stone-700">계약 종류</span>
+              <select className="ui-select" value={state.contractKind} onChange={(e) => onChange({ ...state, contractKind: e.target.value as "standard" | "unit_price" })}>
+                <option value="standard">일반 계약</option>
+                <option value="unit_price">단가 계약</option>
+              </select>
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="font-bold text-stone-700">계약금액</span>
+              <input className="input-field tabular-nums" inputMode="numeric" value={formatThousands(state.currentAmount)} onChange={(e) => onChange({ ...state, currentAmount: stripDigits(e.target.value) })} />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="font-bold text-stone-700">계약일</span>
+              <DateInput value={state.contractDate} onChange={(contractDate) => onChange({ ...state, contractDate, startedAt: state.startedAt || contractDate })} />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="font-bold text-stone-700">준공일</span>
+              <DateInput value={state.endedAt} onChange={(endedAt) => onChange({ ...state, endedAt })} />
+            </label>
+            <label className="grid gap-1 text-sm col-span-2">
+              <span className="font-bold text-stone-700">메모</span>
+              <textarea className="input-field min-h-[90px]" value={state.memo} onChange={(e) => onChange({ ...state, memo: e.target.value })} />
+            </label>
+          </div>
+        )}
+
+        {tab === "milestones" && (
+          <div className="grid gap-3">
+            {state.milestones.map((m, idx) => (
+              <div key={m.id} className="grid grid-cols-[56px_1fr_150px_1.2fr_40px] gap-2 items-end rounded-2xl border border-stone-200 bg-white/60 p-3">
+                <div className="text-xs text-stone-500 pb-2">{idx + 1}차</div>
+                <label className="grid gap-1 text-xs">
+                  <span className="text-stone-500">단계명</span>
+                  <input className="input-field" value={m.stageLabel} onChange={(e) => updateMilestone(m.id, { stageLabel: e.target.value })} placeholder="선급금 / 중도금1 / 준공금" />
+                </label>
+                <label className="grid gap-1 text-xs">
+                  <span className="text-stone-500">청구금액</span>
+                  <input className="input-field tabular-nums" inputMode="numeric" value={formatThousands(m.amount)} onChange={(e) => updateMilestone(m.id, { amount: stripDigits(e.target.value) })} />
+                </label>
+                <label className="grid gap-1 text-xs">
+                  <span className="text-stone-500">대금 지급 조건</span>
+                  <input className="input-field" value={m.paymentTerms} onChange={(e) => updateMilestone(m.id, { paymentTerms: e.target.value })} placeholder="세금계산서 발행 후 30일 이내" />
+                </label>
+                <button type="button" className="rounded-lg p-2 text-rose-600 hover:bg-rose-50" onClick={() => onChange({ ...state, milestones: state.milestones.filter((item) => item.id !== m.id) })}>
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              className="glass-button rounded-xl px-3 py-2 text-sm text-stone-700 inline-flex items-center gap-2 justify-center"
+              onClick={() => onChange({ ...state, milestones: [...state.milestones, createMilestoneDraft()] })}
+            >
+              <Plus className="w-4 h-4" />
+              단계 추가
+            </button>
+          </div>
+        )}
+
+        {tab === "document" && (
+          <div className="grid gap-4">
+            <label className="grid gap-1 text-sm">
+              <span className="font-bold text-stone-700">계약서 PDF 첨부</span>
+              <input
+                type="file"
+                accept="application/pdf,.pdf"
+                className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-2 file:text-xs file:font-bold file:text-white"
+                onChange={(e) => onChange({ ...state, documentFile: e.target.files?.[0] ?? null })}
+              />
+            </label>
+            <p className="text-xs text-stone-500">
+              저장 경로는 계약일 기준 <code>매출계약서/년도/(계약일) 계약명</code> 논리 경로로 생성됩니다.
+            </p>
+          </div>
+        )}
+      </div>
+
+      <div className="p-5 pt-0 border-t border-stone-200/70 flex justify-end gap-2 mt-2">
+        <button type="button" onClick={onClose} className="glass-button rounded-xl px-4 py-2 text-sm font-bold text-stone-700">닫기</button>
+        <button type="button" onClick={submit} disabled={saving} className="rounded-xl px-4 py-2 text-sm font-bold text-white bg-primary hover:bg-primary/90 shadow-sm disabled:opacity-60">
+          {saving ? "저장 중..." : "계약 등록"}
+        </button>
+      </div>
+    </ModalShell>
+  );
+}
+
+function EditMilestoneModal({
+  contractId,
+  state,
+  onChange,
+  onClose,
+  onSaved,
+}: {
+  contractId: string;
+  state: EditMilestoneModalState;
+  onChange: (state: EditMilestoneModalState) => void;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const toast = useToast();
+  const [saving, setSaving] = useState(false);
+
+  const submit = async () => {
+    setSaving(true);
+    try {
+      const patchRes = await fetch(
+        `/api/contracts/${encodeURIComponent(contractId)}/milestones/${encodeURIComponent(state.milestoneId)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            stageLabel: state.stageLabel,
+            amount: state.amount ? Number(state.amount) : null,
+            paymentTerms: state.paymentTerms || null,
+            invoiceIssued: Boolean(state.issueDate),
+            invoiceIssuedAt: state.issueDate || null,
+            invoiceAmount: state.invoiceAmount ? Number(state.invoiceAmount) : null,
+            paymentCollected: state.paymentCollected,
+            paymentCollectedAt: state.paymentCollectedAt || null,
+            collectionRatio: state.collectionRatio ? Number(state.collectionRatio) : null,
+            collectedAmount: state.collectedAmount ? Number(state.collectedAmount) : null,
+            partialPaymentMemo: state.paymentCollected && !state.invoiceFile ? state.partialPaymentMemo : undefined,
+          }),
+        }
+      );
+      if (!patchRes.ok) {
+        const body = await patchRes.json().catch(() => ({}));
+        throw new Error(body?.error ?? "HTTP " + patchRes.status);
+      }
+
+      if (state.invoiceFile) {
+        const form = new FormData();
+        form.set("milestoneId", state.milestoneId);
+        form.set("issueDate", state.issueDate);
+        form.set("invoiceAmount", state.invoiceAmount);
+        form.set("paymentCollected", state.paymentCollected ? "1" : "0");
+        form.set("paymentCollectedAt", state.paymentCollectedAt);
+        form.set("collectionRatio", state.collectionRatio);
+        form.set("collectedAmount", state.collectedAmount);
+        form.set("paymentTerms", state.paymentTerms);
+        form.set("partialPaymentMemo", state.partialPaymentMemo);
+        form.set("file", state.invoiceFile);
+        const uploadRes = await fetch(`/api/contracts/${encodeURIComponent(contractId)}/invoices`, {
+          method: "POST",
+          body: form,
+        });
+        if (!uploadRes.ok) {
+          const body = await uploadRes.json().catch(() => ({}));
+          throw new Error(body?.error ?? "계산서 교체 실패");
+        }
+      }
+
+      toast.show("청구·수금 단계가 수정되었습니다.", "success");
+      onSaved();
+    } catch (err) {
+      toast.show("수정 실패: " + (err as Error).message, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <ModalShell title={`${state.stageLabel} 단계 수정`} onClose={onClose}>
+      <div className="p-5 grid gap-3 grid-cols-2">
+        <label className="grid gap-1 text-sm">
+          <span className="font-bold text-stone-700">단계명</span>
+          <input className="input-field" value={state.stageLabel} onChange={(e) => onChange({ ...state, stageLabel: e.target.value })} />
+        </label>
+        <label className="grid gap-1 text-sm">
+          <span className="font-bold text-stone-700">청구금액</span>
+          <input className="input-field tabular-nums" inputMode="numeric" value={formatThousands(state.amount)} onChange={(e) => onChange({ ...state, amount: stripDigits(e.target.value) })} />
+        </label>
+        <label className="grid gap-1 text-sm col-span-2">
+          <span className="font-bold text-stone-700">대금 지급 조건</span>
+          <input className="input-field" value={state.paymentTerms} onChange={(e) => onChange({ ...state, paymentTerms: e.target.value })} />
+        </label>
+        <label className="grid gap-1 text-sm">
+          <span className="font-bold text-stone-700">계산서 발행일</span>
+          <DateInput value={state.issueDate} onChange={(issueDate) => onChange({ ...state, issueDate })} />
+        </label>
+        <label className="grid gap-1 text-sm">
+          <span className="font-bold text-stone-700">계산서 발행금액</span>
+          <input className="input-field tabular-nums" inputMode="numeric" value={formatThousands(state.invoiceAmount)} onChange={(e) => onChange({ ...state, invoiceAmount: stripDigits(e.target.value) })} />
+        </label>
+        <label className="grid gap-1 text-sm col-span-2">
+          <span className="font-bold text-stone-700">세금계산서 교체 PDF</span>
+          <input
+            type="file"
+            accept="application/pdf,.pdf"
+            className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-2 file:text-xs file:font-bold file:text-white"
+            onChange={(e) => onChange({ ...state, invoiceFile: e.target.files?.[0] ?? null })}
+          />
+          <span className="text-xs text-stone-500">파일을 선택하면 새 계산서 PDF가 같은 단계의 최신 계산서로 추가 등록됩니다.</span>
+        </label>
+        <label className="flex items-center gap-2 text-sm font-bold text-stone-700 col-span-2">
+          <input type="checkbox" checked={state.paymentCollected} onChange={(e) => onChange({ ...state, paymentCollected: e.target.checked })} />
+          수금 정보 등록
+        </label>
+        {state.paymentCollected && (
+          <>
+            <label className="grid gap-1 text-sm">
+              <span className="font-bold text-stone-700">수금일</span>
+              <DateInput value={state.paymentCollectedAt} onChange={(paymentCollectedAt) => onChange({ ...state, paymentCollectedAt })} />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="font-bold text-stone-700">수금금액</span>
+              <input
+                className="input-field tabular-nums"
+                inputMode="numeric"
+                value={formatThousands(state.collectedAmount)}
+                onChange={(e) => {
+                  const digits = stripDigits(e.target.value);
+                  const amount = Number(digits || "0");
+                  const base = Number(state.amount || state.baseAmount || 0);
+                  const ratio = base > 0 ? String(Math.round((amount / base) * 10000) / 10000) : "";
+                  onChange({ ...state, collectedAmount: digits, collectionRatio: ratio });
+                }}
+              />
+            </label>
+            <label className="grid gap-1 text-sm col-span-2">
+              <span className="font-bold text-stone-700">부분입금 사유</span>
+              <textarea className="input-field min-h-[84px]" value={state.partialPaymentMemo} onChange={(e) => onChange({ ...state, partialPaymentMemo: e.target.value })} />
+            </label>
+          </>
+        )}
+      </div>
+      <div className="p-5 pt-0 border-t border-stone-200/70 flex justify-end gap-2 mt-2">
+        <button type="button" onClick={onClose} className="glass-button rounded-xl px-4 py-2 text-sm font-bold text-stone-700">닫기</button>
+        <button type="button" onClick={submit} disabled={saving} className="rounded-xl px-4 py-2 text-sm font-bold text-white bg-primary hover:bg-primary/90 shadow-sm disabled:opacity-60">
+          {saving ? "저장 중..." : "수정"}
         </button>
       </div>
     </ModalShell>
@@ -894,112 +1411,10 @@ function NewStageModal({
   );
 }
 
-function PartialPaymentModal({
-  contractId,
-  state,
-  onChange,
-  onClose,
-  onSaved,
-}: {
-  contractId: string;
-  state: PartialPaymentModalState;
-  onChange: (state: PartialPaymentModalState) => void;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const toast = useToast();
-  const [saving, setSaving] = useState(false);
-
-  const submit = async () => {
-    if (!state.collectedAt) {
-      toast.show("수금일을 입력하세요.", "error");
-      return;
-    }
-    if (!state.amount && !state.ratio) {
-      toast.show("수금금액 또는 수금비율 중 하나는 입력하세요.", "error");
-      return;
-    }
-    setSaving(true);
-    try {
-      const res = await fetch(
-        `/api/contracts/${encodeURIComponent(contractId)}/milestones/${encodeURIComponent(state.milestoneId)}/payments`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            collectedAt: state.collectedAt,
-            amount: state.amount ? Number(state.amount) : null,
-            ratio: state.ratio ? Number(state.ratio) : null,
-            memo: state.memo || null,
-          }),
-        }
-      );
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body?.error ?? "HTTP " + res.status);
-      }
-      toast.show("부분수금이 추가되었습니다.", "success");
-      onSaved();
-    } catch (err) {
-      toast.show("저장 실패: " + (err as Error).message, "error");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <ModalShell title={`${state.stageLabel} 부분수금 추가`} onClose={onClose}>
-      <div className="p-5 grid gap-3 grid-cols-2">
-        <label className="grid gap-1 text-sm col-span-2">
-          <span className="font-bold text-stone-700">수금일</span>
-          <input type="date" className="input-field" value={state.collectedAt} onChange={(e) => onChange({ ...state, collectedAt: e.target.value })} />
-        </label>
-        <label className="grid gap-1 text-sm">
-          <span className="font-bold text-stone-700">수금금액</span>
-          <input type="number" className="input-field" value={state.amount}
-            onChange={(e) => {
-              const v = e.target.value;
-              const amt = Number(v);
-              const ratio = Number.isFinite(amt) && state.baseAmount > 0
-                ? String(Math.round((amt / state.baseAmount) * 10000) / 10000)
-                : state.ratio;
-              onChange({ ...state, amount: v, ratio });
-            }} />
-        </label>
-        <label className="grid gap-1 text-sm">
-          <span className="font-bold text-stone-700">수금비율 (0~1)</span>
-          <input type="number" step="0.0001" min="0" max="1" className="input-field" value={state.ratio}
-            onChange={(e) => {
-              const v = e.target.value;
-              const ratio = Number(v);
-              const amount = Number.isFinite(ratio) && state.baseAmount > 0
-                ? String(Math.round(state.baseAmount * ratio))
-                : state.amount;
-              onChange({ ...state, ratio: v, amount });
-            }} />
-        </label>
-        <label className="grid gap-1 text-sm col-span-2">
-          <span className="font-bold text-stone-700">메모</span>
-          <input type="text" className="input-field" value={state.memo} onChange={(e) => onChange({ ...state, memo: e.target.value })} />
-        </label>
-        <p className="text-xs text-stone-500 col-span-2">
-          이 단계의 청구금액({formatMoney(state.baseAmount)})에 대해 누적 수금비율과 수금금액이 자동 갱신됩니다.
-        </p>
-      </div>
-      <div className="p-5 pt-0 border-t border-stone-200/70 flex justify-end gap-2 mt-2">
-        <button type="button" onClick={onClose} className="glass-button rounded-xl px-4 py-2 text-sm font-bold text-stone-700">닫기</button>
-        <button type="button" onClick={submit} disabled={saving} className="rounded-xl px-4 py-2 text-sm font-bold text-white bg-primary hover:bg-primary/90 shadow-sm disabled:opacity-60">
-          {saving ? "저장 중..." : "추가"}
-        </button>
-      </div>
-    </ModalShell>
-  );
-}
-
-function ModalShell({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+function ModalShell({ title, onClose, children, wide }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
   return (
     <div className="fixed inset-0 z-50 bg-stone-950/20 flex items-center justify-center p-4">
-      <div className="glass-panel rounded-3xl w-[min(640px,calc(100vw-32px))] max-h-[min(840px,calc(100vh-32px))] shadow-2xl overflow-hidden flex flex-col">
+      <div className={"glass-panel rounded-3xl max-h-[min(840px,calc(100vh-32px))] shadow-2xl overflow-hidden flex flex-col " + (wide ? "w-[min(960px,calc(100vw-32px))]" : "w-[min(640px,calc(100vw-32px))]")}>
         <div className="p-5 border-b border-stone-200/70 flex items-start justify-between gap-3">
           <h3 className="text-xl font-bold text-stone-800">{title}</h3>
           <button type="button" onClick={onClose} className="text-stone-400 hover:text-stone-700">
@@ -1141,6 +1556,91 @@ const TreeChildRow = memo(function TreeChildRow({
     </button>
   );
 });
+
+function DateInput({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const displayValue = value ? value.replace(/-/g, "") : "";
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type="text"
+        inputMode="numeric"
+        maxLength={8}
+        className="input-field tabular-nums"
+        placeholder="YYYYMMDD"
+        value={displayValue}
+        onChange={(e) => onChange(normalizeDateInput(e.target.value))}
+      />
+      <input
+        type="date"
+        className="ui-select w-[48px] px-2 text-transparent"
+        value={/^\d{4}-\d{2}-\d{2}$/.test(value) ? value : ""}
+        onChange={(e) => onChange(e.target.value)}
+        title="달력에서 선택"
+      />
+    </div>
+  );
+}
+
+function normalizeDateInput(value: string): string {
+  const digits = stripDigits(value).slice(0, 8);
+  if (digits.length !== 8) return digits;
+  const year = digits.slice(0, 4);
+  const month = digits.slice(4, 6);
+  const day = digits.slice(6, 8);
+  const iso = `${year}-${month}-${day}`;
+  const date = new Date(iso + "T00:00:00");
+  const valid =
+    !Number.isNaN(date.getTime()) &&
+    date.getFullYear() === Number(year) &&
+    date.getMonth() + 1 === Number(month) &&
+    date.getDate() === Number(day);
+  return valid ? iso : digits;
+}
+
+function createMilestoneDraft(): ContractMilestoneDraft {
+  return {
+    id: "draft_" + Math.random().toString(36).slice(2),
+    stageLabel: "",
+    amount: "",
+    paymentTerms: "",
+  };
+}
+
+function createEmptyContractState(): NewContractModalState {
+  return {
+    contractTitle: "",
+    counterpartyQuery: "",
+    counterpartyEntityId: "",
+    counterpartyName: "",
+    serviceType: "",
+    serviceSubtype: "",
+    contractKind: "standard",
+    contractDate: new Date().toISOString().slice(0, 10),
+    startedAt: "",
+    endedAt: "",
+    currentAmount: "",
+    memo: "",
+    milestones: [
+      { ...createMilestoneDraft(), stageLabel: "선급금" },
+      { ...createMilestoneDraft(), stageLabel: "준공금" },
+    ],
+    documentFile: null,
+  };
+}
+
+function firstPartialPaymentMemo(value: unknown): string {
+  if (!value) return "";
+  try {
+    const parsed = Array.isArray(value)
+      ? value
+      : typeof value === "string"
+        ? JSON.parse(value) as Array<{ memo?: unknown }>
+        : [];
+    return String(parsed.find((item) => item?.memo)?.memo ?? "");
+  } catch {
+    return "";
+  }
+}
 
 /**
  * Render a numeric amount with thousands separators for currency input fields

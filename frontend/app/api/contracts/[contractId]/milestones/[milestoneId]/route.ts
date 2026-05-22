@@ -34,6 +34,28 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     if (body.paymentCollectedAt !== undefined) pushSet("payment_collected_at", body.paymentCollectedAt || null);
     if (body.collectionRatio !== undefined) pushSet("collection_ratio", toNullableNumber(body.collectionRatio));
     if (body.collectedAmount !== undefined) pushSet("collected_amount", toNullableNumber(body.collectedAmount));
+    if (body.partialPaymentMemo !== undefined) {
+      const collectedAt = String(body.paymentCollectedAt ?? "").trim();
+      const amount = toNullableNumber(body.collectedAmount);
+      const ratio = toNullableNumber(body.collectionRatio);
+      const memo = String(body.partialPaymentMemo ?? "").trim();
+      setClauses.push(`partial_payments_json = $${values.length + 1}::jsonb`);
+      values.push(
+        collectedAt || amount != null || memo
+          ? JSON.stringify([
+              {
+                id: "manual_edit",
+                collectedAt: collectedAt || null,
+                amount: amount ?? 0,
+                ratio: ratio ?? 0,
+                memo: memo || null,
+                recordedBy: actor.userId,
+                recordedAt: new Date().toISOString(),
+              },
+            ])
+          : null
+      );
+    }
 
     if (setClauses.length === 0) {
       return NextResponse.json({ error: "수정할 항목이 없습니다." }, { status: 400 });

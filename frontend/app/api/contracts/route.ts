@@ -45,16 +45,16 @@ export async function POST(req: NextRequest) {
       await db.run(
         `INSERT INTO contracts
           (contract_id, facility_id, counterparty_entity_id, operating_relation_id,
-           contract_title, service_type, contract_status, contract_amount,
+           contract_title, service_type, service_subtype, contract_kind, contract_status, contract_amount,
            legacy_contract_no, legacy_company_id, contract_direction, industry_category,
            contract_date, started_at, ended_at, original_amount, current_amount,
            memo, created_at, updated_at)
          VALUES
           ($1, $2, $3, $4,
-           $5, $6, $7, $8,
-           $9, $10, $11, $12,
-           $13, $14, $15, $16, $17,
-           $18, $19, $20)`,
+           $5, $6, $7, $8, $9, $10,
+           $11, $12, $13, $14,
+           $15, $16, $17, $18, $19,
+           $20, $21, $22)`,
         [
           contractId,
           body.facilityId || null,
@@ -62,7 +62,9 @@ export async function POST(req: NextRequest) {
           body.operatingRelationId || null,
           contractTitle,
           body.serviceType || null,
-          body.contractStatus || "draft",
+          body.serviceSubtype || null,
+          body.contractKind || "standard",
+          body.contractStatus || "active",
           toNullableNumber(body.contractAmount),
           body.legacyContractNo || null,
           body.legacyCompanyId || null,

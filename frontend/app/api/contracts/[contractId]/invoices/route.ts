@@ -35,6 +35,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     const collectionRatio = toNullableNumber(form.get("collectionRatio"));
     const collectedAmount = toNullableNumber(form.get("collectedAmount"));
     const paymentTerms = String(form.get("paymentTerms") ?? "").trim() || null;
+    const partialPaymentMemo = String(form.get("partialPaymentMemo") ?? "").trim() || null;
     const memo = String(form.get("memo") ?? "").trim() || null;
 
     if (!(file instanceof File)) {
@@ -88,6 +89,20 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     const date = new Date(issueDate + "T00:00:00");
     const fiscalYear = date.getFullYear();
     const fiscalQuarter = Math.floor(date.getMonth() / 3) + 1;
+    const partialPaymentJson =
+      paymentCollected
+        ? JSON.stringify([
+            {
+              id: "invoice_" + invoiceId.slice(-12),
+              collectedAt: paymentCollectedAt,
+              amount: collectedAmount ?? invoiceAmount ?? 0,
+              ratio: collectionRatio ?? null,
+              memo: partialPaymentMemo,
+              recordedBy: actor.userId,
+              recordedAt: now,
+            },
+          ])
+        : null;
 
     await withDbWrite(async (db) => {
       await db.run(
@@ -159,10 +174,15 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
                payment_collected_at = COALESCE($4, payment_collected_at),
                collection_ratio = CASE WHEN $3 = 1 THEN COALESCE($5, collection_ratio, 1.0) ELSE collection_ratio END,
                collected_amount = CASE WHEN $3 = 1 THEN COALESCE($6, $2, collected_amount, amount) ELSE collected_amount END,
-               payment_terms = COALESCE($7, payment_terms),
-               updated_at = $8
-           WHERE milestone_id = $9
-             AND contract_id = $10`,
+              payment_terms = COALESCE($7, payment_terms),
+              partial_payments_json = CASE
+                WHEN $3 = 1 AND $8::jsonb IS NOT NULL
+                  THEN COALESCE(partial_payments_json, '[]'::jsonb) || $8::jsonb
+                ELSE partial_payments_json
+              END,
+              updated_at = $9
+           WHERE milestone_id = $10
+             AND contract_id = $11`,
           [
             issueDate,
             invoiceAmount,
@@ -171,6 +191,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
             collectionRatio,
             collectedAmount,
             paymentTerms,
+            partialPaymentJson,
             now,
             milestoneId,
             contractId,
@@ -182,7 +203,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
         action: "contract_invoice_upload",
         targetTable: "contract_invoices",
         targetId: invoiceId,
-        after: { contractId, milestoneId, issueDate, invoiceAmount, documentId, storageKey },
+        after: { contractId, milestoneId, issueDate, invoiceAmount, documentId, storageKey, partialPaymentMemo },
       });
     });
 

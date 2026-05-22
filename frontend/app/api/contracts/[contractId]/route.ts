@@ -48,6 +48,8 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
         pushSet("contract_title", title);
       }
       if (body.serviceType !== undefined) pushSet("service_type", body.serviceType || null);
+      if (body.serviceSubtype !== undefined) pushSet("service_subtype", body.serviceSubtype || null);
+      if (body.contractKind !== undefined) pushSet("contract_kind", body.contractKind || "standard");
       if (body.contractStatus !== undefined) pushSet("contract_status", body.contractStatus || "draft");
       if (body.contractAmount !== undefined) pushSet("contract_amount", toNullableNumber(body.contractAmount));
       if (body.legacyContractNo !== undefined) pushSet("legacy_contract_no", body.legacyContractNo || null);

@@ -52,6 +52,7 @@ export interface ContractTreeContractNode {
   serviceSubtype: string | null;
   currentAmount: number | null;
   contractDate: string | null;
+  contractStatus: string;
   /** True when the total collected amount has reached the full contract amount. */
   isFullyCollected: boolean;
 }
@@ -275,6 +276,7 @@ export async function listContractsForTree(year: string | null): Promise<Contrac
               e.entity_name AS counterparty_name,
               c.service_type,
               c.service_subtype,
+              c.contract_status,
               COALESCE(c.current_amount, c.contract_amount) AS current_amount,
               c.contract_date,
               COALESCE(ms.total_milestone_amount, 0) AS total_milestone_amount,
@@ -310,6 +312,7 @@ export async function listContractsForTree(year: string | null): Promise<Contrac
       serviceSubtype: row.service_subtype != null ? String(row.service_subtype) : null,
       currentAmount: toNumberOrNull(row.current_amount),
       contractDate: row.contract_date != null ? String(row.contract_date) : null,
+      contractStatus: String(row.contract_status ?? "active"),
       isFullyCollected: baseAmount > 0 && collected >= baseAmount,
     };
     if (!groupMap.has(serviceType)) groupMap.set(serviceType, []);
@@ -397,8 +400,20 @@ export async function getContractDetail(contractId: string) {
       [contractId]
     )
   );
+  const outsourcing = rowsToObjects(
+    await db.exec(
+      `SELECT o.*, e.entity_name AS counterparty_entity_name, d.public_path AS document_public_path,
+              d.display_name AS document_display_name
+       FROM contract_outsourcing o
+       LEFT JOIN legal_entities e ON e.entity_id = o.counterparty_entity_id
+       LEFT JOIN contract_documents d ON d.document_id = o.document_id
+       WHERE o.contract_id = $1
+       ORDER BY COALESCE(o.contract_date, o.created_at) DESC`,
+      [contractId]
+    )
+  );
 
-  return { contract, milestones, invoices, documents, changes };
+  return { contract, milestones, invoices, documents, changes, outsourcing };
 }
 
 export async function getContractDashboard(): Promise<ContractDashboard> {

@@ -87,6 +87,14 @@ export function buildInvoiceFileName(
   return sanitizeFilename(`(${issueDate})${title}${middle} 세금계산서.pdf`);
 }
 
+export function buildOutsourcingDocumentFileName(
+  date: string,
+  outsourcingTitle: string
+): string {
+  const title = sanitizePathSegment(outsourcingTitle);
+  return sanitizeFilename(`(${date})${title} 외주계약서.pdf`);
+}
+
 /**
  * S3 key for a contract document. The folder name is derived from the
  * *contract* date so amendments live alongside the original contract pdf.
@@ -120,6 +128,20 @@ export function getInvoiceStorageKey(params: {
   const fileName = buildInvoiceFileName(params.issueDate, params.contractTitle, params.stageLabel);
   const storageKey = ["contracts", "invoices", year, quarter, fileName].join("/");
   return { storageKey, fileName };
+}
+
+export function getOutsourcingDocumentStorageKey(params: {
+  contractDate: string;
+  documentDate: string;
+  contractTitle: string;
+  outsourcingTitle: string;
+}): { storageKey: string; fileName: string; folderName: string } {
+  const contractDate = parseIsoDate(params.contractDate, "계약일자");
+  const year = String(contractDate.getFullYear());
+  const folderName = sanitizePathSegment(`(${params.contractDate}) ${params.contractTitle}`);
+  const fileName = buildOutsourcingDocumentFileName(params.documentDate, params.outsourcingTitle);
+  const storageKey = ["contracts", "documents", year, folderName, fileName].join("/");
+  return { storageKey, fileName, folderName };
 }
 
 export async function putContractDocument(

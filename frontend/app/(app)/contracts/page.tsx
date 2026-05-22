@@ -33,6 +33,7 @@ interface ContractTreeContractNode {
   serviceSubtype: string | null;
   currentAmount: number | null;
   contractDate: string | null;
+  contractStatus: string;
   isFullyCollected: boolean;
 }
 
@@ -54,6 +55,7 @@ interface ContractDetail {
   invoices: Array<Record<string, unknown>>;
   documents: Array<Record<string, unknown>>;
   changes: Array<Record<string, unknown>>;
+  outsourcing: Array<Record<string, unknown>>;
 }
 
 interface InvoiceModalState {
@@ -78,6 +80,17 @@ interface ContractMilestoneDraft {
   paymentTerms: string;
 }
 
+interface OutsourcingDraft {
+  outsourcingTitle: string;
+  counterpartyQuery: string;
+  counterpartyEntityId: string;
+  counterpartyName: string;
+  serviceType: string;
+  contractDate: string;
+  endedAt: string;
+  memo: string;
+}
+
 interface NewContractModalState {
   contractTitle: string;
   counterpartyQuery: string;
@@ -92,6 +105,7 @@ interface NewContractModalState {
   currentAmount: string;
   memo: string;
   milestones: ContractMilestoneDraft[];
+  outsourcing: OutsourcingDraft;
 }
 
 interface NewStageModalState {
@@ -159,6 +173,8 @@ const CONTRACT_SERVICE_OPTIONS = [
     subtypes: ["기타", "총량제신고", "매체별인허가", "환경자문", "환경R&D", "기타인허가"],
   },
 ] as const;
+
+const DEFAULT_OUTSOURCING_TYPES = ["도면 작성", "산업안전 관련", "측정/분석", "디자인", "번역"];
 
 export default function ContractsPage() {
   return (
@@ -603,6 +619,8 @@ function ContractDetailPanel({
   );
   const collectionRate = baseAmount > 0 ? Math.min(1, collectedAmount / baseAmount) : 0;
   const contractKindLabel = String(contract.contract_kind ?? "standard") === "unit_price" ? "단가 계약" : "일반 계약";
+  const statusLabel = getContractStatusLabel(String(contract.contract_status ?? "active"));
+  const outsourcingCount = detail.outsourcing?.length ?? 0;
 
   return (
     <div className="flex flex-col gap-5">
@@ -665,6 +683,8 @@ function ContractDetailPanel({
         <Info label="용역분류" value={contract.service_type} />
         <Info label="용역세분류" value={contract.service_subtype} />
         <Info label="준공일" value={contract.ended_at} />
+        <Info label="계약 상태" value={statusLabel} highlight={String(contract.contract_status ?? "") !== "active"} />
+        <Info label="외주 용역" value={outsourcingCount > 0 ? `${outsourcingCount}건 등록` : "없음"} highlight={outsourcingCount > 0} />
         <Info
           label="수금 진척도"
           value={`${Math.round(collectionRate * 100)}% (${formatExactAmount(collectedAmount)} / ${formatExactAmount(baseAmount)})`}
@@ -972,10 +992,14 @@ function NewContractModal({
 }) {
   const toast = useToast();
   const [saving, setSaving] = useState(false);
-  const [tab, setTab] = useState<"basic" | "milestones" | "document">("basic");
+  const [tab, setTab] = useState<"basic" | "milestones" | "outsourcing" | "document">("basic");
   const [entityOptions, setEntityOptions] = useState<LegalEntitySearchItem[]>([]);
+  const [outsourcingEntityOptions, setOutsourcingEntityOptions] = useState<LegalEntitySearchItem[]>([]);
+  const [outsourcingTypeOptions, setOutsourcingTypeOptions] = useState(DEFAULT_OUTSOURCING_TYPES);
   const documentFileRef = useRef<File | null>(null);
   const [documentFileName, setDocumentFileName] = useState("");
+  const outsourcingFileRef = useRef<File | null>(null);
+  const [outsourcingFileName, setOutsourcingFileName] = useState("");
   const subtypeOptions = useMemo(
     () => CONTRACT_SERVICE_OPTIONS.find((item) => item.type === state.serviceType)?.subtypes ?? [],
     [state.serviceType]
@@ -1006,6 +1030,32 @@ function NewContractModal({
       controller.abort();
     };
   }, [state.counterpartyQuery]);
+
+  useEffect(() => {
+    const q = state.outsourcing.counterpartyQuery.trim();
+    if (q.length < 2) {
+      setOutsourcingEntityOptions([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/legal-entities?q=${encodeURIComponent(q)}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!res.ok) return;
+        const json = (await res.json()) as { items?: LegalEntitySearchItem[] };
+        setOutsourcingEntityOptions(json.items ?? []);
+      } catch {
+        if (!controller.signal.aborted) setOutsourcingEntityOptions([]);
+      }
+    }, 160);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [state.outsourcing.counterpartyQuery]);
 
   const updateMilestone = (id: string, patch: Partial<ContractMilestoneDraft>) => {
     onChange({
@@ -1091,6 +1141,27 @@ function NewContractModal({
         }
       }
 
+      if (state.outsourcing.outsourcingTitle.trim()) {
+        const outsourcingForm = new FormData();
+        outsourcingForm.set("outsourcingTitle", state.outsourcing.outsourcingTitle);
+        outsourcingForm.set("counterpartyEntityId", state.outsourcing.counterpartyEntityId);
+        outsourcingForm.set("counterpartyName", state.outsourcing.counterpartyName || state.outsourcing.counterpartyQuery);
+        outsourcingForm.set("serviceType", state.outsourcing.serviceType);
+        outsourcingForm.set("contractDate", state.outsourcing.contractDate);
+        outsourcingForm.set("endedAt", state.outsourcing.endedAt);
+        outsourcingForm.set("memo", state.outsourcing.memo);
+        const outsourcingFile = outsourcingFileRef.current;
+        if (outsourcingFile) outsourcingForm.set("file", outsourcingFile);
+        const res = await fetch(`/api/contracts/${encodeURIComponent(contractId)}/outsourcing`, {
+          method: "POST",
+          body: outsourcingForm,
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body?.error ?? "외주 용역 저장 실패");
+        }
+      }
+
       toast.show("신규 계약이 등록되었습니다.", "success");
       onSaved(contractId);
     } catch (err) {
@@ -1106,6 +1177,7 @@ function NewContractModal({
         {[
           ["basic", "계약 상세정보"],
           ["milestones", "청구·수금 단계"],
+          ["outsourcing", "외주 용역"],
           ["document", "계약서 PDF"],
         ].map(([key, label]) => (
           <button
@@ -1251,6 +1323,130 @@ function NewContractModal({
               <Plus className="w-4 h-4" />
               단계 추가
             </button>
+          </div>
+        )}
+
+        {tab === "outsourcing" && (
+          <div className="grid grid-cols-2 gap-3">
+            <label className="grid gap-1 text-sm col-span-2">
+              <span className="font-bold text-stone-700">외주 계약명</span>
+              <input
+                className="input-field"
+                value={state.outsourcing.outsourcingTitle}
+                onChange={(e) => onChange({ ...state, outsourcing: { ...state.outsourcing, outsourcingTitle: e.target.value } })}
+              />
+            </label>
+            <label className="grid gap-1 text-sm col-span-2 relative">
+              <span className="font-bold text-stone-700">계약상대 업체</span>
+              <input
+                className="input-field"
+                placeholder="업체명 또는 사업자번호 검색"
+                value={state.outsourcing.counterpartyQuery}
+                onChange={(e) => onChange({
+                  ...state,
+                  outsourcing: {
+                    ...state.outsourcing,
+                    counterpartyQuery: e.target.value,
+                    counterpartyEntityId: "",
+                    counterpartyName: "",
+                  },
+                })}
+              />
+              {state.outsourcing.counterpartyName && <p className="text-xs text-primary">선택됨: {state.outsourcing.counterpartyName}</p>}
+              {outsourcingEntityOptions.length > 0 && !state.outsourcing.counterpartyEntityId && (
+                <div className="absolute z-10 top-[70px] left-0 right-0 rounded-xl border border-stone-200 bg-white shadow-lg max-h-56 overflow-y-auto">
+                  {outsourcingEntityOptions.map((entity) => (
+                    <button
+                      key={entity.entityId}
+                      type="button"
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-primary/5"
+                      onClick={() =>
+                        onChange({
+                          ...state,
+                          outsourcing: {
+                            ...state.outsourcing,
+                            counterpartyEntityId: entity.entityId,
+                            counterpartyName: entity.entityName,
+                            counterpartyQuery: entity.entityName,
+                          },
+                        })
+                      }
+                    >
+                      <span className="text-stone-800">{entity.entityName}</span>
+                      <span className="ml-2 text-xs text-stone-400">{entity.businessRegistrationNo ?? ""}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="font-bold text-stone-700">용역분류</span>
+              <select
+                className="ui-select"
+                value={state.outsourcing.serviceType}
+                onChange={(e) => onChange({ ...state, outsourcing: { ...state.outsourcing, serviceType: e.target.value } })}
+              >
+                {outsourcingTypeOptions.map((type) => (
+                  <option key={type} value={type}>{type}</option>
+                ))}
+              </select>
+            </label>
+            <div className="flex items-end">
+              <button
+                type="button"
+                className="glass-button rounded-xl px-3 py-2 text-xs text-stone-700"
+                onClick={() => {
+                  const next = prompt("추가할 외주 용역 분류명을 입력하세요.");
+                  if (!next?.trim()) return;
+                  setOutsourcingTypeOptions((prev) => prev.includes(next.trim()) ? prev : [...prev, next.trim()]);
+                  onChange({ ...state, outsourcing: { ...state.outsourcing, serviceType: next.trim() } });
+                }}
+              >
+                분류 추가
+              </button>
+              <button
+                type="button"
+                className="ml-2 glass-button rounded-xl px-3 py-2 text-xs text-rose-600"
+                onClick={() => {
+                  if (outsourcingTypeOptions.length <= 1) return;
+                  const next = outsourcingTypeOptions.filter((type) => type !== state.outsourcing.serviceType);
+                  setOutsourcingTypeOptions(next);
+                  onChange({ ...state, outsourcing: { ...state.outsourcing, serviceType: next[0] ?? "" } });
+                }}
+              >
+                삭제
+              </button>
+            </div>
+            <label className="grid gap-1 text-sm">
+              <span className="font-bold text-stone-700">계약일</span>
+              <DateInput value={state.outsourcing.contractDate} onChange={(contractDate) => onChange({ ...state, outsourcing: { ...state.outsourcing, contractDate } })} />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="font-bold text-stone-700">준공일</span>
+              <DateInput value={state.outsourcing.endedAt} onChange={(endedAt) => onChange({ ...state, outsourcing: { ...state.outsourcing, endedAt } })} />
+            </label>
+            <label className="grid gap-1 text-sm col-span-2">
+              <span className="font-bold text-stone-700">메모</span>
+              <textarea
+                className="input-field min-h-[90px]"
+                value={state.outsourcing.memo}
+                onChange={(e) => onChange({ ...state, outsourcing: { ...state.outsourcing, memo: e.target.value } })}
+              />
+            </label>
+            <label className="grid gap-1 text-sm col-span-2">
+              <span className="font-bold text-stone-700">외주 계약서 PDF 첨부</span>
+              <input
+                type="file"
+                accept="application/pdf,.pdf"
+                className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-2 file:text-xs file:font-bold file:text-white"
+                onChange={(e) => {
+                  const nextFile = e.target.files?.[0] ?? null;
+                  outsourcingFileRef.current = nextFile;
+                  setOutsourcingFileName(nextFile?.name ?? "");
+                }}
+              />
+              {outsourcingFileName && <span className="text-xs text-stone-500">선택됨: {outsourcingFileName}</span>}
+            </label>
           </div>
         )}
 
@@ -1733,6 +1929,16 @@ const TreeChildRow = memo(function TreeChildRow({
       />
       <span className="flex items-center gap-1.5 flex-1 min-w-0">
         <span className="truncate text-stone-800">{contract.contractTitle}</span>
+        {contract.contractStatus === "terminated" && (
+          <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] text-white" style={{ background: "#FF7171" }}>
+            계약해지
+          </span>
+        )}
+        {contract.contractStatus === "suspended" && (
+          <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] text-stone-800" style={{ background: "#FFD966" }}>
+            계약중지
+          </span>
+        )}
         {contract.isFullyCollected && (
           <span
             aria-label="수금 완료"
@@ -1820,6 +2026,16 @@ function createEmptyContractState(): NewContractModalState {
       { ...createMilestoneDraft(), stageLabel: "선급금" },
       { ...createMilestoneDraft(), stageLabel: "준공금" },
     ],
+    outsourcing: {
+      outsourcingTitle: "",
+      counterpartyQuery: "",
+      counterpartyEntityId: "",
+      counterpartyName: "",
+      serviceType: DEFAULT_OUTSOURCING_TYPES[0],
+      contractDate: "",
+      endedAt: "",
+      memo: "",
+    },
   };
 }
 
@@ -1835,6 +2051,14 @@ function firstPartialPaymentMemo(value: unknown): string {
   } catch {
     return "";
   }
+}
+
+function getContractStatusLabel(status: string): string {
+  if (status === "terminated") return "계약해지";
+  if (status === "suspended") return "계약중지";
+  if (status === "completed") return "완료";
+  if (status === "draft") return "초안";
+  return "진행중";
 }
 
 /**

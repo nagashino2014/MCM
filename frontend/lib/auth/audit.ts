@@ -38,6 +38,7 @@ export type AuditAction =
   | "contract_payment_update"
   | "contract_invoice_upload"
   | "contract_document_upload"
+  | "contract_outsourcing_update"
   | "contract_dedupe_resolve"
   | "permit_create"
   | "permit_update"

@@ -59,6 +59,10 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       if (body.contractDate !== undefined) pushSet("contract_date", body.contractDate || null);
       if (body.startedAt !== undefined) pushSet("started_at", body.startedAt || null);
       if (body.endedAt !== undefined) pushSet("ended_at", body.endedAt || null);
+      if (body.contractTerminatedAt !== undefined) pushSet("contract_terminated_at", body.contractTerminatedAt || null);
+      if (body.contractTerminationReason !== undefined) pushSet("contract_termination_reason", body.contractTerminationReason || null);
+      if (body.contractSuspendedAt !== undefined) pushSet("contract_suspended_at", body.contractSuspendedAt || null);
+      if (body.contractSuspensionReason !== undefined) pushSet("contract_suspension_reason", body.contractSuspensionReason || null);
       if (body.originalAmount !== undefined) pushSet("original_amount", toNullableNumber(body.originalAmount));
       if (body.currentAmount !== undefined) pushSet("current_amount", toNullableNumber(body.currentAmount));
       if (body.memo !== undefined) pushSet("memo", body.memo || null);

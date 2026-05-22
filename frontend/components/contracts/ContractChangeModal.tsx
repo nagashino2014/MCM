@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
 
@@ -10,7 +10,8 @@ export interface ContractChangePayload {
   paymentTerms: Array<{ stageLabel: string; previous: string; next: string }>;
   serviceCategory: { previousType: string; previousSubtype: string; nextType: string; nextSubtype: string; changed: boolean };
   closing: { completionDate: string; permitAcquiredAt: string; etc: string };
-  termination: { terminated: boolean; terminatedAt: string };
+  termination: { terminatedAt: string; terminationReason: string; suspendedAt: string; suspensionReason: string };
+  outsourcing: { outsourcingTitle: string; counterpartyName: string; serviceType: string; contractDate: string; endedAt: string; memo: string };
   meta: { changedAt: string; enteredAt: string; memo: string };
 }
 
@@ -28,23 +29,32 @@ interface ContractChangeModalProps {
   onSaved: () => void;
 }
 
-type TabKey = "amount" | "period" | "terms" | "service" | "closing";
+type TabKey = "amount" | "period" | "terms" | "service" | "outsourcing" | "lifecycle" | "closing";
 
 const TABS: Array<{ key: TabKey; label: string }> = [
   { key: "amount", label: "금액" },
   { key: "period", label: "용역기간" },
   { key: "terms", label: "지급조건" },
   { key: "service", label: "용역분류" },
+  { key: "outsourcing", label: "외주 용역" },
+  { key: "lifecycle", label: "계약중지/해지" },
   { key: "closing", label: "준공일 및 기타" },
 ];
+
+const DEFAULT_OUTSOURCING_TYPES = ["도면 작성", "산업안전 관련", "측정/분석", "디자인", "번역"];
+const DEFAULT_TERMINATION_REASONS = ["사업장 폐쇄", "허가대상 제외", "대금 미지급"];
+const DEFAULT_SUSPENSION_REASONS = ["사업추진 유보", "가동 지연", "관련허가 지연", "대금 미지급"];
 
 export default function ContractChangeModal(props: ContractChangeModalProps) {
   const toast = useToast();
   const [activeTab, setActiveTab] = useState<TabKey>("amount");
   const [saving, setSaving] = useState(false);
-  const [terminated, setTerminated] = useState(false);
-  const [terminatedAt, setTerminatedAt] = useState("");
   const [meta, setMeta] = useState({ changedAt: new Date().toISOString().slice(0, 10), enteredAt: new Date().toISOString().slice(0, 10), memo: "" });
+  const outsourcingFileRef = useRef<File | null>(null);
+  const [outsourcingFileName, setOutsourcingFileName] = useState("");
+  const [outsourcingTypes, setOutsourcingTypes] = useState(DEFAULT_OUTSOURCING_TYPES);
+  const [terminationReasons, setTerminationReasons] = useState(DEFAULT_TERMINATION_REASONS);
+  const [suspensionReasons, setSuspensionReasons] = useState(DEFAULT_SUSPENSION_REASONS);
 
   const [amounts, setAmounts] = useState(
     props.initialMilestones.map((m) => ({
@@ -73,6 +83,20 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
   });
   const [closing, setClosing] = useState({ completionDate: "", permitAcquiredAt: "", etc: "" });
   const [amendmentFile, setAmendmentFile] = useState<File | null>(null);
+  const [outsourcing, setOutsourcing] = useState({
+    outsourcingTitle: "",
+    counterpartyName: "",
+    serviceType: DEFAULT_OUTSOURCING_TYPES[0],
+    contractDate: "",
+    endedAt: "",
+    memo: "",
+  });
+  const [lifecycle, setLifecycle] = useState({
+    terminatedAt: "",
+    terminationReason: DEFAULT_TERMINATION_REASONS[0],
+    suspendedAt: "",
+    suspensionReason: DEFAULT_SUSPENSION_REASONS[0],
+  });
 
   const newCurrentAmount = useMemo(() => {
     const totalNext = amounts.reduce((acc, item) => acc + (Number(item.nextAmount) || 0), 0);
@@ -94,7 +118,8 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
         paymentTerms,
         serviceCategory,
         closing,
-        termination: { terminated, terminatedAt },
+        termination: lifecycle,
+        outsourcing,
         meta,
       };
       const changedFields: string[] = [];
@@ -103,7 +128,8 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
       if (paymentTerms.some((t) => t.next !== "")) changedFields.push("paymentTerms");
       if (serviceCategory.changed || serviceCategory.nextType || serviceCategory.nextSubtype) changedFields.push("serviceCategory");
       if (closing.completionDate || closing.permitAcquiredAt || closing.etc) changedFields.push("closing");
-      if (terminated) changedFields.push("termination");
+      if (lifecycle.terminatedAt || lifecycle.suspendedAt) changedFields.push("termination");
+      if (outsourcing.outsourcingTitle) changedFields.push("outsourcing");
 
       const res = await fetch(`/api/contracts/${encodeURIComponent(props.contractId)}/changes`, {
         method: "POST",
@@ -121,9 +147,13 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
           payload,
           changedFields,
           newCurrentAmount,
-          newEndedAt: terminated ? terminatedAt : closing.completionDate || servicePeriod.next || undefined,
+          newEndedAt: lifecycle.terminatedAt || closing.completionDate || servicePeriod.next || undefined,
           newServiceType: serviceCategory.changed ? serviceCategory.nextType : undefined,
           newServiceSubtype: serviceCategory.changed ? serviceCategory.nextSubtype : undefined,
+          contractTerminatedAt: lifecycle.terminatedAt || undefined,
+          contractTerminationReason: lifecycle.terminatedAt ? lifecycle.terminationReason : undefined,
+          contractSuspendedAt: lifecycle.suspendedAt || undefined,
+          contractSuspensionReason: lifecycle.suspendedAt ? lifecycle.suspensionReason : undefined,
         }),
       });
       if (!res.ok) {
@@ -153,6 +183,26 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
           }
         } catch (uploadErr) {
           toast.show("변경계약서 PDF 업로드 실패: " + (uploadErr as Error).message, "error");
+        }
+      }
+
+      if (outsourcing.outsourcingTitle.trim()) {
+        const outsourcingForm = new FormData();
+        outsourcingForm.set("outsourcingTitle", outsourcing.outsourcingTitle);
+        outsourcingForm.set("counterpartyName", outsourcing.counterpartyName);
+        outsourcingForm.set("serviceType", outsourcing.serviceType);
+        outsourcingForm.set("contractDate", outsourcing.contractDate);
+        outsourcingForm.set("endedAt", outsourcing.endedAt);
+        outsourcingForm.set("memo", outsourcing.memo);
+        const file = outsourcingFileRef.current;
+        if (file) outsourcingForm.set("file", file);
+        const outsourcingRes = await fetch(`/api/contracts/${encodeURIComponent(props.contractId)}/outsourcing`, {
+          method: "POST",
+          body: outsourcingForm,
+        });
+        if (!outsourcingRes.ok) {
+          const body = await outsourcingRes.json().catch(() => ({}));
+          throw new Error(body?.error ?? "외주 용역 저장 실패");
         }
       }
 
@@ -310,6 +360,120 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
             </div>
           )}
 
+          {activeTab === "outsourcing" && (
+            <div className="grid grid-cols-2 gap-3">
+              <label className="grid gap-1 text-sm col-span-2">
+                <span className="font-bold text-stone-700">외주 계약명</span>
+                <input className="input-field" value={outsourcing.outsourcingTitle}
+                  onChange={(e) => setOutsourcing({ ...outsourcing, outsourcingTitle: e.target.value })} />
+              </label>
+              <label className="grid gap-1 text-sm col-span-2">
+                <span className="font-bold text-stone-700">계약상대 업체</span>
+                <input className="input-field" value={outsourcing.counterpartyName}
+                  onChange={(e) => setOutsourcing({ ...outsourcing, counterpartyName: e.target.value })} />
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="font-bold text-stone-700">용역분류</span>
+                <select className="ui-select" value={outsourcing.serviceType}
+                  onChange={(e) => setOutsourcing({ ...outsourcing, serviceType: e.target.value })}>
+                  {outsourcingTypes.map((type) => <option key={type} value={type}>{type}</option>)}
+                </select>
+              </label>
+              <div className="flex items-end gap-2">
+                <button type="button" className="glass-button rounded-xl px-3 py-2 text-xs text-stone-700"
+                  onClick={() => {
+                    const next = prompt("추가할 외주 용역 분류명을 입력하세요.");
+                    if (!next?.trim()) return;
+                    setOutsourcingTypes((prev) => prev.includes(next.trim()) ? prev : [...prev, next.trim()]);
+                    setOutsourcing({ ...outsourcing, serviceType: next.trim() });
+                  }}>
+                  분류 추가
+                </button>
+                <button type="button" className="glass-button rounded-xl px-3 py-2 text-xs text-rose-600"
+                  onClick={() => {
+                    if (outsourcingTypes.length <= 1) return;
+                    const next = outsourcingTypes.filter((type) => type !== outsourcing.serviceType);
+                    setOutsourcingTypes(next);
+                    setOutsourcing({ ...outsourcing, serviceType: next[0] ?? "" });
+                  }}>
+                  삭제
+                </button>
+              </div>
+              <label className="grid gap-1 text-sm">
+                <span className="font-bold text-stone-700">계약일</span>
+                <input type="date" className="input-field" value={outsourcing.contractDate}
+                  onChange={(e) => setOutsourcing({ ...outsourcing, contractDate: e.target.value })} />
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="font-bold text-stone-700">준공일</span>
+                <input type="date" className="input-field" value={outsourcing.endedAt}
+                  onChange={(e) => setOutsourcing({ ...outsourcing, endedAt: e.target.value })} />
+              </label>
+              <label className="grid gap-1 text-sm col-span-2">
+                <span className="font-bold text-stone-700">메모</span>
+                <textarea className="input-field min-h-[80px]" value={outsourcing.memo}
+                  onChange={(e) => setOutsourcing({ ...outsourcing, memo: e.target.value })} />
+              </label>
+              <label className="grid gap-1 text-sm col-span-2">
+                <span className="font-bold text-stone-700">외주 계약서 PDF</span>
+                <input
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-2 file:text-xs file:font-bold file:text-white"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] ?? null;
+                    outsourcingFileRef.current = file;
+                    setOutsourcingFileName(file?.name ?? "");
+                  }}
+                />
+                {outsourcingFileName && <span className="text-[11px] text-stone-500">선택됨: {outsourcingFileName}</span>}
+              </label>
+            </div>
+          )}
+
+          {activeTab === "lifecycle" && (
+            <div className="grid grid-cols-2 gap-3">
+              <label className="grid gap-1 text-sm">
+                <span className="font-bold text-stone-700">계약해지일</span>
+                <input type="date" className="input-field" value={lifecycle.terminatedAt}
+                  onChange={(e) => setLifecycle({ ...lifecycle, terminatedAt: e.target.value })} />
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="font-bold text-stone-700">해지 사유</span>
+                <select className="ui-select" value={lifecycle.terminationReason}
+                  onChange={(e) => setLifecycle({ ...lifecycle, terminationReason: e.target.value })}>
+                  {terminationReasons.map((reason) => <option key={reason} value={reason}>{reason}</option>)}
+                </select>
+              </label>
+              <ListEditorButtons
+                label="해지 사유"
+                options={terminationReasons}
+                value={lifecycle.terminationReason}
+                onOptions={setTerminationReasons}
+                onValue={(terminationReason) => setLifecycle({ ...lifecycle, terminationReason })}
+              />
+              <label className="grid gap-1 text-sm">
+                <span className="font-bold text-stone-700">계약중지일</span>
+                <input type="date" className="input-field" value={lifecycle.suspendedAt}
+                  onChange={(e) => setLifecycle({ ...lifecycle, suspendedAt: e.target.value })} />
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="font-bold text-stone-700">계약 중지 사유</span>
+                <select className="ui-select" value={lifecycle.suspensionReason}
+                  onChange={(e) => setLifecycle({ ...lifecycle, suspensionReason: e.target.value })}>
+                  {suspensionReasons.map((reason) => <option key={reason} value={reason}>{reason}</option>)}
+                </select>
+              </label>
+              <ListEditorButtons
+                label="중지 사유"
+                options={suspensionReasons}
+                value={lifecycle.suspensionReason}
+                onOptions={setSuspensionReasons}
+                onValue={(suspensionReason) => setLifecycle({ ...lifecycle, suspensionReason })}
+              />
+            </div>
+          )}
+
           {activeTab === "closing" && (
             <div className="grid gap-3">
               <div className="grid grid-cols-2 gap-3">
@@ -329,17 +493,6 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
                 <textarea className="input-field min-h-[80px]"
                   value={closing.etc} onChange={(e) => setClosing({ ...closing, etc: e.target.value })} />
               </label>
-              <label className="flex items-center gap-2 text-sm font-bold text-stone-700">
-                <input type="checkbox" checked={terminated} onChange={(e) => setTerminated(e.target.checked)} />
-                계약 해지/종료
-              </label>
-              {terminated && (
-                <label className="grid gap-1 text-sm">
-                  <span className="font-bold text-stone-700">해지일</span>
-                  <input type="date" className="input-field" value={terminatedAt}
-                    onChange={(e) => setTerminatedAt(e.target.value)} />
-                </label>
-              )}
               <label className="grid gap-1 text-sm">
                 <span className="font-bold text-stone-700">변경계약서 PDF (선택)</span>
                 <input
@@ -376,4 +529,48 @@ function updateAt<T>(list: T[], setter: (next: T[]) => void, idx: number, patch:
   const next = list.slice();
   next[idx] = { ...next[idx], ...patch };
   setter(next);
+}
+
+function ListEditorButtons({
+  label,
+  options,
+  value,
+  onOptions,
+  onValue,
+}: {
+  label: string;
+  options: string[];
+  value: string;
+  onOptions: (next: string[]) => void;
+  onValue: (next: string) => void;
+}) {
+  return (
+    <div className="col-span-2 flex justify-end gap-2">
+      <button
+        type="button"
+        className="glass-button rounded-xl px-3 py-2 text-xs text-stone-700"
+        onClick={() => {
+          const next = prompt(`추가할 ${label}를 입력하세요.`);
+          if (!next?.trim()) return;
+          const trimmed = next.trim();
+          onOptions(options.includes(trimmed) ? options : [...options, trimmed]);
+          onValue(trimmed);
+        }}
+      >
+        목록 추가
+      </button>
+      <button
+        type="button"
+        className="glass-button rounded-xl px-3 py-2 text-xs text-rose-600"
+        onClick={() => {
+          if (options.length <= 1) return;
+          const next = options.filter((item) => item !== value);
+          onOptions(next);
+          onValue(next[0] ?? "");
+        }}
+      >
+        선택 삭제
+      </button>
+    </div>
+  );
 }

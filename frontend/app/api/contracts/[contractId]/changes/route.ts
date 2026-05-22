@@ -90,6 +90,19 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       if (body.newServiceSubtype !== undefined) {
         pushSet("service_subtype", body.newServiceSubtype || null);
       }
+      if (body.contractTerminatedAt !== undefined) {
+        pushSet("contract_terminated_at", body.contractTerminatedAt || null);
+        pushSet("contract_termination_reason", body.contractTerminationReason || null);
+      }
+      if (body.contractSuspendedAt !== undefined) {
+        pushSet("contract_suspended_at", body.contractSuspendedAt || null);
+        pushSet("contract_suspension_reason", body.contractSuspensionReason || null);
+      }
+      if (body.contractTerminatedAt) {
+        pushSet("contract_status", "terminated");
+      } else if (body.contractSuspendedAt) {
+        pushSet("contract_status", "suspended");
+      }
       if (contractUpdates.length > 0) {
         contractUpdates.push(`updated_at = $${values.length + 1}`);
         values.push(now);

@@ -139,42 +139,43 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-zinc-950/50 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="w-full max-w-3xl rounded-3xl bg-[#24251f] text-stone-100 shadow-2xl border border-amber-300/20 overflow-hidden">
-        <div className="p-5 border-b border-white/10 flex items-start justify-between gap-4">
+    <div className="fixed inset-0 z-50 bg-stone-950/20 flex items-center justify-center p-4">
+      <div className="glass-panel rounded-3xl w-[min(880px,calc(100vw-32px))] max-h-[min(840px,calc(100vh-32px))] shadow-2xl flex flex-col overflow-hidden">
+        <div className="p-5 border-b border-stone-200/70 flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-black text-amber-300 tracking-[0.18em] uppercase">Contract Change</p>
-            <h2 className="text-xl font-black mt-1">{props.contractTitle}</h2>
-            <p className="text-xs text-stone-400 mt-1">{props.counterpartyName} · 계약일 {props.contractDate ?? "-"}</p>
+            <h3 className="text-xl font-bold text-stone-800">{props.contractTitle}</h3>
+            <p className="text-xs text-stone-500 mt-1">{props.counterpartyName} · 계약일 {props.contractDate ?? "-"}</p>
           </div>
-          <button type="button" onClick={props.onClose} className="text-stone-300 hover:text-white">
+          <button type="button" onClick={props.onClose} className="text-stone-400 hover:text-stone-700">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <div className="px-5 pt-3 grid grid-cols-3 gap-2 text-xs">
           <label className="grid gap-1">
-            <span className="font-bold text-stone-400">계약일</span>
-            <input type="date" disabled value={props.contractDate ?? ""} className="input-field text-stone-900 disabled:opacity-60" />
+            <span className="font-bold text-stone-500">계약일</span>
+            <input type="date" disabled value={props.contractDate ?? ""} className="input-field disabled:opacity-60" />
           </label>
           <label className="grid gap-1">
-            <span className="font-bold text-stone-400">입력일</span>
-            <input type="date" value={meta.enteredAt} onChange={(e) => setMeta({ ...meta, enteredAt: e.target.value })} className="input-field text-stone-900" />
+            <span className="font-bold text-stone-500">입력일</span>
+            <input type="date" value={meta.enteredAt} onChange={(e) => setMeta({ ...meta, enteredAt: e.target.value })} className="input-field" />
           </label>
           <label className="grid gap-1">
-            <span className="font-bold text-stone-400">변경일</span>
-            <input type="date" value={meta.changedAt} onChange={(e) => setMeta({ ...meta, changedAt: e.target.value })} className="input-field text-stone-900" />
+            <span className="font-bold text-stone-500">변경일</span>
+            <input type="date" value={meta.changedAt} onChange={(e) => setMeta({ ...meta, changedAt: e.target.value })} className="input-field" />
           </label>
         </div>
 
-        <div className="px-5 mt-4 flex gap-1 border-b border-white/10">
+        <div className="px-5 mt-4 flex gap-1 border-b border-stone-200/70">
           {TABS.map((tab) => (
             <button
               key={tab.key}
               type="button"
               className={
                 "px-3 py-2 text-xs font-bold rounded-t-lg " +
-                (activeTab === tab.key ? "bg-amber-300 text-zinc-950" : "bg-white/5 text-stone-300 hover:bg-white/10")
+                (activeTab === tab.key
+                  ? "bg-primary text-white shadow-sm"
+                  : "bg-stone-100 text-stone-600 hover:bg-stone-200")
               }
               onClick={() => setActiveTab(tab.key)}
             >
@@ -183,31 +184,31 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
           ))}
         </div>
 
-        <div className="p-5 max-h-[420px] overflow-auto">
+        <div className="p-5 h-[440px] overflow-y-auto scrollbar-hide">
           {activeTab === "amount" && (
             <div className="grid gap-2">
-              <div className="grid grid-cols-[1fr_140px_140px] gap-2 text-[11px] font-bold text-stone-400">
+              <div className="grid grid-cols-[1fr_140px_140px] gap-2 text-[11px] font-bold text-stone-500">
                 <span>단계</span>
                 <span className="text-right">기존 금액</span>
                 <span className="text-right">변경 금액</span>
               </div>
               {amounts.map((row, idx) => (
                 <div key={idx} className="grid grid-cols-[1fr_140px_140px] gap-2 items-center">
-                  <input type="text" className="input-field text-stone-900" value={row.stageLabel}
+                  <input type="text" className="input-field" value={row.stageLabel}
                     onChange={(e) => updateAt(amounts, setAmounts, idx, { stageLabel: e.target.value })} />
-                  <input type="number" className="input-field text-stone-900" value={row.previousAmount}
+                  <input type="number" className="input-field" value={row.previousAmount}
                     onChange={(e) => updateAt(amounts, setAmounts, idx, { previousAmount: e.target.value })} />
-                  <input type="number" className="input-field text-stone-900" value={row.nextAmount}
+                  <input type="number" className="input-field" value={row.nextAmount}
                     onChange={(e) => updateAt(amounts, setAmounts, idx, { nextAmount: e.target.value })} />
                 </div>
               ))}
               <div className="flex justify-end gap-2 mt-2">
                 <button type="button" onClick={() => setAmounts([...amounts, { stageLabel: `${amounts.length + 1}차`, previousAmount: "", nextAmount: "" }])}
-                  className="rounded-lg px-3 py-1.5 text-[11px] font-bold border border-white/20">+ 단계 추가</button>
+                  className="glass-button rounded-lg px-3 py-1.5 text-[11px] font-bold text-stone-700">+ 단계 추가</button>
                 <button type="button" onClick={() => setAmounts(amounts.slice(0, -1))} disabled={amounts.length === 0}
-                  className="rounded-lg px-3 py-1.5 text-[11px] font-bold border border-white/20 disabled:opacity-50">- 단계 삭제</button>
+                  className="glass-button rounded-lg px-3 py-1.5 text-[11px] font-bold text-stone-700 disabled:opacity-50">- 단계 삭제</button>
               </div>
-              <p className="text-[11px] text-stone-400 mt-2">
+              <p className="text-[11px] text-stone-500 mt-2">
                 기존 합계 {previousAmountTotal.toLocaleString()} → 변경 합계 {(newCurrentAmount ?? 0).toLocaleString()}
               </p>
             </div>
@@ -216,13 +217,13 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
           {activeTab === "period" && (
             <div className="grid grid-cols-2 gap-3">
               <label className="grid gap-1 text-sm">
-                <span className="font-bold text-stone-300">기존 준공기한</span>
-                <input type="date" className="input-field text-stone-900" value={servicePeriod.previous}
+                <span className="font-bold text-stone-700">기존 준공기한</span>
+                <input type="date" className="input-field" value={servicePeriod.previous}
                   onChange={(e) => setServicePeriod({ ...servicePeriod, previous: e.target.value })} />
               </label>
               <label className="grid gap-1 text-sm">
-                <span className="font-bold text-stone-300">변경 준공기한</span>
-                <input type="date" className="input-field text-stone-900" value={servicePeriod.next}
+                <span className="font-bold text-stone-700">변경 준공기한</span>
+                <input type="date" className="input-field" value={servicePeriod.next}
                   onChange={(e) => setServicePeriod({ ...servicePeriod, next: e.target.value })} />
               </label>
             </div>
@@ -230,18 +231,18 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
 
           {activeTab === "terms" && (
             <div className="grid gap-2">
-              <div className="grid grid-cols-[1fr_1fr_1fr] gap-2 text-[11px] font-bold text-stone-400">
+              <div className="grid grid-cols-[1fr_1fr_1fr] gap-2 text-[11px] font-bold text-stone-500">
                 <span>단계</span>
                 <span>기존 지급조건</span>
                 <span>변경 지급조건</span>
               </div>
               {paymentTerms.map((row, idx) => (
                 <div key={idx} className="grid grid-cols-[1fr_1fr_1fr] gap-2 items-center">
-                  <input type="text" className="input-field text-stone-900" value={row.stageLabel}
+                  <input type="text" className="input-field" value={row.stageLabel}
                     onChange={(e) => updateAt(paymentTerms, setPaymentTerms, idx, { stageLabel: e.target.value })} />
-                  <input type="text" className="input-field text-stone-900" value={row.previous}
+                  <input type="text" className="input-field" value={row.previous}
                     onChange={(e) => updateAt(paymentTerms, setPaymentTerms, idx, { previous: e.target.value })} />
-                  <input type="text" className="input-field text-stone-900" value={row.next}
+                  <input type="text" className="input-field" value={row.next}
                     onChange={(e) => updateAt(paymentTerms, setPaymentTerms, idx, { next: e.target.value })} />
                 </div>
               ))}
@@ -250,31 +251,31 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
 
           {activeTab === "service" && (
             <div className="grid gap-3">
-              <label className="flex items-center gap-2 text-sm font-bold text-stone-300">
+              <label className="flex items-center gap-2 text-sm font-bold text-stone-700">
                 <input type="checkbox" checked={serviceCategory.changed}
                   onChange={(e) => setServiceCategory({ ...serviceCategory, changed: e.target.checked })} />
                 용역분류 변경 적용
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <label className="grid gap-1 text-sm">
-                  <span className="font-bold text-stone-300">기존 대분류</span>
-                  <input type="text" disabled className="input-field text-stone-900 disabled:opacity-60"
+                  <span className="font-bold text-stone-700">기존 대분류</span>
+                  <input type="text" disabled className="input-field disabled:opacity-60"
                     value={serviceCategory.previousType} />
                 </label>
                 <label className="grid gap-1 text-sm">
-                  <span className="font-bold text-stone-300">기존 세분류</span>
-                  <input type="text" disabled className="input-field text-stone-900 disabled:opacity-60"
+                  <span className="font-bold text-stone-700">기존 세분류</span>
+                  <input type="text" disabled className="input-field disabled:opacity-60"
                     value={serviceCategory.previousSubtype} />
                 </label>
                 <label className="grid gap-1 text-sm">
-                  <span className="font-bold text-stone-300">변경 대분류</span>
-                  <input type="text" className="input-field text-stone-900"
+                  <span className="font-bold text-stone-700">변경 대분류</span>
+                  <input type="text" className="input-field"
                     value={serviceCategory.nextType}
                     onChange={(e) => setServiceCategory({ ...serviceCategory, nextType: e.target.value })} />
                 </label>
                 <label className="grid gap-1 text-sm">
-                  <span className="font-bold text-stone-300">변경 세분류</span>
-                  <input type="text" className="input-field text-stone-900"
+                  <span className="font-bold text-stone-700">변경 세분류</span>
+                  <input type="text" className="input-field"
                     value={serviceCategory.nextSubtype}
                     onChange={(e) => setServiceCategory({ ...serviceCategory, nextSubtype: e.target.value })} />
                 </label>
@@ -286,29 +287,29 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
             <div className="grid gap-3">
               <div className="grid grid-cols-2 gap-3">
                 <label className="grid gap-1 text-sm">
-                  <span className="font-bold text-stone-300">준공일</span>
-                  <input type="date" className="input-field text-stone-900" value={closing.completionDate}
+                  <span className="font-bold text-stone-700">준공일</span>
+                  <input type="date" className="input-field" value={closing.completionDate}
                     onChange={(e) => setClosing({ ...closing, completionDate: e.target.value })} />
                 </label>
                 <label className="grid gap-1 text-sm">
-                  <span className="font-bold text-stone-300">허가 취득일</span>
-                  <input type="date" className="input-field text-stone-900" value={closing.permitAcquiredAt}
+                  <span className="font-bold text-stone-700">허가 취득일</span>
+                  <input type="date" className="input-field" value={closing.permitAcquiredAt}
                     onChange={(e) => setClosing({ ...closing, permitAcquiredAt: e.target.value })} />
                 </label>
               </div>
               <label className="grid gap-1 text-sm">
-                <span className="font-bold text-stone-300">기타 변경사항</span>
-                <textarea className="input-field text-stone-900 min-h-[80px]"
+                <span className="font-bold text-stone-700">기타 변경사항</span>
+                <textarea className="input-field min-h-[80px]"
                   value={closing.etc} onChange={(e) => setClosing({ ...closing, etc: e.target.value })} />
               </label>
-              <label className="flex items-center gap-2 text-sm font-bold text-stone-300">
+              <label className="flex items-center gap-2 text-sm font-bold text-stone-700">
                 <input type="checkbox" checked={terminated} onChange={(e) => setTerminated(e.target.checked)} />
                 계약 해지/종료
               </label>
               {terminated && (
                 <label className="grid gap-1 text-sm">
-                  <span className="font-bold text-stone-300">해지일</span>
-                  <input type="date" className="input-field text-stone-900" value={terminatedAt}
+                  <span className="font-bold text-stone-700">해지일</span>
+                  <input type="date" className="input-field" value={terminatedAt}
                     onChange={(e) => setTerminatedAt(e.target.value)} />
                 </label>
               )}
@@ -316,13 +317,13 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
           )}
         </div>
 
-        <div className="p-5 border-t border-white/10 flex justify-between items-center gap-2">
-          <p className="text-[11px] text-stone-400">변경 사유와 변경 계약서 PDF는 후속 단계에서 첨부 가능합니다.</p>
+        <div className="p-5 border-t border-stone-200/70 flex justify-between items-center gap-2">
+          <p className="text-[11px] text-stone-500">변경 사유와 변경 계약서 PDF는 후속 단계에서 첨부 가능합니다.</p>
           <div className="flex gap-2">
-            <button type="button" onClick={props.onClose} className="rounded-xl px-4 py-2 text-sm font-bold border border-white/20">
+            <button type="button" onClick={props.onClose} className="glass-button rounded-xl px-4 py-2 text-sm font-bold text-stone-700">
               닫기
             </button>
-            <button type="button" onClick={submit} disabled={saving} className="rounded-xl px-4 py-2 text-sm font-black bg-amber-300 text-zinc-950 disabled:opacity-60">
+            <button type="button" onClick={submit} disabled={saving} className="rounded-xl px-4 py-2 text-sm font-bold text-white bg-primary hover:bg-primary/90 shadow-sm disabled:opacity-60">
               {saving ? "저장 중..." : "저장"}
             </button>
           </div>

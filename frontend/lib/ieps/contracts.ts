@@ -289,7 +289,9 @@ export async function listContractsForTree(year: string | null): Promise<Contrac
          GROUP BY contract_id
        ) ms ON ms.contract_id = c.contract_id
        ${whereSql}
-       ORDER BY c.service_type ASC NULLS LAST, c.contract_title ASC`,
+       ORDER BY
+         COALESCE(NULLIF(c.contract_date, ''), c.started_at, c.created_at) ASC NULLS LAST,
+         c.contract_title ASC`,
       params
     )
   );
@@ -320,7 +322,12 @@ export async function listContractsForTree(year: string | null): Promise<Contrac
 
   const groups: ContractTreeServiceGroup[] = Array.from(groupMap.entries())
     .map(([serviceType, contracts]) => ({ serviceType, contracts }))
-    .sort((a, b) => a.serviceType.localeCompare(b.serviceType, "ko"));
+    .sort((a, b) => {
+      const pa = serviceTypePriority(a.serviceType);
+      const pb = serviceTypePriority(b.serviceType);
+      if (pa !== pb) return pa - pb;
+      return a.serviceType.localeCompare(b.serviceType, "ko");
+    });
 
   return {
     year: year && /^\d{4}$/.test(year) ? year : null,
@@ -487,6 +494,21 @@ export async function getContractDashboard(): Promise<ContractDashboard> {
     byYear,
     uncollected,
   };
+}
+
+/**
+ * Tree group ordering: 통합허가 → 장외&화관법 → HAPs → ESG탄소중립 → 기술진단 → (기타 카테고리들 가나다순) → 기타.
+ * Returns a numeric priority where smaller comes first.
+ */
+function serviceTypePriority(serviceType: string): number {
+  const t = serviceType.trim();
+  if (t.includes("통합허가") || t.includes("통합환경")) return 1;
+  if (t.includes("장외") || t.includes("화관법") || t.includes("유해화학")) return 2;
+  if (t.includes("HAPs")) return 3;
+  if (t.includes("ESG") || t.includes("탄소중립")) return 4;
+  if (t.includes("기술진단") || t.includes("진단")) return 5;
+  if (t === "기타") return 99;
+  return 50;
 }
 
 function toNumber(value: unknown): number {

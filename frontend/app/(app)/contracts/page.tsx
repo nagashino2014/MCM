@@ -197,75 +197,78 @@ function ContractsInner() {
 
   return (
     <div className="flex flex-col gap-6 p-2">
-      <section className="rounded-3xl relative overflow-hidden reveal border border-zinc-800/10 bg-[#1f211d] text-stone-50 shadow-xl">
-        <div className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_12%_20%,rgba(245,158,11,0.28),transparent_28%),radial-gradient(circle_at_88%_0%,rgba(20,184,166,0.18),transparent_30%)]" />
-        <div className="relative z-10 p-8 flex items-start justify-between gap-4 flex-wrap">
+      <section className="glass-panel p-8 rounded-3xl relative overflow-hidden reveal">
+        <div className="relative z-10 flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <p className="text-xs font-black tracking-[0.24em] text-amber-300 uppercase">Contract Ledger</p>
-            <h1 className="text-3xl font-black mt-2 mb-3 flex items-center gap-3">
-              <FileSignature className="w-7 h-7 text-amber-300" />
+            <h1 className="text-3xl font-bold text-stone-800 mb-2 flex items-center gap-3">
+              <FileSignature className="w-7 h-7 text-primary" />
               계약 관리
             </h1>
-            <p className="text-stone-300 text-sm max-w-3xl">
+            <p className="text-stone-600 text-base max-w-3xl">
               엑셀 계약현황의 원장 구조를 웹으로 이전해 계약, 단계별 청구·수금, 세금계산서 PDF를 함께 관리합니다.
+              상세 패널에서 청구·수금 단계 관리와 변경계약 입력이 가능합니다.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 mt-2">
+            <button
+              type="button"
+              onClick={reloadTree}
+              className="glass-button rounded-xl px-3 py-2 text-xs font-bold text-stone-700 flex items-center gap-1"
+            >
+              <RefreshCw className={"w-3 h-3 " + (loading ? "animate-spin" : "")} />
+              새로고침
+            </button>
             <Link
               href="/contracts/dashboard"
-              className="rounded-xl px-3 py-2 text-xs font-black bg-amber-300 text-zinc-950 hover:bg-amber-200 flex items-center gap-1"
+              className="rounded-xl px-3 py-2 text-xs font-bold text-white bg-primary hover:bg-primary/90 shadow-sm flex items-center gap-1"
             >
               <BarChart3 className="w-3.5 h-3.5" />
               Dashboard
             </Link>
-            <button
-              type="button"
-              onClick={reloadTree}
-              className="rounded-xl px-3 py-2 text-xs font-bold border border-stone-500/40 text-stone-100 hover:bg-white/10 flex items-center gap-1"
-            >
-              <RefreshCw className={"w-3.5 h-3.5 " + (loading ? "animate-spin" : "")} />
-              새로고침
-            </button>
           </div>
         </div>
+        <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-gradient-to-l from-primary/10 to-transparent pointer-events-none" />
       </section>
 
       {error ? (
-        <div className="glass-card rounded-2xl p-6 text-sm text-red-600">
-          계약 데이터를 불러오지 못했습니다. `infra/aws/005_contract_management_round2.sql` 적용 여부와 DB 연결을 확인하세요.
-          <div className="mt-2 font-mono text-xs">{error}</div>
+        <div className="glass-card rounded-2xl p-6 text-sm text-rose-600">
+          계약 데이터를 불러오지 못했습니다. <code>infra/aws/005_contract_management_round2.sql</code> 적용 여부와 DB 연결을 확인하세요.
+          <div className="mt-2 font-mono text-xs text-stone-600">{error}</div>
         </div>
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-[minmax(360px,0.9fr)_minmax(560px,1.4fr)] gap-5">
           <section className="glass-card rounded-3xl overflow-hidden reveal delay-2">
-            <div className="p-4 border-b border-stone-200/70 flex items-center justify-between gap-2 flex-wrap">
+            <div className="p-4 border-b border-stone-200/70 flex items-center justify-between gap-3">
               <div>
-                <h2 className="font-black text-stone-800 flex items-center gap-2">
-                  <WalletCards className="w-4 h-4 text-amber-600" />
+                <h2 className="font-bold text-stone-800 flex items-center gap-2">
+                  <WalletCards className="w-4 h-4 text-primary" />
                   계약 원장
                 </h2>
                 <p className="text-xs text-stone-500">총 {totalCount.toLocaleString()}건</p>
               </div>
+            </div>
+            <div className="px-4 py-3 border-b border-stone-200/70 flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <Search className="w-4 h-4 text-stone-400 shrink-0" />
+                <input
+                  type="text"
+                  className="input-field text-xs"
+                  placeholder="계약명 / 거래처 / 세분류 검색"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
               <select
-                className="ui-select text-xs w-28"
+                className="ui-select text-xs shrink-0"
+                style={{ width: "8.5ch" }}
                 value={year}
                 onChange={(e) => setYear(e.target.value)}
               >
-                <option value="">전체 연도</option>
+                <option value="">전체</option>
                 {(tree?.availableYears ?? []).map((y) => (
-                  <option key={y} value={y}>{y}년</option>
+                  <option key={y} value={y}>{y}</option>
                 ))}
               </select>
-            </div>
-            <div className="px-4 py-3 border-b border-stone-200/70 flex items-center gap-2">
-              <Search className="w-4 h-4 text-stone-400" />
-              <input
-                type="text"
-                className="input-field text-xs"
-                placeholder="계약명 / 거래처 / 세분류 검색"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
             </div>
             <div className="max-h-[720px] overflow-auto">
               {filteredGroups.length === 0 && !loading && (
@@ -284,27 +287,40 @@ function ContractsInner() {
                       className={"w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-stone-50 " + style.parentChip}
                     >
                       {isOpen ? <ChevronDown className="w-4 h-4 text-stone-500" /> : <ChevronRight className="w-4 h-4 text-stone-500" />}
-                      <ParentIcon className={"w-4 h-4 " + style.parentText} />
+                      <ParentIcon className={"w-4 h-4 fill-current " + style.parentText} />
                       <span className="font-black text-sm text-stone-800">{group.serviceType}</span>
                       <span className="text-[11px] font-bold text-stone-500 ml-auto">{group.contracts.length}건</span>
                     </button>
                     {isOpen && (
                       <div className="bg-white/40">
-                        {group.contracts.map((c) => {
+                        {group.contracts.map((c, idx, arr) => {
                           const isSelected = c.contractId === selectedId;
+                          const isLastChild = idx === arr.length - 1;
                           return (
                             <button
                               type="button"
                               key={c.contractId}
                               onClick={() => setSelectedId(c.contractId)}
                               className={
-                                "w-full flex items-center gap-2 pl-9 pr-3 py-2 text-left text-xs hover:bg-amber-50/70 " +
-                                (isSelected ? "bg-amber-50 border-l-4 border-amber-500" : "border-l-4 border-transparent")
+                                "relative w-full flex items-center gap-2 pl-12 pr-3 py-2 text-left text-xs hover:bg-primary/5 " +
+                                (isSelected ? "bg-primary/10 border-l-4 border-primary" : "border-l-4 border-transparent")
                               }
                             >
-                              <ChildIcon className={"w-3.5 h-3.5 " + style.childText} />
+                              <span
+                                aria-hidden
+                                className={
+                                  "pointer-events-none absolute left-7 w-px bg-stone-300 " +
+                                  (isLastChild ? "top-0 h-1/2" : "top-0 bottom-0")
+                                }
+                              />
+                              <span
+                                aria-hidden
+                                className="pointer-events-none absolute left-7 top-1/2 w-3 h-px bg-stone-300"
+                              />
+                              <ChildIcon className={"w-3.5 h-3.5 fill-current " + style.childText} />
                               <span className="flex-1 truncate font-bold text-stone-800">{c.contractTitle}</span>
-                              <span className="text-[10px] font-mono text-stone-500 ml-2">{formatMoney(c.currentAmount)}</span>
+                              <span className="text-[10px] font-mono text-stone-400 ml-2 shrink-0">{c.contractDate ?? "-"}</span>
+                              <span className="text-[10px] font-mono text-stone-500 ml-1 shrink-0">{formatMoney(c.currentAmount)}</span>
                             </button>
                           );
                         })}
@@ -451,8 +467,7 @@ function ContractDetailPanel({
     <div className="flex flex-col gap-5">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-black text-amber-700 tracking-[0.18em] uppercase">Detail</p>
-          <h2 className="text-2xl font-black text-stone-900 mt-1">{String(contract.contract_title ?? "")}</h2>
+          <h2 className="text-2xl font-bold text-stone-800">{String(contract.contract_title ?? "")}</h2>
           <p className="text-sm text-stone-500 mt-2">
             {String(contract.counterparty_name ?? "")} · 업체ID {String(contract.legacy_company_id ?? "-")}
           </p>
@@ -460,7 +475,7 @@ function ContractDetailPanel({
         <div className="flex items-center gap-2">
           <button
             type="button"
-            className="rounded-xl px-3 py-2 text-xs font-bold border border-stone-300 text-stone-700 hover:bg-stone-100 flex items-center gap-1"
+            className="glass-button rounded-xl px-3 py-2 text-xs font-bold text-stone-700 flex items-center gap-1"
             onClick={() => {
               const path = String(detail.invoices?.[0]?.public_path ?? "");
               if (!path) {
@@ -476,7 +491,7 @@ function ContractDetailPanel({
           <button
             type="button"
             onClick={onOpenChange}
-            className="rounded-xl px-3 py-2 text-xs font-bold bg-amber-500 text-white hover:bg-amber-600 flex items-center gap-1"
+            className="rounded-xl px-3 py-2 text-xs font-bold text-white bg-primary hover:bg-primary/90 shadow-sm flex items-center gap-1"
           >
             <Pencil className="w-3.5 h-3.5" />
             변경계약 입력
@@ -504,11 +519,11 @@ function ContractDetailPanel({
 
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-black text-stone-800">청구·수금 단계</h3>
+          <h3 className="font-bold text-stone-800">청구·수금 단계</h3>
           <button
             type="button"
             onClick={onOpenNewStage}
-            className="rounded-lg px-3 py-1.5 text-xs font-bold bg-amber-500 text-white hover:bg-amber-600 flex items-center gap-1"
+            className="rounded-lg px-3 py-1.5 text-xs font-bold text-white bg-primary hover:bg-primary/90 shadow-sm flex items-center gap-1"
           >
             <Plus className="w-3 h-3" />
             단계 추가
@@ -516,7 +531,7 @@ function ContractDetailPanel({
         </div>
         <div className="overflow-hidden rounded-2xl border border-stone-200/80">
           <table className="w-full text-xs">
-            <thead className="bg-stone-900 text-stone-100 text-[11px]">
+            <thead className="bg-stone-100 text-stone-700 text-[11px]">
               <tr>
                 <th className="text-left p-2.5">차수</th>
                 <th className="text-left p-2.5">단계명</th>
@@ -553,7 +568,7 @@ function ContractDetailPanel({
                       <div className="flex items-center justify-end gap-1">
                         <button
                           type="button"
-                          className="rounded-lg px-2 py-1 text-[11px] font-bold bg-amber-400 text-zinc-950 hover:bg-amber-300 inline-flex items-center gap-1"
+                          className="rounded-lg px-2 py-1 text-[11px] font-bold text-white bg-primary hover:bg-primary/90 shadow-sm inline-flex items-center gap-1"
                           onClick={() =>
                             onOpenInvoice({
                               milestoneId,
@@ -618,7 +633,7 @@ function ContractDetailPanel({
       </div>
 
       <div>
-        <h3 className="font-black text-stone-800 mb-3">세금계산서 파일</h3>
+        <h3 className="font-bold text-stone-800 mb-3">세금계산서 파일</h3>
         <div className="grid gap-2">
           {detail.invoices.map((invoice) => (
             <a
@@ -626,7 +641,7 @@ function ContractDetailPanel({
               href={String(invoice.public_path ?? "#")}
               target="_blank"
               rel="noreferrer"
-              className="rounded-xl border border-stone-200/80 bg-white/60 px-3 py-2 text-sm hover:bg-amber-50 flex items-center justify-between gap-3"
+              className="rounded-xl border border-stone-200/80 bg-white/60 px-3 py-2 text-sm hover:bg-primary/5 flex items-center justify-between gap-3"
             >
               <span>{String(invoice.document_display_name ?? invoice.invoice_id)}</span>
               <span className="text-xs text-stone-500">{String(invoice.issue_date ?? "")}</span>
@@ -689,42 +704,42 @@ function InvoiceUploadModal({
 
   return (
     <ModalShell title={`${state.stageLabel} 발행/수금 정보 입력`} onClose={onClose}>
-      <div className="grid gap-3 grid-cols-2">
+      <div className="p-5 grid gap-3 grid-cols-2">
         <label className="grid gap-1 text-sm col-span-2">
-          <span className="font-bold text-stone-300">계산서 발행일</span>
-          <input type="date" className="input-field text-stone-900" value={state.issueDate} onChange={(e) => onChange({ ...state, issueDate: e.target.value })} />
+          <span className="font-bold text-stone-700">계산서 발행일</span>
+          <input type="date" className="input-field" value={state.issueDate} onChange={(e) => onChange({ ...state, issueDate: e.target.value })} />
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-bold text-stone-300">발행금액</span>
-          <input type="number" className="input-field text-stone-900" value={state.invoiceAmount} onChange={(e) => onChange({ ...state, invoiceAmount: e.target.value })} />
+          <span className="font-bold text-stone-700">발행금액</span>
+          <input type="number" className="input-field" value={state.invoiceAmount} onChange={(e) => onChange({ ...state, invoiceAmount: e.target.value })} />
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-bold text-stone-300">대금 지급 조건</span>
-          <input type="text" className="input-field text-stone-900" placeholder="예: 세금계산서 발행 후 30일 이내 지급"
+          <span className="font-bold text-stone-700">대금 지급 조건</span>
+          <input type="text" className="input-field" placeholder="예: 세금계산서 발행 후 30일 이내 지급"
             value={state.paymentTerms} onChange={(e) => onChange({ ...state, paymentTerms: e.target.value })} />
         </label>
         <label className="grid gap-1 text-sm col-span-2">
-          <span className="font-bold text-stone-300">계산서 PDF 첨부</span>
+          <span className="font-bold text-stone-700">계산서 PDF 첨부</span>
           <input
             type="file"
             accept="application/pdf,.pdf"
-            className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-amber-300 file:px-3 file:py-2 file:text-xs file:font-black file:text-zinc-950"
+            className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-2 file:text-xs file:font-bold file:text-white"
             onChange={(e) => onChange({ ...state, file: e.target.files?.[0] ?? null })}
           />
         </label>
-        <label className="flex items-center gap-2 text-sm font-bold text-stone-300 col-span-2">
+        <label className="flex items-center gap-2 text-sm font-bold text-stone-700 col-span-2">
           <input type="checkbox" checked={state.paymentCollected} onChange={(e) => onChange({ ...state, paymentCollected: e.target.checked })} />
           수금 정보도 함께 등록
         </label>
         {state.paymentCollected && (
           <>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold text-stone-300">수금일</span>
-              <input type="date" className="input-field text-stone-900" value={state.paymentCollectedAt} onChange={(e) => onChange({ ...state, paymentCollectedAt: e.target.value })} />
+              <span className="font-bold text-stone-700">수금일</span>
+              <input type="date" className="input-field" value={state.paymentCollectedAt} onChange={(e) => onChange({ ...state, paymentCollectedAt: e.target.value })} />
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold text-stone-300">수금비율 (0~1)</span>
-              <input type="number" step="0.01" min="0" max="1" className="input-field text-stone-900" value={state.collectionRatio}
+              <span className="font-bold text-stone-700">수금비율 (0~1)</span>
+              <input type="number" step="0.01" min="0" max="1" className="input-field" value={state.collectionRatio}
                 onChange={(e) => {
                   const v = e.target.value;
                   const ratio = Number(v);
@@ -735,19 +750,19 @@ function InvoiceUploadModal({
                 }} />
             </label>
             <label className="grid gap-1 text-sm col-span-2">
-              <span className="font-bold text-stone-300">수금금액</span>
-              <input type="number" className="input-field text-stone-900" value={state.collectedAmount}
+              <span className="font-bold text-stone-700">수금금액</span>
+              <input type="number" className="input-field" value={state.collectedAmount}
                 onChange={(e) => onChange({ ...state, collectedAmount: e.target.value })} />
             </label>
           </>
         )}
-        <p className="text-xs text-stone-400 col-span-2">
-          저장 경로는 발행일 기준 `매출계산서/년도/분기` 논리 경로로 생성됩니다.
+        <p className="text-xs text-stone-500 col-span-2">
+          저장 경로는 발행일 기준 <code>매출계산서/년도/분기</code> 논리 경로로 생성됩니다.
         </p>
       </div>
-      <div className="p-5 pt-3 border-t border-white/10 flex justify-end gap-2">
-        <button type="button" onClick={onClose} className="rounded-xl px-4 py-2 text-sm font-bold border border-white/20">닫기</button>
-        <button type="button" onClick={submit} disabled={saving} className="rounded-xl px-4 py-2 text-sm font-black bg-amber-300 text-zinc-950 disabled:opacity-60">
+      <div className="p-5 pt-0 border-t border-stone-200/70 flex justify-end gap-2 mt-2">
+        <button type="button" onClick={onClose} className="glass-button rounded-xl px-4 py-2 text-sm font-bold text-stone-700">닫기</button>
+        <button type="button" onClick={submit} disabled={saving} className="rounded-xl px-4 py-2 text-sm font-bold text-white bg-primary hover:bg-primary/90 shadow-sm disabled:opacity-60">
           {saving ? "저장 중..." : "입력"}
         </button>
       </div>
@@ -802,25 +817,25 @@ function NewStageModal({
 
   return (
     <ModalShell title="청구·수금 단계 추가" onClose={onClose}>
-      <div className="grid gap-3">
+      <div className="p-5 grid gap-3">
         <label className="grid gap-1 text-sm">
-          <span className="font-bold text-stone-300">단계명</span>
-          <input type="text" className="input-field text-stone-900" placeholder="예: 1차 기성금"
+          <span className="font-bold text-stone-700">단계명</span>
+          <input type="text" className="input-field" placeholder="예: 1차 기성금"
             value={state.stageLabel} onChange={(e) => onChange({ ...state, stageLabel: e.target.value })} />
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-bold text-stone-300">청구금액</span>
-          <input type="number" className="input-field text-stone-900" value={state.amount} onChange={(e) => onChange({ ...state, amount: e.target.value })} />
+          <span className="font-bold text-stone-700">청구금액</span>
+          <input type="number" className="input-field" value={state.amount} onChange={(e) => onChange({ ...state, amount: e.target.value })} />
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-bold text-stone-300">대금 지급 조건</span>
-          <input type="text" className="input-field text-stone-900" placeholder="예: 세금계산서 발행 후 30일 이내 지급"
+          <span className="font-bold text-stone-700">대금 지급 조건</span>
+          <input type="text" className="input-field" placeholder="예: 세금계산서 발행 후 30일 이내 지급"
             value={state.paymentTerms} onChange={(e) => onChange({ ...state, paymentTerms: e.target.value })} />
         </label>
       </div>
-      <div className="p-5 pt-3 border-t border-white/10 flex justify-end gap-2">
-        <button type="button" onClick={onClose} className="rounded-xl px-4 py-2 text-sm font-bold border border-white/20">닫기</button>
-        <button type="button" onClick={submit} disabled={saving} className="rounded-xl px-4 py-2 text-sm font-black bg-amber-300 text-zinc-950 disabled:opacity-60">
+      <div className="p-5 pt-0 border-t border-stone-200/70 flex justify-end gap-2 mt-2">
+        <button type="button" onClick={onClose} className="glass-button rounded-xl px-4 py-2 text-sm font-bold text-stone-700">닫기</button>
+        <button type="button" onClick={submit} disabled={saving} className="rounded-xl px-4 py-2 text-sm font-bold text-white bg-primary hover:bg-primary/90 shadow-sm disabled:opacity-60">
           {saving ? "저장 중..." : "추가"}
         </button>
       </div>
@@ -883,14 +898,14 @@ function PartialPaymentModal({
 
   return (
     <ModalShell title={`${state.stageLabel} 부분수금 추가`} onClose={onClose}>
-      <div className="grid gap-3 grid-cols-2">
+      <div className="p-5 grid gap-3 grid-cols-2">
         <label className="grid gap-1 text-sm col-span-2">
-          <span className="font-bold text-stone-300">수금일</span>
-          <input type="date" className="input-field text-stone-900" value={state.collectedAt} onChange={(e) => onChange({ ...state, collectedAt: e.target.value })} />
+          <span className="font-bold text-stone-700">수금일</span>
+          <input type="date" className="input-field" value={state.collectedAt} onChange={(e) => onChange({ ...state, collectedAt: e.target.value })} />
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-bold text-stone-300">수금금액</span>
-          <input type="number" className="input-field text-stone-900" value={state.amount}
+          <span className="font-bold text-stone-700">수금금액</span>
+          <input type="number" className="input-field" value={state.amount}
             onChange={(e) => {
               const v = e.target.value;
               const amt = Number(v);
@@ -901,8 +916,8 @@ function PartialPaymentModal({
             }} />
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-bold text-stone-300">수금비율 (0~1)</span>
-          <input type="number" step="0.0001" min="0" max="1" className="input-field text-stone-900" value={state.ratio}
+          <span className="font-bold text-stone-700">수금비율 (0~1)</span>
+          <input type="number" step="0.0001" min="0" max="1" className="input-field" value={state.ratio}
             onChange={(e) => {
               const v = e.target.value;
               const ratio = Number(v);
@@ -913,16 +928,16 @@ function PartialPaymentModal({
             }} />
         </label>
         <label className="grid gap-1 text-sm col-span-2">
-          <span className="font-bold text-stone-300">메모</span>
-          <input type="text" className="input-field text-stone-900" value={state.memo} onChange={(e) => onChange({ ...state, memo: e.target.value })} />
+          <span className="font-bold text-stone-700">메모</span>
+          <input type="text" className="input-field" value={state.memo} onChange={(e) => onChange({ ...state, memo: e.target.value })} />
         </label>
-        <p className="text-xs text-stone-400 col-span-2">
+        <p className="text-xs text-stone-500 col-span-2">
           이 단계의 청구금액({formatMoney(state.baseAmount)})에 대해 누적 수금비율과 수금금액이 자동 갱신됩니다.
         </p>
       </div>
-      <div className="p-5 pt-3 border-t border-white/10 flex justify-end gap-2">
-        <button type="button" onClick={onClose} className="rounded-xl px-4 py-2 text-sm font-bold border border-white/20">닫기</button>
-        <button type="button" onClick={submit} disabled={saving} className="rounded-xl px-4 py-2 text-sm font-black bg-amber-300 text-zinc-950 disabled:opacity-60">
+      <div className="p-5 pt-0 border-t border-stone-200/70 flex justify-end gap-2 mt-2">
+        <button type="button" onClick={onClose} className="glass-button rounded-xl px-4 py-2 text-sm font-bold text-stone-700">닫기</button>
+        <button type="button" onClick={submit} disabled={saving} className="rounded-xl px-4 py-2 text-sm font-bold text-white bg-primary hover:bg-primary/90 shadow-sm disabled:opacity-60">
           {saving ? "저장 중..." : "추가"}
         </button>
       </div>
@@ -932,18 +947,15 @@ function PartialPaymentModal({
 
 function ModalShell({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 bg-zinc-950/50 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="w-full max-w-xl rounded-3xl bg-[#24251f] text-stone-100 shadow-2xl border border-amber-300/20 overflow-hidden">
-        <div className="p-5 border-b border-white/10 flex items-center justify-between">
-          <div>
-            <p className="text-xs font-black text-amber-300 tracking-[0.18em] uppercase">Contract</p>
-            <h2 className="text-xl font-black mt-1">{title}</h2>
-          </div>
-          <button type="button" onClick={onClose} className="text-stone-300 hover:text-white">
+    <div className="fixed inset-0 z-50 bg-stone-950/20 flex items-center justify-center p-4">
+      <div className="glass-panel rounded-3xl w-[min(640px,calc(100vw-32px))] max-h-[min(840px,calc(100vh-32px))] shadow-2xl overflow-hidden flex flex-col">
+        <div className="p-5 border-b border-stone-200/70 flex items-start justify-between gap-3">
+          <h3 className="text-xl font-bold text-stone-800">{title}</h3>
+          <button type="button" onClick={onClose} className="text-stone-400 hover:text-stone-700">
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="p-5">{children}</div>
+        <div className="overflow-y-auto scrollbar-hide">{children}</div>
       </div>
     </div>
   );
@@ -951,9 +963,9 @@ function ModalShell({ title, onClose, children }: { title: string; onClose: () =
 
 function Info({ label, value, highlight }: { label: string; value: unknown; highlight?: boolean }) {
   return (
-    <div className={"rounded-2xl border p-3 " + (highlight ? "bg-amber-50 border-amber-200" : "bg-white/60 border-stone-200/80")}>
-      <p className="text-[11px] font-black text-stone-400">{label}</p>
-      <p className={"text-sm font-bold mt-1 truncate " + (highlight ? "text-amber-900" : "text-stone-800")}>
+    <div className={"rounded-2xl border p-3 " + (highlight ? "bg-primary/5 border-primary/30" : "bg-white/60 border-stone-200/80")}>
+      <p className="text-[11px] font-bold text-stone-500">{label}</p>
+      <p className={"text-sm font-bold mt-1 truncate " + (highlight ? "text-primary" : "text-stone-800")}>
         {value == null || value === "" ? "-" : String(value)}
       </p>
     </div>

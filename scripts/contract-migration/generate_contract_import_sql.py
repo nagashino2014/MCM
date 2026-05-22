@@ -20,7 +20,7 @@ import argparse
 import hashlib
 import json
 import re
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -121,6 +121,31 @@ def normalize_digits(value: Any) -> str | None:
     return digits or None
 
 
+_EXCEL_EPOCH = datetime(1899, 12, 30)
+# Bounds chosen to cover plausible business dates (1968 ~ 2119) and exclude
+# unrelated 5-digit numeric values that may occasionally appear in date cells.
+_EXCEL_SERIAL_MIN = 25000
+_EXCEL_SERIAL_MAX = 80000
+
+
+def excel_serial_to_iso(value: Any) -> str | None:
+    """Convert an Excel-style date serial number to an ISO YYYY-MM-DD string.
+
+    Returns None when the value falls outside the plausible business range,
+    so that genuine numeric (non-date) cells are left untouched.
+    """
+    try:
+        n = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not (_EXCEL_SERIAL_MIN <= n <= _EXCEL_SERIAL_MAX):
+        return None
+    try:
+        return (_EXCEL_EPOCH + timedelta(days=int(n))).date().isoformat()
+    except (OverflowError, ValueError):
+        return None
+
+
 def as_iso_date(value: Any) -> str | None:
     if isinstance(value, datetime):
         if value.year <= 1900:
@@ -130,9 +155,17 @@ def as_iso_date(value: Any) -> str | None:
         if value.year <= 1900:
             return None
         return value.isoformat()
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return excel_serial_to_iso(value)
     text = normalize_text(value)
     if not text or text in {"0", "00:00:00"}:
         return None
+    if re.fullmatch(r"\d{5}", text):
+        iso = excel_serial_to_iso(text)
+        if iso is not None:
+            return iso
     return text
 
 

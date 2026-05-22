@@ -31,6 +31,7 @@ interface ContractTreeContractNode {
   serviceSubtype: string | null;
   currentAmount: number | null;
   contractDate: string | null;
+  isFullyCollected: boolean;
 }
 
 interface ContractTreeServiceGroup {
@@ -732,7 +733,13 @@ function InvoiceUploadModal({
         </label>
         <label className="grid gap-1 text-sm">
           <span className="font-bold text-stone-700">발행금액</span>
-          <input type="number" className="input-field" value={state.invoiceAmount} onChange={(e) => onChange({ ...state, invoiceAmount: e.target.value })} />
+          <input
+            type="text"
+            inputMode="numeric"
+            className="input-field tabular-nums"
+            value={formatThousands(state.invoiceAmount)}
+            onChange={(e) => onChange({ ...state, invoiceAmount: stripDigits(e.target.value) })}
+          />
         </label>
         <label className="grid gap-1 text-sm">
           <span className="font-bold text-stone-700">대금 지급 조건</span>
@@ -759,21 +766,23 @@ function InvoiceUploadModal({
               <input type="date" className="input-field" value={state.paymentCollectedAt} onChange={(e) => onChange({ ...state, paymentCollectedAt: e.target.value })} />
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold text-stone-700">수금비율 (0~1)</span>
-              <input type="number" step="0.01" min="0" max="1" className="input-field" value={state.collectionRatio}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  const ratio = Number(v);
-                  const auto = Number.isFinite(ratio) && state.baseAmount > 0
-                    ? String(Math.round(state.baseAmount * ratio))
-                    : state.collectedAmount;
-                  onChange({ ...state, collectionRatio: v, collectedAmount: auto });
-                }} />
-            </label>
-            <label className="grid gap-1 text-sm col-span-2">
               <span className="font-bold text-stone-700">수금금액</span>
-              <input type="number" className="input-field" value={state.collectedAmount}
-                onChange={(e) => onChange({ ...state, collectedAmount: e.target.value })} />
+              <input
+                type="text"
+                inputMode="numeric"
+                className="input-field tabular-nums"
+                value={formatThousands(state.collectedAmount)}
+                onChange={(e) => {
+                  const digits = stripDigits(e.target.value);
+                  // 발행금액 대비 자동 산출. 수금비율 입력란을 따로 두지 않고
+                  // 수금금액으로부터 0~1 사이로 클램프된 값을 저장한다.
+                  const collected = Number(digits || "0");
+                  const ratio = state.baseAmount > 0
+                    ? Math.min(1, Math.max(0, Math.round((collected / state.baseAmount) * 10000) / 10000))
+                    : 0;
+                  onChange({ ...state, collectedAmount: digits, collectionRatio: String(ratio) });
+                }}
+              />
             </label>
           </>
         )}
@@ -1029,10 +1038,7 @@ const TreeGroupHeader = memo(function TreeGroupHeader({
     <button
       type="button"
       onClick={handleClick}
-      className={
-        "w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-stone-50 border-b border-stone-200/70 " +
-        style.parentChip
-      }
+      className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-stone-50 border-b border-stone-200/70"
     >
       {isOpen ? (
         <ChevronDown className="w-4 h-4 text-stone-500" />
@@ -1085,7 +1091,16 @@ const TreeChildRow = memo(function TreeChildRow({
         className="pointer-events-none absolute left-7 top-1/2 w-3 h-px bg-stone-300"
       />
       <ChildIcon className={"w-3.5 h-3.5 fill-current shrink-0 " + childIconClass} />
-      <span className="flex-1 truncate font-bold text-stone-800">{contract.contractTitle}</span>
+      <span className="flex items-center gap-1.5 flex-1 min-w-0">
+        <span className="truncate text-stone-800">{contract.contractTitle}</span>
+        {contract.isFullyCollected && (
+          <span
+            aria-label="수금 완료"
+            title="수금 완료"
+            className={"shrink-0 w-1.5 h-1.5 rounded-full bg-current " + childIconClass}
+          />
+        )}
+      </span>
       <span className="w-[88px] text-right text-[10px] font-mono text-stone-400 ml-2 shrink-0 tabular-nums">
         {contract.contractDate ?? "-"}
       </span>
@@ -1095,6 +1110,22 @@ const TreeChildRow = memo(function TreeChildRow({
     </button>
   );
 });
+
+/**
+ * Render a numeric amount with thousands separators for currency input fields
+ * (e.g. `53000000` -> `53,000,000`). Returns "" for empty/non-numeric input
+ * so that placeholders still show up in the form.
+ */
+function formatThousands(value: string): string {
+  const digits = stripDigits(value);
+  if (!digits) return "";
+  return Number(digits).toLocaleString("en-US");
+}
+
+/** Remove every non-digit character (commas, spaces, etc.) from a string. */
+function stripDigits(value: string): string {
+  return value.replace(/[^0-9]/g, "");
+}
 
 function formatMoney(value: unknown): string {
   const n = typeof value === "number" ? value : Number(value ?? 0);

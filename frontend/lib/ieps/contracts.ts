@@ -376,6 +376,18 @@ export async function getContractDetail(contractId: string) {
       [contractId]
     )
   );
+  const documents = rowsToObjects(
+    await db.exec(
+      `SELECT document_id, contract_id, document_type, display_name, original_filename,
+              public_path, storage_provider, storage_key, byte_size, sha256, source,
+              created_at, updated_at
+       FROM contract_documents
+       WHERE contract_id = $1
+         AND document_type IN ('contract', 'amendment')
+       ORDER BY created_at DESC`,
+      [contractId]
+    )
+  );
   const changes = rowsToObjects(
     await db.exec(
       `SELECT *
@@ -386,7 +398,7 @@ export async function getContractDetail(contractId: string) {
     )
   );
 
-  return { contract, milestones, invoices, changes };
+  return { contract, milestones, invoices, documents, changes };
 }
 
 export async function getContractDashboard(): Promise<ContractDashboard> {

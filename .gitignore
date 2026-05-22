@@ -39,6 +39,7 @@ backend/data/jobs/
 backend/test_cache*/
 backend/tests/frontend/save/ExtractedData/
 backend/tests/test_output/
+scripts/contract-migration/_dump/
 
 # Terraform local state and providers
 **/.terraform/

@@ -3,7 +3,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requireEditor } from "@/lib/auth/guards";
 import { withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
-import { getInvoiceStorageKey, putContractDocument, sanitizeFilename } from "@/lib/storage/contract-document-storage";
+import {
+  getInvoiceStorageKey,
+  putContractDocument,
+  sanitizeFilename,
+} from "@/lib/storage/contract-document-storage";
+import { getDb, rowsToObjects } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,8 +53,34 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     const buffer = Buffer.from(await file.arrayBuffer());
     const hash = crypto.createHash("sha256").update(buffer).digest("hex");
     const originalName = sanitizeFilename(file.name || "invoice.pdf");
-    const storedName = `${issueDate}_${crypto.randomUUID().slice(0, 8)}_${originalName.endsWith(".pdf") ? originalName : originalName + ".pdf"}`;
-    const storageKey = getInvoiceStorageKey(issueDate, storedName);
+
+    // Look up the contract title (and optional stage label) so the stored
+    // filename mirrors the V:\계약\매출계산서 naming convention:
+    //   (YYYY-MM-DD){contractTitle} {stageLabel} 세금계산서.pdf
+    const db = await getDb();
+    const contractRows = rowsToObjects(
+      await db.exec("SELECT contract_title FROM contracts WHERE contract_id = $1", [contractId])
+    );
+    if (contractRows.length === 0) {
+      return NextResponse.json({ error: "계약을 찾을 수 없습니다." }, { status: 404 });
+    }
+    const contractTitle = String(contractRows[0]?.contract_title ?? "").trim();
+    let stageLabel: string | null = null;
+    if (milestoneId) {
+      const milestoneRows = rowsToObjects(
+        await db.exec(
+          "SELECT stage_label FROM contract_payment_milestones WHERE milestone_id = $1 AND contract_id = $2",
+          [milestoneId, contractId]
+        )
+      );
+      stageLabel = String(milestoneRows[0]?.stage_label ?? "").trim() || null;
+    }
+
+    const { storageKey, fileName: storedName } = getInvoiceStorageKey({
+      issueDate,
+      contractTitle,
+      stageLabel,
+    });
     const stored = await putContractDocument(storageKey, buffer, file.type || "application/pdf");
     const documentId = "doc_" + crypto.randomUUID().replace(/-/g, "").slice(0, 16);
     const invoiceId = "inv_" + crypto.randomUUID().replace(/-/g, "").slice(0, 16);

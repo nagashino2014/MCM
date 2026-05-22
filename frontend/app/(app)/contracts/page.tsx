@@ -52,6 +52,7 @@ interface ContractDetail {
   contract: Record<string, unknown>;
   milestones: Array<Record<string, unknown>>;
   invoices: Array<Record<string, unknown>>;
+  documents: Array<Record<string, unknown>>;
   changes: Array<Record<string, unknown>>;
 }
 
@@ -509,7 +510,17 @@ function ContractDetailPanel({
             type="button"
             className="glass-button rounded-xl px-3 py-2 text-xs text-stone-700 flex items-center gap-1"
             onClick={() => {
-              const path = String(detail.invoices?.[0]?.public_path ?? "");
+              // Prefer the most recent contract/amendment PDF stored in
+              // contract_documents; the legacy fallback to invoice[0] is kept
+              // only for the very small number of imports that pre-date the
+              // documents table.
+              const docs = (detail.documents ?? []) as Array<{ document_type?: unknown; public_path?: unknown }>;
+              const contractDoc =
+                docs.find((d) => String(d.document_type ?? "") === "contract") ??
+                docs.find((d) => String(d.document_type ?? "") === "amendment");
+              const path =
+                String(contractDoc?.public_path ?? "") ||
+                String((detail.invoices?.[0] as { public_path?: unknown } | undefined)?.public_path ?? "");
               if (!path) {
                 alert("등록된 계약서 PDF가 없습니다. 먼저 계약서 PDF를 업로드해 주세요.");
                 return;

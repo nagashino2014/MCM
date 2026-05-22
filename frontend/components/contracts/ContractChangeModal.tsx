@@ -72,6 +72,7 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
     changed: false,
   });
   const [closing, setClosing] = useState({ completionDate: "", permitAcquiredAt: "", etc: "" });
+  const [amendmentFile, setAmendmentFile] = useState<File | null>(null);
 
   const newCurrentAmount = useMemo(() => {
     const totalNext = amounts.reduce((acc, item) => acc + (Number(item.nextAmount) || 0), 0);
@@ -129,6 +130,32 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body?.error ?? "HTTP " + res.status);
       }
+
+      // After the change event is recorded, optionally attach an amendment
+      // PDF. Failure here is a soft error — the change event itself is
+      // already saved, so we only surface a warning and let the user retry
+      // the upload from the detail panel.
+      if (amendmentFile) {
+        try {
+          const created = (await res.json().catch(() => ({}))) as { changeId?: string };
+          const docForm = new FormData();
+          docForm.set("documentType", "amendment");
+          docForm.set("documentDate", meta.changedAt);
+          if (created.changeId) docForm.set("changeEventId", created.changeId);
+          docForm.set("file", amendmentFile);
+          const docRes = await fetch(
+            `/api/contracts/${encodeURIComponent(props.contractId)}/documents`,
+            { method: "POST", body: docForm }
+          );
+          if (!docRes.ok) {
+            const body = await docRes.json().catch(() => ({}));
+            throw new Error(body?.error ?? "HTTP " + docRes.status);
+          }
+        } catch (uploadErr) {
+          toast.show("변경계약서 PDF 업로드 실패: " + (uploadErr as Error).message, "error");
+        }
+      }
+
       toast.show("변경계약이 저장되었습니다.", "success");
       props.onSaved();
     } catch (err) {
@@ -313,12 +340,24 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
                     onChange={(e) => setTerminatedAt(e.target.value)} />
                 </label>
               )}
+              <label className="grid gap-1 text-sm">
+                <span className="font-bold text-stone-700">변경계약서 PDF (선택)</span>
+                <input
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-2 file:text-xs file:font-bold file:text-white"
+                  onChange={(e) => setAmendmentFile(e.target.files?.[0] ?? null)}
+                />
+                <span className="text-[11px] text-stone-500">
+                  업로드 시 원 계약 폴더에 동일 형식(<code>(YYYY-MM-DD)계약명 변경계약서.pdf</code>)으로 저장됩니다.
+                </span>
+              </label>
             </div>
           )}
         </div>
 
         <div className="p-5 border-t border-stone-200/70 flex justify-between items-center gap-2">
-          <p className="text-[11px] text-stone-500">변경 사유와 변경 계약서 PDF는 후속 단계에서 첨부 가능합니다.</p>
+          <p className="text-[11px] text-stone-500">변경계약서 PDF는 &quot;준공일 및 기타&quot; 탭에서 첨부할 수 있습니다.</p>
           <div className="flex gap-2">
             <button type="button" onClick={props.onClose} className="glass-button rounded-xl px-4 py-2 text-sm font-bold text-stone-700">
               닫기

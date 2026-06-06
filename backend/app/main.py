@@ -4,12 +4,13 @@ FastAPI 기반 REST API
 """
 import os
 import asyncio
+import tempfile
 import time
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Query, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -282,6 +283,151 @@ async def extract_file(request: ExtractRequest):
         error_message=result.error_message,
         tables=tables_info,
     )
+
+
+@app.post("/extract/upload", response_model=ExtractResponse)
+async def extract_uploaded_file(file: UploadFile = File(...)):
+    """
+    업로드 파일을 임시 저장한 뒤 기존 추출 파이프라인으로 처리한다.
+    스캔 PDF는 서비스 설정에 따라 OCR fallback을 수행한다.
+    """
+    service = get_extraction_service()
+    suffix = Path(file.filename or "").suffix or ".pdf"
+    tmp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp_path = Path(tmp.name)
+            while True:
+                chunk = await file.read(1024 * 1024)
+                if not chunk:
+                    break
+                tmp.write(chunk)
+
+        result = await service.extract_file_async(str(tmp_path))
+        tables_info: List[TableInfo] = []
+        table_idx = 0
+        for page in result.pages:
+            for table in page.tables:
+                tables_info.append(TableInfo(
+                    table_index=table_idx,
+                    page_num=table.page_num if table.page_num else page.page_num,
+                    row_count=table.row_count,
+                    col_count=table.col_count,
+                    rows=table.rows,
+                    is_merged=table.is_merged,
+                    page_span=table.page_span,
+                    merge_confidence=table.merge_confidence,
+                ))
+                table_idx += 1
+
+        return ExtractResponse(
+            success=result.status in (ExtractionStatus.COMPLETED, ExtractionStatus.LLM_FALLBACK),
+            file_path=file.filename or result.file_path,
+            status=result.status.value,
+            text=result.text,
+            text_preview=result.text[:1000] + "..." if len(result.text) > 1000 else result.text,
+            page_count=result.page_count,
+            char_count=result.char_count,
+            token_count=result.token_count,
+            quality_score=result.quality_score,
+            extraction_method=result.extraction_method.value if result.extraction_method else None,
+            processing_time_ms=result.processing_time_ms,
+            error_message=result.error_message,
+            tables=tables_info,
+        )
+    finally:
+        if tmp_path:
+            tmp_path.unlink(missing_ok=True)
+
+
+@app.post("/extract/business-certificate", response_model=ExtractResponse)
+async def extract_business_certificate(file: UploadFile = File(...)):
+    """사업자등록증 전용 선명화 + 다단계 OCR 추출.
+
+    정보공개 게시판 파싱(텍스트 레이어 위주)과 달리, 저화질 스캔본을 대상으로
+    고DPI 렌더링/언샤프 마스크 선명화/Otsu 이진화 후 Tesseract→EasyOCR→PaddleOCR
+    순으로 폴백한다. (`/extract/upload` 의 일반 파이프라인과 분리)
+    """
+    from .services.business_certificate_ocr import extract_business_certificate_text
+
+    started = time.time()
+    data = await file.read()
+    result = extract_business_certificate_text(data, filename=file.filename)
+    processing_time_ms = int((time.time() - started) * 1000)
+
+    return ExtractResponse(
+        success=bool(result.text),
+        file_path=file.filename or "business-certificate.pdf",
+        status="completed" if result.text else "failed",
+        text=result.text,
+        text_preview=result.text[:1000] + "..." if len(result.text) > 1000 else result.text,
+        page_count=result.page_count,
+        char_count=len(result.text),
+        token_count=0,
+        quality_score=result.quality_score,
+        extraction_method=result.method,
+        processing_time_ms=processing_time_ms,
+        error_message=result.warning,
+        tables=[],
+    )
+
+
+@app.post("/extract/document-ocr")
+async def extract_document_ocr(file: UploadFile = File(...), max_pages: int = Query(1, ge=1, le=5)):
+    """공통 PDF OCR 후보 추출.
+
+    여러 OCR 엔진/전처리 후보를 단일 원문으로 접지 않고 후보 배열로 반환한다.
+    PDF OCR 앱, 표 구조 복원, 통합허가 계획서 작성 플랫폼의 공통 진입점이다.
+    """
+    from .services.document_ocr import extract_document_ocr_candidates
+
+    started = time.time()
+    data = await file.read()
+    engines = _resolve_ocr_engines("MCM_DOCUMENT_OCR_ENGINES", "tesseract,easyocr,paddleocr,vlm")
+    result = extract_document_ocr_candidates(data, filename=file.filename, max_pages=max_pages, engines=engines)
+    body = result.to_dict()
+    body.update({
+        "success": bool(result.text),
+        "file_path": file.filename or "document.pdf",
+        "status": "completed" if result.text else "failed",
+        "processing_time_ms": int((time.time() - started) * 1000),
+    })
+    return body
+
+
+@app.post("/extract/business-certificate-v2")
+async def extract_business_certificate_v2(file: UploadFile = File(...)):
+    """사업자등록증 OCR v2.
+
+    공통 OCR 후보 생성기를 사용해 전통 OCR/VLM 후보를 반환한다. 필드 단위 보팅은
+    현재 Next 계층에서 수행하며, 이후 백엔드 공통 보팅 계층으로 이동할 수 있다.
+    """
+    from .services.document_ocr import extract_document_ocr_candidates
+
+    started = time.time()
+    data = await file.read()
+    engines = _resolve_ocr_engines("MCM_BIZCERT_OCR_ENGINES", "paddleocr,easyocr,vlm")
+    result = extract_document_ocr_candidates(
+        data,
+        filename=file.filename,
+        max_pages=1,
+        engines=engines,
+        prefer_text_layer=True,
+        tesseract_mode=os.getenv("MCM_BIZCERT_TESSERACT_MODE", "disabled"),
+    )
+    body = result.to_dict()
+    body.update({
+        "success": bool(result.text),
+        "file_path": file.filename or "business-certificate.pdf",
+        "status": "completed" if result.text else "failed",
+        "processing_time_ms": int((time.time() - started) * 1000),
+    })
+    return body
+
+
+def _resolve_ocr_engines(env_name: str, default_value: str) -> List[str]:
+    raw = os.getenv(env_name, default_value)
+    return [item.strip() for item in raw.split(",") if item.strip()]
 
 
 @app.post("/extract/batch", response_model=BatchExtractResponse)

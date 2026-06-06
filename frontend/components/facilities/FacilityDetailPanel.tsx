@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Pencil, Save, X, MapPin, Phone, Hash, Building2, FileText, Layers, ClipboardList, Trash2, Plus, History, Upload, Tags, Briefcase } from "lucide-react";
+import { Pencil, Save, X, MapPin, Phone, Hash, Building2, FileText, Layers, ClipboardList, Trash2, Plus, History, Upload, Tags, Briefcase, FolderTree } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AnnualReportSnapshot, FacilityDetail, PermitDetail, ProductOutput } from "@/lib/ieps/types-facility";
 import { cleanProductName, formatAddress, formatBusinessRegistrationNo, formatCompanyName, formatNumber, parseIndustriesFromValue } from "@/lib/ieps/formatters";
@@ -27,6 +27,7 @@ import type {
   FacilityGroupTree,
 } from "@/lib/ieps/facility-group";
 import type { FacilityOperatingRelationType, LegalEntity } from "@/lib/ieps/legal-entity";
+import { FacilityOrdersModal } from "@/components/facilities/FacilityOrdersModal";
 
 const GROUP_COMPANY_ROLE_LABELS: Record<FacilityGroupCompanyRole, string> = {
   group_representative: "그룹 대표기업",
@@ -133,9 +134,11 @@ export function FacilityDetailPanel({ facilityId, canEdit, onUpdated, onDeleted 
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyAnchor, setHistoryAnchor] = useState<{ top: number; left: number } | null>(null);
   const [contactsOpen, setContactsOpen] = useState(false);
+  const [ordersOpen, setOrdersOpen] = useState(false);
 
   const reload = useCallback(async () => {
     if (!facilityId) {
@@ -212,66 +215,118 @@ export function FacilityDetailPanel({ facilityId, canEdit, onUpdated, onDeleted 
             </div>
           </div>
         </div>
-        {canEdit && !editing && (
+        {!editing && (
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={(event) => {
-                const rect = event.currentTarget.getBoundingClientRect();
-                const popoverWidth = Math.min(820, window.innerWidth - 32);
-                const popoverHeight = Math.min(820, window.innerHeight - 24);
-                const belowTop = rect.bottom + 8;
-                const aboveTop = rect.top - popoverHeight - 8;
-                const top =
-                  belowTop + popoverHeight <= window.innerHeight - 16
-                    ? belowTop
-                    : Math.max(16, aboveTop);
-                setHistoryAnchor({
-                  top,
-                  left: Math.max(16, Math.min(rect.left, window.innerWidth - popoverWidth - 16)),
-                });
-                setHistoryOpen(true);
-              }}
+              onClick={() => setOrdersOpen(true)}
               className="glass-button rounded-xl px-3 py-2 text-xs font-bold text-stone-700 flex items-center gap-1"
             >
-              <History className="w-3.5 h-3.5" /> 이력
+              <FolderTree className="w-3.5 h-3.5" /> 수주
             </button>
-            <button
-              type="button"
-              onClick={() => setEditing(true)}
-              className="glass-button rounded-xl px-3 py-2 text-xs font-bold text-stone-700 flex items-center gap-1"
-            >
-              <Pencil className="w-3.5 h-3.5" /> 편집
-            </button>
-            <button
-              type="button"
-              disabled={deleting}
-              onClick={async () => {
-                const ok = window.confirm(
-                  `${detail.companyName} 사업장을 삭제합니다. 관련 허가/생산품/연간보고 데이터도 함께 삭제됩니다. 계속할까요?`
-                );
-                if (!ok) return;
-                setDeleting(true);
-                try {
-                  const res = await fetch("/api/facilities/" + detail.facilityId, { method: "DELETE" });
-                  if (!res.ok) {
-                    const body = await res.json().catch(() => ({}));
-                    throw new Error(body?.error ?? "HTTP " + res.status);
-                  }
-                  onDeleted();
-                } catch (err) {
-                  alert("삭제 실패: " + (err as Error).message);
-                } finally {
-                  setDeleting(false);
-                }
-              }}
-              className="rounded-xl px-3 py-2 text-xs font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 flex items-center gap-1 disabled:opacity-60"
-            >
-              <Trash2 className="w-3.5 h-3.5" /> 삭제
-            </button>
+            {canEdit && (
+              <>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    const popoverWidth = Math.min(820, window.innerWidth - 32);
+                    const popoverHeight = Math.min(820, window.innerHeight - 24);
+                    const belowTop = rect.bottom + 8;
+                    const aboveTop = rect.top - popoverHeight - 8;
+                    const top =
+                      belowTop + popoverHeight <= window.innerHeight - 16
+                        ? belowTop
+                        : Math.max(16, aboveTop);
+                    setHistoryAnchor({
+                      top,
+                      left: Math.max(16, Math.min(rect.left, window.innerWidth - popoverWidth - 16)),
+                    });
+                    setHistoryOpen(true);
+                  }}
+                  className="glass-button rounded-xl px-3 py-2 text-xs font-bold text-stone-700 flex items-center gap-1"
+                >
+                  <History className="w-3.5 h-3.5" /> 이력
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditing(true)}
+                  className="glass-button rounded-xl px-3 py-2 text-xs font-bold text-stone-700 flex items-center gap-1"
+                >
+                  <Pencil className="w-3.5 h-3.5" /> 편집
+                </button>
+                <button
+                  type="button"
+                  disabled={deleting}
+                  onClick={() => setDeleteConfirmOpen(true)}
+                  className="rounded-xl px-3 py-2 text-xs font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 flex items-center gap-1 disabled:opacity-60"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> 삭제
+                </button>
+              </>
+            )}
           </div>
         )}
       </header>
+
+      {ordersOpen && (
+        <FacilityOrdersModal
+          facilityId={detail.facilityId}
+          facilityName={formatCompanyName(detail.companyName) ?? detail.companyName}
+          onClose={() => setOrdersOpen(false)}
+        />
+      )}
+
+      {deleteConfirmOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/30 p-4">
+          <div className="glass-panel rounded-3xl p-5 w-full max-w-md">
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div>
+                <h3 className="text-lg font-bold text-stone-800">사업장 휴지통 이동</h3>
+                <p className="text-sm text-stone-600 mt-2">
+                  <span className="font-bold text-stone-900">{formatCompanyName(detail.companyName)}</span> 사업장을 휴지통으로 이동합니다.
+                  관련 허가/생산품/연간보고 데이터는 보존되며, 목록에서는 제외됩니다.
+                </p>
+              </div>
+              <button type="button" onClick={() => setDeleteConfirmOpen(false)} className="glass-button rounded-full p-2">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setDeleteConfirmOpen(false)} className="glass-button rounded-xl px-4 py-2 text-sm font-bold">
+                취소
+              </button>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={async () => {
+                  setDeleting(true);
+                  try {
+                    const res = await fetch("/api/facilities/" + detail.facilityId, {
+                      method: "DELETE",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ deleteReason: "사용자 요청" }),
+                    });
+                    if (!res.ok) {
+                      const body = await res.json().catch(() => ({}));
+                      throw new Error(body?.error ?? "HTTP " + res.status);
+                    }
+                    setDeleteConfirmOpen(false);
+                    onDeleted();
+                  } catch (err) {
+                    alert("삭제 실패: " + (err as Error).message);
+                  } finally {
+                    setDeleting(false);
+                  }
+                }}
+                className="rounded-xl px-4 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 disabled:opacity-60"
+              >
+                휴지통으로 이동
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {!editing ? (
         <ReadView detail={detail} onOpenContacts={() => setContactsOpen(true)} />
@@ -286,6 +341,14 @@ export function FacilityDetailPanel({ facilityId, canEdit, onUpdated, onDeleted 
           }}
         />
       )}
+      <BusinessCertificatesSection
+        detail={detail}
+        canEdit={canEdit}
+        onChanged={() => {
+          reload();
+          onUpdated();
+        }}
+      />
 
       {hasIntegratedService ? (
         <>
@@ -1624,6 +1687,7 @@ function ReadView({
         </div>
       </div>
       <DetailField icon={Hash} label="사업자등록번호" value={formatBusinessRegistrationNo(detail.businessRegistrationNo)} />
+      <DetailField icon={Building2} label="대표자명" value={detail.representativeName ?? null} />
       <PhoneContactField value={detail.phoneNumber} onOpenContacts={onOpenContacts} />
       <DetailField
         icon={MapPin}
@@ -1657,9 +1721,130 @@ function ReadView({
         </div>
       </div>
       <DetailField icon={Layers} label="허가 건수" value={String(detail.permits.length)} />
+      <DetailField
+        icon={FileText}
+        label="사업자등록증 업태"
+        value={detail.businessCertificateBusinessType ?? null}
+        multiline
+      />
+      <DetailField
+        icon={FileText}
+        label="사업자등록증 종목"
+        value={detail.businessCertificateBusinessItem ?? null}
+        multiline
+      />
+      <DetailField
+        icon={Hash}
+        label="법인등록번호"
+        value={detail.businessCertificateCorporateRegistrationNo ?? null}
+      />
       <OperatingEntityCard detail={detail} />
       <GroupInfoCard detail={detail} />
     </div>
+  );
+}
+
+function BusinessCertificatesSection({
+  detail,
+  canEdit,
+  onChanged,
+}: {
+  detail: FacilityDetail;
+  canEdit: boolean;
+  onChanged: () => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const certificates = detail.businessCertificates ?? [];
+  const current = certificates.find((item) => item.isCurrent);
+
+  const upload = async (file: File) => {
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.set("file", file);
+      const res = await fetch(`/api/facilities/${encodeURIComponent(detail.facilityId)}/business-certificates`, {
+        method: "POST",
+        body: form,
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? "HTTP " + res.status);
+      }
+      onChanged();
+    } catch (err) {
+      alert("사업자등록증 업로드 실패: " + (err as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <section className="rounded-2xl border border-stone-200 bg-white/50 p-4">
+      <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
+        <div>
+          <h3 className="text-sm font-black text-stone-800 flex items-center gap-2">
+            <FileText className="w-4 h-4 text-primary" />
+            사업자등록증
+          </h3>
+          <p className="text-xs text-stone-500 mt-1">
+            PDF 원본은 S3에 보관되며, 갱신 업로드 시 OCR 파싱 결과로 업태·종목·법인등록번호를 업데이트합니다.
+          </p>
+        </div>
+        {canEdit && (
+          <label className="rounded-xl px-3 py-2 text-xs font-bold text-white bg-primary hover:bg-primary/90 cursor-pointer inline-flex items-center gap-1">
+            <Upload className="w-3.5 h-3.5" />
+            {uploading ? "업로드 중..." : current ? "갱신본 업로드" : "등록증 업로드"}
+            <input
+              type="file"
+              accept="application/pdf,.pdf"
+              disabled={uploading}
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (file) upload(file);
+              }}
+            />
+          </label>
+        )}
+      </div>
+
+      {certificates.length === 0 ? (
+        <p className="text-sm text-stone-400">등록된 사업자등록증이 없습니다.</p>
+      ) : (
+        <div className="grid gap-2">
+          {certificates.map((item) => (
+            <div key={item.certificateId} className="rounded-xl border border-stone-200 bg-white/70 p-3 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-sm font-bold text-stone-800 truncate">{item.displayName}</p>
+                  {item.isCurrent && (
+                    <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">현재본</span>
+                  )}
+                  <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-bold text-stone-500">v{item.versionNo}</span>
+                </div>
+                <p className="text-xs text-stone-500 mt-1">
+                  갱신일: {item.createdAt.slice(0, 10)} · 업태 {item.businessType ?? "-"} · 종목 {item.businessItem ?? "-"} · 법인등록번호 {item.corporateRegistrationNo ?? "-"}
+                </p>
+                <p className="text-[11px] text-stone-400 mt-1">
+                  등록자: {item.createdByName ?? item.createdByEmail ?? "-"}
+                </p>
+              </div>
+              {item.publicPath && (
+                <a
+                  href={item.publicPath}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold text-stone-700 bg-stone-100 hover:bg-stone-200"
+                >
+                  PDF 보기
+                </a>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -1674,6 +1859,7 @@ function EditView({
 }) {
   const [companyName, setCompanyName] = useState(formatCompanyName(detail.companyName) ?? "");
   const [businessRegistrationNo, setBrn] = useState(formatBusinessRegistrationNo(detail.businessRegistrationNo) ?? "");
+  const [representativeName, setRepresentativeName] = useState(detail.representativeName ?? "");
   const [siteAddress, setSiteAddress] = useState(formatAddress(detail.siteAddress) ?? "");
   const [phoneNumber, setPhoneNumber] = useState(detail.phoneNumber ?? "");
   const facilityIndustries =
@@ -1692,6 +1878,19 @@ function EditView({
           name: industry.name ?? "",
         }))
       : [{ code: "", name: "" }]
+  );
+  const [certificateKinds, setCertificateKinds] = useState(() => {
+    const types = (detail.businessCertificateBusinessType ?? "").split(/\n+/);
+    const items = (detail.businessCertificateBusinessItem ?? "").split(/\n+/);
+    const max = Math.max(types.length, items.length);
+    const rows = Array.from({ length: max }, (_, idx) => ({
+      businessType: (types[idx] ?? "").trim(),
+      businessItem: (items[idx] ?? "").trim(),
+    })).filter((row) => row.businessType || row.businessItem);
+    return rows.length ? rows : [{ businessType: "", businessItem: "" }];
+  });
+  const [certificateCorporateNo, setCertificateCorporateNo] = useState(
+    detail.businessCertificateCorporateRegistrationNo ?? ""
   );
   const [logoPath, setLogoPath] = useState(detail.logoPath ?? "");
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -1757,6 +1956,12 @@ function EditView({
         name: industry.name.trim(),
       }))
       .filter((industry) => industry.code || industry.name);
+    const normalizedCertificateKinds = certificateKinds
+      .map((row) => ({
+        businessType: row.businessType.trim(),
+        businessItem: row.businessItem.trim(),
+      }))
+      .filter((row) => row.businessType || row.businessItem);
     try {
       const nextLogoPath = logoFile ? await uploadLogo(logoFile) : logoPath;
       const res = await fetch("/api/facilities/" + detail.facilityId, {
@@ -1765,10 +1970,16 @@ function EditView({
         body: JSON.stringify({
           companyName: formatCompanyName(companyName) ?? companyName,
           businessRegistrationNo: formatBusinessRegistrationNo(businessRegistrationNo) || null,
+          representativeName: representativeName || null,
           siteAddress: formatAddress(siteAddress) || null,
           phoneNumber: phoneNumber || null,
           industryCode: normalizedIndustries.map((industry) => industry.code).join("\n") || null,
           industryName: normalizedIndustries.map((industry) => industry.name).join("\n") || null,
+          businessCertificateBusinessType:
+            normalizedCertificateKinds.map((row) => row.businessType).join("\n") || null,
+          businessCertificateBusinessItem:
+            normalizedCertificateKinds.map((row) => row.businessItem).join("\n") || null,
+          businessCertificateCorporateRegistrationNo: certificateCorporateNo || null,
           logoPath: nextLogoPath || null,
           companySize: companySize || null,
         }),
@@ -1813,6 +2024,7 @@ function EditView({
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <FieldInput label="상호" value={companyName} onChange={setCompanyName} />
       <FieldInput label="사업자등록번호" value={businessRegistrationNo} onChange={setBrn} />
+      <FieldInput label="대표자명" value={representativeName} onChange={setRepresentativeName} multiline />
       <FieldInput
         label="소재지"
         value={siteAddress}
@@ -1878,6 +2090,71 @@ function EditView({
           ))}
         </div>
       </div>
+      <div className="sm:col-span-2 flex flex-col gap-2">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">
+            사업자등록증 기반 업종
+          </span>
+          <button
+            type="button"
+            onClick={() => setCertificateKinds((prev) => [...prev, { businessType: "", businessItem: "" }])}
+            className="glass-button rounded-lg px-2 py-1 text-[11px] font-bold text-stone-700 flex items-center gap-1"
+          >
+            <Plus className="w-3 h-3" /> 항목 추가
+          </button>
+        </div>
+        <div className="flex flex-col gap-2">
+          {certificateKinds.map((row, idx) => (
+            <div
+              key={idx}
+              className="grid grid-cols-1 sm:grid-cols-[180px_1fr_auto] gap-2 bg-white/40 border border-white/50 rounded-xl p-2"
+            >
+              <input
+                className="input-field"
+                value={row.businessType}
+                onChange={(e) =>
+                  setCertificateKinds((prev) =>
+                    prev.map((item, itemIdx) =>
+                      itemIdx === idx ? { ...item, businessType: e.target.value } : item
+                    )
+                  )
+                }
+                placeholder="사업자등록증 업태"
+              />
+              <input
+                className="input-field"
+                value={row.businessItem}
+                onChange={(e) =>
+                  setCertificateKinds((prev) =>
+                    prev.map((item, itemIdx) =>
+                      itemIdx === idx ? { ...item, businessItem: e.target.value } : item
+                    )
+                  )
+                }
+                placeholder="사업자등록증 종목"
+              />
+              <button
+                type="button"
+                onClick={() =>
+                  setCertificateKinds((prev) =>
+                    prev.length > 1
+                      ? prev.filter((_, itemIdx) => itemIdx !== idx)
+                      : [{ businessType: "", businessItem: "" }]
+                  )
+                }
+                className="rounded-lg px-2 py-1 text-[11px] font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 flex items-center justify-center gap-1"
+              >
+                <Trash2 className="w-3 h-3" /> 삭제
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+      <FieldInput
+        label="법인등록번호"
+        value={certificateCorporateNo}
+        onChange={setCertificateCorporateNo}
+      />
       <div className="sm:col-span-2 grid grid-cols-1 md:grid-cols-[auto_1fr] gap-3 bg-white/40 border border-white/50 rounded-xl p-3">
         <LogoPreview path={logoPreviewUrl || logoPath || null} label={companyName} />
         <div className="flex flex-col gap-2">
@@ -1966,7 +2243,7 @@ function EditView({
           </div>
         </div>
         <div className="flex flex-col gap-1.5">
-          <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">사업장 규모</span>
+          <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">사업장 분류</span>
           <select className="ui-select" value={companySize} onChange={(e) => setCompanySize(e.target.value as FacilityCompanySize | "")}>
             <option value="">미지정</option>
             {FACILITY_COMPANY_SIZE_ORDER.map((size) => (
@@ -2797,22 +3074,33 @@ function FieldInput({
   value,
   onChange,
   full,
+  multiline,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   full?: boolean;
+  multiline?: boolean;
 }) {
   return (
     <div className={cn("flex flex-col gap-1.5", full && "sm:col-span-2")}>
       <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">
         {label}
       </span>
-      <input
-        className="input-field"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
+      {multiline ? (
+        <textarea
+          className="input-field"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          rows={2}
+        />
+      ) : (
+        <input
+          className="input-field"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      )}
     </div>
   );
 }

@@ -4,6 +4,7 @@ import fs from "node:fs";
 import { spawn, exec, type ChildProcess } from "node:child_process";
 import readline from "node:readline";
 import type { CollectionConfig } from "./types";
+import { resolveJobBackendUrl } from "./job-backend-url";
 
 /** /ieps/parse 라우팅과 동일한 카테고리 어휘. cli-collect 의 ParseOnlyCategory 와 1:1 대응. */
 export type ParseCategory = "integratedFirst" | "integratedChange" | "annualReport";
@@ -80,7 +81,8 @@ export function startCollectJob(options: JobOptions): JobHandle {
     "--config=" + configPath,
   ];
   if (options.maxPages != null) args.push("--max-pages=" + options.maxPages);
-  if (options.backendUrl) args.push("--backend=" + options.backendUrl);
+  const backendUrl = resolveJobBackendUrl(options.backendUrl);
+  if (backendUrl) args.push("--backend=" + backendUrl);
   if (options.dryRun) args.push("--dry-run");
   if (options.skipParse) args.push("--skip-parse");
   if (options.downloadOnly) args.push("--download-only");

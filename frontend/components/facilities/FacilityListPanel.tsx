@@ -82,11 +82,6 @@ export function FacilityListPanel({
                 </div>
                 <div className="text-sm font-bold text-stone-800 truncate flex items-center gap-2">
                   {formatCompanyName(f.companyName)}
-                  {f.source === "manual" && (
-                    <span className="text-[9px] font-bold uppercase tracking-wide bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">
-                      manual
-                    </span>
-                  )}
                 </div>
                 <div className="text-[11px] text-stone-500 truncate mt-0.5">
                   {f.regionSido || "—"} {f.regionSigungu ?? ""}{" · "}

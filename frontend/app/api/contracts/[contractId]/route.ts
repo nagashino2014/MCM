@@ -57,6 +57,8 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       if (body.legacyCompanyId !== undefined) pushSet("legacy_company_id", body.legacyCompanyId || null);
       if (body.contractDirection !== undefined) pushSet("contract_direction", body.contractDirection || "sales");
       if (body.industryCategory !== undefined) pushSet("industry_category", body.industryCategory || null);
+      if (body.paymentMethod !== undefined) pushSet("payment_method", body.paymentMethod || null);
+      if (body.orderingSubjectType !== undefined) pushSet("ordering_subject_type", normalizeOrderingSubjectType(body.orderingSubjectType));
       if (body.contractDate !== undefined) pushSet("contract_date", body.contractDate || null);
       if (body.startedAt !== undefined) pushSet("started_at", body.startedAt || null);
       if (body.endedAt !== undefined) pushSet("ended_at", body.endedAt || null);
@@ -90,6 +92,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
 
 const DELETE_REASONS = new Set(["중복 입력 삭제", "계약 무산", "계약 포기"]);
 const newDeleteLogId = () => "cdel_" + crypto.randomUUID().replace(/-/g, "").slice(0, 16);
+const newTrashId = () => "trash_" + crypto.randomUUID().replace(/-/g, "").slice(0, 16);
 
 export async function DELETE(req: NextRequest, ctx: RouteContext) {
   try {
@@ -102,6 +105,7 @@ export async function DELETE(req: NextRequest, ctx: RouteContext) {
     }
     const before = await getContractDetail(contractId);
     if (!before) return NextResponse.json({ error: "not found" }, { status: 404 });
+    const now = new Date().toISOString();
     await withDbWrite(async (db) => {
       await db.run(
         `INSERT INTO contract_delete_logs
@@ -114,7 +118,21 @@ export async function DELETE(req: NextRequest, ctx: RouteContext) {
           deleteReason,
           JSON.stringify(before),
           actor.userId,
-          new Date().toISOString(),
+          now,
+        ]
+      );
+      await db.run(
+        `INSERT INTO trash_items
+          (trash_id, item_type, item_id, item_title, reason, before_json, deleted_by, deleted_at)
+         VALUES ($1, 'contract', $2, $3, $4, $5::jsonb, $6, $7)`,
+        [
+          newTrashId(),
+          contractId,
+          String(before.contract.contract_title ?? ""),
+          deleteReason,
+          JSON.stringify(before),
+          actor.userId,
+          now,
         ]
       );
       await recordAuditLogInline(db, {
@@ -123,9 +141,12 @@ export async function DELETE(req: NextRequest, ctx: RouteContext) {
         targetTable: "contracts",
         targetId: contractId,
         before,
-        after: { deleted: true, deleteReason },
+        after: { movedToTrash: true, deleteReason },
       });
-      await db.run("DELETE FROM contracts WHERE contract_id = $1", [contractId]);
+      await db.run(
+        "UPDATE contracts SET deleted_at = $1, deleted_by = $2, delete_reason = $3, updated_at = $1 WHERE contract_id = $4",
+        [now, actor.userId, deleteReason, contractId]
+      );
     });
     return NextResponse.json({ ok: true });
   } catch (err) {
@@ -137,4 +158,17 @@ function toNullableNumber(value: unknown): number | null {
   if (value == null || value === "") return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
+}
+
+function normalizeOrderingSubjectType(value: unknown): string | null {
+  const text = String(value ?? "").trim();
+  return [
+    "SITE_DIRECT",
+    "PARENT_CORP",
+    "CONSIGNED_OPERATOR",
+    "THIRD_PARTY_PARTNER",
+    "ETC",
+  ].includes(text)
+    ? text
+    : null;
 }

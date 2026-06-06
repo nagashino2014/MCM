@@ -16,6 +16,10 @@ export function formatCompanyName(value: string | null | undefined): string | nu
   out = out.replace(/주\s*식\s*회\s*사/g, "㈜");
   out = out.replace(/\(\s*주\s*\)|（\s*주\s*）/g, "㈜");
   out = out.replace(/(^|\s)주(?=\s|$)/g, "$1㈜");
+  out = out.replace(/\s+㈜/g, "㈜");
+  out = out.replace(/^㈜\s+/g, "㈜");
+  out = out.replace(/㈜(?=\S)/g, (_, offset: number) => (offset === 0 ? "㈜" : "㈜ "));
+  out = out.replace(/\s+/g, " ").trim();
   return out || null;
 }
 
@@ -41,11 +45,25 @@ export function formatAddress(value: string | null | undefined): string | null {
   let out = String(value).replace(/\s+/g, " ").trim();
   out = out.replace(/\s*([()（）])\s*/g, " $1 ").replace(/\s+/g, " ").trim();
   out = out.replace(/\(\s+/g, "(").replace(/\s+\)/g, ")");
+  out = spaceCompactKoreanAddress(out);
   return out || null;
 }
 
 export function normalizeAddress(value: string | null | undefined): string | null {
   return formatAddress(value);
+}
+
+function spaceCompactKoreanAddress(value: string): string {
+  let out = value;
+  out = out.replace(
+    /(서울특별시|부산광역시|대구광역시|인천광역시|광주광역시|대전광역시|울산광역시|세종특별자치시|경기도|강원특별자치도|강원도|충청북도|충청남도|전북특별자치도|전라북도|전라남도|경상북도|경상남도|제주특별자치도|제주도)(?=[가-힣0-9])/g,
+    "$1 "
+  );
+  out = out.replace(/([가-힣]{1,12}(?:시|군|구))(?=[가-힣0-9])/g, "$1 ");
+  out = out.replace(/([가-힣0-9]{1,12}(?:읍|면|동))(?=[가-힣0-9])/g, "$1 ");
+  out = out.replace(/([가-힣0-9]+(?:대로|로|길))(?=\d)/g, "$1 ");
+  out = out.replace(/([가-힣0-9]{1,12})\s+(시|군|구|읍|면|동)(?=\s|[가-힣0-9]|$)/g, "$1$2");
+  return out.replace(/\s+/g, " ").trim();
 }
 
 export function cleanProductName(value: string | null | undefined): string | null {

@@ -35,6 +35,10 @@ def main() -> None:
     parser.add_argument("--instance-id", required=True)
     parser.add_argument("--bastion-role", required=True)
     parser.add_argument("--secret-id", required=True)
+    parser.add_argument("--db-secret-id", help="Optional RDS managed secret containing username/password")
+    parser.add_argument("--db-host", help="Database host used with --db-secret-id")
+    parser.add_argument("--db-name", default="mcm", help="Database name used with --db-secret-id")
+    parser.add_argument("--db-port", default="5432", help="Database port used with --db-secret-id")
     parser.add_argument("--sql", required=True)
     parser.add_argument("--s3-bucket", help="Optional temporary S3 bucket for large SQL files")
     parser.add_argument("--s3-key", help="Temporary S3 key. Defaults to tmp/sql-migrations/<filename>")
@@ -114,11 +118,47 @@ fi
 {sql_fetch_commands}
 SECRET_JSON=$(aws secretsmanager get-secret-value --region {args.region} --secret-id {args.secret_id} --query SecretString --output text)
 export SECRET_JSON
+DB_SECRET_ID={json.dumps(args.db_secret_id or "")}
+DB_HOST={json.dumps(args.db_host or "")}
+DB_NAME={json.dumps(args.db_name)}
+DB_PORT={json.dumps(args.db_port)}
+export DB_SECRET_ID DB_HOST DB_NAME DB_PORT
 DB_URL=$(python3 - <<'PY'
 import json
 import os
+from urllib.parse import quote
+
 secret = json.loads(os.environ["SECRET_JSON"])
-url = secret["DATABASE_URL"].replace("sslmode=no-verify", "sslmode=require")
+db_secret_id = os.environ.get("DB_SECRET_ID", "")
+if db_secret_id:
+    import subprocess
+
+    raw = subprocess.check_output([
+        "aws",
+        "secretsmanager",
+        "get-secret-value",
+        "--region",
+        "{args.region}",
+        "--secret-id",
+        db_secret_id,
+        "--query",
+        "SecretString",
+        "--output",
+        "text",
+    ], text=True)
+    db_secret = json.loads(raw)
+    host = os.environ["DB_HOST"]
+    database = os.environ["DB_NAME"]
+    port = os.environ["DB_PORT"]
+    url = "postgresql://{{}}:{{}}@{{}}:{{}}/{{}}?sslmode=require".format(
+        quote(db_secret["username"], safe=""),
+        quote(db_secret["password"], safe=""),
+        host,
+        port,
+        database,
+    )
+else:
+    url = secret["DATABASE_URL"].replace("sslmode=no-verify", "sslmode=require")
 print(url)
 PY
 )

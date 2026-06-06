@@ -29,9 +29,12 @@ export const WATER_PALETTE = [
 export const SERVICE_PALETTE = ["#F4B084", "#FFD966", "#A9D08E", "#9BC2E6", "#BFBFBF"];
 
 export const SIZE_PALETTE = [
-  "rgba(237, 125, 49, 0.7)",
-  "rgba(237, 125, 49, 0.45)",
-  "rgba(237, 125, 49, 0.25)",
+  "rgba(68, 114, 196, 0.78)",
+  "rgba(112, 173, 71, 0.78)",
+  "rgba(165, 165, 165, 0.78)",
+  "rgba(237, 125, 49, 0.78)",
+  "rgba(255, 192, 0, 0.72)",
+  "rgba(91, 155, 213, 0.62)",
 ];
 
 export function bucketsToSlices(
@@ -61,9 +64,9 @@ export function dummyServiceMix(total: number, seed: number): Slice[] {
 }
 
 export function dummySizeMix(total: number, seed: number): Slice[] {
-  const labels = ["대기업", "중견기업", "중소기업"];
+  const labels = ["국가기관", "지자체", "공기업", "대기업", "중견기업", "중소기업"];
   if (total <= 0) return labels.map((l) => ({ label: l, count: 0 }));
-  const base = [0.12, 0.3, 0.58];
+  const base = [0.04, 0.08, 0.1, 0.12, 0.24, 0.42];
   let rem = total;
   const out: Slice[] = [];
   for (let i = 0; i < labels.length; i++) {

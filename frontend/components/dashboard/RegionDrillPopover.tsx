@@ -22,7 +22,7 @@ import { FACILITY_COMPANY_SIZE_LABELS, FACILITY_SERVICE_LABELS, type FacilityCom
  *      (1) 대기 종 규모  (실측 — permit_scales.air_class)
  *      (2) 수질 종 규모  (실측 — permit_scales.water_class)
  *      (3) 대상 용역 분류별 비율 (CONCEPT — 통합허가/화관법/HAPs/ESG)
- *      (4) 사업장 규모별 비율    (CONCEPT — 대기업/중견기업/중소기업)
+ *      (4) 사업장 분류별 비율    (국가기관/지자체/공기업/대기업/중견기업/중소기업)
  *  - 사업장 30건 리스트 — `/facilities?focus=<id>` 진입 링크
  *  - 위치: 부모 컨테이너 기준 절대 좌표(x, y) — 부모(RegionMap)가 클램핑 처리
  */
@@ -126,7 +126,7 @@ export function RegionDrillPopover({ x, y, sidoFull, sidoShort, sigungu, onClose
         <div className="min-w-0">
           <h3 className="text-sm font-bold text-stone-800 truncate">{title}</h3>
           <p className="text-[10px] text-stone-500 mt-0.5 truncate">
-            해당 시군구 사업장 분포 — 대기/수질/용역/규모 실측
+            해당 시군구 사업장 분포 — 대기/수질/용역/분류 실측
           </p>
         </div>
         <button
@@ -182,7 +182,7 @@ export function RegionDrillPopover({ x, y, sidoFull, sidoShort, sigungu, onClose
                 conceptNote="용역 카테고리 입력 전 임시 분포"
               />
               <PieCard
-                title="사업장 규모"
+                title="사업장 분류"
                 icon={<Building2 className="w-3.5 h-3.5 text-stone-400" />}
                 slices={
                   data.companySizes?.some((item) => item.count > 0 && item.size !== "unknown")
@@ -191,7 +191,7 @@ export function RegionDrillPopover({ x, y, sidoFull, sidoShort, sigungu, onClose
                 }
                 kind={data.companySizes?.some((item) => item.count > 0 && item.size !== "unknown") ? "real" : "concept"}
                 palette={SIZE_PALETTE}
-                conceptNote="사업장 규모 입력 전 임시 분포"
+                conceptNote="사업장 분류 입력 전 임시 분포"
               />
             </section>
 
@@ -205,7 +205,7 @@ export function RegionDrillPopover({ x, y, sidoFull, sidoShort, sigungu, onClose
                     <tr className="text-left text-[9px] text-stone-500 uppercase tracking-wider bg-white/50">
                       <th className="px-2 py-1.5">상호</th>
                       <th className="px-2 py-1.5">업종</th>
-                      <th className="px-2 py-1.5">용역/규모</th>
+                      <th className="px-2 py-1.5">용역/분류</th>
                       <th className="px-2 py-1.5 text-center">대기</th>
                       <th className="px-2 py-1.5 text-center">수질</th>
                       <th className="px-2 py-1.5">허가일자</th>

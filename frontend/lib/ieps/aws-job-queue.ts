@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import type { CollectionConfig } from "./types";
 import type { ParseCategory } from "./job-runner";
+import { resolveJobBackendUrl } from "./job-backend-url";
 
 export type AwsJobType = "collect" | "parse";
 
@@ -29,10 +30,12 @@ export async function enqueueAwsJob(request: AwsJobRequest): Promise<AwsQueuedJo
   }
 
   const jobId = crypto.randomUUID();
+  const backendUrl = resolveJobBackendUrl(request.backendUrl);
   const messageBody = JSON.stringify({
     jobId,
     requestedAt: new Date().toISOString(),
     ...request,
+    backendUrl,
   });
 
   const aws = await import("@aws-sdk/client-sqs");

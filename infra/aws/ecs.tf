@@ -26,9 +26,12 @@ resource "aws_iam_role_policy" "ecs_task_execution_secrets" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect   = "Allow"
-      Action   = ["secretsmanager:GetSecretValue"]
-      Resource = [aws_secretsmanager_secret.app.arn]
+      Effect = "Allow"
+      Action = ["secretsmanager:GetSecretValue"]
+      Resource = [
+        aws_secretsmanager_secret.app.arn,
+        aws_rds_cluster.main.master_user_secret[0].secret_arn
+      ]
     }]
   })
 }
@@ -65,8 +68,11 @@ data "aws_iam_policy_document" "app_access" {
   }
 
   statement {
-    actions   = ["secretsmanager:GetSecretValue"]
-    resources = [aws_secretsmanager_secret.app.arn]
+    actions = ["secretsmanager:GetSecretValue"]
+    resources = [
+      aws_secretsmanager_secret.app.arn,
+      aws_rds_cluster.main.master_user_secret[0].secret_arn
+    ]
   }
 }
 
@@ -87,22 +93,28 @@ resource "aws_ecs_task_definition" "next" {
 
   container_definitions = jsonencode([
     {
-      name      = "next"
-      image     = var.container_image_next
-      essential = true
+      name         = "next"
+      image        = var.container_image_next
+      essential    = true
       portMappings = [{ containerPort = 3000, protocol = "tcp" }]
       environment = [
         { name = "NODE_ENV", value = "production" },
         { name = "AWS_REGION", value = var.aws_region },
         { name = "MCM_STORAGE_BUCKET", value = aws_s3_bucket.app_data.bucket },
         { name = "MCM_JOB_QUEUE_URL", value = aws_sqs_queue.jobs.url },
-        { name = "MCM_JOB_QUEUE_MODE", value = "sqs" }
+        { name = "MCM_JOB_QUEUE_MODE", value = "sqs" },
+        { name = "MCM_EXTRACTION_BACKEND_URL", value = "http://backend.local:8001" },
+        { name = "PGHOST", value = aws_rds_cluster.main.endpoint },
+        { name = "PGPORT", value = "5432" },
+        { name = "PGDATABASE", value = var.db_name },
+        { name = "ADMIN_PASSWORD_SYNC_ON_BOOT", value = "true" }
       ]
       secrets = [
-        { name = "DATABASE_URL",   valueFrom = "${aws_secretsmanager_secret.app.arn}:DATABASE_URL::" },
-        { name = "AUTH_SECRET",    valueFrom = "${aws_secretsmanager_secret.app.arn}:AUTH_SECRET::" },
+        { name = "AUTH_SECRET", valueFrom = "${aws_secretsmanager_secret.app.arn}:AUTH_SECRET::" },
         { name = "ADMIN_USERNAME", valueFrom = "${aws_secretsmanager_secret.app.arn}:ADMIN_USERNAME::" },
-        { name = "ADMIN_PASSWORD", valueFrom = "${aws_secretsmanager_secret.app.arn}:ADMIN_PASSWORD::" }
+        { name = "ADMIN_PASSWORD", valueFrom = "${aws_secretsmanager_secret.app.arn}:ADMIN_PASSWORD::" },
+        { name = "PGUSER", valueFrom = "${aws_rds_cluster.main.master_user_secret[0].secret_arn}:username::" },
+        { name = "PGPASSWORD", valueFrom = "${aws_rds_cluster.main.master_user_secret[0].secret_arn}:password::" }
       ]
       logConfiguration = {
         logDriver = "awslogs"
@@ -122,16 +134,16 @@ resource "aws_ecs_task_definition" "backend" {
   family                   = "${local.name}-backend"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
-  cpu                      = 1024
-  memory                   = 4096
+  cpu                      = 2048
+  memory                   = 8192
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
   task_role_arn            = aws_iam_role.ecs_task.arn
 
   container_definitions = jsonencode([
     {
-      name      = "backend"
-      image     = var.container_image_backend
-      essential = true
+      name         = "backend"
+      image        = var.container_image_backend
+      essential    = true
       portMappings = [{ containerPort = 8001, protocol = "tcp" }]
       environment = [
         { name = "DOCKER_ENV", value = "true" },

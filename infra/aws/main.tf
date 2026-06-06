@@ -136,7 +136,7 @@ resource "aws_security_group" "alb" {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = ["175.197.62.48/32"]
   }
 
   egress {
@@ -248,6 +248,7 @@ resource "aws_cloudwatch_log_group" "worker" {
 resource "aws_lb" "main" {
   name               = local.name
   load_balancer_type = "application"
+  idle_timeout       = 300
   subnets            = aws_subnet.public[*].id
   security_groups    = [aws_security_group.alb.id]
   tags               = local.tags

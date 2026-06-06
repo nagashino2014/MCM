@@ -132,7 +132,7 @@ export function mapContractListItem(row: Record<string, unknown>): ContractListI
 
 export async function listContracts(filter: ContractListFilter) {
   const db = await getDb();
-  const where: string[] = [];
+  const where: string[] = ["c.deleted_at IS NULL"];
   const params: unknown[] = [];
 
   const addParam = (value: unknown) => {
@@ -256,7 +256,8 @@ export async function listContractsForTree(year: string | null): Promise<Contrac
     await db.exec(
       `SELECT DISTINCT SUBSTRING(COALESCE(NULLIF(contract_date, ''), started_at, created_at), 1, 4) AS year
        FROM contracts
-       WHERE COALESCE(NULLIF(contract_date, ''), started_at, created_at) IS NOT NULL`
+       WHERE deleted_at IS NULL
+         AND COALESCE(NULLIF(contract_date, ''), started_at, created_at) IS NOT NULL`
     )
   );
   const availableYears = yearsRows
@@ -265,7 +266,7 @@ export async function listContractsForTree(year: string | null): Promise<Contrac
     .sort((a, b) => Number(b) - Number(a));
 
   const params: unknown[] = [];
-  const where: string[] = [];
+  const where: string[] = ["c.deleted_at IS NULL"];
   if (year && /^\d{4}$/.test(year)) {
     params.push(year);
     where.push(`COALESCE(NULLIF(c.contract_date, ''), c.started_at, c.created_at) LIKE $${params.length} || '%'`);
@@ -310,7 +311,10 @@ export async function listContractsForTree(year: string | null): Promise<Contrac
     const serviceType = row.service_type != null && String(row.service_type).trim().length > 0
       ? String(row.service_type)
       : "기타";
-    const baseAmount = toNumber(row.current_amount) || toNumber(row.total_milestone_amount);
+    // 용역 금액은 대금지급조건(milestone) 금액 합계를 기준으로 하고,
+    // 단계가 하나도 없을 때만 계약에 기록된 금액으로 폴백한다.
+    const milestoneAmount = toNumber(row.total_milestone_amount);
+    const baseAmount = milestoneAmount > 0 ? milestoneAmount : toNumber(row.current_amount);
     const collected = toNumber(row.total_collected_amount);
     const node: ContractTreeContractNode = {
       contractId: String(row.contract_id ?? ""),
@@ -320,7 +324,7 @@ export async function listContractsForTree(year: string | null): Promise<Contrac
       industryCategory: row.industry_category != null ? String(row.industry_category) : null,
       facilityIndustryName: row.facility_industry_name != null ? String(row.facility_industry_name) : null,
       facilityIndustryCode: row.facility_industry_code != null ? String(row.facility_industry_code) : null,
-      currentAmount: toNumberOrNull(row.current_amount),
+      currentAmount: baseAmount > 0 ? baseAmount : toNumberOrNull(row.current_amount),
       contractDate: row.contract_date != null ? String(row.contract_date) : null,
       contractStatus: String(row.contract_status ?? "active"),
       isFullyCollected: baseAmount > 0 && collected >= baseAmount,
@@ -346,6 +350,99 @@ export async function listContractsForTree(year: string | null): Promise<Contrac
   };
 }
 
+/**
+ * Tree payload of all contracts that target a single facility, used by the
+ * facility detail "수주" modal. A contract is considered to target the facility
+ * when its primary facility_id matches or when it is linked through
+ * contract_facilities (relation_type = 'integrated_permit_target').
+ * No year filtering is applied here.
+ */
+export async function listContractsForTreeByFacility(facilityId: string): Promise<ContractTreePayload> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT c.contract_id,
+              c.contract_title,
+              e.entity_name AS counterparty_name,
+              c.service_type,
+              c.service_subtype,
+              c.industry_category,
+              f.industry_name AS facility_industry_name,
+              f.industry_code AS facility_industry_code,
+              c.contract_status,
+              COALESCE(c.current_amount, c.contract_amount) AS current_amount,
+              c.contract_date,
+              COALESCE(ms.total_milestone_amount, 0) AS total_milestone_amount,
+              COALESCE(ms.total_collected_amount, 0) AS total_collected_amount
+       FROM contracts c
+       JOIN legal_entities e ON e.entity_id = c.counterparty_entity_id
+       LEFT JOIN facilities f ON f.facility_id = c.facility_id
+       LEFT JOIN (
+         SELECT contract_id,
+                SUM(COALESCE(amount, 0)) AS total_milestone_amount,
+                SUM(CASE WHEN payment_collected = 1 THEN COALESCE(collected_amount, amount, 0) ELSE 0 END) AS total_collected_amount
+         FROM contract_payment_milestones
+         GROUP BY contract_id
+       ) ms ON ms.contract_id = c.contract_id
+       WHERE c.deleted_at IS NULL
+         AND (
+           c.facility_id = $1
+           OR EXISTS (
+             SELECT 1 FROM contract_facilities cf
+             WHERE cf.contract_id = c.contract_id
+               AND cf.facility_id = $1
+               AND cf.relation_type = 'integrated_permit_target'
+           )
+         )
+       ORDER BY
+         COALESCE(NULLIF(c.contract_date, ''), c.started_at, c.created_at) ASC NULLS LAST,
+         c.contract_title ASC`,
+      [facilityId]
+    )
+  );
+
+  const groupMap = new Map<string, ContractTreeContractNode[]>();
+  for (const row of rows) {
+    const serviceType = row.service_type != null && String(row.service_type).trim().length > 0
+      ? String(row.service_type)
+      : "기타";
+    const milestoneAmount = toNumber(row.total_milestone_amount);
+    const baseAmount = milestoneAmount > 0 ? milestoneAmount : toNumber(row.current_amount);
+    const collected = toNumber(row.total_collected_amount);
+    const node: ContractTreeContractNode = {
+      contractId: String(row.contract_id ?? ""),
+      contractTitle: String(row.contract_title ?? ""),
+      counterpartyName: String(row.counterparty_name ?? ""),
+      serviceSubtype: row.service_subtype != null ? String(row.service_subtype) : null,
+      industryCategory: row.industry_category != null ? String(row.industry_category) : null,
+      facilityIndustryName: row.facility_industry_name != null ? String(row.facility_industry_name) : null,
+      facilityIndustryCode: row.facility_industry_code != null ? String(row.facility_industry_code) : null,
+      currentAmount: baseAmount > 0 ? baseAmount : toNumberOrNull(row.current_amount),
+      contractDate: row.contract_date != null ? String(row.contract_date) : null,
+      contractStatus: String(row.contract_status ?? "active"),
+      isFullyCollected: baseAmount > 0 && collected >= baseAmount,
+    };
+    if (!groupMap.has(serviceType)) groupMap.set(serviceType, []);
+    groupMap.get(serviceType)!.push(node);
+  }
+
+  const groups: ContractTreeServiceGroup[] = Array.from(groupMap.entries())
+    .map(([serviceType, contracts]) => ({ serviceType, contracts }))
+    .sort((a, b) => {
+      const pa = serviceTypePriority(a.serviceType);
+      const pb = serviceTypePriority(b.serviceType);
+      if (pa !== pb) return pa - pb;
+      return a.serviceType.localeCompare(b.serviceType, "ko");
+    });
+
+  return {
+    year: null,
+    totalCount: rows.length,
+    availableYears: [],
+    groups,
+  };
+}
+
 export async function getContractDetail(contractId: string) {
   const db = await getDb();
   const rows = rowsToObjects(
@@ -363,7 +460,8 @@ export async function getContractDetail(contractId: string) {
        FROM contracts c
        JOIN legal_entities e ON e.entity_id = c.counterparty_entity_id
        LEFT JOIN facilities f ON f.facility_id = c.facility_id
-       WHERE c.contract_id = $1`,
+       WHERE c.contract_id = $1
+         AND c.deleted_at IS NULL`,
       [contractId]
     )
   );
@@ -422,8 +520,33 @@ export async function getContractDetail(contractId: string) {
       [contractId]
     )
   );
+  const targetFacilities = rowsToObjects(
+    await db.exec(
+      `SELECT cf.facility_id, cf.relation_type, cf.stage_label, cf.memo,
+              f.company_name, f.business_registration_no, f.site_business_registration_no,
+              f.site_address, f.region_sido, f.region_sigungu, f.industry_code,
+              f.industry_name, f.integrated_permit_target
+       FROM contract_facilities cf
+       JOIN facilities f ON f.facility_id = cf.facility_id
+       WHERE cf.contract_id = $1
+         AND cf.relation_type = 'integrated_permit_target'
+       ORDER BY f.company_name ASC`,
+      [contractId]
+    )
+  );
+  if (targetFacilities.length === 0 && contract.facility_id) {
+    targetFacilities.push({
+      facility_id: contract.facility_id,
+      relation_type: "integrated_permit_target",
+      company_name: contract.facility_name,
+      business_registration_no: contract.facility_site_business_registration_no,
+      site_business_registration_no: contract.facility_site_business_registration_no,
+      site_address: contract.facility_address,
+      integrated_permit_target: contract.facility_integrated_permit_target,
+    });
+  }
 
-  return { contract, milestones, invoices, documents, changes, outsourcing };
+  return { contract, milestones, invoices, documents, changes, outsourcing, targetFacilities };
 }
 
 export async function getContractDashboard(): Promise<ContractDashboard> {
@@ -434,6 +557,7 @@ export async function getContractDashboard(): Promise<ContractDashboard> {
          SELECT COUNT(*) AS total_contracts,
                 SUM(COALESCE(current_amount, contract_amount, 0)) AS total_amount
          FROM contracts
+         WHERE deleted_at IS NULL
        ),
        milestone_totals AS (
          SELECT SUM(CASE WHEN invoice_issued = 1 THEN COALESCE(invoice_amount, amount, 0) ELSE 0 END) AS issued_amount,
@@ -462,6 +586,7 @@ export async function getContractDashboard(): Promise<ContractDashboard> {
               COUNT(*) AS count,
               SUM(COALESCE(current_amount, contract_amount, 0)) AS amount
        FROM contracts
+       WHERE deleted_at IS NULL
        GROUP BY COALESCE(service_type, '미분류')
        ORDER BY amount DESC
        LIMIT 20`
@@ -478,6 +603,7 @@ export async function getContractDashboard(): Promise<ContractDashboard> {
               COUNT(*) AS count,
               SUM(COALESCE(current_amount, contract_amount, 0)) AS amount
        FROM contracts
+       WHERE deleted_at IS NULL
        GROUP BY SUBSTRING(COALESCE(NULLIF(contract_date, ''), started_at, created_at), 1, 4)
        ORDER BY year DESC
        LIMIT 12`
@@ -500,6 +626,7 @@ export async function getContractDashboard(): Promise<ContractDashboard> {
        JOIN contracts c ON c.contract_id = m.contract_id
        JOIN legal_entities e ON e.entity_id = c.counterparty_entity_id
        WHERE m.payment_collected = 0
+         AND c.deleted_at IS NULL
          AND COALESCE(m.amount, 0) > 0
        ORDER BY COALESCE(m.invoice_issued_at, c.contract_date, c.created_at) DESC
        LIMIT 10`

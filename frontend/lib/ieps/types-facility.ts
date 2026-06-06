@@ -16,6 +16,7 @@ export interface FacilityListItem {
   facilityId: string;
   companyName: string;
   businessRegistrationNo: string | null;
+  representativeName: string | null;
   siteAddress: string | null;
   regionSido: string | null;
   regionSigungu: string | null;
@@ -94,10 +95,14 @@ export interface FacilityDetail {
   facilityId: string;
   companyName: string;
   businessRegistrationNo: string | null;
+  representativeName: string | null;
   siteAddress: string | null;
   phoneNumber: string | null;
   industryCode: string | null;
   industryName: string | null;
+  businessCertificateBusinessType: string | null;
+  businessCertificateBusinessItem: string | null;
+  businessCertificateCorporateRegistrationNo: string | null;
   industries?: IndustryDisplay[];
   regionSido: string | null;
   regionSigungu: string | null;
@@ -113,8 +118,25 @@ export interface FacilityDetail {
   createdAt: string;
   updatedAt: string;
   permits: PermitDetail[];
+  businessCertificates: FacilityBusinessCertificate[];
   /** 연간(점검)보고서 최신 1건 스냅샷. 검토결과서가 미공개인 사업장의 보강 데이터. */
   annualReport: AnnualReportSnapshot | null;
+}
+
+export interface FacilityBusinessCertificate {
+  certificateId: string;
+  versionNo: number;
+  isCurrent: boolean;
+  displayName: string;
+  originalFilename: string | null;
+  publicPath: string | null;
+  businessType: string | null;
+  businessItem: string | null;
+  corporateRegistrationNo: string | null;
+  memo: string | null;
+  createdByName: string | null;
+  createdByEmail: string | null;
+  createdAt: string;
 }
 
 export interface AnnualReportSnapshot {

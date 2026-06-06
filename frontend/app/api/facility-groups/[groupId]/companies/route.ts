@@ -4,6 +4,7 @@ import { authErrorToResponse, requireEditor } from "@/lib/auth/guards";
 import { withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 import { normalizeAddress, normalizeBusinessRegistrationNo, normalizeCompanyName } from "@/lib/ieps/formatters";
+import { syncGroupCompanyFacility } from "@/lib/ieps/group-company-facility-sync";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,6 +32,10 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     const companyId = "co_" + crypto.randomUUID().replace(/-/g, "").slice(0, 16);
     const now = new Date().toISOString();
     await withDbWrite(async (db) => {
+      const businessRegistrationNo = normalizeBusinessRegistrationNo(body.businessRegistrationNo);
+      const address = normalizeAddress(body.address);
+      const phoneNumber = body.phoneNumber?.trim?.() || null;
+      const logoPath = body.logoPath?.trim?.() || null;
       await db.run(
         `INSERT INTO facility_group_companies
           (company_id, group_id, division_id, company_name, business_registration_no,
@@ -41,16 +46,25 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
           groupId,
           body.divisionId?.trim?.() || null,
           companyName,
-          normalizeBusinessRegistrationNo(body.businessRegistrationNo),
-          normalizeAddress(body.address),
-          body.phoneNumber?.trim?.() || null,
-          body.logoPath?.trim?.() || null,
+          businessRegistrationNo,
+          address,
+          phoneNumber,
+          logoPath,
           groupRole,
           groupRole === "group_representative" || body.isHeadquarters ? 1 : 0,
           now,
           now,
         ]
       );
+      await syncGroupCompanyFacility(db, {
+        companyId,
+        groupId,
+        companyName,
+        businessRegistrationNo,
+        address,
+        phoneNumber,
+        logoPath,
+      }, now);
       await recordAuditLogInline(db, {
         actorUserId: actor.userId,
         action: "facility_group_update",

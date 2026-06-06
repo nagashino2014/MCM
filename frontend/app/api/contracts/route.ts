@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const contractTitle = String(body.contractTitle ?? "").trim();
     const counterpartyEntityId = String(body.counterpartyEntityId ?? "").trim();
+    const facilityIds = normalizeStringArray(body.facilityIds);
     if (!contractTitle) return NextResponse.json({ error: "계약명은 필수입니다." }, { status: 400 });
     if (!counterpartyEntityId) return NextResponse.json({ error: "계약상대 법인은 필수입니다." }, { status: 400 });
 
@@ -48,16 +49,16 @@ export async function POST(req: NextRequest) {
            contract_title, service_type, service_subtype, contract_kind, contract_status, contract_amount,
            legacy_contract_no, legacy_company_id, contract_direction, industry_category,
            contract_date, started_at, ended_at, original_amount, current_amount,
-           memo, created_at, updated_at)
+           payment_method, ordering_subject_type, memo, created_at, updated_at)
          VALUES
           ($1, $2, $3, $4,
            $5, $6, $7, $8, $9, $10,
            $11, $12, $13, $14,
            $15, $16, $17, $18, $19,
-           $20, $21, $22)`,
+           $20, $21, $22, $23, $24)`,
         [
           contractId,
-          body.facilityId || null,
+          facilityIds[0] || body.facilityId || null,
           counterpartyEntityId,
           body.operatingRelationId || null,
           contractTitle,
@@ -75,11 +76,22 @@ export async function POST(req: NextRequest) {
           body.endedAt || null,
           toNullableNumber(body.originalAmount ?? body.contractAmount),
           toNullableNumber(body.currentAmount ?? body.contractAmount),
+          body.paymentMethod || null,
+          normalizeOrderingSubjectType(body.orderingSubjectType),
           body.memo || null,
           now,
           now,
         ]
       );
+      for (const facilityId of facilityIds) {
+        await db.run(
+          `INSERT INTO contract_facilities
+            (contract_id, facility_id, relation_type, created_at, updated_at)
+           VALUES ($1, $2, 'integrated_permit_target', $3, $4)
+           ON CONFLICT (contract_id, facility_id, relation_type) DO UPDATE SET updated_at = excluded.updated_at`,
+          [contractId, facilityId, now, now]
+        );
+      }
       await recordAuditLogInline(db, {
         actorUserId: actor.userId,
         action: "contract_create",
@@ -114,4 +126,28 @@ function toNullableNumber(value: unknown): number | null {
   if (value == null || value === "") return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
+}
+
+function normalizeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return Array.from(
+    new Set(
+      value
+        .map((item) => String(item ?? "").trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+function normalizeOrderingSubjectType(value: unknown): string | null {
+  const text = String(value ?? "").trim();
+  return [
+    "SITE_DIRECT",
+    "PARENT_CORP",
+    "CONSIGNED_OPERATOR",
+    "THIRD_PARTY_PARTNER",
+    "ETC",
+  ].includes(text)
+    ? text
+    : null;
 }

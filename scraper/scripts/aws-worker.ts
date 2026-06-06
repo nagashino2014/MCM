@@ -32,6 +32,13 @@ if (!QUEUE_URL) {
   throw new Error("MCM_JOB_QUEUE_URL is required");
 }
 
+function resolveWorkerBackendUrl(input?: string): string | undefined {
+  if (process.env.NODE_ENV === "production" || process.env.MCM_JOB_QUEUE_URL) {
+    return undefined;
+  }
+  return input;
+}
+
 async function loadAwsSqs() {
   return import("@aws-sdk/client-sqs");
 }
@@ -51,7 +58,8 @@ function runCliCollect(message: QueueMessage): Promise<void> {
       "--config=" + configPath,
     ];
     if (message.maxPages != null) args.push("--max-pages=" + message.maxPages);
-    if (message.backendUrl) args.push("--backend=" + message.backendUrl);
+    const backendUrl = resolveWorkerBackendUrl(message.backendUrl);
+    if (backendUrl) args.push("--backend=" + backendUrl);
     if (message.dryRun) args.push("--dry-run");
     if (message.type === "collect") args.push("--download-only");
     if (message.type === "parse" && message.parseOnly) args.push("--parse-only=" + message.parseOnly);

@@ -3,6 +3,7 @@ import {
   FileSignature,
   Briefcase,
   Database,
+  Trash2,
   Users as UsersIcon,
   type LucideIcon,
 } from "lucide-react";
@@ -61,7 +62,18 @@ export const MENU_ITEMS: MenuItem[] = [
     title: "사용자 관리",
     href: "/admin/users",
     icon: UsersIcon,
+    submenu: [
+      { title: "계정·권한 관리", href: "/admin/users" },
+      { title: "사용자 등록·삭제", href: "/admin/users/registry" },
+    ],
     minRole: "admin",
+    group: "system",
+  },
+  {
+    title: "휴지통",
+    href: "/trash",
+    icon: Trash2,
+    minRole: "editor",
     group: "system",
   },
 ];

@@ -34,6 +34,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     const documentId = body.documentId ? String(body.documentId) : null;
     const payload = body.payload && typeof body.payload === "object" ? body.payload : {};
     const changedFields = Array.isArray(body.changedFields) ? body.changedFields : [];
+    const newFacilityIds = body.newFacilityIds !== undefined ? normalizeStringArray(body.newFacilityIds) : null;
 
     const changeId = newChangeId();
     const now = new Date().toISOString();
@@ -93,6 +94,15 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       if (body.newIndustryCategory !== undefined) {
         pushSet("industry_category", body.newIndustryCategory || null);
       }
+      if (body.newPaymentMethod !== undefined) {
+        pushSet("payment_method", body.newPaymentMethod || null);
+      }
+      if (body.newOrderingSubjectType !== undefined) {
+        pushSet("ordering_subject_type", normalizeOrderingSubjectType(body.newOrderingSubjectType));
+      }
+      if (newFacilityIds !== null) {
+        pushSet("facility_id", newFacilityIds[0] || null);
+      }
       if (body.contractTerminatedAt !== undefined) {
         pushSet("contract_terminated_at", body.contractTerminatedAt || null);
         pushSet("contract_termination_reason", body.contractTerminationReason || null);
@@ -111,6 +121,20 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
         values.push(now);
         values.push(contractId);
         await db.run(`UPDATE contracts SET ${contractUpdates.join(", ")} WHERE contract_id = $${values.length}`, values);
+      }
+      if (newFacilityIds !== null) {
+        await db.run(
+          "DELETE FROM contract_facilities WHERE contract_id = $1 AND relation_type = 'integrated_permit_target'",
+          [contractId]
+        );
+        for (const facilityId of newFacilityIds) {
+          await db.run(
+            `INSERT INTO contract_facilities
+              (contract_id, facility_id, relation_type, created_at, updated_at)
+             VALUES ($1, $2, 'integrated_permit_target', $3, $4)`,
+            [contractId, facilityId, now, now]
+          );
+        }
       }
 
       await recordAuditLogInline(db, {
@@ -132,4 +156,28 @@ function toNullableNumber(value: unknown): number | null {
   if (value == null || value === "") return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
+}
+
+function normalizeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return Array.from(
+    new Set(
+      value
+        .map((item) => String(item ?? "").trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+function normalizeOrderingSubjectType(value: unknown): string | null {
+  const text = String(value ?? "").trim();
+  return [
+    "SITE_DIRECT",
+    "PARENT_CORP",
+    "CONSIGNED_OPERATOR",
+    "THIRD_PARTY_PARTNER",
+    "ETC",
+  ].includes(text)
+    ? text
+    : null;
 }

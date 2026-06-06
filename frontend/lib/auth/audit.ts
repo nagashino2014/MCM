@@ -49,6 +49,11 @@ export type AuditAction =
   | "user_update"
   | "user_delete"
   | "user_password_reset"
+  | "permission_template_update"
+  | "permission_assignment_update"
+  | "employee_update"
+  | "employee_document_upload"
+  | "trash_purge"
   | "alert.ack";
 
 export interface AuditEntry {

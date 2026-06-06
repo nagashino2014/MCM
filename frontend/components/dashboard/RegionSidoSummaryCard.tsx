@@ -21,6 +21,7 @@ import {
   dummySizeMix,
 } from "./RegionStatsCharts";
 import { formatCompanyName } from "@/lib/ieps/formatters";
+import type { FacilityCompanySize } from "@/lib/ieps/facility-service";
 
 interface RegionStatsFacility {
   facilityId: string;
@@ -36,6 +37,7 @@ interface RegionStats {
   total: number;
   airClass: { class: number; count: number }[];
   waterClass: { class: number; count: number }[];
+  companySizes: { size: FacilityCompanySize | "unknown"; label: string; count: number }[];
   facilities: RegionStatsFacility[];
 }
 
@@ -165,12 +167,16 @@ export function RegionSidoSummaryCard({ sidoFull, sidoShort }: Props) {
                 compact
               />
               <PieCard
-                title="사업장 규모"
+                title="사업장 분류"
                 icon={<Building2 className="h-3.5 w-3.5 text-stone-400" />}
-                slices={dummySizeMix(data.total, seed)}
-                kind="concept"
+                slices={
+                  data.companySizes?.some((item) => item.count > 0 && item.size !== "unknown")
+                    ? data.companySizes.map((item) => ({ label: item.label, count: item.count }))
+                    : dummySizeMix(data.total, seed)
+                }
+                kind={data.companySizes?.some((item) => item.count > 0 && item.size !== "unknown") ? "real" : "concept"}
                 palette={SIZE_PALETTE}
-                conceptNote="계약 관리 모듈 입력 후 실측 전환 예정"
+                conceptNote="사업장 분류 입력 전 임시 분포"
                 compact
               />
             </section>

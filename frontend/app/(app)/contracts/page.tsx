@@ -11,6 +11,7 @@ import {
   Folder,
   FolderClosed,
   FolderOpen,
+  GripVertical,
   Paperclip,
   Pencil,
   Plus,
@@ -23,6 +24,15 @@ import {
 import { ToastProvider, useToast } from "@/components/ui/Toast";
 import { resolveServiceTypeStyle } from "@/lib/ieps/contract-tree-style";
 import ContractChangeModal from "@/components/contracts/ContractChangeModal";
+import { IndustryOptionsEditorButton, useContractIndustryOptions } from "@/components/contracts/IndustryOptionsEditor";
+import {
+  ORDERING_SUBJECT_OPTIONS,
+  ORDERING_SUBJECT_SITE_DIRECT,
+  ORDERING_SUBJECT_PARENT_CORP,
+  ORDERING_SUBJECT_CONSIGNED_OPERATOR,
+  getOrderingSubjectLabel,
+  validateOrderingTargetFacility,
+} from "@/lib/ieps/ordering-subject";
 
 interface ContractTreeContractNode {
   contractId: string;
@@ -57,6 +67,7 @@ interface ContractDetail {
   documents: Array<Record<string, unknown>>;
   changes: Array<Record<string, unknown>>;
   outsourcing: Array<Record<string, unknown>>;
+  targetFacilities: Array<Record<string, unknown>>;
 }
 
 interface InvoiceModalState {
@@ -98,9 +109,14 @@ interface NewContractModalState {
   counterpartyQuery: string;
   counterpartyEntityId: string;
   counterpartyName: string;
+  counterpartyBusinessRegistrationNo: string | null;
+  facilityQuery: string;
+  selectedFacilities: FacilitySearchItem[];
   serviceType: string;
   serviceSubtype: string;
   contractKind: "standard" | "unit_price";
+  paymentMethod: string;
+  orderingSubjectType: string;
   contractDate: string;
   startedAt: string;
   endedAt: string;
@@ -136,6 +152,14 @@ interface LegalEntitySearchItem {
   entityId: string;
   entityName: string;
   businessRegistrationNo: string | null;
+}
+
+interface FacilitySearchItem {
+  facilityId: string;
+  companyName: string;
+  businessRegistrationNo: string | null;
+  siteAddress: string | null;
+  integratedPermitTarget?: string | null;
 }
 
 interface PdfViewerState {
@@ -178,28 +202,7 @@ const CONTRACT_SERVICE_OPTIONS = [
 ] as const;
 
 const DEFAULT_OUTSOURCING_TYPES = ["도면 작성", "산업안전 관련", "측정/분석", "디자인", "번역"];
-const CONTRACT_INDUSTRY_OPTIONS = [
-  "발전",
-  "폐기물소각",
-  "철강",
-  "비철",
-  "유기",
-  "석유정제",
-  "무기화학",
-  "정밀화학",
-  "비료및질소화합물",
-  "펄프종이및판지",
-  "전자부품",
-  "반도체",
-  "섬유염색및가공처리업",
-  "도축육류가공및저장처리업",
-  "알콜음료제조업",
-  "플라스틱제품제조업",
-  "자동차부품제조업",
-  "폐기물처리업",
-  "시멘트 제조업",
-  "이차전지 제조업",
-];
+const PAYMENT_METHOD_OPTIONS = ["현금", "어음 : 1개월 이하", "어음 : 2개월 이하", "어음 : 2개월 이상"];
 
 export default function ContractsPage() {
   return (
@@ -503,7 +506,7 @@ function ContractsInner() {
                 onDeleteContract={() => setDeleteModalOpen(true)}
                 onDeleteStage={async (milestoneId) => {
                   if (!selected) return;
-                  if (!confirm("해당 단계를 삭제하시겠습니까?")) return;
+                  if (!confirm("해당 청구·수금 단계를 삭제할까요? 단계 삭제는 휴지통으로 이동하지 않고 즉시 삭제됩니다.")) return;
                   try {
                     const res = await fetch(
                       `/api/contracts/${encodeURIComponent(selected.contractId)}/milestones/${encodeURIComponent(milestoneId)}`,
@@ -517,6 +520,28 @@ function ContractsInner() {
                     loadDetail(selected.contractId);
                   } catch (err) {
                     toast.show("삭제 실패: " + (err as Error).message, "error");
+                  }
+                }}
+                onReorderStages={async (orderedIds) => {
+                  if (!selected) return;
+                  try {
+                    const res = await fetch(
+                      `/api/contracts/${encodeURIComponent(selected.contractId)}/milestones/reorder`,
+                      {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ order: orderedIds }),
+                      }
+                    );
+                    if (!res.ok) {
+                      const body = await res.json().catch(() => ({}));
+                      throw new Error(body?.error ?? "HTTP " + res.status);
+                    }
+                    toast.show("단계 순서가 변경되었습니다.", "success");
+                    loadDetail(selected.contractId);
+                  } catch (err) {
+                    toast.show("순서 변경 실패: " + (err as Error).message, "error");
+                    loadDetail(selected.contractId);
                   }
                 }}
               />
@@ -585,6 +610,11 @@ function ContractsInner() {
           contractId={selected.contractId}
           contractTitle={selected.contractTitle}
           counterpartyName={selected.counterpartyName}
+          counterpartyBusinessRegistrationNo={
+            detail.contract.counterparty_business_registration_no != null
+              ? String(detail.contract.counterparty_business_registration_no)
+              : null
+          }
           contractDate={selected.contractDate}
           initialMilestones={detail.milestones.map((m) => ({
             stageLabel: String(m.stage_label ?? ""),
@@ -594,6 +624,15 @@ function ContractsInner() {
           initialServiceType={String(detail.contract.service_type ?? "") || ""}
           initialServiceSubtype={String(detail.contract.service_subtype ?? "") || ""}
           initialIndustryCategory={String(detail.contract.industry_category ?? "") || ""}
+          initialPaymentMethod={String(detail.contract.payment_method ?? "") || ""}
+          initialTargetFacilities={detail.targetFacilities.map((facility) => ({
+            facilityId: String(facility.facility_id ?? ""),
+            companyName: String(facility.company_name ?? ""),
+            businessRegistrationNo: facility.business_registration_no != null ? String(facility.business_registration_no) : null,
+            siteAddress: facility.site_address != null ? String(facility.site_address) : null,
+            integratedPermitTarget: facility.integrated_permit_target != null ? String(facility.integrated_permit_target) : null,
+          })).filter((facility) => facility.facilityId && facility.companyName)}
+          initialOrderingSubjectType={detail.contract.ordering_subject_type != null ? String(detail.contract.ordering_subject_type) : null}
           initialEndedAt={String(detail.contract.ended_at ?? "") || null}
           initialCurrentAmount={selected.currentAmount}
           onClose={() => setChangeModalOpen(false)}
@@ -652,6 +691,7 @@ function ContractDetailPanel({
   onOpenPdf,
   onDeleteContract,
   onDeleteStage,
+  onReorderStages,
 }: {
   detail: ContractDetail;
   onOpenInvoice: (state: InvoiceModalState) => void;
@@ -661,9 +701,18 @@ function ContractDetailPanel({
   onOpenPdf: (state: PdfViewerState) => void;
   onDeleteContract: () => void;
   onDeleteStage: (milestoneId: string) => void;
+  onReorderStages: (orderedIds: string[]) => void;
 }) {
   const contract = detail.contract;
-  const baseAmount = Number(contract.current_amount ?? contract.contract_amount ?? 0);
+  // 용역(계약) 금액은 청구·수금 단계 각 항목 금액의 합을 기준으로 한다.
+  // 단계가 하나도 없을 때만 계약에 기록된 금액으로 폴백한다.
+  const milestoneAmountSum = detail.milestones.reduce(
+    (acc, m) => acc + Number(m.amount ?? 0),
+    0
+  );
+  const baseAmount = detail.milestones.length > 0
+    ? milestoneAmountSum
+    : Number(contract.current_amount ?? contract.contract_amount ?? 0);
   const collectedAmount = detail.milestones.reduce(
     (acc, m) => acc + Number(m.collected_amount ?? 0),
     0
@@ -672,12 +721,62 @@ function ContractDetailPanel({
   const contractKindLabel = String(contract.contract_kind ?? "standard") === "unit_price" ? "단가 계약" : "일반 계약";
   const statusLabel = getContractStatusLabel(detail);
   const outsourcingCount = detail.outsourcing?.length ?? 0;
+  const targetFacilities = detail.targetFacilities ?? [];
+  const targetFacilityLabel = buildTargetFacilityLabel(contract.service_type);
+  const [targetFacilityPopupOpen, setTargetFacilityPopupOpen] = useState(false);
+
+  // 계산서 발행 후 아직 수금이 완료되지 않은 대금지급조건이 하나라도 있으면
+  // 경과 기간 태그를 노출한다. 색상은 "가장 오래 경과한" 미수금 건 기준.
+  const overdueTag = getOverdueCollectionTag(detail.milestones);
+
+  // Local copy of the milestone rows so drag reordering feels instant; it is
+  // re-synced whenever the parent reloads the contract detail (which happens
+  // after the reorder is persisted).
+  const [orderedMilestones, setOrderedMilestones] = useState(detail.milestones);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [overIndex, setOverIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    setOrderedMilestones(detail.milestones);
+  }, [detail.milestones]);
+
+  useEffect(() => {
+    if (!targetFacilityPopupOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setTargetFacilityPopupOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [targetFacilityPopupOpen]);
+
+  const handleStageDrop = (dropIndex: number) => {
+    const from = dragIndex;
+    setDragIndex(null);
+    setOverIndex(null);
+    if (from === null || from === dropIndex) return;
+    const next = [...orderedMilestones];
+    const [moved] = next.splice(from, 1);
+    next.splice(dropIndex, 0, moved);
+    setOrderedMilestones(next);
+    onReorderStages(next.map((m) => String(m.milestone_id ?? "")));
+  };
 
   return (
     <div className="flex flex-col gap-5">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-stone-800">{String(contract.contract_title ?? "")}</h2>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-2xl font-bold text-stone-800">{String(contract.contract_title ?? "")}</h2>
+            {overdueTag && (
+              <span
+                className="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold text-stone-800 shadow-sm"
+                style={{ backgroundColor: overdueTag.color }}
+                title={overdueTag.tooltip}
+              >
+                {overdueTag.label}
+              </span>
+            )}
+          </div>
           <p className="text-sm text-stone-500 mt-2">
             {String(contract.counterparty_name ?? "")} · 업체ID {String(contract.legacy_company_id ?? "-")}
           </p>
@@ -708,7 +807,9 @@ function ContractDetailPanel({
               });
             }}
           >
-            <FileText className="w-3.5 h-3.5" />
+            <span className="inline-flex items-center justify-center rounded-md bg-red-600 px-1.5 py-0.5 text-[9px] font-black tracking-tight text-white shadow-sm">
+              PDF
+            </span>
             계약서 보기
           </button>
           <button
@@ -730,26 +831,77 @@ function ContractDetailPanel({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Info label="계약일" value={contract.contract_date ?? contract.started_at} />
-        <Info
-          label="계약금액"
-          value={baseAmount ? formatExactAmount(baseAmount) : "-"}
-          highlight
-        />
-        <Info label="업체명" value={contract.counterparty_name} />
-        <Info label="계약 종류" value={contractKindLabel} />
-        <Info label="용역분류" value={contract.service_type} />
-        <Info label="용역세분류" value={contract.service_subtype} />
-        <Info label="준공일" value={contract.ended_at} />
-        <Info label="계약 상태" value={statusLabel} highlight={statusLabel !== "진행중"} />
-        <Info label="업종" value={contract.industry_category} />
-        <Info label="외주 용역" value={outsourcingCount > 0 ? `${outsourcingCount}건 등록` : "없음"} highlight={outsourcingCount > 0} />
-        <Info
-          label="수금 진척도"
-          value={`${Math.round(collectionRate * 100)}% (${formatExactAmount(collectedAmount)} / ${formatExactAmount(baseAmount)})`}
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,4fr)_minmax(220px,1fr)] gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <Info label="계약일" value={String(contract.contract_date ?? contract.started_at ?? "-")} />
+          <Info
+            label="계약금액"
+            value={baseAmount ? formatExactAmount(baseAmount) : "-"}
+            highlight
+          />
+          <Info label="업체명" value={String(contract.counterparty_name ?? "-")} />
+          <Info label="계약 종류" value={contractKindLabel} />
+          <Info label="용역분류" value={String(contract.service_type ?? "-")} />
+          <Info label="용역세분류" value={String(contract.service_subtype ?? "-")} />
+          <Info label="준공일" value={String(contract.ended_at ?? "-")} />
+          <Info label="계약 상태" value={statusLabel} highlight={statusLabel !== "진행중"} />
+          <Info label="업종" value={String(contract.industry_category ?? "-")} />
+          <Info
+            label={targetFacilityLabel}
+            value={
+              <span className="inline-flex items-center gap-1">
+                {targetFacilities.length > 0 ? `${targetFacilities.length}개` : "-"}
+                {targetFacilities.length > 0 && (
+                  <button
+                    type="button"
+                    className="rounded-full p-0.5 text-primary hover:bg-primary/10"
+                    onClick={() => setTargetFacilityPopupOpen(true)}
+                    aria-label={`${targetFacilityLabel} 목록 보기`}
+                  >
+                    <Search className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </span>
+            }
+          />
+          <Info label="대금 지급 방식" value={String(contract.payment_method ?? "-")} />
+          <Info label="발주 주체 구분" value={getOrderingSubjectLabel(contract.ordering_subject_type)} />
+          <Info label="외주 용역" value={outsourcingCount > 0 ? `${outsourcingCount}건 등록` : "없음"} highlight={outsourcingCount > 0} />
+        </div>
+        <CollectionProgressCard
+          rate={collectionRate}
+          collectedAmount={collectedAmount}
+          baseAmount={baseAmount}
         />
       </div>
+
+      {targetFacilityPopupOpen && (
+        <div className="fixed inset-0 z-50 bg-stone-950/10" onClick={() => setTargetFacilityPopupOpen(false)}>
+          <div
+            className="absolute right-8 top-28 w-[min(520px,calc(100vw-48px))] rounded-3xl border border-stone-200 bg-white p-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <h3 className="font-bold text-stone-800">{targetFacilityLabel} {targetFacilities.length}개</h3>
+              <button type="button" className="text-stone-400 hover:text-stone-700" onClick={() => setTargetFacilityPopupOpen(false)}>
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="grid gap-2 max-h-[420px] overflow-y-auto">
+              {targetFacilities.map((facility) => (
+                <div key={String(facility.facility_id)} className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3">
+                  <p className="font-bold text-sm text-stone-800">{String(facility.company_name ?? "-")}</p>
+                  <p className="text-xs text-stone-500 mt-1">{String(facility.site_address ?? "-")}</p>
+                  <p className="text-[11px] text-stone-400 mt-1">
+                    {String(facility.business_registration_no ?? facility.site_business_registration_no ?? "-")}
+                    {facility.integrated_permit_target ? ` · ${String(facility.integrated_permit_target)}` : ""}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {outsourcingCount > 0 && (
         <div className="rounded-2xl border border-stone-200/80 bg-white/60 p-4">
@@ -775,7 +927,10 @@ function ContractDetailPanel({
 
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-bold text-stone-800">청구·수금 단계</h3>
+          <div className="flex items-baseline gap-2">
+            <h3 className="font-bold text-stone-800">청구·수금 단계</h3>
+            <span className="text-[11px] text-stone-400">행을 드래그해 순서 변경</span>
+          </div>
           <button
             type="button"
             onClick={onOpenNewStage}
@@ -801,16 +956,44 @@ function ContractDetailPanel({
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-200/70">
-              {detail.milestones.map((milestone, idx) => {
+              {orderedMilestones.map((milestone, idx) => {
                 const milestoneId = String(milestone.milestone_id ?? "");
                 const stageAmount = Number(milestone.amount ?? 0);
                 const collectionRatio = Number(milestone.collection_ratio ?? 0);
                 const ratioLabel = collectionRatio > 0
                   ? `${Math.round(collectionRatio * 1000) / 10}%`
                   : Number(milestone.payment_collected ?? 0) === 1 ? "100%" : "-";
+                const isDragging = dragIndex === idx;
+                const isDropTarget = overIndex === idx && dragIndex !== null && dragIndex !== idx;
                 return (
-                  <tr key={milestoneId} className="bg-white/60">
-                    <td className="p-2.5 font-mono text-stone-600">{idx + 1}</td>
+                  <tr
+                    key={milestoneId}
+                    draggable
+                    onDragStart={() => setDragIndex(idx)}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      if (overIndex !== idx) setOverIndex(idx);
+                    }}
+                    onDragEnd={() => {
+                      setDragIndex(null);
+                      setOverIndex(null);
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      handleStageDrop(idx);
+                    }}
+                    className={
+                      "transition-colors " +
+                      (isDragging ? "opacity-50 " : "") +
+                      (isDropTarget ? "bg-primary/10 " : "bg-white/60 ")
+                    }
+                  >
+                    <td className="p-2.5 font-mono text-stone-600">
+                      <span className="flex items-center gap-1.5" title="드래그하여 순서 변경">
+                        <GripVertical className="w-3.5 h-3.5 text-stone-400 cursor-grab active:cursor-grabbing" />
+                        {idx + 1}
+                      </span>
+                    </td>
                     <td className="p-2.5 text-stone-800">{String(milestone.stage_label ?? "")}</td>
                     <td className="p-2.5 text-right font-mono tabular-nums">{formatExactAmount(stageAmount)}</td>
                     <td className="p-2.5 text-stone-600 max-w-[220px] truncate" title={String(milestone.payment_terms ?? "")}>
@@ -881,7 +1064,7 @@ function ContractDetailPanel({
                   </tr>
                 );
               })}
-              {detail.milestones.length === 0 && (
+              {orderedMilestones.length === 0 && (
                 <tr>
                   <td className="p-6 text-center text-stone-500" colSpan={9}>
                     등록된 청구 단계가 없습니다. 우상단의 `단계 추가` 버튼으로 추가하세요.
@@ -935,16 +1118,49 @@ function InvoiceUploadModal({
   const toast = useToast();
   const [saving, setSaving] = useState(false);
   const fileRef = useRef<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [fileName, setFileName] = useState("");
 
   const submit = async () => {
     const selectedFile = fileRef.current;
-    if (!selectedFile) {
-      toast.show("세금계산서 PDF 파일을 선택하세요.", "error");
+    if (!selectedFile && !state.paymentCollected) {
+      toast.show("계산서를 첨부해 주세요.", "error");
       return;
     }
     setSaving(true);
     try {
+      if (!selectedFile && state.paymentCollected) {
+        const res = await fetch(
+          `/api/contracts/${encodeURIComponent(contractId)}/milestones/${encodeURIComponent(state.milestoneId)}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              invoiceIssued: Boolean(state.issueDate || state.invoiceAmount),
+              invoiceIssuedAt: state.issueDate || null,
+              invoiceAmount: state.invoiceAmount || null,
+              paymentCollected: true,
+              paymentCollectedAt: state.paymentCollectedAt || null,
+              collectionRatio: state.collectionRatio || null,
+              collectedAmount: state.collectedAmount || null,
+              paymentTerms: state.paymentTerms || null,
+              partialPaymentMemo: state.partialPaymentMemo || "",
+            }),
+          }
+        );
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body?.error ?? "HTTP " + res.status);
+        }
+        toast.show("수금 정보를 등록했습니다.", "success");
+        onSaved();
+        return;
+      }
+
+      if (!selectedFile) {
+        throw new Error("세금계산서 PDF 파일을 선택해 주세요.");
+      }
+
       const form = new FormData();
       form.set("milestoneId", state.milestoneId);
       form.set("issueDate", state.issueDate);
@@ -993,23 +1209,33 @@ function InvoiceUploadModal({
           <input type="text" className="input-field" placeholder="예: 세금계산서 발행 후 30일 이내 지급"
             value={state.paymentTerms} onChange={(e) => onChange({ ...state, paymentTerms: e.target.value })} />
         </label>
-        <label className="grid gap-1 text-sm col-span-2">
+        <div className="grid gap-1 text-sm col-span-2">
           <span className="font-bold text-stone-700">계산서 PDF 첨부</span>
           <input
+            ref={fileInputRef}
             type="file"
             accept="application/pdf,.pdf"
-            className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-2 file:text-xs file:font-bold file:text-white"
+            className="hidden"
             onChange={(e) => {
               const nextFile = e.target.files?.[0] ?? null;
               fileRef.current = nextFile;
               setFileName(nextFile?.name ?? "");
             }}
           />
-          {fileName && <span className="text-xs text-stone-500">선택됨: {fileName}</span>}
-        </label>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="rounded-lg bg-primary px-3 py-2 text-xs font-bold text-white hover:bg-primary/90 shadow-sm"
+            >
+              파일 선택
+            </button>
+            <span className="text-xs text-stone-500">{fileName ? `선택됨: ${fileName}` : "선택된 파일 없음"}</span>
+          </div>
+        </div>
         <label className="flex items-center gap-2 text-sm font-bold text-stone-700 col-span-2">
           <input type="checkbox" checked={state.paymentCollected} onChange={(e) => onChange({ ...state, paymentCollected: e.target.checked })} />
-          수금 정보도 함께 등록
+          수금 정보 등록
         </label>
         {state.paymentCollected && (
           <>
@@ -1076,8 +1302,10 @@ function NewContractModal({
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState<"basic" | "milestones" | "outsourcing" | "document">("basic");
   const [entityOptions, setEntityOptions] = useState<LegalEntitySearchItem[]>([]);
+  const [facilityOptions, setFacilityOptions] = useState<FacilitySearchItem[]>([]);
   const [outsourcingEntityOptions, setOutsourcingEntityOptions] = useState<LegalEntitySearchItem[]>([]);
   const [outsourcingTypeOptions, setOutsourcingTypeOptions] = useState(DEFAULT_OUTSOURCING_TYPES);
+  const { industryOptions, setIndustryOptions } = useContractIndustryOptions();
   const documentFileRef = useRef<File | null>(null);
   const [documentFileName, setDocumentFileName] = useState("");
   const outsourcingFileRef = useRef<File | null>(null);
@@ -1114,6 +1342,37 @@ function NewContractModal({
   }, [state.counterpartyQuery]);
 
   useEffect(() => {
+    const q = state.facilityQuery.trim();
+    if (q.length < 2) {
+      setFacilityOptions([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({
+          q,
+          limit: "10",
+          sort: "name",
+        });
+        const res = await fetch(`/api/facilities?${params.toString()}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!res.ok) return;
+        const json = (await res.json()) as { items?: FacilitySearchItem[] };
+        setFacilityOptions(json.items ?? []);
+      } catch {
+        if (!controller.signal.aborted) setFacilityOptions([]);
+      }
+    }, 160);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [state.facilityQuery]);
+
+  useEffect(() => {
     const q = state.outsourcing.counterpartyQuery.trim();
     if (q.length < 2) {
       setOutsourcingEntityOptions([]);
@@ -1146,6 +1405,80 @@ function NewContractModal({
     });
   };
 
+  // 발주 주체 = 대상사업장 본인: 계약상대 업체의 사업자등록번호와 일치하는
+  // 사업장을 자동으로 찾아 대상사업장으로 채운다. 매칭 실패 시 경고만 표시한다.
+  useEffect(() => {
+    if (state.orderingSubjectType !== ORDERING_SUBJECT_SITE_DIRECT) return;
+    const brn = (state.counterpartyBusinessRegistrationNo ?? "").replace(/[^0-9]/g, "");
+    if (!state.counterpartyEntityId || !brn) {
+      if (state.selectedFacilities.length > 0) onChange({ ...state, selectedFacilities: [] });
+      return;
+    }
+    const alreadyMatched =
+      state.selectedFacilities.length === 1 &&
+      (state.selectedFacilities[0].businessRegistrationNo ?? "").replace(/[^0-9]/g, "") === brn;
+    if (alreadyMatched) return;
+    const controller = new AbortController();
+    (async () => {
+      try {
+        const params = new URLSearchParams({ q: brn, limit: "10", sort: "name" });
+        const res = await fetch(`/api/facilities?${params.toString()}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!res.ok) return;
+        const json = (await res.json()) as { items?: FacilitySearchItem[] };
+        const match = (json.items ?? []).find(
+          (item) => (item.businessRegistrationNo ?? "").replace(/[^0-9]/g, "") === brn
+        );
+        if (match) {
+          onChange({ ...state, selectedFacilities: [match], facilityQuery: "" });
+        } else {
+          onChange({ ...state, selectedFacilities: [] });
+          toast.show("계약상대 업체와 일치하는 사업장을 찾지 못했습니다. 대상사업장을 직접 확인하세요.", "error");
+        }
+      } catch {
+        if (!controller.signal.aborted) {
+          /* 네트워크 오류는 조용히 무시하고 다음 변경 시 재시도 */
+        }
+      }
+    })();
+    return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.orderingSubjectType, state.counterpartyEntityId, state.counterpartyBusinessRegistrationNo]);
+
+  // 발주 주체 구분에 따른 대상사업장 추가. 소속 법인·모회사 / 위탁운영사는
+  // 사업장 상세 정보를 받아 관계를 검증한 뒤에만 추가한다.
+  const addTargetFacility = async (facility: FacilitySearchItem) => {
+    if (
+      state.orderingSubjectType === ORDERING_SUBJECT_PARENT_CORP ||
+      state.orderingSubjectType === ORDERING_SUBJECT_CONSIGNED_OPERATOR
+    ) {
+      try {
+        const res = await fetch(`/api/facilities/${encodeURIComponent(facility.facilityId)}`, { cache: "no-store" });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const facilityDetail = await res.json();
+        const result = validateOrderingTargetFacility(
+          state.orderingSubjectType,
+          facilityDetail,
+          state.counterpartyBusinessRegistrationNo
+        );
+        if (!result.ok) {
+          toast.show(result.message ?? "대상사업장 검증에 실패했습니다.", "error");
+          return;
+        }
+      } catch (err) {
+        toast.show("대상사업장 검증 실패: " + (err as Error).message, "error");
+        return;
+      }
+    }
+    onChange({
+      ...state,
+      facilityQuery: "",
+      selectedFacilities: [...state.selectedFacilities, facility],
+    });
+  };
+
   const submit = async () => {
     if (!state.contractTitle.trim()) {
       toast.show("계약명을 입력하세요.", "error");
@@ -1175,6 +1508,9 @@ function NewContractModal({
           serviceSubtype: state.serviceSubtype || null,
           contractKind: state.contractKind,
           industryCategory: state.industryCategory || null,
+          paymentMethod: state.paymentMethod || null,
+          orderingSubjectType: state.orderingSubjectType || null,
+          facilityIds: state.selectedFacilities.map((facility) => facility.facilityId),
           contractDate: state.contractDate,
           startedAt: state.startedAt || state.contractDate,
           endedAt: state.endedAt || null,
@@ -1291,7 +1627,7 @@ function NewContractModal({
                 className="input-field"
                 placeholder="업체명 또는 사업자번호 검색"
                 value={state.counterpartyQuery}
-                onChange={(e) => onChange({ ...state, counterpartyQuery: e.target.value, counterpartyEntityId: "", counterpartyName: "" })}
+                onChange={(e) => onChange({ ...state, counterpartyQuery: e.target.value, counterpartyEntityId: "", counterpartyName: "", counterpartyBusinessRegistrationNo: null })}
               />
               {state.counterpartyName && <p className="text-xs text-primary">선택됨: {state.counterpartyName}</p>}
               {entityOptions.length > 0 && !state.counterpartyEntityId && (
@@ -1307,6 +1643,7 @@ function NewContractModal({
                           counterpartyEntityId: entity.entityId,
                           counterpartyName: entity.entityName,
                           counterpartyQuery: entity.entityName,
+                          counterpartyBusinessRegistrationNo: entity.businessRegistrationNo ?? null,
                         })
                       }
                     >
@@ -1316,6 +1653,74 @@ function NewContractModal({
                   ))}
                 </div>
               )}
+            </label>
+            <label className="grid gap-1 text-sm relative">
+              <span className="font-bold text-stone-700">{buildTargetFacilityLabel(state.serviceType)}</span>
+              <input
+                className="input-field disabled:opacity-60"
+                placeholder={
+                  state.orderingSubjectType === ORDERING_SUBJECT_SITE_DIRECT
+                    ? "계약상대 업체 기준 자동 입력"
+                    : "사업장명, 주소, 사업자번호 검색"
+                }
+                disabled={state.orderingSubjectType === ORDERING_SUBJECT_SITE_DIRECT}
+                value={state.facilityQuery}
+                onChange={(e) => onChange({ ...state, facilityQuery: e.target.value })}
+              />
+              {state.selectedFacilities.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-1">
+                  {state.selectedFacilities.map((facility) => (
+                    <span key={facility.facilityId} className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">
+                      {facility.companyName}
+                      <button
+                        type="button"
+                        className="text-primary/70 hover:text-primary"
+                        onClick={() =>
+                          onChange({
+                            ...state,
+                            selectedFacilities: state.selectedFacilities.filter((item) => item.facilityId !== facility.facilityId),
+                          })
+                        }
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              {state.orderingSubjectType !== ORDERING_SUBJECT_SITE_DIRECT && facilityOptions.length > 0 && (
+                <div className="absolute z-10 top-[70px] left-0 right-0 rounded-xl border border-stone-200 bg-white shadow-lg max-h-56 overflow-y-auto">
+                  {facilityOptions
+                    .filter((facility) => !state.selectedFacilities.some((selected) => selected.facilityId === facility.facilityId))
+                    .map((facility) => (
+                      <button
+                        key={facility.facilityId}
+                        type="button"
+                        className="w-full px-3 py-2 text-left text-sm hover:bg-primary/5"
+                        onClick={() => addTargetFacility(facility)}
+                      >
+                        <span className="text-stone-800">{facility.companyName}</span>
+                        <span className="ml-2 text-xs text-stone-400">{facility.businessRegistrationNo ?? ""}</span>
+                        {facility.siteAddress && <p className="text-xs text-stone-500 mt-0.5 truncate">{facility.siteAddress}</p>}
+                      </button>
+                    ))}
+                </div>
+              )}
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="font-bold text-stone-700">발주 주체 구분</span>
+              <select
+                className="ui-select"
+                value={state.orderingSubjectType}
+                onChange={(e) => onChange({ ...state, orderingSubjectType: e.target.value, facilityQuery: "", selectedFacilities: [] })}
+              >
+                {ORDERING_SUBJECT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+              <span className="text-[11px] text-stone-500">
+                대상사업장 기준, 실제 계약 체결 주체와의 관계
+              </span>
             </label>
             <label className="grid gap-1 text-sm">
               <span className="font-bold text-stone-700">용역분류</span>
@@ -1359,14 +1764,25 @@ function NewContractModal({
               </select>
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold text-stone-700">업종</span>
-              <select className="ui-select" value={state.industryCategory} onChange={(e) => onChange({ ...state, industryCategory: e.target.value })}>
-                <option value="">업종 선택</option>
-                {CONTRACT_INDUSTRY_OPTIONS.map((option) => (
+              <span className="font-bold text-stone-700">대금 지급 방식</span>
+              <select className="ui-select" value={state.paymentMethod} onChange={(e) => onChange({ ...state, paymentMethod: e.target.value })}>
+                {PAYMENT_METHOD_OPTIONS.map((option) => (
                   <option key={option} value={option}>{option}</option>
                 ))}
               </select>
             </label>
+            <div className="grid gap-1 text-sm">
+              <span className="font-bold text-stone-700">업종</span>
+              <div className="flex items-center gap-2">
+                <select className="ui-select min-w-0 flex-1" value={state.industryCategory} onChange={(e) => onChange({ ...state, industryCategory: e.target.value })}>
+                  <option value="">업종 선택</option>
+                  {industryOptions.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+                <IndustryOptionsEditorButton options={industryOptions} onOptionsChange={setIndustryOptions} />
+              </div>
+            </div>
             <label className="grid gap-1 text-sm">
               <span className="font-bold text-stone-700">계약금액</span>
               <input className="input-field tabular-nums" inputMode="numeric" value={formatThousands(state.currentAmount)} onChange={(e) => onChange({ ...state, currentAmount: stripDigits(e.target.value) })} />
@@ -1798,7 +2214,7 @@ function NewStageModal({
         </label>
         <label className="grid gap-1 text-sm">
           <span className="font-bold text-stone-700">청구금액</span>
-          <input type="number" className="input-field" value={state.amount} onChange={(e) => onChange({ ...state, amount: e.target.value })} />
+          <input className="input-field tabular-nums" inputMode="numeric" value={formatThousands(state.amount)} onChange={(e) => onChange({ ...state, amount: stripDigits(e.target.value) })} />
         </label>
         <label className="grid gap-1 text-sm">
           <span className="font-bold text-stone-700">대금 지급 조건</span>
@@ -1916,10 +2332,10 @@ function ContractDeleteModal({
   const [deleteReason, setDeleteReason] = useState("중복 입력 삭제");
   const [saving, setSaving] = useState(false);
   return (
-    <ModalShell title="계약 삭제" onClose={onClose}>
+    <ModalShell title="계약 휴지통 이동" onClose={onClose}>
       <div className="p-5 grid gap-4">
         <p className="text-sm text-stone-600">
-          <span className="text-stone-900">{contractTitle}</span> 계약을 삭제합니다. 삭제 사유는 별도 로그로 저장됩니다.
+          <span className="text-stone-900">{contractTitle}</span> 계약을 휴지통으로 이동합니다. 계약 데이터는 목록에서 제외되며, admin만 휴지통에서 영구 삭제할 수 있습니다.
         </p>
         <label className="grid gap-1 text-sm">
           <span className="font-bold text-stone-700">삭제 사유</span>
@@ -1970,13 +2386,44 @@ function ModalShell({ title, onClose, children, wide }: { title: string; onClose
   );
 }
 
-function Info({ label, value, highlight }: { label: string; value: unknown; highlight?: boolean }) {
+function Info({ label, value, highlight }: { label: string; value: React.ReactNode; highlight?: boolean }) {
+  const isEmpty = value == null || value === "";
   return (
     <div className={"rounded-2xl border p-3 " + (highlight ? "bg-primary/5 border-primary/30" : "bg-white/60 border-stone-200/80")}>
       <p className="text-[11px] text-stone-500">{label}</p>
       <p className={"text-sm mt-1 truncate " + (highlight ? "text-primary" : "text-stone-800")}>
-        {value == null || value === "" ? "-" : String(value)}
+        {isEmpty ? "-" : value}
       </p>
+    </div>
+  );
+}
+
+function CollectionProgressCard({
+  rate,
+  collectedAmount,
+  baseAmount,
+}: {
+  rate: number;
+  collectedAmount: number;
+  baseAmount: number;
+}) {
+  const percent = Math.round(rate * 100);
+  const today = formatKoreanDate(new Date());
+  return (
+    <div className="rounded-2xl border border-primary/20 bg-white/70 p-4 min-h-[180px] flex flex-col items-center justify-center relative">
+      <p className="absolute left-4 top-3 text-[11px] font-bold text-stone-500">수금 진척도</p>
+      <div
+        className="w-28 h-28 rounded-full flex items-center justify-center"
+        style={{ background: `conic-gradient(#9BC2E6 ${percent}%, #ececec ${percent}% 100%)` }}
+      >
+        <div className="w-20 h-20 rounded-full bg-white flex items-center justify-center">
+          <span className="text-2xl font-bold text-[#9BC2E6]">{percent}%</span>
+        </div>
+      </div>
+      <p className="mt-3 text-xs font-mono text-stone-600">
+        {formatExactAmount(collectedAmount)} / {formatExactAmount(baseAmount)}
+      </p>
+      <p className="absolute right-4 bottom-3 text-[11px] text-stone-500">{today} 기준</p>
     </div>
   );
 }
@@ -2150,6 +2597,13 @@ function normalizeDateInput(value: string): string {
   return valid ? iso : digits;
 }
 
+function formatKoreanDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}.${month}.${day}.`;
+}
+
 function createMilestoneDraft(): ContractMilestoneDraft {
   return {
     id: "draft_" + Math.random().toString(36).slice(2),
@@ -2166,9 +2620,14 @@ function createEmptyContractState(): NewContractModalState {
     counterpartyQuery: "",
     counterpartyEntityId: "",
     counterpartyName: "",
+    counterpartyBusinessRegistrationNo: null,
+    facilityQuery: "",
+    selectedFacilities: [],
     serviceType: defaultService.type,
     serviceSubtype: defaultService.subtypes[0],
     contractKind: "standard",
+    paymentMethod: PAYMENT_METHOD_OPTIONS[0],
+    orderingSubjectType: ORDERING_SUBJECT_OPTIONS[0].value,
     contractDate: new Date().toISOString().slice(0, 10),
     startedAt: "",
     endedAt: "",
@@ -2232,6 +2691,44 @@ function isMilestoneFullyCollected(milestone: Record<string, unknown>): boolean 
  * (e.g. `53000000` -> `53,000,000`). Returns "" for empty/non-numeric input
  * so that placeholders still show up in the form.
  */
+/**
+ * 두 날짜 사이의 "경과 개월 수"를 달력 기준으로 계산한다.
+ * (일자가 시작일보다 이르면 아직 한 달을 채우지 못한 것으로 보고 1을 뺀다.)
+ */
+function monthsBetween(from: Date, to: Date): number {
+  let months = (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth());
+  if (to.getDate() < from.getDate()) months -= 1;
+  return Math.max(0, months);
+}
+
+interface OverdueCollectionTag {
+  label: string;
+  color: string;
+  tooltip: string;
+}
+
+/**
+ * 계산서 발행 후 수금이 완료되지 않은 대금지급조건을 검사해 경과 기간 태그를 만든다.
+ * 미수금 건이 하나도 없으면 null. 색상/구간은 "가장 오래 경과한" 발행 건을 기준으로 한다.
+ *  - 1개월 미만: #A9D08E / 2개월 미만: #FFD966 / 2개월 이상: #FF7979
+ */
+function getOverdueCollectionTag(milestones: Array<Record<string, unknown>>): OverdueCollectionTag | null {
+  const now = new Date();
+  let maxMonths = -1;
+  for (const m of milestones) {
+    const issued = Number(m.invoice_issued ?? 0) === 1;
+    const collected = Number(m.payment_collected ?? 0) === 1;
+    if (!issued || collected) continue;
+    const raw = m.invoice_issued_at ? new Date(String(m.invoice_issued_at)) : null;
+    const months = raw && !Number.isNaN(raw.getTime()) ? monthsBetween(raw, now) : 0;
+    if (months > maxMonths) maxMonths = months;
+  }
+  if (maxMonths < 0) return null;
+  if (maxMonths < 1) return { label: "1개월 미만", color: "#A9D08E", tooltip: "계산서 발행 후 수금 미완료 (발행 1개월 미만)" };
+  if (maxMonths < 2) return { label: "2개월 미만", color: "#FFD966", tooltip: "계산서 발행 후 수금 미완료 (발행 1~2개월 경과)" };
+  return { label: "2개월 이상", color: "#FF7979", tooltip: "계산서 발행 후 수금 미완료 (발행 2개월 이상 경과)" };
+}
+
 function formatThousands(value: string): string {
   const digits = stripDigits(value);
   if (!digits) return "";
@@ -2260,4 +2757,13 @@ function formatExactAmount(value: unknown): string {
   const n = typeof value === "number" ? value : Number(value ?? 0);
   if (!Number.isFinite(n) || n === 0) return "-";
   return Math.round(n).toLocaleString("en-US");
+}
+
+/**
+ * 대상사업장 항목 라벨을 용역분류에 맞춰 `대상사업장(용역분류)` 형태로 생성한다.
+ * 용역분류가 비어 있으면 `대상사업장`만 표시한다.
+ */
+function buildTargetFacilityLabel(serviceType: unknown): string {
+  const type = String(serviceType ?? "").trim();
+  return type ? `대상사업장(${type})` : "대상사업장";
 }

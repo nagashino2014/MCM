@@ -70,6 +70,11 @@ export async function requireEditor(): Promise<AuthContext> {
   return requireRole(["admin", "editor"]);
 }
 
+/** admin only */
+export async function requireAdmin(): Promise<AuthContext> {
+  return requireRole("admin");
+}
+
 /** viewer 이상 (전 role) */
 export async function requireAuthenticated(): Promise<AuthContext> {
   return requireSession();

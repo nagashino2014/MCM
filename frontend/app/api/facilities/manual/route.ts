@@ -22,19 +22,53 @@ export const dynamic = "force-dynamic";
 interface CreateBody {
   companyName: string;
   businessRegistrationNo?: string | null;
+  representativeName?: string | null;
   siteAddress?: string | null;
   phoneNumber?: string | null;
   industryCode?: string | null;
   industryName?: string | null;
+  businessCertificateBusinessType?: string | null;
+  businessCertificateBusinessItem?: string | null;
+  businessCertificateCorporateRegistrationNo?: string | null;
+  businessCertificateOcrText?: string | null;
   memo?: string | null;
   aliases?: { alias?: string; aliasType?: string | null; note?: string | null; isPrimary?: boolean }[];
   serviceCategories?: FacilityServiceCategory[];
   companySize?: FacilityCompanySize | null;
 }
 
+interface DuplicateFacility {
+  facilityId: string;
+  companyName: string | null;
+  businessRegistrationNo: string | null;
+  siteAddress: string | null;
+  matchType: "businessRegistrationNo" | "companyAddress";
+}
+
 function normalizeCompanyKey(name: string | null | undefined): string | null {
   if (!name) return null;
   return name.replace(/\s+/g, "").replace(/[\(\)（）]/g, "").trim().toLowerCase();
+}
+
+function normalizeText(value: string | null | undefined): string | null {
+  const text = value?.trim();
+  return text ? text : null;
+}
+
+function normalizeCorporateRegistrationNo(value: string | null | undefined): string | null {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  if (digits.length !== 13) return normalizeText(value);
+  return digits.slice(0, 6) + "-" + digits.slice(6);
+}
+
+function duplicateFromRow(row: unknown[], matchType: DuplicateFacility["matchType"]): DuplicateFacility {
+  return {
+    facilityId: String(row[0] ?? ""),
+    companyName: row[1] != null ? String(row[1]) : null,
+    businessRegistrationNo: row[2] != null ? String(row[2]) : null,
+    siteAddress: row[3] != null ? String(row[3]) : null,
+    matchType,
+  };
 }
 
 export async function POST(req: NextRequest) {
@@ -62,29 +96,48 @@ export async function POST(req: NextRequest) {
     const now = new Date().toISOString();
 
     const created = await withDbWrite(async (db) => {
+      if (businessRegistrationNo) {
+        const r = await db.exec(
+          `SELECT facility_id, company_name, business_registration_no, site_address
+             FROM facilities
+            WHERE business_registration_no = $1
+              AND deleted_at IS NULL
+            LIMIT 1`,
+          [businessRegistrationNo]
+        );
+        if (r.length && r[0].values.length) {
+          return { duplicate: duplicateFromRow(r[0].values[0], "businessRegistrationNo") };
+        }
+      }
       if (normCompany && normAddress) {
         const r = await db.exec(
-          `SELECT facility_id FROM facilities
-            WHERE normalized_company_name = $1 AND normalized_address = $2
+          `SELECT facility_id, company_name, business_registration_no, site_address
+             FROM facilities
+            WHERE normalized_company_name = $1
+              AND normalized_address = $2
+              AND deleted_at IS NULL
             LIMIT 1`,
           [normCompany, normAddress]
         );
         if (r.length && r[0].values.length) {
-          throw new Error(
-            "동일 상호와 소재지의 사업장이 이미 존재합니다. 사업장 마스터에서 확인 후 병합하세요."
-          );
+          return { duplicate: duplicateFromRow(r[0].values[0], "companyAddress") };
         }
       }
       await db.run(
         `INSERT INTO facilities
-          (facility_id, company_name, business_registration_no, site_address, phone_number,
+          (facility_id, company_name, business_registration_no, representative_name, site_address, phone_number,
            industry_code, industry_name, normalized_company_name, normalized_address,
-          region_sido, region_sigungu, source, memo, company_size, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'manual', $12, $13, $14, $15)`,
+          region_sido, region_sigungu, source, memo, company_size,
+          business_certificate_business_type, business_certificate_business_item,
+          business_certificate_corporate_registration_no, business_certificate_ocr_text,
+          created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'manual', $13, $14,
+          $15, $16, $17, $18, $19, $20)`,
         [
           facilityId,
           companyName,
           businessRegistrationNo,
+          normalizeText(body.representativeName),
           siteAddress,
           body.phoneNumber ?? null,
           body.industryCode ?? null,
@@ -95,6 +148,10 @@ export async function POST(req: NextRequest) {
           region.sigungu,
           body.memo ?? null,
           normalizeFacilityCompanySize(body.companySize),
+          normalizeText(body.businessCertificateBusinessType),
+          normalizeText(body.businessCertificateBusinessItem),
+          normalizeCorporateRegistrationNo(body.businessCertificateCorporateRegistrationNo),
+          normalizeText(body.businessCertificateOcrText),
           now,
           now,
         ]
@@ -135,14 +192,29 @@ export async function POST(req: NextRequest) {
         after: {
           companyName,
           businessRegistrationNo,
+            representativeName: normalizeText(body.representativeName),
           siteAddress,
           source: "manual",
           serviceCategories: services,
           companySize: normalizeFacilityCompanySize(body.companySize),
+          businessCertificateBusinessType: normalizeText(body.businessCertificateBusinessType),
+          businessCertificateBusinessItem: normalizeText(body.businessCertificateBusinessItem),
+          businessCertificateCorporateRegistrationNo: normalizeCorporateRegistrationNo(body.businessCertificateCorporateRegistrationNo),
         },
       });
-      return { facilityId, updatedExisting: false };
+      return { facilityId, updatedExisting: false, duplicate: null };
     });
+
+    if (created.duplicate) {
+      const message =
+        created.duplicate.matchType === "businessRegistrationNo"
+          ? "동일 사업자등록번호의 사업장이 이미 존재합니다. 기존 사업장을 확인 후 필요 시 정보를 수정하세요."
+          : "동일 상호와 소재지의 사업장이 이미 존재합니다. 사업장 마스터에서 확인 후 병합하세요.";
+      return NextResponse.json(
+        { error: message, duplicateFacility: created.duplicate },
+        { status: 409 }
+      );
+    }
 
     return NextResponse.json({
       facilityId: created.facilityId,

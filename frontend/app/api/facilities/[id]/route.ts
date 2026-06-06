@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "node:crypto";
 import {
   authErrorToResponse,
   requireAuthenticated,
@@ -13,6 +14,7 @@ import { normalizeFacilityCompanySize, type FacilityCompanySize } from "@/lib/ie
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+const newTrashId = () => "trash_" + crypto.randomUUID().replace(/-/g, "").slice(0, 16);
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -33,10 +35,14 @@ export async function GET(_: NextRequest, ctx: RouteContext) {
 interface PatchBody {
   companyName?: string;
   businessRegistrationNo?: string | null;
+  representativeName?: string | null;
   siteAddress?: string | null;
   phoneNumber?: string | null;
   industryCode?: string | null;
   industryName?: string | null;
+  businessCertificateBusinessType?: string | null;
+  businessCertificateBusinessItem?: string | null;
+  businessCertificateCorporateRegistrationNo?: string | null;
   memo?: string | null;
   logoPath?: string | null;
   companySize?: FacilityCompanySize | null;
@@ -71,6 +77,9 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       if (body.businessRegistrationNo !== undefined) {
         pushSet("business_registration_no", normalizeBusinessRegistrationNo(body.businessRegistrationNo));
       }
+      if (body.representativeName !== undefined) {
+        pushSet("representative_name", body.representativeName?.trim() || null);
+      }
       if (body.siteAddress !== undefined) {
         const formattedAddress = normalizeAddress(body.siteAddress);
         pushSet("site_address", formattedAddress);
@@ -88,6 +97,17 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       }
       if (body.industryName !== undefined) {
         pushSet("industry_name", body.industryName);
+      }
+      if (body.businessCertificateBusinessType !== undefined) {
+        pushSet("business_certificate_business_type", normalizeNullableText(body.businessCertificateBusinessType));
+      }
+      if (body.businessCertificateBusinessItem !== undefined) {
+        pushSet("business_certificate_business_item", normalizeNullableText(body.businessCertificateBusinessItem));
+      }
+      if (body.businessCertificateCorporateRegistrationNo !== undefined) {
+        const corporateNo = normalizeCorporateRegistrationNo(body.businessCertificateCorporateRegistrationNo);
+        pushSet("business_certificate_corporate_registration_no", corporateNo);
+        pushSet("corporate_registration_no", corporateNo);
       }
       if (body.memo !== undefined) {
         pushSet("memo", body.memo);
@@ -122,33 +142,55 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
   }
 }
 
-export async function DELETE(_: NextRequest, ctx: RouteContext) {
+function normalizeNullableText(value?: string | null): string | null {
+  const text = String(value ?? "").trim();
+  return text || null;
+}
+
+function normalizeCorporateRegistrationNo(value?: string | null): string | null {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  if (digits.length === 13) return `${digits.slice(0, 6)}-${digits.slice(6)}`;
+  const text = String(value ?? "").trim();
+  return text || null;
+}
+
+export async function DELETE(req: NextRequest, ctx: RouteContext) {
   try {
     const actor = await requireEditor();
     const { id } = await ctx.params;
+    const body = await req.json().catch(() => ({}));
+    const deleteReason = String(body?.deleteReason ?? "사용자 요청").trim() || "사용자 요청";
     const before = await getFacilityDetail(id);
     if (!before) return NextResponse.json({ error: "not found" }, { status: 404 });
+    const now = new Date().toISOString();
 
     await withDbWrite(async (db) => {
+      await db.run(
+        `INSERT INTO trash_items
+          (trash_id, item_type, item_id, item_title, reason, before_json, deleted_by, deleted_at)
+         VALUES ($1, 'facility', $2, $3, $4, $5::jsonb, $6, $7)`,
+        [
+          newTrashId(),
+          id,
+          before.companyName,
+          deleteReason,
+          JSON.stringify(before),
+          actor.userId,
+          now,
+        ]
+      );
       await recordAuditLogInline(db, {
         actorUserId: actor.userId,
         action: "facility_delete",
         targetTable: "facilities",
         targetId: id,
         before,
-        after: { deleted: true },
+        after: { movedToTrash: true, deleteReason },
       });
-      await db.run("DELETE FROM facility_annual_reports WHERE facility_id = $1", [id]);
-      await db.run("DELETE FROM facility_aliases WHERE facility_id = $1", [id]);
-      await db.run("DELETE FROM facility_service_categories WHERE facility_id = $1", [id]);
-      await db.run("DELETE FROM facility_manual_products WHERE facility_id = $1", [id]);
-      await db.run("DELETE FROM facility_group_memberships WHERE facility_id = $1", [id]);
-      await db.run("DELETE FROM facility_operating_entities WHERE facility_id = $1", [id]);
-      await db.run("DELETE FROM facility_contact_main_numbers WHERE facility_id = $1", [id]);
-      await db.run("DELETE FROM facility_contact_logs WHERE facility_id = $1", [id]);
-      await db.run("DELETE FROM facility_contact_people WHERE facility_id = $1", [id]);
-      await db.run("DELETE FROM facility_contact_departments WHERE facility_id = $1", [id]);
-      await db.run("DELETE FROM facilities WHERE facility_id = $1", [id]);
+      await db.run(
+        "UPDATE facilities SET deleted_at = $1, deleted_by = $2, delete_reason = $3, updated_at = $1 WHERE facility_id = $4",
+        [now, actor.userId, deleteReason, id]
+      );
     });
 
     return NextResponse.json({ ok: true });

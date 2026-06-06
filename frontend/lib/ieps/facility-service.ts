@@ -1,6 +1,12 @@
 export type FacilityServiceCategory = "integrated" | "chemicals" | "haps" | "esg" | "other";
 
-export type FacilityCompanySize = "large" | "mid" | "small";
+export type FacilityCompanySize =
+  | "national_agency"
+  | "local_government"
+  | "public_enterprise"
+  | "large"
+  | "mid"
+  | "small";
 
 export interface FacilityAlias {
   id?: number;
@@ -43,12 +49,22 @@ export const FACILITY_SERVICE_ORDER: FacilityServiceCategory[] = [
 ];
 
 export const FACILITY_COMPANY_SIZE_LABELS: Record<FacilityCompanySize, string> = {
+  national_agency: "국가기관",
+  local_government: "지자체",
+  public_enterprise: "공기업",
   large: "대기업",
   mid: "중견기업",
   small: "중소기업",
 };
 
-export const FACILITY_COMPANY_SIZE_ORDER: FacilityCompanySize[] = ["large", "mid", "small"];
+export const FACILITY_COMPANY_SIZE_ORDER: FacilityCompanySize[] = [
+  "national_agency",
+  "local_government",
+  "public_enterprise",
+  "large",
+  "mid",
+  "small",
+];
 
 export const normalizeFacilityServiceCategory = (
   value: unknown

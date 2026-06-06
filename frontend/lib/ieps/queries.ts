@@ -19,6 +19,7 @@ import type { FacilityGroupCompanyRole, FacilityGroupInfo, FacilityGroupMembersh
 import type { FacilityOperatingEntityInfo, FacilityOperatingRelationType } from "./legal-entity";
 import {
   FACILITY_COMPANY_SIZE_LABELS,
+  FACILITY_COMPANY_SIZE_ORDER,
   FACILITY_SERVICE_LABELS,
   FACILITY_SERVICE_ORDER,
   normalizeFacilityCompanySize,
@@ -771,11 +772,13 @@ export interface FacilityListItem {
   facilityId: string;
   companyName: string;
   businessRegistrationNo: string | null;
+  representativeName: string | null;
   siteAddress: string | null;
   regionSido: string | null;
   regionSigungu: string | null;
   industryCode: string | null;
   industryName: string | null;
+  integratedPermitTarget: string | null;
   source: string;
   memo: string | null;
   logoPath: string | null;
@@ -795,6 +798,7 @@ export interface FacilityListItem {
 
 export interface FacilityListFilter {
   q?: string;
+  integratedPermitTarget?: boolean;
   sido?: string;
   sigungu?: string;
   industryCode?: string;
@@ -811,7 +815,7 @@ export async function listFacilities(
 ): Promise<{ items: FacilityListItem[]; total: number }> {
   invalidateDb();
   const db = await getDb();
-  const where: string[] = [];
+  const where: string[] = ["f.deleted_at IS NULL"];
   const params: unknown[] = [];
 
   if (filter.q && filter.q.trim()) {
@@ -833,6 +837,11 @@ export async function listFacilities(
   if (filter.industryCode) {
     where.push(`f.industry_code = $${params.length + 1}`);
     params.push(filter.industryCode);
+  }
+  if (filter.integratedPermitTarget) {
+    where.push(
+      `(COALESCE(NULLIF(f.integrated_permit_target, ''), '') <> '' OR EXISTS (SELECT 1 FROM permits pit WHERE pit.facility_id = f.facility_id))`
+    );
   }
   if (filter.source) {
     where.push(`f.source = $${params.length + 1}`);
@@ -881,7 +890,7 @@ export async function listFacilities(
   const sql = `
     SELECT
       f.facility_id, f.company_name, f.business_registration_no, f.site_address,
-      f.region_sido, f.region_sigungu, f.industry_code, f.industry_name,
+      f.region_sido, f.region_sigungu, f.industry_code, f.industry_name, f.integrated_permit_target,
       f.source, f.memo, f.logo_path, f.company_size, f.created_at, f.updated_at,
       lp.decision_no, lp.permit_date,
       COALESCE(ls.air_class, far.air_class)         AS air_class,
@@ -928,6 +937,7 @@ export async function listFacilities(
     regionSigungu: row.region_sigungu != null ? String(row.region_sigungu) : null,
     industryCode: row.industry_code != null ? String(row.industry_code) : null,
     industryName: row.industry_name != null ? String(row.industry_name) : null,
+    integratedPermitTarget: row.integrated_permit_target != null ? String(row.integrated_permit_target) : null,
     source: row.source != null ? String(row.source) : "ieps",
     memo: row.memo != null ? String(row.memo) : null,
     logoPath: row.logo_path != null ? String(row.logo_path) : null,
@@ -970,19 +980,19 @@ export async function getFacilityFilterOptions(): Promise<FacilityFilterOptions>
     }
   };
   const sidoR = await safe(
-    "SELECT region_sido, COUNT(*) FROM facilities WHERE region_sido IS NOT NULL GROUP BY region_sido ORDER BY 2 DESC"
+    "SELECT region_sido, COUNT(*) FROM facilities WHERE deleted_at IS NULL AND region_sido IS NOT NULL GROUP BY region_sido ORDER BY 2 DESC"
   );
   const sigunguR = await safe(
-    "SELECT region_sigungu, region_sido, COUNT(*) FROM facilities WHERE region_sigungu IS NOT NULL GROUP BY region_sigungu, region_sido ORDER BY 3 DESC"
+    "SELECT region_sigungu, region_sido, COUNT(*) FROM facilities WHERE deleted_at IS NULL AND region_sigungu IS NOT NULL GROUP BY region_sigungu, region_sido ORDER BY 3 DESC"
   );
   // industry_code 단일 키로 묶고 industry_name 은 대표값 1개(MIN)만 채택.
   // 동일 코드에 표기 변형(공백·괄호 차이)이 섞여 있으면 React key 가 코드만으로 구성될 때
   // duplicate key 경고가 발생하므로 DB 레벨에서 코드 단일화로 해결한다.
   const industryR = await safe(
-    "SELECT industry_code, MIN(industry_name) AS industry_name, COUNT(*) FROM facilities WHERE industry_code IS NOT NULL GROUP BY industry_code ORDER BY 3 DESC"
+    "SELECT industry_code, MIN(industry_name) AS industry_name, COUNT(*) FROM facilities WHERE deleted_at IS NULL AND industry_code IS NOT NULL GROUP BY industry_code ORDER BY 3 DESC"
   );
   const sourceR = await safe(
-    "SELECT source, COUNT(*) FROM facilities GROUP BY source ORDER BY 2 DESC"
+    "SELECT source, COUNT(*) FROM facilities WHERE deleted_at IS NULL GROUP BY source ORDER BY 2 DESC"
   );
 
   return {
@@ -1015,6 +1025,9 @@ export interface FacilityDetail {
   phoneNumber: string | null;
   industryCode: string | null;
   industryName: string | null;
+  businessCertificateBusinessType: string | null;
+  businessCertificateBusinessItem: string | null;
+  businessCertificateCorporateRegistrationNo: string | null;
   industries: IndustryDisplay[];
   regionSido: string | null;
   regionSigungu: string | null;
@@ -1030,11 +1043,28 @@ export interface FacilityDetail {
   createdAt: string;
   updatedAt: string;
   permits: PermitDetail[];
+  businessCertificates: FacilityBusinessCertificate[];
   /**
    * 연간(점검)보고서 스냅샷. 사업장당 가장 최근 1건. 검토결과서가 미공개인 사업장의
    * 차선책 데이터 출처. 검토결과서가 공개된 사업장도 보강 데이터로 함께 노출.
    */
   annualReport: AnnualReportSnapshot | null;
+}
+
+export interface FacilityBusinessCertificate {
+  certificateId: string;
+  versionNo: number;
+  isCurrent: boolean;
+  displayName: string;
+  originalFilename: string | null;
+  publicPath: string | null;
+  businessType: string | null;
+  businessItem: string | null;
+  corporateRegistrationNo: string | null;
+  memo: string | null;
+  createdByName: string | null;
+  createdByEmail: string | null;
+  createdAt: string;
 }
 
 export interface AnnualReportSnapshot {
@@ -1081,7 +1111,12 @@ export async function getFacilityDetail(facilityId: string): Promise<FacilityDet
   let facRow;
   try {
     facRow = await db.exec(
-      "SELECT facility_id, company_name, business_registration_no, site_address, phone_number, industry_code, industry_name, region_sido, region_sigungu, source, memo, logo_path, company_size, created_at, updated_at FROM facilities WHERE facility_id = $1",
+      `SELECT facility_id, company_name, business_registration_no, representative_name, site_address, phone_number,
+              industry_code, industry_name,
+              business_certificate_business_type, business_certificate_business_item,
+              business_certificate_corporate_registration_no,
+              region_sido, region_sigungu, source, memo, logo_path, company_size, created_at, updated_at
+         FROM facilities WHERE facility_id = $1 AND deleted_at IS NULL`,
       [facilityId]
     );
   } catch {
@@ -1156,6 +1191,31 @@ export async function getFacilityDetail(facilityId: string): Promise<FacilityDet
       products,
     });
   }
+
+  const businessCertificates = rowsToObjects(
+    await db.exec(
+      `SELECT c.*, u.name AS created_by_name, u.email AS created_by_email
+         FROM facility_business_certificates c
+         LEFT JOIN users u ON u.user_id = c.created_by
+        WHERE c.facility_id = $1
+        ORDER BY c.version_no DESC, c.created_at DESC`,
+      [facilityId]
+    ).catch(() => [])
+  ).map((row) => ({
+    certificateId: String(row.certificate_id ?? ""),
+    versionNo: Number(row.version_no ?? 0),
+    isCurrent: Number(row.is_current ?? 0) === 1,
+    displayName: String(row.display_name ?? ""),
+    originalFilename: row.original_filename != null ? String(row.original_filename) : null,
+    publicPath: row.public_path != null ? String(row.public_path) : null,
+    businessType: row.business_type != null ? String(row.business_type) : null,
+    businessItem: row.business_item != null ? String(row.business_item) : null,
+    corporateRegistrationNo: row.corporate_registration_no != null ? String(row.corporate_registration_no) : null,
+    memo: row.memo != null ? String(row.memo) : null,
+    createdByName: row.created_by_name != null ? String(row.created_by_name) : null,
+    createdByEmail: row.created_by_email != null ? String(row.created_by_email) : null,
+    createdAt: String(row.created_at ?? ""),
+  }));
 
   // facility_annual_reports — 사업장당 1행 (연간보고서 최신 스냅샷). 미존재 시 null.
   let annualReport: AnnualReportSnapshot | null = null;
@@ -1240,10 +1300,14 @@ export async function getFacilityDetail(facilityId: string): Promise<FacilityDet
       f.business_registration_no != null
         ? formatBusinessRegistrationNo(String(f.business_registration_no))
         : null,
+    representativeName: f.representative_name != null ? String(f.representative_name) : null,
     siteAddress: f.site_address != null ? formatAddress(String(f.site_address)) : null,
     phoneNumber: f.phone_number != null ? String(f.phone_number) : null,
     industryCode: f.industry_code != null ? String(f.industry_code) : null,
     industryName: f.industry_name != null ? String(f.industry_name) : null,
+    businessCertificateBusinessType: f.business_certificate_business_type != null ? String(f.business_certificate_business_type) : null,
+    businessCertificateBusinessItem: f.business_certificate_business_item != null ? String(f.business_certificate_business_item) : null,
+    businessCertificateCorporateRegistrationNo: f.business_certificate_corporate_registration_no != null ? String(f.business_certificate_corporate_registration_no) : null,
     industries,
     regionSido: f.region_sido != null ? String(f.region_sido) : null,
     regionSigungu: f.region_sigungu != null ? String(f.region_sigungu) : null,
@@ -1259,6 +1323,7 @@ export async function getFacilityDetail(facilityId: string): Promise<FacilityDet
     createdAt: String(f.created_at ?? ""),
     updatedAt: String(f.updated_at ?? ""),
     permits,
+    businessCertificates,
     annualReport,
   };
 }
@@ -1452,10 +1517,12 @@ export async function getRegionStats(
   const sizeMap = new Map<string, number>();
   for (const row of sizeR?.values ?? []) sizeMap.set(String(row[0] ?? "unknown"), Number(row[1] ?? 0));
   const companySizes: RegionStats["companySizes"] = [
-    { size: "large", label: FACILITY_COMPANY_SIZE_LABELS.large, count: sizeMap.get("large") ?? 0 },
-    { size: "mid", label: FACILITY_COMPANY_SIZE_LABELS.mid, count: sizeMap.get("mid") ?? 0 },
-    { size: "small", label: FACILITY_COMPANY_SIZE_LABELS.small, count: sizeMap.get("small") ?? 0 },
-    { size: "unknown", label: "미상", count: sizeMap.get("unknown") ?? 0 },
+    ...FACILITY_COMPANY_SIZE_ORDER.map((size) => ({
+      size,
+      label: FACILITY_COMPANY_SIZE_LABELS[size],
+      count: sizeMap.get(size) ?? 0,
+    })),
+    { size: "unknown" as const, label: "미상", count: sizeMap.get("unknown") ?? 0 },
   ];
 
   const facilityLimit = options.facilityLimit === undefined ? 30 : options.facilityLimit;

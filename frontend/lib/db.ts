@@ -43,11 +43,23 @@ type PgPoolCtor = new (config: PgPoolConfig) => PgPool;
 
 let pool: PgPool | null = null;
 
+function buildConnectionStringFromParts(): string | null {
+  const host = process.env.PGHOST;
+  const user = process.env.PGUSER;
+  const password = process.env.PGPASSWORD;
+  const database = process.env.PGDATABASE;
+  if (!host || !user || !password || !database) return null;
+  const port = process.env.PGPORT || "5432";
+  const encodedUser = encodeURIComponent(user);
+  const encodedPassword = encodeURIComponent(password);
+  return `postgresql://${encodedUser}:${encodedPassword}@${host}:${port}/${database}`;
+}
+
 async function getPool(): Promise<PgPool> {
   if (pool) return pool;
-  const connectionString = process.env.DATABASE_URL;
+  const connectionString = process.env.DATABASE_URL || buildConnectionStringFromParts();
   if (!connectionString) {
-    throw new Error("DATABASE_URL is required to access the application database.");
+    throw new Error("DATABASE_URL or PGHOST/PGUSER/PGPASSWORD/PGDATABASE is required to access the application database.");
   }
   const mod = (await import("pg")) as unknown as { Pool?: PgPoolCtor; default?: { Pool: PgPoolCtor } };
   const PoolCtor: PgPoolCtor = mod.Pool ?? mod.default!.Pool;

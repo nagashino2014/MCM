@@ -1,14 +1,34 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
+import { IndustryOptionsEditorButton, useContractIndustryOptions } from "@/components/contracts/IndustryOptionsEditor";
+import {
+  ORDERING_SUBJECT_OPTIONS,
+  ORDERING_SUBJECT_SITE_DIRECT,
+  ORDERING_SUBJECT_PARENT_CORP,
+  ORDERING_SUBJECT_CONSIGNED_OPERATOR,
+  validateOrderingTargetFacility,
+} from "@/lib/ieps/ordering-subject";
 
 export interface ContractChangePayload {
   amounts: Array<{ stageLabel: string; previousAmount: string; nextAmount: string }>;
   servicePeriod: { previous: string; next: string };
   paymentTerms: Array<{ stageLabel: string; previous: string; next: string }>;
-  serviceCategory: { previousType: string; previousSubtype: string; previousIndustry: string; nextType: string; nextSubtype: string; nextIndustry: string; changed: boolean };
+  serviceCategory: {
+    previousType: string;
+    previousSubtype: string;
+    previousIndustry: string;
+    nextType: string;
+    nextSubtype: string;
+    nextIndustry: string;
+    changed: boolean;
+    previousPaymentMethod: string;
+    nextPaymentMethod: string;
+    targetFacilities: FacilitySearchItem[];
+    orderingSubjectType: string;
+  };
   closing: { completionDate: string; permitAcquiredAt: string; etc: string };
   termination: { terminatedAt: string; terminationReason: string; suspendedAt: string; suspensionReason: string };
   outsourcing: { outsourcingTitle: string; counterpartyName: string; serviceType: string; contractDate: string; endedAt: string; amount: string; memo: string };
@@ -19,11 +39,15 @@ interface ContractChangeModalProps {
   contractId: string;
   contractTitle: string;
   counterpartyName: string;
+  counterpartyBusinessRegistrationNo?: string | null;
   contractDate: string | null;
   initialMilestones: Array<{ stageLabel: string; amount: number; paymentTerms: string }>;
   initialServiceType: string;
   initialServiceSubtype: string;
   initialIndustryCategory: string;
+  initialPaymentMethod: string;
+  initialTargetFacilities: FacilitySearchItem[];
+  initialOrderingSubjectType?: string | null;
   initialEndedAt: string | null;
   initialCurrentAmount: number | null;
   onClose: () => void;
@@ -45,28 +69,15 @@ const TABS: Array<{ key: TabKey; label: string }> = [
 const DEFAULT_OUTSOURCING_TYPES = ["도면 작성", "산업안전 관련", "측정/분석", "디자인", "번역"];
 const DEFAULT_TERMINATION_REASONS = ["사업장 폐쇄", "허가대상 제외", "대금 미지급"];
 const DEFAULT_SUSPENSION_REASONS = ["사업추진 유보", "가동 지연", "관련허가 지연", "대금 미지급"];
-const CONTRACT_INDUSTRY_OPTIONS = [
-  "발전",
-  "폐기물소각",
-  "철강",
-  "비철",
-  "유기",
-  "석유정제",
-  "무기화학",
-  "정밀화학",
-  "비료및질소화합물",
-  "펄프종이및판지",
-  "전자부품",
-  "반도체",
-  "섬유염색및가공처리업",
-  "도축육류가공및저장처리업",
-  "알콜음료제조업",
-  "플라스틱제품제조업",
-  "자동차부품제조업",
-  "폐기물처리업",
-  "시멘트 제조업",
-  "이차전지 제조업",
-];
+const PAYMENT_METHOD_OPTIONS = ["현금", "어음 : 1개월 이하", "어음 : 2개월 이하", "어음 : 2개월 이상"];
+
+interface FacilitySearchItem {
+  facilityId: string;
+  companyName: string;
+  businessRegistrationNo: string | null;
+  siteAddress: string | null;
+  integratedPermitTarget?: string | null;
+}
 
 export default function ContractChangeModal(props: ContractChangeModalProps) {
   const toast = useToast();
@@ -78,6 +89,9 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
   const [outsourcingTypes, setOutsourcingTypes] = useState(DEFAULT_OUTSOURCING_TYPES);
   const [terminationReasons, setTerminationReasons] = useState(DEFAULT_TERMINATION_REASONS);
   const [suspensionReasons, setSuspensionReasons] = useState(DEFAULT_SUSPENSION_REASONS);
+  const [facilityQuery, setFacilityQuery] = useState("");
+  const [facilityOptions, setFacilityOptions] = useState<FacilitySearchItem[]>([]);
+  const { industryOptions, setIndustryOptions } = useContractIndustryOptions();
 
   const [amounts, setAmounts] = useState(
     props.initialMilestones.map((m) => ({
@@ -105,6 +119,10 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
     nextSubtype: "",
     nextIndustry: "",
     changed: false,
+    previousPaymentMethod: props.initialPaymentMethod ?? "",
+    nextPaymentMethod: "",
+    targetFacilities: props.initialTargetFacilities ?? [],
+    orderingSubjectType: props.initialOrderingSubjectType ?? ORDERING_SUBJECT_OPTIONS[0].value,
   });
   const [closing, setClosing] = useState({ completionDate: "", permitAcquiredAt: "", etc: "" });
   const [amendmentFile, setAmendmentFile] = useState<File | null>(null);
@@ -135,6 +153,104 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
     [amounts]
   );
 
+  useEffect(() => {
+    const q = facilityQuery.trim();
+    if (q.length < 2) {
+      setFacilityOptions([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({
+          q,
+          limit: "10",
+          sort: "name",
+        });
+        const res = await fetch(`/api/facilities?${params.toString()}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!res.ok) return;
+        const json = (await res.json()) as { items?: FacilitySearchItem[] };
+        setFacilityOptions(json.items ?? []);
+      } catch {
+        if (!controller.signal.aborted) setFacilityOptions([]);
+      }
+    }, 160);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [facilityQuery]);
+
+  // 발주 주체 = 대상사업장 본인: 계약상대 업체 사업자번호와 일치하는 사업장을
+  // 자동으로 찾아 대상사업장으로 채운다. (신규 계약 입력 모달과 동일 동작)
+  useEffect(() => {
+    if (serviceCategory.orderingSubjectType !== ORDERING_SUBJECT_SITE_DIRECT) return;
+    const brn = (props.counterpartyBusinessRegistrationNo ?? "").replace(/[^0-9]/g, "");
+    if (!brn) return;
+    const alreadyMatched =
+      serviceCategory.targetFacilities.length === 1 &&
+      (serviceCategory.targetFacilities[0].businessRegistrationNo ?? "").replace(/[^0-9]/g, "") === brn;
+    if (alreadyMatched) return;
+    const controller = new AbortController();
+    (async () => {
+      try {
+        const params = new URLSearchParams({ q: brn, limit: "10", sort: "name" });
+        const res = await fetch(`/api/facilities?${params.toString()}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!res.ok) return;
+        const json = (await res.json()) as { items?: FacilitySearchItem[] };
+        const match = (json.items ?? []).find(
+          (item) => (item.businessRegistrationNo ?? "").replace(/[^0-9]/g, "") === brn
+        );
+        if (match) {
+          setServiceCategory((prev) => ({ ...prev, targetFacilities: [match] }));
+        } else {
+          setServiceCategory((prev) => ({ ...prev, targetFacilities: [] }));
+          toast.show("계약상대 업체와 일치하는 사업장을 찾지 못했습니다. 대상사업장을 직접 확인하세요.", "error");
+        }
+      } catch {
+        if (!controller.signal.aborted) {
+          /* 네트워크 오류는 무시 */
+        }
+      }
+    })();
+    return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serviceCategory.orderingSubjectType, props.counterpartyBusinessRegistrationNo]);
+
+  // 발주 주체 구분별 대상사업장 추가(소속 법인·모회사 / 위탁운영사는 검증 후 추가).
+  const addTargetFacility = async (facility: FacilitySearchItem) => {
+    if (
+      serviceCategory.orderingSubjectType === ORDERING_SUBJECT_PARENT_CORP ||
+      serviceCategory.orderingSubjectType === ORDERING_SUBJECT_CONSIGNED_OPERATOR
+    ) {
+      try {
+        const res = await fetch(`/api/facilities/${encodeURIComponent(facility.facilityId)}`, { cache: "no-store" });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const facilityDetail = await res.json();
+        const result = validateOrderingTargetFacility(
+          serviceCategory.orderingSubjectType,
+          facilityDetail,
+          props.counterpartyBusinessRegistrationNo
+        );
+        if (!result.ok) {
+          toast.show(result.message ?? "대상사업장 검증에 실패했습니다.", "error");
+          return;
+        }
+      } catch (err) {
+        toast.show("대상사업장 검증 실패: " + (err as Error).message, "error");
+        return;
+      }
+    }
+    setServiceCategory((prev) => ({ ...prev, targetFacilities: [...prev.targetFacilities, facility] }));
+    setFacilityQuery("");
+  };
+
   const submit = async () => {
     setSaving(true);
     try {
@@ -149,39 +265,63 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
         meta,
       };
       const changedFields: string[] = [];
+      const initialFacilityKey = props.initialTargetFacilities.map((item) => item.facilityId).sort().join("|");
+      const nextFacilityKey = serviceCategory.targetFacilities.map((item) => item.facilityId).sort().join("|");
       if (amounts.some((a) => a.nextAmount !== "")) changedFields.push("amounts");
       if (servicePeriod.next) changedFields.push("servicePeriod");
       if (paymentTerms.some((t) => t.next !== "")) changedFields.push("paymentTerms");
       if (serviceCategory.changed || serviceCategory.nextType || serviceCategory.nextSubtype || serviceCategory.nextIndustry) changedFields.push("serviceCategory");
+      if (serviceCategory.nextPaymentMethod) changedFields.push("paymentMethod");
+      if (initialFacilityKey !== nextFacilityKey) changedFields.push("targetFacilities");
+      const initialOrderingSubjectType = props.initialOrderingSubjectType ?? "";
+      const orderingSubjectChanged = serviceCategory.orderingSubjectType !== initialOrderingSubjectType;
+      if (orderingSubjectChanged) changedFields.push("orderingSubjectType");
       if (closing.completionDate || closing.permitAcquiredAt || closing.etc) changedFields.push("closing");
       if (lifecycle.terminatedAt || lifecycle.suspendedAt) changedFields.push("termination");
       if (outsourcing.outsourcingTitle) changedFields.push("outsourcing");
 
+      // 변경계약 저장 요청 본문. 계약 테이블을 갱신하는 필드는 "실제로 새 값이
+      // 입력된 항목만" 포함한다. 빈 값/ null 을 보내면 서버(changes route)가
+      // 기존 값을 null 로 덮어써 데이터가 유실되므로, 미입력 항목은 키 자체를 생략한다.
+      const requestBody: Record<string, unknown> = {
+        changedAt: meta.changedAt,
+        previousAmount: previousAmountTotal || null,
+        deltaAmount: newCurrentAmount != null && previousAmountTotal ? newCurrentAmount - previousAmountTotal : null,
+        changedServicePeriod: servicePeriod.next || null,
+        changedPaymentTerms: paymentTerms
+          .filter((t) => t.next)
+          .map((t) => `${t.stageLabel}: ${t.next}`)
+          .join("\n") || null,
+        detail: closing.etc || meta.memo || null,
+        payload,
+        changedFields,
+      };
+      if (newCurrentAmount != null) requestBody.newCurrentAmount = newCurrentAmount;
+      const nextEndedAt = lifecycle.terminatedAt || closing.completionDate || servicePeriod.next;
+      if (nextEndedAt) requestBody.newEndedAt = nextEndedAt;
+      if (serviceCategory.nextType.trim()) requestBody.newServiceType = serviceCategory.nextType.trim();
+      if (serviceCategory.nextSubtype.trim()) requestBody.newServiceSubtype = serviceCategory.nextSubtype.trim();
+      if (serviceCategory.nextIndustry.trim()) requestBody.newIndustryCategory = serviceCategory.nextIndustry.trim();
+      if (serviceCategory.nextPaymentMethod.trim()) requestBody.newPaymentMethod = serviceCategory.nextPaymentMethod.trim();
+      if (initialFacilityKey !== nextFacilityKey) {
+        requestBody.newFacilityIds = serviceCategory.targetFacilities.map((item) => item.facilityId);
+      }
+      if (orderingSubjectChanged) {
+        requestBody.newOrderingSubjectType = serviceCategory.orderingSubjectType;
+      }
+      if (lifecycle.terminatedAt) {
+        requestBody.contractTerminatedAt = lifecycle.terminatedAt;
+        requestBody.contractTerminationReason = lifecycle.terminationReason;
+      }
+      if (lifecycle.suspendedAt) {
+        requestBody.contractSuspendedAt = lifecycle.suspendedAt;
+        requestBody.contractSuspensionReason = lifecycle.suspensionReason;
+      }
+
       const res = await fetch(`/api/contracts/${encodeURIComponent(props.contractId)}/changes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          changedAt: meta.changedAt,
-          previousAmount: previousAmountTotal || null,
-          deltaAmount: newCurrentAmount != null && previousAmountTotal ? newCurrentAmount - previousAmountTotal : null,
-          changedServicePeriod: servicePeriod.next || null,
-          changedPaymentTerms: paymentTerms
-            .filter((t) => t.next)
-            .map((t) => `${t.stageLabel}: ${t.next}`)
-            .join("\n") || null,
-          detail: closing.etc || meta.memo || null,
-          payload,
-          changedFields,
-          newCurrentAmount,
-          newEndedAt: lifecycle.terminatedAt || closing.completionDate || servicePeriod.next || undefined,
-          newServiceType: serviceCategory.changed ? serviceCategory.nextType : undefined,
-          newServiceSubtype: serviceCategory.changed ? serviceCategory.nextSubtype : undefined,
-          newIndustryCategory: serviceCategory.changed ? serviceCategory.nextIndustry : undefined,
-          contractTerminatedAt: lifecycle.terminatedAt || undefined,
-          contractTerminationReason: lifecycle.terminatedAt ? lifecycle.terminationReason : undefined,
-          contractSuspendedAt: lifecycle.suspendedAt || undefined,
-          contractSuspensionReason: lifecycle.suspendedAt ? lifecycle.suspensionReason : undefined,
-        }),
+        body: JSON.stringify(requestBody),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -301,10 +441,10 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
                 <div key={idx} className="grid grid-cols-[1fr_140px_140px] gap-2 items-center">
                   <input type="text" className="input-field" value={row.stageLabel}
                     onChange={(e) => updateAt(amounts, setAmounts, idx, { stageLabel: e.target.value })} />
-                  <input type="number" className="input-field" value={row.previousAmount}
-                    onChange={(e) => updateAt(amounts, setAmounts, idx, { previousAmount: e.target.value })} />
-                  <input type="number" className="input-field" value={row.nextAmount}
-                    onChange={(e) => updateAt(amounts, setAmounts, idx, { nextAmount: e.target.value })} />
+                  <input className="input-field tabular-nums text-right" inputMode="numeric" value={formatThousands(row.previousAmount)}
+                    onChange={(e) => updateAt(amounts, setAmounts, idx, { previousAmount: stripDigits(e.target.value) })} />
+                  <input className="input-field tabular-nums text-right" inputMode="numeric" value={formatThousands(row.nextAmount)}
+                    onChange={(e) => updateAt(amounts, setAmounts, idx, { nextAmount: stripDigits(e.target.value) })} />
                 </div>
               ))}
               <div className="flex justify-end gap-2 mt-2">
@@ -356,11 +496,7 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
 
           {activeTab === "service" && (
             <div className="grid gap-3">
-              <label className="flex items-center gap-2 text-sm font-bold text-stone-700">
-                <input type="checkbox" checked={serviceCategory.changed}
-                  onChange={(e) => setServiceCategory({ ...serviceCategory, changed: e.target.checked })} />
-                용역분류 변경 적용
-              </label>
+              <p className="text-[11px] text-stone-500">변경할 항목만 입력하세요. 입력한 항목만 계약 정보에 반영되며, 비워 둔 항목은 기존 값이 유지됩니다.</p>
               <div className="grid grid-cols-2 gap-3">
                 <label className="grid gap-1 text-sm">
                   <span className="font-bold text-stone-700">기존 대분류</span>
@@ -389,17 +525,105 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
                     value={serviceCategory.nextSubtype}
                     onChange={(e) => setServiceCategory({ ...serviceCategory, nextSubtype: e.target.value })} />
                 </label>
-                <label className="grid gap-1 text-sm col-span-2">
+                <div className="grid gap-1 text-sm col-span-2">
                   <span className="font-bold text-stone-700">변경 업종</span>
-                  <select className="ui-select"
-                    value={serviceCategory.nextIndustry}
-                    onChange={(e) => setServiceCategory({ ...serviceCategory, nextIndustry: e.target.value })}>
-                    <option value="">업종 선택</option>
-                    {CONTRACT_INDUSTRY_OPTIONS.map((option) => (
+                  <div className="flex items-center gap-2">
+                    <select className="ui-select min-w-0 flex-1"
+                      value={serviceCategory.nextIndustry}
+                      onChange={(e) => setServiceCategory({ ...serviceCategory, nextIndustry: e.target.value })}>
+                      <option value="">업종 선택</option>
+                      {industryOptions.map((option) => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
+                    <IndustryOptionsEditorButton options={industryOptions} onOptionsChange={setIndustryOptions} />
+                  </div>
+                </div>
+                <label className="grid gap-1 text-sm">
+                  <span className="font-bold text-stone-700">기존 대금 지급 방식</span>
+                  <input type="text" disabled className="input-field disabled:opacity-60" value={serviceCategory.previousPaymentMethod} />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="font-bold text-stone-700">변경 대금 지급 방식</span>
+                  <select
+                    className="ui-select"
+                    value={serviceCategory.nextPaymentMethod}
+                    onChange={(e) => setServiceCategory({ ...serviceCategory, nextPaymentMethod: e.target.value })}
+                  >
+                    <option value="">변경 없음</option>
+                    {PAYMENT_METHOD_OPTIONS.map((option) => (
                       <option key={option} value={option}>{option}</option>
                     ))}
                   </select>
                 </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="font-bold text-stone-700">발주 주체 구분</span>
+                  <select
+                    className="ui-select"
+                    value={serviceCategory.orderingSubjectType}
+                    onChange={(e) =>
+                      setServiceCategory({ ...serviceCategory, orderingSubjectType: e.target.value, targetFacilities: [] })
+                    }
+                  >
+                    {ORDERING_SUBJECT_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                  <span className="text-[11px] text-stone-500">대상사업장 기준, 실제 계약 체결 주체와의 관계</span>
+                </label>
+                <div className="grid gap-1 text-sm col-span-2 relative">
+                  <span className="font-bold text-stone-700">{`대상사업장(${props.initialServiceType || "용역"})`}</span>
+                  <input
+                    className="input-field disabled:opacity-60"
+                    placeholder={
+                      serviceCategory.orderingSubjectType === ORDERING_SUBJECT_SITE_DIRECT
+                        ? "계약상대 업체 기준 자동 입력"
+                        : "사업장명, 주소, 사업자번호 검색"
+                    }
+                    disabled={serviceCategory.orderingSubjectType === ORDERING_SUBJECT_SITE_DIRECT}
+                    value={facilityQuery}
+                    onChange={(e) => setFacilityQuery(e.target.value)}
+                  />
+                  {serviceCategory.targetFacilities.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {serviceCategory.targetFacilities.map((facility) => (
+                        <span key={facility.facilityId} className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">
+                          {facility.companyName}
+                          <button
+                            type="button"
+                            className="text-primary/70 hover:text-primary"
+                            onClick={() =>
+                              setServiceCategory({
+                                ...serviceCategory,
+                                targetFacilities: serviceCategory.targetFacilities.filter((item) => item.facilityId !== facility.facilityId),
+                              })
+                            }
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {serviceCategory.orderingSubjectType !== ORDERING_SUBJECT_SITE_DIRECT && facilityOptions.length > 0 && (
+                    <div className="absolute z-10 top-[70px] left-0 right-0 rounded-xl border border-stone-200 bg-white shadow-lg max-h-56 overflow-y-auto">
+                      {facilityOptions
+                        .filter((facility) => !serviceCategory.targetFacilities.some((selected) => selected.facilityId === facility.facilityId))
+                        .map((facility) => (
+                          <button
+                            key={facility.facilityId}
+                            type="button"
+                            className="w-full px-3 py-2 text-left text-sm hover:bg-primary/5"
+                            onClick={() => addTargetFacility(facility)}
+                          >
+                            <span className="text-stone-800">{facility.companyName}</span>
+                            <span className="ml-2 text-xs text-stone-400">{facility.businessRegistrationNo ?? ""}</span>
+                            {facility.siteAddress && <p className="text-xs text-stone-500 mt-0.5 truncate">{facility.siteAddress}</p>}
+                          </button>
+                        ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}

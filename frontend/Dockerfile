@@ -1,9 +1,9 @@
-FROM node:20-alpine AS deps
+FROM node:22-alpine AS deps
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
-RUN npm install
+RUN npm config set strict-ssl false && npm ci --no-audit --no-fund --foreground-scripts
 
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 WORKDIR /app/frontend
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/frontend/node_modules ./node_modules
@@ -11,7 +11,7 @@ COPY frontend ./
 COPY scraper ../scraper
 RUN npm run build
 
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 WORKDIR /app/frontend
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1

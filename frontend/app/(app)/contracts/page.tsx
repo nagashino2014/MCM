@@ -30,6 +30,7 @@ import {
   ORDERING_SUBJECT_SITE_DIRECT,
   ORDERING_SUBJECT_PARENT_CORP,
   ORDERING_SUBJECT_CONSIGNED_OPERATOR,
+  findFacilityByBusinessRegistrationNo,
   getOrderingSubjectLabel,
   validateOrderingTargetFacility,
 } from "@/lib/ieps/ordering-subject";
@@ -1421,15 +1422,9 @@ function NewContractModal({
     const controller = new AbortController();
     (async () => {
       try {
-        const params = new URLSearchParams({ q: brn, limit: "10", sort: "name" });
-        const res = await fetch(`/api/facilities?${params.toString()}`, {
-          cache: "no-store",
-          signal: controller.signal,
-        });
-        if (!res.ok) return;
-        const json = (await res.json()) as { items?: FacilitySearchItem[] };
-        const match = (json.items ?? []).find(
-          (item) => (item.businessRegistrationNo ?? "").replace(/[^0-9]/g, "") === brn
+        const match = await findFacilityByBusinessRegistrationNo(
+          state.counterpartyBusinessRegistrationNo,
+          controller.signal
         );
         if (match) {
           onChange({ ...state, selectedFacilities: [match], facilityQuery: "" });
@@ -1495,6 +1490,17 @@ function NewContractModal({
       setTab("basic");
       return;
     }
+    let selectedFacilities = state.selectedFacilities;
+    if (state.orderingSubjectType === ORDERING_SUBJECT_SITE_DIRECT && selectedFacilities.length === 0) {
+      const match = await findFacilityByBusinessRegistrationNo(state.counterpartyBusinessRegistrationNo);
+      if (!match) {
+        toast.show("계약상대 업체와 일치하는 사업장을 찾지 못했습니다. 사업장 마스터의 사업자번호를 확인하세요.", "error");
+        setTab("basic");
+        return;
+      }
+      selectedFacilities = [match];
+      onChange({ ...state, selectedFacilities, facilityQuery: "" });
+    }
     const validMilestones = state.milestones.filter((m) => m.stageLabel.trim());
     setSaving(true);
     try {
@@ -1510,7 +1516,7 @@ function NewContractModal({
           industryCategory: state.industryCategory || null,
           paymentMethod: state.paymentMethod || null,
           orderingSubjectType: state.orderingSubjectType || null,
-          facilityIds: state.selectedFacilities.map((facility) => facility.facilityId),
+          facilityIds: selectedFacilities.map((facility) => facility.facilityId),
           contractDate: state.contractDate,
           startedAt: state.startedAt || state.contractDate,
           endedAt: state.endedAt || null,

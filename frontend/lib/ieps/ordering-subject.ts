@@ -25,6 +25,49 @@ export function normalizeBrn(value: string | null | undefined): string {
   return (value ?? "").replace(/[^0-9]/g, "");
 }
 
+export interface OrderingTargetFacilitySearchItem {
+  facilityId: string;
+  companyName: string;
+  businessRegistrationNo: string | null;
+  siteAddress: string | null;
+  integratedPermitTarget?: string | null;
+}
+
+/**
+ * 계약상대 업체 사업자번호로 사업장 마스터를 찾는다. 검색 API는 문자열 LIKE
+ * 기반이므로 `416-13-89078`/`4161389078` 저장 형태 차이를 모두 커버하도록
+ * 원문, 숫자만, 3-2-5 포맷을 순차 조회하고 최종 비교는 숫자만으로 수행한다.
+ */
+export async function findFacilityByBusinessRegistrationNo(
+  businessRegistrationNo: string | null | undefined,
+  signal?: AbortSignal
+): Promise<OrderingTargetFacilitySearchItem | null> {
+  const original = (businessRegistrationNo ?? "").trim();
+  const digits = normalizeBrn(original);
+  if (!digits) return null;
+
+  const formatted = digits.length === 10
+    ? `${digits.slice(0, 3)}-${digits.slice(3, 5)}-${digits.slice(5)}`
+    : "";
+  const queries = Array.from(new Set([original, formatted, digits].filter(Boolean)));
+
+  for (const q of queries) {
+    const params = new URLSearchParams({ q, limit: "20", sort: "name" });
+    const res = await fetch(`/api/facilities?${params.toString()}`, {
+      cache: "no-store",
+      signal,
+    });
+    if (!res.ok) continue;
+    const json = (await res.json()) as { items?: OrderingTargetFacilitySearchItem[] };
+    const match = (json.items ?? []).find(
+      (item) => normalizeBrn(item.businessRegistrationNo) === digits
+    );
+    if (match) return match;
+  }
+
+  return null;
+}
+
 interface OrderingValidationFacility {
   groupInfo?: { company?: { businessRegistrationNo?: string | null } | null } | null;
   operatingEntityInfo?: {

@@ -9,6 +9,7 @@ import {
   ORDERING_SUBJECT_SITE_DIRECT,
   ORDERING_SUBJECT_PARENT_CORP,
   ORDERING_SUBJECT_CONSIGNED_OPERATOR,
+  findFacilityByBusinessRegistrationNo,
   validateOrderingTargetFacility,
 } from "@/lib/ieps/ordering-subject";
 
@@ -197,15 +198,9 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
     const controller = new AbortController();
     (async () => {
       try {
-        const params = new URLSearchParams({ q: brn, limit: "10", sort: "name" });
-        const res = await fetch(`/api/facilities?${params.toString()}`, {
-          cache: "no-store",
-          signal: controller.signal,
-        });
-        if (!res.ok) return;
-        const json = (await res.json()) as { items?: FacilitySearchItem[] };
-        const match = (json.items ?? []).find(
-          (item) => (item.businessRegistrationNo ?? "").replace(/[^0-9]/g, "") === brn
+        const match = await findFacilityByBusinessRegistrationNo(
+          props.counterpartyBusinessRegistrationNo,
+          controller.signal
         );
         if (match) {
           setServiceCategory((prev) => ({ ...prev, targetFacilities: [match] }));
@@ -254,11 +249,26 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
   const submit = async () => {
     setSaving(true);
     try {
+      let nextServiceCategory = serviceCategory;
+      if (
+        serviceCategory.orderingSubjectType === ORDERING_SUBJECT_SITE_DIRECT &&
+        serviceCategory.targetFacilities.length === 0
+      ) {
+        const match = await findFacilityByBusinessRegistrationNo(props.counterpartyBusinessRegistrationNo);
+        if (!match) {
+          toast.show("계약상대 업체와 일치하는 사업장을 찾지 못했습니다. 사업장 마스터의 사업자번호를 확인하세요.", "error");
+          setSaving(false);
+          return;
+        }
+        nextServiceCategory = { ...serviceCategory, targetFacilities: [match] };
+        setServiceCategory(nextServiceCategory);
+      }
+
       const payload: ContractChangePayload = {
         amounts,
         servicePeriod,
         paymentTerms,
-        serviceCategory,
+        serviceCategory: nextServiceCategory,
         closing,
         termination: lifecycle,
         outsourcing,
@@ -266,15 +276,15 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
       };
       const changedFields: string[] = [];
       const initialFacilityKey = props.initialTargetFacilities.map((item) => item.facilityId).sort().join("|");
-      const nextFacilityKey = serviceCategory.targetFacilities.map((item) => item.facilityId).sort().join("|");
+      const nextFacilityKey = nextServiceCategory.targetFacilities.map((item) => item.facilityId).sort().join("|");
       if (amounts.some((a) => a.nextAmount !== "")) changedFields.push("amounts");
       if (servicePeriod.next) changedFields.push("servicePeriod");
       if (paymentTerms.some((t) => t.next !== "")) changedFields.push("paymentTerms");
-      if (serviceCategory.changed || serviceCategory.nextType || serviceCategory.nextSubtype || serviceCategory.nextIndustry) changedFields.push("serviceCategory");
-      if (serviceCategory.nextPaymentMethod) changedFields.push("paymentMethod");
+      if (nextServiceCategory.changed || nextServiceCategory.nextType || nextServiceCategory.nextSubtype || nextServiceCategory.nextIndustry) changedFields.push("serviceCategory");
+      if (nextServiceCategory.nextPaymentMethod) changedFields.push("paymentMethod");
       if (initialFacilityKey !== nextFacilityKey) changedFields.push("targetFacilities");
       const initialOrderingSubjectType = props.initialOrderingSubjectType ?? "";
-      const orderingSubjectChanged = serviceCategory.orderingSubjectType !== initialOrderingSubjectType;
+      const orderingSubjectChanged = nextServiceCategory.orderingSubjectType !== initialOrderingSubjectType;
       if (orderingSubjectChanged) changedFields.push("orderingSubjectType");
       if (closing.completionDate || closing.permitAcquiredAt || closing.etc) changedFields.push("closing");
       if (lifecycle.terminatedAt || lifecycle.suspendedAt) changedFields.push("termination");
@@ -299,15 +309,15 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
       if (newCurrentAmount != null) requestBody.newCurrentAmount = newCurrentAmount;
       const nextEndedAt = lifecycle.terminatedAt || closing.completionDate || servicePeriod.next;
       if (nextEndedAt) requestBody.newEndedAt = nextEndedAt;
-      if (serviceCategory.nextType.trim()) requestBody.newServiceType = serviceCategory.nextType.trim();
-      if (serviceCategory.nextSubtype.trim()) requestBody.newServiceSubtype = serviceCategory.nextSubtype.trim();
-      if (serviceCategory.nextIndustry.trim()) requestBody.newIndustryCategory = serviceCategory.nextIndustry.trim();
-      if (serviceCategory.nextPaymentMethod.trim()) requestBody.newPaymentMethod = serviceCategory.nextPaymentMethod.trim();
+      if (nextServiceCategory.nextType.trim()) requestBody.newServiceType = nextServiceCategory.nextType.trim();
+      if (nextServiceCategory.nextSubtype.trim()) requestBody.newServiceSubtype = nextServiceCategory.nextSubtype.trim();
+      if (nextServiceCategory.nextIndustry.trim()) requestBody.newIndustryCategory = nextServiceCategory.nextIndustry.trim();
+      if (nextServiceCategory.nextPaymentMethod.trim()) requestBody.newPaymentMethod = nextServiceCategory.nextPaymentMethod.trim();
       if (initialFacilityKey !== nextFacilityKey) {
-        requestBody.newFacilityIds = serviceCategory.targetFacilities.map((item) => item.facilityId);
+        requestBody.newFacilityIds = nextServiceCategory.targetFacilities.map((item) => item.facilityId);
       }
       if (orderingSubjectChanged) {
-        requestBody.newOrderingSubjectType = serviceCategory.orderingSubjectType;
+        requestBody.newOrderingSubjectType = nextServiceCategory.orderingSubjectType;
       }
       if (lifecycle.terminatedAt) {
         requestBody.contractTerminatedAt = lifecycle.terminatedAt;

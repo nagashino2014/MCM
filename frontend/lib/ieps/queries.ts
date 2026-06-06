@@ -819,11 +819,14 @@ export async function listFacilities(
   const params: unknown[] = [];
 
   if (filter.q && filter.q.trim()) {
-    const q = "%" + filter.q.trim() + "%";
+    const qText = filter.q.trim();
+    const q = "%" + qText + "%";
+    const qDigitsOnly = qText.replace(/[^0-9]/g, "");
+    const qDigits = qDigitsOnly ? "%" + qDigitsOnly + "%" : "__NO_BRN_MATCH__";
     const startIdx = params.length;
-    params.push(q, q, q, q, q);
+    params.push(q, q, q, q, q, qDigits, qDigits, q);
     where.push(
-      `(f.company_name LIKE $${startIdx + 1} OR f.normalized_company_name LIKE $${startIdx + 2} OR f.site_address LIKE $${startIdx + 3} OR f.business_registration_no LIKE $${startIdx + 4} OR EXISTS (SELECT 1 FROM facility_aliases fa WHERE fa.facility_id = f.facility_id AND fa.alias LIKE $${startIdx + 5}))`
+      `(f.company_name LIKE $${startIdx + 1} OR f.normalized_company_name LIKE $${startIdx + 2} OR f.site_address LIKE $${startIdx + 3} OR f.business_registration_no LIKE $${startIdx + 4} OR f.site_business_registration_no LIKE $${startIdx + 5} OR REPLACE(COALESCE(f.business_registration_no, ''), '-', '') LIKE $${startIdx + 6} OR REPLACE(COALESCE(f.site_business_registration_no, ''), '-', '') LIKE $${startIdx + 7} OR EXISTS (SELECT 1 FROM facility_aliases fa WHERE fa.facility_id = f.facility_id AND fa.alias LIKE $${startIdx + 8}))`
     );
   }
   if (filter.sido) {
@@ -889,7 +892,7 @@ export async function listFacilities(
   // 날짜가 비어 있는 최신 updated_at 행이 대표로 잡히면 지역 리스트 허가일자가 비어 보인다.
   const sql = `
     SELECT
-      f.facility_id, f.company_name, f.business_registration_no, f.site_address,
+      f.facility_id, f.company_name, f.business_registration_no, f.site_business_registration_no, f.site_address,
       f.region_sido, f.region_sigungu, f.industry_code, f.industry_name, f.integrated_permit_target,
       f.source, f.memo, f.logo_path, f.company_size, f.created_at, f.updated_at,
       lp.decision_no, lp.permit_date,
@@ -929,8 +932,8 @@ export async function listFacilities(
     facilityId: String(row.facility_id ?? ""),
     companyName: formatCompanyName(String(row.company_name ?? "")) ?? "",
     businessRegistrationNo:
-      row.business_registration_no != null
-        ? formatBusinessRegistrationNo(String(row.business_registration_no))
+      row.business_registration_no != null || row.site_business_registration_no != null
+        ? formatBusinessRegistrationNo(String(row.business_registration_no ?? row.site_business_registration_no))
         : null,
     siteAddress: row.site_address != null ? formatAddress(String(row.site_address)) : null,
     regionSido: row.region_sido != null ? String(row.region_sido) : null,

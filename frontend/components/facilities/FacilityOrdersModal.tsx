@@ -11,7 +11,6 @@ import {
   X,
 } from "lucide-react";
 import { resolveServiceTypeStyle, type ServiceTypeStyle } from "@/lib/ieps/contract-tree-style";
-import { getOrderingSubjectLabel } from "@/lib/ieps/ordering-subject";
 
 interface ContractTreeContractNode {
   contractId: string;
@@ -194,18 +193,21 @@ export function FacilityOrdersModal({ facilityId, facilityName, onClose }: Props
             </div>
           </div>
 
-          <div className="rounded-2xl border border-stone-200 bg-white p-4">
-            {!selected ? (
-              <div className="py-10 text-center text-sm text-stone-500">
-                위 트리에서 수주 건을 선택하세요.
-              </div>
-            ) : (
-              <ContractSummary
-                node={selected}
-                detail={detail}
-                detailLoading={detailLoading}
-              />
-            )}
+          <div className="grid grid-cols-1 xl:grid-cols-[minmax(260px,0.8fr)_minmax(0,2.2fr)] gap-4 items-stretch">
+            <OrdersOverviewCard tree={tree} />
+            <div className="rounded-2xl border border-stone-200 bg-white p-4 min-h-[320px] flex flex-col">
+              {!selected ? (
+                <div className="flex-1 flex items-center justify-center text-sm text-stone-500">
+                  위 트리에서 수주 건을 선택하세요.
+                </div>
+              ) : (
+                <ContractSummary
+                  node={selected}
+                  detail={detail}
+                  detailLoading={detailLoading}
+                />
+              )}
+            </div>
           </div>
         </div>
 
@@ -245,10 +247,6 @@ function ContractSummary({
   const contractKindLabel =
     String(contract.contract_kind ?? "standard") === "unit_price" ? "단가 계약" : "일반 계약";
   const statusLabel = detail ? getStatusLabel(detail) : statusLabelFromNode(node.contractStatus);
-  const outsourcingCount = detail?.outsourcing?.length ?? 0;
-  const targetFacilities = detail?.targetFacilities ?? [];
-  const serviceType = String(contract.service_type ?? "").trim();
-  const targetFacilityLabel = serviceType ? `대상사업장(${serviceType})` : "대상사업장";
 
   return (
     <div className="grid gap-4">
@@ -257,8 +255,8 @@ function ContractSummary({
         <h4 className="text-lg font-bold text-stone-800 mt-0.5">{node.contractTitle}</h4>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(220px,260px)] gap-3">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(198px,234px)] gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
           <Kpi label="계약일" value={String(contract.contract_date ?? contract.started_at ?? node.contractDate ?? "-")} />
           <Kpi label="계약금액" value={baseAmount ? formatExactAmount(baseAmount) : "-"} accent />
           <Kpi label="업체명" value={String(contract.counterparty_name ?? node.counterpartyName ?? "-")} />
@@ -268,15 +266,89 @@ function ContractSummary({
           <Kpi label="준공일" value={String(contract.ended_at ?? "-")} />
           <Kpi label="계약 상태" value={statusLabel} accent={statusLabel !== "진행중"} />
           <Kpi label="업종" value={String(contract.industry_category ?? node.industryCategory ?? "-")} />
-          <Kpi label={targetFacilityLabel} value={targetFacilities.length > 0 ? `${targetFacilities.length}개` : "-"} />
-          <Kpi label="대금 지급 방식" value={String(contract.payment_method ?? "-")} />
-          <Kpi label="발주 주체 구분" value={getOrderingSubjectLabel(contract.ordering_subject_type)} />
-          <Kpi label="외주 용역" value={outsourcingCount > 0 ? `${outsourcingCount}건 등록` : "없음"} accent={outsourcingCount > 0} />
         </div>
         <CollectionProgressCard rate={collectionRate} collectedAmount={collectedAmount} baseAmount={baseAmount} />
       </div>
 
       {detailLoading && <p className="text-[11px] text-stone-400">상세 정보를 불러오는 중…</p>}
+    </div>
+  );
+}
+
+type OrderCategory = {
+  label: string;
+  keys: string[];
+  color: string;
+  iconSrc: string;
+};
+
+// 트리뷰 노드 아이콘과 동일한 용역별 색상을 그대로 사용한다(contract-tree-style 기준).
+// 아이콘은 업로드된 단색 실루엣 PNG 를 CSS mask 로 입혀 색상만 용역색으로 칠한다.
+// keys 가 비어 있는 마지막 "기타 용역" 항목은 어디에도 매칭되지 않은 그룹의 폴백 버킷이다.
+const ORDER_CATEGORIES: OrderCategory[] = [
+  { label: "통합환경허가", keys: ["통합허가", "통합환경허가", "통합"], color: "#ED7D31", iconSrc: "/icons/services/integrated-permit.png" },
+  { label: "장외·화관법", keys: ["장외", "화관법", "유해화학"], color: "#FFC000", iconSrc: "/icons/services/chemical.png" },
+  { label: "HAPs 용역", keys: ["HAPs"], color: "#70AD47", iconSrc: "/icons/services/haps.png" },
+  { label: "ESG·탄소중립", keys: ["ESG", "탄소중립"], color: "#5B9BD5", iconSrc: "/icons/services/esg.png" },
+  { label: "기타 용역", keys: [], color: "#7F7F7F", iconSrc: "/icons/services/etc.png" },
+];
+
+function OrdersOverviewCard({ tree }: { tree: ContractTreePayload | null }) {
+  const rows = useMemo(() => {
+    const totals = new Map<string, { count: number; amount: number }>();
+    for (const cat of ORDER_CATEGORIES) totals.set(cat.label, { count: 0, amount: 0 });
+    const fallback = ORDER_CATEGORIES[ORDER_CATEGORIES.length - 1];
+    for (const group of tree?.groups ?? []) {
+      const cat =
+        ORDER_CATEGORIES.find((c) => c.keys.some((k) => group.serviceType.includes(k))) ?? fallback;
+      const t = totals.get(cat.label)!;
+      t.count += group.contracts.length;
+      t.amount += group.contracts.reduce((acc, c) => acc + Number(c.currentAmount ?? 0), 0);
+    }
+    return ORDER_CATEGORIES.map((c) => ({ ...c, ...totals.get(c.label)! }));
+  }, [tree]);
+
+  return (
+    <div className="rounded-2xl border border-stone-200 bg-white p-4 flex flex-col">
+      <p className="text-[11px] text-stone-400 uppercase tracking-wide">전체 용역 수주 현황</p>
+      <div className="mt-3 grid content-start gap-2.5 flex-1">
+        {rows.map((row) => {
+          return (
+            <div
+              key={row.label}
+              className="flex items-center gap-3 rounded-xl border border-stone-200 px-3 py-2"
+            >
+              <span
+                className="shrink-0 inline-flex w-8 h-8 items-center justify-center rounded-lg"
+                style={{ background: row.color + "1f" }}
+              >
+                <span
+                  aria-hidden
+                  className="w-[18px] h-[18px]"
+                  style={{
+                    backgroundColor: row.color,
+                    maskImage: `url(${row.iconSrc})`,
+                    WebkitMaskImage: `url(${row.iconSrc})`,
+                    maskRepeat: "no-repeat",
+                    WebkitMaskRepeat: "no-repeat",
+                    maskPosition: "center",
+                    WebkitMaskPosition: "center",
+                    maskSize: "contain",
+                    WebkitMaskSize: "contain",
+                  }}
+                />
+              </span>
+              <span className="flex-1 truncate text-sm text-stone-700">{row.label}</span>
+              <span className="w-12 text-right text-xs tabular-nums text-stone-500">
+                {row.count.toLocaleString()}건
+              </span>
+              <span className="w-20 text-right text-sm font-bold tabular-nums text-stone-800">
+                {formatMoney(row.amount)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

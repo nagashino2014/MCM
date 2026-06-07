@@ -144,9 +144,9 @@ export function FacilityOrdersModal({ facilityId, facilityName, onClose }: Props
           <div>
             <h3 className="text-xl font-bold text-stone-800 flex items-center gap-2">
               <FolderTree className="w-5 h-5 text-primary" />
-              수주 현황
+              {facilityName} 수주 현황
             </h3>
-            <p className="text-xs text-stone-500 mt-1">{facilityName} · 총 {totalCount.toLocaleString()}건</p>
+            <p className="text-xs text-stone-500 mt-1">총 {totalCount.toLocaleString()}건</p>
           </div>
           <button type="button" onClick={onClose} className="text-stone-400 hover:text-stone-700">
             <X className="w-5 h-5" />
@@ -316,7 +316,7 @@ function OrdersOverviewCard({ tree }: { tree: ContractTreePayload | null }) {
           return (
             <div
               key={row.label}
-              className="flex items-center gap-3 rounded-xl border border-stone-200 px-3 py-2"
+              className="flex items-center gap-2.5 rounded-xl border border-stone-200 py-2 pl-3 pr-4"
             >
               <span
                 className="shrink-0 inline-flex w-8 h-8 items-center justify-center rounded-lg"
@@ -338,11 +338,11 @@ function OrdersOverviewCard({ tree }: { tree: ContractTreePayload | null }) {
                   }}
                 />
               </span>
-              <span className="flex-1 truncate text-sm text-stone-700">{row.label}</span>
-              <span className="w-12 text-right text-xs tabular-nums text-stone-500">
+              <span className="min-w-0 flex-1 truncate text-sm text-stone-700">{row.label}</span>
+              <span className="w-10 shrink-0 text-right text-xs tabular-nums text-stone-500">
                 {row.count.toLocaleString()}건
               </span>
-              <span className="w-20 text-right text-sm font-bold tabular-nums text-stone-800">
+              <span className="w-16 shrink-0 text-right text-xs tabular-nums text-stone-800">
                 {formatMoney(row.amount)}
               </span>
             </div>

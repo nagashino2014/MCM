@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { resolveServiceTypeStyle, type ServiceTypeStyle } from "@/lib/ieps/contract-tree-style";
+import { getOrderingSubjectLabel } from "@/lib/ieps/ordering-subject";
 
 interface ContractTreeContractNode {
   contractId: string;
@@ -38,6 +39,13 @@ interface ContractTreePayload {
   groups: ContractTreeServiceGroup[];
 }
 
+interface ContractDetailPayload {
+  contract: Record<string, unknown>;
+  milestones: Array<Record<string, unknown>>;
+  outsourcing?: Array<Record<string, unknown>>;
+  targetFacilities?: Array<Record<string, unknown>>;
+}
+
 interface Props {
   facilityId: string;
   facilityName: string;
@@ -50,6 +58,8 @@ export function FacilityOrdersModal({ facilityId, facilityName, onClose }: Props
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<ContractDetailPayload | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,6 +94,34 @@ export function FacilityOrdersModal({ facilityId, facilityName, onClose }: Props
     };
   }, [facilityId]);
 
+  // 선택된 수주 건은 계약 상세 API 로 전체 정보를 받아와 계약 관리의 상세 카드와
+  // 동일한 KPI 세트와 수금 진척도 차트를 표시한다.
+  useEffect(() => {
+    if (!selectedId) {
+      setDetail(null);
+      return;
+    }
+    let cancelled = false;
+    setDetailLoading(true);
+    (async () => {
+      try {
+        const res = await fetch(`/api/contracts/${encodeURIComponent(selectedId)}`, {
+          cache: "no-store",
+        });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const json = (await res.json()) as ContractDetailPayload;
+        if (!cancelled) setDetail(json);
+      } catch {
+        if (!cancelled) setDetail(null);
+      } finally {
+        if (!cancelled) setDetailLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedId]);
+
   const toggleGroup = (serviceType: string) => {
     setExpanded((prev) => ({ ...prev, [serviceType]: !prev[serviceType] }));
   };
@@ -101,9 +139,9 @@ export function FacilityOrdersModal({ facilityId, facilityName, onClose }: Props
   const totalCount = tree?.totalCount ?? 0;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-stone-950/20 p-4">
-      <div className="glass-panel rounded-3xl w-[min(960px,calc(100vw-32px))] max-h-[min(820px,calc(100vh-32px))] shadow-2xl flex flex-col overflow-hidden">
-        <div className="p-5 border-b border-stone-200/70 flex items-start justify-between gap-4">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-stone-950/30 p-4">
+      <div className="bg-white rounded-3xl w-[min(1120px,calc(100vw-32px))] max-h-[min(880px,calc(100vh-32px))] shadow-2xl flex flex-col overflow-hidden border border-stone-200">
+        <div className="p-5 border-b border-stone-200 flex items-start justify-between gap-4">
           <div>
             <h3 className="text-xl font-bold text-stone-800 flex items-center gap-2">
               <FolderTree className="w-5 h-5 text-primary" />
@@ -116,9 +154,9 @@ export function FacilityOrdersModal({ facilityId, facilityName, onClose }: Props
           </button>
         </div>
 
-        <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[minmax(320px,0.95fr)_minmax(320px,1.05fr)]">
-          <div className="min-h-0 flex flex-col border-r border-stone-200/70">
-            <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide">
+        <div className="min-h-0 flex-1 overflow-y-auto scrollbar-hide p-5 flex flex-col gap-4">
+          <div className="rounded-2xl border border-stone-200 bg-white overflow-hidden">
+            <div className="h-[504px] overflow-y-auto scrollbar-hide">
               {loading ? (
                 <div className="p-10 text-center text-sm text-stone-500">불러오는 중…</div>
               ) : error ? (
@@ -156,31 +194,22 @@ export function FacilityOrdersModal({ facilityId, facilityName, onClose }: Props
             </div>
           </div>
 
-          <div className="min-h-0 overflow-y-auto scrollbar-hide p-5">
+          <div className="rounded-2xl border border-stone-200 bg-white p-4">
             {!selected ? (
-              <div className="h-full flex items-center justify-center text-sm text-stone-500">
-                좌측에서 수주 건을 선택하세요.
+              <div className="py-10 text-center text-sm text-stone-500">
+                위 트리에서 수주 건을 선택하세요.
               </div>
             ) : (
-              <div className="grid gap-3">
-                <div>
-                  <p className="text-[11px] text-stone-400 uppercase tracking-wide">계약명</p>
-                  <h4 className="text-lg font-bold text-stone-800 mt-0.5">{selected.contractTitle}</h4>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <SummaryItem label="거래처" value={selected.counterpartyName || "-"} />
-                  <SummaryItem label="용역세분류" value={selected.serviceSubtype || "-"} />
-                  <SummaryItem label="계약일" value={selected.contractDate || "-"} />
-                  <SummaryItem label="계약금액" value={formatExactAmount(selected.currentAmount)} highlight />
-                  <SummaryItem label="업종" value={selected.industryCategory || "-"} />
-                  <SummaryItem label="계약 상태" value={statusLabel(selected.contractStatus)} />
-                </div>
-              </div>
+              <ContractSummary
+                node={selected}
+                detail={detail}
+                detailLoading={detailLoading}
+              />
             )}
           </div>
         </div>
 
-        <div className="p-4 border-t border-stone-200/70 flex justify-end">
+        <div className="p-4 border-t border-stone-200 flex justify-end">
           <button
             type="button"
             onClick={onClose}
@@ -194,11 +223,102 @@ export function FacilityOrdersModal({ facilityId, facilityName, onClose }: Props
   );
 }
 
-function SummaryItem({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+function ContractSummary({
+  node,
+  detail,
+  detailLoading,
+}: {
+  node: ContractTreeContractNode;
+  detail: ContractDetailPayload | null;
+  detailLoading: boolean;
+}) {
+  const contract = detail?.contract ?? {};
+  const milestones = detail?.milestones ?? [];
+
+  const milestoneAmountSum = milestones.reduce((acc, m) => acc + Number(m.amount ?? 0), 0);
+  const baseAmount = milestones.length > 0
+    ? milestoneAmountSum
+    : Number(contract.current_amount ?? contract.contract_amount ?? node.currentAmount ?? 0);
+  const collectedAmount = milestones.reduce((acc, m) => acc + Number(m.collected_amount ?? 0), 0);
+  const collectionRate = baseAmount > 0 ? Math.min(1, collectedAmount / baseAmount) : 0;
+
+  const contractKindLabel =
+    String(contract.contract_kind ?? "standard") === "unit_price" ? "단가 계약" : "일반 계약";
+  const statusLabel = detail ? getStatusLabel(detail) : statusLabelFromNode(node.contractStatus);
+  const outsourcingCount = detail?.outsourcing?.length ?? 0;
+  const targetFacilities = detail?.targetFacilities ?? [];
+  const serviceType = String(contract.service_type ?? "").trim();
+  const targetFacilityLabel = serviceType ? `대상사업장(${serviceType})` : "대상사업장";
+
   return (
-    <div className={"rounded-2xl border p-3 " + (highlight ? "bg-primary/5 border-primary/30" : "bg-white/60 border-stone-200/80")}>
+    <div className="grid gap-4">
+      <div>
+        <p className="text-[11px] text-stone-400 uppercase tracking-wide">계약명</p>
+        <h4 className="text-lg font-bold text-stone-800 mt-0.5">{node.contractTitle}</h4>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(220px,260px)] gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <Kpi label="계약일" value={String(contract.contract_date ?? contract.started_at ?? node.contractDate ?? "-")} />
+          <Kpi label="계약금액" value={baseAmount ? formatExactAmount(baseAmount) : "-"} accent />
+          <Kpi label="업체명" value={String(contract.counterparty_name ?? node.counterpartyName ?? "-")} />
+          <Kpi label="계약 종류" value={contractKindLabel} />
+          <Kpi label="용역분류" value={String(contract.service_type ?? "-")} />
+          <Kpi label="용역세분류" value={String(contract.service_subtype ?? node.serviceSubtype ?? "-")} />
+          <Kpi label="준공일" value={String(contract.ended_at ?? "-")} />
+          <Kpi label="계약 상태" value={statusLabel} accent={statusLabel !== "진행중"} />
+          <Kpi label="업종" value={String(contract.industry_category ?? node.industryCategory ?? "-")} />
+          <Kpi label={targetFacilityLabel} value={targetFacilities.length > 0 ? `${targetFacilities.length}개` : "-"} />
+          <Kpi label="대금 지급 방식" value={String(contract.payment_method ?? "-")} />
+          <Kpi label="발주 주체 구분" value={getOrderingSubjectLabel(contract.ordering_subject_type)} />
+          <Kpi label="외주 용역" value={outsourcingCount > 0 ? `${outsourcingCount}건 등록` : "없음"} accent={outsourcingCount > 0} />
+        </div>
+        <CollectionProgressCard rate={collectionRate} collectedAmount={collectedAmount} baseAmount={baseAmount} />
+      </div>
+
+      {detailLoading && <p className="text-[11px] text-stone-400">상세 정보를 불러오는 중…</p>}
+    </div>
+  );
+}
+
+function Kpi({ label, value, accent }: { label: string; value: React.ReactNode; accent?: boolean }) {
+  const isEmpty = value == null || value === "";
+  return (
+    <div className="rounded-2xl border border-stone-200 bg-white p-3">
       <p className="text-[11px] text-stone-500">{label}</p>
-      <p className={"text-sm mt-1 truncate " + (highlight ? "text-primary" : "text-stone-800")}>{value}</p>
+      <p className={"text-sm mt-1 truncate " + (accent ? "text-primary font-bold" : "text-stone-800")}>
+        {isEmpty ? "-" : value}
+      </p>
+    </div>
+  );
+}
+
+function CollectionProgressCard({
+  rate,
+  collectedAmount,
+  baseAmount,
+}: {
+  rate: number;
+  collectedAmount: number;
+  baseAmount: number;
+}) {
+  const percent = Math.round(rate * 100);
+  const today = formatKoreanDate(new Date());
+  return (
+    <div className="rounded-2xl border border-stone-200 bg-white p-4 min-h-[180px] flex flex-col items-center justify-center relative">
+      <p className="absolute left-4 top-3 text-[11px] font-bold text-stone-500">수금 진척도</p>
+      <div
+        className="w-28 h-28 rounded-full flex items-center justify-center"
+        style={{ background: `conic-gradient(#9BC2E6 ${percent}%, #ececec ${percent}% 100%)` }}
+      >
+        <div className="w-20 h-20 rounded-full bg-white flex items-center justify-center">
+          <span className="text-2xl font-bold text-[#9BC2E6]">{percent}%</span>
+        </div>
+      </div>
+      <p className="mt-3 text-xs font-mono text-stone-600">
+        {formatExactAmount(collectedAmount)} / {formatExactAmount(baseAmount)}
+      </p>
+      <p className="absolute right-4 bottom-3 text-[11px] text-stone-500">{today} 기준</p>
     </div>
   );
 }
@@ -288,20 +408,47 @@ function TreeChildRow({
           />
         )}
       </span>
-      <span className="w-[88px] text-right text-[10px] font-mono text-stone-400 ml-2 shrink-0 tabular-nums">
+      <span className="w-[96px] text-right text-[10px] font-mono text-stone-400 ml-2 shrink-0 tabular-nums">
         {contract.contractDate ?? "-"}
       </span>
-      <span className="w-[72px] text-right text-[10px] font-mono text-stone-500 ml-1 shrink-0 tabular-nums">
+      <span className="w-[80px] text-right text-[10px] font-mono text-stone-500 ml-1 shrink-0 tabular-nums">
         {formatMoney(contract.currentAmount)}
       </span>
     </button>
   );
 }
 
-function statusLabel(status: string): string {
+function statusLabelFromNode(status: string): string {
   if (status === "terminated") return "계약해지";
   if (status === "suspended") return "계약중지";
   return "진행중";
+}
+
+function getStatusLabel(detail: ContractDetailPayload): string {
+  const contract = detail.contract;
+  const status = String(contract.contract_status ?? "active");
+  if (status === "terminated" || contract.contract_terminated_at) return "계약해지";
+  if (status === "suspended" || contract.contract_suspended_at) return "계약중지";
+  const lastMilestone = detail.milestones[detail.milestones.length - 1];
+  if (lastMilestone && isMilestoneFullyCollected(lastMilestone)) return "수행 완료";
+  if (status === "completed") return "수행 완료";
+  if (status === "draft") return "초안";
+  return "진행중";
+}
+
+function isMilestoneFullyCollected(milestone: Record<string, unknown>): boolean {
+  const amount = Number(milestone.amount ?? 0);
+  const collectedAmount = Number(milestone.collected_amount ?? 0);
+  if (Number(milestone.payment_collected ?? 0) === 1) return true;
+  if (Number(milestone.collection_ratio ?? 0) >= 1) return true;
+  return amount > 0 && collectedAmount >= amount;
+}
+
+function formatKoreanDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}.${month}.${day}.`;
 }
 
 function formatMoney(value: unknown): string {

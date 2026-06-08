@@ -2654,8 +2654,8 @@ function OperatingEntityModal({
 
           {pendingLink && (
             <div className="flex items-center justify-center gap-3 py-3">
-              <span className="rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs font-bold text-stone-700 max-w-[40%] truncate">
-                {facilityLabel}
+              <span className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary max-w-[40%] truncate">
+                {pendingLink.companyName}
               </span>
               <div className="flex flex-col items-center gap-0.5">
                 <ArrowRight className="w-5 h-5 text-stone-400" />
@@ -2663,8 +2663,8 @@ function OperatingEntityModal({
                   {OPERATING_RELATION_LABELS[relationType]}
                 </span>
               </div>
-              <span className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary max-w-[40%] truncate">
-                {pendingLink.companyName}
+              <span className="rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs font-bold text-stone-700 max-w-[40%] truncate">
+                {facilityLabel}
               </span>
             </div>
           )}

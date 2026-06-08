@@ -46,6 +46,20 @@ export async function PUT(req: NextRequest, ctx: RouteContext) {
 
     await withDbWrite(async (db) => {
       const before = await db.exec("SELECT * FROM facility_operating_entities WHERE facility_id = $1 AND ended_at IS NULL", [id]);
+      // 사업장 검색으로 연결하는 경우 동일 사업자등록번호의 법인이 이미 있으면 재사용해
+      // 법인 마스터 중복 생성을 막는다.
+      if (!entityId) {
+        const brn = normalizeBusinessRegistrationNo(body.businessRegistrationNo);
+        if (brn) {
+          const found = await db.exec(
+            "SELECT entity_id FROM legal_entities WHERE business_registration_no = $1 LIMIT 1",
+            [brn]
+          );
+          if (found.length && found[0].values.length) {
+            entityId = String(found[0].values[0][0]);
+          }
+        }
+      }
       if (!entityId) {
         entityId = "ent_" + crypto.randomUUID().replace(/-/g, "").slice(0, 16);
         await db.run(

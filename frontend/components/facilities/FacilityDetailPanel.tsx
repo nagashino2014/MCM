@@ -1692,7 +1692,7 @@ function ReadView({
       <DetailField
         icon={MapPin}
         label={detail.additionalSiteAddresses.length > 0 ? "소재지 (대표)" : "소재지"}
-        value={formatAddress(detail.siteAddress)}
+        value={detail.siteAddress}
         secondary={
           detail.regionSido
             ? "지역: " + detail.regionSido + (detail.regionSigungu ? " " + detail.regionSigungu : "")
@@ -1704,7 +1704,7 @@ function ReadView({
           key={"add-site-" + idx}
           icon={MapPin}
           label={"추가 소재지 " + (idx + 1)}
-          value={formatAddress(addr)}
+          value={addr}
         />
       ))}
       <div className="flex flex-col gap-1 bg-white/40 border border-white/50 rounded-xl p-3">
@@ -1868,14 +1868,12 @@ function EditView({
   const [companyName, setCompanyName] = useState(formatCompanyName(detail.companyName) ?? "");
   const [businessRegistrationNo, setBrn] = useState(formatBusinessRegistrationNo(detail.businessRegistrationNo) ?? "");
   const [representativeName, setRepresentativeName] = useState(detail.representativeName ?? "");
-  const [siteAddress, setSiteAddress] = useState(formatAddress(detail.siteAddress) ?? "");
+  const [siteAddress, setSiteAddress] = useState(detail.siteAddress ?? "");
   const [hasMultipleSites, setHasMultipleSites] = useState(
     (detail.additionalSiteAddresses?.length ?? 0) > 0
   );
   const [additionalSiteAddresses, setAdditionalSiteAddresses] = useState<string[]>(
-    detail.additionalSiteAddresses?.length
-      ? detail.additionalSiteAddresses.map((addr) => formatAddress(addr) ?? addr)
-      : [""]
+    detail.additionalSiteAddresses?.length ? [...detail.additionalSiteAddresses] : [""]
   );
   const [phoneNumber, setPhoneNumber] = useState(detail.phoneNumber ?? "");
   const facilityIndustries =
@@ -1987,7 +1985,7 @@ function EditView({
           companyName: formatCompanyName(companyName) ?? companyName,
           businessRegistrationNo: formatBusinessRegistrationNo(businessRegistrationNo) || null,
           representativeName: representativeName || null,
-          siteAddress: formatAddress(siteAddress) || null,
+          siteAddress: siteAddress.trim() || null,
           additionalSiteAddresses: hasMultipleSites
             ? additionalSiteAddresses.map((addr) => addr.trim()).filter(Boolean)
             : [],

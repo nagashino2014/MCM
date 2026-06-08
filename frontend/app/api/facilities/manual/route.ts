@@ -86,12 +86,15 @@ export async function POST(req: NextRequest) {
     const companyName = normalizeCompanyName(body.companyName) ?? body.companyName.trim();
     const normCompany = normalizeCompanyKey(companyName);
     const siteAddress = normalizeAddress(body.siteAddress);
+    // 사용자가 직접 입력한 소재지는 시군구동 구분 로직을 적용하지 않고 입력값을 그대로 저장한다.
+    // (중복 검증/지역 추출용 normalized_address는 기존대로 포맷된 값을 사용)
+    const siteAddressVerbatim = (body.siteAddress ?? "").replace(/\s+/g, " ").trim() || null;
     const businessRegistrationNo = normalizeBusinessRegistrationNo(body.businessRegistrationNo);
     const normAddress = siteAddress?.replace(/\s+/g, " ").trim() ?? null;
     const additionalSiteAddresses = Array.isArray(body.additionalSiteAddresses)
       ? body.additionalSiteAddresses
-          .map((addr) => normalizeAddress(addr))
-          .filter((addr): addr is string => !!addr && addr !== siteAddress)
+          .map((addr) => (addr ?? "").replace(/\s+/g, " ").trim())
+          .filter((addr) => !!addr && addr !== siteAddressVerbatim)
       : [];
     const additionalSiteAddressesJson = additionalSiteAddresses.length
       ? JSON.stringify(additionalSiteAddresses)
@@ -143,15 +146,15 @@ export async function POST(req: NextRequest) {
           region_sido, region_sigungu, source, memo, company_size,
           business_certificate_business_type, business_certificate_business_item,
           business_certificate_corporate_registration_no, business_certificate_ocr_text,
-          created_at, updated_at, additional_site_addresses)
+          created_at, updated_at, additional_site_addresses, site_address_verbatim)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'manual', $13, $14,
-          $15, $16, $17, $18, $19, $20, $21)`,
+          $15, $16, $17, $18, $19, $20, $21, true)`,
         [
           facilityId,
           companyName,
           businessRegistrationNo,
           normalizeText(body.representativeName),
-          siteAddress,
+          siteAddressVerbatim,
           body.phoneNumber ?? null,
           body.industryCode ?? null,
           body.industryName ?? null,
@@ -207,7 +210,7 @@ export async function POST(req: NextRequest) {
           companyName,
           businessRegistrationNo,
             representativeName: normalizeText(body.representativeName),
-          siteAddress,
+          siteAddress: siteAddressVerbatim,
           additionalSiteAddresses,
           source: "manual",
           serviceCategories: services,

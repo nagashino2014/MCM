@@ -9,7 +9,7 @@ import { getFacilityDetail } from "@/lib/ieps/queries";
 import { withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 import { extractRegion } from "@scraper/lib/ieps/region";
-import { normalizeAddress, normalizeBusinessRegistrationNo, normalizeCompanyName } from "@/lib/ieps/formatters";
+import { normalizeBusinessRegistrationNo, normalizeCompanyName } from "@/lib/ieps/formatters";
 import { normalizeFacilityCompanySize, type FacilityCompanySize } from "@/lib/ieps/facility-service";
 
 export const runtime = "nodejs";
@@ -83,25 +83,27 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
         pushSet("representative_name", body.representativeName?.trim() || null);
       }
       if (body.siteAddress !== undefined) {
-        const formattedAddress = normalizeAddress(body.siteAddress);
-        pushSet("site_address", formattedAddress);
-        const norm = formattedAddress?.replace(/\s+/g, " ").trim() ?? null;
-        pushSet("normalized_address", norm);
-        const region = extractRegion(formattedAddress);
+        // 사용자가 편집 화면에서 직접 입력한 소재지는 시군구동 구분(자동 띄어쓰기) 로직을
+        // 적용하지 않고 입력값을 그대로 저장한다. (앞뒤/중복 공백만 정리)
+        const verbatimAddress = (body.siteAddress ?? "").replace(/\s+/g, " ").trim() || null;
+        pushSet("site_address", verbatimAddress);
+        pushSet("site_address_verbatim", true);
+        pushSet("normalized_address", verbatimAddress);
+        const region = extractRegion(verbatimAddress);
         pushSet("region_sido", region.sido);
         pushSet("region_sigungu", region.sigungu);
       }
       if (body.additionalSiteAddresses !== undefined) {
         const primary =
           body.siteAddress !== undefined
-            ? normalizeAddress(body.siteAddress)
+            ? (body.siteAddress ?? "").replace(/\s+/g, " ").trim()
             : before.siteAddress
-            ? normalizeAddress(before.siteAddress)
-            : null;
+            ? before.siteAddress.replace(/\s+/g, " ").trim()
+            : "";
         const list = Array.isArray(body.additionalSiteAddresses)
           ? body.additionalSiteAddresses
-              .map((addr) => normalizeAddress(addr))
-              .filter((addr): addr is string => !!addr && addr !== primary)
+              .map((addr) => (addr ?? "").replace(/\s+/g, " ").trim())
+              .filter((addr) => !!addr && addr !== primary)
           : [];
         pushSet("additional_site_addresses", list.length ? JSON.stringify(list) : null);
       }

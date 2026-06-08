@@ -1109,6 +1109,16 @@ export interface ProductOutput {
   sourceText: string | null;
 }
 
+function isTruthyFlag(value: unknown): boolean {
+  return (
+    value === true ||
+    value === 1 ||
+    value === "1" ||
+    value === "t" ||
+    value === "true"
+  );
+}
+
 function parseAdditionalSiteAddresses(raw: unknown): string[] {
   if (raw == null) return [];
   const text = String(raw).trim();
@@ -1118,13 +1128,14 @@ function parseAdditionalSiteAddresses(raw: unknown): string[] {
     parsed = JSON.parse(text);
   } catch {
     // 과거 데이터가 단일 문자열로 저장된 경우를 대비한 안전망.
-    const single = formatAddress(text);
+    // 추가 소재지는 사용자 입력값이므로 시군구동 구분 로직을 적용하지 않는다.
+    const single = text.replace(/\s+/g, " ").trim();
     return single ? [single] : [];
   }
   if (!Array.isArray(parsed)) return [];
   return parsed
-    .map((item) => (item != null ? formatAddress(String(item)) : null))
-    .filter((addr): addr is string => !!addr);
+    .map((item) => (item != null ? String(item).replace(/\s+/g, " ").trim() : ""))
+    .filter((addr) => !!addr);
 }
 
 export async function getFacilityDetail(facilityId: string): Promise<FacilityDetail | null> {
@@ -1133,7 +1144,7 @@ export async function getFacilityDetail(facilityId: string): Promise<FacilityDet
   let facRow;
   try {
     facRow = await db.exec(
-      `SELECT facility_id, company_name, business_registration_no, representative_name, site_address, additional_site_addresses, phone_number,
+      `SELECT facility_id, company_name, business_registration_no, representative_name, site_address, site_address_verbatim, additional_site_addresses, phone_number,
               industry_code, industry_name,
               business_certificate_business_type, business_certificate_business_item,
               business_certificate_corporate_registration_no,
@@ -1323,7 +1334,12 @@ export async function getFacilityDetail(facilityId: string): Promise<FacilityDet
         ? formatBusinessRegistrationNo(String(f.business_registration_no))
         : null,
     representativeName: f.representative_name != null ? String(f.representative_name) : null,
-    siteAddress: f.site_address != null ? formatAddress(String(f.site_address)) : null,
+    siteAddress:
+      f.site_address != null
+        ? isTruthyFlag(f.site_address_verbatim)
+          ? String(f.site_address)
+          : formatAddress(String(f.site_address))
+        : null,
     additionalSiteAddresses: parseAdditionalSiteAddresses(f.additional_site_addresses),
     phoneNumber: f.phone_number != null ? String(f.phone_number) : null,
     industryCode: f.industry_code != null ? String(f.industry_code) : null,

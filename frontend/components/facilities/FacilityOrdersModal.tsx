@@ -76,12 +76,8 @@ export function FacilityOrdersModal({ facilityId, facilityName, onClose }: Props
         const json = (await res.json()) as ContractTreePayload;
         if (cancelled) return;
         setTree(json);
-        // 자식 노드가 있는 부모 그룹은 기본적으로 펼쳐서 표시한다.
-        const initialExpanded: Record<string, boolean> = {};
-        for (const group of json.groups) {
-          if (group.contracts.length > 0) initialExpanded[group.serviceType] = true;
-        }
-        setExpanded(initialExpanded);
+        // 모달이 처음 뜰 때는 모든 부모 노드를 접힌 상태로 표시한다.
+        setExpanded({});
       } catch (err) {
         if (!cancelled) setError((err as Error).message);
       } finally {
@@ -121,8 +117,9 @@ export function FacilityOrdersModal({ facilityId, facilityName, onClose }: Props
     };
   }, [selectedId]);
 
+  // 한 번에 하나의 부모 노드만 펼친다(아코디언). 열려 있는 노드를 다시 누르면 모두 접힌다.
   const toggleGroup = (serviceType: string) => {
-    setExpanded((prev) => ({ ...prev, [serviceType]: !prev[serviceType] }));
+    setExpanded((prev) => (prev[serviceType] ? {} : { [serviceType]: true }));
   };
 
   const selected = useMemo(() => {
@@ -136,6 +133,14 @@ export function FacilityOrdersModal({ facilityId, facilityName, onClose }: Props
   }, [tree, selectedId]);
 
   const totalCount = tree?.totalCount ?? 0;
+  const totalAmount = useMemo(
+    () =>
+      (tree?.groups ?? []).reduce(
+        (acc, group) => acc + group.contracts.reduce((a, c) => a + Number(c.currentAmount ?? 0), 0),
+        0
+      ),
+    [tree]
+  );
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-stone-950/30 p-4">
@@ -146,16 +151,18 @@ export function FacilityOrdersModal({ facilityId, facilityName, onClose }: Props
               <FolderTree className="w-5 h-5 text-primary" />
               {facilityName} 수주 현황
             </h3>
-            <p className="text-xs text-stone-500 mt-1">총 {totalCount.toLocaleString()}건</p>
+            <p className="text-xs text-stone-500 mt-1">
+              총 {totalCount.toLocaleString()}건 · {formatMoney(totalAmount)}
+            </p>
           </div>
           <button type="button" onClick={onClose} className="text-stone-400 hover:text-stone-700">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto scrollbar-hide p-5 flex flex-col gap-4">
-          <div className="rounded-2xl border border-stone-200 bg-white overflow-hidden">
-            <div className="h-[504px] overflow-y-auto scrollbar-hide">
+        <div className="min-h-0 flex-1 overflow-hidden p-5 flex flex-col gap-4">
+          <div className="rounded-2xl border border-stone-200 bg-white overflow-hidden flex-1 min-h-[260px] flex flex-col">
+            <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide">
               {loading ? (
                 <div className="p-10 text-center text-sm text-stone-500">불러오는 중…</div>
               ) : error ? (
@@ -193,7 +200,7 @@ export function FacilityOrdersModal({ facilityId, facilityName, onClose }: Props
             </div>
           </div>
 
-          <div className="grid grid-cols-1 xl:grid-cols-[minmax(260px,0.8fr)_minmax(0,2.2fr)] gap-4 items-stretch">
+          <div className="shrink-0 grid grid-cols-1 xl:grid-cols-[minmax(260px,0.8fr)_minmax(0,2.2fr)] gap-4 items-stretch">
             <OrdersOverviewCard tree={tree} />
             <div className="rounded-2xl border border-stone-200 bg-white p-4 min-h-[320px] flex flex-col">
               {!selected ? (
@@ -316,7 +323,7 @@ function OrdersOverviewCard({ tree }: { tree: ContractTreePayload | null }) {
           return (
             <div
               key={row.label}
-              className="flex items-center gap-2.5 rounded-xl border border-stone-200 py-2 pl-3 pr-4"
+              className="flex items-center gap-1.5 rounded-xl border border-stone-200 py-2 px-3"
             >
               <span
                 className="shrink-0 inline-flex w-8 h-8 items-center justify-center rounded-lg"
@@ -338,11 +345,11 @@ function OrdersOverviewCard({ tree }: { tree: ContractTreePayload | null }) {
                   }}
                 />
               </span>
-              <span className="min-w-0 flex-1 truncate text-sm text-stone-700">{row.label}</span>
-              <span className="w-10 shrink-0 text-right text-xs tabular-nums text-stone-500">
+              <span className="min-w-0 flex-1 truncate text-xs text-stone-700">{row.label}</span>
+              <span className="w-8 shrink-0 text-right text-xs tabular-nums text-stone-500">
                 {row.count.toLocaleString()}건
               </span>
-              <span className="w-16 shrink-0 text-right text-xs tabular-nums text-stone-800">
+              <span className="w-14 shrink-0 text-right text-xs tabular-nums text-stone-800">
                 {formatMoney(row.amount)}
               </span>
             </div>

@@ -88,7 +88,7 @@ function Inner() {
     );
   }
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (options?: { allowDuplicateBrn?: boolean }) => {
     setPending(true);
     setError(null);
     setDuplicateFacility(null);
@@ -118,6 +118,7 @@ function Inner() {
           serviceCategories,
           companySize: companySize || null,
           memo: memo || null,
+          allowDuplicateBusinessRegistrationNo: options?.allowDuplicateBrn ?? false,
         }),
       });
       if (!res.ok) {
@@ -500,12 +501,30 @@ function Inner() {
               {duplicateFacility.businessRegistrationNo ? ` · ${duplicateFacility.businessRegistrationNo}` : ""}
               {duplicateFacility.siteAddress ? ` · ${duplicateFacility.siteAddress}` : ""}
             </div>
-            <Link
-              href={`/facilities?focus=${encodeURIComponent(duplicateFacility.facilityId)}`}
-              className="inline-flex mt-2 text-xs font-black text-primary hover:underline"
-            >
-              기존 사업장으로 이동
-            </Link>
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <Link
+                href={`/facilities?focus=${encodeURIComponent(duplicateFacility.facilityId)}`}
+                className="inline-flex text-xs font-black text-primary hover:underline"
+              >
+                기존 사업장으로 이동
+              </Link>
+              {duplicateFacility.matchType === "businessRegistrationNo" && (
+                <button
+                  type="button"
+                  onClick={() => handleSubmit({ allowDuplicateBrn: true })}
+                  disabled={pending}
+                  className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-black text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  {pending ? "저장 중…" : "사업자번호 중복 확인 후 그래도 등록"}
+                </button>
+              )}
+            </div>
+            {duplicateFacility.matchType === "businessRegistrationNo" && (
+              <p className="mt-2 text-[11px] leading-relaxed text-amber-700">
+                동일 법인의 본사·공장 등 같은 사업자등록번호를 사용하는 별도 사업장이면 그대로 등록한 뒤 관계 법인으로 묶을 수 있습니다.
+              </p>
+            )}
           </div>
         )}
 
@@ -518,7 +537,7 @@ function Inner() {
           </Link>
           <button
             type="button"
-            onClick={handleSubmit}
+            onClick={() => handleSubmit()}
             disabled={pending || !companyName.trim()}
             className="rounded-xl px-4 py-2 text-sm font-bold text-white bg-primary hover:bg-primary/90 shadow-sm flex items-center gap-1 disabled:opacity-50"
           >

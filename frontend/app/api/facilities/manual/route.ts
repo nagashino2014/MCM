@@ -35,6 +35,9 @@ interface CreateBody {
   aliases?: { alias?: string; aliasType?: string | null; note?: string | null; isPrimary?: boolean }[];
   serviceCategories?: FacilityServiceCategory[];
   companySize?: FacilityCompanySize | null;
+  // 사업자등록번호가 같은 사업장(예: 동일 법인의 본사/공장)을 관계 법인으로 묶기 위해
+  // 사용자가 중복을 확인한 뒤 그대로 등록하도록 허용하는 플래그.
+  allowDuplicateBusinessRegistrationNo?: boolean;
 }
 
 interface DuplicateFacility {
@@ -96,7 +99,7 @@ export async function POST(req: NextRequest) {
     const now = new Date().toISOString();
 
     const created = await withDbWrite(async (db) => {
-      if (businessRegistrationNo) {
+      if (businessRegistrationNo && !body.allowDuplicateBusinessRegistrationNo) {
         const r = await db.exec(
           `SELECT facility_id, company_name, business_registration_no, site_address
              FROM facilities

@@ -37,6 +37,8 @@ interface PatchBody {
   businessRegistrationNo?: string | null;
   representativeName?: string | null;
   siteAddress?: string | null;
+  // 동일 사업자등록번호로 2개 이상의 소재지를 운영하는 사업장의 보조 소재지 목록.
+  additionalSiteAddresses?: (string | null | undefined)[] | null;
   phoneNumber?: string | null;
   industryCode?: string | null;
   industryName?: string | null;
@@ -88,6 +90,20 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
         const region = extractRegion(formattedAddress);
         pushSet("region_sido", region.sido);
         pushSet("region_sigungu", region.sigungu);
+      }
+      if (body.additionalSiteAddresses !== undefined) {
+        const primary =
+          body.siteAddress !== undefined
+            ? normalizeAddress(body.siteAddress)
+            : before.siteAddress
+            ? normalizeAddress(before.siteAddress)
+            : null;
+        const list = Array.isArray(body.additionalSiteAddresses)
+          ? body.additionalSiteAddresses
+              .map((addr) => normalizeAddress(addr))
+              .filter((addr): addr is string => !!addr && addr !== primary)
+          : [];
+        pushSet("additional_site_addresses", list.length ? JSON.stringify(list) : null);
       }
       if (body.phoneNumber !== undefined) {
         pushSet("phone_number", body.phoneNumber);

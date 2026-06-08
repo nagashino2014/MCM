@@ -1869,6 +1869,14 @@ function EditView({
   const [businessRegistrationNo, setBrn] = useState(formatBusinessRegistrationNo(detail.businessRegistrationNo) ?? "");
   const [representativeName, setRepresentativeName] = useState(detail.representativeName ?? "");
   const [siteAddress, setSiteAddress] = useState(formatAddress(detail.siteAddress) ?? "");
+  const [hasMultipleSites, setHasMultipleSites] = useState(
+    (detail.additionalSiteAddresses?.length ?? 0) > 0
+  );
+  const [additionalSiteAddresses, setAdditionalSiteAddresses] = useState<string[]>(
+    detail.additionalSiteAddresses?.length
+      ? detail.additionalSiteAddresses.map((addr) => formatAddress(addr) ?? addr)
+      : [""]
+  );
   const [phoneNumber, setPhoneNumber] = useState(detail.phoneNumber ?? "");
   const facilityIndustries =
     detail.industries?.filter((industry) => industry.source === "facility") ?? [];
@@ -1980,6 +1988,9 @@ function EditView({
           businessRegistrationNo: formatBusinessRegistrationNo(businessRegistrationNo) || null,
           representativeName: representativeName || null,
           siteAddress: formatAddress(siteAddress) || null,
+          additionalSiteAddresses: hasMultipleSites
+            ? additionalSiteAddresses.map((addr) => addr.trim()).filter(Boolean)
+            : [],
           phoneNumber: phoneNumber || null,
           industryCode: normalizedIndustries.map((industry) => industry.code).join("\n") || null,
           industryName: normalizedIndustries.map((industry) => industry.name).join("\n") || null,
@@ -2034,11 +2045,70 @@ function EditView({
       <FieldInput label="사업자등록번호" value={businessRegistrationNo} onChange={setBrn} />
       <FieldInput label="대표자명" value={representativeName} onChange={setRepresentativeName} multiline />
       <FieldInput
-        label="소재지"
+        label={hasMultipleSites ? "소재지 (대표)" : "소재지"}
         value={siteAddress}
         onChange={setSiteAddress}
         full
       />
+      <div className="sm:col-span-2 flex flex-col gap-2">
+        <label className="flex items-center gap-1.5 text-xs font-bold text-stone-600 select-none">
+          <input
+            type="checkbox"
+            checked={hasMultipleSites}
+            onChange={(e) => {
+              const checked = e.target.checked;
+              setHasMultipleSites(checked);
+              if (checked && additionalSiteAddresses.length === 0) {
+                setAdditionalSiteAddresses([""]);
+              }
+            }}
+          />
+          복수 사업장 (동일 사업자등록번호로 소재지가 2개 이상)
+        </label>
+        {hasMultipleSites && (
+          <div className="flex flex-col gap-2 bg-white/40 border border-white/50 rounded-xl p-3">
+            <div className="text-[11px] font-bold text-stone-500">
+              대표 소재지 외 추가 운영 소재지를 입력합니다. (지역·중복 검증·계약 매칭은 대표 소재지 기준)
+            </div>
+            {additionalSiteAddresses.map((addr, idx) => (
+              <div key={idx} className="grid grid-cols-[1fr_auto] gap-2 items-center">
+                <input
+                  className="input-field"
+                  value={addr}
+                  onChange={(e) =>
+                    setAdditionalSiteAddresses((prev) =>
+                      prev.map((item, itemIdx) => (itemIdx === idx ? e.target.value : item))
+                    )
+                  }
+                  placeholder={"추가 소재지 " + (idx + 1)}
+                />
+                <div className="flex gap-1">
+                  <button
+                    type="button"
+                    className="rounded-lg border border-stone-200 bg-white px-2 py-2 text-stone-600 hover:bg-stone-50"
+                    onClick={() => setAdditionalSiteAddresses((prev) => [...prev, ""])}
+                    title="추가 소재지 행 추가"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-lg border border-red-100 bg-red-50 px-2 py-2 text-red-600 hover:bg-red-100"
+                    onClick={() =>
+                      setAdditionalSiteAddresses((prev) =>
+                        prev.length <= 1 ? [""] : prev.filter((_, itemIdx) => itemIdx !== idx)
+                      )
+                    }
+                    title="추가 소재지 행 삭제"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
       <FieldInput label="전화번호" value={phoneNumber} onChange={setPhoneNumber} />
       <div className="sm:col-span-2 flex flex-col gap-2">
         <div className="flex items-center justify-between gap-2">

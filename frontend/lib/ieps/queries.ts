@@ -1025,6 +1025,7 @@ export interface FacilityDetail {
   companyName: string;
   businessRegistrationNo: string | null;
   siteAddress: string | null;
+  additionalSiteAddresses: string[];
   phoneNumber: string | null;
   industryCode: string | null;
   industryName: string | null;
@@ -1108,13 +1109,31 @@ export interface ProductOutput {
   sourceText: string | null;
 }
 
+function parseAdditionalSiteAddresses(raw: unknown): string[] {
+  if (raw == null) return [];
+  const text = String(raw).trim();
+  if (!text) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    // 과거 데이터가 단일 문자열로 저장된 경우를 대비한 안전망.
+    const single = formatAddress(text);
+    return single ? [single] : [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  return parsed
+    .map((item) => (item != null ? formatAddress(String(item)) : null))
+    .filter((addr): addr is string => !!addr);
+}
+
 export async function getFacilityDetail(facilityId: string): Promise<FacilityDetail | null> {
   invalidateDb();
   const db = await getDb();
   let facRow;
   try {
     facRow = await db.exec(
-      `SELECT facility_id, company_name, business_registration_no, representative_name, site_address, phone_number,
+      `SELECT facility_id, company_name, business_registration_no, representative_name, site_address, additional_site_addresses, phone_number,
               industry_code, industry_name,
               business_certificate_business_type, business_certificate_business_item,
               business_certificate_corporate_registration_no,
@@ -1305,6 +1324,7 @@ export async function getFacilityDetail(facilityId: string): Promise<FacilityDet
         : null,
     representativeName: f.representative_name != null ? String(f.representative_name) : null,
     siteAddress: f.site_address != null ? formatAddress(String(f.site_address)) : null,
+    additionalSiteAddresses: parseAdditionalSiteAddresses(f.additional_site_addresses),
     phoneNumber: f.phone_number != null ? String(f.phone_number) : null,
     industryCode: f.industry_code != null ? String(f.industry_code) : null,
     industryName: f.industry_name != null ? String(f.industry_name) : null,

@@ -24,6 +24,8 @@ interface CreateBody {
   businessRegistrationNo?: string | null;
   representativeName?: string | null;
   siteAddress?: string | null;
+  // 동일 사업자등록번호로 2개 이상의 소재지를 운영하는 사업장의 보조 소재지 목록.
+  additionalSiteAddresses?: (string | null | undefined)[] | null;
   phoneNumber?: string | null;
   industryCode?: string | null;
   industryName?: string | null;
@@ -86,6 +88,14 @@ export async function POST(req: NextRequest) {
     const siteAddress = normalizeAddress(body.siteAddress);
     const businessRegistrationNo = normalizeBusinessRegistrationNo(body.businessRegistrationNo);
     const normAddress = siteAddress?.replace(/\s+/g, " ").trim() ?? null;
+    const additionalSiteAddresses = Array.isArray(body.additionalSiteAddresses)
+      ? body.additionalSiteAddresses
+          .map((addr) => normalizeAddress(addr))
+          .filter((addr): addr is string => !!addr && addr !== siteAddress)
+      : [];
+    const additionalSiteAddressesJson = additionalSiteAddresses.length
+      ? JSON.stringify(additionalSiteAddresses)
+      : null;
     const region = extractRegion(siteAddress);
     const facilityId =
       "facm_" +
@@ -133,9 +143,9 @@ export async function POST(req: NextRequest) {
           region_sido, region_sigungu, source, memo, company_size,
           business_certificate_business_type, business_certificate_business_item,
           business_certificate_corporate_registration_no, business_certificate_ocr_text,
-          created_at, updated_at)
+          created_at, updated_at, additional_site_addresses)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'manual', $13, $14,
-          $15, $16, $17, $18, $19, $20)`,
+          $15, $16, $17, $18, $19, $20, $21)`,
         [
           facilityId,
           companyName,
@@ -157,6 +167,7 @@ export async function POST(req: NextRequest) {
           normalizeText(body.businessCertificateOcrText),
           now,
           now,
+          additionalSiteAddressesJson,
         ]
       );
       const services = normalizeServiceCategories(body.serviceCategories);
@@ -197,6 +208,7 @@ export async function POST(req: NextRequest) {
           businessRegistrationNo,
             representativeName: normalizeText(body.representativeName),
           siteAddress,
+          additionalSiteAddresses,
           source: "manual",
           serviceCategories: services,
           companySize: normalizeFacilityCompanySize(body.companySize),

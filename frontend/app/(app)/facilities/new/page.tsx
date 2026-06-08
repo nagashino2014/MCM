@@ -54,6 +54,8 @@ function Inner() {
   const [brn, setBrn] = useState("");
   const [representativeName, setRepresentativeName] = useState("");
   const [siteAddress, setSiteAddress] = useState("");
+  const [hasMultipleSites, setHasMultipleSites] = useState(false);
+  const [additionalSiteAddresses, setAdditionalSiteAddresses] = useState<string[]>([""]);
   const [phoneNumber, setPhoneNumber] = useState("");
   const [industryRows, setIndustryRows] = useState<IndustryInputRow[]>([{ code: "", name: "" }]);
   const [certificateBusinessKinds, setCertificateBusinessKinds] = useState<BusinessCertificateKindInput[]>([
@@ -107,6 +109,9 @@ function Inner() {
           businessRegistrationNo: brn || null,
           representativeName: representativeName || null,
           siteAddress: siteAddress || null,
+          additionalSiteAddresses: hasMultipleSites
+            ? additionalSiteAddresses.map((addr) => addr.trim()).filter(Boolean)
+            : [],
           phoneNumber: phoneNumber || null,
           industryCode: normalizedIndustryRows.map((row) => row.code).join("\n") || null,
           industryName: normalizedIndustryRows.map((row) => row.name).join("\n") || null,
@@ -257,8 +262,8 @@ function Inner() {
             placeholder="123-45-67890"
           />
         </Field>
-        <div className="md:col-span-2">
-          <Field label="소재지">
+        <div className="md:col-span-2 flex flex-col gap-2">
+          <Field label={hasMultipleSites ? "소재지 (대표)" : "소재지"}>
             <input
               className="input-field"
               value={siteAddress}
@@ -266,6 +271,63 @@ function Inner() {
               placeholder="경기도 화성시 ..."
             />
           </Field>
+          <label className="flex items-center gap-1.5 text-xs font-bold text-stone-600 select-none">
+            <input
+              type="checkbox"
+              checked={hasMultipleSites}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                setHasMultipleSites(checked);
+                if (checked && additionalSiteAddresses.length === 0) {
+                  setAdditionalSiteAddresses([""]);
+                }
+              }}
+            />
+            복수 사업장 (동일 사업자등록번호로 소재지가 2개 이상)
+          </label>
+          {hasMultipleSites && (
+            <div className="grid gap-2 rounded-2xl border border-stone-200 bg-white/50 p-3">
+              <div className="text-[11px] font-bold text-stone-500">
+                대표 소재지 외 추가 운영 소재지를 입력합니다. (지역·중복 검증·계약 매칭은 대표 소재지 기준으로 동작합니다.)
+              </div>
+              {additionalSiteAddresses.map((addr, index) => (
+                <div key={index} className="grid grid-cols-[1fr_auto] gap-2 items-center">
+                  <input
+                    className="input-field"
+                    value={addr}
+                    onChange={(e) =>
+                      setAdditionalSiteAddresses((prev) =>
+                        prev.map((item, idx) => (idx === index ? e.target.value : item))
+                      )
+                    }
+                    placeholder={"추가 소재지 " + (index + 1)}
+                  />
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      className="rounded-lg border border-stone-200 bg-white px-2 py-2 text-stone-600 hover:bg-stone-50"
+                      onClick={() => setAdditionalSiteAddresses((prev) => [...prev, ""])}
+                      title="추가 소재지 행 추가"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-lg border border-red-100 bg-red-50 px-2 py-2 text-red-600 hover:bg-red-100"
+                      onClick={() =>
+                        setAdditionalSiteAddresses((prev) =>
+                          prev.length <= 1 ? [""] : prev.filter((_, idx) => idx !== index)
+                        )
+                      }
+                      title="추가 소재지 행 삭제"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         <Field label="전화번호">
           <input

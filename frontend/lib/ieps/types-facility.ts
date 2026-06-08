@@ -97,6 +97,7 @@ export interface FacilityDetail {
   businessRegistrationNo: string | null;
   representativeName: string | null;
   siteAddress: string | null;
+  additionalSiteAddresses: string[];
   phoneNumber: string | null;
   industryCode: string | null;
   industryName: string | null;

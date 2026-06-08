@@ -1691,7 +1691,7 @@ function ReadView({
       <PhoneContactField value={detail.phoneNumber} onOpenContacts={onOpenContacts} />
       <DetailField
         icon={MapPin}
-        label="소재지"
+        label={detail.additionalSiteAddresses.length > 0 ? "소재지 (대표)" : "소재지"}
         value={formatAddress(detail.siteAddress)}
         secondary={
           detail.regionSido
@@ -1699,6 +1699,14 @@ function ReadView({
             : null
         }
       />
+      {detail.additionalSiteAddresses.map((addr, idx) => (
+        <DetailField
+          key={"add-site-" + idx}
+          icon={MapPin}
+          label={"추가 소재지 " + (idx + 1)}
+          value={formatAddress(addr)}
+        />
+      ))}
       <div className="flex flex-col gap-1 bg-white/40 border border-white/50 rounded-xl p-3">
         <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wide flex items-center gap-1">
           <FileText className="w-3 h-3" /> 업종

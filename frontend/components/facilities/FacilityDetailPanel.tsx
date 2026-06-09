@@ -55,6 +55,15 @@ const OPERATING_RELATION_LABELS: Record<FacilityOperatingRelationType, string> =
   other: "기타 관계",
 };
 
+// 이력 추가 폼의 유형 체크박스(복수 선택). 인수/합병은 별도 체크박스로 분리 배치한다.
+const HISTORY_TYPE_CHECKBOX_OPTIONS: FacilityHistoryEventType[] = [
+  "company_name_change",
+  "business_registration_no_change",
+  "group_change",
+  "site_address_change",
+  "closure",
+];
+
 interface Props {
   facilityId: string | null;
   canEdit: boolean;
@@ -66,6 +75,7 @@ interface FacilityHistoryItem {
   id: number;
   facilityId: string;
   eventType: FacilityHistoryEventType;
+  eventTypes: FacilityHistoryEventType[];
   eventDate: string | null;
   previousCompanyName: string | null;
   newCompanyName: string | null;
@@ -73,6 +83,10 @@ interface FacilityHistoryItem {
   newBusinessRegistrationNo: string | null;
   previousGroupName: string | null;
   newGroupName: string | null;
+  previousSiteAddress: string | null;
+  newSiteAddress: string | null;
+  acquirerCompanyName: string | null;
+  mergerTargetCompanyNames: string[];
   relatedCompanyName: string | null;
   sourceFacilityId: string | null;
   memo: string | null;
@@ -372,6 +386,10 @@ export function FacilityDetailPanel({ facilityId, canEdit, onUpdated, onDeleted 
           canEdit={canEdit}
           anchor={historyAnchor}
           onClose={() => setHistoryOpen(false)}
+          onChanged={() => {
+            reload();
+            onUpdated();
+          }}
         />
       )}
       {contactsOpen && (
@@ -385,21 +403,29 @@ export function FacilityDetailPanel({ facilityId, canEdit, onUpdated, onDeleted 
   );
 }
 
+function formatGroupLabel(groupInfo: FacilityDetail["groupInfo"]): string {
+  if (!groupInfo) return "";
+  const company = formatCompanyName(groupInfo.company.companyName) ?? groupInfo.company.companyName;
+  return `${groupInfo.group.groupName} · ${company} (${MEMBERSHIP_RELATION_LABELS[groupInfo.membership.relationType]})`;
+}
+
 function FacilityHistoryModal({
   facility,
   canEdit,
   anchor,
   onClose,
+  onChanged,
 }: {
   facility: FacilityDetail;
   canEdit: boolean;
   anchor: { top: number; left: number } | null;
   onClose: () => void;
+  onChanged?: () => void;
 }) {
   const [items, setItems] = useState<FacilityHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [eventType, setEventType] = useState<FacilityHistoryEventType>("company_name_change");
+  const [selectedTypes, setSelectedTypes] = useState<Set<FacilityHistoryEventType>>(new Set());
   const [eventDate, setEventDate] = useState("");
   const [previousCompanyName, setPreviousCompanyName] = useState("");
   const [newCompanyName, setNewCompanyName] = useState("");
@@ -407,10 +433,32 @@ function FacilityHistoryModal({
   const [newBusinessRegistrationNo, setNewBusinessRegistrationNo] = useState("");
   const [previousGroupName, setPreviousGroupName] = useState("");
   const [newGroupName, setNewGroupName] = useState("");
-  const [relatedCompanyName, setRelatedCompanyName] = useState("");
+  const [previousSiteAddress, setPreviousSiteAddress] = useState("");
+  const [newSiteAddress, setNewSiteAddress] = useState("");
+  const [acquirerCompanyName, setAcquirerCompanyName] = useState("");
+  const [mergerTargets, setMergerTargets] = useState<string[]>([""]);
   const [memo, setMemo] = useState("");
   const [mounted, setMounted] = useState(false);
   const [editingHistoryId, setEditingHistoryId] = useState<number | null>(null);
+  const [groupModalOpen, setGroupModalOpen] = useState(false);
+  // 모달 진입 시점에 적용되어 있던 계열/그룹(이전 값)을 1회 캡처한다.
+  const [initialGroupLabel] = useState(() => formatGroupLabel(facility.groupInfo));
+
+  // 사업장에 이미 존재하는 현재 값(이전 값 자동표시용).
+  const currentCompanyName = formatCompanyName(facility.companyName) ?? facility.companyName ?? "";
+  const currentBrn =
+    formatBusinessRegistrationNo(facility.businessRegistrationNo) ?? facility.businessRegistrationNo ?? "";
+  const currentSiteAddress = facility.siteAddress ?? "";
+
+  const toggleType = (type: FacilityHistoryEventType) => {
+    setSelectedTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(type)) next.delete(type);
+      else next.add(type);
+      return next;
+    });
+  };
+  const hasType = (type: FacilityHistoryEventType) => selectedTypes.has(type);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -434,33 +482,46 @@ function FacilityHistoryModal({
   useEffect(() => {
     setMounted(true);
     reload();
+    // 신규 이력 입력 폼의 "이전" 값들을 현재 사업장 데이터로 초기화한다.
+    setPreviousGroupName((prev) => (prev ? prev : initialGroupLabel));
+    setPreviousCompanyName((prev) => (prev ? prev : currentCompanyName));
+    setPreviousBusinessRegistrationNo((prev) => (prev ? prev : currentBrn));
+    setPreviousSiteAddress((prev) => (prev ? prev : currentSiteAddress));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reload]);
 
   const resetForm = () => {
     setEditingHistoryId(null);
-    setEventType("company_name_change");
+    setSelectedTypes(new Set());
     setEventDate("");
-    setPreviousCompanyName("");
+    // 이전 값들은 현재 사업장 데이터를 자동으로 채운다(읽기 전용 표시).
+    setPreviousCompanyName(currentCompanyName);
     setNewCompanyName("");
-    setPreviousBusinessRegistrationNo("");
+    setPreviousBusinessRegistrationNo(currentBrn);
     setNewBusinessRegistrationNo("");
-    setPreviousGroupName("");
+    setPreviousGroupName(initialGroupLabel);
     setNewGroupName("");
-    setRelatedCompanyName("");
+    setPreviousSiteAddress(currentSiteAddress);
+    setNewSiteAddress("");
+    setAcquirerCompanyName("");
+    setMergerTargets([""]);
     setMemo("");
   };
 
   const startEdit = (item: FacilityHistoryItem) => {
     setEditingHistoryId(item.id);
-    setEventType(item.eventType);
+    setSelectedTypes(new Set(item.eventTypes?.length ? item.eventTypes : [item.eventType]));
     setEventDate(item.eventDate ?? "");
-    setPreviousCompanyName(item.previousCompanyName ?? "");
+    setPreviousCompanyName(item.previousCompanyName ?? currentCompanyName);
     setNewCompanyName(item.newCompanyName ?? "");
-    setPreviousBusinessRegistrationNo(item.previousBusinessRegistrationNo ?? "");
+    setPreviousBusinessRegistrationNo(item.previousBusinessRegistrationNo ?? currentBrn);
     setNewBusinessRegistrationNo(item.newBusinessRegistrationNo ?? "");
-    setPreviousGroupName(item.previousGroupName ?? "");
+    setPreviousGroupName(item.previousGroupName ?? initialGroupLabel);
     setNewGroupName(item.newGroupName ?? "");
-    setRelatedCompanyName(item.relatedCompanyName ?? "");
+    setPreviousSiteAddress(item.previousSiteAddress ?? currentSiteAddress);
+    setNewSiteAddress(item.newSiteAddress ?? "");
+    setAcquirerCompanyName(item.acquirerCompanyName ?? "");
+    setMergerTargets(item.mergerTargetCompanyNames?.length ? [...item.mergerTargetCompanyNames] : [""]);
     setMemo(item.memo ?? "");
   };
 
@@ -483,6 +544,36 @@ function FacilityHistoryModal({
   };
 
   const save = async () => {
+    const cleanedMergerTargets = mergerTargets.map((target) => target.trim()).filter(Boolean);
+    // 최소 한 가지 이력 유형(또는 인수/합병) 선택 필요 + 항목별 필수 입력값 검증.
+    if (selectedTypes.size === 0) {
+      alert("이력 유형을 한 가지 이상 선택하세요.");
+      return;
+    }
+    if (hasType("company_name_change") && !newCompanyName.trim()) {
+      alert("변경 상호를 입력하세요.");
+      return;
+    }
+    if (hasType("business_registration_no_change") && !newBusinessRegistrationNo.trim()) {
+      alert("변경 사업자번호를 입력하세요.");
+      return;
+    }
+    if (hasType("group_change") && !newGroupName.trim()) {
+      alert("변경 계열/그룹을 그룹 정보 모달에서 설정하세요.");
+      return;
+    }
+    if (hasType("site_address_change") && !newSiteAddress.trim()) {
+      alert("변경 소재지를 입력하세요.");
+      return;
+    }
+    if (hasType("acquisition") && !acquirerCompanyName.trim()) {
+      alert("인수 주체 기업명을 입력하세요.");
+      return;
+    }
+    if (hasType("merger") && cleanedMergerTargets.length === 0) {
+      alert("합병 대상 기업명을 한 곳 이상 입력하세요.");
+      return;
+    }
     setSaving(true);
     try {
       const res = await fetch(
@@ -494,15 +585,22 @@ function FacilityHistoryModal({
           method: editingHistoryId ? "PATCH" : "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
-            eventType,
+            eventTypes: Array.from(selectedTypes),
             eventDate: eventDate || null,
-            previousCompanyName: previousCompanyName || null,
-            newCompanyName: newCompanyName || null,
-            previousBusinessRegistrationNo: previousBusinessRegistrationNo || null,
-            newBusinessRegistrationNo: newBusinessRegistrationNo || null,
-            previousGroupName: previousGroupName || null,
-            newGroupName: newGroupName || null,
-            relatedCompanyName: relatedCompanyName || null,
+            previousCompanyName: hasType("company_name_change") ? previousCompanyName || null : null,
+            newCompanyName: hasType("company_name_change") ? newCompanyName.trim() || null : null,
+            previousBusinessRegistrationNo: hasType("business_registration_no_change")
+              ? previousBusinessRegistrationNo || null
+              : null,
+            newBusinessRegistrationNo: hasType("business_registration_no_change")
+              ? newBusinessRegistrationNo.trim() || null
+              : null,
+            previousGroupName: hasType("group_change") ? previousGroupName || null : null,
+            newGroupName: hasType("group_change") ? newGroupName.trim() || null : null,
+            previousSiteAddress: hasType("site_address_change") ? previousSiteAddress || null : null,
+            newSiteAddress: hasType("site_address_change") ? newSiteAddress.trim() || null : null,
+            acquirerCompanyName: hasType("acquisition") ? acquirerCompanyName.trim() || null : null,
+            mergerTargetCompanyNames: hasType("merger") ? cleanedMergerTargets : [],
             memo: memo || null,
           }),
         }
@@ -513,6 +611,8 @@ function FacilityHistoryModal({
       }
       resetForm();
       reload();
+      // 신규 이력 저장 시 사업장 본 레코드(상호/사업자번호/소재지)가 갱신될 수 있으므로 상세 패널을 새로고침한다.
+      if (!editingHistoryId) onChanged?.();
     } catch (err) {
       alert("이력 저장 실패: " + (err as Error).message);
     } finally {
@@ -563,8 +663,15 @@ function FacilityHistoryModal({
               )}
             >
               <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div className="text-sm font-bold text-stone-800">
-                  {FACILITY_HISTORY_EVENT_LABELS[item.eventType]}
+                <div className="flex flex-wrap items-center gap-1">
+                  {(item.eventTypes?.length ? item.eventTypes : [item.eventType]).map((type) => (
+                    <span
+                      key={type}
+                      className="rounded-md bg-primary/10 text-primary px-2 py-0.5 text-[11px] font-bold"
+                    >
+                      {FACILITY_HISTORY_EVENT_LABELS[type]}
+                    </span>
+                  ))}
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="text-[11px] text-stone-400">
@@ -598,6 +705,13 @@ function FacilityHistoryModal({
                   after={item.newBusinessRegistrationNo}
                 />
                 <HistoryDiff label="계열/그룹" before={item.previousGroupName} after={item.newGroupName} />
+                <HistoryDiff label="소재지" before={item.previousSiteAddress} after={item.newSiteAddress} />
+                {item.acquirerCompanyName && (
+                  <div>인수 주체: <b>{item.acquirerCompanyName}</b></div>
+                )}
+                {item.mergerTargetCompanyNames?.length > 0 && (
+                  <div>합병 대상: <b>{item.mergerTargetCompanyNames.join(", ")}</b></div>
+                )}
                 {item.relatedCompanyName && (
                   <div>관련 업체: <b>{item.relatedCompanyName}</b></div>
                 )}
@@ -624,27 +738,175 @@ function FacilityHistoryModal({
               )}
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <SelectField
-                label="이력 유형"
-                value={eventType}
-                onChange={(value) => setEventType(value as FacilityHistoryEventType)}
-              />
+              <div className="sm:col-span-2 flex flex-col gap-1.5">
+                <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">
+                  이력 유형 (복수 선택)
+                </span>
+                <div className="flex flex-wrap gap-2 rounded-xl border border-stone-200 bg-white/50 p-2">
+                  {HISTORY_TYPE_CHECKBOX_OPTIONS.map((type) => (
+                    <label
+                      key={type}
+                      className={cn(
+                        "flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-bold cursor-pointer border select-none",
+                        hasType(type)
+                          ? "bg-primary/10 border-primary/40 text-primary"
+                          : "bg-white border-stone-200 text-stone-600"
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={hasType(type)}
+                        onChange={() => toggleType(type)}
+                        className="accent-primary"
+                      />
+                      {FACILITY_HISTORY_EVENT_LABELS[type]}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
               <FieldInput label="발생일" value={eventDate} onChange={setEventDate} />
-              <FieldInput label="이전 상호" value={previousCompanyName} onChange={setPreviousCompanyName} />
-              <FieldInput label="변경 상호" value={newCompanyName} onChange={setNewCompanyName} />
-              <FieldInput
-                label="이전 사업자번호"
-                value={previousBusinessRegistrationNo}
-                onChange={setPreviousBusinessRegistrationNo}
-              />
-              <FieldInput
-                label="변경 사업자번호"
-                value={newBusinessRegistrationNo}
-                onChange={setNewBusinessRegistrationNo}
-              />
-              <FieldInput label="이전 계열/그룹" value={previousGroupName} onChange={setPreviousGroupName} />
-              <FieldInput label="변경 계열/그룹" value={newGroupName} onChange={setNewGroupName} />
-              <FieldInput label="관련 업체" value={relatedCompanyName} onChange={setRelatedCompanyName} />
+              <div className="hidden sm:block" />
+
+              <ReadonlyField label="이전 상호" value={previousCompanyName} />
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">변경 상호</span>
+                <input
+                  className="input-field disabled:bg-stone-100 disabled:text-stone-400"
+                  value={newCompanyName}
+                  disabled={!hasType("company_name_change")}
+                  onChange={(e) => setNewCompanyName(e.target.value)}
+                  placeholder={hasType("company_name_change") ? "변경 상호 입력" : "상호 변경 체크 시 입력"}
+                />
+              </div>
+
+              <ReadonlyField label="이전 사업자번호" value={previousBusinessRegistrationNo} />
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">변경 사업자번호</span>
+                <input
+                  className="input-field disabled:bg-stone-100 disabled:text-stone-400"
+                  value={newBusinessRegistrationNo}
+                  disabled={!hasType("business_registration_no_change")}
+                  onChange={(e) => setNewBusinessRegistrationNo(e.target.value)}
+                  placeholder={
+                    hasType("business_registration_no_change") ? "변경 사업자번호 입력" : "사업자번호 변경 체크 시 입력"
+                  }
+                />
+              </div>
+
+              <ReadonlyField label="이전 계열/그룹" value={previousGroupName} emptyText="연결된 계열/그룹 없음" />
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">변경 계열/그룹</span>
+                <button
+                  type="button"
+                  disabled={!hasType("group_change")}
+                  onClick={() => setGroupModalOpen(true)}
+                  className="input-field flex items-center justify-between gap-2 text-left hover:bg-stone-50 disabled:bg-stone-100 disabled:hover:bg-stone-100"
+                  title="그룹 정보 모달에서 계열/그룹을 재설정합니다."
+                >
+                  <span className={cn("truncate", newGroupName ? "text-stone-800 font-bold" : "text-stone-400")}>
+                    {hasType("group_change")
+                      ? newGroupName || "그룹 정보에서 재설정…"
+                      : "계열/그룹 변경 체크 시 설정"}
+                  </span>
+                  <Briefcase className="w-4 h-4 text-stone-400 shrink-0" />
+                </button>
+              </div>
+
+              <ReadonlyField label="이전 소재지" value={previousSiteAddress} />
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">변경 소재지</span>
+                <input
+                  className="input-field disabled:bg-stone-100 disabled:text-stone-400"
+                  value={newSiteAddress}
+                  disabled={!hasType("site_address_change")}
+                  onChange={(e) => setNewSiteAddress(e.target.value)}
+                  placeholder={hasType("site_address_change") ? "변경 소재지 입력" : "소재지 변경 체크 시 입력"}
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">인수 / 합병</span>
+                <div className="flex flex-col gap-2 rounded-xl border border-stone-200 bg-white/50 p-2.5">
+                  <label className="flex items-center gap-1.5 text-xs font-bold text-stone-600 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={hasType("acquisition")}
+                      onChange={() => toggleType("acquisition")}
+                      className="accent-primary"
+                    />
+                    인수
+                  </label>
+                  <label className="flex items-center gap-1.5 text-xs font-bold text-stone-600 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={hasType("merger")}
+                      onChange={() => toggleType("merger")}
+                      className="accent-primary"
+                    />
+                    합병
+                  </label>
+                </div>
+              </div>
+              <div className="flex flex-col gap-3">
+                {!hasType("acquisition") && !hasType("merger") && (
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">
+                      인수 주체 / 합병 대상
+                    </span>
+                    <div className="input-field bg-stone-100 text-stone-400">인수 또는 합병 체크 시 입력</div>
+                  </div>
+                )}
+                {hasType("acquisition") && (
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">인수 주체</span>
+                    <CompanyKeywordInput
+                      value={acquirerCompanyName}
+                      onChange={setAcquirerCompanyName}
+                      placeholder="인수 주체 기업명 검색"
+                    />
+                  </div>
+                )}
+                {hasType("merger") && (
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">합병 대상</span>
+                    {mergerTargets.map((target, idx) => (
+                      <div key={idx} className="grid grid-cols-[1fr_auto] gap-1.5 items-start">
+                        <CompanyKeywordInput
+                          value={target}
+                          onChange={(v) =>
+                            setMergerTargets((prev) => prev.map((item, itemIdx) => (itemIdx === idx ? v : item)))
+                          }
+                          placeholder={"합병 대상 " + (idx + 1) + " 검색"}
+                        />
+                        <div className="flex gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setMergerTargets((prev) => [...prev, ""])}
+                            className="rounded-lg border border-stone-200 bg-white px-2 py-2 text-stone-600 hover:bg-stone-50"
+                            title="합병 대상 추가"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setMergerTargets((prev) =>
+                                prev.length <= 1 ? [""] : prev.filter((_, itemIdx) => itemIdx !== idx)
+                              )
+                            }
+                            className="rounded-lg border border-red-100 bg-red-50 px-2 py-2 text-red-600 hover:bg-red-100"
+                            title="합병 대상 삭제"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div className="sm:col-span-2 flex flex-col gap-1.5">
                 <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">
                   메모
@@ -665,9 +927,113 @@ function FacilityHistoryModal({
           </div>
         )}
       </div>
+      {groupModalOpen && (
+        <GroupManagementModal
+          facility={facility}
+          onClose={() => setGroupModalOpen(false)}
+          onChanged={(groupLabel) => {
+            setGroupModalOpen(false);
+            // 그룹 재설정은 group-membership API로 이미 사업장에 반영된 상태.
+            // 이력 폼에는 변경 후 계열/그룹을 채우고, 유형에 계열/그룹 변경을 추가한다.
+            if (groupLabel) {
+              setNewGroupName(groupLabel);
+              setSelectedTypes((prev) => new Set(prev).add("group_change"));
+            }
+            onChanged?.();
+          }}
+        />
+      )}
     </div>
   );
   return mounted ? createPortal(modal, document.body) : null;
+}
+
+interface CompanyKeywordResult {
+  facilityId: string;
+  companyName: string;
+  businessRegistrationNo: string | null;
+}
+
+// 사업장 마스터를 키워드로 검색해 기업명을 선택/입력하는 입력창(인수 주체·합병 대상용).
+function CompanyKeywordInput({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+}) {
+  const [results, setResults] = useState<CompanyKeywordResult[]>([]);
+  const [open, setOpen] = useState(false);
+  const [focused, setFocused] = useState(false);
+
+  useEffect(() => {
+    const q = value.trim();
+    if (!focused || q.length < 2) {
+      setResults([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({ q, limit: "8", sort: "name" });
+        const res = await fetch("/api/facilities?" + params.toString(), {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!res.ok) return;
+        const json = (await res.json()) as { items?: CompanyKeywordResult[] };
+        setResults(json.items ?? []);
+        setOpen(true);
+      } catch {
+        if (!controller.signal.aborted) setResults([]);
+      }
+    }, 200);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [value, focused]);
+
+  return (
+    <div className="relative">
+      <input
+        className="input-field"
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() =>
+          setTimeout(() => {
+            setOpen(false);
+            setFocused(false);
+          }, 150)
+        }
+      />
+      {open && results.length > 0 && (
+        <div className="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto rounded-xl border border-stone-200 bg-white shadow-lg">
+          {results.map((item) => (
+            <button
+              key={item.facilityId}
+              type="button"
+              className="block w-full text-left px-3 py-2 text-xs hover:bg-stone-50"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                onChange(formatCompanyName(item.companyName) ?? item.companyName);
+                setOpen(false);
+              }}
+            >
+              <b className="text-stone-800">{formatCompanyName(item.companyName) ?? item.companyName}</b>
+              {item.businessRegistrationNo && (
+                <span className="text-stone-400 ml-2">{item.businessRegistrationNo}</span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function HistoryDiff({
@@ -689,27 +1055,22 @@ function HistoryDiff({
   );
 }
 
-function SelectField({
+// 이력 폼의 "이전" 값(읽기 전용) 표시 필드.
+function ReadonlyField({
   label,
   value,
-  onChange,
+  emptyText = "—",
 }: {
   label: string;
   value: string;
-  onChange: (value: string) => void;
+  emptyText?: string;
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">
-        {label}
-      </span>
-      <select className="ui-select" value={value} onChange={(e) => onChange(e.target.value)}>
-        {Object.entries(FACILITY_HISTORY_EVENT_LABELS).map(([key, label]) => (
-          <option key={key} value={key}>
-            {label}
-          </option>
-        ))}
-      </select>
+      <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">{label}</span>
+      <div className="input-field bg-stone-50/70 text-stone-600 truncate" title={value || emptyText}>
+        {value || emptyText}
+      </div>
     </div>
   );
 }
@@ -2694,7 +3055,7 @@ function GroupManagementModal({
 }: {
   facility: FacilityDetail;
   onClose: () => void;
-  onChanged: () => void;
+  onChanged: (groupLabel?: string) => void;
 }) {
   const [groups, setGroups] = useState<FacilityGroupTree[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState(facility.groupInfo?.group.groupId ?? "");
@@ -2934,7 +3295,11 @@ function GroupManagementModal({
         const body = await res.json().catch(() => ({}));
         throw new Error(body?.error ?? "HTTP " + res.status);
       }
-      onChanged();
+      const label =
+        selectedGroup && selectedCompany
+          ? `${selectedGroup.groupName} · ${formatCompanyName(selectedCompany.companyName) ?? selectedCompany.companyName} (${MEMBERSHIP_RELATION_LABELS[relationType]})`
+          : undefined;
+      onChanged(label);
     } catch (err) {
       alert("그룹 연결 저장 실패: " + (err as Error).message);
     } finally {

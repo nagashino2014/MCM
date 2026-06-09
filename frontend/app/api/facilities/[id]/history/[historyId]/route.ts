@@ -13,6 +13,7 @@ interface RouteContext {
 
 interface HistoryBody {
   eventType?: FacilityHistoryEventType;
+  eventTypes?: FacilityHistoryEventType[] | null;
   eventDate?: string | null;
   previousCompanyName?: string | null;
   newCompanyName?: string | null;
@@ -20,6 +21,10 @@ interface HistoryBody {
   newBusinessRegistrationNo?: string | null;
   previousGroupName?: string | null;
   newGroupName?: string | null;
+  previousSiteAddress?: string | null;
+  newSiteAddress?: string | null;
+  acquirerCompanyName?: string | null;
+  mergerTargetCompanyNames?: (string | null | undefined)[] | null;
   relatedCompanyName?: string | null;
   memo?: string | null;
 }
@@ -30,6 +35,37 @@ const nullableText = (value: unknown): string | null => {
   return trimmed || null;
 };
 
+const EVENT_TYPE_PRIORITY: FacilityHistoryEventType[] = [
+  "company_name_change",
+  "business_registration_no_change",
+  "site_address_change",
+  "group_change",
+  "acquisition",
+  "merger",
+  "closure",
+];
+
+function resolveEventTypes(body: HistoryBody): {
+  eventTypes: FacilityHistoryEventType[];
+  primary: FacilityHistoryEventType;
+} {
+  const raw = Array.isArray(body.eventTypes) && body.eventTypes.length
+    ? body.eventTypes
+    : body.eventType
+    ? [body.eventType]
+    : [];
+  const normalized = Array.from(new Set(raw.map((value) => normalizeFacilityHistoryEventType(value))));
+  const primary =
+    EVENT_TYPE_PRIORITY.find((type) => normalized.includes(type)) ?? normalized[0] ?? "manual_note";
+  return { eventTypes: normalized.length ? normalized : [primary], primary };
+}
+
+function normalizeMergerTargets(value: HistoryBody["mergerTargetCompanyNames"]): string | null {
+  if (!Array.isArray(value)) return null;
+  const list = value.map((item) => (item ?? "").toString().trim()).filter((item) => item.length > 0);
+  return list.length ? JSON.stringify(list) : null;
+}
+
 export async function PATCH(req: NextRequest, ctx: RouteContext) {
   try {
     const actor = await requireEditor();
@@ -39,14 +75,17 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     await withDbWrite(async (db) => {
       const before = await snapshotHistory(db, facilityId, historyId);
       if (!before) throw new Error("history event not found");
+      const { eventTypes, primary } = resolveEventTypes(body);
       await db.run(
         `UPDATE facility_history_events SET
            event_type = $1, event_date = $2, previous_company_name = $3, new_company_name = $4,
            previous_business_registration_no = $5, new_business_registration_no = $6,
-           previous_group_name = $7, new_group_name = $8, related_company_name = $9, memo = $10
+           previous_group_name = $7, new_group_name = $8, related_company_name = $9, memo = $10,
+           previous_site_address = $13, new_site_address = $14, acquirer_company_name = $15,
+           merger_target_company_names = $16, event_types = $17
          WHERE id = $11 AND facility_id = $12`,
         [
-          normalizeFacilityHistoryEventType(body.eventType),
+          primary,
           nullableText(body.eventDate),
           nullableText(body.previousCompanyName),
           nullableText(body.newCompanyName),
@@ -58,6 +97,11 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
           nullableText(body.memo),
           historyId,
           facilityId,
+          nullableText(body.previousSiteAddress),
+          nullableText(body.newSiteAddress),
+          nullableText(body.acquirerCompanyName),
+          normalizeMergerTargets(body.mergerTargetCompanyNames),
+          eventTypes.length ? JSON.stringify(eventTypes) : null,
         ]
       );
       await recordAuditLogInline(db, {

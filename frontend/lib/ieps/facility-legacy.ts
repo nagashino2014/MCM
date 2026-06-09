@@ -4,6 +4,7 @@ export type FacilityHistoryEventType =
   | "company_name_change"
   | "business_registration_no_change"
   | "group_change"
+  | "site_address_change"
   | "acquisition"
   | "merger"
   | "closure"
@@ -21,6 +22,7 @@ export const FACILITY_HISTORY_EVENT_LABELS: Record<FacilityHistoryEventType, str
   company_name_change: "상호 변경",
   business_registration_no_change: "사업자번호 변경",
   group_change: "계열/그룹 변경",
+  site_address_change: "소재지 변경",
   acquisition: "인수",
   merger: "합병",
   closure: "폐업",
@@ -127,6 +129,7 @@ export class FacilityPermitSuccession {
 export class FacilityHistoryEvent {
   facilityId: string;
   eventType: FacilityHistoryEventType;
+  eventTypes: FacilityHistoryEventType[];
   eventDate: string | null;
   previousCompanyName: string | null;
   newCompanyName: string | null;
@@ -134,6 +137,10 @@ export class FacilityHistoryEvent {
   newBusinessRegistrationNo: string | null;
   previousGroupName: string | null;
   newGroupName: string | null;
+  previousSiteAddress: string | null;
+  newSiteAddress: string | null;
+  acquirerCompanyName: string | null;
+  mergerTargetCompanyNames: string[];
   relatedCompanyName: string | null;
   sourceFacilityId: string | null;
   memo: string | null;
@@ -144,6 +151,7 @@ export class FacilityHistoryEvent {
   constructor(args: {
     facilityId: string;
     eventType: FacilityHistoryEventType;
+    eventTypes?: FacilityHistoryEventType[];
     eventDate: string | null;
     previousCompanyName: string | null;
     newCompanyName: string | null;
@@ -151,6 +159,10 @@ export class FacilityHistoryEvent {
     newBusinessRegistrationNo: string | null;
     previousGroupName: string | null;
     newGroupName: string | null;
+    previousSiteAddress?: string | null;
+    newSiteAddress?: string | null;
+    acquirerCompanyName?: string | null;
+    mergerTargetCompanyNames?: string[];
     relatedCompanyName: string | null;
     sourceFacilityId: string | null;
     memo: string | null;
@@ -160,6 +172,7 @@ export class FacilityHistoryEvent {
   }) {
     this.facilityId = args.facilityId;
     this.eventType = args.eventType;
+    this.eventTypes = args.eventTypes?.length ? args.eventTypes : [args.eventType];
     this.eventDate = args.eventDate;
     this.previousCompanyName = args.previousCompanyName;
     this.newCompanyName = args.newCompanyName;
@@ -167,6 +180,10 @@ export class FacilityHistoryEvent {
     this.newBusinessRegistrationNo = args.newBusinessRegistrationNo;
     this.previousGroupName = args.previousGroupName;
     this.newGroupName = args.newGroupName;
+    this.previousSiteAddress = args.previousSiteAddress ?? null;
+    this.newSiteAddress = args.newSiteAddress ?? null;
+    this.acquirerCompanyName = args.acquirerCompanyName ?? null;
+    this.mergerTargetCompanyNames = args.mergerTargetCompanyNames ?? [];
     this.relatedCompanyName = args.relatedCompanyName;
     this.sourceFacilityId = args.sourceFacilityId;
     this.memo = args.memo;
@@ -192,6 +209,11 @@ export class FacilityHistoryEvent {
       this.source,
       this.createdAt,
       this.createdBy,
+      this.previousSiteAddress,
+      this.newSiteAddress,
+      this.acquirerCompanyName,
+      this.mergerTargetCompanyNames.length ? JSON.stringify(this.mergerTargetCompanyNames) : null,
+      this.eventTypes.length ? JSON.stringify(this.eventTypes) : null,
     ];
   }
 }
@@ -201,6 +223,7 @@ export function normalizeFacilityHistoryEventType(value: unknown): FacilityHisto
     value === "company_name_change" ||
     value === "business_registration_no_change" ||
     value === "group_change" ||
+    value === "site_address_change" ||
     value === "acquisition" ||
     value === "merger" ||
     value === "closure" ||

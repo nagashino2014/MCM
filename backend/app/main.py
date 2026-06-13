@@ -406,7 +406,7 @@ async def extract_business_certificate_v2(file: UploadFile = File(...)):
 
     started = time.time()
     data = await file.read()
-    engines = _resolve_ocr_engines("MCM_BIZCERT_OCR_ENGINES", "paddleocr,easyocr,vlm")
+    engines = _resolve_ocr_engines("MCM_BIZCERT_OCR_ENGINES", "easyocr,paddleocr")
     result = extract_document_ocr_candidates(
         data,
         filename=file.filename,

@@ -6,6 +6,10 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { ArrowLeft, FileText, ShieldAlert, Save, Upload, Plus, Trash2 } from "lucide-react";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
+import { useCdashTheme } from "@/components/cdash/useCdashTheme";
+import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
+import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import "@/components/cdash/cdash.css";
 import {
   FACILITY_COMPANY_SIZE_LABELS,
   FACILITY_COMPANY_SIZE_ORDER,
@@ -46,6 +50,7 @@ function Inner() {
   const { data: session, status: sessionStatus } = useSession();
   const role = (session?.user as { role?: string } | undefined)?.role;
   const canEdit = role === "admin" || role === "editor";
+  const { theme, toggleTheme } = useCdashTheme();
 
   const router = useRouter();
   const toast = useToast();
@@ -76,15 +81,15 @@ function Inner() {
   const [duplicateFacility, setDuplicateFacility] = useState<DuplicateFacilityInfo | null>(null);
 
   if (sessionStatus === "loading") {
-    return <div className="p-8 text-stone-400 text-sm">세션 확인 중…</div>;
+    return <div className="cdash p-8 cd-text-faint text-sm" data-theme={theme}>세션 확인 중…</div>;
   }
   if (!canEdit) {
     return (
-      <div className="p-8 flex items-center justify-center">
-        <div className="glass-card rounded-3xl p-10 text-center max-w-md">
-          <ShieldAlert className="w-10 h-10 text-red-500 mx-auto mb-3" />
-          <h2 className="text-lg font-bold text-stone-800 mb-1">권한이 없습니다</h2>
-          <p className="text-sm text-stone-500">사업장 등록은 편집자 이상 권한이 필요합니다.</p>
+      <div className="cdash p-8 flex items-center justify-center" data-theme={theme}>
+        <div className="cd-card rounded-3xl p-10 text-center max-w-md">
+          <ShieldAlert className="w-10 h-10 cd-error-text mx-auto mb-3" />
+          <h2 className="text-lg font-bold cd-text mb-1">권한이 없습니다</h2>
+          <p className="text-sm cd-text-faint">사업장 등록은 편집자 이상 권한이 필요합니다.</p>
         </div>
       </div>
     );
@@ -224,30 +229,26 @@ function Inner() {
   };
 
   return (
-    <div className="flex flex-col gap-6 p-2">
-      <section className="glass-panel p-8 rounded-3xl relative overflow-hidden reveal">
-        <div className="relative z-10 flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <Link
-              href="/facilities"
-              className="inline-flex items-center gap-1 text-xs font-bold text-stone-500 hover:text-primary mb-2"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" /> 사업장 마스터로
+    <div className="cdash cd-fields-white flex flex-col gap-5 p-4 md:p-5 rounded-3xl min-h-full" data-theme={theme}>
+      <CdPageHeader
+        icon={<FileText className="w-5 h-5" />}
+        eyebrow="Facility · New"
+        title="사업장 수동 등록"
+        subtitle="IEPS 게시판에서 자동 수집되지 않은 사업장을 직접 등록합니다. source=manual 로 표시되며 향후 IEPS 데이터와 자동 병합되지 않습니다 (필요 시 “중복 병합”에서 수동 병합)."
+        actions={
+          <>
+            <Link href="/facilities" className="cd-btn cd-btn-ghost cd-btn-sm">
+              <ArrowLeft className="w-3.5 h-3.5" /> 사업장 마스터
             </Link>
-            <h1 className="text-3xl font-bold text-stone-800 mb-2">사업장 수동 등록</h1>
-            <p className="text-stone-600 text-base max-w-3xl">
-              IEPS 게시판에서 자동 수집되지 않은 사업장을 직접 등록합니다.
-              source=manual 로 표시되며 향후 IEPS 데이터와 자동 병합되지 않습니다 (필요 시 “중복 병합”에서 수동 병합).
-            </p>
-          </div>
-        </div>
-        <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-gradient-to-l from-primary/10 to-transparent pointer-events-none" />
-      </section>
+            <CdThemeToggle theme={theme} onToggle={toggleTheme} />
+          </>
+        }
+      />
 
-      <section className="glass-panel rounded-3xl p-6 reveal delay-1 grid grid-cols-1 md:grid-cols-2 gap-4">
+      <section className="cd-card rounded-3xl p-6 cd-reveal delay-1 grid grid-cols-1 md:grid-cols-2 gap-4">
         <Field label="상호 *">
           <input
-            className="input-field"
+            className="cd-input"
             value={companyName}
             onChange={(e) => setCompanyName(e.target.value)}
             placeholder="예: 주식회사 OO"
@@ -256,7 +257,7 @@ function Inner() {
         </Field>
         <Field label="사업자등록번호">
           <input
-            className="input-field"
+            className="cd-input"
             value={brn}
             onChange={(e) => setBrn(e.target.value)}
             placeholder="123-45-67890"
@@ -265,13 +266,13 @@ function Inner() {
         <div className="md:col-span-2 flex flex-col gap-2">
           <Field label={hasMultipleSites ? "소재지 (대표)" : "소재지"}>
             <input
-              className="input-field"
+              className="cd-input"
               value={siteAddress}
               onChange={(e) => setSiteAddress(e.target.value)}
               placeholder="경기도 화성시 ..."
             />
           </Field>
-          <label className="flex items-center gap-1.5 text-xs font-bold text-stone-600 select-none">
+          <label className="flex items-center gap-1.5 text-xs font-bold cd-text-muted select-none">
             <input
               type="checkbox"
               checked={hasMultipleSites}
@@ -286,14 +287,14 @@ function Inner() {
             복수 사업장 (동일 사업자등록번호로 소재지가 2개 이상)
           </label>
           {hasMultipleSites && (
-            <div className="grid gap-2 rounded-2xl border border-stone-200 bg-white/50 p-3">
-              <div className="text-[11px] font-bold text-stone-500">
+            <div className="grid gap-2 rounded-2xl border cd-border-c cd-surface-bg p-3">
+              <div className="text-[11px] font-bold cd-text-faint">
                 대표 소재지 외 추가 운영 소재지를 입력합니다. (지역·중복 검증·계약 매칭은 대표 소재지 기준으로 동작합니다.)
               </div>
               {additionalSiteAddresses.map((addr, index) => (
                 <div key={index} className="grid grid-cols-[1fr_auto] gap-2 items-center">
                   <input
-                    className="input-field"
+                    className="cd-input"
                     value={addr}
                     onChange={(e) =>
                       setAdditionalSiteAddresses((prev) =>
@@ -305,7 +306,7 @@ function Inner() {
                   <div className="flex gap-1">
                     <button
                       type="button"
-                      className="rounded-lg border border-stone-200 bg-white px-2 py-2 text-stone-600 hover:bg-stone-50"
+                      className="rounded-lg border cd-border-c cd-card-bg px-2 py-2 cd-text-muted hover:bg-[color:var(--cd-surface)]"
                       onClick={() => setAdditionalSiteAddresses((prev) => [...prev, ""])}
                       title="추가 소재지 행 추가"
                     >
@@ -313,7 +314,7 @@ function Inner() {
                     </button>
                     <button
                       type="button"
-                      className="rounded-lg border border-red-100 bg-red-50 px-2 py-2 text-red-600 hover:bg-red-100"
+                      className="rounded-lg border border-red-100 cd-error-bg px-2 py-2 cd-error-text hover:cd-error-bg"
                       onClick={() =>
                         setAdditionalSiteAddresses((prev) =>
                           prev.length <= 1 ? [""] : prev.filter((_, idx) => idx !== index)
@@ -331,7 +332,7 @@ function Inner() {
         </div>
         <Field label="전화번호">
           <input
-            className="input-field"
+            className="cd-input"
             value={phoneNumber}
             onChange={(e) => setPhoneNumber(e.target.value)}
             placeholder="031-000-0000"
@@ -339,27 +340,27 @@ function Inner() {
         </Field>
         <Field label="대표자명">
           <textarea
-            className="input-field"
+            className="cd-input"
             value={representativeName}
             onChange={(e) => setRepresentativeName(e.target.value)}
             placeholder={"예: 홍길동\n복수 대표자는 줄바꿈으로 구분"}
             rows={2}
           />
         </Field>
-        <div className="md:col-span-2 rounded-2xl border border-stone-200 bg-white/50 p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="md:col-span-2 rounded-2xl border cd-border-c cd-surface-bg p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="md:col-span-2">
-            <h2 className="text-sm font-black text-stone-800 flex items-center gap-2">
-              <FileText className="w-4 h-4 text-primary" />
+            <h2 className="text-sm font-black cd-text flex items-center gap-2">
+              <FileText className="w-4 h-4 cd-text-primary" />
               업종 코드 기반
             </h2>
-            <p className="text-xs text-stone-500 mt-1">통합허가 계획서 또는 공장등록증 등에 기재된 표준산업분류 코드를 입력합니다.</p>
+            <p className="text-xs cd-text-faint mt-1">통합허가 계획서 또는 공장등록증 등에 기재된 표준산업분류 코드를 입력합니다.</p>
           </div>
           <div className="md:col-span-2 grid gap-2">
             {industryRows.map((row, index) => (
               <div key={index} className="grid grid-cols-1 md:grid-cols-[150px_1fr_auto] gap-2 items-end">
                 <Field label={index === 0 ? "업종 코드 (5자리)" : "업종 코드"}>
                   <input
-                    className="input-field"
+                    className="cd-input"
                     value={row.code}
                     onChange={(e) => updateIndustryRow(index, { code: e.target.value })}
                     placeholder="예: 22221"
@@ -368,7 +369,7 @@ function Inner() {
                 </Field>
                 <Field label={index === 0 ? "업종명" : "업종명"}>
                   <input
-                    className="input-field"
+                    className="cd-input"
                     value={row.name}
                     onChange={(e) => updateIndustryRow(index, { name: e.target.value })}
                     placeholder="예: 자동차용 플라스틱 부품 제조업"
@@ -377,7 +378,7 @@ function Inner() {
                 <div className="flex gap-1 pb-1">
                   <button
                     type="button"
-                    className="rounded-lg border border-stone-200 bg-white px-2 py-2 text-stone-600 hover:bg-stone-50"
+                    className="rounded-lg border cd-border-c cd-card-bg px-2 py-2 cd-text-muted hover:bg-[color:var(--cd-surface)]"
                     onClick={() => setIndustryRows((prev) => [...prev, { code: "", name: "" }])}
                     title="업종 행 추가"
                   >
@@ -385,7 +386,7 @@ function Inner() {
                   </button>
                   <button
                     type="button"
-                    className="rounded-lg border border-red-100 bg-red-50 px-2 py-2 text-red-600 hover:bg-red-100"
+                    className="rounded-lg border border-red-100 cd-error-bg px-2 py-2 cd-error-text hover:cd-error-bg"
                     onClick={() => removeIndustryRow(index)}
                     title="업종 행 삭제"
                   >
@@ -396,18 +397,18 @@ function Inner() {
             ))}
           </div>
         </div>
-        <div className="md:col-span-2 rounded-2xl border border-stone-200 bg-white/50 p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="md:col-span-2 rounded-2xl border cd-border-c cd-surface-bg p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="md:col-span-2 flex items-start justify-between gap-3 flex-wrap">
             <div>
-              <h2 className="text-sm font-black text-stone-800 flex items-center gap-2">
-                <FileText className="w-4 h-4 text-primary" />
+              <h2 className="text-sm font-black cd-text flex items-center gap-2">
+                <FileText className="w-4 h-4 cd-text-primary" />
                 사업자등록증 기반
               </h2>
-              <p className="text-xs text-stone-500 mt-1">
+              <p className="text-xs cd-text-faint mt-1">
                 사업자등록증 PDF의 사업의 종류 항목에서 업태·종목을, 등록증의 법인등록번호를 자동 추출합니다.
               </p>
             </div>
-            <label className="rounded-xl px-3 py-2 text-xs font-bold text-white bg-primary hover:bg-primary/90 cursor-pointer inline-flex items-center gap-1">
+            <label className="rounded-xl px-3 py-2 text-xs font-bold text-white cd-fill-primary cursor-pointer inline-flex items-center gap-1">
               <Upload className="w-3.5 h-3.5" />
               {certificateParsing ? "추출 중..." : "PDF 첨부·추출"}
               <input
@@ -424,22 +425,22 @@ function Inner() {
             </label>
           </div>
           {certificateFileName && (
-            <p className="md:col-span-2 text-xs text-stone-500">첨부 파일: {certificateFileName}</p>
+            <p className="md:col-span-2 text-xs cd-text-faint">첨부 파일: {certificateFileName}</p>
           )}
           {certificateWarning && (
-            <div className="md:col-span-2 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+            <div className="md:col-span-2 text-xs font-bold text-amber-700 cd-warn-bg border border-amber-200 rounded-xl px-3 py-2">
               {certificateWarning}
             </div>
           )}
           <div className="md:col-span-2 grid gap-2">
-            <div className="text-[11px] font-bold text-stone-500">
+            <div className="text-[11px] font-bold cd-text-faint">
               사업자등록증의 업태·종목이 여러 행으로 기재된 경우 각각 행을 나눠 보정하세요.
             </div>
             {certificateBusinessKinds.map((row, index) => (
               <div key={index} className="grid grid-cols-1 md:grid-cols-[180px_1fr_auto] gap-2 items-end">
                 <Field label={index === 0 ? "업태" : "업태"}>
                   <input
-                    className="input-field"
+                    className="cd-input"
                     value={row.businessType}
                     onChange={(e) => updateCertificateKind(index, { businessType: e.target.value })}
                     placeholder="예: 제조업"
@@ -447,7 +448,7 @@ function Inner() {
                 </Field>
                 <Field label={index === 0 ? "종목" : "종목"}>
                   <input
-                    className="input-field"
+                    className="cd-input"
                     value={row.businessItem}
                     onChange={(e) => updateCertificateKind(index, { businessItem: e.target.value })}
                     placeholder="예: 건설용기계, 농업기계"
@@ -456,7 +457,7 @@ function Inner() {
                 <div className="flex gap-1 pb-1">
                   <button
                     type="button"
-                    className="rounded-lg border border-stone-200 bg-white px-2 py-2 text-stone-600 hover:bg-stone-50"
+                    className="rounded-lg border cd-border-c cd-card-bg px-2 py-2 cd-text-muted hover:bg-[color:var(--cd-surface)]"
                     onClick={() => setCertificateBusinessKinds((prev) => [...prev, { businessType: "", businessItem: "" }])}
                     title="업태/종목 행 추가"
                   >
@@ -464,7 +465,7 @@ function Inner() {
                   </button>
                   <button
                     type="button"
-                    className="rounded-lg border border-red-100 bg-red-50 px-2 py-2 text-red-600 hover:bg-red-100"
+                    className="rounded-lg border border-red-100 cd-error-bg px-2 py-2 cd-error-text hover:cd-error-bg"
                     onClick={() => removeCertificateKind(index)}
                     title="업태/종목 행 삭제"
                   >
@@ -476,7 +477,7 @@ function Inner() {
           </div>
           <Field label="법인등록번호">
             <input
-              className="input-field"
+              className="cd-input"
               value={certificateCorporateNo}
               onChange={(e) => setCertificateCorporateNo(e.target.value)}
               placeholder="000000-0000000"
@@ -485,7 +486,7 @@ function Inner() {
           <div className="md:col-span-2">
             <Field label="OCR 원문 확인·보정 참고">
               <textarea
-                className="ui-textarea min-h-[110px] font-mono text-xs"
+                className="cd-textarea min-h-[110px] font-mono text-xs"
                 value={certificateOcrText}
                 onChange={(e) => setCertificateOcrText(e.target.value)}
                 placeholder="자동 추출 시 OCR 원문 일부가 표시됩니다. 인식이 부족하면 위 입력란을 수동 보정하세요."
@@ -496,7 +497,7 @@ function Inner() {
         <div className="md:col-span-2">
           <Field label="사업장 별칭">
             <input
-              className="input-field"
+              className="cd-input"
               value={alias}
               onChange={(e) => setAlias(e.target.value)}
               placeholder="예: 여수1공장, TDI공장"
@@ -507,7 +508,7 @@ function Inner() {
           <Field label="대상 용역 카테고리">
             <div className="flex flex-wrap gap-2">
               {FACILITY_SERVICE_ORDER.map((category) => (
-                <label key={category} className="flex items-center gap-1.5 text-xs font-bold text-stone-700">
+                <label key={category} className="flex items-center gap-1.5 text-xs font-bold cd-text-muted">
                   <input
                     type="checkbox"
                     checked={serviceCategories.includes(category)}
@@ -526,7 +527,7 @@ function Inner() {
           </Field>
           <Field label="사업장 분류">
             <select
-              className="ui-select"
+              className="cd-select"
               value={companySize}
               onChange={(e) => setCompanySize(e.target.value as FacilityCompanySize | "")}
             >
@@ -542,7 +543,7 @@ function Inner() {
         <div className="md:col-span-2">
           <Field label="메모">
             <textarea
-              className="ui-textarea"
+              className="cd-textarea"
               value={memo}
               onChange={(e) => setMemo(e.target.value)}
               placeholder="등록 사유, 출처, 영업 상태 등 자유 메모"
@@ -551,12 +552,12 @@ function Inner() {
         </div>
 
         {error && (
-          <div className="md:col-span-2 text-xs font-bold text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
+          <div className="md:col-span-2 text-xs font-bold cd-error-text cd-error-bg border border-red-200 rounded-xl px-3 py-2">
             {error}
           </div>
         )}
         {duplicateFacility && (
-          <div className="md:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <div className="md:col-span-2 rounded-2xl border border-amber-200 cd-warn-bg px-4 py-3 text-sm text-amber-900">
             <div className="font-black mb-1">기존 등록 사업장이 확인되었습니다.</div>
             <div className="text-xs leading-relaxed">
               {duplicateFacility.companyName ?? "상호 미기재"}
@@ -566,7 +567,7 @@ function Inner() {
             <div className="mt-2 flex flex-wrap items-center gap-3">
               <Link
                 href={`/facilities?focus=${encodeURIComponent(duplicateFacility.facilityId)}`}
-                className="inline-flex text-xs font-black text-primary hover:underline"
+                className="inline-flex text-xs font-black cd-text-primary hover:underline"
               >
                 기존 사업장으로 이동
               </Link>
@@ -575,7 +576,7 @@ function Inner() {
                   type="button"
                   onClick={() => handleSubmit({ allowDuplicateBrn: true })}
                   disabled={pending}
-                  className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-black text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+                  className="inline-flex items-center gap-1 rounded-lg border border-amber-300 cd-card-bg px-3 py-1.5 text-xs font-black text-amber-900 hover:bg-amber-100 disabled:opacity-50"
                 >
                   <Save className="w-3.5 h-3.5" />
                   {pending ? "저장 중…" : "사업자번호 중복 확인 후 그래도 등록"}
@@ -590,10 +591,10 @@ function Inner() {
           </div>
         )}
 
-        <div className="md:col-span-2 flex items-center justify-end gap-2 pt-2 border-t border-stone-200/70">
+        <div className="md:col-span-2 flex items-center justify-end gap-2 pt-2 border-t cd-border-c/70">
           <Link
             href="/facilities"
-            className="glass-button rounded-xl px-4 py-2 text-sm font-bold text-stone-700"
+            className="cd-btn cd-btn-ghost rounded-xl px-4 py-2 text-sm font-bold cd-text-muted"
           >
             취소
           </Link>
@@ -601,7 +602,7 @@ function Inner() {
             type="button"
             onClick={() => handleSubmit()}
             disabled={pending || !companyName.trim()}
-            className="rounded-xl px-4 py-2 text-sm font-bold text-white bg-primary hover:bg-primary/90 shadow-sm flex items-center gap-1 disabled:opacity-50"
+            className="rounded-xl px-4 py-2 text-sm font-bold text-white cd-fill-primary shadow-sm flex items-center gap-1 disabled:opacity-50"
           >
             <Save className="w-3.5 h-3.5" />
             {pending ? "저장 중…" : "등록"}
@@ -615,7 +616,7 @@ function Inner() {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">
+      <span className="text-[11px] font-bold cd-text-faint uppercase tracking-wide">
         {label}
       </span>
       {children}

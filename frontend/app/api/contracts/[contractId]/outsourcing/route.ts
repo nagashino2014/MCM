@@ -26,7 +26,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     const { contractId } = await ctx.params;
     const form = await req.formData();
     const outsourcingTitle = String(form.get("outsourcingTitle") ?? "").trim();
-    const counterpartyEntityId = String(form.get("counterpartyEntityId") ?? "").trim() || null;
+    const counterpartyFacilityId = String(form.get("counterpartyFacilityId") ?? "").trim() || null;
     const counterpartyName = String(form.get("counterpartyName") ?? "").trim() || null;
     const serviceType = String(form.get("serviceType") ?? "").trim() || null;
     const contractDate = String(form.get("contractDate") ?? "").trim() || null;
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     if (!outsourcingTitle) {
       return NextResponse.json({ error: "외주 계약명이 필요합니다." }, { status: 400 });
     }
-    if (!counterpartyEntityId && !counterpartyName) {
+    if (!counterpartyFacilityId && !counterpartyName) {
       return NextResponse.json({ error: "외주 계약상대 업체를 입력하세요." }, { status: 400 });
     }
 
@@ -143,7 +143,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
 
       await txn.run(
         `INSERT INTO contract_outsourcing
-          (outsourcing_id, contract_id, outsourcing_title, counterparty_entity_id,
+          (outsourcing_id, contract_id, outsourcing_title, counterparty_facility_id,
            counterparty_name, service_type, contract_date, ended_at, amount, memo, document_id,
            created_by, created_at, updated_at)
          VALUES
@@ -154,7 +154,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
           outsourcingId,
           contractId,
           outsourcingTitle,
-          counterpartyEntityId,
+          counterpartyFacilityId,
           counterpartyName,
           serviceType,
           contractDate,
@@ -173,7 +173,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
         action: "contract_outsourcing_update",
         targetTable: "contract_outsourcing",
         targetId: outsourcingId,
-        after: { contractId, outsourcingTitle, counterpartyEntityId, counterpartyName, serviceType, contractDate, amount, documentId },
+        after: { contractId, outsourcingTitle, counterpartyFacilityId, counterpartyName, serviceType, contractDate, amount, documentId },
       });
     });
 

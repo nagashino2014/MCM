@@ -1,0 +1,373 @@
+/* ---------------------------------------------------------------------------
+ * cdash — Modernize UI 키트 공용 토큰 & 프리미티브 (라이트/다크 듀얼 테마)
+ * 색상 출처: Modernize DefaultColors.tsx (계약 대시보드 dashboard.css 와 동일 값)
+ * 폰트: Plus Jakarta Sans (라틴) + Pretendard Variable (한글)
+ * 사용: 페이지/패널 루트에 <div className="cdash" data-theme={theme}> 를 두고
+ *       이 파일을 import 한다. (dashboard.css 와 동시 import 금지 — 중복 정의)
+ * ------------------------------------------------------------------------- */
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap");
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css");
+
+/* `.cdash` = 토큰 + 페이지 배경/글자색까지. `.cdash-vars` = 토큰만(배경 없음).
+ * 포털로 body 에 렌더되는 모달 오버레이는 `.cdash-vars` 를 써서 스크림이 투명하게
+ * 유지되도록 한다(.cdash 의 background 가 오버레이를 불투명하게 덮는 문제 방지). */
+.cdash,
+.cdash-vars {
+  /* light palette */
+  --cd-bg: #eef2f8;
+  --cd-card: #ffffff;
+  --cd-surface: #f2f6fa;
+  --cd-border: #e5eaef;
+  --cd-text: #2a3547;
+  --cd-muted: #5a6a85;
+  --cd-faint: #7c8fac;
+  --cd-primary: #5d87ff;
+  --cd-primary-soft: #ecf2ff;
+  --cd-primary-strong: #4570ea;
+  --cd-secondary: #49beff;
+  --cd-secondary-soft: #e8f7ff;
+  --cd-accent: #fa896b;
+  --cd-accent-soft: #fbf2ef;
+  --cd-accent-strong: #f3704d;
+  --cd-success: #7eba56;
+  --cd-success-soft: #eef6e7;
+  --cd-warning: #ffae1f;
+  --cd-warning-soft: #fef5e5;
+  --cd-error: #f3704d;
+  --cd-error-soft: #fdede8;
+  --cd-grid-line: #ebf1f6;
+  --cd-shadow: 0 9px 17.5px rgba(0, 0, 0, 0.05);
+
+  font-family: "Plus Jakarta Sans", "Pretendard Variable", Pretendard, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.cdash[data-theme="dark"],
+.cdash-vars[data-theme="dark"] {
+  --cd-bg: #11161d;
+  --cd-card: #171c23;
+  --cd-surface: #1d2530;
+  --cd-border: #333f55;
+  --cd-text: #eaeff4;
+  --cd-muted: #8c9bb5;
+  --cd-faint: #5a6a85;
+  --cd-primary-soft: #253662;
+  --cd-secondary-soft: #1c455d;
+  --cd-accent-soft: #4b313d;
+  --cd-success-soft: #2e3b27;
+  --cd-warning-soft: #4d3a2a;
+  --cd-error-soft: #4b313d;
+  --cd-grid-line: #232c39;
+  --cd-shadow: 0 9px 17.5px rgba(0, 0, 0, 0.35);
+}
+
+/* 페이지 루트(.cdash)만 배경/글자색을 칠한다. */
+.cdash {
+  background: var(--cd-bg);
+  color: var(--cd-text);
+  transition: background 0.25s ease, color 0.25s ease;
+}
+
+/* ---------------- 텍스트 색 유틸 ---------------- */
+.cd-text { color: var(--cd-text); }
+.cd-text-muted { color: var(--cd-muted); }
+.cd-text-faint { color: var(--cd-faint); }
+.cd-text-primary { color: var(--cd-primary); }
+
+/* ---------------- 마이그레이션 보조 유틸 (배경/테두리/상태색 → 토큰) ---------------- */
+.cd-surface-bg { background: var(--cd-surface); }
+.cd-card-bg { background: var(--cd-card); }
+.cd-border-c { border-color: var(--cd-border); }
+.cd-fill-primary { background: var(--cd-primary); color: #fff; }
+.cd-fill-primary:hover { background: var(--cd-primary-strong); }
+.cd-soft-primary { background: var(--cd-primary-soft); color: var(--cd-primary); }
+.cd-tint-primary { background: var(--cd-primary-soft); }
+.cd-error-bg { background: var(--cd-error-soft); }
+.cd-error-text { color: var(--cd-error); }
+.cd-fill-error { background: var(--cd-error); color: #fff; }
+.cd-success-bg { background: var(--cd-success-soft); }
+.cd-success-text { color: var(--cd-success); }
+.cd-warn-bg { background: var(--cd-warning-soft); }
+.cd-warn-text { color: var(--cd-warning); }
+
+/* ---------------- 카드 프레임 ---------------- */
+.cd-card {
+  background: var(--cd-card);
+  border: 1px solid var(--cd-border);
+  border-radius: 20px;
+  box-shadow: var(--cd-shadow);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  transition: background 0.25s ease, border-color 0.25s ease;
+}
+
+.cd-card-title {
+  font-size: 0.9375rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--cd-text);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.cd-card-title .cd-title-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  background: var(--cd-primary-soft);
+  color: var(--cd-primary);
+  flex-shrink: 0;
+}
+
+.cd-divider {
+  height: 1px;
+  border: 0;
+  background: var(--cd-border);
+}
+
+/* ---------------- 폼 컨트롤 ---------------- */
+.cd-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--cd-muted);
+  margin-bottom: 0.35rem;
+}
+
+.cd-input,
+.cd-select,
+.cd-textarea {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8125rem;
+  border-radius: 10px;
+  background: var(--cd-surface);
+  border: 1px solid var(--cd-border);
+  color: var(--cd-text);
+  transition: all 0.18s ease;
+}
+
+/* `.cd-fields-white` 스코프 안에서는 입력류를 흰색(카드색)으로 — 항목 배경과 구분.
+ * (계약 대시보드/빌링은 이 클래스를 쓰지 않으므로 영향 없음) */
+.cd-fields-white .cd-input,
+.cd-fields-white .cd-select,
+.cd-fields-white .cd-textarea {
+  background: var(--cd-card);
+}
+.cd-input::placeholder,
+.cd-textarea::placeholder { color: var(--cd-faint); }
+.cd-input:focus,
+.cd-select:focus,
+.cd-textarea:focus {
+  outline: none;
+  border-color: var(--cd-primary);
+  box-shadow: 0 0 0 3px rgba(93, 135, 255, 0.18);
+}
+.cd-input:disabled,
+.cd-select:disabled,
+.cd-textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.cd-textarea {
+  resize: vertical;
+  min-height: 64px;
+  line-height: 1.5;
+}
+.cd-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%237c8fac' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.65rem center;
+  padding-right: 2rem;
+}
+
+/* ---------------- 버튼 ---------------- */
+.cd-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.18s ease;
+}
+.cd-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.cd-btn-sm { padding: 0.38rem 0.7rem; font-size: 0.75rem; border-radius: 9px; }
+.cd-btn-block { width: 100%; }
+
+.cd-btn-primary { background: var(--cd-primary); color: #fff; }
+.cd-btn-primary:not(:disabled):hover {
+  background: var(--cd-primary-strong);
+  box-shadow: 0 4px 12px rgba(93, 135, 255, 0.35);
+}
+
+.cd-btn-soft { background: var(--cd-primary-soft); color: var(--cd-primary); }
+.cd-btn-soft:not(:disabled):hover { background: var(--cd-primary); color: #fff; }
+
+.cd-btn-ghost {
+  background: var(--cd-surface);
+  color: var(--cd-muted);
+  border-color: var(--cd-border);
+}
+.cd-btn-ghost:not(:disabled):hover { border-color: var(--cd-primary); color: var(--cd-primary); }
+
+.cd-btn-danger { background: var(--cd-error-soft); color: var(--cd-error); }
+.cd-btn-danger:not(:disabled):hover { background: var(--cd-error); color: #fff; }
+
+/* ---------------- 칩 (필터/세그먼트) ---------------- */
+.cd-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  background: var(--cd-surface);
+  color: var(--cd-muted);
+  border: 1px solid var(--cd-border);
+  transition: all 0.18s ease;
+}
+.cd-chip:hover { border-color: var(--cd-primary); color: var(--cd-primary); }
+.cd-chip-sm { padding: 0.32rem 0.7rem; font-size: 0.71875rem; }
+.cd-chip[data-active="true"] {
+  background: var(--cd-primary);
+  border-color: var(--cd-primary);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(93, 135, 255, 0.35);
+}
+
+/* ---------------- 상태 pill (soft-tint) ---------------- */
+.cd-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.16rem 0.55rem;
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.cd-pill-idle { background: var(--cd-surface); color: var(--cd-muted); }
+/* 흰색(카드색) 배경 + 테두리로 항목 배경과 구분되는 중립 태그 */
+.cd-pill-outline { background: var(--cd-card); color: var(--cd-muted); border: 1px solid var(--cd-border); }
+.cd-pill-info { background: var(--cd-primary-soft); color: var(--cd-primary); }
+.cd-pill-secondary { background: var(--cd-secondary-soft); color: var(--cd-secondary); }
+.cd-pill-success { background: var(--cd-success-soft); color: var(--cd-success); }
+.cd-pill-warn { background: var(--cd-warning-soft); color: var(--cd-warning); }
+.cd-pill-error { background: var(--cd-error-soft); color: var(--cd-error); }
+
+/* globals.css 의 status-pill(녹색 기반)을 cdash 섹션 안에서만 modernize 색으로 재정의.
+ * (.cdash 밖 비-cdash 화면의 status-pill 은 globals 정의 그대로 유지) */
+.cdash .status-pill--idle,    .cdash-vars .status-pill--idle    { background: var(--cd-surface);       color: var(--cd-muted); }
+.cdash .status-pill--running, .cdash-vars .status-pill--running { background: var(--cd-primary-soft);  color: var(--cd-primary); }
+.cdash .status-pill--success, .cdash-vars .status-pill--success { background: var(--cd-success-soft);  color: var(--cd-success); }
+.cdash .status-pill--error,   .cdash-vars .status-pill--error   { background: var(--cd-error-soft);    color: var(--cd-error); }
+.cdash .status-pill--warn,    .cdash-vars .status-pill--warn    { background: var(--cd-warning-soft);  color: var(--cd-warning); }
+
+/* ---------------- 테이블 ---------------- */
+.cd-table { width: 100%; border-collapse: collapse; }
+.cd-table thead th {
+  text-align: left;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--cd-faint);
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--cd-border);
+  white-space: nowrap;
+}
+.cd-table tbody td {
+  padding: 0.7rem 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--cd-text);
+  border-bottom: 1px solid var(--cd-border);
+}
+.cd-table tbody tr:last-child td { border-bottom: 0; }
+.cd-table tbody tr { transition: background 0.15s ease; }
+.cd-table tbody tr:hover { background: var(--cd-surface); }
+
+/* 단독 행 hover (table 아닌 리스트용) */
+.cd-row-hover { transition: background 0.15s ease; }
+.cd-row-hover:hover { background: var(--cd-surface); }
+
+/* 선택 가능한 리스트 아이템 (좌측 목록 등) */
+.cd-listitem {
+  background: var(--cd-surface);
+  border: 1px solid var(--cd-border);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.cd-listitem:hover { border-color: var(--cd-primary); }
+.cd-listitem[data-active="true"] {
+  background: var(--cd-primary-soft);
+  border-color: var(--cd-primary);
+}
+
+/* ---------------- 모달 / 드로어 ---------------- */
+.cd-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(17, 22, 29, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  animation: cd-fade 0.18s ease;
+}
+.cd-modal {
+  background: var(--cd-card);
+  color: var(--cd-text);
+  border: 1px solid var(--cd-border);
+  border-radius: 20px;
+  box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.45), 0 8px 20px -8px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-height: calc(100vh - 2rem);
+  animation: cd-pop 0.18s ease;
+}
+
+/* ---------------- 모션 ---------------- */
+@keyframes cd-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes cd-pop {
+  from { opacity: 0; transform: translateY(-4px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.cd-reveal { opacity: 0; transform: translateY(6px); animation: cd-reveal 0.4s ease forwards; }
+@keyframes cd-reveal { to { opacity: 1; transform: translateY(0); } }
+
+/* ---------------- 스크롤바 ---------------- */
+.cdash *::-webkit-scrollbar { width: 6px; height: 6px; }
+.cdash *::-webkit-scrollbar-track { background: transparent; }
+.cdash *::-webkit-scrollbar-thumb { background: var(--cd-border); border-radius: 3px; }
+
+/* ---------------- ApexCharts 툴팁 보정 ---------------- */
+.cdash .apexcharts-tooltip {
+  background: var(--cd-card) !important;
+  border: 1px solid var(--cd-border) !important;
+  color: var(--cd-text) !important;
+  box-shadow: var(--cd-shadow) !important;
+}
+.cdash .apexcharts-tooltip-title {
+  background: var(--cd-surface) !important;
+  border-bottom: 1px solid var(--cd-border) !important;
+}

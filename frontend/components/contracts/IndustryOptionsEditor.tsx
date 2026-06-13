@@ -119,19 +119,19 @@ export function IndustryOptionsEditorButton({ options, onOptionsChange }: Props)
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="shrink-0 rounded-xl border border-stone-200 bg-white/80 px-3 py-2 text-xs font-bold text-stone-700 hover:bg-white"
+        className="shrink-0 rounded-xl border cd-border-c cd-surface-bg px-3 py-2 text-xs font-bold cd-text-muted hover:bg-[color:var(--cd-card)]"
       >
         업종 수정
       </button>
       {open && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/30 p-4" onMouseDown={() => setOpen(false)}>
-          <div className="glass-panel rounded-3xl p-5 w-full max-w-lg" onMouseDown={(event) => event.stopPropagation()}>
+          <div className="cd-card rounded-3xl p-5 w-full max-w-lg" onMouseDown={(event) => event.stopPropagation()}>
             <div className="flex items-center justify-between gap-3 mb-4">
               <div>
-                <h3 className="text-lg font-bold text-stone-800">업종 옵션 수정</h3>
-                <p className="text-xs text-stone-500 mt-1">신규/변경 계약 업종 드롭다운에 표시될 옵션입니다.</p>
+                <h3 className="text-lg font-bold cd-text">업종 옵션 수정</h3>
+                <p className="text-xs cd-text-faint mt-1">신규/변경 계약 업종 드롭다운에 표시될 옵션입니다.</p>
               </div>
-              <button type="button" onClick={() => setOpen(false)} className="glass-button rounded-full p-2">
+              <button type="button" onClick={() => setOpen(false)} className="cd-btn cd-btn-ghost rounded-full p-2">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -152,15 +152,15 @@ export function IndustryOptionsEditorButton({ options, onOptionsChange }: Props)
                 추가
               </button>
             </div>
-            <div className="max-h-80 overflow-y-auto rounded-2xl border border-stone-200 bg-white/70">
+            <div className="max-h-80 overflow-y-auto rounded-2xl border cd-border-c cd-surface-bg">
               {options.map((option) => (
                 <div key={option} className="flex items-center justify-between gap-3 border-b border-stone-100 px-3 py-2 last:border-b-0">
-                  <span className="text-sm font-semibold text-stone-700">{option}</span>
+                  <span className="text-sm font-semibold cd-text-muted">{option}</span>
                   <button
                     type="button"
                     disabled={saving}
                     onClick={() => removeOption(option)}
-                    className="rounded-lg px-2 py-1 text-xs font-bold text-red-700 hover:bg-red-50 disabled:opacity-50"
+                    className="rounded-lg px-2 py-1 text-xs font-bold cd-error-text hover:bg-[color:var(--cd-error-soft)] disabled:opacity-50"
                   >
                     삭제
                   </button>

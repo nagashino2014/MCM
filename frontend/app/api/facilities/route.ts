@@ -24,8 +24,16 @@ export async function GET(req: NextRequest) {
       q: searchParams.get("q") || undefined,
       integratedPermitTarget: searchParams.get("integratedPermitTarget") === "1",
       sido: searchParams.get("sido") || undefined,
+      sidos: searchParams.get("sidos")
+        ? searchParams
+            .get("sidos")!
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : undefined,
       sigungu: searchParams.get("sigungu") || undefined,
       industryCode: searchParams.get("industryCode") || undefined,
+      industryCategory: searchParams.get("industryCategory") || undefined,
       airClass: searchParams.get("airClass") ? Number(searchParams.get("airClass")) : undefined,
       waterClass: searchParams.get("waterClass")
         ? Number(searchParams.get("waterClass"))

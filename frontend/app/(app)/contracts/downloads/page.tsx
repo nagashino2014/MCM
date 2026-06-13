@@ -2,8 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { Archive, CheckSquare, ChevronDown, ChevronRight, Download, FileArchive, FileText, Search } from "lucide-react";
+import { Archive, BadgeCheck, CheckSquare, ChevronDown, ChevronRight, Download, FileArchive, FileText, ListChecks, Search, Users } from "lucide-react";
 import { resolveServiceTypeStyle } from "@/lib/ieps/contract-tree-style";
+import { useCdashTheme } from "@/components/cdash/useCdashTheme";
+import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
+import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import "@/components/cdash/cdash.css";
 
 interface ContractTreeContractNode {
   contractId: string;
@@ -70,6 +74,7 @@ const INTEGRATED_PERMIT_INDUSTRIES = [
 ];
 
 export default function ContractDownloadsPage() {
+  const { theme, toggleTheme } = useCdashTheme();
   const [tree, setTree] = useState<ContractTreePayload | null>(null);
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const [search, setSearch] = useState("");
@@ -84,6 +89,7 @@ export default function ContractDownloadsPage() {
   const [multiMode, setMultiMode] = useState<MultiMode>("perContractMergedZip");
   const [downloading, setDownloading] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; contractId: string } | null>(null);
 
   const reloadTree = useCallback(async () => {
     setLoading(true);
@@ -208,6 +214,42 @@ export default function ContractDownloadsPage() {
     setSelectedId(contractId);
   };
 
+  // 트리 전체에서 contractId → 노드 조회용 맵 (선택 계약 리스트 표시에 사용)
+  const contractById = useMemo(() => {
+    const map = new Map<string, ContractTreeContractNode>();
+    for (const group of tree?.groups ?? []) {
+      for (const contract of group.contracts) map.set(contract.contractId, contract);
+    }
+    return map;
+  }, [tree]);
+
+  const removeFromSelection = (contractId: string) => {
+    setChecked((prev) => {
+      const next = new Set(prev);
+      next.delete(contractId);
+      return next;
+    });
+    setSelectedId((prev) => (prev === contractId ? null : prev));
+    setContextMenu(null);
+  };
+
+  // 컨텍스트 메뉴 외부 클릭/ESC 시 닫기
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    window.addEventListener("click", close);
+    window.addEventListener("contextmenu", close);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("contextmenu", close);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [contextMenu]);
+
   const download = async (mode: SingleMode | MultiMode, scope: Scope = { kind: "all" }) => {
     if (targetIds.length === 0) {
       alert("다운로드할 계약을 선택하세요.");
@@ -243,65 +285,63 @@ export default function ContractDownloadsPage() {
   const amendmentDocs = detail?.documents.filter((doc) => String(doc.document_type) === "amendment") ?? [];
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-6 p-2">
-      <section className="glass-panel p-8 rounded-3xl relative overflow-hidden reveal">
-        <h1 className="text-3xl font-bold text-stone-800 mb-2 flex items-center gap-3">
-          <Archive className="w-7 h-7 text-primary" />
-          다운로드/증명서 생성
-        </h1>
-        <p className="text-stone-600 text-base">
-          계약서, 변경계약서, 세금계산서 PDF를 선택한 계약 단위로 다운로드하거나 병합합니다.
-        </p>
-      </section>
+    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
+      <CdPageHeader
+        icon={<Archive className="w-5 h-5" />}
+        eyebrow="Contract · Documents"
+        title="다운로드/증명서 생성"
+        subtitle="계약서, 변경계약서, 세금계산서 PDF를 선택한 계약 단위로 다운로드하거나 병합합니다."
+        actions={<CdThemeToggle theme={theme} onToggle={toggleTheme} />}
+      />
 
       <div className="grid min-h-0 flex-1 grid-cols-1 xl:grid-cols-[minmax(360px,0.9fr)_minmax(620px,1.4fr)] gap-5">
-        <section className="glass-card rounded-3xl overflow-hidden reveal delay-1 flex min-h-0 flex-col">
-          <div className="p-4 border-b border-stone-200/70 flex items-center justify-between gap-3">
+        <section className="cd-card rounded-3xl overflow-hidden cd-reveal delay-1 flex min-h-0 flex-col">
+          <div className="p-4 border-b cd-border-c flex items-center justify-between gap-3">
             <div>
-              <h2 className="font-bold text-stone-800 flex items-center gap-2">
-                <CheckSquare className="w-4 h-4 text-primary" />
+              <h2 className="font-bold cd-text flex items-center gap-2">
+                <CheckSquare className="w-4 h-4 cd-text-primary" />
                 계약 선택
               </h2>
-              <p className="text-xs text-stone-500">
+              <p className="text-xs cd-text-faint">
                 선택 {targetIds.length.toLocaleString()}건 / 현재 목록 {filteredGroups.reduce((acc, group) => acc + group.contracts.length, 0).toLocaleString()}건
               </p>
             </div>
-            <button type="button" className="glass-button rounded-lg px-3 py-1.5 text-xs text-stone-700" onClick={() => setChecked(new Set())}>
+            <button type="button" className="cd-btn cd-btn-ghost rounded-lg px-3 py-1.5 text-xs cd-text-muted" onClick={() => setChecked(new Set())}>
               선택 해제
             </button>
           </div>
-          <div className="px-4 py-3 border-b border-stone-200/70 grid gap-2">
+          <div className="px-4 py-3 border-b cd-border-c grid gap-2">
             <div className="flex items-center gap-2">
-              <Search className="w-4 h-4 text-stone-400 shrink-0" />
-              <input className="input-field text-xs flex-1" placeholder="계약명 / 거래처 / 세분류 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
-              <select className="ui-select text-xs shrink-0" style={{ width: "17ch" }} value={year} onChange={(e) => setYear(e.target.value)}>
+              <Search className="w-4 h-4 cd-text-faint shrink-0" />
+              <input className="cd-input text-xs flex-1" placeholder="계약명 / 거래처 / 세분류 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
+              <select className="cd-select text-xs shrink-0" style={{ width: "17ch" }} value={year} onChange={(e) => setYear(e.target.value)}>
                 <option value="">전체 연도</option>
                 {(tree?.availableYears ?? []).map((item) => <option key={item} value={item}>{item}년</option>)}
               </select>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2 pl-6">
-              <select className="ui-select text-xs" value={serviceTypeFilter} onChange={(e) => setServiceTypeFilter(e.target.value)}>
+              <select className="cd-select text-xs" value={serviceTypeFilter} onChange={(e) => setServiceTypeFilter(e.target.value)}>
                 <option value="">용역분류 전체</option>
                 {serviceTypeOptions.map((item) => <option key={item} value={item}>{item}</option>)}
               </select>
-              <select className="ui-select text-xs" value={serviceSubtypeFilter} onChange={(e) => setServiceSubtypeFilter(e.target.value)}>
+              <select className="cd-select text-xs" value={serviceSubtypeFilter} onChange={(e) => setServiceSubtypeFilter(e.target.value)}>
                 <option value="">용역세분류 전체</option>
                 {serviceSubtypeOptions.map((item) => <option key={item} value={item}>{item}</option>)}
               </select>
-              <select className="ui-select text-xs" value={industryFilter} onChange={(e) => setIndustryFilter(e.target.value)}>
+              <select className="cd-select text-xs" value={industryFilter} onChange={(e) => setIndustryFilter(e.target.value)}>
                 <option value="">업종 전체</option>
                 {INTEGRATED_PERMIT_INDUSTRIES.map((item) => <option key={item.label} value={item.label}>{item.label}</option>)}
               </select>
             </div>
             {hiddenSelectedCount > 0 && (
-              <p className="pl-6 text-[11px] text-primary">
+              <p className="pl-6 text-[11px] cd-text-primary">
                 현재 연도/필터 목록에 보이지 않는 선택 계약 {hiddenSelectedCount}건도 다운로드 대상에 유지됩니다.
               </p>
             )}
           </div>
           <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide">
             {loading ? (
-              <div className="p-8 text-center text-sm text-stone-500">계약 목록을 불러오는 중입니다.</div>
+              <div className="p-8 text-center text-sm cd-text-faint">계약 목록을 불러오는 중입니다.</div>
             ) : (
               filteredGroups.map((group) => {
                 const style = resolveServiceTypeStyle(group.serviceType);
@@ -311,19 +351,19 @@ export default function ContractDownloadsPage() {
                     <button
                       type="button"
                       onClick={() => setExpanded((prev) => ({ ...prev, [group.serviceType]: !isOpen }))}
-                      className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-stone-50 border-b border-stone-200/70"
+                      className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-[color:var(--cd-surface)] border-b cd-border-c"
                     >
-                      {isOpen ? <ChevronDown className="w-4 h-4 text-stone-500" /> : <ChevronRight className="w-4 h-4 text-stone-500" />}
+                      {isOpen ? <ChevronDown className="w-4 h-4 cd-text-faint" /> : <ChevronRight className="w-4 h-4 cd-text-faint" />}
                       <span className="w-3 h-3 rounded-full" style={{ background: style.parentColor }} />
-                      <span className="text-sm text-stone-800">{group.serviceType}</span>
-                      <span className="text-[11px] text-stone-500 ml-auto">{group.contracts.length}건</span>
+                      <span className="text-sm cd-text">{group.serviceType}</span>
+                      <span className="text-[11px] cd-text-faint ml-auto">{group.contracts.length}건</span>
                     </button>
                     {isOpen && group.contracts.map((contract) => (
                       <label
                         key={contract.contractId}
                         className={
-                          "relative w-full flex items-center gap-2 pl-8 pr-3 py-2 text-left text-xs bg-white/40 hover:bg-primary/5 border-l-4 " +
-                          (selectedId === contract.contractId ? "border-primary bg-primary/10" : "border-transparent")
+                          "relative w-full flex items-center gap-2 pl-8 pr-3 py-2 text-left text-xs hover:bg-[color:var(--cd-surface)] border-l-4 " +
+                          (selectedId === contract.contractId ? "border-[color:var(--cd-primary)] cd-tint-primary" : "border-transparent")
                         }
                         onClick={() => setSelectedId(contract.contractId)}
                       >
@@ -333,8 +373,8 @@ export default function ContractDownloadsPage() {
                           onChange={() => toggleChecked(contract.contractId)}
                           onClick={(e) => e.stopPropagation()}
                         />
-                        <span className="truncate text-stone-800">{contract.contractTitle}</span>
-                        <span className="ml-auto w-[80px] shrink-0 text-right text-[10px] font-mono text-stone-400">{contract.contractDate ?? "-"}</span>
+                        <span className="truncate cd-text">{contract.contractTitle}</span>
+                        <span className="ml-auto w-[80px] shrink-0 text-right text-[10px] font-mono cd-text-faint">{contract.contractDate ?? "-"}</span>
                       </label>
                     ))}
                   </div>
@@ -344,22 +384,23 @@ export default function ContractDownloadsPage() {
           </div>
         </section>
 
-        <section className="glass-card rounded-3xl p-5 reveal delay-2 min-h-0 overflow-y-auto scrollbar-hide">
+        <section className="cd-card rounded-3xl p-5 cd-reveal delay-2 min-h-0 overflow-y-auto scrollbar-hide">
           <div className="flex items-start justify-between gap-4 mb-5">
             <div>
-              <h2 className="text-xl font-bold text-stone-800">
+              <h2 className="text-xl font-bold cd-text">
                 {selectedContract?.contractTitle ?? String(detail?.contract.contract_title ?? "계약을 선택하세요")}
               </h2>
-              <p className="text-xs text-stone-500 mt-1">
+              <p className="text-xs cd-text-faint mt-1">
                 {isSingleTarget ? "단일 계약은 개별 문서 또는 전체 증빙을 다운로드할 수 있습니다." : "복수 계약은 전체 증빙 다운로드만 가능합니다."}
               </p>
             </div>
-            <FileArchive className="w-6 h-6 text-primary" />
+            <FileArchive className="w-6 h-6 cd-text-primary" />
           </div>
 
-          <div className="grid grid-cols-1 2xl:grid-cols-2 gap-5">
-            <div className="rounded-2xl border border-stone-200/80 bg-white/50 p-3 h-[360px] overflow-hidden">
-              <h3 className="font-bold text-stone-800 mb-3">병합 옵션</h3>
+          {/* 병합 옵션(1) + 병합 대상 파일 목록(1) = 선택 계약 리스트(2, gap 포함) 너비 */}
+          <div className="grid grid-cols-1 2xl:grid-cols-4 gap-4">
+            <div className="rounded-2xl border cd-border-c p-3 h-[360px] overflow-hidden">
+              <h3 className="font-bold cd-text mb-3">병합 옵션</h3>
               <div className="grid grid-cols-1 gap-2">
                 <OptionCard
                   title="병합 없이 개별 저장"
@@ -392,8 +433,8 @@ export default function ContractDownloadsPage() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-stone-200/80 bg-white/50 p-3 h-[360px] overflow-hidden flex flex-col">
-              <h3 className="font-bold text-stone-800 mb-3">병합 대상 파일 목록</h3>
+            <div className="rounded-2xl border cd-border-c p-3 h-[360px] overflow-hidden flex flex-col">
+              <h3 className="font-bold cd-text mb-3">병합 대상 파일 목록</h3>
               {isSingleTarget && detail ? (
                 <div className="flex min-h-0 flex-1 flex-col">
                   <div className="flex-1 overflow-y-auto pr-1 scrollbar-hide">
@@ -425,43 +466,113 @@ export default function ContractDownloadsPage() {
                     })}
                     </div>
                   </div>
-                  <div className="mt-3 flex items-center justify-between gap-2">
-                    <div className="flex flex-wrap gap-2">
-                      <DownloadButton disabled={contractDocs.length === 0 || downloading} onClick={() => download(singleMode, { kind: "contract" })}>계약서</DownloadButton>
-                      <DownloadButton disabled={amendmentDocs.length === 0 || downloading} onClick={() => download(singleMode, { kind: "amendment" })}>변경계약</DownloadButton>
-                      <DownloadButton disabled={downloading} onClick={() => download(singleMode)}>전체</DownloadButton>
-                    </div>
-                    <DownloadButton
-                      primary
-                      disabled={targetIds.length === 0 || downloading}
-                      onClick={() => download(isSingleTarget ? singleMode : multiMode)}
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      {downloading ? "생성 중..." : "전체 다운로드"}
-                    </DownloadButton>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <DownloadButton disabled={contractDocs.length === 0 || downloading} onClick={() => download(singleMode, { kind: "contract" })}>계약서</DownloadButton>
+                    <DownloadButton disabled={amendmentDocs.length === 0 || downloading} onClick={() => download(singleMode, { kind: "amendment" })}>변경계약</DownloadButton>
+                    <DownloadButton disabled={downloading} onClick={() => download(singleMode)}>전체</DownloadButton>
                   </div>
                 </div>
               ) : (
-                <div className="flex min-h-0 flex-1 flex-col justify-between gap-3">
-                  <div className="rounded-2xl border border-stone-200/80 bg-white/60 p-6 text-sm text-stone-500">
+                <div className="flex min-h-0 flex-1 flex-col">
+                  <div className="rounded-2xl border cd-border-c p-6 text-sm cd-text-faint">
                     {targetIds.length > 1 ? "복수 계약 선택 중입니다. 전체 다운로드 버튼만 사용할 수 있습니다." : "좌측 트리에서 계약을 선택하세요."}
-                  </div>
-                  <div className="flex justify-end">
-                    <DownloadButton
-                      primary
-                      disabled={targetIds.length === 0 || downloading}
-                      onClick={() => download(isSingleTarget ? singleMode : multiMode)}
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      {downloading ? "생성 중..." : "전체 다운로드"}
-                    </DownloadButton>
                   </div>
                 </div>
               )}
             </div>
+
+            {/* 선택 계약 리스트 — 트리뷰에서 체크/선택한 계약 전체. 우클릭으로 목록에서 제거 */}
+            <div className="rounded-2xl border cd-border-c p-3 h-[360px] overflow-hidden flex flex-col 2xl:col-span-2">
+              <h3 className="font-bold cd-text mb-3 flex items-center gap-2">
+                <ListChecks className="w-4 h-4 cd-text-primary" />
+                선택 계약 리스트
+                <span className="text-[11px] font-normal cd-text-faint ml-auto">{targetIds.length.toLocaleString()}건</span>
+              </h3>
+              <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide rounded-xl border cd-border-c">
+                {targetIds.length === 0 ? (
+                  <p className="p-6 text-sm cd-text-faint">트리뷰에서 계약을 체크하면 여기에 표시됩니다.</p>
+                ) : (
+                  targetIds.map((id) => {
+                    const node = contractById.get(id);
+                    return (
+                      <div
+                        key={id}
+                        className="px-3 py-2 text-xs border-b cd-border-c last:border-b-0 hover:bg-[color:var(--cd-surface)] cursor-default select-none"
+                        title="우클릭으로 목록에서 제거"
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setContextMenu({ x: e.clientX, y: e.clientY, contractId: id });
+                        }}
+                      >
+                        <p className="truncate cd-text">{node?.contractTitle ?? "(현재 필터 목록에 없는 계약)"}</p>
+                        <p className="mt-0.5 flex items-center gap-2 text-[10px] cd-text-faint">
+                          <span className="truncate">{node?.counterpartyName ?? id}</span>
+                          <span className="ml-auto shrink-0 font-mono">{node?.contractDate ?? ""}</span>
+                        </p>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+              <div className="mt-3 flex justify-end">
+                <DownloadButton
+                  primary
+                  disabled={targetIds.length === 0 || downloading}
+                  onClick={() => download(isSingleTarget ? singleMode : multiMode)}
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  {downloading ? "생성 중..." : "전체 다운로드"}
+                </DownloadButton>
+              </div>
+            </div>
+          </div>
+
+          {/* 용역 수행실적 증명서 / 수행인력 명단 생성 (기능 구상 중 — 컨셉 카드) */}
+          <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4 mt-4">
+            <div className="rounded-2xl border cd-border-c p-5">
+              <h3 className="font-bold cd-text flex items-center gap-2">
+                <Users className="w-4 h-4 cd-text-primary" />
+                수행인력 명단 생성
+                <span className="ml-auto rounded-full cd-surface-bg px-2.5 py-0.5 text-[10px] font-semibold cd-text-faint">준비 중</span>
+              </h3>
+              <p className="mt-2 text-xs leading-relaxed cd-text-faint">
+                용역별 수행인력 정보를 웹앱에서 통합 관리하고, 선택한 용역의 수행인력 명단 문서를
+                생성하는 기능이 제공될 예정입니다.
+              </p>
+            </div>
+            <div className="rounded-2xl border cd-border-c p-5">
+              <h3 className="font-bold cd-text flex items-center gap-2">
+                <BadgeCheck className="w-4 h-4 cd-text-primary" />
+                수행실적 증명서 생성
+                <span className="ml-auto rounded-full cd-surface-bg px-2.5 py-0.5 text-[10px] font-semibold cd-text-faint">준비 중</span>
+              </h3>
+              <p className="mt-2 text-xs leading-relaxed cd-text-faint">
+                선택한 계약 이력을 바탕으로 용역 수행실적 증명서를 생성·다운로드하는 기능이
+                제공될 예정입니다.
+              </p>
+            </div>
           </div>
         </section>
       </div>
+
+      {/* 선택 계약 리스트 우클릭 컨텍스트 메뉴 */}
+      {contextMenu && (
+        <div
+          className="fixed z-[80] rounded-xl border cd-border-c cd-card-bg shadow-xl py-1 min-w-[160px]"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          <button
+            type="button"
+            className="w-full px-3 py-2 text-left text-xs cd-error-text hover:bg-[color:var(--cd-error-soft)]"
+            onClick={() => removeFromSelection(contextMenu.contractId)}
+          >
+            선택 목록에서 제거
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -486,11 +597,11 @@ function OptionCard({
       onClick={onClick}
       className={
         "rounded-xl border px-3 py-2.5 text-left transition disabled:opacity-40 disabled:cursor-not-allowed " +
-        (active ? "border-primary bg-primary/5" : "border-stone-200/80 bg-white/60 hover:bg-primary/5")
+        (active ? "border-[color:var(--cd-primary)] cd-tint-primary" : "cd-border-c hover:bg-[color:var(--cd-surface)]")
       }
     >
-      <p className="text-sm leading-tight text-stone-800">{title}</p>
-      <p className="text-[11px] leading-snug text-stone-500 mt-1">{description}</p>
+      <p className="text-sm leading-tight cd-text">{title}</p>
+      <p className="text-[11px] leading-snug cd-text-faint mt-1">{description}</p>
     </button>
   );
 }
@@ -514,14 +625,14 @@ function DocumentTag({
       className={
         "inline-flex max-w-full items-center gap-2 rounded-full border px-3 py-1.5 text-xs transition disabled:cursor-not-allowed " +
         (count > 0
-          ? "border-primary/30 bg-primary/5 text-stone-800 hover:bg-primary/10"
-          : "border-stone-200 bg-white/50 text-stone-400")
+          ? "border-[color:var(--cd-primary)] cd-tint-primary cd-text hover:bg-[color:var(--cd-primary-soft)]"
+          : "cd-border-c cd-text-faint")
       }
       title={count > 0 ? `${title} ${count}개` : `${title} 없음`}
     >
-        <FileText className="w-4 h-4 text-primary" />
+        <FileText className="w-4 h-4 cd-text-primary" />
         <span className="truncate">{title}</span>
-        <span className={count > 0 ? "text-primary" : "text-stone-400"}>{count > 0 ? `${count}개` : "없음"}</span>
+        <span className={count > 0 ? "cd-text-primary" : "cd-text-faint"}>{count > 0 ? `${count}개` : "없음"}</span>
       </button>
   );
 }
@@ -544,7 +655,7 @@ function DownloadButton({
       onClick={onClick}
       className={
         "rounded-xl px-3 py-2 text-xs shadow-sm inline-flex items-center gap-1 disabled:opacity-50 " +
-        (primary ? "text-white bg-primary hover:bg-primary/90" : "text-stone-700 border border-stone-300 hover:bg-stone-100")
+        (primary ? "text-white cd-fill-primary" : "cd-text-muted border cd-border-c hover:bg-[color:var(--cd-surface)]")
       }
     >
       {children}

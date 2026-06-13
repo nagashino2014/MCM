@@ -8,15 +8,15 @@ import { getDb, invalidateDb, rowsToObjects } from "../db";
 type DbHandle = Awaited<ReturnType<typeof getDb>>;
 import {
   cleanProductName,
-  dedupeIndustries,
   formatAddress,
   formatBusinessRegistrationNo,
   formatCompanyName,
   parseIndustriesFromValue,
   type IndustryDisplay,
 } from "./formatters";
+import { findIntegratedPermitIndustry } from "./integrated-permit-industries";
 import type { FacilityGroupCompanyRole, FacilityGroupInfo, FacilityGroupMembershipRelationType } from "./facility-group";
-import type { FacilityOperatingEntityInfo, FacilityOperatingRelationType } from "./legal-entity";
+import type { FacilityOperatingEntityInfo, FacilityOperatingRelationType } from "./facility-operating-entity";
 import {
   FACILITY_COMPANY_SIZE_LABELS,
   FACILITY_COMPANY_SIZE_ORDER,
@@ -166,12 +166,13 @@ async function loadOperatingEntityInfo(db: DbHandle, facilityId: string): Promis
     const rows = rowsToObjects(
       await db.exec(
         `SELECT
-           r.id, r.facility_id, r.entity_id, r.relation_type, r.started_at, r.ended_at,
+           r.id, r.facility_id, r.related_facility_id, r.relation_type, r.started_at, r.ended_at,
            r.is_primary, r.memo AS relation_memo, r.created_at AS relation_created_at, r.updated_at AS relation_updated_at,
-           e.entity_name, e.business_registration_no, e.address, e.phone_number, e.memo AS entity_memo,
-           e.created_at AS entity_created_at, e.updated_at AS entity_updated_at
+           rf.company_name AS counterparty_name, rf.business_registration_no, rf.site_address,
+           rf.phone_number, rf.memo AS counterparty_memo,
+           rf.created_at AS counterparty_created_at, rf.updated_at AS counterparty_updated_at
          FROM facility_operating_entities r
-         JOIN legal_entities e ON e.entity_id = r.entity_id
+         JOIN facilities rf ON rf.facility_id = r.related_facility_id
          WHERE r.facility_id = $1
            AND r.ended_at IS NULL
            AND r.is_primary = 1
@@ -183,21 +184,21 @@ async function loadOperatingEntityInfo(db: DbHandle, facilityId: string): Promis
     const row = rows[0];
     if (!row) return null;
     return {
-      entity: {
-        entityId: String(row.entity_id ?? ""),
-        entityName: formatCompanyName(String(row.entity_name ?? "")) ?? "",
+      counterparty: {
+        facilityId: String(row.related_facility_id ?? ""),
+        companyName: formatCompanyName(String(row.counterparty_name ?? "")) ?? "",
         businessRegistrationNo:
           row.business_registration_no != null ? formatBusinessRegistrationNo(String(row.business_registration_no)) : null,
-        address: row.address != null ? formatAddress(String(row.address)) : null,
+        siteAddress: row.site_address != null ? formatAddress(String(row.site_address)) : null,
         phoneNumber: row.phone_number != null ? String(row.phone_number) : null,
-        memo: row.entity_memo != null ? String(row.entity_memo) : null,
-        createdAt: String(row.entity_created_at ?? ""),
-        updatedAt: String(row.entity_updated_at ?? ""),
+        memo: row.counterparty_memo != null ? String(row.counterparty_memo) : null,
+        createdAt: String(row.counterparty_created_at ?? ""),
+        updatedAt: String(row.counterparty_updated_at ?? ""),
       },
       relation: {
         id: Number(row.id ?? 0),
         facilityId: String(row.facility_id ?? ""),
-        entityId: String(row.entity_id ?? ""),
+        relatedFacilityId: String(row.related_facility_id ?? ""),
         relationType: normalizeOperatingRelationType(row.relation_type),
         startedAt: row.started_at != null ? String(row.started_at) : null,
         endedAt: row.ended_at != null ? String(row.ended_at) : null,
@@ -789,6 +790,7 @@ export interface FacilityListItem {
   updatedAt: string;
   decisionNo: string | null;
   permitDate: string | null;
+  isClosed: boolean;
   airClass: number | null;
   waterClass: number | null;
   airAmount: number | null;
@@ -800,8 +802,12 @@ export interface FacilityListFilter {
   q?: string;
   integratedPermitTarget?: boolean;
   sido?: string;
+  /** 복수 지역 검색. 지정 시 sido/sigungu 단일 필터보다 우선한다. */
+  sidos?: string[];
   sigungu?: string;
   industryCode?: string;
+  /** 통합허가 20개 업종 카테고리 id. 지정 시 industryCode 보다 우선한다. */
+  industryCategory?: string;
   airClass?: number;
   waterClass?: number;
   source?: string;
@@ -829,15 +835,40 @@ export async function listFacilities(
       `(f.company_name LIKE $${startIdx + 1} OR f.normalized_company_name LIKE $${startIdx + 2} OR f.site_address LIKE $${startIdx + 3} OR f.business_registration_no LIKE $${startIdx + 4} OR f.site_business_registration_no LIKE $${startIdx + 5} OR REPLACE(COALESCE(f.business_registration_no, ''), '-', '') LIKE $${startIdx + 6} OR REPLACE(COALESCE(f.site_business_registration_no, ''), '-', '') LIKE $${startIdx + 7} OR EXISTS (SELECT 1 FROM facility_aliases fa WHERE fa.facility_id = f.facility_id AND fa.alias LIKE $${startIdx + 8}))`
     );
   }
-  if (filter.sido) {
-    where.push(`f.region_sido = $${params.length + 1}`);
-    params.push(filter.sido);
+  const sidoList = (filter.sidos ?? []).map((s) => s.trim()).filter(Boolean);
+  if (sidoList.length > 0) {
+    const placeholders = sidoList.map((_, i) => `$${params.length + i + 1}`).join(", ");
+    where.push(`f.region_sido IN (${placeholders})`);
+    params.push(...sidoList);
+  } else {
+    if (filter.sido) {
+      where.push(`f.region_sido = $${params.length + 1}`);
+      params.push(filter.sido);
+    }
+    if (filter.sigungu) {
+      where.push(`f.region_sigungu = $${params.length + 1}`);
+      params.push(filter.sigungu);
+    }
   }
-  if (filter.sigungu) {
-    where.push(`f.region_sigungu = $${params.length + 1}`);
-    params.push(filter.sigungu);
-  }
-  if (filter.industryCode) {
+  const industryCategory = filter.industryCategory
+    ? findIntegratedPermitIndustry(filter.industryCategory)
+    : null;
+  if (industryCategory) {
+    // industry_code 는 복수 업종이 줄바꿈/쉼표로 연결될 수 있어 코드 단위로 분해해 비교한다.
+    // 코드 값은 코드 내 상수(INTEGRATED_PERMIT_INDUSTRIES)에서만 오므로 리터럴 삽입이 안전하다.
+    const conds: string[] = [];
+    for (const code of industryCategory.exactCodes) {
+      conds.push(`TRIM(ic) = '${code}'`);
+    }
+    for (const prefix of industryCategory.prefixCodes) {
+      conds.push(`TRIM(ic) LIKE '${prefix}%'`);
+    }
+    if (conds.length > 0) {
+      where.push(
+        `EXISTS (SELECT 1 FROM regexp_split_to_table(COALESCE(f.industry_code, ''), '[\\n,/]+') AS ic WHERE ${conds.join(" OR ")})`
+      );
+    }
+  } else if (filter.industryCode) {
     where.push(`f.industry_code = $${params.length + 1}`);
     params.push(filter.industryCode);
   }
@@ -847,8 +878,13 @@ export async function listFacilities(
     );
   }
   if (filter.source) {
-    where.push(`f.source = $${params.length + 1}`);
-    params.push(filter.source);
+    // 그룹 관리 경유 등록(group_company)은 출처 필터에서 '수동 등록'(manual)에 합쳐 취급한다.
+    if (filter.source === "manual") {
+      where.push(`f.source IN ('manual', 'group_company')`);
+    } else {
+      where.push(`f.source = $${params.length + 1}`);
+      params.push(filter.source);
+    }
   }
   // air/water 종 규모 필터: permit_scales(검토결과서) OR facility_annual_reports(연간보고서)
   // 어느 쪽이라도 일치하면 포함. 사업장당 두 출처가 모두 있으면 OR 로 둘 다 후보가 된다.
@@ -896,6 +932,12 @@ export async function listFacilities(
       f.region_sido, f.region_sigungu, f.industry_code, f.industry_name, f.integrated_permit_target,
       f.source, f.memo, f.logo_path, f.company_size, f.created_at, f.updated_at,
       lp.decision_no, lp.permit_date,
+      EXISTS (
+        SELECT 1
+          FROM facility_history_events fhe
+         WHERE fhe.facility_id = f.facility_id
+           AND (fhe.event_type = 'closure' OR fhe.event_types LIKE '%"closure"%')
+      ) AS is_closed,
       COALESCE(ls.air_class, far.air_class)         AS air_class,
       COALESCE(ls.water_class, far.water_class)     AS water_class,
       COALESCE(ls.air_amount_ton_per_year, far.air_amount_ton_per_year)             AS air_amount_ton_per_year,
@@ -951,6 +993,7 @@ export async function listFacilities(
     updatedAt: String(row.updated_at ?? ""),
     decisionNo: row.decision_no != null ? String(row.decision_no) : null,
     permitDate: row.permit_date != null ? String(row.permit_date) : null,
+    isClosed: row.is_closed === true || row.is_closed === "true" || Number(row.is_closed ?? 0) === 1,
     airClass: row.air_class != null ? Number(row.air_class) : null,
     waterClass: row.water_class != null ? Number(row.water_class) : null,
     airAmount:
@@ -1013,11 +1056,21 @@ export async function getFacilityFilterOptions(): Promise<FacilityFilterOptions>
       name: r[1] != null ? String(r[1]) : null,
       count: Number(r[2]),
     })),
-    sources: (sourceR?.values ?? []).map((r) => ({
-      value: String(r[0] ?? "ieps"),
-      count: Number(r[1]),
-    })),
+    sources: mergeSourceOptions(sourceR?.values ?? []),
   };
+}
+
+/** group_company 출처는 '수동 등록'(manual)으로 합산해 노출한다. */
+function mergeSourceOptions(rows: unknown[][]): { value: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const r of rows) {
+    let value = String(r[0] ?? "ieps");
+    if (value === "group_company") value = "manual";
+    counts.set(value, (counts.get(value) ?? 0) + Number(r[1]));
+  }
+  return Array.from(counts.entries())
+    .map(([value, count]) => ({ value, count }))
+    .sort((a, b) => b.count - a.count);
 }
 
 export interface FacilityDetail {
@@ -1046,6 +1099,7 @@ export interface FacilityDetail {
   operatingEntityInfo: FacilityOperatingEntityInfo | null;
   createdAt: string;
   updatedAt: string;
+  isClosed: boolean;
   permits: PermitDetail[];
   businessCertificates: FacilityBusinessCertificate[];
   /**
@@ -1158,6 +1212,18 @@ export async function getFacilityDetail(facilityId: string): Promise<FacilityDet
   const facRows = rowsToObjects(facRow);
   if (!facRows.length) return null;
   const f = facRows[0];
+
+  const isClosed = rowsToObjects(
+    await db.exec(
+      `SELECT EXISTS (
+         SELECT 1
+           FROM facility_history_events
+          WHERE facility_id = $1
+            AND (event_type = 'closure' OR event_types LIKE '%"closure"%')
+       ) AS is_closed`,
+      [facilityId]
+    ).catch(() => [])
+  )[0]?.is_closed;
 
   let permitRows: Awaited<ReturnType<typeof db.exec>>;
   try {
@@ -1289,42 +1355,13 @@ export async function getFacilityDetail(facilityId: string): Promise<FacilityDet
     annualReport = null;
   }
 
-  let industries = parseIndustriesFromValue(
+  // 업종은 facilities 저장값을 단일 출처로 사용한다.
+  // 과거에는 parsed_fields(industry_code_name) 원문 파싱 결과를 매 조회마다 재병합했으나,
+  // 편집으로 수정/삭제한 옛 업종이 계속 부활하는 문제가 있어 병합을 중단했다.
+  const industries = parseIndustriesFromValue(
     f.industry_code != null ? String(f.industry_code) : null,
     f.industry_name != null ? String(f.industry_name) : null
   );
-  try {
-    const industryRows = await db.exec(
-      `SELECT normalized_value, raw_value
-         FROM parsed_fields
-        WHERE rule_id = 'industry_code_name'
-          AND doc_id IN (SELECT source_doc_id FROM permits WHERE facility_id = $1)
-        ORDER BY created_at DESC
-        LIMIT 5`,
-      [facilityId]
-    );
-    const extra: IndustryDisplay[] = [];
-    for (const row of rowsToObjects(industryRows)) {
-      const raw = row.normalized_value != null ? String(row.normalized_value) : null;
-      if (!raw) continue;
-      try {
-        const parsed = JSON.parse(raw);
-        const arr = Array.isArray(parsed) ? parsed : [parsed];
-        for (const item of arr) {
-          extra.push({
-            code: item?.code ?? item?.prefixCode ?? null,
-            name: item?.name ?? null,
-            source: item?.matchSource ?? "parsed_field",
-          });
-        }
-      } catch {
-        extra.push(...parseIndustriesFromValue(null, String(row.raw_value ?? raw)));
-      }
-    }
-    industries = dedupeIndustries([...industries, ...extra]);
-  } catch {
-    industries = dedupeIndustries(industries);
-  }
 
   return {
     facilityId: String(f.facility_id ?? ""),
@@ -1361,6 +1398,7 @@ export async function getFacilityDetail(facilityId: string): Promise<FacilityDet
     operatingEntityInfo: await loadOperatingEntityInfo(db, facilityId),
     createdAt: String(f.created_at ?? ""),
     updatedAt: String(f.updated_at ?? ""),
+    isClosed: isClosed === true || isClosed === "true" || Number(isClosed ?? 0) === 1,
     permits,
     businessCertificates,
     annualReport,

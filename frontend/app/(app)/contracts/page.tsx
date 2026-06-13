@@ -1,9 +1,11 @@
 "use client";
 
-import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { Suspense, memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Virtuoso } from "react-virtuoso";
 import type { ServiceTypeStyle } from "@/lib/ieps/contract-tree-style";
 import {
+  Calendar,
   ChevronDown,
   ChevronRight,
   FileSignature,
@@ -18,10 +20,15 @@ import {
   RefreshCw,
   Search,
   Trash2,
+  Undo2,
   WalletCards,
   X,
 } from "lucide-react";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
+import { useCdashTheme } from "@/components/cdash/useCdashTheme";
+import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
+import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import "@/components/cdash/cdash.css";
 import { resolveServiceTypeStyle } from "@/lib/ieps/contract-tree-style";
 import ContractChangeModal from "@/components/contracts/ContractChangeModal";
 import { IndustryOptionsEditorButton, useContractIndustryOptions } from "@/components/contracts/IndustryOptionsEditor";
@@ -96,7 +103,7 @@ interface ContractMilestoneDraft {
 interface OutsourcingDraft {
   outsourcingTitle: string;
   counterpartyQuery: string;
-  counterpartyEntityId: string;
+  counterpartyFacilityId: string;
   counterpartyName: string;
   serviceType: string;
   contractDate: string;
@@ -108,7 +115,7 @@ interface OutsourcingDraft {
 interface NewContractModalState {
   contractTitle: string;
   counterpartyQuery: string;
-  counterpartyEntityId: string;
+  counterpartyFacilityId: string;
   counterpartyName: string;
   counterpartyBusinessRegistrationNo: string | null;
   facilityQuery: string;
@@ -147,12 +154,6 @@ interface EditMilestoneModalState {
   collectedAmount: string;
   collectionRatio: string;
   partialPaymentMemo: string;
-}
-
-interface LegalEntitySearchItem {
-  entityId: string;
-  entityName: string;
-  businessRegistrationNo: string | null;
 }
 
 interface FacilitySearchItem {
@@ -208,15 +209,29 @@ const PAYMENT_METHOD_OPTIONS = ["현금", "어음 : 1개월 이하", "어음 : 2
 export default function ContractsPage() {
   return (
     <ToastProvider>
-      <ContractsInner />
+      <Suspense fallback={null}>
+        <ContractsInner />
+      </Suspense>
     </ToastProvider>
   );
 }
 
 function ContractsInner() {
   const toast = useToast();
+  const { theme, toggleTheme } = useCdashTheme();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  // 외부 메뉴(수주 현황 등)에서 ?contract=&year= 로 진입 시 해당 계약을 자동 선택한다.
+  const pendingContractRef = useRef<string | null>(searchParams.get("contract"));
+  // 미발행 현황에서 ?milestone= 로 진입 시 상세 로드 후 발행/수금 모달을 자동으로 연다.
+  const pendingMilestoneRef = useRef<string | null>(searchParams.get("milestone"));
+  // 수주 현황 리스트에서 진입한 경우 상세 헤더에 "돌아가기" 버튼을 노출한다.
+  const fromBillingOrdersRef = useRef(searchParams.get("from") === "billing-orders");
   const [tree, setTree] = useState<ContractTreePayload | null>(null);
-  const [year, setYear] = useState<string>(() => String(new Date().getFullYear()));
+  const [year, setYear] = useState<string>(() => {
+    const fromQuery = searchParams.get("year");
+    return fromQuery && /^\d{4}$/.test(fromQuery) ? fromQuery : String(new Date().getFullYear());
+  });
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [, startSearchTransition] = useTransition();
@@ -255,10 +270,25 @@ function ContractsInner() {
         }
         return next;
       });
-      setSelectedId((current) => {
-        if (current && json.groups.some((g) => g.contracts.some((c) => c.contractId === current))) return current;
-        return null;
-      });
+      const pending = pendingContractRef.current;
+      const pendingGroup = pending
+        ? json.groups.find((g) => g.contracts.some((c) => c.contractId === pending))
+        : undefined;
+      if (pending && pendingGroup) {
+        // 딥링크 계약 선택 + 해당 용역 그룹만 펼침 (아코디언 동작과 동일)
+        pendingContractRef.current = null;
+        setExpanded(() => {
+          const next: Record<string, boolean> = {};
+          for (const group of json.groups) next[group.serviceType] = group.serviceType === pendingGroup.serviceType;
+          return next;
+        });
+        setSelectedId(pending);
+      } else {
+        setSelectedId((current) => {
+          if (current && json.groups.some((g) => g.contracts.some((c) => c.contractId === current))) return current;
+          return null;
+        });
+      }
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -289,6 +319,29 @@ function ContractsInner() {
   useEffect(() => {
     if (selectedId) loadDetail(selectedId);
   }, [selectedId, loadDetail]);
+
+  // 미발행 현황 딥링크: 상세 로드 후 해당 청구·수금 단계의 발행/수금 모달을 자동으로 연다
+  useEffect(() => {
+    const milestoneId = pendingMilestoneRef.current;
+    if (!milestoneId || !detail) return;
+    const milestone = detail.milestones.find((m) => String(m.milestone_id ?? "") === milestoneId);
+    if (!milestone) return;
+    pendingMilestoneRef.current = null;
+    setInvoiceModal({
+      milestoneId,
+      stageLabel: String(milestone.stage_label ?? ""),
+      baseAmount: Number(milestone.amount ?? 0),
+      issueDate: String(milestone.invoice_issued_at ?? new Date().toISOString().slice(0, 10)),
+      invoiceAmount: String(milestone.invoice_amount ?? milestone.amount ?? ""),
+      paymentCollected: Number(milestone.payment_collected ?? 0) === 1,
+      paymentCollectedAt: String(milestone.payment_collected_at ?? ""),
+      collectionRatio: String(milestone.collection_ratio ?? "1"),
+      collectedAmount: String(milestone.collected_amount ?? milestone.amount ?? ""),
+      paymentTerms: String(milestone.payment_terms ?? ""),
+      partialPaymentMemo: "",
+      memo: "",
+    });
+  }, [detail]);
 
   const selectContract = useCallback((id: string) => setSelectedId(id), []);
   // Accordion behavior: opening a group automatically collapses all other
@@ -372,63 +425,54 @@ function ContractsInner() {
   }, [tree, selectedId]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-6 p-2">
-      <section className="glass-panel p-8 rounded-3xl relative overflow-hidden reveal">
-        <div className="relative z-10 flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="text-3xl font-bold text-stone-800 mb-2 flex items-center gap-3">
-              <FileSignature className="w-7 h-7 text-primary" />
-              계약 관리
-            </h1>
-            <p className="text-stone-600 text-base max-w-3xl">
-              신규/변경 계약 입력, 계산서 및 수금 정보 등록 기능
-            </p>
-          </div>
-          <div className="flex items-center gap-2 mt-2">
+    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
+      <CdPageHeader
+        icon={<FileSignature className="w-5 h-5" />}
+        eyebrow="Contract · Ledger"
+        title="계약 관리"
+        subtitle="신규/변경 계약 입력, 계산서 및 수금 정보 등록"
+        actions={
+          <>
             <button
               type="button"
               onClick={() => setNewContractModal(createEmptyContractState())}
-              className="rounded-xl px-3 py-2 text-xs font-bold text-white bg-primary hover:bg-primary/90 shadow-sm flex items-center gap-1"
+              className="cd-btn cd-btn-primary cd-btn-sm"
             >
               <Plus className="w-3.5 h-3.5" />
               신규 계약
             </button>
-            <button
-              type="button"
-              onClick={reloadTree}
-              className="glass-button rounded-xl px-3 py-2 text-xs font-bold text-stone-700 flex items-center gap-1"
-            >
-              <RefreshCw className={"w-3 h-3 " + (loading ? "animate-spin" : "")} />
+            <button type="button" onClick={reloadTree} className="cd-btn cd-btn-ghost cd-btn-sm">
+              <RefreshCw className={"w-3.5 h-3.5 " + (loading ? "animate-spin" : "")} />
               새로고침
             </button>
-          </div>
-        </div>
-        <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-gradient-to-l from-primary/10 to-transparent pointer-events-none" />
-      </section>
+            <CdThemeToggle theme={theme} onToggle={toggleTheme} />
+          </>
+        }
+      />
 
       {error ? (
-        <div className="glass-card rounded-2xl p-6 text-sm text-rose-600">
+        <div className="cd-card rounded-2xl p-6 text-sm text-rose-600">
           계약 데이터를 불러오지 못했습니다. <code>infra/aws/005_contract_management_round2.sql</code> 적용 여부와 DB 연결을 확인하세요.
-          <div className="mt-2 font-mono text-xs text-stone-600">{error}</div>
+          <div className="mt-2 font-mono text-xs cd-text-muted">{error}</div>
         </div>
       ) : (
         <div className="grid min-h-0 flex-1 grid-cols-1 xl:grid-cols-[minmax(360px,0.9fr)_minmax(560px,1.4fr)] gap-5">
-          <section className="glass-card rounded-3xl overflow-hidden reveal delay-2 flex min-h-0 flex-col">
-            <div className="p-4 border-b border-stone-200/70 flex items-center justify-between gap-3">
+          <section className="cd-card rounded-3xl overflow-hidden cd-reveal delay-2 flex min-h-0 flex-col">
+            <div className="p-4 border-b cd-border-c flex items-center justify-between gap-3">
               <div>
-                <h2 className="font-bold text-stone-800 flex items-center gap-2">
-                  <WalletCards className="w-4 h-4 text-primary" />
+                <h2 className="font-bold cd-text flex items-center gap-2">
+                  <WalletCards className="w-4 h-4 cd-text-primary" />
                   계약 원장
                 </h2>
-                <p className="text-xs text-stone-500">총 {totalCount.toLocaleString()}건</p>
+                <p className="text-xs cd-text-faint">총 {totalCount.toLocaleString()}건</p>
               </div>
             </div>
-            <div className="px-4 py-3 border-b border-stone-200/70 flex items-center gap-2">
+            <div className="px-4 py-3 border-b cd-border-c flex items-center gap-2">
               <div className="flex items-center gap-2 flex-1 min-w-0">
-                <Search className="w-4 h-4 text-stone-400 shrink-0" />
+                <Search className="w-4 h-4 cd-text-faint shrink-0" />
                 <input
                   type="text"
-                  className="input-field text-xs"
+                  className="cd-input text-xs"
                   placeholder="계약명 / 거래처 / 세분류 검색"
                   value={searchInput}
                   onChange={(e) => {
@@ -442,7 +486,7 @@ function ContractsInner() {
                 />
               </div>
               <select
-                className="ui-select text-xs shrink-0"
+                className="cd-select text-xs shrink-0"
                 style={{ width: "17ch" }}
                 value={year}
                 onChange={(e) => setYear(e.target.value)}
@@ -455,7 +499,7 @@ function ContractsInner() {
             </div>
             <div className="flex-1 min-h-0">
               {filteredGroups.length === 0 && !loading ? (
-                <div className="h-full p-10 text-center text-sm text-stone-500">조건에 맞는 계약이 없습니다.</div>
+                <div className="h-full p-10 text-center text-sm cd-text-faint">조건에 맞는 계약이 없습니다.</div>
               ) : (
                 <Virtuoso
                   style={{ height: "100%", minHeight: 0 }}
@@ -486,24 +530,30 @@ function ContractsInner() {
                 />
               )}
             </div>
-            <div className="p-3 text-xs text-stone-500 text-right border-t border-stone-200/70">
+            <div className="p-3 text-xs cd-text-faint text-right border-t cd-border-c">
               계약 건수: {tree?.totalCount.toLocaleString() ?? 0}
             </div>
           </section>
 
-          <section className="glass-card rounded-3xl p-5 reveal delay-3 min-h-0 overflow-y-auto scrollbar-hide">
+          <section className="cd-card rounded-3xl p-5 cd-reveal delay-3 min-h-0 overflow-y-auto scrollbar-hide">
             {!selected ? (
-              <div className="h-full flex items-center justify-center text-sm text-stone-500">계약을 선택하세요.</div>
+              <div className="h-full flex items-center justify-center text-sm cd-text-faint">계약을 선택하세요.</div>
             ) : detailLoading || !detail ? (
-              <div className="h-full flex items-center justify-center text-sm text-stone-500">상세 정보를 불러오는 중입니다.</div>
+              <div className="h-full flex items-center justify-center text-sm cd-text-faint">상세 정보를 불러오는 중입니다.</div>
             ) : (
               <ContractDetailPanel
                 detail={detail}
+                onBackToBilling={
+                  fromBillingOrdersRef.current
+                    ? () => router.push("/contracts/billing?tab=orders&restore=1")
+                    : undefined
+                }
                 onOpenInvoice={setInvoiceModal}
                 onOpenNewStage={() => setNewStageModal({ stageLabel: "", amount: "", paymentTerms: "" })}
                 onOpenEditStage={setEditMilestoneModal}
                 onOpenChange={() => setChangeModalOpen(true)}
                 onOpenPdf={setPdfViewer}
+                onReloadDetail={() => selected && loadDetail(selected.contractId)}
                 onDeleteContract={() => setDeleteModalOpen(true)}
                 onDeleteStage={async (milestoneId) => {
                   if (!selected) return;
@@ -685,6 +735,7 @@ function ContractsInner() {
 
 function ContractDetailPanel({
   detail,
+  onBackToBilling,
   onOpenInvoice,
   onOpenNewStage,
   onOpenEditStage,
@@ -693,8 +744,11 @@ function ContractDetailPanel({
   onDeleteContract,
   onDeleteStage,
   onReorderStages,
+  onReloadDetail,
 }: {
   detail: ContractDetail;
+  /** 수주 현황에서 진입한 경우에만 전달 — 헤더에 돌아가기 버튼 노출 */
+  onBackToBilling?: () => void;
   onOpenInvoice: (state: InvoiceModalState) => void;
   onOpenNewStage: () => void;
   onOpenEditStage: (state: EditMilestoneModalState) => void;
@@ -703,6 +757,8 @@ function ContractDetailPanel({
   onDeleteContract: () => void;
   onDeleteStage: (milestoneId: string) => void;
   onReorderStages: (orderedIds: string[]) => void;
+  /** 허가 정보 저장 등 패널 내부 갱신 후 상세 재조회 */
+  onReloadDetail: () => void;
 }) {
   const contract = detail.contract;
   // 용역(계약) 금액은 청구·수금 단계 각 항목 금액의 합을 기준으로 한다.
@@ -729,6 +785,16 @@ function ContractDetailPanel({
   // 계산서 발행 후 아직 수금이 완료되지 않은 대금지급조건이 하나라도 있으면
   // 경과 기간 태그를 노출한다. 색상은 "가장 오래 경과한" 미수금 건 기준.
   const overdueTag = getOverdueCollectionTag(detail.milestones);
+
+  // 완료일(발행일) = 최종 대금지급단위(stage_order 마지막)의 계산서 발행일
+  const lastMilestone = detail.milestones[detail.milestones.length - 1];
+  const completionInvoiceDate =
+    lastMilestone && Number(lastMilestone.invoice_issued ?? 0) === 1 && lastMilestone.invoice_issued_at
+      ? String(lastMilestone.invoice_issued_at).slice(0, 10)
+      : null;
+  // 허가 정보 섹션/완료일(허가일) KPI는 용역분류가 통합허가 계열일 때만 노출
+  const isIntegratedPermit = String(contract.service_type ?? "").includes("통합");
+  const permitIssuedAt = contract.permit_issued_at ? String(contract.permit_issued_at).slice(0, 10) : null;
 
   // Local copy of the milestone rows so drag reordering feels instant; it is
   // re-synced whenever the parent reloads the contract detail (which happens
@@ -767,25 +833,36 @@ function ContractDetailPanel({
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-2xl font-bold text-stone-800">{String(contract.contract_title ?? "")}</h2>
+            <h2 className="text-2xl font-bold cd-text">{String(contract.contract_title ?? "")}</h2>
             {overdueTag && (
               <span
-                className="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold text-stone-800 shadow-sm"
+                className="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold cd-text shadow-sm"
                 style={{ backgroundColor: overdueTag.color }}
                 title={overdueTag.tooltip}
               >
                 {overdueTag.label}
               </span>
             )}
+            {onBackToBilling && (
+              <button
+                type="button"
+                onClick={onBackToBilling}
+                className="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold border cd-border-c cd-text-muted hover:bg-[color:var(--cd-surface)] inline-flex items-center gap-1 shadow-sm"
+                title="수주 현황 화면으로 돌아갑니다"
+              >
+                <Undo2 className="w-3 h-3" />
+                수주 현황으로 돌아가기
+              </button>
+            )}
           </div>
-          <p className="text-sm text-stone-500 mt-2">
+          <p className="text-sm cd-text-faint mt-2">
             {String(contract.counterparty_name ?? "")} · 업체ID {String(contract.legacy_company_id ?? "-")}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <button
             type="button"
-            className="glass-button rounded-xl px-3 py-2 text-xs text-stone-700 flex items-center gap-1"
+            className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs cd-text-muted flex items-center gap-1"
             onClick={() => {
               // Prefer the most recent contract/amendment PDF stored in
               // contract_documents; the legacy fallback to invoice[0] is kept
@@ -816,7 +893,7 @@ function ContractDetailPanel({
           <button
             type="button"
             onClick={onOpenChange}
-            className="rounded-xl px-3 py-2 text-xs text-white bg-primary hover:bg-primary/90 shadow-sm flex items-center gap-1"
+            className="rounded-xl px-3 py-2 text-xs text-white cd-fill-primary shadow-sm flex items-center gap-1"
           >
             <Pencil className="w-3.5 h-3.5" />
             변경계약 입력
@@ -855,7 +932,7 @@ function ContractDetailPanel({
                 {targetFacilities.length > 0 && (
                   <button
                     type="button"
-                    className="rounded-full p-0.5 text-primary hover:bg-primary/10"
+                    className="rounded-full p-0.5 cd-text-primary hover:bg-[color:var(--cd-primary-soft)]"
                     onClick={() => setTargetFacilityPopupOpen(true)}
                     aria-label={`${targetFacilityLabel} 목록 보기`}
                   >
@@ -867,7 +944,13 @@ function ContractDetailPanel({
           />
           <Info label="대금 지급 방식" value={String(contract.payment_method ?? "-")} />
           <Info label="발주 주체 구분" value={getOrderingSubjectLabel(contract.ordering_subject_type)} />
-          <Info label="외주 용역" value={outsourcingCount > 0 ? `${outsourcingCount}건 등록` : "없음"} highlight={outsourcingCount > 0} />
+          <Info label="외주 용역" value={outsourcingCount > 0 ? `${outsourcingCount}건 등록` : "없음"} />
+          <Info label="완료일(발행일)" value={completionInvoiceDate ?? "-"} highlight={!!completionInvoiceDate} />
+          <Info
+            label="완료일(허가일)"
+            value={isIntegratedPermit ? (permitIssuedAt ?? "-") : "-"}
+            highlight={isIntegratedPermit && !!permitIssuedAt}
+          />
         </div>
         <CollectionProgressCard
           rate={collectionRate}
@@ -879,21 +962,21 @@ function ContractDetailPanel({
       {targetFacilityPopupOpen && (
         <div className="fixed inset-0 z-50 bg-stone-950/10" onClick={() => setTargetFacilityPopupOpen(false)}>
           <div
-            className="absolute right-8 top-28 w-[min(520px,calc(100vw-48px))] rounded-3xl border border-stone-200 bg-white p-4 shadow-2xl"
+            className="absolute right-8 top-28 w-[min(520px,calc(100vw-48px))] rounded-3xl border cd-border-c cd-card-bg p-4 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between gap-3 mb-3">
-              <h3 className="font-bold text-stone-800">{targetFacilityLabel} {targetFacilities.length}개</h3>
-              <button type="button" className="text-stone-400 hover:text-stone-700" onClick={() => setTargetFacilityPopupOpen(false)}>
+              <h3 className="font-bold cd-text">{targetFacilityLabel} {targetFacilities.length}개</h3>
+              <button type="button" className="cd-text-faint hover:opacity-70" onClick={() => setTargetFacilityPopupOpen(false)}>
                 <X className="w-4 h-4" />
               </button>
             </div>
             <div className="grid gap-2 max-h-[420px] overflow-y-auto">
               {targetFacilities.map((facility) => (
-                <div key={String(facility.facility_id)} className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3">
-                  <p className="font-bold text-sm text-stone-800">{String(facility.company_name ?? "-")}</p>
-                  <p className="text-xs text-stone-500 mt-1">{String(facility.site_address ?? "-")}</p>
-                  <p className="text-[11px] text-stone-400 mt-1">
+                <div key={String(facility.facility_id)} className="rounded-2xl border cd-border-c cd-surface-bg p-3">
+                  <p className="font-bold text-sm cd-text">{String(facility.company_name ?? "-")}</p>
+                  <p className="text-xs cd-text-faint mt-1">{String(facility.site_address ?? "-")}</p>
+                  <p className="text-[11px] cd-text-faint mt-1">
                     {String(facility.business_registration_no ?? facility.site_business_registration_no ?? "-")}
                     {facility.integrated_permit_target ? ` · ${String(facility.integrated_permit_target)}` : ""}
                   </p>
@@ -905,19 +988,19 @@ function ContractDetailPanel({
       )}
 
       {outsourcingCount > 0 && (
-        <div className="rounded-2xl border border-stone-200/80 bg-white/60 p-4">
-          <h3 className="font-bold text-stone-800 mb-3">외주 용역</h3>
+        <div className="rounded-2xl border cd-border-c cd-surface-bg p-4">
+          <h3 className="font-bold cd-text mb-3">외주 용역</h3>
           <div className="grid gap-2">
             {detail.outsourcing.map((item) => (
-              <div key={String(item.outsourcing_id)} className="rounded-xl border border-stone-200/70 bg-white/70 px-3 py-2 text-sm">
+              <div key={String(item.outsourcing_id)} className="rounded-xl border cd-border-c cd-surface-bg px-3 py-2 text-sm">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-stone-800">{String(item.outsourcing_title ?? "-")}</span>
-                  <span className="font-mono text-xs text-stone-500">
+                  <span className="cd-text">{String(item.outsourcing_title ?? "-")}</span>
+                  <span className="font-mono text-xs cd-text-faint">
                     {item.amount ? formatExactAmount(item.amount) : ""}
                   </span>
                 </div>
-                <p className="text-xs text-stone-500 mt-1">
-                  {String(item.counterparty_entity_name ?? item.counterparty_name ?? "-")}
+                <p className="text-xs cd-text-faint mt-1">
+                  {String(item.counterparty_facility_name ?? item.counterparty_name ?? "-")}
                   {item.contract_date ? ` · 계약일 ${String(item.contract_date)}` : ""}
                 </p>
               </div>
@@ -929,21 +1012,21 @@ function ContractDetailPanel({
       <div>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-baseline gap-2">
-            <h3 className="font-bold text-stone-800">청구·수금 단계</h3>
-            <span className="text-[11px] text-stone-400">행을 드래그해 순서 변경</span>
+            <h3 className="font-bold cd-text">청구·수금 단계</h3>
+            <span className="text-[11px] cd-text-faint">행을 드래그해 순서 변경</span>
           </div>
           <button
             type="button"
             onClick={onOpenNewStage}
-            className="rounded-lg px-3 py-1.5 text-xs text-white bg-primary hover:bg-primary/90 shadow-sm flex items-center gap-1"
+            className="rounded-lg px-3 py-1.5 text-xs text-white cd-fill-primary shadow-sm flex items-center gap-1"
           >
             <Plus className="w-3 h-3" />
             단계 추가
           </button>
         </div>
-        <div className="overflow-hidden rounded-2xl border border-stone-200/80">
+        <div className="overflow-hidden rounded-2xl border cd-border-c">
           <table className="w-full text-xs">
-            <thead className="bg-stone-100 text-stone-700 text-[11px]">
+            <thead className="cd-surface-bg cd-text-muted text-[11px]">
               <tr>
                 <th className="text-left p-2.5">차수</th>
                 <th className="text-left p-2.5">단계명</th>
@@ -956,7 +1039,7 @@ function ContractDetailPanel({
                 <th className="text-right p-2.5">작업</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-stone-200/70">
+            <tbody className="divide-y divide-[color:var(--cd-border)]">
               {orderedMilestones.map((milestone, idx) => {
                 const milestoneId = String(milestone.milestone_id ?? "");
                 const stageAmount = Number(milestone.amount ?? 0);
@@ -986,29 +1069,29 @@ function ContractDetailPanel({
                     className={
                       "transition-colors " +
                       (isDragging ? "opacity-50 " : "") +
-                      (isDropTarget ? "bg-primary/10 " : "bg-white/60 ")
+                      (isDropTarget ? "cd-tint-primary " : "")
                     }
                   >
-                    <td className="p-2.5 font-mono text-stone-600">
+                    <td className="p-2.5 font-mono cd-text-muted">
                       <span className="flex items-center gap-1.5" title="드래그하여 순서 변경">
-                        <GripVertical className="w-3.5 h-3.5 text-stone-400 cursor-grab active:cursor-grabbing" />
+                        <GripVertical className="w-3.5 h-3.5 cd-text-faint cursor-grab active:cursor-grabbing" />
                         {idx + 1}
                       </span>
                     </td>
-                    <td className="p-2.5 text-stone-800">{String(milestone.stage_label ?? "")}</td>
+                    <td className="p-2.5 cd-text">{String(milestone.stage_label ?? "")}</td>
                     <td className="p-2.5 text-right font-mono tabular-nums">{formatExactAmount(stageAmount)}</td>
-                    <td className="p-2.5 text-stone-600 max-w-[220px] truncate" title={String(milestone.payment_terms ?? "")}>
+                    <td className="p-2.5 cd-text-muted max-w-[220px] truncate" title={String(milestone.payment_terms ?? "")}>
                       {String(milestone.payment_terms ?? "-") || "-"}
                     </td>
-                    <td className="p-2.5 text-center text-stone-600">{String(milestone.invoice_issued_at ?? "-") || "-"}</td>
-                    <td className="p-2.5 text-center text-stone-600">{String(milestone.payment_collected_at ?? "-") || "-"}</td>
+                    <td className="p-2.5 text-center cd-text-muted">{String(milestone.invoice_issued_at ?? "-") || "-"}</td>
+                    <td className="p-2.5 text-center cd-text-muted">{String(milestone.payment_collected_at ?? "-") || "-"}</td>
                     <td className="p-2.5 text-right font-mono">{ratioLabel}</td>
                     <td className="p-2.5 text-right font-mono tabular-nums">{formatExactAmount(milestone.collected_amount)}</td>
                     <td className="p-2.5 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <button
                           type="button"
-                          className="rounded-lg px-2 py-1 text-[11px] text-white bg-primary hover:bg-primary/90 shadow-sm inline-flex items-center gap-1"
+                          className="rounded-lg px-2 py-1 text-[11px] text-white cd-fill-primary shadow-sm inline-flex items-center gap-1"
                           onClick={() =>
                             onOpenInvoice({
                               milestoneId,
@@ -1031,7 +1114,7 @@ function ContractDetailPanel({
                         </button>
                         <button
                           type="button"
-                          className="rounded-lg px-2 py-1 text-[11px] border border-stone-300 text-stone-700 hover:bg-stone-100"
+                          className="rounded-lg px-2 py-1 text-[11px] border cd-border-c cd-text-muted hover:bg-[color:var(--cd-surface)]"
                           onClick={() =>
                             onOpenEditStage({
                               milestoneId,
@@ -1067,7 +1150,7 @@ function ContractDetailPanel({
               })}
               {orderedMilestones.length === 0 && (
                 <tr>
-                  <td className="p-6 text-center text-stone-500" colSpan={9}>
+                  <td className="p-6 text-center cd-text-faint" colSpan={9}>
                     등록된 청구 단계가 없습니다. 우상단의 `단계 추가` 버튼으로 추가하세요.
                   </td>
                 </tr>
@@ -1077,8 +1160,19 @@ function ContractDetailPanel({
         </div>
       </div>
 
+      {isIntegratedPermit && (
+        <PermitInfoSection
+          contractId={String(contract.contract_id ?? "")}
+          serviceSubtype={String(contract.service_subtype ?? "")}
+          permitIssuedAt={permitIssuedAt ?? ""}
+          permitNo={contract.permit_no != null ? String(contract.permit_no) : ""}
+          permitNote={contract.permit_note != null ? String(contract.permit_note) : ""}
+          onSaved={onReloadDetail}
+        />
+      )}
+
       <div>
-        <h3 className="font-bold text-stone-800 mb-3">세금계산서 파일</h3>
+        <h3 className="font-bold cd-text mb-3">세금계산서 파일</h3>
         <div className="grid gap-2">
           {detail.invoices.map((invoice) => {
             const title = String(invoice.document_display_name ?? invoice.invoice_id);
@@ -1089,15 +1183,130 @@ function ContractDetailPanel({
               type="button"
               disabled={!url}
               onClick={() => url && onOpenPdf({ title, url })}
-              className="rounded-xl border border-stone-200/80 bg-white/60 px-3 py-2 text-sm hover:bg-primary/5 flex items-center justify-between gap-3"
+              className="rounded-xl border cd-border-c cd-surface-bg px-3 py-2 text-sm hover:bg-[color:var(--cd-surface)] flex items-center justify-between gap-3"
             >
               <span>{title}</span>
-              <span className="text-xs text-stone-500">{String(invoice.issue_date ?? "")}</span>
+              <span className="text-xs cd-text-faint">{String(invoice.issue_date ?? "")}</span>
             </button>
           );
           })}
-          {detail.invoices.length === 0 && <p className="text-sm text-stone-500">등록된 세금계산서 PDF가 없습니다.</p>}
+          {detail.invoices.length === 0 && <p className="text-sm cd-text-faint">등록된 세금계산서 PDF가 없습니다.</p>}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** 허가번호 입력이 가능한 용역세분류 */
+const PERMIT_NO_SUBTYPES = new Set(["최초허가", "변경허가", "재검토"]);
+
+/**
+ * 허가 정보 — 용역분류가 통합허가 계열인 계약에서만 표시.
+ * 해당 계약 건으로 진행된 허가 완료 내역(허가일/허가번호/비고)을 입력한다.
+ * 허가일은 완료 현황 탭의 완료일(허가일)과 계약 상세 KPI에 사용된다.
+ */
+function PermitInfoSection({
+  contractId,
+  serviceSubtype,
+  permitIssuedAt,
+  permitNo,
+  permitNote,
+  onSaved,
+}: {
+  contractId: string;
+  serviceSubtype: string;
+  permitIssuedAt: string;
+  permitNo: string;
+  permitNote: string;
+  onSaved: () => void;
+}) {
+  const toast = useToast();
+  const [issuedAt, setIssuedAt] = useState(permitIssuedAt);
+  const [no, setNo] = useState(permitNo);
+  const [note, setNote] = useState(permitNote);
+  const [saving, setSaving] = useState(false);
+
+  // 다른 계약 선택/저장 후 재조회 시 폼을 서버 값으로 동기화
+  useEffect(() => {
+    setIssuedAt(permitIssuedAt);
+    setNo(permitNo);
+    setNote(permitNote);
+  }, [contractId, permitIssuedAt, permitNo, permitNote]);
+
+  const permitNoEnabled = PERMIT_NO_SUBTYPES.has(serviceSubtype.trim());
+  const dirty = issuedAt !== permitIssuedAt || no !== permitNo || note !== permitNote;
+
+  const save = async () => {
+    if (saving || !dirty) return;
+    if (issuedAt && !/^\d{4}-\d{2}-\d{2}$/.test(issuedAt)) {
+      toast.show("허가일은 8자리(YYYYMMDD)로 입력해 주세요.", "error");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/contracts/${encodeURIComponent(contractId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          permitIssuedAt: issuedAt || null,
+          permitNo: no.trim() || null,
+          permitNote: note.trim() || null,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? "HTTP " + res.status);
+      }
+      toast.show("허가 정보를 저장했습니다.", "success");
+      onSaved();
+    } catch (err) {
+      toast.show("저장 실패: " + (err as Error).message, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="rounded-2xl border cd-border-c p-4">
+      <div className="flex items-baseline gap-2 mb-3">
+        <h3 className="font-bold cd-text">허가 정보</h3>
+        <span className="text-[11px] cd-text-faint">해당 계약 건으로 진행된 허가 완료 내역</span>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-[220px_220px_minmax(0,1fr)_auto] gap-3 items-end">
+        <label className="grid gap-1 text-sm">
+          <span className="font-bold cd-text-muted">허가일</span>
+          <DateInput value={issuedAt} onChange={setIssuedAt} />
+        </label>
+        <label className="grid gap-1 text-sm">
+          <span className="font-bold cd-text-muted">허가번호</span>
+          <input
+            type="text"
+            className="cd-input disabled:opacity-50 disabled:cursor-not-allowed"
+            placeholder={permitNoEnabled ? "허가번호 입력" : "최초허가·변경허가·재검토만 입력"}
+            value={no}
+            disabled={!permitNoEnabled}
+            onChange={(e) => setNo(e.target.value)}
+            title={permitNoEnabled ? undefined : "용역세분류가 최초허가, 변경허가, 재검토인 경우에만 입력할 수 있습니다."}
+          />
+        </label>
+        <label className="grid gap-1 text-sm">
+          <span className="font-bold cd-text-muted">비고</span>
+          <input
+            type="text"
+            className="cd-input"
+            placeholder="비고 입력"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
+        </label>
+        <button
+          type="button"
+          onClick={save}
+          disabled={saving || !dirty}
+          className="rounded-xl px-4 py-2 text-xs text-white cd-fill-primary shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {saving ? "저장 중…" : "저장"}
+        </button>
       </div>
     </div>
   );
@@ -1192,26 +1401,26 @@ function InvoiceUploadModal({
     <ModalShell title={`${state.stageLabel} 발행/수금 정보 입력`} onClose={onClose}>
       <div className="p-5 grid gap-3 grid-cols-2">
         <label className="grid gap-1 text-sm col-span-2">
-          <span className="font-bold text-stone-700">계산서 발행일</span>
+          <span className="font-bold cd-text-muted">계산서 발행일</span>
           <DateInput value={state.issueDate} onChange={(issueDate) => onChange({ ...state, issueDate })} />
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-bold text-stone-700">발행금액</span>
+          <span className="font-bold cd-text-muted">발행금액</span>
           <input
             type="text"
             inputMode="numeric"
-            className="input-field tabular-nums"
+            className="cd-input tabular-nums"
             value={formatThousands(state.invoiceAmount)}
             onChange={(e) => onChange({ ...state, invoiceAmount: stripDigits(e.target.value) })}
           />
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-bold text-stone-700">대금 지급 조건</span>
-          <input type="text" className="input-field" placeholder="예: 세금계산서 발행 후 30일 이내 지급"
+          <span className="font-bold cd-text-muted">대금 지급 조건</span>
+          <input type="text" className="cd-input" placeholder="예: 세금계산서 발행 후 30일 이내 지급"
             value={state.paymentTerms} onChange={(e) => onChange({ ...state, paymentTerms: e.target.value })} />
         </label>
         <div className="grid gap-1 text-sm col-span-2">
-          <span className="font-bold text-stone-700">계산서 PDF 첨부</span>
+          <span className="font-bold cd-text-muted">계산서 PDF 첨부</span>
           <input
             ref={fileInputRef}
             type="file"
@@ -1227,29 +1436,29 @@ function InvoiceUploadModal({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="rounded-lg bg-primary px-3 py-2 text-xs font-bold text-white hover:bg-primary/90 shadow-sm"
+              className="rounded-lg cd-fill-primary px-3 py-2 text-xs font-bold text-white shadow-sm"
             >
               파일 선택
             </button>
-            <span className="text-xs text-stone-500">{fileName ? `선택됨: ${fileName}` : "선택된 파일 없음"}</span>
+            <span className="text-xs cd-text-faint">{fileName ? `선택됨: ${fileName}` : "선택된 파일 없음"}</span>
           </div>
         </div>
-        <label className="flex items-center gap-2 text-sm font-bold text-stone-700 col-span-2">
+        <label className="flex items-center gap-2 text-sm font-bold cd-text-muted col-span-2">
           <input type="checkbox" checked={state.paymentCollected} onChange={(e) => onChange({ ...state, paymentCollected: e.target.checked })} />
           수금 정보 등록
         </label>
         {state.paymentCollected && (
           <>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold text-stone-700">수금일</span>
+              <span className="font-bold cd-text-muted">수금일</span>
               <DateInput value={state.paymentCollectedAt} onChange={(paymentCollectedAt) => onChange({ ...state, paymentCollectedAt })} />
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold text-stone-700">수금금액</span>
+              <span className="font-bold cd-text-muted">수금금액</span>
               <input
                 type="text"
                 inputMode="numeric"
-                className="input-field tabular-nums"
+                className="cd-input tabular-nums"
                 value={formatThousands(state.collectedAmount)}
                 onChange={(e) => {
                   const digits = stripDigits(e.target.value);
@@ -1264,9 +1473,9 @@ function InvoiceUploadModal({
               />
             </label>
             <label className="grid gap-1 text-sm col-span-2">
-              <span className="font-bold text-stone-700">부분입금 사유</span>
+              <span className="font-bold cd-text-muted">부분입금 사유</span>
               <textarea
-                className="input-field min-h-[84px]"
+                className="cd-input min-h-[84px]"
                 placeholder="예: 업체 자금 사정으로 일부만 입금, 착오입금 후 잔액 추후 입금 예정 등"
                 value={state.partialPaymentMemo}
                 onChange={(e) => onChange({ ...state, partialPaymentMemo: e.target.value })}
@@ -1274,13 +1483,13 @@ function InvoiceUploadModal({
             </label>
           </>
         )}
-        <p className="text-xs text-stone-500 col-span-2">
+        <p className="text-xs cd-text-faint col-span-2">
           저장 경로는 발행일 기준 <code>매출계산서/년도/분기</code> 논리 경로로 생성됩니다.
         </p>
       </div>
-      <div className="p-5 pt-0 border-t border-stone-200/70 flex justify-end gap-2 mt-2">
-        <button type="button" onClick={onClose} className="glass-button rounded-xl px-4 py-2 text-sm font-bold text-stone-700">닫기</button>
-        <button type="button" onClick={submit} disabled={saving} className="rounded-xl px-4 py-2 text-sm font-bold text-white bg-primary hover:bg-primary/90 shadow-sm disabled:opacity-60">
+      <div className="p-5 pt-0 border-t cd-border-c flex justify-end gap-2 mt-2">
+        <button type="button" onClick={onClose} className="cd-btn cd-btn-ghost rounded-xl px-4 py-2 text-sm font-bold cd-text-muted">닫기</button>
+        <button type="button" onClick={submit} disabled={saving} className="rounded-xl px-4 py-2 text-sm font-bold text-white cd-fill-primary shadow-sm disabled:opacity-60">
           {saving ? "저장 중..." : "입력"}
         </button>
       </div>
@@ -1302,9 +1511,9 @@ function NewContractModal({
   const toast = useToast();
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState<"basic" | "milestones" | "outsourcing" | "document">("basic");
-  const [entityOptions, setEntityOptions] = useState<LegalEntitySearchItem[]>([]);
+  const [entityOptions, setEntityOptions] = useState<FacilitySearchItem[]>([]);
   const [facilityOptions, setFacilityOptions] = useState<FacilitySearchItem[]>([]);
-  const [outsourcingEntityOptions, setOutsourcingEntityOptions] = useState<LegalEntitySearchItem[]>([]);
+  const [outsourcingEntityOptions, setOutsourcingEntityOptions] = useState<FacilitySearchItem[]>([]);
   const [outsourcingTypeOptions, setOutsourcingTypeOptions] = useState(DEFAULT_OUTSOURCING_TYPES);
   const { industryOptions, setIndustryOptions } = useContractIndustryOptions();
   const documentFileRef = useRef<File | null>(null);
@@ -1325,12 +1534,13 @@ function NewContractModal({
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/legal-entities?q=${encodeURIComponent(q)}`, {
+        const params = new URLSearchParams({ q, limit: "20", sort: "name" });
+        const res = await fetch(`/api/facilities?${params.toString()}`, {
           cache: "no-store",
           signal: controller.signal,
         });
         if (!res.ok) return;
-        const json = (await res.json()) as { items?: LegalEntitySearchItem[] };
+        const json = (await res.json()) as { items?: FacilitySearchItem[] };
         setEntityOptions(json.items ?? []);
       } catch {
         if (!controller.signal.aborted) setEntityOptions([]);
@@ -1382,12 +1592,13 @@ function NewContractModal({
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/legal-entities?q=${encodeURIComponent(q)}`, {
+        const params = new URLSearchParams({ q, limit: "20", sort: "name" });
+        const res = await fetch(`/api/facilities?${params.toString()}`, {
           cache: "no-store",
           signal: controller.signal,
         });
         if (!res.ok) return;
-        const json = (await res.json()) as { items?: LegalEntitySearchItem[] };
+        const json = (await res.json()) as { items?: FacilitySearchItem[] };
         setOutsourcingEntityOptions(json.items ?? []);
       } catch {
         if (!controller.signal.aborted) setOutsourcingEntityOptions([]);
@@ -1411,7 +1622,7 @@ function NewContractModal({
   useEffect(() => {
     if (state.orderingSubjectType !== ORDERING_SUBJECT_SITE_DIRECT) return;
     const brn = (state.counterpartyBusinessRegistrationNo ?? "").replace(/[^0-9]/g, "");
-    if (!state.counterpartyEntityId || !brn) {
+    if (!state.counterpartyFacilityId || !brn) {
       if (state.selectedFacilities.length > 0) onChange({ ...state, selectedFacilities: [] });
       return;
     }
@@ -1440,7 +1651,7 @@ function NewContractModal({
     })();
     return () => controller.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.orderingSubjectType, state.counterpartyEntityId, state.counterpartyBusinessRegistrationNo]);
+  }, [state.orderingSubjectType, state.counterpartyFacilityId, state.counterpartyBusinessRegistrationNo]);
 
   // 발주 주체 구분에 따른 대상사업장 추가. 소속 법인·모회사 / 위탁운영사는
   // 사업장 상세 정보를 받아 관계를 검증한 뒤에만 추가한다.
@@ -1480,7 +1691,7 @@ function NewContractModal({
       setTab("basic");
       return;
     }
-    if (!state.counterpartyEntityId) {
+    if (!state.counterpartyFacilityId) {
       toast.show("계약상대 업체를 선택하세요.", "error");
       setTab("basic");
       return;
@@ -1509,7 +1720,7 @@ function NewContractModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contractTitle: state.contractTitle,
-          counterpartyEntityId: state.counterpartyEntityId,
+          counterpartyFacilityId: state.counterpartyFacilityId,
           serviceType: state.serviceType || null,
           serviceSubtype: state.serviceSubtype || null,
           contractKind: state.contractKind,
@@ -1569,7 +1780,7 @@ function NewContractModal({
       if (state.outsourcing.outsourcingTitle.trim()) {
         const outsourcingForm = new FormData();
         outsourcingForm.set("outsourcingTitle", state.outsourcing.outsourcingTitle);
-        outsourcingForm.set("counterpartyEntityId", state.outsourcing.counterpartyEntityId);
+        outsourcingForm.set("counterpartyFacilityId", state.outsourcing.counterpartyFacilityId);
         outsourcingForm.set("counterpartyName", state.outsourcing.counterpartyName || state.outsourcing.counterpartyQuery);
         outsourcingForm.set("serviceType", state.outsourcing.serviceType);
         outsourcingForm.set("contractDate", state.outsourcing.contractDate);
@@ -1599,7 +1810,7 @@ function NewContractModal({
 
   return (
     <ModalShell title="신규 계약 입력" onClose={onClose} wide>
-      <div className="border-b border-stone-200/70 px-5 pt-4 flex gap-2">
+      <div className="border-b cd-border-c px-5 pt-4 flex gap-2">
         {[
           ["basic", "계약 상세정보"],
           ["milestones", "청구·수금 단계"],
@@ -1612,7 +1823,7 @@ function NewContractModal({
             onClick={() => setTab(key as typeof tab)}
             className={
               "rounded-t-xl px-3 py-2 text-xs border border-b-0 " +
-              (tab === key ? "bg-white text-primary border-primary/30" : "bg-stone-50 text-stone-500 border-stone-200")
+              (tab === key ? "cd-card-bg cd-text-primary border-[color:var(--cd-primary)]" : "cd-surface-bg cd-text-faint cd-border-c")
             }
           >
             {label}
@@ -1624,46 +1835,46 @@ function NewContractModal({
         {tab === "basic" && (
           <div className="grid grid-cols-2 gap-3">
             <label className="grid gap-1 text-sm col-span-2">
-              <span className="font-bold text-stone-700">계약명</span>
-              <input className="input-field" value={state.contractTitle} onChange={(e) => onChange({ ...state, contractTitle: e.target.value })} />
+              <span className="font-bold cd-text-muted">계약명</span>
+              <input className="cd-input" value={state.contractTitle} onChange={(e) => onChange({ ...state, contractTitle: e.target.value })} />
             </label>
             <label className="grid gap-1 text-sm col-span-2 relative">
-              <span className="font-bold text-stone-700">계약상대 업체</span>
+              <span className="font-bold cd-text-muted">계약상대 업체</span>
               <input
-                className="input-field"
+                className="cd-input"
                 placeholder="업체명 또는 사업자번호 검색"
                 value={state.counterpartyQuery}
-                onChange={(e) => onChange({ ...state, counterpartyQuery: e.target.value, counterpartyEntityId: "", counterpartyName: "", counterpartyBusinessRegistrationNo: null })}
+                onChange={(e) => onChange({ ...state, counterpartyQuery: e.target.value, counterpartyFacilityId: "", counterpartyName: "", counterpartyBusinessRegistrationNo: null })}
               />
-              {state.counterpartyName && <p className="text-xs text-primary">선택됨: {state.counterpartyName}</p>}
-              {entityOptions.length > 0 && !state.counterpartyEntityId && (
-                <div className="absolute z-10 top-[70px] left-0 right-0 rounded-xl border border-stone-200 bg-white shadow-lg max-h-56 overflow-y-auto">
+              {state.counterpartyName && <p className="text-xs cd-text-primary">선택됨: {state.counterpartyName}</p>}
+              {entityOptions.length > 0 && !state.counterpartyFacilityId && (
+                <div className="absolute z-10 top-[70px] left-0 right-0 rounded-xl border cd-border-c cd-card-bg shadow-lg max-h-56 overflow-y-auto">
                   {entityOptions.map((entity) => (
                     <button
-                      key={entity.entityId}
+                      key={entity.facilityId}
                       type="button"
-                      className="w-full px-3 py-2 text-left text-sm hover:bg-primary/5"
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-[color:var(--cd-surface)]"
                       onClick={() =>
                         onChange({
                           ...state,
-                          counterpartyEntityId: entity.entityId,
-                          counterpartyName: entity.entityName,
-                          counterpartyQuery: entity.entityName,
+                          counterpartyFacilityId: entity.facilityId,
+                          counterpartyName: entity.companyName,
+                          counterpartyQuery: entity.companyName,
                           counterpartyBusinessRegistrationNo: entity.businessRegistrationNo ?? null,
                         })
                       }
                     >
-                      <span className="text-stone-800">{entity.entityName}</span>
-                      <span className="ml-2 text-xs text-stone-400">{entity.businessRegistrationNo ?? ""}</span>
+                      <span className="cd-text">{entity.companyName}</span>
+                      <span className="ml-2 text-xs cd-text-faint">{entity.businessRegistrationNo ?? ""}</span>
                     </button>
                   ))}
                 </div>
               )}
             </label>
             <label className="grid gap-1 text-sm relative">
-              <span className="font-bold text-stone-700">{buildTargetFacilityLabel(state.serviceType)}</span>
+              <span className="font-bold cd-text-muted">{buildTargetFacilityLabel(state.serviceType)}</span>
               <input
-                className="input-field disabled:opacity-60"
+                className="cd-input disabled:opacity-60"
                 placeholder={
                   state.orderingSubjectType === ORDERING_SUBJECT_SITE_DIRECT
                     ? "계약상대 업체 기준 자동 입력"
@@ -1676,11 +1887,11 @@ function NewContractModal({
               {state.selectedFacilities.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-1">
                   {state.selectedFacilities.map((facility) => (
-                    <span key={facility.facilityId} className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">
+                    <span key={facility.facilityId} className="inline-flex items-center gap-1 rounded-full cd-tint-primary px-2.5 py-1 text-xs cd-text-primary">
                       {facility.companyName}
                       <button
                         type="button"
-                        className="text-primary/70 hover:text-primary"
+                        className="cd-text-primary hover:text-[color:var(--cd-primary)]"
                         onClick={() =>
                           onChange({
                             ...state,
@@ -1695,28 +1906,28 @@ function NewContractModal({
                 </div>
               )}
               {state.orderingSubjectType !== ORDERING_SUBJECT_SITE_DIRECT && facilityOptions.length > 0 && (
-                <div className="absolute z-10 top-[70px] left-0 right-0 rounded-xl border border-stone-200 bg-white shadow-lg max-h-56 overflow-y-auto">
+                <div className="absolute z-10 top-[70px] left-0 right-0 rounded-xl border cd-border-c cd-card-bg shadow-lg max-h-56 overflow-y-auto">
                   {facilityOptions
                     .filter((facility) => !state.selectedFacilities.some((selected) => selected.facilityId === facility.facilityId))
                     .map((facility) => (
                       <button
                         key={facility.facilityId}
                         type="button"
-                        className="w-full px-3 py-2 text-left text-sm hover:bg-primary/5"
+                        className="w-full px-3 py-2 text-left text-sm hover:bg-[color:var(--cd-surface)]"
                         onClick={() => addTargetFacility(facility)}
                       >
-                        <span className="text-stone-800">{facility.companyName}</span>
-                        <span className="ml-2 text-xs text-stone-400">{facility.businessRegistrationNo ?? ""}</span>
-                        {facility.siteAddress && <p className="text-xs text-stone-500 mt-0.5 truncate">{facility.siteAddress}</p>}
+                        <span className="cd-text">{facility.companyName}</span>
+                        <span className="ml-2 text-xs cd-text-faint">{facility.businessRegistrationNo ?? ""}</span>
+                        {facility.siteAddress && <p className="text-xs cd-text-faint mt-0.5 truncate">{facility.siteAddress}</p>}
                       </button>
                     ))}
                 </div>
               )}
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold text-stone-700">발주 주체 구분</span>
+              <span className="font-bold cd-text-muted">발주 주체 구분</span>
               <select
-                className="ui-select"
+                className="cd-select"
                 value={state.orderingSubjectType}
                 onChange={(e) => onChange({ ...state, orderingSubjectType: e.target.value, facilityQuery: "", selectedFacilities: [] })}
               >
@@ -1724,14 +1935,14 @@ function NewContractModal({
                   <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
               </select>
-              <span className="text-[11px] text-stone-500">
+              <span className="text-[11px] cd-text-faint">
                 대상사업장 기준, 실제 계약 체결 주체와의 관계
               </span>
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold text-stone-700">용역분류</span>
+              <span className="font-bold cd-text-muted">용역분류</span>
               <select
-                className="ui-select"
+                className="cd-select"
                 value={state.serviceType}
                 onChange={(e) => {
                   const nextType = e.target.value;
@@ -1751,9 +1962,9 @@ function NewContractModal({
               </select>
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold text-stone-700">용역세분류</span>
+              <span className="font-bold cd-text-muted">용역세분류</span>
               <select
-                className="ui-select"
+                className="cd-select"
                 value={state.serviceSubtype}
                 onChange={(e) => onChange({ ...state, serviceSubtype: e.target.value })}
               >
@@ -1763,24 +1974,24 @@ function NewContractModal({
               </select>
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold text-stone-700">계약 종류</span>
-              <select className="ui-select" value={state.contractKind} onChange={(e) => onChange({ ...state, contractKind: e.target.value as "standard" | "unit_price" })}>
+              <span className="font-bold cd-text-muted">계약 종류</span>
+              <select className="cd-select" value={state.contractKind} onChange={(e) => onChange({ ...state, contractKind: e.target.value as "standard" | "unit_price" })}>
                 <option value="standard">일반 계약</option>
                 <option value="unit_price">단가 계약</option>
               </select>
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold text-stone-700">대금 지급 방식</span>
-              <select className="ui-select" value={state.paymentMethod} onChange={(e) => onChange({ ...state, paymentMethod: e.target.value })}>
+              <span className="font-bold cd-text-muted">대금 지급 방식</span>
+              <select className="cd-select" value={state.paymentMethod} onChange={(e) => onChange({ ...state, paymentMethod: e.target.value })}>
                 {PAYMENT_METHOD_OPTIONS.map((option) => (
                   <option key={option} value={option}>{option}</option>
                 ))}
               </select>
             </label>
             <div className="grid gap-1 text-sm">
-              <span className="font-bold text-stone-700">업종</span>
+              <span className="font-bold cd-text-muted">업종</span>
               <div className="flex items-center gap-2">
-                <select className="ui-select min-w-0 flex-1" value={state.industryCategory} onChange={(e) => onChange({ ...state, industryCategory: e.target.value })}>
+                <select className="cd-select min-w-0 flex-1" value={state.industryCategory} onChange={(e) => onChange({ ...state, industryCategory: e.target.value })}>
                   <option value="">업종 선택</option>
                   {industryOptions.map((option) => (
                     <option key={option} value={option}>{option}</option>
@@ -1790,20 +2001,20 @@ function NewContractModal({
               </div>
             </div>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold text-stone-700">계약금액</span>
-              <input className="input-field tabular-nums" inputMode="numeric" value={formatThousands(state.currentAmount)} onChange={(e) => onChange({ ...state, currentAmount: stripDigits(e.target.value) })} />
+              <span className="font-bold cd-text-muted">계약금액</span>
+              <input className="cd-input tabular-nums" inputMode="numeric" value={formatThousands(state.currentAmount)} onChange={(e) => onChange({ ...state, currentAmount: stripDigits(e.target.value) })} />
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold text-stone-700">계약일</span>
+              <span className="font-bold cd-text-muted">계약일</span>
               <DateInput value={state.contractDate} onChange={(contractDate) => onChange({ ...state, contractDate, startedAt: state.startedAt || contractDate })} />
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold text-stone-700">준공일</span>
+              <span className="font-bold cd-text-muted">준공일</span>
               <DateInput value={state.endedAt} onChange={(endedAt) => onChange({ ...state, endedAt })} />
             </label>
             <label className="grid gap-1 text-sm col-span-2">
-              <span className="font-bold text-stone-700">메모</span>
-              <textarea className="input-field min-h-[90px]" value={state.memo} onChange={(e) => onChange({ ...state, memo: e.target.value })} />
+              <span className="font-bold cd-text-muted">메모</span>
+              <textarea className="cd-input min-h-[90px]" value={state.memo} onChange={(e) => onChange({ ...state, memo: e.target.value })} />
             </label>
           </div>
         )}
@@ -1811,19 +2022,19 @@ function NewContractModal({
         {tab === "milestones" && (
           <div className="grid gap-3">
             {state.milestones.map((m, idx) => (
-              <div key={m.id} className="grid grid-cols-[56px_1fr_150px_1.2fr_40px] gap-2 items-end rounded-2xl border border-stone-200 bg-white/60 p-3">
-                <div className="text-xs text-stone-500 pb-2">{idx + 1}차</div>
+              <div key={m.id} className="grid grid-cols-[56px_1fr_150px_1.2fr_40px] gap-2 items-end rounded-2xl border cd-border-c cd-surface-bg p-3">
+                <div className="text-xs cd-text-faint pb-2">{idx + 1}차</div>
                 <label className="grid gap-1 text-xs">
-                  <span className="text-stone-500">단계명</span>
-                  <input className="input-field" value={m.stageLabel} onChange={(e) => updateMilestone(m.id, { stageLabel: e.target.value })} placeholder="선급금 / 중도금1 / 준공금" />
+                  <span className="cd-text-faint">단계명</span>
+                  <input className="cd-input" value={m.stageLabel} onChange={(e) => updateMilestone(m.id, { stageLabel: e.target.value })} placeholder="선급금 / 중도금1 / 준공금" />
                 </label>
                 <label className="grid gap-1 text-xs">
-                  <span className="text-stone-500">청구금액</span>
-                  <input className="input-field tabular-nums" inputMode="numeric" value={formatThousands(m.amount)} onChange={(e) => updateMilestone(m.id, { amount: stripDigits(e.target.value) })} />
+                  <span className="cd-text-faint">청구금액</span>
+                  <input className="cd-input tabular-nums" inputMode="numeric" value={formatThousands(m.amount)} onChange={(e) => updateMilestone(m.id, { amount: stripDigits(e.target.value) })} />
                 </label>
                 <label className="grid gap-1 text-xs">
-                  <span className="text-stone-500">대금 지급 조건</span>
-                  <input className="input-field" value={m.paymentTerms} onChange={(e) => updateMilestone(m.id, { paymentTerms: e.target.value })} placeholder="세금계산서 발행 후 30일 이내" />
+                  <span className="cd-text-faint">대금 지급 조건</span>
+                  <input className="cd-input" value={m.paymentTerms} onChange={(e) => updateMilestone(m.id, { paymentTerms: e.target.value })} placeholder="세금계산서 발행 후 30일 이내" />
                 </label>
                 <button type="button" className="rounded-lg p-2 text-rose-600 hover:bg-rose-50" onClick={() => onChange({ ...state, milestones: state.milestones.filter((item) => item.id !== m.id) })}>
                   <Trash2 className="w-4 h-4" />
@@ -1832,7 +2043,7 @@ function NewContractModal({
             ))}
             <button
               type="button"
-              className="glass-button rounded-xl px-3 py-2 text-sm text-stone-700 inline-flex items-center gap-2 justify-center"
+              className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-sm cd-text-muted inline-flex items-center gap-2 justify-center"
               onClick={() => onChange({ ...state, milestones: [...state.milestones, createMilestoneDraft()] })}
             >
               <Plus className="w-4 h-4" />
@@ -1844,17 +2055,17 @@ function NewContractModal({
         {tab === "outsourcing" && (
           <div className="grid grid-cols-2 gap-3">
             <label className="grid gap-1 text-sm col-span-2">
-              <span className="font-bold text-stone-700">외주 계약명</span>
+              <span className="font-bold cd-text-muted">외주 계약명</span>
               <input
-                className="input-field"
+                className="cd-input"
                 value={state.outsourcing.outsourcingTitle}
                 onChange={(e) => onChange({ ...state, outsourcing: { ...state.outsourcing, outsourcingTitle: e.target.value } })}
               />
             </label>
             <label className="grid gap-1 text-sm col-span-2 relative">
-              <span className="font-bold text-stone-700">계약상대 업체</span>
+              <span className="font-bold cd-text-muted">계약상대 업체</span>
               <input
-                className="input-field"
+                className="cd-input"
                 placeholder="업체명 또는 사업자번호 검색"
                 value={state.outsourcing.counterpartyQuery}
                 onChange={(e) => onChange({
@@ -1862,42 +2073,42 @@ function NewContractModal({
                   outsourcing: {
                     ...state.outsourcing,
                     counterpartyQuery: e.target.value,
-                    counterpartyEntityId: "",
+                    counterpartyFacilityId: "",
                     counterpartyName: "",
                   },
                 })}
               />
-              {state.outsourcing.counterpartyName && <p className="text-xs text-primary">선택됨: {state.outsourcing.counterpartyName}</p>}
-              {outsourcingEntityOptions.length > 0 && !state.outsourcing.counterpartyEntityId && (
-                <div className="absolute z-10 top-[70px] left-0 right-0 rounded-xl border border-stone-200 bg-white shadow-lg max-h-56 overflow-y-auto">
+              {state.outsourcing.counterpartyName && <p className="text-xs cd-text-primary">선택됨: {state.outsourcing.counterpartyName}</p>}
+              {outsourcingEntityOptions.length > 0 && !state.outsourcing.counterpartyFacilityId && (
+                <div className="absolute z-10 top-[70px] left-0 right-0 rounded-xl border cd-border-c cd-card-bg shadow-lg max-h-56 overflow-y-auto">
                   {outsourcingEntityOptions.map((entity) => (
                     <button
-                      key={entity.entityId}
+                      key={entity.facilityId}
                       type="button"
-                      className="w-full px-3 py-2 text-left text-sm hover:bg-primary/5"
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-[color:var(--cd-surface)]"
                       onClick={() =>
                         onChange({
                           ...state,
                           outsourcing: {
                             ...state.outsourcing,
-                            counterpartyEntityId: entity.entityId,
-                            counterpartyName: entity.entityName,
-                            counterpartyQuery: entity.entityName,
+                            counterpartyFacilityId: entity.facilityId,
+                            counterpartyName: entity.companyName,
+                            counterpartyQuery: entity.companyName,
                           },
                         })
                       }
                     >
-                      <span className="text-stone-800">{entity.entityName}</span>
-                      <span className="ml-2 text-xs text-stone-400">{entity.businessRegistrationNo ?? ""}</span>
+                      <span className="cd-text">{entity.companyName}</span>
+                      <span className="ml-2 text-xs cd-text-faint">{entity.businessRegistrationNo ?? ""}</span>
                     </button>
                   ))}
                 </div>
               )}
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold text-stone-700">용역분류</span>
+              <span className="font-bold cd-text-muted">용역분류</span>
               <select
-                className="ui-select max-w-[220px]"
+                className="cd-select max-w-[220px]"
                 value={state.outsourcing.serviceType}
                 onChange={(e) => onChange({ ...state, outsourcing: { ...state.outsourcing, serviceType: e.target.value } })}
               >
@@ -1909,7 +2120,7 @@ function NewContractModal({
             <div className="flex items-end justify-start">
               <button
                 type="button"
-                className="glass-button rounded-xl px-3 py-2 text-xs text-stone-700"
+                className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs cd-text-muted"
                 onClick={() => {
                   const next = prompt("추가할 외주 용역 분류명을 입력하세요.");
                   if (!next?.trim()) return;
@@ -1921,7 +2132,7 @@ function NewContractModal({
               </button>
               <button
                 type="button"
-                className="ml-2 glass-button rounded-xl px-3 py-2 text-xs text-rose-600"
+                className="ml-2 cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs text-rose-600"
                 onClick={() => {
                   if (outsourcingTypeOptions.length <= 1) return;
                   const next = outsourcingTypeOptions.filter((type) => type !== state.outsourcing.serviceType);
@@ -1933,43 +2144,43 @@ function NewContractModal({
               </button>
             </div>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold text-stone-700">계약금액</span>
+              <span className="font-bold cd-text-muted">계약금액</span>
               <input
-                className="input-field tabular-nums"
+                className="cd-input tabular-nums"
                 inputMode="numeric"
                 value={formatThousands(state.outsourcing.amount)}
                 onChange={(e) => onChange({ ...state, outsourcing: { ...state.outsourcing, amount: stripDigits(e.target.value) } })}
               />
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold text-stone-700">계약일</span>
+              <span className="font-bold cd-text-muted">계약일</span>
               <DateInput value={state.outsourcing.contractDate} onChange={(contractDate) => onChange({ ...state, outsourcing: { ...state.outsourcing, contractDate } })} />
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold text-stone-700">준공일</span>
+              <span className="font-bold cd-text-muted">준공일</span>
               <DateInput value={state.outsourcing.endedAt} onChange={(endedAt) => onChange({ ...state, outsourcing: { ...state.outsourcing, endedAt } })} />
             </label>
             <label className="grid gap-1 text-sm col-span-2">
-              <span className="font-bold text-stone-700">메모</span>
+              <span className="font-bold cd-text-muted">메모</span>
               <textarea
-                className="input-field min-h-[90px]"
+                className="cd-input min-h-[90px]"
                 value={state.outsourcing.memo}
                 onChange={(e) => onChange({ ...state, outsourcing: { ...state.outsourcing, memo: e.target.value } })}
               />
             </label>
             <label className="grid gap-1 text-sm col-span-2">
-              <span className="font-bold text-stone-700">외주 계약서 PDF 첨부</span>
+              <span className="font-bold cd-text-muted">외주 계약서 PDF 첨부</span>
               <input
                 type="file"
                 accept="application/pdf,.pdf"
-                className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-2 file:text-xs file:font-bold file:text-white"
+                className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:cd-fill-primary file:px-3 file:py-2 file:text-xs file:font-bold file:text-white"
                 onChange={(e) => {
                   const nextFile = e.target.files?.[0] ?? null;
                   outsourcingFileRef.current = nextFile;
                   setOutsourcingFileName(nextFile?.name ?? "");
                 }}
               />
-              {outsourcingFileName && <span className="text-xs text-stone-500">선택됨: {outsourcingFileName}</span>}
+              {outsourcingFileName && <span className="text-xs cd-text-faint">선택됨: {outsourcingFileName}</span>}
             </label>
           </div>
         )}
@@ -1977,29 +2188,29 @@ function NewContractModal({
         {tab === "document" && (
           <div className="grid gap-4">
             <label className="grid gap-1 text-sm">
-              <span className="font-bold text-stone-700">계약서 PDF 첨부</span>
+              <span className="font-bold cd-text-muted">계약서 PDF 첨부</span>
               <input
                 type="file"
                 accept="application/pdf,.pdf"
-                className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-2 file:text-xs file:font-bold file:text-white"
+                className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:cd-fill-primary file:px-3 file:py-2 file:text-xs file:font-bold file:text-white"
                 onChange={(e) => {
                   const nextFile = e.target.files?.[0] ?? null;
                   documentFileRef.current = nextFile;
                   setDocumentFileName(nextFile?.name ?? "");
                 }}
               />
-              {documentFileName && <span className="text-xs text-stone-500">선택됨: {documentFileName}</span>}
+              {documentFileName && <span className="text-xs cd-text-faint">선택됨: {documentFileName}</span>}
             </label>
-            <p className="text-xs text-stone-500">
+            <p className="text-xs cd-text-faint">
               저장 경로는 계약일 기준 <code>매출계약서/년도/(계약일) 계약명</code> 논리 경로로 생성됩니다.
             </p>
           </div>
         )}
       </div>
 
-      <div className="p-5 pt-0 border-t border-stone-200/70 flex justify-end gap-2 mt-2">
-        <button type="button" onClick={onClose} className="glass-button rounded-xl px-4 py-2 text-sm font-bold text-stone-700">닫기</button>
-        <button type="button" onClick={submit} disabled={saving} className="rounded-xl px-4 py-2 text-sm font-bold text-white bg-primary hover:bg-primary/90 shadow-sm disabled:opacity-60">
+      <div className="p-5 pt-0 border-t cd-border-c flex justify-end gap-2 mt-2">
+        <button type="button" onClick={onClose} className="cd-btn cd-btn-ghost rounded-xl px-4 py-2 text-sm font-bold cd-text-muted">닫기</button>
+        <button type="button" onClick={submit} disabled={saving} className="rounded-xl px-4 py-2 text-sm font-bold text-white cd-fill-primary shadow-sm disabled:opacity-60">
           {saving ? "저장 중..." : "계약 등록"}
         </button>
       </div>
@@ -2089,54 +2300,54 @@ function EditMilestoneModal({
     <ModalShell title={`${state.stageLabel} 단계 수정`} onClose={onClose}>
       <div className="p-5 grid gap-3 grid-cols-2">
         <label className="grid gap-1 text-sm">
-          <span className="font-bold text-stone-700">단계명</span>
-          <input className="input-field" value={state.stageLabel} onChange={(e) => onChange({ ...state, stageLabel: e.target.value })} />
+          <span className="font-bold cd-text-muted">단계명</span>
+          <input className="cd-input" value={state.stageLabel} onChange={(e) => onChange({ ...state, stageLabel: e.target.value })} />
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-bold text-stone-700">청구금액</span>
-          <input className="input-field tabular-nums" inputMode="numeric" value={formatThousands(state.amount)} onChange={(e) => onChange({ ...state, amount: stripDigits(e.target.value) })} />
+          <span className="font-bold cd-text-muted">청구금액</span>
+          <input className="cd-input tabular-nums" inputMode="numeric" value={formatThousands(state.amount)} onChange={(e) => onChange({ ...state, amount: stripDigits(e.target.value) })} />
         </label>
         <label className="grid gap-1 text-sm col-span-2">
-          <span className="font-bold text-stone-700">대금 지급 조건</span>
-          <input className="input-field" value={state.paymentTerms} onChange={(e) => onChange({ ...state, paymentTerms: e.target.value })} />
+          <span className="font-bold cd-text-muted">대금 지급 조건</span>
+          <input className="cd-input" value={state.paymentTerms} onChange={(e) => onChange({ ...state, paymentTerms: e.target.value })} />
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-bold text-stone-700">계산서 발행일</span>
+          <span className="font-bold cd-text-muted">계산서 발행일</span>
           <DateInput value={state.issueDate} onChange={(issueDate) => onChange({ ...state, issueDate })} />
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-bold text-stone-700">계산서 발행금액</span>
-          <input className="input-field tabular-nums" inputMode="numeric" value={formatThousands(state.invoiceAmount)} onChange={(e) => onChange({ ...state, invoiceAmount: stripDigits(e.target.value) })} />
+          <span className="font-bold cd-text-muted">계산서 발행금액</span>
+          <input className="cd-input tabular-nums" inputMode="numeric" value={formatThousands(state.invoiceAmount)} onChange={(e) => onChange({ ...state, invoiceAmount: stripDigits(e.target.value) })} />
         </label>
         <label className="grid gap-1 text-sm col-span-2">
-          <span className="font-bold text-stone-700">세금계산서 교체 PDF</span>
+          <span className="font-bold cd-text-muted">세금계산서 교체 PDF</span>
           <input
             type="file"
             accept="application/pdf,.pdf"
-            className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-2 file:text-xs file:font-bold file:text-white"
+            className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:cd-fill-primary file:px-3 file:py-2 file:text-xs file:font-bold file:text-white"
             onChange={(e) => {
               const nextFile = e.target.files?.[0] ?? null;
               invoiceFileRef.current = nextFile;
               setInvoiceFileName(nextFile?.name ?? "");
             }}
           />
-          {invoiceFileName && <span className="text-xs text-stone-500">선택됨: {invoiceFileName}</span>}
-          <span className="text-xs text-stone-500">파일을 선택하면 새 계산서 PDF가 같은 단계의 최신 계산서로 추가 등록됩니다.</span>
+          {invoiceFileName && <span className="text-xs cd-text-faint">선택됨: {invoiceFileName}</span>}
+          <span className="text-xs cd-text-faint">파일을 선택하면 새 계산서 PDF가 같은 단계의 최신 계산서로 추가 등록됩니다.</span>
         </label>
-        <label className="flex items-center gap-2 text-sm font-bold text-stone-700 col-span-2">
+        <label className="flex items-center gap-2 text-sm font-bold cd-text-muted col-span-2">
           <input type="checkbox" checked={state.paymentCollected} onChange={(e) => onChange({ ...state, paymentCollected: e.target.checked })} />
           수금 정보 등록
         </label>
         {state.paymentCollected && (
           <>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold text-stone-700">수금일</span>
+              <span className="font-bold cd-text-muted">수금일</span>
               <DateInput value={state.paymentCollectedAt} onChange={(paymentCollectedAt) => onChange({ ...state, paymentCollectedAt })} />
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold text-stone-700">수금금액</span>
+              <span className="font-bold cd-text-muted">수금금액</span>
               <input
-                className="input-field tabular-nums"
+                className="cd-input tabular-nums"
                 inputMode="numeric"
                 value={formatThousands(state.collectedAmount)}
                 onChange={(e) => {
@@ -2149,15 +2360,15 @@ function EditMilestoneModal({
               />
             </label>
             <label className="grid gap-1 text-sm col-span-2">
-              <span className="font-bold text-stone-700">부분입금 사유</span>
-              <textarea className="input-field min-h-[84px]" value={state.partialPaymentMemo} onChange={(e) => onChange({ ...state, partialPaymentMemo: e.target.value })} />
+              <span className="font-bold cd-text-muted">부분입금 사유</span>
+              <textarea className="cd-input min-h-[84px]" value={state.partialPaymentMemo} onChange={(e) => onChange({ ...state, partialPaymentMemo: e.target.value })} />
             </label>
           </>
         )}
       </div>
-      <div className="p-5 pt-0 border-t border-stone-200/70 flex justify-end gap-2 mt-2">
-        <button type="button" onClick={onClose} className="glass-button rounded-xl px-4 py-2 text-sm font-bold text-stone-700">닫기</button>
-        <button type="button" onClick={submit} disabled={saving} className="rounded-xl px-4 py-2 text-sm font-bold text-white bg-primary hover:bg-primary/90 shadow-sm disabled:opacity-60">
+      <div className="p-5 pt-0 border-t cd-border-c flex justify-end gap-2 mt-2">
+        <button type="button" onClick={onClose} className="cd-btn cd-btn-ghost rounded-xl px-4 py-2 text-sm font-bold cd-text-muted">닫기</button>
+        <button type="button" onClick={submit} disabled={saving} className="rounded-xl px-4 py-2 text-sm font-bold text-white cd-fill-primary shadow-sm disabled:opacity-60">
           {saving ? "저장 중..." : "수정"}
         </button>
       </div>
@@ -2214,23 +2425,23 @@ function NewStageModal({
     <ModalShell title="청구·수금 단계 추가" onClose={onClose}>
       <div className="p-5 grid gap-3">
         <label className="grid gap-1 text-sm">
-          <span className="font-bold text-stone-700">단계명</span>
-          <input type="text" className="input-field" placeholder="예: 1차 기성금"
+          <span className="font-bold cd-text-muted">단계명</span>
+          <input type="text" className="cd-input" placeholder="예: 1차 기성금"
             value={state.stageLabel} onChange={(e) => onChange({ ...state, stageLabel: e.target.value })} />
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-bold text-stone-700">청구금액</span>
-          <input className="input-field tabular-nums" inputMode="numeric" value={formatThousands(state.amount)} onChange={(e) => onChange({ ...state, amount: stripDigits(e.target.value) })} />
+          <span className="font-bold cd-text-muted">청구금액</span>
+          <input className="cd-input tabular-nums" inputMode="numeric" value={formatThousands(state.amount)} onChange={(e) => onChange({ ...state, amount: stripDigits(e.target.value) })} />
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-bold text-stone-700">대금 지급 조건</span>
-          <input type="text" className="input-field" placeholder="예: 세금계산서 발행 후 30일 이내 지급"
+          <span className="font-bold cd-text-muted">대금 지급 조건</span>
+          <input type="text" className="cd-input" placeholder="예: 세금계산서 발행 후 30일 이내 지급"
             value={state.paymentTerms} onChange={(e) => onChange({ ...state, paymentTerms: e.target.value })} />
         </label>
       </div>
-      <div className="p-5 pt-0 border-t border-stone-200/70 flex justify-end gap-2 mt-2">
-        <button type="button" onClick={onClose} className="glass-button rounded-xl px-4 py-2 text-sm font-bold text-stone-700">닫기</button>
-        <button type="button" onClick={submit} disabled={saving} className="rounded-xl px-4 py-2 text-sm font-bold text-white bg-primary hover:bg-primary/90 shadow-sm disabled:opacity-60">
+      <div className="p-5 pt-0 border-t cd-border-c flex justify-end gap-2 mt-2">
+        <button type="button" onClick={onClose} className="cd-btn cd-btn-ghost rounded-xl px-4 py-2 text-sm font-bold cd-text-muted">닫기</button>
+        <button type="button" onClick={submit} disabled={saving} className="rounded-xl px-4 py-2 text-sm font-bold text-white cd-fill-primary shadow-sm disabled:opacity-60">
           {saving ? "저장 중..." : "추가"}
         </button>
       </div>
@@ -2280,7 +2491,7 @@ function DraggablePdfViewer({
 
   return (
     <div
-      className="fixed z-[60] rounded-3xl border border-stone-200 bg-white shadow-2xl overflow-hidden"
+      className="fixed z-[60] rounded-3xl border cd-border-c cd-card-bg shadow-2xl overflow-hidden"
       style={{
         left: position.x,
         top: position.y,
@@ -2289,15 +2500,15 @@ function DraggablePdfViewer({
       }}
     >
       <div
-        className="h-12 px-4 border-b border-stone-200 bg-stone-50 flex items-center justify-between gap-3 cursor-move select-none"
+        className="h-12 px-4 border-b cd-border-c cd-surface-bg flex items-center justify-between gap-3 cursor-move select-none"
         onPointerDown={startDrag}
         onPointerMove={moveDrag}
         onPointerUp={stopDrag}
         onPointerCancel={stopDrag}
       >
         <div className="min-w-0 flex items-center gap-2">
-          <FileText className="w-4 h-4 text-primary shrink-0" />
-          <span className="text-sm text-stone-800 truncate">{title}</span>
+          <FileText className="w-4 h-4 cd-text-primary shrink-0" />
+          <span className="text-sm cd-text truncate">{title}</span>
         </div>
         <button
           type="button"
@@ -2306,7 +2517,7 @@ function DraggablePdfViewer({
             event.stopPropagation();
             onClose();
           }}
-          className="rounded-lg p-1 text-stone-500 hover:bg-stone-200 hover:text-stone-800"
+          className="rounded-lg p-1 cd-text-faint hover:bg-[color:var(--cd-surface)] hover:text-[color:var(--cd-text)]"
           title="닫기"
         >
           <X className="w-4 h-4" />
@@ -2315,7 +2526,7 @@ function DraggablePdfViewer({
       <iframe
         title={title}
         src={withPdfViewerDefaults(url)}
-        className="w-full h-[calc(100%-48px)] bg-stone-100"
+        className="w-full h-[calc(100%-48px)] cd-surface-bg"
       />
     </div>
   );
@@ -2340,19 +2551,19 @@ function ContractDeleteModal({
   return (
     <ModalShell title="계약 휴지통 이동" onClose={onClose}>
       <div className="p-5 grid gap-4">
-        <p className="text-sm text-stone-600">
-          <span className="text-stone-900">{contractTitle}</span> 계약을 휴지통으로 이동합니다. 계약 데이터는 목록에서 제외되며, admin만 휴지통에서 영구 삭제할 수 있습니다.
+        <p className="text-sm cd-text-muted">
+          <span className="cd-text">{contractTitle}</span> 계약을 휴지통으로 이동합니다. 계약 데이터는 목록에서 제외되며, admin만 휴지통에서 영구 삭제할 수 있습니다.
         </p>
         <label className="grid gap-1 text-sm">
-          <span className="font-bold text-stone-700">삭제 사유</span>
-          <select className="ui-select" value={deleteReason} onChange={(e) => setDeleteReason(e.target.value)}>
+          <span className="font-bold cd-text-muted">삭제 사유</span>
+          <select className="cd-select" value={deleteReason} onChange={(e) => setDeleteReason(e.target.value)}>
             <option value="중복 입력 삭제">중복 입력 삭제</option>
             <option value="계약 무산">계약 무산</option>
             <option value="계약 포기">계약 포기</option>
           </select>
         </label>
-        <div className="flex justify-end gap-2 pt-2 border-t border-stone-200/70">
-          <button type="button" onClick={onClose} className="glass-button rounded-xl px-4 py-2 text-sm font-bold text-stone-700">
+        <div className="flex justify-end gap-2 pt-2 border-t cd-border-c">
+          <button type="button" onClick={onClose} className="cd-btn cd-btn-ghost rounded-xl px-4 py-2 text-sm font-bold cd-text-muted">
             닫기
           </button>
           <button
@@ -2379,10 +2590,10 @@ function ContractDeleteModal({
 function ModalShell({ title, onClose, children, wide }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
   return (
     <div className="fixed inset-0 z-50 bg-stone-950/20 flex items-center justify-center p-4">
-      <div className={"glass-panel rounded-3xl max-h-[min(840px,calc(100vh-32px))] shadow-2xl overflow-hidden flex flex-col " + (wide ? "w-[min(960px,calc(100vw-32px))]" : "w-[min(640px,calc(100vw-32px))]")}>
-        <div className="p-5 border-b border-stone-200/70 flex items-start justify-between gap-3">
-          <h3 className="text-xl font-bold text-stone-800">{title}</h3>
-          <button type="button" onClick={onClose} className="text-stone-400 hover:text-stone-700">
+      <div className={"cd-card rounded-3xl max-h-[min(840px,calc(100vh-32px))] shadow-2xl overflow-hidden flex flex-col " + (wide ? "w-[min(960px,calc(100vw-32px))]" : "w-[min(640px,calc(100vw-32px))]")}>
+        <div className="p-5 border-b cd-border-c flex items-start justify-between gap-3">
+          <h3 className="text-xl font-bold cd-text">{title}</h3>
+          <button type="button" onClick={onClose} className="cd-text-faint hover:opacity-70">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -2395,9 +2606,9 @@ function ModalShell({ title, onClose, children, wide }: { title: string; onClose
 function Info({ label, value, highlight }: { label: string; value: React.ReactNode; highlight?: boolean }) {
   const isEmpty = value == null || value === "";
   return (
-    <div className={"rounded-2xl border p-3 " + (highlight ? "bg-primary/5 border-primary/30" : "bg-white/60 border-stone-200/80")}>
-      <p className="text-[11px] text-stone-500">{label}</p>
-      <p className={"text-sm mt-1 truncate " + (highlight ? "text-primary" : "text-stone-800")}>
+    <div className={"rounded-2xl border p-3 " + (highlight ? "cd-tint-primary border-[color:var(--cd-primary)]" : "cd-border-c")}>
+      <p className="text-[11px] cd-text-faint">{label}</p>
+      <p className={"text-sm mt-1 truncate " + (highlight ? "cd-text-primary" : "cd-text")}>
         {isEmpty ? "-" : value}
       </p>
     </div>
@@ -2416,20 +2627,20 @@ function CollectionProgressCard({
   const percent = Math.round(rate * 100);
   const today = formatKoreanDate(new Date());
   return (
-    <div className="rounded-2xl border border-primary/20 bg-white/70 p-4 min-h-[180px] flex flex-col items-center justify-center relative">
-      <p className="absolute left-4 top-3 text-[11px] font-bold text-stone-500">수금 진척도</p>
+    <div className="rounded-2xl border cd-border-c p-4 min-h-[180px] flex flex-col items-center justify-center relative">
+      <p className="absolute left-4 top-3 text-[11px] font-bold cd-text-faint">수금 진척도</p>
       <div
         className="w-28 h-28 rounded-full flex items-center justify-center"
         style={{ background: `conic-gradient(#9BC2E6 ${percent}%, #ececec ${percent}% 100%)` }}
       >
-        <div className="w-20 h-20 rounded-full bg-white flex items-center justify-center">
-          <span className="text-2xl font-bold text-[#9BC2E6]">{percent}%</span>
+        <div className="w-20 h-20 rounded-full cd-card-bg flex items-center justify-center">
+          <span className="text-xl font-bold text-[#9BC2E6]">{percent}%</span>
         </div>
       </div>
-      <p className="mt-3 text-xs font-mono text-stone-600">
+      <p className="mt-3 text-xs font-mono cd-text-muted">
         {formatExactAmount(collectedAmount)} / {formatExactAmount(baseAmount)}
       </p>
-      <p className="absolute right-4 bottom-3 text-[11px] text-stone-500">{today} 기준</p>
+      <p className="absolute right-4 bottom-3 text-[11px] cd-text-faint">{today} 기준</p>
     </div>
   );
 }
@@ -2472,19 +2683,19 @@ const TreeGroupHeader = memo(function TreeGroupHeader({
     <button
       type="button"
       onClick={handleClick}
-      className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-stone-50 border-b border-stone-200/70"
+      className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-[color:var(--cd-surface)] border-b cd-border-c"
     >
       {isOpen ? (
-        <ChevronDown className="w-4 h-4 text-stone-500" />
+        <ChevronDown className="w-4 h-4 cd-text-faint" />
       ) : (
-        <ChevronRight className="w-4 h-4 text-stone-500" />
+        <ChevronRight className="w-4 h-4 cd-text-faint" />
       )}
       <ParentIcon
         className="w-4 h-4 fill-current transition-transform"
         style={{ color: style.parentColor }}
       />
-      <span className="text-sm text-stone-800">{serviceType}</span>
-      <span className="text-[11px] text-stone-500 ml-auto">{count}건</span>
+      <span className="text-sm cd-text">{serviceType}</span>
+      <span className="text-[11px] cd-text-faint ml-auto">{count}건</span>
     </button>
   );
 });
@@ -2513,34 +2724,34 @@ const TreeChildRow = memo(function TreeChildRow({
       type="button"
       onClick={handleClick}
       className={
-        "relative w-full flex items-center gap-2 pl-12 pr-3 py-2 text-left text-xs bg-white/40 hover:bg-primary/5 " +
-        (isSelected ? "bg-primary/10 border-l-4 border-primary" : "border-l-4 border-transparent")
+        "relative w-full flex items-center gap-2 pl-12 pr-3 py-2 text-left text-xs hover:bg-[color:var(--cd-surface)] " +
+        (isSelected ? "cd-tint-primary border-l-4 border-[color:var(--cd-primary)]" : "border-l-4 border-transparent")
       }
     >
       <span
         aria-hidden
         className={
-          "pointer-events-none absolute left-7 w-px bg-stone-300 " +
+          "pointer-events-none absolute left-7 w-px bg-[var(--cd-border)] " +
           (isLastChild ? "top-0 h-1/2" : "top-0 bottom-0")
         }
       />
       <span
         aria-hidden
-        className="pointer-events-none absolute left-7 top-1/2 w-3 h-px bg-stone-300"
+        className="pointer-events-none absolute left-7 top-1/2 w-3 h-px bg-[var(--cd-border)]"
       />
       <ChildIcon
         className="w-3.5 h-3.5 fill-current shrink-0"
         style={{ color: childColor }}
       />
       <span className="flex items-center gap-1.5 flex-1 min-w-0">
-        <span className="truncate text-stone-800">{contract.contractTitle}</span>
+        <span className="truncate cd-text">{contract.contractTitle}</span>
         {contract.contractStatus === "terminated" && (
           <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] text-white" style={{ background: "#FF7171" }}>
             계약해지
           </span>
         )}
         {contract.contractStatus === "suspended" && (
-          <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] text-stone-800" style={{ background: "#FFD966" }}>
+          <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] cd-text" style={{ background: "#FFD966" }}>
             계약중지
           </span>
         )}
@@ -2553,10 +2764,10 @@ const TreeChildRow = memo(function TreeChildRow({
           />
         )}
       </span>
-      <span className="w-[88px] text-right text-[10px] font-mono text-stone-400 ml-2 shrink-0 tabular-nums">
+      <span className="w-[88px] text-right text-[10px] font-mono cd-text-faint ml-2 shrink-0 tabular-nums">
         {contract.contractDate ?? "-"}
       </span>
-      <span className="w-[72px] text-right text-[10px] font-mono text-stone-500 ml-1 shrink-0 tabular-nums">
+      <span className="w-[72px] text-right text-[10px] font-mono cd-text-faint ml-1 shrink-0 tabular-nums">
         {formatMoney(contract.currentAmount)}
       </span>
     </button>
@@ -2566,22 +2777,24 @@ const TreeChildRow = memo(function TreeChildRow({
 function DateInput({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   const displayValue = value ? value.replace(/-/g, "") : "";
   return (
-    <div className="flex items-center gap-2">
+    <div className="relative flex items-center">
       <input
         type="text"
         inputMode="numeric"
         maxLength={8}
-        className="input-field tabular-nums"
+        className="cd-input tabular-nums w-full pr-9"
         placeholder="YYYYMMDD"
         value={displayValue}
         onChange={(e) => onChange(normalizeDateInput(e.target.value))}
       />
+      <Calendar className="pointer-events-none absolute right-3 w-4 h-4 cd-text-faint" />
       <input
         type="date"
-        className="ui-select w-[48px] px-2 text-transparent"
+        aria-label="달력에서 선택"
+        title="달력에서 선택"
+        className="absolute right-0 top-0 h-full w-9 cursor-pointer opacity-0"
         value={/^\d{4}-\d{2}-\d{2}$/.test(value) ? value : ""}
         onChange={(e) => onChange(e.target.value)}
-        title="달력에서 선택"
       />
     </div>
   );
@@ -2624,7 +2837,7 @@ function createEmptyContractState(): NewContractModalState {
   return {
     contractTitle: "",
     counterpartyQuery: "",
-    counterpartyEntityId: "",
+    counterpartyFacilityId: "",
     counterpartyName: "",
     counterpartyBusinessRegistrationNo: null,
     facilityQuery: "",
@@ -2647,7 +2860,7 @@ function createEmptyContractState(): NewContractModalState {
     outsourcing: {
       outsourcingTitle: "",
       counterpartyQuery: "",
-      counterpartyEntityId: "",
+      counterpartyFacilityId: "",
       counterpartyName: "",
       serviceType: DEFAULT_OUTSOURCING_TYPES[0],
       contractDate: "",

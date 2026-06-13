@@ -14,7 +14,7 @@ export interface ContractListFilter {
 export interface ContractListItem {
   contractId: string;
   contractTitle: string;
-  counterpartyEntityId: string;
+  counterpartyFacilityId: string;
   counterpartyName: string;
   facilityId: string | null;
   facilityName: string | null;
@@ -72,28 +72,6 @@ export interface ContractTreePayload {
   groups: ContractTreeServiceGroup[];
 }
 
-export interface ContractDashboard {
-  kpis: {
-    totalContracts: number;
-    totalAmount: number;
-    issuedAmount: number;
-    collectedAmount: number;
-    unissuedAmount: number;
-    uncollectedAmount: number;
-    collectionRate: number;
-  };
-  byServiceType: Array<{ serviceType: string; count: number; amount: number }>;
-  byYear: Array<{ year: string; count: number; amount: number }>;
-  uncollected: Array<{
-    contractId: string;
-    contractTitle: string;
-    counterpartyName: string;
-    stageLabel: string;
-    amount: number;
-    invoiceIssuedAt: string | null;
-  }>;
-}
-
 export function mapContractListItem(row: Record<string, unknown>): ContractListItem {
   const totalMilestoneAmount = toNumber(row.total_milestone_amount);
   const totalCollectedAmount = toNumber(row.total_collected_amount);
@@ -104,7 +82,7 @@ export function mapContractListItem(row: Record<string, unknown>): ContractListI
   return {
     contractId: String(row.contract_id ?? ""),
     contractTitle: String(row.contract_title ?? ""),
-    counterpartyEntityId: String(row.counterparty_entity_id ?? ""),
+    counterpartyFacilityId: String(row.counterparty_facility_id ?? ""),
     counterpartyName: String(row.counterparty_name ?? ""),
     facilityId: row.facility_id != null ? String(row.facility_id) : null,
     facilityName: row.facility_name != null ? String(row.facility_name) : null,
@@ -142,7 +120,7 @@ export async function listContracts(filter: ContractListFilter) {
 
   if (filter.q) {
     const p = addParam("%" + filter.q.trim() + "%");
-    where.push(`(c.contract_title ILIKE ${p} OR e.entity_name ILIKE ${p} OR c.legacy_company_id ILIKE ${p})`);
+    where.push(`(c.contract_title ILIKE ${p} OR cp.company_name ILIKE ${p} OR c.legacy_company_id ILIKE ${p})`);
   }
   if (filter.year) {
     const p = addParam(filter.year);
@@ -180,7 +158,7 @@ export async function listContracts(filter: ContractListFilter) {
     await db.exec(
       `SELECT COUNT(*) AS total
        FROM contracts c
-       JOIN legal_entities e ON e.entity_id = c.counterparty_entity_id
+       JOIN facilities cp ON cp.facility_id = c.counterparty_facility_id
        LEFT JOIN (
          SELECT contract_id,
                 SUM(CASE WHEN invoice_issued = 0 AND COALESCE(amount, 0) > 0 THEN 1 ELSE 0 END) AS unissued_count,
@@ -199,8 +177,8 @@ export async function listContracts(filter: ContractListFilter) {
     await db.exec(
       `SELECT c.contract_id,
               c.contract_title,
-              c.counterparty_entity_id,
-              e.entity_name AS counterparty_name,
+              c.counterparty_facility_id,
+              cp.company_name AS counterparty_name,
               c.facility_id,
               f.company_name AS facility_name,
               c.legacy_company_id,
@@ -222,7 +200,7 @@ export async function listContracts(filter: ContractListFilter) {
               COALESCE(ms.total_issued_amount, 0) AS total_issued_amount,
               COALESCE(ms.total_collected_amount, 0) AS total_collected_amount
        FROM contracts c
-       JOIN legal_entities e ON e.entity_id = c.counterparty_entity_id
+       JOIN facilities cp ON cp.facility_id = c.counterparty_facility_id
        LEFT JOIN facilities f ON f.facility_id = c.facility_id
        LEFT JOIN (
          SELECT contract_id,
@@ -277,7 +255,7 @@ export async function listContractsForTree(year: string | null): Promise<Contrac
     await db.exec(
       `SELECT c.contract_id,
               c.contract_title,
-              e.entity_name AS counterparty_name,
+              cp.company_name AS counterparty_name,
               c.service_type,
               c.service_subtype,
               c.industry_category,
@@ -289,7 +267,7 @@ export async function listContractsForTree(year: string | null): Promise<Contrac
               COALESCE(ms.total_milestone_amount, 0) AS total_milestone_amount,
               COALESCE(ms.total_collected_amount, 0) AS total_collected_amount
        FROM contracts c
-       JOIN legal_entities e ON e.entity_id = c.counterparty_entity_id
+       JOIN facilities cp ON cp.facility_id = c.counterparty_facility_id
        LEFT JOIN facilities f ON f.facility_id = c.facility_id
        LEFT JOIN (
          SELECT contract_id,
@@ -363,7 +341,7 @@ export async function listContractsForTreeByFacility(facilityId: string): Promis
     await db.exec(
       `SELECT c.contract_id,
               c.contract_title,
-              e.entity_name AS counterparty_name,
+              cp.company_name AS counterparty_name,
               c.service_type,
               c.service_subtype,
               c.industry_category,
@@ -375,7 +353,7 @@ export async function listContractsForTreeByFacility(facilityId: string): Promis
               COALESCE(ms.total_milestone_amount, 0) AS total_milestone_amount,
               COALESCE(ms.total_collected_amount, 0) AS total_collected_amount
        FROM contracts c
-       JOIN legal_entities e ON e.entity_id = c.counterparty_entity_id
+       JOIN facilities cp ON cp.facility_id = c.counterparty_facility_id
        LEFT JOIN facilities f ON f.facility_id = c.facility_id
        LEFT JOIN (
          SELECT contract_id,
@@ -448,17 +426,17 @@ export async function getContractDetail(contractId: string) {
   const rows = rowsToObjects(
     await db.exec(
       `SELECT c.*,
-              e.entity_name AS counterparty_name,
-              e.business_registration_no AS counterparty_business_registration_no,
-              e.corporate_registration_no AS counterparty_corporate_registration_no,
-              e.representative_name AS counterparty_representative_name,
+              cp.company_name AS counterparty_name,
+              cp.business_registration_no AS counterparty_business_registration_no,
+              cp.corporate_registration_no AS counterparty_corporate_registration_no,
+              cp.representative_name AS counterparty_representative_name,
               f.company_name AS facility_name,
               f.site_address AS facility_address,
               f.site_business_registration_no AS facility_site_business_registration_no,
               f.corporate_registration_no AS facility_corporate_registration_no,
               f.integrated_permit_target AS facility_integrated_permit_target
        FROM contracts c
-       JOIN legal_entities e ON e.entity_id = c.counterparty_entity_id
+       JOIN facilities cp ON cp.facility_id = c.counterparty_facility_id
        LEFT JOIN facilities f ON f.facility_id = c.facility_id
        WHERE c.contract_id = $1
          AND c.deleted_at IS NULL`,
@@ -510,10 +488,10 @@ export async function getContractDetail(contractId: string) {
   );
   const outsourcing = rowsToObjects(
     await db.exec(
-      `SELECT o.*, e.entity_name AS counterparty_entity_name, d.public_path AS document_public_path,
+      `SELECT o.*, cp.company_name AS counterparty_facility_name, d.public_path AS document_public_path,
               d.display_name AS document_display_name
        FROM contract_outsourcing o
-       LEFT JOIN legal_entities e ON e.entity_id = o.counterparty_entity_id
+       LEFT JOIN facilities cp ON cp.facility_id = o.counterparty_facility_id
        LEFT JOIN contract_documents d ON d.document_id = o.document_id
        WHERE o.contract_id = $1
        ORDER BY COALESCE(o.contract_date, o.created_at) DESC`,
@@ -549,110 +527,746 @@ export async function getContractDetail(contractId: string) {
   return { contract, milestones, invoices, documents, changes, outsourcing, targetFacilities };
 }
 
-export async function getContractDashboard(): Promise<ContractDashboard> {
+// ---------------------------------------------------------------------------
+// Contract Dashboard V2 — 엑셀 계약현황 대쉬보드 이전용 집계 계층
+// ---------------------------------------------------------------------------
+
+export const DASHBOARD_SERVICE_CATEGORIES = [
+  "통합환경허가",
+  "장외·화관법",
+  "HAPs 용역",
+  "ESG·탄소중립",
+  "기타 용역",
+] as const;
+
+export type DashboardServiceCategory = (typeof DASHBOARD_SERVICE_CATEGORIES)[number];
+
+export interface ContractDashboardV2Filter {
+  /** 기준연도 (YYYY). 생략 시 데이터가 존재하는 최신 연도. */
+  year?: string;
+  /** 기준 용역분류 (단일 선택). 생략/무효 시 통합환경허가. */
+  category?: string;
+}
+
+export interface DashboardMonthlyBlock {
+  total: number;
+  /** index 0 = 1월 … index 11 = 12월 */
+  monthly: number[];
+  byCategory: Array<{
+    category: string;
+    current: number;
+    d1: number;
+    d2: number;
+    /** 기준연도 총액 대비 점유율 (%) */
+    share: number;
+  }>;
+}
+
+export interface ContractDashboardV2 {
+  year: string;
+  availableYears: string[];
+  /** 조건별 필터에서 선택된 기준 용역분류 (단일) */
+  category: string;
+  sales: DashboardMonthlyBlock;
+  orders: DashboardMonthlyBlock;
+  serviceDetail: {
+    totalCount: number;
+    rows: Array<{ label: string; count: number; amount: number }>;
+  };
+  collection: {
+    /** 기준연도 계약(전체 분류)의 수금 완료액 합 */
+    collectedTotal: number;
+    /** 기준연도 계약(선택 분류)의 수금 완료액 합 */
+    collectedCategory: number;
+    prevCollectedTotal: number;
+    prevCollectedCategory: number;
+    /** collectedTotal / 기준연도 수주총액 (%) */
+    rateTotal: number;
+    /** collectedCategory / 기준연도 선택 분류 수주액 (%) */
+    rateCategory: number;
+  };
+  regions: Array<{ sido: string; amount: number }>;
+  uncollected: Array<{
+    contractId: string;
+    contractTitle: string;
+    counterpartyName: string;
+    /** 발행/수금 모달용 청구·수금 단계 ID */
+    milestoneId: string;
+    category: string;
+    stageLabel: string;
+    paymentTerms: string | null;
+    amount: number;
+    /** 부분입금 차감 후 미수 잔액 */
+    outstandingAmount: number;
+    invoiceIssuedAt: string | null;
+    agingMonths: number;
+  }>;
+  recentCollections: Array<{
+    contractId: string;
+    contractTitle: string;
+    counterpartyName: string;
+    /** 발행/수금 모달용 청구·수금 단계 ID */
+    milestoneId: string;
+    category: string;
+    stageLabel: string;
+    paymentTerms: string | null;
+    invoiceIssuedAt: string | null;
+    invoiceAmount: number;
+    amount: number;
+    collectedAt: string;
+    daysAgo: number;
+  }>;
+}
+
+/** 계약 기준일: 계약일 → 착수일 → 생성일 순 폴백 (기존 byYear 집계와 동일 규칙) */
+const CONTRACT_DATE_SQL = "COALESCE(NULLIF(c.contract_date, ''), c.started_at, c.created_at)";
+/** 계약 금액: 변경 후 금액 → 원 계약금액 폴백 */
+const CONTRACT_AMOUNT_SQL = "COALESCE(c.current_amount, c.contract_amount, 0)";
+
+/** service_type 원문을 대쉬보드 5대 분류로 정규화하는 SQL CASE 식 (serviceTypePriority 와 동일 규칙) */
+export function categoryCaseSql(col: string): string {
+  return `CASE
+    WHEN UPPER(COALESCE(${col}, '')) LIKE '%HAPS%' THEN 'HAPs 용역'
+    WHEN COALESCE(${col}, '') LIKE '%통합%' THEN '통합환경허가'
+    WHEN COALESCE(${col}, '') LIKE '%장외%' OR COALESCE(${col}, '') LIKE '%화관%' OR COALESCE(${col}, '') LIKE '%유해화학%' THEN '장외·화관법'
+    WHEN UPPER(COALESCE(${col}, '')) LIKE '%ESG%' OR COALESCE(${col}, '') LIKE '%탄소%' THEN 'ESG·탄소중립'
+    ELSE '기타 용역'
+  END`;
+}
+
+function sanitizeCategory(input: string | undefined): string {
+  const allowed = new Set<string>(DASHBOARD_SERVICE_CATEGORIES);
+  return input && allowed.has(input) ? input : DASHBOARD_SERVICE_CATEGORIES[0];
+}
+
+export async function getContractDashboardV2(
+  filter: ContractDashboardV2Filter = {}
+): Promise<ContractDashboardV2> {
   const db = await getDb();
-  const kpiRows = rowsToObjects(
+  const catCase = categoryCaseSql("c.service_type");
+
+  const yearRows = rowsToObjects(
     await db.exec(
-      `WITH contract_totals AS (
-         SELECT COUNT(*) AS total_contracts,
-                SUM(COALESCE(current_amount, contract_amount, 0)) AS total_amount
-         FROM contracts
-         WHERE deleted_at IS NULL
-       ),
-       milestone_totals AS (
-         SELECT SUM(CASE WHEN invoice_issued = 1 THEN COALESCE(invoice_amount, amount, 0) ELSE 0 END) AS issued_amount,
-                SUM(CASE WHEN payment_collected = 1 THEN COALESCE(collected_amount, amount, 0) ELSE 0 END) AS collected_amount,
-                SUM(CASE WHEN invoice_issued = 0 THEN COALESCE(amount, 0) ELSE 0 END) AS unissued_amount,
-                SUM(CASE WHEN payment_collected = 0 THEN COALESCE(amount, 0) ELSE 0 END) AS uncollected_amount
-         FROM contract_payment_milestones
-       )
-       SELECT contract_totals.total_contracts,
-              contract_totals.total_amount,
-              milestone_totals.issued_amount,
-              milestone_totals.collected_amount,
-              milestone_totals.unissued_amount,
-              milestone_totals.uncollected_amount
-       FROM contract_totals
-       CROSS JOIN milestone_totals`
+      `SELECT DISTINCT SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) AS year
+       FROM contracts c
+       WHERE c.deleted_at IS NULL
+       ORDER BY year DESC
+       LIMIT 14`
     )
   );
-  const k = kpiRows[0] ?? {};
-  const totalAmount = toNumber(k.total_amount);
-  const collectedAmount = toNumber(k.collected_amount);
+  const availableYears = yearRows
+    .map((r) => String(r.year ?? ""))
+    .filter((y) => /^\d{4}$/.test(y));
 
-  const byServiceType = rowsToObjects(
+  const year =
+    filter.year && /^\d{4}$/.test(filter.year)
+      ? filter.year
+      : availableYears[0] ?? String(new Date().getFullYear());
+  const d1Year = String(Number(year) - 1);
+  const d2Year = String(Number(year) - 2);
+  const category = sanitizeCategory(filter.category);
+
+  // ---------------- 수주 (계약일 기준) — 분류 필터와 무관하게 전체 집계 ----------------
+  const ordersMonthlyRows = rowsToObjects(
     await db.exec(
-      `SELECT COALESCE(service_type, '미분류') AS service_type,
-              COUNT(*) AS count,
-              SUM(COALESCE(current_amount, contract_amount, 0)) AS amount
-       FROM contracts
-       WHERE deleted_at IS NULL
-       GROUP BY COALESCE(service_type, '미분류')
-       ORDER BY amount DESC
-       LIMIT 20`
+      `SELECT CAST(SUBSTRING(${CONTRACT_DATE_SQL}, 6, 2) AS int) AS month,
+              SUM(${CONTRACT_AMOUNT_SQL}) AS amount
+       FROM contracts c
+       WHERE c.deleted_at IS NULL
+         AND SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) = $1
+       GROUP BY 1
+       ORDER BY 1`,
+      [year]
     )
-  ).map((row) => ({
-    serviceType: String(row.service_type ?? "미분류"),
-    count: toNumber(row.count),
-    amount: toNumber(row.amount),
-  }));
+  );
 
-  const byYear = rowsToObjects(
+  const ordersByCategoryRows = rowsToObjects(
     await db.exec(
-      `SELECT SUBSTRING(COALESCE(NULLIF(contract_date, ''), started_at, created_at), 1, 4) AS year,
-              COUNT(*) AS count,
-              SUM(COALESCE(current_amount, contract_amount, 0)) AS amount
-       FROM contracts
-       WHERE deleted_at IS NULL
-       GROUP BY SUBSTRING(COALESCE(NULLIF(contract_date, ''), started_at, created_at), 1, 4)
-       ORDER BY year DESC
-       LIMIT 12`
+      `SELECT ${catCase} AS category,
+              SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) AS year,
+              SUM(${CONTRACT_AMOUNT_SQL}) AS amount
+       FROM contracts c
+       WHERE c.deleted_at IS NULL
+         AND SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) IN ($1, $2, $3)
+       GROUP BY 1, 2`,
+      [year, d1Year, d2Year]
     )
-  ).map((row) => ({
-    year: String(row.year ?? ""),
-    count: toNumber(row.count),
-    amount: toNumber(row.amount),
-  }));
+  );
 
-  const uncollected = rowsToObjects(
+  // ---------------- 매출 (계산서 발행일 기준) — 분류 필터와 무관하게 전체 집계 ----------------
+  const salesMonthlyRows = rowsToObjects(
+    await db.exec(
+      `SELECT CAST(SUBSTRING(m.invoice_issued_at, 6, 2) AS int) AS month,
+              SUM(COALESCE(m.invoice_amount, m.amount, 0)) AS amount
+       FROM contract_payment_milestones m
+       JOIN contracts c ON c.contract_id = m.contract_id
+       WHERE c.deleted_at IS NULL
+         AND m.invoice_issued = 1
+         AND m.invoice_issued_at IS NOT NULL
+         AND SUBSTRING(m.invoice_issued_at, 1, 4) = $1
+       GROUP BY 1
+       ORDER BY 1`,
+      [year]
+    )
+  );
+
+  const salesByCategoryRows = rowsToObjects(
+    await db.exec(
+      `SELECT ${catCase} AS category,
+              SUBSTRING(m.invoice_issued_at, 1, 4) AS year,
+              SUM(COALESCE(m.invoice_amount, m.amount, 0)) AS amount
+       FROM contract_payment_milestones m
+       JOIN contracts c ON c.contract_id = m.contract_id
+       WHERE c.deleted_at IS NULL
+         AND m.invoice_issued = 1
+         AND m.invoice_issued_at IS NOT NULL
+         AND SUBSTRING(m.invoice_issued_at, 1, 4) IN ($1, $2, $3)
+       GROUP BY 1, 2`,
+      [year, d1Year, d2Year]
+    )
+  );
+
+  // ---------------- 용역별 수주 상세 (선택 분류 내 세부유형) ----------------
+  const serviceDetailRows = rowsToObjects(
+    await db.exec(
+      `SELECT COALESCE(NULLIF(c.service_subtype, ''), COALESCE(c.service_type, '기타')) AS label,
+              COUNT(*) AS count,
+              SUM(${CONTRACT_AMOUNT_SQL}) AS amount
+       FROM contracts c
+       WHERE c.deleted_at IS NULL
+         AND SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) = $1
+         AND ${catCase} = $2
+       GROUP BY 1
+       ORDER BY amount DESC, count DESC`,
+      [year, category]
+    )
+  );
+
+  // ---------------- 수금 (기준연도/전년도 계약 대상 수금 완료액 — 엑셀 수금율 산식) ----------------
+  const collectionRows = rowsToObjects(
+    await db.exec(
+      `SELECT SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) AS year,
+              ${catCase} AS category,
+              SUM(COALESCE(m.collected_amount, m.amount, 0)) AS amount
+       FROM contract_payment_milestones m
+       JOIN contracts c ON c.contract_id = m.contract_id
+       WHERE c.deleted_at IS NULL
+         AND m.payment_collected = 1
+         AND SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) IN ($1, $2)
+       GROUP BY 1, 2`,
+      [year, d1Year]
+    )
+  );
+
+  // ---------------- 지역별 수주 (발주처 사업장 시도 기준 / 선택 분류) ----------------
+  const regionRows = rowsToObjects(
+    await db.exec(
+      `SELECT COALESCE(NULLIF(f.region_sido, ''), '미상') AS sido,
+              SUM(${CONTRACT_AMOUNT_SQL}) AS amount
+       FROM contracts c
+       JOIN facilities f ON f.facility_id = c.counterparty_facility_id
+       WHERE c.deleted_at IS NULL
+         AND SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) = $1
+         AND ${catCase} = $2
+       GROUP BY 1
+       ORDER BY amount DESC`,
+      [year, category]
+    )
+  );
+
+  // ---------------- 미수금 (발행 완료 + 수금 미완료 / 선택 분류 + 기준연도 발행분) ----------------
+  const uncollectedRows = rowsToObjects(
     await db.exec(
       `SELECT c.contract_id,
               c.contract_title,
-              e.entity_name AS counterparty_name,
+              f.company_name AS counterparty_name,
+              m.milestone_id,
               m.stage_label,
-              COALESCE(m.amount, 0) AS amount,
+              m.payment_terms,
+              COALESCE(m.invoice_amount, m.amount, 0) AS amount,
+              COALESCE(m.collected_amount, 0) AS partial_collected,
               m.invoice_issued_at
        FROM contract_payment_milestones m
        JOIN contracts c ON c.contract_id = m.contract_id
-       JOIN legal_entities e ON e.entity_id = c.counterparty_entity_id
-       WHERE m.payment_collected = 0
-         AND c.deleted_at IS NULL
-         AND COALESCE(m.amount, 0) > 0
-       ORDER BY COALESCE(m.invoice_issued_at, c.contract_date, c.created_at) DESC
-       LIMIT 10`
+       JOIN facilities f ON f.facility_id = c.counterparty_facility_id
+       WHERE c.deleted_at IS NULL
+         AND m.invoice_issued = 1
+         AND m.payment_collected = 0
+         AND COALESCE(m.invoice_amount, m.amount, 0) > 0
+         AND ${catCase} = $1
+         AND SUBSTRING(m.invoice_issued_at, 1, 4) = $2
+       ORDER BY m.invoice_issued_at DESC NULLS LAST
+       LIMIT 50`,
+      [category, year]
     )
-  ).map((row) => ({
-    contractId: String(row.contract_id ?? ""),
-    contractTitle: String(row.contract_title ?? ""),
-    counterpartyName: String(row.counterparty_name ?? ""),
-    stageLabel: String(row.stage_label ?? ""),
-    amount: toNumber(row.amount),
-    invoiceIssuedAt: row.invoice_issued_at != null ? String(row.invoice_issued_at) : null,
-  }));
+  );
+
+  // ---------------- 수금내역 (최근 2개월 수금 완료 / 선택 분류) ----------------
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - 2);
+  const cutoffStr = cutoff.toISOString().slice(0, 10);
+  const recentCollectionRows = rowsToObjects(
+    await db.exec(
+      `SELECT c.contract_id,
+              c.contract_title,
+              COALESCE(f.company_name, '') AS counterparty_name,
+              ${catCase} AS category,
+              m.milestone_id,
+              m.stage_label,
+              m.payment_terms,
+              m.invoice_issued_at,
+              COALESCE(m.invoice_amount, m.amount, 0) AS invoice_amount,
+              COALESCE(m.collected_amount, m.amount, 0) AS amount,
+              m.payment_collected_at
+       FROM contract_payment_milestones m
+       JOIN contracts c ON c.contract_id = m.contract_id
+       LEFT JOIN facilities f ON f.facility_id = c.counterparty_facility_id
+       WHERE c.deleted_at IS NULL
+         AND m.payment_collected = 1
+         AND m.payment_collected_at IS NOT NULL
+         AND SUBSTRING(m.payment_collected_at, 1, 10) >= $1
+         AND ${catCase} = $2
+       ORDER BY m.payment_collected_at DESC
+       LIMIT 50`,
+      [cutoffStr, category]
+    )
+  );
+
+  // ---------------- 후처리 ----------------
+  const buildMonthly = (rows: Array<Record<string, unknown>>): number[] => {
+    const arr = new Array<number>(12).fill(0);
+    for (const r of rows) {
+      const m = toNumber(r.month);
+      if (m >= 1 && m <= 12) arr[m - 1] += toNumber(r.amount);
+    }
+    return arr;
+  };
+
+  const buildBlock = (
+    monthlyRows: Array<Record<string, unknown>>,
+    byCategoryRows: Array<Record<string, unknown>>
+  ): DashboardMonthlyBlock => {
+    const monthly = buildMonthly(monthlyRows);
+    const map = new Map<string, { current: number; d1: number; d2: number }>();
+    for (const cat of DASHBOARD_SERVICE_CATEGORIES) map.set(cat, { current: 0, d1: 0, d2: 0 });
+    for (const r of byCategoryRows) {
+      const cat = String(r.category ?? "");
+      const entry = map.get(cat);
+      if (!entry) continue;
+      const y = String(r.year ?? "");
+      const amount = toNumber(r.amount);
+      if (y === year) entry.current += amount;
+      else if (y === d1Year) entry.d1 += amount;
+      else if (y === d2Year) entry.d2 += amount;
+    }
+    const total = [...map.values()].reduce((s, v) => s + v.current, 0);
+    const byCategory = DASHBOARD_SERVICE_CATEGORIES.filter((c) => map.has(c)).map((cat) => {
+      const v = map.get(cat)!;
+      return {
+        category: cat,
+        current: v.current,
+        d1: v.d1,
+        d2: v.d2,
+        share: total > 0 ? Math.round((v.current / total) * 1000) / 10 : 0,
+      };
+    });
+    return { total, monthly, byCategory };
+  };
+
+  const orders = buildBlock(ordersMonthlyRows, ordersByCategoryRows);
+  const sales = buildBlock(salesMonthlyRows, salesByCategoryRows);
+
+  let collectedTotal = 0;
+  let collectedCategory = 0;
+  let prevCollectedTotal = 0;
+  let prevCollectedCategory = 0;
+  for (const r of collectionRows) {
+    const y = String(r.year ?? "");
+    const cat = String(r.category ?? "");
+    const amount = toNumber(r.amount);
+    if (y === year) {
+      collectedTotal += amount;
+      if (cat === category) collectedCategory += amount;
+    } else if (y === d1Year) {
+      prevCollectedTotal += amount;
+      if (cat === category) prevCollectedCategory += amount;
+    }
+  }
+  const categoryOrders = orders.byCategory.find((b) => b.category === category)?.current ?? 0;
+  const rateTotal = orders.total > 0 ? Math.round((collectedTotal / orders.total) * 1000) / 10 : 0;
+  const rateCategory = categoryOrders > 0 ? Math.round((collectedCategory / categoryOrders) * 1000) / 10 : 0;
+
+  const now = Date.now();
+  const uncollected = uncollectedRows.map((r) => {
+    const issuedAt = r.invoice_issued_at != null ? String(r.invoice_issued_at).slice(0, 10) : null;
+    let agingMonths = 0;
+    if (issuedAt) {
+      const t = Date.parse(issuedAt);
+      if (Number.isFinite(t)) agingMonths = Math.max(0, Math.floor((now - t) / (1000 * 60 * 60 * 24 * 30)));
+    }
+    const amount = toNumber(r.amount);
+    return {
+      contractId: String(r.contract_id ?? ""),
+      contractTitle: String(r.contract_title ?? ""),
+      counterpartyName: String(r.counterparty_name ?? ""),
+      milestoneId: String(r.milestone_id ?? ""),
+      category,
+      stageLabel: String(r.stage_label ?? ""),
+      paymentTerms: r.payment_terms != null ? String(r.payment_terms) : null,
+      amount,
+      outstandingAmount: Math.max(0, amount - toNumber(r.partial_collected)),
+      invoiceIssuedAt: issuedAt,
+      agingMonths,
+    };
+  });
+
+  const recentCollections = recentCollectionRows.map((r) => {
+    const collectedAt = String(r.payment_collected_at ?? "").slice(0, 10);
+    const t = Date.parse(collectedAt);
+    const daysAgo = Number.isFinite(t) ? Math.max(0, Math.floor((now - t) / (1000 * 60 * 60 * 24))) : 0;
+    return {
+      contractId: String(r.contract_id ?? ""),
+      contractTitle: String(r.contract_title ?? ""),
+      counterpartyName: String(r.counterparty_name ?? ""),
+      milestoneId: String(r.milestone_id ?? ""),
+      category: String(r.category ?? ""),
+      stageLabel: String(r.stage_label ?? ""),
+      paymentTerms: r.payment_terms != null ? String(r.payment_terms) : null,
+      invoiceIssuedAt: r.invoice_issued_at != null ? String(r.invoice_issued_at).slice(0, 10) : null,
+      invoiceAmount: toNumber(r.invoice_amount),
+      amount: toNumber(r.amount),
+      collectedAt,
+      daysAgo,
+    };
+  });
 
   return {
-    kpis: {
-      totalContracts: toNumber(k.total_contracts),
-      totalAmount,
-      issuedAmount: toNumber(k.issued_amount),
-      collectedAmount,
-      unissuedAmount: toNumber(k.unissued_amount),
-      uncollectedAmount: toNumber(k.uncollected_amount),
-      collectionRate: totalAmount > 0 ? Math.round((collectedAmount / totalAmount) * 1000) / 10 : 0,
+    year,
+    availableYears,
+    category,
+    sales,
+    orders,
+    serviceDetail: {
+      totalCount: serviceDetailRows.reduce((s, r) => s + toNumber(r.count), 0),
+      rows: serviceDetailRows.map((r) => ({
+        label: String(r.label ?? "기타"),
+        count: toNumber(r.count),
+        amount: toNumber(r.amount),
+      })),
     },
-    byServiceType,
-    byYear,
+    collection: {
+      collectedTotal,
+      collectedCategory,
+      prevCollectedTotal,
+      prevCollectedCategory,
+      rateTotal,
+      rateCategory,
+    },
+    regions: regionRows.map((r) => ({ sido: String(r.sido ?? "미상"), amount: toNumber(r.amount) })),
     uncollected,
+    recentCollections,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Contract Dashboard V2 — 발주처 상세
+// ---------------------------------------------------------------------------
+
+export interface CounterpartySearchItem {
+  facilityId: string;
+  name: string;
+  contractCount: number;
+}
+
+export interface CounterpartyDetail {
+  facilityId: string;
+  name: string;
+  yearly: Array<{ year: string; orders: number; sales: number }>;
+  current: {
+    year: string;
+    orderAmount: number;
+    salesAmount: number;
+    orderCount: number;
+    topCategory: string | null;
+  };
+  contracts: Array<{
+    contractId: string;
+    contractDate: string | null;
+    contractTitle: string;
+    amount: number;
+  }>;
+}
+
+export async function searchDashboardCounterparties(q: string): Promise<CounterpartySearchItem[]> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT f.facility_id, f.company_name, COUNT(*) AS contract_count
+       FROM contracts c
+       JOIN facilities f ON f.facility_id = c.counterparty_facility_id
+       WHERE c.deleted_at IS NULL
+         AND f.company_name ILIKE '%' || $1 || '%'
+       GROUP BY f.facility_id, f.company_name
+       ORDER BY contract_count DESC, f.company_name ASC
+       LIMIT 12`,
+      [q]
+    )
+  );
+  return rows.map((r) => ({
+    facilityId: String(r.facility_id ?? ""),
+    name: String(r.company_name ?? ""),
+    contractCount: toNumber(r.contract_count),
+  }));
+}
+
+export async function getDashboardCounterpartyDetail(
+  facilityId: string,
+  year: string
+): Promise<CounterpartyDetail | null> {
+  const db = await getDb();
+  const catCase = categoryCaseSql("c.service_type");
+
+  const nameRows = rowsToObjects(
+    await db.exec(`SELECT company_name FROM facilities WHERE facility_id = $1`, [facilityId])
+  );
+  if (nameRows.length === 0) return null;
+  const name = String(nameRows[0].company_name ?? "");
+
+  const fromYear = String(Number(year) - 5);
+  const orderYearRows = rowsToObjects(
+    await db.exec(
+      `SELECT SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) AS year,
+              SUM(${CONTRACT_AMOUNT_SQL}) AS amount
+       FROM contracts c
+       WHERE c.deleted_at IS NULL
+         AND c.counterparty_facility_id = $1
+         AND SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) BETWEEN $2 AND $3
+       GROUP BY 1`,
+      [facilityId, fromYear, year]
+    )
+  );
+  const salesYearRows = rowsToObjects(
+    await db.exec(
+      `SELECT SUBSTRING(m.invoice_issued_at, 1, 4) AS year,
+              SUM(COALESCE(m.invoice_amount, m.amount, 0)) AS amount
+       FROM contract_payment_milestones m
+       JOIN contracts c ON c.contract_id = m.contract_id
+       WHERE c.deleted_at IS NULL
+         AND c.counterparty_facility_id = $1
+         AND m.invoice_issued = 1
+         AND m.invoice_issued_at IS NOT NULL
+         AND SUBSTRING(m.invoice_issued_at, 1, 4) BETWEEN $2 AND $3
+       GROUP BY 1`,
+      [facilityId, fromYear, year]
+    )
+  );
+
+  const ordersByYear = new Map(orderYearRows.map((r) => [String(r.year ?? ""), toNumber(r.amount)]));
+  const salesByYear = new Map(salesYearRows.map((r) => [String(r.year ?? ""), toNumber(r.amount)]));
+  const yearly: CounterpartyDetail["yearly"] = [];
+  for (let y = Number(fromYear); y <= Number(year); y += 1) {
+    const key = String(y);
+    yearly.push({ year: key, orders: ordersByYear.get(key) ?? 0, sales: salesByYear.get(key) ?? 0 });
+  }
+
+  const statRows = rowsToObjects(
+    await db.exec(
+      `SELECT COUNT(*) AS order_count,
+              SUM(${CONTRACT_AMOUNT_SQL}) AS order_amount
+       FROM contracts c
+       WHERE c.deleted_at IS NULL
+         AND c.counterparty_facility_id = $1
+         AND SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) = $2`,
+      [facilityId, year]
+    )
+  );
+  const topCategoryRows = rowsToObjects(
+    await db.exec(
+      `SELECT ${catCase} AS category,
+              SUM(${CONTRACT_AMOUNT_SQL}) AS amount
+       FROM contracts c
+       WHERE c.deleted_at IS NULL
+         AND c.counterparty_facility_id = $1
+         AND SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) = $2
+       GROUP BY 1
+       ORDER BY amount DESC
+       LIMIT 1`,
+      [facilityId, year]
+    )
+  );
+  const contractRows = rowsToObjects(
+    await db.exec(
+      `SELECT c.contract_id,
+              SUBSTRING(${CONTRACT_DATE_SQL}, 1, 10) AS contract_date,
+              c.contract_title,
+              ${CONTRACT_AMOUNT_SQL} AS amount
+       FROM contracts c
+       WHERE c.deleted_at IS NULL
+         AND c.counterparty_facility_id = $1
+         AND SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) = $2
+       ORDER BY contract_date DESC
+       LIMIT 20`,
+      [facilityId, year]
+    )
+  );
+
+  return {
+    facilityId,
+    name,
+    yearly,
+    current: {
+      year,
+      orderAmount: toNumber(statRows[0]?.order_amount),
+      salesAmount: salesByYear.get(year) ?? 0,
+      orderCount: toNumber(statRows[0]?.order_count),
+      topCategory: topCategoryRows.length > 0 ? String(topCategoryRows[0].category ?? "") : null,
+    },
+    contracts: contractRows.map((r) => ({
+      contractId: String(r.contract_id ?? ""),
+      contractDate: r.contract_date != null ? String(r.contract_date) : null,
+      contractTitle: String(r.contract_title ?? ""),
+      amount: toNumber(r.amount),
+    })),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 수주/수금/발행 현황 — 수주 현황 (연도 기준 계약 원본 리스트)
+// 지역/용역/업종 필터링은 클라이언트 및 export 라우트에서 공통 헬퍼로 수행한다.
+// ---------------------------------------------------------------------------
+
+export interface ContractOrdersStatusRow {
+  contractId: string;
+  contractTitle: string;
+  counterpartyName: string;
+  /** 대쉬보드 5대 분류로 정규화된 용역분류 */
+  category: string;
+  /** 용역 세분류 원문 */
+  serviceSubtype: string | null;
+  /** YYYY-MM-DD */
+  contractDate: string | null;
+  amount: number;
+  /** 발주처 사업장 시도 (원문) */
+  sido: string | null;
+  /** 계약에 기록된 업종 분류 */
+  industryCategory: string | null;
+  /** 대상 사업장 업종명 */
+  facilityIndustryName: string | null;
+  /** 대상 사업장 KSIC 업종코드 */
+  facilityIndustryCode: string | null;
+}
+
+export interface ContractOrdersYearlyEntry {
+  year: string;
+  /** 해당 연도 전체 용역 수주액 */
+  total: number;
+  /** 대쉬보드 5대 분류별 수주액 */
+  byCategory: Record<string, number>;
+}
+
+export interface ContractOrdersStatus {
+  year: string;
+  availableYears: string[];
+  rows: ContractOrdersStatusRow[];
+  /** 기준연도 포함 직전 10개년 수주액 추이 (연도 오름차순) */
+  yearly: ContractOrdersYearlyEntry[];
+}
+
+export async function getContractOrdersStatus(yearFilter?: string): Promise<ContractOrdersStatus> {
+  const db = await getDb();
+  const catCase = categoryCaseSql("c.service_type");
+
+  const yearRows = rowsToObjects(
+    await db.exec(
+      `SELECT DISTINCT SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) AS year
+       FROM contracts c
+       WHERE c.deleted_at IS NULL
+       ORDER BY year DESC
+       LIMIT 14`
+    )
+  );
+  const availableYears = yearRows
+    .map((r) => String(r.year ?? ""))
+    .filter((y) => /^\d{4}$/.test(y));
+  // "all" = 전체 기간 (연도 제한 없음)
+  const isAllPeriod = yearFilter === "all";
+  const latestYear = availableYears[0] ?? String(new Date().getFullYear());
+  const year = isAllPeriod
+    ? "all"
+    : yearFilter && /^\d{4}$/.test(yearFilter)
+      ? yearFilter
+      : latestYear;
+
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT c.contract_id,
+              c.contract_title,
+              ${catCase} AS category,
+              SUBSTRING(${CONTRACT_DATE_SQL}, 1, 10) AS contract_date,
+              ${CONTRACT_AMOUNT_SQL} AS amount,
+              cp.company_name AS counterparty_name,
+              NULLIF(cp.region_sido, '') AS sido,
+              c.service_subtype,
+              c.industry_category,
+              f.industry_name AS facility_industry_name,
+              f.industry_code AS facility_industry_code
+       FROM contracts c
+       LEFT JOIN facilities cp ON cp.facility_id = c.counterparty_facility_id
+       LEFT JOIN facilities f ON f.facility_id = c.facility_id
+       WHERE c.deleted_at IS NULL
+         ${isAllPeriod ? "" : `AND SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) = $1`}
+       ORDER BY contract_date DESC NULLS LAST, c.contract_title ASC`,
+      isAllPeriod ? [] : [year]
+    )
+  );
+
+  // 기준연도(전체 기간이면 최신 연도) 포함 직전 10개년 — 연도/분류별 수주액 추이
+  const anchorYear = isAllPeriod ? latestYear : year;
+  const fromYear = String(Number(anchorYear) - 9);
+  const yearlyRows = rowsToObjects(
+    await db.exec(
+      `SELECT SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) AS year,
+              ${catCase} AS category,
+              SUM(${CONTRACT_AMOUNT_SQL}) AS amount
+       FROM contracts c
+       WHERE c.deleted_at IS NULL
+         AND SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) BETWEEN $1 AND $2
+       GROUP BY 1, 2`,
+      [fromYear, anchorYear]
+    )
+  );
+  const yearlyMap = new Map<string, ContractOrdersYearlyEntry>();
+  for (let y = Number(fromYear); y <= Number(anchorYear); y += 1) {
+    yearlyMap.set(String(y), { year: String(y), total: 0, byCategory: {} });
+  }
+  for (const r of yearlyRows) {
+    const entry = yearlyMap.get(String(r.year ?? ""));
+    if (!entry) continue;
+    const cat = String(r.category ?? "기타 용역");
+    const amount = toNumber(r.amount);
+    entry.total += amount;
+    entry.byCategory[cat] = (entry.byCategory[cat] ?? 0) + amount;
+  }
+
+  return {
+    year,
+    availableYears,
+    yearly: [...yearlyMap.values()],
+    rows: rows.map((r) => ({
+      contractId: String(r.contract_id ?? ""),
+      contractTitle: String(r.contract_title ?? ""),
+      counterpartyName: String(r.counterparty_name ?? ""),
+      category: String(r.category ?? "기타 용역"),
+      serviceSubtype: r.service_subtype != null ? String(r.service_subtype) : null,
+      contractDate: r.contract_date != null ? String(r.contract_date) : null,
+      amount: toNumber(r.amount),
+      sido: r.sido != null ? String(r.sido) : null,
+      industryCategory: r.industry_category != null ? String(r.industry_category) : null,
+      facilityIndustryName:
+        r.facility_industry_name != null ? String(r.facility_industry_name) : null,
+      facilityIndustryCode:
+        r.facility_industry_code != null ? String(r.facility_industry_code) : null,
+    })),
   };
 }
 

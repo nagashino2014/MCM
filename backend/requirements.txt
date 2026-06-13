@@ -1,4 +1,6 @@
 # FastAPI server
+--extra-index-url https://download.pytorch.org/whl/cpu
+
 fastapi
 uvicorn[standard]
 python-multipart
@@ -23,13 +25,13 @@ openpyxl==3.1.2
 beautifulsoup4==4.12.3
 
 # OCR engines
-paddlepaddle==3.1.1
-paddleocr
+paddlepaddle==2.6.2
+paddleocr==2.7.3
 easyocr==1.7.1
 pytesseract==0.3.10
 
 # Image processing
-opencv-python>=4.8.0
+opencv-python==4.6.0.66
 numpy>=1.24.0,<2.0.0
 Pillow
 
@@ -46,7 +48,8 @@ httpx==0.26.0
 
 # Embedding models (HuggingFace)
 sentence-transformers>=2.2.2
-torch>=2.0.0
+torch==2.3.1+cpu
+torchvision==0.18.1+cpu
 transformers>=4.30.0
 
 # Vector Database

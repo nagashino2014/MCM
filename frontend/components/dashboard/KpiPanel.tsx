@@ -47,16 +47,16 @@ export function KpiPanel({ refreshKey }: { refreshKey?: number }) {
   }, [reload, refreshKey]);
 
   return (
-    <div className="glass-card p-6 rounded-3xl flex flex-col gap-4 reveal delay-1">
+    <div className="cd-card p-6 rounded-3xl flex flex-col gap-4 cd-reveal delay-1">
       <div className="flex items-center justify-between">
-        <h3 className="font-bold text-stone-700 flex items-center gap-2">
-          <Database className="w-5 h-5 text-primary" />
+        <h3 className="font-bold cd-text-muted flex items-center gap-2">
+          <Database className="w-5 h-5 cd-text-primary" />
           IEPS 수집 파이프라인
         </h3>
         <button
           type="button"
           onClick={reload}
-          className="glass-button rounded-xl px-3 py-1.5 text-xs font-bold text-stone-700 flex items-center gap-1"
+          className="cd-btn cd-btn-ghost rounded-xl px-3 py-1.5 text-xs font-bold cd-text-muted flex items-center gap-1"
         >
           <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} />
           새로고침
@@ -107,7 +107,7 @@ export function KpiPanel({ refreshKey }: { refreshKey?: number }) {
       </div>
 
       {error && (
-        <div className="text-[11px] text-red-600 font-bold">KPI 로딩 실패: {error}</div>
+        <div className="text-[11px] cd-error-text font-bold">KPI 로딩 실패: {error}</div>
       )}
     </div>
   );

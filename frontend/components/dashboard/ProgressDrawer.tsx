@@ -116,12 +116,12 @@ export function ProgressDrawer({ open, onClose, events, status, errorMessage, on
         onClick={status === "running" ? undefined : onClose}
       />
       <aside className="drawer">
-        <header className="px-6 py-5 border-b border-stone-200/70 flex items-center justify-between">
+        <header className="px-6 py-5 border-b cd-border-c flex items-center justify-between">
           <div>
-            <div className="text-xs font-bold text-stone-400 uppercase tracking-wide">
+            <div className="text-xs font-bold cd-text-faint uppercase tracking-wide">
               수집 진행 상황
             </div>
-            <h3 className="text-base font-bold text-stone-800 mt-1 flex items-center gap-2">
+            <h3 className="text-base font-bold cd-text mt-1 flex items-center gap-2">
               {status === "running" && (
                 <span className="status-pill status-pill--running">진행 중</span>
               )}
@@ -143,14 +143,14 @@ export function ProgressDrawer({ open, onClose, events, status, errorMessage, on
           </div>
           <button
             type="button"
-            className="glass-button rounded-xl w-9 h-9 flex items-center justify-center text-stone-600"
+            className="cd-btn cd-btn-ghost rounded-xl w-9 h-9 flex items-center justify-center cd-text-muted"
             onClick={onClose}
           >
             <X className="w-4 h-4" />
           </button>
         </header>
 
-        <div className="px-6 py-4 flex flex-col gap-3 border-b border-stone-200/70">
+        <div className="px-6 py-4 flex flex-col gap-3 border-b cd-border-c">
           {phases.map((p) => {
             const stats = phaseStats.get(p.id);
             const total = stats?.total ?? 0;
@@ -164,11 +164,11 @@ export function ProgressDrawer({ open, onClose, events, status, errorMessage, on
                   <PhaseIcon
                     className={cn(
                       "w-4 h-4",
-                      active ? "text-primary" : "text-stone-400"
+                      active ? "cd-text-primary" : "cd-text-faint"
                     )}
                   />
-                  <div className="text-xs font-bold text-stone-700">{p.label}</div>
-                  <div className="text-[11px] text-stone-400 font-medium ml-auto">
+                  <div className="text-xs font-bold cd-text-muted">{p.label}</div>
+                  <div className="text-[11px] cd-text-faint font-medium ml-auto">
                     {total > 0 ? current + " / " + total : current > 0 ? current : "—"}
                   </div>
                 </div>
@@ -176,7 +176,7 @@ export function ProgressDrawer({ open, onClose, events, status, errorMessage, on
                   <div className="progress-bar" style={{ width: pct + "%" }} />
                 </div>
                 {stats?.latest && (
-                  <div className="text-[10px] text-stone-500 truncate">{stats.latest}</div>
+                  <div className="text-[10px] cd-text-faint truncate">{stats.latest}</div>
                 )}
               </div>
             );
@@ -200,10 +200,10 @@ export function ProgressDrawer({ open, onClose, events, status, errorMessage, on
                 key={i}
                 className={cn(
                   "leading-snug",
-                  isError ? "text-red-600" : isWarn ? "text-amber-600" : "text-stone-600"
+                  isError ? "cd-error-text" : isWarn ? "text-amber-600" : "cd-text-muted"
                 )}
               >
-                <span className="text-stone-400">[{e.event}]</span>{" "}
+                <span className="cd-text-faint">[{e.event}]</span>{" "}
                 {downloadMethod && (
                   <span className={cn("method-badge", "method-" + downloadMethod)}>{downloadMethod.toUpperCase()}</span>
                 )}
@@ -217,19 +217,19 @@ export function ProgressDrawer({ open, onClose, events, status, errorMessage, on
             );
           })}
           {events.length === 0 && (
-            <div className="text-stone-400 italic">수집을 시작하면 진행 로그가 표시됩니다.</div>
+            <div className="cd-text-faint italic">수집을 시작하면 진행 로그가 표시됩니다.</div>
           )}
           {errorMessage && (
-            <div className="text-red-600 font-bold">[error] {errorMessage}</div>
+            <div className="cd-error-text font-bold">[error] {errorMessage}</div>
           )}
         </div>
 
-        <footer className="px-6 py-4 border-t border-stone-200/70 flex items-center gap-2">
+        <footer className="px-6 py-4 border-t cd-border-c flex items-center gap-2">
           {status === "running" && onCancel && (
             <button
               type="button"
               onClick={onCancel}
-              className="glass-button rounded-xl px-3 py-2 text-xs font-bold text-stone-700"
+              className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs font-bold cd-text-muted"
             >
               중단
             </button>
@@ -237,7 +237,7 @@ export function ProgressDrawer({ open, onClose, events, status, errorMessage, on
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl px-3 py-2 text-xs font-bold text-white bg-primary hover:bg-primary/90 ml-auto"
+            className="rounded-xl px-3 py-2 text-xs font-bold text-white cd-fill-primary ml-auto"
           >
             닫기
           </button>

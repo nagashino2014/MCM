@@ -275,17 +275,17 @@ export function CollectionOptionsCard({
   };
 
   return (
-    <section className="glass-panel p-6 rounded-3xl flex flex-col gap-4 reveal delay-3">
+    <section className="cd-card p-6 rounded-3xl flex flex-col gap-4 cd-reveal delay-3">
       <div className="flex items-center justify-between">
-        <h3 className="font-bold text-stone-700 flex items-center gap-2">
-          <SlidersHorizontal className="w-5 h-5 text-primary" />
+        <h3 className="font-bold cd-text-muted flex items-center gap-2">
+          <SlidersHorizontal className="w-5 h-5 cd-text-primary" />
           수집 옵션
         </h3>
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={handleReset}
-            className="glass-button rounded-xl px-3 py-1.5 text-xs font-bold text-stone-700 flex items-center gap-1"
+            className="cd-btn cd-btn-ghost rounded-xl px-3 py-1.5 text-xs font-bold cd-text-muted flex items-center gap-1"
           >
             <RotateCcw className="w-3 h-3" />
             초기화
@@ -296,7 +296,7 @@ export function CollectionOptionsCard({
       {savedConfigs.length > 0 && (
         <div className="flex items-center gap-2">
           <select
-            className="ui-select text-xs flex-1"
+            className="cd-select text-xs flex-1"
             value={selectedConfigId ?? ""}
             onChange={(e) => handleLoad(Number(e.target.value))}
           >
@@ -311,18 +311,18 @@ export function CollectionOptionsCard({
       )}
 
       {/* 1. 수집 범위 */}
-      <div className="bg-white/40 border border-white/60 rounded-2xl p-4 flex flex-col gap-3">
+      <div className="cd-surface-bg border cd-border-c rounded-2xl p-4 flex flex-col gap-3">
         <div className="flex items-center gap-2">
-          <CalendarRange className="w-4 h-4 text-stone-500" />
-          <span className="text-xs font-bold text-stone-700">수집 범위</span>
-          <span className="text-[10px] text-stone-400 font-medium ml-auto">게재일 기준</span>
+          <CalendarRange className="w-4 h-4 cd-text-faint" />
+          <span className="text-xs font-bold cd-text-muted">수집 범위</span>
+          <span className="text-[10px] cd-text-faint font-medium ml-auto">게재일 기준</span>
         </div>
         <div className="flex flex-wrap gap-2">
           {RANGE_PRESETS.map((p) => (
             <button
               key={p.id}
               type="button"
-              className="ui-chip"
+              className="cd-chip"
               data-active={
                 config.collectionRange?.mode === "preset" &&
                 config.collectionRange.preset === p.id
@@ -338,14 +338,14 @@ export function CollectionOptionsCard({
         <div className="flex items-center gap-2">
           <input
             type="date"
-            className="input-field flex-1"
+            className="cd-input flex-1"
             value={config.collectionRange?.startDate ?? ""}
             onChange={(e) => setCustomDate("startDate", e.target.value)}
           />
-          <span className="text-stone-400 text-xs">~</span>
+          <span className="cd-text-faint text-xs">~</span>
           <input
             type="date"
-            className="input-field flex-1"
+            className="cd-input flex-1"
             value={config.collectionRange?.endDate ?? ""}
             onChange={(e) => setCustomDate("endDate", e.target.value)}
           />
@@ -353,18 +353,18 @@ export function CollectionOptionsCard({
       </div>
 
       {/* 2. 필터 */}
-      <div className="bg-white/40 border border-white/60 rounded-2xl p-4 flex flex-col gap-3">
+      <div className="cd-surface-bg border cd-border-c rounded-2xl p-4 flex flex-col gap-3">
         <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-stone-500" />
-          <span className="text-xs font-bold text-stone-700">수집 필터</span>
-          <span className="text-[10px] text-stone-400 font-medium ml-auto">다중 선택</span>
+          <Filter className="w-4 h-4 cd-text-faint" />
+          <span className="text-xs font-bold cd-text-muted">수집 필터</span>
+          <span className="text-[10px] cd-text-faint font-medium ml-auto">다중 선택</span>
         </div>
         <div className="flex flex-wrap gap-2">
           {FILTER_OPTIONS.map((f) => (
             <button
               key={f.id}
               type="button"
-              className="ui-chip"
+              className="cd-chip"
               data-active={(config.filters ?? []).includes(f.id) ? "true" : "false"}
               onClick={() => toggleFilter(f.id)}
             >
@@ -399,11 +399,11 @@ export function CollectionOptionsCard({
       </div>
 
       {/* 4. 추출 설정 */}
-      <div className="bg-white/40 border border-white/60 rounded-2xl p-4 flex flex-col gap-3">
+      <div className="cd-surface-bg border cd-border-c rounded-2xl p-4 flex flex-col gap-3">
         <div className="flex items-center gap-2">
-          <ScanLine className="w-4 h-4 text-stone-500" />
-          <span className="text-xs font-bold text-stone-700">추출 설정</span>
-          <span className="text-[10px] text-stone-400 font-medium ml-auto">
+          <ScanLine className="w-4 h-4 cd-text-faint" />
+          <span className="text-xs font-bold cd-text-muted">추출 설정</span>
+          <span className="text-[10px] cd-text-faint font-medium ml-auto">
             활성 {activeIds.length} / {rules.length}
           </span>
         </div>
@@ -446,7 +446,7 @@ export function CollectionOptionsCard({
       <div className="flex items-center gap-2 pt-2">
         <input
           type="text"
-          className="input-field flex-1"
+          className="cd-input flex-1"
           placeholder="저장 이름 (선택) — 비우면 오늘 날짜 사용"
           value={saveName}
           onChange={(e) => setSaveName(e.target.value)}
@@ -456,7 +456,7 @@ export function CollectionOptionsCard({
           onClick={handleSave}
           disabled={!canEdit}
           title={!canEdit ? "조회자 권한은 옵션을 저장할 수 없습니다." : undefined}
-          className="rounded-xl px-3 py-2 text-xs font-bold bg-white/70 text-stone-700 border border-white/70 hover:bg-white shadow-sm flex items-center gap-1 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="rounded-xl px-3 py-2 text-xs font-bold cd-surface-bg cd-text-muted border cd-border-c hover:bg-[color:var(--cd-card)] shadow-sm flex items-center gap-1 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Save className="w-3.5 h-3.5" />
           옵션 저장
@@ -470,7 +470,7 @@ export function CollectionOptionsCard({
               ? "조회자 권한은 수집을 트리거할 수 없습니다."
               : "게시판 목록 스크래핑 + PDF 다운로드까지만 수행합니다. (OCR/사업장 적재는 아래 카테고리별 파싱 버튼)"
           }
-          className="rounded-xl px-4 py-2 text-xs font-bold text-white bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm flex items-center gap-1 shrink-0"
+          className="rounded-xl px-4 py-2 text-xs font-bold text-white cd-fill-primary disabled:opacity-50 disabled:cursor-not-allowed shadow-sm flex items-center gap-1 shrink-0"
         >
           <Play className="w-3.5 h-3.5" />
           {isCollecting ? "수집 중…" : "수집 시작"}
@@ -556,8 +556,8 @@ function ParseCategoryButton({
       className={
         "rounded-xl px-3 py-2 text-[11px] font-bold border shadow-sm flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed " +
         (running
-          ? "bg-primary/10 border-primary/40 text-primary"
-          : "bg-white/70 border-white/70 text-stone-700 hover:bg-white")
+          ? "cd-tint-primary border-[color:var(--cd-primary)] cd-text-primary"
+          : "cd-surface-bg cd-border-c cd-text-muted hover:bg-[color:var(--cd-card)]")
       }
     >
       <RefreshCw className={"w-3 h-3 " + (running ? "animate-spin" : "")} />
@@ -594,7 +594,7 @@ function ExtractionRangeCard({
   return (
     <div
       className={
-        "bg-white/40 border border-white/60 rounded-2xl p-4 flex flex-col gap-3 transition-opacity " +
+        "cd-surface-bg border cd-border-c rounded-2xl p-4 flex flex-col gap-3 transition-opacity " +
         (active ? "" : "opacity-50")
       }
       title={
@@ -604,9 +604,9 @@ function ExtractionRangeCard({
       }
     >
       <div className="flex items-center gap-2">
-        <FileSearch className="w-4 h-4 text-stone-500" />
-        <span className="text-xs font-bold text-stone-700">{title}</span>
-        <span className="text-[10px] text-stone-400 font-medium ml-auto">{subtitle}</span>
+        <FileSearch className="w-4 h-4 cd-text-faint" />
+        <span className="text-xs font-bold cd-text-muted">{title}</span>
+        <span className="text-[10px] cd-text-faint font-medium ml-auto">{subtitle}</span>
       </div>
       <div className="range-toggle">
         <button
@@ -629,26 +629,26 @@ function ExtractionRangeCard({
           <input
             type="number"
             min={1}
-            className="input-field w-20 text-center"
+            className="cd-input w-20 text-center"
             value={range.startPage ?? 1}
             onChange={(e) =>
               onChangePage("startPage", Math.max(1, Number(e.target.value) || 1))
             }
           />
-          <span className="text-stone-400 text-xs">~</span>
+          <span className="cd-text-faint text-xs">~</span>
           <input
             type="number"
             min={1}
-            className="input-field w-20 text-center"
+            className="cd-input w-20 text-center"
             value={range.endPage ?? defaultEnd}
             onChange={(e) =>
               onChangePage("endPage", Math.max(1, Number(e.target.value) || 1))
             }
           />
-          <span className="text-[10px] text-stone-400 font-medium">p</span>
+          <span className="text-[10px] cd-text-faint font-medium">p</span>
         </div>
       ) : (
-        <div className="text-[11px] text-stone-500 font-medium">전체 페이지에서 추출</div>
+        <div className="text-[11px] cd-text-faint font-medium">전체 페이지에서 추출</div>
       )}
     </div>
   );

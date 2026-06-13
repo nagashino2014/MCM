@@ -102,7 +102,7 @@ export function ConceptSummaryCards({ refreshKey }: { refreshKey?: number }) {
   }, [refreshKey]);
 
   return (
-    <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 reveal delay-1">
+    <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 cd-reveal delay-1">
       {CARDS.map((c, idx) => (
         <ConceptCard key={c.label} card={c} kpi={kpi} index={idx} />
       ))}
@@ -130,17 +130,17 @@ function ConceptCard({
       className={
         "relative rounded-2xl p-4 border transition-shadow " +
         (isReal
-          ? "bg-gradient-to-br from-primary/15 via-white/70 to-white/40 border-white/70 shadow-sm"
-          : "bg-white/55 border-white/60 concept-hatched")
+          ? "cd-tint-primary cd-border-c shadow-sm"
+          : "cd-card-bg cd-border-c concept-hatched")
       }
       style={{ animationDelay: 0.05 + index * 0.04 + "s" }}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <Icon
-            className={"w-4 h-4 flex-shrink-0 " + (isReal ? "text-primary" : "text-stone-400")}
+            className={"w-4 h-4 flex-shrink-0 " + (isReal ? "cd-text-primary" : "cd-text-faint")}
           />
-          <div className="text-[10px] font-bold uppercase tracking-wider text-stone-500 truncate">
+          <div className="text-[10px] font-bold uppercase tracking-wider cd-text-faint truncate">
             {card.label}
           </div>
         </div>
@@ -156,16 +156,16 @@ function ConceptCard({
         )}
       </div>
 
-      <div className={"mt-2 text-3xl font-extrabold leading-tight " + (isReal ? "text-stone-900" : "text-stone-400")}>
+      <div className={"mt-2 text-3xl font-extrabold leading-tight " + (isReal ? "cd-text" : "cd-text-faint")}>
         {value}
       </div>
       {hint && (
-        <div className="text-[10px] text-stone-500 font-medium mt-1 truncate" title={hint}>
+        <div className="text-[10px] cd-text-faint font-medium mt-1 truncate" title={hint}>
           {hint}
         </div>
       )}
       {trend && (
-        <div className="text-[10px] mt-2 inline-flex items-center gap-1 text-stone-400 font-medium">
+        <div className="text-[10px] mt-2 inline-flex items-center gap-1 cd-text-faint font-medium">
           <TrendingUp className="w-3 h-3" />
           {trend}
         </div>

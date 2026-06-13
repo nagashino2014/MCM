@@ -4,6 +4,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { ClipboardCheck, Download, RefreshCw } from "lucide-react";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
+import { useCdashTheme } from "@/components/cdash/useCdashTheme";
+import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
+import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import "@/components/cdash/cdash.css";
 import {
   ReviewQueueTable,
   type ReviewRow,
@@ -21,6 +25,7 @@ export default function ReviewPage() {
 
 function ReviewPageInner() {
   const { data: session } = useSession();
+  const { theme, toggleTheme } = useCdashTheme();
   const role = (session?.user as { role?: "admin" | "editor" | "viewer" } | undefined)?.role ?? "viewer";
   const canEdit = role === "admin" || role === "editor";
   const [rows, setRows] = useState<ReviewRow[]>([]);
@@ -117,21 +122,15 @@ function ReviewPageInner() {
   );
 
   return (
-    <div className="flex flex-col gap-6 p-2">
-      <section className="glass-panel p-8 rounded-3xl relative overflow-hidden reveal">
-        <div className="relative z-10 flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="text-3xl font-bold text-stone-800 mb-2 flex items-center gap-3">
-              <ClipboardCheck className="w-7 h-7 text-primary" />
-              데이터 · 검수 대기열
-            </h1>
-            <p className="text-stone-600 text-base max-w-3xl">
-              OCR 추출 시 신뢰도가 낮거나 필수 항목이 빈 값으로 잡힌 필드가 표시됩니다.
-              우측 패널에서 source text를 확인한 뒤 확정 값을 입력하세요.
-            </p>
-          </div>
-          <div className="flex items-center gap-3 mt-2">
-            <label className="flex items-center gap-2 text-xs font-bold text-stone-600">
+    <div className="cdash cd-fields-white flex flex-col gap-5 p-4 md:p-5 rounded-3xl min-h-full" data-theme={theme}>
+      <CdPageHeader
+        icon={<ClipboardCheck className="w-5 h-5" />}
+        eyebrow="Data · Review"
+        title="데이터 · 검수 대기열"
+        subtitle="OCR 추출 시 신뢰도가 낮거나 필수 항목이 빈 값으로 잡힌 필드가 표시됩니다. 우측 패널에서 source text를 확인한 뒤 확정 값을 입력하세요."
+        actions={
+          <>
+            <label className="flex items-center gap-2 text-xs font-bold cd-text-muted">
               <input
                 type="checkbox"
                 checked={includeReviewed}
@@ -140,41 +139,37 @@ function ReviewPageInner() {
                   setIncludeReviewed(e.target.checked);
                 }}
               />
-              검수 완료 항목 포함
+              검수 완료 포함
             </label>
             <button
               type="button"
               onClick={handleExportDiagnostic}
               disabled={exporting}
-              className="glass-button rounded-xl px-3 py-2 text-xs font-bold text-stone-700 flex items-center gap-1 disabled:opacity-50"
+              className="cd-btn cd-btn-ghost cd-btn-sm"
               title="첨부 단위로 묶인 실패 사유/원본 텍스트/페이지 위치를 JSON으로 다운로드"
             >
-              <Download className={"w-3 h-3 " + (exporting ? "animate-pulse" : "")} />
+              <Download className={"w-3.5 h-3.5 " + (exporting ? "animate-pulse" : "")} />
               진단 JSON
             </button>
-            <button
-              type="button"
-              onClick={reload}
-              className="glass-button rounded-xl px-3 py-2 text-xs font-bold text-stone-700 flex items-center gap-1"
-            >
-              <RefreshCw className={"w-3 h-3 " + (loading ? "animate-spin" : "")} />
+            <button type="button" onClick={reload} className="cd-btn cd-btn-ghost cd-btn-sm">
+              <RefreshCw className={"w-3.5 h-3.5 " + (loading ? "animate-spin" : "")} />
               새로고침
             </button>
-          </div>
-        </div>
-        <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-gradient-to-l from-primary/10 to-transparent pointer-events-none" />
-      </section>
+            <CdThemeToggle theme={theme} onToggle={toggleTheme} />
+          </>
+        }
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-6">
-        <section className="glass-panel rounded-3xl p-6 reveal delay-1">
+        <section className="cd-card rounded-3xl p-6 cd-reveal delay-1">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-stone-700">검수 항목 ({headerStats.total}건)</h3>
-            <span className="text-[11px] text-stone-400 font-medium">
+            <h3 className="font-bold cd-text-muted">검수 항목 ({headerStats.total}건)</h3>
+            <span className="text-[11px] cd-text-faint font-medium">
               표시 {headerStats.shown} / 총 {headerStats.total}
             </span>
           </div>
           {error && (
-            <div className="text-red-600 text-sm font-bold mb-3">조회 실패: {error}</div>
+            <div className="cd-error-text text-sm font-bold mb-3">조회 실패: {error}</div>
           )}
           <ReviewQueueTable
             rows={rows}
@@ -182,7 +177,7 @@ function ReviewPageInner() {
             onSelect={(r) => setSelected(r)}
             loading={loading}
           />
-          <div className="pt-4 mt-4 border-t border-white/50">
+          <div className="pt-4 mt-4 border-t cd-border-c">
             <PaginationControls
               total={total}
               limit={limit}
@@ -196,7 +191,7 @@ function ReviewPageInner() {
           </div>
         </section>
 
-        <aside className="reveal delay-2">
+        <aside className="cd-reveal delay-2">
           <ReviewSidePanel
             row={selected}
             onSave={handleSave}

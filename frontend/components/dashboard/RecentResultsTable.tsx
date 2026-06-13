@@ -44,15 +44,15 @@ export function RecentResultsTable({ refreshKey }: { refreshKey?: number }) {
   }, [reload, refreshKey]);
 
   return (
-    <section className="glass-panel p-6 rounded-3xl reveal delay-2">
+    <section className="cd-card p-6 rounded-3xl cd-reveal delay-2">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-bold text-stone-700 flex items-center gap-2">
-          <ListChecks className="w-5 h-5 text-primary" />
+        <h3 className="font-bold cd-text-muted flex items-center gap-2">
+          <ListChecks className="w-5 h-5 cd-text-primary" />
           수집 결과
         </h3>
         <a
           href="/data/review"
-          className="text-xs font-semibold text-stone-500 hover:text-primary transition-colors flex items-center gap-1 group"
+          className="text-xs font-semibold cd-text-faint hover:text-[color:var(--cd-primary)] transition-colors flex items-center gap-1 group"
         >
           검수 대기열로 이동
           <ArrowUpRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
@@ -62,7 +62,7 @@ export function RecentResultsTable({ refreshKey }: { refreshKey?: number }) {
       {/* 헤더와 행 영역의 좌측 시작 위치를 일치시키기 위해 동일 그리드 + 동일 좌우 패딩(p-3) 사용.
           행 영역의 `overflow-y-auto` 가 만드는 스크롤바 gutter 만큼 헤더 우측에 padding 을 보태
           fr 분배가 헤더/행에서 동일하게 되도록 보정한다. */}
-      <div className="hidden md:grid grid-cols-[1.5fr_1fr_1fr_0.8fr] gap-3 p-3 pr-[14px] text-left text-[10px] font-bold uppercase text-stone-400 tracking-wide">
+      <div className="hidden md:grid grid-cols-[1.5fr_1fr_1fr_0.8fr] gap-3 p-3 pr-[14px] text-left text-[10px] font-bold uppercase cd-text-faint tracking-wide">
         <div className="text-left">상호 / 소재지</div>
         <div className="text-left">결정번호 · 허가일</div>
         <div className="text-left">업종</div>
@@ -71,15 +71,15 @@ export function RecentResultsTable({ refreshKey }: { refreshKey?: number }) {
 
       <div className="flex flex-col gap-2 max-h-[420px] overflow-y-auto">
         {loading && (
-          <div className="text-stone-400 text-sm text-center py-10">로딩 중…</div>
+          <div className="cd-text-faint text-sm text-center py-10">로딩 중…</div>
         )}
         {error && (
-          <div className="text-red-600 text-sm font-bold text-center py-6">
+          <div className="cd-error-text text-sm font-bold text-center py-6">
             데이터 조회 실패: {error}
           </div>
         )}
         {!loading && !error && rows.length === 0 && (
-          <div className="text-stone-400 text-sm text-center py-10">
+          <div className="cd-text-faint text-sm text-center py-10">
             아직 수집된 사업장이 없습니다. 우측 수집 옵션에서 수집을 시작하세요.
           </div>
         )}
@@ -88,25 +88,25 @@ export function RecentResultsTable({ refreshKey }: { refreshKey?: number }) {
           return (
             <div
               key={r.facilityId}
-              className="grid grid-cols-[1.5fr_1fr_1fr_0.8fr] gap-3 items-start p-3 rounded-xl bg-white/40 hover:bg-white/70 transition-colors border border-white/50 group text-left"
+              className="grid grid-cols-[1.5fr_1fr_1fr_0.8fr] gap-3 items-start p-3 rounded-xl cd-surface-bg hover:bg-[color:var(--cd-surface)] transition-colors border cd-border-c group text-left"
             >
               <div className="min-w-0 text-left">
-                <div className="text-sm font-bold text-stone-800 truncate">
+                <div className="text-sm font-bold cd-text truncate">
                   {companyName || "(상호 미상)"}
                 </div>
-                <div className="text-[11px] text-stone-500 truncate">
+                <div className="text-[11px] cd-text-faint truncate">
                   {r.siteAddress || "—"}
                 </div>
               </div>
               <div className="min-w-0 text-left">
-                <div className="text-xs font-bold text-stone-700 truncate">{r.decisionNo || "—"}</div>
-                <div className="text-[11px] text-stone-500 truncate">{r.permitDate || "—"}</div>
+                <div className="text-xs font-bold cd-text-muted truncate">{r.decisionNo || "—"}</div>
+                <div className="text-[11px] cd-text-faint truncate">{r.permitDate || "—"}</div>
               </div>
               <div className="min-w-0 text-left">
-                <div className="text-xs font-bold text-stone-700 truncate">
+                <div className="text-xs font-bold cd-text-muted truncate">
                   {r.industryCode || "—"}
                 </div>
-                <div className="text-[11px] text-stone-500 truncate">
+                <div className="text-[11px] cd-text-faint truncate">
                   {r.industryName || "—"}
                 </div>
               </div>
@@ -122,7 +122,7 @@ export function RecentResultsTable({ refreshKey }: { refreshKey?: number }) {
                   </span>
                 )}
                 {r.airClass == null && r.waterClass == null && (
-                  <span className="text-[10px] text-stone-400">—</span>
+                  <span className="text-[10px] cd-text-faint">—</span>
                 )}
               </div>
             </div>

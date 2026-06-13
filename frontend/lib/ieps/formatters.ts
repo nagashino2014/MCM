@@ -110,16 +110,60 @@ export function parseIndustriesFromValue(
   return dedupeIndustries(items);
 }
 
+export function normalizeIndustryDisplay(item: IndustryDisplay): IndustryDisplay {
+  let code = normalizeIndustryCode(item.code);
+  let name = normalizeIndustryName(item.name);
+  const embeddedCode = name?.match(/^(\d{3,5})\s*[,，:：/\-]?\s*(.+)$/);
+  if (embeddedCode) {
+    code = code ?? embeddedCode[1];
+    if (code === embeddedCode[1]) {
+      name = normalizeIndustryName(embeddedCode[2]);
+    }
+  }
+  return {
+    code,
+    name,
+    source: item.source ?? null,
+  };
+}
+
 export function dedupeIndustries(items: IndustryDisplay[]): IndustryDisplay[] {
   const seen = new Set<string>();
   const out: IndustryDisplay[] = [];
   for (const item of items) {
-    const key = `${item.code ?? ""}|${item.name ?? ""}`;
-    if ((!item.code && !item.name) || seen.has(key)) continue;
+    const normalized = normalizeIndustryDisplay(item);
+    const key = industryDedupeKey(normalized);
+    if ((!normalized.code && !normalized.name) || seen.has(key)) continue;
     seen.add(key);
-    out.push(item);
+    out.push(normalized);
   }
   return out;
+}
+
+function industryDedupeKey(item: IndustryDisplay): string {
+  const codeKey = normalizeIndustryCode(item.code) ?? "";
+  const nameKey = (normalizeIndustryName(item.name) ?? "").replace(/\s+/g, "");
+  return `${codeKey}|${nameKey}`;
+}
+
+function normalizeIndustryCode(value: string | null | undefined): string | null {
+  const normalized = normalizeComparableText(value);
+  if (!normalized) return null;
+  const digits = normalized.replace(/\D/g, "");
+  return digits || normalized;
+}
+
+function normalizeIndustryName(value: string | null | undefined): string | null {
+  return normalizeComparableText(value);
+}
+
+function normalizeComparableText(value: string | null | undefined): string | null {
+  const normalized = value
+    ?.normalize("NFKC")
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return normalized || null;
 }
 
 function compactSingle(value: string | null | undefined): string[] {

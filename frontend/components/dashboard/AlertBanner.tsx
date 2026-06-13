@@ -47,15 +47,15 @@ export function AlertBanner({ canAck }: AlertBannerProps) {
   )[0];
   const tone =
     top.severity === "error"
-      ? "border-red-300 bg-red-50/80"
+      ? "border-red-300 cd-error-bg"
       : top.severity === "warn"
-        ? "border-amber-300 bg-amber-50/80"
+        ? "border-amber-300 cd-warn-bg"
         : "border-sky-300 bg-sky-50/80";
   const Icon =
     top.severity === "error" ? AlertCircle : top.severity === "warn" ? AlertTriangle : Info;
   const accent =
     top.severity === "error"
-      ? "text-red-600"
+      ? "cd-error-text"
       : top.severity === "warn"
         ? "text-amber-600"
         : "text-sky-600";
@@ -66,7 +66,7 @@ export function AlertBanner({ canAck }: AlertBannerProps) {
         type="button"
         onClick={() => setOpen(true)}
         className={cn(
-          "w-full rounded-2xl border-2 p-4 flex items-start gap-3 reveal transition-all hover:shadow-md text-left",
+          "w-full rounded-2xl border-2 p-4 flex items-start gap-3 cd-reveal transition-all hover:shadow-md text-left",
           tone
         )}
       >
@@ -76,21 +76,21 @@ export function AlertBanner({ canAck }: AlertBannerProps) {
             <span className={cn("text-[10px] font-bold uppercase tracking-wide", accent)}>
               {top.severity}
             </span>
-            <span className="text-[10px] font-bold text-stone-400 uppercase">
+            <span className="text-[10px] font-bold cd-text-faint uppercase">
               {top.source} · {top.code}
             </span>
             {alerts.length > 1 && (
-              <span className="text-[10px] font-bold text-stone-500 px-2 py-0.5 rounded-full bg-white/70 border border-stone-200/60">
+              <span className="text-[10px] font-bold cd-text-faint px-2 py-0.5 rounded-full cd-surface-bg border cd-border-c">
                 외 {alerts.length - 1}건
               </span>
             )}
           </div>
-          <div className="text-sm font-bold text-stone-800 mt-1 break-words">{top.title}</div>
+          <div className="text-sm font-bold cd-text mt-1 break-words">{top.title}</div>
           {top.body && (
-            <div className="text-[12px] text-stone-600 mt-1 break-words">{top.body}</div>
+            <div className="text-[12px] cd-text-muted mt-1 break-words">{top.body}</div>
           )}
         </div>
-        <ArrowRight className="w-4 h-4 text-stone-500 mt-1 shrink-0" />
+        <ArrowRight className="w-4 h-4 cd-text-faint mt-1 shrink-0" />
       </button>
       <AlertDrawer
         open={open}

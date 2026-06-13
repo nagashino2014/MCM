@@ -328,12 +328,12 @@ export function RegionMap({ refreshKey }: Props) {
   const isReady = !!mapData && !!dist && !error;
 
   return (
-    <section ref={containerRef} className="glass-panel p-6 rounded-3xl reveal delay-2 h-full flex flex-col">
+    <section ref={containerRef} className="cd-card p-6 rounded-3xl cd-reveal delay-2 h-full flex flex-col">
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <h3 className="font-bold text-stone-700 flex items-center gap-2">
-          <MapIcon className="w-5 h-5 text-primary" />
+        <h3 className="font-bold cd-text-muted flex items-center gap-2">
+          <MapIcon className="w-5 h-5 cd-text-primary" />
           지역 분포
-          <span className="text-[10px] font-bold text-stone-400 ml-1">
+          <span className="text-[10px] font-bold cd-text-faint ml-1">
             (시도 → 시군구 드릴다운)
           </span>
         </h3>
@@ -342,7 +342,7 @@ export function RegionMap({ refreshKey }: Props) {
           <button
             type="button"
             onClick={reloadDist}
-            className="glass-button rounded-xl px-3 py-1.5 text-xs font-bold text-stone-700 flex items-center gap-1"
+            className="cd-btn cd-btn-ghost rounded-xl px-3 py-1.5 text-xs font-bold cd-text-muted flex items-center gap-1"
           >
             <RefreshCw className={"w-3 h-3 " + (loading ? "animate-spin" : "")} />
             새로고침
@@ -422,12 +422,12 @@ export function RegionMap({ refreshKey }: Props) {
         </svg>
 
         {!isReady && !error && (
-          <div className="absolute inset-0 flex items-center justify-center text-xs text-stone-400 bg-white/40 backdrop-blur-sm rounded-2xl">
+          <div className="absolute inset-0 flex items-center justify-center text-xs cd-text-faint cd-surface-bg backdrop-blur-sm rounded-2xl">
             지도 로딩중…
           </div>
         )}
         {error && (
-          <div className="absolute inset-0 flex items-center justify-center text-xs text-red-600 bg-white/40 backdrop-blur-sm rounded-2xl">
+          <div className="absolute inset-0 flex items-center justify-center text-xs cd-error-text cd-surface-bg backdrop-blur-sm rounded-2xl">
             지도 로드 실패: {error}
           </div>
         )}
@@ -437,7 +437,7 @@ export function RegionMap({ refreshKey }: Props) {
             <button
               ref={sidoSummaryButtonRef}
               type="button"
-              className="region-summary-toggle glass-button"
+              className="region-summary-toggle cd-btn cd-btn-ghost"
               aria-expanded={showSidoSummary}
               onClick={(e) => {
                 e.stopPropagation();
@@ -466,12 +466,12 @@ export function RegionMap({ refreshKey }: Props) {
         )}
       </div>
 
-      <div className="mt-3 flex items-center justify-between text-[11px] text-stone-500 font-medium">
+      <div className="mt-3 flex items-center justify-between text-[11px] cd-text-faint font-medium">
         <span>
           누적 {dist?.total.toLocaleString() ?? "—"}건
           {dist?.unassigned ? ` · 지역 미상 ${dist.unassigned.toLocaleString()}건` : null}
         </span>
-        <span className="text-stone-400 text-right">
+        <span className="cd-text-faint text-right">
           {phase === "sido"
             ? "시도 클릭 → 시군구 단계로 진입"
             : "역내 사업장 현황 버튼 · 시군구 클릭 → 분포 팝오버 표시"}
@@ -498,21 +498,21 @@ function Breadcrumb({
         className={
           "px-2.5 py-1 rounded-lg transition " +
           (phase === "sido"
-            ? "bg-primary/10 text-primary cursor-default"
-            : "text-stone-600 hover:bg-white/70")
+            ? "cd-tint-primary cd-text-primary cursor-default"
+            : "cd-text-muted hover:bg-[color:var(--cd-surface)]")
         }
       >
         전국
       </button>
       {phase === "sigungu" && (
         <>
-          <ChevronRight className="w-3 h-3 text-stone-400" />
-          <span className="px-2.5 py-1 rounded-lg bg-primary/10 text-primary inline-flex items-center gap-1">
+          <ChevronRight className="w-3 h-3 cd-text-faint" />
+          <span className="px-2.5 py-1 rounded-lg cd-tint-primary cd-text-primary inline-flex items-center gap-1">
             {selectedSidoFull}
             <button
               type="button"
               onClick={onBack}
-              className="ml-1 inline-flex w-4 h-4 items-center justify-center rounded-full hover:bg-primary/20"
+              className="ml-1 inline-flex w-4 h-4 items-center justify-center rounded-full hover:bg-[var(--cd-primary-soft)]"
               aria-label="전국으로 돌아가기"
               title="전국"
             >

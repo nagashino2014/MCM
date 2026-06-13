@@ -1,0 +1,245 @@
+/* ---------------------------------------------------------------------------
+ * 계약 Dashboard — Modernize UI 키트 토큰 기반 듀얼 테마 (다크 기본 / 라이트 대응)
+ * 색상 출처: Modernize DefaultColors.tsx (light/dark palette)
+ * 폰트: Plus Jakarta Sans (라틴) + Pretendard Variable (한글) 페어링
+ * ------------------------------------------------------------------------- */
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap");
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css");
+
+.cdash {
+  /* light palette */
+  --cd-bg: #eef2f8;
+  --cd-card: #ffffff;
+  --cd-surface: #f2f6fa;
+  --cd-border: #e5eaef;
+  --cd-text: #2a3547;
+  --cd-muted: #5a6a85;
+  --cd-faint: #7c8fac;
+  --cd-primary: #5d87ff;
+  --cd-primary-soft: #ecf2ff;
+  --cd-secondary: #49beff;
+  --cd-secondary-soft: #e8f7ff;
+  --cd-accent: #fa896b;
+  --cd-accent-soft: #fbf2ef;
+  --cd-success: #7eba56;
+  --cd-success-soft: #eef6e7;
+  --cd-warning: #ffae1f;
+  --cd-warning-soft: #fef5e5;
+  --cd-error: #f3704d;
+  --cd-error-soft: #fdede8;
+  --cd-grid-line: #ebf1f6;
+  --cd-shadow: 0 9px 17.5px rgba(0, 0, 0, 0.05);
+  /* 차트색보다 한 단계 진한 강조색 (총액 텍스트용) */
+  --cd-primary-strong: #4570ea;
+  --cd-accent-strong: #f3704d;
+
+  font-family: "Plus Jakarta Sans", "Pretendard Variable", Pretendard, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--cd-bg);
+  color: var(--cd-text);
+  transition: background 0.25s ease, color 0.25s ease;
+}
+
+.cdash[data-theme="dark"] {
+  --cd-bg: #11161d;
+  --cd-card: #171c23;
+  --cd-surface: #1d2530;
+  --cd-border: #333f55;
+  --cd-text: #eaeff4;
+  --cd-muted: #8c9bb5;
+  --cd-faint: #5a6a85;
+  --cd-primary-soft: #253662;
+  --cd-secondary-soft: #1c455d;
+  --cd-accent-soft: #4b313d;
+  --cd-success-soft: #2e3b27;
+  --cd-warning-soft: #4d3a2a;
+  --cd-error-soft: #4b313d;
+  --cd-grid-line: #232c39;
+  --cd-shadow: 0 9px 17.5px rgba(0, 0, 0, 0.35);
+}
+
+/* ---------------- 카드 프레임 ---------------- */
+.cd-card {
+  background: var(--cd-card);
+  border: 1px solid var(--cd-border);
+  border-radius: 20px;
+  box-shadow: var(--cd-shadow);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  transition: background 0.25s ease, border-color 0.25s ease;
+}
+
+.cd-card-title {
+  font-size: 0.9375rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--cd-text);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.cd-card-title .cd-title-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  background: var(--cd-primary-soft);
+  color: var(--cd-primary);
+  flex-shrink: 0;
+}
+
+/* ---------------- 그리드 (엑셀 원본 1:1 매핑) ---------------- */
+.cd-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "filter"
+    "sales"
+    "orders"
+    "svc"
+    "gauge"
+    "cpty"
+    "region"
+    "uncol"
+    "recent";
+}
+
+@media (min-width: 1024px) {
+  .cd-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      "filter filter"
+      "sales  orders"
+      "svc    gauge"
+      "cpty   region"
+      "uncol  recent";
+  }
+
+  /* 상단 3카드 고정 높이 — 미수금은 내부 스크롤 */
+  .cd-a-sales,
+  .cd-a-orders,
+  .cd-a-uncol {
+    height: 480px;
+    overflow: hidden;
+  }
+}
+
+@media (min-width: 1600px) {
+  .cd-grid {
+    grid-template-columns:
+      minmax(0, 1.32fr) minmax(0, 0.72fr) minmax(0, 0.72fr)
+      minmax(0, 1.04fr);
+    grid-template-rows: auto auto auto auto;
+    grid-template-areas:
+      "sales  orders orders uncol"
+      "svc    cpty   region recent"
+      "gauge  cpty   region recent"
+      "filter cpty   region recent";
+  }
+}
+
+.cd-a-sales { grid-area: sales; }
+.cd-a-orders { grid-area: orders; }
+.cd-a-uncol { grid-area: uncol; }
+.cd-a-svc { grid-area: svc; }
+.cd-a-cpty { grid-area: cpty; }
+.cd-a-region { grid-area: region; }
+.cd-a-recent { grid-area: recent; }
+.cd-a-gauge { grid-area: gauge; }
+.cd-a-filter { grid-area: filter; }
+
+/* ---------------- 공용 패턴 ---------------- */
+.cd-chip {
+  padding: 0.4rem 0.85rem;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  background: var(--cd-surface);
+  color: var(--cd-muted);
+  border: 1px solid var(--cd-border);
+  transition: all 0.18s ease;
+}
+.cd-chip:hover {
+  border-color: var(--cd-primary);
+  color: var(--cd-primary);
+}
+.cd-chip-sm {
+  padding: 0.32rem 0.7rem;
+  font-size: 0.71875rem;
+}
+.cd-chip[data-active="true"] {
+  background: var(--cd-primary);
+  border-color: var(--cd-primary);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(93, 135, 255, 0.35);
+}
+
+.cd-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8125rem;
+  border-radius: 10px;
+  background: var(--cd-surface);
+  border: 1px solid var(--cd-border);
+  color: var(--cd-text);
+  transition: all 0.18s ease;
+}
+.cd-input::placeholder { color: var(--cd-faint); }
+.cd-input:focus {
+  outline: none;
+  border-color: var(--cd-primary);
+  box-shadow: 0 0 0 3px rgba(93, 135, 255, 0.18);
+}
+
+.cd-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--cd-muted);
+}
+.cd-legend .swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+/* 테이블 행 hover */
+.cd-row-hover {
+  transition: background 0.15s ease;
+}
+.cd-row-hover:hover {
+  background: var(--cd-surface);
+}
+
+/* ApexCharts 다크/라이트 툴팁 보정 */
+.cdash .apexcharts-tooltip {
+  background: var(--cd-card) !important;
+  border: 1px solid var(--cd-border) !important;
+  color: var(--cd-text) !important;
+  box-shadow: var(--cd-shadow) !important;
+}
+.cdash .apexcharts-tooltip-title {
+  background: var(--cd-surface) !important;
+  border-bottom: 1px solid var(--cd-border) !important;
+}
+
+/* 지도 (지역별 수주현황) */
+.cd-region-svg path.cd-region {
+  stroke: var(--cd-border);
+  stroke-width: 0.6;
+  transition: fill 0.2s ease, stroke 0.2s ease;
+}
+.cd-region-svg path.cd-region:hover {
+  stroke: var(--cd-accent);
+  stroke-width: 1.2;
+}

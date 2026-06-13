@@ -35,17 +35,17 @@ export async function POST(req: NextRequest) {
     const actor = await requireEditor();
     const body = await req.json();
     const contractTitle = String(body.contractTitle ?? "").trim();
-    const counterpartyEntityId = String(body.counterpartyEntityId ?? "").trim();
+    const counterpartyFacilityId = String(body.counterpartyFacilityId ?? "").trim();
     const facilityIds = normalizeStringArray(body.facilityIds);
     if (!contractTitle) return NextResponse.json({ error: "계약명은 필수입니다." }, { status: 400 });
-    if (!counterpartyEntityId) return NextResponse.json({ error: "계약상대 법인은 필수입니다." }, { status: 400 });
+    if (!counterpartyFacilityId) return NextResponse.json({ error: "계약상대 업체는 필수입니다." }, { status: 400 });
 
     const contractId = id();
     const now = new Date().toISOString();
     await withDbWrite(async (db) => {
       await db.run(
         `INSERT INTO contracts
-          (contract_id, facility_id, counterparty_entity_id, operating_relation_id,
+          (contract_id, facility_id, counterparty_facility_id, operating_relation_id,
            contract_title, service_type, service_subtype, contract_kind, contract_status, contract_amount,
            legacy_contract_no, legacy_company_id, contract_direction, industry_category,
            contract_date, started_at, ended_at, original_amount, current_amount,
@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
         [
           contractId,
           facilityIds[0] || body.facilityId || null,
-          counterpartyEntityId,
+          counterpartyFacilityId,
           body.operatingRelationId || null,
           contractTitle,
           body.serviceType || null,

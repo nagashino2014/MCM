@@ -267,8 +267,9 @@ export async function POST(req: NextRequest) {
             (facility_id, event_type, event_date, previous_company_name, new_company_name,
              previous_business_registration_no, new_business_registration_no,
              previous_group_name, new_group_name, related_company_name, source_facility_id,
-             memo, source, created_at, created_by)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+             memo, source, created_at, created_by, previous_site_address, new_site_address,
+             acquirer_company_name, merger_target_company_names, event_types)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)`,
           event.toDbParams() as any[]
         );
       }

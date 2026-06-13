@@ -130,13 +130,20 @@ export async function GET() {
 
     const byId = new Map(facilities.map((facility) => [facility.facilityId, facility]));
     const excludedKeys = new Set<string>();
+    const excludedFacilityIds = new Set<string>();
     try {
       const exclusionRows = rowsToObjects(
         await db.exec("SELECT match_type, facility_ids_key FROM facility_merge_exclusions")
       );
       for (const row of exclusionRows) {
         if (!row.match_type || !row.facility_ids_key) continue;
-        excludedKeys.add(`${String(row.match_type)}:${String(row.facility_ids_key)}`);
+        const matchType = String(row.match_type);
+        const facilityIdsKey = String(row.facility_ids_key);
+        if (matchType === "facility") {
+          facilityIdsKey.split("|").map((id) => id.trim()).filter(Boolean).forEach((id) => excludedFacilityIds.add(id));
+          continue;
+        }
+        excludedKeys.add(`${matchType}:${facilityIdsKey}`);
       }
     } catch {
       // 마이그레이션 전 DB에서도 후보 조회는 계속 동작하게 한다.
@@ -148,6 +155,7 @@ export async function GET() {
     };
 
     for (const facility of facilities) {
+      if (excludedFacilityIds.has(facility.facilityId)) continue;
       addBucket(buckets.brn, brnRegionKey(facility), facility.facilityId);
       addBucket(buckets.company, facility.normalizedCompanyName, facility.facilityId);
       addBucket(buckets.address, facility.normalizedAddress, facility.facilityId);

@@ -1,0 +1,113 @@
+---
+description: MCM 프론트엔드 UI는 Modernize 어드민 UI 키트의 디자인 언어를 충실히 재현한다. 화면/컴포넌트/스타일을 만들거나 수정할 때 항상 따른다.
+globs: frontend/**/*.{tsx,ts,jsx,js,css}
+alwaysApply: false
+---
+
+# MCM UI 규칙 — Modernize 디자인 시스템 충실 재현
+
+> 이 규칙은 기존의 "독특·기억에 남는·브루탈리즘/비대칭/그라데이션 메시·강한 글라스모피즘" UI 룰을 **대체**한다.
+> MCM은 데이터 집약적인 **계약·환경허가 관리 어드민**이다. 목표는 "튀는 디자인"이 아니라
+> **차분하고 정돈된, 신뢰감 있는 Modernize 스타일의 일관된 재현**이다.
+> 색상·타이포·간격·그림자·컴포넌트 패턴의 출처는 워크스페이스의
+> `nextjs-version/.../utils/theme/*` (DefaultColors / Typography / Shadows / Components)이며,
+> 현재 Modernize가 **이미 적용된 화면은 두 곳뿐**이며, 이들이 유일한 레퍼런스 구현이다:
+> - **계약 대시보드** — `app/(app)/contracts/dashboard/**`, `components/contracts/dashboard/**` (`dashboard.css`)
+> - **수주/수금/발행 현황** — `app/(app)/contracts/billing/**`, `components/contracts/billing/**` (`billing.css`)
+>
+> 그 외(예: `contracts/page.tsx` 목록, `contracts/downloads/**`, `admin`·`data`·`facilities`·`sales`·`trash` 등)는
+> **아직 구식 스타일**이므로 레퍼런스로 삼지 말 것 — 오히려 이 규칙으로 마이그레이션할 대상이다.
+> **새 화면·미적용 화면은 위 두 곳의 토큰(`cdash`/`cd-`)·패턴을 그대로 이어서 쓴다.**
+
+## 0. 절대 하지 말 것 (구 룰 폐기 항목)
+- ❌ 범용 AI룩(Inter / 보라 그라데이션 / 무지성 흰 배경)도, 그 반작용으로의 **브루탈리즘·비대칭·맥시멀리즘**도 쓰지 않는다.
+- ❌ gradient mesh·노이즈 텍스처·기하학 패턴으로 배경에 깊이를 주지 않는다. 배경은 **단색 surface + 부드러운 그림자**로 위계를 만든다.
+- ❌ 글라스모피즘(backdrop-blur)을 기본 표면 언어로 쓰지 않는다. 오버레이/드로어/모달의 *오버레이 층*에 한해 절제해 사용하고, 카드·패널 본문은 **불투명 surface**로 둔다.
+- ❌ "기억에 남는 단 하나"식 과장된 차별화 포인트, 과한 hover 스케일/그림자, 화려한 staggered 모션을 넣지 않는다. 모션은 미세하고 기능적이어야 한다.
+- ✅ 대신: 일관된 토큰, 넉넉한 여백, 카드 기반 그리드, soft-tint 상태색, 가벼운 그림자, 차분한 모션.
+
+## 1. 색상 토큰 (Modernize 팔레트, **Primary = 블루 #5D87FF**)
+새 CSS는 아래 변수를 `.cdash`(또는 동등한 루트)에 정의해 재사용한다. Tailwind 임의값을 쓸 땐 이 hex를 그대로 사용한다.
+
+### 라이트 (기본)
+```css
+--cd-bg:            #eef2f8;  /* 페이지 배경 */
+--cd-card:          #ffffff;  /* 카드/패널 표면 */
+--cd-surface:       #f2f6fa;  /* 카드 내부 보조 표면, grey.100 */
+--cd-border:        #e5eaef;  /* divider/테두리 */
+--cd-text:          #2a3547;  /* 본문 텍스트, grey.600 */
+--cd-muted:         #5a6a85;  /* 보조 텍스트, grey.500 */
+--cd-faint:         #7c8fac;  /* 약한 텍스트/플레이스홀더, grey.400 */
+--cd-primary:       #5d87ff;  --cd-primary-soft:#ecf2ff;  --cd-primary-strong:#4570ea;
+--cd-secondary:     #49beff;  --cd-secondary-soft:#e8f7ff;
+--cd-success:       #13deb9;  --cd-success-soft:#e6fffa;
+--cd-info:          #539bff;  --cd-info-soft:#ebf3fe;
+--cd-warning:       #ffae1f;  --cd-warning-soft:#fef5e5;
+--cd-error:         #fa896b;  --cd-error-soft:#fdede8;
+--cd-shadow:        0 9px 17.5px rgba(0,0,0,0.05);
+```
+
+### 다크 (`.cdash[data-theme="dark"]`에서 오버라이드)
+```css
+--cd-bg:#11161d; --cd-card:#171c23; --cd-surface:#1d2530; --cd-border:#333f55;
+--cd-text:#eaeff4; --cd-muted:#8c9bb5; --cd-faint:#5a6a85;
+--cd-primary-soft:#253662; --cd-secondary-soft:#1c455d;
+--cd-success-soft:#1b3c48; --cd-info-soft:#223662; --cd-warning-soft:#4d3a2a; --cd-error-soft:#4b313d;
+--cd-shadow:0 9px 17.5px rgba(0,0,0,0.35);
+```
+
+- **state 색은 항상 "main 텍스트/아이콘 + soft 배경" 쌍**으로 쓴다(Modernize의 standard Alert·Chip 시그니처). 예: 성공 배지 = `color:var(--cd-success); background:var(--cd-success-soft)`.
+- 모든 화면은 **라이트/다크 듀얼 테마**를 토큰으로 지원한다. 색을 하드코딩하지 말고 변수로 분기한다.
+
+## 2. 타이포그래피
+- 폰트 페어링은 **Plus Jakarta Sans(라틴/숫자) + Pretendard Variable(한글)** 고정.
+  ```css
+  font-family:"Plus Jakarta Sans","Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  ```
+  (Inter·시스템 산세리프 단독 사용 금지.)
+- 타입 스케일(Modernize Typography.tsx 준수, heading은 **weight 600**):
+  | 토큰 | size / line | weight |
+  |---|---|---|
+  | h1 | 2.25rem / 2.75rem | 600 |
+  | h2 | 1.875rem / 2.25rem | 600 |
+  | h3 | 1.5rem / 1.75rem | 600 |
+  | h4 | 1.3125rem / 1.6rem | 600 |
+  | h5 | 1.125rem / 1.6rem | 600 |
+  | h6 | 1rem / 1.2rem | 600 |
+  | body1 | 0.875rem / 1.334rem | 400 |
+  | body2 | 0.75rem / 1rem | 400 |
+- 카드 제목은 `0.9375rem~1.125rem`, weight `700~800`, `letter-spacing:-0.01em`로 약간 조인다(contracts `cd-card-title` 관례).
+- 버튼 텍스트는 `text-transform:none`, 굵기 과하지 않게(400~600). 대문자 변환 금지.
+
+## 3. 간격·라운드·그림자·테두리
+- **라운드**: 작은 컨트롤(input·select·chip 내부 버튼) `8~10px`, 탭/세그먼트 `12~14px`, **카드/패널 `16~20px`**, pill/뱃지·토글 `9999px`. (Modernize MUI 기본 radius는 7이지만, contracts 재현에서 굳어진 큰 라운드 카드를 표준으로 한다.)
+- **그림자**: 카드는 `var(--cd-shadow)` 또는 Modernize elevation9
+  `rgb(145 158 171 / 30%) 0 0 2px 0, rgb(145 158 171 / 12%) 0 12px 24px -4px` 수준의 **가볍고 퍼진 그림자**만. 진하고 단단한 그림자·다중 드롭섀도 금지.
+- **테두리**: `1px solid var(--cd-border)`. 표는 셀 `border-bottom`만, **마지막 행은 테두리 제거**(Modernize MuiTableRow 관례).
+- **간격**: 카드 내부 패딩 `24~30px`, 카드 헤더 `16px 24px`. 그리드 갭 넉넉히(보통 `gap:24px`/Tailwind `gap-6`). 정렬은 **대칭·정돈된 그리드** 기준(비대칭 레이아웃 지양).
+
+## 4. 컴포넌트 패턴 (Modernize Components.tsx 재현)
+- **Card/Panel**: 불투명 surface + 큰 라운드 + 가벼운 그림자. 헤더(제목 h5 + subtitle `var(--cd-muted)`) / 본문 / 푸터 구조. contracts의 `cd-card`·`CardFrame.tsx`를 기본 골격으로 재사용.
+- **Button**: `box-shadow:none`, `text-transform:none`. text/outlined 변형은 **평상시 soft 배경(또는 투명) → hover 시 해당 main 색으로 채우고 글자 흰색**. 예: primary text 버튼 = `bg:var(--cd-primary-soft)` → hover `bg:var(--cd-primary); color:#fff`.
+- **IconButton**: hover 시 `bg:var(--cd-primary-soft); color:var(--cd-primary)` (컬러 지정 시 main 채움 + 흰 글자).
+- **Input / Select / Textarea**: outlined, 테두리 `var(--cd-border)`, padding `12px 14px`(small `8px 14px`), 포커스 시 primary 링(`box-shadow:0 0 0 2px rgba(93,135,255,.2)`). disabled는 surface 배경 + faint 텍스트. (contracts `.input-field`/`.ui-select` 패턴 계승하되 색만 Modernize 블루로.)
+- **Chip / Badge / Pill**: weight `600~700`, size `0.75rem`, 라운드 pill. 상태색은 soft-tint 쌍. 활성 chip = primary 채움.
+- **Alert**: standard = `soft 배경 + main 텍스트`; filled = main 배경 + 흰 텍스트.
+- **Tooltip**: 어두운 배경(`var(--cd-text)`) + 밝은 글자.
+- **LinearProgress/게이지**: 트랙 `var(--cd-surface)`(또는 grey.200), radius 6px, 바는 primary(또는 `linear-gradient(90deg, primary 70%, primary)`).
+- **Tabs(서브메뉴)**: 활성 탭이 콘텐츠 패널과 같은 배경/테두리로 이어지는 connected 탭(billing `cdb-tab` 패턴) 사용.
+- **Table**: 행 hover는 미세한 surface 틴트. 헤더는 `var(--cd-muted)` 소문자/일반 가중치. 조밀하지만 답답하지 않게(셀 패딩 충분히).
+
+## 5. 아이콘·차트·모션
+- **아이콘**: 프로젝트 표준인 **`lucide-react`** 사용(스트로크 아이콘, 크기 16~20px, `strokeWidth` 일관). 이모지·혼합 아이콘 세트 금지.
+- **차트**: `react-apexcharts`. 색상은 §1 팔레트, 막대는 둥근 모서리(`clipPath: inset(0 0 5% 0 round 20px)` 또는 apex `borderRadius`), 그리드라인 연하게(`--cd-grid-line`), 범례·축 라벨은 `var(--cd-muted)`.
+- **모션**: 진입은 `opacity + 4~8px translateY`, `150~220ms ease` 수준의 **미세한** 전환만. hover 스케일은 최대 `1.01`. 페이지 전체 staggered 쇼는 지양(데이터 화면에서는 깜빡임이 됨).
+
+## 6. 레이아웃 골격
+- 사이드바 폭 **270px**(미니 87px), 탑바 높이 **70px**, **boxed** 레이아웃 기준(Modernize customizer 기본값). 기존 `components/layout/**`와 일관되게.
+- 페이지 = 제목/브레드크럼 영역 + 카드 그리드. 한 화면에 성격이 다른 정보는 **카드로 분리**해 위계를 만든다.
+
+## 7. 적용 원칙
+- 기존 `app/globals.css`의 구식 글라스/녹색(#16A34A)·dot-grid·reveal 유틸은 **신규 화면에 새로 쓰지 않는다.** 기존 화면을 손볼 때는 점진적으로 위 토큰으로 마이그레이션한다.
+- 새 색·간격·그림자가 필요하면 임의값 대신 **§1 변수 또는 Modernize 원본 값**을 먼저 찾는다. 없으면 가장 가까운 토큰을 재사용한다.
+- 의심스러우면 **계약 대시보드(`contracts/dashboard/**`)** 또는 **수주/수금/발행 현황(`contracts/billing/**`)** 의 구현(dashboard.css·billing.css 및 각 `components/contracts/{dashboard,billing}/**`)을 레퍼런스로 삼아 동일한 결을 맞춘다. **그 외 화면은 레퍼런스가 아니라 마이그레이션 대상이다.**

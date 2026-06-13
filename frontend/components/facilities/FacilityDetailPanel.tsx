@@ -4,8 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Pencil, Save, X, MapPin, Phone, Hash, Building2, FileText, Layers, ClipboardList, Trash2, Plus, History, Upload, Tags, Briefcase, FolderTree, ArrowRight, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useCdashTheme } from "@/components/cdash/useCdashTheme";
+import "@/components/cdash/cdash.css";
 import type { AnnualReportSnapshot, FacilityDetail, PermitDetail, ProductOutput } from "@/lib/ieps/types-facility";
-import { cleanProductName, formatAddress, formatBusinessRegistrationNo, formatCompanyName, formatNumber, parseIndustriesFromValue } from "@/lib/ieps/formatters";
+import { cleanProductName, dedupeIndustries, formatAddress, formatBusinessRegistrationNo, formatCompanyName, formatNumber, parseIndustriesFromValue } from "@/lib/ieps/formatters";
 import {
   FACILITY_HISTORY_EVENT_LABELS,
   type FacilityHistoryEventType,
@@ -26,7 +28,7 @@ import type {
   FacilityGroupMembershipRelationType,
   FacilityGroupTree,
 } from "@/lib/ieps/facility-group";
-import type { FacilityOperatingRelationType } from "@/lib/ieps/legal-entity";
+import type { FacilityOperatingRelationType } from "@/lib/ieps/facility-operating-entity";
 import { FacilityOrdersModal } from "@/components/facilities/FacilityOrdersModal";
 
 const GROUP_COMPANY_ROLE_LABELS: Record<FacilityGroupCompanyRole, string> = {
@@ -37,7 +39,7 @@ const GROUP_COMPANY_ROLE_LABELS: Record<FacilityGroupCompanyRole, string> = {
 
 const MEMBERSHIP_RELATION_LABELS: Record<FacilityGroupMembershipRelationType, string> = {
   site: "사업장 연결(기존)",
-  operating_company: "사업장 운영 법인",
+  operating_company: "운영 법인",
   owner_company: "소유 법인",
   other: "기타 관계",
 };
@@ -183,28 +185,28 @@ export function FacilityDetailPanel({ facilityId, canEdit, onUpdated, onDeleted 
 
   if (!facilityId) {
     return (
-      <section className="glass-card rounded-3xl p-10 text-center text-stone-500 text-sm reveal delay-2">
+      <section className="cd-card rounded-3xl p-10 text-center cd-text-faint text-sm cd-reveal delay-2">
         좌측 목록에서 사업장을 선택하세요.
       </section>
     );
   }
   if (loading) {
     return (
-      <section className="glass-card rounded-3xl p-10 text-center text-stone-400 text-sm reveal delay-2">
+      <section className="cd-card rounded-3xl p-10 text-center cd-text-faint text-sm cd-reveal delay-2">
         로딩 중…
       </section>
     );
   }
   if (error) {
     return (
-      <section className="glass-card rounded-3xl p-10 text-center text-red-600 text-sm font-bold reveal delay-2">
+      <section className="cd-card rounded-3xl p-10 text-center cd-error-text text-sm font-bold cd-reveal delay-2">
         조회 실패: {error}
       </section>
     );
   }
   if (!detail) {
     return (
-      <section className="glass-card rounded-3xl p-10 text-center text-stone-500 text-sm reveal delay-2">
+      <section className="cd-card rounded-3xl p-10 text-center cd-text-faint text-sm cd-reveal delay-2">
         해당 사업장을 찾을 수 없습니다.
       </section>
     );
@@ -213,18 +215,26 @@ export function FacilityDetailPanel({ facilityId, canEdit, onUpdated, onDeleted 
     detail.serviceCategories.length === 0 || detail.serviceCategories.includes("integrated");
 
   return (
-    <section className="glass-panel rounded-3xl p-6 reveal delay-2 flex flex-col gap-5 max-h-[calc(100vh-160px)] overflow-y-auto">
+    <section className="cd-card rounded-3xl p-6 cd-reveal delay-2 flex flex-col gap-5 min-h-0 overflow-y-auto scrollbar-hide">
       <header className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <LogoPreview path={detail.logoPath} label={detail.companyName} />
           <div className="min-w-0">
-            <div className="text-[10px] font-bold text-stone-400 uppercase tracking-wide">
+            <div className="text-[10px] font-bold cd-text-faint uppercase tracking-wide">
               FACILITY · {detail.source.toUpperCase()}
             </div>
-            <h2 className="text-2xl font-bold text-stone-800 mt-0.5 truncate">
-              {formatCompanyName(detail.companyName)}
+            <h2 className="mt-0.5 flex min-w-0 flex-wrap items-center gap-2 text-2xl font-bold cd-text">
+              <span className="min-w-0 truncate">{formatCompanyName(detail.companyName)}</span>
+              {detail.isClosed && (
+                <span
+                  className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold leading-4 text-white"
+                  style={{ backgroundColor: "#FF7979" }}
+                >
+                  폐업사업장
+                </span>
+              )}
             </h2>
-            <div className="text-xs text-stone-500 mt-1">
+            <div className="text-xs cd-text-faint mt-1">
               facility_id: <span className="font-mono">{detail.facilityId}</span>
             </div>
           </div>
@@ -234,7 +244,7 @@ export function FacilityDetailPanel({ facilityId, canEdit, onUpdated, onDeleted 
             <button
               type="button"
               onClick={() => setOrdersOpen(true)}
-              className="glass-button rounded-xl px-3 py-2 text-xs font-bold text-stone-700 flex items-center gap-1"
+              className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs font-bold cd-text-muted flex items-center gap-1"
             >
               <FolderTree className="w-3.5 h-3.5" /> 수주
             </button>
@@ -258,14 +268,14 @@ export function FacilityDetailPanel({ facilityId, canEdit, onUpdated, onDeleted 
                     });
                     setHistoryOpen(true);
                   }}
-                  className="glass-button rounded-xl px-3 py-2 text-xs font-bold text-stone-700 flex items-center gap-1"
+                  className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs font-bold cd-text-muted flex items-center gap-1"
                 >
                   <History className="w-3.5 h-3.5" /> 이력
                 </button>
                 <button
                   type="button"
                   onClick={() => setEditing(true)}
-                  className="glass-button rounded-xl px-3 py-2 text-xs font-bold text-stone-700 flex items-center gap-1"
+                  className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs font-bold cd-text-muted flex items-center gap-1"
                 >
                   <Pencil className="w-3.5 h-3.5" /> 편집
                 </button>
@@ -273,7 +283,7 @@ export function FacilityDetailPanel({ facilityId, canEdit, onUpdated, onDeleted 
                   type="button"
                   disabled={deleting}
                   onClick={() => setDeleteConfirmOpen(true)}
-                  className="rounded-xl px-3 py-2 text-xs font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 flex items-center gap-1 disabled:opacity-60"
+                  className="rounded-xl px-3 py-2 text-xs font-bold cd-error-text cd-error-bg hover:cd-error-bg border border-red-200 flex items-center gap-1 disabled:opacity-60"
                 >
                   <Trash2 className="w-3.5 h-3.5" /> 삭제
                 </button>
@@ -293,21 +303,21 @@ export function FacilityDetailPanel({ facilityId, canEdit, onUpdated, onDeleted 
 
       {deleteConfirmOpen && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/30 p-4">
-          <div className="glass-panel rounded-3xl p-5 w-full max-w-md">
+          <div className="cd-card rounded-3xl p-5 w-full max-w-md">
             <div className="flex items-start justify-between gap-3 mb-4">
               <div>
-                <h3 className="text-lg font-bold text-stone-800">사업장 휴지통 이동</h3>
-                <p className="text-sm text-stone-600 mt-2">
-                  <span className="font-bold text-stone-900">{formatCompanyName(detail.companyName)}</span> 사업장을 휴지통으로 이동합니다.
+                <h3 className="text-lg font-bold cd-text">사업장 휴지통 이동</h3>
+                <p className="text-sm cd-text-muted mt-2">
+                  <span className="font-bold cd-text">{formatCompanyName(detail.companyName)}</span> 사업장을 휴지통으로 이동합니다.
                   관련 허가/생산품/연간보고 데이터는 보존되며, 목록에서는 제외됩니다.
                 </p>
               </div>
-              <button type="button" onClick={() => setDeleteConfirmOpen(false)} className="glass-button rounded-full p-2">
+              <button type="button" onClick={() => setDeleteConfirmOpen(false)} className="cd-btn cd-btn-ghost rounded-full p-2">
                 <X className="w-4 h-4" />
               </button>
             </div>
             <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => setDeleteConfirmOpen(false)} className="glass-button rounded-xl px-4 py-2 text-sm font-bold">
+              <button type="button" onClick={() => setDeleteConfirmOpen(false)} className="cd-btn cd-btn-ghost rounded-xl px-4 py-2 text-sm font-bold">
                 취소
               </button>
               <button
@@ -333,7 +343,7 @@ export function FacilityDetailPanel({ facilityId, canEdit, onUpdated, onDeleted 
                     setDeleting(false);
                   }
                 }}
-                className="rounded-xl px-4 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 disabled:opacity-60"
+                className="rounded-xl px-4 py-2 text-sm font-bold text-white cd-fill-error hover:opacity-90 disabled:opacity-60"
               >
                 휴지통으로 이동
               </button>
@@ -422,6 +432,7 @@ function FacilityHistoryModal({
   onClose: () => void;
   onChanged?: () => void;
 }) {
+  const { theme } = useCdashTheme();
   const [items, setItems] = useState<FacilityHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -624,16 +635,17 @@ function FacilityHistoryModal({
   const left = anchor?.left ?? 24;
   const modal = (
     <div
-      className="fixed z-50 w-[min(820px,calc(100vw-32px))] max-h-[min(820px,calc(100vh-24px))] overflow-y-auto scrollbar-hide rounded-3xl shadow-2xl"
+      className="cdash-vars cd-fields-white fixed z-50 w-[min(820px,calc(100vw-32px))] max-h-[min(820px,calc(100vh-24px))] overflow-y-auto scrollbar-hide rounded-3xl shadow-2xl"
       style={{ top, left }}
+      data-theme={theme}
     >
-      <div className="glass-panel rounded-3xl p-6 flex flex-col gap-5">
+      <div className="cd-card rounded-3xl p-6 flex flex-col gap-5">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h3 className="text-xl font-bold text-stone-800 flex items-center gap-2">
-              <History className="w-5 h-5 text-primary" /> 사업장 이력
+            <h3 className="text-xl font-bold cd-text flex items-center gap-2">
+              <History className="w-5 h-5 cd-text-primary" /> 사업장 이력
             </h3>
-            <p className="text-xs text-stone-500 mt-1">
+            <p className="text-xs cd-text-faint mt-1">
               {formatCompanyName(facility.companyName)} · facility_id:{" "}
               <span className="font-mono">{facility.facilityId}</span>
             </p>
@@ -641,16 +653,16 @@ function FacilityHistoryModal({
           <button
             type="button"
             onClick={onClose}
-            className="glass-button rounded-xl px-3 py-2 text-xs font-bold text-stone-700"
+            className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs font-bold cd-text-muted"
           >
             닫기
           </button>
         </div>
 
         <div className="flex flex-col gap-2">
-          {loading && <div className="text-sm text-stone-400 py-8 text-center">이력 조회 중…</div>}
+          {loading && <div className="text-sm cd-text-faint py-8 text-center">이력 조회 중…</div>}
           {!loading && items.length === 0 && (
-            <div className="text-sm text-stone-400 py-8 text-center">
+            <div className="text-sm cd-text-faint py-8 text-center">
               등록된 사업장 이력이 없습니다.
             </div>
           )}
@@ -658,8 +670,8 @@ function FacilityHistoryModal({
             <div
               key={item.id}
               className={cn(
-                "bg-white/50 border rounded-xl p-3",
-                editingHistoryId === item.id ? "border-primary/40" : "border-white/60"
+                "cd-surface-bg border rounded-xl p-3",
+                editingHistoryId === item.id ? "border-[color:var(--cd-primary)]" : "cd-border-c"
               )}
             >
               <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -667,14 +679,14 @@ function FacilityHistoryModal({
                   {(item.eventTypes?.length ? item.eventTypes : [item.eventType]).map((type) => (
                     <span
                       key={type}
-                      className="rounded-md bg-primary/10 text-primary px-2 py-0.5 text-[11px] font-bold"
+                      className="rounded-md cd-tint-primary cd-text-primary px-2 py-0.5 text-[11px] font-bold"
                     >
                       {FACILITY_HISTORY_EVENT_LABELS[type]}
                     </span>
                   ))}
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="text-[11px] text-stone-400">
+                  <div className="text-[11px] cd-text-faint">
                     {item.eventDate ?? item.createdAt.slice(0, 10)} · {item.source}
                   </div>
                   {canEdit && (
@@ -682,14 +694,14 @@ function FacilityHistoryModal({
                       <button
                         type="button"
                         onClick={() => startEdit(item)}
-                        className="glass-button rounded-lg px-2 py-1 text-[10px] font-bold text-stone-700"
+                        className="cd-btn cd-btn-ghost rounded-lg px-2 py-1 text-[10px] font-bold cd-text-muted"
                       >
                         편집
                       </button>
                       <button
                         type="button"
                         onClick={() => deleteHistory(item)}
-                        className="rounded-lg px-2 py-1 text-[10px] font-bold text-red-700 bg-red-50 border border-red-200"
+                        className="rounded-lg px-2 py-1 text-[10px] font-bold cd-error-text cd-error-bg border border-red-200"
                       >
                         삭제
                       </button>
@@ -697,7 +709,7 @@ function FacilityHistoryModal({
                   )}
                 </div>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2 text-xs text-stone-600">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2 text-xs cd-text-muted">
                 <HistoryDiff label="상호" before={item.previousCompanyName} after={item.newCompanyName} />
                 <HistoryDiff
                   label="사업자번호"
@@ -716,22 +728,22 @@ function FacilityHistoryModal({
                   <div>관련 업체: <b>{item.relatedCompanyName}</b></div>
                 )}
               </div>
-              {item.memo && <div className="text-xs text-stone-500 mt-2">{item.memo}</div>}
+              {item.memo && <div className="text-xs cd-text-faint mt-2">{item.memo}</div>}
             </div>
           ))}
         </div>
 
         {canEdit && (
-          <div className="border-t border-stone-200/70 pt-4 flex flex-col gap-3">
+          <div className="border-t cd-border-c/70 pt-4 flex flex-col gap-3">
             <div className="flex items-center justify-between gap-2">
-              <h4 className="text-sm font-bold text-stone-700">
+              <h4 className="text-sm font-bold cd-text-muted">
                 {editingHistoryId ? "이력 편집" : "이력 추가"}
               </h4>
               {editingHistoryId && (
                 <button
                   type="button"
                   onClick={resetForm}
-                  className="glass-button rounded-lg px-2 py-1 text-[10px] font-bold text-stone-700"
+                  className="cd-btn cd-btn-ghost rounded-lg px-2 py-1 text-[10px] font-bold cd-text-muted"
                 >
                   새 이력 입력
                 </button>
@@ -739,18 +751,18 @@ function FacilityHistoryModal({
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="sm:col-span-2 flex flex-col gap-1.5">
-                <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">
+                <span className="text-[11px] font-bold cd-text-faint uppercase tracking-wide">
                   이력 유형 (복수 선택)
                 </span>
-                <div className="flex flex-wrap gap-2 rounded-xl border border-stone-200 bg-white/50 p-2">
+                <div className="flex flex-wrap gap-2 rounded-xl border cd-border-c cd-surface-bg p-2">
                   {HISTORY_TYPE_CHECKBOX_OPTIONS.map((type) => (
                     <label
                       key={type}
                       className={cn(
                         "flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-bold cursor-pointer border select-none",
                         hasType(type)
-                          ? "bg-primary/10 border-primary/40 text-primary"
-                          : "bg-white border-stone-200 text-stone-600"
+                          ? "cd-tint-primary border-[color:var(--cd-primary)] cd-text-primary"
+                          : "cd-card-bg cd-border-c cd-text-muted"
                       )}
                     >
                       <input
@@ -770,9 +782,9 @@ function FacilityHistoryModal({
 
               <ReadonlyField label="이전 상호" value={previousCompanyName} />
               <div className="flex flex-col gap-1.5">
-                <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">변경 상호</span>
+                <span className="text-[11px] font-bold cd-text-faint uppercase tracking-wide">변경 상호</span>
                 <input
-                  className="input-field disabled:bg-stone-100 disabled:text-stone-400"
+                  className="cd-input disabled:bg-[color:var(--cd-surface)] disabled:text-[color:var(--cd-faint)]"
                   value={newCompanyName}
                   disabled={!hasType("company_name_change")}
                   onChange={(e) => setNewCompanyName(e.target.value)}
@@ -782,9 +794,9 @@ function FacilityHistoryModal({
 
               <ReadonlyField label="이전 사업자번호" value={previousBusinessRegistrationNo} />
               <div className="flex flex-col gap-1.5">
-                <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">변경 사업자번호</span>
+                <span className="text-[11px] font-bold cd-text-faint uppercase tracking-wide">변경 사업자번호</span>
                 <input
-                  className="input-field disabled:bg-stone-100 disabled:text-stone-400"
+                  className="cd-input disabled:bg-[color:var(--cd-surface)] disabled:text-[color:var(--cd-faint)]"
                   value={newBusinessRegistrationNo}
                   disabled={!hasType("business_registration_no_change")}
                   onChange={(e) => setNewBusinessRegistrationNo(e.target.value)}
@@ -796,28 +808,28 @@ function FacilityHistoryModal({
 
               <ReadonlyField label="이전 계열/그룹" value={previousGroupName} emptyText="연결된 계열/그룹 없음" />
               <div className="flex flex-col gap-1.5">
-                <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">변경 계열/그룹</span>
+                <span className="text-[11px] font-bold cd-text-faint uppercase tracking-wide">변경 계열/그룹</span>
                 <button
                   type="button"
                   disabled={!hasType("group_change")}
                   onClick={() => setGroupModalOpen(true)}
-                  className="input-field flex items-center justify-between gap-2 text-left hover:bg-stone-50 disabled:bg-stone-100 disabled:hover:bg-stone-100"
+                  className="cd-input flex items-center justify-between gap-2 text-left hover:bg-[color:var(--cd-surface)] disabled:bg-[color:var(--cd-surface)] disabled:hover:bg-[color:var(--cd-surface)]"
                   title="그룹 정보 모달에서 계열/그룹을 재설정합니다."
                 >
-                  <span className={cn("truncate", newGroupName ? "text-stone-800 font-bold" : "text-stone-400")}>
+                  <span className={cn("truncate", newGroupName ? "cd-text font-bold" : "cd-text-faint")}>
                     {hasType("group_change")
                       ? newGroupName || "그룹 정보에서 재설정…"
                       : "계열/그룹 변경 체크 시 설정"}
                   </span>
-                  <Briefcase className="w-4 h-4 text-stone-400 shrink-0" />
+                  <Briefcase className="w-4 h-4 cd-text-faint shrink-0" />
                 </button>
               </div>
 
               <ReadonlyField label="이전 소재지" value={previousSiteAddress} />
               <div className="flex flex-col gap-1.5">
-                <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">변경 소재지</span>
+                <span className="text-[11px] font-bold cd-text-faint uppercase tracking-wide">변경 소재지</span>
                 <input
-                  className="input-field disabled:bg-stone-100 disabled:text-stone-400"
+                  className="cd-input disabled:bg-[color:var(--cd-surface)] disabled:text-[color:var(--cd-faint)]"
                   value={newSiteAddress}
                   disabled={!hasType("site_address_change")}
                   onChange={(e) => setNewSiteAddress(e.target.value)}
@@ -826,9 +838,9 @@ function FacilityHistoryModal({
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">인수 / 합병</span>
-                <div className="flex flex-col gap-2 rounded-xl border border-stone-200 bg-white/50 p-2.5">
-                  <label className="flex items-center gap-1.5 text-xs font-bold text-stone-600 cursor-pointer select-none">
+                <span className="text-[11px] font-bold cd-text-faint uppercase tracking-wide">인수 / 합병</span>
+                <div className="flex flex-col gap-2 rounded-xl border cd-border-c cd-surface-bg p-2.5">
+                  <label className="flex items-center gap-1.5 text-xs font-bold cd-text-muted cursor-pointer select-none">
                     <input
                       type="checkbox"
                       checked={hasType("acquisition")}
@@ -837,7 +849,7 @@ function FacilityHistoryModal({
                     />
                     인수
                   </label>
-                  <label className="flex items-center gap-1.5 text-xs font-bold text-stone-600 cursor-pointer select-none">
+                  <label className="flex items-center gap-1.5 text-xs font-bold cd-text-muted cursor-pointer select-none">
                     <input
                       type="checkbox"
                       checked={hasType("merger")}
@@ -851,15 +863,15 @@ function FacilityHistoryModal({
               <div className="flex flex-col gap-3">
                 {!hasType("acquisition") && !hasType("merger") && (
                   <div className="flex flex-col gap-1.5">
-                    <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">
+                    <span className="text-[11px] font-bold cd-text-faint uppercase tracking-wide">
                       인수 주체 / 합병 대상
                     </span>
-                    <div className="input-field bg-stone-100 text-stone-400">인수 또는 합병 체크 시 입력</div>
+                    <div className="cd-input cd-surface-bg cd-text-faint">인수 또는 합병 체크 시 입력</div>
                   </div>
                 )}
                 {hasType("acquisition") && (
                   <div className="flex flex-col gap-1.5">
-                    <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">인수 주체</span>
+                    <span className="text-[11px] font-bold cd-text-faint uppercase tracking-wide">인수 주체</span>
                     <CompanyKeywordInput
                       value={acquirerCompanyName}
                       onChange={setAcquirerCompanyName}
@@ -869,7 +881,7 @@ function FacilityHistoryModal({
                 )}
                 {hasType("merger") && (
                   <div className="flex flex-col gap-1.5">
-                    <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">합병 대상</span>
+                    <span className="text-[11px] font-bold cd-text-faint uppercase tracking-wide">합병 대상</span>
                     {mergerTargets.map((target, idx) => (
                       <div key={idx} className="grid grid-cols-[1fr_auto] gap-1.5 items-start">
                         <CompanyKeywordInput
@@ -883,7 +895,7 @@ function FacilityHistoryModal({
                           <button
                             type="button"
                             onClick={() => setMergerTargets((prev) => [...prev, ""])}
-                            className="rounded-lg border border-stone-200 bg-white px-2 py-2 text-stone-600 hover:bg-stone-50"
+                            className="rounded-lg border cd-border-c cd-card-bg px-2 py-2 cd-text-muted hover:bg-[color:var(--cd-surface)]"
                             title="합병 대상 추가"
                           >
                             <Plus className="w-3.5 h-3.5" />
@@ -895,7 +907,7 @@ function FacilityHistoryModal({
                                 prev.length <= 1 ? [""] : prev.filter((_, itemIdx) => itemIdx !== idx)
                               )
                             }
-                            className="rounded-lg border border-red-100 bg-red-50 px-2 py-2 text-red-600 hover:bg-red-100"
+                            className="rounded-lg border border-red-100 cd-error-bg px-2 py-2 cd-error-text hover:cd-error-bg"
                             title="합병 대상 삭제"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -908,10 +920,10 @@ function FacilityHistoryModal({
               </div>
 
               <div className="sm:col-span-2 flex flex-col gap-1.5">
-                <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">
+                <span className="text-[11px] font-bold cd-text-faint uppercase tracking-wide">
                   메모
                 </span>
-                <textarea className="ui-textarea" value={memo} onChange={(e) => setMemo(e.target.value)} />
+                <textarea className="cd-textarea" value={memo} onChange={(e) => setMemo(e.target.value)} />
               </div>
             </div>
             <div className="flex justify-end">
@@ -919,7 +931,7 @@ function FacilityHistoryModal({
                 type="button"
                 onClick={save}
                 disabled={saving}
-                className="rounded-xl px-4 py-2 text-sm font-bold text-white bg-primary hover:bg-primary/90 disabled:opacity-60"
+                className="rounded-xl px-4 py-2 text-sm font-bold text-white cd-fill-primary disabled:opacity-60"
               >
                 {saving ? "저장 중…" : editingHistoryId ? "이력 수정" : "이력 저장"}
               </button>
@@ -999,7 +1011,7 @@ function CompanyKeywordInput({
   return (
     <div className="relative">
       <input
-        className="input-field"
+        className="cd-input"
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
@@ -1012,21 +1024,21 @@ function CompanyKeywordInput({
         }
       />
       {open && results.length > 0 && (
-        <div className="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto rounded-xl border border-stone-200 bg-white shadow-lg">
+        <div className="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto rounded-xl border cd-border-c cd-card-bg shadow-lg">
           {results.map((item) => (
             <button
               key={item.facilityId}
               type="button"
-              className="block w-full text-left px-3 py-2 text-xs hover:bg-stone-50"
+              className="block w-full text-left px-3 py-2 text-xs hover:bg-[color:var(--cd-surface)]"
               onMouseDown={(e) => {
                 e.preventDefault();
                 onChange(formatCompanyName(item.companyName) ?? item.companyName);
                 setOpen(false);
               }}
             >
-              <b className="text-stone-800">{formatCompanyName(item.companyName) ?? item.companyName}</b>
+              <b className="cd-text">{formatCompanyName(item.companyName) ?? item.companyName}</b>
               {item.businessRegistrationNo && (
-                <span className="text-stone-400 ml-2">{item.businessRegistrationNo}</span>
+                <span className="cd-text-faint ml-2">{item.businessRegistrationNo}</span>
               )}
             </button>
           ))}
@@ -1048,8 +1060,8 @@ function HistoryDiff({
   if (!before && !after) return null;
   return (
     <div>
-      {label}: <span className="text-stone-400">{before ?? "—"}</span>
-      <span className="mx-1 text-stone-400">→</span>
+      {label}: <span className="cd-text-faint">{before ?? "—"}</span>
+      <span className="mx-1 cd-text-faint">→</span>
       <b>{after ?? "—"}</b>
     </div>
   );
@@ -1067,8 +1079,8 @@ function ReadonlyField({
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">{label}</span>
-      <div className="input-field bg-stone-50/70 text-stone-600 truncate" title={value || emptyText}>
+      <span className="text-[11px] font-bold cd-text-faint uppercase tracking-wide">{label}</span>
+      <div className="cd-input cd-surface-bg/70 cd-text-muted truncate" title={value || emptyText}>
         {value || emptyText}
       </div>
     </div>
@@ -1082,7 +1094,7 @@ function ServiceTags({ categories }: { categories: FacilityServiceCategory[] }) 
       {display.map((category) => (
         <span
           key={category}
-          className="rounded-full px-2 py-0.5 text-[10px] font-bold text-stone-800 border border-white/70"
+          className="rounded-full px-2 py-0.5 text-[10px] font-bold cd-text border cd-border-c"
           style={{ background: FACILITY_SERVICE_COLORS[category] }}
         >
           {FACILITY_SERVICE_LABELS[category]}
@@ -1097,11 +1109,11 @@ function LogoPreview({ path, label }: { path: string | null; label: string }) {
     <img
       src={path}
       alt={label + " 로고"}
-      className="w-14 h-14 rounded-2xl object-contain bg-white/80 border border-white/70 p-1"
+      className="w-14 h-14 rounded-2xl object-contain cd-surface-bg border cd-border-c p-1"
     />
   ) : (
-    <div className="w-14 h-14 rounded-2xl bg-white/60 border border-white/70 flex items-center justify-center">
-      <Building2 className="w-6 h-6 text-stone-300" />
+    <div className="w-14 h-14 rounded-2xl cd-surface-bg border cd-border-c flex items-center justify-center">
+      <Building2 className="w-6 h-6 cd-text-faint" />
     </div>
   );
 }
@@ -1109,12 +1121,12 @@ function LogoPreview({ path, label }: { path: string | null; label: string }) {
 function GroupInfoCard({ detail }: { detail: FacilityDetail }) {
   const groupInfo = detail.groupInfo;
   return (
-    <div className="flex flex-col gap-1 bg-white/40 border border-white/50 rounded-xl p-3 sm:col-span-2">
-      <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wide flex items-center gap-1">
+    <div className="flex flex-col gap-1 border cd-border-c rounded-xl p-3 sm:col-span-2">
+      <span className="text-[10px] font-bold cd-text-faint uppercase tracking-wide flex items-center gap-1">
         <Briefcase className="w-3 h-3" /> 그룹 정보
       </span>
       {groupInfo ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-stone-700">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs cd-text-muted">
           <div>
             그룹명: <b>{groupInfo.group.groupName}</b>
           </div>
@@ -1131,7 +1143,7 @@ function GroupInfoCard({ detail }: { detail: FacilityDetail }) {
           <div>전화번호: <b>{groupInfo.company.phoneNumber ?? "—"}</b></div>
         </div>
       ) : (
-        <div className="text-sm text-stone-400">그룹 정보 없음</div>
+        <div className="text-sm cd-text-faint">그룹 정보 없음</div>
       )}
     </div>
   );
@@ -1140,26 +1152,26 @@ function GroupInfoCard({ detail }: { detail: FacilityDetail }) {
 function OperatingEntityCard({ detail }: { detail: FacilityDetail }) {
   const info = detail.operatingEntityInfo;
   return (
-    <div className="flex flex-col gap-1 bg-white/40 border border-white/50 rounded-xl p-3 sm:col-span-2">
-      <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wide flex items-center gap-1">
+    <div className="flex flex-col gap-1 border cd-border-c rounded-xl p-3 sm:col-span-2">
+      <span className="text-[10px] font-bold cd-text-faint uppercase tracking-wide flex items-center gap-1">
         <Briefcase className="w-3 h-3" /> 운영 주체
       </span>
       {info ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-stone-700">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs cd-text-muted">
           <div>
-            법인명: <b>{formatCompanyName(info.entity.entityName)}</b>
+            운영 주체명: <b>{formatCompanyName(info.counterparty.companyName)}</b>
           </div>
           <div>
             관계: <b>{OPERATING_RELATION_LABELS[info.relation.relationType]}</b>
           </div>
-          <div>사업자번호: <b>{formatBusinessRegistrationNo(info.entity.businessRegistrationNo) ?? "—"}</b></div>
-          <div>전화번호: <b>{info.entity.phoneNumber ?? "—"}</b></div>
+          <div>사업자번호: <b>{formatBusinessRegistrationNo(info.counterparty.businessRegistrationNo) ?? "—"}</b></div>
+          <div>전화번호: <b>{info.counterparty.phoneNumber ?? "—"}</b></div>
           <div className="sm:col-span-2">
-            소재지: <b>{formatAddress(info.entity.address) ?? "—"}</b>
+            소재지: <b>{formatAddress(info.counterparty.siteAddress) ?? "—"}</b>
           </div>
         </div>
       ) : (
-        <div className="text-sm text-stone-400">운영 주체 정보 없음</div>
+        <div className="text-sm cd-text-faint">운영 주체 정보 없음</div>
       )}
     </div>
   );
@@ -1173,20 +1185,20 @@ function PhoneContactField({
   onOpenContacts: () => void;
 }) {
   return (
-    <div className="flex flex-col gap-1 bg-white/40 border border-white/50 rounded-xl p-3">
+    <div className="flex flex-col gap-1 border cd-border-c rounded-xl p-3">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wide flex items-center gap-1">
+        <span className="text-[10px] font-bold cd-text-faint uppercase tracking-wide flex items-center gap-1">
           <Phone className="w-3 h-3" /> 전화번호
         </span>
         <button
           type="button"
           onClick={onOpenContacts}
-          className="glass-button rounded-lg px-2 py-1 text-[10px] font-bold text-stone-700"
+          className="cd-btn cd-btn-ghost rounded-lg px-2 py-1 text-[10px] font-bold cd-text-muted"
         >
           연락처/담당자 관리
         </button>
       </div>
-      <div className="text-sm font-semibold text-stone-800 whitespace-pre-line">{value || "—"}</div>
+      <div className="text-sm font-semibold cd-text whitespace-pre-line">{value || "—"}</div>
     </div>
   );
 }
@@ -1200,6 +1212,7 @@ function FacilityContactsModal({
   canEdit: boolean;
   onClose: () => void;
 }) {
+  const { theme } = useCdashTheme();
   const [departments, setDepartments] = useState<FacilityContactDepartment[]>([]);
   const [people, setPeople] = useState<FacilityContactPerson[]>([]);
   const [logs, setLogs] = useState<FacilityContactLog[]>([]);
@@ -1467,34 +1480,34 @@ function FacilityContactsModal({
   };
 
   const modal = (
-    <div className="fixed inset-0 z-50 bg-stone-950/20 flex items-center justify-center p-4">
-      <div className="glass-panel rounded-3xl p-5 w-[min(1120px,calc(100vw-32px))] max-h-[min(840px,calc(100vh-32px))] overflow-y-auto scrollbar-hide shadow-2xl">
+    <div className="cdash-vars cd-fields-white fixed inset-0 z-50 bg-stone-950/20 flex items-center justify-center p-4" data-theme={theme}>
+      <div className="cd-card rounded-3xl p-5 w-[min(1120px,calc(100vw-32px))] max-h-[min(840px,calc(100vh-32px))] overflow-y-auto scrollbar-hide shadow-2xl">
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
-            <h3 className="text-xl font-bold text-stone-800">연락처/담당자 관리</h3>
-            <p className="text-xs text-stone-500 mt-1">
+            <h3 className="text-xl font-bold cd-text">연락처/담당자 관리</h3>
+            <p className="text-xs cd-text-faint mt-1">
               {formatCompanyName(facility.companyName)} · 기존 파싱 전화번호: {facility.phoneNumber ?? "—"}
             </p>
           </div>
-          <button type="button" onClick={onClose} className="glass-button rounded-xl px-3 py-2 text-xs font-bold text-stone-700">
+          <button type="button" onClick={onClose} className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs font-bold cd-text-muted">
             닫기
           </button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-4">
-          <section className="bg-white/45 border border-white/60 rounded-2xl p-3">
+          <section className="cd-surface-bg border cd-border-c rounded-2xl p-3">
             <div className="grid grid-cols-2 gap-2 mb-3">
-              <button type="button" onClick={() => setTab("department")} className={cn("rounded-xl px-3 py-2 text-xs font-bold", tab === "department" ? "bg-primary text-white" : "glass-button text-stone-700")}>
+              <button type="button" onClick={() => setTab("department")} className={cn("rounded-xl px-3 py-2 text-xs font-bold", tab === "department" ? "cd-fill-primary text-white" : "cd-btn cd-btn-ghost cd-text-muted")}>
                 부서별
               </button>
-              <button type="button" onClick={() => setTab("person")} className={cn("rounded-xl px-3 py-2 text-xs font-bold", tab === "person" ? "bg-primary text-white" : "glass-button text-stone-700")}>
+              <button type="button" onClick={() => setTab("person")} className={cn("rounded-xl px-3 py-2 text-xs font-bold", tab === "person" ? "cd-fill-primary text-white" : "cd-btn cd-btn-ghost cd-text-muted")}>
                 담당자별
               </button>
             </div>
-            {loading && <div className="text-sm text-stone-400 text-center py-8">연락처 조회 중…</div>}
+            {loading && <div className="text-sm cd-text-faint text-center py-8">연락처 조회 중…</div>}
             {!loading && tab === "department" && (
               <div className="flex flex-col gap-2 max-h-[600px] overflow-y-auto scrollbar-hide">
-                {departments.length === 0 && <div className="text-sm text-stone-400 text-center py-8">등록된 부서가 없습니다.</div>}
+                {departments.length === 0 && <div className="text-sm cd-text-faint text-center py-8">등록된 부서가 없습니다.</div>}
                 {departments.map((department) => {
                   const count = people.filter((person) => person.departmentId === department.id).length;
                   return (
@@ -1506,13 +1519,13 @@ function FacilityContactsModal({
                         setSelectedDepartmentId(department.id);
                         setEditing(false);
                       }}
-                      className={cn("text-left rounded-xl border p-3", selectedDepartmentId === department.id ? "border-primary/40 bg-primary/10" : "border-white/60 bg-white/50")}
+                      className={cn("text-left rounded-xl border p-3", selectedDepartmentId === department.id ? "border-[color:var(--cd-primary)] cd-tint-primary" : "cd-border-c cd-surface-bg")}
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-bold text-stone-800 truncate">{department.departmentName}</span>
-                        <span className="text-[10px] font-bold text-stone-500 bg-white/70 rounded-full px-2 py-0.5">{count}건</span>
+                        <span className="text-sm font-bold cd-text truncate">{department.departmentName}</span>
+                        <span className="text-[10px] font-bold cd-text-faint cd-surface-bg rounded-full px-2 py-0.5">{count}건</span>
                       </div>
-                      <div className="text-[11px] text-stone-500 mt-1">{department.phoneNumber ?? "전화번호 없음"}</div>
+                      <div className="text-[11px] cd-text-faint mt-1">{department.phoneNumber ?? "전화번호 없음"}</div>
                     </button>
                   );
                 })}
@@ -1520,7 +1533,7 @@ function FacilityContactsModal({
             )}
             {!loading && tab === "person" && (
               <div className="flex flex-col gap-2 max-h-[600px] overflow-y-auto scrollbar-hide">
-                {people.length === 0 && <div className="text-sm text-stone-400 text-center py-8">등록된 담당자가 없습니다.</div>}
+                {people.length === 0 && <div className="text-sm cd-text-faint text-center py-8">등록된 담당자가 없습니다.</div>}
                 {people.map((person) => (
                   <button
                     key={person.id}
@@ -1530,26 +1543,26 @@ function FacilityContactsModal({
                       setSelectedPersonId(person.id);
                       setEditing(false);
                     }}
-                    className={cn("text-left rounded-xl border p-3", selectedPersonId === person.id ? "border-primary/40 bg-primary/10" : "border-white/60 bg-white/50")}
+                    className={cn("text-left rounded-xl border p-3", selectedPersonId === person.id ? "border-[color:var(--cd-primary)] cd-tint-primary" : "cd-border-c cd-surface-bg")}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-bold text-stone-800 truncate">{person.personName}</span>
-                      <span className="text-[10px] text-stone-500 truncate">{departmentName(person.departmentId)}</span>
+                      <span className="text-sm font-bold cd-text truncate">{person.personName}</span>
+                      <span className="text-[10px] cd-text-faint truncate">{departmentName(person.departmentId)}</span>
                     </div>
-                    <div className="text-[11px] text-stone-500 mt-1">{person.title ?? "직함 미입력"}</div>
+                    <div className="text-[11px] cd-text-faint mt-1">{person.title ?? "직함 미입력"}</div>
                   </button>
                 ))}
               </div>
             )}
-            <div className="mt-3 pt-3 border-t border-white/60">
-              <div className="rounded-2xl bg-white/60 border border-white/70 p-3">
+            <div className="mt-3 pt-3 border-t cd-border-c">
+              <div className="rounded-2xl cd-surface-bg border cd-border-c p-3">
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <div>
-                    <div className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">
+                    <div className="text-[11px] font-bold cd-text-faint uppercase tracking-wide">
                       대표번호
                     </div>
                     {!mainNumberEditing && (
-                      <div className="text-sm font-bold text-stone-800 mt-1">
+                      <div className="text-sm font-bold cd-text mt-1">
                         {mainNumber?.phoneNumber ?? facility.phoneNumber ?? "—"}
                       </div>
                     )}
@@ -1564,7 +1577,7 @@ function FacilityContactsModal({
                         });
                         setMainNumberEditing(true);
                       }}
-                      className="glass-button rounded-lg px-2 py-1 text-[11px] font-bold text-stone-700"
+                      className="cd-btn cd-btn-ghost rounded-lg px-2 py-1 text-[11px] font-bold cd-text-muted"
                     >
                       {mainNumber?.phoneNumber ? "수정" : "등록"}
                     </button>
@@ -1573,13 +1586,13 @@ function FacilityContactsModal({
                 {mainNumberEditing ? (
                   <div className="flex flex-col gap-2">
                     <input
-                      className="input-field"
+                      className="cd-input"
                       value={mainNumberForm.phoneNumber}
                       onChange={(e) => setMainNumberForm((prev) => ({ ...prev, phoneNumber: e.target.value }))}
                       placeholder="대표번호"
                     />
                     <input
-                      className="input-field"
+                      className="cd-input"
                       value={mainNumberForm.note}
                       onChange={(e) => setMainNumberForm((prev) => ({ ...prev, note: e.target.value }))}
                       placeholder="메모"
@@ -1594,7 +1607,7 @@ function FacilityContactsModal({
                           });
                           setMainNumberEditing(false);
                         }}
-                        className="glass-button rounded-lg px-2 py-1 text-[11px] font-bold text-stone-700"
+                        className="cd-btn cd-btn-ghost rounded-lg px-2 py-1 text-[11px] font-bold cd-text-muted"
                       >
                         취소
                       </button>
@@ -1602,7 +1615,7 @@ function FacilityContactsModal({
                         type="button"
                         onClick={saveMainNumber}
                         disabled={saving}
-                        className="rounded-lg px-2 py-1 text-[11px] font-bold text-white bg-primary disabled:opacity-50"
+                        className="rounded-lg px-2 py-1 text-[11px] font-bold text-white cd-fill-primary disabled:opacity-50"
                       >
                         저장
                       </button>
@@ -1610,9 +1623,9 @@ function FacilityContactsModal({
                   </div>
                 ) : (
                   <>
-                    {mainNumber?.note && <div className="text-[11px] text-stone-500 mt-1">{mainNumber.note}</div>}
+                    {mainNumber?.note && <div className="text-[11px] cd-text-faint mt-1">{mainNumber.note}</div>}
                     {!mainNumber?.phoneNumber && facility.phoneNumber && (
-                      <div className="text-[10px] text-stone-400 mt-1">현재 파싱 전화번호를 참고값으로 표시 중</div>
+                      <div className="text-[10px] cd-text-faint mt-1">현재 파싱 전화번호를 참고값으로 표시 중</div>
                     )}
                   </>
                 )}
@@ -1620,7 +1633,7 @@ function FacilityContactsModal({
             </div>
           </section>
 
-          <section className="bg-white/45 border border-white/60 rounded-2xl p-4 min-h-[620px]">
+          <section className="cd-surface-bg border cd-border-c rounded-2xl p-4 min-h-[620px]">
             {tab === "department" ? (
               <DepartmentContactPane
                 canEdit={canEdit}
@@ -1728,21 +1741,21 @@ function DepartmentContactPane({
             <ContactValue label="팩스번호" value={department?.faxNumber} />
             <ContactValue label="담당업무" value={department?.duties} full />
           </div>
-          <div className="rounded-2xl bg-white/50 border border-white/60 p-3">
+          <div className="rounded-2xl cd-surface-bg border cd-border-c p-3">
             <div className="flex items-center justify-between gap-2 mb-2">
-              <h4 className="text-sm font-bold text-stone-800">소속 직원</h4>
+              <h4 className="text-sm font-bold cd-text">소속 직원</h4>
               {canEdit && (
-                <button type="button" onClick={onAddPerson} className="glass-button rounded-lg px-2 py-1 text-[11px] font-bold text-stone-700">
+                <button type="button" onClick={onAddPerson} className="cd-btn cd-btn-ghost rounded-lg px-2 py-1 text-[11px] font-bold cd-text-muted">
                   담당자 추가
                 </button>
               )}
             </div>
             <div className="flex flex-col gap-2">
-              {people.length === 0 && <div className="text-sm text-stone-400 py-4 text-center">등록된 담당 직원이 없습니다.</div>}
+              {people.length === 0 && <div className="text-sm cd-text-faint py-4 text-center">등록된 담당 직원이 없습니다.</div>}
               {people.map((person) => (
-                <button key={person.id} type="button" onClick={() => onSelectPerson(person.id)} className="text-left rounded-xl bg-white/60 border border-white/60 p-2">
-                  <span className="text-sm font-bold text-stone-800">{person.personName}</span>
-                  <span className="text-xs text-stone-500 ml-2">{person.title ?? "직함 미입력"}</span>
+                <button key={person.id} type="button" onClick={() => onSelectPerson(person.id)} className="text-left rounded-xl cd-surface-bg border cd-border-c p-2">
+                  <span className="text-sm font-bold cd-text">{person.personName}</span>
+                  <span className="text-xs cd-text-faint ml-2">{person.title ?? "직함 미입력"}</span>
                 </button>
               ))}
             </div>
@@ -1808,8 +1821,8 @@ function PersonContactPane({
           <ContactInput label="담당자 성명" value={form.personName} onChange={(v) => onFormChange({ ...form, personName: v })} />
           <ContactInput label="직함" value={form.title} onChange={(v) => onFormChange({ ...form, title: v })} />
           <div className="flex flex-col gap-1.5">
-            <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">소속 부서</span>
-            <select className="ui-select" value={form.departmentId} onChange={(e) => onFormChange({ ...form, departmentId: e.target.value })}>
+            <span className="text-[11px] font-bold cd-text-faint uppercase tracking-wide">소속 부서</span>
+            <select className="cd-select" value={form.departmentId} onChange={(e) => onFormChange({ ...form, departmentId: e.target.value })}>
               <option value="">미지정</option>
               {departments.map((department) => (
                 <option key={department.id} value={department.id}>{department.departmentName}</option>
@@ -1823,8 +1836,8 @@ function PersonContactPane({
           <ContactInput label="부서 변경일" value={form.transferredAt} onChange={(v) => onFormChange({ ...form, transferredAt: v })} />
           <ContactInput label="퇴사일" value={form.resignedAt} onChange={(v) => onFormChange({ ...form, resignedAt: v })} />
           <div className="flex flex-col gap-1.5">
-            <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">상태</span>
-            <select className="ui-select" value={form.status} onChange={(e) => onFormChange({ ...form, status: e.target.value })}>
+            <span className="text-[11px] font-bold cd-text-faint uppercase tracking-wide">상태</span>
+            <select className="cd-select" value={form.status} onChange={(e) => onFormChange({ ...form, status: e.target.value })}>
               <option value="active">재직</option>
               <option value="transferred">부서 변경</option>
               <option value="resigned">퇴사</option>
@@ -1846,8 +1859,8 @@ function PersonContactPane({
             <ContactValue label="이메일주소" value={person?.email} />
             <ContactValue label="담당 업무" value={person?.duties} full />
           </div>
-          <div className="rounded-2xl bg-white/50 border border-white/60 p-3">
-            <h4 className="text-sm font-bold text-stone-800 mb-2">담당자 이력</h4>
+          <div className="rounded-2xl cd-surface-bg border cd-border-c p-3">
+            <h4 className="text-sm font-bold cd-text mb-2">담당자 이력</h4>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
               <ContactValue label="신규 선임" value={person?.appointedAt} />
               <ContactValue label="부서 변경" value={person?.transferredAt} />
@@ -1864,9 +1877,9 @@ function PersonContactPane({
 function EmptyContactPane({ title, canEdit, onNew }: { title: string; canEdit: boolean; onNew: () => void }) {
   return (
     <div className="h-full min-h-[520px] flex flex-col items-center justify-center text-center gap-3">
-      <div className="text-sm text-stone-400">{title}</div>
+      <div className="text-sm cd-text-faint">{title}</div>
       {canEdit && (
-        <button type="button" onClick={onNew} className="rounded-xl px-4 py-2 text-sm font-bold text-white bg-primary">
+        <button type="button" onClick={onNew} className="rounded-xl px-4 py-2 text-sm font-bold text-white cd-fill-primary">
           신규 등록
         </button>
       )}
@@ -1889,13 +1902,13 @@ function ContactPaneHeader({
 }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <h4 className="text-lg font-bold text-stone-800">{title}</h4>
+      <h4 className="text-lg font-bold cd-text">{title}</h4>
       {canEdit && !editing && (
         <div className="flex items-center gap-2">
-          <button type="button" onClick={onNew} className="glass-button rounded-xl px-3 py-2 text-xs font-bold text-stone-700">
+          <button type="button" onClick={onNew} className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs font-bold cd-text-muted">
             신규
           </button>
-          <button type="button" onClick={onEdit} className="glass-button rounded-xl px-3 py-2 text-xs font-bold text-stone-700">
+          <button type="button" onClick={onEdit} className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs font-bold cd-text-muted">
             수정
           </button>
         </div>
@@ -1920,13 +1933,13 @@ function ContactEditActions({
   if (!canEdit) return null;
   return (
     <div className="sm:col-span-2 flex justify-end gap-2 pt-2">
-      <button type="button" onClick={onDelete} className="rounded-xl px-3 py-2 text-xs font-bold text-red-700 bg-red-50 border border-red-200">
+      <button type="button" onClick={onDelete} className="rounded-xl px-3 py-2 text-xs font-bold cd-error-text cd-error-bg border border-red-200">
         삭제
       </button>
-      <button type="button" onClick={onCancel} className="glass-button rounded-xl px-3 py-2 text-xs font-bold text-stone-700">
+      <button type="button" onClick={onCancel} className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs font-bold cd-text-muted">
         취소
       </button>
-      <button type="button" onClick={onSave} disabled={saving} className="rounded-xl px-3 py-2 text-xs font-bold text-white bg-primary disabled:opacity-50">
+      <button type="button" onClick={onSave} disabled={saving} className="rounded-xl px-3 py-2 text-xs font-bold text-white cd-fill-primary disabled:opacity-50">
         {saving ? "저장 중…" : "저장"}
       </button>
     </div>
@@ -1936,8 +1949,8 @@ function ContactEditActions({
 function ContactInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">{label}</span>
-      <input className="input-field" value={value} onChange={(e) => onChange(e.target.value)} />
+      <span className="text-[11px] font-bold cd-text-faint uppercase tracking-wide">{label}</span>
+      <input className="cd-input" value={value} onChange={(e) => onChange(e.target.value)} />
     </div>
   );
 }
@@ -1945,34 +1958,34 @@ function ContactInput({ label, value, onChange }: { label: string; value: string
 function ContactTextarea({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">{label}</span>
-      <textarea className="ui-textarea" value={value} onChange={(e) => onChange(e.target.value)} />
+      <span className="text-[11px] font-bold cd-text-faint uppercase tracking-wide">{label}</span>
+      <textarea className="cd-textarea" value={value} onChange={(e) => onChange(e.target.value)} />
     </div>
   );
 }
 
 function ContactValue({ label, value, full }: { label: string; value: string | null | undefined; full?: boolean }) {
   return (
-    <div className={cn("rounded-xl bg-white/50 border border-white/60 p-3", full && "sm:col-span-2")}>
-      <div className="text-[10px] font-bold text-stone-400 uppercase tracking-wide">{label}</div>
-      <div className="text-sm font-semibold text-stone-800 mt-1 whitespace-pre-line">{value || "—"}</div>
+    <div className={cn("rounded-xl cd-surface-bg border cd-border-c p-3", full && "sm:col-span-2")}>
+      <div className="text-[10px] font-bold cd-text-faint uppercase tracking-wide">{label}</div>
+      <div className="text-sm font-semibold cd-text mt-1 whitespace-pre-line">{value || "—"}</div>
     </div>
   );
 }
 
 function ContactLogBox({ logs }: { logs: FacilityContactLog[] }) {
   return (
-    <div className="rounded-2xl bg-white/50 border border-white/60 p-3">
-      <h4 className="text-sm font-bold text-stone-800 mb-2">변동 이력 로그</h4>
+    <div className="rounded-2xl cd-surface-bg border cd-border-c p-3">
+      <h4 className="text-sm font-bold cd-text mb-2">변동 이력 로그</h4>
       <div className="max-h-44 overflow-y-auto scrollbar-hide flex flex-col gap-2">
-        {logs.length === 0 && <div className="text-sm text-stone-400 py-4 text-center">등록된 변동 이력이 없습니다.</div>}
+        {logs.length === 0 && <div className="text-sm cd-text-faint py-4 text-center">등록된 변동 이력이 없습니다.</div>}
         {logs.map((log) => (
-          <div key={log.id} className="rounded-xl bg-white/60 border border-white/60 p-2 text-xs">
+          <div key={log.id} className="rounded-xl cd-surface-bg border cd-border-c p-2 text-xs">
             <div className="flex items-center justify-between gap-2">
-              <b className="text-stone-800">{contactEventLabel(log.eventType)}</b>
-              <span className="text-stone-400">{log.eventDate ?? log.createdAt?.slice(0, 10) ?? "—"}</span>
+              <b className="cd-text">{contactEventLabel(log.eventType)}</b>
+              <span className="cd-text-faint">{log.eventDate ?? log.createdAt?.slice(0, 10) ?? "—"}</span>
             </div>
-            {log.memo && <div className="text-stone-500 mt-1">{log.memo}</div>}
+            {log.memo && <div className="cd-text-faint mt-1">{log.memo}</div>}
           </div>
         ))}
       </div>
@@ -1990,22 +2003,22 @@ function contactEventLabel(eventType: string): string {
 
 function ManualProductsSection({ products }: { products: FacilityManualProduct[] }) {
   return (
-    <section className="bg-white/40 border border-white/50 rounded-2xl p-4">
-      <h3 className="text-sm font-bold text-stone-800 flex items-center gap-2">
-        <ClipboardList className="w-4 h-4 text-primary" /> 주요 생산품
+    <section className="cd-surface-bg border cd-border-c rounded-2xl p-4">
+      <h3 className="text-sm font-bold cd-text flex items-center gap-2">
+        <ClipboardList className="w-4 h-4 cd-text-primary" /> 주요 생산품
       </h3>
-      <p className="text-[11px] text-stone-500 mt-1">
+      <p className="text-[11px] cd-text-faint mt-1">
         통합허가 파싱 대상이 아닌 용역 사업장을 위한 수동 입력 정보입니다.
       </p>
       <div className="mt-3 flex flex-col gap-2">
-        {products.length === 0 && <div className="text-sm text-stone-400 py-4 text-center">등록된 생산품이 없습니다.</div>}
+        {products.length === 0 && <div className="text-sm cd-text-faint py-4 text-center">등록된 생산품이 없습니다.</div>}
         {products.map((product, idx) => (
-          <div key={product.id ?? idx} className="grid grid-cols-[1fr_auto] gap-2 text-xs bg-white/50 border border-white/60 rounded-xl p-2">
+          <div key={product.id ?? idx} className="grid grid-cols-[1fr_auto] gap-2 text-xs cd-surface-bg border cd-border-c rounded-xl p-2">
             <div>
-              <b className="text-stone-800">{product.productName}</b>
-              {product.note && <div className="text-stone-500 mt-0.5">{product.note}</div>}
+              <b className="cd-text">{product.productName}</b>
+              {product.note && <div className="cd-text-faint mt-0.5">{product.note}</div>}
             </div>
-            <div className="text-stone-600">
+            <div className="cd-text-muted">
               {[product.amount != null ? formatNumber(product.amount) : null, product.unit].filter(Boolean).join(" ") || "—"}
             </div>
           </div>
@@ -2024,15 +2037,15 @@ function ReadView({
 }) {
   const industries =
     detail.industries && detail.industries.length > 0
-      ? detail.industries
+      ? dedupeIndustries(detail.industries)
       : [{ code: detail.industryCode, name: detail.industryName }];
   const primaryAlias = detail.aliases.find((alias) => alias.isPrimary) ?? detail.aliases[0];
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      <div className="sm:col-span-2 bg-white/40 border border-white/50 rounded-xl p-3">
+      <div className="sm:col-span-2 cd-surface-bg border cd-border-c rounded-xl p-3">
         <div className="min-w-0">
           {primaryAlias && (
-            <div className="text-xs text-stone-500 truncate">
+            <div className="text-xs cd-text-faint truncate">
               별칭: <b>{primaryAlias.alias}</b>
               {detail.aliases.length > 1 ? ` 외 ${detail.aliases.length - 1}개` : ""}
             </div>
@@ -2040,7 +2053,7 @@ function ReadView({
           <div className="flex flex-wrap gap-1.5 mt-2">
             <ServiceTags categories={detail.serviceCategories} />
             {detail.companySize && (
-              <span className="rounded-full px-2 py-0.5 text-[10px] font-bold bg-stone-100 text-stone-700">
+              <span className="rounded-full px-2 py-0.5 text-[10px] font-bold cd-card-bg border cd-border-c cd-text-muted">
                 {FACILITY_COMPANY_SIZE_LABELS[detail.companySize]}
               </span>
             )}
@@ -2068,24 +2081,24 @@ function ReadView({
           value={addr}
         />
       ))}
-      <div className="flex flex-col gap-1 bg-white/40 border border-white/50 rounded-xl p-3">
-        <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wide flex items-center gap-1">
+      <div className="flex flex-col gap-1 border cd-border-c rounded-xl p-3">
+        <span className="text-[10px] font-bold cd-text-faint uppercase tracking-wide flex items-center gap-1">
           <FileText className="w-3 h-3" /> 업종
         </span>
         <div className="flex flex-col gap-1">
           {industries.length > 0 ? (
             industries.map((industry, idx) => (
               <div key={idx} className="grid grid-cols-[90px_1fr] gap-1 text-xs">
-                <span className="font-mono bg-stone-100 rounded px-2 py-1 text-stone-700">
+                <span className="font-mono rounded px-2 py-1 cd-text-muted">
                   {industry.code ?? "—"}
                 </span>
-                <span className="bg-white/50 rounded px-2 py-1 text-stone-800">
+                <span className="rounded px-2 py-1 cd-text">
                   {industry.name ?? "업종명 없음"}
                 </span>
               </div>
             ))
           ) : (
-            <span className="text-sm text-stone-400">—</span>
+            <span className="text-sm cd-text-faint">—</span>
           )}
         </div>
       </div>
@@ -2148,19 +2161,19 @@ function BusinessCertificatesSection({
   };
 
   return (
-    <section className="rounded-2xl border border-stone-200 bg-white/50 p-4">
+    <section className="rounded-2xl border cd-border-c p-4">
       <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
         <div>
-          <h3 className="text-sm font-black text-stone-800 flex items-center gap-2">
-            <FileText className="w-4 h-4 text-primary" />
+          <h3 className="text-sm font-black cd-text flex items-center gap-2">
+            <FileText className="w-4 h-4 cd-text-primary" />
             사업자등록증
           </h3>
-          <p className="text-xs text-stone-500 mt-1">
+          <p className="text-xs cd-text-faint mt-1">
             PDF 원본은 S3에 보관되며, 갱신 업로드 시 OCR 파싱 결과로 업태·종목·법인등록번호를 업데이트합니다.
           </p>
         </div>
         {canEdit && (
-          <label className="rounded-xl px-3 py-2 text-xs font-bold text-white bg-primary hover:bg-primary/90 cursor-pointer inline-flex items-center gap-1">
+          <label className="rounded-xl px-3 py-2 text-xs font-bold text-white cd-fill-primary cursor-pointer inline-flex items-center gap-1">
             <Upload className="w-3.5 h-3.5" />
             {uploading ? "업로드 중..." : current ? "갱신본 업로드" : "등록증 업로드"}
             <input
@@ -2179,23 +2192,23 @@ function BusinessCertificatesSection({
       </div>
 
       {certificates.length === 0 ? (
-        <p className="text-sm text-stone-400">등록된 사업자등록증이 없습니다.</p>
+        <p className="text-sm cd-text-faint">등록된 사업자등록증이 없습니다.</p>
       ) : (
         <div className="grid gap-2">
           {certificates.map((item) => (
-            <div key={item.certificateId} className="rounded-xl border border-stone-200 bg-white/70 p-3 flex items-start justify-between gap-3">
+            <div key={item.certificateId} className="rounded-xl border cd-border-c cd-surface-bg p-3 flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-sm font-bold text-stone-800 truncate">{item.displayName}</p>
+                  <p className="text-sm font-bold cd-text truncate">{item.displayName}</p>
                   {item.isCurrent && (
-                    <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">현재본</span>
+                    <span className="rounded-full cd-tint-primary px-2 py-0.5 text-[10px] font-bold cd-text-primary">현재본</span>
                   )}
-                  <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-bold text-stone-500">v{item.versionNo}</span>
+                  <span className="rounded-full cd-surface-bg px-2 py-0.5 text-[10px] font-bold cd-text-faint">v{item.versionNo}</span>
                 </div>
-                <p className="text-xs text-stone-500 mt-1">
+                <p className="text-xs cd-text-faint mt-1">
                   갱신일: {item.createdAt.slice(0, 10)} · 업태 {item.businessType ?? "-"} · 종목 {item.businessItem ?? "-"} · 법인등록번호 {item.corporateRegistrationNo ?? "-"}
                 </p>
-                <p className="text-[11px] text-stone-400 mt-1">
+                <p className="text-[11px] cd-text-faint mt-1">
                   등록자: {item.createdByName ?? item.createdByEmail ?? "-"}
                 </p>
               </div>
@@ -2204,7 +2217,7 @@ function BusinessCertificatesSection({
                   href={item.publicPath}
                   target="_blank"
                   rel="noreferrer"
-                  className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold text-stone-700 bg-stone-100 hover:bg-stone-200"
+                  className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold cd-text-muted cd-surface-bg hover:bg-[color:var(--cd-surface)]"
                 >
                   PDF 보기
                 </a>
@@ -2237,15 +2250,13 @@ function EditView({
     detail.additionalSiteAddresses?.length ? [...detail.additionalSiteAddresses] : [""]
   );
   const [phoneNumber, setPhoneNumber] = useState(detail.phoneNumber ?? "");
-  const facilityIndustries =
-    detail.industries?.filter((industry) => industry.source === "facility") ?? [];
   const scalarIndustries = parseIndustriesFromValue(detail.industryCode, detail.industryName);
-  const displayedIndustries = detail.industries ?? [];
-  const initialIndustries = facilityIndustries.length
-    ? facilityIndustries
+  const displayedIndustries = dedupeIndustries(detail.industries ?? []);
+  const initialIndustries = displayedIndustries.length
+    ? displayedIndustries
     : scalarIndustries.length
     ? scalarIndustries
-    : displayedIndustries;
+    : [];
   const [industries, setIndustries] = useState(
     initialIndustries.length
       ? initialIndustries.map((industry) => ({
@@ -2410,7 +2421,7 @@ function EditView({
         full
       />
       <div className="sm:col-span-2 flex flex-col gap-2">
-        <label className="flex items-center gap-1.5 text-xs font-bold text-stone-600 select-none">
+        <label className="flex items-center gap-1.5 text-xs font-bold cd-text-muted select-none">
           <input
             type="checkbox"
             checked={hasMultipleSites}
@@ -2425,14 +2436,14 @@ function EditView({
           복수 사업장 (동일 사업자등록번호로 소재지가 2개 이상)
         </label>
         {hasMultipleSites && (
-          <div className="flex flex-col gap-2 bg-white/40 border border-white/50 rounded-xl p-3">
-            <div className="text-[11px] font-bold text-stone-500">
+          <div className="flex flex-col gap-2 cd-surface-bg border cd-border-c rounded-xl p-3">
+            <div className="text-[11px] font-bold cd-text-faint">
               대표 소재지 외 추가 운영 소재지를 입력합니다. (지역·중복 검증·계약 매칭은 대표 소재지 기준)
             </div>
             {additionalSiteAddresses.map((addr, idx) => (
               <div key={idx} className="grid grid-cols-[1fr_auto] gap-2 items-center">
                 <input
-                  className="input-field"
+                  className="cd-input"
                   value={addr}
                   onChange={(e) =>
                     setAdditionalSiteAddresses((prev) =>
@@ -2444,7 +2455,7 @@ function EditView({
                 <div className="flex gap-1">
                   <button
                     type="button"
-                    className="rounded-lg border border-stone-200 bg-white px-2 py-2 text-stone-600 hover:bg-stone-50"
+                    className="rounded-lg border cd-border-c cd-card-bg px-2 py-2 cd-text-muted hover:bg-[color:var(--cd-surface)]"
                     onClick={() => setAdditionalSiteAddresses((prev) => [...prev, ""])}
                     title="추가 소재지 행 추가"
                   >
@@ -2452,7 +2463,7 @@ function EditView({
                   </button>
                   <button
                     type="button"
-                    className="rounded-lg border border-red-100 bg-red-50 px-2 py-2 text-red-600 hover:bg-red-100"
+                    className="rounded-lg border border-red-100 cd-error-bg px-2 py-2 cd-error-text hover:cd-error-bg"
                     onClick={() =>
                       setAdditionalSiteAddresses((prev) =>
                         prev.length <= 1 ? [""] : prev.filter((_, itemIdx) => itemIdx !== idx)
@@ -2471,13 +2482,13 @@ function EditView({
       <FieldInput label="전화번호" value={phoneNumber} onChange={setPhoneNumber} />
       <div className="sm:col-span-2 flex flex-col gap-2">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">
+          <span className="text-[11px] font-bold cd-text-faint uppercase tracking-wide">
             업종
           </span>
           <button
             type="button"
             onClick={() => setIndustries((prev) => [...prev, { code: "", name: "" }])}
-            className="glass-button rounded-lg px-2 py-1 text-[11px] font-bold text-stone-700 flex items-center gap-1"
+            className="cd-btn cd-btn-ghost rounded-lg px-2 py-1 text-[11px] font-bold cd-text-muted flex items-center gap-1"
           >
             <Plus className="w-3 h-3" /> 업종 추가
           </button>
@@ -2486,10 +2497,10 @@ function EditView({
           {industries.map((industry, idx) => (
             <div
               key={idx}
-              className="grid grid-cols-1 sm:grid-cols-[130px_1fr_auto] gap-2 bg-white/40 border border-white/50 rounded-xl p-2"
+              className="grid grid-cols-1 sm:grid-cols-[130px_1fr_auto] gap-2 cd-surface-bg border cd-border-c rounded-xl p-2"
             >
               <input
-                className="input-field"
+                className="cd-input"
                 value={industry.code}
                 onChange={(e) =>
                   setIndustries((prev) =>
@@ -2501,7 +2512,7 @@ function EditView({
                 placeholder="업종 코드"
               />
               <input
-                className="input-field"
+                className="cd-input"
                 value={industry.name}
                 onChange={(e) =>
                   setIndustries((prev) =>
@@ -2519,7 +2530,7 @@ function EditView({
                     prev.length > 1 ? prev.filter((_, itemIdx) => itemIdx !== idx) : [{ code: "", name: "" }]
                   )
                 }
-                className="rounded-lg px-2 py-1 text-[11px] font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 flex items-center justify-center gap-1"
+                className="rounded-lg px-2 py-1 text-[11px] font-bold cd-error-text cd-error-bg hover:cd-error-bg border border-red-200 flex items-center justify-center gap-1"
               >
                 <Trash2 className="w-3 h-3" /> 삭제
               </button>
@@ -2529,13 +2540,13 @@ function EditView({
       </div>
       <div className="sm:col-span-2 flex flex-col gap-2">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">
+          <span className="text-[11px] font-bold cd-text-faint uppercase tracking-wide">
             사업자등록증 기반 업종
           </span>
           <button
             type="button"
             onClick={() => setCertificateKinds((prev) => [...prev, { businessType: "", businessItem: "" }])}
-            className="glass-button rounded-lg px-2 py-1 text-[11px] font-bold text-stone-700 flex items-center gap-1"
+            className="cd-btn cd-btn-ghost rounded-lg px-2 py-1 text-[11px] font-bold cd-text-muted flex items-center gap-1"
           >
             <Plus className="w-3 h-3" /> 항목 추가
           </button>
@@ -2544,10 +2555,10 @@ function EditView({
           {certificateKinds.map((row, idx) => (
             <div
               key={idx}
-              className="grid grid-cols-1 sm:grid-cols-[180px_1fr_auto] gap-2 bg-white/40 border border-white/50 rounded-xl p-2"
+              className="grid grid-cols-1 sm:grid-cols-[180px_1fr_auto] gap-2 cd-surface-bg border cd-border-c rounded-xl p-2"
             >
               <input
-                className="input-field"
+                className="cd-input"
                 value={row.businessType}
                 onChange={(e) =>
                   setCertificateKinds((prev) =>
@@ -2559,7 +2570,7 @@ function EditView({
                 placeholder="사업자등록증 업태"
               />
               <input
-                className="input-field"
+                className="cd-input"
                 value={row.businessItem}
                 onChange={(e) =>
                   setCertificateKinds((prev) =>
@@ -2579,7 +2590,7 @@ function EditView({
                       : [{ businessType: "", businessItem: "" }]
                   )
                 }
-                className="rounded-lg px-2 py-1 text-[11px] font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 flex items-center justify-center gap-1"
+                className="rounded-lg px-2 py-1 text-[11px] font-bold cd-error-text cd-error-bg hover:cd-error-bg border border-red-200 flex items-center justify-center gap-1"
               >
                 <Trash2 className="w-3 h-3" /> 삭제
               </button>
@@ -2592,11 +2603,11 @@ function EditView({
         value={certificateCorporateNo}
         onChange={setCertificateCorporateNo}
       />
-      <div className="sm:col-span-2 grid grid-cols-1 md:grid-cols-[auto_1fr] gap-3 bg-white/40 border border-white/50 rounded-xl p-3">
+      <div className="sm:col-span-2 grid grid-cols-1 md:grid-cols-[auto_1fr] gap-3 cd-surface-bg border cd-border-c rounded-xl p-3">
         <LogoPreview path={logoPreviewUrl || logoPath || null} label={companyName} />
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2 flex-wrap">
-            <label className="glass-button rounded-lg px-3 py-2 text-[11px] font-bold text-stone-700 flex items-center gap-1 cursor-pointer">
+            <label className="cd-btn cd-btn-ghost rounded-lg px-3 py-2 text-[11px] font-bold cd-text-muted flex items-center gap-1 cursor-pointer">
               <Upload className="w-3 h-3" /> 사업장 로고 파일 선택
               <input
                 type="file"
@@ -2616,13 +2627,13 @@ function EditView({
                   setLogoPath("");
                   setLogoFile(null);
                 }}
-                className="rounded-lg px-3 py-2 text-[11px] font-bold text-red-700 bg-red-50 border border-red-200"
+                className="rounded-lg px-3 py-2 text-[11px] font-bold cd-error-text cd-error-bg border border-red-200"
               >
                 로고 제거
               </button>
             )}
           </div>
-          <div className="rounded-xl bg-white/50 border border-white/60 px-3 py-2 text-[11px] text-stone-500">
+          <div className="rounded-xl cd-surface-bg border cd-border-c px-3 py-2 text-[11px] cd-text-faint">
             {logoFile
               ? `${logoFile.name} 선택됨 · 저장 시 업로드됩니다.`
               : logoPath
@@ -2632,37 +2643,37 @@ function EditView({
         </div>
       </div>
 
-      <div className="sm:col-span-2 flex flex-col gap-2 bg-white/40 border border-white/50 rounded-xl p-3">
+      <div className="sm:col-span-2 flex flex-col gap-2 cd-surface-bg border cd-border-c rounded-xl p-3">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide flex items-center gap-1">
+          <span className="text-[11px] font-bold cd-text-faint uppercase tracking-wide flex items-center gap-1">
             <Tags className="w-3 h-3" /> 사업장 별칭
           </span>
           <button
             type="button"
             onClick={() => setAliases((prev) => [...prev, { alias: "", aliasType: "site", note: "", isPrimary: false }])}
-            className="glass-button rounded-lg px-2 py-1 text-[11px] font-bold text-stone-700"
+            className="cd-btn cd-btn-ghost rounded-lg px-2 py-1 text-[11px] font-bold cd-text-muted"
           >
             별칭 추가
           </button>
         </div>
         {aliases.map((alias, idx) => (
           <div key={idx} className="grid grid-cols-1 sm:grid-cols-[1fr_100px_1fr_auto] gap-2">
-            <input className="input-field" value={alias.alias} onChange={(e) => setAliases((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, alias: e.target.value } : item))} placeholder="사업체 사용 명칭" />
-            <input className="input-field" value={alias.aliasType} onChange={(e) => setAliases((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, aliasType: e.target.value } : item))} placeholder="유형" />
-            <input className="input-field" value={alias.note} onChange={(e) => setAliases((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, note: e.target.value } : item))} placeholder="메모" />
-            <button type="button" onClick={() => setAliases((prev) => prev.filter((_, itemIdx) => itemIdx !== idx))} className="rounded-lg px-2 py-1 text-[11px] font-bold text-red-700 bg-red-50 border border-red-200">
+            <input className="cd-input" value={alias.alias} onChange={(e) => setAliases((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, alias: e.target.value } : item))} placeholder="사업체 사용 명칭" />
+            <input className="cd-input" value={alias.aliasType} onChange={(e) => setAliases((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, aliasType: e.target.value } : item))} placeholder="유형" />
+            <input className="cd-input" value={alias.note} onChange={(e) => setAliases((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, note: e.target.value } : item))} placeholder="메모" />
+            <button type="button" onClick={() => setAliases((prev) => prev.filter((_, itemIdx) => itemIdx !== idx))} className="rounded-lg px-2 py-1 text-[11px] font-bold cd-error-text cd-error-bg border border-red-200">
               삭제
             </button>
           </div>
         ))}
       </div>
 
-      <div className="sm:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-3 bg-white/40 border border-white/50 rounded-xl p-3">
+      <div className="sm:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-3 cd-surface-bg border cd-border-c rounded-xl p-3">
         <div className="flex flex-col gap-2">
-          <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">대상 용역 카테고리</span>
+          <span className="text-[11px] font-bold cd-text-faint uppercase tracking-wide">대상 용역 카테고리</span>
           <div className="flex flex-wrap gap-2">
             {FACILITY_SERVICE_ORDER.map((category) => (
-              <label key={category} className="flex items-center gap-1.5 text-xs font-bold text-stone-700">
+              <label key={category} className="flex items-center gap-1.5 text-xs font-bold cd-text-muted">
                 <input
                   type="checkbox"
                   checked={serviceCategories.includes(category)}
@@ -2680,8 +2691,8 @@ function EditView({
           </div>
         </div>
         <div className="flex flex-col gap-1.5">
-          <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">사업장 분류</span>
-          <select className="ui-select" value={companySize} onChange={(e) => setCompanySize(e.target.value as FacilityCompanySize | "")}>
+          <span className="text-[11px] font-bold cd-text-faint uppercase tracking-wide">사업장 분류</span>
+          <select className="cd-select" value={companySize} onChange={(e) => setCompanySize(e.target.value as FacilityCompanySize | "")}>
             <option value="">미지정</option>
             {FACILITY_COMPANY_SIZE_ORDER.map((size) => (
               <option key={size} value={size}>{FACILITY_COMPANY_SIZE_LABELS[size]}</option>
@@ -2691,20 +2702,20 @@ function EditView({
       </div>
 
       {!hasIntegratedService && (
-        <div className="sm:col-span-2 flex flex-col gap-2 bg-white/40 border border-white/50 rounded-xl p-3">
+        <div className="sm:col-span-2 flex flex-col gap-2 cd-surface-bg border cd-border-c rounded-xl p-3">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">수동 주요 생산품</span>
-            <button type="button" onClick={() => setManualProducts((prev) => [...prev, { productName: "", amount: "", unit: "", note: "" }])} className="glass-button rounded-lg px-2 py-1 text-[11px] font-bold text-stone-700">
+            <span className="text-[11px] font-bold cd-text-faint uppercase tracking-wide">수동 주요 생산품</span>
+            <button type="button" onClick={() => setManualProducts((prev) => [...prev, { productName: "", amount: "", unit: "", note: "" }])} className="cd-btn cd-btn-ghost rounded-lg px-2 py-1 text-[11px] font-bold cd-text-muted">
               생산품 추가
             </button>
           </div>
           {manualProducts.map((product, idx) => (
             <div key={idx} className="grid grid-cols-1 sm:grid-cols-[1fr_100px_90px_1fr_auto] gap-2">
-              <input className="input-field" value={product.productName} onChange={(e) => setManualProducts((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, productName: e.target.value } : item))} placeholder="생산품" />
-              <input className="input-field" value={product.amount} onChange={(e) => setManualProducts((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, amount: e.target.value } : item))} placeholder="생산량" />
-              <input className="input-field" value={product.unit} onChange={(e) => setManualProducts((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, unit: e.target.value } : item))} placeholder="단위" />
-              <input className="input-field" value={product.note} onChange={(e) => setManualProducts((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, note: e.target.value } : item))} placeholder="비고" />
-              <button type="button" onClick={() => setManualProducts((prev) => prev.filter((_, itemIdx) => itemIdx !== idx))} className="rounded-lg px-2 py-1 text-[11px] font-bold text-red-700 bg-red-50 border border-red-200">
+              <input className="cd-input" value={product.productName} onChange={(e) => setManualProducts((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, productName: e.target.value } : item))} placeholder="생산품" />
+              <input className="cd-input" value={product.amount} onChange={(e) => setManualProducts((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, amount: e.target.value } : item))} placeholder="생산량" />
+              <input className="cd-input" value={product.unit} onChange={(e) => setManualProducts((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, unit: e.target.value } : item))} placeholder="단위" />
+              <input className="cd-input" value={product.note} onChange={(e) => setManualProducts((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, note: e.target.value } : item))} placeholder="비고" />
+              <button type="button" onClick={() => setManualProducts((prev) => prev.filter((_, itemIdx) => itemIdx !== idx))} className="rounded-lg px-2 py-1 text-[11px] font-bold cd-error-text cd-error-bg border border-red-200">
                 삭제
               </button>
             </div>
@@ -2712,16 +2723,16 @@ function EditView({
         </div>
       )}
 
-      <div className="sm:col-span-2 bg-white/40 border border-white/50 rounded-xl p-3 flex items-center justify-between gap-3">
-        <div className="text-xs text-stone-600">
-          <b className="text-stone-800">그룹 정보</b>
+      <div className="sm:col-span-2 cd-surface-bg border cd-border-c rounded-xl p-3 flex items-center justify-between gap-3">
+        <div className="text-xs cd-text-muted">
+          <b className="cd-text">그룹 정보</b>
           <div>
             {detail.groupInfo
               ? `${detail.groupInfo.group.groupName} · ${detail.groupInfo.company.companyName} (${MEMBERSHIP_RELATION_LABELS[detail.groupInfo.membership.relationType]})`
               : "연결된 그룹 정보 없음"}
           </div>
         </div>
-        <button type="button" onClick={() => setGroupOpen(true)} className="glass-button rounded-xl px-3 py-2 text-xs font-bold text-stone-700">
+        <button type="button" onClick={() => setGroupOpen(true)} className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs font-bold cd-text-muted">
           그룹 관리
         </button>
       </div>
@@ -2737,16 +2748,16 @@ function EditView({
         />
       )}
 
-      <div className="sm:col-span-2 bg-white/40 border border-white/50 rounded-xl p-3 flex items-center justify-between gap-3">
-        <div className="text-xs text-stone-600">
-          <b className="text-stone-800">운영 주체</b>
+      <div className="sm:col-span-2 cd-surface-bg border cd-border-c rounded-xl p-3 flex items-center justify-between gap-3">
+        <div className="text-xs cd-text-muted">
+          <b className="cd-text">운영 주체</b>
           <div>
             {detail.operatingEntityInfo
-              ? `${detail.operatingEntityInfo.entity.entityName} · ${OPERATING_RELATION_LABELS[detail.operatingEntityInfo.relation.relationType]}`
+              ? `${detail.operatingEntityInfo.counterparty.companyName} · ${OPERATING_RELATION_LABELS[detail.operatingEntityInfo.relation.relationType]}`
               : "연결된 운영 주체 없음"}
           </div>
         </div>
-        <button type="button" onClick={() => setOperatingOpen(true)} className="glass-button rounded-xl px-3 py-2 text-xs font-bold text-stone-700">
+        <button type="button" onClick={() => setOperatingOpen(true)} className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs font-bold cd-text-muted">
           운영 주체 관리
         </button>
       </div>
@@ -2763,7 +2774,7 @@ function EditView({
       )}
 
       {error && (
-        <div className="sm:col-span-2 text-xs font-bold text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
+        <div className="sm:col-span-2 text-xs font-bold cd-error-text cd-error-bg border border-red-200 rounded-xl px-3 py-2">
           {error}
         </div>
       )}
@@ -2772,7 +2783,7 @@ function EditView({
         <button
           type="button"
           onClick={onCancel}
-          className="glass-button rounded-xl px-3 py-2 text-xs font-bold text-stone-700 flex items-center gap-1"
+          className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs font-bold cd-text-muted flex items-center gap-1"
         >
           <X className="w-3.5 h-3.5" /> 취소
         </button>
@@ -2780,7 +2791,7 @@ function EditView({
           type="button"
           onClick={handleSave}
           disabled={pending}
-          className="rounded-xl px-3 py-2 text-xs font-bold text-white bg-primary hover:bg-primary/90 shadow-sm flex items-center gap-1 disabled:opacity-60"
+          className="rounded-xl px-3 py-2 text-xs font-bold text-white cd-fill-primary shadow-sm flex items-center gap-1 disabled:opacity-60"
         >
           <Save className="w-3.5 h-3.5" />
           {pending ? "저장 중…" : "저장"}
@@ -2798,7 +2809,7 @@ interface OperatingEntitySearchResult {
 }
 
 interface OperatingEntityLinkCandidate {
-  entityId?: string;
+  facilityId?: string;
   companyName: string;
   businessRegistrationNo: string | null;
   siteAddress: string | null;
@@ -2814,6 +2825,7 @@ function OperatingEntityModal({
   onClose: () => void;
   onChanged: () => void;
 }) {
+  const { theme } = useCdashTheme();
   const existing = facility.operatingEntityInfo;
   const [relationType, setRelationType] = useState<FacilityOperatingRelationType>(
     existing?.relation.relationType ?? "operating_entity"
@@ -2825,11 +2837,11 @@ function OperatingEntityModal({
   const [pendingLink, setPendingLink] = useState<OperatingEntityLinkCandidate | null>(
     existing
       ? {
-          entityId: existing.entity.entityId,
-          companyName: existing.entity.entityName,
-          businessRegistrationNo: existing.entity.businessRegistrationNo,
-          siteAddress: existing.entity.address,
-          phoneNumber: existing.entity.phoneNumber,
+          facilityId: existing.counterparty.facilityId,
+          companyName: existing.counterparty.companyName,
+          businessRegistrationNo: existing.counterparty.businessRegistrationNo,
+          siteAddress: existing.counterparty.siteAddress,
+          phoneNumber: existing.counterparty.phoneNumber,
         }
       : null
   );
@@ -2869,6 +2881,7 @@ function OperatingEntityModal({
   const stageSelected = () => {
     if (!selected) return;
     setPendingLink({
+      facilityId: selected.facilityId,
       companyName: formatCompanyName(selected.companyName) ?? selected.companyName,
       businessRegistrationNo: selected.businessRegistrationNo,
       siteAddress: selected.siteAddress,
@@ -2879,8 +2892,8 @@ function OperatingEntityModal({
     if (!pendingLink) return;
     setSaving(true);
     try {
-      const payload = pendingLink.entityId
-        ? { entityId: pendingLink.entityId, relationType }
+      const payload = pendingLink.facilityId
+        ? { relatedFacilityId: pendingLink.facilityId, relationType }
         : {
             entityName: pendingLink.companyName,
             businessRegistrationNo: pendingLink.businessRegistrationNo,
@@ -2926,27 +2939,27 @@ function OperatingEntityModal({
   const trimmedQuery = query.trim();
 
   const modal = (
-    <div className="fixed inset-0 z-50 bg-stone-950/20 flex items-center justify-center p-4">
-      <div className="glass-panel rounded-3xl p-5 w-[min(720px,calc(100vw-32px))] max-h-[min(780px,calc(100vh-32px))] overflow-y-auto scrollbar-hide shadow-2xl">
+    <div className="cdash-vars cd-fields-white fixed inset-0 z-50 bg-stone-950/20 flex items-center justify-center p-4" data-theme={theme}>
+      <div className="cd-card rounded-3xl p-5 w-[min(720px,calc(100vw-32px))] max-h-[min(780px,calc(100vh-32px))] overflow-y-auto scrollbar-hide shadow-2xl">
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
-            <h3 className="text-xl font-bold text-stone-800">운영 주체 관리</h3>
-            <p className="text-xs text-stone-500 mt-1">
+            <h3 className="text-xl font-bold cd-text">운영 주체 관리</h3>
+            <p className="text-xs cd-text-faint mt-1">
               허가 대상 사업장과 실제 계약 상대 법인을 분리해 관리합니다.
             </p>
           </div>
-          <button type="button" onClick={onClose} className="glass-button rounded-xl px-3 py-2 text-xs font-bold text-stone-700">
+          <button type="button" onClick={onClose} className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs font-bold cd-text-muted">
             닫기
           </button>
         </div>
 
-        <section className="bg-white/45 border border-white/60 rounded-2xl p-4 flex flex-col gap-3">
-          <h4 className="text-sm font-bold text-stone-800">기존 법인 연결</h4>
+        <section className="cd-surface-bg border cd-border-c rounded-2xl p-4 flex flex-col gap-3">
+          <h4 className="text-sm font-bold cd-text">기존 법인 연결</h4>
 
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 pointer-events-none" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 cd-text-faint pointer-events-none" />
             <input
-              className="input-field pl-9"
+              className="cd-input pl-9"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="법인명·사업자번호로 사업장 검색"
@@ -2955,9 +2968,9 @@ function OperatingEntityModal({
 
           {trimmedQuery && (
             <div className="flex flex-wrap gap-1.5">
-              {searching && <span className="text-xs text-stone-400 py-1">검색 중…</span>}
+              {searching && <span className="text-xs cd-text-faint py-1">검색 중…</span>}
               {!searching && results.length === 0 && (
-                <span className="text-xs text-stone-400 py-1">검색 결과가 없습니다.</span>
+                <span className="text-xs cd-text-faint py-1">검색 결과가 없습니다.</span>
               )}
               {results.map((item) => {
                 const isActive = selected?.facilityId === item.facilityId;
@@ -2969,13 +2982,13 @@ function OperatingEntityModal({
                     className={cn(
                       "rounded-full border px-3 py-1 text-xs font-bold transition",
                       isActive
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-stone-200 bg-white text-stone-700 hover:border-primary/40"
+                        ? "border-[color:var(--cd-primary)] cd-tint-primary cd-text-primary"
+                        : "cd-border-c cd-card-bg cd-text-muted hover:border-[color:var(--cd-primary)]"
                     )}
                   >
                     {formatCompanyName(item.companyName) ?? item.companyName}
                     {item.businessRegistrationNo ? (
-                      <span className="ml-1 font-normal text-stone-400">· {item.businessRegistrationNo}</span>
+                      <span className="ml-1 font-normal cd-text-faint">· {item.businessRegistrationNo}</span>
                     ) : null}
                   </button>
                 );
@@ -2984,7 +2997,7 @@ function OperatingEntityModal({
           )}
 
           <select
-            className="ui-select"
+            className="cd-select"
             value={relationType}
             onChange={(e) => setRelationType(e.target.value as FacilityOperatingRelationType)}
           >
@@ -2999,7 +3012,7 @@ function OperatingEntityModal({
               type="button"
               onClick={stageSelected}
               disabled={saving || !selected}
-              className="rounded-xl px-3 py-2 text-xs font-bold text-primary bg-primary/10 border border-primary/30 disabled:opacity-50"
+              className="rounded-xl px-3 py-2 text-xs font-bold cd-text-primary cd-tint-primary border border-[color:var(--cd-primary)] disabled:opacity-50"
             >
               선택 법인 연결
             </button>
@@ -3007,7 +3020,7 @@ function OperatingEntityModal({
               type="button"
               onClick={saveLink}
               disabled={saving || !pendingLink}
-              className="rounded-xl px-3 py-2 text-xs font-bold text-white bg-primary disabled:opacity-50"
+              className="rounded-xl px-3 py-2 text-xs font-bold text-white cd-fill-primary disabled:opacity-50"
             >
               {saving ? "저장 중…" : "법인 정보 저장"}
             </button>
@@ -3015,16 +3028,16 @@ function OperatingEntityModal({
 
           {pendingLink && (
             <div className="flex items-center justify-center gap-3 py-3">
-              <span className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary max-w-[40%] truncate">
+              <span className="rounded-full border border-[color:var(--cd-primary)] cd-tint-primary px-3 py-1.5 text-xs font-bold cd-text-primary max-w-[40%] truncate">
                 {pendingLink.companyName}
               </span>
               <div className="flex flex-col items-center gap-0.5">
-                <ArrowRight className="w-5 h-5 text-stone-400" />
-                <span className="text-[10px] font-bold text-stone-500">
+                <ArrowRight className="w-5 h-5 cd-text-faint" />
+                <span className="text-[10px] font-bold cd-text-faint">
                   {OPERATING_RELATION_LABELS[relationType]}
                 </span>
               </div>
-              <span className="rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs font-bold text-stone-700 max-w-[40%] truncate">
+              <span className="rounded-full border cd-border-c cd-card-bg px-3 py-1.5 text-xs font-bold cd-text-muted max-w-[40%] truncate">
                 {facilityLabel}
               </span>
             </div>
@@ -3035,7 +3048,7 @@ function OperatingEntityModal({
               type="button"
               onClick={clearOperatingEntity}
               disabled={saving}
-              className="rounded-xl px-3 py-2 text-xs font-bold text-amber-800 bg-amber-50 border border-amber-200 disabled:opacity-50"
+              className="rounded-xl px-3 py-2 text-xs font-bold text-amber-800 cd-warn-bg border border-amber-200 disabled:opacity-50"
             >
               현재 운영 주체 연결 해제
             </button>
@@ -3057,31 +3070,23 @@ function GroupManagementModal({
   onClose: () => void;
   onChanged: (groupLabel?: string) => void;
 }) {
+  const { theme } = useCdashTheme();
   const [groups, setGroups] = useState<FacilityGroupTree[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState(facility.groupInfo?.group.groupId ?? "");
+  const [selectedDivisionId, setSelectedDivisionId] = useState(facility.groupInfo?.division?.divisionId ?? "");
   const [selectedCompanyId, setSelectedCompanyId] = useState(facility.groupInfo?.company.companyId ?? "");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [groupName, setGroupName] = useState("");
   const [divisionName, setDivisionName] = useState("");
-  const [companyName, setCompanyName] = useState("");
-  const [companyBrn, setCompanyBrn] = useState("");
-  const [companyAddress, setCompanyAddress] = useState("");
-  const [companyPhone, setCompanyPhone] = useState("");
-  const [companyDivisionId, setCompanyDivisionId] = useState("");
   const [companyRole, setCompanyRole] = useState<FacilityGroupCompanyRole>("affiliate");
-  const [editCompanyName, setEditCompanyName] = useState("");
-  const [editCompanyBrn, setEditCompanyBrn] = useState("");
-  const [editCompanyAddress, setEditCompanyAddress] = useState("");
-  const [editCompanyPhone, setEditCompanyPhone] = useState("");
-  const [editCompanyDivisionId, setEditCompanyDivisionId] = useState("");
-  const [editCompanyRole, setEditCompanyRole] = useState<FacilityGroupCompanyRole>("affiliate");
   const [relationType, setRelationType] = useState<FacilityGroupMembershipRelationType>(
     facility.groupInfo?.membership.relationType === "site"
       ? "operating_company"
       : facility.groupInfo?.membership.relationType ?? "operating_company"
   );
   const selectedGroup = groups.find((group) => group.groupId === selectedGroupId);
+  const selectedDivision = selectedGroup?.divisions.find((division) => division.divisionId === selectedDivisionId) ?? null;
   const selectedCompany = selectedGroup?.companies.find((company) => company.companyId === selectedCompanyId);
 
   const reload = useCallback(async () => {
@@ -3102,24 +3107,6 @@ function GroupManagementModal({
     reload();
   }, [reload]);
 
-  useEffect(() => {
-    if (!selectedCompany) {
-      setEditCompanyName("");
-      setEditCompanyBrn("");
-      setEditCompanyAddress("");
-      setEditCompanyPhone("");
-      setEditCompanyDivisionId("");
-      setEditCompanyRole("affiliate");
-      return;
-    }
-    setEditCompanyName(selectedCompany.companyName);
-    setEditCompanyBrn(selectedCompany.businessRegistrationNo ?? "");
-    setEditCompanyAddress(selectedCompany.address ?? "");
-    setEditCompanyPhone(selectedCompany.phoneNumber ?? "");
-    setEditCompanyDivisionId(selectedCompany.divisionId ?? "");
-    setEditCompanyRole(selectedCompany.groupRole);
-  }, [selectedCompany]);
-
   const createGroup = async () => {
     if (!groupName.trim()) return;
     setSaving(true);
@@ -3132,6 +3119,7 @@ function GroupManagementModal({
       if (!res.ok) throw new Error("HTTP " + res.status);
       const body = (await res.json()) as { groupId: string };
       setSelectedGroupId(body.groupId);
+      setSelectedDivisionId("");
       setGroupName("");
       await reload();
     } catch (err) {
@@ -3168,28 +3156,11 @@ function GroupManagementModal({
       const res = await fetch("/api/facility-groups/" + selectedGroupId, { method: "DELETE" });
       if (!res.ok) throw new Error("HTTP " + res.status);
       setSelectedGroupId("");
+      setSelectedDivisionId("");
       setSelectedCompanyId("");
       await reload();
     } catch (err) {
       alert("그룹 삭제 실패: " + (err as Error).message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const deleteSelectedCompany = async () => {
-    if (!selectedGroupId || !selectedCompanyId || !window.confirm("선택한 법인 마스터를 그룹에서 삭제할까요? 이 법인을 참조하는 사업장 연결도 함께 삭제됩니다.")) return;
-    setSaving(true);
-    try {
-      const res = await fetch(
-        "/api/facility-groups/" + selectedGroupId + "/companies/" + selectedCompanyId,
-        { method: "DELETE" }
-      );
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      setSelectedCompanyId("");
-      await reload();
-    } catch (err) {
-      alert("법인 마스터 삭제 실패: " + (err as Error).message);
     } finally {
       setSaving(false);
     }
@@ -3205,74 +3176,12 @@ function GroupManagementModal({
         body: JSON.stringify({ divisionName }),
       });
       if (!res.ok) throw new Error("HTTP " + res.status);
+      const body = (await res.json()) as { divisionId: string };
+      setSelectedDivisionId(body.divisionId);
       setDivisionName("");
       await reload();
     } catch (err) {
       alert("부문 생성 실패: " + (err as Error).message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const createCompany = async () => {
-    if (!selectedGroupId || !companyName.trim()) return;
-    setSaving(true);
-    try {
-      const selectedDivisionId = selectedGroup?.divisions.some((division) => division.divisionId === companyDivisionId)
-        ? companyDivisionId
-        : null;
-      const res = await fetch("/api/facility-groups/" + selectedGroupId + "/companies", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          divisionId: selectedDivisionId,
-          companyName,
-          businessRegistrationNo: companyBrn,
-          address: companyAddress,
-          phoneNumber: companyPhone,
-          groupRole: companyRole,
-          isHeadquarters: companyRole === "group_representative",
-        }),
-      });
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      const body = (await res.json()) as { companyId: string };
-      setSelectedCompanyId(body.companyId);
-      setCompanyName("");
-      setCompanyBrn("");
-      setCompanyAddress("");
-      setCompanyPhone("");
-      await reload();
-    } catch (err) {
-      alert("그룹 소속 법인 생성 실패: " + (err as Error).message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const updateSelectedCompany = async () => {
-    if (!selectedGroupId || !selectedCompanyId || !editCompanyName.trim()) return;
-    setSaving(true);
-    try {
-      const res = await fetch(
-        "/api/facility-groups/" + selectedGroupId + "/companies/" + selectedCompanyId,
-        {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            divisionId: editCompanyDivisionId || null,
-            companyName: editCompanyName,
-            businessRegistrationNo: editCompanyBrn,
-            address: editCompanyAddress,
-            phoneNumber: editCompanyPhone,
-            groupRole: editCompanyRole,
-            isHeadquarters: editCompanyRole === "group_representative",
-          }),
-        }
-      );
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      await reload();
-    } catch (err) {
-      alert("법인 마스터 수정 실패: " + (err as Error).message);
     } finally {
       setSaving(false);
     }
@@ -3307,6 +3216,38 @@ function GroupManagementModal({
     }
   };
 
+  const saveGroupDivisionMembership = async () => {
+    if (!selectedGroupId) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/facilities/" + facility.facilityId + "/group-membership", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          groupId: selectedGroupId,
+          divisionId: selectedDivisionId || null,
+          companyRole,
+          relationType: "site",
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? "HTTP " + res.status);
+      }
+      const body = (await res.json()) as { companyId?: string };
+      if (body.companyId) setSelectedCompanyId(body.companyId);
+      const label = selectedGroup
+        ? `${selectedGroup.groupName}${selectedDivision ? " · " + selectedDivision.divisionName : ""} (사업장 연결)`
+        : undefined;
+      await reload();
+      onChanged(label);
+    } catch (err) {
+      alert("그룹/부문 설정 저장 실패: " + (err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const clearMembership = async () => {
     if (!facility.groupInfo || !window.confirm("현재 사업장에 연결된 운영 법인 정보를 해제할까요? 그룹과 법인 마스터는 삭제되지 않습니다.")) return;
     setSaving(true);
@@ -3328,24 +3269,24 @@ function GroupManagementModal({
   };
 
   const modal = (
-    <div className="fixed inset-0 z-50 bg-stone-950/20 flex items-center justify-center p-4">
-      <div className="glass-panel rounded-3xl p-5 w-[min(1120px,calc(100vw-32px))] max-h-[min(820px,calc(100vh-32px))] overflow-y-auto scrollbar-hide shadow-2xl">
+    <div className="cdash-vars cd-fields-white fixed inset-0 z-50 bg-stone-950/20 flex items-center justify-center p-4" data-theme={theme}>
+      <div className="cd-card rounded-3xl p-5 w-[min(1120px,calc(100vw-32px))] max-h-[min(820px,calc(100vh-32px))] overflow-y-auto scrollbar-hide shadow-2xl">
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
-            <h3 className="text-xl font-bold text-stone-800">그룹 관리</h3>
-            <p className="text-xs text-stone-500 mt-1">
+            <h3 className="text-xl font-bold cd-text">그룹 관리</h3>
+            <p className="text-xs cd-text-faint mt-1">
               그룹, 부문, 그룹 소속 법인을 관리하고 현재 사업장과의 관계를 연결합니다.
             </p>
           </div>
-          <button type="button" onClick={onClose} className="glass-button rounded-xl px-3 py-2 text-xs font-bold text-stone-700">
+          <button type="button" onClick={onClose} className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs font-bold cd-text-muted">
             닫기
           </button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4">
-          <section className="bg-white/45 border border-white/60 rounded-2xl p-3">
-            <h4 className="text-sm font-bold text-stone-800 mb-2">그룹 트리</h4>
-            {loading && <div className="text-sm text-stone-400 py-6 text-center">불러오는 중…</div>}
+          <section className="cd-surface-bg border cd-border-c rounded-2xl p-3">
+            <h4 className="text-sm font-bold cd-text mb-2">그룹 트리</h4>
+            {loading && <div className="text-sm cd-text-faint py-6 text-center">불러오는 중…</div>}
             <div className="flex flex-col gap-2 max-h-[520px] overflow-y-auto scrollbar-hide">
               {groups.map((group) => (
                 <button
@@ -3354,17 +3295,17 @@ function GroupManagementModal({
                   onClick={() => {
                     setSelectedGroupId(group.groupId);
                     setSelectedCompanyId(group.companies[0]?.companyId ?? "");
-                    setCompanyDivisionId("");
+                    setSelectedDivisionId("");
                   }}
-                  className={cn("text-left rounded-xl border p-3", selectedGroupId === group.groupId ? "border-primary/40 bg-primary/10" : "border-white/60 bg-white/50")}
+                  className={cn("text-left rounded-xl border p-3", selectedGroupId === group.groupId ? "border-[color:var(--cd-primary)] cd-tint-primary" : "cd-border-c cd-card-bg")}
                 >
-                  <div className="text-sm font-bold text-stone-800">{group.groupName}</div>
-                  <div className="text-[11px] text-stone-500 mt-1">
+                  <div className="text-sm font-bold cd-text">{group.groupName}</div>
+                  <div className="text-[11px] cd-text-faint mt-1">
                     등록 법인 {group.companies.length}개 · 부문 {group.divisions.length}개
                   </div>
                   <div className="mt-2 flex flex-col gap-1">
                     {group.divisions.map((division) => (
-                      <div key={division.divisionId} className="text-[11px] text-stone-600">
+                      <div key={division.divisionId} className="text-[11px] cd-text-muted">
                         {division.divisionName} ({division.companies.length})
                       </div>
                     ))}
@@ -3383,36 +3324,67 @@ function GroupManagementModal({
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="bg-white/45 border border-white/60 rounded-2xl p-3 flex flex-col gap-2">
-                <h4 className="text-sm font-bold text-stone-800">그룹 신규 입력</h4>
-                <input className="input-field" value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder="예: 한화그룹" />
-                <button type="button" onClick={createGroup} disabled={saving} className="rounded-xl px-3 py-2 text-xs font-bold text-white bg-primary disabled:opacity-50">
+              <div className="cd-surface-bg border cd-border-c rounded-2xl p-3 flex flex-col gap-2">
+                <h4 className="text-sm font-bold cd-text">그룹 신규 입력</h4>
+                <input className="cd-input h-9" value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder="예: 한화그룹" />
+                <button type="button" onClick={createGroup} disabled={saving} className="rounded-xl px-3 py-2 text-xs font-bold text-white cd-fill-primary disabled:opacity-50">
                   그룹 저장
                 </button>
               </div>
-              <div className="bg-white/45 border border-white/60 rounded-2xl p-3 flex flex-col gap-2">
-                <h4 className="text-sm font-bold text-stone-800">부문 신규 입력</h4>
-                <input className="input-field" value={divisionName} onChange={(e) => setDivisionName(e.target.value)} placeholder="예: 화학 부문" />
-                <button type="button" onClick={createDivision} disabled={saving || !selectedGroupId} className="rounded-xl px-3 py-2 text-xs font-bold text-white bg-primary disabled:opacity-50">
+
+              <div className="cd-surface-bg border cd-border-c rounded-2xl p-3 flex flex-col gap-2">
+                <div className="flex items-center justify-between gap-2">
+                  <h4 className="text-sm font-bold cd-text">부문 신규 입력</h4>
+                  <span className="max-w-[55%] truncate rounded-full cd-tint-primary px-2 py-0.5 text-[10px] font-bold cd-text-primary">
+                    {selectedGroup?.groupName ?? "그룹 미선택"}
+                  </span>
+                </div>
+                <input className="cd-input h-9" value={divisionName} onChange={(e) => setDivisionName(e.target.value)} placeholder="예: 화학 부문" />
+                <button type="button" onClick={createDivision} disabled={saving || !selectedGroupId} className="rounded-xl px-3 py-2 text-xs font-bold text-white cd-fill-primary disabled:opacity-50">
                   부문 저장
                 </button>
               </div>
-              <div className="bg-white/45 border border-white/60 rounded-2xl p-3 flex flex-col gap-2">
-                <h4 className="text-sm font-bold text-stone-800">그룹 소속 법인 등록</h4>
-                <input className="input-field" value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="상호" />
-                <input className="input-field" value={companyBrn} onChange={(e) => setCompanyBrn(e.target.value)} placeholder="사업자번호" />
-                <input className="input-field" value={companyAddress} onChange={(e) => setCompanyAddress(e.target.value)} placeholder="소재지" />
-                <input className="input-field" value={companyPhone} onChange={(e) => setCompanyPhone(e.target.value)} placeholder="전화번호" />
-                <select className="ui-select" value={companyDivisionId} onChange={(e) => setCompanyDivisionId(e.target.value)}>
-                  <option value="">부문 없음</option>
-                  {selectedGroup?.divisions.map((division) => (
-                    <option key={division.divisionId} value={division.divisionId}>
-                      {division.divisionName}
-                    </option>
-                  ))}
-                </select>
+
+              <div className="cd-surface-bg border cd-border-c rounded-2xl p-3 flex md:row-span-2 min-h-[268px] flex-col gap-3">
+                <h4 className="text-sm font-bold cd-text">그룹/부문 적용</h4>
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[11px] font-bold cd-text-faint">선택 그룹</span>
+                  <input
+                    className="cd-input h-9"
+                    value={selectedGroup?.groupName ?? ""}
+                    readOnly
+                    placeholder="그룹 트리에서 그룹 선택"
+                  />
+                </div>
+                <div className="flex flex-1 flex-col gap-1.5">
+                  <span className="text-[11px] font-bold cd-text-faint">부문 선택</span>
+                  <select
+                    className="cd-select min-h-[88px] flex-1"
+                    size={Math.min(Math.max((selectedGroup?.divisions.length ?? 0) + 1, 3), 5)}
+                    value={selectedDivisionId}
+                    onChange={(e) => setSelectedDivisionId(e.target.value)}
+                    disabled={!selectedGroup}
+                  >
+                    <option value="">부문 없음</option>
+                    {selectedGroup?.divisions.map((division) => (
+                      <option key={division.divisionId} value={division.divisionId}>
+                        {division.divisionName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {selectedGroup && (
+                    <span className="rounded-full cd-tint-primary px-2.5 py-1 text-[11px] font-bold cd-text-primary">
+                      {selectedGroup.groupName}
+                    </span>
+                  )}
+                  <span className="rounded-full cd-card-bg border cd-border-c px-2.5 py-1 text-[11px] font-bold cd-text-muted">
+                    {selectedDivision?.divisionName ?? "부문 없음"}
+                  </span>
+                </div>
                 <select
-                  className="ui-select"
+                  className="cd-select"
                   value={companyRole}
                   onChange={(e) => setCompanyRole(e.target.value as FacilityGroupCompanyRole)}
                 >
@@ -3420,105 +3392,71 @@ function GroupManagementModal({
                   <option value="affiliate">그룹 소속 법인</option>
                   <option value="other">기타 법인</option>
                 </select>
-                <button type="button" onClick={createCompany} disabled={saving || !selectedGroupId} className="rounded-xl px-3 py-2 text-xs font-bold text-white bg-primary disabled:opacity-50">
-                  그룹 소속 법인 저장
-                </button>
-              </div>
-            </div>
-
-            <div className="bg-white/45 border border-white/60 rounded-2xl p-3">
-              <h4 className="text-sm font-bold text-stone-800 mb-2">현재 사업장 운영 법인 연결</h4>
-              <div className="grid grid-cols-1 md:grid-cols-[1fr_220px_auto] gap-2">
-                <select className="ui-select" value={selectedCompanyId} onChange={(e) => setSelectedCompanyId(e.target.value)}>
-                  <option value="">연결 법인 선택</option>
-                  {selectedGroup?.companies.map((company) => (
-                    <option key={company.companyId} value={company.companyId}>
-                      [{GROUP_COMPANY_ROLE_LABELS[company.groupRole]}] {company.companyName}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  className="ui-select"
-                  value={relationType}
-                  onChange={(e) => setRelationType(e.target.value as FacilityGroupMembershipRelationType)}
+                <button
+                  type="button"
+                  onClick={saveGroupDivisionMembership}
+                  disabled={saving || !selectedGroupId}
+                  className="mt-auto rounded-xl cd-fill-primary px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
                 >
-                  {EDITABLE_MEMBERSHIP_RELATION_TYPES.map((type) => (
-                    <option key={type} value={type}>
-                      {MEMBERSHIP_RELATION_LABELS[type]}
-                    </option>
-                  ))}
-                </select>
-                <button type="button" onClick={saveMembership} disabled={saving || !selectedGroupId || !selectedCompanyId} className="rounded-xl px-4 py-2 text-xs font-bold text-white bg-primary disabled:opacity-50">
-                  연결 저장
+                  설정 저장
                 </button>
               </div>
-              {facility.groupInfo && (
-                <div className="mt-2 text-[11px] text-stone-500">
-                  현재 연결: {facility.groupInfo.group.groupName} · {facility.groupInfo.company.companyName} ({MEMBERSHIP_RELATION_LABELS[facility.groupInfo.membership.relationType]})
+
+              <div className="cd-surface-bg border cd-border-c rounded-2xl p-3 md:col-span-2">
+                <h4 className="text-sm font-bold cd-text mb-2">현재 사업장 운영 법인 연결</h4>
+                <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_130px] gap-2">
+                  <select className="cd-select" value={selectedCompanyId} onChange={(e) => setSelectedCompanyId(e.target.value)}>
+                    <option value="">연결 법인 선택</option>
+                    {selectedGroup?.companies.map((company) => (
+                      <option key={company.companyId} value={company.companyId}>
+                        [{company.groupRole === "group_representative" ? "대표" : company.groupRole === "affiliate" ? "소속" : "기타"}] {company.companyName}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="cd-select"
+                    value={relationType}
+                    onChange={(e) => setRelationType(e.target.value as FacilityGroupMembershipRelationType)}
+                  >
+                    {EDITABLE_MEMBERSHIP_RELATION_TYPES.map((type) => (
+                      <option key={type} value={type}>
+                        {MEMBERSHIP_RELATION_LABELS[type]}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-              )}
-              <div className="flex flex-wrap gap-2 mt-2">
-                <button type="button" onClick={clearMembership} disabled={saving || !facility.groupInfo} className="rounded-lg px-2 py-1 text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-200 disabled:opacity-50">
-                  현재 사업장 연결 해제
-                </button>
-                <button type="button" onClick={renameSelectedGroup} disabled={saving || !selectedGroupId} className="glass-button rounded-lg px-2 py-1 text-[11px] font-bold text-stone-700 disabled:opacity-50">
-                  그룹명 수정
-                </button>
-                <button type="button" onClick={deleteSelectedCompany} disabled={saving || !selectedCompanyId} className="rounded-lg px-2 py-1 text-[11px] font-bold text-red-700 bg-red-50 border border-red-200 disabled:opacity-50">
-                  법인 마스터 삭제
-                </button>
-                <button type="button" onClick={deleteSelectedGroup} disabled={saving || !selectedGroupId} className="rounded-lg px-2 py-1 text-[11px] font-bold text-red-700 bg-red-50 border border-red-200 disabled:opacity-50">
-                  그룹 삭제
-                </button>
+                {facility.groupInfo && (
+                  <div className="mt-2 text-[11px] cd-text-faint">
+                    현재 연결: {facility.groupInfo.group.groupName} · {facility.groupInfo.company.companyName} ({MEMBERSHIP_RELATION_LABELS[facility.groupInfo.membership.relationType]})
+                  </div>
+                )}
+                <div className="flex flex-wrap items-center gap-2 mt-2">
+                  <button type="button" onClick={clearMembership} disabled={saving || !facility.groupInfo} className="rounded-lg px-2 py-1 text-[11px] font-bold text-amber-800 cd-warn-bg border border-amber-200 disabled:opacity-50">
+                    현재 사업장 연결 해제
+                  </button>
+                  <button type="button" onClick={renameSelectedGroup} disabled={saving || !selectedGroupId} className="cd-btn cd-btn-ghost rounded-lg px-2 py-1 text-[11px] font-bold cd-text-muted disabled:opacity-50">
+                    그룹명 수정
+                  </button>
+                  <button type="button" onClick={deleteSelectedGroup} disabled={saving || !selectedGroupId} className="rounded-lg px-2 py-1 text-[11px] font-bold cd-error-text cd-error-bg border border-red-200 disabled:opacity-50">
+                    그룹 삭제
+                  </button>
+                  <button type="button" onClick={saveMembership} disabled={saving || !selectedGroupId || !selectedCompanyId} className="ml-auto rounded-lg px-3 py-1 text-[11px] font-bold text-white cd-fill-primary disabled:opacity-50">
+                    연결 저장
+                  </button>
+                </div>
               </div>
             </div>
 
-            <div className="bg-white/45 border border-white/60 rounded-2xl p-3">
-              <h4 className="text-sm font-bold text-stone-800 mb-2">선택 법인 마스터 수정</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                <input className="input-field" value={editCompanyName} onChange={(e) => setEditCompanyName(e.target.value)} placeholder="상호" disabled={!selectedCompany} />
-                <select className="ui-select" value={editCompanyDivisionId} onChange={(e) => setEditCompanyDivisionId(e.target.value)} disabled={!selectedCompany}>
-                  <option value="">부문 없음</option>
-                  {selectedGroup?.divisions.map((division) => (
-                    <option key={division.divisionId} value={division.divisionId}>
-                      {division.divisionName}
-                    </option>
-                  ))}
-                </select>
-                <input className="input-field" value={editCompanyBrn} onChange={(e) => setEditCompanyBrn(e.target.value)} placeholder="사업자번호" disabled={!selectedCompany} />
-                <select
-                  className="ui-select"
-                  value={editCompanyRole}
-                  onChange={(e) => setEditCompanyRole(e.target.value as FacilityGroupCompanyRole)}
-                  disabled={!selectedCompany}
-                >
-                  <option value="group_representative">그룹 대표기업</option>
-                  <option value="affiliate">그룹 소속 법인</option>
-                  <option value="other">기타 법인</option>
-                </select>
-                <input className="input-field" value={editCompanyAddress} onChange={(e) => setEditCompanyAddress(e.target.value)} placeholder="소재지" disabled={!selectedCompany} />
-                <input className="input-field" value={editCompanyPhone} onChange={(e) => setEditCompanyPhone(e.target.value)} placeholder="전화번호" disabled={!selectedCompany} />
-              </div>
-              <div className="flex items-center justify-between gap-2 mt-2">
-                <p className="text-[11px] text-stone-500">
-                  선택한 법인의 그룹 내 역할과 부문 소속을 수정합니다. 사업장 연결은 별도로 저장해야 합니다.
-                </p>
-                <button type="button" onClick={updateSelectedCompany} disabled={saving || !selectedCompany || !editCompanyName.trim()} className="rounded-xl px-4 py-2 text-xs font-bold text-white bg-primary disabled:opacity-50">
-                  법인 정보 저장
-                </button>
-              </div>
-            </div>
-
-            <div className="bg-white/45 border border-white/60 rounded-2xl p-3">
-              <h4 className="text-sm font-bold text-stone-800 mb-2">거래 사업장 컨셉 UI</h4>
+            <div className="cd-surface-bg border cd-border-c rounded-2xl p-3">
+              <h4 className="text-sm font-bold cd-text mb-2">거래 사업장 컨셉 UI</h4>
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="rounded-xl bg-white/60 border border-white/60 p-3">
+                <div className="rounded-xl cd-card-bg border cd-border-c p-3">
                   <b>현재 거래 사업장</b>
-                  <div className="text-stone-400 mt-2">계약 관리 모듈 연동 예정</div>
+                  <div className="cd-text-faint mt-2">계약 관리 모듈 연동 예정</div>
                 </div>
-                <div className="rounded-xl bg-white/60 border border-white/60 p-3">
+                <div className="rounded-xl cd-card-bg border cd-border-c p-3">
                   <b>거래 경험 사업장</b>
-                  <div className="text-stone-400 mt-2">용역 수행 내역 상세 패널 예정</div>
+                  <div className="cd-text-faint mt-2">용역 수행 내역 상세 패널 예정</div>
                 </div>
               </div>
             </div>
@@ -3533,9 +3471,9 @@ function GroupManagementModal({
 
 function MetricCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl bg-white/50 border border-white/60 p-3">
-      <div className="text-[10px] font-bold text-stone-400 uppercase tracking-wide">{label}</div>
-      <div className="text-sm font-bold text-stone-800 mt-1">{value}</div>
+    <div className="rounded-2xl cd-surface-bg border cd-border-c p-3">
+      <div className="text-[10px] font-bold cd-text-faint uppercase tracking-wide">{label}</div>
+      <div className="text-sm font-bold cd-text mt-1">{value}</div>
     </div>
   );
 }
@@ -3555,19 +3493,19 @@ function FieldInput({
 }) {
   return (
     <div className={cn("flex flex-col gap-1.5", full && "sm:col-span-2")}>
-      <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">
+      <span className="text-[11px] font-bold cd-text-faint uppercase tracking-wide">
         {label}
       </span>
       {multiline ? (
         <textarea
-          className="input-field"
+          className="cd-input"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           rows={2}
         />
       ) : (
         <input
-          className="input-field"
+          className="cd-input"
           value={value}
           onChange={(e) => onChange(e.target.value)}
         />
@@ -3604,19 +3542,19 @@ function DetailField({
   multiline?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-1 bg-white/40 border border-white/50 rounded-xl p-3">
-      <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wide flex items-center gap-1">
+    <div className="flex flex-col gap-1 border cd-border-c rounded-xl p-3">
+      <span className="text-[10px] font-bold cd-text-faint uppercase tracking-wide flex items-center gap-1">
         <Icon className="w-3 h-3" /> {label}
       </span>
       <span
         className={cn(
-          "text-sm text-stone-800",
+          "text-sm cd-text",
           multiline ? "whitespace-pre-wrap" : "truncate"
         )}
       >
-        {value ?? <span className="text-stone-400">—</span>}
+        {value ?? <span className="cd-text-faint">—</span>}
       </span>
-      {secondary && <span className="text-[10px] text-stone-400">{secondary}</span>}
+      {secondary && <span className="text-[10px] cd-text-faint">{secondary}</span>}
     </div>
   );
 }
@@ -3655,7 +3593,7 @@ function AnnualReportSection({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-2">
-        <div className="text-[10px] font-bold text-stone-400 uppercase tracking-wide flex items-center gap-1">
+        <div className="text-[10px] font-bold cd-text-faint uppercase tracking-wide flex items-center gap-1">
           <ClipboardList className="w-3 h-3" /> 연간보고서 (최신 스냅샷)
         </div>
         {canEdit && (
@@ -3663,7 +3601,7 @@ function AnnualReportSection({
             <button
               type="button"
               onClick={() => setEditing(true)}
-              className="glass-button rounded-lg px-2 py-1 text-[10px] font-bold text-stone-700"
+              className="cd-btn cd-btn-ghost rounded-lg px-2 py-1 text-[10px] font-bold cd-text-muted"
             >
               편집
             </button>
@@ -3681,27 +3619,27 @@ function AnnualReportSection({
                 }
                 onChanged();
               }}
-              className="rounded-lg px-2 py-1 text-[10px] font-bold text-red-700 bg-red-50 border border-red-200"
+              className="rounded-lg px-2 py-1 text-[10px] font-bold cd-error-text cd-error-bg border border-red-200"
             >
               삭제
             </button>
           </div>
         )}
       </div>
-      <div className="bg-amber-50/40 border border-amber-200/50 rounded-xl p-4 flex flex-col gap-2">
+      <div className="cd-warn-bg/40 border border-amber-200/50 rounded-xl p-4 flex flex-col gap-2">
         <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="text-[11px] text-stone-600">
+          <div className="text-[11px] cd-text-muted">
             출처: 연간(점검)보고서 · 사업장당 1건 보존
           </div>
           {annualReport.parsedAt && (
-            <div className="text-[10px] text-stone-400">
+            <div className="text-[10px] cd-text-faint">
               파싱: {annualReport.parsedAt.slice(0, 10)}
             </div>
           )}
         </div>
         <div className="flex flex-wrap gap-2 text-[11px]">
           {annualReport.airClass != null && (
-            <span className="bg-stone-100 px-2 py-0.5 rounded">
+            <span className="cd-surface-bg px-2 py-0.5 rounded">
               대기 {annualReport.airClass}종
               {annualReport.airAmountTonPerYear != null
                 ? " · " + annualReport.airAmountTonPerYear + " 톤/년"
@@ -3709,7 +3647,7 @@ function AnnualReportSection({
             </span>
           )}
           {annualReport.waterClass != null && (
-            <span className="bg-stone-100 px-2 py-0.5 rounded">
+            <span className="cd-surface-bg px-2 py-0.5 rounded">
               수질 {annualReport.waterClass}종
               {annualReport.wastewaterM3PerDay != null
                 ? " · " + annualReport.wastewaterM3PerDay + " m³/일"
@@ -3718,8 +3656,8 @@ function AnnualReportSection({
           )}
         </div>
         {hasProducts && (
-          <div className="text-[11px] text-stone-600 flex flex-col gap-0.5 mt-1">
-            <div className="text-[10px] font-bold text-stone-500 uppercase tracking-wide mt-1">
+          <div className="text-[11px] cd-text-muted flex flex-col gap-0.5 mt-1">
+            <div className="text-[10px] font-bold cd-text-faint uppercase tracking-wide mt-1">
               주요 생산품
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
@@ -3803,9 +3741,9 @@ function AnnualReportEditForm({
   };
 
   return (
-    <div className="bg-amber-50/40 border border-amber-200/50 rounded-xl p-4 flex flex-col gap-3">
+    <div className="cd-warn-bg/40 border border-amber-200/50 rounded-xl p-4 flex flex-col gap-3">
       <div className="flex items-center justify-between gap-2">
-        <div className="text-[10px] font-bold text-stone-500 uppercase tracking-wide flex items-center gap-1">
+        <div className="text-[10px] font-bold cd-text-faint uppercase tracking-wide flex items-center gap-1">
           <ClipboardList className="w-3 h-3" /> 연간보고서 스냅샷 편집
         </div>
       </div>
@@ -3819,13 +3757,13 @@ function AnnualReportEditForm({
       </div>
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">
+          <span className="text-[11px] font-bold cd-text-faint uppercase tracking-wide">
             주요 생산품
           </span>
           <button
             type="button"
             onClick={() => setProducts([...products, { productName: "", amount: "", unit: "" }])}
-            className="glass-button rounded-lg px-2 py-1 text-[10px] font-bold"
+            className="cd-btn cd-btn-ghost rounded-lg px-2 py-1 text-[10px] font-bold"
           >
             행 추가
           </button>
@@ -3833,7 +3771,7 @@ function AnnualReportEditForm({
         {products.map((product, idx) => (
           <div key={idx} className="grid grid-cols-[1fr_90px_70px_32px] gap-2">
             <input
-              className="input-field text-xs"
+              className="cd-input text-xs"
               placeholder="품목명"
               value={product.productName}
               onChange={(e) => {
@@ -3843,7 +3781,7 @@ function AnnualReportEditForm({
               }}
             />
             <input
-              className="input-field text-xs"
+              className="cd-input text-xs"
               placeholder="생산량"
               value={product.amount}
               onChange={(e) => {
@@ -3853,7 +3791,7 @@ function AnnualReportEditForm({
               }}
             />
             <input
-              className="input-field text-xs"
+              className="cd-input text-xs"
               placeholder="단위"
               value={product.unit}
               onChange={(e) => {
@@ -3865,7 +3803,7 @@ function AnnualReportEditForm({
             <button
               type="button"
               onClick={() => setProducts(products.filter((_, i) => i !== idx))}
-              className="rounded-lg text-red-600 bg-red-50 border border-red-200 text-xs font-bold"
+              className="rounded-lg cd-error-text cd-error-bg border border-red-200 text-xs font-bold"
             >
               ×
             </button>
@@ -3873,14 +3811,14 @@ function AnnualReportEditForm({
         ))}
       </div>
       <div className="flex justify-end gap-2">
-        <button type="button" onClick={onCancel} className="glass-button rounded-xl px-3 py-2 text-xs font-bold">
+        <button type="button" onClick={onCancel} className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs font-bold">
           취소
         </button>
         <button
           type="button"
           onClick={save}
           disabled={pending}
-          className="rounded-xl px-3 py-2 text-xs font-bold text-white bg-primary disabled:opacity-60"
+          className="rounded-xl px-3 py-2 text-xs font-bold text-white cd-fill-primary disabled:opacity-60"
         >
           {pending ? "저장 중…" : "저장"}
         </button>
@@ -3902,21 +3840,21 @@ function PermitsSection({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-2">
-        <div className="text-[10px] font-bold text-stone-400 uppercase tracking-wide">
+        <div className="text-[10px] font-bold cd-text-faint uppercase tracking-wide">
           허가 / 종 규모 / 생산품
         </div>
         {canEdit && (
           <button
             type="button"
             onClick={() => setEditing("new")}
-            className="glass-button rounded-xl px-2 py-1 text-[11px] font-bold text-stone-700 flex items-center gap-1"
+            className="cd-btn cd-btn-ghost rounded-xl px-2 py-1 text-[11px] font-bold cd-text-muted flex items-center gap-1"
           >
             <Plus className="w-3 h-3" /> 허가 추가
           </button>
         )}
       </div>
       {detail.permits.length === 0 && !editing && (
-        <div className="text-xs text-stone-400 text-center py-6">
+        <div className="text-xs cd-text-faint text-center py-6">
           등록된 허가 정보가 없습니다.
         </div>
       )}
@@ -3934,23 +3872,23 @@ function PermitsSection({
       {detail.permits.map((p) => (
         <div
           key={p.permitId}
-          className="bg-white/40 border border-white/50 rounded-xl p-4 flex flex-col gap-2"
+          className="cd-surface-bg border cd-border-c rounded-xl p-4 flex flex-col gap-2"
         >
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div>
-              <div className="text-sm font-bold text-stone-800">
+              <div className="text-sm font-bold cd-text">
                 {p.decisionNo ?? "(결정번호 없음)"}
               </div>
-              <div className="text-[10px] text-stone-400 font-mono">
+              <div className="text-[10px] cd-text-faint font-mono">
                 {p.permitId}
                 {p.sourceAttachmentId ? " · " + p.sourceAttachmentId : ""}
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <div className="text-[11px] text-stone-500">
+              <div className="text-[11px] cd-text-faint">
                 {p.permitDate ?? "—"}
                 {p.isFirstPermit ? (
-                  <span className="ml-2 text-[10px] text-primary font-bold bg-primary/10 px-2 py-0.5 rounded-full">
+                  <span className="ml-2 text-[10px] cd-text-primary font-bold cd-tint-primary px-2 py-0.5 rounded-full">
                     최초허가
                   </span>
                 ) : null}
@@ -3960,7 +3898,7 @@ function PermitsSection({
                   <button
                     type="button"
                     onClick={() => setEditing(p)}
-                    className="glass-button rounded-lg px-2 py-1 text-[10px] font-bold text-stone-700"
+                    className="cd-btn cd-btn-ghost rounded-lg px-2 py-1 text-[10px] font-bold cd-text-muted"
                   >
                     편집
                   </button>
@@ -3976,7 +3914,7 @@ function PermitsSection({
                       }
                       onChanged();
                     }}
-                    className="rounded-lg px-2 py-1 text-[10px] font-bold text-red-700 bg-red-50 border border-red-200"
+                    className="rounded-lg px-2 py-1 text-[10px] font-bold cd-error-text cd-error-bg border border-red-200"
                   >
                     삭제
                   </button>
@@ -3986,17 +3924,17 @@ function PermitsSection({
           </div>
           <div className="flex flex-wrap gap-2 text-[11px]">
             {p.airClass != null && (
-              <span className="bg-stone-100 px-2 py-0.5 rounded">
+              <span className="cd-surface-bg px-2 py-0.5 rounded">
                 대기 {p.airClass}종 · {p.airAmount ?? "—"} 톤/년
               </span>
             )}
             {p.waterClass != null && (
-              <span className="bg-stone-100 px-2 py-0.5 rounded">
+              <span className="cd-surface-bg px-2 py-0.5 rounded">
                 수질 {p.waterClass}종 · {p.waterAmount ?? "—"} m³/일
               </span>
             )}
             {p.attachmentFileName && (
-              <span className="text-stone-400 ml-auto truncate max-w-[60%]">
+              <span className="cd-text-faint ml-auto truncate max-w-[60%]">
                 {p.attachmentFileName}
               </span>
             )}
@@ -4029,15 +3967,15 @@ function ProductTagCard({
   unit: string | null;
 }) {
   return (
-    <div className="rounded-lg bg-white/60 border border-white/70 px-3 py-2 min-w-0">
-      <div className="text-[11px] font-bold text-stone-700 truncate">
+    <div className="rounded-lg cd-card-bg border cd-border-c px-3 py-2 min-w-0">
+      <div className="text-[11px] font-bold cd-text-muted truncate">
         {cleanProductName(name) ?? "(상품명 없음)"}
       </div>
       <div className="mt-1 flex items-baseline justify-end gap-1 text-right">
-        <span className="font-mono text-xs font-bold text-stone-800 tabular-nums">
+        <span className="font-mono text-xs font-bold cd-text tabular-nums">
           {formatNumber(amount) ?? "—"}
         </span>
-        {unit && <span className="text-[10px] text-stone-500 shrink-0">{unit}</span>}
+        {unit && <span className="text-[10px] cd-text-faint shrink-0">{unit}</span>}
       </div>
     </div>
   );
@@ -4114,12 +4052,12 @@ function PermitEditForm({
   };
 
   return (
-    <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex flex-col gap-3">
+    <div className="cd-tint-primary border border-[color:var(--cd-primary)] rounded-xl p-4 flex flex-col gap-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <FieldInput label="결정번호" value={decisionNo} onChange={setDecisionNo} />
         <FieldInput label="허가유형" value={permitType} onChange={setPermitType} />
         <FieldInput label="허가일자" value={permitDate} onChange={setPermitDate} />
-        <label className="flex items-center gap-2 text-xs font-bold text-stone-600 pt-6">
+        <label className="flex items-center gap-2 text-xs font-bold cd-text-muted pt-6">
           <input type="checkbox" checked={isFirstPermit} onChange={(e) => setIsFirstPermit(e.target.checked)} />
           최초허가
         </label>
@@ -4130,11 +4068,11 @@ function PermitEditForm({
       </div>
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">생산품</span>
+          <span className="text-[11px] font-bold cd-text-faint uppercase tracking-wide">생산품</span>
           <button
             type="button"
             onClick={() => setProducts([...products, { productName: "", productionAmount: null, productionUnit: "", sourcePage: null, sourceText: null }])}
-            className="glass-button rounded-lg px-2 py-1 text-[10px] font-bold"
+            className="cd-btn cd-btn-ghost rounded-lg px-2 py-1 text-[10px] font-bold"
           >
             행 추가
           </button>
@@ -4142,7 +4080,7 @@ function PermitEditForm({
         {products.map((product, idx) => (
           <div key={idx} className="grid grid-cols-[1fr_90px_70px_32px] gap-2">
             <input
-              className="input-field text-xs"
+              className="cd-input text-xs"
               placeholder="품목명"
               value={product.productName ?? ""}
               onChange={(e) => {
@@ -4152,7 +4090,7 @@ function PermitEditForm({
               }}
             />
             <input
-              className="input-field text-xs"
+              className="cd-input text-xs"
               placeholder="생산량"
               value={productAmountInputValue(product.productionAmount)}
               onChange={(e) => {
@@ -4162,7 +4100,7 @@ function PermitEditForm({
               }}
             />
             <input
-              className="input-field text-xs"
+              className="cd-input text-xs"
               placeholder="단위"
               value={product.productionUnit ?? ""}
               onChange={(e) => {
@@ -4174,7 +4112,7 @@ function PermitEditForm({
             <button
               type="button"
               onClick={() => setProducts(products.filter((_, i) => i !== idx))}
-              className="rounded-lg text-red-600 bg-red-50 border border-red-200 text-xs font-bold"
+              className="rounded-lg cd-error-text cd-error-bg border border-red-200 text-xs font-bold"
             >
               ×
             </button>
@@ -4182,14 +4120,14 @@ function PermitEditForm({
         ))}
       </div>
       <div className="flex justify-end gap-2">
-        <button type="button" onClick={onCancel} className="glass-button rounded-xl px-3 py-2 text-xs font-bold">
+        <button type="button" onClick={onCancel} className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs font-bold">
           취소
         </button>
         <button
           type="button"
           onClick={save}
           disabled={pending}
-          className="rounded-xl px-3 py-2 text-xs font-bold text-white bg-primary disabled:opacity-60"
+          className="rounded-xl px-3 py-2 text-xs font-bold text-white cd-fill-primary disabled:opacity-60"
         >
           {pending ? "저장 중…" : "저장"}
         </button>

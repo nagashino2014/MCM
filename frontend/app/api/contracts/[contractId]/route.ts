@@ -41,7 +41,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       };
 
       if (body.facilityId !== undefined) pushSet("facility_id", body.facilityId || null);
-      if (body.counterpartyEntityId !== undefined) pushSet("counterparty_entity_id", body.counterpartyEntityId || null);
+      if (body.counterpartyFacilityId !== undefined) pushSet("counterparty_facility_id", body.counterpartyFacilityId || null);
       if (body.operatingRelationId !== undefined) pushSet("operating_relation_id", body.operatingRelationId || null);
       if (body.contractTitle !== undefined) {
         const title = String(body.contractTitle ?? "").trim();
@@ -69,6 +69,10 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       if (body.originalAmount !== undefined) pushSet("original_amount", toNullableNumber(body.originalAmount));
       if (body.currentAmount !== undefined) pushSet("current_amount", toNullableNumber(body.currentAmount));
       if (body.memo !== undefined) pushSet("memo", body.memo || null);
+      // 허가 정보 (통합허가 분류 전용 — 025 마이그레이션)
+      if (body.permitIssuedAt !== undefined) pushSet("permit_issued_at", body.permitIssuedAt || null);
+      if (body.permitNo !== undefined) pushSet("permit_no", body.permitNo || null);
+      if (body.permitNote !== undefined) pushSet("permit_note", body.permitNote || null);
       if (setClauses.length === 0) return;
 
       pushSet("updated_at", new Date().toISOString());

@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
+import { Database } from "lucide-react";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
+import { useCdashTheme } from "@/components/cdash/useCdashTheme";
+import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
+import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import "@/components/cdash/cdash.css";
 import { KpiPanel } from "@/components/dashboard/KpiPanel";
 import { RecentResultsTable } from "@/components/dashboard/RecentResultsTable";
 import { CollectionOptionsCard } from "@/components/dashboard/CollectionOptionsCard";
@@ -34,6 +39,7 @@ export default function StatusPage() {
 
 function StatusPageInner() {
   const { data: session } = useSession();
+  const { theme, toggleTheme } = useCdashTheme();
   const role = (session?.user as { role?: "admin" | "editor" | "viewer" } | undefined)?.role ?? "viewer";
   const canEdit = role === "admin" || role === "editor";
   const [refreshKey, setRefreshKey] = useState(0);
@@ -287,19 +293,20 @@ function StatusPageInner() {
   }, []);
 
   return (
-    <div className="flex flex-col gap-6 p-2">
-      <section className="glass-panel p-8 rounded-3xl relative overflow-hidden reveal">
-        <div className="relative z-10">
-          <h1 className="text-3xl font-bold text-stone-800 mb-2">데이터 · 수집 현황</h1>
-          <p className="text-stone-600 text-base max-w-3xl">
-            IEPS 통합환경허가 게시판에서 통합/변경허가 검토결과서와 연간보고서 PDF 를 수집합니다.
-            <span className="text-primary font-bold"> 수집 시작</span>은 게시물 목록과 PDF 다운로드까지 수행하고,
-            우측 옵션 카드의 <span className="text-primary font-bold">통합허가 / 변경허가 / 연간보고서 파싱</span>
-            버튼이 카테고리별 OCR 추출과 사업장 적재를 담당합니다.
-          </p>
-        </div>
-        <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-gradient-to-l from-primary/10 to-transparent pointer-events-none" />
-      </section>
+    <div className="cdash cd-fields-white flex flex-col gap-5 p-4 md:p-5 rounded-3xl min-h-full" data-theme={theme}>
+      <CdPageHeader
+        icon={<Database className="w-5 h-5" />}
+        eyebrow="Data · Status"
+        title="데이터 · 수집 현황"
+        subtitle={
+          <>
+            IEPS 통합환경허가 게시판에서 통합/변경허가 검토결과서와 연간보고서 PDF 를 수집합니다.{" "}
+            <b className="cd-text-primary">수집 시작</b>은 게시물 목록과 PDF 다운로드까지, 우측 옵션 카드의{" "}
+            <b className="cd-text-primary">통합·변경·연간보고서 파싱</b> 버튼이 카테고리별 OCR 추출과 사업장 적재를 담당합니다.
+          </>
+        }
+        actions={<CdThemeToggle theme={theme} onToggle={toggleTheme} />}
+      />
 
       <AlertBanner canAck={canEdit} />
 
@@ -353,13 +360,13 @@ function StatusPageInner() {
         <button
           type="button"
           onClick={() => setDrawerOpen(true)}
-          className="fixed bottom-6 right-6 z-40 rounded-2xl px-4 py-3 bg-primary text-white text-xs font-bold shadow-lg hover:bg-primary/90 flex items-center gap-2"
+          className="fixed bottom-6 right-6 z-40 rounded-2xl px-4 py-3 cd-fill-primary text-white text-xs font-bold shadow-lg flex items-center gap-2"
           title="진행 로그 다시 보기"
         >
           {status === "running" && (
             <span
               aria-hidden
-              className="w-2 h-2 rounded-full bg-white animate-pulse"
+              className="w-2 h-2 rounded-full cd-card-bg animate-pulse"
             />
           )}
           {(() => {

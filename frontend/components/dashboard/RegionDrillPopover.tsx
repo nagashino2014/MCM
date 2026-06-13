@@ -115,24 +115,24 @@ export function RegionDrillPopover({ x, y, sidoFull, sidoShort, sigungu, onClose
 
   return (
     <div
-      className="region-popover glass-panel rounded-2xl flex flex-col"
+      className="region-popover cd-card rounded-2xl flex flex-col"
       style={{ position: "absolute", left: x, top: y, width: 520, maxHeight: 580 }}
       role="dialog"
       aria-label={`${title} 분포`}
       onClick={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.stopPropagation()}
     >
-      <header className="flex items-center justify-between px-4 py-3 border-b border-white/60">
+      <header className="flex items-center justify-between px-4 py-3 border-b cd-border-c">
         <div className="min-w-0">
-          <h3 className="text-sm font-bold text-stone-800 truncate">{title}</h3>
-          <p className="text-[10px] text-stone-500 mt-0.5 truncate">
+          <h3 className="text-sm font-bold cd-text truncate">{title}</h3>
+          <p className="text-[10px] cd-text-faint mt-0.5 truncate">
             해당 시군구 사업장 분포 — 대기/수질/용역/분류 실측
           </p>
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="glass-button rounded-xl px-2 py-1.5 text-stone-600 shrink-0 ml-2"
+          className="cd-btn cd-btn-ghost rounded-xl px-2 py-1.5 cd-text-muted shrink-0 ml-2"
           aria-label="닫기"
         >
           <X className="w-3.5 h-3.5" />
@@ -141,16 +141,16 @@ export function RegionDrillPopover({ x, y, sidoFull, sidoShort, sigungu, onClose
 
       <div className="flex-1 overflow-y-auto scrollbar-hide px-4 py-3">
         {loading && (
-          <div className="text-center text-xs text-stone-500 py-8">불러오는 중…</div>
+          <div className="text-center text-xs cd-text-faint py-8">불러오는 중…</div>
         )}
         {error && (
-          <div className="text-center text-xs text-red-600 py-8">데이터 로딩 실패: {error}</div>
+          <div className="text-center text-xs cd-error-text py-8">데이터 로딩 실패: {error}</div>
         )}
 
         {data && !loading && (
           <>
-            <div className="mb-3 text-[11px] text-stone-600">
-              <span className="font-bold text-stone-800">총 {data.total.toLocaleString()}개</span>{" "}
+            <div className="mb-3 text-[11px] cd-text-muted">
+              <span className="font-bold cd-text">총 {data.total.toLocaleString()}개</span>{" "}
               사업장 (실측)
             </div>
 
@@ -171,7 +171,7 @@ export function RegionDrillPopover({ x, y, sidoFull, sidoShort, sigungu, onClose
               />
               <PieCard
                 title="대상 용역 분류"
-                icon={<Briefcase className="w-3.5 h-3.5 text-stone-400" />}
+                icon={<Briefcase className="w-3.5 h-3.5 cd-text-faint" />}
                 slices={
                   data.serviceCategories?.some((item) => item.count > 0)
                     ? data.serviceCategories.map((item) => ({ label: item.label, count: item.count }))
@@ -183,7 +183,7 @@ export function RegionDrillPopover({ x, y, sidoFull, sidoShort, sigungu, onClose
               />
               <PieCard
                 title="사업장 분류"
-                icon={<Building2 className="w-3.5 h-3.5 text-stone-400" />}
+                icon={<Building2 className="w-3.5 h-3.5 cd-text-faint" />}
                 slices={
                   data.companySizes?.some((item) => item.count > 0 && item.size !== "unknown")
                     ? data.companySizes.map((item) => ({ label: item.label, count: item.count }))
@@ -196,13 +196,13 @@ export function RegionDrillPopover({ x, y, sidoFull, sidoShort, sigungu, onClose
             </section>
 
             <section className="mt-4">
-              <h4 className="text-[11px] font-bold text-stone-700 mb-2">
+              <h4 className="text-[11px] font-bold cd-text-muted mb-2">
                 사업장 (최신 {data.facilities.length}건 / 총 {data.total.toLocaleString()})
               </h4>
-              <div className="rounded-xl border border-white/60 bg-white/60 overflow-hidden">
+              <div className="rounded-xl border cd-border-c cd-surface-bg overflow-hidden">
                 <table className="w-full text-[11px]">
                   <thead>
-                    <tr className="text-left text-[9px] text-stone-500 uppercase tracking-wider bg-white/50">
+                    <tr className="text-left text-[9px] cd-text-faint uppercase tracking-wider cd-surface-bg">
                       <th className="px-2 py-1.5">상호</th>
                       <th className="px-2 py-1.5">업종</th>
                       <th className="px-2 py-1.5">용역/분류</th>
@@ -215,7 +215,7 @@ export function RegionDrillPopover({ x, y, sidoFull, sidoShort, sigungu, onClose
                   <tbody>
                     {data.facilities.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="px-2 py-4 text-center text-stone-400">
+                        <td colSpan={7} className="px-2 py-4 text-center cd-text-faint">
                           사업장 데이터가 없습니다.
                         </td>
                       </tr>
@@ -225,41 +225,41 @@ export function RegionDrillPopover({ x, y, sidoFull, sidoShort, sigungu, onClose
                       return (
                       <tr
                         key={f.facilityId}
-                        className="border-t border-white/60 hover:bg-white/70 transition"
+                        className="border-t cd-border-c hover:bg-[color:var(--cd-surface)] transition"
                       >
-                        <td className="px-2 py-1.5 font-bold text-stone-800 truncate max-w-[160px]">
+                        <td className="px-2 py-1.5 font-bold cd-text truncate max-w-[160px]">
                           {companyName || "(이름 없음)"}
                         </td>
-                        <td className="px-2 py-1.5 text-stone-600 truncate max-w-[140px]">
+                        <td className="px-2 py-1.5 cd-text-muted truncate max-w-[140px]">
                           {f.industryName ?? "—"}
                         </td>
-                        <td className="px-2 py-1.5 text-stone-600">
+                        <td className="px-2 py-1.5 cd-text-muted">
                           <div className="flex flex-wrap gap-1 max-w-[150px]">
                             {(f.serviceCategories.length ? f.serviceCategories : (["integrated"] as FacilityServiceCategory[])).map((category) => (
-                              <span key={category} className="rounded bg-white/70 px-1.5 py-0.5 text-[9px] font-bold">
+                              <span key={category} className="rounded cd-surface-bg px-1.5 py-0.5 text-[9px] font-bold">
                                 {FACILITY_SERVICE_LABELS[category]}
                               </span>
                             ))}
                             {f.companySize && (
-                              <span className="rounded bg-stone-100 px-1.5 py-0.5 text-[9px] font-bold">
+                              <span className="rounded cd-surface-bg px-1.5 py-0.5 text-[9px] font-bold">
                                 {FACILITY_COMPANY_SIZE_LABELS[f.companySize]}
                               </span>
                             )}
                           </div>
                         </td>
-                        <td className="px-2 py-1.5 text-center text-stone-700">
+                        <td className="px-2 py-1.5 text-center cd-text-muted">
                           {f.airClass != null ? `${f.airClass}종` : "—"}
                         </td>
-                        <td className="px-2 py-1.5 text-center text-stone-700">
+                        <td className="px-2 py-1.5 text-center cd-text-muted">
                           {f.waterClass != null ? `${f.waterClass}종` : "—"}
                         </td>
-                        <td className="px-2 py-1.5 text-stone-500">
+                        <td className="px-2 py-1.5 cd-text-faint">
                           {f.permitDate ?? "—"}
                         </td>
                         <td className="px-2 py-1.5">
                           <Link
                             href={`/facilities?focus=${encodeURIComponent(f.facilityId)}`}
-                            className="inline-flex items-center justify-center text-primary hover:text-primary/80 transition-colors"
+                            className="inline-flex items-center justify-center cd-text-primary hover:text-[color:var(--cd-primary)]/80 transition-colors"
                             onClick={onClose}
                             aria-label={`${companyName || "사업장"} 상세 열기`}
                             title="상세 열기"

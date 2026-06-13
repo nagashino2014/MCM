@@ -428,26 +428,17 @@ def _paddle_ocr(variants: List[Tuple[str, "np.ndarray"]]) -> Optional[str]:
         if _PADDLE_OCR is None:
             from paddleocr import PaddleOCR  # type: ignore
 
-            os.environ.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
-            ocr_version = os.getenv("MCM_PADDLEOCR_VERSION", "PP-OCRv5").strip()
-            init_attempts = []
-            if ocr_version:
-                init_attempts.append({
+            ocr_version = os.getenv("MCM_PADDLEOCR_VERSION", "PP-OCRv3")
+            init_attempts = [
+                {
+                    "use_angle_cls": True,
                     "lang": "korean",
                     "ocr_version": ocr_version,
-                    "use_doc_orientation_classify": False,
-                    "use_doc_unwarping": False,
-                    "use_textline_orientation": False,
-                })
-            init_attempts.extend([
-                {
-                    "lang": "korean",
-                    "use_doc_orientation_classify": False,
-                    "use_doc_unwarping": False,
-                    "use_textline_orientation": False,
+                    "show_log": False,
                 },
-                {"use_angle_cls": True, "lang": "korean"},
-            ])
+                {"use_angle_cls": True, "lang": "korean", "show_log": False},
+                {"lang": "korean", "show_log": False},
+            ]
             last_exc: Optional[Exception] = None
             for kwargs in init_attempts:
                 try:

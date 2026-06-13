@@ -13,7 +13,8 @@ interface RouteContext {
 }
 
 interface Body {
-  entityId?: string | null;
+  relatedFacilityId?: string | null;
+  facilityId?: string | null;
   entityName?: string | null;
   businessRegistrationNo?: string | null;
   address?: string | null;
@@ -37,41 +38,48 @@ export async function PUT(req: NextRequest, ctx: RouteContext) {
     const { id } = await ctx.params;
     const body = (await req.json()) as Body;
     const now = new Date().toISOString();
-    let entityId = body.entityId?.trim() || "";
+    let relatedFacilityId = body.relatedFacilityId?.trim() || body.facilityId?.trim() || "";
     const relationType = normalizeRelationType(body.relationType);
     const entityName = normalizeCompanyName(body.entityName) ?? String(body.entityName ?? "").trim();
-    if (!entityId && !entityName) {
-      return NextResponse.json({ error: "기존 법인을 선택하거나 신규 법인명을 입력해야 합니다." }, { status: 400 });
+    if (!relatedFacilityId && !entityName) {
+      return NextResponse.json({ error: "연결할 업체를 선택하거나 업체명을 입력해야 합니다." }, { status: 400 });
     }
 
     await withDbWrite(async (db) => {
       const before = await db.exec("SELECT * FROM facility_operating_entities WHERE facility_id = $1 AND ended_at IS NULL", [id]);
-      // 사업장 검색으로 연결하는 경우 동일 사업자등록번호의 법인이 이미 있으면 재사용해
-      // 법인 마스터 중복 생성을 막는다.
-      if (!entityId) {
+
+      if (!relatedFacilityId) {
         const brn = normalizeBusinessRegistrationNo(body.businessRegistrationNo);
         if (brn) {
           const found = await db.exec(
-            "SELECT entity_id FROM legal_entities WHERE business_registration_no = $1 LIMIT 1",
+            "SELECT facility_id FROM facilities WHERE business_registration_no = $1 AND deleted_at IS NULL LIMIT 1",
             [brn]
           );
           if (found.length && found[0].values.length) {
-            entityId = String(found[0].values[0][0]);
+            relatedFacilityId = String(found[0].values[0][0]);
           }
         }
       }
-      if (!entityId) {
-        entityId = "ent_" + crypto.randomUUID().replace(/-/g, "").slice(0, 16);
+
+      if (!relatedFacilityId) {
+        relatedFacilityId = "facm_" + crypto.randomUUID().replace(/-/g, "").slice(0, 16);
+        const companyName = entityName || "미지정 업체";
+        const address = normalizeAddress(body.address);
         await db.run(
-          `INSERT INTO legal_entities
-            (entity_id, entity_name, business_registration_no, address, phone_number, memo, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          `INSERT INTO facilities
+            (facility_id, company_name, business_registration_no, site_address, site_address_verbatim,
+             phone_number, normalized_company_name, normalized_address, source, memo, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
           [
-            entityId,
-            entityName,
+            relatedFacilityId,
+            companyName,
             normalizeBusinessRegistrationNo(body.businessRegistrationNo),
-            normalizeAddress(body.address),
+            address,
+            true,
             body.phoneNumber?.trim() || null,
+            companyName.replace(/\s+/g, "").replace(/[\(\)（）]/g, "").trim().toLowerCase(),
+            address,
+            "manual",
             body.memo?.trim() || null,
             now,
             now,
@@ -81,17 +89,17 @@ export async function PUT(req: NextRequest, ctx: RouteContext) {
 
       await db.run(
         `INSERT INTO facility_operating_entities
-          (facility_id, entity_id, relation_type, started_at, ended_at, is_primary, memo, created_at, updated_at)
+          (facility_id, related_facility_id, relation_type, started_at, ended_at, is_primary, memo, created_at, updated_at)
          VALUES ($1, $2, $3, $4, NULL, 1, $5, $6, $7)
          ON CONFLICT (facility_id, relation_type) WHERE ended_at IS NULL AND is_primary = 1
          DO UPDATE SET
-           entity_id = excluded.entity_id,
+           related_facility_id = excluded.related_facility_id,
            started_at = excluded.started_at,
            memo = excluded.memo,
            updated_at = excluded.updated_at`,
         [
           id,
-          entityId,
+          relatedFacilityId,
           relationType,
           body.startedAt?.trim() || null,
           body.relationMemo?.trim() || null,
@@ -106,11 +114,11 @@ export async function PUT(req: NextRequest, ctx: RouteContext) {
         targetTable: "facility_operating_entities",
         targetId: id,
         before,
-        after: { ...body, entityId, relationType },
+        after: { ...body, relatedFacilityId, relationType },
       });
     });
 
-    return NextResponse.json({ ok: true, entityId });
+    return NextResponse.json({ ok: true, relatedFacilityId });
   } catch (err) {
     return authErrorToResponse(err);
   }

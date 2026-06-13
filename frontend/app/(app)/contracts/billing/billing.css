@@ -1,0 +1,309 @@
+/* ---------------------------------------------------------------------------
+ * 수주/수금/발행 현황 — 연결형 서브메뉴 탭 바 (Modernize 토큰 cdash 기반)
+ * 활성 탭이 콘텐츠 패널과 같은 배경/테두리로 이어져 보이도록 구성한다.
+ * ------------------------------------------------------------------------- */
+
+.cdb-tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 0 14px;
+  position: relative;
+  z-index: 1;
+}
+
+.cdb-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.72rem 1.25rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--cd-muted);
+  background: var(--cd-surface);
+  border: 1px solid var(--cd-border);
+  border-bottom: none;
+  border-radius: 14px 14px 0 0;
+  cursor: pointer;
+  margin-bottom: 0;
+  transition: all 0.18s ease;
+}
+
+.cdb-tab:hover {
+  color: var(--cd-primary);
+}
+
+.cdb-tab[data-active="true"] {
+  background: var(--cd-card);
+  color: var(--cd-primary);
+  padding-top: 0.85rem;
+  padding-bottom: 0.85rem;
+  /* 패널 상단 테두리를 덮어 탭-패널이 이어진 형태 */
+  margin-bottom: -1px;
+}
+
+.cdb-tab .cdb-tab-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+}
+
+.cdb-tab[data-active="true"] .cdb-tab-icon {
+  background: var(--cd-primary-soft);
+}
+
+.cdb-panel {
+  background: var(--cd-card);
+  border: 1px solid var(--cd-border);
+  border-radius: 20px;
+  box-shadow: var(--cd-shadow);
+  padding: 18px;
+  min-height: 640px;
+}
+
+/* 패널 내부 박스 (지도 / 리스트) */
+.cdb-box {
+  border: 1px solid var(--cd-border);
+  border-radius: 16px;
+  background: var(--cd-card);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* 지도 시도 선택 상태 */
+.cdb-region-svg path.cd-region {
+  cursor: pointer;
+}
+.cdb-region-svg path.cd-region[data-selected="true"] {
+  stroke: var(--cd-primary);
+  stroke-width: 1.8;
+}
+
+/* 수주 계약 리스트 행 */
+.cdb-list-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 92px 124px;
+  gap: 10px;
+  align-items: center;
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--cd-grid-line);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.cdb-list-row:hover {
+  background: var(--cd-surface);
+}
+.cdb-list-row[data-selected="true"] {
+  background: var(--cd-surface);
+  box-shadow: inset 2px 0 0 var(--cd-primary);
+}
+
+/* ---------------------------------------------------------------------------
+ * 미발행 현황 탭
+ * ------------------------------------------------------------------------- */
+
+/* 미발행 리스트 행: 용역명 / 계약일 / 조건 / 대상 금액 */
+.cdb-unbilled-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) 86px minmax(0, 0.6fr) 110px;
+  gap: 8px;
+  align-items: center;
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--cd-grid-line);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.cdb-unbilled-row:hover {
+  background: var(--cd-surface);
+}
+
+/* 완료 현황 탭 — 완료 리스트 행 (용역명 / 계약일 / 완료일(허가일) / 완료일(발행일)) */
+.cdb-completion-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) 90px 96px 96px;
+  gap: 8px;
+  align-items: center;
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--cd-grid-line);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.cdb-completion-row:hover {
+  background: var(--cd-surface);
+}
+
+/* ---------------------------------------------------------------------------
+ * 미수금 현황 탭
+ * ------------------------------------------------------------------------- */
+
+/* KPI 카드 */
+.cdb-kpi {
+  border: 1px solid var(--cd-border);
+  border-radius: 14px;
+  background: var(--cd-card);
+  padding: 0.8rem 0.95rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+.cdb-kpi .cdb-kpi-label {
+  font-size: 0.6875rem;
+  font-weight: 800;
+  color: var(--cd-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.cdb-kpi .cdb-kpi-value {
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--cd-text);
+  white-space: nowrap;
+}
+.cdb-kpi .cdb-kpi-sub {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--cd-faint);
+}
+
+/* 미수금 리스트 행: 용역명 / 조건 / 발행일 / 발행금액 */
+.cdb-recv-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.9fr) 86px 112px;
+  gap: 10px;
+  align-items: center;
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--cd-grid-line);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.cdb-recv-row:hover {
+  background: var(--cd-surface);
+}
+
+/* 장기 미수금 리스트 행: 용역명 / 조건 / 발행일 / 미수금액 */
+.cdb-longterm-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.8fr) 82px 104px;
+  gap: 8px;
+  align-items: center;
+  padding: 0.5rem 0.65rem;
+  border-bottom: 1px solid var(--cd-grid-line);
+  cursor: pointer;
+  border-left: 2px solid transparent;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.cdb-longterm-row:hover {
+  background: var(--cd-surface);
+}
+.cdb-longterm-row[data-selected="true"] {
+  background: var(--cd-surface);
+  border-left-color: var(--cd-primary);
+}
+
+/* 경과 기간 태그 */
+.cdb-aging-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.16rem 0.5rem;
+  border-radius: 7px;
+  font-size: 0.625rem;
+  font-weight: 800;
+  line-height: 1.2;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+/* 장기 미수금 리스트용 소형 태그 (업체명 텍스트 크기에 맞춤, 볼드 없음) */
+.cdb-aging-tag.cdb-tag-xs {
+  padding: 0.06rem 0.38rem;
+  border-radius: 5px;
+  font-size: 0.625rem;
+  font-weight: 400;
+}
+
+/* 장기 미수금 대응 조치 유형 태그 (옵션 박스 활성 배경색 + 흰색 텍스트) */
+.cdb-action-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.06rem 0.38rem;
+  border-radius: 5px;
+  font-size: 0.625rem;
+  font-weight: 400;
+  line-height: 1.2;
+  color: #ffffff;
+  background: var(--cd-primary);
+  white-space: nowrap;
+}
+
+/* 대응 조치 옵션 박스 (5열 1행) */
+.cdb-option-box {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  padding: 0.55rem 0.35rem;
+  border-radius: 12px;
+  font-size: 0.71875rem;
+  font-weight: 800;
+  white-space: nowrap;
+  background: var(--cd-surface);
+  color: var(--cd-muted);
+  border: 1px solid var(--cd-border);
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+.cdb-option-box:hover {
+  border-color: var(--cd-primary);
+  color: var(--cd-primary);
+}
+.cdb-option-box[data-active="true"] {
+  background: var(--cd-primary);
+  border-color: var(--cd-primary);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(93, 135, 255, 0.35);
+}
+
+/* 대응 조치 항목 박스 */
+.cdb-action-entry {
+  border: 1px solid var(--cd-border);
+  border-radius: 12px;
+  padding: 0.7rem 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* 수금 입력 모달 */
+.cdb-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(8, 12, 20, 0.55);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+.cdb-modal {
+  width: 100%;
+  max-width: 480px;
+  max-height: calc(100vh - 4rem);
+  overflow-y: auto;
+  background: var(--cd-card);
+  border: 1px solid var(--cd-border);
+  border-radius: 18px;
+  box-shadow: var(--cd-shadow);
+  padding: 1.25rem;
+}

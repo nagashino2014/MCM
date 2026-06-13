@@ -56,13 +56,11 @@ def _preload_easyocr() -> None:
 def _preload_paddleocr() -> None:
     from paddleocr import PaddleOCR  # type: ignore
 
-    os.environ.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
     PaddleOCR(
+        use_angle_cls=True,
         lang="korean",
-        ocr_version=os.getenv("MCM_PADDLEOCR_VERSION", "PP-OCRv5"),
-        use_doc_orientation_classify=False,
-        use_doc_unwarping=False,
-        use_textline_orientation=False,
+        ocr_version=os.getenv("MCM_PADDLEOCR_VERSION", "PP-OCRv3"),
+        show_log=False,
     )
     print("[OCR MODEL PRELOAD] PaddleOCR models ready")
 

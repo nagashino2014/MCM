@@ -6,7 +6,7 @@ import { recordAuditLogInline } from "@/lib/auth/audit";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type MatchType = "brn" | "company" | "address";
+type MatchType = "brn" | "company" | "address" | "facility";
 
 interface ExclusionBody {
   matchType?: MatchType;
@@ -16,7 +16,7 @@ interface ExclusionBody {
 }
 
 function normalizeMatchType(value: unknown): MatchType | null {
-  if (value === "brn" || value === "company" || value === "address") return value;
+  if (value === "brn" || value === "company" || value === "address" || value === "facility") return value;
   return null;
 }
 
@@ -33,16 +33,18 @@ export async function POST(req: NextRequest) {
       ? body.facilityIds.map((id) => String(id).trim()).filter(Boolean)
       : [];
     const uniqueIds = [...new Set(ids)].sort();
-    if (!matchType || uniqueIds.length < 2) {
+    if (!matchType || uniqueIds.length < (matchType === "facility" ? 1 : 2)) {
       return NextResponse.json(
-        { error: "matchType 과 2개 이상의 facilityIds 가 필요합니다." },
+        { error: "matchType 과 제외할 facilityIds 가 필요합니다." },
         { status: 400 }
       );
     }
 
     const key = facilityIdsKey(uniqueIds);
     const now = new Date().toISOString();
-    const reason = body.reason?.trim() || "서로 다른 개별 통합허가 대상 사업장";
+    const reason =
+      body.reason?.trim() ||
+      (matchType === "facility" ? "개별 사업장 중복 병합 후보 제외" : "서로 다른 개별 통합허가 대상 사업장");
     await withDbWrite(async (db) => {
       await db.run(
         `INSERT INTO facility_merge_exclusions

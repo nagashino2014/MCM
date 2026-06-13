@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { resolveServiceTypeStyle, type ServiceTypeStyle } from "@/lib/ieps/contract-tree-style";
+import "@/components/cdash/cdash.css";
 
 interface ContractTreeContractNode {
   contractId: string;
@@ -144,31 +145,31 @@ export function FacilityOrdersModal({ facilityId, facilityName, onClose }: Props
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-stone-950/30 p-4">
-      <div className="bg-white rounded-3xl w-[min(1120px,calc(100vw-32px))] max-h-[min(880px,calc(100vh-32px))] shadow-2xl flex flex-col overflow-hidden border border-stone-200">
-        <div className="p-5 border-b border-stone-200 flex items-start justify-between gap-4">
+      <div className="cd-card-bg rounded-3xl w-[min(1120px,calc(100vw-32px))] max-h-[min(880px,calc(100vh-32px))] shadow-2xl flex flex-col overflow-hidden border cd-border-c">
+        <div className="p-5 border-b cd-border-c flex items-start justify-between gap-4">
           <div>
-            <h3 className="text-xl font-bold text-stone-800 flex items-center gap-2">
-              <FolderTree className="w-5 h-5 text-primary" />
+            <h3 className="text-xl font-bold cd-text flex items-center gap-2">
+              <FolderTree className="w-5 h-5 cd-text-primary" />
               {facilityName} 수주 현황
             </h3>
-            <p className="text-xs text-stone-500 mt-1">
+            <p className="text-xs cd-text-faint mt-1">
               총 {totalCount.toLocaleString()}건 · {formatMoney(totalAmount)}
             </p>
           </div>
-          <button type="button" onClick={onClose} className="text-stone-400 hover:text-stone-700">
+          <button type="button" onClick={onClose} className="cd-text-faint hover:opacity-70">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <div className="min-h-0 flex-1 overflow-hidden p-5 flex flex-col gap-4">
-          <div className="rounded-2xl border border-stone-200 bg-white overflow-hidden flex-1 min-h-[260px] flex flex-col">
+          <div className="rounded-2xl border cd-border-c cd-card-bg overflow-hidden flex-1 min-h-[260px] flex flex-col">
             <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide">
               {loading ? (
-                <div className="p-10 text-center text-sm text-stone-500">불러오는 중…</div>
+                <div className="p-10 text-center text-sm cd-text-faint">불러오는 중…</div>
               ) : error ? (
-                <div className="p-10 text-center text-sm text-rose-600">{error}</div>
+                <div className="p-10 text-center text-sm cd-error-text">{error}</div>
               ) : !tree || tree.groups.length === 0 ? (
-                <div className="p-10 text-center text-sm text-stone-500">해당 사업장을 대상으로 한 수주 건이 없습니다.</div>
+                <div className="p-10 text-center text-sm cd-text-faint">해당 사업장을 대상으로 한 수주 건이 없습니다.</div>
               ) : (
                 tree.groups.map((group) => {
                   const style = resolveServiceTypeStyle(group.serviceType);
@@ -202,9 +203,9 @@ export function FacilityOrdersModal({ facilityId, facilityName, onClose }: Props
 
           <div className="shrink-0 grid grid-cols-1 xl:grid-cols-[minmax(260px,0.8fr)_minmax(0,2.2fr)] gap-4 items-stretch">
             <OrdersOverviewCard tree={tree} />
-            <div className="rounded-2xl border border-stone-200 bg-white p-4 min-h-[320px] flex flex-col">
+            <div className="rounded-2xl border cd-border-c cd-card-bg p-4 min-h-[320px] flex flex-col">
               {!selected ? (
-                <div className="flex-1 flex items-center justify-center text-sm text-stone-500">
+                <div className="flex-1 flex items-center justify-center text-sm cd-text-faint">
                   위 트리에서 수주 건을 선택하세요.
                 </div>
               ) : (
@@ -218,11 +219,11 @@ export function FacilityOrdersModal({ facilityId, facilityName, onClose }: Props
           </div>
         </div>
 
-        <div className="p-4 border-t border-stone-200 flex justify-end">
+        <div className="p-4 border-t cd-border-c flex justify-end">
           <button
             type="button"
             onClick={onClose}
-            className="glass-button rounded-xl px-4 py-2 text-sm font-bold text-stone-700"
+            className="cd-btn cd-btn-ghost rounded-xl px-4 py-2 text-sm font-bold cd-text-muted"
           >
             닫기
           </button>
@@ -258,8 +259,8 @@ function ContractSummary({
   return (
     <div className="grid gap-4">
       <div>
-        <p className="text-[11px] text-stone-400 uppercase tracking-wide">계약명</p>
-        <h4 className="text-lg font-bold text-stone-800 mt-0.5">{node.contractTitle}</h4>
+        <p className="text-[11px] cd-text-faint uppercase tracking-wide">계약명</p>
+        <h4 className="text-lg font-bold cd-text mt-0.5">{node.contractTitle}</h4>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(198px,234px)] gap-3">
@@ -277,7 +278,7 @@ function ContractSummary({
         <CollectionProgressCard rate={collectionRate} collectedAmount={collectedAmount} baseAmount={baseAmount} />
       </div>
 
-      {detailLoading && <p className="text-[11px] text-stone-400">상세 정보를 불러오는 중…</p>}
+      {detailLoading && <p className="text-[11px] cd-text-faint">상세 정보를 불러오는 중…</p>}
     </div>
   );
 }
@@ -316,14 +317,14 @@ function OrdersOverviewCard({ tree }: { tree: ContractTreePayload | null }) {
   }, [tree]);
 
   return (
-    <div className="rounded-2xl border border-stone-200 bg-white p-4 flex flex-col">
-      <p className="text-[11px] text-stone-400 uppercase tracking-wide">전체 용역 수주 현황</p>
+    <div className="rounded-2xl border cd-border-c cd-card-bg p-4 flex flex-col">
+      <p className="text-[11px] cd-text-faint uppercase tracking-wide">전체 용역 수주 현황</p>
       <div className="mt-3 grid content-start gap-2.5 flex-1">
         {rows.map((row) => {
           return (
             <div
               key={row.label}
-              className="flex items-center gap-1.5 rounded-xl border border-stone-200 py-2 px-3"
+              className="flex items-center gap-1.5 rounded-xl border cd-border-c py-2 px-3"
             >
               <span
                 className="shrink-0 inline-flex w-8 h-8 items-center justify-center rounded-lg"
@@ -345,11 +346,11 @@ function OrdersOverviewCard({ tree }: { tree: ContractTreePayload | null }) {
                   }}
                 />
               </span>
-              <span className="min-w-0 flex-1 truncate text-xs text-stone-700">{row.label}</span>
-              <span className="w-8 shrink-0 text-right text-xs tabular-nums text-stone-500">
+              <span className="min-w-0 flex-1 truncate text-xs cd-text-muted">{row.label}</span>
+              <span className="w-8 shrink-0 text-right text-xs tabular-nums cd-text-faint">
                 {row.count.toLocaleString()}건
               </span>
-              <span className="w-14 shrink-0 text-right text-xs tabular-nums text-stone-800">
+              <span className="w-14 shrink-0 text-right text-xs tabular-nums cd-text">
                 {formatMoney(row.amount)}
               </span>
             </div>
@@ -363,9 +364,9 @@ function OrdersOverviewCard({ tree }: { tree: ContractTreePayload | null }) {
 function Kpi({ label, value, accent }: { label: string; value: React.ReactNode; accent?: boolean }) {
   const isEmpty = value == null || value === "";
   return (
-    <div className="rounded-2xl border border-stone-200 bg-white p-3">
-      <p className="text-[11px] text-stone-500">{label}</p>
-      <p className={"text-sm mt-1 truncate " + (accent ? "text-primary font-bold" : "text-stone-800")}>
+    <div className="rounded-2xl border cd-border-c cd-card-bg p-3">
+      <p className="text-[11px] cd-text-faint">{label}</p>
+      <p className={"text-sm mt-1 truncate " + (accent ? "cd-text-primary font-bold" : "cd-text")}>
         {isEmpty ? "-" : value}
       </p>
     </div>
@@ -384,20 +385,20 @@ function CollectionProgressCard({
   const percent = Math.round(rate * 100);
   const today = formatKoreanDate(new Date());
   return (
-    <div className="rounded-2xl border border-stone-200 bg-white p-4 min-h-[180px] flex flex-col items-center justify-center relative">
-      <p className="absolute left-4 top-3 text-[11px] font-bold text-stone-500">수금 진척도</p>
+    <div className="rounded-2xl border cd-border-c cd-card-bg p-4 min-h-[180px] flex flex-col items-center justify-center relative">
+      <p className="absolute left-4 top-3 text-[11px] font-bold cd-text-faint">수금 진척도</p>
       <div
         className="w-28 h-28 rounded-full flex items-center justify-center"
         style={{ background: `conic-gradient(#9BC2E6 ${percent}%, #ececec ${percent}% 100%)` }}
       >
-        <div className="w-20 h-20 rounded-full bg-white flex items-center justify-center">
+        <div className="w-20 h-20 rounded-full cd-card-bg flex items-center justify-center">
           <span className="text-2xl font-bold text-[#9BC2E6]">{percent}%</span>
         </div>
       </div>
-      <p className="mt-3 text-xs font-mono text-stone-600">
+      <p className="mt-3 text-xs font-mono cd-text-muted">
         {formatExactAmount(collectedAmount)} / {formatExactAmount(baseAmount)}
       </p>
-      <p className="absolute right-4 bottom-3 text-[11px] text-stone-500">{today} 기준</p>
+      <p className="absolute right-4 bottom-3 text-[11px] cd-text-faint">{today} 기준</p>
     </div>
   );
 }
@@ -420,16 +421,16 @@ function TreeGroupHeader({
     <button
       type="button"
       onClick={() => onToggle(serviceType)}
-      className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-stone-50 border-b border-stone-200/70"
+      className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-[color:var(--cd-surface)] border-b cd-border-c/70"
     >
       {isOpen ? (
-        <ChevronDown className="w-4 h-4 text-stone-500" />
+        <ChevronDown className="w-4 h-4 cd-text-faint" />
       ) : (
-        <ChevronRight className="w-4 h-4 text-stone-500" />
+        <ChevronRight className="w-4 h-4 cd-text-faint" />
       )}
       <ParentIcon className="w-4 h-4 fill-current transition-transform" style={{ color: style.parentColor }} />
-      <span className="text-sm text-stone-800">{serviceType}</span>
-      <span className="text-[11px] text-stone-500 ml-auto">{count}건</span>
+      <span className="text-sm cd-text">{serviceType}</span>
+      <span className="text-[11px] cd-text-faint ml-auto">{count}건</span>
     </button>
   );
 }
@@ -453,28 +454,28 @@ function TreeChildRow({
       type="button"
       onClick={() => onSelect(contract.contractId)}
       className={
-        "relative w-full flex items-center gap-2 pl-12 pr-3 py-2 text-left text-xs bg-white/40 hover:bg-primary/5 " +
-        (isSelected ? "bg-primary/10 border-l-4 border-primary" : "border-l-4 border-transparent")
+        "relative w-full flex items-center gap-2 pl-12 pr-3 py-2 text-left text-xs cd-surface-bg hover:bg-[color:var(--cd-surface)] " +
+        (isSelected ? "cd-tint-primary border-l-4 border-[color:var(--cd-primary)]" : "border-l-4 border-transparent")
       }
     >
       <span
         aria-hidden
         className={
-          "pointer-events-none absolute left-7 w-px bg-stone-300 " +
+          "pointer-events-none absolute left-7 w-px bg-[var(--cd-border)] " +
           (isLastChild ? "top-0 h-1/2" : "top-0 bottom-0")
         }
       />
-      <span aria-hidden className="pointer-events-none absolute left-7 top-1/2 w-3 h-px bg-stone-300" />
+      <span aria-hidden className="pointer-events-none absolute left-7 top-1/2 w-3 h-px bg-[var(--cd-border)]" />
       <ChildIcon className="w-3.5 h-3.5 fill-current shrink-0" style={{ color: childColor }} />
       <span className="flex items-center gap-1.5 flex-1 min-w-0">
-        <span className="truncate text-stone-800">{contract.contractTitle}</span>
+        <span className="truncate cd-text">{contract.contractTitle}</span>
         {contract.contractStatus === "terminated" && (
           <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] text-white" style={{ background: "#FF7171" }}>
             계약해지
           </span>
         )}
         {contract.contractStatus === "suspended" && (
-          <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] text-stone-800" style={{ background: "#FFD966" }}>
+          <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] cd-text" style={{ background: "#FFD966" }}>
             계약중지
           </span>
         )}
@@ -487,10 +488,10 @@ function TreeChildRow({
           />
         )}
       </span>
-      <span className="w-[96px] text-right text-[10px] font-mono text-stone-400 ml-2 shrink-0 tabular-nums">
+      <span className="w-[96px] text-right text-[10px] font-mono cd-text-faint ml-2 shrink-0 tabular-nums">
         {contract.contractDate ?? "-"}
       </span>
-      <span className="w-[80px] text-right text-[10px] font-mono text-stone-500 ml-1 shrink-0 tabular-nums">
+      <span className="w-[80px] text-right text-[10px] font-mono cd-text-faint ml-1 shrink-0 tabular-nums">
         {formatMoney(contract.currentAmount)}
       </span>
     </button>

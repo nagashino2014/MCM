@@ -91,10 +91,10 @@ export function OperationsPanel() {
   }, [reload]);
 
   return (
-    <div className="glass-card p-6 rounded-3xl flex flex-col gap-4 reveal delay-2">
+    <div className="cd-card p-6 rounded-3xl flex flex-col gap-4 cd-reveal delay-2">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h3 className="font-bold text-stone-700 flex items-center gap-2">
-          <Activity className="w-5 h-5 text-primary" />
+        <h3 className="font-bold cd-text-muted flex items-center gap-2">
+          <Activity className="w-5 h-5 cd-text-primary" />
           운영 관측
         </h3>
         <div className="flex items-center gap-2">
@@ -106,8 +106,8 @@ export function OperationsPanel() {
               className={cn(
                 "px-3 py-1.5 rounded-xl text-xs font-bold transition-colors",
                 days === w.id
-                  ? "bg-primary text-white"
-                  : "glass-button text-stone-700"
+                  ? "cd-fill-primary text-white"
+                  : "cd-btn cd-btn-ghost cd-text-muted"
               )}
             >
               {w.label}
@@ -116,7 +116,7 @@ export function OperationsPanel() {
           <button
             type="button"
             onClick={() => reload()}
-            className="glass-button rounded-xl px-3 py-1.5 text-xs font-bold text-stone-700 flex items-center gap-1"
+            className="cd-btn cd-btn-ghost rounded-xl px-3 py-1.5 text-xs font-bold cd-text-muted flex items-center gap-1"
           >
             <RefreshCw className={cn("w-3 h-3", loading && "animate-spin")} />
             새로고침
@@ -125,10 +125,10 @@ export function OperationsPanel() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 rounded-2xl border border-stone-200/60 bg-white/70 p-4">
+        <div className="lg:col-span-2 rounded-2xl border cd-border-c cd-surface-bg p-4">
           <div className="flex items-center gap-2 mb-3">
-            <BarChart3 className="w-4 h-4 text-stone-500" />
-            <div className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">
+            <BarChart3 className="w-4 h-4 cd-text-faint" />
+            <div className="text-[11px] font-bold cd-text-faint uppercase tracking-wide">
               일별 다운로드 추이
             </div>
           </div>
@@ -136,10 +136,10 @@ export function OperationsPanel() {
           <Legend />
         </div>
 
-        <div className="rounded-2xl border border-stone-200/60 bg-white/70 p-4">
+        <div className="rounded-2xl border cd-border-c cd-surface-bg p-4">
           <div className="flex items-center gap-2 mb-3">
-            <AlertTriangle className="w-4 h-4 text-stone-500" />
-            <div className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">
+            <AlertTriangle className="w-4 h-4 cd-text-faint" />
+            <div className="text-[11px] font-bold cd-text-faint uppercase tracking-wide">
               실패 사유 Top 10
             </div>
           </div>
@@ -148,7 +148,7 @@ export function OperationsPanel() {
       </div>
 
       {error && (
-        <div className="text-[11px] text-red-600 font-bold">로딩 실패: {error}</div>
+        <div className="text-[11px] cd-error-text font-bold">로딩 실패: {error}</div>
       )}
     </div>
   );
@@ -163,7 +163,7 @@ function TrendChart({
 }) {
   if (!data || data.length === 0) {
     return (
-      <div className="text-[12px] text-stone-400 italic h-40 flex items-center justify-center">
+      <div className="text-[12px] cd-text-faint italic h-40 flex items-center justify-center">
         {loading ? "로딩 중..." : "표시할 데이터가 없습니다."}
       </div>
     );
@@ -267,7 +267,7 @@ function Legend() {
     { label: "실패", color: SERIES_COLORS.failed },
   ];
   return (
-    <div className="flex items-center flex-wrap gap-x-4 gap-y-1 mt-2 text-[11px] text-stone-600">
+    <div className="flex items-center flex-wrap gap-x-4 gap-y-1 mt-2 text-[11px] cd-text-muted">
       {items.map((i) => (
         <span key={i.label} className="flex items-center gap-1.5">
           <span
@@ -311,7 +311,7 @@ function ReasonsDonut({
 
   if (!reasons || reasons.length === 0) {
     return (
-      <div className="text-[12px] text-stone-400 italic h-40 flex items-center justify-center">
+      <div className="text-[12px] cd-text-faint italic h-40 flex items-center justify-center">
         {loading ? "로딩 중..." : "실패 기록이 없습니다."}
       </div>
     );
@@ -358,10 +358,10 @@ function ReasonsDonut({
               className="inline-block w-2.5 h-2.5 rounded-sm shrink-0"
               style={{ background: REASON_PALETTE[i % REASON_PALETTE.length] }}
             />
-            <span className="flex-1 truncate text-stone-700" title={r.reason}>
+            <span className="flex-1 truncate cd-text-muted" title={r.reason}>
               {r.reason}
             </span>
-            <span className="font-bold text-stone-800">{r.count}</span>
+            <span className="font-bold cd-text">{r.count}</span>
           </li>
         ))}
       </ul>

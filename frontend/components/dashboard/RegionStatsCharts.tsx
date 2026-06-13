@@ -122,12 +122,12 @@ export function PieCard({
         "rounded-xl border " +
         (compact ? "p-2.5 " : "p-3 ") +
         (isConcept
-          ? "bg-white/55 border-white/60 concept-hatched"
-          : "bg-white/70 border-white/70")
+          ? "cd-card-bg cd-border-c concept-hatched"
+          : "cd-surface-bg cd-border-c")
       }
     >
       <div className="flex items-center justify-between gap-2 mb-1.5">
-        <div className="flex items-center gap-1.5 text-[11px] font-bold text-stone-700">
+        <div className="flex items-center gap-1.5 text-[11px] font-bold cd-text-muted">
           {icon}
           {title}
         </div>
@@ -139,7 +139,7 @@ export function PieCard({
       </div>
 
       {total <= 0 ? (
-        <div className="h-[88px] flex items-center justify-center text-[11px] text-stone-400">
+        <div className="h-[88px] flex items-center justify-center text-[11px] cd-text-faint">
           데이터 없음
         </div>
       ) : (
@@ -176,10 +176,10 @@ export function PieCard({
                     className="inline-block w-2 h-2 rounded-sm flex-shrink-0"
                     style={{ background: palette[i % palette.length] }}
                   />
-                  <span className="font-bold text-stone-700 truncate">{s.label}</span>
-                  <span className="text-stone-500 ml-auto whitespace-nowrap">
+                  <span className="font-bold cd-text-muted truncate">{s.label}</span>
+                  <span className="cd-text-faint ml-auto whitespace-nowrap">
                     {s.count.toLocaleString()}
-                    <span className="text-stone-400 ml-1">({pct}%)</span>
+                    <span className="cd-text-faint ml-1">({pct}%)</span>
                   </span>
                 </div>
               );
@@ -189,7 +189,7 @@ export function PieCard({
       )}
 
       {isConcept && conceptNote && (
-        <div className="text-[9px] text-stone-400 mt-2">※ {conceptNote}</div>
+        <div className="text-[9px] cd-text-faint mt-2">※ {conceptNote}</div>
       )}
     </div>
   );

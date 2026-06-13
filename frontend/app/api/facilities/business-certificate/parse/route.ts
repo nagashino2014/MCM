@@ -79,7 +79,21 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const extracted = (await res.json()) as ExtractResponse;
+    let extracted = (await res.json()) as ExtractResponse;
+    if (
+      !(extracted.text ?? "").trim() &&
+      (!Array.isArray(extracted.candidates) || extracted.candidates.length === 0)
+    ) {
+      const fallbackForm = new FormData();
+      fallbackForm.set("file", file, file.name || "business-certificate.pdf");
+      const fallbackRes = await fetch(`${baseUrl}/extract/business-certificate`, {
+        method: "POST",
+        body: fallbackForm,
+      });
+      if (fallbackRes.ok) {
+        extracted = (await fallbackRes.json()) as ExtractResponse;
+      }
+    }
     const candidates = Array.isArray(extracted.candidates) ? extracted.candidates : [];
     const voted = voteBusinessCertificateCandidates(candidates, extracted.text ?? "", file.name);
     const text = voted.ocrText || normalizeBusinessCertificateOcrText(extracted.text ?? "");

@@ -1,5 +1,5 @@
 import type { FacilityGroupInfo } from "./facility-group";
-import type { FacilityOperatingEntityInfo } from "./legal-entity";
+import type { FacilityOperatingEntityInfo } from "./facility-operating-entity";
 import type {
   FacilityAlias,
   FacilityCompanySize,
@@ -32,6 +32,7 @@ export interface FacilityListItem {
   updatedAt: string;
   decisionNo: string | null;
   permitDate: string | null;
+  isClosed: boolean;
   airClass: number | null;
   waterClass: number | null;
   airAmount: number | null;
@@ -49,8 +50,12 @@ export interface FacilityFilterOptions {
 export interface FacilityListFilter {
   q?: string;
   sido?: string;
+  /** 복수 지역 검색. 비어 있지 않으면 sido/sigungu 단일 필터보다 우선한다. */
+  sidos?: string[];
   sigungu?: string;
   industryCode?: string;
+  /** 통합허가 20개 업종 카테고리 id. 지정 시 industryCode 보다 우선한다. */
+  industryCategory?: string;
   airClass?: number;
   waterClass?: number;
   source?: string;
@@ -118,6 +123,7 @@ export interface FacilityDetail {
   operatingEntityInfo: FacilityOperatingEntityInfo | null;
   createdAt: string;
   updatedAt: string;
+  isClosed: boolean;
   permits: PermitDetail[];
   businessCertificates: FacilityBusinessCertificate[];
   /** 연간(점검)보고서 최신 1건 스냅샷. 검토결과서가 미공개인 사업장의 보강 데이터. */

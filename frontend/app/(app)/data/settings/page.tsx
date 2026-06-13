@@ -4,6 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { Settings as SettingsIcon, Star, Trash2, RefreshCw, Plus } from "lucide-react";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
+import { useCdashTheme } from "@/components/cdash/useCdashTheme";
+import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
+import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import "@/components/cdash/cdash.css";
 import { CollectionOptionsCard } from "@/components/dashboard/CollectionOptionsCard";
 import { DEFAULT_COLLECTION_CONFIG } from "@/lib/ieps/defaults";
 import type { CollectionConfig } from "@/lib/ieps/types";
@@ -28,6 +32,7 @@ interface ConfigItem {
 
 function SettingsPageInner() {
   const { data: session } = useSession();
+  const { theme, toggleTheme } = useCdashTheme();
   const role = (session?.user as { role?: "admin" | "editor" | "viewer" } | undefined)?.role ?? "viewer";
   const canEdit = role === "admin" || role === "editor";
   const [items, setItems] = useState<ConfigItem[]>([]);
@@ -129,26 +134,21 @@ function SettingsPageInner() {
   };
 
   return (
-    <div className="flex flex-col gap-6 p-2">
-      <section className="glass-panel p-8 rounded-3xl relative overflow-hidden reveal">
-        <div className="relative z-10 flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="text-3xl font-bold text-stone-800 mb-2 flex items-center gap-3">
-              <SettingsIcon className="w-7 h-7 text-primary" />
-              데이터 · 설정
-            </h1>
-            <p className="text-stone-600 text-base max-w-3xl">
-              자주 사용하는 수집 옵션을 저장하고, 기본 옵션을 지정합니다. 저장된 옵션은
-              <span className="text-primary font-bold"> /data/status </span>의 옵션 카드 상단 드롭다운에서 즉시 불러올 수 있습니다.
-            </p>
-          </div>
-          <div className="flex items-center gap-2 mt-2">
-            <button
-              type="button"
-              onClick={reload}
-              className="glass-button rounded-xl px-3 py-2 text-xs font-bold text-stone-700 flex items-center gap-1"
-            >
-              <RefreshCw className={"w-3 h-3 " + (loading ? "animate-spin" : "")} />
+    <div className="cdash cd-fields-white flex flex-col gap-5 p-4 md:p-5 rounded-3xl min-h-full" data-theme={theme}>
+      <CdPageHeader
+        icon={<SettingsIcon className="w-5 h-5" />}
+        eyebrow="Data · Settings"
+        title="데이터 · 설정"
+        subtitle={
+          <>
+            자주 사용하는 수집 옵션을 저장하고, 기본 옵션을 지정합니다. 저장된 옵션은{" "}
+            <b className="cd-text-primary">/data/status</b>의 옵션 카드 상단 드롭다운에서 즉시 불러올 수 있습니다.
+          </>
+        }
+        actions={
+          <>
+            <button type="button" onClick={reload} className="cd-btn cd-btn-ghost cd-btn-sm">
+              <RefreshCw className={"w-3.5 h-3.5 " + (loading ? "animate-spin" : "")} />
               새로고침
             </button>
             <button
@@ -156,24 +156,24 @@ function SettingsPageInner() {
               onClick={handleNew}
               disabled={!canEdit}
               title={!canEdit ? "조회자 권한은 옵션을 추가할 수 없습니다." : undefined}
-              className="rounded-xl px-3 py-2 text-xs font-bold text-white bg-primary hover:bg-primary/90 shadow-sm flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="cd-btn cd-btn-primary cd-btn-sm disabled:cursor-not-allowed"
             >
               <Plus className="w-3.5 h-3.5" />
               새 옵션
             </button>
-          </div>
-        </div>
-        <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-gradient-to-l from-primary/10 to-transparent pointer-events-none" />
-      </section>
+            <CdThemeToggle theme={theme} onToggle={toggleTheme} />
+          </>
+        }
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.4fr] gap-6">
-        <section className="glass-panel rounded-3xl p-6 reveal delay-1">
-          <h3 className="font-bold text-stone-700 mb-3">저장된 옵션 ({items.length})</h3>
+        <section className="cd-card rounded-3xl p-6 cd-reveal delay-1">
+          <h3 className="font-bold cd-text-muted mb-3">저장된 옵션 ({items.length})</h3>
           {loading && (
-            <div className="text-stone-400 text-sm text-center py-10">로딩 중…</div>
+            <div className="cd-text-faint text-sm text-center py-10">로딩 중…</div>
           )}
           {!loading && items.length === 0 && (
-            <div className="text-stone-400 text-sm text-center py-10">
+            <div className="cd-text-faint text-sm text-center py-10">
               아직 저장된 옵션이 없습니다. 우측에서 새 옵션을 정의해 저장하세요.
             </div>
           )}
@@ -184,8 +184,8 @@ function SettingsPageInner() {
                 className={cn(
                   "p-3 rounded-xl border transition-colors flex items-center gap-3",
                   editingId === item.id
-                    ? "bg-primary/10 border-primary/30"
-                    : "bg-white/40 hover:bg-white/70 border-white/50"
+                    ? "cd-tint-primary border-[color:var(--cd-primary)]"
+                    : "cd-surface-bg hover:bg-[color:var(--cd-surface)] cd-border-c"
                 )}
               >
                 <button
@@ -193,13 +193,13 @@ function SettingsPageInner() {
                   onClick={() => handleEdit(item)}
                   className="flex-1 min-w-0 text-left"
                 >
-                  <div className="text-sm font-bold text-stone-800 truncate flex items-center gap-2">
+                  <div className="text-sm font-bold cd-text truncate flex items-center gap-2">
                     {item.name}
                     {item.isDefault && (
                       <span className="status-pill status-pill--running">기본</span>
                     )}
                   </div>
-                  <div className="text-[11px] text-stone-500 truncate">
+                  <div className="text-[11px] cd-text-faint truncate">
                     수정 {item.updatedAt?.slice(0, 16).replace("T", " ")} · 룰 {item.config?.extractionRules?.length ?? 0}개
                   </div>
                 </button>
@@ -209,7 +209,7 @@ function SettingsPageInner() {
                   disabled={!canEdit}
                   className={cn(
                     "p-2 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed",
-                    item.isDefault ? "text-primary" : "text-stone-400 hover:text-primary"
+                    item.isDefault ? "cd-text-primary" : "cd-text-faint hover:text-[color:var(--cd-primary)]"
                   )}
                   title={
                     !canEdit
@@ -225,7 +225,7 @@ function SettingsPageInner() {
                   type="button"
                   onClick={() => handleDelete(item.id)}
                   disabled={!canEdit}
-                  className="p-2 rounded-lg text-stone-400 hover:text-red-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="p-2 rounded-lg cd-text-faint hover:text-[color:var(--cd-error)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   title={!canEdit ? "조회자 권한은 삭제할 수 없습니다." : "삭제"}
                 >
                   <Trash2 className="w-4 h-4" />
@@ -235,19 +235,19 @@ function SettingsPageInner() {
           </div>
         </section>
 
-        <section className="reveal delay-2">
+        <section className="cd-reveal delay-2">
           {editingId === null ? (
-            <div className="glass-card rounded-3xl p-10 text-center text-sm text-stone-500">
+            <div className="cd-card rounded-3xl p-10 text-center text-sm cd-text-faint">
               좌측 목록에서 옵션을 선택하거나 “새 옵션”을 누르세요.
             </div>
           ) : (
             <div className="flex flex-col gap-3">
-              <div className="glass-card rounded-2xl p-4 flex items-center gap-3">
-                <label className="text-[11px] font-bold text-stone-500 uppercase tracking-wide whitespace-nowrap">
+              <div className="cd-card rounded-2xl p-4 flex items-center gap-3">
+                <label className="text-[11px] font-bold cd-text-faint uppercase tracking-wide whitespace-nowrap">
                   옵션 이름
                 </label>
                 <input
-                  className="input-field flex-1"
+                  className="cd-input flex-1"
                   value={editingName}
                   onChange={(e) => setEditingName(e.target.value)}
                   placeholder="예: 분기별 통합허가 수집"
@@ -255,7 +255,7 @@ function SettingsPageInner() {
                 <button
                   type="button"
                   onClick={handleClose}
-                  className="glass-button rounded-xl px-3 py-2 text-xs font-bold text-stone-700"
+                  className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs font-bold cd-text-muted"
                 >
                   닫기
                 </button>

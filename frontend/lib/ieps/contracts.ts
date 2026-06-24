@@ -236,7 +236,8 @@ export async function listContracts(filter: ContractListFilter) {
 
 export async function listContractsForTree(
   year: string | null,
-  deptId?: string | null
+  deptId?: string | null,
+  contractIds?: string[] | null
 ): Promise<ContractTreePayload> {
   const db = await getDb();
   const yearsRows = rowsToObjects(
@@ -262,6 +263,11 @@ export async function listContractsForTree(
   if (deptId) {
     params.push(deptId);
     where.push(`c.owning_dept_id = $${params.length}`);
+  }
+  // RBAC 가시 계약 범위(null = 전사).
+  if (contractIds !== undefined && contractIds !== null) {
+    params.push(contractIds);
+    where.push(`c.contract_id = ANY($${params.length})`);
   }
   const whereSql = where.length ? "WHERE " + where.join(" AND ") : "";
 
@@ -562,6 +568,8 @@ export interface ContractDashboardV2Filter {
   year?: string;
   /** 기준 용역분류 (단일 선택). 생략/무효 시 통합환경허가. */
   category?: string;
+  /** RBAC 가시 계약 범위. null/undefined = 전사(필터 없음). */
+  contractIds?: string[] | null;
 }
 
 export interface DashboardMonthlyBlock {
@@ -660,14 +668,19 @@ export async function getContractDashboardV2(
 ): Promise<ContractDashboardV2> {
   const db = await getDb();
   const catCase = categoryCaseSql("c.service_type");
+  // RBAC 가시 계약 범위(null = 전사). 각 contracts 쿼리에 동일 조건을 마지막 파라미터로 합류.
+  const contractIds = filter.contractIds;
+  const scopeSql = (n: number) => (contractIds ? ` AND c.contract_id = ANY($${n})` : "");
+  const scopeArg: unknown[] = contractIds ? [contractIds] : [];
 
   const yearRows = rowsToObjects(
     await db.exec(
       `SELECT DISTINCT SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) AS year
        FROM contracts c
-       WHERE c.deleted_at IS NULL
+       WHERE c.deleted_at IS NULL${scopeSql(1)}
        ORDER BY year DESC
-       LIMIT 14`
+       LIMIT 14`,
+      scopeArg
     )
   );
   const availableYears = yearRows
@@ -689,10 +702,10 @@ export async function getContractDashboardV2(
               SUM(${CONTRACT_AMOUNT_SQL}) AS amount
        FROM contracts c
        WHERE c.deleted_at IS NULL
-         AND SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) = $1
+         AND SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) = $1${scopeSql(2)}
        GROUP BY 1
        ORDER BY 1`,
-      [year]
+      [year, ...scopeArg]
     )
   );
 
@@ -703,9 +716,9 @@ export async function getContractDashboardV2(
               SUM(${CONTRACT_AMOUNT_SQL}) AS amount
        FROM contracts c
        WHERE c.deleted_at IS NULL
-         AND SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) IN ($1, $2, $3)
+         AND SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) IN ($1, $2, $3)${scopeSql(4)}
        GROUP BY 1, 2`,
-      [year, d1Year, d2Year]
+      [year, d1Year, d2Year, ...scopeArg]
     )
   );
 
@@ -719,10 +732,10 @@ export async function getContractDashboardV2(
        WHERE c.deleted_at IS NULL
          AND m.invoice_issued = 1
          AND m.invoice_issued_at IS NOT NULL
-         AND SUBSTRING(m.invoice_issued_at, 1, 4) = $1
+         AND SUBSTRING(m.invoice_issued_at, 1, 4) = $1${scopeSql(2)}
        GROUP BY 1
        ORDER BY 1`,
-      [year]
+      [year, ...scopeArg]
     )
   );
 
@@ -736,9 +749,9 @@ export async function getContractDashboardV2(
        WHERE c.deleted_at IS NULL
          AND m.invoice_issued = 1
          AND m.invoice_issued_at IS NOT NULL
-         AND SUBSTRING(m.invoice_issued_at, 1, 4) IN ($1, $2, $3)
+         AND SUBSTRING(m.invoice_issued_at, 1, 4) IN ($1, $2, $3)${scopeSql(4)}
        GROUP BY 1, 2`,
-      [year, d1Year, d2Year]
+      [year, d1Year, d2Year, ...scopeArg]
     )
   );
 
@@ -751,10 +764,10 @@ export async function getContractDashboardV2(
        FROM contracts c
        WHERE c.deleted_at IS NULL
          AND SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) = $1
-         AND ${catCase} = $2
+         AND ${catCase} = $2${scopeSql(3)}
        GROUP BY 1
        ORDER BY amount DESC, count DESC`,
-      [year, category]
+      [year, category, ...scopeArg]
     )
   );
 
@@ -768,9 +781,9 @@ export async function getContractDashboardV2(
        JOIN contracts c ON c.contract_id = m.contract_id
        WHERE c.deleted_at IS NULL
          AND m.payment_collected = 1
-         AND SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) IN ($1, $2)
+         AND SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) IN ($1, $2)${scopeSql(3)}
        GROUP BY 1, 2`,
-      [year, d1Year]
+      [year, d1Year, ...scopeArg]
     )
   );
 
@@ -783,10 +796,10 @@ export async function getContractDashboardV2(
        JOIN facilities f ON f.facility_id = c.counterparty_facility_id
        WHERE c.deleted_at IS NULL
          AND SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) = $1
-         AND ${catCase} = $2
+         AND ${catCase} = $2${scopeSql(3)}
        GROUP BY 1
        ORDER BY amount DESC`,
-      [year, category]
+      [year, category, ...scopeArg]
     )
   );
 
@@ -810,10 +823,10 @@ export async function getContractDashboardV2(
          AND m.payment_collected = 0
          AND COALESCE(m.invoice_amount, m.amount, 0) > 0
          AND ${catCase} = $1
-         AND SUBSTRING(m.invoice_issued_at, 1, 4) = $2
+         AND SUBSTRING(m.invoice_issued_at, 1, 4) = $2${scopeSql(3)}
        ORDER BY m.invoice_issued_at DESC NULLS LAST
        LIMIT 50`,
-      [category, year]
+      [category, year, ...scopeArg]
     )
   );
 
@@ -841,10 +854,10 @@ export async function getContractDashboardV2(
          AND m.payment_collected = 1
          AND m.payment_collected_at IS NOT NULL
          AND SUBSTRING(m.payment_collected_at, 1, 10) >= $1
-         AND ${catCase} = $2
+         AND ${catCase} = $2${scopeSql(3)}
        ORDER BY m.payment_collected_at DESC
        LIMIT 50`,
-      [cutoffStr, category]
+      [cutoffStr, category, ...scopeArg]
     )
   );
 

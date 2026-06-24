@@ -33,6 +33,23 @@ export const CERTIFICATION_OPTIONS = [
   "산업안전기사",
 ] as const;
 
+// 엔지니어링협회 기술등급 (수행인력 명단의 '기술등급' 칸에 사용)
+export const ENG_GRADE_OPTIONS = ["기술사", "특급", "고급", "중급", "초급"] as const;
+// 환경부 통합허가 대행업 등급 base (전문분야=대기관리면 표시 시 '(대기)' 부착)
+export const ENV_GRADE_OPTIONS = ["고급인력", "일반인력"] as const;
+// 전문분야
+export const SPECIALTY_OPTIONS = ["대기관리", "수질관리"] as const;
+
+/** 환경부 등급 표시 라벨: 전문분야가 대기관리면 '(대기)'를 부착한다. */
+export function envGradeLabel(
+  envGrade?: string | null,
+  specialtyField?: string | null
+): string {
+  const base = (envGrade ?? "").trim();
+  if (!base) return "";
+  return specialtyField === "대기관리" ? `${base}(대기)` : base;
+}
+
 export type Gender = "male" | "female";
 export type DegreeLevel = "bachelor" | "master" | "doctor";
 
@@ -109,6 +126,10 @@ export interface EmployeeDetail extends EmployeeListItem {
   employeeNo: string | null;
   hiredAt: string | null;
   jobDuties: string | null;
+  agentRegisteredAt: string | null;
+  engGrade: string | null;
+  envGrade: string | null;
+  specialtyField: string | null;
   address: string | null;
   residentRegistrationMasked: string | null;
   birthDate: string | null;
@@ -132,6 +153,10 @@ export interface SaveEmployeeInput {
   positionId?: string | null;
   hiredAt?: string | null;
   jobDuties?: string | null;
+  agentRegisteredAt?: string | null;
+  engGrade?: string | null;
+  envGrade?: string | null;
+  specialtyField?: string | null;
   address?: string | null;
   residentRegistrationNo?: string | null;
   mobilePhone?: string | null;
@@ -292,6 +317,10 @@ export async function getEmployeeDetail(employeeId: string): Promise<EmployeeDet
     employeeNo: row.employee_no != null ? String(row.employee_no) : null,
     hiredAt: row.hired_at != null ? String(row.hired_at) : null,
     jobDuties: row.job_duties != null ? String(row.job_duties) : null,
+    agentRegisteredAt: row.agent_registered_at != null ? String(row.agent_registered_at) : null,
+    engGrade: row.eng_grade != null ? String(row.eng_grade) : null,
+    envGrade: row.env_grade != null ? String(row.env_grade) : null,
+    specialtyField: row.specialty_field != null ? String(row.specialty_field) : null,
     address: row.address != null ? String(row.address) : null,
     residentRegistrationMasked:
       row.resident_registration_masked != null ? String(row.resident_registration_masked) : null,
@@ -374,10 +403,11 @@ export async function saveEmployeeDetail(
     )[0];
     await db.run(
       `INSERT INTO employee_profiles
-        (employee_id, user_id, employee_no, name, dept_id, position_id, hired_at, job_duties, address,
+        (employee_id, user_id, employee_no, name, dept_id, position_id, hired_at, job_duties,
+         agent_registered_at, eng_grade, env_grade, specialty_field, address,
          resident_registration_encrypted, resident_registration_masked, birth_date, gender,
          nationality_kind, mobile_phone, email, company_phone, status, memo, created_by, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $21)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $25)
        ON CONFLICT (employee_id) DO UPDATE SET
          user_id = EXCLUDED.user_id,
          employee_no = EXCLUDED.employee_no,
@@ -386,6 +416,10 @@ export async function saveEmployeeDetail(
          position_id = EXCLUDED.position_id,
          hired_at = EXCLUDED.hired_at,
          job_duties = EXCLUDED.job_duties,
+         agent_registered_at = EXCLUDED.agent_registered_at,
+         eng_grade = EXCLUDED.eng_grade,
+         env_grade = EXCLUDED.env_grade,
+         specialty_field = EXCLUDED.specialty_field,
          address = EXCLUDED.address,
          resident_registration_encrypted = COALESCE(EXCLUDED.resident_registration_encrypted, employee_profiles.resident_registration_encrypted),
          resident_registration_masked = COALESCE(EXCLUDED.resident_registration_masked, employee_profiles.resident_registration_masked),
@@ -407,6 +441,10 @@ export async function saveEmployeeDetail(
         input.positionId || null,
         nullable(input.hiredAt),
         nullable(input.jobDuties),
+        nullable(input.agentRegisteredAt),
+        nullable(input.engGrade),
+        nullable(input.envGrade),
+        nullable(input.specialtyField),
         nullable(input.address),
         rrn?.encrypted ?? null,
         rrn?.masked ?? null,

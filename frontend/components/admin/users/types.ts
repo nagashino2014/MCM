@@ -24,6 +24,7 @@ export interface DepartmentPositionRow {
 export interface OrganizationEmployeeRow {
   employeeId: string;
   userId: string | null;
+  employeeNo: string | null;
   name: string;
   deptId: string | null;
   positionId: string | null;
@@ -31,6 +32,9 @@ export interface OrganizationEmployeeRow {
   positionRankOrder: number | null;
   email: string | null;
   status: "active" | "inactive";
+  hiredAt: string | null;
+  gender: "male" | "female" | null;
+  hasBirthDate: boolean;
 }
 
 export interface OrganizationSnapshot {
@@ -43,6 +47,7 @@ export interface OrganizationSnapshot {
 export interface UserRow {
   userId: string;
   email: string;
+  loginId: string | null;
   name: string;
   role: "admin" | "editor" | "viewer";
   status: "active" | "disabled";

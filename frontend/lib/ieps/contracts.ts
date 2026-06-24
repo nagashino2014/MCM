@@ -228,7 +228,10 @@ export async function listContracts(filter: ContractListFilter) {
   };
 }
 
-export async function listContractsForTree(year: string | null): Promise<ContractTreePayload> {
+export async function listContractsForTree(
+  year: string | null,
+  deptId?: string | null
+): Promise<ContractTreePayload> {
   const db = await getDb();
   const yearsRows = rowsToObjects(
     await db.exec(
@@ -248,6 +251,11 @@ export async function listContractsForTree(year: string | null): Promise<Contrac
   if (year && /^\d{4}$/.test(year)) {
     params.push(year);
     where.push(`COALESCE(NULLIF(c.contract_date, ''), c.started_at, c.created_at) LIKE $${params.length} || '%'`);
+  }
+  // 업무보고 화면용 — 수행 부서(owning_dept_id)로 한정.
+  if (deptId) {
+    params.push(deptId);
+    where.push(`c.owning_dept_id = $${params.length}`);
   }
   const whereSql = where.length ? "WHERE " + where.join(" AND ") : "";
 
@@ -434,10 +442,12 @@ export async function getContractDetail(contractId: string) {
               f.site_address AS facility_address,
               f.site_business_registration_no AS facility_site_business_registration_no,
               f.corporate_registration_no AS facility_corporate_registration_no,
-              f.integrated_permit_target AS facility_integrated_permit_target
+              f.integrated_permit_target AS facility_integrated_permit_target,
+              od.dept_name AS owning_dept_name
        FROM contracts c
        JOIN facilities cp ON cp.facility_id = c.counterparty_facility_id
        LEFT JOIN facilities f ON f.facility_id = c.facility_id
+       LEFT JOIN departments od ON od.dept_id = c.owning_dept_id
        WHERE c.contract_id = $1
          AND c.deleted_at IS NULL`,
       [contractId]

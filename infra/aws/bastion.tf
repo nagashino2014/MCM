@@ -86,4 +86,10 @@ resource "aws_instance" "bastion" {
   }
 
   tags = merge(local.tags, { Name = "${local.name}-bastion" })
+
+  # al2023 데이터소스(most_recent=true)가 시간이 지나며 새 AMI 로 바뀌어도
+  # 매 apply 마다 bastion 을 재생성하지 않도록 AMI 변경 무시(현재 인스턴스 유지).
+  lifecycle {
+    ignore_changes = [ami]
+  }
 }

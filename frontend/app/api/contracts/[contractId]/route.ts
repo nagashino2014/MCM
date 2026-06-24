@@ -58,6 +58,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       if (body.contractDirection !== undefined) pushSet("contract_direction", body.contractDirection || "sales");
       if (body.industryCategory !== undefined) pushSet("industry_category", body.industryCategory || null);
       if (body.paymentMethod !== undefined) pushSet("payment_method", body.paymentMethod || null);
+      if (body.owningDeptId !== undefined) pushSet("owning_dept_id", body.owningDeptId || null);
       if (body.orderingSubjectType !== undefined) pushSet("ordering_subject_type", normalizeOrderingSubjectType(body.orderingSubjectType));
       if (body.contractDate !== undefined) pushSet("contract_date", body.contractDate || null);
       if (body.startedAt !== undefined) pushSet("started_at", body.startedAt || null);

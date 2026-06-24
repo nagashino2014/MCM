@@ -13,6 +13,7 @@ import {
   Folder,
   FolderClosed,
   FolderOpen,
+  GitCommitHorizontal,
   GripVertical,
   Paperclip,
   Pencil,
@@ -31,6 +32,7 @@ import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import "@/components/cdash/cdash.css";
 import { resolveServiceTypeStyle } from "@/lib/ieps/contract-tree-style";
 import ContractChangeModal from "@/components/contracts/ContractChangeModal";
+import ContractStaffingModal from "@/components/contracts/ContractStaffingModal";
 import { IndustryOptionsEditorButton, useContractIndustryOptions } from "@/components/contracts/IndustryOptionsEditor";
 import {
   ORDERING_SUBJECT_OPTIONS,
@@ -782,6 +784,26 @@ function ContractDetailPanel({
   const targetFacilityLabel = buildTargetFacilityLabel(contract.service_type);
   const [targetFacilityPopupOpen, setTargetFacilityPopupOpen] = useState(false);
 
+  // 공정표/수행인력 모달 + 수행 부서·인력 요약(KPI 표시용).
+  const [staffingModalOpen, setStaffingModalOpen] = useState(false);
+  const [participants, setParticipants] = useState<{ employeeName: string }[]>([]);
+  const reloadParticipants = useCallback(() => {
+    fetch(`/api/contracts/${String(contract.contract_id)}/participants`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setParticipants(d.participants ?? []))
+      .catch(() => setParticipants([]));
+  }, [contract.contract_id]);
+  useEffect(() => {
+    reloadParticipants();
+  }, [reloadParticipants]);
+
+  const owningDeptName = contract.owning_dept_name ? String(contract.owning_dept_name) : null;
+  const staffSummary =
+    participants.length === 0
+      ? null
+      : participants.slice(0, 2).map((p) => p.employeeName).join(", ") +
+        (participants.length > 2 ? ` 외 ${participants.length - 2}명` : "");
+
   // 계산서 발행 후 아직 수금이 완료되지 않은 대금지급조건이 하나라도 있으면
   // 경과 기간 태그를 노출한다. 색상은 "가장 오래 경과한" 미수금 건 기준.
   const overdueTag = getOverdueCollectionTag(detail.milestones);
@@ -892,6 +914,14 @@ function ContractDetailPanel({
           </button>
           <button
             type="button"
+            onClick={() => setStaffingModalOpen(true)}
+            className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs cd-text-muted flex items-center gap-1"
+          >
+            <GitCommitHorizontal className="w-3.5 h-3.5" />
+            공정표/수행인력
+          </button>
+          <button
+            type="button"
             onClick={onOpenChange}
             className="rounded-xl px-3 py-2 text-xs text-white cd-fill-primary shadow-sm flex items-center gap-1"
           >
@@ -951,6 +981,16 @@ function ContractDetailPanel({
             value={isIntegratedPermit ? (permitIssuedAt ?? "-") : "-"}
             highlight={isIntegratedPermit && !!permitIssuedAt}
           />
+          <Info
+            label="수행 부서"
+            highlight={!!contract.owning_dept_id}
+            value={
+              <span className="flex flex-col">
+                <span>{owningDeptName ?? "미지정"}</span>
+                {staffSummary && <span className="text-[11px] cd-text-faint font-normal">{staffSummary}</span>}
+              </span>
+            }
+          />
         </div>
         <CollectionProgressCard
           rate={collectionRate}
@@ -985,6 +1025,23 @@ function ContractDetailPanel({
             </div>
           </div>
         </div>
+      )}
+
+      {staffingModalOpen && (
+        <ContractStaffingModal
+          contractId={String(contract.contract_id)}
+          serviceType={String(contract.service_type ?? "")}
+          currentDeptId={String(contract.owning_dept_id ?? "")}
+          onClose={() => {
+            setStaffingModalOpen(false);
+            onReloadDetail();
+            reloadParticipants();
+          }}
+          onSaved={() => {
+            onReloadDetail();
+            reloadParticipants();
+          }}
+        />
       )}
 
       {outsourcingCount > 0 && (
@@ -2477,7 +2534,7 @@ function DraggablePdfViewer({
   const moveDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!dragOffset.current) return;
     const width = Math.min(1280, window.innerWidth - 32);
-    const height = Math.min(900, window.innerHeight - 32);
+    const height = Math.min(1100, window.innerHeight - 32);
     setPosition({
       x: Math.min(Math.max(8, event.clientX - dragOffset.current.x), Math.max(8, window.innerWidth - width - 8)),
       y: Math.min(Math.max(8, event.clientY - dragOffset.current.y), Math.max(8, window.innerHeight - height - 8)),
@@ -2496,7 +2553,7 @@ function DraggablePdfViewer({
         left: position.x,
         top: position.y,
         width: "min(1280px, calc(100vw - 32px))",
-        height: "min(900px, calc(100vh - 32px))",
+        height: "min(1100px, calc(100vh - 32px))",
       }}
     >
       <div

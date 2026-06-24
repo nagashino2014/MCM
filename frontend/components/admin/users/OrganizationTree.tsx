@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Building2, ChevronDown, ChevronRight, Network, UserRound } from "lucide-react";
+import { ChevronDown, ChevronRight, Network, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { DepartmentRow, OrganizationEmployeeRow, OrganizationSnapshot } from "./types";
 
@@ -12,6 +12,8 @@ interface OrganizationTreeProps {
   onSelectDept?: (dept: DepartmentRow) => void;
   onSelectEmployee?: (employee: OrganizationEmployeeRow) => void;
   title?: string;
+  /** 모달 등에 끼울 때 자체 높이 제한·스크롤을 제거 */
+  embedded?: boolean;
 }
 
 export default function OrganizationTree({
@@ -21,6 +23,7 @@ export default function OrganizationTree({
   onSelectDept,
   onSelectEmployee,
   title = "조직도",
+  embedded = false,
 }: OrganizationTreeProps) {
   const [open, setOpen] = useState<Set<string>>(() => new Set(["exec"]));
   const departments = snapshot?.departments ?? [];
@@ -84,7 +87,9 @@ export default function OrganizationTree({
 
     return (
       <div key={dept.deptId} className="relative">
-        {depth > 0 && <div className="absolute left-3 top-0 bottom-0 border-l border-stone-200" />}
+        {depth > 0 && (
+          <div className="absolute left-3 top-0 bottom-0 w-px" style={{ background: "var(--cd-border)" }} />
+        )}
         <button
           type="button"
           onClick={() => {
@@ -94,21 +99,21 @@ export default function OrganizationTree({
           className={cn(
             "w-full flex items-center gap-2 rounded-xl px-2 py-2 text-left transition",
             selectedDeptId === dept.deptId
-              ? "bg-primary/10 text-primary"
-              : "hover:bg-white/70 text-stone-700"
+              ? "cd-soft-primary"
+              : "cd-text-muted cd-row-hover hover:text-[color:var(--cd-text)]"
           )}
           style={{ marginLeft: depth * 14 }}
         >
-          <span className="w-4 h-4 flex items-center justify-center text-stone-400">
+          <span className="w-4 h-4 flex items-center justify-center cd-text-faint">
             {hasChildren ? (
               isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />
             ) : (
-              <span className="w-1.5 h-1.5 rounded-full bg-stone-300" />
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--cd-faint)" }} />
             )}
           </span>
           <Network className="w-4 h-4" fill="currentColor" style={{ color: accent }} />
-          <span className="text-sm font-medium truncate">{dept.deptName}</span>
-          <span className="ml-auto text-[10px] font-bold text-stone-400">{childEmployees.length}</span>
+          <span className="text-sm font-semibold truncate">{dept.deptName}</span>
+          <span className="ml-auto mr-1 text-[10px] font-bold cd-text-faint">{childEmployees.length}</span>
         </button>
 
         {isOpen && (
@@ -122,15 +127,22 @@ export default function OrganizationTree({
                 className={cn(
                   "w-full flex items-center gap-2 rounded-xl px-2 py-1.5 text-left transition",
                   selectedEmployeeId === employee.employeeId
-                    ? "bg-stone-900 text-white"
-                    : "hover:bg-white/70 text-stone-600"
+                    ? "cd-fill-primary"
+                    : "cd-text-muted cd-row-hover hover:text-[color:var(--cd-text)]"
                 )}
                 style={{ marginLeft: (depth + 1) * 14 }}
               >
-                <span className="w-4 h-4 border-l border-b border-stone-200 rounded-bl-md" />
+                <span className="w-4 h-4 rounded-bl-md" style={{ borderLeft: "1px solid var(--cd-border)", borderBottom: "1px solid var(--cd-border)" }} />
                 <UserRound className="w-4 h-4" fill="currentColor" style={{ color: accent }} />
                 <span className="text-xs font-normal truncate">{employee.name}</span>
-                <span className="text-[10px] text-stone-400 truncate">{employee.positionName}</span>
+                <span
+                  className={cn(
+                    "text-[10px] truncate",
+                    selectedEmployeeId === employee.employeeId ? "text-white/70" : "cd-text-faint"
+                  )}
+                >
+                  {employee.positionName}
+                </span>
               </button>
             ))}
           </div>
@@ -140,17 +152,14 @@ export default function OrganizationTree({
   };
 
   return (
-    <section className="glass-panel rounded-3xl p-5 reveal bg-white/70">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.18em] text-primary">Organization</p>
-          <h2 className="text-lg font-black text-stone-800">{title}</h2>
-        </div>
-        <Building2 className="w-5 h-5 text-primary" fill="currentColor" />
+    <section className="cd-card p-5">
+      <div className="mb-4">
+        <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] cd-text-primary">Organization</p>
+        <h2 className="text-lg font-extrabold cd-text">{title}</h2>
       </div>
-      <div className="max-h-[calc(100vh-260px)] min-h-[520px] overflow-auto pr-1">
+      <div className={embedded ? "max-h-[380px] overflow-y-auto scrollbar-hide pr-1" : "max-h-[calc(100vh-260px)] min-h-[520px] overflow-auto scrollbar-hide pr-1"}>
         {!snapshot ? (
-          <div className="text-sm text-stone-400 py-10 text-center">조직도 로딩 중…</div>
+          <div className="text-sm cd-text-faint py-10 text-center">조직도 로딩 중…</div>
         ) : (
           <div className="space-y-1">{roots.map((dept) => renderDept(dept, 0))}</div>
         )}

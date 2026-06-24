@@ -1,7 +1,6 @@
 import { auth } from "@/lib/auth/config";
 import { ensureAdminSeeded } from "@/lib/auth/seed";
-import { Sidebar } from "@/components/layout/Sidebar";
-import { TopBar } from "@/components/layout/TopBar";
+import { AppShell } from "@/components/layout/AppShell";
 import { SessionProvider } from "@/components/auth/SessionProvider";
 
 export default async function AppLayout({
@@ -20,19 +19,13 @@ export default async function AppLayout({
 
   return (
     <SessionProvider session={session}>
-      <div className="flex h-screen bg-[#F2F4F7] p-4 gap-4">
-        <Sidebar role={role} />
-        <div className="flex-1 flex flex-col min-w-0 min-h-0">
-          <TopBar
-            userName={session?.user?.name ?? null}
-            userEmail={session?.user?.email ?? null}
-            role={role}
-          />
-          <main className="flex-1 mt-4 min-h-0 relative rounded-3xl overflow-y-auto">
-            {children}
-          </main>
-        </div>
-      </div>
+      <AppShell
+        role={role}
+        userName={session?.user?.name ?? null}
+        userEmail={session?.user?.email ?? null}
+      >
+        {children}
+      </AppShell>
     </SessionProvider>
   );
 }

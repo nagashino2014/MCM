@@ -371,3 +371,55 @@
   background: var(--cd-surface) !important;
   border-bottom: 1px solid var(--cd-border) !important;
 }
+
+/* ---------------- 구조화 노트(추진 내역) ---------------- */
+.sn-toolbar .sn-btn {
+  border: 1px solid var(--cd-border);
+  border-radius: 8px;
+  padding: 2px 8px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--cd-text-muted, var(--cd-muted));
+  background: var(--cd-card);
+}
+.sn-toolbar .sn-btn:hover { background: var(--cd-surface); }
+.sn-editor {
+  min-height: 120px;
+  width: 100%;
+  resize: vertical;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 13px;
+}
+.sn-editor:empty::before,
+.sn-editor[data-empty="1"]::before { content: ""; }
+.sn-editor .sn-line {
+  position: relative;
+  line-height: 1.6;
+  min-height: 1.6em;
+}
+/* 글머리/기타기호: 고정 20px 들여쓰기 + 걸어쓰기(마커 absolute, 줄바꿈 텍스트는 항상 20px 우측) */
+.sn-editor .sn-line[data-bullet="num"],
+.sn-editor .sn-line[data-bullet="dot"],
+.sn-editor .sn-line[data-bullet="dash"],
+.sn-editor .sn-line[data-bullet="misc"] { padding-left: 20px; }
+.sn-editor .sn-line[data-bullet="num"]::before,
+.sn-editor .sn-line[data-bullet="dot"]::before,
+.sn-editor .sn-line[data-bullet="dash"]::before,
+.sn-editor .sn-line[data-bullet="misc"]::before {
+  content: attr(data-marker);
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+.sn-editor .sn-line[data-bullet="dot"]::before { font-size: 0.85em; top: 0.08em; }
+/* 글머리 행: 하단 행간 +30% */
+.sn-editor .sn-line[data-bullet="num"],
+.sn-editor .sn-line[data-bullet="dot"],
+.sn-editor .sn-line[data-bullet="dash"] { margin-bottom: 0.48em; }
+/* 부연(※→) 행: 하단 행간 +30% */
+.sn-editor .sn-line[data-bullet="misc"] { margin-bottom: 0.48em; }
+/* 소제목 행: 강조 + 하단 행간 +100% + 상단 행간 +80% (첫 행은 상단 여백 제외) */
+.sn-editor .sn-line[data-sub="1"] { font-weight: 600; margin-top: 1.28em; margin-bottom: 1.6em; }
+.sn-editor .sn-line:first-child[data-sub="1"] { margin-top: 0; }

@@ -49,4 +49,9 @@ resource "aws_ecs_service" "backend" {
   }
 
   tags = local.tags
+
+  # 배포는 terraform 밖에서 처리. task_definition 되돌림 방지.
+  lifecycle {
+    ignore_changes = [task_definition]
+  }
 }

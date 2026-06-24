@@ -14,9 +14,11 @@ export type UserStatus = "active" | "disabled";
 export interface UserRow {
   userId: string;
   email: string;
+  loginId: string | null;
   name: string;
   role: Role;
   status: UserStatus;
+  mustChangePassword: boolean;
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;
@@ -30,9 +32,11 @@ function rowToUser(row: Record<string, unknown>): UserRow {
   return {
     userId: String(row.user_id ?? ""),
     email: String(row.email ?? ""),
+    loginId: row.login_id != null ? String(row.login_id) : null,
     name: String(row.name ?? ""),
     role: (String(row.role ?? "viewer") as Role),
     status: (String(row.status ?? "active") as UserStatus),
+    mustChangePassword: Number(row.must_change_password ?? 0) === 1,
     createdBy: row.created_by != null ? String(row.created_by) : null,
     createdAt: String(row.created_at ?? ""),
     updatedAt: String(row.updated_at ?? ""),
@@ -66,7 +70,7 @@ export async function findUserById(userId: string): Promise<UserRow | null> {
   let result;
   try {
     result = await db.exec(
-      "SELECT user_id, email, name, role, status, created_by, created_at, updated_at FROM users WHERE user_id = $1 LIMIT 1",
+      "SELECT user_id, email, name, role, status, must_change_password, created_by, created_at, updated_at FROM users WHERE user_id = $1 LIMIT 1",
       [userId]
     );
   } catch {
@@ -83,7 +87,7 @@ export async function listUsers(): Promise<UserRow[]> {
   let result;
   try {
     result = await db.exec(
-      "SELECT user_id, email, name, role, status, created_by, created_at, updated_at FROM users ORDER BY created_at ASC"
+      "SELECT user_id, email, login_id, name, role, status, must_change_password, created_by, created_at, updated_at FROM users ORDER BY created_at ASC"
     );
   } catch {
     return [];
@@ -135,9 +139,11 @@ export async function createUser(input: CreateUserInput): Promise<UserRow> {
     return {
       userId,
       email,
+      loginId: null,
       name: input.name.trim(),
       role: input.role,
       status: "active" as UserStatus,
+      mustChangePassword: false,
       createdBy: input.createdBy ?? null,
       createdAt: now,
       updatedAt: now,
@@ -191,6 +197,86 @@ export async function updateUser(userId: string, patch: UpdateUserPatch): Promis
     await db.run(
       "UPDATE users SET " + fields.join(", ") + ` WHERE user_id = $${pIdx}`,
       values as unknown[]
+    );
+  });
+}
+
+/** authorize 용 조회 결과: 사번(login_id) 또는 이메일 로컬파트(email_local)로 찾는다. */
+export interface AuthLookup {
+  userId: string;
+  email: string;
+  name: string;
+  role: Role;
+  status: UserStatus;
+  passwordHash: string;
+  mustChangePassword: boolean;
+}
+
+/**
+ * 로그인 식별자(사번 또는 이메일 로컬파트)로 계정을 조회한다.
+ * 입력이 전체 이메일(@포함)이면 로컬파트만 취해 매칭(전체 주소는 식별자로 쓰지 않음 — §7.5-3).
+ */
+export async function findUserByLoginIdentifier(identifier: string): Promise<AuthLookup | null> {
+  invalidateDb();
+  const db = await getDb();
+  const raw = String(identifier ?? "").trim().toLowerCase();
+  if (!raw) return null;
+  const at = raw.indexOf("@");
+  const key = at > 0 ? raw.slice(0, at) : raw;
+  let result;
+  try {
+    result = await db.exec(
+      `SELECT user_id, email, password_hash, name, role, status, must_change_password
+         FROM users
+        WHERE login_id = $1 OR email_local = $1
+        LIMIT 1`,
+      [key]
+    );
+  } catch {
+    return null;
+  }
+  const rows = rowsToObjects(result);
+  if (!rows.length) return null;
+  const r = rows[0];
+  return {
+    userId: String(r.user_id ?? ""),
+    email: String(r.email ?? ""),
+    name: String(r.name ?? ""),
+    role: (String(r.role ?? "viewer") as Role),
+    status: (String(r.status ?? "active") as UserStatus),
+    passwordHash: String(r.password_hash ?? ""),
+    mustChangePassword: Number(r.must_change_password ?? 0) === 1,
+  };
+}
+
+/** 본인 비밀번호 변경(현재 비번 검증용)으로 password_hash 포함 조회. */
+export async function findUserWithHashById(userId: string): Promise<UserWithHash | null> {
+  invalidateDb();
+  const db = await getDb();
+  let result;
+  try {
+    result = await db.exec(
+      "SELECT user_id, email, password_hash, name, role, status, created_by, created_at, updated_at FROM users WHERE user_id = $1 LIMIT 1",
+      [userId]
+    );
+  } catch {
+    return null;
+  }
+  const rows = rowsToObjects(result);
+  if (!rows.length) return null;
+  return { ...rowToUser(rows[0]), passwordHash: String(rows[0].password_hash ?? "") };
+}
+
+/** 본인 비밀번호 변경 + 강제 변경 플래그 해제. */
+export async function changeOwnPassword(userId: string, newPassword: string): Promise<void> {
+  if (!newPassword || newPassword.length < 8) {
+    throw new Error("비밀번호는 최소 8자 이상이어야 합니다.");
+  }
+  const hash = await hashPassword(newPassword);
+  await withDbWrite(async (db) => {
+    await db.run(
+      "UPDATE users SET password_hash = $1, must_change_password = 0, updated_at = $2 WHERE user_id = $3",
+      [hash, new Date().toISOString(), userId]
     );
   });
 }

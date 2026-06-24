@@ -2,6 +2,10 @@ output "alb_dns_name" {
   value = aws_lb.main.dns_name
 }
 
+output "app_url" {
+  value = "https://${var.domain_name}"
+}
+
 output "s3_bucket" {
   value = aws_s3_bucket.app_data.bucket
 }

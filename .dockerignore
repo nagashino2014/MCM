@@ -8,6 +8,18 @@ data/ieps/raw
 data/ieps/extracted
 data/ieps/logs
 data/ieps/db.sqlite
+# 빌드 컨텍스트 최적화: data/ 는 14GB 이며 이미지에는 data/ksic 만 COPY 된다.
+data/*
+!data/ksic
+# 이미지에 들어가지 않는 대용량/불필요 항목 (컨텍스트 전송만 느려짐)
+.git
+venv311
+.venv-aws
+table_cache
+prototype
+save
+security-api-scan.txt
+security-command-only.txt
 frontend/public/uploads
 frontend/data/chromadb
 backend/data/jobs

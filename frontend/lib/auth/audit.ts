@@ -49,10 +49,13 @@ export type AuditAction =
   | "user_update"
   | "user_delete"
   | "user_password_reset"
+  | "account_provision"
   | "permission_template_update"
   | "permission_assignment_update"
   | "employee_update"
   | "employee_document_upload"
+  | "work_plan_save"
+  | "work_plan_delete"
   | "trash_purge"
   | "alert.ack";
 

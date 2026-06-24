@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import type React from "react";
 import { BriefcaseBusiness, FileUp, GraduationCap, Home, Plus, Save, Trash2, UserRoundCog, X } from "lucide-react";
+import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import type {
   DepartmentRow,
   OrganizationEmployeeRow,
@@ -21,6 +22,18 @@ interface EmployeeRegistryPanelProps {
 
 type TabKey = "basic" | "education" | "evidence";
 
+// 수행인력 명단 연동 등급/분야 옵션 (서버 lib와 값 동일 — 서버 전용 모듈 임포트 회피를 위해 로컬 정의)
+const ENG_GRADE_OPTIONS = ["기술사", "특급", "고급", "중급", "초급"] as const;
+const ENV_GRADE_OPTIONS = ["고급인력", "일반인력"] as const;
+const SPECIALTY_OPTIONS = ["대기관리", "수질관리"] as const;
+
+/** 환경부 등급 표시 라벨: 전문분야가 대기관리면 '(대기)'를 부착한다. */
+function envGradeLabel(envGrade?: string | null, specialtyField?: string | null): string {
+  const base = (envGrade ?? "").trim();
+  if (!base) return "";
+  return specialtyField === "대기관리" ? `${base}(대기)` : base;
+}
+
 interface EmployeeDetail {
   employeeId?: string;
   userId?: string | null;
@@ -30,6 +43,10 @@ interface EmployeeDetail {
   positionId?: string | null;
   hiredAt?: string | null;
   jobDuties?: string | null;
+  agentRegisteredAt?: string | null;
+  engGrade?: string | null;
+  envGrade?: string | null;
+  specialtyField?: string | null;
   address?: string | null;
   residentRegistrationNo?: string;
   residentRegistrationMasked?: string | null;
@@ -310,22 +327,22 @@ export default function EmployeeRegistryPanel({
 
   return (
     <div className="flex flex-col gap-5">
-      <section className="glass-panel rounded-3xl p-6 reveal delay-1">
+      <section className="cd-card p-6">
         <div className="flex items-start justify-between gap-4 mb-5">
           <div>
-            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-primary">Department</p>
-            <h2 className="text-2xl font-black text-stone-800">부서 편집</h2>
-            <p className="text-sm text-stone-500 mt-1">상위 부서와 해당 부서에서 사용할 직급을 설정합니다.</p>
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] cd-text-primary">Department</p>
+            <h2 className="text-xl font-extrabold cd-text">부서 편집</h2>
+            <p className="text-sm cd-text-muted mt-1">상위 부서와 해당 부서에서 사용할 직급을 설정합니다.</p>
           </div>
-          <BriefcaseBusiness className="w-7 h-7 text-primary" fill="currentColor" />
+          <span className="cd-title-icon"><BriefcaseBusiness className="w-4 h-4" /></span>
         </div>
         <div className="grid lg:grid-cols-[1fr_0.8fr] gap-4">
           <div className="grid md:grid-cols-2 gap-3">
             <Field label="부서명">
-              <input className="input-field" value={departmentDraft.deptName} onChange={(e) => setDepartmentDraft((prev) => ({ ...prev, deptName: e.target.value }))} placeholder="부서명" />
+              <input className="cd-input" value={departmentDraft.deptName} onChange={(e) => setDepartmentDraft((prev) => ({ ...prev, deptName: e.target.value }))} placeholder="부서명" />
             </Field>
             <Field label="부서 유형">
-              <select className="ui-select" value={departmentDraft.deptKind} onChange={(e) => setDepartmentDraft((prev) => ({ ...prev, deptKind: e.target.value }))}>
+              <select className="cd-select" value={departmentDraft.deptKind} onChange={(e) => setDepartmentDraft((prev) => ({ ...prev, deptKind: e.target.value }))}>
                 <option value="executive">총괄</option>
                 <option value="division">본부</option>
                 <option value="team">팀</option>
@@ -335,7 +352,7 @@ export default function EmployeeRegistryPanel({
               </select>
             </Field>
             <Field label="상위 부서">
-              <select className="ui-select" value={departmentDraft.parentDeptId} onChange={(e) => setDepartmentDraft((prev) => ({ ...prev, parentDeptId: e.target.value }))}>
+              <select className="cd-select" value={departmentDraft.parentDeptId} onChange={(e) => setDepartmentDraft((prev) => ({ ...prev, parentDeptId: e.target.value }))}>
                 <option value="">최상위 부서</option>
                 {departments.filter((dept) => dept.deptId !== selectedDept?.deptId).map((dept) => (
                   <option key={dept.deptId} value={dept.deptId}>
@@ -345,11 +362,11 @@ export default function EmployeeRegistryPanel({
               </select>
             </Field>
             <Field label="표시 색상">
-              <input className="input-field h-10" type="color" value={departmentDraft.accentColor} onChange={(e) => setDepartmentDraft((prev) => ({ ...prev, accentColor: e.target.value }))} />
+              <input className="cd-input h-10 p-1" type="color" value={departmentDraft.accentColor} onChange={(e) => setDepartmentDraft((prev) => ({ ...prev, accentColor: e.target.value }))} />
             </Field>
           </div>
-          <div className="rounded-2xl bg-white/55 border border-white/70 p-4">
-            <h3 className="font-medium text-stone-800 mb-3">사용 가능 직급</h3>
+          <div className="rounded-2xl cd-surface-bg border cd-border-c p-4">
+            <h3 className="font-semibold cd-text mb-3">사용 가능 직급</h3>
             <PositionTagEditor
               positions={positions}
               activeIds={departmentDraft.positionIds}
@@ -364,24 +381,24 @@ export default function EmployeeRegistryPanel({
               onAdd={addPosition}
               onDelete={deletePosition}
             />
-            <button type="button" disabled={saving || !departmentDraft.deptName} onClick={saveDepartment} className="mt-4 rounded-xl px-4 py-2 text-xs font-bold text-white bg-primary disabled:opacity-40">
+            <button type="button" disabled={saving || !departmentDraft.deptName} onClick={saveDepartment} className="cd-btn cd-btn-primary mt-4">
               부서 저장
             </button>
           </div>
         </div>
       </section>
 
-      <section className="glass-panel rounded-3xl p-6 reveal delay-2">
+      <section className="cd-card p-6">
         <div className="flex items-start justify-between gap-4 mb-4">
           <div>
-            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-primary">Employee record</p>
-            <h2 className="text-2xl font-black text-stone-800">사용자 등록·수정</h2>
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] cd-text-primary">Employee record</p>
+            <h2 className="text-xl font-extrabold cd-text">사용자 등록·수정</h2>
           </div>
-          <button type="button" className="glass-button rounded-xl px-3 py-2 text-xs font-bold" onClick={() => setEmployee(emptyEmployee(selectedDept?.deptId))}>
+          <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => setEmployee(emptyEmployee(selectedDept?.deptId))}>
             신규 등록
           </button>
         </div>
-        <div className="flex gap-2 border-b border-stone-200 mb-5">
+        <div className="flex gap-1 border-b cd-border-c mb-5">
           <TabButton active={activeTab === "basic"} onClick={() => setActiveTab("basic")} icon={<UserRoundCog className="w-4 h-4" />} label="기본 정보" />
           <TabButton active={activeTab === "education"} onClick={() => setActiveTab("education")} icon={<GraduationCap className="w-4 h-4" />} label="학력/자격" />
           <TabButton active={activeTab === "evidence"} onClick={() => setActiveTab("evidence")} icon={<Home className="w-4 h-4" />} label="기타 증빙" />
@@ -397,11 +414,11 @@ export default function EmployeeRegistryPanel({
           <EvidenceTab employee={employee} setEmployee={setEmployee} uploadDocument={uploadDocument} />
         )}
 
-        <div className="flex items-center justify-between gap-3 mt-6 pt-4 border-t border-stone-200">
-          <div className="text-xs text-stone-500">
+        <div className="flex items-center justify-between gap-3 mt-6 pt-4 border-t cd-border-c">
+          <div className="text-xs cd-text-muted">
             주민번호는 서버에서 암호화 저장하며 화면에는 마스킹 값과 생년월일/성별만 표시합니다.
           </div>
-          <button type="button" disabled={saving || !employee.name} onClick={saveEmployee} className="rounded-xl px-5 py-2.5 text-xs font-bold text-white bg-primary hover:bg-primary/90 disabled:opacity-40 flex items-center gap-2">
+          <button type="button" disabled={saving || !employee.name} onClick={saveEmployee} className="cd-btn cd-btn-primary">
             <Save className="w-4 h-4" /> 직원 정보 저장
           </button>
         </div>
@@ -425,7 +442,7 @@ function BasicTab({
     <div className="grid md:grid-cols-3 gap-3">
       <TextField label="성명" value={employee.name} onChange={(value) => setEmployee((prev) => ({ ...prev, name: value }))} />
       <Field label="직급">
-        <select className="ui-select" value={employee.positionId ?? ""} onChange={(e) => setEmployee((prev) => ({ ...prev, positionId: e.target.value || null }))}>
+        <select className="cd-select" value={employee.positionId ?? ""} onChange={(e) => setEmployee((prev) => ({ ...prev, positionId: e.target.value || null }))}>
           <option value="">직급 선택</option>
           {positions.map((position) => (
             <option key={position.positionId} value={position.positionId}>
@@ -435,7 +452,7 @@ function BasicTab({
         </select>
       </Field>
       <Field label="부서">
-        <select className="ui-select" value={employee.deptId ?? ""} onChange={(e) => setEmployee((prev) => ({ ...prev, deptId: e.target.value || null, positionId: null }))}>
+        <select className="cd-select" value={employee.deptId ?? ""} onChange={(e) => setEmployee((prev) => ({ ...prev, deptId: e.target.value || null, positionId: null }))}>
           <option value="">부서 선택</option>
           {departments.map((dept) => (
             <option key={dept.deptId} value={dept.deptId}>
@@ -450,14 +467,40 @@ function BasicTab({
       <TextField label="이메일" value={employee.email ?? ""} onChange={(value) => setEmployee((prev) => ({ ...prev, email: value }))} />
       <TextField label="회사 직통 번호" value={employee.companyPhone ?? ""} onChange={(value) => setEmployee((prev) => ({ ...prev, companyPhone: formatPhoneNumber(value) }))} inputMode="numeric" />
       <TextField label="담당업무" value={employee.jobDuties ?? ""} onChange={(value) => setEmployee((prev) => ({ ...prev, jobDuties: value }))} placeholder="예: 통합허가 인허가 총괄" />
+      <TextField label="대행인력등록일" value={employee.agentRegisteredAt ?? ""} onChange={(value) => setEmployee((prev) => ({ ...prev, agentRegisteredAt: formatDateInput(value) }))} placeholder="YYYY-MM-DD" inputMode="numeric" />
+      <Field label="기술등급(엔지니어링)">
+        <select className="cd-select" value={employee.engGrade ?? ""} onChange={(e) => setEmployee((prev) => ({ ...prev, engGrade: e.target.value || null }))}>
+          <option value="">선택</option>
+          {ENG_GRADE_OPTIONS.map((g) => (
+            <option key={g} value={g}>{g}</option>
+          ))}
+        </select>
+      </Field>
+      <Field label="전문분야">
+        <select className="cd-select" value={employee.specialtyField ?? ""} onChange={(e) => setEmployee((prev) => ({ ...prev, specialtyField: e.target.value || null }))}>
+          <option value="">선택</option>
+          {SPECIALTY_OPTIONS.map((f) => (
+            <option key={f} value={f}>{f}</option>
+          ))}
+        </select>
+      </Field>
+      <Field label="환경부 등급(대행업)">
+        <select className="cd-select" value={employee.envGrade ?? ""} onChange={(e) => setEmployee((prev) => ({ ...prev, envGrade: e.target.value || null }))}>
+          <option value="">선택</option>
+          {ENV_GRADE_OPTIONS.map((g) => (
+            <option key={g} value={g}>{g}</option>
+          ))}
+        </select>
+      </Field>
       <label className="md:col-span-3 flex flex-col gap-1">
-        <span className="text-[11px] font-bold uppercase text-stone-500">거주지 주소</span>
-        <input className="input-field" value={employee.address ?? ""} onChange={(e) => setEmployee((prev) => ({ ...prev, address: e.target.value }))} />
+        <span className="cd-label !mb-0">거주지 주소</span>
+        <input className="cd-input" value={employee.address ?? ""} onChange={(e) => setEmployee((prev) => ({ ...prev, address: e.target.value }))} />
       </label>
       <div className="md:col-span-3 grid md:grid-cols-3 gap-3">
         <InfoPill label="마스킹 주민번호" value={employee.residentRegistrationMasked ?? "저장 후 표시"} />
         <InfoPill label="생년월일" value={employee.birthDate ?? "자동 분류"} />
         <InfoPill label="성별" value={employee.gender === "male" ? "남성" : employee.gender === "female" ? "여성" : "자동 분류"} />
+        <InfoPill label="환경부 등급(표시)" value={envGradeLabel(employee.envGrade, employee.specialtyField) || "미지정"} />
       </div>
     </div>
   );
@@ -479,17 +522,17 @@ function EducationTab({
         onAdd={() => setEmployee((prev) => ({ ...prev, educations: [...prev.educations, { degreeLevel: "bachelor", schoolName: "" }] }))}
       >
         {employee.educations.map((item, index) => (
-          <div key={index} className="grid md:grid-cols-6 gap-2 rounded-2xl bg-white/55 border border-white/70 p-3">
-            <select className="ui-select" value={item.degreeLevel} onChange={(e) => updateArray(setEmployee, "educations", index, { degreeLevel: e.target.value as EducationRow["degreeLevel"] })}>
+          <div key={index} className="grid md:grid-cols-6 gap-2 rounded-2xl cd-surface-bg border cd-border-c p-3">
+            <select className="cd-select" value={item.degreeLevel} onChange={(e) => updateArray(setEmployee, "educations", index, { degreeLevel: e.target.value as EducationRow["degreeLevel"] })}>
               <option value="bachelor">학사</option>
               <option value="master">석사</option>
               <option value="doctor">박사</option>
             </select>
-            <input className="input-field" placeholder="출신 학교" value={item.schoolName} onChange={(e) => updateArray(setEmployee, "educations", index, { schoolName: e.target.value })} />
-            <input className="input-field" placeholder="전공" value={item.major ?? ""} onChange={(e) => updateArray(setEmployee, "educations", index, { major: e.target.value })} />
-            <input className="input-field" placeholder="학위" value={item.degreeName ?? ""} onChange={(e) => updateArray(setEmployee, "educations", index, { degreeName: e.target.value })} />
-            <input className="input-field" inputMode="numeric" placeholder="입학일" value={item.admissionDate ?? ""} onChange={(e) => updateArray(setEmployee, "educations", index, { admissionDate: formatDateInput(e.target.value) })} />
-            <input className="input-field" inputMode="numeric" placeholder="졸업일" value={item.graduationDate ?? ""} onChange={(e) => updateArray(setEmployee, "educations", index, { graduationDate: formatDateInput(e.target.value) })} />
+            <input className="cd-input" placeholder="출신 학교" value={item.schoolName} onChange={(e) => updateArray(setEmployee, "educations", index, { schoolName: e.target.value })} />
+            <input className="cd-input" placeholder="전공" value={item.major ?? ""} onChange={(e) => updateArray(setEmployee, "educations", index, { major: e.target.value })} />
+            <input className="cd-input" placeholder="학위" value={item.degreeName ?? ""} onChange={(e) => updateArray(setEmployee, "educations", index, { degreeName: e.target.value })} />
+            <input className="cd-input" inputMode="numeric" placeholder="입학일" value={item.admissionDate ?? ""} onChange={(e) => updateArray(setEmployee, "educations", index, { admissionDate: formatDateInput(e.target.value) })} />
+            <input className="cd-input" inputMode="numeric" placeholder="졸업일" value={item.graduationDate ?? ""} onChange={(e) => updateArray(setEmployee, "educations", index, { graduationDate: formatDateInput(e.target.value) })} />
           </div>
         ))}
       </RepeatingSection>
@@ -499,17 +542,17 @@ function EducationTab({
         onAdd={() => setEmployee((prev) => ({ ...prev, certifications: [...prev.certifications, { certificationName: CERTIFICATION_OPTIONS[0] }] }))}
       >
         {employee.certifications.map((item, index) => (
-          <div key={index} className="grid md:grid-cols-4 gap-2 rounded-2xl bg-white/55 border border-white/70 p-3">
-            <select className="ui-select" value={item.certificationName} onChange={(e) => updateArray(setEmployee, "certifications", index, { certificationName: e.target.value })}>
+          <div key={index} className="grid md:grid-cols-4 gap-2 rounded-2xl cd-surface-bg border cd-border-c p-3">
+            <select className="cd-select" value={item.certificationName} onChange={(e) => updateArray(setEmployee, "certifications", index, { certificationName: e.target.value })}>
               {CERTIFICATION_OPTIONS.map((name) => (
                 <option key={name} value={name}>
                   {name}
                 </option>
               ))}
             </select>
-            <input className="input-field" type="date" value={item.passedAt ?? ""} onChange={(e) => updateArray(setEmployee, "certifications", index, { passedAt: e.target.value })} />
-            <input className="input-field" type="date" value={item.issuedAt ?? ""} onChange={(e) => updateArray(setEmployee, "certifications", index, { issuedAt: e.target.value })} />
-            <input className="input-field" placeholder="자격번호" value={item.certificationNo ?? ""} onChange={(e) => updateArray(setEmployee, "certifications", index, { certificationNo: e.target.value })} />
+            <input className="cd-input" type="date" value={item.passedAt ?? ""} onChange={(e) => updateArray(setEmployee, "certifications", index, { passedAt: e.target.value })} />
+            <input className="cd-input" type="date" value={item.issuedAt ?? ""} onChange={(e) => updateArray(setEmployee, "certifications", index, { issuedAt: e.target.value })} />
+            <input className="cd-input" placeholder="자격번호" value={item.certificationNo ?? ""} onChange={(e) => updateArray(setEmployee, "certifications", index, { certificationNo: e.target.value })} />
           </div>
         ))}
       </RepeatingSection>
@@ -535,12 +578,12 @@ function EvidenceTab({
         onAdd={() => setEmployee((prev) => ({ ...prev, careers: [...prev.careers, {}] }))}
       >
         {employee.careers.map((item, index) => (
-          <div key={index} className="grid md:grid-cols-5 gap-2 rounded-2xl bg-white/55 border border-white/70 p-3">
-            <input className="input-field" inputMode="numeric" placeholder="입사시기" value={item.workedFrom ?? ""} onChange={(e) => updateArray(setEmployee, "careers", index, { workedFrom: formatMonthInput(e.target.value) })} />
-            <input className="input-field" inputMode="numeric" placeholder="퇴사시기" value={item.workedTo ?? ""} onChange={(e) => updateArray(setEmployee, "careers", index, { workedTo: formatMonthInput(e.target.value) })} />
-            <input className="input-field" placeholder="근무처" value={item.companyName ?? ""} onChange={(e) => updateArray(setEmployee, "careers", index, { companyName: e.target.value })} />
-            <input className="input-field" placeholder="최종직위" value={item.finalPosition ?? ""} onChange={(e) => updateArray(setEmployee, "careers", index, { finalPosition: e.target.value })} />
-            <input className="input-field" placeholder="담당업무" value={item.responsibilities ?? ""} onChange={(e) => updateArray(setEmployee, "careers", index, { responsibilities: e.target.value })} />
+          <div key={index} className="grid md:grid-cols-5 gap-2 rounded-2xl cd-surface-bg border cd-border-c p-3">
+            <input className="cd-input" inputMode="numeric" placeholder="입사시기" value={item.workedFrom ?? ""} onChange={(e) => updateArray(setEmployee, "careers", index, { workedFrom: formatMonthInput(e.target.value) })} />
+            <input className="cd-input" inputMode="numeric" placeholder="퇴사시기" value={item.workedTo ?? ""} onChange={(e) => updateArray(setEmployee, "careers", index, { workedTo: formatMonthInput(e.target.value) })} />
+            <input className="cd-input" placeholder="근무처" value={item.companyName ?? ""} onChange={(e) => updateArray(setEmployee, "careers", index, { companyName: e.target.value })} />
+            <input className="cd-input" placeholder="최종직위" value={item.finalPosition ?? ""} onChange={(e) => updateArray(setEmployee, "careers", index, { finalPosition: e.target.value })} />
+            <input className="cd-input" placeholder="담당업무" value={item.responsibilities ?? ""} onChange={(e) => updateArray(setEmployee, "careers", index, { responsibilities: e.target.value })} />
           </div>
         ))}
       </RepeatingSection>
@@ -550,12 +593,12 @@ function EvidenceTab({
         onAdd={() => setEmployee((prev) => ({ ...prev, housingSupports: [...prev.housingSupports, {}] }))}
       >
         {employee.housingSupports.map((item, index) => (
-          <div key={index} className="grid md:grid-cols-5 gap-2 rounded-2xl bg-white/55 border border-white/70 p-3">
-            <input className="input-field" type="date" value={item.leaseStartedAt ?? ""} onChange={(e) => updateArray(setEmployee, "housingSupports", index, { leaseStartedAt: e.target.value })} />
-            <input className="input-field" type="date" value={item.leaseEndedAt ?? ""} onChange={(e) => updateArray(setEmployee, "housingSupports", index, { leaseEndedAt: e.target.value })} />
-            <input className="input-field" type="number" placeholder="월세액" value={item.monthlyRent ?? ""} onChange={(e) => updateArray(setEmployee, "housingSupports", index, { monthlyRent: Number(e.target.value || 0) })} />
-            <input className="input-field" type="number" placeholder="보증금" value={item.depositAmount ?? ""} onChange={(e) => updateArray(setEmployee, "housingSupports", index, { depositAmount: Number(e.target.value || 0) })} />
-            <input className="input-field" placeholder="임대차 주소" value={item.address ?? ""} onChange={(e) => updateArray(setEmployee, "housingSupports", index, { address: e.target.value })} />
+          <div key={index} className="grid md:grid-cols-5 gap-2 rounded-2xl cd-surface-bg border cd-border-c p-3">
+            <input className="cd-input" type="date" value={item.leaseStartedAt ?? ""} onChange={(e) => updateArray(setEmployee, "housingSupports", index, { leaseStartedAt: e.target.value })} />
+            <input className="cd-input" type="date" value={item.leaseEndedAt ?? ""} onChange={(e) => updateArray(setEmployee, "housingSupports", index, { leaseEndedAt: e.target.value })} />
+            <input className="cd-input" type="number" placeholder="월세액" value={item.monthlyRent ?? ""} onChange={(e) => updateArray(setEmployee, "housingSupports", index, { monthlyRent: Number(e.target.value || 0) })} />
+            <input className="cd-input" type="number" placeholder="보증금" value={item.depositAmount ?? ""} onChange={(e) => updateArray(setEmployee, "housingSupports", index, { depositAmount: Number(e.target.value || 0) })} />
+            <input className="cd-input" placeholder="임대차 주소" value={item.address ?? ""} onChange={(e) => updateArray(setEmployee, "housingSupports", index, { address: e.target.value })} />
           </div>
         ))}
       </RepeatingSection>
@@ -576,17 +619,17 @@ function UploadRow({
 }) {
   const [documentType, setDocumentType] = useState(types[0]);
   return (
-    <div className="rounded-2xl bg-white/55 border border-white/70 p-4">
-      <h3 className="mb-3 text-sm font-medium text-stone-800">증빙 서류 업로드</h3>
+    <div className="rounded-2xl cd-surface-bg border cd-border-c p-4">
+      <h3 className="mb-3 text-sm font-semibold cd-text">증빙 서류 업로드</h3>
       <div className="grid md:grid-cols-[220px_1fr] gap-3 items-center">
-        <select className="ui-select" value={documentType} onChange={(e) => setDocumentType(e.target.value)}>
+        <select className="cd-select" value={documentType} onChange={(e) => setDocumentType(e.target.value)}>
           {types.map((type) => (
             <option key={type} value={type}>
               {type}
             </option>
           ))}
         </select>
-        <label className="glass-button rounded-xl px-3 py-2 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer">
+        <label className="cd-btn cd-btn-soft cursor-pointer">
           <FileUp className="w-4 h-4" /> 증빙 파일 업로드
           <input
             type="file"
@@ -603,7 +646,7 @@ function UploadRow({
         {documents
           .filter((doc) => types.includes(doc.documentType))
           .map((doc) => (
-            <a key={doc.documentId} href={doc.publicPath ?? "#"} className="rounded-full bg-stone-900 text-white px-3 py-1 text-[11px] font-bold" target="_blank" rel="noreferrer">
+            <a key={doc.documentId} href={doc.publicPath ?? "#"} className="cd-pill cd-pill-info" target="_blank" rel="noreferrer">
               {doc.originalFilename || doc.displayName}
             </a>
           ))}
@@ -625,6 +668,7 @@ function PositionTagEditor({
   onAdd: (positionName: string, rankOrder: number) => Promise<void>;
   onDelete: (positionId: string) => Promise<void>;
 }) {
+  const { theme } = useCdashTheme();
   const sortedPositions = [...positions].sort((a, b) => b.rankOrder - a.rankOrder);
   const [addOpen, setAddOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<PositionRow | null>(null);
@@ -665,8 +709,8 @@ function PositionTagEditor({
     <span className="inline-flex">
       <button
         type="button"
-        className="ui-chip border-dashed text-primary"
-        data-active={true}
+        className="cd-chip border-dashed text-[color:var(--cd-primary)]"
+        style={{ borderStyle: "dashed", borderColor: "var(--cd-primary)" }}
         onClick={() => {
           setDeleteTarget(null);
           setAddOpen((prev) => !prev);
@@ -680,21 +724,21 @@ function PositionTagEditor({
   const overlay =
     mounted && (addOpen || deleteTarget)
       ? createPortal(
-          <div className="fixed inset-0 z-[9999] pointer-events-none">
+          <div className="cdash-vars cd-fields-white fixed inset-0 z-[9999] pointer-events-none" data-theme={theme}>
             {addOpen && (
-              <div className="absolute right-8 top-36 w-[min(18rem,calc(100vw-3rem))] rounded-2xl border border-stone-200 bg-white p-4 shadow-2xl pointer-events-auto">
+              <div className="cd-modal absolute right-8 top-36 w-[min(18rem,calc(100vw-3rem))] p-4 pointer-events-auto">
                 <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-sm font-medium text-stone-800">직급 추가</h4>
-                  <button type="button" onClick={() => setAddOpen(false)} className="text-stone-400 hover:text-stone-700">
+                  <h4 className="text-sm font-semibold cd-text">직급 추가</h4>
+                  <button type="button" onClick={() => setAddOpen(false)} className="cd-text-faint hover:text-[color:var(--cd-text)]">
                     <X className="w-4 h-4" />
                   </button>
                 </div>
                 <div className="space-y-2">
                   <Field label="직급명">
-                    <input className="input-field" value={positionName} onChange={(e) => setPositionName(e.target.value)} placeholder="예: 팀장" />
+                    <input className="cd-input" value={positionName} onChange={(e) => setPositionName(e.target.value)} placeholder="예: 팀장" />
                   </Field>
                   <Field label="바로 위 직급">
-                    <select className="ui-select" value={aboveId} onChange={(e) => setAboveId(e.target.value)}>
+                    <select className="cd-select" value={aboveId} onChange={(e) => setAboveId(e.target.value)}>
                       <option value="">선택 안 함</option>
                       {sortedPositions.map((position) => (
                         <option key={position.positionId} value={position.positionId}>
@@ -704,7 +748,7 @@ function PositionTagEditor({
                     </select>
                   </Field>
                   <Field label="바로 아래 직급">
-                    <select className="ui-select" value={belowId} onChange={(e) => setBelowId(e.target.value)}>
+                    <select className="cd-select" value={belowId} onChange={(e) => setBelowId(e.target.value)}>
                       <option value="">선택 안 함</option>
                       {sortedPositions.map((position) => (
                         <option key={position.positionId} value={position.positionId}>
@@ -713,24 +757,24 @@ function PositionTagEditor({
                       ))}
                     </select>
                   </Field>
-                  <button type="button" className="w-full rounded-xl bg-primary px-4 py-2 text-xs font-bold text-white" onClick={submitAdd}>
+                  <button type="button" className="cd-btn cd-btn-primary cd-btn-block" onClick={submitAdd}>
                     추가
                   </button>
                 </div>
               </div>
             )}
             {deleteTarget && (
-              <div className="absolute right-8 top-36 w-[min(16rem,calc(100vw-3rem))] rounded-2xl border border-rose-100 bg-white p-4 shadow-2xl pointer-events-auto">
-                <p className="text-sm text-stone-700 mb-4">
+              <div className="cd-modal absolute right-8 top-36 w-[min(16rem,calc(100vw-3rem))] p-4 pointer-events-auto">
+                <p className="text-sm cd-text mb-4">
                   {deleteTarget.positionName} 직급을 삭제하시겠습니까?
                 </p>
                 <div className="flex justify-end gap-2">
-                  <button type="button" className="glass-button rounded-xl px-3 py-2 text-xs font-bold" onClick={() => setDeleteTarget(null)}>
+                  <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => setDeleteTarget(null)}>
                     취소
                   </button>
                   <button
                     type="button"
-                    className="rounded-xl bg-rose-500 px-3 py-2 text-xs font-bold text-white"
+                    className="cd-btn cd-btn-danger cd-btn-sm"
                     onClick={async () => {
                       await onDelete(deleteTarget.positionId);
                       setDeleteTarget(null);
@@ -762,7 +806,7 @@ function PositionTagEditor({
                 setAddOpen(false);
                 setDeleteTarget(position);
               }}
-              className={active ? "ui-chip font-normal" : "ui-chip font-normal opacity-50"}
+              className={active ? "cd-chip font-normal" : "cd-chip font-normal opacity-50"}
               data-active={active}
             >
               {position.positionName}
@@ -781,8 +825,8 @@ function RepeatingSection({ title, onAdd, children }: { title: string; onAdd: ()
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <h3 className="font-medium text-stone-800">{title}</h3>
-        <button type="button" onClick={onAdd} className="glass-button rounded-xl px-3 py-2 text-xs font-bold flex items-center gap-1">
+        <h3 className="font-semibold cd-text">{title}</h3>
+        <button type="button" onClick={onAdd} className="cd-btn cd-btn-ghost cd-btn-sm">
           <Plus className="w-3.5 h-3.5" /> 행 추가
         </button>
       </div>
@@ -805,7 +849,15 @@ function updateArray<K extends "educations" | "certifications" | "careers" | "ho
 
 function TabButton({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
   return (
-    <button type="button" onClick={onClick} className={active ? "rounded-t-xl bg-primary text-white px-4 py-2 text-xs font-black flex items-center gap-2" : "rounded-t-xl px-4 py-2 text-xs font-black text-stone-500 hover:bg-white/60 flex items-center gap-2"}>
+    <button
+      type="button"
+      onClick={onClick}
+      className={
+        active
+          ? "rounded-t-xl cd-soft-primary px-4 py-2 text-xs font-bold flex items-center gap-2 border-b-2 border-[color:var(--cd-primary)]"
+          : "rounded-t-xl px-4 py-2 text-xs font-bold cd-text-muted hover:text-[color:var(--cd-text)] flex items-center gap-2 border-b-2 border-transparent"
+      }
+    >
       {icon}
       {label}
     </button>
@@ -865,16 +917,16 @@ function TextField({
 }) {
   return (
     <Field label={label}>
-      <input className="input-field" type={type} value={value} placeholder={placeholder} inputMode={inputMode} onChange={(e) => onChange(e.target.value)} />
+      <input className="cd-input" type={type} value={value} placeholder={placeholder} inputMode={inputMode} onChange={(e) => onChange(e.target.value)} />
     </Field>
   );
 }
 
 function InfoPill({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl bg-stone-50 border border-stone-100 p-3">
-      <div className="text-[10px] font-black uppercase text-stone-400">{label}</div>
-      <div className="text-sm font-bold text-stone-700 mt-1">{value}</div>
+    <div className="rounded-2xl cd-surface-bg border cd-border-c p-3">
+      <div className="text-[10px] font-bold uppercase cd-text-faint">{label}</div>
+      <div className="text-sm font-bold cd-text mt-1">{value}</div>
     </div>
   );
 }
@@ -882,7 +934,7 @@ function InfoPill({ label, value }: { label: string; value: string }) {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-[11px] font-bold uppercase text-stone-500">{label}</span>
+      <span className="cd-label !mb-0">{label}</span>
       {children}
     </label>
   );

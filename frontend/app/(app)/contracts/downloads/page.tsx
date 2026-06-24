@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { Archive, BadgeCheck, CheckSquare, ChevronDown, ChevronRight, Download, FileArchive, FileText, ListChecks, Search, Users } from "lucide-react";
+import { Archive, BadgeCheck, Check, CheckSquare, ChevronDown, ChevronRight, Download, FileArchive, FileText, ListChecks, Mail, Paperclip, Search } from "lucide-react";
 import { resolveServiceTypeStyle } from "@/lib/ieps/contract-tree-style";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
@@ -41,13 +41,26 @@ interface ContractDetail {
   documents: Array<Record<string, unknown>>;
 }
 
+interface ContactOption {
+  personId: string;
+  name: string;
+  title: string;
+  deptName: string;
+  fax: string;
+  active: boolean;
+}
+interface ContractContacts {
+  facilityName: string;
+  contacts: ContactOption[];
+}
+
 type Scope =
   | { kind: "all" }
   | { kind: "contract" }
   | { kind: "amendment" }
   | { kind: "invoice"; milestoneId: string };
 
-type SingleMode = "individualZip" | "mergedSingle";
+type SingleMode = "singleRaw" | "individualZip" | "mergedSingle";
 type MultiMode = "perContractMergedZip" | "mergedAll";
 
 const INTEGRATED_PERMIT_INDUSTRIES = [
@@ -83,12 +96,25 @@ export default function ContractDownloadsPage() {
   const [industryFilter, setIndustryFilter] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [checked, setChecked] = useState<Set<string>>(new Set());
+  // 연도/필터를 바꿔도 이전에 본 계약 메타를 유지하기 위한 누적 캐시
+  // (트리는 연도별로만 로드되므로, 다른 연도에서 선택한 계약의 표시 정보가 사라지는 문제 방지)
+  const [nodeCache, setNodeCache] = useState<Map<string, { node: ContractTreeContractNode; serviceType: string }>>(new Map());
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ContractDetail | null>(null);
   const [singleMode, setSingleMode] = useState<SingleMode>("individualZip");
   const [multiMode, setMultiMode] = useState<MultiMode>("perContractMergedZip");
   const [downloading, setDownloading] = useState(false);
   const [loading, setLoading] = useState(true);
+  // 증명서 생성 관련 상태
+  const [certOption, setCertOption] = useState<1 | 2>(1); // 1=증명서만 2=증명서+명단
+  const [submittedTo, setSubmittedTo] = useState("");
+  const [purpose, setPurpose] = useState("입찰 참여용");
+  const [certBusy, setCertBusy] = useState(false);
+  const [bundleBusy, setBundleBusy] = useState(false);
+  const [contactsByContract, setContactsByContract] = useState<Record<string, ContractContacts>>({});
+  const [contactByContract, setContactByContract] = useState<Record<string, string>>({});
+  // 서명 증명서는 세션 한정 클라이언트 보관(서버 미저장) — 새로고침/재진입 시 초기화
+  const [signedFiles, setSignedFiles] = useState<Record<string, File>>({});
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; contractId: string } | null>(null);
 
   const reloadTree = useCallback(async () => {
@@ -99,6 +125,15 @@ export default function ContractDownloadsPage() {
       const res = await fetch("/api/contracts/tree?" + params.toString(), { cache: "no-store" });
       const json = (await res.json()) as ContractTreePayload;
       setTree(json);
+      setNodeCache((prev) => {
+        const next = new Map(prev);
+        for (const group of json.groups) {
+          for (const contract of group.contracts) {
+            next.set(contract.contractId, { node: contract, serviceType: group.serviceType });
+          }
+        }
+        return next;
+      });
       setExpanded((prev) => {
         const next = { ...prev };
         for (const group of json.groups) if (next[group.serviceType] === undefined) next[group.serviceType] = false;
@@ -195,14 +230,6 @@ export default function ContractDownloadsPage() {
     [checked, visibleContractIds]
   );
   const isSingleTarget = targetIds.length === 1;
-  const selectedContract = useMemo(() => {
-    if (!tree || !activeSingleId) return null;
-    for (const group of tree.groups) {
-      const found = group.contracts.find((contract) => contract.contractId === activeSingleId);
-      if (found) return found;
-    }
-    return null;
-  }, [tree, activeSingleId]);
 
   const toggleChecked = (contractId: string) => {
     setChecked((prev) => {
@@ -215,13 +242,12 @@ export default function ContractDownloadsPage() {
   };
 
   // 트리 전체에서 contractId → 노드 조회용 맵 (선택 계약 리스트 표시에 사용)
+  // 누적 캐시 기반이라 연도/필터를 바꿔도 이전에 선택한 계약 정보가 유지된다.
   const contractById = useMemo(() => {
     const map = new Map<string, ContractTreeContractNode>();
-    for (const group of tree?.groups ?? []) {
-      for (const contract of group.contracts) map.set(contract.contractId, contract);
-    }
+    nodeCache.forEach((value, id) => map.set(id, value.node));
     return map;
-  }, [tree]);
+  }, [nodeCache]);
 
   const removeFromSelection = (contractId: string) => {
     setChecked((prev) => {
@@ -230,6 +256,12 @@ export default function ContractDownloadsPage() {
       return next;
     });
     setSelectedId((prev) => (prev === contractId ? null : prev));
+    setSignedFiles((prev) => {
+      if (!(contractId in prev)) return prev;
+      const next = { ...prev };
+      delete next[contractId];
+      return next;
+    });
     setContextMenu(null);
   };
 
@@ -281,6 +313,121 @@ export default function ContractDownloadsPage() {
     }
   };
 
+  // 특정 문서 태그/버튼 다운로드: 단일 파일이면 폴더/zip 없이 원본 그대로,
+  // 복수 파일이면 선택한 병합 옵션(singleMode)대로 처리한다.
+  const downloadDoc = (scope: Scope, count: number) =>
+    download(count === 1 ? "singleRaw" : singleMode, scope);
+
+  // 계약 → 용역분류 매핑 (증명서 통합허가 필터용) — 누적 캐시 기반(연도 전환에도 유지)
+  const serviceTypeById = useMemo(() => {
+    const m = new Map<string, string>();
+    nodeCache.forEach((value, id) => m.set(id, value.serviceType));
+    return m;
+  }, [nodeCache]);
+
+  // 선택된 계약 중 통합허가(증명서 대상). 필터로 숨은 계약(분류 미상)은 서버 판정에 맡겨 포함.
+  const certEligibleIds = useMemo(
+    () => targetIds.filter((id) => (serviceTypeById.get(id) ?? "통합허가") === "통합허가"),
+    [targetIds, serviceTypeById]
+  );
+  // 화면상 분류가 확인된 비-통합허가(안내용)
+  const knownSkippedCount = useMemo(
+    () => targetIds.filter((id) => { const t = serviceTypeById.get(id); return t && t !== "통합허가"; }).length,
+    [targetIds, serviceTypeById]
+  );
+
+  // 증명서 발급기관 담당자 선택용 — 통합허가 계약별 담당자 리스트 로드
+  useEffect(() => {
+    const ids = targetIds.filter((id) => serviceTypeById.get(id) === "통합허가");
+    let cancelled = false;
+    for (const id of ids) {
+      if (contactsByContract[id]) continue;
+      fetch(`/api/contracts/${encodeURIComponent(id)}/contacts`, { cache: "no-store" })
+        .then((res) => (res.ok ? (res.json() as Promise<ContractContacts>) : null))
+        .then((data) => {
+          if (cancelled || !data) return;
+          setContactsByContract((prev) => (prev[id] ? prev : { ...prev, [id]: data }));
+          const first = data.contacts[0];
+          if (first) setContactByContract((prev) => (prev[id] ? prev : { ...prev, [id]: first.personId }));
+        })
+        .catch(() => {});
+    }
+    return () => { cancelled = true; };
+  }, [targetIds, serviceTypeById, contactsByContract]);
+
+  const downloadBlobResponse = async (res: Response, fallbackName: string) => {
+    const blob = await res.blob();
+    const fileName = getDownloadFileName(res.headers.get("Content-Disposition")) ?? fallbackName;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const generateCertificates = async () => {
+    if (certEligibleIds.length === 0) {
+      alert("선택한 계약 중 통합허가 용역이 없어 증명서를 생성할 수 없습니다.");
+      return;
+    }
+    if (knownSkippedCount > 0 &&
+        !confirm(`통합허가가 아닌 ${knownSkippedCount}건은 제외하고 ${certEligibleIds.length}건의 증명서를 생성합니다. 계속할까요?`)) {
+      return;
+    }
+    setCertBusy(true);
+    try {
+      const res = await fetch("/api/contracts/certificate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contractIds: certEligibleIds, option: certOption, submittedTo, purpose, contactByContract }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? "증명서 생성 실패");
+      }
+      await downloadBlobResponse(res, "용역수행실적증명서.hwpx");
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setCertBusy(false);
+    }
+  };
+
+  // 계약 행의 서명 증명서 PDF 첨부 — 세션 한정 클라이언트 보관(서버 미저장, 새로고침 시 초기화)
+  const attachSignedCert = (contractId: string, file: File) => {
+    if (file.type && file.type !== "application/pdf") {
+      alert("PDF 파일만 첨부할 수 있습니다.");
+      return;
+    }
+    setSignedFiles((prev) => ({ ...prev, [contractId]: file }));
+  };
+
+  // 통합묶음(증명서+명단+계약서) 다운로드 — 첨부 서명 증명서를 함께 전송
+  const downloadBundle = async () => {
+    const ids = targetIds.filter((id) => signedFiles[id]);
+    if (ids.length === 0) {
+      alert("서명 증명서를 첨부한 계약이 없습니다. 계약 목록의 ‘증명서 첨부’로 먼저 첨부하세요.");
+      return;
+    }
+    setBundleBusy(true);
+    try {
+      const form = new FormData();
+      form.append("contractIds", JSON.stringify(ids));
+      for (const id of ids) form.append(`file_${id}`, signedFiles[id]);
+      const res = await fetch("/api/contracts/certificate-bundle", { method: "POST", body: form });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? "통합묶음 생성 실패");
+      }
+      await downloadBlobResponse(res, "증명서묶음.pdf");
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setBundleBusy(false);
+    }
+  };
+
   const contractDocs = detail?.documents.filter((doc) => String(doc.document_type) === "contract") ?? [];
   const amendmentDocs = detail?.documents.filter((doc) => String(doc.document_type) === "amendment") ?? [];
 
@@ -306,9 +453,6 @@ export default function ContractDownloadsPage() {
                 선택 {targetIds.length.toLocaleString()}건 / 현재 목록 {filteredGroups.reduce((acc, group) => acc + group.contracts.length, 0).toLocaleString()}건
               </p>
             </div>
-            <button type="button" className="cd-btn cd-btn-ghost rounded-lg px-3 py-1.5 text-xs cd-text-muted" onClick={() => setChecked(new Set())}>
-              선택 해제
-            </button>
           </div>
           <div className="px-4 py-3 border-b cd-border-c grid gap-2">
             <div className="flex items-center gap-2">
@@ -384,12 +528,10 @@ export default function ContractDownloadsPage() {
           </div>
         </section>
 
-        <section className="cd-card rounded-3xl p-5 cd-reveal delay-2 min-h-0 overflow-y-auto scrollbar-hide">
-          <div className="flex items-start justify-between gap-4 mb-5">
+        <section className="cd-card rounded-3xl p-5 cd-reveal delay-2 min-h-0 flex flex-col">
+          <div className="flex items-start justify-between gap-4 mb-5 shrink-0">
             <div>
-              <h2 className="text-xl font-bold cd-text">
-                {selectedContract?.contractTitle ?? String(detail?.contract.contract_title ?? "계약을 선택하세요")}
-              </h2>
+              <h2 className="text-xl font-bold cd-text">파일 병합 및 증명서/명단 생성</h2>
               <p className="text-xs cd-text-faint mt-1">
                 {isSingleTarget ? "단일 계약은 개별 문서 또는 전체 증빙을 다운로드할 수 있습니다." : "복수 계약은 전체 증빙 다운로드만 가능합니다."}
               </p>
@@ -397,9 +539,9 @@ export default function ContractDownloadsPage() {
             <FileArchive className="w-6 h-6 cd-text-primary" />
           </div>
 
-          {/* 병합 옵션(1) + 병합 대상 파일 목록(1) = 선택 계약 리스트(2, gap 포함) 너비 */}
-          <div className="grid grid-cols-1 2xl:grid-cols-4 gap-4">
-            <div className="rounded-2xl border cd-border-c p-3 h-[360px] overflow-hidden">
+          {/* 좌: [병합옵션·병합대상] 위 / [증명서 생성] 아래(하단까지) · 우: [선택 계약 리스트] 위 / [실적증명서 송부] 아래 */}
+          <div className="grid grid-cols-1 2xl:grid-cols-4 2xl:grid-rows-[360px_1fr_auto] gap-4 flex-1 min-h-0 overflow-y-auto scrollbar-hide">
+            <div className="rounded-2xl border cd-border-c p-3 h-[360px] overflow-hidden 2xl:col-start-1 2xl:row-start-1">
               <h3 className="font-bold cd-text mb-3">병합 옵션</h3>
               <div className="grid grid-cols-1 gap-2">
                 <OptionCard
@@ -433,7 +575,7 @@ export default function ContractDownloadsPage() {
               </div>
             </div>
 
-            <div className="rounded-2xl border cd-border-c p-3 h-[360px] overflow-hidden flex flex-col">
+            <div className="rounded-2xl border cd-border-c p-3 h-[360px] overflow-hidden flex flex-col 2xl:col-start-2 2xl:row-start-1">
               <h3 className="font-bold cd-text mb-3">병합 대상 파일 목록</h3>
               {isSingleTarget && detail ? (
                 <div className="flex min-h-0 flex-1 flex-col">
@@ -443,13 +585,13 @@ export default function ContractDownloadsPage() {
                       title="계약서"
                       count={contractDocs.length}
                       disabled={contractDocs.length === 0 || downloading}
-                      onClick={() => download(singleMode, { kind: "contract" })}
+                      onClick={() => downloadDoc({ kind: "contract" }, contractDocs.length)}
                     />
                     <DocumentTag
                       title="변경계약서"
                       count={amendmentDocs.length}
                       disabled={amendmentDocs.length === 0 || downloading}
-                      onClick={() => download(singleMode, { kind: "amendment" })}
+                      onClick={() => downloadDoc({ kind: "amendment" }, amendmentDocs.length)}
                     />
                     {detail.milestones.map((milestone) => {
                       const milestoneId = String(milestone.milestone_id ?? "");
@@ -460,15 +602,15 @@ export default function ContractDownloadsPage() {
                           title={String(milestone.stage_label ?? "-")}
                           count={invoiceCount}
                           disabled={invoiceCount === 0 || downloading}
-                          onClick={() => download(singleMode, { kind: "invoice", milestoneId })}
+                          onClick={() => downloadDoc({ kind: "invoice", milestoneId }, invoiceCount)}
                         />
                       );
                     })}
                     </div>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <DownloadButton disabled={contractDocs.length === 0 || downloading} onClick={() => download(singleMode, { kind: "contract" })}>계약서</DownloadButton>
-                    <DownloadButton disabled={amendmentDocs.length === 0 || downloading} onClick={() => download(singleMode, { kind: "amendment" })}>변경계약</DownloadButton>
+                    <DownloadButton disabled={contractDocs.length === 0 || downloading} onClick={() => downloadDoc({ kind: "contract" }, contractDocs.length)}>계약서</DownloadButton>
+                    <DownloadButton disabled={amendmentDocs.length === 0 || downloading} onClick={() => downloadDoc({ kind: "amendment" }, amendmentDocs.length)}>변경계약</DownloadButton>
                     <DownloadButton disabled={downloading} onClick={() => download(singleMode)}>전체</DownloadButton>
                   </div>
                 </div>
@@ -482,11 +624,19 @@ export default function ContractDownloadsPage() {
             </div>
 
             {/* 선택 계약 리스트 — 트리뷰에서 체크/선택한 계약 전체. 우클릭으로 목록에서 제거 */}
-            <div className="rounded-2xl border cd-border-c p-3 h-[360px] overflow-hidden flex flex-col 2xl:col-span-2">
+            <div className="rounded-2xl border cd-border-c p-3 h-full min-h-[360px] overflow-hidden flex flex-col 2xl:col-start-3 2xl:col-span-2 2xl:row-start-1 2xl:row-span-2">
               <h3 className="font-bold cd-text mb-3 flex items-center gap-2">
                 <ListChecks className="w-4 h-4 cd-text-primary" />
                 선택 계약 리스트
                 <span className="text-[11px] font-normal cd-text-faint ml-auto">{targetIds.length.toLocaleString()}건</span>
+                <button
+                  type="button"
+                  className="cd-btn cd-btn-ghost rounded-lg px-2.5 py-1 text-[11px] cd-text-muted"
+                  disabled={targetIds.length === 0}
+                  onClick={() => { setChecked(new Set()); setSelectedId(null); setDetail(null); setSignedFiles({}); }}
+                >
+                  선택 해제
+                </button>
               </h3>
               <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide rounded-xl border cd-border-c">
                 {targetIds.length === 0 ? (
@@ -509,47 +659,155 @@ export default function ContractDownloadsPage() {
                         <p className="mt-0.5 flex items-center gap-2 text-[10px] cd-text-faint">
                           <span className="truncate">{node?.counterpartyName ?? id}</span>
                           <span className="ml-auto shrink-0 font-mono">{node?.contractDate ?? ""}</span>
+                          <label
+                            className={
+                              "shrink-0 inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 cursor-pointer text-[9px] font-semibold " +
+                              (signedFiles[id]
+                                ? "border-[color:var(--cd-primary)] cd-tint-primary cd-text-primary"
+                                : "cd-border-c cd-text-faint hover:bg-[color:var(--cd-surface)]")
+                            }
+                            title={signedFiles[id] ? `서명 증명서 첨부됨: ${signedFiles[id].name} — 클릭하여 교체` : "서명 증명서 PDF 첨부"}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {signedFiles[id] ? <Check className="w-3 h-3" /> : <Paperclip className="w-3 h-3" />}
+                            {signedFiles[id] ? "증명서 첨부됨" : "증명서 첨부"}
+                            <input
+                              type="file"
+                              accept="application/pdf"
+                              className="hidden"
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (f) attachSignedCert(id, f);
+                                e.target.value = "";
+                              }}
+                            />
+                          </label>
                         </p>
                       </div>
                     );
                   })
                 )}
               </div>
-              <div className="mt-3 flex justify-end">
+              <div className="mt-3 flex justify-end gap-2">
+                <DownloadButton
+                  disabled={targetIds.length === 0 || bundleBusy}
+                  onClick={downloadBundle}
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  {bundleBusy ? "생성 중..." : "증명서+명단+계약서"}
+                </DownloadButton>
                 <DownloadButton
                   primary
                   disabled={targetIds.length === 0 || downloading}
                   onClick={() => download(isSingleTarget ? singleMode : multiMode)}
                 >
                   <Download className="w-3.5 h-3.5" />
-                  {downloading ? "생성 중..." : "전체 다운로드"}
+                  {downloading ? "생성 중..." : "계약서+계산서"}
                 </DownloadButton>
               </div>
             </div>
-          </div>
 
-          {/* 용역 수행실적 증명서 / 수행인력 명단 생성 (기능 구상 중 — 컨셉 카드) */}
-          <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4 mt-4">
-            <div className="rounded-2xl border cd-border-c p-5">
-              <h3 className="font-bold cd-text flex items-center gap-2">
-                <Users className="w-4 h-4 cd-text-primary" />
-                수행인력 명단 생성
-                <span className="ml-auto rounded-full cd-surface-bg px-2.5 py-0.5 text-[10px] font-semibold cd-text-faint">준비 중</span>
-              </h3>
-              <p className="mt-2 text-xs leading-relaxed cd-text-faint">
-                용역별 수행인력 정보를 웹앱에서 통합 관리하고, 선택한 용역의 수행인력 명단 문서를
-                생성하는 기능이 제공될 예정입니다.
-              </p>
+            {/* 수행실적 증명서 생성 카드 (좌측 하단 — 카드 하단까지 확장) */}
+            <div className="rounded-2xl border cd-border-c p-5 flex flex-col gap-4 overflow-y-auto scrollbar-hide 2xl:col-start-1 2xl:col-span-2 2xl:row-start-2 2xl:row-span-2">
+              {/* 수행실적 증명서 */}
+              <div>
+                <h3 className="font-bold cd-text flex items-center gap-2">
+                  <BadgeCheck className="w-4 h-4 cd-text-primary" />
+                  수행실적 증명서 생성
+                  <span className="ml-auto text-[11px] font-normal cd-text-faint">통합허가 {certEligibleIds.length}건</span>
+                </h3>
+
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  {([
+                    { v: 1, label: "증명서만 생성" },
+                    { v: 2, label: "증명서 + 명단" },
+                  ] as const).map((opt) => (
+                    <label
+                      key={opt.v}
+                      className={
+                        "flex items-center justify-center gap-2 rounded-xl border px-2 py-2 text-xs text-center cursor-pointer " +
+                        (certOption === opt.v ? "border-[color:var(--cd-primary)] cd-tint-primary" : "cd-border-c")
+                      }
+                    >
+                      <input
+                        type="radio"
+                        name="certOption"
+                        className="shrink-0"
+                        checked={certOption === opt.v}
+                        onChange={() => setCertOption(opt.v)}
+                      />
+                      <span className="font-semibold cd-text">{opt.label}</span>
+                    </label>
+                  ))}
+                </div>
+
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <label className="flex flex-col gap-1">
+                    <span className="text-[11px] cd-text-faint">제출처</span>
+                    <input className="cd-input text-xs" value={submittedTo} onChange={(e) => setSubmittedTo(e.target.value)} placeholder="예: 신평택발전㈜" />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-[11px] cd-text-faint">증명서용도</span>
+                    <input className="cd-input text-xs" value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="예: 입찰 참여용" />
+                  </label>
+                </div>
+
+                {certEligibleIds.some((id) => contactsByContract[id]) && (
+                  <div className="mt-3">
+                    <span className="text-[11px] cd-text-faint">발급기관 담당자 선택</span>
+                    <div className="mt-1 rounded-xl border cd-border-c divide-y cd-border-c max-h-[160px] overflow-y-auto scrollbar-hide">
+                      {certEligibleIds.map((id) => {
+                        const data = contactsByContract[id];
+                        if (!data) return null;
+                        const node = contractById.get(id);
+                        return (
+                          <div key={id} className="flex items-center gap-2 px-2.5 py-1.5 text-xs">
+                            <span className="truncate cd-text flex-1 min-w-0" title={node?.contractTitle ?? id}>
+                              {data.facilityName || node?.contractTitle || id}
+                            </span>
+                            {data.contacts.length === 0 ? (
+                              <span className="text-[11px] cd-text-faint shrink-0">담당자 없음</span>
+                            ) : (
+                              <select
+                                className="cd-select text-xs shrink-0 max-w-[55%]"
+                                value={contactByContract[id] ?? ""}
+                                onChange={(e) => setContactByContract((prev) => ({ ...prev, [id]: e.target.value }))}
+                              >
+                                {data.contacts.map((c) => (
+                                  <option key={c.personId} value={c.personId}>
+                                    {[c.name, c.title].filter(Boolean).join(" ")}{c.deptName ? ` · ${c.deptName}` : ""}{c.active ? "" : " (퇴직)"}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={generateCertificates}
+                  disabled={certEligibleIds.length === 0 || certBusy}
+                  className="mt-3 cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold disabled:opacity-50"
+                >
+                  {certBusy ? "생성 중..." : `HWPX 생성${certEligibleIds.length > 1 ? ` (${certEligibleIds.length}건)` : ""}`}
+                </button>
+              </div>
             </div>
-            <div className="rounded-2xl border cd-border-c p-5">
+
+            {/* 실적증명서 송부 카드 (선택 계약 리스트 하단) — 메일 자동작성·수신/답신 확인·첨부 S3 보관 예정 */}
+            <div className="rounded-2xl border cd-border-c p-5 flex flex-col gap-3 2xl:col-start-3 2xl:col-span-2 2xl:row-start-3">
               <h3 className="font-bold cd-text flex items-center gap-2">
-                <BadgeCheck className="w-4 h-4 cd-text-primary" />
-                수행실적 증명서 생성
-                <span className="ml-auto rounded-full cd-surface-bg px-2.5 py-0.5 text-[10px] font-semibold cd-text-faint">준비 중</span>
+                <Mail className="w-4 h-4 cd-text-primary" />
+                실적증명서 송부
+                <span className="ml-auto text-[11px] font-normal cd-text-faint">준비 중</span>
               </h3>
-              <p className="mt-2 text-xs leading-relaxed cd-text-faint">
-                선택한 계약 이력을 바탕으로 용역 수행실적 증명서를 생성·다운로드하는 기능이
-                제공될 예정입니다.
+              <p className="text-xs leading-relaxed cd-text-faint">
+                생성한 수행실적 증명서(HWPX)를 사업장 담당자에게 메일로 자동 송부하고, 수신·답신 확인과
+                첨부 PDF의 S3 보관까지 관리하는 기능이 이 영역에 추가될 예정입니다.
               </p>
             </div>
           </div>

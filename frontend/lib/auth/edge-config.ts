@@ -6,6 +6,7 @@
  */
 
 import type { NextAuthConfig } from "next-auth";
+import { NextResponse } from "next/server";
 
 export type Role = "admin" | "editor" | "viewer";
 export type UserStatus = "active" | "disabled";
@@ -20,10 +21,11 @@ export const edgeAuthConfig: NextAuthConfig = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        const u = user as { id?: string; role?: Role; status?: UserStatus };
+        const u = user as { id?: string; role?: Role; status?: UserStatus; mustChangePassword?: boolean };
         if (u.id) (token as Record<string, unknown>).userId = u.id;
         if (u.role) (token as Record<string, unknown>).role = u.role;
         if (u.status) (token as Record<string, unknown>).status = u.status;
+        (token as Record<string, unknown>).mustChangePassword = u.mustChangePassword === true;
       }
       return token;
     },
@@ -34,6 +36,8 @@ export const edgeAuthConfig: NextAuthConfig = {
         (session.user as { role?: Role }).role = (t.role as Role) ?? "viewer";
         (session.user as { status?: UserStatus }).status =
           (t.status as UserStatus) ?? "active";
+        (session.user as { mustChangePassword?: boolean }).mustChangePassword =
+          t.mustChangePassword === true;
       }
       return session;
     },
@@ -51,8 +55,15 @@ export const edgeAuthConfig: NextAuthConfig = {
       }
 
       if (!session?.user) return false;
-      const user = session.user as { role?: Role; status?: UserStatus };
+      const user = session.user as { role?: Role; status?: UserStatus; mustChangePassword?: boolean };
       if (user.status && user.status !== "active") return false;
+
+      // 초기 비밀번호 강제 변경: 변경 전까지 변경 화면/그 API 외 모든 경로를 변경 화면으로 보낸다.
+      const onChangeFlow =
+        path === "/account/change-password" || path === "/api/account/change-password";
+      if (user.mustChangePassword && !onChangeFlow) {
+        return NextResponse.redirect(new URL("/account/change-password", nextUrl));
+      }
 
       if (path.startsWith("/admin") || path.startsWith("/api/admin")) {
         return user.role === "admin";

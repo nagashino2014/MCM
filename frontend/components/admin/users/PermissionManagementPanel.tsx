@@ -136,32 +136,32 @@ export default function PermissionManagementPanel({
 
   return (
     <div className="flex flex-col gap-5">
-      <section className="glass-panel rounded-3xl p-6 reveal delay-1">
+      <section className="cd-card p-6">
         <div className="flex items-start justify-between gap-4 mb-5">
           <div>
-            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-primary">Permission templates</p>
-            <h2 className="text-2xl font-black text-stone-800">계정·권한 관리</h2>
-            <p className="text-sm text-stone-500 mt-1">
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] cd-text-primary">Permission templates</p>
+            <h2 className="text-xl font-extrabold cd-text">계정·권한 관리</h2>
+            <p className="text-sm cd-text-muted mt-1">
               권한 템플릿을 만든 뒤 개별 계정에 부서 범위와 함께 적용합니다.
             </p>
           </div>
-          <ShieldCheck className="w-7 h-7 text-primary" fill="currentColor" />
+          <span className="cd-title-icon"><ShieldCheck className="w-4 h-4" /></span>
         </div>
 
         <div className="grid xl:grid-cols-[1.1fr_0.9fr] gap-4">
-          <div className="rounded-2xl bg-white/55 border border-white/70 p-4">
-            <h3 className="font-black text-stone-800 mb-3 flex items-center gap-2">
-              <Plus className="w-4 h-4 text-primary" /> 권한 템플릿 생성
+          <div className="rounded-2xl cd-surface-bg border cd-border-c p-4">
+            <h3 className="font-bold cd-text mb-3 flex items-center gap-2">
+              <Plus className="w-4 h-4 text-[color:var(--cd-primary)]" /> 권한 템플릿 생성
             </h3>
             <div className="grid md:grid-cols-2 gap-3">
               <Field label="템플릿명">
-                <input className="input-field" value={templateName} onChange={(e) => setTemplateName(e.target.value)} placeholder="예: 통합환경 본부장" />
+                <input className="cd-input" value={templateName} onChange={(e) => setTemplateName(e.target.value)} placeholder="예: 통합환경 본부장" />
               </Field>
               <Field label="설명">
-                <input className="input-field" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="권한 목적" />
+                <input className="cd-input" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="권한 목적" />
               </Field>
               <Field label="권한">
-                <select className="ui-select" value={selectedPermission} onChange={(e) => setSelectedPermission(e.target.value)}>
+                <select className="cd-select" value={selectedPermission} onChange={(e) => setSelectedPermission(e.target.value)}>
                   <option value="">권한 선택</option>
                   {permissions?.permissions.map((permission) => (
                     <option key={permission.permissionKey} value={permission.permissionKey}>
@@ -172,14 +172,14 @@ export default function PermissionManagementPanel({
               </Field>
               <Field label="범위">
                 <div className="flex gap-2">
-                  <select className="ui-select" value={scopeKind} onChange={(e) => setScopeKind(e.target.value as ScopeKind)}>
+                  <select className="cd-select" value={scopeKind} onChange={(e) => setScopeKind(e.target.value as ScopeKind)}>
                     {Object.entries(SCOPE_LABEL).map(([value, label]) => (
                       <option key={value} value={value}>
                         {label}
                       </option>
                     ))}
                   </select>
-                  <button type="button" className="glass-button rounded-xl px-3 text-xs font-bold" onClick={addGrant}>
+                  <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={addGrant}>
                     추가
                   </button>
                 </div>
@@ -191,7 +191,7 @@ export default function PermissionManagementPanel({
                   type="button"
                   key={grant.permissionKey + grant.scopeKind}
                   onClick={() => setDraftGrants((prev) => prev.filter((item) => item !== grant))}
-                  className="rounded-full bg-primary/10 text-primary px-3 py-1 text-xs font-bold flex items-center gap-1"
+                  className="cd-pill cd-pill-info"
                 >
                   {permissionLabel(grant.permissionKey)} · {SCOPE_LABEL[grant.scopeKind]}
                   <X className="w-3 h-3" />
@@ -202,19 +202,19 @@ export default function PermissionManagementPanel({
               type="button"
               disabled={saving || !templateName || draftGrants.length === 0}
               onClick={saveTemplate}
-              className="mt-4 rounded-xl px-4 py-2 text-xs font-bold text-white bg-primary hover:bg-primary/90 disabled:opacity-40 flex items-center gap-2"
+              className="cd-btn cd-btn-primary mt-4"
             >
               <Save className="w-4 h-4" /> 템플릿 저장
             </button>
           </div>
 
-          <div className="rounded-2xl bg-white/55 border border-white/70 p-4">
-            <h3 className="font-black text-stone-800 mb-3 flex items-center gap-2">
-              <KeyRound className="w-4 h-4 text-primary" /> 계정에 권한 부여
+          <div className="rounded-2xl cd-surface-bg border cd-border-c p-4">
+            <h3 className="font-bold cd-text mb-3 flex items-center gap-2">
+              <KeyRound className="w-4 h-4 text-[color:var(--cd-primary)]" /> 계정에 권한 부여
             </h3>
             <div className="space-y-3">
               <Field label="계정">
-                <select className="ui-select" value={assignUserId} onChange={(e) => setAssignUserId(e.target.value)}>
+                <select className="cd-select" value={assignUserId} onChange={(e) => setAssignUserId(e.target.value)}>
                   <option value="">계정 선택</option>
                   {users.map((user) => (
                     <option key={user.userId} value={user.userId}>
@@ -224,7 +224,7 @@ export default function PermissionManagementPanel({
                 </select>
               </Field>
               <Field label="권한 템플릿">
-                <select className="ui-select" value={assignTemplateId} onChange={(e) => setAssignTemplateId(e.target.value)}>
+                <select className="cd-select" value={assignTemplateId} onChange={(e) => setAssignTemplateId(e.target.value)}>
                   <option value="">템플릿 선택</option>
                   {permissions?.templates.filter((template) => template.isActive).map((template) => (
                     <option key={template.templateId} value={template.templateId}>
@@ -233,14 +233,14 @@ export default function PermissionManagementPanel({
                   ))}
                 </select>
               </Field>
-              <div className="rounded-xl bg-stone-50 border border-stone-100 p-3 text-xs text-stone-500">
+              <div className="rounded-xl cd-card-bg border cd-border-c p-3 text-xs cd-text-muted">
                 {selectedDept ? `현재 선택 부서(${selectedDept.deptName}) 범위로 적용됩니다.` : "부서를 선택하지 않으면 템플릿 기본 범위로 적용됩니다."}
               </div>
               <button
                 type="button"
                 disabled={saving || !assignUserId || !assignTemplateId}
                 onClick={assignTemplate}
-                className="rounded-xl px-4 py-2 text-xs font-bold text-white bg-stone-900 hover:bg-stone-800 disabled:opacity-40"
+                className="cd-btn cd-btn-primary"
               >
                 권한 적용
               </button>
@@ -249,8 +249,8 @@ export default function PermissionManagementPanel({
         </div>
       </section>
 
-      <section className="glass-panel rounded-3xl p-6 reveal delay-2">
-        <h3 className="font-black text-stone-800 mb-3">권한 템플릿 목록</h3>
+      <section className="cd-card p-6">
+        <h3 className="font-extrabold cd-text mb-3">권한 템플릿 목록</h3>
         <div className="grid xl:grid-cols-3 gap-3">
           {permissions?.templates.map((template) => (
             <TemplateCard key={template.templateId} template={template} permissionLabel={permissionLabel} />
@@ -258,25 +258,25 @@ export default function PermissionManagementPanel({
         </div>
       </section>
 
-      <section className="glass-panel rounded-3xl p-6 reveal delay-3">
-        <h3 className="font-black text-stone-800 mb-3">계정별 권한 적용 현황</h3>
+      <section className="cd-card p-6">
+        <h3 className="font-extrabold cd-text mb-3">계정별 권한 적용 현황</h3>
         <div className="flex flex-col gap-2">
           {activeAssignments.map((assignment) => (
-            <div key={assignment.assignmentId} className="grid md:grid-cols-[1.2fr_1fr_1fr_auto] gap-3 items-center rounded-xl bg-white/50 border border-white/70 p-3">
+            <div key={assignment.assignmentId} className="grid md:grid-cols-[1.2fr_1fr_1fr_auto] gap-3 items-center rounded-xl cd-surface-bg border cd-border-c p-3">
               <div>
-                <div className="text-sm font-black text-stone-800">{assignment.userName}</div>
-                <div className="text-xs text-stone-500">{assignment.userEmail}</div>
+                <div className="text-sm font-bold cd-text">{assignment.userName}</div>
+                <div className="text-xs cd-text-muted">{assignment.userEmail}</div>
               </div>
-              <div className="text-sm font-bold text-primary">{assignment.templateName}</div>
-              <div className="text-xs text-stone-500">
+              <div className="text-sm font-bold cd-text-primary">{assignment.templateName}</div>
+              <div className="text-xs cd-text-muted">
                 {assignment.scopeOverrideKind ? SCOPE_LABEL[assignment.scopeOverrideKind] : "템플릿 기본"} · {assignment.effectiveFrom}
               </div>
-              <button type="button" onClick={() => revoke(assignment.assignmentId)} className="glass-button rounded-xl px-3 py-2 text-xs font-bold text-red-600">
+              <button type="button" onClick={() => revoke(assignment.assignmentId)} className="cd-btn cd-btn-danger cd-btn-sm">
                 취소
               </button>
             </div>
           ))}
-          {activeAssignments.length === 0 && <div className="text-sm text-stone-400 py-8 text-center">적용된 권한 템플릿이 없습니다.</div>}
+          {activeAssignments.length === 0 && <div className="text-sm cd-text-faint py-8 text-center">적용된 권한 템플릿이 없습니다.</div>}
         </div>
       </section>
     </div>
@@ -291,15 +291,15 @@ function TemplateCard({
   permissionLabel: (key: string) => string;
 }) {
   return (
-    <div className={cn("rounded-2xl border p-4 bg-white/55", template.isActive ? "border-white/70" : "border-stone-200 opacity-60")}>
+    <div className={cn("rounded-2xl border cd-border-c p-4 cd-surface-bg", !template.isActive && "opacity-60")}>
       <div className="flex items-center justify-between gap-2 mb-2">
-        <h4 className="font-black text-stone-800">{template.templateName}</h4>
-        {template.isSystem && <span className="rounded-full bg-stone-900 text-white text-[10px] px-2 py-0.5 font-bold">SYSTEM</span>}
+        <h4 className="font-bold cd-text">{template.templateName}</h4>
+        {template.isSystem && <span className="cd-pill cd-pill-idle">SYSTEM</span>}
       </div>
-      <p className="text-xs text-stone-500 min-h-8">{template.description || "설명 없음"}</p>
+      <p className="text-xs cd-text-muted min-h-8">{template.description || "설명 없음"}</p>
       <div className="flex flex-wrap gap-1.5 mt-3">
         {template.grants.map((grant) => (
-          <span key={grant.grantId} className="rounded-full bg-primary/10 text-primary px-2 py-1 text-[10px] font-bold">
+          <span key={grant.grantId} className="cd-pill cd-pill-info">
             {permissionLabel(grant.permissionKey)}
           </span>
         ))}
@@ -311,7 +311,7 @@ function TemplateCard({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-[11px] font-bold uppercase text-stone-500">{label}</span>
+      <span className="cd-label !mb-0">{label}</span>
       {children}
     </label>
   );

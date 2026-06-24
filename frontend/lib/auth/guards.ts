@@ -8,6 +8,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "./config";
 import type { Role, UserStatus } from "./users";
+import { hasPermission, type PermissionTarget } from "./rbac";
 
 export interface AuthContext {
   userId: string;
@@ -78,4 +79,19 @@ export async function requireAdmin(): Promise<AuthContext> {
 /** viewer 이상 (전 role) */
 export async function requireAuthenticated(): Promise<AuthContext> {
   return requireSession();
+}
+
+/**
+ * RBAC atomic 권한키 가드. admin 은 항상 통과, 그 외에는 권한 템플릿 평가.
+ * (역할 화면 적용은 권한 할당 데이터 정비 후 단계적으로 도입)
+ */
+export async function requirePermission(
+  permissionKey: string,
+  target?: PermissionTarget
+): Promise<AuthContext> {
+  const ctx = await requireSession();
+  if (ctx.role === "admin") return ctx;
+  const ok = await hasPermission(ctx.userId, permissionKey, target);
+  if (!ok) throw new AuthError("이 작업을 수행할 권한이 없습니다.", 403);
+  return ctx;
 }

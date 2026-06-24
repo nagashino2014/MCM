@@ -4,6 +4,7 @@ import { authErrorToResponse, requireEditor } from "@/lib/auth/guards";
 import { withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 import {
+  deleteContractDocument,
   getInvoiceStorageKey,
   putContractDocument,
   sanitizeFilename,
@@ -77,6 +78,22 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       stageLabel = String(milestoneRows[0]?.stage_label ?? "").trim() || null;
     }
 
+    // 같은 대금지급단위(milestone)의 기존 계산서는 교체 대상 — 기존 파일의 storage_key 수집(S3 정리용)
+    const priorStorageKeys: string[] = [];
+    if (milestoneId) {
+      const priorDocs = rowsToObjects(
+        await db.exec(
+          `SELECT storage_key FROM contract_documents
+            WHERE contract_id = $1 AND milestone_id = $2 AND document_type = 'tax_invoice'`,
+          [contractId, milestoneId]
+        )
+      );
+      for (const r of priorDocs) {
+        const k = r.storage_key != null ? String(r.storage_key) : "";
+        if (k) priorStorageKeys.push(k);
+      }
+    }
+
     const { storageKey, fileName: storedName } = getInvoiceStorageKey({
       issueDate,
       contractTitle,
@@ -105,6 +122,17 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
         : null;
 
     await withDbWrite(async (db) => {
+      // 같은 대금지급단위의 기존 계산서(인보이스+문서)는 삭제 후 새 파일로 교체
+      if (milestoneId) {
+        await db.run(
+          "DELETE FROM contract_invoices WHERE contract_id = $1 AND milestone_id = $2",
+          [contractId, milestoneId]
+        );
+        await db.run(
+          "DELETE FROM contract_documents WHERE contract_id = $1 AND milestone_id = $2 AND document_type = 'tax_invoice'",
+          [contractId, milestoneId]
+        );
+      }
       await db.run(
         `INSERT INTO contract_documents
           (document_id, contract_id, milestone_id, document_type, display_name,
@@ -206,6 +234,11 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
         after: { contractId, milestoneId, issueDate, invoiceAmount, documentId, storageKey, partialPaymentMemo },
       });
     });
+
+    // 교체된 기존 파일의 S3/로컬 객체 정리 (새 파일과 키가 같으면 건너뜀 — 방금 올린 파일 보호)
+    for (const oldKey of priorStorageKeys) {
+      if (oldKey !== stored.storageKey) await deleteContractDocument(oldKey);
+    }
 
     return NextResponse.json({ invoiceId, documentId, publicPath: stored.publicPath });
   } catch (err) {

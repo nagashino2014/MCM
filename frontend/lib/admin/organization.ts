@@ -76,7 +76,8 @@ export async function listOrganizationSnapshot(): Promise<OrganizationSnapshot> 
         "SELECT dept_id, position_id, display_order FROM department_positions ORDER BY dept_id ASC, display_order DESC"
       ),
       db.exec(
-        `SELECT e.employee_id, e.user_id, e.name, e.dept_id, e.position_id, p.position_name, p.rank_order, e.email, e.status
+        `SELECT e.employee_id, e.user_id, e.employee_no, e.name, e.dept_id, e.position_id, p.position_name, p.rank_order,
+                e.email, e.status, e.hired_at, e.gender, (e.birth_date IS NOT NULL) AS has_birth_date
            FROM employee_profiles e
            LEFT JOIN positions p ON p.position_id = e.position_id
           ORDER BY p.rank_order DESC NULLS LAST, e.name ASC`
@@ -107,6 +108,7 @@ export async function listOrganizationSnapshot(): Promise<OrganizationSnapshot> 
     employees: rowsToObjects(employeesResult).map((row) => ({
       employeeId: String(row.employee_id ?? ""),
       userId: row.user_id != null ? String(row.user_id) : null,
+      employeeNo: row.employee_no != null ? String(row.employee_no) : null,
       name: String(row.name ?? ""),
       deptId: row.dept_id != null ? String(row.dept_id) : null,
       positionId: row.position_id != null ? String(row.position_id) : null,
@@ -114,6 +116,9 @@ export async function listOrganizationSnapshot(): Promise<OrganizationSnapshot> 
       positionRankOrder: row.rank_order != null ? Number(row.rank_order) : null,
       email: row.email != null ? String(row.email) : null,
       status: (String(row.status ?? "active") as "active" | "inactive"),
+      hiredAt: row.hired_at != null ? String(row.hired_at) : null,
+      gender: row.gender != null ? (String(row.gender) as "male" | "female") : null,
+      hasBirthDate: Boolean(row.has_birth_date),
     })),
   };
 }

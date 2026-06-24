@@ -10,7 +10,8 @@ export async function GET(req: NextRequest) {
     await requireAuthenticated();
     const { searchParams } = new URL(req.url);
     const year = searchParams.get("year");
-    return NextResponse.json(await listContractsForTree(year));
+    const dept = searchParams.get("dept");
+    return NextResponse.json(await listContractsForTree(year, dept));
   } catch (err) {
     return authErrorToResponse(err);
   }

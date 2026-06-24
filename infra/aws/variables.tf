@@ -18,6 +18,11 @@ variable "vpc_cidr" {
   default = "10.40.0.0/16"
 }
 
+variable "domain_name" {
+  type    = string
+  default = "koensain.app"
+}
+
 variable "availability_zones" {
   type    = list(string)
   default = ["ap-northeast-2a", "ap-northeast-2c"]

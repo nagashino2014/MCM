@@ -5,6 +5,19 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { LogIn, ShieldAlert } from "lucide-react";
 
+// callbackUrl 을 항상 현재 도메인의 경로로 정규화한다.
+// ALB(프록시) 뒤에서 미들웨어가 host 를 localhost:3000 으로 잡아 절대 URL 을 심는 경우가 있어,
+// 다른 출처 URL 이면 경로만 취해 동일 출처로 강제한다(오픈 리다이렉트 방지 겸용).
+function toSameOriginPath(target: string): string {
+  if (typeof window === "undefined") return target;
+  try {
+    const u = new URL(target, window.location.origin);
+    return (u.pathname + u.search + u.hash) || "/data/status";
+  } catch {
+    return target.startsWith("/") ? target : "/data/status";
+  }
+}
+
 export default function LoginPage() {
   return (
     <Suspense
@@ -39,10 +52,10 @@ function LoginForm() {
         redirect: false,
       });
       if (!res || res.error) {
-        setError("이메일 또는 비밀번호가 올바르지 않거나, 비활성화된 계정입니다.");
+        setError("사번/아이디 또는 비밀번호가 올바르지 않거나, 비활성화된 계정입니다.");
         return;
       }
-      router.replace(callbackUrl);
+      router.replace(toSameOriginPath(callbackUrl));
       router.refresh();
     });
   };
@@ -62,16 +75,16 @@ function LoginForm() {
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <label className="flex flex-col gap-1.5">
           <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">
-            이메일
+            사번 또는 아이디
           </span>
           <input
-            type="email"
-            autoComplete="email"
+            type="text"
+            autoComplete="username"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className="input-field"
-            placeholder="admin@example.com"
+            placeholder="사번(예: 201903040101) 또는 이메일 아이디"
             autoFocus
           />
         </label>

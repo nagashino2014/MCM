@@ -4,6 +4,8 @@ import {
   Briefcase,
   Database,
   Trash2,
+  ClipboardList,
+  UserCog,
   Users as UsersIcon,
   type LucideIcon,
 } from "lucide-react";
@@ -18,11 +20,35 @@ export interface MenuItem {
   comingSoon?: boolean;
   /** 이 메뉴를 보려면 필요한 최소 role. 미지정 시 viewer 이상 모두 노출. */
   minRole?: Role;
-  /** "시스템" 같은 별도 섹션 그룹화용 키 */
-  group?: "main" | "system";
+  /** 사이드바 카테고리 그룹: 업무 보고(work) / 사업 운영(main) / 시스템(system) */
+  group?: "work" | "main" | "system";
 }
 
 export const MENU_ITEMS: MenuItem[] = [
+  // ── 업무 보고 ─────────────────────────────────────
+  {
+    title: "업무추진계획",
+    href: "/work-plan",
+    icon: ClipboardList,
+    submenu: [
+      { title: "보고 작성/목록", href: "/work-plan" },
+      { title: "부서장 감독", href: "/work-plan/oversight" },
+      { title: "임원 검토·지시", href: "/work-plan/exec" },
+      { title: "발표 모드", href: "/work-plan/present" },
+    ],
+    group: "work",
+  },
+  {
+    title: "사업참여 수행인력",
+    href: "/staffing",
+    icon: UserCog,
+    submenu: [
+      { title: "수행인력 현황", href: "/staffing" },
+      { title: "반기 참여도·평점", href: "/staffing/evaluations" },
+    ],
+    group: "work",
+  },
+  // ── 사업 운영 ─────────────────────────────────────
   {
     title: "사업장",
     href: "/facilities",

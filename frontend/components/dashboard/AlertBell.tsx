@@ -47,12 +47,15 @@ export function AlertBell({ variant = "sidebar", canAck }: AlertBellProps) {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="relative glass-button rounded-xl w-9 h-9 flex items-center justify-center text-stone-700"
+          className="relative rounded-xl w-9 h-9 flex items-center justify-center cd-surface-bg border cd-border-c cd-text-muted hover:text-[color:var(--cd-text)]"
           title="운영 알람"
         >
           <Bell className="w-4 h-4" />
           {hasUnread && (
-            <span className="absolute -top-1 -right-1 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+            <span
+              className="absolute -top-1 -right-1 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full text-white text-[10px] font-bold flex items-center justify-center"
+              style={{ background: "var(--cd-error)" }}
+            >
               {count}
             </span>
           )}
@@ -74,28 +77,30 @@ export function AlertBell({ variant = "sidebar", canAck }: AlertBellProps) {
         onClick={() => setOpen(true)}
         className={cn(
           "w-full rounded-2xl border p-3 flex items-center gap-3 transition-colors",
-          hasUnread
-            ? "border-red-200 bg-red-50/60 hover:bg-red-50"
-            : "border-stone-200/60 bg-white/60 hover:bg-white/80"
+          hasUnread ? "cd-error-bg" : "cd-surface-bg cd-border-c"
         )}
+        style={hasUnread ? { borderColor: "var(--cd-error)" } : undefined}
         title="운영 알람"
       >
         <div
           className={cn(
             "w-9 h-9 rounded-full flex items-center justify-center relative",
-            hasUnread ? "bg-red-500/15 text-red-600" : "bg-primary/10 text-primary"
+            hasUnread ? "cd-error-bg cd-error-text" : "cd-soft-primary"
           )}
         >
           <Bell className="w-4 h-4" />
           {hasUnread && (
-            <span className="absolute -top-1 -right-1 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+            <span
+              className="absolute -top-1 -right-1 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full text-white text-[10px] font-bold flex items-center justify-center"
+              style={{ background: "var(--cd-error)" }}
+            >
               {count}
             </span>
           )}
         </div>
         <div className="flex-1 min-w-0 text-left">
-          <div className="text-xs font-bold text-stone-700 truncate">운영 알람</div>
-          <div className="text-[11px] text-stone-400 truncate">
+          <div className="text-xs font-bold cd-text truncate">운영 알람</div>
+          <div className="text-[11px] cd-text-faint truncate">
             {count === null
               ? "로딩 중"
               : hasUnread

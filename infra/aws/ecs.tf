@@ -128,6 +128,12 @@ resource "aws_ecs_task_definition" "next" {
   ])
 
   tags = local.tags
+
+  # 앱 이미지/태스크 정의는 terraform 밖(register-task-definition)에서 배포한다.
+  # terraform 이 container_definitions(이미지·정규화 필드)를 되돌리지 않도록 무시.
+  lifecycle {
+    ignore_changes = [container_definitions]
+  }
 }
 
 resource "aws_ecs_task_definition" "backend" {
@@ -163,6 +169,10 @@ resource "aws_ecs_task_definition" "backend" {
   ])
 
   tags = local.tags
+
+  lifecycle {
+    ignore_changes = [container_definitions]
+  }
 }
 
 resource "aws_ecs_task_definition" "worker" {
@@ -197,6 +207,10 @@ resource "aws_ecs_task_definition" "worker" {
   ])
 
   tags = local.tags
+
+  lifecycle {
+    ignore_changes = [container_definitions]
+  }
 }
 
 resource "aws_ecs_service" "next" {
@@ -220,4 +234,10 @@ resource "aws_ecs_service" "next" {
 
   depends_on = [aws_lb_listener.http]
   tags       = local.tags
+
+  # 배포는 terraform 밖에서 새 task def 리비전 등록 + update-service 로 한다.
+  # terraform 이 실행 중 서비스의 task_definition 을 자기 리비전으로 되돌리지 않도록 무시.
+  lifecycle {
+    ignore_changes = [task_definition]
+  }
 }

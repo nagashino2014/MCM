@@ -5,6 +5,7 @@
   "description": "MCM IEPS 통합환경허가 데이터 관리 Next.js 프론트엔드",
   "scripts": {
     "dev": "next dev",
+    "dev:aws": "powershell -ExecutionPolicy Bypass -File ../scripts/dev-frontend-aws.ps1",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"

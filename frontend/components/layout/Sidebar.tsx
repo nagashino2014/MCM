@@ -25,36 +25,53 @@ export function Sidebar({ role }: SidebarProps) {
   };
 
   const visible = MENU_ITEMS.filter((m) => isMenuVisibleForRole(m, role));
+  const workItems = visible.filter((m) => m.group === "work");
   const mainItems = visible.filter((m) => (m.group ?? "main") === "main");
   const systemItems = visible.filter((m) => m.group === "system");
 
   return (
-    <aside className="w-72 h-[calc(100vh-2rem)] sticky top-4 left-4 glass-panel rounded-3xl flex flex-col p-6 overflow-y-auto hidden xl:flex shrink-0">
+    <aside
+      className="w-72 h-[calc(100vh-2rem)] sticky top-4 left-4 rounded-3xl flex flex-col p-6 overflow-y-auto hidden xl:flex shrink-0 border cd-border-c"
+      style={{ background: "var(--cd-card)", boxShadow: "var(--cd-shadow)" }}
+    >
       <div className="mb-6 px-2">
         <div className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
-            <ShieldCheck className="w-5 h-5 text-primary" />
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center cd-soft-primary">
+            <ShieldCheck className="w-5 h-5" />
           </div>
           <div className="flex flex-col leading-tight">
-            <span className="brand-mark text-[18px] font-extrabold text-stone-800">
+            <span className="text-[18px] font-extrabold tracking-tight cd-text">
               PermitIQ
             </span>
-            <span className="text-[11px] font-semibold text-stone-400">
+            <span className="text-[11px] font-semibold cd-text-faint">
               IEPS Permit Intelligence
             </span>
           </div>
         </div>
       </div>
 
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1">
+        {workItems.length > 0 && (
+          <>
+            <div className="px-3 mb-1 text-[10px] font-bold uppercase tracking-widest cd-text-faint">
+              업무 보고
+            </div>
+            {workItems.map((section) =>
+              renderItem(section, pathname, openSections, toggleSection)
+            )}
+            <div className="px-3 mb-1 mt-4 text-[10px] font-bold uppercase tracking-widest cd-text-faint">
+              사업 운영
+            </div>
+          </>
+        )}
         {mainItems.map((section) =>
           renderItem(section, pathname, openSections, toggleSection)
         )}
       </div>
 
       {systemItems.length > 0 && (
-        <div className="mt-6 pt-4 border-t border-stone-200/60 flex flex-col gap-2">
-          <div className="px-3 text-[10px] font-bold uppercase tracking-widest text-stone-400">
+        <div className="mt-6 pt-4 border-t cd-border-c flex flex-col gap-1">
+          <div className="px-3 mb-1 text-[10px] font-bold uppercase tracking-widest cd-text-faint">
             시스템
           </div>
           {systemItems.map((section) =>
@@ -65,13 +82,13 @@ export function Sidebar({ role }: SidebarProps) {
 
       <div className="mt-auto pt-6 flex flex-col gap-3">
         <AlertBell variant="sidebar" canAck={role === "admin" || role === "editor"} />
-        <div className="rounded-2xl border border-stone-200/60 bg-white/60 p-3 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+        <div className="rounded-2xl border cd-border-c cd-surface-bg p-3 flex items-center gap-3">
+          <div className="w-9 h-9 rounded-full flex items-center justify-center cd-soft-primary">
             <Zap className="w-4 h-4" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-xs font-bold text-stone-700 truncate">자동 수집</div>
-            <div className="text-[11px] text-stone-400 truncate">
+            <div className="text-xs font-bold cd-text truncate">자동 수집</div>
+            <div className="text-[11px] cd-text-faint truncate">
               `npm run collect` 또는 수집 시작 버튼
             </div>
           </div>
@@ -100,17 +117,17 @@ function renderItem(
         key={section.title}
         href={section.href}
         className={cn(
-          "flex items-center justify-between w-full px-3 py-3 rounded-xl text-sm font-semibold transition-all group mb-1",
-          isActiveSection ? "text-primary bg-primary/5" : "text-stone-600 hover:text-stone-900"
+          "flex items-center justify-between w-full px-3 py-2.5 rounded-xl text-sm font-semibold transition-all group",
+          isActiveSection
+            ? "cd-soft-primary"
+            : "cd-text-muted hover:text-[color:var(--cd-text)]"
         )}
       >
         <div className="flex items-center gap-3">
           <div
             className={cn(
-              "p-2 rounded-lg shadow-sm",
-              isActiveSection
-                ? "bg-primary text-white"
-                : "bg-white text-stone-500 group-hover:bg-white/80"
+              "p-2 rounded-lg flex items-center justify-center transition-colors",
+              isActiveSection ? "cd-fill-primary" : "cd-surface-bg cd-text-muted"
             )}
           >
             <Icon className="w-4 h-4" />
@@ -118,7 +135,7 @@ function renderItem(
           <span>{section.title}</span>
         </div>
         {section.comingSoon && (
-          <span className="text-[10px] text-stone-400 font-medium">예정</span>
+          <span className="text-[10px] cd-text-faint font-medium">예정</span>
         )}
       </Link>
     );
@@ -130,17 +147,17 @@ function renderItem(
         type="button"
         onClick={() => toggleSection(section.title)}
         className={cn(
-          "flex items-center justify-between w-full px-3 py-3 rounded-xl text-sm font-semibold transition-all group mb-1",
-          isActiveSection ? "text-primary" : "text-stone-600 hover:text-stone-900"
+          "flex items-center justify-between w-full px-3 py-2.5 rounded-xl text-sm font-semibold transition-all group",
+          isActiveSection
+            ? "text-[color:var(--cd-primary)]"
+            : "cd-text-muted hover:text-[color:var(--cd-text)]"
         )}
       >
         <div className="flex items-center gap-3">
           <div
             className={cn(
-              "p-2 rounded-lg shadow-sm",
-              isActiveSection
-                ? "bg-primary text-white"
-                : "bg-white text-stone-500 group-hover:bg-white/80"
+              "p-2 rounded-lg flex items-center justify-center transition-colors",
+              isActiveSection ? "cd-fill-primary" : "cd-surface-bg cd-text-muted"
             )}
           >
             <Icon className="w-4 h-4" />
@@ -155,8 +172,8 @@ function renderItem(
       </button>
 
       {isOpen && (
-        <div className="flex flex-col gap-1 pl-4 relative">
-          <div className="absolute left-6 top-0 bottom-0 w-px bg-stone-200" />
+        <div className="flex flex-col gap-1 pl-4 mt-1 relative">
+          <div className="absolute left-6 top-0 bottom-0 w-px" style={{ background: "var(--cd-border)" }} />
           {section.submenu!.map((item) => {
             const isItemActive = pathname === item.href;
             return (
@@ -166,8 +183,8 @@ function renderItem(
                 className={cn(
                   "relative block px-3 py-2 text-sm rounded-lg ml-4 transition-colors",
                   isItemActive
-                    ? "bg-primary/10 text-primary font-medium"
-                    : "text-stone-500 hover:text-stone-800 hover:bg-stone-100/50"
+                    ? "cd-soft-primary font-semibold"
+                    : "cd-text-muted hover:text-[color:var(--cd-text)] cd-row-hover"
                 )}
               >
                 {item.title}

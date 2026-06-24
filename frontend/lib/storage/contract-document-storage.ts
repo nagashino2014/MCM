@@ -1,6 +1,6 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile, unlink } from "node:fs/promises";
 import path from "node:path";
-import { PutObjectCommand } from "@aws-sdk/client-s3";
+import { PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getS3Client } from "@/lib/storage/logo-storage";
 
 export interface StoredContractDocument {
@@ -185,4 +185,29 @@ export async function putContractDocument(
     storageKey,
     publicPath: "/api/contracts/documents?key=" + encodeURIComponent(storageKey),
   };
+}
+
+/**
+ * 저장된 문서 객체를 삭제한다(교체 시 기존 파일 정리용). best-effort: 키가 비었거나
+ * 안전하지 않으면 무시한다. 실패해도 호출측 흐름을 막지 않도록 예외를 던지지 않는다.
+ */
+export async function deleteContractDocument(storageKey: string): Promise<void> {
+  if (!storageKey || storageKey.includes("..") || storageKey.startsWith("/") || storageKey.startsWith("\\")) {
+    return;
+  }
+  try {
+    const localRoot = process.env.CONTRACT_DOCUMENT_STORAGE_ROOT?.trim();
+    if (localRoot) {
+      const root = path.resolve(localRoot);
+      const target = path.resolve(root, storageKey);
+      if (!target.startsWith(root + path.sep)) return;
+      await unlink(target).catch(() => {});
+      return;
+    }
+    const bucket = process.env.MCM_STORAGE_BUCKET?.trim();
+    if (!bucket) return;
+    await getS3Client().send(new DeleteObjectCommand({ Bucket: bucket, Key: storageKey }));
+  } catch {
+    // 정리는 best-effort — 실패 무시
+  }
 }

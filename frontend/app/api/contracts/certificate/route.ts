@@ -1,6 +1,6 @@
 import JSZip from "jszip";
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { getCertificateData } from "@/lib/contracts/certificate";
 import { fillHwpx, buildCertTokens, buildRosterTokens } from "@/lib/contracts/hwpx";
@@ -24,7 +24,7 @@ interface CertRequestBody {
 // 증명서(+명단) HWPX 생성 → 계약별 S3 저장 + 다운로드
 export async function POST(req: NextRequest) {
   try {
-    const actor = await requireEditor();
+    const actor = await requirePermission("certificate.issue", { fallbackRoles: ["editor"] });
     const body = (await req.json()) as CertRequestBody;
     const contractIds = [...new Set((body.contractIds ?? []).map((id) => String(id).trim()).filter(Boolean))];
     const option = body.option === 2 ? 2 : 1;

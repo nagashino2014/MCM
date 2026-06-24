@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAuthenticated, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { createIssue, listContractIssues, type IssueInput } from "@/lib/work-plan/issues";
 
 export const runtime = "nodejs";
@@ -11,8 +11,8 @@ interface RouteContext {
 
 export async function GET(_: NextRequest, ctx: RouteContext) {
   try {
-    await requireAuthenticated();
     const { contractId } = await ctx.params;
+    await requirePermission("contract.view", { target: { contractId } });
     return NextResponse.json({ issues: await listContractIssues(contractId) });
   } catch (err) {
     return authErrorToResponse(err);
@@ -21,8 +21,8 @@ export async function GET(_: NextRequest, ctx: RouteContext) {
 
 export async function POST(req: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requireEditor();
     const { contractId } = await ctx.params;
+    const actor = await requirePermission("contract.edit", { fallbackRoles: ["editor"], target: { contractId } });
     const body = (await req.json()) as IssueInput;
     const issueId = await createIssue(actor.userId, contractId, body);
     return NextResponse.json({ issueId, issues: await listContractIssues(contractId) });

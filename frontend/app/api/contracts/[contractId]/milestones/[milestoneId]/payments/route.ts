@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { rowsToObjects, withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 
@@ -23,8 +23,8 @@ interface PartialPaymentEntry {
 
 export async function POST(req: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requireEditor();
     const { contractId, milestoneId } = await ctx.params;
+    const actor = await requirePermission("contract.edit", { fallbackRoles: ["editor"], target: { contractId } });
     const body = await req.json();
     const collectedAt = String(body.collectedAt ?? "").trim();
     const amount = toNumberOrNull(body.amount);

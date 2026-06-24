@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 import {
@@ -22,8 +22,8 @@ const newDocumentId = () => "doc_" + crypto.randomUUID().replace(/-/g, "").slice
 
 export async function POST(req: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requireEditor();
     const { contractId } = await ctx.params;
+    const actor = await requirePermission("contract.edit", { fallbackRoles: ["editor"], target: { contractId } });
     const form = await req.formData();
     const outsourcingTitle = String(form.get("outsourcingTitle") ?? "").trim();
     const counterpartyFacilityId = String(form.get("counterpartyFacilityId") ?? "").trim() || null;

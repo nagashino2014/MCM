@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAuthenticated } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import {
   getDashboardCounterpartyDetail,
   searchDashboardCounterparties,
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
-    await requireAuthenticated();
+    await requirePermission("billing.view");
     const sp = req.nextUrl.searchParams;
     const q = sp.get("q");
     const facilityId = sp.get("facilityId");

@@ -2,7 +2,7 @@ import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAuthenticated } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getS3Client } from "@/lib/storage/logo-storage";
 
 export const runtime = "nodejs";
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
-    await requireAuthenticated();
+    await requirePermission("contract.view");
     const key = req.nextUrl.searchParams.get("key")?.trim();
     if (!key || key.includes("..") || key.startsWith("/") || key.startsWith("\\")) {
       return NextResponse.json({ error: "문서 키가 올바르지 않습니다." }, { status: 400 });

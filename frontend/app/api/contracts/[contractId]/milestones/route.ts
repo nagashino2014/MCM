@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { rowsToObjects, withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 
@@ -15,8 +15,8 @@ const newMilestoneId = () => "mil_" + crypto.randomUUID().replace(/-/g, "").slic
 
 export async function POST(req: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requireEditor();
     const { contractId } = await ctx.params;
+    const actor = await requirePermission("contract.edit", { fallbackRoles: ["editor"], target: { contractId } });
     const body = await req.json();
     const stageLabel = String(body.stageLabel ?? "").trim();
     if (!stageLabel) return NextResponse.json({ error: "단계명이 필요합니다." }, { status: 400 });

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { applyPresetToContract } from "@/lib/contracts/process-stage-presets";
 import { listContractStages } from "@/lib/contracts/process-stages";
@@ -14,8 +14,8 @@ interface RouteContext {
 // 프리셋을 계약 공정표로 적용(기존 공정표 교체).
 export async function POST(req: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requireEditor();
     const { contractId } = await ctx.params;
+    const actor = await requirePermission("contract.edit", { fallbackRoles: ["editor"], target: { contractId } });
     const body = (await req.json()) as { presetId?: string };
     if (!body.presetId) {
       return NextResponse.json({ error: "presetId가 필요합니다." }, { status: 400 });

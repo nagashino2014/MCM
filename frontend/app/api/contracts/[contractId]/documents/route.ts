@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getDb, withDbWrite, rowsToObjects } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 import {
@@ -28,8 +28,8 @@ const MAX_BYTES = 30 * 1024 * 1024;
  */
 export async function POST(req: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requireEditor();
     const { contractId } = await ctx.params;
+    const actor = await requirePermission("contract.edit", { fallbackRoles: ["editor"], target: { contractId } });
     const form = await req.formData();
     const file = form.get("file");
     const documentType = String(form.get("documentType") ?? "contract").trim();

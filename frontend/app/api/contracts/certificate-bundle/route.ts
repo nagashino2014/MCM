@@ -1,6 +1,6 @@
 import JSZip from "jszip";
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAuthenticated } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getContractRoster } from "@/lib/staffing/roster";
 import { renderRosterPdf } from "@/lib/staffing/roster-pdf";
 import {
@@ -22,7 +22,7 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(req: NextRequest) {
   try {
-    await requireAuthenticated();
+    await requirePermission("contract.view");
     const form = await req.formData();
     let contractIds: string[] = [];
     try {

@@ -9,6 +9,8 @@ export interface ContractListFilter {
   sort?: "recent" | "amount" | "date";
   limit?: number;
   offset?: number;
+  /** RBAC 가시 계약 범위. null/undefined = 제한 없음(전사), [] = 없음, [ids] = 해당 계약만. */
+  contractIds?: string[] | null;
 }
 
 export interface ContractListItem {
@@ -133,6 +135,10 @@ export async function listContracts(filter: ContractListFilter) {
   if (filter.status) {
     const p = addParam(filter.status);
     where.push(`c.contract_status = ${p}`);
+  }
+  if (filter.contractIds !== undefined && filter.contractIds !== null) {
+    const p = addParam(filter.contractIds);
+    where.push(`c.contract_id = ANY(${p})`);
   }
   if (filter.collection === "unissued") {
     where.push("COALESCE(ms.unissued_count, 0) > 0");

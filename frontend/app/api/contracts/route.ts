@@ -1,8 +1,9 @@
 import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAuthenticated, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
+import { resolveVisibleContractIds } from "@/lib/auth/contract-scope";
 import { listContracts, type ContractListFilter } from "@/lib/ieps/contracts";
 
 export const runtime = "nodejs";
@@ -12,7 +13,8 @@ const id = () => "ctr_" + crypto.randomUUID().replace(/-/g, "").slice(0, 16);
 
 export async function GET(req: NextRequest) {
   try {
-    await requireAuthenticated();
+    const ctx = await requirePermission("contract.view");
+    const contractIds = await resolveVisibleContractIds(ctx.userId, "contract.view");
     const { searchParams } = new URL(req.url);
     const filter: ContractListFilter = {
       q: searchParams.get("q") || undefined,
@@ -23,6 +25,7 @@ export async function GET(req: NextRequest) {
       sort: parseSort(searchParams.get("sort")),
       limit: clampLimit(Number(searchParams.get("limit") ?? "50")),
       offset: Math.max(0, Number(searchParams.get("offset") ?? "0")),
+      contractIds,
     };
     return NextResponse.json(await listContracts(filter));
   } catch (err) {
@@ -32,7 +35,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const actor = await requireEditor();
+    const actor = await requirePermission("contract.edit", { fallbackRoles: ["editor"] });
     const body = await req.json();
     const contractTitle = String(body.contractTitle ?? "").trim();
     const counterpartyFacilityId = String(body.counterpartyFacilityId ?? "").trim();

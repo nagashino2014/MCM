@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
-import { authErrorToResponse, requireAuthenticated, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 import { getContractDetail } from "@/lib/ieps/contracts";
@@ -14,8 +14,8 @@ interface RouteContext {
 
 export async function GET(_: NextRequest, ctx: RouteContext) {
   try {
-    await requireAuthenticated();
     const { contractId } = await ctx.params;
+    await requirePermission("contract.view", { target: { contractId } });
     const detail = await getContractDetail(contractId);
     if (!detail) return NextResponse.json({ error: "not found" }, { status: 404 });
     return NextResponse.json(detail);
@@ -26,8 +26,8 @@ export async function GET(_: NextRequest, ctx: RouteContext) {
 
 export async function PATCH(req: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requireEditor();
     const { contractId } = await ctx.params;
+    const actor = await requirePermission("contract.edit", { fallbackRoles: ["editor"], target: { contractId } });
     const body = await req.json();
     const before = await getContractDetail(contractId);
     if (!before) return NextResponse.json({ error: "not found" }, { status: 404 });
@@ -101,8 +101,8 @@ const newTrashId = () => "trash_" + crypto.randomUUID().replace(/-/g, "").slice(
 
 export async function DELETE(req: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requireEditor();
     const { contractId } = await ctx.params;
+    const actor = await requirePermission("contract.delete", { fallbackRoles: ["editor"], target: { contractId } });
     const body = await req.json().catch(() => ({}));
     const deleteReason = String(body?.deleteReason ?? "").trim();
     if (!DELETE_REASONS.has(deleteReason)) {

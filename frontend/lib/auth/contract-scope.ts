@@ -5,6 +5,7 @@
  *
  * 설계: docs/permission-rbac-redesign.md §3.5.
  */
+import { getDb, rowsToObjects } from "@/lib/db";
 import { loadUserAccess } from "./rbac";
 
 export type ContractScope =
@@ -44,6 +45,51 @@ export async function resolveContractScope(
   }
 
   return { kind: "none" };
+}
+
+/**
+ * 사용자가 볼 수 있는 계약 id 목록으로 해석한다. 분산된 billing 집계 함수들이 공통으로 쓰기 좋게,
+ * scope 를 미리 contract_id 배열로 펼친다.
+ * - 반환 null = 전사(필터 없음), [] = 가시 계약 없음, [ids] = 해당 계약만.
+ * 호출부는 null 이면 필터를 걸지 않고, 배열이면 `c.contract_id = ANY($n)` 한 조건만 추가하면 된다.
+ */
+/** RBAC 강제 전까지(롤아웃 §10) 목록 scope 필터를 적용하지 않는다(기존 전체 노출 유지). */
+const RBAC_ENFORCE = process.env.RBAC_ENFORCE === "true";
+
+export async function resolveVisibleContractIds(
+  userId: string,
+  permissionKey: string
+): Promise<string[] | null> {
+  if (!RBAC_ENFORCE) return null; // 호환 모드: 필터 없음
+  const scope = await resolveContractScope(userId, permissionKey);
+  if (scope.kind === "all") return null;
+  if (scope.kind === "none") return [];
+
+  const db = await getDb();
+  if (scope.kind === "dept") {
+    const rows = rowsToObjects(
+      await db.exec(
+        `SELECT DISTINCT c.contract_id
+           FROM contracts c
+          WHERE c.owning_dept_id = ANY($1)
+             OR EXISTS (
+               SELECT 1 FROM service_participants sp
+               JOIN employee_profiles ep ON ep.employee_id = sp.employee_id
+               WHERE sp.contract_id = c.contract_id AND ep.dept_id = ANY($1)
+             )`,
+        [scope.deptIds]
+      )
+    );
+    return rows.map((r) => String(r.contract_id));
+  }
+  // participant
+  const rows = rowsToObjects(
+    await db.exec(
+      "SELECT DISTINCT contract_id FROM service_participants WHERE employee_id = $1",
+      [scope.employeeId]
+    )
+  );
+  return rows.map((r) => String(r.contract_id));
 }
 
 /**

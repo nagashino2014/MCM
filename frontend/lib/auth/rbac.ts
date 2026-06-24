@@ -9,7 +9,7 @@
 import { getDb, rowsToObjects } from "@/lib/db";
 import type { Role } from "./users";
 
-export type ScopeKind = "self" | "self_dept" | "specific_dept" | "all";
+export type ScopeKind = "self" | "participant" | "self_dept" | "specific_dept" | "all";
 
 interface GrantRow {
   permissionKey: string;
@@ -22,12 +22,16 @@ export interface UserAccess {
   userId: string;
   role: Role;
   deptId: string | null;
+  employeeId: string | null;
+  /** 본인(employee)이 참여자로 등록된 계약 id 집합 — participant scope 평가용(종료 포함). */
+  participantContractIds: Set<string>;
   grants: GrantRow[];
 }
 
 export interface PermissionTarget {
   userId?: string;
   deptId?: string;
+  contractId?: string;
 }
 
 /** 사용자 role·소속부서 + 활성 권한 grants 를 로드한다. */
@@ -36,10 +40,22 @@ export async function loadUserAccess(userId: string): Promise<UserAccess> {
   const today = new Date().toISOString().slice(0, 10);
 
   const userRows = rowsToObjects(
-    await db.exec("SELECT role, dept_id FROM users WHERE user_id = $1 LIMIT 1", [userId])
+    await db.exec("SELECT role, dept_id, employee_id FROM users WHERE user_id = $1 LIMIT 1", [userId])
   );
   const role = (String(userRows[0]?.role ?? "viewer") as Role);
   const deptId = userRows[0]?.dept_id != null ? String(userRows[0].dept_id) : null;
+  const employeeId = userRows[0]?.employee_id != null ? String(userRows[0].employee_id) : null;
+
+  // participant scope 평가용: 본인이 참여한 계약 id(종료 포함).
+  const participantContractIds = new Set<string>();
+  if (employeeId) {
+    const partRows = rowsToObjects(
+      await db.exec("SELECT contract_id FROM service_participants WHERE employee_id = $1", [employeeId])
+    );
+    for (const r of partRows) {
+      if (r.contract_id != null) participantContractIds.add(String(r.contract_id));
+    }
+  }
 
   const grantRows = rowsToObjects(
     await db.exec(
@@ -64,7 +80,7 @@ export async function loadUserAccess(userId: string): Promise<UserAccess> {
     effect: (String(row.effect ?? "allow") as "allow" | "deny"),
   }));
 
-  return { userId, role, deptId, grants };
+  return { userId, role, deptId, employeeId, participantContractIds, grants };
 }
 
 function scopeMatches(grant: GrantRow, access: UserAccess, target: PermissionTarget): boolean {
@@ -73,6 +89,9 @@ function scopeMatches(grant: GrantRow, access: UserAccess, target: PermissionTar
       return true;
     case "self":
       return !target.userId || target.userId === access.userId;
+    case "participant":
+      // 본인이 참여한 계약만. 단건 가드는 target.contractId 를 넘긴다(목록은 contract-scope.ts).
+      return !target.contractId || access.participantContractIds.has(target.contractId);
     case "self_dept":
       return !target.deptId || target.deptId === access.deptId;
     case "specific_dept":

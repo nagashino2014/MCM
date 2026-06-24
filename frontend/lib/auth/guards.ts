@@ -81,17 +81,30 @@ export async function requireAuthenticated(): Promise<AuthContext> {
   return requireSession();
 }
 
+/** RBAC 강제 여부. env RBAC_ENFORCE='true' 일 때만 권한 템플릿으로 판정한다(롤아웃 §10). */
+const RBAC_ENFORCE = process.env.RBAC_ENFORCE === "true";
+
 /**
- * RBAC atomic 권한키 가드. admin 은 항상 통과, 그 외에는 권한 템플릿 평가.
- * (역할 화면 적용은 권한 할당 데이터 정비 후 단계적으로 도입)
+ * RBAC atomic 권한키 가드. 단계적 전환을 위해 호환 모드를 둔다.
+ * - admin 은 항상 통과(부트스트랩).
+ * - RBAC_ENFORCE=false(기본): 기존 role 가드와 동일하게 판정한다(회귀 방지).
+ *   `fallbackRoles` 미지정이면 인증만으로 통과(= 기존 requireAuthenticated 동등).
+ * - RBAC_ENFORCE=true: 권한 템플릿(hasPermission)으로 판정한다.
  */
 export async function requirePermission(
   permissionKey: string,
-  target?: PermissionTarget
+  opts?: { target?: PermissionTarget; fallbackRoles?: Role[] }
 ): Promise<AuthContext> {
   const ctx = await requireSession();
   if (ctx.role === "admin") return ctx;
-  const ok = await hasPermission(ctx.userId, permissionKey, target);
+
+  if (!RBAC_ENFORCE) {
+    const roles = opts?.fallbackRoles;
+    if (!roles || roles.includes(ctx.role)) return ctx;
+    throw new AuthError("이 작업을 수행할 권한이 없습니다.", 403);
+  }
+
+  const ok = await hasPermission(ctx.userId, permissionKey, opts?.target);
   if (!ok) throw new AuthError("이 작업을 수행할 권한이 없습니다.", 403);
   return ctx;
 }

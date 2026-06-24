@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
-import {
-  authErrorToResponse,
-  requireAuthenticated,
-  requireEditor,
-} from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getFacilityDetail } from "@/lib/ieps/queries";
 import { withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
@@ -22,7 +18,7 @@ interface RouteContext {
 
 export async function GET(_: NextRequest, ctx: RouteContext) {
   try {
-    await requireAuthenticated();
+    await requirePermission("facility.view");
     const { id } = await ctx.params;
     const detail = await getFacilityDetail(id);
     if (!detail) return NextResponse.json({ error: "not found" }, { status: 404 });
@@ -52,7 +48,7 @@ interface PatchBody {
 
 export async function PATCH(req: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requireEditor();
+    const actor = await requirePermission("facility.edit", { fallbackRoles: ["editor"] });
     const { id } = await ctx.params;
     const body = (await req.json()) as PatchBody;
     const before = await getFacilityDetail(id);
@@ -174,7 +170,7 @@ function normalizeCorporateRegistrationNo(value?: string | null): string | null 
 
 export async function DELETE(req: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requireEditor();
+    const actor = await requirePermission("facility.delete", { fallbackRoles: ["editor"] });
     const { id } = await ctx.params;
     const body = await req.json().catch(() => ({}));
     const deleteReason = String(body?.deleteReason ?? "사용자 요청").trim() || "사용자 요청";

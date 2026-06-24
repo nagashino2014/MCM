@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAuthenticated, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 import {
@@ -30,7 +30,7 @@ const MAX_BYTES = 30 * 1024 * 1024;
 
 export async function GET(_: NextRequest, ctx: RouteContext) {
   try {
-    await requireAuthenticated();
+    await requirePermission("facility.view");
     const { id } = await ctx.params;
     const db = await getDb();
     const rows = rowsToObjects(
@@ -51,7 +51,7 @@ export async function GET(_: NextRequest, ctx: RouteContext) {
 
 export async function POST(req: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requireEditor();
+    const actor = await requirePermission("facility.edit", { fallbackRoles: ["editor"] });
     const { id } = await ctx.params;
     const form = await req.formData();
     const file = form.get("file");

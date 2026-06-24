@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 import { normalizeFacilityHistoryEventType, type FacilityHistoryEventType } from "@/lib/ieps/facility-legacy";
@@ -68,7 +68,7 @@ function normalizeMergerTargets(value: HistoryBody["mergerTargetCompanyNames"]):
 
 export async function PATCH(req: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requireEditor();
+    const actor = await requirePermission("facility.edit", { fallbackRoles: ["editor"] });
     const { id: facilityId, historyId } = await ctx.params;
     const body = (await req.json()) as HistoryBody;
 
@@ -122,7 +122,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
 
 export async function DELETE(_: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requireEditor();
+    const actor = await requirePermission("facility.edit", { fallbackRoles: ["editor"] });
     const { id: facilityId, historyId } = await ctx.params;
     await withDbWrite(async (db) => {
       const before = await snapshotHistory(db, facilityId, historyId);

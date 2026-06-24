@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAuthenticated } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { listContractsForTreeByFacility } from "@/lib/ieps/contracts";
 
 export const runtime = "nodejs";
@@ -11,7 +11,7 @@ interface RouteContext {
 
 export async function GET(_: NextRequest, ctx: RouteContext) {
   try {
-    await requireAuthenticated();
+    await requirePermission("facility.view");
     const { id } = await ctx.params;
     return NextResponse.json(await listContractsForTreeByFacility(id));
   } catch (err) {

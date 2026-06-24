@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
-import { authErrorToResponse, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 
@@ -37,7 +37,7 @@ function normalizeCompanyRole(value: string | null | undefined) {
 
 export async function PUT(req: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requireEditor();
+    const actor = await requirePermission("facility.edit", { fallbackRoles: ["editor"] });
     const { id } = await ctx.params;
     const body = (await req.json()) as Body;
     if (!body.groupId) {
@@ -158,7 +158,7 @@ export async function PUT(req: NextRequest, ctx: RouteContext) {
 
 export async function DELETE(_: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requireEditor();
+    const actor = await requirePermission("facility.edit", { fallbackRoles: ["editor"] });
     const { id } = await ctx.params;
     await withDbWrite(async (db) => {
       const before = await db.exec("SELECT * FROM facility_group_memberships WHERE facility_id = $1", [id]);

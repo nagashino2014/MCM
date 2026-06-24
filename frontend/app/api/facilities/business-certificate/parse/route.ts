@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import {
   normalizeBusinessCertificateOcrText,
   parseBusinessCertificateText,
@@ -25,7 +25,7 @@ interface ExtractResponse {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireEditor();
+    await requirePermission("facility.edit", { fallbackRoles: ["editor"] });
     const form = await req.formData();
     const file = form.get("file");
     if (!(file instanceof File)) {

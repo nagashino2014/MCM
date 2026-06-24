@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuthenticated, authErrorToResponse } from "@/lib/auth/guards";
+import { requirePermission, authErrorToResponse } from "@/lib/auth/guards";
 import { withDbWrite } from "@/lib/db";
 import {
   getFacilityFilterOptions,
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
-    await requireAuthenticated();
+    await requirePermission("facility.view");
     await withDbWrite(async (db) => {
       await syncAllGroupCompanyFacilities(db);
     });

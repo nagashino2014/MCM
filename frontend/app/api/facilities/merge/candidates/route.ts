@@ -5,7 +5,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { authErrorToResponse, requireAuthenticated } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getDb, invalidateDb, rowsToObjects } from "@/lib/db";
 import {
   formatCompanyName,
@@ -91,7 +91,7 @@ function brnRegionKey(facility: FacilityRow): string | null {
 
 export async function GET() {
   try {
-    await requireAuthenticated();
+    await requirePermission("facility.view");
     invalidateDb();
     const db = await getDb();
 

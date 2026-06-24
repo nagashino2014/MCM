@@ -1,7 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAuthenticated } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getFacilityBusinessCertificate } from "@/lib/storage/facility-business-certificate-storage";
 
 export const runtime = "nodejs";
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
-    await requireAuthenticated();
+    await requirePermission("facility.view");
     const key = req.nextUrl.searchParams.get("key")?.trim();
     if (!key || key.includes("..") || key.startsWith("/") || key.startsWith("\\")) {
       return NextResponse.json({ error: "문서 키가 올바르지 않습니다." }, { status: 400 });

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 
@@ -26,7 +26,7 @@ function facilityIdsKey(ids: string[]): string {
 
 export async function POST(req: NextRequest) {
   try {
-    const actor = await requireEditor();
+    const actor = await requirePermission("facility.merge", { fallbackRoles: ["editor"] });
     const body = (await req.json()) as ExclusionBody;
     const matchType = normalizeMatchType(body.matchType);
     const ids = Array.isArray(body.facilityIds)

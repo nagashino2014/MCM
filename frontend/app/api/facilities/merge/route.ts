@@ -24,7 +24,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 import { extractRegion } from "@scraper/lib/ieps/region";
@@ -70,7 +70,7 @@ function historyTypeFromMergeReason(reason: FacilityMergeReason): FacilityHistor
 
 export async function POST(req: NextRequest) {
   try {
-    const actor = await requireEditor();
+    const actor = await requirePermission("facility.merge", { fallbackRoles: ["editor"] });
     const body = (await req.json()) as MergeBody;
     if (!body?.targetId || !Array.isArray(body.sourceIds) || body.sourceIds.length === 0) {
       return NextResponse.json(

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuthenticated, authErrorToResponse } from "@/lib/auth/guards";
+import { requirePermission, authErrorToResponse } from "@/lib/auth/guards";
 import { listFacilities, type FacilityListFilter } from "@/lib/ieps/queries";
 import { formatCompanyName } from "@/lib/ieps/formatters";
 import {
@@ -48,7 +48,7 @@ function stampDisplay(d: Date): string {
 
 export async function GET(req: NextRequest) {
   try {
-    await requireAuthenticated();
+    await requirePermission("facility.view");
     const { searchParams } = new URL(req.url);
     const format = searchParams.get("format") === "pdf" ? "pdf" : "xlsx";
 

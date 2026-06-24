@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAuthenticated } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { resolveVisibleContractIds } from "@/lib/auth/contract-scope";
 import { getContractOrdersStatus } from "@/lib/ieps/contracts";
 import { filterOrdersStatusRows } from "@/lib/ieps/orders-status-filter";
 import { createTablePdf, createTableWorkbook, type TableDocumentSpec } from "@/lib/export/table-document";
@@ -23,11 +24,12 @@ function stampIso(d: Date): string {
 
 export async function GET(req: NextRequest) {
   try {
-    await requireAuthenticated();
+    const ctx = await requirePermission("billing.view");
+    const ids = await resolveVisibleContractIds(ctx.userId, "billing.view");
     const sp = req.nextUrl.searchParams;
     const format = sp.get("format") === "pdf" ? "pdf" : "xlsx";
 
-    const status = await getContractOrdersStatus(sp.get("year") ?? undefined);
+    const status = await getContractOrdersStatus(sp.get("year") ?? undefined, ids);
     const categoryParam = sp.get("category") || null;
     const sidoParam = sp.get("sido") || null;
     const filtered = filterOrdersStatusRows(status.rows, {

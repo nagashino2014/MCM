@@ -25,7 +25,9 @@ function calendarMonthsBetween(fromIso: string, to: Date): number {
   return Math.max(0, months);
 }
 
-export async function getContractReceivablesStatus(): Promise<ContractReceivablesStatus> {
+export async function getContractReceivablesStatus(
+  contractIds?: string[] | null
+): Promise<ContractReceivablesStatus> {
   const db = await getDb();
   const catCase = categoryCaseSql("c.service_type");
 
@@ -47,8 +49,9 @@ export async function getContractReceivablesStatus(): Promise<ContractReceivable
        WHERE c.deleted_at IS NULL
          AND m.invoice_issued = 1
          AND m.payment_collected = 0
-         AND COALESCE(m.invoice_amount, m.amount, 0) > 0
-       ORDER BY m.invoice_issued_at ASC NULLS LAST, c.contract_title ASC`
+         AND COALESCE(m.invoice_amount, m.amount, 0) > 0${contractIds ? " AND c.contract_id = ANY($1)" : ""}
+       ORDER BY m.invoice_issued_at ASC NULLS LAST, c.contract_title ASC`,
+      contractIds ? [contractIds] : []
     )
   );
 

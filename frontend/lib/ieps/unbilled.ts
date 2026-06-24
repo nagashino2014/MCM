@@ -19,17 +19,21 @@ const CONTRACT_AMOUNT_SQL = "COALESCE(c.current_amount, c.contract_amount, 0)";
  * 미발행 비율 계산용 연도별 수주액을 함께 반환한다.
  * 용역분류/연도 필터링은 클라이언트 및 export 라우트에서 공통으로 수행한다.
  */
-export async function getContractUnbilledStatus(): Promise<ContractUnbilledStatus> {
+export async function getContractUnbilledStatus(
+  contractIds?: string[] | null
+): Promise<ContractUnbilledStatus> {
   const db = await getDb();
   const catCase = categoryCaseSql("c.service_type");
+  const scope1 = contractIds ? " AND c.contract_id = ANY($1)" : "";
 
   const yearRows = rowsToObjects(
     await db.exec(
       `SELECT DISTINCT SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) AS year
        FROM contracts c
-       WHERE c.deleted_at IS NULL
+       WHERE c.deleted_at IS NULL${scope1}
        ORDER BY year DESC
-       LIMIT 14`
+       LIMIT 14`,
+      contractIds ? [contractIds] : []
     )
   );
   const availableYears = yearRows
@@ -52,8 +56,9 @@ export async function getContractUnbilledStatus(): Promise<ContractUnbilledStatu
        LEFT JOIN facilities f ON f.facility_id = c.counterparty_facility_id
        WHERE c.deleted_at IS NULL
          AND COALESCE(m.invoice_issued, 0) = 0
-         AND COALESCE(m.amount, 0) > 0
-       ORDER BY contract_date DESC NULLS LAST, c.contract_title ASC, m.stage_order ASC`
+         AND COALESCE(m.amount, 0) > 0${scope1}
+       ORDER BY contract_date DESC NULLS LAST, c.contract_title ASC, m.stage_order ASC`,
+      contractIds ? [contractIds] : []
     )
   );
 
@@ -67,9 +72,9 @@ export async function getContractUnbilledStatus(): Promise<ContractUnbilledStatu
               SUM(${CONTRACT_AMOUNT_SQL}) AS amount
        FROM contracts c
        WHERE c.deleted_at IS NULL
-         AND SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) BETWEEN $1 AND $2
+         AND SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) BETWEEN $1 AND $2${contractIds ? " AND c.contract_id = ANY($3)" : ""}
        GROUP BY 1, 2`,
-      [fromYear, String(currentYear)]
+      contractIds ? [fromYear, String(currentYear), contractIds] : [fromYear, String(currentYear)]
     )
   );
   const ordersMap = new Map<string, ContractUnbilledOrdersYearly>();

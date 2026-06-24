@@ -1188,17 +1188,22 @@ export interface ContractOrdersStatus {
   yearly: ContractOrdersYearlyEntry[];
 }
 
-export async function getContractOrdersStatus(yearFilter?: string): Promise<ContractOrdersStatus> {
+export async function getContractOrdersStatus(
+  yearFilter?: string,
+  contractIds?: string[] | null
+): Promise<ContractOrdersStatus> {
   const db = await getDb();
   const catCase = categoryCaseSql("c.service_type");
+  const scope1 = contractIds ? " AND c.contract_id = ANY($1)" : "";
 
   const yearRows = rowsToObjects(
     await db.exec(
       `SELECT DISTINCT SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) AS year
        FROM contracts c
-       WHERE c.deleted_at IS NULL
+       WHERE c.deleted_at IS NULL${scope1}
        ORDER BY year DESC
-       LIMIT 14`
+       LIMIT 14`,
+      contractIds ? [contractIds] : []
     )
   );
   const availableYears = yearRows
@@ -1213,6 +1218,9 @@ export async function getContractOrdersStatus(yearFilter?: string): Promise<Cont
       ? yearFilter
       : latestYear;
 
+  const rowsParams: unknown[] = isAllPeriod ? [] : [year];
+  const rowsScope = contractIds ? ` AND c.contract_id = ANY($${rowsParams.length + 1})` : "";
+  if (contractIds) rowsParams.push(contractIds);
   const rows = rowsToObjects(
     await db.exec(
       `SELECT c.contract_id,
@@ -1230,9 +1238,9 @@ export async function getContractOrdersStatus(yearFilter?: string): Promise<Cont
        LEFT JOIN facilities cp ON cp.facility_id = c.counterparty_facility_id
        LEFT JOIN facilities f ON f.facility_id = c.facility_id
        WHERE c.deleted_at IS NULL
-         ${isAllPeriod ? "" : `AND SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) = $1`}
+         ${isAllPeriod ? "" : `AND SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) = $1`}${rowsScope}
        ORDER BY contract_date DESC NULLS LAST, c.contract_title ASC`,
-      isAllPeriod ? [] : [year]
+      rowsParams
     )
   );
 
@@ -1246,9 +1254,9 @@ export async function getContractOrdersStatus(yearFilter?: string): Promise<Cont
               SUM(${CONTRACT_AMOUNT_SQL}) AS amount
        FROM contracts c
        WHERE c.deleted_at IS NULL
-         AND SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) BETWEEN $1 AND $2
+         AND SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) BETWEEN $1 AND $2${contractIds ? " AND c.contract_id = ANY($3)" : ""}
        GROUP BY 1, 2`,
-      [fromYear, anchorYear]
+      contractIds ? [fromYear, anchorYear, contractIds] : [fromYear, anchorYear]
     )
   );
   const yearlyMap = new Map<string, ContractOrdersYearlyEntry>();

@@ -18,17 +18,21 @@ const CONTRACT_DATE_SQL = "COALESCE(NULLIF(c.contract_date, ''), c.started_at, c
  * 완료일(발행일: 최종 대금지급단위의 계산서 발행일)이 존재하는 계약.
  * 완료 비율 계산용 연도별 계약 건수(전체/분류별/세분류별)를 함께 반환한다.
  */
-export async function getContractCompletionsStatus(): Promise<ContractCompletionsStatus> {
+export async function getContractCompletionsStatus(
+  contractIds?: string[] | null
+): Promise<ContractCompletionsStatus> {
   const db = await getDb();
   const catCase = categoryCaseSql("c.service_type");
+  const scope1 = contractIds ? " AND c.contract_id = ANY($1)" : "";
 
   const yearRows = rowsToObjects(
     await db.exec(
       `SELECT DISTINCT SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) AS year
        FROM contracts c
-       WHERE c.deleted_at IS NULL
+       WHERE c.deleted_at IS NULL${scope1}
        ORDER BY year DESC
-       LIMIT 14`
+       LIMIT 14`,
+      contractIds ? [contractIds] : []
     )
   );
   const availableYears = yearRows
@@ -57,8 +61,9 @@ export async function getContractCompletionsStatus(): Promise<ContractCompletion
          ORDER BY contract_id, stage_order DESC
        ) lm ON lm.contract_id = c.contract_id
        WHERE c.deleted_at IS NULL
-         AND (NULLIF(c.permit_issued_at, '') IS NOT NULL OR lm.invoice_done_date IS NOT NULL)
-       ORDER BY contract_date DESC NULLS LAST, c.contract_title ASC`
+         AND (NULLIF(c.permit_issued_at, '') IS NOT NULL OR lm.invoice_done_date IS NOT NULL)${scope1}
+       ORDER BY contract_date DESC NULLS LAST, c.contract_title ASC`,
+      contractIds ? [contractIds] : []
     )
   );
 
@@ -73,9 +78,9 @@ export async function getContractCompletionsStatus(): Promise<ContractCompletion
               COUNT(*) AS cnt
        FROM contracts c
        WHERE c.deleted_at IS NULL
-         AND SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) BETWEEN $1 AND $2
+         AND SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) BETWEEN $1 AND $2${contractIds ? " AND c.contract_id = ANY($3)" : ""}
        GROUP BY 1, 2, 3`,
-      [fromYear, String(currentYear)]
+      contractIds ? [fromYear, String(currentYear), contractIds] : [fromYear, String(currentYear)]
     )
   );
   const countsMap = new Map<string, ContractCompletionsYearlyContracts>();

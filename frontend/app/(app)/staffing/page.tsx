@@ -2,7 +2,6 @@
 
 import { UserCog } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
-import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import "@/components/cdash/cdash.css";
 
@@ -16,7 +15,6 @@ export default function StaffingPage() {
         eyebrow="Work · Staffing"
         title="사업참여 수행인력"
         subtitle="용역별 수행인력 현황을 자동 집계하고, 실적증명서 명단 생성과 반기 성과급 산정의 기준 데이터를 관리합니다."
-        actions={<CdThemeToggle theme={theme} onToggle={toggleTheme} />}
       />
 
       <section className="cd-card rounded-3xl p-8 cd-reveal delay-1 flex flex-col items-center justify-center text-center gap-3 min-h-[320px]">

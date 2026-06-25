@@ -7,7 +7,6 @@ import { useSession } from "next-auth/react";
 import { ArrowLeft, FileText, ShieldAlert, Save, Upload, Plus, Trash2 } from "lucide-react";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
-import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import "@/components/cdash/cdash.css";
 import {
@@ -240,7 +239,6 @@ function Inner() {
             <Link href="/facilities" className="cd-btn cd-btn-ghost cd-btn-sm">
               <ArrowLeft className="w-3.5 h-3.5" /> 사업장 마스터
             </Link>
-            <CdThemeToggle theme={theme} onToggle={toggleTheme} />
           </>
         }
       />

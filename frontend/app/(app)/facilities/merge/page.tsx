@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
-import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import "@/components/cdash/cdash.css";
 import { cn } from "@/lib/utils";
@@ -441,7 +440,6 @@ function Inner() {
             <button type="button" onClick={reload} className="cd-btn cd-btn-ghost cd-btn-sm">
               <RefreshCw className={"w-3.5 h-3.5 " + (loading ? "animate-spin" : "")} /> 다시 검색
             </button>
-            <CdThemeToggle theme={theme} onToggle={toggleTheme} />
           </>
         }
       />

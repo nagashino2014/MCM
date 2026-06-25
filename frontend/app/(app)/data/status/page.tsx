@@ -5,7 +5,6 @@ import { useSession } from "next-auth/react";
 import { Database } from "lucide-react";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
-import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import "@/components/cdash/cdash.css";
 import { KpiPanel } from "@/components/dashboard/KpiPanel";
@@ -305,7 +304,6 @@ function StatusPageInner() {
             <b className="cd-text-primary">통합·변경·연간보고서 파싱</b> 버튼이 카테고리별 OCR 추출과 사업장 적재를 담당합니다.
           </>
         }
-        actions={<CdThemeToggle theme={theme} onToggle={toggleTheme} />}
       />
 
       <AlertBanner canAck={canEdit} />

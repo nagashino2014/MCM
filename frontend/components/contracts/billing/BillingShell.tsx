@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -8,19 +8,15 @@ import {
   FileClock,
   Handshake,
   Hourglass,
-  Moon,
   ReceiptText,
-  Sun,
   Wallet,
 } from "lucide-react";
-import type { CdTheme } from "@/components/contracts/dashboard/types";
+import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { OrdersStatusSection } from "./OrdersStatusSection";
 import { ReceivablesSection } from "./ReceivablesSection";
 import { UnbilledSection } from "./UnbilledSection";
 import { CollectionsSection } from "./CollectionsSection";
 import { CompletionsSection } from "./CompletionsSection";
-
-const THEME_STORAGE_KEY = "cdash-theme";
 
 type BillingTab = "orders" | "uncollected" | "unissued" | "collections" | "completed";
 
@@ -36,25 +32,12 @@ const TAB_IDS: BillingTab[] = ["orders", "uncollected", "unissued", "collections
 
 export function BillingShell() {
   const searchParams = useSearchParams();
-  const [theme, setTheme] = useState<CdTheme>("dark");
+  const { theme } = useCdashTheme();
   // 계약 상세의 "돌아가기" 등 외부 진입 시 ?tab= 으로 초기 탭을 지정할 수 있다.
   const [tab, setTab] = useState<BillingTab>(() => {
     const fromQuery = searchParams.get("tab") as BillingTab | null;
     return fromQuery && TAB_IDS.includes(fromQuery) ? fromQuery : "orders";
   });
-
-  useEffect(() => {
-    const saved = localStorage.getItem(THEME_STORAGE_KEY);
-    if (saved === "light" || saved === "dark") setTheme(saved);
-  }, []);
-
-  const toggleTheme = () => {
-    setTheme((prev) => {
-      const next = prev === "dark" ? "light" : "dark";
-      localStorage.setItem(THEME_STORAGE_KEY, next);
-      return next;
-    });
-  };
 
   const activeMeta = TABS.find((t) => t.id === tab)!;
 
@@ -88,15 +71,6 @@ export function BillingShell() {
             </h1>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={toggleTheme}
-          className="cd-chip inline-flex items-center gap-1.5"
-          aria-label={theme === "dark" ? "라이트 모드로 전환" : "다크 모드로 전환"}
-        >
-          {theme === "dark" ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
-          {theme === "dark" ? "라이트" : "다크"}
-        </button>
       </header>
 
       {/* 연결형 서브메뉴 탭 바 */}

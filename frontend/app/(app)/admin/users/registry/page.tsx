@@ -12,7 +12,6 @@ import type {
 } from "@/components/admin/users/types";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
-import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import "@/components/cdash/cdash.css";
 
@@ -136,7 +135,6 @@ function Inner() {
               <RefreshCw className={"w-3.5 h-3.5 " + (loading ? "animate-spin" : "")} />
               새로고침
             </button>
-            <CdThemeToggle theme={theme} onToggle={toggleTheme} />
           </>
         }
       />

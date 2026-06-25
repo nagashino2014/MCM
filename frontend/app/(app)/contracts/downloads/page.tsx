@@ -5,7 +5,6 @@ import type { ReactNode } from "react";
 import { Archive, BadgeCheck, Check, CheckSquare, ChevronDown, ChevronRight, Download, FileArchive, FileText, ListChecks, Mail, Paperclip, Search } from "lucide-react";
 import { resolveServiceTypeStyle } from "@/lib/ieps/contract-tree-style";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
-import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import "@/components/cdash/cdash.css";
 
@@ -438,7 +437,6 @@ export default function ContractDownloadsPage() {
         eyebrow="Contract · Documents"
         title="다운로드/증명서 생성"
         subtitle="계약서, 변경계약서, 세금계산서 PDF를 선택한 계약 단위로 다운로드하거나 병합합니다."
-        actions={<CdThemeToggle theme={theme} onToggle={toggleTheme} />}
       />
 
       <div className="grid min-h-0 flex-1 grid-cols-1 xl:grid-cols-[minmax(360px,0.9fr)_minmax(620px,1.4fr)] gap-5">

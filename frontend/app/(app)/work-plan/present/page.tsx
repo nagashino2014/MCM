@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, ArrowLeft, ChevronLeft, ChevronRight, Pause, Play, Users } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
-import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import type { OversightCard } from "@/lib/work-plan/oversight";
 import "@/components/cdash/cdash.css";
@@ -88,7 +87,6 @@ export default function PresentPage() {
             <Link href="/work-plan" className="cd-btn rounded-xl px-3 py-2 text-sm border cd-border-c cd-text-muted inline-flex items-center gap-1.5">
               <ArrowLeft className="w-4 h-4" /> 나가기
             </Link>
-            <CdThemeToggle theme={theme} onToggle={toggleTheme} />
           </div>
         }
       />

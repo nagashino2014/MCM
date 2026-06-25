@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, ClipboardList, FileSignature, Plus, Save, Send, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
-import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import ContractPickerModal from "@/components/work-plan/ContractPickerModal";
 import IssuePanel from "@/components/work-plan/IssuePanel";
@@ -236,7 +235,6 @@ export default function WorkPlanEditor({
             >
               <ArrowLeft className="w-4 h-4" /> 목록
             </button>
-            <CdThemeToggle theme={theme} onToggle={toggleTheme} />
           </div>
         }
       />

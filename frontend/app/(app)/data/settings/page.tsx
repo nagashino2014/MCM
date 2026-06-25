@@ -5,7 +5,6 @@ import { useSession } from "next-auth/react";
 import { Settings as SettingsIcon, Star, Trash2, RefreshCw, Plus } from "lucide-react";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
-import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import "@/components/cdash/cdash.css";
 import { CollectionOptionsCard } from "@/components/dashboard/CollectionOptionsCard";
@@ -161,7 +160,6 @@ function SettingsPageInner() {
               <Plus className="w-3.5 h-3.5" />
               새 옵션
             </button>
-            <CdThemeToggle theme={theme} onToggle={toggleTheme} />
           </>
         }
       />

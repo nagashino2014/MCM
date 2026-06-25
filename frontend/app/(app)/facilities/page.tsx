@@ -9,7 +9,6 @@ import { ToastProvider, useToast } from "@/components/ui/Toast";
 import { FacilityListPanel } from "@/components/facilities/FacilityListPanel";
 import { FacilityDetailPanel } from "@/components/facilities/FacilityDetailPanel";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
-import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import "@/components/cdash/cdash.css";
 import type {
@@ -153,7 +152,6 @@ function Inner() {
                 </Link>
               </>
             )}
-            <CdThemeToggle theme={theme} onToggle={toggleTheme} />
           </>
         }
       />

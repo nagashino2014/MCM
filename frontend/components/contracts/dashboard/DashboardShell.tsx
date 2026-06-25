@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { BarChart3, Handshake, LayoutDashboard, Moon, Sun } from "lucide-react";
-import { DASHBOARD_CATEGORIES, type CdTheme, type DashboardData } from "./types";
+import { BarChart3, Handshake, LayoutDashboard } from "lucide-react";
+import { DASHBOARD_CATEGORIES, type DashboardData } from "./types";
+import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { FilterCard } from "./FilterCard";
 import { MonthlyTrendCard } from "./MonthlyTrendCard";
 import { ServiceDetailCard } from "./ServiceDetailCard";
@@ -12,30 +13,14 @@ import { RegionCard } from "./RegionCard";
 import { UncollectedCard } from "./UncollectedCard";
 import { RecentCollectionsCard } from "./RecentCollectionsCard";
 
-const THEME_STORAGE_KEY = "cdash-theme";
-
 export function DashboardShell() {
-  const [theme, setTheme] = useState<CdTheme>("dark");
+  const { theme } = useCdashTheme();
   const [year, setYear] = useState<string | null>(null);
   const [category, setCategory] = useState<string>(DASHBOARD_CATEGORIES[0]);
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const requestSeq = useRef(0);
-
-  // 테마 복원
-  useEffect(() => {
-    const saved = localStorage.getItem(THEME_STORAGE_KEY);
-    if (saved === "light" || saved === "dark") setTheme(saved);
-  }, []);
-
-  const toggleTheme = () => {
-    setTheme((prev) => {
-      const next = prev === "dark" ? "light" : "dark";
-      localStorage.setItem(THEME_STORAGE_KEY, next);
-      return next;
-    });
-  };
 
   const load = useCallback(
     async (opts?: { year?: string | null; category?: string }) => {
@@ -120,15 +105,6 @@ export function DashboardShell() {
               불러오기 실패: {error}
             </span>
           )}
-          <button
-            type="button"
-            onClick={toggleTheme}
-            className="cd-chip inline-flex items-center gap-1.5"
-            aria-label={theme === "dark" ? "라이트 모드로 전환" : "다크 모드로 전환"}
-          >
-            {theme === "dark" ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
-            {theme === "dark" ? "라이트" : "다크"}
-          </button>
         </div>
       </header>
 

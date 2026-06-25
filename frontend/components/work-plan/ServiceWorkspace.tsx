@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ClipboardList, ArrowLeft, Plus } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
-import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import ServiceListPanel, { type LeftTab } from "@/components/work-plan/ServiceListPanel";
 import NewEntryPanel from "@/components/work-plan/NewEntryPanel";
@@ -252,7 +251,6 @@ export default function ServiceWorkspace() {
                 <Plus className="w-4 h-4" /> 새 업무추진계획
               </button>
             )}
-            <CdThemeToggle theme={theme} onToggle={toggleTheme} />
           </div>
         }
       />

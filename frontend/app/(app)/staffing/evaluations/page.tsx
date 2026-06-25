@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ClipboardList, Save, Star } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
-import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import type { EvaluationRow } from "@/lib/staffing/evaluations";
 import "@/components/cdash/cdash.css";
@@ -87,7 +86,6 @@ export default function EvaluationsPage() {
         eyebrow="Staffing · Evaluation"
         title="반기 참여도·평점"
         subtitle="부서 용역별 수행인력의 반기 참여도와 평점(0~5)을 입력합니다. 성과급 산정의 기준 데이터입니다."
-        actions={<CdThemeToggle theme={theme} onToggle={toggleTheme} />}
       />
 
       <section className="cd-card rounded-3xl p-4 cd-reveal delay-1 flex items-center gap-2 flex-wrap">

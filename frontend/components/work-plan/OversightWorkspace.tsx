@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ClipboardCheck, GitMerge, Layers } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
-import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { cn } from "@/lib/utils";
 import ServiceListPanel, { type LeftTab } from "@/components/work-plan/ServiceListPanel";
@@ -315,7 +314,6 @@ export default function OversightWorkspace() {
                 <Layers className="w-4 h-4" /> Merging 대상
               </button>
             </div>
-            <CdThemeToggle theme={theme} onToggle={toggleTheme} />
           </div>
         }
       />

@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ShieldCheck } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
-import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { cn } from "@/lib/utils";
 import ReportEditor, { type ReportSubject } from "@/components/work-plan/ReportEditor";
@@ -96,7 +95,6 @@ export default function ExecWorkspace() {
         eyebrow="Work · Executive"
         title="임원 검토·지시"
         subtitle="부서 통합 보고를 용역·Task별로 검토하고, 보완 요구·진행 촉구·추가보고 지시를 하달합니다."
-        actions={<CdThemeToggle theme={theme} onToggle={toggleTheme} />}
       />
 
       <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[900px_1fr] gap-5">

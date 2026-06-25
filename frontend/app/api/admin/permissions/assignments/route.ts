@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireRole } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import {
   assignPermissionTemplate,
   revokePermissionAssignment,
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
-    const actor = await requireRole("admin");
+    const actor = await requirePermission("rbac.assignment.manage", { fallbackRoles: ["admin"] });
     const body = await req.json();
     const assignmentId = await assignPermissionTemplate(actor.userId, body);
     return NextResponse.json({ assignmentId });
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    const actor = await requireRole("admin");
+    const actor = await requirePermission("rbac.assignment.manage", { fallbackRoles: ["admin"] });
     const { searchParams } = new URL(req.url);
     const assignmentId = searchParams.get("assignmentId");
     if (!assignmentId) {

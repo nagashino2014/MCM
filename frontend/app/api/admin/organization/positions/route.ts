@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireRole } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { deletePosition, savePosition } from "@/lib/admin/organization";
 import { recordAuditLog } from "@/lib/auth/audit";
 
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
-    const actor = await requireRole("admin");
+    const actor = await requirePermission("org.edit", { fallbackRoles: ["admin"] });
     const body = await req.json();
     const position = await savePosition(body);
     await recordAuditLog({
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    const actor = await requireRole("admin");
+    const actor = await requirePermission("org.edit", { fallbackRoles: ["admin"] });
     const { searchParams } = new URL(req.url);
     const positionId = searchParams.get("positionId");
     if (!positionId) {

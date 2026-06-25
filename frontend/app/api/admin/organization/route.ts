@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireRole } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { listOrganizationSnapshot, saveDepartment } from "@/lib/admin/organization";
 import { recordAuditLog } from "@/lib/auth/audit";
 
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    await requireRole("admin");
+    await requirePermission("org.view", { fallbackRoles: ["admin"] });
     return NextResponse.json(await listOrganizationSnapshot());
   } catch (err) {
     return authErrorToResponse(err);
@@ -17,7 +17,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const actor = await requireRole("admin");
+    const actor = await requirePermission("org.edit", { fallbackRoles: ["admin"] });
     const body = await req.json();
     const department = await saveDepartment(body);
     await recordAuditLog({

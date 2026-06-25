@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireRole, authErrorToResponse } from "@/lib/auth/guards";
+import { requirePermission, authErrorToResponse } from "@/lib/auth/guards";
 import {
   countAdmins,
   deleteUser,
@@ -26,7 +26,7 @@ interface PatchBody {
 
 export async function PATCH(req: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requireRole("admin");
+    const actor = await requirePermission("account.manage", { fallbackRoles: ["admin"] });
     const { id } = await ctx.params;
     const before = await findUserById(id);
     if (!before) return NextResponse.json({ error: "not found" }, { status: 404 });
@@ -65,7 +65,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
 
 export async function DELETE(_: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requireRole("admin");
+    const actor = await requirePermission("account.manage", { fallbackRoles: ["admin"] });
     const { id } = await ctx.params;
     if (id === actor.userId) {
       return NextResponse.json({ error: "자기 자신을 삭제할 수 없습니다." }, { status: 400 });

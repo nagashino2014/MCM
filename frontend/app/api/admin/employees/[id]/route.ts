@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireRole } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getEmployeeDetail, saveEmployeeDetail } from "@/lib/admin/employee-records";
 
 export const runtime = "nodejs";
@@ -11,7 +11,7 @@ interface RouteContext {
 
 export async function GET(_: NextRequest, ctx: RouteContext) {
   try {
-    await requireRole("admin");
+    await requirePermission("staffing.view", { fallbackRoles: ["admin"] });
     const { id } = await ctx.params;
     const employee = await getEmployeeDetail(id);
     if (!employee) return NextResponse.json({ error: "not found" }, { status: 404 });
@@ -23,7 +23,7 @@ export async function GET(_: NextRequest, ctx: RouteContext) {
 
 export async function PATCH(req: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requireRole("admin");
+    const actor = await requirePermission("staffing.edit", { fallbackRoles: ["admin"] });
     const { id } = await ctx.params;
     const body = await req.json();
     const employeeId = await saveEmployeeDetail(actor.userId, { ...body, employeeId: id });

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireRole, authErrorToResponse } from "@/lib/auth/guards";
+import { requirePermission, authErrorToResponse } from "@/lib/auth/guards";
 import { listUsers } from "@/lib/auth/users";
 
 export const runtime = "nodejs";
@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    await requireRole("admin");
+    await requirePermission("account.manage", { fallbackRoles: ["admin"] });
     const items = await listUsers();
     return NextResponse.json({ items });
   } catch (err) {

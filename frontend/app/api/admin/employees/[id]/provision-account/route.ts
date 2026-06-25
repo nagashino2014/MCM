@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireRole } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { provisionAccountForEmployee } from "@/lib/auth/account-provisioning";
 
 export const runtime = "nodejs";
@@ -20,10 +20,10 @@ const ERROR_STATUS: Record<string, { status: number; message: string }> = {
   EMPLOYEE_NAME_REQUIRED: { status: 400, message: "직원 이름이 필요합니다." },
 };
 
-// 조직 인원에게 사번 계정을 발급한다. (B 단계에서 requirePermission("account.manage") 로 교체 예정)
+// 조직 인원에게 사번 계정을 발급한다. account.manage 보유자(인사/회계 담당 또는 admin).
 export async function POST(_: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requireRole("admin");
+    const actor = await requirePermission("account.manage", { fallbackRoles: ["admin"] });
     const { id } = await ctx.params;
     const result = await provisionAccountForEmployee(id, actor.userId);
     return NextResponse.json(result);

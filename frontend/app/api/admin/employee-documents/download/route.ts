@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { S3ServiceException } from "@aws-sdk/client-s3";
-import { authErrorToResponse, requireRole } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { findEmployeeDocumentByKey } from "@/lib/admin/employee-records";
 import { getEmployeeDocument } from "@/lib/storage/employee-document-storage";
 
@@ -14,7 +14,7 @@ function contentDisposition(filename: string): string {
 
 export async function GET(req: NextRequest) {
   try {
-    await requireRole("admin");
+    await requirePermission("staffing.view", { fallbackRoles: ["admin"] });
     const key = new URL(req.url).searchParams.get("key");
     if (!key) return NextResponse.json({ error: "key가 필요합니다." }, { status: 400 });
     const metadata = await findEmployeeDocumentByKey(key);

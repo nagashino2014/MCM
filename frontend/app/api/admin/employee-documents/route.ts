@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireRole } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getEmployeeDetail, recordEmployeeDocument } from "@/lib/admin/employee-records";
 import {
   buildEmployeeDocumentStorageKey,
@@ -25,7 +25,7 @@ const MAX_BYTES = 20 * 1024 * 1024;
 
 export async function POST(req: NextRequest) {
   try {
-    const actor = await requireRole("admin");
+    const actor = await requirePermission("staffing.documents.manage", { fallbackRoles: ["admin"] });
     const form = await req.formData();
     const file = form.get("file");
     const employeeId = String(form.get("employeeId") ?? "");

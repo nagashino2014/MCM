@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireRole, authErrorToResponse } from "@/lib/auth/guards";
+import { requirePermission, authErrorToResponse } from "@/lib/auth/guards";
 import { findUserById, resetUserPassword } from "@/lib/auth/users";
 import { recordAuditLog } from "@/lib/auth/audit";
 
@@ -16,7 +16,7 @@ interface Body {
 
 export async function POST(req: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requireRole("admin");
+    const actor = await requirePermission("account.manage", { fallbackRoles: ["admin"] });
     const { id } = await ctx.params;
     const before = await findUserById(id);
     if (!before) return NextResponse.json({ error: "not found" }, { status: 404 });

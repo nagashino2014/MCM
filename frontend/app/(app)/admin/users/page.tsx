@@ -14,7 +14,6 @@ import type {
 } from "@/components/admin/users/types";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
-import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import "@/components/cdash/cdash.css";
 
@@ -27,7 +26,7 @@ export default function AdminUsersPage() {
 }
 
 function Inner() {
-  const { theme, toggleTheme } = useCdashTheme();
+  const { theme } = useCdashTheme();
   const { data: session, status: sessionStatus } = useSession();
   const role = (session?.user as { role?: string } | undefined)?.role;
   const [organization, setOrganization] = useState<OrganizationSnapshot | null>(null);
@@ -112,19 +111,17 @@ function Inner() {
         title="계정·권한 관리"
         subtitle="먼저 권한 템플릿을 구성한 뒤 개별 계정에 부서·직급 범위에 맞는 권한을 적용합니다."
         actions={
-          <>
-            <button type="button" onClick={reload} className="cd-btn cd-btn-ghost cd-btn-sm">
-              <RefreshCw className={"w-3.5 h-3.5 " + (loading ? "animate-spin" : "")} />
-              새로고침
-            </button>
-            <CdThemeToggle theme={theme} onToggle={toggleTheme} />
-          </>
+          <button type="button" onClick={reload} className="cd-btn cd-btn-ghost cd-btn-sm">
+            <RefreshCw className={"w-3.5 h-3.5 " + (loading ? "animate-spin" : "")} />
+            새로고침
+          </button>
         }
       />
 
-      <div className="grid xl:grid-cols-[360px_minmax(0,1fr)] gap-5 items-start">
+      <div className="grid xl:grid-cols-[360px_minmax(0,1fr)] gap-5 items-stretch xl:h-[calc(100vh-200px)] min-h-0">
         <OrganizationTree
           snapshot={organization}
+          fillHeight
           selectedDeptId={selectedDept?.deptId}
           selectedEmployeeId={selectedAccount?.employeeId ?? null}
           selectedUserId={selectedAccount?.userId ?? null}
@@ -132,19 +129,17 @@ function Inner() {
           onSelectDept={(dept) => setSelectedDept(dept)}
           onSelectAccount={(account) => setSelectedAccount(account)}
         />
-        <div className="flex flex-col gap-5">
-          <PermissionManagementPanel
-            users={users}
-            permissions={permissions}
-            selectedDept={selectedDept}
-            selectedAccount={selectedAccount}
-            currentUserId={(session?.user as { id?: string } | undefined)?.id}
-            onReload={reload}
-            onUpdateAccount={updateAccount}
-            onDeleteAccount={deleteAccount}
-            toast={(message, type) => toast.show(message, type)}
-          />
-        </div>
+        <PermissionManagementPanel
+          users={users}
+          permissions={permissions}
+          selectedDept={selectedDept}
+          selectedAccount={selectedAccount}
+          currentUserId={(session?.user as { id?: string } | undefined)?.id}
+          onReload={reload}
+          onUpdateAccount={updateAccount}
+          onDeleteAccount={deleteAccount}
+          toast={(message, type) => toast.show(message, type)}
+        />
       </div>
     </div>
   );

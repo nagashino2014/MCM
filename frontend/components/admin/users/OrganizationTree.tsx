@@ -26,6 +26,8 @@ interface OrganizationTreeProps {
   title?: string;
   /** 모달 등에 끼울 때 자체 높이 제한·스크롤을 제거 */
   embedded?: boolean;
+  /** 부모(고정 높이 행)의 높이를 가득 채우고 내부만 스크롤 */
+  fillHeight?: boolean;
 }
 
 const MASTER_KEY = "__master__";
@@ -41,6 +43,7 @@ export default function OrganizationTree({
   onSelectAccount,
   title = "조직도",
   embedded = false,
+  fillHeight = false,
 }: OrganizationTreeProps) {
   const [open, setOpen] = useState<Set<string>>(() => new Set(["exec"]));
   const departments = snapshot?.departments ?? [];
@@ -240,12 +243,20 @@ export default function OrganizationTree({
   };
 
   return (
-    <section className="cd-card p-5">
-      <div className="mb-4">
+    <section className={cn("cd-card p-5", fillHeight && "h-full flex flex-col min-h-0")}>
+      <div className="mb-4 shrink-0">
         <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] cd-text-primary">Organization</p>
         <h2 className="text-lg font-extrabold cd-text">{title}</h2>
       </div>
-      <div className={embedded ? "max-h-[380px] overflow-y-auto scrollbar-hide pr-1" : "max-h-[calc(100vh-260px)] min-h-[520px] overflow-auto scrollbar-hide pr-1"}>
+      <div
+        className={
+          fillHeight
+            ? "flex-1 min-h-0 overflow-y-auto scrollbar-hide pr-1"
+            : embedded
+            ? "max-h-[380px] overflow-y-auto scrollbar-hide pr-1"
+            : "max-h-[calc(100vh-260px)] min-h-[520px] overflow-auto scrollbar-hide pr-1"
+        }
+      >
         {!snapshot ? (
           <div className="text-sm cd-text-faint py-10 text-center">조직도 로딩 중…</div>
         ) : (

@@ -85,6 +85,15 @@ function tint(color: string): string {
   return color.startsWith("#") ? color + "22" : color;
 }
 
+/** 배경 없이 테두리만 있는 권한 태그. */
+function TagPill({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border cd-border-c bg-transparent px-2.5 py-0.5 text-[11px] font-semibold cd-text-muted whitespace-nowrap shrink-0">
+      {children}
+    </span>
+  );
+}
+
 export default function PermissionManagementPanel({
   users,
   permissions,
@@ -112,7 +121,7 @@ export default function PermissionManagementPanel({
   };
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="grid xl:grid-cols-[minmax(0,1fr)_380px] gap-5 h-full min-h-0">
       <TemplateListCard
         permissions={permissions}
         permissionLabel={permissionLabel}
@@ -182,8 +191,8 @@ function TemplateListCard({
   }, [templates, search, filterKind]);
 
   return (
-    <section className="cd-card p-6">
-      <div className="flex items-start justify-between gap-4 mb-5">
+    <section className="cd-card p-6 h-full flex flex-col min-h-0">
+      <div className="flex items-start justify-between gap-4 mb-5 shrink-0">
         <div className="flex items-start gap-3">
           <span className="cd-title-icon mt-0.5">
             <ShieldCheck className="w-4 h-4" />
@@ -198,11 +207,12 @@ function TemplateListCard({
         </button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 mb-5">
+      <div className="flex flex-wrap items-center gap-3 mb-5 shrink-0">
         <div className="relative flex-1 min-w-[200px]">
-          <Search className="w-4 h-4 cd-text-faint absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 cd-text-faint absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
-            className="cd-input pl-9"
+            className="cd-input"
+            style={{ paddingLeft: "2.5rem" }}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="템플릿명으로 검색"
@@ -218,15 +228,17 @@ function TemplateListCard({
         </span>
       </div>
 
-      {filtered.length === 0 ? (
-        <div className="text-sm cd-text-faint py-10 text-center">표시할 템플릿이 없습니다.</div>
-      ) : (
-        <div className="grid xl:grid-cols-3 gap-4 items-stretch">
-          {filtered.map((template) => (
-            <TemplateCard key={template.templateId} template={template} permissionLabel={permissionLabel} onEdit={onEdit} />
-          ))}
-        </div>
-      )}
+      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide pr-1">
+        {filtered.length === 0 ? (
+          <div className="text-sm cd-text-faint py-10 text-center">표시할 템플릿이 없습니다.</div>
+        ) : (
+          <div className="grid xl:grid-cols-2 gap-4 items-start">
+            {filtered.map((template) => (
+              <TemplateCard key={template.templateId} template={template} permissionLabel={permissionLabel} onEdit={onEdit} />
+            ))}
+          </div>
+        )}
+      </div>
     </section>
   );
 }
@@ -274,19 +286,17 @@ function TemplateCard({
 
       <div className="flex flex-nowrap items-center gap-1.5 mt-3 overflow-hidden min-h-[1.75rem]">
         {shown.map((grant) => (
-          <span key={grant.grantId} className="cd-pill cd-pill-info whitespace-nowrap shrink-0">
-            {permissionLabel(grant.permissionKey)}
-          </span>
+          <TagPill key={grant.grantId}>{permissionLabel(grant.permissionKey)}</TagPill>
         ))}
-        {extra > 0 && <span className="cd-pill cd-pill-idle shrink-0">+{extra}</span>}
+        {extra > 0 && <TagPill>+{extra}</TagPill>}
       </div>
 
       {expanded && (
         <div className="flex flex-wrap gap-1.5 mt-3">
           {template.grants.map((grant) => (
-            <span key={grant.grantId} className="cd-pill cd-pill-info">
+            <TagPill key={grant.grantId}>
               {permissionLabel(grant.permissionKey)} · {scopeLabel(grant.scopeKind)}
-            </span>
+            </TagPill>
           ))}
         </div>
       )}
@@ -515,7 +525,7 @@ function AccountDetailPanel({
 
   if (!selectedAccount.userId) {
     return (
-      <section className="cd-card p-6">
+      <section className="cd-card p-6 h-full flex flex-col min-h-0">
         <SectionHeader title={selectedAccount.name} subtitle="계정 미발급 인원" />
         <div className="rounded-2xl cd-surface-bg border cd-border-c p-6 text-sm cd-text-muted text-center">
           이 인원은 <b className="cd-text">계정 미발급</b> 상태입니다.
@@ -581,9 +591,9 @@ function AccountDetailPanel({
   };
 
   return (
-    <section className="cd-card p-6 flex flex-col gap-5">
+    <section className="cd-card p-5 flex flex-col gap-4 h-full min-h-0">
       {/* 계정 헤더 */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-4 shrink-0">
         <div className="flex items-start gap-3">
           <span className="cd-title-icon mt-0.5">
             <KeyRound className="w-4 h-4" />
@@ -631,6 +641,7 @@ function AccountDetailPanel({
         )}
       </div>
 
+      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide flex flex-col gap-4">
       {/* 부여된 권한 템플릿 현황 */}
       <div className="rounded-2xl cd-surface-bg border cd-border-c p-4">
         <h3 className="font-bold cd-text mb-3">부여된 권한 템플릿 ({accountAssignments.length})</h3>
@@ -707,6 +718,7 @@ function AccountDetailPanel({
           </button>
         </div>
       </div>
+      </div>
     </section>
   );
 }
@@ -719,10 +731,10 @@ function GlobalAssignmentsCard({ permissions }: { permissions: PermissionsSnapsh
     [permissions]
   );
   return (
-    <section className="cd-card p-6">
-      <h3 className="font-extrabold cd-text mb-1">계정별 권한 적용 현황</h3>
-      <p className="text-sm cd-text-muted mb-4">조직도에서 계정을 선택하면 해당 계정의 권한 현황과 부여 메뉴가 표시됩니다.</p>
-      <div className="flex flex-col gap-2">
+    <section className="cd-card p-5 h-full flex flex-col min-h-0">
+      <h3 className="font-extrabold cd-text mb-1 shrink-0">계정별 권한 적용 현황</h3>
+      <p className="text-sm cd-text-muted mb-4 shrink-0">조직도에서 계정을 선택하면 해당 계정의 권한 현황과 부여 메뉴가 표시됩니다.</p>
+      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide flex flex-col gap-2 pr-1">
         {activeAssignments.map((assignment) => (
           <div key={assignment.assignmentId} className="grid md:grid-cols-[1.2fr_1fr_1fr] gap-3 items-center rounded-xl cd-surface-bg border cd-border-c p-3">
             <div>

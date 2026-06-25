@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAuthenticated, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { createConsolidated, listStaffInputItems, type MergeInput } from "@/lib/work-plan/merge";
 
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
-    await requireAuthenticated();
+    await requirePermission("work_plan.view");
     const sp = new URL(req.url).searchParams;
     const deptId = sp.get("dept") ?? "";
     const periodStart = sp.get("periodStart") ?? "";
@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const actor = await requireEditor();
+    const actor = await requirePermission("work_plan.merge", { fallbackRoles: ["editor"] });
     const body = (await req.json()) as MergeInput;
     if (!body.deptId || !body.periodStart || !body.periodEnd || !Array.isArray(body.sourceItemIds) || body.sourceItemIds.length === 0) {
       return NextResponse.json({ error: "부서·기간·항목 선택이 필요합니다." }, { status: 400 });

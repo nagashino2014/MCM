@@ -2,7 +2,7 @@ import path from "node:path";
 import { readFile } from "node:fs/promises";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAuthenticated, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getS3Client } from "@/lib/storage/logo-storage";
 import { deleteIssueAttachment } from "@/lib/work-plan/issues";
 import { deleteContractDocument } from "@/lib/storage/contract-document-storage";
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 // 이슈 첨부 다운로드 (?key=).
 export async function GET(req: NextRequest) {
   try {
-    await requireAuthenticated();
+    await requirePermission("work_plan.view");
     const key = req.nextUrl.searchParams.get("key")?.trim();
     if (!key || key.includes("..") || key.startsWith("/") || key.startsWith("\\")) {
       return NextResponse.json({ error: "키가 올바르지 않습니다." }, { status: 400 });
@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
 // 이슈 첨부 삭제 (?attachmentId=).
 export async function DELETE(req: NextRequest) {
   try {
-    await requireEditor();
+    await requirePermission("work_plan.edit", { fallbackRoles: ["editor"] });
     const attachmentId = req.nextUrl.searchParams.get("attachmentId")?.trim();
     if (!attachmentId) return NextResponse.json({ error: "attachmentId가 필요합니다." }, { status: 400 });
     const key = await deleteIssueAttachment(attachmentId);

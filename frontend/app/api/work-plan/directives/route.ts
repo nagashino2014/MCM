@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAuthenticated, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { createDirective, listDirectivesByDept, type DirectiveInput } from "@/lib/work-plan/directives";
 
 export const runtime = "nodejs";
@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
-    await requireAuthenticated();
+    await requirePermission("work_plan.view");
     const sp = new URL(req.url).searchParams;
     const deptId = sp.get("dept") ?? "";
     const level = sp.get("level") ?? undefined;
@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const actor = await requireEditor();
+    const actor = await requirePermission("work_plan.directive", { fallbackRoles: ["editor"] });
     const body = (await req.json()) as DirectiveInput;
     if (!body.kind) return NextResponse.json({ error: "지시 유형이 필요합니다." }, { status: 400 });
     const directiveId = await createDirective(actor.userId, body);

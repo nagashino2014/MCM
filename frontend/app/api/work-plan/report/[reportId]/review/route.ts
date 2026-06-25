@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { setReportReview } from "@/lib/work-plan/workspace";
 
@@ -13,7 +13,7 @@ interface RouteContext {
 // 부서장 검토 처리(반려/확인) + 의견·분류 저장.
 export async function POST(req: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requireEditor();
+    const actor = await requirePermission("work_plan.edit", { fallbackRoles: ["editor"] });
     const { reportId } = await ctx.params;
     const body = (await req.json()) as { action: "reject" | "confirm"; reviewerComment?: string | null; reviewerCommentKind?: string | null };
     if (body.action !== "reject" && body.action !== "confirm") {

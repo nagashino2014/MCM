@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAuthenticated, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { addIssueAttachment, getIssueSubject, listIssueAttachments } from "@/lib/work-plan/issues";
 import { getIssueAttachmentStorageKey, putIssueAttachment } from "@/lib/storage/issue-attachment-storage";
@@ -16,7 +16,7 @@ interface RouteContext {
 
 export async function GET(_: NextRequest, ctx: RouteContext) {
   try {
-    await requireAuthenticated();
+    await requirePermission("work_plan.view");
     const { issueId } = await ctx.params;
     return NextResponse.json({ attachments: await listIssueAttachments(issueId) });
   } catch (err) {
@@ -27,7 +27,7 @@ export async function GET(_: NextRequest, ctx: RouteContext) {
 // 이슈 첨부 업로드 — 용역/Task 별 S3 키로 저장.
 export async function POST(req: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requireEditor();
+    const actor = await requirePermission("work_plan.edit", { fallbackRoles: ["editor"] });
     const { issueId } = await ctx.params;
     const subject = await getIssueSubject(issueId);
     if (!subject) return NextResponse.json({ error: "이슈를 찾을 수 없습니다." }, { status: 404 });

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAuthenticated, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { listOrganizationSnapshot } from "@/lib/admin/organization";
 import {
@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
-    await requireAuthenticated();
+    await requirePermission("work_plan.view");
     const { searchParams } = new URL(req.url);
     const deptId = searchParams.get("dept");
     const status = searchParams.get("status");
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const actor = await requireEditor();
+    const actor = await requirePermission("work_plan.edit", { fallbackRoles: ["editor"] });
     const body = (await req.json()) as WorkPlanReportInput;
     const reportId = await saveWorkPlanReport(actor.userId, body);
     await recordAuditLog({

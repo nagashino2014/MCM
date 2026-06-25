@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAuthenticated, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import {
   deleteWorkPlanReport,
@@ -17,7 +17,7 @@ interface RouteContext {
 
 export async function GET(_: NextRequest, ctx: RouteContext) {
   try {
-    await requireAuthenticated();
+    await requirePermission("work_plan.view");
     const { reportId } = await ctx.params;
     const detail = await getWorkPlanReport(reportId);
     if (!detail) return NextResponse.json({ error: "not found" }, { status: 404 });
@@ -29,7 +29,7 @@ export async function GET(_: NextRequest, ctx: RouteContext) {
 
 export async function PUT(req: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requireEditor();
+    const actor = await requirePermission("work_plan.edit", { fallbackRoles: ["editor"] });
     const { reportId } = await ctx.params;
     const body = (await req.json()) as WorkPlanReportInput;
     const savedId = await saveWorkPlanReport(actor.userId, { ...body, reportId });
@@ -48,7 +48,7 @@ export async function PUT(req: NextRequest, ctx: RouteContext) {
 
 export async function DELETE(_: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requireEditor();
+    const actor = await requirePermission("work_plan.edit", { fallbackRoles: ["editor"] });
     const { reportId } = await ctx.params;
     await deleteWorkPlanReport(reportId);
     await recordAuditLog({

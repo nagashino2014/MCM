@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireEditor, requireSession } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission, requireSession } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { getReporterContext } from "@/lib/work-plan/workspace";
 import { mergeConfirmedReports } from "@/lib/work-plan/merge";
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 // 확인 완료 보고들을 묶어 부서 통합 보고 생성. non-admin 은 본인 부서로 강제.
 export async function POST(req: NextRequest) {
   try {
-    const actor = await requireEditor();
+    const actor = await requirePermission("work_plan.merge", { fallbackRoles: ["editor"] });
     const body = (await req.json()) as { deptId?: string; reportIds?: string[] };
     if (!Array.isArray(body.reportIds) || body.reportIds.length === 0) {
       return NextResponse.json({ error: "통합할 보고를 선택하세요." }, { status: 400 });

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withDbWrite } from "@/lib/db";
-import { authErrorToResponse, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 import { syncReviewedFieldInline } from "@/lib/ieps/review-sync";
 import { rowsToObjects } from "@/lib/db";
@@ -20,7 +20,7 @@ interface PatchBody {
 export async function PATCH(req: NextRequest, ctx: RouteContext) {
   let actor;
   try {
-    actor = await requireEditor();
+    actor = await requirePermission("data.review", { fallbackRoles: ["editor"] });
   } catch (err) {
     return authErrorToResponse(err);
   }

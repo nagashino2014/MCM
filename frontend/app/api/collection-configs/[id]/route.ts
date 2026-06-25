@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCollectionConfig } from "@/lib/ieps/queries";
 import { withDbWrite } from "@/lib/db";
-import {
-  authErrorToResponse,
-  requireAuthenticated,
-  requireEditor,
-} from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,7 +12,7 @@ interface RouteContext {
 
 export async function GET(_: NextRequest, ctx: RouteContext) {
   try {
-    await requireAuthenticated();
+    await requirePermission("data.view");
   } catch (err) {
     return authErrorToResponse(err);
   }
@@ -52,7 +48,7 @@ interface PatchBody {
 
 export async function PATCH(req: NextRequest, ctx: RouteContext) {
   try {
-    await requireEditor();
+    await requirePermission("data.collect", { fallbackRoles: ["editor"] });
   } catch (err) {
     return authErrorToResponse(err);
   }
@@ -107,7 +103,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
 
 export async function DELETE(_: NextRequest, ctx: RouteContext) {
   try {
-    await requireEditor();
+    await requirePermission("data.collect", { fallbackRoles: ["editor"] });
   } catch (err) {
     return authErrorToResponse(err);
   }

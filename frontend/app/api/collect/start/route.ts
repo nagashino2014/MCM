@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { startCollectJob } from "@/lib/ieps/job-runner";
 import { enqueueAwsJob, isAwsJobQueueEnabled } from "@/lib/ieps/aws-job-queue";
 import type { CollectionConfig } from "@/lib/ieps/types";
-import { requireEditor, AuthError } from "@/lib/auth/guards";
+import { requirePermission, AuthError } from "@/lib/auth/guards";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,7 +21,7 @@ interface StartRequestBody {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireEditor();
+    await requirePermission("data.collect", { fallbackRoles: ["editor"] });
   } catch (err) {
     const status = err instanceof AuthError ? err.status : 500;
     const message = (err as Error).message;

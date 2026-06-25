@@ -1,18 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { listCollectionConfigs } from "@/lib/ieps/queries";
 import { withDbWrite } from "@/lib/db";
-import {
-  authErrorToResponse,
-  requireAuthenticated,
-  requireEditor,
-} from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    await requireAuthenticated();
+    await requirePermission("data.view");
     const rows = await listCollectionConfigs();
     return NextResponse.json({
       items: rows.map((r) => ({
@@ -37,7 +33,7 @@ interface CreateBody {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireEditor();
+    await requirePermission("data.collect", { fallbackRoles: ["editor"] });
   } catch (err) {
     return authErrorToResponse(err);
   }

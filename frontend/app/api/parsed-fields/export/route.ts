@@ -11,14 +11,14 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { getReviewDiagnosticReport } from "@/lib/ieps/queries";
-import { authErrorToResponse, requireAuthenticated } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
-    await requireAuthenticated();
+    await requirePermission("data.review", { fallbackRoles: ["editor"] });
   } catch (err) {
     return authErrorToResponse(err);
   }

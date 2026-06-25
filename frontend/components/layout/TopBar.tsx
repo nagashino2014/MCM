@@ -163,7 +163,12 @@ export function TopBar({ userName, userEmail, role, theme, onToggleTheme }: TopB
               </div>
               <button
                 type="button"
-                onClick={() => signOut({ callbackUrl: "/login" })}
+                onClick={async () => {
+                  // ALB(프록시) 뒤에서 next-auth 가 host 를 localhost:3000 으로 잡아 절대 URL 로
+                  // 리다이렉트하는 문제 회피: redirect:false 후 동일 출처 상대경로로 직접 이동.
+                  await signOut({ redirect: false });
+                  window.location.href = "/login";
+                }}
                 className="w-full px-4 py-3 text-sm font-bold cd-text cd-row-hover flex items-center gap-2"
               >
                 <LogOut className="w-4 h-4" />

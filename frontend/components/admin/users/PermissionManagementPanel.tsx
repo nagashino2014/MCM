@@ -85,10 +85,10 @@ function tint(color: string): string {
   return color.startsWith("#") ? color + "22" : color;
 }
 
-/** 배경 없이 테두리만 있는 권한 태그. */
+/** 흰색 배경 + 테두리의 깔끔한 권한 태그(카드 회색 위에서 또렷하게). */
 function TagPill({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border cd-border-c bg-transparent px-2.5 py-0.5 text-[11px] font-semibold cd-text-muted whitespace-nowrap shrink-0">
+    <span className="inline-flex items-center gap-1 rounded-full cd-card-bg border cd-border-c px-2.5 py-0.5 text-[11px] font-semibold cd-text-muted whitespace-nowrap shrink-0">
       {children}
     </span>
   );
@@ -121,7 +121,7 @@ export default function PermissionManagementPanel({
   };
 
   return (
-    <div className="grid xl:grid-cols-[minmax(0,1fr)_380px] gap-5 h-full min-h-0">
+    <div className="grid xl:grid-cols-[2fr_1fr] gap-5 h-full min-h-0">
       <TemplateListCard
         permissions={permissions}
         permissionLabel={permissionLabel}
@@ -142,7 +142,7 @@ export default function PermissionManagementPanel({
           toast={toast}
         />
       ) : (
-        <GlobalAssignmentsCard permissions={permissions} />
+        <GlobalAssignmentsCard />
       )}
 
       {createOpen && (
@@ -725,29 +725,16 @@ function AccountDetailPanel({
 
 /* ── 미선택 시: 전체 권한 적용 현황 ──────────────────────────────── */
 
-function GlobalAssignmentsCard({ permissions }: { permissions: PermissionsSnapshot | null }) {
-  const activeAssignments = useMemo(
-    () => permissions?.assignments.filter((item) => !item.revokedAt) ?? [],
-    [permissions]
-  );
+function GlobalAssignmentsCard() {
   return (
     <section className="cd-card p-5 h-full flex flex-col min-h-0">
       <h3 className="font-extrabold cd-text mb-1 shrink-0">계정별 권한 적용 현황</h3>
       <p className="text-sm cd-text-muted mb-4 shrink-0">조직도에서 계정을 선택하면 해당 계정의 권한 현황과 부여 메뉴가 표시됩니다.</p>
-      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide flex flex-col gap-2 pr-1">
-        {activeAssignments.map((assignment) => (
-          <div key={assignment.assignmentId} className="grid md:grid-cols-[1.2fr_1fr_1fr] gap-3 items-center rounded-xl cd-surface-bg border cd-border-c p-3">
-            <div>
-              <div className="text-sm font-bold cd-text">{assignment.userName}</div>
-              <div className="text-xs cd-text-muted">{assignment.userEmail}</div>
-            </div>
-            <div className="text-sm font-bold cd-text-primary">{assignment.templateName}</div>
-            <div className="text-xs cd-text-muted">
-              {assignment.scopeOverrideKind ? scopeLabel(assignment.scopeOverrideKind) : "템플릿 기본"} · {assignment.effectiveFrom}
-            </div>
-          </div>
-        ))}
-        {activeAssignments.length === 0 && <div className="text-sm cd-text-faint py-8 text-center">적용된 권한 템플릿이 없습니다.</div>}
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center text-center gap-2 px-4">
+        <span className="cd-title-icon">
+          <KeyRound className="w-4 h-4" />
+        </span>
+        <p className="text-sm cd-text-faint">왼쪽 조직도에서 인원 또는 관리자를 선택하세요.</p>
       </div>
     </section>
   );

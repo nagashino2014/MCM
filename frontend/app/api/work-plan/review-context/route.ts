@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { authErrorToResponse, requireSession } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getDb, rowsToObjects } from "@/lib/db";
 import { getReporterContext } from "@/lib/work-plan/workspace";
 
@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 //  - non-admin(부서장 포함): 자기 소속 부서로 고정(deptId), departments 미동봉.
 export async function GET() {
   try {
-    const ctx = await requireSession();
+    const ctx = await requirePermission("work_plan.view");
     const isAdmin = ctx.role === "admin";
     const reporter = await getReporterContext(ctx.userId);
 

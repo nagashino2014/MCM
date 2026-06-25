@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireSession } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getReporterContext, listExecCards } from "@/lib/work-plan/workspace";
 
 export const runtime = "nodejs";
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 // non-admin 은 본인 부서로 강제.
 export async function GET(req: NextRequest) {
   try {
-    const ctx = await requireSession();
+    const ctx = await requirePermission("work_plan.view");
     const sp = new URL(req.url).searchParams;
     const filter = (sp.get("filter") ?? "merged") as "merged" | "directed" | "re_reported";
     if (!["merged", "directed", "re_reported"].includes(filter)) {

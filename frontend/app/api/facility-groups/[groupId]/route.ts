@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 
@@ -12,7 +12,7 @@ interface RouteContext {
 
 export async function PATCH(req: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requireEditor();
+    const actor = await requirePermission("facility.edit", { fallbackRoles: ["editor"] });
     const { groupId } = await ctx.params;
     const body = await req.json();
     const now = new Date().toISOString();
@@ -54,7 +54,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
 
 export async function DELETE(_: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requireEditor();
+    const actor = await requirePermission("facility.edit", { fallbackRoles: ["editor"] });
     const { groupId } = await ctx.params;
     await withDbWrite(async (db) => {
       const before = await db.exec("SELECT * FROM facility_groups WHERE group_id = $1", [groupId]);

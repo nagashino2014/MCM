@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAdmin } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { rowsToObjects, withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 
@@ -12,7 +12,7 @@ interface RouteContext {
 
 export async function DELETE(_: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requireAdmin();
+    const actor = await requirePermission("trash.purge", { fallbackRoles: ["admin"] });
     const { trashId } = await ctx.params;
     const now = new Date().toISOString();
     await withDbWrite(async (db) => {

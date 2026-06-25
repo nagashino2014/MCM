@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getDb, rowsToObjects } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
-    await requireEditor();
+    await requirePermission("trash.view", { fallbackRoles: ["editor"] });
     const { searchParams } = new URL(req.url);
     const type = searchParams.get("type");
     const where = ["t.purged_at IS NULL"];

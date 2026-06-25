@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAuthenticated, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 
@@ -17,7 +17,7 @@ const companyRoleFromRow = (row: Record<string, unknown>) => {
 
 export async function GET() {
   try {
-    await requireAuthenticated();
+    await requirePermission("facility.view");
     const db = await getDb();
     const groups = rowsToObjects(await db.exec("SELECT * FROM facility_groups ORDER BY group_name ASC")).map((row) => ({
       groupId: String(row.group_id ?? ""),
@@ -79,7 +79,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const actor = await requireEditor();
+    const actor = await requirePermission("facility.edit", { fallbackRoles: ["editor"] });
     const body = await req.json();
     const groupName = String(body.groupName ?? "").trim();
     if (!groupName) return NextResponse.json({ error: "그룹명은 필수입니다." }, { status: 400 });

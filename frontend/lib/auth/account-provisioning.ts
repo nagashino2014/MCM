@@ -90,6 +90,38 @@ export async function provisionAccountForEmployee(
       [userId, now, employeeId]
     );
 
+    // 직급 기본 권한 템플릿 자동 부여(044 와 동일 규칙·assignment_id 로 멱등).
+    const tplRows = rowsToObjects(
+      await db.exec(
+        `SELECT pdt.template_id, pdt.scope_kind_default, pdt.scope_dept_default
+           FROM employee_profiles ep
+           JOIN position_default_templates pdt ON pdt.position_id = ep.position_id
+          WHERE ep.employee_id = $1`,
+        [employeeId]
+      )
+    );
+    for (const t of tplRows) {
+      const templateId = String(t.template_id ?? "");
+      if (!templateId) continue;
+      await db.run(
+        `INSERT INTO user_permission_assignments
+           (assignment_id, user_id, template_id, scope_override_kind, scope_override_dept_id,
+            effective_from, reason, assigned_by, assigned_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $6)
+         ON CONFLICT (assignment_id) DO NOTHING`,
+        [
+          `auto-${userId}-${templateId}`,
+          userId,
+          templateId,
+          t.scope_kind_default != null ? String(t.scope_kind_default) : null,
+          t.scope_dept_default != null ? String(t.scope_dept_default) : null,
+          now,
+          "직급 기본 권한 템플릿 자동 부여(발급)",
+          actorUserId,
+        ]
+      );
+    }
+
     await recordAuditLogInline(db, {
       actorUserId,
       action: "account_provision",

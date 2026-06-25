@@ -52,7 +52,7 @@ function LoginForm() {
         redirect: false,
       });
       if (!res || res.error) {
-        setError("사번/아이디 또는 비밀번호가 올바르지 않거나, 비활성화된 계정입니다.");
+        setError("사번 또는 비밀번호가 올바르지 않거나, 비활성화된 계정입니다.");
         return;
       }
       router.replace(toSameOriginPath(callbackUrl));
@@ -68,14 +68,14 @@ function LoginForm() {
         </span>
         <h1 className="text-2xl font-bold text-stone-800">로그인</h1>
         <p className="text-sm text-stone-500">
-          IEPS 통합환경허가 데이터 관리 콘솔에 접근하려면 계정 정보를 입력하세요.
+          사번과 비밀번호로 로그인하세요. 초기 비밀번호는 사번과 동일하며, 최초 로그인 시 변경해야 합니다.
         </p>
       </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <label className="flex flex-col gap-1.5">
           <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">
-            사번 또는 아이디
+            사번
           </span>
           <input
             type="text"
@@ -84,7 +84,7 @@ function LoginForm() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className="input-field"
-            placeholder="사번(예: 201903040101) 또는 이메일 아이디"
+            placeholder="사번 (예: 201903040101)"
             autoFocus
           />
         </label>
@@ -121,8 +121,10 @@ function LoginForm() {
         </button>
       </form>
 
-      <div className="text-[11px] text-stone-400 text-center">
-        계정이 없거나 권한 변경이 필요한 경우 관리자에게 문의하세요.
+      <div className="text-[11px] text-stone-400 text-center leading-relaxed">
+        비밀번호를 잊으셨다면 관리자에게 초기화를 요청하세요.
+        <br />
+        계정이 없거나 권한 변경이 필요한 경우에도 관리자에게 문의하세요.
       </div>
     </div>
   );

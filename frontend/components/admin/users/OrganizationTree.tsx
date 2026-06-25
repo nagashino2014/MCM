@@ -1,27 +1,44 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, Network, UserRound } from "lucide-react";
+import { ChevronDown, ChevronRight, Network, ShieldHalf, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { DepartmentRow, OrganizationEmployeeRow, OrganizationSnapshot } from "./types";
+import type {
+  DepartmentRow,
+  OrganizationEmployeeRow,
+  OrganizationSnapshot,
+  SelectedAccount,
+  UserRow,
+} from "./types";
 
 interface OrganizationTreeProps {
   snapshot: OrganizationSnapshot | null;
   selectedDeptId?: string | null;
   selectedEmployeeId?: string | null;
+  /** 마스터(관리자) 노드 하이라이트용 — 선택된 계정의 userId */
+  selectedUserId?: string | null;
+  /** 조직도 맨 아래 Master 그룹에 노출할 관리자(role==='admin') 계정 */
+  adminUsers?: UserRow[];
   onSelectDept?: (dept: DepartmentRow) => void;
   onSelectEmployee?: (employee: OrganizationEmployeeRow) => void;
+  /** 인원/관리자 클릭 시 계정 선택(권한 패널 연동) */
+  onSelectAccount?: (account: SelectedAccount) => void;
   title?: string;
   /** 모달 등에 끼울 때 자체 높이 제한·스크롤을 제거 */
   embedded?: boolean;
 }
 
+const MASTER_KEY = "__master__";
+
 export default function OrganizationTree({
   snapshot,
   selectedDeptId,
   selectedEmployeeId,
+  selectedUserId,
+  adminUsers = [],
   onSelectDept,
   onSelectEmployee,
+  onSelectAccount,
   title = "조직도",
   embedded = false,
 }: OrganizationTreeProps) {
@@ -123,7 +140,18 @@ export default function OrganizationTree({
               <button
                 type="button"
                 key={employee.employeeId}
-                onClick={() => onSelectEmployee?.(employee)}
+                onClick={() => {
+                  onSelectEmployee?.(employee);
+                  onSelectAccount?.({
+                    kind: "employee",
+                    userId: employee.userId,
+                    name: employee.name,
+                    employeeId: employee.employeeId,
+                    deptId: employee.deptId,
+                    loginId: employee.employeeNo,
+                    email: employee.email,
+                  });
+                }}
                 className={cn(
                   "w-full flex items-center gap-2 rounded-xl px-2 py-1.5 text-left transition",
                   selectedEmployeeId === employee.employeeId
@@ -151,6 +179,66 @@ export default function OrganizationTree({
     );
   };
 
+  // 마스터(관리자) 계정 그룹: 부모 'Master' → 자식 관리자 계정. 아이콘 회색.
+  const renderMaster = () => {
+    const isOpen = open.has(MASTER_KEY);
+    const gray = "var(--cd-faint)";
+    return (
+      <div key={MASTER_KEY} className="relative pt-1">
+        <button
+          type="button"
+          onClick={() => toggle(MASTER_KEY)}
+          className="w-full flex items-center gap-2 rounded-xl px-2 py-2 text-left transition cd-text-muted cd-row-hover hover:text-[color:var(--cd-text)]"
+        >
+          <span className="w-4 h-4 flex items-center justify-center cd-text-faint">
+            {isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+          </span>
+          <ShieldHalf className="w-4 h-4" fill="currentColor" style={{ color: gray }} />
+          <span className="text-sm font-semibold truncate">Master</span>
+          <span className="ml-auto mr-1 text-[10px] font-bold cd-text-faint">{adminUsers.length}</span>
+        </button>
+        {isOpen && (
+          <div className="ml-5">
+            {adminUsers.map((user) => (
+              <button
+                type="button"
+                key={user.userId}
+                onClick={() =>
+                  onSelectAccount?.({
+                    kind: "master",
+                    userId: user.userId,
+                    name: user.name || "관리자",
+                    loginId: user.loginId,
+                    email: user.email,
+                  })
+                }
+                className={cn(
+                  "w-full flex items-center gap-2 rounded-xl px-2 py-1.5 text-left transition",
+                  selectedUserId === user.userId
+                    ? "cd-fill-primary"
+                    : "cd-text-muted cd-row-hover hover:text-[color:var(--cd-text)]"
+                )}
+                style={{ marginLeft: 14 }}
+              >
+                <span className="w-4 h-4 rounded-bl-md" style={{ borderLeft: "1px solid var(--cd-border)", borderBottom: "1px solid var(--cd-border)" }} />
+                <UserRound className="w-4 h-4" fill="currentColor" style={{ color: gray }} />
+                <span className="text-xs font-normal truncate">{user.name || "관리자"}</span>
+                <span
+                  className={cn(
+                    "text-[10px] truncate",
+                    selectedUserId === user.userId ? "text-white/70" : "cd-text-faint"
+                  )}
+                >
+                  관리자
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <section className="cd-card p-5">
       <div className="mb-4">
@@ -161,7 +249,10 @@ export default function OrganizationTree({
         {!snapshot ? (
           <div className="text-sm cd-text-faint py-10 text-center">조직도 로딩 중…</div>
         ) : (
-          <div className="space-y-1">{roots.map((dept) => renderDept(dept, 0))}</div>
+          <div className="space-y-1">
+            {roots.map((dept) => renderDept(dept, 0))}
+            {adminUsers.length > 0 && renderMaster()}
+          </div>
         )}
       </div>
     </section>

@@ -2,28 +2,21 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
-import { KeyRound, RefreshCw, ShieldAlert, Trash2, Users as UsersIcon } from "lucide-react";
+import { RefreshCw, ShieldAlert, Users as UsersIcon } from "lucide-react";
 import OrganizationTree from "@/components/admin/users/OrganizationTree";
 import PermissionManagementPanel from "@/components/admin/users/PermissionManagementPanel";
 import type {
   DepartmentRow,
-  OrganizationEmployeeRow,
   OrganizationSnapshot,
   PermissionsSnapshot,
+  SelectedAccount,
   UserRow,
 } from "@/components/admin/users/types";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
-import { cn } from "@/lib/utils";
 import "@/components/cdash/cdash.css";
-
-const ROLE_LABEL: Record<UserRow["role"], string> = {
-  admin: "관리자",
-  editor: "편집자",
-  viewer: "조회자",
-};
 
 export default function AdminUsersPage() {
   return (
@@ -41,7 +34,7 @@ function Inner() {
   const [permissions, setPermissions] = useState<PermissionsSnapshot | null>(null);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [selectedDept, setSelectedDept] = useState<DepartmentRow | null>(null);
-  const [selectedEmployee, setSelectedEmployee] = useState<OrganizationEmployeeRow | null>(null);
+  const [selectedAccount, setSelectedAccount] = useState<SelectedAccount | null>(null);
   const [loading, setLoading] = useState(true);
   const toast = useToast();
 
@@ -96,11 +89,12 @@ function Inner() {
   };
 
   const deleteAccount = async (user: UserRow) => {
-    if (!confirm("'" + user.email + "' 계정을 삭제할까요?")) return;
+    if (!confirm("'" + (user.loginId ?? user.email) + "' 계정을 삭제할까요?")) return;
     try {
       const res = await fetch("/api/admin/users/" + user.userId, { method: "DELETE" });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "계정 삭제 실패");
       toast.show("계정이 삭제되었습니다.");
+      if (selectedAccount?.userId === user.userId) setSelectedAccount(null);
       void reload();
     } catch (err) {
       toast.show("실패: " + (err as Error).message, "error");
@@ -132,84 +126,27 @@ function Inner() {
         <OrganizationTree
           snapshot={organization}
           selectedDeptId={selectedDept?.deptId}
-          selectedEmployeeId={selectedEmployee?.employeeId}
+          selectedEmployeeId={selectedAccount?.employeeId ?? null}
+          selectedUserId={selectedAccount?.userId ?? null}
+          adminUsers={users.filter((u) => u.role === "admin")}
           onSelectDept={(dept) => setSelectedDept(dept)}
-          onSelectEmployee={(employee) => setSelectedEmployee(employee)}
+          onSelectAccount={(account) => setSelectedAccount(account)}
         />
         <div className="flex flex-col gap-5">
-          <AccountCard
-            users={users}
-            currentUserId={(session?.user as { id?: string } | undefined)?.id}
-            onUpdate={updateAccount}
-            onDelete={deleteAccount}
-          />
           <PermissionManagementPanel
             users={users}
             permissions={permissions}
             selectedDept={selectedDept}
+            selectedAccount={selectedAccount}
+            currentUserId={(session?.user as { id?: string } | undefined)?.id}
             onReload={reload}
+            onUpdateAccount={updateAccount}
+            onDeleteAccount={deleteAccount}
             toast={(message, type) => toast.show(message, type)}
           />
         </div>
       </div>
     </div>
-  );
-}
-
-function AccountCard({
-  users,
-  currentUserId,
-  onUpdate,
-  onDelete,
-}: {
-  users: UserRow[];
-  currentUserId?: string;
-  onUpdate: (user: UserRow, patch: Partial<Pick<UserRow, "role" | "status" | "name">>) => void;
-  onDelete: (user: UserRow) => void;
-}) {
-  return (
-    <section className="cd-card p-6">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] cd-text-primary">Accounts</p>
-          <h2 className="text-lg font-extrabold cd-text">계정 상태 관리</h2>
-          <p className="text-xs cd-text-muted mt-1">
-            계정 발급은 <b className="cd-text">사용자 등록·삭제</b> 화면의 조직도에서 인원별로 진행합니다. 여기서는 발급된 계정의 권한·상태만 관리합니다.
-          </p>
-        </div>
-        <span className="cd-title-icon"><KeyRound className="w-4 h-4" /></span>
-      </div>
-      <div className="rounded-2xl cd-surface-bg border cd-border-c p-4 overflow-hidden">
-        <h3 className="font-bold cd-text mb-3">계정 목록 ({users.length})</h3>
-        <div className="flex flex-col gap-2 max-h-96 overflow-auto pr-1">
-          {users.map((user) => {
-            const isSelf = currentUserId === user.userId;
-            return (
-              <div key={user.userId} className="grid md:grid-cols-[1fr_1.2fr_140px_90px_auto] gap-2 items-center rounded-xl cd-card-bg border cd-border-c p-3">
-                <div className="text-sm font-bold cd-text truncate">
-                  {user.name}
-                  {isSelf && <span className="ml-2 text-[10px] cd-text-primary">YOU</span>}
-                </div>
-                <div className="text-xs cd-text-muted truncate">{user.loginId ?? user.email}</div>
-                <select className="cd-select text-xs" value={user.role} disabled={isSelf} onChange={(e) => onUpdate(user, { role: e.target.value as UserRow["role"] })}>
-                  {Object.entries(ROLE_LABEL).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-                <button type="button" disabled={isSelf} onClick={() => onUpdate(user, { status: user.status === "active" ? "disabled" : "active" })} className={cn("cd-pill justify-center", user.status === "active" ? "cd-pill-info" : "cd-pill-idle", isSelf && "opacity-50")}>
-                  {user.status === "active" ? "활성" : "비활성"}
-                </button>
-                <button type="button" disabled={isSelf} onClick={() => onDelete(user)} className={cn("p-2 rounded-lg cd-text-faint transition-colors hover:text-[color:var(--cd-error)]", isSelf && "opacity-40")}>
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </section>
   );
 }
 

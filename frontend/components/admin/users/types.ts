@@ -102,3 +102,14 @@ export interface PermissionsSnapshot {
   templates: PermissionTemplateRow[];
   assignments: UserPermissionAssignmentRow[];
 }
+
+/** 조직도에서 선택한 계정(발급 인원 또는 마스터 관리자). userId=null 이면 계정 미발급 인원. */
+export interface SelectedAccount {
+  kind: "employee" | "master";
+  userId: string | null;
+  name: string;
+  employeeId?: string | null;
+  deptId?: string | null;
+  loginId?: string | null;
+  email?: string | null;
+}

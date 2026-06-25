@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { applyPresetToTask, listTaskStages } from "@/lib/work-plan/task-stages";
 
@@ -13,7 +13,7 @@ interface RouteContext {
 // 프리셋을 Task 공정표로 적용(기존 교체).
 export async function POST(req: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requireEditor();
+    const actor = await requirePermission("work_plan.edit", { fallbackRoles: ["editor"] });
     const { taskId } = await ctx.params;
     const body = (await req.json()) as { presetId?: string };
     if (!body.presetId) {

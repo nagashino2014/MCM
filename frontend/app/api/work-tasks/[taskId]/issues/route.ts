@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAuthenticated, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { createTaskIssue, listTaskIssues, type IssueInput } from "@/lib/work-plan/issues";
 
 export const runtime = "nodejs";
@@ -11,7 +11,7 @@ interface RouteContext {
 
 export async function GET(_: NextRequest, ctx: RouteContext) {
   try {
-    await requireAuthenticated();
+    await requirePermission("work_plan.view");
     const { taskId } = await ctx.params;
     return NextResponse.json({ issues: await listTaskIssues(taskId) });
   } catch (err) {
@@ -21,7 +21,7 @@ export async function GET(_: NextRequest, ctx: RouteContext) {
 
 export async function POST(req: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requireEditor();
+    const actor = await requirePermission("work_plan.edit", { fallbackRoles: ["editor"] });
     const { taskId } = await ctx.params;
     const body = (await req.json()) as IssueInput;
     const issueId = await createTaskIssue(actor.userId, taskId, body);

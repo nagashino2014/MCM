@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { createTask } from "@/lib/work-plan/tasks";
 
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 // Task 생성.
 export async function POST(req: NextRequest) {
   try {
-    const actor = await requireEditor();
+    const actor = await requirePermission("work_plan.edit", { fallbackRoles: ["editor"] });
     const body = (await req.json()) as { taskName?: string; categoryId?: string | null; startedAt?: string | null; owningDeptId?: string | null };
     const taskId = await createTask(actor.userId, {
       taskName: body.taskName ?? "",

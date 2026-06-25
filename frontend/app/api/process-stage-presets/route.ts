@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireSession, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { listPresets, savePreset, type PresetItemInput } from "@/lib/contracts/process-stage-presets";
 
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 // 공정 프리셋 목록(공정표 설정 모달의 선택 대상).
 export async function GET() {
   try {
-    await requireSession();
+    await requirePermission("work_plan.view");
     return NextResponse.json({ presets: await listPresets() });
   } catch (err) {
     return authErrorToResponse(err);
@@ -19,7 +19,7 @@ export async function GET() {
 // 공정 프리셋 생성/수정.
 export async function POST(req: NextRequest) {
   try {
-    const actor = await requireEditor();
+    const actor = await requirePermission("work_plan.edit", { fallbackRoles: ["editor"] });
     const body = (await req.json()) as {
       presetId?: string;
       presetName?: string;

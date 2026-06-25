@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAuthenticated, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { listTaskParticipants, saveTaskParticipants } from "@/lib/work-plan/task-participants";
 import type { ServiceParticipantInput } from "@/lib/staffing/participants";
@@ -13,7 +13,7 @@ interface RouteContext {
 
 export async function GET(_: NextRequest, ctx: RouteContext) {
   try {
-    await requireAuthenticated();
+    await requirePermission("work_plan.view");
     const { taskId } = await ctx.params;
     return NextResponse.json({ participants: await listTaskParticipants(taskId) });
   } catch (err) {
@@ -23,7 +23,7 @@ export async function GET(_: NextRequest, ctx: RouteContext) {
 
 export async function PUT(req: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requireEditor();
+    const actor = await requirePermission("work_plan.edit", { fallbackRoles: ["editor"] });
     const { taskId } = await ctx.params;
     const body = (await req.json()) as { participants?: ServiceParticipantInput[] };
     const participants = Array.isArray(body.participants) ? body.participants : [];

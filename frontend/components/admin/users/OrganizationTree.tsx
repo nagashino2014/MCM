@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, Network, ShieldHalf, UserRound } from "lucide-react";
+import { ChevronDown, ChevronRight, Network, ShieldHalf, UserRound, UserRoundX, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type {
   DepartmentRow,
@@ -28,6 +28,8 @@ interface OrganizationTreeProps {
   embedded?: boolean;
   /** 부모(고정 높이 행)의 높이를 가득 채우고 내부만 스크롤 */
   fillHeight?: boolean;
+  /** 재직자 ↔ 퇴사자 트리 전환 토글 노출(사용자 등록·삭제 화면 전용) */
+  allowResignedView?: boolean;
 }
 
 const MASTER_KEY = "__master__";
@@ -44,10 +46,13 @@ export default function OrganizationTree({
   title = "조직도",
   embedded = false,
   fillHeight = false,
+  allowResignedView = false,
 }: OrganizationTreeProps) {
   const [open, setOpen] = useState<Set<string>>(() => new Set(["exec"]));
+  const [viewMode, setViewMode] = useState<"active" | "resigned">("active");
   const departments = snapshot?.departments ?? [];
   const employees = snapshot?.employees ?? [];
+  const resignedView = allowResignedView && viewMode === "resigned";
 
   const roots = useMemo(
     () =>
@@ -74,7 +79,10 @@ export default function OrganizationTree({
   const employeesByDept = useMemo(() => {
     const map = new Map<string, OrganizationEmployeeRow[]>();
     for (const employee of employees) {
-      if (!employee.deptId || employee.status !== "active") continue;
+      if (!employee.deptId) continue;
+      const isActive = employee.status === "active";
+      // 재직자 뷰=active 인원만, 퇴사자 뷰=inactive(퇴사) 인원만.
+      if (resignedView ? isActive : !isActive) continue;
       const list = map.get(employee.deptId) ?? [];
       list.push(employee);
       map.set(employee.deptId, list);
@@ -87,7 +95,23 @@ export default function OrganizationTree({
       );
     }
     return map;
-  }, [employees]);
+  }, [employees, resignedView]);
+
+  // 퇴사자 뷰: 퇴사자가 있는 부서 + 그 조상만 노출(빈 부서 가지치기).
+  const visibleDeptIds = useMemo(() => {
+    if (!resignedView) return null;
+    const byId = new Map(departments.map((d) => [d.deptId, d]));
+    const ids = new Set<string>();
+    for (const [deptId, list] of employeesByDept) {
+      if (!list.length) continue;
+      let cur: string | null = deptId;
+      while (cur && !ids.has(cur)) {
+        ids.add(cur);
+        cur = byId.get(cur)?.parentDeptId ?? null;
+      }
+    }
+    return ids;
+  }, [resignedView, departments, employeesByDept]);
 
   const toggle = (deptId: string) => {
     setOpen((prev) => {
@@ -99,10 +123,12 @@ export default function OrganizationTree({
   };
 
   const renderDept = (dept: DepartmentRow, depth: number) => {
+    // 퇴사자 뷰: 퇴사자가 없는 부서(하위 포함)는 숨김.
+    if (resignedView && visibleDeptIds && !visibleDeptIds.has(dept.deptId)) return null;
     const childDepartments = childrenByParent.get(dept.deptId) ?? [];
     const childEmployees = employeesByDept.get(dept.deptId) ?? [];
     const hasChildren = childDepartments.length > 0 || childEmployees.length > 0;
-    const isOpen = open.has(dept.deptId) || depth === 0;
+    const isOpen = open.has(dept.deptId) || depth === 0 || resignedView;
     const accent = dept.accentColor || "#16A34A";
 
     return (
@@ -244,9 +270,22 @@ export default function OrganizationTree({
 
   return (
     <section className={cn("cd-card p-5", fillHeight && "h-full flex flex-col min-h-0")}>
-      <div className="mb-4 shrink-0">
-        <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] cd-text-primary">Organization</p>
-        <h2 className="text-lg font-extrabold cd-text">{title}</h2>
+      <div className="mb-4 shrink-0 flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] cd-text-primary">Organization</p>
+          <h2 className="text-lg font-extrabold cd-text">{resignedView ? "퇴사자" : title}</h2>
+        </div>
+        {allowResignedView && (
+          <button
+            type="button"
+            onClick={() => setViewMode((m) => (m === "resigned" ? "active" : "resigned"))}
+            className={cn("cd-btn cd-btn-sm", resignedView ? "cd-btn-primary" : "cd-btn-ghost")}
+            title={resignedView ? "재직자 보기로 전환" : "퇴사자 보기로 전환"}
+          >
+            {resignedView ? <Users className="w-3.5 h-3.5" /> : <UserRoundX className="w-3.5 h-3.5" />}
+            {resignedView ? "재직자" : "퇴사자"}
+          </button>
+        )}
       </div>
       <div
         className={
@@ -259,10 +298,12 @@ export default function OrganizationTree({
       >
         {!snapshot ? (
           <div className="text-sm cd-text-faint py-10 text-center">조직도 로딩 중…</div>
+        ) : resignedView && visibleDeptIds && visibleDeptIds.size === 0 ? (
+          <div className="text-sm cd-text-faint py-10 text-center">퇴사자가 없습니다.</div>
         ) : (
           <div className="space-y-1">
             {roots.map((dept) => renderDept(dept, 0))}
-            {adminUsers.length > 0 && renderMaster()}
+            {!resignedView && adminUsers.length > 0 && renderMaster()}
           </div>
         )}
       </div>

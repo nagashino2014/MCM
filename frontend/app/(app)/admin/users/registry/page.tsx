@@ -80,6 +80,27 @@ function Inner() {
     [reload, toast]
   );
 
+  const resetPassword = useCallback(
+    async (employee: OrganizationEmployeeRow) => {
+      if (!confirm(`'${employee.name}' 계정 비밀번호를 사번으로 초기화할까요? (최초 로그인 시 변경 요구)`)) return;
+      try {
+        const res = await fetch(
+          "/api/admin/employees/" + encodeURIComponent(employee.employeeId) + "/reset-password",
+          { method: "POST" }
+        );
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error ?? "비밀번호 초기화 실패");
+        toast.show(
+          `비밀번호 초기화 완료 · 임시 비밀번호 = 사번(${data.loginId}), 최초 로그인 시 변경됩니다.`,
+          "success"
+        );
+      } catch (err) {
+        toast.show("실패: " + (err as Error).message, "error");
+      }
+    },
+    [toast]
+  );
+
   useEffect(() => {
     if (sessionStatus === "authenticated") void reload();
   }, [reload, sessionStatus]);
@@ -124,6 +145,7 @@ function Inner() {
         <OrganizationTree
           snapshot={organization}
           title="조직도 · 직원"
+          allowResignedView
           selectedDeptId={selectedDept?.deptId}
           selectedEmployeeId={selectedEmployee?.employeeId}
           onSelectDept={(dept) => {
@@ -142,6 +164,7 @@ function Inner() {
               employee={selectedEmployee}
               busy={provisioning}
               onProvision={provisionAccount}
+              onResetPassword={resetPassword}
             />
           )}
           <EmployeeRegistryPanel
@@ -161,10 +184,12 @@ function AccountProvisionBar({
   employee,
   busy,
   onProvision,
+  onResetPassword,
 }: {
   employee: OrganizationEmployeeRow;
   busy: boolean;
   onProvision: (employee: OrganizationEmployeeRow) => void;
+  onResetPassword: (employee: OrganizationEmployeeRow) => void;
 }) {
   const provisioned = Boolean(employee.userId);
   const ready = Boolean(employee.hiredAt && employee.gender && employee.hasBirthDate);
@@ -198,7 +223,16 @@ function AccountProvisionBar({
         </div>
         <div className="flex items-center gap-2">
           {provisioned ? (
-            <span className="cd-pill cd-pill-info">발급됨</span>
+            <>
+              <button
+                type="button"
+                onClick={() => onResetPassword(employee)}
+                className="cd-btn cd-btn-ghost cd-btn-sm"
+              >
+                <KeyRound className="w-3.5 h-3.5" /> 비밀번호 초기화
+              </button>
+              <span className="cd-pill cd-pill-info">발급됨</span>
+            </>
           ) : (
             <button
               type="button"

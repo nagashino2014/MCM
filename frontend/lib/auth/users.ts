@@ -281,17 +281,51 @@ export async function changeOwnPassword(userId: string, newPassword: string): Pr
   });
 }
 
-export async function resetUserPassword(userId: string, newPassword: string): Promise<void> {
+export async function resetUserPassword(
+  userId: string,
+  newPassword: string,
+  opts?: { mustChange?: boolean }
+): Promise<void> {
   if (!newPassword || newPassword.length < 8) {
     throw new Error("비밀번호는 최소 8자 이상이어야 합니다.");
   }
   const hash = await hashPassword(newPassword);
   await withDbWrite(async (db) => {
-    await db.run(
-      "UPDATE users SET password_hash = $1, updated_at = $2 WHERE user_id = $3",
-      [hash, new Date().toISOString(), userId]
-    );
+    if (opts?.mustChange) {
+      await db.run(
+        "UPDATE users SET password_hash = $1, must_change_password = 1, updated_at = $2 WHERE user_id = $3",
+        [hash, new Date().toISOString(), userId]
+      );
+    } else {
+      await db.run(
+        "UPDATE users SET password_hash = $1, updated_at = $2 WHERE user_id = $3",
+        [hash, new Date().toISOString(), userId]
+      );
+    }
   });
+}
+
+/**
+ * 조직 인원(employee_profiles)의 계정 비밀번호를 사번(employee_no)으로 초기화하고
+ * 최초 로그인 시 강제 변경하도록 한다. 발급 시 초기 비번 정책과 동일.
+ * @returns 초기화된 사번(=임시 비밀번호)
+ */
+export async function resetEmployeeAccountPassword(employeeId: string): Promise<string> {
+  invalidateDb();
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      "SELECT user_id, employee_no FROM employee_profiles WHERE employee_id = $1 LIMIT 1",
+      [employeeId]
+    )
+  );
+  if (!rows.length) throw new Error("직원을 찾을 수 없습니다.");
+  const userId = rows[0].user_id != null ? String(rows[0].user_id) : "";
+  const employeeNo = rows[0].employee_no != null ? String(rows[0].employee_no) : "";
+  if (!userId) throw new Error("계정이 발급되지 않은 인원입니다.");
+  if (!employeeNo) throw new Error("사번이 없어 초기화할 수 없습니다.");
+  await resetUserPassword(userId, employeeNo, { mustChange: true });
+  return employeeNo;
 }
 
 export async function deleteUser(userId: string): Promise<void> {

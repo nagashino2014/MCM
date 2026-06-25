@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import type React from "react";
-import { BriefcaseBusiness, FileUp, GraduationCap, Home, Plus, Save, Trash2, UserRoundCog, X } from "lucide-react";
+import { BriefcaseBusiness, FileUp, GraduationCap, History, Home, Plus, Save, Trash2, UserRoundCog, X } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import type {
   DepartmentRow,
@@ -20,7 +20,7 @@ interface EmployeeRegistryPanelProps {
   toast: (message: string, type?: "success" | "error") => void;
 }
 
-type TabKey = "basic" | "education" | "evidence";
+type TabKey = "basic" | "education" | "evidence" | "hr";
 
 // 수행인력 명단 연동 등급/분야 옵션 (서버 lib와 값 동일 — 서버 전용 모듈 임포트 회피를 위해 로컬 정의)
 const ENG_GRADE_OPTIONS = ["기술사", "특급", "고급", "중급", "초급"] as const;
@@ -109,6 +109,8 @@ interface DocumentRow {
   originalFilename: string | null;
   publicPath: string | null;
   storageKey: string;
+  targetTable?: string;
+  targetId?: string | null;
 }
 
 const CERTIFICATION_OPTIONS = [
@@ -307,7 +309,12 @@ export default function EmployeeRegistryPanel({
     }
   };
 
-  const uploadDocument = async (file: File, documentType: string, displayName: string) => {
+  const uploadDocument = async (
+    file: File,
+    documentType: string,
+    displayName: string,
+    opts?: { targetTable?: string; targetId?: string | null }
+  ) => {
     if (!employee.employeeId) {
       toast("직원 정보를 먼저 저장한 뒤 파일을 업로드하세요.", "error");
       return;
@@ -317,7 +324,8 @@ export default function EmployeeRegistryPanel({
     form.set("employeeId", employee.employeeId);
     form.set("documentType", documentType);
     form.set("displayName", displayName);
-    form.set("targetTable", "employee_profiles");
+    form.set("targetTable", opts?.targetTable ?? "employee_profiles");
+    if (opts?.targetId) form.set("targetId", opts.targetId);
     const res = await fetch("/api/admin/employee-documents", { method: "POST", body: form });
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "업로드 실패");
     const body = (await res.json()) as { document: DocumentRow };
@@ -392,7 +400,10 @@ export default function EmployeeRegistryPanel({
         <div className="flex items-start justify-between gap-4 mb-4">
           <div>
             <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] cd-text-primary">Employee record</p>
-            <h2 className="text-xl font-extrabold cd-text">사용자 등록·수정</h2>
+            <h2 className="text-xl font-extrabold cd-text flex items-center gap-2">
+              사용자 등록·수정
+              {employee.status === "inactive" && <span className="cd-pill cd-pill-idle">퇴사자</span>}
+            </h2>
           </div>
           <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => setEmployee(emptyEmployee(selectedDept?.deptId))}>
             신규 등록
@@ -402,6 +413,7 @@ export default function EmployeeRegistryPanel({
           <TabButton active={activeTab === "basic"} onClick={() => setActiveTab("basic")} icon={<UserRoundCog className="w-4 h-4" />} label="기본 정보" />
           <TabButton active={activeTab === "education"} onClick={() => setActiveTab("education")} icon={<GraduationCap className="w-4 h-4" />} label="학력/자격" />
           <TabButton active={activeTab === "evidence"} onClick={() => setActiveTab("evidence")} icon={<Home className="w-4 h-4" />} label="기타 증빙" />
+          <TabButton active={activeTab === "hr"} onClick={() => setActiveTab("hr")} icon={<History className="w-4 h-4" />} label="인사관리" />
         </div>
 
         {activeTab === "basic" && (
@@ -412,6 +424,15 @@ export default function EmployeeRegistryPanel({
         )}
         {activeTab === "evidence" && (
           <EvidenceTab employee={employee} setEmployee={setEmployee} uploadDocument={uploadDocument} />
+        )}
+        {activeTab === "hr" && (
+          <HrTab
+            employee={employee}
+            departments={departments}
+            positions={positions}
+            uploadDocument={uploadDocument}
+            toast={toast}
+          />
         )}
 
         <div className="flex items-center justify-between gap-3 mt-6 pt-4 border-t cd-border-c">
@@ -651,6 +672,317 @@ function UploadRow({
             </a>
           ))}
       </div>
+    </div>
+  );
+}
+
+interface HrEventRow {
+  eventId: string;
+  employeeId: string;
+  eventType: "promotion" | "transfer" | "resignation";
+  eventDate: string;
+  positionId: string | null;
+  positionName: string | null;
+  fromDeptId: string | null;
+  toDeptId: string | null;
+  fromDeptName: string | null;
+  toDeptName: string | null;
+  note: string | null;
+  createdAt: string;
+}
+
+function HrTab({
+  employee,
+  departments,
+  positions,
+  uploadDocument,
+  toast,
+}: {
+  employee: EmployeeDetail;
+  departments: DepartmentRow[];
+  positions: PositionRow[];
+  uploadDocument: (
+    file: File,
+    documentType: string,
+    displayName: string,
+    opts?: { targetTable?: string; targetId?: string | null }
+  ) => Promise<void>;
+  toast: (message: string, type?: "success" | "error") => void;
+}) {
+  const employeeId = employee.employeeId;
+  const [events, setEvents] = useState<HrEventRow[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [promo, setPromo] = useState({ positionId: "", eventDate: "", note: "" });
+  const [transfer, setTransfer] = useState({ fromDeptId: "", toDeptId: "", eventDate: "", note: "" });
+  const [resign, setResign] = useState({ eventDate: "", note: "" });
+
+  const sortedPositions = [...positions].sort((a, b) => b.rankOrder - a.rankOrder);
+
+  useEffect(() => {
+    if (!employeeId) {
+      setEvents([]);
+      return;
+    }
+    let cancelled = false;
+    fetch("/api/admin/employees/" + encodeURIComponent(employeeId) + "/hr-events", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("이력 조회 실패"))))
+      .then((d) => {
+        if (!cancelled) setEvents((d.events ?? []) as HrEventRow[]);
+      })
+      .catch(() => {
+        if (!cancelled) setEvents([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [employeeId]);
+
+  const reloadEvents = async () => {
+    if (!employeeId) return;
+    const r = await fetch("/api/admin/employees/" + encodeURIComponent(employeeId) + "/hr-events", { cache: "no-store" });
+    if (r.ok) setEvents(((await r.json()).events ?? []) as HrEventRow[]);
+  };
+
+  const createEvent = async (payload: Record<string, unknown>): Promise<string | null> => {
+    if (!employeeId) {
+      toast("직원 정보를 먼저 저장하세요.", "error");
+      return null;
+    }
+    if (!payload.eventDate) {
+      toast("일자를 입력하세요.", "error");
+      return null;
+    }
+    setBusy(true);
+    try {
+      const res = await fetch("/api/admin/employees/" + encodeURIComponent(employeeId) + "/hr-events", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "기록 실패");
+      await reloadEvents();
+      toast("인사 이력이 기록되었습니다.");
+      return (data.event?.eventId as string) ?? null;
+    } catch (e) {
+      toast("실패: " + (e as Error).message, "error");
+      return null;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeEvent = async (eventId: string) => {
+    if (!employeeId) return;
+    if (!confirm("이 인사 이력을 삭제할까요? (첨부 문서도 함께 삭제, 퇴사 이벤트면 재직 상태로 복구)")) return;
+    setBusy(true);
+    try {
+      const res = await fetch(
+        "/api/admin/employees/" + encodeURIComponent(employeeId) + "/hr-events?eventId=" + encodeURIComponent(eventId),
+        { method: "DELETE" }
+      );
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "삭제 실패");
+      await reloadEvents();
+      toast("인사 이력을 삭제했습니다.");
+    } catch (e) {
+      toast("실패: " + (e as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const uploadFor = async (eventId: string, file: File, docType: string) => {
+    if (file.type !== "application/pdf") {
+      toast("PDF 파일만 업로드할 수 있습니다.", "error");
+      return;
+    }
+    try {
+      await uploadDocument(file, docType, docType, { targetTable: "employee_hr_events", targetId: eventId });
+    } catch (e) {
+      toast("실패: " + (e as Error).message, "error");
+    }
+  };
+
+  const renderAttach = (eventId: string, docType: string) => {
+    const docs = employee.documents.filter((d) => d.targetId === eventId && d.documentType === docType);
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="cd-btn cd-btn-soft cd-btn-sm cursor-pointer">
+          <FileUp className="w-3.5 h-3.5" /> {docType} (PDF)
+          <input
+            type="file"
+            accept="application/pdf"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void uploadFor(eventId, f, docType);
+              e.currentTarget.value = "";
+            }}
+          />
+        </label>
+        {docs.map((d) => (
+          <a key={d.documentId} href={d.publicPath ?? "#"} target="_blank" rel="noreferrer" className="cd-pill cd-pill-info">
+            {d.originalFilename || d.displayName}
+          </a>
+        ))}
+      </div>
+    );
+  };
+
+  if (!employeeId) {
+    return <div className="text-sm cd-text-faint py-8 text-center">직원 정보를 먼저 저장하면 인사 이력을 기록할 수 있습니다.</div>;
+  }
+
+  const promotions = events.filter((e) => e.eventType === "promotion");
+  const transfers = events.filter((e) => e.eventType === "transfer");
+  const resignations = events.filter((e) => e.eventType === "resignation");
+
+  return (
+    <div className="flex flex-col gap-5">
+      {/* 승진 이력 */}
+      <section className="rounded-2xl cd-surface-bg border cd-border-c p-4">
+        <h3 className="font-bold cd-text mb-3">승진 이력</h3>
+        <div className="grid md:grid-cols-[1fr_160px_1fr_auto] gap-2 items-end mb-3">
+          <Field label="승진 직급">
+            <select className="cd-select" value={promo.positionId} onChange={(e) => setPromo((p) => ({ ...p, positionId: e.target.value }))}>
+              <option value="">직급 선택</option>
+              {sortedPositions.map((pos) => (
+                <option key={pos.positionId} value={pos.positionId}>{pos.positionName}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="승진일자">
+            <input type="date" className="cd-input" value={promo.eventDate} onChange={(e) => setPromo((p) => ({ ...p, eventDate: e.target.value }))} />
+          </Field>
+          <Field label="비고">
+            <input className="cd-input" value={promo.note} onChange={(e) => setPromo((p) => ({ ...p, note: e.target.value }))} placeholder="비고(선택)" />
+          </Field>
+          <button
+            type="button"
+            disabled={busy || !promo.positionId || !promo.eventDate}
+            onClick={async () => {
+              const id = await createEvent({ eventType: "promotion", eventDate: promo.eventDate, positionId: promo.positionId, note: promo.note });
+              if (id) setPromo({ positionId: "", eventDate: "", note: "" });
+            }}
+            className="cd-btn cd-btn-primary cd-btn-sm"
+          >
+            <Plus className="w-3.5 h-3.5" /> 기록
+          </button>
+        </div>
+        <div className="flex flex-col gap-2">
+          {promotions.map((ev) => (
+            <div key={ev.eventId} className="rounded-xl cd-card-bg border cd-border-c p-3 flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm cd-text">
+                  <b className="cd-text-primary">{ev.positionName ?? "직급"}</b> 승진 · {ev.eventDate}
+                  {ev.note && <span className="cd-text-muted"> · {ev.note}</span>}
+                </div>
+                <button type="button" disabled={busy} onClick={() => removeEvent(ev.eventId)} className="cd-btn cd-btn-danger cd-btn-sm">삭제</button>
+              </div>
+              {renderAttach(ev.eventId, "인사발령")}
+            </div>
+          ))}
+          {promotions.length === 0 && <div className="text-xs cd-text-faint py-2 text-center">승진 이력이 없습니다.</div>}
+        </div>
+      </section>
+
+      {/* 부서 이동 이력 */}
+      <section className="rounded-2xl cd-surface-bg border cd-border-c p-4">
+        <h3 className="font-bold cd-text mb-3">부서 이동 이력</h3>
+        <div className="grid md:grid-cols-[1fr_1fr_160px_1fr_auto] gap-2 items-end mb-3">
+          <Field label="전 소속">
+            <select className="cd-select" value={transfer.fromDeptId} onChange={(e) => setTransfer((t) => ({ ...t, fromDeptId: e.target.value }))}>
+              <option value="">선택</option>
+              {departments.map((d) => (
+                <option key={d.deptId} value={d.deptId}>{d.deptName}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="변경 후 소속">
+            <select className="cd-select" value={transfer.toDeptId} onChange={(e) => setTransfer((t) => ({ ...t, toDeptId: e.target.value }))}>
+              <option value="">선택</option>
+              {departments.map((d) => (
+                <option key={d.deptId} value={d.deptId}>{d.deptName}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="이동일자">
+            <input type="date" className="cd-input" value={transfer.eventDate} onChange={(e) => setTransfer((t) => ({ ...t, eventDate: e.target.value }))} />
+          </Field>
+          <Field label="비고">
+            <input className="cd-input" value={transfer.note} onChange={(e) => setTransfer((t) => ({ ...t, note: e.target.value }))} placeholder="비고(선택)" />
+          </Field>
+          <button
+            type="button"
+            disabled={busy || !transfer.toDeptId || !transfer.eventDate}
+            onClick={async () => {
+              const id = await createEvent({ eventType: "transfer", eventDate: transfer.eventDate, fromDeptId: transfer.fromDeptId || null, toDeptId: transfer.toDeptId, note: transfer.note });
+              if (id) setTransfer({ fromDeptId: "", toDeptId: "", eventDate: "", note: "" });
+            }}
+            className="cd-btn cd-btn-primary cd-btn-sm"
+          >
+            <Plus className="w-3.5 h-3.5" /> 기록
+          </button>
+        </div>
+        <div className="flex flex-col gap-2">
+          {transfers.map((ev) => (
+            <div key={ev.eventId} className="rounded-xl cd-card-bg border cd-border-c p-3 flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm cd-text">
+                  <span className="cd-text-muted">{ev.fromDeptName ?? "—"}</span> → <b className="cd-text-primary">{ev.toDeptName ?? "—"}</b> · {ev.eventDate}
+                  {ev.note && <span className="cd-text-muted"> · {ev.note}</span>}
+                </div>
+                <button type="button" disabled={busy} onClick={() => removeEvent(ev.eventId)} className="cd-btn cd-btn-danger cd-btn-sm">삭제</button>
+              </div>
+              {renderAttach(ev.eventId, "전보발령")}
+            </div>
+          ))}
+          {transfers.length === 0 && <div className="text-xs cd-text-faint py-2 text-center">부서 이동 이력이 없습니다.</div>}
+        </div>
+      </section>
+
+      {/* 퇴사 */}
+      <section className="rounded-2xl cd-surface-bg border cd-border-c p-4">
+        <h3 className="font-bold cd-text mb-1">퇴사</h3>
+        <p className="text-xs cd-text-muted mb-3">퇴사 기록 시 해당 인원·계정이 비활성화되어 조직도/로그인에서 제외됩니다. 이력 삭제 시 복구됩니다.</p>
+        <div className="grid md:grid-cols-[160px_1fr_auto] gap-2 items-end mb-3">
+          <Field label="퇴사일자">
+            <input type="date" className="cd-input" value={resign.eventDate} onChange={(e) => setResign((r) => ({ ...r, eventDate: e.target.value }))} />
+          </Field>
+          <Field label="비고">
+            <input className="cd-input" value={resign.note} onChange={(e) => setResign((r) => ({ ...r, note: e.target.value }))} placeholder="비고(선택)" />
+          </Field>
+          <button
+            type="button"
+            disabled={busy || !resign.eventDate || resignations.length > 0}
+            onClick={async () => {
+              const id = await createEvent({ eventType: "resignation", eventDate: resign.eventDate, note: resign.note });
+              if (id) setResign({ eventDate: "", note: "" });
+            }}
+            className="cd-btn cd-btn-primary cd-btn-sm"
+          >
+            <Plus className="w-3.5 h-3.5" /> 기록
+          </button>
+        </div>
+        <div className="flex flex-col gap-2">
+          {resignations.map((ev) => (
+            <div key={ev.eventId} className="rounded-xl cd-card-bg border cd-border-c p-3 flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm cd-text">
+                  퇴사 · {ev.eventDate}
+                  {ev.note && <span className="cd-text-muted"> · {ev.note}</span>}
+                </div>
+                <button type="button" disabled={busy} onClick={() => removeEvent(ev.eventId)} className="cd-btn cd-btn-danger cd-btn-sm">삭제</button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {renderAttach(ev.eventId, "퇴직원")}
+                {renderAttach(ev.eventId, "퇴직정산")}
+              </div>
+            </div>
+          ))}
+          {resignations.length === 0 && <div className="text-xs cd-text-faint py-2 text-center">퇴사 기록이 없습니다.</div>}
+        </div>
+      </section>
     </div>
   );
 }

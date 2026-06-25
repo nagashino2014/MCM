@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { deleteChange } from "@/lib/staffing/changes";
 
 export const runtime = "nodejs";
@@ -11,7 +11,7 @@ interface RouteContext {
 
 export async function DELETE(_: NextRequest, ctx: RouteContext) {
   try {
-    await requireEditor();
+    await requirePermission("staffing.changes.record", { fallbackRoles: ["editor"] });
     const { changeId } = await ctx.params;
     await deleteChange(changeId);
     return NextResponse.json({ ok: true });

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAuthenticated, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { listEvaluationBoard, saveEvaluations, type EvaluationInput } from "@/lib/staffing/evaluations";
 
 export const runtime = "nodejs";
@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
-    await requireAuthenticated();
+    await requirePermission("staffing.evaluation.read", { fallbackRoles: ["editor"] });
     const sp = new URL(req.url).searchParams;
     const deptId = sp.get("dept") ?? "";
     const year = Number(sp.get("year") ?? new Date().getFullYear());
@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
-    const actor = await requireEditor();
+    const actor = await requirePermission("staffing.evaluation.write", { fallbackRoles: ["editor"] });
     const body = (await req.json()) as { year: number; half: string; rows: EvaluationInput[] };
     const year = Number(body.year);
     const half = body.half === "H2" ? "H2" : "H1";

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAuthenticated } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { listBonusMilestones, parsePeriod } from "@/lib/bonus/source";
 
 export const runtime = "nodejs";
@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
-    await requireAuthenticated();
+    await requirePermission("bonus.view", { fallbackRoles: ["editor"] });
     const sp = new URL(req.url).searchParams;
     const contractId = sp.get("contractId") ?? "";
     const p = parsePeriod(sp.get("period") ?? "");

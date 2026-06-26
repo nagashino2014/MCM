@@ -48,14 +48,18 @@ interface PermissionManagementPanelProps {
   toast: (message: string, type?: "success" | "error") => void;
 }
 
-type ScopeKind = "self" | "self_dept" | "specific_dept" | "all";
+type ScopeKind = "participant" | "self" | "self_dept" | "specific_dept" | "all";
 
 const SCOPE_LABEL: Record<ScopeKind, string> = {
+  participant: "참여 용역",
   self: "본인",
   self_dept: "소속 부서",
   specific_dept: "선택 부서",
   all: "전사",
 };
+
+/** 적용 범위 태그 표시 순서. */
+const SCOPE_ORDER: ScopeKind[] = ["participant", "self", "self_dept", "specific_dept", "all"];
 
 const ROLE_LABEL: Record<UserRow["role"], string> = {
   admin: "관리자",
@@ -86,6 +90,18 @@ const DEFAULT_VISUAL: TemplateVisual = { icon: ShieldCheck, color: "#5D87FF" };
 /** hex 색에 알파를 붙여 파스텔 배경을 만든다. */
 function tint(color: string): string {
   return color.startsWith("#") ? color + "22" : color;
+}
+
+/** 세부 권한(트리 자식) 노드 아이콘 — 첨부 권한.svg. 색상은 카테고리별. */
+function PermIcon({ className, color }: { className?: string; color?: string }) {
+  return (
+    <svg viewBox="0 0 96 96" className={className} fill="currentColor" style={{ color }} aria-hidden="true">
+      <g transform="translate(-818 -227)">
+        <path d="M868 257 864 257C861.8 257 860 255.2 860 253L860 245C860 242.8 861.8 241 864 241L868 241C870.2 241 872 242.8 872 245L872 253C872 255.2 870.2 257 868 257Z" />
+        <path d="M898 277 874 277 874 273 898 273 898 277ZM898 289 874 289 874 285 898 285 898 289ZM898 301 874 301 874 297 898 297 898 301ZM866 301 834 301 834 293C834 291.8 834.6 290.6 835.6 289.8 837.8 288.2 840.6 286.8 843.4 286 845.6 285.4 847.8 285 850 285 852.4 285 854.6 285.4 856.6 286 859.4 286.8 862.2 288 864.4 289.8 865.4 290.6 866 291.8 866 293L866 301ZM850 267C854.4 267 858 270.6 858 275 858 279.4 854.4 283 850 283 845.6 283 842 279.4 842 275 842 270.6 845.6 267 850 267ZM902 253 876 253C876 257.4 872.4 261 868 261L864 261C859.6 261 856 257.4 856 253L830 253C827.8 253 826 254.8 826 257L826 305C826 307.2 827.8 309 830 309L902 309C904.2 309 906 307.2 906 305L906 257C906 254.8 904.2 253 902 253Z" />
+      </g>
+    </svg>
+  );
 }
 
 /** 세부 권한 태그 — 흰색 카드 위에서 구분되도록 회색(cd-surface-bg) 배경 + 테두리. */
@@ -366,6 +382,7 @@ function CreateTemplateModal({
   );
   const [saving, setSaving] = useState(false);
   const [openCats, setOpenCats] = useState<Set<string>>(() => new Set(Object.keys(MODULE_META)));
+  const [activePermKey, setActivePermKey] = useState<string | null>(null);
 
   const toggleCat = (module: string) =>
     setOpenCats((prev) => {
@@ -409,16 +426,43 @@ function CreateTemplateModal({
     return sup.includes("self_dept") ? "self_dept" : sup[0];
   };
   const isSelected = (key: string) => draftGrants.some((g) => g.permissionKey === key);
-  const togglePermission = (p: PermissionRow) => {
-    setDraftGrants((prev) => {
-      if (prev.some((g) => g.permissionKey === p.permissionKey)) {
-        return prev.filter((g) => g.permissionKey !== p.permissionKey);
-      }
-      return [...prev, { permissionKey: p.permissionKey, scopeKind: defaultScopeFor(p), effect: "allow" }];
-    });
+  const removePerm = (key: string) => {
+    setDraftGrants((prev) => prev.filter((g) => g.permissionKey !== key));
+    setActivePermKey((cur) => (cur === key ? null : cur));
   };
-  const setGrantScope = (key: string, scope: ScopeKind) =>
-    setDraftGrants((prev) => prev.map((g) => (g.permissionKey === key ? { ...g, scopeKind: scope } : g)));
+  const togglePermission = (p: PermissionRow) => {
+    if (draftGrants.some((g) => g.permissionKey === p.permissionKey)) {
+      removePerm(p.permissionKey);
+    } else {
+      setDraftGrants((prev) => [...prev, { permissionKey: p.permissionKey, scopeKind: defaultScopeFor(p), effect: "allow" }]);
+      setActivePermKey(p.permissionKey);
+    }
+  };
+  const removeScope = (key: string, scope: ScopeKind) =>
+    setDraftGrants((prev) => prev.filter((g) => !(g.permissionKey === key && g.scopeKind === scope)));
+  const addScopeToActive = (scope: ScopeKind) => {
+    if (!activePermKey) return;
+    if (!supportedScopes(permByKey.get(activePermKey)).includes(scope)) return;
+    setDraftGrants((prev) =>
+      prev.some((g) => g.permissionKey === activePermKey && g.scopeKind === scope)
+        ? prev
+        : [...prev, { permissionKey: activePermKey, scopeKind: scope, effect: "allow" }]
+    );
+  };
+
+  // permissionKey 별로 grant(scope) 묶기 — 우측 '선택된 권한' 태그.
+  const selectedPerms = useMemo(() => {
+    const order: string[] = [];
+    const byKey = new Map<string, ScopeKind[]>();
+    for (const g of draftGrants) {
+      if (!byKey.has(g.permissionKey)) {
+        byKey.set(g.permissionKey, []);
+        order.push(g.permissionKey);
+      }
+      byKey.get(g.permissionKey)!.push(g.scopeKind);
+    }
+    return order.map((key) => ({ key, scopes: byKey.get(key)! }));
+  }, [draftGrants]);
 
   const save = async () => {
     setSaving(true);
@@ -475,7 +519,7 @@ function CreateTemplateModal({
           <p className="text-xs cd-text-muted mb-3">좌측 트리에서 세부 권한을 클릭하면 우측에 추가됩니다. 적용 범위는 권한별 지원 범위 내에서만 설정할 수 있습니다.</p>
           <div className="grid md:grid-cols-2 gap-3">
             {/* 카테고리 트리 */}
-            <div className="rounded-2xl cd-surface-bg border cd-border-c p-3 max-h-[44vh] overflow-y-auto scrollbar-hide">
+            <div className="rounded-2xl cd-card-bg border cd-border-c p-3 max-h-[44vh] overflow-y-auto scrollbar-hide">
               {categories.map((cat) => {
                 const open = openCats.has(cat.module);
                 const selCount = cat.perms.filter((p) => isSelected(p.permissionKey)).length;
@@ -511,7 +555,7 @@ function CreateTemplateModal({
                                 sel ? "cd-soft-primary font-semibold" : "cd-text-muted cd-row-hover"
                               )}
                             >
-                              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: cat.color }} />
+                              <PermIcon className="w-4 h-4 shrink-0" color={cat.color} />
                               <span className="flex-1 truncate">{p.description}</span>
                               {sel && <Check className="w-3.5 h-3.5 shrink-0" />}
                             </button>
@@ -526,47 +570,88 @@ function CreateTemplateModal({
             </div>
 
             {/* 선택된 권한 */}
-            <div className="rounded-2xl cd-surface-bg border cd-border-c p-3 max-h-[44vh] overflow-y-auto scrollbar-hide">
-              <div className="flex items-center justify-between mb-2 px-1">
+            <div className="rounded-2xl cd-card-bg border cd-border-c p-3 max-h-[44vh] overflow-y-auto scrollbar-hide flex flex-col">
+              <div className="flex items-center justify-between mb-2 px-1 shrink-0">
                 <span className="text-sm font-bold cd-text">선택된 권한</span>
-                <span className="text-[10px] font-bold cd-text-faint">{draftGrants.length}개</span>
+                <span className="text-[10px] font-bold cd-text-faint">{selectedPerms.length}개</span>
               </div>
-              {draftGrants.length === 0 ? (
-                <div className="text-xs cd-text-faint py-6 text-center">좌측 트리에서 권한을 선택하세요.</div>
-              ) : (
-                <div className="flex flex-col gap-1.5">
-                  {draftGrants.map((grant) => {
-                    const p = permByKey.get(grant.permissionKey);
-                    const sup = supportedScopes(p);
-                    const options = sup.includes(grant.scopeKind) ? sup : [grant.scopeKind, ...sup];
-                    return (
-                      <div key={grant.permissionKey} className="flex items-center gap-2 rounded-lg cd-card-bg border cd-border-c px-2 py-1.5">
-                        <span className="flex-1 text-xs font-semibold cd-text truncate">{p?.description ?? grant.permissionKey}</span>
-                        {options.length <= 1 ? (
-                          <span className="text-[11px] font-bold cd-text-muted px-2 py-0.5 rounded cd-surface-bg shrink-0">{scopeLabel(grant.scopeKind)}</span>
-                        ) : (
-                          <select
-                            className="cd-select w-auto text-xs shrink-0"
-                            value={grant.scopeKind}
-                            onChange={(e) => setGrantScope(grant.permissionKey, e.target.value as ScopeKind)}
-                          >
-                            {options.map((s) => (
-                              <option key={s} value={s}>{scopeLabel(s)}</option>
-                            ))}
-                          </select>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => setDraftGrants((prev) => prev.filter((g) => g.permissionKey !== grant.permissionKey))}
-                          className="p-1 rounded cd-text-faint hover:text-[color:var(--cd-error)] shrink-0"
+
+              {/* 적용 범위 태그 — 활성 권한에 클릭으로 추가 */}
+              <div className="flex flex-wrap gap-1.5 mb-2 pb-2 border-b cd-border-c shrink-0">
+                {SCOPE_ORDER.map((s) => {
+                  const activeP = activePermKey ? permByKey.get(activePermKey) : undefined;
+                  const supported = activeP ? supportedScopes(activeP).includes(s) : false;
+                  const already = !!activePermKey && draftGrants.some((g) => g.permissionKey === activePermKey && g.scopeKind === s);
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      disabled={!activePermKey || !supported || already}
+                      onClick={() => addScopeToActive(s)}
+                      className={cn(
+                        "cd-pill text-[11px]",
+                        !activePermKey || !supported
+                          ? "cd-pill-idle opacity-40 cursor-not-allowed"
+                          : already
+                          ? "cd-fill-primary cursor-default"
+                          : "cd-pill-info"
+                      )}
+                    >
+                      {SCOPE_LABEL[s]}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] cd-text-faint mb-2 px-1 shrink-0">
+                {activePermKey ? "위 범위 태그 클릭=추가 · 칩 우클릭=삭제" : "아래 권한을 클릭해 활성화한 뒤 범위를 추가하세요"}
+              </p>
+
+              <div className="flex-1 min-h-0">
+                {selectedPerms.length === 0 ? (
+                  <div className="text-xs cd-text-faint py-6 text-center">좌측 트리에서 권한을 선택하세요.</div>
+                ) : (
+                  <div className="flex flex-col gap-1.5">
+                    {selectedPerms.map(({ key, scopes }) => {
+                      const p = permByKey.get(key);
+                      const active = activePermKey === key;
+                      return (
+                        <div
+                          key={key}
+                          onClick={() => setActivePermKey(key)}
+                          className={cn(
+                            "rounded-xl border px-2.5 py-2 cursor-pointer cd-surface-bg transition",
+                            active ? "border-[color:var(--cd-primary)] ring-1 ring-[color:var(--cd-primary)]" : "cd-border-c"
+                          )}
                         >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+                          <div className="flex items-center gap-2">
+                            <span className="flex-1 text-xs font-bold cd-text truncate">{p?.description ?? key}</span>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); removePerm(key); }}
+                              className="p-0.5 rounded cd-text-faint hover:text-[color:var(--cd-error)] shrink-0"
+                              title="권한 제거"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            {scopes.map((s) => (
+                              <span
+                                key={s}
+                                onContextMenu={(e) => { e.preventDefault(); if (scopes.length > 1) removeScope(key, s); }}
+                                className="inline-flex items-center rounded-full cd-card-bg border cd-border-c px-2 py-0.5 text-[10px] font-bold cd-text-muted"
+                                title={scopes.length > 1 ? "우클릭하여 삭제" : "지원 범위가 1개라 고정됩니다"}
+                              >
+                                {SCOPE_LABEL[s]}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

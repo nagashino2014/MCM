@@ -5,9 +5,13 @@ import type React from "react";
 import {
   Building2,
   BriefcaseBusiness,
+  Check,
   ChevronDown,
+  ChevronRight,
   ClipboardCheck,
   Crown,
+  Folder,
+  FolderOpen,
   KeyRound,
   MoreVertical,
   Plus,
@@ -93,22 +97,23 @@ function TagPill({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** 권한 module → 카테고리 라벨·정렬순서(생성 모달의 카테고리 태그 분류). */
-const MODULE_META: Record<string, { label: string; order: number }> = {
-  contract: { label: "계약", order: 1 },
-  billing: { label: "수주·수금·발행", order: 2 },
-  facility: { label: "사업장", order: 3 },
-  data: { label: "데이터 수집·검수", order: 4 },
-  work_plan: { label: "업무추진계획", order: 5 },
-  staffing: { label: "인사·수행인력", order: 6 },
-  bonus: { label: "성과급", order: 7 },
-  certificate: { label: "증명서", order: 8 },
-  org: { label: "조직·직급", order: 9 },
-  account: { label: "계정", order: 10 },
-  rbac: { label: "권한 관리", order: 11 },
-  audit: { label: "감사 로그", order: 12 },
-  trash: { label: "휴지통", order: 13 },
+/** 권한 module → 카테고리 라벨·정렬순서·노드 색상(생성 모달 트리뷰 분류). 색상은 카테고리별로 다양하게. */
+const MODULE_META: Record<string, { label: string; order: number; color: string }> = {
+  contract: { label: "계약", order: 1, color: "#5D87FF" },
+  billing: { label: "수주·수금·발행", order: 2, color: "#13DEB9" },
+  facility: { label: "사업장", order: 3, color: "#FA896B" },
+  data: { label: "데이터 수집·검수", order: 4, color: "#539BFF" },
+  work_plan: { label: "업무추진계획", order: 5, color: "#FFAE1F" },
+  staffing: { label: "인사·수행인력", order: 6, color: "#7C5CFC" },
+  bonus: { label: "성과급", order: 7, color: "#FCC419" },
+  certificate: { label: "증명서", order: 8, color: "#2DD4BF" },
+  org: { label: "조직·직급", order: 9, color: "#FF7AA2" },
+  account: { label: "계정", order: 10, color: "#49BEFF" },
+  rbac: { label: "권한 관리", order: 11, color: "#FA5252" },
+  audit: { label: "감사 로그", order: 12, color: "#94A3B8" },
+  trash: { label: "휴지통", order: 13, color: "#845EF7" },
 };
+const DEFAULT_MODULE_COLOR = "#5D87FF";
 
 export default function PermissionManagementPanel({
   users,
@@ -356,13 +361,21 @@ function CreateTemplateModal({
   const [templateName, setTemplateName] = useState(editing?.templateName ?? "");
   const [description, setDescription] = useState(editing?.description ?? "");
   const [isActive, setIsActive] = useState(editing?.isActive ?? true);
-  const [scopeKind, setScopeKind] = useState<ScopeKind>("self_dept");
   const [draftGrants, setDraftGrants] = useState<Array<{ permissionKey: string; scopeKind: ScopeKind; effect: "allow" | "deny" }>>(
     () => (editing?.grants ?? []).map((g) => ({ permissionKey: g.permissionKey, scopeKind: (g.scopeKind as ScopeKind) ?? "self", effect: g.effect }))
   );
   const [saving, setSaving] = useState(false);
+  const [openCats, setOpenCats] = useState<Set<string>>(() => new Set(Object.keys(MODULE_META)));
 
-  // 카테고리(module)별 권한 그룹 — 드롭다운 대신 태그 버튼으로 선택.
+  const toggleCat = (module: string) =>
+    setOpenCats((prev) => {
+      const next = new Set(prev);
+      if (next.has(module)) next.delete(module);
+      else next.add(module);
+      return next;
+    });
+
+  // 카테고리(module)별 권한 그룹.
   const categories = useMemo(() => {
     const groups = new Map<string, PermissionRow[]>();
     for (const p of permissions?.permissions ?? []) {
@@ -375,19 +388,37 @@ function CreateTemplateModal({
         module,
         label: MODULE_META[module]?.label ?? module,
         order: MODULE_META[module]?.order ?? 99,
+        color: MODULE_META[module]?.color ?? DEFAULT_MODULE_COLOR,
         perms,
       }))
       .sort((a, b) => a.order - b.order || a.label.localeCompare(b.label));
   }, [permissions]);
 
-  const isSelected = (key: string) => draftGrants.some((g) => g.permissionKey === key && g.scopeKind === scopeKind);
-  const togglePermission = (key: string) => {
+  const permByKey = useMemo(
+    () => new Map((permissions?.permissions ?? []).map((p) => [p.permissionKey, p])),
+    [permissions]
+  );
+
+  // 권한별 지원 범위 — 비어있으면 전사 고정.
+  const supportedScopes = (p?: PermissionRow): ScopeKind[] => {
+    const sup = ((p?.scopesSupported ?? []) as string[]).filter(Boolean) as ScopeKind[];
+    return sup.length ? sup : ["all"];
+  };
+  const defaultScopeFor = (p: PermissionRow): ScopeKind => {
+    const sup = supportedScopes(p);
+    return sup.includes("self_dept") ? "self_dept" : sup[0];
+  };
+  const isSelected = (key: string) => draftGrants.some((g) => g.permissionKey === key);
+  const togglePermission = (p: PermissionRow) => {
     setDraftGrants((prev) => {
-      const idx = prev.findIndex((g) => g.permissionKey === key && g.scopeKind === scopeKind);
-      if (idx >= 0) return prev.filter((_, i) => i !== idx);
-      return [...prev, { permissionKey: key, scopeKind, effect: "allow" }];
+      if (prev.some((g) => g.permissionKey === p.permissionKey)) {
+        return prev.filter((g) => g.permissionKey !== p.permissionKey);
+      }
+      return [...prev, { permissionKey: p.permissionKey, scopeKind: defaultScopeFor(p), effect: "allow" }];
     });
   };
+  const setGrantScope = (key: string, scope: ScopeKind) =>
+    setDraftGrants((prev) => prev.map((g) => (g.permissionKey === key ? { ...g, scopeKind: scope } : g)));
 
   const save = async () => {
     setSaving(true);
@@ -419,7 +450,7 @@ function CreateTemplateModal({
   return (
     <div className="absolute inset-0 z-50 flex items-center justify-center p-4">
       <button type="button" aria-label="닫기" className="absolute inset-0 bg-black/40 rounded-3xl" onClick={onClose} />
-      <div className="cd-modal relative w-[min(42rem,100%)] max-h-full overflow-y-auto scrollbar-hide p-6">
+      <div className="cd-modal relative w-[min(52rem,100%)] max-h-full overflow-y-auto scrollbar-hide p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-extrabold cd-text flex items-center gap-2">
             <Plus className="w-4 h-4 text-[color:var(--cd-primary)]" /> {editing ? "권한 템플릿 수정" : "권한 템플릿 생성"}
@@ -438,58 +469,105 @@ function CreateTemplateModal({
           </Field>
         </div>
 
-        {/* 권한 선택: 적용 범위 + 카테고리별 태그 */}
+        {/* 권한 선택: 좌측 카테고리 트리 + 우측 선택된 권한(권한별 적용 범위) */}
         <div className="mt-4">
-          <div className="flex items-center justify-between gap-3 mb-2">
-            <span className="cd-label !mb-0">권한 선택</span>
-            <label className="flex items-center gap-2">
-              <span className="text-xs cd-text-muted">적용 범위</span>
-              <select className="cd-select w-auto text-sm" value={scopeKind} onChange={(e) => setScopeKind(e.target.value as ScopeKind)}>
-                {Object.entries(SCOPE_LABEL).map(([value, label]) => (
-                  <option key={value} value={value}>{label}</option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <p className="text-xs cd-text-muted mb-3">카테고리별 권한 태그를 클릭해 추가/제거합니다. 위에서 선택한 범위로 부여됩니다.</p>
-          <div className="rounded-2xl cd-surface-bg border cd-border-c p-4 max-h-[42vh] overflow-y-auto scrollbar-hide flex flex-col gap-4">
-            {categories.map((cat) => (
-              <div key={cat.module}>
-                <p className="text-[11px] font-extrabold uppercase tracking-wide cd-text-faint mb-2">{cat.label}</p>
-                <div className="flex flex-wrap gap-2">
-                  {cat.perms.map((p) => (
+          <span className="cd-label">권한 선택</span>
+          <p className="text-xs cd-text-muted mb-3">좌측 트리에서 세부 권한을 클릭하면 우측에 추가됩니다. 적용 범위는 권한별 지원 범위 내에서만 설정할 수 있습니다.</p>
+          <div className="grid md:grid-cols-2 gap-3">
+            {/* 카테고리 트리 */}
+            <div className="rounded-2xl cd-surface-bg border cd-border-c p-3 max-h-[44vh] overflow-y-auto scrollbar-hide">
+              {categories.map((cat) => {
+                const open = openCats.has(cat.module);
+                const selCount = cat.perms.filter((p) => isSelected(p.permissionKey)).length;
+                return (
+                  <div key={cat.module}>
                     <button
                       type="button"
-                      key={p.permissionKey}
-                      onClick={() => togglePermission(p.permissionKey)}
-                      className={cn("cd-pill", isSelected(p.permissionKey) ? "cd-fill-primary" : "cd-card-bg border cd-border-c cd-text-muted")}
+                      onClick={() => toggleCat(cat.module)}
+                      className="w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-left cd-row-hover"
                     >
-                      {p.description}
+                      {open ? <ChevronDown className="w-3.5 h-3.5 cd-text-faint" /> : <ChevronRight className="w-3.5 h-3.5 cd-text-faint" />}
+                      {open ? (
+                        <FolderOpen className="w-4 h-4 shrink-0" style={{ color: cat.color }} />
+                      ) : (
+                        <Folder className="w-4 h-4 shrink-0" style={{ color: cat.color }} />
+                      )}
+                      <span className="text-sm font-bold cd-text truncate">{cat.label}</span>
+                      <span className="ml-auto text-[10px] font-bold cd-text-faint shrink-0">
+                        {selCount}/{cat.perms.length}
+                      </span>
                     </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-            {categories.length === 0 && <div className="text-sm cd-text-faint py-2 text-center">권한 목록을 불러오는 중…</div>}
-          </div>
-        </div>
+                    {open && (
+                      <div className="ml-4 border-l cd-border-c pl-2 flex flex-col">
+                        {cat.perms.map((p) => {
+                          const sel = isSelected(p.permissionKey);
+                          return (
+                            <button
+                              type="button"
+                              key={p.permissionKey}
+                              onClick={() => togglePermission(p)}
+                              className={cn(
+                                "flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition",
+                                sel ? "cd-soft-primary font-semibold" : "cd-text-muted cd-row-hover"
+                              )}
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: cat.color }} />
+                              <span className="flex-1 truncate">{p.description}</span>
+                              {sel && <Check className="w-3.5 h-3.5 shrink-0" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              {categories.length === 0 && <div className="text-sm cd-text-faint py-4 text-center">권한 목록을 불러오는 중…</div>}
+            </div>
 
-        {/* 선택된 권한 요약 */}
-        <div className="mt-3">
-          <span className="cd-label">선택된 권한 ({draftGrants.length})</span>
-          <div className="flex flex-wrap gap-2 mt-1 min-h-10">
-            {draftGrants.map((grant) => (
-              <button
-                type="button"
-                key={grant.permissionKey + grant.scopeKind}
-                onClick={() => setDraftGrants((prev) => prev.filter((item) => item !== grant))}
-                className="cd-pill cd-pill-info"
-              >
-                {permissionLabel(grant.permissionKey)} · {scopeLabel(grant.scopeKind)}
-                <X className="w-3 h-3" />
-              </button>
-            ))}
-            {draftGrants.length === 0 && <span className="text-xs cd-text-faint py-2">아직 선택된 권한이 없습니다.</span>}
+            {/* 선택된 권한 */}
+            <div className="rounded-2xl cd-surface-bg border cd-border-c p-3 max-h-[44vh] overflow-y-auto scrollbar-hide">
+              <div className="flex items-center justify-between mb-2 px-1">
+                <span className="text-sm font-bold cd-text">선택된 권한</span>
+                <span className="text-[10px] font-bold cd-text-faint">{draftGrants.length}개</span>
+              </div>
+              {draftGrants.length === 0 ? (
+                <div className="text-xs cd-text-faint py-6 text-center">좌측 트리에서 권한을 선택하세요.</div>
+              ) : (
+                <div className="flex flex-col gap-1.5">
+                  {draftGrants.map((grant) => {
+                    const p = permByKey.get(grant.permissionKey);
+                    const sup = supportedScopes(p);
+                    const options = sup.includes(grant.scopeKind) ? sup : [grant.scopeKind, ...sup];
+                    return (
+                      <div key={grant.permissionKey} className="flex items-center gap-2 rounded-lg cd-card-bg border cd-border-c px-2 py-1.5">
+                        <span className="flex-1 text-xs font-semibold cd-text truncate">{p?.description ?? grant.permissionKey}</span>
+                        {options.length <= 1 ? (
+                          <span className="text-[11px] font-bold cd-text-muted px-2 py-0.5 rounded cd-surface-bg shrink-0">{scopeLabel(grant.scopeKind)}</span>
+                        ) : (
+                          <select
+                            className="cd-select w-auto text-xs shrink-0"
+                            value={grant.scopeKind}
+                            onChange={(e) => setGrantScope(grant.permissionKey, e.target.value as ScopeKind)}
+                          >
+                            {options.map((s) => (
+                              <option key={s} value={s}>{scopeLabel(s)}</option>
+                            ))}
+                          </select>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setDraftGrants((prev) => prev.filter((g) => g.permissionKey !== grant.permissionKey))}
+                          className="p-1 rounded cd-text-faint hover:text-[color:var(--cd-error)] shrink-0"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

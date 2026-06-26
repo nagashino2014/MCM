@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type React from "react";
-import { createPortal } from "react-dom";
 import {
   Building2,
   BriefcaseBusiness,
@@ -21,9 +20,9 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import type {
   DepartmentRow,
+  PermissionRow,
   PermissionsSnapshot,
   PermissionTemplateRow,
   SelectedAccount,
@@ -85,14 +84,31 @@ function tint(color: string): string {
   return color.startsWith("#") ? color + "22" : color;
 }
 
-/** 흰색 배경 + 테두리의 깔끔한 권한 태그(카드 회색 위에서 또렷하게). */
+/** 세부 권한 태그 — 흰색 카드 위에서 구분되도록 회색(cd-surface-bg) 배경 + 테두리. */
 function TagPill({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full cd-card-bg border cd-border-c px-2.5 py-0.5 text-[11px] font-semibold cd-text-muted whitespace-nowrap shrink-0">
+    <span className="inline-flex items-center gap-1 rounded-full cd-surface-bg border cd-border-c px-2.5 py-0.5 text-[11px] font-semibold cd-text-muted whitespace-nowrap shrink-0">
       {children}
     </span>
   );
 }
+
+/** 권한 module → 카테고리 라벨·정렬순서(생성 모달의 카테고리 태그 분류). */
+const MODULE_META: Record<string, { label: string; order: number }> = {
+  contract: { label: "계약", order: 1 },
+  billing: { label: "수주·수금·발행", order: 2 },
+  facility: { label: "사업장", order: 3 },
+  data: { label: "데이터 수집·검수", order: 4 },
+  work_plan: { label: "업무추진계획", order: 5 },
+  staffing: { label: "인사·수행인력", order: 6 },
+  bonus: { label: "성과급", order: 7 },
+  certificate: { label: "증명서", order: 8 },
+  org: { label: "조직·직급", order: 9 },
+  account: { label: "계정", order: 10 },
+  rbac: { label: "권한 관리", order: 11 },
+  audit: { label: "감사 로그", order: 12 },
+  trash: { label: "휴지통", order: 13 },
+};
 
 export default function PermissionManagementPanel({
   users,
@@ -105,28 +121,17 @@ export default function PermissionManagementPanel({
   onDeleteAccount,
   toast,
 }: PermissionManagementPanelProps) {
-  const [createOpen, setCreateOpen] = useState(false);
-  const [editingTemplate, setEditingTemplate] = useState<PermissionTemplateRow | null>(null);
-
   const permissionLabel = (key: string) =>
     permissions?.permissions.find((item) => item.permissionKey === key)?.description ?? key;
-
-  const openCreate = () => {
-    setEditingTemplate(null);
-    setCreateOpen(true);
-  };
-  const openEdit = (template: PermissionTemplateRow) => {
-    setEditingTemplate(template);
-    setCreateOpen(true);
-  };
 
   return (
     <div className="grid xl:grid-cols-[2fr_1fr] gap-5 h-full min-h-0">
       <TemplateListCard
         permissions={permissions}
         permissionLabel={permissionLabel}
-        onCreate={openCreate}
-        onEdit={openEdit}
+        selectedDept={selectedDept}
+        onReload={onReload}
+        toast={toast}
       />
 
       {selectedAccount ? (
@@ -144,21 +149,6 @@ export default function PermissionManagementPanel({
       ) : (
         <GlobalAssignmentsCard />
       )}
-
-      {createOpen && (
-        <CreateTemplateModal
-          permissions={permissions}
-          selectedDept={selectedDept}
-          editing={editingTemplate}
-          permissionLabel={permissionLabel}
-          onClose={() => setCreateOpen(false)}
-          onSaved={() => {
-            setCreateOpen(false);
-            onReload();
-          }}
-          toast={toast}
-        />
-      )}
     </div>
   );
 }
@@ -168,16 +158,29 @@ export default function PermissionManagementPanel({
 function TemplateListCard({
   permissions,
   permissionLabel,
-  onCreate,
-  onEdit,
+  selectedDept,
+  onReload,
+  toast,
 }: {
   permissions: PermissionsSnapshot | null;
   permissionLabel: (key: string) => string;
-  onCreate: () => void;
-  onEdit: (template: PermissionTemplateRow) => void;
+  selectedDept: DepartmentRow | null;
+  onReload: () => void;
+  toast: (message: string, type?: "success" | "error") => void;
 }) {
   const [search, setSearch] = useState("");
   const [filterKind, setFilterKind] = useState<"all" | "system" | "custom">("all");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<PermissionTemplateRow | null>(null);
+
+  const openCreate = () => {
+    setEditingTemplate(null);
+    setCreateOpen(true);
+  };
+  const openEdit = (template: PermissionTemplateRow) => {
+    setEditingTemplate(template);
+    setCreateOpen(true);
+  };
 
   const templates = permissions?.templates ?? [];
   const filtered = useMemo(() => {
@@ -191,7 +194,7 @@ function TemplateListCard({
   }, [templates, search, filterKind]);
 
   return (
-    <section className="cd-card p-6 h-full flex flex-col min-h-0">
+    <section className="cd-card p-6 h-full flex flex-col min-h-0 relative">
       <div className="flex items-start justify-between gap-4 mb-5 shrink-0">
         <div className="flex items-start gap-3">
           <span className="cd-title-icon mt-0.5">
@@ -202,7 +205,7 @@ function TemplateListCard({
             <p className="text-sm cd-text-muted mt-1">계정 유형별 권한 템플릿을 관리하고 빠르게 적용할 수 있습니다.</p>
           </div>
         </div>
-        <button type="button" onClick={onCreate} className="cd-btn cd-btn-primary cd-btn-sm shrink-0">
+        <button type="button" onClick={openCreate} className="cd-btn cd-btn-primary cd-btn-sm shrink-0">
           <Plus className="w-4 h-4" /> 템플릿 생성
         </button>
       </div>
@@ -234,11 +237,26 @@ function TemplateListCard({
         ) : (
           <div className="grid xl:grid-cols-2 gap-4 items-start">
             {filtered.map((template) => (
-              <TemplateCard key={template.templateId} template={template} permissionLabel={permissionLabel} onEdit={onEdit} />
+              <TemplateCard key={template.templateId} template={template} permissionLabel={permissionLabel} onEdit={openEdit} />
             ))}
           </div>
         )}
       </div>
+
+      {createOpen && (
+        <CreateTemplateModal
+          permissions={permissions}
+          selectedDept={selectedDept}
+          editing={editingTemplate}
+          permissionLabel={permissionLabel}
+          onClose={() => setCreateOpen(false)}
+          onSaved={() => {
+            setCreateOpen(false);
+            onReload();
+          }}
+          toast={toast}
+        />
+      )}
     </section>
   );
 }
@@ -260,7 +278,7 @@ function TemplateCard({
   const extra = total - shown.length;
 
   return (
-    <div className={cn("rounded-2xl border cd-border-c p-5 cd-surface-bg flex flex-col min-h-[208px]", !template.isActive && "opacity-60")}>
+    <div className={cn("rounded-2xl border cd-border-c p-5 cd-card-bg flex flex-col min-h-[208px]", !template.isActive && "opacity-60")}>
       <div className="flex items-start gap-3">
         <span
           className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
@@ -335,25 +353,39 @@ function CreateTemplateModal({
   onSaved: () => void;
   toast: (message: string, type?: "success" | "error") => void;
 }) {
-  const { theme } = useCdashTheme();
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-
   const [templateName, setTemplateName] = useState(editing?.templateName ?? "");
   const [description, setDescription] = useState(editing?.description ?? "");
   const [isActive, setIsActive] = useState(editing?.isActive ?? true);
-  const [selectedPermission, setSelectedPermission] = useState("");
   const [scopeKind, setScopeKind] = useState<ScopeKind>("self_dept");
   const [draftGrants, setDraftGrants] = useState<Array<{ permissionKey: string; scopeKind: ScopeKind; effect: "allow" | "deny" }>>(
     () => (editing?.grants ?? []).map((g) => ({ permissionKey: g.permissionKey, scopeKind: (g.scopeKind as ScopeKind) ?? "self", effect: g.effect }))
   );
   const [saving, setSaving] = useState(false);
 
-  const addGrant = () => {
-    if (!selectedPermission) return;
+  // 카테고리(module)별 권한 그룹 — 드롭다운 대신 태그 버튼으로 선택.
+  const categories = useMemo(() => {
+    const groups = new Map<string, PermissionRow[]>();
+    for (const p of permissions?.permissions ?? []) {
+      const list = groups.get(p.module) ?? [];
+      list.push(p);
+      groups.set(p.module, list);
+    }
+    return [...groups.entries()]
+      .map(([module, perms]) => ({
+        module,
+        label: MODULE_META[module]?.label ?? module,
+        order: MODULE_META[module]?.order ?? 99,
+        perms,
+      }))
+      .sort((a, b) => a.order - b.order || a.label.localeCompare(b.label));
+  }, [permissions]);
+
+  const isSelected = (key: string) => draftGrants.some((g) => g.permissionKey === key && g.scopeKind === scopeKind);
+  const togglePermission = (key: string) => {
     setDraftGrants((prev) => {
-      if (prev.some((grant) => grant.permissionKey === selectedPermission && grant.scopeKind === scopeKind)) return prev;
-      return [...prev, { permissionKey: selectedPermission, scopeKind, effect: "allow" }];
+      const idx = prev.findIndex((g) => g.permissionKey === key && g.scopeKind === scopeKind);
+      if (idx >= 0) return prev.filter((_, i) => i !== idx);
+      return [...prev, { permissionKey: key, scopeKind, effect: "allow" }];
     });
   };
 
@@ -384,12 +416,10 @@ function CreateTemplateModal({
     }
   };
 
-  if (!mounted) return null;
-
-  return createPortal(
-    <div className="cdash-vars cd-fields-white fixed inset-0 z-[9999]" data-theme={theme}>
-      <button type="button" aria-label="닫기" className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="cd-modal absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(40rem,calc(100vw-2rem))] max-h-[calc(100vh-4rem)] overflow-auto p-6">
+  return (
+    <div className="absolute inset-0 z-50 flex items-center justify-center p-4">
+      <button type="button" aria-label="닫기" className="absolute inset-0 bg-black/40 rounded-3xl" onClick={onClose} />
+      <div className="cd-modal relative w-[min(42rem,100%)] max-h-full overflow-y-auto scrollbar-hide p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-extrabold cd-text flex items-center gap-2">
             <Plus className="w-4 h-4 text-[color:var(--cd-primary)]" /> {editing ? "권한 템플릿 수정" : "권한 템플릿 생성"}
@@ -406,44 +436,61 @@ function CreateTemplateModal({
           <Field label="설명">
             <input className="cd-input" value={description ?? ""} onChange={(e) => setDescription(e.target.value)} placeholder="권한 목적" />
           </Field>
-          <Field label="권한">
-            <select className="cd-select" value={selectedPermission} onChange={(e) => setSelectedPermission(e.target.value)}>
-              <option value="">권한 선택</option>
-              {permissions?.permissions.map((permission) => (
-                <option key={permission.permissionKey} value={permission.permissionKey}>
-                  {permission.description}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="범위">
-            <div className="flex gap-2">
-              <select className="cd-select" value={scopeKind} onChange={(e) => setScopeKind(e.target.value as ScopeKind)}>
-                {Object.entries(SCOPE_LABEL).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-              <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={addGrant}>
-                추가
-              </button>
-            </div>
-          </Field>
         </div>
 
-        <div className="flex flex-wrap gap-2 mt-3 min-h-10">
-          {draftGrants.map((grant) => (
-            <button
-              type="button"
-              key={grant.permissionKey + grant.scopeKind}
-              onClick={() => setDraftGrants((prev) => prev.filter((item) => item !== grant))}
-              className="cd-pill cd-pill-info"
-            >
-              {permissionLabel(grant.permissionKey)} · {scopeLabel(grant.scopeKind)}
-              <X className="w-3 h-3" />
-            </button>
-          ))}
+        {/* 권한 선택: 적용 범위 + 카테고리별 태그 */}
+        <div className="mt-4">
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <span className="cd-label !mb-0">권한 선택</span>
+            <label className="flex items-center gap-2">
+              <span className="text-xs cd-text-muted">적용 범위</span>
+              <select className="cd-select w-auto text-sm" value={scopeKind} onChange={(e) => setScopeKind(e.target.value as ScopeKind)}>
+                {Object.entries(SCOPE_LABEL).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <p className="text-xs cd-text-muted mb-3">카테고리별 권한 태그를 클릭해 추가/제거합니다. 위에서 선택한 범위로 부여됩니다.</p>
+          <div className="rounded-2xl cd-surface-bg border cd-border-c p-4 max-h-[42vh] overflow-y-auto scrollbar-hide flex flex-col gap-4">
+            {categories.map((cat) => (
+              <div key={cat.module}>
+                <p className="text-[11px] font-extrabold uppercase tracking-wide cd-text-faint mb-2">{cat.label}</p>
+                <div className="flex flex-wrap gap-2">
+                  {cat.perms.map((p) => (
+                    <button
+                      type="button"
+                      key={p.permissionKey}
+                      onClick={() => togglePermission(p.permissionKey)}
+                      className={cn("cd-pill", isSelected(p.permissionKey) ? "cd-fill-primary" : "cd-card-bg border cd-border-c cd-text-muted")}
+                    >
+                      {p.description}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+            {categories.length === 0 && <div className="text-sm cd-text-faint py-2 text-center">권한 목록을 불러오는 중…</div>}
+          </div>
+        </div>
+
+        {/* 선택된 권한 요약 */}
+        <div className="mt-3">
+          <span className="cd-label">선택된 권한 ({draftGrants.length})</span>
+          <div className="flex flex-wrap gap-2 mt-1 min-h-10">
+            {draftGrants.map((grant) => (
+              <button
+                type="button"
+                key={grant.permissionKey + grant.scopeKind}
+                onClick={() => setDraftGrants((prev) => prev.filter((item) => item !== grant))}
+                className="cd-pill cd-pill-info"
+              >
+                {permissionLabel(grant.permissionKey)} · {scopeLabel(grant.scopeKind)}
+                <X className="w-3 h-3" />
+              </button>
+            ))}
+            {draftGrants.length === 0 && <span className="text-xs cd-text-faint py-2">아직 선택된 권한이 없습니다.</span>}
+          </div>
         </div>
 
         <div className="flex items-center justify-between mt-4">
@@ -465,8 +512,7 @@ function CreateTemplateModal({
           </div>
         </div>
       </div>
-    </div>,
-    document.body
+    </div>
   );
 }
 

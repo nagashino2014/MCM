@@ -25,6 +25,8 @@ export interface UserAccess {
   employeeId: string | null;
   /** 본인(employee)이 참여자로 등록된 계약 id 집합 — participant scope 평가용(종료 포함). */
   participantContractIds: Set<string>;
+  /** 본인(employee)이 관계자로 등록된 영업 프로젝트 id 집합 — sales.* participant scope 평가용. */
+  participantProjectIds: Set<string>;
   grants: GrantRow[];
 }
 
@@ -32,6 +34,7 @@ export interface PermissionTarget {
   userId?: string;
   deptId?: string;
   contractId?: string;
+  projectId?: string;
 }
 
 /** 사용자 role·소속부서 + 활성 권한 grants 를 로드한다. */
@@ -48,12 +51,20 @@ export async function loadUserAccess(userId: string): Promise<UserAccess> {
 
   // participant scope 평가용: 본인이 참여한 계약 id(종료 포함).
   const participantContractIds = new Set<string>();
+  // sales.* participant scope 평가용: 본인이 관계자로 등록된 영업 프로젝트 id.
+  const participantProjectIds = new Set<string>();
   if (employeeId) {
     const partRows = rowsToObjects(
       await db.exec("SELECT contract_id FROM service_participants WHERE employee_id = $1", [employeeId])
     );
     for (const r of partRows) {
       if (r.contract_id != null) participantContractIds.add(String(r.contract_id));
+    }
+    const projRows = rowsToObjects(
+      await db.exec("SELECT project_id FROM sales_project_members WHERE employee_id = $1", [employeeId])
+    );
+    for (const r of projRows) {
+      if (r.project_id != null) participantProjectIds.add(String(r.project_id));
     }
   }
 
@@ -80,7 +91,7 @@ export async function loadUserAccess(userId: string): Promise<UserAccess> {
     effect: (String(row.effect ?? "allow") as "allow" | "deny"),
   }));
 
-  return { userId, role, deptId, employeeId, participantContractIds, grants };
+  return { userId, role, deptId, employeeId, participantContractIds, participantProjectIds, grants };
 }
 
 function scopeMatches(grant: GrantRow, access: UserAccess, target: PermissionTarget): boolean {
@@ -90,8 +101,10 @@ function scopeMatches(grant: GrantRow, access: UserAccess, target: PermissionTar
     case "self":
       return !target.userId || target.userId === access.userId;
     case "participant":
-      // 본인이 참여한 계약만. 단건 가드는 target.contractId 를 넘긴다(목록은 contract-scope.ts).
-      return !target.contractId || access.participantContractIds.has(target.contractId);
+      // 본인이 참여한 계약(service_participants) 또는 영업건(sales_project_members)만.
+      // 단건 가드는 target.contractId / target.projectId 를 넘긴다(목록은 각 도메인 필터에서 처리).
+      return (target.contractId == null || access.participantContractIds.has(target.contractId))
+          && (target.projectId == null || access.participantProjectIds.has(target.projectId));
     case "self_dept":
       return !target.deptId || target.deptId === access.deptId;
     case "specific_dept":

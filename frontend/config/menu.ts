@@ -71,7 +71,6 @@ export const MENU_ITEMS: MenuItem[] = [
     title: "영업/마케팅",
     href: "/sales",
     icon: Briefcase,
-    comingSoon: true,
     group: "main",
   },
   {

@@ -15,7 +15,7 @@ const HWPX_MIME = "application/octet-stream";
 
 interface CertRequestBody {
   contractIds?: string[];
-  option?: 1 | 2; // 1=증명서만, 2=증명서+명단
+  option?: 1 | 2 | 3; // 1=증명서만, 2=증명서+명단, 3=명단만
   submittedTo?: string;
   purpose?: string;
   contactByContract?: Record<string, string>;
@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     const actor = await requirePermission("certificate.issue", { fallbackRoles: ["editor"] });
     const body = (await req.json()) as CertRequestBody;
     const contractIds = [...new Set((body.contractIds ?? []).map((id) => String(id).trim()).filter(Boolean))];
-    const option = body.option === 2 ? 2 : 1;
+    const option = body.option === 2 ? 2 : body.option === 3 ? 3 : 1;
     const submittedTo = String(body.submittedTo ?? "");
     const purpose = String(body.purpose ?? "");
     const contactByContract = body.contactByContract ?? {};
@@ -43,6 +43,28 @@ export async function POST(req: NextRequest) {
     let skipped = 0;
 
     for (const contractId of contractIds) {
+      // 명단만 생성(option 3) — 증명서 없이 수행인력 명단 hwpx만 생성
+      if (option === 3) {
+        const roster = await getContractRoster(contractId);
+        if (!roster) {
+          skipped += 1;
+          continue;
+        }
+        const title = roster.serviceName || contractId;
+        const rosterName = `수행인력명단(${title}).hwpx`;
+        const rosterBytes = await fillHwpx("roster.hwpx", buildRosterTokens(roster));
+        await saveCertificateDoc({
+          contractId,
+          actorUserId: actor.userId,
+          documentType: "roster_hwpx",
+          fileName: rosterName,
+          bytes: rosterBytes,
+          contentType: HWPX_MIME,
+        });
+        results.push({ title, files: [{ name: rosterName, bytes: rosterBytes }] });
+        continue;
+      }
+
       const data = await getCertificateData(contractId, {
         submittedTo,
         purpose,
@@ -86,7 +108,12 @@ export async function POST(req: NextRequest) {
 
     if (results.length === 0) {
       return NextResponse.json(
-        { error: "선택한 계약 중 통합허가 용역이 없어 증명서를 생성할 수 없습니다." },
+        {
+          error:
+            option === 3
+              ? "선택한 계약 중 수행인력 명단을 만들 수 있는 계약이 없습니다."
+              : "선택한 계약 중 통합허가 용역이 없어 증명서를 생성할 수 없습니다.",
+        },
         { status: 400 }
       );
     }

@@ -105,15 +105,16 @@ export default function ContractDownloadsPage() {
   const [downloading, setDownloading] = useState(false);
   const [loading, setLoading] = useState(true);
   // 증명서 생성 관련 상태
-  const [certOption, setCertOption] = useState<1 | 2>(1); // 1=증명서만 2=증명서+명단
+  const [certOption, setCertOption] = useState<1 | 2 | 3>(1); // 1=증명서만 2=증명서+명단 3=명단만
   const [submittedTo, setSubmittedTo] = useState("");
   const [purpose, setPurpose] = useState("입찰 참여용");
   const [certBusy, setCertBusy] = useState(false);
   const [bundleBusy, setBundleBusy] = useState(false);
   const [contactsByContract, setContactsByContract] = useState<Record<string, ContractContacts>>({});
   const [contactByContract, setContactByContract] = useState<Record<string, string>>({});
-  // 서명 증명서는 세션 한정 클라이언트 보관(서버 미저장) — 새로고침/재진입 시 초기화
-  const [signedFiles, setSignedFiles] = useState<Record<string, File>>({});
+  // 서명(직인) 증명서는 첨부 즉시 S3에 저장 → 재선택 시 '증명서 기첨부'로 표시. 여기엔 저장 상태만 보관.
+  const [signedCerts, setSignedCerts] = useState<Record<string, { fileName: string }>>({});
+  const [attaching, setAttaching] = useState<Record<string, boolean>>({});
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; contractId: string } | null>(null);
 
   const reloadTree = useCallback(async () => {
@@ -255,7 +256,8 @@ export default function ContractDownloadsPage() {
       return next;
     });
     setSelectedId((prev) => (prev === contractId ? null : prev));
-    setSignedFiles((prev) => {
+    // 로컬 표시만 제거(S3 저장본은 유지) — 재선택 시 서버에서 다시 조회된다.
+    setSignedCerts((prev) => {
       if (!(contractId in prev)) return prev;
       const next = { ...prev };
       delete next[contractId];
@@ -393,28 +395,72 @@ export default function ContractDownloadsPage() {
     }
   };
 
-  // 계약 행의 서명 증명서 PDF 첨부 — 세션 한정 클라이언트 보관(서버 미저장, 새로고침 시 초기화)
-  const attachSignedCert = (contractId: string, file: File) => {
+  // 계약 행의 서명(직인) 증명서 PDF 첨부 — 즉시 S3에 저장(같은 계약 재첨부 시 교체).
+  const attachSignedCert = async (contractId: string, file: File) => {
     if (file.type && file.type !== "application/pdf") {
       alert("PDF 파일만 첨부할 수 있습니다.");
       return;
     }
-    setSignedFiles((prev) => ({ ...prev, [contractId]: file }));
+    setAttaching((prev) => ({ ...prev, [contractId]: true }));
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch(`/api/contracts/${encodeURIComponent(contractId)}/signed-certificate`, {
+        method: "POST",
+        body: form,
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? "증명서 첨부 실패");
+      }
+      const data = (await res.json()) as { fileName: string };
+      setSignedCerts((prev) => ({ ...prev, [contractId]: { fileName: data.fileName } }));
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setAttaching((prev) => {
+        const next = { ...prev };
+        delete next[contractId];
+        return next;
+      });
+    }
   };
 
-  // 통합묶음(증명서+명단+계약서) 다운로드 — 첨부 서명 증명서를 함께 전송
+  // 선택 계약들의 서명 증명서(S3) 첨부 여부를 한 번에 조회해 '증명서 기첨부' 표시 동기화
+  useEffect(() => {
+    if (targetIds.length === 0) {
+      setSignedCerts({});
+      return;
+    }
+    let cancelled = false;
+    fetch("/api/contracts/signed-certificates", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contractIds: targetIds }),
+    })
+      .then((res) => (res.ok ? (res.json() as Promise<{ signed: Record<string, { fileName: string }> }>) : null))
+      .then((d) => {
+        if (!cancelled && d?.signed) setSignedCerts(d.signed);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [targetIds]);
+
+  // 통합묶음(증명서+명단+계약서) 다운로드 — S3 저장된 서명 증명서를 사용
   const downloadBundle = async () => {
-    const ids = targetIds.filter((id) => signedFiles[id]);
-    if (ids.length === 0) {
-      alert("서명 증명서를 첨부한 계약이 없습니다. 계약 목록의 ‘증명서 첨부’로 먼저 첨부하세요.");
+    if (targetIds.length === 0) {
+      alert("계약을 선택하세요.");
       return;
     }
     setBundleBusy(true);
     try {
-      const form = new FormData();
-      form.append("contractIds", JSON.stringify(ids));
-      for (const id of ids) form.append(`file_${id}`, signedFiles[id]);
-      const res = await fetch("/api/contracts/certificate-bundle", { method: "POST", body: form });
+      const res = await fetch("/api/contracts/certificate-bundle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contractIds: targetIds }),
+      });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body?.error ?? "통합묶음 생성 실패");
@@ -492,7 +538,7 @@ export default function ContractDownloadsPage() {
                   <div key={group.serviceType}>
                     <button
                       type="button"
-                      onClick={() => setExpanded((prev) => ({ ...prev, [group.serviceType]: !isOpen }))}
+                      onClick={() => setExpanded((prev) => (prev[group.serviceType] ? {} : { [group.serviceType]: true }))}
                       className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-[color:var(--cd-surface)] border-b cd-border-c"
                     >
                       {isOpen ? <ChevronDown className="w-4 h-4 cd-text-faint" /> : <ChevronRight className="w-4 h-4 cd-text-faint" />}
@@ -631,7 +677,7 @@ export default function ContractDownloadsPage() {
                   type="button"
                   className="cd-btn cd-btn-ghost rounded-lg px-2.5 py-1 text-[11px] cd-text-muted"
                   disabled={targetIds.length === 0}
-                  onClick={() => { setChecked(new Set()); setSelectedId(null); setDetail(null); setSignedFiles({}); }}
+                  onClick={() => { setChecked(new Set()); setSelectedId(null); setDetail(null); setSignedCerts({}); }}
                 >
                   선택 해제
                 </button>
@@ -657,22 +703,26 @@ export default function ContractDownloadsPage() {
                         <p className="mt-0.5 flex items-center gap-2 text-[10px] cd-text-faint">
                           <span className="truncate">{node?.counterpartyName ?? id}</span>
                           <span className="ml-auto shrink-0 font-mono">{node?.contractDate ?? ""}</span>
+                          {signedCerts[id] && (
+                            <span
+                              className="shrink-0 inline-flex items-center gap-1 rounded-md border border-[color:var(--cd-primary)] cd-tint-primary cd-text-primary px-1.5 py-0.5 text-[9px] font-semibold"
+                              title={`증명서 저장됨: ${signedCerts[id].fileName}`}
+                            >
+                              <Check className="w-3 h-3" /> 증명서 기첨부
+                            </span>
+                          )}
                           <label
-                            className={
-                              "shrink-0 inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 cursor-pointer text-[9px] font-semibold " +
-                              (signedFiles[id]
-                                ? "border-[color:var(--cd-primary)] cd-tint-primary cd-text-primary"
-                                : "cd-border-c cd-text-faint hover:bg-[color:var(--cd-surface)]")
-                            }
-                            title={signedFiles[id] ? `서명 증명서 첨부됨: ${signedFiles[id].name} — 클릭하여 교체` : "서명 증명서 PDF 첨부"}
+                            className="shrink-0 inline-flex items-center gap-1 rounded-md border cd-border-c cd-text-faint hover:bg-[color:var(--cd-surface)] px-1.5 py-0.5 cursor-pointer text-[9px] font-semibold"
+                            title={signedCerts[id] ? "증명서 PDF 교체(새 파일 첨부)" : "서명 증명서 PDF 첨부"}
                             onClick={(e) => e.stopPropagation()}
                           >
-                            {signedFiles[id] ? <Check className="w-3 h-3" /> : <Paperclip className="w-3 h-3" />}
-                            {signedFiles[id] ? "증명서 첨부됨" : "증명서 첨부"}
+                            <Paperclip className="w-3 h-3" />
+                            {attaching[id] ? "첨부 중..." : signedCerts[id] ? "증명서 교체" : "증명서 첨부"}
                             <input
                               type="file"
                               accept="application/pdf"
                               className="hidden"
+                              disabled={!!attaching[id]}
                               onChange={(e) => {
                                 const f = e.target.files?.[0];
                                 if (f) attachSignedCert(id, f);
@@ -715,10 +765,11 @@ export default function ContractDownloadsPage() {
                   <span className="ml-auto text-[11px] font-normal cd-text-faint">통합허가 {certEligibleIds.length}건</span>
                 </h3>
 
-                <div className="mt-3 grid grid-cols-2 gap-2">
+                <div className="mt-3 grid grid-cols-3 gap-2">
                   {([
                     { v: 1, label: "증명서만 생성" },
                     { v: 2, label: "증명서 + 명단" },
+                    { v: 3, label: "명단만 생성" },
                   ] as const).map((opt) => (
                     <label
                       key={opt.v}
@@ -753,7 +804,7 @@ export default function ContractDownloadsPage() {
                 {certEligibleIds.some((id) => contactsByContract[id]) && (
                   <div className="mt-3">
                     <span className="text-[11px] cd-text-faint">발급기관 담당자 선택</span>
-                    <div className="mt-1 rounded-xl border cd-border-c divide-y cd-border-c max-h-[160px] overflow-y-auto scrollbar-hide">
+                    <div className="mt-1 rounded-xl border cd-border-c divide-y cd-border-c max-h-[460px] overflow-y-auto scrollbar-hide">
                       {certEligibleIds.map((id) => {
                         const data = contactsByContract[id];
                         if (!data) return null;

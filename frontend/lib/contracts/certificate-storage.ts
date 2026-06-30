@@ -90,6 +90,32 @@ export async function saveCertificateDoc(params: {
   return { storageKey: stored.storageKey, displayName: params.fileName };
 }
 
+/** 여러 계약의 서명 증명서(certificate_signed) 저장 여부를 한 번에 조회. */
+export async function listSignedCertificates(
+  contractIds: string[]
+): Promise<Record<string, { storageKey: string; displayName: string }>> {
+  const ids = [...new Set(contractIds.map((id) => String(id).trim()).filter(Boolean))];
+  if (ids.length === 0) return {};
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT DISTINCT ON (contract_id) contract_id, storage_key, display_name
+         FROM contract_documents
+        WHERE contract_id = ANY($1::text[]) AND document_type = 'certificate_signed'
+        ORDER BY contract_id, created_at DESC`,
+      [ids]
+    )
+  );
+  const out: Record<string, { storageKey: string; displayName: string }> = {};
+  for (const r of rows) {
+    out[String(r.contract_id ?? "")] = {
+      storageKey: String(r.storage_key ?? ""),
+      displayName: String(r.display_name ?? ""),
+    };
+  }
+  return out;
+}
+
 /** 계약의 특정 타입 저장 문서 조회(최근 1건). */
 export async function getCertificateDoc(
   contractId: string,

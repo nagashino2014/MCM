@@ -85,6 +85,9 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       if (body.newEndedAt !== undefined) {
         pushSet("ended_at", body.newEndedAt || null);
       }
+      if (body.newContractDate !== undefined) {
+        pushSet("contract_date", body.newContractDate || null);
+      }
       if (body.newServiceType !== undefined) {
         pushSet("service_type", body.newServiceType || null);
       }

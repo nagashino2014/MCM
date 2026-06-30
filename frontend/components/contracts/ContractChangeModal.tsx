@@ -85,6 +85,9 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
   const [activeTab, setActiveTab] = useState<TabKey>("amount");
   const [saving, setSaving] = useState(false);
   const [meta, setMeta] = useState({ changedAt: new Date().toISOString().slice(0, 10), enteredAt: new Date().toISOString().slice(0, 10), memo: "" });
+  // 계약일은 원칙적으로 변경계약 대상이 아니지만, 신규 입력 시 오기재한 경우
+  // 바로잡을 수 있도록 편집을 허용한다. 초기값과 달라진 경우에만 서버로 전송한다.
+  const [contractDate, setContractDate] = useState(props.contractDate ?? "");
   const outsourcingFileRef = useRef<File | null>(null);
   const [outsourcingFileName, setOutsourcingFileName] = useState("");
   const [outsourcingTypes, setOutsourcingTypes] = useState(DEFAULT_OUTSOURCING_TYPES);
@@ -289,6 +292,8 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
       if (closing.completionDate || closing.permitAcquiredAt || closing.etc) changedFields.push("closing");
       if (lifecycle.terminatedAt || lifecycle.suspendedAt) changedFields.push("termination");
       if (outsourcing.outsourcingTitle) changedFields.push("outsourcing");
+      const contractDateChanged = contractDate !== (props.contractDate ?? "");
+      if (contractDateChanged) changedFields.push("contractDate");
 
       // 변경계약 저장 요청 본문. 계약 테이블을 갱신하는 필드는 "실제로 새 값이
       // 입력된 항목만" 포함한다. 빈 값/ null 을 보내면 서버(changes route)가
@@ -307,6 +312,7 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
         changedFields,
       };
       if (newCurrentAmount != null) requestBody.newCurrentAmount = newCurrentAmount;
+      if (contractDateChanged) requestBody.newContractDate = contractDate || null;
       const nextEndedAt = lifecycle.terminatedAt || closing.completionDate || servicePeriod.next;
       if (nextEndedAt) requestBody.newEndedAt = nextEndedAt;
       if (nextServiceCategory.nextType.trim()) requestBody.newServiceType = nextServiceCategory.nextType.trim();
@@ -409,7 +415,7 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
         <div className="px-5 pt-3 grid grid-cols-3 gap-2 text-xs">
           <label className="grid gap-1">
             <span className="font-bold cd-text-faint">계약일</span>
-            <input type="date" disabled value={props.contractDate ?? ""} className="cd-input disabled:opacity-60" />
+            <input type="date" value={contractDate} onChange={(e) => setContractDate(e.target.value)} className="cd-input" />
           </label>
           <label className="grid gap-1">
             <span className="font-bold cd-text-faint">입력일</span>

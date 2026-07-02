@@ -220,9 +220,11 @@ resource "aws_ecs_service" "next" {
   desired_count   = 1
   launch_type     = "FARGATE"
 
+  # NAT Gateway 제거를 위해 public subnet + public IP 로 배치.
+  # 아웃바운드는 IGW 직결. 인바운드는 ecs SG 가 ALB(3000)/self(8001)만 허용해 안전.
   network_configuration {
-    assign_public_ip = false
-    subnets          = aws_subnet.private[*].id
+    assign_public_ip = true
+    subnets          = aws_subnet.public[*].id
     security_groups  = [aws_security_group.ecs.id]
   }
 

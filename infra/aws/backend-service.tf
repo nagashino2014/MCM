@@ -38,9 +38,10 @@ resource "aws_ecs_service" "backend" {
   desired_count   = 1
   launch_type     = "FARGATE"
 
+  # NAT Gateway 제거를 위해 public subnet + public IP 로 배치(next 와 동일).
   network_configuration {
-    assign_public_ip = false
-    subnets          = aws_subnet.private[*].id
+    assign_public_ip = true
+    subnets          = aws_subnet.public[*].id
     security_groups  = [aws_security_group.ecs.id]
   }
 

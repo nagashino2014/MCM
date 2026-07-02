@@ -58,9 +58,12 @@ resource "aws_security_group" "bastion" {
 resource "aws_instance" "bastion" {
   ami                    = data.aws_ami.al2023.id
   instance_type          = "t3.micro"
-  subnet_id              = aws_subnet.private[0].id
-  vpc_security_group_ids = [aws_security_group.bastion.id]
-  iam_instance_profile   = aws_iam_instance_profile.bastion.name
+  # NAT 제거에 따라 public subnet 배치 + public IP 로 SSM 아웃바운드 확보.
+  # bastion SG 는 인바운드 규칙이 없어(egress only) public IP 가 붙어도 외부 접근 불가.
+  subnet_id                   = aws_subnet.public[0].id
+  associate_public_ip_address = true
+  vpc_security_group_ids      = [aws_security_group.bastion.id]
+  iam_instance_profile        = aws_iam_instance_profile.bastion.name
 
   user_data = <<-EOF
     #!/bin/bash

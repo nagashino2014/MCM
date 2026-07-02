@@ -52,24 +52,13 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
-resource "aws_eip" "nat" {
-  domain = "vpc"
-  tags   = merge(local.tags, { Name = "${local.name}-nat" })
-}
-
-resource "aws_nat_gateway" "main" {
-  allocation_id = aws_eip.nat.id
-  subnet_id     = aws_subnet.public[0].id
-  tags          = merge(local.tags, { Name = "${local.name}-nat" })
-  depends_on    = [aws_internet_gateway.main]
-}
+# NAT Gateway/EIP 는 비용 절감을 위해 제거됨(월 ~$49).
+# ECS 태스크·bastion 은 public subnet + public IP 로 IGW 직결 아웃바운드를 쓴다.
+# private subnet 에는 RDS 만 남고, RDS 는 아웃바운드가 필요 없어 default route 불필요.
 
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main.id
-  }
+  # 인터넷 아웃바운드 경로 없음(로컬 라우트만). RDS 전용.
   tags = merge(local.tags, { Name = "${local.name}-private" })
 }
 
@@ -213,8 +202,12 @@ resource "aws_rds_cluster" "main" {
   storage_encrypted      = true
   skip_final_snapshot    = false
   serverlessv2_scaling_configuration {
-    min_capacity = 0.5
-    max_capacity = 4
+    # min 0 ACU = auto-pause. 커넥션이 없으면(=ECS 내려간 유휴 시간) 자동 일시정지되어
+    # ACU 컴퓨트 과금이 0 이 된다. stop-db-cluster 의 7일 자동재시작 제약이 없다.
+    # 커넥션이 다시 들어오면 수 초 내 자동 재개.
+    min_capacity             = 0
+    max_capacity             = 4
+    seconds_until_auto_pause = 300
   }
   tags                   = local.tags
 }

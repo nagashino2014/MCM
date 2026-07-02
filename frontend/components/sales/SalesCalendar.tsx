@@ -114,16 +114,16 @@ export function SalesCalendar({
     <div className="flex gap-3 flex-col lg:flex-row mb-4">
       {/* 캘린더 */}
       <div className="cd-card-bg rounded-2xl border cd-border-c p-3 flex-1 min-w-0">
-        <div className="flex items-center justify-center gap-3 mb-2">
-          <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => moveMonth(-1)} title="이전 달"><ChevronLeft className="w-5 h-5" /></button>
-          <div className="flex items-center gap-1.5">
+        <div className="flex items-center justify-center gap-2 mb-3">
+          <button className="w-9 h-9 rounded-xl border cd-border-c cd-card-bg flex items-center justify-center cd-text-muted hover:text-[color:var(--cd-primary)] hover:border-[color:var(--cd-primary)] transition" onClick={() => moveMonth(-1)} title="이전 달"><ChevronLeft className="w-5 h-5" /></button>
+          <div className="flex items-center gap-2 rounded-xl border cd-border-c px-4 py-1.5">
             <div className="flex flex-col">
               <button className="cd-text-faint hover:text-[color:var(--cd-primary)] leading-none" onClick={() => moveYear(1)} title="다음 해"><ChevronUp className="w-4 h-4" /></button>
               <button className="cd-text-faint hover:text-[color:var(--cd-primary)] leading-none" onClick={() => moveYear(-1)} title="이전 해"><ChevronDown className="w-4 h-4" /></button>
             </div>
             <h2 className="cd-text font-extrabold text-base tabular-nums">{cur.y}년 {cur.m + 1}월</h2>
           </div>
-          <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => moveMonth(1)} title="다음 달"><ChevronRight className="w-5 h-5" /></button>
+          <button className="w-9 h-9 rounded-xl border cd-border-c cd-card-bg flex items-center justify-center cd-text-muted hover:text-[color:var(--cd-primary)] hover:border-[color:var(--cd-primary)] transition" onClick={() => moveMonth(1)} title="다음 달"><ChevronRight className="w-5 h-5" /></button>
         </div>
         <div className="grid grid-cols-7">
           {WEEKDAYS.map((w, i) => (
@@ -181,7 +181,7 @@ export function SalesCalendar({
                   key={it.a.activityId}
                   type="button"
                   onClick={() => onEditActivity(it.a)}
-                  className="absolute rounded text-[10px] px-1 truncate text-left font-medium"
+                  className="absolute rounded-md text-[11px] px-1.5 truncate text-left font-semibold"
                   style={{
                     left: `calc(${colStart} / 7 * 100% + 2px)`,
                     width: `calc(${colEnd - colStart + 1} / 7 * 100% - 4px)`,
@@ -203,7 +203,7 @@ export function SalesCalendar({
       {/* 우측 일정 목록 — 태그 구획 */}
       <div className="cd-card-bg rounded-2xl border cd-border-c p-3 w-full lg:w-[300px] shrink-0">
         <h3 className="cd-text font-extrabold text-sm mb-2">일정 목록</h3>
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2.5">
           {monthList.map((it) => {
             const color = it.a.color ?? ACTIVITY_TYPE_META[it.a.activityType].color;
             const dLabel = it.startIso.slice(5).replace("-", ".") + (it.endIso !== it.startIso ? ` ~ ${it.endIso.slice(5).replace("-", ".")}` : "");
@@ -214,11 +214,12 @@ export function SalesCalendar({
             const bidDeadline = isBid && it.a.endedAt ? it.a.endedAt.slice(11, 16) : null;
             return (
               <button key={it.a.activityId} type="button" onClick={() => onEditActivity(it.a)}
-                className="flex items-center gap-3 w-full text-left rounded-xl border cd-border-c p-2.5 cd-row-hover">
-                <span className="w-6 h-2.5 rounded-full shrink-0" style={{ background: color }} />
-                <span className="cd-text-muted text-[11px] shrink-0 w-[92px] tabular-nums">{dLabel}</span>
-                <div className="min-w-0">
-                  <div className="cd-text text-xs font-bold">{isResult ? resultLabel : SALES_ACTIVITY_TYPE_LABELS[it.a.activityType]}</div>
+                className="flex items-center gap-3 w-full text-left rounded-xl border cd-border-c p-3 cd-row-hover"
+                style={{ boxShadow: "var(--cd-shadow)" }}>
+                <span className="w-8 h-3 rounded-full shrink-0" style={{ background: color }} />
+                <span className="cd-text-muted text-xs font-bold shrink-0 tabular-nums">{dLabel}</span>
+                <div className="flex-1 min-w-0 text-right">
+                  <div className="cd-text text-sm font-bold truncate">{isResult ? resultLabel : SALES_ACTIVITY_TYPE_LABELS[it.a.activityType]}</div>
                   {attendeeNames && <div className="cd-text-faint text-[11px] truncate">{ACTOR_SHORT[it.a.activityType] ?? "참석"}: {attendeeNames}</div>}
                   {bidDeadline && <div className="cd-text-faint text-[11px]">투찰 마감 {bidDeadline}</div>}
                 </div>

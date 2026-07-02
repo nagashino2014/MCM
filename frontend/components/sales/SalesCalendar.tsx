@@ -1,110 +1,221 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import type { SalesActivity } from "@/lib/sales/types";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from "lucide-react";
+import { ACTIVITY_TYPE_META, SALES_ACTIVITY_TYPE_LABELS, type SalesActivity } from "@/lib/sales/types";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
+const LANE_H = 20; // 바 1개 높이(px)
+const MAX_LANES = 3;
 
-function dateKey(a: SalesActivity): string | null {
-  const d = a.occurredAt ?? a.scheduledAt;
-  return d ? d.slice(0, 10) : null;
+function ymd(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function dayNum(iso: string): number {
+  const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
+  return Math.floor(Date.UTC(y, m - 1, d) / 86400000);
 }
 
-/** 월 그리드 + 날짜칸 활동 마커. 셀 클릭 시 해당 날짜로 예정 활동 추가. */
+interface ActSpan {
+  a: SalesActivity;
+  startIso: string;
+  endIso: string;
+  s: number;
+  e: number;
+}
+
+/** 영업 스케쥴 월 캘린더 — 색상 바(당일/복수일·겹침 최대 3) + 우측 일정 목록. */
 export function SalesCalendar({
   activities,
   canEdit,
   onPickDate,
+  onEditActivity,
 }: {
   activities: SalesActivity[];
   canEdit: boolean;
   onPickDate: (isoDate: string) => void;
+  onEditActivity: (activity: SalesActivity) => void;
 }) {
   const now = new Date();
-  const [cursor, setCursor] = useState({ y: now.getFullYear(), m: now.getMonth() });
+  const [cur, setCur] = useState({ y: now.getFullYear(), m: now.getMonth() });
 
-  const byDate = useMemo(() => {
-    const map = new Map<string, SalesActivity[]>();
-    for (const a of activities) {
-      const k = dateKey(a);
-      if (!k) continue;
-      const list = map.get(k) ?? [];
-      list.push(a);
-      map.set(k, list);
-    }
-    return map;
+  const spans = useMemo<ActSpan[]>(() => {
+    return activities
+      .filter((a) => a.scheduledAt || a.occurredAt)
+      .map((a) => {
+        const startIso = (a.scheduledAt ?? a.occurredAt ?? a.createdAt).slice(0, 10);
+        const endIso = (a.endedAt ?? a.scheduledAt ?? a.occurredAt ?? a.createdAt).slice(0, 10);
+        return { a, startIso, endIso, s: dayNum(startIso), e: Math.max(dayNum(endIso), dayNum(startIso)) };
+      })
+      .sort((x, y) => (x.a.createdAt < y.a.createdAt ? -1 : 1)); // 입력순
   }, [activities]);
 
-  const cells = useMemo(() => {
-    const first = new Date(cursor.y, cursor.m, 1);
-    const startDow = first.getDay();
-    const daysInMonth = new Date(cursor.y, cursor.m + 1, 0).getDate();
-    const out: Array<{ iso: string; day: number } | null> = [];
-    for (let i = 0; i < startDow; i++) out.push(null);
-    for (let d = 1; d <= daysInMonth; d++) {
-      const iso = `${cursor.y}-${String(cursor.m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-      out.push({ iso, day: d });
+  // lane 배정(월 전역, 최대 3). 초과는 -1(overflow).
+  const laneOf = useMemo(() => {
+    const lanes: Array<Array<{ s: number; e: number }>> = [[], [], []];
+    const map = new Map<string, number>();
+    for (const it of spans) {
+      let placed = -1;
+      for (let l = 0; l < MAX_LANES; l++) {
+        if (lanes[l].every((iv) => it.e < iv.s || it.s > iv.e)) {
+          lanes[l].push({ s: it.s, e: it.e });
+          placed = l;
+          break;
+        }
+      }
+      map.set(it.a.activityId, placed);
     }
-    while (out.length % 7 !== 0) out.push(null);
+    return map;
+  }, [spans]);
+
+  const weeks = useMemo(() => {
+    const first = new Date(cur.y, cur.m, 1);
+    const start = new Date(cur.y, cur.m, 1 - first.getDay());
+    const out: Date[][] = [];
+    const cursor = new Date(start);
+    for (let w = 0; w < 6; w++) {
+      const row: Date[] = [];
+      for (let d = 0; d < 7; d++) {
+        row.push(new Date(cursor));
+        cursor.setDate(cursor.getDate() + 1);
+      }
+      out.push(row);
+    }
     return out;
-  }, [cursor]);
+  }, [cur]);
 
-  const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const monthList = useMemo(() => {
+    const mStart = dayNum(`${cur.y}-${String(cur.m + 1).padStart(2, "0")}-01`);
+    const mEnd = dayNum(ymd(new Date(cur.y, cur.m + 1, 0)));
+    return spans.filter((it) => !(it.e < mStart || it.s > mEnd)).sort((x, y) => x.s - y.s);
+  }, [spans, cur]);
 
-  const move = (delta: number) => {
-    setCursor((c) => {
+  const moveMonth = (delta: number) =>
+    setCur((c) => {
       const m = c.m + delta;
       return { y: c.y + Math.floor(m / 12), m: ((m % 12) + 12) % 12 };
     });
-  };
+  const moveYear = (delta: number) => setCur((c) => ({ ...c, y: c.y + delta }));
+
+  const todayIso = ymd(now);
+  const cellH = 28 + MAX_LANES * LANE_H + 8;
 
   return (
-    <div className="cd-card-bg rounded-xl border cd-border-c p-3 mb-4">
-      <div className="flex items-center justify-between mb-2">
-        <h2 className="cd-text font-extrabold text-sm">{cursor.y}년 {cursor.m + 1}월</h2>
-        <div className="flex items-center gap-1">
-          <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => move(-1)}><ChevronLeft className="w-4 h-4" /></button>
-          <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => setCursor({ y: now.getFullYear(), m: now.getMonth() })}>오늘</button>
-          <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => move(1)}><ChevronRight className="w-4 h-4" /></button>
+    <div className="flex gap-3 flex-col lg:flex-row mb-4">
+      {/* 캘린더 */}
+      <div className="cd-card-bg rounded-2xl border cd-border-c p-3 flex-1 min-w-0">
+        <div className="flex items-center justify-center gap-3 mb-2">
+          <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => moveMonth(-1)} title="이전 달"><ChevronLeft className="w-5 h-5" /></button>
+          <div className="flex items-center gap-1.5">
+            <div className="flex flex-col">
+              <button className="cd-text-faint hover:text-[color:var(--cd-primary)] leading-none" onClick={() => moveYear(1)} title="다음 해"><ChevronUp className="w-4 h-4" /></button>
+              <button className="cd-text-faint hover:text-[color:var(--cd-primary)] leading-none" onClick={() => moveYear(-1)} title="이전 해"><ChevronDown className="w-4 h-4" /></button>
+            </div>
+            <h2 className="cd-text font-extrabold text-base tabular-nums">{cur.y}년 {cur.m + 1}월</h2>
+          </div>
+          <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => moveMonth(1)} title="다음 달"><ChevronRight className="w-5 h-5" /></button>
         </div>
-      </div>
-      <div className="grid grid-cols-7 gap-1">
-        {WEEKDAYS.map((w) => (
-          <div key={w} className="cd-text-faint text-[11px] font-bold text-center py-1">{w}</div>
-        ))}
-        {cells.map((cell, i) => {
-          if (!cell) return <div key={i} />;
-          const list = byDate.get(cell.iso) ?? [];
-          const isToday = cell.iso === todayIso;
+        <div className="grid grid-cols-7">
+          {WEEKDAYS.map((w, i) => (
+            <div key={w} className="text-[11px] font-bold text-center py-1" style={{ color: i === 0 ? "#EF4444" : i === 6 ? "#3B82F6" : "var(--cd-faint)" }}>{w}</div>
+          ))}
+        </div>
+        {weeks.map((week, wi) => {
+          const weekStart = dayNum(ymd(week[0]));
+          const weekEnd = weekStart + 6;
+          const segs = spans
+            .filter((it) => (laneOf.get(it.a.activityId) ?? -1) >= 0 && !(it.e < weekStart || it.s > weekEnd))
+            .map((it) => ({
+              it,
+              colStart: Math.max(it.s, weekStart) - weekStart,
+              colEnd: Math.min(it.e, weekEnd) - weekStart,
+              lane: laneOf.get(it.a.activityId) ?? 0,
+            }));
+          const overflow = new Array(7).fill(0);
+          for (const it of spans) {
+            if ((laneOf.get(it.a.activityId) ?? -1) !== -1) continue;
+            for (let c = 0; c < 7; c++) {
+              const dn = weekStart + c;
+              if (dn >= it.s && dn <= it.e) overflow[c]++;
+            }
+          }
           return (
-            <button
-              key={i}
-              type="button"
-              disabled={!canEdit}
-              onClick={() => canEdit && onPickDate(cell.iso)}
-              className={`rounded-lg border min-h-[58px] p-1 text-left transition ${isToday ? "cd-tint-primary" : "cd-border-c"} ${canEdit ? "cd-listitem" : ""}`}
-              style={{ borderColor: isToday ? "var(--cd-primary)" : "var(--cd-border)" }}
-            >
-              <span className={`text-[11px] font-bold ${isToday ? "cd-text-primary" : "cd-text-muted"}`}>{cell.day}</span>
-              <div className="flex flex-col gap-0.5 mt-0.5">
-                {list.slice(0, 2).map((a) => (
-                  <span
-                    key={a.activityId}
-                    className="text-[9px] leading-tight rounded px-1 truncate"
+            <div key={wi} className="relative grid grid-cols-7" style={{ minHeight: cellH }}>
+              {week.map((day, di) => {
+                const iso = ymd(day);
+                const inMonth = day.getMonth() === cur.m;
+                const dow = day.getDay();
+                return (
+                  <button
+                    key={di}
+                    type="button"
+                    disabled={!canEdit}
+                    onClick={() => canEdit && onPickDate(iso)}
+                    className="border text-left p-1 flex flex-col"
                     style={{
-                      background: a.status === "planned" ? "var(--cd-primary-soft)" : "var(--cd-success-soft)",
-                      color: a.status === "planned" ? "var(--cd-primary)" : "var(--cd-success)",
+                      borderColor: "var(--cd-border)",
+                      background: iso === todayIso ? "var(--cd-primary-soft)" : "var(--cd-card)",
+                      opacity: inMonth ? 1 : 0.4,
                     }}
                   >
-                    {a.summary || a.activityType}
-                  </span>
-                ))}
-                {list.length > 2 && <span className="cd-text-faint text-[9px]">+{list.length - 2}</span>}
-              </div>
-            </button>
+                    <span className="text-[11px] font-bold" style={{ color: dow === 0 ? "#EF4444" : dow === 6 ? "#3B82F6" : "var(--cd-muted)" }}>
+                      {day.getDate()}
+                    </span>
+                    {overflow[di] > 0 && <span className="cd-text-faint text-[9px] mt-auto">+{overflow[di]}</span>}
+                  </button>
+                );
+              })}
+              {segs.map(({ it, colStart, colEnd, lane }) => (
+                <button
+                  key={it.a.activityId}
+                  type="button"
+                  onClick={() => onEditActivity(it.a)}
+                  className="absolute rounded text-[10px] px-1 truncate text-left font-medium"
+                  style={{
+                    left: `calc(${colStart} / 7 * 100% + 2px)`,
+                    width: `calc(${colEnd - colStart + 1} / 7 * 100% - 4px)`,
+                    top: 26 + lane * LANE_H,
+                    height: LANE_H - 3,
+                    background: it.a.color ?? ACTIVITY_TYPE_META[it.a.activityType].color,
+                    color: "#1f2937",
+                  }}
+                  title={SALES_ACTIVITY_TYPE_LABELS[it.a.activityType]}
+                >
+                  {SALES_ACTIVITY_TYPE_LABELS[it.a.activityType]}
+                </button>
+              ))}
+            </div>
           );
         })}
+      </div>
+
+      {/* 우측 일정 목록 — 태그 구획 */}
+      <div className="cd-card-bg rounded-2xl border cd-border-c p-3 w-full lg:w-[340px] shrink-0">
+        <h3 className="cd-text font-extrabold text-sm mb-2">일정 목록</h3>
+        <div className="flex flex-col gap-2">
+          {monthList.map((it) => {
+            const color = it.a.color ?? ACTIVITY_TYPE_META[it.a.activityType].color;
+            const dLabel = it.startIso.slice(5).replace("-", ".") + (it.endIso !== it.startIso ? ` ~ ${it.endIso.slice(5).replace("-", ".")}` : "");
+            const attendeeNames = (it.a.assignees ?? []).filter((a) => a.roleKind === "attendee").map((a) => a.employeeName).filter(Boolean).join(", ");
+            const isResult = it.a.activityType === "result";
+            const isBid = it.a.activityType === "bid";
+            const resultLabel = it.startIso >= todayIso ? "입찰 결과 발표 예정일" : "입찰 결과 발표일";
+            const bidDeadline = isBid && it.a.endedAt ? it.a.endedAt.slice(11, 16) : null;
+            return (
+              <button key={it.a.activityId} type="button" onClick={() => onEditActivity(it.a)}
+                className="flex items-center gap-3 w-full text-left rounded-xl border cd-border-c p-2.5 cd-row-hover">
+                <span className="w-6 h-2.5 rounded-full shrink-0" style={{ background: color }} />
+                <span className="cd-text-muted text-[11px] shrink-0 w-[92px] tabular-nums">{dLabel}</span>
+                <div className="min-w-0">
+                  <div className="cd-text text-xs font-bold">{isResult ? resultLabel : SALES_ACTIVITY_TYPE_LABELS[it.a.activityType]}</div>
+                  {attendeeNames && <div className="cd-text-faint text-[11px] truncate">참석: {attendeeNames}</div>}
+                  {bidDeadline && <div className="cd-text-faint text-[11px]">투찰 마감 {bidDeadline}</div>}
+                </div>
+              </button>
+            );
+          })}
+          {monthList.length === 0 && <div className="cd-text-faint text-xs py-2">이 달 일정이 없습니다.</div>}
+        </div>
       </div>
     </div>
   );

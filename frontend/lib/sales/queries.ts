@@ -1,12 +1,17 @@
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import {
-  SALES_ACTIVITY_TYPE_LABELS,
+  ACTIVITY_TYPE_META,
+  type ActivityAssigneeRole,
+  type ActivityBid,
+  type ActivityQuote,
   type SalesActivity,
+  type SalesActivityAssignee,
   type SalesActivityContact,
   type SalesActivityFilter,
   type SalesActivityInput,
   type SalesActivityType,
+  type SalesBidResult,
   type SalesProject,
   type SalesProjectFilter,
   type SalesProjectInput,
@@ -14,6 +19,19 @@ import {
   type SalesProjectMember,
   type SalesEmployeeOption,
 } from "./types";
+
+function jsonArray<T>(v: unknown): T[] {
+  if (Array.isArray(v)) return v as T[];
+  if (typeof v === "string" && v.trim()) {
+    try {
+      const parsed = JSON.parse(v);
+      return Array.isArray(parsed) ? (parsed as T[]) : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
 
 function id(prefix: string): string {
   return `${prefix}_${crypto.randomBytes(8).toString("hex")}`;
@@ -227,14 +245,20 @@ function mapActivity(row: Record<string, unknown>): SalesActivity {
   return {
     activityId: String(row.activity_id ?? ""),
     projectId: String(row.project_id ?? ""),
-    activityType: (String(row.activity_type ?? "other") as SalesActivityType),
+    activityType: (String(row.activity_type ?? "visit") as SalesActivityType),
     status: (String(row.status ?? "done") as SalesActivity["status"]),
     scheduledAt: text(row.scheduled_at),
+    endedAt: text(row.ended_at),
     occurredAt: text(row.occurred_at),
     place: text(row.place),
     summary: text(row.summary),
+    progressNote: text(row.progress_note),
     quoteAmount: num(row.quote_amount),
     bidAmount: num(row.bid_amount),
+    quotes: jsonArray<ActivityQuote>(row.quotes),
+    bids: jsonArray<ActivityBid>(row.bids),
+    bidResult: (text(row.bid_result) as SalesBidResult | null),
+    color: text(row.color),
     authorEmployeeId: text(row.author_employee_id),
     authorName: text(row.author_name),
     createdAt: String(row.created_at ?? ""),
@@ -256,8 +280,9 @@ export async function listActivities(projectId: string, filter: SalesActivityFil
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT a.activity_id, a.project_id, a.activity_type, a.status, a.scheduled_at, a.occurred_at,
-              a.place, a.summary, a.quote_amount, a.bid_amount, a.author_employee_id,
+      `SELECT a.activity_id, a.project_id, a.activity_type, a.status, a.scheduled_at, a.ended_at, a.occurred_at,
+              a.place, a.summary, a.progress_note, a.quote_amount, a.bid_amount, a.quotes, a.bids,
+              a.bid_result, a.color, a.author_employee_id,
               e.name AS author_name, a.created_at, a.updated_at
          FROM sales_activities a
          LEFT JOIN employee_profiles e ON e.employee_id = a.author_employee_id
@@ -267,7 +292,7 @@ export async function listActivities(projectId: string, filter: SalesActivityFil
     )
   ).map(mapActivity);
 
-  // 만난 사람(연락처 마스터) 일괄 로드 후 활동별로 묶는다(N+1 회피).
+  // 만난 사람·담당인력 일괄 로드 후 활동별로 묶는다(N+1 회피).
   if (rows.length) {
     const ids = rows.map((r) => r.activityId);
     const placeholders = ids.map((_, i) => `$${i + 1}`).join(",");
@@ -280,14 +305,37 @@ export async function listActivities(projectId: string, filter: SalesActivityFil
         ids
       )
     );
-    const byActivity = new Map<string, SalesActivityContact[]>();
+    const byContact = new Map<string, SalesActivityContact[]>();
     for (const c of contactRows) {
       const aid = String(c.activity_id ?? "");
-      const list = byActivity.get(aid) ?? [];
+      const list = byContact.get(aid) ?? [];
       list.push({ personId: Number(c.person_id ?? 0), personName: text(c.person_name), title: text(c.title) });
-      byActivity.set(aid, list);
+      byContact.set(aid, list);
     }
-    for (const r of rows) r.contacts = byActivity.get(r.activityId) ?? [];
+    const assigneeRows = rowsToObjects(
+      await db.exec(
+        `SELECT saa.activity_id, saa.employee_id, saa.role_kind, e.name AS employee_name
+           FROM sales_activity_assignees saa
+           LEFT JOIN employee_profiles e ON e.employee_id = saa.employee_id
+          WHERE saa.activity_id IN (${placeholders})`,
+        ids
+      )
+    );
+    const byAssignee = new Map<string, SalesActivityAssignee[]>();
+    for (const r of assigneeRows) {
+      const aid = String(r.activity_id ?? "");
+      const list = byAssignee.get(aid) ?? [];
+      list.push({
+        employeeId: String(r.employee_id ?? ""),
+        employeeName: text(r.employee_name),
+        roleKind: String(r.role_kind ?? "lead") as SalesActivityAssignee["roleKind"],
+      });
+      byAssignee.set(aid, list);
+    }
+    for (const r of rows) {
+      r.contacts = byContact.get(r.activityId) ?? [];
+      r.assignees = byAssignee.get(r.activityId) ?? [];
+    }
   }
   return rows;
 }
@@ -302,26 +350,34 @@ export async function createActivity(
   await withDbWrite(async (db) => {
     await db.run(
       `INSERT INTO sales_activities
-         (activity_id, project_id, activity_type, status, scheduled_at, occurred_at, place, summary,
-          quote_amount, bid_amount, author_employee_id, created_by, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$13)`,
+         (activity_id, project_id, activity_type, status, scheduled_at, ended_at, occurred_at, place, summary,
+          progress_note, quote_amount, bid_amount, quotes, bids, bid_result, color,
+          author_employee_id, created_by, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14::jsonb,$15,$16,$17,$18,$19,$19)`,
       [
         activityId,
         projectId,
         input.activityType,
         input.status ?? "done",
         input.scheduledAt ?? null,
+        input.endedAt ?? null,
         input.occurredAt ?? (input.status === "planned" ? null : now),
         text(input.place),
         text(input.summary),
+        text(input.progressNote),
         input.quoteAmount ?? null,
         input.bidAmount ?? null,
+        input.quotes ? JSON.stringify(input.quotes) : null,
+        input.bids ? JSON.stringify(input.bids) : null,
+        input.bidResult ?? null,
+        input.color ?? null,
         input.authorEmployeeId ?? null,
         userId,
         now,
       ]
     );
     await replaceActivityContacts(db, activityId, input.contactPersonIds ?? []);
+    await replaceActivityAssignees(db, activityId, input.assignees ?? [], now);
     await db.run("UPDATE sales_projects SET updated_at = $2 WHERE project_id = $1", [projectId, now]);
   });
   return activityId;
@@ -332,25 +388,36 @@ export async function updateActivity(activityId: string, input: SalesActivityInp
   await withDbWrite(async (db) => {
     await db.run(
       `UPDATE sales_activities SET
-         activity_type = $2, status = $3, scheduled_at = $4, occurred_at = $5, place = $6,
-         summary = $7, quote_amount = $8, bid_amount = $9, author_employee_id = $10, updated_at = $11
+         activity_type = $2, status = $3, scheduled_at = $4, ended_at = $5, occurred_at = $6, place = $7,
+         summary = $8, progress_note = $9, quote_amount = $10, bid_amount = $11,
+         quotes = $12::jsonb, bids = $13::jsonb, bid_result = $14, color = $15,
+         author_employee_id = $16, updated_at = $17
        WHERE activity_id = $1`,
       [
         activityId,
         input.activityType,
         input.status ?? "done",
         input.scheduledAt ?? null,
+        input.endedAt ?? null,
         input.occurredAt ?? null,
         text(input.place),
         text(input.summary),
+        text(input.progressNote),
         input.quoteAmount ?? null,
         input.bidAmount ?? null,
+        input.quotes ? JSON.stringify(input.quotes) : null,
+        input.bids ? JSON.stringify(input.bids) : null,
+        input.bidResult ?? null,
+        input.color ?? null,
         input.authorEmployeeId ?? null,
         now,
       ]
     );
     if (input.contactPersonIds) {
       await replaceActivityContacts(db, activityId, input.contactPersonIds);
+    }
+    if (input.assignees) {
+      await replaceActivityAssignees(db, activityId, input.assignees, now);
     }
   });
 }
@@ -380,13 +447,35 @@ async function replaceActivityContacts(
   }
 }
 
+async function replaceActivityAssignees(
+  db: { run: (sql: string, params?: unknown[]) => Promise<unknown> },
+  activityId: string,
+  assignees: { employeeId: string; roleKind: ActivityAssigneeRole }[],
+  now: string
+): Promise<void> {
+  await db.run("DELETE FROM sales_activity_assignees WHERE activity_id = $1", [activityId]);
+  const seen = new Set<string>();
+  for (const a of assignees) {
+    const emp = (a.employeeId ?? "").trim();
+    if (!emp || !a.roleKind) continue;
+    const key = `${emp}::${a.roleKind}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    await db.run(
+      `INSERT INTO sales_activity_assignees (activity_id, employee_id, role_kind, created_at)
+       VALUES ($1,$2,$3,$4) ON CONFLICT (activity_id, employee_id, role_kind) DO NOTHING`,
+      [activityId, emp, a.roleKind, now]
+    );
+  }
+}
+
 // ── KPI(파생 집계) ───────────────────────────────────────────
 
 export async function computeProjectKpi(projectId: string): Promise<SalesProjectKpi> {
   const db = await getDb();
 
   const activityCounts = Object.fromEntries(
-    Object.keys(SALES_ACTIVITY_TYPE_LABELS).map((k) => [k, 0])
+    Object.keys(ACTIVITY_TYPE_META).map((k) => [k, 0])
   ) as Record<SalesActivityType, number>;
   const countRows = rowsToObjects(
     await db.exec(

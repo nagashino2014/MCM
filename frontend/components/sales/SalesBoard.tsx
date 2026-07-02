@@ -454,7 +454,7 @@ function CreateProjectModal({
 
   return (
     <div className="cd-modal-overlay cdash cd-fields-white" data-theme={theme} onClick={onClose}>
-      <div className="cd-modal cd-card-bg" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
+      <div className="cd-modal cd-card-bg w-full" style={{ maxWidth: 460, padding: "1.25rem", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <h3 className="cd-text text-lg font-extrabold">영업건 추가</h3>
           <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={onClose}>

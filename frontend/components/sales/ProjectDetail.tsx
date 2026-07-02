@@ -3,15 +3,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft, Building2, CalendarClock, CheckCircle2, CircleSlash, Phone, Plus,
-  Receipt, Sparkles, Trash2, UserPlus, Users, X,
+  ArrowLeft, Building2, CheckCircle2, Plus, Trash2, UserPlus, UserRound, Users, X,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
 import { SalesCalendar } from "./SalesCalendar";
+import { ScheduleModal } from "./ScheduleModal";
+import type { OrganizationSnapshot } from "@/components/admin/users/types";
 import "@/components/cdash/cdash.css";
 import {
+  ACTIVITY_TYPE_META,
   SALES_ACTIVITY_TYPE_LABELS,
   SALES_STAGE_LABELS,
   SALES_STAGE_ORDER,
@@ -24,8 +26,6 @@ import {
   type SalesProjectMember,
   type SalesStage,
 } from "@/lib/sales/types";
-
-const KPI_TYPES: SalesActivityType[] = ["telemarketing", "visit", "meeting", "quote", "bid"];
 
 interface FacilityPerson {
   id: number;
@@ -49,6 +49,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   const [editing, setEditing] = useState<SalesActivity | null>(null);
   const [adding, setAdding] = useState(false);
   const [employees, setEmployees] = useState<SalesEmployeeOption[]>([]);
+  const [snapshot, setSnapshot] = useState<OrganizationSnapshot | null>(null);
   const [people, setPeople] = useState<FacilityPerson[]>([]);
   const [memberOpen, setMemberOpen] = useState(false);
   const [addDate, setAddDate] = useState<string | null>(null);
@@ -90,11 +91,15 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
     reload();
   }, [reload]);
 
-  // 관계자 선택용 직원 목록(1회)
+  // 관계자 선택용 직원 목록 + 담당인력 조직도 스냅샷(1회)
   useEffect(() => {
     fetch("/api/sales/employees", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : { employees: [] }))
       .then((d) => setEmployees(Array.isArray(d.employees) ? d.employees : []))
+      .catch(() => {});
+    fetch("/api/sales/org", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setSnapshot(d && Array.isArray(d.departments) ? d : null))
       .catch(() => {});
   }, []);
 
@@ -168,80 +173,82 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
         </div>
       </div>
 
-      {/* KPI 스트립 — 파생 집계 */}
-      {kpi && (
-        <div className="flex gap-2 overflow-x-auto pb-1 mb-4">
-          {KPI_TYPES.map((t) => (
-            <KpiCard key={t} label={SALES_ACTIVITY_TYPE_LABELS[t]} value={kpi.activityCounts[t] ?? 0} icon={<Phone className="w-4 h-4" />} />
-          ))}
-          <KpiCard label="접촉 담당자" value={kpi.contactCount} icon={<Users className="w-4 h-4" />} />
-          <KpiCard label="수주" value={kpi.isWon ? "수주" : "-"} icon={<CheckCircle2 className="w-4 h-4" />} highlight={kpi.isWon} />
-          <KpiCard label="투자계획" value={kpi.hasInvestmentPlan ? "있음" : "—"} icon={<Sparkles className="w-4 h-4" />} muted={!kpi.hasInvestmentPlan} />
+      {/* 본문 2열 — 좌: 영업 스케쥴/사업장정보/진행상황, 우: 영업활동 이력/담당자 */}
+      <div className="flex flex-col lg:flex-row gap-3">
+        <div className="flex-1 min-w-0 flex flex-col gap-3">
+          <SalesCalendar
+            activities={activities}
+            canEdit={canEdit}
+            onPickDate={(iso) => { setEditing(null); setAddDate(iso); setAdding(true); }}
+            onEditActivity={(a) => { setAddDate(null); setEditing(a); }}
+          />
+          <PlaceholderCard title="사업장 정보" note="일반현황 · 시설현황 · 발주정보 · 과거이력 (추후 구현)" />
+          <PlaceholderCard title="영업활동 진행상황" note="진행 단계 · 활동 집계 · 투찰 정보 (추후 구현)" />
         </div>
-      )}
 
-      {/* 캘린더 — 예정/완료 활동 */}
-      <SalesCalendar
-        activities={activities}
-        canEdit={canEdit}
-        onPickDate={(iso) => { setEditing(null); setAddDate(iso); setAdding(true); }}
-      />
+        <div className="lg:w-[500px] shrink-0 flex flex-col gap-3">
+          {/* 영업활동 이력 */}
+          <div className="cd-card-bg rounded-2xl border cd-border-c p-3">
+            <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
+              <h2 className="cd-text font-extrabold text-sm">영업활동 이력</h2>
+              <div className="flex items-center gap-1.5">
+                <select className="cd-select cd-btn-sm" style={{ width: "auto" }} value={fYear} onChange={(e) => setFYear(e.target.value)}>
+                  <option value="">전체 연도</option>
+                  {years.map((y) => <option key={y} value={y}>{y}</option>)}
+                </select>
+                <select className="cd-select cd-btn-sm" style={{ width: "auto" }} value={fType} onChange={(e) => setFType(e.target.value as SalesActivityType | "")}>
+                  <option value="">전체 유형</option>
+                  {(Object.keys(SALES_ACTIVITY_TYPE_LABELS) as SalesActivityType[]).map((t) => (
+                    <option key={t} value={t}>{SALES_ACTIVITY_TYPE_LABELS[t]}</option>
+                  ))}
+                </select>
+                {canEdit && (
+                  <button className="cd-btn cd-btn-primary cd-btn-sm" onClick={() => { setEditing(null); setAddDate(null); setAdding(true); }}>
+                    <Plus className="w-4 h-4" /> 추가
+                  </button>
+                )}
+              </div>
+            </div>
+            <Timeline activities={activities} canEdit={canEdit} onEdit={setEditing} onReload={reload} />
+          </div>
 
-      {/* 영업 관계자 */}
-      <div className="cd-card-bg rounded-xl border cd-border-c p-3 mb-4">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="cd-text font-extrabold text-sm flex items-center gap-1">
-            <Users className="w-4 h-4" /> 영업 관계자
-          </h2>
-          {canEdit && (
-            <button className="cd-btn cd-btn-soft cd-btn-sm" onClick={() => setMemberOpen(true)}>
-              <UserPlus className="w-4 h-4" /> 관계자 관리
-            </button>
-          )}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {(project.members ?? []).map((m) => (
-            <span key={m.id} className="cd-pill cd-pill-outline">
-              {m.employeeName ?? m.employeeId} · {m.roleLabel}
-            </span>
-          ))}
-          {(project.members ?? []).length === 0 && (
-            <span className="cd-text-faint text-xs">등록된 관계자가 없습니다.</span>
-          )}
+          {/* 담당자 */}
+          <div className="cd-card-bg rounded-2xl border cd-border-c p-3">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="cd-text font-extrabold text-sm flex items-center gap-1"><Users className="w-4 h-4" /> 담당자</h2>
+              {canEdit && (
+                <button className="cd-btn cd-btn-soft cd-btn-sm" onClick={() => setMemberOpen(true)}>
+                  <UserPlus className="w-4 h-4" /> 관계자 관리
+                </button>
+              )}
+            </div>
+            <div className="cd-text-faint text-[11px] font-bold mb-1">프로젝트 담당자</div>
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {(project.members ?? []).map((m) => (
+                <span key={m.id} className="cd-pill cd-pill-outline">{m.employeeName ?? m.employeeId} · {m.roleLabel}</span>
+              ))}
+              {(project.members ?? []).length === 0 && <span className="cd-text-faint text-xs">등록된 관계자가 없습니다.</span>}
+            </div>
+            <div className="cd-text-faint text-[11px] font-bold mb-1">사업장 담당자</div>
+            <div className="flex flex-wrap gap-1.5">
+              {people.filter((p) => p.status === "active").map((p) => (
+                <span key={p.id} className="cd-pill cd-pill-idle">{p.personName}{p.title ? ` ${p.title}` : ""}</span>
+              ))}
+              {people.filter((p) => p.status === "active").length === 0 && <span className="cd-text-faint text-xs">등록된 담당자가 없습니다.</span>}
+            </div>
+          </div>
         </div>
       </div>
-
-      {/* 타임라인 헤더 + 필터 */}
-      <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
-        <h2 className="cd-text font-extrabold text-sm">활동 타임라인</h2>
-        <div className="flex items-center gap-2">
-          <select className="cd-select cd-btn-sm" style={{ width: "auto" }} value={fYear} onChange={(e) => setFYear(e.target.value)}>
-            <option value="">전체 연도</option>
-            {years.map((y) => <option key={y} value={y}>{y}</option>)}
-          </select>
-          <select className="cd-select cd-btn-sm" style={{ width: "auto" }} value={fType} onChange={(e) => setFType(e.target.value as SalesActivityType | "")}>
-            <option value="">전체 유형</option>
-            {(Object.keys(SALES_ACTIVITY_TYPE_LABELS) as SalesActivityType[]).map((t) => (
-              <option key={t} value={t}>{SALES_ACTIVITY_TYPE_LABELS[t]}</option>
-            ))}
-          </select>
-          {canEdit && (
-            <button className="cd-btn cd-btn-primary cd-btn-sm" onClick={() => setAdding(true)}>
-              <Plus className="w-4 h-4" /> 활동 추가
-            </button>
-          )}
-        </div>
-      </div>
-
-      <Timeline activities={activities} canEdit={canEdit} onEdit={setEditing} onReload={reload} />
 
       {(adding || editing) && (
-        <ActivityModal
+        <ScheduleModal
           theme={theme}
           projectId={projectId}
           activity={editing}
+          defaultDate={addDate}
           people={people}
-          defaultWhen={addDate}
+          snapshot={snapshot}
+          members={project.members ?? []}
           onClose={() => { setAdding(false); setEditing(null); setAddDate(null); }}
           onSaved={() => { setAdding(false); setEditing(null); setAddDate(null); reload(); }}
         />
@@ -261,15 +268,34 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   );
 }
 
-function KpiCard({ label, value, icon, highlight, muted }: {
-  label: string; value: string | number; icon: React.ReactNode; highlight?: boolean; muted?: boolean;
-}) {
+function PlaceholderCard({ title, note }: { title: string; note: string }) {
   return (
-    <div className={`shrink-0 rounded-xl border cd-border-c px-3 py-2 min-w-[88px] ${highlight ? "cd-tint-primary" : "cd-card-bg"}`}>
-      <div className={`flex items-center gap-1 text-[11px] font-bold ${muted ? "cd-text-faint" : "cd-text-muted"}`}>
-        {icon}{label}
-      </div>
-      <div className={`text-lg font-extrabold mt-0.5 ${highlight ? "cd-text-primary" : "cd-text"}`}>{value}</div>
+    <div className="cd-card-bg rounded-2xl border cd-border-c p-4">
+      <h3 className="cd-text font-extrabold text-sm mb-1">{title}</h3>
+      <p className="cd-text-faint text-xs">{note}</p>
+    </div>
+  );
+}
+
+function fmtTimelineWhen(a: SalesActivity): string {
+  const s = a.scheduledAt ?? a.occurredAt ?? a.createdAt;
+  if (!s) return "";
+  const sDate = `${s.slice(0, 10).replace(/-/g, ".")}.`;
+  const sTime = s.slice(11, 16);
+  const e = a.endedAt;
+  if (e && e.slice(0, 10) !== s.slice(0, 10)) {
+    return `${sDate} ~ ${e.slice(0, 10).replace(/-/g, ".")}.`;
+  }
+  const eTime = e ? e.slice(11, 16) : "";
+  if (!sTime) return sDate;
+  return `${sDate} ${sTime}${eTime ? ` ~ ${eTime}` : ""}`;
+}
+
+function TimelineRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex gap-3 text-[13px]">
+      <span className="cd-text-faint shrink-0 w-14">{label}</span>
+      <div className="min-w-0 flex-1">{children}</div>
     </div>
   );
 }
@@ -290,45 +316,59 @@ function Timeline({ activities, canEdit, onEdit, onReload }: {
   };
   return (
     <div className="relative pl-6">
-      <div className="absolute left-2 top-1 bottom-1 w-px" style={{ background: "var(--cd-border)" }} />
-      <div className="flex flex-col gap-3">
+      <div className="absolute left-[7px] top-2 bottom-2 w-0.5" style={{ background: "var(--cd-border)" }} />
+      <div className="flex flex-col gap-5">
         {activities.map((a) => {
-          const when = a.occurredAt ?? a.scheduledAt ?? a.createdAt;
-          const isPlanned = a.status === "planned";
-          const isCanceled = a.status === "canceled";
+          const meta = ACTIVITY_TYPE_META[a.activityType];
+          const color = a.color ?? meta.color;
+          const assignees = a.assignees ?? [];
           return (
-            <div key={a.activityId} className="relative">
+            <div key={a.activityId} className="relative group">
+              {/* 노드(이중원) */}
               <span
-                className="absolute -left-[18px] top-2 w-3 h-3 rounded-full border-2"
-                style={{
-                  background: isCanceled ? "var(--cd-faint)" : isPlanned ? "var(--cd-primary)" : "var(--cd-success)",
-                  borderColor: "var(--cd-card)",
-                }}
-              />
-              <div className="cd-card-bg rounded-xl border cd-border-c p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className={`cd-pill ${isPlanned ? "cd-pill-info" : isCanceled ? "cd-pill-outline" : "cd-pill-success"}`}>
-                      {SALES_ACTIVITY_TYPE_LABELS[a.activityType]}
-                    </span>
-                    {isPlanned && <span className="cd-text-primary text-[11px] font-bold flex items-center gap-1"><CalendarClock className="w-3 h-3" />예정</span>}
-                    {isCanceled && <span className="cd-text-faint text-[11px] flex items-center gap-1"><CircleSlash className="w-3 h-3" />취소</span>}
-                  </div>
-                  <span className="cd-text-faint text-xs">{when ? when.slice(0, 16).replace("T", " ") : ""}</span>
-                </div>
-                {a.summary && <p className="cd-text text-sm mt-2 whitespace-pre-wrap">{a.summary}</p>}
-                <div className="flex items-center gap-3 mt-2 flex-wrap">
-                  {a.place && <span className="cd-text-muted text-xs">📍 {a.place}</span>}
-                  {a.authorName && <span className="cd-text-faint text-xs">기록: {a.authorName}</span>}
-                  {a.quoteAmount != null && <span className="cd-text-muted text-xs flex items-center gap-1"><Receipt className="w-3 h-3" />견적 {a.quoteAmount.toLocaleString()}원</span>}
-                  {a.bidAmount != null && <span className="cd-text-muted text-xs">입찰 {a.bidAmount.toLocaleString()}원</span>}
-                </div>
+                className="absolute -left-6 top-0.5 w-4 h-4 rounded-full flex items-center justify-center"
+                style={{ background: `${color}55` }}
+              >
+                <span className="w-2 h-2 rounded-full" style={{ background: color }} />
+              </span>
+
+              {/* 제목 + 배지 */}
+              <div className="flex items-center gap-2">
+                <h3 className="cd-text font-extrabold text-sm">{meta.label}</h3>
+                <span
+                  className="text-[11px] font-bold rounded-full px-2 py-0.5"
+                  style={{ background: color, color: "#1f2937" }}
+                >
+                  {meta.short}
+                </span>
                 {canEdit && (
-                  <div className="flex justify-end gap-1 mt-2">
+                  <span className="ml-auto hidden group-hover:flex items-center gap-1">
                     <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => onEdit(a)}>수정</button>
                     <button className="cd-btn cd-btn-danger cd-btn-sm" onClick={() => del(a)}><Trash2 className="w-3.5 h-3.5" /></button>
-                  </div>
+                  </span>
                 )}
+              </div>
+              <div className="cd-text-faint text-xs mt-0.5 mb-2">{fmtTimelineWhen(a)}</div>
+
+              {/* 카드 */}
+              <div className="cd-card-bg rounded-xl border cd-border-c p-3 flex flex-col gap-2">
+                {assignees.length > 0 && (
+                  <TimelineRow label="담당자">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                      {assignees.map((as) => (
+                        <span key={`${as.employeeId}-${as.roleKind}`} className="inline-flex items-center gap-1.5">
+                          <span className="w-6 h-6 rounded-full flex items-center justify-center cd-surface-bg shrink-0">
+                            <UserRound className="w-3.5 h-3.5 cd-text-muted" />
+                          </span>
+                          <span className="cd-text text-[13px]">{as.employeeName ?? as.employeeId}</span>
+                        </span>
+                      ))}
+                    </div>
+                  </TimelineRow>
+                )}
+                {a.summary && <TimelineRow label="업무상세"><span className="cd-text whitespace-pre-wrap">{a.summary}</span></TimelineRow>}
+                {a.place && <TimelineRow label="장소"><span className="cd-text">{a.place}</span></TimelineRow>}
+                {a.progressNote && <TimelineRow label="경과"><span className="cd-text font-bold">{a.progressNote}</span></TimelineRow>}
               </div>
             </div>
           );
@@ -338,142 +378,7 @@ function Timeline({ activities, canEdit, onEdit, onReload }: {
   );
 }
 
-function ActivityModal({ theme, projectId, activity, people, defaultWhen, onClose, onSaved }: {
-  theme: string;
-  projectId: string;
-  activity: SalesActivity | null;
-  people: FacilityPerson[];
-  defaultWhen?: string | null;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const editingExisting = !!activity;
-  const [type, setType] = useState<SalesActivityType>(activity?.activityType ?? "meeting");
-  const [planned, setPlanned] = useState(activity ? activity.status === "planned" : !!defaultWhen);
-  const [when, setWhen] = useState(
-    activity ? (activity.occurredAt ?? activity.scheduledAt ?? "").slice(0, 16) : defaultWhen ? `${defaultWhen}T09:00` : ""
-  );
-  const [place, setPlace] = useState(activity?.place ?? "");
-  const [summary, setSummary] = useState(activity?.summary ?? "");
-  const [quote, setQuote] = useState(activity?.quoteAmount != null ? String(activity.quoteAmount) : "");
-  const [bid, setBid] = useState(activity?.bidAmount != null ? String(activity.bidAmount) : "");
-  const [selectedPersons, setSelectedPersons] = useState<number[]>(activity?.contacts?.map((c) => c.personId) ?? []);
-  const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  const submit = async () => {
-    setSaving(true);
-    setErr(null);
-    const body: SalesActivityInput = {
-      activityType: type,
-      status: planned ? "planned" : "done",
-      scheduledAt: planned ? (when || null) : null,
-      occurredAt: planned ? null : (when || null),
-      place: place.trim() || null,
-      summary: summary.trim() || null,
-      quoteAmount: quote ? Number(quote.replace(/[^0-9]/g, "")) : null,
-      bidAmount: bid ? Number(bid.replace(/[^0-9]/g, "")) : null,
-      contactPersonIds: selectedPersons,
-    };
-    try {
-      const url = editingExisting
-        ? `/api/sales/activities/${activity!.activityId}`
-        : `/api/sales/projects/${projectId}/activities`;
-      const res = await fetch(url, {
-        method: editingExisting ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error ?? `HTTP ${res.status}`);
-      onSaved();
-    } catch (e) {
-      setErr((e as Error).message);
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="cd-modal-overlay cdash cd-fields-white" data-theme={theme} onClick={onClose}>
-      <div className="cd-modal cd-card-bg" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="cd-text text-lg font-extrabold">{editingExisting ? "활동 수정" : "활동 추가"}</h3>
-          <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={onClose}><X className="w-4 h-4" /></button>
-        </div>
-
-        {err && <div className="cd-error-bg cd-error-text rounded-lg px-3 py-2 text-xs mb-3">{err}</div>}
-
-        <div className="grid grid-cols-2 gap-3 mb-3">
-          <div>
-            <label className="cd-label">유형</label>
-            <select className="cd-select" value={type} onChange={(e) => setType(e.target.value as SalesActivityType)}>
-              {(Object.keys(SALES_ACTIVITY_TYPE_LABELS) as SalesActivityType[]).map((t) => (
-                <option key={t} value={t}>{SALES_ACTIVITY_TYPE_LABELS[t]}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="cd-label">구분</label>
-            <select className="cd-select" value={planned ? "planned" : "done"} onChange={(e) => setPlanned(e.target.value === "planned")}>
-              <option value="done">완료</option>
-              <option value="planned">예정</option>
-            </select>
-          </div>
-        </div>
-
-        <label className="cd-label">{planned ? "예정 일시" : "발생 일시"}</label>
-        <input type="datetime-local" className="cd-input mb-3" value={when} onChange={(e) => setWhen(e.target.value)} />
-
-        <label className="cd-label">장소</label>
-        <input className="cd-input mb-3" value={place} onChange={(e) => setPlace(e.target.value)} placeholder="어디서 만났는지" />
-
-        <label className="cd-label">내용</label>
-        <textarea className="cd-textarea mb-3" rows={3} value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="무슨 얘기를 나눴는지" />
-
-        {people.filter((p) => p.status === "active").length > 0 && (
-          <div className="mb-3">
-            <label className="cd-label">만난 담당자</label>
-            <div className="flex flex-wrap gap-1.5">
-              {people.filter((p) => p.status === "active").map((p) => {
-                const on = selectedPersons.includes(p.id);
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    className="cd-chip cd-chip-sm"
-                    data-active={on}
-                    onClick={() => setSelectedPersons((prev) => (on ? prev.filter((x) => x !== p.id) : [...prev, p.id]))}
-                  >
-                    {p.personName}{p.title ? ` ${p.title}` : ""}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        <div className="grid grid-cols-2 gap-3 mb-4">
-          <div>
-            <label className="cd-label">견적가(원)</label>
-            <input className="cd-input" value={quote} onChange={(e) => setQuote(e.target.value)} inputMode="numeric" />
-          </div>
-          <div>
-            <label className="cd-label">입찰가(원)</label>
-            <input className="cd-input" value={bid} onChange={(e) => setBid(e.target.value)} inputMode="numeric" />
-          </div>
-        </div>
-
-        <div className="flex justify-end gap-2">
-          <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={onClose}>취소</button>
-          <button className="cd-btn cd-btn-primary cd-btn-sm" onClick={submit} disabled={saving}>
-            {saving ? "저장 중…" : "저장"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-const MEMBER_ROLES = ["담당", "임원", "부서장", "지원"];
+const MEMBER_ROLES = ["정", "부", "지원"];
 
 function MemberModal({ theme, projectId, employees, current, onClose, onSaved }: {
   theme: string;
@@ -495,7 +400,7 @@ function MemberModal({ theme, projectId, employees, current, onClose, onSaved }:
     setSel((prev) => {
       const next = new Map(prev);
       if (next.has(id)) next.delete(id);
-      else next.set(id, "담당");
+      else next.set(id, "정");
       return next;
     });
 
@@ -517,7 +422,7 @@ function MemberModal({ theme, projectId, employees, current, onClose, onSaved }:
 
   return (
     <div className="cd-modal-overlay cdash cd-fields-white" data-theme={theme} onClick={onClose}>
-      <div className="cd-modal cd-card-bg" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
+      <div className="cd-modal cd-card-bg w-full" style={{ maxWidth: 460, padding: "1.25rem", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <h3 className="cd-text text-lg font-extrabold">영업 관계자 관리</h3>
           <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={onClose}><X className="w-4 h-4" /></button>

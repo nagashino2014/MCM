@@ -22,13 +22,20 @@ export async function PUT(req: NextRequest, context: RouteContext) {
       activityType: body.activityType,
       status: (body.status as SalesActivityStatus) ?? "done",
       scheduledAt: body.scheduledAt ?? null,
+      endedAt: body.endedAt ?? null,
       occurredAt: body.occurredAt ?? null,
       place: body.place ?? null,
       summary: body.summary ?? null,
+      progressNote: body.progressNote ?? null,
       quoteAmount: body.quoteAmount ?? null,
       bidAmount: body.bidAmount ?? null,
+      quotes: Array.isArray(body.quotes) ? body.quotes : undefined,
+      bids: Array.isArray(body.bids) ? body.bids : undefined,
+      bidResult: body.bidResult ?? null,
+      color: body.color ?? null,
       authorEmployeeId: body.authorEmployeeId ?? null,
       contactPersonIds: Array.isArray(body.contactPersonIds) ? body.contactPersonIds : undefined,
+      assignees: Array.isArray(body.assignees) ? body.assignees : undefined,
     };
     await updateActivity(activityId, input);
     return NextResponse.json({ ok: true });

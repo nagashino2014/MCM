@@ -77,7 +77,7 @@ export async function listOrganizationSnapshot(): Promise<OrganizationSnapshot> 
       ),
       db.exec(
         `SELECT e.employee_id, e.user_id, e.employee_no, e.name, e.dept_id, e.position_id, p.position_name, p.rank_order,
-                e.email, e.status, e.hired_at, e.gender, (e.birth_date IS NOT NULL) AS has_birth_date
+                e.email, e.status, e.hired_at, e.gender, (e.birth_date IS NOT NULL) AS has_birth_date, e.photo_public_path
            FROM employee_profiles e
            LEFT JOIN positions p ON p.position_id = e.position_id
           ORDER BY p.rank_order DESC NULLS LAST, e.name ASC`
@@ -119,6 +119,7 @@ export async function listOrganizationSnapshot(): Promise<OrganizationSnapshot> 
       hiredAt: row.hired_at != null ? String(row.hired_at) : null,
       gender: row.gender != null ? (String(row.gender) as "male" | "female") : null,
       hasBirthDate: Boolean(row.has_birth_date),
+      photoPath: row.photo_public_path != null ? String(row.photo_public_path) : null,
     })),
   };
 }

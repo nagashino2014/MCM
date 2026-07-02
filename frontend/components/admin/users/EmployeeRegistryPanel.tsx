@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type React from "react";
 import { BriefcaseBusiness, FileUp, GraduationCap, History, Home, Plus, Save, Trash2, UserRoundCog, X } from "lucide-react";
@@ -448,6 +448,53 @@ export default function EmployeeRegistryPanel({
   );
 }
 
+function EmployeePhotoField({ employeeId }: { employeeId?: string }) {
+  const [ver, setVer] = useState(0);
+  const [uploading, setUploading] = useState(false);
+  const [hasPhoto, setHasPhoto] = useState(true);
+  const inputRef = useRef<HTMLInputElement>(null);
+  if (!employeeId) {
+    return (
+      <Field label="증명사진">
+        <span className="cd-text-faint text-xs">직원을 저장한 뒤 업로드할 수 있습니다.</span>
+      </Field>
+    );
+  }
+  const src = `/api/admin/employees/${employeeId}/photo?v=${ver}`;
+  const onFile = async (f: File) => {
+    setUploading(true);
+    const fd = new FormData();
+    fd.set("file", f);
+    const res = await fetch(`/api/admin/employees/${employeeId}/photo`, { method: "POST", body: fd });
+    setUploading(false);
+    if (res.ok) {
+      setHasPhoto(true);
+      setVer((v) => v + 1);
+    }
+  };
+  return (
+    <Field label="증명사진">
+      <div className="flex items-center gap-3">
+        <span className="w-16 h-16 rounded-lg overflow-hidden cd-surface-bg flex items-center justify-center shrink-0">
+          {hasPhoto ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={src} alt="" className="w-full h-full object-cover" onError={() => setHasPhoto(false)} />
+          ) : (
+            <UserRoundCog className="w-6 h-6 cd-text-faint" />
+          )}
+        </span>
+        <div>
+          <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); }} />
+          <button type="button" className="cd-btn cd-btn-soft cd-btn-sm" onClick={() => inputRef.current?.click()} disabled={uploading}>
+            {uploading ? "업로드 중…" : "사진 업로드"}
+          </button>
+          <p className="cd-text-faint text-[11px] mt-1">그룹웨어 메신저·영업 담당자 표시에 사용됩니다.</p>
+        </div>
+      </div>
+    </Field>
+  );
+}
+
 function BasicTab({
   employee,
   setEmployee,
@@ -461,6 +508,7 @@ function BasicTab({
 }) {
   return (
     <div className="grid md:grid-cols-3 gap-3">
+      <EmployeePhotoField employeeId={employee.employeeId} />
       <TextField label="성명" value={employee.name} onChange={(value) => setEmployee((prev) => ({ ...prev, name: value }))} />
       <Field label="직급">
         <select className="cd-select" value={employee.positionId ?? ""} onChange={(e) => setEmployee((prev) => ({ ...prev, positionId: e.target.value || null }))}>

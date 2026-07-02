@@ -71,6 +71,8 @@ export interface SalesProjectMember {
   projectId: string;
   employeeId: string;
   employeeName: string | null;
+  positionName: string | null;
+  photoPath: string | null;
   roleLabel: string;
   createdAt: string;
 }
@@ -106,6 +108,7 @@ export interface SalesActivityContact {
 export interface SalesActivityAssignee {
   employeeId: string;
   employeeName: string | null;
+  photoPath: string | null;
   roleKind: ActivityAssigneeRole;
 }
 

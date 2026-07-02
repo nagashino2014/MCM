@@ -37,8 +37,16 @@ const ROLE_TOGGLES: ActivityAssigneeRole[] = ["lead", "deputy", "bidding"];
 const CONTACT_TYPES: SalesActivityType[] = ["telemarketing", "email", "visit", "site_briefing", "quote"];
 // 장소 노출 일정명
 const PLACE_TYPES: SalesActivityType[] = ["visit", "site_briefing", "proposal_meeting"];
-// 참석자 노출 일정명
-const ATTENDEE_TYPES: SalesActivityType[] = ["visit", "site_briefing", "proposal_meeting"];
+// 행위자(수행 인원) 항목 라벨 — 일정명별. result(결과 발표)는 행위자 없음.
+const ACTOR_LABELS: Partial<Record<SalesActivityType, string>> = {
+  telemarketing: "통화자",
+  email: "송신자",
+  visit: "참석자",
+  site_briefing: "참석자",
+  proposal_meeting: "참석자",
+  quote: "제출자",
+  bid: "투찰자",
+};
 const MIN_ASSIGNEE_RANK = 60;
 const EXCLUDE_NAMES = ["한상순"]; // 조직도 트리에서 제외할 인원
 
@@ -94,7 +102,8 @@ export function ScheduleModal({
 
   const showContacts = CONTACT_TYPES.includes(type);
   const showPlace = PLACE_TYPES.includes(type);
-  const showAttendee = ATTENDEE_TYPES.includes(type);
+  const actorLabel = ACTOR_LABELS[type];
+  const showActor = !!actorLabel;
   const showQuote = type === "quote";
   const showBid = type === "bid";
   const showBidResult = type === "result";
@@ -148,7 +157,7 @@ export function ScheduleModal({
     setSaving(true);
     setErr(null);
     const status = progressNote.trim() ? "done" : "planned";
-    const keepAssignees = showAttendee ? assignees : assignees.filter((a) => a.roleKind !== "attendee");
+    const keepAssignees = showActor ? assignees : assignees.filter((a) => a.roleKind !== "attendee");
     const body = {
       activityType: type,
       status,
@@ -222,9 +231,9 @@ export function ScheduleModal({
               </>
             )}
 
-            {showAttendee && (
+            {showActor && (
               <div className="mb-3">
-                <label className="cd-label">참석자</label>
+                <label className="cd-label">{actorLabel}</label>
                 <div className="flex items-stretch gap-1.5">
                   {Array.from({ length: slotCount }).map((_, i) => {
                     const a = attendees[i];

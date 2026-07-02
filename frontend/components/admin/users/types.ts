@@ -35,6 +35,7 @@ export interface OrganizationEmployeeRow {
   hiredAt: string | null;
   gender: "male" | "female" | null;
   hasBirthDate: boolean;
+  photoPath: string | null;
 }
 
 export interface OrganizationSnapshot {

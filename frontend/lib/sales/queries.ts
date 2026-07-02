@@ -107,9 +107,11 @@ export async function listProjectMembers(projectId: string): Promise<SalesProjec
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT m.id, m.project_id, m.employee_id, e.name AS employee_name, m.role_label, m.created_at
+      `SELECT m.id, m.project_id, m.employee_id, e.name AS employee_name,
+              p.position_name, e.photo_public_path, m.role_label, m.created_at
          FROM sales_project_members m
          LEFT JOIN employee_profiles e ON e.employee_id = m.employee_id
+         LEFT JOIN positions p ON p.position_id = e.position_id
         WHERE m.project_id = $1
         ORDER BY m.id ASC`,
       [projectId]
@@ -120,6 +122,8 @@ export async function listProjectMembers(projectId: string): Promise<SalesProjec
     projectId: String(row.project_id ?? ""),
     employeeId: String(row.employee_id ?? ""),
     employeeName: text(row.employee_name),
+    positionName: text(row.position_name),
+    photoPath: text(row.photo_public_path),
     roleLabel: String(row.role_label ?? "담당"),
     createdAt: String(row.created_at ?? ""),
   }));
@@ -314,7 +318,7 @@ export async function listActivities(projectId: string, filter: SalesActivityFil
     }
     const assigneeRows = rowsToObjects(
       await db.exec(
-        `SELECT saa.activity_id, saa.employee_id, saa.role_kind, e.name AS employee_name
+        `SELECT saa.activity_id, saa.employee_id, saa.role_kind, e.name AS employee_name, e.photo_public_path
            FROM sales_activity_assignees saa
            LEFT JOIN employee_profiles e ON e.employee_id = saa.employee_id
           WHERE saa.activity_id IN (${placeholders})`,
@@ -328,6 +332,7 @@ export async function listActivities(projectId: string, filter: SalesActivityFil
       list.push({
         employeeId: String(r.employee_id ?? ""),
         employeeName: text(r.employee_name),
+        photoPath: text(r.photo_public_path),
         roleKind: String(r.role_kind ?? "lead") as SalesActivityAssignee["roleKind"],
       });
       byAssignee.set(aid, list);

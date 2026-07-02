@@ -28,6 +28,7 @@ interface PersonBody {
   email?: string | null;
   duties?: string | null;
   status?: string | null;
+  deptType?: string | null;
   appointedAt?: string | null;
   transferredAt?: string | null;
   resignedAt?: string | null;
@@ -105,7 +106,7 @@ export async function GET(_: NextRequest, ctx: RouteContext) {
     const people = rowsToObjects(
       await db.exec(
         `SELECT id, facility_id, department_id, person_name, title, office_phone, mobile_phone,
-                email, duties, status, appointed_at, transferred_at, resigned_at, created_at, updated_at
+                email, duties, status, dept_type, appointed_at, transferred_at, resigned_at, created_at, updated_at
            FROM facility_contact_people
           WHERE facility_id = $1
           ORDER BY person_name ASC, id ASC`,
@@ -122,6 +123,7 @@ export async function GET(_: NextRequest, ctx: RouteContext) {
       email: row.email != null ? String(row.email) : null,
       duties: row.duties != null ? String(row.duties) : null,
       status: row.status != null ? String(row.status) : "active",
+      deptType: row.dept_type != null ? String(row.dept_type) : null,
       appointedAt: row.appointed_at != null ? String(row.appointed_at) : null,
       transferredAt: row.transferred_at != null ? String(row.transferred_at) : null,
       resignedAt: row.resigned_at != null ? String(row.resigned_at) : null,
@@ -181,6 +183,7 @@ export async function PUT(req: NextRequest, ctx: RouteContext) {
         email: nullableText(item.email),
         duties: nullableText(item.duties),
         status: nullableText(item.status) ?? "active",
+        deptType: nullableText(item.deptType),
         appointedAt: nullableText(item.appointedAt),
         transferredAt: nullableText(item.transferredAt),
         resignedAt: nullableText(item.resignedAt),
@@ -241,8 +244,8 @@ export async function PUT(req: NextRequest, ctx: RouteContext) {
         const inserted = await db.exec(
           `INSERT INTO facility_contact_people
             (facility_id, department_id, person_name, title, office_phone, mobile_phone, email,
-             duties, status, appointed_at, transferred_at, resigned_at, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+             duties, status, dept_type, appointed_at, transferred_at, resigned_at, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
            RETURNING id`,
           [
             id,
@@ -254,6 +257,7 @@ export async function PUT(req: NextRequest, ctx: RouteContext) {
             person.email,
             person.duties,
             person.status,
+            person.deptType,
             person.appointedAt,
             person.transferredAt,
             person.resignedAt,

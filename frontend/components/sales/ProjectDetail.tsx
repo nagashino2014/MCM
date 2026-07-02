@@ -10,7 +10,9 @@ import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
 import { SalesCalendar } from "./SalesCalendar";
 import { ScheduleModal } from "./ScheduleModal";
-import type { OrganizationSnapshot } from "@/components/admin/users/types";
+import OrganizationTree from "@/components/admin/users/OrganizationTree";
+import type { OrganizationEmployeeRow, OrganizationSnapshot } from "@/components/admin/users/types";
+import { filterAssigneeTree } from "@/lib/sales/org-tree";
 import "@/components/cdash/cdash.css";
 import {
   ACTIVITY_TYPE_META,
@@ -29,10 +31,26 @@ import {
 
 interface FacilityPerson {
   id: number;
+  departmentId: number | null;
   personName: string;
   title: string | null;
+  officePhone: string | null;
+  mobilePhone: string | null;
+  email: string | null;
+  duties: string | null;
   status: string;
+  deptType: string | null;
+  appointedAt: string | null;
+  transferredAt: string | null;
+  resignedAt: string | null;
 }
+
+const MEMBER_ROLE_PILL: Record<string, string> = {
+  정: "cd-pill-info",
+  부: "cd-pill-success",
+  입찰: "cd-pill-warn",
+};
+const MEMBER_ROLE_ORDER: Record<string, number> = { 정: 0, 부: 1, 입찰: 2, 지원: 3 };
 
 export function ProjectDetail({ projectId }: { projectId: string }) {
   const router = useRouter();
@@ -51,7 +69,9 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   const [employees, setEmployees] = useState<SalesEmployeeOption[]>([]);
   const [snapshot, setSnapshot] = useState<OrganizationSnapshot | null>(null);
   const [people, setPeople] = useState<FacilityPerson[]>([]);
+  const [departments, setDepartments] = useState<{ id: number; departmentName: string }[]>([]);
   const [memberOpen, setMemberOpen] = useState(false);
+  const [siteContactOpen, setSiteContactOpen] = useState(false);
   const [addDate, setAddDate] = useState<string | null>(null);
 
   // 타임라인 필터
@@ -103,15 +123,19 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       .catch(() => {});
   }, []);
 
-  // 활동의 "만난 사람" 후보 = 해당 사업장 담당자(연락처 마스터)
+  // 활동의 "만난 사람" 후보 + 사업장 담당자 = 해당 사업장 연락처 마스터
   const facilityId = project?.facilityId;
-  useEffect(() => {
+  const reloadPeople = useCallback(() => {
     if (!facilityId) return;
     fetch(`/api/facilities/${facilityId}/contacts`, { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : { people: [] }))
-      .then((d) => setPeople(Array.isArray(d.people) ? d.people : []))
+      .then((r) => (r.ok ? r.json() : { people: [], departments: [] }))
+      .then((d) => {
+        setPeople(Array.isArray(d.people) ? d.people : []);
+        setDepartments(Array.isArray(d.departments) ? d.departments : []);
+      })
       .catch(() => {});
   }, [facilityId]);
+  useEffect(() => { reloadPeople(); }, [reloadPeople]);
 
   const years = useMemo(() => {
     const set = new Set<string>();
@@ -187,9 +211,9 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
         </div>
 
         <div className="lg:w-[500px] shrink-0 flex flex-col gap-3">
-          {/* 영업활동 이력 */}
-          <div className="cd-card-bg rounded-2xl border cd-border-c p-3">
-            <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
+          {/* 영업활동 이력 — 고정 높이 + 세로 스크롤(스크롤바 숨김) */}
+          <div className="cd-card-bg rounded-2xl border cd-border-c p-3 flex flex-col" style={{ height: 500 }}>
+            <div className="flex items-center justify-between gap-2 flex-wrap mb-3 shrink-0">
               <h2 className="cd-text font-extrabold text-sm">영업활동 이력</h2>
               <div className="flex items-center gap-1.5">
                 <select className="cd-select cd-btn-sm" style={{ width: "auto" }} value={fYear} onChange={(e) => setFYear(e.target.value)}>
@@ -209,32 +233,56 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
                 )}
               </div>
             </div>
-            <Timeline activities={activities} canEdit={canEdit} onEdit={setEditing} onReload={reload} />
+            <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide pt-1">
+              <Timeline activities={activities} canEdit={canEdit} onEdit={setEditing} onReload={reload} />
+            </div>
           </div>
 
-          {/* 담당자 */}
-          <div className="cd-card-bg rounded-2xl border cd-border-c p-3">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="cd-text font-extrabold text-sm flex items-center gap-1"><Users className="w-4 h-4" /> 담당자</h2>
-              {canEdit && (
-                <button className="cd-btn cd-btn-soft cd-btn-sm" onClick={() => setMemberOpen(true)}>
-                  <UserPlus className="w-4 h-4" /> 관계자 관리
-                </button>
-              )}
+          {/* 담당자 — 프로젝트 / 사업장 */}
+          <div className="cd-card-bg rounded-2xl border cd-border-c p-3 flex flex-col gap-3">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="cd-text font-extrabold text-sm flex items-center gap-1"><Users className="w-4 h-4" /> 프로젝트 담당자</h2>
+                {canEdit && (
+                  <button className="cd-btn cd-btn-soft cd-btn-sm" onClick={() => setMemberOpen(true)}><UserPlus className="w-4 h-4" /> 담당자 설정</button>
+                )}
+              </div>
+              <div className="flex flex-col gap-1.5">
+                {[...(project.members ?? [])]
+                  .sort((a, b) => (MEMBER_ROLE_ORDER[a.roleLabel] ?? 9) - (MEMBER_ROLE_ORDER[b.roleLabel] ?? 9))
+                  .map((m) => (
+                    <div key={m.id} className="flex items-center gap-2">
+                      <span className={`cd-pill ${MEMBER_ROLE_PILL[m.roleLabel] ?? "cd-pill-idle"} shrink-0`} style={{ minWidth: 40, justifyContent: "center" }}>{m.roleLabel}</span>
+                      <Avatar src={m.photoPath} size={28} />
+                      <span className="cd-text text-sm font-bold">{m.employeeName ?? m.employeeId}</span>
+                      {m.positionName && <span className="cd-text-faint text-xs">{m.positionName}</span>}
+                    </div>
+                  ))}
+                {(project.members ?? []).length === 0 && <span className="cd-text-faint text-xs">등록된 담당자가 없습니다.</span>}
+              </div>
             </div>
-            <div className="cd-text-faint text-[11px] font-bold mb-1">프로젝트 담당자</div>
-            <div className="flex flex-wrap gap-1.5 mb-3">
-              {(project.members ?? []).map((m) => (
-                <span key={m.id} className="cd-pill cd-pill-outline">{m.employeeName ?? m.employeeId} · {m.roleLabel}</span>
-              ))}
-              {(project.members ?? []).length === 0 && <span className="cd-text-faint text-xs">등록된 관계자가 없습니다.</span>}
-            </div>
-            <div className="cd-text-faint text-[11px] font-bold mb-1">사업장 담당자</div>
-            <div className="flex flex-wrap gap-1.5">
-              {people.filter((p) => p.status === "active").map((p) => (
-                <span key={p.id} className="cd-pill cd-pill-idle">{p.personName}{p.title ? ` ${p.title}` : ""}</span>
-              ))}
-              {people.filter((p) => p.status === "active").length === 0 && <span className="cd-text-faint text-xs">등록된 담당자가 없습니다.</span>}
+
+            <div className="cd-divider" />
+
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="cd-text font-extrabold text-sm flex items-center gap-1"><Building2 className="w-4 h-4" /> 사업장 담당자</h2>
+                {canEdit && (
+                  <button className="cd-btn cd-btn-soft cd-btn-sm" onClick={() => setSiteContactOpen(true)}><UserPlus className="w-4 h-4" /> 담당자 설정</button>
+                )}
+              </div>
+              <div className="flex flex-col gap-1.5">
+                {people.filter((p) => p.deptType && p.status === "active").map((p) => (
+                  <div key={p.id} className="flex items-center gap-2">
+                    <span className={`cd-pill ${p.deptType === "contract" ? "cd-pill-warn" : "cd-pill-success"} shrink-0`} style={{ minWidth: 56, justifyContent: "center" }}>
+                      {p.deptType === "contract" ? "계약부서" : "환경부서"}
+                    </span>
+                    <span className="cd-text text-sm font-bold">{p.personName}</span>
+                    {p.title && <span className="cd-text-faint text-xs">{p.title}</span>}
+                  </div>
+                ))}
+                {people.filter((p) => p.deptType && p.status === "active").length === 0 && <span className="cd-text-faint text-xs">등록된 담당자가 없습니다.</span>}
+              </div>
             </div>
           </div>
         </div>
@@ -258,10 +306,19 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
         <MemberModal
           theme={theme}
           projectId={projectId}
-          employees={employees}
+          snapshot={snapshot}
           current={project.members ?? []}
           onClose={() => setMemberOpen(false)}
           onSaved={() => { setMemberOpen(false); loadProject().catch(() => {}); }}
+        />
+      )}
+
+      {siteContactOpen && project.facilityId && (
+        <SiteContactModal
+          theme={theme}
+          facilityId={project.facilityId}
+          onClose={() => setSiteContactOpen(false)}
+          onSaved={() => { setSiteContactOpen(false); reloadPeople(); }}
         />
       )}
     </div>
@@ -289,6 +346,18 @@ function fmtTimelineWhen(a: SalesActivity): string {
   const eTime = e ? e.slice(11, 16) : "";
   if (!sTime) return sDate;
   return `${sDate} ${sTime}${eTime ? ` ~ ${eTime}` : ""}`;
+}
+
+function Avatar({ src, size = 24 }: { src?: string | null; size?: number }) {
+  if (src) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={src} alt="" className="rounded-full object-cover shrink-0" style={{ width: size, height: size }} />;
+  }
+  return (
+    <span className="rounded-full flex items-center justify-center cd-surface-bg shrink-0" style={{ width: size, height: size }}>
+      <UserRound className="cd-text-muted" style={{ width: size * 0.58, height: size * 0.58 }} />
+    </span>
+  );
 }
 
 function TimelineRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -357,9 +426,7 @@ function Timeline({ activities, canEdit, onEdit, onReload }: {
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
                       {assignees.map((as) => (
                         <span key={`${as.employeeId}-${as.roleKind}`} className="inline-flex items-center gap-1.5">
-                          <span className="w-6 h-6 rounded-full flex items-center justify-center cd-surface-bg shrink-0">
-                            <UserRound className="w-3.5 h-3.5 cd-text-muted" />
-                          </span>
+                          <Avatar src={as.photoPath} size={24} />
                           <span className="cd-text text-[13px]">{as.employeeName ?? as.employeeId}</span>
                         </span>
                       ))}
@@ -378,30 +445,28 @@ function Timeline({ activities, canEdit, onEdit, onReload }: {
   );
 }
 
-const MEMBER_ROLES = ["정", "부", "지원"];
+const MEMBER_ROLES = ["정", "부", "입찰"];
 
-function MemberModal({ theme, projectId, employees, current, onClose, onSaved }: {
+function MemberModal({ theme, projectId, snapshot, current, onClose, onSaved }: {
   theme: string;
   projectId: string;
-  employees: SalesEmployeeOption[];
+  snapshot: OrganizationSnapshot | null;
   current: SalesProjectMember[];
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [sel, setSel] = useState<Map<string, string>>(new Map(current.map((m) => [m.employeeId, m.roleLabel])));
-  const [q, setQ] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  const filtered = employees.filter(
-    (e) => !q.trim() || e.name.includes(q.trim()) || (e.deptName ?? "").includes(q.trim())
+  const [picks, setPicks] = useState<{ employeeId: string; name: string; role: string }[]>(
+    current.map((m) => ({ employeeId: m.employeeId, name: m.employeeName ?? m.employeeId, role: m.roleLabel }))
   );
+  const [activeRole, setActiveRole] = useState("정");
+  const [saving, setSaving] = useState(false);
+  const treeSnapshot = useMemo(() => filterAssigneeTree(snapshot), [snapshot]);
 
-  const toggle = (id: string) =>
-    setSel((prev) => {
-      const next = new Map(prev);
-      if (next.has(id)) next.delete(id);
-      else next.set(id, "정");
-      return next;
+  const toggle = (emp: OrganizationEmployeeRow) =>
+    setPicks((prev) => {
+      const ex = prev.find((p) => p.employeeId === emp.employeeId && p.role === activeRole);
+      if (ex) return prev.filter((p) => !(p.employeeId === emp.employeeId && p.role === activeRole));
+      return [...prev, { employeeId: emp.employeeId, name: emp.name, role: activeRole }];
     });
 
   const save = async () => {
@@ -410,9 +475,7 @@ function MemberModal({ theme, projectId, employees, current, onClose, onSaved }:
       await fetch(`/api/sales/projects/${projectId}/members`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          members: Array.from(sel.entries()).map(([employeeId, roleLabel]) => ({ employeeId, roleLabel })),
-        }),
+        body: JSON.stringify({ members: picks.map((p) => ({ employeeId: p.employeeId, roleLabel: p.role })) }),
       });
       onSaved();
     } catch {
@@ -422,52 +485,168 @@ function MemberModal({ theme, projectId, employees, current, onClose, onSaved }:
 
   return (
     <div className="cd-modal-overlay cdash cd-fields-white" data-theme={theme} onClick={onClose}>
-      <div className="cd-modal cd-card-bg w-full" style={{ maxWidth: 460, padding: "1.25rem", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
+      <div className="cd-modal cd-card-bg w-full" style={{ maxWidth: 520, padding: "1.25rem", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="cd-text text-lg font-extrabold">영업 관계자 관리</h3>
+          <h3 className="cd-text text-lg font-extrabold">프로젝트 담당자 설정</h3>
+          <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={onClose}><X className="w-4 h-4" /></button>
+        </div>
+        <label className="cd-label">역할</label>
+        <div className="flex gap-1.5 mb-2">
+          {MEMBER_ROLES.map((r) => (
+            <button key={r} type="button" className="cd-chip cd-chip-sm" data-active={activeRole === r} onClick={() => setActiveRole(r)}>{r}</button>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-1 mb-2">
+          {picks.map((p) => (
+            <span key={`${p.employeeId}-${p.role}`} className="cd-pill cd-pill-info inline-flex items-center gap-1">
+              {p.role}·{p.name}
+              <button onClick={() => setPicks((prev) => prev.filter((x) => !(x.employeeId === p.employeeId && x.role === p.role)))}><X className="w-3 h-3" /></button>
+            </span>
+          ))}
+          {picks.length === 0 && <span className="cd-text-faint text-xs">역할 선택 후 조직도에서 인원을 클릭하세요.</span>}
+        </div>
+        <OrganizationTree snapshot={treeSnapshot} embedded title="조직도" onSelectEmployee={toggle} />
+        <div className="flex justify-end gap-2 mt-4">
+          <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={onClose}>취소</button>
+          <button className="cd-btn cd-btn-primary cd-btn-sm" onClick={save} disabled={saving}>{saving ? "저장 중…" : "저장"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface SitePersonEdit {
+  id: number | null;
+  deptType: string;
+  personName: string;
+  departmentId: number | null;
+  title: string;
+  officePhone: string;
+  mobilePhone: string;
+  email: string;
+  duties: string;
+  appointedAt: string;
+  transferredAt: string;
+  resignedAt: string;
+}
+
+const SITE_DEPT_TYPES = [
+  { v: "contract", l: "계약부서" },
+  { v: "env", l: "환경부서" },
+];
+
+function SiteContactModal({ theme, facilityId, onClose, onSaved }: {
+  theme: string;
+  facilityId: string;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [loaded, setLoaded] = useState<{ mainNumber: unknown; departments: unknown; logs: unknown; people: FacilityPerson[] } | null>(null);
+  const [depts, setDepts] = useState<{ id: number; departmentName: string }[]>([]);
+  const [rows, setRows] = useState<SitePersonEdit[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    fetch(`/api/facilities/${facilityId}/contacts`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d) return;
+        setLoaded(d);
+        setDepts(Array.isArray(d.departments) ? d.departments : []);
+        setRows(
+          (Array.isArray(d.people) ? d.people : [])
+            .filter((p: FacilityPerson) => p.deptType)
+            .map((p: FacilityPerson) => ({
+              id: p.id, deptType: p.deptType ?? "contract", personName: p.personName, departmentId: p.departmentId,
+              title: p.title ?? "", officePhone: p.officePhone ?? "", mobilePhone: p.mobilePhone ?? "",
+              email: p.email ?? "", duties: p.duties ?? "",
+              appointedAt: p.appointedAt ?? "", transferredAt: p.transferredAt ?? "", resignedAt: p.resignedAt ?? "",
+            }))
+        );
+      })
+      .catch(() => {});
+  }, [facilityId]);
+
+  const upd = (i: number, patch: Partial<SitePersonEdit>) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  const addRow = () => setRows((rs) => [...rs, { id: null, deptType: "contract", personName: "", departmentId: null, title: "", officePhone: "", mobilePhone: "", email: "", duties: "", appointedAt: "", transferredAt: "", resignedAt: "" }]);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const others = (loaded?.people ?? []).filter((p) => !p.deptType).map((p) => ({ ...p }));
+      const edited = rows.filter((r) => r.personName.trim()).map((r) => ({
+        id: r.id, deptType: r.deptType, personName: r.personName.trim(), departmentId: r.departmentId,
+        title: r.title || null, officePhone: r.officePhone || null, mobilePhone: r.mobilePhone || null,
+        email: r.email || null, duties: r.duties || null,
+        appointedAt: r.appointedAt || null, transferredAt: r.transferredAt || null, resignedAt: r.resignedAt || null,
+        status: r.resignedAt ? "inactive" : "active",
+      }));
+      await fetch(`/api/facilities/${facilityId}/contacts`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mainNumber: loaded?.mainNumber ?? null, departments: loaded?.departments ?? [], people: [...others, ...edited], logs: loaded?.logs ?? [] }),
+      });
+      onSaved();
+    } catch {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="cd-modal-overlay cdash cd-fields-white" data-theme={theme} onClick={onClose}>
+      <div className="cd-modal cd-card-bg w-full" style={{ maxWidth: 640, padding: "1.25rem", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="cd-text text-lg font-extrabold">사업장 담당자 설정</h3>
           <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={onClose}><X className="w-4 h-4" /></button>
         </div>
 
-        <input className="cd-input mb-3" placeholder="이름·부서 검색" value={q} onChange={(e) => setQ(e.target.value)} />
-
-        <div className="rounded-lg border cd-border-c max-h-72 overflow-y-auto mb-4">
-          {filtered.map((e) => {
-            const on = sel.has(e.employeeId);
-            return (
-              <div key={e.employeeId} className="flex items-center justify-between gap-2 px-3 py-2 border-b cd-border-c last:border-0">
-                <button type="button" className="flex items-center gap-2 text-left min-w-0" onClick={() => toggle(e.employeeId)}>
-                  <span
-                    className="w-4 h-4 rounded border shrink-0 flex items-center justify-center"
-                    style={{ borderColor: "var(--cd-border)", background: on ? "var(--cd-primary)" : "transparent" }}
-                  >
-                    {on && <CheckCircle2 className="w-3 h-3 text-white" />}
-                  </span>
-                  <span className="min-w-0">
-                    <span className="cd-text text-sm font-bold">{e.name}</span>
-                    <span className="cd-text-faint text-xs ml-1">{e.deptName ?? ""} {e.positionName ?? ""}</span>
-                  </span>
-                </button>
-                {on && (
-                  <select
-                    className="cd-select"
-                    style={{ width: "auto" }}
-                    value={sel.get(e.employeeId)}
-                    onChange={(ev) => setSel((prev) => new Map(prev).set(e.employeeId, ev.target.value))}
-                  >
-                    {MEMBER_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-                  </select>
-                )}
+        <div className="flex flex-col gap-3">
+          {rows.map((r, i) => (
+            <div key={i} className="rounded-xl border cd-border-c p-3 flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <div className="flex gap-1.5">
+                  {SITE_DEPT_TYPES.map((d) => (
+                    <button key={d.v} type="button" className="cd-chip cd-chip-sm" data-active={r.deptType === d.v} onClick={() => upd(i, { deptType: d.v })}>{d.l}</button>
+                  ))}
+                </div>
+                <button className="cd-text-faint" onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}><Trash2 className="w-3.5 h-3.5" /></button>
               </div>
-            );
-          })}
-          {filtered.length === 0 && <div className="cd-text-faint text-xs px-3 py-4">검색 결과 없음</div>}
+              <div className="grid grid-cols-2 gap-2">
+                <input className="cd-input" placeholder="성명" value={r.personName} onChange={(e) => upd(i, { personName: e.target.value })} />
+                <input className="cd-input" placeholder="직급/직함" value={r.title} onChange={(e) => upd(i, { title: e.target.value })} />
+                <select className="cd-select" value={r.departmentId ?? ""} onChange={(e) => upd(i, { departmentId: e.target.value ? Number(e.target.value) : null })}>
+                  <option value="">부서 미지정</option>
+                  {depts.map((d) => <option key={d.id} value={d.id}>{d.departmentName}</option>)}
+                </select>
+                <input className="cd-input" placeholder="이메일" value={r.email} onChange={(e) => upd(i, { email: e.target.value })} />
+                <input className="cd-input" placeholder="전화(회사)" value={r.officePhone} onChange={(e) => upd(i, { officePhone: e.target.value })} />
+                <input className="cd-input" placeholder="전화(HP)" value={r.mobilePhone} onChange={(e) => upd(i, { mobilePhone: e.target.value })} />
+              </div>
+              <input className="cd-input" placeholder="업무 개요" value={r.duties} onChange={(e) => upd(i, { duties: e.target.value })} />
+              <div className="flex flex-wrap gap-3 items-center">
+                <label className="flex items-center gap-1 cd-text-muted text-xs">
+                  <input type="checkbox" checked={!!r.appointedAt} onChange={(e) => upd(i, { appointedAt: e.target.checked ? new Date().toISOString().slice(0, 10) : "" })} /> 신규 선임
+                </label>
+                {r.appointedAt && <input type="date" className="cd-input" style={{ width: "auto" }} value={r.appointedAt} onChange={(e) => upd(i, { appointedAt: e.target.value })} />}
+                <label className="flex items-center gap-1 cd-text-muted text-xs">
+                  <input type="checkbox" checked={!!r.transferredAt} onChange={(e) => upd(i, { transferredAt: e.target.checked ? new Date().toISOString().slice(0, 10) : "" })} /> 부서 변경
+                </label>
+                {r.transferredAt && <input type="date" className="cd-input" style={{ width: "auto" }} value={r.transferredAt} onChange={(e) => upd(i, { transferredAt: e.target.value })} />}
+                <label className="flex items-center gap-1 cd-text-muted text-xs">
+                  <input type="checkbox" checked={!!r.resignedAt} onChange={(e) => upd(i, { resignedAt: e.target.checked ? new Date().toISOString().slice(0, 10) : "" })} /> 퇴사
+                </label>
+                {r.resignedAt && <input type="date" className="cd-input" style={{ width: "auto" }} value={r.resignedAt} onChange={(e) => upd(i, { resignedAt: e.target.value })} />}
+                {r.resignedAt && <span className="cd-pill cd-pill-error">퇴직</span>}
+              </div>
+            </div>
+          ))}
+          {rows.length === 0 && <div className="cd-text-faint text-xs">등록된 사업장 담당자가 없습니다.</div>}
+          <button className="cd-btn cd-btn-ghost cd-btn-sm self-start" onClick={addRow}><Plus className="w-4 h-4" /> 담당자 추가</button>
         </div>
 
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-2 mt-4">
           <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={onClose}>취소</button>
-          <button className="cd-btn cd-btn-primary cd-btn-sm" onClick={save} disabled={saving}>
-            {saving ? "저장 중…" : "저장"}
-          </button>
+          <button className="cd-btn cd-btn-primary cd-btn-sm" onClick={save} disabled={saving}>{saving ? "저장 중…" : "저장"}</button>
         </div>
       </div>
     </div>

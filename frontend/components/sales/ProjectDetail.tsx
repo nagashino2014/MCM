@@ -9,6 +9,7 @@ import { useSession } from "next-auth/react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
 import { SalesCalendar } from "./SalesCalendar";
+import { SalesProgressCard } from "./SalesProgressCard";
 import { ScheduleModal } from "./ScheduleModal";
 import OrganizationTree from "@/components/admin/users/OrganizationTree";
 import type { OrganizationEmployeeRow, OrganizationSnapshot } from "@/components/admin/users/types";
@@ -208,10 +209,10 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
             onEditActivity={(a) => { setAddDate(null); setEditing(a); }}
           />
           <PlaceholderCard title="사업장 정보" note="일반현황 · 시설현황 · 발주정보 · 과거이력 (추후 구현)" />
-          <PlaceholderCard title="영업활동 진행상황" note="진행 단계 · 활동 집계 · 투찰 정보 (추후 구현)" />
+          <SalesProgressCard project={project} activities={activities} />
         </div>
 
-        <div className="lg:w-[500px] shrink-0 flex flex-col gap-3">
+        <div className="lg:w-[640px] shrink-0 flex flex-col gap-3">
           {/* 영업활동 이력 — 고정 높이 + 세로 스크롤(스크롤바 숨김) */}
           <div className="cd-card-bg rounded-2xl border cd-border-c p-3 flex flex-col shrink-0" style={{ height: 800 }}>
             <div className="flex items-center justify-between gap-2 flex-wrap mb-3 shrink-0">
@@ -290,11 +291,13 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
               </div>
 
               {selectedSite && (
-                <div className="rounded-xl border cd-border-c p-3 mt-2 text-[13px] flex flex-col gap-1">
-                  <div className="flex gap-2"><span className="cd-text-faint w-10 shrink-0">성명</span><span className="cd-text font-bold">{selectedSite.personName}</span></div>
-                  <div className="flex gap-2"><span className="cd-text-faint w-10 shrink-0">부서</span><span className="cd-text">{departments.find((d) => d.id === selectedSite.departmentId)?.departmentName ?? (selectedSite.deptType === "contract" ? "계약부서" : "환경부서")}</span></div>
-                  <div className="flex gap-2"><span className="cd-text-faint w-10 shrink-0">직급</span><span className="cd-text">{selectedSite.title ?? "—"}</span></div>
-                  <div className="flex gap-2"><span className="cd-text-faint w-10 shrink-0">전화</span><span className="cd-text">{selectedSite.mobilePhone ?? selectedSite.officePhone ?? "—"}</span></div>
+                <div className="rounded-xl border cd-border-c p-3 mt-2 text-[13px] flex flex-col gap-1.5">
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                    <div className="flex gap-2 min-w-0"><span className="cd-text-faint w-10 shrink-0">성명</span><span className="cd-text font-bold truncate">{selectedSite.personName}</span></div>
+                    <div className="flex gap-2 min-w-0"><span className="cd-text-faint w-10 shrink-0">부서</span><span className="cd-text truncate">{departments.find((d) => d.id === selectedSite.departmentId)?.departmentName ?? (selectedSite.deptType === "contract" ? "계약부서" : "환경부서")}</span></div>
+                    <div className="flex gap-2 min-w-0"><span className="cd-text-faint w-10 shrink-0">직급</span><span className="cd-text truncate">{selectedSite.title ?? "—"}</span></div>
+                    <div className="flex gap-2 min-w-0"><span className="cd-text-faint w-10 shrink-0">전화</span><span className="cd-text truncate">{selectedSite.mobilePhone ?? selectedSite.officePhone ?? "—"}</span></div>
+                  </div>
                   <div className="flex gap-2"><span className="cd-text-faint w-10 shrink-0">메일</span><span className="cd-text break-all">{selectedSite.email ?? "—"}</span></div>
                   <div className="flex gap-2"><span className="cd-text-faint w-10 shrink-0">업무</span><span className="cd-text">{selectedSite.duties ?? "—"}</span></div>
                 </div>

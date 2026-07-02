@@ -163,8 +163,9 @@ export function SalesCalendar({
                     onClick={() => canEdit && onPickDate(iso)}
                     className="border text-left p-1 flex flex-col"
                     style={{
-                      borderColor: "var(--cd-border)",
-                      background: iso === todayIso ? "var(--cd-primary-soft)" : "var(--cd-card)",
+                      borderColor: iso === todayIso ? "var(--cd-primary)" : "var(--cd-border)",
+                      background: "var(--cd-card)",
+                      boxShadow: iso === todayIso ? "inset 0 0 0 2px var(--cd-primary)" : undefined,
                       opacity: inMonth ? 1 : 0.4,
                     }}
                   >
@@ -200,7 +201,7 @@ export function SalesCalendar({
       </div>
 
       {/* 우측 일정 목록 — 태그 구획 */}
-      <div className="cd-card-bg rounded-2xl border cd-border-c p-3 w-full lg:w-[340px] shrink-0">
+      <div className="cd-card-bg rounded-2xl border cd-border-c p-3 w-full lg:w-[300px] shrink-0">
         <h3 className="cd-text font-extrabold text-sm mb-2">일정 목록</h3>
         <div className="flex flex-col gap-2">
           {monthList.map((it) => {

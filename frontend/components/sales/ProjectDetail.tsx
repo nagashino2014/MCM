@@ -53,6 +53,10 @@ const MEMBER_ROLE_PILL: Record<string, string> = {
   입찰: "cd-pill-warn",
 };
 const MEMBER_ROLE_ORDER: Record<string, number> = { 정: 0, 부: 1, 입찰: 2, 지원: 3 };
+const STAGE_PILL: Record<string, string> = {
+  lead: "cd-pill-idle", contact: "cd-pill-info", proposal: "cd-pill-secondary",
+  bidding: "cd-pill-warn", won: "cd-pill-success", lost: "cd-pill-error", hold: "cd-pill-outline",
+};
 
 export function ProjectDetail({ projectId }: { projectId: string }) {
   const router = useRouter();
@@ -149,17 +153,6 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
     return Array.from(set).sort().reverse();
   }, [activities]);
 
-  const changeStage = async (stage: SalesStage) => {
-    if (!project) return;
-    setProject({ ...project, stage });
-    await fetch(`/api/sales/projects/${projectId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...project, stage }),
-    });
-    loadProject().catch(() => {});
-  };
-
   if (loading) return <div className="cdash p-6 cd-text-faint text-sm" data-theme={theme}>불러오는 중…</div>;
   if (error || !project) {
     return (
@@ -185,17 +178,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <select
-            className="cd-select"
-            style={{ width: "auto" }}
-            value={project.stage}
-            disabled={!canEdit}
-            onChange={(e) => changeStage(e.target.value as SalesStage)}
-          >
-            {SALES_STAGE_ORDER.map((s) => (
-              <option key={s} value={s}>{SALES_STAGE_LABELS[s]}</option>
-            ))}
-          </select>
+          <span className={`cd-pill ${STAGE_PILL[project.stage] ?? "cd-pill-idle"}`} title="진행 단계(자동 분류)">{SALES_STAGE_LABELS[project.stage]}</span>
           <CdThemeToggle theme={theme} onToggle={toggleTheme} />
         </div>
       </div>

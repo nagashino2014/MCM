@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Building2, Plus, X } from "lucide-react";
 import type { FacilityDetail } from "@/lib/ieps/types-facility";
+import "@/app/(app)/contracts/billing/billing.css";
 
 const TABS = [
   { k: "general", l: "일반현황" },
@@ -14,7 +15,7 @@ const TABS = [
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex gap-3 text-[13px] py-1 border-b cd-border-c last:border-0">
+    <div className="flex gap-3 text-[13px] py-2 border-b cd-border-c last:border-0">
       <span className="cd-text-faint w-20 shrink-0">{label}</span>
       <span className="cd-text min-w-0 flex-1">{value ?? "—"}</span>
     </div>
@@ -41,17 +42,12 @@ export function SalesFacilityInfoCard({ facilityId, theme, canEdit }: { facility
 
   return (
     <div className="cd-card-bg rounded-2xl border cd-border-c p-4 w-full flex flex-col">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="cd-text font-extrabold text-sm flex items-center gap-1"><Building2 className="w-4 h-4" /> 사업장 정보</h2>
-        {canEdit && (
-          <button className="cd-btn cd-btn-soft cd-btn-sm" onClick={() => setNewOpen(true)}><Plus className="w-4 h-4" /> 신규 등록</button>
-        )}
-      </div>
+      <h2 className="cd-text font-extrabold text-sm flex items-center gap-1 mb-3"><Building2 className="w-4 h-4" /> 사업장 정보</h2>
 
-      {/* 탭 */}
-      <div className="flex gap-1.5 mb-3 flex-wrap">
+      {/* 탭 — billing 파일탭 형태 */}
+      <div className="cdb-tabs">
         {TABS.map((t) => (
-          <button key={t.k} type="button" className="cd-chip cd-chip-sm" data-active={tab === t.k} onClick={() => setTab(t.k)}>{t.l}</button>
+          <button key={t.k} type="button" className="cdb-tab" data-active={tab === t.k} onClick={() => setTab(t.k)}>{t.l}</button>
         ))}
       </div>
 
@@ -59,7 +55,7 @@ export function SalesFacilityInfoCard({ facilityId, theme, canEdit }: { facility
         !detail ? (
           <div className="cd-text-faint text-sm py-4">불러오는 중…</div>
         ) : (
-          <div className="flex flex-col">
+          <div className="flex flex-col pt-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
               <InfoRow label="사업장명" value={<span className="font-bold">{detail.companyName}</span>} />
               <InfoRow label="대표자명" value={detail.representativeName} />
@@ -81,6 +77,9 @@ export function SalesFacilityInfoCard({ facilityId, theme, canEdit }: { facility
                 }
               />
             </div>
+            {canEdit && (
+              <button className="cd-btn cd-btn-soft cd-btn-sm mt-4 self-start" onClick={() => setNewOpen(true)}><Plus className="w-4 h-4" /> 신규 등록</button>
+            )}
           </div>
         )
       ) : (

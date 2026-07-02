@@ -17,6 +17,7 @@ import {
   type SalesProjectInput,
   type SalesProjectKpi,
   type SalesProjectMember,
+  type SalesStage,
   type SalesEmployeeOption,
 } from "./types";
 
@@ -243,6 +244,31 @@ export async function listActiveEmployees(): Promise<SalesEmployeeOption[]> {
   }));
 }
 
+// ── 진행 단계 자동 분류 ──────────────────────────────────────
+// 리드→컨택→입찰→수주/실주를 스케쥴 진행에 따라 자동 판정. (제안·보류는 추후 정의)
+function computeStage(rows: Array<Record<string, unknown>>): SalesStage {
+  const result = rows.find((r) => String(r.activity_type) === "result");
+  if (result) {
+    const br = String(result.bid_result ?? "");
+    if (br === "won_bid") return "won";
+    if (br === "lost_bid") return "lost";
+  }
+  if (rows.some((r) => String(r.activity_type) === "bid")) return "bidding";
+  const contactTypes = new Set(["visit", "site_briefing", "quote", "proposal_meeting"]);
+  if (rows.some((r) => contactTypes.has(String(r.activity_type)))) return "contact";
+  return "lead";
+}
+
+async function recomputeProjectStage(
+  db: { run: (sql: string, p?: unknown[]) => Promise<unknown>; exec: (sql: string, p?: unknown[]) => Promise<Array<{ columns: string[]; values: unknown[][] }>> },
+  projectId: string,
+  now: string
+): Promise<void> {
+  const rows = rowsToObjects(await db.exec("SELECT activity_type, bid_result FROM sales_activities WHERE project_id = $1", [projectId]));
+  const stage = computeStage(rows);
+  await db.run("UPDATE sales_projects SET stage = $2, updated_at = $3 WHERE project_id = $1", [projectId, stage, now]);
+}
+
 // ── 활동(타임라인) ───────────────────────────────────────────
 
 function mapActivity(row: Record<string, unknown>): SalesActivity {
@@ -383,7 +409,7 @@ export async function createActivity(
     );
     await replaceActivityContacts(db, activityId, input.contactPersonIds ?? []);
     await replaceActivityAssignees(db, activityId, input.assignees ?? [], now);
-    await db.run("UPDATE sales_projects SET updated_at = $2 WHERE project_id = $1", [projectId, now]);
+    await recomputeProjectStage(db, projectId, now);
   });
   return activityId;
 }
@@ -424,12 +450,18 @@ export async function updateActivity(activityId: string, input: SalesActivityInp
     if (input.assignees) {
       await replaceActivityAssignees(db, activityId, input.assignees, now);
     }
+    const pr = rowsToObjects(await db.exec("SELECT project_id FROM sales_activities WHERE activity_id = $1", [activityId]));
+    if (pr[0]?.project_id) await recomputeProjectStage(db, String(pr[0].project_id), now);
   });
 }
 
 export async function deleteActivity(activityId: string): Promise<void> {
+  const now = new Date().toISOString();
   await withDbWrite(async (db) => {
+    const pr = rowsToObjects(await db.exec("SELECT project_id FROM sales_activities WHERE activity_id = $1", [activityId]));
+    const projectId = pr[0]?.project_id ? String(pr[0].project_id) : null;
     await db.run("DELETE FROM sales_activities WHERE activity_id = $1", [activityId]);
+    if (projectId) await recomputeProjectStage(db, projectId, now);
   });
 }
 

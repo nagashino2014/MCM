@@ -72,6 +72,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   const [departments, setDepartments] = useState<{ id: number; departmentName: string }[]>([]);
   const [memberOpen, setMemberOpen] = useState(false);
   const [siteContactOpen, setSiteContactOpen] = useState(false);
+  const [selectedSite, setSelectedSite] = useState<FacilityPerson | null>(null);
   const [addDate, setAddDate] = useState<string | null>(null);
 
   // 타임라인 필터
@@ -198,7 +199,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       </div>
 
       {/* 본문 2열 — 좌: 영업 스케쥴/사업장정보/진행상황, 우: 영업활동 이력/담당자 */}
-      <div className="flex flex-col lg:flex-row gap-3">
+      <div className="flex flex-col lg:flex-row gap-3 lg:items-stretch">
         <div className="flex-1 min-w-0 flex flex-col gap-3">
           <SalesCalendar
             activities={activities}
@@ -212,7 +213,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
 
         <div className="lg:w-[500px] shrink-0 flex flex-col gap-3">
           {/* 영업활동 이력 — 고정 높이 + 세로 스크롤(스크롤바 숨김) */}
-          <div className="cd-card-bg rounded-2xl border cd-border-c p-3 flex flex-col" style={{ height: 500 }}>
+          <div className="cd-card-bg rounded-2xl border cd-border-c p-3 flex flex-col shrink-0" style={{ height: 800 }}>
             <div className="flex items-center justify-between gap-2 flex-wrap mb-3 shrink-0">
               <h2 className="cd-text font-extrabold text-sm">영업활동 이력</h2>
               <div className="flex items-center gap-1.5">
@@ -238,16 +239,12 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
             </div>
           </div>
 
-          {/* 담당자 — 프로젝트 / 사업장 */}
-          <div className="cd-card-bg rounded-2xl border cd-border-c p-3 flex flex-col gap-3">
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <h2 className="cd-text font-extrabold text-sm flex items-center gap-1"><Users className="w-4 h-4" /> 프로젝트 담당자</h2>
-                {canEdit && (
-                  <button className="cd-btn cd-btn-soft cd-btn-sm" onClick={() => setMemberOpen(true)}><UserPlus className="w-4 h-4" /> 담당자 설정</button>
-                )}
-              </div>
-              <div className="flex flex-col gap-1.5">
+          {/* 담당자 — 좌: 프로젝트 / 우: 사업장 */}
+          <div className="cd-card-bg rounded-2xl border cd-border-c p-3 flex-1 min-h-0 flex flex-col lg:flex-row gap-3">
+            {/* 프로젝트 담당자 */}
+            <div className="flex-1 min-w-0 flex flex-col">
+              <h2 className="cd-text font-extrabold text-sm flex items-center gap-1 mb-2"><Users className="w-4 h-4" /> 프로젝트 담당자</h2>
+              <div className="flex flex-col gap-2 flex-1 overflow-y-auto scrollbar-hide">
                 {[...(project.members ?? [])]
                   .sort((a, b) => (MEMBER_ROLE_ORDER[a.roleLabel] ?? 9) - (MEMBER_ROLE_ORDER[b.roleLabel] ?? 9))
                   .map((m) => (
@@ -260,29 +257,53 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
                   ))}
                 {(project.members ?? []).length === 0 && <span className="cd-text-faint text-xs">등록된 담당자가 없습니다.</span>}
               </div>
+              {canEdit && (
+                <button className="cd-btn cd-btn-soft cd-btn-sm mt-3 self-start" onClick={() => setMemberOpen(true)}><UserPlus className="w-4 h-4" /> 담당자 설정</button>
+              )}
             </div>
 
-            <div className="cd-divider" />
+            <div className="shrink-0 self-stretch" style={{ width: 1, background: "var(--cd-border)" }} />
 
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <h2 className="cd-text font-extrabold text-sm flex items-center gap-1"><Building2 className="w-4 h-4" /> 사업장 담당자</h2>
-                {canEdit && (
-                  <button className="cd-btn cd-btn-soft cd-btn-sm" onClick={() => setSiteContactOpen(true)}><UserPlus className="w-4 h-4" /> 담당자 설정</button>
-                )}
-              </div>
-              <div className="flex flex-col gap-1.5">
-                {people.filter((p) => p.deptType && p.status === "active").map((p) => (
-                  <div key={p.id} className="flex items-center gap-2">
-                    <span className={`cd-pill ${p.deptType === "contract" ? "cd-pill-warn" : "cd-pill-success"} shrink-0`} style={{ minWidth: 56, justifyContent: "center" }}>
-                      {p.deptType === "contract" ? "계약부서" : "환경부서"}
-                    </span>
-                    <span className="cd-text text-sm font-bold">{p.personName}</span>
-                    {p.title && <span className="cd-text-faint text-xs">{p.title}</span>}
-                  </div>
-                ))}
+            {/* 사업장 담당자 */}
+            <div className="flex-1 min-w-0 flex flex-col">
+              <h2 className="cd-text font-extrabold text-sm flex items-center gap-1 mb-2"><Building2 className="w-4 h-4" /> 사업장 담당자</h2>
+              <div className="flex flex-col gap-1.5 overflow-y-auto scrollbar-hide">
+                {people.filter((p) => p.deptType && p.status === "active").map((p) => {
+                  const on = selectedSite?.id === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setSelectedSite(on ? null : p)}
+                      className="flex items-center gap-2 text-left rounded-lg px-1.5 py-1 cd-row-hover"
+                      data-active={on}
+                    >
+                      <span className={`cd-pill ${p.deptType === "contract" ? "cd-pill-warn" : "cd-pill-success"} shrink-0`} style={{ minWidth: 56, justifyContent: "center" }}>
+                        {p.deptType === "contract" ? "계약부서" : "환경부서"}
+                      </span>
+                      <span className="cd-text text-sm font-bold">{p.personName}</span>
+                      {p.title && <span className="cd-text-faint text-xs">{p.title}</span>}
+                    </button>
+                  );
+                })}
                 {people.filter((p) => p.deptType && p.status === "active").length === 0 && <span className="cd-text-faint text-xs">등록된 담당자가 없습니다.</span>}
               </div>
+
+              {selectedSite && (
+                <div className="rounded-xl border cd-border-c p-3 mt-2 text-[13px] flex flex-col gap-1">
+                  <div className="flex gap-2"><span className="cd-text-faint w-10 shrink-0">성명</span><span className="cd-text font-bold">{selectedSite.personName}</span></div>
+                  <div className="flex gap-2"><span className="cd-text-faint w-10 shrink-0">부서</span><span className="cd-text">{departments.find((d) => d.id === selectedSite.departmentId)?.departmentName ?? (selectedSite.deptType === "contract" ? "계약부서" : "환경부서")}</span></div>
+                  <div className="flex gap-2"><span className="cd-text-faint w-10 shrink-0">직급</span><span className="cd-text">{selectedSite.title ?? "—"}</span></div>
+                  <div className="flex gap-2"><span className="cd-text-faint w-10 shrink-0">전화</span><span className="cd-text">{selectedSite.mobilePhone ?? selectedSite.officePhone ?? "—"}</span></div>
+                  <div className="flex gap-2"><span className="cd-text-faint w-10 shrink-0">메일</span><span className="cd-text break-all">{selectedSite.email ?? "—"}</span></div>
+                  <div className="flex gap-2"><span className="cd-text-faint w-10 shrink-0">업무</span><span className="cd-text">{selectedSite.duties ?? "—"}</span></div>
+                </div>
+              )}
+
+              <div className="flex-1" />
+              {canEdit && (
+                <button className="cd-btn cd-btn-soft cd-btn-sm mt-3 self-start" onClick={() => setSiteContactOpen(true)}><UserPlus className="w-4 h-4" /> 담당자 설정</button>
+              )}
             </div>
           </div>
         </div>
@@ -390,7 +411,8 @@ function Timeline({ activities, canEdit, onEdit, onReload }: {
         {activities.map((a) => {
           const meta = ACTIVITY_TYPE_META[a.activityType];
           const color = a.color ?? meta.color;
-          const assignees = a.assignees ?? [];
+          // 담당자 = 해당 스케쥴의 수행자(행위자, attendee)만. 프로젝트 담당자(정/부/입찰) 상속분은 제외.
+          const actors = (a.assignees ?? []).filter((x) => x.roleKind === "attendee");
           return (
             <div key={a.activityId} className="relative group">
               {/* 노드(이중원) */}
@@ -421,10 +443,10 @@ function Timeline({ activities, canEdit, onEdit, onReload }: {
 
               {/* 카드 */}
               <div className="cd-card-bg rounded-xl border cd-border-c p-3 flex flex-col gap-2">
-                {assignees.length > 0 && (
+                {actors.length > 0 && (
                   <TimelineRow label="담당자">
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                      {assignees.map((as) => (
+                      {actors.map((as) => (
                         <span key={`${as.employeeId}-${as.roleKind}`} className="inline-flex items-center gap-1.5">
                           <Avatar src={as.photoPath} size={24} />
                           <span className="cd-text text-[13px]">{as.employeeName ?? as.employeeId}</span>
@@ -544,7 +566,15 @@ function SiteContactModal({ theme, facilityId, onClose, onSaved }: {
   const [loaded, setLoaded] = useState<{ mainNumber: unknown; departments: unknown; logs: unknown; people: FacilityPerson[] } | null>(null);
   const [depts, setDepts] = useState<{ id: number; departmentName: string }[]>([]);
   const [rows, setRows] = useState<SitePersonEdit[]>([]);
+  const [newDeptName, setNewDeptName] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const addDept = () => {
+    const n = newDeptName.trim();
+    if (!n) return;
+    setDepts((ds) => [...ds, { id: -Date.now(), departmentName: n }]);
+    setNewDeptName("");
+  };
 
   useEffect(() => {
     fetch(`/api/facilities/${facilityId}/contacts`, { cache: "no-store" })
@@ -574,6 +604,7 @@ function SiteContactModal({ theme, facilityId, onClose, onSaved }: {
     setSaving(true);
     try {
       const others = (loaded?.people ?? []).filter((p) => !p.deptType).map((p) => ({ ...p }));
+      const newDepts = depts.filter((d) => d.id < 0).map((d) => ({ id: d.id, departmentName: d.departmentName }));
       const edited = rows.filter((r) => r.personName.trim()).map((r) => ({
         id: r.id, deptType: r.deptType, personName: r.personName.trim(), departmentId: r.departmentId,
         title: r.title || null, officePhone: r.officePhone || null, mobilePhone: r.mobilePhone || null,
@@ -584,7 +615,12 @@ function SiteContactModal({ theme, facilityId, onClose, onSaved }: {
       await fetch(`/api/facilities/${facilityId}/contacts`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mainNumber: loaded?.mainNumber ?? null, departments: loaded?.departments ?? [], people: [...others, ...edited], logs: loaded?.logs ?? [] }),
+        body: JSON.stringify({
+          mainNumber: loaded?.mainNumber ?? null,
+          departments: [...((loaded?.departments as { id: number; departmentName: string }[]) ?? []), ...newDepts],
+          people: [...others, ...edited],
+          logs: loaded?.logs ?? [],
+        }),
       });
       onSaved();
     } catch {
@@ -598,6 +634,14 @@ function SiteContactModal({ theme, facilityId, onClose, onSaved }: {
         <div className="flex items-center justify-between mb-3">
           <h3 className="cd-text text-lg font-extrabold">사업장 담당자 설정</h3>
           <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={onClose}><X className="w-4 h-4" /></button>
+        </div>
+
+        <div className="flex items-end gap-2 mb-3">
+          <div className="flex-1">
+            <label className="cd-label">부서 신규 등록</label>
+            <input className="cd-input" placeholder="부서명 입력 후 추가" value={newDeptName} onChange={(e) => setNewDeptName(e.target.value)} />
+          </div>
+          <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={addDept}><Plus className="w-4 h-4" /> 부서 추가</button>
         </div>
 
         <div className="flex flex-col gap-3">

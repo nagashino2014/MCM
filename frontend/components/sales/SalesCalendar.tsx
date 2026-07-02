@@ -2,9 +2,19 @@
 
 import { useMemo, useState } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from "lucide-react";
-import { ACTIVITY_TYPE_META, SALES_ACTIVITY_TYPE_LABELS, type SalesActivity } from "@/lib/sales/types";
+import { ACTIVITY_TYPE_META, SALES_ACTIVITY_TYPE_LABELS, type SalesActivity, type SalesActivityType } from "@/lib/sales/types";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
+// 일정 목록의 수행 인원 라벨 — 일정명별.
+const ACTOR_SHORT: Partial<Record<SalesActivityType, string>> = {
+  telemarketing: "통화",
+  email: "송신",
+  visit: "방문",
+  site_briefing: "참석",
+  proposal_meeting: "참석",
+  quote: "제출",
+  bid: "투찰",
+};
 const LANE_H = 20; // 바 1개 높이(px)
 const MAX_LANES = 3;
 
@@ -208,7 +218,7 @@ export function SalesCalendar({
                 <span className="cd-text-muted text-[11px] shrink-0 w-[92px] tabular-nums">{dLabel}</span>
                 <div className="min-w-0">
                   <div className="cd-text text-xs font-bold">{isResult ? resultLabel : SALES_ACTIVITY_TYPE_LABELS[it.a.activityType]}</div>
-                  {attendeeNames && <div className="cd-text-faint text-[11px] truncate">참석: {attendeeNames}</div>}
+                  {attendeeNames && <div className="cd-text-faint text-[11px] truncate">{ACTOR_SHORT[it.a.activityType] ?? "참석"}: {attendeeNames}</div>}
                   {bidDeadline && <div className="cd-text-faint text-[11px]">투찰 마감 {bidDeadline}</div>}
                 </div>
               </button>

@@ -10,6 +10,7 @@ import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
 import { SalesCalendar } from "./SalesCalendar";
 import { SalesProgressCard } from "./SalesProgressCard";
+import { SalesFacilityInfoCard } from "./SalesFacilityInfoCard";
 import { ScheduleModal } from "./ScheduleModal";
 import OrganizationTree from "@/components/admin/users/OrganizationTree";
 import type { OrganizationEmployeeRow, OrganizationSnapshot } from "@/components/admin/users/types";
@@ -210,7 +211,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
           />
           <div className="flex flex-col lg:flex-row gap-3 lg:items-stretch">
             <div className="flex-[6] min-w-0 flex">
-              <PlaceholderCard title="사업장 정보" note="일반현황 · 시설현황 · 발주정보 · 과거이력 (다음 단계 구현)" />
+              <SalesFacilityInfoCard facilityId={project.facilityId} theme={theme} canEdit={canEdit} />
             </div>
             <div className="flex-[4] min-w-0 flex">
               <SalesProgressCard project={project} activities={activities} />

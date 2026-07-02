@@ -208,8 +208,14 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
             onPickDate={(iso) => { setEditing(null); setAddDate(iso); setAdding(true); }}
             onEditActivity={(a) => { setAddDate(null); setEditing(a); }}
           />
-          <PlaceholderCard title="사업장 정보" note="일반현황 · 시설현황 · 발주정보 · 과거이력 (추후 구현)" />
-          <SalesProgressCard project={project} activities={activities} />
+          <div className="flex flex-col lg:flex-row gap-3 lg:items-stretch">
+            <div className="flex-[6] min-w-0 flex">
+              <PlaceholderCard title="사업장 정보" note="일반현황 · 시설현황 · 발주정보 · 과거이력 (다음 단계 구현)" />
+            </div>
+            <div className="flex-[4] min-w-0 flex">
+              <SalesProgressCard project={project} activities={activities} />
+            </div>
+          </div>
         </div>
 
         <div className="lg:w-[640px] shrink-0 flex flex-col gap-3">
@@ -243,7 +249,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
           {/* 담당자 — 좌: 프로젝트 / 우: 사업장 */}
           <div className="cd-card-bg rounded-2xl border cd-border-c p-3 flex-1 min-h-0 flex flex-col lg:flex-row gap-3">
             {/* 프로젝트 담당자 */}
-            <div className="flex-1 min-w-0 flex flex-col">
+            <div className="flex-[4] min-w-0 flex flex-col">
               <h2 className="cd-text font-extrabold text-sm flex items-center gap-1 mb-2"><Users className="w-4 h-4" /> 프로젝트 담당자</h2>
               <div className="flex flex-col gap-2 flex-1 overflow-y-auto scrollbar-hide">
                 {[...(project.members ?? [])]
@@ -266,7 +272,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
             <div className="shrink-0 self-stretch" style={{ width: 1, background: "var(--cd-border)" }} />
 
             {/* 사업장 담당자 */}
-            <div className="flex-1 min-w-0 flex flex-col">
+            <div className="flex-[6] min-w-0 flex flex-col">
               <h2 className="cd-text font-extrabold text-sm flex items-center gap-1 mb-2"><Building2 className="w-4 h-4" /> 사업장 담당자</h2>
               <div className="flex flex-col gap-1.5 overflow-y-auto scrollbar-hide">
                 {people.filter((p) => p.deptType && p.status === "active").map((p) => {
@@ -351,7 +357,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
 
 function PlaceholderCard({ title, note }: { title: string; note: string }) {
   return (
-    <div className="cd-card-bg rounded-2xl border cd-border-c p-4">
+    <div className="cd-card-bg rounded-2xl border cd-border-c p-4 w-full">
       <h3 className="cd-text font-extrabold text-sm mb-1">{title}</h3>
       <p className="cd-text-faint text-xs">{note}</p>
     </div>

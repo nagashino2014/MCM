@@ -61,20 +61,18 @@ export function SalesProgressCard({ project, activities }: { project: SalesProje
   const detailEntries = Array.from(info.counts.entries());
 
   return (
-    <div className="cd-card-bg rounded-2xl border cd-border-c p-4">
+    <div className="cd-card-bg rounded-2xl border cd-border-c p-4 w-full">
       <h2 className="cd-text font-extrabold text-sm mb-3">영업활동 진행상황</h2>
 
       {/* 인포그래픽 파이프라인 */}
       {flowTags.length > 0 ? (
-        <div className="relative flex items-center gap-2 mb-4 pr-6">
-          <div className="absolute left-1 right-5 top-1/2 -translate-y-1/2 h-2 rounded-full pointer-events-none"
+        <div className="relative flex items-center justify-between mb-4">
+          <div className="absolute left-1 right-2 top-1/2 -translate-y-1/2 h-2 rounded-full pointer-events-none"
             style={{ background: "linear-gradient(90deg, #FFE9A8, #FDC748)" }} />
-          <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none"
-            style={{ width: 0, height: 0, borderTop: "8px solid transparent", borderBottom: "8px solid transparent", borderLeft: "12px solid #FDC748" }} />
           {flowTags.map((t) => {
             const on = info.activeType === t;
             return (
-              <span key={t} className="relative z-10 rounded-full px-3 py-1 text-xs font-bold"
+              <span key={t} className="relative z-10 rounded-full px-3 py-1 text-xs font-bold shrink-0"
                 style={{
                   background: on ? "#EAF7E1" : "var(--cd-card)",
                   border: on ? "1.5px solid #7EBA56" : "1px solid var(--cd-border)",
@@ -84,6 +82,8 @@ export function SalesProgressCard({ project, activities }: { project: SalesProje
               </span>
             );
           })}
+          <span className="relative z-10 shrink-0 pointer-events-none"
+            style={{ width: 0, height: 0, borderTop: "8px solid transparent", borderBottom: "8px solid transparent", borderLeft: "12px solid #FDC748" }} />
         </div>
       ) : (
         <div className="cd-text-faint text-xs mb-4">등록된 스케쥴이 없습니다.</div>

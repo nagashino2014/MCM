@@ -214,8 +214,7 @@ export function SalesCalendar({
             const bidDeadline = isBid && it.a.endedAt ? it.a.endedAt.slice(11, 16) : null;
             return (
               <button key={it.a.activityId} type="button" onClick={() => onEditActivity(it.a)}
-                className="flex items-center gap-3 w-full text-left rounded-xl border cd-border-c p-3 cd-row-hover"
-                style={{ boxShadow: "var(--cd-shadow)" }}>
+                className="flex items-center gap-3 w-full text-left rounded-xl border cd-border-c p-3 cd-row-hover">
                 <span className="w-8 h-3 rounded-full shrink-0" style={{ background: color }} />
                 <span className="cd-text-muted text-xs font-bold shrink-0 tabular-nums">{dLabel}</span>
                 <div className="flex-1 min-w-0 text-right">

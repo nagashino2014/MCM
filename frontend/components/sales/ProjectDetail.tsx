@@ -242,7 +242,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
                     <div key={m.id} className="flex items-center gap-2">
                       <span className={`cd-pill ${MEMBER_ROLE_PILL[m.roleLabel] ?? "cd-pill-idle"} shrink-0`} style={{ minWidth: 40, justifyContent: "center" }}>{m.roleLabel}</span>
                       <Avatar src={m.photoPath} size={28} />
-                      <span className="cd-text text-sm font-bold">{m.employeeName ?? m.employeeId}</span>
+                      <span className="cd-text text-sm">{m.employeeName ?? m.employeeId}</span>
                       {m.positionName && <span className="cd-text-faint text-xs">{m.positionName}</span>}
                     </div>
                   ))}
@@ -272,7 +272,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
                       <span className={`cd-pill ${p.deptType === "contract" ? "cd-pill-warn" : "cd-pill-success"} shrink-0`} style={{ minWidth: 56, justifyContent: "center" }}>
                         {p.deptType === "contract" ? "계약부서" : "환경부서"}
                       </span>
-                      <span className="cd-text text-sm font-bold">{p.personName}</span>
+                      <span className="cd-text text-sm">{p.personName}</span>
                       {p.title && <span className="cd-text-faint text-xs">{p.title}</span>}
                     </button>
                   );
@@ -283,7 +283,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
               {selectedSite && (
                 <div className="rounded-xl border cd-border-c p-3 mt-2 text-[13px] flex flex-col gap-1.5">
                   <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-                    <div className="flex gap-2 min-w-0"><span className="cd-text-faint w-10 shrink-0">성명</span><span className="cd-text font-bold truncate">{selectedSite.personName}</span></div>
+                    <div className="flex gap-2 min-w-0"><span className="cd-text-faint w-10 shrink-0">성명</span><span className="cd-text truncate">{selectedSite.personName}</span></div>
                     <div className="flex gap-2 min-w-0"><span className="cd-text-faint w-10 shrink-0">부서</span><span className="cd-text truncate">{departments.find((d) => d.id === selectedSite.departmentId)?.departmentName ?? (selectedSite.deptType === "contract" ? "계약부서" : "환경부서")}</span></div>
                     <div className="flex gap-2 min-w-0"><span className="cd-text-faint w-10 shrink-0">직급</span><span className="cd-text truncate">{selectedSite.title ?? "—"}</span></div>
                     <div className="flex gap-2 min-w-0"><span className="cd-text-faint w-10 shrink-0">전화</span><span className="cd-text truncate">{selectedSite.mobilePhone ?? selectedSite.officePhone ?? "—"}</span></div>
@@ -418,9 +418,9 @@ function Timeline({ activities, canEdit, onEdit, onReload }: {
 
               {/* 제목 + 배지 */}
               <div className="flex items-center gap-2">
-                <h3 className="cd-text font-extrabold text-sm">{meta.label}</h3>
+                <h3 className="cd-text text-sm">{meta.label}</h3>
                 <span
-                  className="text-[11px] font-bold rounded-full px-2 py-0.5"
+                  className="text-[11px] rounded-full px-2 py-0.5"
                   style={{ background: color, color: "#1f2937" }}
                 >
                   {meta.short}
@@ -450,7 +450,7 @@ function Timeline({ activities, canEdit, onEdit, onReload }: {
                 )}
                 {a.summary && <TimelineRow label="업무상세"><span className="cd-text whitespace-pre-wrap">{a.summary}</span></TimelineRow>}
                 {a.place && <TimelineRow label="장소"><span className="cd-text">{a.place}</span></TimelineRow>}
-                {a.progressNote && <TimelineRow label="경과"><span className="cd-text font-bold">{a.progressNote}</span></TimelineRow>}
+                {a.progressNote && <TimelineRow label="경과"><span className="cd-text">{a.progressNote}</span></TimelineRow>}
               </div>
             </div>
           );

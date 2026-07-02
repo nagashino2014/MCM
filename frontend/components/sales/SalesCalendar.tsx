@@ -127,7 +127,7 @@ export function SalesCalendar({
         </div>
         <div className="grid grid-cols-7">
           {WEEKDAYS.map((w, i) => (
-            <div key={w} className="text-[11px] font-bold text-center py-1" style={{ color: i === 0 ? "#EF4444" : i === 6 ? "#3B82F6" : "var(--cd-faint)" }}>{w}</div>
+            <div key={w} className="text-[11px] text-center py-1" style={{ color: i === 0 ? "#EF4444" : i === 6 ? "#3B82F6" : "var(--cd-faint)" }}>{w}</div>
           ))}
         </div>
         {weeks.map((week, wi) => {
@@ -169,7 +169,7 @@ export function SalesCalendar({
                       opacity: inMonth ? 1 : 0.4,
                     }}
                   >
-                    <span className="text-[11px] font-bold" style={{ color: dow === 0 ? "#EF4444" : dow === 6 ? "#3B82F6" : "var(--cd-muted)" }}>
+                    <span className="text-[11px]" style={{ color: dow === 0 ? "#EF4444" : dow === 6 ? "#3B82F6" : "var(--cd-muted)" }}>
                       {day.getDate()}
                     </span>
                     {overflow[di] > 0 && <span className="cd-text-faint text-[9px] mt-auto">+{overflow[di]}</span>}
@@ -181,7 +181,7 @@ export function SalesCalendar({
                   key={it.a.activityId}
                   type="button"
                   onClick={() => onEditActivity(it.a)}
-                  className="absolute rounded-md text-[11px] px-1.5 truncate text-left font-semibold"
+                  className="absolute rounded-md text-[11px] px-1.5 truncate text-left"
                   style={{
                     left: `calc(${colStart} / 7 * 100% + 2px)`,
                     width: `calc(${colEnd - colStart + 1} / 7 * 100% - 4px)`,
@@ -216,9 +216,9 @@ export function SalesCalendar({
               <button key={it.a.activityId} type="button" onClick={() => onEditActivity(it.a)}
                 className="flex items-center gap-3 w-full text-left rounded-xl border cd-border-c p-3 cd-row-hover">
                 <span className="w-8 h-3 rounded-full shrink-0" style={{ background: color }} />
-                <span className="cd-text-muted text-xs font-bold shrink-0 tabular-nums">{dLabel}</span>
+                <span className="cd-text-muted text-xs shrink-0 tabular-nums">{dLabel}</span>
                 <div className="flex-1 min-w-0 text-right">
-                  <div className="cd-text text-sm font-bold truncate">{isResult ? resultLabel : SALES_ACTIVITY_TYPE_LABELS[it.a.activityType]}</div>
+                  <div className="cd-text text-sm truncate">{isResult ? resultLabel : SALES_ACTIVITY_TYPE_LABELS[it.a.activityType]}</div>
                   {attendeeNames && <div className="cd-text-faint text-[11px] truncate">{ACTOR_SHORT[it.a.activityType] ?? "참석"}: {attendeeNames}</div>}
                   {bidDeadline && <div className="cd-text-faint text-[11px]">투찰 마감 {bidDeadline}</div>}
                 </div>

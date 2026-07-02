@@ -72,7 +72,7 @@ export function SalesProgressCard({ project, activities }: { project: SalesProje
           {flowTags.map((t) => {
             const on = info.activeType === t;
             return (
-              <span key={t} className="relative z-10 rounded-full px-3 py-1 text-xs font-bold shrink-0"
+              <span key={t} className="relative z-10 rounded-full px-3 py-1 text-xs shrink-0"
                 style={{
                   background: on ? "#EAF7E1" : "var(--cd-card)",
                   border: on ? "1.5px solid #7EBA56" : "1px solid var(--cd-border)",
@@ -93,15 +93,15 @@ export function SalesProgressCard({ project, activities }: { project: SalesProje
       <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-4">
         <div className="rounded-xl border cd-border-c p-3 flex flex-col items-center justify-center">
           <span className="cd-text-faint text-[11px] mb-1">진행 단계</span>
-          <span className="cd-text font-extrabold">{SALES_STAGE_LABELS[project.stage]}</span>
+          <span className="cd-text">{SALES_STAGE_LABELS[project.stage]}</span>
         </div>
         <div className="rounded-xl border p-3 flex flex-col items-center justify-center" style={{ borderColor: "#7EBA56", background: "#EAF7E1" }}>
           <span className="text-[11px] mb-1" style={{ color: "#4A7A2E" }}>현재 활동</span>
-          <span className="font-extrabold" style={{ color: "#4A7A2E" }}>{info.activeType ? ACTIVITY_TYPE_META[info.activeType].label : "—"}</span>
+          <span style={{ color: "#4A7A2E" }}>{info.activeType ? ACTIVITY_TYPE_META[info.activeType].label : "—"}</span>
         </div>
         <div className="rounded-xl border cd-border-c p-3 flex flex-col gap-1 justify-center">
-          <div className="flex justify-between text-[13px]"><span className="cd-text-faint">착수일</span><span className="cd-text font-bold">{info.startIso ? info.startIso.replace(/-/g, ".") + "." : "—"}</span></div>
-          <div className="flex justify-between text-[13px]"><span className="cd-text-faint">경과기간</span><span className="cd-text font-bold">{info.elapsedDays}일</span></div>
+          <div className="flex justify-between text-[13px]"><span className="cd-text-faint">착수일</span><span className="cd-text">{info.startIso ? info.startIso.replace(/-/g, ".") + "." : "—"}</span></div>
+          <div className="flex justify-between text-[13px]"><span className="cd-text-faint">경과기간</span><span className="cd-text">{info.elapsedDays}일</span></div>
         </div>
       </div>
 
@@ -109,14 +109,14 @@ export function SalesProgressCard({ project, activities }: { project: SalesProje
       <div className="mb-4">
         <div className="flex items-center gap-1.5 mb-2">
           <span className="w-1 h-3.5 rounded-full" style={{ background: "var(--cd-success)" }} />
-          <h3 className="cd-text font-bold text-sm">활동 상세</h3>
+          <h3 className="cd-text text-sm">활동 상세</h3>
         </div>
         {detailEntries.length > 0 ? (
           <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2">
             {detailEntries.map(([t, n]) => (
               <div key={t} className="flex justify-between border-b cd-border-c pb-1 text-[13px]">
                 <span className="cd-text-muted">{SALES_ACTIVITY_TYPE_LABELS[t]}</span>
-                <span className="cd-text font-bold">{n}회</span>
+                <span className="cd-text">{n}회</span>
               </div>
             ))}
           </div>
@@ -129,27 +129,27 @@ export function SalesProgressCard({ project, activities }: { project: SalesProje
       <div>
         <div className="flex items-center gap-1.5 mb-2">
           <span className="w-1 h-3.5 rounded-full" style={{ background: "var(--cd-primary)" }} />
-          <h3 className="cd-text font-bold text-sm">투찰 정보</h3>
+          <h3 className="cd-text text-sm">투찰 정보</h3>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           <div className="rounded-xl border cd-border-c p-3 flex flex-col gap-1.5">
             <div className="flex justify-between text-[13px]">
               <span className="cd-text-faint">{info.quoteCount > 1 ? `견적가 (${info.quoteCount}차)` : "견적가 (1차)"}</span>
-              <span className="cd-text font-bold">{info.lastQuote != null ? `₩${info.lastQuote.toLocaleString()}` : "—"}</span>
+              <span className="cd-text">{info.lastQuote != null ? `₩${info.lastQuote.toLocaleString()}` : "—"}</span>
             </div>
             <div className="flex justify-between text-[13px]">
               <span className="cd-text-faint">최종 입찰가</span>
-              <span className="cd-text font-bold">{info.lastBid != null ? `₩${info.lastBid.toLocaleString()}` : "—"}</span>
+              <span className="cd-text">{info.lastBid != null ? `₩${info.lastBid.toLocaleString()}` : "—"}</span>
             </div>
           </div>
           <div className="rounded-xl border cd-border-c p-3 flex flex-col gap-1.5">
             <div className="flex justify-between text-[13px]">
               <span className="cd-text-faint">발주유형</span>
-              <span className="cd-text font-bold">제한경쟁</span>
+              <span className="cd-text">제한경쟁</span>
             </div>
             <div className="flex justify-between text-[13px]">
               <span className="cd-text-faint">참여업체</span>
-              <span className="cd-text font-bold">4개사</span>
+              <span className="cd-text">4개사</span>
             </div>
           </div>
         </div>

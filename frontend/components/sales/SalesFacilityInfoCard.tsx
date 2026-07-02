@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, Plus, X } from "lucide-react";
+import { Building2, Download, Plus, Upload, X } from "lucide-react";
 import type { FacilityDetail } from "@/lib/ieps/types-facility";
+import { INTEGRATED_PERMIT_INDUSTRIES } from "@/lib/ieps/integrated-permit-industries";
 import "@/app/(app)/contracts/billing/billing.css";
 
 const TABS = [
@@ -57,7 +58,7 @@ export function SalesFacilityInfoCard({ facilityId, theme, canEdit }: { facility
         ) : (
           <div className="flex flex-col pt-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
-              <InfoRow label="사업장명" value={<span className="font-bold">{detail.companyName}</span>} />
+              <InfoRow label="사업장명" value={detail.companyName} />
               <InfoRow label="대표자명" value={detail.representativeName} />
               <InfoRow label="소재지" value={detail.siteAddress} />
               <InfoRow label="사업자번호" value={detail.businessRegistrationNo} />
@@ -82,6 +83,8 @@ export function SalesFacilityInfoCard({ facilityId, theme, canEdit }: { facility
             )}
           </div>
         )
+      ) : tab === "facility" ? (
+        <FacilitySpecTab facilityId={facilityId} canEdit={canEdit} />
       ) : (
         <div className="cd-text-faint text-sm py-6 text-center">다음 단계에서 구현 예정입니다.</div>
       )}
@@ -167,8 +170,11 @@ function NewFacilityModal({ theme, onClose, onCreated }: { theme: string; onClos
                 <input className="cd-input" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} />
               </div>
             </div>
-            <label className="cd-label">업종</label>
-            <input className="cd-input mb-4" value={industryName} onChange={(e) => setIndustryName(e.target.value)} />
+            <label className="cd-label">업종(통합허가 대상)</label>
+            <select className="cd-select mb-4" value={industryName} onChange={(e) => setIndustryName(e.target.value)}>
+              <option value="">업종 선택</option>
+              {INTEGRATED_PERMIT_INDUSTRIES.map((i) => <option key={i.id} value={i.label}>{i.label}</option>)}
+            </select>
             <div className="flex justify-end gap-2">
               <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={onClose}>취소</button>
               <button className="cd-btn cd-btn-primary cd-btn-sm" onClick={submit} disabled={saving}>{saving ? "저장 중…" : "등록"}</button>
@@ -176,6 +182,112 @@ function NewFacilityModal({ theme, onClose, onCreated }: { theme: string; onClos
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+const SPEC_FIELDS = [
+  { k: "dischargeFacility", l: "배출시설" }, { k: "generalStack", l: "일반굴뚝" }, { k: "cleansys", l: "CleanSYS" },
+  { k: "flareStack", l: "플레어스택" }, { k: "outlet", l: "방류구" }, { k: "nonDischargeFacility", l: "비배출시설" },
+];
+const AREA_FIELDS = [
+  { k: "factoryArea", l: "공장부지" }, { k: "manufacturingArea", l: "제조시설" }, { k: "auxiliaryArea", l: "부대시설" },
+];
+const SPEC_DOCS = [
+  { k: "integrated_plan", l: "통합 계획서" }, { k: "media_permit", l: "매체별 인허가" }, { k: "factory_reg", l: "공장 등록증" },
+];
+
+function FacilitySpecTab({ facilityId, canEdit }: { facilityId: string; canEdit: boolean }) {
+  const [form, setForm] = useState<Record<string, string>>({});
+  const [hasDoc, setHasDoc] = useState<Record<string, boolean>>({});
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState<string | null>(null);
+  const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  const reload = useCallback(() => {
+    fetch(`/api/facilities/${facilityId}/facility-info`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : { info: null, docs: [] }))
+      .then((d) => {
+        const info = d.info ?? {};
+        const f: Record<string, string> = {};
+        [...SPEC_FIELDS, ...AREA_FIELDS].forEach((x) => { f[x.k] = info[x.k] != null ? String(info[x.k]) : ""; });
+        setForm(f);
+        const has: Record<string, boolean> = {};
+        (d.docs ?? []).forEach((x: { docType: string }) => { has[x.docType] = true; });
+        setHasDoc(has);
+      })
+      .catch(() => {});
+  }, [facilityId]);
+  useEffect(() => { reload(); }, [reload]);
+
+  const save = async () => {
+    setSaving(true);
+    await fetch(`/api/facilities/${facilityId}/facility-info`, {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form),
+    }).catch(() => {});
+    setSaving(false);
+  };
+  const upload = async (docType: string, file: File) => {
+    setUploading(docType);
+    const fd = new FormData(); fd.set("file", file); fd.set("docType", docType);
+    await fetch(`/api/facilities/${facilityId}/facility-docs`, { method: "POST", body: fd }).catch(() => {});
+    setUploading(null);
+    reload();
+  };
+
+  return (
+    <div className="pt-4 flex flex-col gap-4">
+      <div>
+        <div className="flex items-center gap-1.5 mb-2"><span className="w-1 h-3.5 rounded-full" style={{ background: "var(--cd-success)" }} /><h3 className="cd-text text-sm">시설정보</h3></div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {SPEC_FIELDS.map((f) => (
+            <div key={f.k}>
+              <label className="cd-label">{f.l}</label>
+              <input className="cd-input" disabled={!canEdit} value={form[f.k] ?? ""} onChange={(e) => setForm((p) => ({ ...p, [f.k]: e.target.value }))} />
+            </div>
+          ))}
+        </div>
+      </div>
+      <div>
+        <div className="flex items-center gap-1.5 mb-2"><span className="w-1 h-3.5 rounded-full" style={{ background: "var(--cd-primary)" }} /><h3 className="cd-text text-sm">부지면적</h3></div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {AREA_FIELDS.map((f) => (
+            <div key={f.k}>
+              <label className="cd-label">{f.l} (m²)</label>
+              <input className="cd-input" inputMode="numeric" disabled={!canEdit} value={form[f.k] ?? ""} onChange={(e) => setForm((p) => ({ ...p, [f.k]: e.target.value }))} />
+            </div>
+          ))}
+        </div>
+      </div>
+      <div>
+        <div className="flex items-center gap-1.5 mb-2"><span className="w-1 h-3.5 rounded-full" style={{ background: "var(--cd-warning)" }} /><h3 className="cd-text text-sm">시설 현황 자료</h3></div>
+        <div className="flex flex-col gap-2">
+          {SPEC_DOCS.map((d) => {
+            const on = hasDoc[d.k];
+            return (
+              <div key={d.k} className="flex items-center gap-2">
+                <span className="rounded-full px-3 py-1 text-xs shrink-0" style={{ minWidth: 100, textAlign: "center", background: on ? "#EAF7E1" : "var(--cd-surface)", border: on ? "1.5px solid #7EBA56" : "1px solid var(--cd-border)", color: on ? "#4A7A2E" : "var(--cd-muted)" }}>{d.l}</span>
+                {canEdit && (
+                  <>
+                    <input ref={(el) => { fileRefs.current[d.k] = el; }} type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(d.k, f); }} />
+                    <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => fileRefs.current[d.k]?.click()} disabled={uploading === d.k}>
+                      <Upload className="w-3 h-3" /> {uploading === d.k ? "…" : "Up"}
+                    </button>
+                  </>
+                )}
+                <button className="cd-btn cd-btn-ghost cd-btn-sm" disabled={!on} onClick={() => window.open(`/api/facilities/${facilityId}/facility-docs?docType=${d.k}`)}>
+                  <Download className="w-3 h-3" /> Down
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      {canEdit && (
+        <div className="flex justify-end">
+          <button className="cd-btn cd-btn-primary cd-btn-sm" onClick={save} disabled={saving}>{saving ? "저장 중…" : "저장"}</button>
+        </div>
+      )}
     </div>
   );
 }

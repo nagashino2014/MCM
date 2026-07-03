@@ -60,6 +60,8 @@ function mapProject(row: Record<string, unknown>): SalesProject {
     ownerEmployeeName: text(row.owner_employee_name),
     ownerDeptId: text(row.owner_dept_id),
     contractId: text(row.contract_id),
+    serviceCategory: text(row.service_category) as SalesProject["serviceCategory"],
+    serviceSubcategory: text(row.service_subcategory) as SalesProject["serviceSubcategory"],
     expectedAmount: num(row.expected_amount),
     priority: (String(row.priority ?? "normal") as SalesProject["priority"]),
     status: (String(row.status ?? "open") as SalesProject["status"]),
@@ -75,6 +77,7 @@ function mapProject(row: Record<string, unknown>): SalesProject {
 const PROJECT_SELECT = `
   SELECT p.project_id, p.facility_id, f.company_name AS facility_name, p.title, p.stage,
          p.owner_employee_id, e.name AS owner_employee_name, p.owner_dept_id, p.contract_id,
+         p.service_category, p.service_subcategory,
          p.expected_amount, p.priority, p.status, p.opened_at, p.closed_at, p.memo,
          p.created_by, p.created_at, p.updated_at
     FROM sales_projects p
@@ -130,6 +133,118 @@ export async function listProjectMembers(projectId: string): Promise<SalesProjec
   }));
 }
 
+// ── 과거이력(사업장 단위 영업 건 이력) ────────────────────────
+export interface SalesProjectHistoryItem {
+  projectId: string;
+  title: string;
+  stage: SalesStage;
+  serviceCategory: SalesProject["serviceCategory"];
+  serviceSubcategory: SalesProject["serviceSubcategory"];
+  startDate: string | null;
+  endDate: string | null;
+  members: { employeeName: string | null; positionName: string | null; photoPath: string | null }[];
+  summary: string | null;
+  bidAmount: number | null;
+  outcome: SalesBidResult | null;
+}
+
+export async function listFacilityProjectHistory(facilityId: string): Promise<SalesProjectHistoryItem[]> {
+  const db = await getDb();
+  const projects = rowsToObjects(
+    await db.exec(`${PROJECT_SELECT} WHERE p.facility_id = $1 ORDER BY p.created_at DESC`, [facilityId])
+  ).map(mapProject);
+
+  const items: SalesProjectHistoryItem[] = [];
+  for (const p of projects) {
+    const acts = rowsToObjects(
+      await db.exec(
+        `SELECT activity_type, scheduled_at, ended_at, occurred_at, bid_result, bids, summary
+           FROM sales_activities WHERE project_id = $1`,
+        [p.projectId]
+      )
+    );
+    const dates: string[] = [];
+    let bidAmount: number | null = null;
+    let outcome: SalesBidResult | null = null;
+    let summary = p.memo;
+    for (const a of acts) {
+      const s = text(a.scheduled_at) ?? text(a.occurred_at);
+      const e = text(a.ended_at);
+      if (s) dates.push(s.slice(0, 10));
+      if (e) dates.push(e.slice(0, 10));
+      if (String(a.activity_type) === "bid") {
+        const bids = jsonArray<ActivityBid>(a.bids);
+        const last = bids[bids.length - 1];
+        if (last && last.amount != null) bidAmount = last.amount;
+      }
+      if (String(a.activity_type) === "result") outcome = text(a.bid_result) as SalesBidResult | null;
+      if (!summary) { const sm = text(a.summary); if (sm) summary = sm; }
+    }
+    dates.sort();
+    const members = await listProjectMembers(p.projectId);
+    items.push({
+      projectId: p.projectId,
+      title: p.title,
+      stage: p.stage,
+      serviceCategory: p.serviceCategory,
+      serviceSubcategory: p.serviceSubcategory,
+      startDate: dates[0] ?? null,
+      endDate: dates[dates.length - 1] ?? null,
+      members: members.map((m) => ({ employeeName: m.employeeName, positionName: m.positionName, photoPath: m.photoPath })),
+      summary,
+      bidAmount,
+      outcome,
+    });
+  }
+  return items;
+}
+
+// ── 경과 보고 대상(기간 경과 + 경과 미입력 스케쥴) ──────────────
+export interface PendingProgressReport {
+  projectId: string;
+  title: string;
+  facilityId: string;
+  facilityName: string | null;
+  members: SalesProjectMember[];
+  activities: SalesActivity[];
+}
+
+export async function listPendingProgressReports(): Promise<PendingProgressReport[]> {
+  const db = await getDb();
+  const nowIso = new Date().toISOString();
+  const idRows = rowsToObjects(
+    await db.exec(
+      `SELECT DISTINCT project_id FROM sales_activities
+         WHERE COALESCE(ended_at, scheduled_at) IS NOT NULL
+           AND COALESCE(ended_at, scheduled_at) < $1
+           AND COALESCE(NULLIF(TRIM(progress_note), ''), NULL) IS NULL`,
+      [nowIso]
+    )
+  );
+  const reports: PendingProgressReport[] = [];
+  for (const r of idRows) {
+    const pid = String(r.project_id ?? "");
+    if (!pid) continue;
+    const project = await getSalesProject(pid);
+    if (!project) continue;
+    const acts = await listActivities(pid);
+    const pending = acts.filter((a) => {
+      const end = a.endedAt ?? a.scheduledAt;
+      return !!end && end < nowIso && !(a.progressNote && a.progressNote.trim());
+    });
+    if (!pending.length) continue;
+    reports.push({
+      projectId: pid,
+      title: project.title,
+      facilityId: project.facilityId,
+      facilityName: project.facilityName,
+      members: project.members ?? [],
+      activities: pending,
+    });
+  }
+  return reports;
+}
+
 export async function createSalesProject(input: SalesProjectInput, userId: string | null): Promise<string> {
   const now = new Date().toISOString();
   const projectId = id("sproj");
@@ -137,8 +252,9 @@ export async function createSalesProject(input: SalesProjectInput, userId: strin
     await db.run(
       `INSERT INTO sales_projects
          (project_id, facility_id, title, stage, owner_employee_id, owner_dept_id, contract_id,
+          service_category, service_subcategory,
           expected_amount, priority, status, opened_at, closed_at, memo, created_by, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$15)`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$17)`,
       [
         projectId,
         input.facilityId,
@@ -147,6 +263,8 @@ export async function createSalesProject(input: SalesProjectInput, userId: strin
         input.ownerEmployeeId ?? null,
         input.ownerDeptId ?? null,
         input.contractId ?? null,
+        input.serviceCategory ?? null,
+        input.serviceSubcategory ?? null,
         input.expectedAmount ?? null,
         input.priority ?? "normal",
         input.status ?? "open",
@@ -167,8 +285,9 @@ export async function updateSalesProject(projectId: string, input: SalesProjectI
     await db.run(
       `UPDATE sales_projects SET
          facility_id = $2, title = $3, stage = $4, owner_employee_id = $5, owner_dept_id = $6,
-         contract_id = $7, expected_amount = $8, priority = $9, status = $10,
-         opened_at = $11, closed_at = $12, memo = $13, updated_at = $14
+         contract_id = $7, service_category = $8, service_subcategory = $9,
+         expected_amount = $10, priority = $11, status = $12,
+         opened_at = $13, closed_at = $14, memo = $15, updated_at = $16
        WHERE project_id = $1`,
       [
         projectId,
@@ -178,6 +297,8 @@ export async function updateSalesProject(projectId: string, input: SalesProjectI
         input.ownerEmployeeId ?? null,
         input.ownerDeptId ?? null,
         input.contractId ?? null,
+        input.serviceCategory ?? null,
+        input.serviceSubcategory ?? null,
         input.expectedAmount ?? null,
         input.priority ?? "normal",
         input.status ?? "open",
@@ -246,17 +367,42 @@ export async function listActiveEmployees(): Promise<SalesEmployeeOption[]> {
 
 // ── 진행 단계 자동 분류 ──────────────────────────────────────
 // 리드→컨택→입찰→수주/실주를 스케쥴 진행에 따라 자동 판정. (제안·보류는 추후 정의)
+// 진행 단계 = 경과(progress_note)가 입력되어 '종료된' 스케쥴 기준으로 산정.
+// 미래 예정 스케쥴(경과 미입력)은 단계 산정에서 제외한다.
+//   G1 전화/메일 종료 → 컨택, G2 방문/현설 종료 → 제안, G3 견적/제안 종료 → 입찰, G4 투찰 종료 → 입찰(결과 대기).
+//   영업 결과: 낙찰→수주, 탈락·거절·중단→실주.
 function computeStage(rows: Array<Record<string, unknown>>): SalesStage {
   const result = rows.find((r) => String(r.activity_type) === "result");
   if (result) {
     const br = String(result.bid_result ?? "");
     if (br === "won_bid") return "won";
-    if (br === "lost_bid") return "lost";
+    if (br === "lost_bid" || br === "facility_declined" || br === "project_halted") return "lost";
+    // rebid(재투찰)/미정은 아래 단계 산정으로 폴백
   }
-  if (rows.some((r) => String(r.activity_type) === "bid")) return "bidding";
-  const contactTypes = new Set(["visit", "site_briefing", "quote", "proposal_meeting"]);
-  if (rows.some((r) => contactTypes.has(String(r.activity_type)))) return "contact";
-  return "lead";
+  const G1 = new Set(["telemarketing", "email"]);
+  const G2 = new Set(["visit", "site_briefing"]);
+  const G3 = new Set(["quote", "proposal_meeting"]);
+  let topDone = 0; // 경과 입력(종료)된 스케쥴 중 최고 그룹
+  for (const r of rows) {
+    const note = String(r.progress_note ?? "").trim();
+    if (!note) continue; // 경과 미입력(예정/미종료) → 제외
+    const t = String(r.activity_type);
+    if (t === "bid") topDone = Math.max(topDone, 4);
+    else if (G3.has(t)) topDone = Math.max(topDone, 3);
+    else if (G2.has(t)) topDone = Math.max(topDone, 2);
+    else if (G1.has(t)) topDone = Math.max(topDone, 1);
+  }
+  switch (topDone) {
+    case 4:
+    case 3:
+      return "bidding";
+    case 2:
+      return "proposal";
+    case 1:
+      return "contact";
+    default:
+      return "lead";
+  }
 }
 
 async function recomputeProjectStage(
@@ -264,7 +410,7 @@ async function recomputeProjectStage(
   projectId: string,
   now: string
 ): Promise<void> {
-  const rows = rowsToObjects(await db.exec("SELECT activity_type, bid_result FROM sales_activities WHERE project_id = $1", [projectId]));
+  const rows = rowsToObjects(await db.exec("SELECT activity_type, bid_result, progress_note FROM sales_activities WHERE project_id = $1", [projectId]));
   const stage = computeStage(rows);
   await db.run("UPDATE sales_projects SET stage = $2, updated_at = $3 WHERE project_id = $1", [projectId, stage, now]);
 }

@@ -1,11 +1,41 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Building2, Download, Plus, Upload, X } from "lucide-react";
+import { Building2, Download, Minus, Plus, Upload, User, X } from "lucide-react";
 import type { FacilityDetail } from "@/lib/ieps/types-facility";
+import { GroupManagementModal } from "@/components/facilities/FacilityDetailPanel";
 import { INTEGRATED_PERMIT_INDUSTRIES } from "@/lib/ieps/integrated-permit-industries";
+import { AutoDateInput } from "@/components/ui/AutoDateInput";
+import { AutoTimeInput } from "@/components/ui/AutoTimeInput";
+import {
+  SALES_OUTCOME_LABELS,
+  SALES_SERVICE_CATEGORIES,
+  SALES_SUBCATEGORIES_BY_CATEGORY,
+  SALES_STAGE_LABELS,
+  type SalesBidResult,
+  type SalesServiceCategory,
+  type SalesStage,
+} from "@/lib/sales/types";
 import "@/app/(app)/contracts/billing/billing.css";
+
+interface HistoryItem {
+  projectId: string;
+  title: string;
+  stage: SalesStage;
+  serviceCategory: string | null;
+  serviceSubcategory: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  members: { employeeName: string | null; positionName: string | null; photoPath: string | null }[];
+  summary: string | null;
+  bidAmount: number | null;
+  outcome: SalesBidResult | null;
+}
+
+function HistAvatar({ src }: { src: string | null }) {
+  if (src) return <img src={src} alt="" className="w-7 h-7 rounded-full object-cover shrink-0" />;
+  return <span className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center" style={{ background: "var(--cd-surface)" }}><User className="w-3.5 h-3.5 cd-text-faint" /></span>;
+}
 
 const TABS = [
   { k: "general", l: "일반현황" },
@@ -24,10 +54,10 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 export function SalesFacilityInfoCard({ facilityId, theme, canEdit }: { facilityId: string; theme: string; canEdit: boolean }) {
-  const router = useRouter();
   const [tab, setTab] = useState("general");
   const [detail, setDetail] = useState<FacilityDetail | null>(null);
   const [newOpen, setNewOpen] = useState(false);
+  const [groupOpen, setGroupOpen] = useState(false);
 
   const reload = useCallback(() => {
     fetch(`/api/facilities/${facilityId}`, { cache: "no-store" })
@@ -42,16 +72,17 @@ export function SalesFacilityInfoCard({ facilityId, theme, canEdit }: { facility
   const groupName = detail?.groupInfo?.group.groupName ?? null;
 
   return (
-    <div className="cd-card-bg rounded-2xl border cd-border-c p-4 w-full flex flex-col">
-      <h2 className="cd-text font-extrabold text-sm flex items-center gap-1 mb-3"><Building2 className="w-4 h-4" /> 사업장 정보</h2>
+    <div className="cd-card-bg rounded-2xl border cd-border-c p-4 w-full flex flex-col h-full min-h-0">
+      <h2 className="cd-text font-extrabold text-sm mb-3 shrink-0">사업장 정보</h2>
 
       {/* 탭 — billing 파일탭 형태 */}
-      <div className="cdb-tabs">
+      <div className="cdb-tabs shrink-0">
         {TABS.map((t) => (
           <button key={t.k} type="button" className="cdb-tab" data-active={tab === t.k} onClick={() => setTab(t.k)}>{t.l}</button>
         ))}
       </div>
 
+      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide px-3">
       {tab === "general" ? (
         !detail ? (
           <div className="cd-text-faint text-sm py-4">불러오는 중…</div>
@@ -72,7 +103,7 @@ export function SalesFacilityInfoCard({ facilityId, theme, canEdit }: { facility
                   <span className="flex items-center gap-2">
                     <span className="truncate">{groupName ?? "—"}</span>
                     {canEdit && (
-                      <button className="cd-btn cd-btn-ghost cd-btn-sm shrink-0" onClick={() => router.push(`/facilities?focus=${facilityId}`)}>그룹 관리</button>
+                      <button className="cd-btn cd-btn-ghost cd-btn-sm shrink-0" onClick={() => setGroupOpen(true)}>그룹 관리</button>
                     )}
                   </span>
                 }
@@ -85,12 +116,18 @@ export function SalesFacilityInfoCard({ facilityId, theme, canEdit }: { facility
         )
       ) : tab === "facility" ? (
         <FacilitySpecTab facilityId={facilityId} canEdit={canEdit} />
+      ) : tab === "order" ? (
+        <OrderInfoTab facilityId={facilityId} canEdit={canEdit} />
       ) : (
-        <div className="cd-text-faint text-sm py-6 text-center">다음 단계에서 구현 예정입니다.</div>
+        <HistoryTab facilityId={facilityId} />
       )}
+      </div>
 
       {newOpen && (
         <NewFacilityModal theme={theme} onClose={() => setNewOpen(false)} onCreated={() => { setNewOpen(false); }} />
+      )}
+      {groupOpen && detail && (
+        <GroupManagementModal facility={detail} onClose={() => setGroupOpen(false)} onChanged={() => { setGroupOpen(false); reload(); }} />
       )}
     </div>
   );
@@ -195,6 +232,7 @@ const AREA_FIELDS = [
 ];
 const SPEC_DOCS = [
   { k: "integrated_plan", l: "통합 계획서" }, { k: "media_permit", l: "매체별 인허가" }, { k: "factory_reg", l: "공장 등록증" },
+  { k: "etc", l: "기타 설비 자료" },
 ];
 
 function FacilitySpecTab({ facilityId, canEdit }: { facilityId: string; canEdit: boolean }) {
@@ -236,56 +274,313 @@ function FacilitySpecTab({ facilityId, canEdit }: { facilityId: string; canEdit:
   };
 
   return (
+    <div className="pt-4">
+      <div className="flex flex-col lg:flex-row gap-5">
+        {/* 좌측: 시설정보 + 부지면적 (레이블 좌측 인라인, 입력 70px) */}
+        <div className="flex-1 min-w-0 flex flex-col gap-4">
+          <div>
+            <div className="flex items-center gap-1.5 mb-2"><span className="w-1 h-3.5 rounded-full" style={{ background: "var(--cd-success)" }} /><h3 className="cd-text text-sm">시설정보 (EA)</h3></div>
+            <div className="grid grid-cols-3 gap-x-4 gap-y-3">
+              {SPEC_FIELDS.map((f) => (
+                <div key={f.k} className="flex items-center gap-2">
+                  <label className="cd-label font-normal shrink-0 mb-0" style={{ width: 64 }}>{f.l}</label>
+                  <input className="cd-input" style={{ width: 80 }} inputMode="numeric" disabled={!canEdit} value={form[f.k] ?? ""} onChange={(e) => setForm((p) => ({ ...p, [f.k]: e.target.value }))} />
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div className="flex items-center gap-1.5 mb-2"><span className="w-1 h-3.5 rounded-full" style={{ background: "var(--cd-primary)" }} /><h3 className="cd-text text-sm">부지면적 (m²)</h3></div>
+            <div className="grid grid-cols-3 gap-x-4 gap-y-3">
+              {AREA_FIELDS.map((f) => (
+                <div key={f.k} className="flex items-center gap-2">
+                  <label className="cd-label font-normal shrink-0 mb-0" style={{ width: 64 }}>{f.l}</label>
+                  <input className="cd-input" style={{ width: 80 }} inputMode="numeric" disabled={!canEdit} value={form[f.k] ?? ""} onChange={(e) => setForm((p) => ({ ...p, [f.k]: e.target.value }))} />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        {/* 우측: 시설 현황 자료 */}
+        <div className="lg:w-64 shrink-0">
+          <div className="flex items-center gap-1.5 mb-2"><span className="w-1 h-3.5 rounded-full" style={{ background: "var(--cd-warning)" }} /><h3 className="cd-text text-sm">시설 현황 자료</h3></div>
+          <div className="flex flex-col gap-2">
+            {SPEC_DOCS.map((d) => {
+              const on = hasDoc[d.k];
+              return (
+                <div key={d.k} className="flex items-center gap-2">
+                  <span className="rounded-full px-3 py-1 text-xs shrink-0" style={{ minWidth: 96, textAlign: "center", background: on ? "#EAF7E1" : "var(--cd-surface)", border: on ? "1.5px solid #7EBA56" : "1px solid var(--cd-border)", color: on ? "#4A7A2E" : "var(--cd-muted)" }}>{d.l}</span>
+                  {canEdit && (
+                    <>
+                      <input ref={(el) => { fileRefs.current[d.k] = el; }} type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(d.k, f); }} />
+                      <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => fileRefs.current[d.k]?.click()} disabled={uploading === d.k}>
+                        <Upload className="w-3 h-3" /> {uploading === d.k ? "…" : "Up"}
+                      </button>
+                    </>
+                  )}
+                  <button className="cd-btn cd-btn-ghost cd-btn-sm" disabled={!on} onClick={() => window.open(`/api/facilities/${facilityId}/facility-docs?docType=${d.k}`)}>
+                    <Download className="w-3 h-3" /> Down
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+      {canEdit && (
+        <div className="flex justify-end mt-4">
+          <button className="cd-btn cd-btn-primary cd-btn-sm" onClick={save} disabled={saving}>{saving ? "저장 중…" : "저장"}</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const ORDER_TYPE_OPTS = [
+  { k: "negotiated", l: "수의계약" },
+  { k: "limited", l: "제한경쟁" },
+  { k: "qualification", l: "적격심사" },
+];
+const FIELD_W = 142; // 발주구분·예정가격·낙찰하한율 공통 너비
+
+const splitIso = (iso: string | null): { date: string; time: string } =>
+  iso ? { date: iso.slice(0, 10), time: iso.slice(11, 16) } : { date: "", time: "" };
+const joinIso = (date: string, time: string): string | null =>
+  date ? `${date}T${time || "00:00"}:00` : null;
+
+function OrderInfoTab({ facilityId, canEdit }: { facilityId: string; canEdit: boolean }) {
+  const [orderType, setOrderType] = useState("");
+  const [orderDate, setOrderDate] = useState("");
+  const [orderTime, setOrderTime] = useState("");
+  const [bidStartDate, setBidStartDate] = useState("");
+  const [bidStartTime, setBidStartTime] = useState("");
+  const [bidEndDate, setBidEndDate] = useState("");
+  const [bidEndTime, setBidEndTime] = useState("");
+  const [estimatedPrice, setEstimatedPrice] = useState("");
+  const [minBidRate, setMinBidRate] = useState("");
+  const [participants, setParticipants] = useState<string[]>(["", "", ""]);
+  const [saving, setSaving] = useState(false);
+  const negotiated = orderType === "negotiated";
+
+  const reload = useCallback(() => {
+    fetch(`/api/facilities/${facilityId}/order-info`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : { info: null }))
+      .then((d) => {
+        const i = d.info;
+        if (!i) return;
+        setOrderType(i.orderType ?? "");
+        const o = splitIso(i.orderAt); setOrderDate(o.date); setOrderTime(o.time);
+        const s = splitIso(i.bidStart); setBidStartDate(s.date); setBidStartTime(s.time);
+        const e = splitIso(i.bidEnd); setBidEndDate(e.date); setBidEndTime(e.time);
+        setEstimatedPrice(i.estimatedPrice != null ? String(i.estimatedPrice) : "");
+        setMinBidRate(i.minBidRate != null ? String(i.minBidRate) : "");
+        const parts: string[] = Array.isArray(i.participants) ? [...i.participants] : [];
+        while (parts.length < 3 || parts.length % 3 !== 0) parts.push("");
+        setParticipants(parts);
+      })
+      .catch(() => {});
+  }, [facilityId]);
+  useEffect(() => { reload(); }, [reload]);
+
+  const setPart = (idx: number, v: string) => setParticipants((p) => p.map((x, i) => (i === idx ? v : x)));
+  const addRow = () => setParticipants((p) => [...p, "", "", ""]);
+  const removeRow = () => setParticipants((p) => (p.length > 3 ? p.slice(0, -3) : p));
+
+  const save = async () => {
+    setSaving(true);
+    await fetch(`/api/facilities/${facilityId}/order-info`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        orderType: orderType || null,
+        orderAt: joinIso(orderDate, orderTime),
+        bidStart: negotiated ? null : joinIso(bidStartDate, bidStartTime),
+        bidEnd: negotiated ? null : joinIso(bidEndDate, bidEndTime),
+        estimatedPrice: estimatedPrice || null,
+        minBidRate: minBidRate || null,
+        participants: participants.map((x) => x.trim()).filter(Boolean),
+      }),
+    }).catch(() => {});
+    setSaving(false);
+  };
+
+  const rows: number[][] = [];
+  for (let i = 0; i < participants.length; i += 3) rows.push([i, i + 1, i + 2]);
+
+  return (
     <div className="pt-4 flex flex-col gap-4">
-      <div>
-        <div className="flex items-center gap-1.5 mb-2"><span className="w-1 h-3.5 rounded-full" style={{ background: "var(--cd-success)" }} /><h3 className="cd-text text-sm">시설정보</h3></div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {SPEC_FIELDS.map((f) => (
-            <div key={f.k}>
-              <label className="cd-label">{f.l}</label>
-              <input className="cd-input" disabled={!canEdit} value={form[f.k] ?? ""} onChange={(e) => setForm((p) => ({ ...p, [f.k]: e.target.value }))} />
-            </div>
-          ))}
+      {/* 발주구분 · 발주일시 · 투찰기간 — 한 행 */}
+      <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
+        <div>
+          <label className="cd-label font-normal">발주구분</label>
+          <select className="cd-select" style={{ width: FIELD_W }} disabled={!canEdit} value={orderType} onChange={(e) => setOrderType(e.target.value)}>
+            <option value="">선택</option>
+            {ORDER_TYPE_OPTS.map((o) => <option key={o.k} value={o.k}>{o.l}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="cd-label font-normal">발주일시</label>
+          <div className="flex gap-2">
+            <AutoDateInput className="cd-input tabular-nums" style={{ width: 111 }} disabled={!canEdit} value={orderDate} onChange={setOrderDate} />
+            <AutoTimeInput className="cd-input tabular-nums" style={{ width: 75 }} disabled={!canEdit} value={orderTime} onChange={setOrderTime} />
+          </div>
+        </div>
+        <div>
+          <label className="cd-label font-normal">투찰기간{negotiated && <span className="cd-text-faint text-[11px] ml-1">(수의계약 — 해당 없음)</span>}</label>
+          <div className="flex items-center gap-2">
+            <AutoDateInput className="cd-input tabular-nums" style={{ width: 111 }} disabled={!canEdit || negotiated} value={bidStartDate} onChange={setBidStartDate} />
+            <AutoTimeInput className="cd-input tabular-nums" style={{ width: 75 }} disabled={!canEdit || negotiated} value={bidStartTime} onChange={setBidStartTime} />
+            <span className="cd-text-faint shrink-0">~</span>
+            <AutoDateInput className="cd-input tabular-nums" style={{ width: 111 }} disabled={!canEdit || negotiated} value={bidEndDate} onChange={setBidEndDate} />
+            <AutoTimeInput className="cd-input tabular-nums" style={{ width: 75 }} disabled={!canEdit || negotiated} value={bidEndTime} onChange={setBidEndTime} />
+          </div>
         </div>
       </div>
-      <div>
-        <div className="flex items-center gap-1.5 mb-2"><span className="w-1 h-3.5 rounded-full" style={{ background: "var(--cd-primary)" }} /><h3 className="cd-text text-sm">부지면적</h3></div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {AREA_FIELDS.map((f) => (
-            <div key={f.k}>
-              <label className="cd-label">{f.l} (m²)</label>
-              <input className="cd-input" inputMode="numeric" disabled={!canEdit} value={form[f.k] ?? ""} onChange={(e) => setForm((p) => ({ ...p, [f.k]: e.target.value }))} />
-            </div>
-          ))}
+
+      {/* 예정가격·낙찰하한율 · 참여업체 */}
+      <div className="flex flex-col md:flex-row gap-4">
+        <div className="shrink-0 flex flex-col gap-3" style={{ width: FIELD_W }}>
+          <div>
+            <label className="cd-label font-normal">예정가격 (원)</label>
+            <input className="cd-input tabular-nums" inputMode="numeric" disabled={!canEdit} value={estimatedPrice ? Number(estimatedPrice).toLocaleString() : ""} onChange={(e) => setEstimatedPrice(e.target.value.replace(/[^\d]/g, ""))} placeholder="사업장 제시 시" />
+          </div>
+          <div>
+            <label className="cd-label font-normal">낙찰하한율 (%)</label>
+            <input className="cd-input" inputMode="decimal" disabled={!canEdit} value={minBidRate} onChange={(e) => setMinBidRate(e.target.value)} />
+          </div>
         </div>
-      </div>
-      <div>
-        <div className="flex items-center gap-1.5 mb-2"><span className="w-1 h-3.5 rounded-full" style={{ background: "var(--cd-warning)" }} /><h3 className="cd-text text-sm">시설 현황 자료</h3></div>
-        <div className="flex flex-col gap-2">
-          {SPEC_DOCS.map((d) => {
-            const on = hasDoc[d.k];
-            return (
-              <div key={d.k} className="flex items-center gap-2">
-                <span className="rounded-full px-3 py-1 text-xs shrink-0" style={{ minWidth: 100, textAlign: "center", background: on ? "#EAF7E1" : "var(--cd-surface)", border: on ? "1.5px solid #7EBA56" : "1px solid var(--cd-border)", color: on ? "#4A7A2E" : "var(--cd-muted)" }}>{d.l}</span>
-                {canEdit && (
-                  <>
-                    <input ref={(el) => { fileRefs.current[d.k] = el; }} type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(d.k, f); }} />
-                    <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => fileRefs.current[d.k]?.click()} disabled={uploading === d.k}>
-                      <Upload className="w-3 h-3" /> {uploading === d.k ? "…" : "Up"}
-                    </button>
-                  </>
-                )}
-                <button className="cd-btn cd-btn-ghost cd-btn-sm" disabled={!on} onClick={() => window.open(`/api/facilities/${facilityId}/facility-docs?docType=${d.k}`)}>
-                  <Download className="w-3 h-3" /> Down
-                </button>
-              </div>
-            );
-          })}
+        <div className="flex-1 min-w-0">
+          <label className="cd-label font-normal">참여업체</label>
+          <div className="flex flex-col gap-2">
+            {rows.map((row, ri) => {
+              const isLast = ri === rows.length - 1;
+              return (
+                <div key={ri} className="flex items-center gap-2">
+                  {row.map((idx) => (
+                    <input key={idx} className="cd-input flex-1 min-w-0" disabled={!canEdit} value={participants[idx] ?? ""} onChange={(e) => setPart(idx, e.target.value)} />
+                  ))}
+                  {canEdit && isLast ? (
+                    <div className="flex gap-1 shrink-0">
+                      {rows.length > 1 && (
+                        <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={removeRow} title="마지막 줄 삭제"><Minus className="w-4 h-4" /></button>
+                      )}
+                      <button type="button" className="cd-btn cd-btn-soft cd-btn-sm" onClick={addRow} title="줄 추가"><Plus className="w-4 h-4" /></button>
+                    </div>
+                  ) : (
+                    <span className="shrink-0" style={{ width: rows.length > 1 ? 66 : 32 }} />
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
       {canEdit && (
         <div className="flex justify-end">
           <button className="cd-btn cd-btn-primary cd-btn-sm" onClick={save} disabled={saving}>{saving ? "저장 중…" : "저장"}</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const fmtHistDate = (iso: string | null) => (iso ? iso.slice(0, 10).replace(/-/g, ".") + "." : "");
+
+function OutcomePill({ stage, outcome }: { stage: SalesStage; outcome: SalesBidResult | null }) {
+  // 결과 태그: 수주(녹) / 탈락·거절·중단(회) / 진행중(중립)
+  let label: string;
+  let tone: "won" | "lost" | "open";
+  if (stage === "won") { label = "수주"; tone = "won"; }
+  else if (stage === "lost") { label = outcome && outcome !== "won_bid" ? (outcome === "lost_bid" ? "탈락" : SALES_OUTCOME_LABELS[outcome] ?? "종결") : "탈락"; tone = "lost"; }
+  else { label = SALES_STAGE_LABELS[stage]; tone = "open"; }
+  const style =
+    tone === "won" ? { background: "#EAF7E1", border: "1.5px solid #7EBA56", color: "#4A7A2E" }
+    : tone === "lost" ? { background: "var(--cd-surface)", border: "1px solid var(--cd-border)", color: "var(--cd-muted)" }
+    : { background: "var(--cd-primary-soft)", border: "1px solid var(--cd-primary)", color: "var(--cd-primary)" };
+  return <span className="rounded-full px-3 py-1 text-xs font-bold shrink-0" style={style}>{label}</span>;
+}
+
+function HistoryTab({ facilityId }: { facilityId: string }) {
+  const [items, setItems] = useState<HistoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [cat, setCat] = useState<string>("all");
+  const [sub, setSub] = useState<string>("all");
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/facilities/${facilityId}/sales-history`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : { items: [] }))
+      .then((d) => setItems(Array.isArray(d.items) ? d.items : []))
+      .catch(() => setItems([]))
+      .finally(() => setLoading(false));
+  }, [facilityId]);
+
+  const filtered = items.filter(
+    (it) => (cat === "all" || it.serviceCategory === cat) && (sub === "all" || it.serviceSubcategory === sub)
+  );
+
+  const catTabs = [{ code: "all", label: "전체" }, ...SALES_SERVICE_CATEGORIES];
+  // 세분류 탭: 선택된 용역별에 종속(전체 용역이면 세분류 '전체'만).
+  const subTabs = [
+    { code: "all", label: "전체" },
+    ...(cat !== "all" ? SALES_SUBCATEGORIES_BY_CATEGORY[cat as SalesServiceCategory] : []),
+  ];
+
+  return (
+    <div className="pt-4 flex flex-col gap-3">
+      {/* 용역별 탭 */}
+      <div className="flex flex-wrap gap-1.5">
+        {catTabs.map((t) => (
+          <button key={t.code} type="button" onClick={() => { setCat(t.code); setSub("all"); }}
+            className="rounded-full px-3.5 py-1 text-xs font-bold border transition"
+            style={cat === t.code
+              ? { background: "var(--cd-primary-soft)", borderColor: "var(--cd-primary)", color: "var(--cd-primary)" }
+              : { borderColor: "var(--cd-border)", color: "var(--cd-muted)" }}>{t.label}</button>
+        ))}
+      </div>
+      {/* 세분류 탭 */}
+      <div className="flex flex-wrap gap-1.5">
+        {subTabs.map((t) => (
+          <button key={t.code} type="button" onClick={() => setSub(t.code)}
+            className="rounded-lg px-2.5 py-0.5 text-[11px] font-semibold border transition"
+            style={sub === t.code
+              ? { background: "var(--cd-primary)", borderColor: "var(--cd-primary)", color: "#fff" }
+              : { background: "var(--cd-surface)", borderColor: "transparent", color: "var(--cd-muted)" }}>{t.label}</button>
+        ))}
+      </div>
+
+      {/* 태그 카드 목록 */}
+      {loading ? (
+        <div className="cd-text-faint text-sm py-6 text-center">불러오는 중…</div>
+      ) : filtered.length === 0 ? (
+        <div className="cd-text-faint text-sm py-8 text-center border cd-border-c rounded-xl" style={{ borderStyle: "dashed" }}>해당 조건의 영업 이력이 없습니다.</div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {filtered.map((it) => (
+            <div key={it.projectId} className="rounded-2xl border cd-border-c p-4">
+              <div className="flex items-center gap-3 mb-3">
+                <OutcomePill stage={it.stage} outcome={it.outcome} />
+                <span className="cd-text-muted text-xs tabular-nums shrink-0">{it.startDate ? `${fmtHistDate(it.startDate)} ~ ${fmtHistDate(it.endDate)}` : "기간 미정"}</span>
+                <span className="cd-text text-sm font-bold truncate">{it.title}</span>
+              </div>
+              <div className="border-t cd-border-c pt-3 flex flex-col md:flex-row gap-4">
+                <div className="flex flex-col gap-1.5 md:w-48 shrink-0">
+                  {it.members.length ? it.members.map((m, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <HistAvatar src={m.photoPath} />
+                      <span className="cd-text text-sm">{m.employeeName ?? "—"}</span>
+                      {m.positionName && <span className="cd-text-faint text-xs">{m.positionName}</span>}
+                    </div>
+                  )) : <span className="cd-text-faint text-xs">담당 인력 없음</span>}
+                </div>
+                <div className="flex-1 min-w-0 flex flex-col gap-1.5 text-[13px]">
+                  <div className="flex gap-2"><span className="cd-text-faint w-16 shrink-0">업무상세</span><span className="cd-text min-w-0">{it.summary ?? "—"}</span></div>
+                  <div className="flex gap-2"><span className="cd-text-faint w-16 shrink-0">투찰금액</span><span className="cd-text tabular-nums">{it.bidAmount != null ? `₩${it.bidAmount.toLocaleString()}` : "—"}</span></div>
+                  <div className="flex gap-2"><span className="cd-text-faint w-16 shrink-0">추진결과</span><span className="cd-text">{it.outcome ? SALES_OUTCOME_LABELS[it.outcome] ?? "—" : "—"}</span></div>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>

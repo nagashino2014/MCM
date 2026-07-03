@@ -2830,13 +2830,13 @@ const TreeChildRow = memo(function TreeChildRow({
 });
 
 function DateInput({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  const displayValue = value ? value.replace(/-/g, "") : "";
+  const displayValue = formatDateProgressive(value);
   return (
     <div className="relative flex items-center">
       <input
         type="text"
         inputMode="numeric"
-        maxLength={8}
+        maxLength={10}
         className="cd-input tabular-nums w-full pr-9"
         placeholder="YYYYMMDD"
         value={displayValue}
@@ -2853,6 +2853,14 @@ function DateInput({ value, onChange }: { value: string; onChange: (value: strin
       />
     </div>
   );
+}
+
+/** 저장값(부분 숫자 또는 ISO)을 입력 진행도에 맞춰 YYYY-MM-DD 로 표시 */
+function formatDateProgressive(value: string): string {
+  const digits = stripDigits(value).slice(0, 8);
+  if (digits.length <= 4) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 4)}-${digits.slice(4)}`;
+  return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6)}`;
 }
 
 function normalizeDateInput(value: string): string {

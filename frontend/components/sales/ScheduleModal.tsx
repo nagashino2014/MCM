@@ -3,11 +3,11 @@
 import { useMemo, useState } from "react";
 import { Plus, Trash2, X } from "lucide-react";
 import OrganizationTree from "@/components/admin/users/OrganizationTree";
+import { AutoDateInput } from "@/components/ui/AutoDateInput";
+import { AutoTimeInput } from "@/components/ui/AutoTimeInput";
 import type { OrganizationEmployeeRow, OrganizationSnapshot } from "@/components/admin/users/types";
 import {
   ACTIVITY_TYPES,
-  ACTIVITY_TYPE_META,
-  ASSIGNEE_ROLE_LABELS,
   SALES_BID_RESULT_LABELS,
   type ActivityAssigneeRole,
   type ActivityBid,
@@ -31,8 +31,6 @@ interface AssigneePick {
   roleKind: ActivityAssigneeRole;
 }
 
-// 담당인력 역할 토글(참석자 제외 — 참석자는 좌측 별도 항목)
-const ROLE_TOGGLES: ActivityAssigneeRole[] = ["lead", "deputy", "bidding"];
 // 사업장 담당자(구 접견자) 노출 일정명
 const CONTACT_TYPES: SalesActivityType[] = ["telemarketing", "email", "visit", "site_briefing", "quote"];
 // 장소 노출 일정명
@@ -49,6 +47,12 @@ const ACTOR_LABELS: Partial<Record<SalesActivityType, string>> = {
 };
 const MIN_ASSIGNEE_RANK = 60;
 const EXCLUDE_NAMES = ["한상순"]; // 조직도 트리에서 제외할 인원
+
+// datetime-local("YYYY-MM-DDTHH:MM") ↔ 날짜/시각 분리 조합 헬퍼
+const dtDate = (v: string | null | undefined) => (v ?? "").slice(0, 10);
+const dtTime = (v: string | null | undefined) => (v ?? "").slice(11, 16);
+const withDate = (cur: string | null | undefined, d: string) => (d ? `${d}T${dtTime(cur) || "00:00"}` : "");
+const withTime = (cur: string | null | undefined, t: string) => (dtDate(cur) ? `${dtDate(cur)}T${t || "00:00"}` : "");
 
 export function ScheduleModal({
   theme,
@@ -95,7 +99,7 @@ export function ScheduleModal({
       .filter((m) => m.roleLabel === "정" || m.roleLabel === "부")
       .map((m) => ({ employeeId: m.employeeId, name: m.employeeName ?? m.employeeId, roleKind: (m.roleLabel === "정" ? "lead" : "deputy") as ActivityAssigneeRole }));
   });
-  const [activeTarget, setActiveTarget] = useState<ActivityAssigneeRole>("lead");
+  const [activeTarget, setActiveTarget] = useState<ActivityAssigneeRole>("attendee");
   const [attendeeSlots, setAttendeeSlots] = useState(() => Math.max(1, activity?.assignees?.filter((a) => a.roleKind === "attendee").length ?? 0));
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -107,8 +111,11 @@ export function ScheduleModal({
   const showQuote = type === "quote";
   const showBid = type === "bid";
   const showBidResult = type === "result";
+  // 경과 입력란: 스케쥴 설정 기간이 경과한(종료일시가 과거) 기존 스케쥴에서만 노출.
+  const scheduleEndIso = activity?.endedAt ?? activity?.scheduledAt ?? "";
+  const periodPassed = !!scheduleEndIso && scheduleEndIso < new Date().toISOString();
+  const showProgress = !!editing && periodPassed;
 
-  const roleAssignees = assignees.filter((a) => a.roleKind !== "attendee");
   const attendees = assignees.filter((a) => a.roleKind === "attendee");
 
   const treeSnapshot = useMemo<OrganizationSnapshot | null>(() => {
@@ -170,7 +177,7 @@ export function ScheduleModal({
       quotes: showQuote ? quotes.filter((q) => q.amount != null || q.submittedAt).map((q, i) => ({ ...q, seq: i + 1 })) : [],
       bids: showBid ? bids.filter((b) => b.amount != null || b.biddedAt).map((b, i) => ({ ...b, seq: i + 1 })) : [],
       bidResult: showBidResult ? (bidResult || null) : null,
-      color: ACTIVITY_TYPE_META[type].color,
+      color: null, // 색은 일정명(activity_type) 메타에서 파생 — 별도 저장 안 함
       contactPersonIds: showContacts ? selectedPersons : [],
       assignees: keepAssignees.map((a) => ({ employeeId: a.employeeId, roleKind: a.roleKind })),
     };
@@ -208,10 +215,12 @@ export function ScheduleModal({
             </select>
 
             <label className="cd-label">일시 (시작 ~ 종료)</label>
-            <div className="flex items-center gap-1.5 mb-3">
-              <input type="datetime-local" className="cd-input" value={startAt} onChange={(e) => setStartAt(e.target.value)} />
+            <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+              <AutoDateInput className="cd-input tabular-nums" style={{ width: 116 }} value={dtDate(startAt)} onChange={(d) => setStartAt(withDate(startAt, d))} />
+              <AutoTimeInput className="cd-input tabular-nums" style={{ width: 80 }} value={dtTime(startAt)} onChange={(t) => setStartAt(withTime(startAt, t))} />
               <span className="cd-text-faint">~</span>
-              <input type="datetime-local" className="cd-input" value={endAt} onChange={(e) => setEndAt(e.target.value)} />
+              <AutoDateInput className="cd-input tabular-nums" style={{ width: 116 }} value={dtDate(endAt)} onChange={(d) => setEndAt(withDate(endAt, d))} />
+              <AutoTimeInput className="cd-input tabular-nums" style={{ width: 80 }} value={dtTime(endAt)} onChange={(t) => setEndAt(withTime(endAt, t))} />
             </div>
 
             {showPlace && (
@@ -224,7 +233,7 @@ export function ScheduleModal({
             <label className="cd-label">업무상세 <span className="cd-text-faint">({summary.length}/100)</span></label>
             <textarea className="cd-textarea mb-3" rows={2} maxLength={100} value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="100자 이내" />
 
-            {editing && (
+            {showProgress && (
               <>
                 <label className="cd-label">경과 <span className="cd-text-faint">({progressNote.length}/200)</span></label>
                 <textarea className="cd-textarea mb-3" rows={2} maxLength={200} value={progressNote} onChange={(e) => setProgressNote(e.target.value)} placeholder="진행상황·결과(200자 이내)" />
@@ -287,8 +296,10 @@ export function ScheduleModal({
                     {quotes.length > 1 && <span className="cd-text-faint text-[11px] w-8 shrink-0">{i + 1}차</span>}
                     <input className="cd-input" placeholder="금액" inputMode="numeric" value={q.amount != null ? String(q.amount) : ""}
                       onChange={(e) => setQuotes((arr) => arr.map((x, j) => (j === i ? { ...x, amount: num(e.target.value) } : x)))} />
-                    <input type="datetime-local" className="cd-input" value={(q.submittedAt ?? "").slice(0, 16)}
-                      onChange={(e) => setQuotes((arr) => arr.map((x, j) => (j === i ? { ...x, submittedAt: e.target.value || null } : x)))} />
+                    <AutoDateInput className="cd-input tabular-nums" style={{ width: 116 }} value={dtDate(q.submittedAt)}
+                      onChange={(d) => setQuotes((arr) => arr.map((x, j) => (j === i ? { ...x, submittedAt: withDate(x.submittedAt, d) || null } : x)))} />
+                    <AutoTimeInput className="cd-input tabular-nums" style={{ width: 80 }} value={dtTime(q.submittedAt)}
+                      onChange={(t) => setQuotes((arr) => arr.map((x, j) => (j === i ? { ...x, submittedAt: withTime(x.submittedAt, t) || null } : x)))} />
                     {quotes.length > 1 && <button className="cd-text-faint shrink-0" onClick={() => setQuotes((arr) => arr.filter((_, j) => j !== i))}><Trash2 className="w-3.5 h-3.5" /></button>}
                   </div>
                 ))}
@@ -306,8 +317,10 @@ export function ScheduleModal({
                     {bids.length > 1 && <span className="cd-text-faint text-[11px] w-8 shrink-0">{i + 1}차</span>}
                     <input className="cd-input" placeholder="금액" inputMode="numeric" value={b.amount != null ? String(b.amount) : ""}
                       onChange={(e) => setBids((arr) => arr.map((x, j) => (j === i ? { ...x, amount: num(e.target.value) } : x)))} />
-                    <input type="datetime-local" className="cd-input" value={(b.biddedAt ?? "").slice(0, 16)}
-                      onChange={(e) => setBids((arr) => arr.map((x, j) => (j === i ? { ...x, biddedAt: e.target.value || null } : x)))} />
+                    <AutoDateInput className="cd-input tabular-nums" style={{ width: 116 }} value={dtDate(b.biddedAt)}
+                      onChange={(d) => setBids((arr) => arr.map((x, j) => (j === i ? { ...x, biddedAt: withDate(x.biddedAt, d) || null } : x)))} />
+                    <AutoTimeInput className="cd-input tabular-nums" style={{ width: 80 }} value={dtTime(b.biddedAt)}
+                      onChange={(t) => setBids((arr) => arr.map((x, j) => (j === i ? { ...x, biddedAt: withTime(x.biddedAt, t) || null } : x)))} />
                     {bids.length > 1 && <button className="cd-text-faint shrink-0" onClick={() => setBids((arr) => arr.filter((_, j) => j !== i))}><Trash2 className="w-3.5 h-3.5" /></button>}
                   </div>
                 ))}
@@ -316,7 +329,7 @@ export function ScheduleModal({
 
             {showBidResult && (
               <div className="mb-1">
-                <label className="cd-label">투찰결과</label>
+                <label className="cd-label">영업 결과</label>
                 <select className="cd-select" value={bidResult} onChange={(e) => setBidResult(e.target.value as SalesBidResult | "")}>
                   <option value="">미정</option>
                   {(Object.keys(SALES_BID_RESULT_LABELS) as SalesBidResult[]).map((r) => <option key={r} value={r}>{SALES_BID_RESULT_LABELS[r]}</option>)}
@@ -325,26 +338,19 @@ export function ScheduleModal({
             )}
           </div>
 
-          {/* 우: 담당인력만 */}
+          {/* 우: 실행/참석 인원 선택(조직도) — 정/부/입찰은 프로젝트 담당자에서 지정 */}
           <div className="min-w-0">
-            <label className="cd-label">담당인력</label>
-            <div className="flex gap-1.5 mb-2">
-              {ROLE_TOGGLES.map((r) => (
-                <button key={r} type="button" className="cd-chip cd-chip-sm" data-active={activeTarget === r} onClick={() => setActiveTarget(r)}>
-                  {ASSIGNEE_ROLE_LABELS[r]}
-                </button>
-              ))}
-            </div>
+            <label className="cd-label">실행 · 참석 인원</label>
             <div className="flex flex-wrap gap-1 mb-2">
-              {roleAssignees.map((a) => (
-                <span key={`${a.employeeId}-${a.roleKind}`} className="cd-pill cd-pill-info inline-flex items-center gap-1">
-                  {ASSIGNEE_ROLE_LABELS[a.roleKind]}·{a.name}
+              {attendees.map((a) => (
+                <span key={a.employeeId} className="cd-pill cd-pill-info inline-flex items-center gap-1">
+                  {a.name}
                   <button onClick={() => removeAssignee(a)}><X className="w-3 h-3" /></button>
                 </span>
               ))}
-              {roleAssignees.length === 0 && <span className="cd-text-faint text-xs">역할 선택 후 조직도에서 인원을 클릭하세요.</span>}
+              {attendees.length === 0 && <span className="cd-text-faint text-xs">조직도에서 인원을 클릭해 추가하세요.</span>}
             </div>
-            <OrganizationTree snapshot={treeSnapshot} embedded title="조직도" onSelectEmployee={onTreeSelect} />
+            <OrganizationTree snapshot={treeSnapshot} embedded hideHeader onSelectEmployee={onTreeSelect} />
           </div>
         </div>
 

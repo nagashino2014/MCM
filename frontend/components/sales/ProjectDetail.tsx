@@ -76,6 +76,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   const [snapshot, setSnapshot] = useState<OrganizationSnapshot | null>(null);
   const [people, setPeople] = useState<FacilityPerson[]>([]);
   const [departments, setDepartments] = useState<{ id: number; departmentName: string }[]>([]);
+  const [orderInfo, setOrderInfo] = useState<{ orderType: string | null; participants: string[] } | null>(null);
   const [memberOpen, setMemberOpen] = useState(false);
   const [siteContactOpen, setSiteContactOpen] = useState(false);
   const [selectedSite, setSelectedSite] = useState<FacilityPerson | null>(null);
@@ -144,6 +145,14 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   }, [facilityId]);
   useEffect(() => { reloadPeople(); }, [reloadPeople]);
 
+  useEffect(() => {
+    if (!facilityId) return;
+    fetch(`/api/facilities/${facilityId}/order-info`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : { info: null }))
+      .then((d) => setOrderInfo(d.info ? { orderType: d.info.orderType ?? null, participants: Array.isArray(d.info.participants) ? d.info.participants : [] } : null))
+      .catch(() => {});
+  }, [facilityId]);
+
   const years = useMemo(() => {
     const set = new Set<string>();
     for (const a of activities) {
@@ -163,19 +172,13 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   }
 
   return (
-    <div className="cdash cd-fields-white p-2" data-theme={theme}>
-      <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+    <div className="cdash cd-fields-white px-2 pt-2 pb-0 h-full flex flex-col min-h-0" data-theme={theme}>
+      <div className="flex items-center justify-between gap-3 flex-wrap shrink-0" style={{ marginBottom: 15 }}>
         <div className="flex items-center gap-3 min-w-0">
           <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => router.push("/sales")}>
             <ArrowLeft className="w-4 h-4" /> 보드
           </button>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 cd-text-muted text-xs">
-              <Building2 className="w-3.5 h-3.5" />
-              <span className="truncate">{project.facilityName ?? "사업장 미지정"}</span>
-            </div>
-            <h1 className="cd-text text-xl font-extrabold tracking-tight truncate">{project.title}</h1>
-          </div>
+          <h1 className="cd-text text-xl font-extrabold tracking-tight truncate min-w-0">{project.title}</h1>
         </div>
         <div className="flex items-center gap-2">
           <span className={`cd-pill ${STAGE_PILL[project.stage] ?? "cd-pill-idle"}`} title="진행 단계(자동 분류)">{SALES_STAGE_LABELS[project.stage]}</span>
@@ -184,28 +187,31 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       </div>
 
       {/* 본문 2열 — 좌: 영업 스케쥴/사업장정보/진행상황, 우: 영업활동 이력/담당자 */}
-      <div className="flex flex-col lg:flex-row gap-3 lg:items-stretch">
-        <div className="flex-1 min-w-0 flex flex-col gap-3">
-          <SalesCalendar
-            activities={activities}
-            canEdit={canEdit}
-            onPickDate={(iso) => { setEditing(null); setAddDate(iso); setAdding(true); }}
-            onEditActivity={(a) => { setAddDate(null); setEditing(a); }}
-          />
-          <div className="flex flex-col lg:flex-row gap-3 lg:items-stretch">
-            <div className="flex-[6] min-w-0 flex">
+      <div className="flex flex-col lg:flex-row gap-3 lg:items-stretch flex-1 min-h-0">
+        <div className="flex-1 min-w-0 flex flex-col gap-3 min-h-0">
+          <div className="shrink-0">
+            <SalesCalendar
+              activities={activities}
+              canEdit={canEdit}
+              facilityName={project.facilityName}
+              onPickDate={(iso) => { setEditing(null); setAddDate(iso); setAdding(true); }}
+              onEditActivity={(a) => { setAddDate(null); setEditing(a); }}
+            />
+          </div>
+          <div className="flex flex-col lg:flex-row gap-3 lg:items-stretch flex-1 min-h-0">
+            <div className="flex-[6] min-w-0 flex min-h-0">
               <SalesFacilityInfoCard facilityId={project.facilityId} theme={theme} canEdit={canEdit} />
             </div>
-            <div className="flex-[4] min-w-0 flex">
-              <SalesProgressCard project={project} activities={activities} />
+            <div className="flex-[4] min-w-0 flex min-h-0">
+              <SalesProgressCard project={project} activities={activities} orderInfo={orderInfo} />
             </div>
           </div>
         </div>
 
-        <div className="lg:w-[640px] shrink-0 flex flex-col gap-3">
-          {/* 영업활동 이력 — 고정 높이 + 세로 스크롤(스크롤바 숨김) */}
-          <div className="cd-card-bg rounded-2xl border cd-border-c p-3 flex flex-col shrink-0" style={{ height: 800 }}>
-            <div className="flex items-center justify-between gap-2 flex-wrap mb-3 shrink-0">
+        <div className="lg:w-[640px] shrink-0 flex flex-col gap-3 min-h-0">
+          {/* 영업활동 이력 — 남는 높이 채움 + 세로 스크롤(스크롤바 숨김) */}
+          <div className="cd-card-bg rounded-2xl border cd-border-c py-3 flex flex-col flex-[7] min-h-0" style={{ paddingLeft: 20, paddingRight: 20 }}>
+            <div className="flex items-center justify-between gap-2 flex-wrap shrink-0" style={{ marginBottom: 15 }}>
               <h2 className="cd-text font-extrabold text-sm">영업활동 이력</h2>
               <div className="flex items-center gap-1.5">
                 <select className="cd-select cd-btn-sm" style={{ width: "auto" }} value={fYear} onChange={(e) => setFYear(e.target.value)}>
@@ -225,16 +231,16 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
                 )}
               </div>
             </div>
-            <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide pt-1">
+            <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide">
               <Timeline activities={activities} canEdit={canEdit} onEdit={setEditing} onReload={reload} />
             </div>
           </div>
 
           {/* 담당자 — 좌: 프로젝트 / 우: 사업장 */}
-          <div className="cd-card-bg rounded-2xl border cd-border-c p-3 flex-1 min-h-0 flex flex-col lg:flex-row gap-3">
+          <div className="cd-card-bg rounded-2xl border cd-border-c flex-[3] min-h-0 flex flex-col lg:flex-row gap-3" style={{ paddingTop: 12, paddingBottom: 12, paddingLeft: 15, paddingRight: 15 }}>
             {/* 프로젝트 담당자 */}
             <div className="flex-[4] min-w-0 flex flex-col">
-              <h2 className="cd-text font-extrabold text-sm flex items-center gap-1 mb-2"><Users className="w-4 h-4" /> 프로젝트 담당자</h2>
+              <h2 className="cd-text font-extrabold text-sm" style={{ marginBottom: 12 }}>프로젝트 담당자</h2>
               <div className="flex flex-col gap-2 flex-1 overflow-y-auto scrollbar-hide">
                 {[...(project.members ?? [])]
                   .sort((a, b) => (MEMBER_ROLE_ORDER[a.roleLabel] ?? 9) - (MEMBER_ROLE_ORDER[b.roleLabel] ?? 9))
@@ -255,25 +261,25 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
 
             <div className="shrink-0 self-stretch" style={{ width: 1, background: "var(--cd-border)" }} />
 
-            {/* 사업장 담당자 */}
+            {/* 사업장 담당자 — 최대 4명, 2열 2행 */}
             <div className="flex-[6] min-w-0 flex flex-col">
-              <h2 className="cd-text font-extrabold text-sm flex items-center gap-1 mb-2"><Building2 className="w-4 h-4" /> 사업장 담당자</h2>
-              <div className="flex flex-col gap-1.5 overflow-y-auto scrollbar-hide">
-                {people.filter((p) => p.deptType && p.status === "active").map((p) => {
+              <h2 className="cd-text font-extrabold text-sm" style={{ marginBottom: 12 }}>사업장 담당자</h2>
+              <div className="grid grid-cols-2 gap-1.5 overflow-y-auto scrollbar-hide">
+                {people.filter((p) => p.deptType && p.status === "active").slice(0, 4).map((p) => {
                   const on = selectedSite?.id === p.id;
                   return (
                     <button
                       key={p.id}
                       type="button"
                       onClick={() => setSelectedSite(on ? null : p)}
-                      className="flex items-center gap-2 text-left rounded-lg px-1.5 py-1 cd-row-hover"
+                      className="flex items-center gap-2 text-left rounded-lg px-1.5 py-1 cd-row-hover min-w-0"
                       data-active={on}
                     >
                       <span className={`cd-pill ${p.deptType === "contract" ? "cd-pill-warn" : "cd-pill-success"} shrink-0`} style={{ minWidth: 56, justifyContent: "center" }}>
                         {p.deptType === "contract" ? "계약부서" : "환경부서"}
                       </span>
-                      <span className="cd-text text-sm">{p.personName}</span>
-                      {p.title && <span className="cd-text-faint text-xs">{p.title}</span>}
+                      <span className="cd-text text-sm truncate">{p.personName}</span>
+                      {p.title && <span className="cd-text-faint text-xs truncate">{p.title}</span>}
                     </button>
                   );
                 })}
@@ -397,6 +403,7 @@ function Timeline({ activities, canEdit, onEdit, onReload }: {
     await fetch(`/api/sales/activities/${a.activityId}`, { method: "DELETE" });
     onReload();
   };
+  const nowIso = new Date().toISOString();
   return (
     <div className="relative pl-6">
       <div className="absolute left-[7px] top-2 bottom-2 w-0.5" style={{ background: "var(--cd-border)" }} />
@@ -406,6 +413,10 @@ function Timeline({ activities, canEdit, onEdit, onReload }: {
           const color = a.color ?? meta.color;
           // 담당자 = 해당 스케쥴의 수행자(행위자, attendee)만. 프로젝트 담당자(정/부/입찰) 상속분은 제외.
           const actors = (a.assignees ?? []).filter((x) => x.roleKind === "attendee");
+          // 예정 = 스케쥴 시작일시가 미래. 진행 = 시작됐으나 경과 미입력(기간 중 포함).
+          const isFuture = !!a.scheduledAt && a.scheduledAt > nowIso;
+          const doneNote = !!(a.progressNote && a.progressNote.trim());
+          const isProgress = !isFuture && !doneNote;
           return (
             <div key={a.activityId} className="relative group">
               {/* 노드(이중원) */}
@@ -416,21 +427,23 @@ function Timeline({ activities, canEdit, onEdit, onReload }: {
                 <span className="w-2 h-2 rounded-full" style={{ background: color }} />
               </span>
 
-              {/* 제목 + 배지 */}
+              {/* 제목 + (예정·업무) 태그 우측 정렬 */}
               <div className="flex items-center gap-2">
-                <h3 className="cd-text text-sm">{meta.label}</h3>
-                <span
-                  className="text-[11px] rounded-full px-2 py-0.5"
-                  style={{ background: color, color: "#1f2937" }}
-                >
-                  {meta.short}
-                </span>
+                <h3 className="cd-text text-sm font-bold min-w-0 truncate">{meta.label}</h3>
                 {canEdit && (
-                  <span className="ml-auto hidden group-hover:flex items-center gap-1">
+                  <span className="hidden group-hover:flex items-center gap-1">
                     <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => onEdit(a)}>수정</button>
                     <button className="cd-btn cd-btn-danger cd-btn-sm" onClick={() => del(a)}><Trash2 className="w-3.5 h-3.5" /></button>
                   </span>
                 )}
+                <span className="ml-auto flex items-center gap-1.5 shrink-0">
+                  {isFuture ? (
+                    <span className="text-[11px] rounded-full px-2 py-0.5" style={{ border: "1px solid var(--cd-primary)", color: "var(--cd-primary)" }}>예정</span>
+                  ) : isProgress ? (
+                    <span className="text-[11px] rounded-full px-2 py-0.5" style={{ border: "1.5px solid #7EBA56", color: "#4A7A2E" }}>진행</span>
+                  ) : null}
+                  <span className="text-[11px] rounded-full px-2 py-0.5" style={{ background: color, color: "#1f2937" }}>{meta.short}</span>
+                </span>
               </div>
               <div className="cd-text-faint text-xs mt-0.5 mb-2">{fmtTimelineWhen(a)}</div>
 

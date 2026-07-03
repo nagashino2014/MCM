@@ -17,7 +17,14 @@ function whenOf(a: SalesActivity): string {
   return (a.scheduledAt ?? a.occurredAt ?? a.createdAt ?? "").slice(0, 16);
 }
 
-export function SalesProgressCard({ project, activities }: { project: SalesProject; activities: SalesActivity[] }) {
+const ORDER_TYPE_LABELS: Record<string, string> = { negotiated: "수의계약", limited: "제한경쟁", qualification: "적격심사" };
+
+export interface OrderInfoSummary {
+  orderType: string | null;
+  participants: string[];
+}
+
+export function SalesProgressCard({ project, activities, orderInfo }: { project: SalesProject; activities: SalesActivity[]; orderInfo?: OrderInfoSummary | null }) {
   const info = useMemo(() => {
     const sorted = [...activities].sort((a, b) => whenOf(a).localeCompare(whenOf(b)));
     const registered = new Set(activities.map((a) => a.activityType));
@@ -48,20 +55,31 @@ export function SalesProgressCard({ project, activities }: { project: SalesProje
     const counts = new Map<SalesActivityType, number>();
     for (const a of activities) counts.set(a.activityType, (counts.get(a.activityType) ?? 0) + 1);
 
+    // 예정 유형: 해당 일정명의 최초 스케쥴 시작일시가 미래(오늘·현재 시각 이후)
+    const nowIso = new Date().toISOString();
+    const earliestByType = new Map<SalesActivityType, string>();
+    for (const a of activities) {
+      const w = a.scheduledAt ?? a.occurredAt ?? a.createdAt;
+      const cur = earliestByType.get(a.activityType);
+      if (!cur || w < cur) earliestByType.set(a.activityType, w);
+    }
+    const futureTypes = new Set<SalesActivityType>();
+    for (const [t, w] of earliestByType) if (w > nowIso) futureTypes.add(t);
+
     // 투찰정보
     const allQuotes = activities.filter((a) => a.activityType === "quote").flatMap((a) => a.quotes ?? []);
     const allBids = activities.filter((a) => a.activityType === "bid").flatMap((a) => a.bids ?? []);
     const lastQuote = allQuotes.length ? allQuotes[allQuotes.length - 1].amount : null;
     const lastBid = allBids.length ? allBids[allBids.length - 1].amount : null;
 
-    return { registered, activeType, startIso, elapsedDays, counts, quoteCount: allQuotes.length, lastQuote, bidCount: allBids.length, lastBid };
+    return { registered, activeType, futureTypes, startIso, elapsedDays, counts, quoteCount: allQuotes.length, lastQuote, bidCount: allBids.length, lastBid };
   }, [activities]);
 
   const flowTags = STAGE_FLOW.filter((t) => info.registered.has(t));
   const detailEntries = Array.from(info.counts.entries());
 
   return (
-    <div className="cd-card-bg rounded-2xl border cd-border-c p-4 w-full">
+    <div className="cd-card-bg rounded-2xl border cd-border-c py-4 w-full h-full min-h-0 overflow-y-auto scrollbar-hide" style={{ paddingLeft: 21, paddingRight: 21 }}>
       <h2 className="cd-text font-extrabold text-sm mb-3">영업활동 진행상황</h2>
 
       {/* 인포그래픽 파이프라인 */}
@@ -71,13 +89,14 @@ export function SalesProgressCard({ project, activities }: { project: SalesProje
             style={{ background: "linear-gradient(90deg, #FFE9A8, #FDC748)" }} />
           {flowTags.map((t) => {
             const on = info.activeType === t;
+            const future = !on && info.futureTypes.has(t);
+            const style = on
+              ? { background: "#EAF7E1", border: "1.5px solid #7EBA56", color: "#4A7A2E" }
+              : future
+              ? { background: "var(--cd-card)", border: "1.5px solid var(--cd-primary)", color: "var(--cd-primary)" }
+              : { background: "var(--cd-card)", border: "1px solid var(--cd-border)", color: "var(--cd-muted)" };
             return (
-              <span key={t} className="relative z-10 rounded-full px-3 py-1 text-xs shrink-0"
-                style={{
-                  background: on ? "#EAF7E1" : "var(--cd-card)",
-                  border: on ? "1.5px solid #7EBA56" : "1px solid var(--cd-border)",
-                  color: on ? "#4A7A2E" : "var(--cd-muted)",
-                }}>
+              <span key={t} className="relative z-10 rounded-full px-3 py-1 text-xs shrink-0" style={style}>
                 {ACTIVITY_TYPE_META[t].short}
               </span>
             );
@@ -95,7 +114,7 @@ export function SalesProgressCard({ project, activities }: { project: SalesProje
           <span className="cd-text-faint text-[11px] mb-1">진행 단계</span>
           <span className="cd-text">{SALES_STAGE_LABELS[project.stage]}</span>
         </div>
-        <div className="rounded-xl border p-3 flex flex-col items-center justify-center" style={{ borderColor: "#7EBA56", background: "#EAF7E1" }}>
+        <div className="rounded-xl p-3 flex flex-col items-center justify-center" style={{ border: "2px solid #7EBA56" }}>
           <span className="text-[11px] mb-1" style={{ color: "#4A7A2E" }}>현재 활동</span>
           <span style={{ color: "#4A7A2E" }}>{info.activeType ? ACTIVITY_TYPE_META[info.activeType].label : "—"}</span>
         </div>
@@ -112,7 +131,7 @@ export function SalesProgressCard({ project, activities }: { project: SalesProje
           <h3 className="cd-text text-sm">활동 상세</h3>
         </div>
         {detailEntries.length > 0 ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2">
             {detailEntries.map(([t, n]) => (
               <div key={t} className="flex justify-between border-b cd-border-c pb-1 text-[13px]">
                 <span className="cd-text-muted">{SALES_ACTIVITY_TYPE_LABELS[t]}</span>
@@ -145,15 +164,14 @@ export function SalesProgressCard({ project, activities }: { project: SalesProje
           <div className="rounded-xl border cd-border-c p-3 flex flex-col gap-1.5">
             <div className="flex justify-between text-[13px]">
               <span className="cd-text-faint">발주유형</span>
-              <span className="cd-text">제한경쟁</span>
+              <span className="cd-text">{orderInfo?.orderType ? ORDER_TYPE_LABELS[orderInfo.orderType] ?? orderInfo.orderType : "—"}</span>
             </div>
             <div className="flex justify-between text-[13px]">
               <span className="cd-text-faint">참여업체</span>
-              <span className="cd-text">4개사</span>
+              <span className="cd-text">{orderInfo?.participants?.length ? `${orderInfo.participants.length}개사` : "—"}</span>
             </div>
           </div>
         </div>
-        <p className="cd-text-faint text-[11px] mt-1.5">※ 발주유형·참여업체는 사업장 정보(발주 정보 탭) 연동 예정 — 현재 예시값</p>
       </div>
     </div>
   );

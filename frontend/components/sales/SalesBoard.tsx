@@ -9,13 +9,17 @@ import { useSession } from "next-auth/react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
+import { ProgressReportModal } from "./ProgressReportModal";
 import "@/components/cdash/cdash.css";
 import {
+  SALES_SERVICE_CATEGORIES,
+  SALES_SUBCATEGORIES_BY_CATEGORY,
   SALES_STAGE_LABELS,
   SALES_STAGE_ORDER,
   type SalesEmployeeOption,
   type SalesProject,
   type SalesProjectPriority,
+  type SalesServiceCategory,
   type SalesStage,
 } from "@/lib/sales/types";
 
@@ -59,6 +63,11 @@ export function SalesBoard() {
   const [creating, setCreating] = useState(false);
 
   // 뷰·밀도·필터
+  // 경과 보고 대상 안내 팝업/모달
+  const [pendingCount, setPendingCount] = useState(0);
+  const [reportPromptOpen, setReportPromptOpen] = useState(false);
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+
   const [view, setView] = useState<"kanban" | "list">("kanban");
   const [density, setDensity] = useState<Density>("compact");
   const [q, setQ] = useState("");
@@ -85,6 +94,19 @@ export function SalesBoard() {
   useEffect(() => {
     reload();
   }, [reload]);
+
+  // 진입 시 경과 보고 대상 확인 → 있으면 안내 팝업
+  useEffect(() => {
+    fetch("/api/sales/pending-reports", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : { reports: [] }))
+      .then((d) => {
+        const reports: Array<{ activities: unknown[] }> = Array.isArray(d.reports) ? d.reports : [];
+        const count = reports.reduce((n, r) => n + (Array.isArray(r.activities) ? r.activities.length : 0), 0);
+        setPendingCount(count);
+        if (count > 0) setReportPromptOpen(true);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetch("/api/sales/employees", { cache: "no-store" })
@@ -269,6 +291,28 @@ export function SalesBoard() {
           }}
         />
       )}
+
+      {/* 경과 보고 필요 안내 팝업 */}
+      {reportPromptOpen && (
+        <div className="cd-modal-overlay cdash cd-fields-white" data-theme={theme} onClick={() => setReportPromptOpen(false)}>
+          <div className="cd-modal cd-card-bg w-full" style={{ maxWidth: 380, padding: "1.5rem" }} onClick={(e) => e.stopPropagation()}>
+            <h3 className="cd-text text-base font-extrabold mb-2">경과 보고 필요</h3>
+            <p className="cd-text-muted text-sm mb-5">기간이 경과했으나 경과가 입력되지 않은 스케쥴이 <span className="cd-text-primary font-bold">{pendingCount}건</span> 있습니다.</p>
+            <div className="flex justify-end gap-2">
+              <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => setReportPromptOpen(false)}>나중에</button>
+              <button className="cd-btn cd-btn-primary cd-btn-sm" onClick={() => { setReportPromptOpen(false); setReportModalOpen(true); }}>경과 보고</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {reportModalOpen && (
+        <ProgressReportModal
+          theme={theme}
+          onClose={() => setReportModalOpen(false)}
+          onReported={() => { reload(); }}
+        />
+      )}
     </div>
   );
 }
@@ -388,6 +432,8 @@ function CreateProjectModal({
   const [title, setTitle] = useState("");
   const [stage, setStage] = useState<SalesStage>("lead");
   const [priority, setPriority] = useState<SalesProjectPriority>("normal");
+  const [serviceCategory, setServiceCategory] = useState<SalesServiceCategory | "">("");
+  const [serviceSubcategory, setServiceSubcategory] = useState<string>("");
   const [expected, setExpected] = useState("");
   const [memo, setMemo] = useState("");
   const [facility, setFacility] = useState<FacilityOption | null>(null);
@@ -439,6 +485,8 @@ function CreateProjectModal({
           title: title.trim(),
           stage,
           priority,
+          serviceCategory: serviceCategory || null,
+          serviceSubcategory: serviceSubcategory || null,
           expectedAmount: expected ? Number(expected.replace(/[^0-9]/g, "")) : null,
           memo: memo.trim() || null,
         }),
@@ -520,6 +568,23 @@ function CreateProjectModal({
               {(Object.keys(PRIORITY_LABELS) as SalesProjectPriority[]).map((p) => (
                 <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>
               ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <div>
+            <label className="cd-label">용역 분류</label>
+            <select className="cd-select" value={serviceCategory} onChange={(e) => { setServiceCategory(e.target.value as SalesServiceCategory | ""); setServiceSubcategory(""); }}>
+              <option value="">선택</option>
+              {SALES_SERVICE_CATEGORIES.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="cd-label">세분류</label>
+            <select className="cd-select" value={serviceSubcategory} onChange={(e) => setServiceSubcategory(e.target.value)} disabled={!serviceCategory}>
+              <option value="">선택</option>
+              {(serviceCategory ? SALES_SUBCATEGORIES_BY_CATEGORY[serviceCategory] : []).map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
             </select>
           </div>
         </div>

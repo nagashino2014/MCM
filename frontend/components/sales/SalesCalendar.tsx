@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { ACTIVITY_TYPE_META, SALES_ACTIVITY_TYPE_LABELS, type SalesActivity, type SalesActivityType } from "@/lib/sales/types";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
@@ -38,16 +38,33 @@ interface ActSpan {
 export function SalesCalendar({
   activities,
   canEdit,
+  facilityName,
   onPickDate,
   onEditActivity,
 }: {
   activities: SalesActivity[];
   canEdit: boolean;
+  facilityName?: string | null;
   onPickDate: (isoDate: string) => void;
   onEditActivity: (activity: SalesActivity) => void;
 }) {
   const now = new Date();
   const [cur, setCur] = useState({ y: now.getFullYear(), m: now.getMonth() });
+  const [openMenu, setOpenMenu] = useState<null | "year" | "month">(null);
+
+  // 드롭다운 바깥 클릭 시 닫기
+  useEffect(() => {
+    if (!openMenu) return;
+    const h = () => setOpenMenu(null);
+    document.addEventListener("click", h);
+    return () => document.removeEventListener("click", h);
+  }, [openMenu]);
+
+  const yearOptions = useMemo(() => {
+    const base = now.getFullYear();
+    return Array.from({ length: 7 }, (_, i) => base - 3 + i);
+  }, [now]);
+  const goToday = () => { setCur({ y: now.getFullYear(), m: now.getMonth() }); setOpenMenu(null); };
 
   const spans = useMemo<ActSpan[]>(() => {
     return activities
@@ -105,25 +122,70 @@ export function SalesCalendar({
       const m = c.m + delta;
       return { y: c.y + Math.floor(m / 12), m: ((m % 12) + 12) % 12 };
     });
-  const moveYear = (delta: number) => setCur((c) => ({ ...c, y: c.y + delta }));
 
   const todayIso = ymd(now);
   const cellH = 28 + MAX_LANES * LANE_H + 8;
 
   return (
-    <div className="flex gap-3 flex-col lg:flex-row mb-4">
+    <div className="flex gap-3 flex-col lg:flex-row">
       {/* 캘린더 */}
       <div className="cd-card-bg rounded-2xl border cd-border-c p-3 flex-1 min-w-0">
-        <div className="flex items-center justify-center gap-2 mb-3">
-          <button className="w-9 h-9 rounded-xl border cd-border-c cd-card-bg flex items-center justify-center cd-text-muted hover:text-[color:var(--cd-primary)] hover:border-[color:var(--cd-primary)] transition" onClick={() => moveMonth(-1)} title="이전 달"><ChevronLeft className="w-5 h-5" /></button>
-          <div className="flex items-center gap-2 rounded-xl border cd-border-c px-4 py-1.5">
-            <div className="flex flex-col">
-              <button className="cd-text-faint hover:text-[color:var(--cd-primary)] leading-none" onClick={() => moveYear(1)} title="다음 해"><ChevronUp className="w-4 h-4" /></button>
-              <button className="cd-text-faint hover:text-[color:var(--cd-primary)] leading-none" onClick={() => moveYear(-1)} title="이전 해"><ChevronDown className="w-4 h-4" /></button>
-            </div>
-            <h2 className="cd-text font-extrabold text-base tabular-nums">{cur.y}년 {cur.m + 1}월</h2>
+        <div className="relative flex items-center justify-between mb-3">
+          {/* 좌측 연·월 타이틀 그룹 + 오늘 태그 */}
+          <div className="relative flex items-center gap-1">
+            <button type="button" onClick={(e) => { e.stopPropagation(); setOpenMenu(openMenu === "year" ? null : "year"); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:bg-[color:var(--cd-surface)] transition">
+              <span className="cd-text font-extrabold text-[18px] tracking-tight tabular-nums leading-none">{cur.y}년</span>
+              <ChevronDown className={`w-3.5 h-3.5 cd-text-faint transition-transform ${openMenu === "year" ? "rotate-180" : ""}`} />
+            </button>
+            <button type="button" onClick={(e) => { e.stopPropagation(); setOpenMenu(openMenu === "month" ? null : "month"); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:bg-[color:var(--cd-surface)] transition">
+              <span className="font-extrabold text-[18px] tracking-tight leading-none" style={{ color: "var(--cd-primary)" }}>{cur.m + 1}월</span>
+              <ChevronDown className={`w-3.5 h-3.5 cd-text-faint transition-transform ${openMenu === "month" ? "rotate-180" : ""}`} />
+            </button>
+            <button type="button" onClick={(e) => { e.stopPropagation(); goToday(); }}
+              className="ml-1 px-3 py-1 rounded-full text-xs font-bold border cd-border-c cd-text-muted hover:text-[color:var(--cd-primary)] hover:border-[color:var(--cd-primary)] transition">오늘</button>
+
+            {/* 연도 드롭다운 */}
+            {openMenu === "year" && (
+              <div className="absolute left-0 z-30 cd-card-bg border cd-border-c rounded-2xl overflow-y-auto scrollbar-hide" style={{ top: 48, width: 160, maxHeight: 244, boxShadow: "0 16px 40px rgba(30,42,55,.16)" }} onClick={(e) => e.stopPropagation()}>
+                {yearOptions.map((y) => {
+                  const sel = y === cur.y;
+                  return (
+                    <button key={y} type="button" onClick={() => { setCur((c) => ({ ...c, y })); setOpenMenu(null); }}
+                      className="block w-full text-left px-4 py-2.5 text-sm cd-row-hover"
+                      style={sel ? { background: "var(--cd-primary-soft)", color: "var(--cd-primary)", fontWeight: 800 } : { color: "var(--cd-text)" }}>{y}년</button>
+                  );
+                })}
+              </div>
+            )}
+            {/* 월 드롭다운 */}
+            {openMenu === "month" && (
+              <div className="absolute z-30 cd-card-bg border cd-border-c rounded-2xl p-2.5" style={{ top: 48, left: 96, width: 232, boxShadow: "0 16px 40px rgba(30,42,55,.16)" }} onClick={(e) => e.stopPropagation()}>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => {
+                    const sel = m === cur.m + 1;
+                    return (
+                      <button key={m} type="button" onClick={() => { setCur((c) => ({ ...c, m: m - 1 })); setOpenMenu(null); }}
+                        className="py-2.5 rounded-lg text-sm font-semibold transition"
+                        style={sel ? { background: "var(--cd-primary)", color: "#fff", fontWeight: 800 } : { background: "var(--cd-surface)", color: "var(--cd-muted)" }}>{m}월</button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
-          <button className="w-9 h-9 rounded-xl border cd-border-c cd-card-bg flex items-center justify-center cd-text-muted hover:text-[color:var(--cd-primary)] hover:border-[color:var(--cd-primary)] transition" onClick={() => moveMonth(1)} title="다음 달"><ChevronRight className="w-5 h-5" /></button>
+
+          {/* 우측: 업체명 + 이전/다음 달 화살표 */}
+          <div className="flex items-center gap-3 min-w-0">
+            {facilityName && <span className="cd-text-muted text-base truncate">{facilityName}</span>}
+            <div className="flex items-center gap-2.5 shrink-0">
+              <button type="button" onClick={() => moveMonth(-1)} title="이전 달"
+                className="w-10 h-10 rounded-xl border cd-border-c cd-card-bg flex items-center justify-center cd-text-muted hover:text-[color:var(--cd-primary)] hover:border-[color:var(--cd-primary)] hover:bg-[color:var(--cd-surface)] transition active:scale-95"><ChevronLeft className="w-[18px] h-[18px]" /></button>
+              <button type="button" onClick={() => moveMonth(1)} title="다음 달"
+                className="w-10 h-10 rounded-xl border cd-border-c cd-card-bg flex items-center justify-center cd-text-muted hover:text-[color:var(--cd-primary)] hover:border-[color:var(--cd-primary)] hover:bg-[color:var(--cd-surface)] transition active:scale-95"><ChevronRight className="w-[18px] h-[18px]" /></button>
+            </div>
+          </div>
         </div>
         <div className="grid grid-cols-7">
           {WEEKDAYS.map((w, i) => (
@@ -181,7 +243,7 @@ export function SalesCalendar({
                   key={it.a.activityId}
                   type="button"
                   onClick={() => onEditActivity(it.a)}
-                  className="absolute rounded-md text-[11px] px-1.5 truncate text-left"
+                  className="absolute rounded-md text-[11px] px-1.5 truncate text-left font-semibold"
                   style={{
                     left: `calc(${colStart} / 7 * 100% + 2px)`,
                     width: `calc(${colEnd - colStart + 1} / 7 * 100% - 4px)`,
@@ -202,7 +264,7 @@ export function SalesCalendar({
 
       {/* 우측 일정 목록 — 태그 구획 */}
       <div className="cd-card-bg rounded-2xl border cd-border-c p-3 w-full lg:w-[300px] shrink-0">
-        <h3 className="cd-text font-extrabold text-sm mb-2">일정 목록</h3>
+        <h3 className="cd-text font-extrabold text-sm" style={{ marginBottom: 13 }}>일정 목록</h3>
         <div className="flex flex-col gap-2.5">
           {monthList.map((it) => {
             const color = it.a.color ?? ACTIVITY_TYPE_META[it.a.activityType].color;
@@ -218,7 +280,7 @@ export function SalesCalendar({
                 <span className="w-8 h-3 rounded-full shrink-0" style={{ background: color }} />
                 <span className="cd-text-muted text-xs shrink-0 tabular-nums">{dLabel}</span>
                 <div className="flex-1 min-w-0 text-right">
-                  <div className="cd-text text-sm truncate">{isResult ? resultLabel : SALES_ACTIVITY_TYPE_LABELS[it.a.activityType]}</div>
+                  <div className="cd-text text-sm font-bold truncate">{isResult ? resultLabel : SALES_ACTIVITY_TYPE_LABELS[it.a.activityType]}</div>
                   {attendeeNames && <div className="cd-text-faint text-[11px] truncate">{ACTOR_SHORT[it.a.activityType] ?? "참석"}: {attendeeNames}</div>}
                   {bidDeadline && <div className="cd-text-faint text-[11px]">투찰 마감 {bidDeadline}</div>}
                 </div>

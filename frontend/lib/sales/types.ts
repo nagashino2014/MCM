@@ -6,7 +6,7 @@ export type SalesActivityType =
 export type SalesActivityStatus = "planned" | "done" | "canceled";
 export type SalesProjectStatus = "open" | "closed";
 export type SalesProjectPriority = "low" | "normal" | "high";
-export type SalesBidResult = "won_bid" | "lost_bid" | "rebid";
+export type SalesBidResult = "won_bid" | "lost_bid" | "rebid" | "facility_declined" | "project_halted";
 /** 활동 담당인력 역할: 정 / 부 / 입찰 / 참석자 */
 export type ActivityAssigneeRole = "lead" | "deputy" | "bidding" | "attendee";
 
@@ -31,14 +31,14 @@ export interface ActivityTypeMeta {
 }
 
 export const ACTIVITY_TYPES: ActivityTypeMeta[] = [
-  { code: "telemarketing", label: "전화 마케팅", short: "전화", color: "#C9CDD6" },
+  { code: "telemarketing", label: "전화 마케팅", short: "전화", color: "#FFB3B3" },
   { code: "email", label: "홍보 메일 송신", short: "메일", color: "#A9D6D0" },
   { code: "visit", label: "사업장 방문", short: "미팅", color: "#F8CBAD" },
   { code: "site_briefing", label: "현장설명회 참석", short: "현설", color: "#FFE699" },
   { code: "quote", label: "견적서 제출", short: "견적", color: "#BDD7EE" },
-  { code: "proposal_meeting", label: "제안발표회 참석", short: "제안", color: "#9DC3E6" },
-  { code: "bid", label: "용역 투찰 기간", short: "투찰", color: "#C5E0B4" },
-  { code: "result", label: "결과 발표", short: "결과", color: "#8FAADC" },
+  { code: "proposal_meeting", label: "제안발표회 참석", short: "제안", color: "#C5E0B4" },
+  { code: "bid", label: "용역 투찰 기간", short: "투찰", color: "#B4C6E7" },
+  { code: "result", label: "영업 결과", short: "결과", color: "#CDACE6" },
 ];
 
 export const ACTIVITY_TYPE_META: Record<SalesActivityType, ActivityTypeMeta> = Object.fromEntries(
@@ -54,7 +54,64 @@ export const SALES_BID_RESULT_LABELS: Record<SalesBidResult, string> = {
   won_bid: "낙찰",
   lost_bid: "탈락",
   rebid: "재투찰",
+  facility_declined: "사업장 거절",
+  project_halted: "사업 추진 중단",
 };
+
+/** 과거이력 태그 카드 '추진결과' 라벨(최종 4종 — 재투찰 제외). */
+export const SALES_OUTCOME_LABELS: Partial<Record<SalesBidResult, string>> = {
+  won_bid: "당사 수주",
+  lost_bid: "입찰 탈락",
+  facility_declined: "사업장 거절",
+  project_halted: "사업 추진 중단",
+};
+
+/** 과거이력 용역별(대분류) 탭. */
+export const SALES_SERVICE_CATEGORIES = [
+  { code: "integrated_permit", label: "통합허가" },
+  { code: "chem", label: "화관법" },
+  { code: "esg", label: "ESG·탄소중립" },
+  { code: "etc", label: "기타" },
+] as const;
+
+export type SalesServiceCategory = (typeof SALES_SERVICE_CATEGORIES)[number]["code"];
+export type SalesServiceSubcategory = string;
+
+/** 용역별(대분류) → 세분류 목록. 세분류 코드는 전 카테고리에서 고유. */
+export const SALES_SUBCATEGORIES_BY_CATEGORY: Record<SalesServiceCategory, { code: string; label: string }[]> = {
+  integrated_permit: [
+    { code: "first", label: "최초허가" },
+    { code: "change_permit", label: "변경허가" },
+    { code: "change_report", label: "변경신고" },
+    { code: "post_mgmt", label: "사후관리" },
+    { code: "review", label: "재검토" },
+  ],
+  chem: [
+    { code: "chem_plan", label: "화방계" },
+    { code: "chem_biz_permit", label: "영업허가" },
+    { code: "chem_install_check", label: "설치검사" },
+    { code: "chem_diag", label: "화관법진단" },
+  ],
+  esg: [
+    { code: "esg_mgmt", label: "ESG경영" },
+    { code: "esg_cbam", label: "CBAM" },
+    { code: "esg_supply_chain", label: "공급망실사" },
+    { code: "esg_lca", label: "LCA평가" },
+    { code: "esg_ets", label: "배출권관련" },
+  ],
+  etc: [
+    { code: "etc_rnd", label: "환경R&D" },
+    { code: "etc_advisory", label: "환경자문" },
+    { code: "etc_media_permit", label: "매체별인허가" },
+    { code: "etc_tms", label: "총량제신고" },
+    { code: "etc_permit", label: "기타인허가" },
+  ],
+};
+
+/** 세분류 코드 → 라벨(전 카테고리 평탄화). */
+export const SALES_SUBCATEGORY_LABELS: Record<string, string> = Object.fromEntries(
+  Object.values(SALES_SUBCATEGORIES_BY_CATEGORY).flat().map((s) => [s.code, s.label])
+);
 
 export const ASSIGNEE_ROLE_LABELS: Record<ActivityAssigneeRole, string> = {
   lead: "정",
@@ -87,6 +144,8 @@ export interface SalesProject {
   ownerEmployeeName: string | null;
   ownerDeptId: string | null;
   contractId: string | null;
+  serviceCategory: SalesServiceCategory | null;
+  serviceSubcategory: SalesServiceSubcategory | null;
   expectedAmount: number | null;
   priority: SalesProjectPriority;
   status: SalesProjectStatus;
@@ -197,6 +256,8 @@ export interface SalesProjectInput {
   ownerEmployeeId?: string | null;
   ownerDeptId?: string | null;
   contractId?: string | null;
+  serviceCategory?: SalesServiceCategory | null;
+  serviceSubcategory?: SalesServiceSubcategory | null;
   expectedAmount?: number | null;
   priority?: SalesProjectPriority;
   status?: SalesProjectStatus;

@@ -47,6 +47,8 @@ export async function PUT(req: NextRequest, context: RouteContext) {
       ownerEmployeeId: body.ownerEmployeeId ?? null,
       ownerDeptId: body.ownerDeptId ?? null,
       contractId: body.contractId ?? null,
+      serviceCategory: body.serviceCategory ?? null,
+      serviceSubcategory: body.serviceSubcategory ?? null,
       expectedAmount: body.expectedAmount ?? null,
       priority: (body.priority as SalesProjectPriority) ?? "normal",
       status: (body.status as SalesProjectStatus) ?? "open",

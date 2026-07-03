@@ -3061,7 +3061,7 @@ function OperatingEntityModal({
   return createPortal(modal, document.body);
 }
 
-function GroupManagementModal({
+export function GroupManagementModal({
   facility,
   onClose,
   onChanged,

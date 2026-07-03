@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
+import { AutoDateInput } from "@/components/ui/AutoDateInput";
 import { IndustryOptionsEditorButton, useContractIndustryOptions } from "@/components/contracts/IndustryOptionsEditor";
 import {
   ORDERING_SUBJECT_OPTIONS,
@@ -415,15 +416,15 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
         <div className="px-5 pt-3 grid grid-cols-3 gap-2 text-xs">
           <label className="grid gap-1">
             <span className="font-bold cd-text-faint">계약일</span>
-            <input type="date" value={contractDate} onChange={(e) => setContractDate(e.target.value)} className="cd-input" />
+            <AutoDateInput value={contractDate} onChange={setContractDate} className="cd-input tabular-nums" />
           </label>
           <label className="grid gap-1">
             <span className="font-bold cd-text-faint">입력일</span>
-            <input type="date" value={meta.enteredAt} onChange={(e) => setMeta({ ...meta, enteredAt: e.target.value })} className="cd-input" />
+            <AutoDateInput value={meta.enteredAt} onChange={(v) => setMeta({ ...meta, enteredAt: v })} className="cd-input tabular-nums" />
           </label>
           <label className="grid gap-1">
             <span className="font-bold cd-text-faint">변경일</span>
-            <input type="date" value={meta.changedAt} onChange={(e) => setMeta({ ...meta, changedAt: e.target.value })} className="cd-input" />
+            <AutoDateInput value={meta.changedAt} onChange={(v) => setMeta({ ...meta, changedAt: v })} className="cd-input tabular-nums" />
           </label>
         </div>
 
@@ -479,13 +480,13 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
             <div className="grid grid-cols-2 gap-3">
               <label className="grid gap-1 text-sm">
                 <span className="font-bold cd-text-muted">기존 준공기한</span>
-                <input type="date" className="cd-input" value={servicePeriod.previous}
-                  onChange={(e) => setServicePeriod({ ...servicePeriod, previous: e.target.value })} />
+                <AutoDateInput className="cd-input tabular-nums" value={servicePeriod.previous}
+                  onChange={(v) => setServicePeriod({ ...servicePeriod, previous: v })} />
               </label>
               <label className="grid gap-1 text-sm">
                 <span className="font-bold cd-text-muted">변경 준공기한</span>
-                <input type="date" className="cd-input" value={servicePeriod.next}
-                  onChange={(e) => setServicePeriod({ ...servicePeriod, next: e.target.value })} />
+                <AutoDateInput className="cd-input tabular-nums" value={servicePeriod.next}
+                  onChange={(v) => setServicePeriod({ ...servicePeriod, next: v })} />
               </label>
             </div>
           )}
@@ -690,13 +691,13 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
               </label>
               <label className="grid gap-1 text-sm">
                 <span className="font-bold cd-text-muted">계약일</span>
-                <input type="date" className="cd-input" value={outsourcing.contractDate}
-                  onChange={(e) => setOutsourcing({ ...outsourcing, contractDate: e.target.value })} />
+                <AutoDateInput className="cd-input tabular-nums" value={outsourcing.contractDate}
+                  onChange={(v) => setOutsourcing({ ...outsourcing, contractDate: v })} />
               </label>
               <label className="grid gap-1 text-sm">
                 <span className="font-bold cd-text-muted">준공일</span>
-                <input type="date" className="cd-input" value={outsourcing.endedAt}
-                  onChange={(e) => setOutsourcing({ ...outsourcing, endedAt: e.target.value })} />
+                <AutoDateInput className="cd-input tabular-nums" value={outsourcing.endedAt}
+                  onChange={(v) => setOutsourcing({ ...outsourcing, endedAt: v })} />
               </label>
               <label className="grid gap-1 text-sm col-span-2">
                 <span className="font-bold cd-text-muted">메모</span>
@@ -724,8 +725,8 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
             <div className="grid grid-cols-2 gap-3">
               <label className="grid gap-1 text-sm">
                 <span className="font-bold cd-text-muted">계약해지일</span>
-                <input type="date" className="cd-input" value={lifecycle.terminatedAt}
-                  onChange={(e) => setLifecycle({ ...lifecycle, terminatedAt: e.target.value })} />
+                <AutoDateInput className="cd-input tabular-nums" value={lifecycle.terminatedAt}
+                  onChange={(v) => setLifecycle({ ...lifecycle, terminatedAt: v })} />
               </label>
               <label className="grid gap-1 text-sm">
                 <span className="font-bold cd-text-muted">해지 사유</span>
@@ -743,8 +744,8 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
               />
               <label className="grid gap-1 text-sm">
                 <span className="font-bold cd-text-muted">계약중지일</span>
-                <input type="date" className="cd-input" value={lifecycle.suspendedAt}
-                  onChange={(e) => setLifecycle({ ...lifecycle, suspendedAt: e.target.value })} />
+                <AutoDateInput className="cd-input tabular-nums" value={lifecycle.suspendedAt}
+                  onChange={(v) => setLifecycle({ ...lifecycle, suspendedAt: v })} />
               </label>
               <label className="grid gap-1 text-sm">
                 <span className="font-bold cd-text-muted">계약 중지 사유</span>
@@ -768,13 +769,13 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
               <div className="grid grid-cols-2 gap-3">
                 <label className="grid gap-1 text-sm">
                   <span className="font-bold cd-text-muted">준공일</span>
-                  <input type="date" className="cd-input" value={closing.completionDate}
-                    onChange={(e) => setClosing({ ...closing, completionDate: e.target.value })} />
+                  <AutoDateInput className="cd-input tabular-nums" value={closing.completionDate}
+                    onChange={(v) => setClosing({ ...closing, completionDate: v })} />
                 </label>
                 <label className="grid gap-1 text-sm">
                   <span className="font-bold cd-text-muted">허가 취득일</span>
-                  <input type="date" className="cd-input" value={closing.permitAcquiredAt}
-                    onChange={(e) => setClosing({ ...closing, permitAcquiredAt: e.target.value })} />
+                  <AutoDateInput className="cd-input tabular-nums" value={closing.permitAcquiredAt}
+                    onChange={(v) => setClosing({ ...closing, permitAcquiredAt: v })} />
                 </label>
               </div>
               <label className="grid gap-1 text-sm">

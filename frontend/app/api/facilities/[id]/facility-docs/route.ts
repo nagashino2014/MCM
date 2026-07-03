@@ -10,7 +10,7 @@ interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-const DOC_TYPES = new Set(["integrated_plan", "media_permit", "factory_reg"]);
+const DOC_TYPES = new Set(["integrated_plan", "media_permit", "factory_reg", "etc"]);
 
 // 시설 자료 다운로드 (?docType=)
 export async function GET(req: NextRequest, ctx: RouteContext) {

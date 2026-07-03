@@ -30,6 +30,8 @@ interface OrganizationTreeProps {
   fillHeight?: boolean;
   /** 재직자 ↔ 퇴사자 트리 전환 토글 노출(사용자 등록·삭제 화면 전용) */
   allowResignedView?: boolean;
+  /** 상단 헤더(Organization / 제목) 숨김 — 트리만 노출 */
+  hideHeader?: boolean;
 }
 
 const MASTER_KEY = "__master__";
@@ -47,6 +49,7 @@ export default function OrganizationTree({
   embedded = false,
   fillHeight = false,
   allowResignedView = false,
+  hideHeader = false,
 }: OrganizationTreeProps) {
   const [open, setOpen] = useState<Set<string>>(() => new Set(["exec"]));
   const [viewMode, setViewMode] = useState<"active" | "resigned">("active");
@@ -270,7 +273,7 @@ export default function OrganizationTree({
 
   return (
     <section className={cn("cd-card p-5", fillHeight && "h-full flex flex-col min-h-0")}>
-      <div className="mb-4 shrink-0 flex items-start justify-between gap-3">
+      <div className={cn("shrink-0 flex items-start justify-between gap-3", hideHeader ? "hidden" : "mb-4")}>
         <div>
           <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] cd-text-primary">Organization</p>
           <h2 className="text-lg font-extrabold cd-text">{resignedView ? "퇴사자" : title}</h2>

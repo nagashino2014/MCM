@@ -181,10 +181,12 @@ export async function savePosition(input: {
   positionName: string;
   rankOrder?: number;
   isActive?: boolean;
+  defaultTemplateId?: string | null;
 }): Promise<PositionRow> {
   const positionName = input.positionName.trim();
   if (!positionName) throw new Error("직급명이 필요합니다.");
   const positionId = input.positionId?.trim() || cleanId("pos", positionName);
+  const defaultTemplateId = input.defaultTemplateId?.trim() || null;
   const now = new Date().toISOString();
   await withDbWrite(async (db) => {
     await db.run(
@@ -197,6 +199,17 @@ export async function savePosition(input: {
          updated_at = EXCLUDED.updated_at`,
       [positionId, positionName, input.rankOrder ?? 10, input.isActive === false ? 0 : 1, now]
     );
+    // 직급의 기본 권한 템플릿 매핑을 함께 생성한다. 이 매핑(position_default_templates)이
+    // 계정 발급 시 '직급 기본 권한 자동 부여'의 소스이므로, 누락되면 해당 직급 인원이
+    // 발급받아도 권한 템플릿을 0개 부여받는다(부사장 직급 사례). scope 는 템플릿 grant 기본값을 따르도록 NULL.
+    if (defaultTemplateId) {
+      await db.run(
+        `INSERT INTO position_default_templates (position_id, template_id, scope_kind_default, scope_dept_default)
+         VALUES ($1, $2, NULL, NULL)
+         ON CONFLICT (position_id, template_id) DO NOTHING`,
+        [positionId, defaultTemplateId]
+      );
+    }
   });
   return {
     positionId,

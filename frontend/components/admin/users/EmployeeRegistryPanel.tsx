@@ -243,13 +243,13 @@ export default function EmployeeRegistryPanel({
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "부서 직급 저장 실패");
   };
 
-  const addPosition = async (positionName: string, rankOrder: number) => {
+  const addPosition = async (positionName: string, rankOrder: number, defaultTemplateId?: string) => {
     setSaving(true);
     try {
       const res = await fetch("/api/admin/organization/positions", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ positionName, rankOrder }),
+        body: JSON.stringify({ positionName, rankOrder, defaultTemplateId: defaultTemplateId || null }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "직급 추가 실패");
       const body = (await res.json()) as { position: PositionRow };
@@ -1045,7 +1045,7 @@ function PositionTagEditor({
   positions: PositionRow[];
   activeIds: string[];
   onToggle: (positionId: string) => void;
-  onAdd: (positionName: string, rankOrder: number) => Promise<void>;
+  onAdd: (positionName: string, rankOrder: number, defaultTemplateId?: string) => Promise<void>;
   onDelete: (positionId: string) => Promise<void>;
 }) {
   const { theme } = useCdashTheme();
@@ -1055,11 +1055,32 @@ function PositionTagEditor({
   const [positionName, setPositionName] = useState("");
   const [aboveId, setAboveId] = useState("");
   const [belowId, setBelowId] = useState("");
+  const [templateId, setTemplateId] = useState("");
+  const [templates, setTemplates] = useState<{ templateId: string; templateName: string }[]>([]);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // 직급 추가 폼을 처음 열 때 권한 템플릿 목록을 1회 로드한다(rbac.template.manage 권한 없으면 빈 목록 → '선택 안 함'만).
+  useEffect(() => {
+    if (!addOpen || templates.length > 0) return;
+    let alive = true;
+    fetch("/api/admin/permissions", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : { templates: [] }))
+      .then((d: { templates?: { templateId: string; templateName: string }[] }) => {
+        if (alive) {
+          setTemplates(
+            (d.templates ?? []).map((t) => ({ templateId: t.templateId, templateName: t.templateName }))
+          );
+        }
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [addOpen, templates.length]);
 
   const staffIndex = sortedPositions.findIndex((position) => position.positionName === "사원");
   const withAddButton = staffIndex >= 0 ? sortedPositions : [...sortedPositions];
@@ -1078,10 +1099,11 @@ function PositionTagEditor({
   const submitAdd = async () => {
     const name = positionName.trim();
     if (!name) return;
-    await onAdd(name, rankForNewPosition());
+    await onAdd(name, rankForNewPosition(), templateId || undefined);
     setPositionName("");
     setAboveId("");
     setBelowId("");
+    setTemplateId("");
     setAddOpen(false);
   };
 
@@ -1137,6 +1159,19 @@ function PositionTagEditor({
                       ))}
                     </select>
                   </Field>
+                  <Field label="기본 권한 템플릿">
+                    <select className="cd-select" value={templateId} onChange={(e) => setTemplateId(e.target.value)}>
+                      <option value="">선택 안 함</option>
+                      {templates.map((t) => (
+                        <option key={t.templateId} value={t.templateId}>
+                          {t.templateName}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <p className="text-[11px] leading-snug cd-text-faint">
+                    이 직급으로 계정 발급 시 자동 부여될 권한입니다. 지정하지 않으면 발급 시 권한이 비어 있습니다.
+                  </p>
                   <button type="button" className="cd-btn cd-btn-primary cd-btn-block" onClick={submitAdd}>
                     추가
                   </button>

@@ -52,7 +52,9 @@ resource "aws_ecs_service" "backend" {
   tags = local.tags
 
   # 배포는 terraform 밖에서 처리. task_definition 되돌림 방지.
+  # desired_count 도 무시: 평소 0(OCR 미사용) → 필요 시 1 로 수동/자동 조절한 값을
+  # terraform apply 가 되돌리지 않도록 한다. 유휴 시 backend-idle-shutdown Lambda 가 0 으로 내린다.
   lifecycle {
-    ignore_changes = [task_definition]
+    ignore_changes = [task_definition, desired_count]
   }
 }

@@ -239,7 +239,9 @@ resource "aws_ecs_service" "next" {
 
   # 배포는 terraform 밖에서 새 task def 리비전 등록 + update-service 로 한다.
   # terraform 이 실행 중 서비스의 task_definition 을 자기 리비전으로 되돌리지 않도록 무시.
+  # desired_count 도 무시: staging-stop/start.ps1 등으로 수동 0↔1 조절한 값이
+  # terraform apply 후에도 유지되도록 한다(비용 절감 on-demand 토글).
   lifecycle {
-    ignore_changes = [task_definition]
+    ignore_changes = [task_definition, desired_count]
   }
 }

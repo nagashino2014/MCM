@@ -49,6 +49,12 @@ const num = (v: unknown): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
+// KST(UTC+9) 기준 날짜 YYYY-MM-DD. bid_end/scheduled_at은 joinIso로 저장된
+// 타임존 없는 KST 벽시계('2026-07-24T18:00:00')라, UTC now와 직접 비교하면
+// 하루 경계가 어긋난다 → 날짜 문자열 경계로 비교(시각·서버 타임존 무관).
+const kstDay = (offsetDays = 0): string =>
+  new Date(Date.now() + 9 * 3600000 + offsetDays * 86400000).toISOString().slice(0, 10);
+
 function mapProject(row: Record<string, unknown>): SalesProject {
   return {
     projectId: String(row.project_id ?? ""),
@@ -71,6 +77,9 @@ function mapProject(row: Record<string, unknown>): SalesProject {
     createdBy: text(row.created_by),
     createdAt: String(row.created_at ?? ""),
     updatedAt: String(row.updated_at ?? ""),
+    leadMemberId: text(row.lead_member_id),
+    leadMemberName: text(row.lead_member_name),
+    activityTypes: [], // attachStepTypes에서 진행/완료 단계만 채운다
   };
 }
 
@@ -79,10 +88,73 @@ const PROJECT_SELECT = `
          p.owner_employee_id, e.name AS owner_employee_name, p.owner_dept_id, p.contract_id,
          p.service_category, p.service_subcategory,
          p.expected_amount, p.priority, p.status, p.opened_at, p.closed_at, p.memo,
-         p.created_by, p.created_at, p.updated_at
+         p.created_by, p.created_at, p.updated_at,
+         lm.employee_id AS lead_member_id, lm.name AS lead_member_name
     FROM sales_projects p
     LEFT JOIN facilities f ON f.facility_id = p.facility_id
-    LEFT JOIN employee_profiles e ON e.employee_id = p.owner_employee_id`;
+    LEFT JOIN employee_profiles e ON e.employee_id = p.owner_employee_id
+    LEFT JOIN LATERAL (
+      SELECT m.employee_id, e2.name
+        FROM sales_project_members m
+        LEFT JOIN employee_profiles e2 ON e2.employee_id = m.employee_id
+       WHERE m.project_id = p.project_id
+       ORDER BY CASE WHEN m.role_label = '정' THEN 0 ELSE 1 END, m.id ASC
+       LIMIT 1
+    ) lm ON true`;
+
+// 스케쥴 업무단계 진행/완료 판정. 리스트 '업무 단계' 태그는 done|active만 표시(예정 제외).
+//  - 견적: quotes에 (견적가+제출일시) 입력된 항목 존재 → done
+//  - 투찰: bids에 (투찰가+투찰일시) 입력된 항목 존재 → done
+//  - 결과: bid_result 낙찰/탈락/사업장거절/사업추진중단 → done (미정·재투찰은 미완)
+//  - 그 외(전화/메일/방문/현설/제안): 경과(progress_note) 입력 → done
+//  - active: 시작일시(scheduled_at)가 경과했으나 아직 미완
+function activityStepState(a: Record<string, unknown>, nowKst: string): "done" | "active" | "planned" {
+  const t = String(a.activity_type ?? "");
+  let done = false;
+  if (t === "quote") {
+    done = jsonArray<ActivityQuote>(a.quotes).some((q) => q.amount != null && !!q.submittedAt);
+  } else if (t === "bid") {
+    done = jsonArray<ActivityBid>(a.bids).some((b) => b.amount != null && !!b.biddedAt);
+  } else if (t === "result") {
+    const br = String(a.bid_result ?? "");
+    done = br === "won_bid" || br === "lost_bid" || br === "facility_declined" || br === "project_halted";
+  } else {
+    done = !!String(a.progress_note ?? "").trim();
+  }
+  if (done) return "done";
+  const started = !!a.scheduled_at && String(a.scheduled_at) < nowKst;
+  return started ? "active" : "planned";
+}
+
+// 프로젝트별 '진행 또는 완료된' 업무단계 집합을 계산해 activityTypes에 채운다(예정 제외).
+async function attachStepTypes(
+  db: Awaited<ReturnType<typeof getDb>>,
+  projects: SalesProject[]
+): Promise<void> {
+  const ids = projects.map((p) => p.projectId).filter(Boolean);
+  if (!ids.length) return;
+  const ph = ids.map((_, i) => `$${i + 1}`).join(",");
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT project_id, activity_type, scheduled_at, progress_note, quotes, bids, bid_result
+         FROM sales_activities WHERE project_id IN (${ph})`,
+      ids
+    )
+  );
+  // scheduled_at은 KST 벽시계(joinIso)라 시작일시 경과 비교도 KST now로.
+  const nowKst = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 19);
+  const byPid = new Map<string, Set<SalesActivityType>>();
+  for (const a of rows) {
+    if (activityStepState(a, nowKst) === "planned") continue;
+    const pid = String(a.project_id ?? "");
+    if (!pid) continue;
+    if (!byPid.has(pid)) byPid.set(pid, new Set());
+    byPid.get(pid)!.add(String(a.activity_type) as SalesActivityType);
+  }
+  for (const p of projects) {
+    p.activityTypes = Array.from(byPid.get(p.projectId) ?? []);
+  }
+}
 
 export async function listSalesProjects(filter: SalesProjectFilter = {}): Promise<SalesProject[]> {
   const where: string[] = [];
@@ -95,7 +167,9 @@ export async function listSalesProjects(filter: SalesProjectFilter = {}): Promis
 
   const db = await getDb();
   const sql = `${PROJECT_SELECT}${where.length ? ` WHERE ${where.join(" AND ")}` : ""} ORDER BY p.updated_at DESC`;
-  return rowsToObjects(await db.exec(sql, params)).map(mapProject);
+  const projects = rowsToObjects(await db.exec(sql, params)).map(mapProject);
+  await attachStepTypes(db, projects);
+  return projects;
 }
 
 export async function getSalesProject(projectId: string): Promise<SalesProject | null> {
@@ -243,6 +317,90 @@ export async function listPendingProgressReports(): Promise<PendingProgressRepor
     });
   }
   return reports;
+}
+
+// ── 투찰 마감 임박(진행중 영업건 사업장의 발주) ──────────────────
+export interface UpcomingBid {
+  facilityId: string;
+  facilityName: string | null;
+  projectId: string;
+  projectTitle: string;
+  orderType: string | null;
+  bidEnd: string;
+  estimatedPrice: number | null;
+}
+
+export async function listUpcomingBids(days = 14): Promise<UpcomingBid[]> {
+  const db = await getDb();
+  // 오늘(KST) ~ days일 후까지. bid_end는 'YYYY-MM-DDT..'라 날짜 경계로 당일 포함.
+  const startDay = kstDay(0);
+  const endDay = kstDay(days + 1);
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT p.project_id, p.title, p.facility_id, f.company_name AS facility_name,
+              o.order_type, o.bid_end, o.estimated_price
+         FROM sales_projects p
+         JOIN facility_order_info o ON o.facility_id = p.facility_id
+         LEFT JOIN facilities f ON f.facility_id = p.facility_id
+        WHERE p.stage NOT IN ('won','lost','hold')
+          AND o.bid_end IS NOT NULL AND TRIM(o.bid_end) <> ''
+          AND o.bid_end >= $1 AND o.bid_end < $2
+        ORDER BY o.bid_end ASC`,
+      [startDay, endDay]
+    )
+  );
+  return rows.map((r) => ({
+    facilityId: String(r.facility_id ?? ""),
+    facilityName: text(r.facility_name),
+    projectId: String(r.project_id ?? ""),
+    projectTitle: String(r.title ?? ""),
+    orderType: text(r.order_type),
+    bidEnd: String(r.bid_end ?? ""),
+    estimatedPrice: num(r.estimated_price),
+  }));
+}
+
+// ── 다가오는 일정(예정 스케쥴) ─────────────────────────────────
+export interface UpcomingActivity {
+  activityId: string;
+  projectId: string;
+  projectTitle: string;
+  facilityName: string | null;
+  activityType: SalesActivityType;
+  scheduledAt: string;
+  endedAt: string | null;
+  summary: string | null;
+}
+
+export async function listUpcomingActivities(days = 14): Promise<UpcomingActivity[]> {
+  const db = await getDb();
+  // 오늘(KST) ~ days일 후까지. scheduled_at도 KST 벽시계라 날짜 경계로 당일 포함.
+  const startDay = kstDay(0);
+  const endDay = kstDay(days + 1);
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT a.activity_id, a.project_id, a.activity_type, a.scheduled_at, a.ended_at, a.summary,
+              p.title, f.company_name AS facility_name
+         FROM sales_activities a
+         JOIN sales_projects p ON p.project_id = a.project_id
+         LEFT JOIN facilities f ON f.facility_id = p.facility_id
+        WHERE a.status <> 'canceled'
+          AND a.scheduled_at IS NOT NULL
+          AND a.scheduled_at >= $1 AND a.scheduled_at < $2
+        ORDER BY a.scheduled_at ASC`,
+      [startDay, endDay]
+    )
+  );
+  return rows.map((r) => ({
+    activityId: String(r.activity_id ?? ""),
+    projectId: String(r.project_id ?? ""),
+    projectTitle: String(r.title ?? ""),
+    facilityName: text(r.facility_name),
+    activityType: String(r.activity_type ?? "visit") as SalesActivityType,
+    scheduledAt: String(r.scheduled_at ?? ""),
+    endedAt: text(r.ended_at),
+    summary: text(r.summary),
+  }));
 }
 
 export async function createSalesProject(input: SalesProjectInput, userId: string | null): Promise<string> {

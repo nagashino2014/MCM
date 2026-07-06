@@ -71,6 +71,11 @@ export const MENU_ITEMS: MenuItem[] = [
     title: "영업/마케팅",
     href: "/sales",
     icon: Briefcase,
+    submenu: [
+      { title: "Salesboard", href: "/sales" },
+      { title: "담당자 정보 관리", href: "/sales/contacts" },
+      { title: "API & RAG", href: "/sales/intel" },
+    ],
     group: "main",
   },
   {

@@ -156,6 +156,11 @@ export interface SalesProject {
   createdAt: string;
   updatedAt: string;
   members?: SalesProjectMember[];
+  /** 리스트 담당 표시용 — owner 미지정 시 대표 멤버(정 우선) 폴백 */
+  leadMemberId?: string | null;
+  leadMemberName?: string | null;
+  /** 이 영업건에 등록된 활동유형 집합(진행단계 태그용) */
+  activityTypes?: SalesActivityType[];
 }
 
 export interface SalesActivityContact {

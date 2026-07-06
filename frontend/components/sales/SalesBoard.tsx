@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Briefcase, ChevronDown, ChevronRight, LayoutGrid, List, Plus, Rows3, Search, SlidersHorizontal, X,
+  AlarmClock, Briefcase, CalendarClock, ClipboardList, Plus, Search, Siren, X,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
@@ -12,26 +12,17 @@ import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
 import { ProgressReportModal } from "./ProgressReportModal";
 import "@/components/cdash/cdash.css";
 import {
+  ACTIVITY_TYPE_META,
   SALES_SERVICE_CATEGORIES,
   SALES_SUBCATEGORIES_BY_CATEGORY,
   SALES_STAGE_LABELS,
-  SALES_STAGE_ORDER,
+  type SalesActivityType,
   type SalesEmployeeOption,
   type SalesProject,
-  type SalesProjectPriority,
   type SalesServiceCategory,
   type SalesStage,
 } from "@/lib/sales/types";
 
-const ACTIVE_STAGES: SalesStage[] = ["lead", "contact", "proposal", "bidding"];
-const CLOSED_STAGES: SalesStage[] = ["won", "lost", "hold"];
-
-const PRIORITY_LABELS: Record<SalesProjectPriority, string> = { low: "낮음", normal: "보통", high: "높음" };
-const PRIORITY_DOT: Record<SalesProjectPriority, string> = {
-  low: "var(--cd-faint)",
-  normal: "var(--cd-secondary)",
-  high: "var(--cd-error)",
-};
 const STAGE_PILL: Record<SalesStage, string> = {
   lead: "cd-pill-idle",
   contact: "cd-pill-info",
@@ -42,11 +33,53 @@ const STAGE_PILL: Record<SalesStage, string> = {
   hold: "cd-pill-outline",
 };
 
-type Density = "compact" | "detailed";
+// 진행단계 태그 8종(영업 스케쥴 업무 단계). 색은 활동유형 메타에서 파생.
+const STEP_TAGS: { type: SalesActivityType; label: string }[] = [
+  { type: "telemarketing", label: "전화" },
+  { type: "email", label: "메일" },
+  { type: "visit", label: "방문" },
+  { type: "site_briefing", label: "현설" },
+  { type: "quote", label: "견적" },
+  { type: "proposal_meeting", label: "제안" },
+  { type: "bid", label: "투찰" },
+  { type: "result", label: "결과" },
+];
+
+const PANEL_HEIGHT = 375; // 탭 패널·리스트 카드 높이
+const TAB_PANEL_WIDTH = 616; // 탭 패널 너비
+
+type TabKey = "bids" | "reports" | "activities";
 
 interface FacilityOption {
   facilityId: string;
   companyName: string;
+}
+
+// 상단 탭 패널용 — API 응답 shape(서버 queries.ts와 동일).
+interface PendingReportItem {
+  projectId: string;
+  title: string;
+  facilityName: string | null;
+  activities: unknown[];
+}
+interface UpcomingBidItem {
+  facilityId: string;
+  facilityName: string | null;
+  projectId: string;
+  projectTitle: string;
+  orderType: string | null;
+  bidEnd: string;
+  estimatedPrice: number | null;
+}
+interface UpcomingActivityItem {
+  activityId: string;
+  projectId: string;
+  projectTitle: string;
+  facilityName: string | null;
+  activityType: SalesActivityType;
+  scheduledAt: string;
+  endedAt: string | null;
+  summary: string | null;
 }
 
 export function SalesBoard() {
@@ -62,19 +95,19 @@ export function SalesBoard() {
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
-  // 뷰·밀도·필터
-  // 경과 보고 대상 안내 팝업/모달
+  // 상단 탭 패널(투찰임박·경과보고·다가오는일정) + 경과 보고 모달
   const [pendingCount, setPendingCount] = useState(0);
-  const [reportPromptOpen, setReportPromptOpen] = useState(false);
+  const [pendingReports, setPendingReports] = useState<PendingReportItem[]>([]);
+  const [upcomingBids, setUpcomingBids] = useState<UpcomingBidItem[]>([]);
+  const [upcomingActs, setUpcomingActs] = useState<UpcomingActivityItem[]>([]);
   const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabKey>("bids");
+  const [userPickedTab, setUserPickedTab] = useState(false);
 
-  const [view, setView] = useState<"kanban" | "list">("kanban");
-  const [density, setDensity] = useState<Density>("compact");
+  // 리스트 필터
   const [q, setQ] = useState("");
   const [owner, setOwner] = useState("");
-  const [priority, setPriority] = useState("");
   const [year, setYear] = useState("");
-  const [showClosed, setShowClosed] = useState(false);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -95,16 +128,23 @@ export function SalesBoard() {
     reload();
   }, [reload]);
 
-  // 진입 시 경과 보고 대상 확인 → 있으면 안내 팝업
+  // 진입 시 탭 패널 데이터 로드(경과보고·투찰임박·다가오는일정)
   useEffect(() => {
     fetch("/api/sales/pending-reports", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : { reports: [] }))
       .then((d) => {
-        const reports: Array<{ activities: unknown[] }> = Array.isArray(d.reports) ? d.reports : [];
-        const count = reports.reduce((n, r) => n + (Array.isArray(r.activities) ? r.activities.length : 0), 0);
-        setPendingCount(count);
-        if (count > 0) setReportPromptOpen(true);
+        const reports: PendingReportItem[] = Array.isArray(d.reports) ? d.reports : [];
+        setPendingReports(reports);
+        setPendingCount(reports.reduce((n, r) => n + (Array.isArray(r.activities) ? r.activities.length : 0), 0));
       })
+      .catch(() => {});
+    fetch("/api/sales/upcoming-bids", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : { bids: [] }))
+      .then((d) => setUpcomingBids(Array.isArray(d.bids) ? d.bids : []))
+      .catch(() => {});
+    fetch("/api/sales/upcoming-activities", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : { activities: [] }))
+      .then((d) => setUpcomingActs(Array.isArray(d.activities) ? d.activities : []))
       .catch(() => {});
   }, []);
 
@@ -114,6 +154,20 @@ export function SalesBoard() {
       .then((d) => setEmployees(Array.isArray(d.employees) ? d.employees : []))
       .catch(() => {});
   }, []);
+
+  // 초기 표시 탭 우선순위: 투찰 임박 > 경과 보고 > 다가오는 일정.
+  // 사용자가 탭을 직접 누르면(userPickedTab) 자동 전환 중단.
+  useEffect(() => {
+    if (userPickedTab) return;
+    if (upcomingBids.length > 0) setActiveTab("bids");
+    else if (pendingCount > 0) setActiveTab("reports");
+    else setActiveTab("activities");
+  }, [userPickedTab, upcomingBids.length, pendingCount]);
+
+  const pickTab = (k: TabKey) => {
+    setUserPickedTab(true);
+    setActiveTab(k);
+  };
 
   const years = useMemo(
     () =>
@@ -127,22 +181,13 @@ export function SalesBoard() {
     const s = q.trim().toLowerCase();
     return projects.filter((p) => {
       if (s && !(p.title.toLowerCase().includes(s) || (p.facilityName ?? "").toLowerCase().includes(s))) return false;
-      if (owner && p.ownerEmployeeId !== owner) return false;
-      if (priority && p.priority !== priority) return false;
+      if (owner && p.ownerEmployeeId !== owner && p.leadMemberId !== owner) return false;
       if (year && (p.openedAt ?? "").slice(0, 4) !== year) return false;
       return true;
     });
-  }, [projects, q, owner, priority, year]);
+  }, [projects, q, owner, year]);
 
-  const byStage = useMemo(() => {
-    const map = new Map<SalesStage, SalesProject[]>();
-    for (const s of SALES_STAGE_ORDER) map.set(s, []);
-    for (const p of filtered) map.get(p.stage)?.push(p);
-    return map;
-  }, [filtered]);
-
-  const closedTotal = CLOSED_STAGES.reduce((n, s) => n + (byStage.get(s)?.length ?? 0), 0);
-  const hasFilter = !!(q || owner || priority || year);
+  const hasFilter = !!(q || owner || year);
 
   return (
     <div className="cdash cd-fields-white p-2" data-theme={theme}>
@@ -164,122 +209,61 @@ export function SalesBoard() {
         }
       />
 
-      {/* 툴바: 필터 + 뷰/밀도 토글 */}
-      <div className="flex items-center gap-2 flex-wrap mb-3">
-        <div className="flex items-center gap-1.5">
-          <Search className="w-4 h-4 cd-text-faint" />
-          <input
-            className="cd-input"
-            style={{ width: 200 }}
-            placeholder="제목·사업장 검색"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-        </div>
-        <select className="cd-select" style={{ width: "auto" }} value={owner} onChange={(e) => setOwner(e.target.value)}>
-          <option value="">담당 전체</option>
-          {employees.map((e) => (
-            <option key={e.employeeId} value={e.employeeId}>{e.name}{e.deptName ? ` (${e.deptName})` : ""}</option>
-          ))}
-        </select>
-        <select className="cd-select" style={{ width: "auto" }} value={priority} onChange={(e) => setPriority(e.target.value)}>
-          <option value="">우선순위 전체</option>
-          {(Object.keys(PRIORITY_LABELS) as SalesProjectPriority[]).map((p) => (
-            <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>
-          ))}
-        </select>
-        {years.length > 0 && (
-          <select className="cd-select" style={{ width: "auto" }} value={year} onChange={(e) => setYear(e.target.value)}>
-            <option value="">연도 전체</option>
-            {years.map((y) => <option key={y} value={y}>{y}</option>)}
-          </select>
-        )}
-        {hasFilter && (
-          <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => { setQ(""); setOwner(""); setPriority(""); setYear(""); }}>
-            <X className="w-3.5 h-3.5" /> 초기화
-          </button>
-        )}
-
-        <div className="flex-1" />
-
-        {view === "kanban" && (
-          <button
-            className="cd-chip cd-chip-sm"
-            onClick={() => setDensity((d) => (d === "compact" ? "detailed" : "compact"))}
-            title="카드 밀도"
-          >
-            {density === "compact" ? <Rows3 className="w-3.5 h-3.5" /> : <SlidersHorizontal className="w-3.5 h-3.5" />}
-            {density === "compact" ? "간략" : "상세"}
-          </button>
-        )}
-        <div className="flex rounded-lg border cd-border-c overflow-hidden">
-          <button
-            className={`px-2.5 py-1.5 flex items-center gap-1 text-xs font-bold ${view === "kanban" ? "cd-fill-primary" : "cd-card-bg cd-text-muted"}`}
-            onClick={() => setView("kanban")}
-          >
-            <LayoutGrid className="w-3.5 h-3.5" /> 칸반
-          </button>
-          <button
-            className={`px-2.5 py-1.5 flex items-center gap-1 text-xs font-bold ${view === "list" ? "cd-fill-primary" : "cd-card-bg cd-text-muted"}`}
-            onClick={() => setView("list")}
-          >
-            <List className="w-3.5 h-3.5" /> 리스트
-          </button>
-        </div>
-      </div>
-
       {error && <div className="cd-error-bg cd-error-text rounded-xl px-4 py-3 text-sm mb-3">{error}</div>}
 
-      {loading ? (
-        <div className="cd-text-faint text-sm p-6">불러오는 중…</div>
-      ) : view === "list" ? (
-        <ListView projects={filtered} onRowClick={(id) => router.push(`/sales/${id}`)} />
-      ) : (
-        <>
-          {/* 진행 단계 — 메인 칸반 */}
-          <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))" }}>
-            {ACTIVE_STAGES.map((stage) => (
-              <KanbanColumn
-                key={stage}
-                stage={stage}
-                list={byStage.get(stage) ?? []}
-                density={density}
-                maxHeight="calc(100vh - 300px)"
-                onCardClick={(id) => router.push(`/sales/${id}`)}
-              />
-            ))}
-          </div>
+      <div className="flex gap-3 items-stretch flex-wrap">
+        {/* 좌: 탭 패널 */}
+        <SalesTabPanel
+          activeTab={activeTab}
+          onTab={pickTab}
+          pendingCount={pendingCount}
+          pendingReports={pendingReports}
+          bids={upcomingBids}
+          activities={upcomingActs}
+          onOpenReport={() => setReportModalOpen(true)}
+          onGoProject={(id) => router.push(`/sales/${id}`)}
+        />
 
-          {/* 종결 — 접이식 */}
-          <button
-            className="flex items-center gap-2 mt-4 mb-2 cd-text-muted text-sm font-bold"
-            onClick={() => setShowClosed((v) => !v)}
-          >
-            {showClosed ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-            종결된 영업건
-            <span className="cd-text-faint font-normal text-xs">
-              수주 {byStage.get("won")?.length ?? 0} · 실주 {byStage.get("lost")?.length ?? 0} · 보류 {byStage.get("hold")?.length ?? 0}
-            </span>
-          </button>
-          {showClosed && (
-            <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}>
-              {CLOSED_STAGES.map((stage) => (
-                <KanbanColumn
-                  key={stage}
-                  stage={stage}
-                  list={byStage.get(stage) ?? []}
-                  density={density}
-                  maxHeight="360px"
-                  onCardClick={(id) => router.push(`/sales/${id}`)}
-                />
-              ))}
+        {/* 우: 영업건 리스트(필터 + 목록, 합쳐 PANEL_HEIGHT) */}
+        <div className="flex flex-col min-w-0" style={{ flex: "1 1 480px", height: PANEL_HEIGHT }}>
+          <div className="flex items-center gap-2 flex-wrap mb-2 shrink-0">
+            <div className="flex items-center gap-1.5">
+              <Search className="w-4 h-4 cd-text-faint" />
+              <input
+                className="cd-input"
+                style={{ width: 180 }}
+                placeholder="제목·사업장 검색"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+              />
             </div>
-          )}
-          {closedTotal === 0 && showClosed && (
-            <div className="cd-text-faint text-xs px-1 py-2">종결된 영업건이 없습니다.</div>
-          )}
-        </>
-      )}
+            <select className="cd-select" style={{ width: "auto" }} value={owner} onChange={(e) => setOwner(e.target.value)}>
+              <option value="">담당 전체</option>
+              {employees.map((e) => (
+                <option key={e.employeeId} value={e.employeeId}>{e.name}{e.deptName ? ` (${e.deptName})` : ""}</option>
+              ))}
+            </select>
+            {years.length > 0 && (
+              <select className="cd-select" style={{ width: "auto" }} value={year} onChange={(e) => setYear(e.target.value)}>
+                <option value="">연도 전체</option>
+                {years.map((y) => <option key={y} value={y}>{y}</option>)}
+              </select>
+            )}
+            {hasFilter && (
+              <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => { setQ(""); setOwner(""); setYear(""); }}>
+                <X className="w-3.5 h-3.5" /> 초기화
+              </button>
+            )}
+          </div>
+          <div className="flex-1 min-h-0">
+            {loading ? (
+              <div className="cd-text-faint text-sm p-6">불러오는 중…</div>
+            ) : (
+              <ListView projects={filtered} onRowClick={(id) => router.push(`/sales/${id}`)} />
+            )}
+          </div>
+        </div>
+      </div>
 
       {creating && (
         <CreateProjectModal
@@ -290,20 +274,6 @@ export function SalesBoard() {
             router.push(`/sales/${id}`);
           }}
         />
-      )}
-
-      {/* 경과 보고 필요 안내 팝업 */}
-      {reportPromptOpen && (
-        <div className="cd-modal-overlay cdash cd-fields-white" data-theme={theme} onClick={() => setReportPromptOpen(false)}>
-          <div className="cd-modal cd-card-bg w-full" style={{ maxWidth: 380, padding: "1.5rem" }} onClick={(e) => e.stopPropagation()}>
-            <h3 className="cd-text text-base font-extrabold mb-2">경과 보고 필요</h3>
-            <p className="cd-text-muted text-sm mb-5">기간이 경과했으나 경과가 입력되지 않은 스케쥴이 <span className="cd-text-primary font-bold">{pendingCount}건</span> 있습니다.</p>
-            <div className="flex justify-end gap-2">
-              <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => setReportPromptOpen(false)}>나중에</button>
-              <button className="cd-btn cd-btn-primary cd-btn-sm" onClick={() => { setReportPromptOpen(false); setReportModalOpen(true); }}>경과 보고</button>
-            </div>
-          </div>
-        </div>
       )}
 
       {reportModalOpen && (
@@ -317,102 +287,197 @@ export function SalesBoard() {
   );
 }
 
-function KanbanColumn({
-  stage,
-  list,
-  density,
-  maxHeight,
-  onCardClick,
+function SalesTabPanel({
+  activeTab,
+  onTab,
+  pendingCount,
+  pendingReports,
+  bids,
+  activities,
+  onOpenReport,
+  onGoProject,
 }: {
-  stage: SalesStage;
-  list: SalesProject[];
-  density: Density;
-  maxHeight: string;
-  onCardClick: (projectId: string) => void;
+  activeTab: TabKey;
+  onTab: (k: TabKey) => void;
+  pendingCount: number;
+  pendingReports: PendingReportItem[];
+  bids: UpcomingBidItem[];
+  activities: UpcomingActivityItem[];
+  onOpenReport: () => void;
+  onGoProject: (projectId: string) => void;
 }) {
+  const dday = (iso: string) => {
+    const d = new Date(`${iso.slice(0, 10)}T00:00:00`);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return Math.round((d.getTime() - today.getTime()) / 86400000);
+  };
+  const mmdd = (iso: string) => {
+    const [, m, d] = iso.slice(0, 10).split("-");
+    return m && d ? `${Number(m)}/${Number(d)}` : iso.slice(0, 10);
+  };
+  const ddayLabel = (n: number) => (n <= 0 ? "D-DAY" : `D-${n}`);
+  const ddayColor = (n: number) => (n <= 2 ? "var(--cd-error)" : n <= 6 ? "var(--cd-warning)" : "var(--cd-faint)");
+
+  const tabs: {
+    key: TabKey;
+    label: string;
+    Icon: typeof AlarmClock;
+    color: string;
+    count: number;
+    pill: string;
+  }[] = [
+    { key: "bids", label: "투찰 임박", Icon: AlarmClock, color: "var(--cd-error)", count: bids.length, pill: "cd-pill-error" },
+    { key: "reports", label: "경과 보고", Icon: ClipboardList, color: "var(--cd-warning)", count: pendingCount, pill: "cd-pill-warn" },
+    { key: "activities", label: "다가오는 일정", Icon: CalendarClock, color: "var(--cd-primary)", count: activities.length, pill: "cd-pill-info" },
+  ];
+
+  const rowCls = "cd-row-hover text-left rounded-lg px-2 py-1.5 flex items-center gap-2 min-w-0 w-full text-sm";
+
   return (
-    <div className="cd-card-bg rounded-2xl border cd-border-c flex flex-col min-w-0" style={{ maxHeight }}>
-      <div className="flex items-center justify-between px-3 py-2.5 border-b cd-border-c shrink-0">
-        <span className={`cd-pill ${STAGE_PILL[stage]}`}>{SALES_STAGE_LABELS[stage]}</span>
-        <span className="cd-text-faint text-xs font-bold">{list.length}</span>
+    <div
+      className="cd-card-bg rounded-2xl border cd-border-c flex flex-col min-w-0"
+      style={{ flex: `0 0 ${TAB_PANEL_WIDTH}px`, height: PANEL_HEIGHT }}
+    >
+      {/* 탭 헤더 */}
+      <div className="flex border-b cd-border-c shrink-0">
+        {tabs.map((t) => {
+          const active = activeTab === t.key;
+          return (
+            <button
+              key={t.key}
+              onClick={() => onTab(t.key)}
+              className={`flex-1 flex items-center justify-center gap-1 px-1.5 py-2.5 border-b-2 min-w-0 ${active ? "cd-text" : "cd-text-muted"}`}
+              style={{ borderColor: active ? t.color : "transparent" }}
+            >
+              <t.Icon className="w-4 h-4 shrink-0" style={{ color: t.color }} />
+              <span className="text-xs font-bold truncate">{t.label}</span>
+              <span className={`cd-pill ${t.count > 0 ? t.pill : "cd-pill-idle"}`}>{t.count}</span>
+              {t.key === "bids" && bids.length > 0 && (
+                <Siren className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--cd-error)" }} />
+              )}
+            </button>
+          );
+        })}
       </div>
-      <div className="flex flex-col gap-1.5 p-2 overflow-y-auto" style={{ minHeight: 80 }}>
-        {list.map((p) => (
-          <ProjectCard key={p.projectId} project={p} density={density} onClick={() => onCardClick(p.projectId)} />
-        ))}
-        {list.length === 0 && (
-          <div className="flex-1 flex items-center justify-center rounded-xl border border-dashed cd-border-c cd-text-faint text-xs py-5">
-            비어 있음
-          </div>
+
+      {/* 탭 콘텐츠 */}
+      <div className="flex-1 overflow-y-auto p-2">
+        {activeTab === "reports" && (
+          pendingReports.length === 0 ? (
+            <div className="cd-text-faint text-sm px-2 py-3">밀린 경과가 없습니다.</div>
+          ) : (
+            <div className="flex flex-col gap-1">
+              <button className="cd-btn cd-btn-primary cd-btn-sm self-start mb-1" onClick={onOpenReport}>경과 보고</button>
+              {pendingReports.map((r) => (
+                <button key={r.projectId} onClick={() => onGoProject(r.projectId)} className={rowCls}>
+                  <span className="cd-text font-bold truncate flex-1">{r.title}</span>
+                  <span className="cd-text-faint text-[13px] shrink-0">{Array.isArray(r.activities) ? r.activities.length : 0}건</span>
+                </button>
+              ))}
+            </div>
+          )
+        )}
+
+        {activeTab === "bids" && (
+          bids.length === 0 ? (
+            <div className="cd-text-faint text-sm px-2 py-3">임박한 발주가 없습니다.</div>
+          ) : (
+            <div className="flex flex-col gap-1">
+              {bids.map((b) => {
+                const n = dday(b.bidEnd);
+                return (
+                  <button key={`${b.projectId}-${b.facilityId}`} onClick={() => onGoProject(b.projectId)} className={rowCls}>
+                    <span className="font-extrabold shrink-0 text-[13px]" style={{ width: 48, color: ddayColor(n) }}>{ddayLabel(n)}</span>
+                    <span className="cd-text truncate flex-1">{b.facilityName ?? b.projectTitle}</span>
+                    <span className="cd-text-faint text-[13px] shrink-0">{mmdd(b.bidEnd)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )
+        )}
+
+        {activeTab === "activities" && (
+          activities.length === 0 ? (
+            <div className="cd-text-faint text-sm px-2 py-3">예정된 일정이 없습니다.</div>
+          ) : (
+            <div className="flex flex-col gap-1">
+              {activities.map((a) => {
+                const meta = ACTIVITY_TYPE_META[a.activityType];
+                return (
+                  <button key={a.activityId} onClick={() => onGoProject(a.projectId)} className={rowCls}>
+                    <span className="cd-text-faint text-[13px] font-bold shrink-0" style={{ width: 38 }}>{mmdd(a.scheduledAt)}</span>
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: meta?.color ?? "var(--cd-secondary)" }} />
+                    <span className="cd-text truncate flex-1">{a.projectTitle}</span>
+                    {meta && <span className="cd-text-faint text-[13px] shrink-0">{meta.short}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          )
         )}
       </div>
     </div>
   );
 }
 
-function ProjectCard({ project: p, density, onClick }: { project: SalesProject; density: Density; onClick: () => void }) {
-  if (density === "compact") {
-    return (
-      <button onClick={onClick} className="cd-surface-bg cd-listitem text-left rounded-lg border cd-border-c px-2.5 py-2 w-full min-w-0">
-        <div className="flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: PRIORITY_DOT[p.priority] }} />
-          <span className="cd-text font-bold text-[13px] truncate flex-1">{p.title}</span>
-        </div>
-        <div className="cd-text-faint text-[11px] truncate mt-0.5 pl-3">{p.facilityName ?? "사업장 미지정"}</div>
-      </button>
-    );
-  }
+function StepTags({ types }: { types: SalesActivityType[] }) {
+  const set = new Set(types);
+  const active = STEP_TAGS.filter((s) => set.has(s.type));
+  if (active.length === 0) return <span className="cd-text-faint text-[11px]">—</span>;
   return (
-    <button onClick={onClick} className="cd-surface-bg cd-listitem text-left rounded-xl border cd-border-c p-2.5 w-full min-w-0">
-      <div className="flex items-start gap-1.5">
-        <span className="w-1.5 h-1.5 rounded-full shrink-0 mt-1.5" style={{ background: PRIORITY_DOT[p.priority] }} />
-        <span className="cd-text font-bold text-sm leading-snug line-clamp-2 flex-1">{p.title}</span>
-      </div>
-      <div className="cd-text-muted text-xs mt-1 truncate pl-3">{p.facilityName ?? "사업장 미지정"}</div>
-      <div className="flex items-center justify-between mt-2 gap-1 pl-3">
-        <span className="cd-text-faint text-[11px] truncate">{p.ownerEmployeeName ?? "담당 미지정"}</span>
-        {p.expectedAmount != null && (
-          <span className="cd-text-primary text-[11px] font-bold shrink-0">{p.expectedAmount.toLocaleString()}원</span>
-        )}
-      </div>
-    </button>
+    <span className="inline-flex flex-wrap gap-1 align-middle">
+      {active.map((s) => (
+        <span
+          key={s.type}
+          className="text-[12px] font-bold rounded px-1.5 py-0.5 leading-none"
+          style={{ background: ACTIVITY_TYPE_META[s.type].color, color: "#1f2937" }}
+        >
+          {s.label}
+        </span>
+      ))}
+    </span>
   );
 }
 
 function ListView({ projects, onRowClick }: { projects: SalesProject[]; onRowClick: (projectId: string) => void }) {
   if (projects.length === 0) {
-    return <div className="cd-text-faint text-sm p-6 text-center cd-card-bg rounded-2xl border cd-border-c">표시할 영업건이 없습니다.</div>;
+    return <div className="cd-text-faint text-sm p-6 text-center cd-card-bg rounded-2xl border cd-border-c h-full flex items-center justify-center">표시할 영업건이 없습니다.</div>;
   }
   return (
-    <div className="cd-card-bg rounded-2xl border cd-border-c overflow-hidden">
-      <div className="overflow-x-auto" style={{ maxHeight: "calc(100vh - 260px)" }}>
+    <div className="sales-list-scope cd-card-bg rounded-2xl border cd-border-c overflow-hidden h-full">
+      {/* 리스트 폰트 20% 확대(전역 cd-table은 공유 클래스라 스코프 오버라이드) */}
+      <style>{`
+        .sales-list-scope .cd-table thead th { font-size: 0.825rem; }
+        .sales-list-scope .cd-table tbody td { font-size: 0.975rem; }
+      `}</style>
+      <div className="overflow-auto h-full">
         <table className="cd-table">
           <thead>
             <tr>
               <th>제목</th>
               <th>사업장</th>
-              <th>단계</th>
+              <th>분류 단계</th>
+              <th>업무 단계</th>
               <th>담당</th>
-              <th>우선순위</th>
               <th style={{ textAlign: "right" }}>예상 수주금액</th>
             </tr>
           </thead>
           <tbody>
-            {projects.map((p) => (
-              <tr key={p.projectId} className="cursor-pointer" onClick={() => onRowClick(p.projectId)}>
-                <td className="cd-text font-bold">{p.title}</td>
-                <td className="cd-text-muted">{p.facilityName ?? "—"}</td>
-                <td><span className={`cd-pill ${STAGE_PILL[p.stage]}`}>{SALES_STAGE_LABELS[p.stage]}</span></td>
-                <td className="cd-text-muted">{p.ownerEmployeeName ?? "—"}</td>
-                <td>
-                  <span className="inline-flex items-center gap-1 cd-text-muted">
-                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: PRIORITY_DOT[p.priority] }} />
-                    {PRIORITY_LABELS[p.priority]}
-                  </span>
-                </td>
-                <td className="cd-text" style={{ textAlign: "right" }}>{p.expectedAmount != null ? `${p.expectedAmount.toLocaleString()}원` : "—"}</td>
-              </tr>
-            ))}
+            {projects.map((p) => {
+              const assignee = p.ownerEmployeeName ?? p.leadMemberName ?? null;
+              return (
+                <tr key={p.projectId} className="cursor-pointer" onClick={() => onRowClick(p.projectId)}>
+                  <td className="cd-text font-bold">{p.title}</td>
+                  <td className="cd-text-muted">{p.facilityName ?? "—"}</td>
+                  <td><span className={`cd-pill ${STAGE_PILL[p.stage]}`}>{SALES_STAGE_LABELS[p.stage]}</span></td>
+                  <td><StepTags types={p.activityTypes ?? []} /></td>
+                  <td className="cd-text-muted">{assignee ?? "—"}</td>
+                  <td className="cd-text" style={{ textAlign: "right" }}>{p.expectedAmount != null ? `${p.expectedAmount.toLocaleString()}원` : "—"}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -430,8 +495,6 @@ function CreateProjectModal({
   onCreated: (projectId: string) => void;
 }) {
   const [title, setTitle] = useState("");
-  const [stage, setStage] = useState<SalesStage>("lead");
-  const [priority, setPriority] = useState<SalesProjectPriority>("normal");
   const [serviceCategory, setServiceCategory] = useState<SalesServiceCategory | "">("");
   const [serviceSubcategory, setServiceSubcategory] = useState<string>("");
   const [expected, setExpected] = useState("");
@@ -483,8 +546,9 @@ function CreateProjectModal({
         body: JSON.stringify({
           facilityId: facility.facilityId,
           title: title.trim(),
-          stage,
-          priority,
+          // 단계는 영업 스케쥴 진행도에 따라 자동 분류 → 신규 생성 시 lead로 시작.
+          stage: "lead",
+          priority: "normal",
           serviceCategory: serviceCategory || null,
           serviceSubcategory: serviceSubcategory || null,
           expectedAmount: expected ? Number(expected.replace(/[^0-9]/g, "")) : null,
@@ -552,25 +616,6 @@ function CreateProjectModal({
 
         <label className="cd-label">제목 *</label>
         <input className="cd-input mb-3" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="예: 통합허가 갱신 영업" />
-
-        <div className="grid grid-cols-2 gap-3 mb-3">
-          <div>
-            <label className="cd-label">단계</label>
-            <select className="cd-select" value={stage} onChange={(e) => setStage(e.target.value as SalesStage)}>
-              {SALES_STAGE_ORDER.map((s) => (
-                <option key={s} value={s}>{SALES_STAGE_LABELS[s]}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="cd-label">우선순위</label>
-            <select className="cd-select" value={priority} onChange={(e) => setPriority(e.target.value as SalesProjectPriority)}>
-              {(Object.keys(PRIORITY_LABELS) as SalesProjectPriority[]).map((p) => (
-                <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>
-              ))}
-            </select>
-          </div>
-        </div>
 
         <div className="grid grid-cols-2 gap-3 mb-3">
           <div>

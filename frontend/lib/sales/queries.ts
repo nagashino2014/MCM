@@ -403,6 +403,64 @@ export async function listUpcomingActivities(days = 14): Promise<UpcomingActivit
   }));
 }
 
+// ── 담당자 정보 관리(facility_contact_people 전사 횡단) ──────────
+export interface SalesContact {
+  id: number;
+  facilityId: string;
+  facilityName: string | null;
+  departmentId: number | null;
+  departmentName: string | null;
+  personName: string;
+  title: string | null;
+  officePhone: string | null;
+  mobilePhone: string | null;
+  email: string | null;
+  duties: string | null;
+  status: string; // active | inactive
+  deptType: string | null; // contract(계약) | env(환경)
+  appointedAt: string | null;
+  transferredAt: string | null;
+  resignedAt: string | null;
+  updatedAt: string;
+}
+
+export async function listSalesContacts(): Promise<SalesContact[]> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT p.id, p.facility_id, f.company_name AS facility_name,
+              p.department_id, d.department_name,
+              p.person_name, p.title, p.office_phone, p.mobile_phone, p.email,
+              p.duties, p.status, p.dept_type,
+              p.appointed_at, p.transferred_at, p.resigned_at, p.updated_at
+         FROM facility_contact_people p
+         LEFT JOIN facilities f ON f.facility_id = p.facility_id
+         LEFT JOIN facility_contact_departments d ON d.id = p.department_id
+        ORDER BY (p.status = 'active') DESC, f.company_name ASC, p.person_name ASC
+        LIMIT 2000`
+    )
+  );
+  return rows.map((r) => ({
+    id: Number(r.id ?? 0),
+    facilityId: String(r.facility_id ?? ""),
+    facilityName: text(r.facility_name),
+    departmentId: r.department_id != null ? Number(r.department_id) : null,
+    departmentName: text(r.department_name),
+    personName: String(r.person_name ?? ""),
+    title: text(r.title),
+    officePhone: text(r.office_phone),
+    mobilePhone: text(r.mobile_phone),
+    email: text(r.email),
+    duties: text(r.duties),
+    status: String(r.status ?? "active"),
+    deptType: text(r.dept_type),
+    appointedAt: text(r.appointed_at),
+    transferredAt: text(r.transferred_at),
+    resignedAt: text(r.resigned_at),
+    updatedAt: String(r.updated_at ?? ""),
+  }));
+}
+
 export async function createSalesProject(input: SalesProjectInput, userId: string | null): Promise<string> {
   const now = new Date().toISOString();
   const projectId = id("sproj");

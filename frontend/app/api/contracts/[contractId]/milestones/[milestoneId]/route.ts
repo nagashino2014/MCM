@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { rowsToObjects, withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
+import { buildInvoiceFileName } from "@/lib/storage/contract-document-storage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -67,12 +68,53 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     await withDbWrite(async (db) => {
       const exists = rowsToObjects(
         await db.exec(
-          "SELECT milestone_id FROM contract_payment_milestones WHERE milestone_id = $1 AND contract_id = $2",
+          "SELECT milestone_id, invoice_issued_at FROM contract_payment_milestones WHERE milestone_id = $1 AND contract_id = $2",
           [milestoneId, contractId]
         )
       );
       if (exists.length === 0) throw new Error("단계를 찾을 수 없습니다.");
       await db.run(sql, values);
+
+      // 단계명(stage_label) 변경 시, 이 단계에 연결된 세금계산서의 표시명도
+      // 새 단계명으로 재생성한다. 표시명은 (발행일)계약명 단계명 세금계산서.pdf 규칙.
+      // (실제 저장 경로 storage_key 는 그대로 두고 display_name 만 갱신 — 목록/다운로드명 모두 여기서 나온다.)
+      if (body.stageLabel !== undefined) {
+        const invoiceDocs = rowsToObjects(
+          await db.exec(
+            `SELECT document_id FROM contract_documents
+              WHERE contract_id = $1 AND milestone_id = $2 AND document_type = 'tax_invoice'`,
+            [contractId, milestoneId]
+          )
+        );
+        if (invoiceDocs.length > 0) {
+          const newStage = String(body.stageLabel ?? "").trim() || null;
+          const contractTitle = String(
+            rowsToObjects(
+              await db.exec("SELECT contract_title FROM contracts WHERE contract_id = $1", [contractId])
+            )[0]?.contract_title ?? ""
+          ).trim();
+          // 발행일은 인보이스 레코드 우선, 없으면 단계의 invoice_issued_at 사용
+          const invoiceRows = rowsToObjects(
+            await db.exec(
+              `SELECT issue_date FROM contract_invoices
+                WHERE contract_id = $1 AND milestone_id = $2
+                ORDER BY created_at DESC LIMIT 1`,
+              [contractId, milestoneId]
+            )
+          );
+          const issueDate =
+            String(invoiceRows[0]?.issue_date ?? "").slice(0, 10) ||
+            String(exists[0]?.invoice_issued_at ?? "").slice(0, 10);
+          const newDisplayName = buildInvoiceFileName(issueDate, contractTitle, newStage);
+          await db.run(
+            `UPDATE contract_documents
+               SET display_name = $1, updated_at = $2
+              WHERE contract_id = $3 AND milestone_id = $4 AND document_type = 'tax_invoice'`,
+            [newDisplayName, new Date().toISOString(), contractId, milestoneId]
+          );
+        }
+      }
+
       await recordAuditLogInline(db, {
         actorUserId: actor.userId,
         action: "contract_payment_update",

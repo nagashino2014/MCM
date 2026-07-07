@@ -42,8 +42,19 @@ resource "aws_iam_instance_profile" "bastion" {
 
 resource "aws_security_group" "bastion" {
   name        = "${local.name}-bastion"
+  # description 변경은 SG 재생성(forces replacement)을 유발하므로 원문 유지.
   description = "Bastion host for SSM port forwarding"
   vpc_id      = aws_vpc.main.id
+
+  # ECS(next) 태스크 -> bastion tinyproxy(8888). DART 고정 IP 아웃바운드용.
+  # SG 참조로만 허용(VPC 내부), 외부 노출 없음.
+  ingress {
+    from_port       = 8888
+    to_port         = 8888
+    protocol        = "tcp"
+    security_groups = [aws_security_group.ecs.id]
+    description     = "tinyproxy from ECS tasks"
+  }
 
   egress {
     from_port   = 0
@@ -62,6 +73,9 @@ resource "aws_instance" "bastion" {
   # bastion SG 는 인바운드 규칙이 없어(egress only) public IP 가 붙어도 외부 접근 불가.
   subnet_id                   = aws_subnet.public[0].id
   associate_public_ip_address = true
+  # DART 프록시 타깃(ECS -> bastion:8888)이 재생성돼도 불변이도록 private IP 고정.
+  # 현재 실행 중인 인스턴스의 실제 값과 동일 → 재생성 없이 no-op.
+  private_ip                  = "10.40.0.226"
   vpc_security_group_ids      = [aws_security_group.bastion.id]
   iam_instance_profile        = aws_iam_instance_profile.bastion.name
 
@@ -95,4 +109,15 @@ resource "aws_instance" "bastion" {
   lifecycle {
     ignore_changes = [ami]
   }
+}
+
+# DART OpenAPI 는 인증키에 등록된 IP 에서만 호출을 허용한다(status 012).
+# NAT 제거로 ECS 아웃바운드 IP 가 태스크마다 바뀌므로, bastion 에 EIP 를 고정해
+# 고정 아웃바운드 IP 를 확보하고 bastion 의 tinyproxy 경유로 DART 를 호출한다.
+resource "aws_eip" "bastion" {
+  domain   = "vpc"
+  instance = aws_instance.bastion.id
+  tags     = merge(local.tags, { Name = "${local.name}-bastion" })
+
+  depends_on = [aws_internet_gateway.main]
 }

@@ -58,6 +58,14 @@ export function routeDisclosure(reportName: string): DisclosureCategory | null {
 // 대상일 수 있는 유형. 1차 corp 미매칭 공시 중 이 카테고리만 원문(document.xml)을 파싱한다.
 export const COUNTERPARTY_CATEGORIES = new Set<DisclosureCategory>(["supply_contract", "affiliate_deal"]);
 
+// 특정 배출시설 실체 없이 조달/행정만 대행하는 발주기관 — 매칭 모집단에서 제외한다.
+// (주의: 소각장·폐기물처리·발전을 직접 운영하는 지자체/환경공단·발전본부는 통합허가 대상이므로
+//  여기 넣지 않는다. 조달청 등 '조달 창구' 성격만 좁게 잡는다.)
+const PROCUREMENT_PROXY_RE = /(조달청|방위사업청|병무청|국세청|관세청|나라장터)/;
+export function isProcurementProxy(name: string | null | undefined): boolean {
+  return !!name && PROCUREMENT_PROXY_RE.test(name);
+}
+
 export interface ClassifyResult {
   signalType: IntelSignalType;
   grade: IntelSignalGrade;

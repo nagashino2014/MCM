@@ -21,6 +21,7 @@ import {
   extractCounterpartyText,
   findCounterpartyFacility,
   coreCompanyName,
+  isProcurementProxy,
   COUNTERPARTY_CATEGORIES,
   type IntelSignalGrade,
   type ClassifyResult,
@@ -101,13 +102,17 @@ export async function collectDartSignals(opts: CollectOptions = {}): Promise<Col
   const coreToFac = new Map<string, { facilityId: string; name: string }>(); // 2차 원문 대조용
   for (const r of facRows) {
     const fid = String(r.facility_id);
+    const cname = String(r.company_name ?? "");
+    const nm = r.norm_name ? String(r.norm_name).trim() : "";
+    // 순수 조달대행 기관(조달청 등)은 특정 사업장 실체가 없어 발주처 오탐만 유발 → 모집단 제외.
+    // (배출시설을 직접 운영하는 지자체/환경공단은 isProcurementProxy에 안 걸리므로 유지됨)
+    if (isProcurementProxy(cname) || isProcurementProxy(nm)) continue;
     const bd = String(r.brn_digits ?? "");
     if (bd.length >= 10 && !brnToFac.has(bd)) brnToFac.set(bd, fid);
-    const nm = r.norm_name ? String(r.norm_name).trim() : "";
     if (nm && !nameToFac.has(nm)) nameToFac.set(nm, fid);
-    const core = coreCompanyName(nm || String(r.company_name ?? ""));
+    const core = coreCompanyName(nm || cname);
     if (core.length >= 3 && !coreToFac.has(core)) {
-      coreToFac.set(core, { facilityId: fid, name: String(r.company_name ?? nm) });
+      coreToFac.set(core, { facilityId: fid, name: cname || nm });
     }
   }
 

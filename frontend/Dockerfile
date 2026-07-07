@@ -7,9 +7,9 @@ FROM node:22-alpine AS builder
 WORKDIR /app/frontend
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/frontend/node_modules ./node_modules
-COPY frontend ./ 
+COPY frontend ./
 COPY scraper ../scraper
-RUN npm run build
+RUN npm run build && node scripts/build-batch.mjs
 
 FROM node:22-alpine AS runner
 WORKDIR /app/frontend

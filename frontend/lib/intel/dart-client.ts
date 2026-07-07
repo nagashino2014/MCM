@@ -4,6 +4,7 @@
 // undici 의 fetch + ProxyAgent 를 한 세트로 사용한다. Node 내장 fetch(내장 undici)에 별도 버전
 // ProxyAgent 를 dispatcher 로 넘기면 버전 불일치로 무시될 수 있으므로, 동일 undici 로 통일한다.
 import { fetch as undiciFetch, ProxyAgent } from "undici";
+import JSZip from "jszip";
 
 const DART_BASE = "https://opendart.fss.or.kr/api";
 
@@ -144,4 +145,73 @@ export async function getTangibleAssetAcquisitions(
     });
   }
   return map;
+}
+
+// --- 공시 원문(document.xml) 파싱: 2차 거래상대방 매칭용 ---
+// list/company/정형 API로 못 잡는 계열 수주(예: LS엠앤엠 EVBM 공장공사를 LS eNM이 수주)는
+// 공시 원문의 "계약상대방/발주처" 텍스트에 통합허가 대상이 등장한다. 원문을 텍스트로 뽑아
+// signal-extractor 가 대조한다. document.xml 은 ZIP 바이너리(내부 여러 XML, euc-kr/utf-8 혼재).
+
+const latin1 = (u: Uint8Array): string => {
+  let s = "";
+  for (let i = 0; i < u.length; i++) s += String.fromCharCode(u[i]);
+  return s;
+};
+
+function stripXmlTags(xml: string): string {
+  return xml
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#\d+;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function decodeDartXml(raw: Uint8Array): string {
+  // 인코딩 선언 스니핑(선두 200바이트를 latin1로 읽어 encoding= 파싱). 기본 utf-8.
+  const head = latin1(raw.subarray(0, 200)).toLowerCase();
+  const m = head.match(/encoding=["']?([a-z0-9_-]+)/);
+  const enc = m ? m[1] : "utf-8";
+  let text: string;
+  try {
+    text = new TextDecoder(enc).decode(raw);
+  } catch {
+    try { text = new TextDecoder("euc-kr").decode(raw); }
+    catch { text = new TextDecoder("utf-8").decode(raw); }
+  }
+  return stripXmlTags(text);
+}
+
+/**
+ * 공시 원문(document.xml) 텍스트. ZIP 해제 후 내부 XML들을 태그 제거해 이어붙인다.
+ * 무자료/오류(비ZIP JSON status)·네트워크 오류는 빈 문자열(2차 매칭은 폴백 없이 skip).
+ */
+export async function getDocumentText(receiptNo: string): Promise<string> {
+  const q = new URLSearchParams({ crtfc_key: apiKey(), rcept_no: receiptNo });
+  let bytes: Uint8Array;
+  try {
+    const res = await dartFetch(`${DART_BASE}/document.xml?${q.toString()}`);
+    bytes = new Uint8Array(await res.arrayBuffer());
+  } catch {
+    return "";
+  }
+  // ZIP 시그니처 'PK'(0x50 0x4B) 아니면 에러 JSON({status:...}) → 빈 문자열
+  if (bytes.length < 2 || bytes[0] !== 0x50 || bytes[1] !== 0x4b) return "";
+  let zip: JSZip;
+  try {
+    zip = await JSZip.loadAsync(bytes);
+  } catch {
+    return "";
+  }
+  const parts: string[] = [];
+  for (const name of Object.keys(zip.files)) {
+    const f = zip.files[name];
+    if (f.dir || !/\.(xml|html?|txt)$/i.test(name)) continue;
+    parts.push(decodeDartXml(await f.async("uint8array")));
+  }
+  return parts.join("\n");
 }

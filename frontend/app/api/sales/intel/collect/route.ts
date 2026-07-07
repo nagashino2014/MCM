@@ -10,10 +10,12 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
   try {
     await requirePermission("sales.edit", { fallbackRoles: ["editor"] });
-    const body = (await req.json().catch(() => ({}))) as { days?: unknown; maxPages?: unknown };
+    const body = (await req.json().catch(() => ({}))) as { days?: unknown; maxPages?: unknown; maxDocs?: unknown };
     const days = Number(body?.days) > 0 ? Number(body.days) : 7;
     const maxPages = Number(body?.maxPages) > 0 ? Number(body.maxPages) : 2; // 테스트 기본 소량
-    const result = await collectDartSignals({ days, maxPages });
+    // 2차 원문 파싱은 무거우므로 테스트에선 소량만(0=skip). 전량 완주는 야간 배치 전담.
+    const maxDocs = Number.isFinite(Number(body?.maxDocs)) && Number(body?.maxDocs) >= 0 ? Number(body.maxDocs) : 5;
+    const result = await collectDartSignals({ days, maxPages, maxDocs });
     return NextResponse.json(result);
   } catch (err) {
     return authErrorToResponse(err);

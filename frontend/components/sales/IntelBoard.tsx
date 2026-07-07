@@ -29,6 +29,7 @@ interface IntelSignal {
   facilityId: string | null;
   facilityName: string | null;
   matchStatus: string;
+  matchType: string;
   linkedProjectId: string | null;
   status: string;
   createdAt: string;
@@ -64,6 +65,11 @@ function TypeTag({ type }: { type: string }) {
 }
 function GradeTag({ grade }: { grade: string }) {
   return <span className={`cd-pill ${GRADE_PILL[grade] ?? "cd-pill-idle"}`}>{INTEL_SIGNAL_GRADE_LABELS[grade as keyof typeof INTEL_SIGNAL_GRADE_LABELS] ?? grade}</span>;
+}
+// 2차 매칭(공시자≠대상, 발주처=대상)임을 표시. direct는 배지 없음.
+function MatchTypeTag({ type }: { type: string }) {
+  if (type !== "counterparty") return null;
+  return <span className="cd-pill cd-pill-outline" title="공시자가 아닌 거래상대방(발주처)이 통합허가 대상">거래상대</span>;
 }
 
 export function IntelBoard() {
@@ -114,13 +120,14 @@ export function IntelBoard() {
       const res = await fetch("/api/sales/intel/collect", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ days: testDays, maxPages: 2 }),
+        body: JSON.stringify({ days: testDays, maxPages: 2, maxDocs: 5 }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
       const g = data.byGrade ?? {};
       setCollectMsg(
-        `테스트 수집 · 조회 ${data.scanned}${data.truncated ? "(일부)" : ""} / 회사조회 ${data.corpQueried ?? 0} / 매칭후보 ${data.matched ?? 0} / 신규 ${data.inserted} ` +
+        `테스트 수집 · 조회 ${data.scanned}${data.truncated ? "(일부)" : ""} / 회사조회 ${data.corpQueried ?? 0} / 매칭후보 ${data.matched ?? 0} ` +
+        `/ 원문 ${data.docScanned ?? 0}·거래상대 ${data.counterpartyMatched ?? 0} / 신규 ${data.inserted} ` +
         `(확정 ${g.confirmed ?? 0}·후보 ${g.candidate ?? 0}·관찰 ${g.monitoring ?? 0}·제외 ${g.excluded ?? 0})`
       );
       await reload();
@@ -250,7 +257,9 @@ export function IntelBoard() {
               <tbody>
                 {filtered.map((sig) => (
                   <tr key={sig.signalId} className="cursor-pointer" onClick={() => setSelected(sig)}>
-                    <td className="cd-text font-bold">{sig.companyName ?? "—"}</td>
+                    <td className="cd-text font-bold">
+                      {sig.companyName ?? "—"} <MatchTypeTag type={sig.matchType} />
+                    </td>
                     <td><TypeTag type={sig.signalType} /></td>
                     <td><GradeTag grade={sig.signalGrade} /></td>
                     <td className="cd-text-muted">{sig.reportName ?? "—"}</td>
@@ -370,6 +379,7 @@ function IntelDetailModal({
             <h3 className="cd-text text-lg font-extrabold truncate">{s.companyName ?? "—"}</h3>
             <TypeTag type={s.signalType} />
             <GradeTag grade={s.signalGrade} />
+            <MatchTypeTag type={s.matchType} />
           </div>
           <button className="cd-btn cd-btn-ghost cd-btn-sm shrink-0" onClick={onClose}><X className="w-4 h-4" /></button>
         </div>
@@ -384,7 +394,13 @@ function IntelDetailModal({
           {s.amount != null && <Row label="취득금액" value={`${s.amount.toLocaleString()}원`} />}
           {s.counterparty && <Row label="거래상대방" value={s.counterparty} />}
           <Row label="사업자번호" value={s.brn ?? "—"} />
-          <Row label="매칭 사업장" value={s.facilityName ?? <span className="cd-text-faint">미매칭</span>} />
+          <Row
+            label={s.matchType === "counterparty" ? "발주처(대상)" : "매칭 사업장"}
+            value={s.facilityName ?? <span className="cd-text-faint">미매칭</span>}
+          />
+          {s.matchType === "counterparty" && (
+            <Row label="공시자" value={<span className="cd-text-muted">{s.companyName ?? "—"} (원문에서 발주처로 대상 검출)</span>} />
+          )}
           <Row label="원문" value={s.url ? <a href={s.url} target="_blank" rel="noreferrer" className="cd-text-primary inline-flex items-center gap-1"><ExternalLink className="w-3.5 h-3.5" /> DART 원문</a> : "—"} />
         </div>
 

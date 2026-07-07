@@ -34,6 +34,7 @@ export interface IntelSignal {
   facilityId: string | null;
   facilityName: string | null;
   matchStatus: string; // matched | unmatched | ignored
+  matchType: string; // direct | counterparty
   linkedProjectId: string | null;
   status: string; // new | reviewed | converted | dismissed
   createdAt: string;
@@ -70,6 +71,7 @@ function mapSignal(row: Record<string, unknown>): IntelSignal {
     facilityId: text(row.facility_id),
     facilityName: text(row.facility_name),
     matchStatus: String(row.match_status ?? "unmatched"),
+    matchType: String(row.match_type ?? "direct"),
     linkedProjectId: text(row.linked_project_id),
     status: String(row.status ?? "new"),
     createdAt: String(row.created_at ?? ""),
@@ -81,7 +83,7 @@ const SIGNAL_SELECT = `
   SELECT s.signal_id, s.source, s.external_id, s.corp_code, s.company_name, s.brn, s.report_name,
          s.signal_type, s.signal_grade, s.asset_class, s.acquire_purpose, s.counterparty,
          s.disclosed_at, s.amount, s.url, s.facility_id, f.company_name AS facility_name,
-         s.match_status, s.linked_project_id, s.status, s.created_at, s.updated_at
+         s.match_status, s.match_type, s.linked_project_id, s.status, s.created_at, s.updated_at
     FROM intel_signals s
     LEFT JOIN facilities f ON f.facility_id = s.facility_id`;
 

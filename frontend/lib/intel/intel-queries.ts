@@ -2,7 +2,7 @@
 
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { createSalesProject } from "@/lib/sales/queries";
-import { INTEL_SIGNAL_TYPE_LABELS, type IntelSignalType } from "./signal-extractor";
+import { INTEL_SIGNAL_TYPE_LABELS, type IntelSignalType, type IntelSignalGrade } from "./signal-extractor";
 
 const text = (v: unknown): string | null => {
   if (v == null) return null;
@@ -24,6 +24,10 @@ export interface IntelSignal {
   brn: string | null;
   reportName: string | null;
   signalType: IntelSignalType;
+  signalGrade: IntelSignalGrade;
+  assetClass: string | null;
+  acquirePurpose: string | null;
+  counterparty: string | null;
   disclosedAt: string | null;
   amount: number | null;
   url: string | null;
@@ -40,6 +44,7 @@ export interface IntelSignalFilter {
   signalType?: string;
   matchStatus?: string;
   status?: string;
+  grade?: string; // 미지정=confirmed+candidate 기본, 'all'=전체, 특정등급=그 등급만
   q?: string;
   from?: string; // disclosed_at >=
   to?: string; // disclosed_at <=
@@ -55,6 +60,10 @@ function mapSignal(row: Record<string, unknown>): IntelSignal {
     brn: text(row.brn),
     reportName: text(row.report_name),
     signalType: (String(row.signal_type ?? "other") as IntelSignalType),
+    signalGrade: (String(row.signal_grade ?? "candidate") as IntelSignalGrade),
+    assetClass: text(row.asset_class),
+    acquirePurpose: text(row.acquire_purpose),
+    counterparty: text(row.counterparty),
     disclosedAt: text(row.disclosed_at),
     amount: num(row.amount),
     url: text(row.url),
@@ -70,7 +79,8 @@ function mapSignal(row: Record<string, unknown>): IntelSignal {
 
 const SIGNAL_SELECT = `
   SELECT s.signal_id, s.source, s.external_id, s.corp_code, s.company_name, s.brn, s.report_name,
-         s.signal_type, s.disclosed_at, s.amount, s.url, s.facility_id, f.company_name AS facility_name,
+         s.signal_type, s.signal_grade, s.asset_class, s.acquire_purpose, s.counterparty,
+         s.disclosed_at, s.amount, s.url, s.facility_id, f.company_name AS facility_name,
          s.match_status, s.linked_project_id, s.status, s.created_at, s.updated_at
     FROM intel_signals s
     LEFT JOIN facilities f ON f.facility_id = s.facility_id`;
@@ -81,6 +91,12 @@ export async function listIntelSignals(filter: IntelSignalFilter = {}): Promise<
   if (filter.signalType) { params.push(filter.signalType); where.push(`s.signal_type = $${params.length}`); }
   if (filter.matchStatus) { params.push(filter.matchStatus); where.push(`s.match_status = $${params.length}`); }
   if (filter.status) { params.push(filter.status); where.push(`s.status = $${params.length}`); }
+  // grade 기본값: confirmed+candidate 노출. 'all'=제약없음, 특정등급=그 등급만.
+  if (filter.grade === undefined) {
+    where.push(`s.signal_grade IN ('confirmed','candidate')`);
+  } else if (filter.grade !== "all") {
+    params.push(filter.grade); where.push(`s.signal_grade = $${params.length}`);
+  }
   if (filter.from) { params.push(filter.from); where.push(`s.disclosed_at >= $${params.length}`); }
   if (filter.to) { params.push(filter.to); where.push(`s.disclosed_at <= $${params.length}`); }
   if (filter.q) {

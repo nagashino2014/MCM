@@ -59,6 +59,8 @@ const GRADE_PILL: Record<string, string> = {
   monitoring: "cd-pill-warn",
   excluded: "cd-pill-outline",
 };
+// 소스 라벨(목록 원문 링크·필터 공용)
+const SOURCE_LABEL: Record<string, string> = { dart: "DART", news: "뉴스", eiass: "EIASS" };
 
 function TypeTag({ type }: { type: string }) {
   return <span className={`cd-pill ${TYPE_PILL[type] ?? "cd-pill-idle"}`}>{INTEL_SIGNAL_TYPE_LABELS[type as keyof typeof INTEL_SIGNAL_TYPE_LABELS] ?? type}</span>;
@@ -85,6 +87,7 @@ export function IntelBoard() {
   const [collecting, setCollecting] = useState(false);
   const [collectMsg, setCollectMsg] = useState<string | null>(null);
   const [testDays, setTestDays] = useState(7); // 수집 테스트 기간 프리셋
+  const [testSource, setTestSource] = useState<"dart" | "eiass">("dart"); // 수집 테스트 대상 소스
   const [selected, setSelected] = useState<IntelSignal | null>(null);
 
   const [q, setQ] = useState("");
@@ -92,6 +95,7 @@ export function IntelBoard() {
   const [matchStatus, setMatchStatus] = useState("");
   const [status, setStatus] = useState("");
   const [grade, setGrade] = useState(""); // 서버 필터. ''=확정+후보 기본, 'all'=전체, 특정등급
+  const [sourceFilter, setSourceFilter] = useState(""); // dart | news | eiass
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -117,18 +121,25 @@ export function IntelBoard() {
     setCollecting(true);
     setCollectMsg(null);
     try {
+      const body =
+        testSource === "eiass"
+          ? { source: "eiass", maxPages: 2 }
+          : { days: testDays, maxPages: 2, maxDocs: 5 };
       const res = await fetch("/api/sales/intel/collect", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ days: testDays, maxPages: 2, maxDocs: 5 }),
+        body: JSON.stringify(body),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
       const g = data.byGrade ?? {};
+      const gradeMsg = `(확정 ${g.confirmed ?? 0}·후보 ${g.candidate ?? 0}·관찰 ${g.monitoring ?? 0}·제외 ${g.excluded ?? 0})`;
       setCollectMsg(
-        `테스트 수집 · 조회 ${data.scanned}${data.truncated ? "(일부)" : ""} / 회사조회 ${data.corpQueried ?? 0} / 매칭후보 ${data.matched ?? 0} ` +
-        `/ 원문 ${data.docScanned ?? 0}·거래상대 ${data.counterpartyMatched ?? 0} / 신규 ${data.inserted} ` +
-        `(확정 ${g.confirmed ?? 0}·후보 ${g.candidate ?? 0}·관찰 ${g.monitoring ?? 0}·제외 ${g.excluded ?? 0})`
+        testSource === "eiass"
+          ? `EIASS 테스트 · 스캔 ${data.scanned} / 신규 ${data.newFound ?? 0}·키워드 ${data.kwPassed ?? 0} / 상세 ${data.detailFetched ?? 0} ` +
+            `/ 신호 ${data.signals ?? 0} / 저장 ${data.inserted} (매칭 ${data.matched ?? 0}·리드 ${data.newLead ?? 0}) ${gradeMsg}`
+          : `테스트 수집 · 조회 ${data.scanned}${data.truncated ? "(일부)" : ""} / 회사조회 ${data.corpQueried ?? 0} / 매칭후보 ${data.matched ?? 0} ` +
+            `/ 원문 ${data.docScanned ?? 0}·거래상대 ${data.counterpartyMatched ?? 0} / 신규 ${data.inserted} ${gradeMsg}`
       );
       await reload();
     } catch (e) {
@@ -141,6 +152,7 @@ export function IntelBoard() {
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
     return signals.filter((sig) => {
+      if (sourceFilter && sig.source !== sourceFilter) return false;
       if (signalType && sig.signalType !== signalType) return false;
       if (matchStatus && sig.matchStatus !== matchStatus) return false;
       if (status && sig.status !== status) return false;
@@ -150,9 +162,9 @@ export function IntelBoard() {
       }
       return true;
     });
-  }, [signals, q, signalType, matchStatus, status]);
+  }, [signals, q, sourceFilter, signalType, matchStatus, status]);
 
-  const hasFilter = !!(q || signalType || matchStatus || status || grade);
+  const hasFilter = !!(q || sourceFilter || signalType || matchStatus || status || grade);
 
   return (
     <div className="cdash cd-fields-white p-2" data-theme={theme}>
@@ -161,7 +173,7 @@ export function IntelBoard() {
         eyebrow="SALES & MARKETING"
         title="API & RAG"
         titleSuffix={`${filtered.length}건${hasFilter ? ` / ${signals.length}` : ""}`}
-        subtitle="공시·뉴스에서 통합허가 대상 사업장의 투자·증설·신설 신호를 수집해 고지합니다. (1차: DART 전자공시)"
+        subtitle="공시·뉴스·환경영향평가 협의에서 통합허가 대상 사업장의 투자·증설·신설 신호를 수집해 고지합니다."
         actions={
           <>
             {canEdit && (
@@ -169,15 +181,27 @@ export function IntelBoard() {
                 <select
                   className="cd-select cd-btn-sm"
                   style={{ width: "auto" }}
-                  value={testDays}
-                  onChange={(e) => setTestDays(Number(e.target.value))}
-                  title="수집 테스트 기간"
+                  value={testSource}
+                  onChange={(e) => setTestSource(e.target.value as "dart" | "eiass")}
+                  title="수집 테스트 대상 소스"
                 >
-                  <option value={1}>1일</option>
-                  <option value={3}>3일</option>
-                  <option value={7}>1주</option>
-                  <option value={14}>2주</option>
+                  <option value="dart">DART</option>
+                  <option value="eiass">EIASS</option>
                 </select>
+                {testSource === "dart" && (
+                  <select
+                    className="cd-select cd-btn-sm"
+                    style={{ width: "auto" }}
+                    value={testDays}
+                    onChange={(e) => setTestDays(Number(e.target.value))}
+                    title="수집 테스트 기간"
+                  >
+                    <option value={1}>1일</option>
+                    <option value={3}>3일</option>
+                    <option value={7}>1주</option>
+                    <option value={14}>2주</option>
+                  </select>
+                )}
                 <button className="cd-btn cd-btn-primary cd-btn-sm" onClick={collect} disabled={collecting} title="정상작동 확인용 소량 테스트 수집(전량은 야간 배치)">
                   <RefreshCw className={`w-4 h-4 ${collecting ? "animate-spin" : ""}`} /> {collecting ? "테스트 중…" : "수집 테스트"}
                 </button>
@@ -196,6 +220,12 @@ export function IntelBoard() {
           <Search className="w-4 h-4 cd-text-faint" />
           <input className="cd-input" style={{ width: 220 }} placeholder="회사명·공시명 검색" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
+        <select className="cd-select" style={{ width: "auto" }} value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}>
+          <option value="">소스 전체</option>
+          <option value="dart">DART</option>
+          <option value="news">뉴스</option>
+          <option value="eiass">EIASS</option>
+        </select>
         <select className="cd-select" style={{ width: "auto" }} value={signalType} onChange={(e) => setSignalType(e.target.value)}>
           <option value="">신호유형 전체</option>
           <option value="investment">투자</option>
@@ -224,7 +254,7 @@ export function IntelBoard() {
           <option value="excluded">제외</option>
         </select>
         {hasFilter && (
-          <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => { setQ(""); setSignalType(""); setMatchStatus(""); setStatus(""); setGrade(""); }}>
+          <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => { setQ(""); setSourceFilter(""); setSignalType(""); setMatchStatus(""); setStatus(""); setGrade(""); }}>
             <X className="w-3.5 h-3.5" /> 초기화
           </button>
         )}
@@ -269,7 +299,7 @@ export function IntelBoard() {
                     <td onClick={(e) => e.stopPropagation()}>
                       {sig.url ? (
                         <a href={sig.url} target="_blank" rel="noreferrer" className="cd-text-primary inline-flex items-center gap-1 text-xs">
-                          <ExternalLink className="w-3.5 h-3.5" /> DART
+                          <ExternalLink className="w-3.5 h-3.5" /> {SOURCE_LABEL[sig.source] ?? sig.source}
                         </a>
                       ) : "—"}
                     </td>

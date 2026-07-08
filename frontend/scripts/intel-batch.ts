@@ -4,6 +4,7 @@
 //           백필 시 크게 — 예: 400이면 소규모 전량). DB/DART/ANTHROPIC 설정은 next task def env 재사용.
 import { collectDartSignals } from "@/lib/intel/collect";
 import { collectEiassSignals } from "@/lib/intel/collect-eiass";
+import { collectPressSignals } from "@/lib/intel/collect-press";
 
 async function main() {
   const days = Number(process.env.INTEL_BATCH_DAYS) > 0 ? Number(process.env.INTEL_BATCH_DAYS) : 1;
@@ -23,6 +24,18 @@ async function main() {
     );
   } catch (err) {
     console.error("[intel-batch] eiass error", err);
+  }
+
+  // 보도자료(울산·전남·mcee)도 소스별 분리 실행 — 개별 실패가 전체를 막지 않는다.
+  try {
+    const pressStarted = Date.now();
+    const pressResult = await collectPressSignals();
+    console.log(
+      `[intel-batch] press done in ${Math.round((Date.now() - pressStarted) / 1000)}s`,
+      JSON.stringify(pressResult)
+    );
+  } catch (err) {
+    console.error("[intel-batch] press error", err);
   }
   process.exit(0);
 }

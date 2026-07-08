@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { collectDartSignals } from "@/lib/intel/collect";
 import { collectEiassSignals } from "@/lib/intel/collect-eiass";
+import { collectPressSignals } from "@/lib/intel/collect-press";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,6 +19,10 @@ export async function POST(req: Request) {
     const maxPages = Number(body?.maxPages) > 0 ? Number(body.maxPages) : 2; // 테스트 기본 소량
     if (body?.source === "eiass") {
       const result = await collectEiassSignals({ maxPages, maxDetails: 5, maxClassify: 5 });
+      return NextResponse.json(result);
+    }
+    if (body?.source === "press") {
+      const result = await collectPressSignals({ maxClassify: 5 });
       return NextResponse.json(result);
     }
     const days = Number(body?.days) > 0 ? Number(body.days) : 7;

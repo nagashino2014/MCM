@@ -109,8 +109,10 @@ export async function collectEiassSignals(opts: CollectEiassOptions = {}): Promi
       let rows: EiassListRow[];
       try {
         ({ rows } = await fetchEiassList(kind, page));
-      } catch {
-        break; // 개별 kind 실패는 다음 kind 로
+      } catch (err) {
+        // 침묵 금지: ECS 인증서 이슈처럼 전건 실패 원인을 로그로 남긴다(개별 kind 실패는 다음 kind 로)
+        console.error(`[collect-eiass] list fetch 실패 kind=${kind} page=${page}`, err);
+        break;
       }
       await sleep(LIST_THROTTLE_MS);
       if (!rows.length) break;
@@ -140,7 +142,8 @@ export async function collectEiassSignals(opts: CollectEiassOptions = {}): Promi
     let detail: EiassDetail;
     try {
       detail = await fetchEiassDetail(c.kind, c.row.code, c.row.seq);
-    } catch {
+    } catch (err) {
+      console.error(`[collect-eiass] detail fetch 실패 code=${c.row.code}`, err);
       continue; // 개별 상세 실패는 다음 배치에서 재시도(seen 은 DB 기준이라 재노출됨)
     }
     result.detailFetched++;

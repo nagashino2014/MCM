@@ -6,9 +6,14 @@
 // 주의: 리뉴얼 스테이징(eiassrenew) 노출로 사이트 개편 가능성 → 파서는 라벨 텍스트 기준(구조 독립적),
 // 수집측은 파싱 0건 시 알람을 남긴다.
 
-import { fetch as undiciFetch } from "undici";
+import { fetch as undiciFetch, Agent } from "undici";
 
 const BASE = "https://www.eiass.go.kr";
+
+// EIASS 서버는 중간 인증서(Sectigo RSA DV CA)를 내려주지 않아(서버 설정 오류) Linux Node 의
+// 번들 CA 로는 체인 검증이 실패한다(로컬 Windows 만 성공, ECS 는 전건 실패 — 2026-07-08 실측).
+// 공개 게시판 읽기 전용 크롤링(자격증명·민감정보 없음)이라 이 호스트에 한해 검증을 생략한다.
+const eiassDispatcher = new Agent({ connect: { rejectUnauthorized: false } });
 
 // 수집 대상 3종(사전환경성검토는 구제도 아카이브라 제외).
 export type EiassKind = "eia" | "sperss" | "mperss";
@@ -77,6 +82,7 @@ async function post(path: string, params: Record<string, string>, timeoutMs = 20
       headers: { "content-type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams(params).toString(),
       signal: controller.signal,
+      dispatcher: eiassDispatcher,
     });
     if (!res.ok) throw new Error(`EIASS 응답 오류: ${res.status} ${path}`);
     return await res.text();

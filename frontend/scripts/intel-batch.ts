@@ -4,6 +4,7 @@
 //           백필 시 크게 — 예: 400이면 소규모 전량). DB/DART/ANTHROPIC 설정은 next task def env 재사용.
 import { collectDartSignals } from "@/lib/intel/collect";
 import { collectEiassSignals } from "@/lib/intel/collect-eiass";
+import { collectNewsSignals } from "@/lib/intel/collect-news";
 import { collectPressSignals } from "@/lib/intel/collect-press";
 
 async function main() {
@@ -26,7 +27,7 @@ async function main() {
     console.error("[intel-batch] eiass error", err);
   }
 
-  // 보도자료(울산·전남·mcee)도 소스별 분리 실행 — 개별 실패가 전체를 막지 않는다.
+  // 보도자료(울산·전남·경북·mcee)도 소스별 분리 실행 — 개별 실패가 전체를 막지 않는다.
   try {
     const pressStarted = Date.now();
     const pressResult = await collectPressSignals();
@@ -36,6 +37,18 @@ async function main() {
     );
   } catch (err) {
     console.error("[intel-batch] press error", err);
+  }
+
+  // 네이버 뉴스: 키워드 8개 × 최신 30건 → Haiku 분류(하루 최대 ~240콜, link 중복은 skip).
+  try {
+    const newsStarted = Date.now();
+    const newsResult = await collectNewsSignals();
+    console.log(
+      `[intel-batch] news done in ${Math.round((Date.now() - newsStarted) / 1000)}s`,
+      JSON.stringify(newsResult)
+    );
+  } catch (err) {
+    console.error("[intel-batch] news error", err);
   }
   process.exit(0);
 }

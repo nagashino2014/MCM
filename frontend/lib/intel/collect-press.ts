@@ -9,6 +9,8 @@ import { normalizeCompanyName } from "@/lib/ieps/formatters";
 import {
   fetchUlsanList,
   fetchJeonnamList,
+  fetchGyeongbukList,
+  fetchChungnamList,
   fetchMceeRss,
   fetchPressBody,
   PRESS_SOURCE_LABELS,
@@ -43,6 +45,8 @@ type Fetcher = () => Promise<PressItem[]>;
 const FETCHERS: [PressSourceKey, Fetcher][] = [
   ["ulsan", fetchUlsanList],
   ["jeonnam", fetchJeonnamList],
+  ["gyeongbuk", fetchGyeongbukList],
+  ["chungnam", fetchChungnamList],
   ["mcee", fetchMceeRss],
 ];
 

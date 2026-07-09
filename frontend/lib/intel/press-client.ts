@@ -7,11 +7,13 @@
 
 import { fetch as undiciFetch } from "undici";
 
-export type PressSourceKey = "ulsan" | "jeonnam" | "mcee";
+export type PressSourceKey = "ulsan" | "jeonnam" | "gyeongbuk" | "chungnam" | "mcee";
 
 export const PRESS_SOURCE_LABELS: Record<PressSourceKey, string> = {
   ulsan: "울산광역시",
   jeonnam: "전라남도",
+  gyeongbuk: "경상북도",
+  chungnam: "충청남도",
   mcee: "기후에너지환경부",
 };
 
@@ -47,11 +49,14 @@ function toIsoDate(s: string): string | null {
   return m ? `${m[1]}-${m[2]}-${m[3]}` : null;
 }
 
-async function get(url: string, timeoutMs = 20000): Promise<string> {
+async function get(url: string, timeoutMs = 20000, referer?: string): Promise<string> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await undiciFetch(url, { headers: { "user-agent": UA }, signal: controller.signal });
+    const res = await undiciFetch(url, {
+      headers: { "user-agent": UA, ...(referer ? { referer } : {}) },
+      signal: controller.signal,
+    });
     if (!res.ok) throw new Error(`보도자료 응답 오류: ${res.status} ${url}`);
     return await res.text();
   } finally {
@@ -116,6 +121,69 @@ export async function fetchJeonnamList(): Promise<PressItem[]> {
   return items;
 }
 
+// --- 경상북도 (gb.go.kr) ---
+// 리스트: GET page.do?mnu_uid=6792(보도자료) — ul.report_list 카드형. 제목(a title)·부서·날짜에
+// 더해 본문 발췌(div.cont)까지 리스트에 포함 → 상세 페치 불필요.
+// 주의: mnu_uid 가 틀리면 "정상적인 메뉴접근이 아닙니다" 차단 페이지가 뜬다(리퍼러 유지).
+// 상세 정규화 URL 은 B_NUM/B_STEP 기반(cmd=2) — 실측으로 열림 확인.
+
+const GB_LIST =
+  "https://gb.go.kr/Main/page.do?mnu_uid=6792&LARGE_CODE=720&MEDIUM_CODE=50&SMALL_CODE=10&SMALL_CODE2=60&";
+const gbDetailUrl = (bNum: string, bStep: string): string =>
+  `https://gb.go.kr/Main/page.do?mnu_uid=6792&BD_CODE=bbs_bodo&cmd=2&B_NUM=${bNum}&B_STEP=${bStep}&B_LEVEL=0`;
+
+export async function fetchGyeongbukList(): Promise<PressItem[]> {
+  const html = await get(GB_LIST, 20000, "https://gb.go.kr/");
+  if (html.includes("정상적인 메뉴접근")) throw new Error("경북 보도자료 접근 차단(메뉴 검증)");
+  const items: PressItem[] = [];
+  for (const li of html.split(/<li data-aa=/).slice(1)) {
+    const link = li.match(/B_NUM=(\d+)[^"]*B_STEP=(\d+)[^"]*"\s+title="([^"]*)"/);
+    if (!link) continue;
+    // classify: <span>부서</span> ｜ <span>전화</span> ｜ <span>26-07-08</span>
+    const spans = [...li.matchAll(/<span>([^<]*)<\/span>/g)].map((m) => clean(m[1]));
+    const dateRaw = spans.find((s) => /^\d{2}-\d{2}-\d{2}$/.test(s));
+    const cont = li.match(/class="cont"[^>]*>([\s\S]*?)<\/div>/);
+    items.push({
+      sourceKey: "gyeongbuk",
+      title: clean(link[3]),
+      url: gbDetailUrl(link[1], link[2]),
+      dept: textOrNull(spans[0] ?? ""),
+      publishedAt: dateRaw ? `20${dateRaw}` : null,
+      body: cont ? textOrNull(clean(cont[1]).slice(0, 3000)) : null,
+    });
+  }
+  return items;
+}
+
+// --- 충청남도 (chungnam.go.kr) ---
+// 보도자료는 공통게시판 OpenAPI(15060266)에 없고 별도 cnapcPress 시스템 → 크롤링(2026-07 실사).
+// 리스트: GET list.do?pageIndex — 테이블(번호·제목(a.tit, nttId)·바로가기·부서·제공일자·조회).
+// 상세: GET view.do?nttId — 본문 div.content. 간헐적 500 관측 → 실패는 수집측이 스킵·재시도.
+
+const CN_LIST = "https://www.chungnam.go.kr/cnportal/cnapcPressList/cnapcPress/list.do?menuNo=500498&pageIndex=1";
+const CN_VIEW = "https://www.chungnam.go.kr/cnportal/cnapcPressList/cnapcPress/view.do?menuNo=500498&nttId=";
+
+export async function fetchChungnamList(): Promise<PressItem[]> {
+  const html = await get(CN_LIST);
+  const items: PressItem[] = [];
+  for (const tr of html.split(/<tr[ >]/).slice(1)) {
+    const link = tr.match(/view\.do\?nttId=(\d+)[^"]*"[^>]*class="tit"[^>]*>([\s\S]*?)<\/a>/);
+    if (!link) continue;
+    // 텍스트 td 나열에서 날짜(YYYY-MM-DD) td 를 찾고 그 직전 td 가 부서
+    const tds = [...tr.matchAll(/<td[^>]*>\s*([^<]*?)\s*<\/td>/g)].map((m) => clean(m[1]));
+    const dateIdx = tds.findIndex((s) => /^\d{4}-\d{2}-\d{2}$/.test(s));
+    items.push({
+      sourceKey: "chungnam",
+      title: clean(link[2]),
+      url: `${CN_VIEW}${link[1]}`,
+      dept: dateIdx > 0 ? textOrNull(tds[dateIdx - 1]) : null,
+      publishedAt: dateIdx >= 0 ? tds[dateIdx] : null,
+      body: null,
+    });
+  }
+  return items;
+}
+
 // --- 기후에너지환경부 (mcee.go.kr) — RSS, description 에 본문 전문 포함 ---
 // 링크는 상대경로+jsessionid 라 boardId 만 뽑아 정규화한다.
 
@@ -161,6 +229,14 @@ export async function fetchMceeRss(): Promise<PressItem[]> {
 export async function fetchPressBody(item: PressItem): Promise<string | null> {
   if (item.body) return item.body;
   const html = await get(item.url);
+  if (item.sourceKey === "chungnam") {
+    // 본문 div.content 안 중첩 태그 대응: 다음 고정 블록(content-ft)까지 슬라이스
+    const start = html.indexOf('class="content">');
+    if (start < 0) return null;
+    const end = html.indexOf("content-ft", start);
+    const chunk = html.slice(start, end > start ? end : start + 20000);
+    return textOrNull(clean(chunk.slice(chunk.indexOf(">") + 1)).slice(0, 3000));
+  }
   if (item.sourceKey === "jeonnam") {
     // 본문 div 안에 미리보기 iframe div 가 중첩돼 있어 </div> 매칭이 일찍 끊긴다 →
     // 다음 고정 블록(bbs_inventory)까지 슬라이스 후 평문화(공공누리 꼬리는 무해).

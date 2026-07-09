@@ -66,12 +66,18 @@ export async function collectNewsSignals(opts: CollectNewsOptions = {}): Promise
     if (core.length >= 3 && !coreToFac.has(core)) coreToFac.set(core, String(r.facility_id));
   }
 
-  // 2) 키워드별 최신순 검색 → 유니크(link) 뉴스 수집
+  // 2) 키워드별 최신순 검색 → 유니크(link) 뉴스 수집. 기수집 link 는 Haiku 전에 제외(야간 배치
+  //    반복 실행 시 같은 기사 중복 분류 방지 — 비용 절감).
+  const seen = new Set(
+    rowsToObjects(await db.exec(`SELECT external_id FROM intel_signals WHERE source = 'news'`)).map((r) =>
+      String(r.external_id)
+    )
+  );
   const byLink = new Map<string, NewsItem>();
   for (const kw of keywords) {
     try {
       const { items } = await searchNews(kw, { display, sort: "date" });
-      for (const it of items) if (it.link && !byLink.has(it.link)) byLink.set(it.link, it);
+      for (const it of items) if (it.link && !seen.has(it.link) && !byLink.has(it.link)) byLink.set(it.link, it);
     } catch {
       // 개별 키워드 실패는 건너뜀
     }

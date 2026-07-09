@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { loadKsicMap, lookupKsicName } from "@/lib/ieps/ksic-lookup";
 import { Pencil, Save, X, MapPin, Phone, Hash, Building2, FileText, Layers, ClipboardList, Trash2, Plus, History, Upload, Tags, Briefcase, FolderTree, ArrowRight, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
@@ -2262,9 +2263,19 @@ function EditView({
       ? initialIndustries.map((industry) => ({
           code: industry.code ?? "",
           name: industry.name ?? "",
+          autoName: false,
         }))
-      : [{ code: "", name: "" }]
+      : [{ code: "", name: "", autoName: false }]
   );
+  // 표준산업분류(KSIC) 코드→업종명 자동완성용 맵 (편집 폼 진입 시 1회 로드)
+  const [ksicMap, setKsicMap] = useState<Map<string, string> | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    loadKsicMap()
+      .then((m) => { if (!cancelled) setKsicMap(m); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
   const [certificateKinds, setCertificateKinds] = useState(() => {
     const types = (detail.businessCertificateBusinessType ?? "").split(/\n+/);
     const items = (detail.businessCertificateBusinessItem ?? "").split(/\n+/);
@@ -2487,7 +2498,7 @@ function EditView({
           </span>
           <button
             type="button"
-            onClick={() => setIndustries((prev) => [...prev, { code: "", name: "" }])}
+            onClick={() => setIndustries((prev) => [...prev, { code: "", name: "", autoName: false }])}
             className="cd-btn cd-btn-ghost rounded-lg px-2 py-1 text-[11px] font-bold cd-text-muted flex items-center gap-1"
           >
             <Plus className="w-3 h-3" /> 업종 추가
@@ -2502,13 +2513,20 @@ function EditView({
               <input
                 className="cd-input"
                 value={industry.code}
-                onChange={(e) =>
+                onChange={(e) => {
+                  const code = e.target.value;
+                  // 코드가 KSIC와 일치하면 업종명 자동완성 — 비어있거나 앞서 자동입력된 값일 때만 덮어씀
+                  const matched = lookupKsicName(ksicMap, code);
                   setIndustries((prev) =>
-                    prev.map((item, itemIdx) =>
-                      itemIdx === idx ? { ...item, code: e.target.value } : item
-                    )
-                  )
-                }
+                    prev.map((item, itemIdx) => {
+                      if (itemIdx !== idx) return item;
+                      if (matched && (item.name.trim() === "" || item.autoName)) {
+                        return { ...item, code, name: matched, autoName: true };
+                      }
+                      return { ...item, code };
+                    })
+                  );
+                }}
                 placeholder="업종 코드"
               />
               <input
@@ -2517,7 +2535,7 @@ function EditView({
                 onChange={(e) =>
                   setIndustries((prev) =>
                     prev.map((item, itemIdx) =>
-                      itemIdx === idx ? { ...item, name: e.target.value } : item
+                      itemIdx === idx ? { ...item, name: e.target.value, autoName: false } : item
                     )
                   )
                 }
@@ -2527,7 +2545,7 @@ function EditView({
                 type="button"
                 onClick={() =>
                   setIndustries((prev) =>
-                    prev.length > 1 ? prev.filter((_, itemIdx) => itemIdx !== idx) : [{ code: "", name: "" }]
+                    prev.length > 1 ? prev.filter((_, itemIdx) => itemIdx !== idx) : [{ code: "", name: "", autoName: false }]
                   )
                 }
                 className="rounded-lg px-2 py-1 text-[11px] font-bold cd-error-text cd-error-bg hover:cd-error-bg border border-red-200 flex items-center justify-center gap-1"

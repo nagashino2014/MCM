@@ -1,0 +1,6027 @@
+[
+  {
+    "code": "01110",
+    "name": "곡물 및 기타 식량작물 재배업",
+    "name_eng": "Growing of cereal crops and other crops for food"
+  },
+  {
+    "code": "01121",
+    "name": "채소작물 재배업",
+    "name_eng": "Growing of vegetable crops"
+  },
+  {
+    "code": "01122",
+    "name": "화훼작물 재배업",
+    "name_eng": "Growing of horticultural products"
+  },
+  {
+    "code": "01123",
+    "name": "종자 및 묘목 생산업",
+    "name_eng": "Growing of seed crops and nursery products"
+  },
+  {
+    "code": "01131",
+    "name": "과실작물 재배업",
+    "name_eng": "Growing of fruit"
+  },
+  {
+    "code": "01132",
+    "name": "음료용 및 향신용 작물 재배업",
+    "name_eng": "Growing of beverage and spice crops"
+  },
+  {
+    "code": "01140",
+    "name": "기타 작물 재배업",
+    "name_eng": "Growing of other crops"
+  },
+  {
+    "code": "01151",
+    "name": "채소, 화훼 및 과실작물 시설 재배업",
+    "name_eng": "Growing of vegetable, fruit crops and horticultural products under cover"
+  },
+  {
+    "code": "01159",
+    "name": "기타 시설작물 재배업",
+    "name_eng": "Growing of other crops under cover"
+  },
+  {
+    "code": "01211",
+    "name": "젖소 사육업",
+    "name_eng": "Raising of dairy cattle"
+  },
+  {
+    "code": "01212",
+    "name": "육우 사육업",
+    "name_eng": "Raising of beef cattle"
+  },
+  {
+    "code": "01220",
+    "name": "양돈업",
+    "name_eng": "Raising of pigs"
+  },
+  {
+    "code": "01231",
+    "name": "양계업",
+    "name_eng": "Raising of chickens"
+  },
+  {
+    "code": "01239",
+    "name": "기타 가금류 및 조류 사육업",
+    "name_eng": "Raising of other poultry and birds"
+  },
+  {
+    "code": "01291",
+    "name": "말 및 양 사육업",
+    "name_eng": "Raising of horses, sheep and goats"
+  },
+  {
+    "code": "01299",
+    "name": "그 외 기타 축산업",
+    "name_eng": "Raising of other animals n.e.c."
+  },
+  {
+    "code": "01300",
+    "name": "작물재배 및 축산 복합농업",
+    "name_eng": "Growing of crops combined with raising of animals : mixed farming"
+  },
+  {
+    "code": "01411",
+    "name": "작물재배 지원 서비스업",
+    "name_eng": "Support activities for crop production"
+  },
+  {
+    "code": "01412",
+    "name": "농산물 건조, 선별 및 기타 수확 후 서비스업",
+    "name_eng": "Drying, sorting, grading of agricultural products and other post-harvest crop activities"
+  },
+  {
+    "code": "01420",
+    "name": "축산 관련 서비스업",
+    "name_eng": "Support activities for animal production"
+  },
+  {
+    "code": "01500",
+    "name": "수렵 및 관련 서비스업",
+    "name_eng": "Hunting, trapping and related service activities"
+  },
+  {
+    "code": "02011",
+    "name": "임업용 종묘 생산업",
+    "name_eng": "Operation of forest tree nurseries"
+  },
+  {
+    "code": "02012",
+    "name": "육림업",
+    "name_eng": "Afforestation"
+  },
+  {
+    "code": "02020",
+    "name": "벌목업",
+    "name_eng": "Logging"
+  },
+  {
+    "code": "02030",
+    "name": "임산물 채취업",
+    "name_eng": "Gathering of non-wood forest products"
+  },
+  {
+    "code": "02040",
+    "name": "임업 관련 서비스업",
+    "name_eng": "Support services to forestry"
+  },
+  {
+    "code": "03111",
+    "name": "원양 어업",
+    "name_eng": "Deep see fishing"
+  },
+  {
+    "code": "03112",
+    "name": "연근해 어업",
+    "name_eng": "Littoral fishing"
+  },
+  {
+    "code": "03120",
+    "name": "내수면 어업",
+    "name_eng": "Freshwater fishing"
+  },
+  {
+    "code": "03211",
+    "name": "해수면 양식 어업",
+    "name_eng": "Marine aquaculture"
+  },
+  {
+    "code": "03212",
+    "name": "내수면 양식 어업",
+    "name_eng": "Inland aquaculture"
+  },
+  {
+    "code": "03213",
+    "name": "수산물 부화 및 수산종자 생산업",
+    "name_eng": "Hatching and seeding of aquatic animals and seaweeds"
+  },
+  {
+    "code": "03220",
+    "name": "어업 관련 서비스업",
+    "name_eng": "Services incidental to fishing and aquaculture"
+  },
+  {
+    "code": "05100",
+    "name": "석탄 광업",
+    "name_eng": "Mining of coal and lignite"
+  },
+  {
+    "code": "05200",
+    "name": "원유 및 천연가스 채굴업",
+    "name_eng": "Extraction of crude petroleum and natural gas"
+  },
+  {
+    "code": "06100",
+    "name": "철 광업",
+    "name_eng": "Mining of iron ores"
+  },
+  {
+    "code": "06200",
+    "name": "비철금속 광업",
+    "name_eng": "Mining of non-ferrous metal ores"
+  },
+  {
+    "code": "07110",
+    "name": "석회석 및 점토 광업",
+    "name_eng": "Quarrying of limestone, gypsum and clays"
+  },
+  {
+    "code": "07121",
+    "name": "건설용 석재 채굴 및 쇄석 생산업",
+    "name_eng": "Quarrying, crushing and breaking of stone for construction"
+  },
+  {
+    "code": "07122",
+    "name": "모래 및 자갈 채취업",
+    "name_eng": "Quarrying of sand and gravel"
+  },
+  {
+    "code": "07210",
+    "name": "화학용 및 비료원료용 광물 광업",
+    "name_eng": "Mining of chemical and fertilizer minerals"
+  },
+  {
+    "code": "07220",
+    "name": "천일염 생산 및 암염 채취업",
+    "name_eng": "Extraction of salt"
+  },
+  {
+    "code": "07290",
+    "name": "그 외 기타 비금속광물 광업",
+    "name_eng": "Mining of other non-metal ores n.e.c."
+  },
+  {
+    "code": "08000",
+    "name": "광업 지원 서비스업",
+    "name_eng": "Mining support service activities"
+  },
+  {
+    "code": "10111",
+    "name": "육류 도축업(가금류 제외)",
+    "name_eng": "Slaughtering of livestock(except poultry)"
+  },
+  {
+    "code": "10112",
+    "name": "가금류 도축업",
+    "name_eng": "Slaughtering of poultry"
+  },
+  {
+    "code": "10121",
+    "name": "가금류 가공 및 저장 처리업",
+    "name_eng": "Processing, preserving of poultry products"
+  },
+  {
+    "code": "10122",
+    "name": "육류 포장육 및 냉동육 가공업 (가금류 제외)",
+    "name_eng": "Cutting in individuals, freezing and packaging of meat(except poultry)"
+  },
+  {
+    "code": "10129",
+    "name": "육류 기타 가공 및 저장처리업 (가금류 제외)",
+    "name_eng": "Processing and preserving of other meat and meat products(except poultry)"
+  },
+  {
+    "code": "10211",
+    "name": "수산동물 훈제, 조리 및 유사 조제식품 제조업",
+    "name_eng": "Manufacture of smoked, seasoned and similar prepared aquatic animal products"
+  },
+  {
+    "code": "10212",
+    "name": "수산동물 건조 및 염장품 제조업",
+    "name_eng": "Manufacture of dried, salted aquatic animal products"
+  },
+  {
+    "code": "10213",
+    "name": "수산동물 냉동품 제조업",
+    "name_eng": "Manufacture of frozen aquatic animal products"
+  },
+  {
+    "code": "10219",
+    "name": "기타 수산동물 가공 및 저장 처리업",
+    "name_eng": "Processing and preserving of other aquatic animals"
+  },
+  {
+    "code": "10220",
+    "name": "수산식물 가공 및 저장 처리업",
+    "name_eng": "Processing and preserving of edible seaweeds"
+  },
+  {
+    "code": "10301",
+    "name": "김치류 제조업",
+    "name_eng": "Manufacture of kimchi, korean picked vegetables"
+  },
+  {
+    "code": "10302",
+    "name": "과실 및 그 외 채소 절임식품 제조업",
+    "name_eng": "Manufacture of pickled fruit and other vegetables"
+  },
+  {
+    "code": "10309",
+    "name": "기타 과실ㆍ채소 가공 및 저장 처리업",
+    "name_eng": "Processing and preserving of other fruits and vegetables"
+  },
+  {
+    "code": "10411",
+    "name": "동물성 유지 제조업",
+    "name_eng": "Manufacture of animal oils and fats"
+  },
+  {
+    "code": "10412",
+    "name": "식물성 유지 제조업",
+    "name_eng": "Manufacture of vegetable oils and fats"
+  },
+  {
+    "code": "10413",
+    "name": "식용 정제유 및 가공유 제조업",
+    "name_eng": "Manufacture of edible refined oils and processed oils"
+  },
+  {
+    "code": "10421",
+    "name": "액상시유 및 기타 낙농제품 제조업",
+    "name_eng": "Manufacture of liquid milk and other dairy products"
+  },
+  {
+    "code": "10422",
+    "name": "아이스크림 및 기타 식용빙과류 제조업",
+    "name_eng": "Manufacture of ice-cream and other edible ice cakes"
+  },
+  {
+    "code": "10511",
+    "name": "곡물 도정업",
+    "name_eng": "Polishing of cereals"
+  },
+  {
+    "code": "10512",
+    "name": "곡물 제분업",
+    "name_eng": "Milling of cereals"
+  },
+  {
+    "code": "10513",
+    "name": "곡물 혼합분말 및 반죽 제조업",
+    "name_eng": "Manufacture of cereal mixes and doughs"
+  },
+  {
+    "code": "10519",
+    "name": "기타 곡물 가공품 제조업",
+    "name_eng": "Manufacture of other grain mill products"
+  },
+  {
+    "code": "10520",
+    "name": "전분제품 및 당류 제조업",
+    "name_eng": "Manufacture of starches and starch products"
+  },
+  {
+    "code": "10601",
+    "name": "떡류 제조업",
+    "name_eng": "Manufacture of rice cakes"
+  },
+  {
+    "code": "10602",
+    "name": "빵류 제조업",
+    "name_eng": "Manufacture of bakery products"
+  },
+  {
+    "code": "10603",
+    "name": "과자류 및 코코아 제품 제조업",
+    "name_eng": "Manufacture of sugar confectioneries and cocoa products"
+  },
+  {
+    "code": "10701",
+    "name": "도시락류 제조업",
+    "name_eng": "Manufacture of box lunches"
+  },
+  {
+    "code": "10709",
+    "name": "기타 식사용 가공처리 조리식품 제조업",
+    "name_eng": "Manufacture of other prepared meals and dishes"
+  },
+  {
+    "code": "10810",
+    "name": "설탕 제조업",
+    "name_eng": "Manufacture of sugar"
+  },
+  {
+    "code": "10820",
+    "name": "면류, 마카로니 및 유사식품 제조업",
+    "name_eng": "Manufacture of noodles, macaroni and similar farinaceous products"
+  },
+  {
+    "code": "10831",
+    "name": "식초, 발효 및 화학 조미료 제조업",
+    "name_eng": "Manufacture of vinegar, fermentation and chemical seasonings"
+  },
+  {
+    "code": "10832",
+    "name": "천연 및 혼합조제 조미료 제조업",
+    "name_eng": "Manufacture of natural processed spices and mixed condiments"
+  },
+  {
+    "code": "10833",
+    "name": "장류 제조업",
+    "name_eng": "Manufacture of soy sauce and soy bean paste"
+  },
+  {
+    "code": "10839",
+    "name": "기타 식품 첨가물 제조업",
+    "name_eng": "Manufacture of other food additive products"
+  },
+  {
+    "code": "10891",
+    "name": "커피 가공업",
+    "name_eng": "Processing of coffee"
+  },
+  {
+    "code": "10892",
+    "name": "차류 가공업",
+    "name_eng": "Processing of tea"
+  },
+  {
+    "code": "10893",
+    "name": "수프 및 균질화식품 제조업",
+    "name_eng": "Manufacture of soups and food containing homogenized ingredients"
+  },
+  {
+    "code": "10894",
+    "name": "두부 및 유사식품 제조업",
+    "name_eng": "Manufacture of bean curd and similar products"
+  },
+  {
+    "code": "10895",
+    "name": "인삼식품 제조업",
+    "name_eng": "Manufacture of ginseng products"
+  },
+  {
+    "code": "10896",
+    "name": "건강보조용 액화식품 제조업",
+    "name_eng": "Manufacture of liquidized health additive foods"
+  },
+  {
+    "code": "10897",
+    "name": "건강기능식품 제조업",
+    "name_eng": "Manufacture of health functional foods"
+  },
+  {
+    "code": "10899",
+    "name": "그 외 기타 식료품 제조업",
+    "name_eng": "Manufacture of other food products n.e.c."
+  },
+  {
+    "code": "10901",
+    "name": "반려동물용 사료 제조업",
+    "name_eng": "Manufacture of companion animal feeds"
+  },
+  {
+    "code": "10902",
+    "name": "배합 사료 제조업",
+    "name_eng": "Manufacture of formula feeds"
+  },
+  {
+    "code": "10903",
+    "name": "단미 사료 및 기타 사료 제조업",
+    "name_eng": "Manufacture of single ingredients and other prepared animal feeds"
+  },
+  {
+    "code": "11111",
+    "name": "탁주 및 약주 제조업",
+    "name_eng": "Manufacture of raw rice wines and refined rice wines"
+  },
+  {
+    "code": "11112",
+    "name": "맥아 및 맥주 제조업",
+    "name_eng": "Manufacture of malt and malt liquors"
+  },
+  {
+    "code": "11119",
+    "name": "기타 발효주 제조업",
+    "name_eng": "Manufacture of other fermented alcoholic beverages"
+  },
+  {
+    "code": "11121",
+    "name": "주정 제조업",
+    "name_eng": "Manufacture of ethyl alcohol and neutral spirits"
+  },
+  {
+    "code": "11122",
+    "name": "소주 제조업",
+    "name_eng": "Manufacture of blended and distilled soju"
+  },
+  {
+    "code": "11129",
+    "name": "기타 증류주 및 합성주 제조업",
+    "name_eng": "Manufacture of other distilled and compound liquors"
+  },
+  {
+    "code": "11201",
+    "name": "얼음 제조업",
+    "name_eng": "Manufacture of ice, except dry ice"
+  },
+  {
+    "code": "11202",
+    "name": "생수 생산업",
+    "name_eng": "Production of natural mineral waters and other bottled waters"
+  },
+  {
+    "code": "11209",
+    "name": "기타 비알코올 음료 제조업",
+    "name_eng": "Manufacture of other non-alcoholic beverages"
+  },
+  {
+    "code": "12000",
+    "name": "담배제품 제조업",
+    "name_eng": "Manufacture of tobacco products"
+  },
+  {
+    "code": "13101",
+    "name": "면 방적업",
+    "name_eng": "Spinning of cotton"
+  },
+  {
+    "code": "13102",
+    "name": "모 방적업",
+    "name_eng": "Spinning of wool"
+  },
+  {
+    "code": "13103",
+    "name": "화학섬유 방적업",
+    "name_eng": "Spinning of man-made fibers"
+  },
+  {
+    "code": "13104",
+    "name": "연사 및 가공사 제조업",
+    "name_eng": "Manufacture of twisted threads and processing of threads and yarns"
+  },
+  {
+    "code": "13109",
+    "name": "기타 방적업",
+    "name_eng": "Spinning of other textile fibers"
+  },
+  {
+    "code": "13211",
+    "name": "면직물 직조업",
+    "name_eng": "Weaving of cotton fabrics"
+  },
+  {
+    "code": "13212",
+    "name": "모직물 직조업",
+    "name_eng": "Weaving of woolen fabrics"
+  },
+  {
+    "code": "13213",
+    "name": "화학섬유직물 직조업",
+    "name_eng": "Weaving of man-made fiber fabrics"
+  },
+  {
+    "code": "13219",
+    "name": "특수 직물 및 기타 직물 직조업",
+    "name_eng": "Weaving of special textiles and other fabrics"
+  },
+  {
+    "code": "13221",
+    "name": "침구 및 관련제품 제조업",
+    "name_eng": "Manufacture of bedding and related products"
+  },
+  {
+    "code": "13222",
+    "name": "자수제품 및 자수용재료 제조업",
+    "name_eng": "Manufacture of embroidery products and related materials"
+  },
+  {
+    "code": "13223",
+    "name": "커튼 및 유사제품 제조업",
+    "name_eng": "Manufacture of curtains and similar goods"
+  },
+  {
+    "code": "13224",
+    "name": "천막, 텐트 및 유사 제품 제조업",
+    "name_eng": "Manufacture of tarpaulin products, tents and similar goods"
+  },
+  {
+    "code": "13225",
+    "name": "직물포대 제조업",
+    "name_eng": "Manufacture of textile bags"
+  },
+  {
+    "code": "13229",
+    "name": "기타 직물제품 제조업",
+    "name_eng": "Manufacture of other household made-up textile articles"
+  },
+  {
+    "code": "13300",
+    "name": "편조원단 제조업",
+    "name_eng": "Manufacture of knitted and crocheted fabrics"
+  },
+  {
+    "code": "13401",
+    "name": "솜 및 실 염색가공업",
+    "name_eng": "Dyeing and finishing of cotton wools and yarns"
+  },
+  {
+    "code": "13402",
+    "name": "직물, 편조원단 및 의복류 염색 가공업",
+    "name_eng": "Dyeing and finishing of woven and knitted fabrics, including wearing apparel"
+  },
+  {
+    "code": "13403",
+    "name": "날염 가공업",
+    "name_eng": "Printing of textiles"
+  },
+  {
+    "code": "13409",
+    "name": "섬유제품 기타 정리 및 마무리 가공업",
+    "name_eng": "Other finishing of textiles and wearing apparel"
+  },
+  {
+    "code": "13910",
+    "name": "카펫, 마루덮개 및 유사제품 제조업",
+    "name_eng": "Manufacture of carpets, rugs and similar products"
+  },
+  {
+    "code": "13921",
+    "name": "끈 및 로프 제조업",
+    "name_eng": "Manufacture of cordage and rope"
+  },
+  {
+    "code": "13922",
+    "name": "어망 및 기타 끈 가공품 제조업",
+    "name_eng": "Manufacture of fishing nets and other products of rope or netting"
+  },
+  {
+    "code": "13991",
+    "name": "세폭직물 제조업",
+    "name_eng": "Manufacture of narrow woven fabrics"
+  },
+  {
+    "code": "13992",
+    "name": "부직포 및 펠트 제조업",
+    "name_eng": "Manufacture of other non-woven and felt fabrics"
+  },
+  {
+    "code": "13993",
+    "name": "특수사 및 코드직물 제조업",
+    "name_eng": "Manufacture of special yarns and tire cord fabrics"
+  },
+  {
+    "code": "13994",
+    "name": "표면처리 및 적층 직물 제조업",
+    "name_eng": "Manufacture of impregnated, coated, covered or laminated fabrics"
+  },
+  {
+    "code": "13999",
+    "name": "그 외 기타 분류 안된 섬유제품 제조업",
+    "name_eng": "Manufacture of other textiles n.e.c."
+  },
+  {
+    "code": "14111",
+    "name": "남자용 겉옷 제조업",
+    "name_eng": "Manufacture of outerwear for men"
+  },
+  {
+    "code": "14112",
+    "name": "여자용 겉옷 제조업",
+    "name_eng": "Manufacture of outerwear for women"
+  },
+  {
+    "code": "14120",
+    "name": "속옷 및 잠옷 제조업",
+    "name_eng": "Manufacture of underwear and nightwear"
+  },
+  {
+    "code": "14130",
+    "name": "한복 제조업",
+    "name_eng": "Manufacture of hanbok, korean traditional clothes"
+  },
+  {
+    "code": "14191",
+    "name": "셔츠 및 블라우스 제조업",
+    "name_eng": "Manufacture of shirts and blouses"
+  },
+  {
+    "code": "14192",
+    "name": "근무복, 작업복 및 유사의복 제조업",
+    "name_eng": "Manufacture of work wear and similar garments"
+  },
+  {
+    "code": "14193",
+    "name": "가죽의복 제조업",
+    "name_eng": "Manufacture of leather garments"
+  },
+  {
+    "code": "14194",
+    "name": "유아용 의복 제조업",
+    "name_eng": "Manufacture of babies' garments"
+  },
+  {
+    "code": "14199",
+    "name": "그 외 기타 봉제의복 제조업",
+    "name_eng": "Manufacture of other sewn wearing apparel n.e.c."
+  },
+  {
+    "code": "14200",
+    "name": "모피제품 제조업",
+    "name_eng": "Manufacture of articles of fur"
+  },
+  {
+    "code": "14300",
+    "name": "편조의복 제조업",
+    "name_eng": "Manufacture of knitted and crocheted apparel"
+  },
+  {
+    "code": "14411",
+    "name": "스타킹 및 기타 양말 제조업",
+    "name_eng": "Manufacture of stockings and other hosiery"
+  },
+  {
+    "code": "14419",
+    "name": "기타 편조의복 액세서리 제조업",
+    "name_eng": "Manufacture of other knitted and crocheted apparel accessories"
+  },
+  {
+    "code": "14491",
+    "name": "모자 제조업",
+    "name_eng": "Manufacture of hats and caps"
+  },
+  {
+    "code": "14499",
+    "name": "그 외 기타 의복액세서리 제조업",
+    "name_eng": "Manufacture of other clothing accessories n.e.c."
+  },
+  {
+    "code": "15110",
+    "name": "모피 및 가죽 제조업",
+    "name_eng": "Manufacture of furs and leathers"
+  },
+  {
+    "code": "15121",
+    "name": "핸드백 및 지갑 제조업",
+    "name_eng": "Manufacture of handbags and purses"
+  },
+  {
+    "code": "15129",
+    "name": "가방 및 기타 보호용 케이스 제조업",
+    "name_eng": "Manufacture of luggage and other protective cases"
+  },
+  {
+    "code": "15190",
+    "name": "기타 가죽제품 제조업",
+    "name_eng": "Manufacture of other leather articles"
+  },
+  {
+    "code": "15211",
+    "name": "구두류 제조업",
+    "name_eng": "Manufacture of shoes"
+  },
+  {
+    "code": "15219",
+    "name": "기타 신발 제조업",
+    "name_eng": "Manufacture of other footwear"
+  },
+  {
+    "code": "15220",
+    "name": "신발 부분품 제조업",
+    "name_eng": "Manufacture of parts of footwear"
+  },
+  {
+    "code": "16101",
+    "name": "일반 제재업",
+    "name_eng": "Sawmilling of wood"
+  },
+  {
+    "code": "16102",
+    "name": "표면 가공 목재 및 특정 목적용 제재목 제조업",
+    "name_eng": "Manufacture of surface processing wood and woods for special purpose"
+  },
+  {
+    "code": "16103",
+    "name": "목재 보존, 방부처리, 도장 및 유사 처리업",
+    "name_eng": "Preservation, antisepsis, painting and similar processing of wood"
+  },
+  {
+    "code": "16211",
+    "name": "박판, 합판 및 유사 적층판 제조업",
+    "name_eng": "Manufacture of veneer sheets, plywood and similar laminated wood boards"
+  },
+  {
+    "code": "16212",
+    "name": "강화 및 재생 목재 제조업",
+    "name_eng": "Manufacture of densified and reconstituted wood"
+  },
+  {
+    "code": "16221",
+    "name": "목재문 및 관련제품 제조업",
+    "name_eng": "Manufacture of wooden doors and related products"
+  },
+  {
+    "code": "16229",
+    "name": "기타 건축용 나무제품 제조업",
+    "name_eng": "Manufacture of other wooden goods for construction industry"
+  },
+  {
+    "code": "16231",
+    "name": "목재 깔판류 및 기타 적재판 제조업",
+    "name_eng": "Manufacture of wooden pallets and other load boards"
+  },
+  {
+    "code": "16232",
+    "name": "목재 포장용 상자, 드럼 및 유사용기 제조업",
+    "name_eng": "Manufacture of wooden packing boxes, drums and similar containers"
+  },
+  {
+    "code": "16291",
+    "name": "목재 도구 및 주방용 나무제품 제조업",
+    "name_eng": "Manufacture of wooden tools, appliances and household kitchenware"
+  },
+  {
+    "code": "16292",
+    "name": "장식용 목제품 제조업",
+    "name_eng": "Manufacture of wooden statuettes and ornaments"
+  },
+  {
+    "code": "16299",
+    "name": "그 외 기타 나무제품 제조업",
+    "name_eng": "Manufacture of other wood products n.e.c."
+  },
+  {
+    "code": "16300",
+    "name": "코르크 및 조물제품 제조업",
+    "name_eng": "Manufacture of articles of cork, straw and plaiting materials"
+  },
+  {
+    "code": "17101",
+    "name": "펄프 제조업",
+    "name_eng": "Manufacture of pulp"
+  },
+  {
+    "code": "17102",
+    "name": "신문용지 제조업",
+    "name_eng": "Manufacture of newsprint"
+  },
+  {
+    "code": "17103",
+    "name": "인쇄용 및 필기용 원지 제조업",
+    "name_eng": "Manufacture of printing and writing paper"
+  },
+  {
+    "code": "17104",
+    "name": "골판지 원지 제조업",
+    "name_eng": "Manufacture of paper for corrugated paperboard"
+  },
+  {
+    "code": "17105",
+    "name": "크라프트지 및 기타 상자용 판지 제조업",
+    "name_eng": "Manufacture of kraft paper and other paperboard"
+  },
+  {
+    "code": "17106",
+    "name": "위생용 원지 제조업",
+    "name_eng": "Manufacture of paper for sanitary purpose"
+  },
+  {
+    "code": "17109",
+    "name": "기타 종이 및 판지 제조업",
+    "name_eng": "Manufacture of other paper and paperboard"
+  },
+  {
+    "code": "17211",
+    "name": "골판지 제조업",
+    "name_eng": "Manufacture of corrugated paper"
+  },
+  {
+    "code": "17212",
+    "name": "골판지 상자 및 가공제품 제조업",
+    "name_eng": "Manufacture of corrugated boxes and related products"
+  },
+  {
+    "code": "17221",
+    "name": "종이 포대 및 가방 제조업",
+    "name_eng": "Manufacture of paper sacks and paper bags"
+  },
+  {
+    "code": "17222",
+    "name": "판지 상자 및 용기 제조업",
+    "name_eng": "Manufacture of paperboard boxes and containers"
+  },
+  {
+    "code": "17223",
+    "name": "식품 위생용 종이 상자 및 용기 제조업",
+    "name_eng": "Manufacture of sanitary paper boxes and containers for food"
+  },
+  {
+    "code": "17229",
+    "name": "기타 종이 상자 및 용기 제조업",
+    "name_eng": "Manufacture of other paper boxes and containers"
+  },
+  {
+    "code": "17901",
+    "name": "문구용 종이제품 제조업",
+    "name_eng": "Manufacture of stationery paper"
+  },
+  {
+    "code": "17902",
+    "name": "위생용 종이제품 제조업",
+    "name_eng": "Manufacture of sanitary paper products"
+  },
+  {
+    "code": "17903",
+    "name": "벽지 및 장판지 제조업",
+    "name_eng": "Manufacture of wallpaper and oilpaper"
+  },
+  {
+    "code": "17904",
+    "name": "적층, 합성 및 특수표면처리 종이 제조업",
+    "name_eng": "Manufacture of lamination, composition and specific surface processing paper"
+  },
+  {
+    "code": "17909",
+    "name": "그 외 기타 종이 및 판지 제품 제조업",
+    "name_eng": "Manufacture of other articles of paper and paperboard n.e.c."
+  },
+  {
+    "code": "18111",
+    "name": "경 인쇄업",
+    "name_eng": "Master printing by stencil plate and similar plates"
+  },
+  {
+    "code": "18112",
+    "name": "스크린 인쇄업",
+    "name_eng": "Screen printing"
+  },
+  {
+    "code": "18113",
+    "name": "오프셋 인쇄업",
+    "name_eng": "Offset printing"
+  },
+  {
+    "code": "18119",
+    "name": "기타 인쇄업",
+    "name_eng": "Other printing"
+  },
+  {
+    "code": "18121",
+    "name": "제판 및 조판업",
+    "name_eng": "Plate-making and typesetting services"
+  },
+  {
+    "code": "18122",
+    "name": "제책업",
+    "name_eng": "Bookbinding services"
+  },
+  {
+    "code": "18129",
+    "name": "기타 인쇄관련 산업",
+    "name_eng": "Other service activities related to printing"
+  },
+  {
+    "code": "18200",
+    "name": "기록매체 복제업",
+    "name_eng": "Reproduction of recorded media"
+  },
+  {
+    "code": "19100",
+    "name": "코크스 및 연탄 제조업",
+    "name_eng": "Manufacture of coke, briquettes and related products"
+  },
+  {
+    "code": "19210",
+    "name": "원유 정제처리업",
+    "name_eng": "Petroleum refineries"
+  },
+  {
+    "code": "19221",
+    "name": "윤활유 및 그리스 제조업",
+    "name_eng": "Manufacture of lubricating oils and greases"
+  },
+  {
+    "code": "19229",
+    "name": "기타 석유정제물 재처리업",
+    "name_eng": "Reprocessing of other fractionation in petroleum refinery"
+  },
+  {
+    "code": "20111",
+    "name": "석유화학계 기초 화학물질 제조업",
+    "name_eng": "Manufacture of basic organic petrochemicals"
+  },
+  {
+    "code": "20112",
+    "name": "바이오매스계 기초 화학물질 제조업",
+    "name_eng": "Manufacture of based on biomass basic chemicals"
+  },
+  {
+    "code": "20119",
+    "name": "기타 기초 유기 화학물질 제조업",
+    "name_eng": "Manufacture of other basic organic chemicals"
+  },
+  {
+    "code": "20121",
+    "name": "수소 제조업",
+    "name_eng": "Manufacture of hydrogen"
+  },
+  {
+    "code": "20122",
+    "name": "산소, 질소 및 기타 산업용 가스 제조업",
+    "name_eng": "Manufacture of oxygen, nitrogen and other industrial gases"
+  },
+  {
+    "code": "20129",
+    "name": "기타 기초 무기 화학물질 제조업",
+    "name_eng": "Manufacture of other basic inorganic chemicals"
+  },
+  {
+    "code": "20131",
+    "name": "무기안료용 금속 산화물 및 관련 제품 제조업",
+    "name_eng": "Manufacture of metal oxides for inorganic pigments and related products"
+  },
+  {
+    "code": "20132",
+    "name": "염료, 조제 무기안료, 유연제 및 기타 착색제 제조업",
+    "name_eng": "Manufacture of dyes, synthetic inorganic pigments, tanning materials and other coloring agents"
+  },
+  {
+    "code": "20201",
+    "name": "합성고무 제조업",
+    "name_eng": "Manufacture of synthetic rubber"
+  },
+  {
+    "code": "20202",
+    "name": "합성수지 및 기타 플라스틱 물질 제조업",
+    "name_eng": "Manufacture of synthetic resin and other plastic materials"
+  },
+  {
+    "code": "20203",
+    "name": "혼성 및 재생 플라스틱 소재 물질 제조업",
+    "name_eng": "Manufacture of mixed, blended and recycled plastic materials"
+  },
+  {
+    "code": "20311",
+    "name": "질소화합물, 질소, 인산 및 칼리질 화학비료 제조업",
+    "name_eng": "Manufacture of nitrogen compounds and nitrogenous, phosphatic and potassic fertilizers"
+  },
+  {
+    "code": "20312",
+    "name": "복합비료 및 기타 화학비료 제조업",
+    "name_eng": "Manufacture of composite and other chemical fertilizers"
+  },
+  {
+    "code": "20313",
+    "name": "유기질 비료 및 상토 제조업",
+    "name_eng": "Manufacture of organic fertilizers and bed soils"
+  },
+  {
+    "code": "20321",
+    "name": "화학 살균․살충제 및 농업용 약제 제조업",
+    "name_eng": "Manufacture of chemical germicides, insecticides and agrochemical products"
+  },
+  {
+    "code": "20322",
+    "name": "생물 살균․살충제 및 식물보호제 제조업",
+    "name_eng": "Manufacture of biotic germicides, insecticides and plant protectors"
+  },
+  {
+    "code": "20411",
+    "name": "일반용 도료 및 관련제품 제조업",
+    "name_eng": "Manufacture of general paints and similar products"
+  },
+  {
+    "code": "20412",
+    "name": "요업용 도포제 및 관련제품 제조업",
+    "name_eng": "Manufacture of enamels, glazes, engobes and similar preparations for ceramic"
+  },
+  {
+    "code": "20413",
+    "name": "인쇄잉크 및 회화용 물감 제조업",
+    "name_eng": "Manufacture of printing ink and paints for pictures"
+  },
+  {
+    "code": "20421",
+    "name": "계면활성제 제조업",
+    "name_eng": "Manufacture of surface-active agents"
+  },
+  {
+    "code": "20422",
+    "name": "치약, 비누 및 기타 세제 제조업",
+    "name_eng": "Manufacture of toothpastes, soaps and other detergents"
+  },
+  {
+    "code": "20423",
+    "name": "화장품 제조업",
+    "name_eng": "Manufacture of perfumes and cosmetics"
+  },
+  {
+    "code": "20424",
+    "name": "표면광택제 및 실내가향제 제조업",
+    "name_eng": "Manufacture of wax, polish and preparations for perfuming or deodorizing room"
+  },
+  {
+    "code": "20491",
+    "name": "감광재료 및 관련 화학제품 제조업",
+    "name_eng": "Manufacture of sensitized materials and related chemical preparations"
+  },
+  {
+    "code": "20492",
+    "name": "가공 및 정제염 제조업",
+    "name_eng": "Manufacture of processed and refined salt"
+  },
+  {
+    "code": "20493",
+    "name": "접착제 및 젤라틴 제조업",
+    "name_eng": "Manufacture of adhesives and gelatin"
+  },
+  {
+    "code": "20494",
+    "name": "화약 및 불꽃제품 제조업",
+    "name_eng": "Manufacture of explosives and pyrotechnic products"
+  },
+  {
+    "code": "20495",
+    "name": "바이오 연료 및 혼합물 제조업",
+    "name_eng": "Manufacture of biofuels and related mixture"
+  },
+  {
+    "code": "20499",
+    "name": "그 외 기타 분류 안된 화학제품 제조업",
+    "name_eng": "Manufacture of other chemical products n.e.c."
+  },
+  {
+    "code": "20501",
+    "name": "합성섬유 제조업",
+    "name_eng": "Manufacture of synthetic fibers"
+  },
+  {
+    "code": "20502",
+    "name": "재생섬유 제조업",
+    "name_eng": "Manufacture of regenerated fibers"
+  },
+  {
+    "code": "21100",
+    "name": "기초 의약 물질 제조업",
+    "name_eng": "Manufacture of medicinal chemicals"
+  },
+  {
+    "code": "21211",
+    "name": "생물 의약품 제조업",
+    "name_eng": "Manufacture of biopharmaceutical products"
+  },
+  {
+    "code": "21212",
+    "name": "합성의약품 및 기타 완제 의약품 제조업",
+    "name_eng": "Manufacture of synthetic drug and other finished medicaments"
+  },
+  {
+    "code": "21220",
+    "name": "한의약품 제조업",
+    "name_eng": "Manufacture of herb medicaments"
+  },
+  {
+    "code": "21230",
+    "name": "동물용 의약품 제조업",
+    "name_eng": "Manufacture of animal medicaments"
+  },
+  {
+    "code": "21301",
+    "name": "체외 진단 시약 제조업",
+    "name_eng": "Manufacture of invitro diagnostic reagents"
+  },
+  {
+    "code": "21309",
+    "name": "그 외 기타 의료용품 및 의약 관련제품 제조업",
+    "name_eng": "Manufacture of other medical supplies and related other medicaments"
+  },
+  {
+    "code": "22110",
+    "name": "고무 타이어 및 튜브 제조업",
+    "name_eng": "Manufacture of rubber tires and tubes"
+  },
+  {
+    "code": "22191",
+    "name": "고무패킹류 제조업",
+    "name_eng": "Manufacture of rubber packing"
+  },
+  {
+    "code": "22192",
+    "name": "산업용 그 외 비경화 고무제품 제조업",
+    "name_eng": "Manufacture of other industrial un-vulcanized rubber products"
+  },
+  {
+    "code": "22193",
+    "name": "고무 의류 및 기타 위생용 비경화 고무제품 제조업",
+    "name_eng": "Manufacture of apparel and other hygienic articles of rubber"
+  },
+  {
+    "code": "22199",
+    "name": "그 외 기타 고무제품 제조업",
+    "name_eng": "Manufacture of other rubber products n.e.c."
+  },
+  {
+    "code": "22211",
+    "name": "플라스틱 선, 봉, 관 및 호스 제조업",
+    "name_eng": "Manufacture of plastic wires, bars, pipes, tubes and hoses"
+  },
+  {
+    "code": "22212",
+    "name": "플라스틱 필름 제조업",
+    "name_eng": "Manufacture of plastic films"
+  },
+  {
+    "code": "22213",
+    "name": "플라스틱 시트 및 판 제조업",
+    "name_eng": "Manufacture of plastic sheets and plates"
+  },
+  {
+    "code": "22214",
+    "name": "플라스틱 합성피혁 제조업",
+    "name_eng": "Manufacture of plastic synthetic leather"
+  },
+  {
+    "code": "22221",
+    "name": "벽 및 바닥 피복용 플라스틱제품 제조업",
+    "name_eng": "Manufacture of plastic wall and floor coverings"
+  },
+  {
+    "code": "22222",
+    "name": "설치용 및 위생용 플라스틱제품 제조업",
+    "name_eng": "Manufacture of plastic products for installation and sanitation"
+  },
+  {
+    "code": "22223",
+    "name": "플라스틱 창호 제조업",
+    "name_eng": "Manufacture of plastic windows and doors"
+  },
+  {
+    "code": "22229",
+    "name": "기타 건축용 플라스틱 조립제품 제조업",
+    "name_eng": "Manufacture of other fabricated structural plastic products"
+  },
+  {
+    "code": "22231",
+    "name": "플라스틱 포대, 봉투 및 유사제품 제조업",
+    "name_eng": "Manufacture of plastic sacks, bags and similar products"
+  },
+  {
+    "code": "22232",
+    "name": "포장용 플라스틱 성형용기 제조업",
+    "name_eng": "Manufacture of plastic cases, boxes and containers"
+  },
+  {
+    "code": "22241",
+    "name": "운송장비 조립용 플라스틱제품 제조업",
+    "name_eng": "Manufacture of plastic products for fabricating of transportation fixture"
+  },
+  {
+    "code": "22249",
+    "name": "기타 기계․장비 조립용 플라스틱 제품 제조업",
+    "name_eng": "Manufacture of other plastic products for fabricating of machine"
+  },
+  {
+    "code": "22251",
+    "name": "폴리스티렌 발포 성형제품 제조업",
+    "name_eng": "Manufacture of polystyrene foam products"
+  },
+  {
+    "code": "22259",
+    "name": "기타 플라스틱 발포 성형제품 제조업",
+    "name_eng": "Manufacture of other foamed plastic products"
+  },
+  {
+    "code": "22291",
+    "name": "플라스틱 접착처리 제품 제조업",
+    "name_eng": "Manufacture of self-adhesive plastic products"
+  },
+  {
+    "code": "22292",
+    "name": "플라스틱 적층, 도포 및 기타 표면처리 제품 제조업",
+    "name_eng": "Manufacture of plastic laminating, coating and other surface processing products"
+  },
+  {
+    "code": "22299",
+    "name": "그 외 기타 플라스틱 제품 제조업",
+    "name_eng": "Manufacture of other plastic products n.e.c."
+  },
+  {
+    "code": "23111",
+    "name": "판유리 제조업",
+    "name_eng": "Manufacture of flat glass"
+  },
+  {
+    "code": "23112",
+    "name": "안전유리 제조업",
+    "name_eng": "Manufacture of safety glass"
+  },
+  {
+    "code": "23119",
+    "name": "기타 판유리 가공품 제조업",
+    "name_eng": "Manufacture of other products made of flat glass"
+  },
+  {
+    "code": "23121",
+    "name": "1차 유리제품, 유리섬유 및 광학용 유리 제조업",
+    "name_eng": "Manufacture of basic glass products, glass fibers and optical glass"
+  },
+  {
+    "code": "23122",
+    "name": "디스플레이 장치용 유리 제조업",
+    "name_eng": "Manufacture of glass products for displays"
+  },
+  {
+    "code": "23129",
+    "name": "기타 산업용 유리제품 제조업",
+    "name_eng": "Manufacture of other industrial glass products"
+  },
+  {
+    "code": "23191",
+    "name": "가정용 유리제품 제조업",
+    "name_eng": "Manufacture of household glassware"
+  },
+  {
+    "code": "23192",
+    "name": "포장용 유리용기 제조업",
+    "name_eng": "Manufacture of bottles and other containers made of glass"
+  },
+  {
+    "code": "23199",
+    "name": "그 외 기타 유리제품 제조업",
+    "name_eng": "Manufacture of other glass products n.e.c."
+  },
+  {
+    "code": "23211",
+    "name": "정형 내화 요업제품 제조업",
+    "name_eng": "Manufacture of shaped refractory ceramic products"
+  },
+  {
+    "code": "23212",
+    "name": "부정형 내화 요업제품 제조업",
+    "name_eng": "Manufacture of unshaped refractory ceramic products"
+  },
+  {
+    "code": "23221",
+    "name": "가정용 및 장식용 도자기 제조업",
+    "name_eng": "Manufacture of household or ornamental pottery and ceramic ware"
+  },
+  {
+    "code": "23222",
+    "name": "위생용 및 산업용 도자기 제조업",
+    "name_eng": "Manufacture of sanitary and industrial ceramic ware"
+  },
+  {
+    "code": "23229",
+    "name": "기타 일반 도자기 제조업",
+    "name_eng": "Manufacture of other non-refractory porcelain and ceramic products"
+  },
+  {
+    "code": "23231",
+    "name": "점토 벽돌, 블록 및 유사 비내화 요업제품 제조업",
+    "name_eng": "Manufacture of non-refractory clay bricks, blocks and similar products"
+  },
+  {
+    "code": "23232",
+    "name": "타일 및 유사 비내화 요업제품 제조업",
+    "name_eng": "Manufacture of non-refractory ceramic tiles and similar products"
+  },
+  {
+    "code": "23239",
+    "name": "기타 건축용 비내화 요업제품 제조업",
+    "name_eng": "Manufacture of other structural non-refractory clay and ceramic products"
+  },
+  {
+    "code": "23311",
+    "name": "시멘트 제조업",
+    "name_eng": "Manufacture of cement"
+  },
+  {
+    "code": "23312",
+    "name": "석회 및 플라스터 제조업",
+    "name_eng": "Manufacture of lime and plaster"
+  },
+  {
+    "code": "23321",
+    "name": "비내화 모르타르 제조업",
+    "name_eng": "Manufacture of non-refractory mortar"
+  },
+  {
+    "code": "23322",
+    "name": "레미콘 제조업",
+    "name_eng": "Manufacture of ready-mixed concrete"
+  },
+  {
+    "code": "23323",
+    "name": "플라스터 혼합제품 제조업",
+    "name_eng": "Manufacture of plaster products and related products"
+  },
+  {
+    "code": "23324",
+    "name": "콘크리트 타일, 기와, 벽돌 및 블록 제조업",
+    "name_eng": "Manufacture of concrete tiles, roofing tiles, bricks and blocks"
+  },
+  {
+    "code": "23325",
+    "name": "콘크리트 관 및 기타 구조용 콘크리트 제품 제조업",
+    "name_eng": "Manufacture of concrete pipes and other structural concrete products"
+  },
+  {
+    "code": "23326",
+    "name": "인조대리석 제품 제조업",
+    "name_eng": "Manufacture of artificial marble"
+  },
+  {
+    "code": "23329",
+    "name": "그 외 기타 콘크리트 제품 및 유사제품 제조업",
+    "name_eng": "Manufacture of other concrete and similar products n.e.c."
+  },
+  {
+    "code": "23911",
+    "name": "건설용 석제품 제조업",
+    "name_eng": "Manufacture of stone products for construction"
+  },
+  {
+    "code": "23919",
+    "name": "기타 석제품 제조업",
+    "name_eng": "Manufacture of other stone products"
+  },
+  {
+    "code": "23991",
+    "name": "아스팔트 콘크리트 및 혼합제품 제조업",
+    "name_eng": "Manufacture of asphalt concrete and related products"
+  },
+  {
+    "code": "23992",
+    "name": "연마재 제조업",
+    "name_eng": "Manufacture of abrasive articles"
+  },
+  {
+    "code": "23993",
+    "name": "비금속광물 분쇄물 생산업",
+    "name_eng": "Manufacture of non-metallic crushed mineral products"
+  },
+  {
+    "code": "23994",
+    "name": "암면 및 유사제품 제조업",
+    "name_eng": "Manufacture of mineral wools and other similar products"
+  },
+  {
+    "code": "23995",
+    "name": "탄소섬유 제조업",
+    "name_eng": "Manufacture of carbon fibers"
+  },
+  {
+    "code": "23999",
+    "name": "그 외 기타 분류 안된 비금속 광물제품 제조업",
+    "name_eng": "Manufacture of other non-metallic minerals n.e.c."
+  },
+  {
+    "code": "24111",
+    "name": "제철업",
+    "name_eng": "Manufacture of basic iron"
+  },
+  {
+    "code": "24112",
+    "name": "제강업",
+    "name_eng": "Manufacture of basic steel"
+  },
+  {
+    "code": "24113",
+    "name": "합금철 제조업",
+    "name_eng": "Manufacture of ferro-alloys"
+  },
+  {
+    "code": "24119",
+    "name": "기타 제철 및 제강업",
+    "name_eng": "Manufacture of other basic iron and steel"
+  },
+  {
+    "code": "24121",
+    "name": "열간 압연 및 압출 제품 제조업",
+    "name_eng": "Manufacture of steel products by hot rolling, hot extrusion and hot drawing"
+  },
+  {
+    "code": "24122",
+    "name": "냉간 압연 및 압출 제품 제조업",
+    "name_eng": "Manufacture of steel products by cold rolling, cold extrusion and cold drawing"
+  },
+  {
+    "code": "24123",
+    "name": "철강선 제조업",
+    "name_eng": "Manufacture of steel wire"
+  },
+  {
+    "code": "24131",
+    "name": "주철관 제조업",
+    "name_eng": "Manufacture of tubes and pipes, of cast iron"
+  },
+  {
+    "code": "24132",
+    "name": "강관 제조업",
+    "name_eng": "Manufacture of pipes and tubes, of steel"
+  },
+  {
+    "code": "24133",
+    "name": "강관 가공품 및 관 연결구류 제조업",
+    "name_eng": "Manufacture of pipe and tube fittings and related products, of steel"
+  },
+  {
+    "code": "24191",
+    "name": "도금, 착색 및 기타 표면처리강재 제조업",
+    "name_eng": "Manufacture of coated, plated, coloured and other processed steel products"
+  },
+  {
+    "code": "24199",
+    "name": "그 외 기타 1차 철강 제조업",
+    "name_eng": "Manufacture of other basic iron and steel n.e.c."
+  },
+  {
+    "code": "24211",
+    "name": "동 제련, 정련 및 합금 제조업",
+    "name_eng": "Manufacture of smelting, refining and alloys of copper"
+  },
+  {
+    "code": "24212",
+    "name": "알루미늄 제련, 정련 및 합금 제조업",
+    "name_eng": "Manufacture of smelting, refining and alloys of aluminum"
+  },
+  {
+    "code": "24213",
+    "name": "연 및 아연 제련, 정련 및 합금 제조업",
+    "name_eng": "Manufacture of smelting, refining and alloys of lead and zinc"
+  },
+  {
+    "code": "24219",
+    "name": "기타 비철금속 제련, 정련 및 합금 제조업",
+    "name_eng": "Manufacture of smelting, refining and alloys of other non-ferrous metals"
+  },
+  {
+    "code": "24221",
+    "name": "동 압연, 압출 및 연신제품 제조업",
+    "name_eng": "Manufacture of copper products by rolling, extrusion and drawing"
+  },
+  {
+    "code": "24222",
+    "name": "알루미늄 압연, 압출 및 연신제품 제조업",
+    "name_eng": "Manufacture of aluminum products by rolling, extrusion and drawing"
+  },
+  {
+    "code": "24229",
+    "name": "기타 비철금속 압연, 압출 및 연신 제품 제조업",
+    "name_eng": "Manufacture of other non-ferrous metal products by rolling, extrusion and drawing"
+  },
+  {
+    "code": "24290",
+    "name": "기타 1차 비철금속 제조업",
+    "name_eng": "Manufacture of other basic precious and non-ferrous metals"
+  },
+  {
+    "code": "24311",
+    "name": "선철주물 주조업",
+    "name_eng": "Casting of pig iron"
+  },
+  {
+    "code": "24312",
+    "name": "강주물 주조업",
+    "name_eng": "Casting of steel"
+  },
+  {
+    "code": "24321",
+    "name": "알루미늄주물 주조업",
+    "name_eng": "Casting of aluminum"
+  },
+  {
+    "code": "24329",
+    "name": "기타 비철금속 주조업",
+    "name_eng": "Casting of other non-ferrous metals"
+  },
+  {
+    "code": "25111",
+    "name": "금속 문, 창, 셔터 및 관련제품 제조업",
+    "name_eng": "Manufacture of metal doors, windows, shutters and related products"
+  },
+  {
+    "code": "25112",
+    "name": "구조용 금속 판제품 및 공작물 제조업",
+    "name_eng": "Manufacture of structural metal sheet products and metal works used on building"
+  },
+  {
+    "code": "25113",
+    "name": "육상 금속 골조 구조재 제조업",
+    "name_eng": "Manufacture of metal frameworks or skeletons for land structure and parts thereof"
+  },
+  {
+    "code": "25114",
+    "name": "수상 금속 골조 구조재 제조업",
+    "name_eng": "Manufacture of metal frameworks or skeletons for marine structure and parts thereof"
+  },
+  {
+    "code": "25119",
+    "name": "기타 구조용 금속제품 제조업",
+    "name_eng": "Manufacture of other structural metal products"
+  },
+  {
+    "code": "25121",
+    "name": "산업용 난방보일러 및 방열기 제조업",
+    "name_eng": "Manufacture of industrial heating boilers and radiators"
+  },
+  {
+    "code": "25122",
+    "name": "금속탱크 및 저장용기 제조업",
+    "name_eng": "Manufacture of tanks and reservoirs"
+  },
+  {
+    "code": "25123",
+    "name": "압축 및 액화 가스용기 제조업",
+    "name_eng": "Manufacture of metal containers for compressed or liquefied gas"
+  },
+  {
+    "code": "25130",
+    "name": "핵반응기 및 증기보일러 제조업",
+    "name_eng": "Manufacture of nuclear reactors and steam generators"
+  },
+  {
+    "code": "25200",
+    "name": "무기 및 총포탄 제조업",
+    "name_eng": "Manufacture of weapons and ammunition"
+  },
+  {
+    "code": "25911",
+    "name": "분말 야금제품 제조업",
+    "name_eng": "Manufacture of powder metallurgic products"
+  },
+  {
+    "code": "25912",
+    "name": "금속 단조제품 제조업",
+    "name_eng": "Manufacture of forging products"
+  },
+  {
+    "code": "25913",
+    "name": "자동차용 금속 압형제품 제조업",
+    "name_eng": "Manufacture of pressing products for motor vehicles"
+  },
+  {
+    "code": "25914",
+    "name": "그 외 금속 압형제품 제조업",
+    "name_eng": "Manufacture of other pressing products"
+  },
+  {
+    "code": "25921",
+    "name": "금속 열처리업",
+    "name_eng": "Heat treatment of metals"
+  },
+  {
+    "code": "25922",
+    "name": "도금업",
+    "name_eng": "Plating of metals"
+  },
+  {
+    "code": "25923",
+    "name": "도장 및 기타 피막처리업",
+    "name_eng": "Coating and similar treatment of metals"
+  },
+  {
+    "code": "25924",
+    "name": "절삭가공 및 유사처리업",
+    "name_eng": "Engraving, cutting and similar processing of metals"
+  },
+  {
+    "code": "25929",
+    "name": "그 외 기타 금속가공업",
+    "name_eng": "Other metalworking n.e.c."
+  },
+  {
+    "code": "25931",
+    "name": "날붙이 제조업",
+    "name_eng": "Manufacture of cutlery"
+  },
+  {
+    "code": "25932",
+    "name": "일반철물 제조업",
+    "name_eng": "Manufacture of general hardware"
+  },
+  {
+    "code": "25933",
+    "name": "비동력식 수공구 제조업",
+    "name_eng": "Manufacture of non-power-driven hand tools"
+  },
+  {
+    "code": "25934",
+    "name": "톱 및 호환성 공구 제조업",
+    "name_eng": "Manufacture of saws, saw blades and interchangeable tools"
+  },
+  {
+    "code": "25941",
+    "name": "볼트 및 너트류 제조업",
+    "name_eng": "Manufacture of bolts and screws"
+  },
+  {
+    "code": "25942",
+    "name": "그 외 금속파스너 및 나사제품 제조업",
+    "name_eng": "Manufacture of other metal fasteners and screw products"
+  },
+  {
+    "code": "25943",
+    "name": "금속 스프링 제조업",
+    "name_eng": "Manufacture of metal springs"
+  },
+  {
+    "code": "25944",
+    "name": "금속선 가공제품 제조업",
+    "name_eng": "Manufacture of articles made of metal wires"
+  },
+  {
+    "code": "25991",
+    "name": "금속 캔 및 기타 포장용기 제조업",
+    "name_eng": "Manufacture of metal cans and other containers"
+  },
+  {
+    "code": "25992",
+    "name": "수동식 식품 가공기기 및 금속 주방용기 제조업",
+    "name_eng": "Manufacture of hand-operated kitchen appliances and metal ware"
+  },
+  {
+    "code": "25993",
+    "name": "금속 위생용품 제조업",
+    "name_eng": "Manufacture of metal sanitary ware"
+  },
+  {
+    "code": "25994",
+    "name": "금속 표시판 제조업",
+    "name_eng": "Manufacture of metal sign boards including road signs"
+  },
+  {
+    "code": "25995",
+    "name": "피복 및 충전 용접봉 제조업",
+    "name_eng": "Manufacture of coated rods and cored wire, of base metal for soldering or welding"
+  },
+  {
+    "code": "25999",
+    "name": "그 외 기타 분류 안된 금속 가공 제품 제조업",
+    "name_eng": "Manufacture of other fabricated and processed metal products n.e.c"
+  },
+  {
+    "code": "26111",
+    "name": "메모리용 전자집적회로 제조업",
+    "name_eng": "Manufacture of memory electronic integrated circuits"
+  },
+  {
+    "code": "26112",
+    "name": "비메모리용 및 기타 전자집적회로 제조업",
+    "name_eng": "Manufacture of non-memory electronic integrated circuits"
+  },
+  {
+    "code": "26121",
+    "name": "발광 다이오드 제조업",
+    "name_eng": "Manufacture of light emitting diodes"
+  },
+  {
+    "code": "26129",
+    "name": "기타 반도체소자 제조업",
+    "name_eng": "Manufacture of other diodes, transistors and similar semi-conductor devices"
+  },
+  {
+    "code": "26211",
+    "name": "액정 표시장치 제조업",
+    "name_eng": "Manufacture of liquid crystal display components"
+  },
+  {
+    "code": "26212",
+    "name": "유기발광 표시장치 제조업",
+    "name_eng": "Manufacture of organic light emitting diodes display components"
+  },
+  {
+    "code": "26219",
+    "name": "기타 표시장치 제조업",
+    "name_eng": "Manufacture of other display component"
+  },
+  {
+    "code": "26221",
+    "name": "인쇄회로기판용 적층판 제조업",
+    "name_eng": "Manufacture of laminated plates for printed circuit boards"
+  },
+  {
+    "code": "26222",
+    "name": "경성 인쇄회로기판 제조업",
+    "name_eng": "Manufacture of rigid printed circuit boards"
+  },
+  {
+    "code": "26223",
+    "name": "연성 및 기타 인쇄회로기판 제조업",
+    "name_eng": "Manufacture of flexible and other printed circuit boards"
+  },
+  {
+    "code": "26224",
+    "name": "전자부품 실장기판 제조업",
+    "name_eng": "Manufacture of loading of electronic components onto PCB"
+  },
+  {
+    "code": "26291",
+    "name": "전자축전기 제조업",
+    "name_eng": "Manufacture of electronic capacitors"
+  },
+  {
+    "code": "26292",
+    "name": "전자저항기 및 전자카드 제조업",
+    "name_eng": "Manufacture of electronic resistors and smart cards with magnetic stripe or chip"
+  },
+  {
+    "code": "26293",
+    "name": "전자코일, 변성기 및 기타 전자 유도자 제조업",
+    "name_eng": "Manufacture of electronic coils, transformers and other inductors"
+  },
+  {
+    "code": "26294",
+    "name": "전자감지장치 제조업",
+    "name_eng": "Manufacture of electronic perception sensors"
+  },
+  {
+    "code": "26299",
+    "name": "그 외 기타 전자부품 제조업",
+    "name_eng": "Manufacture of electronic tubes, interface cards and other electronic components n.e.c."
+  },
+  {
+    "code": "26310",
+    "name": "컴퓨터 제조업",
+    "name_eng": "Manufacture of computer"
+  },
+  {
+    "code": "26321",
+    "name": "기억장치 제조업",
+    "name_eng": "Manufacture of storage devices"
+  },
+  {
+    "code": "26322",
+    "name": "컴퓨터 모니터 제조업",
+    "name_eng": "Manufacture of computer monitor"
+  },
+  {
+    "code": "26323",
+    "name": "컴퓨터 프린터 제조업",
+    "name_eng": "Manufacture of computer printer"
+  },
+  {
+    "code": "26329",
+    "name": "기타 주변기기 제조업",
+    "name_eng": "Manufacture of other peripheral apparatuses"
+  },
+  {
+    "code": "26410",
+    "name": "유선 통신장비 제조업",
+    "name_eng": "Manufacture of wire telecommunication apparatuses"
+  },
+  {
+    "code": "26421",
+    "name": "방송장비 제조업",
+    "name_eng": "Manufacture of broadcasting apparatuses"
+  },
+  {
+    "code": "26422",
+    "name": "이동전화기 제조업",
+    "name_eng": "Manufacture of mobile phone"
+  },
+  {
+    "code": "26429",
+    "name": "기타 무선 통신장비 제조업",
+    "name_eng": "Manufacture of other wireless communication apparatuses"
+  },
+  {
+    "code": "26511",
+    "name": "텔레비전 제조업",
+    "name_eng": "Manufacture of television"
+  },
+  {
+    "code": "26519",
+    "name": "비디오 및 기타 영상기기 제조업",
+    "name_eng": "Manufacture of video and other visual equipment"
+  },
+  {
+    "code": "26521",
+    "name": "라디오, 녹음 및 재생 기기 제조업",
+    "name_eng": "Manufacture of radio, recorder and reproducing apparatuses"
+  },
+  {
+    "code": "26529",
+    "name": "기타 음향기기 제조업",
+    "name_eng": "Manufacture of other sounding equipment"
+  },
+  {
+    "code": "26600",
+    "name": "마그네틱 및 광학 매체 제조업",
+    "name_eng": "Manufacture of magnetic and optical medium"
+  },
+  {
+    "code": "27111",
+    "name": "방사선 장치 제조업",
+    "name_eng": "Manufacture of irradiation apparatuses"
+  },
+  {
+    "code": "27112",
+    "name": "전기식 진단 및 요법 기기 제조업",
+    "name_eng": "Manufacture of electro-diagnostic and electro-therapeutic apparatuses"
+  },
+  {
+    "code": "27191",
+    "name": "치과용 기기 제조업",
+    "name_eng": "Manufacture of dental instruments and appliances"
+  },
+  {
+    "code": "27192",
+    "name": "치과기공물 제조업",
+    "name_eng": "Manufacture of dental prosthesis"
+  },
+  {
+    "code": "27193",
+    "name": "치과용 임플란트 제조업",
+    "name_eng": "Manufacture of dental implant"
+  },
+  {
+    "code": "27194",
+    "name": "정형외과용 및 신체보정용 기기 제조업",
+    "name_eng": "Manufacture of orthopedic, orthodontic, prosthetic appliances and supplies for disability"
+  },
+  {
+    "code": "27195",
+    "name": "안경 및 안경렌즈 제조업",
+    "name_eng": "Manufacture of eyeglasses and optical lenses"
+  },
+  {
+    "code": "27196",
+    "name": "의료용 가구 제조업",
+    "name_eng": "Manufacture of medical, surgical, dental or veterinary furniture"
+  },
+  {
+    "code": "27199",
+    "name": "그 외 기타 의료용 기기 제조업",
+    "name_eng": "Manufacture of other medical and surgical equipment and orthopedic appliances n.e.c."
+  },
+  {
+    "code": "27211",
+    "name": "레이더, 항행용 무선기기 및 측량기구 제조업",
+    "name_eng": "Manufacture of radar, navigation, aeronautical, nautical equipment; measuring and recording equipment"
+  },
+  {
+    "code": "27212",
+    "name": "전자기 측정, 시험 및 분석기구 제조업",
+    "name_eng": "Manufacture of instruments for measuring and testing electricity and electrical signals"
+  },
+  {
+    "code": "27213",
+    "name": "물질 검사, 측정 및 분석기구 제조업",
+    "name_eng": "Manufacture of physical properties testing, measuring and inspection equipment"
+  },
+  {
+    "code": "27214",
+    "name": "속도계 및 적산계기 제조업",
+    "name_eng": "Manufacture of speedometers and integrating meters"
+  },
+  {
+    "code": "27215",
+    "name": "기기용 자동측정 및 제어장치 제조업",
+    "name_eng": "Manufacture of environmental controls and automatic controls for appliances"
+  },
+  {
+    "code": "27216",
+    "name": "산업처리공정 제어장비 제조업",
+    "name_eng": "Manufacture of industrial process control equipment"
+  },
+  {
+    "code": "27219",
+    "name": "기타 측정, 시험, 항해, 제어 및 정밀기기 제조업",
+    "name_eng": "Manufacture of other measuring, testing, navigating, control instrumensts n.e.c."
+  },
+  {
+    "code": "27220",
+    "name": "시계 및 시계부품 제조업",
+    "name_eng": "Manufacture of watches, clocks and its parts"
+  },
+  {
+    "code": "27301",
+    "name": "광학렌즈 및 광학요소 제조업",
+    "name_eng": "Manufacture of optical lens and elements"
+  },
+  {
+    "code": "27309",
+    "name": "기타 광학기기 및 사진기 제조업",
+    "name_eng": "Manufacture of cameras, other optical instruments and photographic equipment"
+  },
+  {
+    "code": "28111",
+    "name": "전동기 및 발전기 제조업",
+    "name_eng": "Manufacture of electric motors and generators"
+  },
+  {
+    "code": "28112",
+    "name": "변압기 제조업",
+    "name_eng": "Manufacture of transformers"
+  },
+  {
+    "code": "28113",
+    "name": "에너지 저장장치 제조업",
+    "name_eng": "Manufacture of energy storage system"
+  },
+  {
+    "code": "28119",
+    "name": "기타 전기 변환장치 제조업",
+    "name_eng": "Manufacture of other electric motors, generators and transformers"
+  },
+  {
+    "code": "28121",
+    "name": "전기회로 개폐, 보호장치 제조업",
+    "name_eng": "Manufacture of apparatuses for switching, protecting electrical circuits used in power distribution systems"
+  },
+  {
+    "code": "28122",
+    "name": "전기회로 접속장치 제조업",
+    "name_eng": "Manufacture of apparatuses for connecting electrical circuits used in power distribution systems"
+  },
+  {
+    "code": "28123",
+    "name": "배전반 및 전기 자동제어반 제조업",
+    "name_eng": "Manufacture of boards for electric control or distribution"
+  },
+  {
+    "code": "28201",
+    "name": "일차전지 제조업",
+    "name_eng": "Manufacture of primary battery"
+  },
+  {
+    "code": "28202",
+    "name": "운송장비용 이차전지 제조업",
+    "name_eng": "Manufacture of secondary battery for transport equipment"
+  },
+  {
+    "code": "28209",
+    "name": "기타 이차전지 제조업",
+    "name_eng": "Manufacture of other secondary battery"
+  },
+  {
+    "code": "28301",
+    "name": "광섬유 케이블 제조업",
+    "name_eng": "Manufacture of optical fiber cables"
+  },
+  {
+    "code": "28302",
+    "name": "기타 절연선 및 케이블 제조업",
+    "name_eng": "Manufacture of other insulated wires and cables"
+  },
+  {
+    "code": "28303",
+    "name": "절연 코드세트 및 기타 도체 제조업",
+    "name_eng": "Manufacture of insulated codes sets and other conductors for electricity"
+  },
+  {
+    "code": "28410",
+    "name": "전구 및 램프 제조업",
+    "name_eng": "Manufacture of electric lamps and bulbs"
+  },
+  {
+    "code": "28421",
+    "name": "운송장비용 조명장치 제조업",
+    "name_eng": "Manufacture of electric lighting fixtures for transportation equipment"
+  },
+  {
+    "code": "28422",
+    "name": "일반용 전기 조명장치 제조업",
+    "name_eng": "Manufacture of general electric lighting fixtures"
+  },
+  {
+    "code": "28423",
+    "name": "전시 및 광고용 조명장치 제조업",
+    "name_eng": "Manufacture of electric lighting fixtures for exhibition and advertisement"
+  },
+  {
+    "code": "28429",
+    "name": "기타 조명장치 제조업",
+    "name_eng": "Manufacture of other lighting fixtures"
+  },
+  {
+    "code": "28511",
+    "name": "주방용 전기기기 제조업",
+    "name_eng": "Manufacture of electric appliances for kitchen"
+  },
+  {
+    "code": "28512",
+    "name": "가정용 전기 난방기기 제조업",
+    "name_eng": "Manufacture of domestic electrothermic appliances"
+  },
+  {
+    "code": "28519",
+    "name": "기타 가정용 전기기기 제조업",
+    "name_eng": "Manufacture of other domestic electric appliances"
+  },
+  {
+    "code": "28520",
+    "name": "가정용 비전기식 조리 및 난방 기구 제조업",
+    "name_eng": "Manufacture of domestic non-electric cooking and heating appliances"
+  },
+  {
+    "code": "28901",
+    "name": "전기경보 및 신호장치 제조업",
+    "name_eng": "Manufacture of electric alarm and signaling equipment"
+  },
+  {
+    "code": "28902",
+    "name": "전기용 탄소제품 및 절연제품 제조업",
+    "name_eng": "Manufacture of electrical carbon products and insulators"
+  },
+  {
+    "code": "28903",
+    "name": "교통 신호장치 제조업",
+    "name_eng": "Manufacture of traffic signaling equipment"
+  },
+  {
+    "code": "28909",
+    "name": "그 외 기타 전기장비 제조업",
+    "name_eng": "Manufacture of other electrical equipment n.e.c."
+  },
+  {
+    "code": "29111",
+    "name": "내연기관 제조업",
+    "name_eng": "Manufacture of internal combustion piston engines"
+  },
+  {
+    "code": "29119",
+    "name": "기타 기관 및 터빈 제조업",
+    "name_eng": "Manufacture of other engines and turbines"
+  },
+  {
+    "code": "29120",
+    "name": "유압기기 제조업",
+    "name_eng": "Manufacture of fluid power equipment"
+  },
+  {
+    "code": "29131",
+    "name": "액체 펌프 제조업",
+    "name_eng": "Manufacture of pumps for liquids"
+  },
+  {
+    "code": "29132",
+    "name": "기체 펌프 및 압축기 제조업",
+    "name_eng": "Manufacture of air or vacuum pumps and compressors"
+  },
+  {
+    "code": "29133",
+    "name": "탭, 밸브 및 유사장치 제조업",
+    "name_eng": "Manufacture of taps, valves and similar products"
+  },
+  {
+    "code": "29141",
+    "name": "구름베어링 제조업",
+    "name_eng": "Manufacture of ball and roller bearings"
+  },
+  {
+    "code": "29142",
+    "name": "기어 및 동력전달장치 제조업",
+    "name_eng": "Manufacture of gears and driving elements"
+  },
+  {
+    "code": "29150",
+    "name": "산업용 오븐, 노 및 노용 버너 제조업",
+    "name_eng": "Manufacture of industrial ovens, furnaces and furnace burners"
+  },
+  {
+    "code": "29161",
+    "name": "산업용 트럭 및 적재기 제조업",
+    "name_eng": "Manufacture of work trucks and loading or unloading machinery"
+  },
+  {
+    "code": "29162",
+    "name": "승강기 제조업",
+    "name_eng": "Manufacture of lifting equipment"
+  },
+  {
+    "code": "29163",
+    "name": "컨베이어장치 제조업",
+    "name_eng": "Manufacture of conveyors"
+  },
+  {
+    "code": "29169",
+    "name": "기타 물품 취급장비 제조업",
+    "name_eng": "Manufacture of other lifting and handling equipment"
+  },
+  {
+    "code": "29171",
+    "name": "산업용 냉장 및 냉동 장비 제조업",
+    "name_eng": "Manufacture of refrigerating or freezing industrial equipment"
+  },
+  {
+    "code": "29172",
+    "name": "가정용 및 산업용 공기 조화장치 제조업",
+    "name_eng": "Manufacture of household and industrial air conditioning, control machines"
+  },
+  {
+    "code": "29173",
+    "name": "운송장비용 공기 조화장치 제조업",
+    "name_eng": "Manufacture of air conditioning, control machines for transport equipment"
+  },
+  {
+    "code": "29174",
+    "name": "산업용 송풍기 및 배기장치 제조업",
+    "name_eng": "Manufacture of non-domestic fans and ventilators"
+  },
+  {
+    "code": "29175",
+    "name": "기체 여과기 제조업",
+    "name_eng": "Manufacture of filtering or purifying machinery for air or gases"
+  },
+  {
+    "code": "29176",
+    "name": "액체 여과기 제조업",
+    "name_eng": "Manufacture of filtering or purifying machinery for liquids or oils"
+  },
+  {
+    "code": "29177",
+    "name": "증류기, 열교환기 및 가스발생기 제조업",
+    "name_eng": "Manufacture of distilling machinery, heat exchangers and gas generators"
+  },
+  {
+    "code": "29180",
+    "name": "사무용 기계 및 장비 제조업",
+    "name_eng": "Manufacture of office machinery and equipment"
+  },
+  {
+    "code": "29191",
+    "name": "용기 세척, 포장 및 충전기 제조업",
+    "name_eng": "Manufacture of machinery for cleaning, packing and charging"
+  },
+  {
+    "code": "29192",
+    "name": "분사기 및 소화기 제조업",
+    "name_eng": "Manufacture of equipment for projecting, dispersing or spraying liquids or powders"
+  },
+  {
+    "code": "29193",
+    "name": "동력식 수지공구 제조업",
+    "name_eng": "Manufacture of power-driven hand tools"
+  },
+  {
+    "code": "29199",
+    "name": "그 외 기타 일반목적용 기계 제조업",
+    "name_eng": "Manufacture of other general-purpose machinery n.e.c."
+  },
+  {
+    "code": "29210",
+    "name": "농업 및 임업용 기계 제조업",
+    "name_eng": "Manufacture of agricultural and forestry machinery"
+  },
+  {
+    "code": "29221",
+    "name": "전자 응용 절삭기계 제조업",
+    "name_eng": "Manufacture of cutting machinery using a laser beam, ultrasonic waves"
+  },
+  {
+    "code": "29222",
+    "name": "디지털 적층 성형기계 제조업",
+    "name_eng": "Manufacture of forming machinery for digital additive manufacturing"
+  },
+  {
+    "code": "29223",
+    "name": "금속 절삭기계 제조업",
+    "name_eng": "Manufacture of metal cutting machinery"
+  },
+  {
+    "code": "29224",
+    "name": "금속 성형기계 제조업",
+    "name_eng": "Manufacture of metal shaping machinery"
+  },
+  {
+    "code": "29229",
+    "name": "기타 가공 공작기계 제조업",
+    "name_eng": "Manufacture of other forming machinery and machine tools"
+  },
+  {
+    "code": "29230",
+    "name": "금속 주조 및 기타 야금용 기계 제조업",
+    "name_eng": "Manufacture of machinery for metal casting and other metallurgy"
+  },
+  {
+    "code": "29241",
+    "name": "건설 및 채광용 기계장비 제조업",
+    "name_eng": "Manufacture of machinery for mining, quarrying and construction"
+  },
+  {
+    "code": "29242",
+    "name": "광물처리 및 취급장비 제조업",
+    "name_eng": "Manufacture of machinery for treating minerals"
+  },
+  {
+    "code": "29250",
+    "name": "음ㆍ식료품 및 담배 가공기계 제조업",
+    "name_eng": "Manufacture of machinery for food, beverage and tobacco processing"
+  },
+  {
+    "code": "29261",
+    "name": "산업용 섬유 세척, 염색, 정리 및 가공 기계 제조업",
+    "name_eng": "Manufacture of industrial machinery for washing, dyeing, finishing and processing of textile"
+  },
+  {
+    "code": "29269",
+    "name": "기타 섬유, 의복 및 가죽 가공 기계 제조업",
+    "name_eng": "Manufacture of other machinery for textiles, apparel and leather processing"
+  },
+  {
+    "code": "29271",
+    "name": "반도체 제조용 기계 제조업",
+    "name_eng": "Manufacture of semi-conductor manufacturing machinery"
+  },
+  {
+    "code": "29272",
+    "name": "디스플레이 제조용 기계 제조업",
+    "name_eng": "Manufacture of display component manufacturing machinery"
+  },
+  {
+    "code": "29280",
+    "name": "산업용 로봇 제조업",
+    "name_eng": "Manufacture of industrial robots"
+  },
+  {
+    "code": "29291",
+    "name": "고무, 화학섬유 및 플라스틱 성형기 제조업",
+    "name_eng": "Manufacture of machinery for rubber, man-made fiber and plastics processing"
+  },
+  {
+    "code": "29292",
+    "name": "인쇄 및 제책용 기계 제조업",
+    "name_eng": "Manufacture of machinery for printing and bookbinding"
+  },
+  {
+    "code": "29293",
+    "name": "주형 및 금형 제조업",
+    "name_eng": "Manufacture of mould and metallic patterns"
+  },
+  {
+    "code": "29299",
+    "name": "그 외 기타 특수목적용 기계 제조업",
+    "name_eng": "Manufacture of other special purpose machinery, n.e.c."
+  },
+  {
+    "code": "30110",
+    "name": "자동차용 엔진 제조업",
+    "name_eng": "Manufacture of engines for motor vehicles"
+  },
+  {
+    "code": "30121",
+    "name": "내연기관 승용차 및 기타 여객용 자동차 제조업",
+    "name_eng": "Manufacture of internal combustion engine vehicle for passenger"
+  },
+  {
+    "code": "30122",
+    "name": "전기 승용차 및 기타 여객용 전기 자동차 제조업",
+    "name_eng": "Manufacture of electric vehicle for passenger"
+  },
+  {
+    "code": "30123",
+    "name": "내연기관 화물자동차 및 특수목적용 자동차 제조업",
+    "name_eng": "Manufacture of internal combustion engine vehicle for freight and special purpose"
+  },
+  {
+    "code": "30124",
+    "name": "전기 화물자동차 및 특수목적용 전기 자동차 제조업",
+    "name_eng": "Manufacture of electric vehicle for freight and special purpose"
+  },
+  {
+    "code": "30201",
+    "name": "차체 및 특장차 제조업",
+    "name_eng": "Manufacture of motor vehicle bodies and motor vehicles assembled on purchased chassis"
+  },
+  {
+    "code": "30202",
+    "name": "자동차 구조 및 장치 변경업",
+    "name_eng": "Modification of structure and devices of a motor vehicles"
+  },
+  {
+    "code": "30203",
+    "name": "트레일러 및 세미 트레일러 제조업",
+    "name_eng": "Manufacture of trailers and semi-trailers"
+  },
+  {
+    "code": "30310",
+    "name": "자동차 엔진용 신품 부품 제조업",
+    "name_eng": "Manufacture of parts and accessories for motor engines(new products)"
+  },
+  {
+    "code": "30320",
+    "name": "자동차 차체용 신품 부품 제조업",
+    "name_eng": "Manufacture of parts and accessories for motor vehicle body(new products)"
+  },
+  {
+    "code": "30331",
+    "name": "자동차용 신품 동력전달장치 제조업",
+    "name_eng": "Manufacture of power transmission devices for motor vehicles(new products)"
+  },
+  {
+    "code": "30332",
+    "name": "자동차용 신품 전기장치 제조업",
+    "name_eng": "Manufacture of electronic equipment for motor vehicles(new products)"
+  },
+  {
+    "code": "30391",
+    "name": "자동차용 신품 조향장치 및 현가장치 제조업",
+    "name_eng": "Manufacture of steering and suspension devices for motor vehicles(new products)"
+  },
+  {
+    "code": "30392",
+    "name": "자동차용 신품 제동장치 제조업",
+    "name_eng": "Manufacture of damping devices for motor vehicles(new products)"
+  },
+  {
+    "code": "30393",
+    "name": "자동차용 신품 의자 제조업",
+    "name_eng": "Manufacture of seats for motor vehicles(new products)"
+  },
+  {
+    "code": "30399",
+    "name": "그 외 자동차용 신품 부품 제조업",
+    "name_eng": "Manufacture of other new parts and accessories for motor vehicles n.e.c."
+  },
+  {
+    "code": "30400",
+    "name": "자동차 재제조 부품 제조업",
+    "name_eng": "Manufacture of parts and accessories for motor vehicles(re manufacturing products)"
+  },
+  {
+    "code": "31111",
+    "name": "강선 건조업",
+    "name_eng": "Building of steel ships"
+  },
+  {
+    "code": "31112",
+    "name": "합성수지선 건조업",
+    "name_eng": "Building of synthetic resin ships"
+  },
+  {
+    "code": "31113",
+    "name": "기타 선박 건조업",
+    "name_eng": "Building of non-ferrous metal ships and other ships"
+  },
+  {
+    "code": "31114",
+    "name": "선박 구성 부분품 제조업",
+    "name_eng": "Manufacture of sections for ships"
+  },
+  {
+    "code": "31120",
+    "name": "오락 및 스포츠용 보트 건조업",
+    "name_eng": "Building of pleasure and sporting boats"
+  },
+  {
+    "code": "31201",
+    "name": "기관차 및 기타 철도차량 제조업",
+    "name_eng": "Manufacture of rail locomotives and rolling stock"
+  },
+  {
+    "code": "31202",
+    "name": "철도차량 부품 및 관련 장치물 제조업",
+    "name_eng": "Manufacture of specialized parts of railway or tramway locomotives or of rolling stock"
+  },
+  {
+    "code": "31311",
+    "name": "유인 항공기, 항공우주선 및 보조장치 제조업",
+    "name_eng": "Manufacture of manned aircraft, spacecraft and its assistant equipment"
+  },
+  {
+    "code": "31312",
+    "name": "무인 항공기 및 무인 비행장치 제조업",
+    "name_eng": "Manufacture of unmanned aircraft and its assistant equipment"
+  },
+  {
+    "code": "31321",
+    "name": "항공기용 엔진 제조업",
+    "name_eng": "Manufacture of engines for aircraft"
+  },
+  {
+    "code": "31322",
+    "name": "항공기용 부품 제조업",
+    "name_eng": "Manufacture of aircraft parts and accessories"
+  },
+  {
+    "code": "31910",
+    "name": "전투용 차량 제조업",
+    "name_eng": "Manufacture of military fighting vehicles"
+  },
+  {
+    "code": "31921",
+    "name": "모터사이클 제조업",
+    "name_eng": "Manufacture of motorcycles"
+  },
+  {
+    "code": "31922",
+    "name": "개인용 전기식 이동수단 제조업",
+    "name_eng": "Manufacture of electric personal mobility device"
+  },
+  {
+    "code": "31991",
+    "name": "자전거 및 환자용 차량 제조업",
+    "name_eng": "Manufacture of bicycles and invalid carriages"
+  },
+  {
+    "code": "31999",
+    "name": "그 외 기타 달리 분류되지 않은 운송장비 제조업",
+    "name_eng": "Manufacture of other transport equipment n.e.c."
+  },
+  {
+    "code": "32011",
+    "name": "매트리스 및 침대 제조업",
+    "name_eng": "Manufacture of mattresses and beds"
+  },
+  {
+    "code": "32019",
+    "name": "소파 및 기타 내장가구 제조업",
+    "name_eng": "Manufacture of sofas and other upholstered furniture"
+  },
+  {
+    "code": "32021",
+    "name": "주방용 및 음식점용 목재가구 제조업",
+    "name_eng": "Manufacture of wood furniture for kitchen and restaurant"
+  },
+  {
+    "code": "32029",
+    "name": "기타 목재가구 제조업",
+    "name_eng": "Manufacture of other wood furniture"
+  },
+  {
+    "code": "32091",
+    "name": "금속 가구 제조업",
+    "name_eng": "Manufacture of metal furniture"
+  },
+  {
+    "code": "32099",
+    "name": "그 외 기타 가구 제조업",
+    "name_eng": "Manufacture of other furniture n.e.c."
+  },
+  {
+    "code": "33110",
+    "name": "귀금속 및 관련제품 제조업",
+    "name_eng": "Manufacture of jewellery and related articles"
+  },
+  {
+    "code": "33120",
+    "name": "모조 귀금속 및 모조 장신용품 제조업",
+    "name_eng": "Manufacture of imitation jewellery and costume jewellery"
+  },
+  {
+    "code": "33201",
+    "name": "건반 악기 제조업",
+    "name_eng": "Manufacture of keyboard instruments"
+  },
+  {
+    "code": "33209",
+    "name": "기타 악기 및 전자 악기 제조업",
+    "name_eng": "Manufacture of other musical and electronic instruments"
+  },
+  {
+    "code": "33301",
+    "name": "체조, 육상 및 체력단련용 장비 제조업",
+    "name_eng": "Manufacture of athletics, gymnastics, fitness equipment"
+  },
+  {
+    "code": "33302",
+    "name": "놀이터용 장비 제조업",
+    "name_eng": "Manufacture of playground equipment"
+  },
+  {
+    "code": "33303",
+    "name": "낚시 및 수렵용구 제조업",
+    "name_eng": "Manufacture of fishing and hunting equipment"
+  },
+  {
+    "code": "33309",
+    "name": "기타 운동 및 경기용구 제조업",
+    "name_eng": "Manufacture of other sports and athletic goods"
+  },
+  {
+    "code": "33401",
+    "name": "인형 및 장난감 제조업",
+    "name_eng": "Manufacture of dolls and toys"
+  },
+  {
+    "code": "33402",
+    "name": "영상게임기 제조업",
+    "name_eng": "Manufacture of video game machines"
+  },
+  {
+    "code": "33409",
+    "name": "기타 오락용품 제조업",
+    "name_eng": "Manufacture of other amusement goods"
+  },
+  {
+    "code": "33910",
+    "name": "간판 및 광고물 제조업",
+    "name_eng": "Manufacture of signs and advertisements"
+  },
+  {
+    "code": "33920",
+    "name": "사무 및 회화용품 제조업",
+    "name_eng": "Manufacture of stationery and artists' goods"
+  },
+  {
+    "code": "33931",
+    "name": "가발 및 유사 제품 제조업",
+    "name_eng": "Manufacture of wigs and similar articles"
+  },
+  {
+    "code": "33932",
+    "name": "전시용 모형 제조업",
+    "name_eng": "Manufacture of exhibiting models"
+  },
+  {
+    "code": "33933",
+    "name": "표구처리업",
+    "name_eng": "Mounting pictures and other arts"
+  },
+  {
+    "code": "33991",
+    "name": "단추 및 유사 파스너 제조업",
+    "name_eng": "Manufacture of buttons and snaps, slides and similar fasteners"
+  },
+  {
+    "code": "33992",
+    "name": "라이터, 연소물 및 흡연용품 제조업",
+    "name_eng": "Manufacture of lighters, combustible materials and smoking supplies"
+  },
+  {
+    "code": "33993",
+    "name": "비 및 솔 제조업",
+    "name_eng": "Manufacture of brushes and brooms"
+  },
+  {
+    "code": "33999",
+    "name": "그 외 기타 달리 분류되지 않은 제품 제조업",
+    "name_eng": "Other manufacturing n.e.c."
+  },
+  {
+    "code": "34011",
+    "name": "건설․광업용 기계 및 장비 수리업",
+    "name_eng": "Maintenance and repair services of machinery and equipment for mining and construction"
+  },
+  {
+    "code": "34019",
+    "name": "기타 일반 기계 및 장비 수리업",
+    "name_eng": "Maintenance and repair services of other general machinery"
+  },
+  {
+    "code": "34020",
+    "name": "전기․전자 및 정밀기기 수리업",
+    "name_eng": "Maintenance and repair services of electrical, electronic and precision equipment"
+  },
+  {
+    "code": "35111",
+    "name": "원자력 발전업",
+    "name_eng": "Nuclear power generation"
+  },
+  {
+    "code": "35112",
+    "name": "수력 발전업",
+    "name_eng": "Hydroelectric power generation"
+  },
+  {
+    "code": "35113",
+    "name": "화력 발전업",
+    "name_eng": "Thermal power generation"
+  },
+  {
+    "code": "35114",
+    "name": "태양력 발전업",
+    "name_eng": "Solar and sunlight power generation"
+  },
+  {
+    "code": "35115",
+    "name": "풍력 발전업",
+    "name_eng": "Wind power generation"
+  },
+  {
+    "code": "35119",
+    "name": "기타 발전업",
+    "name_eng": "Other power generation"
+  },
+  {
+    "code": "35120",
+    "name": "송전 및 배전업",
+    "name_eng": "Electric power transmission and distribution"
+  },
+  {
+    "code": "35130",
+    "name": "전기 판매업",
+    "name_eng": "Trade of electricity"
+  },
+  {
+    "code": "35200",
+    "name": "연료용 가스 제조 및 배관공급업",
+    "name_eng": "Manufacture of gas; distribution of gaseous fuel through mains"
+  },
+  {
+    "code": "35300",
+    "name": "증기, 냉․온수 및 공기조절 공급업",
+    "name_eng": "Steam, chilled or hot water and air conditioning supply"
+  },
+  {
+    "code": "36010",
+    "name": "생활용수 공급업",
+    "name_eng": "Water collection, treatment and distribution activities for domestic needs"
+  },
+  {
+    "code": "36020",
+    "name": "산업용수 공급업",
+    "name_eng": "Water collection, treatment and distribution activities for industrial needs"
+  },
+  {
+    "code": "37011",
+    "name": "하수 처리업",
+    "name_eng": "Sewage treatment services"
+  },
+  {
+    "code": "37012",
+    "name": "폐수 처리업",
+    "name_eng": "Wastewater treatment services"
+  },
+  {
+    "code": "37021",
+    "name": "사람 분뇨 처리업",
+    "name_eng": "Human waste treatment services"
+  },
+  {
+    "code": "37022",
+    "name": "축산 분뇨 처리업",
+    "name_eng": "Animal waste treatment services"
+  },
+  {
+    "code": "38110",
+    "name": "지정 외 폐기물 수집, 운반업",
+    "name_eng": "Non-hazardous waste collection"
+  },
+  {
+    "code": "38120",
+    "name": "지정 폐기물 수집, 운반업",
+    "name_eng": "Hazardous waste collection"
+  },
+  {
+    "code": "38130",
+    "name": "건설 폐기물 수집, 운반업",
+    "name_eng": "Construction and demolition waste collection"
+  },
+  {
+    "code": "38210",
+    "name": "지정 외 폐기물 처리업",
+    "name_eng": "Treatment and disposal of non-hazardous waste"
+  },
+  {
+    "code": "38220",
+    "name": "지정 폐기물 처리업",
+    "name_eng": "Treatment and disposal of hazardous waste"
+  },
+  {
+    "code": "38230",
+    "name": "건설 폐기물 처리업",
+    "name_eng": "Treatment and disposal of construction and demolition waste"
+  },
+  {
+    "code": "38240",
+    "name": "방사성 폐기물 수집, 운반 및 처리업",
+    "name_eng": "Collection, treatment and disposal of radioactive nuclear waste"
+  },
+  {
+    "code": "38311",
+    "name": "금속류 해체 및 선별업",
+    "name_eng": "Dismantling and sorting metal waste"
+  },
+  {
+    "code": "38312",
+    "name": "금속류 원료 재생업",
+    "name_eng": "Recovery of metal waste"
+  },
+  {
+    "code": "38321",
+    "name": "비금속류 해체 및 선별업",
+    "name_eng": "Dismantling and sorting non-metal waste"
+  },
+  {
+    "code": "38322",
+    "name": "비금속류 원료 재생업",
+    "name_eng": "Recovery of non-metal waste"
+  },
+  {
+    "code": "39001",
+    "name": "토양 및 지하수 정화업",
+    "name_eng": "Decontamination of soils and groundwater"
+  },
+  {
+    "code": "39009",
+    "name": "기타 환경 정화 및 복원업",
+    "name_eng": "Other remediation activities and waste management services"
+  },
+  {
+    "code": "41111",
+    "name": "단독 주택 건설업",
+    "name_eng": "Detached dwelling house and multi-dwelling house construction"
+  },
+  {
+    "code": "41112",
+    "name": "아파트 건설업",
+    "name_eng": "Apartment building construction"
+  },
+  {
+    "code": "41119",
+    "name": "기타 공동 주택 건설업",
+    "name_eng": "Other multi-unit house construction including apartment unit in a house"
+  },
+  {
+    "code": "41121",
+    "name": "사무․상업용 및 공공기관용 건물 건설업",
+    "name_eng": "Office, commercial and institutional building construction"
+  },
+  {
+    "code": "41122",
+    "name": "제조업 및 유사 산업용 건물 건설업",
+    "name_eng": "Factory and similar industrial building construction"
+  },
+  {
+    "code": "41129",
+    "name": "기타 비주거용 건물 건설업",
+    "name_eng": "Other non-residential building construction"
+  },
+  {
+    "code": "41210",
+    "name": "지반조성 건설업",
+    "name_eng": "Land subdivision with land improvement"
+  },
+  {
+    "code": "41221",
+    "name": "도로 건설업",
+    "name_eng": "Construction of highways, streets and roads"
+  },
+  {
+    "code": "41222",
+    "name": "교량, 터널 및 철도 건설업",
+    "name_eng": "Construction of bridges, tunnels and railways"
+  },
+  {
+    "code": "41223",
+    "name": "항만, 수로, 댐 및 유사 구조물 건설업",
+    "name_eng": "Construction of harbor and river works, waterways, dams and other water works"
+  },
+  {
+    "code": "41224",
+    "name": "환경설비 건설업",
+    "name_eng": "Construction of environmental facilities"
+  },
+  {
+    "code": "41225",
+    "name": "산업생산시설 종합건설업",
+    "name_eng": "Construction of industrial plants"
+  },
+  {
+    "code": "41226",
+    "name": "조경 건설업",
+    "name_eng": "Construction of landscaping works"
+  },
+  {
+    "code": "41229",
+    "name": "기타 토목시설물 건설업",
+    "name_eng": "Other construction of civil engineering projects"
+  },
+  {
+    "code": "42110",
+    "name": "건물 및 구축물 해체 공사업",
+    "name_eng": "Wrecking and demolition of buildings and other structures"
+  },
+  {
+    "code": "42121",
+    "name": "토공사업",
+    "name_eng": "Earth works"
+  },
+  {
+    "code": "42122",
+    "name": "보링, 그라우팅 및 관정 공사업",
+    "name_eng": "Boring, grouting and water well drilling works"
+  },
+  {
+    "code": "42123",
+    "name": "파일공사 및 축조관련 기초 공사업",
+    "name_eng": "Pile driving and related construction of foundation works"
+  },
+  {
+    "code": "42129",
+    "name": "기타 기반조성 관련 전문공사업",
+    "name_eng": "Other site preparation and related construction"
+  },
+  {
+    "code": "42131",
+    "name": "철골 및 관련 구조물 공사업",
+    "name_eng": "Steel frame works"
+  },
+  {
+    "code": "42132",
+    "name": "콘크리트 및 철근 공사업",
+    "name_eng": "Concrete and reinforcement works"
+  },
+  {
+    "code": "42191",
+    "name": "조적 및 석공사업",
+    "name_eng": "Brick laying and stone setting works"
+  },
+  {
+    "code": "42192",
+    "name": "포장 공사업",
+    "name_eng": "Pavement works"
+  },
+  {
+    "code": "42193",
+    "name": "철도궤도 전문공사업",
+    "name_eng": "Special railway laying works"
+  },
+  {
+    "code": "42194",
+    "name": "수중 공사업",
+    "name_eng": "Underwater works"
+  },
+  {
+    "code": "42195",
+    "name": "비계 및 형틀 공사업",
+    "name_eng": "Scaffolding and form works"
+  },
+  {
+    "code": "42196",
+    "name": "지붕, 내․외벽 축조 관련 전문 공사업",
+    "name_eng": "Roofing and siding works"
+  },
+  {
+    "code": "42199",
+    "name": "기타 옥외 시설물 축조 관련 전문공사업",
+    "name_eng": "Installing other outdoor facility works"
+  },
+  {
+    "code": "42201",
+    "name": "배관 및 냉ㆍ난방 공사업",
+    "name_eng": "Plumbing, heating, air conditioning works"
+  },
+  {
+    "code": "42202",
+    "name": "건물용 기계ㆍ장비 설치 공사업",
+    "name_eng": "Installation of machinery equipment for building"
+  },
+  {
+    "code": "42203",
+    "name": "승강설비 설치 공사업",
+    "name_eng": "Installation of lifting equipment"
+  },
+  {
+    "code": "42204",
+    "name": "방음, 방진 및 내화 공사업",
+    "name_eng": "Soundproofing, isolating vibration and fireproofing works"
+  },
+  {
+    "code": "42205",
+    "name": "소방시설 공사업",
+    "name_eng": "Fire fighting installation"
+  },
+  {
+    "code": "42209",
+    "name": "기타 건물 관련설비 설치 공사업",
+    "name_eng": "Construction of installing other building equipment"
+  },
+  {
+    "code": "42311",
+    "name": "일반전기 공사업",
+    "name_eng": "Electrical works for heavy and civil engineering structures"
+  },
+  {
+    "code": "42312",
+    "name": "내부 전기배선 공사업",
+    "name_eng": "Electrical works for buildings"
+  },
+  {
+    "code": "42321",
+    "name": "일반 통신 공사업",
+    "name_eng": "Communication works for heavy and civil engineering structures"
+  },
+  {
+    "code": "42322",
+    "name": "내부 통신배선 공사업",
+    "name_eng": "Communication works for buildings"
+  },
+  {
+    "code": "42411",
+    "name": "도장 공사업",
+    "name_eng": "Painting works"
+  },
+  {
+    "code": "42412",
+    "name": "도배, 실내장식 및 내장 목공사업",
+    "name_eng": "Papering, decorating and finishing carpentry works"
+  },
+  {
+    "code": "42420",
+    "name": "유리 및 창호 공사업",
+    "name_eng": "Glazing works and joinery installation"
+  },
+  {
+    "code": "42491",
+    "name": "미장, 타일 및 방수 공사업",
+    "name_eng": "Plastering, installing tile and waterproofing works"
+  },
+  {
+    "code": "42492",
+    "name": "건물용 금속공작물 설치 공사업",
+    "name_eng": "Installation of metal works used on building"
+  },
+  {
+    "code": "42499",
+    "name": "그 외 기타 건축 마무리 공사업",
+    "name_eng": "Building completion and finishing n.e.c."
+  },
+  {
+    "code": "42500",
+    "name": "시설물 유지관리 공사업",
+    "name_eng": "Repair and maintenance works for construction works and supplementary facilities"
+  },
+  {
+    "code": "42600",
+    "name": "건설장비 운영업",
+    "name_eng": "Renting of construction machinery and equipment with operator"
+  },
+  {
+    "code": "45110",
+    "name": "자동차 신품 판매업",
+    "name_eng": "Sale of new motor vehicles"
+  },
+  {
+    "code": "45120",
+    "name": "중고 자동차 판매업",
+    "name_eng": "Sale of used motor vehicles"
+  },
+  {
+    "code": "45211",
+    "name": "자동차 신품 타이어 및 튜브 판매업",
+    "name_eng": "Sale of motor vehicle new tires and tubes"
+  },
+  {
+    "code": "45212",
+    "name": "자동차용 전용 신품 부품 판매업",
+    "name_eng": "Sale of new parts and accessories specialized for motor vehicles"
+  },
+  {
+    "code": "45213",
+    "name": "자동차 내장용 신품 전기․전자․ 정밀 기기 판매업",
+    "name_eng": "Sale of new electrical, electronic and precision equipment for motor vehicles"
+  },
+  {
+    "code": "45219",
+    "name": "기타 자동차 신품 부품 및 내장품 판매업",
+    "name_eng": "Sale of other new parts and accessories for motor vehicle"
+  },
+  {
+    "code": "45220",
+    "name": "자동차 중고 부품 및 내장품 판매업",
+    "name_eng": "Sale of motor vehicle used parts and accessories"
+  },
+  {
+    "code": "45301",
+    "name": "모터사이클 및 부품 도매업",
+    "name_eng": "Wholesale of motorcycles and related parts and accessories"
+  },
+  {
+    "code": "45302",
+    "name": "모터사이클 및 부품 소매업",
+    "name_eng": "Retail sale of motorcycles and related parts and accessories"
+  },
+  {
+    "code": "46101",
+    "name": "산업용 농․축산물, 섬유 원료 및 동물 중개업",
+    "name_eng": "Agents involved in the sale of industrial agricultural raw materials, textile raw materials, live animals"
+  },
+  {
+    "code": "46102",
+    "name": "음ㆍ식료품 및 담배 중개업",
+    "name_eng": "Agents involved in the sale of food, beverages and tobacco"
+  },
+  {
+    "code": "46103",
+    "name": "섬유, 의복, 신발 및 가죽제품 중개업",
+    "name_eng": "Agents involved in the sale of textiles, clothing, footwear and leather goods"
+  },
+  {
+    "code": "46104",
+    "name": "목재 및 건축자재 중개업",
+    "name_eng": "Agents involved in the sale of timber and building materials"
+  },
+  {
+    "code": "46105",
+    "name": "연료, 광물, 1차 금속, 비료 및 화학제품 중개업",
+    "name_eng": "Agents involved in the sale of fuels, ores, metals and industrial chemicals including fertilizers"
+  },
+  {
+    "code": "46106",
+    "name": "기계 및 장비 중개업",
+    "name_eng": "Agents involved in the sale of machinery and equipment"
+  },
+  {
+    "code": "46107",
+    "name": "그 외 기타 특정 상품 중개업",
+    "name_eng": "Agents specialized in the sale of other particular products"
+  },
+  {
+    "code": "46109",
+    "name": "상품 종합 중개업",
+    "name_eng": "Agents involved in the sale of a variety of goods"
+  },
+  {
+    "code": "46201",
+    "name": "곡물 및 유지작물 도매업",
+    "name_eng": "Wholesale of grains and oilseed crops"
+  },
+  {
+    "code": "46202",
+    "name": "종자 및 묘목 도매업",
+    "name_eng": "Wholesale of seeds and seedlings"
+  },
+  {
+    "code": "46203",
+    "name": "사료 도매업",
+    "name_eng": "Wholesale of animal feeds"
+  },
+  {
+    "code": "46204",
+    "name": "화훼류 및 식물 도매업",
+    "name_eng": "Wholesale of flowers and plants"
+  },
+  {
+    "code": "46205",
+    "name": "육지동물 및 반려동물 도매업",
+    "name_eng": "Wholesale of live animals and companion animals"
+  },
+  {
+    "code": "46209",
+    "name": "기타 산업용 농산물 도매업",
+    "name_eng": "Wholesale of other agricultural raw materials and live animals and plants"
+  },
+  {
+    "code": "46311",
+    "name": "과실류 도매업",
+    "name_eng": "Wholesale of fruit"
+  },
+  {
+    "code": "46312",
+    "name": "채소류, 서류 및 향신작물류 도매업",
+    "name_eng": "Wholesale of vegetables, root and tube crops and spice crops"
+  },
+  {
+    "code": "46313",
+    "name": "육류 도매업",
+    "name_eng": "Wholesale of meat"
+  },
+  {
+    "code": "46314",
+    "name": "건어물 및 젓갈류 도매업",
+    "name_eng": "Wholesale of dried and salted fishery products"
+  },
+  {
+    "code": "46315",
+    "name": "신선, 냉동 및 기타 수산물 도매업",
+    "name_eng": "Wholesale of fresh, frozen and other fishery products"
+  },
+  {
+    "code": "46319",
+    "name": "기타 신선식품 및 단순 가공식품 도매업",
+    "name_eng": "Wholesale of other fresh food and dried, salted and frozen food"
+  },
+  {
+    "code": "46321",
+    "name": "육류 가공식품 도매업",
+    "name_eng": "Wholesale of meat processed food"
+  },
+  {
+    "code": "46322",
+    "name": "수산물 가공식품 도매업",
+    "name_eng": "Wholesale of fishery processed food"
+  },
+  {
+    "code": "46323",
+    "name": "빵류, 과자류, 당류, 초콜릿 도매업",
+    "name_eng": "Wholesale of bakery, flour confectionery, sugar and chocolate products"
+  },
+  {
+    "code": "46324",
+    "name": "낙농품 및 동․식물성 유지 도매업",
+    "name_eng": "Wholesale of dairy products and edible oils and fats"
+  },
+  {
+    "code": "46325",
+    "name": "커피 및 차류 도매업",
+    "name_eng": "Wholesale of coffee and tea"
+  },
+  {
+    "code": "46326",
+    "name": "조미료 도매업",
+    "name_eng": "Wholesale of condiments and food additive products"
+  },
+  {
+    "code": "46329",
+    "name": "기타 가공식품 도매업",
+    "name_eng": "Wholesale of other processed food"
+  },
+  {
+    "code": "46331",
+    "name": "주류 도매업",
+    "name_eng": "Wholesale of alcoholic beverages"
+  },
+  {
+    "code": "46332",
+    "name": "비알코올음료 도매업",
+    "name_eng": "Wholesale of non-alcoholic beverages"
+  },
+  {
+    "code": "46333",
+    "name": "담배 도매업",
+    "name_eng": "Wholesale of tobaccos"
+  },
+  {
+    "code": "46411",
+    "name": "생활용 섬유 및 실 도매업",
+    "name_eng": "Wholesale of textiles and threads"
+  },
+  {
+    "code": "46412",
+    "name": "커튼 및 침구용품 도매업",
+    "name_eng": "Wholesale of curtains and bedding"
+  },
+  {
+    "code": "46413",
+    "name": "남녀용 겉옷 및 셔츠 도매업",
+    "name_eng": "Wholesale of outerwear and shirts"
+  },
+  {
+    "code": "46414",
+    "name": "유아용 의류 도매업",
+    "name_eng": "Wholesale of babies' garments"
+  },
+  {
+    "code": "46415",
+    "name": "속옷 및 잠옷 도매업",
+    "name_eng": "Wholesale of underwear and nightwear"
+  },
+  {
+    "code": "46416",
+    "name": "가죽 및 모피제품 도매업",
+    "name_eng": "Wholesale of leather and fur products"
+  },
+  {
+    "code": "46417",
+    "name": "의복 액세서리 및 모조 장신구 도매업",
+    "name_eng": "Wholesale of wear accessories and costume jewelry"
+  },
+  {
+    "code": "46419",
+    "name": "기타 생활용 섬유 및 직물제품 도매업",
+    "name_eng": "Wholesale of other household textiles and textile goods"
+  },
+  {
+    "code": "46420",
+    "name": "신발 도매업",
+    "name_eng": "Wholesale of footwear"
+  },
+  {
+    "code": "46431",
+    "name": "생활용 가구 도매업",
+    "name_eng": "Wholesale of household furniture"
+  },
+  {
+    "code": "46432",
+    "name": "전구, 램프 및 조명장치 도매업",
+    "name_eng": "Wholesale of electric lamps and bulbs and lighting equipment"
+  },
+  {
+    "code": "46433",
+    "name": "생활용 유리ㆍ요업ㆍ목재ㆍ금속 제품 및 날붙이 도매업",
+    "name_eng": "Wholesale of cutlery and housewares made of glass, ceramic, wood, metal"
+  },
+  {
+    "code": "46439",
+    "name": "기타 비전기식 생활용 기기 및 기구 도매업",
+    "name_eng": "Wholesale of other household non-electric appliances"
+  },
+  {
+    "code": "46441",
+    "name": "의약품 도매업",
+    "name_eng": "Wholesale of pharmaceuticals"
+  },
+  {
+    "code": "46442",
+    "name": "의료용품 도매업",
+    "name_eng": "Wholesale of medical goods"
+  },
+  {
+    "code": "46443",
+    "name": "화장품 및 화장용품 도매업",
+    "name_eng": "Wholesale of cosmetics and related products"
+  },
+  {
+    "code": "46444",
+    "name": "비누 및 세정제 도매업",
+    "name_eng": "Wholesale of soaps and detergents"
+  },
+  {
+    "code": "46451",
+    "name": "생활용 포장 및 위생용품, 봉투 및 유사 제품 도매업",
+    "name_eng": "Wholesale of household wrapping, hygienic goods, bags and similar goods"
+  },
+  {
+    "code": "46452",
+    "name": "문구용품, 회화용품, 사무용품 도매업",
+    "name_eng": "Wholesale of stationery, artists' goods and office supplies"
+  },
+  {
+    "code": "46453",
+    "name": "서적, 잡지 및 기타 인쇄물 도매업",
+    "name_eng": "Wholesale of books, magazines and other printed publications"
+  },
+  {
+    "code": "46461",
+    "name": "음반 및 비디오물 도매업",
+    "name_eng": "Wholesale of music and video recordings"
+  },
+  {
+    "code": "46462",
+    "name": "악기 도매업",
+    "name_eng": "Wholesale of musical instruments"
+  },
+  {
+    "code": "46463",
+    "name": "장난감 및 취미, 오락용품 도매업",
+    "name_eng": "Wholesale of toys, hobby supplies and game and playthings"
+  },
+  {
+    "code": "46464",
+    "name": "운동 및 경기용품 도매업",
+    "name_eng": "Wholesale of sports and athletic goods"
+  },
+  {
+    "code": "46465",
+    "name": "자전거 및 기타 운송장비 도매업",
+    "name_eng": "Wholesale of bicycles and other transportation equipment"
+  },
+  {
+    "code": "46491",
+    "name": "가방 및 보호용 케이스 도매업",
+    "name_eng": "Wholesale of luggage and protective cases"
+  },
+  {
+    "code": "46492",
+    "name": "시계 및 귀금속제품 도매업",
+    "name_eng": "Wholesale of watches and jewelry"
+  },
+  {
+    "code": "46493",
+    "name": "안경, 사진장비 및 광학용품 도매업",
+    "name_eng": "Wholesale of eyeglasses, photographic equipments and optical goods"
+  },
+  {
+    "code": "46499",
+    "name": "그 외 기타 생활용품 도매업",
+    "name_eng": "Wholesale of other household goods n.e.c."
+  },
+  {
+    "code": "46510",
+    "name": "컴퓨터 및 주변장치, 소프트웨어 도매업",
+    "name_eng": "Wholesale of computers, computer peripheral equipment and software"
+  },
+  {
+    "code": "46521",
+    "name": "가전제품 및 부품 도매업",
+    "name_eng": "Wholesale of electronic equipment and parts"
+  },
+  {
+    "code": "46522",
+    "name": "통신․방송장비 및 부품 도매업",
+    "name_eng": "Wholesale of communication and broadcasting apparatuses and parts"
+  },
+  {
+    "code": "46531",
+    "name": "농림업용 기계 및 장비 도매업",
+    "name_eng": "Wholesale of agricultural and forestry machinery and equipment"
+  },
+  {
+    "code": "46532",
+    "name": "건설ㆍ광업용 기계 및 장비 도매업",
+    "name_eng": "Wholesale of construction and mining machinery and equipment"
+  },
+  {
+    "code": "46533",
+    "name": "공작용 기계 및 장비 도매업",
+    "name_eng": "Wholesale of machine tools and related equipment"
+  },
+  {
+    "code": "46539",
+    "name": "기타 산업용 기계 및 장비 도매업",
+    "name_eng": "Wholesale of other industrial machinery and equipment"
+  },
+  {
+    "code": "46591",
+    "name": "사무용 가구 및 기기 도매업",
+    "name_eng": "Wholesale of office furniture and appliances"
+  },
+  {
+    "code": "46592",
+    "name": "의료기기 도매업",
+    "name_eng": "Wholesale of medical appliances"
+  },
+  {
+    "code": "46593",
+    "name": "정밀기기 및 과학기기 도매업",
+    "name_eng": "Wholesale of precision and scientific instruments and equipment"
+  },
+  {
+    "code": "46594",
+    "name": "수송용 운송장비 도매업",
+    "name_eng": "Wholesale of transport equipment"
+  },
+  {
+    "code": "46595",
+    "name": "전기용 기계․장비 및 관련 기자재 도매업",
+    "name_eng": "Wholesale of electrical machinery and related materials"
+  },
+  {
+    "code": "46596",
+    "name": "전지 및 케이블 도매업",
+    "name_eng": "Wholesale of batteries and cables"
+  },
+  {
+    "code": "46599",
+    "name": "그 외 기타 기계 및 장비 도매업",
+    "name_eng": "Wholesale of other machinery and equipment n.e.c."
+  },
+  {
+    "code": "46611",
+    "name": "원목 및 건축관련 목제품 도매업",
+    "name_eng": "Wholesale of wood and wooden goods for construction industry"
+  },
+  {
+    "code": "46612",
+    "name": "골재, 벽돌 및 시멘트 도매업",
+    "name_eng": "Wholesale of gravel, bricks and cement"
+  },
+  {
+    "code": "46613",
+    "name": "유리 및 창호 도매업",
+    "name_eng": "Wholesale of glass, windows and doors"
+  },
+  {
+    "code": "46621",
+    "name": "배관 및 냉ㆍ난방장치 도매업",
+    "name_eng": "Wholesale of plumbing and heating and air conditioning equipment"
+  },
+  {
+    "code": "46622",
+    "name": "철물, 금속 파스너 및 수공구 도매업",
+    "name_eng": "Wholesale of hardware, metal fastener and handtools"
+  },
+  {
+    "code": "46691",
+    "name": "도료 도매업",
+    "name_eng": "Wholesale of paint"
+  },
+  {
+    "code": "46692",
+    "name": "벽지 및 장판류 도매업",
+    "name_eng": "Wholesale of wallpaper and floor coverings"
+  },
+  {
+    "code": "46699",
+    "name": "그 외 기타 건축자재 도매업",
+    "name_eng": "Wholesale of other construction materials n.e.c."
+  },
+  {
+    "code": "46711",
+    "name": "고체연료 및 관련제품 도매업",
+    "name_eng": "Wholesale of solid fuels and related products"
+  },
+  {
+    "code": "46712",
+    "name": "액체연료 및 관련제품 도매업",
+    "name_eng": "Wholesale of liquid fuels and related products"
+  },
+  {
+    "code": "46713",
+    "name": "기체연료 및 관련제품 도매업",
+    "name_eng": "Wholesale of gaseous fuels and related products"
+  },
+  {
+    "code": "46721",
+    "name": "1차 금속제품 도매업",
+    "name_eng": "Wholesale of basic metals"
+  },
+  {
+    "code": "46722",
+    "name": "금속광물 도매업",
+    "name_eng": "Wholesale of metal ores"
+  },
+  {
+    "code": "46731",
+    "name": "염료, 안료 및 관련제품 도매업",
+    "name_eng": "Wholesale of dyes, pigments and related products"
+  },
+  {
+    "code": "46732",
+    "name": "비료 및 농약 도매업",
+    "name_eng": "Wholesale of fertilizers and agricultural chemicals"
+  },
+  {
+    "code": "46733",
+    "name": "플라스틱물질 및 합성고무 도매업",
+    "name_eng": "Wholesale of plastics and synthetic rubber in primary forms"
+  },
+  {
+    "code": "46739",
+    "name": "기타 화학물질 및 화학제품 도매업",
+    "name_eng": "Wholesale of other chemical materials and products"
+  },
+  {
+    "code": "46741",
+    "name": "방직용 섬유 및 실 도매업",
+    "name_eng": "Wholesale of fibers and yarns for spinning and weaving"
+  },
+  {
+    "code": "46742",
+    "name": "직물 도매업",
+    "name_eng": "Wholesale of textiles"
+  },
+  {
+    "code": "46750",
+    "name": "종이 원지, 판지, 종이상자 도매업",
+    "name_eng": "Wholesale of paper, paperboard and paper box"
+  },
+  {
+    "code": "46791",
+    "name": "재생용 재료 수집 및 판매업",
+    "name_eng": "Wholesale of materials for recycling"
+  },
+  {
+    "code": "46799",
+    "name": "그 외 기타 상품 전문 도매업",
+    "name_eng": "Wholesale of other specialized goods n.e.c."
+  },
+  {
+    "code": "46800",
+    "name": "상품 종합 도매업",
+    "name_eng": "Non-specialized wholesale trade"
+  },
+  {
+    "code": "47111",
+    "name": "백화점",
+    "name_eng": "Department stores"
+  },
+  {
+    "code": "47112",
+    "name": "대형 마트",
+    "name_eng": "Discount department stores"
+  },
+  {
+    "code": "47119",
+    "name": "기타 대형 종합 소매업",
+    "name_eng": "Other superstores with sales space of at least three thousand square meters"
+  },
+  {
+    "code": "47121",
+    "name": "슈퍼마켓",
+    "name_eng": "Supermarkets"
+  },
+  {
+    "code": "47122",
+    "name": "체인화 편의점",
+    "name_eng": "Convenience stores"
+  },
+  {
+    "code": "47129",
+    "name": "기타 음ㆍ식료품 위주 종합 소매업",
+    "name_eng": "Retail sale in other non-specialized stores with food, beverages predominating"
+  },
+  {
+    "code": "47130",
+    "name": "면세점",
+    "name_eng": "Duty-free shops"
+  },
+  {
+    "code": "47190",
+    "name": "그 외 기타 종합 소매업",
+    "name_eng": "Other retail sale in non-specialized stores"
+  },
+  {
+    "code": "47211",
+    "name": "곡물, 곡분 및 가축 사료 소매업",
+    "name_eng": "Retail sale of grains, grain flour and animal feeds"
+  },
+  {
+    "code": "47212",
+    "name": "육류 소매업",
+    "name_eng": "Retail sale of meat"
+  },
+  {
+    "code": "47213",
+    "name": "건어물 및 젓갈류 소매업",
+    "name_eng": "Retail sale of dried and salted fishery products"
+  },
+  {
+    "code": "47214",
+    "name": "신선, 냉동 및 기타 수산물 소매업",
+    "name_eng": "Retail sale of fresh, frozen and other fishery products"
+  },
+  {
+    "code": "47215",
+    "name": "채소, 과실 및 뿌리작물 소매업",
+    "name_eng": "Retail sale of vegetables, fruit and root crops"
+  },
+  {
+    "code": "47219",
+    "name": "기타 신선식품 및 단순 가공식품 소매업",
+    "name_eng": "Retail sale of other fresh food and dried, salted and frozen food"
+  },
+  {
+    "code": "47221",
+    "name": "빵류, 과자류 및 당류 소매업",
+    "name_eng": "Retail sale of bakery, flour confectionery and sugar products"
+  },
+  {
+    "code": "47222",
+    "name": "건강보조식품 소매업",
+    "name_eng": "Retail sale of health additive foods"
+  },
+  {
+    "code": "47223",
+    "name": "조리 반찬류 소매업",
+    "name_eng": "Retail sale of side dishes"
+  },
+  {
+    "code": "47229",
+    "name": "기타 가공식품 소매업",
+    "name_eng": "Retail sale of other processed food"
+  },
+  {
+    "code": "47231",
+    "name": "음료 소매업",
+    "name_eng": "Retail sale of beverages"
+  },
+  {
+    "code": "47232",
+    "name": "담배 소매업",
+    "name_eng": "Retail sale of tobacco products"
+  },
+  {
+    "code": "47311",
+    "name": "컴퓨터 및 주변장치, 소프트웨어 소매업",
+    "name_eng": "Retail sale of computers, computer peripheral equipment and software"
+  },
+  {
+    "code": "47312",
+    "name": "통신기기 소매업",
+    "name_eng": "Retail sale of communication equipment"
+  },
+  {
+    "code": "47320",
+    "name": "가전제품 소매업",
+    "name_eng": "Retail sale of household electrical appliances"
+  },
+  {
+    "code": "47411",
+    "name": "남자용 겉옷 소매업",
+    "name_eng": "Retail sale of outerwear for men"
+  },
+  {
+    "code": "47412",
+    "name": "여자용 겉옷 소매업",
+    "name_eng": "Retail sale of outerwear for women"
+  },
+  {
+    "code": "47413",
+    "name": "속옷 및 잠옷 소매업",
+    "name_eng": "Retail sale of underwear and nightwear"
+  },
+  {
+    "code": "47414",
+    "name": "셔츠 및 블라우스 소매업",
+    "name_eng": "Retail sale of shirts and blouse"
+  },
+  {
+    "code": "47415",
+    "name": "한복 소매업",
+    "name_eng": "Retail sale of hanbok, korean traditional clothes"
+  },
+  {
+    "code": "47416",
+    "name": "가죽 및 모피의복 소매업",
+    "name_eng": "Retail sale of leather and fur garments"
+  },
+  {
+    "code": "47417",
+    "name": "유아용 의류 소매업",
+    "name_eng": "Retail sale of babies' garments"
+  },
+  {
+    "code": "47419",
+    "name": "기타 의복 소매업",
+    "name_eng": "Retail sale of other clothing"
+  },
+  {
+    "code": "47421",
+    "name": "가정용 직물제품 소매업",
+    "name_eng": "Retail sale of household textile articles"
+  },
+  {
+    "code": "47422",
+    "name": "의복 액세서리 및 모조 장신구 소매업",
+    "name_eng": "Retail sale of wear accessaries and costume jewelry"
+  },
+  {
+    "code": "47429",
+    "name": "섬유 원단, 실 및 기타 섬유제품 소매업",
+    "name_eng": "Retail sale of fabrics, threads and other textile goods"
+  },
+  {
+    "code": "47430",
+    "name": "신발 소매업",
+    "name_eng": "Retail sale of footwear"
+  },
+  {
+    "code": "47440",
+    "name": "가방 및 기타 가죽제품 소매업",
+    "name_eng": "Retail sale of luggage and other leather products"
+  },
+  {
+    "code": "47511",
+    "name": "철물 및 난방용구 소매업",
+    "name_eng": "Retail sale of hardware and heating equipment"
+  },
+  {
+    "code": "47512",
+    "name": "공구 소매업",
+    "name_eng": "Retail sale of tools"
+  },
+  {
+    "code": "47513",
+    "name": "벽지, 마루덮개 및 장판류 소매업",
+    "name_eng": "Retail sale of wallpaper and floor coverings"
+  },
+  {
+    "code": "47519",
+    "name": "페인트, 창호 및 기타 건설자재 소매업",
+    "name_eng": "Retail sale of paints, windows and doors and other construction materials"
+  },
+  {
+    "code": "47520",
+    "name": "가구 소매업",
+    "name_eng": "Retail sale of furniture"
+  },
+  {
+    "code": "47591",
+    "name": "전기용품 및 조명장치 소매업",
+    "name_eng": "Retail sale of electrical appliances, lighting equipment"
+  },
+  {
+    "code": "47592",
+    "name": "주방용품 및 가정용 유리, 요업 제품 소매업",
+    "name_eng": "Retail sale of kitchenware, glass and ceramics household equipment"
+  },
+  {
+    "code": "47593",
+    "name": "악기 소매업",
+    "name_eng": "Retail sale of musical instruments"
+  },
+  {
+    "code": "47599",
+    "name": "그 외 기타 분류 안된 가정용품 소매업",
+    "name_eng": "Retail sale of other household appliances n.e.c."
+  },
+  {
+    "code": "47611",
+    "name": "서적, 신문 및 잡지류 소매업",
+    "name_eng": "Retail sale of books, newspapers and magazines"
+  },
+  {
+    "code": "47612",
+    "name": "문구용품 및 회화용품 소매업",
+    "name_eng": "Retail sale of stationery and artists' goods"
+  },
+  {
+    "code": "47620",
+    "name": "음반 및 비디오물 소매업",
+    "name_eng": "Retail sale of music and video recordings"
+  },
+  {
+    "code": "47631",
+    "name": "운동 및 경기용품 소매업",
+    "name_eng": "Retail sale of sports and athletic goods"
+  },
+  {
+    "code": "47632",
+    "name": "자전거 및 기타 운송장비 소매업",
+    "name_eng": "Retail sale of bicycles and other transportation equipment"
+  },
+  {
+    "code": "47640",
+    "name": "게임용구, 인형 및 장난감 소매업",
+    "name_eng": "Retail sale of amusement goods, dolls and toys"
+  },
+  {
+    "code": "47711",
+    "name": "운송장비용 주유소 운영업",
+    "name_eng": "Oil stations for transportation equipment"
+  },
+  {
+    "code": "47712",
+    "name": "운송장비용 수소 충전업",
+    "name_eng": "Hydrogen stations for transport equipment"
+  },
+  {
+    "code": "47713",
+    "name": "운송장비용 기타 가스 충전업",
+    "name_eng": "Other gas stations for transport equipment"
+  },
+  {
+    "code": "47721",
+    "name": "가정용 고체연료 소매업",
+    "name_eng": "Retail sale of solid fuels for household"
+  },
+  {
+    "code": "47722",
+    "name": "가정용 액체연료 소매업",
+    "name_eng": "Retail sale of liquid fuels for household"
+  },
+  {
+    "code": "47723",
+    "name": "가정용 가스연료 소매업",
+    "name_eng": "Retail sale of gaseous fuels for household"
+  },
+  {
+    "code": "47811",
+    "name": "의약품 및 의료용품 소매업",
+    "name_eng": "Retail sale of pharmaceutical and medical goods"
+  },
+  {
+    "code": "47812",
+    "name": "의료용 기구 소매업",
+    "name_eng": "Retail sale of medical and orthopedic equipment"
+  },
+  {
+    "code": "47813",
+    "name": "화장품, 비누 및 방향제 소매업",
+    "name_eng": "Retail sale of cosmetics, soaps and perfumery"
+  },
+  {
+    "code": "47821",
+    "name": "사무용 기기 소매업",
+    "name_eng": "Retail sale of office appliances"
+  },
+  {
+    "code": "47822",
+    "name": "안경 및 렌즈 소매업",
+    "name_eng": "Retail sale of eyeglasses and lens"
+  },
+  {
+    "code": "47823",
+    "name": "사진기 및 사진용품 소매업",
+    "name_eng": "Retail sale of photographic equipment and related goods"
+  },
+  {
+    "code": "47829",
+    "name": "기타 광학 및 정밀 기기 소매업",
+    "name_eng": "Retail sale of other optical and precision equipment"
+  },
+  {
+    "code": "47830",
+    "name": "시계 및 귀금속 소매업",
+    "name_eng": "Retail sale of watches and jewelry"
+  },
+  {
+    "code": "47841",
+    "name": "예술품 및 골동품 소매업",
+    "name_eng": "Retail sale of works of arts and antiques"
+  },
+  {
+    "code": "47842",
+    "name": "기념품, 관광 민예품 및 장식용품 소매업",
+    "name_eng": "Retail sale of souvenirs, folk art articles and ornaments"
+  },
+  {
+    "code": "47851",
+    "name": "화초 및 식물 소매업",
+    "name_eng": "Retail sale of flowers and plants"
+  },
+  {
+    "code": "47852",
+    "name": "반려용 동물 및 관련용품 소매업",
+    "name_eng": "Retail sale of companion animals and companion animal supplies"
+  },
+  {
+    "code": "47859",
+    "name": "그 외 기타 분류 안된 상품 전문 소매업",
+    "name_eng": "Retail sale of other goods n.e.c."
+  },
+  {
+    "code": "47861",
+    "name": "중고 가구 소매업",
+    "name_eng": "Retail sale of second-hand furniture"
+  },
+  {
+    "code": "47862",
+    "name": "중고 가전제품 및 통신장비 소매업",
+    "name_eng": "Retail sale of electronic and communication equipment"
+  },
+  {
+    "code": "47869",
+    "name": "기타 중고 상품 소매업",
+    "name_eng": "Retail sale of other second-hand goods"
+  },
+  {
+    "code": "47911",
+    "name": "전자상거래 소매 중개업",
+    "name_eng": "Electronic commerce on a fee or contract basis via internet"
+  },
+  {
+    "code": "47912",
+    "name": "전자상거래 소매업",
+    "name_eng": "Electronic commerce via internet"
+  },
+  {
+    "code": "47919",
+    "name": "기타 통신 판매업",
+    "name_eng": "Retail sale via mail order houses"
+  },
+  {
+    "code": "47920",
+    "name": "노점 및 유사이동 소매업",
+    "name_eng": "Sale via stalls and markets of other goods"
+  },
+  {
+    "code": "47991",
+    "name": "자동판매기 운영업",
+    "name_eng": "Retail sale through vending machine"
+  },
+  {
+    "code": "47992",
+    "name": "계약배달 판매업",
+    "name_eng": "Direct selling of goods delivered directly to the customers premises"
+  },
+  {
+    "code": "47993",
+    "name": "방문 판매업",
+    "name_eng": "Retail sale through door-to-door sales"
+  },
+  {
+    "code": "47999",
+    "name": "그 외 기타 무점포 소매업",
+    "name_eng": "Other retail sale not in stores, stalls or markets n.e.c."
+  },
+  {
+    "code": "49101",
+    "name": "철도 여객 운송업",
+    "name_eng": "Passenger rail transport, interurban"
+  },
+  {
+    "code": "49102",
+    "name": "철도 화물 운송업",
+    "name_eng": "Freight rail transport"
+  },
+  {
+    "code": "49211",
+    "name": "도시철도 운송업",
+    "name_eng": "Urban railway transport"
+  },
+  {
+    "code": "49212",
+    "name": "시내버스 운송업",
+    "name_eng": "Intra-city bus transport"
+  },
+  {
+    "code": "49219",
+    "name": "기타 도시 정기 육상 여객 운송업",
+    "name_eng": "Other urban and suburban passenger land transport"
+  },
+  {
+    "code": "49220",
+    "name": "시외버스 운송업",
+    "name_eng": "Intercity bus transport"
+  },
+  {
+    "code": "49231",
+    "name": "택시 운송업",
+    "name_eng": "Taxi transport"
+  },
+  {
+    "code": "49232",
+    "name": "전세버스 운송업",
+    "name_eng": "Chartered bus transport"
+  },
+  {
+    "code": "49233",
+    "name": "특수여객자동차 운송업",
+    "name_eng": "Hearse transport"
+  },
+  {
+    "code": "49239",
+    "name": "기타 부정기 여객 육상 운송업",
+    "name_eng": "Other non-scheduled passenger land transport"
+  },
+  {
+    "code": "49301",
+    "name": "일반 화물자동차 운송업",
+    "name_eng": "Freight transport by two or more trucks"
+  },
+  {
+    "code": "49302",
+    "name": "개인 화물자동차 운송업",
+    "name_eng": "Freight transport by one truck"
+  },
+  {
+    "code": "49309",
+    "name": "기타 도로화물 운송업",
+    "name_eng": "Other freight transport by road"
+  },
+  {
+    "code": "49401",
+    "name": "택배업",
+    "name_eng": "Courier activities"
+  },
+  {
+    "code": "49402",
+    "name": "늘찬 배달업",
+    "name_eng": "Local delivery and messenger services"
+  },
+  {
+    "code": "49500",
+    "name": "파이프라인 운송업",
+    "name_eng": "Transport via pipeline"
+  },
+  {
+    "code": "50111",
+    "name": "외항 여객 운송업",
+    "name_eng": "Sea passenger water transport"
+  },
+  {
+    "code": "50112",
+    "name": "외항 화물 운송업",
+    "name_eng": "Sea freight water transport"
+  },
+  {
+    "code": "50121",
+    "name": "내항 여객 운송업",
+    "name_eng": "Coastal passenger water transport"
+  },
+  {
+    "code": "50122",
+    "name": "내항 화물 운송업",
+    "name_eng": "Coastal freight water transport"
+  },
+  {
+    "code": "50130",
+    "name": "기타 해상 운송업",
+    "name_eng": "Other sea and coastal water transport"
+  },
+  {
+    "code": "50201",
+    "name": "항만 내 여객 운송업",
+    "name_eng": "Harbor passenger transport"
+  },
+  {
+    "code": "50209",
+    "name": "기타 내륙 수상 여객 및 화물 운송업",
+    "name_eng": "Other inland passenger and freight water transport"
+  },
+  {
+    "code": "51100",
+    "name": "항공 여객 운송업",
+    "name_eng": "Passenger air transport"
+  },
+  {
+    "code": "51200",
+    "name": "항공 화물 운송업",
+    "name_eng": "Freight air transport"
+  },
+  {
+    "code": "52101",
+    "name": "일반 창고업",
+    "name_eng": "General warehousing"
+  },
+  {
+    "code": "52102",
+    "name": "냉장 및 냉동 창고업",
+    "name_eng": "Refrigerated and frozen warehousing"
+  },
+  {
+    "code": "52103",
+    "name": "농산물 창고업",
+    "name_eng": "Farm products warehousing"
+  },
+  {
+    "code": "52104",
+    "name": "위험물품 보관업",
+    "name_eng": "Dangerous goods warehousing"
+  },
+  {
+    "code": "52109",
+    "name": "기타 보관 및 창고업",
+    "name_eng": "Other warehousing and storage"
+  },
+  {
+    "code": "52911",
+    "name": "철도 운송지원 서비스업",
+    "name_eng": "Service activities incidental to rail transportation"
+  },
+  {
+    "code": "52912",
+    "name": "여객 자동차 터미널 운영업",
+    "name_eng": "Operation of passenger bus terminal facilities"
+  },
+  {
+    "code": "52913",
+    "name": "물류 터미널 운영업",
+    "name_eng": "Operation of logistics terminal facilities"
+  },
+  {
+    "code": "52914",
+    "name": "도로 및 관련시설 운영업",
+    "name_eng": "Operation of roads and related facilities"
+  },
+  {
+    "code": "52915",
+    "name": "주차장 운영업",
+    "name_eng": "Operation of car park or garage facilities"
+  },
+  {
+    "code": "52919",
+    "name": "기타 육상 운송지원 서비스업",
+    "name_eng": "Other service activities incidental to land transportation"
+  },
+  {
+    "code": "52921",
+    "name": "항구 및 기타 해상 터미널 운영업",
+    "name_eng": "Operation of harbor and marine terminal facilities"
+  },
+  {
+    "code": "52922",
+    "name": "선박관리업",
+    "name_eng": "Ship management"
+  },
+  {
+    "code": "52929",
+    "name": "기타 수상 운송지원 서비스업",
+    "name_eng": "Other service activities incidental to water transportation"
+  },
+  {
+    "code": "52931",
+    "name": "공항 운영업",
+    "name_eng": "Operation of airport"
+  },
+  {
+    "code": "52939",
+    "name": "기타 항공 운송지원 서비스업",
+    "name_eng": "Other service activities incidental to air transportation"
+  },
+  {
+    "code": "52941",
+    "name": "항공 및 육상 화물 취급업",
+    "name_eng": "Air and land cargo handling"
+  },
+  {
+    "code": "52942",
+    "name": "수상 화물 취급업",
+    "name_eng": "Marine cargo handling"
+  },
+  {
+    "code": "52991",
+    "name": "통관 대리 및 관련서비스업",
+    "name_eng": "Activities of customs agents and related services"
+  },
+  {
+    "code": "52992",
+    "name": "화물운송 중개, 대리 및 관련 서비스업",
+    "name_eng": "Activities of freight forwarders and cargo agents and related services"
+  },
+  {
+    "code": "52993",
+    "name": "화물 포장, 검수 및 계량 서비스업",
+    "name_eng": "Activities of cargo packing, checking and weighing services"
+  },
+  {
+    "code": "52999",
+    "name": "그 외 기타 분류 안된 운송 관련 서비스업",
+    "name_eng": "Other supporting transport services n.e.c."
+  },
+  {
+    "code": "55101",
+    "name": "호텔업",
+    "name_eng": "Hotels"
+  },
+  {
+    "code": "55102",
+    "name": "여관업",
+    "name_eng": "Inns"
+  },
+  {
+    "code": "55103",
+    "name": "휴양콘도 운영업",
+    "name_eng": "Resort condominium"
+  },
+  {
+    "code": "55104",
+    "name": "민박업",
+    "name_eng": "Tourist home"
+  },
+  {
+    "code": "55105",
+    "name": "야영장업",
+    "name_eng": "Camping grounds"
+  },
+  {
+    "code": "55109",
+    "name": "기타 일반 및 생활 숙박시설 운영업",
+    "name_eng": "Other general accommodation and provision of accommodation with cooking facilities"
+  },
+  {
+    "code": "55901",
+    "name": "기숙사 및 고시원 운영업",
+    "name_eng": "Dormitory and accommodation for examinee"
+  },
+  {
+    "code": "55909",
+    "name": "그 외 기타 숙박업",
+    "name_eng": "Other accommodation n.e.c."
+  },
+  {
+    "code": "56111",
+    "name": "한식 일반 음식점업",
+    "name_eng": "General korean food restaurants"
+  },
+  {
+    "code": "56112",
+    "name": "한식 면요리 전문점",
+    "name_eng": "Korean food restaurants specializing in noodle dishes"
+  },
+  {
+    "code": "56113",
+    "name": "한식 육류요리 전문점",
+    "name_eng": "Korean food restaurants specializing in meat dishes"
+  },
+  {
+    "code": "56114",
+    "name": "한식 해산물요리 전문점",
+    "name_eng": "Korean food restaurants specializing in seafood dishes"
+  },
+  {
+    "code": "56121",
+    "name": "중식 음식점업",
+    "name_eng": "Chinese food restaurants"
+  },
+  {
+    "code": "56122",
+    "name": "일식 음식점업",
+    "name_eng": "Japanese food restaurants"
+  },
+  {
+    "code": "56123",
+    "name": "서양식 음식점업",
+    "name_eng": "Western food restaurants"
+  },
+  {
+    "code": "56129",
+    "name": "기타 외국식 음식점업",
+    "name_eng": "Other foreign food restaurants"
+  },
+  {
+    "code": "56130",
+    "name": "기관 구내식당업",
+    "name_eng": "Industrial restaurants"
+  },
+  {
+    "code": "56141",
+    "name": "출장 음식 서비스업",
+    "name_eng": "Event catering"
+  },
+  {
+    "code": "56142",
+    "name": "이동 음식점업",
+    "name_eng": "Mobile food services activities"
+  },
+  {
+    "code": "56150",
+    "name": "제과점업",
+    "name_eng": "Bakeries"
+  },
+  {
+    "code": "56161",
+    "name": "피자, 햄버거, 샌드위치 및 유사 음식점업",
+    "name_eng": "Pizza, hamburger and sandwich eating places and similar food services activities"
+  },
+  {
+    "code": "56162",
+    "name": "치킨 전문점",
+    "name_eng": "Chicken restaurants"
+  },
+  {
+    "code": "56191",
+    "name": "김밥 및 기타 간이 음식점업",
+    "name_eng": "Dried seaweed rolls and other light food restaurants"
+  },
+  {
+    "code": "56199",
+    "name": "간이음식 포장 판매 전문점",
+    "name_eng": "Take-out light food restaurants"
+  },
+  {
+    "code": "56211",
+    "name": "일반 유흥주점업",
+    "name_eng": "General amusement and drinking places"
+  },
+  {
+    "code": "56212",
+    "name": "무도 유흥주점업",
+    "name_eng": "Dancing and drinking halls"
+  },
+  {
+    "code": "56213",
+    "name": "생맥주 전문점",
+    "name_eng": "Taphouses"
+  },
+  {
+    "code": "56219",
+    "name": "기타 주점업",
+    "name_eng": "Other drinking places"
+  },
+  {
+    "code": "56221",
+    "name": "커피 전문점",
+    "name_eng": "Coffee shops"
+  },
+  {
+    "code": "56229",
+    "name": "기타 비알코올 음료점업",
+    "name_eng": "Other non-alcoholic beverages places"
+  },
+  {
+    "code": "58111",
+    "name": "교과서 및 학습서적 출판업",
+    "name_eng": "Textbook and study book publishing"
+  },
+  {
+    "code": "58112",
+    "name": "만화 출판업",
+    "name_eng": "Comic book publishing"
+  },
+  {
+    "code": "58113",
+    "name": "일반 서적 출판업",
+    "name_eng": "Other book publishing"
+  },
+  {
+    "code": "58121",
+    "name": "신문 발행업",
+    "name_eng": "Publishing of newspapers"
+  },
+  {
+    "code": "58122",
+    "name": "잡지 및 정기간행물 발행업",
+    "name_eng": "Publishing of magazines and periodicals"
+  },
+  {
+    "code": "58123",
+    "name": "정기 광고간행물 발행업",
+    "name_eng": "Publishing of advertising periodicals"
+  },
+  {
+    "code": "58190",
+    "name": "기타 인쇄물 출판업",
+    "name_eng": "Other publishing activities"
+  },
+  {
+    "code": "58211",
+    "name": "유선 온라인 게임 소프트웨어 개발 및 공급업",
+    "name_eng": "Online game software publishing"
+  },
+  {
+    "code": "58212",
+    "name": "모바일 게임 소프트웨어 개발 및 공급업",
+    "name_eng": "Mobile game software publishing"
+  },
+  {
+    "code": "58219",
+    "name": "기타 게임 소프트웨어 개발 및 공급업",
+    "name_eng": "Other game software publishing"
+  },
+  {
+    "code": "58221",
+    "name": "시스템 소프트웨어 개발 및 공급업",
+    "name_eng": "System software publishing"
+  },
+  {
+    "code": "58222",
+    "name": "응용 소프트웨어 개발 및 공급업",
+    "name_eng": "Application software publishing"
+  },
+  {
+    "code": "59111",
+    "name": "일반 영화 및 비디오물 제작업",
+    "name_eng": "General motion picture and video production activities"
+  },
+  {
+    "code": "59112",
+    "name": "애니메이션 영화 및 비디오물 제작업",
+    "name_eng": "Animated cartoon and video production"
+  },
+  {
+    "code": "59113",
+    "name": "광고 영화 및 비디오물 제작업",
+    "name_eng": "Advertising motion picture and video production"
+  },
+  {
+    "code": "59114",
+    "name": "방송 프로그램 제작업",
+    "name_eng": "Broadcasting programme production"
+  },
+  {
+    "code": "59120",
+    "name": "영화, 비디오물 및 방송프로그램 제작 관련 서비스업",
+    "name_eng": "Motion picture, video and broadcasting programme post-production activities"
+  },
+  {
+    "code": "59130",
+    "name": "영화, 비디오물 및 방송프로그램 배급업",
+    "name_eng": "Motion picture, video and broadcasting programme distribution activities"
+  },
+  {
+    "code": "59141",
+    "name": "영화관 운영업",
+    "name_eng": "Motion picture theaters"
+  },
+  {
+    "code": "59142",
+    "name": "비디오물 감상실 운영업",
+    "name_eng": "Video projection activities"
+  },
+  {
+    "code": "59201",
+    "name": "음악 및 기타 오디오물 출판업",
+    "name_eng": "Music and sound recordings publishing"
+  },
+  {
+    "code": "59202",
+    "name": "녹음시설 운영업",
+    "name_eng": "Sound recording service activities"
+  },
+  {
+    "code": "60100",
+    "name": "라디오 방송업",
+    "name_eng": "Radio broadcasting"
+  },
+  {
+    "code": "60210",
+    "name": "지상파 방송업",
+    "name_eng": "Terrestrial broadcasting"
+  },
+  {
+    "code": "60221",
+    "name": "프로그램 공급업",
+    "name_eng": "Broadcasting programme provider"
+  },
+  {
+    "code": "60222",
+    "name": "유선 방송업",
+    "name_eng": "Cable broadcasting"
+  },
+  {
+    "code": "60229",
+    "name": "위성 및 기타 방송업",
+    "name_eng": "Satellite and other broadcasting"
+  },
+  {
+    "code": "60310",
+    "name": "영상물 제공 서비스업",
+    "name_eng": "Video distribution activities"
+  },
+  {
+    "code": "60320",
+    "name": "오디오물 제공 서비스업",
+    "name_eng": "Audio distribution activities"
+  },
+  {
+    "code": "61100",
+    "name": "공영 우편업",
+    "name_eng": "Postal activities"
+  },
+  {
+    "code": "61210",
+    "name": "유선 통신업",
+    "name_eng": "Wired telecommunications"
+  },
+  {
+    "code": "61220",
+    "name": "무선 및 위성 통신업",
+    "name_eng": "Wireless and satellite telecommunications"
+  },
+  {
+    "code": "61291",
+    "name": "통신 재판매업",
+    "name_eng": "Telecommunications resellers"
+  },
+  {
+    "code": "61299",
+    "name": "그 외 기타 전기 통신업",
+    "name_eng": "Other telecommunications n.e.c."
+  },
+  {
+    "code": "62010",
+    "name": "컴퓨터 프로그래밍 서비스업",
+    "name_eng": "Computer programming services"
+  },
+  {
+    "code": "62021",
+    "name": "컴퓨터시스템 통합 자문 및 구축 서비스업",
+    "name_eng": "Computer system consultancy activities"
+  },
+  {
+    "code": "62022",
+    "name": "컴퓨터시설 관리업",
+    "name_eng": "Computer facilities management services"
+  },
+  {
+    "code": "62090",
+    "name": "기타 정보기술 및 컴퓨터운영 관련 서비스업",
+    "name_eng": "Other information technology and computer service activities"
+  },
+  {
+    "code": "63111",
+    "name": "자료 처리업",
+    "name_eng": "Data processing"
+  },
+  {
+    "code": "63112",
+    "name": "호스팅 및 관련 서비스업",
+    "name_eng": "Hosting and related service activities"
+  },
+  {
+    "code": "63120",
+    "name": "포털 및 기타 인터넷 정보매개 서비스업",
+    "name_eng": "Portals and other internet information media service activities"
+  },
+  {
+    "code": "63910",
+    "name": "뉴스 제공업",
+    "name_eng": "News agency activities"
+  },
+  {
+    "code": "63991",
+    "name": "데이터베이스 및 온라인정보 제공업",
+    "name_eng": "Data base activities and on-line information provision services"
+  },
+  {
+    "code": "63992",
+    "name": "가상자산 매매 및 중개업",
+    "name_eng": "Virtual assets dealing and brokering"
+  },
+  {
+    "code": "63999",
+    "name": "그 외 기타 정보 서비스업",
+    "name_eng": "Other information service activities n.e.c."
+  },
+  {
+    "code": "64110",
+    "name": "중앙은행",
+    "name_eng": "Central bank"
+  },
+  {
+    "code": "64121",
+    "name": "국내은행",
+    "name_eng": "Domestic commercial banks"
+  },
+  {
+    "code": "64122",
+    "name": "외국은행",
+    "name_eng": "Foreign banks"
+  },
+  {
+    "code": "64131",
+    "name": "신용조합",
+    "name_eng": "Credit unions"
+  },
+  {
+    "code": "64132",
+    "name": "상호저축은행 및 기타 저축기관",
+    "name_eng": "Mutual savings bank and other savings institutions"
+  },
+  {
+    "code": "64201",
+    "name": "신탁업 및 집합투자업",
+    "name_eng": "Trust and collective investment businesses"
+  },
+  {
+    "code": "64209",
+    "name": "기타 금융 투자업",
+    "name_eng": "Other financial investment businesses"
+  },
+  {
+    "code": "64911",
+    "name": "금융리스업",
+    "name_eng": "Financial leasing"
+  },
+  {
+    "code": "64912",
+    "name": "개발금융기관",
+    "name_eng": "Development financial institutions"
+  },
+  {
+    "code": "64913",
+    "name": "신용카드 및 할부금융업",
+    "name_eng": "Credit card and installment financial business"
+  },
+  {
+    "code": "64919",
+    "name": "그 외 기타 여신금융업",
+    "name_eng": "Other credit granting n.e.c."
+  },
+  {
+    "code": "64991",
+    "name": "기금 운영업",
+    "name_eng": "Public fund management business"
+  },
+  {
+    "code": "64992",
+    "name": "지주회사",
+    "name_eng": "Activities of holding companies"
+  },
+  {
+    "code": "64999",
+    "name": "그 외 기타 분류 안된 금융업",
+    "name_eng": "Other financial service activities n.e.c."
+  },
+  {
+    "code": "65110",
+    "name": "생명 보험업",
+    "name_eng": "Life insurance"
+  },
+  {
+    "code": "65121",
+    "name": "손해 보험업",
+    "name_eng": "Non-life insurance"
+  },
+  {
+    "code": "65122",
+    "name": "보증 보험업",
+    "name_eng": "Guarantee insurance"
+  },
+  {
+    "code": "65200",
+    "name": "재 보험업",
+    "name_eng": "Reinsurance"
+  },
+  {
+    "code": "65301",
+    "name": "개인 공제업",
+    "name_eng": "Individual mutual aid organizations"
+  },
+  {
+    "code": "65302",
+    "name": "사업 공제업",
+    "name_eng": "Business mutual aid organizations"
+  },
+  {
+    "code": "66110",
+    "name": "금융시장 관리업",
+    "name_eng": "Administration of financial markets"
+  },
+  {
+    "code": "66121",
+    "name": "증권 중개업",
+    "name_eng": "Securities brokerage"
+  },
+  {
+    "code": "66122",
+    "name": "선물 중개업",
+    "name_eng": "Futures mediation"
+  },
+  {
+    "code": "66191",
+    "name": "증권 발행, 관리, 보관 및 거래 지원 서비스업",
+    "name_eng": "Securities issuance, management, deposit and settlement services"
+  },
+  {
+    "code": "66192",
+    "name": "투자 자문업 및 투자 일임업",
+    "name_eng": "Investment advisory businesses and discretionary investment businesses"
+  },
+  {
+    "code": "66199",
+    "name": "그 외 기타 금융 지원 서비스업",
+    "name_eng": "Other activities auxiliary to financial service activities n.e.c."
+  },
+  {
+    "code": "66201",
+    "name": "손해 사정업",
+    "name_eng": "Risk and damage evaluation"
+  },
+  {
+    "code": "66202",
+    "name": "보험 대리 및 중개업",
+    "name_eng": "Insurance agents and brokers"
+  },
+  {
+    "code": "66209",
+    "name": "기타 보험 및 연금관련 서비스업",
+    "name_eng": "Other activities auxiliary to insurance and pension funding"
+  },
+  {
+    "code": "68111",
+    "name": "주거용 건물 임대업",
+    "name_eng": "Renting of residential buildings"
+  },
+  {
+    "code": "68112",
+    "name": "비주거용 건물 임대업",
+    "name_eng": "Renting of non-residential buildings"
+  },
+  {
+    "code": "68119",
+    "name": "기타 부동산 임대업",
+    "name_eng": "Renting of other real estate"
+  },
+  {
+    "code": "68121",
+    "name": "주거용 건물 개발 및 공급업",
+    "name_eng": "Development and subdividing of residential buildings"
+  },
+  {
+    "code": "68122",
+    "name": "비주거용 건물 개발 및 공급업",
+    "name_eng": "Development and subdividing of non-residential buildings"
+  },
+  {
+    "code": "68129",
+    "name": "기타 부동산 개발 및 공급업",
+    "name_eng": "Development and subdividing of other real estate"
+  },
+  {
+    "code": "68211",
+    "name": "주거용 부동산 관리업",
+    "name_eng": "Management of residential real estate"
+  },
+  {
+    "code": "68212",
+    "name": "비주거용 부동산 관리업",
+    "name_eng": "Management of nonresidential real estate"
+  },
+  {
+    "code": "68221",
+    "name": "부동산 중개 및 대리업",
+    "name_eng": "Real estate agents and brokers"
+  },
+  {
+    "code": "68222",
+    "name": "부동산 투자자문업",
+    "name_eng": "Real estate investment consultancy"
+  },
+  {
+    "code": "68223",
+    "name": "부동산 감정평가업",
+    "name_eng": "Real estate appraisal"
+  },
+  {
+    "code": "68224",
+    "name": "부동산 분양 대행업",
+    "name_eng": "Real estate marketing"
+  },
+  {
+    "code": "70111",
+    "name": "물리, 화학 및 생물학 연구개발업",
+    "name_eng": "Research and experimental development on physics, chemistry and biology"
+  },
+  {
+    "code": "70112",
+    "name": "농림수산학 및 수의학 연구개발업",
+    "name_eng": "Research and experimental development on agriculture, forestry, fishery and veterinary science"
+  },
+  {
+    "code": "70113",
+    "name": "의학 및 약학 연구개발업",
+    "name_eng": "Research and experimental development on medical sciences and pharmacy"
+  },
+  {
+    "code": "70119",
+    "name": "기타 자연과학 연구개발업",
+    "name_eng": "Research and experimental development on other natural sciences"
+  },
+  {
+    "code": "70121",
+    "name": "전기ㆍ전자공학 연구개발업",
+    "name_eng": "Research and experimental development on electrical and electronic engineering"
+  },
+  {
+    "code": "70129",
+    "name": "기타 공학 연구개발업",
+    "name_eng": "Research and experimental development on other engineering"
+  },
+  {
+    "code": "70130",
+    "name": "자연과학 및 공학 융합 연구개발업",
+    "name_eng": "Interdisciplinary convergence research and experimental development on natural sciences and engineering"
+  },
+  {
+    "code": "70201",
+    "name": "경제 및 경영학 연구개발업",
+    "name_eng": "Research and experimental development on economics and business administration"
+  },
+  {
+    "code": "70209",
+    "name": "기타 인문 및 사회과학 연구개발업",
+    "name_eng": "Research and experimental development on other social sciences and humanities"
+  },
+  {
+    "code": "71101",
+    "name": "변호사업",
+    "name_eng": "Offices of lawyers"
+  },
+  {
+    "code": "71102",
+    "name": "변리사업",
+    "name_eng": "Offices of patent attorney"
+  },
+  {
+    "code": "71103",
+    "name": "법무사업",
+    "name_eng": "Offices of judicial scrivener"
+  },
+  {
+    "code": "71109",
+    "name": "기타 법무관련 서비스업",
+    "name_eng": "Other legal services"
+  },
+  {
+    "code": "71201",
+    "name": "공인회계사업",
+    "name_eng": "Offices of accountants"
+  },
+  {
+    "code": "71202",
+    "name": "세무사업",
+    "name_eng": "Offices of tax accountants"
+  },
+  {
+    "code": "71209",
+    "name": "기타 회계 관련 서비스업",
+    "name_eng": "Other accounting, bookkeeping and auditing activities"
+  },
+  {
+    "code": "71310",
+    "name": "광고 대행업",
+    "name_eng": "Advertising agencies"
+  },
+  {
+    "code": "71391",
+    "name": "옥외 광고업",
+    "name_eng": "Outdoor advertising"
+  },
+  {
+    "code": "71392",
+    "name": "광고물 문안, 도안, 설계 등 작성업",
+    "name_eng": "Advertising preparation"
+  },
+  {
+    "code": "71399",
+    "name": "그 외 기타 광고 관련 서비스업",
+    "name_eng": "Other advertising related services n.e.c."
+  },
+  {
+    "code": "71400",
+    "name": "시장조사 및 여론조사업",
+    "name_eng": "Market research and public opinion polling"
+  },
+  {
+    "code": "71511",
+    "name": "제조업 회사 본부",
+    "name_eng": "Activities of head offices for manufacturing"
+  },
+  {
+    "code": "71519",
+    "name": "기타 산업 회사 본부",
+    "name_eng": "Activities of head offices for other industries"
+  },
+  {
+    "code": "71531",
+    "name": "경영 컨설팅업",
+    "name_eng": "Activities of management consultancy"
+  },
+  {
+    "code": "71532",
+    "name": "공공관계 서비스업",
+    "name_eng": "Public relation services"
+  },
+  {
+    "code": "71600",
+    "name": "기타 전문 서비스업",
+    "name_eng": "Other professional services"
+  },
+  {
+    "code": "72111",
+    "name": "건축설계 및 관련 서비스업",
+    "name_eng": "Architectural services"
+  },
+  {
+    "code": "72112",
+    "name": "도시계획 및 조경설계 서비스업",
+    "name_eng": "Urban planning landscape architectural services"
+  },
+  {
+    "code": "72121",
+    "name": "건물 및 토목 엔지니어링 서비스업",
+    "name_eng": "Building and civil engineering projects related engineering services"
+  },
+  {
+    "code": "72122",
+    "name": "환경 관련 엔지니어링 서비스업",
+    "name_eng": "Environmental consulting and related engineering services"
+  },
+  {
+    "code": "72129",
+    "name": "기타 엔지니어링 서비스업",
+    "name_eng": "Other engineering services"
+  },
+  {
+    "code": "72911",
+    "name": "물질성분 검사 및 분석업",
+    "name_eng": "Testing and analysis services of composition and purity of materials"
+  },
+  {
+    "code": "72919",
+    "name": "기타 기술 시험, 검사 및 분석업",
+    "name_eng": "Other technical testing and analysis"
+  },
+  {
+    "code": "72921",
+    "name": "측량업",
+    "name_eng": "Surface surveying"
+  },
+  {
+    "code": "72922",
+    "name": "제도업",
+    "name_eng": "Drafting services"
+  },
+  {
+    "code": "72923",
+    "name": "지질 조사·탐사 및 지도 제작업",
+    "name_eng": "Geological surveying, prospecting services and cartography activities"
+  },
+  {
+    "code": "73100",
+    "name": "수의업",
+    "name_eng": "Veterinary activities"
+  },
+  {
+    "code": "73201",
+    "name": "인테리어 디자인업",
+    "name_eng": "Interior design services"
+  },
+  {
+    "code": "73202",
+    "name": "제품 디자인업",
+    "name_eng": "Products design services"
+  },
+  {
+    "code": "73203",
+    "name": "시각 디자인업",
+    "name_eng": "Graphic design services"
+  },
+  {
+    "code": "73209",
+    "name": "패션, 섬유류 및 기타 전문 디자인업",
+    "name_eng": "Other specialized design services"
+  },
+  {
+    "code": "73301",
+    "name": "인물사진 및 행사용 영상 촬영업",
+    "name_eng": "Portrait photography and videotaping of events services"
+  },
+  {
+    "code": "73302",
+    "name": "상업용 사진 촬영업",
+    "name_eng": "Commercial photography services"
+  },
+  {
+    "code": "73303",
+    "name": "사진 처리업",
+    "name_eng": "Photograph processing"
+  },
+  {
+    "code": "73901",
+    "name": "매니저업",
+    "name_eng": "Managers"
+  },
+  {
+    "code": "73902",
+    "name": "번역 및 통역 서비스업",
+    "name_eng": "Translation and interpretation services"
+  },
+  {
+    "code": "73903",
+    "name": "사업 및 무형 재산권 중개업",
+    "name_eng": "Business and intangible rights brokerages"
+  },
+  {
+    "code": "73904",
+    "name": "물품 감정, 계량 및 견본 추출업",
+    "name_eng": "Appraisal, weighing and sampling services of goods"
+  },
+  {
+    "code": "73905",
+    "name": "고고유산 조사연구 서비스업",
+    "name_eng": "Archaeological heritage surveying"
+  },
+  {
+    "code": "73909",
+    "name": "그 외 기타 분류 안된 전문, 과학 및 기술 서비스업",
+    "name_eng": "Other professional, scientific and technical services n.e.c."
+  },
+  {
+    "code": "74100",
+    "name": "사업시설 유지․관리 서비스업",
+    "name_eng": "Combined facilities support activities"
+  },
+  {
+    "code": "74211",
+    "name": "건축물 일반 청소업",
+    "name_eng": "General cleaning of buildings"
+  },
+  {
+    "code": "74212",
+    "name": "산업설비, 운송장비 및 공공장소 청소업",
+    "name_eng": "Cleaning of industrial facilities, transportation equipments and public places"
+  },
+  {
+    "code": "74220",
+    "name": "소독, 구충 및 방제 서비스업",
+    "name_eng": "Disinfecting, exterminating and pest control services"
+  },
+  {
+    "code": "74300",
+    "name": "조경 관리 및 유지 서비스업",
+    "name_eng": "Landscape care and maintenance service activities"
+  },
+  {
+    "code": "75110",
+    "name": "고용 알선업",
+    "name_eng": "Activities of employment placement agencies"
+  },
+  {
+    "code": "75121",
+    "name": "임시 및 일용 인력 공급업",
+    "name_eng": "Provision of temporary workers and day laborers"
+  },
+  {
+    "code": "75122",
+    "name": "상용 인력 공급 및 인사관리 서비스업",
+    "name_eng": "Provision of regular workers and human resources functions"
+  },
+  {
+    "code": "75210",
+    "name": "여행사업",
+    "name_eng": "Travel agency activities"
+  },
+  {
+    "code": "75290",
+    "name": "기타 여행 보조 및 예약 서비스업",
+    "name_eng": "Other tourist assistance and reservation services"
+  },
+  {
+    "code": "75310",
+    "name": "경비 및 경호 서비스업",
+    "name_eng": "Security and guard services"
+  },
+  {
+    "code": "75320",
+    "name": "보안시스템 서비스업",
+    "name_eng": "Security systems crevice activities"
+  },
+  {
+    "code": "75330",
+    "name": "탐정 및 조사 서비스업",
+    "name_eng": "Detective and investigation services"
+  },
+  {
+    "code": "75911",
+    "name": "문서 작성 및 복사업",
+    "name_eng": "Document preparation and duplicating services"
+  },
+  {
+    "code": "75919",
+    "name": "기타 사무지원 서비스업",
+    "name_eng": "Other office support service activities"
+  },
+  {
+    "code": "75991",
+    "name": "콜센터 및 텔레마케팅 서비스업",
+    "name_eng": "Activities of call centers and telemarketing services"
+  },
+  {
+    "code": "75992",
+    "name": "전시, 컨벤션 및 행사 대행업",
+    "name_eng": "Exhibition, convention and trade fair organization agencies"
+  },
+  {
+    "code": "75993",
+    "name": "신용 조사 및 추심 대행업",
+    "name_eng": "Activities of collection agencies and credit bureaus"
+  },
+  {
+    "code": "75994",
+    "name": "포장 및 충전업",
+    "name_eng": "Packaging and filling activities"
+  },
+  {
+    "code": "75995",
+    "name": "온라인 활용 마케팅 및 관련 사업지원 서비스업",
+    "name_eng": "Marketing and related business support services via online"
+  },
+  {
+    "code": "75999",
+    "name": "그 외 기타 분류 안된 사업지원 서비스업",
+    "name_eng": "All other business support services n.e.c."
+  },
+  {
+    "code": "76110",
+    "name": "자동차 임대업",
+    "name_eng": "Renting of motor vehicles"
+  },
+  {
+    "code": "76190",
+    "name": "기타 운송장비 임대업",
+    "name_eng": "Renting of other transport equipment"
+  },
+  {
+    "code": "76210",
+    "name": "스포츠 및 레크리에이션 용품 임대업",
+    "name_eng": "Renting of sports and recreational goods"
+  },
+  {
+    "code": "76220",
+    "name": "음반 및 비디오물 임대업",
+    "name_eng": "Renting of discs and video tapes"
+  },
+  {
+    "code": "76291",
+    "name": "서적 임대업",
+    "name_eng": "Renting of books"
+  },
+  {
+    "code": "76292",
+    "name": "의류 임대업",
+    "name_eng": "Renting of wearing apparel"
+  },
+  {
+    "code": "76299",
+    "name": "그 외 기타 개인 및 가정용품 임대업",
+    "name_eng": "Renting of other personal and household goods n.e.c."
+  },
+  {
+    "code": "76310",
+    "name": "건설 및 토목공사용 기계․장비 임대업",
+    "name_eng": "Renting of construction(including civil engineering and construction) machinery and equipment"
+  },
+  {
+    "code": "76320",
+    "name": "컴퓨터 및 사무용 기계․장비 임대업",
+    "name_eng": "Renting of computers and office equipment"
+  },
+  {
+    "code": "76390",
+    "name": "기타 산업용 기계 및 장비 임대업",
+    "name_eng": "Renting of other industries machinery and equipment"
+  },
+  {
+    "code": "76400",
+    "name": "무형재산권 임대업",
+    "name_eng": "Leasing of intangible property"
+  },
+  {
+    "code": "84111",
+    "name": "입법기관",
+    "name_eng": "Legislative administration"
+  },
+  {
+    "code": "84112",
+    "name": "중앙 최고 집행기관",
+    "name_eng": "Executive administration of central bodies"
+  },
+  {
+    "code": "84113",
+    "name": "지방행정 집행기관",
+    "name_eng": "Executive administration of regional and local bodies"
+  },
+  {
+    "code": "84114",
+    "name": "재정 및 경제정책 행정",
+    "name_eng": "Administration of financial and economic policy"
+  },
+  {
+    "code": "84119",
+    "name": "기타 일반 공공 행정",
+    "name_eng": "Other general public administration activities"
+  },
+  {
+    "code": "84120",
+    "name": "정부기관 일반 보조 행정",
+    "name_eng": "Ancillary service activities for government"
+  },
+  {
+    "code": "84211",
+    "name": "교육 행정",
+    "name_eng": "Regulation of the activities of education affairs"
+  },
+  {
+    "code": "84212",
+    "name": "문화 및 관광 행정",
+    "name_eng": "Regulation of the activities of cultural and tourism affairs"
+  },
+  {
+    "code": "84213",
+    "name": "환경 행정",
+    "name_eng": "Regulation of the activities of environment affairs"
+  },
+  {
+    "code": "84214",
+    "name": "보건 및 복지 행정",
+    "name_eng": "Regulation of the activities of health care and welfare affairs"
+  },
+  {
+    "code": "84219",
+    "name": "기타 사회서비스 관리 행정",
+    "name_eng": "Other regulation of the activities of providing health care, education, cultural services and other social services, excluding social security"
+  },
+  {
+    "code": "84221",
+    "name": "노동 행정",
+    "name_eng": "Administration of general labor affairs"
+  },
+  {
+    "code": "84222",
+    "name": "농림수산 행정",
+    "name_eng": "Administration of agricultural, forestry, fishing affairs"
+  },
+  {
+    "code": "84223",
+    "name": "건설 및 운송 행정",
+    "name_eng": "Administration of construction and transportation programs"
+  },
+  {
+    "code": "84224",
+    "name": "우편 및 통신행정",
+    "name_eng": "Administration of communications"
+  },
+  {
+    "code": "84229",
+    "name": "기타 산업진흥 행정",
+    "name_eng": "Other regulation and contribution to more efficient operation of businesses"
+  },
+  {
+    "code": "84310",
+    "name": "외무 행정",
+    "name_eng": "Foreign affairs"
+  },
+  {
+    "code": "84320",
+    "name": "국방 행정",
+    "name_eng": "Defence activities"
+  },
+  {
+    "code": "84401",
+    "name": "법원",
+    "name_eng": "Courts"
+  },
+  {
+    "code": "84402",
+    "name": "검찰",
+    "name_eng": "Prosecutor's offices"
+  },
+  {
+    "code": "84403",
+    "name": "교도기관",
+    "name_eng": "Correctional institutions"
+  },
+  {
+    "code": "84404",
+    "name": "경찰",
+    "name_eng": "Police protection"
+  },
+  {
+    "code": "84405",
+    "name": "소방서",
+    "name_eng": "Fire protection"
+  },
+  {
+    "code": "84409",
+    "name": "기타 사법 및 공공질서 행정",
+    "name_eng": "Other public order and safety activities"
+  },
+  {
+    "code": "84500",
+    "name": "사회보장 행정",
+    "name_eng": "Compulsory social security activities"
+  },
+  {
+    "code": "84611",
+    "name": "건강보험업",
+    "name_eng": "Health insurance"
+  },
+  {
+    "code": "84619",
+    "name": "산업재해 및 기타 사회보장 보험업",
+    "name_eng": "Industrial accident compensation insurance and other social security insurance"
+  },
+  {
+    "code": "84620",
+    "name": "연금업",
+    "name_eng": "Pension funding"
+  },
+  {
+    "code": "85110",
+    "name": "유아 교육기관",
+    "name_eng": "Pre-primary education"
+  },
+  {
+    "code": "85120",
+    "name": "초등학교",
+    "name_eng": "Elementary schools"
+  },
+  {
+    "code": "85211",
+    "name": "중학교",
+    "name_eng": "Middle schools"
+  },
+  {
+    "code": "85212",
+    "name": "일반 고등학교",
+    "name_eng": "Academic high schools"
+  },
+  {
+    "code": "85221",
+    "name": "상업 및 정보산업 특성화 고등학교",
+    "name_eng": "Commercial and information industry high schools"
+  },
+  {
+    "code": "85222",
+    "name": "공업 특성화 고등학교",
+    "name_eng": "Technical high schools"
+  },
+  {
+    "code": "85229",
+    "name": "기타 특성화 고등학교",
+    "name_eng": "Other technical and vocational secondary education"
+  },
+  {
+    "code": "85301",
+    "name": "전문대학",
+    "name_eng": "Junior technical and vocational colleges"
+  },
+  {
+    "code": "85302",
+    "name": "대학교",
+    "name_eng": "Universities"
+  },
+  {
+    "code": "85303",
+    "name": "대학원",
+    "name_eng": "Graduate schools"
+  },
+  {
+    "code": "85410",
+    "name": "특수학교",
+    "name_eng": "Schools for the handicapped"
+  },
+  {
+    "code": "85420",
+    "name": "외국인 학교",
+    "name_eng": "Schools for the foreigners"
+  },
+  {
+    "code": "85430",
+    "name": "대안학교",
+    "name_eng": "Alternative schools"
+  },
+  {
+    "code": "85501",
+    "name": "일반 교과 학원",
+    "name_eng": "General subject educational institutes"
+  },
+  {
+    "code": "85502",
+    "name": "방문 교육 학원",
+    "name_eng": "Home visiting educational institutes"
+  },
+  {
+    "code": "85503",
+    "name": "온라인 교육 학원",
+    "name_eng": "On-line educational institutes"
+  },
+  {
+    "code": "85611",
+    "name": "태권도 및 무술 교육기관",
+    "name_eng": "Taekwondo and martial arts education"
+  },
+  {
+    "code": "85612",
+    "name": "기타 스포츠 교육기관",
+    "name_eng": "Other sports education"
+  },
+  {
+    "code": "85613",
+    "name": "레크리에이션 교육기관",
+    "name_eng": "Recreation education"
+  },
+  {
+    "code": "85614",
+    "name": "청소년 수련시설 운영업",
+    "name_eng": "Teenagers training facilities"
+  },
+  {
+    "code": "85621",
+    "name": "음악학원",
+    "name_eng": "Music education"
+  },
+  {
+    "code": "85622",
+    "name": "미술학원",
+    "name_eng": "Fine arts education"
+  },
+  {
+    "code": "85629",
+    "name": "기타 예술학원",
+    "name_eng": "Other cultural education"
+  },
+  {
+    "code": "85631",
+    "name": "외국어학원",
+    "name_eng": "Foreign language institutes"
+  },
+  {
+    "code": "85632",
+    "name": "기타 교습학원",
+    "name_eng": "Other educational institutes"
+  },
+  {
+    "code": "85640",
+    "name": "사회교육시설",
+    "name_eng": "Facilities for social education"
+  },
+  {
+    "code": "85650",
+    "name": "직원훈련기관",
+    "name_eng": "Employee training institutes"
+  },
+  {
+    "code": "85661",
+    "name": "운전학원",
+    "name_eng": "Driving schools"
+  },
+  {
+    "code": "85669",
+    "name": "기타 기술 및 직업훈련학원",
+    "name_eng": "Other technical and trade schools"
+  },
+  {
+    "code": "85691",
+    "name": "컴퓨터 학원",
+    "name_eng": "Computer training institutes"
+  },
+  {
+    "code": "85699",
+    "name": "그 외 기타 분류 안된 교육기관",
+    "name_eng": "Other training institutes n.e.c."
+  },
+  {
+    "code": "85701",
+    "name": "교육관련 자문 및 평가업",
+    "name_eng": "Educational consulting and evaluation activities"
+  },
+  {
+    "code": "85709",
+    "name": "기타 교육지원 서비스업",
+    "name_eng": "Other educational support activities"
+  },
+  {
+    "code": "86101",
+    "name": "종합 병원",
+    "name_eng": "General hospitals"
+  },
+  {
+    "code": "86102",
+    "name": "일반 병원",
+    "name_eng": "Specialized hospitals"
+  },
+  {
+    "code": "86103",
+    "name": "치과 병원",
+    "name_eng": "Dental hospitals"
+  },
+  {
+    "code": "86104",
+    "name": "한방 병원",
+    "name_eng": "Oriental medical hospitals"
+  },
+  {
+    "code": "86105",
+    "name": "요양 병원",
+    "name_eng": "Intermediate care hospital"
+  },
+  {
+    "code": "86201",
+    "name": "일반 의원",
+    "name_eng": "General clinics"
+  },
+  {
+    "code": "86202",
+    "name": "치과 의원",
+    "name_eng": "Dental clinics"
+  },
+  {
+    "code": "86203",
+    "name": "한의원",
+    "name_eng": "Oriental medical clinics"
+  },
+  {
+    "code": "86204",
+    "name": "방사선 진단 및 병리 검사 의원",
+    "name_eng": "Medical and diagnostic clinics"
+  },
+  {
+    "code": "86300",
+    "name": "공중 보건 의료업",
+    "name_eng": "Public health centers"
+  },
+  {
+    "code": "86901",
+    "name": "앰뷸런스 서비스업",
+    "name_eng": "Ambulance services"
+  },
+  {
+    "code": "86902",
+    "name": "유사 의료업",
+    "name_eng": "Quasi-medical services"
+  },
+  {
+    "code": "86909",
+    "name": "그 외 기타 보건업",
+    "name_eng": "Other human health activities n.e.c."
+  },
+  {
+    "code": "87111",
+    "name": "노인 요양 복지시설 운영업",
+    "name_eng": "Sanatorium for the elderly with nursing care"
+  },
+  {
+    "code": "87112",
+    "name": "노인 양로 복지시설 운영업",
+    "name_eng": "Nursing homes for the elderly"
+  },
+  {
+    "code": "87121",
+    "name": "신체 부자유자 거주 복지시설 운영업",
+    "name_eng": "Residential welfare facilities for the disabled"
+  },
+  {
+    "code": "87122",
+    "name": "정신질환, 정신지체 및 약물 중독자 거주 복지시설 운영업",
+    "name_eng": "Residential welfare facilities for the mental disorder, mental retardation and substance abuse"
+  },
+  {
+    "code": "87131",
+    "name": "아동 및 부녀자 거주 복지시설 운영업",
+    "name_eng": "Residential welfare facilities for the young and women"
+  },
+  {
+    "code": "87139",
+    "name": "그 외 기타 거주 복지시설 운영업",
+    "name_eng": "Other residential welfare facilities n.e.c."
+  },
+  {
+    "code": "87210",
+    "name": "보육시설 운영업",
+    "name_eng": "Child day-care activities"
+  },
+  {
+    "code": "87291",
+    "name": "직업재활원 운영업",
+    "name_eng": "Vocational rehabilitation facilities"
+  },
+  {
+    "code": "87292",
+    "name": "종합복지관 운영업",
+    "name_eng": "Welfare service center"
+  },
+  {
+    "code": "87293",
+    "name": "방문 복지서비스 제공업",
+    "name_eng": "Domiciliary care activities"
+  },
+  {
+    "code": "87294",
+    "name": "사회복지 상담서비스 제공업",
+    "name_eng": "Welfare counseling service activities"
+  },
+  {
+    "code": "87299",
+    "name": "그 외 기타 비거주 복지 서비스업",
+    "name_eng": "Other non-residential welfare facilities n.e.c."
+  },
+  {
+    "code": "90110",
+    "name": "공연시설 운영업",
+    "name_eng": "Operation of public performance facilities"
+  },
+  {
+    "code": "90121",
+    "name": "연극단체",
+    "name_eng": "Operation of dramatic companies"
+  },
+  {
+    "code": "90122",
+    "name": "무용 및 음악단체",
+    "name_eng": "Musical groups and dance companies"
+  },
+  {
+    "code": "90123",
+    "name": "기타 공연단체",
+    "name_eng": "Other performing arts companies"
+  },
+  {
+    "code": "90131",
+    "name": "공연 예술가",
+    "name_eng": "Independent performing artists"
+  },
+  {
+    "code": "90132",
+    "name": "비공연 예술가",
+    "name_eng": "Independent non-performing artists"
+  },
+  {
+    "code": "90191",
+    "name": "공연 기획업",
+    "name_eng": "Performing arts event promotion and organization"
+  },
+  {
+    "code": "90199",
+    "name": "그 외 기타 창작 및 예술관련 서비스업",
+    "name_eng": "Other creative and arts related services n.e.c."
+  },
+  {
+    "code": "90211",
+    "name": "도서관 및 기록보존소 운영업",
+    "name_eng": "Library and archives activities"
+  },
+  {
+    "code": "90212",
+    "name": "독서실 운영업",
+    "name_eng": "Reading room operation"
+  },
+  {
+    "code": "90221",
+    "name": "박물관 운영업",
+    "name_eng": "Museum activities"
+  },
+  {
+    "code": "90222",
+    "name": "사적지 관리 운영업",
+    "name_eng": "Operation of historical sites and buildings"
+  },
+  {
+    "code": "90231",
+    "name": "식물원 및 동물원 운영업",
+    "name_eng": "Operation of botanical and zoological gardens"
+  },
+  {
+    "code": "90232",
+    "name": "자연공원 운영업",
+    "name_eng": "Operation of nature reserves"
+  },
+  {
+    "code": "90290",
+    "name": "기타 유사 여가관련 서비스업",
+    "name_eng": "Other recreation activities n.e.c."
+  },
+  {
+    "code": "91111",
+    "name": "실내 경기장 운영업",
+    "name_eng": "Indoor arena and stadium operation"
+  },
+  {
+    "code": "91112",
+    "name": "실외 경기장 운영업",
+    "name_eng": "Outdoor arena and stadium operation"
+  },
+  {
+    "code": "91113",
+    "name": "경주장 및 동물 경기장 운영업",
+    "name_eng": "Racetrack operation"
+  },
+  {
+    "code": "91121",
+    "name": "골프장 운영업",
+    "name_eng": "Golf course operation"
+  },
+  {
+    "code": "91122",
+    "name": "스키장 운영업",
+    "name_eng": "Skiing facility operation"
+  },
+  {
+    "code": "91131",
+    "name": "종합 스포츠시설 운영업",
+    "name_eng": "Other complex sports facility operation"
+  },
+  {
+    "code": "91132",
+    "name": "체력단련시설 운영업",
+    "name_eng": "Physical fitness facility operation"
+  },
+  {
+    "code": "91133",
+    "name": "수영장 운영업",
+    "name_eng": "Swimming pool operation"
+  },
+  {
+    "code": "91134",
+    "name": "볼링장 운영업",
+    "name_eng": "Bowling alley operation"
+  },
+  {
+    "code": "91135",
+    "name": "당구장 운영업",
+    "name_eng": "Billiard room operation"
+  },
+  {
+    "code": "91136",
+    "name": "골프연습장 운영업",
+    "name_eng": "Golf practice range operation"
+  },
+  {
+    "code": "91139",
+    "name": "그 외 기타 스포츠시설 운영업",
+    "name_eng": "Other sports facility operation n.e.c."
+  },
+  {
+    "code": "91191",
+    "name": "스포츠 클럽 운영업",
+    "name_eng": "Sports club operation"
+  },
+  {
+    "code": "91199",
+    "name": "그 외 기타 스포츠 서비스업",
+    "name_eng": "Other sports services n.e.c."
+  },
+  {
+    "code": "91210",
+    "name": "유원지 및 테마파크 운영업",
+    "name_eng": "Amusement and theme park operation"
+  },
+  {
+    "code": "91221",
+    "name": "전자 게임장 운영업",
+    "name_eng": "Amusement arcade operation"
+  },
+  {
+    "code": "91222",
+    "name": "컴퓨터 게임방 운영업",
+    "name_eng": "Computer game room operation"
+  },
+  {
+    "code": "91223",
+    "name": "노래연습장 운영업",
+    "name_eng": "Singing room operation"
+  },
+  {
+    "code": "91229",
+    "name": "기타 오락장 운영업",
+    "name_eng": "Other entertainment facility operation"
+  },
+  {
+    "code": "91231",
+    "name": "낚시장 운영업",
+    "name_eng": "Operation of indoor and outdoor fishing place"
+  },
+  {
+    "code": "91239",
+    "name": "기타 수상오락 서비스업",
+    "name_eng": "Other water recreation services"
+  },
+  {
+    "code": "91241",
+    "name": "복권발행 및 판매업",
+    "name_eng": "Publication and sale of lottery"
+  },
+  {
+    "code": "91242",
+    "name": "카지노 운영업",
+    "name_eng": "Operation of casino"
+  },
+  {
+    "code": "91249",
+    "name": "기타 사행시설 관리 및 운영업",
+    "name_eng": "Other gambling and betting activities"
+  },
+  {
+    "code": "91291",
+    "name": "무도장 운영업",
+    "name_eng": "Ballroom operation"
+  },
+  {
+    "code": "91292",
+    "name": "체육공원 및 유사 공원 운영업",
+    "name_eng": "Operation of recreational and sports park including similar activities"
+  },
+  {
+    "code": "91293",
+    "name": "기원 운영업",
+    "name_eng": "Baduk room operation"
+  },
+  {
+    "code": "91299",
+    "name": "그 외 기타 분류 안된 오락관련 서비스업",
+    "name_eng": "Other amusement and recreation activities n.e.c."
+  },
+  {
+    "code": "94110",
+    "name": "산업 단체",
+    "name_eng": "Business and employers membership organizations"
+  },
+  {
+    "code": "94120",
+    "name": "전문가 단체",
+    "name_eng": "Professional membership organizations"
+  },
+  {
+    "code": "94200",
+    "name": "노동조합",
+    "name_eng": "Trade unions"
+  },
+  {
+    "code": "94911",
+    "name": "불교 단체",
+    "name_eng": "Buddhism organizations"
+  },
+  {
+    "code": "94912",
+    "name": "기독교 단체",
+    "name_eng": "Christianity organizations"
+  },
+  {
+    "code": "94913",
+    "name": "천주교 단체",
+    "name_eng": "Catholicism organizations"
+  },
+  {
+    "code": "94914",
+    "name": "민족종교 단체",
+    "name_eng": "Korean religious organizations"
+  },
+  {
+    "code": "94919",
+    "name": "기타 종교 단체",
+    "name_eng": "Other religious organizations"
+  },
+  {
+    "code": "94920",
+    "name": "정치 단체",
+    "name_eng": "Political organizations"
+  },
+  {
+    "code": "94931",
+    "name": "환경운동 단체",
+    "name_eng": "Environmental advocacy organizations"
+  },
+  {
+    "code": "94939",
+    "name": "기타 시민운동 단체",
+    "name_eng": "Other social advocacy organizations"
+  },
+  {
+    "code": "94990",
+    "name": "그 외 기타 협회 및 단체",
+    "name_eng": "Other membership organizations n.e.c."
+  },
+  {
+    "code": "95110",
+    "name": "컴퓨터 및 주변 기기 수리업",
+    "name_eng": "Maintenance and repair services of computers and peripheral equipment"
+  },
+  {
+    "code": "95120",
+    "name": "통신장비 수리업",
+    "name_eng": "Maintenance and repair services of communication equipment"
+  },
+  {
+    "code": "95211",
+    "name": "자동차 종합 수리업",
+    "name_eng": "General repair services of motor vehicles"
+  },
+  {
+    "code": "95212",
+    "name": "자동차 전문 수리업",
+    "name_eng": "Repair services of motor vehicles specializing in parts"
+  },
+  {
+    "code": "95213",
+    "name": "자동차 세차업",
+    "name_eng": "Motor vehicle washing services"
+  },
+  {
+    "code": "95220",
+    "name": "모터사이클 수리업",
+    "name_eng": "Repair services of motorcycles"
+  },
+  {
+    "code": "95310",
+    "name": "가전제품 수리업",
+    "name_eng": "Repair services of electrical household machinery and appliances"
+  },
+  {
+    "code": "95391",
+    "name": "의복 및 기타 가정용 직물제품 수리업",
+    "name_eng": "Repair services of clothing and other household textile goods"
+  },
+  {
+    "code": "95392",
+    "name": "가죽, 가방 및 신발 수리업",
+    "name_eng": "Repair services of leather goods, luggage, footwear"
+  },
+  {
+    "code": "95393",
+    "name": "시계, 귀금속 및 악기 수리업",
+    "name_eng": "Repair services of watches, jewelry and musical instruments"
+  },
+  {
+    "code": "95399",
+    "name": "그 외 기타 개인 및 가정용품 수리업",
+    "name_eng": "Repair services of other personal and household goods n.e.c."
+  },
+  {
+    "code": "96111",
+    "name": "이용업",
+    "name_eng": "Barber shops"
+  },
+  {
+    "code": "96112",
+    "name": "두발 미용업",
+    "name_eng": "Hair beauty shops"
+  },
+  {
+    "code": "96113",
+    "name": "피부 미용업",
+    "name_eng": "Skin beauty shops"
+  },
+  {
+    "code": "96119",
+    "name": "기타 미용업",
+    "name_eng": "Other beauty shops"
+  },
+  {
+    "code": "96121",
+    "name": "욕탕업",
+    "name_eng": "Turkish baths, sauna and steam baths, solariums"
+  },
+  {
+    "code": "96122",
+    "name": "마사지업",
+    "name_eng": "Massage salons"
+  },
+  {
+    "code": "96129",
+    "name": "체형 등 기타 신체관리 서비스업",
+    "name_eng": "Other physical well-being services"
+  },
+  {
+    "code": "96911",
+    "name": "산업용 세탁업",
+    "name_eng": "Industrial laundry services"
+  },
+  {
+    "code": "96912",
+    "name": "가정용 세탁업",
+    "name_eng": "Household laundry services"
+  },
+  {
+    "code": "96913",
+    "name": "세탁물 공급업",
+    "name_eng": "Laundry supplies"
+  },
+  {
+    "code": "96921",
+    "name": "장례식장 및 장의관련 서비스업",
+    "name_eng": "Funeral homes and funeral related services"
+  },
+  {
+    "code": "96922",
+    "name": "화장터 운영, 묘지 분양 및 관리업",
+    "name_eng": "Cremation, graveyard subdivision and management"
+  },
+  {
+    "code": "96991",
+    "name": "예식장업",
+    "name_eng": "Wedding chapel services"
+  },
+  {
+    "code": "96992",
+    "name": "점술 및 유사 서비스업",
+    "name_eng": "Fortune-telling and the similar services"
+  },
+  {
+    "code": "96993",
+    "name": "개인 간병 및 유사 서비스업",
+    "name_eng": "Private nursing and similar services"
+  },
+  {
+    "code": "96994",
+    "name": "결혼 상담 및 준비 서비스업",
+    "name_eng": "Marriage consulting and planning service"
+  },
+  {
+    "code": "96995",
+    "name": "반려동물 장묘 및 보호 서비스업",
+    "name_eng": "Companion animal funeral and care services"
+  },
+  {
+    "code": "96999",
+    "name": "그 외 기타 달리 분류되지 않은 개인 서비스업",
+    "name_eng": "All other personal service activities n.e.c."
+  },
+  {
+    "code": "97000",
+    "name": "가구 내 고용활동",
+    "name_eng": "Activities of households as employers of domestic personnel"
+  },
+  {
+    "code": "98100",
+    "name": "자가 소비를 위한 가사 생산 활동",
+    "name_eng": "Differentiated goods-producing activities of private households for own use"
+  },
+  {
+    "code": "98200",
+    "name": "자가 소비를 위한 가사 서비스 활동",
+    "name_eng": "Differentiated service-producing activities of private households for own use"
+  },
+  {
+    "code": "99001",
+    "name": "주한 외국공관",
+    "name_eng": "Foreign official residence"
+  },
+  {
+    "code": "99009",
+    "name": "기타 국제 및 외국기관",
+    "name_eng": "Other extraterritorial organizations and bodies n.e.c."
+  }
+]

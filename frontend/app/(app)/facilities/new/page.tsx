@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -18,10 +18,12 @@ import {
   type FacilityCompanySize,
   type FacilityServiceCategory,
 } from "@/lib/ieps/facility-service";
+import { loadKsicMap, lookupKsicName } from "@/lib/ieps/ksic-lookup";
 
 interface IndustryInputRow {
   code: string;
   name: string;
+  autoName?: boolean;
 }
 
 interface BusinessCertificateKindInput {
@@ -62,6 +64,15 @@ function Inner() {
   const [additionalSiteAddresses, setAdditionalSiteAddresses] = useState<string[]>([""]);
   const [phoneNumber, setPhoneNumber] = useState("");
   const [industryRows, setIndustryRows] = useState<IndustryInputRow[]>([{ code: "", name: "" }]);
+  // 표준산업분류(KSIC) 코드→업종명 자동완성용 맵 (진입 시 1회 로드)
+  const [ksicMap, setKsicMap] = useState<Map<string, string> | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    loadKsicMap()
+      .then((m) => { if (!cancelled) setKsicMap(m); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
   const [certificateBusinessKinds, setCertificateBusinessKinds] = useState<BusinessCertificateKindInput[]>([
     { businessType: "", businessItem: "" },
   ]);
@@ -360,7 +371,17 @@ function Inner() {
                   <input
                     className="cd-input"
                     value={row.code}
-                    onChange={(e) => updateIndustryRow(index, { code: e.target.value })}
+                    onChange={(e) => {
+                      const code = e.target.value;
+                      // KSIC 일치 시 업종명 자동완성 — 비어있거나 이전 자동입력값일 때만 덮어씀
+                      const matched = lookupKsicName(ksicMap, code);
+                      updateIndustryRow(
+                        index,
+                        matched && (row.name.trim() === "" || row.autoName)
+                          ? { code, name: matched, autoName: true }
+                          : { code }
+                      );
+                    }}
                     placeholder="예: 22221"
                     maxLength={5}
                   />
@@ -369,7 +390,7 @@ function Inner() {
                   <input
                     className="cd-input"
                     value={row.name}
-                    onChange={(e) => updateIndustryRow(index, { name: e.target.value })}
+                    onChange={(e) => updateIndustryRow(index, { name: e.target.value, autoName: false })}
                     placeholder="예: 자동차용 플라스틱 부품 제조업"
                   />
                 </Field>

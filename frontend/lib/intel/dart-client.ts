@@ -87,6 +87,69 @@ export async function getCompanyBrn(corpCode: string): Promise<string | null> {
   return brn || null;
 }
 
+/** 기업개황(company.json) 주요 항목. 사업장 자동 보완(누락 점검)에서 사용. */
+export interface DartCompanyProfile {
+  corpName: string;
+  bizrNo: string; // 숫자 10자리
+  ceoName: string | null;
+  phoneNo: string | null;
+  address: string | null;
+  indutyCode: string | null; // KSIC 코드(자릿수 가변)
+}
+
+/** 기업개황 전체 조회. 오류/무자료 시 null. */
+export async function getCompanyProfile(corpCode: string): Promise<DartCompanyProfile | null> {
+  const q = new URLSearchParams({ crtfc_key: apiKey(), corp_code: corpCode });
+  const res = await dartFetch(`${DART_BASE}/company.json?${q.toString()}`);
+  const data = (await res.json()) as Record<string, unknown>;
+  if (String(data.status ?? "") !== "000") return null;
+  const bizrNo = String(data.bizr_no ?? "").replace(/[^0-9]/g, "");
+  if (bizrNo.length !== 10) return null;
+  const s = (v: unknown) => {
+    const t = String(v ?? "").trim();
+    return t || null;
+  };
+  return {
+    corpName: String(data.corp_name ?? "").trim(),
+    bizrNo,
+    ceoName: s(data.ceo_nm),
+    phoneNo: s(data.phn_no),
+    address: s(data.adres),
+    indutyCode: s(data.induty_code),
+  };
+}
+
+/** corpCode.xml(기업 고유번호 전체 목록) 다운로드·파싱. 약 11만 건. */
+export async function downloadCorpCodes(): Promise<
+  { corpCode: string; corpName: string; stockCode: string | null }[]
+> {
+  const q = new URLSearchParams({ crtfc_key: apiKey() });
+  const res = await dartFetch(`${DART_BASE}/corpCode.xml?${q.toString()}`);
+  const buf = Buffer.from(await res.arrayBuffer());
+  // 오류 시 zip 이 아니라 XML 오류 응답이 온다.
+  if (buf.slice(0, 2).toString("ascii") !== "PK") {
+    throw new Error("DART corpCode 다운로드 실패: " + buf.toString("utf-8").slice(0, 200));
+  }
+  const zip = await JSZip.loadAsync(buf);
+  const entry = Object.values(zip.files)[0];
+  const xml = await entry.async("string");
+  const out: { corpCode: string; corpName: string; stockCode: string | null }[] = [];
+  const re = /<list>([\s\S]*?)<\/list>/g;
+  let m: RegExpExecArray | null;
+  const tag = (block: string, name: string) => {
+    const mm = block.match(new RegExp(`<${name}>([\\s\\S]*?)</${name}>`));
+    return mm ? mm[1].trim() : "";
+  };
+  while ((m = re.exec(xml)) !== null) {
+    const block = m[1];
+    const corpCode = tag(block, "corp_code");
+    const corpName = tag(block, "corp_name");
+    if (!corpCode || !corpName) continue;
+    out.push({ corpCode, corpName, stockCode: tag(block, "stock_code") || null });
+  }
+  return out;
+}
+
 /** 공시 원문 뷰어 URL. */
 export function disclosureUrl(receiptNo: string): string {
   return `https://dart.fss.or.kr/dsaf001/main.do?rcpNo=${receiptNo}`;

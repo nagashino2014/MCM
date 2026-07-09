@@ -17,6 +17,7 @@ export interface FacilityListItem {
   companyName: string;
   businessRegistrationNo: string | null;
   representativeName: string | null;
+  phoneNumber: string | null;
   siteAddress: string | null;
   regionSido: string | null;
   regionSigungu: string | null;
@@ -59,10 +60,17 @@ export interface FacilityListFilter {
   airClass?: number;
   waterClass?: number;
   source?: string;
+  /** 누락 항목 필터. 지정된 항목 중 하나라도 비어 있는 사업장만 포함(OR). */
+  missing?: FacilityMissingField[];
   limit?: number;
   offset?: number;
   sort?: "recent" | "name";
 }
+
+/** 누락 점검 화면의 항목 키. 서버 queries.ts 의 FacilityMissingField 와 동일 모양. */
+export type FacilityMissingField = "brn" | "representative" | "phone" | "address" | "industry";
+
+export type FacilityMissingStats = Record<FacilityMissingField, number>;
 
 export interface ProductOutput {
   productName: string | null;

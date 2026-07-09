@@ -774,6 +774,7 @@ export interface FacilityListItem {
   companyName: string;
   businessRegistrationNo: string | null;
   representativeName: string | null;
+  phoneNumber: string | null;
   siteAddress: string | null;
   regionSido: string | null;
   regionSigungu: string | null;
@@ -811,9 +812,48 @@ export interface FacilityListFilter {
   airClass?: number;
   waterClass?: number;
   source?: string;
+  /** 누락 항목 필터. 지정된 항목 중 하나라도 비어 있는 사업장만 포함(OR). */
+  missing?: FacilityMissingField[];
   limit?: number;
   offset?: number;
   sort?: "recent" | "name";
+}
+
+export type FacilityMissingField = "brn" | "representative" | "phone" | "address" | "industry";
+
+// 누락 판정 SQL. 사업자번호는 리스트 표시와 동일하게 site_business_registration_no 폴백까지
+// 모두 비어 있을 때만 누락으로 본다. 값은 코드 내 상수에서만 오므로 리터럴 삽입이 안전하다.
+const FACILITY_MISSING_CONDS: Record<FacilityMissingField, string> = {
+  brn: "(NULLIF(TRIM(COALESCE(f.business_registration_no, '')), '') IS NULL AND NULLIF(TRIM(COALESCE(f.site_business_registration_no, '')), '') IS NULL)",
+  representative: "NULLIF(TRIM(COALESCE(f.representative_name, '')), '') IS NULL",
+  phone: "NULLIF(TRIM(COALESCE(f.phone_number, '')), '') IS NULL",
+  address: "NULLIF(TRIM(COALESCE(f.site_address, '')), '') IS NULL",
+  industry:
+    "(NULLIF(TRIM(COALESCE(f.industry_code, '')), '') IS NULL OR NULLIF(TRIM(COALESCE(f.industry_name, '')), '') IS NULL)",
+};
+
+export type FacilityMissingStats = Record<FacilityMissingField, number>;
+
+/** 항목별 누락 사업장 수. 누락 점검 화면의 태그 버튼 배지에 사용한다. */
+export async function getFacilityMissingStats(): Promise<FacilityMissingStats> {
+  invalidateDb();
+  const db = await getDb();
+  const fields = Object.keys(FACILITY_MISSING_CONDS) as FacilityMissingField[];
+  const selects = fields
+    .map((k) => `COUNT(*) FILTER (WHERE ${FACILITY_MISSING_CONDS[k]}) AS ${k}`)
+    .join(", ");
+  const stats: FacilityMissingStats = { brn: 0, representative: 0, phone: 0, address: 0, industry: 0 };
+  try {
+    const r = await db.exec(`SELECT ${selects} FROM facilities f WHERE f.deleted_at IS NULL`);
+    if (r.length && r[0].values.length) {
+      r[0].columns.forEach((col, i) => {
+        if (col in stats) stats[col as FacilityMissingField] = Number(r[0].values[0][i] ?? 0);
+      });
+    }
+  } catch (err) {
+    console.error("[getFacilityMissingStats] " + (err as Error).message);
+  }
+  return stats;
 }
 
 export async function listFacilities(
@@ -904,6 +944,12 @@ export async function listFacilities(
         ` OR EXISTS (SELECT 1 FROM facility_annual_reports far2 WHERE far2.facility_id = f.facility_id AND far2.water_class = $${startIdx + 2}))`
     );
   }
+  const missingConds = (filter.missing ?? [])
+    .map((k) => FACILITY_MISSING_CONDS[k])
+    .filter(Boolean);
+  if (missingConds.length > 0) {
+    where.push("(" + missingConds.join(" OR ") + ")");
+  }
 
   const whereSql = where.length ? "WHERE " + where.join(" AND ") : "";
 
@@ -929,6 +975,7 @@ export async function listFacilities(
   const sql = `
     SELECT
       f.facility_id, f.company_name, f.business_registration_no, f.site_business_registration_no, f.site_address,
+      f.representative_name, f.phone_number,
       f.region_sido, f.region_sigungu, f.industry_code, f.industry_name, f.integrated_permit_target,
       f.source, f.memo, f.logo_path, f.company_size, f.created_at, f.updated_at,
       lp.decision_no, lp.permit_date,
@@ -978,6 +1025,8 @@ export async function listFacilities(
         ? formatBusinessRegistrationNo(String(row.business_registration_no ?? row.site_business_registration_no))
         : null,
     siteAddress: row.site_address != null ? formatAddress(String(row.site_address)) : null,
+    representativeName: row.representative_name != null ? String(row.representative_name) : null,
+    phoneNumber: row.phone_number != null ? String(row.phone_number) : null,
     regionSido: row.region_sido != null ? String(row.region_sido) : null,
     regionSigungu: row.region_sigungu != null ? String(row.region_sigungu) : null,
     industryCode: row.industry_code != null ? String(row.industry_code) : null,

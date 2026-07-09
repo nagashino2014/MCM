@@ -13,6 +13,7 @@ export type AuditAction =
   | "facility_merge"
   | "facility_manual_create"
   | "facility_update"
+  | "facility_enrich_apply"
   | "facility_delete"
   | "facility_history_create"
   | "facility_history_update"

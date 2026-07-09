@@ -5,6 +5,7 @@ import {
   getFacilityFilterOptions,
   listFacilities,
   type FacilityListFilter,
+  type FacilityMissingField,
 } from "@/lib/ieps/queries";
 import { syncAllGroupCompanyFacilities } from "@/lib/ieps/group-company-facility-sync";
 
@@ -39,6 +40,15 @@ export async function GET(req: NextRequest) {
         ? Number(searchParams.get("waterClass"))
         : undefined,
       source: searchParams.get("source") || undefined,
+      missing: searchParams.get("missing")
+        ? (searchParams
+            .get("missing")!
+            .split(",")
+            .map((s) => s.trim())
+            .filter((s): s is FacilityMissingField =>
+              ["brn", "representative", "phone", "address", "industry"].includes(s)
+            ) as FacilityMissingField[])
+        : undefined,
       sort: (searchParams.get("sort") as "recent" | "name") || "recent",
       limit: clampLimit(Number(searchParams.get("limit") ?? "50")),
       offset: Math.max(0, Number(searchParams.get("offset") ?? "0")),

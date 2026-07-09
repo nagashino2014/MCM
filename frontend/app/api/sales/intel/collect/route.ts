@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { collectDartSignals } from "@/lib/intel/collect";
 import { collectEiassSignals } from "@/lib/intel/collect-eiass";
+import { collectGosiSignals } from "@/lib/intel/collect-gosi";
 import { collectPressSignals } from "@/lib/intel/collect-press";
 
 export const runtime = "nodejs";
@@ -23,6 +24,10 @@ export async function POST(req: Request) {
     }
     if (body?.source === "press") {
       const result = await collectPressSignals({ maxClassify: 5 });
+      return NextResponse.json(result);
+    }
+    if (body?.source === "gosi") {
+      const result = await collectGosiSignals({ maxPagesPerKeyword: 1 });
       return NextResponse.json(result);
     }
     const days = Number(body?.days) > 0 ? Number(body.days) : 7;

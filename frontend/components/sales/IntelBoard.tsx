@@ -60,7 +60,7 @@ const GRADE_PILL: Record<string, string> = {
   excluded: "cd-pill-outline",
 };
 // 소스 라벨(목록 원문 링크·필터 공용)
-const SOURCE_LABEL: Record<string, string> = { dart: "DART", news: "뉴스", eiass: "EIASS", press: "보도자료" };
+const SOURCE_LABEL: Record<string, string> = { dart: "DART", news: "뉴스", eiass: "EIASS", press: "보도자료", gosi: "고시" };
 
 function TypeTag({ type }: { type: string }) {
   return <span className={`cd-pill ${TYPE_PILL[type] ?? "cd-pill-idle"}`}>{INTEL_SIGNAL_TYPE_LABELS[type as keyof typeof INTEL_SIGNAL_TYPE_LABELS] ?? type}</span>;
@@ -87,7 +87,7 @@ export function IntelBoard() {
   const [collecting, setCollecting] = useState(false);
   const [collectMsg, setCollectMsg] = useState<string | null>(null);
   const [testDays, setTestDays] = useState(7); // 수집 테스트 기간 프리셋
-  const [testSource, setTestSource] = useState<"dart" | "eiass" | "press">("dart"); // 수집 테스트 대상 소스
+  const [testSource, setTestSource] = useState<"dart" | "eiass" | "press" | "gosi">("dart"); // 수집 테스트 대상 소스
   const [selected, setSelected] = useState<IntelSignal | null>(null);
 
   const [q, setQ] = useState("");
@@ -124,8 +124,8 @@ export function IntelBoard() {
       const body =
         testSource === "eiass"
           ? { source: "eiass", maxPages: 2 }
-          : testSource === "press"
-            ? { source: "press" }
+          : testSource === "press" || testSource === "gosi"
+            ? { source: testSource }
             : { days: testDays, maxPages: 2, maxDocs: 5 };
       const res = await fetch("/api/sales/intel/collect", {
         method: "POST",
@@ -143,8 +143,10 @@ export function IntelBoard() {
           : testSource === "press"
             ? `보도자료 테스트 · 스캔 ${data.scanned} / 신규 ${data.newFound ?? 0}·키워드 ${data.kwPassed ?? 0} / 분류 ${data.classified ?? 0} ` +
               `/ 신호 ${data.signals ?? 0} / 저장 ${data.inserted} (매칭 ${data.matched ?? 0}·리드 ${data.newLead ?? 0}) ${gradeMsg}`
-            : `테스트 수집 · 조회 ${data.scanned}${data.truncated ? "(일부)" : ""} / 회사조회 ${data.corpQueried ?? 0} / 매칭후보 ${data.matched ?? 0} ` +
-              `/ 원문 ${data.docScanned ?? 0}·거래상대 ${data.counterpartyMatched ?? 0} / 신규 ${data.inserted} ${gradeMsg}`
+            : testSource === "gosi"
+              ? `고시 테스트 · 스캔 ${data.scanned} / 신규 ${data.newFound ?? 0}·키워드 ${data.kwPassed ?? 0} / 저장 ${data.inserted} ${gradeMsg}`
+              : `테스트 수집 · 조회 ${data.scanned}${data.truncated ? "(일부)" : ""} / 회사조회 ${data.corpQueried ?? 0} / 매칭후보 ${data.matched ?? 0} ` +
+                `/ 원문 ${data.docScanned ?? 0}·거래상대 ${data.counterpartyMatched ?? 0} / 신규 ${data.inserted} ${gradeMsg}`
       );
       await reload();
     } catch (e) {
@@ -187,12 +189,13 @@ export function IntelBoard() {
                   className="cd-select cd-btn-sm"
                   style={{ width: "auto" }}
                   value={testSource}
-                  onChange={(e) => setTestSource(e.target.value as "dart" | "eiass" | "press")}
+                  onChange={(e) => setTestSource(e.target.value as "dart" | "eiass" | "press" | "gosi")}
                   title="수집 테스트 대상 소스"
                 >
                   <option value="dart">DART</option>
                   <option value="eiass">EIASS</option>
                   <option value="press">보도자료</option>
+                  <option value="gosi">고시</option>
                 </select>
                 {testSource === "dart" && (
                   <select
@@ -232,6 +235,7 @@ export function IntelBoard() {
           <option value="news">뉴스</option>
           <option value="eiass">EIASS</option>
           <option value="press">보도자료</option>
+          <option value="gosi">고시</option>
         </select>
         <select className="cd-select" style={{ width: "auto" }} value={signalType} onChange={(e) => setSignalType(e.target.value)}>
           <option value="">신호유형 전체</option>

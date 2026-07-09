@@ -4,6 +4,7 @@
 //           백필 시 크게 — 예: 400이면 소규모 전량). DB/DART/ANTHROPIC 설정은 next task def env 재사용.
 import { collectDartSignals } from "@/lib/intel/collect";
 import { collectEiassSignals } from "@/lib/intel/collect-eiass";
+import { collectGosiSignals } from "@/lib/intel/collect-gosi";
 import { collectNewsSignals } from "@/lib/intel/collect-news";
 import { collectPressSignals } from "@/lib/intel/collect-press";
 
@@ -49,6 +50,18 @@ async function main() {
     );
   } catch (err) {
     console.error("[intel-batch] news error", err);
+  }
+
+  // 고시공고(토지이음 산단 고시 + 환경청 8곳 RSS) — LLM 미사용, 경량.
+  try {
+    const gosiStarted = Date.now();
+    const gosiResult = await collectGosiSignals();
+    console.log(
+      `[intel-batch] gosi done in ${Math.round((Date.now() - gosiStarted) / 1000)}s`,
+      JSON.stringify(gosiResult)
+    );
+  } catch (err) {
+    console.error("[intel-batch] gosi error", err);
   }
   process.exit(0);
 }

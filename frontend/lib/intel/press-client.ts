@@ -7,13 +7,17 @@
 
 import { fetch as undiciFetch } from "undici";
 
-export type PressSourceKey = "ulsan" | "jeonnam" | "gyeongbuk" | "chungnam" | "mcee";
+export type PressSourceKey =
+  | "ulsan" | "jeonnam" | "gyeongbuk" | "chungnam" | "gyeonggi" | "gyeongnam" | "jeonbuk" | "mcee";
 
 export const PRESS_SOURCE_LABELS: Record<PressSourceKey, string> = {
   ulsan: "울산광역시",
   jeonnam: "전라남도",
   gyeongbuk: "경상북도",
   chungnam: "충청남도",
+  gyeonggi: "경기도",
+  gyeongnam: "경상남도",
+  jeonbuk: "전북특별자치도",
   mcee: "기후에너지환경부",
 };
 
@@ -36,6 +40,8 @@ function clean(s: string | null | undefined): string {
     .replace(/&nbsp;/g, " ")
     .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&")
     .replace(/&quot;/g, '"').replace(/&#0?39;/g, "'")
+    .replace(/&lsquo;|&rsquo;/g, "'").replace(/&ldquo;|&rdquo;/g, '"')
+    .replace(/&middot;/g, "·").replace(/&hellip;/g, "…").replace(/&#\d+;/g, " ")
     .replace(/[ \t]+/g, " ")
     .replace(/\s*\n\s*/g, "\n")
     .trim();
@@ -184,6 +190,95 @@ export async function fetchChungnamList(): Promise<PressItem[]> {
   return items;
 }
 
+// --- 경기도 (gnews.gg.go.kr — 도 뉴스포털) ---
+// 리스트: GET brief_gongbo.do — tr: td.tit(a, number=ID)·td.dp(부서)·td.date(2026.07.09).
+// href 에 jsessionid 가 붙어 number 만 뽑아 정규화. 상세 본문은 div.postbody.
+
+const GG_LIST = "https://gnews.gg.go.kr/briefing/brief_gongbo.do";
+const GG_VIEW = "https://gnews.gg.go.kr/briefing/brief_gongbo_view.do?BS_CODE=s017&number=";
+
+export async function fetchGyeonggiList(): Promise<PressItem[]> {
+  const html = await get(GG_LIST);
+  const items: PressItem[] = [];
+  for (const tr of html.split(/<tr[ >]/).slice(1)) {
+    const link = tr.match(/brief_gongbo_view\.do[^"]*[?&]number=(\d+)[^"]*"[^>]*>\s*([\s\S]*?)<\/a>/);
+    if (!link) continue;
+    const dept = tr.match(/class="dp"[^>]*>([\s\S]*?)<\/td>/);
+    const date = tr.match(/class="date"[^>]*>\s*([\d.]+)/);
+    items.push({
+      sourceKey: "gyeonggi",
+      title: clean(link[2]),
+      url: `${GG_VIEW}${link[1]}`,
+      dept: dept ? textOrNull(clean(dept[1])) : null,
+      publishedAt: date ? toIsoDate(date[1]) : null,
+      body: null,
+    });
+  }
+  return items;
+}
+
+// --- 경상남도 (gyeongnam.go.kr) ---
+// 리스트: GET index.gyeong?menuCd(보도자료) — tr: td.title(a, dataSid)·부서·td.date(26.07.09 2자리 연도).
+// 첨부 유무로 td 개수가 흔들려 날짜 패턴 직전의 비어있지 않은 td 를 부서로 잡는다. 본문 div.se-contents.
+
+const GN_LIST = "https://www.gyeongnam.go.kr/index.gyeong?menuCd=DOM_000000135002001000";
+const GN_VIEW =
+  "https://www.gyeongnam.go.kr/board/view.gyeong?boardId=BBS_0000060&menuCd=DOM_000000135002001000&dataSid=";
+
+export async function fetchGyeongnamList(): Promise<PressItem[]> {
+  const html = await get(GN_LIST);
+  const items: PressItem[] = [];
+  for (const tr of html.split(/<tr[ >]/).slice(1)) {
+    const link = tr.match(/view\.gyeong\?[^"]*dataSid=(\d+)"[^>]*>\s*([\s\S]*?)<\/a>/);
+    if (!link) continue;
+    const tds = [...tr.matchAll(/<td[^>]*>\s*([^<]*?)\s*<\/td>/g)].map((m) => clean(m[1]));
+    const dateIdx = tds.findIndex((s) => /^\d{2}\.\d{2}\.\d{2}$/.test(s));
+    const dept = dateIdx > 0 ? tds.slice(0, dateIdx).reverse().find((s) => s && s !== "보도자료") : null;
+    items.push({
+      sourceKey: "gyeongnam",
+      title: clean(link[2]),
+      url: `${GN_VIEW}${link[1]}`,
+      dept: textOrNull(dept ?? ""),
+      publishedAt: dateIdx >= 0 ? `20${tds[dateIdx].replace(/\./g, "-")}` : null,
+      body: null,
+    });
+  }
+  return items;
+}
+
+// --- 전북특별자치도 (jeonbuk.go.kr — 뉴스룸 보도자료) ---
+// 리스트: GET board/list.jeonbuk?boardId=BBS_0000090 — div.news_list 의 li 카드에 제목(strong)·
+// 본문 발췌(span.txt)·부서/작성일(em.info)까지 포함 → 상세 페치 불필요(경북과 동일 패턴).
+
+const JB_LIST =
+  "https://www.jeonbuk.go.kr/board/list.jeonbuk?boardId=BBS_0000090&menuCd=DOM_000001101000000000";
+const JB_VIEW =
+  "https://www.jeonbuk.go.kr/board/view.jeonbuk?boardId=BBS_0000090&menuCd=DOM_000001101000000000&dataSid=";
+
+export async function fetchJeonbukList(): Promise<PressItem[]> {
+  const html = await get(JB_LIST);
+  const listStart = html.indexOf("news_list");
+  const scope = listStart >= 0 ? html.slice(listStart) : html;
+  const items: PressItem[] = [];
+  for (const li of scope.split(/<li>/).slice(1)) {
+    const link = li.match(/view\.jeonbuk\?[^"]*dataSid=(\d+)"/);
+    const title = li.match(/<strong>([\s\S]*?)<\/strong>/);
+    if (!link || !title) continue;
+    const excerpt = li.match(/class="txt"[^>]*>([\s\S]*?)<\/span>/);
+    const dept = li.match(/부서\s*:\s*([^<]+)</);
+    const date = li.match(/작성일\s*:\s*([\d-]+)/);
+    items.push({
+      sourceKey: "jeonbuk",
+      title: clean(title[1]),
+      url: `${JB_VIEW}${link[1]}`,
+      dept: dept ? textOrNull(clean(dept[1])) : null,
+      publishedAt: date ? date[1] : null,
+      body: excerpt ? textOrNull(clean(excerpt[1]).slice(0, 3000)) : null,
+    });
+  }
+  return items;
+}
+
 // --- 기후에너지환경부 (mcee.go.kr) — RSS, description 에 본문 전문 포함 ---
 // 링크는 상대경로+jsessionid 라 boardId 만 뽑아 정규화한다.
 
@@ -229,6 +324,21 @@ export async function fetchMceeRss(): Promise<PressItem[]> {
 export async function fetchPressBody(item: PressItem): Promise<string | null> {
   if (item.body) return item.body;
   const html = await get(item.url);
+  if (item.sourceKey === "gyeonggi") {
+    // div.postbody(중첩 postBody) — 다음 고정 블록(fileset) 전까지 슬라이스
+    const start = html.indexOf('class="postbody"');
+    if (start < 0) return null;
+    const end = html.indexOf("fileset", start);
+    const chunk = html.slice(start, end > start ? end : start + 20000);
+    return textOrNull(clean(chunk.slice(chunk.indexOf(">") + 1)).slice(0, 3000));
+  }
+  if (item.sourceKey === "gyeongnam") {
+    // 스마트에디터 div.se-contents — 중첩이 깊어 여는 태그 닫힘(>) 이후 고정 길이 슬라이스 후 평문화
+    const start = html.indexOf('class="se-contents"');
+    if (start < 0) return null;
+    const open = html.indexOf(">", start);
+    return textOrNull(clean(html.slice(open + 1, open + 30000)).slice(0, 3000));
+  }
   if (item.sourceKey === "chungnam") {
     // 본문 div.content 안 중첩 태그 대응: 다음 고정 블록(content-ft)까지 슬라이스
     const start = html.indexOf('class="content">');

@@ -11,6 +11,9 @@ import {
   fetchJeonnamList,
   fetchGyeongbukList,
   fetchChungnamList,
+  fetchGyeonggiList,
+  fetchGyeongnamList,
+  fetchJeonbukList,
   fetchMceeRss,
   fetchPressBody,
   PRESS_SOURCE_LABELS,
@@ -47,6 +50,9 @@ const FETCHERS: [PressSourceKey, Fetcher][] = [
   ["jeonnam", fetchJeonnamList],
   ["gyeongbuk", fetchGyeongbukList],
   ["chungnam", fetchChungnamList],
+  ["gyeonggi", fetchGyeonggiList],
+  ["gyeongnam", fetchGyeongnamList],
+  ["jeonbuk", fetchJeonbukList],
   ["mcee", fetchMceeRss],
 ];
 

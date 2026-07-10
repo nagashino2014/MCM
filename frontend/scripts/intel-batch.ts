@@ -2,6 +2,8 @@
 // next 이미지의 node_modules(pg·undici 등)를 그대로 쓰고, 소스는 esbuild로 단일 번들(.next/intel-batch.cjs).
 // 환경변수: INTEL_BATCH_DAYS(기본 1=전일 증분), INTEL_BATCH_EIASS_PAGES(kind당 리스트 페이지, 기본 5.
 //           백필 시 크게 — 예: 400이면 소규모 전량). DB/DART/ANTHROPIC 설정은 next task def env 재사용.
+// DART 과거 백필: INTEL_BATCH_DART_BGN_DE/END_DE(YYYYMMDD, DART 제약상 창은 최대 30일) +
+//                INTEL_BATCH_ONLY=dart(다른 소스 skip). 청크 분할·순차 실행은 호출측 책임.
 import { getDb } from "@/lib/db";
 import { collectDartSignals } from "@/lib/intel/collect";
 import { collectEiassSignals } from "@/lib/intel/collect-eiass";
@@ -15,17 +17,29 @@ async function main() {
   const settings = await loadIntelSettings(await getDb());
   const cutoff = disclosureCutoffIso(settings);
   const days = Number(process.env.INTEL_BATCH_DAYS) > 0 ? Number(process.env.INTEL_BATCH_DAYS) : settings.dart.days;
-  console.log(`[intel-batch] start days=${days} cutoff=${cutoff ?? "none"}`);
+  // DART 과거 백필용 창 직접 지정(YYYYMMDD). 지정 시 days 대신 사용.
+  const dartBgnDe = /^\d{8}$/.test(process.env.INTEL_BATCH_DART_BGN_DE ?? "") ? process.env.INTEL_BATCH_DART_BGN_DE : undefined;
+  const dartEndDe = /^\d{8}$/.test(process.env.INTEL_BATCH_DART_END_DE ?? "") ? process.env.INTEL_BATCH_DART_END_DE : undefined;
+  // INTEL_BATCH_ONLY=dart 면 다른 소스는 건너뛴다(백필 반복 실행 시 낭비 방지)
+  const only = (process.env.INTEL_BATCH_ONLY ?? "").trim().toLowerCase();
+  console.log(`[intel-batch] start days=${days} cutoff=${cutoff ?? "none"}${dartBgnDe ? ` dartRange=${dartBgnDe}~${dartEndDe ?? "today"}` : ""}${only ? ` only=${only}` : ""}`);
 
-  if (settings.dart.enabled) {
+  if (settings.dart.enabled && (!only || only === "dart")) {
     const started = Date.now();
     const result = await collectDartSignals({
-      days,
+      ...(dartBgnDe ? { bgnDe: dartBgnDe, endDe: dartEndDe } : { days }),
       ...(settings.dart.counterpartyScan ? {} : { maxDocs: 0 }),
     }); // maxPages 미지정 = 전 페이지 완주
     console.log(`[intel-batch] dart done in ${Math.round((Date.now() - started) / 1000)}s`, JSON.stringify(result));
   } else {
-    console.log("[intel-batch] dart disabled by settings");
+    console.log("[intel-batch] dart skipped");
+  }
+
+  if (only && only !== "dart") {
+    console.log(`[intel-batch] unknown INTEL_BATCH_ONLY=${only} — nothing else to run`);
+  }
+  if (only) {
+    process.exit(0);
   }
 
   // EIASS 는 개별 실패가 DART 결과를 잃게 하지 않도록 분리 실행(실패해도 exit 0 유지, 로그로 확인).

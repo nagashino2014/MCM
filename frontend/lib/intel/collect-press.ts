@@ -5,7 +5,7 @@
 
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
-import { normalizeCompanyName } from "@/lib/ieps/formatters";
+
 import {
   fetchUlsanList,
   fetchJeonnamList,
@@ -21,7 +21,9 @@ import {
   type PressSourceKey,
 } from "./press-client";
 import { classifyNews, type NewsClassification } from "./news-classifier";
-import { coreCompanyName, isProcurementProxy, type IntelSignalGrade } from "./signal-extractor";
+import { type IntelSignalGrade } from "./signal-extractor";
+import { buildFacilityMatcher } from "./facility-matcher";
+import { INTEL_COLLECT_DEFAULTS, isOlderThanCutoff } from "./intel-settings";
 
 function id(prefix: string): string {
   return `${prefix}_${crypto.randomBytes(8).toString("hex")}`;
@@ -32,10 +34,11 @@ const LIST_THROTTLE_MS = 300;
 const BODY_THROTTLE_MS = 300;
 const HAIKU_THROTTLE_MS = 120;
 
-// 제목 키워드 필터: 투자·공장 신증설 정황만 본문·Haiku 로 넘긴다(지자체 보도자료 대부분은 행정 홍보).
+// 제목/부서 키워드 필터 기본값은 intel-settings DEFAULTS — 설정(opts)으로 오버라이드 가능.
 // 담당부서에 '투자'가 들어가면(투자유치과 등) 제목 무관 통과 — 부서 필드가 가장 강한 사전 신호.
-const TITLE_RE = /(투자협약|투자유치|투자 유치|MOU|양해각서|공장|증설|신설|착공|산업단지|산단|생산시설|생산라인|유치 협약|투자)/;
-const DEPT_RE = /(투자|기업유치)/;
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const keywordsToRe = (kws: string[]): RegExp | null =>
+  kws.length ? new RegExp("(" + kws.map(escapeRe).join("|") + ")") : null;
 
 // Haiku confidence → 신호 등급(뉴스와 동일 매핑)
 const GRADE_BY_CONFIDENCE: Record<NewsClassification["confidence"], IntelSignalGrade> = {
@@ -58,6 +61,10 @@ const FETCHERS: [PressSourceKey, Fetcher][] = [
 
 export interface CollectPressOptions {
   maxClassify?: number; // Haiku 분류 상한(비용·테스트 제어). 미지정=전량
+  adapters?: Record<string, boolean>; // 지자체 어댑터별 사용 여부(설정 오버라이드)
+  titleKeywords?: string[];
+  deptKeywords?: string[];
+  disclosureCutoffIso?: string | null; // 게재일 하한(YYYY-MM-DD)
 }
 
 export interface CollectPressResult {
@@ -75,6 +82,10 @@ export interface CollectPressResult {
 export async function collectPressSignals(opts: CollectPressOptions = {}): Promise<CollectPressResult> {
   const db = await getDb();
   const maxClassify = opts.maxClassify != null && opts.maxClassify >= 0 ? opts.maxClassify : Infinity;
+  const titleRe = keywordsToRe(opts.titleKeywords ?? INTEL_COLLECT_DEFAULTS.press.titleKeywords) ?? /(?:)/;
+  const deptRe = keywordsToRe(opts.deptKeywords ?? INTEL_COLLECT_DEFAULTS.press.deptKeywords);
+  const cutoffIso = opts.disclosureCutoffIso ?? null;
+  const adapterEnabled = (key: PressSourceKey) => opts.adapters?.[key] !== false;
 
   const result: CollectPressResult = {
     scanned: 0, newFound: 0, kwPassed: 0, classified: 0, signals: 0,
@@ -82,18 +93,8 @@ export async function collectPressSignals(opts: CollectPressOptions = {}): Promi
     byGrade: { confirmed: 0, candidate: 0, monitoring: 0, excluded: 0 },
   };
 
-  // 1) facilities 코어명 매칭 집합(보도자료는 BRN 없어 회사명 매칭 — 뉴스와 동일)
-  const facRows = rowsToObjects(
-    await db.exec(`SELECT facility_id, company_name, normalized_company_name FROM facilities`)
-  );
-  const coreToFac = new Map<string, string>();
-  for (const r of facRows) {
-    const cname = String(r.company_name ?? "");
-    const nm = r.normalized_company_name ? String(r.normalized_company_name).trim() : "";
-    if (isProcurementProxy(cname) || isProcurementProxy(nm)) continue;
-    const core = coreCompanyName(nm || cname);
-    if (core.length >= 3 && !coreToFac.has(core)) coreToFac.set(core, String(r.facility_id));
-  }
+  // 1) facilities 매칭 모집단 — 공용 매처(법인격·사이트 접미사·음차·별칭 대응)
+  const matcher = await buildFacilityMatcher(db);
 
   // 2) 기존 수집 URL(스킵용)
   const seen = new Set(
@@ -105,6 +106,7 @@ export async function collectPressSignals(opts: CollectPressOptions = {}): Promi
   // 3) 어댑터별 리스트 → 신규 + 키워드/부서 통과만 후보로
   const candidates: PressItem[] = [];
   for (const [key, fetcher] of FETCHERS) {
+    if (!adapterEnabled(key)) continue; // 설정에서 끈 어댑터
     let items: PressItem[];
     try {
       items = await fetcher();
@@ -118,7 +120,8 @@ export async function collectPressSignals(opts: CollectPressOptions = {}): Promi
       if (!it.url || seen.has(it.url)) continue;
       seen.add(it.url);
       result.newFound++;
-      if (!TITLE_RE.test(it.title) && !(it.dept && DEPT_RE.test(it.dept))) continue;
+      if (!titleRe.test(it.title) && !(it.dept && deptRe && deptRe.test(it.dept))) continue;
+      if (isOlderThanCutoff(it.publishedAt, cutoffIso)) continue;
       result.kwPassed++;
       candidates.push(it);
     }
@@ -144,11 +147,7 @@ export async function collectPressSignals(opts: CollectPressOptions = {}): Promi
     await sleep(HAIKU_THROTTLE_MS);
     if (!cls || !cls.isSignal) continue;
     result.signals++;
-    let facilityId: string | null = null;
-    if (cls.companyName && !isProcurementProxy(cls.companyName)) {
-      const core = coreCompanyName(normalizeCompanyName(cls.companyName) ?? cls.companyName);
-      if (core.length >= 3) facilityId = coreToFac.get(core) ?? null;
-    }
+    const facilityId = matcher.matchName(cls.companyName)?.facilityId ?? null;
     prepared.push({ it, body, cls, facilityId });
   }
 

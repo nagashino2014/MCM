@@ -6,7 +6,7 @@
 
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
-import { normalizeCompanyName } from "@/lib/ieps/formatters";
+
 import {
   fetchEiassList,
   fetchEiassDetail,
@@ -17,7 +17,9 @@ import {
   type EiassDetail,
 } from "./eiass-client";
 import { classifyEiass, type EiassClassification } from "./eiass-classifier";
-import { coreCompanyName, isProcurementProxy, type IntelSignalType, type IntelSignalGrade } from "./signal-extractor";
+import { type IntelSignalType, type IntelSignalGrade } from "./signal-extractor";
+import { buildFacilityMatcher } from "./facility-matcher";
+import { INTEL_COLLECT_DEFAULTS, isOlderThanCutoff } from "./intel-settings";
 
 function id(prefix: string): string {
   return `${prefix}_${crypto.randomBytes(8).toString("hex")}`;
@@ -30,9 +32,10 @@ const DETAIL_THROTTLE_MS = 300;
 const HAIKU_THROTTLE_MS = 120;
 
 // 1차 사업명 키워드 필터: 통합허가 업종 정황(산단·공장·발전·소각·폐기물)만 상세 조회.
-// 도로·하천·골프장·주택 등은 포지티브 미부합으로 자연 탈락. 태양광·풍력은 발전 계열 오탐이라 네거티브.
-const POSITIVE_RE = /(산업단지|농공단지|산단|공장|제조|생산시설|생산라인|발전소|발전사업|복합발전|열병합|소각|폐기물|매립장|자원순환|재활용시설)/;
-const NEGATIVE_RE = /(태양광|풍력|연료전지)/;
+// 기본 키워드는 intel-settings DEFAULTS 와 동일 — 설정(opts)으로 오버라이드 가능.
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const keywordsToRe = (kws: string[]): RegExp | null =>
+  kws.length ? new RegExp("(" + kws.map(escapeRe).join("|") + ")") : null;
 
 // Haiku confidence → 신호 등급(뉴스 파이프라인과 동일 매핑)
 const GRADE_BY_CONFIDENCE: Record<EiassClassification["confidence"], IntelSignalGrade> = {
@@ -51,6 +54,9 @@ export interface CollectEiassOptions {
   maxPages?: number; // kind당 리스트 페이지 수(10행/페이지). 기본 5(일일 증분 충분)
   maxDetails?: number; // 상세 조회 상한(키워드 통과 건 대상, 테스트 제어). 미지정=전량
   maxClassify?: number; // Haiku 분류 상한(비용·테스트 제어). 미지정=전량
+  positiveKeywords?: string[]; // 사업명 포함 키워드(설정 오버라이드)
+  negativeKeywords?: string[]; // 사업명 제외 키워드
+  disclosureCutoffIso?: string | null; // 접수일 하한(YYYY-MM-DD). 오래된 협의 건 제외
 }
 
 export interface CollectEiassResult {
@@ -72,6 +78,10 @@ export async function collectEiassSignals(opts: CollectEiassOptions = {}): Promi
   const maxPages = opts.maxPages && opts.maxPages > 0 ? opts.maxPages : 5;
   const maxDetails = opts.maxDetails != null && opts.maxDetails >= 0 ? opts.maxDetails : Infinity;
   const maxClassify = opts.maxClassify != null && opts.maxClassify >= 0 ? opts.maxClassify : Infinity;
+  const positiveRe =
+    keywordsToRe(opts.positiveKeywords ?? INTEL_COLLECT_DEFAULTS.eiass.positiveKeywords) ?? /(?:)/;
+  const negativeRe = keywordsToRe(opts.negativeKeywords ?? INTEL_COLLECT_DEFAULTS.eiass.negativeKeywords);
+  const cutoffIso = opts.disclosureCutoffIso ?? null;
 
   const result: CollectEiassResult = {
     scanned: 0, newFound: 0, kwPassed: 0, detailFetched: 0, classified: 0, signals: 0,
@@ -80,18 +90,8 @@ export async function collectEiassSignals(opts: CollectEiassOptions = {}): Promi
     parseEmpty: false,
   };
 
-  // 1) facilities 코어명 매칭 집합(시행자명 매칭. EIASS 는 BRN 없음) — 뉴스 파이프라인과 동일 패턴.
-  const facRows = rowsToObjects(
-    await db.exec(`SELECT facility_id, company_name, normalized_company_name FROM facilities`)
-  );
-  const coreToFac = new Map<string, string>();
-  for (const r of facRows) {
-    const cname = String(r.company_name ?? "");
-    const nm = r.normalized_company_name ? String(r.normalized_company_name).trim() : "";
-    if (isProcurementProxy(cname) || isProcurementProxy(nm)) continue;
-    const core = coreCompanyName(nm || cname);
-    if (core.length >= 3 && !coreToFac.has(core)) coreToFac.set(core, String(r.facility_id));
-  }
+  // 1) facilities 매칭 모집단 — 공용 매처(법인격·사이트 접미사·음차·별칭 대응)
+  const matcher = await buildFacilityMatcher(db);
 
   // 2) 기존 수집 코드(스킵용). external_id=사업코드.
   const seen = new Set(
@@ -122,7 +122,9 @@ export async function collectEiassSignals(opts: CollectEiassOptions = {}): Promi
         if (seen.has(row.code)) continue;
         seen.add(row.code); // 리스트 중복 노출 방어
         result.newFound++;
-        if (!POSITIVE_RE.test(row.title) || NEGATIVE_RE.test(row.title)) continue;
+        if (!positiveRe.test(row.title) || (negativeRe && negativeRe.test(row.title))) continue;
+        // 접수일 하한(공시일 컷): 너무 오래된 협의 건은 이미 통합허가가 진행됐을 가능성이 높다.
+        if (isOlderThanCutoff(dotDateToIso(row.dateText), cutoffIso)) continue;
         result.kwPassed++;
         candidates.push({ kind, row });
       }
@@ -173,12 +175,8 @@ export async function collectEiassSignals(opts: CollectEiassOptions = {}): Promi
     const grade = cls ? GRADE_BY_CONFIDENCE[cls.confidence] : "monitoring";
     const companyName = cls?.companyName ?? detail.operator;
 
-    // 시행자명 → facilities 매칭(조달대행 기관 제외). 지자체·공사 시행 산단은 unmatched 리드로 남는다.
-    let facilityId: string | null = null;
-    if (companyName && !isProcurementProxy(companyName)) {
-      const core = coreCompanyName(normalizeCompanyName(companyName) ?? companyName);
-      if (core.length >= 3) facilityId = coreToFac.get(core) ?? null;
-    }
+    // 시행자명 → facilities 매칭. 지자체·공사 시행 산단은 unmatched 리드로 남는다.
+    const facilityId = matcher.matchName(companyName)?.facilityId ?? null;
     prepared.push({
       kind: c.kind, row: c.row, detail,
       signalType, grade, companyName,

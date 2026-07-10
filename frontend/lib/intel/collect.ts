@@ -19,15 +19,12 @@ import {
   classifyDisclosure,
   classifyCounterparty,
   extractCounterpartyText,
-  findCounterpartyFacility,
-  coreCompanyName,
-  isProcurementProxy,
   COUNTERPARTY_CATEGORIES,
   type IntelSignalGrade,
   type ClassifyResult,
   type DisclosureCategory,
 } from "./signal-extractor";
-import { normalizeCompanyName } from "@/lib/ieps/formatters";
+import { buildFacilityMatcher, facilityCoreKey } from "./facility-matcher";
 
 function id(prefix: string): string {
   return `${prefix}_${crypto.randomBytes(8).toString("hex")}`;
@@ -88,33 +85,8 @@ export async function collectDartSignals(opts: CollectOptions = {}): Promise<Col
     range: { bgnDe, endDe }, truncated: false,
   };
 
-  // 1) facilities(통합허가 대상 마스터) 매칭 집합: BRN 숫자정규화, 정규화 회사명, 원문대조용 코어명
-  const facRows = rowsToObjects(
-    await db.exec(
-      `SELECT facility_id, company_name,
-              regexp_replace(coalesce(business_registration_no,''),'[^0-9]','','g') AS brn_digits,
-              normalized_company_name AS norm_name
-         FROM facilities`
-    )
-  );
-  const brnToFac = new Map<string, string>();
-  const nameToFac = new Map<string, string>();
-  const coreToFac = new Map<string, { facilityId: string; name: string }>(); // 2차 원문 대조용
-  for (const r of facRows) {
-    const fid = String(r.facility_id);
-    const cname = String(r.company_name ?? "");
-    const nm = r.norm_name ? String(r.norm_name).trim() : "";
-    // 순수 조달대행 기관(조달청 등)은 특정 사업장 실체가 없어 발주처 오탐만 유발 → 모집단 제외.
-    // (배출시설을 직접 운영하는 지자체/환경공단은 isProcurementProxy에 안 걸리므로 유지됨)
-    if (isProcurementProxy(cname) || isProcurementProxy(nm)) continue;
-    const bd = String(r.brn_digits ?? "");
-    if (bd.length >= 10 && !brnToFac.has(bd)) brnToFac.set(bd, fid);
-    if (nm && !nameToFac.has(nm)) nameToFac.set(nm, fid);
-    const core = coreCompanyName(nm || cname);
-    if (core.length >= 3 && !coreToFac.has(core)) {
-      coreToFac.set(core, { facilityId: fid, name: cname || nm });
-    }
-  }
+  // 1) facilities(통합허가 대상 마스터) 매칭 — 공용 매처(BRN + 법인격·사이트 접미사·음차·별칭 대응)
+  const matcher = await buildFacilityMatcher(db);
 
   // 2) 선택 기간 전 공시 조회(테스트는 maxPages 소량). 라우팅 필터 없이 전부 수집(모집단 역전).
   const all: DartDisclosure[] = [];
@@ -138,14 +110,12 @@ export async function collectDartSignals(opts: CollectOptions = {}): Promise<Col
   const corpToFac = new Map<string, string | null>();
   const corpToBrn = new Map<string, string | null>();
   for (const [corp, name] of corpName) {
-    const nn = normalizeCompanyName(name) ?? name;
-    let fid = nameToFac.get(nn) ?? null;
+    let fid = matcher.matchName(name)?.facilityId ?? null;
     let brn: string | null = null;
     if (!fid && interestCorps.has(corp)) {
       try { brn = await getCompanyBrn(corp); } catch { brn = null; }
       result.corpQueried++;
-      const bd = brnDigits(brn);
-      if (bd.length >= 10) fid = brnToFac.get(bd) ?? null;
+      fid = matcher.matchBrn(brnDigits(brn))?.facilityId ?? null;
       await sleep(CORP_THROTTLE_MS);
     }
     corpToFac.set(corp, fid);
@@ -185,9 +155,9 @@ export async function collectDartSignals(opts: CollectOptions = {}): Promise<Col
       await sleep(DOC_THROTTLE_MS);
       if (!fullText) continue;
       const ctxt = extractCounterpartyText(fullText);
-      const excludeCore = coreCompanyName(normalizeCompanyName(d.corpName) ?? d.corpName);
-      const hit = findCounterpartyFacility(ctxt, coreToFac, excludeCore);
-      if (hit) secondCands.push({ d, facilityId: hit.facilityId, counterpartyName: hit.name });
+      const excludeCore = facilityCoreKey(d.corpName);
+      const hit = matcher.findInText(ctxt, excludeCore);
+      if (hit) secondCands.push({ d, facilityId: hit.facilityId, counterpartyName: hit.facilityName });
     }
     result.counterpartyMatched = secondCands.length;
   }

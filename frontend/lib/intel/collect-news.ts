@@ -4,10 +4,10 @@
 
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
-import { normalizeCompanyName } from "@/lib/ieps/formatters";
 import { searchNews, type NewsItem } from "./naver-news-client";
 import { classifyNews, type NewsClassification } from "./news-classifier";
-import { coreCompanyName, isProcurementProxy, type IntelSignalGrade } from "./signal-extractor";
+import { buildFacilityMatcher } from "./facility-matcher";
+import { type IntelSignalGrade } from "./signal-extractor";
 
 function id(prefix: string): string {
   return `${prefix}_${crypto.randomBytes(8).toString("hex")}`;
@@ -56,15 +56,8 @@ export async function collectNewsSignals(opts: CollectNewsOptions = {}): Promise
     byGrade: { confirmed: 0, candidate: 0, monitoring: 0, excluded: 0 },
   };
 
-  // 1) facilities 코어명 매칭 집합(회사명 코어 → facility). 뉴스는 BRN 없어 회사명 매칭.
-  const facRows = rowsToObjects(
-    await db.exec(`SELECT facility_id, company_name, normalized_company_name FROM facilities`)
-  );
-  const coreToFac = new Map<string, string>();
-  for (const r of facRows) {
-    const core = coreCompanyName(String(r.normalized_company_name ?? r.company_name ?? ""));
-    if (core.length >= 3 && !coreToFac.has(core)) coreToFac.set(core, String(r.facility_id));
-  }
+  // 1) facilities 매칭 모집단 — 공용 매처(법인격·사이트 접미사·음차·별칭 대응)
+  const matcher = await buildFacilityMatcher(db);
 
   // 2) 키워드별 최신순 검색 → 유니크(link) 뉴스 수집. 기수집 link 는 Haiku 전에 제외(야간 배치
   //    반복 실행 시 같은 기사 중복 분류 방지 — 비용 절감).
@@ -96,12 +89,8 @@ export async function collectNewsSignals(opts: CollectNewsOptions = {}): Promise
     await sleep(HAIKU_THROTTLE_MS);
     if (!cls || !cls.isSignal) continue;
     result.signals++;
-    // 회사명 → facilities 매칭(조달대행 기관 제외)
-    let facilityId: string | null = null;
-    if (cls.companyName && !isProcurementProxy(cls.companyName)) {
-      const core = coreCompanyName(normalizeCompanyName(cls.companyName) ?? cls.companyName);
-      if (core.length >= 3) facilityId = coreToFac.get(core) ?? null;
-    }
+    // 회사명 → facilities 매칭(조달대행 기관 제외는 매처 내부에서 처리)
+    const facilityId = matcher.matchName(cls.companyName)?.facilityId ?? null;
     prepared.push({ it, cls, facilityId });
   }
 

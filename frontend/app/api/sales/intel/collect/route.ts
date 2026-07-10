@@ -3,6 +3,7 @@ import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { collectDartSignals } from "@/lib/intel/collect";
 import { collectEiassSignals } from "@/lib/intel/collect-eiass";
 import { collectGosiSignals } from "@/lib/intel/collect-gosi";
+import { collectNewsSignals } from "@/lib/intel/collect-news";
 import { collectPressSignals } from "@/lib/intel/collect-press";
 
 export const runtime = "nodejs";
@@ -28,6 +29,10 @@ export async function POST(req: Request) {
     }
     if (body?.source === "gosi") {
       const result = await collectGosiSignals({ maxPagesPerKeyword: 1 });
+      return NextResponse.json(result);
+    }
+    if (body?.source === "news") {
+      const result = await collectNewsSignals({ displayPerKeyword: 10, maxClassify: 5 });
       return NextResponse.json(result);
     }
     const days = Number(body?.days) > 0 ? Number(body.days) : 7;

@@ -13,6 +13,7 @@ import {
   type GosiItem,
 } from "./gosi-client";
 import type { IntelSignalType, IntelSignalGrade } from "./signal-extractor";
+import { isOlderThanCutoff } from "./intel-settings";
 
 function id(prefix: string): string {
   return `${prefix}_${crypto.randomBytes(8).toString("hex")}`;
@@ -35,6 +36,9 @@ function classifyEumGosi(title: string): { signalType: IntelSignalType; grade: I
 
 export interface CollectGosiOptions {
   maxPagesPerKeyword?: number; // 토지이음 키워드당 페이지(10행). 기본 1(일일 증분 충분)
+  eumKeywords?: string[]; // 토지이음 검색 키워드(EUM_KEYWORDS 에 정의된 것만 유효)
+  rssEnabled?: boolean; // 환경청 RSS 채널 사용 여부
+  disclosureCutoffIso?: string | null; // 고시일 하한(YYYY-MM-DD)
 }
 
 export interface CollectGosiResult {
@@ -49,6 +53,11 @@ export interface CollectGosiResult {
 export async function collectGosiSignals(opts: CollectGosiOptions = {}): Promise<CollectGosiResult> {
   const db = await getDb();
   const maxPages = opts.maxPagesPerKeyword && opts.maxPagesPerKeyword > 0 ? opts.maxPagesPerKeyword : 1;
+  const eumKeywords = (Object.keys(EUM_KEYWORDS) as (keyof typeof EUM_KEYWORDS)[]).filter(
+    (k) => !opts.eumKeywords || opts.eumKeywords.includes(k)
+  );
+  const rssEnabled = opts.rssEnabled !== false;
+  const cutoffIso = opts.disclosureCutoffIso ?? null;
 
   const result: CollectGosiResult = {
     scanned: 0, newFound: 0, kwPassed: 0, inserted: 0,
@@ -67,7 +76,7 @@ export async function collectGosiSignals(opts: CollectGosiOptions = {}): Promise
   const prepared: Prepared[] = [];
   let anyItems = false;
 
-  for (const keyword of Object.keys(EUM_KEYWORDS) as (keyof typeof EUM_KEYWORDS)[]) {
+  for (const keyword of eumKeywords) {
     for (let page = 1; page <= maxPages; page++) {
       let items: GosiItem[];
       try {
@@ -84,13 +93,14 @@ export async function collectGosiSignals(opts: CollectGosiOptions = {}): Promise
         if (seen.has(it.externalId)) continue;
         seen.add(it.externalId);
         result.newFound++;
+        if (isOlderThanCutoff(it.publishedAt, cutoffIso)) continue;
         result.kwPassed++; // 검색 자체가 키워드 필터
         prepared.push({ ...it, ...classifyEumGosi(it.title) });
       }
     }
   }
 
-  for (const office of ME_OFFICES) {
+  for (const office of rssEnabled ? ME_OFFICES : []) {
     let items: GosiItem[];
     try {
       items = await fetchMeOfficeRss(office);
@@ -106,6 +116,7 @@ export async function collectGosiSignals(opts: CollectGosiOptions = {}): Promise
       seen.add(it.externalId);
       result.newFound++;
       if (!ME_TITLE_RE.test(it.title)) continue;
+      if (isOlderThanCutoff(it.publishedAt, cutoffIso)) continue;
       result.kwPassed++;
       const signalType: IntelSignalType = /산업단지|산단|농공단지|공장|제조/.test(it.title) ? "new_site" : "other";
       prepared.push({ ...it, signalType, grade: "monitoring" });

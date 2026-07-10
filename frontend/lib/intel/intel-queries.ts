@@ -42,6 +42,8 @@ export interface IntelSignal {
 }
 
 export interface IntelSignalFilter {
+  /** dart|eiass|press|news|gosi 또는 gosi 채널 분리(gosi_eum=토지이음, gosi_me=유역청) */
+  source?: string;
   signalType?: string;
   matchStatus?: string;
   status?: string;
@@ -49,6 +51,8 @@ export interface IntelSignalFilter {
   q?: string;
   from?: string; // disclosed_at >=
   to?: string; // disclosed_at <=
+  limit?: number;
+  offset?: number;
 }
 
 function mapSignal(row: Record<string, unknown>): IntelSignal {
@@ -87,9 +91,20 @@ const SIGNAL_SELECT = `
     FROM intel_signals s
     LEFT JOIN facilities f ON f.facility_id = s.facility_id`;
 
-export async function listIntelSignals(filter: IntelSignalFilter = {}): Promise<IntelSignal[]> {
+/** gosi 채널 분리(gosi_eum/gosi_me)를 포함한 소스 WHERE 절 생성. */
+function sourceCondition(source: string, params: unknown[], alias = "s."): string {
+  if (source === "gosi_eum" || source === "gosi_me") {
+    params.push(source === "gosi_eum" ? "eum" : "me");
+    return `${alias}source = 'gosi' AND COALESCE(${alias}raw_json->>'channel','me') = $${params.length}`;
+  }
+  params.push(source);
+  return `${alias}source = $${params.length}`;
+}
+
+function buildSignalWhere(filter: IntelSignalFilter): { where: string[]; params: unknown[] } {
   const where: string[] = [];
   const params: unknown[] = [];
+  if (filter.source) where.push(sourceCondition(filter.source, params));
   if (filter.signalType) { params.push(filter.signalType); where.push(`s.signal_type = $${params.length}`); }
   if (filter.matchStatus) { params.push(filter.matchStatus); where.push(`s.match_status = $${params.length}`); }
   if (filter.status) { params.push(filter.status); where.push(`s.status = $${params.length}`); }
@@ -105,16 +120,85 @@ export async function listIntelSignals(filter: IntelSignalFilter = {}): Promise<
     params.push(`%${filter.q}%`);
     where.push(`(s.company_name ILIKE $${params.length} OR s.report_name ILIKE $${params.length})`);
   }
+  return { where, params };
+}
+
+export async function listIntelSignals(
+  filter: IntelSignalFilter = {}
+): Promise<{ signals: IntelSignal[]; total: number }> {
+  const { where, params } = buildSignalWhere(filter);
+  const whereSql = where.length ? ` WHERE ${where.join(" AND ")}` : "";
   const db = await getDb();
-  const sql = `${SIGNAL_SELECT}${where.length ? ` WHERE ${where.join(" AND ")}` : ""}
-    ORDER BY s.disclosed_at DESC NULLS LAST, s.created_at DESC LIMIT 500`;
-  return rowsToObjects(await db.exec(sql, params)).map(mapSignal);
+  const countRows = rowsToObjects(
+    await db.exec(`SELECT COUNT(*)::int AS total FROM intel_signals s${whereSql}`, params)
+  );
+  const total = Number(countRows[0]?.total ?? 0);
+  const limit = Math.min(Math.max(1, filter.limit ?? 50), 200);
+  const offset = Math.max(0, filter.offset ?? 0);
+  const sql = `${SIGNAL_SELECT}${whereSql}
+    ORDER BY s.disclosed_at DESC NULLS LAST, s.created_at DESC
+    LIMIT ${limit} OFFSET ${offset}`;
+  const signals = rowsToObjects(await db.exec(sql, params)).map(mapSignal);
+  return { signals, total };
 }
 
 export async function getIntelSignal(signalId: string): Promise<IntelSignal | null> {
   const db = await getDb();
   const rows = rowsToObjects(await db.exec(`${SIGNAL_SELECT} WHERE s.signal_id = $1 LIMIT 1`, [signalId]));
   return rows.length ? mapSignal(rows[0]) : null;
+}
+
+export interface IntelSignalDetail extends IntelSignal {
+  summary: string | null;
+  rawJson: Record<string, unknown> | null;
+}
+
+/** 원문 모달용 상세 — raw_json(소스별 원본·본문·분류)·summary 포함. */
+export async function getIntelSignalDetail(signalId: string): Promise<IntelSignalDetail | null> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `${SIGNAL_SELECT.replace("s.match_status,", "s.summary, s.raw_json, s.match_status,")}
+       WHERE s.signal_id = $1 LIMIT 1`,
+      [signalId]
+    )
+  );
+  if (!rows.length) return null;
+  const row = rows[0];
+  let rawJson: Record<string, unknown> | null = null;
+  const rawVal = row.raw_json;
+  try {
+    const parsed = typeof rawVal === "string" ? JSON.parse(rawVal) : rawVal;
+    if (parsed && typeof parsed === "object") rawJson = parsed as Record<string, unknown>;
+  } catch { /* 원본 파싱 실패 시 모달은 기본 정보만 표시 */ }
+  return { ...mapSignal(row), summary: text(row.summary), rawJson };
+}
+
+/** 선택 신호 일괄 삭제. 반환: 삭제 건수. */
+export async function deleteSignals(signalIds: string[]): Promise<number> {
+  if (!signalIds.length) return 0;
+  return withDbWrite(async (db) => {
+    const rows = rowsToObjects(
+      await db.exec(
+        `DELETE FROM intel_signals WHERE signal_id = ANY($1::text[]) RETURNING signal_id`,
+        [signalIds]
+      )
+    );
+    return rows.length;
+  });
+}
+
+/** 등급(excluded/monitoring) 일괄 삭제. source 지정 시 해당 소스만. */
+export async function deleteSignalsByGrade(grade: "excluded" | "monitoring", source?: string): Promise<number> {
+  return withDbWrite(async (db) => {
+    const params: unknown[] = [grade];
+    let where = `signal_grade = $1`;
+    if (source) where += ` AND ${sourceCondition(source, params, "")}`;
+    const rows = rowsToObjects(
+      await db.exec(`DELETE FROM intel_signals WHERE ${where} RETURNING signal_id`, params)
+    );
+    return rows.length;
+  });
 }
 
 /** 처리상태 변경(new/reviewed/dismissed). converted는 전환 함수에서만. */

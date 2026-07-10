@@ -1,4 +1,4 @@
-import { IntelBoard } from "@/components/sales/IntelBoard";
+import { IntelBoard } from "@/components/sales/intel/IntelBoard";
 
 export default function SalesIntelPage() {
   return (

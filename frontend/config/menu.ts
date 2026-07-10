@@ -74,7 +74,8 @@ export const MENU_ITEMS: MenuItem[] = [
     submenu: [
       { title: "Salesboard", href: "/sales" },
       { title: "담당자 정보 관리", href: "/sales/contacts" },
-      { title: "API & RAG", href: "/sales/intel" },
+      { title: "API & 스크래핑", href: "/sales/intel" },
+      { title: "RAG & 영업 발굴", href: "/sales/rag" },
     ],
     group: "main",
   },

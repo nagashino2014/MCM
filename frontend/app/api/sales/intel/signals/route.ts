@@ -9,7 +9,10 @@ export async function GET(req: NextRequest) {
   try {
     await requirePermission("sales.view");
     const sp = req.nextUrl.searchParams;
-    const signals = await listIntelSignals({
+    const limitRaw = Number(sp.get("limit"));
+    const offsetRaw = Number(sp.get("offset"));
+    const { signals, total } = await listIntelSignals({
+      source: sp.get("source") || undefined,
       signalType: sp.get("signalType") || undefined,
       matchStatus: sp.get("matchStatus") || undefined,
       status: sp.get("status") || undefined,
@@ -17,8 +20,10 @@ export async function GET(req: NextRequest) {
       q: sp.get("q") || undefined,
       from: sp.get("from") || undefined,
       to: sp.get("to") || undefined,
+      limit: Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : undefined,
+      offset: Number.isFinite(offsetRaw) && offsetRaw >= 0 ? offsetRaw : undefined,
     });
-    return NextResponse.json({ signals });
+    return NextResponse.json({ signals, total });
   } catch (err) {
     return authErrorToResponse(err);
   }

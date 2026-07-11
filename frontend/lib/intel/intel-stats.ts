@@ -21,6 +21,17 @@ export interface IntelBreakdownRow {
   count: number;
 }
 
+export interface IntelDailyRow {
+  /** 수집일 'YYYY-MM-DD' */
+  date: string;
+  collected: number;
+  confirmed: number;
+  candidate: number;
+  /** 채택 = converted 또는 confirmed */
+  adopted: number;
+  bySource: Record<string, number>;
+}
+
 export interface IntelStats {
   /** 기간 내 소스별 수집·채택 */
   bySource: Record<string, IntelSourceStat>;
@@ -29,6 +40,8 @@ export interface IntelStats {
   monthly: Array<{ month: string; collected: number; adopted: number }>;
   /** 기간 내 소스×유형×매칭×상태×등급 조합별 건수 (세부 유형 차트는 클라에서 축별 합산) */
   breakdown: IntelBreakdownRow[];
+  /** 최근 14일 일별 수집 로그(기간 파라미터와 무관 — 야간 배치 결과 확인용) */
+  daily: IntelDailyRow[];
 }
 
 const SRC_EXPR = `CASE WHEN s.source = 'gosi'
@@ -111,7 +124,40 @@ export async function getIntelStats(from: string, to: string): Promise<IntelStat
     count: Number(r.count ?? 0),
   }));
 
-  return { bySource, total, monthly, breakdown };
+  // 일별 수집 로그: 조회 기간과 무관하게 최근 14일(야간 배치 결과 확인용)
+  const dailyFloor = new Date();
+  dailyFloor.setUTCDate(dailyFloor.getUTCDate() - 13);
+  const dailyRows = rowsToObjects(
+    await db.exec(
+      `SELECT substr(s.created_at,1,10) AS day, ${SRC_EXPR} AS src,
+              COUNT(*)::int AS collected,
+              COUNT(*) FILTER (WHERE s.signal_grade = 'confirmed')::int AS confirmed,
+              COUNT(*) FILTER (WHERE s.signal_grade = 'candidate')::int AS candidate,
+              COUNT(*) FILTER (WHERE ${ADOPTED_EXPR})::int AS adopted
+         FROM intel_signals s
+        WHERE substr(s.created_at,1,10) >= $1
+        GROUP BY 1, 2 ORDER BY 1 DESC`,
+      [dailyFloor.toISOString().slice(0, 10)]
+    )
+  );
+  const dailyMap = new Map<string, IntelDailyRow>();
+  for (const r of dailyRows) {
+    const date = String(r.day);
+    let row = dailyMap.get(date);
+    if (!row) {
+      row = { date, collected: 0, confirmed: 0, candidate: 0, adopted: 0, bySource: {} };
+      dailyMap.set(date, row);
+    }
+    const c = Number(r.collected ?? 0);
+    row.collected += c;
+    row.confirmed += Number(r.confirmed ?? 0);
+    row.candidate += Number(r.candidate ?? 0);
+    row.adopted += Number(r.adopted ?? 0);
+    row.bySource[String(r.src)] = c;
+  }
+  const daily = [...dailyMap.values()].sort((a, b) => (a.date < b.date ? 1 : -1));
+
+  return { bySource, total, monthly, breakdown, daily };
 }
 
 export interface IntelCollectState {

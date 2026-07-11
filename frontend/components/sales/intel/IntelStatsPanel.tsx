@@ -13,6 +13,14 @@ interface SourceStat { collected: number; adopted: number }
 interface BreakdownRow {
   source: string; signalType: string; matchStatus: string; status: string; grade: string; count: number;
 }
+interface DailyRow {
+  date: string;
+  collected: number;
+  confirmed: number;
+  candidate: number;
+  adopted: number;
+  bySource: Record<string, number>;
+}
 export interface IntelStatsData {
   from: string;
   to: string;
@@ -20,6 +28,8 @@ export interface IntelStatsData {
   total: SourceStat;
   monthly: Array<{ month: string; collected: number; adopted: number }>;
   breakdown: BreakdownRow[];
+  /** 최근 14일 일별 수집 로그(월 선택과 무관) */
+  daily: DailyRow[];
   /** 소스별 마지막 수집 실행(수동 실행 패널 표시용) */
   collectState: Array<{ source: string; lastRunAt: string | null; lastCursor: string | null }>;
 }
@@ -287,6 +297,49 @@ export function IntelStatsPanel({
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* 일별 수집 로그 — 야간 배치가 매일 몇 건을 넣었고 그중 몇 건이 확정·후보인지 */}
+          <div className="rounded-xl border cd-border-c p-3">
+            <div className="flex items-baseline justify-between gap-2 mb-2">
+              <h3 className="text-[13px] font-extrabold" style={{ color: "var(--cd-text)" }}>일별 수집 로그</h3>
+              <span className="text-[10px]" style={{ color: "var(--cd-faint)" }}>수집일 기준 최근 14일 · 월 선택과 무관</span>
+            </div>
+            {(stats.daily ?? []).length === 0 ? (
+              <div className="cd-text-faint text-xs py-4 text-center">최근 14일 수집 이력이 없습니다.</div>
+            ) : (
+              <div className="flex flex-col">
+                <div
+                  className="grid grid-cols-[64px_1fr_1fr_1fr_1fr] gap-x-2 px-2 py-1.5 rounded-lg text-[10px] font-bold"
+                  style={{ background: "var(--cd-surface)", color: "var(--cd-muted)" }}
+                >
+                  <span>수집일</span>
+                  <span className="text-right">수집</span>
+                  <span className="text-right">확정</span>
+                  <span className="text-right">후보</span>
+                  <span className="text-right">채택</span>
+                </div>
+                {stats.daily.map((d) => (
+                  <div key={d.date} className="cd-row-hover px-2 py-1.5 rounded-lg">
+                    <div className="grid grid-cols-[64px_1fr_1fr_1fr_1fr] gap-x-2 text-[11px] tabular-nums">
+                      <span className="font-bold" style={{ color: "var(--cd-text)" }}>{d.date.slice(5)}</span>
+                      <span className="text-right font-extrabold" style={{ color: "var(--cd-text)" }}>{d.collected.toLocaleString()}</span>
+                      <span className="text-right font-bold" style={{ color: d.confirmed > 0 ? "#13deb9" : "var(--cd-faint)" }}>{d.confirmed}</span>
+                      <span className="text-right font-bold" style={{ color: d.candidate > 0 ? "#5d87ff" : "var(--cd-faint)" }}>{d.candidate}</span>
+                      <span className="text-right font-bold" style={{ color: "var(--cd-muted)" }}>{d.adopted}</span>
+                    </div>
+                    <div className="text-[10px] mt-0.5 truncate" style={{ color: "var(--cd-faint)" }} title={
+                      Object.entries(d.bySource).map(([s, c]) => `${STAT_SOURCE_LABELS[s] ?? s} ${c}`).join(" · ")
+                    }>
+                      {Object.entries(d.bySource)
+                        .sort((a, b) => b[1] - a[1])
+                        .map(([s, c]) => `${STAT_SOURCE_LABELS[s] ?? s} ${c}`)
+                        .join(" · ")}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </>
       )}

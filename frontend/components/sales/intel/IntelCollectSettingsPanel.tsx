@@ -337,11 +337,11 @@ export function IntelCollectSettingsPanel({
               <FieldRow label="검색 키워드">
                 <KeywordChips value={settings.news.keywords} disabled={!canEdit} onChange={(v) => set("news", { keywords: v })} />
               </FieldRow>
-              <FieldRow label="키워드당 건수" hint="네이버 검색 API display(1~100)">
+              <FieldRow label="키워드당 건수" hint="1~200 (100 초과는 API 페이지 분할 호출)">
                 <input
-                  type="number" min={1} max={100} className="cd-input" style={{ width: 90 }}
+                  type="number" min={1} max={200} className="cd-input" style={{ width: 90 }}
                   value={settings.news.displayPerKeyword} disabled={!canEdit}
-                  onChange={(e) => set("news", { displayPerKeyword: Math.min(100, Math.max(1, Number(e.target.value) || 1)) })}
+                  onChange={(e) => set("news", { displayPerKeyword: Math.min(200, Math.max(1, Number(e.target.value) || 1)) })}
                 />
               </FieldRow>
               <FieldRow label="일일 AI 분류 상한" hint="Haiku 분류 비용 통제. 0 = 무제한">

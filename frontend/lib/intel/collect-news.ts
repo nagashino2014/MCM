@@ -31,7 +31,7 @@ const GRADE_BY_CONFIDENCE: Record<NewsClassification["confidence"], IntelSignalG
 
 export interface CollectNewsOptions {
   keywords?: string[];
-  displayPerKeyword?: number; // 키워드당 검색 건수(1~100, 기본 30). 테스트는 소량
+  displayPerKeyword?: number; // 키워드당 검색 건수(1~200, 기본 30 — 100 초과는 API 페이지 분할). 테스트는 소량
   maxClassify?: number; // Haiku 분류 상한(비용·테스트 제어). 미지정=전량
 }
 
@@ -48,7 +48,7 @@ export interface CollectNewsResult {
 export async function collectNewsSignals(opts: CollectNewsOptions = {}): Promise<CollectNewsResult> {
   const db = await getDb();
   const keywords = opts.keywords?.length ? opts.keywords : KEYWORDS;
-  const display = Math.min(Math.max(opts.displayPerKeyword ?? 30, 1), 100);
+  const display = Math.min(Math.max(opts.displayPerKeyword ?? 30, 1), 200);
   const maxClassify = opts.maxClassify != null && opts.maxClassify >= 0 ? opts.maxClassify : Infinity;
 
   const result: CollectNewsResult = {

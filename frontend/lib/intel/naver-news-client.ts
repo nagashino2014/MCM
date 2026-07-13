@@ -40,19 +40,24 @@ function creds(): { id: string; secret: string } {
 }
 
 export interface SearchOptions {
-  display?: number; // 1~100 (기본 20)
+  display?: number; // 1~200 (기본 20). API 상한(100) 초과분은 start 페이지 분할로 이어받는다
   start?: number; // 1~1000
   sort?: "date" | "sim"; // date=최신순(발주 신호는 date)
 }
 
-/** 뉴스 검색. 최신순(date) 기본. 실패 시 예외. */
-export async function searchNews(query: string, opts: SearchOptions = {}): Promise<{ items: NewsItem[]; total: number }> {
+/** 단일 페이지 호출(네이버 API display 상한 100). */
+async function fetchNewsPage(
+  query: string,
+  display: number,
+  start: number,
+  sort: "date" | "sim"
+): Promise<{ items: NewsItem[]; total: number }> {
   const { id, secret } = creds();
   const q = new URLSearchParams({
     query,
-    display: String(Math.min(Math.max(opts.display ?? 20, 1), 100)),
-    start: String(Math.min(Math.max(opts.start ?? 1, 1), 1000)),
-    sort: opts.sort ?? "date",
+    display: String(Math.min(Math.max(display, 1), 100)),
+    start: String(Math.min(Math.max(start, 1), 1000)),
+    sort,
   });
   const res = await undiciFetch(`${ENDPOINT}?${q.toString()}`, {
     headers: { "X-Naver-Client-Id": id, "X-Naver-Client-Secret": secret },
@@ -78,4 +83,22 @@ export async function searchNews(query: string, opts: SearchOptions = {}): Promi
     };
   });
   return { items, total: Number(data.total ?? items.length) };
+}
+
+/** 뉴스 검색. 최신순(date) 기본. display 100 초과는 start 페이지 분할 호출로 병합(최대 200). 실패 시 예외. */
+export async function searchNews(query: string, opts: SearchOptions = {}): Promise<{ items: NewsItem[]; total: number }> {
+  const want = Math.min(Math.max(opts.display ?? 20, 1), 200);
+  const sort = opts.sort ?? "date";
+  let start = Math.min(Math.max(opts.start ?? 1, 1), 1000);
+  const items: NewsItem[] = [];
+  let total = 0;
+  while (items.length < want) {
+    const batch = Math.min(100, want - items.length);
+    const page = await fetchNewsPage(query, batch, start, sort);
+    items.push(...page.items);
+    total = page.total;
+    if (page.items.length < batch || start + batch > 1000) break; // 결과 소진 또는 API start 상한
+    start += batch;
+  }
+  return { items, total };
 }

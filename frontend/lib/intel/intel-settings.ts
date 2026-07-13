@@ -28,7 +28,7 @@ export interface IntelCollectSettings {
     enabled: boolean;
     /** 네이버 뉴스 검색 키워드 */
     keywords: string[];
-    /** 키워드당 검색 건수(1~100) */
+    /** 키워드당 검색 건수(1~200 — 100 초과는 API 페이지 분할) */
     displayPerKeyword: number;
     /** 일일 AI 분류 상한(비용 통제). 0 = 무제한 */
     maxClassify: number;

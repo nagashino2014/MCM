@@ -133,8 +133,8 @@ export async function indexPendingEmbeddings(batchLimit = 200): Promise<IndexRes
 
 // ── 뉴스 중복 병합(마킹) ──────────────────────────────────────────────
 
-/** 중복 판정 코사인 임계 — 실측(2026-07-13): 0.92+ 는 전부 동일 사건 변형 기사, 0.85 부터는 오탐 위험. */
-const NEWS_DUP_THRESHOLD = 0.92;
+/** 중복 판정 코사인 임계 — 실측(2026-07-13): 0.90+ 도 동일 사건 변형 기사(0.92 시작 후 사용자 승인으로 하향), 0.85 부터는 오탐 위험. */
+const NEWS_DUP_THRESHOLD = 0.9;
 
 export interface DedupResult {
   marked: number; // 이번 실행으로 duplicate_of 마킹된 건수
@@ -196,6 +196,25 @@ export async function markNewsDuplicates(): Promise<DedupResult> {
       }
     });
   }
+
+  // 체인 플래튼: 이전 실행의 대표가 이번 실행(임계 하향 등)에서 중복으로 마킹되면
+  // 기존 마킹이 중복을 가리키게 된다 → 루트로 승격될 때까지 반복 갱신.
+  await withDbWrite(async (wdb) => {
+    const now = new Date().toISOString();
+    for (let i = 0; i < 5; i++) {
+      const updated = rowsToObjects(
+        await wdb.exec(
+          `UPDATE intel_signals d SET duplicate_of = r.duplicate_of, updated_at = $1
+             FROM intel_signals r
+            WHERE d.duplicate_of = r.signal_id AND r.duplicate_of IS NOT NULL
+              AND d.signal_id <> r.duplicate_of
+            RETURNING d.signal_id`,
+          [now]
+        )
+      );
+      if (!updated.length) break;
+    }
+  });
 
   const totalRows = rowsToObjects(
     await db.exec(`SELECT COUNT(*)::int AS n FROM intel_signals WHERE duplicate_of IS NOT NULL`)

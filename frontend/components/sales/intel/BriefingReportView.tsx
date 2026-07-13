@@ -233,14 +233,28 @@ export function BriefingReportView({
                 <div key={i} className="rounded-xl border cd-border-c px-4 py-3.5 flex flex-col gap-1.5" style={{ background: SOFT_SURFACE }}>
                   <span className="cd-text-faint text-[11.5px] font-bold tracking-wide">{k.label}</span>
                   <span className={`text-xl font-extrabold ${k.value === "미공개" ? "cd-text-muted" : "cd-text"}`}>{k.value}</span>
-                  {k.sub && (
-                    <span
-                      className="cd-text-muted text-xs leading-relaxed"
-                      style={{ overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}
-                    >
-                      <InlineMd text={k.sub} ctx={ctx} />
-                    </span>
-                  )}
+                  {k.sub && (() => {
+                    // 요약문과 인용 칩을 행 분리 — 요약문 위, 신호 태그 아래
+                    const cites = [...k.sub.matchAll(/\[(\d+)\]/g)].map((m) => Number(m[1]));
+                    const text = k.sub.replace(/\s*\[\d+\]/g, "").replace(/\s{2,}/g, " ").trim();
+                    return (
+                      <>
+                        {text && (
+                          <span
+                            className="cd-text-muted text-xs leading-relaxed"
+                            style={{ overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}
+                          >
+                            <InlineMd text={text} ctx={ctx} />
+                          </span>
+                        )}
+                        {cites.length > 0 && (
+                          <span className="flex items-center gap-0.5 flex-wrap">
+                            {cites.map((n, j) => <CiteChip key={j} n={n} ctx={ctx} />)}
+                          </span>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               ))}
             </div>
@@ -279,7 +293,7 @@ export function BriefingReportView({
                             ))}
                           </div>
                           {c.facts.length > 0 && (
-                            <div className="flex gap-6 pt-2.5" style={{ borderTop: "1px dashed var(--cd-border)" }}>
+                            <div className="flex gap-12 pt-2.5" style={{ borderTop: "1px dashed var(--cd-border)" }}>
                               {c.facts.map((f, j) => (
                                 <div key={j} className="flex flex-col gap-0.5">
                                   <span className="cd-text-faint text-[10.5px] font-bold">{f.label}</span>

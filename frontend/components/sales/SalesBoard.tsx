@@ -8,7 +8,6 @@ import {
 import { useSession } from "next-auth/react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
-import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
 import { ProgressReportModal } from "./ProgressReportModal";
 import "@/components/cdash/cdash.css";
 import {
@@ -87,7 +86,7 @@ export function SalesBoard() {
   const { data: session } = useSession();
   const role = (session?.user as { role?: "admin" | "editor" | "viewer" } | undefined)?.role ?? "viewer";
   const canEdit = role === "admin" || role === "editor";
-  const { theme, toggleTheme } = useCdashTheme();
+  const { theme } = useCdashTheme();
 
   const [projects, setProjects] = useState<SalesProject[]>([]);
   const [employees, setEmployees] = useState<SalesEmployeeOption[]>([]);
@@ -198,14 +197,11 @@ export function SalesBoard() {
         titleSuffix={`${filtered.length}건${hasFilter ? ` / ${projects.length}` : ""}`}
         subtitle="사업장별 영업건을 단계로 관리하고, 활동 이력·견적·입찰을 한 타임라인으로 추적합니다."
         actions={
-          <>
-            {canEdit && (
-              <button className="cd-btn cd-btn-primary cd-btn-sm" onClick={() => setCreating(true)}>
-                <Plus className="w-4 h-4" /> 영업건 추가
-              </button>
-            )}
-            <CdThemeToggle theme={theme} onToggle={toggleTheme} />
-          </>
+          canEdit && (
+            <button className="cd-btn cd-btn-primary cd-btn-sm" onClick={() => setCreating(true)}>
+              <Plus className="w-4 h-4" /> 영업건 추가
+            </button>
+          )
         }
       />
 

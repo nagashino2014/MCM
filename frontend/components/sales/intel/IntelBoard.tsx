@@ -10,7 +10,6 @@ import { ExternalLink, Radar, Search, X } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
-import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
 import { PaginationControls } from "@/components/ui/PaginationControls";
 import "@/components/cdash/cdash.css";
 import type { IntelSignal } from "./intel-shared";
@@ -32,7 +31,7 @@ export function IntelBoard() {
   const { data: session } = useSession();
   const role = (session?.user as { role?: "admin" | "editor" | "viewer" } | undefined)?.role ?? "viewer";
   const canEdit = role === "admin" || role === "editor";
-  const { theme, toggleTheme } = useCdashTheme();
+  const { theme } = useCdashTheme();
 
   // ── 리스트 상태(서버 필터·페이지네이션) ──
   const [signals, setSignals] = useState<IntelSignal[]>([]);
@@ -211,7 +210,6 @@ export function IntelBoard() {
         title="API & 스크래핑"
         titleSuffix={`${total.toLocaleString()}건`}
         subtitle="공시·환경영향평가·보도자료·뉴스·고시에서 통합허가 대상 사업장의 투자·증설·신설 신호를 수집해 선별합니다."
-        actions={<CdThemeToggle theme={theme} onToggle={toggleTheme} />}
       />
 
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-4 items-start">

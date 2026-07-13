@@ -7,7 +7,6 @@ import {
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
-import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
 import { SalesCalendar } from "./SalesCalendar";
 import { SalesProgressCard } from "./SalesProgressCard";
 import { SalesFacilityInfoCard } from "./SalesFacilityInfoCard";
@@ -63,7 +62,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   const { data: session } = useSession();
   const role = (session?.user as { role?: "admin" | "editor" | "viewer" } | undefined)?.role ?? "viewer";
   const canEdit = role === "admin" || role === "editor";
-  const { theme, toggleTheme } = useCdashTheme();
+  const { theme } = useCdashTheme();
 
   const [project, setProject] = useState<SalesProject | null>(null);
   const [kpi, setKpi] = useState<SalesProjectKpi | null>(null);
@@ -182,7 +181,6 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
         </div>
         <div className="flex items-center gap-2">
           <span className={`cd-pill ${STAGE_PILL[project.stage] ?? "cd-pill-idle"}`} title="진행 단계(자동 분류)">{SALES_STAGE_LABELS[project.stage]}</span>
-          <CdThemeToggle theme={theme} onToggle={toggleTheme} />
         </div>
       </div>
 

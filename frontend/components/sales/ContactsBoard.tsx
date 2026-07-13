@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Users, Search, X, Building2, Phone, Smartphone, Mail, Briefcase } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
-import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
 import "@/components/cdash/cdash.css";
 
 // API 응답 shape(서버 queries.ts SalesContact와 동일).
@@ -42,7 +41,7 @@ function StatusTag({ status }: { status: string }) {
 }
 
 export function ContactsBoard() {
-  const { theme, toggleTheme } = useCdashTheme();
+  const { theme } = useCdashTheme();
   const [contacts, setContacts] = useState<SalesContact[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -97,7 +96,6 @@ export function ContactsBoard() {
         title="담당자 정보 관리"
         titleSuffix={`${filtered.length}명${hasFilter ? ` / ${contacts.length}` : ""}`}
         subtitle="전 사업장 담당자를 한 곳에서 조회합니다. 명함 촬영·통합 타임라인은 준비 중입니다."
-        actions={<CdThemeToggle theme={theme} onToggle={toggleTheme} />}
       />
 
       {/* 툴바 */}

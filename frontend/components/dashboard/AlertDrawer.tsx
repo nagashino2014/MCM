@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { X, Bell, AlertTriangle, AlertCircle, Info, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -83,7 +84,9 @@ export function AlertDrawer({ open, onClose, canAck, onChanged }: AlertDrawerPro
 
   if (!open) return null;
 
-  return (
+  // 사이드바(position: sticky) 내부에서 렌더되면 sticky 의 stacking context 에 갇혀
+  // 메인 컨텐츠 뒤로 깔리므로(닫기 불가·메뉴 비활성), body 포털로 최상위에 띄운다.
+  return createPortal(
     <>
       <div className="drawer-overlay" onClick={onClose} />
       <aside className="drawer">
@@ -158,7 +161,8 @@ export function AlertDrawer({ open, onClose, canAck, onChanged }: AlertDrawerPro
           ))}
         </div>
       </aside>
-    </>
+    </>,
+    document.body
   );
 }
 

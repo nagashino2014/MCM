@@ -25,6 +25,7 @@ export interface IntelSignal {
   matchType: string;
   linkedProjectId: string | null;
   status: string;
+  duplicateOf: string | null;
   createdAt: string;
 }
 

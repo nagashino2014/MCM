@@ -10,7 +10,7 @@ import { collectEiassSignals } from "@/lib/intel/collect-eiass";
 import { collectGosiSignals } from "@/lib/intel/collect-gosi";
 import { collectNewsSignals } from "@/lib/intel/collect-news";
 import { collectPressSignals } from "@/lib/intel/collect-press";
-import { indexPendingEmbeddings } from "@/lib/intel/rag-indexer";
+import { indexPendingEmbeddings, markNewsDuplicates } from "@/lib/intel/rag-indexer";
 import { disclosureCutoffIso, loadIntelSettings } from "@/lib/intel/intel-settings";
 
 async function main() {
@@ -142,6 +142,11 @@ async function main() {
     console.log(
       `[intel-batch] embed done in ${Math.round((Date.now() - embStarted) / 1000)}s indexed=${indexed}${remaining >= 0 ? ` remaining=${remaining}` : ""}`
     );
+    // 임베딩 이후: 뉴스 중복(동일 사건 변형 기사) 병합 마킹 — 삭제 없이 duplicate_of 기록
+    if (remaining >= 0) {
+      const dedup = await markNewsDuplicates();
+      console.log(`[intel-batch] dedup done marked=${dedup.marked} total=${dedup.totalDuplicates}`);
+    }
   } catch (err) {
     console.error("[intel-batch] embed error", err);
   }

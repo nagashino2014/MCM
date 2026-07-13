@@ -37,6 +37,7 @@ export interface IntelSignal {
   matchType: string; // direct | counterparty
   linkedProjectId: string | null;
   status: string; // new | reviewed | converted | dismissed
+  duplicateOf: string | null; // 중복(변형 기사)이면 대표 신호 ID
   createdAt: string;
   updatedAt: string;
 }
@@ -48,6 +49,7 @@ export interface IntelSignalFilter {
   matchStatus?: string;
   status?: string;
   grade?: string; // 미지정=confirmed+candidate 기본, 'all'=전체, 특정등급=그 등급만
+  includeDuplicates?: boolean; // 기본 false — 중복(변형 기사) 마킹 건 제외
   q?: string;
   from?: string; // disclosed_at >=
   to?: string; // disclosed_at <=
@@ -78,6 +80,7 @@ function mapSignal(row: Record<string, unknown>): IntelSignal {
     matchType: String(row.match_type ?? "direct"),
     linkedProjectId: text(row.linked_project_id),
     status: String(row.status ?? "new"),
+    duplicateOf: text(row.duplicate_of),
     createdAt: String(row.created_at ?? ""),
     updatedAt: String(row.updated_at ?? ""),
   };
@@ -87,7 +90,7 @@ const SIGNAL_SELECT = `
   SELECT s.signal_id, s.source, s.external_id, s.corp_code, s.company_name, s.brn, s.report_name,
          s.signal_type, s.signal_grade, s.asset_class, s.acquire_purpose, s.counterparty,
          s.disclosed_at, s.amount, s.url, s.facility_id, f.company_name AS facility_name,
-         s.match_status, s.match_type, s.linked_project_id, s.status, s.created_at, s.updated_at
+         s.match_status, s.match_type, s.linked_project_id, s.status, s.duplicate_of, s.created_at, s.updated_at
     FROM intel_signals s
     LEFT JOIN facilities f ON f.facility_id = s.facility_id`;
 
@@ -114,6 +117,8 @@ function buildSignalWhere(filter: IntelSignalFilter): { where: string[]; params:
   } else if (filter.grade !== "all") {
     params.push(filter.grade); where.push(`s.signal_grade = $${params.length}`);
   }
+  // 중복(동일 사건 변형 기사) 기본 제외 — 데이터는 보존, 노출만 대표 신호로 일원화
+  if (!filter.includeDuplicates) where.push(`s.duplicate_of IS NULL`);
   if (filter.from) { params.push(filter.from); where.push(`s.disclosed_at >= $${params.length}`); }
   if (filter.to) { params.push(filter.to); where.push(`s.disclosed_at <= $${params.length}`); }
   if (filter.q) {

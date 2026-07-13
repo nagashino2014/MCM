@@ -25,6 +25,7 @@ interface RagStatusData {
   briefingReady: boolean;
   totalSignals: number;
   embedded: number;
+  duplicates: number;
   bySource: Array<{ source: string; total: number; embedded: number }>;
   briefingCount: number;
 }
@@ -217,8 +218,9 @@ export function RagBoard() {
                   <option key={t.key} value={t.key}>{t.label}</option>
                 ))}
               </select>
-              <select className="cd-select" style={{ width: "auto" }} value={fGrade} onChange={(e) => setFGrade(e.target.value)}>
-                <option value="">등급 전체</option>
+              <select className="cd-select" style={{ width: "auto" }} value={fGrade} onChange={(e) => setFGrade(e.target.value)} title="검색 대상 등급 — 기본은 '제외' 등급을 뺀 전체">
+                <option value="">등급 기본(제외 뺌)</option>
+                <option value="all">등급 전체</option>
                 <option value="confirmed">확정</option>
                 <option value="candidate">후보</option>
                 <option value="monitoring">관찰</option>
@@ -354,7 +356,9 @@ export function RagBoard() {
                   ))}
                 </div>
                 <p className="cd-text-faint text-[11px] mt-2">
-                  브리핑 {status.briefingCount.toLocaleString()}건 생성됨 · 야간 배치 수집분은 다음 적재 때 반영
+                  브리핑 {status.briefingCount.toLocaleString()}건 생성됨
+                  {status.duplicates > 0 ? ` · 중복 기사 ${status.duplicates.toLocaleString()}건 병합됨(검색 제외)` : ""}
+                  {" · 야간 배치 수집분은 다음 적재 때 반영"}
                 </p>
               </>
             ) : (

@@ -50,6 +50,7 @@ export function IntelBoard() {
   const [matchStatus, setMatchStatus] = useState("");
   const [status, setStatus] = useState("");
   const [grade, setGrade] = useState(""); // ''=확정+후보 기본, 'all'=전체, 특정등급
+  const [includeDup, setIncludeDup] = useState(false); // 중복(변형 기사) 포함 여부
   const [offset, setOffset] = useState(0);
 
   useEffect(() => {
@@ -58,7 +59,7 @@ export function IntelBoard() {
   }, [q]);
 
   // 필터 변경 시 1페이지로
-  useEffect(() => { setOffset(0); setCheckedIds(new Set()); }, [source, qDebounced, signalType, matchStatus, status, grade]);
+  useEffect(() => { setOffset(0); setCheckedIds(new Set()); }, [source, qDebounced, signalType, matchStatus, status, grade, includeDup]);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -71,6 +72,7 @@ export function IntelBoard() {
       if (matchStatus) params.set("matchStatus", matchStatus);
       if (status) params.set("status", status);
       if (grade) params.set("grade", grade);
+      if (includeDup) params.set("includeDuplicates", "1");
       params.set("limit", String(PAGE_SIZE));
       params.set("offset", String(offset));
       const res = await fetch(`/api/sales/intel/signals?${params.toString()}`, { cache: "no-store" });
@@ -83,7 +85,7 @@ export function IntelBoard() {
     } finally {
       setLoading(false);
     }
-  }, [source, qDebounced, signalType, matchStatus, status, grade, offset]);
+  }, [source, qDebounced, signalType, matchStatus, status, grade, includeDup, offset]);
 
   useEffect(() => { reload(); }, [reload]);
 
@@ -200,7 +202,7 @@ export function IntelBoard() {
       return next;
     });
 
-  const hasFilter = !!(q || signalType || matchStatus || status || grade);
+  const hasFilter = !!(q || signalType || matchStatus || status || grade || includeDup);
 
   return (
     <div className="cdash cd-fields-white p-2" data-theme={theme}>
@@ -258,8 +260,12 @@ export function IntelBoard() {
                 <option value="monitoring">관찰</option>
                 <option value="excluded">제외</option>
               </select>
+              <label className="inline-flex items-center gap-1.5 cd-text-muted text-xs cursor-pointer" title="같은 사건의 변형 기사(중복 병합 마킹)도 표시">
+                <input type="checkbox" checked={includeDup} onChange={(e) => setIncludeDup(e.target.checked)} />
+                중복 포함
+              </label>
               {hasFilter && (
-                <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => { setQ(""); setSignalType(""); setMatchStatus(""); setStatus(""); setGrade(""); }}>
+                <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => { setQ(""); setSignalType(""); setMatchStatus(""); setStatus(""); setGrade(""); setIncludeDup(false); }}>
                   <X className="w-3.5 h-3.5" /> 초기화
                 </button>
               )}
@@ -307,6 +313,9 @@ export function IntelBoard() {
                           )}
                           <td className="cd-text font-bold">
                             {sig.companyName ?? "—"} <MatchTypeTag type={sig.matchType} />
+                            {sig.duplicateOf && (
+                              <span className="cd-pill cd-pill-outline ml-1" title="같은 사건의 변형 기사 — 대표 신호에 병합됨">중복</span>
+                            )}
                           </td>
                           <td><TypeTag type={sig.signalType} /></td>
                           <td><GradeTag grade={sig.signalGrade} /></td>

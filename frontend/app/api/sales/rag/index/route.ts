@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
-import { indexPendingEmbeddings } from "@/lib/intel/rag-indexer";
+import { indexPendingEmbeddings, markNewsDuplicates } from "@/lib/intel/rag-indexer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,7 +21,9 @@ export async function POST(req: NextRequest) {
         { status: 503 }
       );
     }
-    return NextResponse.json(result);
+    // 적재 후 뉴스 중복 병합 마킹(신규 임베딩 기준 판정)
+    const dedup = await markNewsDuplicates();
+    return NextResponse.json({ ...result, dedupMarked: dedup.marked, dedupTotal: dedup.totalDuplicates });
   } catch (err) {
     return authErrorToResponse(err);
   }

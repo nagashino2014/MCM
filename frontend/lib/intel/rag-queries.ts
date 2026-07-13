@@ -24,7 +24,7 @@ function id(prefix: string): string {
 
 export interface RagSearchFilter {
   source?: string; // dart|eiass|press|news|gosi_eum|gosi_me
-  grade?: string; // 미지정=전체(축적 전량이 모수), 특정등급=그 등급만
+  grade?: string; // 미지정=기본(excluded 제외), 'all'=전량, 특정등급=그 등급만
   matchStatus?: string;
   from?: string; // disclosed_at >=
   to?: string; // disclosed_at <=
@@ -72,7 +72,15 @@ function buildRagWhere(filter: RagSearchFilter, alias = "s."): { where: string[]
   const where: string[] = [];
   const params: unknown[] = [];
   if (filter.source) where.push(sourceCondition(filter.source, params, alias));
-  if (filter.grade) { params.push(filter.grade); where.push(`${alias}signal_grade = $${params.length}`); }
+  // 등급 기본값: excluded(무관 판정·기간 초과 강등분) 제외 — 검색·브리핑 노이즈 저감.
+  // 'all' 이면 전량, 특정 등급이면 그 등급만.
+  if (filter.grade === undefined || filter.grade === "") {
+    where.push(`${alias}signal_grade <> 'excluded'`);
+  } else if (filter.grade !== "all") {
+    params.push(filter.grade); where.push(`${alias}signal_grade = $${params.length}`);
+  }
+  // 중복(변형 기사) 마킹 건은 검색 모수에서 상시 제외 — 대표 신호가 같은 내용을 대표한다
+  where.push(`${alias}duplicate_of IS NULL`);
   if (filter.matchStatus) { params.push(filter.matchStatus); where.push(`${alias}match_status = $${params.length}`); }
   if (filter.from) { params.push(filter.from); where.push(`${alias}disclosed_at >= $${params.length}`); }
   if (filter.to) { params.push(filter.to); where.push(`${alias}disclosed_at <= $${params.length}`); }
@@ -436,6 +444,7 @@ export interface RagStatus {
   briefingReady: boolean; // ANTHROPIC_API_KEY
   totalSignals: number;
   embedded: number;
+  duplicates: number; // 중복 병합 마킹 누계(검색 모수에서 제외됨)
   bySource: Array<{ source: string; total: number; embedded: number }>;
   briefingCount: number;
 }
@@ -459,11 +468,15 @@ export async function getRagStatus(): Promise<RagStatus> {
   const briefingRows = rowsToObjects(
     await db.exec(`SELECT COUNT(*)::int AS cnt FROM intel_rag_briefings`)
   );
+  const dupRows = rowsToObjects(
+    await db.exec(`SELECT COUNT(*)::int AS cnt FROM intel_signals WHERE duplicate_of IS NOT NULL`)
+  );
   return {
     embeddingReady: isEmbeddingConfigured(),
     briefingReady: !!process.env.ANTHROPIC_API_KEY,
     totalSignals: bySource.reduce((a, r) => a + r.total, 0),
     embedded: bySource.reduce((a, r) => a + r.embedded, 0),
+    duplicates: Number(dupRows[0]?.cnt ?? 0),
     bySource,
     briefingCount: Number(briefingRows[0]?.cnt ?? 0),
   };
@@ -498,6 +511,7 @@ export async function listDiscoveryCandidates(limit = 30): Promise<DiscoveryCand
         WHERE s.match_status = 'matched'
           AND s.signal_grade IN ('confirmed','candidate')
           AND s.status IN ('new','reviewed')
+          AND s.duplicate_of IS NULL
         ORDER BY s.disclosed_at DESC NULLS LAST, s.created_at DESC
         LIMIT ${Math.min(Math.max(1, limit), 100)}`
     )

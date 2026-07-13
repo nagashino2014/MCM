@@ -130,3 +130,75 @@ export async function indexPendingEmbeddings(batchLimit = 200): Promise<IndexRes
   );
   return { configured: true, indexed: rows.length, remaining: Number(remainRows[0]?.remaining ?? 0) };
 }
+
+// ── 뉴스 중복 병합(마킹) ──────────────────────────────────────────────
+
+/** 중복 판정 코사인 임계 — 실측(2026-07-13): 0.92+ 는 전부 동일 사건 변형 기사, 0.85 부터는 오탐 위험. */
+const NEWS_DUP_THRESHOLD = 0.92;
+
+export interface DedupResult {
+  marked: number; // 이번 실행으로 duplicate_of 마킹된 건수
+  totalDuplicates: number; // 마킹 누계
+}
+
+/**
+ * 임베딩 코사인 유사도로 뉴스 중복(같은 사건의 변형 기사)을 대표 신호에 병합 마킹한다.
+ * - 삭제하지 않는다: duplicate_of 에 대표 signal_id 를 기록해 보존(리스트·검색 기본에서만 제외).
+ * - 대표 = (created_at, signal_id) 사전순으로 가장 이른 신호. 같은 배치 수집분은 created_at 이
+ *   동일하므로 signal_id 타이브레이커가 필수다.
+ * - 체인(A←B, B←C) 은 대표를 루트로 승격시켜 duplicate_of 가 항상 비중복 신호를 가리키게 한다.
+ * 임베딩 적재(indexPendingEmbeddings) 이후에 호출한다(신규 신호의 임베딩이 있어야 판정 가능).
+ */
+export async function markNewsDuplicates(): Promise<DedupResult> {
+  const db = await getDb();
+  // 미마킹 뉴스 신호별로, 자기보다 이른 뉴스 신호 중 최고 유사도(임계 이상) 상대를 찾는다.
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT DISTINCT ON (sb.signal_id)
+              sb.signal_id AS dup_id, sa.signal_id AS rep_id,
+              sa.duplicate_of AS rep_dup_of
+         FROM intel_signals sb
+         JOIN intel_embeddings eb ON eb.signal_id = sb.signal_id
+         JOIN intel_signals sa
+           ON sa.source = 'news'
+          AND (sa.created_at, sa.signal_id) < (sb.created_at, sb.signal_id)
+         JOIN intel_embeddings ea ON ea.signal_id = sa.signal_id
+        WHERE sb.source = 'news'
+          AND sb.duplicate_of IS NULL
+          AND 1 - (ea.embedding <=> eb.embedding) >= ${NEWS_DUP_THRESHOLD}
+        ORDER BY sb.signal_id, (ea.embedding <=> eb.embedding) ASC`
+    )
+  );
+
+  if (rows.length) {
+    // 대표가 이미 중복이면 그 대표(루트)로 승격 — 이번 배치 내 체인도 맵으로 해소
+    const repOf = new Map<string, string>();
+    for (const r of rows) {
+      const dup = String(r.dup_id);
+      const rep = str(r.rep_dup_of) ?? String(r.rep_id);
+      repOf.set(dup, rep);
+    }
+    const resolve = (id: string): string => {
+      let cur = id;
+      for (let i = 0; i < 10 && repOf.has(cur); i++) cur = repOf.get(cur)!;
+      return cur;
+    };
+    const now = new Date().toISOString();
+    await withDbWrite(async (wdb) => {
+      for (const r of rows) {
+        const dup = String(r.dup_id);
+        const rep = resolve(dup);
+        if (rep === dup) continue; // 자기 자신(순환 방어)
+        await wdb.run(
+          `UPDATE intel_signals SET duplicate_of = $2, updated_at = $3 WHERE signal_id = $1`,
+          [dup, rep, now]
+        );
+      }
+    });
+  }
+
+  const totalRows = rowsToObjects(
+    await db.exec(`SELECT COUNT(*)::int AS n FROM intel_signals WHERE duplicate_of IS NOT NULL`)
+  );
+  return { marked: rows.length, totalDuplicates: Number(totalRows[0]?.n ?? 0) };
+}

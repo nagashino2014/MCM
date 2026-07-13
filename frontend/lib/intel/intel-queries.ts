@@ -91,8 +91,8 @@ const SIGNAL_SELECT = `
     FROM intel_signals s
     LEFT JOIN facilities f ON f.facility_id = s.facility_id`;
 
-/** gosi 채널 분리(gosi_eum/gosi_me)를 포함한 소스 WHERE 절 생성. */
-function sourceCondition(source: string, params: unknown[], alias = "s."): string {
+/** gosi 채널 분리(gosi_eum/gosi_me)를 포함한 소스 WHERE 절 생성. rag-queries 에서도 재사용. */
+export function sourceCondition(source: string, params: unknown[], alias = "s."): string {
   if (source === "gosi_eum" || source === "gosi_me") {
     params.push(source === "gosi_eum" ? "eum" : "me");
     return `${alias}source = 'gosi' AND COALESCE(${alias}raw_json->>'channel','me') = $${params.length}`;

@@ -33,6 +33,46 @@ export interface IntelSignalDetail extends IntelSignal {
   rawJson: Record<string, unknown> | null;
 }
 
+// ── RAG 브리핑 응답 shape(서버 rag-queries 와 동일 — 서버 모듈은 클라이언트 import 금지라 복제) ──
+
+export interface BriefingReport {
+  kpis: Array<{ label: string; value: string; sub: string | null }>;
+  trends: string[];
+  companies: Array<{
+    name: string;
+    region: string | null;
+    status: string | null;
+    project: string | null;
+    desc: string;
+    facts: Array<{ label: string; value: string }>;
+    note: { kind: string; text: string } | null;
+  }>;
+  etcNote: string | null;
+  insights: Array<{ badge: string; text: string }>;
+}
+
+export interface BriefingSource {
+  signalId: string;
+  score: number | null;
+  source: string;
+  companyName: string | null;
+  reportName: string | null;
+  disclosedAt: string | null;
+  facilityName: string | null;
+  url: string | null;
+}
+
+export interface Briefing {
+  briefingId: string;
+  question: string;
+  answerMd: string | null;
+  report: BriefingReport | null;
+  sources: BriefingSource[];
+  filters: { source?: string; grade?: string; from?: string; to?: string };
+  model: string | null;
+  createdAt: string;
+}
+
 /** 소스 탭 — gosi 는 채널로 분리(토지이음/유역청). key 는 API source 파라미터와 동일. */
 export const SOURCE_TABS = [
   { key: "", label: "전체" },

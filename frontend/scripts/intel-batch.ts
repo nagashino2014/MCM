@@ -10,6 +10,7 @@ import { collectEiassSignals } from "@/lib/intel/collect-eiass";
 import { collectGosiSignals } from "@/lib/intel/collect-gosi";
 import { collectNewsSignals } from "@/lib/intel/collect-news";
 import { collectPressSignals } from "@/lib/intel/collect-press";
+import { indexPendingEmbeddings } from "@/lib/intel/rag-indexer";
 import { disclosureCutoffIso, loadIntelSettings } from "@/lib/intel/intel-settings";
 
 async function main() {
@@ -119,6 +120,30 @@ async function main() {
     } catch (err) {
       console.error("[intel-batch] gosi error", err);
     }
+  }
+
+  // 마지막: 신규 수집분 벡터 임베딩 적재(D단계 RAG). 미적재분을 500건씩 소진.
+  // VOYAGE_API_KEY 미설정이면 skip. 실패해도 수집 결과에는 영향 없음(exit 0 유지).
+  try {
+    const embStarted = Date.now();
+    let indexed = 0;
+    let remaining = -1;
+    for (let i = 0; i < 40; i++) { // 안전 상한 40회(2만건) — 일일 증분에는 충분
+      const r = await indexPendingEmbeddings(500);
+      if (!r.configured) {
+        console.log("[intel-batch] embed skipped (VOYAGE_API_KEY not set)");
+        remaining = -1;
+        break;
+      }
+      indexed += r.indexed;
+      remaining = r.remaining;
+      if (r.remaining === 0 || r.indexed === 0) break;
+    }
+    console.log(
+      `[intel-batch] embed done in ${Math.round((Date.now() - embStarted) / 1000)}s indexed=${indexed}${remaining >= 0 ? ` remaining=${remaining}` : ""}`
+    );
+  } catch (err) {
+    console.error("[intel-batch] embed error", err);
   }
   process.exit(0);
 }

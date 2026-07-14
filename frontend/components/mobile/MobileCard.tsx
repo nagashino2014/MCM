@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, Check, ImageUp, Loader2, RotateCcw, Search } from "lucide-react";
+import { Camera, Check, ImageUp, Loader2, Plus, RotateCcw, Search, X } from "lucide-react";
 import { Empty, ErrorBox } from "./mobile-shared";
 
 // 명함 촬영 플로우 — 촬영/앨범 → Claude vision 파싱 → 필드 미리보기·수정 →
@@ -39,6 +39,11 @@ export function MobileCard() {
   const [facilityQuery, setFacilityQuery] = useState("");
   const [facilityOptions, setFacilityOptions] = useState<FacilityOption[]>([]);
   const [facility, setFacility] = useState<FacilityOption | null>(null);
+  // 간이 사업장 등록(현장에서 미등록 사업장 명함 대응) — source='mobile-quick' 으로 저장
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [quickForm, setQuickForm] = useState({ companyName: "", siteAddress: "", phoneNumber: "" });
+  const [quickSaving, setQuickSaving] = useState(false);
+  const [quickError, setQuickError] = useState<string | null>(null);
   const [savedMode, setSavedMode] = useState<"created" | "updated" | null>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
   const albumRef = useRef<HTMLInputElement>(null);
@@ -92,6 +97,8 @@ export function MobileCard() {
       const company = fields?.companyName ?? "";
       setFacilityQuery(company);
       setFacility(null);
+      setQuickOpen(false);
+      setQuickForm({ companyName: company, siteAddress: fields?.address ?? "", phoneNumber: fields?.officePhone ?? "" });
       if (company) await searchFacilities(company);
       setStep("form");
     } catch (e) {
@@ -130,6 +137,48 @@ export function MobileCard() {
     }
   };
 
+  const quickRegister = async () => {
+    if (!quickForm.companyName.trim() || !quickForm.siteAddress.trim()) {
+      setQuickError("사업장명과 소재지는 필수입니다.");
+      return;
+    }
+    setQuickSaving(true);
+    setQuickError(null);
+    try {
+      const res = await fetch("/api/facilities/manual", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          companyName: quickForm.companyName.trim(),
+          siteAddress: quickForm.siteAddress.trim(),
+          phoneNumber: quickForm.phoneNumber.trim() || null,
+          source: "mobile-quick",
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 409 && data.duplicateFacility) {
+        // 동일 상호+소재지(또는 BRN)가 이미 있으면 그 사업장을 바로 선택
+        const dup = data.duplicateFacility as { facilityId: string; companyName: string | null; siteAddress: string | null };
+        setFacility({ facilityId: dup.facilityId, companyName: dup.companyName ?? quickForm.companyName, siteAddress: dup.siteAddress });
+        setQuickOpen(false);
+        setQuickError(null);
+        setWarning("이미 등록된 사업장이라 기존 사업장을 선택했습니다.");
+        return;
+      }
+      if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
+      setFacility({
+        facilityId: String(data.facilityId),
+        companyName: quickForm.companyName.trim(),
+        siteAddress: quickForm.siteAddress.trim(),
+      });
+      setQuickOpen(false);
+    } catch (e) {
+      setQuickError((e as Error).message);
+    } finally {
+      setQuickSaving(false);
+    }
+  };
+
   const reset = () => {
     setStep("pick");
     setError(null);
@@ -141,6 +190,9 @@ export function MobileCard() {
     setFacilityQuery("");
     setFacilityOptions([]);
     setSavedMode(null);
+    setQuickOpen(false);
+    setQuickForm({ companyName: "", siteAddress: "", phoneNumber: "" });
+    setQuickError(null);
     setPreviewUrl((old) => {
       if (old) URL.revokeObjectURL(old);
       return null;
@@ -221,6 +273,29 @@ export function MobileCard() {
                       </button>
                     ))}
                   </div>
+                )}
+                {/* 간이 등록 — 미등록 사업장의 명함을 현장에서 바로 저장 */}
+                {quickOpen ? (
+                  <div className="rounded-xl border cd-border-c p-3 mt-2 flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                      <span className="cd-text text-xs font-bold">신규 사업장 간이 등록</span>
+                      <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => setQuickOpen(false)} aria-label="닫기">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <Field label="사업장명 *" value={quickForm.companyName} onChange={(v) => setQuickForm((s) => ({ ...s, companyName: v }))} />
+                    <Field label="소재지 *" value={quickForm.siteAddress} onChange={(v) => setQuickForm((s) => ({ ...s, siteAddress: v }))} />
+                    <Field label="대표전화" value={quickForm.phoneNumber} onChange={(v) => setQuickForm((s) => ({ ...s, phoneNumber: v }))} inputMode="tel" />
+                    {quickError && <p className="cd-error-text text-xs">{quickError}</p>}
+                    <button className="cd-btn cd-btn-primary justify-center" onClick={quickRegister} disabled={quickSaving}>
+                      {quickSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} 등록하고 선택
+                    </button>
+                    <p className="cd-text-faint text-[11px]">임시 등록된 사업장은 이후 데스크톱에서 정보를 완성할 수 있습니다.</p>
+                  </div>
+                ) : (
+                  <button className="cd-btn cd-btn-soft cd-btn-block justify-center mt-2" onClick={() => { setQuickOpen(true); setQuickError(null); }}>
+                    <Plus className="w-4 h-4" /> 신규 사업장 간이 등록
+                  </button>
                 )}
               </>
             )}

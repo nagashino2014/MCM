@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Phone, Smartphone } from "lucide-react";
 import { ACTIVITY_TYPE_META } from "@/lib/sales/types";
 import {
   ActivityTag,
@@ -256,6 +256,38 @@ function ActivityDetailSheet({
         />
         {detail.summary && <SheetRow label="업무 상세" value={detail.summary} />}
       </div>
+
+      {/* 일정에 연결된 사업장 담당자 — 미팅 전 확인·즉시 통화 */}
+      {(detail.contacts?.length ?? 0) > 0 && (
+        <div className="mt-3">
+          <h4 className="cd-text-muted text-xs font-bold mb-1.5">사업장 담당자</h4>
+          <div className="flex flex-col gap-1.5">
+            {detail.contacts!.map((c) => (
+              <div key={c.id} className="rounded-xl border cd-border-c px-3 py-2.5 flex items-center gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="cd-text text-sm font-bold truncate">
+                    {c.personName}
+                    {c.title && <span className="cd-text-muted font-normal ml-1.5 text-xs">{c.title}</span>}
+                  </div>
+                  <div className="cd-text-faint text-xs truncate">
+                    {[c.departmentName, c.mobilePhone ?? c.officePhone].filter(Boolean).join(" · ") || "—"}
+                  </div>
+                </div>
+                {(c.mobilePhone ?? c.officePhone) && (
+                  <a href={`tel:${c.mobilePhone ?? c.officePhone}`} className="cd-btn cd-btn-soft cd-btn-sm shrink-0" aria-label="전화">
+                    <Phone className="w-4 h-4" />
+                  </a>
+                )}
+                {c.mobilePhone && (
+                  <a href={`sms:${c.mobilePhone}`} className="cd-btn cd-btn-soft cd-btn-sm shrink-0" aria-label="문자">
+                    <Smartphone className="w-4 h-4" />
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {canReport ? (
         <div className="mt-3">

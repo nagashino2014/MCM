@@ -40,6 +40,9 @@ interface CreateBody {
   // 사업자등록번호가 같은 사업장(예: 동일 법인의 본사/공장)을 관계 법인으로 묶기 위해
   // 사용자가 중복을 확인한 뒤 그대로 등록하도록 허용하는 플래그.
   allowDuplicateBusinessRegistrationNo?: boolean;
+  // 등록 출처 — 모바일 명함 촬영의 간이 등록은 'mobile-quick' 으로 저장해
+  // 추후 데스크톱 관리자 화면의 "임시 등록 사업장" 정보 완성 대상으로 식별한다.
+  source?: "manual" | "mobile-quick";
 }
 
 interface DuplicateFacility {
@@ -100,6 +103,7 @@ export async function POST(req: NextRequest) {
       ? JSON.stringify(additionalSiteAddresses)
       : null;
     const region = extractRegion(siteAddress);
+    const source = body.source === "mobile-quick" ? "mobile-quick" : "manual";
     const facilityId =
       "facm_" +
       crypto
@@ -147,7 +151,7 @@ export async function POST(req: NextRequest) {
           business_certificate_business_type, business_certificate_business_item,
           business_certificate_corporate_registration_no, business_certificate_ocr_text,
           created_at, updated_at, additional_site_addresses, site_address_verbatim)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'manual', $13, $14,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $22, $13, $14,
           $15, $16, $17, $18, $19, $20, $21, true)`,
         [
           facilityId,
@@ -171,6 +175,7 @@ export async function POST(req: NextRequest) {
           now,
           now,
           additionalSiteAddressesJson,
+          source,
         ]
       );
       const services = normalizeServiceCategories(body.serviceCategories);
@@ -212,7 +217,7 @@ export async function POST(req: NextRequest) {
             representativeName: normalizeText(body.representativeName),
           siteAddress: siteAddressVerbatim,
           additionalSiteAddresses,
-          source: "manual",
+          source,
           serviceCategories: services,
           companySize: normalizeFacilityCompanySize(body.companySize),
           businessCertificateBusinessType: normalizeText(body.businessCertificateBusinessType),

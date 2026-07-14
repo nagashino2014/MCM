@@ -70,6 +70,9 @@ export async function parseBusinessCard(image: Buffer): Promise<BusinessCardPars
   const prompt =
     "이 이미지는 명함입니다. 아래 필드를 추출해 JSON 만 출력하세요(설명·코드블록 금지). " +
     "없는 필드는 null. 값은 명함 표기 그대로(번역·추측 금지), 전화번호는 국내 표기 유지.\n" +
+    "- title 에는 직급·직책만(부장/차장/과장/팀장/이사/책임/수석 등), 부서·본부·팀·실·소속 명칭은 " +
+    'department 로 분리. 붙어 있어도 나눈다(예: "부장 / 환경사업본부" → title "부장", department "환경사업본부" / ' +
+    '"영업팀 김대리" → department "영업팀", title "대리").\n' +
     '{"personName": 이름, "title": 직급·직책, "department": 부서, "companyName": 회사명, ' +
     '"mobilePhone": 휴대폰(M/Mobile/HP), "officePhone": 유선전화(T/Tel), "faxNumber": 팩스(F/Fax), ' +
     '"email": 이메일, "address": 주소, "etc": 그 외 정보(홈페이지 등) 한 줄 또는 null}';

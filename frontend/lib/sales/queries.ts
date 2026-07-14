@@ -403,13 +403,38 @@ export async function listUpcomingActivities(days = 14): Promise<UpcomingActivit
   }));
 }
 
+/** 일정에 연결된 사업장 담당자(만난 사람) — 모바일 일정 시트의 확인·즉시 통화용. */
+export interface ActivityContactPerson {
+  id: number;
+  personName: string;
+  title: string | null;
+  departmentName: string | null;
+  mobilePhone: string | null;
+  officePhone: string | null;
+}
+
+export interface MonthActivity extends UpcomingActivity {
+  contacts: ActivityContactPerson[];
+}
+
 /** 월 단위 일정 조회(모바일 캘린더용) — month='YYYY-MM'. scheduled_at 은 KST 벽시계 문자열. */
-export async function listActivitiesByMonth(month: string): Promise<UpcomingActivity[]> {
+export async function listActivitiesByMonth(month: string): Promise<MonthActivity[]> {
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
       `SELECT a.activity_id, a.project_id, a.activity_type, a.scheduled_at, a.ended_at, a.summary,
-              p.title, f.company_name AS facility_name
+              p.title, f.company_name AS facility_name,
+              COALESCE((
+                SELECT json_agg(json_build_object(
+                         'id', cp.id, 'personName', cp.person_name, 'title', cp.title,
+                         'departmentName', cd.department_name,
+                         'mobilePhone', cp.mobile_phone, 'officePhone', cp.office_phone)
+                       ORDER BY cp.person_name)
+                  FROM sales_activity_contacts ac
+                  JOIN facility_contact_people cp ON cp.id = ac.person_id
+                  LEFT JOIN facility_contact_departments cd ON cd.id = cp.department_id
+                 WHERE ac.activity_id = a.activity_id
+              ), '[]'::json) AS contacts
          FROM sales_activities a
          JOIN sales_projects p ON p.project_id = a.project_id
          LEFT JOIN facilities f ON f.facility_id = p.facility_id
@@ -429,6 +454,7 @@ export async function listActivitiesByMonth(month: string): Promise<UpcomingActi
     scheduledAt: String(r.scheduled_at ?? ""),
     endedAt: text(r.ended_at),
     summary: text(r.summary),
+    contacts: jsonArray<ActivityContactPerson>(r.contacts),
   }));
 }
 
@@ -453,8 +479,30 @@ export interface SalesContact {
   updatedAt: string;
 }
 
-export async function listSalesContacts(): Promise<SalesContact[]> {
+export async function listSalesContacts(
+  filter?: { engagement?: ("contract" | "sales")[] }
+): Promise<SalesContact[]> {
   const db = await getDb();
+  // 소속 사업장 기준 관계 필터(OR) — 판정 조건은 listFacilities.engagement 와 동일
+  // (용역 진행 중 = billing 완료 현황과 같은 미완료 판정).
+  const engConds: string[] = [];
+  if (filter?.engagement?.includes("contract")) {
+    engConds.push(`EXISTS (
+      SELECT 1 FROM contracts c
+      WHERE c.counterparty_facility_id = p.facility_id
+        AND c.deleted_at IS NULL AND c.contract_terminated_at IS NULL
+        AND NULLIF(c.permit_issued_at, '') IS NULL
+        AND COALESCE((SELECT m.invoice_issued FROM contract_payment_milestones m
+                       WHERE m.contract_id = c.contract_id
+                       ORDER BY m.stage_order DESC LIMIT 1), 0) = 0)`);
+  }
+  if (filter?.engagement?.includes("sales")) {
+    engConds.push(`EXISTS (
+      SELECT 1 FROM sales_projects sp
+      WHERE sp.facility_id = p.facility_id
+        AND sp.status = 'open' AND sp.stage NOT IN ('won','lost','hold'))`);
+  }
+  const engWhere = engConds.length ? `WHERE (${engConds.join(" OR ")})` : "";
   const rows = rowsToObjects(
     await db.exec(
       `SELECT p.id, p.facility_id, f.company_name AS facility_name,
@@ -465,6 +513,7 @@ export async function listSalesContacts(): Promise<SalesContact[]> {
          FROM facility_contact_people p
          LEFT JOIN facilities f ON f.facility_id = p.facility_id
          LEFT JOIN facility_contact_departments d ON d.id = p.department_id
+        ${engWhere}
         ORDER BY (p.status = 'active') DESC, f.company_name ASC, p.person_name ASC
         LIMIT 2000`
     )

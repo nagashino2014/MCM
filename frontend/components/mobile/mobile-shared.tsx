@@ -15,6 +15,15 @@ export interface MobileActivity {
   scheduledAt: string; // KST 벽시계 'YYYY-MM-DDTHH:MM:00'
   endedAt: string | null;
   summary: string | null;
+  /** 일정에 연결된 사업장 담당자(월 조회 API 만 내려줌 — 홈의 upcoming 응답엔 없음) */
+  contacts?: {
+    id: number;
+    personName: string;
+    title: string | null;
+    departmentName: string | null;
+    mobilePhone: string | null;
+    officePhone: string | null;
+  }[];
 }
 
 export function ActivityTag({ type }: { type: SalesActivityType }) {

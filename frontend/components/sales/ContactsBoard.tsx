@@ -50,12 +50,14 @@ export function ContactsBoard() {
   const [q, setQ] = useState("");
   const [deptType, setDeptType] = useState("");
   const [status, setStatus] = useState("");
+  const [engagement, setEngagement] = useState(""); // '' | contract | sales — 소속 사업장 관계
 
   const reload = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/sales/contacts", { cache: "no-store" });
+      const params = engagement ? `?engagement=${engagement}` : "";
+      const res = await fetch(`/api/sales/contacts${params}`, { cache: "no-store" });
       if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error ?? `HTTP ${res.status}`);
       const data = await res.json();
       setContacts(Array.isArray(data.contacts) ? data.contacts : []);
@@ -64,7 +66,7 @@ export function ContactsBoard() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [engagement]);
 
   useEffect(() => {
     reload();
@@ -86,7 +88,7 @@ export function ContactsBoard() {
     });
   }, [contacts, q, deptType, status]);
 
-  const hasFilter = !!(q || deptType || status);
+  const hasFilter = !!(q || deptType || status || engagement);
 
   return (
     <div className="cdash cd-fields-white p-2" data-theme={theme}>
@@ -120,8 +122,13 @@ export function ContactsBoard() {
           <option value="active">재직</option>
           <option value="inactive">퇴사</option>
         </select>
+        <select className="cd-select" style={{ width: "auto" }} value={engagement} onChange={(e) => setEngagement(e.target.value)}>
+          <option value="">관계 전체</option>
+          <option value="contract">용역 진행 중</option>
+          <option value="sales">영업 진행 중</option>
+        </select>
         {hasFilter && (
-          <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => { setQ(""); setDeptType(""); setStatus(""); }}>
+          <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => { setQ(""); setDeptType(""); setStatus(""); setEngagement(""); }}>
             <X className="w-3.5 h-3.5" /> 초기화
           </button>
         )}

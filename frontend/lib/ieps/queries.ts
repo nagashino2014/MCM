@@ -14,7 +14,7 @@ import {
   parseIndustriesFromValue,
   type IndustryDisplay,
 } from "./formatters";
-import { findIntegratedPermitIndustry } from "./integrated-permit-industries";
+import { INTEGRATED_PERMIT_INDUSTRIES, findIntegratedPermitIndustry } from "./integrated-permit-industries";
 import type { FacilityGroupCompanyRole, FacilityGroupInfo, FacilityGroupMembershipRelationType } from "./facility-group";
 import type { FacilityOperatingEntityInfo, FacilityOperatingRelationType } from "./facility-operating-entity";
 import {
@@ -809,6 +809,10 @@ export interface FacilityListFilter {
   industryCode?: string;
   /** 통합허가 20개 업종 카테고리 id. 지정 시 industryCode 보다 우선한다. */
   industryCategory?: string;
+  /** 복수 업종 카테고리(모바일 필터). 지정 시 industryCategory/industryCode 보다 우선(OR). */
+  industryCategories?: string[];
+  /** 관계 상태 필터(OR): contract=용역 진행 중, sales=영업 진행 중. */
+  engagement?: ("contract" | "sales")[];
   airClass?: number;
   waterClass?: number;
   source?: string;
@@ -890,27 +894,50 @@ export async function listFacilities(
       params.push(filter.sigungu);
     }
   }
-  const industryCategory = filter.industryCategory
-    ? findIntegratedPermitIndustry(filter.industryCategory)
-    : null;
-  if (industryCategory) {
-    // industry_code 는 복수 업종이 줄바꿈/쉼표로 연결될 수 있어 코드 단위로 분해해 비교한다.
-    // 코드 값은 코드 내 상수(INTEGRATED_PERMIT_INDUSTRIES)에서만 오므로 리터럴 삽입이 안전하다.
-    const conds: string[] = [];
-    for (const code of industryCategory.exactCodes) {
-      conds.push(`TRIM(ic) = '${code}'`);
-    }
-    for (const prefix of industryCategory.prefixCodes) {
-      conds.push(`TRIM(ic) LIKE '${prefix}%'`);
-    }
-    if (conds.length > 0) {
-      where.push(
-        `EXISTS (SELECT 1 FROM regexp_split_to_table(COALESCE(f.industry_code, ''), '[\\n,/]+') AS ic WHERE ${conds.join(" OR ")})`
-      );
-    }
-  } else if (filter.industryCode) {
+  // 업종 카테고리(단수/복수) — industry_code 는 복수 업종이 줄바꿈/쉼표로 연결될 수 있어
+  // 코드 단위로 분해해 비교한다. 코드 값은 상수(INTEGRATED_PERMIT_INDUSTRIES)에서만 오므로
+  // 리터럴 삽입이 안전하다. 복수 지정 시 카테고리 간 OR.
+  const industryCategoryIds = filter.industryCategories?.length
+    ? filter.industryCategories
+    : filter.industryCategory
+      ? [filter.industryCategory]
+      : [];
+  const industryConds: string[] = [];
+  for (const catId of industryCategoryIds) {
+    const cat = findIntegratedPermitIndustry(catId);
+    if (!cat) continue;
+    for (const code of cat.exactCodes) industryConds.push(`TRIM(ic) = '${code}'`);
+    for (const prefix of cat.prefixCodes) industryConds.push(`TRIM(ic) LIKE '${prefix}%'`);
+  }
+  if (industryConds.length > 0) {
+    where.push(
+      `EXISTS (SELECT 1 FROM regexp_split_to_table(COALESCE(f.industry_code, ''), '[\\n,/]+') AS ic WHERE ${industryConds.join(" OR ")})`
+    );
+  } else if (industryCategoryIds.length === 0 && filter.industryCode) {
     where.push(`f.industry_code = $${params.length + 1}`);
     params.push(filter.industryCode);
+  }
+  // 관계 상태(OR) — 용역 진행 중 판정은 billing 완료 현황(completions-status.ts)과 동일:
+  // counterparty 연결 + 미해지 + (허가일 없음 AND 최종 대금지급단위 미발행).
+  if (filter.engagement?.length) {
+    const engConds: string[] = [];
+    if (filter.engagement.includes("contract")) {
+      engConds.push(`EXISTS (
+        SELECT 1 FROM contracts c
+        WHERE c.counterparty_facility_id = f.facility_id
+          AND c.deleted_at IS NULL AND c.contract_terminated_at IS NULL
+          AND NULLIF(c.permit_issued_at, '') IS NULL
+          AND COALESCE((SELECT m.invoice_issued FROM contract_payment_milestones m
+                         WHERE m.contract_id = c.contract_id
+                         ORDER BY m.stage_order DESC LIMIT 1), 0) = 0)`);
+    }
+    if (filter.engagement.includes("sales")) {
+      engConds.push(`EXISTS (
+        SELECT 1 FROM sales_projects sp
+        WHERE sp.facility_id = f.facility_id
+          AND sp.status = 'open' AND sp.stage NOT IN ('won','lost','hold'))`);
+    }
+    if (engConds.length) where.push(`(${engConds.join(" OR ")})`);
   }
   if (filter.integratedPermitTarget) {
     where.push(
@@ -1061,6 +1088,62 @@ export interface FacilityFilterOptions {
   sigungus: { value: string; sido: string | null; count: number }[];
   industries: { code: string; name: string | null; count: number }[];
   sources: { value: string; count: number }[];
+}
+
+export interface FacilityBrowseStats {
+  /** 통합허가 20업종 카테고리별 사업장 수(0건 포함) — {id, label, count} */
+  industries: { id: string; label: string; count: number }[];
+  /** 용역 진행 중 사업장 수(완료판정 = 허가일/최종 대금단위 발행, completions-status 와 동일) */
+  contractActive: number;
+  /** 영업 진행 중 사업장 수(open + 미종결 stage) */
+  salesActive: number;
+}
+
+/** 모바일 사업장 탐색 초기 그리드용 카운트 — 단일 스캔(COUNT FILTER). */
+export async function getFacilityBrowseStats(): Promise<FacilityBrowseStats> {
+  invalidateDb();
+  const db = await getDb();
+  // 카테고리별 FILTER 식 — 코드 값은 상수에서만 오므로 리터럴 삽입 안전(listFacilities 와 동일 관례)
+  const catFilters = INTEGRATED_PERMIT_INDUSTRIES.map((cat, i) => {
+    const conds = [
+      ...cat.exactCodes.map((code) => `TRIM(ic) = '${code}'`),
+      ...cat.prefixCodes.map((prefix) => `TRIM(ic) LIKE '${prefix}%'`),
+    ];
+    if (!conds.length) return `0::int AS cat_${i}`;
+    return `COUNT(*) FILTER (WHERE EXISTS (
+      SELECT 1 FROM regexp_split_to_table(COALESCE(f.industry_code, ''), '[\\n,/]+') AS ic
+      WHERE ${conds.join(" OR ")}))::int AS cat_${i}`;
+  });
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT
+         ${catFilters.join(",\n         ")},
+         COUNT(*) FILTER (WHERE EXISTS (
+           SELECT 1 FROM contracts c
+           WHERE c.counterparty_facility_id = f.facility_id
+             AND c.deleted_at IS NULL AND c.contract_terminated_at IS NULL
+             AND NULLIF(c.permit_issued_at, '') IS NULL
+             AND COALESCE((SELECT m.invoice_issued FROM contract_payment_milestones m
+                            WHERE m.contract_id = c.contract_id
+                            ORDER BY m.stage_order DESC LIMIT 1), 0) = 0))::int AS contract_active,
+         COUNT(*) FILTER (WHERE EXISTS (
+           SELECT 1 FROM sales_projects sp
+           WHERE sp.facility_id = f.facility_id
+             AND sp.status = 'open' AND sp.stage NOT IN ('won','lost','hold')))::int AS sales_active
+       FROM facilities f
+       WHERE f.deleted_at IS NULL`
+    )
+  );
+  const row = rows[0] ?? {};
+  return {
+    industries: INTEGRATED_PERMIT_INDUSTRIES.map((cat, i) => ({
+      id: cat.id,
+      label: cat.label,
+      count: Number(row[`cat_${i}`] ?? 0),
+    })),
+    contractActive: Number(row.contract_active ?? 0),
+    salesActive: Number(row.sales_active ?? 0),
+  };
 }
 
 export async function getFacilityFilterOptions(): Promise<FacilityFilterOptions> {

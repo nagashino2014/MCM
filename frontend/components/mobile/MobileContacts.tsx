@@ -29,22 +29,30 @@ export function MobileContacts() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
+  const [engagement, setEngagement] = useState<"" | "contract" | "sales">("");
   const [selected, setSelected] = useState<SalesContact | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
+      setLoading(true);
+      setError(null);
       try {
-        const res = await fetch("/api/sales/contacts", { cache: "no-store" });
+        const params = engagement ? `?engagement=${engagement}` : "";
+        const res = await fetch(`/api/sales/contacts${params}`, { cache: "no-store" });
         if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error ?? `HTTP ${res.status}`);
         const data = await res.json();
-        setContacts(Array.isArray(data.contacts) ? data.contacts : []);
+        if (!cancelled) setContacts(Array.isArray(data.contacts) ? data.contacts : []);
       } catch (e) {
-        setError((e as Error).message);
+        if (!cancelled) setError((e as Error).message);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [engagement]);
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -72,6 +80,20 @@ export function MobileContacts() {
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
+      </div>
+
+      {/* 소속 사업장 관계 필터 */}
+      <div className="flex items-center gap-1.5">
+        {([["", "전체"], ["contract", "용역 진행 중"], ["sales", "영업 진행 중"]] as const).map(([value, label]) => (
+          <button
+            key={value}
+            className={`cd-pill ${engagement === value ? "cd-pill-info" : "cd-pill-outline"}`}
+            style={{ paddingTop: 6, paddingBottom: 6 }}
+            onClick={() => setEngagement(value)}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {error && <ErrorBox message={error} />}

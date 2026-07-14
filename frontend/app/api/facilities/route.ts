@@ -35,6 +35,20 @@ export async function GET(req: NextRequest) {
       sigungu: searchParams.get("sigungu") || undefined,
       industryCode: searchParams.get("industryCode") || undefined,
       industryCategory: searchParams.get("industryCategory") || undefined,
+      industryCategories: searchParams.get("industryCategories")
+        ? searchParams
+            .get("industryCategories")!
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : undefined,
+      engagement: searchParams.get("engagement")
+        ? searchParams
+            .get("engagement")!
+            .split(",")
+            .map((s) => s.trim())
+            .filter((s): s is "contract" | "sales" => s === "contract" || s === "sales")
+        : undefined,
       airClass: searchParams.get("airClass") ? Number(searchParams.get("airClass")) : undefined,
       waterClass: searchParams.get("waterClass")
         ? Number(searchParams.get("waterClass"))

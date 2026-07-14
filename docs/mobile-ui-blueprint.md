@@ -138,3 +138,69 @@ frontend/app/m/
 
 M1(1~7) → tsc·로컬 검증 → 스테이징 배포·실기기 확인 → **사용자 확인** →
 M2(1~5) → 실기기 명함 검증 → **사용자 확인** → 커밋·배포. 각 단계 커밋 분리(셸·열람 / 명함·경과).
+
+## 8. M3 — 실기기 피드백 반영 (2026-07-14 확정)
+
+> M2 실기기 검증 피드백 4건: ①직급/부서 분리 오류 ②현장에서 미등록 사업장의 명함을 저장할 수
+> 없음(간이 등록 필요) ③사업장 리스트가 2,000건 평면 나열이라 탐색 불가(C안 하이브리드 확정)
+> ④진행 중 용역/영업 기준 필터(사업장·담당자 공통).
+
+### M3-1. 명함 파서 직급/부서 분리 보정
+
+- business-card-parser 프롬프트에 분리 규칙 명시: title=직급·직책만(부장/이사/팀장/책임 등),
+  부서·본부·팀·실 명칭은 department 로. "부장 / 환경사업본부"처럼 붙은 표기는 분해(예시 포함).
+
+### M3-2. 명함 촬영 내 간이 사업장 등록
+
+- **API**: 기존 `/api/facilities/manual` POST 재사용 + `source` 파라미터 허용
+  (`"manual"`(기본) | `"mobile-quick"` — 임시 등록 식별용. 추후 데스크톱 홈 UI 의
+  관리자용 "임시 등록 사업장" 리스트가 `source='mobile-quick'` 조회로 정보 완성 → 승격).
+- **UI**(MobileCard 사업장 선택 섹션): 검색 결과 하단 "+ 신규 사업장 간이 등록" → 인라인 폼
+  (사업장명*, 소재지*, 대표전화 — **명함 파싱의 companyName/address/officePhone 프리필**).
+  등록 성공 시 그 사업장을 즉시 선택 상태로. manual API 의 중복 응답(회사명+주소)이 오면
+  "이미 등록된 사업장" 안내 + 해당 사업장 바로 선택.
+
+### M3-3. 사업장 탐색 개편 (C안 하이브리드)
+
+- **서버 확장**(lib/ieps/queries.ts):
+  - `FacilityListFilter.industryCategories?: string[]` — 기존 단일 industryCategory 의
+    EXISTS(regexp_split) 조건을 카테고리별 OR 로 확장(기존 파라미터는 호환 유지).
+  - `FacilityListFilter.engagement?: ("contract"|"sales")[]` — OR 판정 EXISTS:
+    - contract(용역 진행 중): `contracts.counterparty_facility_id = f.facility_id` +
+      미삭제·미해지 + **미완료 = NULLIF(permit_issued_at,'') IS NULL AND 최종 대금지급단위
+      (stage_order 최대) 미발행** — billing 완료 현황(completions-status.ts)과 동일 판정.
+      실측 103건/85곳(2026-07-14).
+    - sales(영업 진행 중): `sales_projects.facility_id = f.facility_id AND stage NOT IN
+      ('won','lost','hold')`.
+  - 신규 `/api/facilities/browse-stats`: 초기 그리드용 카운트 — 통합허가 20업종별
+    (COUNT FILTER + regexp_split EXISTS 단일 쿼리) + 용역 중/영업 중 사업장 수.
+- **MobileFacilities 전면 개편**:
+  - 초기 화면(검색어·필터 없음): 검색창 + **최근 본 사업장**(localStorage `mcm-recent-facilities`
+    최대 5, 상세 시트 열람 시 기록) + **관계 카드 2개**(용역 진행 중 N / 영업 진행 중 N — 탭 시
+    해당 필터 리스트) + **업종별 카운트 그리드**(0건 업종 숨김, 탭 시 업종 필터 리스트).
+  - 필터/검색 모드: 필터 칩 행 `[업종 ▾][지역 ▾][관계 ▾]` — 탭 시 **바텀시트**(멀티선택,
+    업종 20종·시도별 카운트 표시, 관계는 용역 중/영업 중 2항목) + 적용 필터 요약 칩.
+    결과 헤더 "N곳" + 리스트 + **더보기**(offset 30건씩, total 은 기존 응답 재사용).
+  - 정렬 토글(이름순 기본 / 최근 등록순). 규모별 필터는 데이터 축적 후(칩 1개 추가로 대응).
+- **바텀시트 컴포넌트**는 mobile-shared 의 MobileSheet 재사용(멀티선택 리스트+적용 버튼).
+
+### M3-4. 담당자 메뉴 관계 필터
+
+- `listSalesContacts(filter?: { engagement?: ("contract"|"sales")[] })` — M3-3 과 동일 EXISTS 를
+  소속 사업장(facility_id) 기준으로 적용. `/api/sales/contacts?engagement=` 파라미터.
+- MobileContacts 상단에 관계 칩(전체/용역 중/영업 중) — 기존 검색과 조합.
+- 데스크톱 ContactsBoard 에도 동일 필터 select 추가(같은 API 파라미터 재사용, 소폭).
+
+### M3-5. 일정 상세 시트에 사업장 담당자 표시
+
+- 일정에 연결된 사업장 담당자(sales_activity_contacts → facility_contact_people)를
+  일정 상세 시트에 카드로 표시 — 이름·직급·부서 + **전화(tel:)·문자(sms:) 원터치**
+  (미팅 전 담당자 확인·즉시 통화 시나리오).
+- `listActivitiesByMonth` 응답에 contacts 배열 포함(json_agg 조인 — 추가 fetch 없음).
+  연결 담당자가 없는 일정은 섹션 숨김.
+
+### 작업 순서·검증
+
+1. M3-1+M3-2(명함 계열) → tsc·dev 실증(간이 등록→명함 저장→중복 케이스) 
+2. M3-3 서버(필터 확장+browse-stats) → 쿼리 실측(카운트·engagement 85곳 일치 확인)
+3. M3-3 화면 + M3-4 + M3-5 → dev 렌더·조합 필터 검증 → **사용자 확인** → 커밋·배포 → 실기기 확인

@@ -41,13 +41,15 @@ export const edgeAuthConfig: NextAuthConfig = {
       }
       return session;
     },
-    authorized({ auth: session, request: { nextUrl } }) {
+    authorized({ auth: session, request }) {
+      const { nextUrl } = request;
       const path = nextUrl.pathname;
 
       if (
         path === "/login" ||
         path.startsWith("/api/auth/") ||
         path === "/api/health" ||
+        path === "/manifest.webmanifest" || // PWA manifest 는 설치 시 비인증 fetch
         path.startsWith("/_next/") ||
         path.startsWith("/static/")
       ) {
@@ -63,6 +65,16 @@ export const edgeAuthConfig: NextAuthConfig = {
         path === "/account/change-password" || path === "/api/account/change-password";
       if (user.mustChangePassword && !onChangeFlow) {
         return NextResponse.redirect(new URL("/account/change-password", nextUrl));
+      }
+
+      // 모바일 UA 가 루트로 진입하면 모바일 전용 화면(/m)으로.
+      // "데스크톱 버전으로 보기"가 심는 mcm-prefer-desktop 쿠키가 있으면 미적용.
+      if (path === "/") {
+        const ua = request.headers.get("user-agent") ?? "";
+        const preferDesktop = request.cookies.get("mcm-prefer-desktop")?.value === "1";
+        if (/iPhone|iPod|Android.*Mobile/i.test(ua) && !preferDesktop) {
+          return NextResponse.redirect(new URL("/m", nextUrl));
+        }
       }
 
       if (path.startsWith("/admin") || path.startsWith("/api/admin")) {

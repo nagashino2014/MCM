@@ -403,6 +403,35 @@ export async function listUpcomingActivities(days = 14): Promise<UpcomingActivit
   }));
 }
 
+/** 월 단위 일정 조회(모바일 캘린더용) — month='YYYY-MM'. scheduled_at 은 KST 벽시계 문자열. */
+export async function listActivitiesByMonth(month: string): Promise<UpcomingActivity[]> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT a.activity_id, a.project_id, a.activity_type, a.scheduled_at, a.ended_at, a.summary,
+              p.title, f.company_name AS facility_name
+         FROM sales_activities a
+         JOIN sales_projects p ON p.project_id = a.project_id
+         LEFT JOIN facilities f ON f.facility_id = p.facility_id
+        WHERE a.status <> 'canceled'
+          AND a.scheduled_at IS NOT NULL
+          AND substr(a.scheduled_at, 1, 7) = $1
+        ORDER BY a.scheduled_at ASC`,
+      [month]
+    )
+  );
+  return rows.map((r) => ({
+    activityId: String(r.activity_id ?? ""),
+    projectId: String(r.project_id ?? ""),
+    projectTitle: String(r.title ?? ""),
+    facilityName: text(r.facility_name),
+    activityType: String(r.activity_type ?? "visit") as SalesActivityType,
+    scheduledAt: String(r.scheduled_at ?? ""),
+    endedAt: text(r.ended_at),
+    summary: text(r.summary),
+  }));
+}
+
 // ── 담당자 정보 관리(facility_contact_people 전사 횡단) ──────────
 export interface SalesContact {
   id: number;

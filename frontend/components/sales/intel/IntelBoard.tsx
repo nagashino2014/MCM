@@ -13,7 +13,7 @@ import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { PaginationControls } from "@/components/ui/PaginationControls";
 import "@/components/cdash/cdash.css";
 import type { IntelSignal } from "./intel-shared";
-import { GradeTag, MatchTypeTag, SOURCE_LABEL, SOURCE_TABS, STATUS_LABEL, STATUS_PILL, TypeTag } from "./intel-shared";
+import { GradeTag, MatchTypeTag, RelevanceTag, SOURCE_LABEL, SOURCE_TABS, STATUS_LABEL, STATUS_PILL, TypeTag } from "./intel-shared";
 import { IntelSignalModal } from "./IntelSignalModal";
 import { IntelStatsPanel, type IntelStatsData } from "./IntelStatsPanel";
 import { IntelCollectSettingsPanel, type CollectStateRow } from "./IntelCollectSettingsPanel";
@@ -50,6 +50,7 @@ export function IntelBoard() {
   const [matchStatus, setMatchStatus] = useState("");
   const [status, setStatus] = useState("");
   const [grade, setGrade] = useState(""); // ''=확정+후보 기본, 'all'=전체, 특정등급
+  const [relevance, setRelevance] = useState(""); // 업종 관련성 필터(''=전체 노출)
   const [includeDup, setIncludeDup] = useState(false); // 중복(변형 기사) 포함 여부
   const [offset, setOffset] = useState(0);
 
@@ -59,7 +60,7 @@ export function IntelBoard() {
   }, [q]);
 
   // 필터 변경 시 1페이지로
-  useEffect(() => { setOffset(0); setCheckedIds(new Set()); }, [source, qDebounced, signalType, matchStatus, status, grade, includeDup]);
+  useEffect(() => { setOffset(0); setCheckedIds(new Set()); }, [source, qDebounced, signalType, matchStatus, status, grade, relevance, includeDup]);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -72,6 +73,7 @@ export function IntelBoard() {
       if (matchStatus) params.set("matchStatus", matchStatus);
       if (status) params.set("status", status);
       if (grade) params.set("grade", grade);
+      if (relevance) params.set("relevance", relevance);
       if (includeDup) params.set("includeDuplicates", "1");
       params.set("limit", String(PAGE_SIZE));
       params.set("offset", String(offset));
@@ -85,7 +87,7 @@ export function IntelBoard() {
     } finally {
       setLoading(false);
     }
-  }, [source, qDebounced, signalType, matchStatus, status, grade, includeDup, offset]);
+  }, [source, qDebounced, signalType, matchStatus, status, grade, relevance, includeDup, offset]);
 
   useEffect(() => { reload(); }, [reload]);
 
@@ -202,7 +204,7 @@ export function IntelBoard() {
       return next;
     });
 
-  const hasFilter = !!(q || signalType || matchStatus || status || grade || includeDup);
+  const hasFilter = !!(q || signalType || matchStatus || status || grade || relevance || includeDup);
 
   return (
     <div className="cdash cd-fields-white p-2" data-theme={theme}>
@@ -260,12 +262,19 @@ export function IntelBoard() {
                 <option value="monitoring">관찰</option>
                 <option value="excluded">제외</option>
               </select>
+              <select className="cd-select" style={{ width: "auto" }} value={relevance} onChange={(e) => setRelevance(e.target.value)} title="통합허가 대상 업종과의 상관도(등급과 별개 축)">
+                <option value="">관련성 전체</option>
+                <option value="direct">직접</option>
+                <option value="supply_chain">공급망</option>
+                <option value="low">낮음</option>
+                <option value="none">무관</option>
+              </select>
               <label className="inline-flex items-center gap-1.5 cd-text-muted text-xs cursor-pointer" title="같은 사건의 변형 기사(중복 병합 마킹)도 표시">
                 <input type="checkbox" checked={includeDup} onChange={(e) => setIncludeDup(e.target.checked)} />
                 중복 포함
               </label>
               {hasFilter && (
-                <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => { setQ(""); setSignalType(""); setMatchStatus(""); setStatus(""); setGrade(""); setIncludeDup(false); }}>
+                <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => { setQ(""); setSignalType(""); setMatchStatus(""); setStatus(""); setGrade(""); setRelevance(""); setIncludeDup(false); }}>
                   <X className="w-3.5 h-3.5" /> 초기화
                 </button>
               )}
@@ -295,6 +304,7 @@ export function IntelBoard() {
                         <th>회사명</th>
                         <th>신호유형</th>
                         <th>등급</th>
+                        <th>관련성</th>
                         <th>공시명</th>
                         <th>공시일</th>
                         <th>수집일</th>
@@ -319,6 +329,7 @@ export function IntelBoard() {
                           </td>
                           <td><TypeTag type={sig.signalType} /></td>
                           <td><GradeTag grade={sig.signalGrade} /></td>
+                          <td><RelevanceTag relevance={sig.industryRelevance} note={sig.relevanceNote} /></td>
                           <td className="cd-text-muted">{sig.reportName ?? "—"}</td>
                           <td className="cd-text-muted tabular-nums">{sig.disclosedAt ? sig.disclosedAt.slice(0, 10) : "—"}</td>
                           <td className="cd-text-muted tabular-nums">{sig.createdAt ? sig.createdAt.slice(0, 10) : "—"}</td>

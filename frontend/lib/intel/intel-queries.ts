@@ -38,6 +38,9 @@ export interface IntelSignal {
   linkedProjectId: string | null;
   status: string; // new | reviewed | converted | dismissed
   duplicateOf: string | null; // 중복(변형 기사)이면 대표 신호 ID
+  industry: string | null; // 통합허가 대상 업종 id
+  industryRelevance: string | null; // direct | supply_chain | low | none
+  relevanceNote: string | null; // supply_chain 유발 경로
   createdAt: string;
   updatedAt: string;
 }
@@ -50,6 +53,7 @@ export interface IntelSignalFilter {
   status?: string;
   grade?: string; // 미지정=confirmed+candidate 기본, 'all'=전체, 특정등급=그 등급만
   includeDuplicates?: boolean; // 기본 false — 중복(변형 기사) 마킹 건 제외
+  relevance?: string; // 업종 관련성 필터(direct/supply_chain/low/none). 미지정=전체 노출
   q?: string;
   from?: string; // disclosed_at >=
   to?: string; // disclosed_at <=
@@ -81,6 +85,9 @@ function mapSignal(row: Record<string, unknown>): IntelSignal {
     linkedProjectId: text(row.linked_project_id),
     status: String(row.status ?? "new"),
     duplicateOf: text(row.duplicate_of),
+    industry: text(row.industry),
+    industryRelevance: text(row.industry_relevance),
+    relevanceNote: text(row.relevance_note),
     createdAt: String(row.created_at ?? ""),
     updatedAt: String(row.updated_at ?? ""),
   };
@@ -90,7 +97,8 @@ const SIGNAL_SELECT = `
   SELECT s.signal_id, s.source, s.external_id, s.corp_code, s.company_name, s.brn, s.report_name,
          s.signal_type, s.signal_grade, s.asset_class, s.acquire_purpose, s.counterparty,
          s.disclosed_at, s.amount, s.url, s.facility_id, f.company_name AS facility_name,
-         s.match_status, s.match_type, s.linked_project_id, s.status, s.duplicate_of, s.created_at, s.updated_at
+         s.match_status, s.match_type, s.linked_project_id, s.status, s.duplicate_of,
+         s.industry, s.industry_relevance, s.relevance_note, s.created_at, s.updated_at
     FROM intel_signals s
     LEFT JOIN facilities f ON f.facility_id = s.facility_id`;
 
@@ -119,6 +127,8 @@ function buildSignalWhere(filter: IntelSignalFilter): { where: string[]; params:
   }
   // 중복(동일 사건 변형 기사) 기본 제외 — 데이터는 보존, 노출만 대표 신호로 일원화
   if (!filter.includeDuplicates) where.push(`s.duplicate_of IS NULL`);
+  // 업종 관련성 필터 — 리스트는 기본 전체 노출(배제 없음), 명시 선택 시에만 좁힘
+  if (filter.relevance) { params.push(filter.relevance); where.push(`s.industry_relevance = $${params.length}`); }
   if (filter.from) { params.push(filter.from); where.push(`s.disclosed_at >= $${params.length}`); }
   if (filter.to) { params.push(filter.to); where.push(`s.disclosed_at <= $${params.length}`); }
   if (filter.q) {

@@ -18,6 +18,7 @@ export async function GET(req: NextRequest) {
       status: sp.get("status") || undefined,
       grade: sp.get("grade") || undefined,
       includeDuplicates: sp.get("includeDuplicates") === "1",
+      relevance: sp.get("relevance") || undefined,
       q: sp.get("q") || undefined,
       from: sp.get("from") || undefined,
       to: sp.get("to") || undefined,

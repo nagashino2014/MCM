@@ -1,6 +1,7 @@
 // "API&스크래핑" 화면 공용 타입·라벨·소스 탭 정의.
 
 import { INTEL_SIGNAL_TYPE_LABELS, INTEL_SIGNAL_GRADE_LABELS } from "@/lib/intel/signal-extractor";
+import { INTEGRATED_PERMIT_INDUSTRIES } from "@/lib/ieps/integrated-permit-industries";
 
 // API 응답 shape(서버 intel-queries IntelSignal과 동일).
 export interface IntelSignal {
@@ -26,6 +27,9 @@ export interface IntelSignal {
   linkedProjectId: string | null;
   status: string;
   duplicateOf: string | null;
+  industry: string | null;
+  industryRelevance: string | null; // direct | supply_chain | low | none
+  relevanceNote: string | null;
   createdAt: string;
 }
 
@@ -124,6 +128,40 @@ export const GRADE_PILL: Record<string, string> = {
 };
 
 export const MATCH_LABEL: Record<string, string> = { matched: "매칭", unmatched: "미매칭", ignored: "무시" };
+
+// ── 업종 상관관계(별도 축 — 등급과 직교) ──
+
+export const RELEVANCE_LABEL: Record<string, string> = {
+  direct: "직접",
+  supply_chain: "공급망",
+  low: "낮음",
+  none: "무관",
+};
+export const RELEVANCE_PILL: Record<string, string> = {
+  direct: "cd-pill-success",
+  supply_chain: "cd-pill-info",
+  low: "cd-pill-idle",
+  none: "cd-pill-outline",
+};
+
+/** 업종 id → 라벨(코드 상수 + 특수 키). 설정 추가 업종은 id=label 이라 그대로 표시. */
+export const INDUSTRY_LABEL: Record<string, string> = {
+  ...Object.fromEntries(INTEGRATED_PERMIT_INDUSTRIES.map((i) => [i.id, i.label])),
+  "industrial-complex": "산업단지",
+  other: "기타(대상)",
+};
+
+export function RelevanceTag({ relevance, note }: { relevance: string | null; note?: string | null }) {
+  if (!relevance) return null;
+  return (
+    <span
+      className={`cd-pill ${RELEVANCE_PILL[relevance] ?? "cd-pill-idle"}`}
+      title={note ?? (relevance === "direct" ? "통합허가 대상 업종 직접 신호" : undefined)}
+    >
+      {RELEVANCE_LABEL[relevance] ?? relevance}
+    </span>
+  );
+}
 
 export function TypeTag({ type }: { type: string }) {
   return (

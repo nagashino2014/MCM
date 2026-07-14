@@ -18,6 +18,7 @@ export async function GET(req: NextRequest) {
       {
         source: sp.get("source") || undefined,
         grade: sp.get("grade") || undefined,
+        relevance: sp.get("relevance") || undefined,
         matchStatus: sp.get("matchStatus") || undefined,
         from: sp.get("from") || undefined,
         to: sp.get("to") || undefined,

@@ -65,6 +65,8 @@ export function buildSignalContent(row: Record<string, unknown>): string {
     str(row.disclosed_at) && `일자: ${String(row.disclosed_at).slice(0, 10)}`,
     str(row.region) && `지역: ${str(row.region)}`,
     str(row.agency) && `기관: ${str(row.agency)}`,
+    str(row.industry) && `대상업종: ${str(row.industry)}${str(row.industry_relevance) ? ` (관련성 ${str(row.industry_relevance)})` : ""}`,
+    str(row.relevance_note) && `유발경로: ${str(row.relevance_note)}`,
     str(row.asset_class) && `자산구분: ${str(row.asset_class)}`,
     str(row.acquire_purpose) && `취득목적: ${str(row.acquire_purpose)}`,
     str(row.counterparty) && `거래상대방: ${str(row.counterparty)}`,
@@ -94,6 +96,7 @@ export async function indexPendingEmbeddings(batchLimit = 200): Promise<IndexRes
       `SELECT s.signal_id, s.source, s.company_name, s.report_name, s.signal_type, s.signal_grade,
               s.disclosed_at, s.amount, s.region, s.agency, s.summary,
               s.asset_class, s.acquire_purpose, s.counterparty, s.raw_json,
+              s.industry, s.industry_relevance, s.relevance_note,
               f.company_name AS facility_name
          FROM intel_signals s
          LEFT JOIN intel_embeddings e ON e.signal_id = s.signal_id

@@ -10,7 +10,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Ban, Building2, ExternalLink, FileText, Plus, RefreshCw, X } from "lucide-react";
 import type { IntelSignal, IntelSignalDetail } from "./intel-shared";
-import { GradeTag, MatchTypeTag, SOURCE_LABEL, TypeTag } from "./intel-shared";
+import { GradeTag, INDUSTRY_LABEL, MatchTypeTag, RELEVANCE_LABEL, RelevanceTag, SOURCE_LABEL, TypeTag } from "./intel-shared";
 
 interface FacilityOption {
   facilityId: string;
@@ -237,6 +237,7 @@ export function IntelSignalModal({
             <h3 className="cd-text text-lg font-extrabold truncate">{s.companyName ?? s.reportName ?? "—"}</h3>
             <TypeTag type={s.signalType} />
             <GradeTag grade={s.signalGrade} />
+            <RelevanceTag relevance={s.industryRelevance} note={s.relevanceNote} />
             <MatchTypeTag type={s.matchType} />
           </div>
           <button className="cd-btn cd-btn-ghost cd-btn-sm shrink-0" onClick={onClose}><X className="w-4 h-4" /></button>
@@ -252,6 +253,13 @@ export function IntelSignalModal({
           {s.acquirePurpose && <Row label="취득목적" value={s.acquirePurpose} />}
           {s.amount != null && <Row label={s.source === "eiass" ? "사업비" : "취득금액"} value={`${s.amount.toLocaleString()}원`} />}
           {s.counterparty && <Row label="거래상대방" value={s.counterparty} />}
+          {s.industry && (
+            <Row
+              label="대상 업종"
+              value={`${INDUSTRY_LABEL[s.industry] ?? s.industry}${s.industryRelevance ? ` (관련성 ${RELEVANCE_LABEL[s.industryRelevance] ?? s.industryRelevance})` : ""}`}
+            />
+          )}
+          {s.relevanceNote && <Row label="유발 경로" value={s.relevanceNote} />}
           {s.brn && <Row label="사업자번호" value={s.brn} />}
           <Row
             label={s.matchType === "counterparty" ? "발주처(대상)" : "매칭 사업장"}

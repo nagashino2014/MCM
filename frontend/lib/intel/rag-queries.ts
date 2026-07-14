@@ -25,6 +25,7 @@ function id(prefix: string): string {
 export interface RagSearchFilter {
   source?: string; // dart|eiass|press|news|gosi_eum|gosi_me
   grade?: string; // 미지정=기본(excluded 제외), 'all'=전량, 특정등급=그 등급만
+  relevance?: string; // 미지정=기본(none 제외), 'all'=전량, 특정 관련성=그 값만
   matchStatus?: string;
   from?: string; // disclosed_at >=
   to?: string; // disclosed_at <=
@@ -81,6 +82,12 @@ function buildRagWhere(filter: RagSearchFilter, alias = "s."): { where: string[]
   }
   // 중복(변형 기사) 마킹 건은 검색 모수에서 상시 제외 — 대표 신호가 같은 내용을 대표한다
   where.push(`${alias}duplicate_of IS NULL`);
+  // 업종 관련성 기본값: none(비제조·무관) 제외. 태깅 전(NULL) 신호는 안전하게 포함.
+  if (filter.relevance === undefined || filter.relevance === "") {
+    where.push(`(${alias}industry_relevance IS NULL OR ${alias}industry_relevance <> 'none')`);
+  } else if (filter.relevance !== "all") {
+    params.push(filter.relevance); where.push(`${alias}industry_relevance = $${params.length}`);
+  }
   if (filter.matchStatus) { params.push(filter.matchStatus); where.push(`${alias}match_status = $${params.length}`); }
   if (filter.from) { params.push(filter.from); where.push(`${alias}disclosed_at >= $${params.length}`); }
   if (filter.to) { params.push(filter.to); where.push(`${alias}disclosed_at <= $${params.length}`); }
@@ -494,25 +501,32 @@ export interface DiscoveryCandidate {
   facilityName: string | null;
   status: string;
   summary: string | null;
+  industry: string | null;
+  industryRelevance: string | null;
+  relevanceNote: string | null;
 }
 
 /**
  * 영업 발굴 후보 — 사업장 매칭 + 확정/후보 등급 + 미전환(new/reviewed) 신호.
- * "정제된 후보군"으로 RAG 브리핑과 함께 영업 착수 대상을 보여준다.
+ * direct(대상 업종 직접) 우선 정렬, supply_chain 은 유발 경로와 함께 노출. none 은 제외.
  */
 export async function listDiscoveryCandidates(limit = 30): Promise<DiscoveryCandidate[]> {
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
       `SELECT s.signal_id, s.source, s.company_name, s.report_name, s.signal_type, s.signal_grade,
-              s.disclosed_at, s.facility_id, f.company_name AS facility_name, s.status, s.summary
+              s.disclosed_at, s.facility_id, f.company_name AS facility_name, s.status, s.summary,
+              s.industry, s.industry_relevance, s.relevance_note
          FROM intel_signals s
          JOIN facilities f ON f.facility_id = s.facility_id
         WHERE s.match_status = 'matched'
           AND s.signal_grade IN ('confirmed','candidate')
           AND s.status IN ('new','reviewed')
           AND s.duplicate_of IS NULL
-        ORDER BY s.disclosed_at DESC NULLS LAST, s.created_at DESC
+          AND COALESCE(s.industry_relevance, '') <> 'none'
+        ORDER BY CASE s.industry_relevance
+                   WHEN 'direct' THEN 0 WHEN 'supply_chain' THEN 1 WHEN 'low' THEN 2 ELSE 3 END,
+                 s.disclosed_at DESC NULLS LAST, s.created_at DESC
         LIMIT ${Math.min(Math.max(1, limit), 100)}`
     )
   );
@@ -528,5 +542,8 @@ export async function listDiscoveryCandidates(limit = 30): Promise<DiscoveryCand
     facilityName: str(r.facility_name),
     status: String(r.status ?? "new"),
     summary: str(r.summary),
+    industry: str(r.industry),
+    industryRelevance: str(r.industry_relevance),
+    relevanceNote: str(r.relevance_note),
   }));
 }

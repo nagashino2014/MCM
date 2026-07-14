@@ -14,7 +14,7 @@ import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import "@/components/cdash/cdash.css";
 import type { Briefing, IntelSignal } from "./intel-shared";
-import { GradeTag, SOURCE_LABEL, SOURCE_TABS, TypeTag } from "./intel-shared";
+import { GradeTag, RelevanceTag, SOURCE_LABEL, SOURCE_TABS, TypeTag } from "./intel-shared";
 import { IntelSignalModal } from "./IntelSignalModal";
 import { BriefingReportView } from "./BriefingReportView";
 
@@ -40,6 +40,9 @@ interface DiscoveryCandidate {
   disclosedAt: string | null;
   facilityName: string | null;
   summary: string | null;
+  industry: string | null;
+  industryRelevance: string | null;
+  relevanceNote: string | null;
 }
 
 const EXAMPLE_QUESTIONS = [
@@ -390,11 +393,17 @@ export function RagBoard() {
                       <span className="cd-text text-sm font-bold truncate">{c.companyName ?? c.facilityName ?? "—"}</span>
                       <TypeTag type={c.signalType} />
                       <GradeTag grade={c.signalGrade} />
+                      <RelevanceTag relevance={c.industryRelevance} note={c.relevanceNote} />
                       <span className="cd-pill cd-pill-outline">{SOURCE_LABEL[c.source] ?? c.source}</span>
                     </div>
                     <p className="cd-text-muted text-[11px] truncate mt-1">
                       {c.summary ?? c.reportName ?? "—"}
                     </p>
+                    {c.industryRelevance === "supply_chain" && c.relevanceNote && (
+                      <p className="text-[11px] mt-0.5 leading-relaxed" style={{ color: "var(--cd-primary)" }}>
+                        ↳ {c.relevanceNote}
+                      </p>
+                    )}
                     <p className="cd-text-faint text-[11px] mt-0.5">
                       {c.facilityName ? `사업장 ${c.facilityName}` : ""}{c.disclosedAt ? ` · ${c.disclosedAt.slice(0, 10)}` : ""}
                     </p>

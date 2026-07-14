@@ -372,7 +372,7 @@ export interface UpcomingActivity {
   summary: string | null;
 }
 
-export async function listUpcomingActivities(days = 14): Promise<UpcomingActivity[]> {
+export async function listUpcomingActivities(days = 14): Promise<MonthActivity[]> {
   const db = await getDb();
   // 오늘(KST) ~ days일 후까지. scheduled_at도 KST 벽시계라 날짜 경계로 당일 포함.
   const startDay = kstDay(0);
@@ -380,7 +380,18 @@ export async function listUpcomingActivities(days = 14): Promise<UpcomingActivit
   const rows = rowsToObjects(
     await db.exec(
       `SELECT a.activity_id, a.project_id, a.activity_type, a.scheduled_at, a.ended_at, a.summary,
-              p.title, f.company_name AS facility_name
+              p.title, f.company_name AS facility_name,
+              COALESCE((
+                SELECT json_agg(json_build_object(
+                         'id', cp.id, 'personName', cp.person_name, 'title', cp.title,
+                         'departmentName', cd.department_name,
+                         'mobilePhone', cp.mobile_phone, 'officePhone', cp.office_phone)
+                       ORDER BY cp.person_name)
+                  FROM sales_activity_contacts ac
+                  JOIN facility_contact_people cp ON cp.id = ac.person_id
+                  LEFT JOIN facility_contact_departments cd ON cd.id = cp.department_id
+                 WHERE ac.activity_id = a.activity_id
+              ), '[]'::json) AS contacts
          FROM sales_activities a
          JOIN sales_projects p ON p.project_id = a.project_id
          LEFT JOIN facilities f ON f.facility_id = p.facility_id
@@ -400,6 +411,7 @@ export async function listUpcomingActivities(days = 14): Promise<UpcomingActivit
     scheduledAt: String(r.scheduled_at ?? ""),
     endedAt: text(r.ended_at),
     summary: text(r.summary),
+    contacts: jsonArray<ActivityContactPerson>(r.contacts),
   }));
 }
 

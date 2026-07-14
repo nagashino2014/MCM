@@ -13,6 +13,9 @@ export interface ProductDisplay {
 export function formatCompanyName(value: string | null | undefined): string | null {
   if (!value) return null;
   let out = String(value).replace(/\s+/g, " ").trim();
+  out = out.replace(/유\s*한\s*회\s*사/g, "(유)");
+  out = out.replace(/\(\s*유\s*\)\s*|（\s*유\s*）\s*/g, "(유)");
+  out = out.replace(/\s+\(유\)/g, "(유)");
   out = out.replace(/주\s*식\s*회\s*사/g, "㈜");
   out = out.replace(/\(\s*주\s*\)|（\s*주\s*）/g, "㈜");
   out = out.replace(/(^|\s)주(?=\s|$)/g, "$1㈜");

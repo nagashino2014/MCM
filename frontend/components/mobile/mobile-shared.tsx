@@ -1,6 +1,7 @@
 "use client";
 
-import { X } from "lucide-react";
+import { useState } from "react";
+import { Phone, Smartphone, X } from "lucide-react";
 import { ACTIVITY_TYPE_META, type SalesActivityType } from "@/lib/sales/types";
 
 // 모바일 화면 공용 소품 — 시트(풀스크린 하단 모달)·활동유형 태그·상태 표시.
@@ -106,5 +107,113 @@ export function SheetRow({ label, value }: { label: string; value: React.ReactNo
       <span className="cd-text-faint text-xs shrink-0 pt-0.5" style={{ width: 72 }}>{label}</span>
       <span className="cd-text text-sm flex-1 min-w-0 break-words">{value}</span>
     </div>
+  );
+}
+
+/** 일정 상세 시트(홈·일정 공용) — 연결 담당자 카드 + 종료된 일정 경과 입력(M2/M3). */
+export function ActivityDetailSheet({
+  activity: detail,
+  today,
+  onClose,
+  onSaved,
+}: {
+  activity: MobileActivity;
+  today: string;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // 경과 입력 가능 = 일정 기간이 시작된 것(데스크톱 ScheduleModal 의 기간경과 노출과 같은 취지)
+  const canReport = (detail.endedAt ?? detail.scheduledAt).slice(0, 10) <= today;
+
+  const save = async () => {
+    if (!note.trim()) {
+      setError("경과 내용을 입력하세요.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/sales/activities/${encodeURIComponent(detail.activityId)}/progress`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ progressNote: note.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
+      onSaved();
+    } catch (e) {
+      setError((e as Error).message);
+      setSaving(false);
+    }
+  };
+
+  return (
+    <MobileSheet title={ACTIVITY_TYPE_META[detail.activityType]?.label ?? "일정 상세"} onClose={onClose}>
+      <div className="rounded-xl border cd-border-c px-3 py-1.5">
+        <SheetRow label="영업 건" value={detail.projectTitle} />
+        <SheetRow label="사업장" value={detail.facilityName ?? "—"} />
+        <SheetRow
+          label="일시"
+          value={`${detail.scheduledAt.slice(0, 10)} ${timeOf(detail.scheduledAt)}${
+            detail.endedAt ? ` ~ ${detail.endedAt.slice(0, 10)} ${timeOf(detail.endedAt)}` : ""
+          }`.trim()}
+        />
+        {detail.summary && <SheetRow label="업무 상세" value={detail.summary} />}
+      </div>
+
+      {/* 일정에 연결된 사업장 담당자 — 미팅 전 확인·즉시 통화 */}
+      {(detail.contacts?.length ?? 0) > 0 && (
+        <div className="mt-3">
+          <h4 className="cd-text-muted text-xs font-bold mb-1.5">사업장 담당자</h4>
+          <div className="flex flex-col gap-1.5">
+            {detail.contacts!.map((c) => (
+              <div key={c.id} className="rounded-xl border cd-border-c px-3 py-2.5 flex items-center gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="cd-text text-sm font-bold truncate">
+                    {c.personName}
+                    {c.title && <span className="cd-text-muted font-normal ml-1.5 text-xs">{c.title}</span>}
+                  </div>
+                  <div className="cd-text-faint text-xs truncate">
+                    {[c.departmentName, c.mobilePhone ?? c.officePhone].filter(Boolean).join(" · ") || "—"}
+                  </div>
+                </div>
+                {(c.mobilePhone ?? c.officePhone) && (
+                  <a href={`tel:${c.mobilePhone ?? c.officePhone}`} className="cd-btn cd-btn-soft cd-btn-sm shrink-0" aria-label="전화">
+                    <Phone className="w-4 h-4" />
+                  </a>
+                )}
+                {c.mobilePhone && (
+                  <a href={`sms:${c.mobilePhone}`} className="cd-btn cd-btn-soft cd-btn-sm shrink-0" aria-label="문자">
+                    <Smartphone className="w-4 h-4" />
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {canReport ? (
+        <div className="mt-3">
+          <h4 className="cd-text-muted text-xs font-bold mb-1.5">경과 입력</h4>
+          <textarea
+            className="cd-textarea w-full"
+            rows={4}
+            placeholder="일정 진행 경과를 입력하세요 (입력 시 일정이 종료 처리되고 진행 단계가 갱신됩니다)"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
+          {error && <p className="cd-error-text text-xs mt-1">{error}</p>}
+          <button className="cd-btn cd-btn-primary cd-btn-block justify-center mt-2" style={{ height: 44 }} onClick={save} disabled={saving}>
+            {saving ? "저장 중…" : "경과 저장"}
+          </button>
+        </div>
+      ) : (
+        <p className="cd-text-faint text-xs mt-3">경과는 일정 기간이 지난 뒤 입력할 수 있습니다.</p>
+      )}
+    </MobileSheet>
   );
 }

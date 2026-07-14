@@ -294,6 +294,25 @@ export async function PUT(req: NextRequest, ctx: RouteContext) {
         personIndex += 1;
       }
 
+      // 이 replace-all 저장은 담당자 id 를 재발급한다 — 영업 일정의 "만난 사람" 연결
+      // (sales_activity_contacts.person_id, FK 없음)이 옛 id 를 가리킨 채 끊어지므로
+      // 새 id 로 재매핑한다(아래 logs 의 person_id 재매핑과 같은 취지).
+      for (const [oldId, newId] of personIdMap) {
+        if (oldId > 0 && oldId !== newId) {
+          await db.run(`UPDATE sales_activity_contacts SET person_id = $2 WHERE person_id = $1`, [oldId, newId]);
+        }
+      }
+      // 삭제된(이번 저장에 없는) 담당자의 일정 연결은 정리 — 끊어진 참조를 남기지 않는다.
+      await db.run(
+        `DELETE FROM sales_activity_contacts
+          WHERE person_id NOT IN (SELECT id FROM facility_contact_people)
+            AND EXISTS (SELECT 1 FROM sales_activities a
+                         JOIN sales_projects p ON p.project_id = a.project_id
+                        WHERE a.activity_id = sales_activity_contacts.activity_id
+                          AND p.facility_id = $1)`,
+        [id]
+      );
+
       for (const log of logs) {
         const mappedDepartmentId =
           log.departmentId != null ? departmentIdMap.get(log.departmentId) ?? log.departmentId : null;

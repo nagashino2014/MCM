@@ -25,6 +25,7 @@ import {
   type DisclosureCategory,
 } from "./signal-extractor";
 import { buildFacilityMatcher, facilityCoreKey } from "./facility-matcher";
+import { industryTagForFacility } from "./industry-rules";
 
 function id(prefix: string): string {
   return `${prefix}_${crypto.randomBytes(8).toString("hex")}`;
@@ -179,19 +180,22 @@ export async function collectDartSignals(opts: CollectOptions = {}): Promise<Col
         corpCode: d.corpCode, receiptNo: d.receiptNo, filerName: d.filerName,
         remark: d.remark, stockCode: d.stockCode, category, detail, matchType,
       });
+      // DART 는 facilities 매칭 전제 소스 — 마스터 KSIC 로 업종 확정(relevance=direct)
+      const tag = await industryTagForFacility(wdb, facilityId);
       const ins = rowsToObjects(
         await wdb.exec(
           `INSERT INTO intel_signals
              (signal_id, source, external_id, corp_code, company_name, brn, report_name, signal_type, signal_grade,
               disclosed_at, amount, url, raw_json, asset_class, acquire_purpose, counterparty,
-              facility_id, match_status, match_type, status, created_at, updated_at)
-           VALUES ($1,'dart',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,$14,$15,$16,'matched',$17,'new',$18,$18)
+              facility_id, match_status, match_type, status,
+              industry, industry_relevance, created_at, updated_at)
+           VALUES ($1,'dart',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,$14,$15,$16,'matched',$17,'new',$18,$19,$20,$20)
            ON CONFLICT (source, external_id) DO NOTHING
            RETURNING signal_id`,
           [
             signalId, d.receiptNo, d.corpCode, d.corpName, brn, d.reportName, cls.signalType, cls.grade,
             toIso(d.receiptDate), cls.amount, disclosureUrl(d.receiptNo), raw, cls.assetClass, cls.purpose, cls.counterparty,
-            facilityId, matchType, nowIso,
+            facilityId, matchType, tag.industry, tag.relevance, nowIso,
           ]
         )
       );

@@ -135,8 +135,10 @@ export async function collectGosiSignals(opts: CollectGosiOptions = {}): Promise
           `INSERT INTO intel_signals
              (signal_id, source, external_id, company_name, report_name, signal_type, signal_grade,
               disclosed_at, url, raw_json, region, agency,
-              facility_id, match_status, match_type, status, created_at, updated_at)
-           VALUES ($1,'gosi',$2,NULL,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,NULL,'unmatched','direct','new',$11,$11)
+              facility_id, match_status, match_type, status,
+              industry, industry_relevance, created_at, updated_at)
+           VALUES ($1,'gosi',$2,NULL,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,NULL,'unmatched','direct','new',
+                   'industrial-complex','direct',$11,$11)
            ON CONFLICT (source, external_id) DO NOTHING
            RETURNING signal_id`,
           [

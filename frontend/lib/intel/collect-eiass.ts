@@ -19,7 +19,8 @@ import {
 import { classifyEiass, type EiassClassification } from "./eiass-classifier";
 import { type IntelSignalType, type IntelSignalGrade } from "./signal-extractor";
 import { buildFacilityMatcher } from "./facility-matcher";
-import { INTEL_COLLECT_DEFAULTS, isOlderThanCutoff } from "./intel-settings";
+import { INTEL_COLLECT_DEFAULTS, isOlderThanCutoff, type IntelIndustryItem } from "./intel-settings";
+import { EMPTY_INDUSTRY_TAG, industryTagForFacility, ruleTagForEiass, type IndustryTag } from "./industry-rules";
 
 function id(prefix: string): string {
   return `${prefix}_${crypto.randomBytes(8).toString("hex")}`;
@@ -57,6 +58,7 @@ export interface CollectEiassOptions {
   positiveKeywords?: string[]; // 사업명 포함 키워드(설정 오버라이드)
   negativeKeywords?: string[]; // 사업명 제외 키워드
   disclosureCutoffIso?: string | null; // 접수일 하한(YYYY-MM-DD). 오래된 협의 건 제외
+  industries?: IntelIndustryItem[]; // 업종 태깅 후보군(설정). 미전달 시 규칙 층만
 }
 
 export interface CollectEiassResult {
@@ -132,11 +134,12 @@ export async function collectEiassSignals(opts: CollectEiassOptions = {}): Promi
   }
   result.parseEmpty = !anyRows;
 
-  // 4) 상세 조회 → Haiku 판별(폴백: 규칙 기반 monitoring) → 매칭
+  // 4) 상세 조회 → Haiku 판별(폴백: 규칙 기반 monitoring) → 매칭 + 업종 태깅
   interface Prepared {
     kind: EiassKind; row: EiassListRow; detail: EiassDetail;
     signalType: IntelSignalType; grade: IntelSignalGrade;
     companyName: string | null; summary: string | null; facilityId: string | null;
+    tag: IndustryTag;
   }
   const prepared: Prepared[] = [];
   for (const c of candidates) {
@@ -161,7 +164,7 @@ export async function collectEiassSignals(opts: CollectEiassOptions = {}): Promi
         region: detail.region,
         scaleText: detail.scaleText,
         costEokwon: detail.costEokwon,
-      });
+      }, opts.industries);
       if (cls) {
         result.classified++;
         await sleep(HAIKU_THROTTLE_MS);
@@ -177,10 +180,19 @@ export async function collectEiassSignals(opts: CollectEiassOptions = {}): Promi
 
     // 시행자명 → facilities 매칭. 지자체·공사 시행 산단은 unmatched 리드로 남는다.
     const facilityId = matcher.matchName(companyName)?.facilityId ?? null;
+    // 업종 태깅: 매칭(마스터) > bizCategory 규칙 > LLM 업종(isTarget 전제 direct)
+    const tag: IndustryTag = facilityId
+      ? await industryTagForFacility(db, facilityId)
+      : ruleTagForEiass(detail.bizCategory) ??
+        (cls?.industry
+          ? { industry: cls.industry, relevance: "direct", note: null }
+          : cls
+            ? { industry: "other", relevance: "direct", note: null } // isTarget=true 인데 업종 미상
+            : EMPTY_INDUSTRY_TAG); // Haiku 폴백(monitoring)은 태깅 보류
     prepared.push({
       kind: c.kind, row: c.row, detail,
       signalType, grade, companyName,
-      summary: cls?.summary ?? null, facilityId,
+      summary: cls?.summary ?? null, facilityId, tag,
     });
   }
 
@@ -201,15 +213,17 @@ export async function collectEiassSignals(opts: CollectEiassOptions = {}): Promi
              (signal_id, source, external_id, company_name, report_name, signal_type, signal_grade,
               disclosed_at, amount, url, raw_json, summary,
               region, agency, progress_step,
-              facility_id, match_status, match_type, status, created_at, updated_at)
-           VALUES ($1,'eiass',$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12,$13,$14,$15,$16,'direct','new',$17,$17)
+              facility_id, match_status, match_type, status,
+              industry, industry_relevance, relevance_note, created_at, updated_at)
+           VALUES ($1,'eiass',$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12,$13,$14,$15,$16,'direct','new',$17,$18,$19,$20,$20)
            ON CONFLICT (source, external_id) DO NOTHING
            RETURNING signal_id`,
           [
             signalId, p.row.code, p.companyName, p.row.title, p.signalType, p.grade,
             dotDateToIso(p.row.dateText), amount, EIASS_LIST_URL[p.kind], raw, p.summary,
             p.detail.region, p.detail.agency ?? p.row.agency, p.row.status || null,
-            p.facilityId, p.facilityId ? "matched" : "unmatched", nowIso,
+            p.facilityId, p.facilityId ? "matched" : "unmatched",
+            p.tag.industry, p.tag.relevance, p.tag.note, nowIso,
           ]
         )
       );
@@ -218,8 +232,8 @@ export async function collectEiassSignals(opts: CollectEiassOptions = {}): Promi
       result.byGrade[p.grade]++;
       if (p.facilityId) result.matched++;
       else result.newLead++;
-      // 확정(high) 신호만 alerts 고지(노이즈 억제 — 뉴스와 동일 정책)
-      if (p.grade === "confirmed") {
+      // 확정(high) + 대상 업종 유관(none/low 제외) 신호만 alerts 고지(노이즈 억제)
+      if (p.grade === "confirmed" && p.tag.relevance !== "none" && p.tag.relevance !== "low") {
         await wdb.run(
           `INSERT INTO alerts (severity, source, code, title, body, payload_json, created_at)
            VALUES ('info','intel','eiass-signal',$1,$2,$3::jsonb,$4)`,

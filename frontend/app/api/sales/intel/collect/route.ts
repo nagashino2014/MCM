@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { getDb } from "@/lib/db";
 import { collectDartSignals } from "@/lib/intel/collect";
 import { collectEiassSignals } from "@/lib/intel/collect-eiass";
 import { collectGosiSignals } from "@/lib/intel/collect-gosi";
 import { collectNewsSignals } from "@/lib/intel/collect-news";
 import { collectPressSignals } from "@/lib/intel/collect-press";
+import { loadIntelSettings } from "@/lib/intel/intel-settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,12 +21,13 @@ export async function POST(req: Request) {
       source?: unknown; days?: unknown; maxPages?: unknown; maxDocs?: unknown;
     };
     const maxPages = Number(body?.maxPages) > 0 ? Number(body.maxPages) : 2; // 테스트 기본 소량
+    const industries = (await loadIntelSettings(await getDb())).industries.list; // 업종 태깅 후보군
     if (body?.source === "eiass") {
-      const result = await collectEiassSignals({ maxPages, maxDetails: 5, maxClassify: 5 });
+      const result = await collectEiassSignals({ maxPages, maxDetails: 5, maxClassify: 5, industries });
       return NextResponse.json(result);
     }
     if (body?.source === "press") {
-      const result = await collectPressSignals({ maxClassify: 5 });
+      const result = await collectPressSignals({ maxClassify: 5, industries });
       return NextResponse.json(result);
     }
     if (body?.source === "gosi") {
@@ -32,7 +35,7 @@ export async function POST(req: Request) {
       return NextResponse.json(result);
     }
     if (body?.source === "news") {
-      const result = await collectNewsSignals({ displayPerKeyword: 10, maxClassify: 5 });
+      const result = await collectNewsSignals({ displayPerKeyword: 10, maxClassify: 5, industries });
       return NextResponse.json(result);
     }
     const days = Number(body?.days) > 0 ? Number(body.days) : 7;

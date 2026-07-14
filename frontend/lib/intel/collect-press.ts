@@ -23,7 +23,8 @@ import {
 import { classifyNews, type NewsClassification } from "./news-classifier";
 import { type IntelSignalGrade } from "./signal-extractor";
 import { buildFacilityMatcher } from "./facility-matcher";
-import { INTEL_COLLECT_DEFAULTS, isOlderThanCutoff } from "./intel-settings";
+import { INTEL_COLLECT_DEFAULTS, isOlderThanCutoff, type IntelIndustryItem } from "./intel-settings";
+import { EMPTY_INDUSTRY_TAG, industryTagForFacility, type IndustryTag } from "./industry-rules";
 
 function id(prefix: string): string {
   return `${prefix}_${crypto.randomBytes(8).toString("hex")}`;
@@ -65,6 +66,7 @@ export interface CollectPressOptions {
   titleKeywords?: string[];
   deptKeywords?: string[];
   disclosureCutoffIso?: string | null; // 게재일 하한(YYYY-MM-DD)
+  industries?: IntelIndustryItem[]; // 업종 태깅 후보군(설정). 미전달 시 태깅 생략
 }
 
 export interface CollectPressResult {
@@ -127,8 +129,8 @@ export async function collectPressSignals(opts: CollectPressOptions = {}): Promi
     }
   }
 
-  // 4) 본문 확보 → Haiku 분류(뉴스 분류기 재사용) → 매칭
-  interface Prepared { it: PressItem; body: string | null; cls: NewsClassification; facilityId: string | null }
+  // 4) 본문 확보 → Haiku 분류(뉴스 분류기 재사용) → 매칭 + 업종 태깅(매칭이면 facilities 우선)
+  interface Prepared { it: PressItem; body: string | null; cls: NewsClassification; facilityId: string | null; tag: IndustryTag }
   const prepared: Prepared[] = [];
   for (const it of candidates) {
     if (result.classified >= maxClassify) break;
@@ -142,13 +144,18 @@ export async function collectPressSignals(opts: CollectPressOptions = {}): Promi
       }
       await sleep(BODY_THROTTLE_MS);
     }
-    const cls = await classifyNews(it.title, body ?? it.title);
+    const cls = await classifyNews(it.title, body ?? it.title, opts.industries);
     result.classified++;
     await sleep(HAIKU_THROTTLE_MS);
     if (!cls || !cls.isSignal) continue;
     result.signals++;
     const facilityId = matcher.matchName(cls.companyName)?.facilityId ?? null;
-    prepared.push({ it, body, cls, facilityId });
+    const tag: IndustryTag = facilityId
+      ? await industryTagForFacility(db, facilityId)
+      : opts.industries?.length
+        ? { industry: cls.industry, relevance: cls.industryRelevance, note: cls.relevanceNote }
+        : EMPTY_INDUSTRY_TAG;
+    prepared.push({ it, body, cls, facilityId, tag });
   }
 
   // 5) upsert (source='press'). press 컬럼=발표 주체 라벨, 원문·분류는 raw_json.
@@ -166,14 +173,16 @@ export async function collectPressSignals(opts: CollectPressOptions = {}): Promi
           `INSERT INTO intel_signals
              (signal_id, source, external_id, company_name, report_name, signal_type, signal_grade,
               disclosed_at, url, raw_json, summary, press, news_stage,
-              facility_id, match_status, match_type, status, created_at, updated_at)
-           VALUES ($1,'press',$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,'detailed',$12,$13,'direct','new',$14,$14)
+              facility_id, match_status, match_type, status,
+              industry, industry_relevance, relevance_note, created_at, updated_at)
+           VALUES ($1,'press',$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,'detailed',$12,$13,'direct','new',$14,$15,$16,$17,$17)
            ON CONFLICT (source, external_id) DO NOTHING
            RETURNING signal_id`,
           [
             signalId, p.it.url, p.cls.companyName, p.it.title, p.cls.signalType, grade,
             p.it.publishedAt, p.it.url, raw, p.cls.summary, PRESS_SOURCE_LABELS[p.it.sourceKey],
-            p.facilityId, matched ? "matched" : "unmatched", nowIso,
+            p.facilityId, matched ? "matched" : "unmatched",
+            p.tag.industry, p.tag.relevance, p.tag.note, nowIso,
           ]
         )
       );
@@ -182,8 +191,8 @@ export async function collectPressSignals(opts: CollectPressOptions = {}): Promi
       result.byGrade[grade]++;
       if (matched) result.matched++;
       else result.newLead++;
-      // 확정(high)만 alerts 고지(뉴스·EIASS 와 동일 정책)
-      if (grade === "confirmed") {
+      // 확정(high) + 대상 업종 유관(none/low 제외)만 alerts 고지(뉴스·EIASS 와 동일 정책)
+      if (grade === "confirmed" && p.tag.relevance !== "none" && p.tag.relevance !== "low") {
         await wdb.run(
           `INSERT INTO alerts (severity, source, code, title, body, payload_json, created_at)
            VALUES ('info','intel','press-signal',$1,$2,$3::jsonb,$4)`,

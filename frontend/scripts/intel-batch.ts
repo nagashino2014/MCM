@@ -56,6 +56,7 @@ async function main() {
         positiveKeywords: settings.eiass.positiveKeywords,
         negativeKeywords: settings.eiass.negativeKeywords,
         disclosureCutoffIso: cutoff,
+        industries: settings.industries.list,
       });
       console.log(
         `[intel-batch] eiass done in ${Math.round((Date.now() - eiassStarted) / 1000)}s`,
@@ -75,6 +76,7 @@ async function main() {
         titleKeywords: settings.press.titleKeywords,
         deptKeywords: settings.press.deptKeywords,
         disclosureCutoffIso: cutoff,
+        industries: settings.industries.list,
       });
       console.log(
         `[intel-batch] press done in ${Math.round((Date.now() - pressStarted) / 1000)}s`,
@@ -92,6 +94,7 @@ async function main() {
       const newsResult = await collectNewsSignals({
         keywords: settings.news.keywords,
         displayPerKeyword: settings.news.displayPerKeyword,
+        industries: settings.industries.list,
         ...(settings.news.maxClassify > 0 ? { maxClassify: settings.news.maxClassify } : {}),
       });
       console.log(

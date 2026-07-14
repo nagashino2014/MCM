@@ -8,6 +8,8 @@ import { searchNews, type NewsItem } from "./naver-news-client";
 import { classifyNews, type NewsClassification } from "./news-classifier";
 import { buildFacilityMatcher } from "./facility-matcher";
 import { type IntelSignalGrade } from "./signal-extractor";
+import { EMPTY_INDUSTRY_TAG, industryTagForFacility, type IndustryTag } from "./industry-rules";
+import type { IntelIndustryItem } from "./intel-settings";
 
 function id(prefix: string): string {
   return `${prefix}_${crypto.randomBytes(8).toString("hex")}`;
@@ -33,6 +35,7 @@ export interface CollectNewsOptions {
   keywords?: string[];
   displayPerKeyword?: number; // 키워드당 검색 건수(1~200, 기본 30 — 100 초과는 API 페이지 분할). 테스트는 소량
   maxClassify?: number; // Haiku 분류 상한(비용·테스트 제어). 미지정=전량
+  industries?: IntelIndustryItem[]; // 업종 태깅 후보군(설정). 미전달 시 태깅 생략
 }
 
 export interface CollectNewsResult {
@@ -79,19 +82,24 @@ export async function collectNewsSignals(opts: CollectNewsOptions = {}): Promise
   const news = [...byLink.values()];
   result.scanned = news.length;
 
-  // 3) Haiku 분류 → 신호만 선별 + 회사명 매칭
-  interface Prepared { it: NewsItem; cls: NewsClassification; facilityId: string | null }
+  // 3) Haiku 분류 → 신호만 선별 + 회사명 매칭 + 업종 태깅(매칭이면 facilities 마스터 우선)
+  interface Prepared { it: NewsItem; cls: NewsClassification; facilityId: string | null; tag: IndustryTag }
   const prepared: Prepared[] = [];
   for (const it of news) {
     if (result.classified >= maxClassify) break;
-    const cls = await classifyNews(it.title, it.description);
+    const cls = await classifyNews(it.title, it.description, opts.industries);
     result.classified++;
     await sleep(HAIKU_THROTTLE_MS);
     if (!cls || !cls.isSignal) continue;
     result.signals++;
     // 회사명 → facilities 매칭(조달대행 기관 제외는 매처 내부에서 처리)
     const facilityId = matcher.matchName(cls.companyName)?.facilityId ?? null;
-    prepared.push({ it, cls, facilityId });
+    const tag: IndustryTag = facilityId
+      ? await industryTagForFacility(db, facilityId)
+      : opts.industries?.length
+        ? { industry: cls.industry, relevance: cls.industryRelevance, note: cls.relevanceNote }
+        : EMPTY_INDUSTRY_TAG;
+    prepared.push({ it, cls, facilityId, tag });
   }
 
   // 4) upsert (source='news', news_stage='detailed')
@@ -110,14 +118,16 @@ export async function collectNewsSignals(opts: CollectNewsOptions = {}): Promise
           `INSERT INTO intel_signals
              (signal_id, source, external_id, company_name, report_name, signal_type, signal_grade,
               disclosed_at, url, raw_json, summary, press, news_stage,
-              facility_id, match_status, match_type, status, created_at, updated_at)
-           VALUES ($1,'news',$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,'detailed',$12,$13,'direct','new',$14,$14)
+              facility_id, match_status, match_type, status,
+              industry, industry_relevance, relevance_note, created_at, updated_at)
+           VALUES ($1,'news',$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,'detailed',$12,$13,'direct','new',$14,$15,$16,$17,$17)
            ON CONFLICT (source, external_id) DO NOTHING
            RETURNING signal_id`,
           [
             signalId, p.it.link, p.cls.companyName, p.it.title, p.cls.signalType, grade,
             p.it.pubDate || null, p.it.link, raw, p.cls.summary, p.it.press,
-            p.facilityId, matched ? "matched" : "unmatched", nowIso,
+            p.facilityId, matched ? "matched" : "unmatched",
+            p.tag.industry, p.tag.relevance, p.tag.note, nowIso,
           ]
         )
       );
@@ -126,8 +136,8 @@ export async function collectNewsSignals(opts: CollectNewsOptions = {}): Promise
       result.byGrade[grade]++;
       if (matched) result.matched++;
       else result.newLead++;
-      // 확정(high) 신호만 alerts 고지
-      if (grade === "confirmed") {
+      // 확정(high) + 대상 업종 유관(none/low 제외) 신호만 alerts 고지
+      if (grade === "confirmed" && p.tag.relevance !== "none" && p.tag.relevance !== "low") {
         await wdb.run(
           `INSERT INTO alerts (severity, source, code, title, body, payload_json, created_at)
            VALUES ('info','intel','news-signal',$1,$2,$3::jsonb,$4)`,

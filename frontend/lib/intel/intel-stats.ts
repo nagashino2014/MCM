@@ -125,17 +125,20 @@ export async function getIntelStats(from: string, to: string): Promise<IntelStat
   }));
 
   // 일별 수집 로그: 조회 기간과 무관하게 최근 14일(야간 배치 결과 확인용)
-  const dailyFloor = new Date();
+  // created_at 은 UTC ISO 문자열 — UTC 날짜로 자르면 야간 배치(KST 03:00 = UTC 전날 18:00)가
+  // 전날로 집계되므로 KST 날짜 기준으로 그룹핑한다.
+  const kstDayExpr = `substr((s.created_at::timestamptz AT TIME ZONE 'Asia/Seoul')::text,1,10)`;
+  const dailyFloor = new Date(Date.now() + 9 * 3600 * 1000); // KST 오늘
   dailyFloor.setUTCDate(dailyFloor.getUTCDate() - 13);
   const dailyRows = rowsToObjects(
     await db.exec(
-      `SELECT substr(s.created_at,1,10) AS day, ${SRC_EXPR} AS src,
+      `SELECT ${kstDayExpr} AS day, ${SRC_EXPR} AS src,
               COUNT(*)::int AS collected,
               COUNT(*) FILTER (WHERE s.signal_grade = 'confirmed')::int AS confirmed,
               COUNT(*) FILTER (WHERE s.signal_grade = 'candidate')::int AS candidate,
               COUNT(*) FILTER (WHERE ${ADOPTED_EXPR})::int AS adopted
          FROM intel_signals s
-        WHERE substr(s.created_at,1,10) >= $1
+        WHERE ${kstDayExpr} >= $1
         GROUP BY 1, 2 ORDER BY 1 DESC`,
       [dailyFloor.toISOString().slice(0, 10)]
     )

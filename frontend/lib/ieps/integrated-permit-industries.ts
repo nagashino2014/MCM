@@ -18,13 +18,13 @@ export interface IntegratedPermitIndustry {
 export const INTEGRATED_PERMIT_INDUSTRIES: IntegratedPermitIndustry[] = [
   { id: "power", label: "발전", exactCodes: [], prefixCodes: ["3511"] },
   { id: "steam-heat", label: "증기열공급", exactCodes: ["35300"], prefixCodes: [] },
-  { id: "waste-incineration", label: "폐기물소각", exactCodes: ["38210", "38220"], prefixCodes: [] },
+  { id: "waste-incineration", label: "폐기물처리", exactCodes: ["38210", "38220"], prefixCodes: [] },
   { id: "steel", label: "철강", exactCodes: [], prefixCodes: ["241"] },
   { id: "nonferrous", label: "비철", exactCodes: [], prefixCodes: ["242"] },
-  { id: "organic-chem", label: "유기", exactCodes: [], prefixCodes: ["2011", "203"] },
+  { id: "organic-chem", label: "유기화학", exactCodes: [], prefixCodes: ["2011", "203"] },
   { id: "oil-refining", label: "석유정제", exactCodes: [], prefixCodes: ["192"] },
-  { id: "inorganic-chem", label: "무기화학", exactCodes: ["20131"], prefixCodes: ["2012"] },
-  { id: "fine-chem", label: "정밀화학", exactCodes: ["20132"], prefixCodes: ["204"] },
+  { id: "inorganic-chem", label: "무기화학", exactCodes: ["20131", "20132"], prefixCodes: ["2012"] },
+  { id: "fine-chem", label: "기타화학", exactCodes: [], prefixCodes: ["204"] },
   { id: "fertilizer", label: "비료", exactCodes: [], prefixCodes: ["202"] },
   { id: "pulp-paper", label: "종이·펄프", exactCodes: [], prefixCodes: ["171", "179"] },
   {

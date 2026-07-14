@@ -2,11 +2,24 @@
 // DEFAULTS 가 현재 운영값(기존 하드코딩과 동일)이며, DB 에는 사용자가 바꾼 오버라이드만 저장된다.
 // 야간 배치(intel-batch)와 수동 수집 라우트가 이 설정을 읽어 각 수집기에 옵션으로 전달한다.
 import { rowsToObjects, type PgDatabase } from "@/lib/db";
+import { INTEGRATED_PERMIT_INDUSTRIES } from "@/lib/ieps/integrated-permit-industries";
+
+/** 통합허가 대상 업종 항목 — LLM 업종 태깅 후보군(수집 설정에서 추가/삭제로 신규 편입 대응). */
+export interface IntelIndustryItem {
+  id: string;
+  label: string;
+  /** 프롬프트 힌트(선택) — 예: "데이터센터 냉각·전력설비 포함" */
+  note?: string;
+}
 
 export interface IntelCollectSettings {
   common: {
     /** 공시·접수일 수집 하한(개월). 현재일 - N개월보다 오래된 건은 저장하지 않는다. 0 = 제한 없음 */
     maxAgeMonths: number;
+  };
+  industries: {
+    /** 통합허가 대상 업종 목록. 기본 = INTEGRATED_PERMIT_INDUSTRIES 파생, 목록 전체 교체 방식 오버라이드 */
+    list: IntelIndustryItem[];
   };
   dart: {
     enabled: boolean;
@@ -55,6 +68,9 @@ export const INTEL_SETTINGS_KEY = "collect";
 
 export const INTEL_COLLECT_DEFAULTS: IntelCollectSettings = {
   common: { maxAgeMonths: 18 },
+  industries: {
+    list: INTEGRATED_PERMIT_INDUSTRIES.map((i) => ({ id: i.id, label: i.label })),
+  },
   dart: { enabled: true, days: 1, counterpartyScan: true },
   eiass: {
     enabled: true,

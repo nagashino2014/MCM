@@ -13,7 +13,9 @@ import { WorkPlanTodoCard } from "./widgets/WorkPlanTodoCard";
 import { InvoiceRequestCard } from "./widgets/InvoiceRequestCard";
 import { InvoiceInboxCard } from "./widgets/InvoiceInboxCard";
 import { QuickFacilitiesCard } from "./widgets/QuickFacilitiesCard";
-import { AlertsCard } from "./widgets/AlertsCard";
+import { BillingSummaryCard } from "./widgets/BillingSummaryCard";
+import { IntelHighlightsCard } from "./widgets/IntelHighlightsCard";
+import { MyServicesCard } from "./widgets/MyServicesCard";
 
 /**
  * 홈 대시보드 보드(cdash). 권한별 노출은 각 위젯의 API 403 → 카드 숨김으로 처리(프론트 권한 분기 없음).
@@ -39,11 +41,13 @@ export function HomeBoard({ role }: { role?: string }) {
         <TodayScheduleCard />
         <PendingProgressCard theme={theme} />
         <UpcomingBidsCard />
+        <MyServicesCard />
         <WorkPlanTodoCard />
         <InvoiceRequestCard />
         <InvoiceInboxCard />
+        <BillingSummaryCard />
+        <IntelHighlightsCard />
         <QuickFacilitiesCard role={role} />
-        <AlertsCard role={role} />
       </div>
     </div>
   );

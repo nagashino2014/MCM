@@ -3,6 +3,7 @@
 import { CalendarClock } from "lucide-react";
 import { HomeCard, HomeRow } from "../HomeCard";
 import { useHomeWidget } from "../useHomeWidget";
+import { ACTIVITY_TYPE_META, type SalesActivityType } from "@/lib/sales/types";
 
 interface Activity {
   activityId: string;
@@ -46,26 +47,34 @@ export function TodayScheduleCard() {
       emptyText="예정된 일정이 없습니다."
     >
       <ul className="flex flex-col gap-1.5">
-        {activities.slice(0, 5).map((a) => (
-          <li key={a.activityId}>
-            <HomeRow href="/sales">
-              <span className="text-[11px] font-mono cd-text-faint shrink-0 w-[104px] tabular-nums">
-                {fmt(a.scheduledAt)}
-              </span>
-              <span className="flex-1 min-w-0">
-                <span className="block text-[13px] cd-text truncate">{a.projectTitle}</span>
-                {a.facilityName && (
-                  <span className="block text-[11px] cd-text-faint truncate">{a.facilityName}</span>
-                )}
-              </span>
-              {a.activityType && (
-                <span className="text-[10px] rounded px-1.5 py-0.5 shrink-0 cd-text-muted border cd-border-c">
-                  {a.activityType}
+        {activities.slice(0, 5).map((a) => {
+          const meta = a.activityType
+            ? ACTIVITY_TYPE_META[a.activityType as SalesActivityType]
+            : undefined;
+          return (
+            <li key={a.activityId}>
+              <HomeRow href="/sales">
+                <span className="text-[11px] font-mono cd-text-faint shrink-0 w-[104px] tabular-nums">
+                  {fmt(a.scheduledAt)}
                 </span>
-              )}
-            </HomeRow>
-          </li>
-        ))}
+                <span className="flex-1 min-w-0">
+                  <span className="block text-[13px] cd-text truncate">{a.projectTitle}</span>
+                  {a.facilityName && (
+                    <span className="block text-[11px] cd-text-faint truncate">{a.facilityName}</span>
+                  )}
+                </span>
+                {meta && (
+                  <span
+                    className="text-[11px] rounded-full px-2 py-0.5 shrink-0"
+                    style={{ background: meta.color, color: "#1f2937" }}
+                  >
+                    {meta.short}
+                  </span>
+                )}
+              </HomeRow>
+            </li>
+          );
+        })}
       </ul>
     </HomeCard>
   );

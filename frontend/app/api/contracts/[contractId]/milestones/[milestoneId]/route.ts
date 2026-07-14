@@ -68,12 +68,49 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     await withDbWrite(async (db) => {
       const exists = rowsToObjects(
         await db.exec(
-          "SELECT milestone_id, invoice_issued_at FROM contract_payment_milestones WHERE milestone_id = $1 AND contract_id = $2",
+          "SELECT milestone_id, invoice_issued_at, invoice_requested_at, invoice_requested_by FROM contract_payment_milestones WHERE milestone_id = $1 AND contract_id = $2",
           [milestoneId, contractId]
         )
       );
       if (exists.length === 0) throw new Error("단계를 찾을 수 없습니다.");
       await db.run(sql, values);
+
+      // 발행 요청(H10) 상태였던 단계를 발행 완료 처리하면 요청자에게 회신 알림을 남긴다.
+      // (요청 상태는 invoice_issued=1 이 되면 조회 조건상 자동 해소되므로 컬럼은 그대로 둔다.)
+      if (body.invoiceIssued && exists[0]?.invoice_requested_at && exists[0]?.invoice_requested_by) {
+        const meta = rowsToObjects(
+          await db.exec(
+            `SELECT c.contract_title, f.company_name AS facility_name,
+                    m.stage_label
+               FROM contract_payment_milestones m
+               JOIN contracts c ON c.contract_id = m.contract_id
+               LEFT JOIN facilities f ON f.facility_id = c.counterparty_facility_id
+              WHERE m.milestone_id = $1 AND m.contract_id = $2`,
+            [milestoneId, contractId]
+          )
+        )[0];
+        const contractTitle = String(meta?.contract_title ?? "");
+        const facilityName = String(meta?.facility_name ?? "");
+        const stageLabel = String(meta?.stage_label ?? "");
+        await db.run(
+          `INSERT INTO alerts (severity, source, code, title, body, payload_json, created_at)
+           VALUES ('info', 'billing', 'invoice-issued', $1, $2, $3::jsonb, $4)`,
+          [
+            `세금계산서 발행 완료 · ${contractTitle || facilityName}`,
+            `요청하신 "${stageLabel}" 단계 세금계산서가 발행되었습니다.`,
+            JSON.stringify({
+              contractId,
+              milestoneId,
+              contractTitle,
+              facilityName,
+              stageLabel,
+              requestedBy: String(exists[0].invoice_requested_by),
+              invoiceIssuedAt: body.invoiceIssuedAt || null,
+            }),
+            new Date().toISOString(),
+          ]
+        );
+      }
 
       // 단계명(stage_label) 변경 시, 이 단계에 연결된 세금계산서의 표시명도
       // 새 단계명으로 재생성한다. 표시명은 (발행일)계약명 단계명 세금계산서.pdf 규칙.

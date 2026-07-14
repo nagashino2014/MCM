@@ -25,6 +25,7 @@ export function Sidebar({ role }: SidebarProps) {
   };
 
   const visible = MENU_ITEMS.filter((m) => isMenuVisibleForRole(m, role));
+  const homeItems = visible.filter((m) => m.group === "home");
   const workItems = visible.filter((m) => m.group === "work");
   const mainItems = visible.filter((m) => (m.group ?? "main") === "main");
   const systemItems = visible.filter((m) => m.group === "system");
@@ -51,6 +52,10 @@ export function Sidebar({ role }: SidebarProps) {
       </div>
 
       <div className="flex flex-col gap-1">
+        {homeItems.map((section) =>
+          renderItem(section, pathname, openSections, toggleSection)
+        )}
+        {homeItems.length > 0 && <div className="mb-3" />}
         {workItems.length > 0 && (
           <>
             <div className="px-3 mb-1 text-[10px] font-bold uppercase tracking-widest cd-text-faint">

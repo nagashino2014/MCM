@@ -1,4 +1,5 @@
 import {
+  House,
   Factory,
   FileSignature,
   Briefcase,
@@ -20,11 +21,18 @@ export interface MenuItem {
   comingSoon?: boolean;
   /** 이 메뉴를 보려면 필요한 최소 role. 미지정 시 viewer 이상 모두 노출. */
   minRole?: Role;
-  /** 사이드바 카테고리 그룹: 업무 보고(work) / 사업 운영(main) / 시스템(system) */
-  group?: "work" | "main" | "system";
+  /** 사이드바 카테고리 그룹: 홈(home) / 업무 보고(work) / 사업 운영(main) / 시스템(system) */
+  group?: "home" | "work" | "main" | "system";
 }
 
 export const MENU_ITEMS: MenuItem[] = [
+  // ── 홈 ────────────────────────────────────────────
+  {
+    title: "홈",
+    href: "/home",
+    icon: House,
+    group: "home",
+  },
   // ── 업무 보고 ─────────────────────────────────────
   {
     title: "업무추진계획",

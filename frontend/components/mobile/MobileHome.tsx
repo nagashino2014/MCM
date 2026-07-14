@@ -66,10 +66,10 @@ export function MobileHome() {
           <Search className="w-4.5 h-4.5 cd-text-primary" style={{ width: 18, height: 18 }} />
           <span className="cd-text text-sm font-bold">사업장 검색</span>
         </Link>
-        <div className="cd-card-bg border cd-border-c rounded-2xl px-4 py-3.5 flex items-center gap-2.5 opacity-50">
-          <CreditCard style={{ width: 18, height: 18 }} className="cd-text-faint" />
-          <span className="cd-text-muted text-sm font-bold">명함 촬영 (준비 중)</span>
-        </div>
+        <Link href="/m/card" className="cd-card-bg border cd-border-c rounded-2xl px-4 py-3.5 flex items-center gap-2.5">
+          <CreditCard style={{ width: 18, height: 18 }} className="cd-text-primary" />
+          <span className="cd-text text-sm font-bold">명함 촬영</span>
+        </Link>
       </div>
 
       {/* 오늘 일정 */}

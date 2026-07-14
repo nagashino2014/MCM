@@ -846,6 +846,25 @@ export async function updateActivity(activityId: string, input: SalesActivityInp
   });
 }
 
+/** 경과(progress_note)만 갱신 — 모바일 경과 입력용. 다른 필드는 건드리지 않고 단계만 재계산. */
+export async function updateActivityProgress(activityId: string, progressNote: string): Promise<boolean> {
+  const now = new Date().toISOString();
+  let found = false;
+  await withDbWrite(async (db) => {
+    const rows = rowsToObjects(
+      await db.exec("SELECT project_id FROM sales_activities WHERE activity_id = $1", [activityId])
+    );
+    if (!rows.length) return;
+    found = true;
+    await db.run(
+      `UPDATE sales_activities SET progress_note = $2, status = 'done', updated_at = $3 WHERE activity_id = $1`,
+      [activityId, progressNote, now]
+    );
+    await recomputeProjectStage(db, String(rows[0].project_id), now);
+  });
+  return found;
+}
+
 export async function deleteActivity(activityId: string): Promise<void> {
   const now = new Date().toISOString();
   await withDbWrite(async (db) => {

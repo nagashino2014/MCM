@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { loadKsicMap, lookupKsicName } from "@/lib/ieps/ksic-lookup";
 import { Pencil, Save, X, MapPin, Phone, Hash, Building2, FileText, Layers, ClipboardList, Trash2, Plus, History, Upload, Tags, Briefcase, FolderTree, ArrowRight, Search } from "lucide-react";
@@ -1246,6 +1246,44 @@ function FacilityContactsModal({
     resignedAt: "",
   });
 
+  // 명함 촬영(이미지 선택) → Claude vision 파싱 → 담당자 신규 폼 프리필 (M2)
+  const cardInputRef = useRef<HTMLInputElement>(null);
+  const [cardParsing, setCardParsing] = useState(false);
+  const handleCardFile = async (file: File | null) => {
+    if (!file) return;
+    setCardParsing(true);
+    try {
+      const fd = new FormData();
+      fd.set("file", file, file.name || "card.jpg");
+      const res = await fetch("/api/facilities/business-card/parse", { method: "POST", body: fd });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
+      const f = (data.fields ?? {}) as Record<string, string | null>;
+      if (data.warning) alert(String(data.warning));
+      setTab("person");
+      setSelectedPersonId(null);
+      setPersonForm({
+        personName: f.personName ?? "",
+        title: f.title ?? "",
+        departmentId: "",
+        officePhone: f.officePhone ?? "",
+        mobilePhone: f.mobilePhone ?? "",
+        email: f.email ?? "",
+        duties: "",
+        status: "active",
+        appointedAt: "",
+        transferredAt: "",
+        resignedAt: "",
+      });
+      setEditing(true);
+    } catch (err) {
+      alert("명함 인식 실패: " + (err as Error).message);
+    } finally {
+      setCardParsing(false);
+      if (cardInputRef.current) cardInputRef.current.value = "";
+    }
+  };
+
   const selectedDepartment = departments.find((department) => department.id === selectedDepartmentId) ?? null;
   const selectedPerson = people.find((person) => person.id === selectedPersonId) ?? null;
   const departmentPeople = selectedDepartment
@@ -1490,9 +1528,30 @@ function FacilityContactsModal({
               {formatCompanyName(facility.companyName)} · 기존 파싱 전화번호: {facility.phoneNumber ?? "—"}
             </p>
           </div>
-          <button type="button" onClick={onClose} className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs font-bold cd-text-muted">
-            닫기
-          </button>
+          <div className="flex items-center gap-2">
+            {canEdit && (
+              <>
+                <input
+                  ref={cardInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => handleCardFile(e.target.files?.[0] ?? null)}
+                />
+                <button
+                  type="button"
+                  disabled={cardParsing}
+                  onClick={() => cardInputRef.current?.click()}
+                  className="cd-btn cd-btn-soft rounded-xl px-3 py-2 text-xs font-bold"
+                >
+                  {cardParsing ? "명함 인식 중…" : "명함 촬영"}
+                </button>
+              </>
+            )}
+            <button type="button" onClick={onClose} className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs font-bold cd-text-muted">
+              닫기
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-4">

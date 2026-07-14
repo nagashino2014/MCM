@@ -207,6 +207,19 @@ export async function PUT(req: NextRequest, ctx: RouteContext) {
         logs: await db.exec("SELECT * FROM facility_contact_logs WHERE facility_id = $1", [id]),
         mainNumber: await db.exec("SELECT * FROM facility_contact_main_numbers WHERE facility_id = $1", [id]),
       };
+      // 명함 OCR 원본(card_*)은 이 replace-all 저장 흐름 밖(049, 명함 촬영 API)에서 기록된다 —
+      // DELETE→INSERT 로 재생성할 때 기존 id 기준으로 보존하지 않으면 소실된다.
+      const cardByPersonId = new Map<number, Record<string, unknown>>();
+      for (const row of rowsToObjects(
+        await db.exec(
+          `SELECT id, card_storage_provider, card_storage_bucket, card_storage_key,
+                  card_public_path, card_ocr_text, card_parsed_json, card_captured_at
+             FROM facility_contact_people WHERE facility_id = $1`,
+          [id]
+        )
+      )) {
+        cardByPersonId.set(Number(row.id), row);
+      }
       await db.run("DELETE FROM facility_contact_main_numbers WHERE facility_id = $1", [id]);
       await db.run("DELETE FROM facility_contact_logs WHERE facility_id = $1", [id]);
       await db.run("DELETE FROM facility_contact_people WHERE facility_id = $1", [id]);
@@ -241,11 +254,15 @@ export async function PUT(req: NextRequest, ctx: RouteContext) {
       for (const person of people) {
         const mappedDepartmentId =
           person.departmentId != null ? departmentIdMap.get(person.departmentId) ?? person.departmentId : null;
+        const card = person.id != null ? cardByPersonId.get(person.id) : undefined;
         const inserted = await db.exec(
           `INSERT INTO facility_contact_people
             (facility_id, department_id, person_name, title, office_phone, mobile_phone, email,
-             duties, status, dept_type, appointed_at, transferred_at, resigned_at, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+             duties, status, dept_type, appointed_at, transferred_at, resigned_at,
+             card_storage_provider, card_storage_bucket, card_storage_key, card_public_path,
+             card_ocr_text, card_parsed_json, card_captured_at, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+                   $14, $15, $16, $17, $18, $19, $20, $21, $22)
            RETURNING id`,
           [
             id,
@@ -261,6 +278,13 @@ export async function PUT(req: NextRequest, ctx: RouteContext) {
             person.appointedAt,
             person.transferredAt,
             person.resignedAt,
+            card?.card_storage_provider ?? null,
+            card?.card_storage_bucket ?? null,
+            card?.card_storage_key ?? null,
+            card?.card_public_path ?? null,
+            card?.card_ocr_text ?? null,
+            card?.card_parsed_json != null ? JSON.stringify(card.card_parsed_json) : null,
+            card?.card_captured_at ?? null,
             now,
             now,
           ]

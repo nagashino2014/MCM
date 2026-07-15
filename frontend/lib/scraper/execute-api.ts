@@ -254,6 +254,8 @@ export async function runApiCollect(apiProfile: ApiProfile, apiConfig: ApiConfig
       if (pagination && pagination.type !== "none") {
         if (pagination.type === "offset") pageParams[pageParam] = String((page - 1) * pageSize);
         else pageParams[pageParam] = String(page);
+        // 페이지당 건수 파라미터(예: numOfRows)가 별도면 함께 전달.
+        if (pagination.size_param) pageParams[pagination.size_param] = String(pageSize);
       }
       const result = await executeApiCall(apiProfile, apiConfig, pageParams, logs);
       if (result.error) {

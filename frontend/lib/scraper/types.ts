@@ -25,7 +25,10 @@ export interface SearchFilter {
 export interface ApiPagination {
   /** 'page' | 'offset' | 'none' */
   type: string;
+  /** 페이지 번호/오프셋 파라미터명(예: pageNo). */
   param_name: string;
+  /** 페이지당 건수 파라미터명(예: numOfRows). 지정 시 요청에 page_size 값이 함께 나간다. */
+  size_param?: string;
   page_size: number;
   max_pages: number;
 }

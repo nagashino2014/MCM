@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Radar, Plus, Wand2, Play, Eye, Trash2, ArrowLeft, Check } from "lucide-react";
+import { Radar, Plus, Wand2, Play, Eye, Trash2, ArrowLeft, Check, ExternalLink } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
@@ -348,6 +348,23 @@ export function CustomSourcesPanel() {
                     {proposal.warnings?.length > 0 && (
                       <p className="text-[12px]" style={{ color: "#FA896B" }}>⚠ {proposal.warnings.join(", ")}</p>
                     )}
+                    {(() => {
+                      const w = (proposal.warnings ?? []).join(" ").toLowerCase();
+                      const isPortal =
+                        (sel.baseUrl ?? "").includes("data.go.kr") ||
+                        /data_go_kr|portal|approval|승인|인증키|활용신청/.test(w);
+                      return isPortal ? (
+                        <a
+                          href="https://www.data.go.kr/iim/api/selectAPIAcountList.do"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="cd-chip self-start"
+                          style={{ color: "var(--cd-primary)" }}
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" /> 공공데이터포털 마이페이지(활용신청·인증키 확인)
+                        </a>
+                      ) : null;
+                    })()}
                     <label className="text-[11px] cd-text-faint">field_mapping</label>
                     <pre className="text-[11px] cd-text-muted bg-[color:var(--cd-surface)] rounded p-2 overflow-x-auto">{JSON.stringify(proposal.field_mapping, null, 2)}</pre>
                     <label className="text-[11px] cd-text-faint">api_config</label>

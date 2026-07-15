@@ -68,7 +68,7 @@ function buildPrompt(input: AnalyzeInput, combined: string): string {
 3. **파라미터**: 필수/고정값(항상 같은 값)은 default_params 와 api_config.params 에, 가변값은 variable_params 에. 시크릿(인증키) 값은 절대 넣지 말고 auth.secret_ref 로만.
 4. **응답형식**: JSON/XML 감지. response_mapping.format 에 "JSON" 또는 "XML". **XML 이면 warnings 에 "xml_unsupported_mvp"** (현재 JSON 만 지원).
 5. **응답 배열 경로**: 목록이 담긴 키(data/items/results/response.body.items 등)를 response_mapping.list_path 에.
-6. **페이지네이션**: 페이지/오프셋 파라미터명과 페이지 크기를 api_config.pagination 에(type "page"|"offset"|"none").
+6. **페이지네이션**: api_config.pagination(type "page"|"offset"|"none"). param_name=페이지번호/오프셋 파라미터명(예 pageNo). **페이지당 건수 파라미터(예 numOfRows/display/perPage)가 따로 있으면 size_param 에 그 이름을, page_size 에 값을 넣어라**(누락하면 기본 소량만 조회됨). 필수 조회조건(조회기간 inqryBgnDt/inqryEndDt·구분값 등)이 명세에 있으면 params 에 빠짐없이 포함하라.
 7. **★ field_mapping (가장 중요)**: 응답 배열의 item 1건 기준으로, 아래 표준필드에 대응하는 필드 경로(점 표기)를 채운다. 이 API가 "회사/기업의 투자·설비 신호"를 다룬다는 전제로 가장 적합한 필드를 고른다. 없으면 생략(빈 문자열 금지).
    - external_id: 각 item의 고유 식별자(공고번호/일련번호/id 등). 없으면 생략(URL 해시로 폴백됨).
    - company_name: 회사/기관/사업주체명.
@@ -90,7 +90,7 @@ function buildPrompt(input: AnalyzeInput, combined: string): string {
   "api_config": {
     "primary_endpoint": { "name": "엔드포인트명", "path": "/실제/경로", "method": "GET" },
     "params": { "가변·고정 기본 파라미터": "값" },
-    "pagination": { "type": "page|offset|none", "param_name": "pageNo", "page_size": 100, "max_pages": 3 }
+    "pagination": { "type": "page|offset|none", "param_name": "pageNo", "size_param": "numOfRows", "page_size": 100, "max_pages": 3 }
   },
   "field_mapping": { "external_id": "...", "company_name": "...", "report_name": "...", "url": "...", "disclosed_at": "...", "summary": "..." },
   "warnings": ["불확실 항목"],

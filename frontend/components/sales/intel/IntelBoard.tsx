@@ -5,8 +5,9 @@
 // 우: 발주 정보 분석용 데이터 수집현황(총계·추이·소스별 채택·세부 유형)
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ExternalLink, Radar, Search, X } from "lucide-react";
+import { ExternalLink, Radar, Search, X, Wand2 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
@@ -214,6 +215,13 @@ export function IntelBoard() {
         title="API & 스크래핑"
         titleSuffix={`${total.toLocaleString()}건`}
         subtitle="공시·환경영향평가·보도자료·뉴스·고시에서 통합허가 대상 사업장의 투자·증설·신설 신호를 수집해 선별합니다."
+        actions={
+          canEdit ? (
+            <Link href="/sales/intel/sources" className="cd-chip">
+              <Wand2 className="w-3.5 h-3.5" /> 커스텀 소스
+            </Link>
+          ) : undefined
+        }
       />
 
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-4 items-start">

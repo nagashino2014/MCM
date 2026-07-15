@@ -73,6 +73,7 @@ export function CustomSourcesPanel() {
   const [anUrl, setAnUrl] = useState("");
   const [anRaw, setAnRaw] = useState("");
   const [anContext, setAnContext] = useState("");
+  const [anFile, setAnFile] = useState<File | null>(null);
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [endpointName, setEndpointName] = useState("기본 엔드포인트");
 
@@ -133,17 +134,30 @@ export function CustomSourcesPanel() {
 
   const runAnalyze = async () => {
     if (!sel) return;
-    if (!anUrl.trim() && !anRaw.trim()) {
-      setMsg("URL 또는 명세 원문을 입력하세요.");
+    if (!anUrl.trim() && !anRaw.trim() && !anFile) {
+      setMsg("가이드 파일(docx)·URL 또는 명세 원문을 입력하세요.");
       return;
     }
     setBusy(true);
     setMsg("분석 중… (LLM 호출, 최대 1분)");
     try {
-      const d = (await jfetch(`/api/scraper/sources/${sel.sourceId}/analyze`, {
-        method: "POST",
-        body: JSON.stringify({ url: anUrl.trim() || undefined, rawText: anRaw.trim() || undefined, context: anContext.trim() || undefined }),
-      })) as Proposal;
+      let d: Proposal;
+      if (anFile) {
+        // 파일 업로드는 multipart/form-data
+        const fd = new FormData();
+        if (anUrl.trim()) fd.append("url", anUrl.trim());
+        if (anRaw.trim()) fd.append("rawText", anRaw.trim());
+        if (anContext.trim()) fd.append("context", anContext.trim());
+        fd.append("file", anFile);
+        const res = await fetch(`/api/scraper/sources/${sel.sourceId}/analyze`, { method: "POST", body: fd, cache: "no-store" });
+        d = await res.json();
+        if (!res.ok) throw new Error((d as unknown as { error?: string })?.error ?? `HTTP ${res.status}`);
+      } else {
+        d = (await jfetch(`/api/scraper/sources/${sel.sourceId}/analyze`, {
+          method: "POST",
+          body: JSON.stringify({ url: anUrl.trim() || undefined, rawText: anRaw.trim() || undefined, context: anContext.trim() || undefined }),
+        })) as Proposal;
+      }
       setProposal(d);
       setMsg(d.warnings?.length ? `분석 완료 — 경고: ${d.warnings.join(", ")}` : "분석 완료");
     } catch (e) {
@@ -287,7 +301,7 @@ export function CustomSourcesPanel() {
           </div>
           <div className="border-t cd-border-c pt-3 flex flex-col gap-2">
             <input className="cd-input text-[13px]" placeholder="소스명 (예: 조달청 나라장터)" value={newName} onChange={(e) => setNewName(e.target.value)} />
-            <input className="cd-input text-[13px]" placeholder="base URL (선택, 예: https://apis.data.go.kr)" value={newBaseUrl} onChange={(e) => setNewBaseUrl(e.target.value)} />
+            <input className="cd-input text-[13px]" placeholder="base URL (도메인만, 예: http://apis.data.go.kr)" value={newBaseUrl} onChange={(e) => setNewBaseUrl(e.target.value)} />
             <button type="button" onClick={createSource} disabled={busy || !newName.trim()} className="cd-btn cd-btn-primary text-[13px] disabled:opacity-50">
               <Plus className="w-4 h-4" /> 소스 추가
             </button>
@@ -316,7 +330,12 @@ export function CustomSourcesPanel() {
               {/* analyze */}
               <div className="cd-card p-4 flex flex-col gap-2">
                 <h3 className="text-sm font-bold cd-text flex items-center gap-1.5"><Wand2 className="w-4 h-4" /> API Profile 자동생성</h3>
-                <input className="cd-input text-[13px]" placeholder="API 가이드/명세 URL" value={anUrl} onChange={(e) => setAnUrl(e.target.value)} />
+                <p className="text-[11px] cd-text-faint">가이드 문서(docx)를 올리거나, 명세 페이지 URL·원문을 넣으면 AI가 요청변수·응답필드·인증방식을 분석합니다.</p>
+                <label className="flex items-center gap-2 text-[12px] cd-text-muted">
+                  <input type="file" accept=".docx" className="text-[12px]" onChange={(e) => setAnFile(e.target.files?.[0] ?? null)} />
+                  {anFile && <span className="cd-text-faint truncate">{anFile.name}</span>}
+                </label>
+                <input className="cd-input text-[13px]" placeholder="API 가이드/명세 URL (실제 호출 URL 아님)" value={anUrl} onChange={(e) => setAnUrl(e.target.value)} />
                 <textarea className="cd-textarea text-[13px] font-mono" rows={3} placeholder="또는 명세/응답 예시 원문 붙여넣기" value={anRaw} onChange={(e) => setAnRaw(e.target.value)} />
                 <input className="cd-input text-[13px]" placeholder="추가 설명(선택, 예: 발주계획 목록 조회)" value={anContext} onChange={(e) => setAnContext(e.target.value)} />
                 <button type="button" onClick={runAnalyze} disabled={busy} className="cd-btn cd-btn-primary text-[13px] self-start disabled:opacity-50">

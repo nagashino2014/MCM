@@ -15,6 +15,9 @@ export interface AnalyzeInput {
   baseUrlHint?: string;
   url?: string;
   rawText?: string;
+  /** 업로드된 가이드 파일(docx 등)에서 추출한 텍스트. */
+  fileText?: string;
+  fileName?: string;
   context?: string;
 }
 
@@ -117,10 +120,11 @@ export async function analyzeApiSource(input: AnalyzeInput): Promise<AnalyzeResu
     const t = await fetchText(input.url).catch(() => "");
     if (t) parts.push(`URL_TEXT:\n${t}`);
   }
+  if (input.fileText) parts.push(`GUIDE_FILE${input.fileName ? ` (${input.fileName})` : ""}:\n${input.fileText}`);
   if (input.rawText) parts.push(`RAW_TEXT:\n${input.rawText}`);
   const combinedRaw = parts.join("\n\n");
   if (!combinedRaw.trim()) {
-    throw new Error("분석할 URL 또는 명세 원문이 필요합니다.");
+    throw new Error("분석할 URL·가이드 파일 또는 명세 원문이 필요합니다.");
   }
   const combined = combinedRaw.slice(0, MAX_TEXT_CHARS);
 

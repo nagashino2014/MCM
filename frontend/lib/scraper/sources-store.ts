@@ -4,6 +4,7 @@
  */
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
+import { decryptSecret, encryptSecret } from "./secret-crypto";
 import type {
   ApiConfig,
   ApiProfile,
@@ -35,6 +36,7 @@ function mapSource(r: Record<string, unknown>): ScraperSourceRow {
     purpose: (String(r.purpose ?? "intel") as ScraperPurpose),
     apiProfile: parseJson<ApiProfile>(r.api_profile),
     enabled: Number(r.enabled ?? 0) === 1,
+    hasSecret: !!r.auth_secret_enc, // 값은 미포함 — 존재 여부만
     createdAt: String(r.created_at ?? ""),
     updatedAt: String(r.updated_at ?? ""),
     updatedBy: r.updated_by != null ? String(r.updated_by) : null,
@@ -82,6 +84,7 @@ export async function createSource(input: {
   baseUrl?: string | null;
   purpose?: ScraperPurpose;
   slug?: string;
+  authSecret?: string;
   updatedBy: string | null;
 }): Promise<ScraperSourceRow> {
   const now = new Date().toISOString();
@@ -89,11 +92,12 @@ export async function createSource(input: {
   // 한글만인 소스명은 slugify 결과가 폴백('src')이 되어 UNIQUE 충돌 → sourceId hex 접미로 유니크 보장.
   let slug = slugify(input.slug || input.name);
   if (slug === "src") slug = "src" + sourceId.slice(5, 11);
+  const enc = input.authSecret?.trim() ? encryptSecret(input.authSecret.trim()) : null;
   return withDbWrite(async (db) => {
     await db.run(
-      `INSERT INTO scraper_sources (source_id, slug, name, base_url, purpose, enabled, created_at, updated_at, updated_by)
-       VALUES ($1, $2, $3, $4, $5, 0, $6, $6, $7)`,
-      [sourceId, slug, input.name.trim(), input.baseUrl || null, input.purpose || "intel", now, input.updatedBy]
+      `INSERT INTO scraper_sources (source_id, slug, name, base_url, purpose, auth_secret_enc, enabled, created_at, updated_at, updated_by)
+       VALUES ($1, $2, $3, $4, $5, $6, 0, $7, $7, $8)`,
+      [sourceId, slug, input.name.trim(), input.baseUrl || null, input.purpose || "intel", enc, now, input.updatedBy]
     );
     const rows = rowsToObjects(
       await db.exec("SELECT * FROM scraper_sources WHERE source_id = $1", [sourceId])
@@ -104,7 +108,14 @@ export async function createSource(input: {
 
 export async function updateSource(
   sourceId: string,
-  patch: { name?: string; baseUrl?: string | null; apiProfile?: ApiProfile | null; enabled?: boolean },
+  patch: {
+    name?: string;
+    baseUrl?: string | null;
+    apiProfile?: ApiProfile | null;
+    enabled?: boolean;
+    /** 인증키: non-empty=암호화 저장, null=삭제, ""/undefined=변경 안함. */
+    authSecret?: string | null;
+  },
   updatedBy: string | null
 ): Promise<void> {
   const sets: string[] = [];
@@ -120,6 +131,11 @@ export async function updateSource(
     vals.push(patch.apiProfile ? JSON.stringify(patch.apiProfile) : null);
   }
   if (patch.enabled !== undefined) push("enabled", patch.enabled ? 1 : 0);
+  if (patch.authSecret !== undefined) {
+    if (patch.authSecret === null) push("auth_secret_enc", null);
+    else if (patch.authSecret.trim()) push("auth_secret_enc", encryptSecret(patch.authSecret.trim()));
+    // 빈 문자열은 기존 키 유지(변경 없음)
+  }
   if (sets.length === 0) return;
   push("updated_at", new Date().toISOString());
   push("updated_by", updatedBy);
@@ -127,6 +143,15 @@ export async function updateSource(
   await withDbWrite(async (db) => {
     await db.run(`UPDATE scraper_sources SET ${sets.join(", ")} WHERE source_id = $${vals.length}`, vals);
   });
+}
+
+/** 실행(수집/미리보기) 시점 전용 — 저장된 인증키를 복호화해 반환. 응답에는 절대 노출 금지. */
+export async function getSourceSecret(sourceId: string): Promise<string | null> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec("SELECT auth_secret_enc FROM scraper_sources WHERE source_id = $1", [sourceId])
+  );
+  return decryptSecret(rows[0]?.auth_secret_enc as string | undefined);
 }
 
 export async function deleteSource(sourceId: string): Promise<void> {

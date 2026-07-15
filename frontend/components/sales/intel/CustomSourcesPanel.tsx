@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Radar, Plus, Wand2, Play, Eye, Trash2, ArrowLeft, Check, ExternalLink } from "lucide-react";
+import { Radar, Plus, Wand2, Play, Eye, Trash2, ArrowLeft, Check, ExternalLink, KeyRound } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
@@ -20,6 +20,7 @@ interface Source {
   purpose: string;
   apiProfile: unknown;
   enabled: boolean;
+  hasSecret?: boolean;
 }
 interface Endpoint {
   endpointId: string;
@@ -84,6 +85,9 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
   // preview
   const [samples, setSamples] = useState<PreviewSample[] | null>(null);
 
+  // 인증키
+  const [secretInput, setSecretInput] = useState("");
+
   const loadSources = useCallback(async () => {
     try {
       const d = await jfetch(`/api/scraper/sources?purpose=${purpose}`);
@@ -110,6 +114,7 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
     if (selId) {
       setProposal(null);
       setSamples(null);
+      setSecretInput("");
       loadDetail(selId);
     } else {
       setSel(null);
@@ -248,6 +253,24 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
     await loadDetail(sel.sourceId);
   };
 
+  const saveSecret = async () => {
+    if (!sel || !secretInput.trim()) return;
+    setBusy(true);
+    try {
+      await jfetch(`/api/scraper/sources/${sel.sourceId}`, {
+        method: "PUT",
+        body: JSON.stringify({ authSecret: secretInput.trim() }),
+      });
+      setSecretInput("");
+      setMsg("인증키가 암호화 저장되었습니다.");
+      await loadDetail(sel.sourceId);
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const deleteSource = async () => {
     if (!sel || !confirm(`소스 "${sel.name}"를 삭제할까요? (엔드포인트 포함)`)) return;
     await jfetch(`/api/scraper/sources/${sel.sourceId}`, { method: "DELETE" }).catch((e) => setMsg(String(e)));
@@ -340,6 +363,34 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
                 <button type="button" onClick={deleteSource} className="cd-btn cd-btn-danger text-[12px]">
                   <Trash2 className="w-3.5 h-3.5" /> 삭제
                 </button>
+              </div>
+
+              {/* 인증키 */}
+              <div className="cd-card p-4 flex flex-col gap-2">
+                <h3 className="text-sm font-bold cd-text flex items-center gap-1.5">
+                  <KeyRound className="w-4 h-4" /> 인증키
+                  {sel.hasSecret && <span className="text-[11px]" style={{ color: "#13DEB9" }}>· 저장됨</span>}
+                </h3>
+                <p className="text-[11px] cd-text-faint">
+                  인증키가 필요한 API(공공데이터포털 등)는 여기 입력하면 암호화 저장됩니다 — 재배포 불필요. 나라장터는 Decoding 키를 사용하세요.
+                </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="password"
+                    className="cd-input text-[13px] flex-1"
+                    placeholder={sel.hasSecret ? "변경할 때만 새로 입력" : "인증키 입력"}
+                    value={secretInput}
+                    onChange={(e) => setSecretInput(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={saveSecret}
+                    disabled={busy || !secretInput.trim()}
+                    className="cd-btn cd-btn-primary text-[13px] disabled:opacity-50"
+                  >
+                    <KeyRound className="w-4 h-4" /> 저장
+                  </button>
+                </div>
               </div>
 
               {/* analyze */}

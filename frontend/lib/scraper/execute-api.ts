@@ -171,7 +171,8 @@ async function executeApiCall(
   apiProfile: ApiProfile,
   apiConfig: ApiConfig,
   pageParams: Record<string, string>,
-  logs: string[]
+  logs: string[],
+  resolvedSecret: string | null
 ): Promise<{ data: unknown; error?: string }> {
   const baseUrl = apiProfile.base_url;
   if (!baseUrl) return { data: null, error: "base_url이 설정되지 않았습니다." };
@@ -195,7 +196,8 @@ async function executeApiCall(
       const auth = apiProfile.auth;
       const authIn = (auth.in || "query").toLowerCase();
       const authName = auth.param_name || auth.name || "";
-      const secret = getEnvSecret(auth.secret_ref);
+      // DB에 저장된 키(resolvedSecret) 우선, 없으면 ENV 폴백(하위호환).
+      const secret = resolvedSecret ?? getEnvSecret(auth.secret_ref);
       if (secret && authName) {
         if (authIn === "header") headers[authName] = secret;
         else url.searchParams.set(authName, secret);
@@ -237,7 +239,11 @@ async function executeApiCall(
  * 등록된 api_profile + api_config로 수집을 실행해 원시 item 목록을 반환한다.
  * 페이지네이션(page/offset), max_pages 상한, 빈 페이지 조기 종료, 검색/필드 필터 적용.
  */
-export async function runApiCollect(apiProfile: ApiProfile, apiConfig: ApiConfig): Promise<RunApiResult> {
+export async function runApiCollect(
+  apiProfile: ApiProfile,
+  apiConfig: ApiConfig,
+  opts: { secret?: string | null } = {}
+): Promise<RunApiResult> {
   const logs: string[] = [];
   let allData: Record<string, unknown>[] = [];
   try {
@@ -257,7 +263,7 @@ export async function runApiCollect(apiProfile: ApiProfile, apiConfig: ApiConfig
         // 페이지당 건수 파라미터(예: numOfRows)가 별도면 함께 전달.
         if (pagination.size_param) pageParams[pagination.size_param] = String(pageSize);
       }
-      const result = await executeApiCall(apiProfile, apiConfig, pageParams, logs);
+      const result = await executeApiCall(apiProfile, apiConfig, pageParams, logs, opts.secret ?? null);
       if (result.error) {
         logs.push(`[ERROR] ${result.error}`);
         if (page === 1) return { items: [], logs, error: result.error };

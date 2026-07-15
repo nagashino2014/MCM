@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
       baseUrl: body?.baseUrl ? String(body.baseUrl) : null,
       purpose,
       slug: body?.slug ? String(body.slug) : undefined,
+      authSecret: body?.authSecret ? String(body.authSecret) : undefined,
       updatedBy: ctx.userId,
     });
     return NextResponse.json({ source });

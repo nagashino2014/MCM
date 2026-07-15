@@ -10,6 +10,7 @@ import { buildFacilityMatcher } from "./facility-matcher";
 import { EMPTY_INDUSTRY_TAG, industryTagForFacility, type IndustryTag } from "./industry-rules";
 import type { IntelSignalGrade, IntelSignalType } from "./signal-extractor";
 import { getNestedValue, runApiCollect } from "@/lib/scraper/execute-api";
+import { getSourceSecret } from "@/lib/scraper/sources-store";
 import type { FieldMapping, ScraperEndpointRow, ScraperSourceRow } from "@/lib/scraper/types";
 
 const GRADES: IntelSignalGrade[] = ["confirmed", "candidate", "monitoring", "excluded"];
@@ -95,8 +96,9 @@ export async function collectCustomSource(
   const typeRaw = (endpoint.sinkConfig?.signal_type ?? "other") as IntelSignalType;
   const signalType: IntelSignalType = TYPES.includes(typeRaw) ? typeRaw : "other";
 
-  // 1) 실행 → 원시 items
-  const run = await runApiCollect(source.apiProfile, endpoint.apiConfig);
+  // 1) 실행 → 원시 items (저장된 인증키 복호화 주입, 없으면 ENV 폴백)
+  const secret = await getSourceSecret(source.sourceId);
+  const run = await runApiCollect(source.apiProfile, endpoint.apiConfig, { secret });
   if (run.error && run.items.length === 0) {
     return { ...result, error: run.error, logs: run.logs };
   }

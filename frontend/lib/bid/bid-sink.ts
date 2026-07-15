@@ -8,6 +8,7 @@
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { getNestedValue, runApiCollect } from "@/lib/scraper/execute-api";
+import { getSourceSecret } from "@/lib/scraper/sources-store";
 import type {
   BidType,
   FieldMapping,
@@ -102,7 +103,8 @@ export async function collectBidSource(
     return { ...result, error: "api_profile 또는 api_config 가 없습니다." };
   }
 
-  const run = await runApiCollect(source.apiProfile, endpoint.apiConfig);
+  const secret = await getSourceSecret(source.sourceId);
+  const run = await runApiCollect(source.apiProfile, endpoint.apiConfig, { secret });
   if (run.error && run.items.length === 0) {
     return { ...result, error: run.error, logs: run.logs };
   }

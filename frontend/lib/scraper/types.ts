@@ -100,6 +100,8 @@ export interface ScraperSourceRow {
   purpose: ScraperPurpose;
   apiProfile: ApiProfile | null;
   enabled: boolean;
+  /** 인증키가 DB에 저장돼 있는지(값은 응답에 포함하지 않음 — 실행 시에만 복호화). */
+  hasSecret: boolean;
   createdAt: string;
   updatedAt: string;
   updatedBy: string | null;

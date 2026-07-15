@@ -14,6 +14,7 @@ import { indexPendingEmbeddings, markNewsDuplicates } from "@/lib/intel/rag-inde
 import { disclosureCutoffIso, loadIntelSettings } from "@/lib/intel/intel-settings";
 import { listEnabledCustomCollectors } from "@/lib/scraper/sources-store";
 import { collectCustomSource } from "@/lib/intel/custom-sink";
+import { collectBidSource } from "@/lib/bid/bid-sink";
 
 async function main() {
   // 수집 설정(intel_settings)을 읽어 각 수집기에 전달. env 는 설정보다 우선(백필 오버라이드용).
@@ -146,6 +147,26 @@ async function main() {
     }
   } catch (err) {
     console.error("[intel-batch] custom sources error", err);
+  }
+
+  // 공공입찰(bid) 커스텀 소스: purpose='bid' 소스×엔드포인트 순회 → 종류별 bid 테이블 적재. 개별 실패 격리.
+  try {
+    const bidDb = await getDb();
+    const bidCollectors = await listEnabledCustomCollectors(bidDb, "bid");
+    for (const { source, endpoint } of bidCollectors) {
+      try {
+        const started = Date.now();
+        const r = await collectBidSource(source, endpoint, {});
+        console.log(
+          `[intel-batch] bid:${source.slug} done in ${Math.round((Date.now() - started) / 1000)}s`,
+          JSON.stringify({ bidType: r.bidType, scanned: r.scanned, inserted: r.inserted, error: r.error })
+        );
+      } catch (err) {
+        console.error(`[intel-batch] bid:${source.slug} error`, err);
+      }
+    }
+  } catch (err) {
+    console.error("[intel-batch] bid sources error", err);
   }
 
   // 마지막: 신규 수집분 벡터 임베딩 적재(D단계 RAG). 미적재분을 500건씩 소진.

@@ -71,6 +71,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       fileText,
       fileName,
       context,
+      purpose: source.purpose,
     });
     return NextResponse.json(result);
   } catch (err) {

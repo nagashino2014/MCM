@@ -5,7 +5,7 @@
  * 결과는 DB에 저장하지 않고 proposal로 반환한다(사용자 확인 후 소스/엔드포인트에 커밋).
  */
 import { anthropicChatJson } from "@/lib/ai/llm-json";
-import type { ApiConfig, ApiProfile, FieldMapping } from "./types";
+import type { ApiConfig, ApiProfile, FieldMapping, ScraperPurpose } from "./types";
 
 const MAX_TEXT_CHARS = 180000;
 
@@ -19,6 +19,8 @@ export interface AnalyzeInput {
   fileText?: string;
   fileName?: string;
   context?: string;
+  /** 'intel'(기본) | 'bid' — field_mapping 표준필드셋을 결정. */
+  purpose?: ScraperPurpose;
 }
 
 export interface AnalyzeResult {
@@ -59,6 +61,29 @@ async function fetchText(url: string): Promise<string> {
 
 function buildPrompt(input: AnalyzeInput, combined: string): string {
   const secretRef = secretEnvRef(input.slug);
+  const isBid = input.purpose === "bid";
+  const fieldMappingSpec = isBid
+    ? `7. **★ field_mapping (가장 중요)**: 응답 item 1건 기준. 이 API가 "공공기관의 발주계획/사전규격/입찰공고"를 다룬다는 전제로 아래 표준필드 경로를 채운다. 없으면 생략(빈 문자열 금지).
+   - external_id: 공고번호/식별번호(orderPlanUntyNo·bfSpecRgstNo·bidNtceNo 등). 없으면 생략(URL 해시 폴백).
+   - org_name: 발주기관/수요기관명.
+   - title: 사업명/공고명.
+   - budget: 예산·예정가격 금액 필드(숫자).
+   - posted_at: 게시일/등록일시.
+   - deadline: 입찰마감일시(있으면).
+   - method: 조달방식/계약방법.
+   - work_type: 업무구분(공사/물품/용역/외자).
+   - category: 품목/업종 분류.
+   - url: 원문 상세 링크(있으면).`
+    : `7. **★ field_mapping (가장 중요)**: 응답 배열의 item 1건 기준으로, 아래 표준필드에 대응하는 필드 경로(점 표기)를 채운다. 이 API가 "회사/기업의 투자·설비 신호"를 다룬다는 전제로 가장 적합한 필드를 고른다. 없으면 생략(빈 문자열 금지).
+   - external_id: 각 item의 고유 식별자(공고번호/일련번호/id 등). 없으면 생략(URL 해시로 폴백됨).
+   - company_name: 회사/기관/사업주체명.
+   - report_name: 제목/사업명/공고명.
+   - url: 원문 상세 링크.
+   - disclosed_at: 공시/등록/게시 일자.
+   - summary: 요약/내용(선택).`;
+  const fieldMappingSchema = isBid
+    ? `"field_mapping": { "external_id": "...", "org_name": "...", "title": "...", "budget": "...", "posted_at": "...", "deadline": "...", "method": "...", "work_type": "...", "category": "...", "url": "..." }`
+    : `"field_mapping": { "external_id": "...", "company_name": "...", "report_name": "...", "url": "...", "disclosed_at": "...", "summary": "..." }`;
   return `너는 임의의 공개 REST/OPEN API 명세(가이드 문서/응답 예시)를 분석해, 그 API를 곧바로 호출·수집할 수 있는
 프로파일을 생성한다. **JSON 하나만 출력한다**(설명 텍스트 금지).
 
@@ -69,13 +94,7 @@ function buildPrompt(input: AnalyzeInput, combined: string): string {
 4. **응답형식**: JSON/XML 감지. response_mapping.format 에 "JSON" 또는 "XML". **XML 이면 warnings 에 "xml_unsupported_mvp"** (현재 JSON 만 지원).
 5. **응답 배열 경로**: 목록이 담긴 키(data/items/results/response.body.items 등)를 response_mapping.list_path 에.
 6. **페이지네이션**: api_config.pagination(type "page"|"offset"|"none"). param_name=페이지번호/오프셋 파라미터명(예 pageNo). **페이지당 건수 파라미터(예 numOfRows/display/perPage)가 따로 있으면 size_param 에 그 이름을, page_size 에 값을 넣어라**(누락하면 기본 소량만 조회됨). 필수 조회조건(조회기간 inqryBgnDt/inqryEndDt·구분값 등)이 명세에 있으면 params 에 빠짐없이 포함하라.
-7. **★ field_mapping (가장 중요)**: 응답 배열의 item 1건 기준으로, 아래 표준필드에 대응하는 필드 경로(점 표기)를 채운다. 이 API가 "회사/기업의 투자·설비 신호"를 다룬다는 전제로 가장 적합한 필드를 고른다. 없으면 생략(빈 문자열 금지).
-   - external_id: 각 item의 고유 식별자(공고번호/일련번호/id 등). 없으면 생략(URL 해시로 폴백됨).
-   - company_name: 회사/기관/사업주체명.
-   - report_name: 제목/사업명/공고명.
-   - url: 원문 상세 링크.
-   - disclosed_at: 공시/등록/게시 일자.
-   - summary: 요약/내용(선택).
+${fieldMappingSpec}
 
 ## 출력 스키마(JSON만)
 {
@@ -92,7 +111,7 @@ function buildPrompt(input: AnalyzeInput, combined: string): string {
     "params": { "가변·고정 기본 파라미터": "값" },
     "pagination": { "type": "page|offset|none", "param_name": "pageNo", "size_param": "numOfRows", "page_size": 100, "max_pages": 3 }
   },
-  "field_mapping": { "external_id": "...", "company_name": "...", "report_name": "...", "url": "...", "disclosed_at": "...", "summary": "..." },
+  ${fieldMappingSchema},
   "warnings": ["불확실 항목"],
   "summary": "분석 요약(한국어 1~2문장)"
 }

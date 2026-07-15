@@ -56,7 +56,8 @@ async function jfetch(url: string, init?: RequestInit) {
   return data;
 }
 
-export function CustomSourcesPanel() {
+export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | "bid" }) {
+  const isBid = purpose === "bid";
   const { theme, toggleTheme } = useCdashTheme();
   const [sources, setSources] = useState<Source[]>([]);
   const [selId, setSelId] = useState<string | null>(null);
@@ -68,6 +69,9 @@ export function CustomSourcesPanel() {
   // 생성 폼
   const [newName, setNewName] = useState("");
   const [newBaseUrl, setNewBaseUrl] = useState("");
+  const [newSlug, setNewSlug] = useState("");
+  // bid 소스 저장 시 대상 종류(엔드포인트별)
+  const [bidType, setBidType] = useState<"order_plan" | "prior_spec" | "bid_notice">("bid_notice");
 
   // analyze
   const [anUrl, setAnUrl] = useState("");
@@ -82,12 +86,12 @@ export function CustomSourcesPanel() {
 
   const loadSources = useCallback(async () => {
     try {
-      const d = await jfetch("/api/scraper/sources?purpose=intel");
+      const d = await jfetch(`/api/scraper/sources?purpose=${purpose}`);
       setSources(d.sources ?? []);
     } catch (e) {
       setMsg(e instanceof Error ? e.message : String(e));
     }
-  }, []);
+  }, [purpose]);
 
   const loadDetail = useCallback(async (sourceId: string) => {
     try {
@@ -119,10 +123,16 @@ export function CustomSourcesPanel() {
     try {
       const d = await jfetch("/api/scraper/sources", {
         method: "POST",
-        body: JSON.stringify({ name: newName.trim(), baseUrl: newBaseUrl.trim() || null }),
+        body: JSON.stringify({
+          name: newName.trim(),
+          baseUrl: newBaseUrl.trim() || null,
+          slug: newSlug.trim() || undefined,
+          purpose,
+        }),
       });
       setNewName("");
       setNewBaseUrl("");
+      setNewSlug("");
       await loadSources();
       setSelId(d.source.sourceId);
     } catch (e) {
@@ -183,7 +193,7 @@ export function CustomSourcesPanel() {
           name: endpointName.trim() || "기본 엔드포인트",
           apiConfig: proposal.api_config,
           fieldMapping: proposal.field_mapping,
-          sinkConfig: { signal_grade: "monitoring", signal_type: "other" },
+          sinkConfig: isBid ? { bid_type: bidType } : { signal_grade: "monitoring", signal_type: "other" },
         }),
       });
       setProposal(null);
@@ -249,13 +259,17 @@ export function CustomSourcesPanel() {
     <div className="cdash cd-fields-white flex flex-col gap-4 p-4 md:p-5 rounded-3xl min-h-full" data-theme={theme}>
       <CdPageHeader
         icon={<Radar className="w-5 h-5" />}
-        eyebrow="Intel · Custom Sources"
-        title="커스텀 API 소스"
-        subtitle="임의의 공개 API를 등록하면 API Profile을 AI가 자동 생성해 수집합니다. 결과는 인텔 신호로 적재됩니다."
+        eyebrow={isBid ? "Bid · Custom Sources" : "Intel · Custom Sources"}
+        title={isBid ? "공공입찰 API 소스" : "커스텀 API 소스"}
+        subtitle={
+          isBid
+            ? "나라장터 등 공공입찰 API를 등록하면 API Profile을 AI가 자동 생성해 수집합니다. 결과는 공공입찰 종류별 테이블로 적재됩니다."
+            : "임의의 공개 API를 등록하면 API Profile을 AI가 자동 생성해 수집합니다. 결과는 인텔 신호로 적재됩니다."
+        }
         actions={
           <div className="flex items-center gap-2">
-            <Link href="/sales/intel" className="cd-chip">
-              <ArrowLeft className="w-3.5 h-3.5" /> 인텔
+            <Link href={isBid ? "/sales/bids" : "/sales/intel"} className="cd-chip">
+              <ArrowLeft className="w-3.5 h-3.5" /> {isBid ? "공공입찰" : "인텔"}
             </Link>
             <CdThemeToggle theme={theme} onToggle={toggleTheme} />
           </div>
@@ -302,6 +316,7 @@ export function CustomSourcesPanel() {
           <div className="border-t cd-border-c pt-3 flex flex-col gap-2">
             <input className="cd-input text-[13px]" placeholder="소스명 (예: 조달청 나라장터)" value={newName} onChange={(e) => setNewName(e.target.value)} />
             <input className="cd-input text-[13px]" placeholder="base URL (도메인만, 예: http://apis.data.go.kr)" value={newBaseUrl} onChange={(e) => setNewBaseUrl(e.target.value)} />
+            <input className="cd-input text-[13px]" placeholder="식별자 slug (선택, 영문·숫자, 예: narajangteo)" value={newSlug} onChange={(e) => setNewSlug(e.target.value)} />
             <button type="button" onClick={createSource} disabled={busy || !newName.trim()} className="cd-btn cd-btn-primary text-[13px] disabled:opacity-50">
               <Plus className="w-4 h-4" /> 소스 추가
             </button>
@@ -369,8 +384,19 @@ export function CustomSourcesPanel() {
                     <pre className="text-[11px] cd-text-muted bg-[color:var(--cd-surface)] rounded p-2 overflow-x-auto">{JSON.stringify(proposal.field_mapping, null, 2)}</pre>
                     <label className="text-[11px] cd-text-faint">api_config</label>
                     <pre className="text-[11px] cd-text-muted bg-[color:var(--cd-surface)] rounded p-2 overflow-x-auto max-h-40">{JSON.stringify(proposal.api_config, null, 2)}</pre>
-                    <div className="flex items-center gap-2">
-                      <input className="cd-input text-[13px] flex-1" placeholder="엔드포인트명" value={endpointName} onChange={(e) => setEndpointName(e.target.value)} />
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <input className="cd-input text-[13px] flex-1 min-w-[120px]" placeholder="엔드포인트명" value={endpointName} onChange={(e) => setEndpointName(e.target.value)} />
+                      {isBid && (
+                        <select
+                          className="cd-select text-[13px]"
+                          value={bidType}
+                          onChange={(e) => setBidType(e.target.value as "order_plan" | "prior_spec" | "bid_notice")}
+                        >
+                          <option value="order_plan">발주계획</option>
+                          <option value="prior_spec">사전규격</option>
+                          <option value="bid_notice">입찰공고</option>
+                        </select>
+                      )}
                       <button type="button" onClick={saveProposal} disabled={busy} className="cd-btn cd-btn-primary text-[13px] disabled:opacity-50">
                         <Check className="w-4 h-4" /> 프로파일 저장
                       </button>

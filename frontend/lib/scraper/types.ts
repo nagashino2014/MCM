@@ -79,6 +79,18 @@ export interface IntelSinkConfig {
   use_llm_classify?: boolean; // 2차
 }
 
+/** bid sink 어댑터 옵션 — 대상 테이블(종류)을 결정한다. */
+export type BidType = "order_plan" | "prior_spec" | "bid_notice";
+export interface BidSinkConfig {
+  bid_type?: BidType; // 기본 bid_notice
+}
+
+/**
+ * bid sink 표준 field_mapping 키(참고): external_id / org_name(발주기관) / title(사업명) /
+ * budget(예산·예정가격) / posted_at(게시일) / deadline(입찰마감) / method(조달방식) /
+ * work_type(업무구분) / category(분류) / url(원문링크). FieldMapping(Record<string,string>) 재사용.
+ */
+
 /** DB row: scraper_sources */
 export interface ScraperSourceRow {
   sourceId: string;

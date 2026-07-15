@@ -86,7 +86,9 @@ export async function createSource(input: {
 }): Promise<ScraperSourceRow> {
   const now = new Date().toISOString();
   const sourceId = "ssrc_" + crypto.randomBytes(7).toString("hex");
-  const slug = slugify(input.slug || input.name);
+  // 한글만인 소스명은 slugify 결과가 폴백('src')이 되어 UNIQUE 충돌 → sourceId hex 접미로 유니크 보장.
+  let slug = slugify(input.slug || input.name);
+  if (slug === "src") slug = "src" + sourceId.slice(5, 11);
   return withDbWrite(async (db) => {
     await db.run(
       `INSERT INTO scraper_sources (source_id, slug, name, base_url, purpose, enabled, created_at, updated_at, updated_by)

@@ -84,6 +84,7 @@ export const MENU_ITEMS: MenuItem[] = [
       { title: "담당자 정보 관리", href: "/sales/contacts" },
       { title: "API & 스크래핑", href: "/sales/intel" },
       { title: "RAG & 영업 발굴", href: "/sales/rag" },
+      { title: "공공입찰", href: "/sales/bids" },
     ],
     group: "main",
   },

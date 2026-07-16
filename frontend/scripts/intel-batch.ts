@@ -192,6 +192,11 @@ async function main() {
           const r = source.purpose === "bid"
             ? await collectBidSource(source, chunkEp)
             : await collectCustomSource(source, chunkEp);
+          if (r.error && r.scanned === 0) {
+            // 지속 오류(인증키 누락 등) — 커서 보존하고 이 엔드포인트는 다음 배치에서 재시도.
+            console.error(`[intel-batch] backfill ${source.slug}/${endpoint.name} ${chunk} stalled: ${r.error}`);
+            break;
+          }
           cursor = nextYm(chunk);
           const finished = totalMonths(cursor, st.to) === 0;
           const next: BackfillState = {

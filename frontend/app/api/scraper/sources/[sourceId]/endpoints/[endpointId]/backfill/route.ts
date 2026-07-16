@@ -106,6 +106,24 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         source.purpose === "bid"
           ? await collectBidSource(source, chunkEp)
           : await collectCustomSource(source, chunkEp);
+      // 완전 실패(수집 0 + 오류)면 커서를 전진하지 않는다 — 인증키 누락 같은 지속 오류가
+      // "빈 완주(done)"로 끝나는 것을 방지. 클라이언트는 이 응답을 보고 중단한다.
+      if (result.error && result.scanned === 0) {
+        const stalled: BackfillState = {
+          ...state,
+          updated_at: new Date().toISOString(),
+          last_result: { chunk, scanned: 0, inserted: 0, updated: 0, error: result.error },
+        };
+        await updateEndpoint(endpointId, { backfill: stalled as unknown as Record<string, unknown> });
+        return NextResponse.json({
+          backfill: stalled,
+          progress: progressOf(stalled),
+          chunk,
+          result: stalled.last_result,
+          done: false,
+          stalled: true,
+        });
+      }
       const nextCursor = nextYm(chunk);
       const finished = totalMonths(nextCursor, state.to) === 0;
       const nextState: BackfillState = {

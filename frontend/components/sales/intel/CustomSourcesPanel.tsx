@@ -314,6 +314,12 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
               `${r.chunk} 수집: 신규 ${r.inserted ?? 0} / 갱신 ${r.updated ?? 0} / 스캔 ${r.scanned ?? 0}${r.error ? ` · 오류: ${r.error}` : ""}`
             );
           }
+          if (d.stalled) {
+            // 수집 0건 + 오류(인증키 누락 등 지속 오류) — 커서 보존 중단. 원인 해결 후 재시작.
+            setBfMsg(`백필 중단 — ${d.result?.error ?? "수집 실패"} · 원인 해결 후 같은 기간으로 재시작하면 이어서 진행합니다.`);
+            bfLoopRef.current = false;
+            break;
+          }
           if (d.done) {
             setBfMsg((m) => `${m ? m + " · " : ""}백필 완료 ✓`);
             break;

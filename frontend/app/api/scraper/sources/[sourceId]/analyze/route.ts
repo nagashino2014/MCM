@@ -83,6 +83,10 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         catalog: source.catalog,
         selectedTitles,
       });
+      // 목록만 있던 카탈로그에 선택분 상세가 보충됐으면 재저장(카드에 파라미터/필드 수 표시).
+      if (built.catalog_updated) {
+        await updateSource(sourceId, { catalog: source.catalog }, actor.userId);
+      }
       return NextResponse.json(built);
     }
 

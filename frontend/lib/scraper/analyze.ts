@@ -221,6 +221,35 @@ export interface ExtractCatalogResult {
   summary: string;
 }
 
+/** 문서 발췌에서 특정 오퍼레이션의 요청변수·응답필드를 완전 추출(카탈로그 2차·build 상세 보충 공용). */
+async function extractOpDetail(
+  op: { title: string },
+  doc: string
+): Promise<Pick<CatalogEndpoint, "request_params" | "response_fields">> {
+  const d = await anthropicChatJson<{ request_params?: unknown[]; response_fields?: unknown[] }>({
+    system: "너는 API 가이드에서 특정 오퍼레이션의 요청변수·응답필드를 완전하게 추출하는 전문가다. 반드시 JSON 하나만 출력한다.",
+    user: `아래 문서 발췌에서 오퍼레이션 "${op.title}" 의 **요청변수와 응답필드를 하나도 빠짐없이** 추출한다. **JSON 하나만 출력**(설명 금지).
+- 요청변수가 12개면 12개 전부, 응답필드가 60개면 60개 전부. 요약·생략 금지. 문서에 없는 값은 지어내지 말 것.
+- request_params[]: { "name": 영문 변수명, "name_ko": 한글명, "required": true/false(문서의 필수/옵션 표기), "type": 형, "description": 설명, "example": 샘플값(있으면) }
+- response_fields[]: { "name": 영문 필드명, "name_ko": 한글명, "type": 형, "description": 설명 }
+
+## 출력 스키마
+{ "request_params": [...], "response_fields": [...] }
+
+## 문서 발췌
+${doc}`.trim(),
+    model: "claude-sonnet-5",
+    maxTokens: 24000,
+    timeoutMs: 180000,
+  });
+  const params = Array.isArray(d.request_params) ? d.request_params : [];
+  const fields = Array.isArray(d.response_fields) ? d.response_fields : [];
+  return {
+    request_params: params.filter((p): p is CatalogEndpoint["request_params"][number] => !!p && typeof (p as { name?: unknown }).name === "string"),
+    response_fields: fields.filter((f): f is CatalogEndpoint["response_fields"][number] => !!f && typeof (f as { name?: unknown }).name === "string"),
+  };
+}
+
 /**
  * 오퍼레이션 제목 기준으로 문서에서 해당 구간만 잘라낸다(상세 추출 입력·시간 절감).
  * 제목은 목차·본문 등 여러 번 등장하므로, **모든 등장 위치 중 다음 제목까지의 구간이 가장 긴 곳(=본문 상세)**을 고른다.
@@ -280,8 +309,8 @@ export async function extractCatalog(input: AnalyzeInput): Promise<ExtractCatalo
 ORG: ${input.name} (slug: ${input.slug})
 ${combined}`.trim(),
     model: "claude-sonnet-5",
-    maxTokens: 4000,
-    timeoutMs: 90000,
+    maxTokens: 8000,
+    timeoutMs: 120000,
   });
 
   const ops = (Array.isArray(listRaw.operations) ? listRaw.operations : []).filter(
@@ -290,34 +319,25 @@ ${combined}`.trim(),
   if (!ops.length) throw new Error("가이드에서 오퍼레이션을 찾지 못했습니다.");
   const allTitles = ops.map((o) => o.title);
 
-  // ── 2차: 오퍼레이션별 파라미터·응답필드 (4개씩 병렬, 실패 시 빈 항목 + 경고) ──
-  const extractOpDetail = async (
-    op: (typeof ops)[number],
-    doc: string
-  ): Promise<Pick<CatalogEndpoint, "request_params" | "response_fields">> => {
-    const d = await anthropicChatJson<{ request_params?: unknown[]; response_fields?: unknown[] }>({
-      system: "너는 API 가이드에서 특정 오퍼레이션의 요청변수·응답필드를 완전하게 추출하는 전문가다. 반드시 JSON 하나만 출력한다.",
-      user: `아래 문서 발췌에서 오퍼레이션 "${op.title}" 의 **요청변수와 응답필드를 하나도 빠짐없이** 추출한다. **JSON 하나만 출력**(설명 금지).
-- 요청변수가 12개면 12개 전부, 응답필드가 60개면 60개 전부. 요약·생략 금지. 문서에 없는 값은 지어내지 말 것.
-- request_params[]: { "name": 영문 변수명, "name_ko": 한글명, "required": true/false(문서의 필수/옵션 표기), "type": 형, "description": 설명, "example": 샘플값(있으면) }
-- response_fields[]: { "name": 영문 필드명, "name_ko": 한글명, "type": 형, "description": 설명 }
-
-## 출력 스키마
-{ "request_params": [...], "response_fields": [...] }
-
-## 문서 발췌
-${doc}`.trim(),
-      model: "claude-sonnet-5",
-      maxTokens: 12000,
-      timeoutMs: 120000,
-    });
-    const params = Array.isArray(d.request_params) ? d.request_params : [];
-    const fields = Array.isArray(d.response_fields) ? d.response_fields : [];
+  // 오퍼레이션이 많은 문서(입찰공고정보서비스 등 수십 개)는 전량 상세 추출이 토큰·시간 한도를
+  // 넘는다 → 목록만 저장하고, 상세(파라미터/응답필드)는 사용자가 선택한 항목만 build 단계에서
+  // 원문(doc_text)으로부터 추출한다.
+  const DETAIL_LIMIT = 12;
+  if (ops.length > DETAIL_LIMIT) {
     return {
-      request_params: params.filter((p): p is CatalogEndpoint["request_params"][number] => !!p && typeof (p as { name?: unknown }).name === "string"),
-      response_fields: fields.filter((f): f is CatalogEndpoint["response_fields"][number] => !!f && typeof (f as { name?: unknown }).name === "string"),
+      catalog: {
+        extracted_at: new Date().toISOString(),
+        source: input.fileName || input.url || (input.rawText ? "raw_text" : undefined),
+        total_endpoints: ops.length,
+        endpoints: ops.map((op) => ({ ...op, request_params: [], response_fields: [] })),
+        doc_text: combined,
+      },
+      warnings,
+      summary:
+        (typeof listRaw.summary === "string" && listRaw.summary ? listRaw.summary + " " : "") +
+        `오퍼레이션이 ${ops.length}개로 많아 목록만 추출했습니다 — 항목을 선택해 "선택 항목 분석"을 누르면 선택분의 요청변수·응답필드를 분석합니다.`,
     };
-  };
+  }
 
   const endpoints: CatalogEndpoint[] = [];
   const BATCH = 4;
@@ -383,6 +403,8 @@ export interface BuildProfileResult {
   endpoint_proposals: EndpointProposal[];
   warnings: string[];
   summary: string;
+  /** 목록만 있던 카탈로그에 선택분 상세를 보충한 경우 — 호출측이 catalog 를 재저장한다. */
+  catalog_updated?: boolean;
 }
 
 /**
@@ -404,6 +426,35 @@ export async function buildProfileFromCatalog(input: {
   if (!selected.length) throw new Error("선택된 엔드포인트가 없습니다.");
   const secretRef = secretEnvRef(input.slug);
   const isBid = input.purpose === "bid";
+  const buildWarnings: string[] = [];
+
+  // 목록만 추출된 카탈로그(대형 가이드)는 선택분의 상세(파라미터/응답필드)를 원문에서 지금 추출.
+  const docText = input.catalog.doc_text;
+  const needDetail = selected.filter((e) => !e.request_params?.length && !e.response_fields?.length);
+  if (needDetail.length && docText) {
+    const allTitles = input.catalog.endpoints.map((e) => e.title);
+    const BATCH = 4;
+    for (let i = 0; i < needDetail.length; i += BATCH) {
+      const batch = needDetail.slice(i, i + BATCH);
+      await Promise.all(
+        batch.map(async (ep) => {
+          try {
+            const doc = sliceDocForOp(docText, ep.title, allTitles);
+            let detail = await extractOpDetail(ep, doc);
+            if (!detail.request_params.length && !detail.response_fields.length && doc !== docText) {
+              detail = await extractOpDetail(ep, docText);
+            }
+            ep.request_params = detail.request_params;
+            ep.response_fields = detail.response_fields;
+          } catch (e) {
+            buildWarnings.push(`"${ep.title}" 상세 추출 실패: ${e instanceof Error ? e.message : String(e)}`);
+          }
+        })
+      );
+    }
+  } else if (needDetail.length && !docText) {
+    buildWarnings.push("카탈로그에 원문이 없어 일부 항목의 파라미터/응답필드를 보충하지 못했습니다 — 카탈로그를 다시 추출하세요.");
+  }
 
   // 카탈로그를 텍스트화(LLM 입력) — 파라미터/필드 이름과 설명만(전량).
   const epText = selected
@@ -530,7 +581,8 @@ ${epText}`.trim();
   return {
     api_profile: profile,
     endpoint_proposals,
-    warnings: Array.isArray(raw.warnings) ? raw.warnings.map(String) : [],
+    warnings: [...buildWarnings, ...(Array.isArray(raw.warnings) ? raw.warnings.map(String) : [])],
     summary: typeof raw.summary === "string" ? raw.summary : "",
+    ...(needDetail.length && docText ? { catalog_updated: true } : {}),
   };
 }

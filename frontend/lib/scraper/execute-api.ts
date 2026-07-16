@@ -42,13 +42,18 @@ export function formatDateForApi(date: Date, format?: string, endOfDay = false):
   const m = String(date.getMonth() + 1).padStart(2, "0");
   const d = String(date.getDate()).padStart(2, "0");
   if (!format) return `${y}-${m}-${d}`;
-  return format
-    .replace("YYYY", y)
-    .replace("MM", m)
-    .replace("DD", d)
-    .replace("HH", endOfDay ? "23" : "00")
-    .replace("mm", endOfDay ? "59" : "00")
-    .replace("ss", endOfDay ? "59" : "00");
+  return (
+    format
+      .replace("YYYY", y)
+      .replace("MM", m)
+      .replace("DD", d)
+      .replace("HH", endOfDay ? "23" : "00")
+      .replace("mm", endOfDay ? "59" : "00")
+      .replace("ss", endOfDay ? "59" : "00")
+      // "YYYYMMDDHHMM"처럼 분을 대문자로 쓰는 표기 — 월 치환 후 남은 MM/SS 는 분/초.
+      .replace("MM", endOfDay ? "59" : "00")
+      .replace("SS", endOfDay ? "59" : "00")
+  );
 }
 
 function applyDateFilters(

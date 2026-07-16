@@ -115,6 +115,11 @@ export interface SourceCatalog {
   source?: string;
   total_endpoints: number;
   endpoints: CatalogEndpoint[];
+  /**
+   * 가이드 원문 텍스트 — 오퍼레이션이 많아 목록만 추출한 경우, 선택 항목 분석(build) 때
+   * 이 원문에서 해당 오퍼레이션의 파라미터/응답필드를 상세 추출한다.
+   */
+  doc_text?: string;
 }
 
 /** api_profile.endpoints[] — 선택·정제된 엔드포인트(설정 빌더의 소스). */

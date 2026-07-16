@@ -239,7 +239,7 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
     setBusy(true);
     setBuildRunning(true);
     setMsg(`선택 ${catalogSel.length}개 엔드포인트 정제 분석 중… (LLM 호출)`);
-    setBuildMsg(`선택 ${catalogSel.length}개 정제 분석 중… 1~2분 걸립니다. 완료되면 아래 엔드포인트 목록으로 이동합니다.`);
+    setBuildMsg(`선택 ${catalogSel.length}개 정제 분석 중… 1~3분 걸립니다(목록만 추출된 항목은 상세 분석 포함). 완료되면 아래 엔드포인트 목록으로 이동합니다.`);
     try {
       const d = await jfetch(`/api/scraper/sources/${sel.sourceId}/analyze`, {
         method: "POST",
@@ -700,7 +700,11 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
                           </div>
                           {ce.category && <div className="text-[10px]" style={{ color: "var(--cd-primary)" }}>{ce.category}</div>}
                           <div className="text-[11px] cd-text-faint">
-                            요청변수 <strong>{ce.request_params.length}</strong>개 · 응답필드 <strong>{ce.response_fields.length}</strong>개
+                            {ce.request_params.length || ce.response_fields.length ? (
+                              <>요청변수 <strong>{ce.request_params.length}</strong>개 · 응답필드 <strong>{ce.response_fields.length}</strong>개</>
+                            ) : (
+                              <>목록만 추출됨 — 선택 항목 분석 시 상세 분석</>
+                            )}
                           </div>
                           {ce.request_url && <div className="text-[10px] cd-text-faint font-mono truncate">{ce.request_url}</div>}
                         </button>

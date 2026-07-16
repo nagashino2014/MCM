@@ -26,6 +26,8 @@ export interface BidRow {
   url: string | null;
   /** 발주계획 전용 — 발주년도+발주월 조합(예: "2026-07"). raw_json.orderYear/orderMnth. */
   orderPeriod: string | null;
+  /** withRaw 옵션일 때만 — 커스텀 열 계산용 원문(응답에는 내보내지 말 것). */
+  raw?: Record<string, unknown>;
   createdAt: string;
 }
 
@@ -59,9 +61,19 @@ export interface BidListFilter {
   regionGroup?: string;
   /** 용역 분류 키워드(bid_categories) — title OR 검색. */
   categoryKeywords?: string[];
+  /** 열 정렬 — field 는 표준 컬럼명 또는 raw_json 필드명. numeric 이면 숫자 캐스팅 정렬. */
+  sort?: { field: string; dir: "asc" | "desc"; numeric?: boolean };
+  /** true 면 각 행에 raw(원문 JSON)를 포함 — 커스텀 열(cells) 계산용. */
+  withRaw?: boolean;
   limit?: number;
   offset?: number;
 }
+
+/** 정렬에 쓸 수 있는 표준 컬럼 화이트리스트(SQL 식별자 주입 방지). */
+const STD_SORT_COLS = new Set([
+  "org_name", "title", "budget", "posted_at", "deadline", "method", "work_type", "category", "external_id", "created_at",
+]);
+const RAW_FIELD_RE = /^[A-Za-z0-9_.]{1,60}$/;
 
 function mapRow(r: Record<string, unknown>): BidRow {
   const s = (v: unknown) => (v != null ? String(v) : null);
@@ -135,16 +147,46 @@ export async function listBids(filter: BidListFilter): Promise<{ items: BidRow[]
   const totalRows = rowsToObjects(await db.exec(`SELECT COUNT(*)::int AS n FROM ${table} ${whereSql}`, params));
   const total = Number(totalRows[0]?.n ?? 0);
 
+  // 열 정렬 — 표준 컬럼은 화이트리스트 식별자, raw 필드는 파라미터 바인딩(raw_json->>$n).
+  let orderSql = `ORDER BY COALESCE(NULLIF(posted_at, ''), created_at) DESC`;
+  const s = filter.sort;
+  if (s?.field) {
+    const dir = s.dir === "asc" ? "ASC" : "DESC";
+    if (STD_SORT_COLS.has(s.field)) {
+      orderSql =
+        s.field === "budget"
+          ? `ORDER BY budget ${dir} NULLS LAST`
+          : `ORDER BY NULLIF(${s.field}, '') ${dir} NULLS LAST`;
+    } else if (RAW_FIELD_RE.test(s.field)) {
+      const p = add(s.field);
+      orderSql = s.numeric
+        ? `ORDER BY NULLIF(regexp_replace(COALESCE(raw_json->>${p}, ''), '[^0-9.\\-]', '', 'g'), '')::numeric ${dir} NULLS LAST`
+        : `ORDER BY NULLIF(raw_json->>${p}, '') ${dir} NULLS LAST`;
+    }
+  }
+
   const rows = rowsToObjects(
     await db.exec(
       `SELECT *, raw_json->>'orderYear' AS order_year, raw_json->>'orderMnth' AS order_mnth
          FROM ${table} ${whereSql}
-       ORDER BY COALESCE(NULLIF(posted_at, ''), created_at) DESC
+       ${orderSql}
        LIMIT ${add(limit)} OFFSET ${add(offset)}`,
       params
     )
   );
-  return { items: rows.map(mapRow), total };
+  const items = rows.map((r) => {
+    const row = mapRow(r);
+    if (filter.withRaw) {
+      try {
+        const v = typeof r.raw_json === "string" ? JSON.parse(r.raw_json) : r.raw_json;
+        if (v && typeof v === "object") row.raw = v as Record<string, unknown>;
+      } catch {
+        // raw 파싱 실패 시 생략
+      }
+    }
+    return row;
+  });
+  return { items, total };
 }
 
 /** 계약방법(method) 실데이터 distinct — 필터 옵션용(종류별로 값이 다름: 발주계획엔 적격심사 없음 등). */

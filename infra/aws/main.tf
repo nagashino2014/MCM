@@ -201,6 +201,8 @@ resource "aws_rds_cluster" "main" {
   backup_retention_period = 7
   storage_encrypted      = true
   skip_final_snapshot    = false
+  # 공공입찰 등 수집 데이터가 본격 축적됨 — 실수로 인한 클러스터 삭제 방지(2026-07-16 콘솔 적용과 일치).
+  deletion_protection    = true
   serverlessv2_scaling_configuration {
     # min 0 ACU = auto-pause. 커넥션이 없으면(=ECS 내려간 유휴 시간) 자동 일시정지되어
     # ACU 컴퓨트 과금이 0 이 된다. stop-db-cluster 의 7일 자동재시작 제약이 없다.

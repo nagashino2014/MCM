@@ -227,87 +227,95 @@ export function EndpointConfigBuilder({
         </div>
       </div>
 
-      {/* 요청 파라미터 취사선택 */}
-      <div className="flex flex-col gap-1.5">
-        <label className="text-[11px] font-bold cd-text-faint">
-          요청 파라미터 — 사용할 항목을 체크하고 값을 입력 (인증키·페이지 파라미터는 자동 처리)
-        </label>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
-          {params.map((r) => (
-            <div
-              key={r.name}
-              className={"rounded-lg border p-2 flex flex-col gap-1 " + (r.enabled ? "cd-border-c" : "cd-border-c opacity-55")}
-            >
-              <label className="flex items-center gap-1.5 cursor-pointer">
-                <input type="checkbox" checked={r.enabled} disabled={r.fixed} onChange={() => toggleParam(r.name)} />
-                <span className="text-[12px] cd-text font-mono font-semibold truncate">{r.name}</span>
-                {r.fixed && <span className="text-[10px] rounded px-1 cd-tint-primary shrink-0">고정</span>}
-                {r.required && !r.fixed && <span className="text-[10px] rounded px-1 shrink-0" style={{ background: "color-mix(in srgb, #FA896B 15%, transparent)", color: "#FA896B" }}>필수</span>}
+      {/* 요청 파라미터(절반) | 조회기간(2) | 페이지네이션(1) */}
+      <div className="grid grid-cols-1 xl:grid-cols-6 gap-4 items-start">
+        {/* 요청 파라미터 취사선택 */}
+        <div className="xl:col-span-3 flex flex-col gap-1.5 min-w-0">
+          <label className="text-[11px] font-bold cd-text-faint">
+            요청 파라미터 — 사용할 항목을 체크하고 값을 입력 (인증키·페이지 파라미터는 자동 처리)
+          </label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {params.map((r) => (
+              <div
+                key={r.name}
+                className={"rounded-lg border p-2 flex flex-col gap-1 " + (r.enabled ? "cd-border-c" : "cd-border-c opacity-55")}
+              >
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" checked={r.enabled} disabled={r.fixed} onChange={() => toggleParam(r.name)} />
+                  <span className="text-[12px] cd-text font-mono font-semibold truncate">{r.name}</span>
+                  {r.fixed && <span className="text-[10px] rounded px-1 cd-tint-primary shrink-0">고정</span>}
+                  {r.required && !r.fixed && <span className="text-[10px] rounded px-1 shrink-0" style={{ background: "color-mix(in srgb, #FA896B 15%, transparent)", color: "#FA896B" }}>필수</span>}
+                </label>
+                {(r.nameKo || r.description) && (
+                  <div className="text-[10px] cd-text-faint truncate" title={r.description}>{r.nameKo ?? r.description}</div>
+                )}
+                {r.enabled && (
+                  <input
+                    className="cd-input text-[12px]"
+                    placeholder={r.fixed ? "고정값" : "값 입력"}
+                    value={r.value}
+                    disabled={r.fixed && !!r.value}
+                    onChange={(e) => setParamValue(r.name, e.target.value)}
+                  />
+                )}
+              </div>
+            ))}
+            {params.length === 0 && <p className="text-[12px] cd-text-faint">요청변수 정보가 없습니다.</p>}
+          </div>
+        </div>
+
+        {/* 날짜 필터 */}
+        <div className="xl:col-span-2 flex flex-col gap-1.5 min-w-0">
+          <label className="text-[11px] font-bold cd-text-faint">
+            조회기간(날짜) 파라미터 — 매 실행 시 최근 N일 자동 계산 (시작=N일 전, 종료=오늘)
+          </label>
+          {dfs.map((d, i) => (
+            <div key={i} className="rounded-lg border cd-border-c p-2 grid grid-cols-2 gap-1.5 items-center">
+              <input className="cd-input text-[12px] font-mono" placeholder="필드명 (inqryBgnDt)" value={d.field} list={`df-params-${epIdx}`}
+                onChange={(e) => setDfs((p) => p.map((x, j) => (j === i ? { ...x, field: e.target.value } : x)))} />
+              <input className="cd-input text-[12px] font-mono" placeholder="형식 (YYYYMMDD)" value={d.format}
+                onChange={(e) => setDfs((p) => p.map((x, j) => (j === i ? { ...x, format: e.target.value } : x)))} />
+              <label className="text-[12px] cd-text-muted flex items-center gap-1">
+                최근
+                <input type="number" min={0} className="cd-input text-[12px] w-16" value={d.relative_days}
+                  onChange={(e) => setDfs((p) => p.map((x, j) => (j === i ? { ...x, relative_days: Number(e.target.value) } : x)))} />
+                일 전{d.relative_days === 0 ? "(=오늘)" : ""}
               </label>
-              {(r.nameKo || r.description) && (
-                <div className="text-[10px] cd-text-faint truncate" title={r.description}>{r.nameKo ?? r.description}</div>
-              )}
-              {r.enabled && (
-                <input
-                  className="cd-input text-[12px]"
-                  placeholder={r.fixed ? "고정값" : "값 입력"}
-                  value={r.value}
-                  disabled={r.fixed && !!r.value}
-                  onChange={(e) => setParamValue(r.name, e.target.value)}
-                />
-              )}
+              <button type="button" className="cd-btn cd-btn-soft text-[11px] justify-self-end" onClick={() => setDfs((p) => p.filter((_, j) => j !== i))}>삭제</button>
             </div>
           ))}
-          {params.length === 0 && <p className="text-[12px] cd-text-faint">요청변수 정보가 없습니다.</p>}
+          <datalist id={`df-params-${epIdx}`}>
+            {(ep.request_params ?? []).map((p) => <option key={p.name} value={p.name}>{p.name_ko ?? ""}</option>)}
+          </datalist>
+          <button type="button" className="cd-btn cd-btn-soft text-[11px] self-start" onClick={() => setDfs((p) => [...p, { field: "", format: "YYYYMMDD", relative_days: p.length === 0 ? 30 : 0 }])}>
+            + 날짜 필터 추가
+          </button>
         </div>
-      </div>
 
-      {/* 날짜 필터 */}
-      <div className="flex flex-col gap-1.5">
-        <label className="text-[11px] font-bold cd-text-faint">
-          조회기간(날짜) 파라미터 — 매 실행 시 최근 N일이 자동 계산됩니다 (시작=N일 전, 종료=오늘)
-        </label>
-        {dfs.map((d, i) => (
-          <div key={i} className="flex items-center gap-2 flex-wrap">
-            <input className="cd-input text-[12px] w-40 font-mono" placeholder="필드명 (예: inqryBgnDt)" value={d.field} list={`df-params-${epIdx}`}
-              onChange={(e) => setDfs((p) => p.map((x, j) => (j === i ? { ...x, field: e.target.value } : x)))} />
-            <input className="cd-input text-[12px] w-36 font-mono" placeholder="형식 (YYYYMMDD)" value={d.format}
-              onChange={(e) => setDfs((p) => p.map((x, j) => (j === i ? { ...x, format: e.target.value } : x)))} />
-            <label className="text-[12px] cd-text-muted flex items-center gap-1">
-              최근
-              <input type="number" min={0} className="cd-input text-[12px] w-16" value={d.relative_days}
-                onChange={(e) => setDfs((p) => p.map((x, j) => (j === i ? { ...x, relative_days: Number(e.target.value) } : x)))} />
-              일 전{d.relative_days === 0 ? " (=오늘·종료일용)" : ""}
-            </label>
-            <button type="button" className="cd-btn cd-btn-soft text-[11px]" onClick={() => setDfs((p) => p.filter((_, j) => j !== i))}>삭제</button>
-          </div>
-        ))}
-        <datalist id={`df-params-${epIdx}`}>
-          {(ep.request_params ?? []).map((p) => <option key={p.name} value={p.name}>{p.name_ko ?? ""}</option>)}
-        </datalist>
-        <button type="button" className="cd-btn cd-btn-soft text-[11px] self-start" onClick={() => setDfs((p) => [...p, { field: "", format: "YYYYMMDD", relative_days: p.length === 0 ? 30 : 0 }])}>
-          + 날짜 필터 추가
-        </button>
-      </div>
-
-      {/* 페이지네이션 */}
-      <div className="flex flex-col gap-1.5">
-        <label className="flex items-center gap-1.5 text-[11px] font-bold cd-text-faint cursor-pointer">
-          <input type="checkbox" checked={pg.enabled} onChange={(e) => setPg((p) => ({ ...p, enabled: e.target.checked }))} />
-          페이지네이션
-        </label>
-        {pg.enabled && (
-          <div className="flex items-center gap-2 flex-wrap text-[12px] cd-text-muted">
-            <select className="cd-select text-[12px]" value={pg.type} onChange={(e) => setPg((p) => ({ ...p, type: e.target.value as "page" | "offset" }))}>
-              <option value="page">page 번호</option>
-              <option value="offset">offset</option>
-            </select>
-            <input className="cd-input text-[12px] w-28 font-mono" placeholder="페이지 파라미터" value={pg.param_name} onChange={(e) => setPg((p) => ({ ...p, param_name: e.target.value }))} />
-            <input className="cd-input text-[12px] w-28 font-mono" placeholder="건수 파라미터" value={pg.size_param} onChange={(e) => setPg((p) => ({ ...p, size_param: e.target.value }))} />
-            <label className="flex items-center gap-1">페이지당 <input type="number" min={1} className="cd-input text-[12px] w-20" value={pg.page_size} onChange={(e) => setPg((p) => ({ ...p, page_size: Number(e.target.value) }))} /> 건</label>
-            <label className="flex items-center gap-1">최대 <input type="number" min={1} max={200} className="cd-input text-[12px] w-16" value={pg.max_pages} onChange={(e) => setPg((p) => ({ ...p, max_pages: Number(e.target.value) }))} /> 페이지</label>
-          </div>
-        )}
+        {/* 페이지네이션 */}
+        <div className="xl:col-span-1 flex flex-col gap-1.5 min-w-0">
+          <label className="flex items-center gap-1.5 text-[11px] font-bold cd-text-faint cursor-pointer">
+            <input type="checkbox" checked={pg.enabled} onChange={(e) => setPg((p) => ({ ...p, enabled: e.target.checked }))} />
+            페이지네이션
+          </label>
+          {pg.enabled && (
+            <div className="rounded-lg border cd-border-c p-2 flex flex-col gap-1.5 text-[12px] cd-text-muted">
+              <select className="cd-select text-[12px] w-full" value={pg.type} onChange={(e) => setPg((p) => ({ ...p, type: e.target.value as "page" | "offset" }))}>
+                <option value="page">page 번호</option>
+                <option value="offset">offset</option>
+              </select>
+              <input className="cd-input text-[12px] w-full font-mono" placeholder="페이지 파라미터" title="페이지 파라미터" value={pg.param_name} onChange={(e) => setPg((p) => ({ ...p, param_name: e.target.value }))} />
+              <input className="cd-input text-[12px] w-full font-mono" placeholder="건수 파라미터" title="건수 파라미터" value={pg.size_param} onChange={(e) => setPg((p) => ({ ...p, size_param: e.target.value }))} />
+              <label className="flex items-center gap-1">페이지당
+                <input type="number" min={1} className="cd-input text-[12px] w-full" value={pg.page_size} onChange={(e) => setPg((p) => ({ ...p, page_size: Number(e.target.value) }))} />
+              </label>
+              <label className="flex items-center gap-1">최대
+                <input type="number" min={1} max={200} className="cd-input text-[12px] w-full" value={pg.max_pages} onChange={(e) => setPg((p) => ({ ...p, max_pages: Number(e.target.value) }))} />
+                p
+              </label>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* 응답 필드 취사선택 */}
@@ -315,7 +323,7 @@ export function EndpointConfigBuilder({
         <label className="text-[11px] font-bold cd-text-faint">
           응답 필드 — 남길 필드만 선택(미선택 시 전체 유지). 표준필드 매핑과는 별개입니다.
         </label>
-        <div className="flex flex-wrap gap-1.5 max-h-44 overflow-y-auto">
+        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-1.5 max-h-64 overflow-y-auto">
           {respFields.map((f) => {
             const on = selFields.includes(f.name);
             return (
@@ -323,13 +331,18 @@ export function EndpointConfigBuilder({
                 key={f.name}
                 type="button"
                 onClick={() => toggleField(f.name)}
-                title={`${f.name_ko ?? f.name}${f.type ? ` (${f.type})` : ""}`}
+                title={`${f.name_ko ?? f.name}${f.type ? ` (${f.type})` : ""}${f.description ? ` — ${f.description}` : ""}`}
                 className={
-                  "px-2 py-1 rounded-lg text-[11px] font-mono border transition-colors " +
-                  (on ? "cd-fill-primary border-transparent" : "cd-border-c cd-text-muted hover:bg-[color:var(--cd-surface)]")
+                  "w-full px-2 py-1.5 rounded-lg border transition-colors flex flex-col items-center gap-0.5 min-w-0 " +
+                  (on ? "cd-fill-primary border-transparent" : "cd-border-c hover:bg-[color:var(--cd-surface)]")
                 }
               >
-                {f.name}
+                <span className={"text-[12px] font-semibold truncate w-full text-center " + (on ? "" : "cd-text")}>
+                  {f.name_ko ?? f.name}
+                </span>
+                <span className={"text-[10px] font-mono truncate w-full text-center " + (on ? "opacity-75" : "cd-text-faint")}>
+                  {f.name}
+                </span>
               </button>
             );
           })}

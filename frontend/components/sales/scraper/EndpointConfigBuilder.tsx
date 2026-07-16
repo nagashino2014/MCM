@@ -227,14 +227,14 @@ export function EndpointConfigBuilder({
         </div>
       </div>
 
-      {/* 요청 파라미터(절반) | 조회기간(2) | 페이지네이션(1) */}
-      <div className="grid grid-cols-1 xl:grid-cols-6 gap-4 items-start">
-        {/* 요청 파라미터 취사선택 */}
-        <div className="xl:col-span-3 flex flex-col gap-1.5 min-w-0">
+      {/* 요청 파라미터(50%) | 조회기간(30%) | 페이지네이션(20%) */}
+      <div className="grid grid-cols-1 xl:grid-cols-[3fr_1.8fr_1.2fr] gap-4 items-start">
+        {/* 요청 파라미터 취사선택 — 항목이 많으면 3열로 촘촘하게(스크롤 절감) */}
+        <div className="flex flex-col gap-1.5 min-w-0">
           <label className="text-[11px] font-bold cd-text-faint">
             요청 파라미터 — 사용할 항목을 체크하고 값을 입력 (인증키·페이지 파라미터는 자동 처리)
           </label>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <div className={"grid grid-cols-1 gap-2 " + (params.length > 12 ? "md:grid-cols-3" : "md:grid-cols-2")}>
             {params.map((r) => (
               <div
                 key={r.name}
@@ -265,21 +265,21 @@ export function EndpointConfigBuilder({
         </div>
 
         {/* 날짜 필터 */}
-        <div className="xl:col-span-2 flex flex-col gap-1.5 min-w-0">
+        <div className="flex flex-col gap-1.5 min-w-0">
           <label className="text-[11px] font-bold cd-text-faint">
             조회기간(날짜) 파라미터 — 매 실행 시 최근 N일 자동 계산 (시작=N일 전, 종료=오늘)
           </label>
           {dfs.map((d, i) => (
             <div key={i} className="rounded-lg border cd-border-c p-2 grid grid-cols-2 gap-1.5 items-center">
-              <input className="cd-input text-[12px] font-mono" placeholder="필드명 (inqryBgnDt)" value={d.field} list={`df-params-${epIdx}`}
+              <input className="cd-input text-[12px] font-mono min-w-0" placeholder="필드명 (inqryBgnDt)" value={d.field} list={`df-params-${epIdx}`}
                 onChange={(e) => setDfs((p) => p.map((x, j) => (j === i ? { ...x, field: e.target.value } : x)))} />
-              <input className="cd-input text-[12px] font-mono" placeholder="형식 (YYYYMMDD)" value={d.format}
+              <input className="cd-input text-[12px] font-mono min-w-0" placeholder="형식 (YYYYMMDD)" value={d.format}
                 onChange={(e) => setDfs((p) => p.map((x, j) => (j === i ? { ...x, format: e.target.value } : x)))} />
-              <label className="text-[12px] cd-text-muted flex items-center gap-1">
+              <label className="text-[12px] cd-text-muted flex items-center gap-1 whitespace-nowrap min-w-0">
                 최근
-                <input type="number" min={0} className="cd-input text-[12px] w-16" value={d.relative_days}
+                <input type="number" min={0} className="cd-input text-[12px] w-14 shrink-0" value={d.relative_days}
                   onChange={(e) => setDfs((p) => p.map((x, j) => (j === i ? { ...x, relative_days: Number(e.target.value) } : x)))} />
-                일 전{d.relative_days === 0 ? "(=오늘)" : ""}
+                {d.relative_days === 0 ? "일 전(=오늘)" : "일 전"}
               </label>
               <button type="button" className="cd-btn cd-btn-soft text-[11px] justify-self-end" onClick={() => setDfs((p) => p.filter((_, j) => j !== i))}>삭제</button>
             </div>
@@ -293,7 +293,7 @@ export function EndpointConfigBuilder({
         </div>
 
         {/* 페이지네이션 */}
-        <div className="xl:col-span-1 flex flex-col gap-1.5 min-w-0">
+        <div className="flex flex-col gap-1.5 min-w-0">
           <label className="flex items-center gap-1.5 text-[11px] font-bold cd-text-faint cursor-pointer">
             <input type="checkbox" checked={pg.enabled} onChange={(e) => setPg((p) => ({ ...p, enabled: e.target.checked }))} />
             페이지네이션
@@ -306,12 +306,14 @@ export function EndpointConfigBuilder({
               </select>
               <input className="cd-input text-[12px] w-full font-mono" placeholder="페이지 파라미터" title="페이지 파라미터" value={pg.param_name} onChange={(e) => setPg((p) => ({ ...p, param_name: e.target.value }))} />
               <input className="cd-input text-[12px] w-full font-mono" placeholder="건수 파라미터" title="건수 파라미터" value={pg.size_param} onChange={(e) => setPg((p) => ({ ...p, size_param: e.target.value }))} />
-              <label className="flex items-center gap-1">페이지당
-                <input type="number" min={1} className="cd-input text-[12px] w-full" value={pg.page_size} onChange={(e) => setPg((p) => ({ ...p, page_size: Number(e.target.value) }))} />
+              <label className="flex items-center gap-1 whitespace-nowrap">
+                <span className="shrink-0">페이지당</span>
+                <input type="number" min={1} className="cd-input text-[12px] w-full min-w-0" value={pg.page_size} onChange={(e) => setPg((p) => ({ ...p, page_size: Number(e.target.value) }))} />
               </label>
-              <label className="flex items-center gap-1">최대
-                <input type="number" min={1} max={200} className="cd-input text-[12px] w-full" value={pg.max_pages} onChange={(e) => setPg((p) => ({ ...p, max_pages: Number(e.target.value) }))} />
-                p
+              <label className="flex items-center gap-1 whitespace-nowrap">
+                <span className="shrink-0">최대</span>
+                <input type="number" min={1} max={200} className="cd-input text-[12px] w-full min-w-0" value={pg.max_pages} onChange={(e) => setPg((p) => ({ ...p, max_pages: Number(e.target.value) }))} />
+                <span className="shrink-0">p</span>
               </label>
             </div>
           )}
@@ -323,7 +325,7 @@ export function EndpointConfigBuilder({
         <label className="text-[11px] font-bold cd-text-faint">
           응답 필드 — 남길 필드만 선택(미선택 시 전체 유지). 표준필드 매핑과는 별개입니다.
         </label>
-        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-1.5 max-h-64 overflow-y-auto">
+        <div className="grid grid-cols-2 md:grid-cols-5 xl:grid-cols-8 gap-1.5 max-h-64 overflow-y-auto">
           {respFields.map((f) => {
             const on = selFields.includes(f.name);
             return (

@@ -24,6 +24,8 @@ export interface BidRow {
   workType: string | null;
   category: string | null;
   url: string | null;
+  /** 발주계획 전용 — 발주년도+발주월 조합(예: "2026-07"). raw_json.orderYear/orderMnth. */
+  orderPeriod: string | null;
   createdAt: string;
 }
 
@@ -63,6 +65,10 @@ export interface BidListFilter {
 
 function mapRow(r: Record<string, unknown>): BidRow {
   const s = (v: unknown) => (v != null ? String(v) : null);
+  // 발주시기 = 발주년도-발주월(2자리). 둘 다 있어야 표기.
+  const oy = s(r.order_year);
+  const om = s(r.order_mnth);
+  const orderPeriod = oy && om ? `${oy}-${om.padStart(2, "0")}` : null;
   return {
     bidId: String(r.bid_id),
     sourceSlug: String(r.source_slug),
@@ -76,6 +82,7 @@ function mapRow(r: Record<string, unknown>): BidRow {
     workType: s(r.work_type),
     category: s(r.category),
     url: s(r.url),
+    orderPeriod,
     createdAt: String(r.created_at ?? ""),
   };
 }
@@ -130,7 +137,8 @@ export async function listBids(filter: BidListFilter): Promise<{ items: BidRow[]
 
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT * FROM ${table} ${whereSql}
+      `SELECT *, raw_json->>'orderYear' AS order_year, raw_json->>'orderMnth' AS order_mnth
+         FROM ${table} ${whereSql}
        ORDER BY COALESCE(NULLIF(posted_at, ''), created_at) DESC
        LIMIT ${add(limit)} OFFSET ${add(offset)}`,
       params
@@ -181,7 +189,12 @@ export async function getBid(bidType: BidType, bidId: string): Promise<BidDetail
   const table = TABLE_BY_TYPE[bidType];
   if (!table) return null;
   const db = await getDb();
-  const rows = rowsToObjects(await db.exec(`SELECT * FROM ${table} WHERE bid_id = $1`, [bidId]));
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT *, raw_json->>'orderYear' AS order_year, raw_json->>'orderMnth' AS order_mnth FROM ${table} WHERE bid_id = $1`,
+      [bidId]
+    )
+  );
   return rows.length ? mapDetail(rows[0]) : null;
 }
 

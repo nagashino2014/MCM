@@ -27,6 +27,8 @@ interface BidRow {
   workType: string | null;
   category: string | null;
   url: string | null;
+  /** 발주계획 전용 — 발주년도-발주월(예: 2026-07). */
+  orderPeriod: string | null;
 }
 
 interface BidDetail extends BidRow {
@@ -334,7 +336,7 @@ export function BidBoard() {
           </div>
         )}
 
-        {/* 테이블 */}
+        {/* 테이블 — 발주계획은 마감·원문 대신 발주시기(발주년도+발주월) */}
         <div className="overflow-x-auto">
           <table className="cd-table text-[13px] w-full">
             <thead>
@@ -343,9 +345,15 @@ export function BidBoard() {
                 <th className="text-left">사업명</th>
                 <th className="text-right">예산</th>
                 <th className="text-left">게시일</th>
-                <th className="text-left">마감</th>
+                {bidType === "order_plan" ? (
+                  <th className="text-left">발주시기</th>
+                ) : (
+                  <>
+                    <th className="text-left">마감</th>
+                  </>
+                )}
                 <th className="text-left">조달방식</th>
-                <th className="text-left">원문</th>
+                {bidType !== "order_plan" && <th className="text-left">원문</th>}
               </tr>
             </thead>
             <tbody>
@@ -355,17 +363,23 @@ export function BidBoard() {
                   <td className="truncate max-w-[280px]">{r.title ?? "-"}</td>
                   <td className="text-right font-mono tabular-nums">{fmtMoney(r.budget)}</td>
                   <td className="font-mono text-[12px] cd-text-faint">{short(r.postedAt)}</td>
-                  <td className="font-mono text-[12px] cd-text-faint">{short(r.deadline)}</td>
+                  {bidType === "order_plan" ? (
+                    <td className="font-mono text-[12px] cd-text">{r.orderPeriod ?? "-"}</td>
+                  ) : (
+                    <td className="font-mono text-[12px] cd-text-faint">{short(r.deadline)}</td>
+                  )}
                   <td>{r.method ?? "-"}</td>
-                  <td onClick={(e) => e.stopPropagation()}>
-                    {r.url ? (
-                      <a href={r.url} target="_blank" rel="noreferrer" className="cd-text-muted hover:cd-text">
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </a>
-                    ) : (
-                      "-"
-                    )}
-                  </td>
+                  {bidType !== "order_plan" && (
+                    <td onClick={(e) => e.stopPropagation()}>
+                      {r.url ? (
+                        <a href={r.url} target="_blank" rel="noreferrer" className="cd-text-muted hover:cd-text">
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      ) : (
+                        "-"
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
               {!loading && rows.length === 0 && (
@@ -410,7 +424,11 @@ export function BidBoard() {
                   <div><span className="cd-text-faint">공고번호</span><div className="cd-text font-mono">{detail.externalId}</div></div>
                   <div><span className="cd-text-faint">예산</span><div className="cd-text">{fmtMoney(detail.budget)}</div></div>
                   <div><span className="cd-text-faint">게시일</span><div className="cd-text font-mono">{short(detail.postedAt)}</div></div>
-                  <div><span className="cd-text-faint">마감</span><div className="cd-text font-mono">{short(detail.deadline)}</div></div>
+                  {detailType === "order_plan" ? (
+                    <div><span className="cd-text-faint">발주시기</span><div className="cd-text font-mono">{detail.orderPeriod ?? "-"}</div></div>
+                  ) : (
+                    <div><span className="cd-text-faint">마감</span><div className="cd-text font-mono">{short(detail.deadline)}</div></div>
+                  )}
                   <div><span className="cd-text-faint">조달방식</span><div className="cd-text">{detail.method ?? "-"}</div></div>
                   <div><span className="cd-text-faint">업무구분</span><div className="cd-text">{detail.workType ?? "-"}</div></div>
                   {rawExtras.map(({ label, key }) => {

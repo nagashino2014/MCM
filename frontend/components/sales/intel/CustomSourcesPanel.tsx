@@ -4,7 +4,7 @@
 // 소스 CRUD + API Profile 자동생성(analyze) + 엔드포인트(JSON 편집) + 미리보기/실행 + 활성화.
 // 수집 결과는 intel_signals(source='custom:<slug>')로 적재된다.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Radar, Plus, Wand2, Play, Eye, Trash2, ArrowLeft, Check, ExternalLink, KeyRound, ListTree, Settings2 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
@@ -104,6 +104,10 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
   // 카탈로그 취사선택 + 설정 빌더
   const [catalogSel, setCatalogSel] = useState<string[]>([]);
   const [builderEpId, setBuilderEpId] = useState<string | null>(null);
+  /** 카탈로그 카드 내부 진행/완료 배너(전역 msg 는 페이지 상단이라 스크롤 밖에서 안 보임). */
+  const [buildMsg, setBuildMsg] = useState<string | null>(null);
+  const [buildRunning, setBuildRunning] = useState(false);
+  const endpointsRef = useRef<HTMLDivElement | null>(null);
 
   const loadSources = useCallback(async () => {
     try {
@@ -134,6 +138,7 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
       setSecretInput("");
       setCatalogSel([]);
       setBuilderEpId(null);
+      setBuildMsg(null);
       loadDetail(selId);
     } else {
       setSel(null);
@@ -214,7 +219,9 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
   const buildSelected = async () => {
     if (!sel || catalogSel.length === 0) return;
     setBusy(true);
+    setBuildRunning(true);
     setMsg(`선택 ${catalogSel.length}개 엔드포인트 정제 분석 중… (LLM 호출)`);
+    setBuildMsg(`선택 ${catalogSel.length}개 정제 분석 중… 1~2분 걸립니다. 완료되면 아래 엔드포인트 목록으로 이동합니다.`);
     try {
       const d = await jfetch(`/api/scraper/sources/${sel.sourceId}/analyze`, {
         method: "POST",
@@ -245,13 +252,18 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
       setCatalogSel([]);
       await loadDetail(sel.sourceId);
       const warnings = Array.isArray(d.warnings) ? (d.warnings as string[]) : [];
-      setMsg(
-        `정제 완료 — 프로파일 저장 + 엔드포인트 ${created}개 생성. 각 엔드포인트의 "설정"에서 파라미터·필드를 조정하세요.${warnings.length ? ` · 경고: ${warnings.join(", ")}` : ""}`
-      );
+      const done = `정제 완료 — 프로파일 저장 + 엔드포인트 ${created}개 생성. 각 엔드포인트의 "설정"에서 파라미터·필드를 조정하세요.${warnings.length ? ` · 경고: ${warnings.join(", ")}` : ""}`;
+      setMsg(done);
+      setBuildMsg(done);
+      // 생성 결과가 바로 보이도록 엔드포인트 섹션으로 스크롤.
+      setTimeout(() => endpointsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 150);
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : String(e));
+      const err = e instanceof Error ? e.message : String(e);
+      setMsg(err);
+      setBuildMsg(`분석 실패: ${err}`);
     } finally {
       setBusy(false);
+      setBuildRunning(false);
     }
   };
 
@@ -607,19 +619,30 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
                       );
                     })}
                   </div>
-                  <button
-                    type="button"
-                    onClick={buildSelected}
-                    disabled={busy || catalogSel.length === 0}
-                    className="cd-btn cd-btn-primary text-[13px] self-start disabled:opacity-50"
-                  >
-                    <Wand2 className="w-4 h-4" /> 선택 항목 분석 ({catalogSel.length}개)
-                  </button>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={buildSelected}
+                      disabled={busy || catalogSel.length === 0}
+                      className="cd-btn cd-btn-primary text-[13px] disabled:opacity-50"
+                    >
+                      <Wand2 className={"w-4 h-4" + (buildRunning ? " animate-spin" : "")} />
+                      {buildRunning ? "정제 분석 중… (1~2분)" : `선택 항목 분석 (${catalogSel.length}개)`}
+                    </button>
+                  </div>
+                  {buildMsg && (
+                    <div
+                      className="rounded-lg border cd-border-c px-3 py-2 text-[12px] cd-text-muted"
+                      style={buildRunning ? { borderColor: "var(--cd-primary)" } : undefined}
+                    >
+                      {buildMsg}
+                    </div>
+                  )}
                 </div>
               )}
 
               {/* 엔드포인트 목록 */}
-              <div className="cd-card p-4 flex flex-col gap-2">
+              <div ref={endpointsRef} className="cd-card p-4 flex flex-col gap-2">
                 <h3 className="text-sm font-bold cd-text">엔드포인트</h3>
                 {endpoints.length === 0 && <p className="text-[13px] cd-text-faint">아직 없습니다. 위에서 분석 후 프로파일을 저장하세요.</p>}
                 {endpoints.map((ep) => {

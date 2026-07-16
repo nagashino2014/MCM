@@ -6,8 +6,8 @@ import { extractGuideFileText } from "@/lib/scraper/file-text";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-// analyze 는 URL fetch + LLM(Sonnet) 이라 시간이 걸린다.
-export const maxDuration = 120;
+// analyze 는 URL fetch + LLM(Sonnet) 이라 시간이 걸린다. 카탈로그 추출(2패스 배치)은 수 분 — ALB idle timeout(300s) 한도까지.
+export const maxDuration = 300;
 
 interface Ctx {
   params: Promise<{ sourceId: string }>;

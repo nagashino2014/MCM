@@ -222,64 +222,130 @@ export interface ExtractCatalogResult {
 }
 
 /**
+ * 오퍼레이션 제목 기준으로 문서에서 해당 구간만 잘라낸다(상세 추출 입력·시간 절감).
+ * 제목은 목차·본문 등 여러 번 등장하므로, **모든 등장 위치 중 다음 제목까지의 구간이 가장 긴 곳(=본문 상세)**을 고른다.
+ * (첫 등장만 쓰면 목차 몇 줄만 잘려 파라미터/필드가 비는 문제 — E2E 실측.)
+ * 구간이 너무 짧거나 못 찾으면 전체 문서 fallback.
+ */
+function sliceDocForOp(doc: string, title: string, allTitles: string[]): string {
+  const PAD = 500;
+  const MIN_SLICE = 1500;
+  const positions: number[] = [];
+  let p = doc.indexOf(title);
+  while (p >= 0 && positions.length < 30) {
+    positions.push(p);
+    p = doc.indexOf(title, p + title.length);
+  }
+  if (!positions.length) return doc;
+  let best = { start: positions[0], end: doc.length, len: 0 };
+  for (const start of positions) {
+    let end = doc.length;
+    for (const t of allTitles) {
+      if (t === title) continue;
+      const q = doc.indexOf(t, start + title.length);
+      if (q > start && q < end) end = q;
+    }
+    if (end - start > best.len) best = { start, end, len: end - start };
+  }
+  if (best.len < MIN_SLICE) return doc;
+  return doc.slice(Math.max(0, best.start - PAD), Math.min(doc.length, best.end + PAD));
+}
+
+/**
  * ① 가이드에서 엔드포인트×요청변수×응답필드 "카탈로그"를 추출한다(선택지 나열이 목적 — 판단 없음).
  * 결과는 scraper_sources.catalog 에 저장하고, UI가 카드로 나열해 사용자가 취사선택한다.
+ * 단일 호출은 출력이 수만 토큰이라 llm_timeout 이 나므로(원본도 배치 처리) **2패스**로 나눈다:
+ * 1차 오퍼레이션 목록(가벼움) → 2차 오퍼레이션별 파라미터/응답필드(문서 구간 슬라이스, 병렬 배치).
  */
 export async function extractCatalog(input: AnalyzeInput): Promise<ExtractCatalogResult> {
   const combined = await combineInput(input);
-  const prompt = `너는 공개 REST/OPEN API 가이드 문서를 분석해, 문서에 실린 **모든 오퍼레이션(엔드포인트)의 완전한 카탈로그**를 만든다.
-**JSON 하나만 출력한다**(설명 텍스트 금지).
+  const warnings: string[] = [];
 
-## 절대 규칙 — 완전성
-1. 문서에 오퍼레이션이 N개면 endpoints 배열에 **정확히 N개**를 넣는다. 요약·통합·대표 선택 금지.
-2. 각 오퍼레이션의 **요청변수(request_params)와 응답필드(response_fields)를 하나도 빠짐없이** 옮긴다.
-   요청변수가 12개면 12개 전부, 응답필드가 60개면 60개 전부. 절대 생략하지 말 것.
-3. 값을 지어내지 말 것 — 문서에 없는 정보는 필드를 생략한다.
+  // ── 1차: 오퍼레이션 목록만 ──
+  const listRaw = await anthropicChatJson<{
+    operations?: Array<Pick<CatalogEndpoint, "title" | "category" | "request_url" | "path" | "method" | "description">>;
+    summary?: string;
+  }>({
+    system: "너는 API 가이드 문서에서 오퍼레이션 목록을 추출하는 전문가다. 반드시 JSON 하나만 출력한다.",
+    user: `아래 API 가이드 문서에 실린 **모든 오퍼레이션(엔드포인트)의 목록**을 만든다. **JSON 하나만 출력**(설명 금지).
+- 문서에 오퍼레이션이 N개면 정확히 N개(통합·생략 금지). 파라미터/응답필드는 여기서 출력하지 않는다.
+- title 은 문서의 오퍼레이션명 표기를 **원문 그대로**(뒤 단계에서 문서 검색 키로 쓴다).
+- request_url: 호출 URL 예시 전체. path: URL 의 경로 부분. method: GET/POST.
 
-## 항목 규칙
-- title: 오퍼레이션명(한국어 그대로). category: 문서의 분류(있으면).
-- request_url: 문서의 호출 URL 예시 전체. path: 그 URL의 경로 부분(예 "/1230000/ao/OrderPlanSttusService/getOrderPlanSttusListServc"). method: GET/POST.
-- request_params[]: { name(영문 변수명), name_ko(한글명), required(true/false), type, description, example(샘플/고정값 힌트 있으면) }.
-  required 는 문서의 필수 여부 표기(필수/옵션)를 boolean 으로.
-- response_fields[]: { name(영문 필드명), name_ko(한글명), type, description }.
-
-## 출력 스키마(JSON만)
-{
-  "endpoints": [
-    {
-      "title": "...", "category": "...", "request_url": "...", "path": "/...", "method": "GET",
-      "description": "...",
-      "request_params": [ { "name": "...", "name_ko": "...", "required": true, "type": "...", "description": "...", "example": "..." } ],
-      "response_fields": [ { "name": "...", "name_ko": "...", "type": "...", "description": "..." } ]
-    }
-  ],
-  "warnings": ["불확실 항목"],
-  "summary": "카탈로그 요약(한국어 1~2문장, 오퍼레이션 수 포함)"
-}
+## 출력 스키마
+{ "operations": [ { "title": "...", "category": "...", "request_url": "...", "path": "/...", "method": "GET", "description": "..." } ],
+  "summary": "한국어 1문장(오퍼레이션 수 포함)" }
 
 ## 입력
 ORG: ${input.name} (slug: ${input.slug})
-${combined}`.trim();
-
-  const raw = await anthropicChatJson<{
-    endpoints?: CatalogEndpoint[];
-    warnings?: unknown[];
-    summary?: string;
-  }>({
-    system: "너는 API 가이드 문서에서 완전한 엔드포인트 카탈로그를 추출하는 전문가다. 반드시 JSON 하나만 출력한다.",
-    user: prompt,
+${combined}`.trim(),
     model: "claude-sonnet-5",
-    maxTokens: 32000,
-    timeoutMs: 180000,
+    maxTokens: 4000,
+    timeoutMs: 90000,
   });
 
-  const endpoints = (Array.isArray(raw.endpoints) ? raw.endpoints : []).filter(
-    (e): e is CatalogEndpoint => !!e && typeof e === "object" && typeof (e as CatalogEndpoint).title === "string"
+  const ops = (Array.isArray(listRaw.operations) ? listRaw.operations : []).filter(
+    (o) => !!o && typeof o.title === "string" && o.title.trim()
   );
-  for (const ep of endpoints) {
-    if (!Array.isArray(ep.request_params)) ep.request_params = [];
-    if (!Array.isArray(ep.response_fields)) ep.response_fields = [];
+  if (!ops.length) throw new Error("가이드에서 오퍼레이션을 찾지 못했습니다.");
+  const allTitles = ops.map((o) => o.title);
+
+  // ── 2차: 오퍼레이션별 파라미터·응답필드 (4개씩 병렬, 실패 시 빈 항목 + 경고) ──
+  const extractOpDetail = async (
+    op: (typeof ops)[number],
+    doc: string
+  ): Promise<Pick<CatalogEndpoint, "request_params" | "response_fields">> => {
+    const d = await anthropicChatJson<{ request_params?: unknown[]; response_fields?: unknown[] }>({
+      system: "너는 API 가이드에서 특정 오퍼레이션의 요청변수·응답필드를 완전하게 추출하는 전문가다. 반드시 JSON 하나만 출력한다.",
+      user: `아래 문서 발췌에서 오퍼레이션 "${op.title}" 의 **요청변수와 응답필드를 하나도 빠짐없이** 추출한다. **JSON 하나만 출력**(설명 금지).
+- 요청변수가 12개면 12개 전부, 응답필드가 60개면 60개 전부. 요약·생략 금지. 문서에 없는 값은 지어내지 말 것.
+- request_params[]: { "name": 영문 변수명, "name_ko": 한글명, "required": true/false(문서의 필수/옵션 표기), "type": 형, "description": 설명, "example": 샘플값(있으면) }
+- response_fields[]: { "name": 영문 필드명, "name_ko": 한글명, "type": 형, "description": 설명 }
+
+## 출력 스키마
+{ "request_params": [...], "response_fields": [...] }
+
+## 문서 발췌
+${doc}`.trim(),
+      model: "claude-sonnet-5",
+      maxTokens: 12000,
+      timeoutMs: 120000,
+    });
+    const params = Array.isArray(d.request_params) ? d.request_params : [];
+    const fields = Array.isArray(d.response_fields) ? d.response_fields : [];
+    return {
+      request_params: params.filter((p): p is CatalogEndpoint["request_params"][number] => !!p && typeof (p as { name?: unknown }).name === "string"),
+      response_fields: fields.filter((f): f is CatalogEndpoint["response_fields"][number] => !!f && typeof (f as { name?: unknown }).name === "string"),
+    };
+  };
+
+  const endpoints: CatalogEndpoint[] = [];
+  const BATCH = 4;
+  for (let i = 0; i < ops.length; i += BATCH) {
+    const batch = ops.slice(i, i + BATCH);
+    const results = await Promise.all(
+      batch.map(async (op): Promise<CatalogEndpoint> => {
+        const base: CatalogEndpoint = { ...op, request_params: [], response_fields: [] };
+        try {
+          const doc = sliceDocForOp(combined, op.title, allTitles);
+          let detail = await extractOpDetail(op, doc);
+          // 구간 슬라이스가 빗나가 빈 결과면 전체 문서로 1회 재시도.
+          if (detail.request_params.length === 0 && detail.response_fields.length === 0 && doc !== combined) {
+            detail = await extractOpDetail(op, combined);
+          }
+          if (detail.request_params.length === 0 && detail.response_fields.length === 0) {
+            warnings.push(`"${op.title}" 요청변수/응답필드를 찾지 못함`);
+          }
+          return { ...base, ...detail };
+        } catch (e) {
+          warnings.push(`"${op.title}" 상세 추출 실패: ${e instanceof Error ? e.message : String(e)}`);
+          return base;
+        }
+      })
+    );
+    endpoints.push(...results);
   }
+
   return {
     catalog: {
       extracted_at: new Date().toISOString(),
@@ -287,8 +353,11 @@ ${combined}`.trim();
       total_endpoints: endpoints.length,
       endpoints,
     },
-    warnings: Array.isArray(raw.warnings) ? raw.warnings.map(String) : [],
-    summary: typeof raw.summary === "string" ? raw.summary : "",
+    warnings,
+    summary:
+      typeof listRaw.summary === "string" && listRaw.summary
+        ? listRaw.summary
+        : `오퍼레이션 ${endpoints.length}개 추출`,
   };
 }
 

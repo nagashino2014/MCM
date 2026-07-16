@@ -55,13 +55,6 @@ const TABS: { key: BidType; label: string }[] = [
 ];
 const TYPE_LABEL: Record<BidType, string> = { order_plan: "발주계획", prior_spec: "사전규격", bid_notice: "입찰공고" };
 const REGION_GROUPS = ["수도권", "강원권", "충청권", "경북권", "경남권", "전라권", "제주권"];
-const METHODS = [
-  { value: "일반경쟁", label: "일반경쟁" },
-  { value: "제한경쟁", label: "제한경쟁" },
-  { value: "지명경쟁", label: "지명경쟁" },
-  { value: "수의", label: "수의(소액 포함)" },
-  { value: "적격", label: "적격심사" },
-];
 const PAGE_SIZE = 20;
 
 function fmtMoney(n: number | null): string {
@@ -106,6 +99,8 @@ export function BidBoard() {
   const [categoryId, setCategoryId] = useState("");
 
   const [categories, setCategories] = useState<BidCategory[]>([]);
+  /** 계약방법 옵션 — 해당 종류의 실데이터 distinct(서버 제공). */
+  const [methodOptions, setMethodOptions] = useState<string[]>([]);
   const [offset, setOffset] = useState(0);
   const [rows, setRows] = useState<BidRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -166,6 +161,7 @@ export function BidBoard() {
       const d = await res.json();
       setRows(d.items ?? []);
       setTotal(d.total ?? 0);
+      if (Array.isArray(d.methods)) setMethodOptions(d.methods);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setRows([]);
@@ -297,9 +293,10 @@ export function BidBoard() {
           </select>
           <select className="cd-select" style={{ width: "auto" }} value={method} onChange={(e) => setMethod(e.target.value)}>
             <option value="">계약방법 전체</option>
-            {METHODS.map((m) => (
-              <option key={m.value} value={m.value}>{m.label}</option>
+            {methodOptions.map((m) => (
+              <option key={m} value={m}>{m}</option>
             ))}
+            {method && !methodOptions.includes(method) && <option value={method}>{method}</option>}
           </select>
           <button type="button" className="cd-chip cd-chip-sm" data-active={showFilters} onClick={() => setShowFilters((v) => !v)}>
             <SlidersHorizontal className="w-3.5 h-3.5" /> 기간·금액

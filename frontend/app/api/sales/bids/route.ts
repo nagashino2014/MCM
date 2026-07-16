@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
-import { listBids } from "@/lib/bid/bid-queries";
+import { listBids, listMethodOptions } from "@/lib/bid/bid-queries";
 import { getCategory } from "@/lib/bid/category-store";
 import type { BidType } from "@/lib/scraper/types";
 
@@ -44,7 +44,9 @@ export async function GET(req: NextRequest) {
       limit: Number.isFinite(limit) && limit > 0 ? limit : undefined,
       offset: Number.isFinite(offset) && offset >= 0 ? offset : undefined,
     });
-    return NextResponse.json(result);
+    // 계약방법 필터 옵션 — 해당 종류의 실데이터 distinct(발주계획엔 적격심사가 없는 등 종류별 상이).
+    const methods = await listMethodOptions(bidType);
+    return NextResponse.json({ ...result, methods });
   } catch (err) {
     return authErrorToResponse(err);
   }

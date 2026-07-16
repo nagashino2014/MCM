@@ -139,6 +139,19 @@ export async function listBids(filter: BidListFilter): Promise<{ items: BidRow[]
   return { items: rows.map(mapRow), total };
 }
 
+/** 계약방법(method) 실데이터 distinct — 필터 옵션용(종류별로 값이 다름: 발주계획엔 적격심사 없음 등). */
+export async function listMethodOptions(bidType: BidType): Promise<string[]> {
+  const table = TABLE_BY_TYPE[bidType];
+  if (!table) return [];
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT method, count(*) AS n FROM ${table} WHERE COALESCE(method,'') <> '' GROUP BY method ORDER BY n DESC LIMIT 20`
+    )
+  );
+  return rows.map((r) => String(r.method));
+}
+
 // ── 상세 + 발주계획↔사전규격↔입찰공고 연계 ──────────────────
 
 export interface BidDetail extends BidRow {

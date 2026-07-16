@@ -298,6 +298,7 @@ export function EndpointConfigBuilder({
               <div className="col-span-2 flex items-center gap-1.5 min-w-0">
                 <select
                   className="cd-select text-[12px] shrink-0"
+                  style={{ width: 64 }}
                   title="자동(최근 N일) 또는 고정값(초기 축적 시 기간을 끊어 수집)"
                   value={d.mode}
                   onChange={(e) => setDfs((p) => p.map((x, j) => (j === i ? { ...x, mode: e.target.value as DfRow["mode"] } : x)))}
@@ -394,7 +395,9 @@ export function EndpointConfigBuilder({
 
       {/* 표준필드 매핑 (sink 적재용) */}
       <div className="flex flex-col gap-1.5">
-        <label className="text-[11px] font-bold cd-text-faint">표준필드 매핑 — 적재 테이블 컬럼 ← 응답 필드</label>
+        <label className="text-[11px] font-bold cd-text-faint">
+          표준필드 매핑 — 적재 테이블 컬럼 ← 응답 필드 (응답에 없는 값은 &quot;=고정값&quot; — 예: 용역 전용 조회의 업무구분에 =용역)
+        </label>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
           {stdKeys.map((k) => (
             <div key={k} className="flex items-center gap-1.5">

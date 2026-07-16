@@ -56,7 +56,13 @@ interface MappedBid {
 }
 
 function mapItem(item: Record<string, unknown>, fm: FieldMapping): MappedBid {
-  const pick = (key: string): string | null => (fm[key] ? str(getNestedValue(item, fm[key])) : null);
+  // "=값" 은 상수 — 응답에 해당 필드가 없는 오퍼레이션(예: 용역 전용 조회의 업무구분)에 사용.
+  const pick = (key: string): string | null => {
+    const path = fm[key];
+    if (!path) return null;
+    if (path.startsWith("=")) return str(path.slice(1));
+    return str(getNestedValue(item, path));
+  };
   const url = pick("url");
   let externalId = pick("external_id");
   if (!externalId) {
@@ -80,6 +86,8 @@ function mapItem(item: Record<string, unknown>, fm: FieldMapping): MappedBid {
 export interface BidCollectResult {
   scanned: number;
   inserted: number;
+  /** 기존 건 갱신 수(재수집 시 field_mapping 수정분 반영). */
+  updated: number;
   bidType: BidType;
   samples?: Array<Omit<MappedBid, "raw">>;
   error?: string;
@@ -97,7 +105,7 @@ export async function collectBidSource(
 ): Promise<BidCollectResult> {
   const bidType = ((endpoint.sinkConfig as { bid_type?: BidType } | null)?.bid_type ?? "bid_notice") as BidType;
   const table = TABLE_BY_TYPE[bidType] ?? TABLE_BY_TYPE.bid_notice;
-  const result: BidCollectResult = { scanned: 0, inserted: 0, bidType };
+  const result: BidCollectResult = { scanned: 0, inserted: 0, updated: 0, bidType };
 
   if (!source.apiProfile || !endpoint.apiConfig) {
     return { ...result, error: "api_profile 또는 api_config 가 없습니다." };
@@ -141,27 +149,35 @@ export async function collectBidSource(
 
   const nowIso = new Date().toISOString();
   await withDbWrite(async (wdb) => {
+    const processed = new Set<string>(); // 이번 실행 내 중복 item 방어
     for (const it of items) {
       const m = mapItem(it, fm);
-      if (seen.has(m.externalId)) continue;
+      if (processed.has(m.externalId)) continue;
+      processed.add(m.externalId);
+      const isNew = !seen.has(m.externalId);
       const bidId = id("pbid");
-      const ins = rowsToObjects(
-        await wdb.exec(
-          `INSERT INTO ${table}
-             (bid_id, source_slug, external_id, org_name, title, budget, posted_at, deadline,
-              method, work_type, category, url, raw_json, created_at, updated_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$14)
-           ON CONFLICT (source_slug, external_id) DO NOTHING
-           RETURNING bid_id`,
-          [
-            bidId, source.slug, m.externalId, m.orgName, m.title, m.budget, m.postedAt, m.deadline,
-            m.method, m.workType, m.category, m.url, JSON.stringify(m.raw), nowIso,
-          ]
-        )
+      // 재수집 시 field_mapping 수정·원문 변경이 반영되도록 upsert.
+      await wdb.run(
+        `INSERT INTO ${table}
+           (bid_id, source_slug, external_id, org_name, title, budget, posted_at, deadline,
+            method, work_type, category, url, raw_json, created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$14)
+         ON CONFLICT (source_slug, external_id) DO UPDATE SET
+           org_name = EXCLUDED.org_name, title = EXCLUDED.title, budget = EXCLUDED.budget,
+           posted_at = EXCLUDED.posted_at, deadline = EXCLUDED.deadline, method = EXCLUDED.method,
+           work_type = EXCLUDED.work_type, category = EXCLUDED.category, url = EXCLUDED.url,
+           raw_json = EXCLUDED.raw_json, updated_at = EXCLUDED.updated_at`,
+        [
+          bidId, source.slug, m.externalId, m.orgName, m.title, m.budget, m.postedAt, m.deadline,
+          m.method, m.workType, m.category, m.url, JSON.stringify(m.raw), nowIso,
+        ]
       );
-      if (!ins.length) continue;
-      seen.add(m.externalId);
-      result.inserted++;
+      if (isNew) {
+        seen.add(m.externalId);
+        result.inserted++;
+      } else {
+        result.updated++;
+      }
     }
     await wdb.run(
       `INSERT INTO intel_collect_state (source, last_run_at, last_cursor, updated_at)

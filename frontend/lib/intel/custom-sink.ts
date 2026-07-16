@@ -39,8 +39,13 @@ const str = (v: unknown): string | null => {
 
 /** field_mapping 경로로 item 을 표준 필드에 사상. external_id 없으면 url/item 해시로 결정론적 폴백. */
 function mapItem(item: Record<string, unknown>, fm: FieldMapping): MappedItem {
-  const pick = (key: string): string | null =>
-    fm[key] ? str(getNestedValue(item, fm[key])) : null;
+  // "=값" 은 상수(응답에 해당 필드가 없을 때 고정값 지정 — bid-sink 와 동일 문법).
+  const pick = (key: string): string | null => {
+    const path = fm[key];
+    if (!path) return null;
+    if (path.startsWith("=")) return str(path.slice(1));
+    return str(getNestedValue(item, path));
+  };
   const url = pick("url");
   let externalId = pick("external_id");
   if (!externalId) {

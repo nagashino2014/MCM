@@ -334,7 +334,7 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
         );
       } else {
         setMsg(
-          `수집 완료: 신규 ${d.inserted}건${isBid ? "" : ` / 매칭 ${d.matched ?? 0}건`} / 스캔 ${d.scanned}건${d.error ? ` · 오류: ${d.error}` : ""}`
+          `수집 완료: 신규 ${d.inserted}건${isBid ? ` / 갱신 ${d.updated ?? 0}건` : ` / 매칭 ${d.matched ?? 0}건`} / 스캔 ${d.scanned}건${d.error ? ` · 오류: ${d.error}` : ""}`
         );
       }
     } catch (e) {
@@ -462,49 +462,53 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
             <div className="cd-card p-8 text-center text-[13px] cd-text-faint">소스를 선택하거나 새로 추가하세요.</div>
           ) : (
             <>
-              <div className="cd-card p-4 flex items-center gap-3 flex-wrap">
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-bold cd-text">{sel.name}</div>
-                  <div className="text-[11px] cd-text-faint">custom:{sel.slug}{sel.baseUrl ? ` · ${sel.baseUrl}` : ""}</div>
-                </div>
-                <button type="button" onClick={toggleSource} className={"cd-btn text-[12px] " + (sel.enabled ? "cd-btn-soft" : "cd-btn-primary")}>
-                  {sel.enabled ? "야간배치 비활성화" : "야간배치 활성화"}
-                </button>
-                <button type="button" onClick={deleteSource} className="cd-btn cd-btn-danger text-[12px]">
-                  <Trash2 className="w-3.5 h-3.5" /> 삭제
-                </button>
-              </div>
+              {/* 상단 2열: (소스 정보 + 인증키) | API Profile 자동생성 — 좌측 합계 높이 = 우측 높이 */}
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-stretch">
+                <div className="flex flex-col gap-4 min-w-0">
+                  <div className="cd-card p-4 flex items-center gap-3 flex-wrap">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-bold cd-text">{sel.name}</div>
+                      <div className="text-[11px] cd-text-faint">custom:{sel.slug}{sel.baseUrl ? ` · ${sel.baseUrl}` : ""}</div>
+                    </div>
+                    <button type="button" onClick={toggleSource} className={"cd-btn text-[12px] " + (sel.enabled ? "cd-btn-soft" : "cd-btn-primary")}>
+                      {sel.enabled ? "야간배치 비활성화" : "야간배치 활성화"}
+                    </button>
+                    <button type="button" onClick={deleteSource} className="cd-btn cd-btn-danger text-[12px]">
+                      <Trash2 className="w-3.5 h-3.5" /> 삭제
+                    </button>
+                  </div>
 
-              {/* 인증키 */}
-              <div className="cd-card p-4 flex flex-col gap-2">
-                <h3 className="text-sm font-bold cd-text flex items-center gap-1.5">
-                  <KeyRound className="w-4 h-4" /> 인증키
-                  {sel.hasSecret && <span className="text-[11px]" style={{ color: "#13DEB9" }}>· 저장됨</span>}
-                </h3>
-                <p className="text-[11px] cd-text-faint">
-                  인증키가 필요한 API(공공데이터포털 등)는 여기 입력하면 암호화 저장됩니다 — 재배포 불필요. 나라장터는 Decoding 키를 사용하세요.
-                </p>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="password"
-                    className="cd-input text-[13px] flex-1"
-                    placeholder={sel.hasSecret ? "변경할 때만 새로 입력" : "인증키 입력"}
-                    value={secretInput}
-                    onChange={(e) => setSecretInput(e.target.value)}
-                  />
-                  <button
-                    type="button"
-                    onClick={saveSecret}
-                    disabled={busy || !secretInput.trim()}
-                    className="cd-btn cd-btn-primary text-[13px] disabled:opacity-50"
-                  >
-                    <KeyRound className="w-4 h-4" /> 저장
-                  </button>
+                  {/* 인증키 */}
+                  <div className="cd-card p-4 flex flex-col gap-2 flex-1">
+                    <h3 className="text-sm font-bold cd-text flex items-center gap-1.5">
+                      <KeyRound className="w-4 h-4" /> 인증키
+                      {sel.hasSecret && <span className="text-[11px]" style={{ color: "#13DEB9" }}>· 저장됨</span>}
+                    </h3>
+                    <p className="text-[11px] cd-text-faint">
+                      인증키가 필요한 API(공공데이터포털 등)는 여기 입력하면 암호화 저장됩니다 — 재배포 불필요. 나라장터는 Decoding 키를 사용하세요.
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="password"
+                        className="cd-input text-[13px] flex-1"
+                        placeholder={sel.hasSecret ? "변경할 때만 새로 입력" : "인증키 입력"}
+                        value={secretInput}
+                        onChange={(e) => setSecretInput(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        onClick={saveSecret}
+                        disabled={busy || !secretInput.trim()}
+                        className="cd-btn cd-btn-primary text-[13px] disabled:opacity-50"
+                      >
+                        <KeyRound className="w-4 h-4" /> 저장
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
 
-              {/* analyze */}
-              <div className="cd-card p-4 flex flex-col gap-2">
+                {/* analyze */}
+                <div className="cd-card p-4 flex flex-col gap-2 min-w-0">
                 <h3 className="text-sm font-bold cd-text flex items-center gap-1.5"><Wand2 className="w-4 h-4" /> API Profile 자동생성</h3>
                 <p className="text-[11px] cd-text-faint">가이드 문서(docx)를 올리거나, 명세 페이지 URL·원문을 넣으면 AI가 요청변수·응답필드·인증방식을 분석합니다.</p>
                 <label className="flex items-center gap-2 text-[12px] cd-text-muted">
@@ -569,6 +573,7 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
                     </div>
                   </div>
                 )}
+                </div>
               </div>
 
               {/* 카탈로그 — 엔드포인트 취사선택 */}
@@ -673,9 +678,22 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
                             <option value="bid_notice">입찰공고</option>
                           </select>
                         )}
-                        <span className="text-[11px] cd-text-faint">{ep.enabled ? "수집 대상" : "비활성"}</span>
-                        <button type="button" onClick={() => toggleEndpoint(ep)} className="cd-btn cd-btn-soft text-[11px]">
+                        <span className="text-[11px] cd-text-faint whitespace-nowrap shrink-0">{ep.enabled ? "수집 대상" : "비활성"}</span>
+                        <button type="button" onClick={() => toggleEndpoint(ep)} className="cd-btn cd-btn-soft text-[11px] shrink-0">
                           {ep.enabled ? "끄기" : "켜기"}
+                        </button>
+                        <button
+                          type="button"
+                          title="엔드포인트 삭제"
+                          className="cd-btn cd-btn-soft text-[11px] shrink-0"
+                          onClick={async () => {
+                            if (!confirm(`엔드포인트 "${ep.name}"를 삭제할까요?`)) return;
+                            await jfetch(`/api/scraper/sources/${sel.sourceId}/endpoints/${ep.endpointId}`, { method: "DELETE" }).catch((err) => setMsg(String(err)));
+                            if (builderEpId === ep.endpointId) setBuilderEpId(null);
+                            await loadDetail(sel.sourceId);
+                          }}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                       <div className="flex items-center gap-2 flex-wrap">

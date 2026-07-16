@@ -439,6 +439,7 @@ ${params || "  (없음)"}
    - pagination: { type, param_name, size_param, page_size, max_pages } (페이지 파라미터가 있으면).
    - date_filters: 필수 조회기간은 [{ "field": 시작필드, "relative_days": 30, "format": 문서의 날짜형식(YYYYMMDD/YYYYMM/YYYYMMDDHHmm 등) }, { "field": 종료필드, "relative_days": 0, "format": 동일 }].
    - field_mapping: 응답필드 중 표준키(${fieldKeys})에 대응하는 필드 경로. 없으면 그 키 생략.
+     ★ 오퍼레이션이 특정 구분 전용(예: "용역조회")인데 응답에 그 구분 필드가 없으면 **상수 문법 "=값"** 을 쓴다(예: work_type: "=용역").
 5. 시크릿 값은 절대 출력하지 말 것.
 
 ## 출력 스키마(JSON만)

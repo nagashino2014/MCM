@@ -89,11 +89,12 @@ function buildPrompt(input: AnalyzeInput, combined: string): string {
 
 ## 분석 규칙
 1. **엔드포인트 경로**: 실제 호출 URL 예시에서 path 추출(예 "https://api.data.go.kr/1230000/ao/PubDataOpnStdService" → path). 추상 경로를 지어내지 말 것. 못 찾으면 warnings에 "endpoint_path_uncertain".
-2. **인증 자동감지**: authKey/serviceKey/ServiceKey/apiKey/인증키 → auth.type="apiKey", param_name=해당명. OC/사용자ID만 → type="param". 둘 다 → "multi". 인증 없음 → "none". 불명 → "unknown"+warnings "auth_method_uncertain". **secret_ref 는 반드시 "${secretRef}" 로 지정**.
+2. **인증 자동감지**: authKey/serviceKey/ServiceKey/apiKey/인증키 → auth.type="apiKey", param_name=해당명. OC/사용자ID만 → type="param". 둘 다 → "multi". 인증 없음 → "none". 불명 → "unknown"+warnings "auth_method_uncertain". **secret_ref 는 반드시 "${secretRef}" 로 지정**. ★ 공공데이터포털(data.go.kr)류면 param_name 은 **정확히 "serviceKey"(소문자 s로 시작)** 로 하라(대소문자 다르면 서버가 무시함).
 3. **파라미터**: 필수/고정값(항상 같은 값)은 default_params 와 api_config.params 에, 가변값은 variable_params 에. 시크릿(인증키) 값은 절대 넣지 말고 auth.secret_ref 로만.
-4. **응답형식**: JSON/XML 감지. response_mapping.format 에 "JSON" 또는 "XML". **XML 이면 warnings 에 "xml_unsupported_mvp"** (현재 JSON 만 지원).
-5. **응답 배열 경로**: 목록이 담긴 키(data/items/results/response.body.items 등)를 response_mapping.list_path 에.
-6. **페이지네이션**: api_config.pagination(type "page"|"offset"|"none"). param_name=페이지번호/오프셋 파라미터명(예 pageNo). **페이지당 건수 파라미터(예 numOfRows/display/perPage)가 따로 있으면 size_param 에 그 이름을, page_size 에 값을 넣어라**(누락하면 기본 소량만 조회됨). 필수 조회조건(조회기간 inqryBgnDt/inqryEndDt·구분값 등)이 명세에 있으면 params 에 빠짐없이 포함하라.
+4. **응답형식**: JSON/XML 감지. response_mapping.format 에 "JSON" 또는 "XML". ★ 공공데이터포털류가 응답형식 파라미터(_type/type/dataType)로 JSON 을 지원하면 **default_params 에 그 파라미터=json 을 넣어라**(예 "_type":"json"). 그런 파라미터 없이 XML 만 반환하면 warnings 에 "xml_unsupported_mvp".
+5. **응답 배열 경로**: 목록 item 이 **배열로 직접 담긴 경로**를 response_mapping.list_path 에. 공공데이터포털처럼 items 래퍼 아래 item 배열이면 "response.body.items.item" 까지, 또는 래퍼 "response.body.items" 로 지정(둘 다 실행기가 item 배열을 풀어낸다).
+6. **페이지네이션**: api_config.pagination(type "page"|"offset"|"none"). param_name=페이지번호/오프셋 파라미터명(예 pageNo). **페이지당 건수 파라미터(예 numOfRows/display/perPage)가 따로 있으면 size_param 에 그 이름을, page_size 에 값을 넣어라**(누락하면 기본 소량만 조회됨).
+6b. **필수 조회기간(날짜 범위)**: 조회기간(inqryBgnDt/inqryEndDt, bidNtceBgnDt/EndDt, fromDt/toDt 등)이 **필수**면 고정값 대신 **api_config.date_filters** 로 산출하라. 시작일 필드는 field 에 그 이름, relative_days 에 조회할 과거 일수(기본 30), format 은 명세의 날짜형식("YYYYMMDD" 등)으로. 종료일 필드는 별도 date_filter(field=종료일명, relative_days 동일)로. 이렇게 하면 매 실행 시 최근 기간이 자동 계산된다. 날짜 외 필수 구분값은 params 에 포함하라.
 ${fieldMappingSpec}
 
 ## 출력 스키마(JSON만)
@@ -101,15 +102,16 @@ ${fieldMappingSpec}
   "api_profile": {
     "base_url": "http(s)://도메인",
     "auth": { "type": "apiKey|param|multi|none|unknown", "in": "query|header", "param_name": "ServiceKey 등", "secret_ref": "${secretRef}" },
-    "default_params": { "고정키": "값" },
-    "response_mapping": { "format": "JSON|XML", "list_path": "response.body.items" },
+    "default_params": { "고정키": "값", "_type": "json (공공데이터포털이 지원할 때만)" },
+    "response_mapping": { "format": "JSON|XML", "list_path": "response.body.items.item" },
     "constraints": { "ip_allowlist_required": false, "rate_limit_hint": "", "approval_required": false },
     "status": "draft"
   },
   "api_config": {
     "primary_endpoint": { "name": "엔드포인트명", "path": "/실제/경로", "method": "GET" },
-    "params": { "가변·고정 기본 파라미터": "값" },
-    "pagination": { "type": "page|offset|none", "param_name": "pageNo", "size_param": "numOfRows", "page_size": 100, "max_pages": 3 }
+    "params": { "가변·고정 기본 파라미터(날짜 제외)": "값" },
+    "pagination": { "type": "page|offset|none", "param_name": "pageNo", "size_param": "numOfRows", "page_size": 100, "max_pages": 3 },
+    "date_filters": [ { "field": "inqryBgnDt", "relative_days": 30, "format": "YYYYMMDD" }, { "field": "inqryEndDt", "relative_days": 0, "format": "YYYYMMDD" } ]
   },
   ${fieldMappingSchema},
   "warnings": ["불확실 항목"],

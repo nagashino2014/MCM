@@ -126,8 +126,36 @@ function filterResponseFields(
   });
 }
 
-/** JSON 응답에서 데이터 배열 추출(일반 경로 자동탐지). XML은 [{raw_xml}]로 감싸 반환(어댑터가 skip). */
-function extractDataFromResponse(response: unknown, logs: string[]): Record<string, unknown>[] {
+/**
+ * 어떤 값을 item 배열로 강제한다.
+ * - 배열이면 그대로.
+ * - 공공데이터포털식 래퍼({ item: [...] } / { item: {...} } 등 단일 건은 객체)면 그 내부 배열/객체.
+ * - 그 밖의 단일 객체면 [obj].
+ * - null/빈문자열(totalCount=0 시 items="")이면 null(→ 빈 페이지 판정).
+ */
+function coerceItemArray(v: unknown): Record<string, unknown>[] | null {
+  if (v == null || v === "") return null;
+  if (Array.isArray(v)) return v as Record<string, unknown>[];
+  if (typeof v === "object") {
+    const rec = v as Record<string, unknown>;
+    // 공공데이터포털: items 래퍼 안에 item(배열이면 다건, 객체면 1건)
+    const inner = rec.item ?? rec.items ?? rec.list ?? rec.row;
+    if (Array.isArray(inner)) return inner as Record<string, unknown>[];
+    if (inner && typeof inner === "object") return [inner as Record<string, unknown>];
+    return [rec];
+  }
+  return null;
+}
+
+/**
+ * JSON 응답에서 데이터 배열 추출. api_profile.response_mapping.list_path 우선,
+ * 없으면 response/body 래퍼를 벗겨 일반 경로 자동탐지. XML은 [{raw_xml}]로 감싸 반환(어댑터가 skip).
+ */
+function extractDataFromResponse(
+  response: unknown,
+  logs: string[],
+  listPath?: string
+): Record<string, unknown>[] {
   if (response && typeof response === "object") {
     if (Array.isArray(response)) {
       logs.push(`[EXTRACT] 배열 응답: ${response.length}건`);
@@ -137,23 +165,41 @@ function extractDataFromResponse(response: unknown, logs: string[]): Record<stri
     if ((rec.raw_xml || rec.raw_text) && Object.keys(rec).length <= 2) {
       return [rec];
     }
-    const commonPaths = ["data", "items", "results", "records", "list", "rows", "content", "목록", "결과"];
-    for (const key of commonPaths) {
-      const v = rec[key];
-      if (v) {
-        if (Array.isArray(v)) {
-          logs.push(`[EXTRACT] ${key} 경로: ${v.length}건`);
-          return v as Record<string, unknown>[];
-        }
-        if (typeof v === "object") {
-          for (const subKey of commonPaths) {
-            const sv = (v as Record<string, unknown>)[subKey];
-            if (Array.isArray(sv)) {
-              logs.push(`[EXTRACT] ${key}.${subKey} 경로: ${sv.length}건`);
-              return sv as Record<string, unknown>[];
-            }
+    // 1) 명세에서 뽑은 list_path 우선(예 "response.body.items" 또는 "response.body.items.item")
+    if (listPath) {
+      const raw = getNestedValue(rec, listPath);
+      const arr = coerceItemArray(raw);
+      if (arr) {
+        logs.push(`[EXTRACT] list_path(${listPath}): ${arr.length}건`);
+        return arr;
+      }
+      // 경로는 존재하나 빈 값(""/null, totalCount=0)이면 0건 — 자동탐지 폴백 금지(전체 객체 오인 방지)
+      if (raw !== undefined) {
+        logs.push(`[EXTRACT] list_path(${listPath}) 빈 결과 — 0건`);
+        return [];
+      }
+      logs.push(`[EXTRACT] list_path(${listPath}) 미해결 — 자동탐지로 폴백`);
+    }
+    // 2) 자동탐지 — response/body 래퍼도 벗겨서 탐색(공공데이터포털 표준 응답 구조)
+    const commonPaths = ["data", "items", "results", "records", "list", "rows", "content", "목록", "결과", "item"];
+    const roots: Record<string, unknown>[] = [rec];
+    const resp = rec.response;
+    if (resp && typeof resp === "object") {
+      roots.push(resp as Record<string, unknown>);
+      const body = (resp as Record<string, unknown>).body;
+      if (body && typeof body === "object") roots.push(body as Record<string, unknown>);
+    }
+    for (const root of roots) {
+      for (const key of commonPaths) {
+        const v = root[key];
+        if (v == null) continue;
+        // 배열 직결, 또는 items/item 래퍼일 때만 내부 배열 추출(임의 객체를 1건으로 오인 방지)
+        if (Array.isArray(v) || key === "items" || key === "item") {
+          const arr = coerceItemArray(v);
+          if (arr) {
+            logs.push(`[EXTRACT] ${key} 경로: ${arr.length}건`);
+            return arr;
           }
-          return [v as Record<string, unknown>];
         }
       }
     }
@@ -184,6 +230,13 @@ async function executeApiCall(
     let params = { ...(apiProfile.default_params ?? {}), ...apiConfig.params };
     params = applyDateFilters(params, apiConfig.date_filters);
     params = { ...params, ...pageParams };
+    // 공공데이터포털(serviceKey / data.go.kr) 계열은 미지정 시 기본 XML → JSON 강제(MVP는 JSON만 파싱).
+    const authName0 = (apiProfile.auth?.param_name || apiProfile.auth?.name || "").toLowerCase();
+    const isDataGoKr = /data\.go\.kr/i.test(baseUrl) || authName0 === "servicekey";
+    if (isDataGoKr && !("_type" in params) && !("type" in params) && !("dataType" in params)) {
+      params._type = "json";
+      logs.push(`[API] 공공데이터포털 감지 — _type=json 자동 주입`);
+    }
     for (const [k, v] of Object.entries(params)) {
       if (v !== undefined && v !== null && v !== "") url.searchParams.set(k, String(v));
     }
@@ -251,25 +304,27 @@ export async function runApiCollect(
       return { items: [], logs, error: "api_config.primary_endpoint 가 없습니다." };
     }
     const pagination = apiConfig.pagination;
-    const maxPages = Math.min(pagination?.max_pages || 1, 200); // 무한루프 방어 상한
+    const paging = !!pagination && pagination.type !== "none";
+    const maxPages = paging ? Math.min(pagination!.max_pages || 1, 200) : 1; // 무한루프 방어 상한
     const pageSize = pagination?.page_size || 10;
     const pageParam = pagination?.param_name || "page";
+    const listPath = apiProfile.response_mapping?.list_path;
 
     for (let page = 1; page <= maxPages; page++) {
       const pageParams: Record<string, string> = {};
-      if (pagination && pagination.type !== "none") {
-        if (pagination.type === "offset") pageParams[pageParam] = String((page - 1) * pageSize);
+      if (paging) {
+        if (pagination!.type === "offset") pageParams[pageParam] = String((page - 1) * pageSize);
         else pageParams[pageParam] = String(page);
-        // 페이지당 건수 파라미터(예: numOfRows)가 별도면 함께 전달.
-        if (pagination.size_param) pageParams[pagination.size_param] = String(pageSize);
       }
+      // 페이지당 건수 파라미터(예: numOfRows)는 페이지네이션이 없어도 전달(기본 소량 조회 방지).
+      if (pagination?.size_param) pageParams[pagination.size_param] = String(pageSize);
       const result = await executeApiCall(apiProfile, apiConfig, pageParams, logs, opts.secret ?? null);
       if (result.error) {
         logs.push(`[ERROR] ${result.error}`);
         if (page === 1) return { items: [], logs, error: result.error };
         break;
       }
-      const items = extractDataFromResponse(result.data, logs);
+      const items = extractDataFromResponse(result.data, logs, listPath);
       if (items.length === 0) {
         logs.push("[INFO] 빈 페이지 — 페이지네이션 종료");
         break;

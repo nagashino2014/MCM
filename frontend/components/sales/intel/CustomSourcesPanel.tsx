@@ -39,11 +39,21 @@ interface Proposal {
 }
 interface PreviewSample {
   externalId: string;
-  companyName: string | null;
-  reportName: string | null;
-  url: string | null;
-  disclosedAt: string | null;
-  facilityId: string | null;
+  // intel sink
+  companyName?: string | null;
+  reportName?: string | null;
+  url?: string | null;
+  disclosedAt?: string | null;
+  facilityId?: string | null;
+  // bid sink
+  orgName?: string | null;
+  title?: string | null;
+  budget?: number | null;
+  postedAt?: string | null;
+  deadline?: string | null;
+  method?: string | null;
+  workType?: string | null;
+  category?: string | null;
 }
 
 async function jfetch(url: string, init?: RequestInit) {
@@ -223,9 +233,13 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
       });
       if (preview) {
         setSamples(d.samples ?? []);
-        setMsg(`미리보기: 수집 ${d.scanned}건, 매칭 ${d.matched}건${d.error ? ` · 오류: ${d.error}` : ""}`);
+        setMsg(
+          `미리보기: 수집 ${d.scanned}건${isBid ? "" : `, 매칭 ${d.matched ?? 0}건`}${d.error ? ` · 오류: ${d.error}` : ""}`
+        );
       } else {
-        setMsg(`수집 완료: 신규 ${d.inserted}건 / 매칭 ${d.matched}건 / 스캔 ${d.scanned}건${d.error ? ` · 오류: ${d.error}` : ""}`);
+        setMsg(
+          `수집 완료: 신규 ${d.inserted}건${isBid ? "" : ` / 매칭 ${d.matched ?? 0}건`} / 스캔 ${d.scanned}건${d.error ? ` · 오류: ${d.error}` : ""}`
+        );
       }
     } catch (e) {
       setMsg(e instanceof Error ? e.message : String(e));
@@ -486,26 +500,61 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
                 <div className="cd-card p-4 flex flex-col gap-2">
                   <h3 className="text-sm font-bold cd-text">미리보기 ({samples.length}건)</h3>
                   <div className="overflow-x-auto">
-                    <table className="cd-table text-[12px] w-full">
-                      <thead>
-                        <tr>
-                          <th className="text-left">회사</th>
-                          <th className="text-left">제목</th>
-                          <th className="text-left">일자</th>
-                          <th className="text-left">매칭</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {samples.map((s) => (
-                          <tr key={s.externalId}>
-                            <td className="truncate max-w-[140px]">{s.companyName ?? "-"}</td>
-                            <td className="truncate max-w-[240px]">{s.reportName ?? "-"}</td>
-                            <td>{s.disclosedAt ?? "-"}</td>
-                            <td>{s.facilityId ? "✓" : "-"}</td>
+                    {isBid ? (
+                      <table className="cd-table text-[12px] w-full">
+                        <thead>
+                          <tr>
+                            <th className="text-left">발주기관</th>
+                            <th className="text-left">사업명</th>
+                            <th className="text-left">게시일</th>
+                            <th className="text-left">마감</th>
+                            <th className="text-left">조달방식</th>
+                            <th className="text-left">원문</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {samples.map((s) => (
+                            <tr key={s.externalId}>
+                              <td className="truncate max-w-[140px]">{s.orgName ?? "-"}</td>
+                              <td className="truncate max-w-[260px]">{s.title ?? "-"}</td>
+                              <td>{s.postedAt ?? "-"}</td>
+                              <td>{s.deadline ?? "-"}</td>
+                              <td>{s.method ?? "-"}</td>
+                              <td>
+                                {s.url ? (
+                                  <a href={s.url} target="_blank" rel="noreferrer" className="cd-text-muted hover:cd-text">
+                                    열기
+                                  </a>
+                                ) : (
+                                  "-"
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <table className="cd-table text-[12px] w-full">
+                        <thead>
+                          <tr>
+                            <th className="text-left">회사</th>
+                            <th className="text-left">제목</th>
+                            <th className="text-left">일자</th>
+                            <th className="text-left">매칭</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {samples.map((s) => (
+                            <tr key={s.externalId}>
+                              <td className="truncate max-w-[140px]">{s.companyName ?? "-"}</td>
+                              <td className="truncate max-w-[240px]">{s.reportName ?? "-"}</td>
+                              <td>{s.disclosedAt ?? "-"}</td>
+                              <td>{s.facilityId ? "✓" : "-"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
                   </div>
                 </div>
               )}

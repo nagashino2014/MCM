@@ -299,13 +299,20 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
         body: JSON.stringify({ action: "start", from: bfFrom, to: bfTo }),
       });
       setBfProgress(started.progress ?? null);
+      let cursor: string | undefined = started.backfill?.cursor;
       let failStreak = 0;
       while (bfLoopRef.current) {
         try {
+          // 큰 달(입찰공고 등 월 1만 건+)은 청크당 1~2분 — 진행 중에도 어느 달인지 표시.
+          if (cursor) {
+            const base = `${cursor} 수집 중… (데이터가 많은 달은 1~2분)`;
+            setBfMsg((m) => (m && !m.startsWith("백필 시작") && !m.includes("수집 중…") ? `${base} · 직전: ${m}` : base));
+          }
           const d = await jfetch(`/api/scraper/sources/${sel.sourceId}/endpoints/${ep.endpointId}/backfill`, {
             method: "POST",
             body: JSON.stringify({ action: "step" }),
           });
+          cursor = d.backfill?.cursor;
           failStreak = 0;
           setBfProgress(d.progress ?? null);
           const r = d.result;

@@ -37,7 +37,11 @@ interface PgState {
 interface DfRow {
   field: string;
   format: string;
+  /** relative=최근 N일 자동 계산, fixed=고정값(초기 DB 축적 시 기간을 끊어 수집). */
+  mode: "relative" | "fixed";
   relative_days: number;
+  /** fixed 모드에서 이 필드에 그대로 전달할 값(format 형식, 예: 202501). */
+  fixed_value: string;
 }
 
 interface TpMapping {
@@ -132,7 +136,13 @@ export function EndpointConfigBuilder({
         : { enabled: false, type: "page", param_name: "pageNo", size_param: "numOfRows", page_size: 100, max_pages: 3 }
     );
     setDfs(
-      (cfg?.date_filters ?? []).map((d) => ({ field: d.field, format: d.format ?? "YYYYMMDD", relative_days: d.relative_days ?? 0 }))
+      (cfg?.date_filters ?? []).map((d) => ({
+        field: d.field,
+        format: d.format ?? "YYYYMMDD",
+        mode: d.relative_days == null && (d.start_date || d.end_date) ? ("fixed" as const) : ("relative" as const),
+        relative_days: d.relative_days ?? 0,
+        fixed_value: d.start_date ?? d.end_date ?? "",
+      }))
     );
     setFm(sameEp ? { ...(initialFieldMapping ?? {}) } : {});
     const tp = cfg?.two_phase;
@@ -178,7 +188,17 @@ export function EndpointConfigBuilder({
     }
     const validDfs: DateFilter[] = dfs
       .filter((d) => d.field.trim())
-      .map((d) => ({ field: d.field.trim(), format: d.format.trim() || undefined, relative_days: d.relative_days }));
+      .map((d) =>
+        d.mode === "fixed"
+          ? {
+              field: d.field.trim(),
+              format: d.format.trim() || undefined,
+              // 고정값은 시작/종료 판정과 무관하게 그대로 나가도록 양쪽에 넣는다.
+              start_date: d.fixed_value.trim(),
+              end_date: d.fixed_value.trim(),
+            }
+          : { field: d.field.trim(), format: d.format.trim() || undefined, relative_days: d.relative_days }
+      );
     if (validDfs.length) cfg.date_filters = validDfs;
     if (selFields.length) cfg.response_fields = selFields;
     if (tpEnabled && listEp) {
@@ -275,19 +295,39 @@ export function EndpointConfigBuilder({
                 onChange={(e) => setDfs((p) => p.map((x, j) => (j === i ? { ...x, field: e.target.value } : x)))} />
               <input className="cd-input text-[12px] font-mono min-w-0" placeholder="형식 (YYYYMMDD)" value={d.format}
                 onChange={(e) => setDfs((p) => p.map((x, j) => (j === i ? { ...x, format: e.target.value } : x)))} />
-              <label className="text-[12px] cd-text-muted flex items-center gap-1 whitespace-nowrap min-w-0">
-                최근
-                <input type="number" min={0} className="cd-input text-[12px] w-14 shrink-0" value={d.relative_days}
-                  onChange={(e) => setDfs((p) => p.map((x, j) => (j === i ? { ...x, relative_days: Number(e.target.value) } : x)))} />
-                {d.relative_days === 0 ? "일 전(=오늘)" : "일 전"}
-              </label>
-              <button type="button" className="cd-btn cd-btn-soft text-[11px] justify-self-end" onClick={() => setDfs((p) => p.filter((_, j) => j !== i))}>삭제</button>
+              <div className="col-span-2 flex items-center gap-1.5 min-w-0">
+                <select
+                  className="cd-select text-[12px] shrink-0"
+                  title="자동(최근 N일) 또는 고정값(초기 축적 시 기간을 끊어 수집)"
+                  value={d.mode}
+                  onChange={(e) => setDfs((p) => p.map((x, j) => (j === i ? { ...x, mode: e.target.value as DfRow["mode"] } : x)))}
+                >
+                  <option value="relative">자동</option>
+                  <option value="fixed">고정</option>
+                </select>
+                {d.mode === "relative" ? (
+                  <label className="text-[12px] cd-text-muted flex items-center gap-1 whitespace-nowrap min-w-0 flex-1">
+                    최근
+                    <input type="number" min={0} className="cd-input text-[12px] w-14 shrink-0" value={d.relative_days}
+                      onChange={(e) => setDfs((p) => p.map((x, j) => (j === i ? { ...x, relative_days: Number(e.target.value) } : x)))} />
+                    {d.relative_days === 0 ? "일 전(=오늘)" : "일 전"}
+                  </label>
+                ) : (
+                  <input
+                    className="cd-input text-[12px] font-mono min-w-0 flex-1"
+                    placeholder={`고정값 (형식대로, 예: ${d.format || "YYYYMMDD"})`}
+                    value={d.fixed_value}
+                    onChange={(e) => setDfs((p) => p.map((x, j) => (j === i ? { ...x, fixed_value: e.target.value } : x)))}
+                  />
+                )}
+                <button type="button" className="cd-btn cd-btn-soft text-[11px] shrink-0" onClick={() => setDfs((p) => p.filter((_, j) => j !== i))}>삭제</button>
+              </div>
             </div>
           ))}
           <datalist id={`df-params-${epIdx}`}>
             {(ep.request_params ?? []).map((p) => <option key={p.name} value={p.name}>{p.name_ko ?? ""}</option>)}
           </datalist>
-          <button type="button" className="cd-btn cd-btn-soft text-[11px] self-start" onClick={() => setDfs((p) => [...p, { field: "", format: "YYYYMMDD", relative_days: p.length === 0 ? 30 : 0 }])}>
+          <button type="button" className="cd-btn cd-btn-soft text-[11px] self-start" onClick={() => setDfs((p) => [...p, { field: "", format: "YYYYMMDD", mode: "relative", relative_days: p.length === 0 ? 30 : 0, fixed_value: "" }])}>
             + 날짜 필터 추가
           </button>
         </div>

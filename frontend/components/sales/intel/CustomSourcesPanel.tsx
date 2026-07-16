@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Radar, Plus, Wand2, Play, Eye, Trash2, ArrowLeft, Check, ExternalLink, KeyRound, ListTree, Settings2 } from "lucide-react";
+import { Radar, Plus, Wand2, Play, Eye, Trash2, ArrowLeft, Check, ExternalLink, KeyRound, ListTree, Settings2, History } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
@@ -31,6 +31,13 @@ interface Endpoint {
   apiConfig: ApiConfig | null;
   fieldMapping: Record<string, string>;
   sinkConfig: { signal_type?: string; signal_grade?: string; bid_type?: string } | null;
+  backfill: {
+    from?: string;
+    to?: string;
+    cursor?: string;
+    status?: string;
+    last_result?: { chunk?: string; scanned?: number; inserted?: number; updated?: number; error?: string };
+  } | null;
   enabled: boolean;
 }
 interface Proposal {
@@ -109,6 +116,15 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
   const [buildRunning, setBuildRunning] = useState(false);
   const endpointsRef = useRef<HTMLDivElement | null>(null);
 
+  // 백필(과거 대량 수집) — 열린 엔드포인트/기간/진행/자동 반복 제어
+  const [backfillEpId, setBackfillEpId] = useState<string | null>(null);
+  const [bfFrom, setBfFrom] = useState("");
+  const [bfTo, setBfTo] = useState("");
+  const [bfProgress, setBfProgress] = useState<{ done: number; total: number } | null>(null);
+  const [bfMsg, setBfMsg] = useState<string | null>(null);
+  const [bfRunning, setBfRunning] = useState(false);
+  const bfLoopRef = useRef(false);
+
   const loadSources = useCallback(async () => {
     try {
       const d = await jfetch(`/api/scraper/sources?purpose=${purpose}`);
@@ -139,6 +155,8 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
       setCatalogSel([]);
       setBuilderEpId(null);
       setBuildMsg(null);
+      setBackfillEpId(null);
+      bfLoopRef.current = false;
       loadDetail(selId);
     } else {
       setSel(null);
@@ -266,6 +284,52 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
     } finally {
       setBusy(false);
       setBuildRunning(false);
+    }
+  };
+
+  /** 백필 자동 반복 — start 후 done/중지까지 step 을 연속 호출(월 1청크씩, 중단 재개 가능). */
+  const runBackfill = async (ep: Endpoint) => {
+    if (!sel || !bfFrom || !bfTo) return;
+    setBfRunning(true);
+    bfLoopRef.current = true;
+    setBfMsg("백필 시작…");
+    try {
+      const started = await jfetch(`/api/scraper/sources/${sel.sourceId}/endpoints/${ep.endpointId}/backfill`, {
+        method: "POST",
+        body: JSON.stringify({ action: "start", from: bfFrom, to: bfTo }),
+      });
+      setBfProgress(started.progress ?? null);
+      while (bfLoopRef.current) {
+        const d = await jfetch(`/api/scraper/sources/${sel.sourceId}/endpoints/${ep.endpointId}/backfill`, {
+          method: "POST",
+          body: JSON.stringify({ action: "step" }),
+        });
+        setBfProgress(d.progress ?? null);
+        const r = d.result;
+        if (r) {
+          setBfMsg(
+            `${r.chunk} 수집: 신규 ${r.inserted ?? 0} / 갱신 ${r.updated ?? 0} / 스캔 ${r.scanned ?? 0}${r.error ? ` · 오류: ${r.error}` : ""}`
+          );
+        }
+        if (d.done) {
+          setBfMsg((m) => `${m ? m + " · " : ""}백필 완료 ✓`);
+          break;
+        }
+      }
+      if (!bfLoopRef.current) {
+        // 사용자 중지 — 서버 상태도 idle 로(커서 보존, 재시작 시 이어서)
+        await jfetch(`/api/scraper/sources/${sel.sourceId}/endpoints/${ep.endpointId}/backfill`, {
+          method: "POST",
+          body: JSON.stringify({ action: "stop" }),
+        }).catch(() => undefined);
+        setBfMsg((m) => `${m ? m + " · " : ""}중지됨(재시작 시 이어서 진행)`);
+      }
+      await loadDetail(sel.sourceId);
+    } catch (e) {
+      setBfMsg(`백필 오류: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      bfLoopRef.current = false;
+      setBfRunning(false);
     }
   };
 
@@ -712,7 +776,69 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
                             <Settings2 className="w-3.5 h-3.5" /> {building ? "설정 닫기" : "설정"}
                           </button>
                         )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const opening = backfillEpId !== ep.endpointId;
+                            setBackfillEpId(opening ? ep.endpointId : null);
+                            if (opening) {
+                              setBfFrom(ep.backfill?.from ?? "");
+                              setBfTo(ep.backfill?.to ?? "");
+                              setBfMsg(null);
+                              const st = ep.backfill;
+                              setBfProgress(st?.from && st?.to && st?.cursor ? null : null);
+                            }
+                          }}
+                          className={"cd-btn text-[12px] " + (backfillEpId === ep.endpointId ? "cd-btn-primary" : "cd-btn-soft")}
+                        >
+                          <History className="w-3.5 h-3.5" /> 백필
+                        </button>
                       </div>
+                      {backfillEpId === ep.endpointId && (
+                        <div className="border-t cd-border-c pt-3 flex flex-col gap-2">
+                          <p className="text-[11px] cd-text-faint">
+                            과거 데이터를 월 단위로 끊어 순차 수집합니다(호출량 분산·중단 시 이어서 재개). 조회기간 필터가 설정된 엔드포인트에서만 동작합니다.
+                          </p>
+                          <div className="flex items-center gap-2 flex-wrap text-[12px] cd-text-muted">
+                            <input type="month" className="cd-input text-[12px]" style={{ width: 150 }} value={bfFrom} onChange={(e) => setBfFrom(e.target.value)} disabled={bfRunning} />
+                            ~
+                            <input type="month" className="cd-input text-[12px]" style={{ width: 150 }} value={bfTo} onChange={(e) => setBfTo(e.target.value)} disabled={bfRunning} />
+                            {!bfRunning ? (
+                              <button
+                                type="button"
+                                onClick={() => runBackfill(ep)}
+                                disabled={busy || !bfFrom || !bfTo}
+                                className="cd-btn cd-btn-primary text-[12px] disabled:opacity-50"
+                              >
+                                <Play className="w-3.5 h-3.5" />
+                                {ep.backfill?.status === "idle" && ep.backfill?.from === bfFrom && ep.backfill?.to === bfTo ? "이어서 진행" : "백필 시작"}
+                              </button>
+                            ) : (
+                              <button type="button" onClick={() => { bfLoopRef.current = false; }} className="cd-btn cd-btn-danger text-[12px]">
+                                중지
+                              </button>
+                            )}
+                          </div>
+                          {bfProgress && bfProgress.total > 0 && (
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: "var(--cd-surface)" }}>
+                                <div
+                                  className="h-full rounded-full transition-all"
+                                  style={{ width: `${Math.round((bfProgress.done / bfProgress.total) * 100)}%`, background: "var(--cd-primary)" }}
+                                />
+                              </div>
+                              <span className="text-[11px] cd-text-faint whitespace-nowrap">{bfProgress.done}/{bfProgress.total}개월</span>
+                            </div>
+                          )}
+                          {bfMsg && <p className="text-[12px] cd-text-muted">{bfMsg}</p>}
+                          {!bfMsg && ep.backfill?.last_result && (
+                            <p className="text-[11px] cd-text-faint">
+                              마지막 실행: {ep.backfill.last_result.chunk} — 신규 {ep.backfill.last_result.inserted ?? 0} / 스캔 {ep.backfill.last_result.scanned ?? 0}
+                              {ep.backfill.status === "done" ? " · 완료" : ep.backfill.status === "idle" ? " · 중지됨" : ""}
+                            </p>
+                          )}
+                        </div>
+                      )}
                       {building && canBuild && (
                         <div className="border-t cd-border-c pt-3">
                           <EndpointConfigBuilder

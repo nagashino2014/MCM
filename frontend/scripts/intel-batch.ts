@@ -12,9 +12,10 @@ import { collectNewsSignals } from "@/lib/intel/collect-news";
 import { collectPressSignals } from "@/lib/intel/collect-press";
 import { indexPendingEmbeddings, markNewsDuplicates } from "@/lib/intel/rag-indexer";
 import { disclosureCutoffIso, loadIntelSettings } from "@/lib/intel/intel-settings";
-import { listEnabledCustomCollectors } from "@/lib/scraper/sources-store";
+import { listEnabledCustomCollectors, updateEndpoint } from "@/lib/scraper/sources-store";
 import { collectCustomSource } from "@/lib/intel/custom-sink";
 import { collectBidSource } from "@/lib/bid/bid-sink";
+import { buildChunkConfig, nextYm, totalMonths, type BackfillState } from "@/lib/scraper/backfill";
 
 async function main() {
   // 수집 설정(intel_settings)을 읽어 각 수집기에 전달. env 는 설정보다 우선(백필 오버라이드용).
@@ -167,6 +168,57 @@ async function main() {
     }
   } catch (err) {
     console.error("[intel-batch] bid sources error", err);
+  }
+
+  // 백필(과거 대량 수집) 진행 — running 상태 엔드포인트를 실행당 최대 N개월씩 이어서 수집.
+  // UI에서 시작/중지, 배치는 매일 조금씩 과거로 확장한다(호출량 분산). 개별 실패 격리.
+  try {
+    const bfDb = await getDb();
+    const maxChunks = Number(process.env.INTEL_BATCH_BACKFILL_CHUNKS) > 0 ? Number(process.env.INTEL_BATCH_BACKFILL_CHUNKS) : 12;
+    const all = [
+      ...(await listEnabledCustomCollectors(bfDb, "intel")),
+      ...(await listEnabledCustomCollectors(bfDb, "bid")),
+    ];
+    for (const { source, endpoint } of all) {
+      const st = endpoint.backfill as BackfillState | null;
+      if (!st || st.status !== "running" || !endpoint.apiConfig?.date_filters?.length) continue;
+      let cursor = st.cursor;
+      for (let i = 0; i < maxChunks; i++) {
+        if (totalMonths(cursor, st.to) === 0) break;
+        const chunk = cursor;
+        try {
+          const cfg = buildChunkConfig(endpoint.apiConfig, chunk);
+          if (cfg.pagination) cfg.pagination = { ...cfg.pagination, max_pages: Math.max(cfg.pagination.max_pages || 1, 200) };
+          const chunkEp = { ...endpoint, apiConfig: cfg };
+          const r = source.purpose === "bid"
+            ? await collectBidSource(source, chunkEp)
+            : await collectCustomSource(source, chunkEp);
+          cursor = nextYm(chunk);
+          const finished = totalMonths(cursor, st.to) === 0;
+          const next: BackfillState = {
+            ...st,
+            cursor,
+            status: finished ? "done" : "running",
+            updated_at: new Date().toISOString(),
+            last_result: {
+              chunk,
+              scanned: r.scanned,
+              inserted: r.inserted,
+              updated: (r as { updated?: number }).updated ?? 0,
+              ...(r.error ? { error: r.error } : {}),
+            },
+          };
+          await updateEndpoint(endpoint.endpointId, { backfill: next as unknown as Record<string, unknown> });
+          console.log(`[intel-batch] backfill ${source.slug}/${endpoint.name} ${chunk}: +${r.inserted} (scan ${r.scanned})${finished ? " done" : ""}`);
+          if (finished) break;
+        } catch (err) {
+          console.error(`[intel-batch] backfill ${source.slug}/${endpoint.name} ${chunk} error`, err);
+          break; // 이 엔드포인트는 중단(cursor 보존) — 다음 배치에서 재시도
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[intel-batch] backfill error", err);
   }
 
   // 마지막: 신규 수집분 벡터 임베딩 적재(D단계 RAG). 미적재분을 500건씩 소진.

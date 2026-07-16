@@ -35,9 +35,9 @@ export function getNestedValue(obj: unknown, path: string): unknown {
 /**
  * format 토큰(YYYY/MM/DD/HH/mm/ss) 치환 — YYYYMM·YYYYMMDDHHmm 등 임의 조합 지원.
  * (기존 switch 방식은 미지원 포맷을 YYYY-MM-DD로 폴백해 나라장터 필수값 오류(08)를 유발했다.)
- * endOfDay=true(종료일)면 시각 성분을 23:59:59로 채운다.
+ * endOfDay=true(종료일)면 시각 성분을 23:59:59로 채운다. (백필 청크 생성에서도 재사용)
  */
-function formatDateForApi(date: Date, format?: string, endOfDay = false): string {
+export function formatDateForApi(date: Date, format?: string, endOfDay = false): string {
   const y = String(date.getFullYear());
   const m = String(date.getMonth() + 1).padStart(2, "0");
   const d = String(date.getDate()).padStart(2, "0");

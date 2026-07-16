@@ -195,6 +195,8 @@ export interface ScraperEndpointRow {
   apiConfig: ApiConfig | null;
   fieldMapping: FieldMapping;
   sinkConfig: IntelSinkConfig | null;
+  /** 백필 상태(075) — lib/scraper/backfill.BackfillState. */
+  backfill: Record<string, unknown> | null;
   enabled: boolean;
   createdAt: string;
   updatedAt: string;

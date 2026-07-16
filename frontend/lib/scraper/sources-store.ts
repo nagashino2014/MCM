@@ -53,6 +53,7 @@ function mapEndpoint(r: Record<string, unknown>): ScraperEndpointRow {
     apiConfig: parseJson<ApiConfig>(r.api_config),
     fieldMapping: parseJson<FieldMapping>(r.field_mapping) ?? {},
     sinkConfig: parseJson<IntelSinkConfig>(r.sink_config),
+    backfill: parseJson<Record<string, unknown>>(r.backfill),
     enabled: Number(r.enabled ?? 0) === 1,
     createdAt: String(r.created_at ?? ""),
     updatedAt: String(r.updated_at ?? ""),
@@ -222,6 +223,8 @@ export async function updateEndpoint(
     apiConfig?: ApiConfig | null;
     fieldMapping?: FieldMapping;
     sinkConfig?: IntelSinkConfig | null;
+    /** 백필 상태(075). null=초기화. */
+    backfill?: Record<string, unknown> | null;
     enabled?: boolean;
   }
 ): Promise<void> {
@@ -238,6 +241,7 @@ export async function updateEndpoint(
   if (patch.apiConfig !== undefined) pushJson("api_config", patch.apiConfig);
   if (patch.fieldMapping !== undefined) pushJson("field_mapping", patch.fieldMapping ?? {});
   if (patch.sinkConfig !== undefined) pushJson("sink_config", patch.sinkConfig);
+  if (patch.backfill !== undefined) pushJson("backfill", patch.backfill);
   if (patch.enabled !== undefined) {
     sets.push(`enabled = $${vals.length + 1}`);
     vals.push(patch.enabled ? 1 : 0);

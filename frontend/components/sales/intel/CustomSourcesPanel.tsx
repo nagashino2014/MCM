@@ -6,10 +6,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Radar, Plus, Wand2, Play, Eye, Trash2, ArrowLeft, Check, ExternalLink, KeyRound } from "lucide-react";
+import { Radar, Plus, Wand2, Play, Eye, Trash2, ArrowLeft, Check, ExternalLink, KeyRound, ListTree, Settings2 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
+import { EndpointConfigBuilder } from "@/components/sales/scraper/EndpointConfigBuilder";
+import type { ApiConfig, ApiProfile, FieldMapping, SourceCatalog } from "@/lib/scraper/types";
 import "@/components/cdash/cdash.css";
 
 interface Source {
@@ -18,16 +20,17 @@ interface Source {
   name: string;
   baseUrl: string | null;
   purpose: string;
-  apiProfile: unknown;
+  apiProfile: ApiProfile | null;
+  catalog: SourceCatalog | null;
   enabled: boolean;
   hasSecret?: boolean;
 }
 interface Endpoint {
   endpointId: string;
   name: string;
-  apiConfig: unknown;
+  apiConfig: ApiConfig | null;
   fieldMapping: Record<string, string>;
-  sinkConfig: { signal_type?: string; signal_grade?: string } | null;
+  sinkConfig: { signal_type?: string; signal_grade?: string; bid_type?: string } | null;
   enabled: boolean;
 }
 interface Proposal {
@@ -98,6 +101,10 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
   // 인증키
   const [secretInput, setSecretInput] = useState("");
 
+  // 카탈로그 취사선택 + 설정 빌더
+  const [catalogSel, setCatalogSel] = useState<string[]>([]);
+  const [builderEpId, setBuilderEpId] = useState<string | null>(null);
+
   const loadSources = useCallback(async () => {
     try {
       const d = await jfetch(`/api/scraper/sources?purpose=${purpose}`);
@@ -125,6 +132,8 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
       setProposal(null);
       setSamples(null);
       setSecretInput("");
+      setCatalogSel([]);
+      setBuilderEpId(null);
       loadDetail(selId);
     } else {
       setSel(null);
@@ -157,34 +166,107 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
     }
   };
 
-  const runAnalyze = async () => {
+  const runAnalyze = async (mode: "quick" | "catalog") => {
     if (!sel) return;
     if (!anUrl.trim() && !anRaw.trim() && !anFile) {
       setMsg("가이드 파일(docx)·URL 또는 명세 원문을 입력하세요.");
       return;
     }
     setBusy(true);
-    setMsg("분석 중… (LLM 호출, 최대 1분)");
+    setMsg(mode === "catalog" ? "카탈로그 추출 중… (LLM 호출, 큰 가이드는 2~3분)" : "분석 중… (LLM 호출, 최대 1분)");
     try {
-      let d: Proposal;
+      let d: Record<string, unknown>;
       if (anFile) {
         // 파일 업로드는 multipart/form-data
         const fd = new FormData();
+        fd.append("mode", mode);
         if (anUrl.trim()) fd.append("url", anUrl.trim());
         if (anRaw.trim()) fd.append("rawText", anRaw.trim());
         if (anContext.trim()) fd.append("context", anContext.trim());
         fd.append("file", anFile);
         const res = await fetch(`/api/scraper/sources/${sel.sourceId}/analyze`, { method: "POST", body: fd, cache: "no-store" });
         d = await res.json();
-        if (!res.ok) throw new Error((d as unknown as { error?: string })?.error ?? `HTTP ${res.status}`);
+        if (!res.ok) throw new Error((d as { error?: string })?.error ?? `HTTP ${res.status}`);
       } else {
         d = (await jfetch(`/api/scraper/sources/${sel.sourceId}/analyze`, {
           method: "POST",
-          body: JSON.stringify({ url: anUrl.trim() || undefined, rawText: anRaw.trim() || undefined, context: anContext.trim() || undefined }),
-        })) as Proposal;
+          body: JSON.stringify({ mode, url: anUrl.trim() || undefined, rawText: anRaw.trim() || undefined, context: anContext.trim() || undefined }),
+        })) as Record<string, unknown>;
       }
-      setProposal(d);
-      setMsg(d.warnings?.length ? `분석 완료 — 경고: ${d.warnings.join(", ")}` : "분석 완료");
+      const warnings = Array.isArray(d.warnings) ? (d.warnings as string[]) : [];
+      if (mode === "catalog") {
+        const cat = d.catalog as SourceCatalog | undefined;
+        setCatalogSel([]);
+        await loadDetail(sel.sourceId); // catalog 는 서버에 저장됨
+        setMsg(`카탈로그 추출 완료 — 엔드포인트 ${cat?.total_endpoints ?? 0}개. 아래에서 수집할 항목을 선택하세요.${warnings.length ? ` · 경고: ${warnings.join(", ")}` : ""}`);
+      } else {
+        setProposal(d as unknown as Proposal);
+        setMsg(warnings.length ? `분석 완료 — 경고: ${warnings.join(", ")}` : "분석 완료");
+      }
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** 카탈로그에서 선택한 엔드포인트를 정제 분석 → api_profile 저장 + 엔드포인트 자동 생성. */
+  const buildSelected = async () => {
+    if (!sel || catalogSel.length === 0) return;
+    setBusy(true);
+    setMsg(`선택 ${catalogSel.length}개 엔드포인트 정제 분석 중… (LLM 호출)`);
+    try {
+      const d = await jfetch(`/api/scraper/sources/${sel.sourceId}/analyze`, {
+        method: "POST",
+        body: JSON.stringify({ mode: "build", selectedTitles: catalogSel, context: anContext.trim() || undefined }),
+      });
+      // 1) api_profile 커밋(endpoints[] 카탈로그 보존본 포함)
+      await jfetch(`/api/scraper/sources/${sel.sourceId}`, {
+        method: "PUT",
+        body: JSON.stringify({ apiProfile: d.api_profile }),
+      });
+      // 2) 엔드포인트별 proposal 을 자동 생성(이미 같은 이름이 있으면 건너뜀 → 설정 버튼으로 수정)
+      const existing = new Set(endpoints.map((e) => e.name));
+      const proposals = Array.isArray(d.endpoint_proposals) ? d.endpoint_proposals : [];
+      let created = 0;
+      for (const p of proposals) {
+        if (!p?.name || existing.has(p.name)) continue;
+        await jfetch(`/api/scraper/sources/${sel.sourceId}/endpoints`, {
+          method: "POST",
+          body: JSON.stringify({
+            name: p.name,
+            apiConfig: p.api_config,
+            fieldMapping: p.field_mapping ?? {},
+            sinkConfig: isBid ? { bid_type: bidType } : { signal_grade: "monitoring", signal_type: "other" },
+          }),
+        });
+        created++;
+      }
+      setCatalogSel([]);
+      await loadDetail(sel.sourceId);
+      const warnings = Array.isArray(d.warnings) ? (d.warnings as string[]) : [];
+      setMsg(
+        `정제 완료 — 프로파일 저장 + 엔드포인트 ${created}개 생성. 각 엔드포인트의 "설정"에서 파라미터·필드를 조정하세요.${warnings.length ? ` · 경고: ${warnings.join(", ")}` : ""}`
+      );
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** 설정 빌더 저장 — 엔드포인트 api_config + field_mapping 갱신. */
+  const saveEndpointConfig = async (ep: Endpoint, name: string, config: ApiConfig, fieldMapping: FieldMapping) => {
+    if (!sel) return;
+    setBusy(true);
+    try {
+      await jfetch(`/api/scraper/sources/${sel.sourceId}/endpoints/${ep.endpointId}`, {
+        method: "PUT",
+        body: JSON.stringify({ name, apiConfig: config, fieldMapping }),
+      });
+      setBuilderEpId(null);
+      setMsg("엔드포인트 설정이 저장되었습니다. 미리보기로 확인하세요.");
+      await loadDetail(sel.sourceId);
     } catch (e) {
       setMsg(e instanceof Error ? e.message : String(e));
     } finally {
@@ -418,9 +500,14 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
                 <input className="cd-input text-[13px]" placeholder="API 가이드/명세 URL (실제 호출 URL 아님)" value={anUrl} onChange={(e) => setAnUrl(e.target.value)} />
                 <textarea className="cd-textarea text-[13px] font-mono" rows={3} placeholder="또는 명세/응답 예시 원문 붙여넣기" value={anRaw} onChange={(e) => setAnRaw(e.target.value)} />
                 <input className="cd-input text-[13px]" placeholder="추가 설명(선택, 예: 발주계획 목록 조회)" value={anContext} onChange={(e) => setAnContext(e.target.value)} />
-                <button type="button" onClick={runAnalyze} disabled={busy} className="cd-btn cd-btn-primary text-[13px] self-start disabled:opacity-50">
-                  <Wand2 className="w-4 h-4" /> 분석
-                </button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button type="button" onClick={() => runAnalyze("catalog")} disabled={busy} className="cd-btn cd-btn-primary text-[13px] disabled:opacity-50">
+                    <ListTree className="w-4 h-4" /> 카탈로그 추출 (엔드포인트·파라미터 선택형)
+                  </button>
+                  <button type="button" onClick={() => runAnalyze("quick")} disabled={busy} className="cd-btn cd-btn-soft text-[13px] disabled:opacity-50">
+                    <Wand2 className="w-4 h-4" /> 빠른 자동생성 (원샷)
+                  </button>
+                </div>
 
                 {proposal && (
                   <div className="mt-2 flex flex-col gap-2 border-t cd-border-c pt-3">
@@ -470,29 +557,117 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
                 )}
               </div>
 
+              {/* 카탈로그 — 엔드포인트 취사선택 */}
+              {sel.catalog && sel.catalog.endpoints.length > 0 && (
+                <div className="cd-card p-4 flex flex-col gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-sm font-bold cd-text flex items-center gap-1.5 flex-1">
+                      <ListTree className="w-4 h-4" /> 카탈로그 ({sel.catalog.total_endpoints}개 엔드포인트)
+                    </h3>
+                    <button
+                      type="button"
+                      className="cd-btn cd-btn-soft text-[11px]"
+                      onClick={() =>
+                        setCatalogSel(
+                          catalogSel.length === sel.catalog!.endpoints.length ? [] : sel.catalog!.endpoints.map((e) => e.title)
+                        )
+                      }
+                    >
+                      {catalogSel.length === sel.catalog.endpoints.length ? "전체 해제" : "전체 선택"}
+                    </button>
+                  </div>
+                  <p className="text-[11px] cd-text-faint">
+                    가이드에서 추출한 오퍼레이션 목록입니다. 수집할 항목을 선택하고 &quot;선택 항목 분석&quot;을 누르면 프로파일과 엔드포인트가 생성됩니다.
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {sel.catalog.endpoints.map((ce) => {
+                      const on = catalogSel.includes(ce.title);
+                      return (
+                        <button
+                          key={ce.title}
+                          type="button"
+                          onClick={() =>
+                            setCatalogSel((prev) => (on ? prev.filter((t) => t !== ce.title) : [...prev, ce.title]))
+                          }
+                          className={
+                            "text-left rounded-lg border px-3 py-2 transition-colors " +
+                            (on ? "cd-tint-primary border-[color:var(--cd-primary)]" : "cd-border-c hover:bg-[color:var(--cd-surface)]")
+                          }
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[13px] cd-text font-semibold truncate flex-1">{ce.title}</span>
+                            {on && <Check className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--cd-primary)" }} />}
+                          </div>
+                          {ce.category && <div className="text-[10px]" style={{ color: "var(--cd-primary)" }}>{ce.category}</div>}
+                          <div className="text-[11px] cd-text-faint">
+                            요청변수 <strong>{ce.request_params.length}</strong>개 · 응답필드 <strong>{ce.response_fields.length}</strong>개
+                          </div>
+                          {ce.request_url && <div className="text-[10px] cd-text-faint font-mono truncate">{ce.request_url}</div>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={buildSelected}
+                    disabled={busy || catalogSel.length === 0}
+                    className="cd-btn cd-btn-primary text-[13px] self-start disabled:opacity-50"
+                  >
+                    <Wand2 className="w-4 h-4" /> 선택 항목 분석 ({catalogSel.length}개)
+                  </button>
+                </div>
+              )}
+
               {/* 엔드포인트 목록 */}
               <div className="cd-card p-4 flex flex-col gap-2">
                 <h3 className="text-sm font-bold cd-text">엔드포인트</h3>
                 {endpoints.length === 0 && <p className="text-[13px] cd-text-faint">아직 없습니다. 위에서 분석 후 프로파일을 저장하세요.</p>}
-                {endpoints.map((ep) => (
-                  <div key={ep.endpointId} className="rounded-lg border cd-border-c p-3 flex flex-col gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[13px] cd-text flex-1 truncate">{ep.name}</span>
-                      <span className="text-[11px] cd-text-faint">{ep.enabled ? "수집 대상" : "비활성"}</span>
-                      <button type="button" onClick={() => toggleEndpoint(ep)} className="cd-btn cd-btn-soft text-[11px]">
-                        {ep.enabled ? "끄기" : "켜기"}
-                      </button>
+                {endpoints.map((ep) => {
+                  const profileEps = sel.apiProfile?.endpoints ?? [];
+                  const canBuild = profileEps.length > 0;
+                  const building = builderEpId === ep.endpointId;
+                  return (
+                    <div key={ep.endpointId} className="rounded-lg border cd-border-c p-3 flex flex-col gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[13px] cd-text flex-1 truncate">{ep.name}</span>
+                        <span className="text-[11px] cd-text-faint">{ep.enabled ? "수집 대상" : "비활성"}</span>
+                        <button type="button" onClick={() => toggleEndpoint(ep)} className="cd-btn cd-btn-soft text-[11px]">
+                          {ep.enabled ? "끄기" : "켜기"}
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button type="button" onClick={() => runEndpoint(ep, true)} disabled={busy} className="cd-btn cd-btn-soft text-[12px] disabled:opacity-50">
+                          <Eye className="w-3.5 h-3.5" /> 미리보기
+                        </button>
+                        <button type="button" onClick={() => runEndpoint(ep, false)} disabled={busy} className="cd-btn cd-btn-primary text-[12px] disabled:opacity-50">
+                          <Play className="w-3.5 h-3.5" /> 지금 수집
+                        </button>
+                        {canBuild && (
+                          <button
+                            type="button"
+                            onClick={() => setBuilderEpId(building ? null : ep.endpointId)}
+                            className={"cd-btn text-[12px] " + (building ? "cd-btn-primary" : "cd-btn-soft")}
+                          >
+                            <Settings2 className="w-3.5 h-3.5" /> {building ? "설정 닫기" : "설정"}
+                          </button>
+                        )}
+                      </div>
+                      {building && canBuild && (
+                        <div className="border-t cd-border-c pt-3">
+                          <EndpointConfigBuilder
+                            profileEndpoints={profileEps}
+                            purpose={isBid ? "bid" : "intel"}
+                            initialEpName={ep.name}
+                            initialConfig={ep.apiConfig}
+                            initialFieldMapping={ep.fieldMapping}
+                            busy={busy}
+                            onSave={(name, config, fieldMapping) => saveEndpointConfig(ep, name, config, fieldMapping)}
+                          />
+                        </div>
+                      )}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button type="button" onClick={() => runEndpoint(ep, true)} disabled={busy} className="cd-btn cd-btn-soft text-[12px] disabled:opacity-50">
-                        <Eye className="w-3.5 h-3.5" /> 미리보기
-                      </button>
-                      <button type="button" onClick={() => runEndpoint(ep, false)} disabled={busy} className="cd-btn cd-btn-primary text-[12px] disabled:opacity-50">
-                        <Play className="w-3.5 h-3.5" /> 지금 수집
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* 미리보기 결과 */}

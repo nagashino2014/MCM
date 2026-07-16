@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
-import { getSource } from "@/lib/scraper/sources-store";
-import { analyzeApiSource } from "@/lib/scraper/analyze";
+import { getSource, updateSource } from "@/lib/scraper/sources-store";
+import { analyzeApiSource, buildProfileFromCatalog, extractCatalog } from "@/lib/scraper/analyze";
 import { extractGuideFileText } from "@/lib/scraper/file-text";
 
 export const runtime = "nodejs";
@@ -14,24 +14,29 @@ interface Ctx {
 }
 
 /**
- * API Profile 자동생성 — URL 또는 원문(rawText)을 LLM으로 분석해 api_profile+api_config+field_mapping proposal 반환.
- * DB에 저장하지 않는다(사용자 확인 후 소스 PUT + 엔드포인트 POST 로 커밋).
+ * API 가이드 분석. mode 로 분기:
+ * - "quick"(기본): 기존 원샷 자동생성 — api_profile+api_config+field_mapping proposal 반환(저장 안 함).
+ * - "catalog": 가이드에서 엔드포인트×파라미터×응답필드 카탈로그 추출 → scraper_sources.catalog 에 저장 후 반환.
+ * - "build": 저장된 카탈로그에서 selectedTitles 만 정제 → api_profile(endpoints[]) + 엔드포인트별 proposal 반환(저장 안 함).
  */
 export async function POST(req: NextRequest, ctx: Ctx) {
   try {
-    await requirePermission("sales.edit", { fallbackRoles: ["editor"] });
+    const actor = await requirePermission("sales.edit", { fallbackRoles: ["editor"] });
     const { sourceId } = await ctx.params;
     const source = await getSource(sourceId);
     if (!source) return NextResponse.json({ error: "소스를 찾을 수 없습니다." }, { status: 404 });
 
     // 파일 업로드(docx 가이드)는 multipart/form-data, 그 외는 JSON.
+    let mode = "quick";
     let url: string | undefined;
     let rawText: string | undefined;
     let context: string | undefined;
     let fileText: string | undefined;
     let fileName: string | undefined;
+    let selectedTitles: string[] = [];
     if ((req.headers.get("content-type") || "").includes("multipart/form-data")) {
       const form = await req.formData();
+      mode = form.get("mode")?.toString().trim() || "quick";
       url = form.get("url")?.toString().trim() || undefined;
       rawText = form.get("rawText")?.toString().trim() || undefined;
       context = form.get("context")?.toString().trim() || undefined;
@@ -54,15 +59,37 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       }
     } else {
       const body = await req.json().catch(() => ({}));
+      mode = body?.mode ? String(body.mode) : "quick";
       url = body?.url ? String(body.url) : undefined;
       rawText = body?.rawText ? String(body.rawText) : undefined;
       context = body?.context ? String(body.context) : undefined;
+      selectedTitles = Array.isArray(body?.selectedTitles) ? body.selectedTitles.map(String) : [];
     }
+
+    // ② 선택 엔드포인트 정제 — 저장된 카탈로그 기반(가이드 재입력 불필요).
+    if (mode === "build") {
+      if (!source.catalog?.endpoints?.length) {
+        return NextResponse.json({ error: "저장된 카탈로그가 없습니다. 먼저 카탈로그를 추출하세요." }, { status: 400 });
+      }
+      if (!selectedTitles.length) {
+        return NextResponse.json({ error: "엔드포인트를 1개 이상 선택하세요." }, { status: 400 });
+      }
+      const built = await buildProfileFromCatalog({
+        slug: source.slug,
+        name: source.name,
+        baseUrlHint: source.baseUrl ?? undefined,
+        purpose: source.purpose,
+        context,
+        catalog: source.catalog,
+        selectedTitles,
+      });
+      return NextResponse.json(built);
+    }
+
     if (!url && !rawText && !fileText) {
       return NextResponse.json({ error: "분석할 URL·가이드 파일 또는 명세 원문이 필요합니다." }, { status: 400 });
     }
-
-    const result = await analyzeApiSource({
+    const input = {
       slug: source.slug,
       name: source.name,
       baseUrlHint: source.baseUrl ?? undefined,
@@ -72,7 +99,17 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       fileName,
       context,
       purpose: source.purpose,
-    });
+    };
+
+    // ① 카탈로그 추출 — 소스에 저장 후 반환(취사선택의 원천).
+    if (mode === "catalog") {
+      const result = await extractCatalog(input);
+      await updateSource(sourceId, { catalog: result.catalog }, actor.userId);
+      return NextResponse.json(result);
+    }
+
+    // 기본: 원샷 자동생성(기존 동작 유지)
+    const result = await analyzeApiSource(input);
     return NextResponse.json(result);
   } catch (err) {
     if (err instanceof Error && err.message === "llm_not_configured") {

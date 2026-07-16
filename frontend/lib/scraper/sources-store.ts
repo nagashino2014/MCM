@@ -13,6 +13,7 @@ import type {
   ScraperEndpointRow,
   ScraperPurpose,
   ScraperSourceRow,
+  SourceCatalog,
 } from "./types";
 
 function parseJson<T>(v: unknown): T | null {
@@ -35,6 +36,7 @@ function mapSource(r: Record<string, unknown>): ScraperSourceRow {
     baseUrl: r.base_url != null ? String(r.base_url) : null,
     purpose: (String(r.purpose ?? "intel") as ScraperPurpose),
     apiProfile: parseJson<ApiProfile>(r.api_profile),
+    catalog: parseJson<SourceCatalog>(r.catalog),
     enabled: Number(r.enabled ?? 0) === 1,
     hasSecret: !!r.auth_secret_enc, // 값은 미포함 — 존재 여부만
     createdAt: String(r.created_at ?? ""),
@@ -112,6 +114,8 @@ export async function updateSource(
     name?: string;
     baseUrl?: string | null;
     apiProfile?: ApiProfile | null;
+    /** 가이드 분석 카탈로그(073). null=삭제. */
+    catalog?: SourceCatalog | null;
     enabled?: boolean;
     /** 인증키: non-empty=암호화 저장, null=삭제, ""/undefined=변경 안함. */
     authSecret?: string | null;
@@ -129,6 +133,10 @@ export async function updateSource(
   if (patch.apiProfile !== undefined) {
     sets.push(`api_profile = $${vals.length + 1}::jsonb`);
     vals.push(patch.apiProfile ? JSON.stringify(patch.apiProfile) : null);
+  }
+  if (patch.catalog !== undefined) {
+    sets.push(`catalog = $${vals.length + 1}::jsonb`);
+    vals.push(patch.catalog ? JSON.stringify(patch.catalog) : null);
   }
   if (patch.enabled !== undefined) push("enabled", patch.enabled ? 1 : 0);
   if (patch.authSecret !== undefined) {

@@ -291,9 +291,50 @@ async function executeApiCall(
   }
 }
 
+/** 페이지네이션 루프 1회분 — primary_endpoint 를 max_pages 까지 수집. */
+async function collectPages(
+  apiProfile: ApiProfile,
+  apiConfig: ApiConfig,
+  logs: string[],
+  secret: string | null
+): Promise<{ items: Record<string, unknown>[]; error?: string }> {
+  const allData: Record<string, unknown>[] = [];
+  const pagination = apiConfig.pagination;
+  const paging = !!pagination && pagination.type !== "none";
+  const maxPages = paging ? Math.min(pagination!.max_pages || 1, 200) : 1; // 무한루프 방어 상한
+  const pageSize = pagination?.page_size || 10;
+  const pageParam = pagination?.param_name || "page";
+  const listPath = apiProfile.response_mapping?.list_path;
+
+  for (let page = 1; page <= maxPages; page++) {
+    const pageParams: Record<string, string> = {};
+    if (paging) {
+      if (pagination!.type === "offset") pageParams[pageParam] = String((page - 1) * pageSize);
+      else pageParams[pageParam] = String(page);
+    }
+    // 페이지당 건수 파라미터(예: numOfRows)는 페이지네이션이 없어도 전달(기본 소량 조회 방지).
+    if (pagination?.size_param) pageParams[pagination.size_param] = String(pageSize);
+    const result = await executeApiCall(apiProfile, apiConfig, pageParams, logs, secret);
+    if (result.error) {
+      logs.push(`[ERROR] ${result.error}`);
+      if (page === 1) return { items: [], error: result.error };
+      break;
+    }
+    const items = extractDataFromResponse(result.data, logs, listPath);
+    if (items.length === 0) {
+      logs.push("[INFO] 빈 페이지 — 페이지네이션 종료");
+      break;
+    }
+    allData.push(...items);
+    if (page < maxPages) await delay(500);
+  }
+  return { items: allData };
+}
+
 /**
  * 등록된 api_profile + api_config로 수집을 실행해 원시 item 목록을 반환한다.
  * 페이지네이션(page/offset), max_pages 상한, 빈 페이지 조기 종료, 검색/필드 필터 적용.
+ * two_phase.enabled 면 목록 API(secondary_endpoints[0])로 키를 뽑아 본문(primary)을 반복 조회한다.
  */
 export async function runApiCollect(
   apiProfile: ApiProfile,
@@ -302,38 +343,69 @@ export async function runApiCollect(
 ): Promise<RunApiResult> {
   const logs: string[] = [];
   let allData: Record<string, unknown>[] = [];
+  const secret = opts.secret ?? null;
   try {
     if (!apiConfig?.primary_endpoint?.path) {
       return { items: [], logs, error: "api_config.primary_endpoint 가 없습니다." };
     }
-    const pagination = apiConfig.pagination;
-    const paging = !!pagination && pagination.type !== "none";
-    const maxPages = paging ? Math.min(pagination!.max_pages || 1, 200) : 1; // 무한루프 방어 상한
-    const pageSize = pagination?.page_size || 10;
-    const pageParam = pagination?.param_name || "page";
-    const listPath = apiProfile.response_mapping?.list_path;
 
-    for (let page = 1; page <= maxPages; page++) {
-      const pageParams: Record<string, string> = {};
-      if (paging) {
-        if (pagination!.type === "offset") pageParams[pageParam] = String((page - 1) * pageSize);
-        else pageParams[pageParam] = String(page);
+    const twoPhase = apiConfig.two_phase;
+    const listEp = apiConfig.secondary_endpoints?.[0];
+    if (twoPhase?.enabled && listEp?.path && twoPhase.field_mappings?.length) {
+      // ── 2단계 호출: 목록 → 키 추출 → 본문 반복 ──
+      const listCfg: ApiConfig = {
+        primary_endpoint: { name: listEp.name, path: listEp.path, method: listEp.method },
+        params: listEp.params ?? {},
+        pagination: apiConfig.pagination, // 페이지네이션은 목록 단계에 적용
+        date_filters: listEp.date_filters ?? apiConfig.date_filters,
+        response_fields: listEp.response_fields,
+      };
+      const listRun = await collectPages(apiProfile, listCfg, logs, secret);
+      if (listRun.error && listRun.items.length === 0) {
+        return { items: [], logs, error: `목록 단계 실패: ${listRun.error}` };
       }
-      // 페이지당 건수 파라미터(예: numOfRows)는 페이지네이션이 없어도 전달(기본 소량 조회 방지).
-      if (pagination?.size_param) pageParams[pagination.size_param] = String(pageSize);
-      const result = await executeApiCall(apiProfile, apiConfig, pageParams, logs, opts.secret ?? null);
-      if (result.error) {
-        logs.push(`[ERROR] ${result.error}`);
-        if (page === 1) return { items: [], logs, error: result.error };
-        break;
+      const listItems = listRun.items.filter((it) => !("raw_xml" in it));
+      logs.push(`[2PHASE] 목록 ${listItems.length}건`);
+
+      const maxDetail = Math.min(twoPhase.max_detail_items || 100, 1000);
+      const seen = new Set<string>();
+      const keySets: Record<string, string>[] = [];
+      for (const it of listItems) {
+        const kv: Record<string, string> = {};
+        let ok = true;
+        for (const fm of twoPhase.field_mappings) {
+          if (!fm.source_field || !fm.target_param) continue;
+          const v = getNestedValue(it, fm.source_field);
+          if (v == null || v === "") { ok = false; break; }
+          kv[fm.target_param] = String(v);
+        }
+        if (!ok || Object.keys(kv).length === 0) continue;
+        const sig = JSON.stringify(kv);
+        if (seen.has(sig)) continue;
+        seen.add(sig);
+        keySets.push(kv);
+        if (keySets.length >= maxDetail) break;
       }
-      const items = extractDataFromResponse(result.data, logs, listPath);
-      if (items.length === 0) {
-        logs.push("[INFO] 빈 페이지 — 페이지네이션 종료");
-        break;
+      logs.push(`[2PHASE] 본문 조회 대상 ${keySets.length}건 (상한 ${maxDetail})`);
+
+      for (const kv of keySets) {
+        const detailCfg: ApiConfig = {
+          ...apiConfig,
+          params: { ...apiConfig.params, ...kv },
+          pagination: undefined,
+          secondary_endpoints: undefined,
+          two_phase: undefined,
+          search_filters: undefined, // 필터는 최종 결과에 일괄 적용
+          response_fields: undefined,
+        };
+        const r = await collectPages(apiProfile, detailCfg, logs, secret);
+        allData.push(...r.items.filter((it) => !("raw_xml" in it)));
+        await delay(300);
       }
-      allData.push(...items);
-      if (page < maxPages) await delay(500);
+    } else {
+      const run = await collectPages(apiProfile, apiConfig, logs, secret);
+      if (run.error && run.items.length === 0) return { items: [], logs, error: run.error };
+      allData = run.items;
     }
 
     if (apiConfig.search_filters?.length) {

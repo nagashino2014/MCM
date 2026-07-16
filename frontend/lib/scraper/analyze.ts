@@ -5,7 +5,15 @@
  * 결과는 DB에 저장하지 않고 proposal로 반환한다(사용자 확인 후 소스/엔드포인트에 커밋).
  */
 import { anthropicChatJson } from "@/lib/ai/llm-json";
-import type { ApiConfig, ApiProfile, FieldMapping, ScraperPurpose } from "./types";
+import type {
+  ApiConfig,
+  ApiProfile,
+  CatalogEndpoint,
+  FieldMapping,
+  ProfileEndpoint,
+  ScraperPurpose,
+  SourceCatalog,
+} from "./types";
 
 const MAX_TEXT_CHARS = 180000;
 
@@ -181,6 +189,263 @@ export async function analyzeApiSource(input: AnalyzeInput): Promise<AnalyzeResu
     api_config: cfg,
     field_mapping: asStringRecord(raw.field_mapping),
     warnings,
+    summary: typeof raw.summary === "string" ? raw.summary : "",
+  };
+}
+
+// ─────────────────────────────────────────────────────────────
+// 2단 분석 (Web Scraper Final 이식): ① 카탈로그 추출 → 사용자가 엔드포인트 취사선택
+// → ② 선택 항목만 정제해 api_profile.endpoints[] + 엔드포인트별 제안 생성.
+// ─────────────────────────────────────────────────────────────
+
+/** 분석 입력 텍스트 조립(공용). */
+async function combineInput(input: AnalyzeInput): Promise<string> {
+  const parts: string[] = [];
+  if (input.baseUrlHint) parts.push(`BASE_URL_HINT: ${input.baseUrlHint}`);
+  if (input.context) parts.push(`USER_CONTEXT:\n${input.context}`);
+  if (input.url) {
+    parts.push(`GUIDE_URL: ${input.url}`);
+    const t = await fetchText(input.url).catch(() => "");
+    if (t) parts.push(`URL_TEXT:\n${t}`);
+  }
+  if (input.fileText) parts.push(`GUIDE_FILE${input.fileName ? ` (${input.fileName})` : ""}:\n${input.fileText}`);
+  if (input.rawText) parts.push(`RAW_TEXT:\n${input.rawText}`);
+  const combined = parts.join("\n\n");
+  if (!combined.trim()) throw new Error("분석할 URL·가이드 파일 또는 명세 원문이 필요합니다.");
+  return combined.slice(0, MAX_TEXT_CHARS);
+}
+
+export interface ExtractCatalogResult {
+  catalog: SourceCatalog;
+  warnings: string[];
+  summary: string;
+}
+
+/**
+ * ① 가이드에서 엔드포인트×요청변수×응답필드 "카탈로그"를 추출한다(선택지 나열이 목적 — 판단 없음).
+ * 결과는 scraper_sources.catalog 에 저장하고, UI가 카드로 나열해 사용자가 취사선택한다.
+ */
+export async function extractCatalog(input: AnalyzeInput): Promise<ExtractCatalogResult> {
+  const combined = await combineInput(input);
+  const prompt = `너는 공개 REST/OPEN API 가이드 문서를 분석해, 문서에 실린 **모든 오퍼레이션(엔드포인트)의 완전한 카탈로그**를 만든다.
+**JSON 하나만 출력한다**(설명 텍스트 금지).
+
+## 절대 규칙 — 완전성
+1. 문서에 오퍼레이션이 N개면 endpoints 배열에 **정확히 N개**를 넣는다. 요약·통합·대표 선택 금지.
+2. 각 오퍼레이션의 **요청변수(request_params)와 응답필드(response_fields)를 하나도 빠짐없이** 옮긴다.
+   요청변수가 12개면 12개 전부, 응답필드가 60개면 60개 전부. 절대 생략하지 말 것.
+3. 값을 지어내지 말 것 — 문서에 없는 정보는 필드를 생략한다.
+
+## 항목 규칙
+- title: 오퍼레이션명(한국어 그대로). category: 문서의 분류(있으면).
+- request_url: 문서의 호출 URL 예시 전체. path: 그 URL의 경로 부분(예 "/1230000/ao/OrderPlanSttusService/getOrderPlanSttusListServc"). method: GET/POST.
+- request_params[]: { name(영문 변수명), name_ko(한글명), required(true/false), type, description, example(샘플/고정값 힌트 있으면) }.
+  required 는 문서의 필수 여부 표기(필수/옵션)를 boolean 으로.
+- response_fields[]: { name(영문 필드명), name_ko(한글명), type, description }.
+
+## 출력 스키마(JSON만)
+{
+  "endpoints": [
+    {
+      "title": "...", "category": "...", "request_url": "...", "path": "/...", "method": "GET",
+      "description": "...",
+      "request_params": [ { "name": "...", "name_ko": "...", "required": true, "type": "...", "description": "...", "example": "..." } ],
+      "response_fields": [ { "name": "...", "name_ko": "...", "type": "...", "description": "..." } ]
+    }
+  ],
+  "warnings": ["불확실 항목"],
+  "summary": "카탈로그 요약(한국어 1~2문장, 오퍼레이션 수 포함)"
+}
+
+## 입력
+ORG: ${input.name} (slug: ${input.slug})
+${combined}`.trim();
+
+  const raw = await anthropicChatJson<{
+    endpoints?: CatalogEndpoint[];
+    warnings?: unknown[];
+    summary?: string;
+  }>({
+    system: "너는 API 가이드 문서에서 완전한 엔드포인트 카탈로그를 추출하는 전문가다. 반드시 JSON 하나만 출력한다.",
+    user: prompt,
+    model: "claude-sonnet-5",
+    maxTokens: 32000,
+    timeoutMs: 180000,
+  });
+
+  const endpoints = (Array.isArray(raw.endpoints) ? raw.endpoints : []).filter(
+    (e): e is CatalogEndpoint => !!e && typeof e === "object" && typeof (e as CatalogEndpoint).title === "string"
+  );
+  for (const ep of endpoints) {
+    if (!Array.isArray(ep.request_params)) ep.request_params = [];
+    if (!Array.isArray(ep.response_fields)) ep.response_fields = [];
+  }
+  return {
+    catalog: {
+      extracted_at: new Date().toISOString(),
+      source: input.fileName || input.url || (input.rawText ? "raw_text" : undefined),
+      total_endpoints: endpoints.length,
+      endpoints,
+    },
+    warnings: Array.isArray(raw.warnings) ? raw.warnings.map(String) : [],
+    summary: typeof raw.summary === "string" ? raw.summary : "",
+  };
+}
+
+/** 엔드포인트별 제안 — UI 설정 빌더의 시작점(사용자가 수정 후 저장). */
+export interface EndpointProposal {
+  name: string;
+  api_config: ApiConfig;
+  field_mapping: FieldMapping;
+}
+
+export interface BuildProfileResult {
+  api_profile: ApiProfile;
+  endpoint_proposals: EndpointProposal[];
+  warnings: string[];
+  summary: string;
+}
+
+/**
+ * ② 카탈로그에서 사용자가 선택한 엔드포인트만 정제해 api_profile(.endpoints[] 보존)과
+ * 엔드포인트별 제안(api_config 초기값 + field_mapping)을 생성한다.
+ * request_params/response_fields 는 LLM 산출을 신뢰하지 않고 카탈로그 원본을 그대로 이식한다(누락 방지).
+ */
+export async function buildProfileFromCatalog(input: {
+  slug: string;
+  name: string;
+  baseUrlHint?: string;
+  purpose?: ScraperPurpose;
+  context?: string;
+  catalog: SourceCatalog;
+  /** 선택한 카탈로그 엔드포인트 title 배열. */
+  selectedTitles: string[];
+}): Promise<BuildProfileResult> {
+  const selected = input.catalog.endpoints.filter((e) => input.selectedTitles.includes(e.title));
+  if (!selected.length) throw new Error("선택된 엔드포인트가 없습니다.");
+  const secretRef = secretEnvRef(input.slug);
+  const isBid = input.purpose === "bid";
+
+  // 카탈로그를 텍스트화(LLM 입력) — 파라미터/필드 이름과 설명만(전량).
+  const epText = selected
+    .map((e, i) => {
+      const params = e.request_params
+        .map((p) => `  - ${p.name}${p.name_ko ? `(${p.name_ko})` : ""}${p.required ? " [필수]" : ""}${p.example ? ` 예:${p.example}` : ""} ${p.description ?? ""}`.trimEnd())
+        .join("\n");
+      const fields = e.response_fields.map((f) => `${f.name}${f.name_ko ? `(${f.name_ko})` : ""}`).join(", ");
+      return `### [${i}] ${e.title}${e.category ? ` (${e.category})` : ""}
+URL: ${e.request_url ?? "-"} / path: ${e.path ?? "-"} / method: ${e.method ?? "GET"}
+요청변수(${e.request_params.length}개):
+${params || "  (없음)"}
+응답필드(${e.response_fields.length}개): ${fields || "(없음)"}`;
+    })
+    .join("\n\n");
+
+  const fieldKeys = isBid
+    ? "external_id/org_name/title/budget/posted_at/deadline/method/work_type/category/url"
+    : "external_id/company_name/report_name/url/disclosed_at/summary";
+
+  const prompt = `너는 API 카탈로그에서 선택된 엔드포인트들을 "곧바로 호출 가능한 프로파일"로 정제한다.
+**JSON 하나만 출력한다**(설명 텍스트 금지).
+
+## 규칙
+1. endpoints 배열에 선택된 ${selected.length}개를 **인덱스 순서 그대로** 넣는다(통합·생략 금지).
+   각 항목: { "name": 제목, "path": 실제 경로, "method": "GET", "description": 한 줄,
+   "fixed_params": {항상 같은 값인 파라미터: 값}, "variable_params": [사용자 입력 파라미터명], "required_params": [필수 파라미터명] }
+   ※ request_params/response_fields 는 출력하지 마라(시스템이 카탈로그 원본을 이식한다).
+2. 인증: authKey/serviceKey류 → auth.type="apiKey"·param_name(공공데이터포털이면 정확히 "serviceKey"). OC류 → "param". secret_ref 는 반드시 "${secretRef}".
+3. 응답형식 파라미터(_type/type/dataType)로 JSON 지원 시 default_params 에 (예 "_type":"json"). 목록 배열 경로를 response_mapping.list_path 에(공공데이터포털은 "response.body.items.item").
+4. **엔드포인트별 제안(proposals)**: 각 엔드포인트에 대해
+   - params: 필수·고정 파라미터의 초기값(날짜 파라미터 제외, 시크릿 제외).
+   - pagination: { type, param_name, size_param, page_size, max_pages } (페이지 파라미터가 있으면).
+   - date_filters: 필수 조회기간은 [{ "field": 시작필드, "relative_days": 30, "format": 문서의 날짜형식(YYYYMMDD/YYYYMM/YYYYMMDDHHmm 등) }, { "field": 종료필드, "relative_days": 0, "format": 동일 }].
+   - field_mapping: 응답필드 중 표준키(${fieldKeys})에 대응하는 필드 경로. 없으면 그 키 생략.
+5. 시크릿 값은 절대 출력하지 말 것.
+
+## 출력 스키마(JSON만)
+{
+  "api_profile": {
+    "base_url": "http(s)://도메인",
+    "auth": { "type": "apiKey|param|multi|none|unknown", "in": "query|header", "param_name": "serviceKey", "secret_ref": "${secretRef}" },
+    "default_params": { },
+    "response_mapping": { "format": "JSON|XML", "list_path": "response.body.items.item" },
+    "constraints": { "ip_allowlist_required": false, "rate_limit_hint": "", "approval_required": false },
+    "status": "draft",
+    "endpoints": [ { "name": "...", "path": "/...", "method": "GET", "description": "...", "fixed_params": {}, "variable_params": [], "required_params": [] } ]
+  },
+  "proposals": [ { "name": "...", "params": {}, "pagination": null, "date_filters": [], "field_mapping": {} } ],
+  "warnings": [],
+  "summary": "한국어 1~2문장"
+}
+
+## 입력
+ORG: ${input.name} (slug: ${input.slug})${input.baseUrlHint ? `\nBASE_URL_HINT: ${input.baseUrlHint}` : ""}${input.context ? `\nUSER_CONTEXT: ${input.context}` : ""}
+
+## 선택된 엔드포인트 카탈로그
+${epText}`.trim();
+
+  const raw = await anthropicChatJson<{
+    api_profile?: ApiProfile;
+    proposals?: Array<{
+      name?: string;
+      params?: Record<string, unknown>;
+      pagination?: ApiConfig["pagination"] | null;
+      date_filters?: ApiConfig["date_filters"];
+      field_mapping?: Record<string, unknown>;
+    }>;
+    warnings?: unknown[];
+    summary?: string;
+  }>({
+    system: "너는 API 카탈로그를 실행 가능한 프로파일로 정제하는 전문가다. 반드시 JSON 하나만 출력한다.",
+    user: prompt,
+    model: "claude-sonnet-5",
+    maxTokens: 16000,
+    timeoutMs: 120000,
+  });
+
+  const profile: ApiProfile = raw.api_profile ?? {};
+  if (!profile.base_url && input.baseUrlHint) profile.base_url = input.baseUrlHint;
+  if (profile.auth && (profile.auth.type ?? "none") !== "none") {
+    profile.auth.secret_ref = secretEnvRef(input.slug);
+    if (!profile.auth.in) profile.auth.in = "query";
+  }
+  if (!profile.status) profile.status = "draft";
+
+  // endpoints 정합화 + 카탈로그 원본(request_params/response_fields) 이식 — LLM 누락 방지.
+  const llmEndpoints = Array.isArray(profile.endpoints) ? profile.endpoints : [];
+  profile.endpoints = selected.map((cat, i) => {
+    const llm = (llmEndpoints[i] ?? {}) as ProfileEndpoint;
+    return {
+      name: llm.name || cat.title,
+      path: llm.path || cat.path || "",
+      method: llm.method || cat.method || "GET",
+      description: llm.description ?? cat.description,
+      fixed_params: llm.fixed_params ?? {},
+      variable_params: Array.isArray(llm.variable_params) ? llm.variable_params : [],
+      required_params: Array.isArray(llm.required_params)
+        ? llm.required_params
+        : cat.request_params.filter((p) => p.required).map((p) => p.name),
+      request_params: cat.request_params,
+      response_fields: cat.response_fields,
+    };
+  });
+
+  const rawProposals = Array.isArray(raw.proposals) ? raw.proposals : [];
+  const endpoint_proposals: EndpointProposal[] = profile.endpoints.map((ep, i) => {
+    const p = rawProposals[i] ?? {};
+    const cfg: ApiConfig = {
+      primary_endpoint: { name: ep.name, path: ep.path, method: ep.method || "GET" },
+      params: asStringRecord(p.params),
+    };
+    if (p.pagination && p.pagination.type && p.pagination.type !== "none") cfg.pagination = p.pagination;
+    if (Array.isArray(p.date_filters) && p.date_filters.length) cfg.date_filters = p.date_filters;
+    return { name: ep.name, api_config: cfg, field_mapping: asStringRecord(p.field_mapping) };
+  });
+
+  return {
+    api_profile: profile,
+    endpoint_proposals,
+    warnings: Array.isArray(raw.warnings) ? raw.warnings.map(String) : [],
     summary: typeof raw.summary === "string" ? raw.summary : "",
   };
 }

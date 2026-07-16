@@ -33,6 +33,25 @@ export interface ApiPagination {
   max_pages: number;
 }
 
+/** 2단계 호출 설정 — 목록 API(secondary) 결과의 필드값을 본문 API(primary) 파라미터로 매핑해 반복 조회. */
+export interface TwoPhaseConfig {
+  enabled: boolean;
+  /** 목록 item 의 source_field 값 → 본문 호출의 target_param. */
+  field_mappings: { source_field: string; target_param: string }[];
+  /** 목록에서 본문 조회로 넘길 최대 건수(기본 100). */
+  max_detail_items?: number;
+}
+
+export interface SecondaryEndpoint {
+  name?: string;
+  path: string;
+  method?: string;
+  params?: Record<string, string>;
+  /** 목록 응답에서 남길 필드(선택). */
+  response_fields?: string[];
+  date_filters?: DateFilter[];
+}
+
 export interface ApiConfig {
   primary_endpoint: { name?: string; path: string; method?: string };
   params: Record<string, string>;
@@ -41,6 +60,9 @@ export interface ApiConfig {
   response_fields?: string[];
   search_filters?: SearchFilter[];
   date_filters?: DateFilter[];
+  /** 2단계 호출: 목록 API(secondary_endpoints[0])로 키를 뽑아 primary(본문)를 반복 조회. */
+  secondary_endpoints?: SecondaryEndpoint[];
+  two_phase?: TwoPhaseConfig;
 }
 
 export interface ApiAuth {
@@ -54,11 +76,67 @@ export interface ApiAuth {
   secret_ref?: string;
 }
 
+/** 카탈로그/프로파일의 요청 파라미터 명세 1건. */
+export interface ParamSpec {
+  name: string;
+  name_ko?: string;
+  required?: boolean;
+  type?: string;
+  description?: string;
+  /** 예시값/고정값 힌트(가이드에 있으면). */
+  example?: string;
+}
+
+/** 카탈로그/프로파일의 응답 필드 명세 1건. */
+export interface FieldSpec {
+  name: string;
+  name_ko?: string;
+  type?: string;
+  description?: string;
+}
+
+/** 가이드에서 추출한 엔드포인트 카탈로그 1건(취사선택의 원천). */
+export interface CatalogEndpoint {
+  title: string;
+  category?: string;
+  /** 실제 호출 URL 예시(가이드 원문 기준). */
+  request_url?: string;
+  path?: string;
+  method?: string;
+  description?: string;
+  request_params: ParamSpec[];
+  response_fields: FieldSpec[];
+}
+
+/** scraper_sources.catalog jsonb — 가이드 분석 결과 전체. */
+export interface SourceCatalog {
+  extracted_at: string;
+  /** 분석 입력(파일명/URL). */
+  source?: string;
+  total_endpoints: number;
+  endpoints: CatalogEndpoint[];
+}
+
+/** api_profile.endpoints[] — 선택·정제된 엔드포인트(설정 빌더의 소스). */
+export interface ProfileEndpoint {
+  name: string;
+  path: string;
+  method?: string;
+  description?: string;
+  /** 항상 같은 값으로 보내는 고정 파라미터(예: target=eflaw). */
+  fixed_params?: Record<string, string>;
+  /** 사용자가 값을 정하는 가변 파라미터명. */
+  variable_params?: string[];
+  required_params?: string[];
+  request_params?: ParamSpec[];
+  response_fields?: FieldSpec[];
+}
+
 export interface ApiProfile {
   base_url?: string;
   auth?: ApiAuth;
   default_params?: Record<string, string>;
-  endpoints?: unknown[];
+  endpoints?: ProfileEndpoint[];
   response_mapping?: { format?: string; list_path?: string; total_path?: string };
   constraints?: Record<string, unknown>;
   /** 'draft' | 'ready' */
@@ -99,6 +177,8 @@ export interface ScraperSourceRow {
   baseUrl: string | null;
   purpose: ScraperPurpose;
   apiProfile: ApiProfile | null;
+  /** 가이드 분석 카탈로그(073) — 취사선택 UI의 원천. */
+  catalog: SourceCatalog | null;
   enabled: boolean;
   /** 인증키가 DB에 저장돼 있는지(값은 응답에 포함하지 않음 — 실행 시에만 복호화). */
   hasSecret: boolean;

@@ -238,13 +238,15 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
       let created = 0;
       for (const p of proposals) {
         if (!p?.name || existing.has(p.name)) continue;
+        // bid 적재 종류: 정제 결과(이름 휴리스틱) 우선 — 발주계획을 입찰공고 테이블에 넣는 오적재 방지.
+        const epBidType = (p.bid_type as string | undefined) ?? bidType;
         await jfetch(`/api/scraper/sources/${sel.sourceId}/endpoints`, {
           method: "POST",
           body: JSON.stringify({
             name: p.name,
             apiConfig: p.api_config,
             fieldMapping: p.field_mapping ?? {},
-            sinkConfig: isBid ? { bid_type: bidType } : { signal_grade: "monitoring", signal_type: "other" },
+            sinkConfig: isBid ? { bid_type: epBidType } : { signal_grade: "monitoring", signal_type: "other" },
           }),
         });
         created++;
@@ -653,6 +655,24 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
                     <div key={ep.endpointId} className="rounded-lg border cd-border-c p-3 flex flex-col gap-2">
                       <div className="flex items-center gap-2">
                         <span className="text-[13px] cd-text flex-1 truncate">{ep.name}</span>
+                        {isBid && (
+                          <select
+                            className="cd-select text-[11px]"
+                            title="적재 테이블 종류"
+                            value={(ep.sinkConfig?.bid_type as string) ?? "bid_notice"}
+                            onChange={async (e) => {
+                              await jfetch(`/api/scraper/sources/${sel.sourceId}/endpoints/${ep.endpointId}`, {
+                                method: "PUT",
+                                body: JSON.stringify({ sinkConfig: { bid_type: e.target.value } }),
+                              }).catch((err) => setMsg(String(err)));
+                              await loadDetail(sel.sourceId);
+                            }}
+                          >
+                            <option value="order_plan">발주계획</option>
+                            <option value="prior_spec">사전규격</option>
+                            <option value="bid_notice">입찰공고</option>
+                          </select>
+                        )}
                         <span className="text-[11px] cd-text-faint">{ep.enabled ? "수집 대상" : "비활성"}</span>
                         <button type="button" onClick={() => toggleEndpoint(ep)} className="cd-btn cd-btn-soft text-[11px]">
                           {ep.enabled ? "끄기" : "켜기"}

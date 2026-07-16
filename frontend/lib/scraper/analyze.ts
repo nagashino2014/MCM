@@ -366,6 +366,16 @@ export interface EndpointProposal {
   name: string;
   api_config: ApiConfig;
   field_mapping: FieldMapping;
+  /** purpose=bid 전용 — 적재 테이블 종류. 이름 휴리스틱으로 보정됨. */
+  bid_type?: "order_plan" | "prior_spec" | "bid_notice";
+}
+
+/** 엔드포인트 이름/설명에서 bid 종류 추론(발주계획/사전규격/입찰공고). */
+export function inferBidType(text: string): "order_plan" | "prior_spec" | "bid_notice" | null {
+  if (/발주\s*계획/.test(text)) return "order_plan";
+  if (/사전\s*규격/.test(text)) return "prior_spec";
+  if (/입찰\s*공고|낙찰|개찰/.test(text)) return "bid_notice";
+  return null;
 }
 
 export interface BuildProfileResult {
@@ -508,7 +518,12 @@ ${epText}`.trim();
     };
     if (p.pagination && p.pagination.type && p.pagination.type !== "none") cfg.pagination = p.pagination;
     if (Array.isArray(p.date_filters) && p.date_filters.length) cfg.date_filters = p.date_filters;
-    return { name: ep.name, api_config: cfg, field_mapping: asStringRecord(p.field_mapping) };
+    const proposal: EndpointProposal = { name: ep.name, api_config: cfg, field_mapping: asStringRecord(p.field_mapping) };
+    // bid 소스는 엔드포인트 이름으로 적재 테이블 종류를 판별(발주계획/사전규격/입찰공고).
+    if (input.purpose === "bid") {
+      proposal.bid_type = inferBidType(`${ep.name} ${ep.description ?? ""}`) ?? undefined;
+    }
+    return proposal;
   });
 
   return {

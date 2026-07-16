@@ -301,6 +301,21 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
       setBfProgress(started.progress ?? null);
       let cursor: string | undefined = started.backfill?.cursor;
       let failStreak = 0;
+      /**
+       * 커서가 전진(또는 완료)할 때까지 15초 간격 폴링(최대 5분) — 504가 나도 서버는 그 달을
+       * 계속 수집 중이므로, 같은 달 step 을 곧바로 재요청해 이중 수집하지 않는다.
+       */
+      const waitAdvance = async (prev?: string) => {
+        for (let i = 0; i < 20 && bfLoopRef.current; i++) {
+          await new Promise((res) => setTimeout(res, 15000));
+          const st = await jfetch(`/api/scraper/sources/${sel.sourceId}/endpoints/${ep.endpointId}/backfill`).catch(() => null);
+          if (!st?.backfill) continue;
+          setBfProgress(st.progress ?? null);
+          if (st.backfill.status === "done") return { done: true, cursor: st.backfill.cursor as string };
+          if (st.backfill.cursor && st.backfill.cursor !== prev) return { done: false, cursor: st.backfill.cursor as string };
+        }
+        return null;
+      };
       while (bfLoopRef.current) {
         try {
           // 큰 달(입찰공고 등 월 1만 건+)은 청크당 1~2분 — 진행 중에도 어느 달인지 표시.
@@ -312,6 +327,19 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
             method: "POST",
             body: JSON.stringify({ action: "step" }),
           });
+          if (d.busy) {
+            // 서버가 아직 이전 step(같은 달)을 수집 중 — 완료를 기다렸다 다음 달로.
+            setBfMsg(`${cursor ?? "현재 달"} 수집 중(서버 진행)… 완료 대기`);
+            const adv = await waitAdvance(cursor);
+            if (adv) {
+              cursor = adv.cursor;
+              if (adv.done) {
+                setBfMsg("백필 완료 ✓");
+                break;
+              }
+            }
+            continue;
+          }
           cursor = d.backfill?.cursor;
           failStreak = 0;
           setBfProgress(d.progress ?? null);
@@ -332,18 +360,20 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
             break;
           }
         } catch (stepErr) {
-          // 대량 월은 게이트웨이 타임아웃(504)이 날 수 있다 — 서버는 계속 수집 중일 수 있으므로
-          // 잠시 기다렸다 상태를 재확인하고 이어간다(연속 3회 실패면 중단, 커서 보존).
+          // 504 등 — 서버는 그 달을 계속 수집 중일 수 있다. 커서 전진을 기다렸다 이어간다.
+          setBfMsg(`일시 오류(${stepErr instanceof Error ? stepErr.message : stepErr}) — 서버 수집 완료를 기다리는 중…`);
+          const adv = await waitAdvance(cursor);
+          if (adv) {
+            failStreak = 0;
+            cursor = adv.cursor;
+            if (adv.done) {
+              setBfMsg("백필 완료 ✓");
+              break;
+            }
+            continue;
+          }
           failStreak++;
           if (failStreak >= 3) throw stepErr;
-          setBfMsg(`일시 오류(${stepErr instanceof Error ? stepErr.message : stepErr}) — 15초 후 상태 확인 후 계속…`);
-          await new Promise((res) => setTimeout(res, 15000));
-          const st = await jfetch(`/api/scraper/sources/${sel.sourceId}/endpoints/${ep.endpointId}/backfill`).catch(() => null);
-          if (st?.progress) setBfProgress(st.progress);
-          if (st?.backfill?.status === "done") {
-            setBfMsg("백필 완료 ✓");
-            break;
-          }
         }
       }
       if (!bfLoopRef.current) {

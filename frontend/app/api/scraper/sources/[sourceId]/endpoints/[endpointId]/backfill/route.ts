@@ -21,6 +21,10 @@ function asState(v: unknown): BackfillState | null {
   return s;
 }
 
+// step 동시 실행 방지(단일 컨테이너 구조) — 대량 월 청크가 ALB 한도(300s)를 넘어 클라이언트가
+// 504를 받아도 서버는 수집을 계속한다. 그 사이 재요청이 같은 달을 이중 수집하지 않게 막는다.
+const inFlight = new Set<string>();
+
 function progressOf(s: BackfillState) {
   const total = totalMonths(s.from, s.to);
   const done = s.status === "done" ? total : Math.min(total, doneMonths(s.from, s.cursor));
@@ -93,6 +97,10 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       if (!state || state.status !== "running") {
         return NextResponse.json({ error: "진행 중인 백필이 없습니다. 먼저 시작하세요." }, { status: 400 });
       }
+      // 이 엔드포인트의 step 이 이미 실행 중(504 이후 서버는 계속 수집 중일 수 있음) — 이중 수집 방지.
+      if (inFlight.has(endpointId)) {
+        return NextResponse.json({ backfill: state, progress: progressOf(state), busy: true });
+      }
       if (totalMonths(state.cursor, state.to) === 0) {
         const doneState: BackfillState = { ...state, status: "done", updated_at: new Date().toISOString() };
         await updateEndpoint(endpointId, { backfill: doneState as unknown as Record<string, unknown> });
@@ -102,10 +110,16 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       // 청크 실행 — date_filters 를 해당 월 고정값으로 치환(페이지당 500건·상한 100p 는 buildChunkConfig 가 처리).
       const cfg = buildChunkConfig(endpoint.apiConfig!, chunk);
       const chunkEp: ScraperEndpointRow = { ...endpoint, apiConfig: cfg };
-      const result =
-        source.purpose === "bid"
-          ? await collectBidSource(source, chunkEp)
-          : await collectCustomSource(source, chunkEp);
+      inFlight.add(endpointId);
+      let result: Awaited<ReturnType<typeof collectBidSource>> | Awaited<ReturnType<typeof collectCustomSource>>;
+      try {
+        result =
+          source.purpose === "bid"
+            ? await collectBidSource(source, chunkEp)
+            : await collectCustomSource(source, chunkEp);
+      } finally {
+        inFlight.delete(endpointId);
+      }
       // 완전 실패(수집 0 + 오류)면 커서를 전진하지 않는다 — 인증키 누락 같은 지속 오류가
       // "빈 완주(done)"로 끝나는 것을 방지. 클라이언트는 이 응답을 보고 중단한다.
       if (result.error && result.scanned === 0) {

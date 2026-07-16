@@ -32,20 +32,23 @@ export function getNestedValue(obj: unknown, path: string): unknown {
   return current;
 }
 
-function formatDateForApi(date: Date, format?: string): string {
-  const y = date.getFullYear();
+/**
+ * format 토큰(YYYY/MM/DD/HH/mm/ss) 치환 — YYYYMM·YYYYMMDDHHmm 등 임의 조합 지원.
+ * (기존 switch 방식은 미지원 포맷을 YYYY-MM-DD로 폴백해 나라장터 필수값 오류(08)를 유발했다.)
+ * endOfDay=true(종료일)면 시각 성분을 23:59:59로 채운다.
+ */
+function formatDateForApi(date: Date, format?: string, endOfDay = false): string {
+  const y = String(date.getFullYear());
   const m = String(date.getMonth() + 1).padStart(2, "0");
   const d = String(date.getDate()).padStart(2, "0");
-  switch (format) {
-    case "YYYYMMDD":
-      return `${y}${m}${d}`;
-    case "YYYY/MM/DD":
-      return `${y}/${m}/${d}`;
-    case "YYYY.MM.DD":
-      return `${y}.${m}.${d}`;
-    default:
-      return `${y}-${m}-${d}`;
-  }
+  if (!format) return `${y}-${m}-${d}`;
+  return format
+    .replace("YYYY", y)
+    .replace("MM", m)
+    .replace("DD", d)
+    .replace("HH", endOfDay ? "23" : "00")
+    .replace("mm", endOfDay ? "59" : "00")
+    .replace("ss", endOfDay ? "59" : "00");
 }
 
 function applyDateFilters(
@@ -59,11 +62,11 @@ function applyDateFilters(
     if (!df.field) continue;
     let startDate = df.start_date;
     let endDate = df.end_date;
-    if (df.relative_days && df.relative_days > 0) {
+    if (df.relative_days != null && df.relative_days >= 0) {
       const past = new Date(today);
       past.setDate(past.getDate() - df.relative_days);
       startDate = formatDateForApi(past, df.format);
-      endDate = formatDateForApi(today, df.format);
+      endDate = formatDateForApi(today, df.format, true);
     }
     const f = df.field.toLowerCase();
     if (f.includes("start") || f.includes("from")) {

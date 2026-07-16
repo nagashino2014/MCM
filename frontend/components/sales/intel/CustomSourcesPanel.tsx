@@ -825,6 +825,7 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
                         <div className="border-t cd-border-c pt-3 flex flex-col gap-2">
                           <p className="text-[11px] cd-text-faint">
                             과거 데이터를 월 단위로 끊어 순차 수집합니다(호출량 분산·중단 시 이어서 재개). 조회기간 필터가 설정된 엔드포인트에서만 동작합니다.
+                            <br />※ 진행 중에는 이 화면을 열어 두세요 — 벗어나면 일시 정지되며, 진행 중 상태로 두면 야간배치가 매일 이어서 수집합니다.
                           </p>
                           <div className="flex items-center gap-2 flex-wrap text-[12px] cd-text-muted">
                             <input type="month" className="cd-input text-[12px]" style={{ width: 150 }} value={bfFrom} onChange={(e) => setBfFrom(e.target.value)} disabled={bfRunning} />

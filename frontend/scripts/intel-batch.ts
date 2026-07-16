@@ -188,7 +188,6 @@ async function main() {
         const chunk = cursor;
         try {
           const cfg = buildChunkConfig(endpoint.apiConfig, chunk);
-          if (cfg.pagination) cfg.pagination = { ...cfg.pagination, max_pages: Math.max(cfg.pagination.max_pages || 1, 200) };
           const chunkEp = { ...endpoint, apiConfig: cfg };
           const r = source.purpose === "bid"
             ? await collectBidSource(source, chunkEp)

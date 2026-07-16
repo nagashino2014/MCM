@@ -99,9 +99,8 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         return NextResponse.json({ backfill: doneState, progress: progressOf(doneState), done: true });
       }
       const chunk = state.cursor;
-      // 청크 실행 — date_filters 를 해당 월 고정값으로 치환, max_pages 는 대량 월 대비 상향.
+      // 청크 실행 — date_filters 를 해당 월 고정값으로 치환(페이지당 500건·상한 100p 는 buildChunkConfig 가 처리).
       const cfg = buildChunkConfig(endpoint.apiConfig!, chunk);
-      if (cfg.pagination) cfg.pagination = { ...cfg.pagination, max_pages: Math.max(cfg.pagination.max_pages || 1, 200) };
       const chunkEp: ScraperEndpointRow = { ...endpoint, apiConfig: cfg };
       const result =
         source.purpose === "bid"

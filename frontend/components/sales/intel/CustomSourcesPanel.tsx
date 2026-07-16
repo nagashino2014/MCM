@@ -299,21 +299,38 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
         body: JSON.stringify({ action: "start", from: bfFrom, to: bfTo }),
       });
       setBfProgress(started.progress ?? null);
+      let failStreak = 0;
       while (bfLoopRef.current) {
-        const d = await jfetch(`/api/scraper/sources/${sel.sourceId}/endpoints/${ep.endpointId}/backfill`, {
-          method: "POST",
-          body: JSON.stringify({ action: "step" }),
-        });
-        setBfProgress(d.progress ?? null);
-        const r = d.result;
-        if (r) {
-          setBfMsg(
-            `${r.chunk} 수집: 신규 ${r.inserted ?? 0} / 갱신 ${r.updated ?? 0} / 스캔 ${r.scanned ?? 0}${r.error ? ` · 오류: ${r.error}` : ""}`
-          );
-        }
-        if (d.done) {
-          setBfMsg((m) => `${m ? m + " · " : ""}백필 완료 ✓`);
-          break;
+        try {
+          const d = await jfetch(`/api/scraper/sources/${sel.sourceId}/endpoints/${ep.endpointId}/backfill`, {
+            method: "POST",
+            body: JSON.stringify({ action: "step" }),
+          });
+          failStreak = 0;
+          setBfProgress(d.progress ?? null);
+          const r = d.result;
+          if (r) {
+            setBfMsg(
+              `${r.chunk} 수집: 신규 ${r.inserted ?? 0} / 갱신 ${r.updated ?? 0} / 스캔 ${r.scanned ?? 0}${r.error ? ` · 오류: ${r.error}` : ""}`
+            );
+          }
+          if (d.done) {
+            setBfMsg((m) => `${m ? m + " · " : ""}백필 완료 ✓`);
+            break;
+          }
+        } catch (stepErr) {
+          // 대량 월은 게이트웨이 타임아웃(504)이 날 수 있다 — 서버는 계속 수집 중일 수 있으므로
+          // 잠시 기다렸다 상태를 재확인하고 이어간다(연속 3회 실패면 중단, 커서 보존).
+          failStreak++;
+          if (failStreak >= 3) throw stepErr;
+          setBfMsg(`일시 오류(${stepErr instanceof Error ? stepErr.message : stepErr}) — 15초 후 상태 확인 후 계속…`);
+          await new Promise((res) => setTimeout(res, 15000));
+          const st = await jfetch(`/api/scraper/sources/${sel.sourceId}/endpoints/${ep.endpointId}/backfill`).catch(() => null);
+          if (st?.progress) setBfProgress(st.progress);
+          if (st?.backfill?.status === "done") {
+            setBfMsg("백필 완료 ✓");
+            break;
+          }
         }
       }
       if (!bfLoopRef.current) {

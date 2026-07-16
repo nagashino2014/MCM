@@ -62,5 +62,17 @@ export function buildChunkConfig(apiConfig: ApiConfig, ym: string): ApiConfig {
     start_date: formatDateForApi(first, df.format),
     end_date: formatDateForApi(last, df.format, true),
   }));
-  return { ...apiConfig, date_filters: dfs };
+  const cfg: ApiConfig = { ...apiConfig, date_filters: dfs };
+  // 한 청크(1개월)를 ALB 한도(300s) 안에 완주해야 한다 — 페이지당 건수를 크게(공공데이터포털
+  // numOfRows 최대 999), 페이지 상한은 100(500건×100p=5만 건/월 커버, 소요 ~2분).
+  if (cfg.pagination?.size_param) {
+    cfg.pagination = {
+      ...cfg.pagination,
+      page_size: Math.max(cfg.pagination.page_size || 100, 500),
+      max_pages: Math.max(cfg.pagination.max_pages || 1, 100),
+    };
+  } else if (cfg.pagination) {
+    cfg.pagination = { ...cfg.pagination, max_pages: Math.max(cfg.pagination.max_pages || 1, 100) };
+  }
+  return cfg;
 }

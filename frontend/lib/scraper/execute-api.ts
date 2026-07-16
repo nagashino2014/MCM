@@ -326,7 +326,7 @@ async function collectPages(
       break;
     }
     allData.push(...items);
-    if (page < maxPages) await delay(500);
+    if (page < maxPages) await delay(300);
   }
   return { items: allData };
 }

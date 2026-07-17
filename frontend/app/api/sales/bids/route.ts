@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { listBids, listMethodOptions } from "@/lib/bid/bid-queries";
 import { getCategory } from "@/lib/bid/category-store";
+import { ruleFromCategory, type RuleGroup } from "@/lib/bid/match";
 import { computeCell, DEFAULT_COLUMNS, getViewColumns } from "@/lib/bid/view-config";
 import type { BidType } from "@/lib/scraper/types";
 
@@ -21,12 +22,15 @@ export async function GET(req: NextRequest) {
     const offset = Number(sp.get("offset"));
     const budgetMin = Number(sp.get("budgetMin"));
     const budgetMax = Number(sp.get("budgetMax"));
-    // 분류 필터 — categoryId 로 키워드 조회해 title OR 검색
-    let categoryKeywords: string[] | undefined;
+    // 분류 필터 — categoryId 로 조건 그룹(match_rule, keywords 폴백) 조회해 사업명에 적용
+    let categoryRule: RuleGroup[] | undefined;
     const categoryId = sp.get("categoryId");
     if (categoryId) {
       const cat = await getCategory(categoryId);
-      if (cat?.keywords?.length) categoryKeywords = cat.keywords;
+      if (cat) {
+        const rule = ruleFromCategory(cat);
+        if (rule.length) categoryRule = rule;
+      }
     }
     // 커스텀 열 구성(076) — 없으면 기본 열. 정렬은 열의 parts[0] 기준(클라이언트가 전달).
     const columns = (await getViewColumns(bidType)) ?? DEFAULT_COLUMNS[bidType];
@@ -47,7 +51,7 @@ export async function GET(req: NextRequest) {
       budgetMin: Number.isFinite(budgetMin) && budgetMin > 0 ? budgetMin : undefined,
       budgetMax: Number.isFinite(budgetMax) && budgetMax > 0 ? budgetMax : undefined,
       regionGroup: sp.get("regionGroup") || undefined,
-      categoryKeywords,
+      categoryRule,
       ...(sortField ? { sort: { field: sortField, dir: sortDir, numeric: sortNumeric } } : {}),
       withRaw: true,
       limit: Number.isFinite(limit) && limit > 0 ? limit : undefined,

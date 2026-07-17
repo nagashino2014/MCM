@@ -83,6 +83,10 @@ function mapItem(item: Record<string, unknown>, fm: FieldMapping): MappedBid {
   };
 }
 
+export interface InsertedBid extends Omit<MappedBid, "raw"> {
+  bidId: string;
+}
+
 export interface BidCollectResult {
   scanned: number;
   inserted: number;
@@ -90,6 +94,8 @@ export interface BidCollectResult {
   updated: number;
   bidType: BidType;
   samples?: Array<Omit<MappedBid, "raw">>;
+  /** 이번 실행에서 신규 적재된 건 상세(raw 제외) — 사업분야 매칭 알림 훅용. */
+  insertedItems?: InsertedBid[];
   error?: string;
   logs?: string[];
 }
@@ -151,6 +157,7 @@ export async function collectBidSource(
   );
 
   const nowIso = new Date().toISOString();
+  const insertedItems: InsertedBid[] = [];
   await withDbWrite(async (wdb) => {
     const processed = new Set<string>(); // 이번 실행 내 중복 item 방어
     for (const it of items) {
@@ -178,6 +185,8 @@ export async function collectBidSource(
       if (isNew) {
         seen.add(m.externalId);
         result.inserted++;
+        const { raw: _raw, ...rest } = m;
+        insertedItems.push({ ...rest, bidId });
       } else {
         result.updated++;
       }
@@ -190,6 +199,7 @@ export async function collectBidSource(
     );
   });
 
+  result.insertedItems = insertedItems;
   result.logs = run.logs;
   return result;
 }

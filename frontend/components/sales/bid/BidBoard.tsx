@@ -4,13 +4,15 @@
 // 종류 탭 + 필터(키워드·업무구분·게시일 기간·예산 금액대·지역권·계약방법·용역 분류) +
 // 서버 페이지네이션 테이블 + 상세 모달(발주계획↔사전규격↔입찰공고 연계 링크) + 분류 설정.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { Gavel, Search, ExternalLink, Wand2, SlidersHorizontal, Tags, X, Link2, Plus, Trash2, Columns3, ArrowUp, ArrowDown, ChevronUp, ChevronDown, Paperclip } from "lucide-react";
+import { Gavel, Search, ExternalLink, Wand2, SlidersHorizontal, Tags, X, Link2, Plus, Trash2, Columns3, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, ChevronUp, ChevronDown, Paperclip, BellRing, Pencil, ListOrdered } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { PaginationControls } from "@/components/ui/PaginationControls";
+import OrganizationTree from "@/components/admin/users/OrganizationTree";
+import type { OrganizationEmployeeRow, OrganizationSnapshot } from "@/components/admin/users/types";
 import "@/components/cdash/cdash.css";
 
 type BidType = "order_plan" | "prior_spec" | "bid_notice";
@@ -60,11 +62,67 @@ interface RelatedBid {
   postedAt: string | null;
 }
 
+/** 분류 조건 그룹 — 그룹 내 op(AND/OR/NOR), 그룹 간 AND (lib/bid/match 와 동일 구조). */
+interface RuleGroup {
+  op: "and" | "or" | "nor";
+  keywords: string[];
+}
+
 interface BidCategory {
   categoryId: string;
   name: string;
   keywords: string[];
+  rule?: RuleGroup[] | null;
   enabled: boolean;
+}
+
+type NotifyChannel = "kakao" | "email" | "app";
+
+interface NotifyRecipient {
+  employeeId: string;
+  name: string;
+  channels: NotifyChannel[];
+}
+
+interface NotifyContentField {
+  name: string;
+  label: string;
+}
+
+interface BidNotifySettings {
+  enabled: boolean;
+  sendTime: string;
+  recipients: NotifyRecipient[];
+  /** 발송 대상 종류. */
+  bidTypes: BidType[];
+  /** 종류별 발송 본문 항목(위→아래 순서). 없으면 기본(분류·사업명·기관·마감·링크). */
+  contentFields: Partial<Record<BidType, NotifyContentField[]>>;
+}
+
+const CHANNEL_LABELS: { key: NotifyChannel; label: string }[] = [
+  { key: "kakao", label: "카카오톡" },
+  { key: "email", label: "메일" },
+  { key: "app", label: "앱(출시 후)" },
+];
+const OP_LABELS: { key: RuleGroup["op"]; label: string; desc: string }[] = [
+  { key: "and", label: "AND", desc: "모두 포함" },
+  { key: "or", label: "OR", desc: "하나라도 포함" },
+  { key: "nor", label: "NOR", desc: "모두 미포함(제외)" },
+];
+// 영업 스케쥴 모달과 동일한 담당자 필터 — 직급 rank 60 이상만 조직도에 표시.
+const MIN_NOTIFY_RANK = 60;
+const NOTIFY_EXCLUDE_NAMES = ["한상순"];
+
+/** 규칙 요약 — 예: [통합환경∨통합허가] AND [¬(조성공사∨개선공사)] */
+function ruleSummaryText(c: BidCategory): string {
+  const groups = c.rule?.length ? c.rule : c.keywords.length ? [{ op: "or" as const, keywords: c.keywords }] : [];
+  if (!groups.length) return "(조건 없음)";
+  return groups
+    .map((g) => {
+      const kw = g.keywords.join(g.op === "and" ? " ∧ " : " ∨ ");
+      return g.op === "nor" ? `[제외: ${kw}]` : `[${kw}]`;
+    })
+    .join(" AND ");
 }
 
 const TABS: { key: BidType; label: string }[] = [
@@ -160,11 +218,35 @@ export function BidBoard() {
   const [related, setRelated] = useState<RelatedBid[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  // 분류 설정 모달
+  // 분류 설정 모달 — 조건 그룹(AND/OR/NOR) 에디터
   const [catModal, setCatModal] = useState(false);
   const [catName, setCatName] = useState("");
-  const [catKeywords, setCatKeywords] = useState("");
+  const [catGroups, setCatGroups] = useState<RuleGroup[]>([{ op: "or", keywords: [] }]);
+  const [kwDrafts, setKwDrafts] = useState<string[]>([""]);
+  const [editingCatId, setEditingCatId] = useState<string | null>(null);
   const [catBusy, setCatBusy] = useState(false);
+
+  // 매칭 알림 설정 모달
+  const [notifyModal, setNotifyModal] = useState(false);
+  const [notifySettings, setNotifySettings] = useState<BidNotifySettings>({
+    enabled: false,
+    sendTime: "08:30",
+    recipients: [],
+    bidTypes: ["order_plan", "prior_spec", "bid_notice"],
+    contentFields: {},
+  });
+  const [notifyPending, setNotifyPending] = useState(0);
+  const [notifyLastSentAt, setNotifyLastSentAt] = useState<string | null>(null);
+  const [orgSnapshot, setOrgSnapshot] = useState<OrganizationSnapshot | null>(null);
+  const [notifyBusy, setNotifyBusy] = useState(false);
+
+  // 발송 항목 구성 모달 — 종류별 후보(수집된 전체 파라미터) ↔ 포함 항목(순서)
+  const [fieldModal, setFieldModal] = useState(false);
+  const [fieldBidType, setFieldBidType] = useState<BidType>("bid_notice");
+  const [fieldCandCache, setFieldCandCache] = useState<Partial<Record<BidType, FieldCandidate[]>>>({});
+  const [fieldBusy, setFieldBusy] = useState(false);
+  const [fieldLeftSel, setFieldLeftSel] = useState<string | null>(null);
+  const [fieldRightSel, setFieldRightSel] = useState<number>(-1);
 
   // 열 설정 모달
   const [colModal, setColModal] = useState(false);
@@ -265,22 +347,179 @@ export function BidBoard() {
     }
   }, []);
 
-  const addCategory = async () => {
+  // ── 분류 조건 그룹 에디터 ──
+  const resetCatForm = () => {
+    setCatName("");
+    setCatGroups([{ op: "or", keywords: [] }]);
+    setKwDrafts([""]);
+    setEditingCatId(null);
+  };
+
+  const startEditCategory = (c: BidCategory) => {
+    setCatName(c.name);
+    const groups = c.rule?.length
+      ? c.rule.map((g) => ({ op: g.op, keywords: [...g.keywords] }))
+      : [{ op: "or" as const, keywords: [...c.keywords] }];
+    setCatGroups(groups.length ? groups : [{ op: "or", keywords: [] }]);
+    setKwDrafts(groups.map(() => ""));
+    setEditingCatId(c.categoryId);
+  };
+
+  const addKeywordToGroup = (gi: number) => {
+    const kw = (kwDrafts[gi] ?? "").trim();
+    if (!kw) return;
+    setCatGroups((prev) =>
+      prev.map((g, i) => (i === gi && !g.keywords.includes(kw) ? { ...g, keywords: [...g.keywords, kw] } : g))
+    );
+    setKwDrafts((prev) => prev.map((v, i) => (i === gi ? "" : v)));
+  };
+
+  const saveCategory = async () => {
     if (!catName.trim()) return;
+    const rule = catGroups.map((g) => ({ ...g, keywords: g.keywords.filter(Boolean) })).filter((g) => g.keywords.length);
+    if (!rule.length) return;
     setCatBusy(true);
     try {
-      await jfetch("/api/sales/bids/categories", {
-        method: "POST",
-        body: JSON.stringify({ name: catName.trim(), keywords: catKeywords.split(",").map((s) => s.trim()).filter(Boolean) }),
-      });
-      setCatName("");
-      setCatKeywords("");
+      if (editingCatId) {
+        await jfetch(`/api/sales/bids/categories/${editingCatId}`, {
+          method: "PUT",
+          body: JSON.stringify({ name: catName.trim(), rule }),
+        });
+      } else {
+        await jfetch("/api/sales/bids/categories", {
+          method: "POST",
+          body: JSON.stringify({ name: catName.trim(), rule }),
+        });
+      }
+      resetCatForm();
       await loadCategories();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setCatBusy(false);
     }
+  };
+
+  // ── 매칭 알림 설정 ──
+  const openNotifyModal = async () => {
+    setNotifyModal(true);
+    setNotifyBusy(true);
+    try {
+      const [d, org] = await Promise.all([
+        jfetch("/api/sales/bids/notify-settings"),
+        orgSnapshot ? Promise.resolve(null) : jfetch("/api/sales/org"),
+      ]);
+      if (d?.settings) setNotifySettings(d.settings);
+      setNotifyPending(Number(d?.pending ?? 0));
+      setNotifyLastSentAt(d?.lastSentAt ?? null);
+      if (org) setOrgSnapshot(org as OrganizationSnapshot);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setNotifyBusy(false);
+    }
+  };
+
+  const saveNotifySettings = async () => {
+    setNotifyBusy(true);
+    try {
+      const d = await jfetch("/api/sales/bids/notify-settings", {
+        method: "PUT",
+        body: JSON.stringify(notifySettings),
+      });
+      if (d?.settings) setNotifySettings(d.settings);
+      setNotifyModal(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setNotifyBusy(false);
+    }
+  };
+
+  const toggleRecipient = (emp: OrganizationEmployeeRow) => {
+    setNotifySettings((prev) => {
+      const exists = prev.recipients.some((r) => r.employeeId === emp.employeeId);
+      return {
+        ...prev,
+        recipients: exists
+          ? prev.recipients.filter((r) => r.employeeId !== emp.employeeId)
+          : [...prev.recipients, { employeeId: emp.employeeId, name: emp.name, channels: ["kakao"] }],
+      };
+    });
+  };
+
+  const toggleRecipientChannel = (employeeId: string, ch: NotifyChannel) => {
+    setNotifySettings((prev) => ({
+      ...prev,
+      recipients: prev.recipients.map((r) =>
+        r.employeeId === employeeId
+          ? { ...r, channels: r.channels.includes(ch) ? r.channels.filter((c) => c !== ch) : [...r.channels, ch] }
+          : r
+      ),
+    }));
+  };
+
+  const toggleNotifyBidType = (t: BidType) => {
+    setNotifySettings((prev) => ({
+      ...prev,
+      bidTypes: prev.bidTypes.includes(t) ? prev.bidTypes.filter((x) => x !== t) : [...prev.bidTypes, t],
+    }));
+  };
+
+  // ── 발송 항목 구성 — 후보는 열 설정과 동일 소스(view-config: 표준 컬럼 + 최근 raw 키 + 한글명) ──
+  const loadFieldCandidates = useCallback(
+    async (t: BidType) => {
+      if (fieldCandCache[t]) return;
+      setFieldBusy(true);
+      try {
+        const d = await jfetch(`/api/sales/bids/view-config?bidType=${t}`);
+        setFieldCandCache((prev) => ({ ...prev, [t]: Array.isArray(d.candidates) ? d.candidates : [] }));
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setFieldBusy(false);
+      }
+    },
+    [fieldCandCache]
+  );
+
+  const openFieldModal = () => {
+    const t = notifySettings.bidTypes[0] ?? "bid_notice";
+    setFieldBidType(t);
+    setFieldLeftSel(null);
+    setFieldRightSel(-1);
+    setFieldModal(true);
+    loadFieldCandidates(t);
+  };
+
+  const fieldSelected = notifySettings.contentFields[fieldBidType] ?? [];
+  const setFieldSelected = (next: NotifyContentField[]) =>
+    setNotifySettings((prev) => ({
+      ...prev,
+      contentFields: { ...prev.contentFields, [fieldBidType]: next },
+    }));
+
+  const fieldMoveRight = () => {
+    if (!fieldLeftSel) return;
+    if (fieldSelected.some((f) => f.name === fieldLeftSel)) return;
+    const cand = (fieldCandCache[fieldBidType] ?? []).find((c) => c.name === fieldLeftSel);
+    setFieldSelected([...fieldSelected, { name: fieldLeftSel, label: cand?.nameKo ?? fieldLeftSel }]);
+    setFieldLeftSel(null);
+  };
+
+  const fieldMoveLeft = () => {
+    if (fieldRightSel < 0 || fieldRightSel >= fieldSelected.length) return;
+    setFieldSelected(fieldSelected.filter((_, i) => i !== fieldRightSel));
+    setFieldRightSel(-1);
+  };
+
+  const fieldMove = (i: number, dir: -1 | 1) => {
+    const j = i + dir;
+    if (j < 0 || j >= fieldSelected.length) return;
+    const next = [...fieldSelected];
+    [next[i], next[j]] = [next[j], next[i]];
+    setFieldSelected(next);
+    setFieldRightSel(j);
   };
 
   // ── 열 설정 ──
@@ -353,6 +592,24 @@ export function BidBoard() {
     }
   };
 
+  // 알림 수신자 조직도 — 영업 스케쥴 모달과 동일하게 담당자(rank>=60)만 남기고 빈 부서 축소.
+  const notifyTreeSnapshot = useMemo<OrganizationSnapshot | null>(() => {
+    if (!orgSnapshot) return null;
+    const emps = orgSnapshot.employees.filter(
+      (e) => (e.positionRankOrder ?? 0) >= MIN_NOTIFY_RANK && !NOTIFY_EXCLUDE_NAMES.includes(e.name)
+    );
+    const byId = new Map(orgSnapshot.departments.map((d) => [d.deptId, d]));
+    const keep = new Set<string>();
+    for (const e of emps) {
+      let cur: string | null = e.deptId ?? null;
+      while (cur && !keep.has(cur)) {
+        keep.add(cur);
+        cur = byId.get(cur)?.parentDeptId ?? null;
+      }
+    }
+    return { ...orgSnapshot, employees: emps, departments: orgSnapshot.departments.filter((d) => keep.has(d.deptId)) };
+  }, [orgSnapshot]);
+
   // 상세 모달의 주요 raw 필드(있을 때만 표시)
   const rawExtras: { label: string; key: string }[] = [
     { label: "담당부서", key: "deptNm" },
@@ -380,6 +637,9 @@ export function BidBoard() {
               </button>
               <button type="button" className="cd-chip" onClick={() => setCatModal(true)}>
                 <Tags className="w-3.5 h-3.5" /> 분류 설정
+              </button>
+              <button type="button" className="cd-chip" onClick={openNotifyModal}>
+                <BellRing className="w-3.5 h-3.5" /> 매칭 알림
               </button>
               <Link href="/sales/bids/sources" className="cd-chip">
                 <Wand2 className="w-3.5 h-3.5" /> 공공입찰 소스
@@ -780,41 +1040,394 @@ export function BidBoard() {
         </div>
       )}
 
-      {/* 분류 설정 모달 */}
+      {/* 분류 설정 모달 — 조건 그룹(AND/OR/NOR) 에디터 */}
       {catModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={() => setCatModal(false)}>
-          <div className="cd-card-bg rounded-2xl border cd-border-c w-full max-w-lg max-h-[80vh] overflow-y-auto p-5 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={() => { setCatModal(false); resetCatForm(); }}>
+          <div className="cd-card-bg rounded-2xl border cd-border-c w-full max-w-2xl max-h-[85vh] overflow-y-auto p-5 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-2">
               <h3 className="text-[14px] font-bold cd-text flex items-center gap-1.5 flex-1">
                 <Tags className="w-4 h-4" /> 용역 분류 설정
               </h3>
-              <button type="button" className="cd-btn cd-btn-soft text-[12px]" onClick={() => setCatModal(false)}>
+              <button type="button" className="cd-btn cd-btn-soft text-[12px]" onClick={() => { setCatModal(false); resetCatForm(); }}>
                 <X className="w-4 h-4" />
               </button>
             </div>
             <p className="text-[11px] cd-text-faint">
-              분류별 검색 키워드를 등록하면 사업명에서 키워드 중 하나라도 포함된 공고를 찾습니다. (예: 통합허가 → 통합환경, 통합허가)
+              조건마다 키워드와 논리식(AND=모두 포함 / OR=하나라도 포함 / NOR=모두 미포함)을 정하고, 조건 사이는 AND 로 결합됩니다.
+              예: 조건1 [통합환경 OR 통합허가] + 조건2 [NOR 조성공사, 개선공사] → &quot;통합환경 조성공사&quot; 같은 무관 건 제외.
             </p>
             <div className="flex flex-col gap-2">
               {categories.map((c) => (
-                <div key={c.categoryId} className="rounded-lg border cd-border-c px-3 py-2 flex items-center gap-2">
+                <div key={c.categoryId} className="rounded-lg border cd-border-c px-3 py-2 flex items-center gap-2" data-active={editingCatId === c.categoryId}>
                   <div className="flex-1 min-w-0">
                     <div className="text-[13px] cd-text font-semibold">{c.name}</div>
-                    <div className="text-[11px] cd-text-faint truncate">{c.keywords.join(", ") || "(키워드 없음)"}</div>
+                    <div className="text-[11px] cd-text-faint truncate">{ruleSummaryText(c)}</div>
                   </div>
-                  <button type="button" disabled={catBusy} className="cd-btn cd-btn-soft text-[11px]" onClick={() => removeCategory(c)}>
+                  <button type="button" disabled={catBusy} className="cd-btn cd-btn-soft text-[11px]" title="편집" onClick={() => startEditCategory(c)}>
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                  <button type="button" disabled={catBusy} className="cd-btn cd-btn-soft text-[11px]" title="삭제" onClick={() => removeCategory(c)}>
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
               ))}
               {categories.length === 0 && <p className="text-[12px] cd-text-faint">등록된 분류가 없습니다.</p>}
             </div>
+
             <div className="border-t cd-border-c pt-3 flex flex-col gap-2">
-              <input className="cd-input text-[13px]" placeholder="분류명 (예: 통합허가)" value={catName} onChange={(e) => setCatName(e.target.value)} />
-              <input className="cd-input text-[13px]" placeholder="검색 키워드 (콤마 구분, 예: 통합환경, 통합허가)" value={catKeywords} onChange={(e) => setCatKeywords(e.target.value)} />
-              <button type="button" disabled={catBusy || !catName.trim()} className="cd-btn cd-btn-primary text-[13px] self-start disabled:opacity-50" onClick={addCategory}>
-                <Plus className="w-4 h-4" /> 분류 추가
+              <div className="flex items-center gap-2">
+                <input className="cd-input text-[13px] flex-1" placeholder="분류명 (예: 통합허가)" value={catName} onChange={(e) => setCatName(e.target.value)} />
+                {editingCatId && (
+                  <button type="button" className="cd-btn cd-btn-soft text-[12px]" onClick={resetCatForm}>
+                    편집 취소
+                  </button>
+                )}
+              </div>
+
+              {catGroups.map((g, gi) => (
+                <div key={gi}>
+                  {gi > 0 && (
+                    <div className="text-[11px] cd-text-faint font-semibold pl-2 py-0.5">AND</div>
+                  )}
+                  <div className="rounded-xl border cd-border-c px-3 py-2.5 flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[12px] cd-text font-semibold flex-1">조건 {gi + 1}</span>
+                      {catGroups.length > 1 && (
+                        <button
+                          type="button"
+                          className="cd-btn cd-btn-soft text-[11px]"
+                          onClick={() => {
+                            setCatGroups((prev) => prev.filter((_, i) => i !== gi));
+                            setKwDrafts((prev) => prev.filter((_, i) => i !== gi));
+                          }}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {g.keywords.map((kw) => (
+                        <span key={kw} className="cd-chip cd-chip-sm">
+                          {kw}
+                          <button
+                            type="button"
+                            className="ml-1"
+                            onClick={() =>
+                              setCatGroups((prev) =>
+                                prev.map((gr, i) => (i === gi ? { ...gr, keywords: gr.keywords.filter((k) => k !== kw) } : gr))
+                              )
+                            }
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                      <input
+                        className="cd-input text-[12px]"
+                        style={{ width: 140 }}
+                        placeholder="키워드 입력"
+                        value={kwDrafts[gi] ?? ""}
+                        onChange={(e) => setKwDrafts((prev) => prev.map((v, i) => (i === gi ? e.target.value : v)))}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            addKeywordToGroup(gi);
+                          }
+                        }}
+                      />
+                      <button type="button" className="cd-btn cd-btn-soft text-[11px]" onClick={() => addKeywordToGroup(gi)}>
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {OP_LABELS.map((op) => (
+                        <button
+                          key={op.key}
+                          type="button"
+                          className="cd-chip cd-chip-sm"
+                          data-active={g.op === op.key}
+                          title={op.desc}
+                          onClick={() => setCatGroups((prev) => prev.map((gr, i) => (i === gi ? { ...gr, op: op.key } : gr)))}
+                        >
+                          {op.label}
+                        </button>
+                      ))}
+                      <span className="text-[10px] cd-text-faint">{OP_LABELS.find((o) => o.key === g.op)?.desc}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              <button
+                type="button"
+                className="cd-btn cd-btn-soft text-[12px] self-start"
+                onClick={() => {
+                  setCatGroups((prev) => [...prev, { op: "or", keywords: [] }]);
+                  setKwDrafts((prev) => [...prev, ""]);
+                }}
+              >
+                <Plus className="w-3.5 h-3.5" /> 조건 추가 (AND)
               </button>
+
+              <button
+                type="button"
+                disabled={catBusy || !catName.trim() || !catGroups.some((g) => g.keywords.length)}
+                className="cd-btn cd-btn-primary text-[13px] self-start disabled:opacity-50"
+                onClick={saveCategory}
+              >
+                <Plus className="w-4 h-4" /> {editingCatId ? "분류 수정" : "분류 추가"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 매칭 알림 설정 모달 — 수신자(조직도)·채널·발송 시각 */}
+      {notifyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={() => setNotifyModal(false)}>
+          <div className="cd-card-bg rounded-2xl border cd-border-c w-full max-w-3xl max-h-[85vh] overflow-y-auto p-5 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-2">
+              <h3 className="text-[14px] font-bold cd-text flex items-center gap-1.5 flex-1">
+                <BellRing className="w-4 h-4" /> 사업분야 매칭 알림 설정
+              </h3>
+              <button type="button" className="cd-btn cd-btn-soft text-[12px]" onClick={() => setNotifyModal(false)}>
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-[11px] cd-text-faint">
+              신규 수집 공고가 용역 분류 조건에 매칭되면 아래 수신자에게 매일 발송 시각에 요약을 전송합니다.
+              카카오톡(알림톡)·메일은 발송 계정 설정 후 활성화되며, 앱 푸시는 네이티브 앱 출시 후 지원됩니다.
+              {notifyPending > 0 && <> · 발송 대기 <b>{notifyPending}건</b></>}
+              {notifyLastSentAt && <> · 최근 발송 {short(notifyLastSentAt)}</>}
+            </p>
+
+            <div className="flex items-center gap-4 flex-wrap rounded-lg border cd-border-c px-3 py-2">
+              <label className="flex items-center gap-2 text-[13px] cd-text">
+                <input
+                  type="checkbox"
+                  checked={notifySettings.enabled}
+                  onChange={(e) => setNotifySettings((p) => ({ ...p, enabled: e.target.checked }))}
+                />
+                알림 활성화
+              </label>
+              <label className="flex items-center gap-2 text-[13px] cd-text whitespace-nowrap">
+                발송 시각
+                <input
+                  type="time"
+                  className="cd-input text-[13px]"
+                  style={{ width: 110 }}
+                  value={notifySettings.sendTime}
+                  onChange={(e) => setNotifySettings((p) => ({ ...p, sendTime: e.target.value }))}
+                />
+              </label>
+              <span className="flex items-center gap-2 text-[13px] cd-text whitespace-nowrap">
+                발송 대상
+                {TABS.map((t) => (
+                  <label key={t.key} className="flex items-center gap-1 text-[12px] cd-text-muted whitespace-nowrap">
+                    <input
+                      type="checkbox"
+                      checked={notifySettings.bidTypes.includes(t.key)}
+                      onChange={() => toggleNotifyBidType(t.key)}
+                    />
+                    {t.label}
+                  </label>
+                ))}
+              </span>
+              <button type="button" className="cd-chip cd-chip-sm" onClick={openFieldModal}>
+                <ListOrdered className="w-3.5 h-3.5" /> 발송 항목 구성
+              </button>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-3">
+              <div className="rounded-lg border cd-border-c p-2 min-h-[260px]">
+                <div className="text-[12px] cd-text-faint mb-1 px-1">조직도에서 수신자를 클릭해 추가/제거</div>
+                {notifyTreeSnapshot ? (
+                  <OrganizationTree snapshot={notifyTreeSnapshot} embedded hideHeader onSelectEmployee={toggleRecipient} />
+                ) : (
+                  <p className="text-[12px] cd-text-faint p-2">{notifyBusy ? "조직도 불러오는 중…" : "조직도를 불러오지 못했습니다."}</p>
+                )}
+              </div>
+              <div className="rounded-lg border cd-border-c p-2 flex flex-col gap-1.5">
+                <div className="text-[12px] cd-text-faint px-1">수신자 {notifySettings.recipients.length}명 — 인원별 알림 수단</div>
+                {notifySettings.recipients.map((r) => (
+                  <div key={r.employeeId} className="rounded-lg border cd-border-c px-2.5 py-1.5 flex items-center gap-2 flex-wrap">
+                    <span className="text-[13px] cd-text font-semibold">{r.name}</span>
+                    <span className="flex items-center gap-2 flex-1 flex-wrap">
+                      {CHANNEL_LABELS.map((ch) => (
+                        <label key={ch.key} className="flex items-center gap-1 text-[11px] cd-text-muted whitespace-nowrap">
+                          <input
+                            type="checkbox"
+                            checked={r.channels.includes(ch.key)}
+                            onChange={() => toggleRecipientChannel(r.employeeId, ch.key)}
+                          />
+                          {ch.label}
+                        </label>
+                      ))}
+                    </span>
+                    <button
+                      type="button"
+                      className="cd-btn cd-btn-soft text-[11px]"
+                      onClick={() =>
+                        setNotifySettings((p) => ({ ...p, recipients: p.recipients.filter((x) => x.employeeId !== r.employeeId) }))
+                      }
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+                {notifySettings.recipients.length === 0 && (
+                  <p className="text-[12px] cd-text-faint p-2">왼쪽 조직도에서 담당자를 클릭하세요.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="border-t cd-border-c pt-3 flex items-center gap-2">
+              <button type="button" disabled={notifyBusy} className="cd-btn cd-btn-primary text-[13px] disabled:opacity-50" onClick={saveNotifySettings}>
+                저장
+              </button>
+              <button type="button" className="cd-btn cd-btn-soft text-[13px]" onClick={() => setNotifyModal(false)}>
+                닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 발송 항목 구성 모달 — 좌: 수집된 전체 파라미터, 우: 발송 포함 항목(위→아래 순서) */}
+      {fieldModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={() => setFieldModal(false)}>
+          <div className="cd-card-bg rounded-2xl border cd-border-c w-full max-w-3xl max-h-[85vh] overflow-y-auto p-5 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-2">
+              <h3 className="text-[14px] font-bold cd-text flex items-center gap-1.5 flex-1">
+                <ListOrdered className="w-4 h-4" /> 발송 항목 구성
+              </h3>
+              <button type="button" className="cd-btn cd-btn-soft text-[12px]" onClick={() => setFieldModal(false)}>
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-[11px] cd-text-faint">
+              종류별로 발송 본문에 포함할 항목을 선택하고 순서를 정합니다. 왼쪽(수집된 전체 항목)에서 선택 후 화살표로 이동하세요.
+              항목을 구성하지 않은 종류는 기본 구성(분류·사업명·기관·마감·링크)으로 발송됩니다.
+            </p>
+
+            {/* 종류 탭 */}
+            <div className="flex items-center gap-1 flex-wrap">
+              {TABS.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  className="cd-chip cd-chip-sm"
+                  data-active={fieldBidType === t.key}
+                  onClick={() => {
+                    setFieldBidType(t.key);
+                    setFieldLeftSel(null);
+                    setFieldRightSel(-1);
+                    loadFieldCandidates(t.key);
+                  }}
+                >
+                  {t.label}
+                  {(notifySettings.contentFields[t.key]?.length ?? 0) > 0 && (
+                    <span className="ml-1 text-[10px]">({notifySettings.contentFields[t.key]!.length})</span>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-stretch">
+              {/* 좌: 후보 전체 */}
+              <div className="rounded-lg border cd-border-c p-2 flex flex-col gap-1 max-h-[380px] overflow-y-auto">
+                <div className="text-[12px] cd-text-faint px-1 sticky top-0 cd-card-bg">
+                  수집된 항목 {fieldBusy ? "불러오는 중…" : `${(fieldCandCache[fieldBidType] ?? []).length}개`}
+                </div>
+                {(fieldCandCache[fieldBidType] ?? [])
+                  .filter((c) => !fieldSelected.some((f) => f.name === c.name))
+                  .map((c) => (
+                    <button
+                      key={c.name}
+                      type="button"
+                      className="rounded-md border cd-border-c px-2 py-1 text-left"
+                      data-active={fieldLeftSel === c.name}
+                      style={fieldLeftSel === c.name ? { borderColor: "var(--cd-primary)", background: "var(--cd-primary-tint, rgba(93,135,255,0.08))" } : undefined}
+                      onClick={() => setFieldLeftSel(c.name)}
+                      onDoubleClick={() => {
+                        setFieldLeftSel(c.name);
+                        const cand = (fieldCandCache[fieldBidType] ?? []).find((x) => x.name === c.name);
+                        if (!fieldSelected.some((f) => f.name === c.name)) {
+                          setFieldSelected([...fieldSelected, { name: c.name, label: cand?.nameKo ?? c.name }]);
+                        }
+                        setFieldLeftSel(null);
+                      }}
+                    >
+                      <span className="text-[12px] cd-text">{c.nameKo ?? c.name}</span>
+                      <span className="text-[10px] cd-text-faint ml-1.5">{c.name}</span>
+                    </button>
+                  ))}
+              </div>
+
+              {/* 가운데: 이동 버튼 */}
+              <div className="flex flex-col items-center justify-center gap-2">
+                <button type="button" className="cd-btn cd-btn-soft" title="포함" disabled={!fieldLeftSel} onClick={fieldMoveRight}>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+                <button type="button" className="cd-btn cd-btn-soft" title="제외" disabled={fieldRightSel < 0} onClick={fieldMoveLeft}>
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* 우: 포함 항목(순서) */}
+              <div className="rounded-lg border cd-border-c p-2 flex flex-col gap-1 max-h-[380px] overflow-y-auto">
+                <div className="text-[12px] cd-text-faint px-1 sticky top-0 cd-card-bg">발송 포함 항목 {fieldSelected.length}개 (위→아래 순서)</div>
+                {fieldSelected.map((f, i) => (
+                  <div
+                    key={f.name}
+                    className="rounded-md border cd-border-c px-2 py-1 flex items-center gap-1.5 cursor-pointer"
+                    data-active={fieldRightSel === i}
+                    style={fieldRightSel === i ? { borderColor: "var(--cd-primary)", background: "var(--cd-primary-tint, rgba(93,135,255,0.08))" } : undefined}
+                    onClick={() => setFieldRightSel(i)}
+                  >
+                    <span className="text-[11px] cd-text-faint w-4 text-right">{i + 1}</span>
+                    <span className="flex-1 min-w-0 truncate">
+                      <span className="text-[12px] cd-text">{f.label}</span>
+                      <span className="text-[10px] cd-text-faint ml-1.5">{f.name}</span>
+                    </span>
+                    <button type="button" className="cd-btn cd-btn-soft p-0.5" title="위로" onClick={(e) => { e.stopPropagation(); fieldMove(i, -1); }}>
+                      <ChevronUp className="w-3.5 h-3.5" />
+                    </button>
+                    <button type="button" className="cd-btn cd-btn-soft p-0.5" title="아래로" onClick={(e) => { e.stopPropagation(); fieldMove(i, 1); }}>
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      className="cd-btn cd-btn-soft p-0.5"
+                      title="제외"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setFieldSelected(fieldSelected.filter((_, j) => j !== i));
+                        setFieldRightSel(-1);
+                      }}
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+                {fieldSelected.length === 0 && (
+                  <p className="text-[12px] cd-text-faint p-2">기본 구성으로 발송됩니다. 왼쪽에서 항목을 추가하세요.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="border-t cd-border-c pt-3 flex items-center gap-2">
+              <button type="button" className="cd-btn cd-btn-primary text-[13px]" onClick={() => setFieldModal(false)}>
+                적용
+              </button>
+              <button
+                type="button"
+                className="cd-btn cd-btn-soft text-[13px]"
+                onClick={() => setFieldSelected([])}
+              >
+                기본 구성으로
+              </button>
+              <span className="text-[11px] cd-text-faint">적용 후 알림 설정의 저장을 눌러야 반영됩니다.</span>
             </div>
           </div>
         </div>

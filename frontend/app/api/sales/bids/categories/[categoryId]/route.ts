@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { deleteCategory, updateCategory } from "@/lib/bid/category-store";
+import { normalizeGroups } from "@/lib/bid/match";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,6 +18,7 @@ export async function PUT(req: NextRequest, ctx: Ctx) {
     await updateCategory(categoryId, {
       name: body?.name !== undefined ? String(body.name) : undefined,
       keywords: Array.isArray(body?.keywords) ? body.keywords.map(String) : undefined,
+      rule: body?.rule !== undefined ? normalizeGroups(body.rule) : undefined,
       enabled: typeof body?.enabled === "boolean" ? body.enabled : undefined,
     });
     return NextResponse.json({ ok: true });

@@ -3,6 +3,7 @@ import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getEndpoint, getSource } from "@/lib/scraper/sources-store";
 import { collectCustomSource } from "@/lib/intel/custom-sink";
 import { collectBidSource } from "@/lib/bid/bid-sink";
+import { matchAndQueueBidNotices } from "@/lib/bid/match-notify";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,6 +34,14 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       source.purpose === "bid"
         ? await collectBidSource(source, endpoint, { preview })
         : await collectCustomSource(source, endpoint, { preview });
+    // bid 실적재 시 사업분야 매칭 알림 큐 적재(신규 건만, 실패해도 수집 결과는 반환).
+    if (!preview && source.purpose === "bid" && "insertedItems" in result && result.insertedItems?.length) {
+      try {
+        await matchAndQueueBidNotices(result.bidType, result.insertedItems);
+      } catch (err) {
+        console.error("[bid] match-notify error", err);
+      }
+    }
     return NextResponse.json(result);
   } catch (err) {
     return authErrorToResponse(err);

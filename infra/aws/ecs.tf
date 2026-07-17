@@ -74,6 +74,23 @@ data "aws_iam_policy_document" "app_access" {
       aws_rds_cluster.main.master_user_secret[0].secret_arn
     ]
   }
+
+  # OCR 백엔드 on-demand 기동: 파싱 요청 시 next 가 backend 서비스를 desired=1 로 올린다.
+  statement {
+    actions   = ["ecs:DescribeServices", "ecs:UpdateService"]
+    resources = ["*"]
+    condition {
+      test     = "ArnEquals"
+      variable = "ecs:cluster"
+      values   = [aws_ecs_cluster.main.arn]
+    }
+  }
+
+  # 공공입찰 매칭 알림 메일(SES) — 발신 주소는 BID_NOTIFY_EMAIL_FROM env(검증된 identity 필요).
+  statement {
+    actions   = ["ses:SendEmail", "ses:SendRawEmail"]
+    resources = ["*"]
+  }
 }
 
 resource "aws_iam_role_policy" "app_access" {

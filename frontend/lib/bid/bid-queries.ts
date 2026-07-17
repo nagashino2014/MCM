@@ -3,6 +3,7 @@
  * 필터·서버 페이지네이션으로 읽는다. bidType 은 화이트리스트로만 테이블에 매핑(SQL 주입 방지).
  */
 import { getDb, rowsToObjects } from "@/lib/db";
+import { buildRuleWhere, type RuleGroup } from "@/lib/bid/match";
 import type { BidType } from "@/lib/scraper/types";
 
 const TABLE_BY_TYPE: Record<BidType, string> = {
@@ -59,8 +60,8 @@ export interface BidListFilter {
   budgetMax?: number;
   /** REGION_GROUPS 키(수도권/강원권/…). */
   regionGroup?: string;
-  /** 용역 분류 키워드(bid_categories) — title OR 검색. */
-  categoryKeywords?: string[];
+  /** 용역 분류 조건 그룹(bid_categories.match_rule) — 그룹 내 AND/OR/NOR, 그룹 간 AND. */
+  categoryRule?: RuleGroup[];
   /** 열 정렬 — field 는 표준 컬럼명 또는 raw_json 필드명. numeric 이면 숫자 캐스팅 정렬. */
   sort?: { field: string; dir: "asc" | "desc"; numeric?: boolean };
   /** true 면 각 행에 raw(원문 JSON)를 포함 — 커스텀 열(cells) 계산용. */
@@ -134,10 +135,10 @@ export async function listBids(filter: BidListFilter): Promise<{ items: BidRow[]
     });
     where.push(`(${ors.join(" OR ")})`);
   }
-  // 용역 분류 — 분류에 등록된 키워드 중 하나라도 사업명에 포함.
-  const catKeys = (filter.categoryKeywords ?? []).map((k) => k.trim()).filter(Boolean);
-  if (catKeys.length) {
-    where.push(`(${catKeys.map((k) => `title LIKE ${add(`%${k}%`)}`).join(" OR ")})`);
+  // 용역 분류 — 조건 그룹(AND/OR/NOR)을 사업명에 적용.
+  if (filter.categoryRule?.length) {
+    const ruleSql = buildRuleWhere(filter.categoryRule, add, "title");
+    if (ruleSql) where.push(ruleSql);
   }
 
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";

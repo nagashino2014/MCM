@@ -15,6 +15,7 @@ import { disclosureCutoffIso, loadIntelSettings } from "@/lib/intel/intel-settin
 import { listEnabledCustomCollectors, updateEndpoint } from "@/lib/scraper/sources-store";
 import { collectCustomSource } from "@/lib/intel/custom-sink";
 import { collectBidSource } from "@/lib/bid/bid-sink";
+import { matchAndQueueBidNotices } from "@/lib/bid/match-notify";
 import { buildChunkConfig, nextYm, totalMonths, type BackfillState } from "@/lib/scraper/backfill";
 
 async function main() {
@@ -162,6 +163,15 @@ async function main() {
           `[intel-batch] bid:${source.slug} done in ${Math.round((Date.now() - started) / 1000)}s`,
           JSON.stringify({ bidType: r.bidType, scanned: r.scanned, inserted: r.inserted, error: r.error })
         );
+        // 사업분야 매칭 알림 — 신규 건만 분류 조건 평가 후 큐 적재(발송은 설정 시각에 디스패처가).
+        if (r.insertedItems?.length) {
+          try {
+            const mq = await matchAndQueueBidNotices(r.bidType, r.insertedItems);
+            if (mq.matched > 0) console.log(`[intel-batch] bid:${source.slug} match`, JSON.stringify(mq));
+          } catch (err) {
+            console.error(`[intel-batch] bid:${source.slug} match error`, err);
+          }
+        }
       } catch (err) {
         console.error(`[intel-batch] bid:${source.slug} error`, err);
       }

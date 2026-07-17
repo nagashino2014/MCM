@@ -114,6 +114,10 @@ export default function ContractDownloadsPage() {
   const [contactByContract, setContactByContract] = useState<Record<string, string>>({});
   // 서명(직인) 증명서는 첨부 즉시 S3에 저장 → 재선택 시 '증명서 기첨부'로 표시. 여기엔 저장 상태만 보관.
   const [signedCerts, setSignedCerts] = useState<Record<string, { fileName: string }>>({});
+  // 'PDF생성'으로 만든 수행인력 명단 PDF도 S3 저장 → 재선택 시 '명단 기저장'으로 표시('명단+계약서' 묶음에 사용).
+  const [rosterPdfs, setRosterPdfs] = useState<Record<string, { fileName: string }>>({});
+  const [rosterPdfBusy, setRosterPdfBusy] = useState(false);
+  const [rosterBundleBusy, setRosterBundleBusy] = useState(false);
   const [attaching, setAttaching] = useState<Record<string, boolean>>({});
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; contractId: string } | null>(null);
 
@@ -258,6 +262,12 @@ export default function ContractDownloadsPage() {
     setSelectedId((prev) => (prev === contractId ? null : prev));
     // 로컬 표시만 제거(S3 저장본은 유지) — 재선택 시 서버에서 다시 조회된다.
     setSignedCerts((prev) => {
+      if (!(contractId in prev)) return prev;
+      const next = { ...prev };
+      delete next[contractId];
+      return next;
+    });
+    setRosterPdfs((prev) => {
       if (!(contractId in prev)) return prev;
       const next = { ...prev };
       delete next[contractId];
@@ -426,10 +436,11 @@ export default function ContractDownloadsPage() {
     }
   };
 
-  // 선택 계약들의 서명 증명서(S3) 첨부 여부를 한 번에 조회해 '증명서 기첨부' 표시 동기화
+  // 선택 계약들의 서명 증명서/명단 PDF(S3) 저장 여부를 한 번에 조회해 '기첨부/기저장' 표시 동기화
   useEffect(() => {
     if (targetIds.length === 0) {
       setSignedCerts({});
+      setRosterPdfs({});
       return;
     }
     let cancelled = false;
@@ -438,15 +449,45 @@ export default function ContractDownloadsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contractIds: targetIds }),
     })
-      .then((res) => (res.ok ? (res.json() as Promise<{ signed: Record<string, { fileName: string }> }>) : null))
+      .then((res) => (res.ok ? (res.json() as Promise<{ signed: Record<string, { fileName: string }>; rosters?: Record<string, { fileName: string }> }>) : null))
       .then((d) => {
-        if (!cancelled && d?.signed) setSignedCerts(d.signed);
+        if (cancelled || !d) return;
+        if (d.signed) setSignedCerts(d.signed);
+        setRosterPdfs(d.rosters ?? {});
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
   }, [targetIds]);
+
+  // '명단만 생성' PDF — 선택 계약 리스트 전체의 수행인력 명단을 PDF로 만들어 S3에 저장(다운로드 없음)
+  const generateRosterPdfs = async () => {
+    if (targetIds.length === 0) {
+      alert("명단을 생성할 계약을 선택하세요.");
+      return;
+    }
+    setRosterPdfBusy(true);
+    try {
+      const res = await fetch("/api/contracts/roster-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contractIds: targetIds }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? "명단 PDF 생성 실패");
+      }
+      const data = (await res.json()) as { saved: Record<string, { fileName: string }>; skipped: number };
+      setRosterPdfs((prev) => ({ ...prev, ...data.saved }));
+      const count = Object.keys(data.saved).length;
+      alert(`수행인력 명단 PDF ${count}건을 저장했습니다.${data.skipped > 0 ? ` (생성 불가 ${data.skipped}건 제외)` : ""}`);
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setRosterPdfBusy(false);
+    }
+  };
 
   // 통합묶음(증명서+명단+계약서) 다운로드 — S3 저장된 서명 증명서를 사용
   const downloadBundle = async () => {
@@ -470,6 +511,31 @@ export default function ContractDownloadsPage() {
       alert((err as Error).message);
     } finally {
       setBundleBusy(false);
+    }
+  };
+
+  // 명단+계약서 묶음 다운로드 — 'PDF생성'으로 S3에 저장된 명단 PDF를 사용
+  const downloadRosterBundle = async () => {
+    if (targetIds.length === 0) {
+      alert("계약을 선택하세요.");
+      return;
+    }
+    setRosterBundleBusy(true);
+    try {
+      const res = await fetch("/api/contracts/roster-bundle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contractIds: targetIds }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? "명단+계약서 묶음 생성 실패");
+      }
+      await downloadBlobResponse(res, "명단계약서묶음.pdf");
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setRosterBundleBusy(false);
     }
   };
 
@@ -677,7 +743,7 @@ export default function ContractDownloadsPage() {
                   type="button"
                   className="cd-btn cd-btn-ghost rounded-lg px-2.5 py-1 text-[11px] cd-text-muted"
                   disabled={targetIds.length === 0}
-                  onClick={() => { setChecked(new Set()); setSelectedId(null); setDetail(null); setSignedCerts({}); }}
+                  onClick={() => { setChecked(new Set()); setSelectedId(null); setDetail(null); setSignedCerts({}); setRosterPdfs({}); }}
                 >
                   선택 해제
                 </button>
@@ -703,6 +769,14 @@ export default function ContractDownloadsPage() {
                         <p className="mt-0.5 flex items-center gap-2 text-[10px] cd-text-faint">
                           <span className="truncate">{node?.counterpartyName ?? id}</span>
                           <span className="ml-auto shrink-0 font-mono">{node?.contractDate ?? ""}</span>
+                          {rosterPdfs[id] && (
+                            <span
+                              className="shrink-0 inline-flex items-center gap-1 rounded-md border border-[color:var(--cd-primary)] cd-tint-primary cd-text-primary px-1.5 py-0.5 text-[9px] font-semibold"
+                              title={`명단 PDF 저장됨: ${rosterPdfs[id].fileName}`}
+                            >
+                              <Check className="w-3 h-3" /> 명단 기저장
+                            </span>
+                          )}
                           {signedCerts[id] && (
                             <span
                               className="shrink-0 inline-flex items-center gap-1 rounded-md border border-[color:var(--cd-primary)] cd-tint-primary cd-text-primary px-1.5 py-0.5 text-[9px] font-semibold"
@@ -737,6 +811,13 @@ export default function ContractDownloadsPage() {
                 )}
               </div>
               <div className="mt-3 flex justify-end gap-2">
+                <DownloadButton
+                  disabled={targetIds.length === 0 || rosterBundleBusy}
+                  onClick={downloadRosterBundle}
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  {rosterBundleBusy ? "생성 중..." : "명단+계약서"}
+                </DownloadButton>
                 <DownloadButton
                   disabled={targetIds.length === 0 || bundleBusy}
                   onClick={downloadBundle}
@@ -836,14 +917,26 @@ export default function ContractDownloadsPage() {
                   </div>
                 )}
 
-                <button
-                  type="button"
-                  onClick={generateCertificates}
-                  disabled={certEligibleIds.length === 0 || certBusy}
-                  className="mt-3 cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold disabled:opacity-50"
-                >
-                  {certBusy ? "생성 중..." : `HWPX 생성${certEligibleIds.length > 1 ? ` (${certEligibleIds.length}건)` : ""}`}
-                </button>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={generateCertificates}
+                    disabled={certEligibleIds.length === 0 || certBusy}
+                    className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold disabled:opacity-50"
+                  >
+                    {certBusy ? "생성 중..." : `HWPX 생성${certEligibleIds.length > 1 ? ` (${certEligibleIds.length}건)` : ""}`}
+                  </button>
+                  {/* 명단만 생성(옵션 3) 전용 — 선택 계약 리스트 전체의 명단 PDF를 S3에 저장(다운로드 없음, '명단+계약서' 묶음에 사용) */}
+                  <button
+                    type="button"
+                    onClick={generateRosterPdfs}
+                    disabled={certOption !== 3 || targetIds.length === 0 || rosterPdfBusy}
+                    title="선택 계약의 수행인력 명단을 PDF로 저장합니다. 저장본은 '명단+계약서' 묶음 다운로드에 사용됩니다."
+                    className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold disabled:opacity-50"
+                  >
+                    {rosterPdfBusy ? "저장 중..." : `PDF생성${targetIds.length > 1 ? ` (${targetIds.length}건)` : ""}`}
+                  </button>
+                </div>
               </div>
             </div>
 

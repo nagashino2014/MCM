@@ -112,7 +112,10 @@ export async function collectBidSource(
   }
 
   const secret = await getSourceSecret(source.sourceId);
-  const run = await runApiCollect(source.apiProfile, endpoint.apiConfig, { secret });
+  // bid 는 raw_json 원문 보존이 핵심(첨부 DocUrl/FileNm·연계키·커스텀 열·재매핑) —
+  // response_fields 슬림화를 적용하지 않는다(과거 설정이 남아 있어도 무시).
+  const cfg = { ...endpoint.apiConfig, response_fields: undefined };
+  const run = await runApiCollect(source.apiProfile, cfg, { secret });
   if (run.error && run.items.length === 0) {
     return { ...result, error: run.error, logs: run.logs };
   }

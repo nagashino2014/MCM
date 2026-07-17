@@ -200,7 +200,7 @@ export function EndpointConfigBuilder({
           : { field: d.field.trim(), format: d.format.trim() || undefined, relative_days: d.relative_days }
       );
     if (validDfs.length) cfg.date_filters = validDfs;
-    if (selFields.length) cfg.response_fields = selFields;
+    if (purpose !== "bid" && selFields.length) cfg.response_fields = selFields; // bid 는 raw 원문 보존(슬림화 미지원)
     if (tpEnabled && listEp) {
       const mappings = tpMappings.filter((m) => m.source_field.trim() && m.target_param.trim());
       if (mappings.length) {
@@ -361,7 +361,8 @@ export function EndpointConfigBuilder({
         </div>
       </div>
 
-      {/* 응답 필드 취사선택 */}
+      {/* 응답 필드 취사선택 — bid 는 raw 원문 보존이 필수(첨부·연계·커스텀 열)라 슬림화 미지원 */}
+      {purpose !== "bid" && (
       <div className="flex flex-col gap-1.5">
         <label className="text-[11px] font-bold cd-text-faint">
           응답 필드 — 남길 필드만 선택(미선택 시 전체 유지). 표준필드 매핑과는 별개입니다.
@@ -392,6 +393,7 @@ export function EndpointConfigBuilder({
           {respFields.length === 0 && <p className="text-[12px] cd-text-faint">응답필드 정보가 없습니다.</p>}
         </div>
       </div>
+      )}
 
       {/* 표준필드 매핑 (sink 적재용) */}
       <div className="flex flex-col gap-1.5">

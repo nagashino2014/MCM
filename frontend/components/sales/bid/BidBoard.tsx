@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { Gavel, Search, ExternalLink, Wand2, SlidersHorizontal, Tags, X, Link2, Plus, Trash2, Columns3, ArrowUp, ArrowDown, ChevronUp, ChevronDown } from "lucide-react";
+import { Gavel, Search, ExternalLink, Wand2, SlidersHorizontal, Tags, X, Link2, Plus, Trash2, Columns3, ArrowUp, ArrowDown, ChevronUp, ChevronDown, Paperclip } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { PaginationControls } from "@/components/ui/PaginationControls";
@@ -85,6 +85,29 @@ function fmtMoney(n: number | null): string {
   return n.toLocaleString("ko-KR");
 }
 const short = (s: string | null) => (s ? s.slice(0, 16).replace("T", " ") : "-");
+
+/**
+ * raw 응답에서 첨부파일(URL+파일명) 쌍 추출 — 나라장터 표준: ntceSpecDocUrl{N}↔ntceSpecFileNm{N},
+ * stdNtceDocUrl 등 "…DocUrl{N}" 패턴 전반(사전규격도 동일 규칙). URL 은 g2b 직다운로드 링크.
+ */
+function extractAttachments(raw: Record<string, unknown> | undefined): { name: string; url: string }[] {
+  if (!raw) return [];
+  const out: { name: string; url: string }[] = [];
+  const seen = new Set<string>();
+  for (const k of Object.keys(raw)) {
+    const m = k.match(/^(.*)DocUrl(\d*)$/);
+    if (!m) continue;
+    const url = String(raw[k] ?? "").trim();
+    if (!/^https?:\/\//.test(url)) continue;
+    const nameKey = `${m[1]}FileNm${m[2]}`;
+    const name = String(raw[nameKey] ?? "").trim() || `첨부파일${m[2] ? ` ${m[2]}` : ""}`;
+    const sig = `${name}|${url}`;
+    if (seen.has(sig)) continue;
+    seen.add(sig);
+    out.push({ name, url });
+  }
+  return out;
+}
 
 async function jfetch(url: string, init?: RequestInit) {
   const res = await fetch(url, {
@@ -567,6 +590,31 @@ export function BidBoard() {
                     <ExternalLink className="w-3.5 h-3.5" /> 원문 보기
                   </a>
                 )}
+
+                {/* 첨부파일 — raw 의 …DocUrl{N}/…FileNm{N} 쌍(공고문·과업지시서·제안요청서 등 직다운로드) */}
+                {(() => {
+                  const atts = extractAttachments(detail.raw);
+                  if (!atts.length) return null;
+                  return (
+                    <div className="border-t cd-border-c pt-3 flex flex-col gap-1.5">
+                      <h4 className="text-[12px] font-bold cd-text flex items-center gap-1">
+                        <Paperclip className="w-3.5 h-3.5" /> 첨부파일 ({atts.length})
+                      </h4>
+                      {atts.map((a, i) => (
+                        <a
+                          key={`${a.url}-${i}`}
+                          href={a.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[12px] cd-text-muted hover:cd-text flex items-center gap-1.5 min-w-0"
+                        >
+                          <Paperclip className="w-3 h-3 shrink-0 cd-text-faint" />
+                          <span className="truncate">{a.name}</span>
+                        </a>
+                      ))}
+                    </div>
+                  );
+                })()}
 
                 {/* 연계 공고 — 발주계획↔사전규격↔입찰공고 */}
                 <div className="border-t cd-border-c pt-3 flex flex-col gap-1.5">

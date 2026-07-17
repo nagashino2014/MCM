@@ -14,7 +14,8 @@ export default auth;
 
 export const config = {
   matcher: [
-    // /geo/* 정적 토포 JSON (라운드 2B 지도) 은 인증 없이 공개
-    "/((?!_next/static|_next/image|favicon.ico|geo/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    // /geo/* 정적 토포 JSON (라운드 2B 지도) 은 인증 없이 공개.
+    // /api/internal/* 은 서버 자기호출 크론 틱 — 세션 없이 호출되며 라우트가 AUTH_SECRET 헤더로 자체 가드.
+    "/((?!_next/static|_next/image|favicon.ico|geo/|api/internal/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

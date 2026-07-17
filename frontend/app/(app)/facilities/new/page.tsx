@@ -178,7 +178,8 @@ function Inner() {
     }
   };
 
-  const parseBusinessCertificate = async (file: File) => {
+  const parseBusinessCertificate = async (file: File, opts?: { highQuality?: boolean }) => {
+    const overwrite = !!opts?.highQuality; // 고정밀 재분석 시 기존 값 덮어쓰기
     setCertificateFile(file);
     setCertificateFileName(file.name);
     setCertificateParsing(true);
@@ -186,16 +187,17 @@ function Inner() {
     try {
       const form = new FormData();
       form.set("file", file);
+      if (opts?.highQuality) form.set("highQuality", "1");
       const res = await fetch("/api/facilities/business-certificate/parse", {
         method: "POST",
         body: form,
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body?.error ?? "HTTP " + res.status);
-      if (!companyName.trim() && body.companyName) setCompanyName(String(body.companyName));
-      if (!brn.trim() && body.businessRegistrationNo) setBrn(String(body.businessRegistrationNo));
-      if (!representativeName.trim() && body.representativeName) setRepresentativeName(String(body.representativeName));
-      if (!siteAddress.trim() && body.siteAddress) setSiteAddress(String(body.siteAddress));
+      if ((overwrite || !companyName.trim()) && body.companyName) setCompanyName(String(body.companyName));
+      if ((overwrite || !brn.trim()) && body.businessRegistrationNo) setBrn(String(body.businessRegistrationNo));
+      if ((overwrite || !representativeName.trim()) && body.representativeName) setRepresentativeName(String(body.representativeName));
+      if ((overwrite || !siteAddress.trim()) && body.siteAddress) setSiteAddress(String(body.siteAddress));
       const parsedKinds = Array.isArray(body.businessKinds)
         ? body.businessKinds
             .map((item: { businessType?: unknown; businessItem?: unknown }) => ({
@@ -212,7 +214,15 @@ function Inner() {
       setCertificateCorporateNo(String(body.corporateRegistrationNo ?? ""));
       setCertificateOcrText(String(body.ocrText ?? ""));
       setCertificateWarning(body.warning ? String(body.warning) : null);
-      toast.show(body.warning ? "자동 추출 결과를 확인해 주세요." : "사업자등록증 정보를 추출했습니다.");
+      toast.show(
+        body.backendWarming
+          ? "OCR 엔진을 기동 중입니다. 1~2분 후 다시 업로드해 주세요."
+          : opts?.highQuality
+            ? "고정밀(Opus) 재분석 완료 — 결과를 확인해 주세요."
+            : body.warning
+              ? "자동 추출 결과를 확인해 주세요."
+              : "사업자등록증 정보를 추출했습니다."
+      );
     } catch (err) {
       setCertificateWarning("자동 추출 실패: " + (err as Error).message + " 수동 입력해 주세요.");
     } finally {
@@ -444,7 +454,20 @@ function Inner() {
             </label>
           </div>
           {certificateFileName && (
-            <p className="md:col-span-2 text-xs cd-text-faint">첨부 파일: {certificateFileName}</p>
+            <div className="md:col-span-2 flex items-center gap-2 flex-wrap">
+              <p className="text-xs cd-text-faint">첨부 파일: {certificateFileName}</p>
+              {certificateFile && (
+                <button
+                  type="button"
+                  disabled={certificateParsing}
+                  onClick={() => parseBusinessCertificate(certificateFile, { highQuality: true })}
+                  className="rounded-lg px-2.5 py-1 text-[11px] font-bold border cd-border-c cd-text-muted inline-flex items-center gap-1 disabled:opacity-50"
+                  title="저화질 스캔 등 추출이 부정확할 때 Opus로 정밀 재분석(기존 값 덮어씀)"
+                >
+                  {certificateParsing ? "재분석 중…" : "고정밀 재분석 (Opus)"}
+                </button>
+              )}
+            </div>
           )}
           {certificateWarning && (
             <div className="md:col-span-2 text-xs font-bold text-amber-700 cd-warn-bg border border-amber-200 rounded-xl px-3 py-2">

@@ -4,6 +4,7 @@
 
 import sharp from "sharp";
 import { formatCompanyName } from "@/lib/ieps/formatters";
+import { reconcileDeptTitle } from "@/lib/ai/rank-title";
 
 const MODEL = process.env.BUSINESS_CARD_MODEL || "claude-haiku-4-5-20251001";
 const ENDPOINT = "https://api.anthropic.com/v1/messages";
@@ -124,6 +125,12 @@ export async function parseBusinessCard(image: Buffer): Promise<BusinessCardPars
 
   const fields = Object.fromEntries(FIELD_KEYS.map((k) => [k, str(raw[k])])) as unknown as BusinessCardFields;
   fields.personName = normalizePersonName(fields.personName);
+  // 직급/부서 결정론적 보정 — LLM이 직급을 누락하거나 부서에 몰아넣는 경우 사전으로 강제 분리.
+  {
+    const rt = reconcileDeptTitle({ department: fields.department, title: fields.title });
+    fields.department = rt.department;
+    fields.title = rt.title;
+  }
   // 법인격 표기 통일 — (주)/주식회사→㈜, 유한회사→(유). 기존 사업장 표기와 맞아야 검색이 매칭된다.
   fields.companyName = formatCompanyName(fields.companyName);
   fields.mobilePhone = normalizePhone(fields.mobilePhone);

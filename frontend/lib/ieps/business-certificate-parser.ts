@@ -101,11 +101,6 @@ function splitBusinessKinds(block: string): BusinessCertificateKind[] {
     .map((line) => line.trim())
     .filter(Boolean);
 
-  const wasteService = extractWasteServiceKind(block);
-  if (wasteService.length) {
-    return wasteService;
-  }
-
   const looseTableValues = extractBusinessKindsFromLooseTable(lines);
   if (looseTableValues.length) {
     return looseTableValues;
@@ -152,23 +147,6 @@ function splitBusinessKinds(block: string): BusinessCertificateKind[] {
     businessType: parts[0] ?? "",
     businessItem: parts.slice(1).join(", "),
   }];
-}
-
-function extractWasteServiceKind(block: string): BusinessCertificateKind[] {
-  const compact = block.replace(/\s+/g, " ");
-  if (!/(폐기물|피기물|SNES|중간처분|처분엄|원료재생|하수)/.test(compact)) {
-    return [];
-  }
-
-  const businessType =
-    /(수도|하수|원료재생|폐기물|피기물)/.test(compact)
-      ? "수도, 하수 및 폐기물처리, 원료재생"
-      : "";
-  const businessItem = /생활계|중간처분|처분엄|폐기물|피기물/.test(compact)
-    ? "생활계폐기물 중간처분업"
-    : "";
-
-  return businessType || businessItem ? [{ businessType, businessItem }] : [];
 }
 
 function extractBusinessKindsFromLooseTable(lines: string[]): BusinessCertificateKind[] {

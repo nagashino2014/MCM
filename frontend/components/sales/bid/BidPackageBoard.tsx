@@ -22,6 +22,7 @@ import {
   Users,
 } from "lucide-react";
 import { resolveServiceTypeStyle } from "@/lib/ieps/contract-tree-style";
+import { INTEGRATED_PERMIT_INDUSTRIES, canonicalServiceSubtype, matchesIndustryText } from "@/lib/ieps/integrated-permit";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { FormProfilePanel } from "@/components/sales/bid/FormProfilePanel";
@@ -70,6 +71,10 @@ interface TreeContract {
   contractTitle: string;
   counterpartyName: string;
   contractDate: string | null;
+  serviceSubtype: string | null;
+  industryCategory: string | null;
+  facilityIndustryName: string | null;
+  facilityIndustryCode: string | null;
 }
 
 interface TreeGroup {
@@ -131,6 +136,9 @@ export function BidPackageBoard() {
   const [tree, setTree] = useState<TreePayload | null>(null);
   const [year, setYear] = useState("");
   const [search, setSearch] = useState("");
+  // 통합허가 실적 인정 범위 한정용 — 용역 세분류·업종 필터
+  const [subtypeFilter, setSubtypeFilter] = useState("");
+  const [industryFilter, setIndustryFilter] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [nodeCache, setNodeCache] = useState<Map<string, TreeContract>>(new Map());
@@ -143,6 +151,7 @@ export function BidPackageBoard() {
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
 
   // 초기 로드 — 공고 요약 + 저장된 패키지 상태 + 발주처 기본 양식
   useEffect(() => {
@@ -245,21 +254,38 @@ export function BidPackageBoard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contractIds.join(",")]);
 
+  // 통합허가 용역 세분류 옵션(트리에서 동적 수집)
+  const subtypeOptions = useMemo(() => {
+    const values = new Set<string>();
+    for (const g of tree?.groups ?? []) {
+      for (const c of g.contracts) {
+        if (c.serviceSubtype) values.add(canonicalServiceSubtype(c.serviceSubtype));
+      }
+      if (g.serviceType === "통합허가") values.add("최초허가");
+    }
+    return Array.from(values).sort((a, b) => a.localeCompare(b, "ko"));
+  }, [tree]);
+
   const filteredGroups = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!tree) return [];
     return (tree.groups ?? [])
       .map((g) => ({
         ...g,
-        contracts: g.contracts.filter(
-          (c) =>
+        contracts: g.contracts.filter((c) => {
+          const textMatch =
             !q ||
             c.contractTitle.toLowerCase().includes(q) ||
-            c.counterpartyName.toLowerCase().includes(q)
-        ),
+            c.counterpartyName.toLowerCase().includes(q);
+          const subtypeMatch = !subtypeFilter || canonicalServiceSubtype(c.serviceSubtype) === subtypeFilter;
+          const industryMatch =
+            !industryFilter ||
+            matchesIndustryText([c.industryCategory, c.facilityIndustryName, c.facilityIndustryCode], industryFilter);
+          return textMatch && subtypeMatch && industryMatch;
+        }),
       }))
       .filter((g) => g.contracts.length > 0);
-  }, [tree, search]);
+  }, [tree, search, subtypeFilter, industryFilter]);
 
   const uploadForm = async (file: File) => {
     if (!bid?.orgName) {
@@ -279,6 +305,37 @@ export function BidPackageBoard() {
       alert((err as Error).message);
     } finally {
       setUploading(false);
+    }
+  };
+
+  // 문서 생성 — 저장된 작업 상태(양식·계약·인력) 기준으로 채움본 HWPX zip 다운로드
+  const generate = async () => {
+    if (!bidId) return;
+    setGenerating(true);
+    try {
+      const res = await fetch("/api/sales/bids/package/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bidType, bidId }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error((body as { error?: string })?.error ?? "문서 생성 실패");
+      }
+      const blob = await res.blob();
+      const cd = res.headers.get("Content-Disposition");
+      const m = cd?.match(/filename\*=UTF-8''([^;]+)/);
+      const name = m ? decodeURIComponent(m[1]) : "입찰서류패키지.zip";
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setGenerating(false);
     }
   };
 
@@ -420,9 +477,21 @@ export function BidPackageBoard() {
                   인력별 첨부: 경력확인서 → 졸업증명서(박사→석사→학사) → 자격증 사본(지정 순서)
                 </li>
               </ul>
-              <button type="button" disabled className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold opacity-50 cursor-not-allowed self-start">
-                문서 생성 (준비 중)
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={generate}
+                  disabled={generating || !form?.hasProfile || contractIds.length === 0}
+                  className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold disabled:opacity-50 self-start"
+                  title="저장된 작업 상태(양식 매핑·실적 계약·수행인력) 기준으로 채움본 HWPX 를 생성합니다. 생성 전 '작업 상태 저장'을 눌러 주세요."
+                >
+                  {generating ? "생성 중..." : "문서 생성 (HWPX)"}
+                </button>
+                {!form?.hasProfile && <span className="text-[10px] cd-text-faint">양식 분석(매핑) 후 활성화됩니다.</span>}
+              </div>
+              <p className="text-[10px] cd-text-faint">
+                PDF 변환본·인력별 첨부(경력확인서·졸업증명서·자격증) 병합은 다음 단계에서 추가됩니다.
+              </p>
             </section>
           </div>
 
@@ -433,11 +502,28 @@ export function BidPackageBoard() {
                 <CheckSquare className="w-4 h-4 cd-text-primary" />
                 ② 실적 계약 선택
                 <span className="ml-auto text-[11px] font-normal cd-text-faint">{checked.size.toLocaleString()}건 선택</span>
+                <button
+                  type="button"
+                  className="cd-btn cd-btn-ghost rounded-lg px-2.5 py-1 text-[11px] cd-text-muted"
+                  disabled={checked.size === 0}
+                  onClick={() => { setChecked(new Set()); setPickedEmployees(new Set()); }}
+                >
+                  일괄 해제
+                </button>
               </h3>
               <div className="flex items-center gap-2 mb-2">
                 <Search className="w-4 h-4 cd-text-faint shrink-0" />
-                <input className="cd-input text-xs flex-1" placeholder="계약명 / 거래처 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
-                <select className="cd-select text-xs shrink-0" style={{ width: "14ch" }} value={year} onChange={(e) => setYear(e.target.value)}>
+                <input className="cd-input text-xs flex-1 min-w-0" placeholder="계약명 / 거래처 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
+                {/* 통합허가 실적 인정 범위(발전·증기/열공급·폐기물소각 등) 한정용 필터 */}
+                <select className="cd-select text-xs shrink-0" style={{ width: "13ch" }} value={subtypeFilter} onChange={(e) => setSubtypeFilter(e.target.value)}>
+                  <option value="">세분류 전체</option>
+                  {subtypeOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+                <select className="cd-select text-xs shrink-0" style={{ width: "13ch" }} value={industryFilter} onChange={(e) => setIndustryFilter(e.target.value)}>
+                  <option value="">업종 전체</option>
+                  {INTEGRATED_PERMIT_INDUSTRIES.map((i) => <option key={i.label} value={i.label}>{i.label}</option>)}
+                </select>
+                <select className="cd-select text-xs shrink-0" style={{ width: "11ch" }} value={year} onChange={(e) => setYear(e.target.value)}>
                   <option value="">전체 연도</option>
                   {(tree?.availableYears ?? []).map((y) => <option key={y} value={y}>{y}년</option>)}
                 </select>

@@ -69,7 +69,9 @@ function buildPrompt(serialized: string): string {
     "3. 반복 행(실적·인력 목록): repeat 에 {table, fromRow(첫 데이터 행), columns:[{col,field,label}]} 로. 헤더 행·합계 행은 제외.\n" +
     "4. 개별 경력사항처럼 **한 사람당 표 1개**가 반복되는 문서는 perPersonTable=true 로 하고, 대표 표 1개 기준으로 fields/repeat 를 산출하세요(같은 구조의 표가 여러 개면 tables 에 전부 나열).\n" +
     "5. 카탈로그에 없는 입력 항목은 field 를 \"custom:<간단한영문키>\" 로 만들되 label 에 양식 라벨을 그대로 쓰세요. 발주처 평가 기입란(득점 등)은 score 필드로 매핑만 하고 생성 시 빈칸 유지됩니다.\n" +
-    "6. 확실하지 않은 항목은 제외하지 말고 가장 그럴듯한 매핑을 제시하세요(사용자가 화면에서 보정합니다).\n\n" +
+    "6. 확실하지 않은 항목은 제외하지 말고 가장 그럴듯한 매핑을 제시하세요(사용자가 화면에서 보정합니다).\n" +
+    "7. **[문단](표 밖)에 있는 항목은 fields 에 넣지 마세요** — 셀 좌표가 있는 표 안 항목만 매핑합니다. " +
+    "라벨이 인쇄된 셀(예: '구 분', '성 명' 헤더)은 값 셀이 아니므로 매핑하지 마세요.\n\n" +
     "## 출력(JSON만, 설명 금지)\n" +
     '{"documents":[{"docType":"","title":"","tables":[0],"fields":[{"field":"","label":"","table":0,"row":0,"col":0}],' +
     '"repeat":{"table":0,"fromRow":1,"columns":[{"col":0,"field":"","label":""}]} 또는 null,"perPersonTable":false}]}\n\n' +

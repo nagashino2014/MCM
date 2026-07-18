@@ -1,0 +1,273 @@
+import { getDb, rowsToObjects } from "@/lib/db";
+import { getBid } from "@/lib/bid/bid-queries";
+import type { BidType } from "@/lib/scraper/types";
+import {
+  getCompanyProfile,
+  getStaffComposition,
+  listCredentials,
+  listHistory,
+  type CompanyProfile,
+  type CompanyCredential,
+  type CompanyHistoryItem,
+  type StaffComposition,
+} from "@/lib/company/profile";
+import { getEmployeeDetail, type EmployeeDetail } from "@/lib/admin/employee-records";
+
+/*
+ * 입찰 증빙서류 패키지 P3 — 문서 생성용 데이터 어셈블리.
+ * 선택한 실적 계약·수행인력·회사 프로필을 모아 form_profile 필드 키에 대응하는 값을 만든다.
+ * (docs/bid-package-blueprint.md §4-2 수퍼셋. 미해석 필드는 빈칸 유지 — 발주처 평가란 등)
+ */
+
+export interface PackageContractRow {
+  contractId: string;
+  year: string;
+  category: string; // 동등실적(세분류)
+  serviceName: string;
+  overview: string; // 시설유형+취득종류 — 1차는 빈칸(수기 보정 전제)
+  amountMillion: string; // 백만원 단위(반올림)
+  periodText: string; // YY.MM.~YY.MM. (N개월)
+  staffCountText: string; // 고급:N 일반:N
+  clientName: string;
+  clientPhone: string;
+}
+
+export interface PackagePersonProject {
+  client: string;
+  projectName: string;
+  task: string;
+  amountEok: string; // 억원
+  periodText: string;
+  thenCompany: string;
+  thenPosition: string;
+}
+
+export interface PackagePerson {
+  employeeId: string;
+  name: string;
+  positionName: string;
+  engGrade: string;
+  envGrade: string;
+  birthDate: string;
+  tenureText: string; // 소속사 근무기간
+  educationText: string; // 학부/대학원 줄바꿈
+  degreeTop: string; // 최고학위(박사>석사>학사)
+  licensesText: string; // 자격증(취득일) 줄바꿈
+  careerMonthsTotal: string;
+  careerMonthsCompany: string;
+  perfCount: string; // 자사 참여계약 수
+  projects: PackagePersonProject[]; // 자사 참여계약(개별 이력 경력표)
+  detail: EmployeeDetail;
+}
+
+export interface PackageData {
+  bid: { title: string; orgName: string };
+  company: {
+    profile: CompanyProfile;
+    staff: StaffComposition;
+    history: CompanyHistoryItem[];
+    credentials: CompanyCredential[];
+  };
+  contracts: PackageContractRow[];
+  totalAmountMillion: string;
+  persons: PackagePerson[];
+}
+
+const s = (v: unknown): string => (v == null ? "" : String(v).trim());
+
+function ym(value: string): string {
+  const m = value.match(/(\d{4})\D?(\d{1,2})/);
+  return m ? `${m[1].slice(2)}.${m[2].padStart(2, "0")}.` : "";
+}
+
+function monthsBetween(from: string, to: string): number | null {
+  const f = from.match(/(\d{4})\D?(\d{1,2})/);
+  const t = to.match(/(\d{4})\D?(\d{1,2})/);
+  if (!f || !t) return null;
+  return (Number(t[1]) - Number(f[1])) * 12 + (Number(t[2]) - Number(f[2]));
+}
+
+function periodText(from: string, to: string): string {
+  const f = ym(from);
+  const t = ym(to);
+  if (!f) return "";
+  const months = monthsBetween(from, to);
+  const range = `${f}~${t || ""}`;
+  return months != null && months >= 0 ? `${range} (${months}개월)` : range;
+}
+
+const DEGREE_ORDER = ["박사", "석사", "학사"];
+
+function topDegree(detail: EmployeeDetail): string {
+  for (const d of DEGREE_ORDER) {
+    if (detail.educations.some((e) => String(e.degreeLevel ?? "").includes(d))) return d;
+  }
+  return detail.educations.length ? s(detail.educations[0]?.degreeLevel) : "";
+}
+
+function monthsToText(months: number | null): string {
+  if (months == null || months < 0) return "";
+  return String(months);
+}
+
+/** 선택 계약들의 실적 행 + 등급별 참여인원 집계. */
+async function loadContractRows(contractIds: string[]): Promise<PackageContractRow[]> {
+  if (contractIds.length === 0) return [];
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT c.contract_id, c.contract_title, c.service_subtype,
+              COALESCE(NULLIF(c.contract_date,''), c.started_at, c.created_at) AS contract_date,
+              c.started_at, c.ended_at,
+              COALESCE(c.current_amount, c.contract_amount) AS amount,
+              cp.company_name AS client_name,
+              (SELECT COUNT(*) FROM service_participants sp
+                 JOIN employee_profiles e ON e.employee_id = sp.employee_id
+                WHERE sp.contract_id = c.contract_id AND TRIM(COALESCE(e.env_grade,'')) = '고급인력') AS cnt_high,
+              (SELECT COUNT(*) FROM service_participants sp
+                 JOIN employee_profiles e ON e.employee_id = sp.employee_id
+                WHERE sp.contract_id = c.contract_id AND TRIM(COALESCE(e.env_grade,'')) = '일반인력') AS cnt_normal
+         FROM contracts c
+         LEFT JOIN facilities cp ON cp.facility_id = c.counterparty_facility_id
+        WHERE c.contract_id = ANY($1::text[])
+        ORDER BY COALESCE(NULLIF(c.contract_date,''), c.started_at, c.created_at) ASC`,
+      [contractIds]
+    )
+  );
+  return rows.map((r) => {
+    const amount = Number(r.amount ?? 0);
+    const started = s(r.started_at) || s(r.contract_date);
+    const ended = s(r.ended_at);
+    const high = Number(r.cnt_high ?? 0);
+    const normal = Number(r.cnt_normal ?? 0);
+    return {
+      contractId: s(r.contract_id),
+      year: s(r.contract_date).slice(0, 4),
+      category: s(r.service_subtype) || "동등실적",
+      serviceName: s(r.contract_title),
+      overview: "",
+      amountMillion: amount > 0 ? String(Math.round(amount / 1_000_000)) : "",
+      periodText: periodText(started, ended),
+      staffCountText: [high > 0 ? `고급:${high}` : "", normal > 0 ? `일반:${normal}` : ""].filter(Boolean).join(" "),
+      clientName: s(r.client_name),
+      clientPhone: "",
+    };
+  });
+}
+
+/** 인당 자사 참여계약(개별 이력 경력표) — 참여기간 오름차순. */
+async function loadPersonProjects(employeeId: string): Promise<PackagePersonProject[]> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT c.contract_title, cp.company_name AS client_name,
+              COALESCE(c.current_amount, c.contract_amount) AS amount,
+              c.started_at, c.ended_at,
+              sp.task_label, sp.participated_from, sp.participated_to
+         FROM service_participants sp
+         JOIN contracts c ON c.contract_id = sp.contract_id AND c.deleted_at IS NULL
+         LEFT JOIN facilities cp ON cp.facility_id = c.counterparty_facility_id
+        WHERE sp.employee_id = $1
+        ORDER BY COALESCE(NULLIF(sp.participated_from,''), c.started_at) ASC`,
+      [employeeId]
+    )
+  );
+  return rows.map((r) => {
+    const amount = Number(r.amount ?? 0);
+    const from = s(r.participated_from) || s(r.started_at);
+    const to = s(r.participated_to) || s(r.ended_at);
+    return {
+      client: s(r.client_name),
+      projectName: s(r.contract_title),
+      task: s(r.task_label),
+      amountEok: amount > 0 ? String(Math.round((amount / 100_000_000) * 100) / 100) : "",
+      periodText: periodText(from, to),
+      thenCompany: "", // 자사 수행 — 생성 시 회사명으로 채움
+      thenPosition: "",
+    };
+  });
+}
+
+async function loadPerson(employeeId: string, companyName: string): Promise<PackagePerson | null> {
+  const detail = await getEmployeeDetail(employeeId);
+  if (!detail) return null;
+  const projects = await loadPersonProjects(employeeId);
+  for (const p of projects) p.thenCompany = companyName;
+
+  const joined = s(detail.hiredAt);
+  const now = new Date().toISOString().slice(0, 10);
+  const tenureMonths = joined ? monthsBetween(joined, now) : null;
+  const tenureText =
+    tenureMonths != null && tenureMonths >= 0
+      ? `${Math.floor(tenureMonths / 12)}년 ${tenureMonths % 12}개월`
+      : "";
+
+  // 관련분야 총 경력 = 타사 경력(careers) + 자사 재직 개월
+  let careerMonths = tenureMonths ?? 0;
+  for (const c of detail.careers) {
+    const m = monthsBetween(s(c.workedFrom), s(c.workedTo) || now);
+    if (m != null && m > 0) careerMonths += m;
+  }
+
+  const educationText = detail.educations
+    .map((e) => {
+      const year = s(e.graduationDate).slice(0, 4);
+      return [s(e.schoolName), s(e.major), s(e.degreeLevel), year ? `(${year})` : ""].filter(Boolean).join(" ");
+    })
+    .join("\n");
+  const licensesText = detail.certifications
+    .map((c) => {
+      const d = s(c.passedAt) || s(c.issuedAt);
+      return `${s(c.certificationName)}${d ? `(${d.slice(2).replace(/-/g, ".")})` : ""}`;
+    })
+    .join("\n");
+
+  return {
+    employeeId,
+    name: s(detail.name),
+    positionName: s(detail.positionName),
+    engGrade: s(detail.engGrade),
+    envGrade: s(detail.envGrade),
+    birthDate: s(detail.birthDate),
+    tenureText,
+    educationText,
+    degreeTop: topDegree(detail),
+    licensesText,
+    careerMonthsTotal: monthsToText(careerMonths),
+    careerMonthsCompany: monthsToText(tenureMonths),
+    perfCount: String(projects.length),
+    projects,
+    detail,
+  };
+}
+
+/** 패키지 생성 데이터 어셈블리 — 공고·회사·실적 계약·수행인력. */
+export async function assemblePackageData(params: {
+  bidType: BidType;
+  bidId: string;
+  contractIds: string[];
+  employeeIds: string[];
+}): Promise<PackageData> {
+  const bid = await getBid(params.bidType, params.bidId);
+  if (!bid) throw new Error("공고를 찾을 수 없습니다.");
+  const [profile, staff, history, credentials] = await Promise.all([
+    getCompanyProfile(),
+    getStaffComposition(),
+    listHistory(),
+    listCredentials(),
+  ]);
+  const contracts = await loadContractRows(params.contractIds);
+  const persons: PackagePerson[] = [];
+  for (const id of params.employeeIds) {
+    const p = await loadPerson(id, profile.companyName);
+    if (p) persons.push(p);
+  }
+  const totalRaw = contracts.reduce((acc, c) => acc + (Number(c.amountMillion) || 0), 0);
+  return {
+    bid: { title: s(bid.title), orgName: s(bid.orgName) },
+    company: { profile, staff, history, credentials },
+    contracts,
+    totalAmountMillion: totalRaw > 0 ? String(totalRaw) : "",
+    persons,
+  };
+}

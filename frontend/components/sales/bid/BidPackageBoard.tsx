@@ -24,6 +24,7 @@ import {
 import { resolveServiceTypeStyle } from "@/lib/ieps/contract-tree-style";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { FormProfilePanel } from "@/components/sales/bid/FormProfilePanel";
 import "@/components/cdash/cdash.css";
 
 interface BidSummary {
@@ -396,9 +397,8 @@ export function BidPackageBoard() {
                   }}
                 />
               </label>
-              <p className="text-[11px] cd-text-faint">
-                업로드한 양식의 항목 분석(LLM)과 표준 항목 매핑·미세조정은 다음 단계에서 제공됩니다.
-              </p>
+              {/* 양식 분석·매핑 미세조정(P2) — HWPX 표·셀 → 표준 서류 항목 */}
+              {form && <FormProfilePanel formId={form.formId} hasProfile={form.hasProfile} />}
             </section>
 
             {/* ④ 문서 구성(안내) — 생성은 P3 */}

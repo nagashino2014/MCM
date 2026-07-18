@@ -2,6 +2,7 @@
 
 // 회사 프로필 관리 — 자사 일반현황·인적구성(env_grade 집계)·연혁 타임라인·주요 사업내용·
 // 면허/인증 보유현황(LLM 파싱 자동입력). 입찰 증빙서류 패키지의 자사 데이터 공급원.
+// 재정상황=홈택스 표준재무제표 업로드 LLM 추출, 신용평가=등급서 업로드 LLM 추출.
 // docs/bid-package-blueprint.md §4-3
 
 import { useCallback, useEffect, useState } from "react";
@@ -27,7 +28,11 @@ import "@/components/cdash/cdash.css";
 interface FinanceRow {
   year: string;
   capital: string;
+  totalAssets: string;
+  totalLiabilities: string;
+  equity: string;
   revenue: string;
+  operatingProfit: string;
 }
 
 interface Profile {
@@ -41,7 +46,7 @@ interface Profile {
   bizField: string;
   foundedYm: string;
   mainBusiness: string;
-  credit: { bondGrade: string; creditGrade: string; ratedAt: string };
+  credit: { agency: string; ratingType: string; creditGrade: string; ratedAt: string };
   finance: FinanceRow[];
   updatedAt: string | null;
 }
@@ -71,6 +76,17 @@ interface Credential {
 // 면허/인증 명칭 선택지 — 직접 입력도 가능(datalist)
 const LICENSE_PRESETS = ["환경컨설팅회사", "엔지니어링 컨설팅업", "통합허가 대행업", "환경전문공사업", "기업부설연구소"];
 const CERT_PRESETS = ["이노비즈(기술혁신형 중소기업)", "벤처기업 확인", "ISO 9001", "ISO 14001", "특허", "메인비즈"];
+
+// 재정상황 표 열 — 연도 외 금액은 원 단위 숫자 문자열(표준재무제표 LLM 추출)
+const FINANCE_COLS: { key: keyof FinanceRow; label: string }[] = [
+  { key: "year", label: "연도" },
+  { key: "capital", label: "자본금" },
+  { key: "totalAssets", label: "자산총계" },
+  { key: "totalLiabilities", label: "부채총계" },
+  { key: "equity", label: "자기자본" },
+  { key: "revenue", label: "매출액" },
+  { key: "operatingProfit", label: "영업이익" },
+];
 
 const emptyCredentialDraft = {
   credentialId: null as string | null,
@@ -116,6 +132,10 @@ export function CompanyProfilePanel() {
   const [credDraft, setCredDraft] = useState({ ...emptyCredentialDraft });
   const [credBusy, setCredBusy] = useState(false);
   const [parsing, setParsing] = useState(false);
+
+  // 재무제표/등급서 분석
+  const [financeParsing, setFinanceParsing] = useState(false);
+  const [creditParsing, setCreditParsing] = useState(false);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -251,6 +271,49 @@ export function CompanyProfilePanel() {
     }
   };
 
+  // 표준재무제표 업로드 → 연도별 행 추출(같은 연도는 교체 병합)
+  const parseFinanceFile = async (file: File) => {
+    if (!profile) return;
+    setFinanceParsing(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const data = (await jfetch("/api/admin/company-profile/finance/parse", { method: "POST", body: fd })) as { rows: FinanceRow[] };
+      const merged = [...profile.finance];
+      for (const row of data.rows) {
+        const idx = merged.findIndex((f) => f.year === row.year);
+        if (idx >= 0) merged[idx] = row;
+        else merged.push(row);
+      }
+      merged.sort((a, b) => b.year.localeCompare(a.year));
+      set({ finance: merged });
+      alert(`재정상황 ${data.rows.length}개 연도를 추출했습니다. 확인 후 '일반현황 저장'을 눌러 주세요.`);
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setFinanceParsing(false);
+    }
+  };
+
+  // 신용평가 등급서 업로드 → 신용평가회사·평가 종류·등급·평가일 프리필
+  const parseCreditFile = async (file: File) => {
+    if (!profile) return;
+    setCreditParsing(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const data = (await jfetch("/api/admin/company-profile/credit/parse", { method: "POST", body: fd })) as {
+        fields: { agency: string; ratingType: string; creditGrade: string; ratedAt: string };
+      };
+      set({ credit: { ...data.fields } });
+      alert("신용평가 등급을 추출했습니다. 확인 후 '일반현황 저장'을 눌러 주세요.");
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setCreditParsing(false);
+    }
+  };
+
   return (
     <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
       <CdPageHeader
@@ -300,92 +363,102 @@ export function CompanyProfilePanel() {
                 </div>
               </div>
 
-              <h4 className="text-[12px] font-bold cd-text mt-4 mb-2">신용평가 등급</h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-                <L label="회사채 등급"><input className="cd-input" value={profile.credit.bondGrade} onChange={(e) => set({ credit: { ...profile.credit, bondGrade: e.target.value } })} placeholder="BBB0" /></L>
+              <div className="flex items-center gap-2 mt-4 mb-2">
+                <h4 className="text-[12px] font-bold cd-text">신용평가 등급</h4>
+                <UploadButton
+                  label={creditParsing ? "분석 중..." : "등급서 분석"}
+                  busy={creditParsing}
+                  accept=".pdf,.jpg,.jpeg,.png,.webp"
+                  title="신용평가 등급서(1~3페이지만 분석)를 업로드하면 신용평가회사·평가 종류·등급·평가일이 자동 입력됩니다."
+                  onFile={parseCreditFile}
+                />
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                <L label="신용평가회사"><input className="cd-input" value={profile.credit.agency} onChange={(e) => set({ credit: { ...profile.credit, agency: e.target.value } })} placeholder="나이스평가정보" /></L>
+                <L label="평가 종류"><input className="cd-input" value={profile.credit.ratingType} onChange={(e) => set({ credit: { ...profile.credit, ratingType: e.target.value } })} placeholder="기업신용평가등급" /></L>
                 <L label="기업신용 등급"><input className="cd-input" value={profile.credit.creditGrade} onChange={(e) => set({ credit: { ...profile.credit, creditGrade: e.target.value } })} placeholder="BB+" /></L>
                 <L label="평가일"><input className="cd-input" value={profile.credit.ratedAt} onChange={(e) => set({ credit: { ...profile.credit, ratedAt: e.target.value } })} placeholder="2026-01-15" /></L>
               </div>
 
-              <h4 className="text-[12px] font-bold cd-text mt-4 mb-2">재정상황 (연도별, 단위 자유 표기)</h4>
-              <div className="flex flex-col gap-2">
-                {profile.finance.map((f, i) => (
-                  <div key={i} className="grid grid-cols-[90px_1fr_1fr_32px] gap-2 text-xs items-center">
-                    <input className="cd-input" value={f.year} placeholder="2025" onChange={(e) => set({ finance: profile.finance.map((x, j) => (j === i ? { ...x, year: e.target.value } : x)) })} />
-                    <input className="cd-input" value={f.capital} placeholder="자본금 (예: 1억 2천500만원)" onChange={(e) => set({ finance: profile.finance.map((x, j) => (j === i ? { ...x, capital: e.target.value } : x)) })} />
-                    <input className="cd-input" value={f.revenue} placeholder="매출액 (예: 40억 7천만원)" onChange={(e) => set({ finance: profile.finance.map((x, j) => (j === i ? { ...x, revenue: e.target.value } : x)) })} />
-                    <button type="button" className="cd-btn cd-btn-ghost rounded-lg p-1.5" onClick={() => set({ finance: profile.finance.filter((_, j) => j !== i) })}>
-                      <Trash2 className="w-3.5 h-3.5 cd-text-faint" />
-                    </button>
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  className="cd-btn cd-btn-soft rounded-lg px-3 py-1.5 text-xs self-start inline-flex items-center gap-1"
-                  onClick={() => set({ finance: [...profile.finance, { year: "", capital: "", revenue: "" }] })}
-                >
-                  <Plus className="w-3.5 h-3.5" /> 연도 추가
-                </button>
+              <div className="flex items-center gap-2 mt-4 mb-2">
+                <h4 className="text-[12px] font-bold cd-text">재정상황</h4>
+                <UploadButton
+                  label={financeParsing ? "분석 중..." : "표준재무제표 분석"}
+                  busy={financeParsing}
+                  accept=".pdf"
+                  title="홈택스에서 출력한 표준재무제표 PDF만 업로드할 수 있습니다. 연도별 자본금·자산총계·부채총계·자기자본·매출액·영업이익이 자동 입력됩니다."
+                  onFile={parseFinanceFile}
+                />
+                <span className="text-[10px] cd-text-faint">홈택스 표준재무제표만 가능 · 금액은 원 단위</span>
               </div>
-            </section>
-
-            {/* 인적구성 (자동 집계) */}
-            <section className="cd-card rounded-3xl p-5 cd-reveal delay-1 flex flex-col">
-              <h3 className="font-bold cd-text flex items-center gap-2 mb-1">
-                <Users className="w-4 h-4 cd-text-primary" /> 인적구성
-                <span className="ml-auto text-[11px] font-normal cd-text-faint">통합허가 대행업 기준</span>
-              </h3>
-              <p className="text-[11px] cd-text-faint mb-3">
-                사용자 등록·삭제의 인원 상세 <b>환경부 등급(대행업)</b> 값으로 자동 집계됩니다(재직자 기준).
-              </p>
-              <div className="rounded-xl border cd-border-c divide-y cd-border-c">
-                <div className="flex items-center justify-between px-3 py-2 text-xs">
-                  <span className="cd-text font-semibold">계</span>
-                  <span className="cd-text font-bold">{staff?.total ?? 0}명</span>
+              {profile.finance.length === 0 ? (
+                <p className="rounded-xl border cd-border-c px-3 py-2.5 text-[11px] cd-text-faint">
+                  표준재무제표를 업로드하면 연도별 재정상황이 추출됩니다.
+                </p>
+              ) : (
+                <div className="overflow-x-auto rounded-xl border cd-border-c">
+                  <table className="w-full text-[11px]">
+                    <thead>
+                      <tr className="border-b cd-border-c">
+                        {FINANCE_COLS.map((c) => (
+                          <th key={c.key} className="px-2 py-1.5 text-left cd-text-faint font-semibold whitespace-nowrap">{c.label}</th>
+                        ))}
+                        <th className="w-8" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {profile.finance.map((f, i) => (
+                        <tr key={i} className="border-b cd-border-c last:border-b-0">
+                          {FINANCE_COLS.map((c) => (
+                            <td key={c.key} className="px-1 py-1">
+                              <input
+                                className="cd-input !px-2 !py-1 text-[11px] font-mono"
+                                style={{ minWidth: c.key === "year" ? 64 : 108 }}
+                                value={f[c.key]}
+                                onChange={(e) => set({ finance: profile.finance.map((x, j) => (j === i ? { ...x, [c.key]: e.target.value } : x)) })}
+                              />
+                            </td>
+                          ))}
+                          <td className="px-1">
+                            <button type="button" className="cd-btn cd-btn-ghost rounded p-1" onClick={() => set({ finance: profile.finance.filter((_, j) => j !== i) })}>
+                              <Trash2 className="w-3.5 h-3.5 cd-text-faint" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-                {(staff?.rows ?? []).map((r) => (
-                  <div key={r.grade} className="flex items-center justify-between px-3 py-2 text-xs">
-                    <span className="cd-text">{r.grade}</span>
-                    <span className="cd-text">{r.count}명</span>
-                  </div>
-                ))}
-              </div>
-              <Link href="/admin/users/registry" className="mt-3 text-[11px] cd-text-primary self-start">
-                인원별 등급은 사용자 등록·삭제에서 관리 →
-              </Link>
-
-              <h4 className="text-[12px] font-bold cd-text mt-5 mb-2">주요 사업내용</h4>
-              <textarea
-                className="cd-input text-xs flex-1 min-h-[120px] resize-none"
-                value={profile.mainBusiness}
-                onChange={(e) => set({ mainBusiness: e.target.value })}
-                placeholder="예: 통합환경허가 대행, 환경컨설팅, 대기·수질 측정 분석 …"
-              />
-              <p className="text-[10px] cd-text-faint mt-1">일반현황 저장 버튼으로 함께 저장됩니다.</p>
+              )}
             </section>
-          </div>
 
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            {/* 연혁 타임라인 */}
-            <section className="cd-card rounded-3xl p-5 cd-reveal delay-2 flex flex-col">
+            {/* 주요 연혁 (상단 우측) */}
+            <section className="cd-card rounded-3xl p-5 cd-reveal delay-1 flex flex-col">
               <h3 className="font-bold cd-text flex items-center gap-2 mb-3">
                 <History className="w-4 h-4 cd-text-primary" /> 주요 연혁
                 <span className="ml-auto text-[11px] font-normal cd-text-faint">{history.length}건</span>
               </h3>
-              <div className="flex gap-2 mb-3">
-                <input className="cd-input text-xs w-[110px]" value={histYm} onChange={(e) => setHistYm(e.target.value)} placeholder="2025-01" />
-                <input className="cd-input text-xs flex-1" value={histContent} onChange={(e) => setHistContent(e.target.value)} placeholder="예: 기술혁신형 중소기업(Inno-Biz) 인증" />
-                <button type="button" onClick={submitHistory} disabled={histBusy} className="cd-btn cd-btn-primary rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-50 shrink-0">
-                  {histEditing ? "수정" : "추가"}
-                </button>
-                {histEditing && (
-                  <button type="button" className="cd-btn cd-btn-ghost rounded-lg px-2 py-1.5 text-xs shrink-0" onClick={() => { setHistEditing(null); setHistYm(""); setHistContent(""); }}>
-                    <X className="w-3.5 h-3.5" />
+              {/* 연월·주요내용 분리 입력 */}
+              <div className="rounded-xl border cd-border-c p-3 mb-3 grid gap-2 text-xs">
+                <L label="연월">
+                  <input className="cd-input w-[120px]" value={histYm} onChange={(e) => setHistYm(e.target.value)} placeholder="2025-01" />
+                </L>
+                <L label="주요내용">
+                  <input className="cd-input" value={histContent} onChange={(e) => setHistContent(e.target.value)} placeholder="예: 기술혁신형 중소기업(Inno-Biz) 인증" />
+                </L>
+                <div className="flex justify-end gap-2">
+                  {histEditing && (
+                    <button type="button" className="cd-btn cd-btn-ghost rounded-lg px-2 py-1.5 text-xs" onClick={() => { setHistEditing(null); setHistYm(""); setHistContent(""); }}>
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <button type="button" onClick={submitHistory} disabled={histBusy} className="cd-btn cd-btn-primary rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-50">
+                    {histEditing ? "수정" : "추가"}
                   </button>
-                )}
+                </div>
               </div>
               {/* 타임라인 — 영업 스케쥴 이력과 같은 세로선+노드 형태 */}
-              <div className="relative pl-5 flex-1 min-h-[160px] max-h-[420px] overflow-y-auto scrollbar-hide">
+              <div className="relative pl-5 flex-1 min-h-[160px] max-h-[430px] overflow-y-auto scrollbar-hide">
                 <div className="absolute left-[7px] top-1 bottom-1 w-px" style={{ background: "var(--cd-border)" }} />
                 {history.length === 0 && <p className="text-xs cd-text-faint py-4">연혁을 추가하면 타임라인으로 표시됩니다.</p>}
                 {history.map((h) => (
@@ -412,6 +485,49 @@ export function CompanyProfilePanel() {
                 ))}
               </div>
             </section>
+          </div>
+
+          {/* 하단: 인적구성(1) · 주요 사업내용(1.5) · 면허/인증(1.5) */}
+          <div className="grid grid-cols-1 xl:grid-cols-[1fr_1.5fr_1.5fr] gap-4">
+            {/* 인적구성 (자동 집계) */}
+            <section className="cd-card rounded-3xl p-5 cd-reveal delay-2 flex flex-col">
+              <h3 className="font-bold cd-text flex items-center gap-2 mb-1">
+                <Users className="w-4 h-4 cd-text-primary" /> 인적구성
+              </h3>
+              <p className="text-[11px] cd-text-faint mb-3">
+                통합허가 대행업 기준 — 사용자 등록·삭제의 인원 상세 <b>환경부 등급(대행업)</b> 값으로 자동
+                집계됩니다(재직자 기준).
+              </p>
+              <div className="rounded-xl border cd-border-c divide-y cd-border-c">
+                <div className="flex items-center justify-between px-3 py-2 text-xs">
+                  <span className="cd-text font-semibold">계</span>
+                  <span className="cd-text font-bold">{staff?.total ?? 0}명</span>
+                </div>
+                {(staff?.rows ?? []).map((r) => (
+                  <div key={r.grade} className="flex items-center justify-between px-3 py-2 text-xs">
+                    <span className="cd-text">{r.grade}</span>
+                    <span className="cd-text">{r.count}명</span>
+                  </div>
+                ))}
+              </div>
+              <Link href="/admin/users/registry" className="mt-3 text-[11px] cd-text-primary self-start">
+                인원별 등급은 사용자 등록·삭제에서 관리 →
+              </Link>
+            </section>
+
+            {/* 주요 사업내용 */}
+            <section className="cd-card rounded-3xl p-5 cd-reveal delay-2 flex flex-col">
+              <h3 className="font-bold cd-text flex items-center gap-2 mb-3">
+                <FileText className="w-4 h-4 cd-text-primary" /> 주요 사업내용
+              </h3>
+              <textarea
+                className="cd-input text-xs flex-1 min-h-[180px] resize-none"
+                value={profile.mainBusiness}
+                onChange={(e) => set({ mainBusiness: e.target.value })}
+                placeholder="예: 통합환경허가 대행, 환경컨설팅, 대기·수질 측정 분석 …"
+              />
+              <p className="text-[10px] cd-text-faint mt-2">일반현황 저장 버튼으로 함께 저장됩니다.</p>
+            </section>
 
             {/* 면허/인증 보유현황 */}
             <section className="cd-card rounded-3xl p-5 cd-reveal delay-2 flex flex-col">
@@ -437,21 +553,13 @@ export function CompanyProfilePanel() {
                   <datalist id="credential-name-presets">
                     {(credDraft.kind === "license" ? LICENSE_PRESETS : CERT_PRESETS).map((n) => <option key={n} value={n} />)}
                   </datalist>
-                  <label className="cd-btn cd-btn-soft rounded-lg px-3 py-1.5 font-semibold cursor-pointer inline-flex items-center gap-1 shrink-0" title="면허/인증 문서(PDF·이미지)를 업로드하면 LLM 분석으로 명칭·번호·취득일·유효기간을 자동 입력합니다.">
-                    <Wand2 className="w-3.5 h-3.5" />
-                    {parsing ? "분석 중..." : "문서 분석"}
-                    <input
-                      type="file"
-                      className="hidden"
-                      accept=".pdf,.jpg,.jpeg,.png,.webp"
-                      disabled={parsing}
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f) parseCredentialFile(f);
-                        e.target.value = "";
-                      }}
-                    />
-                  </label>
+                  <UploadButton
+                    label={parsing ? "분석 중..." : "문서 분석"}
+                    busy={parsing}
+                    accept=".pdf,.jpg,.jpeg,.png,.webp"
+                    title="면허/인증 문서(PDF·이미지)를 업로드하면 LLM 분석으로 명칭·번호·취득일·유효기간을 자동 입력합니다."
+                    onFile={parseCredentialFile}
+                  />
                 </div>
                 <input className="cd-input" value={credDraft.credentialNo} onChange={(e) => setCredDraft((p) => ({ ...p, credentialNo: e.target.value }))} placeholder="번호 (예: 제 44호)" />
                 <input className="cd-input" value={credDraft.issuer} onChange={(e) => setCredDraft((p) => ({ ...p, issuer: e.target.value }))} placeholder="발급기관" />
@@ -504,6 +612,38 @@ function L({ label, children }: { label: string; children: React.ReactNode }) {
     <label className="flex flex-col gap-1">
       <span className="text-[11px] cd-text-faint">{label}</span>
       {children}
+    </label>
+  );
+}
+
+function UploadButton({
+  label,
+  busy,
+  accept,
+  title,
+  onFile,
+}: {
+  label: string;
+  busy: boolean;
+  accept: string;
+  title: string;
+  onFile: (file: File) => void;
+}) {
+  return (
+    <label className="cd-btn cd-btn-soft rounded-lg px-3 py-1.5 text-xs font-semibold cursor-pointer inline-flex items-center gap-1 shrink-0" title={title}>
+      <Wand2 className="w-3.5 h-3.5" />
+      {label}
+      <input
+        type="file"
+        className="hidden"
+        accept={accept}
+        disabled={busy}
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) onFile(f);
+          e.target.value = "";
+        }}
+      />
     </label>
   );
 }

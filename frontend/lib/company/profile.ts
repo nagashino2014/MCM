@@ -7,10 +7,15 @@ import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
  * 프로필은 단일 행(profile_id='default').
  */
 
+/** 재정상황 — 홈택스 표준재무제표 LLM 추출(원 단위 숫자 문자열). equity=표준재무상태표의 자본총계. */
 export interface CompanyFinanceRow {
   year: string;
-  capital: string; // 자본금(표기 그대로 — 단위 자유)
+  capital: string; // 자본금
+  totalAssets: string; // 자산총계
+  totalLiabilities: string; // 부채총계
+  equity: string; // 자기자본(자본총계)
   revenue: string; // 매출액
+  operatingProfit: string; // 영업이익
 }
 
 export interface CompanyProfile {
@@ -24,7 +29,7 @@ export interface CompanyProfile {
   bizField: string;
   foundedYm: string; // YYYY-MM
   mainBusiness: string;
-  credit: { bondGrade: string; creditGrade: string; ratedAt: string };
+  credit: { agency: string; ratingType: string; creditGrade: string; ratedAt: string };
   finance: CompanyFinanceRow[];
   updatedAt: string | null;
 }
@@ -75,7 +80,15 @@ export async function getCompanyProfile(): Promise<CompanyProfile> {
   const finance: CompanyFinanceRow[] = Array.isArray(financeRaw)
     ? financeRaw.map((f) => {
         const o = (f ?? {}) as Record<string, unknown>;
-        return { year: s(o.year), capital: s(o.capital), revenue: s(o.revenue) };
+        return {
+          year: s(o.year),
+          capital: s(o.capital),
+          totalAssets: s(o.totalAssets),
+          totalLiabilities: s(o.totalLiabilities),
+          equity: s(o.equity),
+          revenue: s(o.revenue),
+          operatingProfit: s(o.operatingProfit),
+        };
       })
     : [];
   return {
@@ -89,7 +102,12 @@ export async function getCompanyProfile(): Promise<CompanyProfile> {
     bizField: s(r.biz_field),
     foundedYm: s(r.founded_ym),
     mainBusiness: s(r.main_business),
-    credit: { bondGrade: s(credit.bondGrade), creditGrade: s(credit.creditGrade), ratedAt: s(credit.ratedAt) },
+    credit: {
+      agency: s(credit.agency),
+      ratingType: s(credit.ratingType),
+      creditGrade: s(credit.creditGrade),
+      ratedAt: s(credit.ratedAt),
+    },
     finance,
     updatedAt: r.updated_at != null ? String(r.updated_at) : null,
   };

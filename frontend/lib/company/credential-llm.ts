@@ -34,7 +34,8 @@ const str = (v: unknown): string => {
   return s === "null" ? "" : s;
 };
 
-async function toContentBlock(file: File): Promise<Record<string, unknown>> {
+/** 파일 → Anthropic content 블록(PDF=document, 이미지=sharp 정규화 image). 회사 문서 파서 공용. */
+export async function toContentBlock(file: File): Promise<Record<string, unknown>> {
   const buf = Buffer.from(await file.arrayBuffer());
   const ext = (file.name.split(".").pop() || "").toLowerCase();
   if (IMAGE_EXT[ext]) {

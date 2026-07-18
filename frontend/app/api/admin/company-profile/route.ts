@@ -47,7 +47,8 @@ export async function PUT(req: NextRequest) {
         foundedYm: String(body.foundedYm ?? ""),
         mainBusiness: String(body.mainBusiness ?? ""),
         credit: {
-          bondGrade: String(body.credit?.bondGrade ?? ""),
+          agency: String(body.credit?.agency ?? ""),
+          ratingType: String(body.credit?.ratingType ?? ""),
           creditGrade: String(body.credit?.creditGrade ?? ""),
           ratedAt: String(body.credit?.ratedAt ?? ""),
         },
@@ -55,7 +56,11 @@ export async function PUT(req: NextRequest) {
           ? body.finance.map((f) => ({
               year: String(f?.year ?? ""),
               capital: String(f?.capital ?? ""),
+              totalAssets: String(f?.totalAssets ?? ""),
+              totalLiabilities: String(f?.totalLiabilities ?? ""),
+              equity: String(f?.equity ?? ""),
               revenue: String(f?.revenue ?? ""),
+              operatingProfit: String(f?.operatingProfit ?? ""),
             }))
           : [],
       },

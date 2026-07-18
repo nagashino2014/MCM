@@ -24,7 +24,7 @@ type TabKey = "basic" | "education" | "evidence" | "hr";
 
 // 수행인력 명단 연동 등급/분야 옵션 (서버 lib와 값 동일 — 서버 전용 모듈 임포트 회피를 위해 로컬 정의)
 const ENG_GRADE_OPTIONS = ["기술사", "특급", "고급", "중급", "초급"] as const;
-const ENV_GRADE_OPTIONS = ["고급인력", "일반인력"] as const;
+const ENV_GRADE_OPTIONS = ["고급인력", "일반인력", "미구분"] as const;
 const SPECIALTY_OPTIONS = ["대기관리", "수질관리"] as const;
 
 /** 환경부 등급 표시 라벨: 전문분야가 대기관리면 '(대기)'를 부착한다. */

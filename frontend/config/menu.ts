@@ -7,6 +7,7 @@ import {
   Trash2,
   ClipboardList,
   UserCog,
+  Building2,
   Users as UsersIcon,
   type LucideIcon,
 } from "lucide-react";
@@ -107,6 +108,13 @@ export const MENU_ITEMS: MenuItem[] = [
       { title: "계정·권한 관리", href: "/admin/users" },
       { title: "사용자 등록·삭제", href: "/admin/users/registry" },
     ],
+    minRole: "admin",
+    group: "system",
+  },
+  {
+    title: "회사 프로필 관리",
+    href: "/admin/company-profile",
+    icon: Building2,
     minRole: "admin",
     group: "system",
   },

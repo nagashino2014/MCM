@@ -1,0 +1,102 @@
+/**
+ * 면허/허가/등록증·인증서 → 구조화 필드 (Claude 멀티모달).
+ * 사업자등록증 파서(lib/ieps/business-certificate-llm.ts) 패턴을 자사 면허/인증 문서용으로 이식 —
+ * 명칭·번호·취득일·유효기간·발급기관을 추출해 회사 프로필의 보유현황 입력을 자동화한다.
+ * ANTHROPIC_API_KEY 미설정 시 null 반환(호출부가 수기 입력 안내).
+ */
+
+import sharp from "sharp";
+
+const DEFAULT_MODEL = process.env.BUSINESS_CERT_MODEL || "claude-haiku-4-5-20251001";
+const ENDPOINT = "https://api.anthropic.com/v1/messages";
+
+export interface CredentialFields {
+  kind: "license" | "certification";
+  name: string;
+  credentialNo: string;
+  issuedAt: string; // YYYY-MM-DD
+  validUntil: string; // YYYY-MM-DD (없으면 빈 문자열)
+  issuer: string;
+  model: string;
+}
+
+const IMAGE_EXT: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  gif: "image/gif",
+};
+
+const str = (v: unknown): string => {
+  if (v == null) return "";
+  const s = String(v).trim();
+  return s === "null" ? "" : s;
+};
+
+async function toContentBlock(file: File): Promise<Record<string, unknown>> {
+  const buf = Buffer.from(await file.arrayBuffer());
+  const ext = (file.name.split(".").pop() || "").toLowerCase();
+  if (IMAGE_EXT[ext]) {
+    const out = await sharp(buf, { failOn: "none" })
+      .rotate()
+      .resize(2000, 2000, { fit: "inside", withoutEnlargement: true })
+      .jpeg({ quality: 90 })
+      .toBuffer();
+    return { type: "image", source: { type: "base64", media_type: "image/jpeg", data: out.toString("base64") } };
+  }
+  return { type: "document", source: { type: "base64", media_type: "application/pdf", data: buf.toString("base64") } };
+}
+
+const PROMPT =
+  "이 파일은 한국 기업이 보유한 면허·허가·등록증 또는 인증서입니다" +
+  "(예: 환경컨설팅회사 등록증, 엔지니어링 컨설팅업 신고증, 통합허가 대행업 등록증, " +
+  "이노비즈 확인서, 벤처기업 확인서, ISO 인증서 등). " +
+  "아래 필드를 추출해 JSON만 출력하세요(설명·코드블록 금지). 값이 없으면 빈 문자열.\n" +
+  "매우 중요: 문서에 실제로 인쇄된 글자만 사용하고, 없는 값을 지어내지 마세요.\n" +
+  "- kind: 면허/허가/등록증이면 \"license\", 인증(이노비즈·벤처·ISO 등)이면 \"certification\".\n" +
+  "- name: 문서의 정식 명칭(예: '환경컨설팅회사 등록증', '이노비즈(기술혁신형 중소기업) 확인서').\n" +
+  "- credentialNo: 면허/등록/인증 번호(제 N호 등 표기 그대로).\n" +
+  "- issuedAt: 취득일/발급일/등록일 (YYYY-MM-DD). 여러 날짜가 있으면 최초 등록(취득)일 우선.\n" +
+  "- validUntil: 유효기간 만료일 (YYYY-MM-DD). 유효기간 표기가 없으면 빈 문자열.\n" +
+  "- issuer: 발급 기관(예: 서울특별시장, 환경부장관, 중소벤처기업부).\n" +
+  '{"kind":"license","name":"","credentialNo":"","issuedAt":"","validUntil":"","issuer":""}';
+
+/** 면허/인증 문서 1건 파싱. 키 미설정이면 null. 실패는 throw. */
+export async function parseCredentialWithLlm(file: File): Promise<CredentialFields | null> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return null;
+
+  const block = await toContentBlock(file);
+  const res = await fetch(ENDPOINT, {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: DEFAULT_MODEL,
+      max_tokens: 1000,
+      messages: [{ role: "user", content: [block, { type: "text", text: PROMPT }] }],
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`면허/인증 분석 API 오류 (HTTP ${res.status}) ${body.slice(0, 200)}`);
+  }
+  const json = (await res.json()) as { content?: { type: string; text?: string }[] };
+  const text = (json.content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join("").trim();
+  const match = text.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error("면허/인증 분석 결과를 해석하지 못했습니다.");
+  const raw = JSON.parse(match[0]) as Record<string, unknown>;
+  return {
+    kind: str(raw.kind) === "certification" ? "certification" : "license",
+    name: str(raw.name),
+    credentialNo: str(raw.credentialNo),
+    issuedAt: str(raw.issuedAt),
+    validUntil: str(raw.validUntil),
+    issuer: str(raw.issuer),
+    model: DEFAULT_MODEL,
+  };
+}

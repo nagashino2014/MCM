@@ -57,6 +57,7 @@ export type AuditAction =
   | "permission_template_update"
   | "permission_assignment_update"
   | "employee_update"
+  | "company_profile_update"
   | "employee_document_upload"
   | "employee_hr_event_create"
   | "employee_hr_event_delete"

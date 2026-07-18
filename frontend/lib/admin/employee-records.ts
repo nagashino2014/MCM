@@ -36,7 +36,7 @@ export const CERTIFICATION_OPTIONS = [
 // 엔지니어링협회 기술등급 (수행인력 명단의 '기술등급' 칸에 사용)
 export const ENG_GRADE_OPTIONS = ["기술사", "특급", "고급", "중급", "초급"] as const;
 // 환경부 통합허가 대행업 등급 base (전문분야=대기관리면 표시 시 '(대기)' 부착)
-export const ENV_GRADE_OPTIONS = ["고급인력", "일반인력"] as const;
+export const ENV_GRADE_OPTIONS = ["고급인력", "일반인력", "미구분"] as const;
 // 전문분야
 export const SPECIALTY_OPTIONS = ["대기관리", "수질관리"] as const;
 

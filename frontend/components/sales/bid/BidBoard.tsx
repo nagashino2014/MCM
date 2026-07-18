@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { Gavel, Search, ExternalLink, Wand2, SlidersHorizontal, Tags, X, Link2, Plus, Trash2, Columns3, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, ChevronUp, ChevronDown, Paperclip, BellRing, Pencil, ListOrdered } from "lucide-react";
+import { Gavel, Search, ExternalLink, Wand2, SlidersHorizontal, Tags, X, Link2, Plus, Trash2, Columns3, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, ChevronUp, ChevronDown, Paperclip, BellRing, Pencil, ListOrdered, FileStack } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { PaginationControls } from "@/components/ui/PaginationControls";
@@ -845,11 +845,21 @@ export function BidBoard() {
                   })}
                 </div>
 
-                {detail.url && (
-                  <a href={detail.url} target="_blank" rel="noreferrer" className="cd-chip self-start" style={{ color: "var(--cd-primary)" }}>
-                    <ExternalLink className="w-3.5 h-3.5" /> 원문 보기
-                  </a>
-                )}
+                <div className="flex items-center gap-2">
+                  {detail.url && (
+                    <a href={detail.url} target="_blank" rel="noreferrer" className="cd-chip" style={{ color: "var(--cd-primary)" }}>
+                      <ExternalLink className="w-3.5 h-3.5" /> 원문 보기
+                    </a>
+                  )}
+                  {/* 입찰 증빙서류 패키지 생성(전용 페이지) — docs/bid-package-blueprint.md */}
+                  <Link
+                    href={`/sales/bids/package?bidType=${encodeURIComponent(detailType)}&bidId=${encodeURIComponent(detail.bidId)}`}
+                    className="cd-chip"
+                    style={{ color: "var(--cd-primary)" }}
+                  >
+                    <FileStack className="w-3.5 h-3.5" /> 입찰 서류 생성
+                  </Link>
+                </div>
 
                 {/* 첨부파일 — raw 의 …DocUrl{N}/…FileNm{N} 쌍(공고문·과업지시서·제안요청서 등 직다운로드) */}
                 {(() => {

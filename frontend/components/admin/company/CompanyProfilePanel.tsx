@@ -35,6 +35,13 @@ interface FinanceRow {
   operatingProfit: string;
 }
 
+interface CreditRow {
+  agency: string;
+  ratingType: string;
+  creditGrade: string;
+  ratedAt: string;
+}
+
 interface Profile {
   companyName: string;
   ceoName: string;
@@ -46,7 +53,7 @@ interface Profile {
   bizField: string;
   foundedYm: string;
   mainBusiness: string;
-  credit: { agency: string; ratingType: string; creditGrade: string; ratedAt: string };
+  credit: CreditRow[];
   finance: FinanceRow[];
   updatedAt: string | null;
 }
@@ -87,6 +94,19 @@ const FINANCE_COLS: { key: keyof FinanceRow; label: string }[] = [
   { key: "revenue", label: "매출액" },
   { key: "operatingProfit", label: "영업이익" },
 ];
+
+/** 원 단위 숫자 문자열 → 천단위 콤마 표시(음수·비숫자 문자는 정리). */
+function fmtComma(value: string): string {
+  const raw = value.replace(/[^\d-]/g, "");
+  if (!raw || raw === "-") return raw;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n.toLocaleString("ko-KR") : value;
+}
+
+/** 콤마 표시 입력 → 저장용 숫자 문자열. */
+function stripComma(value: string): string {
+  return value.replace(/[^\d-]/g, "");
+}
 
 const emptyCredentialDraft = {
   credentialId: null as string | null,
@@ -295,7 +315,7 @@ export function CompanyProfilePanel() {
     }
   };
 
-  // 신용평가 등급서 업로드 → 신용평가회사·평가 종류·등급·평가일 프리필
+  // 신용평가 등급서 업로드 → 새 등급 행으로 추가(민간 CLIP·공공 등 종류별 복수 보유)
   const parseCreditFile = async (file: File) => {
     if (!profile) return;
     setCreditParsing(true);
@@ -303,10 +323,10 @@ export function CompanyProfilePanel() {
       const fd = new FormData();
       fd.append("file", file);
       const data = (await jfetch("/api/admin/company-profile/credit/parse", { method: "POST", body: fd })) as {
-        fields: { agency: string; ratingType: string; creditGrade: string; ratedAt: string };
+        fields: CreditRow;
       };
-      set({ credit: { ...data.fields } });
-      alert("신용평가 등급을 추출했습니다. 확인 후 '일반현황 저장'을 눌러 주세요.");
+      set({ credit: [...profile.credit, data.fields] });
+      alert("신용평가 등급을 추출해 행으로 추가했습니다. 확인 후 '일반현황 저장'을 눌러 주세요.");
     } catch (err) {
       alert((err as Error).message);
     } finally {
@@ -365,31 +385,56 @@ export function CompanyProfilePanel() {
 
               <div className="flex items-center gap-2 mt-4 mb-2">
                 <h4 className="text-[12px] font-bold cd-text">신용평가 등급</h4>
-                <UploadButton
-                  label={creditParsing ? "분석 중..." : "등급서 분석"}
-                  busy={creditParsing}
-                  accept=".pdf,.jpg,.jpeg,.png,.webp"
-                  title="신용평가 등급서(1~3페이지만 분석)를 업로드하면 신용평가회사·평가 종류·등급·평가일이 자동 입력됩니다."
-                  onFile={parseCreditFile}
-                />
+                <span className="text-[10px] cd-text-faint">민간(CLIP)·공공 등 평가 종류별 복수 등록</span>
+                <div className="ml-auto flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="cd-btn cd-btn-soft rounded-lg px-3 py-1.5 text-xs font-semibold inline-flex items-center gap-1"
+                    onClick={() => set({ credit: [...profile.credit, { agency: "", ratingType: "", creditGrade: "", ratedAt: "" }] })}
+                  >
+                    <Plus className="w-3.5 h-3.5" /> 추가
+                  </button>
+                  <UploadButton
+                    label={creditParsing ? "분석 중..." : "등급서 분석"}
+                    busy={creditParsing}
+                    accept=".pdf,.jpg,.jpeg,.png,.webp"
+                    title="신용평가 등급서(1~3페이지만 분석)를 업로드하면 신용평가회사·평가 종류·등급·평가일이 행으로 추가됩니다."
+                    onFile={parseCreditFile}
+                  />
+                </div>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                <L label="신용평가회사"><input className="cd-input" value={profile.credit.agency} onChange={(e) => set({ credit: { ...profile.credit, agency: e.target.value } })} placeholder="나이스평가정보" /></L>
-                <L label="평가 종류"><input className="cd-input" value={profile.credit.ratingType} onChange={(e) => set({ credit: { ...profile.credit, ratingType: e.target.value } })} placeholder="기업신용평가등급" /></L>
-                <L label="기업신용 등급"><input className="cd-input" value={profile.credit.creditGrade} onChange={(e) => set({ credit: { ...profile.credit, creditGrade: e.target.value } })} placeholder="BB+" /></L>
-                <L label="평가일"><input className="cd-input" value={profile.credit.ratedAt} onChange={(e) => set({ credit: { ...profile.credit, ratedAt: e.target.value } })} placeholder="2026-01-15" /></L>
-              </div>
+              {profile.credit.length === 0 ? (
+                <p className="rounded-xl border cd-border-c px-3 py-2.5 text-[11px] cd-text-faint">
+                  등급서를 분석하거나 추가 버튼으로 평가 종류별 등급을 등록하세요.
+                </p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {profile.credit.map((c, i) => (
+                    <div key={i} className="grid grid-cols-[1fr_1fr_100px_120px_32px] gap-2 text-xs items-center">
+                      <input className="cd-input" value={c.agency} placeholder="신용평가회사" onChange={(e) => set({ credit: profile.credit.map((x, j) => (j === i ? { ...x, agency: e.target.value } : x)) })} />
+                      <input className="cd-input" value={c.ratingType} placeholder="평가 종류 (민간 CLIP / 공공 등)" onChange={(e) => set({ credit: profile.credit.map((x, j) => (j === i ? { ...x, ratingType: e.target.value } : x)) })} />
+                      <input className="cd-input" value={c.creditGrade} placeholder="등급" onChange={(e) => set({ credit: profile.credit.map((x, j) => (j === i ? { ...x, creditGrade: e.target.value } : x)) })} />
+                      <input className="cd-input" value={c.ratedAt} placeholder="평가일" onChange={(e) => set({ credit: profile.credit.map((x, j) => (j === i ? { ...x, ratedAt: e.target.value } : x)) })} />
+                      <button type="button" className="cd-btn cd-btn-ghost rounded-lg p-1.5" onClick={() => set({ credit: profile.credit.filter((_, j) => j !== i) })}>
+                        <Trash2 className="w-3.5 h-3.5 cd-text-faint" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               <div className="flex items-center gap-2 mt-4 mb-2">
                 <h4 className="text-[12px] font-bold cd-text">재정상황</h4>
-                <UploadButton
-                  label={financeParsing ? "분석 중..." : "표준재무제표 분석"}
-                  busy={financeParsing}
-                  accept=".pdf"
-                  title="홈택스에서 출력한 표준재무제표 PDF만 업로드할 수 있습니다. 연도별 자본금·자산총계·부채총계·자기자본·매출액·영업이익이 자동 입력됩니다."
-                  onFile={parseFinanceFile}
-                />
                 <span className="text-[10px] cd-text-faint">홈택스 표준재무제표만 가능 · 금액은 원 단위</span>
+                <div className="ml-auto">
+                  <UploadButton
+                    label={financeParsing ? "분석 중..." : "표준재무제표 분석"}
+                    busy={financeParsing}
+                    accept=".pdf"
+                    title="홈택스에서 출력한 표준재무제표 PDF만 업로드할 수 있습니다. 연도별 자본금·자산총계·부채총계·자기자본·매출액·영업이익이 자동 입력됩니다."
+                    onFile={parseFinanceFile}
+                  />
+                </div>
               </div>
               {profile.finance.length === 0 ? (
                 <p className="rounded-xl border cd-border-c px-3 py-2.5 text-[11px] cd-text-faint">
@@ -412,10 +457,16 @@ export function CompanyProfilePanel() {
                           {FINANCE_COLS.map((c) => (
                             <td key={c.key} className="px-1 py-1">
                               <input
-                                className="cd-input !px-2 !py-1 text-[11px] font-mono"
+                                className={"cd-input !px-2 !py-1 text-[11px] font-mono" + (c.key === "year" ? "" : " text-right")}
                                 style={{ minWidth: c.key === "year" ? 64 : 108 }}
-                                value={f[c.key]}
-                                onChange={(e) => set({ finance: profile.finance.map((x, j) => (j === i ? { ...x, [c.key]: e.target.value } : x)) })}
+                                value={c.key === "year" ? f.year : fmtComma(f[c.key])}
+                                onChange={(e) =>
+                                  set({
+                                    finance: profile.finance.map((x, j) =>
+                                      j === i ? { ...x, [c.key]: c.key === "year" ? e.target.value : stripComma(e.target.value) } : x
+                                    ),
+                                  })
+                                }
                               />
                             </td>
                           ))}
@@ -539,12 +590,13 @@ export function CompanyProfilePanel() {
               {/* 입력 폼 — 문서 업로드 LLM 분석으로 자동 채움 */}
               <div className="rounded-xl border cd-border-c p-3 mb-3 grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
                 <div className="md:col-span-2 flex items-center gap-2">
-                  <select className="cd-select w-[110px]" value={credDraft.kind} onChange={(e) => setCredDraft((p) => ({ ...p, kind: e.target.value as "license" | "certification" }))}>
+                  {/* cd-select 는 기본 너비 100% — 인라인 width 로 고정해야 옆 명칭 입력란이 살아남는다 */}
+                  <select className="cd-select shrink-0" style={{ width: 120 }} value={credDraft.kind} onChange={(e) => setCredDraft((p) => ({ ...p, kind: e.target.value as "license" | "certification" }))}>
                     <option value="license">면허/등록증</option>
                     <option value="certification">인증</option>
                   </select>
                   <input
-                    className="cd-input flex-1"
+                    className="cd-input flex-1 min-w-0"
                     list="credential-name-presets"
                     value={credDraft.name}
                     onChange={(e) => setCredDraft((p) => ({ ...p, name: e.target.value }))}

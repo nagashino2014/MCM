@@ -29,9 +29,17 @@ export interface CompanyProfile {
   bizField: string;
   foundedYm: string; // YYYY-MM
   mainBusiness: string;
-  credit: { agency: string; ratingType: string; creditGrade: string; ratedAt: string };
+  credit: CompanyCreditRow[];
   finance: CompanyFinanceRow[];
   updatedAt: string | null;
+}
+
+/** 신용평가 등급 — 민간(CLIP)·공공 등 평가 종류별 복수 행. */
+export interface CompanyCreditRow {
+  agency: string;
+  ratingType: string;
+  creditGrade: string;
+  ratedAt: string;
 }
 
 export interface CompanyHistoryItem {
@@ -75,7 +83,15 @@ export async function getCompanyProfile(): Promise<CompanyProfile> {
   const db = await getDb();
   const rows = rowsToObjects(await db.exec("SELECT * FROM company_profile WHERE profile_id = 'default'"));
   const r = rows[0] ?? {};
-  const credit = parseJson<Record<string, unknown>>(r.credit, {});
+  // credit: 배열(현행). 과거 단일 객체 저장분은 1행 배열로 승격.
+  const creditRaw = parseJson<unknown>(r.credit, []);
+  const creditList = Array.isArray(creditRaw) ? creditRaw : [creditRaw];
+  const credit: CompanyCreditRow[] = creditList
+    .map((c) => {
+      const o = (c ?? {}) as Record<string, unknown>;
+      return { agency: s(o.agency), ratingType: s(o.ratingType), creditGrade: s(o.creditGrade), ratedAt: s(o.ratedAt) };
+    })
+    .filter((c) => c.agency || c.ratingType || c.creditGrade || c.ratedAt);
   const financeRaw = parseJson<unknown>(r.finance, []);
   const finance: CompanyFinanceRow[] = Array.isArray(financeRaw)
     ? financeRaw.map((f) => {
@@ -102,12 +118,7 @@ export async function getCompanyProfile(): Promise<CompanyProfile> {
     bizField: s(r.biz_field),
     foundedYm: s(r.founded_ym),
     mainBusiness: s(r.main_business),
-    credit: {
-      agency: s(credit.agency),
-      ratingType: s(credit.ratingType),
-      creditGrade: s(credit.creditGrade),
-      ratedAt: s(credit.ratedAt),
-    },
+    credit,
     finance,
     updatedAt: r.updated_at != null ? String(r.updated_at) : null,
   };
@@ -150,7 +161,7 @@ export async function saveCompanyProfile(
         s(input.bizField),
         s(input.foundedYm),
         s(input.mainBusiness),
-        JSON.stringify(input.credit ?? {}),
+        JSON.stringify(Array.isArray(input.credit) ? input.credit : []),
         JSON.stringify(Array.isArray(input.finance) ? input.finance : []),
         actorUserId,
         now,

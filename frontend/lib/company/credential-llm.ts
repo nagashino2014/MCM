@@ -7,7 +7,9 @@
 
 import sharp from "sharp";
 
-const DEFAULT_MODEL = process.env.BUSINESS_CERT_MODEL || "claude-haiku-4-5-20251001";
+// 등록증은 생년월일·발행일 등 혼동 요소가 많아 상위 모델 기본(실측: Haiku 는 대표자 생년월일을
+// 취득일로 오파싱). 빈도 낮은 작업이라 비용 영향 미미. env 로 조정 가능.
+const DEFAULT_MODEL = process.env.CREDENTIAL_PARSE_MODEL || "claude-sonnet-5";
 const ENDPOINT = "https://api.anthropic.com/v1/messages";
 
 export interface CredentialFields {
@@ -52,15 +54,18 @@ export async function toContentBlock(file: File): Promise<Record<string, unknown
 const PROMPT =
   "이 파일은 한국 기업이 보유한 면허·허가·등록증 또는 인증서입니다" +
   "(예: 환경컨설팅회사 등록증, 엔지니어링 컨설팅업 신고증, 통합허가 대행업 등록증, " +
-  "이노비즈 확인서, 벤처기업 확인서, ISO 인증서 등). " +
+  "이노비즈 확인서, 벤처기업 확인서, ISO 인증서 등). **모든 페이지를 확인한 뒤** " +
   "아래 필드를 추출해 JSON만 출력하세요(설명·코드블록 금지). 값이 없으면 빈 문자열.\n" +
   "매우 중요: 문서에 실제로 인쇄된 글자만 사용하고, 없는 값을 지어내지 마세요.\n" +
   "- kind: 면허/허가/등록증이면 \"license\", 인증(이노비즈·벤처·ISO 등)이면 \"certification\".\n" +
-  "- name: 문서의 정식 명칭(예: '환경컨설팅회사 등록증', '이노비즈(기술혁신형 중소기업) 확인서').\n" +
+  "- name: 문서 제목의 정식 명칭(예: '환경컨설팅회사 등록증', '통합환경관리 대행업 등록증').\n" +
   "- credentialNo: 면허/등록/인증 번호(제 N호 등 표기 그대로).\n" +
-  "- issuedAt: 취득일/발급일/등록일 (YYYY-MM-DD). 여러 날짜가 있으면 최초 등록(취득)일 우선.\n" +
+  "- issuedAt: **최초 등록(취득)일** (YYYY-MM-DD). 주의:\n" +
+  "  · 등록증에 '최초 등록일'·'등록연월일' 항목이 있으면(뒤 페이지의 등록사항·변경이력 표 포함) 그 날짜를 최우선으로 사용하세요.\n" +
+  "  · 문서 하단의 발행일(재발급일·변경발급일)은 최초 등록일이 따로 없을 때만 사용하세요.\n" +
+  "  · **대표자(대표이사)의 생년월일은 절대 취득일이 아닙니다** — 성명 옆 괄호나 '생년월일' 라벨의 날짜는 무시하세요.\n" +
   "- validUntil: 유효기간 만료일 (YYYY-MM-DD). 유효기간 표기가 없으면 빈 문자열.\n" +
-  "- issuer: 발급 기관(예: 서울특별시장, 환경부장관, 중소벤처기업부).\n" +
+  "- issuer: **문서 하단 직인(발급 주체)의 기관명**(예: 서울특별시장, 환경부장관, 한강유역환경청장, 중소벤처기업부장관). 회사명·대표자명이 아닙니다.\n" +
   '{"kind":"license","name":"","credentialNo":"","issuedAt":"","validUntil":"","issuer":""}';
 
 /** 면허/인증 문서 1건 파싱. 키 미설정이면 null. 실패는 throw. */

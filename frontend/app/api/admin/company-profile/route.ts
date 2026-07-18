@@ -46,12 +46,14 @@ export async function PUT(req: NextRequest) {
         bizField: String(body.bizField ?? ""),
         foundedYm: String(body.foundedYm ?? ""),
         mainBusiness: String(body.mainBusiness ?? ""),
-        credit: {
-          agency: String(body.credit?.agency ?? ""),
-          ratingType: String(body.credit?.ratingType ?? ""),
-          creditGrade: String(body.credit?.creditGrade ?? ""),
-          ratedAt: String(body.credit?.ratedAt ?? ""),
-        },
+        credit: Array.isArray(body.credit)
+          ? body.credit.map((c) => ({
+              agency: String(c?.agency ?? ""),
+              ratingType: String(c?.ratingType ?? ""),
+              creditGrade: String(c?.creditGrade ?? ""),
+              ratedAt: String(c?.ratedAt ?? ""),
+            }))
+          : [],
         finance: Array.isArray(body.finance)
           ? body.finance.map((f) => ({
               year: String(f?.year ?? ""),

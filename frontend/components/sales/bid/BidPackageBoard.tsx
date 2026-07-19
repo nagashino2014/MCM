@@ -147,6 +147,7 @@ export function BidPackageBoard() {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [pickedEmployees, setPickedEmployees] = useState<Set<string>>(new Set());
   const [participantsLoading, setParticipantsLoading] = useState(false);
+  const [participantsError, setParticipantsError] = useState<string | null>(null);
 
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -221,10 +222,15 @@ export function BidPackageBoard() {
     }
     let cancelled = false;
     setParticipantsLoading(true);
+    setParticipantsError(null);
     fetch("/api/sales/bids/package/participants?contractIds=" + encodeURIComponent(contractIds.join(",")), {
       cache: "no-store",
     })
-      .then((res) => res.json())
+      .then(async (res) => {
+        const data = (await res.json().catch(() => ({}))) as { participants?: Participant[]; error?: string };
+        if (!res.ok) throw new Error(data?.error ?? `수행인력 조회 실패 (HTTP ${res.status})`);
+        return data;
+      })
       .then((data: { participants?: Participant[] }) => {
         if (cancelled) return;
         const list = data.participants ?? [];
@@ -243,7 +249,9 @@ export function BidPackageBoard() {
           return next;
         });
       })
-      .catch(() => {})
+      .catch((err) => {
+        if (!cancelled) setParticipantsError((err as Error).message);
+      })
       .finally(() => {
         if (!cancelled) setParticipantsLoading(false);
       });
@@ -455,7 +463,13 @@ export function BidPackageBoard() {
                 />
               </label>
               {/* 양식 분석·매핑 미세조정(P2) — HWPX 표·셀 → 표준 서류 항목 */}
-              {form && <FormProfilePanel formId={form.formId} hasProfile={form.hasProfile} />}
+              {form && (
+                <FormProfilePanel
+                  formId={form.formId}
+                  hasProfile={form.hasProfile}
+                  onProfileChange={(has) => setForm((prev) => (prev ? { ...prev, hasProfile: has } : prev))}
+                />
+              )}
             </section>
 
             {/* ④ 문서 구성(안내) — 생성은 P3 */}
@@ -598,8 +612,14 @@ export function BidPackageBoard() {
               <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide rounded-xl border cd-border-c">
                 {participantsLoading ? (
                   <p className="p-5 text-sm cd-text-faint">수행인력을 불러오는 중입니다.</p>
+                ) : participantsError ? (
+                  <p className="p-5 text-sm cd-error-text">{participantsError}</p>
                 ) : participants.length === 0 ? (
-                  <p className="p-5 text-sm cd-text-faint">실적 계약을 선택하면 수행인력 후보가 표시됩니다.</p>
+                  <p className="p-5 text-sm cd-text-faint">
+                    {contractIds.length > 0
+                      ? "선택한 계약에 등록된 수행인력이 없습니다. 계약 상세의 공정표/수행인력에서 인력을 지정하세요."
+                      : "실적 계약을 선택하면 수행인력 후보가 표시됩니다."}
+                  </p>
                 ) : (
                   participants.map((p) => (
                     <label key={p.employeeId} className="w-full flex items-center gap-2.5 px-3 py-2 text-xs border-b cd-border-c last:border-b-0 hover:bg-[color:var(--cd-surface)] cursor-pointer">

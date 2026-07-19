@@ -210,14 +210,14 @@ export async function listParticipantsForContracts(contractIds: string[]): Promi
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT e.employee_id, e.name, e.eng_grade, e.specialty_field, p.name AS position_name,
+      `SELECT e.employee_id, e.name, e.eng_grade, e.specialty_field, p.position_name,
               COUNT(DISTINCT sp.contract_id) AS contract_count,
               MAX(p.rank_order) AS rank_order
          FROM service_participants sp
          JOIN employee_profiles e ON e.employee_id = sp.employee_id
          LEFT JOIN positions p ON p.position_id = e.position_id
         WHERE sp.contract_id = ANY($1::text[])
-        GROUP BY e.employee_id, e.name, e.eng_grade, e.specialty_field, p.name
+        GROUP BY e.employee_id, e.name, e.eng_grade, e.specialty_field, p.position_name
         ORDER BY MAX(p.rank_order) DESC NULLS LAST, e.name ASC`,
       [ids]
     )

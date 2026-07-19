@@ -54,7 +54,16 @@ async function jfetch(url: string, init?: RequestInit) {
   return data;
 }
 
-export function FormProfilePanel({ formId, hasProfile }: { formId: string; hasProfile: boolean }) {
+export function FormProfilePanel({
+  formId,
+  hasProfile,
+  onProfileChange,
+}: {
+  formId: string;
+  hasProfile: boolean;
+  /** 분석/저장으로 매핑 보유 상태가 바뀌면 부모(문서 생성 버튼 활성 조건)에 알림. */
+  onProfileChange?: (has: boolean) => void;
+}) {
   const [profile, setProfile] = useState<FormProfile | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -82,6 +91,7 @@ export function FormProfilePanel({ formId, hasProfile }: { formId: string; hasPr
         body: JSON.stringify({ formId }),
       })) as { profile: FormProfile };
       setProfile(data.profile);
+      onProfileChange?.(true);
       alert(`양식 분석 완료 — 서류 ${data.profile.documents.length}종을 식별했습니다. 매핑을 확인·보정하세요.`);
     } catch (err) {
       alert((err as Error).message);

@@ -7,6 +7,7 @@ import { getFormById, getPackage } from "@/lib/bid/package-store";
 import { getFormProfile } from "@/lib/bid/form-analyze";
 import { assemblePackageData } from "@/lib/bid/package-data";
 import { fillPackageHwpx } from "@/lib/bid/hwpx-fill";
+import { buildPersonAttachments } from "@/lib/bid/package-attachments";
 import { readStorageObject, binaryResponse, sanitizeDownloadName } from "@/lib/contracts/document-bundle";
 
 export const runtime = "nodejs";
@@ -72,18 +73,26 @@ export async function POST(req: NextRequest) {
       after: { kind: "package_generate", contracts: pkg.contractIds.length, persons: pkg.employeeIds.length, warnings: warnings.length },
     });
 
+    // 인력별 첨부 병합(경력확인서 → 졸업증명서(박사→석사→학사) → 자격증 사본(지정 순))
+    const attachments = await buildPersonAttachments(pkg.employeeIds, warnings);
+
     const title = sanitizeDownloadName(data.bid.title || bidId).slice(0, 60);
     const zip = new JSZip();
     zip.file(`입찰서류(${title}).hwpx`, bytes);
+    for (const att of attachments) {
+      zip.file(`수행인력 증빙/${sanitizeDownloadName(att.name)}.pdf`, att.pdf);
+    }
     const log = [
       `생성일시: ${new Date().toISOString()}`,
       `공고: ${data.bid.title} (${data.bid.orgName})`,
       `실적 계약 ${data.contracts.length}건 / 수행인력 ${data.persons.length}명 / 서류 ${profile.documents.length}종`,
+      `인력별 첨부 PDF ${attachments.length}명분 (경력확인서→졸업증명서→자격증 순 병합)`,
       "",
       warnings.length ? "경고:" : "경고 없음",
       ...warnings.map((w) => `- ${w}`),
       "",
-      "확인 사항: 용역개요·참여임무 등 수기 항목과 발주처 평가란(득점)은 비워져 있습니다. 한글에서 열어 검토하세요.",
+      "확인 사항: 참여직위·참여임무 등 수기 항목과 발주처 평가란(득점)은 비워져 있습니다. 한글에서 열어 검토하세요.",
+      "증빙 문서는 사용자 등록·삭제의 학력/자격 행별 '증빙' 버튼과 기타 증빙 탭(기술자 경력확인서)에서 관리합니다.",
     ].join("\n");
     zip.file("생성로그.txt", log);
     const zipped = await zip.generateAsync({ type: "uint8array" });

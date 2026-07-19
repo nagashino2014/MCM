@@ -105,14 +105,8 @@ export function resolveSingleValue(
   }
 
   if (docType === "credit_rating") {
-    const join = (pick: (c: PackageData["company"]["profile"]["credit"][number]) => string) =>
-      profile.credit.map(pick).filter(Boolean).join("\n");
-    switch (field) {
-      case "agency": return { value: join((c) => c.agency) };
-      case "ratingType": return { value: join((c) => c.ratingType) };
-      case "creditGrade": return { value: join((c) => c.creditGrade) };
-      case "ratedAt": return { value: join((c) => c.ratedAt) };
-    }
+    // 신용평가 등급 페이지는 등급서 스캔 이미지를 그대로 두는 서식 — 텍스트 주입하지 않는다
+    // (등급 표시부 이미지 삽입은 후속 구현 예정, docs/bid-package-blueprint.md).
     return null;
   }
 

@@ -12,6 +12,7 @@ import {
   type StaffComposition,
 } from "@/lib/company/profile";
 import { getEmployeeDetail, type EmployeeDetail } from "@/lib/admin/employee-records";
+import { INTEGRATED_PERMIT_INDUSTRIES, canonicalServiceSubtype, matchesIndustryText } from "@/lib/ieps/integrated-permit";
 
 /*
  * 입찰 증빙서류 패키지 P3 — 문서 생성용 데이터 어셈블리.
@@ -98,6 +99,40 @@ function periodText(from: string, to: string): string {
 
 const DEGREE_ORDER = ["박사", "석사", "학사"];
 
+// 용역개요의 '○○시설' 로 표기하는 비제조 업종 — 나머지는 '○○제조시설'.
+const FACILITY_SUFFIX_INDUSTRIES = new Set(["발전", "폐기물소각", "폐기물처리업"]);
+
+/** 소재지 축약 — 광역시/특별시는 시명 축약(울산광역시→울산), 도 산하는 시·군명(군위군→군위). */
+function shortRegion(sido: string, sigungu: string): string {
+  const sd = sido.trim();
+  const sg = sigungu.trim().split(/\s+/)[0] ?? ""; // '경산시 압량읍' 같은 복합 표기는 첫 토큰만
+  if (sd.endsWith("도") && sg) {
+    return sg.replace(/(시|군|구)$/, "");
+  }
+  return sd.replace(/(특별자치시|특별자치도|특별시|광역시|도)$/, "");
+}
+
+/**
+ * 용역개요 자동 생성 — "{소재지 축약} {업종명}(제조)시설 통합환경 {세분류} 대행".
+ * 예: 울산 발전시설 통합환경 변경허가 대행 / 경산 반도체제조시설 통합환경 변경신고 대행.
+ */
+function buildOverview(params: {
+  sido: string;
+  sigungu: string;
+  industryName: string;
+  industryCode: string;
+  serviceSubtype: string;
+}): string {
+  const region = shortRegion(params.sido, params.sigungu);
+  const industry = INTEGRATED_PERMIT_INDUSTRIES.find((i) =>
+    matchesIndustryText([params.industryName, params.industryCode], i.label)
+  );
+  const subtype = canonicalServiceSubtype(params.serviceSubtype || null);
+  if (!region || !industry || !subtype) return "";
+  const suffix = FACILITY_SUFFIX_INDUSTRIES.has(industry.label) ? "시설" : "제조시설";
+  return `${region} ${industry.label}${suffix} 통합환경 ${subtype} 대행`;
+}
+
 function topDegree(detail: EmployeeDetail): string {
   for (const d of DEGREE_ORDER) {
     if (detail.educations.some((e) => String(e.degreeLevel ?? "").includes(d))) return d;
@@ -121,6 +156,8 @@ async function loadContractRows(contractIds: string[]): Promise<PackageContractR
               c.started_at, c.ended_at,
               COALESCE(c.current_amount, c.contract_amount) AS amount,
               cp.company_name AS client_name,
+              cp.phone_number AS client_phone,
+              sf.region_sido, sf.region_sigungu, sf.industry_name, sf.industry_code,
               (SELECT COUNT(*) FROM service_participants sp
                  JOIN employee_profiles e ON e.employee_id = sp.employee_id
                 WHERE sp.contract_id = c.contract_id AND TRIM(COALESCE(e.env_grade,'')) = '고급인력') AS cnt_high,
@@ -129,6 +166,7 @@ async function loadContractRows(contractIds: string[]): Promise<PackageContractR
                 WHERE sp.contract_id = c.contract_id AND TRIM(COALESCE(e.env_grade,'')) = '일반인력') AS cnt_normal
          FROM contracts c
          LEFT JOIN facilities cp ON cp.facility_id = c.counterparty_facility_id
+         LEFT JOIN facilities sf ON sf.facility_id = c.facility_id
         WHERE c.contract_id = ANY($1::text[])
         ORDER BY COALESCE(NULLIF(c.contract_date,''), c.started_at, c.created_at) ASC`,
       [contractIds]
@@ -145,12 +183,18 @@ async function loadContractRows(contractIds: string[]): Promise<PackageContractR
       year: s(r.contract_date).slice(0, 4),
       category: s(r.service_subtype) || "동등실적",
       serviceName: s(r.contract_title),
-      overview: "",
+      overview: buildOverview({
+        sido: s(r.region_sido),
+        sigungu: s(r.region_sigungu),
+        industryName: s(r.industry_name),
+        industryCode: s(r.industry_code),
+        serviceSubtype: s(r.service_subtype),
+      }),
       amountMillion: amount > 0 ? String(Math.round(amount / 1_000_000)) : "",
       periodText: periodText(started, ended),
       staffCountText: [high > 0 ? `고급:${high}` : "", normal > 0 ? `일반:${normal}` : ""].filter(Boolean).join(" "),
       clientName: s(r.client_name),
-      clientPhone: "",
+      clientPhone: s(r.client_phone),
     };
   });
 }

@@ -46,19 +46,49 @@ function setParagraphText(pXml: string, value: string): string {
   if (runClose >= 0) {
     return pXml.slice(0, runClose) + `<hp:t>${escapeXml(value)}</hp:t>` + pXml.slice(runClose);
   }
+  // self-closing run(<hp:run .../>) — 열림 태그로 바꿔 hp:t 삽입(빈 문단 셀에서 값 유실 방지)
+  const selfRun = /<hp:run\b[^>]*\/>/.exec(pXml);
+  if (selfRun) {
+    const opened = selfRun[0].slice(0, -2) + ">";
+    return pXml.replace(selfRun[0], `${opened}<hp:t>${escapeXml(value)}</hp:t></hp:run>`);
+  }
   return pXml;
 }
 
-/** 셀(tc) XML 의 내용을 value 로 교체. 개행은 첫 문단 복제로 표현. */
+/** 문단에서 그림/개체(hp:pic·hp:ctrl 등)를 제거한 텍스트 전용 복제 템플릿. */
+function stripObjectsFromParagraph(pXml: string): string {
+  return pXml
+    .replace(/<hp:pic\b[\s\S]*?<\/hp:pic>/g, "")
+    .replace(/<hp:ctrl\b[\s\S]*?<\/hp:ctrl>/g, "");
+}
+
+/** 셀(tc) XML 의 내용을 value 로 교체. 개행은 문단 복제(개체 제거 템플릿 — 이미지 중복 방지). */
 function setCellXmlText(tcXml: string, value: string): string {
-  const pMatch = P_RE.exec(tcXml);
-  if (!pMatch) return tcXml;
+  const allPs = [...tcXml.matchAll(new RegExp(P_RE.source, "g"))];
+  if (allPs.length === 0) return tcXml;
+  // 템플릿 = 텍스트(hp:t)가 있는 첫 문단 우선(선두의 빈 self-closing run 문단 회피), 없으면 첫 문단
+  const tplMatch = allPs.find((m) => T_RE.test(m[0])) ?? allPs[0];
   const lines = String(value ?? "").split("\n");
-  const paragraphs = lines.map((line) => setParagraphText(pMatch[0], line)).join("");
-  // 첫 문단은 교체, 이후 문단(같은 셀 내 나머지)은 제거해 값만 남긴다
-  const sub = tcXml.slice(pMatch.index + pMatch[0].length);
-  const removedRest = sub.replace(new RegExp(P_RE.source, "g"), "");
-  return tcXml.slice(0, pMatch.index) + paragraphs + removedRest;
+  const lineTemplate = stripObjectsFromParagraph(tplMatch[0]);
+  // 첫 줄은 원본 템플릿(개체 보존), 추가 줄은 개체 제거 템플릿으로 복제
+  const paragraphs = lines
+    .map((line, i) => setParagraphText(i === 0 ? tplMatch[0] : lineTemplate, line))
+    .join("");
+  // 기존 문단 정리: 값 문단들은 첫 문단 위치에 삽입하고, 개체(이미지 등)가 든 문단만 보존
+  let out = "";
+  let cursor = 0;
+  let inserted = false;
+  for (const m of allPs) {
+    out += tcXml.slice(cursor, m.index);
+    if (!inserted) {
+      out += paragraphs;
+      inserted = true;
+    }
+    if (m[0] !== tplMatch[0] && /<hp:pic\b/.test(m[0])) out += m[0]; // 개체 문단 보존
+    cursor = (m.index ?? 0) + m[0].length;
+  }
+  out += tcXml.slice(cursor);
+  return out;
 }
 
 /** 표 XML 에서 (row,col) 셀 텍스트 교체. 반환: [수정된 표, 성공 여부] */
@@ -253,14 +283,17 @@ export async function fillPackageHwpx(
   let xml = await zip.files[sectionName].async("string");
 
   const tables = extractTables(xml);
-  // 표 교체는 뒤에서부터(앞 위치가 흔들리지 않게)
+  // 표 교체는 뒤에서부터(앞 위치가 흔들리지 않게). 같은 표를 두 문서가 교체하면 좌표가
+  // 어긋나므로 표당 1회만 처리(먼저 온 문서 우선).
   const replacements: { start: number; end: number; xml: string }[] = [];
+  const processedTables = new Set<number>();
 
   for (const doc of profile.documents) {
     if (doc.docType === "unknown" || doc.docType === "org_chart") continue;
 
     if (doc.perPersonTable) {
-      const slots = doc.tables.map((ti) => tables[ti]).filter(Boolean);
+      const slots = doc.tables.filter((ti) => !processedTables.has(ti)).map((ti) => tables[ti]).filter(Boolean);
+      for (const ti of doc.tables) processedTables.add(ti);
       if (slots.length === 0) continue;
       const templateIndex = doc.tables[0];
       const template = tables[templateIndex];
@@ -285,14 +318,25 @@ export async function fillPackageHwpx(
       continue;
     }
 
-    for (const ti of doc.tables) {
+    // 필드/반복이 참조하는 표는 doc.tables 밖이어도 처리(LLM 이 tables 나열을 빠뜨려도 주입 누락 방지)
+    const refTables = new Set<number>(doc.tables);
+    for (const f of doc.fields) if (f.table != null) refTables.add(f.table);
+    if (doc.repeat) refTables.add(doc.repeat.table);
+    for (const ti of refTables) {
       const slot = tables[ti];
       if (!slot) {
         warnings.push(`${doc.docType}: 표 ${ti} 없음`);
         continue;
       }
+      if (processedTables.has(ti)) {
+        warnings.push(`${doc.docType}: 표 ${ti} 는 다른 문서에서 이미 처리되어 건너뜀`);
+        continue;
+      }
       const filled = fillDocTable(slot.xml, doc, ti, data, null, warnings);
-      if (filled !== slot.xml) replacements.push({ start: slot.start, end: slot.end, xml: filled });
+      if (filled !== slot.xml) {
+        processedTables.add(ti);
+        replacements.push({ start: slot.start, end: slot.end, xml: filled });
+      }
     }
   }
 

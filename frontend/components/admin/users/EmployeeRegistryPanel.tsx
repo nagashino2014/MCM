@@ -113,6 +113,14 @@ interface DocumentRow {
   targetId?: string | null;
 }
 
+/** 증빙 업로드 — opts.targetTable/targetId 로 학력·자격 행별 연결. */
+type UploadDocumentFn = (
+  file: File,
+  documentType: string,
+  displayName: string,
+  opts?: { targetTable?: string; targetId?: string | null }
+) => Promise<void>;
+
 const CERTIFICATION_OPTIONS = [
   "대기관리기술사",
   "수질관리기술사",
@@ -582,7 +590,7 @@ function EducationTab({
 }: {
   employee: EmployeeDetail;
   setEmployee: React.Dispatch<React.SetStateAction<EmployeeDetail>>;
-  uploadDocument: (file: File, documentType: string, displayName: string) => Promise<void>;
+  uploadDocument: UploadDocumentFn;
 }) {
   return (
     <div className="space-y-5">
@@ -591,7 +599,7 @@ function EducationTab({
         onAdd={() => setEmployee((prev) => ({ ...prev, educations: [...prev.educations, { degreeLevel: "bachelor", schoolName: "" }] }))}
       >
         {employee.educations.map((item, index) => (
-          <div key={index} className="grid md:grid-cols-6 gap-2 rounded-2xl cd-surface-bg border cd-border-c p-3">
+          <div key={index} className="grid md:grid-cols-[repeat(6,1fr)_auto] gap-2 rounded-2xl cd-surface-bg border cd-border-c p-3 items-center">
             <select className="cd-select" value={item.degreeLevel} onChange={(e) => updateArray(setEmployee, "educations", index, { degreeLevel: e.target.value as EducationRow["degreeLevel"] })}>
               <option value="bachelor">학사</option>
               <option value="master">석사</option>
@@ -602,6 +610,14 @@ function EducationTab({
             <input className="cd-input" placeholder="학위" value={item.degreeName ?? ""} onChange={(e) => updateArray(setEmployee, "educations", index, { degreeName: e.target.value })} />
             <input className="cd-input" inputMode="numeric" placeholder="입학일" value={item.admissionDate ?? ""} onChange={(e) => updateArray(setEmployee, "educations", index, { admissionDate: formatDateInput(e.target.value) })} />
             <input className="cd-input" inputMode="numeric" placeholder="졸업일" value={item.graduationDate ?? ""} onChange={(e) => updateArray(setEmployee, "educations", index, { graduationDate: formatDateInput(e.target.value) })} />
+            <RowAttach
+              targetTable="employee_educations"
+              targetId={item.educationId || null}
+              documentType="졸업증명서"
+              displayName={`졸업증명서(${item.schoolName || "학력"})`}
+              documents={employee.documents}
+              uploadDocument={uploadDocument}
+            />
           </div>
         ))}
       </RepeatingSection>
@@ -611,7 +627,7 @@ function EducationTab({
         onAdd={() => setEmployee((prev) => ({ ...prev, certifications: [...prev.certifications, { certificationName: CERTIFICATION_OPTIONS[0] }] }))}
       >
         {employee.certifications.map((item, index) => (
-          <div key={index} className="grid md:grid-cols-4 gap-2 rounded-2xl cd-surface-bg border cd-border-c p-3">
+          <div key={index} className="grid md:grid-cols-[repeat(4,1fr)_auto] gap-2 rounded-2xl cd-surface-bg border cd-border-c p-3 items-center">
             <select className="cd-select" value={item.certificationName} onChange={(e) => updateArray(setEmployee, "certifications", index, { certificationName: e.target.value })}>
               {CERTIFICATION_OPTIONS.map((name) => (
                 <option key={name} value={name}>
@@ -622,11 +638,69 @@ function EducationTab({
             <input className="cd-input" type="date" value={item.passedAt ?? ""} onChange={(e) => updateArray(setEmployee, "certifications", index, { passedAt: e.target.value })} />
             <input className="cd-input" type="date" value={item.issuedAt ?? ""} onChange={(e) => updateArray(setEmployee, "certifications", index, { issuedAt: e.target.value })} />
             <input className="cd-input" placeholder="자격번호" value={item.certificationNo ?? ""} onChange={(e) => updateArray(setEmployee, "certifications", index, { certificationNo: e.target.value })} />
+            <RowAttach
+              targetTable="employee_certifications"
+              targetId={item.certificationId || null}
+              documentType="자격증 사본"
+              displayName={`자격증 사본(${item.certificationName || "자격증"})`}
+              documents={employee.documents}
+              uploadDocument={uploadDocument}
+            />
           </div>
         ))}
       </RepeatingSection>
 
-      <UploadRow uploadDocument={uploadDocument} types={["졸업증명서", "성적증명서", "학위증명서", "자격증 사본"]} documents={employee.documents} />
+      {/* 졸업증명서·자격증 사본은 각 행의 증빙 버튼으로 업로드(건별 매칭 — 입찰 패키지 첨부 병합용) */}
+      <UploadRow uploadDocument={uploadDocument} types={["성적증명서"]} documents={employee.documents} />
+    </div>
+  );
+}
+
+/** 학력·자격 행별 증빙 첨부 — employee_documents 의 target_table/target_id 로 건별 매칭. */
+function RowAttach({
+  targetTable,
+  targetId,
+  documentType,
+  displayName,
+  documents,
+  uploadDocument,
+}: {
+  targetTable: string;
+  targetId: string | null;
+  documentType: string;
+  displayName: string;
+  documents: DocumentRow[];
+  uploadDocument: UploadDocumentFn;
+}) {
+  if (!targetId) {
+    return <span className="text-[10px] cd-text-faint whitespace-nowrap self-center">저장 후 증빙 첨부</span>;
+  }
+  const attached = documents.find((d) => d.targetTable === targetTable && d.targetId === targetId);
+  return (
+    <div className="flex items-center gap-1.5 min-w-0">
+      {attached && (
+        <a
+          href={attached.publicPath ?? "#"}
+          target="_blank"
+          rel="noreferrer"
+          className="cd-pill cd-pill-info truncate max-w-[140px]"
+          title={attached.originalFilename || attached.displayName}
+        >
+          {attached.originalFilename || attached.displayName}
+        </a>
+      )}
+      <label className="cd-btn cd-btn-soft cursor-pointer !px-2.5 !py-1.5 text-[11px] shrink-0" title={`${documentType} 파일을 이 행에 연결해 업로드합니다.`}>
+        <FileUp className="w-3.5 h-3.5" /> {attached ? "교체" : "증빙"}
+        <input
+          type="file"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) void uploadDocument(file, documentType, displayName, { targetTable, targetId });
+            e.currentTarget.value = "";
+          }}
+        />
+      </label>
     </div>
   );
 }
@@ -638,7 +712,7 @@ function EvidenceTab({
 }: {
   employee: EmployeeDetail;
   setEmployee: React.Dispatch<React.SetStateAction<EmployeeDetail>>;
-  uploadDocument: (file: File, documentType: string, displayName: string) => Promise<void>;
+  uploadDocument: UploadDocumentFn;
 }) {
   return (
     <div className="space-y-5">
@@ -682,7 +756,7 @@ function UploadRow({
   types,
   documents,
 }: {
-  uploadDocument: (file: File, documentType: string, displayName: string) => Promise<void>;
+  uploadDocument: UploadDocumentFn;
   types: string[];
   documents: DocumentRow[];
 }) {

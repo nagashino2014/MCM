@@ -1,7 +1,8 @@
 import JSZip from "jszip";
+import sharp from "sharp";
 import type { FormProfile, ProfileDoc } from "@/lib/bid/form-analyze";
 import type { PackageData } from "@/lib/bid/package-data";
-import { resolveSingleValue, resolveRepeatRows, personCount } from "@/lib/bid/package-values";
+import { resolveSingleValue, resolveRepeatRows, personCount, cleanServiceTitle } from "@/lib/bid/package-values";
 
 /*
  * 입찰 서류 양식 HWPX 주입 엔진(P3) — form_profile 셀 매핑에 데이터를 채워 제출본 HWPX 를 만든다.
@@ -190,6 +191,45 @@ function forceCellPageBreak(tblXml: string): string {
   return tblXml.replace(/(<hp:tbl\b[^>]*pageBreak=")(\w+)(")/, (_, a, __, c) => a + "TABLE" + c);
 }
 
+// 셀 폭 추정용 — 전각 글자 1자 ≈ 1100 HWPUNIT(10pt 기준), 셀 안 여백 여유분.
+const HWPUNIT_PER_CHAR = 1100;
+const CELL_PADDING_HWPUNIT = 1200;
+
+/**
+ * 값이 셀 폭보다 길어 줄바꿈될 것 같으면 같은 행의 오른쪽 이웃 셀에서 폭을 가져와 넓힌다
+ * (행 전체 폭은 유지 — 서약서 '업체명' 등 좁은 값 셀 대응).
+ */
+function widenCellIfNeeded(tblXml: string, row: number, col: number, value: string): string {
+  const needed = value.length * HWPUNIT_PER_CHAR + CELL_PADDING_HWPUNIT;
+  const cells = [...tblXml.matchAll(TC_RE)].map((m) => {
+    const addr = ADDR_RE.exec(m[0]);
+    const sz = /<hp:cellSz width="(\d+)"/.exec(m[0]);
+    return {
+      xml: m[0],
+      start: m.index ?? 0,
+      row: addr ? Number(addr[2]) : -1,
+      col: addr ? Number(addr[1]) : -1,
+      width: sz ? Number(sz[1]) : 0,
+    };
+  });
+  const target = cells.find((c) => c.row === row && c.col === col);
+  if (!target || target.width === 0 || target.width >= needed) return tblXml;
+  const neighbors = cells.filter((c) => c.row === row && c.col > col).sort((a, b) => a.col - b.col);
+  const donor = neighbors.find((c) => c.width > needed - target.width + 2000);
+  if (!donor) return tblXml;
+  const delta = needed - target.width;
+  const widened = target.xml.replace(/(<hp:cellSz width=")(\d+)(")/, (_, a, __, c) => a + String(target.width + delta) + c);
+  const narrowed = donor.xml.replace(/(<hp:cellSz width=")(\d+)(")/, (_, a, __, c) => a + String(donor.width - delta) + c);
+  // 뒤쪽부터 교체(위치 보존)
+  const parts = [
+    { start: donor.start, end: donor.start + donor.xml.length, xml: narrowed },
+    { start: target.start, end: target.start + target.xml.length, xml: widened },
+  ].sort((a, b) => b.start - a.start);
+  let out = tblXml;
+  for (const p of parts) out = out.slice(0, p.start) + p.xml + out.slice(p.end);
+  return out;
+}
+
 interface TableSlot {
   start: number;
   end: number;
@@ -242,7 +282,12 @@ function fillDocTable(
         : entries.map((e) => `${e.label || e.field} : ${e.value}`).join("\n");
     const [next, ok] = setCellText(out, row, col, value);
     out = next;
-    if (!ok) warnings.push(`${doc.docType}: 셀(${row},${col})을 찾지 못함`);
+    if (!ok) {
+      warnings.push(`${doc.docType}: 셀(${row},${col})을 찾지 못함`);
+      continue;
+    }
+    // ': 값' 기입형(서약서 등) 좁은 셀은 줄바꿈 방지 위해 이웃 셀에서 폭을 빌려 확장
+    if (entries.some((e) => e.prefixColon)) out = widenCellIfNeeded(out, row, col, value);
   }
 
   // 반복 행
@@ -263,11 +308,12 @@ function fillDocTable(
   return out;
 }
 
-/** 양식 HWPX + form_profile + 데이터 → 채움본 HWPX. */
+/** 양식 HWPX + form_profile + 데이터 → 채움본 HWPX. opts.creditImage = 신용평가 등급부 이미지(스캔 교체). */
 export async function fillPackageHwpx(
   formBytes: Uint8Array,
   profile: FormProfile,
-  data: PackageData
+  data: PackageData,
+  opts?: { creditImage?: Uint8Array }
 ): Promise<{ bytes: Uint8Array; warnings: string[] }> {
   const warnings: string[] = [];
   const zip = await JSZip.loadAsync(formBytes);
@@ -343,6 +389,52 @@ export async function fillPackageHwpx(
   replacements.sort((a, b) => b.start - a.start);
   for (const r of replacements) {
     xml = xml.slice(0, r.start) + r.xml + xml.slice(r.end);
+  }
+
+  // 동의서·서약서 본문의 『용역명』은 표 밖 문단에도 있음 — 문서 전체 hp:t 에서 일괄 치환
+  // (『…』 인용 표기는 용역명에만 쓰이는 관례. 표 안에서 이미 치환된 곳은 동일 값이라 무해)
+  if (profile.documents.some((d) => d.docType === "privacy_consent" || d.docType === "security_pledge")) {
+    const serviceTitle = cleanServiceTitle(data.bid.title);
+    if (serviceTitle) {
+      xml = xml.replace(T_ALL_RE, (t) => t.replace(/『[^』]*』/g, `『${escapeXml(serviceTitle)}』`));
+    }
+  }
+
+  // 신용평가 등급부 이미지 교체 — credit_rating 문서 표 안의 스캔 이미지 BinData 를
+  // 회사 프로필의 등급 이미지로 교체(프레임 비율에 맞춰 흰 배경 contain, 왜곡 방지)
+  if (opts?.creditImage) {
+    const creditDoc = profile.documents.find((d) => d.docType === "credit_rating");
+    const refIds = new Set<string>();
+    if (creditDoc) {
+      for (const ti of creditDoc.tables) {
+        const slotXml = tables[ti]?.xml ?? "";
+        for (const m of slotXml.matchAll(/binaryItemIDRef="([^"]+)"/g)) refIds.add(m[1]);
+      }
+    }
+    if (refIds.size === 0) {
+      warnings.push("신용평가 서식에서 교체할 스캔 이미지를 찾지 못해 등급 이미지를 건너뜀");
+    } else {
+      for (const id of refIds) {
+        const binName = Object.keys(zip.files).find((n) => n.startsWith(`BinData/${id}.`));
+        if (!binName) {
+          warnings.push(`등급 이미지: BinData/${id}.* 파일 없음`);
+          continue;
+        }
+        try {
+          const original = await zip.files[binName].async("uint8array");
+          const meta = await sharp(Buffer.from(original)).metadata();
+          const frameW = meta.width ?? 1200;
+          const frameH = meta.height ?? 1600;
+          const replaced = await sharp(Buffer.from(opts.creditImage))
+            .resize(frameW, frameH, { fit: "contain", background: { r: 255, g: 255, b: 255 } })
+            .jpeg({ quality: 92 })
+            .toBuffer();
+          zip.file(binName, replaced);
+        } catch {
+          warnings.push(`등급 이미지 교체 실패(BinData/${id})`);
+        }
+      }
+    }
   }
 
   // 줄 레이아웃 캐시 제거 — 한글이 열 때 전체 재계산(자동 페이지 분할 포함)

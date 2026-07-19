@@ -97,6 +97,9 @@ function periodText(from: string, to: string): string {
   return months != null && months >= 0 ? `${range} (${months}개월)` : range;
 }
 
+// degreeLevel 코드(bachelor/master/doctor) → 한글 학위명
+const DEGREE_LABELS: Record<string, string> = { bachelor: "학사", master: "석사", doctor: "박사" };
+const degreeLabel = (level: unknown): string => DEGREE_LABELS[String(level ?? "")] ?? String(level ?? "");
 const DEGREE_ORDER = ["박사", "석사", "학사"];
 
 // 용역개요의 '○○시설' 로 표기하는 비제조 업종 — 나머지는 '○○제조시설'.
@@ -135,9 +138,9 @@ function buildOverview(params: {
 
 function topDegree(detail: EmployeeDetail): string {
   for (const d of DEGREE_ORDER) {
-    if (detail.educations.some((e) => String(e.degreeLevel ?? "").includes(d))) return d;
+    if (detail.educations.some((e) => degreeLabel(e.degreeLevel) === d)) return d;
   }
-  return detail.educations.length ? s(detail.educations[0]?.degreeLevel) : "";
+  return detail.educations.length ? degreeLabel(detail.educations[0]?.degreeLevel) : "";
 }
 
 function monthsToText(months: number | null): string {
@@ -256,7 +259,7 @@ async function loadPerson(employeeId: string, companyName: string): Promise<Pack
   const educationText = detail.educations
     .map((e) => {
       const year = s(e.graduationDate).slice(0, 4);
-      return [s(e.schoolName), s(e.major), s(e.degreeLevel), year ? `(${year})` : ""].filter(Boolean).join(" ");
+      return [s(e.schoolName), s(e.major), degreeLabel(e.degreeLevel), year ? `(${year})` : ""].filter(Boolean).join(" ");
     })
     .join("\n");
   const licensesText = detail.certifications

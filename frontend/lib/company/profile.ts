@@ -30,6 +30,8 @@ export interface CompanyProfile {
   foundedYm: string; // YYYY-MM
   mainBusiness: string;
   credit: CompanyCreditRow[];
+  /** 등급 확인서 이미지(등급 표시부) — 입찰 패키지 신용평가 서식에 삽입. */
+  creditImage: { storageKey: string; fileName: string } | null;
   finance: CompanyFinanceRow[];
   updatedAt: string | null;
 }
@@ -119,9 +121,32 @@ export async function getCompanyProfile(): Promise<CompanyProfile> {
     foundedYm: s(r.founded_ym),
     mainBusiness: s(r.main_business),
     credit,
+    creditImage: s(r.credit_image_key)
+      ? { storageKey: s(r.credit_image_key), fileName: s(r.credit_image_name) || "credit-image" }
+      : null,
     finance,
     updatedAt: r.updated_at != null ? String(r.updated_at) : null,
   };
+}
+
+/** 신용평가 등급 확인서 이미지 저장(교체) — 계약 문서 저장소의 company/ 프리픽스 사용. */
+export async function saveCreditImage(params: {
+  fileName: string;
+  contentType: string;
+  bytes: Uint8Array;
+  actorUserId: string | null;
+}): Promise<{ storageKey: string; fileName: string }> {
+  const { putContractDocument, sanitizeFilename } = await import("@/lib/storage/contract-document-storage");
+  const fileName = sanitizeFilename(params.fileName) || "credit-image.png";
+  const storageKey = ["company", "credit-rating", fileName].join("/");
+  const stored = await putContractDocument(storageKey, Buffer.from(params.bytes), params.contentType);
+  await withDbWrite(async (txn) => {
+    await txn.run(
+      "UPDATE company_profile SET credit_image_key = $1, credit_image_name = $2, updated_by = $3, updated_at = $4 WHERE profile_id = 'default'",
+      [stored.storageKey, fileName, params.actorUserId, new Date().toISOString()]
+    );
+  });
+  return { storageKey: stored.storageKey, fileName };
 }
 
 export async function saveCompanyProfile(

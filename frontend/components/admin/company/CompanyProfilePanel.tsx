@@ -54,6 +54,7 @@ interface Profile {
   foundedYm: string;
   mainBusiness: string;
   credit: CreditRow[];
+  creditImage: { storageKey: string; fileName: string } | null;
   finance: FinanceRow[];
   updatedAt: string | null;
 }
@@ -156,6 +157,7 @@ export function CompanyProfilePanel() {
   // 재무제표/등급서 분석
   const [financeParsing, setFinanceParsing] = useState(false);
   const [creditParsing, setCreditParsing] = useState(false);
+  const [creditImageUploading, setCreditImageUploading] = useState(false);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -315,6 +317,23 @@ export function CompanyProfilePanel() {
     }
   };
 
+  // 등급 확인서 이미지(등급 표시부 크롭) 업로드 — 입찰 패키지 신용평가 서식에 삽입됨
+  const uploadCreditImage = async (file: File) => {
+    setCreditImageUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const data = (await jfetch("/api/admin/company-profile/credit/image", { method: "POST", body: fd })) as {
+        creditImage: { storageKey: string; fileName: string };
+      };
+      setProfile((prev) => (prev ? { ...prev, creditImage: data.creditImage } : prev));
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setCreditImageUploading(false);
+    }
+  };
+
   // 신용평가 등급서 업로드 → 새 등급 행으로 추가(민간 CLIP·공공 등 종류별 복수 보유)
   const parseCreditFile = async (file: File) => {
     if (!profile) return;
@@ -387,6 +406,18 @@ export function CompanyProfilePanel() {
                 <h4 className="text-[12px] font-bold cd-text">신용평가 등급</h4>
                 <span className="text-[10px] cd-text-faint">민간(CLIP)·공공 등 평가 종류별 복수 등록</span>
                 <div className="ml-auto flex items-center gap-2">
+                  {profile.creditImage && (
+                    <span className="text-[10px] cd-text-faint truncate max-w-[160px]" title={profile.creditImage.fileName}>
+                      등급 이미지: {profile.creditImage.fileName}
+                    </span>
+                  )}
+                  <UploadButton
+                    label={creditImageUploading ? "업로드 중..." : profile.creditImage ? "등급 이미지 교체" : "등급 이미지"}
+                    busy={creditImageUploading}
+                    accept=".png,.jpg,.jpeg,.webp"
+                    title="등급 확인서에서 등급 표시부를 캡처한 이미지를 올려두면, 입찰 서류 패키지 생성 시 신용평가 서식의 스캔 자리에 자동 삽입됩니다."
+                    onFile={uploadCreditImage}
+                  />
                   <button
                     type="button"
                     className="cd-btn cd-btn-soft rounded-lg px-3 py-1.5 text-xs font-semibold inline-flex items-center gap-1"

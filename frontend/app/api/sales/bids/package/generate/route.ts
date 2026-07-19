@@ -53,7 +53,16 @@ export async function POST(req: NextRequest) {
       employeeIds: pkg.employeeIds,
     });
     const formBytes = await readStorageObject(form.storageKey);
-    const { bytes, warnings } = await fillPackageHwpx(formBytes, profile, data);
+    // 회사 프로필에 등급 확인서 이미지가 있으면 신용평가 서식 스캔을 교체
+    let creditImage: Uint8Array | undefined;
+    if (data.company.profile.creditImage?.storageKey) {
+      try {
+        creditImage = await readStorageObject(data.company.profile.creditImage.storageKey);
+      } catch {
+        creditImage = undefined;
+      }
+    }
+    const { bytes, warnings } = await fillPackageHwpx(formBytes, profile, data, { creditImage });
 
     await recordAuditLog({
       actorUserId: actor.userId,

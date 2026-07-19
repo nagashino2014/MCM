@@ -15,6 +15,24 @@ export interface ResolvedValue {
 
 const s = (v: unknown): string => (v == null ? "" : String(v).trim());
 
+/**
+ * 공고명 → 용역명 정제: '…용역'까지만 남기고 뒤의 '견적제출 안내공고' 등 공고성 꼬리를 제거.
+ * '용역' 표기가 없으면 원문 유지. (동의서·서약서 본문 『용역명』 치환 공용)
+ */
+export function cleanServiceTitle(title: string): string {
+  const t = s(title);
+  const m = t.match(/^(.*?용역)(?:\s|$)/);
+  return m ? m[1] : t;
+}
+
+/** 회사명 축약 표기: '주식회사 X' → '㈜X', '(주)X' → '㈜X' (서약서 등 좁은 셀 줄바꿈 방지). */
+export function abbrevCompanyName(name: string): string {
+  return s(name)
+    .replace(/^주식회사\s*/, "㈜")
+    .replace(/\(\s*주\s*\)\s*/g, "㈜")
+    .replace(/^유한회사\s*/, "㈲");
+}
+
 function ymText(value: string): string {
   const m = value.match(/(\d{4})\D?(\d{1,2})/);
   return m ? `${m[1]} 년 ${Number(m[2])} 월` : value;
@@ -139,7 +157,7 @@ export function resolveSingleValue(
 
   if (docType === "privacy_consent") {
     switch (field) {
-      case "serviceName": return { value: data.bid.title, mode: "quoted" };
+      case "serviceName": return { value: cleanServiceTitle(data.bid.title), mode: "quoted" };
       case "signerName": return null; // 본문 내 서명란 — 셀 교체 시 본문이 훼손되므로 원본 유지(수기)
     }
     return null;
@@ -149,8 +167,8 @@ export function resolveSingleValue(
     const now = new Date();
     switch (field) {
       case "pledgeDate": return { value: `${now.getFullYear()} 년 ${now.getMonth() + 1} 월 ${now.getDate()} 일` };
-      case "serviceName": return { value: data.bid.title, mode: "quoted" };
-      case "companyName": return { value: profile.companyName, prefixColon: true };
+      case "serviceName": return { value: cleanServiceTitle(data.bid.title), mode: "quoted" };
+      case "companyName": return { value: abbrevCompanyName(profile.companyName), prefixColon: true };
       case "position": return lead ? { value: lead.positionName, prefixColon: true } : null;
       case "name": return lead ? { value: lead.name, prefixColon: true } : null;
       case "birthDate": return lead ? { value: dotDate(lead.birthDate), prefixColon: true } : null;

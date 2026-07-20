@@ -35,6 +35,7 @@ export interface PackageContractRow {
 }
 
 export interface PackagePersonProject {
+  contractId: string;
   client: string;
   projectName: string;
   task: string;
@@ -47,9 +48,10 @@ export interface PackagePersonProject {
 export interface PackagePerson {
   employeeId: string;
   name: string;
-  /** 참여직위(PM/팀장/팀원 — 수행인력 확정에서 지정)·담당파트 */
+  /** 참여직위(PM/팀장/팀원 — 수행인력 확정에서 지정)·담당파트(업무기준·사업장기준) */
   role: string;
-  part: string;
+  workPart: string;
+  sitePart: string;
   positionName: string;
   engGrade: string;
   envGrade: string;
@@ -208,16 +210,19 @@ async function loadContractRows(contractIds: string[]): Promise<PackageContractR
 
 /**
  * 인당 자사 참여계약(개별 이력 경력표) — 참여기간 오름차순.
- * perfFilter(수행실적 설정)로 세분류·업종·연도·금액 범위를 걸러 개별 이력에 넣을 실적만 남긴다.
+ * perfFilter(수행실적 설정)로 세분류·업종·연도·금액 범위를 걸러 개별 이력에 넣을 실적만 남기고,
+ * excludedContractIds(실적 미리보기에서 제거한 건)는 최종 제외한다.
+ * (실적 미리보기 API 에서도 재사용 — export)
  */
-async function loadPersonProjects(
+export async function loadPersonProjects(
   employeeId: string,
-  filter: StaffConfig["perfFilter"] | null
+  filter: StaffConfig["perfFilter"] | null,
+  excludedContractIds?: string[]
 ): Promise<PackagePersonProject[]> {
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT c.contract_title, c.service_subtype,
+      `SELECT c.contract_id, c.contract_title, c.service_subtype,
               COALESCE(NULLIF(c.contract_date,''), c.started_at, c.created_at) AS contract_date,
               cp.company_name AS client_name,
               COALESCE(c.current_amount, c.contract_amount) AS amount,
@@ -233,33 +238,37 @@ async function loadPersonProjects(
       [employeeId]
     )
   );
+  const excluded = new Set(excludedContractIds ?? []);
   const out: PackagePersonProject[] = [];
   for (const r of rows) {
+    if (excluded.has(s(r.contract_id))) continue;
     const amount = Number(r.amount ?? 0);
+    const from = s(r.participated_from) || s(r.started_at);
+    const to = s(r.participated_to) || s(r.ended_at);
     if (filter) {
-      // 세분류: '모두 적용'이 아니면 선택 세분류만
-      if (!filter.applyAllSubtypes && filter.subtypes.length > 0) {
+      // 세분류: 선택 목록이 있으면 그 세분류만('모두 적용' 저장 시 파생 태그 전체가 목록에 담김)
+      if (filter.subtypes.length > 0) {
         if (!filter.subtypes.includes(canonicalServiceSubtype(s(r.service_subtype) || null))) continue;
       }
-      // 업종: '모두 적용'이 아니면 선택 업종 라벨 매칭만
-      if (!filter.applyAllIndustries && filter.industries.length > 0) {
+      // 업종: 선택 목록이 있으면 매칭 필수 — 사업장 업종 정보가 없는 계약은 표시하지 않는다
+      if (filter.industries.length > 0) {
         const hit = filter.industries.some((label) =>
           matchesIndustryText([s(r.industry_name), s(r.industry_code)], label)
         );
         if (!hit) continue;
       }
-      // 연도: 선택된 연도만(빈 배열 = 전체)
+      // 연도: 실제 수행 연도(참여 시작→계약 시작→계약일 순) 기준. 빈 배열 = 전체
       if (filter.years.length > 0) {
-        if (!filter.years.includes(s(r.contract_date).slice(0, 4))) continue;
+        const y = (from || s(r.contract_date)).slice(0, 4);
+        if (!filter.years.includes(y)) continue;
       }
       // 금액 범위(만원)
       const man = amount / 10_000;
       if (filter.amountMinMan != null && man < filter.amountMinMan) continue;
       if (filter.amountMaxMan != null && man > filter.amountMaxMan) continue;
     }
-    const from = s(r.participated_from) || s(r.started_at);
-    const to = s(r.participated_to) || s(r.ended_at);
     out.push({
+      contractId: s(r.contract_id),
       client: s(r.client_name),
       projectName: s(r.contract_title),
       task: s(r.task_label),
@@ -279,7 +288,11 @@ async function loadPerson(
 ): Promise<PackagePerson | null> {
   const detail = await getEmployeeDetail(employeeId);
   if (!detail) return null;
-  const projects = await loadPersonProjects(employeeId, staffConfig?.perfFilter ?? null);
+  const projects = await loadPersonProjects(
+    employeeId,
+    staffConfig?.perfFilter ?? null,
+    staffConfig?.excluded?.[employeeId]
+  );
   for (const p of projects) p.thenCompany = companyName;
 
   const joined = s(detail.hiredAt);
@@ -315,7 +328,8 @@ async function loadPerson(
     employeeId,
     name: s(detail.name),
     role: s(roleConf?.role),
-    part: s(roleConf?.part),
+    workPart: s(roleConf?.workPart),
+    sitePart: s(roleConf?.sitePart),
     positionName: s(detail.positionName),
     engGrade: s(detail.engGrade),
     envGrade: s(detail.envGrade),

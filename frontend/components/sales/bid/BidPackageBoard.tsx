@@ -14,12 +14,15 @@ import {
   CheckSquare,
   ChevronDown,
   ChevronRight,
+  Eye,
   FileStack,
   FileText,
   Paperclip,
   Plus,
+  RotateCcw,
   Save,
   Search,
+  Trash2,
   Users,
   X,
 } from "lucide-react";
@@ -54,8 +57,13 @@ interface PackageForm {
 }
 
 interface StaffConfigUI {
-  roles: Record<string, { role: string; part: string }>;
-  parts: string[];
+  roles: Record<string, { role: string; workPart: string; sitePart: string }>;
+  /** 담당파트 후보 — 업무기준(계획서작성팀·품질보증팀 등) */
+  workParts: string[];
+  /** 담당파트 후보 — 사업장기준(발주처 산하 개별 사업장·본부) */
+  siteParts: string[];
+  /** 조직도 배치 — nested: 업무파트를 사업장 산하 배치 / separate: separatePart 를 사업장과 동급 배치 */
+  orgLayout: { mode: "nested" | "separate"; separatePart: string };
   perfFilter: {
     subtypes: string[];
     industries: string[];
@@ -65,11 +73,15 @@ interface StaffConfigUI {
     applyAllSubtypes: boolean;
     applyAllIndustries: boolean;
   };
+  /** 실적 미리보기에서 인력별로 제외한 계약(employeeId → contractId[]) */
+  excluded: Record<string, string[]>;
 }
 
 const EMPTY_STAFF_CONFIG: StaffConfigUI = {
   roles: {},
-  parts: [],
+  workParts: [],
+  siteParts: [],
+  orgLayout: { mode: "nested", separatePart: "" },
   perfFilter: {
     subtypes: [],
     industries: [],
@@ -79,7 +91,17 @@ const EMPTY_STAFF_CONFIG: StaffConfigUI = {
     applyAllSubtypes: true,
     applyAllIndustries: true,
   },
+  excluded: {},
 };
+
+interface PreviewProject {
+  contractId: string;
+  client: string;
+  projectName: string;
+  task: string;
+  amountEok: string;
+  periodText: string;
+}
 
 const PARTICIPATION_ROLES = ["PM", "팀장", "팀원"];
 const PERF_YEARS = Array.from({ length: 9 }, (_, i) => String(2018 + i));
@@ -174,7 +196,7 @@ function TagFilterRow({
   lead?: string;
   tags: string[];
   active: string[];
-  /** '모두 적용' 체크 시 개별 토글 비활성(전체 적용 상태 표시) */
+  /** '모두 적용' 체크 상태(전체 적용 표시) — 태그 클릭은 가능하며, 클릭 시 부모가 해제 처리 */
   disabled?: boolean;
   onToggle: (tag: string) => void;
   onAll: (all: boolean) => void;
@@ -192,10 +214,9 @@ function TagFilterRow({
             <button
               key={t}
               type="button"
-              disabled={disabled}
               onClick={() => onToggle(t)}
               className={
-                "text-[11px] rounded-full px-2.5 py-1 border transition disabled:cursor-not-allowed " +
+                "text-[11px] rounded-full px-2.5 py-1 border transition " +
                 (on ? "border-[color:var(--cd-primary)] cd-tint-primary cd-text" : "cd-border-c cd-text-faint")
               }
             >
@@ -208,6 +229,64 @@ function TagFilterRow({
             {allActive ? "모두 해제" : "모두 선택"}
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+/** 담당파트 태그 편집기 — 업무기준/사업장기준 파트 목록의 추가·삭제. */
+function PartTagEditor({
+  label,
+  hint,
+  parts,
+  placeholder,
+  onAdd,
+  onRemove,
+}: {
+  label: string;
+  hint: string;
+  parts: string[];
+  placeholder: string;
+  onAdd: (part: string) => void;
+  onRemove: (part: string) => void;
+}) {
+  const [draft, setDraft] = useState("");
+  const commit = () => {
+    const v = draft.trim();
+    if (v && !parts.includes(v)) onAdd(v);
+    setDraft("");
+  };
+  return (
+    <div className="flex items-start gap-2">
+      <div className="shrink-0 w-[72px] pt-1">
+        <p className="text-[11px] font-semibold cd-text">{label}</p>
+        <p className="text-[9px] cd-text-faint leading-tight">{hint}</p>
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5 flex-1 min-w-0">
+        {parts.map((pt) => (
+          <span key={pt} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 cd-tint-primary text-[11px] cd-text">
+            {pt}
+            <button type="button" onClick={() => onRemove(pt)}>
+              <X className="w-3 h-3 cd-text-faint" />
+            </button>
+          </span>
+        ))}
+        <input
+          className="cd-input !py-1 text-[11px]"
+          style={{ width: 150 }}
+          value={draft}
+          placeholder={placeholder}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commit();
+            }
+          }}
+        />
+        <button type="button" className="cd-btn cd-btn-soft rounded-lg px-2 py-1 text-[11px]" onClick={commit}>
+          <Plus className="w-3 h-3" />
+        </button>
       </div>
     </div>
   );
@@ -247,7 +326,10 @@ export function BidPackageBoard() {
   const [staffConfig, setStaffConfig] = useState<StaffConfigUI>(EMPTY_STAFF_CONFIG);
   const [orgModal, setOrgModal] = useState(false);
   const [orgSnapshot, setOrgSnapshot] = useState<OrganizationSnapshot | null>(null);
-  const [newPart, setNewPart] = useState("");
+  // 실적 미리보기 모달 — 인력별 개별 이력사항에 들어갈 실적 목록(현재 수행실적 설정 기준)
+  const [preview, setPreview] = useState<{ employeeId: string; name: string } | null>(null);
+  const [previewProjects, setPreviewProjects] = useState<PreviewProject[] | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   // 양식에 조직도(자유양식) 서식 존재 여부 — form_profile 의 org_chart 문서
   const [orgChartInForm, setOrgChartInForm] = useState<boolean | null>(null);
 
@@ -483,6 +565,45 @@ export function BidPackageBoard() {
     return Array.from(values);
   }, [contractIds, nodeCache]);
 
+  // 서버(생성·미리보기)에 보내는 확정 필터 — '모두 적용'이면 파생 태그 전체를 목록으로 채운다
+  // (서버는 목록 기반 매칭: 업종 목록이 있으면 업종 정보 없는 계약은 제외된다)
+  const effectivePerfFilter = useMemo(
+    () => ({
+      ...staffConfig.perfFilter,
+      subtypes: staffConfig.perfFilter.applyAllSubtypes ? [...selectedSubtypeTags] : staffConfig.perfFilter.subtypes,
+      industries: staffConfig.perfFilter.applyAllIndustries ? [...selectedIndustryTags] : staffConfig.perfFilter.industries,
+    }),
+    [staffConfig.perfFilter, selectedSubtypeTags, selectedIndustryTags]
+  );
+
+  // 실적 미리보기 열기 — 현재 필터 기준 실적 로드(제외 건 포함 전체, 화면에서 제거/복원 토글)
+  const openPreview = async (p: Participant) => {
+    setPreview({ employeeId: p.employeeId, name: p.name });
+    setPreviewProjects(null);
+    setPreviewError(null);
+    try {
+      const res = await fetch("/api/sales/bids/package/person-projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ employeeId: p.employeeId, perfFilter: effectivePerfFilter }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { projects?: PreviewProject[]; error?: string };
+      if (!res.ok) throw new Error(data?.error ?? "실적을 불러오지 못했습니다.");
+      setPreviewProjects(data.projects ?? []);
+    } catch (err) {
+      setPreviewError((err as Error).message);
+    }
+  };
+
+  const toggleExcluded = (employeeId: string, contractId: string) => {
+    setStaffConfig((prev) => {
+      const cur = new Set(prev.excluded[employeeId] ?? []);
+      if (cur.has(contractId)) cur.delete(contractId);
+      else cur.add(contractId);
+      return { ...prev, excluded: { ...prev.excluded, [employeeId]: Array.from(cur) } };
+    });
+  };
+
   const uploadForm = async (file: File) => {
     if (!bid?.orgName) {
       alert("공고의 발주기관명이 없어 양식을 등록할 수 없습니다.");
@@ -504,11 +625,14 @@ export function BidPackageBoard() {
     }
   };
 
-  // 문서 생성 — 저장된 작업 상태(양식·계약·인력) 기준으로 채움본 HWPX zip 다운로드
+  // 문서 생성 — 현재 화면 상태를 자동 저장한 뒤 채움본 HWPX zip 다운로드
+  // (저장을 누르지 않고 생성해도 참여직위·수행실적 설정이 반영되도록)
   const generate = async () => {
     if (!bidId) return;
     setGenerating(true);
     try {
+      const saved = await save();
+      if (!saved) return;
       const res = await fetch("/api/sales/bids/package/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -552,8 +676,8 @@ export function BidPackageBoard() {
     });
   };
 
-  const save = useCallback(async () => {
-    if (!bidId) return;
+  const save = useCallback(async (): Promise<boolean> => {
+    if (!bidId) return false;
     setSaving(true);
     try {
       // 참여직위/파트 설정은 확정(체크) 인력만 유지
@@ -570,19 +694,21 @@ export function BidPackageBoard() {
           formId: form?.formId ?? null,
           contractIds,
           employeeIds: Array.from(pickedEmployees),
-          staffConfig: { ...staffConfig, roles },
+          staffConfig: { ...staffConfig, roles, perfFilter: effectivePerfFilter },
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "저장 실패");
       setPkg(data.package ?? null);
       setSavedAt(new Date().toLocaleTimeString("ko-KR"));
+      return true;
     } catch (err) {
       alert((err as Error).message);
+      return false;
     } finally {
       setSaving(false);
     }
-  }, [bidType, bidId, form, contractIds, pickedEmployees, staffConfig]);
+  }, [bidType, bidId, form, contractIds, pickedEmployees, staffConfig, effectivePerfFilter]);
 
   return (
     <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
@@ -629,8 +755,9 @@ export function BidPackageBoard() {
             </div>
           </section>
 
-          {/* 좌열: ① 양식+② 실적 계약 / 우열: ④ 문서 구성+③ 수행인력 — 열 단위 배치로 빈 공간 없이 이어 붙임 */}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
+          {/* 좌열: ① 양식+② 실적 계약 / 우열: ④ 문서 구성+③ 수행인력 — 두 열을 stretch 로 같은
+              높이로 맞추고, ② 는 flex-1(고정 상한)로 남는 공간을 채워 좌우 합이 일치한다 */}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <div className="flex flex-col gap-4 min-w-0">
             {/* ① 제출 양식 — 발주처 라이브러리 */}
             <section className="cd-card rounded-3xl p-5 cd-reveal delay-2 flex flex-col gap-3">
@@ -685,8 +812,8 @@ export function BidPackageBoard() {
               )}
             </section>
 
-            {/* ② 실적 계약 선택 */}
-            <section className="cd-card rounded-3xl p-5 cd-reveal delay-3 flex flex-col min-h-0">
+            {/* ② 실적 계약 선택 — 고정 높이(열 stretch): 트리를 열어도 카드가 늘어나지 않고 내부 스크롤 */}
+            <section className="cd-card rounded-3xl p-5 cd-reveal delay-3 flex flex-col flex-1 min-h-[440px]">
               <h3 className="font-bold cd-text flex items-center gap-2 mb-3">
                 <CheckSquare className="w-4 h-4 cd-text-primary" />
                 ② 실적 계약 선택
@@ -771,7 +898,7 @@ export function BidPackageBoard() {
             </div>
             <div className="flex flex-col gap-4 min-w-0">
             {/* ④ 문서 구성(안내) — 생성은 P3 */}
-            <section className="cd-card rounded-3xl p-5 cd-reveal delay-2 flex flex-col gap-3">
+            <section className="cd-card rounded-3xl p-5 cd-reveal delay-2 flex flex-col gap-3 min-h-[330px]">
               <h3 className="font-bold cd-text flex items-center gap-2">
                 <FileStack className="w-4 h-4 cd-text-primary" />
                 ④ 패키지 문서 구성
@@ -807,7 +934,7 @@ export function BidPackageBoard() {
             </section>
             {/* ③ 수행인력 확정 — 리스트 + 참여직위/담당파트/수행실적 설정(단일 카드) */}
             <section className="cd-card rounded-3xl p-5 cd-reveal delay-3 flex flex-col min-h-0 gap-4">
-              <div className="flex flex-col min-h-[200px]">
+              <div className="flex flex-col min-h-[240px]">
               <h3 className="font-bold cd-text flex items-center gap-2 mb-3">
                 <Users className="w-4 h-4 cd-text-primary" />
                 ③ 수행인력 확정
@@ -819,7 +946,7 @@ export function BidPackageBoard() {
                 실적 계약의 수행인력 합산 후보에 조직도로 인력을 추가할 수 있습니다. 확정 인력 기준으로
                 집계표·개별 이력사항·증빙 첨부가 구성됩니다.
               </p>
-              <div className="flex-1 min-h-0 max-h-[220px] overflow-y-auto scrollbar-hide rounded-xl border cd-border-c">
+              <div className="flex-1 min-h-0 max-h-[264px] overflow-y-auto scrollbar-hide rounded-xl border cd-border-c">
                 {participantsLoading ? (
                   <p className="p-5 text-sm cd-text-faint">수행인력을 불러오는 중입니다.</p>
                 ) : participantsError ? (
@@ -850,7 +977,17 @@ export function BidPackageBoard() {
                         <span className="cd-text-faint shrink-0">{p.positionName ?? ""}</span>
                         {p.engGrade && <span className="text-[10px] rounded-full px-1.5 py-0.5 cd-tint-primary shrink-0">{p.engGrade}</span>}
                         {p.specialtyField && <span className="text-[10px] cd-text-faint truncate">{p.specialtyField}</span>}
-                        <span className="ml-auto text-[10px] cd-text-faint shrink-0">참여 {p.contractCount}건</span>
+                        <button
+                          type="button"
+                          className="ml-auto shrink-0 text-[10px] cd-text-primary rounded-lg border cd-border-c px-2 py-0.5 hover:bg-[color:var(--cd-surface)] inline-flex items-center gap-1"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            openPreview(p);
+                          }}
+                        >
+                          <Eye className="w-3 h-3" /> 실적 미리보기
+                        </button>
                       </label>
                     ))}
                   </div>
@@ -878,29 +1015,33 @@ export function BidPackageBoard() {
                     </span>
                   )}
                 </div>
-                <div className="rounded-xl border cd-border-c divide-y cd-border-c max-h-[240px] overflow-y-auto scrollbar-hide">
+                <div className="rounded-xl border cd-border-c divide-y cd-border-c max-h-[288px] overflow-y-auto scrollbar-hide">
                   {Array.from(pickedEmployees).length === 0 && (
                     <p className="p-3 text-[11px] cd-text-faint">확정(체크)한 인력이 여기에 표시됩니다.</p>
                   )}
                   {participants
                     .filter((p) => pickedEmployees.has(p.employeeId))
                     .map((p) => {
-                      const conf = staffConfig.roles[p.employeeId] ?? { role: "", part: "" };
-                      const setConf = (patch: Partial<{ role: string; part: string }>) =>
+                      const conf = staffConfig.roles[p.employeeId] ?? { role: "", workPart: "", sitePart: "" };
+                      const setConf = (patch: Partial<{ role: string; workPart: string; sitePart: string }>) =>
                         setStaffConfig((prev) => ({
                           ...prev,
                           roles: { ...prev.roles, [p.employeeId]: { ...conf, ...patch } },
                         }));
                       return (
-                        <div key={p.employeeId} className="flex items-center gap-2 px-2.5 py-1.5 text-xs">
+                        <div key={p.employeeId} className="flex items-center gap-2 px-2.5 py-1.5 text-xs flex-wrap">
                           <span className="rounded-full px-2 py-0.5 cd-tint-primary shrink-0">{p.name} {p.positionName ?? ""}</span>
-                          <select className="cd-select !py-1 text-xs" style={{ width: 130 }} value={conf.role} onChange={(e) => setConf({ role: e.target.value })}>
-                            <option value="">참여직위 선택</option>
+                          <select className="cd-select !py-1 text-xs" style={{ width: 110 }} value={conf.role} onChange={(e) => setConf({ role: e.target.value })}>
+                            <option value="">참여직위</option>
                             {PARTICIPATION_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
                           </select>
-                          <select className="cd-select !py-1 text-xs" style={{ width: 150 }} value={conf.part} onChange={(e) => setConf({ part: e.target.value })}>
-                            <option value="">담당 파트 선택</option>
-                            {staffConfig.parts.map((pt) => <option key={pt} value={pt}>{pt}</option>)}
+                          <select className="cd-select !py-1 text-xs" style={{ width: 140 }} value={conf.workPart} onChange={(e) => setConf({ workPart: e.target.value })}>
+                            <option value="">업무기준 파트</option>
+                            {staffConfig.workParts.map((pt) => <option key={pt} value={pt}>{pt}</option>)}
+                          </select>
+                          <select className="cd-select !py-1 text-xs" style={{ width: 140 }} value={conf.sitePart} onChange={(e) => setConf({ sitePart: e.target.value })}>
+                            <option value="">사업장기준 파트</option>
+                            {staffConfig.siteParts.map((pt) => <option key={pt} value={pt}>{pt}</option>)}
                           </select>
                         </div>
                       );
@@ -908,53 +1049,77 @@ export function BidPackageBoard() {
                 </div>
               </div>
 
-              {/* 담당파트 설정 */}
+              {/* 담당파트 설정 — 업무기준/사업장기준 2계열 + 조직도 배치 옵션 */}
               <div>
                 <h4 className="text-[12px] font-bold cd-text mb-2">담당파트 설정</h4>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {staffConfig.parts.map((pt) => (
-                    <span key={pt} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 cd-tint-primary text-[11px] cd-text">
-                      {pt}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setStaffConfig((prev) => ({ ...prev, parts: prev.parts.filter((x) => x !== pt) }))
+                <div className="flex flex-col gap-2">
+                  <PartTagEditor
+                    label="업무기준"
+                    hint="업무 기반 파트"
+                    parts={staffConfig.workParts}
+                    placeholder="예: 계획서작성팀, 품질보증팀"
+                    onAdd={(v) => setStaffConfig((prev) => ({ ...prev, workParts: [...prev.workParts, v] }))}
+                    onRemove={(v) =>
+                      setStaffConfig((prev) => ({
+                        ...prev,
+                        workParts: prev.workParts.filter((x) => x !== v),
+                        orgLayout:
+                          prev.orgLayout.separatePart === v
+                            ? { ...prev.orgLayout, separatePart: "" }
+                            : prev.orgLayout,
+                      }))
+                    }
+                  />
+                  <PartTagEditor
+                    label="사업장기준"
+                    hint="발주처 산하 사업장"
+                    parts={staffConfig.siteParts}
+                    placeholder="예: 영동발전본부, 삼척발전본부"
+                    onAdd={(v) => setStaffConfig((prev) => ({ ...prev, siteParts: [...prev.siteParts, v] }))}
+                    onRemove={(v) => setStaffConfig((prev) => ({ ...prev, siteParts: prev.siteParts.filter((x) => x !== v) }))}
+                  />
+                  {/* 조직도 배치 — PM(최상위) → 사업장기준(2순위) → 업무기준(3순위) */}
+                  <div className="rounded-lg border cd-border-c p-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px]">
+                    <span className="cd-text font-semibold shrink-0">조직도 배치</span>
+                    <label className="flex items-center gap-1.5 cd-text">
+                      <input
+                        type="radio"
+                        name="org-layout"
+                        checked={staffConfig.orgLayout.mode === "nested"}
+                        onChange={() =>
+                          setStaffConfig((prev) => ({ ...prev, orgLayout: { ...prev.orgLayout, mode: "nested" } }))
+                        }
+                      />
+                      업무파트를 각 사업장 산하에 배치
+                    </label>
+                    <label className="flex items-center gap-1.5 cd-text">
+                      <input
+                        type="radio"
+                        name="org-layout"
+                        checked={staffConfig.orgLayout.mode === "separate"}
+                        onChange={() =>
+                          setStaffConfig((prev) => ({ ...prev, orgLayout: { ...prev.orgLayout, mode: "separate" } }))
+                        }
+                      />
+                      선택한 업무파트만 사업장과 동급 배치
+                    </label>
+                    {staffConfig.orgLayout.mode === "separate" && (
+                      <select
+                        className="cd-select !py-1 text-[11px]"
+                        style={{ width: 140 }}
+                        value={staffConfig.orgLayout.separatePart}
+                        onChange={(e) =>
+                          setStaffConfig((prev) => ({
+                            ...prev,
+                            orgLayout: { ...prev.orgLayout, separatePart: e.target.value },
+                          }))
                         }
                       >
-                        <X className="w-3 h-3 cd-text-faint" />
-                      </button>
-                    </span>
-                  ))}
-                  <input
-                    className="cd-input !py-1 text-[11px]"
-                    style={{ width: 140 }}
-                    value={newPart}
-                    placeholder="파트명 (예: 영동발전본부)"
-                    onChange={(e) => setNewPart(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        const v = newPart.trim();
-                        if (v && !staffConfig.parts.includes(v)) {
-                          setStaffConfig((prev) => ({ ...prev, parts: [...prev.parts, v] }));
-                        }
-                        setNewPart("");
-                      }
-                    }}
-                  />
-                  <button
-                    type="button"
-                    className="cd-btn cd-btn-soft rounded-lg px-2 py-1 text-[11px]"
-                    onClick={() => {
-                      const v = newPart.trim();
-                      if (v && !staffConfig.parts.includes(v)) {
-                        setStaffConfig((prev) => ({ ...prev, parts: [...prev.parts, v] }));
-                      }
-                      setNewPart("");
-                    }}
-                  >
-                    <Plus className="w-3 h-3" />
-                  </button>
+                        <option value="">분리할 파트 선택</option>
+                        {staffConfig.workParts.map((pt) => <option key={pt} value={pt}>{pt}</option>)}
+                      </select>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -973,15 +1138,28 @@ export function BidPackageBoard() {
                       active={staffConfig.perfFilter.subtypes}
                       disabled={staffConfig.perfFilter.applyAllSubtypes}
                       onToggle={(tag) =>
-                        setStaffConfig((prev) => ({
-                          ...prev,
-                          perfFilter: {
-                            ...prev.perfFilter,
-                            subtypes: prev.perfFilter.subtypes.includes(tag)
-                              ? prev.perfFilter.subtypes.filter((x) => x !== tag)
-                              : [...prev.perfFilter.subtypes, tag],
-                          },
-                        }))
+                        setStaffConfig((prev) => {
+                          // '모두 적용' 상태에서 태그를 끄면 자동 해제 후 나머지 태그만 유지
+                          if (prev.perfFilter.applyAllSubtypes) {
+                            return {
+                              ...prev,
+                              perfFilter: {
+                                ...prev.perfFilter,
+                                applyAllSubtypes: false,
+                                subtypes: selectedSubtypeTags.filter((x) => x !== tag),
+                              },
+                            };
+                          }
+                          return {
+                            ...prev,
+                            perfFilter: {
+                              ...prev.perfFilter,
+                              subtypes: prev.perfFilter.subtypes.includes(tag)
+                                ? prev.perfFilter.subtypes.filter((x) => x !== tag)
+                                : [...prev.perfFilter.subtypes, tag],
+                            },
+                          };
+                        })
                       }
                       onAll={(all) =>
                         setStaffConfig((prev) => ({
@@ -996,15 +1174,27 @@ export function BidPackageBoard() {
                       active={staffConfig.perfFilter.industries}
                       disabled={staffConfig.perfFilter.applyAllIndustries}
                       onToggle={(tag) =>
-                        setStaffConfig((prev) => ({
-                          ...prev,
-                          perfFilter: {
-                            ...prev.perfFilter,
-                            industries: prev.perfFilter.industries.includes(tag)
-                              ? prev.perfFilter.industries.filter((x) => x !== tag)
-                              : [...prev.perfFilter.industries, tag],
-                          },
-                        }))
+                        setStaffConfig((prev) => {
+                          if (prev.perfFilter.applyAllIndustries) {
+                            return {
+                              ...prev,
+                              perfFilter: {
+                                ...prev.perfFilter,
+                                applyAllIndustries: false,
+                                industries: selectedIndustryTags.filter((x) => x !== tag),
+                              },
+                            };
+                          }
+                          return {
+                            ...prev,
+                            perfFilter: {
+                              ...prev.perfFilter,
+                              industries: prev.perfFilter.industries.includes(tag)
+                                ? prev.perfFilter.industries.filter((x) => x !== tag)
+                                : [...prev.perfFilter.industries, tag],
+                            },
+                          };
+                        })
                       }
                       onAll={(all) =>
                         setStaffConfig((prev) => ({
@@ -1134,6 +1324,74 @@ export function BidPackageBoard() {
                   <p className="text-[12px] cd-text-faint py-6 text-center">조직도를 불러오는 중입니다.</p>
                 )}
                 <p className="text-[10px] cd-text-faint">인원을 클릭하면 수행인력 리스트에 추가·확정됩니다.</p>
+              </div>
+            </div>
+          )}
+
+          {/* 실적 미리보기 — 개별 이력사항 경력표와 같은 구성으로, 현재 수행실적 설정이 적용된 목록 */}
+          {preview && (
+            <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={() => setPreview(null)}>
+              <div className="cdash cdash-vars cd-fields-white cd-card-bg rounded-2xl border cd-border-c w-full max-w-3xl max-h-[85vh] overflow-y-auto p-4 flex flex-col gap-3" data-theme={theme} onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-[14px] font-bold cd-text flex-1">
+                    실적 미리보기 — {preview.name}
+                    <span className="ml-2 text-[11px] font-normal cd-text-faint">개별 이력사항에 포함될 용역 수행실적</span>
+                  </h3>
+                  <button type="button" className="cd-btn cd-btn-soft text-[12px]" onClick={() => setPreview(null)}>
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                {previewError ? (
+                  <p className="text-[12px] cd-error-text py-6 text-center">{previewError}</p>
+                ) : previewProjects == null ? (
+                  <p className="text-[12px] cd-text-faint py-6 text-center">실적을 불러오는 중입니다.</p>
+                ) : previewProjects.length === 0 ? (
+                  <p className="text-[12px] cd-text-faint py-6 text-center">현재 수행실적 설정 조건에 해당하는 실적이 없습니다.</p>
+                ) : (
+                  <div className="rounded-xl border cd-border-c overflow-x-auto">
+                    <table className="w-full text-[11px]">
+                      <thead>
+                        <tr className="cd-text-faint border-b cd-border-c bg-[color:var(--cd-surface)]">
+                          <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">발주기관</th>
+                          <th className="px-2 py-1.5 text-left font-semibold">참여 사업명</th>
+                          <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">담당업무</th>
+                          <th className="px-2 py-1.5 text-right font-semibold whitespace-nowrap">사업비(억원)</th>
+                          <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">용역기간</th>
+                          <th className="px-2 py-1.5 w-[52px]"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {previewProjects.map((pr) => {
+                          const removed = (staffConfig.excluded[preview.employeeId] ?? []).includes(pr.contractId);
+                          return (
+                            <tr key={pr.contractId} className={"border-b cd-border-c last:border-b-0 " + (removed ? "opacity-40" : "")}>
+                              <td className="px-2 py-1.5 cd-text whitespace-nowrap">{pr.client || "-"}</td>
+                              <td className={"px-2 py-1.5 cd-text " + (removed ? "line-through" : "")}>{pr.projectName}</td>
+                              <td className="px-2 py-1.5 cd-text whitespace-nowrap">{pr.task || "-"}</td>
+                              <td className="px-2 py-1.5 cd-text text-right font-mono whitespace-nowrap">{pr.amountEok || "-"}</td>
+                              <td className="px-2 py-1.5 cd-text font-mono whitespace-nowrap">{pr.periodText || "-"}</td>
+                              <td className="px-2 py-1.5 text-center">
+                                <button
+                                  type="button"
+                                  className={"inline-flex items-center gap-0.5 text-[10px] " + (removed ? "cd-text-primary" : "cd-text-faint hover:text-[color:var(--cd-error)]")}
+                                  title={removed ? "복원" : "이 실적을 개별 이력에서 제거"}
+                                  onClick={() => toggleExcluded(preview.employeeId, pr.contractId)}
+                                >
+                                  {removed ? <RotateCcw className="w-3 h-3" /> : <Trash2 className="w-3 h-3" />}
+                                  {removed ? "복원" : "제거"}
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                <p className="text-[10px] cd-text-faint">
+                  제거한 실적은 문서 생성 시 이 인력의 개별 이력사항에서 빠집니다(참여당시 소속·직위는 자사·현 직위로
+                  채워짐). 제거 상태는 '작업 상태 저장' 또는 문서 생성 시 함께 저장됩니다.
+                </p>
               </div>
             </div>
           )}

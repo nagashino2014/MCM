@@ -75,7 +75,9 @@ function buildPrompt(serialized: string): string {
     "8. '주요연혁' 라벨 아래/옆의 **큰 내용 셀(또는 라벨 행 바로 다음의 1x1 표)** 이 연혁 목록이 들어갈 " +
     "자리입니다 — company_profile 의 historyList 를 그 내용 셀에 매핑하세요(라벨 셀 아님).\n" +
     "9. 신용평가 등급 서식이 **평가기관 확인서 스캔 이미지를 붙이는 형태**(입력 셀 없이 빈 표/이미지만 있음)면 " +
-    "credit_rating 문서로 분류하되 fields 를 빈 배열로 두세요 — 텍스트를 넣을 자리가 아닙니다.\n\n" +
+    "credit_rating 문서로 분류하되 fields 를 빈 배열로 두세요 — 텍스트를 넣을 자리가 아닙니다.\n" +
+    "10. **양식에 실제로 존재하는 서식만 나열하세요.** 카탈로그에 있어도 양식에 해당 서식(표제·표)이 없으면 " +
+    "documents 에 포함하지 마세요(예: 조직도 서식이 없는 양식에 org_chart 를 만들어내지 말 것).\n\n" +
     "## 출력(JSON만, 설명 금지)\n" +
     '{"documents":[{"docType":"","title":"","tables":[0],"fields":[{"field":"","label":"","table":0,"row":0,"col":0}],' +
     '"repeat":{"table":0,"fromRow":1,"columns":[{"col":0,"field":"","label":""}]} 또는 null,"perPersonTable":false}]}\n\n' +
@@ -88,7 +90,7 @@ const num = (v: unknown): number | null => {
   return Number.isInteger(n) && n >= 0 ? n : null;
 };
 
-function sanitizeProfile(raw: unknown, model: string): FormProfile {
+function sanitizeProfile(raw: unknown, model: string, paraTexts: string[]): FormProfile {
   const root = (raw ?? {}) as Record<string, unknown>;
   const docsRaw = Array.isArray(root.documents) ? root.documents : [];
   const documents: ProfileDoc[] = docsRaw.map((d) => {
@@ -126,7 +128,15 @@ function sanitizeProfile(raw: unknown, model: string): FormProfile {
       perPersonTable: o.perPersonTable === true,
     };
   });
-  return { analyzedAt: new Date().toISOString(), model, documents };
+  // 실체 검증 — 표·필드·반복이 전혀 없는 문서는 LLM 환각일 수 있다.
+  // 표제(title)가 양식의 실제 문단 텍스트에 존재할 때만 유지(조직도 등 자유양식 인정).
+  const flatText = paraTexts.join("\n").replace(/\s+/g, "");
+  const verified = documents.filter((doc) => {
+    if (doc.tables.length > 0 || doc.fields.length > 0 || doc.repeat) return true;
+    const key = doc.title.replace(/\s+/g, "");
+    return key.length > 0 && flatText.includes(key);
+  });
+  return { analyzedAt: new Date().toISOString(), model, documents: verified };
 }
 
 /** HWPX 바이트 → 파싱 → LLM 매핑(저장 없음). 검증·재사용 가능한 분석 코어. */
@@ -142,7 +152,8 @@ export async function analyzeFormBytes(bytes: Uint8Array): Promise<FormProfile> 
     maxTokens: 8000,
     timeoutMs: 180_000,
   });
-  const profile = sanitizeProfile(raw, MODEL);
+  const paraTexts = doc.blocks.filter((b): b is { type: "para"; text: string } => b.type === "para").map((b) => b.text);
+  const profile = sanitizeProfile(raw, MODEL, paraTexts);
   if (profile.documents.length === 0) {
     throw new Error("양식에서 표준 서류를 식별하지 못했습니다.");
   }

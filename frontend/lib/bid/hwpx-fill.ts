@@ -186,9 +186,13 @@ function fillRepeatRows(
   return out;
 }
 
-/** 행이 늘어난 표에 '셀 단위로 나눔'(pageBreak=TABLE) 강제 — 개별이력 등 NONE 표가 넘칠 때 잘림 방지. */
+/** 행이 늘어난 표에 '셀 단위로 나눔'(pageBreak=CELL) 강제 — 개별이력 등 NONE 표가 넘칠 때 잘림 방지. */
 function forceCellPageBreak(tblXml: string): string {
-  return tblXml.replace(/(<hp:tbl\b[^>]*pageBreak=")(\w+)(")/, (_, a, __, c) => a + "TABLE" + c);
+  if (/<hp:tbl\b[^>]*pageBreak="/.test(tblXml)) {
+    return tblXml.replace(/(<hp:tbl\b[^>]*pageBreak=")(\w+)(")/, (_, a, __, c) => a + "CELL" + c);
+  }
+  // pageBreak 속성이 없는 표 — 여는 태그에 삽입
+  return tblXml.replace(/<hp:tbl\b/, '<hp:tbl pageBreak="CELL"');
 }
 
 // 셀 폭 추정용 — 전각 글자 1자 ≈ 1100 HWPUNIT(10pt 기준), 셀 안 여백 여유분.
@@ -228,6 +232,82 @@ function widenCellIfNeeded(tblXml: string, row: number, col: number, value: stri
   let out = tblXml;
   for (const p of parts) out = out.slice(0, p.start) + p.xml + out.slice(p.end);
   return out;
+}
+
+/**
+ * 서식 사이 '페이지 밀어내기용' 연속 빈 문단 블록을 정리한다.
+ * 원본 양식은 빈 문단 수십 개로 다음 서식을 다음 페이지 첫 줄에 맞춰 두는데, 표 행이 늘어나면
+ * 그 개수만큼 다음 서식 위에 공백이 쌓인다 → 빈 문단 블록(3개 이상)을 제거하고 다음 서식의
+ * 첫 문단에 쪽나눔(pageBreak="1")을 부여해 행 수와 무관하게 항상 첫 줄에서 시작하게 한다.
+ */
+// XML 텍스트에 나타날 수 없는 NUL 문자를 표 자리표시 토큰 구분자로 사용
+const TBL_TOKEN = String.fromCharCode(0);
+const SPACER_MIN_RUN = 3;
+
+function collapseSpacerParagraphs(sectionXml: string): string {
+  // 표 블록을 토큰으로 치환해 최상위 문단만 안전하게 다룬다(표 안 문단 오인 방지)
+  const tableStore: string[] = [];
+  const flat = sectionXml.replace(TBL_RE, (tbl) => {
+    tableStore.push(tbl);
+    return TBL_TOKEN + "TBL" + (tableStore.length - 1) + TBL_TOKEN;
+  });
+  const paras = [...flat.matchAll(/<hp:p\b[\s\S]*?<\/hp:p>/g)].map((m) => ({
+    xml: m[0],
+    start: m.index ?? 0,
+    end: (m.index ?? 0) + m[0].length,
+  }));
+  const isEmptyPara = (xml: string): boolean =>
+    !xml.includes(TBL_TOKEN) &&
+    !/<hp:pic\b|<hp:ctrl\b/.test(xml) &&
+    ![...xml.matchAll(/<hp:t[^>]*>([\s\S]*?)<\/hp:t>/g)].some((m) => m[1].trim().length > 0);
+  const withPageBreak = (xml: string): string => {
+    const head = /^<hp:p\b[^>]*>/.exec(xml)?.[0] ?? "";
+    if (/pageBreak="/.test(head)) {
+      return xml.replace(/^(<hp:p\b[^>]*pageBreak=")(\w+)(")/, (_, a, __, c) => a + "1" + c);
+    }
+    return xml.replace(/^<hp:p\b/, '<hp:p pageBreak="1"');
+  };
+  // 서식 표제([별첨 서식 N]·【양식 N】 등) 문단 — 항상 새 페이지 첫 줄에서 시작해야 한다
+  const isFormTitlePara = (xml: string): boolean => {
+    const text = [...xml.matchAll(/<hp:t[^>]*>([\s\S]*?)<\/hp:t>/g)].map((m) => m[1]).join("");
+    return /^\s*(\[\s*별\s*첨|\[\s*별\s*지|\[\s*서\s*식|\[\s*양\s*식|【\s*서\s*식|【\s*양\s*식)/.test(text);
+  };
+
+  const edits: { start: number; end: number; xml: string }[] = [];
+  const brokenParas = new Set<number>(); // 이미 pageBreak 를 부여한 문단 index(중복 편집 방지)
+  let seenContent = false;
+  let i = 0;
+  while (i < paras.length) {
+    if (!isEmptyPara(paras[i].xml)) {
+      // 서식 표제 문단은 앞 공백 유무와 무관하게 쪽나눔 부여(문서 첫 문단 제외)
+      if (seenContent && isFormTitlePara(paras[i].xml) && !brokenParas.has(i)) {
+        edits.push({ start: paras[i].start, end: paras[i].end, xml: withPageBreak(paras[i].xml) });
+        brokenParas.add(i);
+      }
+      seenContent = true;
+      i += 1;
+      continue;
+    }
+    let j = i;
+    while (j < paras.length && isEmptyPara(paras[j].xml)) j += 1;
+    const runLen = j - i;
+    const nextIsTitle = j < paras.length && isFormTitlePara(paras[j].xml);
+    // 문서 첫머리 공백은 길이 무관 제거(첫 줄부터 시작), 이후는 밀어내기 블록(>=3) 또는
+    // 서식 표제 직전 공백을 제거하고 다음 문단에 쪽나눔을 부여한다
+    if (!seenContent || runLen >= SPACER_MIN_RUN || nextIsTitle) {
+      edits.push({ start: paras[i].start, end: paras[j - 1].end, xml: "" });
+      if (seenContent && j < paras.length && !brokenParas.has(j)) {
+        edits.push({ start: paras[j].start, end: paras[j].end, xml: withPageBreak(paras[j].xml) });
+        brokenParas.add(j);
+      }
+    }
+    i = j;
+  }
+
+  let out = flat;
+  edits.sort((a, b) => b.start - a.start);
+  for (const e of edits) out = out.slice(0, e.start) + e.xml + out.slice(e.end);
+  return out.replace(new RegExp(TBL_TOKEN + "TBL(\\d+)" + TBL_TOKEN, "g"), (_, idx) => tableStore[Number(idx)]);
 }
 
 interface TableSlot {
@@ -436,6 +516,9 @@ export async function fillPackageHwpx(
       }
     }
   }
+
+  // 서식 사이 페이지 밀어내기용 빈 문단 정리 — 행이 늘어도 다음 서식이 항상 첫 줄에서 시작
+  xml = collapseSpacerParagraphs(xml);
 
   // 줄 레이아웃 캐시 제거 — 한글이 열 때 전체 재계산(자동 페이지 분할 포함)
   xml = xml.replace(LINESEG_RE, "");

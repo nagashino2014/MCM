@@ -26,10 +26,18 @@ export interface BidPackageForm {
 
 /** 수행인력 설정 — 참여직위/담당파트/개별 이력 수행실적 필터. */
 export interface StaffConfig {
-  /** employeeId → 참여직위(PM/팀장/팀원)·담당파트 */
-  roles: Record<string, { role: string; part: string }>;
-  /** 담당파트 후보(사용자가 그때그때 세팅 — 사업장명·계획서작성팀 등) */
-  parts: string[];
+  /** employeeId → 참여직위(PM/팀장/팀원)·담당파트(업무기준·사업장기준) */
+  roles: Record<string, { role: string; workPart: string; sitePart: string }>;
+  /** 담당파트 후보 — 업무기준(계획서작성팀·품질보증팀 등 업무 기반 파트) */
+  workParts: string[];
+  /** 담당파트 후보 — 사업장기준(용역 범위에 포함된 발주처 산하 개별 사업장·본부) */
+  siteParts: string[];
+  /**
+   * 조직도 배치 옵션 — PM(최상위) → 사업장기준(2순위) → 업무기준(3순위).
+   * nested: 업무파트를 각 사업장 산하에 모두 배치 / separate: separatePart(예: 품질보증팀)만
+   * 사업장기준 파트들과 같은 레벨에 배치.
+   */
+  orgLayout: { mode: "nested" | "separate"; separatePart: string };
   perfFilter: {
     subtypes: string[]; // 선택된 용역 세분류(빈 배열 = 제한 없음과 구분 위해 applyAll 참조)
     industries: string[];
@@ -39,11 +47,15 @@ export interface StaffConfig {
     applyAllSubtypes: boolean;
     applyAllIndustries: boolean;
   };
+  /** 실적 미리보기에서 인력별로 제외한 계약(employeeId → contractId[]) — 개별 이력에서 빠진다 */
+  excluded: Record<string, string[]>;
 }
 
 export const EMPTY_STAFF_CONFIG: StaffConfig = {
   roles: {},
-  parts: [],
+  workParts: [],
+  siteParts: [],
+  orgLayout: { mode: "nested", separatePart: "" },
   perfFilter: {
     subtypes: [],
     industries: [],
@@ -53,6 +65,7 @@ export const EMPTY_STAFF_CONFIG: StaffConfig = {
     applyAllSubtypes: true,
     applyAllIndustries: true,
   },
+  excluded: {},
 };
 
 export interface BidPackage {
@@ -105,10 +118,33 @@ function parseStaffConfig(value: unknown): StaffConfig {
   try {
     const v = typeof value === "string" ? JSON.parse(value) : value;
     if (v && typeof v === "object") {
-      const o = v as Partial<StaffConfig>;
+      const o = v as Partial<StaffConfig> & { parts?: unknown };
+      // 참여직위·담당파트 — 구버전 { part } 저장분은 업무기준(workPart)으로 승계
+      const roles: StaffConfig["roles"] = {};
+      if (o.roles && typeof o.roles === "object") {
+        for (const [id, rc] of Object.entries(o.roles as Record<string, Record<string, unknown>>)) {
+          if (!rc || typeof rc !== "object") continue;
+          roles[String(id)] = {
+            role: String(rc.role ?? ""),
+            workPart: String(rc.workPart ?? rc.part ?? ""),
+            sitePart: String(rc.sitePart ?? ""),
+          };
+        }
+      }
+      const layout = (o.orgLayout && typeof o.orgLayout === "object" ? o.orgLayout : {}) as Record<string, unknown>;
       return {
-        roles: (o.roles && typeof o.roles === "object" ? o.roles : {}) as StaffConfig["roles"],
-        parts: Array.isArray(o.parts) ? o.parts.map(String) : [],
+        roles,
+        // 구버전 parts[] 는 업무기준 파트로 승계
+        workParts: Array.isArray(o.workParts)
+          ? o.workParts.map(String)
+          : Array.isArray(o.parts)
+            ? (o.parts as unknown[]).map(String)
+            : [],
+        siteParts: Array.isArray(o.siteParts) ? o.siteParts.map(String) : [],
+        orgLayout: {
+          mode: layout.mode === "separate" ? "separate" : "nested",
+          separatePart: String(layout.separatePart ?? ""),
+        },
         perfFilter: {
           subtypes: Array.isArray(o.perfFilter?.subtypes) ? o.perfFilter.subtypes.map(String) : [],
           industries: Array.isArray(o.perfFilter?.industries) ? o.perfFilter.industries.map(String) : [],
@@ -118,6 +154,12 @@ function parseStaffConfig(value: unknown): StaffConfig {
           applyAllSubtypes: o.perfFilter?.applyAllSubtypes !== false,
           applyAllIndustries: o.perfFilter?.applyAllIndustries !== false,
         },
+        excluded: Object.fromEntries(
+          Object.entries(o.excluded && typeof o.excluded === "object" ? o.excluded : {}).map(([k, v]) => [
+            String(k),
+            Array.isArray(v) ? v.map(String) : [],
+          ])
+        ),
       };
     }
   } catch {

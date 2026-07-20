@@ -290,11 +290,12 @@ async function loadPerson(
 ): Promise<PackagePerson | null> {
   const detail = await getEmployeeDetail(employeeId);
   if (!detail) return null;
-  const projects = await loadPersonProjects(
-    employeeId,
-    staffConfig?.perfFilter ?? null,
-    staffConfig?.excluded?.[employeeId]
-  );
+  // 업종 필터 해제 인력은 선택업종을 무시(용역분류·연도·금액만 적용)
+  let perfFilter = staffConfig?.perfFilter ?? null;
+  if (perfFilter && staffConfig?.industryBypass?.includes(employeeId)) {
+    perfFilter = { ...perfFilter, industries: [] };
+  }
+  const projects = await loadPersonProjects(employeeId, perfFilter, staffConfig?.excluded?.[employeeId]);
   for (const p of projects) p.thenCompany = companyName;
 
   const joined = s(detail.hiredAt);

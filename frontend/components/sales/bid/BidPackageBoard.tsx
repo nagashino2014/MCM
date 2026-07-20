@@ -72,6 +72,8 @@ interface StaffConfigUI {
   orgLayout: { mode: "nested" | "separate"; separatePart: string };
   /** 후보 리스트에서 삭제한 인력(계약 참여자라도 숨김) */
   removedCandidates: string[];
+  /** 업종 필터를 해제한 인력 — 개별 이력에 선택업종 필터를 적용하지 않는다 */
+  industryBypass: string[];
   perfFilter: {
     subtypes: string[];
     industries: string[];
@@ -91,6 +93,7 @@ const EMPTY_STAFF_CONFIG: StaffConfigUI = {
   siteParts: [],
   orgLayout: { mode: "nested", separatePart: "" },
   removedCandidates: [],
+  industryBypass: [],
   perfFilter: {
     subtypes: [],
     industries: [],
@@ -666,16 +669,16 @@ export function BidPackageBoard() {
     [staffConfig.perfFilter, selectedSubtypeTags, selectedIndustryTags]
   );
 
-  // 실적 미리보기 열기 — 현재 필터 기준 실적 로드(제외 건 포함 전체, 화면에서 제거/복원 토글)
-  const openPreview = async (p: Participant) => {
-    setPreview({ employeeId: p.employeeId, name: p.name });
+  // 실적 미리보기 로드 — 현재 필터 기준(업종 필터 해제 인력은 선택업종 무시), 제거/복원은 화면 토글
+  const loadPreviewProjects = async (employeeId: string, bypassIndustry: boolean) => {
     setPreviewProjects(null);
     setPreviewError(null);
     try {
+      const perfFilter = bypassIndustry ? { ...effectivePerfFilter, industries: [] } : effectivePerfFilter;
       const res = await fetch("/api/sales/bids/package/person-projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ employeeId: p.employeeId, perfFilter: effectivePerfFilter }),
+        body: JSON.stringify({ employeeId, perfFilter }),
       });
       const data = (await res.json().catch(() => ({}))) as { projects?: PreviewProject[]; error?: string };
       if (!res.ok) throw new Error(data?.error ?? "실적을 불러오지 못했습니다.");
@@ -683,6 +686,23 @@ export function BidPackageBoard() {
     } catch (err) {
       setPreviewError((err as Error).message);
     }
+  };
+
+  const openPreview = (p: Participant) => {
+    setPreview({ employeeId: p.employeeId, name: p.name });
+    loadPreviewProjects(p.employeeId, staffConfig.industryBypass.includes(p.employeeId));
+  };
+
+  // 업종 필터 해제/적용 토글 — 상태는 staffConfig 에 저장되어 문서 생성 시에도 반영된다
+  const toggleIndustryBypass = (employeeId: string) => {
+    const next = !staffConfig.industryBypass.includes(employeeId);
+    setStaffConfig((prev) => ({
+      ...prev,
+      industryBypass: next
+        ? [...prev.industryBypass, employeeId]
+        : prev.industryBypass.filter((id) => id !== employeeId),
+    }));
+    loadPreviewProjects(employeeId, next);
   };
 
   const toggleExcluded = (employeeId: string, contractId: string) => {
@@ -937,8 +957,8 @@ export function BidPackageBoard() {
               )}
             </section>
 
-            {/* ② 실적 계약 선택 — 고정 높이(열 stretch): 트리를 열어도 카드가 늘어나지 않고 내부 스크롤 */}
-            <section className="cd-card rounded-3xl p-5 cd-reveal delay-3 flex flex-col flex-1 min-h-[440px]">
+            {/* ② 실적 계약 선택 — 절대 높이 고정: 트리를 열어도 카드는 늘지 않고 내부 스크롤 */}
+            <section className="cd-card rounded-3xl p-5 cd-reveal delay-3 flex flex-col h-[480px] shrink-0">
               <h3 className="font-bold cd-text flex items-center gap-2 mb-3">
                 <CheckSquare className="w-4 h-4 cd-text-primary" />
                 ② 실적 계약 선택
@@ -1472,6 +1492,19 @@ export function BidPackageBoard() {
                   </h3>
                   <button type="button" className="cd-btn cd-btn-soft text-[12px]" onClick={() => setPreview(null)}>
                     <X className="w-4 h-4" />
+                  </button>
+                </div>
+                {/* 업종 필터 해제 — 해당 업종 실적이 없는 참여인력도 전체 수행 용역을 개별 이력에 담을 수 있게 */}
+                <div className="flex items-center justify-end gap-2">
+                  {staffConfig.industryBypass.includes(preview.employeeId) && (
+                    <span className="text-[10px] cd-text-faint">선택업종 필터 무시 중 — 용역분류·연도 필터만 적용</span>
+                  )}
+                  <button
+                    type="button"
+                    className="cd-btn cd-btn-soft rounded-lg px-2.5 py-1 text-[11px] font-semibold"
+                    onClick={() => toggleIndustryBypass(preview.employeeId)}
+                  >
+                    {staffConfig.industryBypass.includes(preview.employeeId) ? "업종 필터 적용" : "업종 필터 해제"}
                   </button>
                 </div>
                 {previewError ? (

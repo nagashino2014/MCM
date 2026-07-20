@@ -57,6 +57,11 @@ export interface StaffConfig {
   };
   /** 실적 미리보기에서 인력별로 제외한 계약(employeeId → contractId[]) — 개별 이력에서 빠진다 */
   excluded: Record<string, string[]>;
+  /**
+   * 업종 필터를 해제한 인력(employeeId 목록) — 해당 인력의 개별 이력은 선택업종 필터를 무시하고
+   * 용역분류·연도·금액 필터만 적용한다(해당 업종 실적이 없는 참여인력 대응).
+   */
+  industryBypass: string[];
 }
 
 export const EMPTY_STAFF_CONFIG: StaffConfig = {
@@ -75,6 +80,7 @@ export const EMPTY_STAFF_CONFIG: StaffConfig = {
     applyAllIndustries: true,
   },
   excluded: {},
+  industryBypass: [],
 };
 
 export interface BidPackage {
@@ -178,6 +184,7 @@ function parseStaffConfig(value: unknown): StaffConfig {
             Array.isArray(v) ? v.map(String) : [],
           ])
         ),
+        industryBypass: Array.isArray(o.industryBypass) ? o.industryBypass.map(String) : [],
       };
     }
   } catch {

@@ -11,13 +11,14 @@ import type { PackageData, PackagePerson } from "@/lib/bid/package-data";
  * 겸직(assignments 복수)은 해당하는 모든 팀 박스에 이름이 들어간다.
  */
 
-/** 조직도에 필요한 borderFill 5종(id) — hwpx-fill 이 header.xml 에 등록 후 전달 */
+/** 조직도에 필요한 borderFill 6종(id) — hwpx-fill 이 header.xml 에 등록 후 전달 */
 export interface OrgBorderFills {
   none: number; // 무테두리(여백·간격 셀)
   box: number; // 4변 실선(박스)
   right: number; // 우변만 실선(세로 연결선)
   top: number; // 상변만 실선(가로 분배선)
   topRight: number; // 상변+우변(가로선과 만나는 세로선)
+  leftRight: number; // 좌+우변 실선(박스 사이 간격 셀 — 원본 작성예시와 동일)
 }
 
 /** header.xml 의 borderFill 항목 XML 5종 생성(등록용). */
@@ -127,6 +128,8 @@ interface GridRow {
 const ROW_LABEL_H = 560;
 const ROW_BODY_H = 420;
 const ROW_CONN_H = 330;
+/** 형제 박스 사이 간격 열 폭(HWPUNIT) — 원본 작성예시 실측값 */
+const GAP_COL_W = 563;
 
 interface PlacedNode {
   node: OrgNode;
@@ -134,23 +137,29 @@ interface PlacedNode {
   children: PlacedNode[];
 }
 
-function countLeaves(node: OrgNode): number {
-  if (node.children.length === 0) return 1;
-  return node.children.reduce((acc, c) => acc + countLeaves(c), 0);
+/** 노드가 차지하는 열 수 — 리프 2열, 내부는 자식 합 + 형제 사이 간격 열. */
+function widthOf(node: OrgNode): number {
+  if (node.children.length === 0) return 2;
+  return node.children.reduce((acc, c) => acc + widthOf(c), 0) + (node.children.length - 1);
 }
 
-/** 리프당 2열을 배정하고 각 노드의 중앙 열을 계산한다. */
-function placeNode(node: OrgNode, colStart: number): PlacedNode {
+/** 리프당 2열 + 형제 사이 간격 열 1개를 배정하고 각 노드의 중앙 열을 계산한다. */
+function placeNode(node: OrgNode, colStart: number, gapCols: Set<number>): PlacedNode {
   if (node.children.length === 0) {
     return { node, centerCol: colStart, children: [] };
   }
   const children: PlacedNode[] = [];
   let cursor = colStart;
-  for (const c of node.children) {
-    children.push(placeNode(c, cursor));
-    cursor += countLeaves(c) * 2;
-  }
-  const center = Math.floor((children[0].centerCol + children[children.length - 1].centerCol) / 2);
+  node.children.forEach((c, i) => {
+    if (i > 0) {
+      gapCols.add(cursor);
+      cursor += 1;
+    }
+    children.push(placeNode(c, cursor, gapCols));
+    cursor += widthOf(c);
+  });
+  let center = Math.floor((children[0].centerCol + children[children.length - 1].centerCol) / 2);
+  if (gapCols.has(center)) center -= 1; // 세로선이 간격 열에 걸리지 않게
   return { node, centerCol: center, children };
 }
 
@@ -165,27 +174,46 @@ function byLevel(root: PlacedNode): PlacedNode[][] {
   return levels;
 }
 
-/** 트리 → 행/셀 그리드. */
-export function layoutOrgChart(root: OrgNode): { rows: GridRow[]; totalCols: number } {
-  const placed = placeNode(root, 0);
-  const totalCols = countLeaves(root) * 2;
+/** 트리 → 행/셀 그리드. gapCols = 형제 박스 사이 간격 열(좁은 폭). */
+export function layoutOrgChart(root: OrgNode): { rows: GridRow[]; totalCols: number; gapCols: Set<number> } {
+  const gapCols = new Set<number>();
+  const placed = placeNode(root, 0, gapCols);
+  const totalCols = widthOf(root);
   const levels = byLevel(placed);
   const rows: GridRow[] = [];
+
+  // 박스 열 구간 — 중앙 2열이 간격 열을 걸치면 다음 일반 열까지 확장(좌우 대칭 유지)
+  const boxRange = (center: number): { col: number; span: number } => {
+    let end = center + 1;
+    if (gapCols.has(end)) end += 1;
+    return { col: center, span: end - center + 1 };
+  };
 
   levels.forEach((nodes, li) => {
     // 이 레벨의 박스 행수 — twoTier 노드가 있으면 2행(1단 박스는 rowSpan 2 로 병합)
     const tier = nodes.some((n) => n.node.twoTier) ? 2 : 1;
     const rowLabel: GridRow = { height: ROW_LABEL_H, cells: [] };
     const rowBody: GridRow = { height: ROW_BODY_H, cells: [] };
+    const boxSpans: { col: number; span: number }[] = [];
     for (const n of nodes) {
-      const col = n.centerCol; // 박스 = 중앙 2열(centerCol, centerCol+1)
+      const r = boxRange(n.centerCol);
+      boxSpans.push(r);
       if (n.node.twoTier) {
-        rowLabel.cells.push({ col, span: 2, rowSpan: 1, border: "box", lines: [n.node.lines[0]] });
-        rowBody.cells.push({ col, span: 2, rowSpan: 1, border: "box", lines: n.node.lines.slice(1) });
+        rowLabel.cells.push({ col: r.col, span: r.span, rowSpan: 1, border: "box", lines: [n.node.lines[0]] });
+        rowBody.cells.push({ col: r.col, span: r.span, rowSpan: 1, border: "box", lines: n.node.lines.slice(1) });
       } else {
-        rowLabel.cells.push({ col, span: 2, rowSpan: tier, border: "box", lines: n.node.lines });
+        rowLabel.cells.push({ col: r.col, span: r.span, rowSpan: tier, border: "box", lines: n.node.lines });
       }
     }
+    // 박스 사이 간격 셀 — 양옆이 모두 박스인 간격 열은 좌우 세로 테두리만(원본 작성예시 방식)
+    const inBox = (c: number) => boxSpans.some((b) => c >= b.col && c < b.col + b.span);
+    for (const g of gapCols) {
+      if (!inBox(g) && inBox(g - 1) && inBox(g + 1)) {
+        rowLabel.cells.push({ col: g, span: 1, rowSpan: tier, border: "leftRight", lines: [] });
+      }
+    }
+    rowLabel.cells.sort((a, b) => a.col - b.col);
+    rowBody.cells.sort((a, b) => a.col - b.col);
     rows.push(rowLabel);
     if (tier === 2) rows.push(rowBody);
 
@@ -213,7 +241,7 @@ export function layoutOrgChart(root: OrgNode): { rows: GridRow[]; totalCols: num
       rows.push(connA, connB);
     }
   });
-  return { rows, totalCols };
+  return { rows, totalCols, gapCols };
 }
 
 /* ---------- HWPX 표 렌더 ---------- */
@@ -235,11 +263,14 @@ function escapeXml(v: string): string {
 
 /** 조직도 그리드 → hp:tbl XML. */
 export function renderOrgTableXml(
-  grid: { rows: GridRow[]; totalCols: number },
+  grid: { rows: GridRow[]; totalCols: number; gapCols: Set<number> },
   fills: OrgBorderFills,
   style: OrgRenderStyle
 ): string {
-  const colW = Math.floor(style.totalWidthHwp / grid.totalCols);
+  const gapCount = grid.gapCols.size;
+  const baseW = Math.floor((style.totalWidthHwp - gapCount * GAP_COL_W) / Math.max(1, grid.totalCols - gapCount));
+  const colWidths = Array.from({ length: grid.totalCols }, (_, i) => (grid.gapCols.has(i) ? GAP_COL_W : baseW));
+  const spanW = (col: number, span: number) => colWidths.slice(col, col + span).reduce((a, b) => a + b, 0);
   const para = (text: string) =>
     `<hp:p id="0" paraPrIDRef="${style.paraPrIDRef}" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">` +
     `<hp:run charPrIDRef="${style.charPrIDRef}"><hp:t>${escapeXml(text)}</hp:t></hp:run></hp:p>`;
@@ -250,7 +281,7 @@ export function renderOrgTableXml(
       `<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="CENTER" linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">${paras}</hp:subList>` +
       `<hp:cellAddr colAddr="${c.col}" rowAddr="${row}"/>` +
       `<hp:cellSpan colSpan="${c.span}" rowSpan="${c.rowSpan}"/>` +
-      `<hp:cellSz width="${colW * c.span}" height="${height}"/>` +
+      `<hp:cellSz width="${spanW(c.col, c.span)}" height="${height}"/>` +
       `<hp:cellMargin left="141" right="141" top="141" bottom="141"/></hp:tc>`
     );
   };
@@ -286,9 +317,10 @@ export function renderOrgTableXml(
   });
 
   const totalH = grid.rows.reduce((acc, r) => acc + r.height, 0);
+  const totalW = colWidths.reduce((a, b) => a + b, 0);
   const preamble = style.tblPreamble
     .replace(/rowCnt="\d+"/, `rowCnt="${grid.rows.length}"`)
     .replace(/colCnt="\d+"/, `colCnt="${grid.totalCols}"`)
-    .replace(/(<hp:sz width=")\d+(" height=")\d+(")/, (_, a, b, c) => a + String(colW * grid.totalCols) + b + String(totalH) + c);
+    .replace(/(<hp:sz width=")\d+(" height=")\d+(")/, (_, a, b, c) => a + String(totalW) + b + String(totalH) + c);
   return `${preamble}${trs.join("")}</hp:tbl>`;
 }

@@ -343,15 +343,17 @@ function registerOrgBorderFills(headerXml: string): { headerXml: string; fills: 
     right: maxId + 3,
     top: maxId + 4,
     topRight: maxId + 5,
+    leftRight: maxId + 6,
   };
   const appended =
     orgBorderFillXml(fills.none, {}) +
     orgBorderFillXml(fills.box, { l: true, r: true, t: true, b: true }) +
     orgBorderFillXml(fills.right, { r: true }) +
     orgBorderFillXml(fills.top, { t: true }) +
-    orgBorderFillXml(fills.topRight, { t: true, r: true });
+    orgBorderFillXml(fills.topRight, { t: true, r: true }) +
+    orgBorderFillXml(fills.leftRight, { l: true, r: true });
   let out = headerXml.replace("</hh:borderFills>", appended + "</hh:borderFills>");
-  out = out.replace(/(<hh:borderFills itemCnt=")(\d+)(")/, (_, a, n, c) => a + String(Number(n) + 5) + c);
+  out = out.replace(/(<hh:borderFills itemCnt=")(\d+)(")/, (_, a, n, c) => a + String(Number(n) + 6) + c);
   return { headerXml: out, fills };
 }
 

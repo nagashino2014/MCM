@@ -310,6 +310,28 @@ function collapseSpacerParagraphs(sectionXml: string): string {
   return out.replace(new RegExp(TBL_TOKEN + "TBL(\\d+)" + TBL_TOKEN, "g"), (_, idx) => tableStore[Number(idx)]);
 }
 
+// HWPUNIT: 1pt = 100
+const HWPUNIT_PER_PT = 100;
+
+/** (row,col) 셀의 왼쪽 안 여백을 pt 로 설정 — 값이 셀 경계에 붙지 않게 한다. */
+function setCellLeftMargin(tblXml: string, row: number, col: number, pt: number): string {
+  let done = false;
+  return tblXml.replace(TC_RE, (tc) => {
+    if (done) return tc;
+    const addr = ADDR_RE.exec(tc);
+    if (!addr || Number(addr[2]) !== row || Number(addr[1]) !== col) return tc;
+    done = true;
+    const unit = Math.round(pt * HWPUNIT_PER_PT);
+    let out = tc.replace(/(<hp:tc\b[^>]*hasMargin=")(\w+)(")/, (_, a, __, c) => a + "1" + c);
+    if (/<hp:cellMargin\b/.test(out)) {
+      out = out.replace(/(<hp:cellMargin left=")(\d+)(")/, (_, a, __, c) => a + String(unit) + c);
+    } else {
+      out = out.replace(/(<hp:cellSz[^>]*\/>)/, `$1<hp:cellMargin left="${unit}" right="141" top="141" bottom="141"/>`);
+    }
+    return out;
+  });
+}
+
 interface TableSlot {
   start: number;
   end: number;
@@ -338,7 +360,7 @@ function fillDocTable(
 
   // 단일 필드(이 표를 참조하는 것만) — 같은 셀에 복수 필드가 매핑되면(자유 기입 1x1 표 등)
   // "라벨: 값" 줄로 합쳐 넣는다. quoted(본문 『…』 치환)는 실패 시 본문 훼손 방지 위해 폴백 없이 경고만.
-  const byCell = new Map<string, { field: string; label: string; value: string; prefixColon: boolean }[]>();
+  const byCell = new Map<string, { field: string; label: string; value: string; prefixColon: boolean; topPadLines: number; leftIndentPt: number }[]>();
   for (const f of doc.fields) {
     if (f.table !== tableIndex || f.row == null || f.col == null) continue;
     const resolved = resolveSingleValue(doc.docType, f.field, data, personIndex);
@@ -351,21 +373,32 @@ function fillDocTable(
     }
     const key = `${f.row}:${f.col}`;
     const list = byCell.get(key) ?? [];
-    list.push({ field: f.field, label: f.label, value: resolved.value, prefixColon: resolved.prefixColon === true });
+    list.push({
+      field: f.field,
+      label: f.label,
+      value: resolved.value,
+      prefixColon: resolved.prefixColon === true,
+      topPadLines: resolved.topPadLines ?? 0,
+      leftIndentPt: resolved.leftIndentPt ?? 0,
+    });
     byCell.set(key, list);
   }
   for (const [key, entries] of byCell) {
     const [row, col] = key.split(":").map(Number);
+    const topPad = Math.max(...entries.map((e) => e.topPadLines));
+    const leftIndent = Math.max(...entries.map((e) => e.leftIndentPt));
     const value =
-      entries.length === 1
+      "\n".repeat(topPad) +
+      (entries.length === 1
         ? (entries[0].prefixColon ? `: ${entries[0].value}` : entries[0].value)
-        : entries.map((e) => `${e.label || e.field} : ${e.value}`).join("\n");
+        : entries.map((e) => `${e.label || e.field} : ${e.value}`).join("\n"));
     const [next, ok] = setCellText(out, row, col, value);
     out = next;
     if (!ok) {
       warnings.push(`${doc.docType}: 셀(${row},${col})을 찾지 못함`);
       continue;
     }
+    if (leftIndent > 0) out = setCellLeftMargin(out, row, col, leftIndent);
     // ': 값' 기입형(서약서 등) 좁은 셀은 줄바꿈 방지 위해 이웃 셀에서 폭을 빌려 확장
     if (entries.some((e) => e.prefixColon)) out = widenCellIfNeeded(out, row, col, value);
   }
@@ -425,21 +458,45 @@ export async function fillPackageHwpx(
       const template = tables[templateIndex];
       if (!template) continue;
       const n = personCount(data);
+      // 슬롯의 '서식 블록' = 직전 표 문단 끝 ~ 이 표를 감싼 문단 끝.
+      // 서식 표제([별첨 서식 N]·양식명·구분선)와 선행 공백 문단이 포함되므로, 초과 인원은
+      // 블록째 복제(표제 유지 + collapse 패스가 표제에 쪽나눔 부여 → 인당 1페이지),
+      // 잉여 서식은 블록째 제거(표만 지우면 표제가 남는 문제 방지).
+      const blockRangeOf = (slot: TableSlot): { start: number; end: number } => {
+        const paraEnd = xml.indexOf("</hp:p>", slot.end);
+        const end = paraEnd >= 0 ? paraEnd + "</hp:p>".length : slot.end;
+        const prev = tables.filter((t) => t.end <= slot.start).sort((a, b) => b.end - a.end)[0];
+        let start: number;
+        if (prev) {
+          const prevParaEnd = xml.indexOf("</hp:p>", prev.end);
+          start = prevParaEnd >= 0 ? prevParaEnd + "</hp:p>".length : slot.start;
+        } else {
+          start = xml.lastIndexOf("<hp:p", slot.start);
+        }
+        return { start, end };
+      };
+      const lastSlot = slots[slots.length - 1];
+      const lastBlock = blockRangeOf(lastSlot);
+      const lastBlockXml = xml.slice(lastBlock.start, lastBlock.end);
+      const extraBlocks: string[] = [];
       for (let i = 0; i < Math.max(slots.length, n); i += 1) {
-        const slot = slots[Math.min(i, slots.length - 1)];
         if (i < n) {
           // person i 로 채움(모든 좌표는 템플릿 표 기준이라 templateIndex 로 해석)
           const filled = fillDocTable(template.xml, doc, templateIndex, data, i, warnings);
           if (i < slots.length) {
             replacements.push({ start: slots[i].start, end: slots[i].end, xml: filled });
           } else {
-            // 인원이 표보다 많음 — 마지막 표 뒤에 이어붙임
-            replacements.push({ start: slot.end, end: slot.end, xml: filled });
+            // 인원이 표보다 많음 — 마지막 서식 블록을 복제해 표 부분만 채움본으로 교체
+            extraBlocks.push(lastBlockXml.replace(lastSlot.xml, filled));
           }
         } else if (i < slots.length) {
-          // 인원이 표보다 적음 — 남는 표 제거
-          replacements.push({ start: slots[i].start, end: slots[i].end, xml: "" });
+          // 인원이 표보다 적음 — 남는 서식 블록(표제 포함) 제거
+          replacements.push({ ...blockRangeOf(slots[i]), xml: "" });
         }
+      }
+      if (extraBlocks.length > 0) {
+        // 같은 위치 복수 삽입은 적용 순서에 따라 순서가 뒤집히므로 하나로 합쳐 1회 삽입
+        replacements.push({ start: lastBlock.end, end: lastBlock.end, xml: extraBlocks.join("") });
       }
       continue;
     }

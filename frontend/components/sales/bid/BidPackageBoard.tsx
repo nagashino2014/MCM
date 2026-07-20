@@ -329,25 +329,25 @@ function StaffRoleRow({
   };
   const labelOf = (a: PartAssignmentUI) => [a.sitePart, a.workPart].filter(Boolean).join(" · ");
   return (
-    <div className="px-2.5 py-1.5 text-xs flex flex-col gap-1.5">
-      <div className="flex items-center gap-2 flex-wrap">
+    <div className="px-2.5 py-1.5 text-xs flex flex-col gap-1.5 border-b cd-border-c min-w-0">
+      <div className="flex items-center gap-1.5 flex-wrap">
         <span className="rounded-full px-2 py-0.5 cd-tint-primary shrink-0">
           {participant.name} {participant.positionName ?? ""}
         </span>
         <select
           className="cd-select !py-1 text-xs"
-          style={{ width: 100 }}
+          style={{ width: 92 }}
           value={conf.role}
           onChange={(e) => onChange({ ...conf, role: e.target.value })}
         >
           <option value="">참여직위</option>
           {PARTICIPATION_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
         </select>
-        <select className="cd-select !py-1 text-xs" style={{ width: 130 }} value={draftSite} onChange={(e) => setDraftSite(e.target.value)}>
+        <select className="cd-select !py-1 text-xs" style={{ width: 110 }} value={draftSite} onChange={(e) => setDraftSite(e.target.value)}>
           <option value="">사업장기준</option>
           {siteParts.map((pt) => <option key={pt} value={pt}>{pt}</option>)}
         </select>
-        <select className="cd-select !py-1 text-xs" style={{ width: 130 }} value={draftWork} onChange={(e) => setDraftWork(e.target.value)}>
+        <select className="cd-select !py-1 text-xs" style={{ width: 110 }} value={draftWork} onChange={(e) => setDraftWork(e.target.value)}>
           <option value="">업무기준</option>
           {workParts.map((pt) => <option key={pt} value={pt}>{pt}</option>)}
         </select>
@@ -1137,9 +1137,9 @@ export function BidPackageBoard() {
                     </span>
                   )}
                 </div>
-                <div className="rounded-xl border cd-border-c divide-y cd-border-c max-h-[288px] overflow-y-auto scrollbar-hide">
+                <div className="rounded-xl border cd-border-c max-h-[288px] overflow-y-auto scrollbar-hide grid grid-cols-1 lg:grid-cols-2">
                   {Array.from(pickedEmployees).length === 0 && (
-                    <p className="p-3 text-[11px] cd-text-faint">확정(체크)한 인력이 여기에 표시됩니다.</p>
+                    <p className="p-3 text-[11px] cd-text-faint lg:col-span-2">확정(체크)한 인력이 여기에 표시됩니다.</p>
                   )}
                   {visibleParticipants
                     .filter((p) => pickedEmployees.has(p.employeeId))

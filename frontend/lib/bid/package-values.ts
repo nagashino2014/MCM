@@ -11,6 +11,10 @@ export interface ResolvedValue {
   mode?: "quoted";
   /** 서약서류 ': 값' 기입형 셀 — ': ' 접두 유지. */
   prefixColon?: boolean;
+  /** 값 위에 넣을 빈 줄 수(연혁 등 셀 상단 여백). */
+  topPadLines?: number;
+  /** 셀 왼쪽 안 여백(pt) — cellMargin 으로 적용해 값이 셀 경계에 붙지 않게 한다. */
+  leftIndentPt?: number;
 }
 
 const s = (v: unknown): string => (v == null ? "" : String(v).trim());
@@ -84,16 +88,18 @@ export function resolveSingleValue(
   const person = personIndex != null ? data.persons[personIndex] ?? null : null;
 
   if (docType === "company_profile") {
+    // 일반현황 값 셀은 왼쪽 15pt 들여 입력(모든 양식 공통 — 셀 경계에 붙어 빡빡해 보이지 않게)
+    const pad = { leftIndentPt: 15 };
     switch (field) {
-      case "companyName": return { value: profile.companyName };
-      case "ceoName": return { value: profile.ceoName };
-      case "bizRegNo": return { value: profile.bizRegNo };
-      case "bizField": return { value: profile.bizField };
-      case "address": return { value: profile.address };
-      case "phone": return { value: profile.phone };
-      case "fax": return { value: profile.fax };
-      case "foundedYm": return { value: ymText(profile.foundedYm) };
-      case "industryYears": return { value: yearsBetweenText(profile.foundedYm) };
+      case "companyName": return { value: profile.companyName, ...pad };
+      case "ceoName": return { value: profile.ceoName, ...pad };
+      case "bizRegNo": return { value: profile.bizRegNo, ...pad };
+      case "bizField": return { value: profile.bizField, ...pad };
+      case "address": return { value: profile.address, ...pad };
+      case "phone": return { value: profile.phone, ...pad };
+      case "fax": return { value: profile.fax, ...pad };
+      case "foundedYm": return { value: ymText(profile.foundedYm), ...pad };
+      case "industryYears": return { value: yearsBetweenText(profile.foundedYm), ...pad };
       case "licenseList":
         return {
           value: credentials
@@ -112,10 +118,13 @@ export function resolveSingleValue(
         return { value: `자본금 : ${fmt(latest.capital)}   매출액 : ${fmt(latest.revenue)}   (${latest.year}년, 원)` };
       }
       case "historyList":
+        // 연혁은 셀 상단 2줄·왼쪽 20pt 여백(모든 양식 공통)
         return {
           value: history
             .map((h) => `${h.eventYm.replace("-", ". ")}.   ${h.content}`)
             .join("\n"),
+          topPadLines: 2,
+          leftIndentPt: 20,
         };
       case "mainBusiness": return { value: profile.mainBusiness };
     }

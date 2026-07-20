@@ -77,6 +77,8 @@ export interface PackageData {
   contracts: PackageContractRow[];
   totalAmountMillion: string;
   persons: PackagePerson[];
+  /** 수행인력 설정 원본 — 조직도 생성(사업장/업무 파트·배치 옵션)에 사용 */
+  staffConfig: StaffConfig | null;
 }
 
 const s = (v: unknown): string => (v == null ? "" : String(v).trim());
@@ -377,5 +379,6 @@ export async function assemblePackageData(params: {
     contracts,
     totalAmountMillion: totalRaw > 0 ? String(totalRaw) : "",
     persons,
+    staffConfig: params.staffConfig ?? null,
   };
 }

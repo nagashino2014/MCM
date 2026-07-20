@@ -3,6 +3,7 @@ import sharp from "sharp";
 import type { FormProfile, ProfileDoc } from "@/lib/bid/form-analyze";
 import type { PackageData } from "@/lib/bid/package-data";
 import { resolveSingleValue, resolveRepeatRows, personCount, cleanServiceTitle } from "@/lib/bid/package-values";
+import { buildOrgTree, layoutOrgChart, renderOrgTableXml, orgBorderFillXml, type OrgBorderFills } from "@/lib/bid/org-chart";
 
 /*
  * 입찰 서류 양식 HWPX 주입 엔진(P3) — form_profile 셀 매핑에 데이터를 채워 제출본 HWPX 를 만든다.
@@ -270,7 +271,7 @@ function collapseSpacerParagraphs(sectionXml: string): string {
   // 서식 표제([별첨 서식 N]·【양식 N】 등) 문단 — 항상 새 페이지 첫 줄에서 시작해야 한다
   const isFormTitlePara = (xml: string): boolean => {
     const text = [...xml.matchAll(/<hp:t[^>]*>([\s\S]*?)<\/hp:t>/g)].map((m) => m[1]).join("");
-    return /^\s*(\[\s*별\s*첨|\[\s*별\s*지|\[\s*서\s*식|\[\s*양\s*식|【\s*서\s*식|【\s*양\s*식)/.test(text);
+    return /^\s*(\[\s*별\s*첨|\[\s*별\s*지|\[\s*서\s*식|\[\s*양\s*식|【\s*별\s*첨|【\s*별\s*지|【\s*서\s*식|【\s*양\s*식)/.test(text);
   };
 
   const edits: { start: number; end: number; xml: string }[] = [];
@@ -330,6 +331,49 @@ function setCellLeftMargin(tblXml: string, row: number, col: number, pt: number)
     }
     return out;
   });
+}
+
+/** header.xml 에 조직도용 borderFill 5종(무테·박스·우변·상변·상+우변)을 등록한다. */
+function registerOrgBorderFills(headerXml: string): { headerXml: string; fills: OrgBorderFills } {
+  const ids = [...headerXml.matchAll(/<hh:borderFill id="(\d+)"/g)].map((m) => Number(m[1]));
+  const maxId = ids.length > 0 ? Math.max(...ids) : 0;
+  const fills: OrgBorderFills = {
+    none: maxId + 1,
+    box: maxId + 2,
+    right: maxId + 3,
+    top: maxId + 4,
+    topRight: maxId + 5,
+  };
+  const appended =
+    orgBorderFillXml(fills.none, {}) +
+    orgBorderFillXml(fills.box, { l: true, r: true, t: true, b: true }) +
+    orgBorderFillXml(fills.right, { r: true }) +
+    orgBorderFillXml(fills.top, { t: true }) +
+    orgBorderFillXml(fills.topRight, { t: true, r: true });
+  let out = headerXml.replace("</hh:borderFills>", appended + "</hh:borderFills>");
+  out = out.replace(/(<hh:borderFills itemCnt=")(\d+)(")/, (_, a, n, c) => a + String(Number(n) + 5) + c);
+  return { headerXml: out, fills };
+}
+
+/** 교체 대상 예시 표에서 조직도 렌더 스타일(프리앰블·문단 스타일·표 폭)을 추출한다. */
+function extractOrgStyle(tblXml: string): { tblPreamble: string; paraPrIDRef: string; charPrIDRef: string; totalWidthHwp: number } {
+  const firstTr = tblXml.indexOf("<hp:tr");
+  const tblPreamble = firstTr > 0 ? tblXml.slice(0, firstTr) : tblXml.slice(0, tblXml.indexOf(">") + 1);
+  // 텍스트가 있는 첫 문단의 스타일 재사용(예시 표의 박스 셀 — 가운데 정렬 기대)
+  const withText = /<hp:p\b[^>]*paraPrIDRef="(\d+)"[^>]*>(?:(?!<\/hp:p>)[\s\S])*?<hp:run charPrIDRef="(\d+)"[^>]*>(?:(?!<\/hp:p>)[\s\S])*?<hp:t>[^<]+<\/hp:t>/.exec(tblXml);
+  const anyP = /<hp:p\b[^>]*paraPrIDRef="(\d+)"/.exec(tblXml);
+  const anyRun = /<hp:run charPrIDRef="(\d+)"/.exec(tblXml);
+  const paraPrIDRef = withText?.[1] ?? anyP?.[1] ?? "0";
+  const charPrIDRef = withText?.[2] ?? anyRun?.[1] ?? "0";
+  // 표 폭 = 0행 셀 폭 합
+  let totalWidthHwp = 0;
+  for (const tc of tblXml.matchAll(TC_RE)) {
+    const addr = ADDR_RE.exec(tc[0]);
+    const sz = /<hp:cellSz width="(\d+)"/.exec(tc[0]);
+    if (addr && Number(addr[2]) === 0 && sz) totalWidthHwp += Number(sz[1]);
+  }
+  if (totalWidthHwp <= 0) totalWidthHwp = 44000;
+  return { tblPreamble, paraPrIDRef, charPrIDRef, totalWidthHwp };
 }
 
 interface TableSlot {
@@ -452,9 +496,43 @@ export async function fillPackageHwpx(
   // 어긋나므로 표당 1회만 처리(먼저 온 문서 우선).
   const replacements: { start: number; end: number; xml: string }[] = [];
   const processedTables = new Set<number>();
+  // 조직도(org_chart) — 작성예시 표를 수행인력 설정 기반 조직도 표로 교체(표 테두리 기법)
+  let orgHeaderName: string | null = null;
+  let orgHeaderXml: string | null = null;
+  let orgFills: OrgBorderFills | null = null;
 
   for (const doc of profile.documents) {
-    if (doc.docType === "unknown" || doc.docType === "org_chart") continue;
+    if (doc.docType === "unknown") continue;
+
+    if (doc.docType === "org_chart") {
+      const ti = doc.tables.find((t) => tables[t] && !processedTables.has(t));
+      if (ti == null) {
+        warnings.push("조직도: 교체할 작성예시 표가 없어 원본 유지");
+        continue;
+      }
+      const tree = buildOrgTree(data);
+      if (!tree) {
+        warnings.push("조직도: 담당파트·참여직위 설정이 없어 작성예시를 원본 유지");
+        continue;
+      }
+      if (!orgFills) {
+        orgHeaderName = Object.keys(zip.files).find((n) => /^Contents\/header\.xml$/.test(n)) ?? null;
+        if (!orgHeaderName) {
+          warnings.push("조직도: header.xml 을 찾지 못해 건너뜀");
+          continue;
+        }
+        orgHeaderXml = await zip.files[orgHeaderName].async("string");
+        const reg = registerOrgBorderFills(orgHeaderXml);
+        orgHeaderXml = reg.headerXml;
+        orgFills = reg.fills;
+      }
+      const slot = tables[ti];
+      const style = extractOrgStyle(slot.xml);
+      const orgXml = renderOrgTableXml(layoutOrgChart(tree), orgFills, style);
+      replacements.push({ start: slot.start, end: slot.end, xml: orgXml });
+      processedTables.add(ti);
+      continue;
+    }
 
     if (doc.perPersonTable) {
       const slots = doc.tables.filter((ti) => !processedTables.has(ti)).map((ti) => tables[ti]).filter(Boolean);
@@ -585,6 +663,9 @@ export async function fillPackageHwpx(
 
   // 줄 레이아웃 캐시 제거 — 한글이 열 때 전체 재계산(자동 페이지 분할 포함)
   xml = xml.replace(LINESEG_RE, "");
+
+  // 조직도 borderFill 등록분 반영
+  if (orgHeaderName && orgHeaderXml) zip.file(orgHeaderName, orgHeaderXml);
 
   zip.file(sectionName, xml);
   const bytes = await zip.generateAsync({

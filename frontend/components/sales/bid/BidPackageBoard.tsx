@@ -629,7 +629,9 @@ export function BidPackageBoard() {
             </div>
           </section>
 
+          {/* 좌열: ① 양식+② 실적 계약 / 우열: ④ 문서 구성+③ 수행인력 — 열 단위 배치로 빈 공간 없이 이어 붙임 */}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
+            <div className="flex flex-col gap-4 min-w-0">
             {/* ① 제출 양식 — 발주처 라이브러리 */}
             <section className="cd-card rounded-3xl p-5 cd-reveal delay-2 flex flex-col gap-3">
               <h3 className="font-bold cd-text flex items-center gap-2">
@@ -683,44 +685,6 @@ export function BidPackageBoard() {
               )}
             </section>
 
-            {/* ④ 문서 구성(안내) — 생성은 P3 */}
-            <section className="cd-card rounded-3xl p-5 cd-reveal delay-2 flex flex-col gap-3">
-              <h3 className="font-bold cd-text flex items-center gap-2">
-                <FileStack className="w-4 h-4 cd-text-primary" />
-                ④ 패키지 문서 구성
-                <span className="ml-auto text-[11px] font-normal cd-text-faint">준비 중 — 양식 분석 후 활성화</span>
-              </h3>
-              <ul className="grid grid-cols-1 md:grid-cols-2 gap-1 text-[12px]">
-                {PACKAGE_DOCS.map((d, i) => (
-                  <li key={d} className="rounded-lg border cd-border-c px-3 py-1 cd-text flex items-center gap-2">
-                    <span className="text-[10px] font-mono cd-text-faint shrink-0">{i + 1}</span>
-                    <span className="truncate">{d}</span>
-                  </li>
-                ))}
-                <li className="rounded-lg border cd-border-c px-3 py-1 cd-text-faint flex items-center gap-2 md:col-span-2">
-                  <span className="text-[10px] font-mono shrink-0">+</span>
-                  인력별 첨부: 경력확인서 → 졸업증명서(박사→석사→학사) → 자격증 사본(지정 순서)
-                </li>
-              </ul>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={generate}
-                  disabled={generating || !form?.hasProfile || contractIds.length === 0}
-                  className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold disabled:opacity-50 self-start"
-                  title="저장된 작업 상태(양식 매핑·실적 계약·수행인력) 기준으로 채움본 HWPX 를 생성합니다. 생성 전 '작업 상태 저장'을 눌러 주세요."
-                >
-                  {generating ? "생성 중..." : "문서 생성 (HWPX)"}
-                </button>
-                {!form?.hasProfile && <span className="text-[10px] cd-text-faint">양식 분석(매핑) 후 활성화됩니다.</span>}
-              </div>
-              <p className="text-[10px] cd-text-faint">
-                PDF 변환본·인력별 첨부(경력확인서·졸업증명서·자격증) 병합은 다음 단계에서 추가됩니다.
-              </p>
-            </section>
-          </div>
-
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 min-h-[420px]">
             {/* ② 실적 계약 선택 */}
             <section className="cd-card rounded-3xl p-5 cd-reveal delay-3 flex flex-col min-h-0">
               <h3 className="font-bold cd-text flex items-center gap-2 mb-3">
@@ -804,6 +768,43 @@ export function BidPackageBoard() {
               )}
             </section>
 
+            </div>
+            <div className="flex flex-col gap-4 min-w-0">
+            {/* ④ 문서 구성(안내) — 생성은 P3 */}
+            <section className="cd-card rounded-3xl p-5 cd-reveal delay-2 flex flex-col gap-3">
+              <h3 className="font-bold cd-text flex items-center gap-2">
+                <FileStack className="w-4 h-4 cd-text-primary" />
+                ④ 패키지 문서 구성
+                <span className="ml-auto text-[11px] font-normal cd-text-faint">준비 중 — 양식 분석 후 활성화</span>
+              </h3>
+              <ul className="grid grid-cols-1 md:grid-cols-2 gap-1 text-[12px]">
+                {PACKAGE_DOCS.map((d, i) => (
+                  <li key={d} className="rounded-lg border cd-border-c px-3 py-1 cd-text flex items-center gap-2">
+                    <span className="text-[10px] font-mono cd-text-faint shrink-0">{i + 1}</span>
+                    <span className="truncate">{d}</span>
+                  </li>
+                ))}
+                <li className="rounded-lg border cd-border-c px-3 py-1 cd-text-faint flex items-center gap-2 md:col-span-2">
+                  <span className="text-[10px] font-mono shrink-0">+</span>
+                  인력별 첨부: 경력확인서 → 졸업증명서(박사→석사→학사) → 자격증 사본(지정 순서)
+                </li>
+              </ul>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={generate}
+                  disabled={generating || !form?.hasProfile || contractIds.length === 0}
+                  className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold disabled:opacity-50 self-start"
+                  title="저장된 작업 상태(양식 매핑·실적 계약·수행인력) 기준으로 채움본 HWPX 를 생성합니다. 생성 전 '작업 상태 저장'을 눌러 주세요."
+                >
+                  {generating ? "생성 중..." : "문서 생성 (HWPX)"}
+                </button>
+                {!form?.hasProfile && <span className="text-[10px] cd-text-faint">양식 분석(매핑) 후 활성화됩니다.</span>}
+              </div>
+              <p className="text-[10px] cd-text-faint">
+                PDF 변환본·인력별 첨부(경력확인서·졸업증명서·자격증) 병합은 다음 단계에서 추가됩니다.
+              </p>
+            </section>
             {/* ③ 수행인력 확정 — 리스트 + 참여직위/담당파트/수행실적 설정(단일 카드) */}
             <section className="cd-card rounded-3xl p-5 cd-reveal delay-3 flex flex-col min-h-0 gap-4">
               <div className="flex flex-col min-h-[200px]">
@@ -1106,6 +1107,7 @@ export function BidPackageBoard() {
                 </div>
               </div>
             </section>
+            </div>
           </div>
 
           {/* 참여인력 추가 — 조직도 트리(계약 수행인력 탭과 동일) */}

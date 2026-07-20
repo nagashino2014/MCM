@@ -48,10 +48,9 @@ export interface PackagePersonProject {
 export interface PackagePerson {
   employeeId: string;
   name: string;
-  /** 참여직위(PM/팀장/팀원 — 수행인력 확정에서 지정)·담당파트(업무기준·사업장기준) */
+  /** 참여직위(PM/팀장/팀원 — 수행인력 확정에서 지정)·파트 배정 목록(겸직 = 복수 배정) */
   role: string;
-  workPart: string;
-  sitePart: string;
+  assignments: { sitePart: string; workPart: string }[];
   positionName: string;
   engGrade: string;
   envGrade: string;
@@ -128,13 +127,15 @@ function shortRegion(sido: string, sigungu: string): string {
 function buildOverview(params: {
   sido: string;
   sigungu: string;
+  industryCategory: string;
   industryName: string;
   industryCode: string;
   serviceSubtype: string;
 }): string {
   const region = shortRegion(params.sido, params.sigungu);
+  // 업종 판정 소스: 계약의 업종분류(industry_category) 우선 + 사업장 업종명/코드(트리 필터와 동일)
   const industry = INTEGRATED_PERMIT_INDUSTRIES.find((i) =>
-    matchesIndustryText([params.industryName, params.industryCode], i.label)
+    matchesIndustryText([params.industryCategory, params.industryName, params.industryCode], i.label)
   );
   const subtype = canonicalServiceSubtype(params.serviceSubtype || null);
   if (!region || !industry || !subtype) return "";
@@ -160,7 +161,7 @@ async function loadContractRows(contractIds: string[]): Promise<PackageContractR
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT c.contract_id, c.contract_title, c.service_subtype,
+      `SELECT c.contract_id, c.contract_title, c.service_subtype, c.industry_category,
               COALESCE(NULLIF(c.contract_date,''), c.started_at, c.created_at) AS contract_date,
               c.started_at, c.ended_at,
               COALESCE(c.current_amount, c.contract_amount) AS amount,
@@ -195,6 +196,7 @@ async function loadContractRows(contractIds: string[]): Promise<PackageContractR
       overview: buildOverview({
         sido: s(r.region_sido),
         sigungu: s(r.region_sigungu),
+        industryCategory: s(r.industry_category),
         industryName: s(r.industry_name),
         industryCode: s(r.industry_code),
         serviceSubtype: s(r.service_subtype),
@@ -222,7 +224,7 @@ export async function loadPersonProjects(
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT c.contract_id, c.contract_title, c.service_subtype,
+      `SELECT c.contract_id, c.contract_title, c.service_subtype, c.industry_category,
               COALESCE(NULLIF(c.contract_date,''), c.started_at, c.created_at) AS contract_date,
               cp.company_name AS client_name,
               COALESCE(c.current_amount, c.contract_amount) AS amount,
@@ -250,10 +252,10 @@ export async function loadPersonProjects(
       if (filter.subtypes.length > 0) {
         if (!filter.subtypes.includes(canonicalServiceSubtype(s(r.service_subtype) || null))) continue;
       }
-      // 업종: 선택 목록이 있으면 매칭 필수 — 사업장 업종 정보가 없는 계약은 표시하지 않는다
+      // 업종: 선택 목록이 있으면 매칭 필수 — 업종 정보(계약 업종분류·사업장 업종)가 없는 계약은 표시하지 않는다
       if (filter.industries.length > 0) {
         const hit = filter.industries.some((label) =>
-          matchesIndustryText([s(r.industry_name), s(r.industry_code)], label)
+          matchesIndustryText([s(r.industry_category), s(r.industry_name), s(r.industry_code)], label)
         );
         if (!hit) continue;
       }
@@ -328,8 +330,7 @@ async function loadPerson(
     employeeId,
     name: s(detail.name),
     role: s(roleConf?.role),
-    workPart: s(roleConf?.workPart),
-    sitePart: s(roleConf?.sitePart),
+    assignments: roleConf?.assignments ?? [],
     positionName: s(detail.positionName),
     engGrade: s(detail.engGrade),
     envGrade: s(detail.envGrade),

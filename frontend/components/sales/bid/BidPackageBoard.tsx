@@ -56,14 +56,22 @@ interface PackageForm {
   updatedAt: string;
 }
 
+interface PartAssignmentUI {
+  sitePart: string;
+  workPart: string;
+}
+
 interface StaffConfigUI {
-  roles: Record<string, { role: string; workPart: string; sitePart: string }>;
+  /** employeeId → 참여직위·파트 배정 목록(겸직 = 복수 배정, 예: 영동·계획서작성 + 삼척·계획서작성) */
+  roles: Record<string, { role: string; assignments: PartAssignmentUI[] }>;
   /** 담당파트 후보 — 업무기준(계획서작성팀·품질보증팀 등) */
   workParts: string[];
   /** 담당파트 후보 — 사업장기준(발주처 산하 개별 사업장·본부) */
   siteParts: string[];
   /** 조직도 배치 — nested: 업무파트를 사업장 산하 배치 / separate: separatePart 를 사업장과 동급 배치 */
   orgLayout: { mode: "nested" | "separate"; separatePart: string };
+  /** 후보 리스트에서 삭제한 인력(계약 참여자라도 숨김) */
+  removedCandidates: string[];
   perfFilter: {
     subtypes: string[];
     industries: string[];
@@ -82,6 +90,7 @@ const EMPTY_STAFF_CONFIG: StaffConfigUI = {
   workParts: [],
   siteParts: [],
   orgLayout: { mode: "nested", separatePart: "" },
+  removedCandidates: [],
   perfFilter: {
     subtypes: [],
     industries: [],
@@ -288,6 +297,85 @@ function PartTagEditor({
           <Plus className="w-3 h-3" />
         </button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * 참여직위/조직도 인력 행 — 참여직위 + 파트 배정 목록.
+ * 겸직(예: 영동·삼척발전본부 계획서작성팀장)은 [사업장×업무] 조합을 복수 추가해 표현한다.
+ */
+function StaffRoleRow({
+  participant,
+  conf,
+  workParts,
+  siteParts,
+  onChange,
+}: {
+  participant: Participant;
+  conf: { role: string; assignments: PartAssignmentUI[] };
+  workParts: string[];
+  siteParts: string[];
+  onChange: (next: { role: string; assignments: PartAssignmentUI[] }) => void;
+}) {
+  const [draftSite, setDraftSite] = useState("");
+  const [draftWork, setDraftWork] = useState("");
+  const addAssignment = () => {
+    if (!draftSite && !draftWork) return;
+    const exists = conf.assignments.some((a) => a.sitePart === draftSite && a.workPart === draftWork);
+    if (!exists) onChange({ ...conf, assignments: [...conf.assignments, { sitePart: draftSite, workPart: draftWork }] });
+    setDraftSite("");
+    setDraftWork("");
+  };
+  const labelOf = (a: PartAssignmentUI) => [a.sitePart, a.workPart].filter(Boolean).join(" · ");
+  return (
+    <div className="px-2.5 py-1.5 text-xs flex flex-col gap-1.5">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="rounded-full px-2 py-0.5 cd-tint-primary shrink-0">
+          {participant.name} {participant.positionName ?? ""}
+        </span>
+        <select
+          className="cd-select !py-1 text-xs"
+          style={{ width: 100 }}
+          value={conf.role}
+          onChange={(e) => onChange({ ...conf, role: e.target.value })}
+        >
+          <option value="">참여직위</option>
+          {PARTICIPATION_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+        </select>
+        <select className="cd-select !py-1 text-xs" style={{ width: 130 }} value={draftSite} onChange={(e) => setDraftSite(e.target.value)}>
+          <option value="">사업장기준</option>
+          {siteParts.map((pt) => <option key={pt} value={pt}>{pt}</option>)}
+        </select>
+        <select className="cd-select !py-1 text-xs" style={{ width: 130 }} value={draftWork} onChange={(e) => setDraftWork(e.target.value)}>
+          <option value="">업무기준</option>
+          {workParts.map((pt) => <option key={pt} value={pt}>{pt}</option>)}
+        </select>
+        <button
+          type="button"
+          className="cd-btn cd-btn-soft rounded-lg px-2 py-1 text-[11px]"
+          title="파트 배정 추가(겸직은 조합을 여러 개 추가)"
+          onClick={addAssignment}
+          disabled={!draftSite && !draftWork}
+        >
+          <Plus className="w-3 h-3" />
+        </button>
+      </div>
+      {conf.assignments.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 pl-1">
+          {conf.assignments.map((a, i) => (
+            <span key={`${a.sitePart}|${a.workPart}`} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 border cd-border-c text-[10px] cd-text">
+              {labelOf(a)}
+              <button
+                type="button"
+                onClick={() => onChange({ ...conf, assignments: conf.assignments.filter((_, j) => j !== i) })}
+              >
+                <X className="w-3 h-3 cd-text-faint" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -603,6 +691,28 @@ export function BidPackageBoard() {
       return { ...prev, excluded: { ...prev.excluded, [employeeId]: Array.from(cur) } };
     });
   };
+
+  // 후보 리스트에서 인력 삭제 — 계약 참여자라도 숨김(조직도로 다시 추가 가능)
+  const removeCandidate = (employeeId: string) => {
+    setStaffConfig((prev) => ({
+      ...prev,
+      removedCandidates: prev.removedCandidates.includes(employeeId)
+        ? prev.removedCandidates
+        : [...prev.removedCandidates, employeeId],
+    }));
+    setPickedEmployees((prev) => {
+      const next = new Set(prev);
+      next.delete(employeeId);
+      return next;
+    });
+    setManualIds((prev) => prev.filter((id) => id !== employeeId));
+  };
+
+  // 삭제 인력을 제외한 후보 리스트
+  const visibleParticipants = useMemo(
+    () => participants.filter((p) => !staffConfig.removedCandidates.includes(p.employeeId)),
+    [participants, staffConfig.removedCandidates]
+  );
 
   const uploadForm = async (file: File) => {
     if (!bid?.orgName) {
@@ -939,7 +1049,7 @@ export function BidPackageBoard() {
                 <Users className="w-4 h-4 cd-text-primary" />
                 ③ 수행인력 확정
                 <span className="ml-auto text-[11px] font-normal cd-text-faint">
-                  {pickedEmployees.size.toLocaleString()}명 선택 / 후보 {participants.length.toLocaleString()}명
+                  {pickedEmployees.size.toLocaleString()}명 선택 / 후보 {visibleParticipants.length.toLocaleString()}명
                 </span>
               </h3>
               <p className="text-[12px] cd-text-faint mb-2">
@@ -951,7 +1061,7 @@ export function BidPackageBoard() {
                   <p className="p-5 text-sm cd-text-faint">수행인력을 불러오는 중입니다.</p>
                 ) : participantsError ? (
                   <p className="p-5 text-sm cd-error-text">{participantsError}</p>
-                ) : participants.length === 0 ? (
+                ) : visibleParticipants.length === 0 ? (
                   <p className="p-5 text-sm cd-text-faint">
                     {contractIds.length > 0
                       ? "선택한 계약에 등록된 수행인력이 없습니다. '참여인력 추가'로 조직도에서 선택하세요."
@@ -959,7 +1069,7 @@ export function BidPackageBoard() {
                   </p>
                 ) : (
                   <div className="grid grid-cols-1 lg:grid-cols-2">
-                    {participants.map((p) => (
+                    {visibleParticipants.map((p) => (
                       <label key={p.employeeId} className="flex items-center gap-2 px-3 py-2 text-xs border-b cd-border-c hover:bg-[color:var(--cd-surface)] cursor-pointer min-w-0">
                         <input
                           type="checkbox"
@@ -987,6 +1097,18 @@ export function BidPackageBoard() {
                           }}
                         >
                           <Eye className="w-3 h-3" /> 실적 미리보기
+                        </button>
+                        <button
+                          type="button"
+                          className="shrink-0 text-[10px] cd-text-faint rounded-lg border cd-border-c px-1.5 py-0.5 hover:text-[color:var(--cd-error)] hover:border-[color:var(--cd-error)]"
+                          title="후보에서 삭제(조직도로 다시 추가 가능)"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            removeCandidate(p.employeeId);
+                          }}
+                        >
+                          <Trash2 className="w-3 h-3" />
                         </button>
                       </label>
                     ))}
@@ -1019,33 +1141,23 @@ export function BidPackageBoard() {
                   {Array.from(pickedEmployees).length === 0 && (
                     <p className="p-3 text-[11px] cd-text-faint">확정(체크)한 인력이 여기에 표시됩니다.</p>
                   )}
-                  {participants
+                  {visibleParticipants
                     .filter((p) => pickedEmployees.has(p.employeeId))
-                    .map((p) => {
-                      const conf = staffConfig.roles[p.employeeId] ?? { role: "", workPart: "", sitePart: "" };
-                      const setConf = (patch: Partial<{ role: string; workPart: string; sitePart: string }>) =>
-                        setStaffConfig((prev) => ({
-                          ...prev,
-                          roles: { ...prev.roles, [p.employeeId]: { ...conf, ...patch } },
-                        }));
-                      return (
-                        <div key={p.employeeId} className="flex items-center gap-2 px-2.5 py-1.5 text-xs flex-wrap">
-                          <span className="rounded-full px-2 py-0.5 cd-tint-primary shrink-0">{p.name} {p.positionName ?? ""}</span>
-                          <select className="cd-select !py-1 text-xs" style={{ width: 110 }} value={conf.role} onChange={(e) => setConf({ role: e.target.value })}>
-                            <option value="">참여직위</option>
-                            {PARTICIPATION_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-                          </select>
-                          <select className="cd-select !py-1 text-xs" style={{ width: 140 }} value={conf.workPart} onChange={(e) => setConf({ workPart: e.target.value })}>
-                            <option value="">업무기준 파트</option>
-                            {staffConfig.workParts.map((pt) => <option key={pt} value={pt}>{pt}</option>)}
-                          </select>
-                          <select className="cd-select !py-1 text-xs" style={{ width: 140 }} value={conf.sitePart} onChange={(e) => setConf({ sitePart: e.target.value })}>
-                            <option value="">사업장기준 파트</option>
-                            {staffConfig.siteParts.map((pt) => <option key={pt} value={pt}>{pt}</option>)}
-                          </select>
-                        </div>
-                      );
-                    })}
+                    .map((p) => (
+                      <StaffRoleRow
+                        key={p.employeeId}
+                        participant={p}
+                        conf={staffConfig.roles[p.employeeId] ?? { role: "", assignments: [] }}
+                        workParts={staffConfig.workParts}
+                        siteParts={staffConfig.siteParts}
+                        onChange={(next) =>
+                          setStaffConfig((prev) => ({
+                            ...prev,
+                            roles: { ...prev.roles, [p.employeeId]: next },
+                          }))
+                        }
+                      />
+                    ))}
                 </div>
               </div>
 
@@ -1318,6 +1430,11 @@ export function BidPackageBoard() {
                     onSelectEmployee={(emp) => {
                       setManualIds((prev) => (prev.includes(emp.employeeId) ? prev : [...prev, emp.employeeId]));
                       setPickedEmployees((prev) => new Set(prev).add(emp.employeeId));
+                      // 삭제했던 인력을 다시 추가하는 경우 숨김 해제
+                      setStaffConfig((prev) => ({
+                        ...prev,
+                        removedCandidates: prev.removedCandidates.filter((id) => id !== emp.employeeId),
+                      }));
                     }}
                   />
                 ) : (

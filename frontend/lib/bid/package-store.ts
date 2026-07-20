@@ -24,10 +24,16 @@ export interface BidPackageForm {
   updatedAt: string;
 }
 
+/** 파트 배정 1건 — (사업장기준, 업무기준) 조합. 겸직은 복수 배정으로 표현(예: 영동·계획서작성 + 삼척·계획서작성). */
+export interface PartAssignment {
+  sitePart: string;
+  workPart: string;
+}
+
 /** 수행인력 설정 — 참여직위/담당파트/개별 이력 수행실적 필터. */
 export interface StaffConfig {
-  /** employeeId → 참여직위(PM/팀장/팀원)·담당파트(업무기준·사업장기준) */
-  roles: Record<string, { role: string; workPart: string; sitePart: string }>;
+  /** employeeId → 참여직위(PM/팀장/팀원)·파트 배정 목록(겸직 = 복수 배정) */
+  roles: Record<string, { role: string; assignments: PartAssignment[] }>;
   /** 담당파트 후보 — 업무기준(계획서작성팀·품질보증팀 등 업무 기반 파트) */
   workParts: string[];
   /** 담당파트 후보 — 사업장기준(용역 범위에 포함된 발주처 산하 개별 사업장·본부) */
@@ -38,6 +44,8 @@ export interface StaffConfig {
    * 사업장기준 파트들과 같은 레벨에 배치.
    */
   orgLayout: { mode: "nested" | "separate"; separatePart: string };
+  /** 후보 리스트에서 삭제한 인력(계약 참여자라도 후보에서 숨김) */
+  removedCandidates: string[];
   perfFilter: {
     subtypes: string[]; // 선택된 용역 세분류(빈 배열 = 제한 없음과 구분 위해 applyAll 참조)
     industries: string[];
@@ -56,6 +64,7 @@ export const EMPTY_STAFF_CONFIG: StaffConfig = {
   workParts: [],
   siteParts: [],
   orgLayout: { mode: "nested", separatePart: "" },
+  removedCandidates: [],
   perfFilter: {
     subtypes: [],
     industries: [],
@@ -119,16 +128,23 @@ function parseStaffConfig(value: unknown): StaffConfig {
     const v = typeof value === "string" ? JSON.parse(value) : value;
     if (v && typeof v === "object") {
       const o = v as Partial<StaffConfig> & { parts?: unknown };
-      // 참여직위·담당파트 — 구버전 { part } 저장분은 업무기준(workPart)으로 승계
+      // 참여직위·파트 배정 — 구버전 { part } / { workPart, sitePart } 저장분은 배정 1건으로 승계
       const roles: StaffConfig["roles"] = {};
       if (o.roles && typeof o.roles === "object") {
         for (const [id, rc] of Object.entries(o.roles as Record<string, Record<string, unknown>>)) {
           if (!rc || typeof rc !== "object") continue;
-          roles[String(id)] = {
-            role: String(rc.role ?? ""),
-            workPart: String(rc.workPart ?? rc.part ?? ""),
-            sitePart: String(rc.sitePart ?? ""),
-          };
+          let assignments: PartAssignment[] = [];
+          if (Array.isArray(rc.assignments)) {
+            assignments = (rc.assignments as Record<string, unknown>[])
+              .filter((a) => a && typeof a === "object")
+              .map((a) => ({ sitePart: String(a.sitePart ?? ""), workPart: String(a.workPart ?? "") }))
+              .filter((a) => a.sitePart || a.workPart);
+          } else {
+            const workPart = String(rc.workPart ?? rc.part ?? "");
+            const sitePart = String(rc.sitePart ?? "");
+            if (workPart || sitePart) assignments = [{ sitePart, workPart }];
+          }
+          roles[String(id)] = { role: String(rc.role ?? ""), assignments };
         }
       }
       const layout = (o.orgLayout && typeof o.orgLayout === "object" ? o.orgLayout : {}) as Record<string, unknown>;
@@ -145,6 +161,7 @@ function parseStaffConfig(value: unknown): StaffConfig {
           mode: layout.mode === "separate" ? "separate" : "nested",
           separatePart: String(layout.separatePart ?? ""),
         },
+        removedCandidates: Array.isArray(o.removedCandidates) ? o.removedCandidates.map(String) : [],
         perfFilter: {
           subtypes: Array.isArray(o.perfFilter?.subtypes) ? o.perfFilter.subtypes.map(String) : [],
           industries: Array.isArray(o.perfFilter?.industries) ? o.perfFilter.industries.map(String) : [],

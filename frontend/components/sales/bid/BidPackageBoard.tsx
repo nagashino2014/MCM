@@ -17,15 +17,19 @@ import {
   FileStack,
   FileText,
   Paperclip,
+  Plus,
   Save,
   Search,
   Users,
+  X,
 } from "lucide-react";
 import { resolveServiceTypeStyle } from "@/lib/ieps/contract-tree-style";
 import { INTEGRATED_PERMIT_INDUSTRIES, canonicalServiceSubtype, matchesIndustryText } from "@/lib/ieps/integrated-permit";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { FormProfilePanel } from "@/components/sales/bid/FormProfilePanel";
+import OrganizationTree from "@/components/admin/users/OrganizationTree";
+import type { OrganizationSnapshot } from "@/components/admin/users/types";
 import "@/components/cdash/cdash.css";
 
 interface BidSummary {
@@ -49,11 +53,45 @@ interface PackageForm {
   updatedAt: string;
 }
 
+interface StaffConfigUI {
+  roles: Record<string, { role: string; part: string }>;
+  parts: string[];
+  perfFilter: {
+    subtypes: string[];
+    industries: string[];
+    years: string[];
+    amountMinMan: number | null;
+    amountMaxMan: number | null;
+    applyAllSubtypes: boolean;
+    applyAllIndustries: boolean;
+  };
+}
+
+const EMPTY_STAFF_CONFIG: StaffConfigUI = {
+  roles: {},
+  parts: [],
+  perfFilter: {
+    subtypes: [],
+    industries: [],
+    years: [],
+    amountMinMan: null,
+    amountMaxMan: null,
+    applyAllSubtypes: true,
+    applyAllIndustries: true,
+  },
+};
+
+const PARTICIPATION_ROLES = ["PM", "팀장", "팀원"];
+const PERF_YEARS = Array.from({ length: 9 }, (_, i) => String(2018 + i));
+// 나라장터 입찰이 사실상 없는 화관법·HAPs 계열은 대분류 필터에서 제외
+const MAIN_CATEGORY_EXCLUDE = ["장외", "화관법", "유해화학물질", "HAPs"];
+
 interface PackageState {
   packageId: string;
   formId: string | null;
   contractIds: string[];
   employeeIds: string[];
+  staffConfig?: StaffConfigUI | null;
   updatedAt: string;
 }
 
@@ -75,6 +113,8 @@ interface TreeContract {
   industryCategory: string | null;
   facilityIndustryName: string | null;
   facilityIndustryCode: string | null;
+  /** 캐시 저장 시 부여 — 소속 용역 대분류(그룹) */
+  serviceType?: string;
 }
 
 interface TreeGroup {
@@ -120,6 +160,59 @@ function fmtBytes(n: number | null): string {
   return `${Math.round(n / 1024)}KB`;
 }
 
+/** 수행실적 설정의 태그 필터 행 — 대표(lead) 태그 + 토글 태그들 + 전체 선택/해제. */
+function TagFilterRow({
+  label,
+  lead,
+  tags,
+  active,
+  disabled,
+  onToggle,
+  onAll,
+}: {
+  label: string;
+  lead?: string;
+  tags: string[];
+  active: string[];
+  /** '모두 적용' 체크 시 개별 토글 비활성(전체 적용 상태 표시) */
+  disabled?: boolean;
+  onToggle: (tag: string) => void;
+  onAll: (all: boolean) => void;
+}) {
+  const allActive = tags.length > 0 && tags.every((t) => active.includes(t));
+  return (
+    <div className="flex items-start gap-2">
+      <span className="text-[11px] cd-text-faint shrink-0 w-[58px] pt-1">{label}</span>
+      <div className="flex flex-wrap gap-1.5 flex-1 min-w-0">
+        {lead && <span className="text-[11px] rounded-full px-2.5 py-1 cd-fill-primary text-white shrink-0">{lead}</span>}
+        {tags.length === 0 && <span className="text-[10px] cd-text-faint pt-1">실적 계약을 선택하면 태그가 표시됩니다.</span>}
+        {tags.map((t) => {
+          const on = disabled || active.includes(t);
+          return (
+            <button
+              key={t}
+              type="button"
+              disabled={disabled}
+              onClick={() => onToggle(t)}
+              className={
+                "text-[11px] rounded-full px-2.5 py-1 border transition disabled:cursor-not-allowed " +
+                (on ? "border-[color:var(--cd-primary)] cd-tint-primary cd-text" : "cd-border-c cd-text-faint")
+              }
+            >
+              {t}
+            </button>
+          );
+        })}
+        {tags.length > 0 && !disabled && (
+          <button type="button" className="text-[10px] cd-text-primary px-1" onClick={() => onAll(!allActive)}>
+            {allActive ? "모두 해제" : "모두 선택"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function BidPackageBoard() {
   const { theme } = useCdashTheme();
   const sp = useSearchParams();
@@ -136,7 +229,8 @@ export function BidPackageBoard() {
   const [tree, setTree] = useState<TreePayload | null>(null);
   const [year, setYear] = useState("");
   const [search, setSearch] = useState("");
-  // 통합허가 실적 인정 범위 한정용 — 용역 세분류·업종 필터
+  // 통합허가 실적 인정 범위 한정용 — 용역 대분류·세분류·업종 필터
+  const [mainCategoryFilter, setMainCategoryFilter] = useState("");
   const [subtypeFilter, setSubtypeFilter] = useState("");
   const [industryFilter, setIndustryFilter] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -148,6 +242,14 @@ export function BidPackageBoard() {
   const [pickedEmployees, setPickedEmployees] = useState<Set<string>>(new Set());
   const [participantsLoading, setParticipantsLoading] = useState(false);
   const [participantsError, setParticipantsError] = useState<string | null>(null);
+  // 조직도에서 수동 추가한 인력(실적 계약 미참여 포함) + 참여직위/파트/실적필터 설정
+  const [manualIds, setManualIds] = useState<string[]>([]);
+  const [staffConfig, setStaffConfig] = useState<StaffConfigUI>(EMPTY_STAFF_CONFIG);
+  const [orgModal, setOrgModal] = useState(false);
+  const [orgSnapshot, setOrgSnapshot] = useState<OrganizationSnapshot | null>(null);
+  const [newPart, setNewPart] = useState("");
+  // 양식에 조직도(자유양식) 서식 존재 여부 — form_profile 의 org_chart 문서
+  const [orgChartInForm, setOrgChartInForm] = useState<boolean | null>(null);
 
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -177,6 +279,8 @@ export function BidPackageBoard() {
         if (data.package) {
           setChecked(new Set<string>(data.package.contractIds ?? []));
           setPickedEmployees(new Set<string>(data.package.employeeIds ?? []));
+          setManualIds(data.package.employeeIds ?? []);
+          if (data.package.staffConfig) setStaffConfig({ ...EMPTY_STAFF_CONFIG, ...data.package.staffConfig });
         }
       } catch (err) {
         if (!cancelled) setError((err as Error).message);
@@ -201,7 +305,9 @@ export function BidPackageBoard() {
         setTree(json);
         setNodeCache((prev) => {
           const next = new Map(prev);
-          for (const g of json.groups ?? []) for (const c of g.contracts) next.set(c.contractId, c);
+          for (const g of json.groups ?? []) {
+            for (const c of g.contracts) next.set(c.contractId, { ...c, serviceType: g.serviceType });
+          }
           return next;
         });
       })
@@ -213,9 +319,9 @@ export function BidPackageBoard() {
 
   const contractIds = useMemo(() => Array.from(checked), [checked]);
 
-  // 선택 계약 기반 수행인력 후보 로드 — 신규 등장 인력은 기본 선택
+  // 선택 계약 기반 수행인력 후보 + 수동 추가 인력 로드 — 신규 등장 인력은 기본 선택
   useEffect(() => {
-    if (contractIds.length === 0) {
+    if (contractIds.length === 0 && manualIds.length === 0) {
       setParticipants([]);
       setPickedEmployees(new Set());
       return;
@@ -223,9 +329,11 @@ export function BidPackageBoard() {
     let cancelled = false;
     setParticipantsLoading(true);
     setParticipantsError(null);
-    fetch("/api/sales/bids/package/participants?contractIds=" + encodeURIComponent(contractIds.join(",")), {
-      cache: "no-store",
-    })
+    fetch(
+      "/api/sales/bids/package/participants?contractIds=" + encodeURIComponent(contractIds.join(",")) +
+        "&extraIds=" + encodeURIComponent(manualIds.join(",")),
+      { cache: "no-store" }
+    )
       .then(async (res) => {
         const data = (await res.json().catch(() => ({}))) as { participants?: Participant[]; error?: string };
         if (!res.ok) throw new Error(data?.error ?? `수행인력 조회 실패 (HTTP ${res.status})`);
@@ -260,24 +368,72 @@ export function BidPackageBoard() {
     };
     // participants 는 "이전 목록" 비교용으로만 쓰므로 deps 에 넣지 않는다(무한루프 방지).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contractIds.join(",")]);
+  }, [contractIds.join(","), manualIds.join(",")]);
 
-  // 통합허가 용역 세분류 옵션(트리에서 동적 수집)
+  // 양식에 조직도 서식 존재 여부(참여직위/조직도 헤더 표시)
+  useEffect(() => {
+    if (!form?.formId || !form.hasProfile) {
+      setOrgChartInForm(null);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/sales/bids/package/form/profile?formId=${encodeURIComponent(form.formId)}`, { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((d) => {
+        if (cancelled) return;
+        const docs = (d?.profile?.documents ?? []) as { docType: string }[];
+        setOrgChartInForm(docs.some((x) => x.docType === "org_chart"));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [form?.formId, form?.hasProfile]);
+
+  // 조직도 모달 — 스냅샷은 최초 오픈 시 로드
+  const openOrgModal = async () => {
+    setOrgModal(true);
+    if (!orgSnapshot) {
+      try {
+        const res = await fetch("/api/sales/org", { cache: "no-store" });
+        if (res.ok) setOrgSnapshot((await res.json()) as OrganizationSnapshot);
+      } catch {
+        // 무시 — 모달에 빈 트리 안내
+      }
+    }
+  };
+
+  // 용역 대분류 옵션 — 트리 실값에서 수집(화관법·HAPs 계열 제외: 나라장터 입찰이 사실상 없음)
+  const mainCategoryOptions = useMemo(
+    () =>
+      (tree?.groups ?? [])
+        .map((g) => g.serviceType)
+        .filter((t) => !MAIN_CATEGORY_EXCLUDE.some((k) => t.includes(k))),
+    [tree]
+  );
+
+  // 용역 세분류 옵션 — 선택된 대분류 산하로 자동 재편
   const subtypeOptions = useMemo(() => {
     const values = new Set<string>();
     for (const g of tree?.groups ?? []) {
+      if (mainCategoryFilter && g.serviceType !== mainCategoryFilter) continue;
       for (const c of g.contracts) {
         if (c.serviceSubtype) values.add(canonicalServiceSubtype(c.serviceSubtype));
       }
       if (g.serviceType === "통합허가") values.add("최초허가");
     }
     return Array.from(values).sort((a, b) => a.localeCompare(b, "ko"));
-  }, [tree]);
+  }, [tree, mainCategoryFilter]);
+
+  useEffect(() => {
+    if (subtypeFilter && !subtypeOptions.includes(subtypeFilter)) setSubtypeFilter("");
+  }, [subtypeFilter, subtypeOptions]);
 
   const filteredGroups = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!tree) return [];
     return (tree.groups ?? [])
+      .filter((g) => !mainCategoryFilter || g.serviceType === mainCategoryFilter)
       .map((g) => ({
         ...g,
         contracts: g.contracts.filter((c) => {
@@ -293,7 +449,39 @@ export function BidPackageBoard() {
         }),
       }))
       .filter((g) => g.contracts.length > 0);
-  }, [tree, search, subtypeFilter, industryFilter]);
+  }, [tree, search, mainCategoryFilter, subtypeFilter, industryFilter]);
+
+  // 선택 계약의 대분류(혼합 선택 차단·수행실적 설정 태그의 기준)
+  const selectedMainCategory = useMemo(() => {
+    for (const id of contractIds) {
+      const t = nodeCache.get(id)?.serviceType;
+      if (t) return t;
+    }
+    return null;
+  }, [contractIds, nodeCache]);
+
+  // 수행실적 설정 태그 소스 — 선택된 실적 계약들에서 파생
+  const selectedSubtypeTags = useMemo(() => {
+    const values = new Set<string>();
+    for (const id of contractIds) {
+      const sub = nodeCache.get(id)?.serviceSubtype;
+      if (sub != null) values.add(canonicalServiceSubtype(sub));
+    }
+    return Array.from(values).sort((a, b) => a.localeCompare(b, "ko"));
+  }, [contractIds, nodeCache]);
+
+  const selectedIndustryTags = useMemo(() => {
+    const values = new Set<string>();
+    for (const id of contractIds) {
+      const n = nodeCache.get(id);
+      if (!n) continue;
+      const hit = INTEGRATED_PERMIT_INDUSTRIES.find((i) =>
+        matchesIndustryText([n.industryCategory, n.facilityIndustryName, n.facilityIndustryCode], i.label)
+      );
+      if (hit) values.add(hit.label);
+    }
+    return Array.from(values);
+  }, [contractIds, nodeCache]);
 
   const uploadForm = async (file: File) => {
     if (!bid?.orgName) {
@@ -347,10 +535,32 @@ export function BidPackageBoard() {
     }
   };
 
+  // 대분류가 다른 용역 혼합 선택 차단 + 체크 토글
+  const toggleContract = (c: TreeContract, groupType: string) => {
+    setChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(c.contractId)) {
+        next.delete(c.contractId);
+        return next;
+      }
+      if (next.size > 0 && selectedMainCategory && groupType !== selectedMainCategory) {
+        alert(`대분류가 다른 용역은 함께 선택할 수 없습니다. (현재 선택: ${selectedMainCategory})`);
+        return prev;
+      }
+      next.add(c.contractId);
+      return next;
+    });
+  };
+
   const save = useCallback(async () => {
     if (!bidId) return;
     setSaving(true);
     try {
+      // 참여직위/파트 설정은 확정(체크) 인력만 유지
+      const roles: StaffConfigUI["roles"] = {};
+      for (const id of pickedEmployees) {
+        if (staffConfig.roles[id]) roles[id] = staffConfig.roles[id];
+      }
       const res = await fetch("/api/sales/bids/package", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -360,6 +570,7 @@ export function BidPackageBoard() {
           formId: form?.formId ?? null,
           contractIds,
           employeeIds: Array.from(pickedEmployees),
+          staffConfig: { ...staffConfig, roles },
         }),
       });
       const data = await res.json();
@@ -371,7 +582,7 @@ export function BidPackageBoard() {
     } finally {
       setSaving(false);
     }
-  }, [bidType, bidId, form, contractIds, pickedEmployees]);
+  }, [bidType, bidId, form, contractIds, pickedEmployees, staffConfig]);
 
   return (
     <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
@@ -529,6 +740,10 @@ export function BidPackageBoard() {
                 <Search className="w-4 h-4 cd-text-faint shrink-0" />
                 <input className="cd-input text-xs flex-1 min-w-0" placeholder="계약명 / 거래처 검색" value={search} onChange={(e) => setSearch(e.target.value)} />
                 {/* 통합허가 실적 인정 범위(발전·증기/열공급·폐기물소각 등) 한정용 필터 */}
+                <select className="cd-select text-xs shrink-0" style={{ width: "13ch" }} value={mainCategoryFilter} onChange={(e) => setMainCategoryFilter(e.target.value)}>
+                  <option value="">대분류 전체</option>
+                  {mainCategoryOptions.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
                 <select className="cd-select text-xs shrink-0" style={{ width: "13ch" }} value={subtypeFilter} onChange={(e) => setSubtypeFilter(e.target.value)}>
                   <option value="">세분류 전체</option>
                   {subtypeOptions.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -567,14 +782,7 @@ export function BidPackageBoard() {
                               <input
                                 type="checkbox"
                                 checked={checked.has(c.contractId)}
-                                onChange={() =>
-                                  setChecked((prev) => {
-                                    const next = new Set(prev);
-                                    if (next.has(c.contractId)) next.delete(c.contractId);
-                                    else next.add(c.contractId);
-                                    return next;
-                                  })
-                                }
+                                onChange={() => toggleContract(c, group.serviceType)}
                               />
                               <span className="truncate cd-text">{c.contractTitle}</span>
                               <span className="ml-auto shrink-0 text-[10px] font-mono cd-text-faint">{c.contractDate ?? "-"}</span>
@@ -596,8 +804,8 @@ export function BidPackageBoard() {
               )}
             </section>
 
-            {/* ③ 수행인력 확정 */}
-            <section className="cd-card rounded-3xl p-5 cd-reveal delay-3 flex flex-col min-h-0">
+            {/* ③ 수행인력 확정 — 좌: 인력 리스트(+조직도 추가) / 우: 참여직위·담당파트·수행실적 설정 */}
+            <section className="cd-card rounded-3xl p-5 cd-reveal delay-3 flex flex-col min-h-0 xl:col-span-1">
               <h3 className="font-bold cd-text flex items-center gap-2 mb-3">
                 <Users className="w-4 h-4 cd-text-primary" />
                 ③ 수행인력 확정
@@ -606,8 +814,8 @@ export function BidPackageBoard() {
                 </span>
               </h3>
               <p className="text-[12px] cd-text-faint mb-2">
-                선택한 실적 계약의 수행인력을 합산한 후보입니다. 이 용역 입찰에 제출할 기술인력만 남기세요.
-                확정 인력 기준으로 집계표·개별 이력사항과 경력확인서·졸업증명서·자격증 사본이 구성됩니다.
+                실적 계약의 수행인력 합산 후보에 조직도로 인력을 추가할 수 있습니다. 확정 인력 기준으로
+                집계표·개별 이력사항·증빙 첨부가 구성됩니다.
               </p>
               <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide rounded-xl border cd-border-c">
                 {participantsLoading ? (
@@ -617,35 +825,317 @@ export function BidPackageBoard() {
                 ) : participants.length === 0 ? (
                   <p className="p-5 text-sm cd-text-faint">
                     {contractIds.length > 0
-                      ? "선택한 계약에 등록된 수행인력이 없습니다. 계약 상세의 공정표/수행인력에서 인력을 지정하세요."
-                      : "실적 계약을 선택하면 수행인력 후보가 표시됩니다."}
+                      ? "선택한 계약에 등록된 수행인력이 없습니다. '참여인력 추가'로 조직도에서 선택하세요."
+                      : "실적 계약을 선택하거나 '참여인력 추가'로 인력을 선택하세요."}
                   </p>
                 ) : (
-                  participants.map((p) => (
-                    <label key={p.employeeId} className="w-full flex items-center gap-2.5 px-3 py-2 text-xs border-b cd-border-c last:border-b-0 hover:bg-[color:var(--cd-surface)] cursor-pointer">
+                  <div className="grid grid-cols-1 lg:grid-cols-2">
+                    {participants.map((p) => (
+                      <label key={p.employeeId} className="flex items-center gap-2 px-3 py-2 text-xs border-b cd-border-c hover:bg-[color:var(--cd-surface)] cursor-pointer min-w-0">
+                        <input
+                          type="checkbox"
+                          checked={pickedEmployees.has(p.employeeId)}
+                          onChange={() =>
+                            setPickedEmployees((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(p.employeeId)) next.delete(p.employeeId);
+                              else next.add(p.employeeId);
+                              return next;
+                            })
+                          }
+                        />
+                        <span className="cd-text font-semibold shrink-0">{p.name}</span>
+                        <span className="cd-text-faint shrink-0">{p.positionName ?? ""}</span>
+                        {p.engGrade && <span className="text-[10px] rounded-full px-1.5 py-0.5 cd-tint-primary shrink-0">{p.engGrade}</span>}
+                        {p.specialtyField && <span className="text-[10px] cd-text-faint truncate">{p.specialtyField}</span>}
+                        <span className="ml-auto text-[10px] cd-text-faint shrink-0">참여 {p.contractCount}건</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="mt-2 flex justify-end">
+                <button
+                  type="button"
+                  className="cd-btn cd-btn-soft rounded-lg px-3 py-1.5 text-xs font-semibold inline-flex items-center gap-1"
+                  onClick={openOrgModal}
+                >
+                  참여인력 추가 <Plus className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </section>
+
+            {/* ③-우 수행인력 설정 — 참여직위/조직도 · 담당파트 · 수행실적 설정 */}
+            <section className="cd-card rounded-3xl p-5 cd-reveal delay-3 flex flex-col gap-4 min-h-0 overflow-y-auto scrollbar-hide">
+              {/* 참여직위/조직도 */}
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <h4 className="text-[12px] font-bold cd-text">참여직위 / 조직도</h4>
+                  {orgChartInForm != null && (
+                    <span className={"ml-auto text-[10px] inline-flex items-center gap-1 " + (orgChartInForm ? "cd-text-primary" : "cd-text-faint")}>
+                      {orgChartInForm ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
+                      조직도 양식 {orgChartInForm ? "존재" : "없음"}
+                    </span>
+                  )}
+                </div>
+                <div className="rounded-xl border cd-border-c divide-y cd-border-c max-h-[240px] overflow-y-auto scrollbar-hide">
+                  {Array.from(pickedEmployees).length === 0 && (
+                    <p className="p-3 text-[11px] cd-text-faint">확정(체크)한 인력이 여기에 표시됩니다.</p>
+                  )}
+                  {participants
+                    .filter((p) => pickedEmployees.has(p.employeeId))
+                    .map((p) => {
+                      const conf = staffConfig.roles[p.employeeId] ?? { role: "", part: "" };
+                      const setConf = (patch: Partial<{ role: string; part: string }>) =>
+                        setStaffConfig((prev) => ({
+                          ...prev,
+                          roles: { ...prev.roles, [p.employeeId]: { ...conf, ...patch } },
+                        }));
+                      return (
+                        <div key={p.employeeId} className="flex items-center gap-2 px-2.5 py-1.5 text-xs">
+                          <span className="rounded-full px-2 py-0.5 cd-tint-primary shrink-0">{p.name} {p.positionName ?? ""}</span>
+                          <select className="cd-select !py-1 text-xs" style={{ width: 130 }} value={conf.role} onChange={(e) => setConf({ role: e.target.value })}>
+                            <option value="">참여직위 선택</option>
+                            {PARTICIPATION_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+                          </select>
+                          <select className="cd-select !py-1 text-xs" style={{ width: 150 }} value={conf.part} onChange={(e) => setConf({ part: e.target.value })}>
+                            <option value="">담당 파트 선택</option>
+                            {staffConfig.parts.map((pt) => <option key={pt} value={pt}>{pt}</option>)}
+                          </select>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+
+              {/* 담당파트 설정 */}
+              <div>
+                <h4 className="text-[12px] font-bold cd-text mb-2">담당파트 설정</h4>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {staffConfig.parts.map((pt) => (
+                    <span key={pt} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 cd-tint-primary text-[11px] cd-text">
+                      {pt}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setStaffConfig((prev) => ({ ...prev, parts: prev.parts.filter((x) => x !== pt) }))
+                        }
+                      >
+                        <X className="w-3 h-3 cd-text-faint" />
+                      </button>
+                    </span>
+                  ))}
+                  <input
+                    className="cd-input !py-1 text-[11px]"
+                    style={{ width: 140 }}
+                    value={newPart}
+                    placeholder="파트명 (예: 영동발전본부)"
+                    onChange={(e) => setNewPart(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        const v = newPart.trim();
+                        if (v && !staffConfig.parts.includes(v)) {
+                          setStaffConfig((prev) => ({ ...prev, parts: [...prev.parts, v] }));
+                        }
+                        setNewPart("");
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="cd-btn cd-btn-soft rounded-lg px-2 py-1 text-[11px]"
+                    onClick={() => {
+                      const v = newPart.trim();
+                      if (v && !staffConfig.parts.includes(v)) {
+                        setStaffConfig((prev) => ({ ...prev, parts: [...prev.parts, v] }));
+                      }
+                      setNewPart("");
+                    }}
+                  >
+                    <Plus className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
+
+              {/* 수행실적 설정 — 개별 이력사항에 포함할 인력별 실적 필터 */}
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <h4 className="text-[12px] font-bold cd-text">수행실적 설정</h4>
+                  <span className="text-[10px] cd-text-faint">각 수행인력의 개별 이력사항에 포함할 실적 필터</span>
+                </div>
+                <div className="grid grid-cols-1 2xl:grid-cols-[1fr_230px] gap-3">
+                  <div className="rounded-xl border cd-border-c p-3 flex flex-col gap-2">
+                    <TagFilterRow
+                      label="용역분류"
+                      lead={selectedMainCategory ?? undefined}
+                      tags={selectedSubtypeTags}
+                      active={staffConfig.perfFilter.subtypes}
+                      disabled={staffConfig.perfFilter.applyAllSubtypes}
+                      onToggle={(tag) =>
+                        setStaffConfig((prev) => ({
+                          ...prev,
+                          perfFilter: {
+                            ...prev.perfFilter,
+                            subtypes: prev.perfFilter.subtypes.includes(tag)
+                              ? prev.perfFilter.subtypes.filter((x) => x !== tag)
+                              : [...prev.perfFilter.subtypes, tag],
+                          },
+                        }))
+                      }
+                      onAll={(all) =>
+                        setStaffConfig((prev) => ({
+                          ...prev,
+                          perfFilter: { ...prev.perfFilter, subtypes: all ? [...selectedSubtypeTags] : [] },
+                        }))
+                      }
+                    />
+                    <TagFilterRow
+                      label="선택업종"
+                      tags={selectedIndustryTags}
+                      active={staffConfig.perfFilter.industries}
+                      disabled={staffConfig.perfFilter.applyAllIndustries}
+                      onToggle={(tag) =>
+                        setStaffConfig((prev) => ({
+                          ...prev,
+                          perfFilter: {
+                            ...prev.perfFilter,
+                            industries: prev.perfFilter.industries.includes(tag)
+                              ? prev.perfFilter.industries.filter((x) => x !== tag)
+                              : [...prev.perfFilter.industries, tag],
+                          },
+                        }))
+                      }
+                      onAll={(all) =>
+                        setStaffConfig((prev) => ({
+                          ...prev,
+                          perfFilter: { ...prev.perfFilter, industries: all ? [...selectedIndustryTags] : [] },
+                        }))
+                      }
+                    />
+                    <TagFilterRow
+                      label="연도기준"
+                      tags={PERF_YEARS}
+                      active={staffConfig.perfFilter.years}
+                      onToggle={(tag) =>
+                        setStaffConfig((prev) => ({
+                          ...prev,
+                          perfFilter: {
+                            ...prev.perfFilter,
+                            years: prev.perfFilter.years.includes(tag)
+                              ? prev.perfFilter.years.filter((x) => x !== tag)
+                              : [...prev.perfFilter.years, tag],
+                          },
+                        }))
+                      }
+                      onAll={(all) =>
+                        setStaffConfig((prev) => ({
+                          ...prev,
+                          perfFilter: { ...prev.perfFilter, years: all ? [...PERF_YEARS] : [] },
+                        }))
+                      }
+                    />
+                    <p className="text-[10px] cd-text-faint">
+                      연도 미선택 = 전체 연도. 태그 조건은 인력별 과거·현재 수행 용역 중 개별 이력사항에 넣을 실적을 거릅니다.
+                    </p>
+                  </div>
+                  <div className="rounded-xl border cd-border-c p-3 flex flex-col gap-2 text-[11px]">
+                    <label className="flex items-center gap-1.5 cd-text">
                       <input
                         type="checkbox"
-                        checked={pickedEmployees.has(p.employeeId)}
-                        onChange={() =>
-                          setPickedEmployees((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(p.employeeId)) next.delete(p.employeeId);
-                            else next.add(p.employeeId);
-                            return next;
-                          })
+                        checked={staffConfig.perfFilter.applyAllSubtypes}
+                        onChange={(e) =>
+                          setStaffConfig((prev) => ({
+                            ...prev,
+                            perfFilter: { ...prev.perfFilter, applyAllSubtypes: e.target.checked },
+                          }))
                         }
                       />
-                      <span className="cd-text font-semibold shrink-0">{p.name}</span>
-                      <span className="cd-text-faint shrink-0">{p.positionName ?? ""}</span>
-                      {p.engGrade && <span className="text-[10px] rounded-full px-1.5 py-0.5 cd-tint-primary shrink-0">{p.engGrade}</span>}
-                      {p.specialtyField && <span className="text-[10px] cd-text-faint shrink-0">{p.specialtyField}</span>}
-                      <span className="ml-auto text-[10px] cd-text-faint shrink-0">참여 {p.contractCount}건</span>
+                      선택 용역 세분류 모두 적용
                     </label>
-                  ))
-                )}
+                    <label className="flex items-center gap-1.5 cd-text">
+                      <input
+                        type="checkbox"
+                        checked={staffConfig.perfFilter.applyAllIndustries}
+                        onChange={(e) =>
+                          setStaffConfig((prev) => ({
+                            ...prev,
+                            perfFilter: { ...prev.perfFilter, applyAllIndustries: e.target.checked },
+                          }))
+                        }
+                      />
+                      선택 업종 모두 적용
+                    </label>
+                    <div className="mt-1 rounded-lg border cd-border-c p-2">
+                      <p className="cd-text font-semibold mb-1.5">금액 기준 실적 포함 범위 (만원)</p>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          className="cd-input !py-1 text-[11px] text-right font-mono"
+                          style={{ width: 84 }}
+                          placeholder="최소"
+                          value={staffConfig.perfFilter.amountMinMan ?? ""}
+                          onChange={(e) =>
+                            setStaffConfig((prev) => ({
+                              ...prev,
+                              perfFilter: {
+                                ...prev.perfFilter,
+                                amountMinMan: e.target.value === "" ? null : Number(e.target.value.replace(/[^\d]/g, "")) || null,
+                              },
+                            }))
+                          }
+                        />
+                        <span className="cd-text-faint">~</span>
+                        <input
+                          className="cd-input !py-1 text-[11px] text-right font-mono"
+                          style={{ width: 84 }}
+                          placeholder="최대"
+                          value={staffConfig.perfFilter.amountMaxMan ?? ""}
+                          onChange={(e) =>
+                            setStaffConfig((prev) => ({
+                              ...prev,
+                              perfFilter: {
+                                ...prev.perfFilter,
+                                amountMaxMan: e.target.value === "" ? null : Number(e.target.value.replace(/[^\d]/g, "")) || null,
+                              },
+                            }))
+                          }
+                        />
+                      </div>
+                      <p className="cd-text-faint mt-1">비우면 제한 없음. 인력별 수행 용역의 계약금액 기준.</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </section>
           </div>
+
+          {/* 참여인력 추가 — 조직도 트리(계약 수행인력 탭과 동일) */}
+          {orgModal && (
+            <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={() => setOrgModal(false)}>
+              <div className="cdash cdash-vars cd-fields-white cd-card-bg rounded-2xl border cd-border-c w-full max-w-md max-h-[80vh] overflow-y-auto p-4 flex flex-col gap-2" data-theme={theme} onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-[14px] font-bold cd-text flex-1">참여인력 추가 — 조직도에서 선택</h3>
+                  <button type="button" className="cd-btn cd-btn-soft text-[12px]" onClick={() => setOrgModal(false)}>
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                {orgSnapshot ? (
+                  <OrganizationTree
+                    snapshot={orgSnapshot}
+                    embedded
+                    hideHeader
+                    onSelectEmployee={(emp) => {
+                      setManualIds((prev) => (prev.includes(emp.employeeId) ? prev : [...prev, emp.employeeId]));
+                      setPickedEmployees((prev) => new Set(prev).add(emp.employeeId));
+                    }}
+                  />
+                ) : (
+                  <p className="text-[12px] cd-text-faint py-6 text-center">조직도를 불러오는 중입니다.</p>
+                )}
+                <p className="text-[10px] cd-text-faint">인원을 클릭하면 수행인력 리스트에 추가·확정됩니다.</p>
+              </div>
+            </div>
+          )}
         </div>
       ) : null}
     </div>

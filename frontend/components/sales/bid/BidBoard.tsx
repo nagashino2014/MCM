@@ -212,6 +212,23 @@ export function BidBoard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // 입찰 서류 생성 진행 중 패키지(메인 상단 바로가기)
+  const [activePackages, setActivePackages] = useState<
+    { bidType: string; bidId: string; title: string; orgName: string; deadline: string | null; updatedAt: string }[]
+  >([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/sales/bids/package/active", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((d) => {
+        if (!cancelled && d?.packages) setActivePackages(d.packages);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // 상세 모달
   const [detail, setDetail] = useState<BidDetail | null>(null);
   const [detailType, setDetailType] = useState<BidType>("bid_notice");
@@ -648,6 +665,31 @@ export function BidBoard() {
           ) : undefined
         }
       />
+
+      {/* 입찰 서류 생성 진행 중 — 저장된 패키지 작업으로 바로가기 */}
+      {activePackages.length > 0 && (
+        <section className="cd-card-bg rounded-2xl border cd-border-c p-3">
+          <h3 className="text-[12px] font-bold cd-text flex items-center gap-1.5 mb-2">
+            <FileStack className="w-4 h-4 cd-text-primary" /> 입찰 서류 생성 진행 중
+            <span className="text-[10px] font-normal cd-text-faint">{activePackages.length}건</span>
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {activePackages.map((p) => (
+              <Link
+                key={`${p.bidType}-${p.bidId}`}
+                href={`/sales/bids/package?bidType=${encodeURIComponent(p.bidType)}&bidId=${encodeURIComponent(p.bidId)}`}
+                className="rounded-xl border cd-border-c px-3 py-2 hover:bg-[color:var(--cd-surface)] flex items-center gap-2 max-w-[420px]"
+              >
+                <span className="text-[10px] rounded-full px-1.5 py-0.5 cd-tint-primary shrink-0">{TYPE_LABEL[p.bidType as BidType] ?? p.bidType}</span>
+                <span className="text-[12px] cd-text truncate">{p.title || p.bidId}</span>
+                <span className="text-[10px] cd-text-faint font-mono shrink-0">
+                  {p.deadline ? `마감 ${short(p.deadline)}` : short(p.updatedAt)}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="cd-card-bg rounded-2xl border cd-border-c p-4">
         {/* 종류 탭 */}

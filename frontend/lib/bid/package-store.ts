@@ -24,6 +24,37 @@ export interface BidPackageForm {
   updatedAt: string;
 }
 
+/** 수행인력 설정 — 참여직위/담당파트/개별 이력 수행실적 필터. */
+export interface StaffConfig {
+  /** employeeId → 참여직위(PM/팀장/팀원)·담당파트 */
+  roles: Record<string, { role: string; part: string }>;
+  /** 담당파트 후보(사용자가 그때그때 세팅 — 사업장명·계획서작성팀 등) */
+  parts: string[];
+  perfFilter: {
+    subtypes: string[]; // 선택된 용역 세분류(빈 배열 = 제한 없음과 구분 위해 applyAll 참조)
+    industries: string[];
+    years: string[];
+    amountMinMan: number | null; // 만원
+    amountMaxMan: number | null;
+    applyAllSubtypes: boolean;
+    applyAllIndustries: boolean;
+  };
+}
+
+export const EMPTY_STAFF_CONFIG: StaffConfig = {
+  roles: {},
+  parts: [],
+  perfFilter: {
+    subtypes: [],
+    industries: [],
+    years: [],
+    amountMinMan: null,
+    amountMaxMan: null,
+    applyAllSubtypes: true,
+    applyAllIndustries: true,
+  },
+};
+
 export interface BidPackage {
   packageId: string;
   bidType: string;
@@ -32,6 +63,7 @@ export interface BidPackage {
   formId: string | null;
   contractIds: string[];
   employeeIds: string[];
+  staffConfig: StaffConfig;
   status: string;
   updatedAt: string;
 }
@@ -69,6 +101,31 @@ function parseIds(value: unknown): string[] {
   return [];
 }
 
+function parseStaffConfig(value: unknown): StaffConfig {
+  try {
+    const v = typeof value === "string" ? JSON.parse(value) : value;
+    if (v && typeof v === "object") {
+      const o = v as Partial<StaffConfig>;
+      return {
+        roles: (o.roles && typeof o.roles === "object" ? o.roles : {}) as StaffConfig["roles"],
+        parts: Array.isArray(o.parts) ? o.parts.map(String) : [],
+        perfFilter: {
+          subtypes: Array.isArray(o.perfFilter?.subtypes) ? o.perfFilter.subtypes.map(String) : [],
+          industries: Array.isArray(o.perfFilter?.industries) ? o.perfFilter.industries.map(String) : [],
+          years: Array.isArray(o.perfFilter?.years) ? o.perfFilter.years.map(String) : [],
+          amountMinMan: o.perfFilter?.amountMinMan != null ? Number(o.perfFilter.amountMinMan) : null,
+          amountMaxMan: o.perfFilter?.amountMaxMan != null ? Number(o.perfFilter.amountMaxMan) : null,
+          applyAllSubtypes: o.perfFilter?.applyAllSubtypes !== false,
+          applyAllIndustries: o.perfFilter?.applyAllIndustries !== false,
+        },
+      };
+    }
+  } catch {
+    // 무시 — 기본값
+  }
+  return JSON.parse(JSON.stringify(EMPTY_STAFF_CONFIG)) as StaffConfig;
+}
+
 function mapPackage(r: Record<string, unknown>): BidPackage {
   return {
     packageId: String(r.package_id ?? ""),
@@ -78,6 +135,7 @@ function mapPackage(r: Record<string, unknown>): BidPackage {
     formId: r.form_id != null ? String(r.form_id) : null,
     contractIds: parseIds(r.contract_ids),
     employeeIds: parseIds(r.employee_ids),
+    staffConfig: parseStaffConfig(r.staff_config),
     status: String(r.status ?? "draft"),
     updatedAt: String(r.updated_at ?? ""),
   };
@@ -100,6 +158,7 @@ export async function savePackage(params: {
   formId: string | null;
   contractIds: string[];
   employeeIds: string[];
+  staffConfig: StaffConfig | null;
   actorUserId: string | null;
 }): Promise<BidPackage> {
   const now = new Date().toISOString();
@@ -107,13 +166,14 @@ export async function savePackage(params: {
   await withDbWrite(async (txn) => {
     await txn.run(
       `INSERT INTO bid_packages
-         (package_id, bid_type, bid_id, org_name, form_id, contract_ids, employee_ids, status, created_by, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, 'draft', $8, $9, $9)
+         (package_id, bid_type, bid_id, org_name, form_id, contract_ids, employee_ids, staff_config, status, created_by, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb, 'draft', $9, $10, $10)
        ON CONFLICT (bid_type, bid_id) DO UPDATE SET
          org_name = EXCLUDED.org_name,
          form_id = EXCLUDED.form_id,
          contract_ids = EXCLUDED.contract_ids,
          employee_ids = EXCLUDED.employee_ids,
+         staff_config = EXCLUDED.staff_config,
          updated_at = EXCLUDED.updated_at`,
       [
         packageId,
@@ -123,6 +183,7 @@ export async function savePackage(params: {
         params.formId,
         JSON.stringify([...new Set(params.contractIds.map((s) => s.trim()).filter(Boolean))]),
         JSON.stringify([...new Set(params.employeeIds.map((s) => s.trim()).filter(Boolean))]),
+        JSON.stringify(params.staffConfig ?? EMPTY_STAFF_CONFIG),
         params.actorUserId,
         now,
       ]
@@ -131,6 +192,37 @@ export async function savePackage(params: {
   const saved = await getPackage(params.bidType, params.bidId);
   if (!saved) throw new Error("패키지 저장에 실패했습니다.");
   return saved;
+}
+
+/** 진행 중(draft) 패키지 목록 — 공고 제목·마감 조인(메인 화면 상단 바로가기 카드). */
+export async function listActivePackages(limit = 10): Promise<
+  { bidType: string; bidId: string; title: string; orgName: string; deadline: string | null; updatedAt: string }[]
+> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT p.bid_type, p.bid_id, p.updated_at,
+              COALESCE(n.title, s.title, o.title) AS title,
+              COALESCE(n.org_name, s.org_name, o.org_name) AS org_name,
+              n.deadline
+         FROM bid_packages p
+         LEFT JOIN public_bid_notices n ON p.bid_type = 'bid_notice' AND n.bid_id = p.bid_id
+         LEFT JOIN public_prior_specs s ON p.bid_type = 'prior_spec' AND s.bid_id = p.bid_id
+         LEFT JOIN public_order_plans o ON p.bid_type = 'order_plan' AND o.bid_id = p.bid_id
+        WHERE p.status = 'draft'
+        ORDER BY p.updated_at DESC
+        LIMIT $1`,
+      [limit]
+    )
+  );
+  return rows.map((r) => ({
+    bidType: String(r.bid_type ?? ""),
+    bidId: String(r.bid_id ?? ""),
+    title: String(r.title ?? ""),
+    orgName: String(r.org_name ?? ""),
+    deadline: r.deadline != null ? String(r.deadline) : null,
+    updatedAt: String(r.updated_at ?? ""),
+  }));
 }
 
 /** 발주처 기본 양식 조회(없으면 null). */
@@ -203,31 +295,64 @@ export async function saveForm(params: {
 /**
  * 선택한 실적 계약들의 수행인력 합집합 — 수행인력 확정 후보 목록.
  * 같은 인력이 여러 계약에 참여하면 1행으로 합치고 참여 건수를 센다.
+ * extraEmployeeIds = 조직도에서 수동 추가한 인력(실적 계약 미참여도 포함, 참여 0건 표시).
  */
-export async function listParticipantsForContracts(contractIds: string[]): Promise<PackageParticipant[]> {
+export async function listParticipantsForContracts(
+  contractIds: string[],
+  extraEmployeeIds: string[] = []
+): Promise<PackageParticipant[]> {
   const ids = [...new Set(contractIds.map((s) => s.trim()).filter(Boolean))];
-  if (ids.length === 0) return [];
   const db = await getDb();
-  const rows = rowsToObjects(
-    await db.exec(
-      `SELECT e.employee_id, e.name, e.eng_grade, e.specialty_field, p.position_name,
-              COUNT(DISTINCT sp.contract_id) AS contract_count,
-              MAX(p.rank_order) AS rank_order
-         FROM service_participants sp
-         JOIN employee_profiles e ON e.employee_id = sp.employee_id
-         LEFT JOIN positions p ON p.position_id = e.position_id
-        WHERE sp.contract_id = ANY($1::text[])
-        GROUP BY e.employee_id, e.name, e.eng_grade, e.specialty_field, p.position_name
-        ORDER BY MAX(p.rank_order) DESC NULLS LAST, e.name ASC`,
-      [ids]
-    )
-  );
-  return rows.map((r) => ({
-    employeeId: String(r.employee_id ?? ""),
-    name: String(r.name ?? ""),
-    positionName: r.position_name != null ? String(r.position_name) : null,
-    engGrade: r.eng_grade != null ? String(r.eng_grade) : null,
-    specialtyField: r.specialty_field != null ? String(r.specialty_field) : null,
-    contractCount: Number(r.contract_count ?? 0),
-  }));
+  const out: PackageParticipant[] = [];
+  if (ids.length > 0) {
+    const rows = rowsToObjects(
+      await db.exec(
+        `SELECT e.employee_id, e.name, e.eng_grade, e.specialty_field, p.position_name,
+                COUNT(DISTINCT sp.contract_id) AS contract_count,
+                MAX(p.rank_order) AS rank_order
+           FROM service_participants sp
+           JOIN employee_profiles e ON e.employee_id = sp.employee_id
+           LEFT JOIN positions p ON p.position_id = e.position_id
+          WHERE sp.contract_id = ANY($1::text[])
+          GROUP BY e.employee_id, e.name, e.eng_grade, e.specialty_field, p.position_name
+          ORDER BY MAX(p.rank_order) DESC NULLS LAST, e.name ASC`,
+        [ids]
+      )
+    );
+    for (const r of rows) {
+      out.push({
+        employeeId: String(r.employee_id ?? ""),
+        name: String(r.name ?? ""),
+        positionName: r.position_name != null ? String(r.position_name) : null,
+        engGrade: r.eng_grade != null ? String(r.eng_grade) : null,
+        specialtyField: r.specialty_field != null ? String(r.specialty_field) : null,
+        contractCount: Number(r.contract_count ?? 0),
+      });
+    }
+  }
+  const known = new Set(out.map((p) => p.employeeId));
+  const extras = [...new Set(extraEmployeeIds.map((s) => s.trim()).filter(Boolean))].filter((id) => !known.has(id));
+  if (extras.length > 0) {
+    const rows = rowsToObjects(
+      await db.exec(
+        `SELECT e.employee_id, e.name, e.eng_grade, e.specialty_field, p.position_name, p.rank_order
+           FROM employee_profiles e
+           LEFT JOIN positions p ON p.position_id = e.position_id
+          WHERE e.employee_id = ANY($1::text[])
+          ORDER BY p.rank_order DESC NULLS LAST, e.name ASC`,
+        [extras]
+      )
+    );
+    for (const r of rows) {
+      out.push({
+        employeeId: String(r.employee_id ?? ""),
+        name: String(r.name ?? ""),
+        positionName: r.position_name != null ? String(r.position_name) : null,
+        engGrade: r.eng_grade != null ? String(r.eng_grade) : null,
+        specialtyField: r.specialty_field != null ? String(r.specialty_field) : null,
+        contractCount: 0,
+      });
+    }
+  }
+  return out;
 }

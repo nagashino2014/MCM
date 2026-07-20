@@ -203,7 +203,7 @@ export function resolveRepeatRows(
   }
   if (docType === "staff_summary") {
     return data.persons.map((p) => ({
-      role: "",
+      role: p.role,
       name: p.name,
       grade: p.envGrade || p.engGrade,
       degree: p.degreeTop,

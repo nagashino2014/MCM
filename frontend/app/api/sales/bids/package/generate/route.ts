@@ -52,6 +52,7 @@ export async function POST(req: NextRequest) {
       bidId,
       contractIds: pkg.contractIds,
       employeeIds: pkg.employeeIds,
+      staffConfig: pkg.staffConfig,
     });
     const formBytes = await readStorageObject(form.storageKey);
     // 회사 프로필에 등급 확인서 이미지가 있으면 신용평가 서식 스캔을 교체

@@ -13,6 +13,7 @@ import {
 } from "@/lib/company/profile";
 import { getEmployeeDetail, type EmployeeDetail } from "@/lib/admin/employee-records";
 import { INTEGRATED_PERMIT_INDUSTRIES, canonicalServiceSubtype, matchesIndustryText } from "@/lib/ieps/integrated-permit";
+import type { StaffConfig } from "@/lib/bid/package-store";
 
 /*
  * 입찰 증빙서류 패키지 P3 — 문서 생성용 데이터 어셈블리.
@@ -46,6 +47,9 @@ export interface PackagePersonProject {
 export interface PackagePerson {
   employeeId: string;
   name: string;
+  /** 참여직위(PM/팀장/팀원 — 수행인력 확정에서 지정)·담당파트 */
+  role: string;
+  part: string;
   positionName: string;
   engGrade: string;
   envGrade: string;
@@ -202,28 +206,60 @@ async function loadContractRows(contractIds: string[]): Promise<PackageContractR
   });
 }
 
-/** 인당 자사 참여계약(개별 이력 경력표) — 참여기간 오름차순. */
-async function loadPersonProjects(employeeId: string): Promise<PackagePersonProject[]> {
+/**
+ * 인당 자사 참여계약(개별 이력 경력표) — 참여기간 오름차순.
+ * perfFilter(수행실적 설정)로 세분류·업종·연도·금액 범위를 걸러 개별 이력에 넣을 실적만 남긴다.
+ */
+async function loadPersonProjects(
+  employeeId: string,
+  filter: StaffConfig["perfFilter"] | null
+): Promise<PackagePersonProject[]> {
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT c.contract_title, cp.company_name AS client_name,
+      `SELECT c.contract_title, c.service_subtype,
+              COALESCE(NULLIF(c.contract_date,''), c.started_at, c.created_at) AS contract_date,
+              cp.company_name AS client_name,
               COALESCE(c.current_amount, c.contract_amount) AS amount,
               c.started_at, c.ended_at,
+              sf.industry_name, sf.industry_code,
               sp.task_label, sp.participated_from, sp.participated_to
          FROM service_participants sp
          JOIN contracts c ON c.contract_id = sp.contract_id AND c.deleted_at IS NULL
          LEFT JOIN facilities cp ON cp.facility_id = c.counterparty_facility_id
+         LEFT JOIN facilities sf ON sf.facility_id = c.facility_id
         WHERE sp.employee_id = $1
         ORDER BY COALESCE(NULLIF(sp.participated_from,''), c.started_at) ASC`,
       [employeeId]
     )
   );
-  return rows.map((r) => {
+  const out: PackagePersonProject[] = [];
+  for (const r of rows) {
     const amount = Number(r.amount ?? 0);
+    if (filter) {
+      // 세분류: '모두 적용'이 아니면 선택 세분류만
+      if (!filter.applyAllSubtypes && filter.subtypes.length > 0) {
+        if (!filter.subtypes.includes(canonicalServiceSubtype(s(r.service_subtype) || null))) continue;
+      }
+      // 업종: '모두 적용'이 아니면 선택 업종 라벨 매칭만
+      if (!filter.applyAllIndustries && filter.industries.length > 0) {
+        const hit = filter.industries.some((label) =>
+          matchesIndustryText([s(r.industry_name), s(r.industry_code)], label)
+        );
+        if (!hit) continue;
+      }
+      // 연도: 선택된 연도만(빈 배열 = 전체)
+      if (filter.years.length > 0) {
+        if (!filter.years.includes(s(r.contract_date).slice(0, 4))) continue;
+      }
+      // 금액 범위(만원)
+      const man = amount / 10_000;
+      if (filter.amountMinMan != null && man < filter.amountMinMan) continue;
+      if (filter.amountMaxMan != null && man > filter.amountMaxMan) continue;
+    }
     const from = s(r.participated_from) || s(r.started_at);
     const to = s(r.participated_to) || s(r.ended_at);
-    return {
+    out.push({
       client: s(r.client_name),
       projectName: s(r.contract_title),
       task: s(r.task_label),
@@ -231,14 +267,19 @@ async function loadPersonProjects(employeeId: string): Promise<PackagePersonProj
       periodText: periodText(from, to),
       thenCompany: "", // 자사 수행 — 생성 시 회사명으로 채움
       thenPosition: "",
-    };
-  });
+    });
+  }
+  return out;
 }
 
-async function loadPerson(employeeId: string, companyName: string): Promise<PackagePerson | null> {
+async function loadPerson(
+  employeeId: string,
+  companyName: string,
+  staffConfig: StaffConfig | null
+): Promise<PackagePerson | null> {
   const detail = await getEmployeeDetail(employeeId);
   if (!detail) return null;
-  const projects = await loadPersonProjects(employeeId);
+  const projects = await loadPersonProjects(employeeId, staffConfig?.perfFilter ?? null);
   for (const p of projects) p.thenCompany = companyName;
 
   const joined = s(detail.hiredAt);
@@ -269,9 +310,12 @@ async function loadPerson(employeeId: string, companyName: string): Promise<Pack
     })
     .join("\n");
 
+  const roleConf = staffConfig?.roles?.[employeeId];
   return {
     employeeId,
     name: s(detail.name),
+    role: s(roleConf?.role),
+    part: s(roleConf?.part),
     positionName: s(detail.positionName),
     engGrade: s(detail.engGrade),
     envGrade: s(detail.envGrade),
@@ -294,6 +338,7 @@ export async function assemblePackageData(params: {
   bidId: string;
   contractIds: string[];
   employeeIds: string[];
+  staffConfig?: StaffConfig | null;
 }): Promise<PackageData> {
   const bid = await getBid(params.bidType, params.bidId);
   if (!bid) throw new Error("공고를 찾을 수 없습니다.");
@@ -306,7 +351,7 @@ export async function assemblePackageData(params: {
   const contracts = await loadContractRows(params.contractIds);
   const persons: PackagePerson[] = [];
   for (const id of params.employeeIds) {
-    const p = await loadPerson(id, profile.companyName);
+    const p = await loadPerson(id, profile.companyName, params.staffConfig ?? null);
     if (p) persons.push(p);
   }
   const totalRaw = contracts.reduce((acc, c) => acc + (Number(c.amountMillion) || 0), 0);

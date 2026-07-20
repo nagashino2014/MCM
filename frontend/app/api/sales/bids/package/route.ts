@@ -3,7 +3,7 @@ import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { getBid } from "@/lib/bid/bid-queries";
 import type { BidType } from "@/lib/scraper/types";
-import { getFormByOrg, getFormById, getPackage, savePackage } from "@/lib/bid/package-store";
+import { getFormByOrg, getFormById, getPackage, savePackage, type StaffConfig } from "@/lib/bid/package-store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,6 +55,7 @@ interface PutBody {
   formId?: string | null;
   contractIds?: string[];
   employeeIds?: string[];
+  staffConfig?: StaffConfig | null;
 }
 
 // PUT: 패키지 작업 상태 저장(공고당 1건 upsert)
@@ -78,6 +79,7 @@ export async function PUT(req: NextRequest) {
       formId: body.formId ? String(body.formId) : null,
       contractIds: Array.isArray(body.contractIds) ? body.contractIds.map(String) : [],
       employeeIds: Array.isArray(body.employeeIds) ? body.employeeIds.map(String) : [],
+      staffConfig: body.staffConfig ?? null,
       actorUserId: actor.userId,
     });
     await recordAuditLog({

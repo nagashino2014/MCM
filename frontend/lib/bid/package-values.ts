@@ -159,7 +159,7 @@ export function resolveSingleValue(
       case "education": return { value: p.educationText };
       case "licenses": return { value: p.licensesText };
       case "careerTotal": return { value: monthsToYearMonth(p.careerMonthsTotal) };
-      case "assignedRole": return null; // 본 사업 참여임무 — 수기
+      case "assignedRole": return p.assignedRole ? { value: p.assignedRole } : null; // 수기 미입력 시 원본 유지
     }
     return null;
   }
@@ -219,7 +219,7 @@ export function resolveRepeatRows(
       careerMonthsTotal: p.careerMonthsTotal,
       careerMonthsCompany: p.careerMonthsCompany,
       perfCount: p.perfCount,
-      participateMonths: "",
+      participateMonths: p.participateMonths,
       score: "",
     }));
   }

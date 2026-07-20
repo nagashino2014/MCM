@@ -51,6 +51,9 @@ export interface PackagePerson {
   /** 참여직위(PM/팀장/팀원 — 수행인력 확정에서 지정)·파트 배정 목록(겸직 = 복수 배정) */
   role: string;
   assignments: { sitePart: string; workPart: string }[];
+  /** 수기 항목 — 본 사업 참여임무(개별 이력)·참여기간 개월(집계표) */
+  assignedRole: string;
+  participateMonths: string;
   positionName: string;
   engGrade: string;
   envGrade: string;
@@ -157,8 +160,11 @@ function monthsToText(months: number | null): string {
   return String(months);
 }
 
-/** 선택 계약들의 실적 행 + 등급별 참여인원 집계. */
-async function loadContractRows(contractIds: string[]): Promise<PackageContractRow[]> {
+/** 선택 계약들의 실적 행 + 등급별 참여인원 집계. overviewOverrides = 수기 용역개요(빈 값이면 자동 생성). */
+export async function loadContractRows(
+  contractIds: string[],
+  overviewOverrides?: Record<string, string>
+): Promise<PackageContractRow[]> {
   if (contractIds.length === 0) return [];
   const db = await getDb();
   const rows = rowsToObjects(
@@ -195,14 +201,16 @@ async function loadContractRows(contractIds: string[]): Promise<PackageContractR
       year: s(r.contract_date).slice(0, 4),
       category: s(r.service_subtype) || "동등실적",
       serviceName: s(r.contract_title),
-      overview: buildOverview({
-        sido: s(r.region_sido),
-        sigungu: s(r.region_sigungu),
-        industryCategory: s(r.industry_category),
-        industryName: s(r.industry_name),
-        industryCode: s(r.industry_code),
-        serviceSubtype: s(r.service_subtype),
-      }),
+      overview:
+        s(overviewOverrides?.[s(r.contract_id)]) ||
+        buildOverview({
+          sido: s(r.region_sido),
+          sigungu: s(r.region_sigungu),
+          industryCategory: s(r.industry_category),
+          industryName: s(r.industry_name),
+          industryCode: s(r.industry_code),
+          serviceSubtype: s(r.service_subtype),
+        }),
       amountMillion: amount > 0 ? String(Math.round(amount / 1_000_000)) : "",
       periodText: periodText(started, ended),
       staffCountText: [high > 0 ? `고급:${high}` : "", normal > 0 ? `일반:${normal}` : ""].filter(Boolean).join(" "),
@@ -334,6 +342,8 @@ async function loadPerson(
     name: s(detail.name),
     role: s(roleConf?.role),
     assignments: roleConf?.assignments ?? [],
+    assignedRole: s(staffConfig?.manual?.assignedRole?.[employeeId]),
+    participateMonths: s(staffConfig?.manual?.participateMonths?.[employeeId]),
     positionName: s(detail.positionName),
     engGrade: s(detail.engGrade),
     envGrade: s(detail.envGrade),
@@ -366,7 +376,7 @@ export async function assemblePackageData(params: {
     listHistory(),
     listCredentials(),
   ]);
-  const contracts = await loadContractRows(params.contractIds);
+  const contracts = await loadContractRows(params.contractIds, params.staffConfig?.manual?.overviews);
   const persons: PackagePerson[] = [];
   for (const id of params.employeeIds) {
     const p = await loadPerson(id, profile.companyName, params.staffConfig ?? null);

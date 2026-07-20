@@ -62,6 +62,12 @@ export interface StaffConfig {
    * 용역분류·연도·금액 필터만 적용한다(해당 업종 실적이 없는 참여인력 대응).
    */
   industryBypass: string[];
+  /** 수기 항목 — 참여임무(개별 이력)·참여기간 개월(집계표)·용역개요 오버라이드(총괄표, 빈 값=자동 생성) */
+  manual: {
+    assignedRole: Record<string, string>; // employeeId → 본 사업 참여임무
+    participateMonths: Record<string, string>; // employeeId → 참여기간(개월)
+    overviews: Record<string, string>; // contractId → 용역개요(자동 생성값 대체)
+  };
 }
 
 export const EMPTY_STAFF_CONFIG: StaffConfig = {
@@ -81,6 +87,7 @@ export const EMPTY_STAFF_CONFIG: StaffConfig = {
   },
   excluded: {},
   industryBypass: [],
+  manual: { assignedRole: {}, participateMonths: {}, overviews: {} },
 };
 
 export interface BidPackage {
@@ -185,6 +192,18 @@ function parseStaffConfig(value: unknown): StaffConfig {
           ])
         ),
         industryBypass: Array.isArray(o.industryBypass) ? o.industryBypass.map(String) : [],
+        manual: (() => {
+          const m = (o.manual && typeof o.manual === "object" ? o.manual : {}) as Record<string, unknown>;
+          const dict = (v: unknown): Record<string, string> =>
+            v && typeof v === "object"
+              ? Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([k, x]) => [String(k), String(x ?? "")]))
+              : {};
+          return {
+            assignedRole: dict(m.assignedRole),
+            participateMonths: dict(m.participateMonths),
+            overviews: dict(m.overviews),
+          };
+        })(),
       };
     }
   } catch {

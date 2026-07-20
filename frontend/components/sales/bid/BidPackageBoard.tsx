@@ -74,6 +74,12 @@ interface StaffConfigUI {
   removedCandidates: string[];
   /** 업종 필터를 해제한 인력 — 개별 이력에 선택업종 필터를 적용하지 않는다 */
   industryBypass: string[];
+  /** 수기 항목 — 참여임무(개별 이력)·참여기간 개월(집계표)·용역개요 오버라이드(총괄표, 빈 값=자동) */
+  manual: {
+    assignedRole: Record<string, string>;
+    participateMonths: Record<string, string>;
+    overviews: Record<string, string>;
+  };
   perfFilter: {
     subtypes: string[];
     industries: string[];
@@ -94,6 +100,7 @@ const EMPTY_STAFF_CONFIG: StaffConfigUI = {
   orgLayout: { mode: "nested", separatePart: "" },
   removedCandidates: [],
   industryBypass: [],
+  manual: { assignedRole: {}, participateMonths: {}, overviews: {} },
   perfFilter: {
     subtypes: [],
     industries: [],
@@ -315,12 +322,19 @@ function StaffRoleRow({
   workParts,
   siteParts,
   onChange,
+  assignedRole,
+  participateMonths,
+  onManualChange,
 }: {
   participant: Participant;
   conf: { role: string; assignments: PartAssignmentUI[] };
   workParts: string[];
   siteParts: string[];
   onChange: (next: { role: string; assignments: PartAssignmentUI[] }) => void;
+  /** 수기 항목 — 본 사업 참여임무(개별 이력)·참여기간 개월(집계표) */
+  assignedRole: string;
+  participateMonths: string;
+  onManualChange: (patch: { assignedRole?: string; participateMonths?: string }) => void;
 }) {
   const [draftSite, setDraftSite] = useState("");
   const [draftWork, setDraftWork] = useState("");
@@ -365,6 +379,23 @@ function StaffRoleRow({
         >
           <Plus className="w-3 h-3" />
         </button>
+      </div>
+      {/* 수기 항목 — 개별 이력 '본 사업 참여임무'·집계표 '참여기간(개월)' */}
+      <div className="flex items-center gap-1.5 flex-wrap pl-1">
+        <input
+          className="cd-input !py-1 text-[11px]"
+          style={{ width: 218 }}
+          placeholder="참여임무 (예: 용역총괄, 대기분야 작성)"
+          value={assignedRole}
+          onChange={(e) => onManualChange({ assignedRole: e.target.value })}
+        />
+        <input
+          className="cd-input !py-1 text-[11px] text-right font-mono"
+          style={{ width: 96 }}
+          placeholder="참여(개월)"
+          value={participateMonths}
+          onChange={(e) => onManualChange({ participateMonths: e.target.value.replace(/[^\d]/g, "") })}
+        />
       </div>
       {conf.assignments.length > 0 && (
         <div className="flex flex-wrap gap-1.5 pl-1">
@@ -423,6 +454,10 @@ export function BidPackageBoard() {
   const [preview, setPreview] = useState<{ employeeId: string; name: string } | null>(null);
   const [previewProjects, setPreviewProjects] = useState<PreviewProject[] | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  // 용역개요 보정 모달 — 총괄표 자동 생성 개요 확인·수기 오버라이드
+  const [overviewModal, setOverviewModal] = useState(false);
+  const [overviewRows, setOverviewRows] = useState<{ contractId: string; serviceName: string; category: string; overview: string }[] | null>(null);
+  const [overviewError, setOverviewError] = useState<string | null>(null);
   // 양식에 조직도(자유양식) 서식 존재 여부 — form_profile 의 org_chart 문서
   const [orgChartInForm, setOrgChartInForm] = useState<boolean | null>(null);
 
@@ -714,6 +749,25 @@ export function BidPackageBoard() {
     });
   };
 
+  // 용역개요 보정 모달 열기 — 선택 계약의 자동 생성 개요 로드
+  const openOverviewModal = async () => {
+    setOverviewModal(true);
+    setOverviewRows(null);
+    setOverviewError(null);
+    try {
+      const res = await fetch("/api/sales/bids/package/contract-overviews", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contractIds }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { contracts?: typeof overviewRows; error?: string };
+      if (!res.ok) throw new Error(data?.error ?? "용역개요를 불러오지 못했습니다.");
+      setOverviewRows(data.contracts ?? []);
+    } catch (err) {
+      setOverviewError((err as Error).message);
+    }
+  };
+
   // 후보 리스트에서 인력 삭제 — 계약 참여자라도 숨김(조직도로 다시 추가 가능)
   const removeCandidate = (employeeId: string) => {
     setStaffConfig((prev) => ({
@@ -965,6 +1019,15 @@ export function BidPackageBoard() {
                 <span className="ml-auto text-[11px] font-normal cd-text-faint">{checked.size.toLocaleString()}건 선택</span>
                 <button
                   type="button"
+                  className="cd-btn cd-btn-ghost rounded-lg px-2.5 py-1 text-[11px] cd-text-primary"
+                  disabled={checked.size === 0}
+                  title="총괄표 용역개요를 확인·수기 보정합니다(빈 값 = 자동 생성)"
+                  onClick={openOverviewModal}
+                >
+                  개요 보정
+                </button>
+                <button
+                  type="button"
                   className="cd-btn cd-btn-ghost rounded-lg px-2.5 py-1 text-[11px] cd-text-muted"
                   disabled={checked.size === 0}
                   onClick={() => { setChecked(new Set()); setPickedEmployees(new Set()); }}
@@ -1190,6 +1253,22 @@ export function BidPackageBoard() {
                           setStaffConfig((prev) => ({
                             ...prev,
                             roles: { ...prev.roles, [p.employeeId]: next },
+                          }))
+                        }
+                        assignedRole={staffConfig.manual.assignedRole[p.employeeId] ?? ""}
+                        participateMonths={staffConfig.manual.participateMonths[p.employeeId] ?? ""}
+                        onManualChange={(patch) =>
+                          setStaffConfig((prev) => ({
+                            ...prev,
+                            manual: {
+                              ...prev.manual,
+                              ...(patch.assignedRole !== undefined
+                                ? { assignedRole: { ...prev.manual.assignedRole, [p.employeeId]: patch.assignedRole } }
+                                : {}),
+                              ...(patch.participateMonths !== undefined
+                                ? { participateMonths: { ...prev.manual.participateMonths, [p.employeeId]: patch.participateMonths } }
+                                : {}),
+                            },
                           }))
                         }
                       />
@@ -1557,6 +1636,58 @@ export function BidPackageBoard() {
                 <p className="text-[10px] cd-text-faint">
                   제거한 실적은 문서 생성 시 이 인력의 개별 이력사항에서 빠집니다(참여당시 소속·직위는 자사·현 직위로
                   채워짐). 제거 상태는 '작업 상태 저장' 또는 문서 생성 시 함께 저장됩니다.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* 용역개요 보정 — 총괄표 자동 생성 개요 확인·수기 오버라이드 */}
+          {overviewModal && (
+            <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={() => setOverviewModal(false)}>
+              <div className="cdash cdash-vars cd-fields-white cd-card-bg rounded-2xl border cd-border-c w-full max-w-3xl max-h-[85vh] overflow-y-auto p-4 flex flex-col gap-3" data-theme={theme} onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-[14px] font-bold cd-text flex-1">
+                    용역개요 보정
+                    <span className="ml-2 text-[11px] font-normal cd-text-faint">총괄표 용역개요 — 비우면 자동 생성값 사용</span>
+                  </h3>
+                  <button type="button" className="cd-btn cd-btn-soft text-[12px]" onClick={() => setOverviewModal(false)}>
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                {overviewError ? (
+                  <p className="text-[12px] cd-error-text py-6 text-center">{overviewError}</p>
+                ) : overviewRows == null ? (
+                  <p className="text-[12px] cd-text-faint py-6 text-center">불러오는 중입니다.</p>
+                ) : overviewRows.length === 0 ? (
+                  <p className="text-[12px] cd-text-faint py-6 text-center">선택된 실적 계약이 없습니다.</p>
+                ) : (
+                  <div className="rounded-xl border cd-border-c divide-y cd-border-c">
+                    {overviewRows.map((r) => (
+                      <div key={r.contractId} className="px-3 py-2 flex flex-col gap-1">
+                        <div className="flex items-center gap-2 text-[11px]">
+                          <span className="cd-text font-semibold truncate">{r.serviceName}</span>
+                          <span className="cd-text-faint shrink-0">{r.category}</span>
+                        </div>
+                        <input
+                          className="cd-input !py-1 text-[12px]"
+                          placeholder={r.overview || "자동 생성 불가 — 소재지·업종 정보 부족(직접 입력하세요)"}
+                          value={staffConfig.manual.overviews[r.contractId] ?? ""}
+                          onChange={(e) =>
+                            setStaffConfig((prev) => ({
+                              ...prev,
+                              manual: {
+                                ...prev.manual,
+                                overviews: { ...prev.manual.overviews, [r.contractId]: e.target.value },
+                              },
+                            }))
+                          }
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="text-[10px] cd-text-faint">
+                  입력값은 자동 생성 개요를 대체하며 '작업 상태 저장' 또는 문서 생성 시 함께 저장됩니다.
                 </p>
               </div>
             </div>

@@ -108,7 +108,7 @@ const degreeLabel = (level: unknown): string => DEGREE_LABELS[String(level ?? ""
 const DEGREE_ORDER = ["박사", "석사", "학사"];
 
 // 용역개요의 '○○시설' 로 표기하는 비제조 업종 — 나머지는 '○○제조시설'.
-const FACILITY_SUFFIX_INDUSTRIES = new Set(["발전", "폐기물소각", "폐기물처리업"]);
+const FACILITY_SUFFIX_INDUSTRIES = new Set(["발전", "증기열공급", "폐기물처리"]);
 
 /** 소재지 축약 — 광역시/특별시는 시명 축약(울산광역시→울산), 도 산하는 시·군명(군위군→군위). */
 function shortRegion(sido: string, sigungu: string): string {

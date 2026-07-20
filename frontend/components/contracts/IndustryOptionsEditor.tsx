@@ -3,29 +3,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
+import { INTEGRATED_PERMIT_INDUSTRIES } from "@/lib/ieps/integrated-permit-industries";
 
-export const DEFAULT_CONTRACT_INDUSTRY_OPTIONS = [
-  "발전",
-  "폐기물소각",
-  "철강",
-  "비철",
-  "유기",
-  "석유정제",
-  "무기화학",
-  "정밀화학",
-  "비료및질소화합물",
-  "펄프종이및판지",
-  "전자부품",
-  "반도체",
-  "섬유염색및가공처리업",
-  "도축육류가공및저장처리업",
-  "알콜음료제조업",
-  "플라스틱제품제조업",
-  "자동차부품제조업",
-  "폐기물처리업",
-  "시멘트 제조업",
-  "이차전지 제조업",
-];
+/** 통합허가 대상 업종 옵션 접미 — 화관법·HAPs 등 다른 업종 옵션과 구분한다. */
+export const INTEGRATED_PERMIT_OPTION_SUFFIX = "(통합허가)";
+
+// 통합허가 대상 업종은 수집 설정(통합허가 대상 업종)의 20개 태그명과 동일한 명칭을 쓴다.
+export const DEFAULT_CONTRACT_INDUSTRY_OPTIONS = INTEGRATED_PERMIT_INDUSTRIES.map(
+  (item) => `${item.label}${INTEGRATED_PERMIT_OPTION_SUFFIX}`
+);
 
 export function useContractIndustryOptions() {
   const [industryOptions, setIndustryOptions] = useState(DEFAULT_CONTRACT_INDUSTRY_OPTIONS);
@@ -58,6 +44,8 @@ export function IndustryOptionsEditorButton({ options, onOptionsChange }: Props)
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [newOption, setNewOption] = useState("");
+  // 통합허가 신규 편입 업종 추가용 — 체크 시 '(통합허가)' 접미를 붙여 등록한다
+  const [integratedPermit, setIntegratedPermit] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const reload = useCallback(async () => {
@@ -71,8 +59,11 @@ export function IndustryOptionsEditorButton({ options, onOptionsChange }: Props)
   }, [onOptionsChange]);
 
   const addOption = async () => {
-    const optionName = newOption.trim();
+    let optionName = newOption.trim();
     if (!optionName) return;
+    if (integratedPermit && !optionName.endsWith(INTEGRATED_PERMIT_OPTION_SUFFIX)) {
+      optionName += INTEGRATED_PERMIT_OPTION_SUFFIX;
+    }
     setSaving(true);
     try {
       const res = await fetch("/api/contracts/industry-options", {
@@ -135,7 +126,7 @@ export function IndustryOptionsEditorButton({ options, onOptionsChange }: Props)
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="flex gap-2 mb-4">
+            <div className="flex items-center gap-2 mb-4">
               <input
                 className="ui-input flex-1"
                 placeholder="추가할 업종명"
@@ -148,6 +139,14 @@ export function IndustryOptionsEditorButton({ options, onOptionsChange }: Props)
                   }
                 }}
               />
+              <label className="flex items-center gap-1.5 text-xs cd-text-muted shrink-0 cursor-pointer" title="체크하면 '(통합허가)' 표시를 붙여 등록합니다 — 통합허가 신규 편입 업종 추가용">
+                <input
+                  type="checkbox"
+                  checked={integratedPermit}
+                  onChange={(event) => setIntegratedPermit(event.target.checked)}
+                />
+                통합허가
+              </label>
               <button type="button" disabled={saving} onClick={addOption} className="btn-primary rounded-xl px-4 py-2 text-sm">
                 추가
               </button>

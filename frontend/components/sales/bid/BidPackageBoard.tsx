@@ -133,6 +133,7 @@ interface Participant {
   engGrade: string | null;
   specialtyField: string | null;
   contractCount: number;
+  hiredAt: string | null;
 }
 
 interface TreeContract {
@@ -331,7 +332,8 @@ function StaffRoleRow({
   return (
     <div className="px-2.5 py-1.5 text-xs flex flex-col gap-1.5 border-b cd-border-c min-w-0">
       <div className="flex items-center gap-1.5 flex-wrap">
-        <span className="rounded-full px-2 py-0.5 cd-tint-primary shrink-0">
+        {/* 성명+직함 5자 폭으로 통일 — 긴 직함(총괄본부장)이 있어도 뒤 select 정렬 유지 */}
+        <span className="rounded-full px-2 py-0.5 cd-tint-primary shrink-0 min-w-[124px]">
           {participant.name} {participant.positionName ?? ""}
         </span>
         <select
@@ -708,11 +710,24 @@ export function BidPackageBoard() {
     setManualIds((prev) => prev.filter((id) => id !== employeeId));
   };
 
-  // 삭제 인력을 제외한 후보 리스트
-  const visibleParticipants = useMemo(
-    () => participants.filter((p) => !staffConfig.removedCandidates.includes(p.employeeId)),
-    [participants, staffConfig.removedCandidates]
-  );
+  // 삭제 인력을 제외한 후보 리스트 — 참여직위(PM→팀장→팀원→미지정) 순, 동순위는 근속 긴 순(입사일 빠른 순)
+  const visibleParticipants = useMemo(() => {
+    const roleRank = (id: string): number => {
+      const role = staffConfig.roles[id]?.role ?? "";
+      const idx = PARTICIPATION_ROLES.indexOf(role);
+      return idx >= 0 ? idx : PARTICIPATION_ROLES.length;
+    };
+    return participants
+      .filter((p) => !staffConfig.removedCandidates.includes(p.employeeId))
+      .sort((a, b) => {
+        const r = roleRank(a.employeeId) - roleRank(b.employeeId);
+        if (r !== 0) return r;
+        const ha = a.hiredAt ?? "9999";
+        const hb = b.hiredAt ?? "9999";
+        if (ha !== hb) return ha < hb ? -1 : 1;
+        return a.name.localeCompare(b.name, "ko");
+      });
+  }, [participants, staffConfig.removedCandidates, staffConfig.roles]);
 
   const uploadForm = async (file: File) => {
     if (!bid?.orgName) {
@@ -1083,8 +1098,9 @@ export function BidPackageBoard() {
                             })
                           }
                         />
-                        <span className="cd-text font-semibold shrink-0">{p.name}</span>
-                        <span className="cd-text-faint shrink-0">{p.positionName ?? ""}</span>
+                        <span className="cd-text font-semibold shrink-0 min-w-[42px]">{p.name}</span>
+                        {/* 직함은 5자(총괄본부장) 폭을 확보해 뒤 태그 시작 위치를 정렬 */}
+                        <span className="cd-text-faint shrink-0 min-w-[62px]">{p.positionName ?? ""}</span>
                         {p.engGrade && <span className="text-[10px] rounded-full px-1.5 py-0.5 cd-tint-primary shrink-0">{p.engGrade}</span>}
                         {p.specialtyField && <span className="text-[10px] cd-text-faint truncate">{p.specialtyField}</span>}
                         <button

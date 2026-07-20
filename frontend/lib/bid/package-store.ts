@@ -97,6 +97,7 @@ export interface PackageParticipant {
   engGrade: string | null;
   specialtyField: string | null;
   contractCount: number; // 선택 계약 중 참여 건수
+  hiredAt: string | null; // 입사일 — 화면 정렬(참여직위 동순위 시 근속 긴 순)용
 }
 
 function mapForm(r: Record<string, unknown>): BidPackageForm {
@@ -366,14 +367,14 @@ export async function listParticipantsForContracts(
   if (ids.length > 0) {
     const rows = rowsToObjects(
       await db.exec(
-        `SELECT e.employee_id, e.name, e.eng_grade, e.specialty_field, p.position_name,
+        `SELECT e.employee_id, e.name, e.eng_grade, e.specialty_field, e.hired_at, p.position_name,
                 COUNT(DISTINCT sp.contract_id) AS contract_count,
                 MAX(p.rank_order) AS rank_order
            FROM service_participants sp
            JOIN employee_profiles e ON e.employee_id = sp.employee_id
            LEFT JOIN positions p ON p.position_id = e.position_id
           WHERE sp.contract_id = ANY($1::text[])
-          GROUP BY e.employee_id, e.name, e.eng_grade, e.specialty_field, p.position_name
+          GROUP BY e.employee_id, e.name, e.eng_grade, e.specialty_field, e.hired_at, p.position_name
           ORDER BY MAX(p.rank_order) DESC NULLS LAST, e.name ASC`,
         [ids]
       )
@@ -386,6 +387,7 @@ export async function listParticipantsForContracts(
         engGrade: r.eng_grade != null ? String(r.eng_grade) : null,
         specialtyField: r.specialty_field != null ? String(r.specialty_field) : null,
         contractCount: Number(r.contract_count ?? 0),
+        hiredAt: r.hired_at != null ? String(r.hired_at) : null,
       });
     }
   }
@@ -394,7 +396,7 @@ export async function listParticipantsForContracts(
   if (extras.length > 0) {
     const rows = rowsToObjects(
       await db.exec(
-        `SELECT e.employee_id, e.name, e.eng_grade, e.specialty_field, p.position_name, p.rank_order
+        `SELECT e.employee_id, e.name, e.eng_grade, e.specialty_field, e.hired_at, p.position_name, p.rank_order
            FROM employee_profiles e
            LEFT JOIN positions p ON p.position_id = e.position_id
           WHERE e.employee_id = ANY($1::text[])
@@ -410,6 +412,7 @@ export async function listParticipantsForContracts(
         engGrade: r.eng_grade != null ? String(r.eng_grade) : null,
         specialtyField: r.specialty_field != null ? String(r.specialty_field) : null,
         contractCount: 0,
+        hiredAt: r.hired_at != null ? String(r.hired_at) : null,
       });
     }
   }

@@ -403,18 +403,24 @@ function fillDocTable(
     if (entries.some((e) => e.prefixColon)) out = widenCellIfNeeded(out, row, col, value);
   }
 
-  // 반복 행
+  // 반복 행 — 데이터가 0건이어도 재구성한다(건너뛰면 원본 양식의 샘플 행이 그대로 남는다)
   if (doc.repeat && doc.repeat.table === tableIndex) {
     const rows = resolveRepeatRows(doc.docType, data, personIndex);
-    if (rows.length > 0) {
-      const preserveRows = new Set<number>();
-      for (const f of doc.fields) {
-        if (f.table === tableIndex && f.row != null && f.row >= doc.repeat.fromRow) preserveRows.add(f.row);
-      }
-      // 보존 행의 단일 필드는 행 시프트 전에 이미 채워졌으므로 좌표가 이동해도 값은 유지된다.
-      out = fillRepeatRows(out, doc.repeat.fromRow, doc.repeat.columns, rows, preserveRows, warnings);
-      grew = rows.length > 1;
+    if (rows.length === 0) {
+      const who = personIndex != null ? ` (${data.persons[personIndex]?.name ?? `인원 ${personIndex + 1}`})` : "";
+      warnings.push(`${doc.docType}${who}: 반복 행 데이터 0건 — 샘플 행을 지우고 빈 행으로 생성`);
     }
+    const effectiveRows =
+      rows.length > 0
+        ? rows
+        : [Object.fromEntries(doc.repeat.columns.map((c) => [c.field, ""]))];
+    const preserveRows = new Set<number>();
+    for (const f of doc.fields) {
+      if (f.table === tableIndex && f.row != null && f.row >= doc.repeat.fromRow) preserveRows.add(f.row);
+    }
+    // 보존 행의 단일 필드는 행 시프트 전에 이미 채워졌으므로 좌표가 이동해도 값은 유지된다.
+    out = fillRepeatRows(out, doc.repeat.fromRow, doc.repeat.columns, effectiveRows, preserveRows, warnings);
+    grew = effectiveRows.length > 1;
   }
 
   if (grew) out = forceCellPageBreak(out);

@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import type { BidType } from "@/lib/scraper/types";
-import { getFormById, getPackage } from "@/lib/bid/package-store";
+import { getFormById, getPackage, saveGeneratedOutput } from "@/lib/bid/package-store";
 import { getFormProfile } from "@/lib/bid/form-analyze";
 import { assemblePackageData } from "@/lib/bid/package-data";
 import { fillPackageHwpx } from "@/lib/bid/hwpx-fill";
@@ -94,10 +94,28 @@ export async function POST(req: NextRequest) {
       "",
       "확인 사항: 참여임무 등 수기 항목과 발주처 평가란(득점)은 비워져 있습니다. 한글에서 열어 검토하세요.",
       "증빙 문서는 사용자 등록·삭제의 학력/자격 행별 '증빙' 버튼과 기타 증빙 탭(기술자 경력확인서)에서 관리합니다.",
+      "생성본은 서버에 보관되며(최신 1건) 생성 페이지·공공입찰 진행 중 카드에서 다시 내려받을 수 있습니다.",
     ].join("\n");
     zip.file("생성로그.txt", log);
     const zipped = await zip.generateAsync({ type: "uint8array" });
-    return binaryResponse(zipped, "application/zip", `입찰서류패키지(${title}).zip`);
+    const zipName = `입찰서류패키지(${title}).zip`;
+    // P4: 산출물 S3 보관(최신 1건 대체) — 보관 실패해도 다운로드 응답은 그대로 내려준다
+    let outputSaved = true;
+    try {
+      await saveGeneratedOutput({
+        packageId: pkg.packageId,
+        fileName: zipName,
+        bytes: zipped,
+        warningCount: warnings.length,
+        actorUserId: actor.userId,
+      });
+    } catch (err) {
+      outputSaved = false;
+      console.error("[bid-package] 산출물 보관 실패:", err);
+    }
+    const res = binaryResponse(zipped, "application/zip", zipName);
+    res.headers.set("X-Output-Saved", outputSaved ? "1" : "0");
+    return res;
   } catch (err) {
     return authErrorToResponse(err);
   }

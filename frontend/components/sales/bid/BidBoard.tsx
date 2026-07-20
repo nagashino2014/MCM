@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { Gavel, Search, ExternalLink, Wand2, SlidersHorizontal, Tags, X, Link2, Plus, Trash2, Columns3, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, ChevronUp, ChevronDown, Paperclip, BellRing, Pencil, ListOrdered, FileStack } from "lucide-react";
+import { Gavel, Search, ExternalLink, Wand2, SlidersHorizontal, Tags, X, Link2, Plus, Trash2, Columns3, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, ChevronUp, ChevronDown, Paperclip, BellRing, Pencil, ListOrdered, FileStack, Download } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { PaginationControls } from "@/components/ui/PaginationControls";
@@ -212,9 +212,17 @@ export function BidBoard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // 입찰 서류 생성 진행 중 패키지(메인 상단 바로가기)
+  // 입찰 서류 생성 진행 중 패키지(메인 상단 바로가기) — output = 최근 생성본 보관 메타(P4)
   const [activePackages, setActivePackages] = useState<
-    { bidType: string; bidId: string; title: string; orgName: string; deadline: string | null; updatedAt: string }[]
+    {
+      bidType: string;
+      bidId: string;
+      title: string;
+      orgName: string;
+      deadline: string | null;
+      updatedAt: string;
+      output: { fileName: string; generatedAt: string; warningCount: number } | null;
+    }[]
   >([]);
   useEffect(() => {
     let cancelled = false;
@@ -675,17 +683,30 @@ export function BidBoard() {
           </h3>
           <div className="flex flex-wrap gap-2">
             {activePackages.map((p) => (
-              <Link
+              <div
                 key={`${p.bidType}-${p.bidId}`}
-                href={`/sales/bids/package?bidType=${encodeURIComponent(p.bidType)}&bidId=${encodeURIComponent(p.bidId)}`}
-                className="rounded-xl border cd-border-c px-3 py-2 hover:bg-[color:var(--cd-surface)] flex items-center gap-2 max-w-[420px]"
+                className="rounded-xl border cd-border-c flex items-center max-w-[460px] overflow-hidden"
               >
-                <span className="text-[10px] rounded-full px-1.5 py-0.5 cd-tint-primary shrink-0">{TYPE_LABEL[p.bidType as BidType] ?? p.bidType}</span>
-                <span className="text-[12px] cd-text truncate">{p.title || p.bidId}</span>
-                <span className="text-[10px] cd-text-faint font-mono shrink-0">
-                  {p.deadline ? `마감 ${short(p.deadline)}` : short(p.updatedAt)}
-                </span>
-              </Link>
+                <Link
+                  href={`/sales/bids/package?bidType=${encodeURIComponent(p.bidType)}&bidId=${encodeURIComponent(p.bidId)}`}
+                  className="px-3 py-2 hover:bg-[color:var(--cd-surface)] flex items-center gap-2 min-w-0"
+                >
+                  <span className="text-[10px] rounded-full px-1.5 py-0.5 cd-tint-primary shrink-0">{TYPE_LABEL[p.bidType as BidType] ?? p.bidType}</span>
+                  <span className="text-[12px] cd-text truncate">{p.title || p.bidId}</span>
+                  <span className="text-[10px] cd-text-faint font-mono shrink-0">
+                    {p.deadline ? `마감 ${short(p.deadline)}` : short(p.updatedAt)}
+                  </span>
+                </Link>
+                {p.output && (
+                  <a
+                    href={`/api/sales/bids/package/output?bidType=${encodeURIComponent(p.bidType)}&bidId=${encodeURIComponent(p.bidId)}`}
+                    className="px-2.5 py-2 border-l cd-border-c hover:bg-[color:var(--cd-surface)] shrink-0 cd-text-primary"
+                    title={`최근 생성본 다운로드 — ${short(p.output.generatedAt)} 생성 · 경고 ${p.output.warningCount}건`}
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                  </a>
+                )}
+              </div>
             ))}
           </div>
         </section>

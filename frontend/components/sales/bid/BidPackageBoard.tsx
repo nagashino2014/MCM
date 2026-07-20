@@ -127,12 +127,21 @@ const PERF_YEARS = Array.from({ length: 9 }, (_, i) => String(2018 + i));
 // 나라장터 입찰이 사실상 없는 화관법·HAPs 계열은 대분류 필터에서 제외
 const MAIN_CATEGORY_EXCLUDE = ["장외", "화관법", "유해화학물질", "HAPs"];
 
+/** 최근 생성 산출물 메타(P4) — 서버 보관본(최신 1건), 재생성 시 대체 */
+interface PackageOutputUI {
+  fileName: string;
+  generatedAt: string;
+  warningCount: number;
+  byteSize: number | null;
+}
+
 interface PackageState {
   packageId: string;
   formId: string | null;
   contractIds: string[];
   employeeIds: string[];
   staffConfig?: StaffConfigUI | null;
+  output?: PackageOutputUI | null;
   updatedAt: string;
 }
 
@@ -851,6 +860,20 @@ export function BidPackageBoard() {
       a.download = name;
       a.click();
       URL.revokeObjectURL(url);
+      if (res.headers.get("X-Output-Saved") === "0") {
+        alert("생성본 서버 보관에 실패했습니다. 다운로드된 파일은 정상이니 보관해 두세요.");
+      }
+      // 보관 메타(생성 일시·경고 수) 갱신 — 패키지 상태만 재조회
+      try {
+        const r2 = await fetch(
+          `/api/sales/bids/package?bidType=${encodeURIComponent(bidType)}&bidId=${encodeURIComponent(bidId)}`,
+          { cache: "no-store" }
+        );
+        const d2 = await r2.json().catch(() => null);
+        if (r2.ok && d2?.package) setPkg(d2.package);
+      } catch {
+        // 무시 — 다음 진입 시 표시됨
+      }
     } catch (err) {
       alert((err as Error).message);
     } finally {
@@ -1124,7 +1147,7 @@ export function BidPackageBoard() {
                   인력별 첨부: 경력확인서 → 졸업증명서(박사→석사→학사) → 자격증 사본(지정 순서)
                 </li>
               </ul>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <button
                   type="button"
                   onClick={generate}
@@ -1132,13 +1155,31 @@ export function BidPackageBoard() {
                   className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold disabled:opacity-50 self-start"
                   title="저장된 작업 상태(양식 매핑·실적 계약·수행인력) 기준으로 채움본 HWPX 를 생성합니다. 생성 전 '작업 상태 저장'을 눌러 주세요."
                 >
-                  {generating ? "생성 중..." : "문서 생성 (HWPX)"}
+                  {generating ? "생성 중..." : pkg?.output ? "문서 재생성 (HWPX)" : "문서 생성 (HWPX)"}
                 </button>
+                {pkg?.output && (
+                  <a
+                    href={`/api/sales/bids/package/output?bidType=${encodeURIComponent(bidType)}&bidId=${encodeURIComponent(bidId)}`}
+                    className="cd-btn rounded-lg px-3.5 py-2 text-xs font-semibold border cd-border-c cd-text flex items-center gap-1.5"
+                    title={pkg.output.fileName}
+                  >
+                    <FileText className="w-3.5 h-3.5" /> 최근 생성본 다운로드
+                  </a>
+                )}
                 {!form?.hasProfile && <span className="text-[10px] cd-text-faint">양식 분석(매핑) 후 활성화됩니다.</span>}
               </div>
-              <p className="text-[10px] cd-text-faint">
-                PDF 변환본·인력별 첨부(경력확인서·졸업증명서·자격증) 병합은 다음 단계에서 추가됩니다.
-              </p>
+              {pkg?.output ? (
+                <p className="text-[10px] cd-text-faint">
+                  최근 생성 {new Date(pkg.output.generatedAt).toLocaleString("ko-KR")} · 경고{" "}
+                  {pkg.output.warningCount.toLocaleString()}건
+                  {pkg.output.byteSize != null ? ` · ${(pkg.output.byteSize / 1024 / 1024).toFixed(1)}MB` : ""} — 재생성
+                  시 최신 1건으로 대체됩니다.
+                </p>
+              ) : (
+                <p className="text-[10px] cd-text-faint">
+                  생성본(zip)은 서버에 보관되어 이 화면과 공공입찰의 '진행 중' 카드에서 다시 내려받을 수 있습니다.
+                </p>
+              )}
             </section>
             {/* ③ 수행인력 확정 — 리스트 + 참여직위/담당파트/수행실적 설정(단일 카드) */}
             <section className="cd-card rounded-3xl p-5 cd-reveal delay-3 flex flex-col min-h-0 gap-4">

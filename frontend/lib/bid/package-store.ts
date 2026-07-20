@@ -90,6 +90,16 @@ export const EMPTY_STAFF_CONFIG: StaffConfig = {
   manual: { assignedRole: {}, participateMonths: {}, overviews: {} },
 };
 
+/** 최근 생성 산출물 메타(083) — zip 은 S3 bids/package-output/{packageId}/ 에 최신 1건만 보관. */
+export interface PackageOutput {
+  storageKey: string;
+  fileName: string;
+  generatedAt: string;
+  generatedBy: string | null;
+  warningCount: number;
+  byteSize: number | null;
+}
+
 export interface BidPackage {
   packageId: string;
   bidType: string;
@@ -100,6 +110,7 @@ export interface BidPackage {
   employeeIds: string[];
   staffConfig: StaffConfig;
   status: string;
+  output: PackageOutput | null;
   updatedAt: string;
 }
 
@@ -223,6 +234,17 @@ function mapPackage(r: Record<string, unknown>): BidPackage {
     employeeIds: parseIds(r.employee_ids),
     staffConfig: parseStaffConfig(r.staff_config),
     status: String(r.status ?? "draft"),
+    output:
+      r.output_key != null
+        ? {
+            storageKey: String(r.output_key),
+            fileName: String(r.output_name ?? "입찰서류패키지.zip"),
+            generatedAt: String(r.output_generated_at ?? ""),
+            generatedBy: r.output_generated_by != null ? String(r.output_generated_by) : null,
+            warningCount: Number(r.output_warning_count ?? 0),
+            byteSize: r.output_byte_size != null ? Number(r.output_byte_size) : null,
+          }
+        : null,
     updatedAt: String(r.updated_at ?? ""),
   };
 }
@@ -280,14 +302,70 @@ export async function savePackage(params: {
   return saved;
 }
 
+/**
+ * 생성 산출물(zip) 보관 — S3 bids/package-output/{packageId}/ 에 저장하고 bid_packages 에
+ * 메타(키·파일명·일시·생성자·경고 수·크기)를 기록한다. 재생성 시 최신 1건으로 대체하며
+ * 파일명이 바뀌어 키가 달라지면 이전 산출물은 저장소에서 삭제한다.
+ */
+export async function saveGeneratedOutput(params: {
+  packageId: string;
+  fileName: string;
+  bytes: Uint8Array;
+  warningCount: number;
+  actorUserId: string | null;
+}): Promise<PackageOutput> {
+  const fileName = sanitizeFilename(params.fileName) || "package.zip";
+  const storageKey = ["bids", "package-output", sanitizePathSegment(params.packageId), fileName].join("/");
+
+  const db = await getDb();
+  const priorRows = rowsToObjects(
+    await db.exec("SELECT output_key FROM bid_packages WHERE package_id = $1", [params.packageId])
+  );
+  if (priorRows.length === 0) throw new Error("패키지를 찾을 수 없습니다.");
+  const priorKey = priorRows[0].output_key != null ? String(priorRows[0].output_key) : null;
+
+  const buffer = Buffer.from(params.bytes);
+  const stored = await putContractDocument(storageKey, buffer, "application/zip");
+  const now = new Date().toISOString();
+  await withDbWrite(async (txn) => {
+    await txn.run(
+      `UPDATE bid_packages SET
+         output_key = $2, output_name = $3, output_generated_at = $4, output_generated_by = $5,
+         output_warning_count = $6, output_byte_size = $7, updated_at = $4
+       WHERE package_id = $1`,
+      [params.packageId, stored.storageKey, fileName, now, params.actorUserId, params.warningCount, buffer.byteLength]
+    );
+  });
+  if (priorKey && priorKey !== stored.storageKey) {
+    await deleteContractDocument(priorKey);
+  }
+  return {
+    storageKey: stored.storageKey,
+    fileName,
+    generatedAt: now,
+    generatedBy: params.actorUserId,
+    warningCount: params.warningCount,
+    byteSize: buffer.byteLength,
+  };
+}
+
 /** 진행 중(draft) 패키지 목록 — 공고 제목·마감 조인(메인 화면 상단 바로가기 카드). */
 export async function listActivePackages(limit = 10): Promise<
-  { bidType: string; bidId: string; title: string; orgName: string; deadline: string | null; updatedAt: string }[]
+  {
+    bidType: string;
+    bidId: string;
+    title: string;
+    orgName: string;
+    deadline: string | null;
+    updatedAt: string;
+    output: { fileName: string; generatedAt: string; warningCount: number } | null;
+  }[]
 > {
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
       `SELECT p.bid_type, p.bid_id, p.updated_at,
+              p.output_key, p.output_name, p.output_generated_at, p.output_warning_count,
               COALESCE(n.title, s.title, o.title) AS title,
               COALESCE(n.org_name, s.org_name, o.org_name) AS org_name,
               n.deadline
@@ -308,6 +386,14 @@ export async function listActivePackages(limit = 10): Promise<
     orgName: String(r.org_name ?? ""),
     deadline: r.deadline != null ? String(r.deadline) : null,
     updatedAt: String(r.updated_at ?? ""),
+    output:
+      r.output_key != null
+        ? {
+            fileName: String(r.output_name ?? "입찰서류패키지.zip"),
+            generatedAt: String(r.output_generated_at ?? ""),
+            warningCount: Number(r.output_warning_count ?? 0),
+          }
+        : null,
   }));
 }
 

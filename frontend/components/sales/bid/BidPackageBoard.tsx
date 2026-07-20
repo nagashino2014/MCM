@@ -629,7 +629,7 @@ export function BidPackageBoard() {
             </div>
           </section>
 
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
             {/* ① 제출 양식 — 발주처 라이브러리 */}
             <section className="cd-card rounded-3xl p-5 cd-reveal delay-2 flex flex-col gap-3">
               <h3 className="font-bold cd-text flex items-center gap-2">
@@ -690,14 +690,14 @@ export function BidPackageBoard() {
                 ④ 패키지 문서 구성
                 <span className="ml-auto text-[11px] font-normal cd-text-faint">준비 중 — 양식 분석 후 활성화</span>
               </h3>
-              <ul className="grid grid-cols-1 md:grid-cols-2 gap-1.5 text-[12px]">
+              <ul className="grid grid-cols-1 md:grid-cols-2 gap-1 text-[12px]">
                 {PACKAGE_DOCS.map((d, i) => (
-                  <li key={d} className="rounded-lg border cd-border-c px-3 py-2 cd-text flex items-center gap-2">
+                  <li key={d} className="rounded-lg border cd-border-c px-3 py-1 cd-text flex items-center gap-2">
                     <span className="text-[10px] font-mono cd-text-faint shrink-0">{i + 1}</span>
                     <span className="truncate">{d}</span>
                   </li>
                 ))}
-                <li className="rounded-lg border cd-border-c px-3 py-2 cd-text-faint flex items-center gap-2 md:col-span-2">
+                <li className="rounded-lg border cd-border-c px-3 py-1 cd-text-faint flex items-center gap-2 md:col-span-2">
                   <span className="text-[10px] font-mono shrink-0">+</span>
                   인력별 첨부: 경력확인서 → 졸업증명서(박사→석사→학사) → 자격증 사본(지정 순서)
                 </li>
@@ -804,8 +804,9 @@ export function BidPackageBoard() {
               )}
             </section>
 
-            {/* ③ 수행인력 확정 — 좌: 인력 리스트(+조직도 추가) / 우: 참여직위·담당파트·수행실적 설정 */}
-            <section className="cd-card rounded-3xl p-5 cd-reveal delay-3 flex flex-col min-h-0 xl:col-span-1">
+            {/* ③ 수행인력 확정 — 리스트 + 참여직위/담당파트/수행실적 설정(단일 카드) */}
+            <section className="cd-card rounded-3xl p-5 cd-reveal delay-3 flex flex-col min-h-0 gap-4">
+              <div className="flex flex-col min-h-[200px]">
               <h3 className="font-bold cd-text flex items-center gap-2 mb-3">
                 <Users className="w-4 h-4 cd-text-primary" />
                 ③ 수행인력 확정
@@ -817,7 +818,7 @@ export function BidPackageBoard() {
                 실적 계약의 수행인력 합산 후보에 조직도로 인력을 추가할 수 있습니다. 확정 인력 기준으로
                 집계표·개별 이력사항·증빙 첨부가 구성됩니다.
               </p>
-              <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide rounded-xl border cd-border-c">
+              <div className="flex-1 min-h-0 max-h-[220px] overflow-y-auto scrollbar-hide rounded-xl border cd-border-c">
                 {participantsLoading ? (
                   <p className="p-5 text-sm cd-text-faint">수행인력을 불러오는 중입니다.</p>
                 ) : participantsError ? (
@@ -863,10 +864,8 @@ export function BidPackageBoard() {
                   참여인력 추가 <Plus className="w-3.5 h-3.5" />
                 </button>
               </div>
-            </section>
+              </div>
 
-            {/* ③-우 수행인력 설정 — 참여직위/조직도 · 담당파트 · 수행실적 설정 */}
-            <section className="cd-card rounded-3xl p-5 cd-reveal delay-3 flex flex-col gap-4 min-h-0 overflow-y-auto scrollbar-hide">
               {/* 참여직위/조직도 */}
               <div>
                 <div className="flex items-center gap-2 mb-2">

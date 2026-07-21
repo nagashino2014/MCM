@@ -33,6 +33,8 @@ export interface FeedbackSnapshot {
   /** '중복 기사' 삭제 시 가장 유사한 생존 신호와의 코사인 유사도(dedup 임계 튜닝 근거) */
   maxSimilarity?: number | null;
   similarSignalId?: string | null;
+  /** 삭제 상세 이유(선택) — 사유 코드의 과일반화를 막는 맥락. few-shot 주입 시 함께 제공된다. */
+  detailNote?: string | null;
 }
 
 /** 삭제 사유 + 신호 스냅샷 upsert(같은 신호 재삭제 시 사유 갱신). */
@@ -47,12 +49,13 @@ export async function recordSignalFeedback(
     `INSERT INTO intel_signal_feedback
        (feedback_id, source, external_id, reason, company_name, report_name,
         signal_type, signal_grade, industry_relevance, summary, url,
-        max_similarity, similar_signal_id, deleted_by, created_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+        max_similarity, similar_signal_id, detail_note, deleted_by, created_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
      ON CONFLICT (source, external_id) DO UPDATE
        SET reason = EXCLUDED.reason,
            max_similarity = EXCLUDED.max_similarity,
            similar_signal_id = EXCLUDED.similar_signal_id,
+           detail_note = EXCLUDED.detail_note,
            deleted_by = EXCLUDED.deleted_by,
            created_at = EXCLUDED.created_at`,
     [
@@ -63,6 +66,7 @@ export async function recordSignalFeedback(
       snapshot.industryRelevance ?? null, snapshot.summary ?? null,
       snapshot.url ?? null,
       snapshot.maxSimilarity ?? null, snapshot.similarSignalId ?? null,
+      snapshot.detailNote ?? null,
       deletedBy, now,
     ]
   );
@@ -102,6 +106,8 @@ const EXAMPLE_REASONS: FeedbackReason[] = ["irrelevant_industry", "mere_goal", "
 export interface FeedbackExample {
   reason: FeedbackReason;
   title: string;
+  /** 삭제 상세 이유(선택) — 있으면 few-shot 에 함께 제공해 사유 코드의 과일반화를 막는다 */
+  note: string | null;
 }
 
 /** 소스별 최근 삭제 사례(사유별 최대 perReason건, 최신순). 테이블 부재·오류 시 빈 배열. */
@@ -113,8 +119,8 @@ export async function loadFeedbackExamples(
   try {
     const rows = rowsToObjects(
       await db.exec(
-        `SELECT reason, report_name FROM (
-           SELECT reason, report_name,
+        `SELECT reason, report_name, detail_note FROM (
+           SELECT reason, report_name, detail_note,
                   ROW_NUMBER() OVER (PARTITION BY reason ORDER BY created_at DESC) AS rn
              FROM intel_signal_feedback
             WHERE source = $1 AND reason = ANY($2::text[]) AND report_name IS NOT NULL
@@ -125,21 +131,29 @@ export async function loadFeedbackExamples(
     return rows.map((r) => ({
       reason: String(r.reason) as FeedbackReason,
       title: String(r.report_name),
+      note: r.detail_note == null ? null : String(r.detail_note),
     }));
   } catch {
     return [];
   }
 }
 
-/** 사례 목록 → 분류 프롬프트 삽입 블록. 사례 없으면 빈 문자열(프롬프트 불변 — 캐시 친화). */
+/** 사례 목록 → 분류 프롬프트 삽입 블록. 사례 없으면 빈 문자열(프롬프트 불변 — 캐시 친화).
+ *  ⚠과일반화 방지: 실례는 "그 기사"에 대한 판정일 뿐 — 같은 회사·업종을 일괄 배제하지 않도록
+ *  명시하고, 상세 이유가 있으면 배제의 정확한 경계를 함께 알려준다. */
 export function formatFeedbackExamples(examples: FeedbackExample[], falseField = "isSignal"): string {
   if (!examples.length) return "";
   const lines = examples
-    .map((e) => `  · (${FEEDBACK_REASON_LABELS[e.reason]}) "${e.title.slice(0, 80)}"`)
+    .map((e) => {
+      const note = e.note ? ` — 배제 이유: ${e.note.slice(0, 120)}` : "";
+      return `  · (${FEEDBACK_REASON_LABELS[e.reason]}) "${e.title.slice(0, 80)}"${note}`;
+    })
     .join("\n");
   return (
-    `- ${falseField}=false 실례(사용자가 오인 수집으로 판단해 삭제한 실제 사례 — 유사한 건은 반드시 false):\n` +
-    `${lines}\n`
+    `- ${falseField}=false 실례(사용자가 오인 수집으로 판단해 삭제한 실제 사례):\n` +
+    `${lines}\n` +
+    `  ※ 위 실례는 각 기사 내용에 대한 개별 판정입니다. 언급된 회사·업종·지역의 다른 기사를 ` +
+    `일괄 배제하지 말고, '배제 이유'가 가리키는 조건에 해당할 때만 같은 판정을 적용하세요.\n`
   );
 }
 

@@ -28,14 +28,15 @@ export async function DELETE(req: NextRequest, ctx: RouteContext) {
   try {
     const actor = await requirePermission("sales.edit", { fallbackRoles: ["editor"] });
     const { signalId } = await ctx.params;
-    const body = (await req.json().catch(() => ({}))) as { reason?: string };
+    const body = (await req.json().catch(() => ({}))) as { reason?: string; note?: string };
     if (!isFeedbackReason(body.reason)) {
       return NextResponse.json(
         { error: "reason 은 irrelevant_industry·mere_goal·duplicate·lacks_specifics 중 하나여야 합니다." },
         { status: 400 }
       );
     }
-    const deleted = await deleteSignalWithFeedback(signalId, body.reason, actor.userId);
+    const note = typeof body.note === "string" && body.note.trim() ? body.note.trim().slice(0, 200) : null;
+    const deleted = await deleteSignalWithFeedback(signalId, body.reason, note, actor.userId);
     if (!deleted) return NextResponse.json({ error: "신호를 찾을 수 없습니다." }, { status: 404 });
     return NextResponse.json({ ok: true });
   } catch (err) {

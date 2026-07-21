@@ -195,23 +195,34 @@ export function IntelBoard() {
     </div>
   );
 
-  // ── 개별 삭제(사유 필수 — 오인·중복 수집 피드백을 수집 로직 개선에 활용) ──
+  // ── 개별 삭제(사유 필수 + 상세 이유 선택 — 오인·중복 수집 피드백을 수집 로직 개선에 활용) ──
   const [deleteTarget, setDeleteTarget] = useState<IntelSignal | null>(null);
+  const [deleteReason, setDeleteReason] = useState<DeleteReasonCode | null>(null);
+  const [deleteNote, setDeleteNote] = useState("");
   const [deleteBusy, setDeleteBusy] = useState(false);
 
-  const deleteWithReason = async (reason: DeleteReasonCode) => {
-    if (!deleteTarget || deleteBusy) return;
+  const openDeletePopup = (sig: IntelSignal) => {
+    setDeleteReason(null);
+    setDeleteNote("");
+    setDeleteTarget(sig);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget || !deleteReason || deleteBusy) return;
     setDeleteBusy(true);
     try {
       const res = await fetch(`/api/sales/intel/signals/${deleteTarget.signalId}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason }),
+        body: JSON.stringify({ reason: deleteReason, note: deleteNote.trim() || undefined }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
-      const label = DELETE_REASONS.find((r) => r.code === reason)?.label ?? reason;
-      setBulkMsg(`'${deleteTarget.companyName ?? deleteTarget.reportName ?? "신호"}' 삭제 — 사유: ${label} (재수집 차단됨)`);
+      const label = DELETE_REASONS.find((r) => r.code === deleteReason)?.label ?? deleteReason;
+      setBulkMsg(
+        `'${deleteTarget.companyName ?? deleteTarget.reportName ?? "신호"}' 삭제 — 사유: ${label}` +
+          `${deleteNote.trim() ? ` (${deleteNote.trim()})` : ""} · 이 건만 재수집 차단(회사·업종 전체 차단 아님)`
+      );
       setDeleteTarget(null);
       await Promise.all([reload(), reloadStats()]);
     } catch (e) {
@@ -384,7 +395,7 @@ export function IntelBoard() {
                                 className="cd-btn cd-btn-ghost cd-btn-sm"
                                 style={{ padding: "0.25rem" }}
                                 title="이 신호 삭제(사유 선택 — 재수집 차단·수집 로직 개선에 반영)"
-                                onClick={() => setDeleteTarget(sig)}
+                                onClick={() => openDeletePopup(sig)}
                               >
                                 <Trash2 className="w-3.5 h-3.5 cd-error-text" />
                               </button>
@@ -431,24 +442,50 @@ export function IntelBoard() {
               {deleteTarget.companyName ?? "—"} · {deleteTarget.reportName ?? "—"}
             </p>
             <p className="cd-text-faint text-[11px] mb-3">
-              선택한 사유는 수집 로직 개선에 반영되며, 삭제된 신호는 다시 수집되지 않습니다.
+              사유는 수집 로직 개선에 반영됩니다. 삭제해도 이 건(기사·공시 1건)만 재수집이 차단되며,
+              같은 회사·업종의 다른 정보는 계속 수집됩니다.
             </p>
             <div className="flex flex-col gap-2">
-              {DELETE_REASONS.map((r) => (
-                <button
-                  key={r.code}
-                  className="cd-row-hover w-full text-left rounded-xl border cd-border-c px-3 py-2.5 disabled:opacity-50"
-                  disabled={deleteBusy}
-                  onClick={() => deleteWithReason(r.code)}
-                >
-                  <span className="cd-text text-sm font-bold">{r.label}</span>
-                  <span className="cd-text-faint text-[11px] block mt-0.5">{r.desc}</span>
-                </button>
-              ))}
+              {DELETE_REASONS.map((r) => {
+                const active = deleteReason === r.code;
+                return (
+                  <button
+                    key={r.code}
+                    className="cd-row-hover w-full text-left rounded-xl border px-3 py-2.5 disabled:opacity-50"
+                    style={active
+                      ? { borderColor: "var(--cd-primary)", background: "var(--cd-primary-soft)" }
+                      : { borderColor: "var(--cd-border)" }}
+                    disabled={deleteBusy}
+                    onClick={() => setDeleteReason(r.code)}
+                  >
+                    <span className="cd-text text-sm font-bold">{r.label}</span>
+                    <span className="cd-text-faint text-[11px] block mt-0.5">{r.desc}</span>
+                  </button>
+                );
+              })}
             </div>
-            <div className="flex justify-end mt-3">
+            {/* 상세 이유(선택) — 사유 코드의 과일반화 방지: 배제의 정확한 조건을 분류기에 전달 */}
+            <div className="mt-3">
+              <label className="cd-label">상세 이유 (선택 — 수집 로직이 더 정확히 배웁니다)</label>
+              <input
+                className="cd-input w-full"
+                maxLength={200}
+                placeholder="예: 풍력발전이라 제외 — 발전 업종 자체는 수집 대상"
+                value={deleteNote}
+                onChange={(e) => setDeleteNote(e.target.value)}
+                disabled={deleteBusy}
+                onKeyDown={(e) => { if (e.key === "Enter" && deleteReason) confirmDelete(); }}
+              />
+              <p className="cd-text-faint text-[10px] mt-1 leading-snug">
+                &ldquo;왜 이 건만 제외인지&rdquo;를 적어두면, 같은 회사·업종의 정상 신호까지 배제되는 것을 막는 데 쓰입니다.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2 mt-3">
               <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => setDeleteTarget(null)} disabled={deleteBusy}>
                 취소
+              </button>
+              <button className="cd-btn cd-btn-danger cd-btn-sm" onClick={confirmDelete} disabled={deleteBusy || !deleteReason}>
+                {deleteBusy ? "삭제 중…" : "삭제"}
               </button>
             </div>
           </div>

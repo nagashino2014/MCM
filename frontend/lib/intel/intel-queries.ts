@@ -196,6 +196,7 @@ export async function getIntelSignalDetail(signalId: string): Promise<IntelSigna
 export async function deleteSignalWithFeedback(
   signalId: string,
   reason: FeedbackReason,
+  detailNote: string | null,
   deletedBy: string | null
 ): Promise<boolean> {
   return withDbWrite(async (db) => {
@@ -226,6 +227,7 @@ export async function deleteSignalWithFeedback(
         url: text(r.url),
         maxSimilarity: sim?.similarity ?? null,
         similarSignalId: sim?.signalId ?? null,
+        detailNote,
       },
       reason,
       deletedBy

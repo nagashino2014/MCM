@@ -1,19 +1,52 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme } from 'react-native';
-
 import '@/global.css';
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
 
-SplashScreen.preventAutoHideAsync();
+import { useEffect } from 'react';
+import { ActivityIndicator, View } from 'react-native';
+import { Stack, useRouter, useSegments } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
+import { AuthProvider, useAuth } from '@/lib/auth-context';
+
+// 루트 레이아웃 — 인증 게이트. authed 는 (tabs), guest 는 login 으로 라우팅한다.
+export default function RootLayout() {
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      <AppTabs />
-    </ThemeProvider>
+    <AuthProvider>
+      <RootNavigator />
+    </AuthProvider>
+  );
+}
+
+function RootNavigator() {
+  const { status } = useAuth();
+  const segments = useSegments();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (status === 'loading') return;
+    const inTabs = segments[0] === '(tabs)';
+    const inLogin = segments[0] === 'login';
+    if (status === 'guest' && inTabs) {
+      router.replace('/login');
+    } else if (status === 'authed' && inLogin) {
+      router.replace('/(tabs)');
+    }
+  }, [status, segments, router]);
+
+  if (status === 'loading') {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator />
+      </View>
+    );
+  }
+
+  return (
+    <>
+      <StatusBar style="auto" />
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="login" />
+      </Stack>
+    </>
   );
 }

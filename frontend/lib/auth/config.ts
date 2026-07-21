@@ -6,10 +6,8 @@
 
 import NextAuth, { type DefaultSession } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import { findUserByLoginIdentifier, findUserById } from "./users";
-import { verifyPassword } from "./password";
-import { ensureAdminSeeded } from "./seed";
-import { clientIpFrom, isLoginBlocked, recordLoginFailure, clearLoginFailures } from "./login-throttle";
+import { findUserById } from "./users";
+import { verifyCredentials } from "./verify-credentials";
 import type { Role, UserStatus } from "./users";
 import { edgeAuthConfig } from "./edge-config";
 
@@ -40,48 +38,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: "Password", type: "password" },
       },
       authorize: async (credentials, request) => {
-        try {
-          await ensureAdminSeeded();
-        } catch (err) {
-          console.warn("[auth] seed 실패: " + (err as Error).message);
-        }
-
-        // credentials.email 필드는 "로그인 식별자"(사번 또는 이메일 로컬파트)를 담는다.
-        const identifier = String(credentials?.email ?? "").trim().toLowerCase();
-        const password = String(credentials?.password ?? "");
-        if (!identifier || !password) return null;
-
-        // 무차별 대입 방어: 윈도 내 실패 임계 초과 시 자격 검증 없이 거부.
-        const ip = clientIpFrom(request);
-        if (await isLoginBlocked(identifier, ip)) {
-          console.warn(`[auth] 로그인 차단(과도한 실패): id=${identifier} ip=${ip}`);
-          return null;
-        }
-
-        const user = await findUserByLoginIdentifier(identifier);
-        if (!user) {
-          await recordLoginFailure(identifier, ip);
-          return null;
-        }
-        if (user.status !== "active") {
-          await recordLoginFailure(identifier, ip);
-          return null;
-        }
-
-        const ok = await verifyPassword(password, user.passwordHash);
-        if (!ok) {
-          await recordLoginFailure(identifier, ip);
-          return null;
-        }
-
-        await clearLoginFailures(identifier);
+        // 웹/모바일 공유 검증 로직(verify-credentials.ts) — throttle·status·bcrypt 포함.
+        const verified = await verifyCredentials(
+          String(credentials?.email ?? ""),
+          String(credentials?.password ?? ""),
+          request as unknown as Request | undefined
+        );
+        if (!verified) return null;
         return {
-          id: user.userId,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-          status: user.status,
-          mustChangePassword: user.mustChangePassword,
+          id: verified.id,
+          email: verified.email,
+          name: verified.name,
+          role: verified.role,
+          status: verified.status,
+          mustChangePassword: verified.mustChangePassword,
         };
       },
     }),

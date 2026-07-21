@@ -6,7 +6,9 @@
  */
 
 import { NextResponse } from "next/server";
+import { headers } from "next/headers";
 import { auth } from "./config";
+import { verifyAccessToken } from "./mobile-token";
 import type { Role, UserStatus } from "./users";
 import { hasPermission, type PermissionTarget } from "./rbac";
 
@@ -36,6 +38,25 @@ export function authErrorToResponse(err: unknown): NextResponse {
 }
 
 export async function requireSession(): Promise<AuthContext> {
+  // 모바일 네이티브 앱: Authorization: Bearer <accessToken> 우선.
+  // 웹은 HttpOnly 쿠키 세션. 두 경로 모두 이 단일 관문을 통과한다(라우트 무변경 재사용).
+  const authz = (await headers()).get("authorization");
+  if (authz && authz.toLowerCase().startsWith("bearer ")) {
+    const claims = await verifyAccessToken(authz.slice(7).trim());
+    if (!claims) {
+      throw new AuthError("유효하지 않은 토큰입니다.", 401);
+    }
+    if (claims.status !== "active") {
+      throw new AuthError("비활성화된 계정입니다.", 401);
+    }
+    return {
+      userId: claims.userId,
+      email: claims.email,
+      role: claims.role,
+      status: claims.status,
+    };
+  }
+
   const session = await auth();
   if (!session?.user) {
     throw new AuthError("로그인이 필요합니다.", 401);

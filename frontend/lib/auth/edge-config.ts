@@ -48,11 +48,21 @@ export const edgeAuthConfig: NextAuthConfig = {
       if (
         path === "/login" ||
         path.startsWith("/api/auth/") ||
+        path.startsWith("/api/mobile/auth/") || // 모바일 로그인/refresh — 세션 없이 접근
         path === "/api/health" ||
         path === "/manifest.webmanifest" || // PWA manifest 는 설치 시 비인증 fetch
         path.startsWith("/_next/") ||
         path.startsWith("/static/")
       ) {
+        return true;
+      }
+
+      // 모바일 네이티브 앱: Authorization: Bearer <accessToken> 요청.
+      // 실제 토큰 검증은 각 API 라우트의 requireSession(Node) 이 수행한다.
+      // edge 미들웨어는 토큰 존재만 확인해 통과시키고(쿠키 세션이 없어 아래서 막히지 않도록),
+      // 무효/만료 토큰은 라우트가 401 로 처리한다. (page 리다이렉트 로직과 무관한 API 전용)
+      const authz = request.headers.get("authorization");
+      if (authz && authz.toLowerCase().startsWith("bearer ")) {
         return true;
       }
 

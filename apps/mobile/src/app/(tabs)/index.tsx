@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 
 import { useAuth } from '@/lib/auth-context';
 import { apiJson } from '@/lib/api';
@@ -17,6 +19,7 @@ function countOf(obj: unknown, keys: string[]): number | null {
 
 export default function HomeScreen() {
   const { user, logout } = useAuth();
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [upcoming, setUpcoming] = useState<number | null>(null);
@@ -60,6 +63,13 @@ export default function HomeScreen() {
             </Text>
             {user?.email ? <Text className="text-xs text-neutral-400">{user.email}</Text> : null}
           </View>
+
+          <Pressable
+            onPress={() => router.push('/card')}
+            className="flex-row items-center justify-center gap-2 rounded-2xl bg-primary py-3.5 active:opacity-80">
+            <Ionicons name="camera" size={20} color="#fff" />
+            <Text className="text-base font-bold text-white">명함 촬영</Text>
+          </Pressable>
 
           {loading ? (
             <ActivityIndicator className="mt-6" />

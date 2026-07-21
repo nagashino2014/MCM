@@ -28,7 +28,12 @@ const SYSTEM =
   "'국내(한국) 공장·생산시설의 신설/증설/투자 계획' 신호인지 판별하고 핵심을 구조화 추출합니다. " +
   "반드시 JSON 하나만 출력하고 그 외 설명은 쓰지 않습니다.";
 
-function buildPrompt(title: string, description: string, industries?: IntelIndustryItem[]): string {
+function buildPrompt(
+  title: string,
+  description: string,
+  industries?: IntelIndustryItem[],
+  feedbackBlock?: string
+): string {
   const industryBlock = industries?.length
     ? "- industry: 사업 주체 업종이 아래 [대상 업종] 중 하나면 그 명칭(정확히), 산업단지·농공단지 조성이면 \"산업단지\", 해당 없으면 null.\n" +
       "- industryRelevance: direct=주체 사업 자체가 대상 업종(또는 산업단지 조성) / " +
@@ -49,6 +54,7 @@ function buildPrompt(title: string, description: string, industries?: IntelIndus
     "- isSignal=true 예: '○○사 ○○공장 증설', '○○산단 신규 공장 건설', '생산라인 신·증설 투자 결정' — " +
     "기사의 주제가 특정 기업·기관의 투자·신증설 발표/진행 그 자체일 때만.\n" +
     "- signalType: 신설/이전신축=new_site, 증설/확장=expansion, 투자결정(단계미상)=investment, 그 외=other.\n" +
+    (feedbackBlock ?? "") +
     industryBlock +
     `[제목] ${title}\n[본문] ${description}\n\n` +
     "출력(JSON만, 코드펜스 없이):\n" +
@@ -111,11 +117,13 @@ function normalize(j: Record<string, unknown>, industries?: IntelIndustryItem[])
 /**
  * 뉴스 제목+본문을 Haiku 로 분류. 키 없음/오류 시 null(수집측은 미분류로 처리).
  * industries 전달 시 업종 태깅(industry/industryRelevance/relevanceNote)도 함께 판별한다.
+ * feedbackBlock: 삭제 피드백 few-shot 블록(intel-feedback.formatFeedbackExamples) — 오인 수집 실례 주입.
  */
 export async function classifyNews(
   title: string,
   description: string,
-  industries?: IntelIndustryItem[]
+  industries?: IntelIndustryItem[],
+  feedbackBlock?: string
 ): Promise<NewsClassification | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return null;
@@ -129,7 +137,7 @@ export async function classifyNews(
         model: MODEL,
         max_tokens: 500,
         system: SYSTEM,
-        messages: [{ role: "user", content: buildPrompt(title, description, industries) }],
+        messages: [{ role: "user", content: buildPrompt(title, description, industries, feedbackBlock) }],
       }),
       signal: controller.signal,
     });

@@ -10,7 +10,7 @@ import { buildFacilityMatcher } from "./facility-matcher";
 import { type IntelSignalGrade } from "./signal-extractor";
 import { EMPTY_INDUSTRY_TAG, industryTagForFacility, type IndustryTag } from "./industry-rules";
 import type { IntelIndustryItem } from "./intel-settings";
-import { feedbackKey, loadFeedbackBlocklist } from "./intel-feedback";
+import { feedbackKey, formatFeedbackExamples, loadFeedbackBlocklist, loadFeedbackExamples } from "./intel-feedback";
 
 function id(prefix: string): string {
   return `${prefix}_${crypto.randomBytes(8).toString("hex")}`;
@@ -84,11 +84,13 @@ export async function collectNewsSignals(opts: CollectNewsOptions = {}): Promise
   result.scanned = news.length;
 
   // 3) Haiku 분류 → 신호만 선별 + 회사명 매칭 + 업종 태깅(매칭이면 facilities 마스터 우선)
+  // 삭제 피드백 few-shot: 최근 삭제 사례를 "이런 것은 false" 실례로 프롬프트에 주입(배치당 1회 로드)
+  const feedbackBlock = formatFeedbackExamples(await loadFeedbackExamples(db, "news"));
   interface Prepared { it: NewsItem; cls: NewsClassification; facilityId: string | null; tag: IndustryTag }
   const prepared: Prepared[] = [];
   for (const it of news) {
     if (result.classified >= maxClassify) break;
-    const cls = await classifyNews(it.title, it.description, opts.industries);
+    const cls = await classifyNews(it.title, it.description, opts.industries, feedbackBlock);
     result.classified++;
     await sleep(HAIKU_THROTTLE_MS);
     if (!cls || !cls.isSignal) continue;

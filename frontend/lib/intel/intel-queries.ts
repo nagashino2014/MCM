@@ -2,7 +2,7 @@
 
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { createSalesProject } from "@/lib/sales/queries";
-import { recordSignalFeedback, type FeedbackReason } from "./intel-feedback";
+import { measureTopSimilarity, recordSignalFeedback, type FeedbackReason } from "./intel-feedback";
 import { INTEL_SIGNAL_TYPE_LABELS, type IntelSignalType, type IntelSignalGrade } from "./signal-extractor";
 
 const text = (v: unknown): string | null => {
@@ -199,6 +199,9 @@ export async function deleteSignalWithFeedback(
   deletedBy: string | null
 ): Promise<boolean> {
   return withDbWrite(async (db) => {
+    // '중복 기사' 사유는 삭제 전에 최근접 유사도를 측정(임베딩은 삭제와 함께 CASCADE 소멸)
+    // — dedup 병합 임계(0.90) 튜닝의 실측 근거로 축적된다.
+    const sim = reason === "duplicate" ? await measureTopSimilarity(db, signalId) : null;
     const rows = rowsToObjects(
       await db.exec(
         `DELETE FROM intel_signals WHERE signal_id = $1
@@ -221,6 +224,8 @@ export async function deleteSignalWithFeedback(
         industryRelevance: text(r.industry_relevance),
         summary: text(r.summary),
         url: text(r.url),
+        maxSimilarity: sim?.similarity ?? null,
+        similarSignalId: sim?.signalId ?? null,
       },
       reason,
       deletedBy

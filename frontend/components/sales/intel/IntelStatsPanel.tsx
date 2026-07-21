@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { ApexOptions } from "apexcharts";
 import ApexChart from "@/components/contracts/dashboard/ApexChart";
 import { INTEL_SIGNAL_TYPE_LABELS, INTEL_SIGNAL_GRADE_LABELS } from "@/lib/intel/signal-extractor";
-import { MATCH_LABEL, STAT_SOURCE_LABELS, STATUS_LABEL } from "./intel-shared";
+import { MATCH_LABEL, SOURCE_LABEL, STAT_SOURCE_LABELS, STATUS_LABEL } from "./intel-shared";
 
 interface SourceStat { collected: number; adopted: number }
 interface BreakdownRow {
@@ -30,9 +30,35 @@ export interface IntelStatsData {
   breakdown: BreakdownRow[];
   /** 최근 14일 일별 수집 로그(월 선택과 무관) */
   daily: DailyRow[];
+  /** 삭제 피드백 현황(성장형 수집 로직 모니터링) */
+  feedback: {
+    byReason: Record<string, number>;
+    total: number;
+    recentBySource: Array<{ source: string; deleted: number; collected: number; rate: number }>;
+    duplicateSims: number[];
+  };
   /** 소스별 마지막 수집 실행(수동 실행 패널 표시용) */
   collectState: Array<{ source: string; lastRunAt: string | null; lastCursor: string | null }>;
 }
+
+/** 소스별 삭제율 경보 임계 — 이 이상이면 수집 키워드·분류 기준 점검 필요 */
+const FEEDBACK_RATE_WARN = 0.1;
+/** 뉴스 중복 병합 임계(rag-indexer 와 동일 값 표기용) */
+const DEDUP_THRESHOLD = 0.9;
+
+const REASON_LABELS: Record<string, string> = {
+  irrelevant_industry: "무관한 업종",
+  mere_goal: "단순 경영목표",
+  duplicate: "중복 기사",
+  lacks_specifics: "구체성 부재",
+};
+
+const median = (xs: number[]): number | null => {
+  if (!xs.length) return null;
+  const s = [...xs].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+};
 
 const STAT_SOURCES = ["dart", "eiass", "press", "news", "gosi_eum", "gosi_me"] as const;
 
@@ -339,6 +365,79 @@ export function IntelStatsPanel({
                   </div>
                 ))}
               </div>
+            )}
+          </div>
+
+          {/* 삭제 피드백 — 사유별 축적 현황과 소스별 삭제율(성장형 수집 로직 모니터링) */}
+          <div className="rounded-xl border cd-border-c p-3">
+            <div className="flex items-baseline justify-between gap-2 mb-2">
+              <h3 className="text-[13px] font-extrabold" style={{ color: "var(--cd-text)" }}>삭제 피드백</h3>
+              <span className="text-[10px]" style={{ color: "var(--cd-faint)" }}>누계 {stats.feedback?.total ?? 0}건</span>
+            </div>
+            {!stats.feedback || stats.feedback.total === 0 ? (
+              <p className="cd-text-faint text-xs py-2 text-center">
+                아직 삭제 피드백이 없습니다. 리스트에서 오인 수집 신호를 사유와 함께 삭제하면 여기에 축적됩니다.
+              </p>
+            ) : (
+              <>
+                <div className="grid grid-cols-4 gap-2 mb-2">
+                  {Object.entries(REASON_LABELS).map(([code, label]) => (
+                    <div key={code} className="rounded-lg border cd-border-c px-2 py-1.5 text-center">
+                      <div className="text-[10px] font-bold truncate" style={{ color: "var(--cd-muted)" }}>{label}</div>
+                      <div className="text-[15px] font-extrabold tabular-nums" style={{ color: "var(--cd-text)" }}>
+                        {stats.feedback.byReason[code] ?? 0}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {stats.feedback.recentBySource.length > 0 && (
+                  <div className="mb-2">
+                    <p className="text-[10px] font-bold mb-1" style={{ color: "var(--cd-muted)" }}>최근 30일 소스별 삭제율</p>
+                    <div className="flex flex-col gap-1">
+                      {stats.feedback.recentBySource.map((r) => (
+                        <div key={r.source} className="flex items-center gap-2 text-[11px]">
+                          <span className="font-bold" style={{ width: 64, color: "var(--cd-muted)" }}>
+                            {SOURCE_LABEL[r.source] ?? STAT_SOURCE_LABELS[r.source] ?? r.source}
+                          </span>
+                          <span className="tabular-nums" style={{ color: "var(--cd-text)" }}>
+                            {r.deleted} / {r.collected}건
+                          </span>
+                          <span className="tabular-nums font-extrabold" style={{ color: r.rate >= FEEDBACK_RATE_WARN ? "#fa896b" : "var(--cd-faint)" }}>
+                            {(r.rate * 100).toFixed(1)}%
+                          </span>
+                          {r.rate >= FEEDBACK_RATE_WARN && (
+                            <span className="cd-pill cd-pill-warn" title="오인 수집 비중이 높습니다 — 수집 키워드·분류 기준 점검을 권장합니다">
+                              점검 권장
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {stats.feedback.duplicateSims.length > 0 && (() => {
+                  const med = median(stats.feedback.duplicateSims);
+                  return (
+                    <div className="rounded-lg px-2.5 py-2 mb-2 text-[11px]" style={{ background: "var(--cd-surface)" }}>
+                      <span style={{ color: "var(--cd-muted)" }}>
+                        수동 중복 삭제 {stats.feedback.duplicateSims.length}건 · 최근접 유사도 중앙값{" "}
+                        <b style={{ color: "var(--cd-text)" }}>{med?.toFixed(3)}</b> (자동 병합 임계 {DEDUP_THRESHOLD})
+                      </span>
+                      {med != null && med < DEDUP_THRESHOLD && (
+                        <span className="cd-pill cd-pill-warn ml-1.5" title="수동으로 지운 중복들이 임계 아래에 있습니다 — 임계 하향으로 자동 병합 범위를 넓힐 수 있습니다">
+                          임계 하향 검토
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                <p className="text-[10px] leading-snug" style={{ color: "var(--cd-faint)" }}>
+                  삭제 사례는 다음 야간 배치부터 분류 프롬프트에 오답 실례로 자동 반영되고, 같은 신호는 재수집되지 않습니다.
+                </p>
+              </>
             )}
           </div>
         </>

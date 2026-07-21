@@ -21,7 +21,7 @@ import { type IntelSignalType, type IntelSignalGrade } from "./signal-extractor"
 import { buildFacilityMatcher } from "./facility-matcher";
 import { INTEL_COLLECT_DEFAULTS, isOlderThanCutoff, type IntelIndustryItem } from "./intel-settings";
 import { EMPTY_INDUSTRY_TAG, industryTagForFacility, ruleTagForEiass, type IndustryTag } from "./industry-rules";
-import { feedbackKey, loadFeedbackBlocklist } from "./intel-feedback";
+import { feedbackKey, formatFeedbackExamples, loadFeedbackBlocklist, loadFeedbackExamples } from "./intel-feedback";
 
 function id(prefix: string): string {
   return `${prefix}_${crypto.randomBytes(8).toString("hex")}`;
@@ -142,6 +142,8 @@ export async function collectEiassSignals(opts: CollectEiassOptions = {}): Promi
     companyName: string | null; summary: string | null; facilityId: string | null;
     tag: IndustryTag;
   }
+  // 삭제 피드백 few-shot: 최근 삭제 사례를 "이런 것은 false" 실례로 프롬프트에 주입(배치당 1회 로드)
+  const feedbackBlock = formatFeedbackExamples(await loadFeedbackExamples(db, "eiass"), "isTarget");
   const prepared: Prepared[] = [];
   for (const c of candidates) {
     if (result.detailFetched >= maxDetails) break;
@@ -165,7 +167,7 @@ export async function collectEiassSignals(opts: CollectEiassOptions = {}): Promi
         region: detail.region,
         scaleText: detail.scaleText,
         costEokwon: detail.costEokwon,
-      }, opts.industries);
+      }, opts.industries, feedbackBlock);
       if (cls) {
         result.classified++;
         await sleep(HAIKU_THROTTLE_MS);

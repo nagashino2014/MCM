@@ -36,7 +36,8 @@ function buildPrompt(
     scaleText: string | null;
     costEokwon: number | null;
   },
-  industries?: IntelIndustryItem[]
+  industries?: IntelIndustryItem[],
+  feedbackBlock?: string
 ): string {
   const industryBlock = industries?.length
     ? "- industry: 사업 업종이 아래 [대상 업종] 중 하나면 그 명칭(정확히), 산업단지·농공단지 조성이면 \"산업단지\", 판단 어려우면 null.\n" +
@@ -49,6 +50,7 @@ function buildPrompt(
     "- isTarget=false 예: 도로·철도·하천정비, 태양광·풍력, 골프장·관광지, 주택·도시개발, 농촌용수개발.\n" +
     "- signalType: 신규 조성/신설=new_site, 기존 시설 증설·확장=expansion, 그 외=other.\n" +
     "- companyName: 실질 사업 주체명(민간기업이면 기업명). 지자체·공공기관이면 그 기관명.\n" +
+    (feedbackBlock ?? "") +
     industryBlock +
     "\n" +
     `[사업명] ${input.title}\n` +
@@ -108,10 +110,12 @@ function normalize(j: Record<string, unknown>, industries?: IntelIndustryItem[])
 /**
  * EIASS 협의 건을 Haiku 로 판별. 키 없음/오류 시 null(수집측은 규칙 기반 폴백).
  * industries 전달 시 업종 라벨도 판별(isTarget=true 전제라 relevance 는 수집측에서 direct 처리).
+ * feedbackBlock: 삭제 피드백 few-shot 블록(intel-feedback.formatFeedbackExamples) — 오인 수집 실례 주입.
  */
 export async function classifyEiass(
   input: Parameters<typeof buildPrompt>[0],
-  industries?: IntelIndustryItem[]
+  industries?: IntelIndustryItem[],
+  feedbackBlock?: string
 ): Promise<EiassClassification | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return null;
@@ -125,7 +129,7 @@ export async function classifyEiass(
         model: MODEL,
         max_tokens: 450,
         system: SYSTEM,
-        messages: [{ role: "user", content: buildPrompt(input, industries) }],
+        messages: [{ role: "user", content: buildPrompt(input, industries, feedbackBlock) }],
       }),
       signal: controller.signal,
     });

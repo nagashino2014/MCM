@@ -32,6 +32,16 @@ export interface IntelDailyRow {
   bySource: Record<string, number>;
 }
 
+export interface IntelFeedbackStats {
+  /** 사유별 누계 */
+  byReason: Record<string, number>;
+  total: number;
+  /** 최근 30일 소스별 삭제율(분모=현존 수집+삭제 — 삭제분도 수집됐던 것) */
+  recentBySource: Array<{ source: string; deleted: number; collected: number; rate: number }>;
+  /** '중복 기사' 삭제 시 측정한 최근접 유사도(최신 20건) — dedup 병합 임계 튜닝 근거 */
+  duplicateSims: number[];
+}
+
 export interface IntelStats {
   /** 기간 내 소스별 수집·채택 */
   bySource: Record<string, IntelSourceStat>;
@@ -42,6 +52,8 @@ export interface IntelStats {
   breakdown: IntelBreakdownRow[];
   /** 최근 14일 일별 수집 로그(기간 파라미터와 무관 — 야간 배치 결과 확인용) */
   daily: IntelDailyRow[];
+  /** 삭제 피드백 현황(기간 파라미터와 무관) — 성장형 수집 로직 모니터링 */
+  feedback: IntelFeedbackStats;
 }
 
 const SRC_EXPR = `CASE WHEN s.source = 'gosi'
@@ -160,7 +172,63 @@ export async function getIntelStats(from: string, to: string): Promise<IntelStat
   }
   const daily = [...dailyMap.values()].sort((a, b) => (a.date < b.date ? 1 : -1));
 
-  return { bySource, total, monthly, breakdown, daily };
+  const feedback = await loadFeedbackStats(db);
+
+  return { bySource, total, monthly, breakdown, daily, feedback };
+}
+
+/** 삭제 피드백 집계 — 테이블 부재(마이그레이션 전)·오류 시 빈 통계로 화면 유지. */
+async function loadFeedbackStats(db: Awaited<ReturnType<typeof getDb>>): Promise<IntelFeedbackStats> {
+  const empty: IntelFeedbackStats = { byReason: {}, total: 0, recentBySource: [], duplicateSims: [] };
+  try {
+    const reasonRows = rowsToObjects(
+      await db.exec(`SELECT reason, COUNT(*)::int AS cnt FROM intel_signal_feedback GROUP BY reason`)
+    );
+    const byReason: Record<string, number> = {};
+    let total = 0;
+    for (const r of reasonRows) {
+      const c = Number(r.cnt ?? 0);
+      byReason[String(r.reason)] = c;
+      total += c;
+    }
+
+    // 최근 30일 소스별 삭제율. feedback.source 는 gosi 채널 미분리 원시값이라 소스도 원시 기준으로 집계.
+    const floor = new Date();
+    floor.setUTCDate(floor.getUTCDate() - 30);
+    const floorIso = floor.toISOString().slice(0, 10);
+    const recentRows = rowsToObjects(
+      await db.exec(
+        `SELECT src, SUM(deleted)::int AS deleted, SUM(collected)::int AS collected FROM (
+           SELECT source AS src, COUNT(*)::int AS deleted, 0 AS collected
+             FROM intel_signal_feedback WHERE substr(created_at,1,10) >= $1 GROUP BY source
+           UNION ALL
+           SELECT source AS src, 0 AS deleted, COUNT(*)::int AS collected
+             FROM intel_signals WHERE substr(created_at,1,10) >= $1 GROUP BY source
+         ) t GROUP BY src HAVING SUM(deleted) > 0 ORDER BY SUM(deleted) DESC`,
+        [floorIso]
+      )
+    );
+    const recentBySource = recentRows.map((r) => {
+      const deleted = Number(r.deleted ?? 0);
+      const collected = Number(r.collected ?? 0) + deleted; // 삭제분도 수집됐던 것 — 분모에 합산
+      return { source: String(r.src), deleted, collected, rate: collected > 0 ? deleted / collected : 0 };
+    });
+
+    const simRows = rowsToObjects(
+      await db.exec(
+        `SELECT max_similarity FROM intel_signal_feedback
+          WHERE reason = 'duplicate' AND max_similarity IS NOT NULL
+          ORDER BY created_at DESC LIMIT 20`
+      )
+    );
+    const duplicateSims = simRows
+      .map((r) => Number(r.max_similarity))
+      .filter((v) => Number.isFinite(v));
+
+    return { byReason, total, recentBySource, duplicateSims };
+  } catch {
+    return empty;
+  }
 }
 
 export interface IntelCollectState {

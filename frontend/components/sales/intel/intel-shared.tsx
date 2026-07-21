@@ -38,6 +38,16 @@ export interface IntelSignalDetail extends IntelSignal {
   rawJson: Record<string, unknown> | null;
 }
 
+/** 개별 삭제 사유 — 코드는 서버 intel-feedback.FEEDBACK_REASONS 와 동일(서버 모듈은 클라이언트 import 금지라 복제).
+ *  사유·스냅샷은 intel_signal_feedback 에 축적되어 수집 로직 개선(재수집 차단·분류기 튜닝)에 쓰인다. */
+export const DELETE_REASONS = [
+  { code: "irrelevant_industry", label: "무관한 업종", desc: "통합허가 대상 업종과 무관한 회사·사업" },
+  { code: "mere_goal", label: "단순 경영목표", desc: "실체 없는 비전·실적 발표 등 투자 계획이 아님" },
+  { code: "duplicate", label: "중복 기사", desc: "이미 수집된 신호와 같은 사건" },
+  { code: "lacks_specifics", label: "구체성 부재", desc: "장소·규모·시기가 없어 영업 단서로 쓸 수 없음" },
+] as const;
+export type DeleteReasonCode = (typeof DELETE_REASONS)[number]["code"];
+
 // ── RAG 브리핑 응답 shape(서버 rag-queries 와 동일 — 서버 모듈은 클라이언트 import 금지라 복제) ──
 
 export interface BriefingReport {

@@ -25,6 +25,7 @@ import {
   type DisclosureCategory,
 } from "./signal-extractor";
 import { buildFacilityMatcher, facilityCoreKey } from "./facility-matcher";
+import { feedbackKey, loadFeedbackBlocklist } from "./intel-feedback";
 import { industryTagForFacility } from "./industry-rules";
 
 function id(prefix: string): string {
@@ -166,6 +167,8 @@ export async function collectDartSignals(opts: CollectOptions = {}): Promise<Col
   // 6) DB: 분류·등급 + upsert(1차 direct + 2차 counterparty)
   const nowIso = now.toISOString();
   await withDbWrite(async (wdb) => {
+    // 사용자가 사유와 함께 삭제한 신호는 재수집하지 않는다(intel_signal_feedback)
+    const blocklist = await loadFeedbackBlocklist(wdb);
     const insertSignal = async (
       d: DartDisclosure,
       cls: ClassifyResult,
@@ -175,6 +178,7 @@ export async function collectDartSignals(opts: CollectOptions = {}): Promise<Col
       category: DisclosureCategory | null,
       detail: unknown
     ): Promise<boolean> => {
+      if (blocklist.has(feedbackKey("dart", d.receiptNo))) return false;
       const signalId = id("isig");
       const raw = JSON.stringify({
         corpCode: d.corpCode, receiptNo: d.receiptNo, filerName: d.filerName,

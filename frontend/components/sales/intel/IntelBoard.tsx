@@ -7,14 +7,14 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ExternalLink, Radar, Search, X, Wand2 } from "lucide-react";
+import { ExternalLink, Radar, Search, Trash2, X, Wand2 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { PaginationControls } from "@/components/ui/PaginationControls";
 import "@/components/cdash/cdash.css";
-import type { IntelSignal } from "./intel-shared";
-import { GradeTag, MatchTypeTag, RelevanceTag, SOURCE_LABEL, SOURCE_TABS, STATUS_LABEL, STATUS_PILL, TypeTag } from "./intel-shared";
+import type { DeleteReasonCode, IntelSignal } from "./intel-shared";
+import { DELETE_REASONS, GradeTag, MatchTypeTag, RelevanceTag, SOURCE_LABEL, SOURCE_TABS, STATUS_LABEL, STATUS_PILL, TypeTag } from "./intel-shared";
 import { IntelSignalModal } from "./IntelSignalModal";
 import { IntelStatsPanel, type IntelStatsData } from "./IntelStatsPanel";
 import { IntelCollectSettingsPanel, type CollectStateRow } from "./IntelCollectSettingsPanel";
@@ -195,6 +195,33 @@ export function IntelBoard() {
     </div>
   );
 
+  // ── 개별 삭제(사유 필수 — 오인·중복 수집 피드백을 수집 로직 개선에 활용) ──
+  const [deleteTarget, setDeleteTarget] = useState<IntelSignal | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+
+  const deleteWithReason = async (reason: DeleteReasonCode) => {
+    if (!deleteTarget || deleteBusy) return;
+    setDeleteBusy(true);
+    try {
+      const res = await fetch(`/api/sales/intel/signals/${deleteTarget.signalId}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
+      const label = DELETE_REASONS.find((r) => r.code === reason)?.label ?? reason;
+      setBulkMsg(`'${deleteTarget.companyName ?? deleteTarget.reportName ?? "신호"}' 삭제 — 사유: ${label} (재수집 차단됨)`);
+      setDeleteTarget(null);
+      await Promise.all([reload(), reloadStats()]);
+    } catch (e) {
+      setBulkMsg(`삭제 실패: ${(e as Error).message}`);
+      setDeleteTarget(null);
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+
   const allChecked = signals.length > 0 && signals.every((s) => checkedIds.has(s.signalId));
   const toggleAll = () =>
     setCheckedIds(allChecked ? new Set() : new Set(signals.map((s) => s.signalId)));
@@ -319,6 +346,7 @@ export function IntelBoard() {
                         <th>매칭 사업장</th>
                         <th>상태</th>
                         <th>원문</th>
+                        {canEdit && <th style={{ width: 40 }}></th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -350,6 +378,18 @@ export function IntelBoard() {
                               </a>
                             ) : "—"}
                           </td>
+                          {canEdit && (
+                            <td onClick={(e) => e.stopPropagation()}>
+                              <button
+                                className="cd-btn cd-btn-ghost cd-btn-sm"
+                                style={{ padding: "0.25rem" }}
+                                title="이 신호 삭제(사유 선택 — 재수집 차단·수집 로직 개선에 반영)"
+                                onClick={() => setDeleteTarget(sig)}
+                              >
+                                <Trash2 className="w-3.5 h-3.5 cd-error-text" />
+                              </button>
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
@@ -376,6 +416,44 @@ export function IntelBoard() {
         {/* ── 우측: 수집현황(C-2) ── */}
         <IntelStatsPanel theme={theme} stats={stats} loading={statsLoading} month={month} onMonthChange={setMonth} />
       </div>
+
+      {/* 삭제 사유 팝업 — 사유는 피드백 테이블에 축적되어 재수집 차단·분류 로직 튜닝에 쓰인다 */}
+      {deleteTarget && (
+        <div className="cd-modal-overlay cdash cd-fields-white" data-theme={theme} onClick={() => !deleteBusy && setDeleteTarget(null)}>
+          <div className="cd-modal cd-card-bg w-full" style={{ maxWidth: 420, padding: "1.25rem" }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between mb-1">
+              <h3 className="cd-text text-base font-extrabold">삭제 사유 선택</h3>
+              <button className="cd-btn cd-btn-ghost cd-btn-sm shrink-0" onClick={() => setDeleteTarget(null)} disabled={deleteBusy}>
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="cd-text-muted text-xs mb-1 truncate">
+              {deleteTarget.companyName ?? "—"} · {deleteTarget.reportName ?? "—"}
+            </p>
+            <p className="cd-text-faint text-[11px] mb-3">
+              선택한 사유는 수집 로직 개선에 반영되며, 삭제된 신호는 다시 수집되지 않습니다.
+            </p>
+            <div className="flex flex-col gap-2">
+              {DELETE_REASONS.map((r) => (
+                <button
+                  key={r.code}
+                  className="cd-row-hover w-full text-left rounded-xl border cd-border-c px-3 py-2.5 disabled:opacity-50"
+                  disabled={deleteBusy}
+                  onClick={() => deleteWithReason(r.code)}
+                >
+                  <span className="cd-text text-sm font-bold">{r.label}</span>
+                  <span className="cd-text-faint text-[11px] block mt-0.5">{r.desc}</span>
+                </button>
+              ))}
+            </div>
+            <div className="flex justify-end mt-3">
+              <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => setDeleteTarget(null)} disabled={deleteBusy}>
+                취소
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {selected && (
         <IntelSignalModal

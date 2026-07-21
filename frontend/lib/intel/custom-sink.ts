@@ -9,6 +9,7 @@ import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { buildFacilityMatcher } from "./facility-matcher";
 import { EMPTY_INDUSTRY_TAG, industryTagForFacility, type IndustryTag } from "./industry-rules";
 import type { IntelSignalGrade, IntelSignalType } from "./signal-extractor";
+import { feedbackKey, loadFeedbackBlocklist } from "./intel-feedback";
 import { getNestedValue, runApiCollect } from "@/lib/scraper/execute-api";
 import { getSourceSecret } from "@/lib/scraper/sources-store";
 import type { FieldMapping, ScraperEndpointRow, ScraperSourceRow } from "@/lib/scraper/types";
@@ -144,9 +145,12 @@ export async function collectCustomSource(
 
   const nowIso = new Date().toISOString();
   await withDbWrite(async (wdb) => {
+    // 사용자가 사유와 함께 삭제한 신호는 재수집하지 않는다(intel_signal_feedback)
+    const blocklist = await loadFeedbackBlocklist(wdb);
     for (const it of items) {
       const m = mapItem(it, fm);
       if (seen.has(m.externalId)) continue;
+      if (blocklist.has(feedbackKey(sourceKey, m.externalId))) continue;
       const facilityId = matcher.matchName(m.companyName)?.facilityId ?? null;
       const matched = !!facilityId;
       const tag: IndustryTag = facilityId ? await industryTagForFacility(db, facilityId) : EMPTY_INDUSTRY_TAG;

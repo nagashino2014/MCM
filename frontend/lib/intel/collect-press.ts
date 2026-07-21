@@ -25,6 +25,7 @@ import { type IntelSignalGrade } from "./signal-extractor";
 import { buildFacilityMatcher } from "./facility-matcher";
 import { INTEL_COLLECT_DEFAULTS, isOlderThanCutoff, type IntelIndustryItem } from "./intel-settings";
 import { EMPTY_INDUSTRY_TAG, industryTagForFacility, type IndustryTag } from "./industry-rules";
+import { feedbackKey, loadFeedbackBlocklist } from "./intel-feedback";
 
 function id(prefix: string): string {
   return `${prefix}_${crypto.randomBytes(8).toString("hex")}`;
@@ -161,7 +162,10 @@ export async function collectPressSignals(opts: CollectPressOptions = {}): Promi
   // 5) upsert (source='press'). press 컬럼=발표 주체 라벨, 원문·분류는 raw_json.
   const nowIso = new Date().toISOString();
   await withDbWrite(async (wdb) => {
+    // 사용자가 사유와 함께 삭제한 신호는 재수집하지 않는다(intel_signal_feedback)
+    const blocklist = await loadFeedbackBlocklist(wdb);
     for (const p of prepared) {
+      if (blocklist.has(feedbackKey("press", p.it.url))) continue;
       const grade = GRADE_BY_CONFIDENCE[p.cls.confidence];
       const matched = !!p.facilityId;
       const raw = JSON.stringify({

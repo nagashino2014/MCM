@@ -21,6 +21,7 @@ import { type IntelSignalType, type IntelSignalGrade } from "./signal-extractor"
 import { buildFacilityMatcher } from "./facility-matcher";
 import { INTEL_COLLECT_DEFAULTS, isOlderThanCutoff, type IntelIndustryItem } from "./intel-settings";
 import { EMPTY_INDUSTRY_TAG, industryTagForFacility, ruleTagForEiass, type IndustryTag } from "./industry-rules";
+import { feedbackKey, loadFeedbackBlocklist } from "./intel-feedback";
 
 function id(prefix: string): string {
   return `${prefix}_${crypto.randomBytes(8).toString("hex")}`;
@@ -199,7 +200,10 @@ export async function collectEiassSignals(opts: CollectEiassOptions = {}): Promi
   // 5) upsert (source='eiass'). 상세 원본·규모·대행업체 등은 raw_json.
   const nowIso = new Date().toISOString();
   await withDbWrite(async (wdb) => {
+    // 사용자가 사유와 함께 삭제한 신호는 재수집하지 않는다(intel_signal_feedback)
+    const blocklist = await loadFeedbackBlocklist(wdb);
     for (const p of prepared) {
+      if (blocklist.has(feedbackKey("eiass", p.row.code))) continue;
       const raw = JSON.stringify({
         kind: p.kind, code: p.row.code, seq: p.row.seq, status: p.row.status,
         detail: p.detail,

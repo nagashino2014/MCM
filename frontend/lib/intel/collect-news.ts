@@ -10,6 +10,7 @@ import { buildFacilityMatcher } from "./facility-matcher";
 import { type IntelSignalGrade } from "./signal-extractor";
 import { EMPTY_INDUSTRY_TAG, industryTagForFacility, type IndustryTag } from "./industry-rules";
 import type { IntelIndustryItem } from "./intel-settings";
+import { feedbackKey, loadFeedbackBlocklist } from "./intel-feedback";
 
 function id(prefix: string): string {
   return `${prefix}_${crypto.randomBytes(8).toString("hex")}`;
@@ -105,7 +106,10 @@ export async function collectNewsSignals(opts: CollectNewsOptions = {}): Promise
   // 4) upsert (source='news', news_stage='detailed')
   const nowIso = new Date().toISOString();
   await withDbWrite(async (wdb) => {
+    // 사용자가 사유와 함께 삭제한 신호는 재수집하지 않는다(intel_signal_feedback)
+    const blocklist = await loadFeedbackBlocklist(wdb);
     for (const p of prepared) {
+      if (blocklist.has(feedbackKey("news", p.it.link))) continue;
       const grade = GRADE_BY_CONFIDENCE[p.cls.confidence];
       const matched = !!p.facilityId;
       const raw = JSON.stringify({

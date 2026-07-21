@@ -14,6 +14,7 @@ import {
 } from "./gosi-client";
 import type { IntelSignalType, IntelSignalGrade } from "./signal-extractor";
 import { isOlderThanCutoff } from "./intel-settings";
+import { feedbackKey, loadFeedbackBlocklist } from "./intel-feedback";
 
 function id(prefix: string): string {
   return `${prefix}_${crypto.randomBytes(8).toString("hex")}`;
@@ -127,7 +128,10 @@ export async function collectGosiSignals(opts: CollectGosiOptions = {}): Promise
   // 2) upsert (source='gosi'). 회사 매칭 없음 — 전건 unmatched 리드.
   const nowIso = new Date().toISOString();
   await withDbWrite(async (wdb) => {
+    // 사용자가 사유와 함께 삭제한 신호는 재수집하지 않는다(intel_signal_feedback)
+    const blocklist = await loadFeedbackBlocklist(wdb);
     for (const p of prepared) {
+      if (blocklist.has(feedbackKey("gosi", p.externalId))) continue;
       const raw = JSON.stringify({ channel: p.channel, agency: p.agency });
       const signalId = id("isig");
       const ins = rowsToObjects(

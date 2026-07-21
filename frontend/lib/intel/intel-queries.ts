@@ -2,6 +2,7 @@
 
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { createSalesProject } from "@/lib/sales/queries";
+import { recordSignalFeedback, type FeedbackReason } from "./intel-feedback";
 import { INTEL_SIGNAL_TYPE_LABELS, type IntelSignalType, type IntelSignalGrade } from "./signal-extractor";
 
 const text = (v: unknown): string | null => {
@@ -190,6 +191,44 @@ export async function getIntelSignalDetail(signalId: string): Promise<IntelSigna
 }
 
 /** 선택 신호 일괄 삭제. 반환: 삭제 건수. */
+/** 개별 삭제 + 사유 피드백 기록. 스냅샷은 DELETE RETURNING 으로 확보(임베딩은 FK CASCADE).
+ *  피드백에 남은 (source, external_id)는 수집기가 재수집하지 않는다. 반환: 삭제 여부. */
+export async function deleteSignalWithFeedback(
+  signalId: string,
+  reason: FeedbackReason,
+  deletedBy: string | null
+): Promise<boolean> {
+  return withDbWrite(async (db) => {
+    const rows = rowsToObjects(
+      await db.exec(
+        `DELETE FROM intel_signals WHERE signal_id = $1
+         RETURNING source, external_id, company_name, report_name,
+                   signal_type, signal_grade, industry_relevance, summary, url`,
+        [signalId]
+      )
+    );
+    if (!rows.length) return false;
+    const r = rows[0];
+    await recordSignalFeedback(
+      db,
+      {
+        source: String(r.source ?? ""),
+        externalId: String(r.external_id ?? ""),
+        companyName: text(r.company_name),
+        reportName: text(r.report_name),
+        signalType: text(r.signal_type),
+        signalGrade: text(r.signal_grade),
+        industryRelevance: text(r.industry_relevance),
+        summary: text(r.summary),
+        url: text(r.url),
+      },
+      reason,
+      deletedBy
+    );
+    return true;
+  });
+}
+
 export async function deleteSignals(signalIds: string[]): Promise<number> {
   if (!signalIds.length) return 0;
   return withDbWrite(async (db) => {

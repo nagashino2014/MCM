@@ -399,7 +399,7 @@ function StaffRoleRow({
           onChange={(e) => onManualChange({ assignedRole: e.target.value })}
         />
         <input
-          className="cd-input !py-1 text-[11px] text-right font-mono"
+          className="cd-input !py-1 text-[11px] text-right"
           style={{ width: 96 }}
           placeholder="참여(개월)"
           value={participateMonths}
@@ -1035,7 +1035,7 @@ export function BidPackageBoard() {
             </section>
 
             {/* ② 실적 계약 선택 — 절대 높이 고정: 트리를 열어도 카드는 늘지 않고 내부 스크롤 */}
-            <section className="cd-card rounded-3xl p-5 cd-reveal delay-3 flex flex-col h-[480px] shrink-0">
+            <section className="cd-card rounded-3xl p-5 cd-reveal delay-3 flex flex-col h-[720px] shrink-0">
               <h3 className="font-bold cd-text flex items-center gap-2 mb-3">
                 <CheckSquare className="w-4 h-4 cd-text-primary" />
                 ② 실적 계약 선택
@@ -1528,7 +1528,7 @@ export function BidPackageBoard() {
                       <p className="cd-text font-semibold mb-1.5">금액 기준 실적 포함 범위 (만원)</p>
                       <div className="flex items-center gap-1.5">
                         <input
-                          className="cd-input !py-1 text-[11px] text-right font-mono"
+                          className="cd-input !py-1 text-[11px] text-right"
                           style={{ width: 84 }}
                           placeholder="최소"
                           value={staffConfig.perfFilter.amountMinMan ?? ""}
@@ -1544,7 +1544,7 @@ export function BidPackageBoard() {
                         />
                         <span className="cd-text-faint">~</span>
                         <input
-                          className="cd-input !py-1 text-[11px] text-right font-mono"
+                          className="cd-input !py-1 text-[11px] text-right"
                           style={{ width: 84 }}
                           placeholder="최대"
                           value={staffConfig.perfFilter.amountMaxMan ?? ""}

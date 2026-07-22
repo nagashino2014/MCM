@@ -2,7 +2,6 @@ import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
-  Modal,
   Pressable,
   ScrollView,
   Text,
@@ -295,7 +294,7 @@ export default function CardScreen() {
 
   return (
     <SafeAreaView edges={['bottom']} className="flex-1 bg-neutral-50 dark:bg-neutral-950">
-      <Stack.Screen options={{ title: '명함 촬영', headerShown: true }} />
+      <Stack.Screen options={{ title: '명함 촬영', headerShown: !cameraOpen }} />
       <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
         {error ? (
           <View className="rounded-xl bg-red-50 px-4 py-3 dark:bg-red-950">
@@ -333,7 +332,7 @@ export default function CardScreen() {
             <Text className="mt-1 text-center text-xs text-neutral-400">
               촬영한 명함은 AI가 자동으로 인식해 담당자 정보로 정리합니다.
             </Text>
-            <Text className="text-center text-[10px] text-neutral-300">v1.0.1-cam</Text>
+            <Text className="text-center text-[10px] text-neutral-300">v1.0.1-cam2</Text>
           </View>
         ) : null}
 
@@ -497,9 +496,10 @@ export default function CardScreen() {
         ) : null}
       </ScrollView>
 
-      {/* 자체 카메라 화면 — 시스템 픽커 미사용 */}
-      <Modal visible={cameraOpen} animationType="slide" onRequestClose={() => setCameraOpen(false)}>
-        <View className="flex-1 bg-black">
+      {/* 자체 카메라 — RN Modal 은 expo-router modal presentation 과 충돌(iOS 점멸 실측)
+          → 같은 화면 안에서 absolute 전체 덮개로 렌더 */}
+      {cameraOpen ? (
+        <View className="absolute inset-0 z-50 bg-black">
           <CameraView ref={cameraRef} style={{ flex: 1 }} facing="back" />
           {/* 명함 가이드 문구 */}
           <View className="absolute left-0 right-0 top-16 items-center">
@@ -527,7 +527,7 @@ export default function CardScreen() {
             <View className="h-12 w-12" />
           </View>
         </View>
-      </Modal>
+      ) : null}
     </SafeAreaView>
   );
 }

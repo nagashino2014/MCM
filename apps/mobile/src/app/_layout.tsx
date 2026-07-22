@@ -46,7 +46,7 @@ function RootNavigator() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="login" />
-        <Stack.Screen name="card" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="card" />
       </Stack>
     </>
   );

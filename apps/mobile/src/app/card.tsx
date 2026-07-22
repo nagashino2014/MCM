@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 
@@ -310,8 +310,15 @@ export default function CardScreen() {
   };
 
   return (
-    <SafeAreaView edges={['bottom']} className="flex-1 bg-neutral-50 dark:bg-neutral-950">
-      <Stack.Screen options={{ title: '명함 촬영', headerShown: !cameraOpen }} />
+    <SafeAreaView className="flex-1 bg-neutral-50 dark:bg-neutral-950">
+      {/* 자체 헤더 — 화면 내 <Stack.Screen options> 동적 갱신이 iOS에서 헤더 점멸 루프를
+          일으켜(cam1~3 실측) expo-router 헤더 대신 직접 렌더한다 */}
+      <View className="flex-row items-center gap-2 border-b border-neutral-200 bg-white px-2 py-2 dark:border-neutral-800 dark:bg-neutral-900">
+        <Pressable onPress={() => router.back()} className="h-10 w-10 items-center justify-center active:opacity-60">
+          <Ionicons name="chevron-back" size={24} color={PRIMARY} />
+        </Pressable>
+        <Text className="text-base font-extrabold text-neutral-900 dark:text-white">명함 촬영</Text>
+      </View>
       <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
         {error ? (
           <View className="rounded-xl bg-red-50 px-4 py-3 dark:bg-red-950">
@@ -349,7 +356,7 @@ export default function CardScreen() {
             <Text className="mt-1 text-center text-xs text-neutral-400">
               촬영한 명함은 AI가 자동으로 인식해 담당자 정보로 정리합니다.
             </Text>
-            <Text className="text-center text-[10px] text-neutral-300">v1.0.1-cam3</Text>
+            <Text className="text-center text-[10px] text-neutral-300">v1.0.1-cam4</Text>
           </View>
         ) : null}
 

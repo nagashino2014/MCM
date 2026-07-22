@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -38,11 +39,11 @@ type Step = 'pick' | 'parsing' | 'form' | 'saving' | 'done';
 
 const PRIMARY = '#5D87FF';
 
-// 라우트 크래시 캐처 — 점멸(마운트→크래시→리마운트 의심) 원인 표시용 진단
+// 라우트 크래시 캐처 — 화면 오류 시 흰 화면 대신 안내+재시도 제공
 export function ErrorBoundary({ error, retry }: { error: Error; retry: () => Promise<void> }) {
   return (
     <SafeAreaView className="flex-1 items-center justify-center bg-white px-6 dark:bg-neutral-950">
-      <Text className="mb-2 text-base font-bold text-red-600">[진단] 화면 크래시</Text>
+      <Text className="mb-2 text-base font-bold text-red-600">화면 오류가 발생했습니다</Text>
       <Text className="mb-4 text-center text-xs text-neutral-600 dark:text-neutral-300">
         {error.name}: {error.message}
       </Text>
@@ -77,10 +78,8 @@ export default function CardScreen() {
 
   const openCamera = async () => {
     setError(null);
-    setWarning(`[진단] perm granted=${camPerm?.granted} canAsk=${camPerm?.canAskAgain}`);
     if (!camPerm?.granted) {
       const r = await requestCamPerm();
-      setWarning(`[진단] perm 요청 결과 granted=${r.granted} canAsk=${r.canAskAgain}`);
       if (!r.granted) {
         setError('카메라 권한이 필요합니다. 설정에서 허용해주세요.');
         return;
@@ -98,12 +97,11 @@ export default function CardScreen() {
       if (photo?.uri) {
         void handleImage(photo.uri);
       } else {
-        setError('[진단] takePictureAsync 결과 없음');
+        setError('촬영에 실패했습니다. 다시 시도해주세요.');
       }
     } catch (e) {
       setCameraOpen(false);
-      const err = e as Error;
-      setError(`[진단] 촬영 예외 ${err.name}: ${err.message}`);
+      setError(`촬영 중 오류가 발생했습니다: ${(e as Error).message}`);
     } finally {
       setShooting(false);
     }
@@ -147,21 +145,15 @@ export default function CardScreen() {
         source === 'camera'
           ? await ImagePicker.launchCameraAsync(opts)
           : await ImagePicker.launchImageLibraryAsync(opts);
-      // 진단: 촬영 결과 상태를 그대로 표시(iOS에서 결과 유실 조사)
-      if (result.canceled) {
-        setWarning('[진단] 촬영 결과 canceled=true — 촬영을 완료했는데 이 메시지가 보이면 iOS 픽커 결과 유실 버그입니다.');
-        return;
-      }
+      if (result.canceled) return;
       const asset = result.assets?.[0];
       if (!asset?.uri) {
-        setError(`[진단] assets 비어있음: assets=${JSON.stringify(result.assets)?.slice(0, 120)}`);
+        setError('이미지를 가져오지 못했습니다. 다시 시도해주세요.');
         return;
       }
-      setWarning(`[진단] 촬영 OK: ${asset.uri.split(':')[0]}, ${asset.width}x${asset.height}`);
       void handleImage(asset.uri);
     } catch (e) {
-      const err = e as Error;
-      setError(`[진단] 픽커 예외 ${err.name}: ${err.message}`);
+      setError(`이미지 선택 중 오류가 발생했습니다: ${(e as Error).message}`);
     }
   };
 
@@ -210,10 +202,7 @@ export default function CardScreen() {
       if (company) await searchFacilities(company);
       setStep('form');
     } catch (e) {
-      // 진단 강화: 에러 유형·URI 스킴까지 표시(TestFlight 원격 디버깅용)
-      const err = e as Error;
-      const scheme = uri.split(':')[0];
-      setError(`[인식 실패] ${err.name}: ${err.message} (img=${scheme})`);
+      setError(`명함 인식에 실패했습니다: ${(e as Error).message}`);
       setStep('pick');
     }
   };
@@ -349,16 +338,20 @@ export default function CardScreen() {
               <Ionicons name="camera" size={20} color="#fff" />
               <Text className="text-base font-bold text-white">명함 촬영</Text>
             </Pressable>
-            <Pressable
-              onPress={() => pick('library')}
-              className="h-14 flex-row items-center justify-center gap-2 rounded-2xl bg-primary-light active:opacity-70">
-              <Ionicons name="images" size={20} color={PRIMARY} />
-              <Text className="text-base font-bold text-primary">앨범에서 선택</Text>
-            </Pressable>
+            {/* iOS 는 expo-image-picker 가 결과를 반환하지 않는 문제(1.0.1 실측)로 앨범 숨김.
+                안드로이드는 유지 — 동작 시 촬영 없이 저장된 명함 선택 가능 */}
+            {Platform.OS !== 'ios' ? (
+              <Pressable
+                onPress={() => pick('library')}
+                className="h-14 flex-row items-center justify-center gap-2 rounded-2xl bg-primary-light active:opacity-70">
+                <Ionicons name="images" size={20} color={PRIMARY} />
+                <Text className="text-base font-bold text-primary">앨범에서 선택</Text>
+              </Pressable>
+            ) : null}
             <Text className="mt-1 text-center text-xs text-neutral-400">
               촬영한 명함은 AI가 자동으로 인식해 담당자 정보로 정리합니다.
             </Text>
-            <Text className="text-center text-[10px] text-neutral-300">v1.0.1-cam6</Text>
+            <Text className="text-center text-[10px] text-neutral-300">v1.0.1</Text>
           </View>
         ) : null}
 
@@ -532,7 +525,7 @@ export default function CardScreen() {
             facing="back"
             onMountError={(e) => {
               setCameraOpen(false);
-              setError(`[진단] 카메라 마운트 실패: ${e.message}`);
+              setError(`카메라를 열 수 없습니다: ${e.message}`);
             }}
           />
           {/* 명함 가이드 문구 */}

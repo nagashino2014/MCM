@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
 import { parseFields, type ApprovalFieldDef } from "@/lib/approval/fields";
 import { getForm } from "@/lib/approval/forms";
+import { recordLeaveUsageOnApproval } from "@/lib/approval/leave";
 
 /*
  * 전자결재 문서(084) — 기안 저장/상신·채번·결재선 상태 전이·대결 라우팅·결재함 쿼리.
@@ -59,6 +60,9 @@ export interface ApprovalDocDetail extends ApprovalDocSummary {
   steps: ApprovalStep[];
   drafterUserId: string | null;
   drafterPosition: string | null;
+  /** 양식의 전사 문서함 지정값 — 있으면 승인 문서는 전 직원 열람 허용 */
+  orgFolder: string | null;
+  deptId: string | null;
 }
 
 function mapStep(r: Record<string, unknown>): ApprovalStep {
@@ -382,6 +386,8 @@ export async function actOnDoc(params: {
           now,
         ]);
         docStatus = "approved";
+        // 휴가신청 승인 완료 → 연차 대장 use 적재(연차·반차만, doc당 1회)
+        await recordLeaveUsageOnApproval(txn, params.docId);
       } else {
         await activateOrder(txn, params.docId, Math.min(...nextOrders));
         await txn.run(`UPDATE approval_docs SET updated_at = $2 WHERE doc_id = $1`, [params.docId, now]);
@@ -444,12 +450,137 @@ export async function listActedDocs(userId: string, limit = 30): Promise<Approva
     .slice(0, limit);
 }
 
+export interface DocRecordRow extends ApprovalDocSummary {
+  fieldValues: Record<string, unknown>;
+}
+
+export interface ArchiveDocRow extends ApprovalDocSummary {
+  retentionYears: number | null;
+  orgFolder: string | null;
+}
+
+function mapArchive(r: Record<string, unknown>): ArchiveDocRow {
+  return {
+    ...mapSummary(r),
+    retentionYears: r.retention_years != null ? Number(r.retention_years) : null,
+    orgFolder: r.org_folder != null ? String(r.org_folder) : null,
+  };
+}
+
+/** 뷰어의 소속 부서(부서 문서함·열람 범위 판정용) */
+export async function getUserDeptId(userId: string): Promise<string | null> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT ep.dept_id FROM users u LEFT JOIN employee_profiles ep ON ep.employee_id = u.employee_id WHERE u.user_id = $1`,
+      [userId]
+    )
+  );
+  return rows.length && rows[0].dept_id != null ? String(rows[0].dept_id) : null;
+}
+
+/** 부서 문서함 — 본인 부서의 완료 문서(기안 완료함). */
+export async function listDeptDocs(userId: string, limit = 50): Promise<ArchiveDocRow[]> {
+  const deptId = await getUserDeptId(userId);
+  if (!deptId) return [];
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT d.*, f.name AS form_name, f.retention_years, f.org_folder FROM approval_docs d
+         JOIN approval_forms f ON f.form_id = d.form_id
+        WHERE d.dept_id = $1 AND d.status IN ('approved','rejected')
+        ORDER BY d.completed_at DESC NULLS LAST LIMIT $2`,
+      [deptId, limit]
+    )
+  );
+  return rows.map(mapArchive);
+}
+
+/** 전사 문서함 폴더 목록(양식별 org_folder 지정값) */
+export async function listOrgFolders(): Promise<string[]> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(`SELECT DISTINCT org_folder FROM approval_forms WHERE org_folder IS NOT NULL AND org_folder <> '' ORDER BY org_folder`)
+  );
+  return rows.map((r) => String(r.org_folder));
+}
+
+/** 전사 문서함 — 폴더별 승인 완료 문서(전 직원 열람). */
+export async function listOrgFolderDocs(folder: string, limit = 50): Promise<ArchiveDocRow[]> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT d.*, f.name AS form_name, f.retention_years, f.org_folder FROM approval_docs d
+         JOIN approval_forms f ON f.form_id = d.form_id
+        WHERE f.org_folder = $1 AND d.status = 'approved'
+        ORDER BY d.completed_at DESC NULLS LAST LIMIT $2`,
+      [folder, limit]
+    )
+  );
+  return rows.map(mapArchive);
+}
+
+/**
+ * ★양식별 문서 조회 — 필드가 컬럼으로 펼쳐지는 데이터 테이블의 소스(§5-6, 다우 대비 핵심).
+ * field_values 를 그대로 내려 클라이언트가 현재 양식 스키마 기준으로 평탄화한다.
+ */
+export async function listDocsByForm(params: {
+  formId: string;
+  status?: "all" | "approved" | "in_progress" | "rejected";
+  from?: string | null; // 상신일 범위(YYYY-MM-DD)
+  to?: string | null;
+  q?: string | null; // 제목·기안자 검색
+  limit?: number;
+}): Promise<DocRecordRow[]> {
+  const db = await getDb();
+  const where: string[] = ["d.form_id = $1", "d.status <> 'draft'"];
+  const args: unknown[] = [params.formId];
+  const status = params.status ?? "all";
+  if (status !== "all") {
+    args.push(status);
+    where.push(`d.status = $${args.length}`);
+  }
+  if (params.from) {
+    args.push(params.from);
+    where.push(`d.submitted_at >= $${args.length}`);
+  }
+  if (params.to) {
+    args.push(params.to + "T23:59:59");
+    where.push(`d.submitted_at <= $${args.length}`);
+  }
+  if (params.q?.trim()) {
+    args.push(`%${params.q.trim()}%`);
+    where.push(`(d.title ILIKE $${args.length} OR d.drafter_name ILIKE $${args.length})`);
+  }
+  args.push(Math.min(500, params.limit ?? 200));
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT d.*, f.name AS form_name FROM approval_docs d
+         JOIN approval_forms f ON f.form_id = d.form_id
+        WHERE ${where.join(" AND ")}
+        ORDER BY d.submitted_at DESC NULLS LAST
+        LIMIT $${args.length}`,
+      args
+    )
+  );
+  return rows.map((r) => {
+    let fieldValues: Record<string, unknown> = {};
+    try {
+      const v = typeof r.field_values === "string" ? JSON.parse(r.field_values) : r.field_values;
+      if (v && typeof v === "object") fieldValues = v as Record<string, unknown>;
+    } catch {
+      // 무시
+    }
+    return { ...mapSummary(r), fieldValues };
+  });
+}
+
 /** 문서 상세 — 제출 당시 양식 버전의 fields 로 렌더한다. */
 export async function getDoc(docId: string): Promise<ApprovalDocDetail | null> {
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT d.*, f.name AS form_name,
+      `SELECT d.*, f.name AS form_name, f.org_folder,
               COALESCE(v.fields, f.fields) AS render_fields
          FROM approval_docs d
          JOIN approval_forms f ON f.form_id = d.form_id
@@ -478,5 +609,7 @@ export async function getDoc(docId: string): Promise<ApprovalDocDetail | null> {
     steps: stepRows.map(mapStep),
     drafterUserId: r.drafter_user_id != null ? String(r.drafter_user_id) : null,
     drafterPosition: r.drafter_position != null ? String(r.drafter_position) : null,
+    orgFolder: r.org_folder != null ? String(r.org_folder) : null,
+    deptId: r.dept_id != null ? String(r.dept_id) : null,
   };
 }

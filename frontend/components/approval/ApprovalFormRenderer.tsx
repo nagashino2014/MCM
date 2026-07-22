@@ -10,6 +10,7 @@ import { Plus, Users, X } from "lucide-react";
 import OrganizationTree from "@/components/admin/users/OrganizationTree";
 import type { OrganizationSnapshot } from "@/components/admin/users/types";
 import type { ApprovalFieldDef } from "@/lib/approval/fields";
+import { findInCatalog, type LeaveTypeItem } from "@/lib/approval/leave-types";
 
 type Values = Record<string, unknown>;
 
@@ -240,6 +241,8 @@ function FieldInput({
       return <CompanySelectInput field={f} value={value} onSet={onSet} onFill={onFill} readOnly={dis} />;
     case "contract_select":
       return <ContractSelectInput field={f} value={value} onSet={onSet} onFill={onFill} readOnly={dis} />;
+    case "leave_type":
+      return <LeaveTypeInput value={value} onSet={onSet} readOnly={dis} />;
     case "table":
       return <TableInput field={f} value={value} onSet={onSet} readOnly={dis} />;
     default:
@@ -480,6 +483,78 @@ function ContractSelectInput({
             </button>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * 휴가 종류 입력 — 사규 경조 규정 카탈로그(LEAVE_ENTITLEMENTS)에서 optgroup 으로 렌더.
+ * 선택 시 규정상 부여일수(경조·출산·조의)나 차감 안내(연차·반차)를 배지로 즉시 표시한다.
+ * 저장 값: 선택 key(문자열). 구버전 label 값도 findLeaveItem 이 매칭한다.
+ */
+function LeaveTypeInput({ value, onSet, readOnly }: { value: unknown; onSet: (v: unknown) => void; readOnly?: boolean }) {
+  const [catalog, setCatalog] = useState<LeaveTypeItem[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/approval/leave-types", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled && d?.types) setCatalog(d.types);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const item = findInCatalog(catalog, value);
+  const groups = useMemo(() => {
+    const map = new Map<string, LeaveTypeItem[]>();
+    for (const it of catalog) map.set(it.group, [...(map.get(it.group) ?? []), it]);
+    return [...map.entries()];
+  }, [catalog]);
+
+  const badge = (() => {
+    if (!item) return null;
+    if (item.deduct === "full") return { text: "연차 1일 차감", tone: "primary" as const };
+    if (item.deduct === "half") return { text: "연차 0.5일 차감", tone: "primary" as const };
+    if (item.days != null) return { text: `부여 휴가 ${item.days}일`, tone: "ok" as const };
+    return { text: "실사용 기간만큼 (연차 미차감)", tone: "muted" as const };
+  })();
+
+  return (
+    <div className="flex items-center gap-2 flex-wrap w-full">
+      <select
+        className="cd-select"
+        style={{ width: 210 }}
+        disabled={readOnly}
+        value={item?.key ?? ""}
+        onChange={(e) => onSet(e.target.value)}
+      >
+        <option value="">선택</option>
+        {groups.map(([g, items]) => (
+          <optgroup key={g} label={g}>
+            {items.map((it) => (
+              <option key={it.key} value={it.key}>
+                {it.label}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+      {badge && (
+        <span
+          className={`text-[11.5px] rounded-full px-2.5 py-1 shrink-0 ${
+            badge.tone === "ok"
+              ? "border border-[color:var(--cd-success,#13DEB9)] text-[color:var(--cd-success,#13DEB9)]"
+              : badge.tone === "primary"
+                ? "cd-tint-primary"
+                : "border cd-border-c cd-text-faint"
+          }`}
+        >
+          {badge.text}
+        </span>
       )}
     </div>
   );

@@ -19,10 +19,15 @@ export const APPROVAL_FIELD_TYPES = [
   "dept_select",
   "company_select",
   "contract_select",
+  "leave_type",
   "table",
   "static",
 ] as const;
 export type ApprovalFieldType = (typeof APPROVAL_FIELD_TYPES)[number];
+
+
+// 휴가 종류(leave_type) 규정 카탈로그는 DB 관리로 분리되어 lib/approval/leave-types.ts 에 있다
+// (규정 변경 대비 — 관리자가 /approval/leave-types 에서 편집). 렌더러·leave.ts 는 그 모듈을 쓴다.
 
 /** 자동 채움 규칙 — 검색 필드(업체/계약)에서 선택 시 소스 속성 값을 대상 필드에 주입한다. */
 export interface ApprovalFillRule {

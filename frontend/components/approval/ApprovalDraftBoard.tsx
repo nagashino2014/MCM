@@ -47,6 +47,25 @@ export function ApprovalDraftBoard() {
   const [busy, setBusy] = useState<"save" | "submit" | null>(null);
   const [orgModal, setOrgModal] = useState<"agree" | "approve" | null>(null);
   const [orgSnapshot, setOrgSnapshot] = useState<OrganizationSnapshot | null>(null);
+  // 휴가신청 양식이면 본인 잔여 연차 배지 표시
+  const [leaveRemaining, setLeaveRemaining] = useState<{ granted: number; used: number; remaining: number } | null>(null);
+
+  useEffect(() => {
+    if (form?.formId !== "frm-leave-request") {
+      setLeaveRemaining(null);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/approval/leave?me=1&year=${new Date().getFullYear()}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled && d?.summary) setLeaveRemaining(d.summary);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [form?.formId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -183,6 +202,11 @@ export function ApprovalDraftBoard() {
               <label className="flex items-center gap-1.5 text-[12px] cd-text cursor-pointer mt-4">
                 <input type="checkbox" checked={urgent} onChange={(e) => setUrgent(e.target.checked)} /> 긴급
               </label>
+              {leaveRemaining && (
+                <span className="mt-4 text-[11.5px] rounded-full px-2.5 py-1 cd-tint-primary" title={`부여 ${leaveRemaining.granted} · 사용 ${leaveRemaining.used}`}>
+                  올해 잔여 연차 {leaveRemaining.remaining}일
+                </span>
+              )}
             </div>
             <ApprovalFormRenderer
               fields={form.fields}

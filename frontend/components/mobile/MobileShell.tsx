@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, CalendarDays, Factory, Users, Sun, Moon, Monitor } from "lucide-react";
+import { Home, CalendarDays, ClipboardCheck, Factory, Users, Sun, Moon, Monitor } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import "@/components/cdash/cdash.css";
 
@@ -12,6 +12,7 @@ import "@/components/cdash/cdash.css";
 const TABS = [
   { href: "/m", label: "홈", icon: Home },
   { href: "/m/schedule", label: "일정", icon: CalendarDays },
+  { href: "/m/approval", label: "결재", icon: ClipboardCheck },
   { href: "/m/facilities", label: "사업장", icon: Factory },
   { href: "/m/contacts", label: "담당자", icon: Users },
 ];
@@ -19,6 +20,7 @@ const TABS = [
 const TITLE_BY_PATH: Record<string, string> = {
   "/m": "홈",
   "/m/schedule": "영업 일정",
+  "/m/approval": "결재함",
   "/m/facilities": "사업장",
   "/m/contacts": "담당자",
   "/m/card": "명함 촬영",

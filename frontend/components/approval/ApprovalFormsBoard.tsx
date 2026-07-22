@@ -12,6 +12,7 @@ import {
   AlignLeft,
   Building2,
   Calendar,
+  CalendarCheck2,
   CalendarRange,
   CheckSquare,
   ClipboardCheck,
@@ -76,6 +77,7 @@ const FIELD_TYPE_LABEL: Record<ApprovalFieldType, string> = {
   dept_select: "부서",
   company_select: "업체 검색",
   contract_select: "계약 검색",
+  leave_type: "휴가 종류",
   table: "표(반복 행)",
   static: "안내문",
 };
@@ -95,6 +97,7 @@ const PALETTE: { type: ApprovalFieldType; icon: LucideIcon }[] = [
   { type: "dept_select", icon: Users },
   { type: "company_select", icon: Building2 },
   { type: "contract_select", icon: FileSignature },
+  { type: "leave_type", icon: CalendarCheck2 },
   { type: "table", icon: Table2 },
   { type: "static", icon: Info },
 ];
@@ -730,6 +733,11 @@ function FieldProps({
       )}
       {(f.type === "company_select" || f.type === "contract_select") && (
         <FillMapEditor field={f} onChange={onChange} allFields={allFields} />
+      )}
+      {f.type === "leave_type" && (
+        <p className="text-[11px] cd-text-faint rounded-lg border border-dashed cd-border-c p-2.5">
+          휴가 종류·부여일수는 사규 경조 규정 카탈로그에서 자동 제공됩니다(옵션 편집 불필요). 선택 시 부여 휴가일수가 표시되고, 연차·반차만 연차 대장에서 차감됩니다.
+        </p>
       )}
       {f.type === "table" && <TableColumnsEditor field={f} onChange={onChange} />}
     </div>

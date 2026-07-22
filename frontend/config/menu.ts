@@ -6,6 +6,7 @@ import {
   Database,
   Trash2,
   ClipboardList,
+  ClipboardCheck,
   UserCog,
   Building2,
   Users as UsersIcon,
@@ -35,6 +36,17 @@ export const MENU_ITEMS: MenuItem[] = [
     group: "home",
   },
   // ── 업무 보고 ─────────────────────────────────────
+  {
+    title: "전자결재",
+    href: "/approval",
+    icon: ClipboardCheck,
+    submenu: [
+      { title: "전자결재 홈", href: "/approval" },
+      { title: "기안 작성", href: "/approval/draft" },
+      { title: "양식 관리", href: "/approval/forms" },
+    ],
+    group: "work",
+  },
   {
     title: "업무추진계획",
     href: "/work-plan",

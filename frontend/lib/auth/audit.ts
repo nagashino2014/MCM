@@ -64,6 +64,9 @@ export type AuditAction =
   | "work_plan_save"
   | "work_plan_delete"
   | "trash_purge"
+  | "approval_form_update"
+  | "approval_doc_submit"
+  | "approval_doc_act"
   | "alert.ack";
 
 export interface AuditEntry {

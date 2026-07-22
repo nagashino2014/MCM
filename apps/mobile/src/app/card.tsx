@@ -94,7 +94,14 @@ export default function CardScreen() {
       const fd = new FormData();
       // RN FormData 파일 형식
       fd.append('file', { uri, name: 'card.jpg', type: 'image/jpeg' } as unknown as Blob);
-      const res = await apiFetch('/api/facilities/business-card/parse', { method: 'POST', body: fd });
+      // 진단용 타임아웃(60s) — 행이면 무한 스피너 대신 에러로 떨어뜨린다
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 60_000);
+      const res = await apiFetch('/api/facilities/business-card/parse', {
+        method: 'POST',
+        body: fd,
+        signal: ctrl.signal,
+      }).finally(() => clearTimeout(timer));
       const data = (await res.json().catch(() => ({}))) as {
         fields?: CardFields;
         warning?: string;
@@ -123,7 +130,10 @@ export default function CardScreen() {
       if (company) await searchFacilities(company);
       setStep('form');
     } catch (e) {
-      setError((e as Error).message);
+      // 진단 강화: 에러 유형·URI 스킴까지 표시(TestFlight 원격 디버깅용)
+      const err = e as Error;
+      const scheme = uri.split(':')[0];
+      setError(`[인식 실패] ${err.name}: ${err.message} (img=${scheme})`);
       setStep('pick');
     }
   };

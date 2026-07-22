@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { File } from 'expo-file-system';
 
 import { apiFetch, apiJson } from '@/lib/api';
 
@@ -170,8 +171,9 @@ export default function CardScreen() {
     setStep('parsing');
     try {
       const fd = new FormData();
-      // RN FormData 파일 형식
-      fd.append('file', { uri, name: 'card.jpg', type: 'image/jpeg' } as unknown as Blob);
+      // SDK 57 winter fetch는 RN 스타일 {uri,name,type} 파트를 거부(Unsupported FormDataPart,
+      // 실측) → expo-file-system File 클래스로 표준 File 파트 구성
+      fd.append('file', new File(uri) as unknown as Blob, 'card.jpg');
       // 진단용 타임아웃(60s) — 행이면 무한 스피너 대신 에러로 떨어뜨린다
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 60_000);
@@ -229,7 +231,7 @@ export default function CardScreen() {
     setStep('saving');
     try {
       const fd = new FormData();
-      if (imageUri) fd.append('file', { uri: imageUri, name: 'card.jpg', type: 'image/jpeg' } as unknown as Blob);
+      if (imageUri) fd.append('file', new File(imageUri) as unknown as Blob, 'card.jpg');
       fd.append('fields', JSON.stringify(form));
       if (parsed) fd.append('parsed', JSON.stringify(parsed));
       const res = await apiFetch(
@@ -356,7 +358,7 @@ export default function CardScreen() {
             <Text className="mt-1 text-center text-xs text-neutral-400">
               촬영한 명함은 AI가 자동으로 인식해 담당자 정보로 정리합니다.
             </Text>
-            <Text className="text-center text-[10px] text-neutral-300">v1.0.1-cam4</Text>
+            <Text className="text-center text-[10px] text-neutral-300">v1.0.1-cam5</Text>
           </View>
         ) : null}
 

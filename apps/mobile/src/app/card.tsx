@@ -70,20 +70,43 @@ export default function CardScreen() {
 
   const pick = async (source: 'camera' | 'library') => {
     setError(null);
-    const perm =
-      source === 'camera'
-        ? await ImagePicker.requestCameraPermissionsAsync()
-        : await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      setError('카메라/사진 접근 권한이 필요합니다.');
-      return;
+    try {
+      const perm =
+        source === 'camera'
+          ? await ImagePicker.requestCameraPermissionsAsync()
+          : await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        setError('카메라/사진 접근 권한이 필요합니다.');
+        return;
+      }
+      // iOS promise 유실 버그 회피: 크롭(allowsEditing) 제거 + FULL_SCREEN 강제.
+      // 크롭 화면·pageSheet 모달에서 launchCameraAsync 가 영원히 pending 되는 사례 다수(expo#13221 등).
+      const opts: ImagePicker.ImagePickerOptions = {
+        mediaTypes: ['images'],
+        quality: 0.6,
+        allowsEditing: false,
+        presentationStyle: ImagePicker.UIImagePickerPresentationStyle.FULL_SCREEN,
+      };
+      const result =
+        source === 'camera'
+          ? await ImagePicker.launchCameraAsync(opts)
+          : await ImagePicker.launchImageLibraryAsync(opts);
+      // 진단: 촬영 결과 상태를 그대로 표시(iOS에서 결과 유실 조사)
+      if (result.canceled) {
+        setWarning('[진단] 촬영 결과 canceled=true — 촬영을 완료했는데 이 메시지가 보이면 iOS 픽커 결과 유실 버그입니다.');
+        return;
+      }
+      const asset = result.assets?.[0];
+      if (!asset?.uri) {
+        setError(`[진단] assets 비어있음: assets=${JSON.stringify(result.assets)?.slice(0, 120)}`);
+        return;
+      }
+      setWarning(`[진단] 촬영 OK: ${asset.uri.split(':')[0]}, ${asset.width}x${asset.height}`);
+      void handleImage(asset.uri);
+    } catch (e) {
+      const err = e as Error;
+      setError(`[진단] 픽커 예외 ${err.name}: ${err.message}`);
     }
-    const result =
-      source === 'camera'
-        ? await ImagePicker.launchCameraAsync({ quality: 0.6, allowsEditing: true })
-        : await ImagePicker.launchImageLibraryAsync({ quality: 0.6, allowsEditing: true });
-    if (result.canceled) return;
-    void handleImage(result.assets[0].uri);
   };
 
   const handleImage = async (uri: string) => {
@@ -271,6 +294,7 @@ export default function CardScreen() {
             <Text className="mt-1 text-center text-xs text-neutral-400">
               촬영한 명함은 AI가 자동으로 인식해 담당자 정보로 정리합니다.
             </Text>
+            <Text className="text-center text-[10px] text-neutral-300">diag-3</Text>
           </View>
         ) : null}
 

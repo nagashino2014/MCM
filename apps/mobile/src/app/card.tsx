@@ -358,7 +358,7 @@ export default function CardScreen() {
             <Text className="mt-1 text-center text-xs text-neutral-400">
               촬영한 명함은 AI가 자동으로 인식해 담당자 정보로 정리합니다.
             </Text>
-            <Text className="text-center text-[10px] text-neutral-300">v1.0.1-cam5</Text>
+            <Text className="text-center text-[10px] text-neutral-300">v1.0.1-cam6</Text>
           </View>
         ) : null}
 
@@ -538,7 +538,7 @@ export default function CardScreen() {
           {/* 명함 가이드 문구 */}
           <View className="absolute left-0 right-0 top-16 items-center">
             <Text className="rounded-full bg-black/50 px-4 py-1.5 text-sm text-white">
-              명함이 화면에 가득 차게 촬영하세요
+              명함이 잘 보이게만 찍으면 돼요 — 방향·크기 자유
             </Text>
           </View>
           {/* 하단 컨트롤 */}

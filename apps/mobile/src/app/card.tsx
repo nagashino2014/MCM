@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  Modal,
   Pressable,
   ScrollView,
   Text,
@@ -12,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 
 import { apiFetch, apiJson } from '@/lib/api';
 
@@ -52,6 +54,43 @@ export default function CardScreen() {
   const [quickOpen, setQuickOpen] = useState(false);
   const [quick, setQuick] = useState({ companyName: '', siteAddress: '', phoneNumber: '' });
   const [quickSaving, setQuickSaving] = useState(false);
+  // 자체 카메라(expo-camera) — iOS 시스템 픽커(promise 유실 버그, diag-2/3 실측) 대체
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [shooting, setShooting] = useState(false);
+  const cameraRef = useRef<CameraView>(null);
+  const [camPerm, requestCamPerm] = useCameraPermissions();
+
+  const openCamera = async () => {
+    setError(null);
+    if (!camPerm?.granted) {
+      const r = await requestCamPerm();
+      if (!r.granted) {
+        setError('카메라 권한이 필요합니다. 설정에서 허용해주세요.');
+        return;
+      }
+    }
+    setCameraOpen(true);
+  };
+
+  const shoot = async () => {
+    if (shooting) return;
+    setShooting(true);
+    try {
+      const photo = await cameraRef.current?.takePictureAsync({ quality: 0.6 });
+      setCameraOpen(false);
+      if (photo?.uri) {
+        void handleImage(photo.uri);
+      } else {
+        setError('[진단] takePictureAsync 결과 없음');
+      }
+    } catch (e) {
+      setCameraOpen(false);
+      const err = e as Error;
+      setError(`[진단] 촬영 예외 ${err.name}: ${err.message}`);
+    } finally {
+      setShooting(false);
+    }
+  };
 
   const searchFacilities = async (q: string) => {
     if (!q.trim()) {
@@ -280,7 +319,7 @@ export default function CardScreen() {
         {step === 'pick' ? (
           <View className="gap-3">
             <Pressable
-              onPress={() => pick('camera')}
+              onPress={openCamera}
               className="h-14 flex-row items-center justify-center gap-2 rounded-2xl bg-primary active:opacity-80">
               <Ionicons name="camera" size={20} color="#fff" />
               <Text className="text-base font-bold text-white">명함 촬영</Text>
@@ -294,7 +333,7 @@ export default function CardScreen() {
             <Text className="mt-1 text-center text-xs text-neutral-400">
               촬영한 명함은 AI가 자동으로 인식해 담당자 정보로 정리합니다.
             </Text>
-            <Text className="text-center text-[10px] text-neutral-300">diag-3</Text>
+            <Text className="text-center text-[10px] text-neutral-300">v1.0.1-cam</Text>
           </View>
         ) : null}
 
@@ -457,6 +496,38 @@ export default function CardScreen() {
           </View>
         ) : null}
       </ScrollView>
+
+      {/* 자체 카메라 화면 — 시스템 픽커 미사용 */}
+      <Modal visible={cameraOpen} animationType="slide" onRequestClose={() => setCameraOpen(false)}>
+        <View className="flex-1 bg-black">
+          <CameraView ref={cameraRef} style={{ flex: 1 }} facing="back" />
+          {/* 명함 가이드 문구 */}
+          <View className="absolute left-0 right-0 top-16 items-center">
+            <Text className="rounded-full bg-black/50 px-4 py-1.5 text-sm text-white">
+              명함이 화면에 가득 차게 촬영하세요
+            </Text>
+          </View>
+          {/* 하단 컨트롤 */}
+          <View className="absolute bottom-0 left-0 right-0 flex-row items-center justify-between px-10 pb-12 pt-6">
+            <Pressable
+              onPress={() => setCameraOpen(false)}
+              className="h-12 w-12 items-center justify-center rounded-full bg-black/50 active:opacity-70">
+              <Ionicons name="close" size={26} color="#fff" />
+            </Pressable>
+            <Pressable
+              onPress={shoot}
+              disabled={shooting}
+              className="h-[72px] w-[72px] items-center justify-center rounded-full border-4 border-white active:opacity-70">
+              {shooting ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <View className="h-14 w-14 rounded-full bg-white" />
+              )}
+            </Pressable>
+            <View className="h-12 w-12" />
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

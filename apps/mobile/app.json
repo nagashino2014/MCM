@@ -3,7 +3,7 @@
     "name": "MCM",
     "slug": "mcm",
     "owner": "koensain",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "mcm",
@@ -53,6 +53,12 @@
         {
           "cameraPermission": "명함을 촬영하기 위해 카메라를 사용합니다.",
           "photosPermission": "명함 이미지를 선택하기 위해 사진에 접근합니다."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "명함을 촬영하기 위해 카메라를 사용합니다."
         }
       ]
     ],

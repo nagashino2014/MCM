@@ -37,6 +37,21 @@ type Step = 'pick' | 'parsing' | 'form' | 'saving' | 'done';
 
 const PRIMARY = '#5D87FF';
 
+// 라우트 크래시 캐처 — 점멸(마운트→크래시→리마운트 의심) 원인 표시용 진단
+export function ErrorBoundary({ error, retry }: { error: Error; retry: () => Promise<void> }) {
+  return (
+    <SafeAreaView className="flex-1 items-center justify-center bg-white px-6 dark:bg-neutral-950">
+      <Text className="mb-2 text-base font-bold text-red-600">[진단] 화면 크래시</Text>
+      <Text className="mb-4 text-center text-xs text-neutral-600 dark:text-neutral-300">
+        {error.name}: {error.message}
+      </Text>
+      <Pressable onPress={() => void retry()} className="rounded-xl bg-primary px-5 py-2.5">
+        <Text className="font-bold text-white">다시 시도</Text>
+      </Pressable>
+    </SafeAreaView>
+  );
+}
+
 export default function CardScreen() {
   const router = useRouter();
   const [step, setStep] = useState<Step>('pick');
@@ -61,8 +76,10 @@ export default function CardScreen() {
 
   const openCamera = async () => {
     setError(null);
+    setWarning(`[진단] perm granted=${camPerm?.granted} canAsk=${camPerm?.canAskAgain}`);
     if (!camPerm?.granted) {
       const r = await requestCamPerm();
+      setWarning(`[진단] perm 요청 결과 granted=${r.granted} canAsk=${r.canAskAgain}`);
       if (!r.granted) {
         setError('카메라 권한이 필요합니다. 설정에서 허용해주세요.');
         return;
@@ -332,7 +349,7 @@ export default function CardScreen() {
             <Text className="mt-1 text-center text-xs text-neutral-400">
               촬영한 명함은 AI가 자동으로 인식해 담당자 정보로 정리합니다.
             </Text>
-            <Text className="text-center text-[10px] text-neutral-300">v1.0.1-cam2</Text>
+            <Text className="text-center text-[10px] text-neutral-300">v1.0.1-cam3</Text>
           </View>
         ) : null}
 
@@ -500,7 +517,15 @@ export default function CardScreen() {
           → 같은 화면 안에서 absolute 전체 덮개로 렌더 */}
       {cameraOpen ? (
         <View className="absolute inset-0 z-50 bg-black">
-          <CameraView ref={cameraRef} style={{ flex: 1 }} facing="back" />
+          <CameraView
+            ref={cameraRef}
+            style={{ flex: 1 }}
+            facing="back"
+            onMountError={(e) => {
+              setCameraOpen(false);
+              setError(`[진단] 카메라 마운트 실패: ${e.message}`);
+            }}
+          />
           {/* 명함 가이드 문구 */}
           <View className="absolute left-0 right-0 top-16 items-center">
             <Text className="rounded-full bg-black/50 px-4 py-1.5 text-sm text-white">

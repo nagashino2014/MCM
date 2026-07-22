@@ -1,11 +1,9 @@
-import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
-
 /*
  * 휴가 종류 규정 카탈로그(086 leave_types) — 사규 [별표 5. 경조금 지급 규정] 기반.
  * ★규정이 바뀔 수 있으므로 코드 상수가 아니라 DB 로 관리하고 관리자가 화면에서 편집한다.
  * 연차/반차만 연차 대장에서 차감(deduct), 경조·출산·조의는 규정상 부여일수(days) 고정,
  * 공가·병가는 실사용 기간만큼(가변, 비차감). leave_type 필드가 이 카탈로그로 렌더된다.
- * 순수 조회/판정 함수(findInCatalog)는 클라이언트·서버가 공유한다.
+ * ⚠ 이 파일은 클라이언트 안전(타입·시드·순수 조회만) — DB 접근은 leave-types-store.ts(서버).
  */
 
 export interface LeaveTypeItem {
@@ -72,51 +70,3 @@ export function findInCatalog(catalog: LeaveTypeItem[], value: unknown): LeaveTy
   };
 }
 
-function mapRow(r: Record<string, unknown>): LeaveTypeItem {
-  return {
-    key: String(r.key ?? ""),
-    label: String(r.label ?? ""),
-    group: String(r.group_name ?? ""),
-    days: r.days != null ? Number(r.days) : null,
-    deduct: r.deduct === "full" || r.deduct === "half" ? r.deduct : null,
-    sortOrder: Number(r.sort_order ?? 0),
-    active: Number(r.active ?? 1) === 1,
-  };
-}
-
-/** 전체 카탈로그 조회(정렬순). activeOnly = 기안 화면용(비활성 제외). */
-export async function listLeaveTypes(activeOnly = false): Promise<LeaveTypeItem[]> {
-  const db = await getDb();
-  const rows = rowsToObjects(
-    await db.exec(`SELECT * FROM leave_types ${activeOnly ? "WHERE active = 1" : ""} ORDER BY sort_order, key`)
-  );
-  return rows.map(mapRow);
-}
-
-/** 카탈로그 전체 교체 저장(admin) — 받은 목록으로 upsert 후 빠진 key 삭제. */
-export async function saveLeaveTypes(items: LeaveTypeItem[], _actorUserId: string): Promise<number> {
-  const seen = new Set<string>();
-  const valid = items.filter((it) => {
-    const k = it.key.trim();
-    if (!k || !/^[a-z][a-z0-9_]*$/.test(k) || seen.has(k) || !it.label.trim() || !it.group.trim()) return false;
-    seen.add(k);
-    return true;
-  });
-  if (!valid.length) throw new Error("저장할 유효한 항목이 없습니다.");
-  const now = new Date().toISOString();
-  await withDbWrite(async (txn) => {
-    for (let i = 0; i < valid.length; i++) {
-      const it = valid[i];
-      await txn.run(
-        `INSERT INTO leave_types (key, label, group_name, days, deduct, sort_order, active, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
-         ON CONFLICT (key) DO UPDATE SET
-           label = EXCLUDED.label, group_name = EXCLUDED.group_name, days = EXCLUDED.days,
-           deduct = EXCLUDED.deduct, sort_order = EXCLUDED.sort_order, active = EXCLUDED.active, updated_at = EXCLUDED.updated_at`,
-        [it.key.trim(), it.label.trim(), it.group.trim(), it.days, it.deduct, i, it.active ? 1 : 0, now]
-      );
-    }
-    await txn.run(`DELETE FROM leave_types WHERE key <> ALL($1::text[])`, [valid.map((it) => it.key.trim())]);
-  });
-  return valid.length;
-}

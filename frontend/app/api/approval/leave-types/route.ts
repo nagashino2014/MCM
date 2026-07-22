@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
-import { listLeaveTypes, saveLeaveTypes, type LeaveTypeItem } from "@/lib/approval/leave-types";
+import type { LeaveTypeItem } from "@/lib/approval/leave-types";
+import { listLeaveTypes, saveLeaveTypes } from "@/lib/approval/leave-types-store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

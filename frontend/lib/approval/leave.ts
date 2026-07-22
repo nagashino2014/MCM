@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
-import { findInCatalog, listLeaveTypes } from "@/lib/approval/leave-types";
+import { findInCatalog } from "@/lib/approval/leave-types";
+import { listLeaveTypes } from "@/lib/approval/leave-types-store";
 
 /*
  * 연차 대장(084 annual_leave_ledger, §8-5) — 부여(grant)/사용(use)/조정(adjust) 엔트리 누적.

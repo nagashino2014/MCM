@@ -31,6 +31,7 @@ import type {
 } from "@/lib/ieps/facility-group";
 import type { FacilityOperatingRelationType } from "@/lib/ieps/facility-operating-entity";
 import { FacilityOrdersModal } from "@/components/facilities/FacilityOrdersModal";
+import KsicSearchModal from "@/components/facilities/KsicSearchModal";
 
 const GROUP_COMPANY_ROLE_LABELS: Record<FacilityGroupCompanyRole, string> = {
   group_representative: "그룹 대표기업",
@@ -2328,6 +2329,7 @@ function EditView({
   );
   // 표준산업분류(KSIC) 코드→업종명 자동완성용 맵 (편집 폼 진입 시 1회 로드)
   const [ksicMap, setKsicMap] = useState<Map<string, string> | null>(null);
+  const [ksicSearchOpen, setKsicSearchOpen] = useState(false);
   useEffect(() => {
     let cancelled = false;
     loadKsicMap()
@@ -2555,13 +2557,22 @@ function EditView({
           <span className="text-[11px] font-bold cd-text-faint uppercase tracking-wide">
             업종
           </span>
-          <button
-            type="button"
-            onClick={() => setIndustries((prev) => [...prev, { code: "", name: "", autoName: false }])}
-            className="cd-btn cd-btn-ghost rounded-lg px-2 py-1 text-[11px] font-bold cd-text-muted flex items-center gap-1"
-          >
-            <Plus className="w-3 h-3" /> 업종 추가
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setKsicSearchOpen(true)}
+              className="cd-btn cd-btn-ghost rounded-lg px-2 py-1 text-[11px] font-bold cd-text-muted flex items-center gap-1"
+            >
+              <Search className="w-3 h-3" /> 업종 검색
+            </button>
+            <button
+              type="button"
+              onClick={() => setIndustries((prev) => [...prev, { code: "", name: "", autoName: false }])}
+              className="cd-btn cd-btn-ghost rounded-lg px-2 py-1 text-[11px] font-bold cd-text-muted flex items-center gap-1"
+            >
+              <Plus className="w-3 h-3" /> 업종 추가
+            </button>
+          </div>
         </div>
         <div className="flex flex-col gap-2">
           {industries.map((industry, idx) => (
@@ -2614,6 +2625,23 @@ function EditView({
             </div>
           ))}
         </div>
+        {ksicSearchOpen && (
+          <KsicSearchModal
+            existingCodes={industries.map((i) => i.code.trim()).filter(Boolean)}
+            onAdd={(entry) =>
+              setIndustries((prev) => {
+                if (prev.some((i) => i.code.trim() === entry.code)) return prev;
+                const emptyIdx = prev.findIndex((i) => !i.code.trim() && !i.name.trim());
+                const row = { code: entry.code, name: entry.name, autoName: true };
+                if (emptyIdx >= 0) {
+                  return prev.map((item, idx) => (idx === emptyIdx ? row : item));
+                }
+                return [...prev, row];
+              })
+            }
+            onClose={() => setKsicSearchOpen(false)}
+          />
+        )}
       </div>
       <div className="sm:col-span-2 flex flex-col gap-2">
         <div className="flex items-center justify-between gap-2">

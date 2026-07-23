@@ -10,6 +10,8 @@ export interface KsicEntry {
 
 let cache: Map<string, string> | null = null;
 let inflight: Promise<Map<string, string>> | null = null;
+let listCache: KsicEntry[] | null = null;
+let listInflight: Promise<KsicEntry[]> | null = null;
 
 export async function loadKsicMap(): Promise<Map<string, string>> {
   if (cache) return cache;
@@ -34,6 +36,34 @@ export async function loadKsicMap(): Promise<Map<string, string>> {
       throw err;
     });
   return inflight;
+}
+
+/** KSIC-11 전체 목록(코드+업종명)을 최초 1회만 받아 캐시한다. 검색 모달용. */
+export async function loadKsicList(): Promise<KsicEntry[]> {
+  if (listCache) return listCache;
+  if (listInflight) return listInflight;
+  listInflight = fetch("/ksic11.json", { cache: "force-cache" })
+    .then((res) => {
+      if (!res.ok) throw new Error("KSIC 코드표를 불러오지 못했습니다.");
+      return res.json() as Promise<KsicEntry[]>;
+    })
+    .then((arr) => {
+      const list = (Array.isArray(arr) ? arr : [])
+        .map((item) => ({
+          code: String(item?.code ?? "").trim(),
+          name: String(item?.name ?? "").trim(),
+          name_eng: item?.name_eng ? String(item.name_eng).trim() : undefined,
+        }))
+        .filter((item) => item.code);
+      listCache = list;
+      listInflight = null;
+      return list;
+    })
+    .catch((err) => {
+      listInflight = null;
+      throw err;
+    });
+  return listInflight;
 }
 
 /** 코드 정규화(숫자만) 후 조회. 미일치 시 undefined. */

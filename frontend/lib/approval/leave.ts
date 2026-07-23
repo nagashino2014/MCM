@@ -2,15 +2,18 @@ import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
 import { findInCatalog } from "@/lib/approval/leave-types";
 import { listLeaveTypes } from "@/lib/approval/leave-types-store";
+import { computeAccrual, type AccrualBasis } from "@/lib/approval/leave-accrual";
 
 /*
- * 연차 대장(084 annual_leave_ledger, §8-5) — 부여(grant)/사용(use)/조정(adjust) 엔트리 누적.
- * 휴가신청(frm-leave-request) 최종 승인 시 자동으로 use 엔트리를 적재한다(연차·반차만,
- * 경조/공가/병가 등은 규정상 부여휴가라 비차감). 차감 판정은 LEAVE_ENTITLEMENTS 카탈로그의
- * deduct(full/half) 기준(fields.ts). 초기 잔여는 사용자 자료 임포트(grant/adjust)로 맞춘다.
+ * 직원별 휴가 관리(087) — 연차 대장을 날짜별 이력 기반으로 관리(LM-P3).
+ * 사용(use) 엔트리는 "날짜 1건 = 1행"(used_on·leave_type_key). 연차·반차뿐 아니라
+ * 연차 외 휴가(경조·공가·병가)도 use 로 기록하되, 잔여 차감은 leave_types.deduct 로 판정한다
+ * (비차감 항목은 현황 표시·집계용). 부여(grant)/조정(adjust)은 used_on NULL.
+ * 잔여 = Σ(grant+adjust) − Σ(use where 차감). 규정 발생연차는 computeAccrual 참고 표시.
  */
 
 const LEAVE_FORM_ID = "frm-leave-request";
+const id = () => "alv-" + crypto.randomUUID().replace(/-/g, "").slice(0, 14);
 
 export interface LeaveEntry {
   entryId: string;
@@ -18,9 +21,12 @@ export interface LeaveEntry {
   year: string;
   entryType: string; // grant|use|adjust
   days: number;
+  usedOn: string | null; // YYYY-MM-DD (use)
+  leaveTypeKey: string | null;
+  leaveLabel: string | null; // 카탈로그 라벨(표시용)
+  deduct: "full" | "half" | null;
   docId: string | null;
   note: string | null;
-  createdBy: string | null;
   createdAt: string;
 }
 
@@ -29,26 +35,50 @@ export interface LeaveSummaryRow {
   name: string;
   deptName: string | null;
   positionName: string | null;
-  granted: number; // grant + adjust 합
-  used: number; // use 합
+  hiredAt: string | null;
+  photoPath: string | null;
+  granted: number; // grant + adjust
+  usedAnnual: number; // 연차 차감분(연차·반차)
   remaining: number;
+  otherUsed: number; // 연차 외 휴가 사용일수(현황)
+  accrual: number | null; // 규정상 발생연차(참고)
 }
 
+export interface LeaveSettings {
+  accrualBasis: AccrualBasis;
+}
+
+/* ---------- 설정 ---------- */
+export async function getLeaveSettings(): Promise<LeaveSettings> {
+  const db = await getDb();
+  const rows = rowsToObjects(await db.exec(`SELECT accrual_basis FROM leave_settings WHERE id = 'default'`));
+  const basis = rows.length && rows[0].accrual_basis === "hire_date" ? "hire_date" : "jan1";
+  return { accrualBasis: basis as AccrualBasis };
+}
+
+export async function saveLeaveSettings(basis: AccrualBasis): Promise<void> {
+  const now = new Date().toISOString();
+  await withDbWrite(async (txn) => {
+    await txn.run(
+      `INSERT INTO leave_settings (id, accrual_basis, updated_at) VALUES ('default', $1, $2)
+       ON CONFLICT (id) DO UPDATE SET accrual_basis = EXCLUDED.accrual_basis, updated_at = EXCLUDED.updated_at`,
+      [basis === "hire_date" ? "hire_date" : "jan1", now]
+    );
+  });
+}
+
+/* ---------- 승인 훅 ---------- */
 /**
- * 휴가신청 최종 승인 훅 — actOnDoc 트랜잭션 내부에서 호출한다.
- * 연차/반차만 차감하며, 같은 문서로 이미 적재됐으면 건너뛴다(재상신·중복 방지).
+ * 휴가신청 최종 승인 시 use 엔트리 적재(actOnDoc 트랜잭션 내부). 연차 외 휴가도 기록하며
+ * 잔여 차감은 카탈로그 deduct 로 판정한다. 같은 문서로 이미 적재됐으면 건너뛴다.
  */
 export async function recordLeaveUsageOnApproval(txn: PgDatabase, docId: string): Promise<void> {
   const rows = rowsToObjects(
-    await txn.exec(
-      `SELECT d.form_id, d.drafter_employee_id, d.doc_no, d.field_values
-         FROM approval_docs d WHERE d.doc_id = $1`,
-      [docId]
-    )
+    await txn.exec(`SELECT d.form_id, d.drafter_employee_id, d.doc_no, d.field_values FROM approval_docs d WHERE d.doc_id = $1`, [docId])
   );
   if (!rows.length || String(rows[0].form_id) !== LEAVE_FORM_ID) return;
   const employeeId = rows[0].drafter_employee_id != null ? String(rows[0].drafter_employee_id) : null;
-  if (!employeeId) return; // 직원 미연결 계정 — 대장 반영 불가(문서 자체는 유지)
+  if (!employeeId) return;
 
   let values: Record<string, unknown> = {};
   try {
@@ -59,83 +89,83 @@ export async function recordLeaveUsageOnApproval(txn: PgDatabase, docId: string)
   }
   const catalog = await listLeaveTypes();
   const item = findInCatalog(catalog, values.leave_type);
-  const isFull = item?.deduct === "full";
-  const isHalf = item?.deduct === "half";
-  if (!isFull && !isHalf) return; // 비차감 휴가(경조·공가·병가 등)
+  if (!item) return;
 
-  const dup = rowsToObjects(
-    await txn.exec(`SELECT 1 FROM annual_leave_ledger WHERE doc_id = $1 AND entry_type = 'use'`, [docId])
-  );
+  const dup = rowsToObjects(await txn.exec(`SELECT 1 FROM annual_leave_ledger WHERE doc_id = $1 AND entry_type = 'use'`, [docId]));
   if (dup.length) return;
 
   const period = (values.leave_period ?? {}) as { from?: string; to?: string };
   const from = String(period.from ?? "");
   const to = String(period.to ?? from);
-  // 사용 일수: 반차 0.5 고정, 연차는 use_days 입력값 우선 — 없으면 기간 일수(주말 미제외 단순 계산)
   let days: number;
-  if (isHalf) {
-    days = 0.5;
-  } else {
+  if (item.deduct === "half") days = 0.5;
+  else {
     const manual = Number(String(values.use_days ?? "").replace(/[^\d.]/g, ""));
     if (manual > 0) days = manual;
+    else if (item.days != null) days = item.days;
     else if (from && to) days = Math.max(1, Math.round((new Date(to).getTime() - new Date(from).getTime()) / 86400000) + 1);
     else days = 1;
   }
   const year = (from || new Date().toISOString()).slice(0, 4);
   await txn.run(
-    `INSERT INTO annual_leave_ledger (entry_id, employee_id, year, entry_type, days, doc_id, note, created_by, created_at)
-     VALUES ($1, $2, $3, 'use', $4, $5, $6, NULL, $7)`,
-    [
-      "alv-" + crypto.randomUUID().replace(/-/g, "").slice(0, 14),
-      employeeId,
-      year,
-      days,
-      docId,
-      `${item?.label ?? ""} ${from}${to && to !== from ? `~${to}` : ""}${rows[0].doc_no ? ` (${rows[0].doc_no})` : ""}`,
-      new Date().toISOString(),
-    ]
+    `INSERT INTO annual_leave_ledger (entry_id, employee_id, year, entry_type, days, used_on, leave_type_key, doc_id, note, created_by, created_at)
+     VALUES ($1, $2, $3, 'use', $4, $5, $6, $7, $8, NULL, $9)`,
+    [id(), employeeId, year, days, from || null, item.key, docId, `${item.label} ${from}${to && to !== from ? `~${to}` : ""}${rows[0].doc_no ? ` (${rows[0].doc_no})` : ""}`, new Date().toISOString()]
   );
 }
 
-/** 연도별 직원 집계 — 재직자 전체(대장 엔트리 없는 직원도 0으로 표시). */
+/* ---------- 집계 ---------- */
+/** 연도별 직원 집계 — 재직자 전체. 연차 차감/연차 외/규정 발생연차·사진 포함. */
 export async function listLeaveSummary(year: string): Promise<LeaveSummaryRow[]> {
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT e.employee_id, e.name, d.dept_name, p.position_name,
+      `SELECT e.employee_id, e.name, e.hired_at, e.photo_public_path, d.dept_name, p.position_name,
               COALESCE(SUM(CASE WHEN l.entry_type IN ('grant','adjust') THEN l.days END), 0) AS granted,
-              COALESCE(SUM(CASE WHEN l.entry_type = 'use' THEN l.days END), 0) AS used
+              COALESCE(SUM(CASE WHEN l.entry_type = 'use' AND (lt.deduct IS NOT NULL OR l.leave_type_key IS NULL) THEN l.days END), 0) AS used_annual,
+              COALESCE(SUM(CASE WHEN l.entry_type = 'use' AND l.leave_type_key IS NOT NULL AND lt.deduct IS NULL THEN l.days END), 0) AS used_other
          FROM employee_profiles e
          LEFT JOIN departments d ON d.dept_id = e.dept_id
          LEFT JOIN positions p ON p.position_id = e.position_id
          LEFT JOIN annual_leave_ledger l ON l.employee_id = e.employee_id AND l.year = $1
+         LEFT JOIN leave_types lt ON lt.key = l.leave_type_key
         WHERE e.status = 'active'
-        GROUP BY e.employee_id, e.name, d.dept_name, p.position_name, p.rank_order, e.hired_at
+        GROUP BY e.employee_id, e.name, e.hired_at, e.photo_public_path, d.dept_name, p.position_name, p.rank_order
         ORDER BY p.rank_order DESC NULLS LAST, e.hired_at ASC NULLS LAST, e.name`,
       [year]
     )
   );
+  const { accrualBasis } = await getLeaveSettings();
   return rows.map((r) => {
     const granted = Number(r.granted ?? 0);
-    const used = Number(r.used ?? 0);
+    const usedAnnual = Number(r.used_annual ?? 0);
+    const hiredAt = r.hired_at != null ? String(r.hired_at) : null;
     return {
       employeeId: String(r.employee_id ?? ""),
       name: String(r.name ?? ""),
       deptName: r.dept_name != null ? String(r.dept_name) : null,
       positionName: r.position_name != null ? String(r.position_name) : null,
+      hiredAt,
+      photoPath: r.photo_public_path != null ? String(r.photo_public_path) : null,
       granted,
-      used,
-      remaining: Math.round((granted - used) * 100) / 100,
+      usedAnnual,
+      remaining: Math.round((granted - usedAnnual) * 100) / 100,
+      otherUsed: Number(r.used_other ?? 0),
+      accrual: computeAccrual(hiredAt, year, accrualBasis),
     };
   });
 }
 
-/** 직원별 엔트리 내역(연도) */
+/** 직원별 엔트리 내역(연도) — 사용일·휴가 종류 라벨 포함, 사용일 순 정렬. */
 export async function listLeaveEntries(employeeId: string, year: string): Promise<LeaveEntry[]> {
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT * FROM annual_leave_ledger WHERE employee_id = $1 AND year = $2 ORDER BY created_at`,
+      `SELECT l.*, lt.label AS type_label, lt.deduct AS type_deduct
+         FROM annual_leave_ledger l
+         LEFT JOIN leave_types lt ON lt.key = l.leave_type_key
+        WHERE l.employee_id = $1 AND l.year = $2
+        ORDER BY (l.entry_type = 'use') DESC, l.used_on NULLS FIRST, l.created_at`,
       [employeeId, year]
     )
   );
@@ -145,14 +175,50 @@ export async function listLeaveEntries(employeeId: string, year: string): Promis
     year: String(r.year ?? ""),
     entryType: String(r.entry_type ?? ""),
     days: Number(r.days ?? 0),
+    usedOn: r.used_on != null ? String(r.used_on) : null,
+    leaveTypeKey: r.leave_type_key != null ? String(r.leave_type_key) : null,
+    leaveLabel: r.type_label != null ? String(r.type_label) : r.leave_type_key != null ? String(r.leave_type_key) : null,
+    deduct: r.type_deduct === "full" || r.type_deduct === "half" ? r.type_deduct : null,
     docId: r.doc_id != null ? String(r.doc_id) : null,
     note: r.note != null ? String(r.note) : null,
-    createdBy: r.created_by != null ? String(r.created_by) : null,
     createdAt: String(r.created_at ?? ""),
   }));
 }
 
-/** 부여/조정 엔트리 추가(admin) — days 는 grant 양수, adjust 는 ± 허용. */
+/* ---------- 이력 CRUD ---------- */
+/** 사용(use) 엔트리 추가/수정(admin) — 날짜별 이력. entryId 있으면 수정. */
+export async function upsertUsageEntry(params: {
+  entryId: string | null;
+  employeeId: string;
+  usedOn: string; // YYYY-MM-DD
+  leaveTypeKey: string;
+  days: number;
+  note?: string | null;
+  actorUserId: string;
+}): Promise<void> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(params.usedOn)) throw new Error("사용일(YYYY-MM-DD)이 올바르지 않습니다.");
+  if (!params.leaveTypeKey.trim()) throw new Error("휴가 종류가 필요합니다.");
+  if (!isFinite(params.days) || params.days <= 0) throw new Error("일수가 올바르지 않습니다.");
+  const year = params.usedOn.slice(0, 4);
+  const now = new Date().toISOString();
+  await withDbWrite(async (txn) => {
+    if (params.entryId) {
+      await txn.run(
+        `UPDATE annual_leave_ledger SET used_on = $2, leave_type_key = $3, days = $4, year = $5, note = $6
+          WHERE entry_id = $1 AND entry_type = 'use'`,
+        [params.entryId, params.usedOn, params.leaveTypeKey, params.days, year, params.note ?? null]
+      );
+    } else {
+      await txn.run(
+        `INSERT INTO annual_leave_ledger (entry_id, employee_id, year, entry_type, days, used_on, leave_type_key, doc_id, note, created_by, created_at)
+         VALUES ($1, $2, $3, 'use', $4, $5, $6, NULL, $7, $8, $9)`,
+        [id(), params.employeeId, year, params.days, params.usedOn, params.leaveTypeKey, params.note ?? null, params.actorUserId, now]
+      );
+    }
+  });
+}
+
+/** 부여/조정 엔트리 추가(admin) — grant 양수, adjust ± 허용. */
 export async function addLeaveEntries(params: {
   entries: { employeeId: string; year: string; entryType: "grant" | "adjust"; days: number; note?: string | null }[];
   actorUserId: string;
@@ -167,29 +233,30 @@ export async function addLeaveEntries(params: {
       await txn.run(
         `INSERT INTO annual_leave_ledger (entry_id, employee_id, year, entry_type, days, doc_id, note, created_by, created_at)
          VALUES ($1, $2, $3, $4, $5, NULL, $6, $7, $8)`,
-        ["alv-" + crypto.randomUUID().replace(/-/g, "").slice(0, 14), e.employeeId, e.year, e.entryType, e.days, e.note ?? null, params.actorUserId, now]
+        [id(), e.employeeId, e.year, e.entryType, e.days, e.note ?? null, params.actorUserId, now]
       );
     }
   });
   return valid.length;
 }
 
-/** 엔트리 삭제(admin — 잘못 입력 정정용, 자동 use 엔트리도 삭제 가능하되 감사로그 필수) */
+/** 엔트리 삭제(admin) */
 export async function deleteLeaveEntry(entryId: string): Promise<void> {
   await withDbWrite(async (txn) => {
     await txn.run(`DELETE FROM annual_leave_ledger WHERE entry_id = $1`, [entryId]);
   });
 }
 
-/** 본인 잔여 연차(기안 화면 배지용) — userId 기준. */
+/** 본인 잔여 연차(기안 화면 배지용) — 차감분만 used. */
 export async function getMyLeaveRemaining(userId: string, year: string): Promise<{ granted: number; used: number; remaining: number } | null> {
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
       `SELECT COALESCE(SUM(CASE WHEN l.entry_type IN ('grant','adjust') THEN l.days END), 0) AS granted,
-              COALESCE(SUM(CASE WHEN l.entry_type = 'use' THEN l.days END), 0) AS used
+              COALESCE(SUM(CASE WHEN l.entry_type = 'use' AND (lt.deduct IS NOT NULL OR l.leave_type_key IS NULL) THEN l.days END), 0) AS used
          FROM users u
          JOIN annual_leave_ledger l ON l.employee_id = u.employee_id AND l.year = $2
+         LEFT JOIN leave_types lt ON lt.key = l.leave_type_key
         WHERE u.user_id = $1`,
       [userId, year]
     )

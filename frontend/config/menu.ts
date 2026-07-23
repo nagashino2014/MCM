@@ -45,7 +45,7 @@ export const MENU_ITEMS: MenuItem[] = [
       { title: "기안 작성", href: "/approval/draft" },
       { title: "문서함", href: "/approval/archive" },
       { title: "양식별 문서 조회", href: "/approval/records" },
-      { title: "연차 대장", href: "/approval/leave" },
+      { title: "직원별 휴가 관리", href: "/approval/leave" },
       { title: "휴가 종류 규정", href: "/approval/leave-types" },
       { title: "양식 관리", href: "/approval/forms" },
     ],

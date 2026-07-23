@@ -51,12 +51,17 @@
 - 수신 문서함 = leave_notices 를 수신자(employee_id) 기준 조회(별도 테이블 불필요).
 
 ## 4. 구현 단계 (안)
-- **LP-P1**: LM-P5 아바타 통일 + 직원별 휴가 관리 버튼 교체 + 연차촉진제도 관리 화면
-  (리스트·소진율 열·1/2차 고지 열·KPI 4종·양식/발송 버튼 골격, 발송 로직 전).
-- **LP-P2**: 088 스키마 + 양식 템플릿 마이그레이션(1·2차) + 양식 관리(웹 편집) 화면.
-- **LP-P3**: 1차 발송(7/1 게이팅·일괄 생성) + 수신 문서함(홈) + 회신(사용계획·전자서명).
-- **LP-P4**: 2차 고지(미제출 모달·회사 지정일·잔여 0 검증·발송).
-- **LP-P5**: 알림 연동(수신 문서함 배지, 모바일 앱은 추후).
+- **LP-P1 (완료)**: LM-P5 아바타 통일 + 직원별 휴가 관리 버튼 교체 + 088 스키마 +
+  연차촉진제도 관리 화면(리스트·소진율 열·1/2차 고지 열·KPI 4종·양식/발송 버튼 골격).
+- **LP-P2 (완료)**: 양식 관리(웹 문구 편집·치환 토큰·미리보기) + 1차 발송(7/1~7/20 게이팅·
+  잔여>0 미발송 전원 일괄 생성) + 홈 수신 문서함 위젯 + 회신(사용예정일 다건·클릭 전자서명).
+  - lib: `leave-promotion-tokens.ts`(순수 치환), `leave-promotion.ts` 확장(템플릿 CRUD·
+    sendFirstNotices·listMyNotices·submitNoticePlan). API: `leave-promotion/templates`(GET/PUT)·
+    `leave-promotion/send`(POST)·`home/leave-notices`(GET)·`leave-notices/[id]/submit`(POST).
+  - UI: `LeavePromotionBoard` 버튼 활성화 + `TemplateEditor` 오버레이,
+    `LeaveNoticeInboxCard`(홈, 수신 고지 없으면 위젯 숨김).
+- **LP-P3**: 2차 고지(미제출 모달·회사 지정일·잔여 0 검증·발송).
+- **LP-P4**: 알림 연동(수신 문서함 배지, 모바일 앱은 추후).
 
 ## 5. 확정 결정 (2026-07-23)
 1. **수신 문서함 = 메인 홈(/home)** 위젯 신설.

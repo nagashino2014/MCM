@@ -6,12 +6,20 @@
 // 설계: docs/leave-promotion-blueprint.md.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BellRing, FileCog, Gauge, MailCheck, Send, TrendingDown } from "lucide-react";
+import { BellRing, FileCog, Gauge, MailCheck, Plus, Send, TrendingDown, Trash2, X } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { EmployeeAvatar } from "@/components/ui/EmployeeAvatar";
+import { NOTICE_TOKENS, SAMPLE_TOKEN_VARS, fillNoticeBody } from "@/lib/approval/leave-promotion-tokens";
 import type { LucideIcon } from "lucide-react";
 import "@/components/cdash/cdash.css";
+
+interface NoticeTemplate {
+  round: number;
+  title: string;
+  body: string[];
+  updatedAt: string;
+}
 
 interface PromotionRow {
   employeeId: string;
@@ -43,6 +51,8 @@ export function LeavePromotionBoard() {
   const [rows, setRows] = useState<PromotionRow[]>([]);
   const [gate, setGate] = useState<Gate | null>(null);
   const [loading, setLoading] = useState(true);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [sending, setSending] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -60,6 +70,34 @@ export function LeavePromotionBoard() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const sendTargets = useMemo(() => rows.filter((r) => r.remaining > 0 && !r.round1).length, [rows]);
+
+  const sendFirst = async () => {
+    if (!gate?.canFirst) return;
+    if (sendTargets === 0) {
+      alert("발송 대상(잔여 연차>0·1차 미발송)이 없습니다.");
+      return;
+    }
+    if (!confirm(`잔여 연차가 있는 미발송 직원 ${sendTargets}명에게 1차 연차 사용 촉구 고지를 발송합니다.\n계속할까요?`)) return;
+    setSending(true);
+    try {
+      const res = await fetch(`/api/approval/leave-promotion/send`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ year, round: 1 }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        alert(`1차 고지 ${data.created ?? 0}건을 발송했습니다.`);
+        load();
+      } else {
+        alert(data.error ?? "발송에 실패했습니다.");
+      }
+    } finally {
+      setSending(false);
+    }
+  };
 
   const kpi = useMemo(() => {
     if (!rows.length) return null;
@@ -103,16 +141,28 @@ export function LeavePromotionBoard() {
         subtitle="근로기준법 연차사용촉진 — 잔여 연차가 있는 직원에게 1·2차 사용 촉구 고지를 발송하고 회신을 관리합니다."
         actions={
           <div className="flex items-center gap-2">
-            <button type="button" className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs flex items-center gap-1.5" title="연차 고지 양식(문구) 관리 — LP-P2" disabled>
+            <button
+              type="button"
+              className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs flex items-center gap-1.5"
+              title="연차 고지 문구(1·2차) 편집"
+              onClick={() => setEditorOpen(true)}
+            >
               <FileCog className="w-3.5 h-3.5" /> 연차 고지 양식 관리
             </button>
             <button
               type="button"
               className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
-              title={gate?.phase === "second" ? "2차 고지 발송 — LP-P3" : "1차 고지 발송 — LP-P2"}
-              disabled
+              title={
+                gate?.phase === "second"
+                  ? "2차 고지는 다음 단계(LP-P3)에서 발송합니다."
+                  : gate?.canFirst
+                    ? `1차 고지 발송 (대상 ${sendTargets}명)`
+                    : "1차 고지는 7/1~7/20에만 발송할 수 있습니다."
+              }
+              disabled={!gate?.canFirst || sending}
+              onClick={sendFirst}
             >
-              <Send className="w-3.5 h-3.5" /> 연차 고지 발송
+              <Send className="w-3.5 h-3.5" /> {sending ? "발송 중…" : "연차 고지 발송"}
             </button>
           </div>
         }
@@ -189,8 +239,182 @@ export function LeavePromotionBoard() {
           </div>
         )}
         <p className="text-[10.5px] cd-text-faint">
-          잔여 연차가 있는 직원이 고지 대상입니다. 발송·양식 편집 기능은 후속 단계에서 활성화됩니다. 1차 제출 시 2차는 표시되지 않습니다.
+          잔여 연차가 있는 직원이 고지 대상입니다. 1차 발송분은 직원 홈의 수신 문서함에 도착하며, 사용예정일 회신 시 &lsquo;제출&rsquo;로 표시됩니다. 2차 고지 발송은 다음 단계에서 활성화됩니다.
         </p>
+      </div>
+
+      {editorOpen && <TemplateEditor onClose={() => setEditorOpen(false)} />}
+    </div>
+  );
+}
+
+/** 연차 고지 문구(1·2차) 웹 편집 — title + 문단 배열. 치환 토큰 팔레트 + 실시간 미리보기. */
+function TemplateEditor({ onClose }: { onClose: () => void }) {
+  const [templates, setTemplates] = useState<NoticeTemplate[]>([]);
+  const [round, setRound] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/approval/leave-promotion/templates`, { cache: "no-store" });
+        const data = await res.json();
+        if (res.ok) setTemplates(data.templates ?? []);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const cur = templates.find((t) => t.round === round);
+  const setCur = (patch: Partial<NoticeTemplate>) =>
+    setTemplates((ts) => ts.map((t) => (t.round === round ? { ...t, ...patch } : t)));
+
+  const setPara = (i: number, val: string) => cur && setCur({ body: cur.body.map((p, j) => (j === i ? val : p)) });
+  const addPara = () => cur && setCur({ body: [...cur.body, ""] });
+  const delPara = (i: number) => cur && setCur({ body: cur.body.filter((_, j) => j !== i) });
+
+  const insertToken = (i: number, token: string) => {
+    if (!cur) return;
+    setPara(i, (cur.body[i] ?? "") + token);
+  };
+
+  const save = async () => {
+    if (!cur) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/approval/leave-promotion/templates`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ round: cur.round, title: cur.title, body: cur.body }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        alert(`${round}차 고지 문구를 저장했습니다.`);
+      } else {
+        alert(data.error ?? "저장에 실패했습니다.");
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const preview = cur ? fillNoticeBody(cur.body, SAMPLE_TOKEN_VARS) : [];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.45)" }}>
+      <div className="cd-card rounded-3xl w-full max-w-3xl max-h-[88vh] flex flex-col overflow-hidden">
+        <div className="flex items-center gap-2 px-5 py-4 border-b cd-border-c">
+          <FileCog className="w-4 h-4 cd-text-primary" />
+          <h3 className="text-sm font-bold cd-text">연차 고지 양식 관리</h3>
+          <div className="ml-auto flex items-center gap-1 rounded-lg border cd-border-c p-0.5">
+            {[1, 2].map((r) => (
+              <button
+                key={r}
+                type="button"
+                className={`px-3 py-1 text-xs font-semibold rounded-md ${round === r ? "cd-fill-primary text-white" : "cd-text-faint"}`}
+                onClick={() => setRound(r)}
+              >
+                {r}차
+              </button>
+            ))}
+          </div>
+          <button type="button" className="cd-text-faint hover:cd-text ml-1" onClick={onClose} title="닫기">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {loading || !cur ? (
+          <p className="p-6 text-sm cd-text-faint">불러오는 중입니다.</p>
+        ) : (
+          <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4">
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] font-bold cd-text-faint">제목</span>
+              <input className="cd-input" value={cur.title} onChange={(e) => setCur({ title: e.target.value })} />
+            </label>
+
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[11px] font-bold cd-text-faint mr-1">치환 토큰</span>
+              {NOTICE_TOKENS.map((t) => (
+                <span key={t.token} className="inline-flex items-center gap-1 rounded-md border cd-border-c px-2 py-0.5 text-[10.5px] cd-text-faint">
+                  <code className="cd-text-primary">{t.token}</code>
+                  {t.label}
+                </span>
+              ))}
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <span className="text-[11px] font-bold cd-text-faint">본문 문단</span>
+              {cur.body.map((p, i) => (
+                <div key={i} className="rounded-xl border cd-border-c p-2.5 flex flex-col gap-1.5">
+                  <textarea
+                    className="cd-input w-full text-[13px] leading-relaxed resize-y"
+                    rows={2}
+                    value={p}
+                    onChange={(e) => setPara(i, e.target.value)}
+                  />
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {NOTICE_TOKENS.map((t) => (
+                      <button
+                        key={t.token}
+                        type="button"
+                        className="text-[10px] rounded border cd-border-c px-1.5 py-0.5 cd-text-faint hover:cd-text"
+                        onClick={() => insertToken(i, t.token)}
+                        title={`${t.label} 삽입`}
+                      >
+                        {t.token}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      className="ml-auto cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]"
+                      onClick={() => delPara(i)}
+                      title="문단 삭제"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+              <button
+                type="button"
+                className="cd-btn rounded-lg border cd-border-c px-3 py-1.5 text-xs font-semibold self-start flex items-center gap-1"
+                onClick={addPara}
+              >
+                <Plus className="w-3.5 h-3.5" /> 문단 추가
+              </button>
+            </div>
+
+            <div className="rounded-xl cd-tint-primary p-3">
+              <div className="text-[11px] font-bold cd-text-primary mb-1.5">미리보기 (샘플 값)</div>
+              <div className="text-[13px] font-bold cd-text mb-1.5">{cur.title}</div>
+              <div className="flex flex-col gap-1.5">
+                {preview.map((p, i) => (
+                  <p key={i} className="text-[12.5px] leading-relaxed cd-text">
+                    {p}
+                  </p>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center gap-2 px-5 py-3 border-t cd-border-c">
+          <span className="text-[10.5px] cd-text-faint">표·구조는 고정이며 문구(제목·문단)만 편집됩니다.</span>
+          <button type="button" className="cd-btn cd-btn-ghost text-xs px-3 py-2 ml-auto" onClick={onClose}>
+            닫기
+          </button>
+          <button
+            type="button"
+            className="cd-btn cd-btn-primary rounded-lg px-4 py-2 text-xs font-semibold disabled:opacity-50"
+            onClick={save}
+            disabled={saving || loading}
+          >
+            {saving ? "저장 중…" : `${round}차 문구 저장`}
+          </button>
+        </div>
       </div>
     </div>
   );

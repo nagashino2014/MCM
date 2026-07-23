@@ -68,6 +68,9 @@ export type AuditAction =
   | "approval_doc_submit"
   | "approval_doc_act"
   | "approval_leave_update"
+  | "approval_leave_notice_template"
+  | "approval_leave_notice_send"
+  | "approval_leave_notice_submit"
   | "alert.ack";
 
 export interface AuditEntry {

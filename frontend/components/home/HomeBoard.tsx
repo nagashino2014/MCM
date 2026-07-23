@@ -12,6 +12,7 @@ import { UpcomingBidsCard } from "./widgets/UpcomingBidsCard";
 import { WorkPlanTodoCard } from "./widgets/WorkPlanTodoCard";
 import { InvoiceRequestCard } from "./widgets/InvoiceRequestCard";
 import { InvoiceInboxCard } from "./widgets/InvoiceInboxCard";
+import { LeaveNoticeInboxCard } from "./widgets/LeaveNoticeInboxCard";
 import { QuickFacilitiesCard } from "./widgets/QuickFacilitiesCard";
 import { BillingSummaryCard } from "./widgets/BillingSummaryCard";
 import { IntelHighlightsCard } from "./widgets/IntelHighlightsCard";
@@ -38,6 +39,7 @@ export function HomeBoard({ role }: { role?: string }) {
       />
 
       <div className="columns-1 lg:columns-2 xl:columns-3 gap-4 [&>*]:mb-4 [&>*]:break-inside-avoid">
+        <LeaveNoticeInboxCard />
         <TodayScheduleCard />
         <PendingProgressCard theme={theme} />
         <UpcomingBidsCard />

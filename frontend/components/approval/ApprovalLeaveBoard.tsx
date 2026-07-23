@@ -22,6 +22,8 @@ import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { EmployeeAvatar } from "@/components/ui/EmployeeAvatar";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
+import { LeaveCharts } from "@/components/approval/LeaveCharts";
+import type { CdTheme } from "@/components/contracts/dashboard/types";
 import type { LeaveTypeItem } from "@/lib/approval/leave-types";
 import type { AccrualBasis } from "@/lib/approval/leave-accrual";
 import "@/components/cdash/cdash.css";
@@ -221,6 +223,9 @@ export function ApprovalLeaveBoard() {
           })}
         </section>
       )}
+
+      {/* 인포그래픽 (LM-P4) */}
+      {!loading && rows.length > 0 && <LeaveCharts year={year} theme={theme as CdTheme} />}
 
       <div className="cd-card rounded-3xl p-5 flex flex-col gap-4">
         <div className="flex items-center gap-2 flex-wrap">

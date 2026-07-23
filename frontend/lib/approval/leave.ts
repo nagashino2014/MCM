@@ -192,6 +192,57 @@ export async function listLeaveEntries(employeeId: string, year: string): Promis
   });
 }
 
+/* ---------- 차트 집계(LM-P4) ---------- */
+export interface LeaveCharts {
+  year: string;
+  monthlyUsed: number[]; // 1~12월 연차 사용일수(전사 합계)
+  monthlyRate: number[]; // 1~12월 누적 소진율(%) = 누적 사용 ÷ 총 부여
+  yearlyOther: { year: string; days: number }[]; // 연도별 연차 외 휴가 사용일수
+}
+
+/** 전사 휴가 차트 데이터 — 월별 연차 사용·월별 소진율·연도별 연차 외. */
+export async function getLeaveCharts(year: string): Promise<LeaveCharts> {
+  const db = await getDb();
+  // 월별 연차 사용(차감분)
+  const mu = rowsToObjects(
+    await db.exec(
+      `SELECT substr(l.used_on, 6, 2) AS mm, COALESCE(SUM(l.days), 0) AS d
+         FROM annual_leave_ledger l LEFT JOIN leave_types lt ON lt.key = l.leave_type_key
+        WHERE l.year = $1 AND l.entry_type = 'use' AND l.used_on IS NOT NULL
+          AND (lt.deduct IS NOT NULL OR l.leave_type_key IS NULL)
+        GROUP BY mm`,
+      [year]
+    )
+  );
+  const monthlyUsed = Array(12).fill(0) as number[];
+  for (const r of mu) {
+    const m = Number(r.mm);
+    if (m >= 1 && m <= 12) monthlyUsed[m - 1] = Number(r.d ?? 0);
+  }
+  // 총 부여(소진율 분모)
+  const g = rowsToObjects(
+    await db.exec(`SELECT COALESCE(SUM(days), 0) AS g FROM annual_leave_ledger WHERE year = $1 AND entry_type IN ('grant','adjust')`, [year])
+  );
+  const totalGrant = Number(g[0]?.g ?? 0);
+  const monthlyRate: number[] = [];
+  let cum = 0;
+  for (let i = 0; i < 12; i++) {
+    cum += monthlyUsed[i];
+    monthlyRate.push(totalGrant > 0 ? Math.round((cum / totalGrant) * 1000) / 10 : 0);
+  }
+  // 연도별 연차 외 휴가
+  const yo = rowsToObjects(
+    await db.exec(
+      `SELECT l.year AS y, COALESCE(SUM(l.days), 0) AS d
+         FROM annual_leave_ledger l JOIN leave_types lt ON lt.key = l.leave_type_key
+        WHERE l.entry_type = 'use' AND l.leave_type_key IS NOT NULL AND lt.deduct IS NULL
+        GROUP BY l.year ORDER BY l.year`,
+      []
+    )
+  );
+  return { year, monthlyUsed, monthlyRate, yearlyOther: yo.map((r) => ({ year: String(r.y ?? ""), days: Number(r.d ?? 0) })) };
+}
+
 /* ---------- 이력 CRUD ---------- */
 /** 사용(use) 엔트리 추가/수정(admin) — 날짜별 이력. entryId 있으면 수정. */
 export async function upsertUsageEntry(params: {

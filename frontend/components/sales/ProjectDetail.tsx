@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft, Building2, CheckCircle2, Plus, Trash2, UserPlus, UserRound, Users, X,
+  ArrowLeft, Building2, CheckCircle2, Plus, Trash2, UserPlus, Users, X,
 } from "lucide-react";
+import { EmployeeAvatar } from "@/components/ui/EmployeeAvatar";
 import { useSession } from "next-auth/react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { SalesCalendar } from "./SalesCalendar";
@@ -245,7 +246,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
                   .map((m) => (
                     <div key={m.id} className="flex items-center gap-2">
                       <span className={`cd-pill ${MEMBER_ROLE_PILL[m.roleLabel] ?? "cd-pill-idle"} shrink-0`} style={{ minWidth: 40, justifyContent: "center" }}>{m.roleLabel}</span>
-                      <Avatar src={m.photoPath} size={28} />
+                      <EmployeeAvatar photoPath={m.photoPath} size={28} />
                       <span className="cd-text text-sm">{m.employeeName ?? m.employeeId}</span>
                       {m.positionName && <span className="cd-text-faint text-xs">{m.positionName}</span>}
                     </div>
@@ -366,18 +367,6 @@ function fmtTimelineWhen(a: SalesActivity): string {
   return `${sDate} ${sTime}${eTime ? ` ~ ${eTime}` : ""}`;
 }
 
-function Avatar({ src, size = 24 }: { src?: string | null; size?: number }) {
-  if (src) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img src={src} alt="" className="rounded-full object-cover shrink-0" style={{ width: size, height: size }} />;
-  }
-  return (
-    <span className="rounded-full flex items-center justify-center cd-surface-bg shrink-0" style={{ width: size, height: size }}>
-      <UserRound className="cd-text-muted" style={{ width: size * 0.58, height: size * 0.58 }} />
-    </span>
-  );
-}
-
 function TimelineRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex gap-3 text-[13px]">
@@ -452,7 +441,7 @@ function Timeline({ activities, canEdit, onEdit, onReload }: {
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
                       {actors.map((as) => (
                         <span key={`${as.employeeId}-${as.roleKind}`} className="inline-flex items-center gap-1.5">
-                          <Avatar src={as.photoPath} size={24} />
+                          <EmployeeAvatar photoPath={as.photoPath} size={24} />
                           <span className="cd-text text-[13px]">{as.employeeName ?? as.employeeId}</span>
                         </span>
                       ))}

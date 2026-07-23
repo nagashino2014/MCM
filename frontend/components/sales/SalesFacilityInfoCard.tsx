@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Building2, Download, Minus, Plus, Upload, User, X } from "lucide-react";
+import { Building2, Download, Minus, Plus, Upload, X } from "lucide-react";
+import { EmployeeAvatar } from "@/components/ui/EmployeeAvatar";
 import type { FacilityDetail } from "@/lib/ieps/types-facility";
 import { GroupManagementModal } from "@/components/facilities/FacilityDetailPanel";
 import { INTEGRATED_PERMIT_INDUSTRIES } from "@/lib/ieps/integrated-permit-industries";
@@ -30,11 +31,6 @@ interface HistoryItem {
   summary: string | null;
   bidAmount: number | null;
   outcome: SalesBidResult | null;
-}
-
-function HistAvatar({ src }: { src: string | null }) {
-  if (src) return <img src={src} alt="" className="w-7 h-7 rounded-full object-cover shrink-0" />;
-  return <span className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center" style={{ background: "var(--cd-surface)" }}><User className="w-3.5 h-3.5 cd-text-faint" /></span>;
 }
 
 const TABS = [
@@ -567,7 +563,7 @@ function HistoryTab({ facilityId }: { facilityId: string }) {
                 <div className="flex flex-col gap-1.5 md:w-48 shrink-0">
                   {it.members.length ? it.members.map((m, i) => (
                     <div key={i} className="flex items-center gap-2">
-                      <HistAvatar src={m.photoPath} />
+                      <EmployeeAvatar photoPath={m.photoPath} size={28} />
                       <span className="cd-text text-sm">{m.employeeName ?? "—"}</span>
                       {m.positionName && <span className="cd-text-faint text-xs">{m.positionName}</span>}
                     </div>

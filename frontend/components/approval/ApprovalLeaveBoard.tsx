@@ -7,15 +7,15 @@
 // 설계: docs/leave-management-blueprint.md §3·§4.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
+  BellRing,
   CalendarCheck2,
   CalendarPlus,
-  ClipboardPaste,
   Gauge,
   HeartHandshake,
   Plus,
   Trash2,
-  X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
@@ -60,6 +60,7 @@ const fmtDays = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 
 export function ApprovalLeaveBoard() {
   const { theme } = useCdashTheme();
+  const router = useRouter();
   const thisYear = new Date().getFullYear();
   const [year, setYear] = useState(String(thisYear));
   const [rows, setRows] = useState<SummaryRow[]>([]);
@@ -70,8 +71,6 @@ export function ApprovalLeaveBoard() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [entries, setEntries] = useState<Record<string, EntryRow[]>>({});
   const [busy, setBusy] = useState(false);
-  const [bulkModal, setBulkModal] = useState(false);
-  const [bulkText, setBulkText] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -144,36 +143,6 @@ export function ApprovalLeaveBoard() {
     setExpanded(employeeId);
   };
 
-  // 일괄 등록(연차 부여)
-  const bulkParsed = useMemo(() => {
-    const byName = new Map<string, SummaryRow[]>();
-    for (const r of rows) byName.set(r.name, [...(byName.get(r.name) ?? []), r]);
-    return bulkText
-      .split("\n")
-      .map((l) => l.trim())
-      .filter(Boolean)
-      .map((line) => {
-        const m = line.split(/[\t,]|\s{1,}/).filter(Boolean);
-        const name = m[0] ?? "";
-        const days = Number(m[1]);
-        const matches = byName.get(name) ?? [];
-        return { name, days, employeeId: matches.length === 1 ? matches[0].employeeId : null, error: !name || !isFinite(days) || days <= 0 ? "형식 오류" : matches.length === 0 ? "직원 없음" : matches.length > 1 ? "동명이인" : null };
-      });
-  }, [bulkText, rows]);
-
-  const bulkSubmit = async () => {
-    const valid = bulkParsed.filter((p) => !p.error && p.employeeId);
-    if (!valid.length) {
-      alert("등록할 유효한 줄이 없습니다.");
-      return;
-    }
-    if (await post({ entries: valid.map((p) => ({ employeeId: p.employeeId!, year, entryType: "grant" as const, days: p.days, note: `${year}년 연차 부여(일괄)` })) })) {
-      setBulkModal(false);
-      setBulkText("");
-      await load();
-    }
-  };
-
   const kpi = useMemo(() => {
     if (!rows.length) return null;
     const n = rows.length;
@@ -198,8 +167,8 @@ export function ApprovalLeaveBoard() {
         title="직원별 휴가 관리"
         subtitle="연차와 연차 외 휴가(경조·공가·병가)를 날짜별 이력으로 관리합니다. 사용은 휴가신청 승인 시 자동 반영되며 직접 보정할 수 있습니다."
         actions={
-          <button type="button" className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs flex items-center gap-1.5" onClick={() => setBulkModal(true)}>
-            <ClipboardPaste className="w-3.5 h-3.5" /> 연차 일괄 등록
+          <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold flex items-center gap-1.5" onClick={() => router.push("/approval/leave-promotion")}>
+            <BellRing className="w-3.5 h-3.5" /> 연차촉진제 관리
           </button>
         }
       />
@@ -282,35 +251,6 @@ export function ApprovalLeaveBoard() {
         </p>
       </div>
 
-      {/* 일괄 등록 모달 */}
-      {bulkModal && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={() => setBulkModal(false)}>
-          <div className="cdash cdash-vars cd-fields-white cd-card-bg rounded-2xl border cd-border-c w-full max-w-lg max-h-[85vh] overflow-y-auto p-4 flex flex-col gap-3" data-theme={theme} onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center gap-2">
-              <h3 className="text-[14px] font-bold cd-text flex-1">{year}년 연차 일괄 부여</h3>
-              <button type="button" className="cd-btn cd-btn-soft text-[12px]" onClick={() => setBulkModal(false)}>
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <p className="text-[11.5px] cd-text-faint">엑셀에서 &quot;이름·일수&quot; 두 열을 복사해 붙여넣으세요(줄당 1명).</p>
-            <textarea className="cd-input min-h-[160px] font-mono text-[12px]" value={bulkText} onChange={(e) => setBulkText(e.target.value)} placeholder={"홍길동\t15\n김철수\t17.5"} />
-            {bulkParsed.length > 0 && (
-              <div className="rounded-xl border cd-border-c p-2.5 max-h-40 overflow-y-auto text-[11.5px]">
-                {bulkParsed.map((p, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <span className="cd-text w-24 truncate">{p.name}</span>
-                    <span className="cd-text-faint">{isFinite(p.days) ? `${p.days}일` : "-"}</span>
-                    {p.error ? <span className="text-[color:var(--cd-danger,#FA896B)] ml-auto">{p.error}</span> : <span className="text-[color:var(--cd-success,#13DEB9)] ml-auto">확인</span>}
-                  </div>
-                ))}
-              </div>
-            )}
-            <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold disabled:opacity-50 self-end" disabled={busy} onClick={bulkSubmit}>
-              {bulkParsed.filter((p) => !p.error).length}명 부여 등록
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

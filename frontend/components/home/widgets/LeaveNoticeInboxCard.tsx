@@ -1,15 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { MailWarning, Plus, Trash2, Check } from "lucide-react";
+import { MailWarning, Plus, Trash2, Check, FileText, X } from "lucide-react";
 import { HomeCard } from "../HomeCard";
 import { useHomeWidget } from "../useHomeWidget";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
+import { LeaveNoticePreview } from "@/components/approval/LeaveNoticePreview";
 
 interface MyNotice {
   noticeId: string;
   year: string;
   round: number;
+  name: string;
   title: string;
   paragraphs: string[];
   granted: number;
@@ -24,6 +26,11 @@ interface MyNotice {
   submittedAt: string | null;
 }
 
+interface CompanyInfo {
+  companyName: string;
+  ceoName: string;
+}
+
 const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 
 /**
@@ -31,11 +38,13 @@ const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
  * 수신 고지가 없는 계정은 위젯 자체를 숨긴다.
  */
 export function LeaveNoticeInboxCard() {
-  const w = useHomeWidget<{ notices: MyNotice[] }>("/api/home/leave-notices");
+  const w = useHomeWidget<{ notices: MyNotice[]; company: CompanyInfo | null }>("/api/home/leave-notices");
   const [openId, setOpenId] = useState<string | null>(null);
+  const [viewNotice, setViewNotice] = useState<MyNotice | null>(null);
 
   if (w.status === "forbidden") return null;
   const notices = w.status === "ok" ? w.data.notices : [];
+  const company = w.status === "ok" ? w.data.company : null;
   // 수신 고지가 없으면 위젯을 노출하지 않는다(로딩/에러는 표시).
   if (w.status === "ok" && notices.length === 0) return null;
 
@@ -63,18 +72,27 @@ export function LeaveNoticeInboxCard() {
               <StatusBadge status={n.status} />
             </div>
 
-            {n.round === 1 && n.status === "sent" ? (
-              openId === n.noticeId ? (
-                <ReplyForm notice={n} onDone={() => { setOpenId(null); w.reload(); }} onCancel={() => setOpenId(null)} />
-              ) : (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <button
+                type="button"
+                className="cd-btn cd-btn-ghost text-[11px] px-2 py-1 flex items-center gap-1"
+                onClick={() => setViewNotice(n)}
+              >
+                <FileText className="w-3 h-3" /> 고지서 보기
+              </button>
+              {n.round === 1 && n.status === "sent" && openId !== n.noticeId && (
                 <button
                   type="button"
-                  className="cd-btn cd-btn-soft text-[11px] px-2.5 py-1 self-start"
+                  className="cd-btn cd-btn-soft text-[11px] px-2.5 py-1"
                   onClick={() => setOpenId(n.noticeId)}
                 >
                   사용예정일 회신
                 </button>
-              )
+              )}
+            </div>
+
+            {n.round === 1 && n.status === "sent" && openId === n.noticeId ? (
+              <ReplyForm notice={n} onDone={() => { setOpenId(null); w.reload(); }} onCancel={() => setOpenId(null)} />
             ) : n.status === "submitted" && n.plan.length > 0 ? (
               <div className="text-[11px] cd-text-faint">
                 제출한 사용예정일: <span className="cd-text font-medium">{n.plan.join(", ")}</span>
@@ -87,6 +105,35 @@ export function LeaveNoticeInboxCard() {
           </li>
         ))}
       </ul>
+
+      {viewNotice && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.5)" }} onClick={() => setViewNotice(null)}>
+          <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-end mb-2">
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 text-[12px] font-semibold text-white/90 hover:text-white"
+                onClick={() => setViewNotice(null)}
+              >
+                <X className="w-4 h-4" /> 닫기
+              </button>
+            </div>
+            <LeaveNoticePreview
+              round={viewNotice.round}
+              title={viewNotice.title}
+              paragraphs={viewNotice.paragraphs}
+              info={{ name: viewNotice.name, granted: viewNotice.granted, used: viewNotice.used, remaining: viewNotice.remaining }}
+              noticeDate={viewNotice.noticeDate}
+              deadline={viewNotice.deadline}
+              planTotal={viewNotice.planTotal}
+              plan={viewNotice.plan}
+              assigned={viewNotice.assigned}
+              companyName={company?.companyName}
+              ceoName={company?.ceoName}
+            />
+          </div>
+        </div>
+      )}
     </HomeCard>
   );
 }

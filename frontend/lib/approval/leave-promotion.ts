@@ -24,8 +24,8 @@ export interface PromotionRow {
   remaining: number;
   rate: number; // 소진율 %
   // 고지 현황
-  round1: { noticeDate: string; status: string } | null;
-  round2: { noticeDate: string; status: string } | null;
+  round1: { noticeDate: string; status: string; paper: boolean } | null;
+  round2: { noticeDate: string; status: string; paper: boolean } | null;
 }
 
 /**
@@ -51,12 +51,15 @@ export async function listPromotion(year: string): Promise<PromotionRow[]> {
     )
   );
   const notices = rowsToObjects(
-    await db.exec(`SELECT employee_id, round, notice_date, status FROM leave_notices WHERE year = $1`, [year])
+    await db.exec(`SELECT employee_id, round, notice_date, status, paper FROM leave_notices WHERE year = $1`, [year])
   );
-  const noticeMap = new Map<string, { round: number; noticeDate: string; status: string }[]>();
+  const noticeMap = new Map<string, { round: number; noticeDate: string; status: string; paper: boolean }[]>();
   for (const n of notices) {
     const eid = String(n.employee_id);
-    noticeMap.set(eid, [...(noticeMap.get(eid) ?? []), { round: Number(n.round), noticeDate: String(n.notice_date ?? ""), status: String(n.status ?? "") }]);
+    noticeMap.set(eid, [
+      ...(noticeMap.get(eid) ?? []),
+      { round: Number(n.round), noticeDate: String(n.notice_date ?? ""), status: String(n.status ?? ""), paper: Boolean(n.paper) },
+    ]);
   }
   return rows.map((r) => {
     const granted = Number(r.granted ?? 0);
@@ -75,8 +78,8 @@ export async function listPromotion(year: string): Promise<PromotionRow[]> {
       used,
       remaining,
       rate: granted > 0 ? Math.round((used / granted) * 1000) / 10 : 0,
-      round1: r1 ? { noticeDate: r1.noticeDate, status: r1.status } : null,
-      round2: r2 ? { noticeDate: r2.noticeDate, status: r2.status } : null,
+      round1: r1 ? { noticeDate: r1.noticeDate, status: r1.status, paper: r1.paper } : null,
+      round2: r2 ? { noticeDate: r2.noticeDate, status: r2.status, paper: r2.paper } : null,
     };
   });
 }
@@ -167,6 +170,7 @@ export interface MyNotice {
   noticeId: string;
   year: string;
   round: number;
+  name: string;
   title: string;
   paragraphs: string[]; // 토큰 치환 완료 본문
   granted: number;
@@ -218,6 +222,7 @@ export async function listMyNotices(userId: string): Promise<MyNotice[]> {
       noticeId: String(r.notice_id ?? ""),
       year: String(r.year ?? ""),
       round,
+      name,
       title: tpl?.title ?? "연차휴가 사용 촉구",
       paragraphs: tpl ? fillNoticeBody(tpl.body, vars) : [],
       granted,
@@ -268,4 +273,86 @@ export async function submitNoticePlan(
     );
     return { ok: true };
   });
+}
+
+// ── 서면 통지 사후 등록(admin) ────────────────────────────────
+export interface NoticeAttachmentMeta {
+  key: string;
+  name: string;
+  size: number;
+  contentType: string;
+}
+
+/** 첨부 키가 실제 고지에 등록된 것인지 검증(다운로드 가드) — 소유 직원 + 메타 반환. */
+export async function findNoticeAttachment(
+  key: string
+): Promise<{ employeeId: string; name: string; contentType: string } | null> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT employee_id, a->>'name' AS name, a->>'contentType' AS content_type
+         FROM leave_notices, jsonb_array_elements(attachments) a
+        WHERE a->>'key' = $1 LIMIT 1`,
+      [key]
+    )
+  );
+  if (!rows.length) return null;
+  return {
+    employeeId: String(rows[0].employee_id ?? ""),
+    name: String(rows[0].name ?? "첨부"),
+    contentType: String(rows[0].content_type ?? "application/octet-stream"),
+  };
+}
+
+/**
+ * 서면으로 진행한 1차 고지의 사후 등록(admin) — 받은 사용계획서 스캔본 + 사용예정일을
+ * 인원별로 제출 처리한다. 기존 온라인 발송 건이 있으면 제출로 승격, 없으면 신규 생성.
+ * granted/used/remaining 은 현재 집계값으로 스냅샷한다.
+ */
+export async function backfillPaperNotice(params: {
+  year: string;
+  employeeId: string;
+  round: number;
+  noticeDate: string;
+  plan: string[];
+  attachments: NoticeAttachmentMeta[];
+  actorUserId: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const { year, employeeId, round, noticeDate, actorUserId } = params;
+  if (round !== 1) return { ok: false, error: "현재 1차 고지만 사후 등록할 수 있습니다." };
+  const dates = params.plan.map((d) => d.trim()).filter(Boolean);
+  const snap = (await listPromotion(year)).find((r) => r.employeeId === employeeId);
+  if (!snap) return { ok: false, error: "직원을 찾을 수 없습니다." };
+  const deadline = `${year}-12-31`;
+  const now = new Date().toISOString();
+  const signature = `서면 통지 · 사후등록 (${actorUserId}) · ${now}`;
+  await withDbWrite(async (txn) => {
+    await txn.run(
+      `INSERT INTO leave_notices
+         (notice_id, year, round, employee_id, granted, used, remaining, notice_date, deadline,
+          status, paper, plan, attachments, signature, submitted_at, sent_by, sent_at, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'submitted',true,$10::jsonb,$11::jsonb,$12,$13,$14,$13,$13)
+       ON CONFLICT (year, round, employee_id) DO UPDATE SET
+         status = 'submitted', paper = true, notice_date = EXCLUDED.notice_date,
+         plan = EXCLUDED.plan, attachments = EXCLUDED.attachments,
+         signature = EXCLUDED.signature, submitted_at = EXCLUDED.submitted_at`,
+      [
+        nid(),
+        year,
+        round,
+        employeeId,
+        snap.granted,
+        snap.used,
+        snap.remaining,
+        noticeDate,
+        deadline,
+        JSON.stringify(dates),
+        JSON.stringify(params.attachments),
+        signature,
+        now,
+        actorUserId,
+      ]
+    );
+  });
+  return { ok: true };
 }

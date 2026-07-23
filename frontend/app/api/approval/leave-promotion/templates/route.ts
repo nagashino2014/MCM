@@ -2,15 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { listNoticeTemplates, saveNoticeTemplate } from "@/lib/approval/leave-promotion";
+import { getCompanyProfile } from "@/lib/company/profile";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// GET: 1·2차 연차 고지 문구 템플릿(admin) — 양식 관리 화면
+// GET: 1·2차 연차 고지 문구 템플릿(admin) — 양식 관리 화면. 발신 표기용 회사 정보 동봉.
 export async function GET() {
   try {
     await requirePermission("approval.manage", { fallbackRoles: ["admin"] });
-    return NextResponse.json({ templates: await listNoticeTemplates() });
+    const [templates, company] = await Promise.all([listNoticeTemplates(), getCompanyProfile().catch(() => null)]);
+    return NextResponse.json({
+      templates,
+      company: company ? { companyName: company.companyName, ceoName: company.ceoName } : null,
+    });
   } catch (err) {
     return authErrorToResponse(err);
   }

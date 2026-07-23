@@ -165,6 +165,54 @@ export async function sendFirstNotices(year: string, today: Date, sentBy: string
   return { created, skipped };
 }
 
+// ── 2차 고지 발송(회사 지정일) ────────────────────────────────
+export interface SecondAssignment {
+  employeeId: string;
+  assigned: string[]; // 회사 지정 사용일자(YYYY-MM-DD)
+}
+
+/**
+ * 2차 고지 일괄 발송(admin) — 1차 미제출자에게 회사가 지정한 사용일자로 통보한다.
+ * leave_notices(round=2, status='assigned', assigned jsonb) INSERT. 발송 시점 스냅샷 기록.
+ * 기간 게이팅(7/21+)은 라우트에서 강제. 대상/지정일 유효성(잔여 충족)은 화면에서 검증한다.
+ */
+export async function sendSecondNotices(
+  year: string,
+  today: Date,
+  assignments: SecondAssignment[],
+  sentBy: string
+): Promise<SendResult> {
+  const snapMap = new Map((await listPromotion(year)).map((r) => [r.employeeId, r]));
+  const noticeDate = today.toISOString().slice(0, 10);
+  const deadline = `${year}-12-31`;
+  const now = new Date().toISOString();
+  let created = 0;
+  let skipped = 0;
+  await withDbWrite(async (txn) => {
+    for (const a of assignments) {
+      const snap = snapMap.get(a.employeeId);
+      const dates = a.assigned.map((d) => d.trim()).filter(Boolean);
+      if (!snap || dates.length === 0) {
+        skipped += 1;
+        continue;
+      }
+      const signature = `2차 지정 통보 (${sentBy}) · ${now}`;
+      const res = await txn.exec(
+        `INSERT INTO leave_notices
+           (notice_id, year, round, employee_id, granted, used, remaining, notice_date, deadline,
+            status, assigned, signature, sent_by, sent_at, created_at)
+         VALUES ($1,$2,2,$3,$4,$5,$6,$7,$8,'assigned',$9::jsonb,$10,$11,$12,$12)
+         ON CONFLICT (year, round, employee_id) DO NOTHING
+         RETURNING notice_id`,
+        [nid(), year, a.employeeId, snap.granted, snap.used, snap.remaining, noticeDate, deadline, JSON.stringify(dates), signature, sentBy, now]
+      );
+      if (rowsToObjects(res).length > 0) created += 1;
+      else skipped += 1;
+    }
+  });
+  return { created, skipped };
+}
+
 // ── 수신 문서함(직원 본인) ────────────────────────────────────
 export interface MyNotice {
   noticeId: string;

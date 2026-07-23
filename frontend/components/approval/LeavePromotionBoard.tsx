@@ -62,6 +62,7 @@ export function LeavePromotionBoard() {
   const [loading, setLoading] = useState(true);
   const [editorOpen, setEditorOpen] = useState(false);
   const [backfillOpen, setBackfillOpen] = useState(false);
+  const [secondOpen, setSecondOpen] = useState(false);
   const [sending, setSending] = useState(false);
 
   const load = useCallback(async () => {
@@ -82,6 +83,11 @@ export function LeavePromotionBoard() {
   }, [load]);
 
   const sendTargets = useMemo(() => rows.filter((r) => r.remaining > 0 && !r.round1).length, [rows]);
+  // 2차 대상 = 잔여>0 · 1차 발송됐으나 미제출 · 2차 미발송
+  const secondRows = useMemo(
+    () => rows.filter((r) => r.remaining > 0 && r.round1 && !SUBMITTED.has(r.round1.status) && !r.round2),
+    [rows]
+  );
 
   const sendFirst = async () => {
     if (!gate?.canFirst) return;
@@ -164,15 +170,15 @@ export function LeavePromotionBoard() {
               className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
               title={
                 gate?.phase === "second"
-                  ? "2차 고지는 다음 단계(LP-P3)에서 발송합니다."
+                  ? `2차 고지 발송 — 미제출 ${secondRows.length}명 (회사 지정일 통보)`
                   : gate?.canFirst
                     ? `1차 고지 발송 (대상 ${sendTargets}명)`
                     : "1차 고지는 7/1~7/20에만 발송할 수 있습니다."
               }
-              disabled={!gate?.canFirst || sending}
-              onClick={sendFirst}
+              disabled={(!gate?.canFirst && !gate?.canSecond) || sending}
+              onClick={() => (gate?.phase === "second" ? setSecondOpen(true) : sendFirst())}
             >
-              <Send className="w-3.5 h-3.5" /> {sending ? "발송 중…" : "연차 고지 발송"}
+              <Send className="w-3.5 h-3.5" /> {sending ? "발송 중…" : gate?.phase === "second" ? "2차 고지 발송" : "연차 고지 발송"}
             </button>
           </div>
         }
@@ -275,6 +281,217 @@ export function LeavePromotionBoard() {
           }}
         />
       )}
+      {secondOpen && (
+        <SecondNoticeModal
+          year={year}
+          targets={secondRows}
+          onClose={() => setSecondOpen(false)}
+          onDone={() => {
+            setSecondOpen(false);
+            load();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * 2차 고지 발송 — 1차 미제출자 명단에서 인원을 선택해 회사 지정 사용일자를 입력한다.
+ * 상단 미사용일수 / 하단 잔여일수(미사용−지정) 실시간 차감, 잔여 0 인 인원만 2차 발송 대상.
+ * 인원별 지정일은 assigned 상태에 일시 저장되고 발송 시 잔여 0 인원을 일괄 통보한다.
+ */
+function SecondNoticeModal({
+  year,
+  targets,
+  onClose,
+  onDone,
+}: {
+  year: string;
+  targets: PromotionRow[];
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [selectedId, setSelectedId] = useState<string | null>(targets[0]?.employeeId ?? null);
+  const [assigned, setAssigned] = useState<Record<string, string[]>>({});
+  const [busy, setBusy] = useState(false);
+
+  const sel = targets.find((t) => t.employeeId === selectedId) ?? null;
+  // 지정해야 할 총 일수(미사용일수) = ceil(remaining)
+  const need = (r: PromotionRow) => Math.max(0, Math.ceil(r.remaining));
+  const filledCount = (id: string) => (assigned[id] ?? []).filter((d) => d.trim()).length;
+  const isDone = (r: PromotionRow) => filledCount(r.employeeId) >= need(r) && need(r) > 0;
+
+  const setSlot = (id: string, i: number, v: string) =>
+    setAssigned((a) => {
+      const arr = [...(a[id] ?? [])];
+      arr[i] = v;
+      return { ...a, [id]: arr };
+    });
+
+  const readyRows = targets.filter(isDone);
+
+  const send = async () => {
+    if (readyRows.length === 0) return alert("지정일 입력이 완료된(잔여 0) 인원이 없습니다.");
+    if (!confirm(`회사 지정일 입력이 완료된 ${readyRows.length}명에게 2차 고지를 발송합니다.\n계속할까요?`)) return;
+    setBusy(true);
+    try {
+      const assignments = readyRows.map((r) => ({
+        employeeId: r.employeeId,
+        assigned: (assigned[r.employeeId] ?? []).map((d) => d.trim()).filter(Boolean),
+      }));
+      const res = await fetch(`/api/approval/leave-promotion/send-second`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ year, assignments }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        alert(`2차 고지 ${data.created ?? 0}건을 발송했습니다.`);
+        onDone();
+      } else {
+        alert(data.error ?? "발송에 실패했습니다.");
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.45)" }}>
+      <div className="cd-card rounded-3xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden">
+        <div className="flex items-center gap-2 px-5 py-4 border-b cd-border-c">
+          <Send className="w-4 h-4 cd-text-primary" />
+          <h3 className="text-sm font-bold cd-text">2차 고지 발송</h3>
+          <span className="text-[11px] cd-text-faint">1차 미제출자에게 회사가 사용일자를 지정해 통보합니다.</span>
+          <button type="button" className="cd-text-faint hover:cd-text ml-auto" onClick={onClose} title="닫기">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {targets.length === 0 ? (
+          <p className="p-10 text-center text-sm cd-text-faint">2차 고지 대상(1차 미제출자)이 없습니다.</p>
+        ) : (
+          <div className="flex-1 min-h-0 grid lg:grid-cols-[6fr_6fr]">
+            {/* 좌: 미제출자 명단 */}
+            <div className="overflow-y-auto p-4 border-b lg:border-b-0 lg:border-r cd-border-c">
+              <div className="hidden md:grid grid-cols-[1.7fr_1fr_repeat(4,0.7fr)] gap-2 px-2 pb-1.5 text-[10px] font-bold uppercase tracking-wider cd-text-faint">
+                <span>성명/직함</span>
+                <span>부서</span>
+                <span className="text-right">소진율</span>
+                <span className="text-right">잔여</span>
+                <span className="text-right">사용</span>
+                <span className="text-right">부여</span>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                {targets.map((r) => {
+                  const done = isDone(r);
+                  const active = r.employeeId === selectedId;
+                  return (
+                    <button
+                      key={r.employeeId}
+                      type="button"
+                      onClick={() => setSelectedId(r.employeeId)}
+                      className={`grid grid-cols-[1.7fr_1fr_repeat(4,0.7fr)] gap-2 items-center px-2 py-2 rounded-xl border text-left ${active ? "cd-tint-primary border-[color:var(--cd-primary)]" : "cd-border-c"}`}
+                    >
+                      <span className="flex items-center gap-2 min-w-0">
+                        <EmployeeAvatar employeeId={r.employeeId} photoPath={r.photoPath} size={26} />
+                        <span className="min-w-0">
+                          <span className="block text-[12.5px] font-bold cd-text truncate">
+                            {r.name}
+                            {r.positionName && <span className="cd-text-faint font-normal text-[11px]"> {r.positionName}</span>}
+                          </span>
+                          <span className={`text-[9.5px] rounded-full px-1.5 py-0.5 ${done ? "cd-tint-primary cd-text-primary" : "border border-[color:var(--cd-warning,#FFAE1F)] cd-text-faint"}`}>
+                            {done ? "지정 완료" : "지정 필요"}
+                          </span>
+                        </span>
+                      </span>
+                      <span className="text-[11.5px] cd-text-faint truncate">{r.deptName ?? "-"}</span>
+                      <span className="text-right font-mono text-[12px] cd-text-primary font-bold">{r.rate.toFixed(0)}%</span>
+                      <span className="text-right font-mono text-[12px] font-bold cd-text">{fmt(r.remaining)}</span>
+                      <span className="text-right font-mono text-[12px] cd-text">{fmt(r.used)}</span>
+                      <span className="text-right font-mono text-[12px] cd-text">{fmt(r.granted)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 우: 회사 지정일 입력 */}
+            <div className="overflow-y-auto p-5 flex flex-col gap-4">
+              {!sel ? (
+                <p className="rounded-2xl border cd-border-c p-8 text-center text-sm cd-text-faint">좌측 명단에서 인원을 선택하세요.</p>
+              ) : (
+                (() => {
+                  const total = need(sel);
+                  const filled = filledCount(sel.employeeId);
+                  const rest = total - filled;
+                  return (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <EmployeeAvatar employeeId={sel.employeeId} photoPath={sel.photoPath} size={34} />
+                        <div>
+                          <div className="text-[14px] font-bold cd-text">
+                            {sel.name}
+                            {sel.positionName && <span className="cd-text-faint font-normal text-[12px]"> {sel.positionName}</span>}
+                          </div>
+                          <div className="text-[11px] cd-text-faint">{sel.deptName ?? "-"}</div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="rounded-2xl border cd-border-c p-3 text-center">
+                          <div className="text-[10px] font-bold uppercase tracking-wider cd-text-faint">미사용일수</div>
+                          <div className="mt-1 text-2xl font-extrabold cd-text">{fmt(sel.remaining)}</div>
+                        </div>
+                        <div className={`rounded-2xl border p-3 text-center ${rest <= 0 ? "cd-tint-primary border-[color:var(--cd-primary)]" : "cd-border-c"}`}>
+                          <div className="text-[10px] font-bold uppercase tracking-wider cd-text-faint">잔여일수</div>
+                          <div className={`mt-1 text-2xl font-extrabold ${rest <= 0 ? "cd-text-primary" : "cd-text"}`}>{rest}</div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-1.5">
+                        <span className="text-[11px] font-bold cd-text-faint">회사 지정 사용일자 <span className="font-normal">(총 {total}일 · YYYYMMDD)</span></span>
+                        <div className="grid grid-cols-4 xl:grid-cols-8 gap-1.5">
+                          {Array.from({ length: total }).map((_, i) => (
+                            <AutoDateInput
+                              key={i}
+                              value={(assigned[sel.employeeId] ?? [])[i] ?? ""}
+                              onChange={(v) => setSlot(sel.employeeId, i, v)}
+                              className="cd-input text-[11px] px-1.5 py-1 text-center"
+                              placeholder="YYYYMMDD"
+                            />
+                          ))}
+                        </div>
+                        {rest <= 0 ? (
+                          <span className="text-[11px] cd-text-primary font-semibold">지정 완료 — 잔여일수 0. 발송 대상입니다.</span>
+                        ) : (
+                          <span className="text-[11px] cd-text-faint">남은 {rest}일의 사용일자를 지정하면 발송 대상이 됩니다.</span>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center gap-2 px-5 py-3 border-t cd-border-c">
+          <span className="text-[11px] cd-text-faint">지정 완료 {readyRows.length} / 미제출 {targets.length}명</span>
+          <button type="button" className="cd-btn cd-btn-ghost text-xs px-3 py-2 ml-auto" onClick={onClose}>
+            취소
+          </button>
+          <button
+            type="button"
+            className="cd-btn cd-btn-primary rounded-lg px-4 py-2 text-xs font-semibold disabled:opacity-50 flex items-center gap-1.5"
+            onClick={send}
+            disabled={busy || readyRows.length === 0}
+          >
+            <Send className="w-3.5 h-3.5" /> {busy ? "발송 중…" : `2차 고지 발송 (${readyRows.length})`}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

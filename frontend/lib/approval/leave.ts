@@ -26,6 +26,7 @@ export interface LeaveEntry {
   leaveLabel: string | null; // 카탈로그 라벨(표시용)
   deduct: "full" | "half" | null;
   docId: string | null;
+  source: "groupware" | "excel" | "manual"; // 입력 출처 — 그룹웨어(휴가신청 승인)/엑셀 임포트/수기
   note: string | null;
   createdAt: string;
 }
@@ -169,20 +170,26 @@ export async function listLeaveEntries(employeeId: string, year: string): Promis
       [employeeId, year]
     )
   );
-  return rows.map((r) => ({
-    entryId: String(r.entry_id ?? ""),
-    employeeId: String(r.employee_id ?? ""),
-    year: String(r.year ?? ""),
-    entryType: String(r.entry_type ?? ""),
-    days: Number(r.days ?? 0),
-    usedOn: r.used_on != null ? String(r.used_on) : null,
-    leaveTypeKey: r.leave_type_key != null ? String(r.leave_type_key) : null,
-    leaveLabel: r.type_label != null ? String(r.type_label) : r.leave_type_key != null ? String(r.leave_type_key) : null,
-    deduct: r.type_deduct === "full" || r.type_deduct === "half" ? r.type_deduct : null,
-    docId: r.doc_id != null ? String(r.doc_id) : null,
-    note: r.note != null ? String(r.note) : null,
-    createdAt: String(r.created_at ?? ""),
-  }));
+  return rows.map((r) => {
+    const docId = r.doc_id != null ? String(r.doc_id) : null;
+    const note = r.note != null ? String(r.note) : null;
+    const source: LeaveEntry["source"] = docId ? "groupware" : note && note.includes("엑셀") ? "excel" : "manual";
+    return {
+      entryId: String(r.entry_id ?? ""),
+      employeeId: String(r.employee_id ?? ""),
+      year: String(r.year ?? ""),
+      entryType: String(r.entry_type ?? ""),
+      days: Number(r.days ?? 0),
+      usedOn: r.used_on != null ? String(r.used_on) : null,
+      leaveTypeKey: r.leave_type_key != null ? String(r.leave_type_key) : null,
+      leaveLabel: r.type_label != null ? String(r.type_label) : r.leave_type_key != null ? String(r.leave_type_key) : null,
+      deduct: r.type_deduct === "full" || r.type_deduct === "half" ? r.type_deduct : null,
+      docId,
+      source,
+      note,
+      createdAt: String(r.created_at ?? ""),
+    };
+  });
 }
 
 /* ---------- 이력 CRUD ---------- */

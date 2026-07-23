@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Plus, Users, X } from "lucide-react";
 import OrganizationTree from "@/components/admin/users/OrganizationTree";
 import type { OrganizationSnapshot } from "@/components/admin/users/types";
+import { AutoDateInput } from "@/components/ui/AutoDateInput";
 import type { ApprovalFieldDef } from "@/lib/approval/fields";
 import { findInCatalog, type LeaveTypeItem } from "@/lib/approval/leave-types";
 
@@ -224,16 +225,16 @@ function FieldInput({
       );
     }
     case "date":
-      return <input type="date" className={base} disabled={dis} value={String(value ?? "")} onChange={(e) => onSet(e.target.value)} />;
+      return <AutoDateInput className={base} disabled={dis} value={String(value ?? "")} onChange={(next) => onSet(next)} />;
     case "time":
       return <input type="time" className={base} disabled={dis} value={String(value ?? "")} onChange={(e) => onSet(e.target.value)} />;
     case "period": {
       const v = (value ?? {}) as { from?: string; to?: string };
       return (
         <div className="flex items-center gap-1.5 w-full">
-          <input type="date" className={base} disabled={dis} value={v.from ?? ""} onChange={(e) => onSet({ ...v, from: e.target.value })} />
+          <AutoDateInput className={base} disabled={dis} value={v.from ?? ""} onChange={(from) => onSet({ ...v, from })} />
           <span className="cd-text-faint shrink-0">~</span>
-          <input type="date" className={base} disabled={dis} value={v.to ?? ""} onChange={(e) => onSet({ ...v, to: e.target.value })} />
+          <AutoDateInput className={base} disabled={dis} value={v.to ?? ""} onChange={(to) => onSet({ ...v, to })} />
         </div>
       );
     }
@@ -735,9 +736,16 @@ function TableInput({
                         </option>
                       ))}
                     </select>
+                  ) : c.type === "date" ? (
+                    <AutoDateInput
+                      className="w-full bg-transparent px-1.5 py-1.5 text-[12px] cd-text outline-none"
+                      disabled={readOnly}
+                      value={r[c.key] ?? ""}
+                      onChange={(next) => update(ri, c.key, next)}
+                    />
                   ) : (
                     <input
-                      type={c.type === "date" ? "date" : "text"}
+                      type="text"
                       inputMode={c.type === "currency" || c.type === "number" ? "numeric" : undefined}
                       className={`w-full bg-transparent px-1.5 py-1.5 text-[12px] cd-text outline-none ${
                         c.type === "currency" || c.type === "number" ? "text-right" : ""

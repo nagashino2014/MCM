@@ -14,12 +14,30 @@ import { ApprovalFormRenderer } from "@/components/approval/ApprovalFormRenderer
 import OrganizationTree from "@/components/admin/users/OrganizationTree";
 import type { OrganizationSnapshot } from "@/components/admin/users/types";
 import type { ApprovalFieldDef } from "@/lib/approval/fields";
+import { findInCatalog, type LeaveTypeItem } from "@/lib/approval/leave-types";
 import "@/components/cdash/cdash.css";
 
 interface FormInfo {
   formId: string;
   name: string;
   fields: ApprovalFieldDef[];
+}
+
+/** ISO 날짜에 n일 더한 ISO(달력일, 로컬 계산·타임존 무관). */
+function addDays(iso: string, n: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(y, m - 1, d + n);
+  const p = (x: number) => String(x).padStart(2, "0");
+  return `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`;
+}
+
+/** 두 ISO 날짜 사이 달력일수(양끝 포함, from~to). */
+function dayCount(from: string, to: string): number {
+  const [fy, fm, fd] = from.split("-").map(Number);
+  const [ty, tm, td] = to.split("-").map(Number);
+  const a = new Date(fy, fm - 1, fd).getTime();
+  const b = new Date(ty, tm - 1, td).getTime();
+  return Math.round((b - a) / 86400000) + 1;
 }
 
 interface LineStep {
@@ -47,12 +65,16 @@ export function ApprovalDraftBoard() {
   const [busy, setBusy] = useState<"save" | "submit" | null>(null);
   const [orgModal, setOrgModal] = useState<"agree" | "approve" | null>(null);
   const [orgSnapshot, setOrgSnapshot] = useState<OrganizationSnapshot | null>(null);
-  // 휴가신청 양식이면 본인 잔여 연차 배지 표시
+  // 휴가신청 양식이면 본인 잔여 연차 배지 + 휴가 종류 카탈로그(기간 자동화)
   const [leaveRemaining, setLeaveRemaining] = useState<{ granted: number; used: number; remaining: number } | null>(null);
+  const [leaveCatalog, setLeaveCatalog] = useState<LeaveTypeItem[]>([]);
+  const [leaveHint, setLeaveHint] = useState<string | null>(null);
+  const isLeaveForm = form?.formId === "frm-leave-request";
 
   useEffect(() => {
-    if (form?.formId !== "frm-leave-request") {
+    if (!isLeaveForm) {
       setLeaveRemaining(null);
+      setLeaveCatalog([]);
       return;
     }
     let cancelled = false;
@@ -62,10 +84,62 @@ export function ApprovalDraftBoard() {
         if (!cancelled && d?.summary) setLeaveRemaining(d.summary);
       })
       .catch(() => {});
+    fetch("/api/approval/leave-types", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled && d?.types) setLeaveCatalog(d.types);
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [form?.formId]);
+  }, [isLeaveForm]);
+
+  // 휴가 기간 ↔ 사용일수 ↔ 부여일수 연동(§LM-P2) — 달력일 기준.
+  // 부여일수 고정(경조·조의 등): 시작일 입력 → 종료일 자동(days-1 가산)·사용일수=days.
+  // 가변(연차·공가·병가): 시작+종료 입력 → 사용일수 자동 카운팅(초과 상한 없음, 연차 잔여만 안내).
+  useEffect(() => {
+    if (!isLeaveForm || leaveCatalog.length === 0) {
+      setLeaveHint(null);
+      return;
+    }
+    const item = findInCatalog(leaveCatalog, values.leave_type);
+    if (!item) {
+      setLeaveHint(null);
+      return;
+    }
+    const period = (values.leave_period ?? {}) as { from?: string; to?: string };
+    const from = period.from;
+    if (!from || !/^\d{4}-\d{2}-\d{2}$/.test(from)) {
+      setLeaveHint(item.days != null ? `${item.label} — 부여 ${item.days}일 (시작일을 입력하면 종료일이 자동 설정됩니다)` : null);
+      return;
+    }
+    if (item.days != null) {
+      // 고정 부여일수: 종료일·사용일수 자동(상한 강제)
+      const to = addDays(from, item.days - 1);
+      const changed = to !== period.to || String(values.use_days ?? "") !== String(item.days);
+      if (changed) setValues((prev) => ({ ...prev, leave_period: { from, to }, use_days: String(item.days) }));
+      setLeaveHint(`${item.label} — 부여 ${item.days}일 · 종료일 자동 설정(${to})`);
+    } else {
+      // 가변: 종료일이 있으면 사용일수 카운팅
+      if (period.to && /^\d{4}-\d{2}-\d{2}$/.test(period.to)) {
+        const cnt = dayCount(from, period.to);
+        if (cnt <= 0) {
+          setLeaveHint("종료일이 시작일보다 빠릅니다.");
+          return;
+        }
+        if (String(values.use_days ?? "") !== String(cnt)) setValues((prev) => ({ ...prev, use_days: String(cnt) }));
+        const over =
+          item.deduct && leaveRemaining && cnt > leaveRemaining.remaining
+            ? ` · ⚠ 잔여 연차(${leaveRemaining.remaining}일) 초과`
+            : "";
+        setLeaveHint(`사용 ${cnt}일${over}`);
+      } else {
+        setLeaveHint(`${item.label} — 시작·종료일을 입력하면 사용일수가 계산됩니다`);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLeaveForm, leaveCatalog, values.leave_type, values.leave_period, leaveRemaining]);
 
   useEffect(() => {
     let cancelled = false;
@@ -205,6 +279,17 @@ export function ApprovalDraftBoard() {
               {leaveRemaining && (
                 <span className="mt-4 text-[11.5px] rounded-full px-2.5 py-1 cd-tint-primary" title={`부여 ${leaveRemaining.granted} · 사용 ${leaveRemaining.used}`}>
                   올해 잔여 연차 {leaveRemaining.remaining}일
+                </span>
+              )}
+              {leaveHint && (
+                <span
+                  className={`mt-4 text-[11.5px] rounded-full px-2.5 py-1 ${
+                    leaveHint.includes("⚠") || leaveHint.includes("빠릅니다")
+                      ? "border border-[color:var(--cd-danger,#FA896B)] text-[color:var(--cd-danger,#FA896B)]"
+                      : "border border-[color:var(--cd-success,#13DEB9)] text-[color:var(--cd-success,#13DEB9)]"
+                  }`}
+                >
+                  {leaveHint}
                 </span>
               )}
             </div>

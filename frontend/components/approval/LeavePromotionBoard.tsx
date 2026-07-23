@@ -6,13 +6,15 @@
 // 설계: docs/leave-promotion-blueprint.md.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BellRing, FileCog, FileUp, Gauge, MailCheck, Plus, Send, TrendingDown, Trash2, X } from "lucide-react";
+import { BellRing, FileCog, FileUp, Gauge, MailCheck, Paperclip, Plus, Send, TrendingDown, Trash2, X } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { EmployeeAvatar } from "@/components/ui/EmployeeAvatar";
 import { NOTICE_TOKENS, SAMPLE_TOKEN_VARS, fillNoticeBody } from "@/lib/approval/leave-promotion-tokens";
 import { LeaveNoticePreview } from "@/components/approval/LeaveNoticePreview";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
+import OrganizationTree from "@/components/admin/users/OrganizationTree";
+import type { OrganizationEmployeeRow, OrganizationSnapshot } from "@/components/admin/users/types";
 import type { LucideIcon } from "lucide-react";
 import "@/components/cdash/cdash.css";
 
@@ -222,11 +224,11 @@ export function LeavePromotionBoard() {
             <div className="hidden md:grid grid-cols-[1.6fr_0.7fr_1fr_repeat(3,0.7fr)_1.2fr_1.2fr] gap-2 px-3 text-[10.5px] font-bold uppercase tracking-wider cd-text-faint">
               <span>직원</span>
               <span className="text-right">소진율</span>
-              <span>부서</span>
+              <span className="pl-10">부서</span>
               <span className="text-right">부여</span>
               <span className="text-right">사용</span>
               <span className="text-right">잔여</span>
-              <span>1차 고지</span>
+              <span className="pl-10">1차 고지</span>
               <span>2차 고지</span>
             </div>
             {rows.map((r) => (
@@ -244,11 +246,13 @@ export function LeavePromotionBoard() {
                   </div>
                 </div>
                 <span className="text-right font-mono text-[13px] cd-text-primary font-bold">{r.rate.toFixed(0)}%</span>
-                <span className="text-[12px] cd-text-faint truncate">{r.deptName ?? "-"}</span>
+                <span className="pl-10 text-[12px] cd-text-faint truncate">{r.deptName ?? "-"}</span>
                 <span className="text-right font-mono text-[13px] cd-text">{fmt(r.granted)}</span>
                 <span className="text-right font-mono text-[13px] cd-text">{fmt(r.used)}</span>
                 <span className={`text-right font-mono text-[13px] font-bold ${r.remaining > 0 ? "cd-text" : "cd-text-faint"}`}>{fmt(r.remaining)}</span>
-                <NoticeCell notice={r.round1} empty={r.remaining <= 0 ? "대상 아님" : "미발송"} />
+                <div className="pl-10">
+                  <NoticeCell notice={r.round1} empty={r.remaining <= 0 ? "대상 아님" : "미발송"} />
+                </div>
                 <NoticeCell notice={r.round2} empty={r.round1 && SUBMITTED.has(r.round1.status) ? "" : r.remaining <= 0 ? "" : "-"} />
               </div>
             ))}
@@ -275,7 +279,27 @@ export function LeavePromotionBoard() {
   );
 }
 
-/** 서면 고지 사후 등록 — 직원 선택 + 통지일 + 사용예정일 + 스캔본 업로드 → 제출 처리(paper). */
+interface BackfillEntry {
+  dates: string[];
+  files: File[];
+}
+
+/** 파일명에서 성명을 찾아 직원 매칭(가장 긴 이름 우선, 중복 매칭은 미매칭 처리). */
+function matchByFilename(filename: string, rows: PromotionRow[]): PromotionRow | null {
+  const base = filename.replace(/\.[^.]+$/, "");
+  const hits = rows.filter((r) => r.name && base.includes(r.name));
+  if (!hits.length) return null;
+  hits.sort((a, b) => b.name.length - a.name.length);
+  // 최장 이름이 유일하게 최장인지 확인(동률이면 애매 → 미매칭)
+  if (hits.length > 1 && hits[1].name.length === hits[0].name.length) return null;
+  return hits[0];
+}
+
+/**
+ * 서면 고지 사후 등록 — 조직도 트리에서 1명씩 선택해 인원별 사용예정일을 입력한다.
+ * 서면 통지일·계획서 업로드는 공통(업로드 시 파일명→성명 자동 매칭). 준비된 인원은 칩으로 누적,
+ * 제출 시 인원별로 backfill 을 호출한다. 트리뷰는 계약 상세(수행부서/인력)와 동일 컴포넌트.
+ */
 function BackfillModal({
   year,
   rows,
@@ -287,37 +311,102 @@ function BackfillModal({
   onClose: () => void;
   onDone: () => void;
 }) {
-  const [employeeId, setEmployeeId] = useState("");
+  const [snapshot, setSnapshot] = useState<OrganizationSnapshot | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [noticeDate, setNoticeDate] = useState("");
-  const [dates, setDates] = useState<string[]>([""]);
-  const [files, setFiles] = useState<File[]>([]);
+  const [entries, setEntries] = useState<Record<string, BackfillEntry>>({});
+  const [unmatched, setUnmatched] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
 
-  const setDate = (i: number, v: string) => setDates((ds) => ds.map((d, j) => (j === i ? v : d)));
-  const addDate = () => setDates((ds) => [...ds, ""]);
-  const delDate = (i: number) => setDates((ds) => (ds.length > 1 ? ds.filter((_, j) => j !== i) : ds));
+  useEffect(() => {
+    fetch("/api/organization", { cache: "no-store" })
+      .then((r) => r.json())
+      .then(setSnapshot)
+      .catch(() => setSnapshot(null));
+  }, []);
+
+  const rowById = useMemo(() => new Map(rows.map((r) => [r.employeeId, r])), [rows]);
+  const sel = selectedId ? rowById.get(selectedId) ?? null : null;
+  const selEntry: BackfillEntry = (selectedId && entries[selectedId]) || { dates: [""], files: [] };
+
+  const upsert = (id: string, patch: Partial<BackfillEntry>) =>
+    setEntries((e) => ({ ...e, [id]: { dates: e[id]?.dates ?? [""], files: e[id]?.files ?? [], ...patch } }));
+
+  const pick = (emp: OrganizationEmployeeRow) => {
+    setSelectedId(emp.employeeId);
+    setEntries((e) => (e[emp.employeeId] ? e : { ...e, [emp.employeeId]: { dates: [""], files: [] } }));
+  };
+
+  // 공통 업로드: 파일명→성명 매칭 후 각 인원 엔트리에 파일 첨부.
+  const onUpload = (fileList: FileList | null) => {
+    const files = Array.from(fileList ?? []);
+    if (!files.length) return;
+    const miss: string[] = [];
+    setEntries((prev) => {
+      const next = { ...prev };
+      for (const f of files) {
+        const m = matchByFilename(f.name, rows);
+        if (!m) {
+          miss.push(f.name);
+          continue;
+        }
+        const cur = next[m.employeeId] ?? { dates: [""], files: [] };
+        next[m.employeeId] = { ...cur, files: [...cur.files, f] };
+      }
+      return next;
+    });
+    setUnmatched(miss);
+    const firstHit = files.map((f) => matchByFilename(f.name, rows)).find(Boolean);
+    if (firstHit) setSelectedId(firstHit.employeeId);
+  };
+
+  const setDate = (id: string, i: number, v: string) =>
+    upsert(id, { dates: (entries[id]?.dates ?? [""]).map((d, j) => (j === i ? v : d)) });
+  const addDate = (id: string) => upsert(id, { dates: [...(entries[id]?.dates ?? [""]), ""] });
+  const delDate = (id: string, i: number) => {
+    const ds = entries[id]?.dates ?? [""];
+    upsert(id, { dates: ds.length > 1 ? ds.filter((_, j) => j !== i) : ds });
+  };
+  const addFiles = (id: string, fl: FileList | null) => {
+    const fs = Array.from(fl ?? []);
+    if (fs.length) upsert(id, { files: [...(entries[id]?.files ?? []), ...fs] });
+  };
+  const delFile = (id: string, i: number) => upsert(id, { files: (entries[id]?.files ?? []).filter((_, j) => j !== i) });
+  const removeEntry = (id: string) =>
+    setEntries((e) => {
+      const n = { ...e };
+      delete n[id];
+      return n;
+    });
+
+  const prepared = Object.keys(entries).filter(
+    (id) => (entries[id].files.length > 0) || entries[id].dates.some((d) => d.trim())
+  );
 
   const submit = async () => {
-    if (!employeeId) return alert("직원을 선택하세요.");
     if (!/^\d{4}-\d{2}-\d{2}$/.test(noticeDate)) return alert("서면 통지일을 입력하세요(YYYYMMDD).");
-    const plan = dates.filter((d) => d.trim());
+    if (prepared.length === 0) return alert("등록할 인원이 없습니다. 스캔본을 업로드하거나 사용예정일을 입력하세요.");
+    if (!confirm(`${prepared.length}명을 서면 고지 제출로 등록합니다. 계속할까요?`)) return;
     setBusy(true);
+    let ok = 0;
+    let fail = 0;
     try {
-      const fd = new FormData();
-      fd.set("employeeId", employeeId);
-      fd.set("year", year);
-      fd.set("round", "1");
-      fd.set("noticeDate", noticeDate);
-      fd.set("plan", JSON.stringify(plan));
-      for (const f of files) fd.append("files", f);
-      const res = await fetch(`/api/approval/leave-promotion/backfill`, { method: "POST", body: fd });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        alert("서면 고지를 사후 등록했습니다.");
-        onDone();
-      } else {
-        alert(data.error ?? "사후 등록에 실패했습니다.");
+      for (const id of prepared) {
+        const e = entries[id];
+        const plan = e.dates.filter((d) => d.trim());
+        const fd = new FormData();
+        fd.set("employeeId", id);
+        fd.set("year", year);
+        fd.set("round", "1");
+        fd.set("noticeDate", noticeDate);
+        fd.set("plan", JSON.stringify(plan));
+        for (const f of e.files) fd.append("files", f);
+        const res = await fetch(`/api/approval/leave-promotion/backfill`, { method: "POST", body: fd });
+        if (res.ok) ok += 1;
+        else fail += 1;
       }
+      alert(`서면 고지 사후 등록 완료 — 성공 ${ok}명${fail ? `, 실패 ${fail}명` : ""}.`);
+      if (ok > 0) onDone();
     } finally {
       setBusy(false);
     }
@@ -325,70 +414,128 @@ function BackfillModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.45)" }}>
-      <div className="cd-card rounded-3xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
+      <div className="cd-card rounded-3xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden">
         <div className="flex items-center gap-2 px-5 py-4 border-b cd-border-c">
           <FileUp className="w-4 h-4 cd-text-primary" />
           <h3 className="text-sm font-bold cd-text">서면 고지 사후 등록</h3>
+          <span className="text-[11px] cd-text-faint">서면으로 진행한 1차 고지의 사용계획서를 인원별로 등록합니다.</span>
           <button type="button" className="cd-text-faint hover:cd-text ml-auto" onClick={onClose} title="닫기">
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4">
-          <p className="text-[11px] cd-text-faint leading-relaxed">
-            이미 서면으로 1차 고지를 진행한 건을 등록합니다. 직원을 선택하고 받은 사용계획서 스캔본을 첨부하면 해당 인원이 <b>제출 완료(서면)</b>로 처리됩니다.
-          </p>
-
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-bold cd-text-faint">직원</span>
-            <select className="cd-select" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
-              <option value="">선택하세요</option>
-              {rows.map((r) => (
-                <option key={r.employeeId} value={r.employeeId}>
-                  {r.name} {r.positionName ?? ""} · {r.deptName ?? "-"} (잔여 {fmt(r.remaining)}일)
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-bold cd-text-faint">서면 통지일</span>
-            <AutoDateInput value={noticeDate} onChange={setNoticeDate} className="cd-input" placeholder="YYYYMMDD" />
-          </label>
-
-          <div className="flex flex-col gap-1.5">
-            <span className="text-[11px] font-bold cd-text-faint">사용예정일 (계획서 기재분 · 선택)</span>
-            {dates.map((d, i) => (
-              <div key={i} className="flex items-center gap-1.5">
-                <AutoDateInput value={d} onChange={(v) => setDate(i, v)} className="cd-input w-40" placeholder="YYYYMMDD" />
-                <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)] disabled:opacity-30" onClick={() => delDate(i)} disabled={dates.length <= 1} title="삭제">
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-                {i === dates.length - 1 && (
-                  <button type="button" className="cd-text-primary hover:opacity-70" onClick={addDate} title="날짜 추가">
-                    <Plus className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-            ))}
+        <div className="flex-1 min-h-0 grid lg:grid-cols-[5fr_7fr]">
+          {/* 좌: 조직도 트리(1명 선택) */}
+          <div className="p-4 border-b lg:border-b-0 lg:border-r cd-border-c overflow-y-auto">
+            <div className="rounded-2xl border cd-border-c">
+              <OrganizationTree snapshot={snapshot} onSelectEmployee={pick} selectedEmployeeId={selectedId} title="조직도" embedded />
+            </div>
           </div>
 
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-bold cd-text-faint">사용계획서 스캔본 (PDF/이미지 · 다건)</span>
-            <input
-              type="file"
-              multiple
-              accept="application/pdf,image/*"
-              className="text-[12px] cd-text file:cd-btn file:cd-btn-soft file:text-[11px] file:mr-2 file:px-2.5 file:py-1 file:rounded-lg"
-              onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
-            />
-            {files.length > 0 && (
-              <span className="text-[11px] cd-text-faint mt-1">{files.length}개 파일 · {files.map((f) => f.name).join(", ")}</span>
+          {/* 우: 공통 입력 + 선택 인원 카드 */}
+          <div className="p-5 flex flex-col gap-4 overflow-y-auto">
+            {/* 공통: 통지일 + 업로드 */}
+            <div className="rounded-2xl border cd-border-c p-4 flex items-center gap-3 flex-wrap">
+              <span className="text-[11px] font-bold cd-text-faint">서면 통지일</span>
+              <AutoDateInput value={noticeDate} onChange={setNoticeDate} className="cd-input w-40" placeholder="YYYYMMDD" />
+              <span className="text-[11px] font-bold cd-text-faint ml-2">연차 사용계획서 업로드</span>
+              <label className="cd-btn cd-btn-soft rounded-lg px-3 py-2 text-xs font-semibold cursor-pointer flex items-center gap-1.5">
+                <FileUp className="w-3.5 h-3.5" /> 업로드
+                <input type="file" multiple accept="application/pdf,image/*" className="hidden" onChange={(e) => { onUpload(e.target.files); e.target.value = ""; }} />
+              </label>
+              <span className="text-[10.5px] cd-text-faint w-full">파일명에 포함된 성명으로 인원을 자동 매칭합니다(공통 통지일 적용).</span>
+            </div>
+
+            {/* 준비된 인원 칩 */}
+            {prepared.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {prepared.map((id) => {
+                  const r = rowById.get(id);
+                  const e = entries[id];
+                  const active = id === selectedId;
+                  return (
+                    <span
+                      key={id}
+                      className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11.5px] cursor-pointer ${active ? "cd-tint-primary border-[color:var(--cd-primary)]" : "cd-border-c"}`}
+                      onClick={() => setSelectedId(id)}
+                    >
+                      <span className="cd-text font-semibold">{r?.name ?? id}</span>
+                      {e.files.length > 0 && <Paperclip className="w-3 h-3 cd-text-primary" />}
+                      {e.dates.some((d) => d.trim()) && <span className="cd-text-faint">{e.dates.filter((d) => d.trim()).length}일</span>}
+                      <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" onClick={(ev) => { ev.stopPropagation(); removeEntry(id); }} title="제외">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
             )}
-          </label>
+
+            {unmatched.length > 0 && (
+              <div className="rounded-xl border border-[color:var(--cd-warning,#FFAE1F)] px-3 py-2 text-[11px] cd-text">
+                자동 매칭 실패 {unmatched.length}건: <span className="cd-text-faint">{unmatched.join(", ")}</span> — 좌측 트리에서 직접 선택 후 첨부하세요.
+              </div>
+            )}
+
+            {/* 선택 인원 카드 */}
+            {!sel ? (
+              <p className="rounded-2xl border cd-border-c p-8 text-center text-sm cd-text-faint">
+                좌측 조직도에서 인원을 선택하거나 계획서를 업로드하면 여기에서 사용예정일을 입력합니다.
+              </p>
+            ) : (
+              <div className="rounded-2xl border cd-border-c p-4 flex flex-col gap-4">
+                <div className="grid grid-cols-3 gap-3">
+                  <Field label="성명/직급" value={`${sel.name}${sel.positionName ? ` ${sel.positionName}` : ""}`} />
+                  <Field label="부서" value={sel.deptName ?? "-"} />
+                  <Field label="잔여일수" value={`잔여 ${fmt(sel.remaining)}일`} />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[11px] font-bold cd-text-faint">사용 예정일 <span className="font-normal">(계획서 기재분)</span></span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {selEntry.dates.map((d, i) => (
+                      <div key={i} className="flex items-center gap-1">
+                        <AutoDateInput value={d} onChange={(v) => setDate(sel.employeeId, i, v)} className="cd-input w-36" placeholder="YYYYMMDD" />
+                        <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)] disabled:opacity-30" onClick={() => delDate(sel.employeeId, i)} disabled={selEntry.dates.length <= 1} title="삭제">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                    <button type="button" className="cd-text-primary hover:opacity-70" onClick={() => addDate(sel.employeeId)} title="날짜 추가">
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[11px] font-bold cd-text-faint">사용계획서 스캔본</span>
+                  {selEntry.files.length > 0 ? (
+                    <div className="flex flex-col gap-1">
+                      {selEntry.files.map((f, i) => (
+                        <div key={i} className="flex items-center gap-2 text-[12px] cd-text">
+                          <Paperclip className="w-3.5 h-3.5 cd-text-primary shrink-0" />
+                          <span className="truncate flex-1">{f.name}</span>
+                          <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" onClick={() => delFile(sel.employeeId, i)} title="첨부 삭제">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-[11px] cd-text-faint">첨부된 스캔본이 없습니다. 상단 업로드로 자동 매칭하거나 아래에서 직접 첨부하세요.</span>
+                  )}
+                  <label className="cd-btn cd-btn-ghost rounded-lg px-3 py-1.5 text-xs font-semibold self-start border cd-border-c cursor-pointer flex items-center gap-1">
+                    <Paperclip className="w-3.5 h-3.5" /> 직접 첨부
+                    <input type="file" multiple accept="application/pdf,image/*" className="hidden" onChange={(e) => { addFiles(sel.employeeId, e.target.files); e.target.value = ""; }} />
+                  </label>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-2 px-5 py-3 border-t cd-border-c">
+          <span className="text-[11px] cd-text-faint">등록 대상 {prepared.length}명</span>
           <button type="button" className="cd-btn cd-btn-ghost text-xs px-3 py-2 ml-auto" onClick={onClose}>
             취소
           </button>
@@ -397,6 +544,15 @@ function BackfillModal({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function Field({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-[11px] font-bold cd-text-faint">{label}</span>
+      <div className="rounded-lg border cd-border-c px-3 py-2 text-[13px] cd-text truncate">{value}</div>
     </div>
   );
 }

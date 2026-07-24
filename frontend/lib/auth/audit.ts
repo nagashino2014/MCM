@@ -73,6 +73,8 @@ export type AuditAction =
   | "approval_leave_notice_submit"
   | "adt_attendance_map"
   | "adt_attendance_settings"
+  | "adt_attendance_upload"
+  | "adt_attendance_exclude"
   | "alert.ack";
 
 export interface AuditEntry {

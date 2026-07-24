@@ -23,6 +23,7 @@ export interface WeeklyRow {
   nightMinutes: number;
   daysWorked: number;
   overLimit: boolean;
+  excluded: boolean; // 초과근무 산정 제외(특수관계인·임원)
 }
 
 export interface DailyRow {
@@ -58,6 +59,7 @@ export interface MappableEmployee {
   employeeNo: string | null;
   adtEmpNo: string | null;
   deptName: string | null;
+  overtimeExcluded: boolean;
 }
 
 /** 최근 주(week_start) 목록 — 화면 드롭다운. */
@@ -78,7 +80,7 @@ export async function listWeekly(weekStart: string): Promise<WeeklyRow[]> {
   const rows = rowsToObjects(
     await db.exec(
       `SELECT w.adt_emp_no, w.week_start, w.employee_id, w.emp_name,
-              e.name AS emp_profile_name, e.photo_public_path, d.dept_name, p.position_name,
+              e.name AS emp_profile_name, e.photo_public_path, e.overtime_excluded, d.dept_name, p.position_name,
               w.worked_minutes, w.overtime_minutes, w.overtime_night_minutes, w.overtime_day_minutes,
               w.excess_minutes, w.night_minutes, w.days_worked, w.over_limit
          FROM attendance_weekly w
@@ -86,7 +88,7 @@ export async function listWeekly(weekStart: string): Promise<WeeklyRow[]> {
          LEFT JOIN departments d ON d.dept_id = e.dept_id
          LEFT JOIN positions p ON p.position_id = e.position_id
         WHERE w.week_start = $1::date
-        ORDER BY w.overtime_minutes DESC, w.excess_minutes DESC, w.adt_emp_no`,
+        ORDER BY COALESCE(e.overtime_excluded, false), w.overtime_minutes DESC, w.excess_minutes DESC, w.adt_emp_no`,
       [weekStart]
     )
   );
@@ -106,6 +108,7 @@ export async function listWeekly(weekStart: string): Promise<WeeklyRow[]> {
     nightMinutes: Number(r.night_minutes ?? 0),
     daysWorked: Number(r.days_worked ?? 0),
     overLimit: r.over_limit === true || r.over_limit === "t",
+    excluded: r.overtime_excluded === true || r.overtime_excluded === "t",
   }));
 }
 
@@ -177,7 +180,7 @@ export async function listMappableEmployees(): Promise<MappableEmployee[]> {
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT e.employee_id, e.name, e.employee_no, e.adt_emp_no, d.dept_name
+      `SELECT e.employee_id, e.name, e.employee_no, e.adt_emp_no, e.overtime_excluded, d.dept_name
          FROM employee_profiles e
          LEFT JOIN departments d ON d.dept_id = e.dept_id
         WHERE e.status = 'active'
@@ -190,7 +193,15 @@ export async function listMappableEmployees(): Promise<MappableEmployee[]> {
     employeeNo: r.employee_no != null ? String(r.employee_no) : null,
     adtEmpNo: r.adt_emp_no != null ? String(r.adt_emp_no) : null,
     deptName: r.dept_name != null ? String(r.dept_name) : null,
+    overtimeExcluded: r.overtime_excluded === true || r.overtime_excluded === "t",
   }));
+}
+
+/** 초과근무 산정 제외(특수관계인·임원) 지정/해제. */
+export async function setOvertimeExcluded(employeeId: string, excluded: boolean): Promise<void> {
+  await withDbWrite(async (db) => {
+    await db.run(`UPDATE employee_profiles SET overtime_excluded = $1, updated_at = $2 WHERE employee_id = $3`, [excluded, new Date().toISOString(), employeeId]);
+  });
 }
 
 /**

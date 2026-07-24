@@ -10,6 +10,7 @@ import {
   listWeekly,
   mapAdtEmpNo,
   saveAttendanceSettings,
+  setOvertimeExcluded,
   unmapAdtEmpNo,
 } from "@/lib/adt/queries";
 import type { AttendanceSettings } from "@/lib/adt/types";
@@ -48,6 +49,7 @@ export async function GET(req: NextRequest) {
 interface PostBody {
   map?: { employeeId: string; adtEmpNo: string };
   unmap?: { employeeId: string };
+  exclude?: { employeeId: string; excluded: boolean };
   settings?: Partial<AttendanceSettings>;
 }
 
@@ -67,6 +69,11 @@ export async function POST(req: NextRequest) {
     if (body.unmap?.employeeId) {
       await unmapAdtEmpNo(body.unmap.employeeId);
       await recordAuditLog({ actorUserId: actor.userId, action: "adt_attendance_map", targetTable: "employee_profiles", targetId: body.unmap.employeeId, after: { adtEmpNo: null } });
+      return NextResponse.json({ ok: true });
+    }
+    if (body.exclude?.employeeId) {
+      await setOvertimeExcluded(body.exclude.employeeId, !!body.exclude.excluded);
+      await recordAuditLog({ actorUserId: actor.userId, action: "adt_attendance_exclude", targetTable: "employee_profiles", targetId: body.exclude.employeeId, after: { overtimeExcluded: !!body.exclude.excluded } });
       return NextResponse.json({ ok: true });
     }
     if (body.settings) {

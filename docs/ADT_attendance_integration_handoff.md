@@ -241,32 +241,29 @@ ON CONFLICT (emp_no, work_date) DO UPDATE
 - 메뉴: 전자결재 서브메뉴에 "근태·초과근무 관리" 추가([config/menu.ts](../frontend/config/menu.ts)). 감사액션 `adt_attendance_map`·`adt_attendance_settings`.
 - 시각 확인은 089 적용·데이터 수신 후 배포에서(Ctrl+Shift+R).
 
-## 7-3. 운용 방식 확정 — file(S3) 모드 ★
+## 7-3. 운용 방식 최종 확정 — 웹 업로드 ★
 
-DB 직접 전송(§2-1)은 사내 컨트롤러 PC → Aurora(private) 직접 접속이 필요해 채택하지 않는다.
-대신 **S3 경유 file 모드**로 확정: 사내는 아웃바운드 HTTPS(S3 업로드)만 하면 되고 Aurora 접근이 불필요하다.
+컨트롤러 "근태결과 파일생성"은 **근태처리(집계) 실행에 종속**돼 자동 스케줄이 불안정했고, 근태처리 자체가 **월 1회 수동**이다.
+그래서 자동화(DB 직접전송·S3 sync)를 접고, **관리자가 조회 엑셀을 웹 화면에서 직접 업로드**하는 방식으로 최종 확정한다. AWS 키·CLI·작업 스케줄러가 전부 불필요하다.
 
 ```
-[컨트롤러] 근태결과 파일생성(로컬 폴더 ovrwrk_YYYYMMDD.txt)
-   → [사내 PC] aws s3 sync → s3://mcm-ieps-staging-adt-attendance/incoming/
-      → [EventBridge 30분] → [ECS RunTask: adt-ingest.cjs, mode=file, S3] → 스테이징→일별→주별
+근태처리 → 조회 → 엑셀(.xls) 다운로드
+   → /approval/attendance "엑셀 업로드" 탭에서 업로드(본사·지사 동시 가능)
+      → 서버가 파싱 → 스테이징 → 일별 → 주별 산정(즉시)
 ```
 
-- 배치: `lib/adt/source.ts` 의 `S3Source`(ListObjectsV2→GetObject→파싱→스테이징 upsert). 멱등이라 매 주기 전체 재읽기 안전(파일 급증 시 증분/archive는 후속).
-- 인프라(`adt-ingest.tf`, 배포됨): 전용 버킷 `mcm-ieps-staging-adt-attendance`, ECS task role 의 `incoming/*` 읽기 권한, 스케줄 env(`ADT_INGEST_MODE=file`·`ADT_FILE_S3_BUCKET`·`ADT_FILE_S3_PREFIX=incoming/`), 사내 업로드 전용 IAM 사용자 `mcm-ieps-staging-adt-uploader`(incoming/* 쓰기만).
+- **엑셀 파서** `lib/adt/excel.ts`(SheetJS): 첫 시트, **헤더명 기준 매핑**(사용자ID·부서·직급·이름·근무일자·근무일명칭·출근·퇴근·연장·총합·인정). "총합" 합계행·출퇴근 누락일 스킵. 본사(전체)·지사(개인) 두 형식 공용. 실측 검증 완료(본사 42명 1,302건 / 울산 1명 31건). 출근·퇴근 원본 시각(HH:MM)으로 **자체 재산정**, 연장/총합/인정(컨트롤러 산정치)은 분 환산해 감사 보존.
+- **업로드 API** `app/api/approval/attendance/upload/route.ts`(multipart) → `parseAttendanceWorkbook` → `upsertRawRecords` → `ingestStaging`. admin 전용, `recordAuditLog`.
+- **화면** `/approval/attendance` "엑셀 업로드" 탭 — 파일 선택(다중)·결과(반영/산정/미매칭) 표시.
+- **보조 배치** `adt-ingest.tf`(mode=db, `rate(1 hour)`): 직원 매핑 후 미처리 스테이징 재정규화만 담당(주 경로는 웹 업로드). ※ S3 sync 경로·전용 버킷·업로드 IAM 은 폐기(제거). 문서 `ADT_onprem_setup_runbook.md` 도 폐기.
 
-**사내 컨트롤러 PC 설정(사용자 몫)**
-1. **업로드 계정 키 발급**: IAM 콘솔 → 사용자 `mcm-ieps-staging-adt-uploader` → 액세스 키 생성(장기 키가 tfstate에 남지 않도록 콘솔 수동 발급). 사내 PC 에 AWS CLI 설치 후 `aws configure`(ap-northeast-2)로 이 키 등록.
-2. **컨트롤러 "근태결과 파일생성"**: 출력 폴더(예 `C:\adt\export`)에 `ovrwrk_YYYYMMDD.txt` 생성, 필드 구분자 탭(기본) — 실제 구분자/컬럼순서/인코딩은 벤더 설정 후 실측해 `ADT_FILE_DELIMITER` 등으로 조정(한글 EUC-KR 이면 iconv 후속).
-3. **주기 업로드**(작업 스케줄러 30분 등):
-   ```
-   aws s3 sync C:\adt\export s3://mcm-ieps-staging-adt-attendance/incoming/ --exclude "*" --include "ovrwrk_*.txt"
-   ```
-4. 첫 업로드 후 다음 배치 주기(≤30분)에 자동 취식 → `/approval/attendance` **미매칭 매핑** 탭에서 ADT 사번↔직원 연결.
+### 7-4. 산정 제외(특수관계인·임원)
+- `employee_profiles.overtime_excluded`(마이그 090). 출퇴근 데이터는 보관하되 주별 초과근무 리포트·KPI 집계에서 제외(행은 "산정 제외" 표시).
+- 화면 **미매칭 매핑** 탭의 "매핑된 직원"에서 직원별 토글. 대상: 이유억 대표이사·이재영 부장·이도희 대리(가족).
 
 **남은 후속(3차)**
 - 급여 데이터 연동 → 수당 금액 산정(월평균임금÷209×배수). 특별휴가 자동 적립(선택).
-- 파일(txt) 포맷 실측 반영(구분자/컬럼/인코딩), 컨트롤러 실제 전송 실증. S3 파일 급증 시 증분/archive 최적화.
+- 엑셀 형식 변형(신규 지사·헤더 변경) 대응, 실제 월 운영 실증.
 
 ## 7. 참고 자료
 

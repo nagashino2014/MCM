@@ -9,10 +9,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlarmClockCheck,
   CalendarClock,
+  CheckCircle2,
+  FileSpreadsheet,
   Link2,
   Moon,
   Save,
   TriangleAlert,
+  UploadCloud,
   UserRoundCheck,
 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
@@ -43,7 +46,7 @@ const dowOf = (d: string): string => {
   return Number.isNaN(t) ? "" : DOW[new Date(t).getUTCDay()];
 };
 
-type Tab = "weekly" | "mapping" | "settings";
+type Tab = "upload" | "weekly" | "mapping" | "settings";
 
 export function AttendanceBoard() {
   const { theme, toggleTheme } = useCdashTheme();
@@ -64,6 +67,7 @@ export function AttendanceBoard() {
         {/* 탭 */}
         <div className="flex items-center gap-1.5 mb-4 flex-wrap">
           {([
+            ["upload", "엑셀 업로드"],
             ["weekly", "주별 초과근무"],
             ["mapping", "미매칭 매핑"],
             ["settings", "산정 정책"],
@@ -86,6 +90,7 @@ export function AttendanceBoard() {
           ))}
         </div>
 
+        {tab === "upload" && <UploadPanel onDone={() => setTab("weekly")} />}
         {tab === "weekly" && <WeeklyPanel />}
         {tab === "mapping" && <MappingPanel onCount={setUnmatchedCount} />}
         {tab === "settings" && <SettingsPanel />}
@@ -141,10 +146,12 @@ function WeeklyPanel() {
   };
 
   const kpi = useMemo(() => {
-    const totalOt = rows.reduce((a, r) => a + r.overtimeMinutes, 0);
-    const totalNight = rows.reduce((a, r) => a + r.overtimeNightMinutes, 0);
-    const overLimit = rows.filter((r) => r.overLimit).length;
-    return { totalOt, totalNight, overLimit, people: rows.length };
+    // 산정 제외(특수관계인·임원)는 집계에서 뺀다.
+    const act = rows.filter((r) => !r.excluded);
+    const totalOt = act.reduce((a, r) => a + r.overtimeMinutes, 0);
+    const totalNight = act.reduce((a, r) => a + r.overtimeNightMinutes, 0);
+    const overLimit = act.filter((r) => r.overLimit).length;
+    return { totalOt, totalNight, overLimit, people: act.length };
   }, [rows]);
 
   return (
@@ -186,7 +193,7 @@ function WeeklyPanel() {
           </div>
           {rows.map((r) => (
             <div key={r.adtEmpNo} className="border-b cd-border-c last:border-b-0">
-              <button type="button" onClick={() => toggle(r.adtEmpNo)} className="w-full grid items-center px-3 py-2.5 text-left hover:cd-tint-primary transition-colors" style={gridCols}>
+              <button type="button" onClick={() => toggle(r.adtEmpNo)} className={`w-full grid items-center px-3 py-2.5 text-left hover:cd-tint-primary transition-colors ${r.excluded ? "opacity-45" : ""}`} style={gridCols}>
                 <span className="flex items-center gap-2 min-w-0">
                   <EmployeeAvatar employeeId={r.employeeId} photoPath={r.photoPath} size={30} />
                   <span className="min-w-0">
@@ -200,7 +207,9 @@ function WeeklyPanel() {
                 <span className="text-right font-mono text-[13px] font-semibold" style={{ color: r.overtimeNightMinutes > 0 ? "var(--cd-primary)" : "var(--cd-faint)" }}>{hm(r.overtimeNightMinutes)}</span>
                 <span className="text-right font-mono text-[13px] font-bold" style={{ color: r.excessMinutes > 0 ? "var(--cd-danger,#FA896B)" : "var(--cd-faint)" }}>{r.excessMinutes > 0 ? hm(r.excessMinutes) : "-"}</span>
                 <span className="text-center">
-                  {r.overLimit ? (
+                  {r.excluded ? (
+                    <span className="inline-flex items-center text-[10.5px] font-bold rounded-full px-2 py-0.5 border cd-border-c cd-text-faint">산정 제외</span>
+                  ) : r.overLimit ? (
                     <span className="inline-flex items-center gap-1 text-[10.5px] font-bold rounded-full px-2 py-0.5" style={{ background: "var(--cd-danger,#FA896B)", color: "#fff" }}>특별휴가 대상</span>
                   ) : r.overtimeMinutes > 0 ? (
                     <span className="text-[11px] cd-text-faint">정상</span>
@@ -299,6 +308,19 @@ function MappingPanel({ onCount }: { onCount: (n: number) => void }) {
     }
   };
 
+  const toggleExclude = async (e: MappableEmployee) => {
+    setBusy(e.employeeId);
+    try {
+      const res = await fetch("/api/approval/attendance", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ exclude: { employeeId: e.employeeId, excluded: !e.overtimeExcluded } }) });
+      if (!res.ok) throw new Error((await res.json())?.error ?? "변경 실패");
+      await load();
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const alreadyMapped = employees.filter((e) => e.adtEmpNo);
 
   return (
@@ -349,12 +371,21 @@ function MappingPanel({ onCount }: { onCount: (n: number) => void }) {
 
       {alreadyMapped.length > 0 && (
         <div className="rounded-2xl border cd-border-c p-3">
-          <div className="text-[11px] font-bold cd-text-faint mb-2">매핑된 직원 ({alreadyMapped.length})</div>
+          <div className="text-[11px] font-bold cd-text-faint mb-2">매핑된 직원 ({alreadyMapped.length}) — 특수관계인·임원은 "제외"로 지정하면 초과근무 집계에서 빠집니다</div>
           <div className="flex flex-wrap gap-1.5">
             {alreadyMapped.map((e) => (
-              <span key={e.employeeId} className="inline-flex items-center gap-1.5 rounded-lg border cd-border-c px-2 py-1 text-[11.5px]">
+              <span key={e.employeeId} className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11.5px] ${e.overtimeExcluded ? "cd-border-c opacity-60" : "cd-border-c"}`}>
                 <span className="cd-text font-medium">{e.name}</span>
                 <span className="cd-text-faint font-mono">{e.adtEmpNo}</span>
+                <button
+                  type="button"
+                  disabled={busy === e.employeeId}
+                  onClick={() => toggleExclude(e)}
+                  className={`ml-1 rounded px-1.5 py-0.5 text-[10px] font-bold border disabled:opacity-50 ${e.overtimeExcluded ? "cd-fill-primary border-transparent text-white" : "cd-border-c cd-text-faint hover:cd-tint-primary"}`}
+                  title={e.overtimeExcluded ? "산정 제외 해제" : "초과근무 산정에서 제외"}
+                >
+                  {e.overtimeExcluded ? "산정 제외됨" : "제외"}
+                </button>
               </span>
             ))}
           </div>
@@ -444,6 +475,127 @@ function SettingsPanel() {
       <p className="text-[11.5px] cd-text-faint">
         ※ 수당 금액(월평균임금 ÷ {s.wageDivisorHours} × 배수)은 직원별 급여 데이터 연동 후 지원됩니다. 현재는 시간·배수 대상까지 산정합니다.
       </p>
+    </div>
+  );
+}
+
+/* ================= 엑셀 업로드 ================= */
+interface UploadResult {
+  collected: number;
+  processedRaw: number;
+  dailyUpserts: number;
+  weeksRecomputed: number;
+  matched: number;
+  unmatched: number;
+  perFile: Array<{ name: string; records: number; skipped: number; error?: string }>;
+}
+
+function UploadPanel({ onDone }: { onDone: () => void }) {
+  const [files, setFiles] = useState<File[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<UploadResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async () => {
+    if (!files.length) {
+      alert("업로드할 엑셀 파일을 선택하세요.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setResult(null);
+    try {
+      const fd = new FormData();
+      files.forEach((f) => fd.append("files", f));
+      const res = await fetch("/api/approval/attendance/upload", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "업로드에 실패했습니다.");
+      setResult(data as UploadResult);
+      setFiles([]);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-4 max-w-2xl">
+      <p className="text-[13px] cd-text-muted">
+        근태처리 후 조회에서 받은 <b>엑셀(.xls/.xlsx)</b>을 올리면 자동으로 파싱·초과근무 산정까지 됩니다. 본사·지사 파일을 함께 선택할 수 있습니다.
+      </p>
+
+      {/* 파일 선택 */}
+      <label className="rounded-2xl border border-dashed cd-border-c p-6 flex flex-col items-center gap-2 cursor-pointer hover:cd-tint-primary transition-colors">
+        <UploadCloud className="w-8 h-8" style={{ color: "var(--cd-primary)" }} />
+        <span className="text-[13px] cd-text font-semibold">엑셀 파일 선택</span>
+        <span className="text-[11.5px] cd-text-faint">여러 개 동시 선택 가능 · .xls / .xlsx</span>
+        <input
+          type="file"
+          multiple
+          accept=".xls,.xlsx"
+          className="hidden"
+          onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+        />
+      </label>
+
+      {files.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          {files.map((f, i) => (
+            <div key={i} className="flex items-center gap-2 text-[12.5px] cd-text rounded-lg border cd-border-c px-3 py-2">
+              <FileSpreadsheet className="w-4 h-4 shrink-0" style={{ color: "var(--cd-primary)" }} />
+              <span className="truncate flex-1">{f.name}</span>
+              <span className="cd-text-faint">{(f.size / 1024).toFixed(0)} KB</span>
+            </div>
+          ))}
+          <button type="button" disabled={busy} onClick={submit} className="cd-btn cd-btn-primary rounded-lg px-4 py-2 text-[13px] font-semibold disabled:opacity-50 mt-1 self-start">
+            <UploadCloud className="w-4 h-4 inline mr-1" /> {busy ? "처리 중…" : `${files.length}개 업로드`}
+          </button>
+        </div>
+      )}
+
+      {error && <p className="text-[13px]" style={{ color: "var(--cd-danger,#FA896B)" }}>{error}</p>}
+
+      {result && (
+        <div className="rounded-2xl border cd-border-c p-4 flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-5 h-5" style={{ color: "var(--cd-primary)" }} />
+            <span className="text-[14px] font-bold cd-text">업로드 완료</span>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
+            <Stat label="스테이징 반영" value={result.collected} />
+            <Stat label="일별 산정" value={result.dailyUpserts} />
+            <Stat label="주 재계산" value={result.weeksRecomputed} />
+            <Stat label="미매칭" value={result.unmatched} danger={result.unmatched > 0} />
+          </div>
+          <div className="flex flex-col gap-1 text-[12px] cd-text-faint">
+            {result.perFile.map((f, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <FileSpreadsheet className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">{f.name}</span>
+                <span>— {f.error ? <span style={{ color: "var(--cd-danger,#FA896B)" }}>{f.error}</span> : `${f.records}건 (스킵 ${f.skipped})`}</span>
+              </div>
+            ))}
+          </div>
+          {result.unmatched > 0 && (
+            <p className="text-[12px] rounded-lg cd-tint-primary px-3 py-2" style={{ color: "var(--cd-primary)" }}>
+              직원 자동연결 안 된 {result.unmatched}건이 있습니다 — <b>미매칭 매핑</b> 탭에서 ADT 사번↔직원을 연결하세요.
+            </p>
+          )}
+          <button type="button" onClick={onDone} className="cd-btn rounded-lg border cd-border-c px-3 py-1.5 text-xs font-semibold self-start">
+            주별 초과근무 보기 →
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Stat({ label, value, danger }: { label: string; value: number; danger?: boolean }) {
+  return (
+    <div className="rounded-xl border cd-border-c p-2.5">
+      <div className="text-[18px] font-extrabold tracking-tight" style={{ color: danger ? "var(--cd-danger,#FA896B)" : "var(--cd-text)" }}>{value}</div>
+      <div className="text-[10.5px] cd-text-faint">{label}</div>
     </div>
   );
 }

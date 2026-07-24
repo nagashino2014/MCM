@@ -35,7 +35,8 @@
     "tailwind-merge": "^2.5.5",
     "topojson-client": "^3.1.0",
     "undici": "^7.28.0",
-    "unpdf": "^1.6.2"
+    "unpdf": "^1.6.2",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

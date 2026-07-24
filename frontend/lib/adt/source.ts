@@ -97,6 +97,22 @@ export function parseLine(line: string, delimiter: string, columns: string[]): A
   return r;
 }
 
+/** txt 한 파일의 본문을 파싱해 스테이징 upsert. FileSource/S3Source 공용. */
+async function ingestText(
+  db: PgDatabase,
+  text: string,
+  opts: { delimiter: string; columns: string[]; hasHeader?: boolean }
+): Promise<number> {
+  const lines = text.split(/\r?\n/).filter((l) => l.trim() !== "");
+  const body = opts.hasHeader ? lines.slice(1) : lines;
+  const records: AdtRawRecord[] = [];
+  for (const line of body) {
+    const rec = parseLine(line, opts.delimiter, opts.columns);
+    if (rec) records.push(rec);
+  }
+  return upsertRawRecords(db, records, "file");
+}
+
 export class FileSource implements AttendanceSource {
   readonly kind = "file" as const;
   constructor(private readonly opts: FileSourceOptions) {}
@@ -123,17 +139,72 @@ export class FileSource implements AttendanceSource {
       files += 1;
       try {
         const text = await fs.readFile(path.join(this.opts.dir, name), { encoding });
-        const lines = text.split(/\r?\n/).filter((l) => l.trim() !== "");
-        const body = this.opts.hasHeader ? lines.slice(1) : lines;
-        const records: AdtRawRecord[] = [];
-        for (const line of body) {
-          const rec = parseLine(line, delimiter, columns);
-          if (rec) records.push(rec);
-        }
-        ingested += await upsertRawRecords(db, records, "file");
+        ingested += await ingestText(db, text, { delimiter, columns, hasHeader: this.opts.hasHeader });
       } catch (err) {
         errors.push(`${name}: ${(err as Error).message}`);
       }
+    }
+    return { ingested, files, errors };
+  }
+}
+
+export interface S3SourceOptions {
+  bucket: string;
+  prefix?: string; // 예: 'incoming/'
+  glob?: RegExp; // 객체 basename 필터(기본 ovrwrk_*.txt)
+  delimiter?: string;
+  columns?: string[];
+  encoding?: string; // 기본 utf-8
+  hasHeader?: boolean;
+}
+
+/**
+ * S3 버킷/프리픽스의 txt 를 읽어 스테이징으로.
+ * 사내 컨트롤러 PC 가 `aws s3 sync` 로 올린 파일을 클라우드 배치가 취식(사내→AWS 는 아웃바운드 HTTPS 만).
+ * 멱등(스테이징 upsert)이라 매 주기 전체를 재읽어도 안전 — 파일 수가 커지면 후속에서 증분/archive 최적화.
+ */
+export class S3Source implements AttendanceSource {
+  readonly kind = "file" as const;
+  constructor(private readonly opts: S3SourceOptions) {}
+
+  async collect(db: PgDatabase): Promise<CollectResult> {
+    const { S3Client, ListObjectsV2Command, GetObjectCommand } = await import("@aws-sdk/client-s3");
+    const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "ap-northeast-2";
+    const client = new S3Client({ region });
+    const glob = this.opts.glob ?? /ovrwrk_\d{8}\.txt$/i;
+    const delimiter = this.opts.delimiter ?? "\t";
+    const columns = this.opts.columns ?? DEFAULT_FILE_COLUMNS;
+    const encoding = this.opts.encoding ?? "utf-8";
+    const errors: string[] = [];
+    let ingested = 0;
+    let files = 0;
+
+    let token: string | undefined = undefined;
+    try {
+      do {
+        const out: {
+          Contents?: Array<{ Key?: string }>;
+          NextContinuationToken?: string;
+          IsTruncated?: boolean;
+        } = await client.send(
+          new ListObjectsV2Command({ Bucket: this.opts.bucket, Prefix: this.opts.prefix, ContinuationToken: token })
+        );
+        for (const obj of out.Contents ?? []) {
+          const key = obj.Key;
+          if (!key || !glob.test(key.split("/").pop() ?? key)) continue;
+          files += 1;
+          try {
+            const res = await client.send(new GetObjectCommand({ Bucket: this.opts.bucket, Key: key }));
+            const text = await (res.Body as { transformToString: (enc?: string) => Promise<string> }).transformToString(encoding);
+            ingested += await ingestText(db, text, { delimiter, columns, hasHeader: this.opts.hasHeader });
+          } catch (err) {
+            errors.push(`${key}: ${(err as Error).message}`);
+          }
+        }
+        token = out.IsTruncated ? out.NextContinuationToken : undefined;
+      } while (token);
+    } catch (err) {
+      errors.push(`list s3://${this.opts.bucket}/${this.opts.prefix ?? ""}: ${(err as Error).message}`);
     }
     return { ingested, files, errors };
   }

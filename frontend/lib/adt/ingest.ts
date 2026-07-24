@@ -9,7 +9,7 @@ import { PgDatabase, rowsToObjects, withDbWrite } from "@/lib/db";
 import type { AdtRawRecord, AttendanceSettings } from "./types";
 import { loadAttendanceSettings } from "./settings";
 import { computeDaily, computeWeekly, weekStartOf, ymd8ToDate, type WeeklyDailyInput } from "./overtime";
-import { AttendanceSource, DbStagingSource, FileSource, type CollectResult } from "./source";
+import { AttendanceSource, DbStagingSource, FileSource, S3Source, type CollectResult } from "./source";
 
 export interface IngestResult {
   collected: number; // 소스가 스테이징에 수렴시킨 건수(파일 등)
@@ -209,13 +209,20 @@ export async function ingestStaging(db: PgDatabase, opts: { batchLimit?: number 
 export async function runAdtIngest(opts: {
   mode?: "db" | "file" | "both";
   file?: { dir: string; delimiter?: string; hasHeader?: boolean };
+  s3?: { bucket: string; prefix?: string; delimiter?: string; hasHeader?: boolean };
   batchLimit?: number;
 }): Promise<IngestResult> {
   const mode = opts.mode ?? "db";
   const sources: AttendanceSource[] = [];
   if (mode === "db" || mode === "both") sources.push(new DbStagingSource());
-  if ((mode === "file" || mode === "both") && opts.file?.dir) {
-    sources.push(new FileSource({ dir: opts.file.dir, delimiter: opts.file.delimiter, hasHeader: opts.file.hasHeader }));
+  if (mode === "file" || mode === "both") {
+    // S3(사내 sync 업로드) 우선, 로컬 디렉토리(사내 러너 직접)도 지원.
+    if (opts.s3?.bucket) {
+      sources.push(new S3Source({ bucket: opts.s3.bucket, prefix: opts.s3.prefix, delimiter: opts.s3.delimiter, hasHeader: opts.s3.hasHeader }));
+    }
+    if (opts.file?.dir) {
+      sources.push(new FileSource({ dir: opts.file.dir, delimiter: opts.file.delimiter, hasHeader: opts.file.hasHeader }));
+    }
   }
 
   return withDbWrite(async (db) => {

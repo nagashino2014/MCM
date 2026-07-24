@@ -1,14 +1,86 @@
-# ADT 근태 인제스트 배치.
-# EventBridge(주기) → ECS RunTask(next 이미지 재사용, command override로 .next/adt-ingest.cjs 실행).
-# 배치 엔트리는 Dockerfile builder 의 esbuild(build-batch.mjs)로 번들됨.
-# next task def env(PG*)를 그대로 상속. DB 모드(컨트롤러가 스테이징에 직접 INSERT → 이 배치가 주기 정규화).
-#
-# 주기는 컨트롤러 "자동 근태처리" 스케줄과 무관하게 스테이징을 자주 비우는 용도 — 준실시간 원하면 rate 를 줄인다.
-# file 모드(사내 UNC 공유 txt)는 Fargate 에서 공유폴더 접근 불가 → 사내 러너에서 별도로 실행할 것(adt-ingest.ts 주석 참조).
+# ADT 근태 인제스트 배치 (file 모드 · S3 경유).
+# 사내 컨트롤러 PC 가 "근태결과 파일생성"의 txt(ovrwrk_YYYYMMDD.txt)를 `aws s3 sync` 로 전용 버킷 incoming/ 에 업로드
+#   → EventBridge(주기) → ECS RunTask(next 이미지, .next/adt-ingest.cjs, ADT_INGEST_MODE=file)가 S3 에서 읽어 정규화·산정.
+# 사내→AWS 는 아웃바운드 HTTPS(S3) 만 — Aurora(private) 직접 접속 불필요.
+# next task def env(PG*·AWS_REGION)를 상속. 파일 수가 커지면 후속에서 증분/archive 최적화.
 
+# ── 전용 버킷(사내 업로드 대상) ──────────────────────────────────────────
+resource "aws_s3_bucket" "adt_attendance" {
+  bucket = "${local.name}-adt-attendance"
+  tags   = local.tags
+}
+
+resource "aws_s3_bucket_public_access_block" "adt_attendance" {
+  bucket                  = aws_s3_bucket.adt_attendance.id
+  block_public_acls       = true
+  block_public_policy      = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "adt_attendance" {
+  bucket = aws_s3_bucket.adt_attendance.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+# ── 배치(ECS task role)에 버킷 읽기 권한 ─────────────────────────────────
+resource "aws_iam_role_policy" "adt_ingest_s3_read" {
+  name = "${local.name}-adt-ingest-s3-read"
+  role = aws_iam_role.ecs_task.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["s3:ListBucket"]
+        Resource = [aws_s3_bucket.adt_attendance.arn]
+        Condition = { StringLike = { "s3:prefix" = ["incoming/*"] } }
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = ["${aws_s3_bucket.adt_attendance.arn}/incoming/*"]
+      }
+    ]
+  })
+}
+
+# ── 사내 업로드 전용 IAM 사용자(쓰기 전용) ───────────────────────────────
+# 액세스키는 tfstate 노출을 피하려 콘솔/CLI 로 수동 발급해 사내 PC 에 배치할 것(aws_iam_access_key 미생성).
+resource "aws_iam_user" "adt_uploader" {
+  name = "${local.name}-adt-uploader"
+  tags = local.tags
+}
+
+resource "aws_iam_user_policy" "adt_uploader" {
+  name = "${local.name}-adt-uploader"
+  user = aws_iam_user.adt_uploader.name
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["s3:ListBucket"]
+        Resource = [aws_s3_bucket.adt_attendance.arn]
+        Condition = { StringLike = { "s3:prefix" = ["incoming/*"] } }
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["s3:PutObject"]
+        Resource = ["${aws_s3_bucket.adt_attendance.arn}/incoming/*"]
+      }
+    ]
+  })
+}
+
+# ── 스케줄 → ECS RunTask ─────────────────────────────────────────────────
 resource "aws_cloudwatch_event_rule" "adt_ingest" {
   name                = "${local.name}-adt-ingest"
-  description         = "ADT 근태 스테이징 정규화·초과근무 산정(DB 모드)"
+  description         = "ADT 근태 S3 취식·정규화·초과근무 산정(file 모드)"
   schedule_expression = "rate(30 minutes)"
   tags                = local.tags
 }
@@ -67,12 +139,16 @@ resource "aws_cloudwatch_event_target" "adt_ingest" {
     }
   }
 
-  # next 컨테이너 커맨드를 배치 엔트리로 오버라이드 + DB 모드 env 주입.
+  # next 컨테이너 커맨드를 배치 엔트리로 오버라이드 + file(S3) 모드 env 주입.
   input = jsonencode({
     containerOverrides = [{
-      name        = "next"
-      command     = ["node", ".next/adt-ingest.cjs"]
-      environment = [{ name = "ADT_INGEST_MODE", value = "db" }]
+      name    = "next"
+      command = ["node", ".next/adt-ingest.cjs"]
+      environment = [
+        { name = "ADT_INGEST_MODE", value = "file" },
+        { name = "ADT_FILE_S3_BUCKET", value = aws_s3_bucket.adt_attendance.bucket },
+        { name = "ADT_FILE_S3_PREFIX", value = "incoming/" },
+      ]
     }]
   })
 }

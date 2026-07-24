@@ -241,9 +241,32 @@ ON CONFLICT (emp_no, work_date) DO UPDATE
 - 메뉴: 전자결재 서브메뉴에 "근태·초과근무 관리" 추가([config/menu.ts](../frontend/config/menu.ts)). 감사액션 `adt_attendance_map`·`adt_attendance_settings`.
 - 시각 확인은 089 적용·데이터 수신 후 배포에서(Ctrl+Shift+R).
 
+## 7-3. 운용 방식 확정 — file(S3) 모드 ★
+
+DB 직접 전송(§2-1)은 사내 컨트롤러 PC → Aurora(private) 직접 접속이 필요해 채택하지 않는다.
+대신 **S3 경유 file 모드**로 확정: 사내는 아웃바운드 HTTPS(S3 업로드)만 하면 되고 Aurora 접근이 불필요하다.
+
+```
+[컨트롤러] 근태결과 파일생성(로컬 폴더 ovrwrk_YYYYMMDD.txt)
+   → [사내 PC] aws s3 sync → s3://mcm-ieps-staging-adt-attendance/incoming/
+      → [EventBridge 30분] → [ECS RunTask: adt-ingest.cjs, mode=file, S3] → 스테이징→일별→주별
+```
+
+- 배치: `lib/adt/source.ts` 의 `S3Source`(ListObjectsV2→GetObject→파싱→스테이징 upsert). 멱등이라 매 주기 전체 재읽기 안전(파일 급증 시 증분/archive는 후속).
+- 인프라(`adt-ingest.tf`, 배포됨): 전용 버킷 `mcm-ieps-staging-adt-attendance`, ECS task role 의 `incoming/*` 읽기 권한, 스케줄 env(`ADT_INGEST_MODE=file`·`ADT_FILE_S3_BUCKET`·`ADT_FILE_S3_PREFIX=incoming/`), 사내 업로드 전용 IAM 사용자 `mcm-ieps-staging-adt-uploader`(incoming/* 쓰기만).
+
+**사내 컨트롤러 PC 설정(사용자 몫)**
+1. **업로드 계정 키 발급**: IAM 콘솔 → 사용자 `mcm-ieps-staging-adt-uploader` → 액세스 키 생성(장기 키가 tfstate에 남지 않도록 콘솔 수동 발급). 사내 PC 에 AWS CLI 설치 후 `aws configure`(ap-northeast-2)로 이 키 등록.
+2. **컨트롤러 "근태결과 파일생성"**: 출력 폴더(예 `C:\adt\export`)에 `ovrwrk_YYYYMMDD.txt` 생성, 필드 구분자 탭(기본) — 실제 구분자/컬럼순서/인코딩은 벤더 설정 후 실측해 `ADT_FILE_DELIMITER` 등으로 조정(한글 EUC-KR 이면 iconv 후속).
+3. **주기 업로드**(작업 스케줄러 30분 등):
+   ```
+   aws s3 sync C:\adt\export s3://mcm-ieps-staging-adt-attendance/incoming/ --exclude "*" --include "ovrwrk_*.txt"
+   ```
+4. 첫 업로드 후 다음 배치 주기(≤30분)에 자동 취식 → `/approval/attendance` **미매칭 매핑** 탭에서 ADT 사번↔직원 연결.
+
 **남은 후속(3차)**
 - 급여 데이터 연동 → 수당 금액 산정(월평균임금÷209×배수). 특별휴가 자동 적립(선택).
-- 파일(txt) 포맷 실측 반영(구분자/컬럼/인코딩), 컨트롤러 실제 전송 실증.
+- 파일(txt) 포맷 실측 반영(구분자/컬럼/인코딩), 컨트롤러 실제 전송 실증. S3 파일 급증 시 증분/archive 최적화.
 
 ## 7. 참고 자료
 

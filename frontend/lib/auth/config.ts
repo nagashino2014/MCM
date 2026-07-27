@@ -79,7 +79,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         t.loginAt = Date.now();
       } else if (t.rememberMe !== true) {
         const loginAt = Number(t.loginAt ?? 0);
-        if (!loginAt || Date.now() - loginAt > SHORT_SESSION_MS) {
+        if (!loginAt) {
+          // 배포 전(G-L 이전) 발급 토큰 — 즉시 무효화하면 전 직원이 일제히 로그아웃되므로
+          // 지금부터 12시간 카운트로 1회 마이그레이션(유예).
+          t.loginAt = Date.now();
+        } else if (Date.now() - loginAt > SHORT_SESSION_MS) {
           return null; // 세션 무효화(로그아웃)
         }
       }

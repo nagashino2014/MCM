@@ -75,7 +75,6 @@ export const MENU_ITEMS: MenuItem[] = [
     title: "주소록·조직도",
     href: "/directory",
     icon: BookUser,
-    comingSoon: true, // G6-A 구현 예정(IA 자리 선점)
     group: "collab",
   },
   {

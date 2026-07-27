@@ -18,7 +18,7 @@ import { simpleParser, type AddressObject, type ParsedMail } from "mailparser";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { getS3Client } from "@/lib/storage/logo-storage";
 import { putContractDocument, sanitizeFilename } from "@/lib/storage/contract-document-storage";
-import { getSystemFolderId, MAIL_DOMAIN } from "@/lib/mail/mailbox";
+import { ensureMailbox, getSystemFolderId, MAIL_DOMAIN } from "@/lib/mail/mailbox";
 import { htmlToPlainText } from "@/lib/mail/mime";
 import { isSpamFor } from "@/lib/mail/spam";
 
@@ -132,12 +132,34 @@ async function resolveRecipients(destinations: string[]): Promise<TargetMailbox[
 
   const direct = rowsToObjects(
     await db.exec(
-      `SELECT mailbox_id, address FROM mailboxes WHERE local_part = ANY($1::text[]) AND status = 'active'`,
+      `SELECT mailbox_id, address, local_part FROM mailboxes WHERE local_part = ANY($1::text[]) AND status = 'active'`,
       [localArr]
     )
   );
   const result = new Map<string, TargetMailbox>();
   for (const r of direct) result.set(String(r.mailbox_id), { mailboxId: String(r.mailbox_id), address: String(r.address) });
+
+  // 미생성 메일함 자동 보장(G6-A) — mailbox 는 최초 웹메일 사용 시 lazy 생성이라,
+  // 아직 안 쓴 직원의 회사주소(users.email_local 기반, 주소록·자동완성에 노출)로 온 메일이
+  // 유실되지 않도록 수신 시점에 mailbox 를 생성해 배달한다.
+  const matchedLocals = new Set(direct.map((r) => String(r.local_part)));
+  const unmatched = localArr.filter((l) => !matchedLocals.has(l));
+  if (unmatched.length) {
+    const userRows = rowsToObjects(
+      await db.exec(
+        `SELECT user_id FROM users WHERE LOWER(COALESCE(email_local, '')) = ANY($1::text[]) AND status = 'active'`,
+        [unmatched]
+      )
+    );
+    for (const u of userRows) {
+      try {
+        const mb = await ensureMailbox(String(u.user_id));
+        result.set(mb.mailboxId, { mailboxId: mb.mailboxId, address: mb.address });
+      } catch {
+        // local 유도 불가·주소 충돌 등은 기존 동작(해당 수신자 미배달) 유지
+      }
+    }
+  }
 
   // 별칭/배포리스트 fan-out.
   const aliases = rowsToObjects(

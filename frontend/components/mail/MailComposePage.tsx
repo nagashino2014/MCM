@@ -16,6 +16,7 @@ import { CdInput } from "@/components/cdash/CdField";
 import { useCdToast } from "@/components/cdash/CdToast";
 import { MailEditor } from "@/components/mail/MailEditor";
 import { MailSignatureManager } from "@/components/mail/MailSignatureManager";
+import { RecipientInput } from "@/components/mail/RecipientInput";
 import type { MailMessageDetail } from "@/lib/mail/messages";
 import type { MailSignature } from "@/lib/mail/signatures";
 import "@/components/cdash/cdash.css";
@@ -92,6 +93,9 @@ export function MailComposePage() {
     const mode = searchParams.get("mode");
     const id = searchParams.get("id");
     const draftParam = searchParams.get("draft");
+    // 주소록(G6-A) 등에서 받는 사람을 지정해 진입(/mail/compose?to=...).
+    const toParam = searchParams.get("to");
+    if (toParam) setTo(toParam);
 
     const load = async () => {
       try {
@@ -467,7 +471,7 @@ export function MailComposePage() {
             </div>
           )}
 
-          <CdInput
+          <RecipientInput
             label="받는 사람"
             required
             labelExtra={
@@ -478,14 +482,14 @@ export function MailComposePage() {
               ) : undefined
             }
             value={to}
-            onChange={(e) => {
-              setTo(e.target.value);
+            onChange={(next) => {
+              setTo(next);
               scheduleDraftSave();
             }}
-            placeholder="email@example.com, 홍길동 <hong@example.com>"
+            placeholder="이름·주소를 입력하면 주소록에서 찾아줍니다"
           />
           {showCc && (
-            <CdInput
+            <RecipientInput
               label="참조(CC)"
               labelExtra={
                 !showBcc ? (
@@ -495,20 +499,20 @@ export function MailComposePage() {
                 ) : undefined
               }
               value={cc}
-              onChange={(e) => {
-                setCc(e.target.value);
+              onChange={(next) => {
+                setCc(next);
                 scheduleDraftSave();
               }}
               placeholder="참조 수신자"
             />
           )}
           {showBcc && (
-            <CdInput
+            <RecipientInput
               label="숨은 참조(BCC)"
               hint="숨은 참조 수신자는 다른 수신자에게 표시되지 않습니다."
               value={bcc}
-              onChange={(e) => {
-                setBcc(e.target.value);
+              onChange={(next) => {
+                setBcc(next);
                 scheduleDraftSave();
               }}
               placeholder="숨은 참조 수신자"

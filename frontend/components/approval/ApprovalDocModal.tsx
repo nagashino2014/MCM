@@ -4,7 +4,7 @@
 // 홈/양식별 조회/문서함에서 재사용한다. docId 로 상세를 로드하고, 처리 후 onChanged 를 부른다.
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, X, XCircle } from "lucide-react";
+import { CheckCircle2, Sparkles, X, XCircle } from "lucide-react";
 import { ApprovalFormRenderer } from "@/components/approval/ApprovalFormRenderer";
 import type { ApprovalFieldDef } from "@/lib/approval/fields";
 
@@ -37,6 +37,7 @@ export interface DocDetailData {
   fields: ApprovalFieldDef[];
   steps: DocStepRow[];
   myStepId?: string | null;
+  aiSummary?: { lines: string[]; figures: { label: string; value: string }[]; precedent?: string | null } | null;
 }
 
 export const DOC_STATUS_LABEL: Record<string, string> = {
@@ -172,6 +173,27 @@ export function ApprovalDocModal({
                 </div>
               ))}
             </div>
+
+            {detail.aiSummary && (detail.aiSummary.lines.length > 0 || detail.aiSummary.figures.length > 0) && (
+              <div className="rounded-xl cd-tint-primary p-3 flex flex-col gap-1.5">
+                <span className="text-[11px] font-bold cd-text-primary flex items-center gap-1">
+                  <Sparkles className="w-3.5 h-3.5" /> AI 요약 <span className="font-normal cd-text-faint">— 참고용, 원문을 확인하세요</span>
+                </span>
+                {detail.aiSummary.lines.map((l, i) => (
+                  <p key={i} className="text-[12.5px] cd-text leading-snug">· {l}</p>
+                ))}
+                {detail.aiSummary.figures.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-0.5">
+                    {detail.aiSummary.figures.map((f, i) => (
+                      <span key={i} className="text-[11px] rounded-lg border cd-border-c bg-[color:var(--cd-card-bg)] px-2 py-0.5">
+                        <span className="cd-text-faint">{f.label}</span> <span className="cd-text font-semibold">{f.value}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {detail.aiSummary.precedent && <p className="text-[11px] cd-text-faint mt-0.5">※ {detail.aiSummary.precedent}</p>}
+              </div>
+            )}
 
             <ApprovalFormRenderer
               fields={detail.fields}

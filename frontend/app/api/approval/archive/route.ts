@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
-import { listActedDocs, listDeptDocs, listMyDocs, listOrgFolderDocs, listOrgFolders } from "@/lib/approval/docs";
+import { listActedDocs, listDeptDocs, listMyDocs, listOrgFolderDocs, listOrgFolders, listWatchedDocs } from "@/lib/approval/docs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,6 +13,7 @@ export async function GET(req: NextRequest) {
     const tab = String(sp.get("tab") ?? "mine");
     if (tab === "mine") return NextResponse.json({ docs: await listMyDocs(ctx.userId, "completed", 50) });
     if (tab === "acted") return NextResponse.json({ docs: await listActedDocs(ctx.userId, 50) });
+    if (tab === "watched") return NextResponse.json({ docs: await listWatchedDocs(ctx.userId) });
     if (tab === "dept") return NextResponse.json({ docs: await listDeptDocs(ctx.userId) });
     if (tab === "org") {
       const folders = await listOrgFolders();

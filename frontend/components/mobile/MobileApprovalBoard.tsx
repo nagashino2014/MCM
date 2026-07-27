@@ -18,6 +18,7 @@ interface DocSummary {
   drafterName: string | null;
   submittedAt: string | null;
   updatedAt: string;
+  aiSummary?: { lines: string[]; figures: { label: string; value: string }[]; precedent?: string | null } | null;
 }
 
 const TABS = [
@@ -87,6 +88,14 @@ export function MobileApprovalBoard() {
                 {d.drafterName ?? "-"} · {short(d.submittedAt ?? d.updatedAt)}
                 {d.docNo ? ` · ${d.docNo}` : ""}
               </p>
+              {d.aiSummary && d.aiSummary.lines.length > 0 && (
+                <div className="rounded-lg cd-tint-primary px-2.5 py-1.5 flex flex-col gap-0.5 mt-0.5">
+                  <span className="text-[9px] font-bold cd-text-primary tracking-wide">AI 요약</span>
+                  {d.aiSummary.lines.slice(0, 3).map((l, i) => (
+                    <p key={i} className="text-[11px] cd-text leading-tight">· {l}</p>
+                  ))}
+                </div>
+              )}
             </button>
           ))}
         </div>

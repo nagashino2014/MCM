@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
-import { getDoc, getUserDeptId } from "@/lib/approval/docs";
+import { getDoc, getUserDeptId, markWatcherRead } from "@/lib/approval/docs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,7 +16,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ doc
     // 전사 문서함 지정 양식의 승인 문서는 전 직원, 완료 문서는 같은 부서까지 열람 허용.
     const involved =
       doc.drafterUserId === ctx.userId || doc.steps.some((s) => s.assigneeUserId === ctx.userId || s.delegatedFrom === ctx.userId);
-    let allowed = involved || ctx.role === "admin";
+    const isWatcher = doc.watchers.some((w) => w.userId === ctx.userId);
+    let allowed = involved || isWatcher || ctx.role === "admin";
     if (!allowed && doc.status === "approved" && doc.orgFolder) allowed = true;
     if (!allowed && ["approved", "rejected"].includes(doc.status) && doc.deptId) {
       const myDept = await getUserDeptId(ctx.userId);
@@ -25,6 +26,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ doc
     if (!allowed) {
       return NextResponse.json({ error: "이 문서를 열람할 권한이 없습니다." }, { status: 403 });
     }
+    if (isWatcher) await markWatcherRead(docId, ctx.userId);
     const myStep = doc.steps.find((s) => s.assigneeUserId === ctx.userId && s.status === "pending");
     return NextResponse.json({ doc: { ...doc, myStepId: myStep?.stepId ?? null } });
   } catch (err) {

@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, ClipboardCheck, Send, Save, Trash2, Users, X } from "lucide-react";
+import { ArrowLeft, ClipboardCheck, Send, Save, Trash2, Users, Eye, BookmarkPlus, ShieldCheck, AlertTriangle, Info, Ban, X } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { ApprovalFormRenderer } from "@/components/approval/ApprovalFormRenderer";
@@ -47,6 +47,34 @@ interface LineStep {
   assigneePosition: string | null;
 }
 
+interface Watcher {
+  userId: string;
+  name: string;
+  kind: "ref" | "view";
+}
+
+interface LinePreset {
+  presetId: string;
+  name: string;
+  steps: { stepType: "agree" | "approve"; assigneeUserId: string; assigneeName: string | null; assigneePosition: string | null }[];
+  watchers: { userId: string; name: string | null; kind: "ref" | "view" }[];
+}
+
+/** 조직도 모달이 대상하는 슬롯 — 결재선(합의/승인) 또는 참조/열람. */
+type OrgTarget = "agree" | "approve" | "ref" | "view";
+
+interface PrecheckFinding {
+  level: "block" | "warn" | "info";
+  message: string;
+  source: string;
+}
+interface PrecheckResult {
+  findings: PrecheckFinding[];
+  similar: { title: string; status: string; reason: string | null; note: string }[];
+  llmAvailable: boolean | null;
+  llmError?: string | null;
+}
+
 export function ApprovalDraftBoard() {
   const { theme } = useCdashTheme();
   const router = useRouter();
@@ -60,11 +88,15 @@ export function ApprovalDraftBoard() {
   const [urgent, setUrgent] = useState(false);
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [line, setLine] = useState<LineStep[]>([]);
+  const [watchers, setWatchers] = useState<Watcher[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<"save" | "submit" | null>(null);
-  const [orgModal, setOrgModal] = useState<"agree" | "approve" | null>(null);
+  const [orgModal, setOrgModal] = useState<OrgTarget | null>(null);
   const [orgSnapshot, setOrgSnapshot] = useState<OrganizationSnapshot | null>(null);
+  const [presets, setPresets] = useState<LinePreset[]>([]);
+  const [precheck, setPrecheck] = useState<PrecheckResult | null>(null);
+  const [aiBusy, setAiBusy] = useState(false);
   // 휴가신청 양식이면 본인 잔여 연차 배지 + 휴가 종류 카탈로그(기간 자동화)
   const [leaveRemaining, setLeaveRemaining] = useState<{ granted: number; used: number; remaining: number } | null>(null);
   const [leaveCatalog, setLeaveCatalog] = useState<LeaveTypeItem[]>([]);
@@ -163,6 +195,13 @@ export function ApprovalDraftBoard() {
               assigneePosition: s.assigneePosition,
             }))
           );
+          setWatchers(
+            (d.watchers ?? []).map((w: { userId: string; name: string | null; kind: string }) => ({
+              userId: w.userId,
+              name: w.name ?? "",
+              kind: w.kind === "view" ? "view" : "ref",
+            }))
+          );
         } else {
           if (!formId) throw new Error("양식이 지정되지 않았습니다. 전자결재 홈에서 '새 기안'으로 진입하세요.");
           const res = await fetch(`/api/approval/forms/${encodeURIComponent(formId)}`, { cache: "no-store" });
@@ -183,8 +222,22 @@ export function ApprovalDraftBoard() {
     };
   }, [formId, editDocId]);
 
-  const openOrgModal = async (stepType: "agree" | "approve") => {
-    setOrgModal(stepType);
+  // 결재선 프리셋 목록 로드
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/approval/line-presets", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled && Array.isArray(d?.presets)) setPresets(d.presets);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const openOrgModal = async (target: OrgTarget) => {
+    setOrgModal(target);
     if (!orgSnapshot) {
       try {
         const res = await fetch("/api/sales/org", { cache: "no-store" });
@@ -195,57 +248,165 @@ export function ApprovalDraftBoard() {
     }
   };
 
+  const applyPreset = (p: LinePreset) => {
+    setLine(
+      p.steps.map((s) => ({
+        stepType: s.stepType === "agree" ? "agree" : "approve",
+        assigneeUserId: s.assigneeUserId,
+        assigneeName: s.assigneeName ?? "",
+        assigneePosition: s.assigneePosition,
+      }))
+    );
+    setWatchers(p.watchers.map((w) => ({ userId: w.userId, name: w.name ?? "", kind: w.kind === "view" ? "view" : "ref" })));
+  };
+
+  const saveAsPreset = async () => {
+    if (line.length === 0) {
+      alert("저장할 결재선이 없습니다.");
+      return;
+    }
+    const name = window.prompt("결재선 프리셋 이름을 입력하세요.", "");
+    if (name == null) return;
+    try {
+      const res = await fetch("/api/approval/line-presets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          steps: line.map((s) => ({ stepType: s.stepType, assigneeUserId: s.assigneeUserId, assigneeName: s.assigneeName, assigneePosition: s.assigneePosition })),
+          watchers: watchers.map((w) => ({ userId: w.userId, name: w.name, kind: w.kind })),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "프리셋 저장 실패");
+      const listRes = await fetch("/api/approval/line-presets", { cache: "no-store" });
+      if (listRes.ok) setPresets((await listRes.json()).presets ?? []);
+    } catch (err) {
+      alert((err as Error).message);
+    }
+  };
+
+  const deletePreset = async (presetId: string) => {
+    try {
+      await fetch(`/api/approval/line-presets?presetId=${encodeURIComponent(presetId)}`, { method: "DELETE" });
+      setPresets((prev) => prev.filter((p) => p.presetId !== presetId));
+    } catch {
+      // 무시
+    }
+  };
+
+  // 저장/상신 공용 POST — action 별 body 구성. 저장은 docId 반환.
+  const persist = useCallback(
+    async (action: "save" | "submit"): Promise<{ docId: string; docNo?: string | null }> => {
+      if (!form) throw new Error("양식이 없습니다.");
+      const res = await fetch("/api/approval/docs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          docId,
+          formId: form.formId,
+          title,
+          urgent,
+          fieldValues: values,
+          line,
+          watchers: watchers.map((w) => ({ userId: w.userId, kind: w.kind })),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "저장 실패");
+      setDocId(data.docId);
+      return { docId: data.docId, docNo: data.docNo };
+    },
+    [form, docId, title, urgent, values, line, watchers]
+  );
+
+  const validateForSubmit = useCallback((): boolean => {
+    if (!form) return false;
+    const missing = form.fields
+      .filter((f) => f.required && f.type !== "static")
+      .filter((f) => {
+        const v = values[f.key];
+        if (v == null) return true;
+        if (typeof v === "string") return !v.trim();
+        if (Array.isArray(v)) return v.length === 0;
+        if (typeof v === "object") return Object.values(v as Record<string, unknown>).every((x) => !String(x ?? "").trim());
+        return false;
+      });
+    if (missing.length) {
+      alert(`필수 항목을 입력하세요: ${missing.map((f) => f.label).join(", ")}`);
+      return false;
+    }
+    if (line.length === 0) {
+      alert("결재선에 결재자를 1명 이상 추가하세요.");
+      return false;
+    }
+    return true;
+  }, [form, values, line]);
+
   const send = useCallback(
     async (action: "save" | "submit") => {
       if (!form) return;
-      if (action === "submit") {
-        const missing = form.fields.filter((f) => f.required && f.type !== "static").filter((f) => {
-          const v = values[f.key];
-          if (v == null) return true;
-          if (typeof v === "string") return !v.trim();
-          if (Array.isArray(v)) return v.length === 0;
-          if (typeof v === "object") return Object.values(v as Record<string, unknown>).every((x) => !String(x ?? "").trim());
-          return false;
-        });
-        if (missing.length) {
-          alert(`필수 항목을 입력하세요: ${missing.map((f) => f.label).join(", ")}`);
-          return;
-        }
-        if (line.length === 0) {
-          alert("결재선에 결재자를 1명 이상 추가하세요.");
-          return;
-        }
-      }
+      if (action === "submit" && !validateForSubmit()) return;
       setBusy(action);
       try {
-        const res = await fetch("/api/approval/docs", {
+        const saved = await persist("save");
+        if (action === "save") return;
+        // 상신 전 규칙 사전검토(항상 자동)
+        const preRes = await fetch(`/api/approval/docs/${encodeURIComponent(saved.docId)}/precheck`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action,
-            docId,
-            formId: form.formId,
-            title,
-            urgent,
-            fieldValues: values,
-            line,
-          }),
+          body: JSON.stringify({ llm: false }),
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data?.error ?? "저장 실패");
-        setDocId(data.docId);
-        if (action === "submit") {
-          alert(`상신되었습니다. 문서번호: ${data.docNo}`);
-          router.push("/approval");
+        const pre = (await preRes.json().catch(() => ({}))) as PrecheckResult;
+        const findings = Array.isArray(pre.findings) ? pre.findings : [];
+        setPrecheck({ findings, similar: [], llmAvailable: null });
+        const blocks = findings.filter((f) => f.level === "block");
+        if (blocks.length) {
+          alert(`상신할 수 없습니다:\n${blocks.map((b) => `· ${b.message}`).join("\n")}`);
+          return;
         }
+        const warns = findings.filter((f) => f.level === "warn");
+        if (warns.length && !window.confirm(`아래 경고가 있습니다. 그래도 상신하시겠습니까?\n${warns.map((w) => `· ${w.message}`).join("\n")}`)) {
+          return;
+        }
+        const done = await persist("submit");
+        alert(`상신되었습니다. 문서번호: ${done.docNo}`);
+        router.push("/approval");
       } catch (err) {
         alert((err as Error).message);
       } finally {
         setBusy(null);
       }
     },
-    [form, docId, title, urgent, values, line, router]
+    [form, validateForSubmit, persist, router]
   );
+
+  // AI 검토(수동, 비용 통제) — 저장 후 LLM 사전검토+유사 문서.
+  const aiReview = useCallback(async () => {
+    if (!form) return;
+    setAiBusy(true);
+    try {
+      const saved = await persist("save");
+      const res = await fetch(`/api/approval/docs/${encodeURIComponent(saved.docId)}/precheck`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ llm: true }),
+      });
+      const data = (await res.json().catch(() => ({}))) as PrecheckResult;
+      if (!res.ok) throw new Error((data as { error?: string })?.error ?? "AI 검토 실패");
+      setPrecheck({
+        findings: Array.isArray(data.findings) ? data.findings : [],
+        similar: Array.isArray(data.similar) ? data.similar : [],
+        llmAvailable: data.llmAvailable ?? null,
+        llmError: data.llmError ?? null,
+      });
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setAiBusy(false);
+    }
+  }, [form, persist]);
 
   return (
     <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
@@ -266,6 +427,7 @@ export function ApprovalDraftBoard() {
       ) : error ? (
         <p className="text-sm text-[color:var(--cd-danger,#FA896B)]">{error}</p>
       ) : form ? (
+        <>
         <div className="flex flex-col xl:flex-row gap-4 items-start">
           <div className="cd-card rounded-3xl p-5 flex-1 min-w-0 flex flex-col gap-4">
             <div className="flex items-center gap-3 flex-wrap">
@@ -306,6 +468,24 @@ export function ApprovalDraftBoard() {
               <Users className="w-4 h-4 cd-text-primary" /> 결재선
               <span className="ml-auto text-[11px] font-normal cd-text-faint">기안 → 위에서 아래 순서</span>
             </h3>
+
+            {/* 나의 결재선 프리셋 */}
+            {presets.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1">
+                <span className="text-[10.5px] cd-text-faint mr-0.5">불러오기</span>
+                {presets.map((p) => (
+                  <span key={p.presetId} className="inline-flex items-center rounded-full border cd-border-c overflow-hidden">
+                    <button type="button" className="text-[11px] px-2 py-0.5 hover:cd-tint-primary" onClick={() => applyPreset(p)} title="이 결재선 불러오기">
+                      {p.name}
+                    </button>
+                    <button type="button" className="text-[10px] px-1 cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" onClick={() => deletePreset(p.presetId)} title="프리셋 삭제">
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
             {line.length === 0 && <p className="text-[12px] cd-text-faint">아래 버튼으로 합의/승인 결재자를 추가하세요.</p>}
             <div className="flex flex-col gap-1.5">
               {line.map((s, i) => (
@@ -337,13 +517,60 @@ export function ApprovalDraftBoard() {
                 </div>
               ))}
             </div>
-            <button type="button" className="cd-btn rounded-lg border border-dashed cd-border-c px-3 py-2 text-xs cd-text-faint" onClick={() => openOrgModal("approve")}>
-              ＋ 조직도에서 결재자 추가
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button type="button" className="cd-btn rounded-lg border border-dashed cd-border-c px-3 py-2 text-xs cd-text-faint flex-1" onClick={() => openOrgModal("approve")}>
+                ＋ 결재자 추가
+              </button>
+              <button
+                type="button"
+                className="cd-btn rounded-lg border cd-border-c px-2.5 py-2 text-[11px] cd-text-faint flex items-center gap-1"
+                onClick={saveAsPreset}
+                title="현재 결재선·참조자를 프리셋으로 저장"
+              >
+                <BookmarkPlus className="w-3.5 h-3.5" /> 프리셋 저장
+              </button>
+            </div>
             <p className="text-[10.5px] cd-text-faint">
               결재자가 승인된 휴가 기간 중이면 지정된 대결자에게 자동 위임됩니다(대결 표기).
             </p>
-            <div className="flex items-center gap-2 mt-1">
+
+            {/* 참조/열람자 */}
+            <div className="border-t cd-border-c pt-3 flex flex-col gap-1.5">
+              <h4 className="font-bold cd-text text-[12.5px] flex items-center gap-1.5">
+                <Eye className="w-3.5 h-3.5 cd-text-primary" /> 참조 · 열람
+                <span className="ml-auto text-[10px] font-normal cd-text-faint">참조=완료 통보 · 열람=진행 중 열람</span>
+              </h4>
+              {watchers.length === 0 ? (
+                <p className="text-[11px] cd-text-faint">필요 시 참조/열람자를 지정하세요(선택).</p>
+              ) : (
+                watchers.map((w, i) => (
+                  <div key={`${w.userId}-${i}`} className="rounded-xl border cd-border-c px-3 py-1.5 flex items-center gap-2">
+                    <select
+                      className="cd-select"
+                      style={{ width: 66 }}
+                      value={w.kind}
+                      onChange={(e) => setWatchers((prev) => prev.map((x, xi) => (xi === i ? { ...x, kind: e.target.value as "ref" | "view" } : x)))}
+                    >
+                      <option value="ref">참조</option>
+                      <option value="view">열람</option>
+                    </select>
+                    <span className="text-[12px] cd-text truncate flex-1">{w.name}</span>
+                    <button
+                      type="button"
+                      className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]"
+                      title="제거"
+                      onClick={() => setWatchers((prev) => prev.filter((_, xi) => xi !== i))}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))
+              )}
+              <button type="button" className="cd-btn rounded-lg border border-dashed cd-border-c px-3 py-1.5 text-[11px] cd-text-faint" onClick={() => openOrgModal("ref")}>
+                ＋ 참조/열람자 추가
+              </button>
+            </div>
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
               <button
                 type="button"
                 className="cd-btn rounded-lg border cd-border-c px-3.5 py-2 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
@@ -351,6 +578,15 @@ export function ApprovalDraftBoard() {
                 onClick={() => send("save")}
               >
                 <Save className="w-3.5 h-3.5" /> {busy === "save" ? "저장 중..." : "임시저장"}
+              </button>
+              <button
+                type="button"
+                className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
+                disabled={busy != null || aiBusy}
+                onClick={aiReview}
+                title="AI 사전검토 + 유사 과거 문서(수동)"
+              >
+                <ShieldCheck className="w-3.5 h-3.5" /> {aiBusy ? "검토 중..." : "AI 검토"}
               </button>
               <button
                 type="button"
@@ -363,6 +599,75 @@ export function ApprovalDraftBoard() {
             </div>
           </div>
         </div>
+
+        {/* 사전검토 결과 패널 */}
+        {precheck && (
+          <div className="cd-card rounded-3xl p-5 flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <h3 className="font-bold cd-text text-sm flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 cd-text-primary" /> 사전검토 결과
+              </h3>
+              {precheck.llmAvailable === false && (
+                <span className="text-[11px] cd-text-faint">AI 검토 미설정 — 규칙 검사만 표시</span>
+              )}
+              <button type="button" className="ml-auto cd-btn cd-btn-soft text-[11px]" onClick={() => setPrecheck(null)}>
+                닫기
+              </button>
+            </div>
+            {precheck.findings.length === 0 && precheck.similar.length === 0 ? (
+              <p className="text-[12.5px] cd-text-faint">지적 사항이 없습니다.</p>
+            ) : (
+              <>
+                {precheck.findings.map((f, i) => {
+                  const isBlock = f.level === "block";
+                  const isWarn = f.level === "warn";
+                  const color = isBlock
+                    ? "var(--cd-danger,#FA896B)"
+                    : isWarn
+                      ? "var(--cd-warning,#FFAE1F)"
+                      : "var(--cd-primary)";
+                  const Icon = isBlock ? Ban : isWarn ? AlertTriangle : Info;
+                  return (
+                    <div key={i} className="flex items-start gap-2 rounded-xl border cd-border-c px-3 py-2" style={{ borderColor: color }}>
+                      <Icon className="w-4 h-4 mt-0.5 shrink-0" style={{ color }} />
+                      <div className="flex flex-col">
+                        <span className="text-[12.5px] cd-text">{f.message}</span>
+                        <span className="text-[10px] cd-text-faint">
+                          {isBlock ? "차단" : isWarn ? "경고" : "참고"} · {f.source}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+                {precheck.similar.length > 0 && (
+                  <div className="flex flex-col gap-1.5 mt-1">
+                    <span className="text-[11px] font-bold cd-text-faint">유사 과거 문서</span>
+                    {precheck.similar.map((s, i) => (
+                      <div key={i} className="rounded-xl border cd-border-c px-3 py-2">
+                        <p className="text-[12px] cd-text">
+                          <span
+                            className="text-[10px] font-bold mr-1.5"
+                            style={{ color: s.status === "rejected" ? "var(--cd-danger,#FA896B)" : "var(--cd-success,#13DEB9)" }}
+                          >
+                            {s.status === "rejected" ? "반려" : "승인"}
+                          </span>
+                          {s.title}
+                        </p>
+                        {s.reason && <p className="text-[11px] cd-text-faint">반려사유: {s.reason}</p>}
+                        {s.note && <p className="text-[11px] cd-text-faint">※ {s.note}</p>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+            {precheck.llmError && <p className="text-[11px] cd-text-faint">{precheck.llmError}</p>}
+            <p className="text-[10.5px] cd-text-faint">
+              AI·규칙 검토는 참고용입니다. 차단 항목 외에는 상신을 강제하지 않습니다(최종 판단은 기안자).
+            </p>
+          </div>
+        )}
+        </>
       ) : null}
 
       {/* 조직도 선택 모달 */}
@@ -374,7 +679,9 @@ export function ApprovalDraftBoard() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-2">
-              <h3 className="text-[14px] font-bold cd-text flex-1">결재자 추가 — 조직도에서 선택</h3>
+              <h3 className="text-[14px] font-bold cd-text flex-1">
+                {orgModal === "ref" || orgModal === "view" ? "참조/열람자 추가 — 조직도에서 선택" : "결재자 추가 — 조직도에서 선택"}
+              </h3>
               <button type="button" className="cd-btn cd-btn-soft text-[12px]" onClick={() => setOrgModal(null)}>
                 <X className="w-4 h-4" />
               </button>
@@ -386,21 +693,33 @@ export function ApprovalDraftBoard() {
                 hideHeader
                 onSelectEmployee={(emp) => {
                   if (!emp.userId) {
-                    alert(`${emp.name} 님은 아직 계정이 연결되지 않아 결재자로 지정할 수 없습니다.`);
+                    alert(`${emp.name} 님은 아직 계정이 연결되지 않아 지정할 수 없습니다.`);
                     return;
                   }
                   const userId = emp.userId;
-                  setLine((prev) =>
-                    prev.some((s) => s.assigneeUserId === userId)
-                      ? prev
-                      : [...prev, { stepType: orgModal, assigneeUserId: userId, assigneeName: emp.name, assigneePosition: emp.positionName }]
-                  );
+                  if (orgModal === "ref" || orgModal === "view") {
+                    const kind = orgModal;
+                    setWatchers((prev) =>
+                      prev.some((w) => w.userId === userId) ? prev : [...prev, { userId, name: emp.name, kind }]
+                    );
+                  } else {
+                    const stepType = orgModal;
+                    setLine((prev) =>
+                      prev.some((s) => s.assigneeUserId === userId)
+                        ? prev
+                        : [...prev, { stepType, assigneeUserId: userId, assigneeName: emp.name, assigneePosition: emp.positionName }]
+                    );
+                  }
                 }}
               />
             ) : (
               <p className="text-[12px] cd-text-faint py-6 text-center">조직도를 불러오는 중입니다.</p>
             )}
-            <p className="text-[10px] cd-text-faint">인원을 클릭하면 결재선 맨 뒤에 추가됩니다. 타입(합의/승인)은 목록에서 변경하세요.</p>
+            <p className="text-[10px] cd-text-faint">
+              {orgModal === "ref" || orgModal === "view"
+                ? "인원을 클릭하면 참조/열람자로 추가됩니다. 참조=완료 통보, 열람=진행 중 열람."
+                : "인원을 클릭하면 결재선 맨 뒤에 추가됩니다. 타입(합의/승인)은 목록에서 변경하세요."}
+            </p>
           </div>
         </div>
       )}

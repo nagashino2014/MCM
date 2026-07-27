@@ -3,6 +3,8 @@ import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
 import { parseFields, type ApprovalFieldDef } from "@/lib/approval/fields";
 import { getForm } from "@/lib/approval/forms";
 import { recordLeaveUsageOnApproval } from "@/lib/approval/leave";
+import { notifyPendingSteps, notifyDrafterResult } from "@/lib/approval/notify";
+import { generateDocSummary } from "@/lib/approval/summarize";
 
 /*
  * 전자결재 문서(084) — 기안 저장/상신·채번·결재선 상태 전이·대결 라우팅·결재함 쿼리.
@@ -20,6 +22,12 @@ export interface ApprovalLineStepInput {
   assigneePosition?: string;
   /** 같은 order 로 묶을 병렬 합의 그룹 — 미지정 시 순차(단계마다 order 증가) */
   parallelGroup?: number;
+}
+
+/** 참조/열람 지정(AX-P0) — ref=완료 통보, view=진행 중 열람. */
+export interface ApprovalWatcherInput {
+  userId: string;
+  kind: "ref" | "view";
 }
 
 export interface ApprovalStep {
@@ -51,6 +59,32 @@ export interface ApprovalDocSummary {
   updatedAt: string;
   /** 결재함 조회 시 — 내 차례 step */
   myStepId?: string | null;
+  /** AX-P2 결재자 AI 요약(상신 시 생성). 미생성/실패 시 null. */
+  aiSummary?: DocAiSummaryLite | null;
+}
+
+/** 홈·모달 카드용 요약 표출 형태(생성 세부는 lib/approval/summarize.ts). */
+export interface DocAiSummaryLite {
+  lines: string[];
+  figures: { label: string; value: string }[];
+  precedent?: string | null;
+}
+
+function parseAiSummary(raw: unknown): DocAiSummaryLite | null {
+  if (raw == null) return null;
+  let o: Record<string, unknown> = {};
+  try {
+    const v = typeof raw === "string" ? JSON.parse(raw) : raw;
+    if (v && typeof v === "object") o = v as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+  const lines = Array.isArray(o.lines) ? o.lines.map((x) => String(x)).filter(Boolean) : [];
+  const figures = Array.isArray(o.figures)
+    ? (o.figures as Record<string, unknown>[]).map((x) => ({ label: String(x?.label ?? ""), value: String(x?.value ?? "") })).filter((x) => x.label && x.value)
+    : [];
+  if (!lines.length && !figures.length) return null;
+  return { lines, figures, precedent: o.precedent != null ? String(o.precedent) : null };
 }
 
 export interface ApprovalDocDetail extends ApprovalDocSummary {
@@ -63,6 +97,13 @@ export interface ApprovalDocDetail extends ApprovalDocSummary {
   /** 양식의 전사 문서함 지정값 — 있으면 승인 문서는 전 직원 열람 허용 */
   orgFolder: string | null;
   deptId: string | null;
+  watchers: ApprovalWatcher[];
+}
+
+export interface ApprovalWatcher {
+  userId: string;
+  name: string | null;
+  kind: string; // ref | view
 }
 
 function mapStep(r: Record<string, unknown>): ApprovalStep {
@@ -96,6 +137,7 @@ function mapSummary(r: Record<string, unknown>): ApprovalDocSummary {
     completedAt: r.completed_at != null ? String(r.completed_at) : null,
     updatedAt: String(r.updated_at ?? ""),
     myStepId: r.my_step_id != null ? String(r.my_step_id) : null,
+    aiSummary: parseAiSummary(r.ai_summary),
   };
 }
 
@@ -200,6 +242,7 @@ export async function saveDoc(params: {
   urgent: boolean;
   fieldValues: Record<string, unknown>;
   line: ApprovalLineStepInput[];
+  watchers?: ApprovalWatcherInput[];
   actorUserId: string;
 }): Promise<string> {
   const form = await getForm(params.formId);
@@ -208,6 +251,7 @@ export async function saveDoc(params: {
   const now = new Date().toISOString();
   const drafter = await loadDrafterSnapshot(params.actorUserId);
   const snaps = await loadAssigneeSnapshots(params.line.map((s) => s.assigneeUserId));
+  const watchers = (params.watchers ?? []).filter((w) => w.userId && (w.kind === "ref" || w.kind === "view"));
 
   await withDbWrite(async (txn) => {
     if (params.docId) {
@@ -271,12 +315,25 @@ export async function saveDoc(params: {
         ]
       );
     }
+    // 참조/열람자 교체 저장(중복 제거)
+    await txn.run(`DELETE FROM approval_watchers WHERE doc_id = $1`, [docId]);
+    const seen = new Set<string>();
+    for (const w of watchers) {
+      const dk = `${w.userId}:${w.kind}`;
+      if (seen.has(dk)) continue;
+      seen.add(dk);
+      await txn.run(
+        `INSERT INTO approval_watchers (watcher_id, doc_id, user_id, kind, created_at) VALUES ($1, $2, $3, $4, $5)`,
+        ["awch-" + crypto.randomUUID().replace(/-/g, "").slice(0, 14), docId, w.userId, w.kind, now]
+      );
+    }
   });
   return docId;
 }
 
-/** 특정 order 의 waiting 단계를 pending 으로 — 대결 라우팅을 여기서 적용한다. */
+/** 특정 order 의 waiting 단계를 pending 으로 — 대결 라우팅을 여기서 적용한다. activated_at 기록(체류시간 산출용). */
 async function activateOrder(txn: PgDatabase, docId: string, order: number): Promise<void> {
+  const now = new Date().toISOString();
   const steps = rowsToObjects(
     await txn.exec(`SELECT step_id, assignee_user_id FROM approval_steps WHERE doc_id = $1 AND step_order = $2 AND status = 'waiting'`, [
       docId,
@@ -289,12 +346,12 @@ async function activateOrder(txn: PgDatabase, docId: string, order: number): Pro
     if (delegate && delegate !== assignee) {
       const snap = await loadAssigneeSnapshots([delegate]);
       await txn.run(
-        `UPDATE approval_steps SET status = 'pending', assignee_user_id = $2, assignee_name = $3, assignee_position = $4, delegated_from = $5
+        `UPDATE approval_steps SET status = 'pending', activated_at = $6, assignee_user_id = $2, assignee_name = $3, assignee_position = $4, delegated_from = $5
           WHERE step_id = $1`,
-        [String(s.step_id), delegate, snap.get(delegate)?.name ?? null, snap.get(delegate)?.position ?? null, assignee]
+        [String(s.step_id), delegate, snap.get(delegate)?.name ?? null, snap.get(delegate)?.position ?? null, assignee, now]
       );
     } else {
-      await txn.run(`UPDATE approval_steps SET status = 'pending' WHERE step_id = $1`, [String(s.step_id)]);
+      await txn.run(`UPDATE approval_steps SET status = 'pending', activated_at = $2 WHERE step_id = $1`, [String(s.step_id), now]);
     }
   }
 }
@@ -329,6 +386,10 @@ export async function submitDoc(docId: string, actorUserId: string): Promise<{ d
     await txn.run(`UPDATE approval_steps SET status = 'waiting', acted_at = NULL, comment = NULL WHERE doc_id = $1`, [docId]);
     await activateOrder(txn, docId, 1);
   });
+  // 커밋 후 — 첫 결재자에게 알림(fire-and-forget, 실패해도 상신은 완료)
+  await notifyPendingSteps(docId);
+  // AI 요약 생성(상신 시 자동, 비차단) — 결재자가 열기 전 준비. 실패해도 원문 폴백.
+  void generateDocSummary(docId).catch(() => {});
   return { docNo };
 }
 
@@ -394,6 +455,10 @@ export async function actOnDoc(params: {
       }
     }
   });
+  // 커밋 후 알림 — 최종 승인/반려는 기안자에게, 진행 중이면 다음 결재자에게(단계별 멱등).
+  if (docStatus === "approved") await notifyDrafterResult(params.docId, "approved");
+  else if (docStatus === "rejected") await notifyDrafterResult(params.docId, "rejected");
+  else await notifyPendingSteps(params.docId);
   return { docStatus };
 }
 
@@ -467,6 +532,17 @@ function mapArchive(r: Record<string, unknown>): ArchiveDocRow {
   };
 }
 
+/** 참조/열람자 열람 시각 기록(안 읽음 배지 해제). */
+export async function markWatcherRead(docId: string, userId: string): Promise<void> {
+  await withDbWrite(async (db) => {
+    await db.run(`UPDATE approval_watchers SET read_at = $3 WHERE doc_id = $1 AND user_id = $2 AND read_at IS NULL`, [
+      docId,
+      userId,
+      new Date().toISOString(),
+    ]);
+  });
+}
+
 /** 뷰어의 소속 부서(부서 문서함·열람 범위 판정용) */
 export async function getUserDeptId(userId: string): Promise<string | null> {
   const db = await getDb();
@@ -518,6 +594,27 @@ export async function listOrgFolderDocs(folder: string, limit = 50): Promise<Arc
     )
   );
   return rows.map(mapArchive);
+}
+
+/** 내가 참조/열람자로 지정된 문서(안 읽음 우선). ref/view 모두 포함. */
+export async function listWatchedDocs(userId: string, limit = 50): Promise<Array<ArchiveDocRow & { watchKind: string; unread: boolean }>> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT d.*, f.name AS form_name, f.retention_years, f.org_folder, w.kind AS watch_kind, w.read_at
+         FROM approval_watchers w
+         JOIN approval_docs d ON d.doc_id = w.doc_id
+         JOIN approval_forms f ON f.form_id = d.form_id
+        WHERE w.user_id = $1 AND d.status <> 'draft'
+        ORDER BY (w.read_at IS NULL) DESC, d.updated_at DESC LIMIT $2`,
+      [userId, limit]
+    )
+  );
+  return rows.map((r) => ({
+    ...mapArchive(r),
+    watchKind: String(r.watch_kind ?? "ref"),
+    unread: r.read_at == null,
+  }));
 }
 
 /**
@@ -594,6 +691,16 @@ export async function getDoc(docId: string): Promise<ApprovalDocDetail | null> {
   const stepRows = rowsToObjects(
     await db.exec(`SELECT * FROM approval_steps WHERE doc_id = $1 ORDER BY step_order, created_at`, [docId])
   );
+  const watcherRows = rowsToObjects(
+    await db.exec(
+      `SELECT w.user_id, w.kind, COALESCE(ep.name, u.email) AS name
+         FROM approval_watchers w
+         LEFT JOIN users u ON u.user_id = w.user_id
+         LEFT JOIN employee_profiles ep ON ep.employee_id = u.employee_id
+        WHERE w.doc_id = $1`,
+      [docId]
+    )
+  );
   let fieldValues: Record<string, unknown> = {};
   try {
     const v = typeof r.field_values === "string" ? JSON.parse(r.field_values) : r.field_values;
@@ -611,5 +718,10 @@ export async function getDoc(docId: string): Promise<ApprovalDocDetail | null> {
     drafterPosition: r.drafter_position != null ? String(r.drafter_position) : null,
     orgFolder: r.org_folder != null ? String(r.org_folder) : null,
     deptId: r.dept_id != null ? String(r.dept_id) : null,
+    watchers: watcherRows.map((w) => ({
+      userId: String(w.user_id ?? ""),
+      name: w.name != null ? String(w.name) : null,
+      kind: String(w.kind ?? "ref"),
+    })),
   };
 }

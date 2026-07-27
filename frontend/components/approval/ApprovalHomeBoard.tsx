@@ -26,6 +26,7 @@ interface DocSummary {
   completedAt: string | null;
   updatedAt: string;
   myStepId?: string | null;
+  aiSummary?: { lines: string[]; figures: { label: string; value: string }[]; precedent?: string | null } | null;
 }
 
 interface FormRow {
@@ -138,6 +139,15 @@ export function ApprovalHomeBoard() {
                 <p className="text-[11px] cd-text-faint">
                   기안자 {d.drafterName ?? "-"} · {short(d.submittedAt)}
                 </p>
+                {d.aiSummary && d.aiSummary.lines.length > 0 && (
+                  <div className="rounded-lg cd-tint-primary px-2.5 py-1.5 flex flex-col gap-0.5">
+                    <span className="text-[9.5px] font-bold cd-text-primary tracking-wide">AI 요약</span>
+                    {d.aiSummary.lines.slice(0, 3).map((l, i) => (
+                      <p key={i} className="text-[11px] cd-text leading-tight">· {l}</p>
+                    ))}
+                    {d.aiSummary.precedent && <p className="text-[10px] cd-text-faint mt-0.5">※ {d.aiSummary.precedent}</p>}
+                  </div>
+                )}
                 <button type="button" className="cd-btn rounded-lg border cd-border-c px-3 py-1.5 text-xs font-semibold mt-1" onClick={() => openDetail(d.docId)}>
                   결재하기
                 </button>

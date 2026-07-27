@@ -23,11 +23,14 @@ interface ArchiveRow {
   completedAt: string | null;
   updatedAt: string;
   retentionYears?: number | null;
+  watchKind?: string;
+  unread?: boolean;
 }
 
 const TABS = [
   ["mine", "내 기안 완료"],
   ["acted", "내가 결재한 문서"],
+  ["watched", "참조·열람"],
   ["dept", "부서 문서함"],
   ["org", "전사 문서함"],
 ] as const;
@@ -127,7 +130,15 @@ export function ApprovalArchiveBoard() {
                     <tr key={d.docId} className="border-t cd-border-c cursor-pointer hover:bg-[color:var(--cd-surface)]" onClick={() => setDetailDocId(d.docId)}>
                       <td className="py-2 pr-3 font-mono text-[11px] cd-text-faint">{d.docNo ?? "-"}</td>
                       <td className="py-2 pr-3 cd-text-faint">{d.formName}</td>
-                      <td className="py-2 pr-3 cd-text">{d.title}</td>
+                      <td className="py-2 pr-3 cd-text">
+                        {tab === "watched" && d.unread && (
+                          <span className="inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle" style={{ background: "var(--cd-primary)" }} title="안 읽음" />
+                        )}
+                        {d.title}
+                        {tab === "watched" && d.watchKind && (
+                          <span className="ml-1.5 text-[10px] cd-text-faint">{d.watchKind === "view" ? "(열람)" : "(참조)"}</span>
+                        )}
+                      </td>
                       <td className="py-2 pr-3 cd-text-faint">{d.drafterName ?? "-"}</td>
                       <td className="py-2 pr-3">
                         <span

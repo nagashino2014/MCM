@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
-import { listMyDocs, listInbox, listActedDocs, saveDoc, submitDoc, type ApprovalLineStepInput } from "@/lib/approval/docs";
+import { listMyDocs, listInbox, listActedDocs, saveDoc, submitDoc, type ApprovalLineStepInput, type ApprovalWatcherInput } from "@/lib/approval/docs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,6 +34,7 @@ interface PostBody {
   urgent?: boolean;
   fieldValues?: Record<string, unknown>;
   line?: ApprovalLineStepInput[];
+  watchers?: ApprovalWatcherInput[];
 }
 
 // POST: 기안 저장(draft) / 상신(저장 후 채번·결재 시작)
@@ -49,6 +50,7 @@ export async function POST(req: NextRequest) {
       urgent: body.urgent === true,
       fieldValues: body.fieldValues ?? {},
       line: Array.isArray(body.line) ? body.line : [],
+      watchers: Array.isArray(body.watchers) ? body.watchers : [],
       actorUserId: ctx.userId,
     });
     let docNo: string | null = null;

@@ -17,7 +17,9 @@ import { MailFolderPane } from "@/components/mail/MailFolderPane";
 import { MailListPane, type BulkAction } from "@/components/mail/MailListPane";
 import { MailViewerPane } from "@/components/mail/MailViewerPane";
 import { MailReceiptsPane } from "@/components/mail/MailReceiptsPane";
+import { MailSettingsPane } from "@/components/mail/MailSettingsPane";
 import type { MailFolderInfo, MailListItem, MailMessageDetail } from "@/lib/mail/messages";
+import type { MailCategory } from "@/lib/mail/categories";
 import type { MailDraft } from "@/lib/mail/drafts";
 import "@/components/cdash/cdash.css";
 
@@ -29,7 +31,9 @@ export function MailBoard() {
 
   const [address, setAddress] = useState("");
   const [folders, setFolders] = useState<MailFolderInfo[]>([]);
+  const [categories, setCategories] = useState<MailCategory[]>([]);
   const [folder, setFolder] = useState("inbox");
+  const [activeCategory, setActiveCategory] = useState(""); // 받은편지함 카테고리 필터
   const [items, setItems] = useState<MailListItem[]>([]);
   const [drafts, setDrafts] = useState<MailDraft[]>([]);
   const [loadingList, setLoadingList] = useState(false);
@@ -53,8 +57,15 @@ export function MailBoard() {
       const r = await fetch("/api/mail/folders");
       if (r.ok) {
         const d = await r.json();
-        setFolders(Array.isArray(d.folders) ? d.folders : []);
+        // 사용자 폴더(카테고리)는 별도 트리로 표시 — 시스템 폴더만.
+        const all = Array.isArray(d.folders) ? (d.folders as MailFolderInfo[]) : [];
+        setFolders(all.filter((f) => f.systemKind));
         if (d.address) setAddress(String(d.address));
+      }
+      const c = await fetch("/api/mail/categories");
+      if (c.ok) {
+        const d = await c.json();
+        setCategories(Array.isArray(d.categories) ? d.categories : []);
       }
     } catch {
       /* noop */
@@ -74,8 +85,8 @@ export function MailBoard() {
   }, []);
 
   const loadList = useCallback(
-    async (f: string, query: string) => {
-      if (f === "receipts") return; // 수신 확인 뷰는 자체 로드
+    async (f: string, query: string, category: string) => {
+      if (f === "receipts" || f === "settings") return; // 자체 뷰
       setLoadingList(true);
       try {
         if (f === "drafts") {
@@ -85,7 +96,10 @@ export function MailBoard() {
             setDrafts(Array.isArray(d.drafts) ? d.drafts : []);
           }
         } else {
-          const r = await fetch(`/api/mail/messages?folder=${f}&limit=100${query ? `&q=${encodeURIComponent(query)}` : ""}`);
+          const params = new URLSearchParams({ folder: f, limit: "100" });
+          if (query) params.set("q", query);
+          if (f === "inbox" && category) params.set("category", category);
+          const r = await fetch(`/api/mail/messages?${params.toString()}`);
           if (r.ok) {
             const d = await r.json();
             setItems(Array.isArray(d.items) ? d.items : []);
@@ -103,8 +117,8 @@ export function MailBoard() {
     loadFolders();
   }, [loadMailbox, loadFolders]);
   useEffect(() => {
-    loadList(folder, q);
-  }, [folder, q, loadList]);
+    loadList(folder, q, activeCategory);
+  }, [folder, q, activeCategory, loadList]);
 
   // 레거시 진입점(/mail?compose=1) → 작성 페이지로 리다이렉트.
   const composeParamHandled = useRef(false);
@@ -116,9 +130,87 @@ export function MailBoard() {
   }, []);
 
   const refreshAll = useCallback(() => {
-    loadList(folder, q);
+    loadList(folder, q, activeCategory);
     loadFolders();
-  }, [folder, q, loadList, loadFolders]);
+  }, [folder, q, activeCategory, loadList, loadFolders]);
+
+  // ── 카테고리 관리(G2-12) ──────────────────────────
+  const createCategory = async () => {
+    const name = window.prompt("새 카테고리 이름을 입력하세요. (예: 거래처)");
+    if (!name?.trim()) return;
+    const r = await fetch("/api/mail/categories", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    if (r.ok) {
+      toast(`카테고리 '${name.trim()}' 를 만들었습니다. 보관함에 같은 이름의 폴더가 생성됩니다.`, "success");
+      loadFolders();
+    } else toast("카테고리 생성에 실패했습니다.", "error");
+  };
+
+  const deleteCategory = async (cat: MailCategory) => {
+    let mode = "delete";
+    let target: string | undefined;
+    if (cat.total > 0) {
+      const move = window.confirm(
+        `카테고리 '${cat.name}' 폴더에 보관된 메일이 ${cat.total}건 있습니다.\n\n[확인] 다른 폴더로 이전 후 삭제\n[취소] 메일을 휴지통으로 보내고 폴더 삭제`
+      );
+      if (move) {
+        const others = categories.filter((c) => c.folderId !== cat.folderId);
+        const archiveFolder = folders.find((f) => f.systemKind === "archive");
+        const options = [...others.map((c) => c.name), "보관함(기본)"];
+        const pick = window.prompt(`이전할 폴더를 입력하세요:\n${options.join(", ")}`, "보관함(기본)");
+        if (pick == null) return;
+        const found = others.find((c) => c.name === pick.trim());
+        target = found ? found.folderId : archiveFolder?.folderId;
+        if (!target) return;
+        mode = "move";
+      }
+    } else if (!window.confirm(`카테고리 '${cat.name}' 를 삭제할까요? 보관함 폴더도 함께 삭제됩니다.`)) {
+      return;
+    }
+    const params = new URLSearchParams({ id: cat.folderId, mode });
+    if (target) params.set("target", target);
+    const r = await fetch(`/api/mail/categories?${params.toString()}`, { method: "DELETE" });
+    if (r.ok) {
+      if (activeCategory === cat.folderId) setActiveCategory("");
+      if (folder === `user:${cat.folderId}`) setFolder("archive");
+      toast("카테고리를 삭제했습니다.", "success");
+      refreshAll();
+    } else toast("삭제에 실패했습니다.", "error");
+  };
+
+  // ── 스팸 분류(2단계 confirm) ──────────────────────
+  const markSpam = async () => {
+    if (!detail) return;
+    await runBulk([detail.messageId], { action: "move", target: "spam" });
+    const sender = detail.fromAddr;
+    if (sender && window.confirm(`메일 발송자(${sender})가 보낸 모든 메일을 스팸 분류하시겠습니까?\n(이후 수신 메일도 자동으로 스팸함으로 이동합니다)`)) {
+      const r = await fetch("/api/mail/spam-block", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sender, retroactive: true }),
+      });
+      if (r.ok) {
+        const d = await r.json().catch(() => ({}));
+        toast(`발신자를 차단했습니다. 기존 메일 ${Number(d.moved ?? 0)}건을 스팸함으로 이동했습니다.`, "success");
+        refreshAll();
+      }
+    }
+  };
+
+  const setMessageCategory = async (folderId: string | null) => {
+    if (!detail) return;
+    await runBulk([detail.messageId], { action: "category", target: folderId ?? "" });
+    setDetail({ ...detail, categoryId: folderId });
+  };
+
+  const deleteDraft = async (d: MailDraft) => {
+    if (!window.confirm(`임시보관 메일 '${d.subject || "(제목 없음)"}' 을 삭제할까요?`)) return;
+    await fetch(`/api/mail/drafts?id=${encodeURIComponent(d.draftId)}`, { method: "DELETE" });
+    refreshAll();
+  };
 
   const openMessage = async (id: string) => {
     setLoadingDetail(true);
@@ -181,12 +273,16 @@ export function MailBoard() {
       detail={detail}
       loading={loadingDetail}
       folder={folder}
+      categories={categories}
       onReply={() => openReply(false)}
       onReplyAll={() => openReply(true)}
       onForward={openForward}
       onTrash={() => detail && runBulk([detail.messageId], { action: "trash" })}
       onRestore={() => detail && runBulk([detail.messageId], { action: "restore" })}
       onDelete={() => detail && runBulk([detail.messageId], { action: "delete" })}
+      onSetCategory={setMessageCategory}
+      onArchive={() => detail && runBulk([detail.messageId], { action: "archive" })}
+      onSpam={markSpam}
     />
   );
   const list = (
@@ -201,6 +297,7 @@ export function MailBoard() {
       onRefresh={refreshAll}
       onOpen={openMessage}
       onOpenDraft={openDraft}
+      onDeleteDraft={deleteDraft}
       onBulk={runBulk}
       onToggleStar={toggleStar}
     />
@@ -226,19 +323,31 @@ export function MailBoard() {
             first={
               <MailFolderPane
                 folders={folders}
+                categories={categories}
                 active={folder}
+                activeCategory={activeCategory}
                 draftCount={drafts.length}
                 address={address}
                 onSelect={(k) => {
                   setFolder(k);
                   setQ("");
                   setDetail(null);
+                  if (k !== "inbox") setActiveCategory("");
                 }}
+                onSelectCategory={(id) => {
+                  setFolder("inbox");
+                  setActiveCategory(id);
+                  setDetail(null);
+                }}
+                onCreateCategory={createCategory}
+                onDeleteCategory={deleteCategory}
               />
             }
             second={
               folder === "receipts" ? (
                 <MailReceiptsPane />
+              ) : folder === "settings" ? (
+                <MailSettingsPane />
               ) : (
                 <CdSplitPane first={list} second={viewer} defaultSize={380} minSize={280} maxSize={620} storageKey="mail-list-w" />
               )
@@ -262,6 +371,7 @@ export function MailBoard() {
                         count: f.systemKind === "inbox" ? f.unread : undefined,
                       })),
                       { key: "receipts", label: "수신 확인" },
+                      { key: "settings", label: "메일 설정" },
                     ]}
                     active={folder}
                     onChange={(k) => {
@@ -271,7 +381,9 @@ export function MailBoard() {
                     }}
                   />
                 </div>
-                <div className="flex-1 min-h-0">{folder === "receipts" ? <MailReceiptsPane /> : list}</div>
+                <div className="flex-1 min-h-0">
+                  {folder === "receipts" ? <MailReceiptsPane /> : folder === "settings" ? <MailSettingsPane /> : list}
+                </div>
               </>
             ) : (
               <>

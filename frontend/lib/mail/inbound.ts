@@ -20,6 +20,7 @@ import { getS3Client } from "@/lib/storage/logo-storage";
 import { putContractDocument, sanitizeFilename } from "@/lib/storage/contract-document-storage";
 import { getSystemFolderId, MAIL_DOMAIN } from "@/lib/mail/mailbox";
 import { htmlToPlainText } from "@/lib/mail/mime";
+import { isSpamFor } from "@/lib/mail/spam";
 
 let sqs: InstanceType<typeof SQSClient> | null = null;
 let cachedQueueUrl: string | null = null;
@@ -241,7 +242,9 @@ async function storeForMailbox(
     });
   }
 
-  const inboxFolderId = await getSystemFolderId(target.mailboxId, "inbox");
+  // 스팸 판정(G2-12) — 차단 발신자·키워드 매칭 시 받은편지함 대신 스팸함으로.
+  const spam = await isSpamFor(target.mailboxId, from[0]?.address ?? null, parsed.subject ?? "");
+  const inboxFolderId = await getSystemFolderId(target.mailboxId, spam ? "spam" : "inbox");
   await withDbWrite(async (wdb) => {
     for (const s of stored) {
       await wdb.run(

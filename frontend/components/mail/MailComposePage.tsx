@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, ChevronDown, FolderOpen, HardDrive, Mail, Paperclip, PenLine, Send, Settings2, UploadCloud, X } from "lucide-react";
+import { ArrowLeft, ChevronDown, FolderOpen, HardDrive, Mail, Paperclip, PenLine, Save, Send, Settings2, UploadCloud, X } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdButton } from "@/components/cdash/CdButton";
@@ -178,35 +178,41 @@ export function MailComposePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── 드래프트 자동저장 ─────────────────────────────
-  const scheduleDraftSave = useCallback(() => {
+  // ── 드래프트 수동 저장(G2-12) — [임시 저장] 버튼을 눌렀을 때만 임시보관함에 저장(자동저장 폐지). ──
+  const saveDraftNow = useCallback(async () => {
     setDraftState("saving");
-    if (draftTimer.current) clearTimeout(draftTimer.current);
-    draftTimer.current = setTimeout(async () => {
-      try {
-        const r = await fetch("/api/mail/drafts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            draftId,
-            to,
-            cc: showCc ? cc : "",
-            bcc: showBcc ? bcc : "",
-            subject,
-            bodyHtml: editorRef.current?.innerHTML ?? "",
-            inReplyTo: threadRef.current.inReplyTo,
-          }),
-        });
-        if (r.ok) {
-          const d = await r.json();
-          if (d.draftId) setDraftId(String(d.draftId));
-          setDraftState("saved");
-        } else setDraftState("idle");
-      } catch {
+    try {
+      const r = await fetch("/api/mail/drafts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          draftId,
+          to,
+          cc: showCc ? cc : "",
+          bcc: showBcc ? bcc : "",
+          subject,
+          bodyHtml: editorRef.current?.innerHTML ?? "",
+          inReplyTo: threadRef.current.inReplyTo,
+        }),
+      });
+      if (r.ok) {
+        const d = await r.json();
+        if (d.draftId) setDraftId(String(d.draftId));
+        setDraftState("saved");
+        toast("임시보관함에 저장했습니다.", "success");
+      } else {
         setDraftState("idle");
+        toast("임시 저장에 실패했습니다.", "error");
       }
-    }, 3000);
-  }, [draftId, to, cc, showCc, bcc, showBcc, subject]);
+    } catch {
+      setDraftState("idle");
+      toast("임시 저장 중 오류가 발생했습니다.", "error");
+    }
+  }, [draftId, to, cc, showCc, bcc, showBcc, subject, toast]);
+  /** 입력 변경 콜백 — 자동저장 폐지로 저장 안 함(저장 상태 표시만 초기화). */
+  const scheduleDraftSave = useCallback(() => {
+    setDraftState("idle");
+  }, []);
 
   useEffect(() => () => {
     if (draftTimer.current) clearTimeout(draftTimer.current);
@@ -386,6 +392,9 @@ export function MailComposePage() {
             <span className="text-[11px] cd-text-faint">
               {draftState === "saving" ? "저장 중…" : draftState === "saved" ? "임시저장됨" : ""}
             </span>
+            <CdButton icon={<Save className="w-4 h-4" />} onClick={saveDraftNow}>
+              임시 저장
+            </CdButton>
             {/* 메일 서명 — 드롭다운(목록 선택 삽입 + 관리 진입, G2-10) */}
             <span className="relative inline-flex" data-sig-menu>
               <CdButton icon={<PenLine className="w-4 h-4" />} onClick={() => setSigMenuOpen((v) => !v)}>

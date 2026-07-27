@@ -50,6 +50,7 @@ export function MailListPane({
   onRefresh,
   onOpen,
   onOpenDraft,
+  onDeleteDraft,
   onBulk,
   onToggleStar,
 }: {
@@ -63,6 +64,7 @@ export function MailListPane({
   onRefresh: () => void;
   onOpen: (id: string) => void;
   onOpenDraft: (d: MailDraft) => void;
+  onDeleteDraft: (d: MailDraft) => void;
   onBulk: (ids: string[], act: BulkAction) => void;
   onToggleStar: (id: string, star: boolean) => void;
 }) {
@@ -180,13 +182,21 @@ export function MailListPane({
           ) : (
             <ul className="divide-y cd-border-c">
               {drafts.map((d) => (
-                <li key={d.draftId}>
-                  <button onClick={() => onOpenDraft(d)} className="w-full text-left px-3 py-2.5 flex flex-col gap-0.5 cd-row-hover">
+                <li key={d.draftId} className="flex items-start">
+                  <button onClick={() => onOpenDraft(d)} className="flex-1 min-w-0 text-left px-3 py-2.5 flex flex-col gap-0.5 cd-row-hover">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm font-medium truncate cd-text">{d.subject || "(제목 없음)"}</span>
                       <span className="text-[11px] cd-text-faint shrink-0">{fmtListDate(d.updatedAt)}</span>
                     </div>
                     <span className="text-xs cd-text-faint truncate">받는 사람: {d.to || "-"}</span>
+                  </button>
+                  <button
+                    onClick={() => onDeleteDraft(d)}
+                    className="p-2 mt-1.5 mr-1 cd-text-faint hover:cd-error-text shrink-0"
+                    title="임시보관 메일 삭제"
+                    aria-label="임시보관 메일 삭제"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </li>
               ))}

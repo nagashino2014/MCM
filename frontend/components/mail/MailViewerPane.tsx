@@ -3,11 +3,13 @@
 // 메일 3-pane 우측 — 본문 뷰어(G2-2/4): 헤더·첨부·본문(sandbox iframe)·답장/전달/삭제.
 // 외부 발신 HTML 은 XSS 방지를 위해 sandbox iframe(스크립트 차단)으로 렌더한다.
 
-import { CornerUpLeft, CornerUpRight, Download, Loader2, Reply, ReplyAll, RotateCcw, Trash2 } from "lucide-react";
+import { Archive, ChevronDown, CornerUpRight, Download, Loader2, Reply, ReplyAll, RotateCcw, ShieldAlert, Tag, Trash2 } from "lucide-react";
 import { CdButton } from "@/components/cdash/CdButton";
+import { CdDropdown } from "@/components/cdash/CdDropdown";
 import { CdEmptyState } from "@/components/cdash/CdEmptyState";
 import { CdAvatar } from "@/components/cdash/CdAvatar";
 import type { MailMessageDetail } from "@/lib/mail/messages";
+import type { MailCategory } from "@/lib/mail/categories";
 
 function fmtFull(iso: string): string {
   const d = new Date(iso);
@@ -24,22 +26,30 @@ export function MailViewerPane({
   detail,
   loading,
   folder,
+  categories,
   onReply,
   onReplyAll,
   onForward,
   onTrash,
   onRestore,
   onDelete,
+  onSetCategory,
+  onArchive,
+  onSpam,
 }: {
   detail: MailMessageDetail | null;
   loading: boolean;
   folder: string;
+  categories: MailCategory[];
   onReply: () => void;
   onReplyAll: () => void;
   onForward: () => void;
   onTrash: () => void;
   onRestore: () => void;
   onDelete: () => void;
+  onSetCategory: (folderId: string | null) => void;
+  onArchive: () => void;
+  onSpam: () => void;
 }) {
   if (loading) {
     return (
@@ -68,6 +78,38 @@ export function MailViewerPane({
         <CdButton size="sm" icon={<CornerUpRight className="w-3.5 h-3.5" />} onClick={onForward}>
           전달
         </CdButton>
+        <span className="w-px h-4 mx-0.5" style={{ background: "var(--cd-border)" }} />
+
+        {/* 카테고리 설정(G2-12) — 등록된 카테고리 선택으로 분류(라벨) */}
+        <CdDropdown
+          align="left"
+          trigger={() => {
+            const current = categories.find((c) => c.folderId === detail?.categoryId);
+            return (
+              <span className="cd-btn cd-btn-sm cd-btn-ghost inline-flex items-center gap-1 cursor-pointer" role="button">
+                <Tag className="w-3.5 h-3.5" />
+                {current ? current.name : "카테고리"}
+                <ChevronDown className="w-3 h-3 opacity-50" />
+              </span>
+            );
+          }}
+          items={[
+            ...categories.map((c) => ({
+              key: c.folderId,
+              label: c.name,
+              onSelect: () => onSetCategory(c.folderId),
+            })),
+            { key: "__none", label: "분류 해제", onSelect: () => onSetCategory(null) },
+          ]}
+        />
+        <CdButton size="sm" icon={<Archive className="w-3.5 h-3.5" />} onClick={onArchive} title="카테고리 폴더(미지정 시 보관함)로 이동">
+          보관
+        </CdButton>
+        {folder !== "spam" && (
+          <CdButton size="sm" icon={<ShieldAlert className="w-3.5 h-3.5" />} onClick={onSpam}>
+            스팸 분류
+          </CdButton>
+        )}
         <div className="flex-1" />
         {inTrash ? (
           <>

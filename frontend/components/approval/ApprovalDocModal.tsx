@@ -1,9 +1,10 @@
 "use client";
 
-// 전자결재 문서 상세 모달(공용) — 렌더러 readOnly + 결재선 진행 칩 + 의견 + (내 차례면) 승인/반려.
-// 홈/양식별 조회/문서함에서 재사용한다. docId 로 상세를 로드하고, 처리 후 onChanged 를 부른다.
+// 전자결재 문서 상세(공용) — 렌더러 readOnly + 결재선 진행 칩 + 의견 + (내 차례면) 승인/반려.
+// G3: 뷰어 본체(ApprovalDocViewer)를 분리해 결재함 3-pane 미리보기와 모달이 공유한다.
+// 모달(ApprovalDocModal)은 뷰어를 오버레이로 감싼 래퍼 — 양식별 조회/문서함에서 계속 사용.
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { CheckCircle2, Sparkles, X, XCircle } from "lucide-react";
 import { ApprovalFormRenderer } from "@/components/approval/ApprovalFormRenderer";
 import type { ApprovalFieldDef } from "@/lib/approval/fields";
@@ -56,16 +57,18 @@ const STEP_STATUS_LABEL: Record<string, string> = {
 };
 const short = (s: string | null) => (s ? s.slice(0, 16).replace("T", " ") : "-");
 
-export function ApprovalDocModal({
+/**
+ * 문서 상세 뷰어(본체) — 로드·결재선·AI 요약·렌더러·승인/반려까지 포함.
+ * headerRight 로 우측 상단 액션(모달 닫기 버튼 등)을 주입한다. 결재 처리 성공 시 onActed.
+ */
+export function ApprovalDocViewer({
   docId,
-  theme,
-  onClose,
-  onChanged,
+  onActed,
+  headerRight,
 }: {
   docId: string;
-  theme: string;
-  onClose: () => void;
-  onChanged?: () => void;
+  onActed?: () => void;
+  headerRight?: ReactNode;
 }) {
   const [detail, setDetail] = useState<DocDetailData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -74,6 +77,10 @@ export function ApprovalDocModal({
 
   useEffect(() => {
     let cancelled = false;
+    // pane 재사용 대비 — 문서 전환 시 이전 상세/의견 리셋
+    setDetail(null);
+    setError(null);
+    setComment("");
     fetch(`/api/approval/docs/${encodeURIComponent(docId)}`, { cache: "no-store" })
       .then(async (r) => {
         const data = await r.json();
@@ -103,8 +110,7 @@ export function ApprovalDocModal({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "결재 처리 실패");
-      onChanged?.();
-      onClose();
+      onActed?.();
     } catch (err) {
       alert((err as Error).message);
     } finally {
@@ -113,21 +119,17 @@ export function ApprovalDocModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
-      <div
-        className="cdash cdash-vars cd-fields-white cd-card-bg rounded-2xl border cd-border-c w-full max-w-3xl max-h-[88vh] overflow-y-auto p-5 flex flex-col gap-4"
-        data-theme={theme}
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="flex flex-col gap-4">
         {error ? (
           <div className="flex items-center gap-2">
             <p className="text-sm text-[color:var(--cd-danger,#FA896B)] flex-1">{error}</p>
-            <button type="button" className="cd-btn cd-btn-soft text-[12px]" onClick={onClose}>
-              <X className="w-4 h-4" />
-            </button>
+            {headerRight}
           </div>
         ) : !detail ? (
-          <p className="text-sm cd-text-faint py-8 text-center">문서를 불러오는 중입니다.</p>
+          <div className="flex items-start gap-2">
+            <p className="text-sm cd-text-faint py-8 text-center flex-1">문서를 불러오는 중입니다.</p>
+            {headerRight}
+          </div>
         ) : (
           <>
             <div className="flex items-center gap-2">
@@ -138,9 +140,7 @@ export function ApprovalDocModal({
                   {detail.docNo ?? "미채번"} · {detail.formName} · {DOC_STATUS_LABEL[detail.status] ?? detail.status}
                 </span>
               </h3>
-              <button type="button" className="cd-btn cd-btn-soft text-[12px]" onClick={onClose}>
-                <X className="w-4 h-4" />
-              </button>
+              {headerRight}
             </div>
 
             <div className="rounded-xl border cd-border-c p-3 flex flex-wrap gap-2">
@@ -240,6 +240,40 @@ export function ApprovalDocModal({
             )}
           </>
         )}
+    </div>
+  );
+}
+
+export function ApprovalDocModal({
+  docId,
+  theme,
+  onClose,
+  onChanged,
+}: {
+  docId: string;
+  theme: string;
+  onClose: () => void;
+  onChanged?: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+      <div
+        className="cdash cdash-vars cd-fields-white cd-card-bg rounded-2xl border cd-border-c w-full max-w-3xl max-h-[88vh] overflow-y-auto p-5"
+        data-theme={theme}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <ApprovalDocViewer
+          docId={docId}
+          onActed={() => {
+            onChanged?.();
+            onClose();
+          }}
+          headerRight={
+            <button type="button" className="cd-btn cd-btn-soft text-[12px]" onClick={onClose}>
+              <X className="w-4 h-4" />
+            </button>
+          }
+        />
       </div>
     </div>
   );

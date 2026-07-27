@@ -6,6 +6,8 @@ import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
 import "@/components/cdash/cdash.css";
 
+import { ApprovalPendingCard } from "./widgets/ApprovalPendingCard";
+import { MailUnreadCard } from "./widgets/MailUnreadCard";
 import { TodayScheduleCard } from "./widgets/TodayScheduleCard";
 import { PendingProgressCard } from "./widgets/PendingProgressCard";
 import { UpcomingBidsCard } from "./widgets/UpcomingBidsCard";
@@ -40,6 +42,9 @@ export function HomeBoard({ role }: { role?: string }) {
 
       <div className="columns-1 lg:columns-2 xl:columns-3 gap-4 [&>*]:mb-4 [&>*]:break-inside-avoid">
         <LeaveNoticeInboxCard />
+        {/* 협업 요약(G3) — 미결재·안읽은 메일을 일정과 함께 상단에 */}
+        <ApprovalPendingCard />
+        <MailUnreadCard />
         <TodayScheduleCard />
         <PendingProgressCard theme={theme} />
         <UpcomingBidsCard />

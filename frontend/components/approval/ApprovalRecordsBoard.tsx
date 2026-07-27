@@ -36,6 +36,12 @@ const short = (s: string | null) => (s ? s.slice(0, 10) : "-");
 function flatten(field: ApprovalFieldDef, value: unknown, leaveCatalog: LeaveTypeItem[]): string {
   if (value == null) return "";
   switch (field.type) {
+    case "multitext": {
+      // G3: 리치 에디터 도입으로 HTML 저장 — 표·CSV 에는 태그를 벗겨 텍스트만
+      const div = document.createElement("div");
+      div.innerHTML = String(value);
+      return (div.textContent ?? "").replace(/\s+/g, " ").trim();
+    }
     case "period": {
       const v = value as { from?: string; to?: string };
       return [v.from, v.to].filter(Boolean).join("~");

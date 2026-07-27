@@ -269,9 +269,11 @@ export interface MailEditorProps {
   statusText?: string;
   /** 이미지 버튼 클릭 → 부모(MailComposer)가 파일 선택·인라인 등록을 수행. */
   onPickImage?: () => void;
+  /** 본문 최소 높이 px — 메일 작성(기본 634) 외 임베드 용도(전자결재 여러 줄 필드 등)는 낮게. */
+  minHeightPx?: number;
 }
 
-export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function MailEditor({ onInput, statusText, onPickImage }, ref) {
+export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function MailEditor({ onInput, statusText, onPickImage, minHeightPx }, ref) {
   const innerRef = useRef<HTMLDivElement>(null);
   useImperativeHandle(ref, () => innerRef.current as HTMLDivElement);
 
@@ -743,8 +745,8 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
         onKeyDown={onEditorKeyDown}
         onMouseMove={onEditorMouseMove}
         onMouseDown={onEditorMouseDown}
-        className="cd-mail-editor min-h-[634px] max-h-[75vh] overflow-y-auto border cd-border-c border-t-0 rounded-b-lg px-3 py-2 text-sm bg-white text-black outline-none focus:border-[color:var(--cd-primary)]"
-        style={{ lineHeight: 1.6 }}
+        className="cd-mail-editor max-h-[75vh] overflow-y-auto border cd-border-c border-t-0 rounded-b-lg px-3 py-2 text-sm bg-white text-black outline-none focus:border-[color:var(--cd-primary)]"
+        style={{ lineHeight: 1.6, minHeight: minHeightPx ?? 634 }}
       />
     </div>
   );

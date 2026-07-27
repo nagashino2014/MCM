@@ -37,6 +37,9 @@ function valuesToText(fields: ReturnType<typeof parseFields>, values: Record<str
         const o = v as { name?: string; from?: string; to?: string };
         text = o.name ?? (o.from || o.to ? `${o.from ?? "?"}~${o.to ?? "?"}` : JSON.stringify(v).slice(0, 60));
       }
+    } else if (f.type === "multitext") {
+      // G3: 리치 에디터 도입으로 HTML 저장 — 태그를 벗겨 텍스트만 LLM 에 제시
+      text = String(v).replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
     } else text = String(v);
     lines.push(`${f.label}: ${text}`);
   }

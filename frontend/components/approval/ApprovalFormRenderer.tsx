@@ -5,11 +5,11 @@
 // values/onChange 를 주면 제어 입력(기안 화면), 없으면 내부 상태(미리보기)로 동작한다.
 // 설계: docs/e-approval-blueprint.md §3·§5. 표(table) 필드는 행 추가/삭제+합계 자동.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Users, X } from "lucide-react";
-import OrganizationTree from "@/components/admin/users/OrganizationTree";
-import type { OrganizationSnapshot } from "@/components/admin/users/types";
+import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
+import { MailEditor } from "@/components/mail/MailEditor";
 import type { ApprovalFieldDef } from "@/lib/approval/fields";
 import { findInCatalog, type LeaveTypeItem } from "@/lib/approval/leave-types";
 
@@ -151,15 +151,7 @@ function FieldInput({
     case "user_select":
       return <UserSelectInput field={f} value={value} onSet={onSet} readOnly={dis} />;
     case "multitext":
-      return (
-        <textarea
-          className={`${base} min-h-[92px] resize-y`}
-          disabled={dis}
-          placeholder={f.placeholder}
-          value={String(value ?? "")}
-          onChange={(e) => onSet(e.target.value)}
-        />
-      );
+      return <RichTextInput value={value} onSet={onSet} readOnly={dis} />;
     case "number":
       return (
         <input
@@ -249,6 +241,59 @@ function FieldInput({
     default:
       return <input className={base} disabled={dis} value={String(value ?? "")} onChange={(e) => onSet(e.target.value)} />;
   }
+}
+
+// ── 여러 줄(multitext) 리치 입력 — 메일 본문 에디터(MailEditor) 재사용(G3) ──
+// 값은 HTML 문자열로 저장한다. 구버전 플레인텍스트 값은 시드 시 escape+<br> 변환으로 호환.
+
+const looksLikeHtml = (s: string) => /<[a-z][^>]*>/i.test(s);
+const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const toEditorHtml = (v: unknown): string => {
+  const s = String(v ?? "");
+  if (!s) return "";
+  return looksLikeHtml(s) ? s : escapeHtml(s).replace(/\n/g, "<br>");
+};
+/** 표시 전 최소 새니타이즈 — script·인라인 이벤트·javascript: 제거(에디터 산출물엔 원래 없음). */
+const sanitizeHtml = (html: string) =>
+  html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/\son\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(/javascript:/gi, "");
+
+function RichTextInput({ value, onSet, readOnly }: { value: unknown; onSet: (v: unknown) => void; readOnly?: boolean }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const seeded = useRef(false);
+  useEffect(() => {
+    // 최초 1회 + 외부 값 변경(드래프트 로드·자동 채움) 시드. 입력 중(포커스)에는 덮지 않는다.
+    const el = ref.current;
+    if (!el) return;
+    const html = sanitizeHtml(toEditorHtml(value));
+    if (!seeded.current || (document.activeElement !== el && el.innerHTML !== html)) {
+      el.innerHTML = html;
+      seeded.current = true;
+    }
+  }, [value]);
+  const handleInput = () => {
+    const el = ref.current;
+    if (!el) return;
+    // 텍스트·이미지·표가 전혀 없으면 빈 값으로 저장(필수 검증이 빈 HTML 을 통과하지 않도록)
+    const emptyish = !el.innerText.trim() && !el.querySelector("img,table,hr");
+    onSet(emptyish ? "" : el.innerHTML);
+  };
+  if (readOnly) {
+    return (
+      <div
+        className="cd-mail-editor w-full min-h-[40px] rounded-lg border cd-border-c bg-white px-3 py-2 text-sm text-black"
+        style={{ lineHeight: 1.6 }}
+        dangerouslySetInnerHTML={{ __html: sanitizeHtml(toEditorHtml(value)) }}
+      />
+    );
+  }
+  return (
+    <div className="w-full min-w-0 py-1">
+      <MailEditor ref={ref} onInput={handleInput} minHeightPx={150} />
+    </div>
+  );
 }
 
 /**
@@ -582,24 +627,11 @@ function UserSelectInput({
   readOnly?: boolean;
 }) {
   const [orgModal, setOrgModal] = useState(false);
-  const [snapshot, setSnapshot] = useState<OrganizationSnapshot | null>(null);
   const people: PersonValue[] = Array.isArray(value)
     ? (value as PersonValue[]).filter((p) => p && p.employeeId)
     : value && typeof value === "object" && (value as PersonValue).employeeId
       ? [value as PersonValue]
       : [];
-
-  const openModal = async () => {
-    setOrgModal(true);
-    if (!snapshot) {
-      try {
-        const res = await fetch("/api/sales/org", { cache: "no-store" });
-        if (res.ok) setSnapshot((await res.json()) as OrganizationSnapshot);
-      } catch {
-        // 무시 — 모달에 로딩 안내 유지
-      }
-    }
-  };
 
   const commit = (next: PersonValue[]) => {
     if (f.multiple) onSet(next);
@@ -622,54 +654,27 @@ function UserSelectInput({
         <button
           type="button"
           className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11.5px] flex items-center gap-1"
-          onClick={openModal}
+          onClick={() => setOrgModal(true)}
         >
           <Users className="w-3.5 h-3.5" /> 조직도에서 선택
         </button>
       )}
       {people.length === 0 && readOnly && <span className="text-[12px] cd-text-faint">-</span>}
-      {orgModal && (
-        <div
-          className="fixed inset-0 z-[80] flex items-center justify-center p-4"
-          style={{ background: "rgba(0,0,0,0.45)" }}
-          onClick={() => setOrgModal(false)}
-        >
-          <div
-            className="cd-card-bg rounded-2xl border cd-border-c w-full max-w-md max-h-[80vh] overflow-y-auto p-4 flex flex-col gap-2"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center gap-2">
-              <h3 className="text-[14px] font-bold cd-text flex-1">
-                {f.label} — 조직도에서 선택{f.multiple ? " (복수 가능)" : ""}
-              </h3>
-              <button type="button" className="cd-btn cd-btn-soft text-[12px]" onClick={() => setOrgModal(false)}>
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            {snapshot ? (
-              <OrganizationTree
-                snapshot={snapshot}
-                embedded
-                hideHeader
-                onSelectEmployee={(emp) => {
-                  const next = f.multiple
-                    ? people.some((p) => p.employeeId === emp.employeeId)
-                      ? people
-                      : [...people, { employeeId: emp.employeeId, name: emp.name }]
-                    : [{ employeeId: emp.employeeId, name: emp.name }];
-                  commit(next);
-                  if (!f.multiple) setOrgModal(false);
-                }}
-              />
-            ) : (
-              <p className="text-[12px] cd-text-faint py-6 text-center">조직도를 불러오는 중입니다.</p>
-            )}
-            <p className="text-[10px] cd-text-faint">
-              인원을 클릭하면 선택됩니다.{f.multiple ? " 여러 명을 이어서 선택한 뒤 닫으세요." : ""}
-            </p>
-          </div>
-        </div>
-      )}
+      <OrgPickerModal
+        open={orgModal}
+        title={`${f.label} — 조직도에서 선택${f.multiple ? " (복수 가능)" : ""}`}
+        hint={`인원을 클릭하면 선택됩니다.${f.multiple ? " 여러 명을 이어서 선택한 뒤 닫으세요." : ""}`}
+        onClose={() => setOrgModal(false)}
+        onSelect={(emp) => {
+          const next = f.multiple
+            ? people.some((p) => p.employeeId === emp.employeeId)
+              ? people
+              : [...people, { employeeId: emp.employeeId, name: emp.name }]
+            : [{ employeeId: emp.employeeId, name: emp.name }];
+          commit(next);
+          if (!f.multiple) setOrgModal(false);
+        }}
+      />
     </div>
   );
 }

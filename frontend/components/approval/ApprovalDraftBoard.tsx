@@ -7,12 +7,11 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, ClipboardCheck, Send, Save, Trash2, Users, Eye, BookmarkPlus, ShieldCheck, AlertTriangle, Info, Ban, X } from "lucide-react";
+import { ArrowLeft, ClipboardCheck, Send, Save, Trash2, Users, Eye, BookmarkPlus, ShieldCheck, AlertTriangle, Info, Ban } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { ApprovalFormRenderer } from "@/components/approval/ApprovalFormRenderer";
-import OrganizationTree from "@/components/admin/users/OrganizationTree";
-import type { OrganizationSnapshot } from "@/components/admin/users/types";
+import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
 import type { ApprovalFieldDef } from "@/lib/approval/fields";
 import { findInCatalog, type LeaveTypeItem } from "@/lib/approval/leave-types";
 import "@/components/cdash/cdash.css";
@@ -93,7 +92,6 @@ export function ApprovalDraftBoard() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<"save" | "submit" | null>(null);
   const [orgModal, setOrgModal] = useState<OrgTarget | null>(null);
-  const [orgSnapshot, setOrgSnapshot] = useState<OrganizationSnapshot | null>(null);
   const [presets, setPresets] = useState<LinePreset[]>([]);
   const [precheck, setPrecheck] = useState<PrecheckResult | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
@@ -236,17 +234,7 @@ export function ApprovalDraftBoard() {
     };
   }, []);
 
-  const openOrgModal = async (target: OrgTarget) => {
-    setOrgModal(target);
-    if (!orgSnapshot) {
-      try {
-        const res = await fetch("/api/sales/org", { cache: "no-store" });
-        if (res.ok) setOrgSnapshot((await res.json()) as OrganizationSnapshot);
-      } catch {
-        // 무시
-      }
-    }
-  };
+  const openOrgModal = (target: OrgTarget) => setOrgModal(target);
 
   const applyPreset = (p: LinePreset) => {
     setLine(
@@ -670,59 +658,38 @@ export function ApprovalDraftBoard() {
         </>
       ) : null}
 
-      {/* 조직도 선택 모달 */}
-      {orgModal && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={() => setOrgModal(null)}>
-          <div
-            className="cdash cdash-vars cd-fields-white cd-card-bg rounded-2xl border cd-border-c w-full max-w-md max-h-[80vh] overflow-y-auto p-4 flex flex-col gap-2"
-            data-theme={theme}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center gap-2">
-              <h3 className="text-[14px] font-bold cd-text flex-1">
-                {orgModal === "ref" || orgModal === "view" ? "참조/열람자 추가 — 조직도에서 선택" : "결재자 추가 — 조직도에서 선택"}
-              </h3>
-              <button type="button" className="cd-btn cd-btn-soft text-[12px]" onClick={() => setOrgModal(null)}>
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            {orgSnapshot ? (
-              <OrganizationTree
-                snapshot={orgSnapshot}
-                embedded
-                hideHeader
-                onSelectEmployee={(emp) => {
-                  if (!emp.userId) {
-                    alert(`${emp.name} 님은 아직 계정이 연결되지 않아 지정할 수 없습니다.`);
-                    return;
-                  }
-                  const userId = emp.userId;
-                  if (orgModal === "ref" || orgModal === "view") {
-                    const kind = orgModal;
-                    setWatchers((prev) =>
-                      prev.some((w) => w.userId === userId) ? prev : [...prev, { userId, name: emp.name, kind }]
-                    );
-                  } else {
-                    const stepType = orgModal;
-                    setLine((prev) =>
-                      prev.some((s) => s.assigneeUserId === userId)
-                        ? prev
-                        : [...prev, { stepType, assigneeUserId: userId, assigneeName: emp.name, assigneePosition: emp.positionName }]
-                    );
-                  }
-                }}
-              />
-            ) : (
-              <p className="text-[12px] cd-text-faint py-6 text-center">조직도를 불러오는 중입니다.</p>
-            )}
-            <p className="text-[10px] cd-text-faint">
-              {orgModal === "ref" || orgModal === "view"
-                ? "인원을 클릭하면 참조/열람자로 추가됩니다. 참조=완료 통보, 열람=진행 중 열람."
-                : "인원을 클릭하면 결재선 맨 뒤에 추가됩니다. 타입(합의/승인)은 목록에서 변경하세요."}
-            </p>
-          </div>
-        </div>
-      )}
+      {/* 조직도 선택 모달(공용, G3) */}
+      <OrgPickerModal
+        open={orgModal != null}
+        title={orgModal === "ref" || orgModal === "view" ? "참조/열람자 추가 — 조직도에서 선택" : "결재자 추가 — 조직도에서 선택"}
+        hint={
+          orgModal === "ref" || orgModal === "view"
+            ? "인원을 클릭하면 참조/열람자로 추가됩니다. 참조=완료 통보, 열람=진행 중 열람."
+            : "인원을 클릭하면 결재선 맨 뒤에 추가됩니다. 타입(합의/승인)은 목록에서 변경하세요."
+        }
+        onClose={() => setOrgModal(null)}
+        onSelect={(emp) => {
+          if (!orgModal) return;
+          if (!emp.userId) {
+            alert(`${emp.name} 님은 아직 계정이 연결되지 않아 지정할 수 없습니다.`);
+            return;
+          }
+          const userId = emp.userId;
+          if (orgModal === "ref" || orgModal === "view") {
+            const kind = orgModal;
+            setWatchers((prev) =>
+              prev.some((w) => w.userId === userId) ? prev : [...prev, { userId, name: emp.name, kind }]
+            );
+          } else {
+            const stepType = orgModal;
+            setLine((prev) =>
+              prev.some((s) => s.assigneeUserId === userId)
+                ? prev
+                : [...prev, { stepType, assigneeUserId: userId, assigneeName: emp.name, assigneePosition: emp.positionName }]
+            );
+          }
+        }}
+      />
     </div>
   );
 }

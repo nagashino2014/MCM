@@ -22,6 +22,10 @@ const SUMMARY_MODEL = "claude-haiku-4-5-20251001";
 /** 값 하나를 사람이 읽는 짧은 문자열로. 구조화 값(기간·업체·조직도·표)을 평탄화. */
 function valueToText(type: string, v: unknown): string {
   if (v == null) return "";
+  if (type === "multitext") {
+    // G3: 리치 에디터 도입으로 HTML 저장 — 태그를 벗겨 텍스트만 요약에 사용
+    return String(v).replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+  }
   if (type === "period" && typeof v === "object") {
     const p = v as { from?: string; to?: string };
     if (p.from || p.to) return `${p.from ?? "?"} ~ ${p.to ?? "?"}`;

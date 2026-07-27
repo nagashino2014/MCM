@@ -28,7 +28,8 @@ export async function PATCH(req: NextRequest) {
   }
 }
 
-// PUT: (관리자) 사용자별 총용량 할당 — body: { mailboxId, quotaBytes } / body 없이 목록 조회는 ?list=1
+// PUT: (관리자) 사용자별 총용량 할당 — body: { mailboxId, quotaBytes } 또는 { totalPoolGb }(전사 총량, G2-15).
+//      body 없이 목록 조회는 ?list=1 (totalPoolGb 포함).
 export async function PUT(req: NextRequest) {
   try {
     await requireAdmin();
@@ -37,7 +38,9 @@ export async function PUT(req: NextRequest) {
       const rows = rowsToObjects(
         await db.exec(`SELECT mailbox_id, user_id, address, display_name, quota_bytes, used_bytes FROM mailboxes ORDER BY address`)
       );
+      const pool = rowsToObjects(await db.exec(`SELECT value FROM mail_settings WHERE key = 'total_pool_gb'`));
       return NextResponse.json({
+        totalPoolGb: pool.length ? Number(pool[0].value) || 100 : 100,
         mailboxes: rows.map((r) => ({
           mailboxId: String(r.mailbox_id),
           userId: r.user_id != null ? String(r.user_id) : null,
@@ -48,7 +51,18 @@ export async function PUT(req: NextRequest) {
         })),
       });
     }
-    const body = (await req.json().catch(() => ({}))) as { mailboxId?: string; quotaBytes?: number };
+    const body = (await req.json().catch(() => ({}))) as { mailboxId?: string; quotaBytes?: number; totalPoolGb?: number };
+    if (Number.isFinite(body.totalPoolGb)) {
+      // 전사 총 설정 용량 저장(mail_settings key-value).
+      await withDbWrite(async (db) => {
+        await db.run(
+          `INSERT INTO mail_settings (key, value, updated_at) VALUES ('total_pool_gb', $1, $2)
+           ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at`,
+          [String(Math.max(1, Math.round(Number(body.totalPoolGb)))), new Date().toISOString()]
+        );
+      });
+      return NextResponse.json({ ok: true });
+    }
     if (!body.mailboxId || !Number.isFinite(body.quotaBytes)) {
       return NextResponse.json({ error: "mailboxId/quotaBytes 가 필요합니다." }, { status: 400 });
     }

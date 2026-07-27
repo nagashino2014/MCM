@@ -21,8 +21,6 @@ interface AdminMailbox {
 }
 
 const GB = 1024 * 1024 * 1024;
-// 전사 메일 저장소 총량(운영 정책값 — S3 기반이라 물리 제한은 아님. 배분 기준선).
-const TOTAL_POOL_GB = 100;
 
 export function MailQuotaModal({ open, onClose, onSaved }: { open: boolean; onClose: () => void; onSaved: () => void }) {
   const { toast } = useCdToast();
@@ -32,6 +30,7 @@ export function MailQuotaModal({ open, onClose, onSaved }: { open: boolean; onCl
   const [mailGb, setMailGb] = useState(5);
   const [docGb, setDocGb] = useState(5); // 개인 문서함 — UI 만(추후 문서함 모듈에서 저장)
   const [saving, setSaving] = useState(false);
+  const [totalPoolGb, setTotalPoolGb] = useState(100); // 전사 총 설정 용량 — 관리자 편집(G2-15)
 
   const load = useCallback(async () => {
     try {
@@ -43,6 +42,7 @@ export function MailQuotaModal({ open, onClose, onSaved }: { open: boolean; onCl
       if (mbRes.ok) {
         const d = await mbRes.json();
         setMailboxes(Array.isArray(d.mailboxes) ? d.mailboxes : []);
+        if (Number.isFinite(d.totalPoolGb)) setTotalPoolGb(Number(d.totalPoolGb));
       }
     } catch {
       /* noop */
@@ -108,9 +108,10 @@ export function MailQuotaModal({ open, onClose, onSaved }: { open: boolean; onCl
 
   return (
     <CdModal open={open} onClose={onClose} title="인원별 용량 배분" size="xl" closeOnBackdrop={false}>
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_20rem] gap-4 min-h-[26rem]">
-        {/* 좌 — 조직도 트리뷰 */}
-        <div className="rounded-xl border cd-border-c overflow-hidden min-h-[24rem]">
+      {/* 좌(트리) 축소·우(설정) 확대(20rem→30rem) + 모달 높이 절반 고정(트리는 내부 스크롤) — G2-15 피드백. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(14rem,1fr)_30rem] gap-4 h-[30rem]">
+        {/* 좌 — 조직도 트리뷰(내부 스크롤) */}
+        <div className="rounded-xl border cd-border-c overflow-hidden h-full min-h-0">
           <OrganizationTree
             snapshot={snapshot}
             selectedEmployeeId={selected?.employeeId ?? null}
@@ -121,8 +122,8 @@ export function MailQuotaModal({ open, onClose, onSaved }: { open: boolean; onCl
           />
         </div>
 
-        {/* 우 — 요약 + 선택 인원 설정 */}
-        <div className="flex flex-col gap-3">
+        {/* 우 — 요약 + 선택 인원 설정(넘치면 내부 스크롤) */}
+        <div className="flex flex-col gap-3 min-h-0 overflow-y-auto">
           <div className="rounded-xl border cd-border-c p-3 flex items-center gap-3">
             <svg width="128" height="128" viewBox="0 0 128 128" className="shrink-0">
               <circle cx="64" cy="64" r={R} fill="none" stroke="var(--cd-border)" strokeWidth="14" />
@@ -134,7 +135,29 @@ export function MailQuotaModal({ open, onClose, onSaved }: { open: boolean; onCl
               <text x="64" y="78" textAnchor="middle" fontSize="10" fill="var(--cd-faint)">사용 비율</text>
             </svg>
             <dl className="text-xs flex-1 flex flex-col gap-1.5">
-              <Row k="총 설정 용량" v={`${summary.assignedGb.toFixed(1)} GB / ${TOTAL_POOL_GB} GB`} />
+              <div className="flex items-center justify-between gap-2">
+                <dt className="cd-text-faint">총 설정 용량</dt>
+                <dd className="font-bold cd-text flex items-center gap-1">
+                  {summary.assignedGb.toFixed(1)} GB /
+                  <input
+                    type="number"
+                    min={1}
+                    value={totalPoolGb}
+                    onChange={(e) => setTotalPoolGb(Number(e.target.value))}
+                    onBlur={async () => {
+                      const r = await fetch("/api/mail/settings", {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ totalPoolGb }),
+                      });
+                      if (r.ok) toast(`전사 총 설정 용량을 ${totalPoolGb}GB 로 저장했습니다.`, "success");
+                    }}
+                    className="cd-input !w-16 !px-1.5 !py-0.5 text-right text-xs"
+                    title="전사 총 설정 용량(GB) — 수정 후 포커스를 벗어나면 저장됩니다"
+                  />
+                  GB
+                </dd>
+              </div>
               <Row k="사용 용량" v={`${summary.usedGb.toFixed(2)} GB`} />
               <Row k="잔여 용량" v={`${summary.remainGb.toFixed(1)} GB`} />
               <Row k="1인당 평균" v={`${summary.avgGb.toFixed(1)} GB`} />

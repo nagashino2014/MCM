@@ -219,7 +219,7 @@ export function DirectoryBoard() {
                   {filteredPeople.map((p) => (
                     <div key={p.employeeId} className="rounded-2xl border cd-border-c cd-card-bg p-4 flex flex-col gap-2.5">
                       <div className="flex items-center gap-3 min-w-0">
-                        <CdAvatar name={p.name} src={p.photoPath} size="lg" />
+                        <CdAvatar name={p.name} src={p.photoPath} size="md" />
                         <div className="min-w-0">
                           <p className="text-[14px] font-bold cd-text truncate">
                             {p.name}

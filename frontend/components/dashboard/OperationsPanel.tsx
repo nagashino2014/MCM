@@ -34,7 +34,7 @@ const SERIES_COLORS = {
 };
 
 const REASON_PALETTE = [
-  "#16a34a",
+  "#13DEB9",
   "#0ea5e9",
   "#7c3aed",
   "#f59e0b",

@@ -427,8 +427,8 @@ export function FacilityListPanel({
                   {(f.serviceCategories.length ? f.serviceCategories : ["integrated" as FacilityServiceCategory]).map((category) => (
                     <span
                       key={category}
-                      className="rounded-full px-2 py-0.5 text-[9px] font-bold text-stone-800 border border-black/5"
-                      style={{ background: FACILITY_SERVICE_COLORS[category] }}
+                      className="rounded-full px-2 py-0.5 text-[9px] font-bold border border-black/5"
+                      style={{ background: FACILITY_SERVICE_COLORS[category], color: "#292524" }}
                     >
                       {FACILITY_SERVICE_LABELS[category]}
                     </span>

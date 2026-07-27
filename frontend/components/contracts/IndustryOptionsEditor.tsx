@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { X } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
+import { CdModal } from "@/components/cdash/CdModal";
 import { INTEGRATED_PERMIT_INDUSTRIES } from "@/lib/ieps/integrated-permit-industries";
 
 /** 통합허가 대상 업종 옵션 접미 — 화관법·HAPs 등 다른 업종 옵션과 구분한다. */
@@ -114,61 +114,51 @@ export function IndustryOptionsEditorButton({ options, onOptionsChange }: Props)
       >
         업종 수정
       </button>
-      {open && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/30 p-4" onMouseDown={() => setOpen(false)}>
-          <div className="cd-card rounded-3xl p-5 w-full max-w-lg" onMouseDown={(event) => event.stopPropagation()}>
-            <div className="flex items-center justify-between gap-3 mb-4">
-              <div>
-                <h3 className="text-lg font-bold cd-text">업종 옵션 수정</h3>
-                <p className="text-xs cd-text-faint mt-1">신규/변경 계약 업종 드롭다운에 표시될 옵션입니다.</p>
-              </div>
-              <button type="button" onClick={() => setOpen(false)} className="cd-btn cd-btn-ghost rounded-full p-2">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="flex items-center gap-2 mb-4">
+      <CdModal open={open} onClose={() => setOpen(false)} title="업종 옵션 수정" size="lg">
+        <div className="flex flex-col gap-4">
+          <p className="text-xs cd-text-faint -mt-1">신규/변경 계약 업종 드롭다운에 표시될 옵션입니다.</p>
+          <div className="flex items-center gap-2">
+            <input
+              className="cd-input flex-1"
+              placeholder="추가할 업종명"
+              value={newOption}
+              onChange={(event) => setNewOption(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  addOption();
+                }
+              }}
+            />
+            <label className="flex items-center gap-1.5 text-xs cd-text-muted shrink-0 cursor-pointer" title="체크하면 '(통합허가)' 표시를 붙여 등록합니다 — 통합허가 신규 편입 업종 추가용">
               <input
-                className="ui-input flex-1"
-                placeholder="추가할 업종명"
-                value={newOption}
-                onChange={(event) => setNewOption(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    addOption();
-                  }
-                }}
+                type="checkbox"
+                checked={integratedPermit}
+                onChange={(event) => setIntegratedPermit(event.target.checked)}
               />
-              <label className="flex items-center gap-1.5 text-xs cd-text-muted shrink-0 cursor-pointer" title="체크하면 '(통합허가)' 표시를 붙여 등록합니다 — 통합허가 신규 편입 업종 추가용">
-                <input
-                  type="checkbox"
-                  checked={integratedPermit}
-                  onChange={(event) => setIntegratedPermit(event.target.checked)}
-                />
-                통합허가
-              </label>
-              <button type="button" disabled={saving} onClick={addOption} className="btn-primary rounded-xl px-4 py-2 text-sm">
-                추가
-              </button>
-            </div>
-            <div className="max-h-80 overflow-y-auto rounded-2xl border cd-border-c cd-surface-bg">
-              {options.map((option) => (
-                <div key={option} className="flex items-center justify-between gap-3 border-b border-stone-100 px-3 py-2 last:border-b-0">
-                  <span className="text-sm font-semibold cd-text-muted">{option}</span>
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => removeOption(option)}
-                    className="rounded-lg px-2 py-1 text-xs font-bold cd-error-text hover:bg-[color:var(--cd-error-soft)] disabled:opacity-50"
-                  >
-                    삭제
-                  </button>
-                </div>
-              ))}
-            </div>
+              통합허가
+            </label>
+            <button type="button" disabled={saving} onClick={addOption} className="cd-btn cd-btn-primary rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50">
+              추가
+            </button>
+          </div>
+          <div className="max-h-80 overflow-y-auto rounded-2xl border cd-border-c cd-surface-bg">
+            {options.map((option) => (
+              <div key={option} className="flex items-center justify-between gap-3 border-b cd-border-c px-3 py-2 last:border-b-0">
+                <span className="text-sm font-semibold cd-text-muted">{option}</span>
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => removeOption(option)}
+                  className="rounded-lg px-2 py-1 text-xs font-bold cd-error-text hover:bg-[color:var(--cd-error-soft)] disabled:opacity-50"
+                >
+                  삭제
+                </button>
+              </div>
+            ))}
           </div>
         </div>
-      )}
+      </CdModal>
     </>
   );
 }

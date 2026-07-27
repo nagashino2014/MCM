@@ -1,9 +1,12 @@
 "use client";
 
+// 운영 알람 드로어 — G4: 구식 glass 스타일을 걷어내고 G0 CdDrawer(포털 cdash-vars 내장) 기반으로 표준화.
+// 탑바 AlertBell·데이터 현황 AlertBanner 에서 공용. 항목은 윤곽선 기본(cd-border), severity 는 테두리·아이콘 색으로.
+
 import { useCallback, useEffect, useState } from "react";
-import { createPortal } from "react-dom";
-import { X, Bell, AlertTriangle, AlertCircle, Info, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, AlertCircle, Info, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CdDrawer } from "@/components/cdash/CdModal";
 
 export interface AlertItem {
   id: number;
@@ -82,87 +85,32 @@ export function AlertDrawer({ open, onClose, canAck, onChanged }: AlertDrawerPro
     }
   };
 
-  if (!open) return null;
+  return (
+    <CdDrawer open={open} onClose={onClose} title="운영 알람" widthClass="max-w-md">
+      <div className="flex items-center gap-1.5 mb-3">
+        {(["open", "all"] as const).map((t) => (
+          <button key={t} type="button" className="cd-chip cd-chip-sm" data-active={tab === t} onClick={() => setTab(t)}>
+            {t === "open" ? "미확인" : "전체"}
+          </button>
+        ))}
+        <button type="button" className="ml-auto cd-btn cd-btn-soft rounded-lg px-3 py-1.5 text-xs font-semibold" onClick={() => reload()}>
+          {loading ? "로딩..." : "새로고침"}
+        </button>
+      </div>
 
-  // 사이드바(position: sticky) 내부에서 렌더되면 sticky 의 stacking context 에 갇혀
-  // 메인 컨텐츠 뒤로 깔리므로(닫기 불가·메뉴 비활성), body 포털로 최상위에 띄운다.
-  return createPortal(
-    <>
-      <div className="drawer-overlay" onClick={onClose} />
-      <aside className="drawer">
-        <header className="px-6 py-5 border-b border-stone-200/70 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
-              <Bell className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="text-xs font-bold text-stone-400 uppercase tracking-wide">
-                운영 알람
-              </div>
-              <h3 className="text-base font-bold text-stone-800 mt-0.5">
-                Operations Alerts
-              </h3>
-            </div>
+      <div className="space-y-3">
+        {error && <div className="text-[11px] font-bold text-[color:var(--cd-danger,#FA896B)]">로딩 실패: {error}</div>}
+        {loading && !alerts && <div className="text-[12px] cd-text-faint">로딩 중...</div>}
+        {alerts && alerts.length === 0 && (
+          <div className="text-[12px] cd-text-faint">
+            {tab === "open" ? "미확인 알람이 없습니다." : "알람 기록이 없습니다."}
           </div>
-          <button
-            type="button"
-            className="glass-button rounded-xl w-9 h-9 flex items-center justify-center text-stone-600"
-            onClick={onClose}
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </header>
-
-        <div className="px-6 pt-4 pb-2 flex items-center gap-2">
-          {(["open", "all"] as const).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTab(t)}
-              className={cn(
-                "px-3 py-1.5 rounded-xl text-xs font-bold transition-colors",
-                tab === t
-                  ? "bg-primary text-white"
-                  : "bg-white/60 text-stone-600 border border-stone-200/60 hover:text-stone-900"
-              )}
-            >
-              {t === "open" ? "미확인" : "전체"}
-            </button>
-          ))}
-          <button
-            type="button"
-            onClick={() => reload()}
-            className="ml-auto glass-button rounded-xl px-3 py-1.5 text-xs font-bold text-stone-700"
-          >
-            {loading ? "로딩..." : "새로고침"}
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
-          {error && (
-            <div className="text-[11px] text-red-600 font-bold">로딩 실패: {error}</div>
-          )}
-          {loading && !alerts && (
-            <div className="text-[12px] text-stone-400 italic">로딩 중...</div>
-          )}
-          {alerts && alerts.length === 0 && (
-            <div className="text-[12px] text-stone-400 italic">
-              {tab === "open" ? "미확인 알람이 없습니다." : "알람 기록이 없습니다."}
-            </div>
-          )}
-          {alerts?.map((a) => (
-            <AlertCard
-              key={a.id}
-              alert={a}
-              canAck={canAck}
-              acking={ackingId === a.id}
-              onAck={() => ack(a.id)}
-            />
-          ))}
-        </div>
-      </aside>
-    </>,
-    document.body
+        )}
+        {alerts?.map((a) => (
+          <AlertCard key={a.id} alert={a} canAck={canAck} acking={ackingId === a.id} onAck={() => ack(a.id)} />
+        ))}
+      </div>
+    </CdDrawer>
   );
 }
 
@@ -179,51 +127,39 @@ function AlertCard({
 }) {
   const Icon =
     alert.severity === "error" ? AlertCircle : alert.severity === "warn" ? AlertTriangle : Info;
-  const tone =
+  const toneBorder =
     alert.severity === "error"
-      ? "border-red-200 bg-red-50/60"
+      ? "border-[color:var(--cd-danger,#FA896B)]"
       : alert.severity === "warn"
-        ? "border-amber-200 bg-amber-50/60"
-        : "border-stone-200 bg-white/70";
+        ? "border-[color:var(--cd-warning,#FFAE1F)]"
+        : "cd-border-c";
   const accent =
     alert.severity === "error"
-      ? "text-red-600"
+      ? "text-[color:var(--cd-danger,#FA896B)]"
       : alert.severity === "warn"
-        ? "text-amber-600"
-        : "text-sky-600";
+        ? "text-[color:var(--cd-warning,#FFAE1F)]"
+        : "cd-text-primary";
   const isAcked = !!alert.acknowledgedAt;
 
   return (
-    <div
-      className={cn(
-        "rounded-2xl border p-3 flex flex-col gap-2 transition-opacity",
-        tone,
-        isAcked && "opacity-60"
-      )}
-    >
+    <div className={cn("rounded-2xl border p-3 flex flex-col gap-2 transition-opacity", toneBorder, isAcked && "opacity-60")}>
       <div className="flex items-start gap-2">
         <Icon className={cn("w-4 h-4 mt-0.5", accent)} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className={cn("text-[10px] font-bold uppercase tracking-wide", accent)}>
-              {alert.severity}
-            </span>
-            <span className="text-[10px] font-bold text-stone-400 uppercase">
+            <span className={cn("text-[10px] font-bold uppercase tracking-wide", accent)}>{alert.severity}</span>
+            <span className="text-[10px] font-bold cd-text-faint uppercase">
               {alert.source} · {alert.code}
             </span>
           </div>
-          <div className="text-sm font-bold text-stone-800 mt-0.5 break-words">
-            {alert.title}
-          </div>
-          {alert.body && (
-            <div className="text-[12px] text-stone-600 mt-1 break-words">{alert.body}</div>
-          )}
+          <div className="text-sm font-bold cd-text mt-0.5 break-words">{alert.title}</div>
+          {alert.body && <div className="text-[12px] cd-text-muted mt-1 break-words">{alert.body}</div>}
         </div>
       </div>
-      <div className="flex items-center justify-between text-[10px] text-stone-500">
+      <div className="flex items-center justify-between text-[10px] cd-text-faint">
         <span>{formatDate(alert.createdAt)}</span>
         {isAcked ? (
-          <span className="flex items-center gap-1 text-primary">
+          <span className="flex items-center gap-1 cd-text-primary">
             <CheckCircle2 className="w-3 h-3" />
             {alert.acknowledgedBy ? `${alert.acknowledgedBy} 확인` : "확인됨"}
           </span>
@@ -232,15 +168,12 @@ function AlertCard({
             type="button"
             onClick={onAck}
             disabled={acking}
-            className="rounded-lg px-2 py-1 text-[11px] font-bold text-white bg-primary hover:bg-primary/90 disabled:opacity-50"
+            className="cd-btn cd-btn-primary rounded-lg px-2 py-1 text-[11px] font-bold disabled:opacity-50"
           >
             {acking ? "처리..." : "확인"}
           </button>
         ) : (
-          <span
-            className="rounded-lg px-2 py-1 text-[11px] font-bold text-stone-400 bg-stone-100/80 border border-stone-200/60"
-            title="editor 이상만 확인 가능"
-          >
+          <span className="rounded-lg px-2 py-1 text-[11px] font-bold cd-text-faint border cd-border-c" title="editor 이상만 확인 가능">
             확인 (권한 없음)
           </span>
         )}

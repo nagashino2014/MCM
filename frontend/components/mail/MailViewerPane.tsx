@@ -36,6 +36,7 @@ export function MailViewerPane({
   onSetCategory,
   onArchive,
   onSpam,
+  onUnspam,
 }: {
   detail: MailMessageDetail | null;
   loading: boolean;
@@ -50,6 +51,7 @@ export function MailViewerPane({
   onSetCategory: (folderId: string | null) => void;
   onArchive: () => void;
   onSpam: () => void;
+  onUnspam: () => void;
 }) {
   if (loading) {
     return (
@@ -105,9 +107,13 @@ export function MailViewerPane({
         <CdButton size="sm" icon={<Archive className="w-3.5 h-3.5" />} onClick={onArchive} title="카테고리 폴더(미지정 시 보관함)로 이동">
           보관
         </CdButton>
-        {folder !== "spam" && (
+        {folder !== "spam" ? (
           <CdButton size="sm" icon={<ShieldAlert className="w-3.5 h-3.5" />} onClick={onSpam}>
             스팸 분류
+          </CdButton>
+        ) : (
+          <CdButton size="sm" variant="soft" icon={<RotateCcw className="w-3.5 h-3.5" />} onClick={onUnspam} title="받은편지함으로 복원하고 발신자 차단을 해제합니다">
+            스팸 해제
           </CdButton>
         )}
         <div className="flex-1" />

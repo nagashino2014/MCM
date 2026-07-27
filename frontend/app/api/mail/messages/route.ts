@@ -6,7 +6,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const ALLOWED_FOLDERS = new Set(["inbox", "sent", "drafts", "archive", "spam", "trash"]);
-const ALLOWED_ACTIONS = new Set<MailBulkAction>(["read", "unread", "star", "unstar", "trash", "restore", "move", "delete", "category", "archive"]);
+const ALLOWED_ACTIONS = new Set<MailBulkAction>([
+  "read", "unread", "star", "unstar", "trash", "restore", "move", "delete", "category", "archive", "moveTo", "unspam",
+]);
 const ALLOWED_MOVE_TARGETS = new Set(["inbox", "archive", "spam"]);
 
 // GET: 메일함 폴더 메시지 목록 — folder=inbox|sent|...|user:<folderId>, q(검색), category(받은편지함 필터), limit, offset

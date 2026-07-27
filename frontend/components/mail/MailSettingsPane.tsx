@@ -7,6 +7,7 @@ import { Check, HardDrive, Loader2, Settings2, ShieldAlert, Users } from "lucide
 import { CdButton } from "@/components/cdash/CdButton";
 import { CdCheckbox, CdInput, CdSelect } from "@/components/cdash/CdField";
 import { useCdToast } from "@/components/cdash/CdToast";
+import { MailQuotaModal } from "@/components/mail/MailQuotaModal";
 import type { MailboxSettings } from "@/lib/mail/spam";
 
 interface AdminMailbox {
@@ -31,6 +32,7 @@ export function MailSettingsPane() {
   const [hideRemote, setHideRemote] = useState(true);
   const [split, setSplit] = useState({ inbox: 50, sent: 25, archive: 25 });
   const [adminList, setAdminList] = useState<AdminMailbox[] | null>(null);
+  const [quotaModalOpen, setQuotaModalOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -89,18 +91,6 @@ export function MailSettingsPane() {
     } finally {
       setSaving(false);
     }
-  };
-
-  const saveQuota = async (m: AdminMailbox, gbValue: number) => {
-    const r = await fetch("/api/mail/settings", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mailboxId: m.mailboxId, quotaBytes: Math.round(gbValue * GB) }),
-    });
-    if (r.ok) {
-      toast(`${m.address} 총용량을 ${gbValue}GB 로 설정했습니다.`, "success");
-      load();
-    } else toast("용량 설정 실패", "error");
   };
 
   if (loading) {
@@ -178,41 +168,22 @@ export function MailSettingsPane() {
         </CdButton>
       </div>
 
-      {/* 관리자 — 사용자별 총용량 */}
+      {/* 관리자 — 인원별 용량 배분(조직도 모달, G2-13) */}
       {adminList && (
         <section className="rounded-xl border cd-border-c p-4 flex flex-col gap-2">
           <h3 className="text-sm font-bold cd-text flex items-center gap-1.5">
-            <Users className="w-4 h-4" /> 사용자별 총용량 할당 <span className="text-[10px] cd-text-faint font-medium">(관리자 전용)</span>
+            <Users className="w-4 h-4" /> 인원별 용량 배분 <span className="text-[10px] cd-text-faint font-medium">(관리자 전용)</span>
           </h3>
-          <ul className="divide-y cd-border-c">
-            {adminList.map((m) => (
-              <QuotaRow key={m.mailboxId} m={m} onSave={saveQuota} />
-            ))}
-          </ul>
+          <p className="text-xs cd-text-faint">조직도에서 인원을 선택해 메일·개인 문서함 용량을 할당합니다.</p>
+          <div>
+            <CdButton variant="soft" icon={<Users className="w-4 h-4" />} onClick={() => setQuotaModalOpen(true)}>
+              인원별 용량 배분
+            </CdButton>
+          </div>
         </section>
       )}
-    </div>
-  );
-}
 
-function QuotaRow({ m, onSave }: { m: AdminMailbox; onSave: (m: AdminMailbox, gb: number) => void }) {
-  const [gb, setGb] = useState(m.quotaBytes != null ? Number((m.quotaBytes / GB).toFixed(1)) : 5);
-  return (
-    <li className="py-2 flex items-center gap-2 text-sm">
-      <span className="flex-1 min-w-0 truncate cd-text">{m.address}</span>
-      <span className="text-xs cd-text-faint shrink-0">{m.quotaBytes != null ? `${(m.quotaBytes / GB).toFixed(1)}GB` : "미설정"}</span>
-      <input
-        type="number"
-        min={0.5}
-        step={0.5}
-        value={gb}
-        onChange={(e) => setGb(Number(e.target.value))}
-        className="cd-input !w-24 text-right"
-      />
-      <span className="text-xs cd-text-faint">GB</span>
-      <CdButton size="sm" variant="soft" onClick={() => onSave(m, gb)}>
-        적용
-      </CdButton>
-    </li>
+      <MailQuotaModal open={quotaModalOpen} onClose={() => setQuotaModalOpen(false)} onSaved={load} />
+    </div>
   );
 }

@@ -3,7 +3,7 @@
 // 메일 3-pane 중앙 — 메시지 목록(G2-2/3): 검색·체크 일괄작업·별표·안읽음 강조.
 // 폴더별 가용 액션이 다르다(inbox=보관/스팸/휴지통, trash=복원/영구삭제 …).
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Archive,
   Inbox,
@@ -21,9 +21,11 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CdCheckbox } from "@/components/cdash/CdField";
+import { CdDropdown } from "@/components/cdash/CdDropdown";
 import { CdEmptyState } from "@/components/cdash/CdEmptyState";
 import { CdIconButton } from "@/components/cdash/CdButton";
 import type { MailListItem } from "@/lib/mail/messages";
+import type { MailCategory } from "@/lib/mail/categories";
 import type { MailDraft } from "@/lib/mail/drafts";
 
 /** 그룹웨어 관례 날짜 — 오늘 HH:mm / 올해 M.D / 이전 YYYY.M.D */
@@ -43,6 +45,7 @@ export function MailListPane({
   folder,
   items,
   drafts,
+  categories,
   loading,
   activeId,
   q,
@@ -57,6 +60,7 @@ export function MailListPane({
   folder: string;
   items: MailListItem[];
   drafts: MailDraft[];
+  categories: MailCategory[];
   loading: boolean;
   activeId: string | null;
   q: string;
@@ -71,6 +75,11 @@ export function MailListPane({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [qInput, setQInput] = useState(q);
   const isDrafts = folder === "drafts";
+
+  // 폴더 전환 시 선택 리셋 — 이전 폴더의 체크가 남아 "N건" 오표시되던 버그 수정(G2-13).
+  useEffect(() => {
+    setSelected(new Set());
+  }, [folder]);
 
   const toggleAll = () => {
     setSelected((prev) => (prev.size === items.length && items.length > 0 ? new Set() : new Set(items.map((m) => m.messageId))));
@@ -89,13 +98,12 @@ export function MailListPane({
     setSelected(new Set());
   };
 
-  // 폴더별 일괄 액션 구성.
+  // 폴더별 일괄 액션 구성(보관은 카테고리 드롭다운으로 별도 렌더 — G2-13).
   const bulkButtons: { key: string; label: string; icon: React.ReactNode; act: BulkAction; danger?: boolean }[] =
     folder === "inbox"
       ? [
           { key: "read", label: "읽음", icon: <MailOpen className="w-4 h-4" />, act: { action: "read" } },
           { key: "unread", label: "안읽음", icon: <MailX className="w-4 h-4" />, act: { action: "unread" } },
-          { key: "archive", label: "보관", icon: <Archive className="w-4 h-4" />, act: { action: "move", target: "archive" } },
           { key: "spam", label: "스팸", icon: <ShieldAlert className="w-4 h-4" />, act: { action: "move", target: "spam" } },
           { key: "trash", label: "삭제", icon: <Trash2 className="w-4 h-4" />, act: { action: "trash" }, danger: true },
         ]
@@ -104,12 +112,18 @@ export function MailListPane({
             { key: "restore", label: "복원", icon: <RotateCcw className="w-4 h-4" />, act: { action: "restore" } },
             { key: "delete", label: "영구삭제", icon: <Trash2 className="w-4 h-4" />, act: { action: "delete" }, danger: true },
           ]
-        : folder === "archive" || folder === "spam"
+        : folder === "spam"
           ? [
-              { key: "inbox", label: "받은편지함", icon: <Inbox className="w-4 h-4" />, act: { action: "move", target: "inbox" } },
+              { key: "unspam", label: "스팸 해제", icon: <RotateCcw className="w-4 h-4" />, act: { action: "unspam" } },
               { key: "trash", label: "삭제", icon: <Trash2 className="w-4 h-4" />, act: { action: "trash" }, danger: true },
             ]
-          : [{ key: "trash", label: "삭제", icon: <Trash2 className="w-4 h-4" />, act: { action: "trash" }, danger: true }];
+          : folder === "archive"
+            ? [
+                { key: "inbox", label: "받은편지함", icon: <Inbox className="w-4 h-4" />, act: { action: "move", target: "inbox" } },
+                { key: "trash", label: "삭제", icon: <Trash2 className="w-4 h-4" />, act: { action: "trash" }, danger: true },
+              ]
+            : [{ key: "trash", label: "삭제", icon: <Trash2 className="w-4 h-4" />, act: { action: "trash" }, danger: true }];
+  const showArchiveDropdown = folder === "inbox"; // 보관 — 카테고리 선택 드롭다운
 
   return (
     <div className="flex flex-col h-full border-r cd-border-c min-w-0">
@@ -149,6 +163,25 @@ export function MailListPane({
           {selected.size > 0 ? (
             <>
               <span className="cd-text-faint ml-1 mr-2">{selected.size}건</span>
+              {showArchiveDropdown && (
+                <CdDropdown
+                  align="left"
+                  trigger={() => (
+                    <span className="flex items-center gap-1 px-2 py-1 rounded-md transition-colors cd-text-muted hover:text-[color:var(--cd-text)] cd-row-hover cursor-pointer" role="button" title="보관(카테고리 선택)">
+                      <Archive className="w-4 h-4" />
+                      <span className="hidden xl:inline">보관</span>
+                    </span>
+                  )}
+                  items={[
+                    { key: "__root", label: "보관함(루트)", onSelect: () => runBulk({ action: "moveTo", target: "archive" }) },
+                    ...categories.map((c) => ({
+                      key: c.folderId,
+                      label: c.name,
+                      onSelect: () => runBulk({ action: "moveTo", target: c.folderId }),
+                    })),
+                  ]}
+                />
+              )}
               {bulkButtons.map((b) => (
                 <button
                   key={b.key}

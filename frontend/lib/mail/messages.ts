@@ -60,7 +60,11 @@ export async function listFolders(userId: string): Promise<{ folders: MailFolder
   };
 }
 
-export type MailBulkAction = "read" | "unread" | "star" | "unstar" | "trash" | "restore" | "move" | "delete" | "category" | "archive";
+export type MailBulkAction =
+  | "read" | "unread" | "star" | "unstar" | "trash" | "restore" | "move" | "delete"
+  | "category" | "archive"
+  | "moveTo" // 지정 폴더(사용자 카테고리 폴더 or 시스템 archive)로 보관 — 카테고리 라벨도 동기(G2-13)
+  | "unspam"; // 스팸 해제 — 받은편지함 복원 + 발신자 차단 해제(G2-13)
 
 /**
  * 일괄 상태 변경(소유 mailbox 한정·멱등).
@@ -129,6 +133,67 @@ export async function bulkUpdateMessages(
         [ids, mbId]
       );
       updated = ids.length;
+      return;
+    }
+    if (action === "moveTo") {
+      // 지정 폴더로 보관(G2-13) — target = 사용자 폴더 id 또는 "archive"(루트). 카테고리 폴더면 라벨도 동기.
+      let destFolderId: string | null = null;
+      let syncCategory: string | null = null;
+      if (targetKind === "archive" || !targetKind) {
+        const arch = rowsToObjects(await db.exec(`SELECT folder_id FROM mail_folders WHERE mailbox_id = $1 AND system_kind = 'archive'`, [mbId]));
+        destFolderId = arch.length ? String(arch[0].folder_id) : null;
+      } else {
+        const own = rowsToObjects(
+          await db.exec(`SELECT folder_id FROM mail_folders WHERE folder_id = $1 AND mailbox_id = $2 AND system_kind IS NULL`, [targetKind, mbId])
+        );
+        if (own.length) {
+          destFolderId = targetKind;
+          syncCategory = targetKind;
+        }
+      }
+      if (!destFolderId) return;
+      const nowTs = new Date().toISOString();
+      for (const messageId of ids) {
+        const cur = rowsToObjects(
+          await db.exec(`SELECT is_read, is_starred, category_id FROM mail_message_state WHERE mailbox_id = $2 AND message_id = $1 LIMIT 1`, [messageId, mbId])
+        );
+        if (!cur.length) continue;
+        await db.run(`DELETE FROM mail_message_state WHERE mailbox_id = $2 AND message_id = $1`, [messageId, mbId]);
+        await db.run(
+          `INSERT INTO mail_message_state (message_id, folder_id, mailbox_id, is_read, is_starred, category_id, created_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (message_id, folder_id) DO NOTHING`,
+          [messageId, destFolderId, mbId, Number(cur[0].is_read ?? 0), Number(cur[0].is_starred ?? 0), syncCategory ?? (cur[0].category_id != null ? String(cur[0].category_id) : null), nowTs]
+        );
+        updated++;
+      }
+      return;
+    }
+    if (action === "unspam") {
+      // 스팸 해제(G2-13) — 받은편지함 복원 + 해당 발신자 차단 목록 해제.
+      const inboxRow = rowsToObjects(await db.exec(`SELECT folder_id FROM mail_folders WHERE mailbox_id = $1 AND system_kind = 'inbox'`, [mbId]));
+      if (!inboxRow.length) return;
+      const inboxId = String(inboxRow[0].folder_id);
+      const nowTs = new Date().toISOString();
+      for (const messageId of ids) {
+        const cur = rowsToObjects(
+          await db.exec(
+            `SELECT s.is_read, s.is_starred, s.category_id, m.from_addr
+               FROM mail_message_state s JOIN mail_messages m ON m.message_id = s.message_id
+              WHERE s.mailbox_id = $2 AND s.message_id = $1 LIMIT 1`,
+            [messageId, mbId]
+          )
+        );
+        if (!cur.length) continue;
+        await db.run(`DELETE FROM mail_message_state WHERE mailbox_id = $2 AND message_id = $1`, [messageId, mbId]);
+        await db.run(
+          `INSERT INTO mail_message_state (message_id, folder_id, mailbox_id, is_read, is_starred, category_id, created_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (message_id, folder_id) DO NOTHING`,
+          [messageId, inboxId, mbId, Number(cur[0].is_read ?? 0), Number(cur[0].is_starred ?? 0), cur[0].category_id != null ? String(cur[0].category_id) : null, nowTs]
+        );
+        const from = cur[0].from_addr != null ? String(cur[0].from_addr).toLowerCase() : "";
+        if (from) await db.run(`DELETE FROM mail_spam_senders WHERE mailbox_id = $1 AND sender = $2`, [mbId, from]);
+        updated++;
+      }
       return;
     }
     // 이동 계열: trash/restore/move/archive — 대상 폴더 결정 후 state 재배치.

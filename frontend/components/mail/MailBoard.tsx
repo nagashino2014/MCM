@@ -204,6 +204,8 @@ export function MailBoard() {
     if (!detail) return;
     await runBulk([detail.messageId], { action: "category", target: folderId ?? "" });
     setDetail({ ...detail, categoryId: folderId });
+    const name = categories.find((c) => c.folderId === folderId)?.name;
+    toast(folderId ? `'${name ?? "카테고리"}' 로 분류했습니다. [보관] 시 해당 폴더로 이동합니다.` : "분류를 해제했습니다.", "success");
   };
 
   const deleteDraft = async (d: MailDraft) => {
@@ -283,6 +285,11 @@ export function MailBoard() {
       onSetCategory={setMessageCategory}
       onArchive={() => detail && runBulk([detail.messageId], { action: "archive" })}
       onSpam={markSpam}
+      onUnspam={async () => {
+        if (!detail) return;
+        await runBulk([detail.messageId], { action: "unspam" });
+        toast("스팸을 해제하고 받은편지함으로 복원했습니다. 발신자 차단도 해제됩니다.", "success");
+      }}
     />
   );
   const list = (
@@ -290,6 +297,7 @@ export function MailBoard() {
       folder={folder}
       items={items}
       drafts={drafts}
+      categories={categories}
       loading={loadingList}
       activeId={detail?.messageId ?? null}
       q={q}

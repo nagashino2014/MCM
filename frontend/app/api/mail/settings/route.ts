@@ -35,11 +35,12 @@ export async function PUT(req: NextRequest) {
     if (req.nextUrl.searchParams.get("list") === "1") {
       const db = await getDb();
       const rows = rowsToObjects(
-        await db.exec(`SELECT mailbox_id, address, display_name, quota_bytes, used_bytes FROM mailboxes ORDER BY address`)
+        await db.exec(`SELECT mailbox_id, user_id, address, display_name, quota_bytes, used_bytes FROM mailboxes ORDER BY address`)
       );
       return NextResponse.json({
         mailboxes: rows.map((r) => ({
           mailboxId: String(r.mailbox_id),
+          userId: r.user_id != null ? String(r.user_id) : null,
           address: String(r.address),
           displayName: r.display_name != null ? String(r.display_name) : "",
           quotaBytes: r.quota_bytes != null ? Number(r.quota_bytes) : null,

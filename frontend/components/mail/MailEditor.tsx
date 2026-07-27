@@ -11,7 +11,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type Reac
 import {
   AlignCenter, AlignJustify, AlignLeft, AlignRight, ArrowDown, ArrowLeft, ArrowRight, ArrowUp,
   Baseline, Bold, Image as ImageIcon, Indent, Italic, Link2, List, ListOrdered, Minus as MinusIcon,
-  Omega, Outdent, Paintbrush, Plus, SeparatorHorizontal, Strikethrough, Table2, Trash2,
+  Omega, Outdent, Paintbrush, Plus, SeparatorHorizontal, Strikethrough, Subscript, Superscript, Table2, Trash2,
   Underline as UnderlineIcon, UnfoldHorizontal, UnfoldVertical,
 } from "lucide-react";
 import { CdIconButton } from "@/components/cdash/CdButton";
@@ -278,6 +278,8 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
   const [toolPopover, setToolPopover] = useState<"symbol" | "table" | "cellcolor" | "textcolor" | "lineheight" | null>(null);
   const [tableHover, setTableHover] = useState<{ r: number; c: number }>({ r: 0, c: 0 });
   const [activeCell, setActiveCell] = useState<HTMLTableCellElement | null>(null);
+  const [supActive, setSupActive] = useState(false); // 위 첨자 토글 상태(G2-14)
+  const [subActive, setSubActive] = useState(false); // 아래 첨자 토글 상태
   const dragRef = useRef<{ kind: "col" | "row"; cells: HTMLTableCellElement[]; startPos: number; startSize: number } | null>(null);
 
   const exec = (cmd: string, value?: string) => {
@@ -331,7 +333,7 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
     onInput();
   };
 
-  // 커서 위치의 표 셀 추적.
+  // 커서 위치의 표 셀 추적 + 첨자 토글 상태(G2-14) 동기.
   useEffect(() => {
     const onSel = () => {
       const sel = window.getSelection();
@@ -339,6 +341,15 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
       const el = node instanceof HTMLElement ? node : (node?.parentElement ?? null);
       const cell = (el?.closest?.("td,th") ?? null) as HTMLTableCellElement | null;
       setActiveCell(cell && innerRef.current?.contains(cell) ? cell : null);
+      // 위/아래 첨자 토글 활성 표시 — 커서가 에디터 안에 있을 때만 판독.
+      if (node && innerRef.current?.contains(node instanceof HTMLElement ? node : node.parentElement)) {
+        try {
+          setSupActive(document.queryCommandState("superscript"));
+          setSubActive(document.queryCommandState("subscript"));
+        } catch {
+          /* noop */
+        }
+      }
     };
     document.addEventListener("selectionchange", onSel);
     return () => document.removeEventListener("selectionchange", onSel);
@@ -465,6 +476,8 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
     fn(activeCell);
     innerRef.current?.focus();
     onInput();
+    // 표/행/열 삭제로 셀이 문서에서 떨어져 나갔으면 표 툴바를 닫는다(잔존 버그 수정, G2-14).
+    if (!activeCell.isConnected) setActiveCell(null);
   };
 
   const divider = <span className="w-px h-4 mx-1 shrink-0" style={{ background: "var(--cd-border)" }} />;
@@ -511,6 +524,29 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
         <EBtn label="기울임" onClick={() => exec("italic")}><Italic className="w-3.5 h-3.5" /></EBtn>
         <EBtn label="밑줄" onClick={() => exec("underline")}><UnderlineIcon className="w-3.5 h-3.5" /></EBtn>
         <EBtn label="취소선" onClick={() => exec("strikeThrough")}><Strikethrough className="w-3.5 h-3.5" /></EBtn>
+        {/* 위/아래 첨자 — 토글(활성 상태 유지, 재클릭 해제. G2-14) */}
+        <EBtn
+          label="위 첨자"
+          active={supActive}
+          onClick={() => {
+            exec("superscript");
+            setSupActive((v) => !v);
+            if (subActive) setSubActive(false);
+          }}
+        >
+          <Superscript className="w-3.5 h-3.5" />
+        </EBtn>
+        <EBtn
+          label="아래 첨자"
+          active={subActive}
+          onClick={() => {
+            exec("subscript");
+            setSubActive((v) => !v);
+            if (supActive) setSupActive(false);
+          }}
+        >
+          <Subscript className="w-3.5 h-3.5" />
+        </EBtn>
 
         {/* 글자색 */}
         <span className="relative inline-flex" data-tool-popover>
@@ -707,7 +743,7 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
         onKeyDown={onEditorKeyDown}
         onMouseMove={onEditorMouseMove}
         onMouseDown={onEditorMouseDown}
-        className="cd-mail-editor min-h-[484px] max-h-[70vh] overflow-y-auto border cd-border-c border-t-0 rounded-b-lg px-3 py-2 text-sm bg-white text-black outline-none focus:border-[color:var(--cd-primary)]"
+        className="cd-mail-editor min-h-[634px] max-h-[75vh] overflow-y-auto border cd-border-c border-t-0 rounded-b-lg px-3 py-2 text-sm bg-white text-black outline-none focus:border-[color:var(--cd-primary)]"
         style={{ lineHeight: 1.6 }}
       />
     </div>

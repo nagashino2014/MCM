@@ -423,3 +423,12 @@
 /* 소제목 행: 강조 + 하단 행간 +100% + 상단 행간 +80% (첫 행은 상단 여백 제외) */
 .sn-editor .sn-line[data-sub="1"] { font-weight: 600; margin-top: 1.28em; margin-bottom: 1.6em; }
 .sn-editor .sn-line:first-child[data-sub="1"] { margin-top: 0; }
+
+/* ── 메일 리치 에디터(.cd-mail-editor) — Tailwind 전역 리셋이 지운 목록 마커/HR 복원 (G2-8) ── */
+.cd-mail-editor ul { list-style: disc; padding-left: 1.6em; margin: 0.25em 0; }
+.cd-mail-editor ol { list-style: decimal; padding-left: 1.8em; margin: 0.25em 0; }
+.cd-mail-editor ul ul { list-style: circle; }
+.cd-mail-editor li { display: list-item; }
+.cd-mail-editor hr { border: none; border-top: 1px solid #c8c8cc; margin: 12px 0; }
+.cd-mail-editor img { max-width: 100%; }
+.cd-mail-editor table { border-collapse: collapse; }

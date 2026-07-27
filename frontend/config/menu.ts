@@ -7,13 +7,22 @@ import {
   Trash2,
   ClipboardList,
   ClipboardCheck,
+  Mail,
   UserCog,
   Building2,
   Users as UsersIcon,
+  BookUser,
+  Megaphone,
+  CalendarDays,
+  CalendarClock,
+  SlidersHorizontal,
   type LucideIcon,
 } from "lucide-react";
 
 export type Role = "admin" | "editor" | "viewer";
+
+/** 사이드바 카운트 뱃지 데이터 키(/api/nav/badges 응답 필드와 매핑). */
+export type MenuBadgeKey = "mailUnread" | "approvalPending";
 
 export interface MenuItem {
   title: string;
@@ -23,8 +32,13 @@ export interface MenuItem {
   comingSoon?: boolean;
   /** 이 메뉴를 보려면 필요한 최소 role. 미지정 시 viewer 이상 모두 노출. */
   minRole?: Role;
-  /** 사이드바 카테고리 그룹: 홈(home) / 업무 보고(work) / 사업 운영(main) / 시스템(system) */
-  group?: "home" | "work" | "main" | "system";
+  /**
+   * 사이드바 카테고리 그룹(G1 IA — docs/groupware-ux-overhaul-blueprint.md §2.1):
+   * 홈(home) / 협업(collab) / 업무(work) / 사업 운영(main) / 관리(system)
+   */
+  group?: "home" | "collab" | "work" | "main" | "system";
+  /** 카운트 뱃지(안읽은 메일·미결재) 데이터 키. */
+  badgeKey?: MenuBadgeKey;
 }
 
 export const MENU_ITEMS: MenuItem[] = [
@@ -35,7 +49,14 @@ export const MENU_ITEMS: MenuItem[] = [
     icon: House,
     group: "home",
   },
-  // ── 업무 보고 ─────────────────────────────────────
+  // ── 협업 (그룹웨어 코어 — 최상단) ──────────────────
+  {
+    title: "메일",
+    href: "/mail",
+    icon: Mail,
+    group: "collab",
+    badgeKey: "mailUnread",
+  },
   {
     title: "전자결재",
     href: "/approval",
@@ -45,14 +66,33 @@ export const MENU_ITEMS: MenuItem[] = [
       { title: "기안 작성", href: "/approval/draft" },
       { title: "문서함", href: "/approval/archive" },
       { title: "양식별 문서 조회", href: "/approval/records" },
-      { title: "직원별 휴가 관리", href: "/approval/leave" },
-      { title: "근태·초과근무 관리", href: "/approval/attendance" },
-      { title: "연차촉진제도 관리", href: "/approval/leave-promotion" },
-      { title: "휴가 종류 규정", href: "/approval/leave-types" },
-      { title: "양식 관리", href: "/approval/forms" },
+      { title: "결재 인사이트", href: "/approval/insights" },
     ],
-    group: "work",
+    group: "collab",
+    badgeKey: "approvalPending",
   },
+  {
+    title: "주소록·조직도",
+    href: "/directory",
+    icon: BookUser,
+    comingSoon: true, // G6-A 구현 예정(IA 자리 선점)
+    group: "collab",
+  },
+  {
+    title: "공지·게시판",
+    href: "/board",
+    icon: Megaphone,
+    comingSoon: true, // G6-B 추후 구현
+    group: "collab",
+  },
+  {
+    title: "일정",
+    href: "/calendar",
+    icon: CalendarDays,
+    comingSoon: true, // G6-C 추후 구현
+    group: "collab",
+  },
+  // ── 업무 ──────────────────────────────────────────
   {
     title: "업무추진계획",
     href: "/work-plan",
@@ -75,7 +115,20 @@ export const MENU_ITEMS: MenuItem[] = [
     ],
     group: "work",
   },
-  // ── 사업 운영 ─────────────────────────────────────
+  // 근태·휴가 — 전자결재 하위에서 HR 모듈로 승격(§2.3). 라우트 경로는 무변경(/approval/*).
+  {
+    title: "근태·휴가",
+    href: "/approval/leave",
+    icon: CalendarClock,
+    submenu: [
+      { title: "직원별 휴가 관리", href: "/approval/leave" },
+      { title: "근태·초과근무 관리", href: "/approval/attendance" },
+      { title: "연차촉진제도 관리", href: "/approval/leave-promotion" },
+      { title: "휴가 종류 규정", href: "/approval/leave-types" },
+    ],
+    group: "work",
+  },
+  // ── 사업 운영 (원 PermitIQ 도메인 — 보존) ──────────
   {
     title: "사업장",
     href: "/facilities",
@@ -118,6 +171,7 @@ export const MENU_ITEMS: MenuItem[] = [
     ],
     group: "main",
   },
+  // ── 관리 (운영자) ─────────────────────────────────
   {
     title: "사용자 관리",
     href: "/admin/users",
@@ -133,6 +187,19 @@ export const MENU_ITEMS: MenuItem[] = [
     title: "회사 프로필 관리",
     href: "/admin/company-profile",
     icon: Building2,
+    minRole: "admin",
+    group: "system",
+  },
+  // 결재 운영(양식·정책·알림) — 전자결재 하위에서 관리로 이동(§2.3, 운영자 기능).
+  {
+    title: "결재 운영 설정",
+    href: "/approval/forms",
+    icon: SlidersHorizontal,
+    submenu: [
+      { title: "양식 관리", href: "/approval/forms" },
+      { title: "사전검토 정책", href: "/approval/policies" },
+      { title: "결재 알림 설정", href: "/approval/settings" },
+    ],
     minRole: "admin",
     group: "system",
   },

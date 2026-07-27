@@ -1,198 +1,220 @@
 "use client";
 
-import { useState } from "react";
+// 전역 사이드바(G1) — 5섹션 IA(홈/협업/업무/사업운영/관리) + 카운트 뱃지 + 반응형 레일.
+// 반응형(§3.0 FHD-first): ≥2xl(1536) 전체 확장(w-72) · lg~2xl 아이콘 레일(라벨 숨김·title 툴팁) · <lg 미표시(AppShell 드로어).
+// mode="drawer" 면 폭 강제 확장(오버레이 드로어 내부용). 순수 CSS 브레이크포인트라 상태관리 없음.
+// 설계: docs/groupware-ux-overhaul-blueprint.md §2.1·§3.
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown, ChevronRight, ShieldCheck, Zap } from "lucide-react";
+import { ChevronDown, ChevronRight, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MENU_ITEMS, isMenuVisibleForRole, type MenuItem, type Role } from "@/config/menu";
-import { AlertBell } from "@/components/dashboard/AlertBell";
+import { CdCount } from "@/components/cdash/CdBadge";
+import type { NavBadges } from "@/components/layout/useNavBadges";
 
 interface SidebarProps {
   role: Role;
+  badges: NavBadges;
+  /** auto=데스크톱(레일↔확장 CSS 자동) / drawer=오버레이 내부(항상 확장). */
+  mode?: "auto" | "drawer";
+  /** 드로어에서 항목 클릭 시 닫기 콜백. */
+  onNavigate?: () => void;
 }
 
-export function Sidebar({ role }: SidebarProps) {
+const SECTION_LABEL: Record<string, string> = {
+  collab: "협업",
+  work: "업무",
+  main: "사업 운영",
+  system: "관리",
+};
+
+const OPEN_SECTIONS_KEY = "nav-open-sections";
+
+export function Sidebar({ role, badges, mode = "auto", onNavigate }: SidebarProps) {
   const pathname = usePathname();
-  const [openSections, setOpenSections] = useState<string[]>(
+  const [openSections, setOpenSections] = useState<string[]>(() =>
     MENU_ITEMS.filter((m) => m.submenu).map((m) => m.title)
   );
 
+  // 접힘 상태 기억(클라이언트 전용).
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(OPEN_SECTIONS_KEY);
+      if (saved) setOpenSections(JSON.parse(saved));
+    } catch {
+      /* noop */
+    }
+  }, []);
   const toggleSection = (title: string) => {
-    setOpenSections((prev) =>
-      prev.includes(title) ? prev.filter((t) => t !== title) : [...prev, title]
-    );
+    setOpenSections((prev) => {
+      const next = prev.includes(title) ? prev.filter((t) => t !== title) : [...prev, title];
+      try {
+        localStorage.setItem(OPEN_SECTIONS_KEY, JSON.stringify(next));
+      } catch {
+        /* noop */
+      }
+      return next;
+    });
   };
 
   const visible = MENU_ITEMS.filter((m) => isMenuVisibleForRole(m, role));
-  const homeItems = visible.filter((m) => m.group === "home");
-  const workItems = visible.filter((m) => m.group === "work");
-  const mainItems = visible.filter((m) => (m.group ?? "main") === "main");
-  const systemItems = visible.filter((m) => m.group === "system");
+  const groups: Array<{ key: string; items: MenuItem[] }> = ["home", "collab", "work", "main", "system"]
+    .map((key) => ({ key, items: visible.filter((m) => (m.group ?? "main") === key) }))
+    .filter((g) => g.items.length > 0);
+
+  const isDrawer = mode === "drawer";
+  // 레일 모드에서 라벨류를 숨기는 클래스(드로어는 항상 표시).
+  const labelCls = isDrawer ? "" : "hidden 2xl:block";
+  const expandOnlyCls = isDrawer ? "" : "hidden 2xl:flex";
 
   return (
     <aside
-      className="w-72 h-[calc(100vh-2rem)] sticky top-4 left-4 rounded-3xl flex flex-col p-6 overflow-y-auto hidden xl:flex shrink-0 border cd-border-c"
+      className={cn(
+        "h-full rounded-3xl flex-col overflow-y-auto overflow-x-hidden shrink-0 border cd-border-c flex",
+        isDrawer ? "w-72 p-4" : "w-[76px] 2xl:w-72 p-3 2xl:p-5 hidden lg:flex"
+      )}
       style={{ background: "var(--cd-card)", boxShadow: "var(--cd-shadow)" }}
     >
-      <div className="mb-6 px-2">
-        <div className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center cd-soft-primary">
-            <ShieldCheck className="w-5 h-5" />
-          </div>
-          <div className="flex flex-col leading-tight">
-            <span className="text-[18px] font-extrabold tracking-tight cd-text">
-              PermitIQ
-            </span>
-            <span className="text-[11px] font-semibold cd-text-faint">
-              IEPS Permit Intelligence
-            </span>
-          </div>
+      {/* 브랜드 */}
+      <Link href="/home" onClick={onNavigate} className={cn("mb-5 flex items-center gap-2", isDrawer ? "px-2" : "px-1 2xl:px-2 justify-center 2xl:justify-start")}>
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center cd-soft-primary shrink-0">
+          <ShieldCheck className="w-5 h-5" />
         </div>
-      </div>
+        <div className={cn("flex-col leading-tight", labelCls)}>
+          <span className="text-[18px] font-extrabold tracking-tight cd-text">PermitIQ</span>
+          <span className="text-[11px] font-semibold cd-text-faint">Groupware</span>
+        </div>
+      </Link>
 
-      <div className="flex flex-col gap-1">
-        {homeItems.map((section) =>
-          renderItem(section, pathname, openSections, toggleSection)
-        )}
-        {homeItems.length > 0 && <div className="mb-3" />}
-        {workItems.length > 0 && (
-          <>
-            <div className="px-3 mb-1 text-[10px] font-bold uppercase tracking-widest cd-text-faint">
-              업무 보고
-            </div>
-            {workItems.map((section) =>
-              renderItem(section, pathname, openSections, toggleSection)
+      <div className="flex flex-col gap-0.5 flex-1">
+        {groups.map((g, gi) => (
+          <div key={g.key} className={cn("flex flex-col gap-0.5", gi > 0 && "mt-3")}>
+            {SECTION_LABEL[g.key] && (
+              <>
+                {/* 확장: 텍스트 라벨 / 레일: 구분선 */}
+                <div className={cn("px-3 mb-1 text-[10px] font-bold uppercase tracking-widest cd-text-faint", labelCls)}>
+                  {SECTION_LABEL[g.key]}
+                </div>
+                {!isDrawer && <div className="2xl:hidden mx-3 my-1 border-t cd-border-c" />}
+              </>
             )}
-            <div className="px-3 mb-1 mt-4 text-[10px] font-bold uppercase tracking-widest cd-text-faint">
-              사업 운영
-            </div>
-          </>
-        )}
-        {mainItems.map((section) =>
-          renderItem(section, pathname, openSections, toggleSection)
-        )}
-      </div>
-
-      {systemItems.length > 0 && (
-        <div className="mt-6 pt-4 border-t cd-border-c flex flex-col gap-1">
-          <div className="px-3 mb-1 text-[10px] font-bold uppercase tracking-widest cd-text-faint">
-            시스템
+            {g.items.map((item) => (
+              <NavItem
+                key={item.title}
+                item={item}
+                pathname={pathname}
+                badges={badges}
+                isDrawer={isDrawer}
+                labelCls={labelCls}
+                expandOnlyCls={expandOnlyCls}
+                open={openSections.includes(item.title)}
+                onToggle={() => toggleSection(item.title)}
+                onNavigate={onNavigate}
+              />
+            ))}
           </div>
-          {systemItems.map((section) =>
-            renderItem(section, pathname, openSections, toggleSection)
-          )}
-        </div>
-      )}
-
-      <div className="mt-auto pt-6 flex flex-col gap-3">
-        <AlertBell variant="sidebar" canAck={role === "admin" || role === "editor"} />
-        <div className="rounded-2xl border cd-border-c cd-surface-bg p-3 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full flex items-center justify-center cd-soft-primary">
-            <Zap className="w-4 h-4" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-xs font-bold cd-text truncate">자동 수집</div>
-            <div className="text-[11px] cd-text-faint truncate">
-              `npm run collect` 또는 수집 시작 버튼
-            </div>
-          </div>
-        </div>
+        ))}
       </div>
     </aside>
   );
 }
 
-function renderItem(
-  section: MenuItem,
-  pathname: string | null,
-  openSections: string[],
-  toggleSection: (t: string) => void
-) {
-  const hasSubmenu = !!section.submenu && section.submenu.length > 0;
-  const isActiveSection = hasSubmenu
-    ? section.submenu!.some((s) => pathname === s.href || pathname?.startsWith(s.href + "/"))
-    : pathname === section.href || pathname?.startsWith(section.href + "/");
-  const isOpen = openSections.includes(section.title);
-  const Icon = section.icon;
+function NavItem({
+  item,
+  pathname,
+  badges,
+  isDrawer,
+  labelCls,
+  expandOnlyCls,
+  open,
+  onToggle,
+  onNavigate,
+}: {
+  item: MenuItem;
+  pathname: string | null;
+  badges: NavBadges;
+  isDrawer: boolean;
+  labelCls: string;
+  expandOnlyCls: string;
+  open: boolean;
+  onToggle: () => void;
+  onNavigate?: () => void;
+}) {
+  const Icon = item.icon;
+  const hasSubmenu = !!item.submenu && item.submenu.length > 0;
+  const isActive = hasSubmenu
+    ? item.submenu!.some((s) => pathname === s.href || pathname?.startsWith(s.href + "/"))
+    : pathname === item.href || pathname?.startsWith(item.href + "/");
+  const count = item.badgeKey ? badges[item.badgeKey] : 0;
+
+  // 아이콘 + (라벨/뱃지) 공통 렌더 — 레일에서는 아이콘만, 뱃지는 점(dot)으로.
+  const iconBlock = (
+    <div className={cn("relative p-2 rounded-lg flex items-center justify-center transition-colors shrink-0", isActive ? "cd-fill-primary" : "cd-surface-bg cd-text-muted")}>
+      <Icon className="w-4 h-4" />
+      {!isDrawer && count > 0 && (
+        <span className="2xl:hidden absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full" style={{ background: "var(--cd-error)" }} />
+      )}
+    </div>
+  );
+
+  const rowCls = cn(
+    "flex items-center w-full rounded-xl text-sm font-semibold transition-all",
+    isDrawer ? "px-3 py-2.5 justify-between" : "px-2 2xl:px-3 py-2 2xl:py-2.5 justify-center 2xl:justify-between",
+    isActive ? (hasSubmenu ? "text-[color:var(--cd-primary)]" : "cd-soft-primary") : "cd-text-muted hover:text-[color:var(--cd-text)]"
+  );
 
   if (!hasSubmenu) {
     return (
-      <Link
-        key={section.title}
-        href={section.href}
-        className={cn(
-          "flex items-center justify-between w-full px-3 py-2.5 rounded-xl text-sm font-semibold transition-all group",
-          isActiveSection
-            ? "cd-soft-primary"
-            : "cd-text-muted hover:text-[color:var(--cd-text)]"
-        )}
-      >
-        <div className="flex items-center gap-3">
-          <div
-            className={cn(
-              "p-2 rounded-lg flex items-center justify-center transition-colors",
-              isActiveSection ? "cd-fill-primary" : "cd-surface-bg cd-text-muted"
-            )}
-          >
-            <Icon className="w-4 h-4" />
-          </div>
-          <span>{section.title}</span>
+      <Link href={item.href} onClick={onNavigate} title={item.title} className={rowCls} aria-disabled={item.comingSoon}>
+        <div className="flex items-center gap-3 min-w-0">
+          {iconBlock}
+          <span className={cn("truncate", labelCls)}>{item.title}</span>
         </div>
-        {section.comingSoon && (
-          <span className="text-[10px] cd-text-faint font-medium">예정</span>
-        )}
+        <span className={cn("items-center gap-1", labelCls, isDrawer ? "flex" : expandOnlyCls)}>
+          {count > 0 && <CdCount count={count} tone="error" />}
+          {item.comingSoon && <span className="text-[10px] cd-text-faint font-medium">예정</span>}
+        </span>
       </Link>
     );
   }
 
   return (
-    <div key={section.title} className="flex flex-col">
-      <button
-        type="button"
-        onClick={() => toggleSection(section.title)}
-        className={cn(
-          "flex items-center justify-between w-full px-3 py-2.5 rounded-xl text-sm font-semibold transition-all group",
-          isActiveSection
-            ? "text-[color:var(--cd-primary)]"
-            : "cd-text-muted hover:text-[color:var(--cd-text)]"
-        )}
-      >
-        <div className="flex items-center gap-3">
-          <div
-            className={cn(
-              "p-2 rounded-lg flex items-center justify-center transition-colors",
-              isActiveSection ? "cd-fill-primary" : "cd-surface-bg cd-text-muted"
-            )}
-          >
-            <Icon className="w-4 h-4" />
-          </div>
-          <span>{section.title}</span>
+    <div className="flex flex-col">
+      {/* 레일 모드: 클릭=대표 경로 이동 / 확장: 클릭=접기토글 */}
+      <button type="button" onClick={onToggle} title={item.title} className={cn(rowCls, !isDrawer && "max-2xl:hidden")}>
+        <div className="flex items-center gap-3 min-w-0">
+          {iconBlock}
+          <span className={cn("truncate", labelCls)}>{item.title}</span>
         </div>
-        {isOpen ? (
-          <ChevronDown className="w-4 h-4 opacity-40" />
-        ) : (
-          <ChevronRight className="w-4 h-4 opacity-40" />
-        )}
+        <span className={cn("items-center gap-1", isDrawer ? "flex" : expandOnlyCls)}>
+          {count > 0 && <CdCount count={count} tone="error" />}
+          {open ? <ChevronDown className="w-4 h-4 opacity-40" /> : <ChevronRight className="w-4 h-4 opacity-40" />}
+        </span>
       </button>
+      {!isDrawer && (
+        <Link href={item.href} title={item.title} className={cn(rowCls, "2xl:hidden")} onClick={onNavigate}>
+          {iconBlock}
+        </Link>
+      )}
 
-      {isOpen && (
-        <div className="flex flex-col gap-1 pl-4 mt-1 relative">
+      {open && (
+        <div className={cn("flex-col gap-0.5 pl-4 mt-0.5 relative", isDrawer ? "flex" : "hidden 2xl:flex")}>
           <div className="absolute left-6 top-0 bottom-0 w-px" style={{ background: "var(--cd-border)" }} />
-          {section.submenu!.map((item) => {
-            const isItemActive = pathname === item.href;
+          {item.submenu!.map((sub) => {
+            const subActive = pathname === sub.href;
             return (
               <Link
-                key={item.title}
-                href={item.href}
+                key={sub.title}
+                href={sub.href}
+                onClick={onNavigate}
                 className={cn(
                   "relative block px-3 py-2 text-sm rounded-lg ml-4 transition-colors",
-                  isItemActive
-                    ? "cd-soft-primary font-semibold"
-                    : "cd-text-muted hover:text-[color:var(--cd-text)] cd-row-hover"
+                  subActive ? "cd-soft-primary font-semibold" : "cd-text-muted hover:text-[color:var(--cd-text)] cd-row-hover"
                 )}
               >
-                {item.title}
+                {sub.title}
               </Link>
             );
           })}

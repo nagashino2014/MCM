@@ -3,10 +3,11 @@
 // 메일 설정 화면(G2-12) — 스팸 설정·보관함 용량 배분·외부 클라이언트(POP3/IMAP) 안내 + (관리자) 사용자별 총용량 할당.
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, HardDrive, Loader2, Settings2, ShieldAlert, Users } from "lucide-react";
+import { AtSign, Check, HardDrive, Loader2, Settings2, ShieldAlert, Users } from "lucide-react";
 import { CdButton } from "@/components/cdash/CdButton";
 import { CdCheckbox, CdInput, CdSelect } from "@/components/cdash/CdField";
 import { useCdToast } from "@/components/cdash/CdToast";
+import { MailAliasManager } from "@/components/mail/MailAliasManager";
 import { MailQuotaModal } from "@/components/mail/MailQuotaModal";
 import type { MailboxSettings } from "@/lib/mail/spam";
 
@@ -180,6 +181,21 @@ export function MailSettingsPane() {
               인원별 용량 배분
             </CdButton>
           </div>
+        </section>
+      )}
+
+      {/* 관리자 — 별칭·배포리스트(G5, 메일 P4) */}
+      {adminList && (
+        <section className="rounded-xl border cd-border-c p-4 flex flex-col gap-2">
+          <h3 className="text-sm font-bold cd-text flex items-center gap-1.5">
+            <AtSign className="w-4 h-4" /> 별칭 · 배포리스트 <span className="text-[10px] cd-text-faint font-medium">(관리자 전용)</span>
+          </h3>
+          <p className="text-xs cd-text-faint">
+            sales@ 같은 대표 주소(별칭)나 all@ 같은 배포리스트를 만들고 수신 인원을 지정합니다. 이 주소로 수신된 메일은 지정 인원 모두의 받은편지함에 배달됩니다.
+          </p>
+          <MailAliasManager
+            mailboxes={adminList.map((m) => ({ mailboxId: m.mailboxId, address: m.address, displayName: m.displayName || m.address }))}
+          />
         </section>
       )}
 

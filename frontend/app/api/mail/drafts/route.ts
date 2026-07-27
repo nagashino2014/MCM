@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
       draftId?: string | null;
       to?: string;
       cc?: string;
+      bcc?: string;
       subject?: string;
       bodyHtml?: string;
       inReplyTo?: string | null;
@@ -31,6 +32,7 @@ export async function POST(req: NextRequest) {
       draftId: body.draftId ?? null,
       to: String(body.to ?? ""),
       cc: String(body.cc ?? ""),
+      bcc: String(body.bcc ?? ""),
       subject: String(body.subject ?? ""),
       bodyHtml: String(body.bodyHtml ?? ""),
       inReplyTo: body.inReplyTo ?? null,

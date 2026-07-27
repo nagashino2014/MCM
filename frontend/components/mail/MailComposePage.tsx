@@ -66,6 +66,8 @@ export function MailComposePage() {
   const [to, setTo] = useState("");
   const [cc, setCc] = useState("");
   const [showCc, setShowCc] = useState(false);
+  const [bcc, setBcc] = useState("");
+  const [showBcc, setShowBcc] = useState(false);
   const [subject, setSubject] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [sending, setSending] = useState(false);
@@ -132,6 +134,8 @@ export function MailComposePage() {
               setTo(String(found.to ?? ""));
               setCc(String(found.cc ?? ""));
               setShowCc(!!found.cc);
+              setBcc(String(found.bcc ?? ""));
+              setShowBcc(!!found.bcc);
               setSubject(String(found.subject ?? ""));
               setDraftId(String(found.draftId));
               threadRef.current.inReplyTo = found.inReplyTo ?? null;
@@ -187,6 +191,7 @@ export function MailComposePage() {
             draftId,
             to,
             cc: showCc ? cc : "",
+            bcc: showBcc ? bcc : "",
             subject,
             bodyHtml: editorRef.current?.innerHTML ?? "",
             inReplyTo: threadRef.current.inReplyTo,
@@ -201,7 +206,7 @@ export function MailComposePage() {
         setDraftState("idle");
       }
     }, 3000);
-  }, [draftId, to, cc, showCc, subject]);
+  }, [draftId, to, cc, showCc, bcc, showBcc, subject]);
 
   useEffect(() => () => {
     if (draftTimer.current) clearTimeout(draftTimer.current);
@@ -337,6 +342,7 @@ export function MailComposePage() {
       fd.append("inlineCids", JSON.stringify(usedCids));
       fd.append("to", to);
       if (showCc && cc.trim()) fd.append("cc", cc);
+      if (showBcc && bcc.trim()) fd.append("bcc", bcc);
       fd.append("subject", subject);
       fd.append("bodyHtml", html);
       fd.append("idempotencyKey", idemRef.current);
@@ -472,12 +478,31 @@ export function MailComposePage() {
           {showCc && (
             <CdInput
               label="참조(CC)"
+              labelExtra={
+                !showBcc ? (
+                  <button onClick={() => setShowBcc(true)} className="text-[11px]" style={{ color: "var(--cd-primary)" }} type="button">
+                    + 숨은 참조
+                  </button>
+                ) : undefined
+              }
               value={cc}
               onChange={(e) => {
                 setCc(e.target.value);
                 scheduleDraftSave();
               }}
               placeholder="참조 수신자"
+            />
+          )}
+          {showBcc && (
+            <CdInput
+              label="숨은 참조(BCC)"
+              hint="숨은 참조 수신자는 다른 수신자에게 표시되지 않습니다."
+              value={bcc}
+              onChange={(e) => {
+                setBcc(e.target.value);
+                scheduleDraftSave();
+              }}
+              placeholder="숨은 참조 수신자"
             />
           )}
           <CdInput

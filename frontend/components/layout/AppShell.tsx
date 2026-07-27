@@ -41,8 +41,9 @@ export function AppShell({ role, userName, userEmail, children }: AppShellProps)
             onOpenNav={() => setNavDrawerOpen(true)}
           />
           <main className="flex-1 min-h-0 relative rounded-3xl overflow-y-auto">
-            {/* 울트라와이드 확장 취급: 본문 최대폭 + 중앙 정렬(§3.0). FHD 이하에서는 영향 없음. */}
-            <div className="mx-auto w-full max-w-[1760px] h-full min-h-0">{children}</div>
+            {/* 울트라와이드 확장 취급: 본문 최대폭 + 좌측 정렬(§3.0).
+                중앙 정렬(mx-auto)은 초광폭에서 사이드바와 콘텐츠 사이가 벌어져 보여 좌측 붙임으로 확정(2026-07-27 피드백). */}
+            <div className="w-full max-w-[1760px] h-full min-h-0">{children}</div>
           </main>
         </div>
       </div>

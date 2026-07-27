@@ -707,7 +707,7 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
         onKeyDown={onEditorKeyDown}
         onMouseMove={onEditorMouseMove}
         onMouseDown={onEditorMouseDown}
-        className="cd-mail-editor min-h-[220px] max-h-[38vh] overflow-y-auto border cd-border-c border-t-0 rounded-b-lg px-3 py-2 text-sm bg-white text-black outline-none focus:border-[color:var(--cd-primary)]"
+        className="cd-mail-editor min-h-[484px] max-h-[70vh] overflow-y-auto border cd-border-c border-t-0 rounded-b-lg px-3 py-2 text-sm bg-white text-black outline-none focus:border-[color:var(--cd-primary)]"
         style={{ lineHeight: 1.6 }}
       />
     </div>

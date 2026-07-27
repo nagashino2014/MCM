@@ -10,6 +10,7 @@ export interface MailDraft {
   draftId: string;
   to: string;
   cc: string;
+  bcc: string;
   subject: string;
   bodyHtml: string;
   inReplyTo: string | null;
@@ -34,6 +35,7 @@ function toDraft(r: Record<string, unknown>): MailDraft {
     draftId: String(r.draft_id),
     to: addr(r.to_addrs),
     cc: addr(r.cc_addrs),
+    bcc: addr(r.bcc_addrs),
     subject: r.subject != null ? String(r.subject) : "",
     bodyHtml: r.body_html != null ? String(r.body_html) : "",
     inReplyTo: r.in_reply_to != null ? String(r.in_reply_to) : null,
@@ -55,25 +57,20 @@ export async function listDrafts(userId: string): Promise<MailDraft[]> {
 /** 드래프트 upsert — draftId 없으면 생성해 반환. */
 export async function saveDraft(
   userId: string,
-  input: { draftId?: string | null; to: string; cc: string; subject: string; bodyHtml: string; inReplyTo?: string | null }
+  input: { draftId?: string | null; to: string; cc: string; bcc?: string; subject: string; bodyHtml: string; inReplyTo?: string | null }
 ): Promise<string> {
   const mailbox = await getMailboxByUser(userId);
   if (!mailbox) throw new Error("메일함이 없습니다.");
   const draftId = input.draftId || "mdrf-" + crypto.randomUUID().replace(/-/g, "").slice(0, 14);
   const now = new Date().toISOString();
-  const toJson = JSON.stringify(
-    input.to.split(/[,;\n]+/).map((s) => s.trim()).filter(Boolean)
-  );
-  const ccJson = JSON.stringify(
-    input.cc.split(/[,;\n]+/).map((s) => s.trim()).filter(Boolean)
-  );
+  const splitJson = (s: string) => JSON.stringify(s.split(/[,;\n]+/).map((x) => x.trim()).filter(Boolean));
   await withDbWrite(async (db) => {
     await db.run(
-      `INSERT INTO mail_drafts (draft_id, mailbox_id, to_addrs, cc_addrs, subject, body_html, in_reply_to, updated_at)
-       VALUES ($1,$2,$3::jsonb,$4::jsonb,$5,$6,$7,$8)
-       ON CONFLICT (draft_id) DO UPDATE SET to_addrs = EXCLUDED.to_addrs, cc_addrs = EXCLUDED.cc_addrs,
+      `INSERT INTO mail_drafts (draft_id, mailbox_id, to_addrs, cc_addrs, bcc_addrs, subject, body_html, in_reply_to, updated_at)
+       VALUES ($1,$2,$3::jsonb,$4::jsonb,$5::jsonb,$6,$7,$8,$9)
+       ON CONFLICT (draft_id) DO UPDATE SET to_addrs = EXCLUDED.to_addrs, cc_addrs = EXCLUDED.cc_addrs, bcc_addrs = EXCLUDED.bcc_addrs,
          subject = EXCLUDED.subject, body_html = EXCLUDED.body_html, in_reply_to = EXCLUDED.in_reply_to, updated_at = EXCLUDED.updated_at`,
-      [draftId, mailbox.mailboxId, toJson, ccJson, input.subject, input.bodyHtml, input.inReplyTo ?? null, now]
+      [draftId, mailbox.mailboxId, splitJson(input.to), splitJson(input.cc), splitJson(input.bcc ?? ""), input.subject, input.bodyHtml, input.inReplyTo ?? null, now]
     );
   });
   return draftId;

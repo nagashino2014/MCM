@@ -7,19 +7,40 @@
  */
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
-  const g = globalThis as { __bidNotifyTimer?: ReturnType<typeof setInterval> };
-  if (g.__bidNotifyTimer) return; // dev HMR·중복 register 방어
+  const g = globalThis as {
+    __bidNotifyTimer?: ReturnType<typeof setInterval>;
+    __approvalRemindTimer?: ReturnType<typeof setInterval>;
+    __mailInboundTimer?: ReturnType<typeof setInterval>;
+  };
   const port = process.env.PORT ?? "3000";
-  const tick = async () => {
+  const callTick = async (path: string, tag: string) => {
     try {
-      await fetch(`http://127.0.0.1:${port}/api/internal/bid-notify-tick`, {
+      await fetch(`http://127.0.0.1:${port}${path}`, {
         method: "POST",
         headers: { "x-cron-key": process.env.AUTH_SECRET ?? "" },
       });
     } catch (err) {
-      console.error("[bid-notify] tick fetch error", err);
+      console.error(`[${tag}] tick fetch error`, err);
     }
   };
-  g.__bidNotifyTimer = setInterval(tick, 5 * 60 * 1000);
-  setTimeout(tick, 30 * 1000); // 기동 직후 1회(서버 리슨 대기 여유 30초)
+
+  if (!g.__bidNotifyTimer) {
+    const tick = () => callTick("/api/internal/bid-notify-tick", "bid-notify");
+    g.__bidNotifyTimer = setInterval(tick, 5 * 60 * 1000);
+    setTimeout(tick, 30 * 1000); // 기동 직후 1회(서버 리슨 대기 여유 30초)
+  }
+
+  // 미결재 리마인드(AX-P1) — 30분마다 체크(디스패처가 스텝×일자 dedup 이라 과발송 없음).
+  if (!g.__approvalRemindTimer) {
+    const remindTick = () => callTick("/api/internal/approval-remind-tick", "approval-remind");
+    g.__approvalRemindTimer = setInterval(remindTick, 30 * 60 * 1000);
+    setTimeout(remindTick, 60 * 1000); // 기동 직후 1회(60초 여유)
+  }
+
+  // 코넨사인 메일 수신(P2) — 1분마다 SQS 폴링(큐 미생성 시 no-op). 처리 멱등.
+  if (!g.__mailInboundTimer) {
+    const mailTick = () => callTick("/api/internal/mail-inbound-tick", "mail-inbound");
+    g.__mailInboundTimer = setInterval(mailTick, 60 * 1000);
+    setTimeout(mailTick, 45 * 1000); // 기동 직후 1회
+  }
 }

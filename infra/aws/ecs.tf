@@ -67,6 +67,21 @@ data "aws_iam_policy_document" "app_access" {
     resources = [aws_sqs_queue.jobs.arn, aws_sqs_queue.jobs_dlq.arn]
   }
 
+  # 코넨사인 메일 수신(P2) — next tick 이 수신 큐를 폴링하고 원문 MIME 을 수신 버킷에서 읽는다.
+  statement {
+    actions = [
+      "sqs:ReceiveMessage",
+      "sqs:DeleteMessage",
+      "sqs:GetQueueAttributes",
+      "sqs:GetQueueUrl"
+    ]
+    resources = [aws_sqs_queue.mail_inbound.arn]
+  }
+  statement {
+    actions   = ["s3:GetObject"]
+    resources = ["${aws_s3_bucket.mail_inbound.arn}/*"]
+  }
+
   statement {
     actions = ["secretsmanager:GetSecretValue"]
     resources = [
@@ -124,14 +139,28 @@ resource "aws_ecs_task_definition" "next" {
         { name = "PGHOST", value = aws_rds_cluster.main.endpoint },
         { name = "PGPORT", value = "5432" },
         { name = "PGDATABASE", value = var.db_name },
-        { name = "ADMIN_PASSWORD_SYNC_ON_BOOT", value = "true" }
+        { name = "ADMIN_PASSWORD_SYNC_ON_BOOT", value = "true" },
+        # 알림(전자결재·공공입찰) — 발신 이메일(SES 검증 identity) + 결재함 링크 베이스 URL
+        { name = "BID_NOTIFY_EMAIL_FROM", value = var.notify_email_from },
+        { name = "APP_PUBLIC_URL", value = var.app_public_url },
+        # 카카오 알림톡(솔라피) — 발신프로필/템플릿 ID(비면 알림톡 건너뜀). API 자격증명은 secrets.
+        { name = "SOLAPI_KAKAO_PF_ID", value = var.solapi_kakao_pf_id },
+        { name = "SOLAPI_KAKAO_TEMPLATE_ID", value = var.solapi_kakao_template_id },
+        { name = "SOLAPI_SENDER", value = var.solapi_sender }
       ]
       secrets = [
         { name = "AUTH_SECRET", valueFrom = "${aws_secretsmanager_secret.app.arn}:AUTH_SECRET::" },
         { name = "ADMIN_USERNAME", valueFrom = "${aws_secretsmanager_secret.app.arn}:ADMIN_USERNAME::" },
         { name = "ADMIN_PASSWORD", valueFrom = "${aws_secretsmanager_secret.app.arn}:ADMIN_PASSWORD::" },
         { name = "PGUSER", valueFrom = "${aws_rds_cluster.main.master_user_secret[0].secret_arn}:username::" },
-        { name = "PGPASSWORD", valueFrom = "${aws_rds_cluster.main.master_user_secret[0].secret_arn}:password::" }
+        { name = "PGPASSWORD", valueFrom = "${aws_rds_cluster.main.master_user_secret[0].secret_arn}:password::" },
+        # ⚠ 아래 3개 JSON 키는 Secrets Manager 시크릿(mcm-ieps-staging/app)에 먼저 넣은 뒤 apply 할 것.
+        #    키가 없으면 ECS 태스크가 시크릿 주입 실패로 기동하지 못한다.
+        #    - SOLAPI_API_KEY / SOLAPI_API_SECRET : 솔라피 알림톡 API 자격증명
+        #    - ANTHROPIC_API_KEY : AI 요약(AX-P2)·AI 검토(AX-P3)용
+        { name = "SOLAPI_API_KEY", valueFrom = "${aws_secretsmanager_secret.app.arn}:SOLAPI_API_KEY::" },
+        { name = "SOLAPI_API_SECRET", valueFrom = "${aws_secretsmanager_secret.app.arn}:SOLAPI_API_SECRET::" },
+        { name = "ANTHROPIC_API_KEY", valueFrom = "${aws_secretsmanager_secret.app.arn}:ANTHROPIC_API_KEY::" }
       ]
       logConfiguration = {
         logDriver = "awslogs"

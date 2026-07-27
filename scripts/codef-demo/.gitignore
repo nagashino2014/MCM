@@ -1,0 +1,4 @@
+# 실제 자격증명·발급물은 커밋 금지
+.env
+.connected-id.json
+.cards-*.json

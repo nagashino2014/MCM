@@ -75,6 +75,14 @@ export type AuditAction =
   | "adt_attendance_settings"
   | "adt_attendance_upload"
   | "adt_attendance_exclude"
+  | "approval_notify_settings_update"
+  | "approval_ai_summary"
+  | "approval_policy_update"
+  | "approval_precheck_llm"
+  | "mail_send"
+  | "auth_find_id"
+  | "auth_password_reset"
+  | "admin_password_sync"
   | "alert.ack";
 
 export interface AuditEntry {

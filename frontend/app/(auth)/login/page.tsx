@@ -1,20 +1,24 @@
 "use client";
 
+// 로그인(G-L) — cdash 재설계 + "로그인 유지"(30일/미체크 12시간) + 아이디/비밀번호 찾기 링크.
+// 인증 로직(next-auth credentials·스로틀·최초 비번 변경 강제)은 무변경.
+
 import { Suspense, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
-import { LogIn, ShieldAlert } from "lucide-react";
+import { LogIn, ShieldAlert, ShieldCheck } from "lucide-react";
+import { CdButton } from "@/components/cdash/CdButton";
+import { CdCheckbox, CdInput } from "@/components/cdash/CdField";
 
-// callbackUrl 을 항상 현재 도메인의 경로로 정규화한다.
-// ALB(프록시) 뒤에서 미들웨어가 host 를 localhost:3000 으로 잡아 절대 URL 을 심는 경우가 있어,
-// 다른 출처 URL 이면 경로만 취해 동일 출처로 강제한다(오픈 리다이렉트 방지 겸용).
+// callbackUrl 을 항상 현재 도메인의 경로로 정규화한다(오픈 리다이렉트 방지 겸용).
 function toSameOriginPath(target: string): string {
   if (typeof window === "undefined") return target;
   try {
     const u = new URL(target, window.location.origin);
-    return (u.pathname + u.search + u.hash) || "/data/status";
+    return (u.pathname + u.search + u.hash) || "/home";
   } catch {
-    return target.startsWith("/") ? target : "/data/status";
+    return target.startsWith("/") ? target : "/home";
   }
 }
 
@@ -22,8 +26,8 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="glass-panel rounded-3xl p-10 w-[420px] max-w-[92vw] flex items-center justify-center">
-          <span className="text-sm text-stone-500">로딩 중…</span>
+        <div className="cd-card-bg rounded-3xl border cd-border-c p-10 w-[420px] max-w-[92vw] flex items-center justify-center">
+          <span className="text-sm cd-text-faint">로딩 중…</span>
         </div>
       }
     >
@@ -37,10 +41,11 @@ function LoginForm() {
   const params = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  const callbackUrl = params.get("callbackUrl") ?? "/data/status";
+  const callbackUrl = params.get("callbackUrl") ?? "/home";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,6 +54,7 @@ function LoginForm() {
       const res = await signIn("credentials", {
         email: email.trim(),
         password,
+        remember: remember ? "1" : "",
         redirect: false,
       });
       if (!res || res.error) {
@@ -61,71 +67,71 @@ function LoginForm() {
   };
 
   return (
-    <div className="glass-panel rounded-3xl p-10 w-[420px] max-w-[92vw] flex flex-col gap-6 reveal">
-      <div className="flex flex-col gap-1">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-primary">
-          PermitIQ
-        </span>
-        <h1 className="text-2xl font-bold text-stone-800">로그인</h1>
-        <p className="text-sm text-stone-500">
-          사번과 비밀번호로 로그인하세요. 초기 비밀번호는 사번과 동일하며, 최초 로그인 시 변경해야 합니다.
+    <div className="cd-card-bg rounded-3xl border cd-border-c p-10 w-[440px] max-w-[92vw] flex flex-col gap-6" style={{ boxShadow: "var(--cd-shadow)" }}>
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <span className="w-10 h-10 rounded-xl flex items-center justify-center cd-soft-primary">
+            <ShieldCheck className="w-5 h-5" />
+          </span>
+          <div className="flex flex-col leading-tight">
+            <span className="text-[19px] font-extrabold tracking-tight cd-text">
+              PermitIQ <span style={{ color: "var(--cd-primary)" }}>Groupware</span>
+            </span>
+            <span className="text-[11px] font-semibold cd-text-faint">사번과 비밀번호로 로그인하세요.</span>
+          </div>
+        </div>
+        <p className="text-xs cd-text-faint leading-relaxed">
+          초기 비밀번호는 사번과 동일하며, 최초 로그인 시 변경해야 합니다.
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <label className="flex flex-col gap-1.5">
-          <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">
-            사번
-          </span>
-          <input
-            type="text"
-            autoComplete="username"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="input-field"
-            placeholder="사번 (예: 201903040101)"
-            autoFocus
-          />
-        </label>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
+        <CdInput
+          label="사번"
+          type="text"
+          autoComplete="username"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="사번 (예: 201903040101)"
+          autoFocus
+        />
+        <CdInput
+          label="비밀번호"
+          type="password"
+          autoComplete="current-password"
+          required
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="********"
+        />
 
-        <label className="flex flex-col gap-1.5">
-          <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">
-            비밀번호
-          </span>
-          <input
-            type="password"
-            autoComplete="current-password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="input-field"
-            placeholder="********"
-          />
-        </label>
+        <div className="flex items-center justify-between">
+          <CdCheckbox label="로그인 유지 (30일)" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+          <div className="flex items-center gap-2 text-xs">
+            <Link href="/login/find" className="cd-text-faint hover:text-[color:var(--cd-primary)] transition-colors">
+              아이디·비밀번호 찾기
+            </Link>
+          </div>
+        </div>
 
         {error && (
-          <div className="flex items-center gap-2 text-xs font-bold text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
-            <ShieldAlert className="w-4 h-4 flex-shrink-0" />
+          <div className="flex items-center gap-2 text-xs font-bold cd-error-text cd-error-bg rounded-xl px-3 py-2.5">
+            <ShieldAlert className="w-4 h-4 shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded-xl px-4 py-3 text-sm font-bold text-white bg-primary hover:bg-primary/90 shadow-sm flex items-center justify-center gap-2 disabled:opacity-60"
-        >
-          <LogIn className="w-4 h-4" />
+        <CdButton type="submit" variant="primary" block loading={pending} icon={<LogIn className="w-4 h-4" />}>
           {pending ? "확인 중..." : "로그인"}
-        </button>
+        </CdButton>
       </form>
 
-      <div className="text-[11px] text-stone-400 text-center leading-relaxed">
-        비밀번호를 잊으셨다면 관리자에게 초기화를 요청하세요.
+      <p className="text-[11px] cd-text-faint text-center leading-relaxed">
+        계정이 없거나 권한 변경이 필요한 경우 관리자에게 문의하세요.
         <br />
-        계정이 없거나 권한 변경이 필요한 경우에도 관리자에게 문의하세요.
-      </div>
+        공용 PC 에서는 "로그인 유지"를 사용하지 마세요.
+      </p>
     </div>
   );
 }

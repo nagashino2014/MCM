@@ -12,7 +12,8 @@ export type Role = "admin" | "editor" | "viewer";
 export type UserStatus = "active" | "disabled";
 
 export const edgeAuthConfig: NextAuthConfig = {
-  session: { strategy: "jwt", maxAge: 60 * 60 * 12 },
+  // maxAge = "로그인 유지" 체크 시 상한(30일). 미체크 세션은 config.ts jwt 콜백이 12시간에 강제 만료(G-L).
+  session: { strategy: "jwt", maxAge: 60 * 60 * 24 * 30 },
   trustHost: true,
   pages: {
     signIn: "/login",
@@ -47,8 +48,10 @@ export const edgeAuthConfig: NextAuthConfig = {
 
       if (
         path === "/login" ||
+        path.startsWith("/login/") || // 아이디/비밀번호 찾기·재설정(G-L)
         path.startsWith("/api/auth/") ||
         path.startsWith("/api/mobile/auth/") || // 모바일 로그인/refresh — 세션 없이 접근
+        path === "/api/mail/track" || // 수신 확인 픽셀(G2-10) — 외부 수신자가 호출
         path === "/api/health" ||
         path === "/manifest.webmanifest" || // PWA manifest 는 설치 시 비인증 fetch
         path.startsWith("/_next/") ||

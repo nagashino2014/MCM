@@ -29,12 +29,12 @@ export default function FacilitiesScreen() {
   const items = data?.items ?? [];
 
   return (
-    <SafeAreaView edges={['bottom']} className="flex-1 bg-neutral-50 dark:bg-neutral-950">
-      <View className="border-b border-neutral-200 bg-white px-4 py-3 dark:border-neutral-800 dark:bg-neutral-900">
-        <View className="flex-row items-center gap-2 rounded-xl border border-neutral-300 px-3 py-2 dark:border-neutral-700">
+    <SafeAreaView edges={['bottom']} className="flex-1 bg-cd-bg">
+      <View className="border-b border-cd-border bg-cd-card px-4 py-3">
+        <View className="flex-row items-center gap-2 rounded-xl border border-cd-border px-3 py-2">
           <Ionicons name="search" size={18} color="#9ca3af" />
           <TextInput
-            className="flex-1 text-base text-neutral-900 dark:text-white"
+            className="flex-1 text-base text-cd-text"
             placeholder="사업장명 검색"
             placeholderTextColor="#9ca3af"
             autoCapitalize="none"
@@ -60,7 +60,7 @@ export default function FacilitiesScreen() {
       {loading ? (
         <ActivityIndicator className="mt-10" />
       ) : error ? (
-        <Text className="mt-10 text-center text-red-500">{error}</Text>
+        <Text className="mt-10 text-center text-cd-error">{error}</Text>
       ) : (
         <FlatList
           data={items}
@@ -69,13 +69,13 @@ export default function FacilitiesScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={reload} />}
           ListHeaderComponent={
             data ? (
-              <Text className="mb-1 text-xs text-neutral-400">
+              <Text className="mb-1 text-xs text-cd-faint">
                 {submitted ? `"${submitted}" 검색` : '전체'} · {data.total ?? items.length}곳
               </Text>
             ) : null
           }
           ListEmptyComponent={
-            <Text className="mt-10 text-center text-neutral-400">사업장이 없습니다</Text>
+            <Text className="mt-10 text-center text-cd-faint">사업장이 없습니다</Text>
           }
           renderItem={({ item }) => <FacilityCard f={item} />}
         />
@@ -87,17 +87,17 @@ export default function FacilitiesScreen() {
 function FacilityCard({ f }: { f: Facility }) {
   const region = [f.regionSido, f.regionSigungu].filter(Boolean).join(' ');
   return (
-    <View className="rounded-2xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
-      <Text className="text-base font-bold text-neutral-900 dark:text-white">{f.companyName}</Text>
+    <View className="rounded-2xl border border-cd-border bg-cd-card p-4">
+      <Text className="text-base font-bold text-cd-text">{f.companyName}</Text>
       <View className="mt-1 flex-row flex-wrap gap-x-3 gap-y-0.5">
-        {region ? <Text className="text-xs text-neutral-500">{region}</Text> : null}
-        {f.industryName ? <Text className="text-xs text-neutral-500">{f.industryName}</Text> : null}
+        {region ? <Text className="text-xs text-cd-muted">{region}</Text> : null}
+        {f.industryName ? <Text className="text-xs text-cd-muted">{f.industryName}</Text> : null}
         {f.representativeName ? (
-          <Text className="text-xs text-neutral-500">대표 {f.representativeName}</Text>
+          <Text className="text-xs text-cd-muted">대표 {f.representativeName}</Text>
         ) : null}
       </View>
       {f.siteAddress ? (
-        <Text className="mt-1 text-xs text-neutral-400" numberOfLines={1}>
+        <Text className="mt-1 text-xs text-cd-faint" numberOfLines={1}>
           {f.siteAddress}
         </Text>
       ) : null}

@@ -35,12 +35,12 @@ export default function ContactsScreen() {
   }, [all, q]);
 
   return (
-    <SafeAreaView edges={['bottom']} className="flex-1 bg-neutral-50 dark:bg-neutral-950">
-      <View className="border-b border-neutral-200 bg-white px-4 py-3 dark:border-neutral-800 dark:bg-neutral-900">
-        <View className="flex-row items-center gap-2 rounded-xl border border-neutral-300 px-3 py-2 dark:border-neutral-700">
+    <SafeAreaView edges={['bottom']} className="flex-1 bg-cd-bg">
+      <View className="border-b border-cd-border bg-cd-card px-4 py-3">
+        <View className="flex-row items-center gap-2 rounded-xl border border-cd-border px-3 py-2">
           <Ionicons name="search" size={18} color="#9ca3af" />
           <TextInput
-            className="flex-1 text-base text-neutral-900 dark:text-white"
+            className="flex-1 text-base text-cd-text"
             placeholder="담당자·사업장·부서 검색"
             placeholderTextColor="#9ca3af"
             autoCapitalize="none"
@@ -56,7 +56,7 @@ export default function ContactsScreen() {
       {loading ? (
         <ActivityIndicator className="mt-10" />
       ) : error ? (
-        <Text className="mt-10 text-center text-red-500">{error}</Text>
+        <Text className="mt-10 text-center text-cd-error">{error}</Text>
       ) : (
         <FlatList
           data={list}
@@ -64,7 +64,7 @@ export default function ContactsScreen() {
           contentContainerStyle={{ padding: 16, gap: 10 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={reload} />}
           ListEmptyComponent={
-            <Text className="mt-10 text-center text-neutral-400">담당자가 없습니다</Text>
+            <Text className="mt-10 text-center text-cd-faint">담당자가 없습니다</Text>
           }
           renderItem={({ item }) => <ContactCard c={item} />}
         />
@@ -77,16 +77,16 @@ function ContactCard({ c }: { c: Contact }) {
   const phone = c.mobilePhone || c.officePhone;
   const sub = [c.departmentName, c.facilityName].filter(Boolean).join(' · ');
   return (
-    <View className="flex-row items-center justify-between rounded-2xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+    <View className="flex-row items-center justify-between rounded-2xl border border-cd-border bg-cd-card p-4">
       <View className="flex-1 pr-3">
         <View className="flex-row items-center gap-2">
-          <Text className="text-base font-bold text-neutral-900 dark:text-white">
+          <Text className="text-base font-bold text-cd-text">
             {c.personName ?? '(이름 없음)'}
           </Text>
-          {c.title ? <Text className="text-xs text-neutral-500">{c.title}</Text> : null}
+          {c.title ? <Text className="text-xs text-cd-muted">{c.title}</Text> : null}
         </View>
-        {sub ? <Text className="mt-0.5 text-xs text-neutral-500">{sub}</Text> : null}
-        {phone ? <Text className="mt-0.5 text-xs text-neutral-400">{phone}</Text> : null}
+        {sub ? <Text className="mt-0.5 text-xs text-cd-muted">{sub}</Text> : null}
+        {phone ? <Text className="mt-0.5 text-xs text-cd-faint">{phone}</Text> : null}
       </View>
       {phone ? (
         <View className="flex-row gap-3">

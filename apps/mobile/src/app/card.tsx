@@ -42,9 +42,9 @@ const PRIMARY = '#5D87FF';
 // 라우트 크래시 캐처 — 화면 오류 시 흰 화면 대신 안내+재시도 제공
 export function ErrorBoundary({ error, retry }: { error: Error; retry: () => Promise<void> }) {
   return (
-    <SafeAreaView className="flex-1 items-center justify-center bg-white px-6 dark:bg-neutral-950">
-      <Text className="mb-2 text-base font-bold text-red-600">화면 오류가 발생했습니다</Text>
-      <Text className="mb-4 text-center text-xs text-neutral-600 dark:text-neutral-300">
+    <SafeAreaView className="flex-1 items-center justify-center bg-cd-bg px-6">
+      <Text className="mb-2 text-base font-bold text-cd-error">화면 오류가 발생했습니다</Text>
+      <Text className="mb-4 text-center text-xs text-cd-muted">
         {error.name}: {error.message}
       </Text>
       <Pressable onPress={() => void retry()} className="rounded-xl bg-primary px-5 py-2.5">
@@ -301,24 +301,24 @@ export default function CardScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-neutral-50 dark:bg-neutral-950">
+    <SafeAreaView className="flex-1 bg-cd-bg">
       {/* 자체 헤더 — 화면 내 <Stack.Screen options> 동적 갱신이 iOS에서 헤더 점멸 루프를
           일으켜(cam1~3 실측) expo-router 헤더 대신 직접 렌더한다 */}
-      <View className="flex-row items-center gap-2 border-b border-neutral-200 bg-white px-2 py-2 dark:border-neutral-800 dark:bg-neutral-900">
+      <View className="flex-row items-center gap-2 border-b border-cd-border bg-cd-card px-2 py-2">
         <Pressable onPress={() => router.back()} className="h-10 w-10 items-center justify-center active:opacity-60">
           <Ionicons name="chevron-back" size={24} color={PRIMARY} />
         </Pressable>
-        <Text className="text-base font-extrabold text-neutral-900 dark:text-white">명함 촬영</Text>
+        <Text className="text-base font-extrabold text-cd-text">명함 촬영</Text>
       </View>
       <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
         {error ? (
-          <View className="rounded-xl bg-red-50 px-4 py-3 dark:bg-red-950">
-            <Text className="text-sm text-red-600 dark:text-red-300">{error}</Text>
+          <View className="rounded-xl bg-cd-error-soft px-4 py-3">
+            <Text className="text-sm text-cd-error">{error}</Text>
           </View>
         ) : null}
         {warning ? (
-          <View className="rounded-xl bg-amber-50 px-4 py-3 dark:bg-amber-950">
-            <Text className="text-sm text-amber-700 dark:text-amber-300">{warning}</Text>
+          <View className="rounded-xl bg-cd-warning-soft px-4 py-3">
+            <Text className="text-sm text-cd-warning">{warning}</Text>
           </View>
         ) : null}
 
@@ -326,7 +326,7 @@ export default function CardScreen() {
           <Image
             source={{ uri: imageUri }}
             resizeMode="contain"
-            className="h-44 w-full rounded-2xl border border-neutral-200 dark:border-neutral-800"
+            className="h-44 w-full rounded-2xl border border-cd-border"
           />
         ) : null}
 
@@ -348,34 +348,34 @@ export default function CardScreen() {
                 <Text className="text-base font-bold text-primary">앨범에서 선택</Text>
               </Pressable>
             ) : null}
-            <Text className="mt-1 text-center text-xs text-neutral-400">
+            <Text className="mt-1 text-center text-xs text-cd-faint">
               촬영한 명함은 AI가 자동으로 인식해 담당자 정보로 정리합니다.
             </Text>
-            <Text className="text-center text-[10px] text-neutral-300">v1.0.1</Text>
+            <Text className="text-center text-[10px] text-cd-faint">v1.1.0</Text>
           </View>
         ) : null}
 
         {step === 'parsing' ? (
           <View className="flex-row items-center justify-center gap-2 py-8">
             <ActivityIndicator color={PRIMARY} />
-            <Text className="text-sm text-neutral-500">명함을 인식하는 중…</Text>
+            <Text className="text-sm text-cd-muted">명함을 인식하는 중…</Text>
           </View>
         ) : null}
 
         {step === 'form' || step === 'saving' ? (
           <View className="gap-3">
             {/* 사업장 선택 */}
-            <View className="rounded-2xl border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900">
-              <Text className="mb-2 text-xs font-bold text-neutral-500">사업장 선택 *</Text>
+            <View className="rounded-2xl border border-cd-border bg-cd-card p-3">
+              <Text className="mb-2 text-xs font-bold text-cd-muted">사업장 선택 *</Text>
               {facility ? (
                 <View className="flex-row items-center gap-2 rounded-xl bg-primary-light px-3 py-2.5">
                   <Ionicons name="checkmark-circle" size={18} color={PRIMARY} />
                   <View className="flex-1">
-                    <Text className="text-sm font-bold text-neutral-900 dark:text-neutral-900">
+                    <Text className="text-sm font-bold text-cd-text">
                       {facility.companyName}
                     </Text>
                     {facility.siteAddress ? (
-                      <Text className="text-xs text-neutral-500">{facility.siteAddress}</Text>
+                      <Text className="text-xs text-cd-muted">{facility.siteAddress}</Text>
                     ) : null}
                   </View>
                   <Pressable onPress={() => setFacility(null)} className="active:opacity-60">
@@ -386,7 +386,7 @@ export default function CardScreen() {
                 <View className="gap-2">
                   <View className="flex-row gap-2">
                     <TextInput
-                      className="flex-1 rounded-xl border border-neutral-300 px-3 py-2 text-base text-neutral-900 dark:border-neutral-700 dark:text-white"
+                      className="flex-1 rounded-xl border border-cd-border px-3 py-2 text-base text-cd-text"
                       placeholder="사업장명 검색"
                       placeholderTextColor="#9ca3af"
                       value={facilityQuery}
@@ -404,16 +404,16 @@ export default function CardScreen() {
                     <Pressable
                       key={f.facilityId}
                       onPress={() => setFacility(f)}
-                      className="rounded-xl border border-neutral-200 px-3 py-2 active:opacity-70 dark:border-neutral-700">
-                      <Text className="text-sm font-bold text-neutral-900 dark:text-white">
+                      className="rounded-xl border border-cd-border px-3 py-2 active:opacity-70">
+                      <Text className="text-sm font-bold text-cd-text">
                         {f.companyName}
                       </Text>
-                      <Text className="text-xs text-neutral-500">{f.siteAddress ?? '—'}</Text>
+                      <Text className="text-xs text-cd-muted">{f.siteAddress ?? '—'}</Text>
                     </Pressable>
                   ))}
                   {quickOpen ? (
-                    <View className="mt-1 gap-2 rounded-xl border border-neutral-200 p-3 dark:border-neutral-700">
-                      <Text className="text-xs font-bold text-neutral-700 dark:text-neutral-200">
+                    <View className="mt-1 gap-2 rounded-xl border border-cd-border p-3">
+                      <Text className="text-xs font-bold text-cd-text">
                         신규 사업장 간이 등록
                       </Text>
                       <QuickField
@@ -455,8 +455,8 @@ export default function CardScreen() {
             </View>
 
             {/* 담당자 정보 */}
-            <View className="gap-2 rounded-2xl border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900">
-              <Text className="text-xs font-bold text-neutral-500">담당자 정보</Text>
+            <View className="gap-2 rounded-2xl border border-cd-border bg-cd-card p-3">
+              <Text className="text-xs font-bold text-cd-muted">담당자 정보</Text>
               <FormField label="이름 *" value={form.personName ?? ''} onChange={(v) => setForm((s) => ({ ...s, personName: v }))} />
               <FormField label="직급" value={form.title ?? ''} onChange={(v) => setForm((s) => ({ ...s, title: v }))} />
               <FormField label="부서" value={form.departmentName ?? ''} onChange={(v) => setForm((s) => ({ ...s, departmentName: v }))} />
@@ -469,7 +469,7 @@ export default function CardScreen() {
               <Pressable
                 onPress={reset}
                 disabled={step === 'saving'}
-                className="items-center justify-center rounded-xl border border-neutral-300 px-4 py-3 active:opacity-70 dark:border-neutral-700">
+                className="items-center justify-center rounded-xl border border-cd-border px-4 py-3 active:opacity-70">
                 <Ionicons name="refresh" size={18} color="#6b7280" />
               </Pressable>
               <Pressable
@@ -490,11 +490,11 @@ export default function CardScreen() {
         ) : null}
 
         {step === 'done' ? (
-          <View className="items-center gap-3 rounded-2xl border border-neutral-200 bg-white p-6 dark:border-neutral-800 dark:bg-neutral-900">
-            <View className="rounded-full bg-green-100 p-3 dark:bg-green-900">
+          <View className="items-center gap-3 rounded-2xl border border-cd-border bg-cd-card p-6">
+            <View className="rounded-full bg-cd-success-soft p-3">
               <Ionicons name="checkmark" size={28} color="#16a34a" />
             </View>
-            <Text className="text-center text-sm font-bold text-neutral-900 dark:text-white">
+            <Text className="text-center text-sm font-bold text-cd-text">
               {form.personName} 님을 {facility?.companyName}에{' '}
               {savedMode === 'updated' ? '갱신' : '등록'}했습니다.
             </Text>
@@ -507,8 +507,8 @@ export default function CardScreen() {
               </Pressable>
               <Pressable
                 onPress={() => router.back()}
-                className="rounded-xl border border-neutral-300 px-4 py-2.5 active:opacity-70 dark:border-neutral-700">
-                <Text className="font-semibold text-neutral-700 dark:text-neutral-200">완료</Text>
+                className="rounded-xl border border-cd-border px-4 py-2.5 active:opacity-70">
+                <Text className="font-semibold text-cd-text">완료</Text>
               </Pressable>
             </View>
           </View>
@@ -548,7 +548,7 @@ export default function CardScreen() {
               {shooting ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <View className="h-14 w-14 rounded-full bg-white" />
+                <View className="h-14 w-14 rounded-full bg-cd-card" />
               )}
             </Pressable>
             <View className="h-12 w-12" />
@@ -572,9 +572,9 @@ function FormField({
 }) {
   return (
     <View className="flex-row items-center gap-2">
-      <Text className="w-16 text-xs text-neutral-400">{label}</Text>
+      <Text className="w-16 text-xs text-cd-faint">{label}</Text>
       <TextInput
-        className="flex-1 rounded-lg border border-neutral-200 px-3 py-2 text-base text-neutral-900 dark:border-neutral-700 dark:text-white"
+        className="flex-1 rounded-lg border border-cd-border px-3 py-2 text-base text-cd-text"
         value={value}
         onChangeText={onChange}
         keyboardType={keyboardType}
@@ -595,9 +595,9 @@ function QuickField({
 }) {
   return (
     <View className="flex-row items-center gap-2">
-      <Text className="w-16 text-xs text-neutral-400">{label}</Text>
+      <Text className="w-16 text-xs text-cd-faint">{label}</Text>
       <TextInput
-        className="flex-1 rounded-lg border border-neutral-200 px-3 py-2 text-sm text-neutral-900 dark:border-neutral-700 dark:text-white"
+        className="flex-1 rounded-lg border border-cd-border px-3 py-2 text-sm text-cd-text"
         value={value}
         onChangeText={onChange}
         autoCapitalize="none"

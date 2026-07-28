@@ -11,3 +11,53 @@
   --font-rounded: 'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif;
   --font-serif: Georgia, 'Times New Roman', serif;
 }
+
+/* ---------------------------------------------------------------------------
+ * cdash 디자인 토큰 — 웹 frontend/components/cdash/cdash.css 의 --cd-* 와 동일 값.
+ * 웹은 `.cdash[data-theme]` 스코프, 앱은 루트 + OS 색상 스킴(prefers-color-scheme).
+ * 값 형식이 "R G B" 인 이유 = tailwind 의 `rgb(var(--x) / <alpha-value>)` 문법.
+ * ⚠ 웹 값이 바뀌면 여기도 같이 바꾼다(두 곳이 갈라지면 화면 톤이 어긋난다).
+ * ------------------------------------------------------------------------- */
+:root {
+  --cd-bg: 238 242 248;
+  --cd-card: 255 255 255;
+  --cd-surface: 242 246 250;
+  --cd-border: 229 234 239;
+  --cd-text: 42 53 71;
+  --cd-muted: 90 106 133;
+  --cd-faint: 124 143 172;
+  --cd-primary: 93 135 255;
+  --cd-primary-soft: 236 242 255;
+  --cd-primary-strong: 69 112 234;
+  --cd-secondary: 73 190 255;
+  --cd-secondary-soft: 232 247 255;
+  --cd-accent: 250 137 107;
+  --cd-accent-soft: 251 242 239;
+  --cd-accent-strong: 243 112 77;
+  --cd-success: 126 186 86;
+  --cd-success-soft: 238 246 231;
+  --cd-warning: 255 174 31;
+  --cd-warning-soft: 254 245 229;
+  --cd-error: 243 112 77;
+  --cd-error-soft: 253 237 232;
+  --cd-grid-line: 235 241 246;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --cd-bg: 17 22 29;
+    --cd-card: 23 28 35;
+    --cd-surface: 29 37 48;
+    --cd-border: 51 63 85;
+    --cd-text: 234 239 244;
+    --cd-muted: 140 155 181;
+    --cd-faint: 90 106 133;
+    --cd-primary-soft: 37 54 98;
+    --cd-secondary-soft: 28 69 93;
+    --cd-accent-soft: 75 49 61;
+    --cd-success-soft: 46 59 39;
+    --cd-warning-soft: 77 58 42;
+    --cd-error-soft: 75 49 61;
+    --cd-grid-line: 35 44 57;
+  }
+}

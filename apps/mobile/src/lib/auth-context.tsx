@@ -8,6 +8,7 @@ import React, { createContext, useCallback, useContext, useEffect, useState } fr
 import { API_BASE_URL } from "./config";
 import { saveTokens, clearTokens, getAccessToken } from "./tokens";
 import { setUnauthorizedHandler } from "./api";
+import { kvClearAll } from "./kv";
 
 export interface AuthUser {
   id: string;
@@ -34,6 +35,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(async () => {
     await clearTokens();
+    // 캐시된 업무 데이터(결재·메일 목록 등)가 다음 로그인 사용자에게 보이지 않게 비운다.
+    await kvClearAll();
     setUser(null);
     setStatus("guest");
   }, []);

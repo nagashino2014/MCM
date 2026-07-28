@@ -3,7 +3,7 @@
     "name": "MCM",
     "slug": "mcm",
     "owner": "koensain",
-    "version": "1.0.1",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "mcm",
@@ -28,10 +28,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "permissions": [
-        "android.permission.RECORD_AUDIO",
-        "android.permission.RECORD_AUDIO"
-      ]
+      "permissions": ["android.permission.RECORD_AUDIO"]
     },
     "web": {
       "output": "static",
@@ -59,6 +56,21 @@
         "expo-camera",
         {
           "cameraPermission": "명함을 촬영하기 위해 카메라를 사용합니다."
+        }
+      ],
+      "expo-sharing",
+      "expo-sqlite",
+      [
+        "expo-notifications",
+        {
+          "color": "#5D87FF",
+          "defaultChannel": "default"
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "앱 잠금 해제를 위해 Face ID를 사용합니다."
         }
       ]
     ],

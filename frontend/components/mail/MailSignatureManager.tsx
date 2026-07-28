@@ -29,6 +29,7 @@ export function MailSignatureManager({
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<"list" | "edit">("list");
   const [editId, setEditId] = useState<string | null>(null);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [subjectPrefix, setSubjectPrefix] = useState("");
   const [isDefault, setIsDefault] = useState(false);
@@ -108,9 +109,14 @@ export function MailSignatureManager({
     }
   };
 
+  // 삭제 확인은 앱 내 인라인 확인으로 한다 — 브라우저가 추가 대화상자를 차단한 상태(사용자가
+  // '이 페이지에서 대화상자를 표시하지 않음'을 체크한 경우)에서는 window.confirm 이 항상 false 라
+  // 삭제가 조용히 무시된다.
   const remove = async (s: MailSignature) => {
-    if (!window.confirm(`서명 '${s.name}' 을 삭제할까요?`)) return;
-    await fetch(`/api/mail/signatures?id=${encodeURIComponent(s.signatureId)}`, { method: "DELETE" });
+    setConfirmId(null);
+    const r = await fetch(`/api/mail/signatures?id=${encodeURIComponent(s.signatureId)}`, { method: "DELETE" });
+    if (r.ok) toast(`서명 '${s.name}' 을 삭제했습니다.`, "success");
+    else toast("삭제에 실패했습니다.", "error");
     load();
   };
 
@@ -163,9 +169,20 @@ export function MailSignatureManager({
                     <CdButton size="sm" icon={<PenLine className="w-3.5 h-3.5" />} onClick={() => startEdit(s)}>
                       수정
                     </CdButton>
-                    <CdButton size="sm" variant="danger" icon={<Trash2 className="w-3.5 h-3.5" />} onClick={() => remove(s)}>
-                      삭제
-                    </CdButton>
+                    {confirmId === s.signatureId ? (
+                      <>
+                        <CdButton size="sm" variant="danger" icon={<Trash2 className="w-3.5 h-3.5" />} onClick={() => remove(s)}>
+                          정말 삭제
+                        </CdButton>
+                        <CdButton size="sm" onClick={() => setConfirmId(null)}>
+                          취소
+                        </CdButton>
+                      </>
+                    ) : (
+                      <CdButton size="sm" variant="danger" icon={<Trash2 className="w-3.5 h-3.5" />} onClick={() => setConfirmId(s.signatureId)}>
+                        삭제
+                      </CdButton>
+                    )}
                   </div>
                   {/* 미리보기 — 흰 배경(메일 본문 기준) */}
                   <div className="bg-white text-black px-3 py-2 text-sm max-h-36 overflow-y-auto" dangerouslySetInnerHTML={{ __html: s.bodyHtml }} />
@@ -191,7 +208,16 @@ export function MailSignatureManager({
               기본 서명으로
             </label>
           </div>
-          <MailEditor ref={editorRef} onInput={() => {}} />
+          <MailEditor
+            ref={editorRef}
+            onInput={() => {}}
+            onPasteImageFailed={(reasons) =>
+              toast(
+                `이미지 ${reasons.length}건은 원본 사이트(네이버 등)에 로그인해야만 열리는 주소라 가져올 수 없었습니다. 명함은 툴바의 '이미지 삽입'으로 파일을 넣거나, 원본에서 이미지를 우클릭 → '이미지 복사' 후 붙여넣어 주세요.`,
+                "warn"
+              )
+            }
+          />
           <div className="flex items-center gap-2">
             <CdButton variant="primary" loading={saving} icon={<Check className="w-4 h-4" />} onClick={save}>
               저장

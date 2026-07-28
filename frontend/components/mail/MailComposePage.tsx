@@ -608,7 +608,17 @@ export function MailComposePage() {
             </div>
           </div>
 
-          <MailEditor ref={editorRef} onInput={scheduleDraftSave} onPickImage={() => imageInputRef.current?.click()} />
+          <MailEditor
+            ref={editorRef}
+            onInput={scheduleDraftSave}
+            onPickImage={() => imageInputRef.current?.click()}
+            onPasteImageFailed={(reasons) =>
+              toast(
+                `이미지 ${reasons.length}건은 원본 사이트(네이버 등)에 로그인해야만 열리는 주소라 가져올 수 없었습니다. 툴바의 '이미지 삽입'으로 파일을 넣거나, 원본에서 이미지를 우클릭 → '이미지 복사' 후 붙여넣어 주세요.`,
+                "warn"
+              )
+            }
+          />
 
           <input ref={fileInputRef} type="file" multiple hidden onChange={onPickFiles} />
           <input ref={imageInputRef} type="file" accept="image/*" multiple hidden onChange={onPickImages} />

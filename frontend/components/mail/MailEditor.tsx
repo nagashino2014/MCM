@@ -7,7 +7,7 @@
 // 목록 마커는 Tailwind 전역 리셋이 지우므로 .cd-mail-editor 스코프 CSS 로 복원(cdash.css).
 // 표·구분선·이미지는 인라인 스타일(외부 메일 클라이언트 호환). MailComposer 에서 사용.
 
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from "react";
 import {
   AlignCenter, AlignJustify, AlignLeft, AlignRight, ArrowDown, ArrowLeft, ArrowRight, ArrowUp,
   Baseline, Bold, Image as ImageIcon, Indent, Italic, Link2, List, ListOrdered, Minus as MinusIcon,
@@ -271,9 +271,14 @@ export interface MailEditorProps {
   onPickImage?: () => void;
   /** 본문 최소 높이 px — 메일 작성(기본 634) 외 임베드 용도(전자결재 여러 줄 필드 등)는 낮게. */
   minHeightPx?: number;
+  /** 붙여넣은 외부 이미지를 가져오지 못했을 때(권한 필요 URL 등) 사유 목록 — 사용자 안내용. */
+  onPasteImageFailed?: (reasons: string[]) => void;
 }
 
-export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function MailEditor({ onInput, statusText, onPickImage, minHeightPx }, ref) {
+export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function MailEditor(
+  { onInput, statusText, onPickImage, minHeightPx, onPasteImageFailed },
+  ref
+) {
   const innerRef = useRef<HTMLDivElement>(null);
   useImperativeHandle(ref, () => innerRef.current as HTMLDivElement);
 
@@ -283,6 +288,12 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
   const [supActive, setSupActive] = useState(false); // 위 첨자 토글 상태(G2-14)
   const [subActive, setSubActive] = useState(false); // 아래 첨자 토글 상태
   const dragRef = useRef<{ kind: "col" | "row"; cells: HTMLTableCellElement[]; startPos: number; startSize: number } | null>(null);
+  /** 직전 붙여넣기의 클립보드 이미지 파일 — 외부 URL 수집 실패 시 대체 소스로 쓴다. */
+  const pastedImageFiles = useRef<File[]>([]);
+  /** 크기 조절 중인 이미지(선택 상태) + 핸들 위치. */
+  const [selectedImg, setSelectedImg] = useState<HTMLImageElement | null>(null);
+  const [imgBox, setImgBox] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
+  const imgDragRef = useRef<{ startX: number; startW: number; ratio: number } | null>(null);
 
   const exec = (cmd: string, value?: string) => {
     innerRef.current?.focus();
@@ -301,33 +312,83 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
    * 그 URL 은 로그인 세션·Referer 검증이 걸려 있어 우리 화면·수신자 화면에서 깨진다.
    * 서버 프록시가 한 번 받아 data URL 로 바꿔 넣으면 본문·서명이 자기완결 상태가 된다.
    */
-  const absorbExternalImages = async () => {
+  /** File → data URL. */
+  const readAsDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result ?? ""));
+      reader.onerror = () => reject(new Error("파일을 읽지 못했습니다."));
+      reader.readAsDataURL(file);
+    });
+
+  const absorbExternalImages = async (attempt = 0) => {
     const el = innerRef.current;
     if (!el) return;
     const targets = Array.from(el.querySelectorAll("img")).filter((img) => {
       const src = img.getAttribute("src") ?? "";
-      // 자체 오리진(첨부 미리보기)·data·blob·cid 는 그대로 둔다.
-      return /^https?:\/\//i.test(src) && !src.startsWith(window.location.origin);
+      if (!src) return false;
+      // 이미 자체 보관 중인 형식(data/cid/blob)과 자체 오리진(첨부 미리보기)은 그대로 둔다.
+      if (/^(data:|cid:|blob:)/i.test(src)) return false;
+      if (src.startsWith(window.location.origin)) return false;
+      // 절대 URL + 프로토콜 상대(//host/path) 모두 외부로 본다.
+      return /^https?:\/\//i.test(src) || src.startsWith("//");
     });
-    if (!targets.length) return;
+    if (!targets.length) {
+      // 붙여넣기 삽입이 아직 DOM 에 반영되지 않았을 수 있어 잠깐 뒤 다시 확인한다.
+      if (attempt < 4) setTimeout(() => void absorbExternalImages(attempt + 1), 120 * (attempt + 1));
+      return;
+    }
+    const failed: string[] = [];
+    const unresolved: HTMLImageElement[] = [];
     for (const img of targets) {
       const src = img.getAttribute("src");
       if (!src) continue;
+      const url = src.startsWith("//") ? `https:${src}` : src;
       try {
         const r = await fetch("/api/mail/proxy-image", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: src }),
+          body: JSON.stringify({ url }),
         });
-        if (!r.ok) continue; // 실패 시 원본 URL 유지(최소한 원본 환경에서는 보임)
-        const d = (await r.json()) as { dataUrl?: string };
-        if (!d.dataUrl) continue;
+        const d = (await r.json().catch(() => ({}))) as { dataUrl?: string; error?: string };
+        if (!r.ok || !d.dataUrl) {
+          failed.push(`${url} → ${d.error ?? `HTTP ${r.status}`}`);
+          unresolved.push(img);
+          continue;
+        }
         img.setAttribute("src", d.dataUrl);
         img.removeAttribute("srcset"); // srcset 이 남으면 브라우저가 원본 외부 URL 을 다시 고른다
         if (!img.style.maxWidth) img.style.maxWidth = "100%";
-      } catch {
-        // 무시 — 원본 유지
+      } catch (e) {
+        failed.push(`${url} → ${e instanceof Error ? e.message : "fetch 실패"}`);
+        unresolved.push(img);
       }
+    }
+
+    // 서버가 못 가져온 이미지(네이버 등 로그인 세션이 필요한 주소)는 클립보드에 함께 담겨 온
+    // 원본 비트맵으로 메운다 — 브라우저가 복사 시점에 이미 이미지를 갖고 있는 경우가 많다.
+    const spare = pastedImageFiles.current;
+    pastedImageFiles.current = [];
+    let repaired = 0;
+    for (const img of unresolved) {
+      const file = spare[repaired];
+      if (!file) break;
+      try {
+        const dataUrl = await readAsDataUrl(file);
+        if (!dataUrl.startsWith("data:image/")) continue;
+        img.setAttribute("src", dataUrl);
+        img.removeAttribute("srcset");
+        if (!img.style.maxWidth) img.style.maxWidth = "100%";
+        repaired += 1;
+      } catch {
+        // 무시 — 아래 안내로 넘어간다
+      }
+    }
+
+    if (failed.length > repaired) {
+      // 원인 파악용 — 어떤 주소가 왜 실패했는지 남긴다(권한 필요 URL·핫링크 차단 등).
+      console.warn("[mail] 붙여넣은 이미지를 가져오지 못했습니다:", failed);
+      onPasteImageFailed?.(failed.slice(repaired));
     }
     onInput();
   };
@@ -356,6 +417,9 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
       return;
     }
     // HTML(서명 등)은 기본 붙여넣기 후 외부 이미지를 수집한다.
+    // 서버가 못 가져오는 주소(로그인 필요)를 대비해 클립보드의 원본 비트맵을 함께 보관한다.
+    pastedImageFiles.current = imageFiles;
+    console.info("[mail] paste types:", cd.types.join(", "), "| 이미지 파일:", imageFiles.length);
     setTimeout(() => {
       void absorbExternalImages();
     }, 0);
@@ -473,6 +537,73 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ── 이미지 크기 조절 ────────────────────────────────
+  /** 선택된 이미지의 핸들 위치를 에디터 기준 좌표로 갱신(스크롤·리플로우 반영). */
+  const syncImgBox = useCallback(() => {
+    const editor = innerRef.current;
+    const img = selectedImg;
+    if (!editor || !img || !img.isConnected) {
+      setImgBox(null);
+      return;
+    }
+    const er = editor.getBoundingClientRect();
+    const ir = img.getBoundingClientRect();
+    setImgBox({ top: ir.top - er.top + editor.scrollTop, left: ir.left - er.left, width: ir.width, height: ir.height });
+  }, [selectedImg]);
+
+  useEffect(() => {
+    syncImgBox();
+    if (!selectedImg) return;
+    const editor = innerRef.current;
+    editor?.addEventListener("scroll", syncImgBox);
+    window.addEventListener("resize", syncImgBox);
+    return () => {
+      editor?.removeEventListener("scroll", syncImgBox);
+      window.removeEventListener("resize", syncImgBox);
+    };
+  }, [selectedImg, syncImgBox]);
+
+  // 이미지 드래그 리사이즈(비율 유지) — 수신측 호환 위해 style.width 와 width 속성을 함께 쓴다.
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      const drag = imgDragRef.current;
+      const img = selectedImg;
+      if (!drag || !img) return;
+      e.preventDefault();
+      const maxW = innerRef.current?.clientWidth ?? 2000;
+      const width = Math.round(Math.min(maxW, Math.max(40, drag.startW + (e.clientX - drag.startX))));
+      img.style.width = `${width}px`;
+      img.style.height = "auto";
+      img.setAttribute("width", String(width));
+      img.removeAttribute("height");
+      syncImgBox();
+    };
+    const onUp = () => {
+      if (!imgDragRef.current) return;
+      imgDragRef.current = null;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      onInput();
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    return () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+  }, [selectedImg, syncImgBox, onInput]);
+
+  const startImgResize = (e: React.MouseEvent) => {
+    const img = selectedImg;
+    if (!img) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = img.getBoundingClientRect();
+    imgDragRef.current = { startX: e.clientX, startW: rect.width, ratio: rect.height / Math.max(1, rect.width) };
+    document.body.style.cursor = "nwse-resize";
+    document.body.style.userSelect = "none";
+  };
+
   const onEditorMouseMove = (e: React.MouseEvent) => {
     if (dragRef.current) return;
     const editor = innerRef.current;
@@ -491,7 +622,14 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
   const onEditorMouseDown = (e: React.MouseEvent) => {
     const editor = innerRef.current;
     if (!editor) return;
-    const cell = (e.target as HTMLElement).closest?.("td,th") as HTMLTableCellElement | null;
+    // 이미지 클릭 = 선택(크기 조절 핸들 표시). 다른 곳을 누르면 선택 해제.
+    const target = e.target as HTMLElement;
+    if (target.tagName === "IMG" && editor.contains(target)) {
+      setSelectedImg(target as HTMLImageElement);
+    } else if (selectedImg) {
+      setSelectedImg(null);
+    }
+    const cell = target.closest?.("td,th") as HTMLTableCellElement | null;
     if (!cell || !editor.contains(cell)) return;
     const rect = cell.getBoundingClientRect();
     const table = cell.closest("table") as HTMLTableElement | null;
@@ -804,17 +942,39 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
       )}
 
       {/* 본문 에디터 — 메일 본문은 흰 배경 고정. cd-mail-editor 로 목록 마커/HR 스타일 복원 */}
-      <div
-        ref={innerRef}
-        contentEditable
-        onInput={onInput}
-        onPaste={onPaste}
-        onKeyDown={onEditorKeyDown}
-        onMouseMove={onEditorMouseMove}
-        onMouseDown={onEditorMouseDown}
-        className="cd-mail-editor max-h-[75vh] overflow-y-auto border cd-border-c border-t-0 rounded-b-lg px-3 py-2 text-sm bg-white text-black outline-none focus:border-[color:var(--cd-primary)]"
-        style={{ lineHeight: 1.6, minHeight: minHeightPx ?? 634 }}
-      />
+      <div className="relative">
+        <div
+          ref={innerRef}
+          contentEditable
+          onInput={onInput}
+          onPaste={onPaste}
+          onKeyDown={onEditorKeyDown}
+          onMouseMove={onEditorMouseMove}
+          onMouseDown={onEditorMouseDown}
+          className="cd-mail-editor max-h-[75vh] overflow-y-auto border cd-border-c border-t-0 rounded-b-lg px-3 py-2 text-sm bg-white text-black outline-none focus:border-[color:var(--cd-primary)]"
+          style={{ lineHeight: 1.6, minHeight: minHeightPx ?? 634 }}
+        />
+        {/* 이미지 선택 표시 + 우하단 크기 조절 핸들(드래그하면 비율 유지하며 확대·축소) */}
+        {imgBox && (
+          <div className="absolute pointer-events-none" style={{ top: imgBox.top, left: imgBox.left, width: imgBox.width, height: imgBox.height }}>
+            <div className="absolute inset-0 border-2" style={{ borderColor: "var(--cd-primary)" }} />
+            <div
+              className="absolute pointer-events-auto rounded-sm border-2 border-white"
+              style={{
+                right: -6,
+                bottom: -6,
+                width: 12,
+                height: 12,
+                background: "var(--cd-primary)",
+                cursor: "nwse-resize",
+                boxShadow: "0 1px 3px rgba(0,0,0,.3)",
+              }}
+              onMouseDown={startImgResize}
+              title="드래그해서 크기 조절"
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 });

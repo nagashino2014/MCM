@@ -1,0 +1,41 @@
+{
+  "Rules": [
+    {
+      "ID": "abort-incomplete-multipart-7d",
+      "Status": "Enabled",
+      "Filter": {},
+      "AbortIncompleteMultipartUpload": { "DaysAfterInitiation": 7 }
+    },
+    {
+      "ID": "cleanup-expired-delete-markers",
+      "Status": "Enabled",
+      "Filter": {},
+      "Expiration": { "ExpiredObjectDeleteMarker": true }
+    },
+    {
+      "ID": "noncurrent-to-standard-ia-30d",
+      "Status": "Enabled",
+      "Filter": {},
+      "NoncurrentVersionTransitions": [
+        { "NoncurrentDays": 30, "StorageClass": "STANDARD_IA" }
+      ]
+    },
+    {
+      "ID": "noncurrent-expire-365d-keep-5",
+      "Status": "Enabled",
+      "Filter": {},
+      "NoncurrentVersionExpiration": {
+        "NoncurrentDays": 365,
+        "NewerNoncurrentVersions": 5
+      }
+    },
+    {
+      "ID": "OPTIONAL-current-to-standard-ia-30d",
+      "Status": "Disabled",
+      "Filter": {},
+      "Transitions": [
+        { "Days": 30, "StorageClass": "STANDARD_IA" }
+      ]
+    }
+  ]
+}

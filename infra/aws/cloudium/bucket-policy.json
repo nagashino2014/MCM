@@ -1,0 +1,56 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DenyInsecureTransport",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "s3:*",
+      "Resource": [
+        "arn:aws:s3:::{{BUCKET}}",
+        "arn:aws:s3:::{{BUCKET}}/*"
+      ],
+      "Condition": {
+        "Bool": { "aws:SecureTransport": "false" }
+      }
+    },
+    {
+      "Sid": "DenyVersionDestructionExceptPurgeRole",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": [
+        "s3:DeleteObjectVersion",
+        "s3:BypassGovernanceRetention",
+        "s3:PutBucketVersioning",
+        "s3:PutBucketObjectLockConfiguration"
+      ],
+      "Resource": [
+        "arn:aws:s3:::{{BUCKET}}",
+        "arn:aws:s3:::{{BUCKET}}/*"
+      ],
+      "Condition": {
+        "ArnNotLike": {
+          "aws:PrincipalArn": "arn:aws:iam::{{ACCOUNT_ID}}:role/{{PURGE_ROLE_NAME}}"
+        }
+      }
+    },
+    {
+      "Sid": "DenyBucketAndPolicyDeletion",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": [
+        "s3:DeleteBucket",
+        "s3:DeleteBucketPolicy"
+      ],
+      "Resource": "arn:aws:s3:::{{BUCKET}}",
+      "Condition": {
+        "ArnNotLike": {
+          "aws:PrincipalArn": [
+            "arn:aws:iam::{{ACCOUNT_ID}}:role/{{PURGE_ROLE_NAME}}",
+            "arn:aws:iam::{{ACCOUNT_ID}}:root"
+          ]
+        }
+      }
+    }
+  ]
+}

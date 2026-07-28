@@ -1,0 +1,204 @@
+# infra/aws/cloudium — 클라우디움 보안서버 → S3 이전
+
+온프렘 클라우디움(사이버다임 문서중앙화, 가비아 공급) 어플라이언스를 S3 로 이전하기 위한 인프라 스크립트.
+서버 노후(도입 5년+)·소음·연 460~480만원 유지보수료를 해소하고, 랜섬웨어 대비를 **예방형에서 불변형으로** 바꾸는 것이 목적.
+
+## 현황 실측 (2026-07 기준)
+
+| 항목 | 값 |
+|---|---|
+| 총 용량 | 5,230,692,544,851 B = **4,872 GB** (4.76 TiB) |
+| 문서 수 | 1,193,509 |
+| 폴더 수 | 226,114 (S3 에서는 0바이트 객체로 변환) |
+| 평균 파일 크기 | **4.38 MB** |
+| 축적 속도 | 2020-07 개설 → 6년간 4.87TB ≈ **연 0.8TB** |
+| 콜드 비율 | 약 90% (연 5회 미만 조회) |
+
+## 설계 결정과 근거
+
+| 결정 | 근거 |
+|---|---|
+| **전량 S3 Standard** | 검색요금·최소보관·조기삭제가 전부 $0. 백신 스캔·인덱싱·폴더 이름변경 같은 대량 작업으로 청구서가 터지지 않는다. 월 $122 로 현행 대비 여전히 절반 이하 |
+| **Glacier IR 미사용** | AWS 가 File Gateway 와의 조합을 명시적으로 비권장. 검색요금 $0.03/GB 라 백신 전체 스캔 1회에 $131 발생 |
+| **Object Lock = GOVERNANCE** | COMPLIANCE 는 루트도 삭제 불가 → 발주처 "자료 파기" 요구에 응할 수 없어 계약과 충돌. GOVERNANCE 는 지정 롤만 우회 가능해 랜섬웨어 방어와 파기 대응을 둘 다 만족 |
+| **자동 파기 규칙 없음** | 인허가 업무는 사후관리·변경허가로 자료가 재소요된다. 자동 삭제는 사고 위험이 이득보다 크다. 파기는 요청 시 수동 스크립트(옵션)로 실행 |
+| **CMK(고객관리형 키)** | 발주처 설명력 — 전용 키·키 사용 이력(CloudTrail)·키 삭제로 crypto-shredding 파기 증빙. 월 $1 |
+| **Bucket Key 활성** | 119만 객체라 KMS 요청비가 무시 못 할 규모. 최대 99% 절감 |
+| **DeleteObjectVersion 미부여** | 게이트웨이 롤이 탈취돼도 과거 버전을 파괴할 수 없게. 랜섬웨어 방어의 핵심 |
+
+> ⚠ **Object Lock 은 버킷 생성 시에만 활성화할 수 있다.** 사후 소급 불가.
+> 이 스크립트로 만든 버킷을 그대로 운영에 쓴다. 연습은 `-Bucket` 에 다른 이름을 줄 것.
+
+### 계정 분리 권고
+문서 아카이브를 앱(`mcm-kesi-staging`) 계정과 같이 두지 말 것. 권한·과금 분리와 랜섬웨어 격리(계정 탈취 시 사본 생존)를 위해 **전용 계정**을 만들고 그 프로필을 `-AwsProfile` 로 지정한다.
+향후 통합허가 계획서 작성 플랫폼에서 이 데이터를 읽을 때도 계정이 달라 문제되지 않는다
+(같은 리전이면 크로스 계정 데이터 전송은 무료, 성능도 동일).
+
+#### 조직 현황 (2026-07 확인)
+
+| 항목 | 값 |
+|---|---|
+| Organization | `o-i3vxiui5f5` (FeatureSet **ALL** → 계정 생성·SCP 가능) |
+| 관리 계정 | `195748745315` "NotoriousBoy" (nagashino2014@gmail.com) |
+| Identity Center | `ssoins-7230c5bc5d8984d6` / identity store `d-9b6756b5f9` |
+| 권한 세트 | `AdministratorAccess` |
+| 멤버 계정 | 없음 (관리 계정 1개뿐) |
+
+이미 Organizations + Identity Center 가 갖춰져 있으므로 `00-create-account.ps1` 로 멤버 계정을 만들고
+SSO 프로필만 추가하면 된다. **루트 로그인 없이** 관리 계정에서 `OrganizationAccountAccessRole` 로 접근된다.
+
+#### 루트 이메일은 전 세계에서 유일해야 한다
+이미 쓴 주소는 재사용할 수 없다. Gmail 은 `+태그` 를 붙여도 같은 받은편지함으로 배달되므로
+`nagashino2014+kesidocs@gmail.com` 처럼 쓰면 새 메일함 없이 계정을 만들 수 있다.
+루트 이메일은 **나중에 변경 가능**하니, 회사 도메인 그룹 주소가 준비되면 그때 옮기면 된다
+(개인 Gmail 이 회사 인프라의 루트로 남으면 인수인계·감사에서 문제가 된다).
+
+## 실행 순서
+
+```powershell
+# 0) 전용 계정 생성 + SSO 할당 (관리 계정 프로필로 실행)
+pwsh infra/aws/cloudium/00-create-account.ps1 -Email "nagashino2014+kesidocs@gmail.com" -DryRun
+pwsh infra/aws/cloudium/00-create-account.ps1 -Email "nagashino2014+kesidocs@gmail.com"
+#    → 출력된 프로필 스니펫을 ~/.aws/config 에 붙여넣고
+aws sso login --profile kesi-docs-prod
+
+# 1) 버킷 + KMS + 암호화 + Object Lock + 버킷정책 + Lifecycle
+pwsh infra/aws/cloudium/01-create-bucket.ps1 -AwsProfile kesi-docs-prod
+
+# 무엇을 할지만 먼저 확인
+pwsh infra/aws/cloudium/01-create-bucket.ps1 -AwsProfile kesi-docs-prod -DryRun
+
+# 2) IAM 롤 3종 (출력된 버킷명·KMS ARN 을 그대로 넣는다)
+pwsh infra/aws/cloudium/02-create-iam.ps1 `
+     -AwsProfile kesi-docs-prod `
+     -Bucket kesi-docs-archive-<accountId> `
+     -KmsKeyArn arn:aws:kms:ap-northeast-2:<accountId>:key/xxxx
+```
+
+두 스크립트 모두 **멱등**이다. 다시 실행해도 이미 적용된 항목은 건너뛴다.
+
+## 파일
+
+| 파일 | 역할 |
+|---|---|
+| `00-create-account.ps1` | Organizations 멤버 계정 생성 + Identity Center 권한 할당 + 프로필 스니펫 출력 |
+| `01-create-bucket.ps1` | KMS CMK → 버킷(Object Lock) → 퍼블릭차단 → SSE-KMS → 기본보존 → 버킷정책 → Lifecycle → 태그 |
+| `02-create-iam.ps1` | 롤·정책 3종 생성/갱신 |
+| `lifecycle.json` | Lifecycle 규칙 (아래 표) |
+| `bucket-policy.json` | TLS 강제 + 버전 파괴 Deny (`{{BUCKET}}` 등 치환) |
+| `iam-filegateway-policy.json` | 게이트웨이 최소권한 |
+| `iam-purge-policy.json` | 파기 담당(MFA 필수, Governance 우회) |
+| `iam-audit-readonly-policy.json` | 감사·조회 전용 |
+
+### Lifecycle 규칙
+
+| ID | 상태 | 내용 |
+|---|---|---|
+| `abort-incomplete-multipart-7d` | Enabled | 중단된 멀티파트 업로드 7일 후 정리 — **마이그레이션 중 끊긴 업로드가 계속 과금되는 것을 막는다** |
+| `cleanup-expired-delete-markers` | Enabled | 고아 삭제마커 정리 |
+| `noncurrent-to-standard-ia-30d` | Enabled | 이전 버전은 30일 후 Standard-IA 로 (조회가 거의 없으므로) |
+| `noncurrent-expire-365d-keep-5` | Enabled | 이전 버전 365일 후 만료, 단 **최근 5개 버전은 항상 보존** |
+| `OPTIONAL-current-to-standard-ia-30d` | **Disabled** | 향후 비용 최적화용. 6개월 운영 후 실제 접근 패턴을 보고 켠다 |
+
+**현행(최신) 객체를 자동 삭제하는 규칙은 없다.** 의도된 설계다.
+
+> Object Lock 보존기간(기본 90일) 중인 버전은 Lifecycle 이 삭제하지 못하고 락 만료 후 처리된다. 정상 동작이다.
+
+## 롤 3종
+
+| 롤 | 신뢰 주체 | 권한 요약 |
+|---|---|---|
+| `kesi-docs-filegateway` | `storagegateway.amazonaws.com` | 읽기·쓰기·삭제마커 생성. **`s3:DeleteObjectVersion` 미부여** |
+| `kesi-docs-purge` | SSO `AdministratorAccess` 권한 세트로 로그인한 principal 만 | 버전 삭제 + `BypassGovernanceRetention` + Batch Operations. 발주처 파기 요구 / 사고 정리 전용 |
+| `kesi-docs-audit` | 동일 | 읽기 + CloudWatch Logs 감사 조회 |
+
+### 게이트웨이 로그의 AccessDenied 는 정상이다
+AWS 표준 File Gateway 정책에는 `s3:DeleteObjectVersion` 이 포함되지만 여기서는 **의도적으로 뺐다.**
+버전관리 버킷에서 파일 삭제·이름변경은 삭제마커 생성으로 처리되므로 `s3:DeleteObject` 만으로 동작한다.
+게이트웨이 로그에 `DeleteObjectVersion AccessDenied` 가 보이면 설계대로 막힌 것이다.
+단, 파일 공유 초기 구성 후 **읽기/쓰기/이름변경/삭제를 실제로 시험**해 다른 권한 누락이 없는지 확인할 것.
+
+## 구축 결과 (2026-07-28 실행·검증 완료)
+
+| 리소스 | 값 |
+|---|---|
+| 계정 | `921784996915` "KESI Docs Archive" (Organizations 멤버, SSO 프로필 `kesi-docs-prod`) |
+| 버킷 | `kesi-docs-archive-921784996915` |
+| KMS | `arn:aws:kms:ap-northeast-2:921784996915:key/d614b63c-9c1a-42a1-8a5c-66b09da97f24` (자동 교체 활성) |
+| Object Lock | GOVERNANCE 90일 · 버전관리 Enabled |
+| 암호화 | SSE-KMS + Bucket Key, SSE-C 차단 |
+| 퍼블릭 차단 | 4종 전부 true |
+| 롤 | `kesi-docs-filegateway` / `kesi-docs-purge` / `kesi-docs-audit` |
+
+### 실동작 검증 결과
+
+| 시나리오 | 기대 | 결과 |
+|---|---|---|
+| 업로드 시 SSE-KMS + Bucket Key 적용 | 자동 적용 | ✅ |
+| SSO 관리자가 **객체 버전 파괴** 시도 | 거부 | ✅ AccessDenied (원본 버전 생존 확인) |
+| SSO 관리자가 **삭제마커 생성**(파일 삭제) | 허용 | ✅ File Gateway 동작에 지장 없음 |
+| `kesi-docs-purge` 롤 assume | 가능 | ✅ |
+| purge 롤이 **락 걸린 버전 파기**(bypass) | 가능 | ✅ 발주처 파기 요구 대응 가능 |
+
+→ **랜섬웨어가 파일을 암호화해도 과거 버전을 파괴할 수 없고, 정당한 파기는 지정 롤로 가능**함이 실증됨.
+검증에 쓴 테스트 객체는 모두 제거해 버킷은 비어 있다.
+
+## 구축 중 실제로 부딪힌 함정 (재발 방지)
+
+| 증상 | 원인 · 대응 |
+|---|---|
+| `MalformedPolicy: Policy has invalid action` | **`s3:PutObjectLockConfiguration` 은 존재하지 않는 액션**이다. 버킷 단위는 `s3:PutBucketObjectLockConfiguration` |
+| 스크립트가 자기 Lifecycle 적용에서 막힘 | 버킷 정책 Deny 에 `s3:PutLifecycleConfiguration` 을 넣었더니 스크립트 자신이 차단됐다. **의도적으로 뺐다** — 다시 넣지 말 것(자동 삭제 규칙이 없어 방어 가치도 낮다) |
+| purge 롤 `AssumeRole` 이 AccessDenied | 신뢰 정책의 `aws:MultiFactorAuthPresent=true` 조건 때문. **IAM Identity Center(SSO) 세션에는 이 컨텍스트 키가 실리지 않아** 정당한 관리자까지 막힌다. MFA 강제는 Identity Center 레벨에 맡기고, 신뢰 정책은 SSO 권한 세트 ARN 패턴으로 제한하도록 변경 |
+| 정책의 `BoolIfExists` MFA Deny | 같은 이유로 SSO 에서 항상 Deny 가 걸려 롤이 무용지물이 된다. 제거함 |
+| PS 5.1 에서 스크립트 파싱 실패 | BOM 없는 UTF-8 을 CP949 로 읽어 한글·박스문자가 깨진다. `.ps1` 은 **UTF-8 BOM** 으로 저장할 것 |
+| `2>$null` 후 스크립트가 죽음 | PS 5.1 은 native exe 의 stderr 리디렉션을 `NativeCommandError` 로 감싸고 `$ErrorActionPreference='Stop'` 이면 종료된다. 조회는 `Get-AwsOrNull`/`Test-AwsOk` 헬퍼로 감쌀 것 |
+| 함수 파라미터 `$Args` | PowerShell 자동 변수와 충돌해 **빈 배열**이 넘어간다. `$CliArgs` 등 다른 이름을 쓸 것 |
+| 스크립트 exit code 254 | 조회 실패 exit code 가 스크립트 반환값으로 샌다. 끝에 `exit 0` 명시 |
+
+## 스크립트로 못 하는 수동 작업
+
+| 항목 | 방법 |
+|---|---|
+| MFA Delete | **권장하지 않음(선택).** 루트 계정의 **액세스 키**가 있어야 설정되는데 AWS 는 루트 액세스 키 발급을 강력히 비권장한다. 게다가 Organizations 멤버 계정은 루트 비밀번호가 미설정 상태로 생성돼 절차가 더 번거롭다. **이 설계에서는 이미 ① Object Lock GOVERNANCE ② 버킷 정책의 `DeleteObjectVersion`·`PutBucketVersioning` Deny ③ 게이트웨이 롤의 버전삭제 권한 미부여 로 같은 목적이 달성되므로 생략해도 방어에 공백이 없다** |
+| 루트 계정 보호 | 새 계정(921784996915)의 루트에 **MFA 등록** + 연락처 확인. 평시 작업은 SSO 로만 한다 |
+| **Identity Center MFA 강제** | 롤 신뢰 정책의 MFA 조건이 SSO 에서 작동하지 않으므로, MFA 는 여기서 걸어야 한다. Identity Center → 설정 → 인증 → MFA 를 "모든 로그인마다 요구"로 설정 |
+| (선택) SCP 가드레일 | FeatureSet 이 ALL 이라 SCP 사용 가능. 아카이브 계정에 `s3:DeleteBucket` 금지·리전 제한·CloudTrail 중지 금지를 걸면 관리자 실수까지 차단된다 |
+| CloudTrail 데이터 이벤트 | 발주처 감사·파기 증빙용. 별도 트레일에서 이 버킷의 객체 수준 이벤트를 켠다 |
+| File Gateway 배포 | 온프렘 하이퍼바이저에 게이트웨이 VM + **캐시 SSD 1TB** (핫 데이터 487GB 를 전부 캐시에 상주시켜 egress 최소화) |
+| AD 연동 · SMB 감사 로그 | 파일 공유 생성 시 CloudWatch 로그 그룹 지정 (사용자명·IP·작업종류 기록) |
+
+## 클라우디움에서 데이터 추출 시 주의 (T: 드라이브)
+
+클라우디움 클라이언트 로그인 후 나타나는 `T:` 는 일반 파일시스템이 아니라 **클라이언트가 만드는 가상 드라이브**다. robocopy 는 동작하지만 다음을 전제로 계획할 것:
+
+- **속도**: 파일마다 서버 왕복 + 복호화가 일어나 로컬 디스크보다 훨씬 느릴 수 있다. 반드시 한 폴더(수 GB)로 **파일럿 측정** 후 전체 소요를 추정한다.
+- **스레드**: `/MT:8` 이하로 시작. 높이면 클라우디움 서버가 부하로 불안정해질 수 있다.
+- **긴 경로**: 한글 폴더명 + 깊은 구조라 260자 초과가 거의 확실하다. robocopy 는 긴 경로를 지원하지만, 이후 s3 sync 단계까지 고려해 로그를 남긴다.
+- **속성 복사**: 가상 드라이브는 ACL/소유자 복사가 지원되지 않을 수 있다. `/COPY:DAT` 가 실패하면 `/COPY:DT` 로 낮춘다.
+- **제외 대상**: `휴지통`, `반출 문서`, `즐겨찾기`, `미 저장 문서` 등은 클라우디움 고유 가상 항목이므로 `/XD` 로 제외한다. `S:`(cloudium 임시)도 대상이 아니다.
+- **감사 로그 폭증**: 119만 파일을 읽으면 클라우디움 서버에 열람 로그가 그만큼 쌓인다. 이전 작업 전 벤더/관리자와 공유할 것.
+- **개정 이력**: 화면의 "문서 1,193,509" 가 최신본만인지 개정 이력 포함인지 확인 필요. 과거 개정본까지 가져가면 용량이 몇 배가 될 수 있다.
+
+## 예상 비용
+
+| 구분 | 금액 |
+|---|---|
+| 스토리지 4,872GB × $0.025 | $121.80/월 |
+| 이전 버전 누적(10% 가정) + 요청 + 감사로그 + KMS | 약 $17/월 |
+| egress (캐시 1TB 적용 시) | $0~25/월 |
+| **월 합계** | **약 $139~164 (19~23만원)** |
+| 초기 일회성 (PUT 141만건 + File Gateway 쓰기 4,872GB) | 약 $55 |
+
+현행 온프렘(유지보수 480만원 + 전기 75만원 + 하드웨어 상각 160만원 ≈ 연 715만원) 대비 **5년 누적 약 1,890만원 절감**.
+
+## 후속 작업 (미착수)
+
+| # | 산출물 | 비고 |
+|---|---|---|
+| 03 | CloudTrail 데이터 이벤트 + Storage Lens | 감사·비용 가시화 |
+| 04 | `robocopy` → `aws s3 sync` 마이그레이션 스크립트 | 재시도·검증·진행률 로그 |
+| 05 | 시점 롤백 런북 (Batch Operations) | 랜섬웨어 사고 시. **평시에 리허설 필수** |
+| 06 | 수동 파기 스크립트 (옵션) | 발주처 파기 요구 대응. `kesi-docs-purge` 롤 + MFA 로만 실행 |
+| 07 | 발주처 제출용 자료 관리 체계 확인서 | 영업 자산 |
+| 08 | `03-grant-platform-access.ps1` | 통합허가 계획서 플랫폼(별도 계정)에 읽기 허용. **버킷 정책 + KMS 키 정책 + 플랫폼 롤 IAM 3곳을 모두 열어야 한다**(크로스 계정은 리소스 정책과 IAM 양쪽 필요 — KMS 를 빠뜨려 AccessDenied 나는 것이 가장 흔한 실수). 플랫폼 쓰기는 Object Lock 없는 별도 버킷으로, S3 직접 쓰기 후에는 File Gateway `RefreshCache` 필요 |

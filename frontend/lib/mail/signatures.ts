@@ -11,6 +11,8 @@ export interface MailSignature {
   name: string;
   bodyHtml: string;
   isDefault: boolean;
+  /** 제목 접두어(사명 표시) — 예: "한국환경안전연구원" → 제목 앞에 "[한국환경안전연구원] ". */
+  subjectPrefix: string | null;
   updatedAt: string;
 }
 
@@ -20,6 +22,7 @@ function toSig(r: Record<string, unknown>): MailSignature {
     name: String(r.name),
     bodyHtml: String(r.body_html ?? ""),
     isDefault: Number(r.is_default ?? 0) === 1,
+    subjectPrefix: r.subject_prefix != null && String(r.subject_prefix).trim() !== "" ? String(r.subject_prefix) : null,
     updatedAt: String(r.updated_at),
   };
 }
@@ -37,7 +40,7 @@ export async function listSignatures(userId: string): Promise<MailSignature[]> {
 /** upsert — isDefault=true 면 같은 메일함의 나머지 기본 해제. 반환 = signatureId. */
 export async function saveSignature(
   userId: string,
-  input: { signatureId?: string | null; name: string; bodyHtml: string; isDefault?: boolean }
+  input: { signatureId?: string | null; name: string; bodyHtml: string; isDefault?: boolean; subjectPrefix?: string | null }
 ): Promise<string> {
   const mailbox = await getMailboxByUser(userId);
   if (!mailbox) throw new Error("메일함이 없습니다.");
@@ -50,11 +53,11 @@ export async function saveSignature(
       await db.run(`UPDATE mail_signatures SET is_default = 0 WHERE mailbox_id = $1`, [mailbox.mailboxId]);
     }
     await db.run(
-      `INSERT INTO mail_signatures (signature_id, mailbox_id, name, body_html, is_default, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$6)
+      `INSERT INTO mail_signatures (signature_id, mailbox_id, name, body_html, is_default, subject_prefix, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$7)
        ON CONFLICT (signature_id) DO UPDATE SET name = EXCLUDED.name, body_html = EXCLUDED.body_html,
-         is_default = EXCLUDED.is_default, updated_at = EXCLUDED.updated_at`,
-      [sigId, mailbox.mailboxId, name, input.bodyHtml, input.isDefault ? 1 : 0, now]
+         is_default = EXCLUDED.is_default, subject_prefix = EXCLUDED.subject_prefix, updated_at = EXCLUDED.updated_at`,
+      [sigId, mailbox.mailboxId, name, input.bodyHtml, input.isDefault ? 1 : 0, input.subjectPrefix?.trim() || null, now]
     );
   });
   return sigId;

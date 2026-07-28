@@ -295,6 +295,72 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
     onInput();
   };
 
+  /**
+   * 붙여넣은 본문의 외부 이미지를 자체 data URL 로 수집한다(G6-A 후속).
+   * 다른 웹메일(네이버 등)에서 서명을 복사하면 명함 이미지가 그쪽 서버 URL 로 들어오는데,
+   * 그 URL 은 로그인 세션·Referer 검증이 걸려 있어 우리 화면·수신자 화면에서 깨진다.
+   * 서버 프록시가 한 번 받아 data URL 로 바꿔 넣으면 본문·서명이 자기완결 상태가 된다.
+   */
+  const absorbExternalImages = async () => {
+    const el = innerRef.current;
+    if (!el) return;
+    const targets = Array.from(el.querySelectorAll("img")).filter((img) => {
+      const src = img.getAttribute("src") ?? "";
+      // 자체 오리진(첨부 미리보기)·data·blob·cid 는 그대로 둔다.
+      return /^https?:\/\//i.test(src) && !src.startsWith(window.location.origin);
+    });
+    if (!targets.length) return;
+    for (const img of targets) {
+      const src = img.getAttribute("src");
+      if (!src) continue;
+      try {
+        const r = await fetch("/api/mail/proxy-image", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: src }),
+        });
+        if (!r.ok) continue; // 실패 시 원본 URL 유지(최소한 원본 환경에서는 보임)
+        const d = (await r.json()) as { dataUrl?: string };
+        if (!d.dataUrl) continue;
+        img.setAttribute("src", d.dataUrl);
+        img.removeAttribute("srcset"); // srcset 이 남으면 브라우저가 원본 외부 URL 을 다시 고른다
+        if (!img.style.maxWidth) img.style.maxWidth = "100%";
+      } catch {
+        // 무시 — 원본 유지
+      }
+    }
+    onInput();
+  };
+
+  /** 붙여넣기 — 클립보드 이미지 파일은 data URL 로 즉시 삽입, HTML 은 삽입 후 외부 이미지 수집. */
+  const onPaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    const cd = e.clipboardData;
+    if (!cd) return;
+    const hasHtml = cd.types.includes("text/html");
+    const imageFiles = Array.from(cd.items)
+      .filter((it) => it.kind === "file" && it.type.startsWith("image/"))
+      .map((it) => it.getAsFile())
+      .filter((f): f is File => f != null);
+
+    // 스크린샷·이미지 단독 복사(HTML 동반 없음) → 파일을 직접 읽어 삽입.
+    if (imageFiles.length > 0 && !hasHtml) {
+      e.preventDefault();
+      for (const f of imageFiles) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const url = String(reader.result ?? "");
+          if (url.startsWith("data:image/")) insertHtml(`<img src="${url}" style="max-width:100%">`);
+        };
+        reader.readAsDataURL(f);
+      }
+      return;
+    }
+    // HTML(서명 등)은 기본 붙여넣기 후 외부 이미지를 수집한다.
+    setTimeout(() => {
+      void absorbExternalImages();
+    }, 0);
+  };
+
   /** 글자 크기(px) — execCommand fontSize(1~7) 는 px 지정 불가 → size=7 마커를 span 으로 치환하는 고전 기법. */
   const applyFontSize = (px: number) => {
     const editor = innerRef.current;
@@ -742,6 +808,7 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
         ref={innerRef}
         contentEditable
         onInput={onInput}
+        onPaste={onPaste}
         onKeyDown={onEditorKeyDown}
         onMouseMove={onEditorMouseMove}
         onMouseDown={onEditorMouseDown}

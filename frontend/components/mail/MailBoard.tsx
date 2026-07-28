@@ -312,7 +312,7 @@ export function MailBoard() {
   );
 
   return (
-    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col p-4 md:p-5 rounded-3xl" data-theme={theme}>
+    <div className="cdash cd-fields-white cd-mail-surface flex h-full min-h-0 flex-col p-4 md:p-5 rounded-3xl" data-theme={theme}>
       <CdPageHeader
         icon={<Mail className="w-5 h-5" />}
         eyebrow="Koensain Mail"

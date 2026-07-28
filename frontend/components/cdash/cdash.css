@@ -222,6 +222,9 @@
   border-color: var(--cd-border);
 }
 .cd-btn-ghost:not(:disabled):hover { border-color: var(--cd-primary); color: var(--cd-primary); }
+/* 메일 화면: ghost 버튼 배경(surface)이 페이지 배경과 명도차가 거의 없어 버튼이 묻힌다.
+   페이지 배경 위에 바로 놓이는 툴바·액션 버튼은 카드색(라이트=흰색)으로 띄운다. */
+.cd-mail-surface .cd-btn-ghost { background: var(--cd-card); }
 
 .cd-btn-danger { background: var(--cd-error-soft); color: var(--cd-error); }
 .cd-btn-danger:not(:disabled):hover { background: var(--cd-error); color: #fff; }

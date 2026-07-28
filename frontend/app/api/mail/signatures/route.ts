@@ -15,7 +15,7 @@ export async function GET() {
   }
 }
 
-// POST: 서명 upsert — body: { signatureId?, name, bodyHtml, isDefault? }
+// POST: 서명 upsert — body: { signatureId?, name, bodyHtml, isDefault?, subjectPrefix? }
 export async function POST(req: NextRequest) {
   try {
     const ctx = await requireSession();
@@ -24,12 +24,14 @@ export async function POST(req: NextRequest) {
       name?: string;
       bodyHtml?: string;
       isDefault?: boolean;
+      subjectPrefix?: string | null;
     };
     const signatureId = await saveSignature(ctx.userId, {
       signatureId: body.signatureId ?? null,
       name: String(body.name ?? ""),
       bodyHtml: String(body.bodyHtml ?? ""),
       isDefault: body.isDefault === true,
+      subjectPrefix: body.subjectPrefix != null ? String(body.subjectPrefix) : null,
     });
     return NextResponse.json({ ok: true, signatureId });
   } catch (err) {

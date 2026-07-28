@@ -93,6 +93,8 @@ export interface RecipientSuggestion {
   kind: "employee" | "alias" | "contact";
   /** 부가 설명(부서·직급, 사업장명 등). */
   detail: string | null;
+  /** 직함(직급) — 수신자 표기 "이름 직함 <주소>" 에 사용. */
+  title: string | null;
 }
 
 /** 메일 수신자 자동완성 — 임직원(회사메일) + 별칭/배포리스트 + 외부 담당자(이메일 보유). */
@@ -143,18 +145,21 @@ export async function suggestRecipients(q: string, limit = 12): Promise<Recipien
       address: String(r.address),
       kind: "employee" as const,
       detail: [r.dept_name, r.position_name].filter(Boolean).join(" · ") || null,
+      title: r.position_name != null ? String(r.position_name) : null,
     })),
     ...aliases.map((r) => ({
       name: String(r.alias_local),
       address: `${r.alias_local}@${MAIL_DOMAIN}`,
       kind: "alias" as const,
       detail: String(r.kind) === "list" ? "배포리스트" : "별칭",
+      title: null,
     })),
     ...contacts.map((r) => ({
       name: String(r.person_name),
       address: String(r.email),
       kind: "contact" as const,
       detail: [r.company_name, r.title].filter(Boolean).join(" · ") || null,
+      title: r.title != null ? String(r.title) : null,
     })),
   ];
   // 주소 중복 제거 후 상한.

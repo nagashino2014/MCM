@@ -49,6 +49,16 @@ function prefixSubject(prefix: "Re" | "Fwd", subject: string): string {
   return re.test(subject) ? subject : `${prefix}: ${subject}`;
 }
 
+/**
+ * 제목의 사명 표시([한국환경안전연구원] 등) 적용 — 서명에 지정된 값으로 교체한다.
+ * 맨 앞의 기존 대괄호 표시는 걷어내므로 서명을 바꿔도 이전 사명이 남지 않는다.
+ */
+function applySubjectPrefix(subject: string, prefix: string | null | undefined): string {
+  const stripped = subject.replace(/^\s*\[[^\]]*\]\s*/, "");
+  const name = prefix?.trim();
+  return name ? `[${name}] ${stripped}` : stripped;
+}
+
 interface InlineImage {
   cid: string;
   file: File;
@@ -112,6 +122,7 @@ export function MailComposePage() {
         } catch {
           /* noop */
         }
+        let defaultPrefix: string | null = null;
         try {
           const r = await fetch("/api/mail/signatures");
           if (r.ok) {
@@ -119,7 +130,10 @@ export function MailComposePage() {
             const list = Array.isArray(d.signatures) ? (d.signatures as MailSignature[]) : [];
             setSignatures(list);
             const def = list.find((s) => s.isDefault);
-            if (def) signature = def.bodyHtml;
+            if (def) {
+              signature = def.bodyHtml;
+              defaultPrefix = def.subjectPrefix;
+            }
           }
         } catch {
           /* noop */
@@ -171,6 +185,8 @@ export function MailComposePage() {
             }
           }
         }
+        // 기본 서명에 사명 표시가 있으면 제목에도 반영(임시보관 복원은 저장된 제목을 그대로 둔다).
+        if (!draftParam && defaultPrefix) setSubject((prev) => applySubjectPrefix(prev, defaultPrefix));
         setTimeout(() => {
           if (editorRef.current) editorRef.current.innerHTML = initialHtml;
         }, 30);
@@ -241,9 +257,11 @@ export function MailComposePage() {
   }, [sigMenuOpen]);
 
   /** 서명 블록 삽입(드롭다운·관리 모달 공용). */
-  const insertSignature = (bodyHtml: string) => {
+  const insertSignature = (bodyHtml: string, subjectPrefix?: string | null) => {
     editorRef.current?.focus();
     document.execCommand("insertHTML", false, `<br><div>--<br>${bodyHtml}</div>`);
+    // 서명에 사명 표시가 지정돼 있으면 제목 앞에 [사명] 을 반영한다(서명 교체 시 이전 표시는 대체).
+    if (subjectPrefix !== undefined) setSubject((prev) => applySubjectPrefix(prev, subjectPrefix));
     scheduleDraftSave();
   };
 
@@ -308,7 +326,8 @@ export function MailComposePage() {
     scheduleDraftSave();
   };
 
-  // 드래그 앤 드롭 — 상시 드롭존 + 페이지 전체.
+  // 드래그 앤 드롭 — 첨부 목록 영역에 한정(페이지 전체 오버레이 폐지).
+  // 드롭 가능 상태는 영역 테두리를 얇은 실선 강조로만 알린다(안내 오버레이 없음).
   const onDragEnter = (e: React.DragEvent) => {
     if (!e.dataTransfer.types.includes("Files")) return;
     e.preventDefault();
@@ -349,6 +368,23 @@ export function MailComposePage() {
         fd.append("inlineFiles", im.file);
         usedCids.push(im.cid);
       }
+      // 붙여넣기·서명으로 들어온 data URL 이미지도 cid 첨부로 변환한다
+      // (Outlook 등 다수 클라이언트가 data: 이미지를 차단 — 인라인 첨부가 표준).
+      for (const m of Array.from(html.matchAll(/src="(data:image\/([a-zA-Z0-9.+-]+);base64,([^"]+))"/g))) {
+        const [, dataUrl, subtype, b64] = m;
+        try {
+          const bin = atob(b64);
+          const bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          const cid = `${globalThis.crypto?.randomUUID?.() ?? Date.now()}@koensain.app`;
+          const file = new File([bytes], `inline-${usedCids.length + 1}.${subtype.split("+")[0]}`, { type: `image/${subtype}` });
+          html = html.split(dataUrl).join(`cid:${cid}`);
+          fd.append("inlineFiles", file);
+          usedCids.push(cid);
+        } catch {
+          // 디코딩 실패 시 원본 유지(최소한 웹메일에서는 보임)
+        }
+      }
       fd.append("inlineCids", JSON.stringify(usedCids));
       fd.append("to", to);
       if (showCc && cc.trim()) fd.append("cc", cc);
@@ -379,12 +415,8 @@ export function MailComposePage() {
 
   return (
     <div
-      className="cdash cd-fields-white flex h-full min-h-0 flex-col p-4 md:p-5 rounded-3xl overflow-y-auto"
+      className="cdash cd-fields-white cd-mail-surface flex h-full min-h-0 flex-col p-4 md:p-5 rounded-3xl overflow-y-auto"
       data-theme={theme}
-      onDragEnter={onDragEnter}
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
     >
       <CdPageHeader
         icon={<Mail className="w-5 h-5" />}
@@ -419,7 +451,7 @@ export function MailComposePage() {
                         role="menuitem"
                         onClick={() => {
                           setSigMenuOpen(false);
-                          insertSignature(s.bodyHtml);
+                          insertSignature(s.bodyHtml, s.subjectPrefix);
                         }}
                         className="w-full text-left px-4 py-2.5 text-sm font-medium flex items-center gap-2 cd-text-muted hover:text-[color:var(--cd-text)] cd-row-hover"
                       >
@@ -458,19 +490,6 @@ export function MailComposePage() {
       ) : (
         // 폭: 고정 max-w 없이 브라우저 폭 추종(네이버 메일 방식 — 셸의 울트라와이드 상한만 적용됨).
         <div className="relative flex flex-col gap-3 w-full">
-          {/* 드래그 오버레이 */}
-          {dragging && (
-            <div
-              className="absolute inset-0 z-20 rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-2 pointer-events-none"
-              style={{ borderColor: "var(--cd-primary)", background: "color-mix(in srgb, var(--cd-primary-soft) 85%, transparent)" }}
-            >
-              <UploadCloud className="w-10 h-10" style={{ color: "var(--cd-primary)" }} />
-              <p className="text-sm font-bold" style={{ color: "var(--cd-primary)" }}>
-                여기에 파일을 놓으면 첨부됩니다
-              </p>
-            </div>
-          )}
-
           <RecipientInput
             label="받는 사람"
             required
@@ -529,16 +548,16 @@ export function MailComposePage() {
           />
 
           {/* 파일첨부 — 내 PC / 문서함 버튼 + 상시 드롭존(네이버 메일식).
-              드롭존·버튼은 흰 배경 + 윤곽선으로 페이지 배경과 구분(G2-9). */}
+              드롭존·버튼은 불투명 흰 배경 + 윤곽선으로 페이지 배경과 구분. */}
           <div className="flex flex-col gap-1.5">
             <span className="cd-label flex items-center gap-2">
               <span className="mr-3">파일첨부</span>
-              <CdButton size="sm" className="bg-white" icon={<HardDrive className="w-3.5 h-3.5" />} onClick={() => fileInputRef.current?.click()}>
+              <CdButton size="sm" className="cd-card-bg" icon={<HardDrive className="w-3.5 h-3.5" />} onClick={() => fileInputRef.current?.click()}>
                 내 PC
               </CdButton>
               <CdButton
                 size="sm"
-                className="bg-white"
+                className="cd-card-bg"
                 icon={<FolderOpen className="w-3.5 h-3.5" />}
                 onClick={() => toast("문서함(개인/부서/전사)은 준비 중입니다.", "info")}
               >
@@ -546,11 +565,18 @@ export function MailComposePage() {
               </CdButton>
               {totalKB > 0 && <span className="text-[11px] cd-text-faint">합계 {totalKB} KB / 최대 7MB</span>}
             </span>
-            {/* 상시 드롭존 — 첨부 순서대로 위→아래 목록 표시(G2-10). */}
+            {/* 상시 드롭존 — 첨부 순서대로 위→아래 목록 표시. 드래그 중에는 테두리만 실선 강조. */}
             <div
-              className="rounded-xl border border-dashed px-3 py-2.5 flex flex-col gap-1 min-h-[7rem] bg-white"
-              style={{ borderColor: "var(--cd-border)" }}
+              className="rounded-xl border px-3 py-2.5 flex flex-col gap-1 min-h-[7rem] bg-white transition-colors"
+              style={{
+                borderColor: dragging ? "var(--cd-primary)" : "var(--cd-border)",
+                borderStyle: dragging ? "solid" : "dashed",
+              }}
               onClick={() => files.length === 0 && fileInputRef.current?.click()}
+              onDragEnter={onDragEnter}
+              onDragOver={onDragOver}
+              onDragLeave={onDragLeave}
+              onDrop={onDrop}
               role="button"
             >
               {files.length === 0 ? (

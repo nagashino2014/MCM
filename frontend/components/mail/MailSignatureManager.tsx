@@ -21,8 +21,8 @@ export function MailSignatureManager({
 }: {
   open: boolean;
   onClose: () => void;
-  /** "본문에 삽입" — 작성 페이지 에디터에 서명 HTML 을 넣는다. */
-  onInsert: (bodyHtml: string) => void;
+  /** "본문에 삽입" — 작성 페이지 에디터에 서명 HTML 을 넣고, 사명 표시는 제목에 반영한다. */
+  onInsert: (bodyHtml: string, subjectPrefix?: string | null) => void;
 }) {
   const { toast } = useCdToast();
   const [signatures, setSignatures] = useState<MailSignature[]>([]);
@@ -30,6 +30,7 @@ export function MailSignatureManager({
   const [mode, setMode] = useState<"list" | "edit">("list");
   const [editId, setEditId] = useState<string | null>(null);
   const [name, setName] = useState("");
+  const [subjectPrefix, setSubjectPrefix] = useState("");
   const [isDefault, setIsDefault] = useState(false);
   const [saving, setSaving] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
@@ -57,6 +58,7 @@ export function MailSignatureManager({
   const startNew = () => {
     setEditId(null);
     setName("");
+    setSubjectPrefix("");
     setIsDefault(signatures.length === 0); // 첫 서명은 기본으로 제안
     setMode("edit");
     setTimeout(() => {
@@ -67,6 +69,7 @@ export function MailSignatureManager({
   const startEdit = (s: MailSignature) => {
     setEditId(s.signatureId);
     setName(s.name);
+    setSubjectPrefix(s.subjectPrefix ?? "");
     setIsDefault(s.isDefault);
     setMode("edit");
     setTimeout(() => {
@@ -84,7 +87,13 @@ export function MailSignatureManager({
       const r = await fetch("/api/mail/signatures", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ signatureId: editId, name, bodyHtml: editorRef.current?.innerHTML ?? "", isDefault }),
+        body: JSON.stringify({
+          signatureId: editId,
+          name,
+          bodyHtml: editorRef.current?.innerHTML ?? "",
+          isDefault,
+          subjectPrefix: subjectPrefix.trim() || null,
+        }),
       });
       if (!r.ok) {
         const d = await r.json().catch(() => ({}));
@@ -109,7 +118,13 @@ export function MailSignatureManager({
     await fetch("/api/mail/signatures", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ signatureId: s.signatureId, name: s.name, bodyHtml: s.bodyHtml, isDefault: true }),
+      body: JSON.stringify({
+        signatureId: s.signatureId,
+        name: s.name,
+        bodyHtml: s.bodyHtml,
+        isDefault: true,
+        subjectPrefix: s.subjectPrefix,
+      }),
     });
     load();
   };
@@ -135,8 +150,9 @@ export function MailSignatureManager({
                   <div className="flex items-center gap-2 px-3 py-2 border-b cd-border-c">
                     <span className="text-sm font-semibold cd-text">{s.name}</span>
                     {s.isDefault && <CdBadge tone="info">기본</CdBadge>}
+                    {s.subjectPrefix && <span className="text-[11px] cd-text-faint">제목 앞 [{s.subjectPrefix}]</span>}
                     <div className="flex-1" />
-                    <CdButton size="sm" variant="soft" icon={<Check className="w-3.5 h-3.5" />} onClick={() => { onInsert(s.bodyHtml); onClose(); }}>
+                    <CdButton size="sm" variant="soft" icon={<Check className="w-3.5 h-3.5" />} onClick={() => { onInsert(s.bodyHtml, s.subjectPrefix); onClose(); }}>
                       본문에 삽입
                     </CdButton>
                     {!s.isDefault && (
@@ -160,9 +176,17 @@ export function MailSignatureManager({
         </div>
       ) : (
         <div className="flex flex-col gap-2.5">
-          <div className="flex items-end gap-2">
-            <CdInput label="서식명" required value={name} onChange={(e) => setName(e.target.value)} placeholder="예: 기본 서명, 영업용" className="flex-1" />
-            <label className="inline-flex items-center gap-1.5 pb-2 text-sm cd-text cursor-pointer select-none">
+          <div className="flex items-end gap-2 flex-wrap">
+            <CdInput label="서식명" required value={name} onChange={(e) => setName(e.target.value)} placeholder="예: 기본 서명, 영업용" className="flex-1 min-w-[12rem]" />
+            <CdInput
+              label="제목 앞 사명 표시"
+              value={subjectPrefix}
+              onChange={(e) => setSubjectPrefix(e.target.value)}
+              placeholder="예: 한국환경안전연구원"
+              hint="이 서명을 쓰면 제목 앞에 [사명] 이 자동으로 붙습니다(비우면 없음)."
+              className="flex-1 min-w-[14rem]"
+            />
+            <label className="inline-flex items-center gap-1.5 pb-7 text-sm cd-text cursor-pointer select-none">
               <input type="checkbox" checked={isDefault} onChange={(e) => setIsDefault(e.target.checked)} className="w-4 h-4 accent-[var(--cd-primary)]" />
               기본 서명으로
             </label>

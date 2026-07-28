@@ -1,0 +1,23 @@
+import type { Href } from "expo-router";
+
+/**
+ * 푸시 알림의 `data.link`(서버가 넣는 경로) → 앱 라우트 변환.
+ * 서버는 웹 경로 감각으로 링크를 만들고(예: /board/bpost-xxx, /approval?docId=xxx),
+ * 앱에서 실제로 어느 화면을 열지는 여기 한 곳에서 정한다.
+ */
+export function routeForLink(link: string | null | undefined): Href | null {
+  if (!link || typeof link !== "string") return null;
+  const path = link.split("?")[0];
+
+  // 게시글 상세
+  const board = /^\/board\/([^/]+)$/.exec(path);
+  if (board) return { pathname: "/board/[postId]", params: { postId: board[1] } };
+
+  // 결재 — 문서 상세 화면은 M2 에서 붙는다. 그전까지는 결재 탭으로 보낸다.
+  if (path === "/approval") return "/(tabs)/approval";
+
+  // 메일 — 목록·뷰어는 M3.
+  if (path.startsWith("/mail")) return "/(tabs)/mail";
+
+  return null;
+}

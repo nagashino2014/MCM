@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Switch, Text, View } from 'react-native';
 import Constants from 'expo-constants';
+import { useRouter } from 'expo-router';
 
 import { Chip, ConfirmSheet, ListRow, Screen, SectionTitle, useToast } from '@/components/ui';
 import { useAuth } from '@/lib/auth-context';
@@ -19,6 +20,7 @@ const THEME_OPTIONS: { key: ThemeMode; label: string }[] = [
 export default function SettingsScreen() {
   const { user, logout } = useAuth();
   const { c } = useTheme();
+  const router = useRouter();
   const theme = useThemeMode();
   const toast = useToast();
   const [lock, setLock] = useState(true);
@@ -82,8 +84,8 @@ export default function SettingsScreen() {
       <ListRow
         icon="notifications-outline"
         title="푸시 알림"
-        subtitle="다음 단계에서 열립니다"
-        value="준비 중"
+        subtitle="받을 알림 종류·방해금지 시간"
+        onPress={() => router.push('/notifications')}
       />
 
       <SectionTitle>계정</SectionTitle>

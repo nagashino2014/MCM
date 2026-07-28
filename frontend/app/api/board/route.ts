@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { AuthError, authErrorToResponse, requireAdmin, requireSession } from "@/lib/auth/guards";
 import { getUserDeptId } from "@/lib/approval/docs";
-import { createPost, listNotifyTargets, listPosts, type BoardScope } from "@/lib/board";
+import { createPost, listNotifyTargets, listNotifyUserIds, listPosts, type BoardScope } from "@/lib/board";
 import { getBoardAttachmentStorageKey, putBoardAttachment } from "@/lib/storage/board-attachment-storage";
 import { withDbWrite } from "@/lib/db";
 import { sendNotifyEmail } from "@/lib/notify/email-ses";
+import { sendPush } from "@/lib/notify/push-expo";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -114,6 +115,27 @@ export async function POST(req: NextRequest) {
               to: targets.map((t) => t.email),
               subject: `[${scope === "company" ? "전사 공지" : "부서 공지"}] ${title}`,
               text: `새 공지가 등록되었습니다.\n\n제목: ${title}\n${base ? `\n확인: ${base}/board?post=${postId}` : ""}`,
+            });
+          }
+        } catch {
+          // 알림 실패는 무시(글은 이미 저장됨)
+        }
+      })();
+    }
+
+    // 모바일 푸시(M1) — 메일과 마찬가지로 커밋 후 fire-and-forget.
+    if (form.get("notifyPush") === "1") {
+      void (async () => {
+        try {
+          const userIds = await listNotifyUserIds(scope, myDept, ctx.userId);
+          if (userIds.length) {
+            await sendPush(userIds, {
+              event: "board.posted",
+              title: scope === "company" ? "전사 공지" : "부서 게시판",
+              body: title,
+              link: `/board/${postId}`,
+              targetRef: postId,
+              dedupKey: `board.posted:${postId}`,
             });
           }
         } catch {

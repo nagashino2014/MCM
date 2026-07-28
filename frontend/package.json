@@ -21,6 +21,7 @@
     "clsx": "^2.1.1",
     "d3-geo": "^3.1.1",
     "d3-shape": "^3.2.0",
+    "expo-server-sdk": "^6.1.0",
     "jszip": "^3.10.1",
     "lucide-react": "^0.468.0",
     "mailparser": "^3.9.14",

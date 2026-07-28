@@ -9,12 +9,24 @@ import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { sendNotifyEmail, type ChannelSendResult } from "@/lib/notify/email-ses";
 import { sendAlimtalk } from "@/lib/notify/kakao-solapi";
+import { sendPush, type PushEventKey } from "@/lib/notify/push-expo";
 
 export type ApprovalNotifyEvent = "step_pending" | "delegated" | "approved" | "rejected" | "remind";
+
+/** 결재 이벤트 → 모바일 푸시 이벤트 키(앱 알림 설정에서 사용자가 켜고 끄는 단위). */
+const PUSH_EVENT_BY_APPROVAL: Record<ApprovalNotifyEvent, PushEventKey> = {
+  step_pending: "approval.step_pending",
+  delegated: "approval.delegated",
+  approved: "approval.result",
+  rejected: "approval.result",
+  remind: "approval.remind",
+};
 
 interface NotifySettingRow {
   emailEnabled: boolean;
   alimtalkEnabled: boolean;
+  /** 모바일 푸시(M1). 컬럼은 마이그 109 에서 추가 — 미적용 DB 에서도 죽지 않게 기본 on 폴백. */
+  pushEnabled: boolean;
   remindAfterHours: number | null;
 }
 
@@ -27,14 +39,15 @@ function appLink(path = "/approval"): string {
 /** 이벤트별 채널 설정 조회(미설정 이벤트는 둘 다 on 으로 간주). */
 export async function getNotifySetting(event: ApprovalNotifyEvent): Promise<NotifySettingRow> {
   const db = await getDb();
-  const rows = rowsToObjects(
-    await db.exec(`SELECT email_enabled, alimtalk_enabled, remind_after_hours FROM approval_notify_settings WHERE event = $1`, [event])
-  );
+  // push_enabled 는 마이그 109 에서 추가된 컬럼이라 `SELECT *` 로 읽는다
+  // (미적용 DB 에서 컬럼 미존재로 쿼리 전체가 깨지지 않게).
+  const rows = rowsToObjects(await db.exec(`SELECT * FROM approval_notify_settings WHERE event = $1`, [event]));
   const r = rows[0];
-  if (!r) return { emailEnabled: true, alimtalkEnabled: true, remindAfterHours: null };
+  if (!r) return { emailEnabled: true, alimtalkEnabled: true, pushEnabled: true, remindAfterHours: null };
   return {
     emailEnabled: Number(r.email_enabled ?? 1) === 1,
     alimtalkEnabled: Number(r.alimtalk_enabled ?? 1) === 1,
+    pushEnabled: Number(r.push_enabled ?? 1) === 1,
     remindAfterHours: r.remind_after_hours != null ? Number(r.remind_after_hours) : null,
   };
 }
@@ -162,6 +175,8 @@ async function deliver(params: {
   contact: Contact | undefined;
   subject: string;
   text: string;
+  /** 푸시 본문(짧게 — 보통 문서 제목). 미지정 시 subject 를 쓴다. */
+  pushBody?: string;
 }): Promise<void> {
   const notifyId = await claimDedup(params.dedupKey, params.docId, params.stepId, params.event, params.userId);
   if (!notifyId) return; // 이미 발송됨
@@ -172,6 +187,16 @@ async function deliver(params: {
   }
   if (setting.alimtalkEnabled && params.contact?.phone) {
     channels.alimtalk = await sendAlimtalk({ to: [params.contact.phone], text: params.text });
+  }
+  // 모바일 푸시(M1) — 상위에서 이미 dedup 을 선점했으므로 여기서는 dedupKey 를 넘기지 않는다.
+  if (setting.pushEnabled) {
+    channels.push = await sendPush([params.userId], {
+      event: PUSH_EVENT_BY_APPROVAL[params.event],
+      title: params.subject.replace(/^\[전자결재\]\s*/, "전자결재 · "),
+      body: params.pushBody ?? params.subject,
+      link: `/approval?docId=${params.docId}`,
+      targetRef: params.docId,
+    });
   }
   if (!Object.keys(channels).length) channels.none = { ok: false, skipped: "수신 채널·연락처 없음" };
   await finalizeLog(notifyId, channels);
@@ -254,6 +279,7 @@ export async function notifyPendingSteps(docId: string): Promise<void> {
         contact: contacts.get(userId),
         subject,
         text: `${head}\n\n제목: ${doc.title}${commonFooter(doc)}`,
+        pushBody: doc.title,
       });
     }
   } catch (err) {
@@ -321,6 +347,7 @@ export async function dispatchDueReminders(now = new Date()): Promise<RemindResu
       contact: contacts.get(userId),
       subject: `[전자결재] 미결재 알림: ${doc.title}`,
       text: `${hours}시간 이상 처리되지 않은 ${kindLabel} 결재가 있습니다.\n\n제목: ${doc.title}${commonFooter(doc)}`,
+      pushBody: doc.title,
     });
     reminded++;
   }
@@ -356,6 +383,7 @@ export async function notifyDrafterResult(docId: string, result: "approved" | "r
       contact: contacts.get(doc.drafterUserId),
       subject,
       text: `${head}\n\n제목: ${doc.title}${rejectNote}${commonFooter(doc)}`,
+      pushBody: doc.title,
     });
   } catch (err) {
     console.error("[approval-notify] notifyDrafterResult 실패", docId, err);

@@ -263,3 +263,25 @@ export async function listNotifyTargets(scope: BoardScope, deptId: string | null
   );
   return rows.map((r) => ({ name: String(r.name ?? ""), email: String(r.email) }));
 }
+
+/** 푸시 수신 대상 user_id 목록(재직 임직원). 작성자 본인은 제외한다. */
+export async function listNotifyUserIds(
+  scope: BoardScope,
+  deptId: string | null,
+  excludeUserId?: string | null
+): Promise<string[]> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT u.user_id
+         FROM employee_profiles ep
+         JOIN users u ON u.user_id = ep.user_id AND u.status = 'active'
+        WHERE ep.status = 'active'
+          ${scope === "dept" ? "AND ep.dept_id = $1" : ""}`,
+      scope === "dept" ? [deptId ?? ""] : []
+    )
+  );
+  return rows
+    .map((r) => String(r.user_id))
+    .filter((id) => id && id !== (excludeUserId ?? ""));
+}

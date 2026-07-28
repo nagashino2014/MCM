@@ -9,6 +9,7 @@ import { API_BASE_URL } from "./config";
 import { saveTokens, clearTokens, getAccessToken } from "./tokens";
 import { setUnauthorizedHandler } from "./api";
 import { kvClearAll } from "./kv";
+import { unregisterPush } from "./push";
 
 export interface AuthUser {
   id: string;
@@ -34,6 +35,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
 
   const logout = useCallback(async () => {
+    // 토큰이 아직 유효할 때 이 기기의 푸시 수신을 먼저 끊는다(로그아웃 후엔 API 호출 불가).
+    await unregisterPush();
     await clearTokens();
     // 캐시된 업무 데이터(결재·메일 목록 등)가 다음 로그인 사용자에게 보이지 않게 비운다.
     await kvClearAll();

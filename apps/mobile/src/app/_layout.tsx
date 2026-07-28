@@ -8,6 +8,7 @@ import { StatusBar } from 'expo-status-bar';
 import { LockGate } from '@/components/LockGate';
 import { ToastProvider } from '@/components/ui';
 import { AuthProvider, useAuth } from '@/lib/auth-context';
+import { usePushSetup } from '@/lib/use-push';
 import { ThemeProvider } from '@/theme/ThemeProvider';
 import { useTheme } from '@/theme/useTheme';
 
@@ -34,6 +35,8 @@ function RootNavigator() {
   const { c, dark } = useTheme();
   const segments = useSegments();
   const router = useRouter();
+
+  usePushSetup();
 
   useEffect(() => {
     if (status === 'loading') return;
@@ -74,6 +77,8 @@ function RootNavigator() {
         <Stack.Screen name="facilities" options={{ ...header, title: '사업장' }} />
         <Stack.Screen name="contacts" options={{ ...header, title: '담당자' }} />
         <Stack.Screen name="settings" options={{ ...header, title: '설정' }} />
+        <Stack.Screen name="board/[postId]" options={{ ...header, title: '공지' }} />
+        <Stack.Screen name="notifications" options={{ ...header, title: '알림 설정' }} />
       </Stack>
     </>
   );

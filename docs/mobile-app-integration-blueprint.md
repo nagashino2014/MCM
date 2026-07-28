@@ -338,7 +338,7 @@ mobile_push_log(
 | 단계 | 내용 | 완료 게이트 |
 |---|---|---|
 | **M0 기반** ✅구현완료 | 디자인 토큰·공통 컴포넌트 16종·IA(탭 재편)·데이터 계층 확장·**네이티브 모듈 일괄 도입 후 재빌드/제출**·앱 잠금 | 새 탭 구조가 실기기(iOS TestFlight)에서 뜨고, 기존 4화면 무회귀 → **재빌드 후 실기기 검증 대기** |
-| **M1 푸시** | 스키마·서버 디스패처·토큰 등록·설정 화면·딥링크·뱃지 + **게시판/결재 2개 이벤트 연결** | 실기기에서 공지 등록 → 푸시 수신 → 탭 시 해당 글 열림 |
+| **M1 푸시** ✅배포완료 | 스키마·서버 디스패처·토큰 등록·설정 화면·딥링크·뱃지 + **게시판/결재 2개 이벤트 연결** | 실기기에서 공지 등록 → 푸시 수신 → 탭 시 해당 글 열림 → **실기기 검증 대기** |
 | **M2 전자결재** | 결재함·상세·승인/반려·의견·AI요약·문서함·(단순 양식 기안) | 실기기에서 대기 문서 승인·반려 완주, 웹에 즉시 반영 |
 | **M3 메일** | 폴더·목록(스와이프/일괄)·뷰어(HtmlView)·첨부·작성/답장 | 실기기에서 수신 확인→답장 발송 완주 |
 | **M4 소통** | 공지·게시판(조회·작성·읽음) + 주소록·조직도 | 부서 게시판 작성→푸시→읽음 처리, 임직원 전화/메일 원터치 |
@@ -367,6 +367,21 @@ mobile_push_log(
 - 뱃지·목록은 폴링하지 않는다. 갱신은 포그라운드 복귀·화면 포커스·pull-to-refresh, 실시간성은 M1 푸시.
 
 **남은 확인(실기기 게이트)**: NativeWind CSS 변수(`rgb(var(--cd-*))`)의 런타임 해석과 `prefers-color-scheme` 다크 전환은 번들에 변수명이 실린 것까지만 확인했고 **실기기 화면 확인 전이다**. 어긋나도 배경이 투명해지지 않도록 `Screen` 에 style 폴백을 넣어 두었다.
+
+### 10.2 M1 구현 결과 (2026-07-28, 커밋 5962125·65e84fe, staging 배포 next:287, OTA e1dc0210)
+| 항목 | 산출물 |
+|---|---|
+| 스키마 | `109_mobile_push.sql` — mobile_push_tokens / mobile_notify_prefs / mobile_notify_quiet_hours / mobile_push_log(dedup UNIQUE). staging 적용 완료 |
+| 발송 | `lib/notify/push-expo.ts` — 수신자 필터(개인 토글·방해금지 KST) → dedup 선점 → 청크 발송 → `DeviceNotRegistered` 토큰 자동 폐기. 예외를 밖으로 던지지 않는다 |
+| API | `/api/mobile/push/register`(POST·DELETE), `/api/mobile/push/prefs`(GET·PUT) |
+| 이벤트 연결 | 게시판 POST(`notify_push` → 실제 발송, 작성자 제외) / 결재 `deliver()` 에 push 채널(기존 dedup 안에서) |
+| 앱 | `lib/push.ts`(권한·토큰·채널·뱃지·로그아웃 폐기), `lib/use-push.ts`+`deeplink.ts`(리스너+콜드스타트, 중복 이동 방지), `/board/[postId]` 상세(첨부 다운로드·공유), `/notifications` 설정(이벤트 8종·방해금지) |
+
+**M1 에서 드러난 사실**
+- `approval_notify_settings`(마이그 091, AX-P0)가 **staging 에 없다.** 109 의 ALTER 를 조건부로 바꾸고 `getNotifySetting` 을 기본값 폴백으로 만들어, 091 미적용 상태에서도 결재 푸시가 나가게 했다. 091 적용 후 109 를 재실행하면 컬럼이 붙는다.
+- **`FileSystem.downloadAsync` 는 SDK 57 에서 런타임 throw**(deprecated) → 첨부 다운로드는 `File.createDownloadTask` + Bearer 헤더.
+- **안드로이드 푸시는 FCM 서비스 계정 키를 EAS 에 등록해야 동작한다**(미등록 = iOS 만 수신). 팀 배포 확대 시점에 처리.
+- 게시글 상세 화면은 원래 M4 였으나 **푸시 도착지가 없으면 M1 게이트를 만족할 수 없어** 앞당겨 구현했다.
 
 ---
 

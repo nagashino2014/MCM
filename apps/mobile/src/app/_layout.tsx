@@ -79,6 +79,7 @@ function RootNavigator() {
         <Stack.Screen name="settings" options={{ ...header, title: '설정' }} />
         <Stack.Screen name="board/[postId]" options={{ ...header, title: '공지' }} />
         <Stack.Screen name="notifications" options={{ ...header, title: '알림 설정' }} />
+        <Stack.Screen name="approval/[docId]" options={{ ...header, title: '결재 문서' }} />
       </Stack>
     </>
   );

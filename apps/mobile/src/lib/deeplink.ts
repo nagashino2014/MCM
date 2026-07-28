@@ -13,8 +13,11 @@ export function routeForLink(link: string | null | undefined): Href | null {
   const board = /^\/board\/([^/]+)$/.exec(path);
   if (board) return { pathname: "/board/[postId]", params: { postId: board[1] } };
 
-  // 결재 — 문서 상세 화면은 M2 에서 붙는다. 그전까지는 결재 탭으로 보낸다.
-  if (path === "/approval") return "/(tabs)/approval";
+  // 결재 — 서버는 웹 딥링크 형식(/approval?docId=)으로 보낸다.
+  if (path === "/approval") {
+    const docId = new URLSearchParams(link.split("?")[1] ?? "").get("docId");
+    return docId ? { pathname: "/approval/[docId]", params: { docId } } : "/(tabs)/approval";
+  }
 
   // 메일 — 목록·뷰어는 M3.
   if (path.startsWith("/mail")) return "/(tabs)/mail";

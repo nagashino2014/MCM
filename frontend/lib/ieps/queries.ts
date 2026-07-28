@@ -1503,6 +1503,7 @@ export async function getFacilityDetail(facilityId: string): Promise<FacilityDet
         ? formatBusinessRegistrationNo(String(f.business_registration_no))
         : null,
     representativeName: f.representative_name != null ? String(f.representative_name) : null,
+    orgCategory: f.org_category != null ? String(f.org_category) : null,
     siteAddress:
       f.site_address != null
         ? isTruthyFlag(f.site_address_verbatim)

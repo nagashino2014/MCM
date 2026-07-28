@@ -511,11 +511,25 @@ export function MailComposePage() {
             <RecipientInput
               label="참조(CC)"
               labelExtra={
-                !showBcc ? (
-                  <button onClick={() => setShowBcc(true)} className="text-[11px]" style={{ color: "var(--cd-primary)" }} type="button">
-                    + 숨은 참조
+                <span className="flex items-center gap-2">
+                  {!showBcc && (
+                    <button onClick={() => setShowBcc(true)} className="text-[11px]" style={{ color: "var(--cd-primary)" }} type="button">
+                      + 숨은 참조
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="text-[11px] cd-text-faint hover:cd-error-text inline-flex items-center gap-0.5"
+                    title="참조 입력란 제거"
+                    onClick={() => {
+                      setShowCc(false);
+                      setCc("");
+                      scheduleDraftSave();
+                    }}
+                  >
+                    <X className="w-3 h-3" /> 제거
                   </button>
-                ) : undefined
+                </span>
               }
               value={cc}
               onChange={(next) => {
@@ -529,6 +543,20 @@ export function MailComposePage() {
             <RecipientInput
               label="숨은 참조(BCC)"
               hint="숨은 참조 수신자는 다른 수신자에게 표시되지 않습니다."
+              labelExtra={
+                <button
+                  type="button"
+                  className="text-[11px] cd-text-faint hover:cd-error-text inline-flex items-center gap-0.5"
+                  title="숨은 참조 입력란 제거"
+                  onClick={() => {
+                    setShowBcc(false);
+                    setBcc("");
+                    scheduleDraftSave();
+                  }}
+                >
+                  <X className="w-3 h-3" /> 제거
+                </button>
+              }
               value={bcc}
               onChange={(next) => {
                 setBcc(next);

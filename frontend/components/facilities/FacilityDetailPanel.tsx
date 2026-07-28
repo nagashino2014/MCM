@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { loadKsicMap, lookupKsicName } from "@/lib/ieps/ksic-lookup";
 import { Pencil, Save, X, MapPin, Phone, Hash, Building2, FileText, Layers, ClipboardList, Trash2, Plus, History, Upload, Tags, Briefcase, FolderTree, ArrowRight, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ORG_CATEGORIES } from "@/lib/directory-categories";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import "@/components/cdash/cdash.css";
 import type { AnnualReportSnapshot, FacilityDetail, PermitDetail, ProductOutput } from "@/lib/ieps/types-facility";
@@ -1247,11 +1248,37 @@ function FacilityContactsModal({
     resignedAt: "",
   });
 
+  // 연락처 구분(기관 유형) — 주소록 분류용 사업장 속성. 담당자별이 아니라 사업장에 한 번 지정한다.
+  const [orgCategory, setOrgCategory] = useState<string>(facility.orgCategory ?? "");
+  const [savingOrgCategory, setSavingOrgCategory] = useState(false);
+  const saveOrgCategory = async (next: string) => {
+    setOrgCategory(next);
+    if (!next) return;
+    setSavingOrgCategory(true);
+    try {
+      const res = await fetch("/api/directory/contacts", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ facilityId: facility.facilityId, orgCategory: next }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        alert(String(d?.error ?? "연락처 구분 저장에 실패했습니다."));
+      }
+    } finally {
+      setSavingOrgCategory(false);
+    }
+  };
+
   // 명함 촬영(이미지 선택) → Claude vision 파싱 → 담당자 신규 폼 프리필 (M2)
   const cardInputRef = useRef<HTMLInputElement>(null);
   const [cardParsing, setCardParsing] = useState(false);
   const handleCardFile = async (file: File | null) => {
     if (!file) return;
+    if (!orgCategory) {
+      alert("먼저 이 사업장의 '연락처 구분'을 선택해 주세요. 주소록에서 기관 유형별로 분류하는 데 사용됩니다.");
+      return;
+    }
     setCardParsing(true);
     try {
       const fd = new FormData();
@@ -1467,6 +1494,8 @@ function FacilityContactsModal({
   const savePerson = async () => {
     const name = personForm.personName.trim();
     if (!name) return alert("담당자 성명을 입력하세요.");
+    // 주소록 분류를 위해 사업장의 연락처 구분을 먼저 지정하게 한다(담당자 공통 속성).
+    if (!orgCategory) return alert("먼저 이 사업장의 '연락처 구분'을 선택해 주세요.");
     const now = new Date().toISOString();
     const nextPerson: FacilityContactPerson = {
       id: selectedPersonId ?? -Date.now(),
@@ -1528,6 +1557,30 @@ function FacilityContactsModal({
             <p className="text-xs cd-text-faint mt-1">
               {formatCompanyName(facility.companyName)} · 기존 파싱 전화번호: {facility.phoneNumber ?? "—"}
             </p>
+            {/* 연락처 구분 — 사업장 속성(주소록 분류). 담당자별로 따로 지정하지 않는다. */}
+            <div className="flex items-center gap-2 mt-2">
+              <span className="text-xs font-bold cd-text-muted">연락처 구분</span>
+              <select
+                className="cd-select"
+                style={{ width: 150 }}
+                disabled={!canEdit || savingOrgCategory}
+                value={orgCategory}
+                onChange={(e) => saveOrgCategory(e.target.value)}
+              >
+                <option value="">선택 안 함</option>
+                {ORG_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+              {!orgCategory && (
+                <span className="text-[11px] text-[color:var(--cd-warning,#FFAE1F)]">
+                  주소록 분류를 위해 지정해 주세요
+                </span>
+              )}
+              {savingOrgCategory && <span className="text-[11px] cd-text-faint">저장 중…</span>}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             {canEdit && (

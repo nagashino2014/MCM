@@ -4,8 +4,11 @@
  * (주민번호·생일·주소·메모 등 인사 민감정보는 포함하지 않는다 — 전 직원 열람 화면).
  * 설계: docs/groupware-ux-overhaul-blueprint.md §7 (메일 자동완성·결재선과 공유).
  */
-import { getDb, rowsToObjects } from "@/lib/db";
+import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { MAIL_DOMAIN } from "@/lib/mail/mailbox";
+import type { OrgCategory } from "@/lib/directory-categories";
+
+export { ORG_CATEGORIES, isOrgCategory, type OrgCategory } from "@/lib/directory-categories";
 
 export interface DirectoryDepartment {
   deptId: string;
@@ -50,7 +53,8 @@ export async function listDirectory(): Promise<{ departments: DirectoryDepartmen
          LEFT JOIN users u ON u.user_id = e.user_id
          LEFT JOIN mailboxes mb ON mb.user_id = e.user_id AND mb.status = 'active'
         WHERE e.status = 'active'
-        ORDER BY d.display_order ASC NULLS LAST, p.rank_order ASC NULLS LAST, e.name ASC`
+        -- 직급 서열은 rank_order 가 클수록 상위(사원 30 … 대표이사 100) → 부서 내 상위 직급이 먼저.
+        ORDER BY d.display_order ASC NULLS LAST, p.rank_order DESC NULLS LAST, e.name ASC`
     )
   );
   return {
@@ -85,6 +89,57 @@ export async function listDirectory(): Promise<{ departments: DirectoryDepartmen
   };
 }
 
+/** 사업장의 연락처 구분 설정(같은 사업장 담당자 전원에게 함께 적용된다). */
+export async function setFacilityOrgCategory(facilityId: string, category: OrgCategory): Promise<void> {
+  await withDbWrite(async (db) => {
+    await db.run(`UPDATE facilities SET org_category = $2, updated_at = $3 WHERE facility_id = $1`, [
+      facilityId,
+      category,
+      new Date().toISOString(),
+    ]);
+  });
+}
+
+/** 주소록에서의 담당자 개별 수정(사업장 상세 편집과 별개 경로). */
+export async function updateContactPerson(
+  id: number,
+  patch: {
+    personName?: string;
+    title?: string | null;
+    officePhone?: string | null;
+    mobilePhone?: string | null;
+    email?: string | null;
+    duties?: string | null;
+    status?: string;
+  }
+): Promise<void> {
+  const sets: string[] = [];
+  const params: unknown[] = [id];
+  const put = (col: string, val: unknown) => {
+    params.push(val);
+    sets.push(`${col} = $${params.length}`);
+  };
+  if (patch.personName != null) put("person_name", patch.personName.trim());
+  if (patch.title !== undefined) put("title", patch.title);
+  if (patch.officePhone !== undefined) put("office_phone", patch.officePhone);
+  if (patch.mobilePhone !== undefined) put("mobile_phone", patch.mobilePhone);
+  if (patch.email !== undefined) put("email", patch.email);
+  if (patch.duties !== undefined) put("duties", patch.duties);
+  if (patch.status != null) put("status", patch.status);
+  if (!sets.length) return;
+  params.push(new Date().toISOString());
+  sets.push(`updated_at = $${params.length}`);
+  await withDbWrite(async (db) => {
+    await db.run(`UPDATE facility_contact_people SET ${sets.join(", ")} WHERE id = $1`, params);
+  });
+}
+
+export async function deleteContactPerson(id: number): Promise<void> {
+  await withDbWrite(async (db) => {
+    await db.run(`DELETE FROM facility_contact_people WHERE id = $1`, [id]);
+  });
+}
+
 export interface RecipientSuggestion {
   /** 표시 이름(임직원명·별칭·담당자명). */
   name: string;
@@ -116,7 +171,9 @@ export async function suggestRecipients(q: string, limit = 12): Promise<Recipien
          LEFT JOIN positions p ON p.position_id = e.position_id
         WHERE e.status = 'active'
           AND (mb.address IS NOT NULL OR COALESCE(u.email_local, '') <> '')
-          AND (LOWER(e.name) LIKE $1 OR LOWER(COALESCE(mb.address, u.email_local)) LIKE $1)
+          -- 이름·주소 외에 소속(부서)로도 찾는다("영업" 처럼 부서만 아는 경우).
+          AND (LOWER(e.name) LIKE $1 OR LOWER(COALESCE(mb.address, u.email_local)) LIKE $1
+               OR LOWER(COALESCE(d.dept_name, '')) LIKE $1)
         ORDER BY e.name ASC LIMIT $2`,
       [like, limit, MAIL_DOMAIN]
     )

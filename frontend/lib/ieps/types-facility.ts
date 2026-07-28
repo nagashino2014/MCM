@@ -109,6 +109,8 @@ export interface FacilityDetail {
   companyName: string;
   businessRegistrationNo: string | null;
   representativeName: string | null;
+  /** 주소록 연락처 구분(기관 유형) — 공공기관·민간기업 등. */
+  orgCategory?: string | null;
   siteAddress: string | null;
   additionalSiteAddresses: string[];
   phoneNumber: string | null;

@@ -485,6 +485,8 @@ export interface SalesContact {
   duties: string | null;
   status: string; // active | inactive
   deptType: string | null; // contract(계약) | env(환경)
+  /** 연락처 구분(기관 유형) — 소속 사업장 속성(공공기관·민간기업 등). */
+  orgCategory: string | null;
   appointedAt: string | null;
   transferredAt: string | null;
   resignedAt: string | null;
@@ -517,7 +519,7 @@ export async function listSalesContacts(
   const engWhere = engConds.length ? `WHERE (${engConds.join(" OR ")})` : "";
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT p.id, p.facility_id, f.company_name AS facility_name,
+      `SELECT p.id, p.facility_id, f.company_name AS facility_name, f.org_category,
               p.department_id, d.department_name,
               p.person_name, p.title, p.office_phone, p.mobile_phone, p.email,
               p.duties, p.status, p.dept_type,
@@ -544,6 +546,7 @@ export async function listSalesContacts(
     duties: text(r.duties),
     status: String(r.status ?? "active"),
     deptType: text(r.dept_type),
+    orgCategory: text(r.org_category),
     appointedAt: text(r.appointed_at),
     transferredAt: text(r.transferred_at),
     resignedAt: text(r.resigned_at),

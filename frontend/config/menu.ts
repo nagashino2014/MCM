@@ -81,7 +81,6 @@ export const MENU_ITEMS: MenuItem[] = [
     title: "공지·게시판",
     href: "/board",
     icon: Megaphone,
-    comingSoon: true, // G6-B 추후 구현
     group: "collab",
   },
   {

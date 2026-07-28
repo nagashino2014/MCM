@@ -45,6 +45,12 @@ interface ExternalContact {
 const DEPT_TYPE_LABEL: Record<string, string> = { contract: "계약", env: "환경" };
 const UNCATEGORIZED = "__none__";
 
+/** 메일 쓰기 딥링크용 수신자 토큰 — "이름 직함 <주소>, " 형태로 넘겨야 작성 화면에서 칩으로 잡힌다. */
+function mailToken(name: string, title: string | null | undefined, address: string): string {
+  const label = [name, title].filter(Boolean).join(" ");
+  return `${label} <${address}>, `;
+}
+
 export function DirectoryBoard() {
   const { theme } = useCdashTheme();
   const { toast } = useCdToast();
@@ -259,7 +265,7 @@ export function DirectoryBoard() {
                         <ContactRow icon={<Mail className="w-3.5 h-3.5" />}>
                           {p.companyEmail ? (
                             <Link
-                              href={`/mail/compose?to=${encodeURIComponent(p.companyEmail)}`}
+                              href={`/mail/compose?to=${encodeURIComponent(mailToken(p.name, p.positionName, p.companyEmail))}`}
                               className="cd-text-primary hover:underline truncate"
                               title={`${p.name} 님에게 메일 쓰기`}
                             >
@@ -370,7 +376,10 @@ export function DirectoryBoard() {
                         <td className="cd-text-muted tabular-nums whitespace-nowrap">{c.officePhone ?? "-"}</td>
                         <td>
                           {c.email ? (
-                            <Link href={`/mail/compose?to=${encodeURIComponent(c.email)}`} className="cd-text-primary hover:underline">
+                            <Link
+                              href={`/mail/compose?to=${encodeURIComponent(mailToken(c.personName, c.title, c.email))}`}
+                              className="cd-text-primary hover:underline"
+                            >
                               {c.email}
                             </Link>
                           ) : (

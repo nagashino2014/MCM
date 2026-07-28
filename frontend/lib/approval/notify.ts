@@ -41,7 +41,13 @@ export async function getNotifySetting(event: ApprovalNotifyEvent): Promise<Noti
   const db = await getDb();
   // push_enabled 는 마이그 109 에서 추가된 컬럼이라 `SELECT *` 로 읽는다
   // (미적용 DB 에서 컬럼 미존재로 쿼리 전체가 깨지지 않게).
-  const rows = rowsToObjects(await db.exec(`SELECT * FROM approval_notify_settings WHERE event = $1`, [event]));
+  // 테이블 자체가 없는 환경도 있다(091 미적용 staging 실측) → 그때도 기본값으로 동작시킨다.
+  let rows: Record<string, unknown>[] = [];
+  try {
+    rows = rowsToObjects(await db.exec(`SELECT * FROM approval_notify_settings WHERE event = $1`, [event]));
+  } catch {
+    return { emailEnabled: true, alimtalkEnabled: true, pushEnabled: true, remindAfterHours: null };
+  }
   const r = rows[0];
   if (!r) return { emailEnabled: true, alimtalkEnabled: true, pushEnabled: true, remindAfterHours: null };
   return {

@@ -58,4 +58,12 @@ CREATE INDEX IF NOT EXISTS idx_mobile_push_log_user ON mobile_push_log(user_id, 
 CREATE INDEX IF NOT EXISTS idx_mobile_push_log_event ON mobile_push_log(event_key, created_at DESC);
 
 -- 결재 알림 채널에 push 추가(기존 email/alimtalk 과 나란히). 기본 on.
-ALTER TABLE approval_notify_settings ADD COLUMN IF NOT EXISTS push_enabled integer NOT NULL DEFAULT 1;
+-- ⚠ approval_notify_settings 는 마이그 091(AX-P0)에서 생기는데 환경에 따라 아직 없을 수 있다
+--   (staging 실측 2026-07-28). 없으면 조용히 건너뛰고, 091 적용 시 이 파일을 다시 실행하면 된다.
+--   컬럼이 없어도 앱은 동작한다 — getNotifySetting 이 push_enabled 기본 on 으로 폴백한다.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'approval_notify_settings') THEN
+    ALTER TABLE approval_notify_settings ADD COLUMN IF NOT EXISTS push_enabled integer NOT NULL DEFAULT 1;
+  END IF;
+END $$;

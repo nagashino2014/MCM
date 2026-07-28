@@ -32,6 +32,7 @@ interface BoardPost {
  */
 export default function HomeScreen() {
   const { user } = useAuth();
+  const { c } = useTheme();
   const router = useRouter();
   const badges = useNavBadges();
 
@@ -128,9 +129,10 @@ export default function HomeScreen() {
         ) : (
           <View className="gap-2">
             {posts.slice(0, 3).map((p, i) => (
-              <View
+              <Pressable
                 key={p.postId}
-                className={i === 0 ? '' : 'border-t border-cd-border pt-2'}>
+                onPress={() => router.push(`/board/${p.postId}`)}
+                className={`active:opacity-60 ${i === 0 ? '' : 'border-t border-cd-border pt-2'}`}>
                 <View className="flex-row items-center gap-1.5">
                   {p.pinnedNow ? <Badge label="고정" tone="primary" /> : null}
                   <Text
@@ -140,11 +142,12 @@ export default function HomeScreen() {
                     }`}>
                     {p.title}
                   </Text>
+                  <Ionicons name="chevron-forward" size={14} color={c.faint} />
                 </View>
                 <Text className="text-[11px] text-cd-faint">
                   {p.authorName ?? '-'} · {fmtDate(p.createdAt)}
                 </Text>
-              </View>
+              </Pressable>
             ))}
           </View>
         )}

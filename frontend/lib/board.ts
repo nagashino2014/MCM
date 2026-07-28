@@ -264,23 +264,33 @@ export async function listNotifyTargets(scope: BoardScope, deptId: string | null
   return rows.map((r) => ({ name: String(r.name ?? ""), email: String(r.email) }));
 }
 
-/** 푸시 수신 대상 user_id 목록(재직 임직원). 작성자 본인은 제외한다. */
+/**
+ * 푸시 수신 대상 user_id 목록. 작성자 본인은 제외한다.
+ *
+ * ⚠ 전사 공지는 `users` 기준으로 뽑는다 — employee_profiles 는 LEFT JOIN.
+ *   관리자 가상계정처럼 직원 프로필이 없는 계정도 전사 공지는 받아야 하는데,
+ *   employee_profiles 를 INNER JOIN 하면 통째로 빠진다(실측: 앱 설치자가 관리자뿐이라
+ *   수신자 0명 → 발송 자체가 일어나지 않았다).
+ *   부서 게시판은 소속 판별에 dept_id 가 필요하므로 프로필이 있는 사람만 대상이다.
+ */
 export async function listNotifyUserIds(
   scope: BoardScope,
   deptId: string | null,
   excludeUserId?: string | null
 ): Promise<string[]> {
   const db = await getDb();
-  const rows = rowsToObjects(
-    await db.exec(
-      `SELECT u.user_id
-         FROM employee_profiles ep
-         JOIN users u ON u.user_id = ep.user_id AND u.status = 'active'
-        WHERE ep.status = 'active'
-          ${scope === "dept" ? "AND ep.dept_id = $1" : ""}`,
-      scope === "dept" ? [deptId ?? ""] : []
-    )
-  );
+  const sql =
+    scope === "dept"
+      ? `SELECT u.user_id
+           FROM employee_profiles ep
+           JOIN users u ON u.user_id = ep.user_id AND u.status = 'active'
+          WHERE ep.status = 'active' AND ep.dept_id = $1`
+      : `SELECT u.user_id
+           FROM users u
+           LEFT JOIN employee_profiles ep ON ep.user_id = u.user_id
+          WHERE u.status = 'active'
+            AND (ep.employee_id IS NULL OR ep.status = 'active')`;
+  const rows = rowsToObjects(await db.exec(sql, scope === "dept" ? [deptId ?? ""] : []));
   return rows
     .map((r) => String(r.user_id))
     .filter((id) => id && id !== (excludeUserId ?? ""));

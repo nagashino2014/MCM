@@ -213,10 +213,17 @@ export interface PushPayload {
 export async function sendPush(userIds: string[], payload: PushPayload): Promise<ChannelSendResult> {
   try {
     const allowed = await filterRecipients(userIds, payload.event);
-    if (!allowed.length) return { ok: false, skipped: "수신 대상 없음(설정·방해금지)" };
+    if (!allowed.length) {
+      // 조용히 끝나면 "왜 안 왔지"를 추적할 수 없다 — 스킵 사유는 서버 로그에 남긴다.
+      console.warn(`[push] ${payload.event}: 수신 대상 0명(후보 ${userIds.length}명, 설정·방해금지 필터)`);
+      return { ok: false, skipped: "수신 대상 없음(설정·방해금지)" };
+    }
 
     const tokens = await listTokens(allowed);
-    if (!tokens.length) return { ok: false, skipped: "등록된 기기 없음" };
+    if (!tokens.length) {
+      console.warn(`[push] ${payload.event}: 대상 ${allowed.length}명 중 등록된 기기 없음`);
+      return { ok: false, skipped: "등록된 기기 없음" };
+    }
 
     // 수신자 단위로 선점 — 같은 이벤트를 두 번 호출해도 사람당 1회만 나간다.
     const claims = new Map<string, string>(); // userId → pushId

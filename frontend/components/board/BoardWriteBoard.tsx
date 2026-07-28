@@ -101,7 +101,7 @@ export function BoardWriteBoard() {
       if (Array.isArray(d.attachFailed) && d.attachFailed.length) {
         toast(`첨부 ${d.attachFailed.length}건은 저장하지 못했습니다(${d.attachFailed.join(", ")}). 글은 등록됐으니 수정에서 다시 올려주세요.`, "warn");
       }
-      if (d.pushQueued) toast("모바일 푸시 알림은 준비 중입니다 — 메일 알림만 발송됩니다.", "info");
+      if (d.pushQueued) toast("모바일 앱 푸시 알림을 발송했습니다.", "info");
       router.push(`/board?scope=${scope}`);
     } finally {
       setSaving(false);
@@ -250,7 +250,7 @@ export function BoardWriteBoard() {
             <CdCheckbox label="메일 알림 발송" checked={notifyEmail} onChange={(e) => setNotifyEmail(e.target.checked)} />
             <CdCheckbox label="모바일 앱 푸시 알림" checked={notifyPush} onChange={(e) => setNotifyPush(e.target.checked)} />
             <p className="text-[11px] cd-text-faint">
-              {scope === "company" ? "전 임직원" : "소속 부서원"}에게 발송됩니다. 푸시 알림은 앱 연동 준비 중이라 지금은 저장만 됩니다.
+              {scope === "company" ? "전 임직원" : "소속 부서원"}에게 발송됩니다(작성자 본인 제외). 푸시는 MCM 앱에서 알림을 켠 사람에게만 갑니다.
             </p>
           </section>
         </div>

@@ -8,6 +8,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "mcm",
     "userInterfaceStyle": "automatic",
+    "platforms": ["ios", "android"],
     "ios": {
       "icon": "./assets/expo.icon",
       "bundleIdentifier": "app.koensain.mcm",

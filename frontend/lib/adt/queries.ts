@@ -67,11 +67,12 @@ export async function listWeekStarts(limit = 26): Promise<string[]> {
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT DISTINCT week_start FROM attendance_weekly ORDER BY week_start DESC LIMIT $1`,
+      `SELECT DISTINCT to_char(week_start, 'YYYY-MM-DD') AS week_start
+         FROM attendance_weekly ORDER BY week_start DESC LIMIT $1`,
       [limit]
     )
   );
-  return rows.map((r) => String(r.week_start).slice(0, 10));
+  return rows.map((r) => String(r.week_start));
 }
 
 /** 지정 주의 직원별 초과근무 요약. */
@@ -79,7 +80,7 @@ export async function listWeekly(weekStart: string): Promise<WeeklyRow[]> {
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT w.adt_emp_no, w.week_start, w.employee_id, w.emp_name,
+      `SELECT w.adt_emp_no, to_char(w.week_start, 'YYYY-MM-DD') AS week_start, w.employee_id, w.emp_name,
               e.name AS emp_profile_name, e.photo_public_path, e.overtime_excluded, d.dept_name, p.position_name,
               w.worked_minutes, w.overtime_minutes, w.overtime_night_minutes, w.overtime_day_minutes,
               w.excess_minutes, w.night_minutes, w.days_worked, w.over_limit
@@ -88,13 +89,14 @@ export async function listWeekly(weekStart: string): Promise<WeeklyRow[]> {
          LEFT JOIN departments d ON d.dept_id = e.dept_id
          LEFT JOIN positions p ON p.position_id = e.position_id
         WHERE w.week_start = $1::date
+          AND NOT EXISTS (SELECT 1 FROM attendance_ignored_emp g WHERE g.adt_emp_no = w.adt_emp_no)
         ORDER BY COALESCE(e.overtime_excluded, false), w.overtime_minutes DESC, w.excess_minutes DESC, w.adt_emp_no`,
       [weekStart]
     )
   );
   return rows.map((r) => ({
     adtEmpNo: String(r.adt_emp_no),
-    weekStart: String(r.week_start).slice(0, 10),
+    weekStart: String(r.week_start),
     employeeId: r.employee_id != null ? String(r.employee_id) : null,
     name: (r.emp_profile_name ?? r.emp_name) != null ? String(r.emp_profile_name ?? r.emp_name) : null,
     deptName: r.dept_name != null ? String(r.dept_name) : null,
@@ -117,7 +119,9 @@ export async function listDailyForWeek(adtEmpNo: string, weekStart: string): Pro
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT work_date, employee_id, emp_name, dept_snapshot, in_at, out_at,
+      `SELECT to_char(work_date, 'YYYY-MM-DD') AS work_date, employee_id, emp_name, dept_snapshot,
+              to_char(in_at AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD"T"HH24:MI:SS') AS in_at,
+              to_char(out_at AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD"T"HH24:MI:SS') AS out_at,
               present_minutes, break_minutes, worked_minutes, night_minutes,
               late_minutes, early_minutes, is_leave_day, vendor_over_raw, vendor_night_raw, source
          FROM attendance_daily
@@ -131,7 +135,7 @@ export async function listDailyForWeek(adtEmpNo: string, weekStart: string): Pro
 
 function mapDaily(r: Record<string, unknown>): DailyRow {
   return {
-    workDate: String(r.work_date).slice(0, 10),
+    workDate: String(r.work_date),
     employeeId: r.employee_id != null ? String(r.employee_id) : null,
     empName: r.emp_name != null ? String(r.emp_name) : null,
     deptSnapshot: r.dept_snapshot != null ? String(r.dept_snapshot) : null,
@@ -159,9 +163,10 @@ export async function listUnmatched(): Promise<UnmatchedRow[]> {
               MAX(emp_name) AS emp_name,
               MAX(dept_snapshot) AS dept_snapshot,
               COUNT(*) AS days,
-              MAX(work_date) AS last_date
-         FROM attendance_daily
+              to_char(MAX(work_date), 'YYYY-MM-DD') AS last_date
+         FROM attendance_daily d
         WHERE employee_id IS NULL
+          AND NOT EXISTS (SELECT 1 FROM attendance_ignored_emp g WHERE g.adt_emp_no = d.adt_emp_no)
         GROUP BY adt_emp_no
         ORDER BY MAX(work_date) DESC`
     )
@@ -171,7 +176,7 @@ export async function listUnmatched(): Promise<UnmatchedRow[]> {
     empName: r.emp_name != null ? String(r.emp_name) : null,
     deptSnapshot: r.dept_snapshot != null ? String(r.dept_snapshot) : null,
     days: Number(r.days ?? 0),
-    lastDate: String(r.last_date).slice(0, 10),
+    lastDate: String(r.last_date),
   }));
 }
 
@@ -195,6 +200,51 @@ export async function listMappableEmployees(): Promise<MappableEmployee[]> {
     deptName: r.dept_name != null ? String(r.dept_name) : null,
     overtimeExcluded: r.overtime_excluded === true || r.overtime_excluded === "t",
   }));
+}
+
+export interface IgnoredEmp {
+  adtEmpNo: string;
+  label: string | null;
+  reason: string | null;
+  createdAt: string;
+}
+
+/** 근태 관리대상 아님(퇴사자·비직원) 목록. */
+export async function listIgnoredEmps(): Promise<IgnoredEmp[]> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT adt_emp_no, label, reason, to_char(created_at AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD') AS created_at
+         FROM attendance_ignored_emp ORDER BY adt_emp_no`
+    )
+  );
+  return rows.map((r) => ({
+    adtEmpNo: String(r.adt_emp_no),
+    label: r.label != null ? String(r.label) : null,
+    reason: r.reason != null ? String(r.reason) : null,
+    createdAt: String(r.created_at),
+  }));
+}
+
+/** 관리대상 아님 지정(멱등). label 은 수신 성명 스냅샷. */
+export async function ignoreAdtEmpNo(adtEmpNo: string, opts: { label?: string | null; reason?: string | null; actorUserId?: string | null } = {}): Promise<void> {
+  const no = String(adtEmpNo).trim();
+  if (!no) throw new Error("ADT 사번이 비어 있습니다.");
+  await withDbWrite(async (db) => {
+    await db.run(
+      `INSERT INTO attendance_ignored_emp (adt_emp_no, label, reason, created_by)
+       VALUES ($1,$2,$3,$4)
+       ON CONFLICT (adt_emp_no) DO UPDATE SET label = EXCLUDED.label, reason = EXCLUDED.reason`,
+      [no, opts.label ?? null, opts.reason ?? null, opts.actorUserId ?? null]
+    );
+  });
+}
+
+/** 관리대상 아님 해제(다시 매핑 대상으로). */
+export async function unignoreAdtEmpNo(adtEmpNo: string): Promise<void> {
+  await withDbWrite(async (db) => {
+    await db.run(`DELETE FROM attendance_ignored_emp WHERE adt_emp_no = $1`, [String(adtEmpNo).trim()]);
+  });
 }
 
 /** 초과근무 산정 제외(특수관계인·임원) 지정/해제. */

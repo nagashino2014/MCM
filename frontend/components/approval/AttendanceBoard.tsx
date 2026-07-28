@@ -17,13 +17,14 @@ import {
   TriangleAlert,
   UploadCloud,
   UserRoundCheck,
+  UserRoundX,
 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
 import { EmployeeAvatar } from "@/components/ui/EmployeeAvatar";
 import type { AttendanceSettings } from "@/lib/adt/types";
-import type { DailyRow, MappableEmployee, UnmatchedRow, WeeklyRow } from "@/lib/adt/queries";
+import type { DailyRow, IgnoredEmp, MappableEmployee, UnmatchedRow, WeeklyRow } from "@/lib/adt/queries";
 import "@/components/cdash/cdash.css";
 
 /* ---------- 표시 헬퍼 ---------- */
@@ -270,6 +271,7 @@ const dailyGrid = { display: "grid", gridTemplateColumns: "1.2fr 0.9fr 0.9fr 1fr
 function MappingPanel({ onCount }: { onCount: (n: number) => void }) {
   const [unmatched, setUnmatched] = useState<UnmatchedRow[]>([]);
   const [employees, setEmployees] = useState<MappableEmployee[]>([]);
+  const [ignored, setIgnored] = useState<IgnoredEmp[]>([]);
   const [sel, setSel] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -281,6 +283,7 @@ function MappingPanel({ onCount }: { onCount: (n: number) => void }) {
     if (res.ok) {
       setUnmatched(data.unmatched ?? []);
       setEmployees(data.employees ?? []);
+      setIgnored(data.ignored ?? []);
       onCount((data.unmatched ?? []).length);
     }
     setLoading(false);
@@ -308,6 +311,25 @@ function MappingPanel({ onCount }: { onCount: (n: number) => void }) {
     }
   };
 
+  const post = async (payload: unknown, key: string) => {
+    setBusy(key);
+    try {
+      const res = await fetch("/api/approval/attendance", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      if (!res.ok) throw new Error((await res.json())?.error ?? "처리 실패");
+      await load();
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const doIgnore = async (u: UnmatchedRow) => {
+    if (!confirm(`${u.adtEmpNo}${u.empName ? ` (${u.empName})` : ""} 를 근태 관리대상에서 제외할까요?\n퇴사자·비직원 출입자에 사용합니다. 출입 기록 자체는 보관되며, 리포트에서만 빠집니다.`)) return;
+    const reason = prompt("사유(선택) — 예: 퇴사, 협력사 출입", "") ?? "";
+    await post({ ignore: { adtEmpNo: u.adtEmpNo, label: u.empName, reason: reason || null } }, u.adtEmpNo);
+  };
+
   const toggleExclude = async (e: MappableEmployee) => {
     setBusy(e.employeeId);
     try {
@@ -326,7 +348,9 @@ function MappingPanel({ onCount }: { onCount: (n: number) => void }) {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-[13px] cd-text-muted">
-        ADT 컨트롤러 사원번호(e_idno)가 앱의 직원과 자동으로 연결되지 않은 항목입니다. 아래에서 직원을 지정하면 즉시 이름이 반영되고, 다음 인제스트 주기에 휴가일 판정까지 정밀 재산정됩니다.
+        ADT 컨트롤러 사원번호(e_idno)가 앱의 직원과 자동으로 연결되지 않은 항목입니다. 직원을 지정하면 즉시 이름이 반영되고, 다음 인제스트 주기에 휴가일 판정까지 정밀 재산정됩니다.
+        <br />
+        퇴사자·비직원 출입자는 <b>관리대상 아님</b>으로 지정하세요 — 출입 기록은 보관되고 근태 리포트·집계에서만 영구 제외됩니다.
       </p>
 
       {loading ? (
@@ -359,13 +383,46 @@ function MappingPanel({ onCount }: { onCount: (n: number) => void }) {
                   </option>
                 ))}
               </select>
-              <span className="text-center">
+              <span className="flex items-center justify-center gap-1.5">
                 <button type="button" disabled={busy === u.adtEmpNo} onClick={() => doMap(u.adtEmpNo)} className="cd-btn cd-btn-primary rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-50">
                   <Link2 className="w-3.5 h-3.5 inline" /> 매핑
+                </button>
+                <button
+                  type="button"
+                  disabled={busy === u.adtEmpNo}
+                  onClick={() => doIgnore(u)}
+                  className="cd-btn rounded-lg border cd-border-c px-2 py-1.5 text-xs font-semibold cd-text-faint hover:cd-tint-primary disabled:opacity-50"
+                  title="퇴사자·비직원 — 근태 관리대상에서 영구 제외"
+                >
+                  <UserRoundX className="w-3.5 h-3.5 inline" /> 관리대상 아님
                 </button>
               </span>
             </div>
           ))}
+        </div>
+      )}
+
+      {ignored.length > 0 && (
+        <div className="rounded-2xl border cd-border-c p-3">
+          <div className="text-[11px] font-bold cd-text-faint mb-2">관리대상 아님 ({ignored.length}) — 퇴사자·비직원 출입자. 해제하면 다시 매핑 목록에 나타납니다</div>
+          <div className="flex flex-wrap gap-1.5">
+            {ignored.map((g) => (
+              <span key={g.adtEmpNo} className="inline-flex items-center gap-1.5 rounded-lg border cd-border-c px-2 py-1 text-[11.5px] opacity-70">
+                <UserRoundX className="w-3.5 h-3.5 cd-text-faint" />
+                <span className="cd-text font-medium">{g.label ?? "-"}</span>
+                <span className="cd-text-faint font-mono">{g.adtEmpNo}</span>
+                {g.reason && <span className="cd-text-faint">· {g.reason}</span>}
+                <button
+                  type="button"
+                  disabled={busy === g.adtEmpNo}
+                  onClick={() => post({ unignore: { adtEmpNo: g.adtEmpNo } }, g.adtEmpNo)}
+                  className="ml-1 rounded px-1.5 py-0.5 text-[10px] font-bold border cd-border-c cd-text-faint hover:cd-tint-primary disabled:opacity-50"
+                >
+                  해제
+                </button>
+              </span>
+            ))}
+          </div>
         </div>
       )}
 
@@ -395,7 +452,7 @@ function MappingPanel({ onCount }: { onCount: (n: number) => void }) {
   );
 }
 
-const mapGrid = { display: "grid", gridTemplateColumns: "minmax(0,1.8fr) 0.8fr minmax(0,2fr) 0.9fr", gap: "8px" } as const;
+const mapGrid = { display: "grid", gridTemplateColumns: "minmax(0,1.6fr) 0.7fr minmax(0,1.8fr) 1.6fr", gap: "8px" } as const;
 
 /* ================= 산정 정책 ================= */
 function SettingsPanel() {

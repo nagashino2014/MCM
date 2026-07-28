@@ -75,6 +75,7 @@ export type AuditAction =
   | "adt_attendance_settings"
   | "adt_attendance_upload"
   | "adt_attendance_exclude"
+  | "adt_attendance_ignore"
   | "approval_notify_settings_update"
   | "approval_ai_summary"
   | "approval_policy_update"

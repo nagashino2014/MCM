@@ -3,7 +3,9 @@ import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import {
   getAttendanceSettings,
+  ignoreAdtEmpNo,
   listDailyForWeek,
+  listIgnoredEmps,
   listMappableEmployees,
   listUnmatched,
   listWeekStarts,
@@ -11,6 +13,7 @@ import {
   mapAdtEmpNo,
   saveAttendanceSettings,
   setOvertimeExcluded,
+  unignoreAdtEmpNo,
   unmapAdtEmpNo,
 } from "@/lib/adt/queries";
 import type { AttendanceSettings } from "@/lib/adt/types";
@@ -28,7 +31,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ settings: await getAttendanceSettings() });
     }
     if (sp.get("unmatched") === "1") {
-      return NextResponse.json({ unmatched: await listUnmatched(), employees: await listMappableEmployees() });
+      return NextResponse.json({
+        unmatched: await listUnmatched(),
+        employees: await listMappableEmployees(),
+        ignored: await listIgnoredEmps(),
+      });
     }
     if (sp.get("employees") === "1") {
       return NextResponse.json({ employees: await listMappableEmployees() });
@@ -50,6 +57,8 @@ interface PostBody {
   map?: { employeeId: string; adtEmpNo: string };
   unmap?: { employeeId: string };
   exclude?: { employeeId: string; excluded: boolean };
+  ignore?: { adtEmpNo: string; label?: string | null; reason?: string | null };
+  unignore?: { adtEmpNo: string };
   settings?: Partial<AttendanceSettings>;
 }
 
@@ -69,6 +78,16 @@ export async function POST(req: NextRequest) {
     if (body.unmap?.employeeId) {
       await unmapAdtEmpNo(body.unmap.employeeId);
       await recordAuditLog({ actorUserId: actor.userId, action: "adt_attendance_map", targetTable: "employee_profiles", targetId: body.unmap.employeeId, after: { adtEmpNo: null } });
+      return NextResponse.json({ ok: true });
+    }
+    if (body.ignore?.adtEmpNo) {
+      await ignoreAdtEmpNo(body.ignore.adtEmpNo, { label: body.ignore.label ?? null, reason: body.ignore.reason ?? null, actorUserId: actor.userId });
+      await recordAuditLog({ actorUserId: actor.userId, action: "adt_attendance_ignore", targetTable: "attendance_ignored_emp", targetId: body.ignore.adtEmpNo, after: { label: body.ignore.label ?? null, reason: body.ignore.reason ?? null } });
+      return NextResponse.json({ ok: true });
+    }
+    if (body.unignore?.adtEmpNo) {
+      await unignoreAdtEmpNo(body.unignore.adtEmpNo);
+      await recordAuditLog({ actorUserId: actor.userId, action: "adt_attendance_ignore", targetTable: "attendance_ignored_emp", targetId: body.unignore.adtEmpNo, after: { removed: true } });
       return NextResponse.json({ ok: true });
     }
     if (body.exclude?.employeeId) {

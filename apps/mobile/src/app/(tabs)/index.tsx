@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -45,24 +45,28 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   // 훅 반환 객체는 매 렌더 새로 만들어지므로 의존성에 넣지 않는다(재생성 루프 방지).
-  const reloadRef = { upcoming, pending, board, badges };
+  // 대신 ref 로 최신 참조를 들고 있는다(첫 렌더의 낡은 클로저를 잡지 않도록).
+  const latest = useRef({ upcoming, pending, board, badges });
+  latest.current = { upcoming, pending, board, badges };
+
   const reloadAll = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([
-      reloadRef.upcoming.reload(),
-      reloadRef.pending.reload(),
-      reloadRef.board.reload(),
-    ]);
-    reloadRef.badges.reload();
+    const { upcoming: u, pending: p, board: b, badges: n } = latest.current;
+    await Promise.all([u.reload(), p.reload(), b.reload()]);
+    n.reload();
     setRefreshing(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 탭으로 돌아올 때마다 뱃지를 새로 읽는다(결재·메일 처리 후 복귀).
+  // 홈으로 돌아올 때마다 위젯을 새로 읽는다.
+  // 뱃지만 갱신하면 캐시된 공지·일정이 그대로 남아 새 글이 보이지 않는다(실측).
+  // 캐시가 즉시 렌더되므로 재요청 중에도 화면이 비지 않는다.
   useFocusEffect(
     useCallback(() => {
-      reloadRef.badges.reload();
-      // eslint-disable-next-line react-hooks/exhaustive-deps
+      const { upcoming: u, pending: p, board: b, badges: n } = latest.current;
+      n.reload();
+      void b.reload();
+      void u.reload();
+      void p.reload();
     }, [])
   );
 

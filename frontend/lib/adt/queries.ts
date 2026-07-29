@@ -114,6 +114,53 @@ export async function listWeekly(weekStart: string): Promise<WeeklyRow[]> {
   }));
 }
 
+/**
+ * 본인 근태(모바일 M5) — user_id 로 최근 N주 요약을 돌려준다.
+ * 관리자 화면(listWeekly)은 주 단위로 전 직원을 보지만, 여기는 **본인 것만** 본다.
+ */
+export async function listMyWeekly(
+  userId: string,
+  limit = 8
+): Promise<{ adtEmpNo: string | null; weeks: WeeklyRow[] }> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT w.adt_emp_no, to_char(w.week_start, 'YYYY-MM-DD') AS week_start, w.employee_id, w.emp_name,
+              e.name AS emp_profile_name, e.photo_public_path, e.overtime_excluded, d.dept_name, p.position_name,
+              w.worked_minutes, w.overtime_minutes, w.overtime_night_minutes, w.overtime_day_minutes,
+              w.excess_minutes, w.night_minutes, w.days_worked, w.over_limit
+         FROM users u
+         JOIN employee_profiles e ON e.employee_id = u.employee_id
+         JOIN attendance_weekly w ON w.employee_id = e.employee_id
+         LEFT JOIN departments d ON d.dept_id = e.dept_id
+         LEFT JOIN positions p ON p.position_id = e.position_id
+        WHERE u.user_id = $1
+        ORDER BY w.week_start DESC
+        LIMIT $2`,
+      [userId, limit]
+    )
+  );
+  const weeks = rows.map((r) => ({
+    adtEmpNo: String(r.adt_emp_no),
+    weekStart: String(r.week_start),
+    employeeId: r.employee_id != null ? String(r.employee_id) : null,
+    name: (r.emp_profile_name ?? r.emp_name) != null ? String(r.emp_profile_name ?? r.emp_name) : null,
+    deptName: r.dept_name != null ? String(r.dept_name) : null,
+    positionName: r.position_name != null ? String(r.position_name) : null,
+    photoPath: r.photo_public_path != null ? String(r.photo_public_path) : null,
+    workedMinutes: Number(r.worked_minutes ?? 0),
+    overtimeMinutes: Number(r.overtime_minutes ?? 0),
+    overtimeNightMinutes: Number(r.overtime_night_minutes ?? 0),
+    overtimeDayMinutes: Number(r.overtime_day_minutes ?? 0),
+    excessMinutes: Number(r.excess_minutes ?? 0),
+    nightMinutes: Number(r.night_minutes ?? 0),
+    daysWorked: Number(r.days_worked ?? 0),
+    overLimit: r.over_limit === true || r.over_limit === "t",
+    excluded: r.overtime_excluded === true || r.overtime_excluded === "t",
+  }));
+  return { adtEmpNo: weeks[0]?.adtEmpNo ?? null, weeks };
+}
+
 /** 한 직원(adt_emp_no)의 특정 주 일별 근태(주 상세 펼침). */
 export async function listDailyForWeek(adtEmpNo: string, weekStart: string): Promise<DailyRow[]> {
   const db = await getDb();

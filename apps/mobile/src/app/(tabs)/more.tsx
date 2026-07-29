@@ -56,10 +56,16 @@ export default function MoreScreen() {
 
       <SectionTitle>근무</SectionTitle>
       <ListRow
+        icon="calendar-outline"
+        title="내 휴가"
+        subtitle="잔여 연차·신청·이력"
+        onPress={() => router.push('/leave')}
+      />
+      <ListRow
         icon="time-outline"
-        title="내 근태·휴가"
-        subtitle="다음 단계에서 열립니다"
-        value="준비 중"
+        title="내 근태"
+        subtitle="주별 근무시간·초과근무"
+        onPress={() => router.push('/attendance')}
       />
 
       <SectionTitle>기타</SectionTitle>

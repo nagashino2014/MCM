@@ -83,6 +83,9 @@ function RootNavigator() {
         <Stack.Screen name="approval/[docId]" options={{ ...header, title: '결재 문서' }} />
         <Stack.Screen name="mail/[messageId]" options={{ ...header, title: '메일' }} />
         <Stack.Screen name="mail/compose" options={{ ...header, title: '메일 쓰기' }} />
+        <Stack.Screen name="leave" options={{ ...header, title: '내 휴가' }} />
+        <Stack.Screen name="leave/request" options={{ ...header, title: '휴가 신청' }} />
+        <Stack.Screen name="attendance" options={{ ...header, title: '내 근태' }} />
       </Stack>
     </>
   );

@@ -116,8 +116,9 @@ export default function HomeScreen() {
 
       {/* 빠른 실행 — 영업 화면이 탭에서 내려갔으므로 여기서 1탭 진입을 보장한다(§5.2). */}
       <Card title="빠른 실행">
-        <View className="flex-row gap-2">
-          <Quick icon="camera" label="명함 촬영" onPress={() => router.push('/card')} />
+        <View className="flex-row gap-1">
+          <Quick icon="camera" label="명함" onPress={() => router.push('/card')} />
+          <Quick icon="airplane" label="휴가" onPress={() => router.push('/leave')} />
           <Quick icon="calendar" label="일정" onPress={() => router.push('/schedule')} />
           <Quick icon="business" label="사업장" onPress={() => router.push('/facilities')} />
           <Quick icon="people" label="담당자" onPress={() => router.push('/contacts')} />

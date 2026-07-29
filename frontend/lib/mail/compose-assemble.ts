@@ -5,17 +5,9 @@
  * 깨지거나 용량이 커지므로, 답장 인용·서명 삽입은 서버가 붙인다.
  * 웹은 지금처럼 완성된 bodyHtml 을 보내므로 이 모듈을 거치지 않는다.
  */
+import { escapeHtml, plainToHtml } from "@/lib/text-html";
 import { getMessageDetail } from "./messages";
 import { listSignatures } from "./signatures";
-
-const escapeHtml = (s: string) =>
-  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-
-/** 평문 → 최소 HTML(줄바꿈 보존). 앱이 보내는 본문은 신뢰하지 않고 이스케이프한다. */
-export function plainToHtml(plain: string): string {
-  const body = escapeHtml(plain ?? "").replace(/\r?\n/g, "<br />");
-  return `<div>${body}</div>`;
-}
 
 function fmtQuoteHeader(from: string | null, at: string | null): string {
   const when = at ? new Date(at) : null;

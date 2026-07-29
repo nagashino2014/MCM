@@ -7,6 +7,7 @@ import { getBoardAttachmentStorageKey, putBoardAttachment } from "@/lib/storage/
 import { withDbWrite } from "@/lib/db";
 import { sendNotifyEmail } from "@/lib/notify/email-ses";
 import { sendPush } from "@/lib/notify/push-expo";
+import { plainToHtml } from "@/lib/text-html";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -53,7 +54,12 @@ export async function POST(req: NextRequest) {
         scope,
         deptId: myDept,
         title,
-        bodyHtml: String(form.get("bodyHtml") ?? ""),
+        // 모바일 앱은 평문(plainBody)을 보낸다 — 서버가 이스케이프 후 줄바꿈만 살린다.
+        // 웹은 에디터가 만든 bodyHtml 을 그대로 보낸다(무변경).
+        bodyHtml:
+          typeof form.get("plainBody") === "string"
+            ? plainToHtml(String(form.get("plainBody")))
+            : String(form.get("bodyHtml") ?? ""),
         noticeFrom: text("noticeFrom"),
         noticeTo: text("noticeTo"),
         pinned: form.get("pinned") === "1",

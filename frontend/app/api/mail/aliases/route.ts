@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { AuthError, authErrorToResponse, requireAdmin } from "@/lib/auth/guards";
+import { AuthError, authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { createAlias, deleteAlias, listAliases, updateAlias } from "@/lib/mail/aliases";
 
 export const runtime = "nodejs";
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    await requireAdmin();
+    await requirePermission("mail.manage");
     return NextResponse.json({ aliases: await listAliases() });
   } catch (err) {
     return authErrorToResponse(err);
@@ -18,7 +18,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireAdmin();
+    await requirePermission("mail.manage");
     const body = (await req.json().catch(() => ({}))) as { aliasLocal?: string; kind?: "alias" | "list"; targetMailboxIds?: string[] };
     if (!body.aliasLocal?.trim()) {
       return NextResponse.json({ error: "aliasLocal 이 필요합니다." }, { status: 400 });
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
-    await requireAdmin();
+    await requirePermission("mail.manage");
     const body = (await req.json().catch(() => ({}))) as {
       aliasId?: string;
       aliasLocal?: string;
@@ -67,7 +67,7 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    await requireAdmin();
+    await requirePermission("mail.manage");
     const aliasId = req.nextUrl.searchParams.get("aliasId");
     if (!aliasId) return NextResponse.json({ error: "aliasId 가 필요합니다." }, { status: 400 });
     await deleteAlias(aliasId);

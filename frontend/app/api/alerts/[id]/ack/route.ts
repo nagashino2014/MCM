@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 
@@ -21,7 +21,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const actor = await requireEditor();
+    const actor = await requirePermission("data.review");
     const { id: idStr } = await params;
     const id = parseInt(idStr, 10);
     if (!Number.isFinite(id) || id <= 0) {

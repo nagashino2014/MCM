@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAdmin, requireSession } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission, requireSession } from "@/lib/auth/guards";
 import { getMailboxSettings, saveMailboxSettings, type MailboxSettings } from "@/lib/mail/spam";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 
@@ -32,7 +32,7 @@ export async function PATCH(req: NextRequest) {
 //      body 없이 목록 조회는 ?list=1 (totalPoolGb 포함).
 export async function PUT(req: NextRequest) {
   try {
-    await requireAdmin();
+    await requirePermission("mail.manage");
     if (req.nextUrl.searchParams.get("list") === "1") {
       const db = await getDb();
       const rows = rowsToObjects(

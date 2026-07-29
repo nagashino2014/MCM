@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { putLogoObject } from "@/lib/storage/logo-storage";
 
 export const runtime = "nodejs";
@@ -16,7 +16,7 @@ const MAX_BYTES = 2 * 1024 * 1024;
 
 export async function POST(req: NextRequest) {
   try {
-    await requireEditor();
+    await requirePermission("org.edit");
     const form = await req.formData();
     const file = form.get("file");
     if (!(file instanceof File)) {

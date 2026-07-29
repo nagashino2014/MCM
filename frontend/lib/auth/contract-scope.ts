@@ -23,7 +23,7 @@ export async function resolveContractScope(
   permissionKey: string
 ): Promise<ContractScope> {
   const access = await loadUserAccess(userId);
-  if (access.role === "admin") return { kind: "all" };
+  // role 우회 제거 — 전사 범위는 grant 의 scope=all 로만 판정한다(아래 로직이 처리).
 
   const grants = access.grants.filter(
     (g) => g.permissionKey === permissionKey && g.effect === "allow"

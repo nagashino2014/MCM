@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAuthenticated, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requireAuthenticated, requirePermission } from "@/lib/auth/guards";
 import {
   RECEIVABLE_ACTION_TYPES,
   createReceivableAction,
@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireEditor();
+    await requirePermission("billing.receivable.manage");
     const body = await req.json();
     const contractId = String(body.contractId ?? "").trim();
     const milestoneId = String(body.milestoneId ?? "").trim();

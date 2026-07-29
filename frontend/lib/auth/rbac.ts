@@ -115,8 +115,15 @@ function scopeMatches(grant: GrantRow, access: UserAccess, target: PermissionTar
 }
 
 /** access 객체 기준 동기 권한 검사. */
+/**
+ * role=admin 을 무조건 통과시키던 부트스트랩 우회.
+ * 이제 관리자 권한의 근거는 **tpl-system-admin 템플릿**(마이그 111)이다.
+ * ⚠ 비상용: 권한 배분 실수로 관리자가 잠기면 이 env 를 켜서 우회를 되살린 뒤 정리한다.
+ */
+const ADMIN_BYPASS = process.env.RBAC_ADMIN_BYPASS === "true";
+
 export function checkPermission(access: UserAccess, permissionKey: string, target: PermissionTarget = {}): boolean {
-  if (access.role === "admin") return true;
+  if (ADMIN_BYPASS && access.role === "admin") return true;
   const matching = access.grants.filter((g) => g.permissionKey === permissionKey && scopeMatches(g, access, target));
   if (matching.some((g) => g.effect === "deny")) return false;
   return matching.some((g) => g.effect === "allow");
@@ -126,4 +133,19 @@ export function checkPermission(access: UserAccess, permissionKey: string, targe
 export async function hasPermission(userId: string, permissionKey: string, target: PermissionTarget = {}): Promise<boolean> {
   const access = await loadUserAccess(userId);
   return checkPermission(access, permissionKey, target);
+}
+
+/**
+ * 해당 권한을 **전사 범위(scope=all)** 로 보유하는가.
+ *
+ * "관리자면 전 부서, 아니면 본인 부서" 식으로 role 을 보던 분기를 대체한다.
+ * 이제 전사 조회 여부는 role 이 아니라 부여된 grant 의 scope 로 결정되므로,
+ * 필요하면 임원·부서장에게도 전사 범위를 줄 수 있다.
+ */
+export async function hasGlobalScope(userId: string, permissionKey: string): Promise<boolean> {
+  const access = await loadUserAccess(userId);
+  if (ADMIN_BYPASS && access.role === "admin") return true;
+  return access.grants.some(
+    (g) => g.permissionKey === permissionKey && g.effect === "allow" && g.scopeKind === "all"
+  );
 }

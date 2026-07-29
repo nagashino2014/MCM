@@ -78,6 +78,10 @@ export async function requireSession(): Promise<AuthContext> {
   };
 }
 
+/**
+ * @deprecated role 기반 가드. 권한 판정은 requirePermission(권한키)으로 한다.
+ *   남겨둔 이유는 외부 참조 안전뿐이며, 신규 코드에서 쓰지 말 것.
+ */
 export async function requireRole(roles: Role | Role[]): Promise<AuthContext> {
   const ctx = await requireSession();
   const allowed = Array.isArray(roles) ? roles : [roles];
@@ -102,24 +106,30 @@ export async function requireAuthenticated(): Promise<AuthContext> {
   return requireSession();
 }
 
-/** RBAC 강제 여부. env RBAC_ENFORCE='true' 일 때만 권한 템플릿으로 판정한다(롤아웃 §10). */
-const RBAC_ENFORCE = process.env.RBAC_ENFORCE === "true";
+/**
+ * RBAC 강제 여부. 이제 **기본이 켜짐**이다 — 권한 템플릿으로만 판정한다.
+ * env RBAC_ENFORCE='false' 를 명시할 때만 옛 role 호환 모드로 되돌아간다(비상용).
+ */
+const RBAC_ENFORCE = process.env.RBAC_ENFORCE !== "false";
 
 /**
- * RBAC atomic 권한키 가드. 단계적 전환을 위해 호환 모드를 둔다.
- * - admin 은 항상 통과(부트스트랩).
- * - RBAC_ENFORCE=false(기본): 기존 role 가드와 동일하게 판정한다(회귀 방지).
- *   `fallbackRoles` 미지정이면 인증만으로 통과(= 기존 requireAuthenticated 동등).
- * - RBAC_ENFORCE=true: 권한 템플릿(hasPermission)으로 판정한다.
+ * RBAC 권한키 가드.
+ *
+ * 판정은 오직 권한 템플릿(hasPermission)이다. role(admin/editor/viewer)은 더 이상
+ * 상위 권한으로 쓰지 않는다 — 관리자 권한의 근거는 `tpl-system-admin` 템플릿(마이그 111).
+ *
+ * ⚠ `fallbackRoles` 는 호환 모드(RBAC_ENFORCE=false)에서만 쓰이는 잔재다.
+ *   신규 코드에서는 넘기지 말 것. 기존 호출부의 값은 무시된다.
  */
 export async function requirePermission(
   permissionKey: string,
   opts?: { target?: PermissionTarget; fallbackRoles?: Role[] }
 ): Promise<AuthContext> {
   const ctx = await requireSession();
-  if (ctx.role === "admin") return ctx;
 
   if (!RBAC_ENFORCE) {
+    // 비상 호환 모드 — 옛 role 기준으로만 판정한다.
+    if (ctx.role === "admin") return ctx;
     const roles = opts?.fallbackRoles;
     if (!roles || roles.includes(ctx.role)) return ctx;
     throw new AuthError("이 작업을 수행할 권한이 없습니다.", 403);

@@ -1,3 +1,4 @@
+import { hasGlobalScope } from "@/lib/auth/rbac";
 import { NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getDb, rowsToObjects } from "@/lib/db";
@@ -12,7 +13,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const ctx = await requirePermission("work_plan.view");
-    const isAdmin = ctx.role === "admin";
+    const isAdmin = await hasGlobalScope(ctx.userId, "work_plan.view");
     const reporter = await getReporterContext(ctx.userId);
 
     let departments: { deptId: string; deptName: string }[] | undefined;

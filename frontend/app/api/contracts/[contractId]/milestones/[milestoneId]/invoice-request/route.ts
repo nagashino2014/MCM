@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { AuthError, authErrorToResponse, requireSession } from "@/lib/auth/guards";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
-import { loadUserAccess } from "@/lib/auth/rbac";
+import { checkPermission, hasPermission, loadUserAccess } from "@/lib/auth/rbac";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,7 +24,8 @@ async function resolveRequester(
 ): Promise<{ allowed: boolean; employeeId: string | null }> {
   const access = await loadUserAccess(userId);
   const employeeId = access.employeeId ?? null;
-  if (role === "admin" || role === "editor") return { allowed: true, employeeId };
+  // role 대신 권한으로 — billing.edit 보유자는 참여 여부와 무관하게 요청할 수 있다.
+  if (checkPermission(access, "billing.edit")) return { allowed: true, employeeId };
   if (!employeeId) return { allowed: false, employeeId: null };
   const db = await getDb();
   const rows = rowsToObjects(
@@ -145,7 +146,8 @@ export async function DELETE(_: NextRequest, ctx: RouteContext) {
       if (!rows[0].invoice_requested_at) throw new AuthError("요청 상태가 아닙니다.", 400);
       // 요청 취소는 요청자 본인만(admin 은 예외적으로 허용).
       const requestedBy = rows[0].invoice_requested_by != null ? String(rows[0].invoice_requested_by) : null;
-      if (actor.role !== "admin" && (!employeeId || requestedBy !== employeeId)) {
+      const canManage = await hasPermission(actor.userId, "billing.receivable.manage");
+      if (!canManage && (!employeeId || requestedBy !== employeeId)) {
         throw new AuthError("요청자 본인만 취소할 수 있습니다.", 403);
       }
       await db.run(

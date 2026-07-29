@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { putContractDocument, sanitizeFilename } from "@/lib/storage/contract-document-storage";
 import { addReceivableActionDocument, getReceivableActionById } from "@/lib/ieps/receivables";
 
@@ -14,7 +14,7 @@ interface RouteContext {
 
 export async function POST(req: NextRequest, ctx: RouteContext) {
   try {
-    await requireEditor();
+    await requirePermission("billing.receivable.manage");
     const { actionId } = await ctx.params;
     const action = await getReceivableActionById(actionId);
     if (!action) {

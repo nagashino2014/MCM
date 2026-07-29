@@ -90,6 +90,10 @@ export const edgeAuthConfig: NextAuthConfig = {
         }
       }
 
+      // ⚠ 미들웨어는 edge runtime 이라 DB(권한 템플릿)를 조회할 수 없다.
+      //   여기서는 JWT 의 role 로 1차 차단만 하고, 실제 권한 판정은 각 API 라우트의
+      //   requirePermission(account.manage / org.edit / rbac.* 등)이 한다.
+      //   role 을 완전히 걷어내려면 로그인 시 권한 요약을 JWT 에 실어야 한다(후속 과제).
       if (path.startsWith("/admin") || path.startsWith("/api/admin")) {
         return user.role === "admin";
       }

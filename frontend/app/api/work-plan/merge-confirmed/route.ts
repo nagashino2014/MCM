@@ -1,3 +1,4 @@
+import { hasGlobalScope } from "@/lib/auth/rbac";
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission, requireSession } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
@@ -16,7 +17,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "통합할 보고를 선택하세요." }, { status: 400 });
     }
     let deptId = body.deptId ?? "";
-    if (actor.role !== "admin") {
+    if (!(await hasGlobalScope(actor.userId, "work_plan.view"))) {
       const session = await requireSession();
       const reporter = await getReporterContext(session.userId);
       deptId = reporter.deptId ?? "";

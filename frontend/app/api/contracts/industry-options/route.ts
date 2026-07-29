@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAuthenticated, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requireAuthenticated, requirePermission } from "@/lib/auth/guards";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -22,7 +22,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireEditor();
+    await requirePermission("contract.edit");
     const body = await req.json();
     const optionName = String(body?.optionName ?? "").trim();
     if (!optionName) return NextResponse.json({ error: "업종명을 입력하세요." }, { status: 400 });
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    await requireEditor();
+    await requirePermission("contract.edit");
     const { searchParams } = new URL(req.url);
     const optionName = String(searchParams.get("optionName") ?? "").trim();
     if (!optionName) return NextResponse.json({ error: "업종명을 지정하세요." }, { status: 400 });

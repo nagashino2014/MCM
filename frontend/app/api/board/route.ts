@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
-import { AuthError, authErrorToResponse, requireAdmin, requireSession } from "@/lib/auth/guards";
+import { AuthError, authErrorToResponse, requirePermission, requireSession } from "@/lib/auth/guards";
 import { getUserDeptId } from "@/lib/approval/docs";
 import { createPost, listNotifyTargets, listNotifyUserIds, listPosts, type BoardScope } from "@/lib/board";
 import { getBoardAttachmentStorageKey, putBoardAttachment } from "@/lib/storage/board-attachment-storage";
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     const ctx = await requireSession();
     const form = await req.formData();
     const scope: BoardScope = String(form.get("scope") ?? "dept") === "company" ? "company" : "dept";
-    if (scope === "company") await requireAdmin();
+    if (scope === "company") await requirePermission("board.manage");
 
     const myDept = await getUserDeptId(ctx.userId);
     if (scope === "dept" && !myDept) {

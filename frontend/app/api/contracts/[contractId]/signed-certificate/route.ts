@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAuthenticated, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requireAuthenticated, requirePermission } from "@/lib/auth/guards";
 import { getDb, rowsToObjects } from "@/lib/db";
 import { getCertificateDoc, saveCertificateDoc } from "@/lib/contracts/certificate-storage";
 import { deleteContractDocument } from "@/lib/storage/contract-document-storage";
@@ -29,7 +29,7 @@ export async function GET(_req: NextRequest, ctx: RouteContext) {
 // 서명(직인) 증명서 PDF 첨부/교체 — S3에 저장(같은 계약은 기존 파일 교체)
 export async function POST(req: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requireEditor();
+    const actor = await requirePermission("certificate.issue");
     const { contractId } = await ctx.params;
     const form = await req.formData();
     const file = form.get("file");

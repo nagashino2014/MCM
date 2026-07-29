@@ -1,3 +1,4 @@
+import { hasGlobalScope } from "@/lib/auth/rbac";
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getReporterContext, listDeptMembers } from "@/lib/work-plan/workspace";
@@ -11,7 +12,7 @@ export async function GET(req: NextRequest) {
     const ctx = await requirePermission("work_plan.view");
     const paramDept = new URL(req.url).searchParams.get("dept") ?? "";
     let deptId = paramDept;
-    if (ctx.role !== "admin") {
+    if (!(await hasGlobalScope(ctx.userId, "work_plan.view"))) {
       const reporter = await getReporterContext(ctx.userId);
       deptId = reporter.deptId ?? "";
     }

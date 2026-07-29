@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { hasPermission } from "@/lib/auth/rbac";
 import { getDoc, getUserDeptId, markWatcherRead } from "@/lib/approval/docs";
 
 export const runtime = "nodejs";
@@ -17,7 +18,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ doc
     const involved =
       doc.drafterUserId === ctx.userId || doc.steps.some((s) => s.assigneeUserId === ctx.userId || s.delegatedFrom === ctx.userId);
     const isWatcher = doc.watchers.some((w) => w.userId === ctx.userId);
-    let allowed = involved || isWatcher || ctx.role === "admin";
+    // 관계자가 아니어도 결재 운영 권한(approval.manage)이 있으면 열람 가능.
+    let allowed = involved || isWatcher || (await hasPermission(ctx.userId, "approval.manage"));
     if (!allowed && doc.status === "approved" && doc.orgFolder) allowed = true;
     if (!allowed && ["approved", "rejected"].includes(doc.status) && doc.deptId) {
       const myDept = await getUserDeptId(ctx.userId);

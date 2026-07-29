@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireEditor } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import {
   deleteReceivableAction,
   getReceivableActionById,
@@ -15,7 +15,7 @@ interface RouteContext {
 
 export async function PATCH(req: NextRequest, ctx: RouteContext) {
   try {
-    await requireEditor();
+    await requirePermission("billing.receivable.manage");
     const { actionId } = await ctx.params;
     const exists = await getReceivableActionById(actionId);
     if (!exists) {
@@ -47,7 +47,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
 
 export async function DELETE(_: NextRequest, ctx: RouteContext) {
   try {
-    await requireEditor();
+    await requirePermission("billing.receivable.manage");
     const { actionId } = await ctx.params;
     const exists = await getReceivableActionById(actionId);
     if (!exists) {

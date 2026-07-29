@@ -3,6 +3,8 @@
 
 # Build outputs
 **/.next/
+# 세션별 distDir 분리(NEXT_DIST_DIR=.next-<이름>) 산출물
+**/.next-*/
 **/dist/
 **/build/
 **/coverage/
@@ -31,6 +33,7 @@ data/ieps/extracted/
 data/ieps/logs/
 data/ieps/scrape/
 data/ieps/db.sqlite
+data/daou/
 table_cache/
 frontend/public/uploads/
 frontend/data/chromadb/

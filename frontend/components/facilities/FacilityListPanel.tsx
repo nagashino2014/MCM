@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, Search } from "lucide-react";
+import { ChevronDown, Download, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CdDropdown } from "@/components/cdash/CdDropdown";
 import type {
   FacilityFilterOptions,
   FacilityListFilter,
@@ -22,6 +23,40 @@ const SOURCE_LABELS: Record<string, string> = {
   manual: "수동 등록",
   legal_entity: "계약현황",
 };
+
+/**
+ * 필터 칩 — 비활성은 글라스 칩, 선택되면 그라데이션 채움 + × (해제).
+ * 드롭다운 트리거로 쓸 때는 onClick 없이(부모 CdDropdown 이 클릭을 받음) 라벨만 바꾼다.
+ */
+function FilterChip({
+  label,
+  active,
+  onClick,
+  onClear,
+}: {
+  label: string;
+  active?: boolean;
+  onClick?: () => void;
+  onClear?: () => void;
+}) {
+  return (
+    <span className="cd-chip cd-chip-sm shrink-0" data-active={active || undefined} onClick={onClick} role="button">
+      <span className="truncate max-w-[150px]">{label}</span>
+      {onClear ? (
+        <X
+          className="w-3 h-3 opacity-80 hover:opacity-100"
+          onClick={(e) => {
+            e.stopPropagation();
+            onClear();
+          }}
+          aria-label={`${label} 필터 해제`}
+        />
+      ) : (
+        !onClick && <ChevronDown className="w-3 h-3 opacity-50" />
+      )}
+    </span>
+  );
+}
 
 interface Props {
   items: FacilityListItem[];
@@ -52,9 +87,6 @@ export function FacilityListPanel({
   filterOptions,
   onFilterChange,
 }: Props) {
-  const [multiRegion, setMultiRegion] = useState(false);
-  const [regionSlots, setRegionSlots] = useState<string[]>([""]);
-  const [activeSlotIdx, setActiveSlotIdx] = useState(0);
   const [integratedMode, setIntegratedMode] = useState(false);
   const [exporting, setExporting] = useState<"xlsx" | "pdf" | null>(null);
 
@@ -75,62 +107,27 @@ export function FacilityListPanel({
     return counts;
   }, [filterOptions]);
 
-  const applyRegionSlots = (slots: string[]) => {
-    const sidos = Array.from(new Set(slots.map((s) => s.trim()).filter(Boolean)));
+  // 지역은 칩 다중 선택으로 통일 — "복수 지역 선택" 체크박스 + 읽기전용 슬롯 input 조합을
+  // 폐지하고 sidos 배열을 직접 다룬다(선택하면 칩 추가, × 로 제거).
+  const MAX_REGIONS = 5;
+  const selectedSidos = useMemo(
+    () => (filter.sidos ?? []).filter(Boolean).concat(filter.sido ? [filter.sido] : []),
+    [filter.sidos, filter.sido]
+  );
+
+  const applySidos = (next: string[]) => {
+    const sidos = Array.from(new Set(next.filter(Boolean))).slice(0, MAX_REGIONS);
     onFilterChange({ ...filter, sidos, sido: "", sigungu: "", offset: 0 });
   };
 
-  const toggleMultiRegion = (checked: boolean) => {
-    setMultiRegion(checked);
-    if (checked) {
-      const slots = filter.sido ? [filter.sido] : [""];
-      setRegionSlots(slots);
-      setActiveSlotIdx(slots.length - 1);
-      applyRegionSlots(slots);
-    } else {
-      setRegionSlots([""]);
-      setActiveSlotIdx(0);
-      onFilterChange({ ...filter, sidos: [], sido: "", sigungu: "", offset: 0 });
-    }
-  };
-
-  const handleSidoSelect = (value: string) => {
-    if (!multiRegion) {
-      onFilterChange({ ...filter, sido: value, sigungu: "", offset: 0 });
-      return;
-    }
-    // 비어 있는 박스가 있으면 왼쪽부터 채우고, 모두 차 있으면 현재 선택된 박스를 교체한다.
-    const emptyIdx = regionSlots.findIndex((slot) => !slot.trim());
-    const targetIdx = emptyIdx !== -1 ? emptyIdx : activeSlotIdx;
-    const slots = regionSlots.map((slot, idx) => (idx === targetIdx ? value : slot));
-    setRegionSlots(slots);
-    setActiveSlotIdx(targetIdx);
-    applyRegionSlots(slots);
-  };
-
-  const MAX_REGION_SLOTS = 5;
-
-  const addRegionSlot = () => {
-    if (regionSlots.length >= MAX_REGION_SLOTS) return;
-    const slots = [...regionSlots, ""];
-    setRegionSlots(slots);
-    setActiveSlotIdx(slots.length - 1);
-  };
-
-  const removeRegionSlot = (idx: number) => {
-    const slots = regionSlots.filter((_, slotIdx) => slotIdx !== idx);
-    const next = slots.length ? slots : [""];
-    setRegionSlots(next);
-    setActiveSlotIdx(Math.min(activeSlotIdx, next.length - 1));
-    applyRegionSlots(next);
-  };
-
-  const toggleIntegratedMode = (checked: boolean) => {
-    setIntegratedMode(checked);
+  const toggleIntegratedMode = () => {
+    setIntegratedMode((v) => !v);
     onFilterChange({ ...filter, industryCode: "", industryCategory: "", offset: 0 });
   };
 
-  const activeSidoValue = multiRegion ? regionSlots[activeSlotIdx] ?? "" : filter.sido ?? "";
+  const industryLabel = integratedMode
+    ? INTEGRATED_PERMIT_INDUSTRIES.find((c) => c.id === filter.industryCategory)?.label
+    : filterOptions?.industries.find((i) => String(i.code) === filter.industryCode)?.code;
 
   const buildExportParams = (format: "xlsx" | "pdf") => {
     const params = new URLSearchParams();
@@ -186,213 +183,148 @@ export function FacilityListPanel({
         </span>
       </div>
 
-      <div className="flex flex-col gap-2 mb-4">
-        <div className="flex items-center gap-2">
+      {/* 필터 = 검색 + 필터 칩(선택 시 그라데이션 채움 + ×).
+          select 나열 + 체크박스 조합은 앱에서 가장 노후한 표면이었다(분석 §2 /facilities). */}
+      <div className="flex flex-col gap-2.5 mb-4">
+        <div className="flex items-center gap-2 rounded-xl border cd-line-c cd-surface-bg px-3 py-1.5">
           <Search className="w-4 h-4 cd-text-faint shrink-0" />
           <input
             type="text"
-            className="cd-input"
+            className="flex-1 min-w-0 bg-transparent outline-none text-[13px] cd-text placeholder:text-[color:var(--cd-faint)]"
             placeholder="상호 / 사업자등록번호 / 주소 검색"
             value={filter.q ?? ""}
             onChange={(e) => onFilterChange({ ...filter, q: e.target.value, offset: 0 })}
           />
         </div>
 
-        <div className="flex items-center gap-2 overflow-x-auto">
-          <select
-            className="cd-select text-xs shrink-0"
-            style={{ width: 170 }}
-            value={activeSidoValue}
-            onChange={(e) => handleSidoSelect(e.target.value)}
-          >
-            <option value="">전체 시도</option>
-            {filterOptions?.sidos.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.value} ({s.count})
-              </option>
-            ))}
-          </select>
-
-          <label
-            className="flex items-center gap-1 text-[11px] font-bold cd-text-muted select-none shrink-0"
-            style={{ width: 110 }}
-          >
-            <input
-              type="checkbox"
-              checked={multiRegion}
-              onChange={(e) => toggleMultiRegion(e.target.checked)}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {/* 지역 — 최대 5개 다중 선택, 각 선택은 개별 칩. */}
+          {selectedSidos.map((s) => (
+            <FilterChip key={s} active label={s} onClear={() => applySidos(selectedSidos.filter((v) => v !== s))} />
+          ))}
+          {selectedSidos.length < MAX_REGIONS && (
+            <CdDropdown
+              align="left"
+              menuWidthClass="w-56"
+              trigger={() => <FilterChip label={selectedSidos.length ? "지역 추가" : "지역"} />}
+              items={(filterOptions?.sidos ?? [])
+                .filter((s) => !selectedSidos.includes(s.value))
+                .map((s) => ({
+                  key: s.value,
+                  label: `${s.value} (${s.count})`,
+                  onSelect: () => applySidos([...selectedSidos, s.value]),
+                }))}
             />
-            복수 지역 선택
-          </label>
+          )}
 
-          {multiRegion && (
-            <>
-              {regionSlots.map((slot, idx) => (
-                <input
-                  key={idx}
-                  type="text"
-                  readOnly
-                  value={slot}
-                  placeholder="지역 선택"
-                  title="우클릭으로 삭제"
-                  onClick={() => setActiveSlotIdx(idx)}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    removeRegionSlot(idx);
-                  }}
-                  className="cd-input text-xs cursor-pointer shrink-0"
-                  style={{
-                    width: 104,
-                    borderColor: idx === activeSlotIdx ? "var(--cd-primary)" : "var(--cd-border)",
-                    boxShadow: idx === activeSlotIdx ? "0 0 0 2px rgba(93,135,255,0.25)" : "none",
-                    color: idx === activeSlotIdx ? "var(--cd-text)" : "var(--cd-muted)",
-                  }}
-                />
-              ))}
-              {regionSlots.length < MAX_REGION_SLOTS && (
-                <button
-                  type="button"
-                  onClick={addRegionSlot}
-                  title="검색 지역 추가"
-                  className="cd-btn cd-btn-ghost cd-btn-sm shrink-0"
-                  style={{ padding: "0.45rem" }}
+          {/* 업종 — 통합허가 기준 토글에 따라 20개 카테고리 / 원본 코드. */}
+          <CdDropdown
+            align="left"
+            menuWidthClass="w-64"
+            trigger={() => (
+              <FilterChip
+                active={!!industryLabel}
+                label={industryLabel ?? "업종"}
+                onClear={
+                  industryLabel
+                    ? () => onFilterChange({ ...filter, industryCode: "", industryCategory: "", offset: 0 })
+                    : undefined
+                }
+              />
+            )}
+            items={
+              integratedMode
+                ? INTEGRATED_PERMIT_INDUSTRIES.map((c) => ({
+                    key: c.id,
+                    label: `${c.label} (${categoryCounts.get(c.id) ?? 0})`,
+                    onSelect: () => onFilterChange({ ...filter, industryCategory: c.id, industryCode: "", offset: 0 }),
+                  }))
+                : (filterOptions?.industries ?? []).slice(0, 50).map((i) => ({
+                    key: String(i.code),
+                    label: `${i.code} ${i.name ?? ""} (${i.count})`,
+                    onSelect: () =>
+                      onFilterChange({ ...filter, industryCode: String(i.code), industryCategory: "", offset: 0 }),
+                  }))
+            }
+          />
+          <FilterChip active={integratedMode} label="통합허가 기준" onClick={toggleIntegratedMode} />
+
+          {/* 종 규모 · 출처 */}
+          <CdDropdown
+            align="left"
+            menuWidthClass="w-40"
+            trigger={() => (
+              <FilterChip
+                active={filter.airClass != null}
+                label={filter.airClass != null ? `대기 ${filter.airClass}종` : "대기 종"}
+                onClear={filter.airClass != null ? () => onFilterChange({ ...filter, airClass: undefined, offset: 0 }) : undefined}
+              />
+            )}
+            items={[1, 2, 3, 4, 5].map((c) => ({
+              key: String(c),
+              label: `대기 ${c}종`,
+              onSelect: () => onFilterChange({ ...filter, airClass: c, offset: 0 }),
+            }))}
+          />
+          <CdDropdown
+            align="left"
+            menuWidthClass="w-40"
+            trigger={() => (
+              <FilterChip
+                active={filter.waterClass != null}
+                label={filter.waterClass != null ? `수질 ${filter.waterClass}종` : "수질 종"}
+                onClear={
+                  filter.waterClass != null ? () => onFilterChange({ ...filter, waterClass: undefined, offset: 0 }) : undefined
+                }
+              />
+            )}
+            items={[1, 2, 3, 4, 5].map((c) => ({
+              key: String(c),
+              label: `수질 ${c}종`,
+              onSelect: () => onFilterChange({ ...filter, waterClass: c, offset: 0 }),
+            }))}
+          />
+          <CdDropdown
+            align="left"
+            menuWidthClass="w-48"
+            trigger={() => (
+              <FilterChip
+                active={!!filter.source}
+                label={filter.source ? SOURCE_LABELS[filter.source] ?? filter.source : "출처"}
+                onClear={filter.source ? () => onFilterChange({ ...filter, source: "", offset: 0 }) : undefined}
+              />
+            )}
+            items={(filterOptions?.sources ?? []).map((s) => ({
+              key: s.value,
+              label: `${SOURCE_LABELS[s.value] ?? s.value} (${s.count})`,
+              onSelect: () => onFilterChange({ ...filter, source: s.value, offset: 0 }),
+            }))}
+          />
+
+          {/* 44px 래스터 아이콘 2개 → 내보내기 드롭다운 1개(래스터 자산 폐기). */}
+          <div className="ml-auto shrink-0">
+            <CdDropdown
+              align="right"
+              trigger={() => (
+                <span
+                  className={cn(
+                    "cd-btn cd-btn-ghost cd-btn-sm inline-flex items-center gap-1.5 cursor-pointer",
+                    exporting !== null && "opacity-50 cursor-wait"
+                  )}
+                  role="button"
+                  title="현재 검색 결과를 파일로 내보냅니다"
                 >
-                  <Plus className="w-3.5 h-3.5" />
-                </button>
+                  <Download className="w-3.5 h-3.5" />
+                  {exporting ? "내보내는 중…" : "내보내기"}
+                  <ChevronDown className="w-3 h-3 opacity-50" />
+                </span>
               )}
-            </>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2 overflow-x-auto">
-          {!integratedMode ? (
-            <select
-              className="cd-select text-xs shrink-0"
-              style={{ width: 170 }}
-              value={filter.industryCode ?? ""}
-              onChange={(e) =>
-                onFilterChange({ ...filter, industryCode: e.target.value, industryCategory: "", offset: 0 })
-              }
-            >
-              <option value="">전체 업종</option>
-              {filterOptions?.industries.slice(0, 50).map((i) => (
-                <option key={i.code} value={i.code}>
-                  {i.code} {i.name ?? ""} ({i.count})
-                </option>
-              ))}
-            </select>
-          ) : (
-            <select
-              className="cd-select text-xs shrink-0"
-              style={{ width: 170 }}
-              value={filter.industryCategory ?? ""}
-              onChange={(e) =>
-                onFilterChange({ ...filter, industryCategory: e.target.value, industryCode: "", offset: 0 })
-              }
-            >
-              <option value="">전체 업종</option>
-              {INTEGRATED_PERMIT_INDUSTRIES.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.label} ({categoryCounts.get(category.id) ?? 0})
-                </option>
-              ))}
-            </select>
-          )}
-
-          <label
-            className="flex items-center gap-1 text-[11px] font-bold cd-text-muted select-none shrink-0"
-            style={{ width: 110 }}
-          >
-            <input
-              type="checkbox"
-              checked={integratedMode}
-              onChange={(e) => toggleIntegratedMode(e.target.checked)}
+              items={[
+                { key: "xlsx", label: "엑셀(XLSX)로 내보내기", onSelect: () => handleExport("xlsx") },
+                { key: "pdf", label: "PDF로 내보내기", onSelect: () => handleExport("pdf") },
+              ]}
             />
-            통합허가 기준
-          </label>
-
-          <select
-            className="cd-select text-xs shrink-0"
-            style={{ width: 96 }}
-            value={Number.isFinite(filter.airClass) ? filter.airClass : ""}
-            onChange={(e) =>
-              onFilterChange({
-                ...filter,
-                airClass: e.target.value ? Number(e.target.value) : undefined,
-                offset: 0,
-              })
-            }
-          >
-            <option value="">대기 종</option>
-            {[1, 2, 3, 4, 5].map((c) => (
-              <option key={c} value={c}>
-                대기 {c}종
-              </option>
-            ))}
-          </select>
-
-          <select
-            className="cd-select text-xs shrink-0"
-            style={{ width: 96 }}
-            value={Number.isFinite(filter.waterClass) ? filter.waterClass : ""}
-            onChange={(e) =>
-              onFilterChange({
-                ...filter,
-                waterClass: e.target.value ? Number(e.target.value) : undefined,
-                offset: 0,
-              })
-            }
-          >
-            <option value="">수질 종</option>
-            {[1, 2, 3, 4, 5].map((c) => (
-              <option key={c} value={c}>
-                수질 {c}종
-              </option>
-            ))}
-          </select>
-
-          <select
-            className="cd-select text-xs shrink-0"
-            style={{ width: 130 }}
-            value={filter.source ?? ""}
-            onChange={(e) => onFilterChange({ ...filter, source: e.target.value, offset: 0 })}
-          >
-            <option value="">출처</option>
-            {filterOptions?.sources.map((s) => (
-              <option key={s.value} value={s.value}>
-                {SOURCE_LABELS[s.value] ?? s.value} ({s.count})
-              </option>
-            ))}
-          </select>
-
-          <button
-            type="button"
-            onClick={() => handleExport("xlsx")}
-            disabled={exporting !== null}
-            title="현재 검색 결과를 엑셀로 다운로드"
-            className={cn(
-              "shrink-0 flex items-center justify-center ml-auto",
-              exporting !== null && "opacity-50 cursor-wait"
-            )}
-            style={{ width: 44, height: 44 }}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/icons/excelico.png" alt="엑셀 다운로드" className="w-full h-full object-contain" />
-          </button>
-          <button
-            type="button"
-            onClick={() => handleExport("pdf")}
-            disabled={exporting !== null}
-            title="현재 검색 결과를 PDF로 다운로드"
-            className={cn(
-              "shrink-0 flex items-center justify-center",
-              exporting !== null && "opacity-50 cursor-wait"
-            )}
-            style={{ width: 44, height: 44 }}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/icons/pdfico.png" alt="PDF 다운로드" className="w-full h-full object-contain" />
-          </button>
+          </div>
         </div>
       </div>
 
@@ -421,63 +353,54 @@ export function FacilityListPanel({
             className="text-left p-3 rounded-xl cd-listitem"
             data-active={selectedId === f.facilityId}
           >
+            {/* 3층 제한(Soft Glass Ink): 태그 / 상호 / 지역·업종.
+                주소·별칭·허가건수·사업자번호 5층 적재는 밀도만 높고 위계가 없었다(분석 §2 /facilities).
+                가려진 값은 title 툴팁으로 남긴다. */}
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap gap-1 mb-1">
                   {(f.serviceCategories.length ? f.serviceCategories : ["integrated" as FacilityServiceCategory]).map((category) => (
                     <span
                       key={category}
-                      className="rounded-full px-2 py-0.5 text-[9px] font-bold border border-black/5"
-                      style={{ background: FACILITY_SERVICE_COLORS[category], color: "#292524" }}
+                      className="rounded-full px-2 py-0.5 text-[9px] font-bold"
+                      style={{
+                        background: `color-mix(in srgb, ${FACILITY_SERVICE_COLORS[category]} 55%, transparent)`,
+                        color: "var(--cd-body)",
+                      }}
                     >
                       {FACILITY_SERVICE_LABELS[category]}
                     </span>
                   ))}
                 </div>
-                <div className="flex min-w-0 items-center gap-1.5 text-sm font-bold" style={{ color: "var(--cd-text)" }}>
+                <div
+                  className="flex min-w-0 items-center gap-1.5 text-[14.5px] font-extrabold tracking-[-0.01em]"
+                  style={{ color: "var(--cd-text)" }}
+                  title={f.siteAddress ?? undefined}
+                >
                   <span className="min-w-0 truncate">{formatCompanyName(f.companyName)}</span>
                   {f.isClosed && (
-                    <span
-                      className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold leading-3 text-white"
-                      style={{ backgroundColor: "#FF7979" }}
-                    >
-                      폐업사업장
+                    <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold leading-3 cd-error-bg cd-error-text">
+                      폐업
                     </span>
                   )}
                 </div>
-                <div className="text-[11px] cd-text-muted truncate mt-0.5">
+                <div className="text-[11.5px] truncate mt-0.5" style={{ color: "var(--cd-faint)" }}>
                   {f.regionSido || "—"} {f.regionSigungu ?? ""}{" · "}
                   {f.industryCode || "—"} {f.industryName ?? ""}
                 </div>
-                <div className="text-[11px] cd-text-faint truncate mt-0.5">
-                  {f.siteAddress ?? "주소 없음"}
-                </div>
-                {f.aliases[0] && (
-                  <div className="text-[11px] cd-text-muted truncate mt-0.5">
-                    별칭: {f.aliases[0].alias}
-                  </div>
-                )}
               </div>
               <div className="flex flex-col items-end gap-1 shrink-0">
-                {f.decisionNo && (
-                  <span className="cd-pill cd-pill-info">{f.decisionNo}</span>
-                )}
-                <span className="text-[10px] cd-text-faint">{f.permitsCount}건 허가</span>
+                <span className="flex items-center gap-1">
+                  {f.airClass != null && (
+                    <span className="cd-pill cd-pill-secondary text-[10px]">대기 {f.airClass}종</span>
+                  )}
+                  {f.waterClass != null && (
+                    <span className="cd-pill cd-pill-info text-[10px]">수질 {f.waterClass}종</span>
+                  )}
+                </span>
+                {f.decisionNo && <span className="text-[10px] cd-text-faint tabular-nums">{f.decisionNo}</span>}
               </div>
             </div>
-            {(f.airClass != null || f.waterClass != null) && (
-              <div className="flex items-center gap-2 mt-2 text-[10px] font-bold">
-                {f.airClass != null && (
-                  <span className="cd-pill cd-pill-outline">대기 {f.airClass}종</span>
-                )}
-                {f.waterClass != null && (
-                  <span className="cd-pill cd-pill-outline">수질 {f.waterClass}종</span>
-                )}
-                {f.businessRegistrationNo && (
-                  <span className="cd-text-faint ml-auto">{f.businessRegistrationNo}</span>
-                )}
-              </div>
-            )}
           </button>
         ))}
       </div>

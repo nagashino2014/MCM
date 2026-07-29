@@ -314,10 +314,14 @@ export function MailBoard() {
   return (
     <div className="cdash cd-fields-white cd-mail-surface flex h-full min-h-0 flex-col p-4 md:p-5 rounded-3xl" data-theme={theme}>
       <CdPageHeader
-        icon={<Mail className="w-5 h-5" />}
-        eyebrow="Koensain Mail"
         title="메일"
-        subtitle={address ? `내 주소: ${address}` : undefined}
+        meta={(() => {
+          // 헤더 메타 1줄 — 현재 폴더명 + 받은편지함 안읽음 수(시안 규정).
+          const cur = folders.find((f) => (f.systemKind ?? f.folderId) === folder);
+          const unread = folders.find((f) => f.systemKind === "inbox")?.unread ?? 0;
+          const name = cur?.name ?? "메일함";
+          return unread > 0 ? `${name} · 안읽음 ${unread}통` : name;
+        })()}
         actions={
           <CdButton variant="primary" icon={<PenSquare className="w-4 h-4" />} onClick={openNew}>
             메일 쓰기
@@ -325,7 +329,7 @@ export function MailBoard() {
         }
       />
 
-      <div className="flex-1 min-h-0 rounded-2xl border cd-border-c cd-card-bg overflow-hidden">
+      <div className="flex-1 min-h-0 cd-card overflow-hidden">
         {isWide ? (
           <CdSplitPane
             first={

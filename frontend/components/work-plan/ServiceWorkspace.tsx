@@ -47,7 +47,7 @@ function reviewSubject(r: ReviewReportRow): ReportSubject {
 }
 
 export default function ServiceWorkspace() {
-  const { theme, toggleTheme } = useCdashTheme();
+  const { theme } = useCdashTheme();
 
   const [reporter, setReporter] = useState<ReporterContext | null>(null);
   const [newEntry, setNewEntry] = useState(false);

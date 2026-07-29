@@ -26,6 +26,13 @@ const TITLE_BY_PATH: Record<string, string> = {
   "/m/card": "명함 촬영",
 };
 
+/** "7월 29일 수요일" (KST) — 헤더 메타. */
+function todayLabel(): string {
+  const kst = new Date(Date.now() + 9 * 3600 * 1000);
+  const dow = ["일", "월", "화", "수", "목", "금", "토"][kst.getUTCDay()];
+  return `${kst.getUTCMonth() + 1}월 ${kst.getUTCDate()}일 ${dow}요일`;
+}
+
 function preferDesktop() {
   // 데스크톱 버전으로 탈출 — middleware UA 리다이렉트를 쿠키로 끈다(30일).
   document.cookie = "mcm-prefer-desktop=1; path=/; max-age=2592000";
@@ -38,18 +45,21 @@ export function MobileShell({ userName, children }: { userName: string | null; c
   const title = TITLE_BY_PATH[pathname] ?? "MCM";
 
   return (
-    <div className="cdash cd-fields-white min-h-dvh" data-theme={theme}>
+    <div className="cdash cd-canvas cd-fields-white min-h-dvh" data-theme={theme}>
       <div className="mx-auto flex flex-col min-h-dvh" style={{ maxWidth: 480 }}>
-        {/* 상단 미니 헤더 */}
+        {/* 상단 미니 헤더 — 글라스 + 제목/날짜 메타 */}
         <header
-          className="cd-card-bg border-b cd-border-c sticky top-0 z-20 flex items-center justify-between px-4"
-          style={{ height: 52 }}
+          className="border-b cd-hairline-c sticky top-0 z-20 flex items-center justify-between px-4"
+          style={{
+            height: 52,
+            background: "var(--cd-card)",
+            backdropFilter: "blur(20px)",
+            WebkitBackdropFilter: "blur(20px)",
+          }}
         >
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="cd-fill-primary rounded-lg flex items-center justify-center shrink-0" style={{ width: 26, height: 26 }}>
-              <span className="text-white text-[11px] font-extrabold">M</span>
-            </span>
+          <div className="flex items-baseline gap-2 min-w-0">
             <h1 className="cd-text text-base font-extrabold truncate">{title}</h1>
+            <span className="text-[11.5px] font-bold cd-grad-text truncate">{todayLabel()}</span>
           </div>
           <div className="flex items-center gap-1 shrink-0">
             {userName && <span className="cd-text-faint text-xs mr-1">{userName}</span>}
@@ -70,11 +80,18 @@ export function MobileShell({ userName, children }: { userName: string | null; c
         </main>
 
         {/* 하단 고정 탭바 */}
+        {/* 하단 탭바 — 탭이 5개인데 grid-cols-4 라 다섯 번째(담당자)가 다음 줄로 꺾이던 실버그 수정.
+            글라스(blur 20px) + safe-area. */}
         <nav
-          className="cd-card-bg border-t cd-border-c fixed bottom-0 inset-x-0 z-20"
-          style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+          className="border-t cd-hairline-c fixed bottom-0 inset-x-0 z-20"
+          style={{
+            background: "var(--cd-card)",
+            backdropFilter: "blur(20px)",
+            WebkitBackdropFilter: "blur(20px)",
+            paddingBottom: "env(safe-area-inset-bottom)",
+          }}
         >
-          <div className="mx-auto grid grid-cols-4" style={{ maxWidth: 480 }}>
+          <div className="mx-auto grid grid-cols-5" style={{ maxWidth: 480 }}>
             {TABS.map(({ href, label, icon: Icon }) => {
               const active = pathname === href || (href !== "/m" && pathname.startsWith(href));
               return (

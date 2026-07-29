@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  Beaker, BookUser, Building2, Landmark, Mail, Network, Pencil, Phone, Search, Smartphone,
+  Beaker, Building2, Landmark, Mail, Network, Pencil, Phone, Search, Smartphone,
   Trash2, Users, X,
 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
@@ -183,10 +183,8 @@ export function DirectoryBoard() {
   return (
     <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
       <CdPageHeader
-        icon={<BookUser className="w-5 h-5" />}
-        eyebrow="Directory"
         title="주소록 · 조직도"
-        subtitle="임직원 연락처와 조직도를 한눈에 — 메일 주소를 클릭하면 바로 메일을 쓸 수 있습니다."
+        meta={`임직원 ${people.length}명 · 외부 연락처 ${activeContacts.length}명`}
       />
 
       <CdTabs
@@ -250,38 +248,45 @@ export function DirectoryBoard() {
               <div className="flex-1 min-h-0 overflow-y-auto">
                 <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))" }}>
                   {filteredPeople.map((p) => (
-                    <div key={p.employeeId} className="rounded-2xl border cd-border-c cd-card-bg p-4 flex flex-col gap-2.5">
-                      <div className="flex items-center gap-3 min-w-0">
+                    // 카드 압축(Soft Glass Ink): 아바타+이름+직급/부서가 주인공.
+                    // 연락처 3행 고정(빈 값도 '-')을 없애고 값이 있는 항목만 렌더한다(분석 §2 /directory).
+                    <div
+                      key={p.employeeId}
+                      className="cd-card p-4 gap-[11px] transition-shadow hover:shadow-[var(--cd-shadow-hover)]"
+                      title={p.companyPhone ? `사무실 ${p.companyPhone}` : undefined}
+                    >
+                      <div className="flex items-center gap-[11px] min-w-0">
                         <CdAvatar name={p.name} src={p.photoPath} size="md" />
-                        <div className="min-w-0">
-                          <p className="text-[14px] font-bold cd-text truncate">
+                        <div className="min-w-0 leading-[1.35]">
+                          <p className="text-[14.5px] font-extrabold tracking-[-0.01em] cd-text truncate">
                             {p.name}
                             {p.positionName && <span className="ml-1.5 text-[11.5px] font-medium cd-text-faint">{p.positionName}</span>}
                           </p>
-                          <p className="text-[11.5px] cd-text-faint truncate">{p.deptName ?? "-"}</p>
+                          <p className="text-[11.5px] truncate" style={{ color: "var(--cd-faint)" }}>
+                            {p.deptName ?? "-"}
+                          </p>
                         </div>
                       </div>
-                      <div className="flex flex-col gap-1 text-[12px]">
-                        <ContactRow icon={<Mail className="w-3.5 h-3.5" />}>
-                          {p.companyEmail ? (
-                            <Link
-                              href={`/mail/compose?to=${encodeURIComponent(mailToken(p.name, p.positionName, p.companyEmail))}`}
-                              className="cd-text-primary hover:underline truncate"
-                              title={`${p.name} 님에게 메일 쓰기`}
-                            >
-                              {p.companyEmail}
-                            </Link>
-                          ) : (
-                            <span className="cd-text-faint">-</span>
+                      {(p.companyEmail || p.mobilePhone) && (
+                        <div className="flex flex-col gap-[3px] text-[12px] pt-[9px] border-t cd-hairline-c">
+                          {p.companyEmail && (
+                            <ContactRow icon={<Mail className="w-3.5 h-3.5" />}>
+                              <Link
+                                href={`/mail/compose?to=${encodeURIComponent(mailToken(p.name, p.positionName, p.companyEmail))}`}
+                                className="cd-text-primary hover:underline truncate"
+                                title={`${p.name} 님에게 메일 쓰기`}
+                              >
+                                {p.companyEmail}
+                              </Link>
+                            </ContactRow>
                           )}
-                        </ContactRow>
-                        <ContactRow icon={<Smartphone className="w-3.5 h-3.5" />}>
-                          <span className="cd-text tabular-nums">{p.mobilePhone ?? "-"}</span>
-                        </ContactRow>
-                        <ContactRow icon={<Phone className="w-3.5 h-3.5" />}>
-                          <span className="cd-text tabular-nums">{p.companyPhone ?? "-"}</span>
-                        </ContactRow>
-                      </div>
+                          {p.mobilePhone && (
+                            <ContactRow icon={<Smartphone className="w-3.5 h-3.5" />}>
+                              <span className="cd-text tabular-nums">{p.mobilePhone}</span>
+                            </ContactRow>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -338,7 +343,7 @@ export function DirectoryBoard() {
                 <span className="ml-auto text-[11.5px] cd-text-faint">{filteredContacts.length}명</span>
               </div>
 
-              <div className="flex-1 min-h-0 overflow-auto rounded-2xl border cd-border-c cd-card-bg">
+              <div className="flex-1 min-h-0 overflow-auto cd-card">
                 <table className="cd-table text-[12.5px]">
                   <thead>
                     <tr>
@@ -468,7 +473,7 @@ export function DirectoryBoard() {
 /** 좌측 분류 pane — 임직원(부서)·외부 연락처(연락처 구분) 공용 셸. */
 function FilterPane({ children }: { children: React.ReactNode }) {
   return (
-    <div className="lg:w-60 shrink-0 rounded-2xl border cd-border-c cd-card-bg p-3 lg:overflow-y-auto">
+    <div className="lg:w-60 shrink-0 cd-card p-3 lg:overflow-y-auto">
       <div className="flex lg:flex-col gap-1 overflow-x-auto lg:overflow-x-visible">{children}</div>
     </div>
   );

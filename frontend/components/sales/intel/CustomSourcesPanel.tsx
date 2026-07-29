@@ -9,7 +9,6 @@ import Link from "next/link";
 import { Radar, Plus, Wand2, Play, Eye, Trash2, ArrowLeft, Check, ExternalLink, KeyRound, ListTree, Settings2, History } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
-import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
 import { EndpointConfigBuilder } from "@/components/sales/scraper/EndpointConfigBuilder";
 import type { ApiConfig, ApiProfile, FieldMapping, SourceCatalog } from "@/lib/scraper/types";
 import "@/components/cdash/cdash.css";
@@ -79,7 +78,7 @@ async function jfetch(url: string, init?: RequestInit) {
 
 export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | "bid" }) {
   const isBid = purpose === "bid";
-  const { theme, toggleTheme } = useCdashTheme();
+  const { theme } = useCdashTheme();
   const [sources, setSources] = useState<Source[]>([]);
   const [selId, setSelId] = useState<string | null>(null);
   const [sel, setSel] = useState<Source | null>(null);
@@ -528,7 +527,6 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
             <Link href={isBid ? "/sales/bids" : "/sales/intel"} className="cd-chip">
               <ArrowLeft className="w-3.5 h-3.5" /> {isBid ? "공공입찰" : "인텔"}
             </Link>
-            <CdThemeToggle theme={theme} onToggle={toggleTheme} />
           </div>
         }
       />

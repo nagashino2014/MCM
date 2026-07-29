@@ -51,7 +51,12 @@ export function TopBar({ userName, userEmail, role, theme, onToggleTheme, onOpen
   return (
     <header
       className="h-14 rounded-2xl flex items-center gap-2 px-3 sm:px-4 sticky top-0 z-50 shrink-0 border cd-border-c"
-      style={{ background: "var(--cd-card)", boxShadow: "var(--cd-shadow)" }}
+      style={{
+        background: "var(--cd-card)",
+        backdropFilter: "var(--cd-blur)",
+        WebkitBackdropFilter: "var(--cd-blur)",
+        boxShadow: "var(--cd-shadow)",
+      }}
     >
       {/* <lg: 사이드바 드로어 열기 */}
       <CdIconButton label="메뉴 열기" className="lg:hidden" onClick={onOpenNav}>
@@ -62,11 +67,11 @@ export function TopBar({ userName, userEmail, role, theme, onToggleTheme, onOpen
       <button
         type="button"
         onClick={() => setSearchOpen(true)}
-        className="flex items-center gap-2 flex-1 max-w-md rounded-xl border cd-border-c px-3 py-2 text-sm cd-text-faint hover:border-[color:var(--cd-primary)] transition-colors"
+        className="flex items-center gap-2 flex-1 max-w-md rounded-xl border cd-border-c cd-surface-bg px-3.5 py-2 text-[13px] cd-text-faint hover:bg-[color:var(--cd-hover)] transition-colors"
       >
         <Search className="w-4 h-4 shrink-0" />
         <span className="flex-1 text-left truncate">검색…</span>
-        <kbd className="hidden sm:inline text-[10px] border cd-border-c rounded px-1.5 py-0.5">Ctrl K</kbd>
+        <kbd className="hidden sm:inline text-[10px] border cd-line-c rounded px-1.5 py-0.5">Ctrl K</kbd>
       </button>
 
       <div className="flex-1" />
@@ -115,9 +120,9 @@ export function TopBar({ userName, userEmail, role, theme, onToggleTheme, onOpen
             <div className="fixed inset-0 z-40" onClick={() => setUserMenuOpen(false)} />
             <div
               className="absolute top-[calc(100%+8px)] right-0 w-64 z-50 rounded-2xl overflow-hidden border cd-border-c"
-              style={{ background: "var(--cd-card)", boxShadow: "var(--cd-shadow)" }}
+              style={{ background: "var(--cd-card-solid)", boxShadow: "var(--cd-shadow)" }}
             >
-              <div className="px-4 py-3 border-b cd-border-c">
+              <div className="px-4 py-3 border-b cd-hairline-c">
                 <div className="text-sm font-bold cd-text truncate">{userName || "사용자"}</div>
                 <div className="text-xs cd-text-muted truncate">{userEmail}</div>
                 <div className="mt-1 inline-block text-[10px] font-bold uppercase tracking-wide cd-soft-primary px-2 py-0.5 rounded">

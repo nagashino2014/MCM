@@ -1,0 +1,34 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "proto-static",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8791", "--directory", "C:/Users/nagas/AppData/Local/Temp/claude/C--CodingProject-MCM/df83abb9-1de1-483c-be8e-ca8aa95731c8/scratchpad"],
+      "port": 8791
+    },
+    {
+      "name": "frontend-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "frontend",
+      "port": 3000,
+      "autoPort": true,
+      "env": {
+        "NODE_EXTRA_CA_CERTS": "C:\\ProgramData\\Avast Software\\Avast\\wscert.pem"
+      }
+    },
+    {
+      "name": "frontend-dev-ui",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "frontend",
+      "port": 3000,
+      "autoPort": true,
+      "env": {
+        "NODE_EXTRA_CA_CERTS": "C:\\ProgramData\\Avast Software\\Avast\\wscert.pem",
+        "NEXT_DIST_DIR": ".next-ui"
+      }
+    }
+  ]
+}

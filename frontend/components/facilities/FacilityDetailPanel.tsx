@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -223,22 +223,17 @@ export function FacilityDetailPanel({ facilityId, canEdit, onUpdated, onDeleted 
         <div className="flex items-center gap-3 min-w-0">
           <LogoPreview path={detail.logoPath} label={detail.companyName} />
           <div className="min-w-0">
-            <div className="text-[10px] font-bold cd-text-faint uppercase tracking-wide">
-              FACILITY · {detail.source.toUpperCase()}
-            </div>
-            <h2 className="mt-0.5 flex min-w-0 flex-wrap items-center gap-2 text-2xl font-bold cd-text">
+            {/* 영문 eyebrow 폐기 — 출처는 아래 메타 줄에서 확인한다. */}
+            <h2 className="flex min-w-0 flex-wrap items-center gap-2 text-[21px] font-extrabold tracking-[-0.02em] cd-text">
               <span className="min-w-0 truncate">{formatCompanyName(detail.companyName)}</span>
               {detail.isClosed && (
-                <span
-                  className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold leading-4 text-white"
-                  style={{ backgroundColor: "#FF7979" }}
-                >
+                <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold leading-4 cd-error-bg cd-error-text">
                   폐업사업장
                 </span>
               )}
             </h2>
             <div className="text-xs cd-text-faint mt-1">
-              facility_id: <span className="font-mono">{detail.facilityId}</span>
+              {detail.source.toUpperCase()} · <span className="font-mono">{detail.facilityId}</span>
             </div>
           </div>
         </div>
@@ -286,7 +281,7 @@ export function FacilityDetailPanel({ facilityId, canEdit, onUpdated, onDeleted 
                   type="button"
                   disabled={deleting}
                   onClick={() => setDeleteConfirmOpen(true)}
-                  className="rounded-xl px-3 py-2 text-xs font-bold cd-error-text cd-error-bg hover:cd-error-bg border border-red-200 flex items-center gap-1 disabled:opacity-60"
+                  className="rounded-xl px-3 py-2 text-xs font-bold cd-error-text cd-error-bg hover:cd-error-bg border cd-error-border flex items-center gap-1 disabled:opacity-60"
                 >
                   <Trash2 className="w-3.5 h-3.5" /> 삭제
                 </button>
@@ -704,7 +699,7 @@ function FacilityHistoryModal({
                       <button
                         type="button"
                         onClick={() => deleteHistory(item)}
-                        className="rounded-lg px-2 py-1 text-[10px] font-bold cd-error-text cd-error-bg border border-red-200"
+                        className="rounded-lg px-2 py-1 text-[10px] font-bold cd-error-text cd-error-bg border cd-error-border"
                       >
                         삭제
                       </button>
@@ -2047,7 +2042,7 @@ function ContactEditActions({
   if (!canEdit) return null;
   return (
     <div className="sm:col-span-2 flex justify-end gap-2 pt-2">
-      <button type="button" onClick={onDelete} className="rounded-xl px-3 py-2 text-xs font-bold cd-error-text cd-error-bg border border-red-200">
+      <button type="button" onClick={onDelete} className="rounded-xl px-3 py-2 text-xs font-bold cd-error-text cd-error-bg border cd-error-border">
         삭제
       </button>
       <button type="button" onClick={onCancel} className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs font-bold cd-text-muted">
@@ -2671,7 +2666,7 @@ function EditView({
                     prev.length > 1 ? prev.filter((_, itemIdx) => itemIdx !== idx) : [{ code: "", name: "", autoName: false }]
                   )
                 }
-                className="rounded-lg px-2 py-1 text-[11px] font-bold cd-error-text cd-error-bg hover:cd-error-bg border border-red-200 flex items-center justify-center gap-1"
+                className="rounded-lg px-2 py-1 text-[11px] font-bold cd-error-text cd-error-bg hover:cd-error-bg border cd-error-border flex items-center justify-center gap-1"
               >
                 <Trash2 className="w-3 h-3" /> 삭제
               </button>
@@ -2748,7 +2743,7 @@ function EditView({
                       : [{ businessType: "", businessItem: "" }]
                   )
                 }
-                className="rounded-lg px-2 py-1 text-[11px] font-bold cd-error-text cd-error-bg hover:cd-error-bg border border-red-200 flex items-center justify-center gap-1"
+                className="rounded-lg px-2 py-1 text-[11px] font-bold cd-error-text cd-error-bg hover:cd-error-bg border cd-error-border flex items-center justify-center gap-1"
               >
                 <Trash2 className="w-3 h-3" /> 삭제
               </button>
@@ -2785,7 +2780,7 @@ function EditView({
                   setLogoPath("");
                   setLogoFile(null);
                 }}
-                className="rounded-lg px-3 py-2 text-[11px] font-bold cd-error-text cd-error-bg border border-red-200"
+                className="rounded-lg px-3 py-2 text-[11px] font-bold cd-error-text cd-error-bg border cd-error-border"
               >
                 로고 제거
               </button>
@@ -2819,7 +2814,7 @@ function EditView({
             <input className="cd-input" value={alias.alias} onChange={(e) => setAliases((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, alias: e.target.value } : item))} placeholder="사업체 사용 명칭" />
             <input className="cd-input" value={alias.aliasType} onChange={(e) => setAliases((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, aliasType: e.target.value } : item))} placeholder="유형" />
             <input className="cd-input" value={alias.note} onChange={(e) => setAliases((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, note: e.target.value } : item))} placeholder="메모" />
-            <button type="button" onClick={() => setAliases((prev) => prev.filter((_, itemIdx) => itemIdx !== idx))} className="rounded-lg px-2 py-1 text-[11px] font-bold cd-error-text cd-error-bg border border-red-200">
+            <button type="button" onClick={() => setAliases((prev) => prev.filter((_, itemIdx) => itemIdx !== idx))} className="rounded-lg px-2 py-1 text-[11px] font-bold cd-error-text cd-error-bg border cd-error-border">
               삭제
             </button>
           </div>
@@ -2873,7 +2868,7 @@ function EditView({
               <input className="cd-input" value={product.amount} onChange={(e) => setManualProducts((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, amount: e.target.value } : item))} placeholder="생산량" />
               <input className="cd-input" value={product.unit} onChange={(e) => setManualProducts((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, unit: e.target.value } : item))} placeholder="단위" />
               <input className="cd-input" value={product.note} onChange={(e) => setManualProducts((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, note: e.target.value } : item))} placeholder="비고" />
-              <button type="button" onClick={() => setManualProducts((prev) => prev.filter((_, itemIdx) => itemIdx !== idx))} className="rounded-lg px-2 py-1 text-[11px] font-bold cd-error-text cd-error-bg border border-red-200">
+              <button type="button" onClick={() => setManualProducts((prev) => prev.filter((_, itemIdx) => itemIdx !== idx))} className="rounded-lg px-2 py-1 text-[11px] font-bold cd-error-text cd-error-bg border cd-error-border">
                 삭제
               </button>
             </div>
@@ -2932,7 +2927,7 @@ function EditView({
       )}
 
       {error && (
-        <div className="sm:col-span-2 text-xs font-bold cd-error-text cd-error-bg border border-red-200 rounded-xl px-3 py-2">
+        <div className="sm:col-span-2 text-xs font-bold cd-error-text cd-error-bg border cd-error-border rounded-xl px-3 py-2">
           {error}
         </div>
       )}
@@ -3595,7 +3590,7 @@ export function GroupManagementModal({
                   <button type="button" onClick={renameSelectedGroup} disabled={saving || !selectedGroupId} className="cd-btn cd-btn-ghost rounded-lg px-2 py-1 text-[11px] font-bold cd-text-muted disabled:opacity-50">
                     그룹명 수정
                   </button>
-                  <button type="button" onClick={deleteSelectedGroup} disabled={saving || !selectedGroupId} className="rounded-lg px-2 py-1 text-[11px] font-bold cd-error-text cd-error-bg border border-red-200 disabled:opacity-50">
+                  <button type="button" onClick={deleteSelectedGroup} disabled={saving || !selectedGroupId} className="rounded-lg px-2 py-1 text-[11px] font-bold cd-error-text cd-error-bg border cd-error-border disabled:opacity-50">
                     그룹 삭제
                   </button>
                   <button type="button" onClick={saveMembership} disabled={saving || !selectedGroupId || !selectedCompanyId} className="ml-auto rounded-lg px-3 py-1 text-[11px] font-bold text-white cd-fill-primary disabled:opacity-50">
@@ -3777,7 +3772,7 @@ function AnnualReportSection({
                 }
                 onChanged();
               }}
-              className="rounded-lg px-2 py-1 text-[10px] font-bold cd-error-text cd-error-bg border border-red-200"
+              className="rounded-lg px-2 py-1 text-[10px] font-bold cd-error-text cd-error-bg border cd-error-border"
             >
               삭제
             </button>
@@ -3961,7 +3956,7 @@ function AnnualReportEditForm({
             <button
               type="button"
               onClick={() => setProducts(products.filter((_, i) => i !== idx))}
-              className="rounded-lg cd-error-text cd-error-bg border border-red-200 text-xs font-bold"
+              className="rounded-lg cd-error-text cd-error-bg border cd-error-border text-xs font-bold"
             >
               ×
             </button>
@@ -4072,7 +4067,7 @@ function PermitsSection({
                       }
                       onChanged();
                     }}
-                    className="rounded-lg px-2 py-1 text-[10px] font-bold cd-error-text cd-error-bg border border-red-200"
+                    className="rounded-lg px-2 py-1 text-[10px] font-bold cd-error-text cd-error-bg border cd-error-border"
                   >
                     삭제
                   </button>
@@ -4270,7 +4265,7 @@ function PermitEditForm({
             <button
               type="button"
               onClick={() => setProducts(products.filter((_, i) => i !== idx))}
-              className="rounded-lg cd-error-text cd-error-bg border border-red-200 text-xs font-bold"
+              className="rounded-lg cd-error-text cd-error-bg border cd-error-border text-xs font-bold"
             >
               ×
             </button>

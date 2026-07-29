@@ -1,5 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // 빌드 산출 디렉터리 — 기본은 `.next`. 여러 작업 세션이 dev 서버를 동시에 띄우면
+  // 같은 `.next` 를 서로 덮어써 청크가 사라진다("Cannot find module './XXXX.js'").
+  // 세션마다 NEXT_DIST_DIR=.next-<이름> 을 주면 산출물이 분리돼 충돌하지 않는다.
+  // (미설정 시 기존과 동일 — Dockerfile·배포 경로는 영향 없음)
+  distDir: process.env.NEXT_DIST_DIR ?? ".next",
   serverExternalPackages: ["sql.js"],
   typescript: {
     ignoreBuildErrors: true,

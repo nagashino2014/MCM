@@ -5,11 +5,13 @@ import type { ReactNode } from "react";
 import { ArrowRight } from "lucide-react";
 
 /**
- * 홈 대시보드 위젯 카드 공용 셸(cdash cd-card).
- * 헤더(아이콘 배지 + 타이틀 + 카운트 뱃지 + 딥링크) + 본문. 로딩/에러/빈 상태를 일관되게 처리한다.
+ * 홈 대시보드 위젯 카드 공용 셸(cdash cd-card — 글라스).
+ * 헤더(제목 14/800 + 카운트 배지 + 딥링크) + 헤어라인 + 본문.
+ * Soft Glass Ink: 틴트 사각 아이콘 배지는 폐기했다(화면이 파란 사각형으로 도배되던 원인 — 분석 §1).
+ * `icon` prop 은 기존 13개 위젯 호환을 위해 남겨두되 렌더하지 않는다.
  */
 export function HomeCard({
-  icon,
+  icon: _icon,
   title,
   count,
   accent = "var(--cd-primary)",
@@ -22,10 +24,11 @@ export function HomeCard({
   children,
   headerActions,
 }: {
-  icon: ReactNode;
+  /** @deprecated 아이콘 배지 폐기 — 렌더되지 않는다. */
+  icon?: ReactNode;
   title: string;
   count?: number;
-  /** 아이콘 배지·카운트 뱃지 강조색(CSS 색 문자열). */
+  /** 카운트 배지 강조색(CSS 색 문자열). */
   accent?: string;
   href?: string;
   hrefLabel?: string;
@@ -37,19 +40,13 @@ export function HomeCard({
   headerActions?: ReactNode;
 }) {
   return (
-    <section className="cd-card p-4 flex flex-col gap-3 cd-reveal">
-      <header className="flex items-center gap-2.5">
-        <span
-          className="inline-flex items-center justify-center w-8 h-8 rounded-lg shrink-0"
-          style={{ background: "color-mix(in srgb, " + accent + " 14%, transparent)", color: accent }}
-        >
-          {icon}
-        </span>
-        <h2 className="text-sm font-bold cd-text truncate">{title}</h2>
+    <section className="cd-card cd-reveal overflow-hidden">
+      <header className="flex items-center gap-2 px-[18px] py-[13px] border-b cd-hairline-c shrink-0">
+        <h2 className="text-sm font-extrabold cd-text truncate">{title}</h2>
         {typeof count === "number" && count > 0 && (
           <span
-            className="text-[11px] font-bold rounded-full px-2 py-0.5 shrink-0"
-            style={{ background: "color-mix(in srgb, " + accent + " 16%, transparent)", color: accent }}
+            className="text-[11px] font-extrabold rounded-md px-[7px] py-0.5 shrink-0"
+            style={{ background: "color-mix(in srgb, " + accent + " 14%, transparent)", color: accent }}
           >
             {count}
           </span>
@@ -59,7 +56,7 @@ export function HomeCard({
           {href && (
             <Link
               href={href}
-              className="inline-flex items-center gap-1 text-[11px] font-semibold cd-text-muted hover:cd-text"
+              className="inline-flex items-center gap-1 text-xs font-semibold cd-text-faint hover:text-[color:var(--cd-text)] transition-colors"
             >
               {hrefLabel}
               <ArrowRight className="w-3 h-3" />
@@ -68,12 +65,13 @@ export function HomeCard({
         </div>
       </header>
 
-      <div className="min-h-[64px]">
+      {/* 고정 높이 카드(결재 대기·안읽은 메일)에서 내용이 넘치면 본문만 스크롤한다. */}
+      <div className="min-h-[64px] flex-1 overflow-y-auto px-[18px] py-3">
         {loading ? (
           <div className="flex flex-col gap-2 animate-pulse">
-            <div className="h-3.5 rounded" style={{ background: "var(--cd-surface)", width: "80%" }} />
-            <div className="h-3.5 rounded" style={{ background: "var(--cd-surface)", width: "60%" }} />
-            <div className="h-3.5 rounded" style={{ background: "var(--cd-surface)", width: "70%" }} />
+            <div className="h-3.5 rounded" style={{ background: "var(--cd-hover)", width: "80%" }} />
+            <div className="h-3.5 rounded" style={{ background: "var(--cd-hover)", width: "60%" }} />
+            <div className="h-3.5 rounded" style={{ background: "var(--cd-hover)", width: "70%" }} />
           </div>
         ) : error ? (
           <p className="text-[13px] cd-text-faint py-4 text-center">불러오지 못했습니다.</p>
@@ -87,7 +85,7 @@ export function HomeCard({
   );
 }
 
-/** 위젯 리스트 행 공용 스타일 — 윤곽선 기본, hover 시 surface. */
+/** 위젯 리스트 행 — 윤곽선 박스 폐기, 헤어라인 구분 + hover 글라스(120ms). */
 export function HomeRow({
   children,
   href,
@@ -98,7 +96,7 @@ export function HomeRow({
   onClick?: () => void;
 }) {
   const cls =
-    "w-full flex items-center gap-2 rounded-lg border cd-border-c px-3 py-2 text-left hover:bg-[color:var(--cd-surface)] transition-colors";
+    "w-full flex items-center gap-2.5 rounded-[10px] px-2 py-2.5 text-left cd-row-hover";
   if (href) {
     return (
       <Link href={href} className={cls}>

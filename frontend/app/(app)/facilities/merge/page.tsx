@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -629,7 +629,7 @@ function Inner() {
                       type="button"
                       onClick={handleExcludeActiveCandidate}
                       disabled={excluding}
-                      className="rounded-xl px-3 py-2 text-xs font-bold cd-error-text cd-error-bg hover:cd-error-bg border border-red-200 disabled:opacity-60"
+                      className="rounded-xl px-3 py-2 text-xs font-bold cd-error-text cd-error-bg hover:cd-error-bg border cd-error-border disabled:opacity-60"
                     >
                       {excluding ? "제외 중…" : "전체 업체 제외"}
                     </button>

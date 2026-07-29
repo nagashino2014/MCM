@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { Save, X } from "lucide-react";
@@ -105,7 +105,7 @@ export function ReviewSidePanel({ row, onSave, onClose, canEdit = true }: Props)
           placeholder="확정할 값을 입력하세요"
         />
         {error && (
-          <div className="text-xs font-bold cd-error-text cd-error-bg border border-red-200 rounded-xl px-3 py-2">
+          <div className="text-xs font-bold cd-error-text cd-error-bg border cd-error-border rounded-xl px-3 py-2">
             {error}
           </div>
         )}

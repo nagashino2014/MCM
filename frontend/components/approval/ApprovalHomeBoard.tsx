@@ -64,6 +64,16 @@ const BOXES: { key: BoxKey; label: string; icon: typeof Inbox; group: "inbox" | 
 
 const short = (s: string | null) => (s ? s.slice(0, 16).replace("T", " ") : "-");
 
+/** 행당 상태 표현은 색 점 1개로 제한한다(Soft Glass Ink 상태 규정). */
+const STATUS_DOT: Record<string, string> = {
+  approved: "var(--cd-success)",
+  rejected: "var(--cd-error)",
+  in_progress: "var(--cd-primary)",
+  pending: "var(--cd-primary)",
+  draft: "var(--cd-faint)",
+  canceled: "var(--cd-faint)",
+};
+
 export function ApprovalHomeBoard() {
   const { theme } = useCdashTheme();
   const router = useRouter();
@@ -121,6 +131,14 @@ export function ApprovalHomeBoard() {
   useEffect(() => {
     loadList();
   }, [loadList]);
+
+  // 진입 시 첫 문서 자동 선택 — 뷰어가 빈 상태로 시작하던 문제(분석 §2 /approval).
+  // 작성중·반려함은 클릭이 기안 편집으로 가는 흐름이라 자동 선택에서 제외한다.
+  useEffect(() => {
+    if (!isWide || loading || box === "draft") return;
+    if (selectedId && docs.some((d) => d.docId === selectedId)) return;
+    setSelectedId(docs[0]?.docId ?? null);
+  }, [docs, loading, isWide, box, selectedId]);
 
   const refreshAll = useCallback(() => {
     loadCounts();
@@ -180,7 +198,7 @@ export function ApprovalHomeBoard() {
                 key={b.key}
                 type="button"
                 className={`flex items-center gap-2 rounded-lg px-2.5 py-2 text-[12.5px] text-left transition-colors ${
-                  box === b.key ? "cd-tint-primary font-semibold" : "cd-text hover:bg-[color:var(--cd-surface)]"
+                  box === b.key ? "cd-glass-active font-bold" : "cd-text-muted cd-row-hover"
                 }`}
                 onClick={() => {
                   setBox(b.key);
@@ -204,7 +222,7 @@ export function ApprovalHomeBoard() {
 
   const listPane = (
     <div className="h-full min-h-0 flex flex-col">
-      <div className="flex items-center gap-2 px-3 py-2 border-b cd-border-c shrink-0">
+      <div className="flex items-center gap-2 px-3 py-2 border-b cd-hairline-c shrink-0">
         <span className="text-[13px] font-bold cd-text">{boxLabel}</span>
         <span className="text-[11px] cd-text-faint">{docs.length}건</span>
         <button type="button" className="ml-auto cd-btn cd-btn-soft rounded-lg p-1.5" title="새로고침" onClick={refreshAll}>
@@ -217,45 +235,41 @@ export function ApprovalHomeBoard() {
         ) : docs.length === 0 ? (
           <CdEmptyState icon={<FolderOpen className="w-7 h-7" />} title="문서가 없습니다" description={`${boxLabel} 문서가 없습니다.`} />
         ) : (
+          // 행 위계 반전(Soft Glass Ink): pill 3개(긴급·양식·상태) → 상태 색 점 1개 + 긴급 배지만.
+          // 제목이 노이즈에 밀리던 문제를 없애고, 양식·기안자·시각은 무채 메타 1줄로 내린다.
           docs.map((d) => (
             <button
               key={d.docId}
               type="button"
-              className={`w-full text-left px-3 py-2.5 border-b cd-border-c flex flex-col gap-1 transition-colors ${
-                selectedId === d.docId ? "cd-tint-primary" : "hover:bg-[color:var(--cd-surface)]"
+              className={`w-full text-left px-3.5 py-3 border-b cd-hairline-row-c flex items-start gap-2.5 transition-colors ${
+                selectedId === d.docId ? "cd-glass-active" : "cd-row-hover"
               }`}
               onClick={() => openDoc(d)}
+              title={DOC_STATUS_LABEL[d.status] ?? d.status}
             >
-              <div className="flex items-center gap-1.5 min-w-0">
-                {d.urgent && (
-                  <span className="text-[9.5px] font-bold rounded-full px-1.5 py-0.5 border border-[color:var(--cd-danger,#FA896B)] text-[color:var(--cd-danger,#FA896B)] shrink-0">
-                    긴급
-                  </span>
-                )}
-                <span className="text-[10px] rounded-full px-1.5 py-0.5 cd-tint-primary shrink-0">{d.formName}</span>
-                {d.aiSummary && d.aiSummary.lines.length > 0 && (
-                  <Sparkles className="w-3 h-3 cd-text-primary shrink-0" aria-label="AI 요약 있음" />
-                )}
-                <span
-                  className={`ml-auto shrink-0 text-[10px] rounded-full px-1.5 py-0.5 border ${
-                    d.status === "approved"
-                      ? "border-[color:var(--cd-success,#13DEB9)] text-[color:var(--cd-success,#13DEB9)]"
-                      : d.status === "rejected"
-                        ? "border-[color:var(--cd-danger,#FA896B)] text-[color:var(--cd-danger,#FA896B)]"
-                        : "cd-border-c cd-text-faint"
-                  }`}
-                >
-                  {DOC_STATUS_LABEL[d.status] ?? d.status}
+              <span
+                className="w-2 h-2 rounded-full mt-[5px] shrink-0"
+                style={{ background: STATUS_DOT[d.status] ?? "var(--cd-faint)" }}
+                aria-hidden
+              />
+              <span className="flex-1 min-w-0">
+                <span className="block text-[13.5px] font-bold cd-text leading-[1.4] truncate" title={d.title}>
+                  {d.urgent && (
+                    <span className="text-[10px] font-extrabold rounded-[5px] px-1.5 py-0.5 mr-1.5 cd-error-bg cd-error-text align-[1px]">
+                      긴급
+                    </span>
+                  )}
+                  {d.title}
+                  {d.aiSummary && d.aiSummary.lines.length > 0 && (
+                    <Sparkles className="inline w-3 h-3 ml-1 cd-text-primary" aria-label="AI 요약 있음" />
+                  )}
                 </span>
-              </div>
-              <p className="text-[13px] font-semibold cd-text truncate" title={d.title}>
-                {d.title}
-              </p>
-              <p className="text-[11px] cd-text-faint truncate">
-                {d.drafterName ?? "-"}
-                {d.deptName ? ` · ${d.deptName}` : ""} · {short(d.submittedAt ?? d.updatedAt)}
-                {d.docNo ? ` · ${d.docNo}` : ""}
-              </p>
+                <span className="block mt-[3px] text-[11.5px] truncate" style={{ color: "var(--cd-faint)" }}>
+                  {d.formName} · {d.drafterName ?? "-"}
+                  {d.deptName ? ` · ${d.deptName}` : ""} · {short(d.submittedAt ?? d.updatedAt)}
+                  {d.docNo ? ` · ${d.docNo}` : ""}
+                </span>
+              </span>
             </button>
           ))
         )}
@@ -284,10 +298,8 @@ export function ApprovalHomeBoard() {
   return (
     <div className="cdash cd-fields-white flex h-full min-h-0 flex-col p-4 md:p-5 rounded-3xl" data-theme={theme}>
       <CdPageHeader
-        icon={<ClipboardCheck className="w-5 h-5" />}
-        eyebrow="Approval · Home"
         title="전자결재"
-        subtitle="결재 대기 문서를 처리하고 기안을 작성합니다. 모든 문서의 입력 값은 항목별 데이터로 저장됩니다."
+        meta={`결재 대기 ${counts.pending} · 결재 예정 ${counts.upcoming}`}
         actions={
           <CdButton variant="primary" icon={<Plus className="w-4 h-4" />} onClick={openFormModal}>
             새 기안
@@ -295,7 +307,7 @@ export function ApprovalHomeBoard() {
         }
       />
 
-      <div className="flex-1 min-h-0 rounded-2xl border cd-border-c cd-card-bg overflow-hidden">
+      <div className="flex-1 min-h-0 cd-card overflow-hidden">
         {isWide ? (
           <CdSplitPane
             first={boxPane}
@@ -328,7 +340,7 @@ export function ApprovalHomeBoard() {
               </>
             ) : (
               <>
-                <div className="px-2 py-1.5 border-b cd-border-c">
+                <div className="px-2 py-1.5 border-b cd-hairline-c">
                   <CdButton size="sm" icon={<ArrowLeft className="w-3.5 h-3.5" />} onClick={() => setMobileView("list")}>
                     목록
                   </CdButton>

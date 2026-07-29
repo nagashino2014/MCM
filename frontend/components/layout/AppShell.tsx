@@ -29,9 +29,10 @@ export function AppShell({ role, userName, userEmail, children }: AppShellProps)
 
   return (
     <CdToastProvider>
-      <div className="cdash cd-fields-white flex h-screen p-3 2xl:p-4 gap-3 2xl:gap-4" data-theme={theme}>
+      {/* 루트 = 앰비언트 글로우 캔버스(Soft Glass Ink). 프레임 패딩·gap 16px. */}
+      <div className="cdash cd-canvas cd-fields-white flex h-screen p-4 gap-4" data-theme={theme}>
         <Sidebar role={role} badges={badges} />
-        <div className="flex-1 flex flex-col min-w-0 min-h-0 gap-3 2xl:gap-4">
+        <div className="flex-1 flex flex-col min-w-0 min-h-0 gap-4">
           <TopBar
             userName={userName}
             userEmail={userEmail}

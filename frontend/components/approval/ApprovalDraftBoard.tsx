@@ -447,6 +447,8 @@ export function ApprovalDraftBoard() {
               fields={form.fields}
               values={values}
               onChange={(key, value) => setValues((prev) => ({ ...prev, [key]: value }))}
+              // 기안 단계에서도 완성 문서와 같은 양식 제목을 보여준다(신청/승인란은 상신 후).
+              header={{ formName: form.name }}
             />
           </div>
 

@@ -8,17 +8,9 @@ export default function AuthLayout({
 }) {
   return (
     <div
-      className="cdash cd-fields-white min-h-screen flex items-center justify-center p-4 relative overflow-hidden"
+      className="cdash cd-canvas cd-fields-white min-h-screen flex items-center justify-center p-4 relative overflow-hidden"
       data-theme="light"
-      style={{ background: "var(--cd-bg)" }}
     >
-      <div
-        className="absolute inset-0 -z-10"
-        style={{
-          background: "linear-gradient(135deg, var(--cd-primary-soft) 0%, transparent 45%, var(--cd-secondary-soft) 100%)",
-          opacity: 0.6,
-        }}
-      />
       {children}
     </div>
   );

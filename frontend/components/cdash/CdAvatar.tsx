@@ -15,15 +15,9 @@ const SIZE_CLASS: Record<CdAvatarSize, string> = {
   lg: "w-14 h-14 text-lg",
 };
 
-// 라이트/다크 모두 무난한 파스텔 팔레트(soft 배경 + 진한 글자).
-const PALETTE: Array<{ bg: string; fg: string }> = [
-  { bg: "var(--cd-primary-soft)", fg: "var(--cd-primary)" },
-  { bg: "var(--cd-secondary-soft)", fg: "var(--cd-secondary)" },
-  { bg: "var(--cd-success-soft)", fg: "var(--cd-success)" },
-  { bg: "var(--cd-warning-soft)", fg: "var(--cd-warning)" },
-  { bg: "var(--cd-error-soft)", fg: "var(--cd-error)" },
-  { bg: "var(--cd-accent-soft)", fg: "var(--cd-accent)" },
-];
+// 아바타 전용 저채도 팔레트 — 상태색(성공·경고·위험)과 색조를 분리해 의미 혼선을 없앤다.
+// 배경은 같은 색의 알파 틴트(color-mix), 글자는 원색.
+const PALETTE = ["--cd-av-1", "--cd-av-2", "--cd-av-3", "--cd-av-4", "--cd-av-5", "--cd-av-6"];
 
 function hashName(name: string): number {
   let h = 0;
@@ -50,7 +44,11 @@ export interface CdAvatarProps extends HTMLAttributes<HTMLSpanElement> {
 }
 
 export function CdAvatar({ name, src, size = "md", className, ...rest }: CdAvatarProps) {
-  const color = PALETTE[hashName(name || "?") % PALETTE.length];
+  const token = PALETTE[hashName(name || "?") % PALETTE.length];
+  const color = {
+    bg: `color-mix(in srgb, var(${token}) 18%, transparent)`,
+    fg: `var(${token})`,
+  };
   return (
     <span
       className={cn(

@@ -3,7 +3,7 @@
 // 메일 3-pane 우측 — 본문 뷰어(G2-2/4): 헤더·첨부·본문(sandbox iframe)·답장/전달/삭제.
 // 외부 발신 HTML 은 XSS 방지를 위해 sandbox iframe(스크립트 차단)으로 렌더한다.
 
-import { Archive, ChevronDown, CornerUpRight, Download, Loader2, Reply, ReplyAll, RotateCcw, ShieldAlert, Tag, Trash2 } from "lucide-react";
+import { Archive, CornerUpRight, Download, Loader2, Reply, ReplyAll, RotateCcw, ShieldAlert, Tag, Trash2 } from "lucide-react";
 import { CdButton } from "@/components/cdash/CdButton";
 import { CdDropdown } from "@/components/cdash/CdDropdown";
 import { CdEmptyState } from "@/components/cdash/CdEmptyState";
@@ -69,72 +69,67 @@ export function MailViewerPane({
 
   return (
     <div className="flex flex-col h-full min-w-0">
-      {/* 액션 바 */}
-      <div className="flex items-center gap-1.5 px-3 py-2 border-b cd-border-c flex-wrap">
+      {/* 액션 바 — 주요 3개(답장·전달·삭제)만 노출하고 나머지는 ⋯ 오버플로로.
+          버튼 8개 평면 나열은 주요/보조 구분이 없어 전부 등가로 읽혔다(분석 §2 /mail). */}
+      <div className="flex items-center gap-1.5 px-4 py-2.5 border-b cd-hairline-c">
         <CdButton size="sm" variant="soft" icon={<Reply className="w-3.5 h-3.5" />} onClick={onReply}>
           답장
-        </CdButton>
-        <CdButton size="sm" icon={<ReplyAll className="w-3.5 h-3.5" />} onClick={onReplyAll}>
-          전체답장
         </CdButton>
         <CdButton size="sm" icon={<CornerUpRight className="w-3.5 h-3.5" />} onClick={onForward}>
           전달
         </CdButton>
-        <span className="w-px h-4 mx-0.5" style={{ background: "var(--cd-border)" }} />
-
-        {/* 카테고리 설정(G2-12) — 등록된 카테고리 선택으로 분류(라벨) */}
-        <CdDropdown
-          align="left"
-          trigger={() => {
-            const current = categories.find((c) => c.folderId === detail?.categoryId);
-            return (
-              <span className="cd-btn cd-btn-sm cd-btn-ghost inline-flex items-center gap-1 cursor-pointer" role="button">
-                <Tag className="w-3.5 h-3.5" />
-                {current ? current.name : "카테고리"}
-                <ChevronDown className="w-3 h-3 opacity-50" />
-              </span>
-            );
-          }}
-          items={[
-            ...categories.map((c) => ({
-              key: c.folderId,
-              label: c.name,
-              onSelect: () => onSetCategory(c.folderId),
-            })),
-            { key: "__none", label: "분류 해제", onSelect: () => onSetCategory(null) },
-          ]}
-        />
-        <CdButton size="sm" icon={<Archive className="w-3.5 h-3.5" />} onClick={onArchive} title="카테고리 폴더(미지정 시 보관함)로 이동">
-          보관
-        </CdButton>
-        {folder !== "spam" ? (
-          <CdButton size="sm" icon={<ShieldAlert className="w-3.5 h-3.5" />} onClick={onSpam}>
-            스팸 분류
-          </CdButton>
-        ) : (
-          <CdButton size="sm" variant="soft" icon={<RotateCcw className="w-3.5 h-3.5" />} onClick={onUnspam} title="받은편지함으로 복원하고 발신자 차단을 해제합니다">
-            스팸 해제
-          </CdButton>
-        )}
-        <div className="flex-1" />
         {inTrash ? (
-          <>
-            <CdButton size="sm" icon={<RotateCcw className="w-3.5 h-3.5" />} onClick={onRestore}>
-              복원
-            </CdButton>
-            <CdButton size="sm" variant="danger" icon={<Trash2 className="w-3.5 h-3.5" />} onClick={onDelete}>
-              영구삭제
-            </CdButton>
-          </>
+          <CdButton size="sm" variant="danger" icon={<Trash2 className="w-3.5 h-3.5" />} onClick={onDelete}>
+            영구삭제
+          </CdButton>
         ) : (
           <CdButton size="sm" variant="danger" icon={<Trash2 className="w-3.5 h-3.5" />} onClick={onTrash}>
             삭제
           </CdButton>
         )}
+        <div className="flex-1" />
+        <CdDropdown
+          align="right"
+          trigger={() => (
+            <span
+              className="cd-btn cd-btn-sm cd-btn-ghost inline-flex items-center cursor-pointer tracking-[0.1em] font-extrabold"
+              role="button"
+              title="더 보기"
+            >
+              ⋯
+            </span>
+          )}
+          items={[
+            { key: "replyAll", label: "전체답장", icon: <ReplyAll className="w-4 h-4" />, onSelect: onReplyAll },
+            ...(inTrash
+              ? [{ key: "restore", label: "복원", icon: <RotateCcw className="w-4 h-4" />, onSelect: onRestore }]
+              : [
+                  {
+                    key: "archive",
+                    label: "보관(카테고리 폴더로 이동)",
+                    icon: <Archive className="w-4 h-4" />,
+                    onSelect: onArchive,
+                  },
+                  folder !== "spam"
+                    ? { key: "spam", label: "스팸 분류", icon: <ShieldAlert className="w-4 h-4" />, onSelect: onSpam }
+                    : { key: "unspam", label: "스팸 해제", icon: <RotateCcw className="w-4 h-4" />, onSelect: onUnspam },
+                ]),
+            // 카테고리(라벨) 지정 — 현재 지정된 항목은 라벨에 · 로 표시한다.
+            ...categories.map((c) => ({
+              key: c.folderId,
+              label: `${detail?.categoryId === c.folderId ? "· " : ""}카테고리: ${c.name}`,
+              icon: <Tag className="w-4 h-4" />,
+              onSelect: () => onSetCategory(c.folderId),
+            })),
+            ...(detail?.categoryId
+              ? [{ key: "__none", label: "분류 해제", icon: <Tag className="w-4 h-4" />, onSelect: () => onSetCategory(null) }]
+              : []),
+          ]}
+        />
       </div>
 
       {/* 헤더 */}
-      <div className="px-4 py-3 border-b cd-border-c flex flex-col gap-2">
+      <div className="px-4 py-3 border-b cd-hairline-c flex flex-col gap-2">
         <h2 className="text-base font-bold cd-text break-words">{detail.subject || "(제목 없음)"}</h2>
         <div className="flex items-center gap-2.5">
           <CdAvatar name={fromName} size="sm" />
@@ -180,7 +175,10 @@ export function MailViewerPane({
             className="w-full h-full border-0"
           />
         ) : (
-          <pre className="p-4 text-sm whitespace-pre-wrap font-sans text-black overflow-y-auto h-full">{detail.bodyText || "(내용 없음)"}</pre>
+          // 평문 본문: 읽기 여백 확대 — 최대폭 70ch, 행간 1.8(분석 §2 /mail 처방).
+          <pre className="px-6 py-5 text-[13.5px] leading-[1.8] whitespace-pre-wrap font-sans text-black overflow-y-auto h-full max-w-[70ch]">
+            {detail.bodyText || "(내용 없음)"}
+          </pre>
         )}
       </div>
     </div>

@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Factory, Plus, GitMerge, ClipboardList, RefreshCw } from "lucide-react";
+import { Plus, GitMerge, ClipboardList, RefreshCw } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
 import { FacilityListPanel } from "@/components/facilities/FacilityListPanel";
@@ -128,10 +128,8 @@ function Inner() {
       data-theme={theme}
     >
       <CdPageHeader
-        icon={<Factory className="w-5 h-5" />}
-        eyebrow="Facility Master"
-        title="사업장 마스터"
-        subtitle="IEPS 검토결과서에서 추출되거나 수동 등록된 사업장 마스터를 검색·열람·편집합니다. 상세 패널에서 허가/종 규모/생산품/원본 첨부를 함께 확인할 수 있습니다."
+        title="사업장"
+        meta={total > 0 ? `${total.toLocaleString("ko-KR")}개 · ${items.length}건 표시` : undefined}
         actions={
           <>
             <button

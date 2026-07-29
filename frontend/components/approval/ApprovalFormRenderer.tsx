@@ -7,6 +7,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Users, X } from "lucide-react";
+import { ApprovalDocHead, type DocHeadInfo } from "@/components/approval/ApprovalDocHead";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
 import { MailEditor } from "@/components/mail/MailEditor";
@@ -19,8 +20,8 @@ interface RendererProps {
   fields: ApprovalFieldDef[];
   values?: Values;
   onChange?: (key: string, value: unknown) => void;
-  /** 문서 헤더(기안자·소속·기안일·문서번호) 미리보기 표시용 정보 */
-  header?: { drafterName?: string; deptName?: string; draftDate?: string; docNo?: string };
+  /** 문서 헤더(다우식 양식 상단 — 제목·기안 정보 표·신청/승인란). */
+  header?: DocHeadInfo;
   readOnly?: boolean;
 }
 
@@ -51,26 +52,14 @@ export function ApprovalFormRenderer({ fields, values, onChange, header, readOnl
 
   return (
     <div className="flex flex-col gap-3">
-      {header && (
-        <div className="rounded-xl border cd-border-c overflow-hidden">
-          <div className="grid grid-cols-2 md:grid-cols-4 text-[12px]">
-            {[
-              ["기안자", header.drafterName ?? "-"],
-              ["소속", header.deptName ?? "-"],
-              ["기안일", header.draftDate ?? "-"],
-              ["문서번호", header.docNo ?? "(상신 시 채번)"],
-            ].map(([l, v]) => (
-              <div key={l} className="flex border-b md:border-b-0 md:border-r last:border-r-0 cd-border-c">
-                <div className="w-20 shrink-0 px-2.5 py-2 font-bold cd-surface-bg cd-text text-center">{l}</div>
-                <div className="flex-1 px-2.5 py-2 cd-text truncate">{v}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      <div className="rounded-xl border cd-border-c overflow-hidden">
+      {header && <ApprovalDocHead info={header} />}
+      <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--cd-form-line-strong)" }}>
         {rows.map((rowFields, ri) => (
-          <div key={ri} className="flex flex-col md:flex-row border-b last:border-b-0 cd-border-c">
+          <div
+            key={ri}
+            className="flex flex-col md:flex-row"
+            style={{ borderTop: ri > 0 ? "1px solid var(--cd-form-line)" : undefined }}
+          >
             {rowFields.map((f) => (
               <FieldCell
                 key={f.key}

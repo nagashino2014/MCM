@@ -40,7 +40,7 @@ interface ReviewContext {
 }
 
 export default function ExecWorkspace() {
-  const { theme, toggleTheme } = useCdashTheme();
+  const { theme } = useCdashTheme();
   const [ctx, setCtx] = useState<ReviewContext | null>(null);
   const [deptId, setDeptId] = useState("");
   const [tab, setTab] = useState<ExecTab>("service");

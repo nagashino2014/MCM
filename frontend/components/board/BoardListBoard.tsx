@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Building2, Megaphone, Paperclip, Pin, Plus, Users } from "lucide-react";
+import { CdAvatar } from "@/components/cdash/CdAvatar";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdButton } from "@/components/cdash/CdButton";
@@ -15,6 +16,16 @@ import type { BoardPost } from "@/lib/board";
 import "@/components/cdash/cdash.css";
 
 const short = (s: string | null) => (s ? s.slice(0, 10) : "-");
+
+/** 게시 종료까지 남은 일수 — "D-3" / 당일 "D-DAY". 기간 미설정이거나 지났으면 null. */
+function dday(noticeTo: string | null): string | null {
+  if (!noticeTo) return null;
+  const end = new Date(`${noticeTo.slice(0, 10)}T23:59:59+09:00`);
+  if (Number.isNaN(end.getTime())) return null;
+  const diff = Math.ceil((end.getTime() - Date.now()) / 86_400_000);
+  if (diff < 0) return null;
+  return diff === 0 ? "D-DAY" : `D-${diff}`;
+}
 
 export function BoardListBoard() {
   const { theme } = useCdashTheme();
@@ -41,13 +52,15 @@ export function BoardListBoard() {
     load();
   }, [load]);
 
+  const pinned = posts.filter((p) => p.pinnedNow);
+  const normal = posts.filter((p) => !p.pinnedNow);
+  const unreadCount = posts.filter((p) => p.unread).length;
+
   return (
     <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
       <CdPageHeader
-        icon={<Megaphone className="w-5 h-5" />}
-        eyebrow="Board"
         title="공지 · 게시판"
-        subtitle="전사 공지와 부서 게시판을 한 곳에서 확인합니다."
+        meta={`${scope === "company" ? "전사 공지" : "부서 게시판"}${unreadCount > 0 ? ` · 안읽음 ${unreadCount}건` : ""}`}
         actions={
           <CdButton variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => router.push(`/board/write?scope=${scope}`)}>
             글쓰기
@@ -57,7 +70,7 @@ export function BoardListBoard() {
 
       <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4">
         {/* 게시판 선택 */}
-        <div className="lg:w-56 shrink-0 rounded-2xl border cd-border-c cd-card-bg p-3">
+        <div className="lg:w-56 shrink-0 cd-card p-3">
           <div className="flex lg:flex-col gap-1">
             {(
               [
@@ -69,7 +82,7 @@ export function BoardListBoard() {
                 key={it.key}
                 type="button"
                 className={`flex items-center gap-2 rounded-lg px-2.5 py-2 text-[12.5px] text-left transition-colors ${
-                  scope === it.key ? "cd-tint-primary font-semibold" : "cd-text hover:bg-[color:var(--cd-surface)]"
+                  scope === it.key ? "cd-glass-active font-bold" : "cd-text-muted cd-row-hover"
                 }`}
                 onClick={() => setScope(it.key)}
               >
@@ -92,45 +105,97 @@ export function BoardListBoard() {
               description={scope === "company" ? "전사 공지가 아직 없습니다." : "부서 게시판에 첫 글을 남겨보세요."}
             />
           ) : (
-            <div className="flex-1 min-h-0 overflow-auto rounded-2xl border cd-border-c cd-card-bg">
-              <table className="cd-table text-[12.5px]">
-                <thead>
-                  <tr>
-                    <th className="w-16">구분</th>
-                    <th>제목</th>
-                    <th className="w-28">작성자</th>
-                    <th className="w-32">공지 기간</th>
-                    <th className="w-24">작성일</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {posts.map((p) => (
-                    <tr key={p.postId} className="cursor-pointer" onClick={() => router.push(`/board/${p.postId}`)}>
-                      <td>
-                        {p.pinnedNow ? (
-                          <span className="cd-pill cd-pill-info inline-flex items-center gap-1">
-                            <Pin className="w-3 h-3" /> 고정
+            // 고정 공지는 상단 카드 스트립으로 분리하고, 일반 글은 제목 위주 리스트로.
+            // 5열 균등 테이블에서는 제목이 주인공이 아니었다(분석 §2 /board).
+            <div className="flex-1 min-h-0 overflow-auto flex flex-col gap-3">
+              {pinned.length > 0 && (
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 shrink-0">
+                  {pinned.map((p) => (
+                    <button
+                      key={p.postId}
+                      type="button"
+                      onClick={() => router.push(`/board/${p.postId}`)}
+                      className="text-left rounded-2xl p-4 px-[18px] flex flex-col gap-2.5 transition-colors"
+                      style={{
+                        background: "linear-gradient(135deg, rgba(106,131,239,0.12), rgba(142,134,238,0.08))",
+                        border: "1px solid rgba(106,131,239,0.22)",
+                        backdropFilter: "blur(16px)",
+                        WebkitBackdropFilter: "blur(16px)",
+                      }}
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full px-2.5 py-[3px] text-[10px] font-extrabold cd-text-primary"
+                          style={{ background: "rgba(255,255,255,0.75)" }}
+                        >
+                          <Pin className="w-2.5 h-2.5" /> 고정 공지
+                        </span>
+                        {dday(p.noticeTo) && (
+                          <span className="ml-auto text-[10.5px] font-extrabold cd-warn-bg cd-warn-text rounded-full px-2.5 py-[3px] tabular-nums">
+                            게시 종료 {dday(p.noticeTo)}
                           </span>
-                        ) : p.expired ? (
-                          <span className="text-[11px] cd-text-faint">종료</span>
-                        ) : (
-                          <span className="text-[11px] cd-text-faint">일반</span>
                         )}
-                      </td>
-                      <td className="cd-text">
-                        {p.unread && <span className="inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle" style={{ background: "var(--cd-primary)" }} />}
-                        <span className={p.unread ? "font-bold" : ""}>{p.title}</span>
-                        {(p.attachmentCount ?? 0) > 0 && <Paperclip className="w-3 h-3 inline ml-1 cd-text-faint" />}
-                      </td>
-                      <td className="cd-text-muted whitespace-nowrap">{p.authorName ?? "-"}</td>
-                      <td className="cd-text-faint whitespace-nowrap text-[11px]">
-                        {p.noticeFrom || p.noticeTo ? `${short(p.noticeFrom)} ~ ${short(p.noticeTo)}` : "제한 없음"}
-                      </td>
-                      <td className="cd-text-faint whitespace-nowrap text-[11px]">{short(p.createdAt)}</td>
-                    </tr>
+                      </span>
+                      <span className="text-[15px] font-extrabold tracking-[-0.015em] leading-[1.45] cd-text truncate">
+                        {p.unread && (
+                          <span
+                            className="inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle"
+                            style={{ background: "var(--cd-primary)" }}
+                          />
+                        )}
+                        {p.title}
+                      </span>
+                      <span className="flex items-center gap-[7px]">
+                        <CdAvatar name={p.authorName ?? "-"} size="xs" className="w-[22px] h-[22px] text-[9.5px]" />
+                        <span className="text-[11.5px] font-bold cd-text-muted">{p.authorName ?? "-"}</span>
+                        <span className="text-[11px] cd-text-faint">{short(p.createdAt)}</span>
+                        {(p.attachmentCount ?? 0) > 0 && <Paperclip className="w-3 h-3 cd-text-faint" />}
+                      </span>
+                    </button>
                   ))}
-                </tbody>
-              </table>
+                </div>
+              )}
+
+              <div className="cd-card overflow-hidden">
+                <div className="flex items-center gap-2 px-4 py-3 border-b cd-hairline-c">
+                  <span className="text-[13px] font-extrabold cd-text">일반 글</span>
+                  <span className="text-[11.5px] cd-text-faint">{normal.length}건</span>
+                </div>
+                {normal.length === 0 ? (
+                  <p className="text-[13px] cd-text-faint py-6 text-center">일반 글이 없습니다.</p>
+                ) : (
+                  normal.map((p) => (
+                    <button
+                      key={p.postId}
+                      type="button"
+                      onClick={() => router.push(`/board/${p.postId}`)}
+                      className="w-full text-left flex items-center gap-3 px-[18px] py-[13px] border-b cd-hairline-row-c last:border-b-0 cd-row-hover"
+                    >
+                      <span
+                        className="w-1.5 h-1.5 rounded-full shrink-0"
+                        style={{ background: "var(--cd-primary)", opacity: p.unread ? 1 : 0 }}
+                        aria-hidden
+                      />
+                      <CdAvatar name={p.authorName ?? "-"} size="sm" className="w-[30px] h-[30px] text-[11px]" />
+                      <span className="flex-1 min-w-0">
+                        <span
+                          className={`block text-sm tracking-[-0.01em] cd-text truncate ${p.unread ? "font-bold" : "font-medium"}`}
+                        >
+                          {p.title}
+                        </span>
+                        <span className="block mt-0.5 text-[11.5px] cd-text-faint truncate">
+                          {p.authorName ?? "-"} · {short(p.createdAt)}
+                          {p.noticeFrom || p.noticeTo ? ` · 공지 ${short(p.noticeFrom)}~${short(p.noticeTo)}` : ""}
+                        </span>
+                      </span>
+                      {(p.attachmentCount ?? 0) > 0 && <Paperclip className="w-3.5 h-3.5 cd-text-faint shrink-0" />}
+                      {p.expired && (
+                        <span className="cd-pill cd-pill-idle shrink-0 text-[10.5px]">종료</span>
+                      )}
+                    </button>
+                  ))
+                )}
+              </div>
             </div>
           )}
         </div>

@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CdAvatar } from "@/components/cdash/CdAvatar";
 import { CdCheckbox } from "@/components/cdash/CdField";
 import { CdDropdown } from "@/components/cdash/CdDropdown";
 import { CdEmptyState } from "@/components/cdash/CdEmptyState";
@@ -126,10 +127,10 @@ export function MailListPane({
   const showArchiveDropdown = folder === "inbox"; // 보관 — 카테고리 선택 드롭다운
 
   return (
-    <div className="flex flex-col h-full border-r cd-border-c min-w-0">
+    <div className="flex flex-col h-full border-r cd-hairline-c min-w-0">
       {/* 검색 + 새로고침 */}
-      <div className="flex items-center gap-1.5 px-3 py-2 border-b cd-border-c">
-        <div className="flex items-center gap-1.5 flex-1 rounded-lg border cd-border-c px-2.5 py-1.5 min-w-0">
+      <div className="flex items-center gap-1.5 px-3 py-2.5 border-b cd-hairline-c">
+        <div className="flex items-center gap-1.5 flex-1 rounded-[10px] border cd-line-c cd-surface-bg px-2.5 py-1.5 min-w-0">
           <Search className="w-3.5 h-3.5 cd-text-faint shrink-0" />
           <input
             value={qInput}
@@ -158,7 +159,7 @@ export function MailListPane({
 
       {/* 일괄 액션 툴바(드래프트 폴더 제외) */}
       {!isDrafts && (
-        <div className="flex items-center gap-0.5 px-3 py-1.5 border-b cd-border-c text-xs">
+        <div className="flex items-center gap-0.5 px-3 py-1.5 border-b cd-hairline-c text-xs">
           <CdCheckbox checked={selected.size > 0 && selected.size === items.length} onChange={toggleAll} aria-label="전체 선택" />
           {selected.size > 0 ? (
             <>
@@ -213,7 +214,7 @@ export function MailListPane({
           drafts.length === 0 ? (
             <CdEmptyState title="임시보관함이 비어 있습니다." description="작성 중 자동 저장된 메일이 여기에 보관됩니다." />
           ) : (
-            <ul className="divide-y cd-border-c">
+            <ul className="divide-y cd-hairline-row-c">
               {drafts.map((d) => (
                 <li key={d.draftId} className="flex items-start">
                   <button onClick={() => onOpenDraft(d)} className="flex-1 min-w-0 text-left px-3 py-2.5 flex flex-col gap-0.5 cd-row-hover">
@@ -238,35 +239,44 @@ export function MailListPane({
         ) : items.length === 0 ? (
           <CdEmptyState title={q ? "검색 결과가 없습니다." : "메일이 없습니다."} />
         ) : (
-          <ul className="divide-y cd-border-c">
+          // 행 3층(Soft Glass Ink): 안읽음 점 + 아바타 → 발신자/시간 → 제목 → 스니펫.
+          // 선택 행은 흰 글라스 필, 안읽음은 굵기 + 좌측 6px 점으로 시선 앵커를 만든다.
+          <ul>
             {items.map((m) => {
               const unread = !m.isRead && folder === "inbox";
               const who = folder === "sent" ? m.toAddrs.map((a) => a.name || a.address).join(", ") : m.fromAddr ?? "-";
+              const active = activeId === m.messageId;
               return (
-                <li key={m.messageId} className={cn(activeId === m.messageId && "cd-tint-primary")}>
-                  <div className="flex items-start gap-2 px-3 py-2.5 cd-row-hover">
-                    <span className="pt-0.5" onClick={(e) => e.stopPropagation()}>
+                <li key={m.messageId} className="border-b cd-hairline-row-c last:border-b-0">
+                  <div className={cn("flex items-start gap-2.5 px-3 py-[13px]", active ? "cd-glass-active" : "cd-row-hover")}>
+                    <span
+                      className="w-1.5 h-1.5 rounded-full mt-3 shrink-0"
+                      style={{ background: "var(--cd-primary)", opacity: unread ? 1 : 0 }}
+                      aria-hidden
+                    />
+                    <span className="pt-1.5" onClick={(e) => e.stopPropagation()}>
                       <CdCheckbox checked={selected.has(m.messageId)} onChange={() => toggleOne(m.messageId)} aria-label="선택" />
                     </span>
-                    <button
-                      onClick={() => onToggleStar(m.messageId, !m.isStarred)}
-                      className="pt-0.5 shrink-0"
-                      aria-label={m.isStarred ? "별표 해제" : "별표"}
-                    >
-                      <Star
-                        className={cn("w-4 h-4", m.isStarred ? "fill-[var(--cd-warning)] text-[color:var(--cd-warning)]" : "cd-text-faint")}
-                      />
-                    </button>
-                    <button onClick={() => onOpen(m.messageId)} className="flex-1 min-w-0 text-left flex flex-col gap-0.5">
-                      <div className="flex items-center justify-between gap-2">
+                    <CdAvatar name={who} size="sm" className="mt-0.5 w-[30px] h-[30px] text-[11px]" />
+                    <button onClick={() => onOpen(m.messageId)} className="flex-1 min-w-0 text-left flex flex-col gap-[3px]">
+                      <div className="flex items-baseline justify-between gap-2">
                         <span className={cn("text-xs truncate", unread ? "font-bold cd-text" : "cd-text-muted")}>{who}</span>
-                        <span className="text-[11px] cd-text-faint shrink-0">{fmtListDate(m.createdAt)}</span>
+                        <span className="text-[10.5px] cd-text-faint shrink-0 tabular-nums">{fmtListDate(m.createdAt)}</span>
                       </div>
-                      <span className={cn("text-sm truncate", unread ? "font-bold cd-text" : "cd-text")}>
+                      <span className={cn("text-[13px] truncate cd-text", unread && "font-bold")}>
                         {m.subject || "(제목 없음)"}
                         {m.hasAttachments && <Paperclip className="inline w-3 h-3 ml-1 cd-text-faint" />}
                       </span>
-                      {m.snippet && <span className="text-xs cd-text-faint truncate">{m.snippet}</span>}
+                      {m.snippet && <span className="text-[11px] cd-text-faint truncate">{m.snippet}</span>}
+                    </button>
+                    <button
+                      onClick={() => onToggleStar(m.messageId, !m.isStarred)}
+                      className="mt-0.5 shrink-0"
+                      aria-label={m.isStarred ? "별표 해제" : "별표"}
+                    >
+                      <Star
+                        className={cn("w-4 h-4", m.isStarred ? "fill-[var(--cd-warning)] text-[color:var(--cd-warning)]" : "cd-text-faint opacity-60")}
+                      />
                     </button>
                   </div>
                 </li>

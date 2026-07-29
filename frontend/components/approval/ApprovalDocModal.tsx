@@ -5,7 +5,7 @@
 // 모달(ApprovalDocModal)은 뷰어를 오버레이로 감싼 래퍼 — 양식별 조회/문서함에서 계속 사용.
 
 import { useEffect, useState, type ReactNode } from "react";
-import { CheckCircle2, Sparkles, X, XCircle } from "lucide-react";
+import { CheckCircle2, Sparkles, X } from "lucide-react";
 import { ApprovalFormRenderer } from "@/components/approval/ApprovalFormRenderer";
 import type { ApprovalFieldDef } from "@/lib/approval/fields";
 
@@ -133,45 +133,76 @@ export function ApprovalDocViewer({
         ) : (
           <>
             <div className="flex items-center gap-2">
-              <h3 className="text-[15px] font-bold cd-text flex-1">
-                {detail.urgent && <span className="text-[11px] text-[color:var(--cd-danger,#FA896B)] font-bold mr-1">[긴급]</span>}
+              <h3 className="text-base font-extrabold cd-text flex-1 min-w-0">
+                {detail.urgent && (
+                  <span className="text-[10px] font-extrabold rounded-[5px] px-1.5 py-0.5 mr-1.5 cd-error-bg cd-error-text align-[1px]">
+                    긴급
+                  </span>
+                )}
                 {detail.title}
                 <span className="ml-2 text-[11px] font-normal cd-text-faint">
-                  {detail.docNo ?? "미채번"} · {detail.formName} · {DOC_STATUS_LABEL[detail.status] ?? detail.status}
+                  {detail.docNo ?? "미채번"} · {DOC_STATUS_LABEL[detail.status] ?? detail.status}
                 </span>
               </h3>
               {headerRight}
             </div>
 
-            <div className="rounded-xl border cd-border-c p-3 flex flex-wrap gap-2">
-              <div className="rounded-lg border cd-border-c px-2.5 py-1.5 text-[11.5px]">
-                <span className="cd-text-faint">기안</span> <span className="cd-text font-semibold">{detail.drafterName ?? "-"}</span>
-                <span className="cd-text-faint"> {short(detail.submittedAt)}</span>
-              </div>
-              {detail.steps.map((s) => (
-                <div
-                  key={s.stepId}
-                  className={`rounded-lg border px-2.5 py-1.5 text-[11.5px] ${
-                    s.status === "pending"
-                      ? "border-[color:var(--cd-primary)] cd-tint-primary"
-                      : s.status === "approved"
-                        ? "border-[color:var(--cd-success,#13DEB9)]"
-                        : s.status === "rejected"
-                          ? "border-[color:var(--cd-danger,#FA896B)]"
-                          : "cd-border-c"
-                  }`}
-                  title={s.comment ?? undefined}
-                >
-                  <span className="cd-text-faint">{s.stepType === "agree" ? "합의" : "승인"}</span>{" "}
-                  <span className="cd-text font-semibold">
-                    {s.assigneeName ?? s.assigneeUserId}
-                    {s.delegatedFrom && <span className="text-[10px] cd-text-faint">(대결)</span>}
-                  </span>{" "}
-                  <span className="cd-text-faint">{STEP_STATUS_LABEL[s.status] ?? s.status}</span>
-                  {s.status === "approved" && <CheckCircle2 className="inline w-3 h-3 ml-0.5 text-[color:var(--cd-success,#13DEB9)]" />}
-                  {s.status === "rejected" && <XCircle className="inline w-3 h-3 ml-0.5 text-[color:var(--cd-danger,#FA896B)]" />}
-                </div>
-              ))}
+            {/* 결재선 스텝퍼 — 누가 다음 차례인지 목록·뷰어 어디에도 없던 문제(분석 §2 /approval).
+                기안자부터 마지막 결재자까지 아바타 체인으로 상설 표시하고 현재 차례를 강조한다. */}
+            <div className="flex items-center flex-wrap gap-y-2 pb-3 border-b cd-hairline-c">
+              {[
+                {
+                  key: "__drafter",
+                  name: detail.drafterName ?? "-",
+                  label: `기안 · ${short(detail.submittedAt)}`,
+                  status: "approved",
+                  comment: null as string | null,
+                },
+                ...detail.steps.map((s) => ({
+                  key: s.stepId,
+                  name: `${s.assigneeName ?? s.assigneeUserId}${s.delegatedFrom ? "(대결)" : ""}`,
+                  label: `${s.stepType === "agree" ? "합의" : "승인"} · ${STEP_STATUS_LABEL[s.status] ?? s.status}`,
+                  status: s.status,
+                  comment: s.comment,
+                })),
+              ].map((st, i, arr) => {
+                const tone =
+                  st.status === "approved"
+                    ? "var(--cd-success)"
+                    : st.status === "rejected"
+                      ? "var(--cd-error)"
+                      : st.status === "pending"
+                        ? "var(--cd-primary)"
+                        : "var(--cd-faint)";
+                return (
+                  <div key={st.key} className="flex items-center" title={st.comment ?? undefined}>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="w-[34px] h-[34px] rounded-full inline-flex items-center justify-center text-xs font-bold shrink-0"
+                        style={{
+                          background: `color-mix(in srgb, ${tone} 16%, transparent)`,
+                          color: tone,
+                          boxShadow: st.status === "pending" ? `0 0 0 2px ${tone}` : undefined,
+                        }}
+                      >
+                        {st.name.slice(0, 1)}
+                      </span>
+                      <span className="leading-[1.3]">
+                        <span className="block text-xs font-bold cd-text whitespace-nowrap">{st.name}</span>
+                        <span className="block text-[10px] font-semibold whitespace-nowrap" style={{ color: tone }}>
+                          {st.label}
+                        </span>
+                      </span>
+                    </div>
+                    {i < arr.length - 1 && (
+                      <span
+                        className="w-[18px] h-[2px] rounded-sm mx-[7px]"
+                        style={{ background: arr[i + 1].status === "waiting" ? "var(--cd-hairline)" : tone, opacity: 0.7 }}
+                      />
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {detail.aiSummary && (detail.aiSummary.lines.length > 0 || detail.aiSummary.figures.length > 0) && (
@@ -195,18 +226,31 @@ export function ApprovalDocViewer({
               </div>
             )}
 
-            <ApprovalFormRenderer
-              fields={detail.fields}
-              values={detail.fieldValues}
-              onChange={() => {}}
-              readOnly
-              header={{
-                drafterName: detail.drafterName ?? undefined,
-                deptName: detail.deptName ?? undefined,
-                draftDate: short(detail.submittedAt),
-                docNo: detail.docNo ?? undefined,
+            {/* 문서 본체 — 다우식 양식(중앙 제목 + 기안 표 + 신청/승인란)을 흰 카드 위에 올린다. */}
+            <div
+              className="rounded-[14px] px-[26px] py-6 flex flex-col gap-4"
+              style={{
+                background: "var(--cd-active-fill)",
+                border: "1px solid var(--cd-active-border)",
+                boxShadow: "0 4px 18px rgba(80, 95, 150, 0.05)",
               }}
-            />
+            >
+              <ApprovalFormRenderer
+                fields={detail.fields}
+                values={detail.fieldValues}
+                onChange={() => {}}
+                readOnly
+                header={{
+                  formName: detail.formName,
+                  drafterName: detail.drafterName ?? undefined,
+                  deptName: detail.deptName ?? undefined,
+                  draftDate: short(detail.submittedAt),
+                  docNo: detail.docNo ?? undefined,
+                  steps: detail.steps,
+                  myStepId: detail.myStepId ?? null,
+                }}
+              />
+            </div>
 
             {detail.steps.some((s) => s.comment) && (
               <div className="rounded-xl border cd-border-c p-3 flex flex-col gap-1">
@@ -223,18 +267,30 @@ export function ApprovalDocViewer({
             )}
 
             {detail.myStepId && detail.status === "in_progress" && (
-              <div className="flex items-center gap-2">
-                <input className="cd-input flex-1" placeholder="결재 의견(반려 시 필수)" value={comment} onChange={(e) => setComment(e.target.value)} />
-                <button type="button" className="cd-btn cd-btn-primary rounded-lg px-4 py-2 text-xs font-semibold disabled:opacity-50" disabled={acting} onClick={() => act("approve")}>
-                  승인
-                </button>
+              // 하단 처리 바 — 반려(위험 윤곽) 좌측, 승인(그라데이션 CTA) 우측.
+              <div className="flex items-center gap-2 pt-1">
                 <button
                   type="button"
-                  className="cd-btn rounded-lg border border-[color:var(--cd-danger,#FA896B)] text-[color:var(--cd-danger,#FA896B)] px-4 py-2 text-xs font-semibold disabled:opacity-50"
+                  className="cd-btn cd-btn-danger px-[18px] py-2.5 text-[13px] disabled:opacity-50"
                   disabled={acting}
                   onClick={() => act("reject")}
                 >
                   반려
+                </button>
+                <input
+                  className="cd-input flex-1"
+                  placeholder="결재 의견(반려 시 필수)"
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="cd-btn cd-btn-primary px-[26px] py-2.5 text-[13.5px] disabled:opacity-50"
+                  disabled={acting}
+                  onClick={() => act("approve")}
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  승인
                 </button>
               </div>
             )}
@@ -256,9 +312,14 @@ export function ApprovalDocModal({
   onChanged?: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose}>
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center p-4"
+      style={{ background: "rgba(23, 28, 44, 0.42)", backdropFilter: "blur(3px)", WebkitBackdropFilter: "blur(3px)" }}
+      onClick={onClose}
+    >
       <div
-        className="cdash cdash-vars cd-fields-white cd-card-bg rounded-2xl border cd-border-c w-full max-w-3xl max-h-[88vh] overflow-y-auto p-5"
+        className="cdash cdash-vars cd-fields-white rounded-[24px] border cd-border-c w-full max-w-3xl max-h-[88vh] overflow-y-auto p-5"
+        style={{ background: "var(--cd-card-solid)" }}
         data-theme={theme}
         onClick={(e) => e.stopPropagation()}
       >

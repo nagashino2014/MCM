@@ -78,7 +78,7 @@ export default function WorkPlanEditor({
   organization,
 }: WorkPlanEditorProps) {
   const router = useRouter();
-  const { theme, toggleTheme } = useCdashTheme();
+  const { theme } = useCdashTheme();
   const week = useMemo(() => thisWeekRange(), []);
 
   const [deptId, setDeptId] = useState(initialReport?.deptId ?? "");

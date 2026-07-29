@@ -21,7 +21,6 @@ import {
 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
-import { CdThemeToggle } from "@/components/cdash/CdThemeToggle";
 import { EmployeeAvatar } from "@/components/ui/EmployeeAvatar";
 import type { AttendanceSettings } from "@/lib/adt/types";
 import type { DailyRow, IgnoredEmp, MappableEmployee, UnmatchedRow, WeeklyRow } from "@/lib/adt/queries";
@@ -50,7 +49,7 @@ const dowOf = (d: string): string => {
 type Tab = "upload" | "weekly" | "mapping" | "settings";
 
 export function AttendanceBoard() {
-  const { theme, toggleTheme } = useCdashTheme();
+  const { theme } = useCdashTheme();
   const [tab, setTab] = useState<Tab>("weekly");
   const [unmatchedCount, setUnmatchedCount] = useState<number | null>(null);
 
@@ -59,10 +58,7 @@ export function AttendanceBoard() {
       <div className="max-w-6xl mx-auto px-4 py-6">
         <CdPageHeader
           icon={<CalendarClock className="w-5 h-5" />}
-          eyebrow="ATTENDANCE"
           title="근태 · 초과근무 관리"
-          subtitle="ADT캡스 근태 수신분을 주 단위(일요일 시작)로 집계합니다. 야간 22:00~06:00 2.0배·그 외 연장 1.5배, 주 12시간 초과분은 특별휴가 보상 대상입니다."
-          actions={<CdThemeToggle theme={theme} onToggle={toggleTheme} />}
         />
 
         {/* 탭 */}

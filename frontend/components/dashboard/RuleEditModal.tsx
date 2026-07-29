@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { X, Trash2 } from "lucide-react";
@@ -246,7 +246,7 @@ export function RuleEditModal({ rule, extractionRange, onSave, onDelete, onClose
           </Field>
 
           {error && (
-            <div className="text-xs font-bold cd-error-text cd-error-bg border border-red-200 rounded-xl px-3 py-2">
+            <div className="text-xs font-bold cd-error-text cd-error-bg border cd-error-border rounded-xl px-3 py-2">
               {error}
             </div>
           )}

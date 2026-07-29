@@ -29,6 +29,16 @@ const TABS = [
 
 const short = (s: string | null) => (s ? s.slice(5, 16).replace("T", " ") : "-");
 
+/** 데스크톱 결재함(ApprovalHomeBoard)과 동일한 상태 점 색. */
+const STATUS_DOT: Record<string, string> = {
+  approved: "var(--cd-success)",
+  rejected: "var(--cd-error)",
+  in_progress: "var(--cd-primary)",
+  pending: "var(--cd-primary)",
+  draft: "var(--cd-faint)",
+  canceled: "var(--cd-faint)",
+};
+
 export function MobileApprovalBoard() {
   const { theme } = useCdashTheme();
   const [tab, setTab] = useState<(typeof TABS)[number][0]>("pending");
@@ -68,24 +78,31 @@ export function MobileApprovalBoard() {
       ) : (
         <div className="flex flex-col gap-2">
           {docs.map((d) => (
+            // 행 위계는 데스크톱 결재함과 동일 — 상태 색 점 1개 + 긴급 배지만, 제목 우선.
+            // 카드에서 바로 승인/반려하지 않고 탭하면 상세(모달)에서 내용 확인 후 처리한다.
             <button
               key={d.docId}
               type="button"
-              className="text-left rounded-2xl border cd-border-c cd-card-bg p-3.5 flex flex-col gap-1 active:bg-[color:var(--cd-surface)]"
+              className="text-left cd-card p-3.5 gap-1 active:bg-[color:var(--cd-hover)]"
+              style={{ minHeight: 56 }}
               onClick={() => setDetailDocId(d.docId)}
+              title={DOC_STATUS_LABEL[d.status] ?? d.status}
             >
-              <div className="flex items-center gap-1.5">
+              <p className="text-[13.5px] font-bold cd-text leading-[1.4]">
+                <span
+                  className="inline-block w-2 h-2 rounded-full mr-1.5 align-middle"
+                  style={{ background: STATUS_DOT[d.status] ?? "var(--cd-faint)" }}
+                  aria-hidden
+                />
                 {d.urgent && (
-                  <span className="text-[10px] font-bold rounded-full px-1.5 py-0.5 border border-[color:var(--cd-danger,#FA896B)] text-[color:var(--cd-danger,#FA896B)]">
+                  <span className="text-[10px] font-extrabold rounded-[5px] px-1.5 py-0.5 mr-1.5 cd-error-bg cd-error-text align-[1px]">
                     긴급
                   </span>
                 )}
-                <span className="text-[10px] rounded-full px-1.5 py-0.5 cd-tint-primary">{d.formName}</span>
-                <span className="ml-auto text-[10px] cd-text-faint">{DOC_STATUS_LABEL[d.status] ?? d.status}</span>
-              </div>
-              <p className="text-[13px] font-bold cd-text">{d.title}</p>
-              <p className="text-[11px] cd-text-faint">
-                {d.drafterName ?? "-"} · {short(d.submittedAt ?? d.updatedAt)}
+                {d.title}
+              </p>
+              <p className="text-[11.5px]" style={{ color: "var(--cd-faint)" }}>
+                {d.formName} · {d.drafterName ?? "-"} · {short(d.submittedAt ?? d.updatedAt)}
                 {d.docNo ? ` · ${d.docNo}` : ""}
               </p>
               {d.aiSummary && d.aiSummary.lines.length > 0 && (

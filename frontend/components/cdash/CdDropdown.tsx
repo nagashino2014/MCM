@@ -52,11 +52,12 @@ export function CdDropdown({ trigger, items, align = "right", className, menuWid
       {open && (
         <div
           className={cn(
-            "absolute top-[calc(100%+6px)] z-50 rounded-xl overflow-hidden py-1.5 border cd-border-c cd-card-bg",
+            // 항목이 많은 메뉴(지역·업종 등)가 잘리지 않도록 스크롤. 배경은 불투명(글라스 위 겹침 방지).
+            "absolute top-[calc(100%+6px)] z-50 rounded-xl overflow-y-auto max-h-[320px] py-1.5 border cd-border-c",
             menuWidthClass,
             align === "right" ? "right-0" : "left-0"
           )}
-          style={{ boxShadow: "var(--cd-shadow)" }}
+          style={{ background: "var(--cd-card-solid)", boxShadow: "var(--cd-shadow)" }}
           role="menu"
         >
           {items.map((it) => (

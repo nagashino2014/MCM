@@ -7,7 +7,7 @@ import { Suspense, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
-import { LogIn, ShieldAlert, ShieldCheck } from "lucide-react";
+import { LogIn, ShieldAlert } from "lucide-react";
 import { CdButton } from "@/components/cdash/CdButton";
 import { CdCheckbox, CdInput } from "@/components/cdash/CdField";
 
@@ -67,15 +67,15 @@ function LoginForm() {
   };
 
   return (
-    <div className="cd-card-bg rounded-3xl border cd-border-c p-10 w-[440px] max-w-[92vw] flex flex-col gap-6" style={{ boxShadow: "var(--cd-shadow)" }}>
+    <div className="cd-card p-10 w-[440px] max-w-[92vw] gap-6">
       <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-2">
-          <span className="w-10 h-10 rounded-xl flex items-center justify-center cd-soft-primary">
-            <ShieldCheck className="w-5 h-5" />
+        <div className="flex items-center gap-2.5">
+          <span className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-extrabold text-white cd-grad-fill shrink-0">
+            M
           </span>
           <div className="flex flex-col leading-tight">
             <span className="text-[19px] font-extrabold tracking-tight cd-text">
-              PermitIQ <span style={{ color: "var(--cd-primary)" }}>Groupware</span>
+              MCM <span className="cd-grad-text">GROUPWARE</span>
             </span>
             <span className="text-[11px] font-semibold cd-text-faint">사번과 비밀번호로 로그인하세요.</span>
           </div>

@@ -46,7 +46,7 @@ interface ReviewContext {
 }
 
 export default function OversightWorkspace() {
-  const { theme, toggleTheme } = useCdashTheme();
+  const { theme } = useCdashTheme();
 
   const [ctx, setCtx] = useState<ReviewContext | null>(null);
   const [deptId, setDeptId] = useState("");

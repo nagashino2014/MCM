@@ -3,6 +3,7 @@ import { authErrorToResponse, requireSession } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { sendMail, type SendAttachmentInput } from "@/lib/mail/send";
 import { deleteDraft } from "@/lib/mail/drafts";
+import { assembleBody } from "@/lib/mail/compose-assemble";
 import type { MailAddress } from "@/lib/mail/mime";
 
 export const runtime = "nodejs";
@@ -30,6 +31,10 @@ function parseRecipients(raw: string | null): MailAddress[] {
 }
 
 // POST: 메일 발송(multipart/form-data). fields: to, cc, bcc, subject, bodyHtml, idempotencyKey, files[]
+//
+// 모바일 앱 경로(블루프린트 §9.1): bodyHtml 대신 **plainBody** 를 보내면 서버가
+// 평문→HTML 변환 + 기본 서명 + 원문 인용(quoteOf/quoteMode)까지 조립한다.
+// 웹은 완성된 bodyHtml 을 그대로 보내므로 동작이 바뀌지 않는다.
 export async function POST(req: NextRequest) {
   try {
     const ctx = await requireSession();
@@ -39,7 +44,17 @@ export async function POST(req: NextRequest) {
     const cc = parseRecipients(form.get("cc") as string | null);
     const bcc = parseRecipients(form.get("bcc") as string | null);
     const subject = String(form.get("subject") ?? "");
-    const bodyHtml = String(form.get("bodyHtml") ?? "");
+    const plainBody = form.get("plainBody");
+    const bodyHtml =
+      typeof plainBody === "string"
+        ? await assembleBody({
+            userId: ctx.userId,
+            plain: plainBody,
+            quoteOf: (form.get("quoteOf") as string | null) || null,
+            quoteMode: form.get("quoteMode") === "forward" ? "forward" : "reply",
+            applySignature: form.get("applySignature") !== "0",
+          })
+        : String(form.get("bodyHtml") ?? "");
     const idempotencyKey = (form.get("idempotencyKey") as string | null) ?? undefined;
     const draftId = (form.get("draftId") as string | null) ?? null;
     const inReplyTo = (form.get("inReplyTo") as string | null) || null;

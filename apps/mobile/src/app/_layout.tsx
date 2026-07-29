@@ -80,6 +80,8 @@ function RootNavigator() {
         <Stack.Screen name="board/[postId]" options={{ ...header, title: '공지' }} />
         <Stack.Screen name="notifications" options={{ ...header, title: '알림 설정' }} />
         <Stack.Screen name="approval/[docId]" options={{ ...header, title: '결재 문서' }} />
+        <Stack.Screen name="mail/[messageId]" options={{ ...header, title: '메일' }} />
+        <Stack.Screen name="mail/compose" options={{ ...header, title: '메일 쓰기' }} />
       </Stack>
     </>
   );

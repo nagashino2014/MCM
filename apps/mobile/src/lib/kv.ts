@@ -79,19 +79,26 @@ export async function kvDel(key: string): Promise<void> {
   }
 }
 
-/** 로그아웃 시 호출 — 캐시된 업무 데이터가 다음 사용자에게 보이지 않게 비운다. */
-export async function kvClearAll(): Promise<void> {
+/** 사용자에게 종속된 키인가(로그아웃 시 지워야 하는 것). 기기 설정(테마·잠금)은 남긴다. */
+const isUserData = (key: string) => key.startsWith("api:") || key === "auth.user";
+
+/**
+ * 로그아웃 시 호출 — 캐시된 업무 데이터가 다음 사용자에게 보이지 않게 비운다.
+ * ⚠ 전체 삭제가 아니다: 테마·앱 잠금 같은 **기기 설정은 보존**한다
+ *   (로그아웃할 때마다 설정이 초기화되면 사용자가 매번 다시 맞춰야 한다).
+ */
+export async function kvClearUserData(): Promise<void> {
   try {
     if (isWeb) {
       const ls = globalThis.localStorage;
       if (!ls) return;
       Object.keys(ls)
-        .filter((k) => k.startsWith("kv:"))
+        .filter((k) => k.startsWith("kv:") && isUserData(k.slice(3)))
         .forEach((k) => ls.removeItem(k));
       return;
     }
     const db = await getDb();
-    await db.runAsync("DELETE FROM kv");
+    await db.runAsync("DELETE FROM kv WHERE key LIKE 'api:%' OR key = 'auth.user'");
   } catch {
     /* noop */
   }

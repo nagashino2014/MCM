@@ -1,15 +1,18 @@
 /**
  * 인증 상태(토큰/사용자) 컨텍스트.
- * - 부팅 시 SecureStore 에 저장된 토큰 유무로 authed/guest 를 판정한다
- *   (토큰 유효성 실검증은 첫 API 호출/refresh 가 담당 — 낙관적).
+ * - 부팅 시 토큰이 있으면 `/api/mobile/auth/me` 로 **사용자 정보를 복원**한다.
+ *   토큰만으로 authed 로 넘기면 앱을 재시작할 때마다 이름·권한이 비어 "사용자"로 보인다(실측 버그).
+ * - 네트워크가 없을 땐 마지막으로 저장해 둔 사용자로 화면을 채운다(오프라인 표시용).
  * - login/logout 을 제공하고, api.ts 의 refresh 실패 시 자동 로그아웃을 연결한다.
  */
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { API_BASE_URL } from "./config";
 import { saveTokens, clearTokens, getAccessToken } from "./tokens";
-import { setUnauthorizedHandler } from "./api";
-import { kvClearAll } from "./kv";
+import { apiJson, setUnauthorizedHandler } from "./api";
+import { kvClearUserData, kvGet, kvSet } from "./kv";
 import { unregisterPush } from "./push";
+
+const USER_KEY = "auth.user";
 
 export interface AuthUser {
   id: string;
@@ -39,7 +42,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await unregisterPush();
     await clearTokens();
     // 캐시된 업무 데이터(결재·메일 목록 등)가 다음 로그인 사용자에게 보이지 않게 비운다.
-    await kvClearAll();
+    await kvClearUserData();
     setUser(null);
     setStatus("guest");
   }, []);
@@ -52,11 +55,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => setUnauthorizedHandler(null);
   }, [logout]);
 
-  // 부팅 시 저장된 토큰으로 초기 상태 결정
+  // 부팅 — 토큰이 있으면 사용자 정보까지 복원한다.
   useEffect(() => {
     (async () => {
       const token = await getAccessToken();
-      setStatus(token ? "authed" : "guest");
+      if (!token) {
+        setStatus("guest");
+        return;
+      }
+      // ① 저장해 둔 사용자로 먼저 화면을 채운다(네트워크가 느리거나 없어도 이름이 보이게).
+      const cached = await kvGet<AuthUser>(USER_KEY);
+      if (cached?.value) setUser(cached.value);
+      setStatus("authed");
+
+      // ② 서버에서 최신 정보로 덮어쓴다. 401 이면 apiFetch 가 refresh 를 시도하고,
+      //    그마저 실패하면 onUnauthorized(=logout)가 걸린다.
+      try {
+        const d = await apiJson<{ user: AuthUser }>("/api/mobile/auth/me");
+        setUser(d.user);
+        void kvSet(USER_KEY, d.user);
+      } catch {
+        // 네트워크 오류면 캐시된 사용자로 계속 진행한다(로그아웃시키지 않는다).
+      }
     })();
   }, []);
 
@@ -78,6 +98,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
       await saveTokens(d.accessToken, d.refreshToken);
       setUser(d.user);
+      void kvSet(USER_KEY, d.user);
       setStatus("authed");
       return { ok: true };
     } catch {

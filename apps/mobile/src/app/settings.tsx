@@ -4,6 +4,7 @@ import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 
 import { Chip, ConfirmSheet, ListRow, Screen, SectionTitle, useToast } from '@/components/ui';
+import { UpdateStatus } from '@/components/UpdateStatus';
 import { useAuth } from '@/lib/auth-context';
 import { canAuthenticate, isLockEnabled, setLockEnabled } from '@/lib/lock';
 import { API_BASE_URL } from '@/lib/config';
@@ -97,6 +98,9 @@ export default function SettingsScreen() {
         danger
         onPress={() => setConfirmLogout(true)}
       />
+
+      <SectionTitle>앱 업데이트</SectionTitle>
+      <UpdateStatus />
 
       <View className="items-center gap-1 px-4 py-8">
         <Text className="text-[11px] text-cd-faint">버전 {version}</Text>

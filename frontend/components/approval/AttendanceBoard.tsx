@@ -54,8 +54,9 @@ export function AttendanceBoard() {
   const [unmatchedCount, setUnmatchedCount] = useState<number | null>(null);
 
   return (
-    <div className="cdash cd-fields-white min-h-screen" data-theme={theme}>
-      <div className="max-w-6xl mx-auto px-4 py-6">
+    // 다른 화면과 동일한 풀폭 프레임 — max-w-6xl 중앙 정렬이라 넓은 화면에서 좌우 여백만 남았다.
+    <div className="cdash cd-fields-white min-h-full p-4 rounded-3xl" data-theme={theme}>
+      <div>
         <CdPageHeader
           icon={<CalendarClock className="w-5 h-5" />}
           title="근태 · 초과근무 관리"
@@ -73,13 +74,12 @@ export function AttendanceBoard() {
               key={k}
               type="button"
               onClick={() => setTab(k)}
-              className={`rounded-lg px-3 py-1.5 text-[13px] font-semibold border transition-colors ${
-                tab === k ? "cd-fill-primary border-transparent text-white" : "cd-border-c cd-text hover:cd-tint-primary"
-              }`}
+              className={`cd-chip ${tab === k ? "" : "cd-text-muted"}`}
+              data-active={tab === k || undefined}
             >
               {label}
               {k === "mapping" && unmatchedCount != null && unmatchedCount > 0 && (
-                <span className="ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold" style={{ background: "var(--cd-danger,#FA896B)", color: "#fff" }}>
+                <span className="ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold" style={{ background: "var(--cd-error)", color: "#fff" }}>
                   {unmatchedCount}
                 </span>
               )}
@@ -155,7 +155,7 @@ function WeeklyPanel() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-[12px] cd-text-faint">주 선택</span>
-        <select className="cd-select" style={{ width: 220 }} value={weekStart} onChange={(e) => { setWeekStart(e.target.value); load(e.target.value); }}>
+        <select className="cd-select" style={{ width: 300 }} value={weekStart} onChange={(e) => { setWeekStart(e.target.value); load(e.target.value); }}>
           {weeks.length === 0 && <option value="">데이터 없음</option>}
           {weeks.map((w) => (
             <option key={w} value={w}>{w} (일) ~ {addDays(w, 6)} (토)</option>
@@ -171,13 +171,13 @@ function WeeklyPanel() {
         <Kpi icon={<UserRoundCheck className="w-4 h-4" />} label="대상 인원" value={`${kpi.people}명`} />
       </div>
 
-      {error && <p className="text-[13px]" style={{ color: "var(--cd-danger,#FA896B)" }}>{error}</p>}
+      {error && <p className="text-[13px]" style={{ color: "var(--cd-error)" }}>{error}</p>}
       {loading ? (
         <p className="text-[13px] cd-text-faint">불러오는 중입니다.</p>
       ) : rows.length === 0 ? (
         <p className="text-[13px] cd-text-faint py-4">해당 주의 근태 데이터가 없습니다. 컨트롤러 전송·인제스트 배치를 확인하세요.</p>
       ) : (
-        <div className="rounded-2xl border cd-border-c overflow-hidden">
+        <div className="cd-card overflow-hidden">
           {/* 헤더 */}
           <div className="hidden md:grid px-3 py-2 text-[11px] font-bold cd-text-faint border-b cd-border-c" style={gridCols}>
             <span>직원</span>
@@ -202,12 +202,12 @@ function WeeklyPanel() {
                 <span className="text-right font-mono text-[13px] cd-text">{hm(r.workedMinutes)}</span>
                 <span className="text-right font-mono text-[13px] cd-text-primary font-semibold">{hm(r.overtimeDayMinutes)}</span>
                 <span className="text-right font-mono text-[13px] font-semibold" style={{ color: r.overtimeNightMinutes > 0 ? "var(--cd-primary)" : "var(--cd-faint)" }}>{hm(r.overtimeNightMinutes)}</span>
-                <span className="text-right font-mono text-[13px] font-bold" style={{ color: r.excessMinutes > 0 ? "var(--cd-danger,#FA896B)" : "var(--cd-faint)" }}>{r.excessMinutes > 0 ? hm(r.excessMinutes) : "-"}</span>
+                <span className="text-right font-mono text-[13px] font-bold" style={{ color: r.excessMinutes > 0 ? "var(--cd-error)" : "var(--cd-faint)" }}>{r.excessMinutes > 0 ? hm(r.excessMinutes) : "-"}</span>
                 <span className="text-center">
                   {r.excluded ? (
                     <span className="inline-flex items-center text-[10.5px] font-bold rounded-full px-2 py-0.5 border cd-border-c cd-text-faint">산정 제외</span>
                   ) : r.overLimit ? (
-                    <span className="inline-flex items-center gap-1 text-[10.5px] font-bold rounded-full px-2 py-0.5" style={{ background: "var(--cd-danger,#FA896B)", color: "#fff" }}>특별휴가 대상</span>
+                    <span className="inline-flex items-center gap-1 text-[10.5px] font-bold rounded-full px-2 py-0.5" style={{ background: "var(--cd-error)", color: "#fff" }}>특별휴가 대상</span>
                   ) : r.overtimeMinutes > 0 ? (
                     <span className="text-[11px] cd-text-faint">정상</span>
                   ) : (
@@ -234,7 +234,7 @@ function DailyDetail({ rows }: { rows?: DailyRow[] }) {
   if (!rows) return <p className="text-[11.5px] cd-text-faint py-2">불러오는 중입니다.</p>;
   if (rows.length === 0) return <p className="text-[11.5px] cd-text-faint py-2">일별 기록이 없습니다.</p>;
   return (
-    <div className="rounded-xl border cd-border-c overflow-hidden">
+    <div className="rounded-xl border cd-border-c cd-surface-bg overflow-hidden">
       <div className="grid px-3 py-1.5 text-[10.5px] font-bold cd-text-faint border-b cd-border-c" style={dailyGrid}>
         <span>일자</span>
         <span className="text-center">출근</span>
@@ -352,12 +352,12 @@ function MappingPanel({ onCount }: { onCount: (n: number) => void }) {
       {loading ? (
         <p className="text-[13px] cd-text-faint">불러오는 중입니다.</p>
       ) : unmatched.length === 0 ? (
-        <div className="rounded-2xl border cd-border-c p-6 text-center">
+        <div className="cd-card p-6 text-center">
           <UserRoundCheck className="w-7 h-7 mx-auto mb-2" style={{ color: "var(--cd-primary)" }} />
           <p className="text-[13px] cd-text">미매칭 항목이 없습니다. 모든 근태가 직원과 연결되어 있습니다.</p>
         </div>
       ) : (
-        <div className="rounded-2xl border cd-border-c overflow-hidden">
+        <div className="cd-card overflow-hidden">
           <div className="hidden md:grid px-3 py-2 text-[11px] font-bold cd-text-faint border-b cd-border-c" style={mapGrid}>
             <span>ADT 사번 / 성명(스냅샷)</span>
             <span className="text-center">기록</span>
@@ -607,7 +607,7 @@ function UploadPanel({ onDone }: { onDone: () => void }) {
         </div>
       )}
 
-      {error && <p className="text-[13px]" style={{ color: "var(--cd-danger,#FA896B)" }}>{error}</p>}
+      {error && <p className="text-[13px]" style={{ color: "var(--cd-error)" }}>{error}</p>}
 
       {result && (
         <div className="rounded-2xl border cd-border-c p-4 flex flex-col gap-3">
@@ -626,7 +626,7 @@ function UploadPanel({ onDone }: { onDone: () => void }) {
               <div key={i} className="flex items-center gap-2">
                 <FileSpreadsheet className="w-3.5 h-3.5 shrink-0" />
                 <span className="truncate">{f.name}</span>
-                <span>— {f.error ? <span style={{ color: "var(--cd-danger,#FA896B)" }}>{f.error}</span> : `${f.records}건 (스킵 ${f.skipped})`}</span>
+                <span>— {f.error ? <span style={{ color: "var(--cd-error)" }}>{f.error}</span> : `${f.records}건 (스킵 ${f.skipped})`}</span>
               </div>
             ))}
           </div>
@@ -647,7 +647,7 @@ function UploadPanel({ onDone }: { onDone: () => void }) {
 function Stat({ label, value, danger }: { label: string; value: number; danger?: boolean }) {
   return (
     <div className="rounded-xl border cd-border-c p-2.5">
-      <div className="text-[18px] font-extrabold tracking-tight" style={{ color: danger ? "var(--cd-danger,#FA896B)" : "var(--cd-text)" }}>{value}</div>
+      <div className="text-[18px] font-extrabold tracking-tight" style={{ color: danger ? "var(--cd-error)" : "var(--cd-text)" }}>{value}</div>
       <div className="text-[10.5px] cd-text-faint">{label}</div>
     </div>
   );
@@ -656,13 +656,21 @@ function Stat({ label, value, danger }: { label: string; value: number; danger?:
 /* ---------- 공용 소품 ---------- */
 function Kpi({ icon, label, value, danger }: { icon: React.ReactNode; label: string; value: string; danger?: boolean }) {
   return (
-    <div className="rounded-2xl border cd-border-c p-3.5 flex items-center gap-3">
-      <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl shrink-0" style={{ background: danger ? "var(--cd-danger,#FA896B)" : "var(--cd-primary-soft)", color: danger ? "#fff" : "var(--cd-primary)" }}>
-        {icon}
-      </span>
-      <span className="min-w-0">
-        <span className="block text-[11px] cd-text-faint">{label}</span>
-        <span className="block text-[17px] font-extrabold cd-text tracking-tight">{value}</span>
+    <div className="cd-card p-3.5">
+      <span className="flex items-center gap-3">
+        <span
+          className="inline-flex items-center justify-center w-9 h-9 rounded-xl shrink-0"
+          style={{
+            background: danger ? "var(--cd-error)" : "var(--cd-primary-soft)",
+            color: danger ? "#fff" : "var(--cd-primary)",
+          }}
+        >
+          {icon}
+        </span>
+        <span className="min-w-0">
+          <span className="block text-[11px] cd-text-faint">{label}</span>
+          <span className="block text-[17px] font-extrabold cd-text tracking-tight">{value}</span>
+        </span>
       </span>
     </div>
   );

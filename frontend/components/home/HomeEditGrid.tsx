@@ -68,6 +68,9 @@ export function HomeEditGrid({
   const ref = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [items, setItems] = useState<Record<string, HomeLayoutItem>>(() => withDefaults(entries, layout));
+  // 드래그 종료 시점에 최신 배치를 읽기 위한 미러(렌더 중 setState 회피).
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
 
   // 표시 카드 구성이나 저장된 배치가 바뀌면 다시 계산한다(드래그 중에는 건드리지 않는다).
   useEffect(() => {
@@ -118,11 +121,10 @@ export function HomeEditGrid({
 
     const end = () => {
       setDrag(null);
-      // 최신 배치를 부모에 올려 저장한다(setItems 콜백으로 최신값 확보).
-      setItems((cur) => {
-        onChange(cur);
-        return cur;
-      });
+      // 최신 배치를 부모에 올려 저장한다.
+      // setItems updater 안에서 onChange 를 부르면 "렌더 중 다른 컴포넌트 setState" 경고가 난다
+      // (updater 는 렌더 단계에서 실행될 수 있다) — ref 로 최신값을 읽어 이벤트 핸들러에서 호출한다.
+      onChange(itemsRef.current);
     };
 
     window.addEventListener("pointermove", move);

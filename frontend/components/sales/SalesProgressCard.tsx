@@ -90,11 +90,13 @@ export function SalesProgressCard({ project, activities, orderInfo }: { project:
           {flowTags.map((t) => {
             const on = info.activeType === t;
             const future = !on && info.futureTypes.has(t);
+            // 배경은 반드시 불투명(--cd-card-solid) — 글라스 토큰을 쓰면 아래 진행 바가 비쳐
+            // 태그가 투명하게 보인다.
             const style = on
               ? { background: "#EAF7E1", border: "1.5px solid #7EBA56", color: "#4A7A2E" }
               : future
-              ? { background: "var(--cd-card)", border: "1.5px solid var(--cd-primary)", color: "var(--cd-primary)" }
-              : { background: "var(--cd-card)", border: "1px solid var(--cd-border)", color: "var(--cd-muted)" };
+              ? { background: "var(--cd-card-solid)", border: "1.5px solid var(--cd-primary)", color: "var(--cd-primary)" }
+              : { background: "var(--cd-card-solid)", border: "1px solid var(--cd-ring)", color: "var(--cd-muted)" };
             return (
               <span key={t} className="relative z-10 rounded-full px-3 py-1 text-xs shrink-0" style={style}>
                 {ACTIVITY_TYPE_META[t].short}

@@ -82,7 +82,7 @@ export function MobileSheet({
       onClick={onClose}
     >
       <div
-        className="cd-card-bg rounded-t-3xl w-full flex flex-col"
+        className="cd-solid-bg rounded-t-3xl w-full flex flex-col"
         style={{ maxWidth: 480, maxHeight: "85dvh" }}
         onClick={(e) => e.stopPropagation()}
       >

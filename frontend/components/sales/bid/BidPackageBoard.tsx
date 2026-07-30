@@ -301,7 +301,7 @@ function PartTagEditor({
           </span>
         ))}
         <input
-          className="cd-input !py-1 text-[11px]"
+          className="cd-input !py-1 !text-[11px]"
           style={{ width: 150 }}
           value={draft}
           placeholder={placeholder}
@@ -357,25 +357,27 @@ function StaffRoleRow({
   const labelOf = (a: PartAssignmentUI) => [a.sitePart, a.workPart].filter(Boolean).join(" · ");
   return (
     <div className="px-2.5 py-1.5 text-xs flex flex-col gap-1.5 border-b cd-border-c min-w-0">
+      {/* 태그·select·input 모두 11px 로 통일하고 폭을 줄여 한 줄에 들어가게 한다
+          (.cd-select 의 13px 이 text-xs 를 이겨 select 만 커 보였다 → ! 로 강제). */}
       <div className="flex items-center gap-1.5 flex-wrap">
-        {/* 성명+직함 5자 폭으로 통일 — 긴 직함(총괄본부장)이 있어도 뒤 select 정렬 유지 */}
-        <span className="rounded-full px-2 py-0.5 cd-tint-primary shrink-0 min-w-[124px]">
+        {/* 성명+직함 — 긴 직함(총괄본부장)이 있어도 뒤 select 정렬 유지 */}
+        <span className="rounded-full px-2 py-0.5 cd-tint-primary shrink-0 min-w-[104px] !text-[11px]">
           {participant.name} {participant.positionName ?? ""}
         </span>
         <select
-          className="cd-select !py-1 text-xs"
-          style={{ width: 92 }}
+          className="cd-select !py-1 !text-[11px]"
+          style={{ width: 84 }}
           value={conf.role}
           onChange={(e) => onChange({ ...conf, role: e.target.value })}
         >
           <option value="">참여직위</option>
           {PARTICIPATION_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
         </select>
-        <select className="cd-select !py-1 text-xs" style={{ width: 110 }} value={draftSite} onChange={(e) => setDraftSite(e.target.value)}>
+        <select className="cd-select !py-1 !text-[11px]" style={{ width: 100 }} value={draftSite} onChange={(e) => setDraftSite(e.target.value)}>
           <option value="">사업장기준</option>
           {siteParts.map((pt) => <option key={pt} value={pt}>{pt}</option>)}
         </select>
-        <select className="cd-select !py-1 text-xs" style={{ width: 110 }} value={draftWork} onChange={(e) => setDraftWork(e.target.value)}>
+        <select className="cd-select !py-1 !text-[11px]" style={{ width: 100 }} value={draftWork} onChange={(e) => setDraftWork(e.target.value)}>
           <option value="">업무기준</option>
           {workParts.map((pt) => <option key={pt} value={pt}>{pt}</option>)}
         </select>
@@ -392,14 +394,14 @@ function StaffRoleRow({
       {/* 수기 항목 — 개별 이력 '본 사업 참여임무'·집계표 '참여기간(개월)' */}
       <div className="flex items-center gap-1.5 flex-wrap pl-1">
         <input
-          className="cd-input !py-1 text-[11px]"
+          className="cd-input !py-1 !text-[11px]"
           style={{ width: 218 }}
           placeholder="참여임무 (예: 용역총괄, 대기분야 작성)"
           value={assignedRole}
           onChange={(e) => onManualChange({ assignedRole: e.target.value })}
         />
         <input
-          className="cd-input !py-1 text-[11px] text-right"
+          className="cd-input !py-1 !text-[11px] text-right"
           style={{ width: 96 }}
           placeholder="참여(개월)"
           value={participateMonths}
@@ -1373,7 +1375,7 @@ export function BidPackageBoard() {
                     </label>
                     {staffConfig.orgLayout.mode === "separate" && (
                       <select
-                        className="cd-select !py-1 text-[11px]"
+                        className="cd-select !py-1 !text-[11px]"
                         style={{ width: 140 }}
                         value={staffConfig.orgLayout.separatePart}
                         onChange={(e) =>
@@ -1528,7 +1530,7 @@ export function BidPackageBoard() {
                       <p className="cd-text font-semibold mb-1.5">금액 기준 실적 포함 범위 (만원)</p>
                       <div className="flex items-center gap-1.5">
                         <input
-                          className="cd-input !py-1 text-[11px] text-right"
+                          className="cd-input !py-1 !text-[11px] text-right"
                           style={{ width: 84 }}
                           placeholder="최소"
                           value={staffConfig.perfFilter.amountMinMan ?? ""}
@@ -1544,7 +1546,7 @@ export function BidPackageBoard() {
                         />
                         <span className="cd-text-faint">~</span>
                         <input
-                          className="cd-input !py-1 text-[11px] text-right"
+                          className="cd-input !py-1 !text-[11px] text-right"
                           style={{ width: 84 }}
                           placeholder="최대"
                           value={staffConfig.perfFilter.amountMaxMan ?? ""}
@@ -1571,7 +1573,7 @@ export function BidPackageBoard() {
           {/* 참여인력 추가 — 조직도 트리(계약 수행인력 탭과 동일) */}
           {orgModal && (
             <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={() => setOrgModal(false)}>
-              <div className="cdash cdash-vars cd-fields-white cd-card-bg rounded-2xl border cd-border-c w-full max-w-md max-h-[80vh] overflow-y-auto p-4 flex flex-col gap-2" data-theme={theme} onClick={(e) => e.stopPropagation()}>
+              <div className="cdash cdash-vars cd-fields-white cd-solid-bg rounded-2xl border cd-border-c w-full max-w-md max-h-[80vh] overflow-y-auto p-4 flex flex-col gap-2" data-theme={theme} onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center gap-2">
                   <h3 className="text-[14px] font-bold cd-text flex-1">참여인력 추가 — 조직도에서 선택</h3>
                   <button type="button" className="cd-btn cd-btn-soft text-[12px]" onClick={() => setOrgModal(false)}>
@@ -1604,7 +1606,7 @@ export function BidPackageBoard() {
           {/* 실적 미리보기 — 개별 이력사항 경력표와 같은 구성으로, 현재 수행실적 설정이 적용된 목록 */}
           {preview && (
             <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={() => setPreview(null)}>
-              <div className="cdash cdash-vars cd-fields-white cd-card-bg rounded-2xl border cd-border-c w-full max-w-3xl max-h-[85vh] overflow-y-auto p-4 flex flex-col gap-3" data-theme={theme} onClick={(e) => e.stopPropagation()}>
+              <div className="cdash cdash-vars cd-fields-white cd-solid-bg rounded-2xl border cd-border-c w-full max-w-3xl max-h-[85vh] overflow-y-auto p-4 flex flex-col gap-3" data-theme={theme} onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center gap-2">
                   <h3 className="text-[14px] font-bold cd-text flex-1">
                     실적 미리보기 — {preview.name}
@@ -1685,7 +1687,7 @@ export function BidPackageBoard() {
           {/* 용역개요 보정 — 총괄표 자동 생성 개요 확인·수기 오버라이드 */}
           {overviewModal && (
             <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={() => setOverviewModal(false)}>
-              <div className="cdash cdash-vars cd-fields-white cd-card-bg rounded-2xl border cd-border-c w-full max-w-3xl max-h-[85vh] overflow-y-auto p-4 flex flex-col gap-3" data-theme={theme} onClick={(e) => e.stopPropagation()}>
+              <div className="cdash cdash-vars cd-fields-white cd-solid-bg rounded-2xl border cd-border-c w-full max-w-3xl max-h-[85vh] overflow-y-auto p-4 flex flex-col gap-3" data-theme={theme} onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center gap-2">
                   <h3 className="text-[14px] font-bold cd-text flex-1">
                     용역개요 보정

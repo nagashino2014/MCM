@@ -25,7 +25,7 @@ export default function StaffingSettingModal({
   return createPortal(
     <div className="cdash-vars cd-fields-white fixed inset-0 z-[95] flex items-center justify-center p-4" data-theme={theme}>
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative cd-card-bg border cd-border-c rounded-3xl w-full max-w-5xl max-h-[88vh] flex flex-col overflow-hidden shadow-2xl">
+      <div className="relative cd-solid-bg border cd-border-c rounded-3xl w-full max-w-5xl max-h-[88vh] flex flex-col overflow-hidden shadow-2xl">
         <div className="flex items-center justify-between gap-3 px-4 py-3 border-b cd-border-c">
           <h2 className="font-bold cd-text inline-flex items-center gap-2">
             <UserCog className="w-4 h-4 cd-text-primary" /> 수행인력 설정

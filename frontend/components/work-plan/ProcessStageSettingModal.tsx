@@ -181,7 +181,7 @@ export default function ProcessStageSettingModal({
   return createPortal(
     <div className="cdash-vars cd-fields-white fixed inset-0 z-[95] flex items-center justify-center p-4" data-theme={theme}>
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative cd-card-bg border cd-border-c rounded-3xl w-full max-w-2xl max-h-[88vh] flex flex-col overflow-hidden shadow-2xl">
+      <div className="relative cd-solid-bg border cd-border-c rounded-3xl w-full max-w-2xl max-h-[88vh] flex flex-col overflow-hidden shadow-2xl">
         <div className="flex items-center justify-between gap-3 px-5 py-4 border-b cd-border-c">
           <h2 className="text-lg font-bold cd-text">공정 단계 설정</h2>
           <button type="button" onClick={onClose} className="p-1.5 rounded-lg cd-text-faint hover:cd-text" aria-label="닫기">

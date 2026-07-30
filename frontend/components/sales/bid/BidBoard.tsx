@@ -676,7 +676,7 @@ export function BidBoard() {
 
       {/* 입찰 서류 생성 진행 중 — 저장된 패키지 작업으로 바로가기 */}
       {activePackages.length > 0 && (
-        <section className="cd-card-bg rounded-2xl border cd-border-c p-3">
+        <section className="cd-solid-bg rounded-2xl border cd-border-c p-3">
           <h3 className="text-[12px] font-bold cd-text flex items-center gap-1.5 mb-2">
             <FileStack className="w-4 h-4 cd-text-primary" /> 입찰 서류 생성 진행 중
             <span className="text-[10px] font-normal cd-text-faint">{activePackages.length}건</span>
@@ -712,7 +712,7 @@ export function BidBoard() {
         </section>
       )}
 
-      <section className="cd-card-bg rounded-2xl border cd-border-c p-4">
+      <section className="cd-solid-bg rounded-2xl border cd-border-c p-4">
         {/* 종류 탭 */}
         <div className="flex items-center gap-1 flex-wrap mb-3">
           {TABS.map((t) => (
@@ -873,7 +873,7 @@ export function BidBoard() {
       {/* 상세 모달 (인라인 오버레이 — .cdash 내부라 토큰 유지) */}
       {(detail || detailLoading) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={() => setDetail(null)}>
-          <div className="cd-card-bg rounded-2xl border cd-border-c w-full max-w-3xl max-h-[85vh] overflow-y-auto p-5 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
+          <div className="cd-solid-bg rounded-2xl border cd-border-c w-full max-w-3xl max-h-[85vh] overflow-y-auto p-5 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
             {detailLoading && <p className="text-[13px] cd-text-faint py-8 text-center">불러오는 중…</p>}
             {detail && (
               <>
@@ -984,7 +984,7 @@ export function BidBoard() {
       {/* 열 설정 모달 — 탭(종류)별 표시 열 구성: 순서·조합(구분자/사칙연산)·형식·정렬 여부 */}
       {colModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={() => setColModal(false)}>
-          <div className="cd-card-bg rounded-2xl border cd-border-c w-full max-w-2xl max-h-[85vh] overflow-y-auto p-5 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
+          <div className="cd-solid-bg rounded-2xl border cd-border-c w-full max-w-2xl max-h-[85vh] overflow-y-auto p-5 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-2">
               <h3 className="text-[14px] font-bold cd-text flex items-center gap-1.5 flex-1">
                 <Columns3 className="w-4 h-4" /> 열 설정 — {TABS.find((t) => t.key === bidType)?.label}
@@ -1116,7 +1116,7 @@ export function BidBoard() {
       {/* 분류 설정 모달 — 조건 그룹(AND/OR/NOR) 에디터 */}
       {catModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={() => { setCatModal(false); resetCatForm(); }}>
-          <div className="cd-card-bg rounded-2xl border cd-border-c w-full max-w-2xl max-h-[85vh] overflow-y-auto p-5 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
+          <div className="cd-solid-bg rounded-2xl border cd-border-c w-full max-w-2xl max-h-[85vh] overflow-y-auto p-5 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-2">
               <h3 className="text-[14px] font-bold cd-text flex items-center gap-1.5 flex-1">
                 <Tags className="w-4 h-4" /> 용역 분류 설정
@@ -1258,7 +1258,7 @@ export function BidBoard() {
       {/* 매칭 알림 설정 모달 — 수신자(조직도)·채널·발송 시각 */}
       {notifyModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={() => setNotifyModal(false)}>
-          <div className="cd-card-bg rounded-2xl border cd-border-c w-full max-w-3xl max-h-[85vh] overflow-y-auto p-5 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
+          <div className="cd-solid-bg rounded-2xl border cd-border-c w-full max-w-3xl max-h-[85vh] overflow-y-auto p-5 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-2">
               <h3 className="text-[14px] font-bold cd-text flex items-center gap-1.5 flex-1">
                 <BellRing className="w-4 h-4" /> 사업분야 매칭 알림 설정
@@ -1369,7 +1369,7 @@ export function BidBoard() {
       {/* 발송 항목 구성 모달 — 좌: 수집된 전체 파라미터, 우: 발송 포함 항목(위→아래 순서) */}
       {fieldModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={() => setFieldModal(false)}>
-          <div className="cd-card-bg rounded-2xl border cd-border-c w-full max-w-3xl max-h-[85vh] overflow-y-auto p-5 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
+          <div className="cd-solid-bg rounded-2xl border cd-border-c w-full max-w-3xl max-h-[85vh] overflow-y-auto p-5 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-2">
               <h3 className="text-[14px] font-bold cd-text flex items-center gap-1.5 flex-1">
                 <ListOrdered className="w-4 h-4" /> 발송 항목 구성
@@ -1409,7 +1409,7 @@ export function BidBoard() {
             <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-stretch">
               {/* 좌: 후보 전체 */}
               <div className="rounded-lg border cd-border-c p-2 flex flex-col gap-1 max-h-[380px] overflow-y-auto">
-                <div className="text-[12px] cd-text-faint px-1 sticky top-0 cd-card-bg">
+                <div className="text-[12px] cd-text-faint px-1 sticky top-0 cd-solid-bg">
                   수집된 항목 {fieldBusy ? "불러오는 중…" : `${(fieldCandCache[fieldBidType] ?? []).length}개`}
                 </div>
                 {(fieldCandCache[fieldBidType] ?? [])
@@ -1449,7 +1449,7 @@ export function BidBoard() {
 
               {/* 우: 포함 항목(순서) */}
               <div className="rounded-lg border cd-border-c p-2 flex flex-col gap-1 max-h-[380px] overflow-y-auto">
-                <div className="text-[12px] cd-text-faint px-1 sticky top-0 cd-card-bg">발송 포함 항목 {fieldSelected.length}개 (위→아래 순서)</div>
+                <div className="text-[12px] cd-text-faint px-1 sticky top-0 cd-solid-bg">발송 포함 항목 {fieldSelected.length}개 (위→아래 순서)</div>
                 {fieldSelected.map((f, i) => (
                   <div
                     key={f.name}

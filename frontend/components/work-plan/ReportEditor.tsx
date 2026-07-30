@@ -227,8 +227,10 @@ export default function ReportEditor({
     const w = stageWork[st.stageOrder];
     const status = w?.status ?? st.status;
     const filled = touched.has(st.stageOrder); // 이번 보고에서 변경/기록한 단계만 배경 채움
-    if (status === "done") return { bg: filled ? "var(--cd-success-soft)" : "transparent", line: "var(--cd-success)" };
-    if (status === "in_progress") return { bg: filled ? "var(--cd-warning-soft)" : "transparent", line: "var(--cd-warning)" };
+    // 공정표는 '상태 시그널'이 아니라 공정 진행을 한눈에 보는 색 체계라 전용 팔레트를 쓴다.
+    // 시그널 토큰(--cd-success/warning)을 저채도로 낮추면서 공정표까지 칙칙해졌기에 원래 색으로 되돌린다.
+    if (status === "done") return { bg: filled ? "rgba(126,186,86,0.16)" : "transparent", line: "#7EBA56" };
+    if (status === "in_progress") return { bg: filled ? "rgba(255,174,31,0.18)" : "transparent", line: "#FFAE1F" };
     return { bg: "transparent", line: "rgba(93,135,255,0.45)" };
   };
 

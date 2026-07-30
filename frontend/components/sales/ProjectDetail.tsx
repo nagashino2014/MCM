@@ -84,7 +84,8 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
 
   // 타임라인 필터
   const [fType, setFType] = useState<SalesActivityType | "">("");
-  const [fYear, setFYear] = useState<string>("");
+  /** 이력 목록 월 필터(YYYY-MM). 빈 값 = 전체 월. */
+  const [fMonth, setFMonth] = useState<string>("");
 
   const loadProject = useCallback(async () => {
     const res = await fetch(`/api/sales/projects/${projectId}`, { cache: "no-store" });
@@ -97,11 +98,10 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   const loadActivities = useCallback(async () => {
     const params = new URLSearchParams();
     if (fType) params.set("activityType", fType);
-    if (fYear) params.set("year", fYear);
     const res = await fetch(`/api/sales/projects/${projectId}/activities?${params}`, { cache: "no-store" });
     const data = await res.json().catch(() => ({}));
     setActivities(Array.isArray(data.activities) ? data.activities : []);
-  }, [projectId, fType, fYear]);
+  }, [projectId, fType]);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -153,14 +153,24 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       .catch(() => {});
   }, [facilityId]);
 
-  const years = useMemo(() => {
+  // 단일 영업 건이 여러 해에 걸치는 경우는 없으므로 연도가 아니라 '월'로 거른다.
+  // 필터는 이력 목록에만 적용한다 — 캘린더·진행상황 집계는 전체 활동 기준이어야 맞다.
+  const months = useMemo(() => {
     const set = new Set<string>();
     for (const a of activities) {
       const d = a.occurredAt ?? a.scheduledAt ?? a.createdAt;
-      if (d) set.add(d.slice(0, 4));
+      if (d) set.add(d.slice(0, 7));
     }
     return Array.from(set).sort().reverse();
   }, [activities]);
+
+  const timelineActivities = useMemo(
+    () =>
+      fMonth
+        ? activities.filter((a) => (a.occurredAt ?? a.scheduledAt ?? a.createdAt ?? "").slice(0, 7) === fMonth)
+        : activities,
+    [activities, fMonth]
+  );
 
   if (loading) return <div className="cdash p-6 cd-text-faint text-sm" data-theme={theme}>불러오는 중…</div>;
   if (error || !project) {
@@ -213,9 +223,13 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
             <div className="flex items-center justify-between gap-2 flex-wrap shrink-0" style={{ marginBottom: 15 }}>
               <h2 className="cd-text font-extrabold text-sm">영업활동 이력</h2>
               <div className="flex items-center gap-1.5">
-                <select className="cd-select cd-btn-sm" style={{ width: "auto" }} value={fYear} onChange={(e) => setFYear(e.target.value)}>
-                  <option value="">전체 연도</option>
-                  {years.map((y) => <option key={y} value={y}>{y}</option>)}
+                <select className="cd-select cd-btn-sm" style={{ width: "auto" }} value={fMonth} onChange={(e) => setFMonth(e.target.value)}>
+                  <option value="">전체 월</option>
+                  {months.map((m) => (
+                    <option key={m} value={m}>
+                      {m.slice(0, 4)}년 {Number(m.slice(5, 7))}월
+                    </option>
+                  ))}
                 </select>
                 <select className="cd-select cd-btn-sm" style={{ width: "auto" }} value={fType} onChange={(e) => setFType(e.target.value as SalesActivityType | "")}>
                   <option value="">전체 유형</option>
@@ -231,7 +245,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
               </div>
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide">
-              <Timeline activities={activities} canEdit={canEdit} onEdit={setEditing} onReload={reload} />
+              <Timeline activities={timelineActivities} canEdit={canEdit} onEdit={setEditing} onReload={reload} />
             </div>
           </div>
 

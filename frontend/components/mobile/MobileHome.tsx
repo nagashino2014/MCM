@@ -97,11 +97,11 @@ export function MobileHome() {
 
       {/* 빠른 액션 */}
       <div className="grid grid-cols-2 gap-2">
-        <Link href="/m/facilities" className="cd-card px-4 py-3.5 flex-row items-center gap-2.5">
+        <Link href="/m/facilities" className="cd-card px-4 py-3.5 !flex-row items-center gap-2.5">
           <Search className="cd-text-primary" style={{ width: 18, height: 18 }} />
           <span className="cd-text text-sm font-bold">사업장 검색</span>
         </Link>
-        <Link href="/m/card" className="cd-card px-4 py-3.5 flex-row items-center gap-2.5">
+        <Link href="/m/card" className="cd-card px-4 py-3.5 !flex-row items-center gap-2.5">
           <CreditCard style={{ width: 18, height: 18 }} className="cd-text-primary" />
           <span className="cd-text text-sm font-bold">명함 촬영</span>
         </Link>
@@ -190,7 +190,7 @@ function ActivityCard({
 }) {
   const time = timeOf(a.scheduledAt);
   return (
-    <button className="cd-card px-3.5 py-3 flex-row items-center gap-2.5 text-left w-full" onClick={onClick}>
+    <button className="cd-card px-3.5 py-3 !flex-row items-center gap-2.5 text-left w-full" onClick={onClick}>
       <ActivityTag type={a.activityType} />
       <div className="flex-1 min-w-0">
         <div className="cd-text text-sm font-bold truncate">{a.projectTitle}</div>

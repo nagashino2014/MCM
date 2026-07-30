@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronDown, Download, Search, X } from "lucide-react";
+import { ChevronDown, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CdDropdown } from "@/components/cdash/CdDropdown";
 import type {
@@ -301,29 +301,30 @@ export function FacilityListPanel({
             }))}
           />
 
-          {/* 44px 래스터 아이콘 2개 → 내보내기 드롭다운 1개(래스터 자산 폐기). */}
-          <div className="ml-auto shrink-0">
-            <CdDropdown
-              align="right"
-              trigger={() => (
-                <span
-                  className={cn(
-                    "cd-btn cd-btn-ghost cd-btn-sm inline-flex items-center gap-1.5 cursor-pointer",
-                    exporting !== null && "opacity-50 cursor-wait"
-                  )}
-                  role="button"
-                  title="현재 검색 결과를 파일로 내보냅니다"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  {exporting ? "내보내는 중…" : "내보내기"}
-                  <ChevronDown className="w-3 h-3 opacity-50" />
-                </span>
-              )}
-              items={[
-                { key: "xlsx", label: "엑셀(XLSX)로 내보내기", onSelect: () => handleExport("xlsx") },
-                { key: "pdf", label: "PDF로 내보내기", onSelect: () => handleExport("pdf") },
-              ]}
-            />
+          {/* 내보내기 — 수주/수금/발행 현황 리스트와 같은 엑셀·PDF 아이콘 2개(30px). */}
+          <div className="ml-auto shrink-0 flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => handleExport("xlsx")}
+              disabled={exporting !== null}
+              title="현재 검색 결과를 엑셀로 다운로드"
+              className={cn("flex items-center justify-center disabled:opacity-40", exporting !== null && "cursor-wait")}
+              style={{ width: 30, height: 30 }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/icons/excelico.png" alt="엑셀 다운로드" className="w-full h-full object-contain" />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleExport("pdf")}
+              disabled={exporting !== null}
+              title="현재 검색 결과를 PDF로 다운로드"
+              className={cn("flex items-center justify-center disabled:opacity-40", exporting !== null && "cursor-wait")}
+              style={{ width: 30, height: 30 }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/icons/pdfico.png" alt="PDF 다운로드" className="w-full h-full object-contain" />
+            </button>
           </div>
         </div>
       </div>

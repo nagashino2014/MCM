@@ -216,7 +216,7 @@ export function ApprovalDocViewer({
                 {detail.aiSummary.figures.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mt-0.5">
                     {detail.aiSummary.figures.map((f, i) => (
-                      <span key={i} className="text-[11px] rounded-lg border cd-border-c bg-[color:var(--cd-card-bg)] px-2 py-0.5">
+                      <span key={i} className="text-[11px] rounded-lg border cd-border-c cd-surface-bg px-2 py-0.5">
                         <span className="cd-text-faint">{f.label}</span> <span className="cd-text font-semibold">{f.value}</span>
                       </span>
                     ))}

@@ -145,7 +145,7 @@ export function FacilityOrdersModal({ facilityId, facilityName, onClose }: Props
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-stone-950/30 p-4">
-      <div className="cd-card-bg rounded-3xl w-[min(1120px,calc(100vw-32px))] max-h-[min(880px,calc(100vh-32px))] shadow-2xl flex flex-col overflow-hidden border cd-border-c">
+      <div className="cd-solid-bg rounded-3xl w-[min(1120px,calc(100vw-32px))] max-h-[min(880px,calc(100vh-32px))] shadow-2xl flex flex-col overflow-hidden border cd-border-c">
         <div className="p-5 border-b cd-border-c flex items-start justify-between gap-4">
           <div>
             <h3 className="text-xl font-bold cd-text flex items-center gap-2">
@@ -387,13 +387,26 @@ function CollectionProgressCard({
   return (
     <div className="rounded-2xl border cd-border-c cd-card-bg p-4 min-h-[180px] flex flex-col items-center justify-center relative">
       <p className="absolute left-4 top-3 text-[11px] font-bold cd-text-faint">수금 진척도</p>
-      <div
-        className="w-28 h-28 rounded-full flex items-center justify-center"
-        style={{ background: `conic-gradient(#9BC2E6 ${percent}%, #ececec ${percent}% 100%)` }}
-      >
-        <div className="w-20 h-20 rounded-full cd-card-bg flex items-center justify-center">
-          <span className="text-2xl font-bold text-[#9BC2E6]">{percent}%</span>
-        </div>
+      {/* 계약 상세(CollectionProgressCard)와 동일 — SVG 링으로 가운데를 비우고 호 끝을 둥글린다. */}
+      <div className="relative w-28 h-28 flex items-center justify-center">
+        <svg width="112" height="112" viewBox="0 0 112 112" className="absolute inset-0">
+          <circle cx="56" cy="56" r="44" fill="none" strokeWidth="12" stroke="color-mix(in srgb, #9BC2E6 22%, transparent)" />
+          {percent > 0 && (
+            <circle
+              cx="56"
+              cy="56"
+              r="44"
+              fill="none"
+              strokeWidth="12"
+              stroke="#9BC2E6"
+              strokeLinecap="round"
+              strokeDasharray={2 * Math.PI * 44}
+              strokeDashoffset={2 * Math.PI * 44 * (1 - Math.min(1, Math.max(0, rate)))}
+              transform="rotate(-90 56 56)"
+            />
+          )}
+        </svg>
+        <span className="relative text-2xl font-bold text-[#9BC2E6]">{percent}%</span>
       </div>
       <p className="mt-3 text-xs font-mono cd-text-muted">
         {formatExactAmount(collectedAmount)} / {formatExactAmount(baseAmount)}

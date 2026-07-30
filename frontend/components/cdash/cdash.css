@@ -18,9 +18,12 @@
   --cd-card: rgba(255, 255, 255, 0.6);     /* 글라스 카드 */
   --cd-card-solid: #ffffff;                /* blur 불가 컨텍스트(입력·인쇄·메일 본문) 대체 */
   --cd-surface: rgba(255, 255, 255, 0.5);  /* inset 서페이스 */
-  --cd-border: rgba(255, 255, 255, 0.75);  /* 글라스 하이라이트 보더 */
-  --cd-hairline: rgba(120, 135, 180, 0.13);      /* 카드 내부 구분선(헤더) */
-  --cd-hairline-row: rgba(120, 135, 180, 0.11);  /* 행 구분선 */
+  --cd-border: rgba(255, 255, 255, 0.75);  /* 글라스 하이라이트 보더(안쪽 광택) */
+  /* 카드·칩 바깥 경계선. 흰 하이라이트만으로는 밝은 캔버스 위에서 경계가 사라져
+   * 카드와 배경이 붙어 보인다 — 광택은 두고 바깥에 옅은 링을 한 겹 더한다. */
+  --cd-ring: rgba(120, 135, 180, 0.2);
+  --cd-hairline: rgba(120, 135, 180, 0.15);      /* 카드 내부 구분선(헤더) */
+  --cd-hairline-row: rgba(120, 135, 180, 0.13);  /* 행 구분선 */
 
   /* ── 텍스트 ── */
   --cd-text: #2a3040;        /* 잉크(제목) */
@@ -72,8 +75,8 @@
   --cd-active-border: rgba(255, 255, 255, 0.95);
   --cd-active-shadow: 0 4px 14px rgba(90, 105, 180, 0.1);
   --cd-chip-bg: rgba(255, 255, 255, 0.1);                      /* 비활성 nav 글라스 칩 */
-  --cd-chip-border: rgba(255, 255, 255, 0.38);
-  --cd-line: rgba(120, 135, 180, 0.22);                        /* 컨트롤 윤곽선(글라스 위) */
+  --cd-chip-border: rgba(120, 135, 180, 0.22);                 /* 칩은 광택보다 경계가 중요 */
+  --cd-line: rgba(120, 135, 180, 0.3);                         /* 컨트롤 윤곽선(글라스 위) */
   --cd-form-line: rgba(90, 105, 150, 0.22);                    /* 결재 양식 표선 */
   --cd-form-line-strong: rgba(90, 105, 150, 0.28);
   --cd-form-label: rgba(120, 135, 180, 0.1);                   /* 양식 라벨셀 */
@@ -89,8 +92,9 @@
   --cd-card-solid: #1b2136;
   --cd-surface: rgba(255, 255, 255, 0.05);
   --cd-border: rgba(255, 255, 255, 0.09);
-  --cd-hairline: rgba(255, 255, 255, 0.07);
-  --cd-hairline-row: rgba(255, 255, 255, 0.06);
+  --cd-ring: rgba(0, 0, 0, 0.25);
+  --cd-hairline: rgba(255, 255, 255, 0.09);
+  --cd-hairline-row: rgba(255, 255, 255, 0.08);
 
   --cd-text: #e7eaf4;
   --cd-body: #c6cde0;
@@ -128,8 +132,8 @@
   --cd-active-border: rgba(255, 255, 255, 0.16);
   --cd-active-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
   --cd-chip-bg: rgba(255, 255, 255, 0.03);
-  --cd-chip-border: rgba(255, 255, 255, 0.07);
-  --cd-line: rgba(255, 255, 255, 0.14);
+  --cd-chip-border: rgba(255, 255, 255, 0.12);
+  --cd-line: rgba(255, 255, 255, 0.2);
   --cd-form-line: rgba(255, 255, 255, 0.14);
   --cd-form-line-strong: rgba(255, 255, 255, 0.18);
   --cd-form-label: rgba(255, 255, 255, 0.06);
@@ -193,7 +197,7 @@
 .cd-glass-active {
   background: var(--cd-active-fill);
   border: 1px solid var(--cd-active-border);
-  box-shadow: var(--cd-active-shadow);
+  box-shadow: 0 0 0 1px var(--cd-ring), var(--cd-active-shadow);
   color: var(--cd-primary);
 }
 /* 반투명 inset 서페이스(상세 섹션·폼 그룹). */
@@ -211,7 +215,12 @@
 /* ---------------- 마이그레이션 보조 유틸 (배경/테두리/상태색 → 토큰) ---------------- */
 .cd-surface-bg { background: var(--cd-surface); }
 .cd-card-bg { background: var(--cd-card); }
-.cd-border-c { border-color: var(--cd-border); }
+/* 스크림 위에 뜨는 표면(모달·드로어·바텀시트·팝오버)은 반드시 불투명.
+ * 글라스 토큰(--cd-card)을 쓰면 뒤 화면이 그대로 비쳐 내용을 읽을 수 없다. */
+.cd-solid-bg { background: var(--cd-card-solid); }
+/* 박스 경계 유틸 — 흰 하이라이트(--cd-border)는 밝은 캔버스 위에서 사라지므로
+ * 실제 테두리로 쓰이는 이 유틸은 링 색(옅은 블루그레이)을 쓴다. */
+.cd-border-c { border-color: var(--cd-ring); }
 .cd-fill-primary { background: var(--cd-grad); color: #fff; box-shadow: var(--cd-grad-shadow); }
 .cd-fill-primary:hover { filter: brightness(1.04); }
 .cd-soft-primary { background: var(--cd-primary-soft); color: var(--cd-primary); }
@@ -234,7 +243,9 @@
   -webkit-backdrop-filter: var(--cd-blur);
   border: 1px solid var(--cd-border);
   border-radius: 18px;
-  box-shadow: var(--cd-shadow);
+  /* 0 0 0 1px 링 = 카드와 캔버스의 경계선. 흰 보더(광택)와 함께 이중으로 둘러 밝은 배경에서도
+   * 카드 윤곽이 읽히게 한다. */
+  box-shadow: 0 0 0 1px var(--cd-ring), var(--cd-shadow);
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -410,6 +421,10 @@
 .cd-pill-success { background: var(--cd-success-soft); color: var(--cd-success); }
 .cd-pill-warn { background: var(--cd-warning-soft); color: var(--cd-warning); }
 .cd-pill-error { background: var(--cd-error-soft); color: var(--cd-error); }
+/* 시그널 4색만으로는 서로 다른 축(신호유형·등급·관련성)의 태그가 같은 색으로 겹친다.
+ * 상태 의미가 없는 분류용 톤 2개를 아바타 팔레트에서 빌려 축을 분리한다. */
+.cd-pill-violet { background: color-mix(in srgb, var(--cd-av-2) 16%, transparent); color: var(--cd-av-2); }
+.cd-pill-teal { background: color-mix(in srgb, var(--cd-av-4) 18%, transparent); color: var(--cd-av-4); }
 
 /* globals.css 의 status-pill(녹색 기반)을 cdash 섹션 안에서만 modernize 색으로 재정의.
  * (.cdash 밖 비-cdash 화면의 status-pill 은 globals 정의 그대로 유지) */
@@ -450,13 +465,14 @@
 .cd-listitem {
   background: var(--cd-chip-bg);
   border: 1px solid var(--cd-chip-border);
+  box-shadow: 0 0 0 1px var(--cd-ring);
   transition: background 0.12s ease, border-color 0.12s ease;
 }
 .cd-listitem:hover { background: var(--cd-hover); }
 .cd-listitem[data-active="true"] {
   background: var(--cd-active-fill);
   border-color: var(--cd-active-border);
-  box-shadow: var(--cd-active-shadow);
+  box-shadow: 0 0 0 1px var(--cd-ring), var(--cd-active-shadow);
 }
 
 /* ---------------- 모달 / 드로어 ---------------- */

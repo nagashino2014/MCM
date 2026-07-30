@@ -208,8 +208,9 @@ export function ScheduleCalendarCard() {
         tag: "sales",
         date,
         time: hhmm(a.scheduledAt),
-        // 영업은 이미 규정된 2글자 활동 태그(전화·미팅·현설 …)를 그대로 쓴다.
-        chip: meta?.short ?? "영업",
+        // 영업은 규정된 2글자 활동 태그 + 업체명("미팅 : 재영물산㈜").
+        // 긴 상호는 셀 폭에 맞춰 말줄임(...)되고 전체는 툴팁·팝업에서 확인한다.
+        chip: `${meta?.short ?? "영업"}${a.facilityName ? ` : ${a.facilityName}` : ""}`,
         short: meta?.short ?? "영업",
         detail: [a.facilityName, a.projectTitle, meta?.label].filter(Boolean).join(" "),
         title: a.projectTitle,

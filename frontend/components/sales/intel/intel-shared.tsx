@@ -117,10 +117,12 @@ export const SOURCE_LABEL: Record<string, string> = {
   gosi: "고시",
 };
 
+// 태그 3종(신호유형·등급·관련성)이 한 행에 나란히 붙으므로 축마다 색 계열을 나눈다.
+// 신호유형 = 파랑·보라 계열 / 등급 = 신호등(초록·앰버) / 관련성 = 청록·무채.
 export const TYPE_PILL: Record<string, string> = {
   investment: "cd-pill-info",
-  expansion: "cd-pill-warn",
-  new_site: "cd-pill-success",
+  expansion: "cd-pill-secondary",
+  new_site: "cd-pill-violet",
   other: "cd-pill-idle",
 };
 export const STATUS_LABEL: Record<string, string> = { new: "신규", reviewed: "검토", converted: "전환", dismissed: "무시" };
@@ -132,8 +134,8 @@ export const STATUS_PILL: Record<string, string> = {
 };
 export const GRADE_PILL: Record<string, string> = {
   confirmed: "cd-pill-success",
-  candidate: "cd-pill-info",
-  monitoring: "cd-pill-warn",
+  candidate: "cd-pill-warn",
+  monitoring: "cd-pill-idle",
   excluded: "cd-pill-outline",
 };
 
@@ -148,8 +150,8 @@ export const RELEVANCE_LABEL: Record<string, string> = {
   none: "무관",
 };
 export const RELEVANCE_PILL: Record<string, string> = {
-  direct: "cd-pill-success",
-  supply_chain: "cd-pill-info",
+  direct: "cd-pill-teal",
+  supply_chain: "cd-pill-outline",
   low: "cd-pill-idle",
   none: "cd-pill-outline",
 };

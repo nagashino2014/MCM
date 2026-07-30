@@ -64,8 +64,10 @@ export function CdModal({ open, onClose, title, children, footer, size = "md", c
       <div
         role="dialog"
         aria-modal="true"
-        className={cn("cd-card-bg rounded-2xl border cd-border-c w-full max-h-[85vh] flex flex-col", MODAL_SIZE[size])}
-        style={{ boxShadow: "var(--cd-shadow)" }}
+        // 모달 본체는 스크림 위에 뜨므로 반드시 불투명(--cd-card-solid).
+        // 글라스 토큰(--cd-card)을 쓰면 뒤 화면이 그대로 비쳐 읽을 수 없다.
+        className={cn("rounded-2xl border cd-border-c w-full max-h-[85vh] flex flex-col", MODAL_SIZE[size])}
+        style={{ background: "var(--cd-card-solid)", boxShadow: "var(--cd-shadow)" }}
         onMouseDown={(e) => e.stopPropagation()}
       >
         {title != null && (
@@ -110,11 +112,12 @@ export function CdDrawer({ open, onClose, title, children, footer, side = "right
         role="dialog"
         aria-modal="true"
         className={cn(
-          "cd-card-bg absolute top-0 bottom-0 w-full flex flex-col border cd-border-c",
+          "absolute top-0 bottom-0 w-full flex flex-col border cd-border-c",
           widthClass,
           side === "right" ? "right-0 rounded-l-2xl" : "left-0 rounded-r-2xl"
         )}
-        style={{ boxShadow: "var(--cd-shadow)" }}
+        // 드로어도 스크림 위에 뜨므로 불투명 배경(위 CdModal 과 같은 이유).
+        style={{ background: "var(--cd-card-solid)", boxShadow: "var(--cd-shadow)" }}
         onMouseDown={(e) => e.stopPropagation()}
       >
         {title != null && (

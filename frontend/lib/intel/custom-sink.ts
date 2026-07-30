@@ -76,6 +76,8 @@ export interface CustomCollectResult {
 
 export interface CustomCollectOpts {
   preview?: boolean;
+  /** 진행 보고(백필 진행률 바) — fetch=API 페이지, save=DB 저장. */
+  onProgress?: (p: { phase: "fetch" | "save"; page: number; items: number; total?: number }) => void;
 }
 
 export async function collectCustomSource(
@@ -104,7 +106,10 @@ export async function collectCustomSource(
 
   // 1) 실행 → 원시 items (저장된 인증키 복호화 주입, 없으면 ENV 폴백)
   const secret = await getSourceSecret(source.sourceId);
-  const run = await runApiCollect(source.apiProfile, endpoint.apiConfig, { secret });
+  const run = await runApiCollect(source.apiProfile, endpoint.apiConfig, {
+    secret,
+    onProgress: opts.onProgress ? (p) => opts.onProgress!({ phase: "fetch", ...p }) : undefined,
+  });
   if (run.error && run.items.length === 0) {
     return { ...result, error: run.error, logs: run.logs };
   }

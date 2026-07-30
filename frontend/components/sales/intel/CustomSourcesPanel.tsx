@@ -24,6 +24,17 @@ interface Source {
   enabled: boolean;
   hasSecret?: boolean;
 }
+/** 백필 실행 중 청크의 세부 진행 — 서버 backfill.chunk_progress 와 동일 shape. */
+interface ChunkProgress {
+  chunk: string;
+  phase: "fetch" | "save";
+  page: number;
+  items: number;
+  total?: number;
+  started_at: string;
+  updated_at: string;
+}
+
 interface Endpoint {
   endpointId: string;
   name: string;
@@ -36,6 +47,8 @@ interface Endpoint {
     cursor?: string;
     status?: string;
     last_result?: { chunk?: string; scanned?: number; inserted?: number; updated?: number; error?: string };
+    /** 실행 중 청크의 세부 진행(서버가 폴링용으로 기록) */
+    chunk_progress?: ChunkProgress | null;
   } | null;
   enabled: boolean;
 }
@@ -122,7 +135,11 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
   const [bfProgress, setBfProgress] = useState<{ done: number; total: number } | null>(null);
   const [bfMsg, setBfMsg] = useState<string | null>(null);
   const [bfRunning, setBfRunning] = useState(false);
+  /** 실행 중 청크의 세부 진행(폴링 수신) — 진행률 바 하단 표시용 */
+  const [bfChunk, setBfChunk] = useState<ChunkProgress | null>(null);
   const bfLoopRef = useRef(false);
+  /** 사용자가 중지를 눌렀는지 — 루프 종료 사유 구분(완료/오류와 분리) */
+  const bfStopRef = useRef(false);
 
   const loadSources = useCallback(async () => {
     try {
@@ -286,109 +303,94 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
     }
   };
 
-  /** 백필 자동 반복 — start 후 done/중지까지 step 을 연속 호출(월 1청크씩, 중단 재개 가능). */
+  /**
+   * 백필 실행 — start 후, 청크마다 step(즉시 202)을 던지고 상태를 폴링해 진행률을 갱신한다.
+   * 수집은 서버 백그라운드에서 돌기 때문에 요청이 ALB 한도(300s)에 걸리지 않는다(504 해소).
+   */
   const runBackfill = async (ep: Endpoint) => {
     if (!sel || !bfFrom || !bfTo) return;
+    const url = `/api/scraper/sources/${sel.sourceId}/endpoints/${ep.endpointId}/backfill`;
     setBfRunning(true);
     bfLoopRef.current = true;
     setBfMsg("백필 시작…");
+    setBfChunk(null);
     try {
-      const started = await jfetch(`/api/scraper/sources/${sel.sourceId}/endpoints/${ep.endpointId}/backfill`, {
+      const started = await jfetch(url, {
         method: "POST",
         body: JSON.stringify({ action: "start", from: bfFrom, to: bfTo }),
       });
       setBfProgress(started.progress ?? null);
-      let cursor: string | undefined = started.backfill?.cursor;
-      let failStreak = 0;
-      /**
-       * 커서가 전진(또는 완료)할 때까지 15초 간격 폴링(최대 5분) — 504가 나도 서버는 그 달을
-       * 계속 수집 중이므로, 같은 달 step 을 곧바로 재요청해 이중 수집하지 않는다.
-       */
-      const waitAdvance = async (prev?: string) => {
-        for (let i = 0; i < 20 && bfLoopRef.current; i++) {
-          await new Promise((res) => setTimeout(res, 15000));
-          const st = await jfetch(`/api/scraper/sources/${sel.sourceId}/endpoints/${ep.endpointId}/backfill`).catch(() => null);
+
+      while (bfLoopRef.current) {
+        // 1) 다음 청크 실행 요청(이미 실행 중이면 서버가 busy 로 응답 — 그대로 폴링)
+        const step = await jfetch(url, { method: "POST", body: JSON.stringify({ action: "step" }) }).catch(
+          (e) => ({ __err: e instanceof Error ? e.message : String(e) }) as Record<string, unknown>
+        );
+        if (step.__err) {
+          setBfMsg(`일시 오류(${step.__err}) — 진행 상태를 다시 확인합니다…`);
+        }
+        if (step.done) {
+          setBfProgress(step.progress ?? null);
+          setBfChunk(null);
+          setBfMsg("백필 완료 ✓");
+          break;
+        }
+
+        // 2) 이 청크가 끝날 때까지 3초 간격 폴링 — 진행률 바 갱신
+        let finishedChunk = false;
+        while (bfLoopRef.current && !finishedChunk) {
+          await new Promise((res) => setTimeout(res, 3000));
+          const st = await jfetch(url).catch(() => null);
           if (!st?.backfill) continue;
           setBfProgress(st.progress ?? null);
-          if (st.backfill.status === "done") return { done: true, cursor: st.backfill.cursor as string };
-          if (st.backfill.cursor && st.backfill.cursor !== prev) return { done: false, cursor: st.backfill.cursor as string };
-        }
-        return null;
-      };
-      while (bfLoopRef.current) {
-        try {
-          // 큰 달(입찰공고 등 월 1만 건+)은 청크당 1~2분 — 진행 중에도 어느 달인지 표시.
-          if (cursor) {
-            const base = `${cursor} 수집 중… (데이터가 많은 달은 1~2분)`;
-            setBfMsg((m) => (m && !m.startsWith("백필 시작") && !m.includes("수집 중…") ? `${base} · 직전: ${m}` : base));
-          }
-          const d = await jfetch(`/api/scraper/sources/${sel.sourceId}/endpoints/${ep.endpointId}/backfill`, {
-            method: "POST",
-            body: JSON.stringify({ action: "step" }),
-          });
-          if (d.busy) {
-            // 서버가 아직 이전 step(같은 달)을 수집 중 — 완료를 기다렸다 다음 달로.
-            setBfMsg(`${cursor ?? "현재 달"} 수집 중(서버 진행)… 완료 대기`);
-            const adv = await waitAdvance(cursor);
-            if (adv) {
-              cursor = adv.cursor;
-              if (adv.done) {
-                setBfMsg("백필 완료 ✓");
-                break;
-              }
-            }
+          const cp = (st.backfill.chunk_progress ?? null) as ChunkProgress | null;
+          setBfChunk(cp);
+          const lr = st.backfill.last_result;
+          if (cp) {
+            const label =
+              cp.phase === "fetch"
+                ? `${cp.chunk} 수집 중… ${cp.items.toLocaleString()}건 (${cp.page}p)`
+                : `${cp.chunk} 저장 중… ${cp.items.toLocaleString()}/${(cp.total ?? 0).toLocaleString()}건`;
+            setBfMsg(label);
             continue;
           }
-          cursor = d.backfill?.cursor;
-          failStreak = 0;
-          setBfProgress(d.progress ?? null);
-          const r = d.result;
-          if (r) {
+          // chunk_progress 가 비었으면 청크 종료 — 결과/상태로 다음 동작 결정
+          if (lr) {
             setBfMsg(
-              `${r.chunk} 수집: 신규 ${r.inserted ?? 0} / 갱신 ${r.updated ?? 0} / 스캔 ${r.scanned ?? 0}${r.error ? ` · 오류: ${r.error}` : ""}`
+              `${lr.chunk} 완료: 신규 ${(lr.inserted ?? 0).toLocaleString()} / 갱신 ${(lr.updated ?? 0).toLocaleString()} / 스캔 ${(lr.scanned ?? 0).toLocaleString()}${lr.error ? ` · 오류: ${lr.error}` : ""}`
             );
           }
-          if (d.stalled) {
-            // 수집 0건 + 오류(인증키 누락 등 지속 오류) — 커서 보존 중단. 원인 해결 후 재시작.
-            setBfMsg(`백필 중단 — ${d.result?.error ?? "수집 실패"} · 원인 해결 후 같은 기간으로 재시작하면 이어서 진행합니다.`);
-            bfLoopRef.current = false;
-            break;
-          }
-          if (d.done) {
+          if (st.backfill.status === "done") {
             setBfMsg((m) => `${m ? m + " · " : ""}백필 완료 ✓`);
+            bfLoopRef.current = false;
+            finishedChunk = true;
             break;
           }
-        } catch (stepErr) {
-          // 504 등 — 서버는 그 달을 계속 수집 중일 수 있다. 커서 전진을 기다렸다 이어간다.
-          setBfMsg(`일시 오류(${stepErr instanceof Error ? stepErr.message : stepErr}) — 서버 수집 완료를 기다리는 중…`);
-          const adv = await waitAdvance(cursor);
-          if (adv) {
-            failStreak = 0;
-            cursor = adv.cursor;
-            if (adv.done) {
-              setBfMsg("백필 완료 ✓");
-              break;
-            }
-            continue;
+          if (st.backfill.status === "idle") {
+            // 서버가 중단 처리(지속 오류 등) — 커서 보존. 원인 해결 후 재시작하면 이어서.
+            setBfMsg(
+              `백필 중단 — ${lr?.error ?? "수집 실패 또는 사용자 중지"} · 같은 기간으로 재시작하면 이어서 진행합니다.`
+            );
+            bfLoopRef.current = false;
+            finishedChunk = true;
+            break;
           }
-          failStreak++;
-          if (failStreak >= 3) throw stepErr;
+          if (!st.running) finishedChunk = true; // 다음 청크로
         }
       }
-      if (!bfLoopRef.current) {
-        // 사용자 중지 — 서버 상태도 idle 로(커서 보존, 재시작 시 이어서)
-        await jfetch(`/api/scraper/sources/${sel.sourceId}/endpoints/${ep.endpointId}/backfill`, {
-          method: "POST",
-          body: JSON.stringify({ action: "stop" }),
-        }).catch(() => undefined);
-        setBfMsg((m) => `${m ? m + " · " : ""}중지됨(재시작 시 이어서 진행)`);
+
+      if (bfStopRef.current) {
+        await jfetch(url, { method: "POST", body: JSON.stringify({ action: "stop" }) }).catch(() => undefined);
+        setBfMsg((m) => `${m ? m + " · " : ""}중지됨(진행 중 청크는 완주 후 정지 · 재시작 시 이어서 진행)`);
       }
       await loadDetail(sel.sourceId);
     } catch (e) {
       setBfMsg(`백필 오류: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       bfLoopRef.current = false;
+      bfStopRef.current = false;
       setBfRunning(false);
+      setBfChunk(null);
     }
   };
 
@@ -877,7 +879,7 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
                                 {ep.backfill?.status === "idle" && ep.backfill?.from === bfFrom && ep.backfill?.to === bfTo ? "이어서 진행" : "백필 시작"}
                               </button>
                             ) : (
-                              <button type="button" onClick={() => { bfLoopRef.current = false; }} className="cd-btn cd-btn-danger text-[12px]">
+                              <button type="button" onClick={() => { bfStopRef.current = true; bfLoopRef.current = false; }} className="cd-btn cd-btn-danger text-[12px]">
                                 중지
                               </button>
                             )}
@@ -891,6 +893,29 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
                                 />
                               </div>
                               <span className="text-[11px] cd-text-faint whitespace-nowrap">{bfProgress.done}/{bfProgress.total}개월</span>
+                            </div>
+                          )}
+                          {/* 실행 중 청크의 세부 진행 — 대량 월(1~2만 건)에서 멈춘 듯 보이지 않게 실시간 표시 */}
+                          {bfChunk && (
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: "var(--cd-surface)" }}>
+                                <div
+                                  className="h-full rounded-full transition-all"
+                                  style={{
+                                    width:
+                                      bfChunk.phase === "save" && bfChunk.total
+                                        ? `${Math.min(100, Math.round((bfChunk.items / bfChunk.total) * 100))}%`
+                                        : "100%",
+                                    background: bfChunk.phase === "save" ? "var(--cd-success)" : "var(--cd-secondary)",
+                                    opacity: bfChunk.phase === "fetch" ? 0.5 : 1,
+                                  }}
+                                />
+                              </div>
+                              <span className="text-[11px] cd-text-faint whitespace-nowrap">
+                                {bfChunk.chunk} · {bfChunk.phase === "fetch" ? "조회" : "저장"}{" "}
+                                {bfChunk.items.toLocaleString()}
+                                {bfChunk.phase === "save" && bfChunk.total ? `/${bfChunk.total.toLocaleString()}` : ""}건
+                              </span>
                             </div>
                           )}
                           {bfMsg && <p className="text-[12px] cd-text-muted">{bfMsg}</p>}

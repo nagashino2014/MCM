@@ -102,6 +102,8 @@ export interface BidCollectResult {
 
 export interface BidCollectOpts {
   preview?: boolean;
+  /** 진행 보고(백필 진행률 바) — fetch=API 페이지, save=DB 저장. */
+  onProgress?: (p: { phase: "fetch" | "save"; page: number; items: number; total?: number }) => void;
 }
 
 export async function collectBidSource(
@@ -121,7 +123,10 @@ export async function collectBidSource(
   // bid 는 raw_json 원문 보존이 핵심(첨부 DocUrl/FileNm·연계키·커스텀 열·재매핑) —
   // response_fields 슬림화를 적용하지 않는다(과거 설정이 남아 있어도 무시).
   const cfg = { ...endpoint.apiConfig, response_fields: undefined };
-  const run = await runApiCollect(source.apiProfile, cfg, { secret });
+  const run = await runApiCollect(source.apiProfile, cfg, {
+    secret,
+    onProgress: opts.onProgress ? (p) => opts.onProgress!({ phase: "fetch", ...p }) : undefined,
+  });
   if (run.error && run.items.length === 0) {
     return { ...result, error: run.error, logs: run.logs };
   }
@@ -160,10 +165,16 @@ export async function collectBidSource(
   const insertedItems: InsertedBid[] = [];
   await withDbWrite(async (wdb) => {
     const processed = new Set<string>(); // 이번 실행 내 중복 item 방어
+    let saved = 0;
     for (const it of items) {
       const m = mapItem(it, fm);
       if (processed.has(m.externalId)) continue;
       processed.add(m.externalId);
+      // 저장 진행 보고 — 대량 청크(월 1~2만 건)의 저장 단계도 진행률에 반영
+      saved++;
+      if (opts.onProgress && (saved % 200 === 0 || saved === 1)) {
+        opts.onProgress({ phase: "save", page: 0, items: saved, total: items.length });
+      }
       const isNew = !seen.has(m.externalId);
       const bidId = id("pbid");
       // 재수집 시 field_mapping 수정·원문 변경이 반영되도록 upsert.

@@ -1,14 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getEndpoint, getSource, updateEndpoint } from "@/lib/scraper/sources-store";
-import { buildChunkConfig, doneMonths, isValidYm, nextYm, totalMonths, type BackfillState } from "@/lib/scraper/backfill";
+import {
+  buildChunkConfig,
+  doneMonths,
+  isFreshProgress,
+  isValidYm,
+  nextYm,
+  totalMonths,
+  type BackfillState,
+  type ChunkProgress,
+} from "@/lib/scraper/backfill";
 import { collectBidSource } from "@/lib/bid/bid-sink";
 import { collectCustomSource } from "@/lib/intel/custom-sink";
-import type { ScraperEndpointRow } from "@/lib/scraper/types";
+import type { ScraperEndpointRow, ScraperSourceRow } from "@/lib/scraper/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-// 한 step = 한 달 청크 수집(페이지네이션 포함) — 입찰공고급 대량 월도 커버하도록 여유.
+// step 은 즉시 반환(202)하고 청크 수집은 백그라운드에서 이어진다 — ALB 300s 한도와 무관.
 export const maxDuration = 300;
 
 interface Ctx {
@@ -21,8 +30,7 @@ function asState(v: unknown): BackfillState | null {
   return s;
 }
 
-// step 동시 실행 방지(단일 컨테이너 구조) — 대량 월 청크가 ALB 한도(300s)를 넘어 클라이언트가
-// 504를 받아도 서버는 수집을 계속한다. 그 사이 재요청이 같은 달을 이중 수집하지 않게 막는다.
+// step 동시 실행 방지(단일 컨테이너) — 백그라운드 실행 중 재요청이 같은 달을 이중 수집하지 않게 막는다.
 const inFlight = new Set<string>();
 
 function progressOf(s: BackfillState) {
@@ -31,7 +39,108 @@ function progressOf(s: BackfillState) {
   return { done, total };
 }
 
-/** 백필 상태 조회. */
+/** 진행 중(백그라운드 실행 또는 최근 갱신된 chunk_progress) 여부. */
+function isRunningNow(endpointId: string, s: BackfillState | null): boolean {
+  return inFlight.has(endpointId) || isFreshProgress(s?.chunk_progress);
+}
+
+/**
+ * 청크 1개를 백그라운드에서 수집한다(응답과 분리 — 클라이언트는 폴링으로 진행률을 본다).
+ * 진행 상황은 backfill.chunk_progress 에 주기적으로 기록하고, 완료 시 커서를 전진시킨다.
+ */
+function runChunkInBackground(
+  source: ScraperSourceRow,
+  endpoint: ScraperEndpointRow,
+  state: BackfillState,
+  chunk: string
+): void {
+  const endpointId = endpoint.endpointId;
+  inFlight.add(endpointId);
+  const startedAt = new Date().toISOString();
+  let lastWrite = 0;
+  let progress: ChunkProgress = {
+    chunk,
+    phase: "fetch",
+    page: 0,
+    items: 0,
+    started_at: startedAt,
+    updated_at: startedAt,
+  };
+
+  // 진행 기록은 throttle(2초) — 페이지/건수마다 DB 쓰기가 몰리지 않게.
+  const writeProgress = (next: Partial<ChunkProgress>, force = false) => {
+    progress = { ...progress, ...next, updated_at: new Date().toISOString() };
+    const now = Date.now();
+    if (!force && now - lastWrite < 2000) return;
+    lastWrite = now;
+    const snapshot = { ...state, chunk_progress: progress, updated_at: progress.updated_at };
+    void updateEndpoint(endpointId, { backfill: snapshot as unknown as Record<string, unknown> }).catch(() => undefined);
+  };
+
+  void (async () => {
+    try {
+      const cfg = buildChunkConfig(endpoint.apiConfig!, chunk);
+      const chunkEp: ScraperEndpointRow = { ...endpoint, apiConfig: cfg };
+      const onProgress = (p: { phase: "fetch" | "save"; page: number; items: number; total?: number }) =>
+        writeProgress(p);
+      const result =
+        source.purpose === "bid"
+          ? await collectBidSource(source, chunkEp, { onProgress })
+          : await collectCustomSource(source, chunkEp, { onProgress });
+
+      // 완전 실패(수집 0 + 오류)면 커서를 전진하지 않는다 — 인증키 누락 같은 지속 오류가
+      // "빈 완주(done)"로 끝나는 것을 방지. 클라이언트는 stalled 를 보고 중단한다.
+      if (result.error && result.scanned === 0) {
+        const stalled: BackfillState = {
+          ...state,
+          status: "idle",
+          chunk_progress: null,
+          updated_at: new Date().toISOString(),
+          last_result: { chunk, scanned: 0, inserted: 0, updated: 0, error: result.error },
+        };
+        await updateEndpoint(endpointId, { backfill: stalled as unknown as Record<string, unknown> });
+        return;
+      }
+      const nextCursor = nextYm(chunk);
+      const finished = totalMonths(nextCursor, state.to) === 0;
+      const nextState: BackfillState = {
+        ...state,
+        cursor: nextCursor,
+        status: finished ? "done" : "running",
+        chunk_progress: null,
+        updated_at: new Date().toISOString(),
+        last_result: {
+          chunk,
+          scanned: result.scanned,
+          inserted: result.inserted,
+          updated: (result as { updated?: number }).updated ?? 0,
+          ...(result.error ? { error: result.error } : {}),
+        },
+      };
+      await updateEndpoint(endpointId, { backfill: nextState as unknown as Record<string, unknown> });
+    } catch (err) {
+      // 예외(네트워크·파싱 등) — 커서 보존하고 중단 상태로 남긴다(재시작 시 같은 달부터).
+      const failed: BackfillState = {
+        ...state,
+        status: "idle",
+        chunk_progress: null,
+        updated_at: new Date().toISOString(),
+        last_result: {
+          chunk,
+          scanned: 0,
+          inserted: 0,
+          updated: 0,
+          error: err instanceof Error ? err.message : String(err),
+        },
+      };
+      await updateEndpoint(endpointId, { backfill: failed as unknown as Record<string, unknown> }).catch(() => undefined);
+    } finally {
+      inFlight.delete(endpointId);
+    }
+  })();
+}
+
+/** 백필 상태 조회 — 폴링 대상(진행률 바). */
 export async function GET(_: NextRequest, ctx: Ctx) {
   try {
     await requirePermission("sales.edit", { fallbackRoles: ["editor"] });
@@ -39,7 +148,11 @@ export async function GET(_: NextRequest, ctx: Ctx) {
     const ep = await getEndpoint(endpointId);
     if (!ep) return NextResponse.json({ error: "엔드포인트를 찾을 수 없습니다." }, { status: 404 });
     const state = asState(ep.backfill);
-    return NextResponse.json({ backfill: state, progress: state ? progressOf(state) : null });
+    return NextResponse.json({
+      backfill: state,
+      progress: state ? progressOf(state) : null,
+      running: isRunningNow(endpointId, state),
+    });
   } catch (err) {
     return authErrorToResponse(err);
   }
@@ -79,7 +192,14 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       // 동일 기간 재시작이면 cursor 보존(중단 재개), 기간이 바뀌면 처음부터.
       const prev = asState(endpoint.backfill);
       const cursor = prev && prev.from === from && prev.to === to && prev.status !== "done" ? prev.cursor : from;
-      const state: BackfillState = { from, to, cursor, status: "running", updated_at: new Date().toISOString() };
+      const state: BackfillState = {
+        from,
+        to,
+        cursor,
+        status: "running",
+        chunk_progress: null,
+        updated_at: new Date().toISOString(),
+      };
       await updateEndpoint(endpointId, { backfill: state as unknown as Record<string, unknown> });
       return NextResponse.json({ backfill: state, progress: progressOf(state) });
     }
@@ -87,9 +207,15 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     if (action === "stop") {
       const state = asState(endpoint.backfill);
       if (!state) return NextResponse.json({ error: "백필 상태가 없습니다." }, { status: 400 });
+      // 진행 중인 청크는 그대로 완주시킨다(중단해도 데이터 정합은 유지) — 상태만 idle 로.
+      // 실행 중이면 chunk_progress 는 백그라운드가 계속 갱신하다 완료 시 커서를 전진시킨다.
       const next: BackfillState = { ...state, status: "idle", updated_at: new Date().toISOString() };
       await updateEndpoint(endpointId, { backfill: next as unknown as Record<string, unknown> });
-      return NextResponse.json({ backfill: next, progress: progressOf(next) });
+      return NextResponse.json({
+        backfill: next,
+        progress: progressOf(next),
+        running: isRunningNow(endpointId, next),
+      });
     }
 
     if (action === "step") {
@@ -97,70 +223,30 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       if (!state || state.status !== "running") {
         return NextResponse.json({ error: "진행 중인 백필이 없습니다. 먼저 시작하세요." }, { status: 400 });
       }
-      // 이 엔드포인트의 step 이 이미 실행 중(504 이후 서버는 계속 수집 중일 수 있음) — 이중 수집 방지.
-      if (inFlight.has(endpointId)) {
-        return NextResponse.json({ backfill: state, progress: progressOf(state), busy: true });
+      // 이미 백그라운드로 이 엔드포인트의 청크를 수집 중 — 이중 수집 방지(폴링으로 진행 확인).
+      if (isRunningNow(endpointId, state)) {
+        return NextResponse.json(
+          { backfill: state, progress: progressOf(state), busy: true, running: true },
+          { status: 202 }
+        );
       }
       if (totalMonths(state.cursor, state.to) === 0) {
-        const doneState: BackfillState = { ...state, status: "done", updated_at: new Date().toISOString() };
+        const doneState: BackfillState = {
+          ...state,
+          status: "done",
+          chunk_progress: null,
+          updated_at: new Date().toISOString(),
+        };
         await updateEndpoint(endpointId, { backfill: doneState as unknown as Record<string, unknown> });
         return NextResponse.json({ backfill: doneState, progress: progressOf(doneState), done: true });
       }
+      // 청크 수집은 백그라운드에서 — 응답은 즉시(202). 대량 월(1~2만 건)도 ALB 300s 한도와 무관.
       const chunk = state.cursor;
-      // 청크 실행 — date_filters 를 해당 월 고정값으로 치환(페이지당 500건·상한 100p 는 buildChunkConfig 가 처리).
-      const cfg = buildChunkConfig(endpoint.apiConfig!, chunk);
-      const chunkEp: ScraperEndpointRow = { ...endpoint, apiConfig: cfg };
-      inFlight.add(endpointId);
-      let result: Awaited<ReturnType<typeof collectBidSource>> | Awaited<ReturnType<typeof collectCustomSource>>;
-      try {
-        result =
-          source.purpose === "bid"
-            ? await collectBidSource(source, chunkEp)
-            : await collectCustomSource(source, chunkEp);
-      } finally {
-        inFlight.delete(endpointId);
-      }
-      // 완전 실패(수집 0 + 오류)면 커서를 전진하지 않는다 — 인증키 누락 같은 지속 오류가
-      // "빈 완주(done)"로 끝나는 것을 방지. 클라이언트는 이 응답을 보고 중단한다.
-      if (result.error && result.scanned === 0) {
-        const stalled: BackfillState = {
-          ...state,
-          updated_at: new Date().toISOString(),
-          last_result: { chunk, scanned: 0, inserted: 0, updated: 0, error: result.error },
-        };
-        await updateEndpoint(endpointId, { backfill: stalled as unknown as Record<string, unknown> });
-        return NextResponse.json({
-          backfill: stalled,
-          progress: progressOf(stalled),
-          chunk,
-          result: stalled.last_result,
-          done: false,
-          stalled: true,
-        });
-      }
-      const nextCursor = nextYm(chunk);
-      const finished = totalMonths(nextCursor, state.to) === 0;
-      const nextState: BackfillState = {
-        ...state,
-        cursor: nextCursor,
-        status: finished ? "done" : "running",
-        updated_at: new Date().toISOString(),
-        last_result: {
-          chunk,
-          scanned: result.scanned,
-          inserted: result.inserted,
-          updated: (result as { updated?: number }).updated ?? 0,
-          ...(result.error ? { error: result.error } : {}),
-        },
-      };
-      await updateEndpoint(endpointId, { backfill: nextState as unknown as Record<string, unknown> });
-      return NextResponse.json({
-        backfill: nextState,
-        progress: progressOf(nextState),
-        chunk,
-        result: nextState.last_result,
-        done: finished,
-      });
+      runChunkInBackground(source, endpoint, state, chunk);
+      return NextResponse.json(
+        { backfill: state, progress: progressOf(state), chunk, accepted: true, running: true },
+        { status: 202 }
+      );
     }
 
     return NextResponse.json({ error: "action 은 start|step|stop 이어야 합니다." }, { status: 400 });

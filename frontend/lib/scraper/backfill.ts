@@ -6,6 +6,23 @@
 import { formatDateForApi } from "./execute-api";
 import type { ApiConfig, DateFilter } from "./types";
 
+/** 현재 실행 중인 청크의 세부 진행 — 폴링 UI 진행률 바용(서버가 주기적으로 갱신). */
+export interface ChunkProgress {
+  /** 수집 중인 월("YYYY-MM") */
+  chunk: string;
+  /** fetch=API 페이지 수집 중, save=DB 저장 중 */
+  phase: "fetch" | "save";
+  /** 수집한 페이지 수 */
+  page: number;
+  /** 누적 조회 건수(fetch) 또는 저장 완료 건수(save) */
+  items: number;
+  /** save 단계의 전체 저장 대상 건수 */
+  total?: number;
+  /** 이 청크 시작 시각(ISO) — 경과 시간 표시·유휴 판정용 */
+  started_at: string;
+  updated_at: string;
+}
+
 /** scraper_endpoints.backfill jsonb. */
 export interface BackfillState {
   /** "YYYY-MM" */
@@ -17,6 +34,18 @@ export interface BackfillState {
   status: "running" | "done" | "idle";
   updated_at?: string;
   last_result?: { chunk: string; scanned: number; inserted: number; updated: number; error?: string };
+  /** 실행 중인 청크의 세부 진행(없으면 대기/유휴). 청크 완료 시 제거. */
+  chunk_progress?: ChunkProgress | null;
+}
+
+/** chunk_progress 가 살아있는 실행으로 볼 수 있는 시간(ms) — 컨테이너 재시작 등으로 남은 유령 상태 방어. */
+export const CHUNK_PROGRESS_STALE_MS = 10 * 60 * 1000;
+
+/** 진행 중 표시로 신뢰할 수 있는 chunk_progress 인지(오래된 것은 무시). */
+export function isFreshProgress(p: ChunkProgress | null | undefined, now = Date.now()): boolean {
+  if (!p?.updated_at) return false;
+  const t = Date.parse(p.updated_at);
+  return Number.isFinite(t) && now - t < CHUNK_PROGRESS_STALE_MS;
 }
 
 const YM_RE = /^\d{4}-(0[1-9]|1[0-2])$/;

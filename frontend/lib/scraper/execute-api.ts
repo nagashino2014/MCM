@@ -296,12 +296,16 @@ async function executeApiCall(
   }
 }
 
+/** 페이지 수집 진행 보고 콜백 — 백필 진행률 바(폴링)용. 실패는 무시(수집을 막지 않는다). */
+export type FetchProgressFn = (p: { page: number; items: number }) => void;
+
 /** 페이지네이션 루프 1회분 — primary_endpoint 를 max_pages 까지 수집. */
 async function collectPages(
   apiProfile: ApiProfile,
   apiConfig: ApiConfig,
   logs: string[],
-  secret: string | null
+  secret: string | null,
+  onProgress?: FetchProgressFn
 ): Promise<{ items: Record<string, unknown>[]; error?: string }> {
   const allData: Record<string, unknown>[] = [];
   const pagination = apiConfig.pagination;
@@ -331,6 +335,11 @@ async function collectPages(
       break;
     }
     allData.push(...items);
+    try {
+      onProgress?.({ page, items: allData.length });
+    } catch {
+      // 진행 보고 실패는 수집에 영향 없음
+    }
     if (page < maxPages) await delay(300);
   }
   return { items: allData };
@@ -344,7 +353,7 @@ async function collectPages(
 export async function runApiCollect(
   apiProfile: ApiProfile,
   apiConfig: ApiConfig,
-  opts: { secret?: string | null } = {}
+  opts: { secret?: string | null; onProgress?: FetchProgressFn } = {}
 ): Promise<RunApiResult> {
   const logs: string[] = [];
   let allData: Record<string, unknown>[] = [];
@@ -365,7 +374,7 @@ export async function runApiCollect(
         date_filters: listEp.date_filters ?? apiConfig.date_filters,
         response_fields: listEp.response_fields,
       };
-      const listRun = await collectPages(apiProfile, listCfg, logs, secret);
+      const listRun = await collectPages(apiProfile, listCfg, logs, secret, opts.onProgress);
       if (listRun.error && listRun.items.length === 0) {
         return { items: [], logs, error: `목록 단계 실패: ${listRun.error}` };
       }
@@ -393,6 +402,7 @@ export async function runApiCollect(
       }
       logs.push(`[2PHASE] 본문 조회 대상 ${keySets.length}건 (상한 ${maxDetail})`);
 
+      let detailDone = 0;
       for (const kv of keySets) {
         const detailCfg: ApiConfig = {
           ...apiConfig,
@@ -405,10 +415,17 @@ export async function runApiCollect(
         };
         const r = await collectPages(apiProfile, detailCfg, logs, secret);
         allData.push(...r.items.filter((it) => !("raw_xml" in it)));
+        detailDone++;
+        try {
+          // 본문 반복도 진행 보고(page=본문 조회 순번) — 2단계 소스의 진행률 표시용
+          opts.onProgress?.({ page: detailDone, items: allData.length });
+        } catch {
+          // 진행 보고 실패는 수집에 영향 없음
+        }
         await delay(300);
       }
     } else {
-      const run = await collectPages(apiProfile, apiConfig, logs, secret);
+      const run = await collectPages(apiProfile, apiConfig, logs, secret, opts.onProgress);
       if (run.error && run.items.length === 0) return { items: [], logs, error: run.error };
       allData = run.items;
     }

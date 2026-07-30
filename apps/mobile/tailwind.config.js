@@ -13,9 +13,10 @@ module.exports = {
     extend: {
       colors: {
         // 기존 화면(login·card·tabs)이 쓰는 브랜드 별칭 — 하위호환 유지.
+        // ⚠ Soft Glass Ink 프라이머리와 같은 값을 유지할 것(옛 #5D87FF 는 폐기).
         primary: {
-          DEFAULT: "#5D87FF",
-          light: "#ECF2FF", // cd-tint-primary
+          DEFAULT: "#4A63D8",
+          light: "#ECEFFD", // cd-tint-primary
         },
         cd: {
           bg: cd("bg"),
@@ -23,6 +24,7 @@ module.exports = {
           surface: cd("surface"),
           border: cd("border"),
           text: cd("text"),
+          body: cd("body"),
           muted: cd("muted"),
           faint: cd("faint"),
           "grid-line": cd("grid-line"),
@@ -55,8 +57,8 @@ module.exports = {
         },
       },
       borderRadius: {
-        // 웹 cd-card = 20px
-        card: "20px",
+        // 웹 .cd-card = 18px
+        card: "18px",
       },
     },
   },

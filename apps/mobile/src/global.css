@@ -19,45 +19,55 @@
  * ⚠ 웹 값이 바뀌면 여기도 같이 바꾼다(두 곳이 갈라지면 화면 톤이 어긋난다).
  * ------------------------------------------------------------------------- */
 :root {
-  --cd-bg: 238 242 248;
+  --cd-bg: 239 241 248;
   --cd-card: 255 255 255;
-  --cd-surface: 242 246 250;
-  --cd-border: 229 234 239;
-  --cd-text: 42 53 71;
-  --cd-muted: 90 106 133;
-  --cd-faint: 124 143 172;
-  --cd-primary: 93 135 255;
-  --cd-primary-soft: 236 242 255;
-  --cd-primary-strong: 69 112 234;
-  --cd-secondary: 73 190 255;
-  --cd-secondary-soft: 232 247 255;
-  --cd-accent: 250 137 107;
-  --cd-accent-soft: 251 242 239;
-  --cd-accent-strong: 243 112 77;
-  --cd-success: 126 186 86;
-  --cd-success-soft: 238 246 231;
-  --cd-warning: 255 174 31;
-  --cd-warning-soft: 254 245 229;
-  --cd-error: 243 112 77;
-  --cd-error-soft: 253 237 232;
-  --cd-grid-line: 235 241 246;
+  --cd-surface: 247 248 252;
+  --cd-border: 215 220 234;
+  --cd-text: 42 48 64;
+  --cd-body: 58 64 85;
+  --cd-muted: 123 131 156;
+  --cd-faint: 154 161 184;
+  --cd-primary: 74 99 216;
+  --cd-primary-soft: 236 239 253;
+  --cd-primary-strong: 61 83 194;
+  --cd-secondary: 61 143 196;
+  --cd-secondary-soft: 233 245 252;
+  --cd-accent: 208 87 67;
+  --cd-accent-soft: 252 235 232;
+  --cd-accent-strong: 208 87 67;
+  --cd-success: 46 140 113;
+  --cd-success-soft: 228 244 240;
+  --cd-warning: 181 127 29;
+  --cd-warning-soft: 251 241 224;
+  --cd-error: 208 87 67;
+  --cd-error-soft: 252 235 232;
+  --cd-grid-line: 231 235 244;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --cd-bg: 17 22 29;
-    --cd-card: 23 28 35;
-    --cd-surface: 29 37 48;
-    --cd-border: 51 63 85;
-    --cd-text: 234 239 244;
-    --cd-muted: 140 155 181;
-    --cd-faint: 90 106 133;
-    --cd-primary-soft: 37 54 98;
-    --cd-secondary-soft: 28 69 93;
-    --cd-accent-soft: 75 49 61;
-    --cd-success-soft: 46 59 39;
-    --cd-warning-soft: 77 58 42;
-    --cd-error-soft: 75 49 61;
-    --cd-grid-line: 35 44 57;
+    --cd-bg: 20 24 36;
+    --cd-card: 27 33 54;
+    --cd-surface: 38 44 64;
+    --cd-border: 48 53 72;
+    --cd-text: 231 234 244;
+    --cd-body: 198 205 224;
+    --cd-muted: 154 163 188;
+    --cd-faint: 110 122 150;
+    --cd-primary: 169 184 255;
+    --cd-primary-soft: 46 54 86;
+    --cd-primary-strong: 143 165 255;
+    --cd-secondary: 126 200 240;
+    --cd-secondary-soft: 41 56 80;
+    --cd-accent: 240 154 139;
+    --cd-accent-soft: 61 52 68;
+    --cd-accent-strong: 240 154 139;
+    --cd-success: 95 199 165;
+    --cd-success-soft: 37 56 70;
+    --cd-warning: 235 192 106;
+    --cd-warning-soft: 60 58 62;
+    --cd-error: 240 154 139;
+    --cd-error-soft: 61 52 68;
+    --cd-grid-line: 48 53 72;
   }
 }

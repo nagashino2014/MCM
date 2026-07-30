@@ -29,7 +29,7 @@ const TONE_FG: Record<ToastTone, string> = {
 };
 
 const TONE_HEX: Record<ToastTone, string> = {
-  info: "#5d87ff",
+  info: "#4A63D8",
   success: "#7eba56",
   error: "#f3704d",
 };

@@ -34,11 +34,11 @@ export default function ScheduleScreen() {
     <SafeAreaView edges={['bottom']} className="flex-1 bg-cd-bg">
       <View className="flex-row items-center justify-between border-b border-cd-border bg-cd-card px-4 py-3">
         <Pressable onPress={() => setMonth((m) => shiftMonth(m, -1))} className="p-2 active:opacity-60">
-          <Ionicons name="chevron-back" size={20} color="#5D87FF" />
+          <Ionicons name="chevron-back" size={20} color="#4A63D8" />
         </Pressable>
         <Text className="text-base font-extrabold text-cd-text">{month}</Text>
         <Pressable onPress={() => setMonth((m) => shiftMonth(m, 1))} className="p-2 active:opacity-60">
-          <Ionicons name="chevron-forward" size={20} color="#5D87FF" />
+          <Ionicons name="chevron-forward" size={20} color="#4A63D8" />
         </Pressable>
       </View>
 
@@ -92,10 +92,10 @@ function ActivityCard({ a }: { a: Activity }) {
                 {phone ? (
                   <View className="flex-row gap-4">
                     <Pressable onPress={() => callPhone(phone)} className="active:opacity-60">
-                      <Ionicons name="call" size={18} color="#5D87FF" />
+                      <Ionicons name="call" size={18} color="#4A63D8" />
                     </Pressable>
                     <Pressable onPress={() => sendSms(phone)} className="active:opacity-60">
-                      <Ionicons name="chatbubble-ellipses" size={18} color="#5D87FF" />
+                      <Ionicons name="chatbubble-ellipses" size={18} color="#4A63D8" />
                     </Pressable>
                   </View>
                 ) : null}

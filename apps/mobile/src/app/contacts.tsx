@@ -93,12 +93,12 @@ function ContactCard({ c }: { c: Contact }) {
           <Pressable
             onPress={() => callPhone(phone)}
             className="h-9 w-9 items-center justify-center rounded-full bg-primary-light active:opacity-60">
-            <Ionicons name="call" size={18} color="#5D87FF" />
+            <Ionicons name="call" size={18} color="#4A63D8" />
           </Pressable>
           <Pressable
             onPress={() => sendSms(phone)}
             className="h-9 w-9 items-center justify-center rounded-full bg-primary-light active:opacity-60">
-            <Ionicons name="chatbubble-ellipses" size={18} color="#5D87FF" />
+            <Ionicons name="chatbubble-ellipses" size={18} color="#4A63D8" />
           </Pressable>
         </View>
       ) : null}

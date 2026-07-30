@@ -22,9 +22,12 @@ export function SegmentedTabs<T extends string>({
   onChange: (v: T) => void;
 }) {
   return (
+    // ⚠ flexGrow:0 필수 — 세로 flex 컨테이너(Screen scroll={false}) 안에서 가로 ScrollView 가
+    // 남은 세로 공간을 전부 차지해, 결재함 탭·목록이 화면 중앙으로 밀려 내려가던 버그가 있었다.
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
+      style={{ flexGrow: 0, flexShrink: 0 }}
       contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingVertical: 8 }}>
       {items.map((it) => (
         <View key={it.key} className="flex-row items-center">

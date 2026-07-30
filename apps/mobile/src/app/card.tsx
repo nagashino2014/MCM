@@ -37,7 +37,7 @@ interface FacilityOption {
 }
 type Step = 'pick' | 'parsing' | 'form' | 'saving' | 'done';
 
-const PRIMARY = '#5D87FF';
+const PRIMARY = '#4A63D8';
 
 // 라우트 크래시 캐처 — 화면 오류 시 흰 화면 대신 안내+재시도 제공
 export function ErrorBoundary({ error, retry }: { error: Error; retry: () => Promise<void> }) {

@@ -12,8 +12,11 @@ export interface CdPalette {
   bg: string;
   card: string;
   surface: string;
+  /** 카드·박스 경계선. 웹의 --cd-ring 과 같은 역할(배경과 구분되는 실제 테두리). */
   border: string;
   text: string;
+  /** 본문 글자색(제목=text 보다 한 단계 옅음). */
+  body: string;
   muted: string;
   faint: string;
   primary: string;
@@ -33,47 +36,64 @@ export interface CdPalette {
   gridLine: string;
 }
 
+/**
+ * Soft Glass Ink 팔레트 — 웹 cdash.css 와 같은 색.
+ * 다만 웹의 글라스(반투명 + backdrop blur)는 RN 에 없고, tailwind 색 토큰이
+ * "R G B" 트리플릿이라 알파를 담을 수 없다 → **불투명 근사값**으로 옮긴다.
+ *   card = 흰색, surface·soft 류 = 해당 알파를 배경 위에 합성한 결과값.
+ */
 export const LIGHT: CdPalette = {
-  bg: "#eef2f8",
+  bg: "#eff1f8",
   card: "#ffffff",
-  surface: "#f2f6fa",
-  border: "#e5eaef",
-  text: "#2a3547",
-  muted: "#5a6a85",
-  faint: "#7c8fac",
-  primary: "#5d87ff",
-  primarySoft: "#ecf2ff",
-  primaryStrong: "#4570ea",
-  secondary: "#49beff",
-  secondarySoft: "#e8f7ff",
-  accent: "#fa896b",
-  accentSoft: "#fbf2ef",
-  accentStrong: "#f3704d",
-  success: "#7eba56",
-  successSoft: "#eef6e7",
-  warning: "#ffae1f",
-  warningSoft: "#fef5e5",
-  error: "#f3704d",
-  errorSoft: "#fdede8",
-  gridLine: "#ebf1f6",
+  surface: "#f7f8fc",
+  border: "#d7dcea",
+  text: "#2a3040",
+  body: "#3a4055",
+  muted: "#7b839c",
+  faint: "#9aa1b8",
+  primary: "#4a63d8",
+  primarySoft: "#eceffd",
+  primaryStrong: "#3d53c2",
+  secondary: "#3d8fc4",
+  secondarySoft: "#e9f5fc",
+  // accent 는 폐기 토큰 — 웹과 동일하게 error 로 통합한다(신규 사용 금지).
+  accent: "#d05743",
+  accentSoft: "#fcebe8",
+  accentStrong: "#d05743",
+  success: "#2e8c71",
+  successSoft: "#e4f4f0",
+  warning: "#b57f1d",
+  warningSoft: "#fbf1e0",
+  error: "#d05743",
+  errorSoft: "#fcebe8",
+  gridLine: "#e7ebf4",
 };
 
 export const DARK: CdPalette = {
   ...LIGHT,
-  bg: "#11161d",
-  card: "#171c23",
-  surface: "#1d2530",
-  border: "#333f55",
-  text: "#eaeff4",
-  muted: "#8c9bb5",
-  faint: "#5a6a85",
-  primarySoft: "#253662",
-  secondarySoft: "#1c455d",
-  accentSoft: "#4b313d",
-  successSoft: "#2e3b27",
-  warningSoft: "#4d3a2a",
-  errorSoft: "#4b313d",
-  gridLine: "#232c39",
+  bg: "#141824",
+  card: "#1b2136",
+  surface: "#262c40",
+  border: "#303548",
+  text: "#e7eaf4",
+  body: "#c6cde0",
+  muted: "#9aa3bc",
+  faint: "#6e7a96",
+  primary: "#a9b8ff",
+  primarySoft: "#2e3656",
+  primaryStrong: "#8fa5ff",
+  secondary: "#7ec8f0",
+  secondarySoft: "#293850",
+  accent: "#f09a8b",
+  accentSoft: "#3d3444",
+  accentStrong: "#f09a8b",
+  success: "#5fc7a5",
+  successSoft: "#253846",
+  warning: "#ebc06a",
+  warningSoft: "#3c3a3e",
+  error: "#f09a8b",
+  errorSoft: "#3d3444",
+  gridLine: "#303548",
 };
 
 /** "#5d87ff" → "93 135 255" (tailwind 의 `rgb(var(--x) / <alpha-value>)` 가 요구하는 형식). */
@@ -91,6 +111,7 @@ export function paletteVars(p: CdPalette): Record<string, string> {
     "--cd-surface": triplet(p.surface),
     "--cd-border": triplet(p.border),
     "--cd-text": triplet(p.text),
+    "--cd-body": triplet(p.body),
     "--cd-muted": triplet(p.muted),
     "--cd-faint": triplet(p.faint),
     "--cd-primary": triplet(p.primary),

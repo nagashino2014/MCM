@@ -37,7 +37,7 @@ async function ensureAndroidChannel(): Promise<void> {
     name: "기본 알림",
     importance: Notifications.AndroidImportance.HIGH,
     vibrationPattern: [0, 250, 250, 250],
-    lightColor: "#5D87FF",
+    lightColor: "#4A63D8",
   });
 }
 

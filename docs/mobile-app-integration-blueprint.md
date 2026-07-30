@@ -159,9 +159,12 @@ mobile_push_log(
 | `leave.notice` | 연차촉진 1·2차 고지 | `/leave/notices/{id}` | ON |
 | `invoice.request` | 세금계산서 발행 요청/처리 | `/billing/requests` | ON |
 | `schedule.reminder` | 영업 일정 당일 아침 | `/schedule?date=` | ON |
-| `bid.deadline` | 입찰 마감 임박 | `/bids/{id}` | OFF |
-| `intel.match` | 사업분야 매칭 신호 | `/intel/{signalId}` | OFF |
+| `bid.match` | 사업분야 매칭 공고(발송 시각 요약) | `/bids` | ON ※ |
+| `bid.deadline` | 입찰 마감 임박(D-N) | `/bids?filter=deadline` | ON ※ |
 | `attendance.week52` | 주 52h 임박 경고(AX-P4) | `/attendance` | ON |
+
+> ※ 입찰 2종은 **관리자가 웹에서 지정한 수신자**만 후보다(§10.10). 표 초안의 OFF 는 전 직원 발송을 가정한 값이었다.
+> `intel.match`(DART·뉴스 신호)는 발송 로직 자체가 없어 카탈로그에서 뺐다 — 별건이다.
 
 ### 4.5 앱 측
 - 권한 요청 시점 = **로그인 직후가 아니라 첫 알림 가치 노출 시점**(결재/게시판 첫 진입)에 사전 설명 후 요청.
@@ -464,6 +467,16 @@ mobile_push_log(
 "배포했는데 앱은 그대로"를 추측으로 다루던 문제. **설정 화면에 실행 중 번들 정보**(내장/OTA·채널·런타임·업데이트 ID·생성 시각·마지막 확인)와 **[지금 업데이트 확인]**(check→fetch→reload)을 넣었다.
 - 실측 결론: 서버(채널→브랜치→최신 업데이트)는 정상이었고 **전파·적용 지연**이었다. `fallbackToCacheTimeout=0` 이라 앱은 기존 번들로 즉시 뜨고 새 번들은 백그라운드로 받아 **다음 실행**에 적용된다(번들 4.5MB).
 - ⚠ **발행 명령 교정**: `--channel` + 셸 env 주입은 틀렸다. `eas update --branch <b> --environment production` 을 쓰고, 발행 후 `dist/_expo/static/js/*/*.hbc` 를 `grep -a` 로 호스트 검증한다(`apps/mobile/AGENTS.md`).
+
+### 10.10 M6-C 입찰 푸시 (2026-07-30, **서버 변경 있음 — next 재배포 필요**)
+**조사 결과 §4.4 표를 정정한다.** 표의 `intel.match`(사업분야 매칭 신호)는 실제 코드에서 **공공입찰 매칭**(`bid_match_notices`)이고, intel(DART·뉴스 신호) 쪽에는 알림 발송 로직 자체가 없다. 그래서 이벤트 키를 `bid.match` 로 두고, 없던 마감 임박은 새로 만들었다.
+- **이미 대기 중이던 소비처를 열었다** — `lib/bid/notify-dispatch.ts` 의 `app` 채널이 `{ ok:false, skipped:"네이티브 앱 출시 후 지원" }` 로 막혀 있었다(웹 설정에는 채널이 이미 노출). `sendPush` 로 교체.
+- `employee_profiles.user_id` 로 수신자 → 로그인 계정 매핑. **user_id 미연결 직원은 앱 채널 발송 불가**(웹 안내문에 명시).
+- 푸시 본문은 요약 1줄(대표 1건 + 외 N건)만. 목록은 앱 화면에서 본다 — 알림에 30줄을 넣을 수 없다.
+- **마감 임박 신설**: `dispatchBidDeadlineReminders()`. 매칭 이력 공고 중 마감 오늘~D-N. 설정 `deadlineDays`(기본 3, 0=끔, 웹 모달에서 선택). 큐 상태를 소비하지 않으므로(마감까지 매일 상기시켜야 한다) 멱등은 `mobile_push_log` 의 `dedup_key = bid.deadline:{날짜}` 에만 의존한다. 매칭 발송이 "오늘 이미 발송"으로 끝나도 독립적으로 돈다.
+- **기본값 ON** — 표는 OFF 였으나 실제 구조는 전 직원 발송이 아니라 **관리자가 수신자와 "앱" 채널을 지정한 사람만** 후보다. 그 위에 앱 토글까지 OFF 기본이면 이중 옵트인이 되어 "설정했는데 안 온다"가 된다.
+- 앱 화면 `/bids` 신설(더보기 진입 + 딥링크 착지) — 최근 매칭/마감 임박 세그먼트, D-3 이내 빨강, 탭하면 **원문 링크를 외부 브라우저로** 연다(앱에서 입찰을 편집하지 않는다). 권한 없으면 403 → "열람 권한이 없습니다"로 사유를 밝힌다.
+- 신규 API `GET /api/sales/bids/matches` — 웹의 `/api/sales/bids` 는 커스텀 열 계산까지 하는 무거운 목록이라 "알림으로 온 그 건들"에는 맞지 않는다.
 
 ---
 

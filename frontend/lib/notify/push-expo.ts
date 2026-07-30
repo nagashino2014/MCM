@@ -22,9 +22,17 @@ export type PushEventKey =
   | "approval.delegated"
   | "mail.received"
   | "leave.notice"
-  | "invoice.request";
+  | "invoice.request"
+  | "bid.match"
+  | "bid.deadline";
 
-/** 이벤트 기본 수신 여부(사용자 설정 행이 없을 때). */
+/**
+ * 이벤트 기본 수신 여부(사용자 설정 행이 없을 때).
+ *
+ * 입찰 2종도 기본 ON 이다 — 블루프린트는 OFF 로 적었지만, 실제 구조는 전 직원 발송이 아니라
+ * **관리자가 웹에서 수신자와 채널("앱")을 지정한 사람만** 후보가 된다. 그 위에 앱 개인설정까지
+ * OFF 기본이면 이중 옵트인이 되어 "설정했는데 안 온다"가 된다. 앱 토글은 거부용으로 둔다.
+ */
 const EVENT_DEFAULT: Record<PushEventKey, boolean> = {
   "board.posted": true,
   "approval.step_pending": true,
@@ -34,6 +42,8 @@ const EVENT_DEFAULT: Record<PushEventKey, boolean> = {
   "mail.received": true,
   "leave.notice": true,
   "invoice.request": true,
+  "bid.match": true,
+  "bid.deadline": true,
 };
 
 export const PUSH_EVENTS: { key: PushEventKey; label: string; description: string }[] = [
@@ -45,6 +55,8 @@ export const PUSH_EVENTS: { key: PushEventKey; label: string; description: strin
   { key: "mail.received", label: "새 메일", description: "새 메일을 받았을 때" },
   { key: "leave.notice", label: "연차 촉진 고지", description: "연차 사용 촉진 고지가 도착했을 때" },
   { key: "invoice.request", label: "세금계산서 발행", description: "발행 요청·처리 소식" },
+  { key: "bid.match", label: "공공입찰 매칭", description: "사업분야에 맞는 공고가 수집됐을 때" },
+  { key: "bid.deadline", label: "입찰 마감 임박", description: "매칭된 공고의 마감일이 다가올 때" },
 ];
 
 let expo: Expo | null = null;

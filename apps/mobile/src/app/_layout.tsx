@@ -86,6 +86,7 @@ function RootNavigator() {
         <Stack.Screen name="leave" options={{ ...header, title: '내 휴가' }} />
         <Stack.Screen name="leave/request" options={{ ...header, title: '휴가 신청' }} />
         <Stack.Screen name="attendance" options={{ ...header, title: '내 근태' }} />
+        <Stack.Screen name="bids" options={{ ...header, title: '공공입찰' }} />
       </Stack>
     </>
   );

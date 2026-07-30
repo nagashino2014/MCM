@@ -44,6 +44,7 @@ export async function PUT(req: NextRequest) {
         ...(Array.isArray(body?.recipients) ? { recipients: body.recipients } : {}),
         ...(Array.isArray(body?.bidTypes) ? { bidTypes: body.bidTypes } : {}),
         ...(body?.contentFields && typeof body.contentFields === "object" ? { contentFields: body.contentFields } : {}),
+        ...(body?.deadlineDays != null ? { deadlineDays: Number(body.deadlineDays) } : {}),
       },
       actor.userId
     );

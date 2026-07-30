@@ -22,5 +22,11 @@ export function routeForLink(link: string | null | undefined): Href | null {
   // 메일 — 목록·뷰어는 M3.
   if (path.startsWith("/mail")) return "/(tabs)/mail";
 
+  // 공공입찰 — 마감 임박 푸시는 ?filter=deadline 로 온다(M6-C).
+  if (path === "/bids") {
+    const filter = new URLSearchParams(link.split("?")[1] ?? "").get("filter");
+    return filter === "deadline" ? { pathname: "/bids", params: { filter } } : "/bids";
+  }
+
   return null;
 }

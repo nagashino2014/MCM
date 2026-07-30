@@ -97,12 +97,14 @@ interface BidNotifySettings {
   bidTypes: BidType[];
   /** 종류별 발송 본문 항목(위→아래 순서). 없으면 기본(분류·사업명·기관·마감·링크). */
   contentFields: Partial<Record<BidType, NotifyContentField[]>>;
+  /** 마감 임박 알림 기준일(D-N, 앱 푸시 전용). 0 이면 사용하지 않는다. */
+  deadlineDays: number;
 }
 
 const CHANNEL_LABELS: { key: NotifyChannel; label: string }[] = [
   { key: "kakao", label: "카카오톡" },
   { key: "email", label: "메일" },
-  { key: "app", label: "앱(출시 후)" },
+  { key: "app", label: "앱 푸시" },
 ];
 const OP_LABELS: { key: RuleGroup["op"]; label: string; desc: string }[] = [
   { key: "and", label: "AND", desc: "모두 포함" },
@@ -259,6 +261,7 @@ export function BidBoard() {
     recipients: [],
     bidTypes: ["order_plan", "prior_spec", "bid_notice"],
     contentFields: {},
+    deadlineDays: 3,
   });
   const [notifyPending, setNotifyPending] = useState(0);
   const [notifyLastSentAt, setNotifyLastSentAt] = useState<string | null>(null);
@@ -1269,7 +1272,8 @@ export function BidBoard() {
             </div>
             <p className="text-[11px] cd-text-faint">
               신규 수집 공고가 용역 분류 조건에 매칭되면 아래 수신자에게 매일 발송 시각에 요약을 전송합니다.
-              카카오톡(알림톡)·메일은 발송 계정 설정 후 활성화되며, 앱 푸시는 네이티브 앱 출시 후 지원됩니다.
+              카카오톡(알림톡)·메일은 발송 계정 설정 후 활성화됩니다. 앱 푸시는 모바일 앱에 로그인한
+              기기로 전송되며, 직원 프로필에 로그인 계정이 연결돼 있어야 합니다.
               {notifyPending > 0 && <> · 발송 대기 <b>{notifyPending}건</b></>}
               {notifyLastSentAt && <> · 최근 발송 {short(notifyLastSentAt)}</>}
             </p>
@@ -1306,6 +1310,21 @@ export function BidBoard() {
                   </label>
                 ))}
               </span>
+              <label className="flex items-center gap-2 text-[13px] cd-text whitespace-nowrap">
+                마감 임박 알림
+                <select
+                  className="cd-input text-[13px]"
+                  style={{ width: 96 }}
+                  value={String(notifySettings.deadlineDays)}
+                  onChange={(e) => setNotifySettings((p) => ({ ...p, deadlineDays: Number(e.target.value) }))}
+                >
+                  <option value="0">사용 안 함</option>
+                  <option value="1">D-1</option>
+                  <option value="3">D-3</option>
+                  <option value="5">D-5</option>
+                  <option value="7">D-7</option>
+                </select>
+              </label>
               <button type="button" className="cd-chip cd-chip-sm" onClick={openFieldModal}>
                 <ListOrdered className="w-3.5 h-3.5" /> 발송 항목 구성
               </button>

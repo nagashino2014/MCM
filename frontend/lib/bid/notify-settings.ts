@@ -28,6 +28,11 @@ export interface BidNotifySettings {
   bidTypes: NotifyBidType[];
   /** 종류별 발송 항목 구성(순서 보존). 없으면 기본(분류·사업명·기관·마감·링크). */
   contentFields: Partial<Record<NotifyBidType, NotifyContentField[]>>;
+  /**
+   * 마감 임박 알림 기준일(D-N, 앱 푸시 전용). 0 이면 사용하지 않는다.
+   * 매칭 이력이 있는 공고 중 마감이 오늘~D-N 인 건을 발송 시각에 함께 알린다.
+   */
+  deadlineDays: number;
   /** 마지막 발송 처리일(KST YYYY-MM-DD) — 일 1회 멱등 가드. */
   lastDispatchDate?: string;
 }
@@ -42,6 +47,7 @@ export const BID_NOTIFY_DEFAULTS: BidNotifySettings = {
   recipients: [],
   bidTypes: [...BID_TYPES],
   contentFields: {},
+  deadlineDays: 3,
 };
 
 function sanitize(raw: unknown): BidNotifySettings {
@@ -78,12 +84,14 @@ function sanitize(raw: unknown): BidNotifySettings {
       if (fields.length) contentFields[t] = fields;
     }
   }
+  const dd = Number(r.deadlineDays);
   return {
     enabled: r.enabled === true,
     sendTime,
     recipients,
     bidTypes,
     contentFields,
+    deadlineDays: Number.isFinite(dd) && dd >= 0 ? Math.min(Math.trunc(dd), 30) : BID_NOTIFY_DEFAULTS.deadlineDays,
     ...(typeof r.lastDispatchDate === "string" ? { lastDispatchDate: r.lastDispatchDate } : {}),
   };
 }

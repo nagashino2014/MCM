@@ -4,7 +4,8 @@
  * 발송 대상 종류(settings.bidTypes)만 발송하고, 종류별 발송 항목(contentFields)이 있으면
  * 해당 bid 테이블의 원문(raw_json)에서 값을 뽑아 지정 순서대로 본문을 구성한다.
  * 일 1회 멱등(lastDispatchDate). 트리거는 instrumentation.ts 의 주기 타이머(next 서버 상주).
- * 앱 푸시(app) 채널은 네이티브 전환 후 구현 — skipped 로 기록만 한다.
+ * 앱(app) 채널은 모바일 푸시로 나간다(M6-C) — 요약 1건만 보내고 목록은 앱 화면에서 본다.
+ * 같은 틱에서 마감 임박(deadlineDays) 알림도 함께 발송한다.
  */
 import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
 import {
@@ -15,6 +16,7 @@ import {
 } from "@/lib/bid/notify-settings";
 import { sendNotifyEmail, type ChannelSendResult } from "@/lib/notify/email-ses";
 import { sendAlimtalk } from "@/lib/notify/kakao-solapi";
+import { sendPush } from "@/lib/notify/push-expo";
 
 const TYPE_LABEL: Record<string, string> = {
   order_plan: "발주계획",
@@ -138,6 +140,46 @@ function buildMessage(
   };
 }
 
+/** 푸시 본문 — 알림 한 줄에 들어갈 요약(대표 1건 + 나머지 건수). */
+function pushSummary(notices: PendingNotice[]): string {
+  const head = notices[0]?.title?.trim() || notices[0]?.categoryName || "신규 공고";
+  const rest = notices.length - 1;
+  const line = rest > 0 ? `${head} 외 ${rest}건` : head;
+  return line.length > 90 ? `${line.slice(0, 89)}…` : line;
+}
+
+interface RecipientContact {
+  phone: string;
+  email: string;
+  /** 앱 푸시 대상 — 직원 프로필에 연결된 로그인 계정. 미연결이면 앱 채널 발송 불가. */
+  userId: string;
+}
+
+async function loadRecipientContacts(
+  db: PgDatabase,
+  settings: BidNotifySettings
+): Promise<Map<string, RecipientContact>> {
+  const ids = settings.recipients.map((r) => r.employeeId);
+  if (!ids.length) return new Map();
+  const ph = ids.map((_, i) => `$${i + 1}`).join(",");
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT employee_id, mobile_phone, email, user_id FROM employee_profiles WHERE employee_id IN (${ph})`,
+      ids
+    )
+  );
+  return new Map(
+    rows.map((r) => [
+      String(r.employee_id),
+      {
+        phone: r.mobile_phone != null ? String(r.mobile_phone) : "",
+        email: r.email != null ? String(r.email) : "",
+        userId: r.user_id != null ? String(r.user_id) : "",
+      },
+    ])
+  );
+}
+
 export interface DispatchResult {
   dispatched: number;
   skipped?: string;
@@ -190,29 +232,16 @@ export async function dispatchDueBidNotices(now = new Date()): Promise<DispatchR
     return { dispatched: 0, skipped: "no-pending" };
   }
 
-  // 수신자 연락처 — employee_profiles(mobile_phone/email)에서 발송 시점에 조회.
-  const ids = settings.recipients.map((r) => r.employeeId);
-  const ph = ids.map((_, i) => `$${i + 1}`).join(",");
-  const contactRows = rowsToObjects(
-    await db.exec(
-      `SELECT employee_id, mobile_phone, email FROM employee_profiles WHERE employee_id IN (${ph})`,
-      ids
-    )
-  );
-  const contacts = new Map(
-    contactRows.map((r) => [
-      String(r.employee_id),
-      { phone: r.mobile_phone != null ? String(r.mobile_phone) : "", email: r.email != null ? String(r.email) : "" },
-    ])
-  );
+  // 수신자 연락처 — employee_profiles(mobile_phone/email/user_id)에서 발송 시점에 조회.
+  const contacts = await loadRecipientContacts(db, settings);
   const kakaoTo: string[] = [];
   const emailTo: string[] = [];
-  let appCount = 0;
+  const appUserIds: string[] = [];
   for (const rcpt of settings.recipients) {
     const c = contacts.get(rcpt.employeeId);
     if (rcpt.channels.includes("kakao") && c?.phone) kakaoTo.push(c.phone);
     if (rcpt.channels.includes("email") && c?.email) emailTo.push(c.email);
-    if (rcpt.channels.includes("app")) appCount++;
+    if (rcpt.channels.includes("app") && c?.userId) appUserIds.push(c.userId);
   }
 
   // 발송 항목 구성이 있는 종류는 원문에서 값을 뽑는다.
@@ -228,7 +257,17 @@ export async function dispatchDueBidNotices(now = new Date()): Promise<DispatchR
   const channels: Record<string, ChannelSendResult> = {};
   if (kakaoTo.length) channels.kakao = await sendAlimtalk({ to: kakaoTo, text: msg.text });
   if (emailTo.length) channels.email = await sendNotifyEmail({ to: emailTo, subject: msg.subject, text: msg.text });
-  if (appCount) channels.app = { ok: false, skipped: "네이티브 앱 출시 후 지원" };
+  if (appUserIds.length) {
+    // 푸시는 요약만 — 목록 전체는 앱의 공공입찰 화면에서 본다(M6-C).
+    channels.app = await sendPush(appUserIds, {
+      event: "bid.match",
+      title: `공공입찰 매칭 ${pending.length}건`,
+      body: pushSummary(pending),
+      link: "/bids",
+      targetRef: today,
+      dedupKey: `bid.match:${today}`,
+    });
+  }
 
   const anySent = Object.values(channels).some((c) => c.ok);
   const anyTried = Object.values(channels).some((c) => c.ok || c.error);
@@ -246,4 +285,76 @@ export async function dispatchDueBidNotices(now = new Date()): Promise<DispatchR
   await saveBidNotifySettings({ lastDispatchDate: today }, null);
   console.log(`[bid-notify] dispatched ${pending.length} notices status=${status}`, JSON.stringify(channels));
   return { dispatched: pending.length, channels };
+}
+
+/** KST 기준 date 문자열에 일수를 더한다. */
+function addDays(date: string, days: number): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * 입찰 마감 임박 알림(M6-C) — 앱 푸시 전용.
+ *
+ * 매칭 이력이 있는 공고(bid_match_notices) 중 마감이 오늘~D-N 인 건을 하루 1회 요약해 보낸다.
+ * 매칭 알림과 달리 큐 상태를 소비하지 않으므로(같은 공고를 마감까지 매일 상기시켜야 한다),
+ * 멱등은 mobile_push_log 의 dedup_key(`bid.deadline:{날짜}`)에만 의존한다.
+ */
+export async function dispatchBidDeadlineReminders(now = new Date()): Promise<DispatchResult> {
+  const settings = await loadBidNotifySettings();
+  if (!settings.enabled || settings.deadlineDays <= 0) return { dispatched: 0, skipped: "disabled" };
+
+  const { date: today, hm } = kstParts(now);
+  if (hm < settings.sendTime) return { dispatched: 0, skipped: "before-send-time" };
+
+  const db = await getDb();
+  const contacts = await loadRecipientContacts(db, settings);
+  const appUserIds = settings.recipients
+    .filter((r) => r.channels.includes("app"))
+    .map((r) => contacts.get(r.employeeId)?.userId ?? "")
+    .filter(Boolean);
+  if (!appUserIds.length) return { dispatched: 0, skipped: "no-app-recipient" };
+
+  const until = addDays(today, settings.deadlineDays);
+  const types = settings.bidTypes.length ? settings.bidTypes : [];
+  if (!types.length) return { dispatched: 0, skipped: "no-bid-type" };
+  const typePh = types.map((_, i) => `$${i + 3}`).join(",");
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT DISTINCT ON (bid_type, bid_id) bid_type, bid_id, category_name, title, org_name, deadline
+         FROM bid_match_notices
+        WHERE deadline IS NOT NULL AND deadline <> ''
+          AND substring(deadline, 1, 10) >= $1
+          AND substring(deadline, 1, 10) <= $2
+          AND bid_type IN (${typePh})
+        ORDER BY bid_type, bid_id, matched_at DESC`,
+      [today, until, ...types]
+    )
+  );
+  if (!rows.length) return { dispatched: 0, skipped: "no-upcoming" };
+
+  const soon = rows
+    .map((r) => ({
+      title: r.title != null ? String(r.title) : "",
+      categoryName: r.category_name != null ? String(r.category_name) : null,
+      deadline: String(r.deadline).slice(0, 10),
+    }))
+    .sort((a, b) => a.deadline.localeCompare(b.deadline));
+
+  const head = soon[0];
+  const rest = soon.length - 1;
+  const headLine = `${head.title || head.categoryName || "공고"} (마감 ${head.deadline})`;
+  const body = rest > 0 ? `${headLine} 외 ${rest}건` : headLine;
+
+  const result = await sendPush(appUserIds, {
+    event: "bid.deadline",
+    title: `입찰 마감 임박 ${soon.length}건`,
+    body: body.length > 90 ? `${body.slice(0, 89)}…` : body,
+    link: "/bids?filter=deadline",
+    targetRef: today,
+    dedupKey: `bid.deadline:${today}`,
+  });
+  console.log(`[bid-notify] deadline reminder ${soon.length}건(D-${settings.deadlineDays})`, JSON.stringify(result));
+  return { dispatched: result.ok ? soon.length : 0, channels: { app: result } };
 }

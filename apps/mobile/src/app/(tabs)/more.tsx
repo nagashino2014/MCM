@@ -48,6 +48,12 @@ export default function MoreScreen() {
         onPress={() => router.push('/contacts')}
       />
       <ListRow
+        icon="briefcase-outline"
+        title="공공입찰"
+        subtitle="사업분야 매칭 공고·마감 임박"
+        onPress={() => router.push('/bids')}
+      />
+      <ListRow
         icon="camera-outline"
         title="명함 촬영"
         subtitle="촬영 → AI 인식 → 담당자 등록"

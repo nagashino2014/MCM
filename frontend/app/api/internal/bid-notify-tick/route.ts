@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { dispatchDueBidNotices } from "@/lib/bid/notify-dispatch";
+import { dispatchBidDeadlineReminders, dispatchDueBidNotices } from "@/lib/bid/notify-dispatch";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,7 +17,9 @@ export async function POST(req: NextRequest) {
   }
   try {
     const result = await dispatchDueBidNotices();
-    return NextResponse.json(result);
+    // 마감 임박(M6-C)은 매칭 발송과 독립 — 매칭이 "오늘 이미 발송"으로 끝나도 따로 돈다.
+    const deadline = await dispatchBidDeadlineReminders();
+    return NextResponse.json({ ...result, deadline });
   } catch (err) {
     console.error("[bid-notify] tick error", err);
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });

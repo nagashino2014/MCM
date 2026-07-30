@@ -34,7 +34,8 @@ export default function TabsLayout() {
         tabBarLabelStyle: { fontSize: 11, fontWeight: '700' },
         headerStyle: { backgroundColor: c.card },
         headerTitleStyle: { color: c.text, fontWeight: '800' },
-        headerShadowVisible: false,
+        // 본문 캔버스도 흰색이라 헤더를 그림자 없이 두면 경계가 사라진다 → hairline 유지.
+        headerShadowVisible: true,
         headerTintColor: c.text,
       }}>
       <Tabs.Screen

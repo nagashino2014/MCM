@@ -18,11 +18,12 @@
  * 값 형식이 "R G B" 인 이유 = tailwind 의 `rgb(var(--x) / <alpha-value>)` 문법.
  * ⚠ 웹 값이 바뀌면 여기도 같이 바꾼다(두 곳이 갈라지면 화면 톤이 어긋난다).
  * ------------------------------------------------------------------------- */
+/* ★ 라이트는 캔버스도 흰색(bg = card) — 면 대신 선으로 나눈다. 근거는 theme/tokens.ts 주석. */
 :root {
-  --cd-bg: 239 241 248;
+  --cd-bg: 255 255 255;
   --cd-card: 255 255 255;
-  --cd-surface: 247 248 252;
-  --cd-border: 215 220 234;
+  --cd-surface: 242 244 250;
+  --cd-border: 208 215 232;
   --cd-text: 42 48 64;
   --cd-body: 58 64 85;
   --cd-muted: 123 131 156;
@@ -41,7 +42,7 @@
   --cd-warning-soft: 251 241 224;
   --cd-error: 208 87 67;
   --cd-error-soft: 252 235 232;
-  --cd-grid-line: 231 235 244;
+  --cd-grid-line: 228 232 242;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -49,7 +50,7 @@
     --cd-bg: 20 24 36;
     --cd-card: 27 33 54;
     --cd-surface: 38 44 64;
-    --cd-border: 48 53 72;
+    --cd-border: 58 64 88;
     --cd-text: 231 234 244;
     --cd-body: 198 205 224;
     --cd-muted: 154 163 188;

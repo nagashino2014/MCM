@@ -39,8 +39,8 @@ export function Card({
   );
 
   const cls = "rounded-card border border-cd-border bg-cd-card p-4";
-  // 캔버스(bg)와 카드(흰색)의 명도차가 작아 테두리만으로는 카드가 묻힌다.
-  // 웹의 글라스 그림자에 해당하는 아주 얕은 그림자를 한 겹 얹어 경계를 세운다.
+  // 캔버스와 카드가 같은 흰색이라 경계는 전적으로 테두리가 진다(theme/tokens.ts 참고).
+  // 웹의 글라스 그림자에 해당하는 아주 얕은 그림자를 한 겹만 더해 카드를 살짝 띄운다.
   const shadow = {
     shadowColor: "#505F96",
     shadowOpacity: 0.06,

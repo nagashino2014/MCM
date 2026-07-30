@@ -41,12 +41,19 @@ export interface CdPalette {
  * 다만 웹의 글라스(반투명 + backdrop blur)는 RN 에 없고, tailwind 색 토큰이
  * "R G B" 트리플릿이라 알파를 담을 수 없다 → **불투명 근사값**으로 옮긴다.
  *   card = 흰색, surface·soft 류 = 해당 알파를 배경 위에 합성한 결과값.
+ *
+ * ★ 라이트는 **캔버스도 흰색**이다(2026-07-30 사용자 결정). 웹은 앰비언트 그라데이션 위에
+ * 글라스가 떠 있지만, blur 가 없는 RN 에서 같은 흉내를 내면 회색 캔버스와 흰 카드의 명도차가
+ * 너무 작아 목록 행(배경을 지정하지 않는 ListRow·MailRow 류)이 배경에 묻혀 읽기 어려웠다.
+ * → 면을 칠하는 대신 **선으로 나눈다**: bg = card = 흰색, 경계는 border(테두리·구분선)가 진다.
+ * 그래서 border 는 "옅은 장식선"이 아니라 **유일한 구분 수단**이므로 또렷해야 한다.
  */
 export const LIGHT: CdPalette = {
-  bg: "#eff1f8",
+  bg: "#ffffff",
   card: "#ffffff",
-  surface: "#f7f8fc",
-  border: "#d7dcea",
+  // 눌림 상태·스켈레톤·중립 배지 등 "흰색 위에서 살짝 눌러 보여야 하는" 면.
+  surface: "#f2f4fa",
+  border: "#d0d7e8",
   text: "#2a3040",
   body: "#3a4055",
   muted: "#7b839c",
@@ -66,15 +73,17 @@ export const LIGHT: CdPalette = {
   warningSoft: "#fbf1e0",
   error: "#d05743",
   errorSoft: "#fcebe8",
-  gridLine: "#e7ebf4",
+  // 표·그리드의 보조선 — border 보다 한 단계 옅다(구분이 아니라 정렬용).
+  gridLine: "#e4e8f2",
 };
 
 export const DARK: CdPalette = {
   ...LIGHT,
+  // 다크는 카드가 캔버스보다 밝아 면만으로도 구분된다(라이트처럼 통일하지 않는다).
   bg: "#141824",
   card: "#1b2136",
   surface: "#262c40",
-  border: "#303548",
+  border: "#3a4058",
   text: "#e7eaf4",
   body: "#c6cde0",
   muted: "#9aa3bc",

@@ -43,10 +43,14 @@ export function SegmentedTabs<T extends string>({
   );
 }
 
-/** 섹션 제목(목록 그룹 헤더). */
+/**
+ * 섹션 제목(목록 그룹 헤더).
+ * 캔버스가 흰색이라 예전처럼 "회색 띠"가 그룹을 갈라 주지 않는다 →
+ * 위쪽 여백을 넉넉히 두어 앞 그룹의 마지막 구분선과 시각적으로 떼어 놓는다.
+ */
 export function SectionTitle({ children }: { children: string }) {
   return (
-    <Text className="px-4 pb-1 pt-4 text-[12px] font-bold uppercase tracking-wide text-cd-faint">
+    <Text className="px-4 pb-1.5 pt-7 text-[12px] font-bold uppercase tracking-wide text-cd-muted">
       {children}
     </Text>
   );

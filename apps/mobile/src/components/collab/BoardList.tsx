@@ -57,7 +57,7 @@ export function BoardList({ scope }: { scope: 'company' | 'dept' }) {
       }
       renderItem={({ item }) => (
         <Pressable
-          onPress={() => router.push(`/board/${item.postId}`)}
+          onPress={() => router.push({ pathname: '/board/[postId]', params: { postId: item.postId } })}
           className="gap-1 border-b border-cd-border px-4 py-3.5 active:bg-cd-surface">
           <View className="flex-row items-center gap-1.5">
             {item.pinnedNow ? <Badge label="고정" tone="primary" /> : null}

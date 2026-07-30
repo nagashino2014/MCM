@@ -120,7 +120,7 @@ export default function ApprovalScreen() {
             )
           }
           renderItem={({ item }) => (
-            <DocCard doc={item} onPress={() => router.push(`/approval/${item.docId}`)} />
+            <DocCard doc={item} onPress={() => router.push({ pathname: '/approval/[docId]', params: { docId: item.docId } })} />
           )}
         />
       )}

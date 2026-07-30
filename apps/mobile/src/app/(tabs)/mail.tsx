@@ -226,7 +226,7 @@ export default function MailScreen() {
               folder={folder}
               onPress={() => {
                 markRead(item.messageId);
-                router.push(`/mail/${item.messageId}`);
+                router.push({ pathname: '/mail/[messageId]', params: { messageId: item.messageId } });
               }}
               onLongPress={() => setActionOn(item)}
               onStar={() => void toggleStar(item)}

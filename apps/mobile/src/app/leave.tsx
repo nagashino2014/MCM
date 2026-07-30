@@ -143,7 +143,7 @@ export default function LeaveScreen() {
             {leaveDocs.map((d, i) => (
               <Pressable
                 key={d.docId}
-                onPress={() => router.push(`/approval/${d.docId}`)}
+                onPress={() => router.push({ pathname: '/approval/[docId]', params: { docId: d.docId } })}
                 className={`gap-0.5 active:opacity-70 ${i === 0 ? '' : 'border-t border-cd-border pt-2'}`}>
                 <View className="flex-row items-center gap-1.5">
                   <Text numberOfLines={1} className="flex-1 text-[14px] font-bold text-cd-text">

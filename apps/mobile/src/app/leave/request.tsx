@@ -138,7 +138,7 @@ export default function LeaveRequestScreen() {
         }),
       });
       toast.show('휴가 신청을 상신했습니다.', 'success');
-      router.replace(`/approval/${res.docId}`);
+      router.replace({ pathname: '/approval/[docId]', params: { docId: res.docId } });
     } catch (e) {
       toast.show((e as Error).message, 'error');
     } finally {

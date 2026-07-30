@@ -1,20 +1,21 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 
 import { Avatar, Badge, Card, Screen, SkeletonList } from '@/components/ui';
+import { HOME_WIDGET_NODES, MOBILE_WIDGET_ORDER } from '@/components/home/widgets';
 import { useApi } from '@/lib/use-api';
 import { useAuth } from '@/lib/auth-context';
 import { useNavBadges } from '@/lib/use-nav-badges';
-import { fmtDate, fmtTime } from '@/lib/format';
+import { fmtDate } from '@/lib/format';
 import { useTheme } from '@/theme/useTheme';
 
 interface Activity {
   activityId: string;
   projectTitle?: string;
   facilityName?: string;
-  scheduledAt?: string;
+  scheduledAt?: string | null;
 }
 interface BoardPost {
   postId: string;
@@ -24,11 +25,38 @@ interface BoardPost {
   unread?: boolean;
   pinnedNow?: boolean;
 }
+interface HomeLayout {
+  layout?: { hidden?: string[] };
+  available?: { key: string; label: string }[];
+}
+
+/** ISO → KST "HH:mm" (데스크탑 HomeStats 와 같은 규칙). */
+function hhmm(dt?: string | null): string | null {
+  if (!dt) return null;
+  const d = new Date(dt);
+  if (Number.isNaN(d.getTime())) return null;
+  const kst = new Date(d.getTime() + 9 * 3600 * 1000);
+  return `${String(kst.getUTCHours()).padStart(2, '0')}:${String(kst.getUTCMinutes()).padStart(2, '0')}`;
+}
+
+/** 오늘(KST) 일정만. */
+function todayOnly(list: Activity[]): Activity[] {
+  const key = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  return list.filter((a) => {
+    if (!a.scheduledAt) return false;
+    const d = new Date(a.scheduledAt);
+    if (Number.isNaN(d.getTime())) return false;
+    return new Date(d.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10) === key;
+  });
+}
 
 /**
- * 홈 — 오늘 처리할 것의 출발점(블루프린트 §7.1).
- * 요약 타일 4 + 빠른 실행 + 최근 공지 + 다가오는 일정.
- * 위젯별 API 를 병렬로 부르고 있고, 전용 집계 API(/api/mobile/home)는 M6 에 붙인다.
+ * 홈(M6) — 데스크탑 홈 개편(Soft Glass Ink)에 맞춰 재구성.
+ *
+ * 구성은 데스크탑과 같은 뼈대다: 스탯 4 → 빠른 실행 → 위젯 → 공지·일정.
+ * 위젯 표시 여부는 **웹과 같은 설정을 따른다** — `/api/home/layout` 의 available(권한)과
+ * hidden(사용자가 웹 편집 모드에서 끈 카드). 다만 배치·크기 편집은 모바일에서 하지 않고
+ * 중요도 고정 순서로 보여준다(작은 화면에서 자유 배치는 득보다 실이 크다).
  */
 export default function HomeScreen() {
   const { user } = useAuth();
@@ -39,27 +67,24 @@ export default function HomeScreen() {
   const upcoming = useApi<{ activities: Activity[] }>('/api/sales/upcoming-activities', {
     cache: true,
   });
-  const pending = useApi<{ reports: unknown[] }>('/api/sales/pending-reports', { cache: true });
+  const pending = useApi<{ reports: { activities?: unknown[] }[] }>('/api/sales/pending-reports', {
+    cache: true,
+  });
   const board = useApi<{ posts: BoardPost[] }>('/api/board?scope=company', { cache: true });
+  const home = useApi<HomeLayout>('/api/home/layout', { cache: true });
 
   const [refreshing, setRefreshing] = useState(false);
-
-  // 훅 반환 객체는 매 렌더 새로 만들어지므로 의존성에 넣지 않는다(재생성 루프 방지).
-  // 대신 ref 로 최신 참조를 들고 있는다(첫 렌더의 낡은 클로저를 잡지 않도록).
-  const latest = useRef({ upcoming, pending, board, badges });
-  latest.current = { upcoming, pending, board, badges };
+  const latest = useRef({ upcoming, pending, board, home, badges });
+  latest.current = { upcoming, pending, board, home, badges };
 
   const reloadAll = useCallback(async () => {
     setRefreshing(true);
-    const { upcoming: u, pending: p, board: b, badges: n } = latest.current;
-    await Promise.all([u.reload(), p.reload(), b.reload()]);
+    const { upcoming: u, pending: p, board: b, home: h, badges: n } = latest.current;
+    await Promise.all([u.reload(), p.reload(), b.reload(), h.reload()]);
     n.reload();
     setRefreshing(false);
   }, []);
 
-  // 홈으로 돌아올 때마다 위젯을 새로 읽는다.
-  // 뱃지만 갱신하면 캐시된 공지·일정이 그대로 남아 새 글이 보이지 않는다(실측).
-  // 캐시가 즉시 렌더되므로 재요청 중에도 화면이 비지 않는다.
   useFocusEffect(
     useCallback(() => {
       const { upcoming: u, pending: p, board: b, badges: n } = latest.current;
@@ -71,11 +96,32 @@ export default function HomeScreen() {
   );
 
   const activities = upcoming.data?.activities ?? [];
+  const today = useMemo(() => todayOnly(activities), [activities]);
+  const firstAt = useMemo(
+    () =>
+      today
+        .map((a) => hhmm(a.scheduledAt))
+        .filter((v): v is string => !!v)
+        .sort()[0],
+    [today]
+  );
+  const pendingCount = (pending.data?.reports ?? []).reduce(
+    (s, r) => s + (r.activities?.length ?? 0),
+    0
+  );
   const posts = board.data?.posts ?? [];
+
+  /** 권한(available)과 사용자 설정(hidden)을 통과한 위젯만, 고정 순서로. */
+  const widgetKeys = useMemo(() => {
+    const allowed = new Set((home.data?.available ?? []).map((a) => a.key));
+    const hidden = new Set(home.data?.layout?.hidden ?? []);
+    return MOBILE_WIDGET_ORDER.filter(
+      (k) => (allowed.size === 0 || allowed.has(k)) && !hidden.has(k) && HOME_WIDGET_NODES[k]
+    );
+  }, [home.data]);
 
   return (
     <Screen scroll refreshing={refreshing} onRefresh={reloadAll}>
-      {/* 사용자 카드 */}
       <View className="flex-row items-center gap-3 rounded-card border border-cd-border bg-cd-card p-4">
         <Avatar name={user?.name} size="lg" />
         <View className="flex-1">
@@ -84,37 +130,41 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {/* 요약 타일 4 */}
+      {/* 스탯 4 — 데스크탑 HomeStats 와 같은 지표·델타 문구 */}
       <View className="flex-row gap-3">
-        <Tile
-          label="미결재"
+        <Stat
+          label="결재 대기"
           value={badges.approvalPending}
-          icon="checkbox-outline"
+          delta={badges.approvalPending > 0 ? '내 차례' : null}
+          tone={c.error}
           onPress={() => router.push('/(tabs)/approval')}
         />
-        <Tile
+        <Stat
           label="안읽은 메일"
           value={badges.mailUnread}
-          icon="mail-outline"
+          delta={badges.mailUnread > 0 ? '확인 필요' : null}
+          tone={c.primary}
           onPress={() => router.push('/(tabs)/mail')}
         />
       </View>
       <View className="flex-row gap-3">
-        <Tile
-          label="다가오는 일정"
-          value={activities.length}
-          icon="calendar-outline"
+        <Stat
+          label="오늘 일정"
+          value={today.length}
+          delta={firstAt ? `${firstAt} 시작` : null}
+          tone={c.secondary}
           onPress={() => router.push('/schedule')}
         />
-        <Tile
-          label="미입력 경과"
-          value={pending.data?.reports?.length ?? 0}
-          icon="create-outline"
+        <Stat
+          label="경과 미입력"
+          value={pendingCount}
+          delta={pendingCount > 0 ? '확인 필요' : null}
+          tone={c.warning}
           onPress={() => router.push('/schedule')}
         />
       </View>
 
-      {/* 빠른 실행 — 영업 화면이 탭에서 내려갔으므로 여기서 1탭 진입을 보장한다(§5.2). */}
+      {/* 빠른 실행 — 탭에 없는 기능으로 1탭 진입 */}
       <Card title="빠른 실행">
         <View className="flex-row gap-1">
           <Quick icon="camera" label="명함" onPress={() => router.push('/card')} />
@@ -125,9 +175,15 @@ export default function HomeScreen() {
         </View>
       </Card>
 
+      {/* 위젯 — 각 카드는 데이터가 없으면 스스로 렌더를 생략한다 */}
+      {widgetKeys.map((k) => {
+        const Node = HOME_WIDGET_NODES[k];
+        return <Node key={k} />;
+      })}
+
       {/* 최근 공지 */}
       <Card title="최근 공지">
-        {board.loading ? (
+        {board.loading && !posts.length ? (
           <SkeletonList count={2} />
         ) : posts.length === 0 ? (
           <Text className="py-3 text-[13px] text-cd-faint">등록된 공지가 없습니다.</Text>
@@ -136,7 +192,7 @@ export default function HomeScreen() {
             {posts.slice(0, 3).map((p, i) => (
               <Pressable
                 key={p.postId}
-                onPress={() => router.push(`/board/${p.postId}`)}
+                onPress={() => router.push({ pathname: '/board/[postId]', params: { postId: p.postId } })}
                 className={`active:opacity-60 ${i === 0 ? '' : 'border-t border-cd-border pt-2'}`}>
                 <View className="flex-row items-center gap-1.5">
                   {p.pinnedNow ? <Badge label="고정" tone="primary" /> : null}
@@ -157,51 +213,36 @@ export default function HomeScreen() {
           </View>
         )}
       </Card>
-
-      {/* 다가오는 일정 요약 */}
-      {activities.length > 0 ? (
-        <Card title="다가오는 일정" onPress={() => router.push('/schedule')}>
-          <View className="gap-2">
-            {activities.slice(0, 3).map((a, i) => (
-              <View
-                key={a.activityId}
-                className={i === 0 ? '' : 'border-t border-cd-border pt-2'}>
-                <Text numberOfLines={1} className="text-[14px] font-bold text-cd-text">
-                  {a.facilityName ?? a.projectTitle ?? '일정'}
-                </Text>
-                <Text className="text-[11px] text-cd-faint">
-                  {fmtDate(a.scheduledAt)} {fmtTime(a.scheduledAt)}
-                </Text>
-              </View>
-            ))}
-          </View>
-        </Card>
-      ) : null}
     </Screen>
   );
 }
 
-function Tile({
+function Stat({
   label,
   value,
-  icon,
+  delta,
+  tone,
   onPress,
 }: {
   label: string;
-  value: number | null;
-  icon: keyof typeof Ionicons.glyphMap;
+  value: number;
+  delta?: string | null;
+  tone: string;
   onPress: () => void;
 }) {
-  const { c } = useTheme();
   return (
     <Pressable
       onPress={onPress}
-      className="flex-1 rounded-card border border-cd-border bg-cd-card p-4 active:opacity-70">
-      <View className="flex-row items-center justify-between">
-        <Text className="text-[26px] font-extrabold text-cd-primary">{value ?? '–'}</Text>
-        <Ionicons name={icon} size={20} color={c.faint} />
+      className="flex-1 gap-1 rounded-card border border-cd-border bg-cd-card p-4 active:opacity-70">
+      <Text className="text-[11.5px] font-bold text-cd-muted">{label}</Text>
+      <View className="flex-row items-baseline gap-1.5">
+        <Text className="text-[25px] font-extrabold text-cd-text">{value}</Text>
+        {delta ? (
+          <Text style={{ color: tone }} className="text-[11.5px] font-bold">
+            {delta}
+          </Text>
+        ) : null}
       </View>
-      <Text className="mt-1 text-[12px] text-cd-muted">{label}</Text>
     </Pressable>
   );
 }

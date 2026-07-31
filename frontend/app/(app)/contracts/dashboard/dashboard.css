@@ -70,6 +70,14 @@
   transition: background 0.25s ease, border-color 0.25s ease;
 }
 
+/* 스크림 위에 뜨는 표면(모달·드로어·팝오버)은 반드시 불투명 — cdash.css 와 동일 규칙. */
+.fixed.inset-0 .cd-card,
+.fixed.inset-0 .cd-card-bg {
+  background: var(--cd-card-solid);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
 .cd-card-title {
   font-size: 0.9375rem;
   font-weight: 800;

@@ -218,6 +218,14 @@
 /* 스크림 위에 뜨는 표면(모달·드로어·바텀시트·팝오버)은 반드시 불투명.
  * 글라스 토큰(--cd-card)을 쓰면 뒤 화면이 그대로 비쳐 내용을 읽을 수 없다. */
 .cd-solid-bg { background: var(--cd-card-solid); }
+/* 개별 모달이 .cd-card / .cd-card-bg 를 그대로 쓰더라도 스크림 위에서는 글라스를 끈다.
+ * (오버레이 = fixed inset-0 스크림. 그 안쪽 표면은 뒤 화면이 비치면 안 된다.) */
+.fixed.inset-0 .cd-card,
+.fixed.inset-0 .cd-card-bg {
+  background: var(--cd-card-solid);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
 /* 박스 경계 유틸 — 흰 하이라이트(--cd-border)는 밝은 캔버스 위에서 사라지므로
  * 실제 테두리로 쓰이는 이 유틸은 링 색(옅은 블루그레이)을 쓴다. */
 .cd-border-c { border-color: var(--cd-ring); }

@@ -80,7 +80,7 @@ export function Sidebar({ role, badges, mode = "auto", onNavigate }: SidebarProp
   return (
     <aside
       className={cn(
-        "h-full rounded-[20px] flex-col overflow-y-auto overflow-x-hidden shrink-0 border flex",
+        "cd-nav-flat h-full rounded-[20px] flex-col overflow-y-auto overflow-x-hidden scrollbar-hide shrink-0 border flex",
         isDrawer ? "w-72 p-5 px-3.5" : "w-[76px] 2xl:w-[248px] p-3 2xl:px-3.5 2xl:py-5 hidden lg:flex"
       )}
       style={{

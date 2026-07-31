@@ -35,6 +35,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     if (body.paymentCollectedAt !== undefined) pushSet("payment_collected_at", body.paymentCollectedAt || null);
     if (body.collectionRatio !== undefined) pushSet("collection_ratio", toNullableNumber(body.collectionRatio));
     if (body.collectedAmount !== undefined) pushSet("collected_amount", toNullableNumber(body.collectedAmount));
+    if (body.settlementAmount !== undefined) pushSet("settlement_amount", toNullableNumber(body.settlementAmount));
     if (body.partialPaymentMemo !== undefined) {
       const collectedAt = String(body.paymentCollectedAt ?? "").trim();
       const amount = toNullableNumber(body.collectedAmount);

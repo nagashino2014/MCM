@@ -37,6 +37,8 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     const collectedAmount = toNullableNumber(form.get("collectedAmount"));
     const paymentTerms = String(form.get("paymentTerms") ?? "").trim() || null;
     const partialPaymentMemo = String(form.get("partialPaymentMemo") ?? "").trim() || null;
+    // 실적 정산(준공금 등 최종 단계 전용). 폼에 키가 없으면 기존 값을 유지한다.
+    const settlementAmount = form.has("settlementAmount") ? toNullableNumber(form.get("settlementAmount")) : undefined;
     const memo = String(form.get("memo") ?? "").trim() || null;
 
     if (!(file instanceof File)) {
@@ -208,6 +210,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
                   THEN COALESCE(partial_payments_json, '[]'::jsonb) || $8::jsonb
                 ELSE partial_payments_json
               END,
+              settlement_amount = CASE WHEN $12::boolean THEN $13 ELSE settlement_amount END,
               updated_at = $9
            WHERE milestone_id = $10
              AND contract_id = $11`,
@@ -223,6 +226,8 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
             now,
             milestoneId,
             contractId,
+            settlementAmount !== undefined,
+            settlementAmount ?? null,
           ]
         );
       }

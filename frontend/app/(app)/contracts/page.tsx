@@ -32,6 +32,7 @@ import "@/components/cdash/cdash.css";
 import { resolveServiceTypeStyle } from "@/lib/ieps/contract-tree-style";
 import ContractChangeModal from "@/components/contracts/ContractChangeModal";
 import ContractStaffingModal from "@/components/contracts/ContractStaffingModal";
+import FacilityInfoModal from "@/components/contracts/FacilityInfoModal";
 import { IndustryOptionsEditorButton, useContractIndustryOptions } from "@/components/contracts/IndustryOptionsEditor";
 import {
   ORDERING_SUBJECT_OPTIONS,
@@ -92,6 +93,10 @@ interface InvoiceModalState {
   paymentTerms: string;
   partialPaymentMemo: string;
   memo: string;
+  /** 실적 정산을 반영한 실제 청구액. 최종 대금 지급 단계에서만 입력한다. */
+  settlementAmount: string;
+  /** 이 단계가 실적 정산 입력 대상인지(최종 단계 + 준공금/잔금 계열 단계명) */
+  settlementEligible: boolean;
 }
 
 interface ContractMilestoneDraft {
@@ -206,6 +211,15 @@ const CONTRACT_SERVICE_OPTIONS = [
 
 const DEFAULT_OUTSOURCING_TYPES = ["도면 작성", "산업안전 관련", "측정/분석", "디자인", "번역"];
 const PAYMENT_METHOD_OPTIONS = ["현금", "어음 : 1개월 이하", "어음 : 2개월 이하", "어음 : 2개월 이상"];
+
+// 실적 정산(출장 경비·인쇄비 등의 차액 정산)은 준공금 성격의 최종 대금 지급 단계에만
+// 적용된다. 단계명이 아래 목록에 해당하면서 청구·수금 단계의 마지막 행일 때만 노출.
+const SETTLEMENT_STAGE_LABELS = ["준공금", "잔금", "준공 기성금"];
+
+function isSettlementStage(stageLabel: unknown, index: number, total: number): boolean {
+  if (index !== total - 1) return false;
+  return SETTLEMENT_STAGE_LABELS.includes(String(stageLabel ?? "").trim());
+}
 
 export default function ContractsPage() {
   return (
@@ -325,8 +339,9 @@ function ContractsInner() {
   useEffect(() => {
     const milestoneId = pendingMilestoneRef.current;
     if (!milestoneId || !detail) return;
-    const milestone = detail.milestones.find((m) => String(m.milestone_id ?? "") === milestoneId);
-    if (!milestone) return;
+    const milestoneIndex = detail.milestones.findIndex((m) => String(m.milestone_id ?? "") === milestoneId);
+    if (milestoneIndex < 0) return;
+    const milestone = detail.milestones[milestoneIndex];
     pendingMilestoneRef.current = null;
     setInvoiceModal({
       milestoneId,
@@ -341,6 +356,8 @@ function ContractsInner() {
       paymentTerms: String(milestone.payment_terms ?? ""),
       partialPaymentMemo: "",
       memo: "",
+      settlementAmount: String(milestone.settlement_amount ?? ""),
+      settlementEligible: isSettlementStage(milestone.stage_label, milestoneIndex, detail.milestones.length),
     });
   }, [detail]);
 
@@ -780,7 +797,11 @@ function ContractDetailPanel({
   const outsourcingCount = detail.outsourcing?.length ?? 0;
   const targetFacilities = detail.targetFacilities ?? [];
   const targetFacilityLabel = buildTargetFacilityLabel(contract.service_type);
-  const [targetFacilityPopupOpen, setTargetFacilityPopupOpen] = useState(false);
+  // 업체명·대상사업장 KPI에서 여는 사업장 정보 팝업. 대상은 계약상대 업체 또는 대상사업장 목록.
+  const [facilityInfoModal, setFacilityInfoModal] = useState<{
+    title: string;
+    facilities: Array<{ facilityId: string; companyName: string }>;
+  } | null>(null);
 
   // 공정표/수행인력 모달 + 수행 부서·인력 요약(KPI 표시용).
   const [staffingModalOpen, setStaffingModalOpen] = useState(false);
@@ -827,14 +848,18 @@ function ContractDetailPanel({
     setOrderedMilestones(detail.milestones);
   }, [detail.milestones]);
 
-  useEffect(() => {
-    if (!targetFacilityPopupOpen) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setTargetFacilityPopupOpen(false);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [targetFacilityPopupOpen]);
+  // 실적 정산은 최종 대금 지급 단계(준공금/잔금/준공 기성금)에만 적용된다.
+  // 열 노출 여부와, 정산을 반영한 총 청구액(= 계약금액 - 차감액) 비율을 계산한다.
+  const hasSettlementStage = orderedMilestones.some((m, idx) =>
+    isSettlementStage(m.stage_label, idx, orderedMilestones.length)
+  );
+  const settlementDeduction = orderedMilestones.reduce((acc, m, idx) => {
+    if (!isSettlementStage(m.stage_label, idx, orderedMilestones.length)) return acc;
+    if (m.settlement_amount == null || m.settlement_amount === "") return acc;
+    return acc + Math.max(0, Number(m.amount ?? 0) - Number(m.settlement_amount ?? 0));
+  }, 0);
+  const settlementRate =
+    settlementDeduction > 0 && baseAmount > 0 ? (baseAmount - settlementDeduction) / baseAmount : null;
 
   const handleStageDrop = (dropIndex: number) => {
     const from = dragIndex;
@@ -945,7 +970,33 @@ function ContractDetailPanel({
             value={baseAmount ? formatExactAmount(baseAmount) : "-"}
             highlight
           />
-          <Info label="업체명" value={String(contract.counterparty_name ?? "-")} />
+          <Info
+            label="업체명"
+            value={
+              contract.counterparty_facility_id ? (
+                <button
+                  type="button"
+                  className="text-left underline decoration-dotted underline-offset-2 cd-text-primary hover:opacity-70"
+                  onClick={() =>
+                    setFacilityInfoModal({
+                      title: String(contract.counterparty_name ?? "업체 정보"),
+                      facilities: [
+                        {
+                          facilityId: String(contract.counterparty_facility_id),
+                          companyName: String(contract.counterparty_name ?? ""),
+                        },
+                      ],
+                    })
+                  }
+                  title="사업장 정보 보기"
+                >
+                  {String(contract.counterparty_name ?? "-")}
+                </button>
+              ) : (
+                String(contract.counterparty_name ?? "-")
+              )
+            }
+          />
           <Info label="계약 종류" value={contractKindLabel} />
           <Info label="용역분류" value={String(contract.service_type ?? "-")} />
           <Info label="용역세분류" value={String(contract.service_subtype ?? "-")} />
@@ -961,8 +1012,16 @@ function ContractDetailPanel({
                   <button
                     type="button"
                     className="rounded-full p-0.5 cd-text-primary hover:bg-[color:var(--cd-primary-soft)]"
-                    onClick={() => setTargetFacilityPopupOpen(true)}
-                    aria-label={`${targetFacilityLabel} 목록 보기`}
+                    onClick={() =>
+                      setFacilityInfoModal({
+                        title: targetFacilityLabel,
+                        facilities: targetFacilities.map((facility) => ({
+                          facilityId: String(facility.facility_id),
+                          companyName: String(facility.company_name ?? ""),
+                        })),
+                      })
+                    }
+                    aria-label={`${targetFacilityLabel} 정보 보기`}
                   >
                     <Search className="w-3.5 h-3.5" />
                   </button>
@@ -994,35 +1053,16 @@ function ContractDetailPanel({
           rate={collectionRate}
           collectedAmount={collectedAmount}
           baseAmount={baseAmount}
+          settlementRate={settlementRate}
         />
       </div>
 
-      {targetFacilityPopupOpen && (
-        <div className="fixed inset-0 z-50 bg-stone-950/10" onClick={() => setTargetFacilityPopupOpen(false)}>
-          <div
-            className="absolute right-8 top-28 w-[min(520px,calc(100vw-48px))] rounded-3xl border cd-border-c cd-solid-bg p-4 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between gap-3 mb-3">
-              <h3 className="font-bold cd-text">{targetFacilityLabel} {targetFacilities.length}개</h3>
-              <button type="button" className="cd-text-faint hover:opacity-70" onClick={() => setTargetFacilityPopupOpen(false)}>
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="grid gap-2 max-h-[420px] overflow-y-auto">
-              {targetFacilities.map((facility) => (
-                <div key={String(facility.facility_id)} className="rounded-2xl border cd-border-c cd-surface-bg p-3">
-                  <p className="font-bold text-sm cd-text">{String(facility.company_name ?? "-")}</p>
-                  <p className="text-xs cd-text-faint mt-1">{String(facility.site_address ?? "-")}</p>
-                  <p className="text-[11px] cd-text-faint mt-1">
-                    {String(facility.business_registration_no ?? facility.site_business_registration_no ?? "-")}
-                    {facility.integrated_permit_target ? ` · ${String(facility.integrated_permit_target)}` : ""}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+      {facilityInfoModal && facilityInfoModal.facilities.length > 0 && (
+        <FacilityInfoModal
+          title={facilityInfoModal.title}
+          facilities={facilityInfoModal.facilities}
+          onClose={() => setFacilityInfoModal(null)}
+        />
       )}
 
       {staffingModalOpen && (
@@ -1086,6 +1126,8 @@ function ContractDetailPanel({
                 <th className="text-left p-2.5">차수</th>
                 <th className="text-left p-2.5">단계명</th>
                 <th className="text-right p-2.5">청구금액</th>
+                {hasSettlementStage && <th className="text-right p-2.5">실적 정산</th>}
+                {hasSettlementStage && <th className="text-right p-2.5">차감액</th>}
                 <th className="text-left p-2.5">대금 지급 조건</th>
                 <th className="text-center p-2.5">발행일</th>
                 <th className="text-center p-2.5">수금일</th>
@@ -1098,6 +1140,11 @@ function ContractDetailPanel({
               {orderedMilestones.map((milestone, idx) => {
                 const milestoneId = String(milestone.milestone_id ?? "");
                 const stageAmount = Number(milestone.amount ?? 0);
+                const settlementEligible = isSettlementStage(milestone.stage_label, idx, orderedMilestones.length);
+                const hasSettlement =
+                  settlementEligible && milestone.settlement_amount != null && milestone.settlement_amount !== "";
+                const settlementAmount = hasSettlement ? Number(milestone.settlement_amount ?? 0) : 0;
+                const deductionAmount = hasSettlement ? Math.max(0, stageAmount - settlementAmount) : 0;
                 const collectionRatio = Number(milestone.collection_ratio ?? 0);
                 const ratioLabel = collectionRatio > 0
                   ? `${Math.round(collectionRatio * 1000) / 10}%`
@@ -1135,6 +1182,25 @@ function ContractDetailPanel({
                     </td>
                     <td className="p-2.5 cd-text">{String(milestone.stage_label ?? "")}</td>
                     <td className="p-2.5 text-right font-mono tabular-nums">{formatExactAmount(stageAmount)}</td>
+                    {hasSettlementStage && (
+                      <td className="p-2.5 text-right font-mono tabular-nums">
+                        {hasSettlement ? formatExactAmount(settlementAmount) : "-"}
+                      </td>
+                    )}
+                    {hasSettlementStage && (
+                      <td className="p-2.5 text-right font-mono tabular-nums">
+                        {hasSettlement ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="text-rose-600">{formatExactAmount(deductionAmount)}</span>
+                            <span className="rounded-md border cd-border-c px-1 py-0.5 text-[10px] cd-text-faint">
+                              {stageAmount > 0 ? `${Math.round((deductionAmount / stageAmount) * 1000) / 10}%` : "-"}
+                            </span>
+                          </span>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
+                    )}
                     <td className="p-2.5 cd-text-muted max-w-[220px] truncate" title={String(milestone.payment_terms ?? "")}>
                       {String(milestone.payment_terms ?? "-") || "-"}
                     </td>
@@ -1161,6 +1227,8 @@ function ContractDetailPanel({
                               paymentTerms: String(milestone.payment_terms ?? ""),
                               partialPaymentMemo: "",
                               memo: "",
+                              settlementAmount: String(milestone.settlement_amount ?? ""),
+                              settlementEligible,
                             })
                           }
                         >
@@ -1410,6 +1478,7 @@ function InvoiceUploadModal({
               collectedAmount: state.collectedAmount || null,
               paymentTerms: state.paymentTerms || null,
               partialPaymentMemo: state.partialPaymentMemo || "",
+              ...(state.settlementEligible ? { settlementAmount: state.settlementAmount || null } : {}),
             }),
           }
         );
@@ -1437,6 +1506,7 @@ function InvoiceUploadModal({
       form.set("paymentTerms", state.paymentTerms);
       form.set("partialPaymentMemo", state.partialPaymentMemo);
       form.set("memo", state.memo);
+      if (state.settlementEligible) form.set("settlementAmount", state.settlementAmount);
       form.set("file", selectedFile);
       const res = await fetch(`/api/contracts/${encodeURIComponent(contractId)}/invoices`, { method: "POST", body: form });
       if (!res.ok) {
@@ -1474,6 +1544,50 @@ function InvoiceUploadModal({
           <input type="text" className="cd-input" placeholder="예: 세금계산서 발행 후 30일 이내 지급"
             value={state.paymentTerms} onChange={(e) => onChange({ ...state, paymentTerms: e.target.value })} />
         </label>
+        {state.settlementEligible && (
+          <>
+            <label className="grid gap-1 text-sm">
+              <span className="font-bold cd-text-muted">실적 정산</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                className="cd-input tabular-nums"
+                placeholder="정산 반영 실제 청구액"
+                value={formatThousands(state.settlementAmount)}
+                onChange={(e) => {
+                  // 실적 정산액(= 정산 반영 실제 청구액)을 입력하면 발행금액도 함께 맞춘다.
+                  // 차감액은 (단계 원 금액 - 실적 정산액)으로 자동 산출되어 옆 칸에 표시된다.
+                  const digits = stripDigits(e.target.value);
+                  onChange({ ...state, settlementAmount: digits, invoiceAmount: digits || state.invoiceAmount });
+                }}
+              />
+              <span className="text-[11px] cd-text-faint">
+                출장 경비·인쇄비 등 정산 반영 실제 청구액 (원 금액 {formatExactAmount(state.baseAmount)})
+              </span>
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="font-bold cd-text-muted">차감액</span>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  className="cd-input tabular-nums flex-1"
+                  value={
+                    state.settlementAmount
+                      ? formatThousands(String(Math.max(0, state.baseAmount - Number(state.settlementAmount || "0"))))
+                      : ""
+                  }
+                />
+                <span className="shrink-0 rounded-lg border cd-border-c px-2 py-2 text-[11px] font-bold cd-text-muted tabular-nums">
+                  {state.settlementAmount && state.baseAmount > 0
+                    ? `${Math.round((Math.max(0, state.baseAmount - Number(state.settlementAmount || "0")) / state.baseAmount) * 1000) / 10}%`
+                    : "-"}
+                </span>
+              </div>
+              <span className="text-[11px] cd-text-faint">단계 원 금액 대비 차감 비율</span>
+            </label>
+          </>
+        )}
         <div className="grid gap-1 text-sm col-span-2">
           <span className="font-bold cd-text-muted">계산서 PDF 첨부</span>
           <input
@@ -2674,10 +2788,13 @@ function CollectionProgressCard({
   rate,
   collectedAmount,
   baseAmount,
+  settlementRate,
 }: {
   rate: number;
   collectedAmount: number;
   baseAmount: number;
+  /** 실적 정산이 있는 용역만 전달. 총 계약금액 대비 정산 반영 총 청구액 비율(0~1). */
+  settlementRate?: number | null;
 }) {
   const percent = Math.round(rate * 100);
   const today = formatKoreanDate(new Date());
@@ -2716,6 +2833,11 @@ function CollectionProgressCard({
       <p className="mt-3 text-xs font-mono cd-text-muted">
         {formatExactAmount(collectedAmount)} / {formatExactAmount(baseAmount)}
       </p>
+      {settlementRate != null && (
+        <p className="mt-1.5 rounded-lg border cd-border-c px-2 py-1 text-[11px] font-bold cd-text-muted">
+          실적 정산 반영 비율 {Math.round(settlementRate * 1000) / 10}%
+        </p>
+      )}
       <p className="absolute right-4 bottom-3 text-[11px] cd-text-faint">{today} 기준</p>
     </div>
   );

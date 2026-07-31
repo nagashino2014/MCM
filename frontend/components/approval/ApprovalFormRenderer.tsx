@@ -51,7 +51,9 @@ export function ApprovalFormRenderer({ fields, values, onChange, header, readOnl
   }, [fields]);
 
   return (
-    <div className="flex flex-col gap-3">
+    // 결재 문서는 A4 가로폭(210mm)에 맞춰 가운데 정렬한다. 브라우저 창 너비를 그대로
+    // 따라가면 넓은 화면에서 한 줄이 지나치게 길어져 읽기 어렵다. 세로는 제한하지 않는다.
+    <div className="flex flex-col gap-3 w-full mx-auto" style={{ maxWidth: "210mm" }}>
       {header && <ApprovalDocHead info={header} />}
       <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--cd-form-line-strong)" }}>
         {rows.map((rowFields, ri) => (

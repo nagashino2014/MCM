@@ -5,8 +5,8 @@
 // 엔티티 참조(ref.*) 4종은 필드 타입에서 자동 부여되는 개념이라 적용 대상 편집이 잠긴다.
 // 설계: docs/semantic-analytics-wizard-blueprint.md §4-1 (SW-P0).
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, Plus, RotateCcw, Save, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowDown, ArrowUp, Download, Plus, RotateCcw, Save, Trash2, Upload } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { DEFAULT_SEMANTIC_CONCEPTS, type SemanticConceptItem } from "@/lib/approval/semantic-concepts";
@@ -23,6 +23,27 @@ export function ApprovalSemanticConceptsBoard() {
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeGroup, setActiveGroup] = useState<string | null>(null);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
+
+  /** 설정 패키지 가져오기(SW-P4 §9) — 양식+의미 사전+지표를 upsert(삭제 없음) */
+  const importPackage = async (file: File) => {
+    try {
+      const pkg = JSON.parse(await file.text());
+      if (!confirm(`설정 패키지를 적용할까요?\n양식 ${pkg.forms?.length ?? 0} · 개념 ${pkg.concepts?.length ?? 0} · 지표 ${pkg.metrics?.length ?? 0}건 (기존 항목은 덮어쓰고, 삭제는 하지 않습니다)`)) return;
+      const res = await fetch("/api/approval/config-package", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(pkg),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body?.error ?? "가져오기 실패");
+      const s = body.summary;
+      alert(`적용 완료 — 폴더 ${s.folders} · 양식 ${s.forms} · 개념 ${s.concepts} · 지표 ${s.metrics}${s.errors.length ? `\n오류 ${s.errors.length}건: ${s.errors.slice(0, 3).join(" / ")}` : ""}`);
+      await load();
+    } catch (err) {
+      alert((err as Error).message);
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -133,6 +154,24 @@ export function ApprovalSemanticConceptsBoard() {
         actions={
           <div className="flex items-center gap-2">
             {savedAt && <span className="text-[11px] cd-text-faint">저장됨 {savedAt}</span>}
+            {/* 설정 패키지(양식+의미 사전+지표) — 테넌트 복제·백업 단위(SW-P4 §9) */}
+            <a href="/api/approval/config-package" className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs flex items-center gap-1.5" title="양식·의미 사전·지표를 JSON 파일로 내보냅니다">
+              <Download className="w-3.5 h-3.5" /> 설정 내보내기
+            </a>
+            <button type="button" className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs flex items-center gap-1.5" title="설정 패키지 JSON 을 적용합니다(덮어쓰기·삭제 없음)" onClick={() => importInputRef.current?.click()}>
+              <Upload className="w-3.5 h-3.5" /> 설정 가져오기
+            </button>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept="application/json"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) importPackage(f);
+                e.target.value = "";
+              }}
+            />
             <button type="button" className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs flex items-center gap-1.5" onClick={restoreDefault}>
               <RotateCcw className="w-3.5 h-3.5" /> 기본값 복원
             </button>

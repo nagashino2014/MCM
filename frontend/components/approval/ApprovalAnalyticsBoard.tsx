@@ -7,7 +7,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ApexOptions } from "apexcharts";
-import { BarChart3, Download, Play, Plus } from "lucide-react";
+import { BarChart3, Download, Play, Plus, Sparkles } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import ApexChart from "@/components/contracts/dashboard/ApexChart";
@@ -29,12 +29,15 @@ export function ApprovalAnalyticsBoard() {
   const { theme } = useCdashTheme();
   const [metrics, setMetrics] = useState<MetricItem[]>([]);
   const [manager, setManager] = useState(false);
+  const [nlqAllowed, setNlqAllowed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [result, setResult] = useState<MetricResult | null>(null);
+  const [answer, setAnswer] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [question, setQuestion] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -44,6 +47,7 @@ export function ApprovalAnalyticsBoard() {
       if (!res.ok) throw new Error(body?.error ?? "지표 목록을 불러오지 못했습니다.");
       setMetrics(body.metrics ?? []);
       setManager(body.manager === true);
+      setNlqAllowed(body.nlqAllowed === true);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -58,6 +62,7 @@ export function ApprovalAnalyticsBoard() {
     setSelectedKey(key);
     setRunning(true);
     setResult(null);
+    setAnswer(null);
     setError(null);
     try {
       const res = await fetch(`/api/approval/analytics?run=${encodeURIComponent(key)}`, { cache: "no-store" });
@@ -70,6 +75,31 @@ export function ApprovalAnalyticsBoard() {
       setRunning(false);
     }
   }, []);
+
+  /** 자연어 질문(NLQ) — 기존 지표 재사용 또는 임시 정의 생성 후 즉석 실행(저장 안 함) */
+  const ask = useCallback(async () => {
+    if (!question.trim()) return;
+    setSelectedKey(null);
+    setRunning(true);
+    setResult(null);
+    setAnswer(null);
+    setError(null);
+    try {
+      const res = await fetch("/api/approval/analytics/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body?.error ?? "질문 처리 실패");
+      setResult(body.result);
+      setAnswer(body.answer ?? null);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setRunning(false);
+    }
+  }, [question]);
 
   const pal = chartPalette(theme);
 
@@ -158,6 +188,22 @@ export function ApprovalAnalyticsBoard() {
         }
       />
       {error && <p className="text-sm cd-error-text">{error}</p>}
+      {/* 자연어 질문(NLQ) — reports.nlq 권한 보유자·관리자에게만 노출(AX-P5 어댑터) */}
+      {!loading && nlqAllowed && (
+        <div className="rounded-2xl border cd-border-c px-4 py-3 flex items-center gap-2" style={{ background: "var(--cd-card-solid)" }}>
+          <Sparkles className="w-4 h-4 cd-text-primary shrink-0" />
+          <input
+            className="cd-input flex-1 text-[12.5px]"
+            placeholder='말로 물어보세요 — 예: "출장 경비가 제일 많이 든 용역이 어디야?"'
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && !running && ask()}
+          />
+          <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold disabled:opacity-50" disabled={running || !question.trim()} onClick={ask}>
+            {running ? "계산 중..." : "질문"}
+          </button>
+        </div>
+      )}
       {loading ? (
         <p className="text-sm cd-text-faint">불러오는 중입니다.</p>
       ) : (
@@ -202,6 +248,9 @@ export function ApprovalAnalyticsBoard() {
                     <Download className="w-3.5 h-3.5" /> CSV
                   </button>
                 </div>
+                {answer && (
+                  <p className="rounded-xl px-3.5 py-2.5 text-[13px] cd-text font-semibold cd-tint-primary">{answer}</p>
+                )}
                 <div className="rounded-xl border border-dashed cd-border-c px-3 py-2 text-[11px] cd-text-faint leading-relaxed">
                   소스 {result.diagnostics.sources.join(", ")}
                   {result.diagnostics.totalDocs != null && <> · 대상 문서 {result.diagnostics.totalDocs}건</>} · 사용 {result.diagnostics.usedRows}행

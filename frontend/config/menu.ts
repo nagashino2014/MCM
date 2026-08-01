@@ -195,6 +195,7 @@ export const MENU_ITEMS: MenuItem[] = [
     icon: SlidersHorizontal,
     submenu: [
       { title: "양식 관리", href: "/approval/forms" },
+      { title: "데이터 의미 사전", href: "/approval/semantic-concepts" },
       { title: "사전검토 정책", href: "/approval/policies" },
       { title: "결재 알림 설정", href: "/approval/settings" },
     ],

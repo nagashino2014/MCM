@@ -38,7 +38,14 @@ import type { LucideIcon } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { ApprovalFormRenderer } from "@/components/approval/ApprovalFormRenderer";
-import { FILL_SOURCES, type ApprovalFieldDef, type ApprovalFieldType, type ApprovalTableColumn } from "@/lib/approval/fields";
+import {
+  AUTO_CONCEPT_BY_TYPE,
+  FILL_SOURCES,
+  type ApprovalFieldDef,
+  type ApprovalFieldType,
+  type ApprovalTableColumn,
+} from "@/lib/approval/fields";
+import { conceptLabel, conceptsForType, type SemanticConceptItem } from "@/lib/approval/semantic-concepts";
 import "@/components/cdash/cdash.css";
 
 interface FolderRow {
@@ -164,6 +171,14 @@ export default function ApprovalFormsBoard() {
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [drag, setDrag] = useState<DragItem | null>(null);
+  // 데이터 의미 사전(114) — 태깅 드롭다운의 선택지. 실패해도 빈 배열 → conceptsForType 이 시드로 폴백.
+  const [concepts, setConcepts] = useState<SemanticConceptItem[]>([]);
+  useEffect(() => {
+    fetch("/api/approval/semantic-concepts", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : { concepts: [] }))
+      .then((data) => setConcepts(data.concepts ?? []))
+      .catch(() => {});
+  }, []);
 
   const load = async () => {
     try {
@@ -375,6 +390,17 @@ export default function ApprovalFormsBoard() {
                   )}
                 </h3>
                 <div className="ml-auto flex items-center gap-2">
+                  {/* 미태깅 소프트 안내(비차단, §8-6) — 의미 없는 금액·날짜 항목은 분석 집계에서 빠진다 */}
+                  {(() => {
+                    const untagged = draft.fields.filter(
+                      (x) => ["currency", "number", "date", "period"].includes(x.type) && !x.semantic?.concept
+                    ).length;
+                    return untagged > 0 ? (
+                      <span className="text-[11px] cd-text-faint" title="속성 패널의 '데이터 의미'를 지정하면 용역별 경비·성과 분석에 활용됩니다.">
+                        의미 미지정 금액·날짜 항목 {untagged}개
+                      </span>
+                    ) : null;
+                  })()}
                   {savedAt && <span className="text-[11px] cd-text-faint">저장됨 {savedAt}</span>}
                   <button
                     type="button"
@@ -518,6 +544,7 @@ export default function ApprovalFormsBoard() {
                         onChange={patchSelected}
                         onRemove={removeSelected}
                         allFields={draft.fields}
+                        concepts={concepts}
                       />
                     ) : (
                       <div className="rounded-2xl border border-dashed cd-border-c p-4 text-[12px] cd-text-faint">
@@ -635,11 +662,13 @@ function FieldProps({
   onChange,
   onRemove,
   allFields,
+  concepts,
 }: {
   field: ApprovalFieldDef;
   onChange: (patch: Partial<ApprovalFieldDef>) => void;
   onRemove: () => void;
   allFields: ApprovalFieldDef[];
+  concepts: SemanticConceptItem[];
 }) {
   const hasOptions = ["select", "radio", "checkbox"].includes(f.type);
   const dupKey = allFields.filter((x) => x.key === f.key).length > 1;
@@ -739,7 +768,74 @@ function FieldProps({
           휴가 종류·부여일수는 사규 경조 규정 카탈로그에서 자동 제공됩니다(옵션 편집 불필요). 선택 시 부여 휴가일수가 표시되고, 연차·반차만 연차 대장에서 차감됩니다.
         </p>
       )}
-      {f.type === "table" && <TableColumnsEditor field={f} onChange={onChange} />}
+      {f.type === "table" && <TableColumnsEditor field={f} onChange={onChange} concepts={concepts} />}
+      <SemanticEditor field={f} onChange={onChange} concepts={concepts} />
+    </div>
+  );
+}
+
+/**
+ * 데이터 의미(시맨틱) 태그 편집 — fillMap(입력 편의)과 별개로, 분석 지표가 이 태그를 근거로 집계한다.
+ * 엔티티 참조 타입(업체/계약/사용자/부서)은 자동 부여라 안내만 표시. 표(table)는 열 단위로 태깅한다.
+ * 설계: docs/semantic-analytics-wizard-blueprint.md §4-1 (SW-P0).
+ */
+function SemanticEditor({
+  field: f,
+  onChange,
+  concepts,
+}: {
+  field: ApprovalFieldDef;
+  onChange: (patch: Partial<ApprovalFieldDef>) => void;
+  concepts: SemanticConceptItem[];
+}) {
+  const autoConcept = AUTO_CONCEPT_BY_TYPE[f.type];
+  if (autoConcept) {
+    return (
+      <p className="text-[11px] cd-text-faint rounded-lg border border-dashed cd-border-c p-2.5">
+        데이터 의미: <b>{conceptLabel(concepts, autoConcept)}</b> (필드 종류에서 자동 부여) — 이 항목이 입력된 문서는 선택한
+        대상에 자동 귀속되어 분석(용역별 경비·인원별 성과 등)에 사용됩니다.
+      </p>
+    );
+  }
+  if (f.type === "table") {
+    return (
+      <p className="text-[11px] cd-text-faint rounded-lg border border-dashed cd-border-c p-2.5">
+        표는 하위 열 단위로 데이터 의미를 지정합니다(위 표 하위 열의 &quot;의미&quot; 선택).
+      </p>
+    );
+  }
+  const choices = conceptsForType(concepts, f.type);
+  if (!choices.length) return null;
+  const current = f.semantic?.concept ?? "";
+  return (
+    <div className="rounded-lg border border-dashed cd-border-c p-2.5 flex flex-col gap-1.5">
+      <span className="text-[11px] cd-text-faint">데이터 의미 — 분석 지표가 이 태그로 집계</span>
+      <select
+        className="cd-select"
+        style={{ width: "100%" }}
+        value={current}
+        onChange={(e) => {
+          const concept = e.target.value;
+          onChange({ semantic: concept ? { ...f.semantic, concept } : undefined });
+        }}
+      >
+        <option value="">지정 안 함</option>
+        {choices.map((c) => (
+          <option key={c.key} value={c.key}>
+            {c.group} · {c.label}
+          </option>
+        ))}
+      </select>
+      {current.startsWith("cost.") && (
+        <input
+          className="cd-input text-[12px]"
+          placeholder="세부 분류(선택, 예: 여비교통비)"
+          value={f.semantic?.costCategory ?? ""}
+          onChange={(e) =>
+            onChange({ semantic: { ...f.semantic, concept: current, costCategory: e.target.value || undefined } })
+          }
+        />
+      )}
     </div>
   );
 }
@@ -806,9 +902,11 @@ function FillMapEditor({
 function TableColumnsEditor({
   field: f,
   onChange,
+  concepts,
 }: {
   field: ApprovalFieldDef;
   onChange: (patch: Partial<ApprovalFieldDef>) => void;
+  concepts: SemanticConceptItem[];
 }) {
   const cols = f.tableColumns ?? [];
   const setCol = (i: number, patch: Partial<ApprovalTableColumn>) =>
@@ -833,9 +931,9 @@ function TableColumnsEditor({
           <input className="cd-input font-mono" style={{ width: 84 }} placeholder="col_key" value={c.key} onChange={(e) => setCol(i, { key: e.target.value })} />
           <input className="cd-input flex-1 min-w-[80px]" placeholder="열 라벨" value={c.label} onChange={(e) => setCol(i, { label: e.target.value })} />
           <select className="cd-select" style={{ width: 82 }} value={c.type} onChange={(e) => setCol(i, { type: e.target.value })}>
-            {["text", "date", "select", "number", "currency"].map((t) => (
+            {["text", "date", "select", "number", "currency", "rowno"].map((t) => (
               <option key={t} value={t}>
-                {t}
+                {t === "rowno" ? "연번(자동)" : t}
               </option>
             ))}
           </select>
@@ -854,6 +952,24 @@ function TableColumnsEditor({
               value={(c.options ?? []).join(", ")}
               onChange={(e) => setCol(i, { options: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })}
             />
+          )}
+          {conceptsForType(concepts, c.type).length > 0 && (
+            <label className="w-full flex items-center gap-1.5 text-[10.5px] cd-text-faint">
+              의미
+              <select
+                className="cd-select flex-1"
+                style={{ width: "auto" }}
+                value={c.semantic?.concept ?? ""}
+                onChange={(e) => setCol(i, { semantic: e.target.value ? { concept: e.target.value } : undefined })}
+              >
+                <option value="">지정 안 함</option>
+                {conceptsForType(concepts, c.type).map((sc) => (
+                  <option key={sc.key} value={sc.key}>
+                    {sc.group} · {sc.label}
+                  </option>
+                ))}
+              </select>
+            </label>
           )}
         </div>
       ))}

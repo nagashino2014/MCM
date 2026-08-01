@@ -55,11 +55,38 @@ export const FILL_SOURCES: Partial<Record<ApprovalFieldType, { key: string; labe
   ],
 };
 
+/**
+ * 데이터 의미(시맨틱) 태그 — 분석 지표가 필드 key 대신 참조하는 표준 개념.
+ * 카탈로그는 semantic_concepts(114) DB 관리(lib/approval/semantic-concepts.ts).
+ * 설계: docs/semantic-analytics-wizard-blueprint.md §4-1.
+ */
+export interface ApprovalFieldSemantic {
+  /** 표준 개념 태그 key(예: cost.travel) — semantic_concepts 카탈로그 참조 */
+  concept?: string;
+  /** cost.* 개념의 세부 분류(자유 텍스트, 예: 여비교통비) */
+  costCategory?: string;
+}
+
+/** 엔티티 참조 필드는 타입만으로 개념이 자동 부여된다(빌더에서 수동 태깅 불필요). */
+export const AUTO_CONCEPT_BY_TYPE: Partial<Record<ApprovalFieldType, string>> = {
+  contract_select: "ref.contract",
+  company_select: "ref.company",
+  user_select: "ref.employee",
+  dept_select: "ref.dept",
+};
+
+/** 필드의 유효 개념 — 명시 태그 우선, 없으면 타입 자동 부여. */
+export function resolveFieldConcept(f: { type: ApprovalFieldType; semantic?: ApprovalFieldSemantic }): string | undefined {
+  return f.semantic?.concept || AUTO_CONCEPT_BY_TYPE[f.type];
+}
+
 export interface ApprovalTableColumn {
   key: string;
   label: string;
-  type: string; // text|date|select|currency|number
+  type: string; // text|date|select|currency|number|rowno(자동 연번 — 입력 없음, 렌더 시 행번호)
   options?: string[];
+  /** 열 단위 데이터 의미 태그(지출 내역 표의 금액 열 = cost.travel 등) */
+  semantic?: ApprovalFieldSemantic;
 }
 
 /** 양식 필드 정의 — row(같은 행 배치)·span(행 내 폭 비중 1~3)으로 레이아웃까지 표현 */
@@ -83,6 +110,20 @@ export interface ApprovalFieldDef {
   multiple?: boolean;
   /** company_select/contract_select 전용 — 선택 시 다른 필드 자동 채움 규칙 */
   fillMap?: ApprovalFillRule[];
+  /** 데이터 의미 태그 — fillMap(입력 편의)과 별개로 분석 집계의 근거가 된다 */
+  semantic?: ApprovalFieldSemantic;
+}
+
+function parseSemantic(value: unknown): ApprovalFieldSemantic | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const v = value as Record<string, unknown>;
+  const concept = v.concept != null ? String(v.concept).trim() : "";
+  const costCategory = v.costCategory != null ? String(v.costCategory).trim() : "";
+  if (!concept && !costCategory) return undefined;
+  return {
+    concept: concept || undefined,
+    costCategory: costCategory || undefined,
+  };
 }
 
 export function parseFields(value: unknown): ApprovalFieldDef[] {
@@ -109,6 +150,7 @@ export function parseFields(value: unknown): ApprovalFieldDef[] {
               label: String(c.label ?? ""),
               type: String(c.type ?? "text"),
               options: Array.isArray(c.options) ? c.options.map(String) : undefined,
+              semantic: parseSemantic(c.semantic),
             }))
           : undefined,
         minRows: f.minRows != null ? Number(f.minRows) : undefined,
@@ -120,6 +162,7 @@ export function parseFields(value: unknown): ApprovalFieldDef[] {
               .map((r) => ({ source: String(r.source ?? ""), target: String(r.target ?? "") }))
               .filter((r) => r.source && r.target)
           : undefined,
+        semantic: parseSemantic(f.semantic),
       }))
       .filter((f) => f.key);
   } catch {

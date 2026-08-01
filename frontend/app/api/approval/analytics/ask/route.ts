@@ -14,8 +14,17 @@ export const dynamic = "force-dynamic";
  * 자연어 리포팅(NLQ) — AX-P5 를 지표 엔진 위의 어댑터로 통합(§8-1 확정: 별도 구현 없음).
  * 흐름: 질문 → LLM 이 "기존 지표 선택 또는 임시 정의 생성"(선언 JSON 선택만, 자유 SQL 금지)
  *       → 엔진 즉석 실행(저장 안 함) → 결과 + 코드 생성 해설(LLM 재호출 없음 — 비용 통제).
- * 권한: reports.nlq(120, 기본 미부여 — RBAC 화면에서 선별 부여) + admin fallback.
+ * 권한: reports.nlq(120, 기본 미부여 — RBAC 화면에서 선별 부여). 결재 운영자(approval.manage,
+ * 시스템 관리자 포함)는 별도 부여 없이 사용 가능 — 보드의 질문창 노출 판정(analytics GET)과 동일 기준.
  */
+
+async function requireNlq() {
+  try {
+    return await requirePermission("reports.nlq");
+  } catch {
+    return await requirePermission("approval.manage");
+  }
+}
 
 function buildAnswer(r: MetricResult): string {
   if (!r.rows.length) {
@@ -41,7 +50,7 @@ function buildAnswer(r: MetricResult): string {
 
 export async function POST(req: NextRequest) {
   try {
-    const actor = await requirePermission("reports.nlq", { fallbackRoles: ["admin"] });
+    const actor = await requireNlq();
     const body = (await req.json().catch(() => ({}))) as { question?: string };
     const question = String(body.question ?? "").trim();
     if (!question) return NextResponse.json({ error: "질문이 비어 있습니다." }, { status: 400 });

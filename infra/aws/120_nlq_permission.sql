@@ -9,3 +9,16 @@ VALUES
 ON CONFLICT (permission_key) DO UPDATE SET
   module = EXCLUDED.module, action = EXCLUDED.action, description = EXCLUDED.description,
   scopes_supported = EXCLUDED.scopes_supported, is_dangerous = EXCLUDED.is_dangerous;
+
+-- 시스템 관리자 템플릿(tpl-system-admin, 111) grant 보충 — 111 주석의 필수 절차:
+-- "새 권한 키를 추가하면 이 템플릿에도 넣어야 한다". 누락 시 관리자조차 403(role 우회가 없다).
+INSERT INTO permission_template_grants
+  (grant_id, template_id, permission_key, scope_kind, effect, created_at)
+SELECT 'grant-sysadm-' || substr(md5('reports.nlq'), 1, 16),
+       'tpl-system-admin', 'reports.nlq', 'all', 'allow',
+       to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+ WHERE EXISTS (SELECT 1 FROM permission_templates WHERE template_id = 'tpl-system-admin')
+   AND NOT EXISTS (
+     SELECT 1 FROM permission_template_grants g
+      WHERE g.template_id = 'tpl-system-admin' AND g.permission_key = 'reports.nlq'
+   );

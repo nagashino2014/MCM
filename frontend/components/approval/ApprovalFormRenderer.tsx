@@ -51,9 +51,10 @@ export function ApprovalFormRenderer({ fields, values, onChange, header, readOnl
   }, [fields]);
 
   return (
-    // 결재 문서는 A4 가로폭(210mm)에 맞춰 가운데 정렬한다. 브라우저 창 너비를 그대로
-    // 따라가면 넓은 화면에서 한 줄이 지나치게 길어져 읽기 어렵다. 세로는 제한하지 않는다.
-    <div className="flex flex-col gap-3 w-full mx-auto" style={{ maxWidth: "210mm" }}>
+    // 결재 문서는 고정 가로폭에 맞춰 가운데 정렬한다. 브라우저 창 너비를 그대로 따라가면
+    // 넓은 화면에서 한 줄이 지나치게 길어져 읽기 어렵다. 세로는 제한하지 않는다.
+    // A4(210mm)로 시작했으나 실사용에서 좁다는 피드백 → 30% 확대(273mm).
+    <div className="flex flex-col gap-3 w-full mx-auto" style={{ maxWidth: "273mm" }}>
       {header && <ApprovalDocHead info={header} />}
       <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--cd-form-line-strong)" }}>
         {rows.map((rowFields, ri) => (
@@ -718,7 +719,9 @@ function TableInput({
             <tr key={ri}>
               {cols.map((c) => (
                 <td key={c.key} className="border cd-border-c p-0 align-middle">
-                  {c.type === "select" ? (
+                  {c.type === "rowno" ? (
+                    <div className="px-1.5 py-1.5 text-center cd-text-faint">{ri + 1}</div>
+                  ) : c.type === "select" ? (
                     <select
                       className="w-full bg-transparent px-1.5 py-1.5 text-[12px] cd-text outline-none"
                       disabled={readOnly}

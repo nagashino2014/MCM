@@ -118,6 +118,8 @@ export const SYSTEM_SOURCE_CATALOG: {
     measures: [
       { key: "contract_id", label: "참여 계약 수(중복 제거)", defaultAgg: "count_distinct" },
       { key: "duration_days", label: "수행 기간(일)", defaultAgg: "avg" },
+      { key: "amount_percentile", label: "계약금액 백분위(0~1, 가중 점수용)", defaultAgg: "sum" },
+      { key: "amount_sum", label: "참여 계약금액(원)", defaultAgg: "sum" },
     ],
     dims: [
       { key: "ref.employee", label: "직원" },

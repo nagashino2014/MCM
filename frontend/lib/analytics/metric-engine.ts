@@ -56,11 +56,16 @@ const SYSTEM_SPECS: Record<
     times: { contract_date: "c.started_at" },
   },
   "system.participants": {
-    from: "service_participants sp LEFT JOIN employee_profiles ep ON ep.employee_id = sp.employee_id LEFT JOIN contracts c ON c.contract_id = sp.contract_id",
+    // pr = 계약금액 백분위(cume_dist, 0~1 — 금액 미입력 계약 제외 모집단). percent_rank 는 최저가 0점이
+    // 되어 "수행 건수도 반영"이라는 취지가 깨지므로, 최저 계약도 1/N 점을 받는 cume_dist 를 쓴다.
+    from: "service_participants sp LEFT JOIN employee_profiles ep ON ep.employee_id = sp.employee_id LEFT JOIN contracts c ON c.contract_id = sp.contract_id LEFT JOIN (SELECT contract_id, cume_dist() OVER (ORDER BY contract_amount) AS amount_pctile FROM contracts WHERE contract_amount IS NOT NULL AND contract_amount > 0) pr ON pr.contract_id = sp.contract_id",
     measures: {
       contract_id: "sp.contract_id", // count_distinct 용
       duration_days:
         "CASE WHEN sp.participated_from IS NOT NULL THEN (COALESCE(NULLIF(sp.participated_to,'')::date, CURRENT_DATE) - sp.participated_from::date) END",
+      // 백분위 가중 수행 점수의 원료 — sum 하면 "큰 용역일수록 1점에 가까운 점수가 건마다 누적"
+      amount_percentile: "pr.amount_pctile",
+      amount_sum: "c.contract_amount",
     },
     dims: {
       "ref.employee": { idExpr: "sp.employee_id", labelExpr: "COALESCE(ep.name, sp.employee_id)" },
@@ -393,7 +398,7 @@ async function runSystemAggregate(def: AggregateDefinition, label: string, metri
     metricKey,
     label,
     kind: "aggregate",
-    format: def.measure.field === "amount" ? "currency" : "number",
+    format: def.measure.field === "amount" || def.measure.field === "amount_sum" ? "currency" : "number",
     hasTime: !!timeSql,
     rows: rows.map((r) => ({
       groupId: r.group_id != null ? String(r.group_id) : null,

@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
  */
 
 const SYSTEM_SOURCES_DOC = `system.contracts: 계약 마스터. measures={amount(계약금액),count}, dims=[ref.contract,dim.category(대분류),dim.subcategory(세분류),dim.amount_band(계약금액대 구간)], times={contract_date}
-system.participants: 수행인력(계약별 참여 인원·수행 기간 — 수행 기간 분석의 표준 원천). measures={contract_id(count_distinct 로 참여 계약 수),duration_days(수행일수)}, dims=[ref.employee,ref.contract,dim.category,dim.subcategory,dim.amount_band], times={participated_from}
+system.participants: 수행인력(계약별 참여 인원·수행 기간 — 수행 기간 분석의 표준 원천). measures={contract_id(count_distinct 로 참여 계약 수),duration_days(수행일수),amount_percentile(참여 계약금액 백분위 0~1 — sum 하면 규모 가중 수행 점수),amount_sum(참여 계약금액 원)}, dims=[ref.employee,ref.contract,dim.category,dim.subcategory,dim.amount_band], times={participated_from}
 system.attendance: ADT 근태(주별). measures={overtime_hours(인정 연장),excess_hours(12h 초과),worked_hours}, dims=[ref.employee], times={week_start}
 system.leave: 연차 대장. measures={grant_days,use_days}, dims=[ref.employee], times={year}`;
 

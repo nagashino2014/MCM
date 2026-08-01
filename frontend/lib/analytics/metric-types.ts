@@ -59,6 +59,7 @@ export interface MetricItem {
   visibility: "admin" | "all" | "owner";
   active: boolean;
   version: number;
+  createdBy?: string | null;
   updatedAt?: string;
 }
 
@@ -80,6 +81,84 @@ export interface MetricResult {
     notes: string[];
   };
 }
+
+/**
+ * 시스템 소스 표시 카탈로그(클라이언트 안전) — 마법사 선택지용 메타.
+ * 실행 스펙(SQL 표현식)은 서버 metric-engine.ts SYSTEM_SPECS 에 있고, 이 목록과 key 가 일치해야 한다.
+ */
+export const SYSTEM_SOURCE_CATALOG: {
+  key: string;
+  label: string;
+  measures: { key: string; label: string; defaultAgg: MetricAgg }[];
+  dims: { key: string; label: string }[];
+  times: { key: string; label: string }[];
+}[] = [
+  {
+    key: "system.contracts",
+    label: "계약(용역) 마스터",
+    measures: [
+      { key: "amount", label: "계약금액", defaultAgg: "sum" },
+      { key: "count", label: "계약 건수", defaultAgg: "count" },
+    ],
+    dims: [
+      { key: "ref.contract", label: "계약(용역)" },
+      { key: "dim.category", label: "용역분류" },
+    ],
+    times: [{ key: "contract_date", label: "계약 시작일" }],
+  },
+  {
+    key: "system.participants",
+    label: "수행인력",
+    measures: [
+      { key: "contract_id", label: "참여 계약 수(중복 제거)", defaultAgg: "count_distinct" },
+      { key: "duration_days", label: "수행 기간(일)", defaultAgg: "avg" },
+    ],
+    dims: [
+      { key: "ref.employee", label: "직원" },
+      { key: "ref.contract", label: "계약(용역)" },
+    ],
+    times: [{ key: "participated_from", label: "수행 시작일" }],
+  },
+  {
+    key: "system.attendance",
+    label: "ADT 근태(주별 산정)",
+    measures: [
+      { key: "overtime_hours", label: "인정 연장(시간)", defaultAgg: "sum" },
+      { key: "excess_hours", label: "12h 초과(시간)", defaultAgg: "sum" },
+      { key: "worked_hours", label: "실근무(시간)", defaultAgg: "sum" },
+    ],
+    dims: [{ key: "ref.employee", label: "직원" }],
+    times: [{ key: "week_start", label: "주 시작일" }],
+  },
+  {
+    key: "system.leave",
+    label: "연차 대장",
+    measures: [
+      { key: "grant_days", label: "부여 일수", defaultAgg: "sum" },
+      { key: "use_days", label: "사용 일수", defaultAgg: "sum" },
+    ],
+    dims: [{ key: "ref.employee", label: "직원" }],
+    times: [{ key: "year", label: "연도" }],
+  },
+];
+
+/** 그룹 차원 표시 라벨(마법사·보드 공유) */
+export const DIMENSION_LABEL: Record<string, string> = {
+  "ref.contract": "계약(용역)",
+  "ref.company": "업체(사업장)",
+  "ref.employee": "직원",
+  "ref.dept": "부서",
+  "dim.category": "분류",
+};
+
+export const AGG_LABEL: Record<MetricAgg, string> = {
+  sum: "합계",
+  avg: "평균",
+  count: "건수",
+  min: "최솟값",
+  max: "최댓값",
+  count_distinct: "고유 개수",
+};
 
 const KEY_RE = /^[a-z][a-z0-9_]*$/;
 const NUM_RE = /^-?\d+(\.\d+)?$/;

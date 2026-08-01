@@ -18,6 +18,7 @@ function mapRow(r: Record<string, unknown>): MetricItem | null {
     visibility: vis === "all" || vis === "owner" ? vis : "admin",
     active: Number(r.active ?? 1) === 1,
     version: Number(r.version ?? 1),
+    createdBy: r.created_by != null ? String(r.created_by) : null,
     updatedAt: r.updated_at != null ? String(r.updated_at) : undefined,
   };
 }

@@ -66,6 +66,7 @@ export const MENU_ITEMS: MenuItem[] = [
       { title: "기안 작성", href: "/approval/draft" },
       { title: "문서함", href: "/approval/archive" },
       { title: "양식별 문서 조회", href: "/approval/records" },
+      { title: "데이터 분석", href: "/approval/analytics" },
       { title: "결재 인사이트", href: "/approval/insights" },
     ],
     group: "collab",

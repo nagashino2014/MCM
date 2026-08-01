@@ -22,6 +22,7 @@ import { QuickFacilitiesCard } from "./widgets/QuickFacilitiesCard";
 import { BillingSummaryCard } from "./widgets/BillingSummaryCard";
 import { IntelHighlightsCard } from "./widgets/IntelHighlightsCard";
 import { MyServicesCard } from "./widgets/MyServicesCard";
+import { MetricHighlightCard } from "./widgets/MetricHighlightCard";
 
 /** "7월 29일 수요일" (KST). */
 function todayLabel(): string {
@@ -95,12 +96,18 @@ export function HomeBoard({ role }: { role?: string }) {
       myServices: <MyServicesCard />,
       intel: <IntelHighlightsCard />,
       quickFacilities: <QuickFacilitiesCard role={role} />,
+      metrics: (
+        <MetricHighlightCard
+          metricKey={layout.widgetConfig?.metrics?.metricKey}
+          onSelect={(metricKey) => persist({ ...layout, widgetConfig: { ...layout.widgetConfig, metrics: { metricKey } } })}
+        />
+      ),
     };
     const allowed = new Set(available.map((a) => a.key));
     return HOME_WIDGETS.filter(
       (w) => (available.length === 0 || allowed.has(w.key)) && !layout.hidden.includes(w.key)
     ).map((w) => ({ key: w.key, node: NODES[w.key], defaultW: w.defaultW, defaultH: w.defaultH }));
-  }, [available, layout.hidden, role, theme]);
+  }, [available, layout, persist, role, theme]);
 
   const onGridChange = useCallback(
     (items: Record<string, HomeLayoutItem>) => {

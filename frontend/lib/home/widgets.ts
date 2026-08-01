@@ -33,6 +33,8 @@ export const HOME_WIDGETS: HomeWidgetDef[] = [
   // 목록이 긴 카드는 기본 2행 — 사용자가 편집 모드에서 다시 조절할 수 있다.
   { key: "intel", label: "인텔 신호 하이라이트", permission: "sales.view", defaultW: 8, defaultH: 2 },
   { key: "quickFacilities", label: "임시 등록 사업장 완성", permission: "facility.view", defaultW: 8, defaultH: 2 },
+  // 데이터 지표(SW-P3 이월분) — 표시할 지표는 카드에서 선택(공개범위는 analytics API 가 필터).
+  { key: "metrics", label: "데이터 지표", permission: "approval.view", defaultW: 8, defaultH: 2 },
 ];
 
 export const HOME_WIDGET_KEYS = HOME_WIDGETS.map((w) => w.key);
@@ -72,6 +74,8 @@ export interface HomeLayout {
   items: Record<string, HomeLayoutItem>;
   /** 저장 당시의 열 수 — 열 체계가 바뀌어도 옛 배치를 환산해 살린다(없으면 12열 시절). */
   cols?: number;
+  /** 위젯별 부가 설정(HC-B 서버 저장 — 기기와 무관). 현재 metrics.metricKey 만 쓴다. */
+  widgetConfig?: { metrics?: { metricKey?: string } };
 }
 
 export const EMPTY_HOME_LAYOUT: HomeLayout = { hidden: [], items: {}, cols: HOME_COLS };
@@ -101,5 +105,10 @@ export function normalizeLayout(raw: unknown): HomeLayout {
       };
     }
   }
-  return { hidden, items, cols: HOME_COLS };
+  // 위젯 부가 설정 — 알려진 키만 통과(자유 JSON 적재 방지)
+  const cfgSrc = (src.widgetConfig ?? {}) as { metrics?: { metricKey?: unknown } };
+  const metricKey = typeof cfgSrc.metrics?.metricKey === "string" ? cfgSrc.metrics.metricKey : undefined;
+  const widgetConfig = metricKey ? { metrics: { metricKey } } : undefined;
+
+  return { hidden, items, cols: HOME_COLS, ...(widgetConfig ? { widgetConfig } : {}) };
 }

@@ -27,7 +27,11 @@ export interface AggregateDefinition {
     /** system 소스: 소스 카탈로그가 정의한 측정값 key(예: amount, overtime_hours) */
     field?: string;
   };
-  /** 그룹 차원 — "ref.contract"|"ref.company"|"ref.employee"|"dim.category" (v1: 최대 1개) */
+  /**
+   * 그룹 차원(최대 3, 조합 = "세분류 × 금액대" 등).
+   * 결재 문서 소스: ref.*(참조, 최대 1) + dim.category(분류, 최대 1) 조합만.
+   * 시스템 소스: 카탈로그 dims 내에서 자유 조합(dim.subcategory 세분류·dim.amount_band 금액대 포함).
+   */
   groupBy?: string[];
   timeBy?: {
     /** approval_docs: 시간축 태그(when.occurred | when.period) */
@@ -102,7 +106,9 @@ export const SYSTEM_SOURCE_CATALOG: {
     ],
     dims: [
       { key: "ref.contract", label: "계약(용역)" },
-      { key: "dim.category", label: "용역분류" },
+      { key: "dim.category", label: "용역 대분류" },
+      { key: "dim.subcategory", label: "용역 세분류" },
+      { key: "dim.amount_band", label: "계약금액대" },
     ],
     times: [{ key: "contract_date", label: "계약 시작일" }],
   },
@@ -116,6 +122,9 @@ export const SYSTEM_SOURCE_CATALOG: {
     dims: [
       { key: "ref.employee", label: "직원" },
       { key: "ref.contract", label: "계약(용역)" },
+      { key: "dim.category", label: "용역 대분류" },
+      { key: "dim.subcategory", label: "용역 세분류" },
+      { key: "dim.amount_band", label: "계약금액대" },
     ],
     times: [{ key: "participated_from", label: "수행 시작일" }],
   },
@@ -149,6 +158,8 @@ export const DIMENSION_LABEL: Record<string, string> = {
   "ref.employee": "직원",
   "ref.dept": "부서",
   "dim.category": "분류",
+  "dim.subcategory": "용역 세분류",
+  "dim.amount_band": "계약금액대",
 };
 
 export const AGG_LABEL: Record<MetricAgg, string> = {
@@ -183,14 +194,19 @@ export function validateDefinition(def: MetricDefinition): string | null {
   if (def.kind === "aggregate") {
     if (!def.source?.type) return "소스(type)가 없습니다.";
     if (!METRIC_AGGS.includes(def.measure?.agg)) return `지원하지 않는 집계입니다: ${def.measure?.agg}`;
+    const groupBy = def.groupBy ?? [];
     if (def.source.type === "approval_docs") {
       if (def.measure.agg !== "count" && !def.measure.concept) return "결재 문서 소스는 measure.concept(태그)가 필요합니다.";
       if (def.measure.agg === "count" && !def.measure.concept && def.source.forms === "auto")
         return "count + forms:auto 조합은 대상 양식을 특정할 수 없습니다(forms 명시 필요).";
+      if (groupBy.filter((g) => g.startsWith("ref.")).length > 1) return "결재 문서 소스의 참조(ref.*) 차원은 1개까지입니다.";
+      if (groupBy.some((g) => !g.startsWith("ref.") && g !== "dim.category"))
+        return "결재 문서 소스의 그룹은 ref.* 또는 dim.category 만 가능합니다.";
     } else if (!def.measure.field) {
       return "시스템 소스는 measure.field 가 필요합니다.";
     }
-    if ((def.groupBy ?? []).length > 1) return "그룹 차원은 v1 에서 1개까지입니다.";
+    if (groupBy.length > 3) return "그룹 차원은 최대 3개까지입니다.";
+    if (new Set(groupBy).size !== groupBy.length) return "그룹 차원이 중복됩니다.";
     return null;
   }
   if (def.kind === "composite") {

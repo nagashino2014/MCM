@@ -20,6 +20,20 @@ interface FlatRow {
   time: string | null;
 }
 
+/**
+ * 계약금액대 밴드 — 연속값(계약금액)을 분석 가능한 구간 차원으로 변환한다.
+ * 세분류가 같아도 규모에 따라 공량이 크게 다르므로, 같은 세분류 안에서 비슷한 금액대끼리 묶어
+ * 평균 수행 기간 등을 비교하는 용도(사용자 확정 아이디어). 라벨의 번호 프리픽스는 정렬용.
+ */
+const AMOUNT_BAND_SQL = (col: string) => `CASE
+  WHEN ${col} IS NULL OR ${col} <= 0 THEN NULL
+  WHEN ${col} < 10000000 THEN '1) 1천만 미만'
+  WHEN ${col} < 30000000 THEN '2) 1천만~3천만'
+  WHEN ${col} < 50000000 THEN '3) 3천만~5천만'
+  WHEN ${col} < 100000000 THEN '4) 5천만~1억'
+  WHEN ${col} < 300000000 THEN '5) 1억~3억'
+  ELSE '6) 3억 이상' END`;
+
 /** ── 시스템 소스 카탈로그(실행 스펙) — 여기 정의된 field/dim/time 만 조회 가능 ── */
 const SYSTEM_SPECS: Record<
   string,
@@ -36,6 +50,8 @@ const SYSTEM_SPECS: Record<
     dims: {
       "ref.contract": { idExpr: "c.contract_id", labelExpr: "c.contract_title" },
       "dim.category": { idExpr: "c.service_type", labelExpr: "c.service_type" },
+      "dim.subcategory": { idExpr: "c.service_subtype", labelExpr: "c.service_subtype" },
+      "dim.amount_band": { idExpr: AMOUNT_BAND_SQL("c.contract_amount"), labelExpr: AMOUNT_BAND_SQL("c.contract_amount") },
     },
     times: { contract_date: "c.started_at" },
   },
@@ -49,6 +65,9 @@ const SYSTEM_SPECS: Record<
     dims: {
       "ref.employee": { idExpr: "sp.employee_id", labelExpr: "COALESCE(ep.name, sp.employee_id)" },
       "ref.contract": { idExpr: "sp.contract_id", labelExpr: "COALESCE(c.contract_title, sp.contract_id)" },
+      "dim.category": { idExpr: "c.service_type", labelExpr: "c.service_type" },
+      "dim.subcategory": { idExpr: "c.service_subtype", labelExpr: "c.service_subtype" },
+      "dim.amount_band": { idExpr: AMOUNT_BAND_SQL("c.contract_amount"), labelExpr: AMOUNT_BAND_SQL("c.contract_amount") },
     },
     times: { participated_from: "sp.participated_from" },
   },
@@ -75,10 +94,13 @@ const SYSTEM_SPECS: Record<
 
 function bucketOf(dateText: string | null, bucket: "month" | "year" | "none"): string | null {
   if (bucket === "none") return null;
-  const m = /^(\d{4})[-.]?(\d{2})?/.exec(String(dateText ?? "").trim());
-  if (!m) return null;
-  if (bucket === "year") return m[1];
-  return m[2] ? `${m[1]}-${m[2]}` : null;
+  // 온전한 날짜 형식만 인정 — 연도 조각·자유 텍스트 잔해("2", "25년" 등)는 버킷 없음(null) 처리.
+  const m = /^((?:19|20)\d{2})[-.](0[1-9]|1[0-2])/.exec(String(dateText ?? "").trim());
+  if (!m) {
+    const y = /^((?:19|20)\d{2})$/.exec(String(dateText ?? "").trim());
+    return bucket === "year" && y ? y[1] : null;
+  }
+  return bucket === "year" ? m[1] : `${m[1]}-${m[2]}`;
 }
 
 function toNumber(v: unknown): number | null {
@@ -139,7 +161,6 @@ function refValueOf(
 async function runApprovalDocsAggregate(def: AggregateDefinition, label: string, metricKey: string): Promise<MetricResult> {
   const db = await getDb();
   const status = def.source.status?.length ? def.source.status : ["approved"];
-  const groupBy = def.groupBy?.[0];
   const excluded: Record<string, number> = {};
   const notes: string[] = [];
   const bump = (k: string) => (excluded[k] = (excluded[k] ?? 0) + 1);
@@ -181,15 +202,18 @@ async function runApprovalDocsAggregate(def: AggregateDefinition, label: string,
       continue;
     }
 
-    // 문서 레벨 그룹 키(ref.* — 참조 필드에서)
-    let group: { id: string; label: string } | null = null;
-    if (groupBy?.startsWith("ref.")) {
-      const rf = findRefField(form.fields, groupBy);
+    // 그룹 차원 해석(다중) — ref.* 는 문서 레벨 참조 필드, dim.category 는 문서/표 행 레벨.
+    const refDim = (def.groupBy ?? []).find((g) => g.startsWith("ref."));
+    const wantCat = (def.groupBy ?? []).includes("dim.category");
+
+    let refPart: { id: string; label: string } | null = null;
+    if (refDim) {
+      const rf = findRefField(form.fields, refDim);
       if (!rf) {
         bump("formWithoutRefField");
         continue;
       }
-      const rv = refValueOf(fv, rf, groupBy);
+      const rv = refValueOf(fv, rf, refDim);
       if (rv === "manual") {
         bump("manualRef");
         continue;
@@ -198,7 +222,7 @@ async function runApprovalDocsAggregate(def: AggregateDefinition, label: string,
         bump("noGroupKey");
         continue;
       }
-      group = rv;
+      refPart = rv;
     }
 
     // 문서 레벨 시간(태그된 date/period 필드)
@@ -211,19 +235,39 @@ async function runApprovalDocsAggregate(def: AggregateDefinition, label: string,
         docTime = s || null;
       }
     }
-    // 문서 레벨 dim.category(select 등)
+    // 문서 레벨 dim.category(select 등) — 표 행에 분류 열이 있으면 행 값이 우선
     let docCat: string | null = null;
-    if (groupBy === "dim.category") {
+    if (wantCat) {
       const cp = findConceptPaths(form.fields, "dim.category").find((p) => !p.columnKey);
       if (cp) docCat = String(fv[cp.fieldKey] ?? "").trim() || null;
     }
+
+    /** groupBy 순서대로 참조/분류 파트를 조합. 분류가 필요한데 없으면 null(제외). */
+    const combine = (cat: string | null): { id: string; label: string } | null => {
+      if (wantCat && !cat) return null;
+      const parts = (def.groupBy ?? []).map((g) =>
+        g === "dim.category" ? { id: cat as string, label: cat as string } : refPart
+      );
+      if (!parts.length) return null;
+      return {
+        id: parts.map((p) => p?.id ?? "").join("|"),
+        label: parts.map((p) => p?.label ?? "(없음)").join(" · "),
+      };
+    };
+    const pushRow = (value: number, cat: string | null, time: string | null) => {
+      const g = combine(cat);
+      if ((def.groupBy ?? []).length > 0 && !g) {
+        bump("noGroupKey");
+        return;
+      }
+      flat.push({ value, groupId: g?.id ?? null, groupLabel: g?.label ?? "(전체)", time: bucketOf(time, def.timeBy?.bucket ?? "none") });
+    };
 
     // measure 값 전개 — 필드 레벨 + 표 행 레벨
     const paths = def.measure.concept ? findConceptPaths(form.fields, def.measure.concept) : [{ fieldKey: "__doc__" } as DocPath];
     for (const p of paths) {
       if (p.fieldKey === "__doc__") {
-        // count(문서 수) — 값 1 로 취급
-        flat.push({ value: 1, groupId: group?.id ?? null, groupLabel: group?.label ?? docCat ?? "(전체)", time: bucketOf(docTime, def.timeBy?.bucket ?? "none") });
+        pushRow(1, docCat, docTime); // count(문서 수) — 값 1 로 취급
         continue;
       }
       if (!p.columnKey) {
@@ -232,12 +276,7 @@ async function runApprovalDocsAggregate(def: AggregateDefinition, label: string,
           bump("emptyValue");
           continue;
         }
-        const g = groupBy === "dim.category" ? (docCat ? { id: docCat, label: docCat } : null) : group;
-        if (groupBy === "dim.category" && !g) {
-          bump("noGroupKey");
-          continue;
-        }
-        flat.push({ value: n, groupId: g?.id ?? null, groupLabel: g?.label ?? "(전체)", time: bucketOf(docTime, def.timeBy?.bucket ?? "none") });
+        pushRow(n, docCat, docTime);
         continue;
       }
       // 표 행 전개 — 같은 행에서 분류(dim.category)·시간(when.occurred) 열도 함께 읽는다
@@ -254,17 +293,9 @@ async function runApprovalDocsAggregate(def: AggregateDefinition, label: string,
           bump("emptyValue");
           continue;
         }
-        let g = group;
-        if (groupBy === "dim.category") {
-          const cat = String(row?.[catCol ?? ""] ?? "").trim() || docCat;
-          if (!cat) {
-            bump("noGroupKey");
-            continue;
-          }
-          g = { id: cat, label: cat };
-        }
+        const rowCat = wantCat ? String(row?.[catCol ?? ""] ?? "").trim() || docCat : null;
         const t = timeCol ? String(row?.[timeCol] ?? "") : docTime;
-        flat.push({ value: n, groupId: g?.id ?? null, groupLabel: g?.label ?? "(전체)", time: bucketOf(t, def.timeBy?.bucket ?? "none") });
+        pushRow(n, rowCat, t);
       }
     }
   }
@@ -319,9 +350,12 @@ async function runSystemAggregate(def: AggregateDefinition, label: string, metri
   if (!spec) throw new Error(`등록되지 않은 시스템 소스입니다: ${def.source.type}`);
   const measureExpr = def.measure.field ? spec.measures[def.measure.field] : undefined;
   if (!measureExpr) throw new Error(`소스 ${def.source.type} 에 없는 측정값입니다: ${def.measure.field}`);
-  const groupBy = def.groupBy?.[0];
-  const dim = groupBy ? spec.dims[groupBy] : undefined;
-  if (groupBy && !dim) throw new Error(`소스 ${def.source.type} 에 없는 차원입니다: ${groupBy}`);
+  // 다중 그룹(최대 3) — 세분류 × 금액대 같은 조합 차원. 조합 키는 '|', 표시는 ' · ' 로 잇는다.
+  const dims = (def.groupBy ?? []).map((g) => {
+    const d = spec.dims[g];
+    if (!d) throw new Error(`소스 ${def.source.type} 에 없는 차원입니다: ${g}`);
+    return d;
+  });
   const timeExpr = def.timeBy?.field ? spec.times[def.timeBy.field] : undefined;
   if (def.timeBy?.field && !timeExpr) throw new Error(`소스 ${def.source.type} 에 없는 시간축입니다: ${def.timeBy.field}`);
 
@@ -331,16 +365,26 @@ async function runSystemAggregate(def: AggregateDefinition, label: string, metri
     : agg === "count_distinct" ? `count(DISTINCT ${measureExpr})`
     : `${agg}((${measureExpr})::double precision)`;
   const bucket = def.timeBy?.bucket ?? "none";
-  const timeSql = timeExpr && bucket !== "none" ? `left(regexp_replace(COALESCE(${timeExpr}, ''), '[^0-9-]', '', 'g'), ${bucket === "year" ? 4 : 7})` : null;
+  // 시간 버킷은 YYYY-MM(-DD…) 형식일 때만 인정 — 자유 텍스트 날짜 잔해는 NULL(형식 불량 그룹으로 묶임)
+  const timeSql =
+    timeExpr && bucket !== "none"
+      ? `left(substring(COALESCE(${timeExpr}, '') from '^(19|20)\\d{2}-(0[1-9]|1[0-2])'), ${bucket === "year" ? 4 : 7})`
+      : null;
 
+  const idSql = dims.length
+    ? dims.map((d) => `COALESCE((${d.idExpr})::text, '')`).join(` || '|' || `)
+    : null;
+  const labelSql = dims.length
+    ? `concat_ws(' · ', ${dims.map((d) => `min(COALESCE((${d.labelExpr})::text, '(없음)'))`).join(", ")})`
+    : null;
   const selects = [
-    dim ? `${dim.idExpr} AS group_id, min(${dim.labelExpr}) AS group_label` : `NULL AS group_id, '(전체)' AS group_label`,
+    idSql ? `${idSql} AS group_id, ${labelSql} AS group_label` : `NULL AS group_id, '(전체)' AS group_label`,
     timeSql ? `${timeSql} AS t` : `NULL AS t`,
     `${valueSql} AS value`,
     `count(*) AS used`,
   ];
-  const groups = [dim ? `${dim.idExpr}` : "", timeSql ? timeSql : ""].filter(Boolean);
-  const sql = `SELECT ${selects.join(", ")} FROM ${spec.from} ${groups.length ? `GROUP BY ${groups.join(", ")}` : ""} ORDER BY t NULLS FIRST, value DESC NULLS LAST LIMIT 500`;
+  const groups = [...dims.map((d) => `(${d.idExpr})`), ...(timeSql ? [timeSql] : [])];
+  const sql = `SELECT ${selects.join(", ")} FROM ${spec.from} ${groups.length ? `GROUP BY ${groups.join(", ")}` : ""} ORDER BY t NULLS FIRST, group_label, value DESC NULLS LAST LIMIT 500`;
   const db = await getDb();
   const rows = rowsToObjects(await db.exec(sql));
   const notes: string[] = [];

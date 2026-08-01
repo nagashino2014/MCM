@@ -140,8 +140,8 @@ export function MetricWizard({
   };
 
   const loadEdges = async () => {
-    const groupBy = agg?.groupBy?.[0];
-    if (!groupBy?.startsWith("ref.") || !isDocSource) {
+    const groupBy = agg?.groupBy?.find((g) => g.startsWith("ref."));
+    if (!groupBy || !isDocSource) {
       setEdges([]);
       return;
     }
@@ -395,7 +395,11 @@ export function MetricWizard({
                 className="cd-select mx-1"
                 style={{ width: 150, display: "inline-block" }}
                 value={agg.groupBy?.[0] ?? ""}
-                onChange={(e) => patchAgg({ groupBy: e.target.value ? [e.target.value] : undefined })}
+                onChange={(e) => {
+                  const first = e.target.value;
+                  const second = agg.groupBy?.[1];
+                  patchAgg({ groupBy: first ? (second && second !== first ? [first, second] : [first]) : undefined });
+                }}
               >
                 <option value="">전체(그룹 없음)</option>
                 {(isDocSource
@@ -407,6 +411,29 @@ export function MetricWizard({
                   </option>
                 ))}
               </select>
+              {agg.groupBy?.[0] && (
+                <>
+                  {" "}×{" "}
+                  <select
+                    className="cd-select mx-1"
+                    style={{ width: 150, display: "inline-block" }}
+                    value={agg.groupBy?.[1] ?? ""}
+                    onChange={(e) => patchAgg({ groupBy: e.target.value ? [agg.groupBy![0], e.target.value] : [agg.groupBy![0]] })}
+                  >
+                    <option value="">2차 그룹 없음</option>
+                    {(isDocSource
+                      ? agg.groupBy[0].startsWith("ref.")
+                        ? ["dim.category"]
+                        : ["ref.contract", "ref.company", "ref.employee"]
+                      : (sysSpec?.dims ?? []).map((d) => d.key).filter((k) => k !== agg.groupBy![0])
+                    ).map((k) => (
+                      <option key={k} value={k}>
+                        {DIMENSION_LABEL[k] ?? k}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
               별,{" "}
               <select
                 className="cd-select mx-1"
@@ -425,7 +452,7 @@ export function MetricWizard({
               </select>
               으로 집계합니다.
             </div>
-            {agg.groupBy?.[0] === "ref.employee" && (
+            {agg.groupBy?.includes("ref.employee") && (
               <p className="text-[11px] cd-text-faint rounded-lg border border-dashed cd-border-c p-2.5">
                 인원별 지표는 인사 민감 정보입니다 — 공개 범위 기본값이 &quot;관리자만&quot;으로 저장됩니다.
               </p>
@@ -436,7 +463,7 @@ export function MetricWizard({
         {/* ── STEP 3: 연결 확인 ── */}
         {step === 3 && agg && (
           <div className="flex flex-col gap-3">
-            {!agg.groupBy?.[0]?.startsWith("ref.") || !isDocSource ? (
+            {!agg.groupBy?.some((g) => g.startsWith("ref.")) || !isDocSource ? (
               <p className="text-[12.5px] cd-text-faint rounded-2xl border cd-border-c p-4">
                 {isDocSource ? "분류·전체 집계는 별도 연결이 필요 없습니다." : "시스템 소스는 마스터 데이터라 연결 확인이 필요 없습니다."} 다음으로 진행하세요.
               </p>
@@ -445,7 +472,7 @@ export function MetricWizard({
             ) : (
               <>
                 <p className="text-[12px] cd-text-faint">
-                  문서가 {DIMENSION_LABEL[agg.groupBy[0]]}에 얼마나 연결되어 있는지입니다. 미연결·직접 입력 문서는 집계에서 제외되고, 제외 건수는 결과의 산출 근거에 표시됩니다.
+                  문서가 {DIMENSION_LABEL[agg.groupBy?.find((g) => g.startsWith("ref.")) ?? ""] ?? "참조 대상"}에 얼마나 연결되어 있는지입니다. 미연결·직접 입력 문서는 집계에서 제외되고, 제외 건수는 결과의 산출 근거에 표시됩니다.
                 </p>
                 {edges.length === 0 && <p className="text-[12px] cd-text-faint">아직 제출 문서가 없거나 해당 참조 필드를 가진 양식이 없습니다.</p>}
                 {edges.map((e, i) => {

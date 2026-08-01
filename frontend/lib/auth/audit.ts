@@ -80,6 +80,7 @@ export type AuditAction =
   | "approval_ai_summary"
   | "approval_policy_update"
   | "approval_semantic_update"
+  | "approval_metric_update"
   | "approval_precheck_llm"
   | "mail_send"
   | "auth_find_id"

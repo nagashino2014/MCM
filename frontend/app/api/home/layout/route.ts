@@ -24,6 +24,7 @@ export async function PUT(req: Request) {
     const body = await req.json().catch(() => ({}));
     await saveHomeSettings(ctx.userId, {
       layout: body.layout,
+      presets: body.presets,
       calendarRefs: body.calendarRefs,
       calendarTags: body.calendarTags,
     });

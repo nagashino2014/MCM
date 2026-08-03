@@ -32,24 +32,44 @@ interface DragState {
   colW: number;
 }
 
-/** 저장된 배치가 없는 카드는 순서대로 흘려 자동 배치한다. */
+function collides(a: HomeLayoutItem, b: HomeLayoutItem): boolean {
+  return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+}
+
+/** 이미 놓인 카드들과 겹치지 않는 첫 빈 자리(위→아래, 좌→우 스캔). */
+function firstFreeSlot(placed: HomeLayoutItem[], w: number, h: number): { x: number; y: number } {
+  for (let y = 0; ; y++) {
+    for (let x = 0; x + w <= COLS; x++) {
+      const cand = { x, y, w, h };
+      if (!placed.some((p) => collides(cand, p))) return { x, y };
+    }
+  }
+}
+
+/**
+ * 저장된 배치가 없는 카드는 빈 자리를 찾아 자동 배치한다(first-fit).
+ * ⚠ 단순 흘림(커서 진행)으로 하면 저장된 카드의 자리를 보지 않아, 카탈로그에 새 위젯이
+ * 추가될 때(예: 데이터 지표) 기존 배치 위에 그대로 겹쳤다 — 높이 2짜리 카드의 세로 겹침 포함.
+ */
 function withDefaults(entries: HomeGridEntry[], layout: HomeLayout): Record<string, HomeLayoutItem> {
   const items: Record<string, HomeLayoutItem> = {};
-  let x = 0;
-  let y = 0;
+  const placed: HomeLayoutItem[] = [];
+  // 저장된 카드를 먼저 전부 등록해 점유 영역을 확정한다.
   for (const e of entries) {
     const saved = layout.items[e.key];
     if (saved) {
       items[e.key] = saved;
-      continue;
+      placed.push(saved);
     }
+  }
+  for (const e of entries) {
+    if (items[e.key]) continue;
     const w = Math.min(COLS, e.defaultW);
-    if (x + w > COLS) {
-      x = 0;
-      y += 1;
-    }
-    items[e.key] = { x, y, w, h: e.defaultH };
-    x += w;
+    const h = e.defaultH;
+    const pos = firstFreeSlot(placed, w, h);
+    const item = { ...pos, w, h };
+    items[e.key] = item;
+    placed.push(item);
   }
   return items;
 }

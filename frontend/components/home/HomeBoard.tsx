@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, LayoutGrid, RotateCcw } from "lucide-react";
+import { Check, Download, LayoutGrid, RotateCcw, Save } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { HomeStats } from "./HomeStats";
 import { HomeEditGrid, type HomeGridEntry } from "./HomeEditGrid";
 import { HOME_WIDGETS, EMPTY_HOME_LAYOUT, HOME_HALF_H, HOME_COLS, type HomeLayout, type HomeLayoutItem } from "@/lib/home/widgets";
+import type { HomePresets } from "@/lib/home/layout";
 import "@/components/cdash/cdash.css";
 
 import { ApprovalPendingCard } from "./widgets/ApprovalPendingCard";
@@ -43,6 +44,7 @@ export function HomeBoard({ role }: { role?: string }) {
   const { theme } = useCdashTheme();
   const [editing, setEditing] = useState(false);
   const [layout, setLayout] = useState<HomeLayout>(EMPTY_HOME_LAYOUT);
+  const [presets, setPresets] = useState<HomePresets>({});
   const [available, setAvailable] = useState<Array<{ key: string; label: string }>>([]);
   const [loaded, setLoaded] = useState(false);
 
@@ -52,7 +54,9 @@ export function HomeBoard({ role }: { role?: string }) {
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (!d || !alive) return;
-        if (d.layout) setLayout({ hidden: d.layout.hidden ?? [], items: d.layout.items ?? {} });
+        // widgetConfig(metrics 선택 지표)까지 그대로 실어야 새로고침 후에도 유지된다.
+        if (d.layout) setLayout({ ...d.layout, hidden: d.layout.hidden ?? [], items: d.layout.items ?? {} });
+        if (d.presets) setPresets(d.presets);
         if (Array.isArray(d.available)) setAvailable(d.available);
       })
       .finally(() => {
@@ -82,6 +86,27 @@ export function HomeBoard({ role }: { role?: string }) {
   };
 
   const resetLayout = () => persist({ hidden: [], items: {} });
+
+  /** 현재 배치(표시 카드+위치·크기)를 프리셋 슬롯에 저장한다. widgetConfig 는 전역이라 제외. */
+  const savePreset = (slot: "1" | "2" | "3") => {
+    const snapshot: HomeLayout = { hidden: layout.hidden, items: layout.items };
+    const next = { ...presets, [slot]: snapshot };
+    setPresets(next);
+    fetch("/api/home/layout", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ presets: next }),
+    }).catch(() => {
+      /* 저장 실패가 화면 조작을 막지 않는다 */
+    });
+  };
+
+  /** 프리셋 슬롯을 현재 배치로 적용한다(metrics 지표 선택 등 widgetConfig 는 유지). */
+  const applyPreset = (slot: "1" | "2" | "3") => {
+    const preset = presets[slot];
+    if (!preset) return;
+    persist({ ...layout, hidden: preset.hidden, items: preset.items });
+  };
 
   // 배치 대상 카드 — 권한(available)과 숨김(hidden)을 모두 통과한 것만.
   const entries = useMemo<HomeGridEntry[]>(() => {
@@ -132,16 +157,34 @@ export function HomeBoard({ role }: { role?: string }) {
         title="홈"
         meta={todayLabel()}
         actions={
-          <button
-            type="button"
-            onClick={() => setEditing((v) => !v)}
-            data-active={editing || undefined}
-            className="cd-chip"
-            title="카드 표시 여부와 위치·크기를 조정합니다"
-          >
-            {editing ? <Check className="w-3.5 h-3.5" /> : <LayoutGrid className="w-3.5 h-3.5" />}
-            {editing ? "편집 완료" : "홈 화면 편집"}
-          </button>
+          <div className="flex items-center gap-1.5">
+            {/* 저장된 배치 프리셋 빠른 전환 — 편집 모드에 들어가지 않고 바로 갈아입는다. */}
+            {(["1", "2", "3"] as const).map(
+              (slot) =>
+                presets[slot] && (
+                  <button
+                    key={slot}
+                    type="button"
+                    onClick={() => applyPreset(slot)}
+                    className="cd-chip cd-chip-sm"
+                    title={`배치 프리셋 ${slot} 적용`}
+                  >
+                    <LayoutGrid className="w-3 h-3" />
+                    {slot}
+                  </button>
+                )
+            )}
+            <button
+              type="button"
+              onClick={() => setEditing((v) => !v)}
+              data-active={editing || undefined}
+              className="cd-chip"
+              title="카드 표시 여부와 위치·크기를 조정합니다"
+            >
+              {editing ? <Check className="w-3.5 h-3.5" /> : <LayoutGrid className="w-3.5 h-3.5" />}
+              {editing ? "편집 완료" : "홈 화면 편집"}
+            </button>
+          </div>
         }
       />
 
@@ -175,6 +218,38 @@ export function HomeBoard({ role }: { role?: string }) {
                 {w.label}
               </button>
             ))}
+          </div>
+
+          {/* 배치 프리셋 3슬롯 — 현재 배치를 저장해 두고 헤더 칩으로 바로 전환한다(126). */}
+          <div className="flex items-center gap-2 flex-wrap pt-1 border-t cd-hairline-c">
+            <h2 className="text-sm font-extrabold cd-text">배치 프리셋</h2>
+            <span className="text-[11.5px] cd-text-faint">저장한 슬롯은 홈 상단에 전환 버튼으로 나타납니다.</span>
+            <div className="flex items-center gap-1.5 ml-auto">
+              {(["1", "2", "3"] as const).map((slot) => (
+                <span key={slot} className="flex items-center gap-1 rounded-lg border cd-line-c px-1.5 py-1">
+                  <span className="text-[11.5px] font-extrabold cd-text px-0.5">{slot}</span>
+                  <button
+                    type="button"
+                    onClick={() => applyPreset(slot)}
+                    disabled={!presets[slot]}
+                    className="cd-chip cd-chip-sm disabled:opacity-40"
+                    title={presets[slot] ? `프리셋 ${slot} 불러오기` : "저장된 배치가 없습니다"}
+                  >
+                    <Download className="w-3 h-3" />
+                    불러오기
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => savePreset(slot)}
+                    className="cd-chip cd-chip-sm"
+                    title={`현재 배치를 프리셋 ${slot}에 저장`}
+                  >
+                    <Save className="w-3 h-3" />
+                    저장
+                  </button>
+                </span>
+              ))}
+            </div>
           </div>
         </section>
       )}

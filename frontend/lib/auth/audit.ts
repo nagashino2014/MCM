@@ -67,6 +67,8 @@ export type AuditAction =
   | "approval_form_update"
   | "approval_doc_submit"
   | "approval_doc_act"
+  | "approval_doc_cancel"
+  | "approval_cancel_request"
   | "approval_leave_update"
   | "approval_leave_notice_template"
   | "approval_leave_notice_send"

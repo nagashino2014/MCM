@@ -3,6 +3,7 @@ import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
 import { parseFields, type ApprovalFieldDef } from "@/lib/approval/fields";
 import { getForm } from "@/lib/approval/forms";
 import { recordLeaveUsageOnApproval } from "@/lib/approval/leave";
+import { resolveOpenCancelRequests } from "@/lib/approval/cancel";
 import { notifyPendingSteps, notifyDrafterResult } from "@/lib/approval/notify";
 import { generateDocSummary } from "@/lib/approval/summarize";
 
@@ -426,6 +427,8 @@ export async function actOnDoc(params: {
         params.docId,
         now,
       ]);
+      // 기안자의 반려 요청(취소 요청, 124)이 걸려 있었다면 이 반려로 처리 완료된 것 — 자동 마감.
+      await resolveOpenCancelRequests(txn, params.docId, "rejected", params.actorUserId);
       docStatus = "rejected";
       return;
     }

@@ -11,15 +11,25 @@ import { sendNotifyEmail, type ChannelSendResult } from "@/lib/notify/email-ses"
 import { sendAlimtalk } from "@/lib/notify/kakao-solapi";
 import { sendPush, type PushEventKey } from "@/lib/notify/push-expo";
 
-export type ApprovalNotifyEvent = "step_pending" | "delegated" | "approved" | "rejected" | "remind";
+export type ApprovalNotifyEvent =
+  | "step_pending"
+  | "delegated"
+  | "approved"
+  | "rejected"
+  | "remind"
+  | "cancel_requested"
+  | "canceled";
 
-/** 결재 이벤트 → 모바일 푸시 이벤트 키(앱 알림 설정에서 사용자가 켜고 끄는 단위). */
+/** 결재 이벤트 → 모바일 푸시 이벤트 키(앱 알림 설정에서 사용자가 켜고 끄는 단위).
+ *  cancel_requested/canceled 는 기존 키를 재사용한다 — 모바일 알림 설정 화면 무변경. */
 const PUSH_EVENT_BY_APPROVAL: Record<ApprovalNotifyEvent, PushEventKey> = {
   step_pending: "approval.step_pending",
   delegated: "approval.delegated",
   approved: "approval.result",
   rejected: "approval.result",
   remind: "approval.remind",
+  cancel_requested: "approval.step_pending",
+  canceled: "approval.result",
 };
 
 interface NotifySettingRow {
@@ -358,6 +368,75 @@ export async function dispatchDueReminders(now = new Date()): Promise<RemindResu
     reminded++;
   }
   return { reminded };
+}
+
+/**
+ * 반려 요청(취소 요청) 알림 — 기안자가 휴가/출장/교육 문서의 취소·변경을 요청했을 때.
+ *   in_progress → 현재 pending 결재자들(기존 반려 기능으로 처리 유도)
+ *   approved   → 관리자(role='admin' 활성 계정 — tpl-system-admin 부여 대상과 동일 모집단)
+ * dedup: cancel_requested:{requestId}:{userId} — 요청 1건당 수신자별 1회.
+ */
+export async function notifyCancelRequested(params: {
+  docId: string;
+  requestId: string;
+  reason: string;
+  docStatus: "in_progress" | "approved";
+}): Promise<void> {
+  try {
+    const doc = await loadDocHeader(params.docId);
+    if (!doc) return;
+    const db = await getDb();
+    let userIds: string[] = [];
+    if (params.docStatus === "in_progress") {
+      const rows = rowsToObjects(
+        await db.exec(`SELECT assignee_user_id FROM approval_steps WHERE doc_id = $1 AND status = 'pending'`, [params.docId])
+      );
+      userIds = rows.map((r) => String(r.assignee_user_id));
+    } else {
+      const rows = rowsToObjects(await db.exec(`SELECT user_id FROM users WHERE role = 'admin' AND status = 'active'`));
+      userIds = rows.map((r) => String(r.user_id));
+    }
+    if (!userIds.length) return;
+    const contacts = await resolveContacts(userIds);
+    const action = params.docStatus === "in_progress" ? "반려 처리해 주시기 바랍니다." : "결재 취소 처리해 주시기 바랍니다.";
+    for (const userId of userIds) {
+      await deliver({
+        event: "cancel_requested",
+        docId: params.docId,
+        stepId: null,
+        dedupKey: `cancel_requested:${params.requestId}:${userId}`,
+        userId,
+        contact: contacts.get(userId),
+        subject: `[전자결재] 반려 요청: ${doc.title}`,
+        text: `기안자가 문서의 반려(취소)를 요청했습니다. 내용 확인 후 ${action}\n\n제목: ${doc.title}\n요청 사유: ${params.reason}${commonFooter(doc)}`,
+        pushBody: doc.title,
+      });
+    }
+  } catch (err) {
+    console.error("[approval-notify] notifyCancelRequested 실패", params.docId, err);
+  }
+}
+
+/** 결재 취소(canceled) 완료를 기안자에게 알림. dedup: canceled:{docId}:{requestId}. */
+export async function notifyDocCanceled(docId: string, requestId: string): Promise<void> {
+  try {
+    const doc = await loadDocHeader(docId);
+    if (!doc || !doc.drafterUserId) return;
+    const contacts = await resolveContacts([doc.drafterUserId]);
+    await deliver({
+      event: "canceled",
+      docId,
+      stepId: null,
+      dedupKey: `canceled:${docId}:${requestId}`,
+      userId: doc.drafterUserId,
+      contact: contacts.get(doc.drafterUserId),
+      subject: `[전자결재] 결재 취소 완료: ${doc.title}`,
+      text: `요청하신 문서의 결재가 취소되었습니다. 휴가 문서는 연차 대장 사용분도 함께 회수되었습니다.\n\n제목: ${doc.title}${commonFooter(doc)}`,
+      pushBody: doc.title,
+    });
+  } catch (err) {
+    console.error("[approval-notify] notifyDocCanceled 실패", docId, err);
+  }
 }
 
 /** 최종 승인/반려를 기안자에게 알림. rejected 는 반려 사유를 포함한다. */

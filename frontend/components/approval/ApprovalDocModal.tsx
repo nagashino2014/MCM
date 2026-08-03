@@ -39,6 +39,10 @@ export interface DocDetailData {
   steps: DocStepRow[];
   myStepId?: string | null;
   aiSummary?: { lines: string[]; figures: { label: string; value: string }[]; precedent?: string | null } | null;
+  /** 반려 요청(취소 요청, 124) — 미처리 요청·버튼 노출 판정(서버 계산). */
+  cancelRequest?: { requestId: string; reason: string; requestedByName: string | null; requestedAt: string } | null;
+  canRequestCancel?: boolean;
+  canCancel?: boolean;
 }
 
 export const DOC_STATUS_LABEL: Record<string, string> = {
@@ -74,6 +78,9 @@ export function ApprovalDocViewer({
   const [error, setError] = useState<string | null>(null);
   const [comment, setComment] = useState("");
   const [acting, setActing] = useState(false);
+  // 반려 요청(기안자) — 버튼을 누르면 사유 입력 폼이 펼쳐진다.
+  const [cancelReasonOpen, setCancelReasonOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -110,6 +117,52 @@ export function ApprovalDocViewer({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "결재 처리 실패");
+      onActed?.();
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setActing(false);
+    }
+  };
+
+  // 반려 요청(기안자) — 진행중이면 결재자, 승인완료면 관리자에게 알림이 간다.
+  const requestCancel = async () => {
+    if (!detail) return;
+    if (!cancelReason.trim()) {
+      alert("반려 요청 사유를 입력하세요.");
+      return;
+    }
+    setActing(true);
+    try {
+      const res = await fetch(`/api/approval/docs/${encodeURIComponent(detail.docId)}/cancel-request`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: cancelReason }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "반려 요청 실패");
+      alert(
+        data.docStatus === "approved"
+          ? "반려 요청을 등록했습니다. 관리자가 결재 취소를 처리하면 알림으로 안내됩니다."
+          : "반려 요청을 등록했습니다. 결재자에게 반려 요청 알림이 전송되었습니다."
+      );
+      onActed?.();
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setActing(false);
+    }
+  };
+
+  // 결재 취소(관리자) — 승인 완료 문서를 취소하고 휴가면 연차 대장을 회수한다.
+  const cancelDoc = async () => {
+    if (!detail) return;
+    if (!confirm("승인 완료된 결재를 취소합니다. 휴가 문서는 연차 대장 사용분도 회수됩니다. 계속할까요?")) return;
+    setActing(true);
+    try {
+      const res = await fetch(`/api/approval/docs/${encodeURIComponent(detail.docId)}/cancel`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "결재 취소 실패");
       onActed?.();
     } catch (err) {
       alert((err as Error).message);
@@ -292,6 +345,69 @@ export function ApprovalDocViewer({
                   <CheckCircle2 className="w-4 h-4" />
                   승인
                 </button>
+              </div>
+            )}
+
+            {/* 반려 요청(취소 요청, 124) — 일정 메뉴의 휴가/출장/교육 취소·변경 흐름 */}
+            {detail.cancelRequest && (
+              <div className="rounded-xl border cd-border-c p-3 flex flex-col gap-1" style={{ borderColor: "var(--cd-warning)" }}>
+                <span className="text-[11px] font-bold" style={{ color: "var(--cd-warning)" }}>
+                  반려 요청 처리 대기
+                </span>
+                <p className="text-[12px] cd-text">
+                  <span className="font-semibold">{detail.cancelRequest.requestedByName ?? "기안자"}</span>
+                  <span className="cd-text-faint"> · {short(detail.cancelRequest.requestedAt)}</span> — {detail.cancelRequest.reason}
+                </p>
+                {detail.status === "in_progress" && (
+                  <p className="text-[11px] cd-text-faint">결재자는 위 처리 바에서 반려로 처리해 주세요.</p>
+                )}
+                {detail.canCancel && (
+                  <button
+                    type="button"
+                    className="cd-btn cd-btn-danger px-[18px] py-2 text-[12.5px] self-start disabled:opacity-50"
+                    disabled={acting}
+                    onClick={cancelDoc}
+                  >
+                    결재 취소(연차 대장 회수 포함)
+                  </button>
+                )}
+              </div>
+            )}
+            {detail.canRequestCancel && (
+              <div className="flex flex-col gap-2 pt-1">
+                {cancelReasonOpen ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      className="cd-input flex-1"
+                      placeholder="반려 요청 사유(취소·변경 사유를 입력하세요)"
+                      value={cancelReason}
+                      onChange={(e) => setCancelReason(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="cd-btn cd-btn-danger px-[18px] py-2.5 text-[13px] disabled:opacity-50"
+                      disabled={acting}
+                      onClick={requestCancel}
+                    >
+                      반려 요청 보내기
+                    </button>
+                    <button
+                      type="button"
+                      className="cd-btn cd-btn-soft px-3 py-2.5 text-[13px]"
+                      onClick={() => setCancelReasonOpen(false)}
+                    >
+                      닫기
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-[12.5px] self-start cd-text-muted hover:cd-error-text"
+                    onClick={() => setCancelReasonOpen(true)}
+                  >
+                    반려 요청 — {detail.status === "approved" ? "승인 건 취소를 관리자에게 요청" : "결재자에게 반려를 요청"}
+                  </button>
+                )}
               </div>
             )}
           </>

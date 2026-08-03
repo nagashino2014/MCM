@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { hasPermission } from "@/lib/auth/rbac";
 import { getDoc, getUserDeptId, markWatcherRead } from "@/lib/approval/docs";
+import { CANCELABLE_FORM_IDS, getOpenCancelRequest } from "@/lib/approval/cancel";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,7 +31,16 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ doc
     }
     if (isWatcher) await markWatcherRead(docId, ctx.userId);
     const myStep = doc.steps.find((s) => s.assigneeUserId === ctx.userId && s.status === "pending");
-    return NextResponse.json({ doc: { ...doc, myStepId: myStep?.stepId ?? null } });
+    // 반려 요청(취소 요청, 124) — 배지 표시·버튼 노출 판정용.
+    const cancelRequest = await getOpenCancelRequest(docId);
+    const cancelable = (CANCELABLE_FORM_IDS as readonly string[]).includes(doc.formId);
+    const canRequestCancel =
+      cancelable && doc.drafterUserId === ctx.userId && ["in_progress", "approved"].includes(doc.status) && !cancelRequest;
+    const canCancel =
+      doc.status === "approved" && cancelRequest != null && (await hasPermission(ctx.userId, "approval.manage"));
+    return NextResponse.json({
+      doc: { ...doc, myStepId: myStep?.stepId ?? null, cancelRequest, canRequestCancel, canCancel },
+    });
   } catch (err) {
     return authErrorToResponse(err);
   }

@@ -14,6 +14,7 @@ import {
   Calendar,
   CalendarCheck2,
   CalendarRange,
+  CarFront,
   CheckSquare,
   ClipboardCheck,
   CircleDot,
@@ -85,6 +86,7 @@ const FIELD_TYPE_LABEL: Record<ApprovalFieldType, string> = {
   company_select: "업체 검색",
   contract_select: "계약 검색",
   leave_type: "휴가 종류",
+  asset_select: "예약 자산",
   table: "표(반복 행)",
   static: "안내문",
 };
@@ -105,6 +107,7 @@ const PALETTE: { type: ApprovalFieldType; icon: LucideIcon }[] = [
   { type: "company_select", icon: Building2 },
   { type: "contract_select", icon: FileSignature },
   { type: "leave_type", icon: CalendarCheck2 },
+  { type: "asset_select", icon: CarFront },
   { type: "table", icon: Table2 },
   { type: "static", icon: Info },
 ];
@@ -767,6 +770,23 @@ function FieldProps({
         <p className="text-[11px] cd-text-faint rounded-lg border border-dashed cd-border-c p-2.5">
           휴가 종류·부여일수는 사규 경조 규정 카탈로그에서 자동 제공됩니다(옵션 편집 불필요). 선택 시 부여 휴가일수가 표시되고, 연차·반차만 연차 대장에서 차감됩니다.
         </p>
+      )}
+      {f.type === "asset_select" && (
+        <label className="text-[11px] cd-text-faint flex flex-col gap-1">
+          자산 종류
+          <select
+            className="cd-select"
+            style={{ width: "100%" }}
+            value={f.assetKind ?? ""}
+            onChange={(e) => onChange({ assetKind: e.target.value || undefined })}
+          >
+            <option value="">전체</option>
+            <option value="vehicle">법인차량</option>
+            <option value="room">회의실</option>
+            <option value="etc">기타</option>
+          </select>
+          <span className="text-[10.5px]">선택지는 자산 관리 화면(/assets)의 활성 자산에서 자동 제공됩니다(옵션 편집 불필요).</span>
+        </label>
       )}
       {f.type === "table" && <TableColumnsEditor field={f} onChange={onChange} concepts={concepts} />}
       <SemanticEditor field={f} onChange={onChange} concepts={concepts} />

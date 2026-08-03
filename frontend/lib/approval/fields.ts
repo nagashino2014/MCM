@@ -20,6 +20,7 @@ export const APPROVAL_FIELD_TYPES = [
   "company_select",
   "contract_select",
   "leave_type",
+  "asset_select",
   "table",
   "static",
 ] as const;
@@ -110,6 +111,8 @@ export interface ApprovalFieldDef {
   multiple?: boolean;
   /** company_select/contract_select 전용 — 선택 시 다른 필드 자동 채움 규칙 */
   fillMap?: ApprovalFillRule[];
+  /** asset_select 전용 — 선택지로 보여줄 자산 종류(reservable_assets.kind). 미지정 시 전체 */
+  assetKind?: string;
   /** 데이터 의미 태그 — fillMap(입력 편의)과 별개로 분석 집계의 근거가 된다 */
   semantic?: ApprovalFieldSemantic;
 }
@@ -156,6 +159,7 @@ export function parseFields(value: unknown): ApprovalFieldDef[] {
         minRows: f.minRows != null ? Number(f.minRows) : undefined,
         sumColumn: f.sumColumn != null ? String(f.sumColumn) : undefined,
         multiple: f.multiple === true,
+        assetKind: f.assetKind != null ? String(f.assetKind) : undefined,
         fillMap: Array.isArray(f.fillMap)
           ? (f.fillMap as Record<string, unknown>[])
               .filter((r) => r && typeof r === "object")

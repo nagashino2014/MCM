@@ -228,6 +228,8 @@ function FieldInput({
       return <ContractSelectInput field={f} value={value} onSet={onSet} onFill={onFill} readOnly={dis} />;
     case "leave_type":
       return <LeaveTypeInput value={value} onSet={onSet} readOnly={dis} />;
+    case "asset_select":
+      return <AssetSelectInput field={f} value={value} onSet={onSet} readOnly={dis} />;
     case "table":
       return <TableInput field={f} value={value} onSet={onSet} readOnly={dis} />;
     default:
@@ -595,6 +597,83 @@ function LeaveTypeInput({ value, onSet, readOnly }: { value: unknown; onSet: (v:
         </span>
       )}
     </div>
+  );
+}
+
+/**
+ * 예약 자산 선택 입력 — 자산 마스터(reservable_assets)에서 활성 자산을 로드해 선택한다.
+ * 옵션을 양식에 하드코딩하지 않으므로 자산 관리 화면의 등록·비활성이 즉시 반영된다.
+ * 저장 값: { assetId, name } — 구버전 문자열 값(옵션 하드코딩 시절)은 이름으로 폴백 표시.
+ */
+interface AssetValue {
+  assetId?: string;
+  name?: string;
+}
+
+function AssetSelectInput({
+  field: f,
+  value,
+  onSet,
+  readOnly,
+}: {
+  field: ApprovalFieldDef;
+  value: unknown;
+  onSet: (v: unknown) => void;
+  readOnly?: boolean;
+}) {
+  const v: AssetValue = value && typeof value === "object" ? (value as AssetValue) : { name: String(value ?? "") };
+  const [assets, setAssets] = useState<Array<{ assetId: string; name: string }>>([]);
+  useEffect(() => {
+    let cancelled = false;
+    const params = new URLSearchParams({ activeOnly: "1" });
+    if (f.assetKind) params.set("kind", f.assetKind);
+    fetch(`/api/assets?${params.toString()}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled && Array.isArray(d?.assets)) {
+          setAssets(d.assets.map((a: { assetId: string; name: string }) => ({ assetId: a.assetId, name: a.name })));
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [f.assetKind]);
+
+  // 레거시 문자열 값·비활성 자산 값은 목록에 없어도 표시가 유지되어야 한다(기존 문서 열람).
+  const currentId = v.assetId ?? (v.name ? `name:${v.name}` : "");
+  const hasCurrent = v.assetId
+    ? assets.some((a) => a.assetId === v.assetId)
+    : false;
+
+  return (
+    <select
+      className="cd-select"
+      style={{ width: "100%" }}
+      disabled={readOnly}
+      value={currentId}
+      onChange={(e) => {
+        const id = e.target.value;
+        if (!id) {
+          onSet(null);
+          return;
+        }
+        const a = assets.find((x) => x.assetId === id);
+        onSet(a ? { assetId: a.assetId, name: a.name } : null);
+      }}
+    >
+      <option value="">선택</option>
+      {!hasCurrent && currentId && (
+        <option value={currentId} disabled>
+          {v.name ?? v.assetId}
+        </option>
+      )}
+      {assets.map((a) => (
+        <option key={a.assetId} value={a.assetId}>
+          {a.name}
+        </option>
+      ))}
+    </select>
   );
 }
 

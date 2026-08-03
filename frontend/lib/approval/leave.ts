@@ -12,7 +12,7 @@ import { computeAccrual, type AccrualBasis } from "@/lib/approval/leave-accrual"
  * 잔여 = Σ(grant+adjust) − Σ(use where 차감). 규정 발생연차는 computeAccrual 참고 표시.
  */
 
-const LEAVE_FORM_ID = "frm-leave-request";
+export const LEAVE_FORM_ID = "frm-leave-request";
 const id = () => "alv-" + crypto.randomUUID().replace(/-/g, "").slice(0, 14);
 
 export interface LeaveEntry {

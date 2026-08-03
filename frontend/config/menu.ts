@@ -15,6 +15,7 @@ import {
   Megaphone,
   CalendarDays,
   CalendarClock,
+  CarFront,
   SlidersHorizontal,
   type LucideIcon,
 } from "lucide-react";
@@ -88,7 +89,16 @@ export const MENU_ITEMS: MenuItem[] = [
     title: "일정",
     href: "/calendar",
     icon: CalendarDays,
-    comingSoon: true, // G6-C 추후 구현
+    group: "collab",
+  },
+  {
+    title: "자산 예약",
+    href: "/assets/reservations",
+    icon: CarFront,
+    submenu: [
+      { title: "이용 현황", href: "/assets/reservations" },
+      { title: "자산 관리", href: "/assets" },
+    ],
     group: "collab",
   },
   // ── 업무 ──────────────────────────────────────────

@@ -1,30 +1,32 @@
-// 홈 캘린더 일정(HC-A) — 휴가(annual_leave_ledger) 기반 월 단위 조회.
-// ?month=YYYY-MM&scopes=self,dept,refs  (refs 는 home_layouts.calendar_refs 를 사용)
-// 영업 일정은 기존 /api/sales/schedule 을 그대로 쓰고, 여기서는 인적 일정만 담당한다.
-// 차량(법인차량 예약)은 출장 신청서 구현 전까지 데이터원이 없어 항상 빈 배열이다.
+// 홈 캘린더 일정(HC-A) — 휴가(annual_leave_ledger) + 차량(자산 이용 현황) 월 단위 조회.
+// ?month=YYYY-MM&scopes=self,dept,refs,vehicle  (refs 는 home_layouts.calendar_refs 를 사용)
+// 영업 일정은 기존 /api/sales/schedule 을 그대로 쓰고, 여기서는 인적·차량 일정을 담당한다.
+// 차량(scope=vehicle)은 출장신청서 상신 건의 법인차량 + 직접 예약(lib/assets/usage)에서 온다(G6-C).
+// 통합 일정 화면(/calendar)은 별도 API(/api/calendar)를 쓴다 — 이 라우트는 홈 위젯·모바일 전용.
 
 import { NextResponse } from "next/server";
 import { authErrorToResponse, requireSession } from "@/lib/auth/guards";
 import { getDb, rowsToObjects } from "@/lib/db";
 import { loadHomeSettings } from "@/lib/home/layout";
+import { listAssetUsage } from "@/lib/assets/usage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export interface HomeCalendarEntry {
   entryId: string;
-  /** self=본인 / dept=부서원 / refs=참조 지정 인원 */
-  scope: "self" | "dept" | "refs";
+  /** self=본인 / dept=부서원 / refs=참조 지정 인원 / vehicle=법인차량 */
+  scope: "self" | "dept" | "refs" | "vehicle";
   employeeId: string;
   name: string;
   positionName: string | null;
   deptName: string | null;
   /** YYYY-MM-DD */
   date: string;
-  /** 휴가 종류 표시명(없으면 '연차') — 상세 팝업에 쓴다. 격자 태그는 '휴가'로 통일. */
+  /** 휴가 종류 표시명(없으면 '연차') / 차량은 이용 내역(목적지·시간) — 상세 팝업에 쓴다. */
   label: string;
-  /** 격자 태그의 2자 종류명 — 현재는 휴가뿐이고, 출장 도입 시 '출장'이 추가된다. */
-  kind: "휴가";
+  /** 격자 태그의 2자 종류명. */
+  kind: "휴가" | "차량";
   days: number;
 }
 
@@ -68,7 +70,37 @@ export async function GET(req: Request) {
       for (const id of calendarRefs) if (!targets.has(id)) targets.set(id, "refs");
     }
 
-    if (targets.size === 0) return NextResponse.json({ entries: [] });
+    // 차량 — 자산 이용 현황(출장 유래 + 직접 예약) 중 법인차량. 기간을 일자별로 전개한다
+    // (위젯·모바일 캘린더가 단일 date 구조라 복수일 출장은 날짜마다 1건씩 놓는다).
+    const vehicleEntries: HomeCalendarEntry[] = [];
+    if (scopes.has("vehicle")) {
+      const usage = (await listAssetUsage(month)).filter((u) => u.assetKind === "vehicle");
+      for (const u of usage) {
+        const from = u.startDate < `${month}-01` ? `${month}-01` : u.startDate;
+        const days =
+          Math.round((new Date(u.endDate).getTime() - new Date(u.startDate).getTime()) / 86400000) + 1;
+        const cursor = new Date(from);
+        while (true) {
+          const date = cursor.toISOString().slice(0, 10);
+          if (date > u.endDate || date.slice(0, 7) !== month) break;
+          vehicleEntries.push({
+            entryId: `${u.id}:${date}`,
+            scope: "vehicle",
+            employeeId: "",
+            name: u.assetName,
+            positionName: null,
+            deptName: null,
+            date,
+            label: [u.userName, u.purpose].filter(Boolean).join(" · ") || "예약",
+            kind: "차량",
+            days,
+          });
+          cursor.setDate(cursor.getDate() + 1);
+        }
+      }
+    }
+
+    if (targets.size === 0) return NextResponse.json({ entries: vehicleEntries });
 
     const ids = [...targets.keys()];
     const rows = rowsToObjects(
@@ -91,7 +123,7 @@ export async function GET(req: Request) {
 
     const entries: HomeCalendarEntry[] = rows.map((r) => ({
       entryId: String(r.entry_id),
-      scope: targets.get(String(r.employee_id)) ?? "dept",
+      scope: (targets.get(String(r.employee_id)) ?? "dept") as HomeCalendarEntry["scope"],
       employeeId: String(r.employee_id),
       name: String(r.name ?? ""),
       positionName: r.position_name != null ? String(r.position_name) : null,
@@ -102,7 +134,7 @@ export async function GET(req: Request) {
       days: Number(r.days ?? 0),
     }));
 
-    return NextResponse.json({ entries });
+    return NextResponse.json({ entries: [...entries, ...vehicleEntries] });
   } catch (err) {
     return authErrorToResponse(err);
   }

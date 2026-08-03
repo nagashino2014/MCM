@@ -3,13 +3,14 @@
 // 홈 우측 상단 — 월 캘린더 카드(HC-A).
 // 좌상단 톱니 '참조 지정' + 연·월 + 오늘 pill + 월 이동, 그 아래 태그 5종(본인·영업·부서·선택·차량).
 // 태그를 켠 만큼만 도트/오늘 일정에 반영되며, 켠 태그와 참조 인원은 서버(home_layouts)에 저장된다.
-// 데이터원: 영업=/api/sales/schedule, 인적(휴가)=/api/home/calendar. 차량은 아직 데이터원이 없다.
+// 데이터원: 영업=/api/sales/schedule, 인적(휴가)·차량=/api/home/calendar (차량은 G6-C에서 연결).
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Settings2, X } from "lucide-react";
 import { ACTIVITY_TYPE_META, type SalesActivityType } from "@/lib/sales/types";
 import { CALENDAR_TAGS, HOME_CALENDAR_H, HOME_TODAY_LIMIT, type CalendarTagKey } from "@/lib/home/widgets";
+import { TAG_COLOR, TAG_COLOR_STRONG, TAG_INK } from "@/lib/calendar/types";
 import { CalendarRefPickerModal } from "@/components/home/CalendarRefPickerModal";
 
 interface Activity {
@@ -22,7 +23,7 @@ interface Activity {
 
 interface LeaveEntry {
   entryId: string;
-  scope: "self" | "dept" | "refs";
+  scope: "self" | "dept" | "refs" | "vehicle";
   employeeId: string;
   name: string;
   positionName: string | null;
@@ -53,14 +54,7 @@ interface CalItem {
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
-/** 태그별 대표색 — 도트·타임라인 바에 공통 적용. */
-const TAG_COLOR: Record<CalendarTagKey, string> = {
-  self: "var(--cd-primary)",
-  sales: "var(--cd-secondary)",
-  dept: "var(--cd-success)",
-  refs: "var(--cd-av-2)",
-  vehicle: "var(--cd-warning)",
-};
+// 태그별 대표색은 일정 메뉴와 공용(lib/calendar/types.ts TAG_COLOR) — 파스텔 팔레트 단일 소스.
 
 const ymd = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -96,7 +90,8 @@ export function ScheduleCalendarCard() {
 
   const month = `${cur.y}-${String(cur.m + 1).padStart(2, "0")}`;
   const salesOn = tag === "sales";
-  const leaveScope = tag === "self" || tag === "dept" || tag === "refs" ? tag : "";
+  // 차량도 같은 인적 일정 API 를 쓴다(scope=vehicle — 출장신청서 법인차량·직접 예약, G6-C).
+  const leaveScope = tag === "self" || tag === "dept" || tag === "refs" || tag === "vehicle" ? tag : "";
 
   // 저장된 태그·참조 인원 로드.
   useEffect(() => {
@@ -333,11 +328,11 @@ export function ScheduleCalendarCard() {
               onClick={() => pickTag(t.key)}
               data-active={active || undefined}
               className="cd-chip cd-chip-sm disabled:opacity-40 disabled:cursor-not-allowed"
-              title={t.key === "vehicle" ? "법인차량 예약 — 출장 신청서 도입 후 표시됩니다" : undefined}
+              title={t.key === "vehicle" ? "법인차량 이용 현황 — 출장신청서 상신·직접 예약 기준" : undefined}
             >
               <span
                 className="w-1.5 h-1.5 rounded-full"
-                style={{ background: active ? "currentColor" : TAG_COLOR[t.key] }}
+                style={{ background: active ? "currentColor" : TAG_COLOR_STRONG[t.key] }}
               />
               {t.label}
             </button>
@@ -394,8 +389,9 @@ export function ScheduleCalendarCard() {
                           title={it.detail}
                           className="w-full min-w-0 rounded-[4px] px-1 text-[9.5px] font-bold leading-[14px] truncate text-left"
                           style={{
-                            background: `color-mix(in srgb, ${it.color} 30%, transparent)`,
-                            color: "var(--cd-body)",
+                            // 파스텔 원색 배경 + 진한 잉크(영업 상세 캘린더 방식) — 30% 감쇄는 흐릿하다는 피드백.
+                            background: it.color,
+                            color: TAG_INK,
                           }}
                         >
                           {dense ? it.short : it.chip}
@@ -465,10 +461,10 @@ export function ScheduleCalendarCard() {
           </span>
         )}
         <Link
-          href="/sales"
+          href="/calendar"
           className="ml-auto text-xs font-semibold cd-text-faint hover:text-[color:var(--cd-text)] transition-colors"
         >
-          영업 일정 →
+          일정 →
         </Link>
       </div>
 

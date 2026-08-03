@@ -39,7 +39,7 @@ export const HOME_WIDGETS: HomeWidgetDef[] = [
 
 export const HOME_WIDGET_KEYS = HOME_WIDGETS.map((w) => w.key);
 
-/** 캘린더 태그 — 'vehicle' 은 출장 신청서/법인차량 예약 구현 전까지 데이터가 없다(빈 상태). */
+/** 캘린더 태그 — 'vehicle' 은 출장신청서 상신 건·직접 예약(자산 이용 현황, G6-C)에서 온다. */
 export const CALENDAR_TAGS = [
   { key: "self", label: "본인" },
   { key: "sales", label: "영업" },

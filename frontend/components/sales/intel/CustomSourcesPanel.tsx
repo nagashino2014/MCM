@@ -78,6 +78,34 @@ interface PreviewSample {
   category?: string | null;
 }
 
+interface RunLogRow {
+  runId: string;
+  endpointName: string | null;
+  trigger: string;
+  status: "success" | "error";
+  scanned: number;
+  inserted: number;
+  updated: number;
+  error: string | null;
+  startedAt: string;
+}
+
+const RUN_TRIGGER_LABEL: Record<string, string> = {
+  batch: "야간배치",
+  manual: "수동 수집",
+  backfill: "백필",
+};
+
+/** UTC ISO → KST "MM-DD HH:mm" */
+function fmtRunTime(iso: string): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso.slice(5, 16).replace("T", " ");
+  const kst = new Date(d.getTime() + 9 * 3600 * 1000);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(kst.getUTCMonth() + 1)}-${p(kst.getUTCDate())} ${p(kst.getUTCHours())}:${p(kst.getUTCMinutes())}`;
+}
+
 async function jfetch(url: string, init?: RequestInit) {
   const res = await fetch(url, {
     ...init,
@@ -119,6 +147,18 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
 
   // 인증키
   const [secretInput, setSecretInput] = useState("");
+
+  // 야간배치 실행 로그(최근 5일)
+  const [runs, setRuns] = useState<RunLogRow[] | null>(null);
+
+  const loadRuns = useCallback(async (sourceId: string) => {
+    try {
+      const d = await jfetch(`/api/scraper/sources/${sourceId}/runs?days=5`);
+      setRuns(Array.isArray(d.runs) ? d.runs : []);
+    } catch {
+      setRuns([]);
+    }
+  }, []);
 
   // 카탈로그 취사선택 + 설정 빌더
   const [catalogSel, setCatalogSel] = useState<string[]>([]);
@@ -173,12 +213,15 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
       setBuildMsg(null);
       setBackfillEpId(null);
       bfLoopRef.current = false;
+      setRuns(null);
       loadDetail(selId);
+      loadRuns(selId);
     } else {
       setSel(null);
       setEndpoints([]);
+      setRuns(null);
     }
-  }, [selId, loadDetail]);
+  }, [selId, loadDetail, loadRuns]);
 
   const createSource = async () => {
     if (!newName.trim()) return;
@@ -461,6 +504,7 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
         setMsg(
           `수집 완료: 신규 ${d.inserted}건${isBid ? ` / 갱신 ${d.updated ?? 0}건` : ` / 매칭 ${d.matched ?? 0}건`} / 스캔 ${d.scanned}건${d.error ? ` · 오류: ${d.error}` : ""}`
         );
+        loadRuns(sel.sourceId); // 실행 로그 카드 갱신
       }
     } catch (e) {
       setMsg(e instanceof Error ? e.message : String(e));
@@ -586,48 +630,96 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
             <div className="cd-card p-8 text-center text-[13px] cd-text-faint">소스를 선택하거나 새로 추가하세요.</div>
           ) : (
             <>
-              {/* 상단 2열: (소스 정보 + 인증키) | API Profile 자동생성 — 좌측 합계 높이 = 우측 높이 */}
+              {/* 상단 2열: (소스 정보 + 인증키 | 야간배치 실행 로그) | API Profile 자동생성 — 좌측 합계 높이 = 우측 높이 */}
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-stretch">
-                <div className="flex flex-col gap-4 min-w-0">
-                  <div className="cd-card p-4 flex items-center gap-3 flex-wrap">
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-bold cd-text">{sel.name}</div>
-                      <div className="text-[11px] cd-text-faint">custom:{sel.slug}{sel.baseUrl ? ` · ${sel.baseUrl}` : ""}</div>
-                    </div>
-                    <button type="button" onClick={toggleSource} className={"cd-btn text-[12px] " + (sel.enabled ? "cd-btn-soft" : "cd-btn-primary")}>
-                      {sel.enabled ? "야간배치 비활성화" : "야간배치 활성화"}
-                    </button>
-                    <button type="button" onClick={deleteSource} className="cd-btn cd-btn-danger text-[12px]">
-                      <Trash2 className="w-3.5 h-3.5" /> 삭제
-                    </button>
-                  </div>
-
-                  {/* 인증키 */}
-                  <div className="cd-card p-4 flex flex-col gap-2 flex-1">
-                    <h3 className="text-sm font-bold cd-text flex items-center gap-1.5">
-                      <KeyRound className="w-4 h-4" /> 인증키
-                      {sel.hasSecret && <span className="text-[11px]" style={{ color: "#13DEB9" }}>· 저장됨</span>}
-                    </h3>
-                    <p className="text-[11px] cd-text-faint">
-                      인증키가 필요한 API(공공데이터포털 등)는 여기 입력하면 암호화 저장됩니다 — 재배포 불필요. 나라장터는 Decoding 키를 사용하세요.
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="password"
-                        className="cd-input text-[13px] flex-1"
-                        placeholder={sel.hasSecret ? "변경할 때만 새로 입력" : "인증키 입력"}
-                        value={secretInput}
-                        onChange={(e) => setSecretInput(e.target.value)}
-                      />
-                      <button
-                        type="button"
-                        onClick={saveSecret}
-                        disabled={busy || !secretInput.trim()}
-                        className="cd-btn cd-btn-primary text-[13px] disabled:opacity-50"
-                      >
-                        <KeyRound className="w-4 h-4" /> 저장
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0">
+                  <div className="flex flex-col gap-4 min-w-0">
+                    <div className="cd-card p-4 flex items-center gap-3 flex-wrap">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-bold cd-text">{sel.name}</div>
+                        <div className="text-[11px] cd-text-faint">custom:{sel.slug}{sel.baseUrl ? ` · ${sel.baseUrl}` : ""}</div>
+                      </div>
+                      <button type="button" onClick={toggleSource} className={"cd-btn text-[12px] " + (sel.enabled ? "cd-btn-soft" : "cd-btn-primary")}>
+                        {sel.enabled ? "야간배치 비활성화" : "야간배치 활성화"}
+                      </button>
+                      <button type="button" onClick={deleteSource} className="cd-btn cd-btn-danger text-[12px]">
+                        <Trash2 className="w-3.5 h-3.5" /> 삭제
                       </button>
                     </div>
+
+                    {/* 인증키 */}
+                    <div className="cd-card p-4 flex flex-col gap-2 flex-1">
+                      <h3 className="text-sm font-bold cd-text flex items-center gap-1.5">
+                        <KeyRound className="w-4 h-4" /> 인증키
+                        {sel.hasSecret && <span className="text-[11px]" style={{ color: "#13DEB9" }}>· 저장됨</span>}
+                      </h3>
+                      <p className="text-[11px] cd-text-faint">
+                        인증키가 필요한 API(공공데이터포털 등)는 여기 입력하면 암호화 저장됩니다 — 재배포 불필요. 나라장터는 Decoding 키를 사용하세요.
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="password"
+                          className="cd-input text-[13px] flex-1"
+                          placeholder={sel.hasSecret ? "변경할 때만 새로 입력" : "인증키 입력"}
+                          value={secretInput}
+                          onChange={(e) => setSecretInput(e.target.value)}
+                        />
+                        <button
+                          type="button"
+                          onClick={saveSecret}
+                          disabled={busy || !secretInput.trim()}
+                          className="cd-btn cd-btn-primary text-[13px] disabled:opacity-50"
+                        >
+                          <KeyRound className="w-4 h-4" /> 저장
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 야간배치 실행 로그 — 최근 5일 실행 내역(성공/실패·수집 건수·실행 시각) */}
+                  <div className="cd-card p-4 flex flex-col gap-2 min-w-0">
+                    <h3 className="text-sm font-bold cd-text flex items-center gap-1.5">
+                      <History className="w-4 h-4" /> 야간배치 실행 로그
+                      <span className="text-[11px] cd-text-faint font-normal">· 최근 5일</span>
+                    </h3>
+                    {sel.enabled && endpoints.length > 0 && endpoints.every((e) => !e.enabled) && (
+                      <div className="rounded-lg px-3 py-2 text-[11.5px]" style={{ background: "var(--cd-error-soft)", color: "var(--cd-error)" }}>
+                        야간배치가 켜져 있지만 <b>활성화된 엔드포인트가 없어</b> 수집이 실행되지 않습니다. 아래 엔드포인트 목록에서 활성화하세요.
+                      </div>
+                    )}
+                    {sel.enabled && endpoints.length === 0 && (
+                      <div className="rounded-lg px-3 py-2 text-[11.5px]" style={{ background: "var(--cd-error-soft)", color: "var(--cd-error)" }}>
+                        야간배치가 켜져 있지만 등록된 엔드포인트가 없어 수집이 실행되지 않습니다.
+                      </div>
+                    )}
+                    {runs === null ? (
+                      <div className="text-[12px] cd-text-faint p-3 text-center">불러오는 중…</div>
+                    ) : runs.length === 0 ? (
+                      <div className="text-[12px] cd-text-faint p-3 text-center border cd-border-c rounded-lg">
+                        최근 5일 실행 내역이 없습니다.
+                      </div>
+                    ) : (
+                      <div className="flex flex-col overflow-y-auto" style={{ maxHeight: 240 }}>
+                        {runs.map((r) => (
+                          <div key={r.runId} className="flex flex-col gap-0.5 py-1.5 border-b cd-border-c last:border-b-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className={"cd-pill " + (r.status === "success" ? "cd-pill-success" : "cd-pill-error")}>
+                                {r.status === "success" ? "성공" : "실패"}
+                              </span>
+                              <span className="cd-pill cd-pill-idle">{RUN_TRIGGER_LABEL[r.trigger] ?? r.trigger}</span>
+                              <span className="cd-text text-[12px] font-bold">
+                                수집 {r.scanned.toLocaleString()}건
+                                {r.inserted > 0 ? ` · 신규 ${r.inserted.toLocaleString()}` : ""}
+                                {r.updated > 0 ? ` · 갱신 ${r.updated.toLocaleString()}` : ""}
+                              </span>
+                              <span className="cd-text-faint text-[11px] ml-auto shrink-0">{fmtRunTime(r.startedAt)}</span>
+                            </div>
+                            {r.endpointName && <div className="text-[11px] cd-text-faint truncate">{r.endpointName}</div>}
+                            {r.error && <div className="text-[11px] truncate" style={{ color: "var(--cd-error)" }} title={r.error}>{r.error}</div>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 

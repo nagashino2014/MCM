@@ -5,8 +5,13 @@
 // 인용 칩 [n]: 호버 시 출처 요약 팝오버, 클릭 시 신호 상세 모달. 섹션은 접기/펼치기.
 // report(구조화 JSON)가 없는 구버전 브리핑은 마크다운 폴백으로 렌더한다.
 
-import { useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
+import { ChevronDown, ChevronUp, RefreshCw, Send, Share2, Sparkles, X } from "lucide-react";
+import OrganizationTree from "@/components/admin/users/OrganizationTree";
+import type { OrganizationEmployeeRow, OrganizationSnapshot } from "@/components/admin/users/types";
+import { filterAssigneeTree } from "@/lib/sales/org-tree";
+import { filenameFromDisposition } from "@/lib/client-download";
 import type { Briefing, BriefingSource } from "./intel-shared";
 import { SOURCE_LABEL } from "./intel-shared";
 
@@ -163,14 +168,78 @@ export function BriefingReportView({
   briefing,
   onClose,
   onOpenSignal,
+  theme = "light",
+  canEdit = false,
+  onBriefingUpdate,
 }: {
   briefing: Briefing;
   onClose: () => void;
   onOpenSignal: (signalId: string) => void;
+  /** 포털 모달(cdash-vars) 테마 — RagBoard 의 useCdashTheme 값 */
+  theme?: string;
+  canEdit?: boolean;
+  /** 추가 분석(refine)으로 브리핑이 갱신되면 호출 — 현재 표시 브리핑·이력 갱신용 */
+  onBriefingUpdate?: (briefing: Briefing) => void;
 }) {
   const [popover, setPopover] = useState<PopoverState | null>(null);
   const [showAllSources, setShowAllSources] = useState(false);
   const report = briefing.report;
+
+  // ── PDF 다운로드 ──
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const downloadPdf = async () => {
+    if (pdfBusy) return;
+    setPdfBusy(true);
+    try {
+      const res = await fetch(`/api/sales/rag/briefings/${briefing.briefingId}/export`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const stamp = (briefing.createdAt || "").slice(0, 10).replace(/-/g, "");
+      a.download = filenameFromDisposition(res, `AI브리핑_${stamp}.pdf`);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      /* 다운로드 실패는 조용히 — 재시도 가능 */
+    } finally {
+      setPdfBusy(false);
+    }
+  };
+
+  // ── 공유 모달 ──
+  const [shareOpen, setShareOpen] = useState(false);
+
+  // ── 추가 분석(refine) — 버튼 클릭 시 오른쪽에 입력창 확장 ──
+  const [refineOpen, setRefineOpen] = useState(false);
+  const [refineText, setRefineText] = useState("");
+  const [refineBusy, setRefineBusy] = useState(false);
+  const [refineError, setRefineError] = useState<string | null>(null);
+  const runRefine = async () => {
+    const instruction = refineText.trim();
+    if (!instruction || refineBusy) return;
+    setRefineBusy(true);
+    setRefineError(null);
+    try {
+      const res = await fetch(`/api/sales/rag/briefings/${briefing.briefingId}/refine`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ instruction }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
+      setRefineText("");
+      setRefineOpen(false);
+      onBriefingUpdate?.(data.briefing as Briefing);
+    } catch (e) {
+      setRefineError((e as Error).message);
+    } finally {
+      setRefineBusy(false);
+    }
+  };
 
   const ctx: CiteContext = { sources: briefing.sources, onOpenSignal, setPopover };
 
@@ -219,10 +288,69 @@ export function BriefingReportView({
             {briefing.model && <span className="cd-pill cd-pill-idle">{briefing.model}</span>}
           </div>
         </div>
-        <button className="cd-btn cd-btn-ghost cd-btn-sm shrink-0" title="결과 닫기" onClick={onClose}>
-          <X className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+          <button
+            type="button"
+            className="flex items-center justify-center disabled:opacity-40"
+            style={{ width: 28, height: 28 }}
+            title="브리핑을 PDF로 다운로드"
+            disabled={pdfBusy}
+            onClick={downloadPdf}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/icons/pdfico.png" alt="PDF 다운로드" className="w-full h-full object-contain" />
+          </button>
+          {canEdit && (
+            <button className="cd-btn cd-btn-soft cd-btn-sm" title="브리핑 공유" onClick={() => setShareOpen(true)}>
+              <Share2 className="w-3.5 h-3.5" /> 공유
+            </button>
+          )}
+          {canEdit && (
+            <button
+              className="cd-btn cd-btn-soft cd-btn-sm"
+              title="브리핑 내용을 추가 질문으로 보강합니다"
+              onClick={() => setRefineOpen((v) => !v)}
+            >
+              <Sparkles className="w-3.5 h-3.5" /> 추가 분석
+            </button>
+          )}
+          {refineOpen && (
+            <>
+              <input
+                className="cd-input"
+                style={{ width: 300, maxWidth: "50vw" }}
+                placeholder="심화 분석·추가 정보가 필요한 내용을 입력하세요"
+                value={refineText}
+                autoFocus
+                disabled={refineBusy}
+                onChange={(e) => setRefineText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") { e.preventDefault(); runRefine(); }
+                }}
+              />
+              <button
+                className="cd-btn cd-btn-primary cd-btn-sm"
+                disabled={refineBusy || !refineText.trim()}
+                onClick={runRefine}
+              >
+                {refineBusy ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                {refineBusy ? "분석 중…" : "요청"}
+              </button>
+            </>
+          )}
+          <button className="cd-btn cd-btn-ghost cd-btn-sm" title="결과 닫기" onClick={onClose}>
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       </div>
+      {refineBusy && (
+        <div className="mx-5 mt-3 cd-tint-primary rounded-xl px-4 py-3 text-sm cd-text">
+          추가 분석으로 브리핑을 보강하는 중입니다… (최대 1~2분)
+        </div>
+      )}
+      {refineError && (
+        <div className="mx-5 mt-3 cd-error-bg cd-error-text rounded-xl px-4 py-3 text-sm">{refineError}</div>
+      )}
 
       <div className="px-5 py-5 flex flex-col gap-6">
         {report ? (
@@ -463,6 +591,130 @@ export function BriefingReportView({
           />
         </div>
       )}
+
+      {/* 공유 모달 */}
+      {shareOpen && (
+        <BriefingShareModal briefingId={briefing.briefingId} theme={theme} onClose={() => setShareOpen(false)} />
+      )}
     </article>
+  );
+}
+
+// ── 공유 모달 — 영업 담당자 조직도 트리뷰에서 인원 선택 후 공유 ──
+
+interface SharePick {
+  userId: string;
+  name: string;
+}
+
+function BriefingShareModal({
+  briefingId,
+  theme,
+  onClose,
+}: {
+  briefingId: string;
+  theme: string;
+  onClose: () => void;
+}) {
+  const [snapshot, setSnapshot] = useState<OrganizationSnapshot | null>(null);
+  const [picks, setPicks] = useState<SharePick[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/sales/org", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setSnapshot(d && Array.isArray(d.departments) ? d : null))
+      .catch(() => setSnapshot(null));
+  }, []);
+
+  const tree = useMemo(() => filterAssigneeTree(snapshot), [snapshot]);
+
+  const toggle = (emp: OrganizationEmployeeRow) => {
+    if (!emp.userId) {
+      setError(`${emp.name} 님은 계정이 연결되지 않아 공유할 수 없습니다.`);
+      return;
+    }
+    setError(null);
+    const userId = emp.userId;
+    setPicks((prev) =>
+      prev.some((p) => p.userId === userId)
+        ? prev.filter((p) => p.userId !== userId)
+        : [...prev, { userId, name: emp.name }]
+    );
+  };
+
+  const share = async () => {
+    if (!picks.length || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/sales/rag/briefings/${briefingId}/share`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipients: picks }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
+      setMsg(`${picks.length}명에게 브리핑을 공유했습니다.`);
+      setPicks([]);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    // 포털은 .cdash 밖이라 토큰이 안 풀린다 — 루트에 cdash-vars + data-theme 부여
+    <div
+      className="cdash-vars cd-fields-white fixed inset-0 z-[70] flex items-center justify-center p-4"
+      data-theme={theme}
+      style={{ background: "rgba(16,22,36,0.45)" }}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="cd-card-bg rounded-2xl border cd-border-c w-full max-w-md flex flex-col" style={{ maxHeight: "86vh" }}>
+        <div className="flex items-center gap-2 px-5 py-4 border-b cd-border-c">
+          <Share2 className="w-4 h-4 cd-text-faint" />
+          <h3 className="cd-text text-[0.95rem] font-extrabold flex-1">브리핑 공유</h3>
+          <button className="cd-btn cd-btn-ghost cd-btn-sm" title="닫기" onClick={onClose}>
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="px-5 py-4 flex flex-col gap-3 overflow-y-auto">
+          <p className="cd-text-muted text-xs">조직도에서 공유할 인원을 클릭해 선택하세요. 선택한 인원의 RAG &amp; 영업 발굴 화면에 공유 브리핑이 표시됩니다.</p>
+          {msg && <div className="cd-tint-primary rounded-xl px-3 py-2 text-xs cd-text">{msg}</div>}
+          {error && <div className="cd-error-bg cd-error-text rounded-xl px-3 py-2 text-xs">{error}</div>}
+          <div className="flex flex-wrap gap-1">
+            {picks.map((p) => (
+              <span key={p.userId} className="cd-pill cd-pill-info inline-flex items-center gap-1">
+                {p.name}
+                <button onClick={() => setPicks((prev) => prev.filter((x) => x.userId !== p.userId))}>
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            ))}
+            {picks.length === 0 && <span className="cd-text-faint text-xs">선택된 인원이 없습니다.</span>}
+          </div>
+          {tree ? (
+            <OrganizationTree snapshot={tree} embedded title="조직도" onSelectEmployee={toggle} />
+          ) : (
+            <div className="cd-text-faint text-sm p-4 text-center">조직도를 불러오는 중…</div>
+          )}
+        </div>
+        <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t cd-border-c">
+          <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={onClose}>닫기</button>
+          <button className="cd-btn cd-btn-primary cd-btn-sm" disabled={busy || picks.length === 0} onClick={share}>
+            {busy ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+            {busy ? "공유 중…" : `공유 (${picks.length}명)`}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }

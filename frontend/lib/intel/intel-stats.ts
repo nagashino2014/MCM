@@ -50,7 +50,7 @@ export interface IntelStats {
   monthly: Array<{ month: string; collected: number; adopted: number }>;
   /** 기간 내 소스×유형×매칭×상태×등급 조합별 건수 (세부 유형 차트는 클라에서 축별 합산) */
   breakdown: IntelBreakdownRow[];
-  /** 최근 14일 일별 수집 로그(기간 파라미터와 무관 — 야간 배치 결과 확인용) */
+  /** 최근 5일 일별 수집 로그(기간 파라미터와 무관 — 야간 배치 결과 확인용. 전체는 별도 로그 API) */
   daily: IntelDailyRow[];
   /** 삭제 피드백 현황(기간 파라미터와 무관) — 성장형 수집 로직 모니터링 */
   feedback: IntelFeedbackStats;
@@ -136,12 +136,12 @@ export async function getIntelStats(from: string, to: string): Promise<IntelStat
     count: Number(r.count ?? 0),
   }));
 
-  // 일별 수집 로그: 조회 기간과 무관하게 최근 14일(야간 배치 결과 확인용)
+  // 일별 수집 로그: 조회 기간과 무관하게 최근 5일(야간 배치 결과 확인용 — 전체는 "전체 보기" 로그 API)
   // created_at 은 UTC ISO 문자열 — UTC 날짜로 자르면 야간 배치(KST 03:00 = UTC 전날 18:00)가
   // 전날로 집계되므로 KST 날짜 기준으로 그룹핑한다.
   const kstDayExpr = `substr((s.created_at::timestamptz AT TIME ZONE 'Asia/Seoul')::text,1,10)`;
   const dailyFloor = new Date(Date.now() + 9 * 3600 * 1000); // KST 오늘
-  dailyFloor.setUTCDate(dailyFloor.getUTCDate() - 13);
+  dailyFloor.setUTCDate(dailyFloor.getUTCDate() - 4);
   const dailyRows = rowsToObjects(
     await db.exec(
       `SELECT ${kstDayExpr} AS day, ${SRC_EXPR} AS src,
@@ -229,6 +229,85 @@ async function loadFeedbackStats(db: Awaited<ReturnType<typeof getDb>>): Promise
   } catch {
     return empty;
   }
+}
+
+// ── 전체 수집 로그(전체 보기 모달) — 일/주/월/연 단위 집계 + 페이지네이션 ──
+
+export type IntelLogGranularity = "day" | "week" | "month" | "year";
+
+const KST_TS = `(s.created_at::timestamptz AT TIME ZONE 'Asia/Seoul')`;
+
+function periodExpr(granularity: IntelLogGranularity): string {
+  switch (granularity) {
+    case "week":
+      // 주 시작일(월요일) 'YYYY-MM-DD'
+      return `to_char(date_trunc('week', ${KST_TS}), 'YYYY-MM-DD')`;
+    case "month":
+      return `substr(${KST_TS}::text,1,7)`;
+    case "year":
+      return `substr(${KST_TS}::text,1,4)`;
+    default:
+      return `substr(${KST_TS}::text,1,10)`;
+  }
+}
+
+/**
+ * 전체 수집 로그 — granularity 단위(일/주/월/연)로 집계, 기간 내림차순 페이지네이션.
+ * 행 shape 는 IntelDailyRow(date=기간 라벨)와 동일해 카드와 렌더를 공유한다.
+ */
+export async function getIntelCollectLogs(
+  granularity: IntelLogGranularity,
+  page = 1,
+  pageSize = 15
+): Promise<{ rows: IntelDailyRow[]; total: number; page: number; pageSize: number }> {
+  const db = await getDb();
+  const expr = periodExpr(granularity);
+  const size = Math.min(Math.max(1, pageSize), 50);
+  const p = Math.max(1, page);
+
+  const totalRows = rowsToObjects(
+    await db.exec(`SELECT COUNT(DISTINCT ${expr})::int AS cnt FROM intel_signals s`)
+  );
+  const total = Number(totalRows[0]?.cnt ?? 0);
+
+  const rows = rowsToObjects(
+    await db.exec(
+      `WITH periods AS (
+         SELECT ${expr} AS period FROM intel_signals s
+          GROUP BY 1 ORDER BY 1 DESC
+          LIMIT ${size} OFFSET ${(p - 1) * size}
+       )
+       SELECT ${expr} AS period, ${SRC_EXPR} AS src,
+              COUNT(*)::int AS collected,
+              COUNT(*) FILTER (WHERE s.signal_grade = 'confirmed')::int AS confirmed,
+              COUNT(*) FILTER (WHERE s.signal_grade = 'candidate')::int AS candidate,
+              COUNT(*) FILTER (WHERE ${ADOPTED_EXPR})::int AS adopted
+         FROM intel_signals s
+        WHERE ${expr} IN (SELECT period FROM periods)
+        GROUP BY 1, 2 ORDER BY 1 DESC`
+    )
+  );
+  const map = new Map<string, IntelDailyRow>();
+  for (const r of rows) {
+    const date = String(r.period);
+    let row = map.get(date);
+    if (!row) {
+      row = { date, collected: 0, confirmed: 0, candidate: 0, adopted: 0, bySource: {} };
+      map.set(date, row);
+    }
+    const c = Number(r.collected ?? 0);
+    row.collected += c;
+    row.confirmed += Number(r.confirmed ?? 0);
+    row.candidate += Number(r.candidate ?? 0);
+    row.adopted += Number(r.adopted ?? 0);
+    row.bySource[String(r.src)] = c;
+  }
+  return {
+    rows: [...map.values()].sort((a, b) => (a.date < b.date ? 1 : -1)),
+    total,
+    page: p,
+    pageSize: size,
+  };
 }
 
 export interface IntelCollectState {

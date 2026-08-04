@@ -16,15 +16,21 @@ import "@/components/cdash/cdash.css";
 import type { DeleteReasonCode, IntelSignal } from "./intel-shared";
 import { DELETE_REASONS, GradeTag, MatchTypeTag, RelevanceTag, SOURCE_LABEL, SOURCE_TABS, STATUS_LABEL, STATUS_PILL, TypeTag } from "./intel-shared";
 import { IntelSignalModal } from "./IntelSignalModal";
-import { IntelStatsPanel, type IntelStatsData } from "./IntelStatsPanel";
+import { IntelStatsPanel, type IntelStatsData, type StatsPeriod } from "./IntelStatsPanel";
 import { IntelCollectSettingsPanel, type CollectStateRow } from "./IntelCollectSettingsPanel";
 
 const PAGE_SIZE = 20;
 
-function monthRange(month: string): { from: string; to: string } {
-  const [y, m] = month.split("-").map(Number);
+function periodRange(period: StatsPeriod): { from: string; to: string } {
+  if (period.mode === "all") {
+    return { from: "2000-01-01", to: new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10) };
+  }
+  if (period.mode === "year") {
+    return { from: `${period.year}-01-01`, to: `${period.year}-12-31` };
+  }
+  const [y, m] = period.month.split("-").map(Number);
   const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
-  return { from: `${month}-01`, to: `${month}-${String(last).padStart(2, "0")}` };
+  return { from: `${period.month}-01`, to: `${period.month}-${String(last).padStart(2, "0")}` };
 }
 
 export function IntelBoard() {
@@ -93,7 +99,10 @@ export function IntelBoard() {
   useEffect(() => { reload(); }, [reload]);
 
   // ── 통계 상태 ──
-  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [period, setPeriod] = useState<StatsPeriod>(() => {
+    const now = new Date().toISOString();
+    return { mode: "month", year: now.slice(0, 4), month: now.slice(0, 7) };
+  });
   const [stats, setStats] = useState<IntelStatsData | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
   const collectState: CollectStateRow[] = stats?.collectState ?? [];
@@ -101,7 +110,7 @@ export function IntelBoard() {
   const reloadStats = useCallback(async () => {
     setStatsLoading(true);
     try {
-      const { from, to } = monthRange(month);
+      const { from, to } = periodRange(period);
       const res = await fetch(`/api/sales/intel/stats?from=${from}&to=${to}`, { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setStats(await res.json());
@@ -110,7 +119,7 @@ export function IntelBoard() {
     } finally {
       setStatsLoading(false);
     }
-  }, [month]);
+  }, [period]);
 
   useEffect(() => { reloadStats(); }, [reloadStats]);
 
@@ -425,7 +434,7 @@ export function IntelBoard() {
         </div>
 
         {/* ── 우측: 수집현황(C-2) ── */}
-        <IntelStatsPanel theme={theme} stats={stats} loading={statsLoading} month={month} onMonthChange={setMonth} />
+        <IntelStatsPanel theme={theme} stats={stats} loading={statsLoading} period={period} onPeriodChange={setPeriod} />
       </div>
 
       {/* 삭제 사유 팝업 — 사유는 피드백 테이블에 축적되어 재수집 차단·분류 로직 튜닝에 쓰인다 */}

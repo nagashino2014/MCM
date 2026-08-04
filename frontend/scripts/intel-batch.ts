@@ -17,6 +17,7 @@ import { collectCustomSource } from "@/lib/intel/custom-sink";
 import { collectBidSource } from "@/lib/bid/bid-sink";
 import { matchAndQueueBidNotices } from "@/lib/bid/match-notify";
 import { buildChunkConfig, nextYm, totalMonths, type BackfillState } from "@/lib/scraper/backfill";
+import { logScraperRun } from "@/lib/scraper/run-log";
 
 async function main() {
   // 수집 설정(intel_settings)을 읽어 각 수집기에 전달. env 는 설정보다 우선(백필 오버라이드용).
@@ -136,6 +137,7 @@ async function main() {
     const customDb = await getDb();
     const collectors = await listEnabledCustomCollectors(customDb, "intel");
     for (const { source, endpoint } of collectors) {
+      const startedIso = new Date().toISOString();
       try {
         const started = Date.now();
         const r = await collectCustomSource(source, endpoint, {});
@@ -143,8 +145,10 @@ async function main() {
           `[intel-batch] custom:${source.slug} done in ${Math.round((Date.now() - started) / 1000)}s`,
           JSON.stringify({ scanned: r.scanned, inserted: r.inserted, matched: r.matched, error: r.error })
         );
+        await logScraperRun({ source, endpoint, trigger: "batch", scanned: r.scanned, inserted: r.inserted, error: r.error ?? null, startedAt: startedIso });
       } catch (err) {
         console.error(`[intel-batch] custom:${source.slug} error`, err);
+        await logScraperRun({ source, endpoint, trigger: "batch", error: String((err as Error)?.message ?? err), startedAt: startedIso });
       }
     }
   } catch (err) {
@@ -156,6 +160,7 @@ async function main() {
     const bidDb = await getDb();
     const bidCollectors = await listEnabledCustomCollectors(bidDb, "bid");
     for (const { source, endpoint } of bidCollectors) {
+      const startedIso = new Date().toISOString();
       try {
         const started = Date.now();
         const r = await collectBidSource(source, endpoint, {});
@@ -163,6 +168,10 @@ async function main() {
           `[intel-batch] bid:${source.slug} done in ${Math.round((Date.now() - started) / 1000)}s`,
           JSON.stringify({ bidType: r.bidType, scanned: r.scanned, inserted: r.inserted, error: r.error })
         );
+        await logScraperRun({
+          source, endpoint, trigger: "batch", scanned: r.scanned, inserted: r.inserted,
+          updated: (r as { updated?: number }).updated ?? 0, error: r.error ?? null, startedAt: startedIso,
+        });
         // 사업분야 매칭 알림 — 신규 건만 분류 조건 평가 후 큐 적재(발송은 설정 시각에 디스패처가).
         if (r.insertedItems?.length) {
           try {
@@ -174,6 +183,7 @@ async function main() {
         }
       } catch (err) {
         console.error(`[intel-batch] bid:${source.slug} error`, err);
+        await logScraperRun({ source, endpoint, trigger: "batch", error: String((err as Error)?.message ?? err), startedAt: startedIso });
       }
     }
   } catch (err) {
@@ -196,12 +206,18 @@ async function main() {
       for (let i = 0; i < maxChunks; i++) {
         if (totalMonths(cursor, st.to) === 0) break;
         const chunk = cursor;
+        const startedIso = new Date().toISOString();
         try {
           const cfg = buildChunkConfig(endpoint.apiConfig, chunk);
           const chunkEp = { ...endpoint, apiConfig: cfg };
           const r = source.purpose === "bid"
             ? await collectBidSource(source, chunkEp)
             : await collectCustomSource(source, chunkEp);
+          await logScraperRun({
+            source, endpoint: { endpointId: endpoint.endpointId, name: `${endpoint.name} (${chunk})` },
+            trigger: "backfill", scanned: r.scanned, inserted: r.inserted,
+            updated: (r as { updated?: number }).updated ?? 0, error: r.error ?? null, startedAt: startedIso,
+          });
           if (r.error && r.scanned === 0) {
             // 지속 오류(인증키 누락 등) — 커서 보존하고 이 엔드포인트는 다음 배치에서 재시도.
             console.error(`[intel-batch] backfill ${source.slug}/${endpoint.name} ${chunk} stalled: ${r.error}`);

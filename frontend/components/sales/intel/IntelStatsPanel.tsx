@@ -3,11 +3,20 @@
 // 우측 "발주 정보 분석용 데이터 수집현황" 패널 — 기간(수집일 기준) 총계·추이·소스별 채택·세부 유형.
 // 채택 = 영업건 전환(converted) 또는 등급 confirmed.
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
+import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import type { ApexOptions } from "apexcharts";
 import ApexChart from "@/components/contracts/dashboard/ApexChart";
 import { INTEL_SIGNAL_TYPE_LABELS, INTEL_SIGNAL_GRADE_LABELS } from "@/lib/intel/signal-extractor";
 import { MATCH_LABEL, SOURCE_LABEL, STAT_SOURCE_LABELS, STATUS_LABEL } from "./intel-shared";
+
+/** 수집현황 조회 기간 — 전체/연도별/월별 */
+export interface StatsPeriod {
+  mode: "all" | "year" | "month";
+  year: string; // 'YYYY'
+  month: string; // 'YYYY-MM'
+}
 
 interface SourceStat { collected: number; adopted: number }
 interface BreakdownRow {
@@ -28,7 +37,7 @@ export interface IntelStatsData {
   total: SourceStat;
   monthly: Array<{ month: string; collected: number; adopted: number }>;
   breakdown: BreakdownRow[];
-  /** 최근 14일 일별 수집 로그(월 선택과 무관) */
+  /** 최근 5일 일별 수집 로그(기간 선택과 무관 — 전체는 로그 모달) */
   daily: DailyRow[];
   /** 삭제 피드백 현황(성장형 수집 로직 모니터링) */
   feedback: {
@@ -108,23 +117,179 @@ function MiniDonut({ pct, color, track }: { pct: number | null; color: string; t
   );
 }
 
+type LogGranularity = "day" | "week" | "month" | "year";
+
+const GRANULARITY_TABS: Array<{ key: LogGranularity; label: string }> = [
+  { key: "day", label: "일별" },
+  { key: "week", label: "주별" },
+  { key: "month", label: "월별" },
+  { key: "year", label: "연도별" },
+];
+
+/** 기간 라벨 — day 'MM-DD', week '주 시작일~', month 'YYYY-MM', year 'YYYY' */
+function periodLabel(date: string, granularity: LogGranularity): string {
+  if (granularity === "day") return date.slice(5);
+  if (granularity === "week") return `${date.slice(5)} 주`;
+  return date;
+}
+
+/** 일별/기간별 수집 로그 테이블 — 카드(최근 5일)와 전체 보기 모달이 공유. */
+function DailyLogTable({ rows, granularity }: { rows: DailyRow[]; granularity: LogGranularity }) {
+  const periodCol = granularity === "month" || granularity === "year" ? "72px" : "64px";
+  return (
+    <div className="flex flex-col">
+      <div
+        className={`grid gap-x-2 px-2 py-1.5 rounded-lg text-[10px] font-bold`}
+        style={{ gridTemplateColumns: `${periodCol} 1fr 1fr 1fr 1fr`, background: "var(--cd-surface)", color: "var(--cd-muted)" }}
+      >
+        <span>수집일</span>
+        <span className="text-right">수집</span>
+        <span className="text-right">확정</span>
+        <span className="text-right">후보</span>
+        <span className="text-right">채택</span>
+      </div>
+      {rows.map((d) => (
+        <div key={d.date} className="cd-row-hover px-2 py-1.5 rounded-lg">
+          <div className="grid gap-x-2 text-[11px] tabular-nums" style={{ gridTemplateColumns: `${periodCol} 1fr 1fr 1fr 1fr` }}>
+            <span className="font-bold" style={{ color: "var(--cd-text)" }}>{periodLabel(d.date, granularity)}</span>
+            <span className="text-right font-extrabold" style={{ color: "var(--cd-text)" }}>{d.collected.toLocaleString()}</span>
+            <span className="text-right font-bold" style={{ color: d.confirmed > 0 ? "#13deb9" : "var(--cd-faint)" }}>{d.confirmed}</span>
+            <span className="text-right font-bold" style={{ color: d.candidate > 0 ? "#5d87ff" : "var(--cd-faint)" }}>{d.candidate}</span>
+            <span className="text-right font-bold" style={{ color: "var(--cd-muted)" }}>{d.adopted}</span>
+          </div>
+          <div className="text-[10px] mt-0.5 truncate" style={{ color: "var(--cd-faint)" }} title={
+            Object.entries(d.bySource).map(([s, c]) => `${STAT_SOURCE_LABELS[s] ?? s} ${c}`).join(" · ")
+          }>
+            {Object.entries(d.bySource)
+              .sort((a, b) => b[1] - a[1])
+              .map(([s, c]) => `${STAT_SOURCE_LABELS[s] ?? s} ${c}`)
+              .join(" · ")}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** 전체 수집 로그 모달 — 일/주/월/연 집계 전환 + 페이지네이션. */
+function CollectLogsModal({ theme, onClose }: { theme: string; onClose: () => void }) {
+  const [granularity, setGranularity] = useState<LogGranularity>("day");
+  const [page, setPage] = useState(1);
+  const [rows, setRows] = useState<DailyRow[] | null>(null);
+  const [total, setTotal] = useState(0);
+  const pageSize = 15;
+
+  const load = useCallback(async (g: LogGranularity, p: number) => {
+    setRows(null);
+    try {
+      const res = await fetch(`/api/sales/intel/stats/logs?granularity=${g}&page=${p}&pageSize=${pageSize}`, { cache: "no-store" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
+      setRows(Array.isArray(data.rows) ? data.rows : []);
+      setTotal(Number(data.total ?? 0));
+    } catch {
+      setRows([]);
+      setTotal(0);
+    }
+  }, []);
+
+  useEffect(() => {
+    load(granularity, page);
+  }, [granularity, page, load]);
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    // 포털은 .cdash 밖이라 토큰이 안 풀린다 — 루트에 cdash-vars + data-theme 부여
+    <div
+      className="cdash-vars cd-fields-white fixed inset-0 z-[70] flex items-center justify-center p-4"
+      data-theme={theme}
+      style={{ background: "rgba(16,22,36,0.45)" }}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="cd-card-bg rounded-2xl border cd-border-c w-full max-w-lg flex flex-col" style={{ maxHeight: "86vh" }}>
+        <div className="flex items-center gap-2 px-5 py-4 border-b cd-border-c">
+          <h3 className="cd-text text-[0.95rem] font-extrabold flex-1">전체 수집 로그</h3>
+          <button className="cd-btn cd-btn-ghost cd-btn-sm" title="닫기" onClick={onClose}>
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="px-5 py-4 flex flex-col gap-2.5 overflow-y-auto">
+          <div className="flex items-center gap-1 flex-wrap">
+            {GRANULARITY_TABS.map((t) => (
+              <button
+                key={t.key}
+                className="cd-chip cd-chip-sm"
+                data-active={granularity === t.key}
+                onClick={() => { setGranularity(t.key); setPage(1); }}
+              >
+                {t.label}
+              </button>
+            ))}
+            <span className="text-[10px] ml-auto" style={{ color: "var(--cd-faint)" }}>
+              총 {total.toLocaleString()}개 기간 · 수집일(KST) 기준
+            </span>
+          </div>
+          {rows === null ? (
+            <div className="cd-text-faint text-sm py-8 text-center">불러오는 중…</div>
+          ) : rows.length === 0 ? (
+            <div className="cd-text-faint text-sm py-8 text-center">수집 이력이 없습니다.</div>
+          ) : (
+            <DailyLogTable rows={rows} granularity={granularity} />
+          )}
+        </div>
+        <div className="flex items-center justify-center gap-2 px-5 py-3 border-t cd-border-c">
+          <button
+            className="cd-btn cd-btn-ghost cd-btn-sm disabled:opacity-40"
+            disabled={page <= 1 || rows === null}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+          >
+            <ChevronLeft className="w-4 h-4" /> 이전
+          </button>
+          <span className="cd-text text-xs font-bold tabular-nums">{page} / {totalPages}</span>
+          <button
+            className="cd-btn cd-btn-ghost cd-btn-sm disabled:opacity-40"
+            disabled={page >= totalPages || rows === null}
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+          >
+            다음 <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 export function IntelStatsPanel({
   theme,
   stats,
   loading,
-  month,
-  onMonthChange,
+  period,
+  onPeriodChange,
 }: {
   theme: string;
   stats: IntelStatsData | null;
   loading: boolean;
-  /** 'YYYY-MM' — 기간은 해당 월 1일~말일 */
-  month: string;
-  onMonthChange: (month: string) => void;
+  /** 조회 기간 — 전체 / 연도별(1/1~12/31) / 월별(1일~말일) */
+  period: StatsPeriod;
+  onPeriodChange: (period: StatsPeriod) => void;
 }) {
   const pal = chartColors(theme);
   const [bdSource, setBdSource] = useState<string>("dart");
   const [axis, setAxis] = useState<AxisKey>("signalType");
+  const [logsOpen, setLogsOpen] = useState(false);
+
+  // 연도 선택 옵션 — 2025(데이터 시작)부터 올해까지
+  const yearOptions = useMemo(() => {
+    const thisYear = Number(new Date().toISOString().slice(0, 4));
+    const ys: string[] = [];
+    for (let y = thisYear; y >= 2025; y--) ys.push(String(y));
+    return ys;
+  }, []);
 
   // 선택 소스에 데이터가 없으면 데이터 있는 첫 소스로 이동(초기 UX)
   useEffect(() => {
@@ -210,14 +375,42 @@ export function IntelStatsPanel({
     <section className="cd-card-bg rounded-2xl border cd-border-c p-4 flex flex-col gap-4">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h2 className="cd-card-title cd-text text-[15px] font-extrabold">발주 정보 분석용 데이터 수집현황</h2>
-        <input
-          type="month"
-          className="cd-input"
-          style={{ width: "auto" }}
-          value={month}
-          onChange={(e) => e.target.value && onMonthChange(e.target.value)}
-          title="수집일 기준 조회 월"
-        />
+        <div className="flex items-center gap-1.5">
+          <select
+            className="cd-select"
+            style={{ width: "auto" }}
+            value={period.mode}
+            onChange={(e) => onPeriodChange({ ...period, mode: e.target.value as StatsPeriod["mode"] })}
+            title="수집일 기준 조회 범위"
+          >
+            <option value="all">전체</option>
+            <option value="year">연도별</option>
+            <option value="month">월별</option>
+          </select>
+          {period.mode === "year" && (
+            <select
+              className="cd-select"
+              style={{ width: "auto" }}
+              value={period.year}
+              onChange={(e) => onPeriodChange({ ...period, year: e.target.value })}
+              title="조회 연도"
+            >
+              {yearOptions.map((y) => (
+                <option key={y} value={y}>{y}년</option>
+              ))}
+            </select>
+          )}
+          {period.mode === "month" && (
+            <input
+              type="month"
+              className="cd-input"
+              style={{ width: "auto" }}
+              value={period.month}
+              onChange={(e) => e.target.value && onPeriodChange({ ...period, month: e.target.value })}
+              title="수집일 기준 조회 월"
+            />
+          )}
+        </div>
       </div>
 
       {loading || !stats ? (
@@ -327,44 +520,17 @@ export function IntelStatsPanel({
 
           {/* 일별 수집 로그 — 야간 배치가 매일 몇 건을 넣었고 그중 몇 건이 확정·후보인지 */}
           <div className="rounded-xl border cd-border-c p-3">
-            <div className="flex items-baseline justify-between gap-2 mb-2">
+            <div className="flex items-center justify-between gap-2 mb-2">
               <h3 className="text-[13px] font-extrabold" style={{ color: "var(--cd-text)" }}>일별 수집 로그</h3>
-              <span className="text-[10px]" style={{ color: "var(--cd-faint)" }}>수집일 기준 최근 14일 · 월 선택과 무관</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px]" style={{ color: "var(--cd-faint)" }}>수집일 기준 최근 5일 · 기간 선택과 무관</span>
+                <button className="cd-btn cd-btn-soft cd-btn-sm" onClick={() => setLogsOpen(true)}>전체 보기</button>
+              </div>
             </div>
             {(stats.daily ?? []).length === 0 ? (
-              <div className="cd-text-faint text-xs py-4 text-center">최근 14일 수집 이력이 없습니다.</div>
+              <div className="cd-text-faint text-xs py-4 text-center">최근 5일 수집 이력이 없습니다.</div>
             ) : (
-              <div className="flex flex-col">
-                <div
-                  className="grid grid-cols-[64px_1fr_1fr_1fr_1fr] gap-x-2 px-2 py-1.5 rounded-lg text-[10px] font-bold"
-                  style={{ background: "var(--cd-surface)", color: "var(--cd-muted)" }}
-                >
-                  <span>수집일</span>
-                  <span className="text-right">수집</span>
-                  <span className="text-right">확정</span>
-                  <span className="text-right">후보</span>
-                  <span className="text-right">채택</span>
-                </div>
-                {stats.daily.map((d) => (
-                  <div key={d.date} className="cd-row-hover px-2 py-1.5 rounded-lg">
-                    <div className="grid grid-cols-[64px_1fr_1fr_1fr_1fr] gap-x-2 text-[11px] tabular-nums">
-                      <span className="font-bold" style={{ color: "var(--cd-text)" }}>{d.date.slice(5)}</span>
-                      <span className="text-right font-extrabold" style={{ color: "var(--cd-text)" }}>{d.collected.toLocaleString()}</span>
-                      <span className="text-right font-bold" style={{ color: d.confirmed > 0 ? "#13deb9" : "var(--cd-faint)" }}>{d.confirmed}</span>
-                      <span className="text-right font-bold" style={{ color: d.candidate > 0 ? "#5d87ff" : "var(--cd-faint)" }}>{d.candidate}</span>
-                      <span className="text-right font-bold" style={{ color: "var(--cd-muted)" }}>{d.adopted}</span>
-                    </div>
-                    <div className="text-[10px] mt-0.5 truncate" style={{ color: "var(--cd-faint)" }} title={
-                      Object.entries(d.bySource).map(([s, c]) => `${STAT_SOURCE_LABELS[s] ?? s} ${c}`).join(" · ")
-                    }>
-                      {Object.entries(d.bySource)
-                        .sort((a, b) => b[1] - a[1])
-                        .map(([s, c]) => `${STAT_SOURCE_LABELS[s] ?? s} ${c}`)
-                        .join(" · ")}
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <DailyLogTable rows={stats.daily} granularity="day" />
             )}
           </div>
 
@@ -442,6 +608,9 @@ export function IntelStatsPanel({
           </div>
         </>
       )}
+
+      {/* 전체 수집 로그 모달 */}
+      {logsOpen && <CollectLogsModal theme={theme} onClose={() => setLogsOpen(false)} />}
     </section>
   );
 }

@@ -4,6 +4,7 @@ import { getEndpoint, getSource } from "@/lib/scraper/sources-store";
 import { collectCustomSource } from "@/lib/intel/custom-sink";
 import { collectBidSource } from "@/lib/bid/bid-sink";
 import { matchAndQueueBidNotices } from "@/lib/bid/match-notify";
+import { logScraperRun } from "@/lib/scraper/run-log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,10 +31,20 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     const preview = body?.preview !== false; // 기본 미리보기
 
     // purpose 로 sink 어댑터 분기. bid=공공입찰 종류별 테이블, 그 외=intel_signals.
+    const startedIso = new Date().toISOString();
     const result =
       source.purpose === "bid"
         ? await collectBidSource(source, endpoint, { preview })
         : await collectCustomSource(source, endpoint, { preview });
+    // 실적재(지금 수집)만 실행 로그 기록 — 미리보기는 제외.
+    if (!preview) {
+      await logScraperRun({
+        source, endpoint, trigger: "manual",
+        scanned: result.scanned, inserted: result.inserted,
+        updated: (result as { updated?: number }).updated ?? 0,
+        error: result.error ?? null, startedAt: startedIso,
+      });
+    }
     // bid 실적재 시 사업분야 매칭 알림 큐 적재(신규 건만, 실패해도 수집 결과는 반환).
     if (!preview && source.purpose === "bid" && "insertedItems" in result && result.insertedItems?.length) {
       try {

@@ -45,6 +45,13 @@ interface DiscoveryCandidate {
   relevanceNote: string | null;
 }
 
+interface SharedBriefingItem extends Briefing {
+  shareId: string;
+  sharedByName: string | null;
+  sharedAt: string;
+  readAt: string | null;
+}
+
 const EXAMPLE_QUESTIONS = [
   "반도체 업종 최근 1년 투자·공장 신설 동향",
   "이차전지 관련 기업의 증설·신설 계획 요약",
@@ -64,6 +71,7 @@ export function RagBoard() {
   const [status, setStatus] = useState<RagStatusData | null>(null);
   const [candidates, setCandidates] = useState<DiscoveryCandidate[]>([]);
   const [briefings, setBriefings] = useState<Briefing[]>([]);
+  const [sharedBriefings, setSharedBriefings] = useState<SharedBriefingItem[]>([]);
 
   const reloadStatus = useCallback(async () => {
     try {
@@ -86,9 +94,30 @@ export function RagBoard() {
     } catch { /* noop */ }
   }, []);
 
+  const reloadShared = useCallback(async () => {
+    try {
+      const res = await fetch("/api/sales/rag/briefings/shared?limit=20", { cache: "no-store" });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) setSharedBriefings(Array.isArray(data.briefings) ? data.briefings : []);
+    } catch { /* noop */ }
+  }, []);
+
   useEffect(() => {
-    reloadStatus(); reloadCandidates(); reloadBriefings();
-  }, [reloadStatus, reloadCandidates, reloadBriefings]);
+    reloadStatus(); reloadCandidates(); reloadBriefings(); reloadShared();
+  }, [reloadStatus, reloadCandidates, reloadBriefings, reloadShared]);
+
+  // 공유받은 브리핑 열람 — 표시 + 읽음 마킹
+  const openSharedBriefing = (item: SharedBriefingItem) => {
+    setCurrent(item);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (!item.readAt) {
+      fetch("/api/sales/rag/briefings/shared", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ briefingId: item.briefingId }),
+      }).then(() => reloadShared()).catch(() => { /* noop */ });
+    }
+  };
 
   // ── 브리핑 생성 ──
   const [question, setQuestion] = useState("");
@@ -263,7 +292,44 @@ export function RagBoard() {
 
           {/* 브리핑 리포트 */}
           {current && !genBusy && (
-            <BriefingReportView briefing={current} onClose={() => setCurrent(null)} onOpenSignal={openSignal} />
+            <BriefingReportView
+              briefing={current}
+              theme={theme}
+              canEdit={canEdit}
+              onClose={() => setCurrent(null)}
+              onOpenSignal={openSignal}
+              onBriefingUpdate={(b) => { setCurrent(b); reloadBriefings(); }}
+            />
+          )}
+
+          {/* 공유받은 브리핑 */}
+          {sharedBriefings.length > 0 && (
+            <section className="cd-card-bg rounded-2xl border cd-border-c p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <h2 className="cd-text text-[0.95rem] font-extrabold">공유받은 브리핑</h2>
+                {sharedBriefings.some((b) => !b.readAt) && (
+                  <span className="cd-pill cd-pill-info">새 공유 {sharedBriefings.filter((b) => !b.readAt).length}건</span>
+                )}
+              </div>
+              <div className="flex flex-col">
+                {sharedBriefings.map((b) => (
+                  <button
+                    key={b.shareId}
+                    className="flex items-center gap-2 py-2 border-b cd-border-c last:border-b-0 min-w-0 text-left"
+                    title="공유받은 브리핑 보기"
+                    onClick={() => openSharedBriefing(b)}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm truncate cd-text ${!b.readAt ? "font-bold" : ""}`}>{b.question}</p>
+                      <p className="cd-text-faint text-[11px]">
+                        {b.sharedByName ? `${b.sharedByName} 님이 공유` : "공유됨"} · {b.sharedAt?.slice(0, 16).replace("T", " ")} · 출처 {b.sources?.length ?? 0}건
+                      </p>
+                    </div>
+                    {!b.readAt && <span className="cd-pill cd-pill-info shrink-0">읽지 않음</span>}
+                  </button>
+                ))}
+              </div>
+            </section>
           )}
 
           {/* 브리핑 이력 */}

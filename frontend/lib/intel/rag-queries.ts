@@ -392,6 +392,185 @@ export async function generateBriefing(
   };
 }
 
+/**
+ * 브리핑 추가 분석(보강): 기존 리포트 + 추가 질문으로 재생성해 같은 브리핑을 업데이트한다.
+ * 기존 출처 번호([n] 인용)를 보존하기 위해 기존 sources 순서는 유지하고, 추가 검색으로
+ * 새로 발견된 신호만 뒤에 이어 붙인다.
+ */
+export async function refineBriefing(
+  briefingId: string,
+  instruction: string,
+  _userId: string | null
+): Promise<RagBriefing> {
+  const inst = instruction.trim();
+  if (!inst) throw new Error("추가 분석 요청 내용을 입력하세요.");
+  const briefing = await getBriefing(briefingId);
+  if (!briefing) throw new Error("브리핑을 찾을 수 없습니다.");
+  if (!briefing.report) throw new Error("구버전(비구조화) 브리핑은 추가 분석을 지원하지 않습니다. 새로 생성해 주세요.");
+
+  // 기존 출처의 임베딩 문서 텍스트 복원(브리핑 컨텍스트 재구성)
+  const db = await getDb();
+  const ids = briefing.sources.map((s) => s.signalId);
+  const contentMap = new Map<string, string>();
+  if (ids.length) {
+    const rows = rowsToObjects(
+      await db.exec(`SELECT signal_id, content FROM intel_embeddings WHERE signal_id = ANY($1::text[])`, [ids])
+    );
+    for (const r of rows) contentMap.set(String(r.signal_id), String(r.content ?? ""));
+  }
+
+  // 추가 질문으로 신규 신호 검색 — 기존 출처에 없는 것만 뒤에 append
+  let newHits: RagSearchHit[] = [];
+  try {
+    const { hits } = await searchSimilarSignals(inst, briefing.filters, 12);
+    const seen = new Set(ids);
+    newHits = hits.filter((h) => !seen.has(h.signalId));
+  } catch {
+    // 추가 검색 실패는 치명적이지 않다 — 기존 출처만으로 보강 진행
+  }
+
+  const ctxBlocks: string[] = [];
+  briefing.sources.forEach((s, i) => {
+    const body =
+      contentMap.get(s.signalId) ||
+      [s.companyName, s.reportName].filter(Boolean).join(" · ") ||
+      "(내용 없음)";
+    ctxBlocks.push(`[${i + 1}] (${s.source}${s.disclosedAt ? ` / ${s.disclosedAt.slice(0, 10)}` : ""})\n${body.slice(0, 700)}`);
+  });
+  newHits.forEach((h, i) => {
+    const n = briefing.sources.length + i + 1;
+    const body = h.content || [h.companyName, h.reportName, h.summary].filter(Boolean).join(" · ");
+    ctxBlocks.push(`[${n}] (${h.source}${h.disclosedAt ? ` / ${h.disclosedAt.slice(0, 10)}` : ""}) (신규 추가 신호)\n${body.slice(0, 700)}`);
+  });
+
+  const prompt =
+    `아래는 발주 신호 ${briefing.sources.length + newHits.length}건입니다.\n\n${ctxBlocks.join("\n\n")}\n\n---\n\n` +
+    `원래 질문: ${briefing.question}\n\n` +
+    `현재 브리핑 리포트(JSON):\n${JSON.stringify(briefing.report)}\n\n---\n\n` +
+    `사용자 보강 요청: ${inst}\n\n` +
+    "위 신호만 근거로, 현재 리포트를 사용자 보강 요청에 맞춰 업데이트한 전체 리포트를 같은 JSON 스키마로 다시 출력하세요(JSON만, 코드펜스 없이). " +
+    "보강 요청과 무관한 기존 내용은 유지하되, 요청된 부분은 심화 분석·추가 정보로 확장합니다. " +
+    "신규 추가 신호가 근거를 보태면 해당 번호로 인용하고, 근거 없는 내용은 추가하지 않습니다. " +
+    "인용 번호 [n]은 위 신호 번호 기준을 그대로 사용합니다.";
+
+  const answerMd = await callClaude(BRIEFING_SYSTEM, prompt);
+  const report = parseBriefingReport(answerMd);
+  if (!report) throw new Error("추가 분석 응답 파싱에 실패했습니다. 다시 시도해 주세요.");
+
+  const mergedSources: RagBriefingSource[] = [
+    ...briefing.sources,
+    ...newHits.map((h) => ({
+      signalId: h.signalId,
+      score: h.score,
+      source: h.source,
+      companyName: h.companyName,
+      reportName: h.reportName,
+      disclosedAt: h.disclosedAt,
+      facilityName: h.facilityName,
+      url: h.url,
+    })),
+  ];
+  await withDbWrite(async (wdb) => {
+    await wdb.run(
+      `UPDATE intel_rag_briefings SET answer_md = $1, sources = $2::jsonb, model = $3 WHERE briefing_id = $4`,
+      [answerMd, JSON.stringify(mergedSources), BRIEFING_MODEL, briefingId]
+    );
+  });
+  return { ...briefing, answerMd, report, sources: mergedSources, model: BRIEFING_MODEL };
+}
+
+// ── 브리핑 공유 ────────────────────────────────────────────────────────
+
+export interface BriefingShareRecipient {
+  userId: string;
+  name: string;
+}
+
+/** 브리핑을 수신자들에게 공유(재공유 시 shared_at 갱신). 반환: 실제 공유(신규+갱신) 건수. */
+export async function shareBriefing(
+  briefingId: string,
+  recipients: BriefingShareRecipient[],
+  sharedBy: string | null
+): Promise<number> {
+  const briefing = await getBriefing(briefingId);
+  if (!briefing) throw new Error("브리핑을 찾을 수 없습니다.");
+  const now = new Date().toISOString();
+  let count = 0;
+  await withDbWrite(async (wdb) => {
+    for (const r of recipients) {
+      if (!r.userId) continue;
+      await wdb.run(
+        `INSERT INTO intel_rag_briefing_shares (share_id, briefing_id, recipient_user_id, shared_by, created_at)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (briefing_id, recipient_user_id)
+         DO UPDATE SET shared_by = EXCLUDED.shared_by, created_at = EXCLUDED.created_at, read_at = NULL`,
+        [id("irsh"), briefingId, r.userId, sharedBy, now]
+      );
+      count++;
+    }
+    // 웹 벨 알림(전역 alerts) — 수신자 이름을 본문에 담아 공지
+    if (count > 0) {
+      await wdb.run(
+        `INSERT INTO alerts (severity, source, code, title, body, payload_json, created_at)
+         VALUES ('info','intel','rag-briefing-share',$1,$2,$3::jsonb,$4)`,
+        [
+          `AI 브리핑 공유: ${briefing.question.slice(0, 60)}`,
+          `${recipients.map((r) => r.name).filter(Boolean).join(", ")} 님에게 공유되었습니다.`,
+          JSON.stringify({ briefingId, recipients: recipients.map((r) => r.userId) }),
+          now,
+        ]
+      );
+    }
+  });
+  return count;
+}
+
+export interface SharedBriefing extends RagBriefing {
+  shareId: string;
+  sharedBy: string | null;
+  sharedByName: string | null;
+  sharedAt: string;
+  readAt: string | null;
+}
+
+/** 내가 공유받은 브리핑 목록(최신순). */
+export async function listSharedBriefings(userId: string, limit = 20): Promise<SharedBriefing[]> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT b.briefing_id, b.question, b.answer_md, b.sources, b.filters, b.model, b.status, b.created_by, b.created_at,
+              sh.share_id, sh.shared_by, sh.created_at AS shared_at, sh.read_at,
+              ep.name AS shared_by_name
+         FROM intel_rag_briefing_shares sh
+         JOIN intel_rag_briefings b ON b.briefing_id = sh.briefing_id
+         LEFT JOIN employee_profiles ep ON ep.user_id = sh.shared_by
+        WHERE sh.recipient_user_id = $1
+        ORDER BY sh.created_at DESC
+        LIMIT ${Math.min(Math.max(1, limit), 100)}`,
+      [userId]
+    )
+  );
+  return rows.map((r) => ({
+    ...mapBriefing(r),
+    shareId: String(r.share_id ?? ""),
+    sharedBy: str(r.shared_by),
+    sharedByName: str(r.shared_by_name),
+    sharedAt: String(r.shared_at ?? ""),
+    readAt: str(r.read_at),
+  }));
+}
+
+/** 공유받은 브리핑 열람 마킹. */
+export async function markShareRead(briefingId: string, userId: string): Promise<void> {
+  await withDbWrite(async (wdb) => {
+    await wdb.run(
+      `UPDATE intel_rag_briefing_shares SET read_at = $1
+        WHERE briefing_id = $2 AND recipient_user_id = $3 AND read_at IS NULL`,
+      [new Date().toISOString(), briefingId, userId]
+    );
+  });
+}
+
 function mapBriefing(row: Record<string, unknown>): RagBriefing {
   const parse = (v: unknown): unknown => {
     try { return typeof v === "string" ? JSON.parse(v) : v; } catch { return null; }

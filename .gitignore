@@ -54,3 +54,6 @@ scripts/contract-migration/_dump/
 # OS/editor
 .DS_Store
 Thumbs.db
+
+# 로컬 수집 에이전트 로그(토지이음 등)
+.local-logs/

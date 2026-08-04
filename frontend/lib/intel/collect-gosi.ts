@@ -51,6 +51,108 @@ export interface CollectGosiResult {
   parseEmpty: boolean; // 두 채널 모두 0항목(사이트 개편 의심 → 알람)
 }
 
+export interface IngestEumResult {
+  received: number;
+  newFound: number;
+  inserted: number;
+  byGrade: Record<IntelSignalGrade, number>;
+}
+
+/**
+ * 토지이음(eum) 항목 외부 반입 적재 — eum.go.kr 이 AWS IP 대역을 차단해 서버 수집이 불가하므로,
+ * 로컬 수집 에이전트(scripts/collect-eum-local.mjs)가 목록을 긁어 내부 API 로 올린다.
+ * 등급 규칙·공시일 컷·삭제 피드백 차단·alerts 는 서버 수집(collectGosiSignals)과 동일하게 적용.
+ * external_id UNIQUE 라 중복 반입에 멱등.
+ */
+export async function ingestEumGosiItems(
+  rawItems: Array<Partial<GosiItem>>,
+  opts: { disclosureCutoffIso?: string | null } = {}
+): Promise<IngestEumResult> {
+  const db = await getDb();
+  const cutoffIso = opts.disclosureCutoffIso ?? null;
+  const result: IngestEumResult = {
+    received: rawItems.length, newFound: 0, inserted: 0,
+    byGrade: { confirmed: 0, candidate: 0, monitoring: 0, excluded: 0 },
+  };
+
+  // 입력 정제 — 외부 프로세스가 보내는 payload 라 필수 필드·형식을 방어적으로 거른다.
+  const items: GosiItem[] = [];
+  for (const r of rawItems) {
+    const externalId = String(r.externalId ?? "").trim();
+    const title = String(r.title ?? "").trim();
+    if (!/^eum:\d+$/.test(externalId) || !title) continue;
+    items.push({
+      channel: "eum",
+      externalId,
+      title,
+      url: String(r.url ?? "").trim() || null,
+      agency: r.agency != null && String(r.agency).trim() ? String(r.agency).trim() : null,
+      region: r.region != null && String(r.region).trim() ? String(r.region).trim() : null,
+      publishedAt: r.publishedAt && /^\d{4}-\d{2}-\d{2}/.test(String(r.publishedAt)) ? String(r.publishedAt) : null,
+    } as GosiItem);
+  }
+  if (!items.length) return result;
+
+  const seen = new Set(
+    rowsToObjects(await db.exec(`SELECT external_id FROM intel_signals WHERE source = 'gosi'`)).map((r) =>
+      String(r.external_id)
+    )
+  );
+  interface Prepared extends GosiItem { signalType: IntelSignalType; grade: IntelSignalGrade }
+  const prepared: Prepared[] = [];
+  for (const it of items) {
+    if (seen.has(it.externalId)) continue;
+    seen.add(it.externalId);
+    result.newFound++;
+    if (isOlderThanCutoff(it.publishedAt, cutoffIso)) continue;
+    prepared.push({ ...it, ...classifyEumGosi(it.title) });
+  }
+  if (!prepared.length) return result;
+
+  const nowIso = new Date().toISOString();
+  await withDbWrite(async (wdb) => {
+    const blocklist = await loadFeedbackBlocklist(wdb);
+    for (const p of prepared) {
+      if (blocklist.has(feedbackKey("gosi", p.externalId))) continue;
+      const raw = JSON.stringify({ channel: p.channel, agency: p.agency, ingest: "local-agent" });
+      const signalId = id("isig");
+      const ins = rowsToObjects(
+        await wdb.exec(
+          `INSERT INTO intel_signals
+             (signal_id, source, external_id, company_name, report_name, signal_type, signal_grade,
+              disclosed_at, url, raw_json, region, agency,
+              facility_id, match_status, match_type, status,
+              industry, industry_relevance, created_at, updated_at)
+           VALUES ($1,'gosi',$2,NULL,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,NULL,'unmatched','direct','new',
+                   'industrial-complex','direct',$11,$11)
+           ON CONFLICT (source, external_id) DO NOTHING
+           RETURNING signal_id`,
+          [
+            signalId, p.externalId, p.title, p.signalType, p.grade,
+            p.publishedAt, p.url, raw, p.region, p.agency, nowIso,
+          ]
+        )
+      );
+      if (!ins.length) continue;
+      result.inserted++;
+      result.byGrade[p.grade]++;
+      if (p.grade === "confirmed") {
+        await wdb.run(
+          `INSERT INTO alerts (severity, source, code, title, body, payload_json, created_at)
+           VALUES ('info','intel','gosi-signal',$1,$2,$3::jsonb,$4)`,
+          [
+            `${p.region ?? p.agency ?? "미상"} · 산단 고시 신호`,
+            p.title,
+            JSON.stringify({ signalId, channel: p.channel, grade: p.grade }),
+            nowIso,
+          ]
+        );
+      }
+    }
+  });
+  return result;
+}
+
 export async function collectGosiSignals(opts: CollectGosiOptions = {}): Promise<CollectGosiResult> {
   const db = await getDb();
   const maxPages = opts.maxPagesPerKeyword && opts.maxPagesPerKeyword > 0 ? opts.maxPagesPerKeyword : 1;

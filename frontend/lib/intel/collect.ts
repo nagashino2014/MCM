@@ -302,7 +302,7 @@ export async function collectDartSignals(opts: CollectOptions = {}): Promise<Col
           [
             id("isig"), d.receiptNo, d.corpCode, cls.ordererName, d.reportName, cls.signalType, grade,
             toIso(d.receiptDate), disclosureUrl(d.receiptNo), raw,
-            cls.summary ?? [cls.facilityKind, cls.location, cls.scale].filter(Boolean).join(" · "),
+            cls.summary ?? [cls.facilityKind, cls.location, cls.scale, cls.contractPeriod].filter(Boolean).join(" · "),
             cls.ordererName,
             cls.industry, cls.industryRelevance, cls.relevanceNote, nowIso,
           ]

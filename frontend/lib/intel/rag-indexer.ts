@@ -34,19 +34,42 @@ function parseRaw(v: unknown): Record<string, unknown> {
 function sourceBody(source: string, raw: Record<string, unknown>): string | null {
   if (source === "news") {
     const cls = (raw.classification ?? {}) as Record<string, unknown>;
-    return [str(raw.description), str(cls.location) && `위치: ${str(cls.location)}`, str(cls.scale) && `규모: ${str(cls.scale)}`]
+    return [
+      str(raw.description),
+      str(cls.location) && `위치: ${str(cls.location)}`,
+      str(cls.scale) && `규모: ${str(cls.scale)}`,
+      str(cls.projectPeriod) && `사업기간: ${str(cls.projectPeriod)}`,
+    ]
       .filter(Boolean)
       .join("\n");
   }
-  if (source === "press") return str(raw.body);
+  if (source === "press") {
+    const cls = (raw.classification ?? {}) as Record<string, unknown>;
+    return [str(raw.body), str(cls.projectPeriod) && `사업기간: ${str(cls.projectPeriod)}`]
+      .filter(Boolean)
+      .join("\n") || null;
+  }
   if (source === "eiass") {
     const d = (raw.detail ?? {}) as Record<string, unknown>;
     const fields: Array<[string, string]> = [
       ["사업구분", "bizCategory"], ["사업시행자", "operator"], ["소재지", "region"],
-      ["사업규모", "scaleText"], ["승인기관", "approver"], ["협의기관", "agency"],
+      ["사업규모", "scaleText"], ["사업기간", "projectPeriod"], ["승인기관", "approver"], ["협의기관", "agency"],
     ];
     return fields
       .map(([label, key]) => (str(d[key]) ? `${label}: ${str(d[key])}` : null))
+      .filter(Boolean)
+      .join("\n") || null;
+  }
+  if (source === "dart") {
+    // 공급계약 발주처 리드 — 원문 LLM 분석 결과(시설·위치·규모·계약기간)를 컨텍스트로
+    const lead = (raw.supplyLead ?? null) as Record<string, unknown> | null;
+    if (!lead) return null;
+    return [
+      str(lead.facilityKind) && `발주 시설: ${str(lead.facilityKind)}`,
+      str(lead.location) && `위치: ${str(lead.location)}`,
+      str(lead.scale) && `규모: ${str(lead.scale)}`,
+      str(lead.contractPeriod) && `사업기간(계약기간): ${str(lead.contractPeriod)}`,
+    ]
       .filter(Boolean)
       .join("\n") || null;
   }

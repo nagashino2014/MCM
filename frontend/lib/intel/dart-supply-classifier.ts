@@ -18,6 +18,7 @@ export interface SupplyContractClassification {
   signalType: IntelSignalType; // new_site/expansion/investment/other
   location: string | null; // 시설 위치(시/군/구/산단)
   scale: string | null; // 계약금액·용량 등 규모 표현
+  contractPeriod: string | null; // 계약기간(=공사 기간, 시작~종료) — 영업 적기 판단용
   confidence: "high" | "medium" | "low";
   summary: string | null; // 한 줄 요약(한국어)
   industry: string | null; // 대상 업종 id(설정 목록 매핑)
@@ -55,12 +56,14 @@ function buildPrompt(
     "해외 시설, 소프트웨어·용역·유지보수, 단순 제품(완제품·부품) 판매 공급, 방산·관급 물자 납품.\n" +
     "- ordererName: 발주처(계약상대방) 회사·기관명. 공시자(수주사)가 아님에 주의.\n" +
     "- signalType: 시설 신설 공사=new_site, 기존 시설 증설·개조=expansion, 단계 불명 설비투자=investment, 그 외=other.\n" +
+    "- contractPeriod: 계약기간(시작일~종료일)이 원문에 있으면 'YYYY-MM-DD ~ YYYY-MM-DD' 형태로, 없으면 null. 공사가 언제 끝나는지가 영업 적기 판단에 중요.\n" +
     "- confidence: 시설 종류·발주처가 명확하면 high, 일부 추정이면 medium, 불명확하면 low.\n" +
     industryBlock +
     `[공시자(수주사)] ${filerName}\n[보고서명] ${reportName}\n[원문 발췌]\n${docExcerpt}\n\n` +
     "출력(JSON만, 코드펜스 없이):\n" +
     '{"isTarget": true, "ordererName": "발주처 또는 null", "facilityKind": "시설 종류 또는 null", ' +
     '"signalType": "new_site|expansion|investment|other", "location": "위치 또는 null", "scale": "규모표현 또는 null", ' +
+    '"contractPeriod": "계약기간 또는 null", ' +
     `"confidence": "high|medium|low", "summary": "한국어 한 줄 요약"${industryOut}}`
   );
 }
@@ -105,6 +108,7 @@ function normalize(j: Record<string, unknown>, industries?: IntelIndustryItem[])
     signalType: SIGNAL_TYPES.includes(st) ? st : "other",
     location: str(j.location),
     scale: str(j.scale),
+    contractPeriod: str(j.contractPeriod),
     confidence: conf === "high" || conf === "medium" ? (conf as "high" | "medium") : "low",
     summary: str(j.summary),
     industry: industry ?? (relevance === "direct" ? "other" : null),

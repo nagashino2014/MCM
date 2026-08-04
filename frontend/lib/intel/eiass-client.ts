@@ -55,6 +55,7 @@ export interface EiassDetail {
   approver: string | null; // 승인기관명
   scaleText: string | null; // 사업규모 원문(㎡ 등)
   costEokwon: number | null; // 사업비(억원)
+  projectPeriod: string | null; // 사업기간 원문(예: "2028. ~ 2030.") — 영업 적기 판단용
   evalAgent: string | null; // 평가대행자/작성자 소속(대행 평가업체 — 경쟁·시장 동향용)
 }
 
@@ -203,6 +204,7 @@ export async function fetchEiassDetail(kind: EiassKind, code: string, seq: strin
     approver,
     scaleText,
     costEokwon: Number.isFinite(cost) && cost > 0 ? cost : null,
+    projectPeriod: fieldAfter(html, "사업기간"),
     evalAgent,
   };
 }

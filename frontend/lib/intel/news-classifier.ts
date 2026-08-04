@@ -16,6 +16,7 @@ export interface NewsClassification {
   companyName: string | null; // 사업 주체(발주·투자 기업)
   location: string | null; // 위치(시/군/구/산단)
   scale: string | null; // 규모(투자액·면적 등 원문 표현)
+  projectPeriod: string | null; // 사업기간(착공·준공·완공 시점 표현 — 영업 적기 판단용)
   confidence: "high" | "medium" | "low";
   summary: string | null; // 한 줄 요약(한국어)
   industry: string | null; // 통합허가 대상 업종 id(설정 목록 매핑, 산업단지=industrial-complex)
@@ -54,12 +55,13 @@ function buildPrompt(
     "- isSignal=true 예: '○○사 ○○공장 증설', '○○산단 신규 공장 건설', '생산라인 신·증설 투자 결정' — " +
     "기사의 주제가 특정 기업·기관의 투자·신증설 발표/진행 그 자체일 때만.\n" +
     "- signalType: 신설/이전신축=new_site, 증설/확장=expansion, 투자결정(단계미상)=investment, 그 외=other.\n" +
+    "- projectPeriod: 사업기간·착공/준공/완공/가동 시점 표현이 기사에 있으면 원문 그대로 짧게(예: '2027년 착공, 2029년 완공', '2028~2030'), 없으면 null.\n" +
     (feedbackBlock ?? "") +
     industryBlock +
     `[제목] ${title}\n[본문] ${description}\n\n` +
     "출력(JSON만, 코드펜스 없이):\n" +
     '{"isSignal": true, "signalType": "new_site|expansion|investment|other", "companyName": "회사명 또는 null", ' +
-    `"location": "위치 또는 null", "scale": "규모표현 또는 null", "confidence": "high|medium|low", "summary": "한국어 한 줄 요약"${industryOut}}`
+    `"location": "위치 또는 null", "scale": "규모표현 또는 null", "projectPeriod": "사업기간 또는 null", "confidence": "high|medium|low", "summary": "한국어 한 줄 요약"${industryOut}}`
   );
 }
 
@@ -105,6 +107,7 @@ function normalize(j: Record<string, unknown>, industries?: IntelIndustryItem[])
     companyName: str(j.companyName),
     location: str(j.location),
     scale: str(j.scale),
+    projectPeriod: str(j.projectPeriod),
     confidence: conf === "high" || conf === "medium" ? (conf as "high" | "medium") : "low",
     summary: str(j.summary),
     // direct 인데 업종 미매핑이면 'other'(대상이나 업종 미상)로 보정

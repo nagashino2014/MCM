@@ -188,17 +188,33 @@ async function loadDrafterSnapshot(userId: string): Promise<{
   };
 }
 
-/** 문서번호 채번 — 양식별 규칙 약칭 + 연도별 일련(원자적 증가). 예: 출장신청-2026-0001 */
+/**
+ * 문서번호 채번 — 양식별 규칙 약칭 + 연도별 일련. 예: 출장신청-2026-0001
+ * 삭제로 반납된 번호(doc_no_pool, 130)가 있으면 가장 작은 번호부터 이어받고,
+ * 없으면 시퀀스를 원자적으로 증가시킨다(테스트 문서 삭제 후 결번 방지 — 사용자 확정).
+ */
 async function allocateDocNo(txn: PgDatabase, ruleKey: string, year: string): Promise<string> {
-  const rows = rowsToObjects(
+  const reused = rowsToObjects(
     await txn.exec(
-      `INSERT INTO doc_no_sequences (rule_key, year, last_seq) VALUES ($1, $2, 1)
-       ON CONFLICT (rule_key, year) DO UPDATE SET last_seq = doc_no_sequences.last_seq + 1
-       RETURNING last_seq`,
+      `DELETE FROM doc_no_pool
+        WHERE rule_key = $1 AND year = $2
+          AND seq = (SELECT min(seq) FROM doc_no_pool WHERE rule_key = $1 AND year = $2)
+        RETURNING seq`,
       [ruleKey, year]
     )
   );
-  const seq = Number(rows[0]?.last_seq ?? 1);
+  const seq = reused.length
+    ? Number(reused[0].seq)
+    : Number(
+        rowsToObjects(
+          await txn.exec(
+            `INSERT INTO doc_no_sequences (rule_key, year, last_seq) VALUES ($1, $2, 1)
+             ON CONFLICT (rule_key, year) DO UPDATE SET last_seq = doc_no_sequences.last_seq + 1
+             RETURNING last_seq`,
+            [ruleKey, year]
+          )
+        )[0]?.last_seq ?? 1
+      );
   return `${ruleKey}-${year}-${String(seq).padStart(4, "0")}`;
 }
 
@@ -369,6 +385,15 @@ export async function deleteDoc(docId: string): Promise<{ docNo: string | null; 
     await txn.run(`DELETE FROM annual_leave_ledger WHERE doc_id = $1`, [docId]);
     await txn.run(`UPDATE approval_docs SET ref_doc_id = NULL WHERE ref_doc_id = $1`, [docId]);
     await txn.run(`DELETE FROM approval_docs WHERE doc_id = $1`, [docId]);
+    // 문서번호 반납(130) — 다음 상신이 이 번호를 이어받는다. 형식 `{약칭}-{연도}-{일련}` 파싱.
+    const m = docNo ? /^(.+)-(\d{4})-(\d+)$/.exec(docNo) : null;
+    if (m) {
+      await txn.run(
+        `INSERT INTO doc_no_pool (rule_key, year, seq, released_at) VALUES ($1, $2, $3, $4)
+         ON CONFLICT (rule_key, year, seq) DO NOTHING`,
+        [m[1], m[2], Number(m[3]), new Date().toISOString()]
+      );
+    }
   });
   return { docNo, title };
 }

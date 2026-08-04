@@ -15,6 +15,7 @@ import { listLeaveTypes } from "@/lib/approval/leave-types-store";
 import {
   EDUCATION_FORM_ID,
   TRIP_FORM_ID,
+  extractTripDestination,
   extractVehicleUse,
   normalizeContractClass,
   parsePeriod,
@@ -240,7 +241,7 @@ export async function listCalendarEvents(params: {
       if (!tag) continue;
       const period = parsePeriod(doc.values.trip_period);
       if (!period) continue;
-      const destination = String(doc.values.destination ?? "").trim() || "출장";
+      const destination = extractTripDestination(doc.values) ?? "출장";
       const classes = normalizeContractClass(doc.values.contract_class);
       events.push({
         id: `doc:${doc.docId}:trip`,
@@ -349,7 +350,7 @@ export async function listCalendarEvents(params: {
     for (const doc of tripDocs) {
       const use = extractVehicleUse(doc.values);
       if (!use) continue;
-      const destination = String(doc.values.destination ?? "").trim() || "출장";
+      const destination = extractTripDestination(doc.values) ?? "출장";
       events.push({
         id: `doc:${doc.docId}:vehicle`,
         tag: "vehicle",

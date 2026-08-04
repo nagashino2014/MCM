@@ -69,9 +69,20 @@ export const edgeAuthConfig: NextAuthConfig = {
         return true;
       }
 
-      if (!session?.user) return false;
+      // 세션 만료 시 API 요청은 401 JSON 으로 응답한다. false(로그인 307 리다이렉트)를 그대로 두면
+      // 업로드 같은 multipart POST 가 /login 페이지로 재전송되어 "Failed to find Server Action"
+      // 텍스트가 내려오고, 클라이언트 fetch 의 res.json() 이 "is not valid JSON" 으로 깨진다.
+      // 401 JSON 이면 각 화면의 기존 오류 처리(alert(data.error))가 만료 안내를 그대로 보여준다.
+      const sessionExpired = () =>
+        path.startsWith("/api/")
+          ? NextResponse.json(
+              { error: "로그인이 만료되었습니다. 페이지를 새로고침해 다시 로그인해 주세요." },
+              { status: 401 }
+            )
+          : false;
+      if (!session?.user) return sessionExpired();
       const user = session.user as { role?: Role; status?: UserStatus; mustChangePassword?: boolean };
-      if (user.status && user.status !== "active") return false;
+      if (user.status && user.status !== "active") return sessionExpired();
 
       // 초기 비밀번호 강제 변경: 변경 전까지 변경 화면/그 API 외 모든 경로를 변경 화면으로 보낸다.
       const onChangeFlow =

@@ -42,6 +42,26 @@ export function parsePeriod(value: unknown): TripPeriod | null {
   return { from, to: /^\d{4}-\d{2}-\d{2}$/.test(to) ? to : from };
 }
 
+/**
+ * 출장지 추출 — 구양식의 destination(텍스트) 우선, 없으면 개정 양식의 업체 검색 값
+ * ({name, facilityId|manual} 형태)을 키와 무관하게 탐색해 업체명을 쓴다
+ * (관리자가 빌더에서 출장지를 업체 검색으로 교체한 실측 대응 — field_12 등 임의 키).
+ * asset_select 값({name, assetId})은 facilityId/manual 이 없어 걸리지 않는다.
+ */
+export function extractTripDestination(fieldValues: Record<string, unknown>): string | null {
+  const direct = String(fieldValues.destination ?? "").trim();
+  if (direct) return direct;
+  for (const v of Object.values(fieldValues)) {
+    if (v && typeof v === "object" && !Array.isArray(v)) {
+      const o = v as { name?: unknown; facilityId?: unknown; manual?: unknown };
+      if (typeof o.name === "string" && o.name.trim() && ("facilityId" in o || "manual" in o)) {
+        return o.name.trim();
+      }
+    }
+  }
+  return null;
+}
+
 export interface TripVehicleUse {
   /** asset_select 값의 assetId(레거시 문자열 값이면 null) */
   assetId: string | null;

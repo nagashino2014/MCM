@@ -483,7 +483,9 @@ export function ApprovalDocModal({
       onClick={onClose}
     >
       <div
-        className="cdash cdash-vars cd-fields-white rounded-[24px] border cd-border-c w-full max-w-3xl max-h-[88vh] overflow-y-auto p-5"
+        // 문서 렌더러는 273mm(약 1032px) 고정폭 — max-w-3xl(768px)이면 양식이 눌려 좁아 보인다는
+        // 피드백(일정 메뉴 문서 팝업). 렌더러+좌우 패딩이 온전히 들어가는 폭으로 상향.
+        className="cdash cdash-vars cd-fields-white rounded-[24px] border cd-border-c w-full max-w-[1100px] max-h-[88vh] overflow-y-auto p-5"
         style={{ background: "var(--cd-card-solid)" }}
         data-theme={theme}
         onClick={(e) => e.stopPropagation()}

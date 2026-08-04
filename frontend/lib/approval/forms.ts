@@ -44,6 +44,8 @@ export interface ApprovalForm {
   version: number;
   sortOrder: number;
   updatedAt: string;
+  /** 선행 양식(127) — 지정 시 기안 화면에서 해당 양식의 내 기안 문서를 선행 문서로 연결한다(신청서→보고서). */
+  refFormId: string | null;
 }
 
 function mapForm(r: Record<string, unknown>): ApprovalForm {
@@ -63,6 +65,7 @@ function mapForm(r: Record<string, unknown>): ApprovalForm {
     version: Number(r.version ?? 1),
     sortOrder: Number(r.sort_order ?? 0),
     updatedAt: String(r.updated_at ?? ""),
+    refFormId: r.ref_form_id != null ? String(r.ref_form_id) : null,
   };
 }
 
@@ -120,6 +123,7 @@ export async function saveForm(params: {
   orgFolder: string | null;
   deptFolder: string | null;
   useYn: boolean;
+  refFormId?: string | null;
   actorUserId: string | null;
 }): Promise<ApprovalForm> {
   const err = validateFields(params.fields);
@@ -134,8 +138,8 @@ export async function saveForm(params: {
     await txn.run(
       `INSERT INTO approval_forms
          (form_id, folder_id, name, description, fields, doc_no_rule, retention_years,
-          org_folder, dept_folder, use_yn, version, created_by, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11, $12, $13, $13)
+          org_folder, dept_folder, use_yn, version, ref_form_id, created_by, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11, $12, $13, $14, $14)
        ON CONFLICT (form_id) DO UPDATE SET
          folder_id = EXCLUDED.folder_id,
          name = EXCLUDED.name,
@@ -147,6 +151,7 @@ export async function saveForm(params: {
          dept_folder = EXCLUDED.dept_folder,
          use_yn = EXCLUDED.use_yn,
          version = EXCLUDED.version,
+         ref_form_id = EXCLUDED.ref_form_id,
          updated_at = EXCLUDED.updated_at`,
       [
         formId,
@@ -160,6 +165,7 @@ export async function saveForm(params: {
         params.deptFolder,
         params.useYn ? 1 : 0,
         nextVersion,
+        params.refFormId ?? null,
         params.actorUserId,
         now,
       ]

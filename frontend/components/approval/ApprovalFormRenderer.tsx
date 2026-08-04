@@ -10,6 +10,7 @@ import { Plus, Users, X } from "lucide-react";
 import { ApprovalDocHead, type DocHeadInfo } from "@/components/approval/ApprovalDocHead";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
+import { AutoTimeInput } from "@/components/ui/AutoTimeInput";
 import { MailEditor } from "@/components/mail/MailEditor";
 import type { ApprovalFieldDef } from "@/lib/approval/fields";
 import { findInCatalog, type LeaveTypeItem } from "@/lib/approval/leave-types";
@@ -71,6 +72,8 @@ export function ApprovalFormRenderer({ fields, values, onChange, header, readOnl
                 onSet={(v) => set(f.key, v)}
                 onFill={set}
                 readOnly={readOnly}
+                allFields={fields}
+                allValues={vals}
               />
             ))}
           </div>
@@ -87,12 +90,16 @@ function FieldCell({
   onSet,
   onFill,
   readOnly,
+  allFields,
+  allValues,
 }: {
   field: ApprovalFieldDef;
   value: unknown;
   onSet: (v: unknown) => void;
   onFill: (key: string, value: unknown) => void;
   readOnly?: boolean;
+  allFields: ApprovalFieldDef[];
+  allValues: Values;
 }) {
   const span = Math.max(1, Math.min(3, f.span ?? 1));
   if (f.type === "static") {
@@ -111,7 +118,7 @@ function FieldCell({
         </span>
       </div>
       <div className="flex-1 min-w-0 px-2.5 py-2 flex items-center">
-        <FieldInput field={f} value={value} onSet={onSet} onFill={onFill} readOnly={readOnly} />
+        <FieldInput field={f} value={value} onSet={onSet} onFill={onFill} readOnly={readOnly} allFields={allFields} allValues={allValues} />
       </div>
     </div>
   );
@@ -123,12 +130,16 @@ function FieldInput({
   onSet,
   onFill,
   readOnly,
+  allFields,
+  allValues,
 }: {
   field: ApprovalFieldDef;
   value: unknown;
   onSet: (v: unknown) => void;
   onFill: (key: string, value: unknown) => void;
   readOnly?: boolean;
+  allFields: ApprovalFieldDef[];
+  allValues: Values;
 }) {
   const dis = readOnly === true;
   const base = "cd-input w-full text-[12.5px]";
@@ -211,7 +222,8 @@ function FieldInput({
     case "date":
       return <AutoDateInput className={base} disabled={dis} value={String(value ?? "")} onChange={(next) => onSet(next)} />;
     case "time":
-      return <input type="time" className={base} disabled={dis} value={String(value ?? "")} onChange={(e) => onSet(e.target.value)} />;
+      // 24시간 HHMM 연속 입력(예: 1900) → 자동으로 19:00 완성. 저장 형식(HH:MM)은 기존과 동일.
+      return <AutoTimeInput className={base} disabled={dis} value={String(value ?? "")} onChange={(next) => onSet(next)} />;
     case "period": {
       const v = (value ?? {}) as { from?: string; to?: string };
       return (
@@ -224,8 +236,17 @@ function FieldInput({
     }
     case "company_select":
       return <CompanySelectInput field={f} value={value} onSet={onSet} onFill={onFill} readOnly={dis} />;
-    case "contract_select":
-      return <ContractSelectInput field={f} value={value} onSet={onSet} onFill={onFill} readOnly={dis} />;
+    case "contract_select": {
+      // 같은 양식에 업체 검색(company_select) 필드가 있고 업체가 선택돼 있으면, 키워드 검색 대신
+      // 그 업체와 계약한 최근 3년 이내 계약 리스트를 보여준다(없으면 기존 키워드 검색 유지).
+      const companyField = allFields.find((x) => x.type === "company_select");
+      const cv = companyField ? (allValues[companyField.key] as CompanyValue | undefined) : undefined;
+      const companyFacility =
+        cv && typeof cv === "object" && cv.facilityId && !cv.manual ? { facilityId: cv.facilityId, name: cv.name ?? "" } : null;
+      return <ContractSelectInput field={f} value={value} onSet={onSet} onFill={onFill} readOnly={dis} companyFacility={companyFacility} />;
+    }
+    case "contact_select":
+      return <ContactSelectInput field={f} value={value} onSet={onSet} readOnly={dis} />;
     case "leave_type":
       return <LeaveTypeInput value={value} onSet={onSet} readOnly={dis} />;
     case "asset_select":
@@ -414,6 +435,8 @@ function CompanySelectInput({
  * 계약 검색 입력 — /api/contracts?q= (RBAC 가시성 스코프 적용) 자동완성.
  * '미등록 용역(직접 입력)' 체크 시 자유 입력(컨택 중 업체의 제안서 등 계약 前 업무 대응).
  * 저장 값: { title, contractId?, manual? }. fillMap 으로 업체명·용역분류·계약일 등 자동 채움.
+ * 같은 양식에서 업체가 선택돼 있으면(companyFacility) 키워드 검색 대신 그 업체의
+ * 최근 3년 이내 계약 리스트를 포커스 시 보여준다(입력 텍스트는 리스트 내 필터로 동작).
  */
 interface ContractValue {
   title?: string;
@@ -431,26 +454,40 @@ interface ContractOption {
   contractAmount: number | null;
 }
 
+/** 오늘로부터 n년 전 ISO 날짜(YYYY-MM-DD) — 최근 3년 계약 필터 기준. */
+function isoYearsAgo(n: number): string {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - n);
+  return d.toISOString().slice(0, 10);
+}
+
 function ContractSelectInput({
   field: f,
   value,
   onSet,
   onFill,
   readOnly,
+  companyFacility,
 }: {
   field: ApprovalFieldDef;
   value: unknown;
   onSet: (v: unknown) => void;
   onFill: (key: string, value: unknown) => void;
   readOnly?: boolean;
+  companyFacility: { facilityId: string; name: string } | null;
 }) {
   const v: ContractValue =
     value && typeof value === "object" ? (value as ContractValue) : { title: String(value ?? "") };
   const [options, setOptions] = useState<ContractOption[]>([]);
+  // 업체 연동 모드 — 선택 업체의 최근 3년 계약 리스트(포커스 시 표시)
+  const [companyList, setCompanyList] = useState<ContractOption[] | null>(null);
+  const [focused, setFocused] = useState(false);
+  const linkedFacilityId = companyFacility?.facilityId ?? null;
 
+  // 키워드 검색 모드(업체 미연동 시에만)
   useEffect(() => {
     const q = (v.title ?? "").trim();
-    if (v.manual || v.contractId || q.length < 2) {
+    if (linkedFacilityId || v.manual || v.contractId || q.length < 2) {
       setOptions([]);
       return;
     }
@@ -470,7 +507,33 @@ function ContractSelectInput({
       controller.abort();
       clearTimeout(timer);
     };
-  }, [v.title, v.manual, v.contractId]);
+  }, [v.title, v.manual, v.contractId, linkedFacilityId]);
+
+  // 업체 연동 모드 — 업체가 바뀌면 최근 3년 계약을 미리 로드해 둔다
+  useEffect(() => {
+    if (!linkedFacilityId) {
+      setCompanyList(null);
+      return;
+    }
+    const controller = new AbortController();
+    (async () => {
+      try {
+        const params = new URLSearchParams({
+          facilityId: linkedFacilityId,
+          dateFrom: isoYearsAgo(3),
+          sort: "date",
+          limit: "50",
+        });
+        const res = await fetch(`/api/contracts?${params.toString()}`, { cache: "no-store", signal: controller.signal });
+        if (!res.ok) return;
+        const json = (await res.json()) as { items?: ContractOption[] };
+        setCompanyList(json.items ?? []);
+      } catch {
+        if (!controller.signal.aborted) setCompanyList(null);
+      }
+    })();
+    return () => controller.abort();
+  }, [linkedFacilityId]);
 
   const pick = (o: ContractOption) => {
     onSet({ title: o.contractTitle, contractId: o.contractId, manual: false });
@@ -480,7 +543,19 @@ function ContractSelectInput({
       if (val) onFill(rule.target, val);
     }
     setOptions([]);
+    setFocused(false);
   };
+
+  // 표시할 리스트 — 연동 모드: 최근 3년 계약(입력 텍스트로 필터), 검색 모드: 키워드 결과
+  const listToShow: ContractOption[] = (() => {
+    if (v.contractId || v.manual || readOnly) return [];
+    if (linkedFacilityId) {
+      if (!focused || !companyList) return [];
+      const q = (v.title ?? "").trim().toLowerCase();
+      return q ? companyList.filter((o) => o.contractTitle.toLowerCase().includes(q)) : companyList;
+    }
+    return options;
+  })();
 
   return (
     <div className="w-full relative">
@@ -488,8 +563,20 @@ function ContractSelectInput({
         <input
           className="cd-input flex-1 min-w-[160px] text-[12.5px]"
           disabled={readOnly}
-          placeholder={f.placeholder ?? (v.manual ? "용역명 직접 입력" : "계약(용역명·업체명) 검색(2자 이상)")}
+          placeholder={
+            f.placeholder ??
+            (v.manual
+              ? "용역명 직접 입력"
+              : linkedFacilityId
+                ? `${companyFacility?.name ?? "선택 업체"}의 최근 3년 계약에서 선택`
+                : "계약(용역명·업체명) 검색(2자 이상)")
+          }
           value={v.title ?? ""}
+          onFocus={() => setFocused(true)}
+          onBlur={() => {
+            // 리스트 항목 클릭(mousedown→click)이 끝난 뒤 닫히도록 지연
+            setTimeout(() => setFocused(false), 180);
+          }}
           onChange={(e) => onSet({ ...v, title: e.target.value, contractId: undefined })}
         />
         <label className="flex items-center gap-1.5 text-[11.5px] cd-text cursor-pointer shrink-0" title="계약 전 업무(제안서·발표자료 등)는 직접 입력합니다">
@@ -506,19 +593,162 @@ function ContractSelectInput({
         </label>
       </div>
       {v.contractId && !v.manual && <p className="text-[10.5px] cd-text-primary mt-0.5">선택됨: {v.title}</p>}
-      {options.length > 0 && !v.contractId && !v.manual && !readOnly && (
+      {linkedFacilityId && !v.contractId && !v.manual && companyList && companyList.length === 0 && (
+        <p className="text-[10.5px] cd-text-faint mt-0.5">
+          {companyFacility?.name}의 최근 3년 계약이 없습니다 — 직접 입력을 사용하세요.
+        </p>
+      )}
+      {listToShow.length > 0 && !readOnly && (
         <div className="absolute z-10 top-full mt-1 left-0 right-0 rounded-xl border cd-border-c cd-card-bg shadow-lg max-h-52 overflow-y-auto">
-          {options.map((o) => (
+          {listToShow.map((o) => (
             <button
               key={o.contractId}
               type="button"
               className="w-full px-3 py-2 text-left text-[12.5px] hover:bg-[color:var(--cd-surface)]"
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => pick(o)}
             >
               <span className="cd-text">{o.contractTitle}</span>
               <span className="ml-2 text-[10.5px] cd-text-faint">
                 {o.counterpartyName}
                 {o.contractDate ? ` · ${o.contractDate}` : ""}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * 접견인(사업장 담당자) 검색 입력 — 명함 촬영·사업장 담당자 정보로 쌓인
+ * facility_contact_people 리스트에서 키워드(성명·업체명)로 검색해 복수 선택한다.
+ * 선택한 담당자는 입력 창 우측에 태그로 배치되며, 다시 검색해 추가할 수 있다.
+ * 저장 값: { id, name, title?, facilityName? }[] — 구버전 text 값(문자열)은 그대로 표시(호환).
+ */
+interface ContactPersonValue {
+  id: number;
+  name: string;
+  title?: string | null;
+  facilityName?: string | null;
+}
+
+interface ContactOption {
+  id: number;
+  personName: string;
+  title: string | null;
+  facilityId: string;
+  facilityName: string | null;
+  departmentName: string | null;
+}
+
+function ContactSelectInput({
+  field: f,
+  value,
+  onSet,
+  readOnly,
+}: {
+  field: ApprovalFieldDef;
+  value: unknown;
+  onSet: (v: unknown) => void;
+  readOnly?: boolean;
+}) {
+  const people: ContactPersonValue[] = Array.isArray(value)
+    ? (value as ContactPersonValue[]).filter((p) => p && p.name)
+    : [];
+  const legacyText = !Array.isArray(value) && typeof value === "string" ? value : "";
+  const [q, setQ] = useState("");
+  const [options, setOptions] = useState<ContactOption[]>([]);
+
+  useEffect(() => {
+    const term = q.trim();
+    if (term.length < 2) {
+      setOptions([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({ q: term, limit: "15" });
+        const res = await fetch(`/api/approval/contacts?${params.toString()}`, { cache: "no-store", signal: controller.signal });
+        if (!res.ok) return;
+        const json = (await res.json()) as { items?: ContactOption[] };
+        setOptions(json.items ?? []);
+      } catch {
+        if (!controller.signal.aborted) setOptions([]);
+      }
+    }, 160);
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [q]);
+
+  const pick = (o: ContactOption) => {
+    if (!people.some((p) => p.id === o.id)) {
+      onSet([...people, { id: o.id, name: o.personName, title: o.title, facilityName: o.facilityName }]);
+    }
+    setQ("");
+    setOptions([]);
+  };
+
+  const tagLabel = (p: ContactPersonValue) =>
+    `${p.name}${p.title ? ` ${p.title}` : ""}${p.facilityName ? ` (${p.facilityName})` : ""}`;
+
+  if (readOnly) {
+    return (
+      <div className="w-full flex items-center gap-1.5 flex-wrap text-[12.5px] cd-text">
+        {people.length > 0
+          ? people.map((p) => (
+              <span key={p.id} className="inline-flex items-center rounded-full cd-tint-primary px-2.5 py-1 text-[11.5px]">
+                {tagLabel(p)}
+              </span>
+            ))
+          : legacyText || <span className="cd-text-faint">-</span>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full relative">
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <input
+          className="cd-input flex-1 min-w-[180px] text-[12.5px]"
+          placeholder={f.placeholder ?? "담당자 검색(성명·업체명, 2자 이상)"}
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
+        {people.map((p) => (
+          <span key={p.id} className="inline-flex items-center gap-1 rounded-full cd-tint-primary px-2.5 py-1 text-[11.5px] shrink-0">
+            {tagLabel(p)}
+            <button type="button" title="제거" onClick={() => onSet(people.filter((x) => x.id !== p.id))}>
+              <X className="w-3 h-3" />
+            </button>
+          </span>
+        ))}
+        {legacyText && people.length === 0 && (
+          <span className="text-[11px] cd-text-faint shrink-0" title="이전 방식(직접 입력)으로 저장된 값입니다">
+            기존 입력: {legacyText}
+          </span>
+        )}
+      </div>
+      {options.length > 0 && (
+        <div className="absolute z-10 top-full mt-1 left-0 right-0 rounded-xl border cd-border-c cd-card-bg shadow-lg max-h-52 overflow-y-auto">
+          {options.map((o) => (
+            <button
+              key={o.id}
+              type="button"
+              className="w-full px-3 py-2 text-left text-[12.5px] hover:bg-[color:var(--cd-surface)]"
+              onClick={() => pick(o)}
+            >
+              <span className="cd-text">
+                {o.personName}
+                {o.title ? <span className="cd-text-faint text-[11px]"> {o.title}</span> : null}
+              </span>
+              <span className="ml-2 text-[10.5px] cd-text-faint">
+                {o.facilityName ?? ""}
+                {o.departmentName ? ` · ${o.departmentName}` : ""}
               </span>
             </button>
           ))}
@@ -750,7 +980,8 @@ function UserSelectInput({
   );
 }
 
-/** 표(반복 행) 입력 — 행 추가/삭제 + sumColumn 합계 자동. 값은 행 객체 배열로 저장된다. */
+/** 표(반복 행) 입력 — 행 추가/삭제 + sumColumn 합계 자동. 값은 행 객체 배열로 저장된다.
+ *  people 열은 조직도 복수 선택({employeeId,name,position}[] 저장, 성명/직함 태그 표시). */
 function TableInput({
   field: f,
   value,
@@ -764,17 +995,23 @@ function TableInput({
 }) {
   const cols = f.tableColumns ?? [];
   const emptyRow = () => Object.fromEntries(cols.map((c) => [c.key, ""]));
-  const rows: Record<string, string>[] = useMemo(() => {
-    const arr = Array.isArray(value) ? (value as Record<string, string>[]) : [];
+  const rows: Record<string, unknown>[] = useMemo(() => {
+    const arr = Array.isArray(value) ? (value as Record<string, unknown>[]) : [];
     const min = Math.max(1, f.minRows ?? 1);
     if (arr.length >= min) return arr;
     return [...arr, ...Array.from({ length: min - arr.length }, emptyRow)];
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, f.minRows, cols.length]);
 
-  const update = (ri: number, key: string, v: string) => {
+  const update = (ri: number, key: string, v: unknown) => {
     const next = rows.map((r, i) => (i === ri ? { ...r, [key]: v } : r));
     onSet(next);
+  };
+  // people 열 조직도 모달 대상(행·열) — 모달은 표당 1개만 렌더한다
+  const [peopleTarget, setPeopleTarget] = useState<{ ri: number; colKey: string } | null>(null);
+  const peopleAt = (ri: number, colKey: string): TablePerson[] => {
+    const v = rows[ri]?.[colKey];
+    return Array.isArray(v) ? (v as TablePerson[]).filter((p) => p && p.employeeId) : [];
   };
   const sum = f.sumColumn
     ? rows.reduce((a, r) => a + (Number(String(r[f.sumColumn!] ?? "").replace(/[^\d.-]/g, "")) || 0), 0)
@@ -804,7 +1041,7 @@ function TableInput({
                     <select
                       className="w-full bg-transparent px-1.5 py-1.5 text-[12px] cd-text outline-none"
                       disabled={readOnly}
-                      value={r[c.key] ?? ""}
+                      value={String(r[c.key] ?? "")}
                       onChange={(e) => update(ri, c.key, e.target.value)}
                     >
                       <option value="">선택</option>
@@ -818,9 +1055,48 @@ function TableInput({
                     <AutoDateInput
                       className="w-full bg-transparent px-1.5 py-1.5 text-[12px] cd-text outline-none"
                       disabled={readOnly}
-                      value={r[c.key] ?? ""}
+                      value={String(r[c.key] ?? "")}
                       onChange={(next) => update(ri, c.key, next)}
                     />
+                  ) : c.type === "time" ? (
+                    <AutoTimeInput
+                      className="w-full bg-transparent px-1.5 py-1.5 text-[12px] cd-text outline-none"
+                      disabled={readOnly}
+                      value={String(r[c.key] ?? "")}
+                      onChange={(next) => update(ri, c.key, next)}
+                    />
+                  ) : c.type === "people" ? (
+                    <div className="px-1.5 py-1 flex items-center gap-1 flex-wrap">
+                      {peopleAt(ri, c.key).map((p) => (
+                        <span key={p.employeeId} className="inline-flex items-center gap-1 rounded-full cd-tint-primary px-2 py-0.5 text-[11px] shrink-0">
+                          {p.name}
+                          {p.position ? `/${p.position}` : ""}
+                          {!readOnly && (
+                            <button
+                              type="button"
+                              title="제거"
+                              onClick={() => update(ri, c.key, peopleAt(ri, c.key).filter((x) => x.employeeId !== p.employeeId))}
+                            >
+                              <X className="w-2.5 h-2.5" />
+                            </button>
+                          )}
+                        </span>
+                      ))}
+                      {/* 구버전 텍스트 값(문자열) 호환 표시 */}
+                      {typeof r[c.key] === "string" && String(r[c.key]).trim() !== "" && (
+                        <span className="text-[11.5px] cd-text">{String(r[c.key])}</span>
+                      )}
+                      {!readOnly && (
+                        <button
+                          type="button"
+                          className="cd-btn rounded-md border cd-border-c px-1.5 py-0.5 text-[10.5px] flex items-center gap-1 shrink-0"
+                          title="조직도에서 선택(복수 가능)"
+                          onClick={() => setPeopleTarget({ ri, colKey: c.key })}
+                        >
+                          <Users className="w-3 h-3" /> 선택
+                        </button>
+                      )}
+                    </div>
                   ) : (
                     <input
                       type="text"
@@ -829,7 +1105,7 @@ function TableInput({
                         c.type === "currency" || c.type === "number" ? "text-right" : ""
                       }`}
                       disabled={readOnly}
-                      value={r[c.key] ?? ""}
+                      value={String(r[c.key] ?? "")}
                       onChange={(e) => update(ri, c.key, e.target.value)}
                     />
                   )}
@@ -870,6 +1146,28 @@ function TableInput({
           <Plus className="w-3.5 h-3.5" /> 행 추가
         </button>
       )}
+      <OrgPickerModal
+        open={peopleTarget != null}
+        title="동행자 선택 — 조직도에서 선택 (복수 가능)"
+        hint="인원을 클릭하면 태그로 추가됩니다. 여러 명을 이어서 선택한 뒤 닫으세요."
+        onClose={() => setPeopleTarget(null)}
+        onSelect={(emp) => {
+          if (!peopleTarget) return;
+          const cur = peopleAt(peopleTarget.ri, peopleTarget.colKey);
+          if (cur.some((p) => p.employeeId === emp.employeeId)) return;
+          update(peopleTarget.ri, peopleTarget.colKey, [
+            ...cur,
+            { employeeId: emp.employeeId, name: emp.name, position: emp.positionName ?? undefined },
+          ]);
+        }}
+      />
     </div>
   );
+}
+
+/** 표 people 열 저장 값 — 성명/직함 태그 표시용(조직도 스냅샷 기준). */
+interface TablePerson {
+  employeeId: string;
+  name: string;
+  position?: string;
 }

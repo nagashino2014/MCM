@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { hasPermission } from "@/lib/auth/rbac";
-import { getDoc, getUserDeptId, markWatcherRead } from "@/lib/approval/docs";
+import { recordAuditLog } from "@/lib/auth/audit";
+import { deleteDoc, getDoc, getUserDeptId, markWatcherRead } from "@/lib/approval/docs";
 import { CANCELABLE_FORM_IDS, getOpenCancelRequest } from "@/lib/approval/cancel";
 
 export const runtime = "nodejs";
@@ -20,7 +21,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ doc
       doc.drafterUserId === ctx.userId || doc.steps.some((s) => s.assigneeUserId === ctx.userId || s.delegatedFrom === ctx.userId);
     const isWatcher = doc.watchers.some((w) => w.userId === ctx.userId);
     // 관계자가 아니어도 결재 운영 권한(approval.manage)이 있으면 열람 가능.
-    let allowed = involved || isWatcher || (await hasPermission(ctx.userId, "approval.manage"));
+    const isManager = await hasPermission(ctx.userId, "approval.manage");
+    let allowed = involved || isWatcher || isManager;
     if (!allowed && doc.status === "approved" && doc.orgFolder) allowed = true;
     if (!allowed && ["approved", "rejected"].includes(doc.status) && doc.deptId) {
       const myDept = await getUserDeptId(ctx.userId);
@@ -36,11 +38,32 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ doc
     const cancelable = (CANCELABLE_FORM_IDS as readonly string[]).includes(doc.formId);
     const canRequestCancel =
       cancelable && doc.drafterUserId === ctx.userId && ["in_progress", "approved"].includes(doc.status) && !cancelRequest;
-    const canCancel =
-      doc.status === "approved" && cancelRequest != null && (await hasPermission(ctx.userId, "approval.manage"));
+    const canCancel = doc.status === "approved" && cancelRequest != null && isManager;
+    // 문서 삭제(관리자) — 승인 완료 포함 전 상태. 테스트·오기안 문서 정리용.
+    const canDelete = isManager;
     return NextResponse.json({
-      doc: { ...doc, myStepId: myStep?.stepId ?? null, cancelRequest, canRequestCancel, canCancel },
+      doc: { ...doc, myStepId: myStep?.stepId ?? null, cancelRequest, canRequestCancel, canCancel, canDelete },
     });
+  } catch (err) {
+    return authErrorToResponse(err);
+  }
+}
+
+// DELETE: 문서 완전 삭제 — 결재 운영 권한(approval.manage) 전용.
+// 승인 완료 문서 포함 전 상태 삭제 가능(테스트 문서 정리). 연차 차감 이력도 함께 제거(잔여 복원).
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ docId: string }> }) {
+  try {
+    const actor = await requirePermission("approval.manage", { fallbackRoles: ["admin"] });
+    const { docId } = await params;
+    const removed = await deleteDoc(docId);
+    await recordAuditLog({
+      actorUserId: actor.userId,
+      action: "approval_doc_delete",
+      targetTable: "approval_docs",
+      targetId: docId,
+      after: { docNo: removed.docNo, title: removed.title },
+    });
+    return NextResponse.json({ ok: true });
   } catch (err) {
     return authErrorToResponse(err);
   }

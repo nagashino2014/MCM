@@ -20,6 +20,8 @@ import {
   CircleDot,
   Clock,
   Coins,
+  Contact,
+  Link2,
   Eye,
   FileSignature,
   FolderOpen,
@@ -68,6 +70,8 @@ interface FormRow {
   useYn: boolean;
   version: number;
   updatedAt: string;
+  /** 선행 양식(127) — 지정 시 이 양식 기안 화면에 선행 문서 연결 UI 가 표시된다(예: 출장보고서 ← 출장신청). */
+  refFormId: string | null;
 }
 
 const FIELD_TYPE_LABEL: Record<ApprovalFieldType, string> = {
@@ -85,6 +89,7 @@ const FIELD_TYPE_LABEL: Record<ApprovalFieldType, string> = {
   dept_select: "부서",
   company_select: "업체 검색",
   contract_select: "계약 검색",
+  contact_select: "담당자 검색",
   leave_type: "휴가 종류",
   asset_select: "예약 자산",
   table: "표(반복 행)",
@@ -106,6 +111,7 @@ const PALETTE: { type: ApprovalFieldType; icon: LucideIcon }[] = [
   { type: "dept_select", icon: Users },
   { type: "company_select", icon: Building2 },
   { type: "contract_select", icon: FileSignature },
+  { type: "contact_select", icon: Contact },
   { type: "leave_type", icon: CalendarCheck2 },
   { type: "asset_select", icon: CarFront },
   { type: "table", icon: Table2 },
@@ -125,6 +131,7 @@ const NEW_FORM: FormRow = {
   useYn: true,
   version: 1,
   updatedAt: "",
+  refFormId: null,
 };
 
 /* ---------- 행 그리드 모델 유틸 ---------- */
@@ -292,6 +299,7 @@ export default function ApprovalFormsBoard() {
           orgFolder: draft.orgFolder,
           deptFolder: draft.deptFolder,
           useYn: draft.useYn,
+          refFormId: draft.refFormId,
         }),
       });
       const data = await res.json();
@@ -472,6 +480,29 @@ export default function ApprovalFormsBoard() {
                       <input type="checkbox" checked={draft.useYn} onChange={(e) => setDraft({ ...draft, useYn: e.target.checked })} /> 사용
                     </label>
                   </span>
+                </label>
+                <label
+                  className="text-[11px] cd-text-faint flex flex-col gap-1"
+                  title="지정하면 이 양식의 기안 화면 상단에 '선행 문서 선택' 버튼이 표시되고, 기안자가 자신이 기안한 선행 양식 문서를 골라 연관 관계를 설정할 수 있습니다(예: 출장보고서의 선행 양식 = 출장신청서)."
+                >
+                  <span className="flex items-center gap-1">
+                    <Link2 className="w-3 h-3" /> 선행 양식(신청서→보고서 연관)
+                  </span>
+                  <select
+                    className="cd-select"
+                    style={{ width: "100%" }}
+                    value={draft.refFormId ?? ""}
+                    onChange={(e) => setDraft({ ...draft, refFormId: e.target.value || null })}
+                  >
+                    <option value="">없음</option>
+                    {forms
+                      .filter((f) => f.formId && f.formId !== draft.formId)
+                      .map((f) => (
+                        <option key={f.formId} value={f.formId}>
+                          {f.name}
+                        </option>
+                      ))}
+                  </select>
                 </label>
               </div>
 
@@ -771,6 +802,11 @@ function FieldProps({
           휴가 종류·부여일수는 사규 경조 규정 카탈로그에서 자동 제공됩니다(옵션 편집 불필요). 선택 시 부여 휴가일수가 표시되고, 연차·반차만 연차 대장에서 차감됩니다.
         </p>
       )}
+      {f.type === "contact_select" && (
+        <p className="text-[11px] cd-text-faint rounded-lg border border-dashed cd-border-c p-2.5">
+          명함 촬영·사업장 담당자 정보로 쌓인 담당자 리스트에서 키워드(성명·업체명)로 검색해 선택합니다(복수 가능, 태그 표시). 옵션 편집이 필요 없습니다.
+        </p>
+      )}
       {f.type === "asset_select" && (
         <label className="text-[11px] cd-text-faint flex flex-col gap-1">
           자산 종류
@@ -881,8 +917,8 @@ function FillMapEditor({
     <div className="rounded-lg border border-dashed cd-border-c p-2.5 flex flex-col gap-1.5">
       <span className="text-[11px] cd-text-faint">자동 채움 — 선택 시 다른 필드에 값 주입</span>
       {rules.map((r, i) => (
-        <div key={i} className="flex items-center gap-1.5">
-          <select className="cd-select" style={{ width: 110 }} value={r.source} onChange={(e) => setRule(i, { source: e.target.value })}>
+        <div key={i} className="flex items-center gap-1.5 min-w-0">
+          <select className="cd-select shrink-0" style={{ width: 110 }} value={r.source} onChange={(e) => setRule(i, { source: e.target.value })}>
             {sources.map((s) => (
               <option key={s.key} value={s.key}>
                 {s.label}
@@ -890,7 +926,13 @@ function FillMapEditor({
             ))}
           </select>
           <span className="text-[11px] cd-text-faint shrink-0">→</span>
-          <select className="cd-select flex-1" style={{ width: "auto" }} value={r.target} onChange={(e) => setRule(i, { target: e.target.value })}>
+          {/* width:auto 는 가장 긴 옵션 텍스트만큼 내재 폭이 커져 패널을 삐져나간다 — flex 배분(width:0)으로 고정 */}
+          <select
+            className="cd-select flex-1"
+            style={{ width: 0, minWidth: 0 }}
+            value={r.target}
+            onChange={(e) => setRule(i, { target: e.target.value })}
+          >
             <option value="">대상 필드 선택</option>
             {targets.map((t) => (
               <option key={t.key} value={t.key}>
@@ -951,9 +993,9 @@ function TableColumnsEditor({
           <input className="cd-input font-mono" style={{ width: 84 }} placeholder="col_key" value={c.key} onChange={(e) => setCol(i, { key: e.target.value })} />
           <input className="cd-input flex-1 min-w-[80px]" placeholder="열 라벨" value={c.label} onChange={(e) => setCol(i, { label: e.target.value })} />
           <select className="cd-select" style={{ width: 82 }} value={c.type} onChange={(e) => setCol(i, { type: e.target.value })}>
-            {["text", "date", "select", "number", "currency", "rowno"].map((t) => (
+            {["text", "date", "time", "select", "number", "currency", "rowno", "people"].map((t) => (
               <option key={t} value={t}>
-                {t === "rowno" ? "연번(자동)" : t}
+                {t === "rowno" ? "연번(자동)" : t === "time" ? "시각(HHMM)" : t === "people" ? "인원(조직도)" : t}
               </option>
             ))}
           </select>
@@ -974,11 +1016,11 @@ function TableColumnsEditor({
             />
           )}
           {conceptsForType(concepts, c.type).length > 0 && (
-            <label className="w-full flex items-center gap-1.5 text-[10.5px] cd-text-faint">
+            <label className="w-full flex items-center gap-1.5 text-[10.5px] cd-text-faint min-w-0">
               의미
               <select
                 className="cd-select flex-1"
-                style={{ width: "auto" }}
+                style={{ width: 0, minWidth: 0 }}
                 value={c.semantic?.concept ?? ""}
                 onChange={(e) => setCol(i, { semantic: e.target.value ? { concept: e.target.value } : undefined })}
               >

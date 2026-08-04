@@ -4,15 +4,17 @@
 // 값은 field_key 기반 구조화 저장(field_values). 결재선은 순차 단계 리스트(합의/승인)로 구성한다.
 // 설계: docs/e-approval-blueprint.md §5-2.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, ClipboardCheck, Send, Save, Trash2, Users, Eye, BookmarkPlus, ShieldCheck, AlertTriangle, Info, Ban } from "lucide-react";
+import { ArrowLeft, ClipboardCheck, Send, Save, Trash2, Users, Eye, BookmarkPlus, ShieldCheck, AlertTriangle, Info, Ban, Link2 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { CdModal } from "@/components/cdash/CdModal";
 import { ApprovalFormRenderer } from "@/components/approval/ApprovalFormRenderer";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
 import type { ApprovalFieldDef } from "@/lib/approval/fields";
+import { autofillFromRefDoc, compareWithRefDoc } from "@/lib/approval/ref-link";
 import { findInCatalog, type LeaveTypeItem } from "@/lib/approval/leave-types";
 import "@/components/cdash/cdash.css";
 
@@ -20,6 +22,20 @@ interface FormInfo {
   formId: string;
   name: string;
   fields: ApprovalFieldDef[];
+  /** 선행 양식(127) — 지정 시 선행 문서 연결 UI 를 표시한다(예: 출장보고서 → 출장신청). */
+  refFormId: string | null;
+}
+
+/** 선행 문서 후보/연결 값 — /api/approval/docs?box=ref-candidates 응답 형태. */
+interface RefDocInfo {
+  docId: string;
+  docNo: string | null;
+  title: string;
+  formId: string;
+  formName: string;
+  status: string;
+  submittedAt: string | null;
+  fieldValues: Record<string, unknown>;
 }
 
 /** ISO 날짜에 n일 더한 ISO(달력일, 로컬 계산·타임존 무관). */
@@ -95,6 +111,12 @@ export function ApprovalDraftBoard() {
   const [presets, setPresets] = useState<LinePreset[]>([]);
   const [precheck, setPrecheck] = useState<PrecheckResult | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
+  // 선행 문서 연관(127) — 양식에 선행 양식이 지정된 경우(신청서→보고서)
+  const [refDoc, setRefDoc] = useState<RefDocInfo | null>(null);
+  const [refCandidates, setRefCandidates] = useState<RefDocInfo[]>([]);
+  const [refModal, setRefModal] = useState(false);
+  // 선행 양식 필드 스키마 — 자동 완성의 라벨 매칭용(예: service_class↔contract_class '용역분류')
+  const [refFormFields, setRefFormFields] = useState<ApprovalFieldDef[]>([]);
   // 휴가신청 양식이면 본인 잔여 연차 배지 + 휴가 종류 카탈로그(기간 자동화)
   const [leaveRemaining, setLeaveRemaining] = useState<{ granted: number; used: number; remaining: number } | null>(null);
   const [leaveCatalog, setLeaveCatalog] = useState<LeaveTypeItem[]>([]);
@@ -181,10 +203,11 @@ export function ApprovalDraftBoard() {
           if (!res.ok) throw new Error(data?.error ?? "문서를 불러오지 못했습니다.");
           if (cancelled) return;
           const d = data.doc;
-          setForm({ formId: d.formId, name: d.formName, fields: d.fields });
+          setForm({ formId: d.formId, name: d.formName, fields: d.fields, refFormId: d.formRefFormId ?? null });
           setTitle(d.title ?? "");
           setUrgent(!!d.urgent);
           setValues(d.fieldValues ?? {});
+          if (d.refDoc) setRefDoc(d.refDoc as RefDocInfo);
           setLine(
             (d.steps ?? []).map((s: { stepType: string; assigneeUserId: string; assigneeName: string | null; assigneePosition: string | null }) => ({
               stepType: s.stepType === "agree" ? "agree" : "approve",
@@ -206,7 +229,7 @@ export function ApprovalDraftBoard() {
           const data = await res.json();
           if (!res.ok) throw new Error(data?.error ?? "양식을 불러오지 못했습니다.");
           if (cancelled) return;
-          setForm({ formId: data.form.formId, name: data.form.name, fields: data.form.fields });
+          setForm({ formId: data.form.formId, name: data.form.name, fields: data.form.fields, refFormId: data.form.refFormId ?? null });
           setTitle(data.form.name);
         }
       } catch (err) {
@@ -219,6 +242,60 @@ export function ApprovalDraftBoard() {
       cancelled = true;
     };
   }, [formId, editDocId]);
+
+  // 선행 문서 후보 + 선행 양식 스키마(자동 완성 라벨 매칭용) 로드
+  useEffect(() => {
+    const refFormId = form?.refFormId;
+    if (!refFormId) {
+      setRefCandidates([]);
+      setRefFormFields([]);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/approval/docs?box=ref-candidates&formId=${encodeURIComponent(refFormId)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled && Array.isArray(d?.docs)) setRefCandidates(d.docs);
+      })
+      .catch(() => {});
+    fetch(`/api/approval/forms/${encodeURIComponent(refFormId)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled && Array.isArray(d?.form?.fields)) setRefFormFields(d.form.fields);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [form?.refFormId]);
+
+  // 선행 문서 불일치 검사 — 선택 시점 + 이후 입력 시점 모두 재계산되는 상시 배너(업체명·방문일시·계약명)
+  const refMismatches = useMemo(() => {
+    if (!form || !refDoc) return [];
+    return compareWithRefDoc(form.fields, values, refDoc.fieldValues);
+  }, [form, refDoc, values]);
+
+  const pickRefDoc = (c: RefDocInfo) => {
+    setRefDoc(c);
+    setRefModal(false);
+    if (!form) return;
+    // 자동 완성 — 선행 문서와 겹치는 요소(같은 key·같은 라벨·업체/계약)를 선행 값으로 채운다.
+    // 이미 입력된 필드는 덮지 않는다(다르면 아래 불일치 경고가 알림).
+    const { next, filledLabels } = autofillFromRefDoc(form.fields, values, c.fieldValues, refFormFields);
+    if (filledLabels.length) setValues(next);
+    // 선택 시점 즉시 경고 — 자동 완성 후에도 남는 불일치(기존 입력 값)를 바로 알린다.
+    const miss = compareWithRefDoc(form.fields, next, c.fieldValues);
+    const parts: string[] = [];
+    if (filledLabels.length) parts.push(`선행 문서에서 자동 입력된 항목: ${filledLabels.join(", ")}`);
+    if (miss.length) {
+      parts.push(
+        `입력 값이 선행 문서와 일치하지 않습니다:\n${miss
+          .map((m) => `· ${m.label} — 선행: ${m.refText} / 현재: ${m.curText}`)
+          .join("\n")}\n연결은 유지됩니다. 값을 확인하세요.`
+      );
+    }
+    if (parts.length) alert(parts.join("\n\n"));
+  };
 
   // 결재선 프리셋 목록 로드
   useEffect(() => {
@@ -299,6 +376,7 @@ export function ApprovalDraftBoard() {
           fieldValues: values,
           line,
           watchers: watchers.map((w) => ({ userId: w.userId, kind: w.kind })),
+          refDocId: refDoc?.docId ?? null,
         }),
       });
       const data = await res.json();
@@ -306,7 +384,7 @@ export function ApprovalDraftBoard() {
       setDocId(data.docId);
       return { docId: data.docId, docNo: data.docNo };
     },
-    [form, docId, title, urgent, values, line, watchers]
+    [form, docId, title, urgent, values, line, watchers, refDoc]
   );
 
   const validateForSubmit = useCallback((): boolean => {
@@ -336,6 +414,29 @@ export function ApprovalDraftBoard() {
     async (action: "save" | "submit") => {
       if (!form) return;
       if (action === "submit" && !validateForSubmit()) return;
+      // 선행 문서 미연결 안내(비차단) — 연관 가능한 선행 문서가 있는데 연결하지 않은 채 상신하는 경우
+      if (action === "submit" && form.refFormId && !refDoc && refCandidates.length > 0) {
+        const label = refCandidates[0].formName;
+        if (
+          !window.confirm(
+            `연관 가능한 선행 문서(${label}) ${refCandidates.length}건이 있습니다.\n연결하지 않고 상신하시겠습니까?\n(취소를 누르면 상단 '선행 문서 선택'으로 연결할 수 있습니다)`
+          )
+        ) {
+          return;
+        }
+      }
+      // 불일치 경고(비차단) — 연결된 선행 문서와 입력 값이 다르면 상신 전 마지막으로 확인
+      if (action === "submit" && refDoc && refMismatches.length > 0) {
+        if (
+          !window.confirm(
+            `연결된 선행 문서와 입력 값이 일치하지 않습니다:\n${refMismatches
+              .map((m) => `· ${m.label} — 선행: ${m.refText} / 현재: ${m.curText}`)
+              .join("\n")}\n그래도 상신하시겠습니까?`
+          )
+        ) {
+          return;
+        }
+      }
       setBusy(action);
       try {
         const saved = await persist("save");
@@ -367,7 +468,7 @@ export function ApprovalDraftBoard() {
         setBusy(null);
       }
     },
-    [form, validateForSubmit, persist, router]
+    [form, validateForSubmit, persist, router, refDoc, refCandidates, refMismatches]
   );
 
   // AI 검토(수동, 비용 통제) — 저장 후 LLM 사전검토+유사 문서.
@@ -443,6 +544,65 @@ export function ApprovalDraftBoard() {
                 </span>
               )}
             </div>
+            {/* 선행 문서 연결(127) — 신청서→보고서 연관. 배너는 렌더러 위에 상시 표시된다. */}
+            {form.refFormId && (
+              <div
+                className={`rounded-xl border px-3.5 py-2.5 flex flex-col gap-1.5 ${refDoc ? "cd-border-c" : "border-dashed cd-border-c"}`}
+                style={refDoc && refMismatches.length > 0 ? { borderColor: "var(--cd-warning,#FFAE1F)" } : undefined}
+              >
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Link2 className="w-4 h-4 cd-text-primary shrink-0" />
+                  {refDoc ? (
+                    <>
+                      <span className="text-[12.5px] cd-text">
+                        선행 문서: <b>{refDoc.docNo ? `${refDoc.docNo} · ` : ""}{refDoc.title}</b>
+                      </span>
+                      <span className="text-[10.5px] cd-text-faint">
+                        {refDoc.formName} · {refDoc.status === "approved" ? "승인 완료" : "결재 진행 중"}
+                      </span>
+                      <span className="ml-auto flex items-center gap-1.5">
+                        <button type="button" className="cd-btn rounded-lg border cd-border-c px-2.5 py-1 text-[11px]" onClick={() => setRefModal(true)}>
+                          변경
+                        </button>
+                        <button
+                          type="button"
+                          className="cd-btn rounded-lg border cd-border-c px-2.5 py-1 text-[11px] cd-text-faint"
+                          onClick={() => setRefDoc(null)}
+                        >
+                          연결 해제
+                        </button>
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-[12.5px] cd-text">선행 문서 미연결</span>
+                      {refCandidates.length > 0 && (
+                        <span className="text-[11.5px]" style={{ color: "var(--cd-warning,#FFAE1F)" }}>
+                          최근 기안한 {refCandidates[0].formName} {refCandidates.length}건이 있습니다 — 해당 건이면 연결하세요.
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        className="ml-auto cd-btn rounded-lg border cd-border-c px-3 py-1.5 text-[11.5px] flex items-center gap-1.5"
+                        onClick={() => setRefModal(true)}
+                      >
+                        <Link2 className="w-3.5 h-3.5" /> 선행 문서 선택
+                      </button>
+                    </>
+                  )}
+                </div>
+                {refDoc && refMismatches.length > 0 && (
+                  <div className="flex flex-col gap-1">
+                    {refMismatches.map((m, i) => (
+                      <p key={i} className="text-[11.5px] flex items-center gap-1.5" style={{ color: "var(--cd-warning,#FFAE1F)" }}>
+                        <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                        {m.label} 불일치 — 선행 문서: {m.refText} / 현재 입력: {m.curText}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <ApprovalFormRenderer
               fields={form.fields}
               values={values}
@@ -659,6 +819,53 @@ export function ApprovalDraftBoard() {
         )}
         </>
       ) : null}
+
+      {/* 선행 문서 선택 모달(127) — 내가 기안한 선행 양식 문서 목록에서 선택 */}
+      <CdModal open={refModal} onClose={() => setRefModal(false)} title="선행 문서 선택 — 최근 기안한 문서" size="md">
+        <div className="flex flex-col gap-1.5">
+          {refCandidates.length === 0 ? (
+            <p className="text-[12.5px] cd-text-faint py-6 text-center">
+              연결할 수 있는 선행 문서가 없습니다.
+              <br />
+              선행 문서(신청서)를 먼저 기안·상신한 뒤 보고서를 작성하세요.
+            </p>
+          ) : (
+            refCandidates.map((c) => (
+              <button
+                key={c.docId}
+                type="button"
+                className={`text-left rounded-xl border px-3.5 py-2.5 flex items-center gap-2.5 ${
+                  refDoc?.docId === c.docId ? "cd-tint-primary border-transparent" : "cd-border-c hover:bg-[color:var(--cd-surface)]"
+                }`}
+                onClick={() => pickRefDoc(c)}
+              >
+                <div className="flex flex-col min-w-0 flex-1">
+                  <span className="text-[12.5px] cd-text truncate">
+                    {c.docNo ? <span className="font-mono text-[11px] cd-text-faint mr-1.5">{c.docNo}</span> : null}
+                    {c.title}
+                  </span>
+                  <span className="text-[10.5px] cd-text-faint">
+                    {c.formName}
+                    {c.submittedAt ? ` · 상신 ${c.submittedAt.slice(0, 10)}` : ""}
+                  </span>
+                </div>
+                <span
+                  className={`text-[10.5px] rounded-full px-2 py-0.5 shrink-0 ${
+                    c.status === "approved"
+                      ? "border border-[color:var(--cd-success,#13DEB9)] text-[color:var(--cd-success,#13DEB9)]"
+                      : "border cd-border-c cd-text-faint"
+                  }`}
+                >
+                  {c.status === "approved" ? "승인" : "진행 중"}
+                </span>
+              </button>
+            ))
+          )}
+          <p className="text-[10px] cd-text-faint mt-1">
+            선택하면 이 문서와 연관 관계가 설정됩니다. 업체명·방문일시·계약명이 입력 값과 다르면 경고가 표시됩니다.
+          </p>
+        </div>
+      </CdModal>
 
       {/* 조직도 선택 모달(공용, G3) */}
       <OrgPickerModal

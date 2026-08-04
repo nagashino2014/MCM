@@ -99,6 +99,22 @@ export interface ApprovalDocDetail extends ApprovalDocSummary {
   orgFolder: string | null;
   deptId: string | null;
   watchers: ApprovalWatcher[];
+  /** 선행 문서 연결(127) — 연결된 신청서의 요약(열람 화면 링크·기안 화면 복원용). */
+  refDoc: RefDocLite | null;
+  /** 이 문서 양식에 지정된 선행 양식 id(127) — 재편집 시 연결 UI 표시 판단용. */
+  formRefFormId: string | null;
+}
+
+/** 선행 문서 요약 — 연결 표시·불일치 비교에 필요한 최소 형태. */
+export interface RefDocLite {
+  docId: string;
+  docNo: string | null;
+  title: string;
+  formId: string;
+  formName: string;
+  status: string;
+  submittedAt: string | null;
+  fieldValues: Record<string, unknown>;
 }
 
 export interface ApprovalWatcher {
@@ -244,6 +260,8 @@ export async function saveDoc(params: {
   fieldValues: Record<string, unknown>;
   line: ApprovalLineStepInput[];
   watchers?: ApprovalWatcherInput[];
+  /** 선행 문서 연결(127) — 신청서→보고서 연관(예: 출장신청 → 출장보고). */
+  refDocId?: string | null;
   actorUserId: string;
 }): Promise<string> {
   const form = await getForm(params.formId);
@@ -266,14 +284,15 @@ export async function saveDoc(params: {
     await txn.run(
       `INSERT INTO approval_docs
          (doc_id, form_id, form_version, title, urgent, status, drafter_user_id, drafter_employee_id,
-          drafter_name, drafter_position, dept_id, dept_name, field_values, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, 'draft', $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $13)
+          drafter_name, drafter_position, dept_id, dept_name, field_values, ref_doc_id, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, 'draft', $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14, $14)
        ON CONFLICT (doc_id) DO UPDATE SET
          title = EXCLUDED.title,
          urgent = EXCLUDED.urgent,
          status = 'draft',
          form_version = EXCLUDED.form_version,
          field_values = EXCLUDED.field_values,
+         ref_doc_id = EXCLUDED.ref_doc_id,
          updated_at = EXCLUDED.updated_at`,
       [
         docId,
@@ -288,6 +307,7 @@ export async function saveDoc(params: {
         drafter.deptId,
         drafter.deptName,
         JSON.stringify(params.fieldValues ?? {}),
+        params.refDocId ?? null,
         now,
       ]
     );
@@ -330,6 +350,27 @@ export async function saveDoc(params: {
     }
   });
   return docId;
+}
+
+/**
+ * 문서 완전 삭제(관리자 전용 — 테스트·오기안 문서 정리).
+ * steps·watchers·cancel_requests 는 FK CASCADE 로 함께 삭제되고,
+ * 연차 대장(annual_leave_ledger)의 이 문서 사용 엔트리는 수동 삭제(잔여 연차 복원),
+ * 이 문서를 선행 문서로 참조하는 후행 문서는 연결만 해제(ref_doc_id NULL)한다.
+ */
+export async function deleteDoc(docId: string): Promise<{ docNo: string | null; title: string }> {
+  let docNo: string | null = null;
+  let title = "";
+  await withDbWrite(async (txn) => {
+    const rows = rowsToObjects(await txn.exec(`SELECT doc_no, title FROM approval_docs WHERE doc_id = $1`, [docId]));
+    if (!rows.length) throw new Error("문서를 찾을 수 없습니다.");
+    docNo = rows[0].doc_no != null ? String(rows[0].doc_no) : null;
+    title = String(rows[0].title ?? "");
+    await txn.run(`DELETE FROM annual_leave_ledger WHERE doc_id = $1`, [docId]);
+    await txn.run(`UPDATE approval_docs SET ref_doc_id = NULL WHERE ref_doc_id = $1`, [docId]);
+    await txn.run(`DELETE FROM approval_docs WHERE doc_id = $1`, [docId]);
+  });
+  return { docNo, title };
 }
 
 /** 특정 order 의 waiting 단계를 pending 으로 — 대결 라우팅을 여기서 적용한다. activated_at 기록(체류시간 산출용). */
@@ -675,16 +716,62 @@ export async function listDocsByForm(params: {
   });
 }
 
+/** field_values jsonb 안전 파싱(공용). */
+function parseFieldValues(raw: unknown): Record<string, unknown> {
+  try {
+    const v = typeof raw === "string" ? JSON.parse(raw) : raw;
+    if (v && typeof v === "object") return v as Record<string, unknown>;
+  } catch {
+    // 무시
+  }
+  return {};
+}
+
+/**
+ * 선행 문서 후보(127) — 내가 기안한 특정 양식의 문서(승인 완료 우선, 진행 중 포함).
+ * 보고서 기안 화면의 '선행 문서 선택' 모달 목록 + 미연결 안내 배지에 쓰인다.
+ * field_values 를 포함해 내려 클라이언트가 업체명·기간·계약명 불일치 비교를 수행한다.
+ */
+export async function listRefCandidates(userId: string, formId: string, limit = 20): Promise<RefDocLite[]> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT d.doc_id, d.doc_no, d.title, d.form_id, d.status, d.submitted_at, d.field_values, f.name AS form_name
+         FROM approval_docs d
+         JOIN approval_forms f ON f.form_id = d.form_id
+        WHERE d.drafter_user_id = $1 AND d.form_id = $2 AND d.status IN ('approved', 'in_progress')
+        ORDER BY (d.status = 'approved') DESC, d.submitted_at DESC NULLS LAST
+        LIMIT $3`,
+      [userId, formId, limit]
+    )
+  );
+  return rows.map((r) => ({
+    docId: String(r.doc_id ?? ""),
+    docNo: r.doc_no != null ? String(r.doc_no) : null,
+    title: String(r.title ?? ""),
+    formId: String(r.form_id ?? ""),
+    formName: String(r.form_name ?? ""),
+    status: String(r.status ?? ""),
+    submittedAt: r.submitted_at != null ? String(r.submitted_at) : null,
+    fieldValues: parseFieldValues(r.field_values),
+  }));
+}
+
 /** 문서 상세 — 제출 당시 양식 버전의 fields 로 렌더한다. */
 export async function getDoc(docId: string): Promise<ApprovalDocDetail | null> {
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT d.*, f.name AS form_name, f.org_folder,
-              COALESCE(v.fields, f.fields) AS render_fields
+      `SELECT d.*, f.name AS form_name, f.org_folder, f.ref_form_id AS form_ref_form_id,
+              COALESCE(v.fields, f.fields) AS render_fields,
+              rd.doc_no AS ref_doc_no, rd.title AS ref_title, rd.form_id AS ref_form_id,
+              rd.status AS ref_status, rd.submitted_at AS ref_submitted_at,
+              rd.field_values AS ref_field_values, rf.name AS ref_form_name
          FROM approval_docs d
          JOIN approval_forms f ON f.form_id = d.form_id
          LEFT JOIN approval_form_versions v ON v.form_id = d.form_id AND v.version = d.form_version
+         LEFT JOIN approval_docs rd ON rd.doc_id = d.ref_doc_id
+         LEFT JOIN approval_forms rf ON rf.form_id = rd.form_id
         WHERE d.doc_id = $1`,
       [docId]
     )
@@ -704,13 +791,20 @@ export async function getDoc(docId: string): Promise<ApprovalDocDetail | null> {
       [docId]
     )
   );
-  let fieldValues: Record<string, unknown> = {};
-  try {
-    const v = typeof r.field_values === "string" ? JSON.parse(r.field_values) : r.field_values;
-    if (v && typeof v === "object") fieldValues = v as Record<string, unknown>;
-  } catch {
-    // 무시
-  }
+  const fieldValues = parseFieldValues(r.field_values);
+  const refDoc: RefDocLite | null =
+    r.ref_doc_id != null && String(r.ref_doc_id)
+      ? {
+          docId: String(r.ref_doc_id),
+          docNo: r.ref_doc_no != null ? String(r.ref_doc_no) : null,
+          title: String(r.ref_title ?? ""),
+          formId: String(r.ref_form_id ?? ""),
+          formName: String(r.ref_form_name ?? ""),
+          status: String(r.ref_status ?? ""),
+          submittedAt: r.ref_submitted_at != null ? String(r.ref_submitted_at) : null,
+          fieldValues: parseFieldValues(r.ref_field_values),
+        }
+      : null;
   return {
     ...mapSummary(r),
     formVersion: Number(r.form_version ?? 1),
@@ -726,5 +820,7 @@ export async function getDoc(docId: string): Promise<ApprovalDocDetail | null> {
       name: w.name != null ? String(w.name) : null,
       kind: String(w.kind ?? "ref"),
     })),
+    refDoc,
+    formRefFormId: r.form_ref_form_id != null ? String(r.form_ref_form_id) : null,
   };
 }

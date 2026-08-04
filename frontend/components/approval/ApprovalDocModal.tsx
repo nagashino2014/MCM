@@ -5,7 +5,7 @@
 // 모달(ApprovalDocModal)은 뷰어를 오버레이로 감싼 래퍼 — 양식별 조회/문서함에서 계속 사용.
 
 import { useEffect, useState, type ReactNode } from "react";
-import { CheckCircle2, Sparkles, X } from "lucide-react";
+import { CheckCircle2, Sparkles, Trash2, X } from "lucide-react";
 import { ApprovalFormRenderer } from "@/components/approval/ApprovalFormRenderer";
 import type { ApprovalFieldDef } from "@/lib/approval/fields";
 
@@ -43,6 +43,10 @@ export interface DocDetailData {
   cancelRequest?: { requestId: string; reason: string; requestedByName: string | null; requestedAt: string } | null;
   canRequestCancel?: boolean;
   canCancel?: boolean;
+  /** 선행 문서 연결(127) — 신청서→보고서 연관 표시(예: 출장보고서에 연결된 출장신청서). */
+  refDoc?: { docId: string; docNo: string | null; title: string; formName: string; status: string } | null;
+  /** 문서 삭제 권한(관리자, 승인 완료 포함 전 상태) — 테스트·오기안 문서 정리. */
+  canDelete?: boolean;
 }
 
 export const DOC_STATUS_LABEL: Record<string, string> = {
@@ -197,6 +201,37 @@ export function ApprovalDocViewer({
                   {detail.docNo ?? "미채번"} · {DOC_STATUS_LABEL[detail.status] ?? detail.status}
                 </span>
               </h3>
+              {detail.canDelete && (
+                <button
+                  type="button"
+                  className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] flex items-center gap-1 cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)] shrink-0"
+                  title="문서 완전 삭제(관리자) — 승인 완료 문서 포함, 테스트·오기안 정리용"
+                  disabled={acting}
+                  onClick={async () => {
+                    if (
+                      !window.confirm(
+                        `이 문서를 완전히 삭제합니다.\n${detail.docNo ?? "미채번"} · ${detail.title}\n\n결재선·참조 기록이 함께 삭제되고, 휴가 문서라면 연차 차감도 복원됩니다.\n되돌릴 수 없습니다. 삭제하시겠습니까?`
+                      )
+                    ) {
+                      return;
+                    }
+                    setActing(true);
+                    try {
+                      const res = await fetch(`/api/approval/docs/${encodeURIComponent(docId)}`, { method: "DELETE" });
+                      const data = await res.json().catch(() => ({}));
+                      if (!res.ok) throw new Error(data?.error ?? "삭제 실패");
+                      alert("삭제되었습니다.");
+                      onActed?.();
+                    } catch (err) {
+                      alert((err as Error).message);
+                    } finally {
+                      setActing(false);
+                    }
+                  }}
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> 삭제
+                </button>
+              )}
               {headerRight}
             </div>
 
@@ -257,6 +292,20 @@ export function ApprovalDocViewer({
                 );
               })}
             </div>
+
+            {/* 선행 문서 연관(127) — 보고서에 연결된 신청서 표시 */}
+            {detail.refDoc && (
+              <p className="text-[11.5px] cd-text-faint flex items-center gap-1.5">
+                <span className="text-[10px] font-bold rounded-full px-2 py-0.5 cd-tint-primary shrink-0">선행 문서</span>
+                <span className="cd-text">
+                  {detail.refDoc.docNo ? `${detail.refDoc.docNo} · ` : ""}
+                  {detail.refDoc.title}
+                </span>
+                <span>
+                  ({detail.refDoc.formName} · {DOC_STATUS_LABEL[detail.refDoc.status] ?? detail.refDoc.status})
+                </span>
+              </p>
+            )}
 
             {detail.aiSummary && (detail.aiSummary.lines.length > 0 || detail.aiSummary.figures.length > 0) && (
               <div className="rounded-xl cd-tint-primary p-3 flex flex-col gap-1.5">

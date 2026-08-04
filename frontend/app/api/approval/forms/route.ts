@@ -29,6 +29,7 @@ interface PostBody {
   orgFolder?: string | null;
   deptFolder?: string | null;
   useYn?: boolean;
+  refFormId?: string | null;
 }
 
 // POST: 양식 저장(신규/수정 — 필드 변경 시 버전 증가+스냅샷). 양식 관리는 admin 전용.
@@ -53,6 +54,7 @@ export async function POST(req: NextRequest) {
       orgFolder: body.orgFolder ?? null,
       deptFolder: body.deptFolder ?? null,
       useYn: body.useYn !== false,
+      refFormId: body.refFormId ?? null,
       actorUserId: actor.userId,
     });
     await recordAuditLog({

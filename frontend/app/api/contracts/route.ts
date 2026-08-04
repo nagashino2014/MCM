@@ -27,6 +27,8 @@ export async function GET(req: NextRequest) {
       limit: clampLimit(Number(searchParams.get("limit") ?? "50")),
       offset: Math.max(0, Number(searchParams.get("offset") ?? "0")),
       contractIds,
+      facilityId: searchParams.get("facilityId") || undefined,
+      dateFrom: parseIsoDate(searchParams.get("dateFrom")),
     };
     return NextResponse.json(await listContracts(filter));
   } catch (err) {
@@ -136,6 +138,10 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     return authErrorToResponse(err);
   }
+}
+
+function parseIsoDate(value: string | null): string | undefined {
+  return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : undefined;
 }
 
 function parseCollection(value: string | null): ContractListFilter["collection"] {

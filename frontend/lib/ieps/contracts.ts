@@ -11,6 +11,10 @@ export interface ContractListFilter {
   offset?: number;
   /** RBAC 가시 계약 범위. null/undefined = 제한 없음(전사), [] = 없음, [ids] = 해당 계약만. */
   contractIds?: string[] | null;
+  /** 계약상대 업체(counterparty_facility_id) 한정 — 전자결재 업체↔계약 연동 검색용. */
+  facilityId?: string;
+  /** 계약일 하한(YYYY-MM-DD, contract_date 폴백 포함) — 최근 N년 계약 조회용. */
+  dateFrom?: string;
 }
 
 export interface ContractListItem {
@@ -135,6 +139,14 @@ export async function listContracts(filter: ContractListFilter) {
   if (filter.status) {
     const p = addParam(filter.status);
     where.push(`c.contract_status = ${p}`);
+  }
+  if (filter.facilityId) {
+    const p = addParam(filter.facilityId);
+    where.push(`c.counterparty_facility_id = ${p}`);
+  }
+  if (filter.dateFrom) {
+    const p = addParam(filter.dateFrom);
+    where.push(`COALESCE(NULLIF(c.contract_date, ''), c.started_at, c.created_at) >= ${p}`);
   }
   if (filter.contractIds !== undefined && filter.contractIds !== null) {
     const p = addParam(filter.contractIds);

@@ -19,6 +19,7 @@ export const APPROVAL_FIELD_TYPES = [
   "dept_select",
   "company_select",
   "contract_select",
+  "contact_select",
   "leave_type",
   "asset_select",
   "table",
@@ -84,7 +85,7 @@ export function resolveFieldConcept(f: { type: ApprovalFieldType; semantic?: App
 export interface ApprovalTableColumn {
   key: string;
   label: string;
-  type: string; // text|date|select|currency|number|rowno(자동 연번 — 입력 없음, 렌더 시 행번호)
+  type: string; // text|date|time(HHMM 자동완성)|select|currency|number|rowno(자동 연번)|people(조직도 복수 선택 — 값은 {employeeId,name,position}[])
   options?: string[];
   /** 열 단위 데이터 의미 태그(지출 내역 표의 금액 열 = cost.travel 등) */
   semantic?: ApprovalFieldSemantic;

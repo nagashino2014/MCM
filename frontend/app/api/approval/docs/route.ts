@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
-import { listMyDocs, listInbox, listActedDocs, saveDoc, submitDoc, type ApprovalLineStepInput, type ApprovalWatcherInput } from "@/lib/approval/docs";
+import { listMyDocs, listInbox, listActedDocs, listRefCandidates, saveDoc, submitDoc, type ApprovalLineStepInput, type ApprovalWatcherInput } from "@/lib/approval/docs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,6 +20,12 @@ export async function GET(req: NextRequest) {
     if (box === "draft" || box === "in_progress" || box === "completed") {
       return NextResponse.json({ docs: await listMyDocs(ctx.userId, box) });
     }
+    // 선행 문서 후보(127) — 내가 기안한 특정 양식 문서(보고서 기안 화면의 연결 모달용)
+    if (box === "ref-candidates") {
+      const formId = String(req.nextUrl.searchParams.get("formId") ?? "");
+      if (!formId) return NextResponse.json({ error: "formId 가 필요합니다." }, { status: 400 });
+      return NextResponse.json({ docs: await listRefCandidates(ctx.userId, formId) });
+    }
     return NextResponse.json({ error: "box 파라미터가 올바르지 않습니다." }, { status: 400 });
   } catch (err) {
     return authErrorToResponse(err);
@@ -35,6 +41,7 @@ interface PostBody {
   fieldValues?: Record<string, unknown>;
   line?: ApprovalLineStepInput[];
   watchers?: ApprovalWatcherInput[];
+  refDocId?: string | null;
 }
 
 // POST: 기안 저장(draft) / 상신(저장 후 채번·결재 시작)
@@ -51,6 +58,7 @@ export async function POST(req: NextRequest) {
       fieldValues: body.fieldValues ?? {},
       line: Array.isArray(body.line) ? body.line : [],
       watchers: Array.isArray(body.watchers) ? body.watchers : [],
+      refDocId: body.refDocId ?? null,
       actorUserId: ctx.userId,
     });
     let docNo: string | null = null;

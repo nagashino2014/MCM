@@ -178,6 +178,8 @@ export function HomeEditGrid({
             // 위젯이 권한 없음/데이터 없음으로 아무것도 렌더하지 않으면(카드 내부에서 null 반환)
             // 빈 상자만 남아 자리를 차지한다 — 그런 셀은 접는다.
             // 편집 중에는 배치를 확인해야 하므로 그대로 둔다.
+            // data-home-anchor: 상단 KPI 클릭 시 해당 카드로 스크롤하는 앵커(HomeStats.jump).
+            data-home-anchor={e.key}
             className={"min-w-0 relative h-full" + (editing ? "" : " [&:not(:has(section))]:hidden")}
             style={{
               gridColumn: `${it.x + 1} / span ${it.w}`,

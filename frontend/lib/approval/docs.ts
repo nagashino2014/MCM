@@ -50,6 +50,8 @@ export interface ApprovalDocSummary {
   docNo: string | null;
   formId: string;
   formName: string;
+  /** 양식 폴더(인사 fld-hr / 업무 fld-biz / 회계 fld-finance) — 홈 카드 색 바 구분용(결재함 조회 시). */
+  folderId?: string | null;
   title: string;
   urgent: boolean;
   status: string;
@@ -145,6 +147,7 @@ function mapSummary(r: Record<string, unknown>): ApprovalDocSummary {
     docNo: r.doc_no != null ? String(r.doc_no) : null,
     formId: String(r.form_id ?? ""),
     formName: String(r.form_name ?? ""),
+    folderId: r.folder_id != null ? String(r.folder_id) : null,
     title: String(r.title ?? ""),
     urgent: Number(r.urgent ?? 0) === 1,
     status: String(r.status ?? "draft"),
@@ -554,7 +557,7 @@ export async function listInbox(userId: string, kind: "pending" | "upcoming", li
   const status = kind === "pending" ? "pending" : "waiting";
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT d.*, f.name AS form_name, s.step_id AS my_step_id FROM approval_steps s
+      `SELECT d.*, f.name AS form_name, f.folder_id, s.step_id AS my_step_id FROM approval_steps s
          JOIN approval_docs d ON d.doc_id = s.doc_id
          JOIN approval_forms f ON f.form_id = d.form_id
         WHERE s.assignee_user_id = $1 AND s.status = $2 AND d.status = 'in_progress'

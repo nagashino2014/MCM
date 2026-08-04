@@ -49,6 +49,8 @@ export function PendingProgressCard({ theme }: { theme: string }) {
           {reports.slice(0, 5).map((r) => (
             <li key={r.projectId}>
               <HomeRow onClick={() => setOpen(true)}>
+                {/* 글머리 세로 색 바 — 홈 카드 공통 양식(결재 카드와 동일 규격) */}
+                <span className="w-1 h-[30px] rounded-[2px] shrink-0" style={{ background: "#E3A63B", opacity: 0.85 }} />
                 <span className="flex-1 min-w-0">
                   <span className="block text-[13px] cd-text truncate">{r.title}</span>
                   {r.facilityName && (

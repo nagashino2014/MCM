@@ -83,6 +83,8 @@ export function InvoiceInboxCard() {
         {items.map((item) => (
           <li key={item.milestoneId} className="rounded-lg border cd-border-c px-3 py-2 flex flex-col gap-2">
             <div className="flex items-center gap-2">
+              {/* 글머리 세로 색 바 — 홈 카드 공통 양식(발행 요청 = 바이올렛 계열) */}
+              <span className="w-1 h-[30px] rounded-[2px] shrink-0" style={{ background: "#8E86EE", opacity: 0.85 }} />
               <span className="flex-1 min-w-0">
                 <span className="block text-[13px] cd-text truncate">
                   {item.contractTitle ?? item.facilityName ?? "제목 없음"}

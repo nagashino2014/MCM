@@ -87,6 +87,8 @@ export function ScheduleCalendarCard() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [salesDenied, setSalesDenied] = useState(false);
   const [openDay, setOpenDay] = useState<string | null>(null);
+  // 공휴일(date → 명칭) — 일요일과 같은 붉은색으로 구분한다. 소스는 /api/home/holidays(서버 캐시).
+  const [holidays, setHolidays] = useState<Map<string, string>>(new Map());
 
   const month = `${cur.y}-${String(cur.m + 1).padStart(2, "0")}`;
   const salesOn = tag === "sales";
@@ -145,6 +147,23 @@ export function ScheduleCalendarCard() {
     setOpenDay(null);
     persist({ calendarTags: [k] });
   };
+
+  // 공휴일 — 보는 연도가 바뀔 때만 다시 가져온다.
+  useEffect(() => {
+    let alive = true;
+    fetch(`/api/home/holidays?year=${cur.y}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d || !alive || !Array.isArray(d.holidays)) return;
+        setHolidays(new Map(d.holidays.map((h: { date: string; name: string }) => [h.date, h.name])));
+      })
+      .catch(() => {
+        /* 침묵 — 색 구분 없이 동작 */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [cur.y]);
 
   // 영업 일정.
   useEffect(() => {
@@ -341,8 +360,12 @@ export function ScheduleCalendarCard() {
       </div>
 
       <div className="grid grid-cols-7">
-        {WEEKDAYS.map((w) => (
-          <span key={w} className="text-center text-[10px] font-bold py-0.5" style={{ color: "var(--cd-faint)" }}>
+        {WEEKDAYS.map((w, i) => (
+          <span
+            key={w}
+            className="text-center text-[10px] font-bold py-0.5"
+            style={{ color: i === 0 ? "var(--cd-error)" : i === 6 ? "var(--cd-secondary)" : "var(--cd-faint)" }}
+          >
             {w}
           </span>
         ))}
@@ -354,14 +377,27 @@ export function ScheduleCalendarCard() {
             const inMonth = day.getMonth() === cur.m;
             const isToday = key === todayKey;
             const list = byDay.get(key) ?? [];
+            // 일요일·공휴일은 붉은색, 토요일은 옅은 남색(cd 시그널 토큰 — 다크 자동 대응).
+            const holiday = holidays.get(key);
+            const dow = day.getDay();
+            const dayColor = isToday
+              ? "#fff"
+              : holiday || dow === 0
+                ? "var(--cd-error)"
+                : dow === 6
+                  ? "var(--cd-secondary)"
+                  : inMonth
+                    ? "var(--cd-body)"
+                    : "var(--cd-faint)";
             return (
               // 셀 높이 고정 — 밀집한 날(2열)만 늘어나면 그 주가 높아져 카드 높이가 흔들린다.
               <div key={key} className="h-[70px] overflow-hidden flex flex-col items-center gap-0.5 pt-0.5 px-[1px]">
                 <span
                   className="w-[21px] h-[21px] rounded-full inline-flex items-center justify-center text-[11.5px] shrink-0"
+                  title={holiday}
                   style={{
                     fontWeight: isToday ? 800 : 500,
-                    color: isToday ? "#fff" : inMonth ? "var(--cd-body)" : "var(--cd-faint)",
+                    color: dayColor,
                     background: isToday ? "var(--cd-primary)" : undefined,
                     opacity: inMonth ? 1 : 0.45,
                   }}

@@ -50,6 +50,11 @@ export function UpcomingBidsCard() {
           return (
             <li key={b.projectId}>
               <HomeRow href="/sales">
+                {/* 글머리 세로 색 바 — 마감 임박(D-3 이내)은 주황, 그 외는 뉴트럴 */}
+                <span
+                  className="w-1 h-[30px] rounded-[2px] shrink-0"
+                  style={{ background: d.urgent ? "#E8705F" : "var(--cd-faint)", opacity: 0.85 }}
+                />
                 <span
                   className="text-[11px] font-bold rounded px-1.5 py-0.5 shrink-0 w-[52px] text-center tabular-nums"
                   style={

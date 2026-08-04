@@ -61,6 +61,8 @@ export function WorkPlanTodoCard() {
               {data?.rebound.items.map((r) => (
                 <li key={r.reportId}>
                   <HomeRow href="/work-plan">
+                    {/* 글머리 세로 색 바 — 반려·보완 재작성은 주황 */}
+                    <span className="w-1 h-[30px] rounded-[2px] shrink-0" style={{ background: "#E8705F", opacity: 0.85 }} />
                     <span className="flex-1 min-w-0">
                       <span className="block text-[13px] cd-text truncate">
                         {r.subjectLabel ?? "제목 없음"}
@@ -90,6 +92,8 @@ export function WorkPlanTodoCard() {
               {data?.thisWeek.items.map((t) => (
                 <li key={t.contractId}>
                   <HomeRow href="/work-plan">
+                    {/* 글머리 세로 색 바 — 이번 주 작성 대상은 하늘색 */}
+                    <span className="w-1 h-[30px] rounded-[2px] shrink-0" style={{ background: "#5FB6E8", opacity: 0.85 }} />
                     <span className="flex-1 min-w-0">
                       <span className="block text-[13px] cd-text truncate">{t.contractTitle}</span>
                       {t.serviceType && (

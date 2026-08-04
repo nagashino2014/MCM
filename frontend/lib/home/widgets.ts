@@ -16,8 +16,8 @@ export interface HomeWidgetDef {
  *  24열이라 좌 14 / 우 10 으로 나누면 고정 영역과 배치 카드의 좌우 경계가 정확히 맞물리고,
  *  12열 대비 스냅 간격이 절반이라 폭을 더 잘게 조절할 수 있다. */
 export const HOME_COLS = 24;
-/** 고정 영역 좌(결재·메일) / 우(캘린더) 열 배분 — 배치 영역에서 폭을 맞출 때 기준이 된다. */
-export const HOME_FIXED_LEFT_COLS = 14;
+/** 고정 영역 좌(날씨·연차) / 중(결재·메일) 열 배분 — 우(캘린더)는 나머지 10. 배치 영역에서 폭을 맞출 때 기준. */
+export const HOME_FIXED_LEFT_COLS = 7;
 /** 카드 최소 폭(열). */
 export const HOME_MIN_W = 6;
 

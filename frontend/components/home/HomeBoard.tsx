@@ -6,13 +6,15 @@ import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { HomeStats } from "./HomeStats";
 import { HomeEditGrid, type HomeGridEntry } from "./HomeEditGrid";
-import { HOME_WIDGETS, EMPTY_HOME_LAYOUT, HOME_HALF_H, HOME_COLS, type HomeLayout, type HomeLayoutItem } from "@/lib/home/widgets";
+import { HOME_WIDGETS, EMPTY_HOME_LAYOUT, HOME_CALENDAR_H, HOME_HALF_H, HOME_COLS, type HomeLayout, type HomeLayoutItem } from "@/lib/home/widgets";
 import type { HomePresets } from "@/lib/home/layout";
 import "@/components/cdash/cdash.css";
 
 import { ApprovalPendingCard } from "./widgets/ApprovalPendingCard";
 import { MailUnreadCard } from "./widgets/MailUnreadCard";
 import { ScheduleCalendarCard } from "./widgets/ScheduleCalendarCard";
+import { WeatherWidget } from "./widgets/WeatherWidget";
+import { LeaveGaugeCard } from "./widgets/LeaveGaugeCard";
 import { PendingProgressCard } from "./widgets/PendingProgressCard";
 import { UpcomingBidsCard } from "./widgets/UpcomingBidsCard";
 import { WorkPlanTodoCard } from "./widgets/WorkPlanTodoCard";
@@ -194,8 +196,8 @@ export function HomeBoard({ role }: { role?: string }) {
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-extrabold cd-text">표시할 카드</h2>
             <span className="text-[11.5px] cd-text-faint">
-              스탯·결재 대기·안읽은 메일·캘린더는 항상 표시됩니다. 좌상단 손잡이로 이동, 우측·하단·모서리 핸들로 너비·높이를 조절하세요
-              (위 고정 카드와 같은 폭으로 맞추려면 {HOME_COLS}칸 중 왼쪽 14칸·오른쪽 10칸).
+              스탯·날씨·연차·결재 대기·안읽은 메일·캘린더는 항상 표시됩니다. 좌상단 손잡이로 이동, 우측·하단·모서리 핸들로 너비·높이를 조절하세요
+              (위 고정 카드와 같은 폭으로 맞추려면 {HOME_COLS}칸 중 왼쪽 7칸·가운데 7칸·오른쪽 10칸).
             </span>
             <button type="button" onClick={resetLayout} className="cd-chip cd-chip-sm ml-auto shrink-0" title="배치와 표시 설정을 처음 상태로">
               <RotateCcw className="w-3 h-3" />
@@ -254,25 +256,29 @@ export function HomeBoard({ role }: { role?: string }) {
         </section>
       )}
 
-      {/* 고정 영역 — 스탯 4카드 */}
+      {/* 고정 영역 — 스탯 6카드 */}
       <HomeStats />
 
-      {/* 고정 영역 — 좌: 내 차례인 결재·안읽은 메일(각각 캘린더 높이의 절반) / 우: 캘린더.
-          높이를 고정해 두면 아래 사용자 배치 영역의 시작 위치가 데이터 양에 따라 흔들리지 않는다.
-          열 체계는 배치 영역과 동일한 24열 — 좌 14 / 우 10 이라 카드 좌우 경계가 정확히 맞물린다
-          (fr 비율로 나누면 12열 그리드에 떨어지지 않아 폭을 맞출 수 없었다). */}
-      {/* ⚠ 아래 24 / 14 / 10 은 HOME_COLS·HOME_FIXED_LEFT_COLS 와 같은 값이어야 한다
+      {/* 고정 영역(핸드오프 2a) — 좌: 날씨/시계 + 내 연차·초과근무 / 중: 내 차례인 결재·안읽은 메일(절반 폭) /
+          우: 캘린더. 높이를 고정해 두면 아래 사용자 배치 영역의 시작 위치가 데이터 양에 따라 흔들리지 않는다.
+          열 체계는 배치 영역과 동일한 24열 — 좌 7 / 중 7 / 우 10 이라 카드 좌우 경계가 정확히 맞물린다.
+          data-home-anchor 는 상단 KPI 클릭 시 해당 카드로 스크롤하는 앵커다. */}
+      {/* ⚠ 아래 24 / 7 / 10 은 HOME_COLS·HOME_FIXED_LEFT_COLS 와 같은 값이어야 한다
           (Tailwind 는 정적 클래스만 생성하므로 상수를 문자열에 끼워 넣을 수 없다). */}
       <div className="grid grid-cols-1 gap-4 items-start xl:grid-cols-[repeat(24,minmax(0,1fr))]">
-        <div className="flex flex-col gap-4 min-w-0 xl:[grid-column:span_14]">
-          <div style={{ height: HOME_HALF_H }} className="[&>section]:h-full min-w-0">
+        <div className="flex flex-col gap-4 min-w-0 xl:[grid-column:span_7]" style={{ height: HOME_CALENDAR_H }}>
+          <WeatherWidget />
+          <LeaveGaugeCard />
+        </div>
+        <div className="flex flex-col gap-4 min-w-0 xl:[grid-column:span_7]">
+          <div style={{ height: HOME_HALF_H }} className="[&>section]:h-full min-w-0" data-home-anchor="approval">
             <ApprovalPendingCard />
           </div>
-          <div style={{ height: HOME_HALF_H }} className="[&>section]:h-full min-w-0">
+          <div style={{ height: HOME_HALF_H }} className="[&>section]:h-full min-w-0" data-home-anchor="mail">
             <MailUnreadCard />
           </div>
         </div>
-        <div className="min-w-0 xl:[grid-column:span_10]">
+        <div className="min-w-0 xl:[grid-column:span_10]" data-home-anchor="calendar">
           <ScheduleCalendarCard />
         </div>
       </div>

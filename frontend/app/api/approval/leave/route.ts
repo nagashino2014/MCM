@@ -6,6 +6,7 @@ import {
   deleteLeaveEntry,
   getLeaveSettings,
   getMyLeaveRemaining,
+  getMySpecialLeaveRemaining,
   listLeaveEntries,
   listLeaveSummary,
   saveLeaveSettings,
@@ -23,7 +24,9 @@ export async function GET(req: NextRequest) {
     const year = String(sp.get("year") ?? new Date().getFullYear());
     if (sp.get("me") === "1") {
       const ctx = await requirePermission("approval.view");
-      return NextResponse.json({ summary: await getMyLeaveRemaining(ctx.userId, year) });
+      // 특별휴가(133) — 마이그레이션 미적용 환경에서도 본인 잔여 조회가 죽지 않게 실패는 빈 목록으로.
+      const special = await getMySpecialLeaveRemaining(ctx.userId).catch(() => []);
+      return NextResponse.json({ summary: await getMyLeaveRemaining(ctx.userId, year), special });
     }
     await requirePermission("approval.manage", { fallbackRoles: ["admin"] });
     if (sp.get("settings") === "1") {

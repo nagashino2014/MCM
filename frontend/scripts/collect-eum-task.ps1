@@ -4,6 +4,8 @@
 # PC가 꺼져 있던 날은 다음 실행이 따라잡는다(목록 앞 페이지 재조회 + 서버 멱등 적재).
 
 $ErrorActionPreference = "Stop"
+# node 의 UTF-8 출력을 PS 5.1 이 cp949 로 오해해 로그가 깨지는 것 방지
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $frontend = Split-Path -Parent $PSScriptRoot
 Set-Location $frontend
 

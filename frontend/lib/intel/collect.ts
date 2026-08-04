@@ -27,6 +27,8 @@ import {
 import { buildFacilityMatcher, facilityCoreKey } from "./facility-matcher";
 import { feedbackKey, loadFeedbackBlocklist } from "./intel-feedback";
 import { industryTagForFacility } from "./industry-rules";
+import { classifySupplyContract, supplyDocExcerpt } from "./dart-supply-classifier";
+import type { IntelIndustryItem } from "./intel-settings";
 
 function id(prefix: string): string {
   return `${prefix}_${crypto.randomBytes(8).toString("hex")}`;
@@ -45,6 +47,12 @@ export interface CollectOptions {
   endDe?: string; // YYYYMMDD 직접 지정
   maxPages?: number; // 미지정=완주(배치), 소량=테스트 버튼(헬스체크)
   maxDocs?: number; // 2차 원문 파싱 대상 상한(미지정=완주, 0=2차 skip, 소량=테스트)
+  /** 3차 공급계약 발주처 리드: 2차 매칭 실패한 공급계약 원문을 LLM 분류해 미매칭 리드로 수집. 기본 off */
+  supplyLeadScan?: boolean;
+  /** 3차 LLM 분류 일일 상한(기본 30) */
+  supplyLeadMaxClassify?: number;
+  /** 업종 태깅 목록(리드 분류용) — intel_settings.industries */
+  industries?: IntelIndustryItem[];
 }
 
 export interface CollectResult {
@@ -53,7 +61,9 @@ export interface CollectResult {
   matched: number; // 1차 facilities 매칭+관심유형(direct 후보) 공시 수
   docScanned: number; // 2차 원문(document.xml) 조회한 공시 수
   counterpartyMatched: number; // 2차 거래상대방=대상(counterparty 후보) 공시 수
-  inserted: number; // 신규 저장(1차+2차)
+  supplyClassified: number; // 3차 공급계약 리드 LLM 분류 수
+  supplyLeads: number; // 3차 통합허가 대상 판정(신규 리드 후보) 수
+  inserted: number; // 신규 저장(1차+2차+3차)
   byGrade: Record<IntelSignalGrade, number>; // 신규분 등급 분포
   range: { bgnDe: string; endDe: string };
   truncated: boolean; // maxPages 상한으로 잘렸는지(테스트 모드)
@@ -82,7 +92,8 @@ export async function collectDartSignals(opts: CollectOptions = {}): Promise<Col
   const maxDocs = opts.maxDocs != null && opts.maxDocs >= 0 ? opts.maxDocs : Infinity;
 
   const result: CollectResult = {
-    scanned: 0, corpQueried: 0, matched: 0, docScanned: 0, counterpartyMatched: 0, inserted: 0,
+    scanned: 0, corpQueried: 0, matched: 0, docScanned: 0, counterpartyMatched: 0,
+    supplyClassified: 0, supplyLeads: 0, inserted: 0,
     byGrade: { confirmed: 0, candidate: 0, monitoring: 0, excluded: 0 },
     range: { bgnDe, endDe }, truncated: false,
   };
@@ -140,6 +151,9 @@ export async function collectDartSignals(opts: CollectOptions = {}): Promise<Col
   //    (예: LS엠앤엠 EVBM 공장공사를 LS eNM이 수주 → 공시자 LS eNM은 미매칭이나 원문의 발주처 LS엠앤엠이 대상)
   interface SecondCand { d: DartDisclosure; facilityId: string; counterpartyName: string }
   const secondCands: SecondCand[] = [];
+  // 3차 후보: 2차 매칭 실패한 공급계약 공시(원문은 2차에서 이미 확보 — 추가 조회 없음)
+  interface SupplyLeadCand { d: DartDisclosure; fullText: string }
+  const supplyLeadCands: SupplyLeadCand[] = [];
   if (maxDocs > 0) {
     const seen2 = new Set<string>();
     const secondTargets = all.filter((d) => {
@@ -160,8 +174,34 @@ export async function collectDartSignals(opts: CollectOptions = {}): Promise<Col
       const excludeCore = facilityCoreKey(d.corpName);
       const hit = matcher.findInText(ctxt, excludeCore);
       if (hit) secondCands.push({ d, facilityId: hit.facilityId, counterpartyName: hit.facilityName });
+      else if (opts.supplyLeadScan && routeDisclosure(d.reportName) === "supply_contract") {
+        supplyLeadCands.push({ d, fullText });
+      }
     }
     result.counterpartyMatched = secondCands.length;
+  }
+
+  // 5.5) 3차 공급계약 발주처 리드: 매칭 실패한 공급계약 원문을 LLM 이 읽어 '통합허가 대상급 시설의
+  //      건설·증설·설비' 계약만 골라 발주처를 미매칭 리드로 뽑는다(공시자=수주사는 리드가 아님).
+  interface SupplyLead { d: DartDisclosure; cls: NonNullable<Awaited<ReturnType<typeof classifySupplyContract>>> }
+  const supplyLeads: SupplyLead[] = [];
+  if (opts.supplyLeadScan && supplyLeadCands.length) {
+    const maxClassify = opts.supplyLeadMaxClassify != null && opts.supplyLeadMaxClassify >= 0 ? opts.supplyLeadMaxClassify : 30;
+    for (const cand of supplyLeadCands.slice(0, maxClassify)) {
+      const cls = await classifySupplyContract(
+        cand.d.corpName,
+        cand.d.reportName,
+        supplyDocExcerpt(cand.fullText),
+        opts.industries
+      );
+      if (!cls) continue; // 키 없음/오류 — skip
+      result.supplyClassified++;
+      // 대상 판정 + 업종 무관(none) 제외 + 발주처 식별 필수(리드 주체)
+      if (cls.isTarget && cls.ordererName && cls.industryRelevance !== "none") {
+        supplyLeads.push({ d: cand.d, cls });
+      }
+    }
+    result.supplyLeads = supplyLeads.length;
   }
 
   // 6) DB: 분류·등급 + upsert(1차 direct + 2차 counterparty)
@@ -237,6 +277,40 @@ export async function collectDartSignals(opts: CollectOptions = {}): Promise<Col
       const cls = classifyCounterparty(sc.counterpartyName);
       const category = routeDisclosure(sc.d.reportName);
       await insertSignal(sc.d, cls, sc.facilityId, null, "counterparty", category, { counterparty: sc.counterpartyName });
+    }
+
+    // 3차 공급계약 발주처 리드 — 미매칭(unmatched) 신규 리드로 저장.
+    // company_name=발주처(발굴 주체), 공시자(수주사)는 raw/counterparty 에 보존. alert 없음(검토용).
+    const GRADE_BY_CONF: Record<string, IntelSignalGrade> = { high: "confirmed", medium: "candidate", low: "monitoring" };
+    for (const { d, cls } of supplyLeads) {
+      if (blocklist.has(feedbackKey("dart", d.receiptNo))) continue;
+      const grade = GRADE_BY_CONF[cls.confidence] ?? "monitoring";
+      const raw = JSON.stringify({
+        corpCode: d.corpCode, receiptNo: d.receiptNo, filerName: d.filerName ?? d.corpName,
+        remark: d.remark, stockCode: d.stockCode, category: "supply_contract", matchType: "supply_lead",
+        supplyLead: cls,
+      });
+      const ins = rowsToObjects(
+        await wdb.exec(
+          `INSERT INTO intel_signals
+             (signal_id, source, external_id, corp_code, company_name, report_name, signal_type, signal_grade,
+              disclosed_at, url, raw_json, summary, counterparty,
+              match_status, status, industry, industry_relevance, relevance_note, created_at, updated_at)
+           VALUES ($1,'dart',$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12,'unmatched','new',$13,$14,$15,$16,$16)
+           ON CONFLICT (source, external_id) DO NOTHING
+           RETURNING signal_id`,
+          [
+            id("isig"), d.receiptNo, d.corpCode, cls.ordererName, d.reportName, cls.signalType, grade,
+            toIso(d.receiptDate), disclosureUrl(d.receiptNo), raw,
+            cls.summary ?? [cls.facilityKind, cls.location, cls.scale].filter(Boolean).join(" · "),
+            cls.ordererName,
+            cls.industry, cls.industryRelevance, cls.relevanceNote, nowIso,
+          ]
+        )
+      );
+      if (!ins.length) continue;
+      result.inserted++;
+      result.byGrade[grade]++;
     }
 
     // 최근 실행 기록(증분 커서는 배치가 days로 관리하므로 기록용)

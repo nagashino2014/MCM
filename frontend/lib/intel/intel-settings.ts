@@ -27,6 +27,10 @@ export interface IntelCollectSettings {
     days: number;
     /** 2차 원문(발주처 대조) 분석 사용 여부 */
     counterpartyScan: boolean;
+    /** 3차 공급계약 발주처 리드: 매칭 실패 공급계약 원문 LLM 분류 → 미매칭 리드 수집 */
+    supplyLeadScan: boolean;
+    /** 3차 LLM 분류 일일 상한 */
+    supplyLeadMaxClassify: number;
   };
   eiass: {
     enabled: boolean;
@@ -71,7 +75,7 @@ export const INTEL_COLLECT_DEFAULTS: IntelCollectSettings = {
   industries: {
     list: INTEGRATED_PERMIT_INDUSTRIES.map((i) => ({ id: i.id, label: i.label })),
   },
-  dart: { enabled: true, days: 1, counterpartyScan: true },
+  dart: { enabled: true, days: 1, counterpartyScan: true, supplyLeadScan: true, supplyLeadMaxClassify: 30 },
   eiass: {
     enabled: true,
     maxPages: 5,

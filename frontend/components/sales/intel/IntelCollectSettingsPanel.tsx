@@ -377,6 +377,16 @@ export function IntelCollectSettingsPanel({
               <FieldRow label="2차 원문 분석" hint="공급·수주 계약 원문에서 발주처(거래상대방)를 대조해 counterparty 매칭">
                 <Toggle label={settings.dart.counterpartyScan ? "사용" : "사용 안 함"} checked={settings.dart.counterpartyScan} disabled={!canEdit} onChange={(v) => set("dart", { counterpartyScan: v })} />
               </FieldRow>
+              <FieldRow label="공급계약 발주처 리드" hint="매칭 실패한 공급계약 원문을 AI가 분석해, 통합허가 대상급 시설(공장·발전소·소각 등) 공사의 발주처를 미매칭 리드로 수집">
+                <Toggle label={settings.dart.supplyLeadScan ? "사용" : "사용 안 함"} checked={settings.dart.supplyLeadScan} disabled={!canEdit} onChange={(v) => set("dart", { supplyLeadScan: v })} />
+              </FieldRow>
+              <FieldRow label="리드 분석 일일 상한" hint="공급계약 리드 AI 분류 건수 상한(비용 가드)">
+                <input
+                  type="number" min={0} max={200} className="cd-input" style={{ width: 90 }}
+                  value={settings.dart.supplyLeadMaxClassify} disabled={!canEdit}
+                  onChange={(e) => set("dart", { supplyLeadMaxClassify: Math.max(0, Number(e.target.value) || 0) })}
+                />
+              </FieldRow>
             </>
           )}
 

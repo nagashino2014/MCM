@@ -36,6 +36,9 @@ async function main() {
     const result = await collectDartSignals({
       ...(dartBgnDe ? { bgnDe: dartBgnDe, endDe: dartEndDe } : { days }),
       ...(settings.dart.counterpartyScan ? {} : { maxDocs: 0 }),
+      supplyLeadScan: settings.dart.supplyLeadScan,
+      supplyLeadMaxClassify: settings.dart.supplyLeadMaxClassify,
+      industries: settings.industries.list,
     }); // maxPages 미지정 = 전 페이지 완주
     console.log(`[intel-batch] dart done in ${Math.round((Date.now() - started) / 1000)}s`, JSON.stringify(result));
   } else {

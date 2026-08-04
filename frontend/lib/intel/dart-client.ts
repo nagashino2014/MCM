@@ -215,14 +215,12 @@ export async function getTangibleAssetAcquisitions(
 // 공시 원문의 "계약상대방/발주처" 텍스트에 통합허가 대상이 등장한다. 원문을 텍스트로 뽑아
 // signal-extractor 가 대조한다. document.xml 은 ZIP 바이너리(내부 여러 XML, euc-kr/utf-8 혼재).
 
-const latin1 = (u: Uint8Array): string => {
-  let s = "";
-  for (let i = 0; i < u.length; i++) s += String.fromCharCode(u[i]);
-  return s;
-};
-
 function stripXmlTags(xml: string): string {
   return xml
+    // HTML형 원문(.xml 확장자여도 실제 HTML)의 스타일·스크립트 블록은 내용째 제거 —
+    // 태그만 벗기면 CSS 텍스트가 본문 앞을 채워 발췌·대조를 오염시킨다.
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&")
@@ -235,13 +233,12 @@ function stripXmlTags(xml: string): string {
 }
 
 function decodeDartXml(raw: Uint8Array): string {
-  // 인코딩 선언 스니핑(선두 200바이트를 latin1로 읽어 encoding= 파싱). 기본 utf-8.
-  const head = latin1(raw.subarray(0, 200)).toLowerCase();
-  const m = head.match(/encoding=["']?([a-z0-9_-]+)/);
-  const enc = m ? m[1] : "utf-8";
+  // ⚠ 인코딩 선언은 믿을 수 없다 — meta 는 charset=euc-kr 인데 실제 바이트는 utf-8 인 문서 실측.
+  // 콘텐츠 기반 판별: 엄격(fatal) utf-8 디코딩이 성공하면 utf-8(ASCII 전용 포함),
+  // 실패(비유효 바이트열)하면 euc-kr 로 폴백한다. 한글 euc-kr 바이트열은 유효한 utf-8 이 아니다.
   let text: string;
   try {
-    text = new TextDecoder(enc).decode(raw);
+    text = new TextDecoder("utf-8", { fatal: true }).decode(raw);
   } catch {
     try { text = new TextDecoder("euc-kr").decode(raw); }
     catch { text = new TextDecoder("utf-8").decode(raw); }

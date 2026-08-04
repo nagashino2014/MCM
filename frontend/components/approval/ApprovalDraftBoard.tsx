@@ -4,7 +4,7 @@
 // 값은 field_key 기반 구조화 저장(field_values). 결재선은 순차 단계 리스트(합의/승인)로 구성한다.
 // 설계: docs/e-approval-blueprint.md §5-2.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, ClipboardCheck, Send, Save, Trash2, Users, Eye, BookmarkPlus, ShieldCheck, AlertTriangle, Info, Ban, Link2 } from "lucide-react";
@@ -16,6 +16,8 @@ import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
 import type { ApprovalFieldDef } from "@/lib/approval/fields";
 import { autofillFromRefDoc, compareWithRefDoc } from "@/lib/approval/ref-link";
 import { findInCatalog, type LeaveTypeItem } from "@/lib/approval/leave-types";
+import { OvertimeConsentModal } from "@/components/approval/OvertimeConsentModal";
+import type { OvertimeConsent } from "@/lib/approval/overtime-consent";
 import "@/components/cdash/cdash.css";
 
 interface FormInfo {
@@ -122,6 +124,65 @@ export function ApprovalDraftBoard() {
   const [leaveCatalog, setLeaveCatalog] = useState<LeaveTypeItem[]>([]);
   const [leaveHint, setLeaveHint] = useState<string | null>(null);
   const isLeaveForm = form?.formId === "frm-leave-request";
+  // 초과근무 신청 양식이면 신청 주의 사용량(기존 신청+근태 실적)을 조회해 주 12h 초과를 경고한다.
+  const [otUsage, setOtUsage] = useState<{ weekStart: string; weekEnd: string; requestedMinutes: number; attendanceOvertimeMinutes: number; limitMinutes: number } | null>(null);
+  const [otHint, setOtHint] = useState<string | null>(null);
+  const isOvertimeForm = form?.formId === "frm-overtime-request";
+  const otFrom = isOvertimeForm ? ((values.work_period ?? {}) as { from?: string }).from : undefined;
+  // 12h 초과 상신 동의(전자서명) — 모달에서 받은 동의는 ref 로 들고 있다가 persist 시 field_values 에 병합한다.
+  const [consentModal, setConsentModal] = useState(false);
+  const otConsentRef = useRef<OvertimeConsent | null>(null);
+
+  // 신청 시작일이 속한 주의 사용량 조회(시작일이 바뀔 때만).
+  useEffect(() => {
+    if (!isOvertimeForm || !otFrom || !/^\d{4}-\d{2}-\d{2}$/.test(otFrom)) {
+      setOtUsage(null);
+      return;
+    }
+    let cancelled = false;
+    const q = docId ? `&excludeDocId=${encodeURIComponent(docId)}` : "";
+    fetch(`/api/approval/overtime/week-usage?date=${otFrom}${q}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled) setOtUsage(d?.usage ?? null);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [isOvertimeForm, otFrom, docId]);
+
+  // 사용량 + 신청 시간 → 힌트 갱신 + 기사용/잔여시간 자동 채움(수기 수정 가능).
+  useEffect(() => {
+    if (!isOvertimeForm || !otUsage) {
+      setOtHint(null);
+      return;
+    }
+    const fmtH = (min: number) => {
+      const h = Math.round((min / 60) * 10) / 10;
+      return Number.isInteger(h) ? String(h) : h.toFixed(1);
+    };
+    // 기사용 = 같은 주의 기존 신청 합과 근태 실적 중 큰 값(신청이 아직 근태에 안 잡힌 미래 주 대응).
+    const usedMin = Math.max(otUsage.requestedMinutes, otUsage.attendanceOvertimeMinutes);
+    const applyMin = Number(values.apply_hours) > 0 ? Math.round(Number(values.apply_hours) * 60) : 0;
+    const remainMin = Math.max(0, otUsage.limitMinutes - usedMin - applyMin);
+    const autoUsed = fmtH(usedMin);
+    const autoRemain = fmtH(remainMin);
+    if (String(values.used_hours ?? "") !== autoUsed || String(values.remain_hours ?? "") !== autoRemain) {
+      setValues((prev) => ({ ...prev, used_hours: autoUsed, remain_hours: autoRemain }));
+    }
+    if (applyMin === 0) {
+      setOtHint(`이번 주(${otUsage.weekStart}~) 기사용 ${fmtH(usedMin)}h · 한도 ${fmtH(otUsage.limitMinutes)}h`);
+    } else if (usedMin + applyMin > otUsage.limitMinutes) {
+      setOtHint(
+        `⚠ 주 12시간 초과 — 기사용 ${fmtH(usedMin)}h + 신청 ${fmtH(applyMin)}h = ${fmtH(usedMin + applyMin)}h (한도 ${fmtH(otUsage.limitMinutes)}h). ` +
+          `승인 후 실제 근태와 대조해 초과분이 인정되면 특별휴가(대체휴가)로 산정됩니다.`
+      );
+    } else {
+      setOtHint(`이번 주 기사용 ${fmtH(usedMin)}h + 신청 ${fmtH(applyMin)}h · 잔여 ${fmtH(remainMin)}h`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOvertimeForm, otUsage, values.apply_hours, values.used_hours, values.remain_hours]);
 
   useEffect(() => {
     if (!isLeaveForm) {
@@ -373,7 +434,8 @@ export function ApprovalDraftBoard() {
           formId: form.formId,
           title,
           urgent,
-          fieldValues: values,
+          // 12h 초과 동의(전자서명)는 모달에서 ref 로 받으므로 여기서 병합한다(상신 시 서버가 유효성 강제).
+          fieldValues: otConsentRef.current ? { ...values, _overtime_consent: otConsentRef.current } : values,
           line,
           watchers: watchers.map((w) => ({ userId: w.userId, kind: w.kind })),
           refDocId: refDoc?.docId ?? null,
@@ -414,6 +476,21 @@ export function ApprovalDraftBoard() {
     async (action: "save" | "submit") => {
       if (!form) return;
       if (action === "submit" && !validateForSubmit()) return;
+      // 초과근무 신청 — 주 12h 초과면 특별휴가 전환 동의(전자서명) 없이는 상신을 열지 않는다(서버도 강제).
+      if (action === "submit" && isOvertimeForm && otUsage) {
+        const usedMin = Math.max(otUsage.requestedMinutes, otUsage.attendanceOvertimeMinutes);
+        const applyMin = Number(values.apply_hours) > 0 ? Math.round(Number(values.apply_hours) * 60) : 0;
+        const over = usedMin + applyMin > otUsage.limitMinutes;
+        // 이 주에 대한 유효한 동의가 이미 있는가(모달에서 받은 것 or 편집 재진입 시 문서에 남은 것).
+        const saved = (values._overtime_consent ?? null) as OvertimeConsent | null;
+        const hasConsent =
+          otConsentRef.current?.weekStart === otUsage.weekStart ||
+          (saved && typeof saved === "object" && saved.weekStart === otUsage.weekStart);
+        if (over && !hasConsent) {
+          setConsentModal(true);
+          return;
+        }
+      }
       // 선행 문서 미연결 안내(비차단) — 연관 가능한 선행 문서가 있는데 연결하지 않은 채 상신하는 경우
       if (action === "submit" && form.refFormId && !refDoc && refCandidates.length > 0) {
         const label = refCandidates[0].formName;
@@ -468,7 +545,7 @@ export function ApprovalDraftBoard() {
         setBusy(null);
       }
     },
-    [form, validateForSubmit, persist, router, refDoc, refCandidates, refMismatches]
+    [form, validateForSubmit, persist, router, refDoc, refCandidates, refMismatches, isOvertimeForm, otUsage, values]
   );
 
   // AI 검토(수동, 비용 통제) — 저장 후 LLM 사전검토+유사 문서.
@@ -541,6 +618,17 @@ export function ApprovalDraftBoard() {
                   }`}
                 >
                   {leaveHint}
+                </span>
+              )}
+              {otHint && (
+                <span
+                  className={`mt-4 text-[11.5px] rounded-full px-2.5 py-1 ${
+                    otHint.includes("⚠")
+                      ? "border border-[color:var(--cd-danger,#FA896B)] text-[color:var(--cd-danger,#FA896B)]"
+                      : "border border-[color:var(--cd-success,#13DEB9)] text-[color:var(--cd-success,#13DEB9)]"
+                  }`}
+                >
+                  {otHint}
                 </span>
               )}
             </div>
@@ -866,6 +954,32 @@ export function ApprovalDraftBoard() {
           </p>
         </div>
       </CdModal>
+
+      {/* 주 12h 초과 — 특별휴가 전환 동의(전자서명) 모달. 동의 즉시 상신을 이어간다. */}
+      {otUsage && (
+        <OvertimeConsentModal
+          open={consentModal}
+          weekStart={otUsage.weekStart}
+          weekEnd={otUsage.weekEnd}
+          totalMinutes={
+            Math.max(otUsage.requestedMinutes, otUsage.attendanceOvertimeMinutes) +
+            (Number(values.apply_hours) > 0 ? Math.round(Number(values.apply_hours) * 60) : 0)
+          }
+          excessMinutes={Math.max(
+            0,
+            Math.max(otUsage.requestedMinutes, otUsage.attendanceOvertimeMinutes) +
+              (Number(values.apply_hours) > 0 ? Math.round(Number(values.apply_hours) * 60) : 0) -
+              otUsage.limitMinutes
+          )}
+          limitMinutes={otUsage.limitMinutes}
+          onClose={() => setConsentModal(false)}
+          onAgree={(consent) => {
+            otConsentRef.current = consent;
+            setConsentModal(false);
+            void send("submit");
+          }}
+        />
+      )}
 
       {/* 조직도 선택 모달(공용, G3) */}
       <OrgPickerModal

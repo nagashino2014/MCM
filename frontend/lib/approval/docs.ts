@@ -3,6 +3,7 @@ import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
 import { parseFields, type ApprovalFieldDef } from "@/lib/approval/fields";
 import { getForm } from "@/lib/approval/forms";
 import { recordLeaveUsageOnApproval } from "@/lib/approval/leave";
+import { assessOverLimitOnSubmit } from "@/lib/approval/overtime";
 import { resolveOpenCancelRequests } from "@/lib/approval/cancel";
 import { notifyPendingSteps, notifyDrafterResult } from "@/lib/approval/notify";
 import { generateDocSummary } from "@/lib/approval/summarize";
@@ -455,6 +456,8 @@ export async function submitDoc(docId: string, actorUserId: string): Promise<{ d
     // 재상신 대비 — 모든 단계를 waiting 초기화 후 1차 활성화
     await txn.run(`UPDATE approval_steps SET status = 'waiting', acted_at = NULL, comment = NULL WHERE doc_id = $1`, [docId]);
     await activateOrder(txn, docId, 1);
+    // 초과근무 신청 — 주 12h 초과 판정을 상신 시점에 고정 저장(결재 화면 경고 배너의 근거).
+    await assessOverLimitOnSubmit(txn, docId);
   });
   // 커밋 후 — 첫 결재자에게 알림(fire-and-forget, 실패해도 상신은 완료)
   await notifyPendingSteps(docId);

@@ -54,9 +54,32 @@ interface EntryRow {
   note: string | null;
 }
 
+interface SpecialRemaining {
+  kind: "longevity" | "overtime_comp";
+  label: string;
+  remaining: number;
+  unit?: "day" | "hour";
+}
+
+interface SpecialEntryRow {
+  entryId: string;
+  kind: "longevity" | "overtime_comp";
+  kindLabel: string;
+  entryType: "grant" | "use" | "adjust";
+  days: number;
+  unit?: "day" | "hour";
+  effectiveOn: string | null;
+  expiresOn: string | null;
+  note: string | null;
+  source?: string;
+}
+
 const ENTRY_LABEL: Record<string, string> = { grant: "부여", use: "사용", adjust: "조정" };
 const SOURCE_LABEL: Record<string, string> = { groupware: "그룹웨어", excel: "엑셀", manual: "수기" };
+const SPECIAL_KIND_LABEL: Record<string, string> = { longevity: "장기근속휴가", overtime_comp: "초과근무 대체휴가" };
 const fmtDays = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+/** 특별휴가 수량 — unit='hour'(초과근무 대체) 는 "6h", 그 외 "3일". */
+const fmtQty = (n: number, unit?: "day" | "hour") => (unit === "hour" ? `${fmtDays(n)}h` : `${fmtDays(n)}일`);
 
 export function ApprovalLeaveBoard() {
   const { theme } = useCdashTheme();
@@ -70,6 +93,9 @@ export function ApprovalLeaveBoard() {
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [entries, setEntries] = useState<Record<string, EntryRow[]>>({});
+  // 특별휴가(133) — 직원별 잔여(행 배지)와 이력(펼침 섹션).
+  const [special, setSpecial] = useState<Record<string, SpecialRemaining[]>>({});
+  const [specialEntries, setSpecialEntries] = useState<Record<string, SpecialEntryRow[]>>({});
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -82,6 +108,7 @@ export function ApprovalLeaveBoard() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "휴가 현황을 불러오지 못했습니다.");
       setRows(data.rows ?? []);
+      setSpecial(data.special ?? {});
       if (data.settings?.accrualBasis) setBasis(data.settings.accrualBasis);
       if (cat.ok) {
         const cd = await cat.json();
@@ -103,7 +130,10 @@ export function ApprovalLeaveBoard() {
     async (employeeId: string) => {
       const res = await fetch(`/api/approval/leave?year=${year}&employeeId=${encodeURIComponent(employeeId)}`, { cache: "no-store" });
       const data = await res.json();
-      if (res.ok) setEntries((prev) => ({ ...prev, [employeeId]: data.entries ?? [] }));
+      if (res.ok) {
+        setEntries((prev) => ({ ...prev, [employeeId]: data.entries ?? [] }));
+        setSpecialEntries((prev) => ({ ...prev, [employeeId]: data.specialEntries ?? [] }));
+      }
     },
     [year]
   );
@@ -234,6 +264,8 @@ export function ApprovalLeaveBoard() {
                 row={r}
                 expanded={expanded === r.employeeId}
                 entries={entries[r.employeeId]}
+                special={special[r.employeeId]}
+                specialEntries={specialEntries[r.employeeId]}
                 catalog={catalog}
                 busy={busy}
                 theme={theme}
@@ -260,6 +292,8 @@ function RowBlock({
   row: r,
   expanded,
   entries,
+  special,
+  specialEntries,
   catalog,
   busy,
   theme,
@@ -271,6 +305,8 @@ function RowBlock({
   row: SummaryRow;
   expanded: boolean;
   entries?: EntryRow[];
+  special?: SpecialRemaining[];
+  specialEntries?: SpecialEntryRow[];
   catalog: LeaveTypeItem[];
   busy: boolean;
   theme: string;
@@ -294,6 +330,16 @@ function RowBlock({
             <div className="text-[13px] font-bold cd-text truncate">
               {r.name}
               {r.positionName && <span className="cd-text-faint font-normal text-[11px]"> {r.positionName}</span>}
+              {/* 특별휴가 잔여 배지 — 있는 직원만(툴팁에 유형별 상세) */}
+              {special && special.length > 0 && (
+                <span
+                  className="ml-1.5 align-[1px] text-[9.5px] font-bold rounded-full px-1.5 py-0.5"
+                  style={{ background: "var(--cd-warning-soft)", color: "var(--cd-warning)" }}
+                  title={special.map((s) => `${s.label} ${fmtQty(s.remaining, s.unit)}`).join(" · ")}
+                >
+                  특 {special.map((s) => fmtQty(s.remaining, s.unit)).join("·")}
+                </span>
+              )}
             </div>
             {/* 소진율 미니바 */}
             <div className="mt-1 h-1.5 rounded-full cd-surface-bg overflow-hidden w-28">
@@ -313,6 +359,7 @@ function RowBlock({
         <div className="border-t cd-border-c p-3 flex flex-col gap-3">
           <UsageHistory row={r} entries={entries} catalog={catalog} busy={busy} onChanged={onChanged} post={post} />
           <GrantAdjust row={r} entries={entries} busy={busy} onChanged={onChanged} post={post} year={year} />
+          <SpecialLeaveSection row={r} special={special} entries={specialEntries} busy={busy} onChanged={onChanged} post={post} />
         </div>
       )}
     </div>
@@ -495,6 +542,142 @@ function MonthGrouped({
           )}
         </>
       )}
+    </div>
+  );
+}
+
+/* ---------- 특별휴가(장기근속·초과근무 대체) — 연차와 별도 원장(133) ---------- */
+function SpecialLeaveSection({
+  row: r,
+  special,
+  entries,
+  busy,
+  onChanged,
+  post,
+}: {
+  row: SummaryRow;
+  special?: SpecialRemaining[];
+  entries?: SpecialEntryRow[];
+  busy: boolean;
+  onChanged: () => void;
+  post: (payload: unknown) => Promise<boolean>;
+}) {
+  const [form, setForm] = useState<{
+    kind: "longevity" | "overtime_comp";
+    entryType: "grant" | "use" | "adjust";
+    days: string;
+    unit: "day" | "hour";
+    effectiveOn: string;
+    expiresOn: string;
+    note: string;
+  }>({ kind: "longevity", entryType: "grant", days: "", unit: "day", effectiveOn: "", expiresOn: "", note: "" });
+
+  const add = async () => {
+    const days = Number(form.days);
+    if (!(days > 0)) {
+      alert("수량을 입력하세요(양수 — 차감은 구분을 '사용'으로).");
+      return;
+    }
+    if (
+      await post({
+        specialEntry: {
+          employeeId: r.employeeId,
+          kind: form.kind,
+          entryType: form.entryType,
+          days,
+          unit: form.unit,
+          effectiveOn: form.effectiveOn || null,
+          expiresOn: form.expiresOn || null,
+          note: form.note || null,
+        },
+      })
+    ) {
+      setForm({ ...form, days: "", effectiveOn: "", expiresOn: "", note: "" });
+      onChanged();
+    }
+  };
+  const del = async (entryId: string) => {
+    if (!confirm("이 특별휴가 이력을 삭제할까요?")) return;
+    if (await post({ deleteSpecialEntryId: entryId })) onChanged();
+  };
+
+  return (
+    <div className="rounded-xl border cd-border-c p-3">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-[11px] font-bold cd-text-faint">특별휴가 (장기근속 · 초과근무 대체)</span>
+        {special && special.length > 0 && (
+          <span className="text-[10.5px] font-bold" style={{ color: "var(--cd-warning)" }}>
+            잔여 {special.map((s) => `${s.label} ${fmtQty(s.remaining, s.unit)}`).join(" · ")}
+          </span>
+        )}
+      </div>
+      {entries && entries.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {entries.map((e) => (
+            <span key={e.entryId} className="inline-flex items-center gap-1.5 rounded-lg border cd-border-c px-2 py-1 text-[11px]">
+              <span className={`text-[9.5px] rounded-full px-1.5 py-0.5 ${e.entryType === "use" ? "border cd-border-c cd-text-faint" : "cd-tint-primary"}`}>
+                {SPECIAL_KIND_LABEL[e.kind] ?? e.kind}
+              </span>
+              <span className="cd-text-faint">{ENTRY_LABEL[e.entryType] ?? e.entryType}</span>
+              <span className="font-mono cd-text">{fmtQty(e.days, e.unit)}</span>
+              {e.effectiveOn && <span className="font-mono text-[10px] cd-text-faint">{e.effectiveOn}</span>}
+              {e.expiresOn && <span className="text-[10px] cd-text-faint">~{e.expiresOn} 소멸</span>}
+              {e.note && <span className="cd-text-faint truncate max-w-[200px]" title={e.note}>{e.note}</span>}
+              {e.source === "auto_overtime" ? (
+                // 자동 적재분은 근태 재산정으로 갱신·회수된다 — 수동 삭제하면 다음 재산정 때 부활하므로 막는다.
+                <span className="text-[9.5px] rounded-full px-1.5 py-0.5" style={{ background: "var(--cd-success-soft)", color: "var(--cd-success)" }}>
+                  자동
+                </span>
+              ) : (
+                <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" title="삭제" onClick={() => del(e.entryId)}>
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              )}
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <select
+          className="cd-select"
+          style={{ width: 150 }}
+          value={form.kind}
+          onChange={(e) => {
+            const kind = e.target.value as "longevity" | "overtime_comp";
+            // 초과근무 대체휴가는 시간 단위가 기본(근태 대조 자동 산정과 동일).
+            setForm({ ...form, kind, unit: kind === "overtime_comp" ? "hour" : "day" });
+          }}
+        >
+          <option value="longevity">장기근속휴가</option>
+          <option value="overtime_comp">초과근무 대체휴가</option>
+        </select>
+        <select className="cd-select" style={{ width: 90 }} value={form.entryType} onChange={(e) => setForm({ ...form, entryType: e.target.value as "grant" | "use" | "adjust" })}>
+          <option value="grant">부여</option>
+          <option value="use">사용</option>
+          <option value="adjust">조정</option>
+        </select>
+        <input className="cd-input text-right" style={{ width: 56 }} inputMode="decimal" placeholder="수량" value={form.days} onChange={(e) => setForm({ ...form, days: e.target.value })} />
+        <select className="cd-select" style={{ width: 72 }} value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value as "day" | "hour" })}>
+          <option value="day">일</option>
+          <option value="hour">시간</option>
+        </select>
+        <span className="cd-text-faint text-[11px]">기준일</span>
+        <AutoDateInput className="cd-input" style={{ width: 112 }} value={form.effectiveOn} onChange={(effectiveOn) => setForm({ ...form, effectiveOn })} />
+        {form.entryType !== "use" && (
+          <>
+            <span className="cd-text-faint text-[11px]">소멸일(선택)</span>
+            <AutoDateInput className="cd-input" style={{ width: 112 }} value={form.expiresOn} onChange={(expiresOn) => setForm({ ...form, expiresOn })} />
+          </>
+        )}
+        <input className="cd-input" style={{ width: 150 }} placeholder="메모(선택)" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+        <button type="button" className="cd-btn rounded-lg border cd-border-c px-3 py-1.5 text-xs font-semibold disabled:opacity-50" disabled={busy} onClick={add}>
+          <Plus className="w-3.5 h-3.5 inline" /> 추가
+        </button>
+      </div>
+      <p className="text-[10px] cd-text-faint mt-2">
+        홈 &apos;내 연차·초과근무&apos; 카드에 본인 잔여가 표시됩니다. 초과근무 대체휴가는 승인된 12h 초과 신청이 실제 근태와 대조되면
+        시간 단위로 자동 부여됩니다(자동 표시 — 근태 재산정 시 갱신·회수). 사용(소진)은 &apos;사용&apos;으로 직접 기록하세요.
+      </p>
     </div>
   );
 }

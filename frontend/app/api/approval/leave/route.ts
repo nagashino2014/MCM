@@ -3,12 +3,16 @@ import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import {
   addLeaveEntries,
+  addSpecialLeaveEntry,
   deleteLeaveEntry,
+  deleteSpecialLeaveEntry,
   getLeaveSettings,
   getMyLeaveRemaining,
   getMySpecialLeaveRemaining,
   listLeaveEntries,
   listLeaveSummary,
+  listSpecialLeaveEntries,
+  listSpecialLeaveRemainingAll,
   saveLeaveSettings,
   upsertUsageEntry,
 } from "@/lib/approval/leave";
@@ -34,9 +38,12 @@ export async function GET(req: NextRequest) {
     }
     const employeeId = sp.get("employeeId");
     if (employeeId) {
-      return NextResponse.json({ entries: await listLeaveEntries(employeeId, year) });
+      // 특별휴가(133) 이력 — 마이그레이션 미적용 환경에서도 죽지 않게 실패는 빈 목록으로.
+      const specialEntries = await listSpecialLeaveEntries(employeeId).catch(() => []);
+      return NextResponse.json({ entries: await listLeaveEntries(employeeId, year), specialEntries });
     }
-    return NextResponse.json({ rows: await listLeaveSummary(year), settings: await getLeaveSettings() });
+    const special = await listSpecialLeaveRemainingAll().catch(() => ({}));
+    return NextResponse.json({ rows: await listLeaveSummary(year), settings: await getLeaveSettings(), special });
   } catch (err) {
     return authErrorToResponse(err);
   }
@@ -51,6 +58,19 @@ interface PostBody {
   deleteEntryId?: string;
   // 발생 기준 설정
   accrualBasis?: AccrualBasis;
+  // 특별휴가(장기근속·초과근무 대체) 부여/사용/조정 추가 — unit='hour' 면 days 는 시간 수(134)
+  specialEntry?: {
+    employeeId: string;
+    kind: "longevity" | "overtime_comp";
+    entryType: "grant" | "use" | "adjust";
+    days: number;
+    unit?: "day" | "hour";
+    effectiveOn?: string | null;
+    expiresOn?: string | null;
+    note?: string | null;
+  };
+  // 특별휴가 엔트리 삭제
+  deleteSpecialEntryId?: string;
 }
 
 // POST: 부여/조정·사용 이력 추가/수정·삭제·발생기준 설정 — admin 전용
@@ -62,6 +82,20 @@ export async function POST(req: NextRequest) {
     if (body.accrualBasis) {
       await saveLeaveSettings(body.accrualBasis === "hire_date" ? "hire_date" : "jan1");
       await recordAuditLog({ actorUserId: actor.userId, action: "approval_leave_update", targetTable: "leave_settings", targetId: "default", after: { accrualBasis: body.accrualBasis } });
+      return NextResponse.json({ ok: true });
+    }
+    if (body.specialEntry) {
+      const s = body.specialEntry;
+      if (!s.employeeId || !["longevity", "overtime_comp"].includes(s.kind) || !["grant", "use", "adjust"].includes(s.entryType) || !(Number(s.days) > 0)) {
+        return NextResponse.json({ error: "특별휴가 입력값이 올바르지 않습니다." }, { status: 400 });
+      }
+      const entryId = await addSpecialLeaveEntry({ ...s, days: Number(s.days) });
+      await recordAuditLog({ actorUserId: actor.userId, action: "approval_leave_update", targetTable: "special_leave_ledger", targetId: entryId, after: { kind: s.kind, entryType: s.entryType, days: s.days } });
+      return NextResponse.json({ entryId });
+    }
+    if (body.deleteSpecialEntryId) {
+      await deleteSpecialLeaveEntry(body.deleteSpecialEntryId);
+      await recordAuditLog({ actorUserId: actor.userId, action: "approval_leave_update", targetTable: "special_leave_ledger", targetId: body.deleteSpecialEntryId, after: { deleted: true } });
       return NextResponse.json({ ok: true });
     }
     if (body.deleteEntryId) {

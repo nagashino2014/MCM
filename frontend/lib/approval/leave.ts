@@ -305,11 +305,13 @@ export async function deleteLeaveEntry(entryId: string): Promise<void> {
   });
 }
 
-/** 특별휴가 잔여(홈 카드) — kind 별 Σ(grant+adjust) − Σ(use). 소멸일 지난 부여분은 제외. */
+/** 특별휴가 잔여(홈 카드) — kind·unit 별 Σ(grant+adjust) − Σ(use). 소멸일 지난 부여분은 제외.
+ *  unit: 'day'(장기근속 등) | 'hour'(초과근무 대체 — 근태 대조 자동 산정, 134). */
 export interface SpecialLeaveRemaining {
   kind: "longevity" | "overtime_comp";
   label: string;
   remaining: number;
+  unit: "day" | "hour";
 }
 
 const SPECIAL_LEAVE_LABEL: Record<string, string> = {
@@ -317,19 +319,122 @@ const SPECIAL_LEAVE_LABEL: Record<string, string> = {
   overtime_comp: "초과근무 대체휴가",
 };
 
+export interface SpecialLeaveEntry {
+  entryId: string;
+  employeeId: string;
+  kind: "longevity" | "overtime_comp";
+  kindLabel: string;
+  entryType: "grant" | "use" | "adjust";
+  days: number;
+  unit: "day" | "hour";
+  effectiveOn: string | null;
+  expiresOn: string | null;
+  note: string | null;
+  /** manual(수기) | auto_overtime(근태 대조 자동 산정 — 삭제·수정 대신 재산정으로 갱신된다) */
+  source: string;
+  createdAt: string;
+}
+
+const slvId = () => "slv-" + crypto.randomUUID().replace(/-/g, "").slice(0, 14);
+
+/** 전 직원 특별휴가 잔여(관리 화면 배지) — employeeId → kind·unit별 잔여(>0만). */
+export async function listSpecialLeaveRemainingAll(): Promise<Record<string, SpecialLeaveRemaining[]>> {
+  const db = await getDb();
+  const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT employee_id, kind, unit,
+              COALESCE(SUM(CASE WHEN entry_type IN ('grant','adjust')
+                                 AND (expires_on IS NULL OR expires_on >= $1) THEN days END), 0)
+            - COALESCE(SUM(CASE WHEN entry_type = 'use' THEN days END), 0) AS remaining
+         FROM special_leave_ledger
+        GROUP BY employee_id, kind, unit`,
+      [today]
+    )
+  );
+  const out: Record<string, SpecialLeaveRemaining[]> = {};
+  for (const r of rows) {
+    const remaining = Math.round(Number(r.remaining ?? 0) * 100) / 100;
+    if (remaining <= 0) continue;
+    const employeeId = String(r.employee_id);
+    (out[employeeId] ??= []).push({
+      kind: String(r.kind) as SpecialLeaveRemaining["kind"],
+      label: SPECIAL_LEAVE_LABEL[String(r.kind)] ?? String(r.kind),
+      remaining,
+      unit: String(r.unit) === "hour" ? "hour" : "day",
+    });
+  }
+  return out;
+}
+
+/** 직원의 특별휴가 이력(관리 화면 펼침) — 최근 입력 순. */
+export async function listSpecialLeaveEntries(employeeId: string): Promise<SpecialLeaveEntry[]> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT * FROM special_leave_ledger WHERE employee_id = $1
+        ORDER BY COALESCE(effective_on, created_at) DESC, created_at DESC`,
+      [employeeId]
+    )
+  );
+  return rows.map((r) => ({
+    entryId: String(r.entry_id),
+    employeeId: String(r.employee_id),
+    kind: String(r.kind) as SpecialLeaveEntry["kind"],
+    kindLabel: SPECIAL_LEAVE_LABEL[String(r.kind)] ?? String(r.kind),
+    entryType: String(r.entry_type) as SpecialLeaveEntry["entryType"],
+    days: Number(r.days ?? 0),
+    unit: String(r.unit) === "hour" ? "hour" : "day",
+    effectiveOn: r.effective_on != null ? String(r.effective_on) : null,
+    expiresOn: r.expires_on != null ? String(r.expires_on) : null,
+    note: r.note != null ? String(r.note) : null,
+    source: r.source != null ? String(r.source) : "manual",
+    createdAt: String(r.created_at ?? ""),
+  }));
+}
+
+/** 특별휴가 부여/사용/조정 추가(admin 수기). days 는 양수(unit='hour' 면 시간 수) — 차감은 entry_type='use'. */
+export async function addSpecialLeaveEntry(params: {
+  employeeId: string;
+  kind: "longevity" | "overtime_comp";
+  entryType: "grant" | "use" | "adjust";
+  days: number;
+  unit?: "day" | "hour";
+  effectiveOn?: string | null;
+  expiresOn?: string | null;
+  note?: string | null;
+}): Promise<string> {
+  const entryId = slvId();
+  const now = new Date().toISOString();
+  await withDbWrite(async (txn) => {
+    await txn.run(
+      `INSERT INTO special_leave_ledger (entry_id, employee_id, kind, entry_type, days, unit, effective_on, expires_on, note, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [entryId, params.employeeId, params.kind, params.entryType, params.days, params.unit === "hour" ? "hour" : "day", params.effectiveOn ?? null, params.expiresOn ?? null, params.note ?? null, now]
+    );
+  });
+  return entryId;
+}
+
+export async function deleteSpecialLeaveEntry(entryId: string): Promise<void> {
+  await withDbWrite(async (txn) => {
+    await txn.run(`DELETE FROM special_leave_ledger WHERE entry_id = $1`, [entryId]);
+  });
+}
+
 export async function getMySpecialLeaveRemaining(userId: string): Promise<SpecialLeaveRemaining[]> {
   const db = await getDb();
   const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT s.kind,
+      `SELECT s.kind, s.unit,
               COALESCE(SUM(CASE WHEN s.entry_type IN ('grant','adjust')
                                  AND (s.expires_on IS NULL OR s.expires_on >= $2) THEN s.days END), 0)
             - COALESCE(SUM(CASE WHEN s.entry_type = 'use' THEN s.days END), 0) AS remaining
          FROM users u
          JOIN special_leave_ledger s ON s.employee_id = u.employee_id
         WHERE u.user_id = $1
-        GROUP BY s.kind`,
+        GROUP BY s.kind, s.unit`,
       [userId, today]
     )
   );
@@ -338,6 +443,7 @@ export async function getMySpecialLeaveRemaining(userId: string): Promise<Specia
       kind: String(r.kind) as SpecialLeaveRemaining["kind"],
       label: SPECIAL_LEAVE_LABEL[String(r.kind)] ?? String(r.kind),
       remaining: Math.round(Number(r.remaining ?? 0) * 100) / 100,
+      unit: (String(r.unit) === "hour" ? "hour" : "day") as "day" | "hour",
     }))
     .filter((r) => r.remaining > 0);
 }

@@ -307,6 +307,44 @@ export function ApprovalDocViewer({
               </p>
             )}
 
+            {/* 초과근무 주 12h 초과 경고 — 상신 시점에 고정된 판정(field_values._over_limit) */}
+            {(() => {
+              const ol = (detail.fieldValues as Record<string, unknown> | undefined)?._over_limit as
+                | {
+                    weekStart: string;
+                    priorRequestedMinutes: number;
+                    applyMinutes: number;
+                    limitMinutes: number;
+                    consent?: { agreedAt: string; signerName: string };
+                  }
+                | undefined;
+              if (!ol || typeof ol !== "object" || !ol.weekStart) return null;
+              const h = (min: number) => {
+                const v = Math.round((Number(min || 0) / 60) * 10) / 10;
+                return Number.isInteger(v) ? String(v) : v.toFixed(1);
+              };
+              const total = Number(ol.priorRequestedMinutes || 0) + Number(ol.applyMinutes || 0);
+              return (
+                <div
+                  className="rounded-xl border px-3.5 py-2.5 flex flex-col gap-0.5"
+                  style={{ borderColor: "var(--cd-warning,#FFAE1F)", background: "var(--cd-warning-soft, rgba(255,174,31,0.1))" }}
+                >
+                  <span className="text-[11.5px] font-bold" style={{ color: "var(--cd-warning,#FFAE1F)" }}>
+                    ⚠ 주 12시간 초과 신청 — {ol.weekStart} 주 합계 {h(total)}h (기존 신청 {h(ol.priorRequestedMinutes)}h + 이 문서 {h(ol.applyMinutes)}h · 한도 {h(ol.limitMinutes)}h)
+                  </span>
+                  <span className="text-[10.5px] cd-text-faint">
+                    승인 시 실제 근태 기록과 대조해 초과분이 인정되면 특별휴가(초과근무 대체휴가)로 가산율(1.5·야간 2.0배)을 반영해 시간 단위 자동 산정됩니다.
+                  </span>
+                  {ol.consent?.agreedAt && (
+                    <span className="text-[10.5px] font-semibold" style={{ color: "var(--cd-success)" }}>
+                      ✓ 기안자 보상휴가 전환 동의(전자서명) 완료 — {ol.consent.signerName || "기안자"} ·{" "}
+                      {ol.consent.agreedAt.slice(0, 16).replace("T", " ")}
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
+
             {detail.aiSummary && (detail.aiSummary.lines.length > 0 || detail.aiSummary.figures.length > 0) && (
               <div className="rounded-xl cd-tint-primary p-3 flex flex-col gap-1.5">
                 <span className="text-[11px] font-bold cd-text-primary flex items-center gap-1">

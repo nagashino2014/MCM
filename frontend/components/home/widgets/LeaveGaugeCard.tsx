@@ -10,7 +10,7 @@ import { useHomeWidget } from "../useHomeWidget";
 
 interface LeaveMe {
   summary: { granted: number; used: number; remaining: number } | null;
-  special?: { kind: string; label: string; remaining: number }[];
+  special?: { kind: string; label: string; remaining: number; unit?: "day" | "hour" }[];
 }
 
 interface AttendanceMe {
@@ -163,7 +163,9 @@ export function LeaveGaugeCard() {
             특별휴가
           </span>
           <p className="m-0 text-[11.5px] font-semibold truncate" style={{ color: "#8B7B54" }}>
-            {special.map((s) => `${s.label} ${fmtDays(s.remaining)}`).join(" · ")}
+            {special
+              .map((s) => `${s.label} ${s.unit === "hour" ? `${fmtH(s.remaining * 60)}` : fmtDays(s.remaining)}`)
+              .join(" · ")}
           </p>
         </div>
       )}

@@ -9,6 +9,7 @@ import { PgDatabase, rowsToObjects, withDbWrite } from "@/lib/db";
 import type { AdtRawRecord, AttendanceSettings } from "./types";
 import { loadAttendanceSettings } from "./settings";
 import { computeDaily, computeWeekly, weekStartOf, ymd8ToDate, type WeeklyDailyInput } from "./overtime";
+import { syncOvertimeCompForWeeks } from "@/lib/approval/overtime";
 import { AttendanceSource, DbStagingSource, FileSource, S3Source, type CollectResult } from "./source";
 
 export interface IngestResult {
@@ -191,6 +192,19 @@ export async function ingestStaging(db: PgDatabase, opts: { batchLimit?: number 
     if (!weekStart) continue;
     await recomputeWeek(db, adtEmpNo, weekStart, settings);
   }
+
+  // 근태 대조 — 갱신된 주에 승인된 12h 초과 신청이 있으면 실제 초과분(excess)을
+  // 초과근무 대체휴가(특별휴가, 시간)로 자동 적재한다(ref_key 멱등 — 재업로드 시 갱신/회수).
+  await syncOvertimeCompForWeeks(
+    db,
+    Array.from(affectedWeeks)
+      .map((key) => {
+        const [adtEmpNo, weekStart] = key.split("|");
+        return { adtEmpNo, weekStart };
+      })
+      .filter((w) => !!w.weekStart),
+    settings.weeklyOvertimeLimitMinutes
+  );
 
   return {
     collected: 0,

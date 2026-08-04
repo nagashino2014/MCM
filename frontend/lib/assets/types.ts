@@ -11,6 +11,18 @@ export const ASSET_KIND_LABELS: Record<AssetKind, string> = {
   etc: "기타",
 };
 
+/** 차량 소유 유형(129) — 장기 렌트 / 법인 소유 / 리스. */
+export type VehicleOwnership = "rent" | "owned" | "lease";
+
+export const VEHICLE_OWNERSHIP_LABELS: Record<VehicleOwnership, string> = {
+  rent: "장기 렌트",
+  owned: "법인 소유",
+  lease: "리스",
+};
+
+/** 법인 소유 차량의 소유자 자동 입력값. */
+export const COMPANY_OWNER_NAME = "(주)한국환경안전연구원";
+
 export interface ReservableAsset {
   assetId: string;
   kind: AssetKind;
@@ -20,6 +32,28 @@ export interface ReservableAsset {
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
+  /* ── 차량 전용(129) — 회의실·기타는 전부 null ── */
+  /** 차량번호(예: 12가3456) */
+  plateNo: string | null;
+  ownership: VehicleOwnership | null;
+  /** 소유자 — owned: 법인명 자동, rent/lease: 렌터카·리스사 수동 입력 */
+  ownerName: string | null;
+  /** 취득(계약)일 YYYY-MM-DD */
+  acquiredAt: string | null;
+  /** 계약기간(개월) — rent/lease 전용 */
+  contractMonths: number | null;
+  /** 반납(매각)일 YYYY-MM-DD */
+  returnedAt: string | null;
+  /** 취득 가격(원) — owned 전용 */
+  acquisitionPrice: number | null;
+  /** 월 렌트(리스)료(원) — rent/lease 전용 */
+  monthlyFee: number | null;
+  /** 계약서 PDF S3 키·원본 파일명 */
+  contractDocKey: string | null;
+  contractDocName: string | null;
+  /** 차량 등록증 PDF S3 키·원본 파일명 */
+  registrationDocKey: string | null;
+  registrationDocName: string | null;
 }
 
 export interface AssetReservation {

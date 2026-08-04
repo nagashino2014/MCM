@@ -6,9 +6,9 @@
  */
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
-import type { AssetKind, AssetReservation, ReservableAsset } from "@/lib/assets/types";
+import type { AssetKind, AssetReservation, ReservableAsset, VehicleOwnership } from "@/lib/assets/types";
 
-export type { AssetKind, AssetReservation, ReservableAsset } from "@/lib/assets/types";
+export type { AssetKind, AssetReservation, ReservableAsset, VehicleOwnership } from "@/lib/assets/types";
 
 const newId = (p: string) => `${p}-${crypto.randomUUID().replace(/-/g, "").slice(0, 14)}`;
 
@@ -16,6 +16,14 @@ function toKind(v: unknown): AssetKind {
   const s = String(v ?? "");
   return s === "vehicle" || s === "room" || s === "etc" ? s : "etc";
 }
+
+function toOwnership(v: unknown): VehicleOwnership | null {
+  const s = String(v ?? "");
+  return s === "rent" || s === "owned" || s === "lease" ? s : null;
+}
+
+const textOrNull = (v: unknown): string | null => (v != null && String(v).trim() !== "" ? String(v) : null);
+const numOrNull = (v: unknown): number | null => (v != null && String(v).trim() !== "" ? Number(v) : null);
 
 function toAsset(r: Record<string, unknown>): ReservableAsset {
   return {
@@ -27,7 +35,31 @@ function toAsset(r: Record<string, unknown>): ReservableAsset {
     sortOrder: Number(r.sort_order ?? 0),
     createdAt: String(r.created_at ?? ""),
     updatedAt: String(r.updated_at ?? ""),
+    plateNo: textOrNull(r.plate_no),
+    ownership: toOwnership(r.ownership),
+    ownerName: textOrNull(r.owner_name),
+    acquiredAt: textOrNull(r.acquired_at),
+    contractMonths: numOrNull(r.contract_months),
+    returnedAt: textOrNull(r.returned_at),
+    acquisitionPrice: numOrNull(r.acquisition_price),
+    monthlyFee: numOrNull(r.monthly_fee),
+    contractDocKey: textOrNull(r.contract_doc_key),
+    contractDocName: textOrNull(r.contract_doc_name),
+    registrationDocKey: textOrNull(r.registration_doc_key),
+    registrationDocName: textOrNull(r.registration_doc_name),
   };
+}
+
+/** 차량 상세 입력(129) — create/update 공용. undefined = 변경 안 함, null = 비움. */
+export interface VehicleDetailInput {
+  plateNo?: string | null;
+  ownership?: VehicleOwnership | null;
+  ownerName?: string | null;
+  acquiredAt?: string | null;
+  contractMonths?: number | null;
+  returnedAt?: string | null;
+  acquisitionPrice?: number | null;
+  monthlyFee?: number | null;
 }
 
 function toReservation(r: Record<string, unknown>): AssetReservation {
@@ -75,33 +107,51 @@ export async function createAsset(input: {
   name: string;
   description?: string | null;
   sortOrder?: number;
+  vehicle?: VehicleDetailInput;
 }): Promise<ReservableAsset> {
   const name = input.name.trim();
   if (!name) throw new Error("자산 이름을 입력하세요.");
   const now = new Date().toISOString();
-  const asset: ReservableAsset = {
-    assetId: newId("asset"),
-    kind: input.kind,
-    name,
-    description: input.description?.trim() || null,
-    active: true,
-    sortOrder: input.sortOrder ?? 0,
-    createdAt: now,
-    updatedAt: now,
-  };
+  const v = input.vehicle ?? {};
+  const assetId = newId("asset");
   await withDbWrite(async (db) => {
     await db.run(
-      `INSERT INTO reservable_assets (asset_id, kind, name, description, active, sort_order, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, 1, $5, $6, $6)`,
-      [asset.assetId, asset.kind, asset.name, asset.description, asset.sortOrder, now]
+      `INSERT INTO reservable_assets
+         (asset_id, kind, name, description, active, sort_order, created_at, updated_at,
+          plate_no, ownership, owner_name, acquired_at, contract_months, returned_at, acquisition_price, monthly_fee)
+       VALUES ($1, $2, $3, $4, 1, $5, $6, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+      [
+        assetId,
+        input.kind,
+        name,
+        input.description?.trim() || null,
+        input.sortOrder ?? 0,
+        now,
+        v.plateNo?.trim() || null,
+        v.ownership ?? null,
+        v.ownerName?.trim() || null,
+        v.acquiredAt || null,
+        v.contractMonths ?? null,
+        v.returnedAt || null,
+        v.acquisitionPrice ?? null,
+        v.monthlyFee ?? null,
+      ]
     );
   });
-  return asset;
+  const rows = rowsToObjects(await (await getDb()).exec(`SELECT * FROM reservable_assets WHERE asset_id = $1`, [assetId]));
+  return toAsset(rows[0]);
 }
 
 export async function updateAsset(
   assetId: string,
-  input: { kind?: AssetKind; name?: string; description?: string | null; active?: boolean; sortOrder?: number }
+  input: {
+    kind?: AssetKind;
+    name?: string;
+    description?: string | null;
+    active?: boolean;
+    sortOrder?: number;
+    vehicle?: VehicleDetailInput;
+  }
 ): Promise<void> {
   const sets: string[] = [];
   const args: unknown[] = [];
@@ -118,12 +168,48 @@ export async function updateAsset(
   if (input.description !== undefined) push("description", input.description?.trim() || null);
   if (input.active !== undefined) push("active", input.active ? 1 : 0);
   if (input.sortOrder !== undefined) push("sort_order", input.sortOrder);
+  const v = input.vehicle;
+  if (v) {
+    if (v.plateNo !== undefined) push("plate_no", v.plateNo?.trim() || null);
+    if (v.ownership !== undefined) push("ownership", v.ownership ?? null);
+    if (v.ownerName !== undefined) push("owner_name", v.ownerName?.trim() || null);
+    if (v.acquiredAt !== undefined) push("acquired_at", v.acquiredAt || null);
+    if (v.contractMonths !== undefined) push("contract_months", v.contractMonths ?? null);
+    if (v.returnedAt !== undefined) push("returned_at", v.returnedAt || null);
+    if (v.acquisitionPrice !== undefined) push("acquisition_price", v.acquisitionPrice ?? null);
+    if (v.monthlyFee !== undefined) push("monthly_fee", v.monthlyFee ?? null);
+  }
   if (!sets.length) return;
   push("updated_at", new Date().toISOString());
   args.push(assetId);
   await withDbWrite(async (db) => {
     await db.run(`UPDATE reservable_assets SET ${sets.join(", ")} WHERE asset_id = $${args.length}`, args);
   });
+}
+
+/** 차량 서류(계약서/등록증) 키·파일명 저장(129) — 업로드 라우트가 S3 저장 후 호출한다. */
+export async function setAssetDocument(
+  assetId: string,
+  docType: "contract" | "registration",
+  key: string,
+  fileName: string
+): Promise<void> {
+  const keyCol = docType === "contract" ? "contract_doc_key" : "registration_doc_key";
+  const nameCol = docType === "contract" ? "contract_doc_name" : "registration_doc_name";
+  await withDbWrite(async (db) => {
+    await db.run(
+      `UPDATE reservable_assets SET ${keyCol} = $2, ${nameCol} = $3, updated_at = $4 WHERE asset_id = $1`,
+      [assetId, key, fileName, new Date().toISOString()]
+    );
+  });
+}
+
+/** 서류 기존 키 조회(교체 시 이전 파일 정리용). */
+export async function getAssetDocumentKey(assetId: string, docType: "contract" | "registration"): Promise<string | null> {
+  const db = await getDb();
+  const col = docType === "contract" ? "contract_doc_key" : "registration_doc_key";
+  const rows = rowsToObjects(await db.exec(`SELECT ${col} AS k FROM reservable_assets WHERE asset_id = $1`, [assetId]));
+  return rows.length && rows[0].k != null && String(rows[0].k) ? String(rows[0].k) : null;
 }
 
 /** 삭제 — 예약 이력이 있으면 이력 보존을 위해 비활성화로 대체한다. */

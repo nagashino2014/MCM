@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AuthError, authErrorToResponse, requirePermission } from "@/lib/auth/guards";
-import { deleteAsset, updateAsset, type AssetKind } from "@/lib/assets/store";
+import { deleteAsset, updateAsset, type AssetKind, type VehicleDetailInput } from "@/lib/assets/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,6 +20,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ as
       description?: string | null;
       active?: boolean;
       sortOrder?: number;
+      vehicle?: VehicleDetailInput;
     };
     await updateAsset(assetId, {
       kind: parseKind(body.kind),
@@ -27,6 +28,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ as
       description: body.description !== undefined ? body.description : undefined,
       active: typeof body.active === "boolean" ? body.active : undefined,
       sortOrder: typeof body.sortOrder === "number" ? body.sortOrder : undefined,
+      vehicle: body.vehicle,
     });
     return NextResponse.json({ ok: true });
   } catch (err) {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AuthError, authErrorToResponse, requirePermission, requireSession } from "@/lib/auth/guards";
-import { createAsset, listAssets, type AssetKind } from "@/lib/assets/store";
+import { createAsset, listAssets, type AssetKind, type VehicleDetailInput } from "@/lib/assets/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
       name?: string;
       description?: string | null;
       sortOrder?: number;
+      vehicle?: VehicleDetailInput;
     };
     const kind = parseKind(body.kind ?? null);
     if (!kind) return NextResponse.json({ error: "자산 종류가 올바르지 않습니다." }, { status: 400 });
@@ -39,6 +40,7 @@ export async function POST(req: NextRequest) {
       name: String(body.name ?? ""),
       description: body.description ?? null,
       sortOrder: typeof body.sortOrder === "number" ? body.sortOrder : undefined,
+      vehicle: kind === "vehicle" ? body.vehicle : undefined,
     });
     return NextResponse.json({ ok: true, asset });
   } catch (err) {

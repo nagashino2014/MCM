@@ -34,8 +34,8 @@ export async function summarizeProgress(progressText: string | null, planText: s
   if (!apiKey) return fallback(progress, plan);
 
   const prompt =
-    `다음은 한 용역/업무의 주간 업무보고 추진내역입니다. 핵심만 추려 80자 내외의 한국어 한 문단으로 간결하게 요약하세요. ` +
-    `머리말·따옴표 없이 요약문만 출력하세요.\n\n[이번 기간]\n${flatten(progress) || "(없음)"}\n\n[다음 기간]\n${flatten(plan) || "(없음)"}`;
+    `다음은 한 용역/업무의 주간 업무보고 추진내역입니다. 핵심만 추려 한국어 한 문단으로 아주 간결하게 요약하세요. ` +
+    `공백 포함 100자 이내(카드에 4줄을 넘기면 잘립니다), 머리말·따옴표 없이 요약문만 출력하세요.\n\n[이번 기간]\n${flatten(progress) || "(없음)"}\n\n[다음 기간]\n${flatten(plan) || "(없음)"}`;
 
   try {
     const controller = new AbortController();
@@ -51,11 +51,15 @@ export async function summarizeProgress(progressText: string | null, planText: s
       signal: controller.signal,
     });
     clearTimeout(timer);
-    if (!res.ok) return fallback(progress, plan);
+    if (!res.ok) {
+      console.warn(`[work-plan] 추진내역 AI 요약 실패(status ${res.status}) — truncate 폴백`);
+      return fallback(progress, plan);
+    }
     const data = (await res.json()) as { content?: { type: string; text?: string }[] };
     const text = (data.content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join("").trim();
     return text || fallback(progress, plan);
-  } catch {
+  } catch (err) {
+    console.warn(`[work-plan] 추진내역 AI 요약 실패(${(err as Error).message}) — truncate 폴백`);
     return fallback(progress, plan);
   }
 }

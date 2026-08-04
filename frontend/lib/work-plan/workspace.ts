@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { normalizeReport } from "@/lib/work-plan/normalize";
+import { summarizeProgress } from "@/lib/ai/summarize";
 
 export interface MyServiceRow {
   contractId: string;
@@ -281,6 +282,57 @@ export async function listServiceReports(contractId: string): Promise<ServiceRep
     status: String(row.status ?? "draft"),
     title: str(row.title),
     updatedAt: String(row.updated_at ?? ""),
+  }));
+}
+
+/** 지난 추진 내역 이력 — 한 용역/Task의 1차 보고(staff_input) 전 회차 추진내역(이번/다음 기간). */
+export interface ProgressHistoryRow {
+  reportId: string;
+  periodStart: string;
+  periodEnd: string;
+  reportDate: string | null;
+  meetingLabel: string | null;
+  meetingSeq: number | null;
+  status: string;
+  authorName: string | null;
+  progressText: string | null;
+  planText: string | null;
+}
+
+export async function listSubjectHistory(subjectKind: ReportSubjectKind, subjectId: string): Promise<ProgressHistoryRow[]> {
+  const db = await getDb();
+  const col = subjectKind === "task" ? "task_id" : "contract_id";
+  const result = await db.exec(
+    `SELECT r.report_id, r.period_start, r.period_end, r.report_date, r.meeting_label, r.status,
+            u.name AS author_name, it.progress_text, it.plan_text,
+            (SELECT count(*)::int FROM work_plan_reports r2
+              WHERE r2.${col} = r.${col}
+                AND r2.report_kind = 'staff_input'
+                AND COALESCE(r2.meeting_label, '') = COALESCE(r.meeting_label, '')
+                AND ( COALESCE(NULLIF(r2.report_date, ''), r2.period_end) < COALESCE(NULLIF(r.report_date, ''), r.period_end)
+                      OR ( COALESCE(NULLIF(r2.report_date, ''), r2.period_end) = COALESCE(NULLIF(r.report_date, ''), r.period_end)
+                           AND r2.created_at <= r.created_at ) )) AS seq
+       FROM work_plan_reports r
+       LEFT JOIN users u ON u.user_id = r.author_user_id
+       LEFT JOIN LATERAL (
+         SELECT progress_text, plan_text FROM work_plan_items WHERE report_id = r.report_id ORDER BY display_order ASC LIMIT 1
+       ) it ON true
+      WHERE r.${col} = $1 AND r.report_kind = 'staff_input'
+        AND (it.progress_text IS NOT NULL OR it.plan_text IS NOT NULL)
+      ORDER BY COALESCE(NULLIF(r.report_date, ''), r.period_end) DESC, r.created_at DESC`,
+    [subjectId]
+  );
+  return rowsToObjects(result).map((row) => ({
+    reportId: String(row.report_id ?? ""),
+    periodStart: String(row.period_start ?? ""),
+    periodEnd: String(row.period_end ?? ""),
+    reportDate: str(row.report_date),
+    meetingLabel: str(row.meeting_label),
+    meetingSeq: row.seq != null ? Number(row.seq) : null,
+    status: String(row.status ?? "draft"),
+    authorName: str(row.author_name),
+    progressText: str(row.progress_text),
+    planText: str(row.plan_text),
   }));
 }
 
@@ -666,7 +718,33 @@ export async function listExecCards(deptId: string, filter: "merged" | "directed
       ORDER BY COALESCE(NULLIF(r.report_date, ''), r.period_end) DESC, r.created_at DESC`,
     [deptId]
   );
-  return rowsToObjects(result).map(mapExecCard);
+  const cards = rowsToObjects(result).map(mapExecCard);
+
+  // 요약 backfill — 요약 기능 배포 이전에 머지된 보고 등 summary_text 누락 건은 조회 시점에 생성·저장한다.
+  const missing = cards.filter((c) => !c.summaryText);
+  if (missing.length) {
+    const now = new Date().toISOString();
+    await Promise.all(
+      missing.map(async (c) => {
+        try {
+          const itr = await db.exec(
+            "SELECT progress_text, plan_text FROM work_plan_items WHERE report_id = $1 ORDER BY display_order ASC LIMIT 1",
+            [c.reportId]
+          );
+          const it = rowsToObjects(itr)[0] ?? {};
+          const summary = await summarizeProgress(str(it.progress_text), str(it.plan_text));
+          if (!summary) return;
+          await withDbWrite(async (wdb) => {
+            await wdb.run("UPDATE work_plan_reports SET summary_text = $1, updated_at = $2 WHERE report_id = $3", [summary, now, c.reportId]);
+          });
+          c.summaryText = summary;
+        } catch {
+          // 요약 실패가 카드 목록 표시를 막지 않는다.
+        }
+      })
+    );
+  }
+  return cards;
 }
 
 /** 재보고 대상 = 로그인 작성자에게 반려된 보고(부서장 의견 첨부). */

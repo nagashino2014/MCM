@@ -158,10 +158,10 @@ export default function ExecWorkspace() {
                           <Kv label="수행인력" value={workerLabel(c.workerNames)} />
                         </div>
                       </div>
-                      {/* 추진내역(요약) */}
+                      {/* 추진내역(요약) — 4줄 고정 높이(카드 높이가 요약 길이에 따라 변하지 않게). */}
                       <div className="w-[38%] shrink-0 rounded-xl border cd-border-c p-2">
                         <p className="text-[10px] font-semibold cd-text-faint mb-1">추진내역(요약)</p>
-                        <p className="text-[11px] cd-text-muted leading-relaxed line-clamp-5">{c.summaryText || "—"}</p>
+                        <p className="text-[11px] cd-text-muted leading-relaxed line-clamp-4 h-[72px]">{c.summaryText || "—"}</p>
                       </div>
                     </div>
                     <div className="mt-1.5 flex items-center gap-1.5">

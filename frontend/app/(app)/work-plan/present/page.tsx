@@ -1,21 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, ChevronLeft, ChevronRight, Pause, Play, Users } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Briefcase, ChevronLeft, ChevronRight, ClipboardList, Play, Users } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import type { OversightCard } from "@/lib/work-plan/oversight";
 import "@/components/cdash/cdash.css";
 
+const PAGE_SIZE = 8; // 2열 × 4행
+
 export default function PresentPage() {
-  const { theme, toggleTheme } = useCdashTheme();
+  const { theme } = useCdashTheme();
   const [departments, setDepartments] = useState<{ deptId: string; deptName: string }[]>([]);
   const [deptId, setDeptId] = useState("");
   const [deptName, setDeptName] = useState("");
   const [cards, setCards] = useState<OversightCard[]>([]);
-  const [index, setIndex] = useState(0);
-  const [playing, setPlaying] = useState(true);
+  const [page, setPage] = useState(0);
 
   useEffect(() => {
     fetch("/api/departments", { cache: "no-store" })
@@ -34,34 +35,28 @@ export default function PresentPage() {
 
   useEffect(() => {
     if (!deptId) return;
-    setIndex(0);
+    setPage(0);
     fetch(`/api/work-plan/oversight?dept=${encodeURIComponent(deptId)}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => setCards(d.cards ?? []))
       .catch(() => setCards([]));
   }, [deptId]);
 
-  const next = useCallback(() => setIndex((i) => (cards.length ? (i + 1) % cards.length : 0)), [cards.length]);
-  const prev = useCallback(() => setIndex((i) => (cards.length ? (i - 1 + cards.length) % cards.length : 0)), [cards.length]);
+  const totalPages = Math.max(1, Math.ceil(cards.length / PAGE_SIZE));
+  const next = useCallback(() => setPage((p) => Math.min(p + 1, totalPages - 1)), [totalPages]);
+  const prev = useCallback(() => setPage((p) => Math.max(p - 1, 0)), []);
 
-  useEffect(() => {
-    if (!playing || cards.length <= 1) return;
-    const t = setInterval(next, 30000);
-    return () => clearInterval(t);
-  }, [playing, cards.length, next]);
-
+  // 자동 전환 없음 — ←/→ 키·버튼 수동 조작만.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "ArrowRight") next();
       else if (e.key === "ArrowLeft") prev();
-      else if (e.key === " ") setPlaying((p) => !p);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [next, prev]);
 
-  const card = cards[index] ?? null;
-  const stagePct = card && card.stageTotal > 0 ? Math.round((card.stageDone / card.stageTotal) * 100) : 0;
+  const pageCards = useMemo(() => cards.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE), [cards, page]);
 
   return (
     <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-4 p-4 md:p-5 rounded-3xl" data-theme={theme}>
@@ -69,7 +64,7 @@ export default function PresentPage() {
         icon={<Play className="w-5 h-5" />}
         eyebrow="Work · Presentation"
         title="발표 모드"
-        subtitle="회의·간담회용 부서 보고 발표. ←/→ 이동, Space 재생/정지, 30초 자동 전환."
+        subtitle="회의·간담회용 부서 보고 발표. ←/→ 또는 버튼으로 페이지 이동."
         actions={
           <div className="flex items-center gap-2">
             <select
@@ -91,59 +86,75 @@ export default function PresentPage() {
         }
       />
 
-      <section className="cd-card rounded-3xl flex-1 min-h-0 flex flex-col p-8 md:p-12 cd-reveal delay-1">
-        {!card ? (
+      <section className="cd-card rounded-3xl flex-1 min-h-0 flex flex-col p-4 md:p-6 cd-reveal delay-1">
+        {cards.length === 0 ? (
           <div className="flex-1 flex items-center justify-center text-center cd-text-faint">
             이 부서로 지정된 용역이 없습니다.
           </div>
         ) : (
           <>
-            <div className="flex items-center justify-between gap-4">
-              <span className="text-base md:text-xl font-bold cd-text-primary">{deptName} · 주간 업무 보고</span>
-              <span className="text-sm md:text-lg cd-text-faint">{index + 1} / {cards.length}</span>
+            <div className="flex items-center justify-between gap-4 mb-3">
+              <span className="text-base md:text-lg font-bold cd-text-primary">{deptName} · 주간 업무 보고</span>
+              <span className="text-sm md:text-base cd-text-faint">{page + 1} / {totalPages}</span>
             </div>
 
-            <div className="flex-1 min-h-0 flex flex-col justify-center gap-6 md:gap-8">
-              <div>
-                <h1 className="text-3xl md:text-5xl font-extrabold cd-text leading-tight">{card.title}</h1>
-                <p className="text-lg md:text-2xl cd-text-faint mt-2">{card.subtitle}</p>
-              </div>
+            {/* 용역·Task 카드 — 2열 × 4행 */}
+            <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide grid grid-cols-1 lg:grid-cols-2 auto-rows-fr gap-3">
+              {pageCards.map((card) => {
+                const stagePct = card.stageTotal > 0 ? Math.round((card.stageDone / card.stageTotal) * 100) : 0;
+                const summary = card.summaryText || card.latestProgress;
+                return (
+                  <div key={`${card.kind}:${card.subjectId}`} className="rounded-2xl border cd-border-c p-3.5 flex flex-col gap-2 min-h-0">
+                    <div className="flex items-start gap-2">
+                      <span className="shrink-0 mt-0.5 inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md cd-tint-primary cd-text-primary">
+                        {card.kind === "task" ? <ClipboardList className="w-3 h-3" /> : <Briefcase className="w-3 h-3" />}
+                        {card.kind === "task" ? "Task" : "용역"}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm md:text-base font-bold cd-text leading-snug line-clamp-2">{card.title}</p>
+                        <p className="text-[11px] md:text-xs cd-text-faint truncate">
+                          {[card.counterpartyName, card.categoryLabel].filter(Boolean).join(" · ") || "—"}
+                        </p>
+                      </div>
+                      {card.issueOpen > 0 && (
+                        <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px]" style={{ background: "#FCEBEB", color: "#791F1F" }}>
+                          <AlertTriangle className="w-3 h-3" /> 이슈 {card.issueOpen}
+                        </span>
+                      )}
+                    </div>
 
-              <div>
-                <div className="flex items-center justify-between mb-2 text-base md:text-xl">
-                  <span className="font-bold cd-text">
-                    {card.currentStage ? `${card.currentStage}${card.currentPct != null ? ` ${Math.round(card.currentPct)}%` : ""}` : `진행 ${card.stageDone}/${card.stageTotal}`}
-                  </span>
-                  {card.issueOpen > 0 && (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm md:text-lg" style={{ background: "#FCEBEB", color: "#791F1F" }}>
-                      <AlertTriangle className="w-4 h-4 md:w-5 md:h-5" /> 이슈 {card.issueOpen}건
-                    </span>
-                  )}
-                </div>
-                <span className="block h-3 md:h-4 rounded-full" style={{ background: "var(--cd-surface)" }}>
-                  <span className="block h-full rounded-full" style={{ width: `${stagePct}%`, background: "#1D9E75" }} />
-                </span>
-              </div>
+                    <div>
+                      <div className="flex items-center justify-between mb-1 text-[11px] md:text-xs">
+                        <span className="font-bold cd-text truncate">
+                          {card.currentStage ? `${card.currentStage}${card.currentPct != null ? ` ${Math.round(card.currentPct)}%` : ""}` : `진행 ${card.stageDone}/${card.stageTotal}`}
+                        </span>
+                        <span className="cd-text-faint shrink-0 ml-2">{stagePct}%</span>
+                      </div>
+                      <span className="block h-1.5 rounded-full" style={{ background: "var(--cd-surface)" }}>
+                        <span className="block h-full rounded-full" style={{ width: `${stagePct}%`, background: "#1D9E75" }} />
+                      </span>
+                    </div>
 
-              {card.latestProgress && (
-                <p className="text-xl md:text-3xl cd-text leading-relaxed">{card.latestProgress}</p>
-              )}
+                    {summary && (
+                      <p className="text-[11px] md:text-xs cd-text-muted leading-relaxed line-clamp-4 flex-1">{summary}</p>
+                    )}
 
-              {card.participantNames && (
-                <p className="text-base md:text-2xl cd-text-faint inline-flex items-center gap-2">
-                  <Users className="w-5 h-5 md:w-6 md:h-6" /> {card.participantNames}
-                </p>
-              )}
+                    {card.participantNames && (
+                      <p className="text-[11px] md:text-xs cd-text-faint inline-flex items-center gap-1.5 mt-auto">
+                        <Users className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">{card.participantNames}</span>
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
-            <div className="flex items-center justify-center gap-4">
-              <button type="button" onClick={prev} className="p-3 rounded-xl border cd-border-c cd-text-muted cd-row-hover" aria-label="이전">
+            <div className="flex items-center justify-center gap-4 pt-3">
+              <button type="button" onClick={prev} disabled={page === 0} className="p-3 rounded-xl border cd-border-c cd-text-muted cd-row-hover disabled:opacity-40" aria-label="이전">
                 <ChevronLeft className="w-6 h-6" />
               </button>
-              <button type="button" onClick={() => setPlaying((p) => !p)} className="p-3 rounded-xl cd-fill-primary text-white" aria-label={playing ? "정지" : "재생"}>
-                {playing ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6" />}
-              </button>
-              <button type="button" onClick={next} className="p-3 rounded-xl border cd-border-c cd-text-muted cd-row-hover" aria-label="다음">
+              <span className="text-sm cd-text-faint min-w-[64px] text-center">{page + 1} / {totalPages}</span>
+              <button type="button" onClick={next} disabled={page >= totalPages - 1} className="p-3 rounded-xl border cd-border-c cd-text-muted cd-row-hover disabled:opacity-40" aria-label="다음">
                 <ChevronRight className="w-6 h-6" />
               </button>
             </div>

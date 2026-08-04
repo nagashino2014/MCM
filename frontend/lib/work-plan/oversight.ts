@@ -7,12 +7,16 @@ export interface OversightCard {
   taskId: string | null;
   title: string;
   subtitle: string | null;    // 발주처 · 용역분류 | 업무분류
+  counterpartyName: string | null; // 발주처(용역만) — 발표모드 분리 표기용
+  categoryLabel: string | null;    // 용역분류 | 업무분류
   stageTotal: number;
   stageDone: number;
   currentStage: string | null;
   currentPct: number | null;
   issueOpen: number;
   latestProgress: string | null;
+  /** 최근 보고의 AI 추진내역 요약(발표모드용) — 없으면 latestProgress 폴백. */
+  summaryText: string | null;
   participantNames: string | null;
 }
 
@@ -32,6 +36,8 @@ export async function listOversight(deptId: string): Promise<OversightCard[]> {
             (SELECT s.progress_pct FROM contract_process_stages s WHERE s.contract_id = c.contract_id AND s.status = 'in_progress' ORDER BY s.stage_order ASC LIMIT 1) AS current_pct,
             (SELECT COUNT(*) FROM work_plan_issues i WHERE i.contract_id = c.contract_id AND i.status <> 'resolved') AS issue_open,
             (SELECT wi.progress_text FROM work_plan_items wi WHERE wi.contract_id = c.contract_id AND wi.progress_text IS NOT NULL ORDER BY wi.updated_at DESC LIMIT 1) AS latest_progress,
+            (SELECT r.summary_text FROM work_plan_reports r WHERE r.contract_id = c.contract_id AND r.summary_text IS NOT NULL
+              ORDER BY COALESCE(NULLIF(r.report_date, ''), r.period_end) DESC, r.created_at DESC LIMIT 1) AS latest_summary,
             (SELECT string_agg(e.name, ', ') FROM service_participants sp JOIN employee_profiles e ON e.employee_id = sp.employee_id WHERE sp.contract_id = c.contract_id) AS participant_names
        FROM contracts c
        JOIN facilities cp ON cp.facility_id = c.counterparty_facility_id
@@ -49,6 +55,8 @@ export async function listOversight(deptId: string): Promise<OversightCard[]> {
             (SELECT s.progress_pct FROM work_task_process_stages s WHERE s.task_id = t.task_id AND s.status = 'in_progress' ORDER BY s.stage_order ASC LIMIT 1) AS current_pct,
             (SELECT wi.progress_text FROM work_plan_items wi JOIN work_plan_reports r ON r.report_id = wi.report_id
               WHERE r.task_id = t.task_id AND wi.progress_text IS NOT NULL ORDER BY wi.updated_at DESC LIMIT 1) AS latest_progress,
+            (SELECT r.summary_text FROM work_plan_reports r WHERE r.task_id = t.task_id AND r.summary_text IS NOT NULL
+              ORDER BY COALESCE(NULLIF(r.report_date, ''), r.period_end) DESC, r.created_at DESC LIMIT 1) AS latest_summary,
             (SELECT string_agg(e.name, ', ') FROM work_task_participants wtp JOIN employee_profiles e ON e.employee_id = wtp.employee_id WHERE wtp.task_id = t.task_id) AS participant_names
        FROM work_tasks t
        LEFT JOIN work_task_categories wc ON wc.category_id = t.category_id
@@ -66,12 +74,15 @@ export async function listOversight(deptId: string): Promise<OversightCard[]> {
     subtitle: [row.counterparty_name != null ? String(row.counterparty_name) : null, row.service_type != null ? String(row.service_type) : null]
       .filter(Boolean)
       .join(" · ") || null,
+    counterpartyName: row.counterparty_name != null ? String(row.counterparty_name) : null,
+    categoryLabel: row.service_type != null ? String(row.service_type) : null,
     stageTotal: Number(row.stage_total ?? 0),
     stageDone: Number(row.stage_done ?? 0),
     currentStage: row.current_stage != null ? String(row.current_stage) : null,
     currentPct: row.current_pct != null ? Number(row.current_pct) : null,
     issueOpen: Number(row.issue_open ?? 0),
     latestProgress: row.latest_progress != null ? String(row.latest_progress) : null,
+    summaryText: row.latest_summary != null ? String(row.latest_summary) : null,
     participantNames: row.participant_names != null ? String(row.participant_names) : null,
   }));
 
@@ -82,12 +93,15 @@ export async function listOversight(deptId: string): Promise<OversightCard[]> {
     taskId: String(row.task_id ?? ""),
     title: String(row.task_name ?? ""),
     subtitle: row.category_name != null ? String(row.category_name) : null,
+    counterpartyName: null,
+    categoryLabel: row.category_name != null ? String(row.category_name) : null,
     stageTotal: Number(row.stage_total ?? 0),
     stageDone: Number(row.stage_done ?? 0),
     currentStage: row.current_stage != null ? String(row.current_stage) : null,
     currentPct: row.current_pct != null ? Number(row.current_pct) : null,
     issueOpen: 0,
     latestProgress: row.latest_progress != null ? String(row.latest_progress) : null,
+    summaryText: row.latest_summary != null ? String(row.latest_summary) : null,
     participantNames: row.participant_names != null ? String(row.participant_names) : null,
   }));
 

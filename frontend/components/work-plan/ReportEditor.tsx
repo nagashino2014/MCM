@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Check, GitCommitHorizontal, MessageSquareText, Pencil, Save, Send, Settings2, ShieldCheck, Undo2, UserCog } from "lucide-react";
+import { AlertTriangle, Check, GitCommitHorizontal, History, MessageSquareText, Pencil, Save, Send, Settings2, ShieldCheck, Undo2, UserCog } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
 import ProcessStageSettingModal from "@/components/work-plan/ProcessStageSettingModal";
 import StaffingSettingModal from "@/components/work-plan/StaffingSettingModal";
 import StructuredNoteEditor from "@/components/work-plan/StructuredNoteEditor";
 import IssuePanel from "@/components/work-plan/IssuePanel";
+import HistoryModal, { type HistoryTab } from "@/components/work-plan/HistoryModal";
 import { MEETING_LABELS, REVIEW_COMMENT_KINDS, REJECTABLE_KINDS, EXEC_DIRECTIVE_KINDS, EXEC_DIRECTIVE_ACTIONABLE } from "@/lib/work-plan/constants";
 import type { ContractStageRow } from "@/lib/contracts/process-stages";
 import type { ReporterContext, ReportStageRow, ServiceReportDetail } from "@/lib/work-plan/workspace";
@@ -118,6 +119,7 @@ export default function ReportEditor({
 
   const [showProcessSetting, setShowProcessSetting] = useState(false);
   const [showStaffingSetting, setShowStaffingSetting] = useState(false);
+  const [historyTab, setHistoryTab] = useState<HistoryTab | null>(null);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -599,7 +601,16 @@ export default function ReportEditor({
 
         {/* 추진 내역 */}
         <div className="rounded-2xl border cd-border-c p-4">
-          <h3 className="font-bold cd-text mb-3">추진 내역</h3>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-bold cd-text">추진 내역</h3>
+            <button
+              type="button"
+              onClick={() => setHistoryTab("progress")}
+              className="cd-btn cd-btn-ghost rounded-lg px-3 py-1.5 text-xs cd-text-muted inline-flex items-center gap-1 border cd-border-c"
+            >
+              <History className="w-3.5 h-3.5" /> 지난 내역 보기
+            </button>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {/* label 로 감싸면 클릭이 내부 첫 버튼으로 전달되므로 div 로 감싼다. */}
             <div className="flex flex-col gap-1.5">
@@ -689,9 +700,18 @@ export default function ReportEditor({
         {/* 이슈상황 (보고작성·감독 공통) — 용역/Task 단위. 임원/재보고 모드는 숨김 */}
         {!exec && !execResponse && (
           <div className="rounded-2xl border cd-border-c p-4">
-            <h3 className="font-bold cd-text mb-3 flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 cd-error-text" /> 이슈상황
-            </h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-bold cd-text flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 cd-error-text" /> 이슈상황
+              </h3>
+              <button
+                type="button"
+                onClick={() => setHistoryTab("issues")}
+                className="cd-btn cd-btn-ghost rounded-lg px-3 py-1.5 text-xs cd-text-muted inline-flex items-center gap-1 border cd-border-c"
+              >
+                <History className="w-3.5 h-3.5" /> 지난 내역 보기
+              </button>
+            </div>
             {subject.kind === "task"
               ? <IssuePanel taskId={subject.id} canRespond={review} />
               : <IssuePanel contractId={subject.id} canRespond={review} />}
@@ -777,6 +797,15 @@ export default function ReportEditor({
             setShowProcessSetting(false);
             loadStages();
           }}
+        />
+      )}
+      {historyTab && (
+        <HistoryModal
+          subjectKind={subject.kind}
+          subjectId={subject.id}
+          initialTab={historyTab}
+          theme={theme}
+          onClose={() => setHistoryTab(null)}
         />
       )}
       {showStaffingSetting && (

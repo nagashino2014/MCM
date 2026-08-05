@@ -7,6 +7,8 @@ import { listLeaveTypes } from "@/lib/approval/leave-types-store";
 import { sanitizeDownloadName } from "@/lib/contracts/document-bundle";
 import { generateLetterArtifacts } from "@/lib/letter/generate";
 import { LETTER_FORM_ID } from "@/lib/letter/types";
+import { generateQuoteArtifacts } from "@/lib/quote/generate";
+import { QUOTE_FORM_ID } from "@/lib/quote/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,6 +35,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ docI
     let fileName: string;
     if (doc.formId === LETTER_FORM_ID) {
       const artifacts = await generateLetterArtifacts(docId, { persist: false });
+      bytes = artifacts.pdfBytes;
+      fileName = `${artifacts.fileBase}.pdf`;
+    } else if (doc.formId === QUOTE_FORM_ID) {
+      // 견적(136)도 결재 심사를 최종 제출 지면으로 — on-demand 렌더(저장 안 함)
+      const artifacts = await generateQuoteArtifacts(docId, { persist: false });
       bytes = artifacts.pdfBytes;
       fileName = `${artifacts.fileBase}.pdf`;
     } else {

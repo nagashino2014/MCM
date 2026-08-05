@@ -1101,7 +1101,7 @@ export function ApprovalLetterBoard() {
       {/* 미리보기 + 레이아웃 미세조정 모달 — 조정값은 저장/상신 시 문서에 실려 발송본에 반영 */}
       {previewOpen && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" style={{ background: "rgba(15,20,34,0.5)" }} onClick={() => setPreviewOpen(false)}>
-          <div className="rounded-2xl bg-[color:var(--cd-card)] shadow-2xl w-full max-w-[1100px] h-[92vh] flex overflow-hidden" onClick={(e) => e.stopPropagation()}>
+          <div className="rounded-2xl bg-[color:var(--cd-card)] shadow-2xl w-full max-w-[1500px] h-[94vh] flex overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <div className="flex-1 min-w-0 bg-[color:var(--cd-surface)]">
               {previewUrl ? (
                 <iframe title="공문 미리보기" src={previewUrl} className="w-full h-full" />

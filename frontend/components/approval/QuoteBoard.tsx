@@ -19,6 +19,7 @@ import type { LetterRecipient } from "@/lib/letter/types";
 import {
   MD_GRADES,
   QUOTE_FORM_ID,
+  QUOTE_SERVICE_OPTIONS,
   SUMMARY_SHEET_MIN_SITES,
   STANDARD_OVERHEAD_RATE,
   STANDARD_TECH_FEE_RATE,
@@ -33,14 +34,8 @@ import {
 import { computeAmounts, gradeTotals, matrixLaborCost, mdVectorTotal, reverseAllocate, validateSumConstraint } from "@/lib/quote/rates";
 import "@/components/cdash/cdash.css";
 
-// 계약관리 CONTRACT_SERVICE_OPTIONS 와 동일(전 세분류 대응 — 사용자 확정)
-const SERVICE_OPTIONS: { type: string; subtypes: string[] }[] = [
-  { type: "통합허가", subtypes: ["최초허가", "영업허가", "변경허가", "변경신고", "통합교육", "사후관리", "재검토"] },
-  { type: "장외&화관법", subtypes: ["장외&화관법", "장외영향평가", "설치검사", "화관법기준", "위해관리계획", "배출저감계획", "배출량조사", "판매업허가", "정기검사", "안전진단"] },
-  { type: "HAPs", subtypes: ["HAPs", "HAPs최초", "HAPs변경", "HAPs연간", "시설구축", "명판부착", "배출저감", "정기점검대응"] },
-  { type: "ESG탄소중립", subtypes: ["ESG탄소중립", "ESG경영", "CBAM", "공급망실사", "LCA평가", "배출량산정", "배출권관련"] },
-  { type: "기타", subtypes: ["기타", "총량제신고", "매체별인허가", "환경자문", "환경R&D", "기타인허가"] },
-];
+// 계약관리 CONTRACT_SERVICE_OPTIONS 와 동일(전 세분류 대응 — 사용자 확정). 기준 관리 화면과 공유.
+const SERVICE_OPTIONS = QUOTE_SERVICE_OPTIONS;
 
 interface LineStep {
   stepType: "agree" | "approve";
@@ -490,6 +485,7 @@ export function QuoteBoard() {
                   <span className="ml-auto text-[11px] cd-text-faint">
                     견적번호 {docNo ? <b className="cd-text">{docNo}</b> : <>예정 <b className="cd-text">{nextNo ?? "..."}</b></>}
                     <span className="ml-1.5">· V.A.T 별도 · 유효기간 견적일로부터 1개월</span>
+                    <a href="/approval/quote/settings" className="ml-2 cd-text-primary hover:underline" title="세분류별 MD 기준·요율·노임단가 관리(관리 권한)">기준 관리</a>
                   </span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-2.5">
@@ -908,7 +904,7 @@ export function QuoteBoard() {
       {/* PDF 미리보기 모달 */}
       {previewOpen && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" style={{ background: "rgba(15,20,34,0.5)" }} onClick={() => setPreviewOpen(false)}>
-          <div className="rounded-2xl bg-[color:var(--cd-card)] shadow-2xl w-full max-w-[980px] h-[92vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+          <div className="rounded-2xl bg-[color:var(--cd-card)] shadow-2xl w-full max-w-[1400px] h-[94vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center px-4 py-2.5 border-b cd-border-c">
               <span className="text-sm font-bold cd-text">견적서 미리보기</span>
               <button type="button" className="ml-auto cd-text-faint hover:cd-text" onClick={() => setPreviewOpen(false)}>

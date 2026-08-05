@@ -20,6 +20,16 @@ export function quoteRuleKey(serviceType: string): string {
   return QUOTE_RULE_PREFIX + (QUOTE_NO_LABEL_BY_SERVICE_TYPE[serviceType] ?? "기타");
 }
 
+/** 용역 대분류→세분류 — 계약관리 CONTRACT_SERVICE_OPTIONS 와 동일(전 세분류 대응, 사용자 확정).
+ *  작성 화면(QuoteBoard)과 기준 관리 화면(QuoteSettingsBoard)이 공유한다. */
+export const QUOTE_SERVICE_OPTIONS: { type: string; subtypes: string[] }[] = [
+  { type: "통합허가", subtypes: ["최초허가", "영업허가", "변경허가", "변경신고", "통합교육", "사후관리", "재검토"] },
+  { type: "장외&화관법", subtypes: ["장외&화관법", "장외영향평가", "설치검사", "화관법기준", "위해관리계획", "배출저감계획", "배출량조사", "판매업허가", "정기검사", "안전진단"] },
+  { type: "HAPs", subtypes: ["HAPs", "HAPs최초", "HAPs변경", "HAPs연간", "시설구축", "명판부착", "배출저감", "정기점검대응"] },
+  { type: "ESG탄소중립", subtypes: ["ESG탄소중립", "ESG경영", "CBAM", "공급망실사", "LCA평가", "배출량산정", "배출권관련"] },
+  { type: "기타", subtypes: ["기타", "총량제신고", "매체별인허가", "환경자문", "환경R&D", "기타인허가"] },
+];
+
 /** MD 매트릭스 등급 축 — 별첨1 실물 4열("기술사 or 특급"/고급/중급/초급). 첫 열 단가는 특급 적용 */
 export const MD_GRADES = ["특급", "고급", "중급", "초급"] as const;
 export type MdGrade = (typeof MD_GRADES)[number];

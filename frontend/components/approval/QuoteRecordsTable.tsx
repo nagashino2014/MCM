@@ -155,7 +155,7 @@ export function QuoteViewModal({ quoteId, theme, onClose, onChanged }: { quoteId
   return createPortal(
     // 포털 모달 — .cdash 밖이라 cdash-vars + cd-fields-white + data-theme 부여(UI 규칙)
     <div className="cdash-vars cd-fields-white fixed inset-0 z-[80] flex items-center justify-center p-4" data-theme={theme} style={{ background: "rgba(15,20,34,0.45)" }} onClick={onClose}>
-      <div className="rounded-2xl bg-[color:var(--cd-card)] shadow-2xl w-full max-w-[980px] max-h-[92vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+      <div className="rounded-2xl bg-[color:var(--cd-card)] shadow-2xl w-full max-w-[1400px] max-h-[94vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-2.5 px-5 py-3.5 border-b cd-border-c">
           <div className="flex flex-col min-w-0">
             <span className="text-[13.5px] font-bold cd-text truncate">

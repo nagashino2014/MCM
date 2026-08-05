@@ -9,6 +9,7 @@ import { CheckCircle2, Sparkles, Trash2, X } from "lucide-react";
 import { ApprovalFormRenderer } from "@/components/approval/ApprovalFormRenderer";
 import type { ApprovalFieldDef } from "@/lib/approval/fields";
 import { LETTER_FORM_ID } from "@/lib/letter/types";
+import { QUOTE_FORM_ID } from "@/lib/quote/types";
 
 export interface DocStepRow {
   stepId: string;
@@ -380,14 +381,14 @@ export function ApprovalDocViewer({
             )}
 
             {/* 문서 본체 — 다우식 양식(중앙 제목 + 기안 표 + 신청/승인란)을 흰 카드 위에 올린다. */}
-            {detail.formId === LETTER_FORM_ID ? (
-              // 공문(135) — 결재자도 최종 발송 지면(A4 1장 PDF) 그대로 심사한다.
+            {detail.formId === LETTER_FORM_ID || detail.formId === QUOTE_FORM_ID ? (
+              // 공문(135)·견적서(136) — 결재자도 최종 발송/제출 지면(PDF) 그대로 심사한다.
               <div className="rounded-[14px] overflow-hidden" style={{ border: "1px solid var(--cd-active-border)" }}>
                 <iframe
-                  title="공문 미리보기"
+                  title={detail.formId === QUOTE_FORM_ID ? "견적서 미리보기" : "공문 미리보기"}
                   src={`/api/approval/docs/${encodeURIComponent(docId)}/pdf?disposition=inline`}
                   className="w-full"
-                  style={{ height: "72vh", background: "#fff" }}
+                  style={{ height: "80vh", background: "#fff" }}
                 />
               </div>
             ) : (

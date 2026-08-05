@@ -422,15 +422,17 @@ export function ApprovalDraftBoard() {
   };
 
   // 저장/상신 공용 POST — action 별 body 구성. 저장은 docId 반환.
+  // docIdOverride: save 직후 같은 턴에서 submit 할 때 — setDocId 는 비동기라 클로저의
+  // docId 가 stale 이어서 새 문서가 하나 더 생기는 버그 방지(공문 보드 실사고와 동일 패턴).
   const persist = useCallback(
-    async (action: "save" | "submit"): Promise<{ docId: string; docNo?: string | null }> => {
+    async (action: "save" | "submit", docIdOverride?: string): Promise<{ docId: string; docNo?: string | null }> => {
       if (!form) throw new Error("양식이 없습니다.");
       const res = await fetch("/api/approval/docs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action,
-          docId,
+          docId: docIdOverride ?? docId,
           formId: form.formId,
           title,
           urgent,
@@ -536,7 +538,7 @@ export function ApprovalDraftBoard() {
         if (warns.length && !window.confirm(`아래 경고가 있습니다. 그래도 상신하시겠습니까?\n${warns.map((w) => `· ${w.message}`).join("\n")}`)) {
           return;
         }
-        const done = await persist("submit");
+        const done = await persist("submit", saved.docId);
         alert(`상신되었습니다. 문서번호: ${done.docNo}`);
         router.push("/approval");
       } catch (err) {

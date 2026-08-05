@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     const db = await getDb();
     const rows = rowsToObjects(
       await db.exec(
-        `SELECT p.id, p.person_name, p.title, p.facility_id,
+        `SELECT p.id, p.person_name, p.title, p.email, p.facility_id,
                 f.company_name AS facility_name, d.department_name
            FROM facility_contact_people p
            LEFT JOIN facilities f ON f.facility_id = p.facility_id
@@ -33,6 +33,7 @@ export async function GET(req: NextRequest) {
         id: Number(r.id ?? 0),
         personName: String(r.person_name ?? ""),
         title: r.title != null ? String(r.title) : null,
+        email: r.email != null ? String(r.email) : null,
         facilityId: String(r.facility_id ?? ""),
         facilityName: r.facility_name != null ? String(r.facility_name) : null,
         departmentName: r.department_name != null ? String(r.department_name) : null,

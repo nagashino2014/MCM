@@ -8,6 +8,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { CheckCircle2, Sparkles, Trash2, X } from "lucide-react";
 import { ApprovalFormRenderer } from "@/components/approval/ApprovalFormRenderer";
 import type { ApprovalFieldDef } from "@/lib/approval/fields";
+import { LETTER_FORM_ID } from "@/lib/letter/types";
 
 export interface DocStepRow {
   stepId: string;
@@ -25,6 +26,7 @@ export interface DocStepRow {
 export interface DocDetailData {
   docId: string;
   docNo: string | null;
+  formId?: string;
   formName: string;
   title: string;
   urgent: boolean;
@@ -201,6 +203,17 @@ export function ApprovalDocViewer({
                   {detail.docNo ?? "미채번"} · {DOC_STATUS_LABEL[detail.status] ?? detail.status}
                 </span>
               </h3>
+              {/* PDF 출력 — 사업장 마스터 30px 아이콘 버튼 패턴(FacilityListPanel.tsx:304). 공문은 공문 지면으로 출력. */}
+              <button
+                type="button"
+                className="flex items-center justify-center shrink-0"
+                style={{ width: 30, height: 30 }}
+                title="PDF 출력"
+                onClick={() => window.open(`/api/approval/docs/${encodeURIComponent(docId)}/pdf`, "_blank")}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/icons/pdfico.png" alt="PDF" style={{ width: 30, height: 30 }} />
+              </button>
               {detail.canDelete && (
                 <button
                   type="button"
@@ -367,6 +380,17 @@ export function ApprovalDocViewer({
             )}
 
             {/* 문서 본체 — 다우식 양식(중앙 제목 + 기안 표 + 신청/승인란)을 흰 카드 위에 올린다. */}
+            {detail.formId === LETTER_FORM_ID ? (
+              // 공문(135) — 결재자도 최종 발송 지면(A4 1장 PDF) 그대로 심사한다.
+              <div className="rounded-[14px] overflow-hidden" style={{ border: "1px solid var(--cd-active-border)" }}>
+                <iframe
+                  title="공문 미리보기"
+                  src={`/api/approval/docs/${encodeURIComponent(docId)}/pdf?disposition=inline`}
+                  className="w-full"
+                  style={{ height: "72vh", background: "#fff" }}
+                />
+              </div>
+            ) : (
             <div
               className="rounded-[14px] px-[26px] py-6 flex flex-col gap-4"
               style={{
@@ -391,6 +415,7 @@ export function ApprovalDocViewer({
                 }}
               />
             </div>
+            )}
 
             {detail.steps.some((s) => s.comment) && (
               <div className="rounded-xl border cd-border-c p-3 flex flex-col gap-1">

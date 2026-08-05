@@ -86,12 +86,16 @@ function formatAddressList(list: MailAddress[]): string {
   return list.map(formatAddress).join(", ");
 }
 
-/** RFC2231 filename*=UTF-8''<pct> — 비ASCII 파일명 안전 처리. */
+/** RFC2231 filename*=UTF-8''<pct> — 비ASCII 파일명 안전 처리.
+ *  ⚠ encodeURIComponent 는 !'()* 를 남기는데, RFC2231 ext-value 에서 괄호·아포스트로피는
+ *  attribute-char 가 아니라 SES 가 헤더 파싱을 거부한다(실사고: "(2026-대외-…)" 공문 파일명
+ *  발송 실패) — 잔여 특수문자까지 pct-encoding 한다. */
 function encodeFilename(filename: string): string {
-  if (isPlainAscii(filename) && !/["\\]/.test(filename)) {
+  if (isPlainAscii(filename) && !/["\\()']/.test(filename)) {
     return `filename="${filename}"`;
   }
-  return `filename*=UTF-8''${encodeURIComponent(filename)}`;
+  const pct = encodeURIComponent(filename).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+  return `filename*=UTF-8''${pct}`;
 }
 
 function newBoundary(tag: string): string {

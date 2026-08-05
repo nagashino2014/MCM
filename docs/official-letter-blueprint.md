@@ -1,7 +1,39 @@
-# 공문 발송 관리 시스템 블루프린트 (초안 v1 — 확인 대기)
+# 공문 발송 관리 시스템 블루프린트 (v2 — 2026-08-05 구현 완료)
 
-작성 2026-07-21. 샘플 실측: 발신 공문 4건(기성 청구·독촉·준공계·계약 변경) + 공문 기본 템플릿 1건.
-확정 전 문서 — §9 미결 논점에 대한 사용자 확인 후 구현 계획을 확정한다.
+작성 2026-07-21, 개정 2026-08-05. 샘플 실측: 발신 공문 5건 + 공문 기본 템플릿 1건.
+
+## v2 구현 확정·완료 사항 (2026-08-05)
+
+§9 논점이 사용자 지시로 확정되어 1차 구현이 완료됐다. 상세 계획: 세션 플랜(witty-toasting-dawn).
+
+- **확정 결정**: PDF = pdf-lib 직접 렌더(HWPX→PDF 변환기 없음, 서명줄 하단 고정 실측 재현) ·
+  발신 = 기안자 개인 @koensain.app(lib/mail/send.ts) · 첨부 = PDF 기본+HWPX 동봉 옵션 ·
+  내용증명형 포함 · 결재 = 전자결재 코어 위임(승인 완료 시 자동 채번·생성·메일 발송) ·
+  메뉴 = 전자결재 '공문 작성'(/approval/letter, '기안 작성' 소메뉴 대체) · 과거 공문 백필 포함.
+- **구현 산출물**:
+  - 마이그 `infra/aws/135_official_letters.sql` — official_letters 대장(doc_id nullable —
+    imported 백필 지원)·채번 시드('대외' 2026=1033)·공문 양식 시드(frm-official-letter)
+  - 변환 레이어 `frontend/lib/letter/` — types(A4 실측 상수)·html-parse(MailEditor 서브셋
+    IR 파서)·compose·pdf(measure→fit→draw, A4 1장 격자 탐색: 폰트 10→9.5→9pt ×
+    gapLevel 0→2/서명줄 269→193pt)·hwpx(letter.hwpx 템플릿 fill — **템플릿 수령 대기**)·
+    generate(S3 letters/{연도}/{번호}/)·send(발송 파이프라인)·store(대장 CRUD)
+  - 화면: ApprovalLetterBoard(작성)·ApprovalRecordsBoard 탭('전자결재/발송공문')+
+    YYYYMM×2+연도 선택 필터·LetterRecordsTable/LetterViewModal(PDF iframe·PDF/HWPX
+    30px 아이콘 다운로드·재발송·수신처 사후 편집)·ApprovalDocModal PDF 출력 버튼+공문 지면 분기
+  - API: /api/letters(목록·단건·PATCH·pdf·hwpx·send·import·preview),
+    /api/approval/docs/[docId]/pdf(전자결재 문서 pdf-lib 렌더 doc-pdf.ts, 공문은 지면 렌더)
+  - 채번: allocateDocNo '대외' 분기 — `{연도}-대외-{NNNNN}`·신규 연도 01001 시작·
+    doc_no_pool 반납 호환(deleteDoc 파싱 분기)
+  - 백필: scripts/import_letters.py — V: 발신 공문 스캔·hwp 메타 파싱·임포트 API 업로드.
+    dry-run 197건 파싱 검증 완료. ⚠원본 중복 번호 2쌍(01026·01032) — 정리 필요.
+  - 폰트: KoPubWorld Batang(임베드 허용) public/fonts. 로고·인감 = 템플릿 HWP BinData 추출
+    (public/letter/logo.png·stamp.png)
+- **잔여**: ① 사용자 letter.hwpx 템플릿 제작(docs/letter-template-guide.md) 후 hwpx 검증
+  ② 마이그 135 staging 적용+배포 ③ 백필 실행(스테이징 대상) ④ 실증(상신→승인→자동 발송)
+
+---
+
+이하 v1 원문(실측·설계 근거).
 
 ## 1. 배경 / 문제
 

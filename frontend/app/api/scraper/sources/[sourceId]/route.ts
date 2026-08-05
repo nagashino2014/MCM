@@ -36,6 +36,7 @@ export async function PUT(req: NextRequest, ctx: Ctx) {
         baseUrl: body?.baseUrl,
         apiProfile: body?.apiProfile,
         enabled: typeof body?.enabled === "boolean" ? body.enabled : undefined,
+        batchHour: body?.batchHour === null || typeof body?.batchHour === "number" ? body.batchHour : undefined,
         authSecret: body?.authSecret,
       },
       actor.userId

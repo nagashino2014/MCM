@@ -187,6 +187,10 @@ export interface ScraperSourceRow {
   enabled: boolean;
   /** 인증키가 DB에 저장돼 있는지(값은 응답에 포함하지 않음 — 실행 시에만 복호화). */
   hasSecret: boolean;
+  /** 배치 실행 시각(KST 0~23시, 133). null=기본값(DEFAULT_BATCH_HOUR). */
+  batchHour: number | null;
+  /** 마지막 배치 수집일(KST YYYY-MM-DD) — 하루 1회 멱등 판정용. */
+  lastBatchDate: string | null;
   createdAt: string;
   updatedAt: string;
   updatedBy: string | null;

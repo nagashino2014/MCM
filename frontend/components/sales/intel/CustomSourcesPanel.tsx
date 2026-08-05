@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Radar, Plus, Wand2, Play, Eye, Trash2, ArrowLeft, Check, ExternalLink, KeyRound, ListTree, Settings2, History } from "lucide-react";
+import { Radar, Plus, Wand2, Play, Eye, Trash2, ArrowLeft, Check, ExternalLink, KeyRound, ListTree, Settings2, History, Clock } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { EndpointConfigBuilder } from "@/components/sales/scraper/EndpointConfigBuilder";
@@ -23,7 +23,13 @@ interface Source {
   catalog: SourceCatalog | null;
   enabled: boolean;
   hasSecret?: boolean;
+  /** 배치 실행 시각(KST 0~23). null=기본값 */
+  batchHour?: number | null;
+  lastBatchDate?: string | null;
 }
+
+/** 배치 실행 시각 기본값(KST) — sources-store.DEFAULT_BATCH_HOUR 와 동일해야 함 */
+const DEFAULT_BATCH_HOUR = 7;
 /** 백필 실행 중 청크의 세부 진행 — 서버 backfill.chunk_progress 와 동일 shape. */
 interface ChunkProgress {
   chunk: string;
@@ -91,7 +97,7 @@ interface RunLogRow {
 }
 
 const RUN_TRIGGER_LABEL: Record<string, string> = {
-  batch: "야간배치",
+  batch: "배치",
   manual: "수동 수집",
   backfill: "백필",
 };
@@ -532,6 +538,23 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
     await loadDetail(sel.sourceId);
   };
 
+  const saveBatchHour = async (hour: number) => {
+    if (!sel) return;
+    setBusy(true);
+    try {
+      await jfetch(`/api/scraper/sources/${sel.sourceId}`, {
+        method: "PUT",
+        body: JSON.stringify({ batchHour: hour }),
+      });
+      setMsg(`배치 실행 시각을 ${String(hour).padStart(2, "0")}:00 (KST)로 저장했습니다.`);
+      await loadDetail(sel.sourceId);
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const saveSecret = async () => {
     if (!sel || !secretInput.trim()) return;
     setBusy(true);
@@ -634,17 +657,46 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-stretch">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0">
                   <div className="flex flex-col gap-4 min-w-0">
-                    <div className="cd-card p-4 flex items-center gap-3 flex-wrap">
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-bold cd-text">{sel.name}</div>
-                        <div className="text-[11px] cd-text-faint">custom:{sel.slug}{sel.baseUrl ? ` · ${sel.baseUrl}` : ""}</div>
+                    {/* 소스 정보 | 배치 설정 — 가운데 세로 구분선으로 2열 */}
+                    <div className="cd-card p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="flex flex-col items-center gap-2 text-center min-w-0">
+                        <div className="min-w-0">
+                          <div className="text-sm font-bold cd-text truncate">{sel.name}</div>
+                          <div className="text-[11px] cd-text-faint truncate">custom:{sel.slug}{sel.baseUrl ? ` · ${sel.baseUrl}` : ""}</div>
+                        </div>
+                        <button type="button" onClick={toggleSource} className={"cd-btn text-[12px] " + (sel.enabled ? "cd-btn-soft" : "cd-btn-primary")}>
+                          {sel.enabled ? "배치 비활성화" : "배치 활성화"}
+                        </button>
+                        <button type="button" onClick={deleteSource} className="cd-btn cd-btn-danger text-[12px]">
+                          <Trash2 className="w-3.5 h-3.5" /> 삭제
+                        </button>
                       </div>
-                      <button type="button" onClick={toggleSource} className={"cd-btn text-[12px] " + (sel.enabled ? "cd-btn-soft" : "cd-btn-primary")}>
-                        {sel.enabled ? "야간배치 비활성화" : "야간배치 활성화"}
-                      </button>
-                      <button type="button" onClick={deleteSource} className="cd-btn cd-btn-danger text-[12px]">
-                        <Trash2 className="w-3.5 h-3.5" /> 삭제
-                      </button>
+
+                      <div className="flex flex-col gap-2 md:pl-4 min-w-0 md:border-l cd-border-c">
+                        <h3 className="text-sm font-bold cd-text flex items-center gap-1.5">
+                          <Clock className="w-4 h-4" /> 배치 실행 시각
+                        </h3>
+                        <p className="text-[11px] cd-text-faint leading-snug">
+                          매일 이 시각(KST)에 1회 자동 수집합니다. 나라장터 등 공공 API는 새벽에 점검으로 응답하지 않는 경우가 있어 기본값은 07시입니다.
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <select
+                            className="cd-select text-[13px]"
+                            style={{ width: "auto" }}
+                            value={String(sel.batchHour ?? DEFAULT_BATCH_HOUR)}
+                            disabled={busy}
+                            onChange={(e) => saveBatchHour(Number(e.target.value))}
+                          >
+                            {Array.from({ length: 24 }, (_, h) => (
+                              <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>
+                            ))}
+                          </select>
+                          {sel.batchHour == null && <span className="text-[11px] cd-text-faint">기본값</span>}
+                        </div>
+                        <div className="text-[11px] cd-text-faint">
+                          마지막 수집일: {sel.lastBatchDate ?? "—"}
+                        </div>
+                      </div>
                     </div>
 
                     {/* 인증키 */}
@@ -679,17 +731,17 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
                   {/* 야간배치 실행 로그 — 최근 5일 실행 내역(성공/실패·수집 건수·실행 시각) */}
                   <div className="cd-card p-4 flex flex-col gap-2 min-w-0">
                     <h3 className="text-sm font-bold cd-text flex items-center gap-1.5">
-                      <History className="w-4 h-4" /> 야간배치 실행 로그
+                      <History className="w-4 h-4" /> 배치 실행 로그
                       <span className="text-[11px] cd-text-faint font-normal">· 최근 5일</span>
                     </h3>
                     {sel.enabled && endpoints.length > 0 && endpoints.every((e) => !e.enabled) && (
                       <div className="rounded-lg px-3 py-2 text-[11.5px]" style={{ background: "var(--cd-error-soft)", color: "var(--cd-error)" }}>
-                        야간배치가 켜져 있지만 <b>활성화된 엔드포인트가 없어</b> 수집이 실행되지 않습니다. 아래 엔드포인트 목록에서 활성화하세요.
+                        배치가 켜져 있지만 <b>활성화된 엔드포인트가 없어</b> 수집이 실행되지 않습니다. 아래 엔드포인트 목록에서 활성화하세요.
                       </div>
                     )}
                     {sel.enabled && endpoints.length === 0 && (
                       <div className="rounded-lg px-3 py-2 text-[11.5px]" style={{ background: "var(--cd-error-soft)", color: "var(--cd-error)" }}>
-                        야간배치가 켜져 있지만 등록된 엔드포인트가 없어 수집이 실행되지 않습니다.
+                        배치가 켜져 있지만 등록된 엔드포인트가 없어 수집이 실행되지 않습니다.
                       </div>
                     )}
                     {runs === null ? (

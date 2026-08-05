@@ -12,6 +12,34 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+const FETCH_TIMEOUT_MS = 60000;
+const FETCH_RETRY_DELAYS_MS = [3000, 10000]; // 네트워크·타임아웃 오류 시 백오프 재시도(2회)
+
+/**
+ * 네트워크/타임아웃 오류에 한해 백오프 재시도하는 fetch.
+ * ⚠ 공공데이터포털(나라장터)은 새벽 점검 시간대에 응답 없이 무한 대기하는 사례 실측 —
+ * 일시 장애를 흡수하되, HTTP 응답(4xx/5xx)은 재시도하지 않고 그대로 돌려준다(호출측이 판정).
+ */
+async function fetchWithRetry(
+  url: string,
+  init: { method: string; headers: Record<string, string> },
+  logs: string[]
+): Promise<Response> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= FETCH_RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      return await fetch(url, { ...init, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+    } catch (err) {
+      lastErr = err;
+      const wait = FETCH_RETRY_DELAYS_MS[attempt];
+      if (wait == null) break;
+      logs.push(`[API] 요청 실패(${err instanceof Error ? err.message : String(err)}) — ${wait / 1000}초 후 재시도 ${attempt + 1}/${FETCH_RETRY_DELAYS_MS.length}`);
+      await delay(wait);
+    }
+  }
+  throw lastErr;
+}
+
 /** 환경변수 시크릿 참조("ENV:KEY") → process.env 값. */
 export function getEnvSecret(ref?: string): string | null {
   if (!ref || !ref.startsWith("ENV:")) return null;
@@ -269,11 +297,7 @@ async function executeApiCall(
     }
 
     logs.push(`[API] ${endpoint.method || "GET"} ${url.toString()}`);
-    const response = await fetch(url.toString(), {
-      method: endpoint.method || "GET",
-      headers,
-      signal: AbortSignal.timeout(60000),
-    });
+    const response = await fetchWithRetry(url.toString(), { method: endpoint.method || "GET", headers }, logs);
     if (!response.ok) return { data: null, error: `HTTP ${response.status}: ${response.statusText}` };
 
     const contentType = response.headers.get("content-type") || "";

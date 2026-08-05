@@ -9,6 +9,7 @@ export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
   const g = globalThis as {
     __bidNotifyTimer?: ReturnType<typeof setInterval>;
+    __bidCollectTimer?: ReturnType<typeof setInterval>;
     __approvalRemindTimer?: ReturnType<typeof setInterval>;
     __mailInboundTimer?: ReturnType<typeof setInterval>;
   };
@@ -28,6 +29,14 @@ export async function register() {
     const tick = () => callTick("/api/internal/bid-notify-tick", "bid-notify");
     g.__bidNotifyTimer = setInterval(tick, 5 * 60 * 1000);
     setTimeout(tick, 30 * 1000); // 기동 직후 1회(서버 리슨 대기 여유 30초)
+  }
+
+  // 공공입찰 수집 — 5분마다 체크, 소스별 설정 시각(KST, 기본 07시)에 1회 수집(일 1회 멱등).
+  // 야간 배치(03시)에서 분리: 나라장터가 새벽 시간대 무응답(60초 타임아웃) 실측.
+  if (!g.__bidCollectTimer) {
+    const collectTick = () => callTick("/api/internal/bid-collect-tick", "bid-collect");
+    g.__bidCollectTimer = setInterval(collectTick, 5 * 60 * 1000);
+    setTimeout(collectTick, 40 * 1000); // 기동 직후 1회
   }
 
   // 미결재 리마인드(AX-P1) — 30분마다 체크(디스패처가 스텝×일자 dedup 이라 과발송 없음).

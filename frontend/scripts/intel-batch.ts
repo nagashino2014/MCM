@@ -14,8 +14,7 @@ import { indexPendingEmbeddings, markNewsDuplicates } from "@/lib/intel/rag-inde
 import { disclosureCutoffIso, loadIntelSettings } from "@/lib/intel/intel-settings";
 import { listEnabledCustomCollectors, updateEndpoint } from "@/lib/scraper/sources-store";
 import { collectCustomSource } from "@/lib/intel/custom-sink";
-import { collectBidSource } from "@/lib/bid/bid-sink";
-import { matchAndQueueBidNotices } from "@/lib/bid/match-notify";
+import { collectBidSource } from "@/lib/bid/bid-sink"; // 백필 루프 전용(수집은 bid-collect-tick 담당)
 import { buildChunkConfig, nextYm, totalMonths, type BackfillState } from "@/lib/scraper/backfill";
 import { logScraperRun } from "@/lib/scraper/run-log";
 
@@ -158,40 +157,9 @@ async function main() {
     console.error("[intel-batch] custom sources error", err);
   }
 
-  // 공공입찰(bid) 커스텀 소스: purpose='bid' 소스×엔드포인트 순회 → 종류별 bid 테이블 적재. 개별 실패 격리.
-  try {
-    const bidDb = await getDb();
-    const bidCollectors = await listEnabledCustomCollectors(bidDb, "bid");
-    for (const { source, endpoint } of bidCollectors) {
-      const startedIso = new Date().toISOString();
-      try {
-        const started = Date.now();
-        const r = await collectBidSource(source, endpoint, {});
-        console.log(
-          `[intel-batch] bid:${source.slug} done in ${Math.round((Date.now() - started) / 1000)}s`,
-          JSON.stringify({ bidType: r.bidType, scanned: r.scanned, inserted: r.inserted, error: r.error })
-        );
-        await logScraperRun({
-          source, endpoint, trigger: "batch", scanned: r.scanned, inserted: r.inserted,
-          updated: (r as { updated?: number }).updated ?? 0, error: r.error ?? null, startedAt: startedIso,
-        });
-        // 사업분야 매칭 알림 — 신규 건만 분류 조건 평가 후 큐 적재(발송은 설정 시각에 디스패처가).
-        if (r.insertedItems?.length) {
-          try {
-            const mq = await matchAndQueueBidNotices(r.bidType, r.insertedItems);
-            if (mq.matched > 0) console.log(`[intel-batch] bid:${source.slug} match`, JSON.stringify(mq));
-          } catch (err) {
-            console.error(`[intel-batch] bid:${source.slug} match error`, err);
-          }
-        }
-      } catch (err) {
-        console.error(`[intel-batch] bid:${source.slug} error`, err);
-        await logScraperRun({ source, endpoint, trigger: "batch", error: String((err as Error)?.message ?? err), startedAt: startedIso });
-      }
-    }
-  } catch (err) {
-    console.error("[intel-batch] bid sources error", err);
-  }
+  // 공공입찰(bid) 수집은 이 야간 배치에서 제외한다 —
+  // 나라장터(공공데이터포털)가 KST 03시대에 응답 없이 타임아웃되는 사례 실측(2026-08-05).
+  // 대신 next 서비스의 5분 틱(/api/internal/bid-collect-tick)이 소스별 설정 시각(기본 07시)에 수집한다.
 
   // 백필(과거 대량 수집) 진행 — running 상태 엔드포인트를 실행당 최대 N개월씩 이어서 수집.
   // UI에서 시작/중지, 배치는 매일 조금씩 과거로 확장한다(호출량 분산). 개별 실패 격리.

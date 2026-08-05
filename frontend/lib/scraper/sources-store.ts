@@ -39,6 +39,8 @@ function mapSource(r: Record<string, unknown>): ScraperSourceRow {
     catalog: parseJson<SourceCatalog>(r.catalog),
     enabled: Number(r.enabled ?? 0) === 1,
     hasSecret: !!r.auth_secret_enc, // 값은 미포함 — 존재 여부만
+    batchHour: r.batch_hour == null ? null : Number(r.batch_hour),
+    lastBatchDate: r.last_batch_date != null ? String(r.last_batch_date) : null,
     createdAt: String(r.created_at ?? ""),
     updatedAt: String(r.updated_at ?? ""),
     updatedBy: r.updated_by != null ? String(r.updated_by) : null,
@@ -118,6 +120,8 @@ export async function updateSource(
     /** 가이드 분석 카탈로그(073). null=삭제. */
     catalog?: SourceCatalog | null;
     enabled?: boolean;
+    /** 배치 실행 시각(KST 0~23). null=기본값으로 되돌림. */
+    batchHour?: number | null;
     /** 인증키: non-empty=암호화 저장, null=삭제, ""/undefined=변경 안함. */
     authSecret?: string | null;
   },
@@ -140,6 +144,10 @@ export async function updateSource(
     vals.push(patch.catalog ? JSON.stringify(patch.catalog) : null);
   }
   if (patch.enabled !== undefined) push("enabled", patch.enabled ? 1 : 0);
+  if (patch.batchHour !== undefined) {
+    const h = patch.batchHour;
+    push("batch_hour", h == null || !Number.isFinite(h) ? null : Math.min(23, Math.max(0, Math.trunc(h))));
+  }
   if (patch.authSecret !== undefined) {
     if (patch.authSecret === null) push("auth_secret_enc", null);
     else if (patch.authSecret.trim()) push("auth_secret_enc", encryptSecret(patch.authSecret.trim()));
@@ -270,7 +278,8 @@ export async function listEnabledCustomCollectors(
     await db.exec(
       `SELECT e.* , s.source_id AS s_source_id, s.slug AS s_slug, s.name AS s_name,
               s.base_url AS s_base_url, s.purpose AS s_purpose, s.api_profile AS s_api_profile,
-              s.enabled AS s_enabled, s.created_at AS s_created_at, s.updated_at AS s_updated_at, s.updated_by AS s_updated_by
+              s.enabled AS s_enabled, s.batch_hour AS s_batch_hour, s.last_batch_date AS s_last_batch_date,
+              s.created_at AS s_created_at, s.updated_at AS s_updated_at, s.updated_by AS s_updated_by
          FROM scraper_endpoints e
          JOIN scraper_sources s ON s.source_id = e.source_id
         WHERE s.enabled = 1 AND e.enabled = 1 AND s.purpose = $1`,
@@ -286,10 +295,22 @@ export async function listEnabledCustomCollectors(
       purpose: r.s_purpose,
       api_profile: r.s_api_profile,
       enabled: r.s_enabled,
+      batch_hour: r.s_batch_hour,
+      last_batch_date: r.s_last_batch_date,
       created_at: r.s_created_at,
       updated_at: r.s_updated_at,
       updated_by: r.s_updated_by,
     }),
     endpoint: mapEndpoint(r),
   }));
+}
+
+/** 배치 실행 시각 기본값(KST) — 나라장터 등 공공 API가 새벽 점검으로 무응답인 사례 대응. */
+export const DEFAULT_BATCH_HOUR = 7;
+
+/** 소스의 마지막 배치 수집일(KST) 기록 — 하루 1회 멱등 판정용. */
+export async function markSourceBatchRun(sourceId: string, kstDate: string): Promise<void> {
+  await withDbWrite(async (db) => {
+    await db.run(`UPDATE scraper_sources SET last_batch_date = $1 WHERE source_id = $2`, [kstDate, sourceId]);
+  });
 }

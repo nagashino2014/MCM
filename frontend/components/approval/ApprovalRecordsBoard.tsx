@@ -3,16 +3,36 @@
 // ★양식별 문서 조회(/approval/records, admin) — 양식의 모든 필드가 컬럼으로 펼쳐지는
 // 데이터 테이블. 다우오피스에서 불가능했던 "문서 속 데이터의 분류·정렬·발췌"가 목적.
 // CSV 내보내기(BOM — 엑셀 호환). 행 클릭 = 문서 상세 모달.
-// 설계: docs/e-approval-blueprint.md §5-6.
+// '전자결재'/'발송공문' 탭(135) — 발송공문은 official_letters 대장(과거 이관 포함) 조회.
+// 날짜 필터는 YYYYMM 입력 2개 + 연도 선택(선택 시 1~12월 자동 세팅) — 사용자 요구.
+// 설계: docs/e-approval-blueprint.md §5-6, docs/official-letter-blueprint.md.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Download, Search, Table2 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { ApprovalDocModal, DOC_STATUS_LABEL } from "@/components/approval/ApprovalDocModal";
+import { LetterRecordsTable } from "@/components/approval/LetterRecordsTable";
+import { QuoteRecordsTable } from "@/components/approval/QuoteRecordsTable";
 import type { ApprovalFieldDef } from "@/lib/approval/fields";
 import { findInCatalog, type LeaveTypeItem } from "@/lib/approval/leave-types";
+import type { OfficialLetterRow } from "@/lib/letter/types";
+import type { QuotationRow } from "@/lib/quote/types";
 import "@/components/cdash/cdash.css";
+
+type RecordsTab = "approval" | "letters" | "quotes";
+
+/** YYYYMM → 조회용 ISO 날짜 범위 변환(from=1일, to=월말일). 형식이 아니면 null. */
+function ymToDate(ym: string, edge: "from" | "to"): string | null {
+  const m = /^(\d{4})(\d{2})$/.exec(ym.trim());
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  if (mo < 1 || mo > 12) return null;
+  if (edge === "from") return `${m[1]}-${m[2]}-01`;
+  const last = new Date(y, mo, 0).getDate();
+  return `${m[1]}-${m[2]}-${String(last).padStart(2, "0")}`;
+}
 
 interface FormRow {
   formId: string;
@@ -87,17 +107,23 @@ function flatten(field: ApprovalFieldDef, value: unknown, leaveCatalog: LeaveTyp
 
 export function ApprovalRecordsBoard() {
   const { theme } = useCdashTheme();
+  const [tab, setTab] = useState<RecordsTab>("approval");
   const [forms, setForms] = useState<FormRow[]>([]);
   const [formId, setFormId] = useState("");
   const [status, setStatus] = useState("all");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const [fromYm, setFromYm] = useState("");
+  const [toYm, setToYm] = useState("");
+  const [yearSel, setYearSel] = useState("");
   const [q, setQ] = useState("");
   const [fields, setFields] = useState<ApprovalFieldDef[]>([]);
   const [docs, setDocs] = useState<RecordRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [detailDocId, setDetailDocId] = useState<string | null>(null);
   const [leaveCatalog, setLeaveCatalog] = useState<LeaveTypeItem[]>([]);
+  const [letters, setLetters] = useState<OfficialLetterRow[]>([]);
+  const [lettersLoading, setLettersLoading] = useState(false);
+  const [quotes, setQuotes] = useState<QuotationRow[]>([]);
+  const [quotesLoading, setQuotesLoading] = useState(false);
 
   useEffect(() => {
     fetch("/api/approval/forms?all=1", { cache: "no-store" })
@@ -119,8 +145,10 @@ export function ApprovalRecordsBoard() {
     setLoading(true);
     try {
       const params = new URLSearchParams({ formId, status });
-      if (from) params.set("from", from);
-      if (to) params.set("to", to);
+      const fromDate = ymToDate(fromYm, "from");
+      const toDate = ymToDate(toYm, "to");
+      if (fromDate) params.set("from", fromDate);
+      if (toDate) params.set("to", toDate);
       if (q.trim()) params.set("q", q.trim());
       const res = await fetch(`/api/approval/query?${params.toString()}`, { cache: "no-store" });
       const data = await res.json();
@@ -132,11 +160,66 @@ export function ApprovalRecordsBoard() {
     } finally {
       setLoading(false);
     }
-  }, [formId, status, from, to, q]);
+  }, [formId, status, fromYm, toYm, q]);
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formId, status]);
+
+  const loadLetters = useCallback(async () => {
+    setLettersLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (/^\d{6}$/.test(fromYm.trim())) params.set("from", fromYm.trim());
+      if (/^\d{6}$/.test(toYm.trim())) params.set("to", toYm.trim());
+      if (q.trim()) params.set("q", q.trim());
+      const res = await fetch(`/api/letters?${params.toString()}`, { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "조회 실패");
+      setLetters(data.letters ?? []);
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setLettersLoading(false);
+    }
+  }, [fromYm, toYm, q]);
+  const loadQuotes = useCallback(async () => {
+    setQuotesLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (/^\d{6}$/.test(fromYm.trim())) params.set("from", fromYm.trim());
+      if (/^\d{6}$/.test(toYm.trim())) params.set("to", toYm.trim());
+      if (q.trim()) params.set("q", q.trim());
+      const res = await fetch(`/api/quotes?${params.toString()}`, { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "조회 실패");
+      setQuotes(data.quotes ?? []);
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setQuotesLoading(false);
+    }
+  }, [fromYm, toYm, q]);
+  useEffect(() => {
+    if (tab === "letters") void loadLetters();
+    else if (tab === "quotes") void loadQuotes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+
+  /** 연도 선택 → YYYYMM 범위 자동 세팅 + 즉시 조회. */
+  const applyYear = (year: string) => {
+    setYearSel(year);
+    if (!year) return;
+    setFromYm(`${year}01`);
+    setToYm(`${year}12`);
+  };
+  useEffect(() => {
+    if (!yearSel) return;
+    if (tab === "letters") void loadLetters();
+    else if (tab === "quotes") void loadQuotes();
+    else void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fromYm, toYm]);
 
   const csv = useMemo(() => {
     const head = ["문서번호", "제목", "기안자", "부서", "상신일", "상태", ...fields.map((f) => f.label)];
@@ -173,47 +256,109 @@ export function ApprovalRecordsBoard() {
       />
 
       <div className="cd-card rounded-3xl p-5 flex flex-col gap-4 min-h-0">
+        {/* 전자결재 / 발송공문 / 발송견적 탭 — work-plan 용역/Task 탭 양식(ServiceListPanel.tsx:126) */}
+        <div className="flex items-end gap-1 px-1 -mb-1">
+          {(["approval", "letters", "quotes"] as RecordsTab[]).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTab(t)}
+              className={`rounded-t-xl px-4 py-2 text-sm font-semibold border-b-2 ${
+                tab === t ? "cd-text-primary border-current cd-tint-primary" : "cd-text-faint border-transparent cd-row-hover"
+              }`}
+            >
+              {t === "approval" ? "전자결재" : t === "letters" ? "발송공문" : "발송견적"}
+            </button>
+          ))}
+        </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <select className="cd-select" style={{ width: 200 }} value={formId} onChange={(e) => setFormId(e.target.value)}>
-            {forms.map((f) => (
-              <option key={f.formId} value={f.formId}>
-                {f.name}
+          {tab === "approval" && (
+            <>
+              <select className="cd-select" style={{ width: 200 }} value={formId} onChange={(e) => setFormId(e.target.value)}>
+                {forms.map((f) => (
+                  <option key={f.formId} value={f.formId}>
+                    {f.name}
+                  </option>
+                ))}
+              </select>
+              <select className="cd-select" style={{ width: 110 }} value={status} onChange={(e) => setStatus(e.target.value)}>
+                <option value="all">전체 상태</option>
+                <option value="approved">승인</option>
+                <option value="in_progress">결재중</option>
+                <option value="rejected">반려</option>
+              </select>
+            </>
+          )}
+          {/* 기간: YYYYMM 직접 입력 2개 + 연도 선택(선택 시 1~12월 자동) */}
+          <select className="cd-select" style={{ width: 110 }} value={yearSel} onChange={(e) => applyYear(e.target.value)} title="연도 선택 — 해당 연도 전체 기간을 자동 설정">
+            <option value="">연도 선택</option>
+            {Array.from({ length: 8 }, (_, i) => String(new Date().getFullYear() - i)).map((y) => (
+              <option key={y} value={y}>
+                {y}년
               </option>
             ))}
           </select>
-          <select className="cd-select" style={{ width: 110 }} value={status} onChange={(e) => setStatus(e.target.value)}>
-            <option value="all">전체 상태</option>
-            <option value="approved">승인</option>
-            <option value="in_progress">결재중</option>
-            <option value="rejected">반려</option>
-          </select>
-          <input type="date" className="cd-input" style={{ width: 140 }} value={from} onChange={(e) => setFrom(e.target.value)} />
+          <input
+            className="cd-input font-mono"
+            style={{ width: 92 }}
+            placeholder="YYYYMM"
+            maxLength={6}
+            value={fromYm}
+            onChange={(e) => {
+              setFromYm(e.target.value.replace(/\D/g, ""));
+              setYearSel("");
+            }}
+            onKeyDown={(e) => e.key === "Enter" && (tab === "letters" ? loadLetters() : tab === "quotes" ? loadQuotes() : load())}
+          />
           <span className="cd-text-faint text-xs">~</span>
-          <input type="date" className="cd-input" style={{ width: 140 }} value={to} onChange={(e) => setTo(e.target.value)} />
+          <input
+            className="cd-input font-mono"
+            style={{ width: 92 }}
+            placeholder="YYYYMM"
+            maxLength={6}
+            value={toYm}
+            onChange={(e) => {
+              setToYm(e.target.value.replace(/\D/g, ""));
+              setYearSel("");
+            }}
+            onKeyDown={(e) => e.key === "Enter" && (tab === "letters" ? loadLetters() : tab === "quotes" ? loadQuotes() : load())}
+          />
           <div className="flex items-center gap-1.5">
             <input
               className="cd-input"
               style={{ width: 180 }}
-              placeholder="제목·기안자 검색"
+              placeholder={tab === "letters" ? "제목·공문번호·기안자 검색" : tab === "quotes" ? "건명·견적번호·기안자 검색" : "제목·기안자 검색"}
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && load()}
+              onKeyDown={(e) => e.key === "Enter" && (tab === "letters" ? loadLetters() : tab === "quotes" ? loadQuotes() : load())}
             />
-            <button type="button" className="cd-btn rounded-lg border cd-border-c px-2.5 py-2" title="조회" onClick={load}>
+            <button type="button" className="cd-btn rounded-lg border cd-border-c px-2.5 py-2" title="조회" onClick={() => (tab === "letters" ? loadLetters() : tab === "quotes" ? loadQuotes() : load())}>
               <Search className="w-3.5 h-3.5" />
             </button>
           </div>
-          <button
-            type="button"
-            className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs flex items-center gap-1.5 ml-auto disabled:opacity-50"
-            disabled={!docs.length}
-            onClick={download}
-          >
-            <Download className="w-3.5 h-3.5" /> CSV 내보내기
-          </button>
+          {tab === "approval" && (
+            <button
+              type="button"
+              className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs flex items-center gap-1.5 ml-auto disabled:opacity-50"
+              disabled={!docs.length}
+              onClick={download}
+            >
+              <Download className="w-3.5 h-3.5" /> CSV 내보내기
+            </button>
+          )}
         </div>
 
-        {loading ? (
+        {tab === "letters" ? (
+          <>
+            <LetterRecordsTable letters={letters} loading={lettersLoading} theme={theme} onChanged={loadLetters} />
+            <p className="text-[10.5px] cd-text-faint">공문을 클릭하면 PDF 원문 확인·PDF/한글 다운로드·재발송·수신처 편집이 가능합니다.</p>
+          </>
+        ) : tab === "quotes" ? (
+          <>
+            <QuoteRecordsTable quotes={quotes} loading={quotesLoading} theme={theme} onChanged={loadQuotes} />
+            <p className="text-[10.5px] cd-text-faint">견적을 클릭하면 PDF 확인·PDF/xlsx 다운로드·재발송(직접 제출 건은 수동 발송)·수주 결과 기입이 가능합니다.</p>
+          </>
+        ) : loading ? (
           <p className="text-sm cd-text-faint">조회 중입니다.</p>
         ) : (
           <div className="overflow-x-auto min-h-0">
@@ -268,7 +413,9 @@ export function ApprovalRecordsBoard() {
             </table>
           </div>
         )}
-        <p className="text-[10.5px] cd-text-faint">최근 200건까지 표시됩니다. 행을 클릭하면 문서 원본을 확인할 수 있습니다.</p>
+        {tab === "approval" && (
+          <p className="text-[10.5px] cd-text-faint">최근 200건까지 표시됩니다. 행을 클릭하면 문서 원본을 확인할 수 있습니다.</p>
+        )}
       </div>
 
       {detailDocId && <ApprovalDocModal docId={detailDocId} theme={theme} onClose={() => setDetailDocId(null)} onChanged={load} />}

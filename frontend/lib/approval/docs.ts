@@ -7,6 +7,8 @@ import { assessOverLimitOnSubmit } from "@/lib/approval/overtime";
 import { resolveOpenCancelRequests } from "@/lib/approval/cancel";
 import { notifyPendingSteps, notifyDrafterResult } from "@/lib/approval/notify";
 import { generateDocSummary } from "@/lib/approval/summarize";
+import { markLetterPendingOnApproval } from "@/lib/letter/store";
+import { markQuotePendingOnApproval } from "@/lib/quote/store";
 
 /*
  * 전자결재 문서(084) — 기안 저장/상신·채번·결재선 상태 전이·대결 라우팅·결재함 쿼리.
@@ -162,8 +164,8 @@ function mapSummary(r: Record<string, unknown>): ApprovalDocSummary {
   };
 }
 
-/** 기안자 스냅샷(이름·직급·부서) — users→employee_profiles 조인. */
-async function loadDrafterSnapshot(userId: string): Promise<{
+/** 기안자 스냅샷(이름·직급·부서) — users→employee_profiles 조인. (공문 미리보기 API 도 사용) */
+export async function loadDrafterSnapshot(userId: string): Promise<{
   employeeId: string | null;
   name: string | null;
   position: string | null;
@@ -196,8 +198,24 @@ async function loadDrafterSnapshot(userId: string): Promise<{
  * 문서번호 채번 — 양식별 규칙 약칭 + 연도별 일련. 예: 출장신청-2026-0001
  * 삭제로 반납된 번호(doc_no_pool, 130)가 있으면 가장 작은 번호부터 이어받고,
  * 없으면 시퀀스를 원자적으로 증가시킨다(테스트 문서 삭제 후 결번 방지 — 사용자 확정).
+ * 공문(rule_key='대외', 135)은 실측 관행 포맷 `{연도}-대외-{NNNNN}` · 신규 연도 01001 시작.
  */
+const LETTER_RULE_KEY = "대외"; // = lib/letter/types.ts LETTER_RULE_KEY (fields.ts 처럼 DB 계층은 클라이언트 모듈을 참조하지 않는다)
+
+// 견적(136) — rule_key `견적:{종류}` 5종(통합허가/화관법/HAPs/ESG/기타), 포맷 `{연도}-{종류}-{NNNN}`.
+// = lib/quote/types.ts QUOTE_RULE_PREFIX/QUOTE_NO_LABEL_BY_SERVICE_TYPE (DB 계층은 클라이언트 모듈 미참조)
+const QUOTE_RULE_PREFIX = "견적:";
+const QUOTE_NO_LABELS: Record<string, string> = {
+  통합허가: "통합허가",
+  "장외&화관법": "화관법",
+  HAPs: "HAPs",
+  ESG탄소중립: "ESG",
+  기타: "기타",
+};
+
 async function allocateDocNo(txn: PgDatabase, ruleKey: string, year: string): Promise<string> {
+  const isLetter = ruleKey === LETTER_RULE_KEY;
+  const isQuote = ruleKey.startsWith(QUOTE_RULE_PREFIX);
   const reused = rowsToObjects(
     await txn.exec(
       `DELETE FROM doc_no_pool
@@ -212,13 +230,15 @@ async function allocateDocNo(txn: PgDatabase, ruleKey: string, year: string): Pr
     : Number(
         rowsToObjects(
           await txn.exec(
-            `INSERT INTO doc_no_sequences (rule_key, year, last_seq) VALUES ($1, $2, 1)
+            `INSERT INTO doc_no_sequences (rule_key, year, last_seq) VALUES ($1, $2, $3)
              ON CONFLICT (rule_key, year) DO UPDATE SET last_seq = doc_no_sequences.last_seq + 1
              RETURNING last_seq`,
-            [ruleKey, year]
+            [ruleKey, year, isLetter ? 1001 : 1]
           )
         )[0]?.last_seq ?? 1
       );
+  if (isLetter) return `${year}-${ruleKey}-${String(seq).padStart(5, "0")}`;
+  if (isQuote) return `${year}-${ruleKey.slice(QUOTE_RULE_PREFIX.length)}-${String(seq).padStart(4, "0")}`;
   return `${ruleKey}-${year}-${String(seq).padStart(4, "0")}`;
 }
 
@@ -389,13 +409,24 @@ export async function deleteDoc(docId: string): Promise<{ docNo: string | null; 
     await txn.run(`DELETE FROM annual_leave_ledger WHERE doc_id = $1`, [docId]);
     await txn.run(`UPDATE approval_docs SET ref_doc_id = NULL WHERE ref_doc_id = $1`, [docId]);
     await txn.run(`DELETE FROM approval_docs WHERE doc_id = $1`, [docId]);
-    // 문서번호 반납(130) — 다음 상신이 이 번호를 이어받는다. 형식 `{약칭}-{연도}-{일련}` 파싱.
-    const m = docNo ? /^(.+)-(\d{4})-(\d+)$/.exec(docNo) : null;
-    if (m) {
+    // 문서번호 반납(130) — 다음 상신이 이 번호를 이어받는다.
+    // 형식: 일반 `{약칭}-{연도}-{일련}` / 공문(135) `{연도}-대외-{일련}` / 견적(136) `{연도}-{종류}-{일련}`.
+    const letterM = docNo ? new RegExp(`^(\\d{4})-(${LETTER_RULE_KEY})-(\\d+)$`).exec(docNo) : null;
+    const quoteLabels = Object.values(QUOTE_NO_LABELS).join("|");
+    const quoteM = !letterM && docNo ? new RegExp(`^(\\d{4})-(${quoteLabels})-(\\d+)$`).exec(docNo) : null;
+    const m = !letterM && !quoteM && docNo ? /^(.+)-(\d{4})-(\d+)$/.exec(docNo) : null;
+    const pool = letterM
+      ? { rule: letterM[2], year: letterM[1], seq: Number(letterM[3]) }
+      : quoteM
+        ? { rule: QUOTE_RULE_PREFIX + quoteM[2], year: quoteM[1], seq: Number(quoteM[3]) }
+        : m
+          ? { rule: m[1], year: m[2], seq: Number(m[3]) }
+          : null;
+    if (pool) {
       await txn.run(
         `INSERT INTO doc_no_pool (rule_key, year, seq, released_at) VALUES ($1, $2, $3, $4)
          ON CONFLICT (rule_key, year, seq) DO NOTHING`,
-        [m[1], m[2], Number(m[3]), new Date().toISOString()]
+        [pool.rule, pool.year, pool.seq, new Date().toISOString()]
       );
     }
   });
@@ -433,7 +464,8 @@ export async function submitDoc(docId: string, actorUserId: string): Promise<{ d
   await withDbWrite(async (txn) => {
     const rows = rowsToObjects(
       await txn.exec(
-        `SELECT d.status, d.drafter_user_id, d.doc_no, f.doc_no_rule, f.name AS form_name
+        `SELECT d.status, d.drafter_user_id, d.doc_no, f.doc_no_rule, f.name AS form_name,
+                d.field_values->>'service_type' AS quote_service_type
            FROM approval_docs d JOIN approval_forms f ON f.form_id = d.form_id
           WHERE d.doc_id = $1`,
         [docId]
@@ -448,7 +480,12 @@ export async function submitDoc(docId: string, actorUserId: string): Promise<{ d
 
     const now = new Date().toISOString();
     const year = now.slice(0, 4);
-    docNo = doc.doc_no != null && String(doc.doc_no) ? String(doc.doc_no) : await allocateDocNo(txn, String(doc.doc_no_rule ?? doc.form_name ?? "문서"), year);
+    // 견적 양식(doc_no_rule='견적')은 문서의 용역 대분류에 따라 5종 시퀀스로 분기(136)
+    let ruleKey = String(doc.doc_no_rule ?? doc.form_name ?? "문서");
+    if (ruleKey === "견적") {
+      ruleKey = QUOTE_RULE_PREFIX + (QUOTE_NO_LABELS[String(doc.quote_service_type ?? "")] ?? "기타");
+    }
+    docNo = doc.doc_no != null && String(doc.doc_no) ? String(doc.doc_no) : await allocateDocNo(txn, ruleKey, year);
     await txn.run(
       `UPDATE approval_docs SET status = 'in_progress', doc_no = $2, submitted_at = $3, completed_at = NULL, updated_at = $3 WHERE doc_id = $1`,
       [docId, docNo, now]
@@ -524,6 +561,10 @@ export async function actOnDoc(params: {
         docStatus = "approved";
         // 휴가신청 승인 완료 → 연차 대장 use 적재(연차·반차만, doc당 1회)
         await recordLeaveUsageOnApproval(txn, params.docId);
+        // 공문(135) 승인 완료 → 발송 대장 pending 등록(발송 자체는 커밋 후 비동기)
+        await markLetterPendingOnApproval(txn, params.docId);
+        // 견적(136) 승인 완료 → 발송 대장 pending 등록(산출물 생성·발송은 커밋 후 비동기)
+        await markQuotePendingOnApproval(txn, params.docId);
       } else {
         await activateOrder(txn, params.docId, Math.min(...nextOrders));
         await txn.run(`UPDATE approval_docs SET updated_at = $2 WHERE doc_id = $1`, [params.docId, now]);
@@ -534,6 +575,17 @@ export async function actOnDoc(params: {
   if (docStatus === "approved") await notifyDrafterResult(params.docId, "approved");
   else if (docStatus === "rejected") await notifyDrafterResult(params.docId, "rejected");
   else await notifyPendingSteps(params.docId);
+  // 공문 최종 승인 → 산출물 생성·메일 자동 발송(비차단, 실패 시 대장 failed → 재발송 버튼).
+  // 동적 import 로 순환 참조 회피(letter/generate → docs.getDoc). 공문 아니면 대장 선점 0행으로 no-op.
+  if (docStatus === "approved") {
+    void import("@/lib/letter/send")
+      .then((m) => m.processLetterSend(params.docId))
+      .catch(() => {});
+    // 견적(136)도 동일 패턴 — direct 모드는 산출물 생성까지만(generated), mail 모드는 발송까지.
+    void import("@/lib/quote/send")
+      .then((m) => m.processQuoteSend(params.docId))
+      .catch(() => {});
+  }
   return { docStatus };
 }
 

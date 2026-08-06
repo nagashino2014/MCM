@@ -33,7 +33,7 @@ const STYLE_TABLE: Array<{ keys: string[]; style: ServiceTypeStyle }> = [
     style: { parentColor: "#ED7D31", childColor: "#F4B084" },
   },
   {
-    keys: ["장외", "화관법", "장외&화관법", "장외영향평가", "유해화학물질"],
+    keys: ["장외", "화관법", "장외&화관법", "화학사고예방관리계획", "장외영향평가", "유해화학물질"],
     style: { parentColor: "#FFC000", childColor: "#FFD966" },
   },
   {

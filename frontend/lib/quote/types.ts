@@ -20,11 +20,10 @@ export function quoteRuleKey(serviceType: string): string {
   return QUOTE_RULE_PREFIX + (QUOTE_NO_LABEL_BY_SERVICE_TYPE[serviceType] ?? "기타");
 }
 
-/** 용역 대분류→세분류 — 계약관리 CONTRACT_SERVICE_OPTIONS 기반(전 세분류 대응, 사용자 확정).
+/** 용역 대분류→세분류 — 계약관리 CONTRACT_SERVICE_OPTIONS 와 동일(전 세분류 대응, 사용자 확정).
  *  작성 화면(QuoteBoard)과 기준 관리 화면(QuoteSettingsBoard)이 공유한다.
- *  2026-08-06 견적 한정 정정(사용자 지시): 영업허가는 통합허가→장외&화관법으로 이동,
- *  중복 항목 '장외&화관법' 제외, '장외영향평가'→'화학사고예방관리계획' 개칭.
- *  (계약관리 기존 데이터 보존을 위해 CONTRACT_SERVICE_OPTIONS 는 그대로 둔다) */
+ *  2026-08-06 정정(사용자 지시): 영업허가는 장외&화관법 소속, 대분류와 중복인 '장외&화관법'
+ *  항목 제외, '장외영향평가'→'화학사고예방관리계획' 개칭. 계약 데이터는 마이그 138 에서 정리. */
 export const QUOTE_SERVICE_OPTIONS: { type: string; subtypes: string[] }[] = [
   { type: "통합허가", subtypes: ["최초허가", "변경허가", "변경신고", "통합교육", "사후관리", "재검토"] },
   { type: "장외&화관법", subtypes: ["영업허가", "화학사고예방관리계획", "설치검사", "화관법기준", "위해관리계획", "배출저감계획", "배출량조사", "판매업허가", "정기검사", "안전진단"] },

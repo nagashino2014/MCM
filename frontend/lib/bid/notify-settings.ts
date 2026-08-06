@@ -126,6 +126,11 @@ export function defaultProfile(name = "기본 알림"): BidNotifyProfile {
   };
 }
 
+/** 외부 입력(테스트 전송 등) 프로파일 1건 정제. */
+export function normalizeProfile(raw: unknown): BidNotifyProfile {
+  return sanitizeProfile(raw, 0);
+}
+
 function sanitizeProfile(raw: unknown, index: number): BidNotifyProfile {
   const r = (raw ?? {}) as Partial<BidNotifyProfile>;
   const base = defaultProfile();

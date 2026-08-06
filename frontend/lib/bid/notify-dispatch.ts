@@ -343,6 +343,57 @@ export async function dispatchDueBidNotices(now = new Date()): Promise<DispatchR
 }
 
 /**
+ * 테스트 전송 — 지금 편집 중인 조건 그대로 즉시 1회 발송한다.
+ * 발송 시각·활성화·일1회 멱등을 모두 무시하고, 큐 마킹과 lastDispatchDate 기록도 하지 않는다.
+ * 매칭이 0건이어도 채널 점검이 되도록 "0건" 본문으로 발송한다.
+ */
+export async function sendTestNotification(
+  profile: BidNotifyProfile
+): Promise<{ matched: number; channels: Record<string, ChannelSendResult>; recipients: number }> {
+  const { date: today } = kstParts();
+  const db = await getDb();
+  const fromDate = addDays(today, -profile.rangeDays);
+  const matches = profile.bidTypes.length ? await searchMatches(db, profile, fromDate) : [];
+
+  const contacts = await loadRecipientContacts(db, profile);
+  const emailTo: string[] = [];
+  const appUserIds: string[] = [];
+  for (const rcpt of profile.recipients) {
+    const c = contacts.get(rcpt.employeeId);
+    if (rcpt.channels.includes("email") && c?.email) emailTo.push(c.email);
+    if (rcpt.channels.includes("app") && c?.userId) appUserIds.push(c.userId);
+  }
+
+  const base = matches.length
+    ? buildMessage(matches, profile)
+    : {
+        subject: `[공공입찰] ${profile.name} 매칭 0건`,
+        text: `${profile.name} 조건(최근 ${profile.rangeDays}일)에 매칭된 공고가 없습니다.`,
+      };
+  const channels: Record<string, ChannelSendResult> = {};
+  if (emailTo.length) {
+    channels.email = await sendNotifyEmail({
+      to: emailTo,
+      subject: `[테스트] ${base.subject}`,
+      text: `※ 테스트 전송입니다.\n\n${base.text}`,
+    });
+  }
+  if (appUserIds.length) {
+    channels.app = await sendPush(appUserIds, {
+      event: "bid.match",
+      title: `[테스트] ${profile.name} 매칭 ${matches.length}건`,
+      body: matches.length ? pushSummary(matches) : "조건에 맞는 공고가 없습니다.",
+      link: "/bids",
+      targetRef: today,
+      // 테스트는 같은 날 여러 번 눌러도 매번 도착해야 하므로 dedup 키에 시각을 넣는다.
+      dedupKey: `bid.match.test:${profile.profileId}:${new Date().toISOString()}`,
+    });
+  }
+  console.log(`[bid-notify] TEST "${profile.name}" matched=${matches.length}`, JSON.stringify(channels));
+  return { matched: matches.length, channels, recipients: emailTo.length + appUserIds.length };
+}
+
+/**
  * 입찰 마감 임박 알림 — 입찰 서류 생성 진행 중(bid_packages.status='draft') 건이 대상.
  *
  * 프로파일의 deadlineDays(D-N) 안에 마감이 오는 진행 건을, 수신자 중 '마감 알림'을 체크한

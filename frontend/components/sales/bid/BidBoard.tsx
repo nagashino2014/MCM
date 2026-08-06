@@ -282,6 +282,8 @@ export function BidBoard() {
   const [notifyPending, setNotifyPending] = useState(0);
   const [notifyLastSentAt, setNotifyLastSentAt] = useState<string | null>(null);
   const [defaultFields, setDefaultFields] = useState<Partial<Record<BidType, NotifyContentField[]>>>({});
+  /** 테스트 전송 결과 문구(모달 하단). */
+  const [notifyTestResult, setNotifyTestResult] = useState<string | null>(null);
   const [orgSnapshot, setOrgSnapshot] = useState<OrganizationSnapshot | null>(null);
   const [notifyBusy, setNotifyBusy] = useState(false);
 
@@ -495,8 +497,12 @@ export function BidBoard() {
   const updateProfile = (patch: Partial<BidNotifyProfile>) =>
     setNotifyProfiles((prev) => prev.map((p, i) => (i === notifyIdx ? { ...p, ...patch } : p)));
 
-  const hhmmToDraft = (v: string) => v.replace(":", "");
-  /** HHMM 4자리 → "HH:MM". 형식이 어긋나면 null. */
+  /** 입력값을 숫자만 남겨 HH:MM 꼴로 자동 정리(2자리 초과 시 콜론 삽입). */
+  const formatTimeInput = (v: string): string => {
+    const d = v.replace(/[^0-9]/g, "").slice(0, 4);
+    return d.length > 2 ? `${d.slice(0, 2)}:${d.slice(2)}` : d;
+  };
+  /** "HH:MM"/"HHMM" → "HH:MM". 형식이 어긋나면 null. */
   const draftToHHMM = (v: string): string | null => {
     const s = v.replace(/[^0-9]/g, "");
     if (s.length !== 4) return null;
@@ -508,7 +514,7 @@ export function BidBoard() {
 
   const selectProfile = (idx: number) => {
     setNotifyIdx(idx);
-    setSendTimeDraft(hhmmToDraft(notifyProfiles[idx]?.sendTime ?? ""));
+    setSendTimeDraft(notifyProfiles[idx]?.sendTime ?? "");
   };
 
   const addProfile = () => {
@@ -527,7 +533,7 @@ export function BidBoard() {
     };
     setNotifyProfiles((prev) => [...prev, p]);
     setNotifyIdx(notifyProfiles.length);
-    setSendTimeDraft("0830");
+    setSendTimeDraft("08:30");
   };
 
   const removeProfile = (idx: number) => {
@@ -536,7 +542,7 @@ export function BidBoard() {
     setNotifyProfiles(next);
     const ni = Math.max(0, Math.min(notifyIdx, next.length - 1));
     setNotifyIdx(ni);
-    setSendTimeDraft(hhmmToDraft(next[ni]?.sendTime ?? ""));
+    setSendTimeDraft(next[ni]?.sendTime ?? "");
   };
 
   const openNotifyModal = async () => {
@@ -550,7 +556,7 @@ export function BidBoard() {
       const profiles: BidNotifyProfile[] = Array.isArray(d?.profiles) ? d.profiles : [];
       setNotifyProfiles(profiles);
       setNotifyIdx(0);
-      setSendTimeDraft(hhmmToDraft(profiles[0]?.sendTime ?? ""));
+      setSendTimeDraft(profiles[0]?.sendTime ?? "");
       setNotifyPending(Number(d?.pending ?? 0));
       setNotifyLastSentAt(d?.lastSentAt ?? null);
       if (d?.defaultContentFields) setDefaultFields(d.defaultContentFields);
@@ -584,6 +590,29 @@ export function BidBoard() {
       setNotifyModal(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setNotifyBusy(false);
+    }
+  };
+
+  /** 편집 중 조건 그대로 즉시 1회 발송 — 저장·큐·발송이력에는 영향 없음. */
+  const sendTestNotify = async () => {
+    if (!notifyProfile) return;
+    const hhmm = draftToHHMM(sendTimeDraft);
+    const profile = { ...notifyProfile, ...(hhmm ? { sendTime: hhmm } : {}) };
+    setNotifyBusy(true);
+    setNotifyTestResult(null);
+    try {
+      const d = await jfetch("/api/sales/bids/notify-settings/test", {
+        method: "POST",
+        body: JSON.stringify({ profile }),
+      });
+      const ch = Object.entries((d?.channels ?? {}) as Record<string, { ok?: boolean; skipped?: string; error?: string }>)
+        .map(([k, v]) => `${k === "email" ? "메일" : "앱 푸시"} ${v.ok ? "성공" : v.skipped ? `건너뜀(${v.skipped})` : `실패(${v.error ?? "?"})`}`)
+        .join(" · ");
+      setNotifyTestResult(`매칭 ${d?.matched ?? 0}건 · 수신 대상 ${d?.recipients ?? 0}건${ch ? ` — ${ch}` : " — 발송 가능한 채널 없음"}`);
+    } catch (e) {
+      setNotifyTestResult(`실패: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setNotifyBusy(false);
     }
@@ -1526,17 +1555,16 @@ export function BidBoard() {
             <>
             <div className="flex items-start gap-4 flex-wrap rounded-lg border cd-border-c px-3 py-2">
               {/* 좌측 — 행마다 마지막 요소를 ml-auto 로 밀어 우측 끝을 서로 맞춘다(고정 폭). */}
-              <div className="flex flex-col gap-2" style={{ width: 330 }}>
+              <div className="flex flex-col gap-2" style={{ width: 344 }}>
                 <div className="flex items-center gap-2">
                   <input
-                    className="cd-input text-[13px] flex-1 min-w-0"
-                    placeholder="조건 이름 (예: 하수도 기술진단)"
+                    className="cd-input text-[13px]"
+                    style={{ width: 190 }}
+                    placeholder="조건 이름"
                     value={notifyProfile.name}
                     onChange={(e) => updateProfile({ name: e.target.value })}
                   />
-                </div>
-                <div className="flex items-center gap-2">
-                  <label className="flex items-center gap-2 text-[13px] cd-text whitespace-nowrap">
+                  <label className="flex items-center gap-1.5 text-[13px] cd-text whitespace-nowrap">
                     <input
                       type="checkbox"
                       checked={notifyProfile.enabled}
@@ -1544,34 +1572,13 @@ export function BidBoard() {
                     />
                     알림 활성화
                   </label>
-                  <span className="flex items-center gap-1.5 text-[13px] cd-text whitespace-nowrap ml-auto">
-                    발송 시각
-                    <input
-                      className="cd-input text-[13px] text-center"
-                      style={{ width: 72 }}
-                      inputMode="numeric"
-                      maxLength={4}
-                      placeholder="HHMM"
-                      value={sendTimeDraft}
-                      onChange={(e) => setSendTimeDraft(e.target.value.replace(/[^0-9]/g, "").slice(0, 4))}
-                      onBlur={() => {
-                        const hhmm = draftToHHMM(sendTimeDraft);
-                        if (hhmm) {
-                          updateProfile({ sendTime: hhmm });
-                          setSendTimeDraft(hhmmToDraft(hhmm));
-                        } else {
-                          setSendTimeDraft(hhmmToDraft(notifyProfile.sendTime));
-                        }
-                      }}
-                    />
-                  </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <label className="flex items-center gap-2 text-[13px] cd-text whitespace-nowrap">
+                  <label className="flex items-center gap-1.5 text-[13px] cd-text whitespace-nowrap">
                     마감 임박 알림
                     <select
                       className="cd-input text-[13px]"
-                      style={{ width: 96 }}
+                      style={{ width: 92, height: 34 }}
                       value={String(notifyProfile.deadlineDays)}
                       onChange={(e) => updateProfile({ deadlineDays: Number(e.target.value) })}
                     >
@@ -1582,16 +1589,35 @@ export function BidBoard() {
                       <option value="7">D-7</option>
                     </select>
                   </label>
-                  <button type="button" className="cd-chip cd-chip-sm ml-auto" onClick={openFieldModal}>
-                    <ListOrdered className="w-3.5 h-3.5" /> 발송 항목 구성
-                  </button>
+                  <span className="flex items-center gap-1.5 text-[13px] cd-text whitespace-nowrap ml-auto">
+                    발송 시각
+                    <input
+                      className="cd-input text-[13px] text-center"
+                      style={{ width: 68, height: 34 }}
+                      inputMode="numeric"
+                      maxLength={5}
+                      placeholder="HH:MM"
+                      value={sendTimeDraft}
+                      // 숫자만 받아 2자리를 넘기면 콜론을 자동으로 끼워 넣는다(HH:MM).
+                      onChange={(e) => setSendTimeDraft(formatTimeInput(e.target.value))}
+                      onBlur={() => {
+                        const hhmm = draftToHHMM(sendTimeDraft);
+                        if (hhmm) {
+                          updateProfile({ sendTime: hhmm });
+                          setSendTimeDraft(hhmm);
+                        } else {
+                          setSendTimeDraft(notifyProfile.sendTime);
+                        }
+                      }}
+                    />
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <label className="flex items-center gap-2 text-[13px] cd-text whitespace-nowrap ml-auto">
+                  <label className="flex items-center gap-1.5 text-[13px] cd-text whitespace-nowrap">
                     매칭 범위
                     <select
                       className="cd-input text-[13px]"
-                      style={{ width: 96 }}
+                      style={{ width: 92, height: 34 }}
                       value={String(notifyProfile.rangeDays)}
                       onChange={(e) => updateProfile({ rangeDays: Number(e.target.value) })}
                     >
@@ -1600,6 +1626,14 @@ export function BidBoard() {
                       ))}
                     </select>
                   </label>
+                  <button
+                    type="button"
+                    className="cd-btn cd-btn-soft text-[12px] ml-auto justify-center"
+                    style={{ height: 34, minWidth: 148 }}
+                    onClick={openFieldModal}
+                  >
+                    <ListOrdered className="w-4 h-4" /> 발송 항목 구성
+                  </button>
                 </div>
                 <p className="text-[10px] cd-text-faint">
                   발송일 기준 {notifyProfile.rangeDays}일 전 0시 이후 게시분에서 조건을 검색합니다.
@@ -1641,8 +1675,9 @@ export function BidBoard() {
                     </span>
                   ))}
                 </div>
-                <div className="rounded-lg border cd-border-c px-2 py-1.5 flex items-center gap-1.5 flex-wrap">
-                  <span className="text-[11px] cd-text-faint whitespace-nowrap">지역권</span>
+                {/* 지역권 — 4열 격자로 고정해 2행이 열 단위로 정렬되게(경남권↔수도권, 전라권↔강원권 …). */}
+                <div className="rounded-lg border cd-border-c px-2 py-1.5 flex items-start gap-1.5">
+                  <span className="text-[11px] cd-text-faint whitespace-nowrap pt-1">지역권</span>
                   <span
                     className="cd-chip cd-chip-sm cursor-pointer"
                     data-active={notifyProfile.regionGroups.length === 0}
@@ -1650,16 +1685,18 @@ export function BidBoard() {
                   >
                     전체
                   </span>
-                  {REGION_GROUPS.map((g) => (
-                    <span
-                      key={g}
-                      className="cd-chip cd-chip-sm cursor-pointer"
-                      data-active={notifyProfile.regionGroups.includes(g)}
-                      onClick={() => toggleNotifyRegion(g)}
-                    >
-                      {g}
-                    </span>
-                  ))}
+                  <div className="grid grid-cols-4 gap-1.5 justify-items-start flex-1">
+                    {REGION_GROUPS.map((g) => (
+                      <span
+                        key={g}
+                        className="cd-chip cd-chip-sm cursor-pointer"
+                        data-active={notifyProfile.regionGroups.includes(g)}
+                        onClick={() => toggleNotifyRegion(g)}
+                      >
+                        {g}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1725,13 +1762,25 @@ export function BidBoard() {
             </>
             )}
 
-            <div className="border-t cd-border-c pt-3 flex items-center gap-2">
+            <div className="border-t cd-border-c pt-3 flex items-center gap-2 flex-wrap">
               <button type="button" disabled={notifyBusy} className="cd-btn cd-btn-primary text-[13px] disabled:opacity-50" onClick={saveNotifySettings}>
                 저장
               </button>
+              {notifyProfile && (
+                <button
+                  type="button"
+                  disabled={notifyBusy || !notifyProfile.recipients.length}
+                  className="cd-btn cd-btn-soft text-[13px] disabled:opacity-50"
+                  title="지금 설정된 조건 그대로 즉시 1회 발송합니다(저장·발송이력에는 영향 없음)"
+                  onClick={sendTestNotify}
+                >
+                  <BellRing className="w-3.5 h-3.5" /> 테스트 전송
+                </button>
+              )}
               <button type="button" className="cd-btn cd-btn-soft text-[13px]" onClick={() => setNotifyModal(false)}>
                 닫기
               </button>
+              {notifyTestResult && <span className="text-[11px] cd-text-faint">{notifyTestResult}</span>}
             </div>
           </div>
         </div>

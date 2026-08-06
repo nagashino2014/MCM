@@ -1,12 +1,13 @@
 "use client";
 
-// 견적 기준 관리(/approval/quote/settings, Q4) — 권한 approval.manage.
+// 견적 기준 관리(/approval/quote/settings, Q4·Q5) — 권한 approval.manage.
 // 탭: ①기준 세트(세분류별 항목 트리·base_md·요율·특이사항·인자·규모구간 편집 + 역산 시뮬레이터)
-//     ②노임단가(연도별×등급별, 자동 수집 로그) ③상황 변수 코드.
+//     ②노임단가(연도별×등급별, 자동 수집 로그) ③상황 변수 코드
+//     ④수주 분석(Q5 — 수주율·상황변수·금액구간 집계 + 시장 보정계수 제안·1클릭 반영).
 // 세트 수정은 기존 견적을 훼손하지 않는다(견적서에 산정 당시 스냅샷 박제).
 
 import { useCallback, useEffect, useState } from "react";
-import { Calculator, ChevronDown, ChevronRight, Coins, Plus, Save, Settings2, Tag, Trash2, X } from "lucide-react";
+import { BarChart3, Calculator, ChevronDown, ChevronRight, Coins, Plus, Save, Settings2, Tag, Trash2, X } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import {
@@ -15,12 +16,14 @@ import {
   QUOTE_SERVICE_OPTIONS,
   mdSnapUnit,
   sumOverCap,
+  type QuoteReport,
+  type QuoteReportBucket,
   type QuoteWorkItem,
 } from "@/lib/quote/types";
 import { gradeTotals, mdVectorTotal, reverseAllocate, validateSumConstraint } from "@/lib/quote/rates";
 import "@/components/cdash/cdash.css";
 
-type Tab = "sets" | "labor" | "codes";
+type Tab = "sets" | "labor" | "codes" | "report";
 
 interface SetSummary {
   setId: string;
@@ -51,6 +54,51 @@ interface SetDetail {
 }
 
 const won = (n: number) => Math.round(n).toLocaleString("ko-KR");
+const pct = (v: number | null) => (v == null ? "-" : `${(v * 100).toFixed(1)}%`);
+
+/** 수주 분석 공용 집계 표(세분류·상황변수·금액구간) */
+function BucketTable({ title, buckets }: { title: string; buckets: QuoteReportBucket[] }) {
+  return (
+    <div className="rounded-2xl border cd-border-c p-3.5 flex flex-col gap-2">
+      <p className="text-[12px] font-semibold cd-text">{title}</p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-[11.5px] border-collapse min-w-[560px]">
+          <thead>
+            <tr>
+              <th className="border cd-border-c px-2 py-1.5 text-left cd-text-faint font-semibold">구분</th>
+              <th className="border cd-border-c px-2 py-1.5 cd-text-faint font-semibold w-14">건수</th>
+              <th className="border cd-border-c px-2 py-1.5 cd-text-faint font-semibold w-14">수주</th>
+              <th className="border cd-border-c px-2 py-1.5 cd-text-faint font-semibold w-14">실주</th>
+              <th className="border cd-border-c px-2 py-1.5 cd-text-faint font-semibold w-20">수주율</th>
+              <th className="border cd-border-c px-2 py-1.5 cd-text-faint font-semibold w-28">견적 총액</th>
+              <th className="border cd-border-c px-2 py-1.5 cd-text-faint font-semibold w-24" title="실주 건 (경쟁 낙찰가 / 자사 견적가) 중앙값 - 1">낙찰가 갭</th>
+            </tr>
+          </thead>
+          <tbody>
+            {buckets.map((b) => (
+              <tr key={b.key}>
+                <td className="border cd-border-c px-2 py-1.5 cd-text">{b.label}</td>
+                <td className="border cd-border-c px-2 py-1.5 text-center cd-text">{b.total}</td>
+                <td className="border cd-border-c px-2 py-1.5 text-center cd-text">{b.won}</td>
+                <td className="border cd-border-c px-2 py-1.5 text-center cd-text">{b.lost}</td>
+                <td className="border cd-border-c px-2 py-1.5 text-center font-semibold cd-text">{pct(b.winRate)}</td>
+                <td className="border cd-border-c px-2 py-1.5 text-right font-mono cd-text-faint">{won(b.quotedAmount)}</td>
+                <td className="border cd-border-c px-2 py-1.5 text-center cd-text-faint" title={`표본 ${b.lostGapSamples}건`}>
+                  {b.lostGapPct != null ? `${(b.lostGapPct * 100).toFixed(1)}% (${b.lostGapSamples})` : "-"}
+                </td>
+              </tr>
+            ))}
+            {buckets.length === 0 && (
+              <tr>
+                <td colSpan={7} className="border cd-border-c px-2 py-4 text-center cd-text-faint">집계 대상이 없습니다.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 
 export function QuoteSettingsBoard() {
   const { theme } = useCdashTheme();
@@ -67,6 +115,10 @@ export function QuoteSettingsBoard() {
   // 시뮬레이터
   const [simPrice, setSimPrice] = useState("");
   const [simResult, setSimResult] = useState<{ totalMd: number; totals: Record<string, number>; sum: number; over: number; cap: number; ok: boolean } | null>(null);
+  // 수주 분석(Q5)
+  const [report, setReport] = useState<QuoteReport | null>(null);
+  const [reportRange, setReportRange] = useState<{ from: string; to: string }>({ from: "", to: "" });
+  const [reportLoading, setReportLoading] = useState(false);
 
   const loadSets = useCallback(async () => {
     const res = await fetch("/api/quotes/admin/rate-sets", { cache: "no-store" });
@@ -272,6 +324,70 @@ export function QuoteSettingsBoard() {
     }
   }, [codes]);
 
+  /** 수주 분석 리포트 로드 — 기간(YYYY-MM) 미지정이면 전체 */
+  const loadReport = useCallback(async () => {
+    setReportLoading(true);
+    try {
+      const qs = new URLSearchParams();
+      if (reportRange.from) qs.set("from", reportRange.from);
+      if (reportRange.to) qs.set("to", reportRange.to);
+      const res = await fetch(`/api/quotes/report?${qs.toString()}`, { cache: "no-store" });
+      if (!res.ok) throw new Error((await res.json())?.error ?? "조회 실패");
+      setReport((await res.json()).report as QuoteReport);
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setReportLoading(false);
+    }
+  }, [reportRange]);
+
+  useEffect(() => {
+    if (tab === "report" && !report) void loadReport();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+
+  /** 제안된 시장 보정계수를 해당 세트에 반영 — 상세를 받아 계수만 바꿔 되돌린다(PUT은 통째 교체) */
+  const applySuggestion = useCallback(
+    async (setId: string, value: number) => {
+      if (!confirm(`시장 보정계수를 ${value} 로 반영할까요?\n(정방향 표준가 가이드에만 적용되며 기존 견적서는 영향 없음)`)) return;
+      setBusy(true);
+      try {
+        const cur = await fetch(`/api/quotes/admin/rate-sets/${encodeURIComponent(setId)}`, { cache: "no-store" });
+        if (!cur.ok) throw new Error("세트를 불러오지 못했습니다.");
+        const d = (await cur.json()).set as SetDetail;
+        const idOf = new Map(d.items.map((i, idx) => [i.itemId, idx]));
+        const items = d.items.map((i) => ({
+          label: i.label,
+          baseMd: i.baseMd,
+          parentIdx: i.parentId != null ? idOf.get(i.parentId) ?? null : null,
+        }));
+        const res = await fetch(`/api/quotes/admin/rate-sets/${encodeURIComponent(setId)}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            overheadRate: d.overheadRate,
+            techFeeRate: d.techFeeRate,
+            directExpenseRate: d.directExpenseRate,
+            marketAdjust: value,
+            remarksTemplate: d.remarksTemplate,
+            items,
+            factors: d.factors,
+            bands: d.bands,
+          }),
+        });
+        if (!res.ok) throw new Error((await res.json())?.error ?? "반영 실패");
+        alert("반영되었습니다.");
+        await loadSets();
+        await loadReport();
+      } catch (err) {
+        alert((err as Error).message);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [loadSets, loadReport]
+  );
+
   const editRate = (key: "overheadRate" | "techFeeRate" | "directExpenseRate" | "marketAdjust", pct: boolean, value: string) => {
     if (!detail) return;
     const n = Number(value);
@@ -279,8 +395,8 @@ export function QuoteSettingsBoard() {
   };
 
   return (
-    <div className="cdash cd-fields-white min-h-screen" data-theme={theme}>
-      <div className="px-5 md:px-8 py-6 max-w-[1500px] mx-auto flex flex-col gap-5">
+    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
+      <div className="flex flex-col gap-5 min-h-0">
         <CdPageHeader title="견적 기준 관리" />
         <div className="cd-card rounded-3xl p-5 flex flex-col gap-4 min-h-0">
           {/* 탭 */}
@@ -290,6 +406,7 @@ export function QuoteSettingsBoard() {
                 ["sets", "기준 세트", Settings2],
                 ["labor", "노임단가", Coins],
                 ["codes", "상황 변수", Tag],
+                ["report", "수주 분석", BarChart3],
               ] as const
             ).map(([t, label, Icon]) => (
               <button
@@ -384,14 +501,14 @@ export function QuoteSettingsBoard() {
 
                     {/* 요율 기본값 */}
                     <div className="rounded-2xl border cd-border-c p-3.5 flex items-center gap-4 flex-wrap text-[12px]">
-                      <label className="flex items-center gap-1.5">제경비율
-                        <input className="cd-input w-16 text-right" value={String(Math.round(detail.overheadRate * 100))} onChange={(e) => editRate("overheadRate", true, e.target.value)} />%
+                      <label className="flex items-center gap-1.5 whitespace-nowrap">제경비 요율
+                        <input className="cd-input w-14 text-right px-1.5" value={String(Math.round(detail.overheadRate * 100))} onChange={(e) => editRate("overheadRate", true, e.target.value)} />%
                       </label>
-                      <label className="flex items-center gap-1.5">기술료율
-                        <input className="cd-input w-16 text-right" value={String(Math.round(detail.techFeeRate * 100))} onChange={(e) => editRate("techFeeRate", true, e.target.value)} />%
+                      <label className="flex items-center gap-1.5 whitespace-nowrap">기술료 요율
+                        <input className="cd-input w-14 text-right px-1.5" value={String(Math.round(detail.techFeeRate * 100))} onChange={(e) => editRate("techFeeRate", true, e.target.value)} />%
                       </label>
-                      <label className="flex items-center gap-1.5">직접경비율
-                        <input className="cd-input w-16 text-right" value={String(Math.round(detail.directExpenseRate * 100))} onChange={(e) => editRate("directExpenseRate", true, e.target.value)} />%
+                      <label className="flex items-center gap-1.5 whitespace-nowrap">직접경비 요율
+                        <input className="cd-input w-14 text-right px-1.5" value={String(Math.round(detail.directExpenseRate * 100))} onChange={(e) => editRate("directExpenseRate", true, e.target.value)} />%
                       </label>
                       <label className="flex items-center gap-1.5" title="정방향 표준가 가이드에 적용되는 시장 보정계수">시장 보정계수
                         <input className="cd-input w-16 text-right" value={String(detail.marketAdjust)} onChange={(e) => editRate("marketAdjust", false, e.target.value)} />
@@ -601,6 +718,105 @@ export function QuoteSettingsBoard() {
                   <Save className="w-3.5 h-3.5 inline" /> 저장
                 </button>
               </div>
+            </div>
+          )}
+
+          {tab === "report" && (
+            <div className="flex flex-col gap-4">
+              {/* 기간 필터 */}
+              <div className="flex items-center gap-2 flex-wrap text-[12px]">
+                <label className="flex items-center gap-1.5">기간
+                  <input type="month" className="cd-input text-[12px]" value={reportRange.from} onChange={(e) => setReportRange((r) => ({ ...r, from: e.target.value }))} />
+                </label>
+                <span className="cd-text-faint">~</span>
+                <input type="month" className="cd-input text-[12px]" value={reportRange.to} onChange={(e) => setReportRange((r) => ({ ...r, to: e.target.value }))} />
+                <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-50" disabled={reportLoading} onClick={() => void loadReport()}>
+                  {reportLoading ? "조회 중..." : "조회"}
+                </button>
+                <span className="text-[11px] cd-text-faint">발송(또는 생성) 완료된 견적만 집계 · 수주율 모수 = 수주+실주(중단·진행 중 제외)</span>
+              </div>
+
+              {!report ? (
+                <p className="text-sm cd-text-faint">{reportLoading ? "조회 중입니다." : "조회 결과가 없습니다."}</p>
+              ) : (
+                <>
+                  {/* KPI */}
+                  <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2.5">
+                    {(
+                      [
+                        ["견적 건수", `${report.kpi.total}건`, `진행 중 ${report.kpi.pending} · 중단 ${report.kpi.dropped}`],
+                        ["결과 확정", `${report.kpi.decided}건`, `수주 ${report.kpi.won} · 실주 ${report.kpi.lost}`],
+                        ["수주율(건)", pct(report.kpi.winRate), report.kpi.decided ? `모수 ${report.kpi.decided}건` : "표본 없음"],
+                        ["수주율(금액)", pct(report.kpi.amountWinRate), `수주 ${won(report.kpi.wonAmount)}원`],
+                        ["견적 총액", `${won(report.kpi.quotedAmount)}원`, "VAT 별도"],
+                        ["평균 결정 소요", report.kpi.avgDecideDays != null ? `${report.kpi.avgDecideDays}일` : "-", "견적일→결과 확정일"],
+                      ] as const
+                    ).map(([label, value, hint]) => (
+                      <div key={label} className="rounded-2xl border cd-border-c p-3 flex flex-col gap-0.5">
+                        <span className="text-[10.5px] cd-text-faint">{label}</span>
+                        <span className="text-[16px] font-bold cd-text">{value}</span>
+                        <span className="text-[10px] cd-text-faint">{hint}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* 세분류별 */}
+                  <BucketTable title="세분류별 수주율" buckets={report.bySubtype} />
+
+                  {/* 상황 변수별 · 금액 구간별 */}
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                    <BucketTable title="상황 변수별 수주율 — 한 건에 여러 코드가 붙으면 중복 집계" buckets={report.bySituation} />
+                    <BucketTable title="금액 구간별 수주율" buckets={report.byAmountBand} />
+                  </div>
+
+                  {/* 보정계수 제안 */}
+                  <div className="rounded-2xl border cd-border-c p-3.5 flex flex-col gap-2">
+                    <p className="text-[12px] font-semibold cd-text">시장 보정계수 제안 — 실주 건의 (경쟁 낙찰가 / 자사 견적가) 중앙값 기반</p>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-[11.5px] border-collapse min-w-[720px]">
+                        <thead>
+                          <tr>
+                            <th className="border cd-border-c px-2 py-1.5 text-left cd-text-faint font-semibold">세분류</th>
+                            <th className="border cd-border-c px-2 py-1.5 cd-text-faint font-semibold w-20">표본</th>
+                            <th className="border cd-border-c px-2 py-1.5 cd-text-faint font-semibold w-24">현재 계수</th>
+                            <th className="border cd-border-c px-2 py-1.5 cd-text-faint font-semibold w-24">제안 계수</th>
+                            <th className="border cd-border-c px-2 py-1.5 text-left cd-text-faint font-semibold">근거</th>
+                            <th className="border cd-border-c w-20" />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {report.suggestions.map((s) => (
+                            <tr key={`${s.serviceType}/${s.serviceSubtype}`}>
+                              <td className="border cd-border-c px-2 py-1.5 cd-text">{s.serviceType} · {s.serviceSubtype}</td>
+                              <td className="border cd-border-c px-2 py-1.5 text-center cd-text-faint">{s.samples}</td>
+                              <td className="border cd-border-c px-2 py-1.5 text-center cd-text">{s.currentAdjust ?? "-"}</td>
+                              <td className="border cd-border-c px-2 py-1.5 text-center font-semibold cd-text-primary">{s.suggestAdjust ?? "-"}</td>
+                              <td className="border cd-border-c px-2 py-1.5 cd-text-faint">{s.reason}</td>
+                              <td className="border cd-border-c px-2 py-1 text-center">
+                                {s.setId && s.suggestAdjust != null && (
+                                  <button
+                                    type="button"
+                                    className="cd-btn rounded-lg border cd-border-c px-2 py-1 text-[10.5px] disabled:opacity-50"
+                                    disabled={busy}
+                                    onClick={() => void applySuggestion(s.setId as string, s.suggestAdjust as number)}
+                                  >
+                                    반영
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                          {report.suggestions.length === 0 && (
+                            <tr>
+                              <td colSpan={6} className="border cd-border-c px-2 py-4 text-center cd-text-faint">집계할 견적이 없습니다.</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>

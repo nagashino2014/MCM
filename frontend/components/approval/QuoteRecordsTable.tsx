@@ -7,8 +7,16 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { FileSpreadsheet, Pencil, RefreshCw, Trash2, X } from "lucide-react";
-import { QUOTE_SEND_STATUS_LABEL, type QuoteRecipient, type QuoteSendStatus, type QuotationRow } from "@/lib/quote/types";
+import { FileSpreadsheet, Pencil, RefreshCw, Trash2, Trophy, X } from "lucide-react";
+import {
+  QUOTE_RESULT_LABEL,
+  QUOTE_RESULT_REASONS,
+  QUOTE_SEND_STATUS_LABEL,
+  type QuoteRecipient,
+  type QuoteResult,
+  type QuoteSendStatus,
+  type QuotationRow,
+} from "@/lib/quote/types";
 
 const short = (s: string | null) => (s ? s.slice(0, 10) : "-");
 const won = (n: number | null) => (n != null ? n.toLocaleString("ko-KR") : "-");
@@ -25,12 +33,7 @@ function statusBadge(status: QuoteSendStatus) {
   return <span className={`text-[10.5px] rounded-full px-2 py-0.5 border ${color}`}>{QUOTE_SEND_STATUS_LABEL[status] ?? status}</span>;
 }
 
-const RESULT_LABEL: Record<QuotationRow["result"], string> = {
-  pending: "진행 중",
-  won: "수주",
-  lost: "실주",
-  dropped: "중단",
-};
+const RESULT_LABEL = QUOTE_RESULT_LABEL;
 
 function resultBadge(result: QuotationRow["result"]) {
   const color =
@@ -80,6 +83,14 @@ export function QuoteViewModal({ quoteId, theme, onClose, onChanged }: { quoteId
   const [recipients, setRecipients] = useState<QuoteRecipient[]>([]);
   const [ccRefs, setCcRefs] = useState<QuoteRecipient[]>([]);
   const [busy, setBusy] = useState<"save" | "resend" | "result" | null>(null);
+  const [resultEditing, setResultEditing] = useState(false);
+  const [resultForm, setResultForm] = useState<{
+    result: QuoteResult;
+    resultAt: string;
+    resultAmount: string;
+    resultReason: string;
+    resultNote: string;
+  }>({ result: "pending", resultAt: "", resultAmount: "", resultReason: "", resultNote: "" });
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/quotes/${encodeURIComponent(quoteId)}`, { cache: "no-store" });
@@ -88,6 +99,13 @@ export function QuoteViewModal({ quoteId, theme, onClose, onChanged }: { quoteId
       setQuote(data.quote);
       setRecipients(data.quote.recipients ?? []);
       setCcRefs(data.quote.ccRefs ?? []);
+      setResultForm({
+        result: (data.quote.result ?? "pending") as QuoteResult,
+        resultAt: data.quote.resultAt ?? "",
+        resultAmount: data.quote.resultAmount != null ? String(data.quote.resultAmount) : "",
+        resultReason: data.quote.resultReason ?? "",
+        resultNote: data.quote.resultNote ?? "",
+      });
     }
   }, [quoteId]);
   useEffect(() => {
@@ -114,15 +132,23 @@ export function QuoteViewModal({ quoteId, theme, onClose, onChanged }: { quoteId
     }
   };
 
-  const setResult = async (result: QuotationRow["result"]) => {
+  /** 수주 결과 기입 — 결과·확정일·금액(수주=계약금액/실주=경쟁 낙찰가)·사유·메모 (Q5 분석 원료) */
+  const saveResult = async () => {
     setBusy("result");
     try {
       const res = await fetch(`/api/quotes/${encodeURIComponent(quoteId)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ result }),
+        body: JSON.stringify({
+          result: resultForm.result,
+          resultAt: resultForm.resultAt || null,
+          resultAmount: resultForm.resultAmount ? Number(resultForm.resultAmount) : null,
+          resultReason: resultForm.resultReason || null,
+          resultNote: resultForm.resultNote || null,
+        }),
       });
       if (!res.ok) throw new Error((await res.json())?.error ?? "저장 실패");
+      setResultEditing(false);
       await load();
       onChanged?.();
     } catch (err) {
@@ -165,6 +191,12 @@ export function QuoteViewModal({ quoteId, theme, onClose, onChanged }: { quoteId
               {quote && statusBadge(quote.sendStatus)}
               {quote && resultBadge(quote.result)}
               {quote?.totalAmount != null && <span>견적 {won(quote.totalAmount)}원</span>}
+              {quote?.resultAmount != null && (
+                <span>
+                  {quote.result === "won" ? "계약" : "낙찰"} {won(quote.resultAmount)}원
+                  {quote.totalAmount ? ` (${(((quote.resultAmount as number) / quote.totalAmount - 1) * 100).toFixed(1)}%)` : ""}
+                </span>
+              )}
               {quote?.validUntil && <span>유효 {quote.validUntil}까지</span>}
               {quote?.sentAt ? <span>발송 {short(quote.sentAt)}</span> : null}
               {quote?.sendError && <span className="text-[color:var(--cd-danger,#FA896B)]">{quote.sendError}</span>}
@@ -201,24 +233,71 @@ export function QuoteViewModal({ quoteId, theme, onClose, onChanged }: { quoteId
             <button type="button" className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] flex items-center gap-1" onClick={() => setEditing((v) => !v)} title="수신처·참조 정보 편집">
               <Pencil className="w-3 h-3" /> 수신처 편집
             </button>
-            <select
-              className="cd-select text-[11px]"
-              style={{ width: 84 }}
-              value={quote?.result ?? "pending"}
-              disabled={busy != null}
-              onChange={(e) => void setResult(e.target.value as QuotationRow["result"])}
-              title="수주 결과 기입 — 견적-수주율 분석의 원료"
+            <button
+              type="button"
+              className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] flex items-center gap-1"
+              onClick={() => setResultEditing((v) => !v)}
+              title="수주 결과 기입 — 수주율·보정계수 분석의 원료"
             >
-              <option value="pending">진행 중</option>
-              <option value="won">수주</option>
-              <option value="lost">실주</option>
-              <option value="dropped">중단</option>
-            </select>
+              <Trophy className="w-3 h-3" /> 결과 기입
+            </button>
             <button type="button" className="cd-btn rounded-lg border cd-border-c p-1.5" onClick={onClose}>
               <X className="w-4 h-4" />
             </button>
           </div>
         </div>
+
+        {resultEditing && (
+          <div className="px-5 py-3.5 border-b cd-border-c flex flex-col gap-2.5">
+            <span className="text-[11px] font-bold cd-text">수주 결과 — 수주율·시장 보정계수 분석의 원료(견적 기준 관리 › 수주 분석)</span>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+              <div className="flex flex-col gap-1">
+                <span className="text-[10.5px] cd-text-faint">결과</span>
+                <select className="cd-select text-[12px]" value={resultForm.result} onChange={(e) => setResultForm((f) => ({ ...f, result: e.target.value as QuoteResult }))}>
+                  {(Object.keys(RESULT_LABEL) as QuoteResult[]).map((k) => (
+                    <option key={k} value={k}>{RESULT_LABEL[k]}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-[10.5px] cd-text-faint">결과 확정일</span>
+                <input type="date" className="cd-input text-[12px]" value={resultForm.resultAt} onChange={(e) => setResultForm((f) => ({ ...f, resultAt: e.target.value }))} />
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-[10.5px] cd-text-faint">{resultForm.result === "won" ? "계약금액(원)" : "경쟁 낙찰가(원)"}</span>
+                <input
+                  className="cd-input text-[12px] text-right"
+                  inputMode="numeric"
+                  placeholder={resultForm.result === "won" ? "실제 계약금액" : "파악된 경우만"}
+                  value={resultForm.resultAmount}
+                  onChange={(e) => setResultForm((f) => ({ ...f, resultAmount: e.target.value.replace(/[^\d]/g, "") }))}
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-[10.5px] cd-text-faint">사유</span>
+                <select className="cd-select text-[12px]" value={resultForm.resultReason} onChange={(e) => setResultForm((f) => ({ ...f, resultReason: e.target.value }))}>
+                  <option value="">선택 안 함</option>
+                  {QUOTE_RESULT_REASONS.map((r) => (
+                    <option key={r.code} value={r.code}>{r.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-[10.5px] cd-text-faint">메모</span>
+                <input className="cd-input text-[12px]" value={resultForm.resultNote} onChange={(e) => setResultForm((f) => ({ ...f, resultNote: e.target.value }))} placeholder="경쟁사·발주처 코멘트 등" />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold disabled:opacity-50" disabled={busy != null} onClick={saveResult}>
+                {busy === "result" ? "저장 중..." : "결과 저장"}
+              </button>
+              <button type="button" className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs" onClick={() => setResultEditing(false)}>
+                취소
+              </button>
+              <span className="text-[10.5px] cd-text-faint">실주 시 경쟁 낙찰가를 함께 기입하면 세분류별 표준가 하향 여지가 자동 제안됩니다.</span>
+            </div>
+          </div>
+        )}
 
         {editing && (
           <div className="px-5 py-3.5 border-b cd-border-c flex flex-col gap-3 max-h-[38vh] overflow-auto">

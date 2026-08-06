@@ -20,11 +20,14 @@ export function quoteRuleKey(serviceType: string): string {
   return QUOTE_RULE_PREFIX + (QUOTE_NO_LABEL_BY_SERVICE_TYPE[serviceType] ?? "기타");
 }
 
-/** 용역 대분류→세분류 — 계약관리 CONTRACT_SERVICE_OPTIONS 와 동일(전 세분류 대응, 사용자 확정).
- *  작성 화면(QuoteBoard)과 기준 관리 화면(QuoteSettingsBoard)이 공유한다. */
+/** 용역 대분류→세분류 — 계약관리 CONTRACT_SERVICE_OPTIONS 기반(전 세분류 대응, 사용자 확정).
+ *  작성 화면(QuoteBoard)과 기준 관리 화면(QuoteSettingsBoard)이 공유한다.
+ *  2026-08-06 견적 한정 정정(사용자 지시): 영업허가는 통합허가→장외&화관법으로 이동,
+ *  중복 항목 '장외&화관법' 제외, '장외영향평가'→'화학사고예방관리계획' 개칭.
+ *  (계약관리 기존 데이터 보존을 위해 CONTRACT_SERVICE_OPTIONS 는 그대로 둔다) */
 export const QUOTE_SERVICE_OPTIONS: { type: string; subtypes: string[] }[] = [
-  { type: "통합허가", subtypes: ["최초허가", "영업허가", "변경허가", "변경신고", "통합교육", "사후관리", "재검토"] },
-  { type: "장외&화관법", subtypes: ["장외&화관법", "장외영향평가", "설치검사", "화관법기준", "위해관리계획", "배출저감계획", "배출량조사", "판매업허가", "정기검사", "안전진단"] },
+  { type: "통합허가", subtypes: ["최초허가", "변경허가", "변경신고", "통합교육", "사후관리", "재검토"] },
+  { type: "장외&화관법", subtypes: ["영업허가", "화학사고예방관리계획", "설치검사", "화관법기준", "위해관리계획", "배출저감계획", "배출량조사", "판매업허가", "정기검사", "안전진단"] },
   { type: "HAPs", subtypes: ["HAPs", "HAPs최초", "HAPs변경", "HAPs연간", "시설구축", "명판부착", "배출저감", "정기점검대응"] },
   { type: "ESG탄소중립", subtypes: ["ESG탄소중립", "ESG경영", "CBAM", "공급망실사", "LCA평가", "배출량산정", "배출권관련"] },
   { type: "기타", subtypes: ["기타", "총량제신고", "매체별인허가", "환경자문", "환경R&D", "기타인허가"] },
@@ -186,6 +189,91 @@ export const QUOTE_SEND_STATUS_LABEL: Record<QuoteSendStatus, string> = {
   failed: "발송 실패",
 };
 
+// ── 수주 결과(Q5) ──
+
+export type QuoteResult = "pending" | "won" | "lost" | "dropped";
+
+export const QUOTE_RESULT_LABEL: Record<QuoteResult, string> = {
+  pending: "진행 중",
+  won: "수주",
+  lost: "실주",
+  dropped: "중단",
+};
+
+/** 결과 사유 코드 — 실주·중단 원인 분석용(수주는 선택 입력). 137 quotations.result_reason */
+export const QUOTE_RESULT_REASONS = [
+  { code: "price", label: "가격 경쟁력" },
+  { code: "spec", label: "기술·실적 평가" },
+  { code: "schedule", label: "일정·수행능력" },
+  { code: "relation", label: "관계·영업력" },
+  { code: "cancelled", label: "발주 취소·보류" },
+  { code: "etc", label: "기타" },
+] as const;
+
+export const QUOTE_RESULT_REASON_LABEL: Record<string, string> = Object.fromEntries(
+  QUOTE_RESULT_REASONS.map((r) => [r.code, r.label])
+);
+
+/** 수주 분석 리포트 응답(§5-5 피드백 루프) — /api/quotes/report */
+export interface QuoteReportBucket {
+  key: string; // 세분류·상황코드·금액구간 라벨
+  label: string;
+  total: number; // 결과 확정 여부 무관 전체 건수
+  decided: number; // won + lost (수주율 모수)
+  won: number;
+  lost: number;
+  dropped: number;
+  pending: number;
+  winRate: number | null; // won / decided
+  quotedAmount: number; // 견적 총액(전체)
+  wonAmount: number; // 수주 금액(계약금액 없으면 견적가)
+  amountWinRate: number | null; // 수주 금액 / 결과 확정 건 견적 총액
+  lostGapPct: number | null; // 실주 건 (경쟁 낙찰가 / 우리 견적가) 중앙값 - 1 (음수 = 우리가 비쌌음)
+  lostGapSamples: number;
+}
+
+export interface QuoteReportSuggestion {
+  serviceType: string;
+  serviceSubtype: string;
+  setId: string | null;
+  currentAdjust: number | null; // 세트의 현재 시장 보정계수
+  suggestAdjust: number | null; // 제안값
+  reason: string; // 제안 근거 문장
+  samples: number;
+}
+
+export interface QuoteReport {
+  from: string | null;
+  to: string | null;
+  kpi: {
+    total: number;
+    decided: number;
+    won: number;
+    lost: number;
+    dropped: number;
+    pending: number;
+    winRate: number | null;
+    quotedAmount: number;
+    wonAmount: number;
+    amountWinRate: number | null;
+    avgDecideDays: number | null; // 견적일→결과 확정일 평균 소요일
+  };
+  bySubtype: QuoteReportBucket[];
+  bySituation: QuoteReportBucket[];
+  byAmountBand: QuoteReportBucket[];
+  suggestions: QuoteReportSuggestion[];
+}
+
+/** 금액 구간(수주율 분석 축) — sumOverCap 구간과 동일한 눈금을 쓴다 */
+export const QUOTE_AMOUNT_BANDS: { key: string; label: string; min: number; max: number | null }[] = [
+  { key: "b1", label: "~5백만", min: 0, max: 5_000_000 },
+  { key: "b2", label: "5백만~1천만", min: 5_000_000, max: 10_000_000 },
+  { key: "b3", label: "1천만~5천만", min: 10_000_000, max: 50_000_000 },
+  { key: "b4", label: "5천만~1억", min: 50_000_000, max: 100_000_000 },
+  { key: "b5", label: "1억~2억", min: 100_000_000, max: 200_000_000 },
+  { key: "b6", label: "2억~", min: 200_000_000, max: null },
+];
+
 export interface QuotationRow {
   quoteId: string;
   docId: string;
@@ -207,6 +295,12 @@ export interface QuotationRow {
   sendError: string | null;
   sendAttempts: number;
   sentAt: string | null;
-  result: "pending" | "won" | "lost" | "dropped";
+  situation?: SituationEntry[];
+  result: QuoteResult;
+  resultNote?: string | null;
+  resultAt?: string | null;
+  resultAmount?: number | null;
+  resultReason?: string | null;
+  contractId?: string | null;
   createdAt: string;
 }

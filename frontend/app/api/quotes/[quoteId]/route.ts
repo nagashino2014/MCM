@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getQuoteById, updateQuoteMeta } from "@/lib/quote/store";
-import type { QuoteRecipient } from "@/lib/quote/types";
+import type { QuoteRecipient, QuoteResult } from "@/lib/quote/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,8 +27,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ qu
     const body = (await req.json()) as {
       recipients?: QuoteRecipient[];
       ccRefs?: QuoteRecipient[];
-      result?: "pending" | "won" | "lost" | "dropped";
+      result?: QuoteResult;
       resultNote?: string | null;
+      resultAt?: string | null;
+      resultAmount?: number | null;
+      resultReason?: string | null;
+      contractId?: string | null;
     };
     const quote = await getQuoteById(quoteId);
     if (!quote) return NextResponse.json({ error: "견적을 찾을 수 없습니다." }, { status: 404 });

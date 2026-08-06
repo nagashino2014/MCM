@@ -9,8 +9,10 @@ import {
   QUOTE_FORM_ID,
   type QuoteFieldValues,
   type QuoteRecipient,
+  type QuoteResult,
   type QuoteSendStatus,
   type QuotationRow,
+  type SituationEntry,
 } from "./types";
 
 function newQuoteId(): string {
@@ -49,7 +51,13 @@ function mapRow(r: Record<string, unknown>): QuotationRow {
     sendError: r.send_error != null ? String(r.send_error) : null,
     sendAttempts: Number(r.send_attempts ?? 0),
     sentAt: r.sent_at != null ? String(r.sent_at) : null,
+    situation: parseJsonArr<SituationEntry>(r.situation),
     result: (["pending", "won", "lost", "dropped"].includes(String(r.result)) ? String(r.result) : "pending") as QuotationRow["result"],
+    resultNote: r.result_note != null ? String(r.result_note) : null,
+    resultAt: r.result_at != null ? String(r.result_at) : null,
+    resultAmount: r.result_amount != null ? Number(r.result_amount) : null,
+    resultReason: r.result_reason != null ? String(r.result_reason) : null,
+    contractId: r.contract_id != null ? String(r.contract_id) : null,
     createdAt: String(r.created_at ?? ""),
   };
 }
@@ -258,8 +266,12 @@ export async function updateQuoteMeta(
   patch: {
     recipients?: QuoteRecipient[];
     ccRefs?: QuoteRecipient[];
-    result?: "pending" | "won" | "lost" | "dropped";
+    result?: QuoteResult;
     resultNote?: string | null;
+    resultAt?: string | null;
+    resultAmount?: number | null;
+    resultReason?: string | null;
+    contractId?: string | null;
   }
 ): Promise<void> {
   await withDbWrite(async (txn) => {
@@ -280,6 +292,22 @@ export async function updateQuoteMeta(
     if (patch.resultNote !== undefined) {
       args.push(patch.resultNote);
       sets.push(`result_note = $${args.length}`);
+    }
+    if (patch.resultAt !== undefined) {
+      args.push(patch.resultAt);
+      sets.push(`result_at = $${args.length}`);
+    }
+    if (patch.resultAmount !== undefined) {
+      args.push(patch.resultAmount);
+      sets.push(`result_amount = $${args.length}`);
+    }
+    if (patch.resultReason !== undefined) {
+      args.push(patch.resultReason);
+      sets.push(`result_reason = $${args.length}`);
+    }
+    if (patch.contractId !== undefined) {
+      args.push(patch.contractId);
+      sets.push(`contract_id = $${args.length}`);
     }
     if (!sets.length) return;
     args.push(new Date().toISOString());

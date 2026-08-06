@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  BookmarkPlus, Calculator, Copy, Eye, FileText, Plus, Save, Send, Trash2, Users, X,
+  BookmarkPlus, Calculator, Copy, Eye, FileText, Plus, Save, Send, Settings2, Trash2, Users, X,
 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
@@ -467,8 +467,8 @@ export function QuoteBoard() {
   const tier: "calc" | "free" = (rateData?.set?.items?.length ?? 0) > 0 ? "calc" : "free";
 
   return (
-    <div className="cdash cd-fields-white min-h-screen" data-theme={theme}>
-      <div className="px-5 md:px-8 py-6 max-w-[1500px] mx-auto flex flex-col gap-5">
+    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
+      <div className="flex flex-col gap-5 min-h-0">
         <CdPageHeader title="견적서 작성" />
         {loading ? (
           <div className="cd-card rounded-3xl p-10 text-center text-sm cd-text-faint">불러오는 중...</div>
@@ -484,9 +484,14 @@ export function QuoteBoard() {
                   </h3>
                   <span className="ml-auto text-[11px] cd-text-faint">
                     견적번호 {docNo ? <b className="cd-text">{docNo}</b> : <>예정 <b className="cd-text">{nextNo ?? "..."}</b></>}
-                    <span className="ml-1.5">· V.A.T 별도 · 유효기간 견적일로부터 1개월</span>
-                    <a href="/approval/quote/settings" className="ml-2 cd-text-primary hover:underline" title="세분류별 MD 기준·요율·노임단가 관리(관리 권한)">기준 관리</a>
                   </span>
+                  <a
+                    href="/approval/quote/settings"
+                    className="cd-btn cd-btn-primary rounded-lg px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5"
+                    title="세분류별 MD 기준·요율·노임단가 관리(관리 권한)"
+                  >
+                    <Settings2 className="w-3.5 h-3.5" /> 기준 관리
+                  </a>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-2.5">
                   <div className="md:col-span-2 flex flex-col gap-1">
@@ -646,16 +651,19 @@ export function QuoteBoard() {
                         ) : (
                           <span className="text-[11px] cd-text-faint">이 세분류는 기준 세트 미등록 — 품목 직접 입력(자유형)</span>
                         )}
-                        <div className="ml-auto flex items-center gap-3 text-[11.5px]">
-                          <label className="flex items-center gap-1">제경비율
-                            <input className="cd-input w-16 text-right text-[12px]" value={String(Math.round(site.rates.overheadRate * 100))} onChange={(e) => editRate(activeSite, "overheadRate", Number(e.target.value) / 100 || 0)} />%
-                          </label>
-                          <label className="flex items-center gap-1">기술료율
-                            <input className="cd-input w-14 text-right text-[12px]" value={String(Math.round(site.rates.techFeeRate * 100))} onChange={(e) => editRate(activeSite, "techFeeRate", Number(e.target.value) / 100 || 0)} />%
-                          </label>
-                          <label className="flex items-center gap-1">직접경비율
-                            <input className="cd-input w-14 text-right text-[12px]" value={String(Math.round(site.rates.directExpenseRate * 100))} onChange={(e) => editRate(activeSite, "directExpenseRate", Number(e.target.value) / 100 || 0)} />%
-                          </label>
+                        <div className="ml-auto flex flex-col items-end gap-1.5">
+                          <div className="flex items-center gap-3 text-[11.5px]">
+                            <label className="flex items-center gap-1 whitespace-nowrap">제경비 요율
+                              <input className="cd-input w-12 text-right text-[12px] px-1.5" value={String(Math.round(site.rates.overheadRate * 100))} onChange={(e) => editRate(activeSite, "overheadRate", Number(e.target.value) / 100 || 0)} />%
+                            </label>
+                            <label className="flex items-center gap-1 whitespace-nowrap">기술료 요율
+                              <input className="cd-input w-12 text-right text-[12px] px-1.5" value={String(Math.round(site.rates.techFeeRate * 100))} onChange={(e) => editRate(activeSite, "techFeeRate", Number(e.target.value) / 100 || 0)} />%
+                            </label>
+                            <label className="flex items-center gap-1 whitespace-nowrap">직접경비 요율
+                              <input className="cd-input w-12 text-right text-[12px] px-1.5" value={String(Math.round(site.rates.directExpenseRate * 100))} onChange={(e) => editRate(activeSite, "directExpenseRate", Number(e.target.value) / 100 || 0)} />%
+                            </label>
+                          </div>
+                          <span className="text-[10.5px] cd-text-faint whitespace-nowrap">V.A.T 별도 · 유효기간 견적일로부터 1개월</span>
                         </div>
                       </div>
 

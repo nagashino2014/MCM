@@ -41,8 +41,8 @@ function RootNavigator() {
   useEffect(() => {
     if (status === 'loading') return;
     const inLogin = segments[0] === 'login';
-    // 씬 미리보기(개발 전용)는 로그인 없이 연다 — 디자인 확인용이라 데이터가 필요 없다.
-    if (__DEV__ && segments[0] === 'weather-preview') return;
+    // 부품 미리보기(개발 전용)는 로그인 없이 연다 — 디자인 확인용이라 데이터가 필요 없다.
+    if (__DEV__ && segments[0] === 'dev-preview') return;
     // 탭 밖 스택 화면(일정·사업장·설정 등)이 생겼으므로 "로그인 화면이 아니면" 을 기준으로 판정한다.
     if (status === 'guest' && !inLogin) {
       router.replace('/login');

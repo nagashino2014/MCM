@@ -44,6 +44,63 @@ export function ListRow({
   );
 }
 
+/**
+ * 카드 안의 목록 행(핸드오프 2a §6) — 제목 13px/600 · 메타 11.5 faint · 구분선 · chevron 14.
+ *
+ * 전체폭 설정형 행인 `ListRow` 와 용도가 다르다: 이쪽은 **카드 내부**에서 쓴다
+ * (공지 목록·경과 미입력·계약 목록 등).
+ */
+export function CardRow({
+  title,
+  meta,
+  right,
+  accent,
+  strong,
+  first,
+  onPress,
+}: {
+  title: string;
+  meta?: string;
+  /** 우측 슬롯(배지·금액). 없고 onPress 가 있으면 chevron 을 그린다. */
+  right?: ReactNode;
+  /** 좌측 3px 액센트 바 색(강조 행). */
+  accent?: string;
+  /** 미확인 등 강조 표시. */
+  strong?: boolean;
+  /** 첫 행이면 위쪽 구분선을 그리지 않는다. */
+  first?: boolean;
+  onPress?: () => void;
+}) {
+  const { c } = useTheme();
+  const body = (
+    <>
+      {accent ? <View className="w-[3px] self-stretch rounded-sm" style={{ backgroundColor: accent }} /> : null}
+      <View className="flex-1">
+        <Text
+          numberOfLines={1}
+          className={`text-[13px] ${strong ? "font-extrabold text-cd-text" : "font-semibold text-cd-body"}`}>
+          {title}
+        </Text>
+        {meta ? (
+          <Text numberOfLines={1} className="mt-[2px] text-[11.5px] text-cd-faint">
+            {meta}
+          </Text>
+        ) : null}
+      </View>
+      {right}
+      {!right && onPress ? <Ionicons name="chevron-forward" size={14} color={c.faint} /> : null}
+    </>
+  );
+  const cls = `flex-row items-center gap-2.5 py-3 ${first ? "" : "border-t border-cd-grid-line"}`;
+  return onPress ? (
+    <Pressable onPress={onPress} className={`${cls} active:opacity-60`}>
+      {body}
+    </Pressable>
+  ) : (
+    <View className={cls}>{body}</View>
+  );
+}
+
 /** 빈 상태 — 목록이 비었을 때의 표준 안내. */
 export function EmptyState({
   icon = "documents-outline",

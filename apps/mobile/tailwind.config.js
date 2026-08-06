@@ -57,8 +57,9 @@ module.exports = {
         },
       },
       borderRadius: {
-        // 웹 .cd-card = 18px
-        card: "18px",
+        // 모바일 홈 개편 핸드오프(확정안 2a)의 카드 radius. 웹 .cd-card 는 18px 이지만
+        // 모바일은 전용 규격을 받았다 — 앱 전 화면이 이 값을 쓴다.
+        card: "16px",
       },
     },
   },

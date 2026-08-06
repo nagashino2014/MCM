@@ -64,7 +64,7 @@ interface RelatedBid {
 
 /** 분류 조건 그룹 — 그룹 내 op(AND/OR/NOR), 그룹 간 AND (lib/bid/match 와 동일 구조). */
 interface RuleGroup {
-  op: "and" | "or" | "nor";
+  op: "and" | "or" | "not" | "nor";
   keywords: string[];
 }
 
@@ -109,6 +109,7 @@ const CHANNEL_LABELS: { key: NotifyChannel; label: string }[] = [
 const OP_LABELS: { key: RuleGroup["op"]; label: string; desc: string }[] = [
   { key: "and", label: "AND", desc: "모두 포함" },
   { key: "or", label: "OR", desc: "하나라도 포함" },
+  { key: "not", label: "NOT", desc: "모두 동시 포함만 제외" },
   { key: "nor", label: "NOR", desc: "모두 미포함(제외)" },
 ];
 // 영업 스케쥴 모달과 동일한 담당자 필터 — 직급 rank 60 이상만 조직도에 표시.
@@ -121,7 +122,8 @@ function ruleSummaryText(c: BidCategory): string {
   if (!groups.length) return "(조건 없음)";
   return groups
     .map((g) => {
-      const kw = g.keywords.join(g.op === "and" ? " ∧ " : " ∨ ");
+      const kw = g.keywords.join(g.op === "and" || g.op === "not" ? " ∧ " : " ∨ ");
+      if (g.op === "not") return `[동시 제외: ${kw}]`;
       return g.op === "nor" ? `[제외: ${kw}]` : `[${kw}]`;
     })
     .join(" AND ");
@@ -252,6 +254,8 @@ export function BidBoard() {
   const [kwDrafts, setKwDrafts] = useState<string[]>([""]);
   const [editingCatId, setEditingCatId] = useState<string | null>(null);
   const [catBusy, setCatBusy] = useState(false);
+  /** 분류 모달 내 안내/오류 — 모달이 화면을 덮어 상단 에러 배너가 안 보이므로 별도. */
+  const [catError, setCatError] = useState<string | null>(null);
 
   // 매칭 알림 설정 모달
   const [notifyModal, setNotifyModal] = useState(false);
@@ -381,6 +385,7 @@ export function BidBoard() {
     setCatGroups([{ op: "or", keywords: [] }]);
     setKwDrafts([""]);
     setEditingCatId(null);
+    setCatError(null);
   };
 
   const startEditCategory = (c: BidCategory) => {
@@ -402,10 +407,27 @@ export function BidBoard() {
     setKwDrafts((prev) => prev.map((v, i) => (i === gi ? "" : v)));
   };
 
+  /** 입력창에 남아 있는(칩으로 확정 전) 키워드를 각 그룹에 반영 — 미확정 텍스트가 조용히 사라지지 않도록. */
+  const mergeDrafts = (groups: RuleGroup[], drafts: string[]): RuleGroup[] =>
+    groups.map((g, i) => {
+      const draft = (drafts[i] ?? "").trim();
+      const keywords = g.keywords.filter(Boolean);
+      return { ...g, keywords: draft && !keywords.includes(draft) ? [...keywords, draft] : keywords };
+    });
+
   const saveCategory = async () => {
     if (!catName.trim()) return;
-    const rule = catGroups.map((g) => ({ ...g, keywords: g.keywords.filter(Boolean) })).filter((g) => g.keywords.length);
+    const rule = mergeDrafts(catGroups, kwDrafts);
+    // 빈 조건은 조용히 버리지 않고 알린다 — 예전엔 무시돼 "일부 조건만 적용"으로 보였다.
+    const emptyIdx = rule.findIndex((g) => !g.keywords.length);
+    if (emptyIdx >= 0) {
+      setCatError(`조건 ${emptyIdx + 1} 의 키워드가 비어 있습니다. 키워드를 입력한 뒤 저장하세요.`);
+      return;
+    }
     if (!rule.length) return;
+    setCatError(null);
+    setCatGroups(rule);
+    setKwDrafts(rule.map(() => ""));
     setCatBusy(true);
     try {
       if (editingCatId) {
@@ -1129,7 +1151,7 @@ export function BidBoard() {
               </button>
             </div>
             <p className="text-[11px] cd-text-faint">
-              조건마다 키워드와 논리식(AND=모두 포함 / OR=하나라도 포함 / NOR=모두 미포함)을 정하고, 조건 사이는 AND 로 결합됩니다.
+              조건마다 키워드와 논리식(AND=모두 포함 / OR=하나라도 포함 / NOT=모두 동시 포함만 제외 / NOR=하나라도 있으면 제외)을 정하고, 조건 사이는 AND 로 결합됩니다.
               예: 조건1 [통합환경 OR 통합허가] + 조건2 [NOR 조성공사, 개선공사] → &quot;통합환경 조성공사&quot; 같은 무관 건 제외.
             </p>
             <div className="flex flex-col gap-2">
@@ -1210,12 +1232,13 @@ export function BidBoard() {
                             addKeywordToGroup(gi);
                           }
                         }}
+                        onBlur={() => addKeywordToGroup(gi)}
                       />
                       <button type="button" className="cd-btn cd-btn-soft text-[11px]" onClick={() => addKeywordToGroup(gi)}>
                         <Plus className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       {OP_LABELS.map((op) => (
                         <button
                           key={op.key}
@@ -1238,16 +1261,24 @@ export function BidBoard() {
                 type="button"
                 className="cd-btn cd-btn-soft text-[12px] self-start"
                 onClick={() => {
-                  setCatGroups((prev) => [...prev, { op: "or", keywords: [] }]);
-                  setKwDrafts((prev) => [...prev, ""]);
+                  // 입력 중이던 키워드를 먼저 확정한 뒤 새 조건을 추가한다.
+                  const merged = mergeDrafts(catGroups, kwDrafts);
+                  setCatGroups([...merged, { op: "or", keywords: [] }]);
+                  setKwDrafts([...merged.map(() => ""), ""]);
+                  setCatError(null);
                 }}
               >
                 <Plus className="w-3.5 h-3.5" /> 조건 추가 (AND)
               </button>
 
+              <p className="text-[11px] cd-text-faint">
+                적용될 조건식: <b>{ruleSummaryText({ categoryId: "", name: catName, keywords: [], rule: mergeDrafts(catGroups, kwDrafts).filter((g) => g.keywords.length), enabled: true })}</b>
+              </p>
+              {catError && <p className="text-[11px] cd-error-text">{catError}</p>}
+
               <button
                 type="button"
-                disabled={catBusy || !catName.trim() || !catGroups.some((g) => g.keywords.length)}
+                disabled={catBusy || !catName.trim() || !mergeDrafts(catGroups, kwDrafts).some((g) => g.keywords.length)}
                 className="cd-btn cd-btn-primary text-[13px] self-start disabled:opacity-50"
                 onClick={saveCategory}
               >

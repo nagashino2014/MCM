@@ -66,7 +66,7 @@ export async function getCategory(categoryId: string): Promise<BidCategory | nul
 function keywordsFromRule(rule: RuleGroup[]): string[] {
   const out: string[] = [];
   for (const g of rule) {
-    if (g.op === "nor") continue;
+    if (g.op === "nor" || g.op === "not") continue;
     for (const k of g.keywords) if (!out.includes(k)) out.push(k);
   }
   return out;

@@ -1,18 +1,19 @@
 /**
  * 공공입찰 분류 조건 그룹(match_rule) 평가/SQL 변환 — bid_categories(077).
- * 그룹 내 키워드는 op(AND=모두 포함 / OR=하나라도 포함 / NOR=모두 미포함)로,
+ * 그룹 내 키워드는 op(AND=모두 포함 / OR=하나라도 포함 / NOT=모두 동시 포함만 제외 / NOR=하나라도 있으면 제외)로,
  * 그룹 간은 AND 로 결합한다. 예) [통합환경 OR 통합허가] AND [NOR 조성공사, 개선공사]
  * → "통합환경 조성공사" 같은 무관 건 소거.
+ * NOT 은 AND 의 부정(NAND) — [NOT 하수도, 공사] 는 "하수도 공사"만 제외하고 "하수도 시설"은 통과.
  */
 
-export type RuleOp = "and" | "or" | "nor";
+export type RuleOp = "and" | "or" | "not" | "nor";
 
 export interface RuleGroup {
   op: RuleOp;
   keywords: string[];
 }
 
-const OPS: RuleOp[] = ["and", "or", "nor"];
+const OPS: RuleOp[] = ["and", "or", "not", "nor"];
 
 /** 저장된 jsonb(match_rule.groups 또는 그룹 배열)를 정제 — 빈 키워드·빈 그룹 제거. */
 export function normalizeGroups(raw: unknown): RuleGroup[] {
@@ -47,8 +48,10 @@ export function evaluateGroups(text: string | null | undefined, groups: RuleGrou
   if (!t) return false;
   for (const g of groups) {
     const hit = g.keywords.some((k) => t.includes(k));
-    if (g.op === "and" && !g.keywords.every((k) => t.includes(k))) return false;
+    const all = g.keywords.every((k) => t.includes(k));
+    if (g.op === "and" && !all) return false;
     if (g.op === "or" && !hit) return false;
+    if (g.op === "not" && all) return false;
     if (g.op === "nor" && hit) return false;
   }
   return true;
@@ -70,6 +73,7 @@ export function buildRuleWhere(
     if (!likes.length) continue;
     if (g.op === "and") parts.push(`(${likes.join(" AND ")})`);
     else if (g.op === "or") parts.push(`(${likes.join(" OR ")})`);
+    else if (g.op === "not") parts.push(`NOT (${likes.join(" AND ")})`);
     else parts.push(`NOT (${likes.join(" OR ")})`);
   }
   return parts.length ? `(${parts.join(" AND ")})` : null;
@@ -80,8 +84,8 @@ export function ruleSummary(groups: RuleGroup[]): string {
   if (!groups.length) return "";
   return groups
     .map((g) => {
-      const kw = g.keywords.join(g.op === "and" ? "∧" : "∨");
-      return g.op === "nor" ? `[¬(${kw})]` : `[${kw}]`;
+      const kw = g.keywords.join(g.op === "and" || g.op === "not" ? "∧" : "∨");
+      return g.op === "nor" || g.op === "not" ? `[¬(${kw})]` : `[${kw}]`;
     })
     .join(" AND ");
 }

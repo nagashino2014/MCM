@@ -83,10 +83,11 @@ function RootNavigator() {
         <Stack.Screen name="board/write" options={{ ...header, title: '글쓰기' }} />
         <Stack.Screen name="notifications" options={{ ...header, title: '알림 설정' }} />
         <Stack.Screen name="approval/[docId]" options={{ ...header, title: '결재 문서' }} />
+        {/* 기안은 자체 헤더(양식명)를 그린다 */}
+        <Stack.Screen name="approval/draft" />
         <Stack.Screen name="mail/[messageId]" options={{ ...header, title: '메일' }} />
         <Stack.Screen name="mail/compose" options={{ ...header, title: '메일 쓰기' }} />
         <Stack.Screen name="leave" options={{ ...header, title: '내 휴가' }} />
-        <Stack.Screen name="leave/request" options={{ ...header, title: '휴가 신청' }} />
         <Stack.Screen name="attendance" options={{ ...header, title: '내 근태' }} />
         <Stack.Screen name="bids" options={{ ...header, title: '공공입찰' }} />
       </Stack>

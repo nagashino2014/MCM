@@ -5,6 +5,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import {
   Badge,
   EmptyState,
+  IconButton,
   Screen,
   SegmentedTabs,
   SkeletonList,
@@ -84,7 +85,14 @@ export default function ApprovalScreen() {
 
   return (
     <Screen scroll={false} padded={false}>
-      <SegmentedTabs items={items} value={box} onChange={setBox} />
+      <View className="flex-row items-center border-b border-cd-border bg-cd-card">
+        <View className="flex-1">
+          <SegmentedTabs items={items} value={box} onChange={setBox} />
+        </View>
+        <View className="pr-2">
+          <IconButton icon="create-outline" onPress={() => router.push('/approval/draft')} />
+        </View>
+      </View>
 
       {loading && !docs.length ? (
         <View className="p-4">

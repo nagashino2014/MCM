@@ -38,7 +38,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 const day = (n: number) => `${Number.isInteger(n) ? n : n.toFixed(1)}일`;
 
-/** 내 휴가 — 잔여 연차·신청 이력·촉진 고지. 신청은 /leave/request(결재 상신). */
+/** 내 휴가 — 잔여 연차·신청 이력·촉진 고지. 신청은 기안 화면(휴가 양식)으로 보낸다. */
 export default function LeaveScreen() {
   const router = useRouter();
   const { c } = useTheme();
@@ -106,7 +106,7 @@ export default function LeaveScreen() {
             <Button
               label="휴가 신청"
               icon="calendar-outline"
-              onPress={() => router.push('/leave/request')}
+              onPress={() => router.push({ pathname: '/approval/draft', params: { formId: 'frm-leave-request' } })}
               full
             />
           </View>

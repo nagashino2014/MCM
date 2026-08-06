@@ -75,7 +75,8 @@ function RootNavigator() {
         <Stack.Screen name="login" />
         {/* 명함 화면은 자체 헤더를 그린다(iOS 헤더 갱신 루프 회피 이력). */}
         <Stack.Screen name="card" />
-        <Stack.Screen name="schedule" options={{ ...header, title: '일정' }} />
+        {/* 일정은 태그 칩·참조 지정을 담은 자체 헤더를 그린다 */}
+        <Stack.Screen name="schedule" />
         <Stack.Screen name="facilities" options={{ ...header, title: '사업장' }} />
         <Stack.Screen name="contacts" options={{ ...header, title: '담당자' }} />
         <Stack.Screen name="settings" options={{ ...header, title: '설정' }} />

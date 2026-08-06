@@ -148,7 +148,8 @@ async function searchMatches(
   return out;
 }
 
-function fieldValue(merged: Record<string, unknown> | undefined, name: string): string {
+/** 발송 항목 1개의 표시값 — 금액은 천단위 구분, 빈 값은 ""(호출측에서 생략). */
+export function fieldValue(merged: Record<string, unknown> | undefined, name: string): string {
   const v = merged?.[name];
   if (v == null || v === "") return "";
   if (name === "budget" || name === "presmptPrce" || name === "asignBdgtAmt") {

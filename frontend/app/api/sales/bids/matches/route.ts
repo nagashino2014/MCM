@@ -1,6 +1,83 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
-import { getDb, rowsToObjects } from "@/lib/db";
+import { getDb, rowsToObjects, type PgDatabase } from "@/lib/db";
+import { fieldValue } from "@/lib/bid/notify-dispatch";
+import {
+  DEFAULT_CONTENT_FIELDS,
+  loadBidNotifyConfig,
+  type NotifyBidType,
+} from "@/lib/bid/notify-settings";
+
+const TABLE_BY_TYPE: Record<string, string> = {
+  order_plan: "public_order_plans",
+  prior_spec: "public_prior_specs",
+  bid_notice: "public_bid_notices",
+};
+
+interface MatchDetail {
+  label: string;
+  value: string;
+  /** 원문 링크 항목 — 앱에서 카드 맨 아래 링크 버튼으로 렌더한다. */
+  link?: boolean;
+}
+
+/**
+ * 건별 상세 항목 — 알림 발송 항목 구성(설정) 그대로, 값이 있는 항목만.
+ * 구성이 없는 종류는 기본 프리셋을 쓴다. 앱이 태그를 눌렀을 때 펼칠 카드의 내용.
+ */
+async function loadDetails(
+  db: PgDatabase,
+  rows: { bid_type: string; bid_id: string }[]
+): Promise<Map<string, MatchDetail[]>> {
+  const out = new Map<string, MatchDetail[]>();
+  if (!rows.length) return out;
+
+  const { profiles } = await loadBidNotifyConfig();
+  const byType = new Map<string, string[]>();
+  for (const r of rows) {
+    const arr = byType.get(r.bid_type) ?? [];
+    arr.push(r.bid_id);
+    byType.set(r.bid_type, arr);
+  }
+
+  for (const [type, ids] of byType) {
+    const table = TABLE_BY_TYPE[type];
+    if (!table || !ids.length) continue;
+    // 발송 항목 구성은 이 종류를 발송 대상으로 둔 첫 조건의 것을 따른다.
+    const configured = profiles.find((p) => p.contentFields[type as NotifyBidType]?.length)
+      ?.contentFields[type as NotifyBidType];
+    const fields = configured?.length ? configured : DEFAULT_CONTENT_FIELDS[type as NotifyBidType];
+    if (!fields?.length) continue;
+
+    const ph = ids.map((_, i) => `$${i + 1}`).join(",");
+    const detailRows = rowsToObjects(
+      await db.exec(`SELECT * FROM ${table} WHERE bid_id IN (${ph})`, ids)
+    );
+    for (const r of detailRows) {
+      let raw: Record<string, unknown> = {};
+      try {
+        const v = typeof r.raw_json === "string" ? JSON.parse(r.raw_json) : r.raw_json;
+        if (v && typeof v === "object") raw = v as Record<string, unknown>;
+      } catch {
+        // raw 파싱 실패 시 표준 컬럼만
+      }
+      const merged: Record<string, unknown> = {
+        ...raw,
+        org_name: r.org_name, title: r.title, budget: r.budget, posted_at: r.posted_at,
+        deadline: r.deadline, method: r.method, work_type: r.work_type, category: r.category,
+        url: r.url, external_id: r.external_id,
+      };
+      const details: MatchDetail[] = [];
+      for (const f of fields) {
+        const v = fieldValue(merged, f.name);
+        if (!v) continue;
+        details.push({ label: f.label, value: v, ...(/^https?:\/\//.test(v) ? { link: true } : {}) });
+      }
+      if (details.length) out.set(`${type}:${String(r.bid_id)}`, details);
+    }
+  }
+  return out;
+}
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,10 +118,17 @@ export async function GET(req: NextRequest) {
       )
     );
 
+    // 앱이 태그를 눌러 펼칠 상세 항목 — 종류별 일괄 조회(건별 왕복 없음).
+    const detailMap = await loadDetails(
+      db,
+      rows.map((r) => ({ bid_type: String(r.bid_type), bid_id: String(r.bid_id) }))
+    ).catch(() => new Map<string, MatchDetail[]>());
+
     const items = rows.map((r) => ({
       noticeId: String(r.notice_id),
       bidType: String(r.bid_type),
       bidId: String(r.bid_id),
+      details: detailMap.get(`${String(r.bid_type)}:${String(r.bid_id)}`) ?? [],
       categoryName: r.category_name != null ? String(r.category_name) : null,
       title: r.title != null ? String(r.title) : null,
       orgName: r.org_name != null ? String(r.org_name) : null,

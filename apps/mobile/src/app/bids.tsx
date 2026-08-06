@@ -8,6 +8,14 @@ import type { SegmentItem } from '@/components/ui';
 import { useApi } from '@/lib/use-api';
 import { useTheme } from '@/theme/useTheme';
 
+/** 발송 항목 구성(웹 알림 설정) 그대로 내려오는 상세 항목 — 값이 있는 것만 담겨 온다. */
+interface MatchDetail {
+  label: string;
+  value: string;
+  /** 원문 링크 항목 — 상세 카드 맨 아래 버튼으로 렌더한다. */
+  link?: boolean;
+}
+
 interface BidMatch {
   noticeId: string;
   bidType: string;
@@ -20,6 +28,7 @@ interface BidMatch {
   deadline: string | null;
   url: string | null;
   matchedAt: string | null;
+  details?: MatchDetail[];
 }
 
 type Tab = 'recent' | 'deadline';
@@ -49,14 +58,21 @@ function dday(deadline: string | null, today: string): number | null {
 /**
  * 공공입찰 매칭 공고(M6-C) — 푸시 알림의 착지 화면.
  *
- * 앱에서 입찰을 편집·관리하지는 않는다. "알림으로 온 그 공고가 뭔지" 확인하고
- * 원문(나라장터 등)으로 넘어가는 것까지가 범위다. 상세 화면 대신 원문 링크를 연다.
+ * 앱에서 입찰을 편집·관리하지는 않는다. "알림으로 온 그 공고가 뭔지" 확인하는 것이 범위다.
+ * 카드를 누르면 별도 화면으로 가지 않고 아래에 상세 카드를 펼친다(발송 항목 구성 그대로),
+ * 원문(나라장터)으로는 그 카드 맨 아래 링크로 넘어간다.
  */
 export default function BidsScreen() {
   const { c } = useTheme();
   const toast = useToast();
   const params = useLocalSearchParams<{ filter?: string }>();
   const [tab, setTab] = useState<Tab>(params.filter === 'deadline' ? 'deadline' : 'recent');
+  /** 펼쳐 둔 카드(noticeId) — 여러 건 동시에 펼칠 수 있다. */
+  const [expanded, setExpanded] = useState<string[]>([]);
+  const toggle = (noticeId: string) =>
+    setExpanded((prev) =>
+      prev.includes(noticeId) ? prev.filter((x) => x !== noticeId) : [...prev, noticeId]
+    );
 
   const list = useApi<{ items: BidMatch[]; today: string }>(
     `/api/sales/bids/matches?limit=60${tab === 'deadline' ? '&filter=deadline' : ''}`,
@@ -103,10 +119,17 @@ export default function BidsScreen() {
     return items.map((b) => {
       const d = dday(b.deadline, today);
       const urgent = d != null && d <= 3;
+      const isOpen = expanded.includes(b.noticeId);
+      const details = b.details ?? [];
+      const rows = details.filter((x) => !x.link);
+      // 원문은 상세 항목 안의 링크를 우선 쓰고, 없으면 목록의 url 로 대체한다.
+      const linkItem = details.find((x) => x.link);
+      const linkUrl = linkItem?.value ?? b.url;
+
       return (
         <Pressable
           key={b.noticeId}
-          onPress={() => open(b.url)}
+          onPress={() => toggle(b.noticeId)}
           className="rounded-card border border-cd-border bg-cd-card p-4 active:opacity-70">
           <View className="flex-row items-center gap-2">
             <Badge label={TYPE_LABEL[b.bidType] ?? b.bidType} tone="primary" />
@@ -143,19 +166,41 @@ export default function BidsScreen() {
             <Text className="flex-1 text-[11px] text-cd-faint">
               {b.deadline ? `마감 ${b.deadline.slice(0, 10)}` : '마감 미정'}
             </Text>
-            {b.url ? (
-              <>
-                <Text className="text-[11px] font-bold" style={{ color: c.primary }}>
-                  원문 열기
-                </Text>
-                <Ionicons name="open-outline" size={13} color={c.primary} />
-              </>
-            ) : null}
+            <Text className="text-[11px] font-bold" style={{ color: c.primary }}>
+              {isOpen ? '접기' : '상세 보기'}
+            </Text>
+            <Ionicons name={isOpen ? 'chevron-up' : 'chevron-down'} size={13} color={c.primary} />
           </View>
+
+          {/* 상세 카드 — 알림 발송 항목 구성 그대로(값이 있는 항목만), 맨 아래에 원문 링크 */}
+          {isOpen ? (
+            <View className="mt-3 rounded-card border border-cd-border bg-cd-bg p-3">
+              {rows.length ? (
+                rows.map((f) => (
+                  <View key={f.label} className="flex-row gap-2 py-1">
+                    <Text className="w-[104px] text-[11px] text-cd-faint">{f.label}</Text>
+                    <Text className="flex-1 text-[12px] text-cd-text">{f.value}</Text>
+                  </View>
+                ))
+              ) : (
+                <Text className="py-1 text-[12px] text-cd-muted">표시할 상세 정보가 없습니다.</Text>
+              )}
+              {linkUrl ? (
+                <Pressable
+                  onPress={() => open(linkUrl)}
+                  className="mt-2 flex-row items-center justify-center gap-1 rounded-card border border-cd-border py-2 active:opacity-70">
+                  <Text className="text-[12px] font-bold" style={{ color: c.primary }}>
+                    원문 열기
+                  </Text>
+                  <Ionicons name="open-outline" size={14} color={c.primary} />
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
         </Pressable>
       );
     });
-  }, [items, loading, list.error, tab, today, c]);
+  }, [items, loading, list.error, tab, today, c, expanded]);
 
   return (
     <Screen scroll padded={false} refreshing={list.refreshing} onRefresh={list.reload}>

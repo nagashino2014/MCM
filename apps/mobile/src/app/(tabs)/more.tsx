@@ -28,6 +28,14 @@ export default function MoreScreen() {
         </View>
       </View>
 
+      <SectionTitle>소통</SectionTitle>
+      <ListRow
+        icon="megaphone-outline"
+        title="공지·주소록"
+        subtitle="사내 공지·주소록·조직도"
+        onPress={() => router.push('/(tabs)/collab')}
+      />
+
       <SectionTitle>영업</SectionTitle>
       <ListRow
         icon="calendar-outline"

@@ -751,6 +751,19 @@ function SummerScene({ scale }: SceneProps) {
         <path d="M0 230 Q100 216 200 226 T400 222" stroke="rgba(255,255,255,0.75)" strokeWidth={3} fill="none" />
       </SceneBand>
       <SceneCanvas scale={scale}>
+        {/* 요트 — 바다 위를 지나가므로 **모래밭 전경(야자수·파라솔·비치볼)보다 먼저** 그린다. */}
+        <span style={{ position: "absolute", top: 148, left: 0, width: 96, height: 56, animation: "cdSail 20s linear infinite" }}>
+          <span style={{ position: "absolute", inset: 0, display: "block", animation: "cdBob 4s ease-in-out infinite" }}>
+            <svg width={96} height={56} viewBox="0 0 96 56">
+              <path d="M4 44 q18 6 40 4 M0 50 q26 8 56 4" stroke="rgba(255,255,255,0.7)" strokeWidth={3} fill="none" strokeLinecap="round" />
+              <ellipse cx={76} cy={46} rx={6} ry={3} fill="rgba(255,255,255,0.8)" />
+              <line x1={52} y1={8} x2={52} y2={36} stroke="#6E4E3A" strokeWidth={2} />
+              <polygon points="52,8 52,36 32,36" fill="#FFFFFF" />
+              <polygon points="55,12 55,36 72,36" fill="#E85D5D" />
+              <path d="M28 38 q22 10 46 0 l-6 10 h-34 z" fill="#C9542F" />
+            </svg>
+          </span>
+        </span>
         <svg style={{ position: "absolute", inset: 0 }} width={SCENE_W} height={SCENE_H} viewBox="0 0 400 286">
           <ellipse cx={300} cy={236} rx={36} ry={5} fill="rgba(180,150,90,0.3)" />
           <path d="M296 232 C288 192 300 162 286 128" stroke="#9A6B43" strokeWidth={9} fill="none" strokeLinecap="round" />
@@ -784,18 +797,6 @@ function SummerScene({ scale }: SceneProps) {
             <path d="M10 1 A9 9 0 0 1 19 10 L10 10 Z" fill="#E85D5D" />
             <path d="M10 19 A9 9 0 0 1 1 10 L10 10 Z" fill="#5468C9" />
           </svg>
-        </span>
-        <span style={{ position: "absolute", top: 148, left: 0, width: 96, height: 56, animation: "cdSail 20s linear infinite" }}>
-          <span style={{ position: "absolute", inset: 0, display: "block", animation: "cdBob 4s ease-in-out infinite" }}>
-            <svg width={96} height={56} viewBox="0 0 96 56">
-              <path d="M4 44 q18 6 40 4 M0 50 q26 8 56 4" stroke="rgba(255,255,255,0.7)" strokeWidth={3} fill="none" strokeLinecap="round" />
-              <ellipse cx={76} cy={46} rx={6} ry={3} fill="rgba(255,255,255,0.8)" />
-              <line x1={52} y1={8} x2={52} y2={36} stroke="#6E4E3A" strokeWidth={2} />
-              <polygon points="52,8 52,36 32,36" fill="#FFFFFF" />
-              <polygon points="55,12 55,36 72,36" fill="#E85D5D" />
-              <path d="M28 38 q22 10 46 0 l-6 10 h-34 z" fill="#C9542F" />
-            </svg>
-          </span>
         </span>
       </SceneCanvas>
       <Sun

@@ -19,6 +19,13 @@
       }
     },
     {
+      "name": "mobile-web",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["expo", "start", "--web", "--port", "8081"],
+      "cwd": "apps/mobile",
+      "port": 8081
+    },
+    {
       "name": "frontend-dev-ui",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],

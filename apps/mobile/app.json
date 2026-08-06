@@ -8,7 +8,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "mcm",
     "userInterfaceStyle": "automatic",
-    "platforms": ["ios", "android"],
+    "platforms": ["ios", "android", "web"],
     "ios": {
       "icon": "./assets/expo.icon",
       "bundleIdentifier": "app.koensain.mcm",
@@ -72,6 +72,15 @@
         "expo-local-authentication",
         {
           "faceIDPermission": "앱 잠금 해제를 위해 Face ID를 사용합니다."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "홈 화면 날씨 위젯에 현재 위치의 날씨를 표시하기 위해 사용합니다.",
+          "locationWhenInUsePermission": "홈 화면 날씨 위젯에 현재 위치의 날씨를 표시하기 위해 사용합니다.",
+          "isIosBackgroundLocationEnabled": false,
+          "isAndroidBackgroundLocationEnabled": false
         }
       ]
     ],

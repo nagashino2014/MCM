@@ -5,8 +5,9 @@ import { Text, View } from 'react-native';
 import { useTheme } from '@/theme/useTheme';
 import { useNavBadges } from '@/lib/use-nav-badges';
 
-// 하단 탭 5개 — 블루프린트 §5.1 확정 IA(홈·결재·메일·소통·더보기).
-// 영업 화면(일정·사업장·담당자)은 탭에서 내려가고 더보기/홈 빠른실행으로 진입한다.
+// 하단 탭 5개 — 모바일 홈 개편 핸드오프의 확정 IA(홈·결재·대화·메일·더보기).
+// 소통(공지·주소록·조직도)은 탭에서 내려가고 더보기로 진입한다(라우트는 그대로 유지).
+// 영업 화면(일정·사업장·담당자)도 더보기/홈 빠른실행으로 진입한다.
 //
 // ⚠ 헤더 옵션은 여기(레이아웃)에서만 정적으로 정의한다. 화면 파일 안에서 Stack.Screen 옵션을
 //    인라인 렌더하면 iOS 에서 헤더 갱신 루프가 생긴다(명함 화면 실측 이력).
@@ -31,7 +32,7 @@ export default function TabsLayout() {
         tabBarActiveTintColor: c.primary,
         tabBarInactiveTintColor: c.faint,
         tabBarStyle: { backgroundColor: c.card, borderTopColor: c.border },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '700' },
+        tabBarLabelStyle: { fontSize: 10.5, fontWeight: '600' },
         headerStyle: { backgroundColor: c.card },
         headerTitleStyle: { color: c.text, fontWeight: '800' },
         // 본문 캔버스도 흰색이라 헤더를 그림자 없이 두면 경계가 사라진다 → hairline 유지.
@@ -42,9 +43,9 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: '홈',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home-outline" color={color} size={size} />
-          ),
+          // 홈은 인사말·알림·아바타를 담은 자체 헤더를 그린다(핸드오프 2a §1).
+          headerShown: false,
+          tabBarIcon: ({ color, size }) => <Ionicons name="home-outline" color={color} size={size} />,
         }}
       />
       <Tabs.Screen
@@ -53,9 +54,18 @@ export default function TabsLayout() {
           title: '결재',
           tabBarIcon: ({ color, size }) => (
             <View>
-              <Ionicons name="checkbox-outline" color={color} size={size} />
+              <Ionicons name="clipboard-outline" color={color} size={size} />
               <TabBadge count={badges.approvalPending} />
             </View>
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="chat"
+        options={{
+          title: '대화',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="chatbubble-outline" color={color} size={size} />
           ),
         }}
       />
@@ -72,15 +82,6 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="collab"
-        options={{
-          title: '소통',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="megaphone-outline" color={color} size={size} />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="more"
         options={{
           title: '더보기',
@@ -89,6 +90,8 @@ export default function TabsLayout() {
           ),
         }}
       />
+      {/* 소통 — 탭에서는 감추고 더보기에서 연다(라우트·화면은 그대로). */}
+      <Tabs.Screen name="collab" options={{ title: '소통', href: null }} />
     </Tabs>
   );
 }

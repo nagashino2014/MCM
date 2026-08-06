@@ -66,6 +66,8 @@ interface RelatedBid {
 interface RuleGroup {
   op: "and" | "or" | "not" | "nor";
   keywords: string[];
+  /** 제외 그룹 전용 — 제외어 판정 전 사업명에서 가릴 문구(부분문자열 오탐 방지). */
+  except?: string[];
 }
 
 interface BidCategory {
@@ -123,8 +125,9 @@ function ruleSummaryText(c: BidCategory): string {
   return groups
     .map((g) => {
       const kw = g.keywords.join(g.op === "and" || g.op === "not" ? " ∧ " : " ∨ ");
-      if (g.op === "not") return `[동시 제외: ${kw}]`;
-      return g.op === "nor" ? `[제외: ${kw}]` : `[${kw}]`;
+      if (g.op !== "not" && g.op !== "nor") return `[${kw}]`;
+      const ex = g.except?.length ? `, 단 ${g.except.join(" ∨ ")} 은 통과` : "";
+      return g.op === "not" ? `[동시 제외: ${kw}${ex}]` : `[제외: ${kw}${ex}]`;
     })
     .join(" AND ");
 }
@@ -252,6 +255,8 @@ export function BidBoard() {
   const [catName, setCatName] = useState("");
   const [catGroups, setCatGroups] = useState<RuleGroup[]>([{ op: "or", keywords: [] }]);
   const [kwDrafts, setKwDrafts] = useState<string[]>([""]);
+  /** 조건별 예외 키워드 입력 중 값(제외 그룹 전용). */
+  const [exDrafts, setExDrafts] = useState<string[]>([""]);
   const [editingCatId, setEditingCatId] = useState<string | null>(null);
   const [catBusy, setCatBusy] = useState(false);
   /** 분류 모달 내 안내/오류 — 모달이 화면을 덮어 상단 에러 배너가 안 보이므로 별도. */
@@ -384,6 +389,7 @@ export function BidBoard() {
     setCatName("");
     setCatGroups([{ op: "or", keywords: [] }]);
     setKwDrafts([""]);
+    setExDrafts([""]);
     setEditingCatId(null);
     setCatError(null);
   };
@@ -391,11 +397,13 @@ export function BidBoard() {
   const startEditCategory = (c: BidCategory) => {
     setCatName(c.name);
     const groups = c.rule?.length
-      ? c.rule.map((g) => ({ op: g.op, keywords: [...g.keywords] }))
+      ? c.rule.map((g) => ({ op: g.op, keywords: [...g.keywords], ...(g.except?.length ? { except: [...g.except] } : {}) }))
       : [{ op: "or" as const, keywords: [...c.keywords] }];
     setCatGroups(groups.length ? groups : [{ op: "or", keywords: [] }]);
     setKwDrafts(groups.map(() => ""));
+    setExDrafts(groups.map(() => ""));
     setEditingCatId(c.categoryId);
+    setCatError(null);
   };
 
   const addKeywordToGroup = (gi: number) => {
@@ -407,17 +415,37 @@ export function BidBoard() {
     setKwDrafts((prev) => prev.map((v, i) => (i === gi ? "" : v)));
   };
 
-  /** 입력창에 남아 있는(칩으로 확정 전) 키워드를 각 그룹에 반영 — 미확정 텍스트가 조용히 사라지지 않도록. */
-  const mergeDrafts = (groups: RuleGroup[], drafts: string[]): RuleGroup[] =>
+  const addExceptToGroup = (gi: number) => {
+    const kw = (exDrafts[gi] ?? "").trim();
+    if (!kw) return;
+    setCatGroups((prev) =>
+      prev.map((g, i) =>
+        i === gi && !(g.except ?? []).includes(kw) ? { ...g, except: [...(g.except ?? []), kw] } : g
+      )
+    );
+    setExDrafts((prev) => prev.map((v, i) => (i === gi ? "" : v)));
+  };
+
+  /** 입력창에 남아 있는(칩으로 확정 전) 키워드·예외를 각 그룹에 반영 — 미확정 텍스트가 조용히 사라지지 않도록. */
+  const mergeDrafts = (groups: RuleGroup[], drafts: string[], exs: string[]): RuleGroup[] =>
     groups.map((g, i) => {
       const draft = (drafts[i] ?? "").trim();
       const keywords = g.keywords.filter(Boolean);
-      return { ...g, keywords: draft && !keywords.includes(draft) ? [...keywords, draft] : keywords };
+      const exDraft = (exs[i] ?? "").trim();
+      const except = (g.except ?? []).filter(Boolean);
+      const merged = exDraft && !except.includes(exDraft) ? [...except, exDraft] : except;
+      // 예외는 제외 그룹에서만 유지(op 를 포함 조건으로 되돌리면 버린다).
+      const keepEx = (g.op === "not" || g.op === "nor") && merged.length;
+      return {
+        ...g,
+        keywords: draft && !keywords.includes(draft) ? [...keywords, draft] : keywords,
+        ...(keepEx ? { except: merged } : { except: undefined }),
+      };
     });
 
   const saveCategory = async () => {
     if (!catName.trim()) return;
-    const rule = mergeDrafts(catGroups, kwDrafts);
+    const rule = mergeDrafts(catGroups, kwDrafts, exDrafts);
     // 빈 조건은 조용히 버리지 않고 알린다 — 예전엔 무시돼 "일부 조건만 적용"으로 보였다.
     const emptyIdx = rule.findIndex((g) => !g.keywords.length);
     if (emptyIdx >= 0) {
@@ -428,6 +456,7 @@ export function BidBoard() {
     setCatError(null);
     setCatGroups(rule);
     setKwDrafts(rule.map(() => ""));
+    setExDrafts(rule.map(() => ""));
     setCatBusy(true);
     try {
       if (editingCatId) {
@@ -1197,6 +1226,7 @@ export function BidBoard() {
                           onClick={() => {
                             setCatGroups((prev) => prev.filter((_, i) => i !== gi));
                             setKwDrafts((prev) => prev.filter((_, i) => i !== gi));
+                            setExDrafts((prev) => prev.filter((_, i) => i !== gi));
                           }}
                         >
                           <Trash2 className="w-3 h-3" />
@@ -1253,6 +1283,50 @@ export function BidBoard() {
                       ))}
                       <span className="text-[10px] cd-text-faint">{OP_LABELS.find((o) => o.key === g.op)?.desc}</span>
                     </div>
+                    {/* 예외 — 제외 그룹에서만. 제외어 판정 전에 사업명에서 이 문구를 가린다(부분문자열 오탐 방지). */}
+                    {(g.op === "not" || g.op === "nor") && (
+                      <div className="flex items-center gap-1.5 flex-wrap border-t cd-border-c pt-2">
+                        <span className="text-[11px] cd-text-faint whitespace-nowrap">예외</span>
+                        {(g.except ?? []).map((kw) => (
+                          <span key={kw} className="cd-chip cd-chip-sm">
+                            {kw}
+                            <button
+                              type="button"
+                              className="ml-1"
+                              onClick={() =>
+                                setCatGroups((prev) =>
+                                  prev.map((gr, i) =>
+                                    i === gi ? { ...gr, except: (gr.except ?? []).filter((k) => k !== kw) } : gr
+                                  )
+                                )
+                              }
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        ))}
+                        <input
+                          className="cd-input text-[12px]"
+                          style={{ width: 140 }}
+                          placeholder="예: 하수도시설"
+                          value={exDrafts[gi] ?? ""}
+                          onChange={(e) => setExDrafts((prev) => prev.map((v, i) => (i === gi ? e.target.value : v)))}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              addExceptToGroup(gi);
+                            }
+                          }}
+                          onBlur={() => addExceptToGroup(gi)}
+                        />
+                        <button type="button" className="cd-btn cd-btn-soft text-[11px]" onClick={() => addExceptToGroup(gi)}>
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                        <span className="text-[10px] cd-text-faint">
+                          이 문구는 제외 검사에서 가려집니다 — &quot;하수도시설&quot;을 넣으면 제외어 &quot;수도시설&quot;에 걸리지 않습니다.
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -1262,9 +1336,10 @@ export function BidBoard() {
                 className="cd-btn cd-btn-soft text-[12px] self-start"
                 onClick={() => {
                   // 입력 중이던 키워드를 먼저 확정한 뒤 새 조건을 추가한다.
-                  const merged = mergeDrafts(catGroups, kwDrafts);
+                  const merged = mergeDrafts(catGroups, kwDrafts, exDrafts);
                   setCatGroups([...merged, { op: "or", keywords: [] }]);
                   setKwDrafts([...merged.map(() => ""), ""]);
+                  setExDrafts([...merged.map(() => ""), ""]);
                   setCatError(null);
                 }}
               >
@@ -1272,13 +1347,13 @@ export function BidBoard() {
               </button>
 
               <p className="text-[11px] cd-text-faint">
-                적용될 조건식: <b>{ruleSummaryText({ categoryId: "", name: catName, keywords: [], rule: mergeDrafts(catGroups, kwDrafts).filter((g) => g.keywords.length), enabled: true })}</b>
+                적용될 조건식: <b>{ruleSummaryText({ categoryId: "", name: catName, keywords: [], rule: mergeDrafts(catGroups, kwDrafts, exDrafts).filter((g) => g.keywords.length), enabled: true })}</b>
               </p>
               {catError && <p className="text-[11px] cd-error-text">{catError}</p>}
 
               <button
                 type="button"
-                disabled={catBusy || !catName.trim() || !mergeDrafts(catGroups, kwDrafts).some((g) => g.keywords.length)}
+                disabled={catBusy || !catName.trim() || !mergeDrafts(catGroups, kwDrafts, exDrafts).some((g) => g.keywords.length)}
                 className="cd-btn cd-btn-primary text-[13px] self-start disabled:opacity-50"
                 onClick={saveCategory}
               >

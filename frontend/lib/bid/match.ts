@@ -4,6 +4,9 @@
  * 그룹 간은 AND 로 결합한다. 예) [통합환경 OR 통합허가] AND [NOR 조성공사, 개선공사]
  * → "통합환경 조성공사" 같은 무관 건 소거.
  * NOT 은 AND 의 부정(NAND) — [NOT 하수도, 공사] 는 "하수도 공사"만 제외하고 "하수도 시설"은 통과.
+ * 제외 그룹(NOT/NOR)의 except 는 "제외어 검사에서 가릴 문구" — 사업명에서 먼저 지운 뒤 제외어를 찾는다.
+ * 예) 제외 [수도시설] + 예외 [하수도시설] → "OO하수도시설 기술진단"은 통과, "OO하수도시설 정비공사"는
+ * 마스킹 후에도 '공사'가 남아 정상 제외. 부분문자열 오탐(하수도시설⊃수도시설)만 정확히 무력화한다.
  */
 
 export type RuleOp = "and" | "or" | "not" | "nor";
@@ -11,6 +14,8 @@ export type RuleOp = "and" | "or" | "not" | "nor";
 export interface RuleGroup {
   op: RuleOp;
   keywords: string[];
+  /** 제외 그룹(not|nor) 전용 — 제외어 판정 전 사업명에서 가릴 문구. */
+  except?: string[];
 }
 
 const OPS: RuleOp[] = ["and", "or", "not", "nor"];
@@ -29,7 +34,15 @@ export function normalizeGroups(raw: unknown): RuleGroup[] {
     const op = (OPS.includes(opRaw as RuleOp) ? opRaw : "or") as RuleOp;
     const kwRaw = (g as { keywords?: unknown }).keywords;
     const keywords = Array.isArray(kwRaw) ? kwRaw.map((k) => String(k).trim()).filter(Boolean) : [];
-    if (keywords.length) out.push({ op, keywords: keywords.slice(0, 20) });
+    const exRaw = (g as { except?: unknown }).except;
+    // 예외는 제외 그룹에서만 의미가 있다(포함 그룹에 들어와도 무시).
+    const except =
+      (op === "not" || op === "nor") && Array.isArray(exRaw)
+        ? exRaw.map((k) => String(k).trim()).filter(Boolean).slice(0, 20)
+        : [];
+    if (keywords.length) {
+      out.push({ op, keywords: keywords.slice(0, 20), ...(except.length ? { except } : {}) });
+    }
   }
   return out.slice(0, 10);
 }
@@ -47,10 +60,12 @@ export function evaluateGroups(text: string | null | undefined, groups: RuleGrou
   const t = (text ?? "").trim();
   if (!t) return false;
   for (const g of groups) {
-    const hit = g.keywords.some((k) => t.includes(k));
-    const all = g.keywords.every((k) => t.includes(k));
-    if (g.op === "and" && !all) return false;
-    if (g.op === "or" && !hit) return false;
+    // 제외 그룹은 예외 문구를 지운 사본에서 판정 — 부분문자열 오탐만 무력화.
+    const target = g.except?.length ? g.except.reduce((s, e) => s.split(e).join(" "), t) : t;
+    const hit = g.keywords.some((k) => target.includes(k));
+    const all = g.keywords.every((k) => target.includes(k));
+    if (g.op === "and" && !g.keywords.every((k) => t.includes(k))) return false;
+    if (g.op === "or" && !g.keywords.some((k) => t.includes(k))) return false;
     if (g.op === "not" && all) return false;
     if (g.op === "nor" && hit) return false;
   }
@@ -69,12 +84,16 @@ export function buildRuleWhere(
   if (!groups.length) return null;
   const parts: string[] = [];
   for (const g of groups) {
-    const likes = g.keywords.map((k) => `${col} LIKE ${add(`%${k}%`)}`);
-    if (!likes.length) continue;
-    if (g.op === "and") parts.push(`(${likes.join(" AND ")})`);
-    else if (g.op === "or") parts.push(`(${likes.join(" OR ")})`);
-    else if (g.op === "not") parts.push(`NOT (${likes.join(" AND ")})`);
-    else parts.push(`NOT (${likes.join(" OR ")})`);
+    if (!g.keywords.length) continue;
+    if (g.op === "and" || g.op === "or") {
+      const likes = g.keywords.map((k) => `${col} LIKE ${add(`%${k}%`)}`);
+      parts.push(`(${likes.join(g.op === "and" ? " AND " : " OR ")})`);
+      continue;
+    }
+    // 제외 그룹 — 예외 문구를 replace 로 지운 사본에서 제외어를 찾는다(평가기와 동일 규칙).
+    const target = (g.except ?? []).reduce((expr, e) => `replace(${expr}, ${add(e)}, ' ')`, col);
+    const likes = g.keywords.map((k) => `${target} LIKE ${add(`%${k}%`)}`);
+    parts.push(`NOT (${likes.join(g.op === "not" ? " AND " : " OR ")})`);
   }
   return parts.length ? `(${parts.join(" AND ")})` : null;
 }
@@ -85,7 +104,9 @@ export function ruleSummary(groups: RuleGroup[]): string {
   return groups
     .map((g) => {
       const kw = g.keywords.join(g.op === "and" || g.op === "not" ? "∧" : "∨");
-      return g.op === "nor" || g.op === "not" ? `[¬(${kw})]` : `[${kw}]`;
+      if (g.op !== "nor" && g.op !== "not") return `[${kw}]`;
+      const ex = g.except?.length ? ` 단 ${g.except.join("∨")} 제외` : "";
+      return `[¬(${kw})${ex}]`;
     })
     .join(" AND ");
 }

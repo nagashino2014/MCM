@@ -1,21 +1,27 @@
 /**
- * 공공입찰 매칭 알림 발송 디스패처 — 설정된 발송 시각(KST) 이후 첫 체크에서
- * pending 큐(bid_match_notices)를 요약 메시지로 묶어 수신자 채널별(카카오 알림톡/메일)로 발송한다.
- * 발송 대상 종류(settings.bidTypes)만 발송하고, 종류별 발송 항목(contentFields)이 있으면
- * 해당 bid 테이블의 원문(raw_json)에서 값을 뽑아 지정 순서대로 본문을 구성한다.
- * 일 1회 멱등(lastDispatchDate). 트리거는 instrumentation.ts 의 주기 타이머(next 서버 상주).
- * 앱(app) 채널은 모바일 푸시로 나간다(M6-C) — 요약 1건만 보내고 목록은 앱 화면에서 본다.
- * 같은 틱에서 마감 임박(deadlineDays) 알림도 함께 발송한다.
+ * 공공입찰 매칭 알림 발송 디스패처 — 프로파일(발송 조건)마다 독립 발송한다.
+ *
+ * 각 프로파일은 발송 시각(KST) 이후 첫 체크에서, 매칭 범위(rangeDays)에 해당하는
+ * 게시분을 대상 종류 테이블에서 다시 검색해 용역 분류 조건·지역권 필터로 거른 뒤 요약을 보낸다.
+ * (큐 소비 방식이 아니라 재검색 — 프로파일마다 분류·지역 필터가 달라 큐 하나로는 분리할 수 없다.
+ *  bid_match_notices 는 웹 벨 알림·이력 용도로 유지하고, 발송분은 sent 로 마킹한다.)
+ * 발송 수단은 메일(SES)·앱 푸시. 일 1회 멱등(profile.lastDispatchDate).
+ * 마감 임박 알림은 입찰 서류 생성 진행 건(bid_packages.status='draft')을 대상으로,
+ * 수신자 중 '마감 알림'을 체크한 사람에게만 보낸다.
  */
 import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
 import {
-  loadBidNotifySettings,
-  saveBidNotifySettings,
-  type BidNotifySettings,
+  DEFAULT_CONTENT_FIELDS,
+  loadBidNotifyConfig,
+  patchBidNotifyProfile,
+  type BidNotifyProfile,
   type NotifyBidType,
 } from "@/lib/bid/notify-settings";
+import { listCategories } from "@/lib/bid/category-store";
+import { buildRuleWhere, ruleFromCategory } from "@/lib/bid/match";
+import { REGION_GROUPS } from "@/lib/bid/bid-queries";
+import { listActivePackages } from "@/lib/bid/package-store";
 import { sendNotifyEmail, type ChannelSendResult } from "@/lib/notify/email-ses";
-import { sendAlimtalk } from "@/lib/notify/kakao-solapi";
 import { sendPush } from "@/lib/notify/push-expo";
 
 const TYPE_LABEL: Record<string, string> = {
@@ -30,17 +36,19 @@ const TABLE_BY_TYPE: Record<NotifyBidType, string> = {
 };
 /** 1회 발송에 담는 최대 건수 — 초과분은 건수만 표기(웹에서 확인 유도). */
 const MAX_LINES = 30;
-const DISPATCH_LIMIT = 500;
+/** 프로파일당 검색 상한(분류·종류 합산). */
+const MATCH_LIMIT = 500;
 
-interface PendingNotice {
-  noticeId: string;
-  bidType: string;
+interface MatchedBid {
+  bidType: NotifyBidType;
   bidId: string;
-  categoryName: string | null;
+  categoryName: string;
   title: string | null;
   orgName: string | null;
   deadline: string | null;
   url: string | null;
+  /** 표준 컬럼 + raw_json 병합 — 발송 항목 값 조회용. */
+  merged: Record<string, unknown>;
 }
 
 /** KST(UTC+9) 기준 날짜/시각 문자열. */
@@ -50,34 +58,91 @@ function kstParts(now = new Date()): { date: string; hm: string } {
   return { date: iso.slice(0, 10), hm: iso.slice(11, 16) };
 }
 
-/** contentFields 값 조회용 — 원문(raw_json) + 표준 컬럼 병합 맵(bid_id 키). */
-async function loadDetailMaps(
+/** KST 기준 date 문자열에 일수를 더한다. */
+function addDays(date: string, days: number): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * 매칭 범위 내 게시분에서 프로파일 조건에 맞는 건을 검색한다.
+ * 게시일(posted_at)이 비어 있으면 수집시각(created_at)으로 대체 판정.
+ */
+async function searchMatches(
   db: PgDatabase,
-  byType: Map<string, PendingNotice[]>,
-  settings: BidNotifySettings
-): Promise<Map<string, Record<string, unknown>>> {
-  const out = new Map<string, Record<string, unknown>>();
-  for (const [type, arr] of byType) {
-    const fields = settings.contentFields[type as NotifyBidType];
-    const table = TABLE_BY_TYPE[type as NotifyBidType];
-    if (!fields?.length || !table || !arr.length) continue;
-    const ids = arr.map((n) => n.bidId);
-    const ph = ids.map((_, i) => `$${i + 1}`).join(",");
-    const rows = rowsToObjects(await db.exec(`SELECT * FROM ${table} WHERE bid_id IN (${ph})`, ids));
-    for (const r of rows) {
-      let raw: Record<string, unknown> = {};
-      try {
-        const v = typeof r.raw_json === "string" ? JSON.parse(r.raw_json) : r.raw_json;
-        if (v && typeof v === "object") raw = v as Record<string, unknown>;
-      } catch {
-        // raw 파싱 실패 시 표준 컬럼만
+  profile: BidNotifyProfile,
+  fromDate: string
+): Promise<MatchedBid[]> {
+  const cats = (await listCategories())
+    .filter((c) => c.enabled)
+    .filter((c) => !profile.categoryIds.length || profile.categoryIds.includes(c.categoryId))
+    .map((c) => ({ name: c.name, groups: ruleFromCategory(c) }))
+    .filter((c) => c.groups.length);
+  if (!cats.length) return [];
+
+  const regionKeys = profile.regionGroups.flatMap((g) => REGION_GROUPS[g] ?? []);
+  const seen = new Set<string>();
+  const out: MatchedBid[] = [];
+
+  for (const type of profile.bidTypes) {
+    const table = TABLE_BY_TYPE[type];
+    if (!table) continue;
+    for (const cat of cats) {
+      if (out.length >= MATCH_LIMIT) break;
+      const params: unknown[] = [];
+      const add = (v: unknown) => {
+        params.push(v);
+        return `$${params.length}`;
+      };
+      const where: string[] = [
+        `COALESCE(NULLIF(substring(posted_at, 1, 10), ''), substring(created_at, 1, 10)) >= ${add(fromDate)}`,
+      ];
+      const ruleSql = buildRuleWhere(cat.groups, add, "title");
+      if (!ruleSql) continue;
+      where.push(ruleSql);
+      if (regionKeys.length) {
+        const ors = regionKeys.map((k) => {
+          const like = add(`%${k}%`);
+          return `(org_name LIKE ${like} OR COALESCE(raw_json->>'cnstwkRgnNm','') LIKE ${like})`;
+        });
+        where.push(`(${ors.join(" OR ")})`);
       }
-      out.set(String(r.bid_id), {
-        ...raw,
-        org_name: r.org_name, title: r.title, budget: r.budget, posted_at: r.posted_at,
-        deadline: r.deadline, method: r.method, work_type: r.work_type, category: r.category,
-        url: r.url, external_id: r.external_id,
-      });
+      const rows = rowsToObjects(
+        await db.exec(
+          `SELECT * FROM ${table} WHERE ${where.join(" AND ")}
+            ORDER BY COALESCE(NULLIF(posted_at,''), created_at) DESC LIMIT ${MATCH_LIMIT}`,
+          params
+        )
+      );
+      for (const r of rows) {
+        const bidId = String(r.bid_id);
+        const key = `${type}:${bidId}`;
+        if (seen.has(key)) continue; // 여러 분류에 걸리면 먼저 매칭된 분류로 1건만
+        seen.add(key);
+        let raw: Record<string, unknown> = {};
+        try {
+          const v = typeof r.raw_json === "string" ? JSON.parse(r.raw_json) : r.raw_json;
+          if (v && typeof v === "object") raw = v as Record<string, unknown>;
+        } catch {
+          // raw 파싱 실패 시 표준 컬럼만
+        }
+        out.push({
+          bidType: type,
+          bidId,
+          categoryName: cat.name,
+          title: r.title != null ? String(r.title) : null,
+          orgName: r.org_name != null ? String(r.org_name) : null,
+          deadline: r.deadline != null ? String(r.deadline) : null,
+          url: r.url != null ? String(r.url) : null,
+          merged: {
+            ...raw,
+            org_name: r.org_name, title: r.title, budget: r.budget, posted_at: r.posted_at,
+            deadline: r.deadline, method: r.method, work_type: r.work_type, category: r.category,
+            url: r.url, external_id: r.external_id,
+          },
+        });
+      }
     }
   }
   return out;
@@ -86,70 +151,55 @@ async function loadDetailMaps(
 function fieldValue(merged: Record<string, unknown> | undefined, name: string): string {
   const v = merged?.[name];
   if (v == null || v === "") return "";
-  if (name === "budget") {
+  if (name === "budget" || name === "presmptPrce" || name === "asignBdgtAmt") {
     const n = Number(v);
     if (Number.isFinite(n) && n > 0) return `${n.toLocaleString("ko-KR")}원`;
   }
   return String(v);
 }
 
-function buildMessage(
-  notices: PendingNotice[],
-  settings: BidNotifySettings,
-  detailMaps: Map<string, Record<string, unknown>>
-): { subject: string; text: string } {
-  const byType = new Map<string, PendingNotice[]>();
-  for (const n of notices) {
-    const arr = byType.get(n.bidType) ?? [];
-    arr.push(n);
-    byType.set(n.bidType, arr);
+function buildMessage(matches: MatchedBid[], profile: BidNotifyProfile): { subject: string; text: string } {
+  const byType = new Map<string, MatchedBid[]>();
+  for (const m of matches) {
+    const arr = byType.get(m.bidType) ?? [];
+    arr.push(m);
+    byType.set(m.bidType, arr);
   }
   const lines: string[] = [];
   let listed = 0;
   for (const [type, arr] of byType) {
     lines.push(`■ ${TYPE_LABEL[type] ?? type} ${arr.length}건`);
-    const fields = settings.contentFields[type as NotifyBidType];
-    for (const n of arr) {
+    // 구성이 없으면 종류별 기본 프리셋(10항목)으로 발송한다.
+    const fields = profile.contentFields[type as NotifyBidType]?.length
+      ? profile.contentFields[type as NotifyBidType]!
+      : DEFAULT_CONTENT_FIELDS[type as NotifyBidType];
+    for (const m of arr) {
       if (listed >= MAX_LINES) break;
       listed++;
-      if (fields?.length) {
-        // 사용자 구성 항목 — 지정 순서대로 "라벨: 값"
-        lines.push(` · [${n.categoryName ?? "분류"}]`);
-        const merged = detailMaps.get(n.bidId);
-        for (const f of fields) {
-          const v = fieldValue(merged, f.name);
-          if (v) lines.push(`   ${f.label}: ${v}`);
-        }
-        if (n.url && !fields.some((f) => f.name === "url")) lines.push(`   ${n.url}`);
-      } else {
-        // 기본 구성 — 분류·사업명·기관·마감·링크
-        const parts = [
-          `[${n.categoryName ?? "분류"}] ${n.title ?? "제목 없음"}`,
-          n.orgName ?? "",
-          n.deadline ? `마감 ${String(n.deadline).slice(0, 10)}` : "",
-        ].filter(Boolean);
-        lines.push(` · ${parts.join(" | ")}`);
-        if (n.url) lines.push(`   ${n.url}`);
+      lines.push(` · [${m.categoryName}]`);
+      for (const f of fields) {
+        const v = fieldValue(m.merged, f.name);
+        if (v) lines.push(`   ${f.label}: ${v}`);
       }
+      if (m.url && !fields.some((f) => f.name === "url")) lines.push(`   ${m.url}`);
     }
   }
-  if (notices.length > listed) lines.push(`… 외 ${notices.length - listed}건 (웹 공공입찰 화면에서 확인)`);
+  if (matches.length > listed) lines.push(`… 외 ${matches.length - listed}건 (웹 공공입찰 화면에서 확인)`);
   return {
-    subject: `[공공입찰] 사업분야 매칭 ${notices.length}건`,
-    text: `사업분야 매칭 공고 ${notices.length}건이 수집되었습니다.\n\n${lines.join("\n")}`,
+    subject: `[공공입찰] ${profile.name} 매칭 ${matches.length}건`,
+    text: `${profile.name} 조건에 매칭된 공고 ${matches.length}건입니다.\n\n${lines.join("\n")}`,
   };
 }
 
 /** 푸시 본문 — 알림 한 줄에 들어갈 요약(대표 1건 + 나머지 건수). */
-function pushSummary(notices: PendingNotice[]): string {
-  const head = notices[0]?.title?.trim() || notices[0]?.categoryName || "신규 공고";
-  const rest = notices.length - 1;
+function pushSummary(matches: MatchedBid[]): string {
+  const head = matches[0]?.title?.trim() || matches[0]?.categoryName || "신규 공고";
+  const rest = matches.length - 1;
   const line = rest > 0 ? `${head} 외 ${rest}건` : head;
   return line.length > 90 ? `${line.slice(0, 89)}…` : line;
 }
 
 interface RecipientContact {
-  phone: string;
   email: string;
   /** 앱 푸시 대상 — 직원 프로필에 연결된 로그인 계정. 미연결이면 앱 채널 발송 불가. */
   userId: string;
@@ -157,22 +207,18 @@ interface RecipientContact {
 
 async function loadRecipientContacts(
   db: PgDatabase,
-  settings: BidNotifySettings
+  profile: BidNotifyProfile
 ): Promise<Map<string, RecipientContact>> {
-  const ids = settings.recipients.map((r) => r.employeeId);
+  const ids = profile.recipients.map((r) => r.employeeId);
   if (!ids.length) return new Map();
   const ph = ids.map((_, i) => `$${i + 1}`).join(",");
   const rows = rowsToObjects(
-    await db.exec(
-      `SELECT employee_id, mobile_phone, email, user_id FROM employee_profiles WHERE employee_id IN (${ph})`,
-      ids
-    )
+    await db.exec(`SELECT employee_id, email, user_id FROM employee_profiles WHERE employee_id IN (${ph})`, ids)
   );
   return new Map(
     rows.map((r) => [
       String(r.employee_id),
       {
-        phone: r.mobile_phone != null ? String(r.mobile_phone) : "",
         email: r.email != null ? String(r.email) : "",
         userId: r.user_id != null ? String(r.user_id) : "",
       },
@@ -184,177 +230,200 @@ export interface DispatchResult {
   dispatched: number;
   skipped?: string;
   channels?: Record<string, ChannelSendResult>;
+  /** 프로파일별 결과 요약(복수 프로파일). */
+  profiles?: { name: string; dispatched: number; skipped?: string }[];
 }
 
-export async function dispatchDueBidNotices(now = new Date()): Promise<DispatchResult> {
-  const settings = await loadBidNotifySettings();
-  if (!settings.enabled || !settings.recipients.length) return { dispatched: 0, skipped: "disabled" };
-
-  const { date: today, hm } = kstParts(now);
-  if (hm < settings.sendTime) return { dispatched: 0, skipped: "before-send-time" };
-  if (settings.lastDispatchDate === today) return { dispatched: 0, skipped: "already-dispatched" };
-
-  const db = await getDb();
-  const rows = rowsToObjects(
-    await db.exec(
-      `SELECT notice_id, bid_type, bid_id, category_name, title, org_name, deadline, url
-         FROM bid_match_notices WHERE status = 'pending'
-        ORDER BY matched_at ASC LIMIT ${DISPATCH_LIMIT}`
-    )
-  );
-  const all: PendingNotice[] = rows.map((r) => ({
-    noticeId: String(r.notice_id),
-    bidType: String(r.bid_type),
-    bidId: String(r.bid_id),
-    categoryName: r.category_name != null ? String(r.category_name) : null,
-    title: r.title != null ? String(r.title) : null,
-    orgName: r.org_name != null ? String(r.org_name) : null,
-    deadline: r.deadline != null ? String(r.deadline) : null,
-    url: r.url != null ? String(r.url) : null,
-  }));
-  // 발송 대상 종류만 발송 — 미대상 종류는 skipped(웹 벨 알림은 매칭 시점에 이미 발행됨).
-  const pending = all.filter((n) => settings.bidTypes.includes(n.bidType as NotifyBidType));
-  const offTypeIds = all.filter((n) => !settings.bidTypes.includes(n.bidType as NotifyBidType)).map((n) => n.noticeId);
-  const nowIso = now.toISOString();
-  if (offTypeIds.length) {
-    await withDbWrite(async (wdb) => {
-      const ph = offTypeIds.map((_, i) => `$${i + 2}`).join(",");
+/** 발송분을 큐에 sent 로 마킹 — 웹의 '발송 대기' 건수와 어긋나지 않도록. */
+async function markQueueSent(matches: MatchedBid[], nowIso: string): Promise<void> {
+  if (!matches.length) return;
+  await withDbWrite(async (wdb) => {
+    for (const m of matches) {
       await wdb.run(
-        `UPDATE bid_match_notices SET status = 'skipped', channel_results = '{"reason":"bid-type-off"}'::jsonb, sent_at = $1
-          WHERE notice_id IN (${ph})`,
-        [nowIso, ...offTypeIds]
+        `UPDATE bid_match_notices SET status = 'sent', sent_at = $1
+          WHERE bid_type = $2 AND bid_id = $3 AND status = 'pending'`,
+        [nowIso, m.bidType, m.bidId]
       );
-    });
-  }
-  if (!pending.length) {
-    // 발송할 게 없어도 오늘 체크는 완료 처리 — 매 주기 재확인 방지.
-    await saveBidNotifySettings({ lastDispatchDate: today }, null);
-    return { dispatched: 0, skipped: "no-pending" };
+    }
+  });
+}
+
+/** 어떤 프로파일의 매칭 범위에도 들지 않는 오래된 pending 정리 — 큐가 무한히 쌓이지 않게. */
+async function expireStalePending(maxRangeDays: number, today: string, nowIso: string): Promise<void> {
+  const cutoff = addDays(today, -maxRangeDays);
+  await withDbWrite(async (wdb) => {
+    await wdb.run(
+      `UPDATE bid_match_notices
+          SET status = 'skipped', sent_at = $1,
+              channel_results = '{"reason":"out-of-range"}'::jsonb
+        WHERE status = 'pending' AND substring(matched_at, 1, 10) < $2`,
+      [nowIso, cutoff]
+    );
+  });
+}
+
+async function dispatchProfile(
+  db: PgDatabase,
+  profile: BidNotifyProfile,
+  today: string,
+  hm: string,
+  nowIso: string
+): Promise<{ dispatched: number; skipped?: string; channels?: Record<string, ChannelSendResult> }> {
+  if (!profile.enabled || !profile.recipients.length) return { dispatched: 0, skipped: "disabled" };
+  if (hm < profile.sendTime) return { dispatched: 0, skipped: "before-send-time" };
+  if (profile.lastDispatchDate === today) return { dispatched: 0, skipped: "already-dispatched" };
+  if (!profile.bidTypes.length) return { dispatched: 0, skipped: "no-bid-type" };
+
+  const fromDate = addDays(today, -profile.rangeDays);
+  const matches = await searchMatches(db, profile, fromDate);
+  if (!matches.length) {
+    // 대상이 없어도 오늘 체크는 완료 처리 — 매 주기 재검색 방지.
+    await patchBidNotifyProfile(profile.profileId, { lastDispatchDate: today });
+    return { dispatched: 0, skipped: "no-match" };
   }
 
-  // 수신자 연락처 — employee_profiles(mobile_phone/email/user_id)에서 발송 시점에 조회.
-  const contacts = await loadRecipientContacts(db, settings);
-  const kakaoTo: string[] = [];
+  const contacts = await loadRecipientContacts(db, profile);
   const emailTo: string[] = [];
   const appUserIds: string[] = [];
-  for (const rcpt of settings.recipients) {
+  for (const rcpt of profile.recipients) {
     const c = contacts.get(rcpt.employeeId);
-    if (rcpt.channels.includes("kakao") && c?.phone) kakaoTo.push(c.phone);
     if (rcpt.channels.includes("email") && c?.email) emailTo.push(c.email);
     if (rcpt.channels.includes("app") && c?.userId) appUserIds.push(c.userId);
   }
 
-  // 발송 항목 구성이 있는 종류는 원문에서 값을 뽑는다.
-  const byType = new Map<string, PendingNotice[]>();
-  for (const n of pending) {
-    const arr = byType.get(n.bidType) ?? [];
-    arr.push(n);
-    byType.set(n.bidType, arr);
-  }
-  const detailMaps = await loadDetailMaps(db, byType, settings);
-
-  const msg = buildMessage(pending, settings, detailMaps);
+  const msg = buildMessage(matches, profile);
   const channels: Record<string, ChannelSendResult> = {};
-  if (kakaoTo.length) channels.kakao = await sendAlimtalk({ to: kakaoTo, text: msg.text });
   if (emailTo.length) channels.email = await sendNotifyEmail({ to: emailTo, subject: msg.subject, text: msg.text });
   if (appUserIds.length) {
     // 푸시는 요약만 — 목록 전체는 앱의 공공입찰 화면에서 본다(M6-C).
     channels.app = await sendPush(appUserIds, {
       event: "bid.match",
-      title: `공공입찰 매칭 ${pending.length}건`,
-      body: pushSummary(pending),
+      title: `${profile.name} 매칭 ${matches.length}건`,
+      body: pushSummary(matches),
       link: "/bids",
       targetRef: today,
-      dedupKey: `bid.match:${today}`,
+      dedupKey: `bid.match:${profile.profileId}:${today}`,
     });
   }
 
-  const anySent = Object.values(channels).some((c) => c.ok);
-  const anyTried = Object.values(channels).some((c) => c.ok || c.error);
-  // 하나라도 성공 → sent. 시도했으나 전부 실패 → failed. 채널/자격증명 미비로 시도 자체가 없음 → skipped.
-  const status = anySent ? "sent" : anyTried ? "failed" : "skipped";
-
-  await withDbWrite(async (wdb) => {
-    const idPh = pending.map((_, i) => `$${i + 4}`).join(",");
-    await wdb.run(
-      `UPDATE bid_match_notices SET status = $1, sent_at = $2, channel_results = $3::jsonb
-        WHERE notice_id IN (${idPh})`,
-      [status, nowIso, JSON.stringify(channels), ...pending.map((p) => p.noticeId)]
-    );
-  });
-  await saveBidNotifySettings({ lastDispatchDate: today }, null);
-  console.log(`[bid-notify] dispatched ${pending.length} notices status=${status}`, JSON.stringify(channels));
-  return { dispatched: pending.length, channels };
+  await markQueueSent(matches, nowIso);
+  await patchBidNotifyProfile(profile.profileId, { lastDispatchDate: today });
+  console.log(
+    `[bid-notify] "${profile.name}" dispatched ${matches.length} matches (range ${profile.rangeDays}d)`,
+    JSON.stringify(channels)
+  );
+  return { dispatched: matches.length, channels };
 }
 
-/** KST 기준 date 문자열에 일수를 더한다. */
-function addDays(date: string, days: number): string {
-  const d = new Date(`${date}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
+export async function dispatchDueBidNotices(now = new Date()): Promise<DispatchResult> {
+  const { profiles } = await loadBidNotifyConfig();
+  const active = profiles.filter((p) => p.enabled && p.recipients.length);
+  if (!active.length) return { dispatched: 0, skipped: "disabled" };
+
+  const { date: today, hm } = kstParts(now);
+  const nowIso = now.toISOString();
+  const db = await getDb();
+
+  let total = 0;
+  const results: { name: string; dispatched: number; skipped?: string }[] = [];
+  const channels: Record<string, ChannelSendResult> = {};
+  for (const p of active) {
+    const r = await dispatchProfile(db, p, today, hm, nowIso);
+    total += r.dispatched;
+    results.push({ name: p.name, dispatched: r.dispatched, ...(r.skipped ? { skipped: r.skipped } : {}) });
+    for (const [k, v] of Object.entries(r.channels ?? {})) channels[`${p.name}:${k}`] = v;
+  }
+  await expireStalePending(Math.max(...active.map((p) => p.rangeDays)), today, nowIso);
+
+  return {
+    dispatched: total,
+    ...(total ? { channels } : { skipped: "no-match" }),
+    profiles: results,
+  };
 }
 
 /**
- * 입찰 마감 임박 알림(M6-C) — 앱 푸시 전용.
+ * 입찰 마감 임박 알림 — 입찰 서류 생성 진행 중(bid_packages.status='draft') 건이 대상.
  *
- * 매칭 이력이 있는 공고(bid_match_notices) 중 마감이 오늘~D-N 인 건을 하루 1회 요약해 보낸다.
- * 매칭 알림과 달리 큐 상태를 소비하지 않으므로(같은 공고를 마감까지 매일 상기시켜야 한다),
- * 멱등은 mobile_push_log 의 dedup_key(`bid.deadline:{날짜}`)에만 의존한다.
+ * 프로파일의 deadlineDays(D-N) 안에 마감이 오는 진행 건을, 수신자 중 '마감 알림'을 체크한
+ * 사람에게만 보낸다. 같은 건을 마감까지 매일 상기시켜야 하므로 큐를 소비하지 않고
+ * 멱등은 푸시 로그의 dedup_key(`bid.deadline:{프로파일}:{날짜}`)에 의존한다.
  */
 export async function dispatchBidDeadlineReminders(now = new Date()): Promise<DispatchResult> {
-  const settings = await loadBidNotifySettings();
-  if (!settings.enabled || settings.deadlineDays <= 0) return { dispatched: 0, skipped: "disabled" };
+  const { profiles } = await loadBidNotifyConfig();
+  const active = profiles.filter(
+    (p) => p.enabled && p.deadlineDays > 0 && p.recipients.some((r) => r.deadlineAlert)
+  );
+  if (!active.length) return { dispatched: 0, skipped: "disabled" };
 
   const { date: today, hm } = kstParts(now);
-  if (hm < settings.sendTime) return { dispatched: 0, skipped: "before-send-time" };
-
   const db = await getDb();
-  const contacts = await loadRecipientContacts(db, settings);
-  const appUserIds = settings.recipients
-    .filter((r) => r.channels.includes("app"))
-    .map((r) => contacts.get(r.employeeId)?.userId ?? "")
-    .filter(Boolean);
-  if (!appUserIds.length) return { dispatched: 0, skipped: "no-app-recipient" };
+  const packages = await listActivePackages(50);
+  if (!packages.length) return { dispatched: 0, skipped: "no-package" };
 
-  const until = addDays(today, settings.deadlineDays);
-  const types = settings.bidTypes.length ? settings.bidTypes : [];
-  if (!types.length) return { dispatched: 0, skipped: "no-bid-type" };
-  const typePh = types.map((_, i) => `$${i + 3}`).join(",");
-  const rows = rowsToObjects(
-    await db.exec(
-      `SELECT DISTINCT ON (bid_type, bid_id) bid_type, bid_id, category_name, title, org_name, deadline
-         FROM bid_match_notices
-        WHERE deadline IS NOT NULL AND deadline <> ''
-          AND substring(deadline, 1, 10) >= $1
-          AND substring(deadline, 1, 10) <= $2
-          AND bid_type IN (${typePh})
-        ORDER BY bid_type, bid_id, matched_at DESC`,
-      [today, until, ...types]
-    )
-  );
-  if (!rows.length) return { dispatched: 0, skipped: "no-upcoming" };
+  let total = 0;
+  const channels: Record<string, ChannelSendResult> = {};
+  const results: { name: string; dispatched: number; skipped?: string }[] = [];
 
-  const soon = rows
-    .map((r) => ({
-      title: r.title != null ? String(r.title) : "",
-      categoryName: r.category_name != null ? String(r.category_name) : null,
-      deadline: String(r.deadline).slice(0, 10),
-    }))
-    .sort((a, b) => a.deadline.localeCompare(b.deadline));
+  for (const p of active) {
+    if (hm < p.sendTime) {
+      results.push({ name: p.name, dispatched: 0, skipped: "before-send-time" });
+      continue;
+    }
+    const until = addDays(today, p.deadlineDays);
+    const soon = packages
+      .filter((pkg) => {
+        const d = (pkg.deadline ?? "").slice(0, 10);
+        return d && d >= today && d <= until;
+      })
+      .sort((a, b) => (a.deadline ?? "").localeCompare(b.deadline ?? ""));
+    if (!soon.length) {
+      results.push({ name: p.name, dispatched: 0, skipped: "no-upcoming" });
+      continue;
+    }
 
-  const head = soon[0];
-  const rest = soon.length - 1;
-  const headLine = `${head.title || head.categoryName || "공고"} (마감 ${head.deadline})`;
-  const body = rest > 0 ? `${headLine} 외 ${rest}건` : headLine;
+    const contacts = await loadRecipientContacts(db, p);
+    const targets = p.recipients.filter((r) => r.deadlineAlert);
+    const emailTo: string[] = [];
+    const appUserIds: string[] = [];
+    for (const rcpt of targets) {
+      const c = contacts.get(rcpt.employeeId);
+      if (rcpt.channels.includes("email") && c?.email) emailTo.push(c.email);
+      if (rcpt.channels.includes("app") && c?.userId) appUserIds.push(c.userId);
+    }
+    if (!emailTo.length && !appUserIds.length) {
+      results.push({ name: p.name, dispatched: 0, skipped: "no-contact" });
+      continue;
+    }
 
-  const result = await sendPush(appUserIds, {
-    event: "bid.deadline",
-    title: `입찰 마감 임박 ${soon.length}건`,
-    body: body.length > 90 ? `${body.slice(0, 89)}…` : body,
-    link: "/bids?filter=deadline",
-    targetRef: today,
-    dedupKey: `bid.deadline:${today}`,
-  });
-  console.log(`[bid-notify] deadline reminder ${soon.length}건(D-${settings.deadlineDays})`, JSON.stringify(result));
-  return { dispatched: result.ok ? soon.length : 0, channels: { app: result } };
+    const lines = soon.map(
+      (pkg) => ` · ${pkg.title || "제목 없음"} | ${pkg.orgName || "기관 미상"} | 마감 ${(pkg.deadline ?? "").slice(0, 16)}`
+    );
+    const head = soon[0];
+    const headLine = `${head.title || "진행 건"} (마감 ${(head.deadline ?? "").slice(0, 10)})`;
+    const body = soon.length > 1 ? `${headLine} 외 ${soon.length - 1}건` : headLine;
+
+    if (emailTo.length) {
+      channels[`${p.name}:email`] = await sendNotifyEmail({
+        to: emailTo,
+        subject: `[공공입찰] 입찰 서류 진행 건 마감 임박 ${soon.length}건`,
+        text: `서류 생성 진행 중인 입찰 건 중 ${p.deadlineDays}일 내 마감이 ${soon.length}건 있습니다.\n\n${lines.join("\n")}`,
+      });
+    }
+    if (appUserIds.length) {
+      channels[`${p.name}:app`] = await sendPush(appUserIds, {
+        event: "bid.deadline",
+        title: `입찰 마감 임박 ${soon.length}건`,
+        body: body.length > 90 ? `${body.slice(0, 89)}…` : body,
+        link: "/bids?filter=deadline",
+        targetRef: today,
+        dedupKey: `bid.deadline:${p.profileId}:${today}`,
+      });
+    }
+    total += soon.length;
+    results.push({ name: p.name, dispatched: soon.length });
+    console.log(`[bid-notify] "${p.name}" deadline reminder ${soon.length}건(D-${p.deadlineDays})`);
+  }
+
+  return { dispatched: total, ...(total ? { channels } : { skipped: "no-upcoming" }), profiles: results };
 }

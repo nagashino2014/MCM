@@ -78,12 +78,14 @@ interface BidCategory {
   enabled: boolean;
 }
 
-type NotifyChannel = "kakao" | "email" | "app";
+type NotifyChannel = "email" | "app";
 
 interface NotifyRecipient {
   employeeId: string;
   name: string;
   channels: NotifyChannel[];
+  /** 마감 임박 알림(입찰 서류 생성 진행 건) 수신 여부. */
+  deadlineAlert?: boolean;
 }
 
 interface NotifyContentField {
@@ -91,20 +93,29 @@ interface NotifyContentField {
   label: string;
 }
 
-interface BidNotifySettings {
+/** 발송 조건 1건 — 여러 개를 등록해 각각 독립 발송한다(lib/bid/notify-settings 와 동일 구조). */
+interface BidNotifyProfile {
+  profileId: string;
+  name: string;
   enabled: boolean;
   sendTime: string;
-  recipients: NotifyRecipient[];
+  /** 매칭 범위(일) — 발송일 기준 N일 전 00:00 이후 게시분에서 검색. */
+  rangeDays: number;
   /** 발송 대상 종류. */
   bidTypes: BidType[];
-  /** 종류별 발송 본문 항목(위→아래 순서). 없으면 기본(분류·사업명·기관·마감·링크). */
-  contentFields: Partial<Record<BidType, NotifyContentField[]>>;
-  /** 마감 임박 알림 기준일(D-N, 앱 푸시 전용). 0 이면 사용하지 않는다. */
+  /** 용역 분류 필터(빈 배열=전체). */
+  categoryIds: string[];
+  /** 지역권 필터(빈 배열=전 지역). */
+  regionGroups: string[];
+  /** 마감 임박 알림 기준일(D-N). 0 이면 사용하지 않는다. */
   deadlineDays: number;
+  recipients: NotifyRecipient[];
+  /** 종류별 발송 본문 항목(위→아래 순서). 없으면 종류별 기본 프리셋(10항목). */
+  contentFields: Partial<Record<BidType, NotifyContentField[]>>;
+  lastDispatchDate?: string;
 }
 
 const CHANNEL_LABELS: { key: NotifyChannel; label: string }[] = [
-  { key: "kakao", label: "카카오톡" },
   { key: "email", label: "메일" },
   { key: "app", label: "앱 푸시" },
 ];
@@ -262,18 +273,15 @@ export function BidBoard() {
   /** 분류 모달 내 안내/오류 — 모달이 화면을 덮어 상단 에러 배너가 안 보이므로 별도. */
   const [catError, setCatError] = useState<string | null>(null);
 
-  // 매칭 알림 설정 모달
+  // 매칭 알림 설정 모달 — 발송 조건(프로파일) 여러 개를 태그로 전환하며 편집
   const [notifyModal, setNotifyModal] = useState(false);
-  const [notifySettings, setNotifySettings] = useState<BidNotifySettings>({
-    enabled: false,
-    sendTime: "08:30",
-    recipients: [],
-    bidTypes: ["order_plan", "prior_spec", "bid_notice"],
-    contentFields: {},
-    deadlineDays: 3,
-  });
+  const [notifyProfiles, setNotifyProfiles] = useState<BidNotifyProfile[]>([]);
+  const [notifyIdx, setNotifyIdx] = useState(0);
+  /** 발송 시각 입력(HHMM 4자리) — 저장 시 "HH:MM" 으로 변환. */
+  const [sendTimeDraft, setSendTimeDraft] = useState("");
   const [notifyPending, setNotifyPending] = useState(0);
   const [notifyLastSentAt, setNotifyLastSentAt] = useState<string | null>(null);
+  const [defaultFields, setDefaultFields] = useState<Partial<Record<BidType, NotifyContentField[]>>>({});
   const [orgSnapshot, setOrgSnapshot] = useState<OrganizationSnapshot | null>(null);
   const [notifyBusy, setNotifyBusy] = useState(false);
 
@@ -480,6 +488,57 @@ export function BidBoard() {
   };
 
   // ── 매칭 알림 설정 ──
+  /** 편집 중인 발송 조건. 등록된 조건이 없으면 null. */
+  const notifyProfile: BidNotifyProfile | null = notifyProfiles[notifyIdx] ?? null;
+
+  /** 편집 중인 프로파일만 갱신. */
+  const updateProfile = (patch: Partial<BidNotifyProfile>) =>
+    setNotifyProfiles((prev) => prev.map((p, i) => (i === notifyIdx ? { ...p, ...patch } : p)));
+
+  const hhmmToDraft = (v: string) => v.replace(":", "");
+  /** HHMM 4자리 → "HH:MM". 형식이 어긋나면 null. */
+  const draftToHHMM = (v: string): string | null => {
+    const s = v.replace(/[^0-9]/g, "");
+    if (s.length !== 4) return null;
+    const h = Number(s.slice(0, 2));
+    const m = Number(s.slice(2));
+    if (h > 23 || m > 59) return null;
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  };
+
+  const selectProfile = (idx: number) => {
+    setNotifyIdx(idx);
+    setSendTimeDraft(hhmmToDraft(notifyProfiles[idx]?.sendTime ?? ""));
+  };
+
+  const addProfile = () => {
+    const p: BidNotifyProfile = {
+      profileId: `new_${Date.now()}`,
+      name: `알림 ${notifyProfiles.length + 1}`,
+      enabled: false,
+      sendTime: "08:30",
+      rangeDays: 1,
+      bidTypes: ["order_plan", "prior_spec", "bid_notice"],
+      categoryIds: [],
+      regionGroups: [],
+      deadlineDays: 3,
+      recipients: [],
+      contentFields: {},
+    };
+    setNotifyProfiles((prev) => [...prev, p]);
+    setNotifyIdx(notifyProfiles.length);
+    setSendTimeDraft("0830");
+  };
+
+  const removeProfile = (idx: number) => {
+    if (!confirm(`발송 조건 "${notifyProfiles[idx]?.name}"을 삭제할까요?`)) return;
+    const next = notifyProfiles.filter((_, i) => i !== idx);
+    setNotifyProfiles(next);
+    const ni = Math.max(0, Math.min(notifyIdx, next.length - 1));
+    setNotifyIdx(ni);
+    setSendTimeDraft(hhmmToDraft(next[ni]?.sendTime ?? ""));
+  };
+
   const openNotifyModal = async () => {
     setNotifyModal(true);
     setNotifyBusy(true);
@@ -488,9 +547,13 @@ export function BidBoard() {
         jfetch("/api/sales/bids/notify-settings"),
         orgSnapshot ? Promise.resolve(null) : jfetch("/api/sales/org"),
       ]);
-      if (d?.settings) setNotifySettings(d.settings);
+      const profiles: BidNotifyProfile[] = Array.isArray(d?.profiles) ? d.profiles : [];
+      setNotifyProfiles(profiles);
+      setNotifyIdx(0);
+      setSendTimeDraft(hhmmToDraft(profiles[0]?.sendTime ?? ""));
       setNotifyPending(Number(d?.pending ?? 0));
       setNotifyLastSentAt(d?.lastSentAt ?? null);
+      if (d?.defaultContentFields) setDefaultFields(d.defaultContentFields);
       if (org) setOrgSnapshot(org as OrganizationSnapshot);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -500,13 +563,24 @@ export function BidBoard() {
   };
 
   const saveNotifySettings = async () => {
+    // 입력 중이던 발송 시각(HHMM)을 먼저 반영 — 형식이 어긋나면 저장을 막는다.
+    let profiles = notifyProfiles;
+    if (notifyProfile && sendTimeDraft) {
+      const hhmm = draftToHHMM(sendTimeDraft);
+      if (!hhmm) {
+        setError("발송 시각은 HHMM 4자리로 입력하세요 (예: 0830).");
+        return;
+      }
+      profiles = notifyProfiles.map((p, i) => (i === notifyIdx ? { ...p, sendTime: hhmm } : p));
+      setNotifyProfiles(profiles);
+    }
     setNotifyBusy(true);
     try {
       const d = await jfetch("/api/sales/bids/notify-settings", {
         method: "PUT",
-        body: JSON.stringify(notifySettings),
+        body: JSON.stringify({ profiles }),
       });
-      if (d?.settings) setNotifySettings(d.settings);
+      if (Array.isArray(d?.profiles)) setNotifyProfiles(d.profiles);
       setNotifyModal(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -516,33 +590,77 @@ export function BidBoard() {
   };
 
   const toggleRecipient = (emp: OrganizationEmployeeRow) => {
-    setNotifySettings((prev) => {
-      const exists = prev.recipients.some((r) => r.employeeId === emp.employeeId);
-      return {
-        ...prev,
-        recipients: exists
-          ? prev.recipients.filter((r) => r.employeeId !== emp.employeeId)
-          : [...prev.recipients, { employeeId: emp.employeeId, name: emp.name, channels: ["kakao"] }],
-      };
+    if (!notifyProfile) return;
+    const exists = notifyProfile.recipients.some((r) => r.employeeId === emp.employeeId);
+    updateProfile({
+      recipients: exists
+        ? notifyProfile.recipients.filter((r) => r.employeeId !== emp.employeeId)
+        : [...notifyProfile.recipients, { employeeId: emp.employeeId, name: emp.name, channels: ["app"] }],
+    });
+  };
+
+  /** 조직도의 표시 대상 전원을 수신자로 추가/해제(토글). */
+  const toggleAllRecipients = () => {
+    if (!notifyProfile || !notifyTreeSnapshot) return;
+    const emps = notifyTreeSnapshot.employees;
+    const allIn = emps.length > 0 && emps.every((e) => notifyProfile.recipients.some((r) => r.employeeId === e.employeeId));
+    updateProfile({
+      recipients: allIn
+        ? []
+        : [
+            ...notifyProfile.recipients,
+            ...emps
+              .filter((e) => !notifyProfile.recipients.some((r) => r.employeeId === e.employeeId))
+              .map((e) => ({ employeeId: e.employeeId, name: e.name, channels: ["app" as NotifyChannel] })),
+          ],
     });
   };
 
   const toggleRecipientChannel = (employeeId: string, ch: NotifyChannel) => {
-    setNotifySettings((prev) => ({
-      ...prev,
-      recipients: prev.recipients.map((r) =>
+    if (!notifyProfile) return;
+    updateProfile({
+      recipients: notifyProfile.recipients.map((r) =>
         r.employeeId === employeeId
           ? { ...r, channels: r.channels.includes(ch) ? r.channels.filter((c) => c !== ch) : [...r.channels, ch] }
           : r
       ),
-    }));
+    });
+  };
+
+  const toggleRecipientDeadline = (employeeId: string) => {
+    if (!notifyProfile) return;
+    updateProfile({
+      recipients: notifyProfile.recipients.map((r) =>
+        r.employeeId === employeeId ? { ...r, deadlineAlert: !r.deadlineAlert } : r
+      ),
+    });
   };
 
   const toggleNotifyBidType = (t: BidType) => {
-    setNotifySettings((prev) => ({
-      ...prev,
-      bidTypes: prev.bidTypes.includes(t) ? prev.bidTypes.filter((x) => x !== t) : [...prev.bidTypes, t],
-    }));
+    if (!notifyProfile) return;
+    updateProfile({
+      bidTypes: notifyProfile.bidTypes.includes(t)
+        ? notifyProfile.bidTypes.filter((x) => x !== t)
+        : [...notifyProfile.bidTypes, t],
+    });
+  };
+
+  const toggleNotifyCategory = (id: string) => {
+    if (!notifyProfile) return;
+    updateProfile({
+      categoryIds: notifyProfile.categoryIds.includes(id)
+        ? notifyProfile.categoryIds.filter((x) => x !== id)
+        : [...notifyProfile.categoryIds, id],
+    });
+  };
+
+  const toggleNotifyRegion = (g: string) => {
+    if (!notifyProfile) return;
+    updateProfile({
+      regionGroups: notifyProfile.regionGroups.includes(g)
+        ? notifyProfile.regionGroups.filter((x) => x !== g)
+        : [...notifyProfile.regionGroups, g],
+    });
   };
 
   // ── 발송 항목 구성 — 후보는 열 설정과 동일 소스(view-config: 표준 컬럼 + 최근 raw 키 + 한글명) ──
@@ -563,7 +681,7 @@ export function BidBoard() {
   );
 
   const openFieldModal = () => {
-    const t = notifySettings.bidTypes[0] ?? "bid_notice";
+    const t = notifyProfile?.bidTypes[0] ?? "bid_notice";
     setFieldBidType(t);
     setFieldLeftSel(null);
     setFieldRightSel(-1);
@@ -571,12 +689,9 @@ export function BidBoard() {
     loadFieldCandidates(t);
   };
 
-  const fieldSelected = notifySettings.contentFields[fieldBidType] ?? [];
+  const fieldSelected = notifyProfile?.contentFields[fieldBidType] ?? [];
   const setFieldSelected = (next: NotifyContentField[]) =>
-    setNotifySettings((prev) => ({
-      ...prev,
-      contentFields: { ...prev.contentFields, [fieldBidType]: next },
-    }));
+    updateProfile({ contentFields: { ...(notifyProfile?.contentFields ?? {}), [fieldBidType]: next } });
 
   const fieldMoveRight = () => {
     if (!fieldLeftSel) return;
@@ -1376,69 +1491,187 @@ export function BidBoard() {
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <p className="text-[11px] cd-text-faint">
-              신규 수집 공고가 용역 분류 조건에 매칭되면 아래 수신자에게 매일 발송 시각에 요약을 전송합니다.
-              카카오톡(알림톡)·메일은 발송 계정 설정 후 활성화됩니다. 앱 푸시는 모바일 앱에 로그인한
-              기기로 전송되며, 직원 프로필에 로그인 계정이 연결돼 있어야 합니다.
-              {notifyPending > 0 && <> · 발송 대기 <b>{notifyPending}건</b></>}
-              {notifyLastSentAt && <> · 최근 발송 {short(notifyLastSentAt)}</>}
-            </p>
+            {/* 발송 조건(프로파일) — 신규 등록 + 태그 전환. 조건마다 시각·범위·필터·수신자가 독립. */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <button type="button" className="cd-btn cd-btn-soft text-[12px]" onClick={addProfile}>
+                <Plus className="w-3.5 h-3.5" /> 신규 등록
+              </button>
+              {notifyProfiles.map((p, i) => (
+                <span
+                  key={p.profileId}
+                  className="cd-chip cd-chip-sm cursor-pointer"
+                  data-active={i === notifyIdx}
+                  onClick={() => selectProfile(i)}
+                >
+                  {p.enabled ? "" : "◦ "}
+                  {p.name}
+                  <button type="button" className="ml-1" title="삭제" onClick={(e) => { e.stopPropagation(); removeProfile(i); }}>
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+              <span className="text-[11px] cd-text-faint ml-auto">
+                {notifyPending > 0 && <>발송 대기 <b>{notifyPending}건</b></>}
+                {notifyLastSentAt && <> · 최근 발송 {short(notifyLastSentAt)}</>}
+              </span>
+            </div>
 
-            <div className="flex items-center gap-4 flex-wrap rounded-lg border cd-border-c px-3 py-2">
-              <label className="flex items-center gap-2 text-[13px] cd-text">
-                <input
-                  type="checkbox"
-                  checked={notifySettings.enabled}
-                  onChange={(e) => setNotifySettings((p) => ({ ...p, enabled: e.target.checked }))}
-                />
-                알림 활성화
-              </label>
-              <label className="flex items-center gap-2 text-[13px] cd-text whitespace-nowrap">
-                발송 시각
-                <input
-                  type="time"
-                  className="cd-input text-[13px]"
-                  style={{ width: 110 }}
-                  value={notifySettings.sendTime}
-                  onChange={(e) => setNotifySettings((p) => ({ ...p, sendTime: e.target.value }))}
-                />
-              </label>
-              <span className="flex items-center gap-2 text-[13px] cd-text whitespace-nowrap">
-                발송 대상
-                {TABS.map((t) => (
-                  <label key={t.key} className="flex items-center gap-1 text-[12px] cd-text-muted whitespace-nowrap">
+            {!notifyProfile && (
+              <p className="text-[12px] cd-text-faint rounded-lg border cd-border-c px-3 py-4 text-center">
+                등록된 발송 조건이 없습니다. <b>신규 등록</b>으로 조건을 추가하세요.
+              </p>
+            )}
+
+            {notifyProfile && (
+            <>
+            <div className="flex items-start gap-4 flex-wrap rounded-lg border cd-border-c px-3 py-2">
+              {/* 좌측 — 행마다 마지막 요소를 ml-auto 로 밀어 우측 끝을 서로 맞춘다(고정 폭). */}
+              <div className="flex flex-col gap-2" style={{ width: 330 }}>
+                <div className="flex items-center gap-2">
+                  <input
+                    className="cd-input text-[13px] flex-1 min-w-0"
+                    placeholder="조건 이름 (예: 하수도 기술진단)"
+                    value={notifyProfile.name}
+                    onChange={(e) => updateProfile({ name: e.target.value })}
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-2 text-[13px] cd-text whitespace-nowrap">
                     <input
                       type="checkbox"
-                      checked={notifySettings.bidTypes.includes(t.key)}
-                      onChange={() => toggleNotifyBidType(t.key)}
+                      checked={notifyProfile.enabled}
+                      onChange={(e) => updateProfile({ enabled: e.target.checked })}
                     />
-                    {t.label}
+                    알림 활성화
                   </label>
-                ))}
-              </span>
-              <label className="flex items-center gap-2 text-[13px] cd-text whitespace-nowrap">
-                마감 임박 알림
-                <select
-                  className="cd-input text-[13px]"
-                  style={{ width: 96 }}
-                  value={String(notifySettings.deadlineDays)}
-                  onChange={(e) => setNotifySettings((p) => ({ ...p, deadlineDays: Number(e.target.value) }))}
-                >
-                  <option value="0">사용 안 함</option>
-                  <option value="1">D-1</option>
-                  <option value="3">D-3</option>
-                  <option value="5">D-5</option>
-                  <option value="7">D-7</option>
-                </select>
-              </label>
-              <button type="button" className="cd-chip cd-chip-sm" onClick={openFieldModal}>
-                <ListOrdered className="w-3.5 h-3.5" /> 발송 항목 구성
-              </button>
+                  <span className="flex items-center gap-1.5 text-[13px] cd-text whitespace-nowrap ml-auto">
+                    발송 시각
+                    <input
+                      className="cd-input text-[13px] text-center"
+                      style={{ width: 72 }}
+                      inputMode="numeric"
+                      maxLength={4}
+                      placeholder="HHMM"
+                      value={sendTimeDraft}
+                      onChange={(e) => setSendTimeDraft(e.target.value.replace(/[^0-9]/g, "").slice(0, 4))}
+                      onBlur={() => {
+                        const hhmm = draftToHHMM(sendTimeDraft);
+                        if (hhmm) {
+                          updateProfile({ sendTime: hhmm });
+                          setSendTimeDraft(hhmmToDraft(hhmm));
+                        } else {
+                          setSendTimeDraft(hhmmToDraft(notifyProfile.sendTime));
+                        }
+                      }}
+                    />
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-2 text-[13px] cd-text whitespace-nowrap">
+                    마감 임박 알림
+                    <select
+                      className="cd-input text-[13px]"
+                      style={{ width: 96 }}
+                      value={String(notifyProfile.deadlineDays)}
+                      onChange={(e) => updateProfile({ deadlineDays: Number(e.target.value) })}
+                    >
+                      <option value="0">사용 안 함</option>
+                      <option value="1">D-1</option>
+                      <option value="3">D-3</option>
+                      <option value="5">D-5</option>
+                      <option value="7">D-7</option>
+                    </select>
+                  </label>
+                  <button type="button" className="cd-chip cd-chip-sm ml-auto" onClick={openFieldModal}>
+                    <ListOrdered className="w-3.5 h-3.5" /> 발송 항목 구성
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-2 text-[13px] cd-text whitespace-nowrap ml-auto">
+                    매칭 범위
+                    <select
+                      className="cd-input text-[13px]"
+                      style={{ width: 96 }}
+                      value={String(notifyProfile.rangeDays)}
+                      onChange={(e) => updateProfile({ rangeDays: Number(e.target.value) })}
+                    >
+                      {[1, 2, 3, 5, 7, 14, 30].map((d) => (
+                        <option key={d} value={d}>{d}일</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <p className="text-[10px] cd-text-faint">
+                  발송일 기준 {notifyProfile.rangeDays}일 전 0시 이후 게시분에서 조건을 검색합니다.
+                </p>
+              </div>
+
+              {/* 우측 — 발송 대상 종류 + 대상 용역 필터 */}
+              <div className="flex flex-col gap-2 flex-1" style={{ minWidth: 300 }}>
+                <span className="flex items-center gap-2 text-[13px] cd-text whitespace-nowrap">
+                  발송 대상
+                  {TABS.map((t) => (
+                    <label key={t.key} className="flex items-center gap-1 text-[12px] cd-text-muted whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        checked={notifyProfile.bidTypes.includes(t.key)}
+                        onChange={() => toggleNotifyBidType(t.key)}
+                      />
+                      {t.label}
+                    </label>
+                  ))}
+                </span>
+                <div className="rounded-lg border cd-border-c px-2 py-1.5 flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[11px] cd-text-faint whitespace-nowrap">용역 분류</span>
+                  <span
+                    className="cd-chip cd-chip-sm cursor-pointer"
+                    data-active={notifyProfile.categoryIds.length === 0}
+                    onClick={() => updateProfile({ categoryIds: [] })}
+                  >
+                    전체
+                  </span>
+                  {categories.map((c) => (
+                    <span
+                      key={c.categoryId}
+                      className="cd-chip cd-chip-sm cursor-pointer"
+                      data-active={notifyProfile.categoryIds.includes(c.categoryId)}
+                      onClick={() => toggleNotifyCategory(c.categoryId)}
+                    >
+                      {c.name}
+                    </span>
+                  ))}
+                </div>
+                <div className="rounded-lg border cd-border-c px-2 py-1.5 flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[11px] cd-text-faint whitespace-nowrap">지역권</span>
+                  <span
+                    className="cd-chip cd-chip-sm cursor-pointer"
+                    data-active={notifyProfile.regionGroups.length === 0}
+                    onClick={() => updateProfile({ regionGroups: [] })}
+                  >
+                    전체
+                  </span>
+                  {REGION_GROUPS.map((g) => (
+                    <span
+                      key={g}
+                      className="cd-chip cd-chip-sm cursor-pointer"
+                      data-active={notifyProfile.regionGroups.includes(g)}
+                      onClick={() => toggleNotifyRegion(g)}
+                    >
+                      {g}
+                    </span>
+                  ))}
+                </div>
+              </div>
             </div>
 
             <div className="grid md:grid-cols-2 gap-3">
               <div className="rounded-lg border cd-border-c p-2 min-h-[260px]">
-                <div className="text-[12px] cd-text-faint mb-1 px-1">조직도에서 수신자를 클릭해 추가/제거</div>
+                <div className="flex items-center gap-2 mb-1 px-1">
+                  <span className="text-[12px] cd-text-faint flex-1">조직도에서 수신자를 클릭해 추가/제거</span>
+                  <button type="button" className="cd-chip cd-chip-sm text-[10px]" onClick={toggleAllRecipients}>
+                    모두 선택
+                  </button>
+                </div>
                 {notifyTreeSnapshot ? (
                   <OrganizationTree snapshot={notifyTreeSnapshot} embedded hideHeader onSelectEmployee={toggleRecipient} />
                 ) : (
@@ -1446,8 +1679,8 @@ export function BidBoard() {
                 )}
               </div>
               <div className="rounded-lg border cd-border-c p-2 flex flex-col gap-1.5">
-                <div className="text-[12px] cd-text-faint px-1">수신자 {notifySettings.recipients.length}명 — 인원별 알림 수단</div>
-                {notifySettings.recipients.map((r) => (
+                <div className="text-[12px] cd-text-faint px-1">수신자 {notifyProfile.recipients.length}명 — 인원별 알림 수단</div>
+                {notifyProfile.recipients.map((r) => (
                   <div key={r.employeeId} className="rounded-lg border cd-border-c px-2.5 py-1.5 flex items-center gap-2 flex-wrap">
                     <span className="text-[13px] cd-text font-semibold">{r.name}</span>
                     <span className="flex items-center gap-2 flex-1 flex-wrap">
@@ -1461,23 +1694,36 @@ export function BidBoard() {
                           {ch.label}
                         </label>
                       ))}
+                      <label
+                        className="flex items-center gap-1 text-[11px] cd-text-muted whitespace-nowrap"
+                        title="입찰 서류 생성 진행 건의 마감 임박 알림을 받습니다"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={r.deadlineAlert === true}
+                          onChange={() => toggleRecipientDeadline(r.employeeId)}
+                        />
+                        마감 알림
+                      </label>
                     </span>
                     <button
                       type="button"
                       className="cd-btn cd-btn-soft text-[11px]"
                       onClick={() =>
-                        setNotifySettings((p) => ({ ...p, recipients: p.recipients.filter((x) => x.employeeId !== r.employeeId) }))
+                        updateProfile({ recipients: notifyProfile.recipients.filter((x) => x.employeeId !== r.employeeId) })
                       }
                     >
                       <X className="w-3 h-3" />
                     </button>
                   </div>
                 ))}
-                {notifySettings.recipients.length === 0 && (
+                {notifyProfile.recipients.length === 0 && (
                   <p className="text-[12px] cd-text-faint p-2">왼쪽 조직도에서 담당자를 클릭하세요.</p>
                 )}
               </div>
             </div>
+            </>
+            )}
 
             <div className="border-t cd-border-c pt-3 flex items-center gap-2">
               <button type="button" disabled={notifyBusy} className="cd-btn cd-btn-primary text-[13px] disabled:opacity-50" onClick={saveNotifySettings}>
@@ -1505,7 +1751,7 @@ export function BidBoard() {
             </div>
             <p className="text-[11px] cd-text-faint">
               종류별로 발송 본문에 포함할 항목을 선택하고 순서를 정합니다. 왼쪽(수집된 전체 항목)에서 선택 후 화살표로 이동하세요.
-              항목을 구성하지 않은 종류는 기본 구성(분류·사업명·기관·마감·링크)으로 발송됩니다.
+              구성하지 않은 종류는 <b>기본 구성(실무 필수 10항목)</b>으로 발송되며, 아래 &quot;기본 구성 불러오기&quot;로 그 10항목을 채워 편집할 수 있습니다.
             </p>
 
             {/* 종류 탭 */}
@@ -1524,8 +1770,8 @@ export function BidBoard() {
                   }}
                 >
                   {t.label}
-                  {(notifySettings.contentFields[t.key]?.length ?? 0) > 0 && (
-                    <span className="ml-1 text-[10px]">({notifySettings.contentFields[t.key]!.length})</span>
+                  {(notifyProfile?.contentFields[t.key]?.length ?? 0) > 0 && (
+                    <span className="ml-1 text-[10px]">({notifyProfile!.contentFields[t.key]!.length})</span>
                   )}
                 </button>
               ))}
@@ -1609,7 +1855,9 @@ export function BidBoard() {
                   </div>
                 ))}
                 {fieldSelected.length === 0 && (
-                  <p className="text-[12px] cd-text-faint p-2">기본 구성으로 발송됩니다. 왼쪽에서 항목을 추가하세요.</p>
+                  <p className="text-[12px] cd-text-faint p-2">
+                    기본 구성(10항목)으로 발송됩니다: {(defaultFields[fieldBidType] ?? []).map((f) => f.label).join(" · ") || "—"}
+                  </p>
                 )}
               </div>
             </div>
@@ -1621,9 +1869,16 @@ export function BidBoard() {
               <button
                 type="button"
                 className="cd-btn cd-btn-soft text-[13px]"
+                onClick={() => setFieldSelected([...(defaultFields[fieldBidType] ?? [])])}
+              >
+                기본 구성 불러오기
+              </button>
+              <button
+                type="button"
+                className="cd-btn cd-btn-soft text-[13px]"
                 onClick={() => setFieldSelected([])}
               >
-                기본 구성으로
+                구성 비우기
               </button>
               <span className="text-[11px] cd-text-faint">적용 후 알림 설정의 저장을 눌러야 반영됩니다.</span>
             </div>

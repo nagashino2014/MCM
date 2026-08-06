@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getDb, rowsToObjects } from "@/lib/db";
-import { loadBidNotifySettings, saveBidNotifySettings } from "@/lib/bid/notify-settings";
+import { DEFAULT_CONTENT_FIELDS, loadBidNotifyConfig, saveBidNotifyConfig } from "@/lib/bid/notify-settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** 매칭 알림 설정 조회 — 설정 + 큐 현황(pending/최근 발송). */
+/** 매칭 알림 설정 조회 — 프로파일 목록 + 큐 현황(pending/최근 발송) + 기본 발송 항목 프리셋. */
 export async function GET() {
   try {
     await requirePermission("sales.view");
-    const settings = await loadBidNotifySettings();
+    const config = await loadBidNotifyConfig();
     let pending = 0;
     let lastSentAt: string | null = null;
     try {
@@ -26,29 +26,27 @@ export async function GET() {
     } catch {
       // 큐 테이블 부재(마이그레이션 전)여도 설정은 반환
     }
-    return NextResponse.json({ settings, pending, lastSentAt });
+    return NextResponse.json({
+      profiles: config.profiles,
+      pending,
+      lastSentAt,
+      defaultContentFields: DEFAULT_CONTENT_FIELDS,
+    });
   } catch (err) {
     return authErrorToResponse(err);
   }
 }
 
-/** 매칭 알림 설정 저장 — { enabled, sendTime, recipients: [{employeeId, name, channels[]}] }. */
+/** 매칭 알림 설정 저장 — { profiles: [{ name, enabled, sendTime, rangeDays, bidTypes, … }] } 전체 교체. */
 export async function PUT(req: NextRequest) {
   try {
     const actor = await requirePermission("sales.edit", { fallbackRoles: ["editor"] });
     const body = await req.json().catch(() => ({}));
-    const settings = await saveBidNotifySettings(
-      {
-        enabled: body?.enabled === true,
-        ...(typeof body?.sendTime === "string" ? { sendTime: body.sendTime } : {}),
-        ...(Array.isArray(body?.recipients) ? { recipients: body.recipients } : {}),
-        ...(Array.isArray(body?.bidTypes) ? { bidTypes: body.bidTypes } : {}),
-        ...(body?.contentFields && typeof body.contentFields === "object" ? { contentFields: body.contentFields } : {}),
-        ...(body?.deadlineDays != null ? { deadlineDays: Number(body.deadlineDays) } : {}),
-      },
-      actor.userId
-    );
-    return NextResponse.json({ settings });
+    if (!Array.isArray(body?.profiles)) {
+      return NextResponse.json({ error: "profiles 배열이 필요합니다." }, { status: 400 });
+    }
+    const config = await saveBidNotifyConfig(body.profiles, actor.userId);
+    return NextResponse.json({ profiles: config.profiles });
   } catch (err) {
     return authErrorToResponse(err);
   }

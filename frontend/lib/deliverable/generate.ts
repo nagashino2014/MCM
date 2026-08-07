@@ -4,7 +4,7 @@
 // HWPX 는 D2 에서 이 자리에 추가된다.
 
 import { putContractDocument, sanitizeFilename } from "@/lib/storage/contract-document-storage";
-import { CATALOG_BY_TYPE } from "./catalog";
+import { CATALOG_BY_TYPE, adjustSpecForValues } from "./catalog";
 import { renderDeliverableHwpx } from "./hwpx";
 import { renderDeliverablePdf } from "./pdf";
 import { getDeliverable, getTemplate, setDeliverableArtifacts } from "./store";
@@ -40,7 +40,8 @@ export async function generateDeliverableArtifacts(
   const specs = await resolveSpecs(row);
   if (!specs.length) throw new Error("생성할 서식을 선택하세요.");
 
-  const bytes = await renderDeliverablePdf(specs, row.values);
+  // 준공금 100%(기지급 0) 계약은 기지급 열을 제거한 표로 렌더한다
+  const bytes = await renderDeliverablePdf(specs.map((s) => adjustSpecForValues(s, row.values)), row.values);
   const kindLabel = DELIVERABLE_KIND_LABEL[row.kind];
   const fileBase = sanitizeFilename(`(${kindLabel})${row.title}`);
 

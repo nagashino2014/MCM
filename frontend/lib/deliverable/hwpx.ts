@@ -89,21 +89,34 @@ const DATE_DOTTED_RE = /\d{4}\s*\.\s*\d{1,2}\s*\.\s*\d{1,2}\s*\./g;
 const MONEY_RE = /^-?[\d,]+$/;
 
 /** 장(서식) 1개 구간의 문단 텍스트를 값으로 치환한다. */
-function fillSection(xml: string, kind: DeliverableKind, values: DeliverableValues): string {
+function fillSection(xmlIn: string, kind: DeliverableKind, values: DeliverableValues): string {
+  let xml = xmlIn;
   const table = kind === "start" ? START_LABELS : COMMON_LABELS;
+  // 기지급 0(준공금 100%)이면 표에서 해당 열이 이미 제거돼 있으므로 숫자 셀도 6개만 채운다
+  const noPrior = Number(values["completion.prevTotal"] ?? 0) === 0;
+  if (noPrior) xml = dropPriorColumns(xml);
   const paras = [...xml.matchAll(P_RE)];
-  // 표 숫자 셀 순서: 전회공급·전회부가세·금회공급·금회부가세·누계공급·누계부가세 → 합계 3칸
-  const moneyBindings = [
-    "completion.prevSupply",
-    "completion.prevVat",
-    "completion.curSupply",
-    "completion.curVat",
-    "completion.cumSupply",
-    "completion.cumVat",
-    "completion.prevTotal",
-    "completion.curTotal",
-    "completion.cumTotal",
-  ];
+  // 표 숫자 셀 순서: (기지급공급·기지급부가세)·금회공급·금회부가세·누계공급·누계부가세 → 합계
+  const moneyBindings = noPrior
+    ? [
+        "completion.curSupply",
+        "completion.curVat",
+        "completion.cumSupply",
+        "completion.cumVat",
+        "completion.curTotal",
+        "completion.cumTotal",
+      ]
+    : [
+        "completion.prevSupply",
+        "completion.prevVat",
+        "completion.curSupply",
+        "completion.curVat",
+        "completion.cumSupply",
+        "completion.cumVat",
+        "completion.prevTotal",
+        "completion.curTotal",
+        "completion.cumTotal",
+      ];
   let moneyIdx = 0;
   let companyCellDone = false;
   let out = "";
@@ -161,6 +174,38 @@ function fillSection(xml: string, kind: DeliverableKind, values: DeliverableValu
     }
   }
   return out + xml.slice(last);
+}
+
+/**
+ * 준공금액 표에서 기지급(전회) 2개 열을 제거한다 — 준공금 100% 계약용(사용자 확정).
+ * colAddr 1·2 셀을 지우고 뒤 열의 colAddr 를 2 당긴 뒤, 남은 4개 데이터 열이 표 폭을
+ * 균등 분할하도록 cellSz 를 재계산한다(표 전체 폭은 유지).
+ */
+function dropPriorColumns(xml: string): string {
+  return xml.replace(/<hp:tbl\b[\s\S]*?<\/hp:tbl>/g, (tbl) => {
+    const colCnt = Number(/\bcolCnt="(\d+)"/.exec(tbl)?.[1] ?? 0);
+    if (colCnt !== 7) return tbl;
+    // 열 폭: 첫 열(구분)은 유지, 나머지 4열은 균등 분할
+    const firstW = Number(/<hp:cellSz\b[^>]*\bwidth="(\d+)"/.exec(tbl)?.[1] ?? 0);
+    const totalW = Number(/<hp:sz\b[^>]*\bwidth="(\d+)"/.exec(tbl)?.[1] ?? 0);
+    const dataW = totalW && firstW ? Math.floor((totalW - firstW) / 4) : 0;
+
+    let out = tbl.replace(/<hp:tc\b[\s\S]*?<\/hp:tc>/g, (tc) => {
+      const addr = /<hp:cellAddr\b[^>]*\bcolAddr="(\d+)"/.exec(tc);
+      if (!addr) return tc;
+      const col = Number(addr[1]);
+      if (col === 1 || col === 2) return ""; // 기지급 공급가액·부가세
+      const nextCol = col > 2 ? col - 2 : col;
+      let next = tc.replace(/(<hp:cellAddr\b[^>]*\bcolAddr=")\d+(")/, `$1${nextCol}$2`);
+      if (dataW > 0 && col !== 0) {
+        const span = Number(/<hp:cellSpan\b[^>]*\bcolSpan="(\d+)"/.exec(tc)?.[1] ?? 1);
+        next = next.replace(/(<hp:cellSz\b[^>]*\bwidth=")\d+(")/, `$1${dataW * span}$2`);
+      }
+      return next;
+    });
+    out = out.replace(/(\bcolCnt=")\d+(")/, "$15$2");
+    return out;
+  });
 }
 
 /** 준공 템플릿의 장 경계(제목 문단 시작 위치) — 표제 텍스트로 식별 */

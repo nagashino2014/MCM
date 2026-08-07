@@ -280,6 +280,29 @@ const SERVICE_RESULT_REPORT: DeliverableSpec = {
   ],
 };
 
+/**
+ * 값에 따른 서식 보정 — 준공금 100%(기지급 0) 계약은 준공금액 표에서 기지급 열을 아예 없애고
+ * 금회·누계만 보인다(사용자 확정 2026-08-07). 남은 열은 같은 총폭을 균등 분할한다.
+ */
+export function adjustSpecForValues(spec: DeliverableSpec, values: Record<string, unknown>): DeliverableSpec {
+  const prevTotal = Number(values["completion.prevTotal"] ?? 0);
+  if (!Number.isFinite(prevTotal) || prevTotal > 0) return spec;
+  let touched = false;
+  const blocks = spec.blocks.map((b) => {
+    if (b.kind !== "table" || b.columns.length !== 7) return b;
+    touched = true;
+    const dropped = [1, 2]; // 기지급 공급가액·부가세 열
+    const keep = <T,>(arr: T[]) => arr.filter((_, i) => !dropped.includes(i));
+    const gradeW = (1 - b.columns[0].widthRatio) / 4;
+    return {
+      ...b,
+      columns: [b.columns[0], ...Array.from({ length: 4 }, (_, i) => ({ ...b.columns[i + 3], widthRatio: gradeW }))],
+      rows: b.rows.map((row) => keep(row)),
+    };
+  });
+  return touched ? { ...spec, blocks } : spec;
+}
+
 export const DELIVERABLE_CATALOG: DeliverableSpec[] = [
   START_NOTICE,
   COMPLETION_INSPECTION,

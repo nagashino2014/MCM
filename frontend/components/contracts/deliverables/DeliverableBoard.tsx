@@ -10,7 +10,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckSquare, ChevronDown, ChevronRight, Download, Eye, Lock, Search, Send, Unlock } from "lucide-react";
+import { CheckSquare, ChevronDown, ChevronRight, Download, Eye, Lock, Save, Search, Send, Unlock } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
@@ -97,25 +97,38 @@ export function DeliverableBoard() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [tab, setTab] = useState<string>("계약");
   const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
   // ── 트리 로드 ──
+  // 검색어가 있으면 연도 제한을 풀고 전 연도에서 찾는다 — 연도별로만 로드하면 다른 해 계약이
+  // 검색되지 않는다(예: 2026 트리에서 2025년 계약을 찾지 못하던 문제).
+  const searching = search.trim().length >= 2;
   useEffect(() => {
     let cancelled = false;
     setTreeLoading(true);
-    fetch(`/api/contracts/deliverables/tree?year=${encodeURIComponent(year)}`, { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: TreePayload | null) => {
-        if (!cancelled && d) setTree(d);
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!cancelled) setTreeLoading(false);
-      });
+    const t = setTimeout(() => {
+      const qs = searching ? "" : `?year=${encodeURIComponent(year)}`;
+      fetch(`/api/contracts/deliverables/tree${qs}`, { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d: TreePayload | null) => {
+          if (!cancelled && d) setTree(d);
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (!cancelled) setTreeLoading(false);
+        });
+    }, searching ? 250 : 0);
     return () => {
       cancelled = true;
+      clearTimeout(t);
     };
-  }, [year]);
+  }, [year, searching]);
+
+  // 검색 중에는 결과가 흩어져 보이지 않도록 모든 용역분류를 펼친다
+  useEffect(() => {
+    if (searching) setExpanded(Object.fromEntries((tree?.groups ?? []).map((g) => [g.serviceType, true])));
+  }, [searching, tree]);
 
   const filteredGroups = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -301,6 +314,15 @@ export function DeliverableBoard() {
     }
   };
 
+  /** 저장만 수행(생성/갱신) — 값 변경 후 명시적으로 확정할 때 */
+  const saveOnly = async () => {
+    const id = await save();
+    if (id) {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    }
+  };
+
   const preview = async () => {
     const id = await save();
     if (id) {
@@ -363,6 +385,15 @@ export function DeliverableBoard() {
         meta={contract ? `${contract.counterpartyName || "발주처 미상"} · ${DELIVERABLE_KIND_LABEL[kind]}` : "계약을 선택하세요"}
         actions={
           <>
+            {/* 기재 사항 저장 — 값을 고친 뒤 문서로 확정해 둔다(공문 첨부·재출력이 같은 값을 쓴다) */}
+            <button
+              type="button"
+              className="cd-btn rounded-xl border cd-border-c px-3 py-2 text-[13px] flex items-center gap-1.5"
+              onClick={saveOnly}
+              disabled={busy || !contract}
+            >
+              <Save className="w-4 h-4" /> {saved ? "저장됨" : "저장"}
+            </button>
             {/* 미리보기는 우측 카드의 '미리보기' 탭이 담당한다(버튼 중복 제거 — 사용자 확정) */}
             <button type="button" className="cd-btn rounded-xl border cd-border-c px-3 py-2 text-[13px] flex items-center gap-1.5" onClick={download} disabled={busy}>
               <Download className="w-4 h-4" /> PDF
@@ -404,6 +435,7 @@ export function DeliverableBoard() {
             </h2>
             <p className="text-[11px] cd-text-faint mt-0.5">
               {contract ? "선택 1건" : "선택 없음"} / 현재 목록 {filteredGroups.reduce((a, g) => a + g.contracts.length, 0).toLocaleString()}건
+              {searching && <span className="ml-1">· 전 연도 검색</span>}
               {tree?.scoped && <span className="ml-1">· 본인 수행 용역</span>}
             </p>
           </div>
@@ -419,7 +451,14 @@ export function DeliverableBoard() {
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </div>
-              <select className="cd-input text-[12px] shrink-0" style={{ width: "5.5rem" }} value={year} onChange={(e) => setYear(e.target.value)}>
+              <select
+                className="cd-input text-[12px] shrink-0 disabled:opacity-50"
+                style={{ width: "5.5rem" }}
+                value={year}
+                disabled={searching}
+                title={searching ? "검색 중에는 전 연도에서 찾습니다" : undefined}
+                onChange={(e) => setYear(e.target.value)}
+              >
                 {(tree?.availableYears ?? [year]).map((y) => (
                   <option key={y} value={y}>{y}년</option>
                 ))}

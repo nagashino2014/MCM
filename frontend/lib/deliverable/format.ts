@@ -106,6 +106,19 @@ export function formatValue(raw: unknown, format: FieldFormat | undefined, value
   }
 }
 
+/**
+ * 문서 표기용 상호 축약 — "주식회사 한국환경안전연구원" → "㈜한국환경안전연구원".
+ * 실물 양식이 ㈜ 표기이고, 풀 표기는 표 셀에서 3줄로 접혀 행 높이가 커지며 페이지가 밀린다
+ * (2026-08-07 사용자 확정). 회사 프로필 원본 값은 그대로 두고 출력에서만 줄인다.
+ */
+export function compactCompanyName(name: string): string {
+  return (name ?? "")
+    .trim()
+    .replace(/^주식회사\s*/, "㈜")
+    .replace(/\s*주식회사$/, "")
+    .replace(/^\(주\)\s*/, "㈜");
+}
+
 /** 성명 글자 벌리기 — "이유억" → "이 유 억" (실물 서명란 표기). 한글 2~4자에만 적용. */
 export function spreadName(name: string): string {
   const t = (name ?? "").trim();
@@ -114,7 +127,9 @@ export function spreadName(name: string): string {
 
 /** 바인딩 키의 값을 정의된 기본 포맷(또는 지정 포맷)으로 렌더. */
 export function renderBinding(binding: string, values: DeliverableValues, format?: FieldFormat): string {
-  return formatValue(values[binding], format ?? DEFAULT_FORMAT[binding], values);
+  const out = formatValue(values[binding], format ?? DEFAULT_FORMAT[binding], values);
+  // 자사 상호는 문서 표기 관행(㈜)으로 줄여 쓴다 — PDF·HWPX 공통
+  return binding === "company.name" ? compactCompanyName(out) : out;
 }
 
 /**

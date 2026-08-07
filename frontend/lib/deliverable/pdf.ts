@@ -358,10 +358,22 @@ function drawBlock(ctx: Ctx, block: DocBlock, y: number): number {
 export async function renderDeliverablePdf(specs: DeliverableSpec[], values: DeliverableValues): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   doc.registerFontkit(fontkit);
+  // 글꼴은 HWPX 템플릿(명조 계열)과 결을 맞춘다 — 공공기관 제출 시 두 산출물이 달라 보이면 안 된다.
+  // 한컴바탕(HANBatang)이 없으면 KoPub 바탕으로 폴백한다.
   const fontsDir = path.join(process.cwd(), "public", "fonts");
+  const pick = async (names: string[]) => {
+    for (const n of names) {
+      try {
+        return await readFile(path.join(fontsDir, n));
+      } catch {
+        // 다음 후보
+      }
+    }
+    throw new Error("본문 글꼴을 찾을 수 없습니다(public/fonts).");
+  };
   const fonts: Fonts = {
-    regular: await doc.embedFont(await readFile(path.join(fontsDir, "malgun.ttf")), { subset: true }),
-    bold: await doc.embedFont(await readFile(path.join(fontsDir, "malgunbd.ttf")), { subset: true }),
+    regular: await doc.embedFont(await pick(["HANBatang.ttf", "kopub-batang-md.ttf", "malgun.ttf"]), { subset: true }),
+    bold: await doc.embedFont(await pick(["HANBatangB.ttf", "kopub-batang-bd.ttf", "malgunbd.ttf"]), { subset: true }),
   };
   const stamp = await loadStamp(doc);
 

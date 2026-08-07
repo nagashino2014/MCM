@@ -13,7 +13,7 @@ import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdModal } from "@/components/cdash/CdModal";
 import { ApprovalFormRenderer } from "@/components/approval/ApprovalFormRenderer";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
-import type { ApprovalFieldDef } from "@/lib/approval/fields";
+import { parseTimeRange, timeRangeMinutes, type ApprovalFieldDef } from "@/lib/approval/fields";
 import { autofillFromRefDoc, compareWithRefDoc } from "@/lib/approval/ref-link";
 import { findInCatalog, type LeaveTypeItem } from "@/lib/approval/leave-types";
 import { OvertimeConsentModal } from "@/components/approval/OvertimeConsentModal";
@@ -132,6 +132,24 @@ export function ApprovalDraftBoard() {
   // 12h 초과 상신 동의(전자서명) — 모달에서 받은 동의는 ref 로 들고 있다가 persist 시 field_values 에 병합한다.
   const [consentModal, setConsentModal] = useState(false);
   const otConsentRef = useRef<OvertimeConsent | null>(null);
+
+  // 시간 범위(time_range) → 신청시간 자동 계산. 범위가 실제로 바뀔 때만 채우므로
+  // 휴게시간 제외 등으로 사용자가 신청시간을 수기 조정하면 그 값이 유지된다.
+  // (문서 수정 진입 시의 최초 로드도 덮어쓰지 않는다 — 첫 실행은 기준값만 기록한다.)
+  const otRangeKey = isOvertimeForm ? form?.fields.find((f) => f.type === "time_range")?.key : undefined;
+  const otRangeValue = otRangeKey ? values[otRangeKey] : undefined;
+  const otRangeSigRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!isOvertimeForm || !otRangeKey) return;
+    const minutes = timeRangeMinutes(otRangeValue);
+    const sig = minutes == null ? "" : String(minutes);
+    const first = otRangeSigRef.current === undefined;
+    if (otRangeSigRef.current === sig) return;
+    otRangeSigRef.current = sig;
+    if (first || minutes == null) return;
+    const hours = String(Math.round((minutes / 60) * 100) / 100);
+    setValues((prev) => (String(prev.apply_hours ?? "") === hours ? prev : { ...prev, apply_hours: hours }));
+  }, [isOvertimeForm, otRangeKey, otRangeValue]);
 
   // 신청 시작일이 속한 주의 사용량 조회(시작일이 바뀔 때만).
   useEffect(() => {
@@ -458,6 +476,11 @@ export function ApprovalDraftBoard() {
       .filter((f) => {
         const v = values[f.key];
         if (v == null) return true;
+        // 시간 범위는 한쪽만 있으면 소요 시간을 알 수 없어 미입력으로 본다.
+        if (f.type === "time_range") {
+          const r = parseTimeRange(v);
+          return !r.start || !r.end;
+        }
         if (typeof v === "string") return !v.trim();
         if (Array.isArray(v)) return v.length === 0;
         if (typeof v === "object") return Object.values(v as Record<string, unknown>).every((x) => !String(x ?? "").trim());

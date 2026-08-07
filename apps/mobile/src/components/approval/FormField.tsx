@@ -8,7 +8,7 @@ import { EntityPickerSheet, type EntityKind, type EntityOption } from '@/compone
 import { OrgPickerSheet } from '@/components/pickers/OrgPickerSheet';
 import { useApi } from '@/lib/use-api';
 import { useTheme } from '@/theme/useTheme';
-import type { ApprovalFieldDef } from '@/lib/approval/form-types';
+import { parseTimeRange, timeRangeMinutes, type ApprovalFieldDef } from '@/lib/approval/form-types';
 
 /**
  * 기안 폼의 필드 하나 — 웹 `ApprovalFormRenderer` 의 필드 렌더를 모바일로 옮긴 것.
@@ -29,6 +29,44 @@ interface Props {
   onFill?: (targetKey: string, v: unknown) => void;
   /** contract_select 를 같은 양식의 업체 선택에 연동할 때 쓴다(웹과 동일 동작). */
   linkedFacilityId?: string | null;
+  /** 자동 채움 대상 필드의 타입을 알기 위해 필요하다(양식 전체 스키마). */
+  allFields?: ApprovalFieldDef[];
+}
+
+const normOption = (s: string) => s.replace(/[\s&·・\-_/()]/g, '').toLowerCase();
+
+/**
+ * 자동 채움 값을 대상 필드 타입에 맞게 구조화한다(웹 ApprovalFormRenderer.buildFillValue 와 같은 규칙).
+ * 업체 필드에는 사업장 id 까지 실어 '확정 선택' 상태로 만들고, 선택형은 옵션과 느슨 매칭한다.
+ */
+function buildFillValue(target: ApprovalFieldDef | undefined, text: string, ref?: { facilityId?: string | null }): unknown {
+  if (!target) return text;
+  const matchOption = (opts: string[]): string => {
+    if (!opts.length) return text;
+    if (opts.includes(text)) return text;
+    const n = normOption(text);
+    return (
+      opts.find((o) => {
+        const a = normOption(o);
+        return a === n || a.includes(n) || n.includes(a);
+      }) ?? ''
+    );
+  };
+  switch (target.type) {
+    case 'company_select':
+      return { name: text, facilityId: ref?.facilityId || undefined, manual: !ref?.facilityId };
+    case 'contract_select':
+      return { title: text };
+    case 'select':
+    case 'radio':
+      return matchOption(target.options ?? []);
+    case 'checkbox': {
+      const hit = matchOption(target.options ?? []);
+      return hit ? [hit] : [];
+    }
+    default:
+      return text;
+  }
 }
 
 const rec = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' ? (v as Record<string, unknown>) : {});
@@ -58,7 +96,7 @@ function hasRichMarkup(html: string): boolean {
   return /<(strong|b|em|i|u|ul|ol|li|table|img|a|h[1-6])\b/i.test(html);
 }
 
-export function FormField({ field: f, value, onSet, onFill, linkedFacilityId }: Props) {
+export function FormField({ field: f, value, onSet, onFill, linkedFacilityId, allFields }: Props) {
   const { c } = useTheme();
   const [sheet, setSheet] = useState<null | 'date' | 'period' | 'select' | 'org' | 'entity' | 'leave'>(null);
 
@@ -143,6 +181,34 @@ export function FormField({ field: f, value, onSet, onFill, linkedFacilityId }: 
             placeholder={f.placeholder ?? 'HH:MM'}
           />
         );
+
+      case 'time_range': {
+        // 시작·종료를 각각 HHMM 으로 받는다(웹 TimeRangeInput 과 같은 규칙·같은 저장 구조).
+        const v = parseTimeRange(value);
+        const minutes = timeRangeMinutes(value);
+        const onPart = (part: 'start' | 'end') => (t: string) => {
+          const d = t.replace(/[^\d]/g, '').slice(0, 4);
+          onSet({ ...v, [part]: d.length > 2 ? `${d.slice(0, 2)}:${d.slice(2)}` : d });
+        };
+        return (
+          <View className="gap-1.5">
+            <View className="flex-row items-center gap-2">
+              <View className="flex-1">
+                <Input value={v.start ?? ''} onChangeText={onPart('start')} keyboardType="numeric" placeholder="시작 HHMM" />
+              </View>
+              <Text className="text-[13px] text-cd-faint">~</Text>
+              <View className="flex-1">
+                <Input value={v.end ?? ''} onChangeText={onPart('end')} keyboardType="numeric" placeholder="종료 HHMM" />
+              </View>
+            </View>
+            {minutes != null ? (
+              <Text className="text-[11.5px] text-cd-faint">
+                {Math.floor(minutes / 60)}시간{minutes % 60 > 0 ? ` ${minutes % 60}분` : ''}
+              </Text>
+            ) : null}
+          </View>
+        );
+      }
 
       case 'select':
       case 'radio': {
@@ -330,7 +396,11 @@ export function FormField({ field: f, value, onSet, onFill, linkedFacilityId }: 
           : rule.source === 'contractAmount' && raw.contractAmount != null
             ? Number(raw.contractAmount).toLocaleString('ko-KR')
             : str(raw[rule.source]);
-      if (val) onFill?.(rule.target, val);
+      if (!val) continue;
+      const target = allFields?.find((x) => x.key === rule.target);
+      // 업체명 채움에는 계약상대의 사업장 id 를 실어 보낸다(업체 필드가 다시 검색을 띄우지 않도록).
+      const ref = rule.source === 'counterpartyName' ? { facilityId: str(raw.counterpartyFacilityId) || null } : undefined;
+      onFill?.(rule.target, buildFillValue(target, val, ref));
     }
   };
 

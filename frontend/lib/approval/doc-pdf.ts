@@ -9,7 +9,7 @@ import path from "node:path";
 import { PDFDocument, PDFFont, PDFPage, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import { letterHtmlToPlainText } from "@/lib/letter/html-parse";
-import type { ApprovalFieldDef, ApprovalTableColumn } from "@/lib/approval/fields";
+import { timeRangeText, type ApprovalFieldDef, type ApprovalTableColumn } from "@/lib/approval/fields";
 import type { LeaveTypeItem } from "@/lib/approval/leave-types";
 import { findInCatalog } from "@/lib/approval/leave-types";
 import type { ApprovalDocDetail } from "@/lib/approval/docs";
@@ -72,6 +72,8 @@ export function flattenValue(field: ApprovalFieldDef, value: unknown, leaveCatal
       const v = value as { from?: string; to?: string };
       return [v.from, v.to].filter(Boolean).join(" ~ ");
     }
+    case "time_range":
+      return timeRangeText(value);
     case "checkbox":
       return Array.isArray(value) ? value.map(String).join(", ") : String(value);
     case "user_select":

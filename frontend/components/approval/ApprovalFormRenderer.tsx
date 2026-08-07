@@ -12,7 +12,12 @@ import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
 import { AutoTimeInput } from "@/components/ui/AutoTimeInput";
 import { MailEditor } from "@/components/mail/MailEditor";
-import type { ApprovalFieldDef } from "@/lib/approval/fields";
+import {
+  parseTimeRange,
+  timeRangeMinutes,
+  type ApprovalFieldDef,
+  type ApprovalTimeRange,
+} from "@/lib/approval/fields";
 import { findInCatalog, type LeaveTypeItem } from "@/lib/approval/leave-types";
 
 type Values = Record<string, unknown>;
@@ -84,6 +89,60 @@ export function ApprovalFormRenderer({ fields, values, onChange, header, readOnl
   );
 }
 
+const normOption = (s: string) => s.replace(/[\s&·・\-_/()]/g, "").toLowerCase();
+
+/**
+ * 자동 채움 값을 대상 필드 타입에 맞게 구조화한다 — 업체 필드에는 사업장 id 까지 넘겨
+ * 재검색 없이 '확정 선택' 상태가 되게 하고, 선택형은 옵션과 느슨 매칭한다
+ * (매칭 실패 시 빈 값으로 둬 사용자가 직접 고를 수 있게 한다).
+ */
+function buildFillValue(target: ApprovalFieldDef | undefined, text: string, ref?: { facilityId?: string | null }): unknown {
+  if (!target) return text;
+  const matchOption = (opts: string[]): string => {
+    if (!opts.length) return text;
+    if (opts.includes(text)) return text;
+    const n = normOption(text);
+    return opts.find((o) => {
+      const a = normOption(o);
+      return a === n || a.includes(n) || n.includes(a);
+    }) ?? "";
+  };
+  switch (target.type) {
+    case "company_select":
+      return { name: text, facilityId: ref?.facilityId || undefined, manual: !ref?.facilityId };
+    case "contract_select":
+      return { title: text };
+    case "select":
+    case "radio":
+      return matchOption(target.options ?? []);
+    case "checkbox": {
+      const hit = matchOption(target.options ?? []);
+      return hit ? [hit] : [];
+    }
+    default:
+      return text;
+  }
+}
+
+/**
+ * 자동 채움(fillMap)으로 값이 확정된 필드인지 — 소스(업체·계약)가 검색으로 확정 선택됐고
+ * 그 규칙이 이 필드를 대상으로 하며 값이 실제로 채워진 경우. 이런 필드는 입력을 잠근다
+ * (계약을 고르면 업체명·용역분류는 손댈 필요가 없다). 직접 입력 모드이거나 매칭 실패로
+ * 값이 비면 잠그지 않아 수기 입력이 가능하다.
+ */
+function isAutoFilled(f: ApprovalFieldDef, allFields: ApprovalFieldDef[], allValues: Values): boolean {
+  const cur = allValues[f.key];
+  const empty = cur == null || (typeof cur === "string" && cur.trim() === "") || (typeof cur === "object" && !Object.values(cur as Record<string, unknown>).some(Boolean));
+  if (empty) return false;
+  return allFields.some((src) => {
+    if (!src.fillMap?.some((r) => r.target === f.key)) return false;
+    const sv = allValues[src.key];
+    if (!sv || typeof sv !== "object") return false;
+    const o = sv as { contractId?: string; facilityId?: string; manual?: boolean };
+    return !o.manual && Boolean(o.contractId || o.facilityId);
+  });
+}
+
 function FieldCell({
   field: f,
   value,
@@ -109,16 +168,26 @@ function FieldCell({
       </div>
     );
   }
+  const autoFilled = !readOnly && isAutoFilled(f, allFields, allValues);
   return (
     <div className="flex min-w-0 border-t md:border-t-0 md:border-l first:border-l-0 first:border-t-0 cd-border-c" style={{ flex: span }}>
       <div className="w-32 shrink-0 px-2.5 py-2.5 text-[12px] font-bold cd-surface-bg cd-text flex items-center">
         <span>
           {f.required && <span className="text-[color:var(--cd-danger,#FA896B)] mr-0.5">*</span>}
           {f.label}
+          {autoFilled && <span className="ml-1 text-[10px] font-medium cd-text-primary">자동</span>}
         </span>
       </div>
       <div className="flex-1 min-w-0 px-2.5 py-2 flex items-center">
-        <FieldInput field={f} value={value} onSet={onSet} onFill={onFill} readOnly={readOnly} allFields={allFields} allValues={allValues} />
+        <FieldInput
+          field={f}
+          value={value}
+          onSet={onSet}
+          onFill={onFill}
+          readOnly={readOnly || autoFilled}
+          allFields={allFields}
+          allValues={allValues}
+        />
       </div>
     </div>
   );
@@ -224,6 +293,8 @@ function FieldInput({
     case "time":
       // 24시간 HHMM 연속 입력(예: 1900) → 자동으로 19:00 완성. 저장 형식(HH:MM)은 기존과 동일.
       return <AutoTimeInput className={base} disabled={dis} value={String(value ?? "")} onChange={(next) => onSet(next)} />;
+    case "time_range":
+      return <TimeRangeInput value={value} onSet={onSet} readOnly={dis} />;
     case "period": {
       const v = (value ?? {}) as { from?: string; to?: string };
       return (
@@ -235,7 +306,7 @@ function FieldInput({
       );
     }
     case "company_select":
-      return <CompanySelectInput field={f} value={value} onSet={onSet} onFill={onFill} readOnly={dis} />;
+      return <CompanySelectInput field={f} value={value} onSet={onSet} onFill={onFill} readOnly={dis} allFields={allFields} />;
     case "contract_select": {
       // 같은 양식에 업체 검색(company_select) 필드가 있고 업체가 선택돼 있으면, 키워드 검색 대신
       // 그 업체와 계약한 최근 3년 이내 계약 리스트를 보여준다(없으면 기존 키워드 검색 유지).
@@ -243,7 +314,17 @@ function FieldInput({
       const cv = companyField ? (allValues[companyField.key] as CompanyValue | undefined) : undefined;
       const companyFacility =
         cv && typeof cv === "object" && cv.facilityId && !cv.manual ? { facilityId: cv.facilityId, name: cv.name ?? "" } : null;
-      return <ContractSelectInput field={f} value={value} onSet={onSet} onFill={onFill} readOnly={dis} companyFacility={companyFacility} />;
+      return (
+        <ContractSelectInput
+          field={f}
+          value={value}
+          onSet={onSet}
+          onFill={onFill}
+          readOnly={dis}
+          companyFacility={companyFacility}
+          allFields={allFields}
+        />
+      );
     }
     case "contact_select":
       return <ContactSelectInput field={f} value={value} onSet={onSet} readOnly={dis} />;
@@ -312,6 +393,41 @@ function RichTextInput({ value, onSet, readOnly }: { value: unknown; onSet: (v: 
 }
 
 /**
+ * 시간 범위 입력 — 시작·종료를 각각 HHMM 연속 입력(1830 → 18:30)으로 받는다.
+ * 저장 값: { start, end }(각 "HH:MM"). 구버전 자유 텍스트("18:00 ~ 19:30") 값도 파싱해 표시한다.
+ * 종료가 시작보다 이르면 자정을 넘긴 근무로 보고 소요 시간을 계산한다(22:00~01:00 = 3시간).
+ */
+function TimeRangeInput({ value, onSet, readOnly }: { value: unknown; onSet: (v: unknown) => void; readOnly?: boolean }) {
+  const v: ApprovalTimeRange = parseTimeRange(value);
+  const minutes = timeRangeMinutes(value);
+  const base = "cd-input w-full text-[12.5px]";
+  return (
+    <div className="flex items-center gap-1.5 w-full">
+      <AutoTimeInput
+        className={base}
+        disabled={readOnly}
+        placeholder="시작 HHMM"
+        value={v.start ?? ""}
+        onChange={(start) => onSet({ ...v, start })}
+      />
+      <span className="cd-text-faint shrink-0">~</span>
+      <AutoTimeInput
+        className={base}
+        disabled={readOnly}
+        placeholder="종료 HHMM"
+        value={v.end ?? ""}
+        onChange={(end) => onSet({ ...v, end })}
+      />
+      {minutes != null && (
+        <span className="text-[11px] cd-text-faint shrink-0 whitespace-nowrap">
+          {Math.floor(minutes / 60)}시간{minutes % 60 > 0 ? ` ${minutes % 60}분` : ""}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/**
  * 업체 검색 입력 — 계약 등록 모달과 동일하게 /api/facilities?q= 자동완성(2자 이상, 디바운스).
  * '미계약 업체(직접 입력)' 체크 시 검색 없이 자유 입력으로 전환된다.
  * 저장 값: { name, facilityId?, manual? } — 미계약 여부까지 구조화 저장되어 집계 가능.
@@ -340,12 +456,14 @@ function CompanySelectInput({
   onSet,
   onFill,
   readOnly,
+  allFields,
 }: {
   field: ApprovalFieldDef;
   value: unknown;
   onSet: (v: unknown) => void;
   onFill: (key: string, value: unknown) => void;
   readOnly?: boolean;
+  allFields: ApprovalFieldDef[];
 }) {
   const v: CompanyValue =
     value && typeof value === "object" ? (value as CompanyValue) : { name: String(value ?? "") };
@@ -383,7 +501,7 @@ function CompanySelectInput({
         rule.source === "region"
           ? [o.regionSido, o.regionSigungu].filter(Boolean).join(" ")
           : String((o as unknown as Record<string, unknown>)[rule.source] ?? "");
-      if (val) onFill(rule.target, val);
+      if (val) onFill(rule.target, buildFillValue(allFields.find((x) => x.key === rule.target), val));
     }
     setOptions([]);
   };
@@ -448,6 +566,8 @@ interface ContractOption {
   contractId: string;
   contractTitle: string;
   counterpartyName: string;
+  /** 계약상대 업체의 사업장 id — 업체명 자동 채움 시 함께 넘겨 '확정 선택' 상태로 만든다. */
+  counterpartyFacilityId?: string | null;
   serviceType: string | null;
   serviceSubtype: string | null;
   contractDate: string | null;
@@ -468,6 +588,7 @@ function ContractSelectInput({
   onFill,
   readOnly,
   companyFacility,
+  allFields,
 }: {
   field: ApprovalFieldDef;
   value: unknown;
@@ -475,6 +596,7 @@ function ContractSelectInput({
   onFill: (key: string, value: unknown) => void;
   readOnly?: boolean;
   companyFacility: { facilityId: string; name: string } | null;
+  allFields: ApprovalFieldDef[];
 }) {
   const v: ContractValue =
     value && typeof value === "object" ? (value as ContractValue) : { title: String(value ?? "") };
@@ -540,7 +662,11 @@ function ContractSelectInput({
     for (const rule of f.fillMap ?? []) {
       const raw = (o as unknown as Record<string, unknown>)[rule.source];
       const val = rule.source === "contractAmount" && raw != null ? Number(raw).toLocaleString("ko-KR") : String(raw ?? "");
-      if (val) onFill(rule.target, val);
+      if (!val) continue;
+      const target = allFields.find((x) => x.key === rule.target);
+      // 업체명 채움에는 계약상대의 사업장 id 를 실어 보낸다(업체 필드가 다시 검색을 띄우지 않도록).
+      const ref = rule.source === "counterpartyName" ? { facilityId: o.counterpartyFacilityId ?? null } : undefined;
+      onFill(rule.target, buildFillValue(target, val, ref));
     }
     setOptions([]);
     setFocused(false);

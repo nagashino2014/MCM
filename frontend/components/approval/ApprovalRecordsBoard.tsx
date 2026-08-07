@@ -14,7 +14,7 @@ import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { ApprovalDocModal, DOC_STATUS_LABEL } from "@/components/approval/ApprovalDocModal";
 import { LetterRecordsTable } from "@/components/approval/LetterRecordsTable";
 import { QuoteRecordsTable } from "@/components/approval/QuoteRecordsTable";
-import type { ApprovalFieldDef } from "@/lib/approval/fields";
+import { timeRangeText, type ApprovalFieldDef } from "@/lib/approval/fields";
 import { findInCatalog, type LeaveTypeItem } from "@/lib/approval/leave-types";
 import type { OfficialLetterRow } from "@/lib/letter/types";
 import type { QuotationRow } from "@/lib/quote/types";
@@ -66,6 +66,8 @@ function flatten(field: ApprovalFieldDef, value: unknown, leaveCatalog: LeaveTyp
       const v = value as { from?: string; to?: string };
       return [v.from, v.to].filter(Boolean).join("~");
     }
+    case "time_range":
+      return timeRangeText(value);
     case "checkbox":
       return Array.isArray(value) ? value.map(String).join(", ") : String(value);
     case "user_select": {

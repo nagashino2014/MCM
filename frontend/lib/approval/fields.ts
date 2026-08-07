@@ -14,6 +14,7 @@ export const APPROVAL_FIELD_TYPES = [
   "checkbox",
   "date",
   "time",
+  "time_range",
   "period",
   "user_select",
   "dept_select",
@@ -30,6 +31,56 @@ export type ApprovalFieldType = (typeof APPROVAL_FIELD_TYPES)[number];
 
 // 휴가 종류(leave_type) 규정 카탈로그는 DB 관리로 분리되어 lib/approval/leave-types.ts 에 있다
 // (규정 변경 대비 — 관리자가 /approval/leave-types 에서 편집). 렌더러·leave.ts 는 그 모듈을 쓴다.
+
+/**
+ * time_range 필드 값 — 시작·종료 시각을 각각 HH:MM 으로 나눠 저장한다.
+ * (구버전 text 필드의 "18:00 ~ 19:30" 자유 입력은 사람마다 형식이 달라 집계가 불가능했다.)
+ */
+export interface ApprovalTimeRange {
+  start?: string;
+  end?: string;
+}
+
+const HHMM_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+/** 자유 텍스트("18:00~19:30", "1800 ~ 1930" 등)까지 받아 {start,end} 로 정규화. 파싱 실패분은 빈 값. */
+export function parseTimeRange(value: unknown): ApprovalTimeRange {
+  if (value && typeof value === "object") {
+    const v = value as Record<string, unknown>;
+    const norm = (x: unknown) => {
+      const s = String(x ?? "").trim();
+      return HHMM_RE.test(s) ? s : "";
+    };
+    return { start: norm(v.start), end: norm(v.end) };
+  }
+  const s = String(value ?? "").trim();
+  if (!s) return {};
+  const m = /(\d{1,2})\s*[:시]?\s*(\d{2})?\s*[~\-–—]\s*(\d{1,2})\s*[:시]?\s*(\d{2})?/.exec(s);
+  if (!m) return {};
+  const hm = (h: string, mi?: string) => {
+    const hh = Number(h);
+    const mm = Number(mi ?? "0");
+    if (!Number.isFinite(hh) || hh > 23 || mm > 59) return "";
+    return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+  };
+  return { start: hm(m[1], m[2]), end: hm(m[3], m[4]) };
+}
+
+/** 시간 범위의 길이(분) — 종료가 시작보다 이르면 자정을 넘긴 것으로 본다(22:00~01:00 = 180분). */
+export function timeRangeMinutes(value: unknown): number | null {
+  const { start, end } = parseTimeRange(value);
+  if (!start || !end) return null;
+  const toMin = (hm: string) => Number(hm.slice(0, 2)) * 60 + Number(hm.slice(3, 5));
+  const diff = toMin(end) - toMin(start);
+  return diff > 0 ? diff : diff + 24 * 60;
+}
+
+/** 표시용 "HH:MM ~ HH:MM"(한쪽만 있으면 그쪽만). */
+export function timeRangeText(value: unknown): string {
+  const { start, end } = parseTimeRange(value);
+  if (start && end) return `${start} ~ ${end}`;
+  return start || end || "";
+}
 
 /** 자동 채움 규칙 — 검색 필드(업체/계약)에서 선택 시 소스 속성 값을 대상 필드에 주입한다. */
 export interface ApprovalFillRule {

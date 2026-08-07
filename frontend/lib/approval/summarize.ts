@@ -5,7 +5,7 @@
  * 휴먼 인 더 루프: 요약은 참고용, 원문은 항상 제공. LLM 실패 시 null(무손상). 설계: §9-3.
  */
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
-import { parseFields, type ApprovalFieldDef } from "@/lib/approval/fields";
+import { parseFields, timeRangeText, type ApprovalFieldDef } from "@/lib/approval/fields";
 import { anthropicChatJson, LlmError } from "@/lib/ai/llm-json";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 
@@ -26,6 +26,7 @@ function valueToText(type: string, v: unknown): string {
     // G3: 리치 에디터 도입으로 HTML 저장 — 태그를 벗겨 텍스트만 요약에 사용
     return String(v).replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
   }
+  if (type === "time_range") return timeRangeText(v);
   if (type === "period" && typeof v === "object") {
     const p = v as { from?: string; to?: string };
     if (p.from || p.to) return `${p.from ?? "?"} ~ ${p.to ?? "?"}`;

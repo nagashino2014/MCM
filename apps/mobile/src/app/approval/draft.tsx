@@ -27,6 +27,8 @@ import { useTheme } from '@/theme/useTheme';
 import {
   PINNED_FORM_IDS,
   draftableOnMobile,
+  parseTimeRange,
+  timeRangeMinutes,
   undraftableReason,
   type ApprovalFieldDef,
   type ApprovalForm,
@@ -142,7 +144,9 @@ export default function DraftScreen() {
   const applyHours = Number(values.apply_hours) > 0 ? Number(values.apply_hours) : 0;
   const otHint = useMemo(() => {
     if (!isOvertime || !usage) return null;
-    const usedMin = usage.requestedMinutes;
+    // 기사용 = 같은 주의 기존 신청 합과 근태 실적 중 큰 값(웹 DraftBoard 와 동일 — 신청이 아직
+    // 근태에 안 잡힌 미래 주 대응). 근태 실적을 빼면 두 앱의 기사용시간이 어긋난다.
+    const usedMin = Math.max(usage.requestedMinutes, usage.attendanceOvertimeMinutes);
     const applyMin = Math.round(applyHours * 60);
     const remainMin = Math.max(0, usage.limitMinutes - usedMin - applyMin);
     return {
@@ -162,6 +166,23 @@ export default function DraftScreen() {
     }
   }, [otHint, values.used_hours, values.remain_hours]);
 
+  // 초과근무: 시간 범위(time_range) → 신청시간 자동 계산(웹 DraftBoard 와 같은 규칙).
+  // 범위가 실제로 바뀔 때만 채워, 휴게시간 제외 등 수기 조정값과 문서 로드값을 덮지 않는다.
+  const otRangeKey = isOvertime ? fields.find((f) => f.type === 'time_range')?.key : undefined;
+  const otRangeValue = otRangeKey ? values[otRangeKey] : undefined;
+  const otRangeSigRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!isOvertime || !otRangeKey) return;
+    const minutes = timeRangeMinutes(otRangeValue);
+    const sig = minutes == null ? '' : String(minutes);
+    const first = otRangeSigRef.current === undefined;
+    if (otRangeSigRef.current === sig) return;
+    otRangeSigRef.current = sig;
+    if (first || minutes == null) return;
+    const hours = String(Math.round((minutes / 60) * 100) / 100);
+    setValues((prev) => (String(prev.apply_hours ?? '') === hours ? prev : { ...prev, apply_hours: hours }));
+  }, [isOvertime, otRangeKey, otRangeValue]);
+
   /** contract_select 를 업체 선택에 연동(웹과 동일). */
   const linkedFacilityId = useMemo(() => {
     const cf = fields.find((f) => f.type === 'company_select');
@@ -180,6 +201,8 @@ export default function DraftScreen() {
         v === '' ||
         (Array.isArray(v) && v.length === 0) ||
         (f.type === 'period' && !(v as { from?: string }).from) ||
+        // 시간 범위는 한쪽만 있으면 소요 시간을 알 수 없어 미입력으로 본다(웹과 동일).
+        (f.type === 'time_range' && (() => { const r = parseTimeRange(v); return !r.start || !r.end; })()) ||
         (f.type === 'company_select' && !(v as { name?: string }).name) ||
         (f.type === 'contract_select' && !(v as { title?: string }).title) ||
         (f.type === 'asset_select' && !(v as { assetId?: string }).assetId);
@@ -388,6 +411,7 @@ export default function DraftScreen() {
                       onSet={(v) => setValue(f.key, v)}
                       onFill={(target, v) => setValue(target, v)}
                       linkedFacilityId={linkedFacilityId}
+                      allFields={fields}
                     />
                   ))}
                 </View>

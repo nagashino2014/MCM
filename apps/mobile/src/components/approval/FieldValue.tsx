@@ -1,6 +1,7 @@
 import { Text, View } from 'react-native';
 
 import { HtmlView } from '@/components/ui';
+import { timeRangeText } from '@/lib/approval/form-types';
 
 /**
  * 결재 양식 필드의 **읽기 전용** 렌더(웹 ApprovalFormRenderer 의 readOnly 대응).
@@ -46,6 +47,8 @@ function plain(value: unknown, type: string): string {
       const to = String(v.to ?? '');
       return from || to ? `${from} ~ ${to}` : '';
     }
+    case 'time_range':
+      return timeRangeText(value);
     case 'checkbox':
       return Array.isArray(value) ? value.map(String).join(', ') : String(value);
     case 'currency': {

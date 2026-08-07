@@ -2,7 +2,7 @@
  * 날씨 위젯 데이터 — 시계·위치·기상·명절 시즌.
  *
  * 소스는 데스크탑 위젯과 같다: 위치(OS 권한 → 거부 시 본사), 역지오코딩(BigDataCloud, 무키),
- * 기상(Open-Meteo, 무키), 명절 구간(`/api/home/holidays`).
+ * 기상(`/api/home/weather` — 기상청 초단기실황, 서버가 Open-Meteo 폴백), 명절 구간(`/api/home/holidays`).
  * 위젯은 실패해도 침묵한다 — 시계는 계속 돌고 씬은 기본값(맑음)으로 유지된다.
  */
 import { useEffect, useState } from "react";
@@ -95,25 +95,23 @@ function useLocationLabel(coords: Coords): string | null {
   return label;
 }
 
-/** 기상 — 30분 간격 갱신. */
+/** 기상 — 10분 간격 갱신(초단기실황이 매시 40분경 갱신된다). */
 function useForecast(coords: Coords): WeatherData | null {
   const [weather, setWeather] = useState<WeatherData | null>(null);
 
   useEffect(() => {
     let alive = true;
     const load = () => {
-      fetch(
-        `https://api.open-meteo.com/v1/forecast?latitude=${coords.lat}&longitude=${coords.lon}` +
-          `&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&timezone=Asia%2FSeoul&forecast_days=1`
+      apiJson<{ temp?: number; hi?: number; lo?: number; base?: string }>(
+        `/api/home/weather?lat=${coords.lat}&lon=${coords.lon}`
       )
-        .then((r) => (r.ok ? r.json() : null))
         .then((d) => {
-          if (!d?.current || !alive) return;
+          if (!alive || !Number.isFinite(Number(d.temp))) return;
           setWeather({
-            temp: Number(d.current.temperature_2m),
-            hi: Math.round(Number(d.daily?.temperature_2m_max?.[0] ?? d.current.temperature_2m)),
-            lo: Math.round(Number(d.daily?.temperature_2m_min?.[0] ?? d.current.temperature_2m)),
-            base: toBaseKind(Number(d.current.weather_code)),
+            temp: Number(d.temp),
+            hi: Math.round(Number(d.hi)),
+            lo: Math.round(Number(d.lo)),
+            base: toBaseKind(d.base),
           });
         })
         .catch(() => {
@@ -121,7 +119,7 @@ function useForecast(coords: Coords): WeatherData | null {
         });
     };
     load();
-    const t = setInterval(load, 30 * 60 * 1000);
+    const t = setInterval(load, 10 * 60 * 1000);
     return () => {
       alive = false;
       clearInterval(t);

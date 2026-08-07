@@ -29,13 +29,10 @@ export const SCENE_H = 286;
 /** 위치 미허용/실패 시 기본 위치 — 본사(서울 금천구). */
 export const DEFAULT_LOC = { lat: 37.4569, lon: 126.8956, label: "서울특별시 금천구" };
 
-/** Open-Meteo weather_code → 기본 씬 4종. */
-export function toBaseKind(code: number): BaseKind {
-  if (code === 0 || code === 1) return "맑음";
-  if (code === 2 || code === 3 || code === 45 || code === 48) return "흐림";
-  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return "눈";
-  if (code >= 51) return "비";
-  return "흐림";
+/** 서버가 돌려준 씬 문자열 검증 — 알 수 없는 값이면 기본 씬(맑음). */
+export function toBaseKind(v: unknown): BaseKind {
+  const s = String(v ?? "");
+  return s === "맑음" || s === "흐림" || s === "비" || s === "눈" ? s : "맑음";
 }
 
 /** 카드 배경 그라데이션 정지점 — 웹의 `linear-gradient(160deg, …)` 를 SVG stop 으로 옮긴 값. */

@@ -1,7 +1,8 @@
 "use client";
 
 // 홈 좌상단 — 날씨/시계 위젯(Soft Glass Ink 핸드오프 1:1 이식).
-// 실시간 시계(1s) + 위치(geolocation→역지오코딩, 거부 시 기본 위치) + 날씨(Open-Meteo, 무키).
+// 실시간 시계(1s) + 위치(geolocation→역지오코딩, 거부 시 기본 위치) + 날씨(/api/home/weather —
+// 기상청 초단기실황 주경로, 키 없거나 실패 시 서버가 Open-Meteo 로 폴백).
 // 씬 10종: 기본(맑음·흐림·비·눈) + 시즌(봄·여름휴가·가을·설날·추석·크리스마스).
 // 시즌 규칙 — 봄 3~5월·여름휴가 7~8월·가을 10~11월은 '맑음'일 때만(다른 기상은 기본 씬),
 // 설·추석은 당일 20일 전~연휴 마지막 날(기상 무관, /api/home/holidays 의 seasons),
@@ -44,15 +45,6 @@ interface SceneProps {
 
 // 위치 미허용/실패 시 기본 위치 — 본사(서울 금천구). 권한을 허용하면 실제 좌표로 대체된다.
 const DEFAULT_LOC = { lat: 37.4569, lon: 126.8956, label: "서울특별시 금천구" };
-
-/** Open-Meteo weather_code → 기본 씬 4종. */
-function toBaseKind(code: number): BaseKind {
-  if (code === 0 || code === 1) return "맑음";
-  if (code === 2 || code === 3 || code === 45 || code === 48) return "흐림";
-  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return "눈";
-  if (code >= 51) return "비";
-  return "흐림";
-}
 
 /** 씬별 카드 배경/설명 서픽스/배지 톤(시안 WMAP 그대로). */
 const SCENE_META: Record<SceneKind, { bg: string; desc?: string; badgeBg: string; badgeFg: string }> = {
@@ -892,22 +884,20 @@ export function WeatherWidget() {
     };
   }, [loc]);
 
-  // 날씨(Open-Meteo, 무키) — 30분 간격 갱신.
+  // 날씨(/api/home/weather — 기상청 실황, 실패 시 서버가 Open-Meteo 로 폴백) — 10분 간격 갱신.
+  // 초단기실황이 매시 40분경 갱신되므로 30분 주기로는 최대 30분 낡은 기온이 표시된다.
   useEffect(() => {
     let alive = true;
     const load = () => {
-      fetch(
-        `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}` +
-          `&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&timezone=Asia%2FSeoul&forecast_days=1`
-      )
+      fetch(`/api/home/weather?lat=${loc.lat}&lon=${loc.lon}`, { cache: "no-store" })
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => {
-          if (!d?.current || !alive) return;
+          if (!d || !alive || !Number.isFinite(Number(d.temp))) return;
           setWeather({
-            temp: Number(d.current.temperature_2m),
-            hi: Math.round(Number(d.daily?.temperature_2m_max?.[0] ?? d.current.temperature_2m)),
-            lo: Math.round(Number(d.daily?.temperature_2m_min?.[0] ?? d.current.temperature_2m)),
-            base: toBaseKind(Number(d.current.weather_code)),
+            temp: Number(d.temp),
+            hi: Math.round(Number(d.hi)),
+            lo: Math.round(Number(d.lo)),
+            base: (["맑음", "흐림", "비", "눈"] as BaseKind[]).includes(d.base) ? (d.base as BaseKind) : "맑음",
           });
         })
         .catch(() => {
@@ -915,7 +905,7 @@ export function WeatherWidget() {
         });
     };
     load();
-    const t = setInterval(load, 30 * 60 * 1000);
+    const t = setInterval(load, 10 * 60 * 1000);
     return () => {
       alive = false;
       clearInterval(t);

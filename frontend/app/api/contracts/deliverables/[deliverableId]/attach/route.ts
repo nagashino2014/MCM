@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { CATALOG_BY_TYPE } from "@/lib/deliverable/catalog";
-import { generateDeliverableArtifacts, resolveSpecs } from "@/lib/deliverable/generate";
+import { generateDeliverableArtifacts, resolveSpecs, templateDocTitles } from "@/lib/deliverable/generate";
 import { letterAttachItemsFor, letterBodyFor, letterSubjectFor } from "@/lib/deliverable/letter-template";
-import { getDeliverable } from "@/lib/deliverable/store";
+import { getDeliverable, getTemplate } from "@/lib/deliverable/store";
 import { loadContractContext } from "@/lib/deliverable/data";
 
 /**
@@ -37,7 +37,13 @@ export async function POST(_req: NextRequest, ctx: RouteContext) {
       storageError = (e as Error).message;
       console.warn("[deliverable] 첨부 산출물 보관 실패:", storageError);
     }
-    const specs = await resolveSpecs(row);
+    // 붙임 목록의 문서명 — 기본양식은 카탈로그, 발주처 자체양식은 그 양식의 서식 제목을 쓴다
+    const tpl = row.templateId ? await getTemplate(row.templateId) : null;
+    const docTitles = tpl
+      ? templateDocTitles(tpl)
+          .filter((d) => !row.docTypes.length || row.docTypes.includes(d.docType))
+          .map((d) => d.title)
+      : (await resolveSpecs(row)).map((s) => CATALOG_BY_TYPE[s.docType]?.title ?? s.title);
     const contractTitle = String(row.values["contract.title"] ?? row.title);
 
     // 수신처 = 계약 발주처(계약상대 업체). 공문 수신란 표기·주소 자동 채움용.
@@ -50,7 +56,7 @@ export async function POST(_req: NextRequest, ctx: RouteContext) {
       storageError,
       subject: letterSubjectFor(row.kind, contractTitle),
       bodyHtml: letterBodyFor(row.kind, contractTitle),
-      attachItems: letterAttachItemsFor(specs.map((s) => CATALOG_BY_TYPE[s.docType]?.title ?? s.title)),
+      attachItems: letterAttachItemsFor(docTitles),
       recipient: ctxRow
         ? { name: ctxRow.ordererName, facilityName: ctxRow.ordererName, address: ctxRow.siteAddress }
         : null,

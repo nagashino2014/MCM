@@ -5,17 +5,21 @@
 // 기본양식은 HWPX 가 원본이고 PDF 는 그 HWPX 를 좌표 그대로 옮겨 그린 것이다(hwpx-pdf.ts).
 // 산출물 두 벌이 한 파일에서 나오므로 서식이 갈리지 않는다 — 제출처가 공공기관·공기업이라
 // 한글본과 PDF 본의 글꼴·줄 위치가 달라 보이면 곤란하다.
-// 발주처 자체양식은 아직 대응 HWPX 템플릿이 없어 Spec 기반 자체 레이아웃(pdf.ts)으로 낸다.
+// 발주처 자체양식(D4)은 두 갈래다.
+//   overlay — HWPX 로 받은 양식. 원본을 그대로 두고 값만 주입한다(template-fill.ts). 서식 100% 보존.
+//   spec    — 스캔 PDF 처럼 원본 구조가 없는 입력. DeliverableSpec 으로 재구축해 pdf.ts 로 낸다.
 
+import { readStorageObject } from "@/lib/contracts/document-bundle";
 import { putContractDocument, sanitizeFilename } from "@/lib/storage/contract-document-storage";
 import { CATALOG_BY_TYPE, adjustSpecForValues } from "./catalog";
 import { renderDeliverableHwpx } from "./hwpx";
 import { renderHwpxToPdf } from "./hwpx-pdf";
 import { renderDeliverablePdf } from "./pdf";
 import { getDeliverable, getTemplate, setDeliverableArtifacts } from "./store";
-import { DELIVERABLE_KIND_LABEL, type DeliverableRow, type DeliverableSpec } from "./types";
+import { fillTemplateHwpx } from "./template-fill";
+import { DELIVERABLE_KIND_LABEL, type DeliverableRow, type DeliverableSpec, type DeliverableTemplateRow } from "./types";
 
-/** 문서가 참조하는 서식 Spec 목록 — 기본양식(코드 상수) 또는 발주처 자체양식(DB). */
+/** 문서가 참조하는 서식 Spec 목록 — 기본양식(코드 상수) 또는 발주처 자체양식(DB, spec 모드). */
 export async function resolveSpecs(row: Pick<DeliverableRow, "templateId" | "docTypes">): Promise<DeliverableSpec[]> {
   if (row.templateId) {
     const tpl = await getTemplate(row.templateId);
@@ -25,6 +29,14 @@ export async function resolveSpecs(row: Pick<DeliverableRow, "templateId" | "doc
     return picked.length ? picked : tpl.specs;
   }
   return row.docTypes.map((t) => CATALOG_BY_TYPE[t]).filter((s): s is DeliverableSpec => !!s);
+}
+
+/** overlay 템플릿의 서식 목록 — 작성 화면의 서식 선택과 붙임 목록이 이 제목을 쓴다. */
+export function templateDocTitles(tpl: DeliverableTemplateRow): { docType: string; title: string }[] {
+  if (tpl.renderMode === "overlay") {
+    return (tpl.profile?.docs ?? []).map((d) => ({ docType: d.docType, title: d.title }));
+  }
+  return tpl.specs.map((s) => ({ docType: s.docType, title: s.title }));
 }
 
 export interface DeliverableArtifacts {
@@ -42,29 +54,44 @@ export async function generateDeliverableArtifacts(
   const persist = opts.persist === true;
   const row = await getDeliverable(deliverableId);
   if (!row) throw new Error("문서를 찾을 수 없습니다.");
-  const specs = await resolveSpecs(row);
-  if (!specs.length) throw new Error("생성할 서식을 선택하세요.");
+  const tpl = row.templateId ? await getTemplate(row.templateId) : null;
+  if (row.templateId && !tpl) throw new Error("발주처 양식을 찾을 수 없습니다.");
+  const overlay = tpl?.renderMode === "overlay";
 
   const kindLabel = DELIVERABLE_KIND_LABEL[row.kind];
   const fileBase = sanitizeFilename(`(${kindLabel})${row.title}`);
 
-  // HWPX(D2) — 기본양식만 지원한다. 발주처 자체양식은 대응 템플릿이 없어 PDF 만 낸다.
+  // HWPX 가 원본인 두 경로 — 기본양식(템플릿 치환)과 발주처 자체양식(원본에 값 주입).
+  // PDF 는 어느 쪽이든 같은 HWPX 를 좌표 그대로 옮겨 그린다(서식이 갈리지 않게).
   let hwpxBytes: Uint8Array | null = null;
   let bytes: Uint8Array | null = null;
   if (!row.templateId) {
     try {
       hwpxBytes = await renderDeliverableHwpx(row.kind, row.docTypes, row.values);
-      // PDF 는 같은 HWPX 를 좌표 그대로 옮겨 그린다 — 두 산출물의 서식이 어긋나면
-      // 공공기관·공기업 제출에서 문제가 된다. 좌표를 남긴 사본을 따로 만들어 렌더한다.
       const forPdf = await renderDeliverableHwpx(row.kind, row.docTypes, row.values, { keepLineSeg: true });
       bytes = await renderHwpxToPdf(forPdf);
     } catch (err) {
       console.warn("[deliverable] HWPX 경로 실패(자체 렌더러로 진행):", (err as Error).message);
     }
+  } else if (overlay && tpl?.sourceKey && tpl.profile) {
+    try {
+      const source = await readStorageObject(tpl.sourceKey);
+      const filled = await fillTemplateHwpx(source, tpl.profile, row.docTypes, row.values);
+      hwpxBytes = filled.bytes;
+      if (filled.missed.length) {
+        console.warn(`[deliverable] 양식 ${tpl.templateId}: 값을 넣지 못한 자리 ${filled.missed.length}건`);
+      }
+      const forPdf = await fillTemplateHwpx(source, tpl.profile, row.docTypes, row.values, { keepLineSeg: true });
+      bytes = await renderHwpxToPdf(forPdf.bytes);
+    } catch (err) {
+      console.warn("[deliverable] 자체양식 주입 실패(자체 렌더러로 진행):", (err as Error).message);
+    }
   }
-  // 발주처 자체양식(또는 HWPX 실패)은 Spec 기반 자체 레이아웃으로 낸다.
+  // spec 모드(스캔 PDF 재구축) 또는 위 경로 실패 시의 폴백.
   // 준공금 100%(기지급 0) 계약은 기지급 열을 제거한 표로 렌더한다.
   if (!bytes) {
+    const specs = await resolveSpecs(row);
+    if (!specs.length) throw new Error("생성할 서식을 선택하세요.");
     bytes = await renderDeliverablePdf(specs.map((s) => adjustSpecForValues(s, row.values)), row.values);
   }
 

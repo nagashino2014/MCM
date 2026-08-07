@@ -28,8 +28,25 @@ export async function GET(req: NextRequest) {
       issueDate: sp.get("issueDate"),
       vatNote: sp.get("vatNote"),
     });
-    // 이 발주처가 자체양식을 요구하면 작성 화면에서 우선 추천한다
-    const templates = await listTemplates({ kind });
+    // 이 발주처가 자체양식을 요구하면 작성 화면에서 우선 추천한다.
+    // overlay 양식은 원본에 값을 주입하므로 spec 이 없다 → 서식 목록·편집 대상 바인딩을
+    // profile.docs 에서 뽑아 같은 모양으로 내려준다(화면이 두 방식을 구분하지 않아도 되게).
+    const templates = (await listTemplates({ kind })).map((t) => ({
+      templateId: t.templateId,
+      name: t.name,
+      ownerFacilityId: t.ownerFacilityId,
+      ownerFacilityName: t.ownerFacilityName,
+      renderMode: t.renderMode,
+      specs: t.specs,
+      docs:
+        t.renderMode === "overlay"
+          ? (t.profile?.docs ?? []).map((d) => ({
+              docType: d.docType,
+              title: d.title,
+              bindings: [...new Set(d.slots.map((s) => s.binding))],
+            }))
+          : t.specs.map((s) => ({ docType: s.docType, title: s.title, bindings: [] as string[] })),
+    }));
     return NextResponse.json({ contract: ctx, values, templates });
   } catch (err) {
     return authErrorToResponse(err);

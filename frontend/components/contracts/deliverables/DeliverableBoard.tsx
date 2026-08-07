@@ -10,7 +10,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckSquare, ChevronDown, ChevronRight, Download, Eye, Lock, Save, Search, Send, Unlock } from "lucide-react";
+import { CheckSquare, ChevronDown, ChevronRight, Download, Eye, FileCog, Lock, Save, Search, Send, Unlock } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
@@ -61,7 +61,11 @@ interface TemplateOption {
   templateId: string;
   name: string;
   ownerFacilityName: string | null;
+  /** overlay = 원본 HWPX 에 값 주입(서식 그대로) / spec = 재구축 */
+  renderMode: "overlay" | "spec";
   specs: DeliverableSpec[];
+  /** 서식 목록 — overlay 는 매핑(profile)에서, spec 은 재구축 결과에서 온다 */
+  docs: { docType: string; title: string; bindings: string[] }[];
 }
 
 const BINDING_DEF = new Map(DELIVERABLE_BINDINGS.map((b) => [b.key, b]));
@@ -223,15 +227,21 @@ export function DeliverableBoard() {
     return docTypes.map((t) => CATALOG_BY_TYPE[t]).filter((s): s is DeliverableSpec => !!s);
   }, [docTypes, templateId, templates]);
 
-  const catalogOptions = useMemo(() => {
-    if (templateId) {
-      const tpl = templates.find((t) => t.templateId === templateId);
-      return (tpl?.specs ?? []).map((s) => ({ docType: s.docType, title: s.title }));
-    }
-    return catalogByKind(kind).map((s) => ({ docType: s.docType, title: s.title }));
-  }, [kind, templateId, templates]);
+  const template = useMemo(() => templates.find((t) => t.templateId === templateId) ?? null, [templateId, templates]);
 
-  const editableBindings = useMemo(() => collectBindings(specs), [specs]);
+  const catalogOptions = useMemo(() => {
+    if (template) return template.docs.map((d) => ({ docType: d.docType, title: d.title }));
+    return catalogByKind(kind).map((s) => ({ docType: s.docType, title: s.title }));
+  }, [kind, template]);
+
+  // 편집 대상 항목 — overlay 양식은 Spec 이 없으므로 매핑된 바인딩 목록이 그 역할을 한다
+  const editableBindings = useMemo(() => {
+    if (template?.renderMode === "overlay") {
+      const picked = template.docs.filter((d) => !docTypes.length || docTypes.includes(d.docType));
+      return [...new Set((picked.length ? picked : template.docs).flatMap((d) => d.bindings))];
+    }
+    return collectBindings(specs);
+  }, [docTypes, specs, template]);
 
   /** 탭(그룹) → 그 그룹에 속한 편집 대상 바인딩 */
   const bindingsByGroup = useMemo(() => {
@@ -385,6 +395,15 @@ export function DeliverableBoard() {
         meta={contract ? `${contract.counterpartyName || "발주처 미상"} · ${DELIVERABLE_KIND_LABEL[kind]}` : "계약을 선택하세요"}
         actions={
           <>
+            {/* 발주처가 자기네 양식을 고집하는 경우 여기서 등록한다(D4) */}
+            <button
+              type="button"
+              className="cd-btn rounded-xl border cd-border-c px-3 py-2 text-[13px] flex items-center gap-1.5"
+              onClick={() => router.push("/contracts/deliverables/templates")}
+              title="발주처 자체양식 업로드·매핑 관리"
+            >
+              <FileCog className="w-4 h-4" /> 발주처 양식
+            </button>
             {/* 기재 사항 저장 — 값을 고친 뒤 문서로 확정해 둔다(공문 첨부·재출력이 같은 값을 쓴다) */}
             <button
               type="button"
@@ -402,8 +421,12 @@ export function DeliverableBoard() {
               type="button"
               className="cd-btn rounded-xl border cd-border-c px-3 py-2 text-[13px] flex items-center gap-1.5"
               onClick={downloadHwpx}
-              disabled={busy || !!templateId}
-              title={templateId ? "발주처 자체양식은 PDF 만 제공합니다" : "한글에서 편집 가능한 원본"}
+              disabled={busy || (!!templateId && template?.renderMode !== "overlay")}
+              title={
+                !templateId || template?.renderMode === "overlay"
+                  ? "한글에서 편집 가능한 원본"
+                  : "이 양식은 원본 한글 파일이 없어 PDF 만 제공합니다"
+              }
             >
               <Download className="w-4 h-4" /> HWPX
             </button>

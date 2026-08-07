@@ -44,6 +44,9 @@ const plain = (s: string): string => s.replace(/\t/g, "    ").replace(/\n/g, "")
 // (한컴바탕 0.30em) 그대로 쓰면 줄이 원본보다 짧아지고, 공백으로 들여쓴 서명란이 왼쪽으로 밀린다.
 const SPACE_EM = 0.5;
 
+// 줄이 폭을 넘칠 때 줄여 앉히는 하한 — 이보다 더 줄이면 읽기 힘들어지므로 넘치는 채로 둔다.
+const MIN_SQUEEZE = 0.75;
+
 function chunkWidth(font: PDFFont, text: string, size: number): number {
   try {
     return font.widthOfTextAtSize(text, size);
@@ -171,14 +174,19 @@ class Renderer {
         return acc + layout(this.font(p.cp), p.text, size, (size * p.cp.spacing) / 100);
       }, 0);
 
+      // 자동 줄바꿈이 없는 좌표 렌더라 값이 길면 줄을 넘어 잘린다(발주처 양식에 긴 계약명·주소가
+      // 들어가는 경우). 넘치는 줄만 살짝 줄여 폭 안에 앉힌다 — 한글의 장평 조절과 같은 취지.
       const boxW = availW ?? hu(seg.horzsize);
+      const squeeze = lineW > boxW && boxW > 0 ? Math.max(MIN_SQUEEZE, boxW / lineW) : 1;
+      const drawnW = lineW * squeeze;
+
       let x = originX + hu(seg.horzpos);
-      if (align === "CENTER") x += (boxW - lineW) / 2;
-      else if (align === "RIGHT") x += boxW - lineW;
+      if (align === "CENTER") x += (boxW - drawnW) / 2;
+      else if (align === "RIGHT") x += boxW - drawnW;
 
       const baselineY = pageH - (originY + hu(seg.vertpos) + hu(seg.baseline));
       for (const p of parts) {
-        const size = hu(p.cp.height);
+        const size = hu(p.cp.height) * squeeze;
         const ls = (size * p.cp.spacing) / 100;
         const w = layout(this.font(p.cp), p.text, size, ls, { page, x, y: baselineY, col: p.cp.color });
         if (p.cp.underline && w > 0) {

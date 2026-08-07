@@ -12,6 +12,8 @@ import type {
   DeliverableTemplateRow,
   DeliverableUnlocked,
   DeliverableValues,
+  TemplateProfile,
+  TemplateRenderMode,
   TemplateSourceKind,
 } from "./types";
 
@@ -229,6 +231,8 @@ function mapTemplate(r: Record<string, unknown>): DeliverableTemplateRow {
     sourceKind: (sn(r.source_kind) as TemplateSourceKind | null) ?? null,
     sourceKey: sn(r.source_key),
     sourcePages: r.source_pages != null ? Number(r.source_pages) : null,
+    renderMode: s(r.render_mode) === "overlay" ? "overlay" : "spec",
+    profile: parseJson<TemplateProfile | null>(r.profile, null),
     specs: parseJson<DeliverableSpec[]>(r.spec, []),
     analyzedAt: sn(r.analyzed_at),
     analyzeModel: sn(r.analyze_model),
@@ -249,6 +253,7 @@ export async function createTemplate(params: {
   sourceKind?: TemplateSourceKind | null;
   sourceKey?: string | null;
   sourcePages?: number | null;
+  renderMode?: TemplateRenderMode;
   specs?: DeliverableSpec[];
   createdBy?: string | null;
 }): Promise<string> {
@@ -257,8 +262,9 @@ export async function createTemplate(params: {
   await withDbWrite(async (txn) => {
     await txn.run(
       `INSERT INTO deliverable_templates
-         (template_id, name, kind, owner_facility_id, source_kind, source_key, source_pages, spec, created_by, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $10)`,
+         (template_id, name, kind, owner_facility_id, source_kind, source_key, source_pages,
+          render_mode, spec, created_by, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $11)`,
       [
         id,
         params.name,
@@ -267,6 +273,7 @@ export async function createTemplate(params: {
         params.sourceKind ?? null,
         params.sourceKey ?? null,
         params.sourcePages ?? null,
+        params.renderMode ?? "spec",
         JSON.stringify(params.specs ?? []),
         params.createdBy ?? null,
         now,
@@ -274,6 +281,35 @@ export async function createTemplate(params: {
     );
   });
   return id;
+}
+
+/** 업로드한 원본 파일 정보 기록 — 키는 template_id 를 알아야 정해지므로 생성 후에 채운다. */
+export async function setTemplateSource(
+  templateId: string,
+  source: { sourceKind: TemplateSourceKind; sourceKey: string; sourcePages?: number | null }
+): Promise<void> {
+  await withDbWrite(async (txn) => {
+    await txn.run(
+      `UPDATE deliverable_templates
+          SET source_kind = $2, source_key = $3, source_pages = $4, updated_at = $5
+        WHERE template_id = $1`,
+      [templateId, source.sourceKind, source.sourceKey, source.sourcePages ?? null, new Date().toISOString()]
+    );
+  });
+}
+
+/** overlay 템플릿의 값 자리 매핑 저장(D4) — 분석 결과이자 사용자 보정 결과가 같은 자리에 들어간다. */
+export async function saveTemplateProfile(templateId: string, profile: TemplateProfile): Promise<void> {
+  const now = new Date().toISOString();
+  await withDbWrite(async (txn) => {
+    await txn.run(
+      `UPDATE deliverable_templates
+          SET profile = $2::jsonb, render_mode = 'overlay',
+              analyzed_at = $3, analyze_model = $4, analyze_note = $5, updated_at = $6
+        WHERE template_id = $1`,
+      [templateId, JSON.stringify(profile), profile.analyzedAt, profile.model, profile.note ?? null, now]
+    );
+  });
 }
 
 export async function saveTemplateSpec(

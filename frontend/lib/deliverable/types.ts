@@ -214,6 +214,49 @@ export interface DeliverableRow {
 
 export type TemplateSourceKind = "hwpx" | "docx" | "pdf";
 
+/**
+ * 자체양식 렌더 방식(144).
+ * - overlay: 원본 HWPX 를 그대로 두고 profile 이 가리키는 자리에 값만 주입한다(서식 100% 보존).
+ * - spec: 원본 구조가 없는 입력(스캔 PDF)을 DeliverableSpec[] 으로 재구축한다(근사).
+ */
+export type TemplateRenderMode = "overlay" | "spec";
+
+/** 원본 문서의 값 자리 하나 — 표 밖 문단이면 para, 표 안이면 cell. */
+export interface TemplateSlot {
+  target: "para" | "cell";
+  /** 최상위 문단 연번(문서 전체) */
+  para?: number;
+  /** 표 연번(문서 전체) + 셀 좌표 */
+  table?: number;
+  row?: number;
+  col?: number;
+  /** DELIVERABLE_BINDINGS 키 또는 "custom:<slug>" */
+  binding: string;
+  /** 값 앞에 인쇄된 라벨 — 문단 치환의 기준점이자 사용자 확인용 표기 */
+  label: string;
+  /** 값 뒤에 붙는 고정 문구("귀하" 등). 라벨이 없는 자리도 이걸로 값 범위를 정한다. */
+  suffix?: string;
+  format?: FieldFormat;
+}
+
+export interface TemplateDoc {
+  /** "custom:<slug>" — 기본양식 카탈로그 키와 섞이지 않게 한다 */
+  docType: string;
+  title: string;
+  /** 이 서식이 차지하는 최상위 문단 구간 [paraFrom, paraTo) — 서식별로 골라 낼 때 쓴다 */
+  paraFrom?: number;
+  paraTo?: number;
+  slots: TemplateSlot[];
+}
+
+export interface TemplateProfile {
+  analyzedAt: string;
+  model: string;
+  docs: TemplateDoc[];
+  /** 분석이 확신하지 못한 항목 등 사용자에게 알릴 메모 */
+  note?: string;
+}
+
 export interface DeliverableTemplateRow {
   templateId: string;
   name: string;
@@ -224,6 +267,10 @@ export interface DeliverableTemplateRow {
   sourceKind: TemplateSourceKind | null;
   sourceKey: string | null;
   sourcePages: number | null;
+  renderMode: TemplateRenderMode;
+  /** overlay 모드의 값 자리 매핑(144) */
+  profile: TemplateProfile | null;
+  /** spec 모드의 재구축 결과 */
   specs: DeliverableSpec[];
   analyzedAt: string | null;
   analyzeModel: string | null;

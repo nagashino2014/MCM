@@ -56,6 +56,52 @@ interface Watcher {
 const OVERTIME_FORM_ID = 'frm-overtime-request';
 const LEAVE_FORM_ID = 'frm-leave-request';
 
+/**
+ * 필드의 가로 폭 비중(%) — 짧은 입력은 같은 행에 나란히 놓기 위한 근거.
+ * 웹 양식은 row/span 으로 표 레이아웃을 표현하지만 모바일 폭에서는 3열이 들어가지 않는다.
+ * 그래서 **같은 row 안에서 폭 합이 100 을 넘지 않을 때만** 나란히 놓는다
+ * (예: 국내 출장 신청 row3 = 이용차량 / 이용시간 + 출장 출발 시각).
+ */
+function widthOf(f: ApprovalFieldDef): number {
+  switch (f.type) {
+    case 'time':
+      return 40;
+    case 'date':
+    case 'number':
+    case 'currency':
+      return 50;
+    case 'radio':
+    case 'select':
+      return (f.options?.length ?? 0) <= 3 ? 60 : 100;
+    default:
+      return 100;
+  }
+}
+
+/** 같은 row 의 필드를 폭 합 100 이하로 묶어 화면 행을 만든다(static 은 항상 단독). */
+function packRows(fields: ApprovalFieldDef[]): ApprovalFieldDef[][] {
+  const out: ApprovalFieldDef[][] = [];
+  let cur: ApprovalFieldDef[] = [];
+  let acc = 0;
+  let curRow = -1;
+  for (const f of fields) {
+    const w = widthOf(f);
+    const solo = f.type === 'static' || f.type === 'table' || w >= 100;
+    const joinable = cur.length > 0 && !solo && f.row === curRow && acc + w <= 100;
+    if (joinable) {
+      cur.push(f);
+      acc += w;
+      continue;
+    }
+    if (cur.length) out.push(cur);
+    cur = [f];
+    acc = solo ? 100 : w;
+    curRow = f.row ?? 0;
+  }
+  if (cur.length) out.push(cur);
+  return out;
+}
+
 const fmtH = (min: number) => {
   const h = Math.round((min / 60) * 10) / 10;
   return Number.isInteger(h) ? String(h) : h.toFixed(1);
@@ -403,17 +449,36 @@ export default function DraftScreen() {
 
               <Card title="내용">
                 <View className="mt-1 gap-3.5">
-                  {fields.map((f) => (
-                    <FormField
-                      key={f.key}
-                      field={f}
-                      value={values[f.key]}
-                      onSet={(v) => setValue(f.key, v)}
-                      onFill={(target, v) => setValue(target, v)}
-                      linkedFacilityId={linkedFacilityId}
-                      allFields={fields}
-                    />
-                  ))}
+                  {packRows(fields).map((row) =>
+                    row.length === 1 ? (
+                      <FormField
+                        key={row[0].key}
+                        field={row[0]}
+                        value={values[row[0].key]}
+                        onSet={(v) => setValue(row[0].key, v)}
+                        onFill={(target, v) => setValue(target, v)}
+                        linkedFacilityId={linkedFacilityId}
+                        allFields={fields}
+                        allValues={values}
+                      />
+                    ) : (
+                      <View key={row.map((f) => f.key).join('|')} className="flex-row gap-2.5">
+                        {row.map((f) => (
+                          <View key={f.key} style={{ flex: widthOf(f) }}>
+                            <FormField
+                              field={f}
+                              value={values[f.key]}
+                              onSet={(v) => setValue(f.key, v)}
+                              onFill={(target, v) => setValue(target, v)}
+                              linkedFacilityId={linkedFacilityId}
+                              allFields={fields}
+                              allValues={values}
+                            />
+                          </View>
+                        ))}
+                      </View>
+                    )
+                  )}
                 </View>
               </Card>
 

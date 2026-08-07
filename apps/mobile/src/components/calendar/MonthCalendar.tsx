@@ -75,6 +75,11 @@ export function MonthCalendar({
   selected?: string | null;
   /** 범위 선택의 종료일. */
   rangeEnd?: string | null;
+  /**
+   * 셀 격자선. 기본은 그린다(날짜 선택 모드에서 칸 경계가 있어야 누르기 쉽다).
+   * 일정 화면은 데스크탑 홈 캘린더처럼 선을 없애고 오늘만 원형으로 강조한다.
+   */
+  grid?: boolean;
 }) {
   const { c } = useTheme();
   const [pick, setPick] = useState<null | "year" | "month">(null);

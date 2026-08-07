@@ -96,6 +96,38 @@ export function IconButton({
   );
 }
 
+/**
+ * 강조 아이콘 버튼 — 목록 헤더의 주요 행동(기안 작성·글쓰기)에 쓴다.
+ * 흐린 아이콘만 두면 눈에 띄지 않아, primary 로 채운 원형에 흰 아이콘을 얹는다.
+ */
+export function PrimaryIconButton({
+  icon,
+  onPress,
+  size = 24,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  onPress?: () => void;
+  size?: number;
+}) {
+  const { c } = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={8}
+      style={{
+        backgroundColor: c.primary,
+        shadowColor: c.primary,
+        shadowOpacity: 0.35,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 3 },
+        elevation: 3,
+      }}
+      className="h-11 w-11 items-center justify-center rounded-full active:opacity-70">
+      <Ionicons name={icon} size={size} color="#FFFFFF" />
+    </Pressable>
+  );
+}
+
 /** 하단 고정 액션 바(결재 승인/반려 등). */
 export function ActionBar({ children }: { children: React.ReactNode }) {
   return (

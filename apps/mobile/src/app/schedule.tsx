@@ -145,8 +145,8 @@ export default function ScheduleScreen() {
       <ScrollView
         contentContainerStyle={{ padding: 18, gap: 14, paddingBottom: 40 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={reload} tintColor={c.faint} />}>
-        {/* 태그 칩 */}
-        <View className="flex-row flex-wrap gap-2">
+        {/* 태그 — 데스크탑 홈 캘린더와 같은 형태(우측 정렬 · 작은 pill · 색 도트) */}
+        <View className="flex-row flex-wrap justify-end gap-1.5">
           {CALENDAR_TAG_KEYS.map((t) => {
             const on = tags.includes(t);
             const off = t === 'sales' && data?.salesDenied;
@@ -154,15 +154,18 @@ export default function ScheduleScreen() {
               <Pressable
                 key={t}
                 onPress={() => !off && toggleTag(t)}
-                className={`min-h-[34px] flex-row items-center gap-1.5 rounded-full border px-3 active:opacity-70 ${
+                className={`h-[28px] flex-row items-center gap-1.5 rounded-full border px-2.5 active:opacity-70 ${
                   off ? 'opacity-40' : ''
                 }`}
                 style={{
-                  borderColor: on ? TAG_COLOR_STRONG[t] : c.border,
-                  backgroundColor: on ? TAG_COLOR[t] : c.card,
+                  borderColor: on ? c.primary : c.border,
+                  backgroundColor: on ? c.primary : c.card,
                 }}>
-                <View style={{ backgroundColor: TAG_COLOR_STRONG[t] }} className="h-2 w-2 rounded-full" />
-                <Text className="text-[12.5px] font-bold" style={{ color: on ? TAG_INK : c.muted }}>
+                <View
+                  style={{ backgroundColor: on ? '#FFFFFF' : TAG_COLOR_STRONG[t] }}
+                  className="h-1.5 w-1.5 rounded-full"
+                />
+                <Text className="text-[11.5px] font-bold" style={{ color: on ? '#FFFFFF' : c.muted }}>
                   {CALENDAR_TAG_LABELS[t]}
                 </Text>
               </Pressable>
@@ -171,6 +174,7 @@ export default function ScheduleScreen() {
         </View>
 
         <MonthCalendar
+          grid={false}
           events={bars}
           year={cur.y}
           month0={cur.m}

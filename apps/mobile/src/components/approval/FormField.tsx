@@ -31,6 +31,41 @@ interface Props {
   linkedFacilityId?: string | null;
   /** 자동 채움 대상 필드의 타입을 알기 위해 필요하다(양식 전체 스키마). */
   allFields?: ApprovalFieldDef[];
+  /** 자동 채움으로 잠긴 필드인지 판정하려면 양식 전체 값이 필요하다. */
+  allValues?: Record<string, unknown>;
+}
+
+/**
+ * 자동 채움(fillMap)으로 값이 확정된 필드인가 — 웹 `isAutoFilled` 와 같은 판정.
+ * 소스(업체·계약)를 검색으로 확정 선택했고 그 규칙이 이 필드를 대상으로 하며 값이 실제로 찼을 때.
+ * 이런 필드는 입력을 잠근다(계약을 고르면 업체명·용역분류는 손댈 필요가 없다).
+ * 직접 입력 모드이거나 매칭 실패로 값이 비면 잠그지 않아 수기 입력이 가능하다.
+ */
+function isAutoFilled(f: ApprovalFieldDef, allFields: ApprovalFieldDef[], allValues: Record<string, unknown>): boolean {
+  const cur = allValues[f.key];
+  const empty =
+    cur == null ||
+    (typeof cur === 'string' && cur.trim() === '') ||
+    (Array.isArray(cur) && cur.length === 0) ||
+    (typeof cur === 'object' && !Array.isArray(cur) && !Object.values(cur as Record<string, unknown>).some(Boolean));
+  if (empty) return false;
+  return allFields.some((src) => {
+    if (!src.fillMap?.some((r) => r.target === f.key)) return false;
+    const sv = allValues[src.key];
+    if (!sv || typeof sv !== 'object') return false;
+    const o = sv as { contractId?: string; facilityId?: string; manual?: boolean };
+    return !o.manual && Boolean(o.contractId || o.facilityId);
+  });
+}
+
+/** 잠긴 필드의 표시 문자열. */
+function lockedText(f: ApprovalFieldDef, value: unknown): string {
+  if (Array.isArray(value)) return value.map((v) => (typeof v === 'string' ? v : String((v as { name?: string })?.name ?? ''))).filter(Boolean).join(', ');
+  if (value && typeof value === 'object') {
+    const o = value as Record<string, unknown>;
+    return String(o.name ?? o.title ?? '');
+  }
+  return value == null ? '' : String(value);
 }
 
 const normOption = (s: string) => s.replace(/[\s&·・\-_/()]/g, '').toLowerCase();
@@ -96,7 +131,7 @@ function hasRichMarkup(html: string): boolean {
   return /<(strong|b|em|i|u|ul|ol|li|table|img|a|h[1-6])\b/i.test(html);
 }
 
-export function FormField({ field: f, value, onSet, onFill, linkedFacilityId, allFields }: Props) {
+export function FormField({ field: f, value, onSet, onFill, linkedFacilityId, allFields, allValues }: Props) {
   const { c } = useTheme();
   const [sheet, setSheet] = useState<null | 'date' | 'period' | 'select' | 'org' | 'entity' | 'leave'>(null);
 
@@ -123,6 +158,21 @@ export function FormField({ field: f, value, onSet, onFill, linkedFacilityId, al
         {label}
         <View className="rounded-xl border border-cd-border bg-cd-surface px-3 py-3">
           <Text className="text-[12.5px] text-cd-muted">표 입력은 웹에서 작성합니다.</Text>
+        </View>
+      </View>
+    );
+  }
+
+  const locked = isAutoFilled(f, allFields ?? [], allValues ?? {});
+  if (locked) {
+    return (
+      <View className="gap-1.5">
+        <View className="flex-row items-center gap-1">
+          <Text className="text-[13px] font-bold text-cd-muted">{f.label}</Text>
+          <Ionicons name="lock-closed" size={12} color={c.faint} />
+        </View>
+        <View className="min-h-[46px] justify-center rounded-xl border border-cd-border bg-cd-surface px-3">
+          <Text className="text-[14px] text-cd-body">{lockedText(f, value)}</Text>
         </View>
       </View>
     );

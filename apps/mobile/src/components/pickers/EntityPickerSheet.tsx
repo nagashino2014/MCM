@@ -29,8 +29,8 @@ interface Source {
   minChars: number;
   path: (q: string, opts: { assetKind?: string }) => string;
   parse: (json: unknown) => EntityOption[];
-  /** 직접 입력(미등록) 허용 — 업체·계약. */
-  manual?: boolean;
+  /** 직접 입력 허용 시 버튼 문구 — 웹 렌더러의 체크박스 라벨과 같은 말을 쓴다. */
+  manualLabel?: string;
 }
 
 const str = (v: unknown): string => (v == null ? '' : String(v));
@@ -48,7 +48,7 @@ const SOURCES: Record<EntityKind, Source> = {
         sub: [str(o.regionSido), str(o.regionSigungu)].filter(Boolean).join(' ') || str(o.siteAddress),
         raw: o,
       })),
-    manual: true,
+    manualLabel: '미계약 업체(직접 입력)',
   },
   contract: {
     title: '계약 선택',
@@ -62,7 +62,7 @@ const SOURCES: Record<EntityKind, Source> = {
         sub: [str(o.counterpartyName), str(o.serviceType)].filter(Boolean).join(' · '),
         raw: o,
       })),
-    manual: true,
+    manualLabel: '미등록 용역(직접 입력)',
   },
   contact: {
     title: '담당자 선택',
@@ -167,10 +167,11 @@ export function EntityPickerSheet({
       onClose={close}
       title={title ?? src.title}
       footer={
-        src.manual && onManual ? (
+        src.manualLabel && onManual ? (
           <Button
             variant="ghost"
-            label={`"${q.trim() || '입력한 이름'}" 직접 입력`}
+            label={q.trim() ? `${src.manualLabel} — "${q.trim()}"` : src.manualLabel}
+            disabled={!q.trim()}
             onPress={() => {
               const t = q.trim();
               if (!t) return;

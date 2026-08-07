@@ -24,6 +24,8 @@ export interface OrgEmployee {
   positionName: string | null;
   positionRankOrder: number | null;
   status: 'active' | 'inactive';
+  /** 등록된 증명사진 경로(`/api/admin/employees/{id}/photo`). 없으면 이니셜 아바타. */
+  photoPath?: string | null;
 }
 interface OrgDept {
   deptId: string;
@@ -123,7 +125,7 @@ export function OrgPickerSheet({
           if (!multi) onClose();
         }}
         className={`flex-row items-center gap-2.5 border-b border-cd-grid-line py-2.5 ${indent ? 'pl-6' : ''} active:opacity-70`}>
-        <Avatar name={e.name} size="sm" />
+        <Avatar name={e.name} photoPath={e.photoPath} size="sm" />
         <View className="flex-1">
           <Text className="text-[14px] font-semibold text-cd-text">
             {e.name}

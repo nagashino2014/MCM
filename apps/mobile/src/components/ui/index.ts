@@ -1,7 +1,7 @@
 /** 공통 UI 배럴 — 화면에서는 `import { Screen, Card, Button } from '@/components/ui'` 로 쓴다. */
 export { Screen } from "./Screen";
 export { Card } from "./Card";
-export { Button, IconButton, ActionBar } from "./Button";
+export { Button, IconButton, PrimaryIconButton, ActionBar } from "./Button";
 export { Badge, Count, Chip } from "./Chip";
 export { Avatar } from "./Avatar";
 export { Input, Textarea, SearchBar } from "./Field";

@@ -44,8 +44,9 @@ const num = (v: unknown): number | null => {
 };
 
 /**
- * 공급가액·부가세 분해. VAT 포함 금액이면 총액에서 역산한다.
- * 실측 검증(준공계 수도권매립지): 91,154,823 → 82,868,021 / 8,286,802 (실물과 일치).
+ * 공급가액·부가세 산출.
+ * 계약금액이 VAT 별도(기본, 계약관리 입력 관행)면 그 값이 곧 공급가액이고 부가세를 가산한다.
+ * VAT 포함으로 입력된 계약만 총액에서 역산한다(예: 91,154,823 → 82,868,021 / 8,286,802).
  */
 export function splitVat(total: number, vatIncluded: boolean): { supply: number; vat: number; total: number } {
   if (!vatIncluded) {

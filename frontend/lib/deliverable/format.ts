@@ -9,8 +9,13 @@ const DEFAULT_FORMAT: Record<string, FieldFormat> = Object.fromEntries(
   DELIVERABLE_BINDINGS.map((b) => [b.key, b.format])
 );
 
-/** VAT 표기 기본값 — 계약별로 '별도'인 경우 meta.vatNote 로 덮어쓴다. */
-export const DEFAULT_VAT_NOTE = "VAT 포함";
+/**
+ * VAT 표기 기본값.
+ * 계약관리에 입력하는 계약금액은 **VAT 미포함(공급가액)** 기준이다(2026-08-07 사용자 확정) →
+ * 기본을 'VAT 별도'로 두고, 부가세는 역산이 아니라 가산한다(lib/deliverable/data.ts splitVat).
+ * VAT 포함 금액으로 입력된 계약만 작성 화면에서 meta.vatNote 를 'VAT 포함'으로 바꾼다.
+ */
+export const DEFAULT_VAT_NOTE = "VAT 별도";
 
 interface Ymd {
   y: string;

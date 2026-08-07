@@ -145,9 +145,10 @@ export function DeliverableBoard() {
 
   /** 계약·종류·기성회차가 바뀌면 자동 채움값을 다시 산출한다(잠금 해제 항목은 보존) */
   const loadAutoValues = useCallback(
-    async (contractId: string, nextKind: DeliverableKind, nextMilestoneId?: string) => {
+    async (contractId: string, nextKind: DeliverableKind, nextMilestoneId?: string, nextVatNote?: string) => {
       const params = new URLSearchParams({ contractId, kind: nextKind });
       if (nextMilestoneId) params.set("milestoneId", nextMilestoneId);
+      if (nextVatNote) params.set("vatNote", nextVatNote);
       const res = await fetch(`/api/contracts/deliverables/sources?${params.toString()}`);
       if (!res.ok) return;
       const data = await res.json();
@@ -184,6 +185,16 @@ export function DeliverableBoard() {
   const changeMilestone = async (id: string) => {
     setMilestoneId(id);
     if (contract) await loadAutoValues(contract.contractId, kind, id || undefined);
+  };
+
+  /**
+   * VAT 표기 변경 — 표기만 바꾸는 게 아니라 공급가액·부가세를 다시 산출한다.
+   * 별도 = 계약금액이 공급가액(부가세 가산) / 포함 = 총액에서 역산.
+   */
+  const changeVatNote = async (note: string) => {
+    setValues((prev) => ({ ...prev, "meta.vatNote": note }));
+    setPreviewUrl(null);
+    if (contract) await loadAutoValues(contract.contractId, kind, milestoneId || undefined, note);
   };
 
   // ── 선택 서식 → 편집 필드 ──
@@ -319,6 +330,15 @@ export function DeliverableBoard() {
     const value = raw == null ? "" : String(raw);
     const locked = !unlocked[key];
     const common = "cd-input w-full disabled:opacity-60";
+    if (key === "meta.vatNote") {
+      // 표기를 바꾸면 준공금액 표가 다시 계산된다 → 잠금 없이 바로 고를 수 있게 한다
+      return (
+        <select className="cd-input w-full" value={value || "VAT 별도"} onChange={(e) => void changeVatNote(e.target.value)}>
+          <option value="VAT 별도">VAT 별도 (계약금액 = 공급가액)</option>
+          <option value="VAT 포함">VAT 포함 (계약금액에서 역산)</option>
+        </select>
+      );
+    }
     if (def?.format === "multiline") {
       return <textarea className={common} rows={3} value={value} disabled={locked} onChange={(e) => setValue(key, e.target.value)} />;
     }

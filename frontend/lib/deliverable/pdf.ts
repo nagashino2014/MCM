@@ -231,11 +231,17 @@ function drawSignature(ctx: Ctx, block: Extract<DocBlock, { kind: "signature" }>
     block.align === "left" ? ctx.m.left : Math.max(ctx.m.left, PAGE_W - ctx.m.right - blockW - rightPad);
   const valueX = x0 + labelW + sepW;
 
+  const valueMaxW = PAGE_W - ctx.m.right - valueX;
   block.rows.forEach((row, i) => {
     page.drawText(row.label, { x: x0, y: y - size, size, font: fonts.regular, color: INK });
     page.drawText(":", { x: x0 + labelW + sepW / 2 - 2, y: y - size, size, font: fonts.regular, color: INK });
     const text = valueTexts[i];
-    page.drawText(text, { x: valueX, y: y - size, size, font: fonts.regular, color: INK });
+    // 주소처럼 긴 값은 접되, 둘째 줄부터 값 시작 위치에 맞춰 들여쓴다(HWPX 와 동일 규칙)
+    const lines = fonts.regular.widthOfTextAtSize(text, size) > valueMaxW ? wrap(text, fonts.regular, size, valueMaxW) : [text];
+    lines.forEach((ln, li) => {
+      page.drawText(ln, { x: valueX, y: y - size - li * lineH, size, font: fonts.regular, color: INK });
+    });
+    const extra = (lines.length - 1) * lineH;
     // 인감: 대표자 행(마지막 행)의 값 오른쪽 끝에 겹치게
     if (block.stamp && ctx.stamp && i === block.rows.length - 1) {
       const tw = fonts.regular.widthOfTextAtSize(text, size);
@@ -250,7 +256,7 @@ function drawSignature(ctx: Ctx, block: Extract<DocBlock, { kind: "signature" }>
         opacity: 0.92,
       });
     }
-    y -= lineH;
+    y -= lineH + extra; // 접힌 줄 수만큼 아래로
   });
   return y;
 }

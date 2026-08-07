@@ -12,7 +12,7 @@ import { COMPANY_KO, COMPANY_CEO, COMPANY_ADDRESS, COMPANY_BIZ_NO, COMPANY_PHONE
 import {
   COMPANY_FAX,
   COMPANY_HOMEPAGE,
-  MD_GRADES,
+  DEFAULT_MD_GRADES,
   SUMMARY_SHEET_MIN_SITES,
   QUOTE_VALIDITY_TEXT,
   type QuoteFieldValues,
@@ -590,10 +590,15 @@ function drawAnnex(w: Writer, site: QuoteSite): void {
   w.line(annex1Title, 12, { bold: true, gap: 5 });
   titleUnderline(annex1Title);
   w.gap(12);
-  const ratios = [0.36, 0.135, 0.135, 0.135, 0.135, 0.1];
+  // 등급 축은 산정 당시 세트 스냅샷(가변, 143). 열 개수가 달라도 등급 열 총폭(0.54)은 동일하게 분배한다.
+  const grades = rates.grades?.length ? rates.grades : DEFAULT_MD_GRADES;
+  const gradeRatio = 0.54 / grades.length;
+  const ratios = [0.36, ...grades.map(() => gradeRatio), 0.1];
   const headCell = (text: string): Cell => ({ text, align: "center", bold: true, bg: HEAD_BG, color: BRAND_DARK });
+  // 첫 열이 특급이면 실물 표기("기술사 or 특급")를 유지한다
+  const gradeHead = (g: string, i: number) => (i === 0 && g === "특급" ? "기술사 or\n특급(MD)" : `${g}(MD)`);
   w.tableRow(
-    [headCell("항   목"), headCell("기술사 or\n특급(MD)"), headCell("고급(MD)"), headCell("중급(MD)"), headCell("초급(MD)"), headCell("비고")],
+    [headCell("항   목"), ...grades.map((g, i) => headCell(gradeHead(g, i))), headCell("비고")],
     ratios,
     { size: 8.5 }
   );
@@ -604,7 +609,7 @@ function drawAnnex(w: Writer, site: QuoteSite): void {
     w.tableRow(
       [
         { text: (r.parentId ? "  " : "") + r.label, bold: isParent, bg },
-        ...MD_GRADES.map((g) => ({ text: String(r.md[g] ?? 0), align: "center" as const, bold: isParent, bg })),
+        ...grades.map((g) => ({ text: String(r.md[g] ?? 0), align: "center" as const, bold: isParent, bg })),
         { text: "-", align: "center", bg },
       ],
       ratios,
@@ -616,7 +621,7 @@ function drawAnnex(w: Writer, site: QuoteSite): void {
   w.tableRow(
     [
       { text: "총   계(MD)", bold: true, align: "center", bg: HEAD_BG, color: BRAND_DARK },
-      ...MD_GRADES.map((g) => ({ text: String(totals[g] ?? 0), align: "center" as const, bold: true, bg: HEAD_BG })),
+      ...grades.map((g) => ({ text: String(totals[g] ?? 0), align: "center" as const, bold: true, bg: HEAD_BG })),
       { text: String(mdVectorTotal(totals)), align: "center", bold: true, bg: HEAD_BG, color: BRAND_DARK },
     ],
     ratios,
@@ -625,7 +630,7 @@ function drawAnnex(w: Writer, site: QuoteSite): void {
   w.tableRow(
     [
       { text: "소   계(직접인건비)", bold: true, align: "center" },
-      ...MD_GRADES.map((g) => ({ text: won((totals[g] ?? 0) * (rates.laborRates[g] ?? 0)), align: "right" as const })),
+      ...grades.map((g) => ({ text: won((totals[g] ?? 0) * (rates.laborRates[g] ?? 0)), align: "right" as const })),
       { text: "-", align: "center" },
     ],
     ratios,

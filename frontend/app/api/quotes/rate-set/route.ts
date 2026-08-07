@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getDb, rowsToObjects } from "@/lib/db";
+import { DEFAULT_MD_GRADES, sortGrades } from "@/lib/quote/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -80,6 +81,16 @@ export async function GET(req: NextRequest) {
         techFeeRate: Number(s.tech_fee_rate),
         directExpenseRate: Number(s.direct_expense_rate),
         marketAdjust: Number(s.market_adjust),
+        // 세트별 가변 등급 축(143) — 작성 화면 MD 매트릭스 열·문서 출력 열 순서의 기준
+        grades: (() => {
+          try {
+            const v = typeof s.grades === "string" ? JSON.parse(String(s.grades)) : s.grades;
+            const list = Array.isArray(v) ? v.map((g) => String(g).trim()).filter(Boolean) : [];
+            return list.length ? sortGrades(list) : [...DEFAULT_MD_GRADES];
+          } catch {
+            return [...DEFAULT_MD_GRADES];
+          }
+        })(),
         remarksTemplate: s.remarks_template != null ? String(s.remarks_template) : "",
         items,
         factors,

@@ -396,6 +396,8 @@ export function ApprovalLetterBoard() {
   const router = useRouter();
   const sp = useSearchParams();
   const editDocId = sp.get("docId");
+  /** 계약 메뉴에서 "공문으로 발송"으로 넘어온 착수계·준공계 문서 id(D3 연계) */
+  const deliverableId = sp.get("deliverable");
 
   const [docId, setDocId] = useState<string | null>(editDocId);
   const [subject, setSubject] = useState("");
@@ -458,6 +460,39 @@ export function ApprovalLetterBoard() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [myEmail]);
+
+  // 착수계·준공계 연계(D3) — 산출물 PDF 를 첨부로 등록하고 제목·본문·붙임·수신처를 채운다.
+  // 본문이 정형화돼 있어 템플릿을 미리 넣어 두고, 사용자가 그대로 수정할 수 있다.
+  useEffect(() => {
+    if (!deliverableId || editDocId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/contracts/deliverables/${encodeURIComponent(deliverableId)}/attach`, { method: "POST" });
+        const d = await res.json();
+        if (!res.ok) throw new Error(d?.error ?? "착수계·준공계를 불러오지 못했습니다.");
+        if (cancelled) return;
+        setSubject(d.subject ?? "");
+        setAttachItems(Array.isArray(d.attachItems) ? d.attachItems : []);
+        if (d.attachment?.key) {
+          setFileAttachments((prev) => (prev.some((f) => f.key === d.attachment.key) ? prev : [...prev, d.attachment]));
+        } else if (d.storageError) {
+          alert(`착수계·준공계 PDF 보관에 실패해 자동 첨부되지 않았습니다. 파일을 직접 첨부해 주세요.\n(${d.storageError})`);
+        }
+        if (d.recipient?.name) {
+          setRecipients((prev) => (prev.length ? prev : [{ name: String(d.recipient.name), address: d.recipient.address || undefined }]));
+        }
+        pendingHtmlRef.current = d.bodyHtml ?? "";
+        if (editorRef.current) editorRef.current.innerHTML = d.bodyHtml ?? "";
+      } catch (err) {
+        alert((err as Error).message);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deliverableId]);
 
   // 재편집(임시저장/반려 문서) — field_values 복원
   useEffect(() => {
@@ -618,13 +653,15 @@ export function ApprovalLetterBoard() {
       values.proof_receiver = proofReceiver;
     }
     if (fileAttachments.length) values.file_attachments = fileAttachments;
+    // 첨부된 착수계·준공계 — 발송 완료 시 lib/letter/send.ts 가 이 목록으로 상태를 역기록한다
+    if (deliverableId) values.deliverable_ids = [deliverableId];
     if (Object.values(overrides).some((v) => v !== undefined && v !== null)) {
       values.layout_overrides = overrides;
     }
     values.recipients_display = recipientsDisplay(values);
     values.letter_kind_display = letterKind === "proof" ? "내용증명" : "일반";
     return values;
-  }, [letterKind, recipients, ccRefs, subject, attachItems, stampOn, includeHwpx, contactPhone, contactEmail, proofSender, proofReceiver, overrides]);
+  }, [letterKind, recipients, ccRefs, subject, attachItems, stampOn, includeHwpx, contactPhone, contactEmail, proofSender, proofReceiver, overrides, fileAttachments, deliverableId]);
 
   const persist = useCallback(
     // docIdOverride: 같은 턴에서 save 직후 submit 할 때 — setDocId 는 비동기라 클로저의
@@ -648,9 +685,17 @@ export function ApprovalLetterBoard() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "저장 실패");
       setDocId(data.docId);
+      // 착수계·준공계 연계(D3) — 계약 메뉴 이력에서 이 공문을 역참조할 수 있게 연결해 둔다
+      if (deliverableId) {
+        void fetch(`/api/contracts/deliverables/${encodeURIComponent(deliverableId)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ letterDocId: data.docId }),
+        }).catch(() => {});
+      }
       return { docId: data.docId, docNo: data.docNo };
     },
-    [docId, subject, buildFieldValues, line, watchers]
+    [docId, subject, buildFieldValues, line, watchers, deliverableId]
   );
 
   const validate = useCallback((): string | null => {

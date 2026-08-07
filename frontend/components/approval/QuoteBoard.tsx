@@ -13,11 +13,12 @@ import {
 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { AmountInput } from "@/components/ui/AmountInput";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
 import { FacilityRecipientPicker, QuickFacilityModal, RecipientPicker } from "@/components/approval/ApprovalLetterBoard";
 import type { LetterRecipient } from "@/lib/letter/types";
 import {
-  MD_GRADES,
+  DEFAULT_MD_GRADES,
   QUOTE_FORM_ID,
   QUOTE_SERVICE_OPTIONS,
   SUMMARY_SHEET_MIN_SITES,
@@ -64,6 +65,8 @@ interface RateSetData {
     techFeeRate: number;
     directExpenseRate: number;
     marketAdjust: number;
+    /** 세트별 기술등급 축(가변, 143) */
+    grades?: string[];
     remarksTemplate: string;
     items: QuoteWorkItem[];
     factors: { factorKey: string; label: string; unit: string }[];
@@ -94,6 +97,11 @@ function emptySite(seq: number, subject: string): QuoteSite {
 }
 
 const won = (n: number) => Math.round(n).toLocaleString("ko-KR");
+
+/** 이 사업장 라인의 등급 축 — 산정 당시 세트 스냅샷(가변, 143). 없으면 종전 4종 */
+function siteGrades(site: QuoteSite): string[] {
+  return site.rates.grades?.length ? site.rates.grades : DEFAULT_MD_GRADES;
+}
 
 export function QuoteBoard() {
   const { theme } = useCdashTheme();
@@ -172,6 +180,7 @@ export function QuoteBoard() {
                     overheadRate: d.set?.overheadRate ?? STANDARD_OVERHEAD_RATE,
                     techFeeRate: d.set?.techFeeRate ?? STANDARD_TECH_FEE_RATE,
                     directExpenseRate: d.set?.directExpenseRate ?? 0,
+                    grades: d.set?.grades?.length ? d.set.grades : [...DEFAULT_MD_GRADES],
                     laborRates: d.laborRates,
                     laborYear: d.laborYear,
                   },
@@ -310,15 +319,15 @@ export function QuoteBoard() {
 
   /** MD 셀 수동 편집 → 금액 재계산(제약 실시간 검증은 요약 카드에서) */
   const editMdCell = useCallback(
-    (idx: number, rowIdx: number, grade: (typeof MD_GRADES)[number], value: number) => {
+    (idx: number, rowIdx: number, grade: string, value: number) => {
       const site = sites[idx];
       const rows: MdMatrixRow[] = site.mdMatrix.map((r, i) => (i === rowIdx ? { ...r, md: { ...r.md, [grade]: value }, overridden: true } : r));
-      // 대항목 소계 재계산
+      // 대항목 소계 재계산 — 등급 축은 세트마다 다르므로 자식 벡터의 키 합집합을 돈다
       for (const r of rows) {
         const children = rows.filter((c) => c.parentId === r.itemId);
         if (children.length) {
           const md: MdMatrixRow["md"] = {};
-          for (const g of MD_GRADES) {
+          for (const g of new Set(children.flatMap((c) => Object.keys(c.md)))) {
             const v = children.reduce((acc, c) => acc + (c.md[g] ?? 0), 0);
             if (v) md[g] = Math.round(v * 1000) / 1000;
           }
@@ -474,8 +483,8 @@ export function QuoteBoard() {
           <div className="cd-card rounded-3xl p-10 text-center text-sm cd-text-faint">불러오는 중...</div>
         ) : (
           <div className="flex flex-col xl:flex-row gap-5 items-start">
-            {/* 좌: 기본정보 + 사업장 탭 */}
-            <div className="flex-1 min-w-0 flex flex-col gap-4 w-full">
+            {/* 좌: 기본정보 + 사업장 탭 — 폭은 공문 작성(1032px, 전자결재 작성 양식 273mm)과 동일 */}
+            <div className="flex-1 min-w-0 max-w-[1032px] flex flex-col gap-4 w-full">
               {/* 기본정보 */}
               <div className="cd-card rounded-3xl p-5 flex flex-col gap-3.5">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -631,12 +640,11 @@ export function QuoteBoard() {
                     <div className="rounded-2xl border cd-border-c p-3.5 flex flex-col gap-2.5">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-[12px] font-semibold cd-text">제출 견적가(VAT 별도)</span>
-                        <input
+                        <AmountInput
                           className="cd-input text-sm w-44 text-right"
-                          inputMode="numeric"
                           value={priceInputs[site.siteSeq] ?? (site.amounts.final ? String(site.amounts.final) : "")}
-                          onChange={(e) => setPriceInputs((prev) => ({ ...prev, [site.siteSeq]: e.target.value.replace(/[^\d]/g, "") }))}
-                          placeholder="예: 38000000"
+                          onChange={(next) => setPriceInputs((prev) => ({ ...prev, [site.siteSeq]: next }))}
+                          placeholder="예: 38,000,000"
                         />
                         <span className="text-[11px] cd-text-faint">
                           {(() => {
@@ -693,12 +701,19 @@ export function QuoteBoard() {
                       {/* MD 그리드 (T1/T2) */}
                       {tier === "calc" && site.mdMatrix.length > 0 && (
                         <div className="overflow-x-auto">
-                          <table className="w-full text-[11.5px] border-collapse min-w-[680px]">
+                          {/* 등급 축은 산정에 쓰인 세트 스냅샷을 따른다(가변, 143). 열 총폭은 개수와 무관하게 40% */}
+                          <table className="w-full text-[11.5px] border-collapse min-w-[680px] table-fixed">
+                            <colgroup>
+                              <col />
+                              {siteGrades(site).map((g) => (
+                                <col key={g} style={{ width: `${40 / siteGrades(site).length}%` }} />
+                              ))}
+                            </colgroup>
                             <thead>
                               <tr>
                                 <th className="border cd-border-c px-2 py-1.5 text-left cd-text-faint font-semibold">항목 (별첨1)</th>
-                                {MD_GRADES.map((g) => (
-                                  <th key={g} className="border cd-border-c px-2 py-1.5 cd-text-faint font-semibold w-24">{g}(MD)</th>
+                                {siteGrades(site).map((g) => (
+                                  <th key={g} className="border cd-border-c px-2 py-1.5 cd-text-faint font-semibold">{g}(MD)</th>
                                 ))}
                               </tr>
                             </thead>
@@ -711,7 +726,7 @@ export function QuoteBoard() {
                                       {r.label}
                                       {r.overridden && <span className="ml-1 text-[9px] cd-text-primary" title="수동 조정됨">●</span>}
                                     </td>
-                                    {MD_GRADES.map((g) => (
+                                    {siteGrades(site).map((g) => (
                                       <td key={g} className="border cd-border-c px-1 py-0.5 text-center">
                                         {isParent ? (
                                           <span className="cd-text-faint">{r.md[g] ?? 0}</span>
@@ -731,7 +746,7 @@ export function QuoteBoard() {
                                 <td className="border cd-border-c px-2 py-1.5">총 계(MD)</td>
                                 {(() => {
                                   const t = gradeTotals(site.mdMatrix);
-                                  return MD_GRADES.map((g) => (
+                                  return siteGrades(site).map((g) => (
                                     <td key={g} className="border cd-border-c px-2 py-1.5 text-center">{t[g] ?? 0}</td>
                                   ));
                                 })()}
@@ -754,9 +769,9 @@ export function QuoteBoard() {
                                 next[i] = { ...next[i], label: e.target.value };
                                 updateSite(activeSite, { freeItems: next });
                               }} />
-                              <input className="cd-input text-sm w-36 text-right" inputMode="numeric" value={String(it.amount || "")} placeholder="금액(원)" onChange={(e) => {
+                              <AmountInput className="cd-input text-sm w-36 text-right" value={it.amount || ""} placeholder="금액(원)" onChange={(v) => {
                                 const next = [...(site.freeItems ?? [])];
-                                next[i] = { ...next[i], amount: Number(e.target.value.replace(/[^\d]/g, "")) || 0 };
+                                next[i] = { ...next[i], amount: Number(v) || 0 };
                                 const sum = next.reduce((a, x) => a + x.amount, 0);
                                 const price = Number(priceInputs[site.siteSeq] ?? 0) || sum;
                                 updateSite(activeSite, { freeItems: next, amounts: { ...site.amounts, laborCost: 0, overhead: 0, techFee: 0, directExpense: 0, sum, final: price } });

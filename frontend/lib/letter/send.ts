@@ -9,6 +9,7 @@ import { getDoc } from "@/lib/approval/docs";
 import { sendMail } from "@/lib/mail/send";
 import { readStorageObject } from "@/lib/contracts/document-bundle";
 import { getS3Client } from "@/lib/storage/logo-storage";
+import { markDeliverablesSent } from "@/lib/deliverable/store";
 import { generateLetterArtifacts } from "./generate";
 import { claimLetterSend, finishLetterSend } from "./store";
 import { COMPANY_KO, type LetterFieldValues, type LetterRecipient } from "./types";
@@ -151,6 +152,12 @@ export async function processLetterSend(docId: string): Promise<{ ok: boolean; s
     if (!result.ok) throw new Error(result.error ?? "메일 발송 실패");
 
     await finishLetterSend(docId, { ok: true, messageId: result.messageId ?? null });
+    // 첨부된 착수계·준공계에 발송 사실을 역기록(계약 메뉴 이력에서 시행번호로 추적 가능)
+    if (values.deliverable_ids?.length) {
+      await markDeliverablesSent(docId, artifacts.letterNo).catch((e) =>
+        console.warn("[letter] 착수계·준공계 상태 역기록 실패:", (e as Error).message)
+      );
+    }
     return { ok: true };
   } catch (err) {
     const message = (err as Error).message ?? "발송 실패";

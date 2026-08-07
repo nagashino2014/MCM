@@ -10,7 +10,7 @@ import { COMPANY_KO, COMPANY_CEO, COMPANY_ADDRESS, COMPANY_BIZ_NO, COMPANY_PHONE
 import {
   COMPANY_FAX,
   COMPANY_HOMEPAGE,
-  MD_GRADES,
+  DEFAULT_MD_GRADES,
   SUMMARY_SHEET_MIN_SITES,
   QUOTE_VALIDITY_TEXT,
   type QuoteFieldValues,
@@ -426,12 +426,13 @@ function addAnnexSheet(wb: ExcelJS.Workbook, name: string, site: QuoteSite): voi
   // 헤더
   const head = (addr: string, text: string) =>
     setCell(ws, addr, text, { size: 8.5, bold: true, border: true, fill: HEAD_BG_HEX, color: BRAND_DARK, align: "center", wrap: true });
+  // 등급 축은 산정 당시 세트 스냅샷(가변, 143) — 등급 수에 따라 열 개수·비고 열 위치가 움직인다
+  const grades = rates.grades?.length ? rates.grades : DEFAULT_MD_GRADES;
+  const gcol = (i: number) => String.fromCharCode(66 + i); // B, C, D, ...
+  const noteCol = String.fromCharCode(66 + grades.length);
   head(`A${row}`, "항   목");
-  head(`B${row}`, "기술사(MD) or\n특급기술자(MD)");
-  head(`C${row}`, "고급기술자(MD)");
-  head(`D${row}`, "중급기술자(MD)");
-  head(`E${row}`, "초급기술자(MD)");
-  head(`F${row}`, "비고");
+  grades.forEach((g, i) => head(`${gcol(i)}${row}`, i === 0 && g === "특급" ? "기술사(MD) or\n특급기술자(MD)" : `${g}기술자(MD)`));
+  head(`${noteCol}${row}`, "비고");
   ws.getRow(row).height = 26;
   row++;
   const parentIds = new Set(rows.map((r) => r.parentId).filter(Boolean));
@@ -439,37 +440,33 @@ function addAnnexSheet(wb: ExcelJS.Workbook, name: string, site: QuoteSite): voi
     const isParent = parentIds.has(r.itemId);
     const bg = isParent ? SOFT_BG_HEX : undefined;
     setCell(ws, `A${row}`, (r.parentId ? "  " : "") + r.label, { size: 9.5, bold: isParent, border: true, fill: bg });
-    (MD_GRADES as readonly string[]).forEach((g, gi) => {
-      const col = String.fromCharCode(66 + gi); // B,C,D,E
-      setCell(ws, `${col}${row}`, r.md[g as (typeof MD_GRADES)[number]] ?? 0, { size: 9.5, bold: isParent, border: true, fill: bg, align: "center", numFmt: "0.###" });
+    grades.forEach((g, gi) => {
+      setCell(ws, `${gcol(gi)}${row}`, r.md[g] ?? 0, { size: 9.5, bold: isParent, border: true, fill: bg, align: "center", numFmt: "0.###" });
     });
-    setCell(ws, `F${row}`, "-", { size: 9, border: true, fill: bg, align: "center" });
+    setCell(ws, `${noteCol}${row}`, "-", { size: 9, border: true, fill: bg, align: "center" });
     row++;
   }
   // 총계(MD) — 비고열은 합계 수치만('계' 제거, 사용자 확정)
   const totals = gradeTotals(rows);
   setCell(ws, `A${row}`, "총   계(MD)", { size: 10, bold: true, border: true, fill: HEAD_BG_HEX, color: BRAND_DARK, align: "center" });
-  (MD_GRADES as readonly string[]).forEach((g, gi) => {
-    const col = String.fromCharCode(66 + gi);
-    setCell(ws, `${col}${row}`, totals[g as (typeof MD_GRADES)[number]] ?? 0, { size: 10, bold: true, border: true, fill: HEAD_BG_HEX, align: "center", numFmt: "0.###" });
+  grades.forEach((g, gi) => {
+    setCell(ws, `${gcol(gi)}${row}`, totals[g] ?? 0, { size: 10, bold: true, border: true, fill: HEAD_BG_HEX, align: "center", numFmt: "0.###" });
   });
-  setCell(ws, `F${row}`, mdVectorTotal(totals), { size: 9.5, bold: true, border: true, fill: HEAD_BG_HEX, color: BRAND_DARK, align: "center", numFmt: "0.###" });
+  setCell(ws, `${noteCol}${row}`, mdVectorTotal(totals), { size: 9.5, bold: true, border: true, fill: HEAD_BG_HEX, color: BRAND_DARK, align: "center", numFmt: "0.###" });
   row++;
   // 소계(직접인건비)
   setCell(ws, `A${row}`, "소   계(직접인건비)", { size: 10, bold: true, border: true, align: "center" });
-  (MD_GRADES as readonly string[]).forEach((g, gi) => {
-    const col = String.fromCharCode(66 + gi);
-    const grade = g as (typeof MD_GRADES)[number];
-    setCell(ws, `${col}${row}`, Math.round((totals[grade] ?? 0) * (rates.laborRates[grade] ?? 0)), { size: 9.5, border: true, align: "right", numFmt: "#,##0" });
+  grades.forEach((g, gi) => {
+    setCell(ws, `${gcol(gi)}${row}`, Math.round((totals[g] ?? 0) * (rates.laborRates[g] ?? 0)), { size: 9.5, border: true, align: "right", numFmt: "#,##0" });
   });
-  setCell(ws, `F${row}`, "-", { size: 9, border: true, align: "center" });
+  setCell(ws, `${noteCol}${row}`, "-", { size: 9, border: true, align: "center" });
   row++;
   // 총계(직접인건비) — 등급 4개 열 병합·가운데(사용자 확정) + 브랜드 강조
   const totalLabor = leafRows(rows).reduce((acc, r) => acc + laborCostOf(r.md, rates.laborRates), 0);
   setCell(ws, `A${row}`, "총   계(직접인건비)", { size: 10.5, bold: true, border: true, fill: BRAND, color: WHITE, align: "center" });
-  ws.mergeCells(row, 2, row, 5);
+  ws.mergeCells(row, 2, row, 1 + grades.length); // 등급 열 전체 병합(개수 가변)
   setCell(ws, `B${row}`, Math.round(totalLabor), { size: 10.5, bold: true, border: true, fill: BRAND, color: WHITE, align: "center", numFmt: '#,##0 "원"' });
-  setCell(ws, `F${row}`, "-", { size: 9, border: true, fill: BRAND, color: WHITE, align: "center" });
+  setCell(ws, `${noteCol}${row}`, "-", { size: 9, border: true, fill: BRAND, color: WHITE, align: "center" });
   ws.getRow(row).height = 24;
   row += 3;
 

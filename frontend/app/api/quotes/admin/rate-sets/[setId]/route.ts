@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
+import { DEFAULT_MD_GRADES, sortGrades } from "@/lib/quote/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,6 +15,17 @@ interface ItemPayload {
   parentIdx?: number | null; // 페이로드 내 부모 인덱스(트리 재구성용)
   label: string;
   baseMd: Record<string, number>;
+}
+
+/** 세트 등급 축(143) — 비었거나 깨졌으면 종전 4종 기본값으로 폴백한다. */
+function parseGrades(raw: unknown): string[] {
+  try {
+    const v = typeof raw === "string" ? JSON.parse(raw) : raw;
+    const list = Array.isArray(v) ? v.map((g) => String(g).trim()).filter(Boolean) : [];
+    return list.length ? sortGrades(list) : [...DEFAULT_MD_GRADES];
+  } catch {
+    return [...DEFAULT_MD_GRADES];
+  }
 }
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ setId: string }> }) {
@@ -54,6 +66,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ set
         techFeeRate: Number(s.tech_fee_rate),
         directExpenseRate: Number(s.direct_expense_rate),
         marketAdjust: Number(s.market_adjust),
+        grades: parseGrades(s.grades),
         remarksTemplate: s.remarks_template != null ? String(s.remarks_template) : "",
         items,
         factors,
@@ -76,6 +89,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ setI
       techFeeRate?: number;
       directExpenseRate?: number;
       marketAdjust?: number;
+      grades?: string[];
       remarksTemplate?: string;
       items?: ItemPayload[];
       factors?: { factorKey: string; label: string; unit: string }[];
@@ -87,7 +101,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ setI
     const now = new Date().toISOString();
     await withDbWrite(async (txn) => {
       await txn.run(
-        `UPDATE quote_rate_sets SET overhead_rate = $2, tech_fee_rate = $3, direct_expense_rate = $4, market_adjust = $5, remarks_template = $6, updated_at = $7
+        `UPDATE quote_rate_sets SET overhead_rate = $2, tech_fee_rate = $3, direct_expense_rate = $4, market_adjust = $5, remarks_template = $6, grades = $7::jsonb, updated_at = $8
           WHERE set_id = $1`,
         [
           setId,
@@ -96,6 +110,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ setI
           Number(body.directExpenseRate ?? 0),
           Number(body.marketAdjust ?? 1),
           String(body.remarksTemplate ?? ""),
+          JSON.stringify(parseGrades(body.grades)),
           now,
         ]
       );

@@ -4,11 +4,21 @@ const DIGITS = ["", "일", "이", "삼", "사", "오", "육", "칠", "팔", "구
 const SMALL_UNITS = ["", "십", "백", "천"];
 const BIG_UNITS = ["", "만", "억", "조"];
 
+/** 표기 옵션 — 문서 계열마다 관행이 다르다. */
+export interface HangulAmountOptions {
+  /**
+   * 십/백/천 앞의 "일"을 살린다(기본 false = 생략형).
+   * 착수계·준공계 실물은 붙임형("일금 일억칠천일백오십만원정", "구천삼백칠십팔만일천오백")이라
+   * lib/deliverable 계열이 이 옵션을 쓴다. 견적서는 생략형이므로 기본값을 바꾸지 않는다.
+   */
+  leadingOne?: boolean;
+}
+
 /**
  * 숫자 → 한글 금액(관행 표기: 1억2천 → "일억이천만", 선행 "일"은 십/백/천 앞에서 생략).
  * 실물 견적서 표기("이억", "구백이십만", "이십일억오천만")를 따른다.
  */
-export function toHangulAmount(n: number): string {
+export function toHangulAmount(n: number, options: HangulAmountOptions = {}): string {
   const v = Math.floor(Math.abs(n));
   if (v === 0) return "영";
   const groups: number[] = [];
@@ -29,7 +39,8 @@ export function toHangulAmount(n: number): string {
       const unit = SMALL_UNITS[3 - i];
       // 관행: 십/백/천 앞의 '일' 생략 (일천→천). 만 단위 그룹 선두도 동일(일만→만 은 예외적으로 '일'을 붙이는
       // 관행도 있으나 실물 견적서("이십일억")는 생략형이므로 생략형 채택.
-      s += (d === 1 && unit ? "" : DIGITS[d]) + unit;
+      // leadingOne 이면 붙임형(착수계·준공계 실물 표기).
+      s += (d === 1 && unit && !options.leadingOne ? "" : DIGITS[d]) + unit;
     }
     parts.push(s + BIG_UNITS[gi]);
   }

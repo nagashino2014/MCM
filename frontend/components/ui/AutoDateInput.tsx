@@ -13,11 +13,15 @@ export function AutoDateInput({
   onChange,
   className,
   placeholder,
+  mode = "date",
   ...rest
 }: Omit<React.InputHTMLAttributes<HTMLInputElement>, "type" | "value" | "onChange"> & {
   value: string;
   onChange: (next: string) => void;
+  /** "date" = YYYYMMDD→YYYY-MM-DD(기본) · "month" = YYYYMM→YYYY-MM(기간 필터용) */
+  mode?: "date" | "month";
 }) {
+  const digitLen = mode === "month" ? 6 : 8;
   const [text, setText] = useState(value ?? "");
 
   // 부모 값이 바뀌면(모달 프리필 등) 표시 텍스트를 동기화한다.
@@ -26,15 +30,17 @@ export function AutoDateInput({
     setText(value ?? "");
   }, [value]);
 
+  const isValid = (s: string) => (mode === "month" ? isValidIsoMonth(s) : isValidIsoDate(s));
+
   const commit = (raw: string) => {
-    const digits = raw.replace(/\D/g, "").slice(0, 8);
+    const digits = raw.replace(/\D/g, "").slice(0, digitLen);
     const formatted = formatDigits(digits);
     setText(formatted);
     if (digits.length === 0) {
       if (value !== "") onChange("");
       return;
     }
-    if (digits.length === 8 && isValidIsoDate(formatted)) {
+    if (digits.length === digitLen && isValid(formatted)) {
       if (value !== formatted) onChange(formatted);
     }
   };
@@ -45,14 +51,14 @@ export function AutoDateInput({
       type="text"
       inputMode="numeric"
       autoComplete="off"
-      maxLength={10}
+      maxLength={mode === "month" ? 7 : 10}
       className={className}
-      placeholder={placeholder ?? "YYYYMMDD"}
+      placeholder={placeholder ?? (mode === "month" ? "YYYYMM" : "YYYYMMDD")}
       value={text}
       onChange={(e) => commit(e.target.value)}
       onBlur={() => {
-        // 미완성/잘못된 날짜는 마지막 유효 값으로 되돌린다.
-        if (text !== "" && !isValidIsoDate(text)) setText(value ?? "");
+        // 미완성/잘못된 값은 마지막 유효 값으로 되돌린다.
+        if (text !== "" && !isValid(text)) setText(value ?? "");
       }}
     />
   );
@@ -63,6 +69,14 @@ function formatDigits(digits: string): string {
   if (digits.length <= 4) return digits;
   if (digits.length <= 6) return `${digits.slice(0, 4)}-${digits.slice(4)}`;
   return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6)}`;
+}
+
+/** YYYY-MM 형식 + 월 범위 검증 (기간 필터용) */
+function isValidIsoMonth(iso: string): boolean {
+  const m = /^(\d{4})-(\d{2})$/.exec(iso);
+  if (!m) return false;
+  const mo = Number(m[2]);
+  return mo >= 1 && mo <= 12;
 }
 
 /** YYYY-MM-DD 형식 + 실제 존재하는 날짜인지 검증 (타임존 영향 없는 로컬 계산) */

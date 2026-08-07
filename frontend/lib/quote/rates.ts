@@ -17,14 +17,18 @@ import {
   sumOverCap,
 } from "./types";
 
+// 등급 축은 기준 세트마다 다르다(143) — 아래 함수들은 MD_GRADES 상수 대신 **벡터의 키를
+// 직접 순회**한다. 그래야 기술사 추가·특급 제외 같은 세트별 등급 구성이 산정 엔진 수정 없이
+// 그대로 동작한다. MD_GRADES 는 UI·문서의 기본 열 순서로만 남는다.
+
 /** 등급별 MD 벡터 합 */
 export function mdVectorTotal(md: MdVector): number {
-  return MD_GRADES.reduce((acc, g) => acc + (md[g] ?? 0), 0);
+  return Object.values(md).reduce((acc: number, v) => acc + (v ?? 0), 0);
 }
 
-/** MD 벡터 × 노임단가 → 직접인건비(원). 매트릭스 첫 열('특급')은 특급 단가 적용(실물 관행) */
+/** MD 벡터 × 노임단가 → 직접인건비(원). 등급별 단가는 해당 등급 노임단가를 적용한다. */
 export function laborCostOf(md: MdVector, rates: LaborRates): number {
-  return MD_GRADES.reduce((acc, g) => acc + (md[g] ?? 0) * (rates[g] ?? 0), 0);
+  return Object.entries(md).reduce((acc, [g, v]) => acc + (v ?? 0) * (rates[g] ?? 0), 0);
 }
 
 /** 매트릭스 전체 직접인건비 — 대항목(자식 있는 행)은 자식 합계 표시용이므로 리프만 합산 */
@@ -42,8 +46,8 @@ export function leafRows(rows: MdMatrixRow[]): MdMatrixRow[] {
 export function gradeTotals(rows: MdMatrixRow[]): MdVector {
   const out: MdVector = {};
   for (const r of leafRows(rows)) {
-    for (const g of MD_GRADES) {
-      const v = r.md[g] ?? 0;
+    for (const [g, raw] of Object.entries(r.md)) {
+      const v = raw ?? 0;
       if (v) out[g] = Math.round(((out[g] ?? 0) + v) * 1000) / 1000;
     }
   }
@@ -101,9 +105,12 @@ export interface ForwardResult {
 export function forwardEstimate(input: ForwardInput): ForwardResult {
   const rows: MdMatrixRow[] = input.items.map((it) => {
     const md: MdVector = {};
-    for (const g of MD_GRADES) {
+    const perFactor = input.itemFactors[it.itemId];
+    // 등급 축은 세트마다 다르다 — base_md 와 인자별 unit_md 에 등장하는 등급의 합집합을 돈다
+    const grades = new Set<string>(Object.keys(it.baseMd));
+    if (perFactor) for (const unit of Object.values(perFactor)) for (const g of Object.keys(unit)) grades.add(g);
+    for (const g of grades) {
       let v = it.baseMd[g] ?? 0;
-      const perFactor = input.itemFactors[it.itemId];
       if (perFactor) {
         for (const [fk, unit] of Object.entries(perFactor)) {
           const fv = input.factors[fk] ?? 0;
@@ -200,7 +207,8 @@ export function reverseAllocate(input: ReverseInput): ReverseResult {
   const cells: Cell[] = [];
   for (const it of leaves) {
     const row = rowById.get(it.itemId)!;
-    for (const g of MD_GRADES) {
+    // base_md 에 실제로 값이 있는 등급만 분배 대상(세트별 가변 등급 축을 그대로 따른다)
+    for (const g of Object.keys(it.baseMd)) {
       const base = it.baseMd[g] ?? 0;
       if (base <= 0) continue;
       const snapped = Math.max(unit, Math.round((base * k) / unit) * unit);
@@ -261,7 +269,8 @@ export function reverseAllocate(input: ReverseInput): ReverseResult {
     const children = rows.filter((c) => c.parentId === r.itemId);
     if (children.length) {
       const md: MdVector = {};
-      for (const g of MD_GRADES) {
+      const grades = new Set<string>(children.flatMap((c) => Object.keys(c.md)));
+      for (const g of grades) {
         const v = children.reduce((acc, c) => acc + (c.md[g] ?? 0), 0);
         if (v) md[g] = round3(v);
       }

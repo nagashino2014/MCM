@@ -32,12 +32,25 @@ export const QUOTE_SERVICE_OPTIONS: { type: string; subtypes: string[] }[] = [
   { type: "기타", subtypes: ["기타", "총량제신고", "매체별인허가", "환경자문", "환경R&D", "기타인허가"] },
 ];
 
-/** MD 매트릭스 등급 축 — 별첨1 실물 4열("기술사 or 특급"/고급/중급/초급). 첫 열 단가는 특급 적용 */
+/**
+ * MD 매트릭스 기본 등급 축 — 세트에 등급이 지정되지 않았을 때의 폴백이자 열 표시 순서.
+ * 2026-08-07: 등급은 기준 세트별로 가변(마이그 143 quote_rate_sets.grades) — 기술사가 추가되거나
+ * 특급·고급이 빠질 수 있다. 산정 엔진(rates.ts)은 이 상수가 아니라 base_md 의 키를 순회한다.
+ */
 export const MD_GRADES = ["특급", "고급", "중급", "초급"] as const;
-export type MdGrade = (typeof MD_GRADES)[number];
+export const DEFAULT_MD_GRADES: string[] = [...MD_GRADES];
 
-/** 노임단가 표시용 전체 등급(별첨2) — 기술사 포함 5행 */
+/** 등급 라벨(가변) — 노임단가 등급 어휘(LABOR_GRADES)와 같은 값을 쓴다 */
+export type MdGrade = string;
+
+/** 노임단가 표시용 전체 등급(별첨2) — 기술사 포함 5행. 세트 등급 선택지의 원천이기도 하다. */
 export const LABOR_GRADES = ["기술사", "특급", "고급", "중급", "초급"] as const;
+
+/** 세트 등급 목록을 LABOR_GRADES 순서로 정렬(표시 순서 고정: 기술사→초급) */
+export function sortGrades(grades: string[]): string[] {
+  const order = new Map((LABOR_GRADES as readonly string[]).map((g, i) => [g, i]));
+  return [...grades].sort((a, b) => (order.get(a) ?? 99) - (order.get(b) ?? 99));
+}
 
 /** 등급별 MD 벡터 — 없는 등급은 0 취급 */
 export type MdVector = Partial<Record<MdGrade, number>>;
@@ -70,6 +83,8 @@ export function mdSnapUnit(price: number): number {
 export interface SiteRates {
   setId?: string; // 산정에 사용한 기준 세트 (T3 자유입력이면 없음)
   setVersion?: number;
+  /** 산정 당시 등급 축 스냅샷(가변 등급, 143). 미지정이면 DEFAULT_MD_GRADES — 문서 열 순서의 기준 */
+  grades?: string[];
   overheadRate: number; // 제경비율 (직접인건비 대비, 표준 1.10)
   techFeeRate: number; // 기술료율 ((직접인건비+제경비) 대비, 표준 0.20)
   directExpenseRate: number; // 직접경비율 (직접인건비 대비, 상주 시 0.30 등. 기본 0)

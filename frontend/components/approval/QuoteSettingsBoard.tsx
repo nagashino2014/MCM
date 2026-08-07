@@ -7,14 +7,18 @@
 // 세트 수정은 기존 견적을 훼손하지 않는다(견적서에 산정 당시 스냅샷 박제).
 
 import { useCallback, useEffect, useState } from "react";
-import { BarChart3, Calculator, ChevronDown, ChevronRight, Coins, Plus, Save, Settings2, Tag, Trash2, X } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeft, BarChart3, Calculator, ChevronDown, ChevronRight, Coins, Plus, Save, Settings2, Tag, Trash2, X } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { AutoDateInput } from "@/components/ui/AutoDateInput";
+import { AmountInput } from "@/components/ui/AmountInput";
 import {
+  DEFAULT_MD_GRADES,
   LABOR_GRADES,
-  MD_GRADES,
   QUOTE_SERVICE_OPTIONS,
   mdSnapUnit,
+  sortGrades,
   sumOverCap,
   type QuoteReport,
   type QuoteReportBucket,
@@ -47,6 +51,8 @@ interface SetDetail {
   techFeeRate: number;
   directExpenseRate: number;
   marketAdjust: number;
+  /** 이 세트의 기술등급 축(가변, 143). 기술사 추가·특급 제외 등 세분류마다 다르다 */
+  grades: string[];
   remarksTemplate: string;
   items: { itemId: string; parentId: string | null; label: string; baseMd: Record<string, number> }[];
   factors: { factorKey: string; label: string; unit: string }[];
@@ -57,40 +63,57 @@ const won = (n: number) => Math.round(n).toLocaleString("ko-KR");
 const pct = (v: number | null) => (v == null ? "-" : `${(v * 100).toFixed(1)}%`);
 
 /** 수주 분석 공용 집계 표(세분류·상황변수·금액구간) */
-function BucketTable({ title, buckets }: { title: string; buckets: QuoteReportBucket[] }) {
+/**
+ * 수주율 집계 표. compact = 2열 그리드에 들어가는 좁은 폭(상황 변수별·금액 구간별) —
+ * 고정 최소폭을 두면 가로 스크롤이 생기므로 table-fixed + 비율 열폭 + 축소 타이포로 맞춘다.
+ */
+function BucketTable({ title, buckets, compact = false }: { title: string; buckets: QuoteReportBucket[]; compact?: boolean }) {
+  const fs = compact ? "text-[10.5px]" : "text-[11.5px]";
+  const pad = compact ? "px-1.5 py-1" : "px-2 py-1.5";
+  // 구분 / 건수 / 수주 / 실주 / 수주율 / 견적 총액 / 낙찰가 갭
+  const widths = compact
+    ? ["26%", "8%", "8%", "8%", "12%", "24%", "14%"]
+    : [undefined, "56px", "56px", "56px", "80px", "112px", "96px"];
   return (
-    <div className="rounded-2xl border cd-border-c p-3.5 flex flex-col gap-2">
+    <div className="rounded-2xl border cd-border-c p-3.5 flex flex-col gap-2 min-w-0">
       <p className="text-[12px] font-semibold cd-text">{title}</p>
-      <div className="overflow-x-auto">
-        <table className="w-full text-[11.5px] border-collapse min-w-[560px]">
+      <div className={compact ? "" : "overflow-x-auto"}>
+        <table className={`w-full ${fs} border-collapse table-fixed ${compact ? "" : "min-w-[560px]"}`}>
+          <colgroup>
+            {widths.map((w, i) => (
+              <col key={i} style={w ? { width: w } : undefined} />
+            ))}
+          </colgroup>
           <thead>
             <tr>
-              <th className="border cd-border-c px-2 py-1.5 text-left cd-text-faint font-semibold">구분</th>
-              <th className="border cd-border-c px-2 py-1.5 cd-text-faint font-semibold w-14">건수</th>
-              <th className="border cd-border-c px-2 py-1.5 cd-text-faint font-semibold w-14">수주</th>
-              <th className="border cd-border-c px-2 py-1.5 cd-text-faint font-semibold w-14">실주</th>
-              <th className="border cd-border-c px-2 py-1.5 cd-text-faint font-semibold w-20">수주율</th>
-              <th className="border cd-border-c px-2 py-1.5 cd-text-faint font-semibold w-28">견적 총액</th>
-              <th className="border cd-border-c px-2 py-1.5 cd-text-faint font-semibold w-24" title="실주 건 (경쟁 낙찰가 / 자사 견적가) 중앙값 - 1">낙찰가 갭</th>
+              <th className={`border cd-border-c ${pad} text-left cd-text-faint font-semibold`}>구분</th>
+              <th className={`border cd-border-c ${pad} cd-text-faint font-semibold`}>건수</th>
+              <th className={`border cd-border-c ${pad} cd-text-faint font-semibold`}>수주</th>
+              <th className={`border cd-border-c ${pad} cd-text-faint font-semibold`}>실주</th>
+              <th className={`border cd-border-c ${pad} cd-text-faint font-semibold`}>수주율</th>
+              <th className={`border cd-border-c ${pad} cd-text-faint font-semibold`}>견적 총액</th>
+              <th className={`border cd-border-c ${pad} cd-text-faint font-semibold`} title="실주 건 (경쟁 낙찰가 / 자사 견적가) 중앙값 - 1">
+                낙찰가 갭
+              </th>
             </tr>
           </thead>
           <tbody>
             {buckets.map((b) => (
               <tr key={b.key}>
-                <td className="border cd-border-c px-2 py-1.5 cd-text">{b.label}</td>
-                <td className="border cd-border-c px-2 py-1.5 text-center cd-text">{b.total}</td>
-                <td className="border cd-border-c px-2 py-1.5 text-center cd-text">{b.won}</td>
-                <td className="border cd-border-c px-2 py-1.5 text-center cd-text">{b.lost}</td>
-                <td className="border cd-border-c px-2 py-1.5 text-center font-semibold cd-text">{pct(b.winRate)}</td>
-                <td className="border cd-border-c px-2 py-1.5 text-right font-mono cd-text-faint">{won(b.quotedAmount)}</td>
-                <td className="border cd-border-c px-2 py-1.5 text-center cd-text-faint" title={`표본 ${b.lostGapSamples}건`}>
-                  {b.lostGapPct != null ? `${(b.lostGapPct * 100).toFixed(1)}% (${b.lostGapSamples})` : "-"}
+                <td className={`border cd-border-c ${pad} cd-text truncate`} title={b.label}>{b.label}</td>
+                <td className={`border cd-border-c ${pad} text-center cd-text`}>{b.total}</td>
+                <td className={`border cd-border-c ${pad} text-center cd-text`}>{b.won}</td>
+                <td className={`border cd-border-c ${pad} text-center cd-text`}>{b.lost}</td>
+                <td className={`border cd-border-c ${pad} text-center font-semibold cd-text`}>{pct(b.winRate)}</td>
+                <td className={`border cd-border-c ${pad} text-right font-mono cd-text-faint tabular-nums`}>{won(b.quotedAmount)}</td>
+                <td className={`border cd-border-c ${pad} text-center cd-text-faint`} title={`표본 ${b.lostGapSamples}건`}>
+                  {b.lostGapPct != null ? `${(b.lostGapPct * 100).toFixed(1)}%${compact ? "" : ` (${b.lostGapSamples})`}` : "-"}
                 </td>
               </tr>
             ))}
             {buckets.length === 0 && (
               <tr>
-                <td colSpan={7} className="border cd-border-c px-2 py-4 text-center cd-text-faint">집계 대상이 없습니다.</td>
+                <td colSpan={7} className={`border cd-border-c ${pad} py-4 text-center cd-text-faint`}>집계 대상이 없습니다.</td>
               </tr>
             )}
           </tbody>
@@ -161,7 +184,7 @@ export function QuoteSettingsBoard() {
     const res = await fetch(`/api/quotes/admin/rate-sets/${encodeURIComponent(summary.setId)}`, { cache: "no-store" });
     if (!res.ok) return alert("세트를 불러오지 못했습니다.");
     const d = (await res.json()).set as SetDetail;
-    setDetail(d);
+    setDetail({ ...d, grades: d.grades?.length ? sortGrades(d.grades) : [...DEFAULT_MD_GRADES] });
     const parentIds = new Set(d.items.map((i) => i.parentId).filter(Boolean));
     setRows(d.items.map((i) => ({ label: i.label, isParent: parentIds.has(i.itemId), baseMd: i.baseMd })));
   }, [setOf]);
@@ -197,6 +220,54 @@ export function QuoteSettingsBoard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sets]);
 
+  /**
+   * 기술등급 추가/제외 — 제외 시 그 등급의 MD를 남은 등급에 현재 비율대로 재분배해
+   * 행별 MD 합계를 보존한다(남은 값이 모두 0이면 균등 분배). 추가 시에는 빈 열로 시작한다.
+   */
+  const toggleGrade = useCallback(
+    (grade: string) => {
+      if (!detail) return;
+      const on = detail.grades.includes(grade);
+      const next = on ? detail.grades.filter((g) => g !== grade) : sortGrades([...detail.grades, grade]);
+      if (!next.length) {
+        alert("기술등급은 최소 1개 이상이어야 합니다.");
+        return;
+      }
+      setDetail({ ...detail, grades: next });
+      if (!on) return; // 추가는 값 이동 없음
+      setRows((prev) =>
+        prev.map((r) => {
+          const moving = r.baseMd[grade] ?? 0;
+          const md: Record<string, number> = {};
+          for (const g of next) if (r.baseMd[g]) md[g] = r.baseMd[g];
+          if (moving > 0) {
+            // 분배 눈금: 기존 값이 모두 정수인 세트는 정수, 0.5 가 섞인 소액 세트는 0.5 단위
+            // (사용자 확정 2026-08-07 — 가중치에 소수점이 길게 남지 않게 한다)
+            const values = [...Object.values(md), moving];
+            const unit = values.every((v) => Number.isInteger(v)) ? 1 : 0.5;
+            const target = Object.values(md).reduce((a: number, b: number) => a + b, 0) + moving;
+            const base = next.reduce((acc: number, g: string) => acc + (md[g] ?? 0), 0);
+            if (base > 0) {
+              for (const g of next) if (md[g]) md[g] = Math.round((md[g] + (moving * md[g]) / base) / unit) * unit;
+            } else {
+              const each = Math.round(moving / next.length / unit) * unit;
+              for (const g of next) md[g] = each;
+            }
+            // 스냅 잔차는 가장 큰 셀이 흡수해 행 합계를 보존한다
+            const snapped = next.reduce((acc: number, g: string) => acc + (md[g] ?? 0), 0);
+            const diff = Math.round((target - snapped) / unit) * unit;
+            if (diff !== 0) {
+              const top = next.filter((g) => md[g] != null).sort((a, b) => (md[b] ?? 0) - (md[a] ?? 0))[0];
+              if (top) md[top] = Math.max(unit, Math.round((md[top] + diff) / unit) * unit);
+            }
+          }
+          return { ...r, baseMd: md };
+        })
+      );
+    },
+    [detail]
+  );
+
   const saveSet = useCallback(async () => {
     if (!detail) return;
     setBusy(true);
@@ -215,6 +286,7 @@ export function QuoteSettingsBoard() {
           techFeeRate: detail.techFeeRate,
           directExpenseRate: detail.directExpenseRate,
           marketAdjust: detail.marketAdjust,
+          grades: detail.grades,
           remarksTemplate: detail.remarksTemplate,
           items,
           factors: detail.factors,
@@ -395,9 +467,21 @@ export function QuoteSettingsBoard() {
   };
 
   return (
-    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
-      <div className="flex flex-col gap-5 min-h-0">
-        <CdPageHeader title="견적 기준 관리" />
+    // h-full 을 두면 세분류 목록(50여 항목)이 카드 높이를 넘어 밖으로 삐져나온다 → 콘텐츠 높이를 따른다
+    <div className="cdash cd-fields-white flex min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
+      {/* 폭은 공문 작성(1032px, 전자결재 작성 양식 273mm)·견적서 작성과 동일 */}
+      <div className="flex flex-col gap-5 min-h-0 w-full max-w-[1032px]">
+        <CdPageHeader
+          title="견적 기준 관리"
+          actions={
+            <Link
+              href="/approval/quote"
+              className="cd-btn rounded-xl border cd-border-c px-3 py-2 text-[13px] flex items-center gap-1.5"
+            >
+              <ArrowLeft className="w-4 h-4" /> 견적서 작성으로
+            </Link>
+          }
+        />
         <div className="cd-card rounded-3xl p-5 flex flex-col gap-4 min-h-0">
           {/* 탭 */}
           <div className="flex items-end gap-1 px-1 -mb-1">
@@ -500,34 +584,72 @@ export function QuoteSettingsBoard() {
                     </div>
 
                     {/* 요율 기본값 */}
-                    <div className="rounded-2xl border cd-border-c p-3.5 flex items-center gap-4 flex-wrap text-[12px]">
-                      <label className="flex items-center gap-1.5 whitespace-nowrap">제경비 요율
-                        <input className="cd-input w-14 text-right px-1.5" value={String(Math.round(detail.overheadRate * 100))} onChange={(e) => editRate("overheadRate", true, e.target.value)} />%
-                      </label>
-                      <label className="flex items-center gap-1.5 whitespace-nowrap">기술료 요율
-                        <input className="cd-input w-14 text-right px-1.5" value={String(Math.round(detail.techFeeRate * 100))} onChange={(e) => editRate("techFeeRate", true, e.target.value)} />%
-                      </label>
-                      <label className="flex items-center gap-1.5 whitespace-nowrap">직접경비 요율
-                        <input className="cd-input w-14 text-right px-1.5" value={String(Math.round(detail.directExpenseRate * 100))} onChange={(e) => editRate("directExpenseRate", true, e.target.value)} />%
-                      </label>
-                      <label className="flex items-center gap-1.5" title="정방향 표준가 가이드에 적용되는 시장 보정계수">시장 보정계수
-                        <input className="cd-input w-16 text-right" value={String(detail.marketAdjust)} onChange={(e) => editRate("marketAdjust", false, e.target.value)} />
-                      </label>
+                    {/* 요율 4종 — 입력 박스 기준 2열 정렬(라벨 길이가 달라도 입력이 한 줄에 맞도록) */}
+                    <div className="rounded-2xl border cd-border-c p-3.5 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2.5 text-[12px]">
+                      {(
+                        [
+                          ["제경비 요율", "overheadRate", true, Math.round(detail.overheadRate * 100)],
+                          ["기술료 요율", "techFeeRate", true, Math.round(detail.techFeeRate * 100)],
+                          ["직접경비 요율", "directExpenseRate", true, Math.round(detail.directExpenseRate * 100)],
+                          ["시장 보정계수", "marketAdjust", false, detail.marketAdjust],
+                        ] as const
+                      ).map(([label, key, isPct, value]) => (
+                        <label key={key} className="flex items-center justify-between gap-3" title={key === "marketAdjust" ? "정방향 표준가 가이드에 적용되는 시장 보정계수" : undefined}>
+                          <span className="whitespace-nowrap cd-text">{label}</span>
+                          <span className="flex items-center gap-1 shrink-0">
+                            <input
+                              className="cd-input w-20 text-right px-1.5"
+                              value={String(value)}
+                              onChange={(e) => editRate(key, isPct, e.target.value)}
+                            />
+                            <span className="w-3 text-left cd-text-faint">{isPct ? "%" : ""}</span>
+                          </span>
+                        </label>
+                      ))}
                     </div>
 
                     {/* 항목 트리(base_md) */}
                     <div className="rounded-2xl border cd-border-c p-3.5 flex flex-col gap-2">
                       <p className="text-[12px] font-semibold cd-text">업무 항목 트리 (별첨1) — 표준 MD = 역산 분배 가중치</p>
+                      {/* 기술등급 축(가변) — 등급을 빼면 그 MD를 남은 등급에 비율대로 재분배한다 */}
+                      <div className="flex items-center gap-2 flex-wrap text-[11.5px]">
+                        <span className="cd-text-faint">기술등급</span>
+                        {(LABOR_GRADES as readonly string[]).map((g) => {
+                          const on = detail.grades.includes(g);
+                          return (
+                            <button
+                              key={g}
+                              type="button"
+                              className={`rounded-lg px-2.5 py-1 border ${on ? "cd-tint-primary border-[color:var(--cd-primary)] cd-text" : "cd-border-c cd-text-faint"}`}
+                              onClick={() => toggleGrade(g)}
+                            >
+                              {g}
+                            </button>
+                          );
+                        })}
+                        <span className="text-[10.5px] cd-text-faint">
+                          등급 제외 시 해당 MD는 남은 등급에 비율대로 재분배됩니다(합계 보존).
+                        </span>
+                      </div>
                       <div className="overflow-x-auto">
-                        <table className="w-full text-[11.5px] border-collapse min-w-[640px]">
+                        {/* 등급 열은 개수와 무관하게 총폭 고정(40%)을 균등 분할 — 3열이든 5열이든 표 폭이 같다 */}
+                        <table className="w-full text-[11.5px] border-collapse min-w-[640px] table-fixed">
+                          <colgroup>
+                            <col style={{ width: "56px" }} />
+                            <col />
+                            {detail.grades.map((g) => (
+                              <col key={g} style={{ width: `${40 / detail.grades.length}%` }} />
+                            ))}
+                            <col style={{ width: "36px" }} />
+                          </colgroup>
                           <thead>
                             <tr>
-                              <th className="border cd-border-c px-2 py-1.5 text-left cd-text-faint font-semibold w-16">대항목</th>
+                              <th className="border cd-border-c px-2 py-1.5 text-left cd-text-faint font-semibold">대항목</th>
                               <th className="border cd-border-c px-2 py-1.5 text-left cd-text-faint font-semibold">항목명</th>
-                              {MD_GRADES.map((g) => (
-                                <th key={g} className="border cd-border-c px-2 py-1.5 cd-text-faint font-semibold w-20">{g}</th>
+                              {detail.grades.map((g) => (
+                                <th key={g} className="border cd-border-c px-2 py-1.5 cd-text-faint font-semibold">{g}</th>
                               ))}
-                              <th className="border cd-border-c w-9" />
+                              <th className="border cd-border-c" />
                             </tr>
                           </thead>
                           <tbody>
@@ -543,7 +665,7 @@ export function QuoteSettingsBoard() {
                                     onChange={(e) => setRows((prev) => prev.map((x, xi) => (xi === i ? { ...x, label: e.target.value } : x)))}
                                   />
                                 </td>
-                                {MD_GRADES.map((g) => (
+                                {detail.grades.map((g) => (
                                   <td key={g} className="border cd-border-c px-1 py-0.5 text-center">
                                     {r.isParent ? (
                                       <span className="cd-text-faint text-[10px]">소계</span>
@@ -598,7 +720,7 @@ export function QuoteSettingsBoard() {
                         <Calculator className="w-3.5 h-3.5 cd-text-primary" /> 역산 시뮬레이터 — 편집 중인 기준·최신 노임단가로 즉석 검증
                       </p>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <input className="cd-input w-44 text-right text-sm" inputMode="numeric" placeholder="견적가 (예: 38000000)" value={simPrice} onChange={(e) => setSimPrice(e.target.value.replace(/[^\d]/g, ""))} />
+                        <AmountInput className="cd-input w-44 text-right text-sm" placeholder="견적가 (예: 38,000,000)" value={simPrice} onChange={(v) => setSimPrice(v)} />
                         <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3 py-1.5 text-xs font-semibold" onClick={runSim}>
                           역산 실행
                         </button>
@@ -611,7 +733,7 @@ export function QuoteSettingsBoard() {
                       {simResult && (
                         <div className="flex items-center gap-3 flex-wrap text-[12px] cd-text">
                           <span>총 <b>{simResult.totalMd}MD</b></span>
-                          {MD_GRADES.map((g) => (
+                          {detail.grades.map((g) => (
                             <span key={g}>{g} <b>{simResult.totals[g] ?? 0}</b></span>
                           ))}
                           <span>합계 <b>{won(simResult.sum)}</b>원</span>
@@ -648,13 +770,14 @@ export function QuoteSettingsBoard() {
                         <td className="border cd-border-c px-2 py-1 text-center font-mono">{y}</td>
                         {LABOR_GRADES.map((g) => (
                           <td key={g} className="border cd-border-c px-1 py-0.5">
-                            <input
+                            <AmountInput
                               className="w-full bg-transparent text-right outline-none px-1"
-                              value={laborYears[y].rates[g] != null ? String(laborYears[y].rates[g]) : ""}
-                              onChange={(e) =>
+                              value={laborYears[y].rates[g] != null ? laborYears[y].rates[g] : ""}
+                              placeholder=""
+                              onChange={(v) =>
                                 setLaborYears((prev) => ({
                                   ...prev,
-                                  [y]: { ...prev[y], rates: { ...prev[y].rates, [g]: Number(e.target.value.replace(/[^\d]/g, "")) || 0 } },
+                                  [y]: { ...prev[y], rates: { ...prev[y].rates, [g]: Number(v) || 0 } },
                                 }))
                               }
                             />
@@ -699,11 +822,12 @@ export function QuoteSettingsBoard() {
           {tab === "codes" && (
             <div className="flex flex-col gap-2.5 max-w-[560px]">
               {codes.map((c, i) => (
+                // .cd-input 은 width:100% 라 폭은 인라인으로 못박는다(그러지 않으면 코드 칸이 라벨 칸을 밀어낸다)
                 <div key={i} className="flex items-center gap-2">
-                  <input className="cd-input w-36 font-mono text-[12px]" value={c.code} placeholder="코드" onChange={(e) => setCodes((prev) => prev.map((x, xi) => (xi === i ? { ...x, code: e.target.value } : x)))} />
-                  <input className="cd-input flex-1 text-sm" value={c.label} placeholder="라벨" onChange={(e) => setCodes((prev) => prev.map((x, xi) => (xi === i ? { ...x, label: e.target.value } : x)))} />
-                  <label className="flex items-center gap-1 text-[11.5px] cd-text-faint">
-                    <input type="checkbox" checked={c.enabled} onChange={(e) => setCodes((prev) => prev.map((x, xi) => (xi === i ? { ...x, enabled: e.target.checked } : x)))} /> 사용
+                  <input className="cd-input font-mono text-[12px] shrink-0" style={{ width: "9rem" }} value={c.code} placeholder="코드" onChange={(e) => setCodes((prev) => prev.map((x, xi) => (xi === i ? { ...x, code: e.target.value } : x)))} />
+                  <input className="cd-input text-sm flex-1 min-w-0" style={{ width: "auto" }} value={c.label} placeholder="라벨" onChange={(e) => setCodes((prev) => prev.map((x, xi) => (xi === i ? { ...x, label: e.target.value } : x)))} />
+                  <label className="flex items-center gap-1 text-[11.5px] cd-text-faint whitespace-nowrap shrink-0">
+                    <input type="checkbox" className="shrink-0" checked={c.enabled} onChange={(e) => setCodes((prev) => prev.map((x, xi) => (xi === i ? { ...x, enabled: e.target.checked } : x)))} /> 사용
                   </label>
                   <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" onClick={() => setCodes((prev) => prev.filter((_, xi) => xi !== i))}>
                     <X className="w-3.5 h-3.5" />
@@ -724,12 +848,24 @@ export function QuoteSettingsBoard() {
           {tab === "report" && (
             <div className="flex flex-col gap-4">
               {/* 기간 필터 */}
+              {/* 기간 = 시작·종료 월 2칸. .cd-input 은 width:100% 라 폭을 명시해야 한 줄에 나란히 선다 */}
               <div className="flex items-center gap-2 flex-wrap text-[12px]">
-                <label className="flex items-center gap-1.5">기간
-                  <input type="month" className="cd-input text-[12px]" value={reportRange.from} onChange={(e) => setReportRange((r) => ({ ...r, from: e.target.value }))} />
-                </label>
+                <span className="cd-text whitespace-nowrap">기간</span>
+                <AutoDateInput
+                  mode="month"
+                  className="cd-input text-[12px] shrink-0"
+                  style={{ width: "9rem" }}
+                  value={reportRange.from}
+                  onChange={(next) => setReportRange((r) => ({ ...r, from: next }))}
+                />
                 <span className="cd-text-faint">~</span>
-                <input type="month" className="cd-input text-[12px]" value={reportRange.to} onChange={(e) => setReportRange((r) => ({ ...r, to: e.target.value }))} />
+                <AutoDateInput
+                  mode="month"
+                  className="cd-input text-[12px] shrink-0"
+                  style={{ width: "9rem" }}
+                  value={reportRange.to}
+                  onChange={(next) => setReportRange((r) => ({ ...r, to: next }))}
+                />
                 <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-50" disabled={reportLoading} onClick={() => void loadReport()}>
                   {reportLoading ? "조회 중..." : "조회"}
                 </button>
@@ -765,8 +901,8 @@ export function QuoteSettingsBoard() {
 
                   {/* 상황 변수별 · 금액 구간별 */}
                   <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                    <BucketTable title="상황 변수별 수주율 — 한 건에 여러 코드가 붙으면 중복 집계" buckets={report.bySituation} />
-                    <BucketTable title="금액 구간별 수주율" buckets={report.byAmountBand} />
+                    <BucketTable title="상황 변수별 수주율 — 한 건에 여러 코드가 붙으면 중복 집계" buckets={report.bySituation} compact />
+                    <BucketTable title="금액 구간별 수주율" buckets={report.byAmountBand} compact />
                   </div>
 
                   {/* 보정계수 제안 */}

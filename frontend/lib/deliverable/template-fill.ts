@@ -149,9 +149,38 @@ function isContinuation(fragment: string, value: string, slotParas: Set<number>,
  */
 function valueFor(slot: TemplateSlot, values: DeliverableValues): string {
   const raw = renderBinding(slot.binding, values, slot.format);
-  // 시·도 축약 + 건물명 제거에 더해 층까지 뗀다("서울 금천구 가산디지털1로 100").
-  // 기본양식 착수계도 첫 줄은 이 형태이고, 건물명·층은 둘째 줄이 있을 때만 쓴다.
-  return slot.binding === "company.address" ? compactAddress(raw).replace(/,\s*\d+층\s*$/, "") : raw;
+  // 주소는 시·도 축약 + 건물명 제거로 한 줄에 앉힌다(층은 남긴다 — 사업장 표기에 필요).
+  // 그래도 원본보다 길면 서명란 전체를 왼쪽으로 당겨 흡수한다(shiftLeft).
+  return slot.binding === "company.address" ? compactAddress(raw) : raw;
+}
+
+/** 반각 기준 표기 폭 — 한글·전각은 2, 나머지는 1(hwpx.ts 와 같은 척도). */
+function textWidth(s: string): number {
+  let w = 0;
+  for (const ch of s) w += /[가-힣ㄱ-ㅎㆍ-ㆎ가-힣　-〿！-｠]/.test(ch) ? 2 : 1;
+  return w;
+}
+
+/** 서명란을 왼쪽으로 당길 때 남겨 둘 최소 들여쓰기(칸) — 본문 왼쪽 끝에 붙지 않게. */
+const MIN_LEAD = 2;
+
+/** 문단 첫머리의 들여쓰기 공백 길이. */
+function leadWidth(fragment: string): number {
+  const m = /<hp:t>([\s\S]*?)<\/hp:t>/.exec(fragment);
+  return m ? (/^[ 　]*/.exec(m[1])?.[0] ?? "").length : 0;
+}
+
+/** 문단 첫머리의 들여쓰기 공백을 count 칸 걷어낸다(문단을 왼쪽으로 당긴다). */
+function shiftLeft(fragment: string, count: number): string {
+  if (count <= 0) return fragment;
+  let done = false;
+  return fragment.replace(/<hp:t>([\s\S]*?)<\/hp:t>/, (all, inner: string) => {
+    if (done) return all;
+    done = true;
+    const lead = /^[ 　]*/.exec(inner)?.[0] ?? "";
+    if (!lead) return all;
+    return `<hp:t>${inner.slice(Math.min(count, lead.length))}</hp:t>`;
+  });
 }
 
 function applySlots(xml: string, slots: TemplateSlot[], values: DeliverableValues): FillResult {
@@ -167,6 +196,9 @@ function applySlots(xml: string, slots: TemplateSlot[], values: DeliverableValue
     start: number;
     end: number;
     text: string;
+    /** 서명란 왼쪽 정렬 조정용 — 값을 넣어 원본보다 늘어난 폭(반각 칸) */
+    binding?: string;
+    overflow?: number;
   }
   const edits: Edit[] = [];
   for (const slot of slots) {
@@ -193,12 +225,15 @@ function applySlots(xml: string, slots: TemplateSlot[], values: DeliverableValue
       missed.push(slot);
       continue;
     }
-    const filled = fillParaValue(xml.slice(span.start, span.end), slot.label, slot.suffix, value);
+    const original = xml.slice(span.start, span.end);
+    const filled = fillParaValue(original, slot.label, slot.suffix, value);
     if (filled == null) {
       missed.push(slot);
       continue;
     }
-    edits.push({ start: span.start, end: span.end, text: filled });
+    // 원본이 한 줄에 들어갔으므로, 그 폭을 넘지 않으면 새 값도 한 줄에 들어간다
+    const overflow = textWidth(textPieces(filled).full) - textWidth(textPieces(original).full);
+    edits.push({ start: span.start, end: span.end, text: filled, binding: slot.binding, overflow });
 
     // 원본 양식의 값이 두 줄이면 그 아래에 **연장 문단**이 따로 있다(라벨 없이 나머지만 담긴 줄).
     // 값을 첫 문단에 통째로 넣었으므로 연장 문단을 비우지 않으면 옛 값의 꼬리가 그대로 남는다.
@@ -206,6 +241,16 @@ function applySlots(xml: string, slots: TemplateSlot[], values: DeliverableValue
     if (nextSpan && isContinuation(xml.slice(nextSpan.start, nextSpan.end), value, slotParas, slot.para! + 1)) {
       edits.push({ start: nextSpan.start, end: nextSpan.end, text: replaceTexts(xml.slice(nextSpan.start, nextSpan.end), "") });
     }
+  }
+
+  // 서명란(계약상대자·주소·상호·대표자)은 값이 원본보다 길어지기 쉽다. 줄을 접는 대신
+  // **네 줄을 함께 왼쪽으로 당겨** 흡수한다 — 따로 당기면 서로 어긋나 보이므로 같은 칸수로.
+  const sign = edits.filter((e) => e.binding?.startsWith("company."));
+  const need = Math.max(0, ...sign.map((e) => e.overflow ?? 0));
+  if (need > 0 && sign.length) {
+    const room = Math.min(...sign.map((e) => Math.max(0, leadWidth(e.text) - MIN_LEAD)));
+    const shift = Math.min(need, room);
+    if (shift > 0) for (const e of sign) e.text = shiftLeft(e.text, shift);
   }
 
   edits.sort((a, b) => b.start - a.start);

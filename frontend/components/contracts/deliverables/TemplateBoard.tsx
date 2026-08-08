@@ -48,19 +48,54 @@ interface FacilityHit {
   company_name: string;
 }
 
+/** 재구축(spec) 양식의 블록 — 좌표 대신 이 목록이 구조를 보여준다. */
+interface BlockDetail {
+  kind: string;
+  text?: string;
+  binding?: string;
+  rows?: { label?: string; binding?: string }[];
+  columns?: unknown[];
+}
+
+/** 화면에 한 줄로 보여줄 항목(overlay 는 좌표+라벨, spec 은 블록 종류+요약). */
+interface RowDetail {
+  where: string;
+  label: string;
+  binding: string;
+}
+
+const BLOCK_LABEL: Record<string, string> = {
+  note: "머리 표기",
+  title: "표제",
+  fields: "항목 목록",
+  table: "표",
+  para: "본문",
+  dateLine: "작성일",
+  signature: "서명란",
+  receiver: "수신처",
+  stampBox: "확인란",
+  spacer: "여백",
+};
+
 const fmtDate = (v: string | null): string => (v ? v.slice(0, 10).replace(/-/g, ".") : "—");
 
 /** 매핑 한 줄의 위치 표기 — 사용자가 원본과 대조할 수 있게 좌표를 그대로 보여준다. */
 const slotWhere = (s: SlotDetail): string =>
   s.target === "cell" ? `표 ${s.table} · ${s.row}행 ${s.col}열` : `문단 ${s.para}`;
 
+function blockSummary(b: BlockDetail): string {
+  if (b.rows?.length) return b.rows.map((r) => r.label || r.binding || "").filter(Boolean).join(" · ") || `${b.rows.length}행`;
+  if (b.kind === "table") return `${b.rows?.length ?? 0}행 × ${b.columns?.length ?? 0}열`;
+  return (b.text ?? "").slice(0, 40) || "—";
+}
+
 export function TemplateBoard() {
   const router = useRouter();
   const { theme } = useCdashTheme();
   const [templates, setTemplates] = useState<TemplateSummary[]>([]);
   const [selected, setSelected] = useState<string>("");
-  /** templateId → docType → 그 서식의 값 자리 */
-  const [slots, setSlots] = useState<Record<string, Record<string, SlotDetail[]>>>({});
+  /** templateId → docType → 그 서식에서 보여줄 항목 */
+  const [slots, setSlots] = useState<Record<string, Record<string, RowDetail[]>>>({});
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -152,9 +187,26 @@ export function TemplateBoard() {
       const res = await fetch(`/api/contracts/deliverables/templates/${templateId}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "양식을 불러오지 못했습니다.");
-      const docs = (data?.template?.profile?.docs ?? []) as { docType: string; slots: SlotDetail[] }[];
-      const map: Record<string, SlotDetail[]> = {};
-      for (const d of docs) map[d.docType] = d.slots ?? [];
+      const tpl = data?.template ?? {};
+      const map: Record<string, RowDetail[]> = {};
+      if (tpl.renderMode === "overlay") {
+        for (const d of (tpl.profile?.docs ?? []) as { docType: string; slots: SlotDetail[] }[]) {
+          map[d.docType] = (d.slots ?? []).map((s) => ({
+            where: slotWhere(s),
+            label: s.label || s.suffix || "—",
+            binding: s.binding,
+          }));
+        }
+      } else {
+        // 재구축(spec) 양식은 좌표가 아니라 블록 목록이 곧 구조다
+        for (const s of (tpl.specs ?? []) as { docType: string; blocks: BlockDetail[] }[]) {
+          map[s.docType] = (s.blocks ?? []).map((b) => ({
+            where: BLOCK_LABEL[b.kind] ?? b.kind,
+            label: blockSummary(b),
+            binding: b.binding ?? "",
+          }));
+        }
+      }
       setSlots((prev) => ({ ...prev, [templateId]: map }));
     } catch (err) {
       setMsg((err as Error).message);
@@ -240,7 +292,8 @@ export function TemplateBoard() {
               <FileUp className="w-4 h-4 cd-text-primary" /> 양식 등록
             </h2>
             <p className="text-[11px] cd-text-faint mt-0.5">
-              발주처가 자기네 양식을 요구할 때 등록합니다. 한글 파일(.hwp)은 한컴에서 <b>HWPX</b>로 저장해 올려주세요.
+              발주처가 자기네 양식을 요구할 때 등록합니다. <b>HWPX</b>는 원본 서식을 그대로 두고 값만 채우므로 가장 정확합니다.
+              한글 파일(.hwp)은 한컴에서 HWPX로 저장해 올려주세요. PDF(스캔본)만 있으면 그것도 되지만 서식이 근사치가 됩니다.
             </p>
           </div>
           <div className="p-4 flex flex-col gap-3">
@@ -299,7 +352,7 @@ export function TemplateBoard() {
             <div className="flex gap-2 items-center">
               <input
                 type="file"
-                accept=".hwpx"
+                accept=".hwpx,.pdf"
                 className="cd-input text-[12.5px] flex-1 min-w-0"
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               />
@@ -333,9 +386,9 @@ export function TemplateBoard() {
                       <span className="text-[11px] px-1.5 py-0.5 rounded-md border cd-border-c cd-text-faint">
                         {DELIVERABLE_KIND_LABEL[t.kind]}
                       </span>
-                      {t.renderMode === "overlay" && (
-                        <span className="text-[11px] px-1.5 py-0.5 rounded-md border cd-border-c cd-text-faint">원본 서식 유지</span>
-                      )}
+                      <span className="text-[11px] px-1.5 py-0.5 rounded-md border cd-border-c cd-text-faint">
+                        {t.renderMode === "overlay" ? "원본 서식 유지" : "서식 재구축"}
+                      </span>
                     </div>
                     <div className="text-[11.5px] cd-text-faint mt-1">
                       {t.ownerFacilityName ?? "발주처 미지정"} · 서식 {t.docs.length}종 ·{" "}
@@ -396,10 +449,12 @@ export function TemplateBoard() {
                         className="flex items-center gap-2 px-3 py-1.5 text-[12px] border-b cd-border-c last:border-b-0"
                       >
                         <span className="cd-text-faint shrink-0" style={{ width: "8rem" }}>
-                          {slotWhere(s)}
+                          {s.where}
                         </span>
-                        <span className="cd-text truncate flex-1 min-w-0">{s.label || s.suffix || "—"}</span>
-                        <span className="cd-text-primary shrink-0 text-[11.5px]">{BINDING_LABEL[s.binding] ?? s.binding}</span>
+                        <span className="cd-text truncate flex-1 min-w-0">{s.label}</span>
+                        <span className="cd-text-primary shrink-0 text-[11.5px]">
+                          {s.binding ? BINDING_LABEL[s.binding] ?? s.binding : ""}
+                        </span>
                       </div>
                     ))}
                     {(currentSlots[d.docType] ?? []).length === 0 && (

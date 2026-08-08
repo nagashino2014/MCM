@@ -3,7 +3,8 @@ import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { putContractDocument, sanitizeFilename } from "@/lib/storage/contract-document-storage";
 import { analyzeTemplateHwpx } from "@/lib/deliverable/template-analyze";
-import { createTemplate, listTemplates, saveTemplateProfile, setTemplateSource } from "@/lib/deliverable/store";
+import { analyzeTemplateScan } from "@/lib/deliverable/template-scan";
+import { createTemplate, listTemplates, saveTemplateProfile, saveTemplateSpec, setTemplateSource } from "@/lib/deliverable/store";
 import type { DeliverableKind, TemplateSourceKind } from "@/lib/deliverable/types";
 
 /**
@@ -35,11 +36,11 @@ export async function GET(req: NextRequest) {
         renderMode: t.renderMode,
         analyzedAt: t.analyzedAt,
         analyzeNote: t.analyzeNote,
-        docs: (t.profile?.docs ?? []).map((d) => ({
-          docType: d.docType,
-          title: d.title,
-          slotCount: d.slots.length,
-        })),
+        // overlay 는 매핑(profile)에서, spec(스캔 PDF 재구축)은 블록 수로 규모를 보여준다
+        docs:
+          t.renderMode === "overlay"
+            ? (t.profile?.docs ?? []).map((d) => ({ docType: d.docType, title: d.title, slotCount: d.slots.length }))
+            : t.specs.map((s) => ({ docType: s.docType, title: s.title, slotCount: s.blocks.length })),
         updatedAt: t.updatedAt,
       })),
     });
@@ -66,14 +67,16 @@ export async function POST(req: NextRequest) {
     }
 
     const lower = (file.name || "").toLowerCase();
-    const sourceKind: TemplateSourceKind = lower.endsWith(".hwpx") ? "hwpx" : lower.endsWith(".pdf") ? "pdf" : "docx";
-    if (sourceKind !== "hwpx") {
-      // 한글 원본(.hwp)은 바이너리라 우리가 못 읽는다 — 한컴에서 HWPX 로 저장해 올려야 한다.
+    const sourceKind: TemplateSourceKind | null = lower.endsWith(".hwpx") ? "hwpx" : lower.endsWith(".pdf") ? "pdf" : null;
+    if (!sourceKind) {
+      // 한글 원본(.hwp)은 바이너리라 우리가 못 읽는다 — 한컴에서 HWPX 로 저장해야 한다.
       return NextResponse.json(
-        { error: "현재는 HWPX 양식만 지원합니다. 한글에서 '다른 이름으로 저장 → HWPX' 로 변환해 올려주세요." },
+        { error: "HWPX 또는 PDF 만 올릴 수 있습니다. 한글 파일(.hwp)은 '다른 이름으로 저장 → HWPX' 로 변환해 주세요." },
         { status: 400 }
       );
     }
+    // HWPX 는 원본을 그대로 두고 값만 주입한다(서식 보존). PDF 는 구조를 읽어 재구축한다(근사).
+    const renderMode = sourceKind === "hwpx" ? "overlay" : "spec";
 
     const bytes = new Uint8Array(await file.arrayBuffer());
     const templateId = await createTemplate({
@@ -81,19 +84,25 @@ export async function POST(req: NextRequest) {
       kind,
       ownerFacilityId,
       sourceKind,
-      renderMode: "overlay",
+      renderMode,
       createdBy: actor.userId,
     });
 
     const sourceKey = `deliverable-templates/${templateId}/${sanitizeFilename(file.name || "form")}`;
-    await putContractDocument(sourceKey, Buffer.from(bytes), "application/vnd.hancom.hwpx");
+    const contentType = sourceKind === "hwpx" ? "application/vnd.hancom.hwpx" : "application/pdf";
+    await putContractDocument(sourceKey, Buffer.from(bytes), contentType);
     await setTemplateSource(templateId, { sourceKind, sourceKey });
 
     // 분석이 실패해도 템플릿은 남긴다 — 사용자가 화면에서 직접 매핑할 수 있다.
     let analyzeError: string | null = null;
     try {
-      const { profile } = await analyzeTemplateHwpx(bytes, kind);
-      await saveTemplateProfile(templateId, profile);
+      if (sourceKind === "hwpx") {
+        const { profile } = await analyzeTemplateHwpx(bytes, kind);
+        await saveTemplateProfile(templateId, profile);
+      } else {
+        const { specs, note, model } = await analyzeTemplateScan(bytes, kind);
+        await saveTemplateSpec(templateId, specs, { analyzedAt: new Date().toISOString(), analyzeModel: model, analyzeNote: note ?? null });
+      }
     } catch (e) {
       analyzeError = (e as Error).message;
       console.warn("[deliverable] 양식 분석 실패:", analyzeError);

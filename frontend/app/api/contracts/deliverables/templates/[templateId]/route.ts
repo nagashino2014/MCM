@@ -4,7 +4,8 @@ import { readStorageObject } from "@/lib/contracts/document-bundle";
 import { parseHwpx } from "@/lib/deliverable/hwpx-doc";
 import { outlineHwpx } from "@/lib/deliverable/template-form";
 import { analyzeTemplateHwpx } from "@/lib/deliverable/template-analyze";
-import { deleteTemplate, getTemplate, saveTemplateProfile } from "@/lib/deliverable/store";
+import { analyzeTemplateScan } from "@/lib/deliverable/template-scan";
+import { deleteTemplate, getTemplate, saveTemplateProfile, saveTemplateSpec } from "@/lib/deliverable/store";
 import type { TemplateProfile } from "@/lib/deliverable/types";
 
 /**
@@ -52,7 +53,14 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
 
     if (body.reanalyze) {
       if (!tpl.sourceKey) return NextResponse.json({ error: "원본 파일이 없어 재분석할 수 없습니다." }, { status: 400 });
-      const { profile } = await analyzeTemplateHwpx(await readStorageObject(tpl.sourceKey), tpl.kind);
+      const source = await readStorageObject(tpl.sourceKey);
+      if (tpl.sourceKind === "pdf") {
+        // 스캔 PDF 는 구조를 다시 그리는 것이라 재분석 시 고정밀 모델을 쓴다(저화질 대비)
+        const { specs, note, model } = await analyzeTemplateScan(source, tpl.kind, { highQuality: true });
+        await saveTemplateSpec(templateId, specs, { analyzedAt: new Date().toISOString(), analyzeModel: model, analyzeNote: note ?? null });
+        return NextResponse.json({ specs });
+      }
+      const { profile } = await analyzeTemplateHwpx(source, tpl.kind);
       await saveTemplateProfile(templateId, profile);
       return NextResponse.json({ profile });
     }

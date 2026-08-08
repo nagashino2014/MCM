@@ -171,13 +171,21 @@ export function planDrops(paras: Para[], wrapped: number[]): Set<number> {
   });
   if (cur.length) runs.push(cur);
 
+  // 마지막 줄(수신처 "○○ 귀하") 바로 앞 여백은 한 줄 이상 남긴다 — 서명란에 딱 붙으면 안 된다
+  let lastText = -1;
+  paras.forEach((p, i) => {
+    if (!isBlank(p)) lastText = i;
+  });
+  const floorOf = (run: number[]) => (run.length && run[run.length - 1] === lastText - 1 ? 1 : 0);
+
   for (let n = 0; n < need; n += 1) {
     let best = -1;
     for (let r = 0; r < runs.length; r += 1) {
+      if (runs[r].length <= floorOf(runs[r])) continue;
       // 같은 길이면 뒤쪽(문서 하단) 우선 — 본문 흐름에 영향이 적다
       if (best < 0 || runs[r].length >= runs[best].length) best = r;
     }
-    if (best < 0 || !runs[best].length) break;
+    if (best < 0) break;
     drops.add(runs[best].pop() as number);
   }
   return drops;

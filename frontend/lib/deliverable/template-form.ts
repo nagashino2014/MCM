@@ -178,8 +178,17 @@ export function findCellSpan(tableXml: string, row: number, col: number): { star
   return null;
 }
 
-/** 문단·셀 XML 안의 첫 <hp:t> 텍스트를 새 값으로 바꾸고 나머지 <hp:t> 는 비운다. */
+/**
+ * 셀·문단 XML 의 텍스트를 새 값으로 바꾼다.
+ * ⚠ 여분 문단을 **비우기만 하면 개행이 남아** 셀 높이가 늘고 아래가 밀린다(기본양식에서 겪은 문제).
+ * 첫 문단만 남기고 나머지 문단은 통째로 지운다.
+ */
 export function replaceTexts(fragment: string, next: string): string {
+  const spans = scanParaSpans(fragment);
+  if (spans.length > 1) {
+    // 뒤에서부터 지워야 앞 구간의 오프셋이 밀리지 않는다
+    for (const s of spans.slice(1).reverse()) fragment = fragment.slice(0, s.start) + fragment.slice(s.end);
+  }
   let done = false;
   return fragment.replace(/<hp:t>[\s\S]*?<\/hp:t>|<hp:t\/>/g, () => {
     if (done) return "<hp:t></hp:t>";

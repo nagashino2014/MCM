@@ -72,7 +72,12 @@ function findSpan(full: string, needle: string, from = 0): { start: number; end:
  *
  * 라벨·접미어와 값이 같은 <hp:t> 조각에 섞여 있어도 조각 단위로 잘라 붙여 서식(굵기 등)을 지킨다.
  */
-function fillParaValue(fragment: string, label: string, suffix: string | undefined, value: string): string | null {
+function fillParaValue(
+  fragment: string,
+  label: string,
+  suffix: string | undefined,
+  value: string
+): { xml: string; headWidth: number } | null {
   const { pieces, full } = textPieces(fragment);
   if (!pieces.length) return null;
 
@@ -116,7 +121,21 @@ function fillParaValue(fragment: string, label: string, suffix: string | undefin
     cursor = p.end;
   }
   out += fragment.slice(cursor);
-  return placed ? out : null;
+  return placed ? { xml: out, headWidth: textWidth(head + gap) } : null;
+}
+
+/** 값을 limit(반각 칸) 이하가 되도록 공백 경계에서 두 도막으로 나눈다. */
+function splitByWidth(value: string, limit: number): [string, string] {
+  if (limit <= 0 || textWidth(value) <= limit) return [value, ""];
+  const parts = value.split(/(\s+)/);
+  let head = "";
+  let i = 0;
+  for (; i < parts.length; i += 1) {
+    if (head.trim() && textWidth(head + parts[i]) > limit) break;
+    head += parts[i];
+  }
+  const rest = parts.slice(i).join("").trimStart();
+  return rest ? [head.trimEnd(), rest] : [value, ""];
 }
 
 export interface FillResult {
@@ -128,19 +147,20 @@ export interface FillResult {
 /**
  * 앞 문단 값의 **연장 줄**인가 — 라벨 없이 앞 값의 나머지만 담긴 줄.
  * 양식에 샘플 값이 두 줄로 들어 있을 때 생긴다("… 통합환경 인허가 및" / "PSM 외 작성 용역").
- * 값을 첫 문단에 통째로 넣으므로 이 줄을 비우지 않으면 옛 값의 꼬리가 남는다.
+ * 새 값이 길면 이 자리에 나머지를 담고, 짧으면 지운다(안 그러면 옛 값의 꼬리가 남는다).
  *
- * ⚠ 판정은 **그 줄의 내용이 새 값 안에 실제로 있을 때**로 좁힌다. 줄 모양만 보면
- * 착수계의 "(₩171,500,000) VAT포함" 처럼 독립된 둘째 줄까지 지워 버린다.
+ * ⚠ 착수계의 "(₩171,500,000) VAT포함" 처럼 **괄호·통화기호로 시작하는 독립 표기**는 제외한다 —
+ * 라벨이 없다는 것만으로 지우면 멀쩡한 둘째 줄까지 없앤다.
  */
-function isContinuation(fragment: string, value: string, slotParas: Set<number>, paraIndex?: number): boolean {
+function isContinuation(fragment: string, slotParas: Set<number>, paraIndex?: number): boolean {
   if (paraIndex != null && slotParas.has(paraIndex)) return false; // 자기 값 자리가 있는 문단
   const { full } = textPieces(fragment);
-  const text = squeeze(full);
+  const text = full.trim();
   if (!text) return false;
   if (/[:：]/.test(text)) return false;
   if (/^(\d+\s*[.)]|[□■○●▪·-])/.test(text)) return false;
-  return squeeze(value).includes(text);
+  if (/^[(（[［{＜<₩￦$]/.test(text)) return false;
+  return true;
 }
 
 /**
@@ -226,21 +246,35 @@ function applySlots(xml: string, slots: TemplateSlot[], values: DeliverableValue
       continue;
     }
     const original = xml.slice(span.start, span.end);
-    const filled = fillParaValue(original, slot.label, slot.suffix, value);
+    const origWidth = textWidth(textPieces(original).full);
+
+    // 원본 양식의 값이 두 줄이면 그 아래에 **연장 문단**이 따로 있다(라벨 없이 나머지만 담긴 줄).
+    const nextSpan = slot.para != null ? byPara.get(slot.para + 1) : undefined;
+    const nextXml = nextSpan ? xml.slice(nextSpan.start, nextSpan.end) : "";
+    const hasContinuation = !!nextSpan && isContinuation(nextXml, slotParas, slot.para! + 1);
+
+    let filled = fillParaValue(original, slot.label, slot.suffix, value);
     if (filled == null) {
       missed.push(slot);
       continue;
     }
-    // 원본이 한 줄에 들어갔으므로, 그 폭을 넘지 않으면 새 값도 한 줄에 들어간다
-    const overflow = textWidth(textPieces(filled).full) - textWidth(textPieces(original).full);
-    edits.push({ start: span.start, end: span.end, text: filled, binding: slot.binding, overflow });
 
-    // 원본 양식의 값이 두 줄이면 그 아래에 **연장 문단**이 따로 있다(라벨 없이 나머지만 담긴 줄).
-    // 값을 첫 문단에 통째로 넣었으므로 연장 문단을 비우지 않으면 옛 값의 꼬리가 그대로 남는다.
-    const nextSpan = slot.para != null ? byPara.get(slot.para + 1) : undefined;
-    if (nextSpan && isContinuation(xml.slice(nextSpan.start, nextSpan.end), value, slotParas, slot.para! + 1)) {
-      edits.push({ start: nextSpan.start, end: nextSpan.end, text: replaceTexts(xml.slice(nextSpan.start, nextSpan.end), "") });
+    if (hasContinuation) {
+      // 값이 한 줄을 넘으면 원본처럼 두 줄로 나눠 담는다 — 둘째 줄은 값 시작 위치에 맞춰
+      // 들여쓴다(그냥 넘기면 한글이 접어 왼쪽 끝에 붙는다). 남으면 연장 문단은 지운다.
+      const [head, rest] = splitByWidth(value, Math.max(0, origWidth - filled.headWidth));
+      if (rest) {
+        const again = fillParaValue(original, slot.label, slot.suffix, head);
+        if (again) filled = again;
+        edits.push({ start: nextSpan!.start, end: nextSpan!.end, text: replaceTexts(nextXml, " ".repeat(filled.headWidth) + rest) });
+      } else {
+        edits.push({ start: nextSpan!.start, end: nextSpan!.end, text: "" });
+      }
     }
+
+    // 원본이 한 줄에 들어갔으므로, 그 폭을 넘지 않으면 새 값도 한 줄에 들어간다
+    const overflow = textWidth(textPieces(filled.xml).full) - origWidth;
+    edits.push({ start: span.start, end: span.end, text: filled.xml, binding: slot.binding, overflow });
   }
 
   // 서명란(계약상대자·주소·상호·대표자)은 값이 원본보다 길어지기 쉽다. 줄을 접는 대신

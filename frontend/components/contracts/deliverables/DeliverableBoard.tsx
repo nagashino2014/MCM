@@ -421,11 +421,11 @@ export function DeliverableBoard() {
               type="button"
               className="cd-btn rounded-xl border cd-border-c px-3 py-2 text-[13px] flex items-center gap-1.5"
               onClick={downloadHwpx}
-              disabled={busy || (!!templateId && template?.renderMode !== "overlay")}
+              disabled={busy}
               title={
                 !templateId || template?.renderMode === "overlay"
                   ? "한글에서 편집 가능한 원본"
-                  : "이 양식은 원본 한글 파일이 없어 PDF 만 제공합니다"
+                  : "스캔본을 재구성한 한글 파일 — 서식이 원본과 다를 수 있어 한글에서 다듬어 쓰세요"
               }
             >
               <Download className="w-4 h-4" /> HWPX

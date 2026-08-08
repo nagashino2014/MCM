@@ -20,7 +20,7 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
 
     const { hwpxBytes, fileBase } = await generateDeliverableArtifacts(deliverableId, { persist });
     if (!hwpxBytes) {
-      return NextResponse.json({ error: "이 문서는 HWPX 를 지원하지 않습니다(발주처 자체양식은 PDF 만 제공)." }, { status: 400 });
+      return NextResponse.json({ error: "이 문서의 HWPX 를 만들지 못했습니다. 잠시 후 다시 시도해 주세요." }, { status: 400 });
     }
     return new NextResponse(Buffer.from(hwpxBytes), {
       headers: {

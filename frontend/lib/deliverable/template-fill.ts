@@ -7,6 +7,7 @@
 
 import JSZip from "jszip";
 import { renderBinding } from "./format";
+import { compactAddress } from "./hwpx";
 import { dropParagraphs, findCellSpan, replaceTexts, scanParaSpans, escapeXml, type ParaSpan } from "./template-form";
 import type { DeliverableValues, TemplateProfile, TemplateSlot } from "./types";
 
@@ -43,19 +44,25 @@ function textPieces(fragment: string): { pieces: TextPiece[]; full: string } {
   return { pieces, full };
 }
 
-/** 공백을 무시하고 찾은 부분 문자열의 원문 끝 오프셋(못 찾으면 -1). */
-function offsetAfter(full: string, needle: string, from = 0): number {
+/**
+ * 공백을 무시하고 찾은 부분 문자열의 **원문** 구간(못 찾으면 null).
+ * 양식 라벨은 "계 약 명"처럼 자간이 공백으로 들어가 있어 압축해서 찾아야 하는데,
+ * 되돌릴 때 압축 길이로 빼면 그 공백만큼 어긋난다(그래서 시작 위치도 원문에서 직접 잡는다).
+ */
+function findSpan(full: string, needle: string, from = 0): { start: number; end: number } | null {
   const key = squeeze(needle);
-  if (!key) return -1;
+  if (!key) return null;
   const at = squeeze(full.slice(from)).indexOf(key);
-  if (at < 0) return -1;
+  if (at < 0) return null;
   let seen = 0;
+  let start = -1;
   for (let i = from; i < full.length; i += 1) {
     if (/\s/.test(full[i])) continue;
+    if (seen === at && start < 0) start = i;
     seen += 1;
-    if (seen === at + key.length) return i + 1;
+    if (seen === at + key.length) return { start: start < 0 ? i : start, end: i + 1 };
   }
-  return -1;
+  return null;
 }
 
 /**
@@ -72,34 +79,36 @@ function fillParaValue(fragment: string, label: string, suffix: string | undefin
   // 값 시작 = 라벨 끝(+구분자). 라벨이 없으면 문단 처음부터.
   let cut = 0;
   if (label) {
-    const labelEnd = offsetAfter(full, label);
-    if (labelEnd < 0) return null;
-    cut = labelEnd;
-    const sep = /^\s*[:：]\s*/.exec(full.slice(labelEnd));
+    const span = findSpan(full, label);
+    if (!span) return null;
+    cut = span.end;
+    const sep = /^\s*[:：]\s*/.exec(full.slice(cut));
     if (sep) cut += sep[0].length;
   }
 
-  // 값 끝 = 접미어 시작(앞 공백 포함). 접미어가 없으면 문단 끝까지.
+  // 값 끝 = 접미어 시작(앞 공백까지 물려 잡는다). 접미어가 없으면 문단 끝까지.
   let tailStart = full.length;
   if (suffix) {
-    const end = offsetAfter(full, suffix, cut);
-    if (end < 0) return null;
-    const start = end - suffix.replace(/\s+/g, "").length;
-    // 원문에서 접미어가 시작하는 자리를 앞 공백까지 물려 잡는다
-    let s = start;
+    const span = findSpan(full, suffix, cut);
+    if (!span) return null;
+    let s = span.start;
     while (s > cut && /\s/.test(full[s - 1])) s -= 1;
     tailStart = Math.max(cut, s);
   }
-  if (!label && !suffix) tailStart = full.length;
 
   const head = full.slice(0, cut);
+  // 빈 양식은 "계 약 명 :" 처럼 구분자에서 끝나 값이 콜론에 바로 붙는다 → 한 칸 띄운다.
+  const gap = /[:：]$/.test(head) ? " " : "";
+  // 접미어 앞도 마찬가지("…㈜대표이사" 처럼 붙지 않게)
+  const tailGap = tailStart < full.length && !/^\s/.test(full.slice(tailStart)) ? " " : "";
+
   let out = "";
   let placed = false;
   let cursor = 0;
   for (const p of pieces) {
     let next = head.slice(Math.min(p.from, head.length), Math.min(p.to, head.length));
     if (!placed && p.to >= cut) {
-      next += value;
+      next += gap + value + tailGap;
       placed = true;
     }
     if (p.to > tailStart) next += full.slice(Math.max(p.from, tailStart), p.to);
@@ -116,8 +125,38 @@ export interface FillResult {
   missed: TemplateSlot[];
 }
 
+/**
+ * 앞 문단 값의 **연장 줄**인가 — 라벨 없이 앞 값의 나머지만 담긴 줄.
+ * 양식에 샘플 값이 두 줄로 들어 있을 때 생긴다("… 통합환경 인허가 및" / "PSM 외 작성 용역").
+ * 값을 첫 문단에 통째로 넣으므로 이 줄을 비우지 않으면 옛 값의 꼬리가 남는다.
+ *
+ * ⚠ 판정은 **그 줄의 내용이 새 값 안에 실제로 있을 때**로 좁힌다. 줄 모양만 보면
+ * 착수계의 "(₩171,500,000) VAT포함" 처럼 독립된 둘째 줄까지 지워 버린다.
+ */
+function isContinuation(fragment: string, value: string, slotParas: Set<number>, paraIndex?: number): boolean {
+  if (paraIndex != null && slotParas.has(paraIndex)) return false; // 자기 값 자리가 있는 문단
+  const { full } = textPieces(fragment);
+  const text = squeeze(full);
+  if (!text) return false;
+  if (/[:：]/.test(text)) return false;
+  if (/^(\d+\s*[.)]|[□■○●▪·-])/.test(text)) return false;
+  return squeeze(value).includes(text);
+}
+
+/**
+ * 자리에 넣을 값. 주소는 축약해 **한 줄에 앉힌다** — 발주처 양식은 여백 줄이 빠듯해
+ * 주소가 두 줄로 흐르면 그 아래(인감 포함)가 밀리고, 접힌 둘째 줄은 들여쓰기도 잃는다.
+ */
+function valueFor(slot: TemplateSlot, values: DeliverableValues): string {
+  const raw = renderBinding(slot.binding, values, slot.format);
+  // 시·도 축약 + 건물명 제거에 더해 층까지 뗀다("서울 금천구 가산디지털1로 100").
+  // 기본양식 착수계도 첫 줄은 이 형태이고, 건물명·층은 둘째 줄이 있을 때만 쓴다.
+  return slot.binding === "company.address" ? compactAddress(raw).replace(/,\s*\d+층\s*$/, "") : raw;
+}
+
 function applySlots(xml: string, slots: TemplateSlot[], values: DeliverableValues): FillResult {
   const missed: TemplateSlot[] = [];
+  const slotParas = new Set(slots.filter((s) => s.target === "para" && s.para != null).map((s) => s.para as number));
   // 뒤에서부터 고쳐야 앞 구간의 오프셋이 밀리지 않는다
   const spans = scanParaSpans(xml);
   const byPara = new Map<number, ParaSpan>(spans.map((s) => [s.index, s]));
@@ -131,7 +170,7 @@ function applySlots(xml: string, slots: TemplateSlot[], values: DeliverableValue
   }
   const edits: Edit[] = [];
   for (const slot of slots) {
-    const value = renderBinding(slot.binding, values, slot.format);
+    const value = valueFor(slot, values);
     if (slot.target === "cell") {
       const span = slot.table != null ? tableSpan.get(slot.table) : undefined;
       if (!span || slot.row == null || slot.col == null) {
@@ -160,6 +199,13 @@ function applySlots(xml: string, slots: TemplateSlot[], values: DeliverableValue
       continue;
     }
     edits.push({ start: span.start, end: span.end, text: filled });
+
+    // 원본 양식의 값이 두 줄이면 그 아래에 **연장 문단**이 따로 있다(라벨 없이 나머지만 담긴 줄).
+    // 값을 첫 문단에 통째로 넣었으므로 연장 문단을 비우지 않으면 옛 값의 꼬리가 그대로 남는다.
+    const nextSpan = slot.para != null ? byPara.get(slot.para + 1) : undefined;
+    if (nextSpan && isContinuation(xml.slice(nextSpan.start, nextSpan.end), value, slotParas, slot.para! + 1)) {
+      edits.push({ start: nextSpan.start, end: nextSpan.end, text: replaceTexts(xml.slice(nextSpan.start, nextSpan.end), "") });
+    }
   }
 
   edits.sort((a, b) => b.start - a.start);

@@ -12,7 +12,7 @@
 import { readStorageObject } from "@/lib/contracts/document-bundle";
 import { putContractDocument, sanitizeFilename } from "@/lib/storage/contract-document-storage";
 import { CATALOG_BY_TYPE, adjustSpecForValues } from "./catalog";
-import { renderDeliverableHwpx } from "./hwpx";
+import { compactAddress, renderDeliverableHwpx } from "./hwpx";
 import { renderHwpxToPdf } from "./hwpx-pdf";
 import { renderDeliverablePdf } from "./pdf";
 import { renderSpecHwpx } from "./spec-hwpx";
@@ -98,12 +98,17 @@ export async function generateDeliverableArtifacts(
     const specs = await resolveSpecs(row);
     if (!specs.length) throw new Error("생성할 서식을 선택하세요.");
     const adjusted = specs.map((s) => adjustSpecForValues(s, row.values));
-    bytes = await renderDeliverablePdf(adjusted, row.values);
+    // 재구축 양식의 주소는 한 줄로 앉힌다 — 접히면 들여쓰기를 잃고 아래가 밀린다
+    const specValues = {
+      ...row.values,
+      "company.address": compactAddress(String(row.values["company.address"] ?? "")),
+    };
+    bytes = await renderDeliverablePdf(adjusted, specValues);
     // 재구축 양식도 한글에서 손볼 수 있게 HWPX 를 함께 낸다(사용자 요청) —
     // 서식이 원본과 똑같지는 않지만 고쳐 쓸 수 있다는 점이 중요하다.
     if (!hwpxBytes) {
       try {
-        hwpxBytes = await renderSpecHwpx(adjusted, row.values);
+        hwpxBytes = await renderSpecHwpx(adjusted, specValues);
       } catch (err) {
         console.warn("[deliverable] 재구축 HWPX 생성 실패(PDF 만 제공):", (err as Error).message);
       }

@@ -169,6 +169,23 @@ function inlineStamp(sectionXml: string): string {
     .replace(/horzOffset="\d+"/, 'horzOffset="0"');
 }
 
+/**
+ * 블록 사이 빈 줄 수(사용자 확정 규칙).
+ * LLM 이 준 spacer 에 맡기면 문서마다 들쭉날쭉해서, 여기서 못 박는다.
+ */
+function gapBetween(prev: DocBlock["kind"] | null, next: DocBlock["kind"]): number {
+  if (!prev) return 0;
+  if (prev === "note") return 0; // "[첨부 1]" 바로 아래가 표제
+  if (prev === "title") return 2;
+  if (next === "receiver") return 3; // 서명란과 수신처는 넉넉히
+  if (prev === "fields" && next === "para") return 2;
+  if (prev === "para" && next === "dateLine") return 2;
+  if (prev === "dateLine" && next === "signature") return 2;
+  if (prev === "table") return 1;
+  if (next === "table") return 0; // 표 바로 위는 보통 "9. 준공금액(단위:원)" 소제목
+  return 0;
+}
+
 function blockXml(block: DocBlock, values: DeliverableValues, stampXml: string): string {
   switch (block.kind) {
     case "note":
@@ -222,18 +239,25 @@ export async function renderSpecHwpx(specs: DeliverableSpec[], values: Deliverab
 
   const body = specs
     .map((spec, si) => {
-      const blocks = spec.blocks.map((b) => blockXml(b, values, stampXml)).join("");
-      // 첫 문단에는 용지 설정(secPr)이 실려야 한다 — 한글이 이걸로 페이지를 잡는다
-      if (si > 0) return `<hp:p id="0" paraPrIDRef="${PARA.left}" styleIDRef="0" pageBreak="1" columnBreak="0" merged="0"><hp:run charPrIDRef="${CHAR.body}"><hp:t/></hp:run></hp:p>${blocks}`;
-      return blocks;
+      // spacer 는 무시한다 — 여백은 gapBetween 규칙으로 통일한다(LLM 이 주는 값은 문서마다 제각각)
+      const blocks = spec.blocks.filter((b) => b.kind !== "spacer");
+      let out = "";
+      let prev: DocBlock["kind"] | null = null;
+      for (const b of blocks) {
+        const xml = blockXml(b, values, stampXml);
+        if (!xml) continue;
+        out += blankPara(gapBetween(prev, b.kind)) + xml;
+        prev = b.kind;
+      }
+      // 둘째 장부터는 첫 문단에 쪽 나눔을 준다(빈 문단으로 넘기면 그 줄이 여백으로 보인다)
+      return si > 0 ? out.replace('pageBreak="0"', 'pageBreak="1"') : out;
     })
     .join("");
 
-  const first =
-    `<hp:p id="0" paraPrIDRef="${PARA.left}" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">` +
-    `<hp:run charPrIDRef="${CHAR.body}">${secPr}${colPr}<hp:t/></hp:run></hp:p>`;
+  // 용지 설정(secPr)은 **첫 문단 안**에 실어야 한다 — 별도 빈 문단으로 두면 그게 맨 위 여백이 된다
+  const withSec = body.replace(/(<hp:run charPrIDRef="[^"]*">)/, `$1${secPr}${colPr}`);
 
-  zip.file("Contents/section0.xml", `${head}${first}${body}</hs:sec>`);
+  zip.file("Contents/section0.xml", `${head}${withSec}</hs:sec>`);
   const mimetype = zip.file("mimetype");
   if (mimetype) zip.file("mimetype", await mimetype.async("uint8array"), { compression: "STORE" });
   return zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });

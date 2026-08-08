@@ -29,6 +29,8 @@ const BODY_WIDTH = 48188;
 const TABLE_WIDTH = 47341;
 const ROW_HEIGHT = 2800;
 const LINE_HEIGHT_PT = 20;
+/** 본문 글자 크기(pt) — CHAR.body 가 12pt 다. 인감 좌표 계산에 쓴다. */
+const BODY_PT = 12;
 
 function escapeXml(v: string): string {
   return String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -47,17 +49,30 @@ function para(text: string, opts: { charPr?: string; align?: Align; paraPr?: str
 
 const blankPara = (n = 1): string => Array.from({ length: Math.max(0, n) }, () => para("")).join("");
 
-/** 라벨을 폭에 맞춰 벌려 쓴다 — 양식의 "계   약   명" 표기를 흉내낸다. */
+const widthOf = (s: string): number => [...s].reduce((a, ch) => a + (/[\x00-\x7F]/.test(ch) ? 1 : 2), 0);
+
+/**
+ * 라벨을 목표 폭에 맞춘다 — **글자 사이를 벌려서**("계   약   명") 채우고, 남으면 뒤를 공백으로.
+ * 뒤에만 공백을 붙이면 "용역위치        :" 처럼 라벨과 콜론이 멀어져 양식 표기와 달라진다.
+ */
 function padLabel(label: string, width: number): string {
-  const w = [...label].reduce((a, ch) => a + (/[\x00-\x7F]/.test(ch) ? 1 : 2), 0);
-  return label + " ".repeat(Math.max(0, width - w));
+  if (/[:：]/.test(label)) return label; // 라벨 자체가 문구인 경우는 건드리지 않는다
+  const chars = [...label.replace(/\s+/g, "")];
+  const base = chars.reduce((a, ch) => a + widthOf(ch), 0);
+  const slots = chars.length - 1;
+  const need = width - base;
+  if (slots <= 0 || need <= 0) return label + " ".repeat(Math.max(0, width - widthOf(label)));
+  const per = Math.floor(need / slots);
+  let extra = need - per * slots;
+  const spread = chars
+    .map((ch, i) => (i === chars.length - 1 ? ch : ch + " ".repeat(per + (extra-- > 0 ? 1 : 0))))
+    .join("");
+  return spread + " ".repeat(Math.max(0, width - widthOf(spread)));
 }
 
 function fieldsXml(block: Extract<DocBlock, { kind: "fields" }>, values: DeliverableValues): string {
-  const labelWidth = Math.max(
-    ...block.rows.map((r) => [...r.label].reduce((a, ch) => a + (/[\x00-\x7F]/.test(ch) ? 1 : 2), 0)),
-    0
-  );
+  // 목표 폭 = 가장 긴 라벨. 짧은 라벨은 글자 사이를 벌려 여기에 맞춘다(콜론이 세로로 정렬된다).
+  const labelWidth = Math.max(...block.rows.map((r) => widthOf(r.label.replace(/\s+/g, ""))), 0);
   return block.rows
     .map((row, i) => {
       const value = renderSlot(row, values);
@@ -141,34 +156,36 @@ function tableXml(block: Extract<DocBlock, { kind: "table" }>, values: Deliverab
  * pdf.ts 도 같은 모양(라벨 행 + 빈 행)으로 그린다.
  */
 function stampBoxXml(block: Extract<DocBlock, { kind: "stampBox" }>, values: DeliverableValues): string {
-  const w = (block.widthPt ?? 96) * 100;
+  const w = (block.widthPt ?? 72) * 100; // 기본 72pt ≒ 25mm — 서명 확인란이라 넓을 필요가 없다
   const h = (block.heightPt ?? 46) * 100;
   const headH = Math.round(h * 0.35);
   const rows = [
     cellXml({ text: block.label, align: "center" }, { col: 0, row: 0 }, { w, h: headH }, values),
     cellXml({ text: "" }, { col: 0, row: 1 }, { w, h: h - headH }, values),
   ];
+  // 글자처럼(treatAsChar="1") 두면 문단 정렬을 따라가 어정쩡한 자리에 앉는다 →
+  // 본문 폭 기준으로 띄워 오른쪽 끝에 붙인다.
   const tbl =
     `<hp:tbl id="0" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" ` +
     `dropcapstyle="None" pageBreak="CELL" repeatHeader="0" rowCnt="2" colCnt="1" cellSpacing="0" ` +
     `borderFillIDRef="${BORDER_SOLID}" noAdjust="0">` +
     `<hp:sz width="${w}" widthRelTo="ABSOLUTE" height="${h}" heightRelTo="ABSOLUTE" protect="0"/>` +
-    `<hp:pos treatAsChar="1" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" ` +
-    `vertRelTo="PARA" horzRelTo="PARA" vertAlign="TOP" horzAlign="RIGHT" vertOffset="0" horzOffset="0"/>` +
-    `<hp:outMargin left="283" right="0" top="283" bottom="283"/><hp:tr>${rows[0]}</hp:tr><hp:tr>${rows[1]}</hp:tr></hp:tbl>`;
+    `<hp:pos treatAsChar="0" affectLSpacing="0" flowWithText="1" allowOverlap="1" holdAnchorAndSO="0" ` +
+    `vertRelTo="PARA" horzRelTo="PARA" vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="${BODY_WIDTH - w}"/>` +
+    `<hp:outMargin left="0" right="0" top="0" bottom="283"/><hp:tr>${rows[0]}</hp:tr><hp:tr>${rows[1]}</hp:tr></hp:tbl>`;
+  // 표가 떠 있으므로 그 높이만큼 자리를 비워 준다(본문이 겹쳐 올라오지 않게)
   return (
-    `<hp:p id="0" paraPrIDRef="${PARA.right}" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">` +
-    `<hp:run charPrIDRef="${CHAR.body}">${tbl}<hp:t/></hp:run></hp:p>`
+    `<hp:p id="0" paraPrIDRef="${PARA.left}" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">` +
+    `<hp:run charPrIDRef="${CHAR.body}">${tbl}<hp:t/></hp:run></hp:p>` +
+    blankPara(Math.max(1, Math.round(h / 100 / LINE_HEIGHT_PT)))
   );
 }
 
 /** 서명란 — 라벨을 맞춰 오른쪽에 몰아 쓴다(양식 관행). */
-function signatureXml(block: Extract<DocBlock, { kind: "signature" }>, values: DeliverableValues, stampXml: string): string {
+function signatureXml(block: Extract<DocBlock, { kind: "signature" }>, values: DeliverableValues, stampSource: string): string {
   const indent = " ".repeat(block.indentPt ? Math.round(block.indentPt / 5) : 30);
-  const labelWidth = Math.max(
-    ...block.rows.map((r) => [...r.label].reduce((a, ch) => a + (/[\x00-\x7F]/.test(ch) ? 1 : 2), 0)),
-    0
-  );
+  // 목표 폭 = 가장 긴 라벨. 짧은 라벨은 글자 사이를 벌려 여기에 맞춘다(콜론이 세로로 정렬된다).
+  const labelWidth = Math.max(...block.rows.map((r) => widthOf(r.label.replace(/\s+/g, ""))), 0);
   return block.rows
     .map((row: FieldRow, i) => {
       // 대표자 성명은 벌려 쓰고, 그 줄에 인감을 붙인다(원본 양식의 관행)
@@ -177,26 +194,46 @@ function signatureXml(block: Extract<DocBlock, { kind: "signature" }>, values: D
       const value = isCeo ? `${spreadName(raw)}   (인)` : raw;
       const text = `${indent}${padLabel(row.label, labelWidth)} : ${value}`;
       const last = i === block.rows.length - 1;
-      const stamp = block.stamp !== false && stampXml && (isCeo || (last && !block.rows.some((r) => r.binding === "company.ceo")));
+      const stamp = block.stamp !== false && stampSource && (isCeo || (last && !block.rows.some((r) => r.binding === "company.ceo")));
       if (!stamp) return para(text);
+
+      // 인감은 "(인)" 위에 겹치도록 띄운다 — 글자처럼 넣으면 줄 높이가 밀려 위아래에 빈 공간이 생긴다.
+      // 반각 한 칸 = 글자 크기의 절반이므로 "(인)" 앞까지의 폭으로 가로 위치를 잡는다.
+      const half = BODY_PT * 50; // 본문 12pt → 반각 한 칸 600 HWPUNIT
+      const size = stampSize(stampSource);
+      const beforeMark = `${indent}${padLabel(row.label, labelWidth)} : ${isCeo ? spreadName(raw) : raw}  `;
+      const horz = Math.max(0, widthOf(beforeMark) * half - size.w * 0.25);
+      const vert = -(size.h - BODY_PT * 100) / 2; // 줄 높이 가운데에 오도록 위로 끌어올린다
+      const pic = floatingStamp(stampSource, { horz, vert });
       return (
         `<hp:p id="0" paraPrIDRef="${PARA.left}" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">` +
-        `<hp:run charPrIDRef="${CHAR.body}"><hp:t>${escapeXml(text)}</hp:t>${stampXml}</hp:run></hp:p>`
+        `<hp:run charPrIDRef="${CHAR.body}">${pic}<hp:t>${escapeXml(text)}</hp:t></hp:run></hp:p>`
       );
     })
     .join("");
 }
 
-/** 템플릿의 인감 그림을 글자처럼(treatAsChar) 흐르도록 바꿔 재사용한다. */
-function inlineStamp(sectionXml: string): string {
+/** 인감 그림 크기(HWPUNIT) — 좌표 계산에 쓴다. */
+function stampSize(picXml: string): { w: number; h: number } {
+  const m = /<hp:sz width="(\d+)"[^>]*height="(\d+)"/.exec(picXml);
+  return { w: m ? Number(m[1]) : 5041, h: m ? Number(m[2]) : 4920 };
+}
+
+/**
+ * 템플릿의 인감 그림을 **글자 위에 떠 있는** 형태로 바꿔 재사용한다.
+ * 글자처럼(treatAsChar) 넣으면 "(인)" 과 겹칠 수 없고 그 줄의 높이를 밀어 올려
+ * 위아래에 빈 공간이 생긴다(사용자 지적) → 문단 기준 좌표로 띄운다.
+ */
+function floatingStamp(sectionXml: string, offset: { horz: number; vert: number }): string {
   const m = /<hp:pic\b[\s\S]*?<\/hp:pic>/.exec(sectionXml);
   if (!m) return "";
   return m[0]
-    .replace(/treatAsChar="0"/, 'treatAsChar="1"')
-    .replace(/vertRelTo="PAPER"/, 'vertRelTo="PARA"')
-    .replace(/horzRelTo="PAPER"/, 'horzRelTo="PARA"')
-    .replace(/vertOffset="\d+"/, 'vertOffset="0"')
-    .replace(/horzOffset="\d+"/, 'horzOffset="0"');
+    .replace(/textWrap="[^"]*"/, 'textWrap="IN_FRONT_OF_TEXT"')
+    .replace(/treatAsChar="[01]"/, 'treatAsChar="0"')
+    .replace(/vertRelTo="[^"]*"/, 'vertRelTo="PARA"')
+    .replace(/horzRelTo="[^"]*"/, 'horzRelTo="PARA"')
+    .replace(/vertOffset="-?\d+"/, `vertOffset="${Math.round(offset.vert)}"`)
+    .replace(/horzOffset="-?\d+"/, `horzOffset="${Math.round(offset.horz)}"`);
 }
 
 /**
@@ -235,7 +272,7 @@ export function normalizeSpecSpacing(spec: DeliverableSpec): DeliverableSpec {
   return { ...spec, blocks };
 }
 
-function blockXml(block: DocBlock, values: DeliverableValues, stampXml: string): string {
+function blockXml(block: DocBlock, values: DeliverableValues, stampSource: string): string {
   switch (block.kind) {
     case "note":
       return para(renderTemplate(block.text, values), { align: block.align });
@@ -250,7 +287,7 @@ function blockXml(block: DocBlock, values: DeliverableValues, stampXml: string):
     case "dateLine":
       return para(renderBinding(block.binding, values, block.format), { align: block.align ?? "center" });
     case "signature":
-      return signatureXml(block, values, stampXml);
+      return signatureXml(block, values, stampSource);
     case "receiver":
       return para(`${renderBinding(block.binding, values)} ${renderTemplate(block.suffix, values)}`, {
         charPr: CHAR.receiver,
@@ -284,13 +321,14 @@ export async function renderSpecHwpx(specs: DeliverableSpec[], values: Deliverab
   const head = source.slice(0, source.indexOf("<hp:p "));
   const secPr = /<hp:secPr[\s\S]*?<\/hp:secPr>/.exec(source)?.[0] ?? "";
   const colPr = /<hp:ctrl><hp:colPr[\s\S]*?<\/hp:ctrl>/.exec(source)?.[0] ?? "";
-  const stampXml = inlineStamp(source);
+  // 인감 원본 XML — 서명란에서 좌표를 계산해 띄운다
+  const stampSource = /<hp:pic\b[\s\S]*?<\/hp:pic>/.exec(source)?.[0] ?? "";
 
   const body = specs
     .map((spec, si) => {
       // 여백은 normalizeSpecSpacing 이 이미 spacer 로 심어 뒀다(PDF 와 같은 값을 쓰기 위함)
       let out = "";
-      for (const b of spec.blocks) out += blockXml(b, values, stampXml);
+      for (const b of spec.blocks) out += blockXml(b, values, stampSource);
       // 둘째 장부터는 첫 문단에 쪽 나눔을 준다(빈 문단으로 넘기면 그 줄이 여백으로 보인다)
       return si > 0 ? out.replace('pageBreak="0"', 'pageBreak="1"') : out;
     })

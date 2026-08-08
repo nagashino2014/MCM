@@ -7,7 +7,7 @@
 
 import JSZip from "jszip";
 import { renderBinding } from "./format";
-import { findCellSpan, replaceTexts, scanParaSpans, escapeXml, type ParaSpan } from "./template-form";
+import { dropParagraphs, findCellSpan, replaceTexts, scanParaSpans, escapeXml, type ParaSpan } from "./template-form";
 import type { DeliverableValues, TemplateProfile, TemplateSlot } from "./types";
 
 const LINESEG_RE = /<hp:linesegarray>[\s\S]*?<\/hp:linesegarray>/g;
@@ -200,7 +200,7 @@ export async function fillTemplateHwpx(
   profile: TemplateProfile,
   docTypes: string[],
   values: DeliverableValues,
-  opts: { keepLineSeg?: boolean } = {}
+  opts: { keepLineSeg?: boolean; dropParas?: number[] } = {}
 ): Promise<{ bytes: Uint8Array; missed: TemplateSlot[] }> {
   const zip = await JSZip.loadAsync(source);
   const entry = zip.file("Contents/section0.xml");
@@ -215,6 +215,7 @@ export async function fillTemplateHwpx(
   // 그래서 골라내기 전 좌표로 주입하고, 골라내기는 마지막에 한다.
   const applied = applySlots(original, slots, values);
   let xml = keepDocs(applied.xml, profile, docTypes);
+  if (opts.dropParas?.length) xml = dropParagraphs(xml, opts.dropParas);
   if (!opts.keepLineSeg) xml = xml.replace(LINESEG_RE, "");
 
   zip.file("Contents/section0.xml", xml);

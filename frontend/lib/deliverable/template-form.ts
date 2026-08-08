@@ -201,6 +201,21 @@ export function stripNested(fragment: string): string {
   return at < 0 ? fragment : fragment.slice(0, at);
 }
 
+/**
+ * 지정한 문단(연번)을 XML 에서 통째로 지운다 — 값이 길어져 늘어난 줄을 흡수할 여백 줄 제거용.
+ * 뒤에서부터 지워야 앞 구간의 오프셋이 밀리지 않는다.
+ */
+export function dropParagraphs(xml: string, paraIndices: number[]): string {
+  const spans = scanParaSpans(xml);
+  const targets = [...new Set(paraIndices)]
+    .map((i) => spans[i])
+    .filter((s): s is ParaSpan => !!s)
+    .sort((a, b) => b.start - a.start);
+  let out = xml;
+  for (const s of targets) out = out.slice(0, s.start) + out.slice(s.end);
+  return out;
+}
+
 /** 원본 section XML 을 파싱해 문단/표 좌표계를 얻는다(주입 직전 확인용). */
 export function outlineFromXml(xml: string): { paras: number; tables: number } {
   const spans = scanParaSpans(xml);

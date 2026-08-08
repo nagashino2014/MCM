@@ -65,24 +65,28 @@ export async function generateDeliverableArtifacts(
   // PDF 는 어느 쪽이든 같은 HWPX 를 좌표 그대로 옮겨 그린다(서식이 갈리지 않게).
   let hwpxBytes: Uint8Array | null = null;
   let bytes: Uint8Array | null = null;
+  // PDF 를 먼저 그린다 — 값이 길어져 늘어난 줄을 흡수하려고 없앤 여백 줄(drops)을
+  // 배포용 HWPX 에도 똑같이 적용해야 한글로 열었을 때 같은 배치가 나온다.
   if (!row.templateId) {
     try {
-      hwpxBytes = await renderDeliverableHwpx(row.kind, row.docTypes, row.values);
       const forPdf = await renderDeliverableHwpx(row.kind, row.docTypes, row.values, { keepLineSeg: true });
-      bytes = await renderHwpxToPdf(forPdf);
+      const out = await renderHwpxToPdf(forPdf);
+      bytes = out.pdf;
+      hwpxBytes = await renderDeliverableHwpx(row.kind, row.docTypes, row.values, { dropParas: out.drops });
     } catch (err) {
       console.warn("[deliverable] HWPX 경로 실패(자체 렌더러로 진행):", (err as Error).message);
     }
   } else if (overlay && tpl?.sourceKey && tpl.profile) {
     try {
       const source = await readStorageObject(tpl.sourceKey);
-      const filled = await fillTemplateHwpx(source, tpl.profile, row.docTypes, row.values);
+      const forPdf = await fillTemplateHwpx(source, tpl.profile, row.docTypes, row.values, { keepLineSeg: true });
+      const out = await renderHwpxToPdf(forPdf.bytes);
+      bytes = out.pdf;
+      const filled = await fillTemplateHwpx(source, tpl.profile, row.docTypes, row.values, { dropParas: out.drops });
       hwpxBytes = filled.bytes;
       if (filled.missed.length) {
         console.warn(`[deliverable] 양식 ${tpl.templateId}: 값을 넣지 못한 자리 ${filled.missed.length}건`);
       }
-      const forPdf = await fillTemplateHwpx(source, tpl.profile, row.docTypes, row.values, { keepLineSeg: true });
-      bytes = await renderHwpxToPdf(forPdf.bytes);
     } catch (err) {
       console.warn("[deliverable] 자체양식 주입 실패(자체 렌더러로 진행):", (err as Error).message);
     }

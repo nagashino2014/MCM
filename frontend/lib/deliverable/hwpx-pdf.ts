@@ -44,8 +44,11 @@ const plain = (s: string): string => s.replace(/\t/g, "    ").replace(/\n/g, "")
 // (한컴바탕 0.30em) 그대로 쓰면 줄이 원본보다 짧아지고, 공백으로 들여쓴 서명란이 왼쪽으로 밀린다.
 const SPACE_EM = 0.5;
 
-// 줄이 폭을 넘칠 때 줄여 앉히는 하한 — 이보다 더 줄이면 읽기 힘들어지므로 넘치는 채로 둔다.
-const MIN_SQUEEZE = 0.75;
+// 줄이 폭을 살짝 넘칠 때만 줄여 앉힌다(글꼴 차이로 생기는 몇 %). 그 이상은 한글처럼 다음 줄로
+// 흘린다 — 계약명 같은 본문 값을 작게 만드는 건 제출 문서로 곤란하다는 사용자 판단.
+const SQUEEZE_TOLERANCE = 1.03;
+// 표 칸은 줄을 늘릴 수 없어 줄여 앉히는 수밖에 없다 — 읽을 수 있는 선까지만.
+const MIN_SQUEEZE = 0.6;
 
 function chunkWidth(font: PDFFont, text: string, size: number): number {
   try {
@@ -109,6 +112,77 @@ function layout(
   return cx - from;
 }
 
+/**
+ * 폭을 넘는 텍스트를 여러 줄로 나눈다 — 첫 줄은 남은 폭(firstW), 이후는 전체 폭(fullW).
+ * 공백 경계를 우선하고, 한 덩어리가 통째로 넘치면(한글은 공백이 드물다) 글자 단위로 자른다.
+ */
+function wrapToWidth(font: PDFFont, text: string, size: number, ls: number, firstW: number, fullW: number): string[] {
+  const t = plain(text);
+  if (!t) return [text];
+  const lines: string[] = [];
+  let cur = "";
+  let limit = Math.max(0, firstW);
+  const widthOf = (s: string) => layout(font, s, size, ls);
+  const push = () => {
+    lines.push(cur);
+    cur = "";
+    limit = fullW;
+  };
+  for (const token of t.split(/(?<= )/)) {
+    if (cur && widthOf(cur + token) > limit) push();
+    if (widthOf(token) > limit) {
+      for (const ch of token) {
+        if (cur && widthOf(cur + ch) > limit) push();
+        cur += ch;
+      }
+      continue;
+    }
+    cur += token;
+  }
+  if (cur) lines.push(cur);
+  return lines.length ? lines : [t];
+}
+
+const isBlank = (p: Para): boolean =>
+  !p.tables.length && !p.pics.length && p.runs.every((r) => !r.text.trim());
+
+/**
+ * 늘어난 줄만큼 흡수할 여백 줄을 고른다.
+ * 값이 길어져 줄이 늘면 그 아래가 통째로 밀려 마지막 줄(수신처)이 다음 장으로 넘어간다.
+ * 그래서 **연속된 빈 줄이 가장 많은 구간**에서 한 줄씩 덜어낸다(사용자 확정 방식) —
+ * 여백이 고르게 줄어 문서 인상이 덜 흐트러진다. 같은 길이면 아래쪽 구간을 먼저 줄인다.
+ */
+export function planDrops(paras: Para[], wrapped: number[]): Set<number> {
+  const need = wrapped.reduce((a, b) => a + b, 0);
+  const drops = new Set<number>();
+  if (need <= 0) return drops;
+
+  // 줄이 늘어난 지점 아래의 빈 줄만 후보다 — 위쪽을 줄이면 제목·본문 간격이 흐트러진다
+  const firstOverflow = wrapped.findIndex((w) => w > 0);
+  const runs: number[][] = [];
+  let cur: number[] = [];
+  paras.forEach((p, i) => {
+    if (i > firstOverflow && isBlank(p)) {
+      cur.push(i);
+      return;
+    }
+    if (cur.length) runs.push(cur);
+    cur = [];
+  });
+  if (cur.length) runs.push(cur);
+
+  for (let n = 0; n < need; n += 1) {
+    let best = -1;
+    for (let r = 0; r < runs.length; r += 1) {
+      // 같은 길이면 뒤쪽(문서 하단) 우선 — 본문 흐름에 영향이 적다
+      if (best < 0 || runs[r].length >= runs[best].length) best = r;
+    }
+    if (best < 0 || !runs[best].length) break;
+    drops.add(runs[best].pop() as number);
+  }
+  return drops;
+}
+
 /** 문단의 런들을 이어 붙이고, 문자 오프셋으로 줄을 잘라 쓰기 위한 조각 목록. */
 interface Piece {
   start: number;
@@ -149,8 +223,19 @@ class Renderer {
    * availW 는 정렬 계산에 쓸 가용 폭이다 — 셀에서는 lineseg.horzsize 대신 실제 셀 폭을 넘겨
    * 표 열이 바뀐 경우(기지급 열 제거)에도 가운데 정렬이 어긋나지 않게 한다.
    */
-  private drawPara(page: PDFPage, para: Para, originX: number, originY: number, availW?: number) {
-    if (!para.segs.length) return;
+  /** page 가 null 이면 그리지 않고 늘어난 줄 수만 잰다(배치 계획용). */
+  private drawPara(
+    page: PDFPage | null,
+    para: Para,
+    originX: number,
+    originY: number,
+    availW?: number,
+    opts: { lineStep?: number; extraTop?: number } = {}
+  ): number {
+    if (!para.segs.length) return 0;
+    const lineStep = opts.lineStep ?? hu(para.segs[0].vertsize) * 1.4;
+    const extraTop = opts.extraTop ?? 0;
+    let wrapped = 0;
     const align = this.doc.paraPr.get(para.paraPrId)?.align ?? "LEFT";
     const { pieces, length } = piecesOf(para.runs);
     const pageH = hu(this.doc.geom.height);
@@ -174,33 +259,54 @@ class Renderer {
         return acc + layout(this.font(p.cp), p.text, size, (size * p.cp.spacing) / 100);
       }, 0);
 
-      // 자동 줄바꿈이 없는 좌표 렌더라 값이 길면 줄을 넘어 잘린다(발주처 양식에 긴 계약명·주소가
-      // 들어가는 경우). 넘치는 줄만 살짝 줄여 폭 안에 앉힌다 — 한글의 장평 조절과 같은 취지.
+      // 값이 원본보다 길어 줄을 넘칠 때(긴 계약명 등):
+      // 아주 조금 넘치면 눈에 띄지 않게 줄여 앉히고, 그 이상이면 한글처럼 다음 줄로 흘린다.
+      // 계약명을 작게 만드는 건 제출 문서로 곤란하다는 사용자 판단에 따른 것 —
+      // 대신 늘어난 줄만큼 여백 줄을 흡수해 페이지가 밀리지 않게 한다(render()).
+      // 표 칸(availW 가 넘어온 경우)은 행 높이가 고정이라 줄을 늘릴 수 없다 → 줄바꿈 대신 줄여 앉힌다.
+      // 본문 문단만 한글처럼 다음 줄로 흘린다.
+      const inCell = availW !== undefined;
       const boxW = availW ?? hu(seg.horzsize);
-      const squeeze = lineW > boxW && boxW > 0 ? Math.max(MIN_SQUEEZE, boxW / lineW) : 1;
+      const needWrap = !inCell && boxW > 0 && lineW > boxW * SQUEEZE_TOLERANCE;
+      const squeeze = !needWrap && lineW > boxW && boxW > 0 ? Math.max(MIN_SQUEEZE, boxW / lineW) : 1;
       const drawnW = lineW * squeeze;
 
-      let x = originX + hu(seg.horzpos);
-      if (align === "CENTER") x += (boxW - drawnW) / 2;
-      else if (align === "RIGHT") x += boxW - drawnW;
+      const lineLeft = originX + hu(seg.horzpos);
+      let x = lineLeft;
+      if (!needWrap) {
+        if (align === "CENTER") x += (boxW - drawnW) / 2;
+        else if (align === "RIGHT") x += boxW - drawnW;
+      }
 
-      const baselineY = pageH - (originY + hu(seg.vertpos) + hu(seg.baseline));
+      let baselineY = pageH - (originY + hu(seg.vertpos) + hu(seg.baseline) + extraTop);
       for (const p of parts) {
         const size = hu(p.cp.height) * squeeze;
         const ls = (size * p.cp.spacing) / 100;
-        const w = layout(this.font(p.cp), p.text, size, ls, { page, x, y: baselineY, col: p.cp.color });
-        if (p.cp.underline && w > 0) {
-          const uy = baselineY - size * 0.14;
-          page.drawLine({
-            start: { x, y: uy },
-            end: { x: x + w, y: uy },
-            thickness: Math.max(0.5, size * 0.05),
-            color: color(p.cp.color),
-          });
-        }
-        x += w;
+        const font = this.font(p.cp);
+
+        // 넘치는 줄은 공백 경계(없으면 글자 단위)로 잘라 다음 줄로 내린다
+        const chunks = needWrap ? wrapToWidth(font, p.text, size, ls, lineLeft + boxW - x, boxW) : [p.text];
+        chunks.forEach((chunk, ci) => {
+          if (ci > 0) {
+            x = lineLeft;
+            baselineY -= lineStep;
+            wrapped += 1;
+          }
+          const w = layout(font, chunk, size, ls, page ? { page, x, y: baselineY, col: p.cp.color } : undefined);
+          if (page && p.cp.underline && w > 0) {
+            const uy = baselineY - size * 0.14;
+            page.drawLine({
+              start: { x, y: uy },
+              end: { x: x + w, y: uy },
+              thickness: Math.max(0.5, size * 0.05),
+              color: color(p.cp.color),
+            });
+          }
+          x += w;
+        });
       }
     });
+    return wrapped;
   }
 
   /** 표의 열 폭·행 높이 — span 이 1인 셀에서 뽑고, 빠진 칸은 남은 폭으로 메운다. */
@@ -285,17 +391,43 @@ class Renderer {
     page.drawImage(img, { x: hu(left), y: pageH - hu(top) - h, width: w, height: h });
   }
 
-  render(): void {
+  /** 문단 사이 간격(pt) — 다음 문단과의 좌표 차이가 곧 그 문단이 차지한 높이다. */
+  private stepOf(paras: Para[], i: number): number {
+    const cur = paras[i]?.segs[0];
+    const next = paras[i + 1]?.segs[0];
+    if (cur && next && next.vertpos > cur.vertpos) return hu(next.vertpos - cur.vertpos);
+    const last = paras[i]?.segs[paras[i].segs.length - 1];
+    return hu((last?.vertsize ?? 1500) * 1.4);
+  }
+
+  /** 그린 뒤, 흡수한 여백 줄의 문단 번호(문서 전체 연번)를 돌려준다 — HWPX 쪽도 같이 지워야 한다. */
+  render(): number[] {
     const { geom } = this.doc;
     const bodyLeft = geom.left;
     const bodyTop = geom.top + geom.header;
+    const dropped: number[] = [];
+    let paraBase = 0;
 
     for (const paras of this.doc.pages) {
       const page = this.pdf.addPage([hu(geom.width), hu(geom.height)]);
-      for (const para of paras) {
+
+      // 1) 값이 길어 늘어난 줄 수를 먼저 잰다(그리지 않고 측정만)
+      const wrapped = paras.map((p, i) =>
+        p.segs.length ? this.drawPara(null, p, hu(bodyLeft), hu(bodyTop), undefined, { lineStep: this.stepOf(paras, i) }) : 0
+      );
+      const drops = planDrops(paras, wrapped);
+
+      // 2) 늘어난 만큼 아래로 밀되, 흡수하기로 한 여백 줄에서 되돌린다
+      let delta = 0;
+      paras.forEach((para, i) => {
+        const step = this.stepOf(paras, i);
+        if (drops.has(i)) {
+          delta = Math.max(0, delta - step);
+          return; // 빈 줄이므로 그릴 것도 없다
+        }
         const first = para.segs[0];
-        const paraTop = first ? bodyTop + first.vertpos : bodyTop;
-        this.drawPara(page, para, hu(bodyLeft), hu(bodyTop));
+        const paraTop = (first ? bodyTop + first.vertpos : bodyTop) + delta * U;
+        this.drawPara(page, para, hu(bodyLeft), hu(bodyTop), undefined, { lineStep: step, extraTop: delta });
         for (const table of para.tables) {
           // 표는 문단의 한 글자처럼 앉는다 — 줄 상단 + 바깥 여백이 표 상단이다
           const align = this.doc.paraPr.get(para.paraPrId)?.align ?? "LEFT";
@@ -305,9 +437,14 @@ class Renderer {
           else if (align === "RIGHT") x += Math.max(0, avail - table.width);
           this.drawTable(page, table, x, paraTop + table.outMargin.top);
         }
+        // 인감은 종이 절대 좌표라 밀지 않는다 — HWPX 를 한글로 열었을 때와 같은 거동이다
         for (const pic of para.pics) this.drawPicture(page, pic, paraTop, bodyLeft);
-      }
+        delta += wrapped[i] * step;
+      });
+      for (const i of drops) dropped.push(paraBase + i);
+      paraBase += paras.length;
     }
+    return dropped.sort((a, b) => a - b);
   }
 }
 
@@ -342,13 +479,17 @@ async function embedImages(pdf: PDFDocument, doc: HwpxDoc): Promise<Map<string, 
   return out;
 }
 
-/** HWPX 바이트 → PDF 바이트. 산출물 두 벌이 같은 파일에서 나오므로 서식이 어긋나지 않는다. */
-export async function renderHwpxToPdf(hwpxBytes: Uint8Array): Promise<Uint8Array> {
+/**
+ * HWPX 바이트 → PDF 바이트. 산출물 두 벌이 같은 파일에서 나오므로 서식이 어긋나지 않는다.
+ * drops 는 값이 길어져 늘어난 줄을 흡수하려고 없앤 여백 줄의 문단 번호다 —
+ * 배포용 HWPX 도 같은 줄을 지워야 한글로 열었을 때 같은 배치가 된다(generate.ts).
+ */
+export async function renderHwpxToPdf(hwpxBytes: Uint8Array): Promise<{ pdf: Uint8Array; drops: number[] }> {
   const doc = await parseHwpx(hwpxBytes);
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
   const fonts = await loadFonts(pdf);
   const images = await embedImages(pdf, doc);
-  new Renderer(doc, pdf, fonts, images).render();
-  return pdf.save();
+  const drops = new Renderer(doc, pdf, fonts, images).render();
+  return { pdf: await pdf.save(), drops };
 }

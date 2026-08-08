@@ -15,7 +15,7 @@ import { CATALOG_BY_TYPE, adjustSpecForValues } from "./catalog";
 import { compactAddress, renderDeliverableHwpx } from "./hwpx";
 import { renderHwpxToPdf } from "./hwpx-pdf";
 import { renderDeliverablePdf } from "./pdf";
-import { renderSpecHwpx } from "./spec-hwpx";
+import { normalizeSpecSpacing, renderSpecHwpx } from "./spec-hwpx";
 import { getDeliverable, getTemplate, setDeliverableArtifacts } from "./store";
 import { fillTemplateHwpx } from "./template-fill";
 import { DELIVERABLE_KIND_LABEL, type DeliverableRow, type DeliverableSpec, type DeliverableTemplateRow } from "./types";
@@ -97,7 +97,9 @@ export async function generateDeliverableArtifacts(
   if (!bytes) {
     const specs = await resolveSpecs(row);
     if (!specs.length) throw new Error("생성할 서식을 선택하세요.");
-    const adjusted = specs.map((s) => adjustSpecForValues(s, row.values));
+    // 여백은 normalizeSpecSpacing 이 규칙대로 다시 심는다 — PDF·HWPX 가 같은 spec 을 보게 해
+    // 두 산출물의 간격이 갈리지 않게 한다(LLM 이 준 spacer 는 문서마다 제각각이다)
+    const adjusted = specs.map((s) => normalizeSpecSpacing(adjustSpecForValues(s, row.values)));
     // 재구축 양식의 주소는 한 줄로 앉힌다 — 접히면 들여쓰기를 잃고 아래가 밀린다
     const specValues = {
       ...row.values,

@@ -21,7 +21,7 @@ const CHAR = {
   thBold: "15", // 11pt bold(표 머리)
   td: "16", //    11pt(표 본문)
 } as const;
-const PARA = { left: "0", center: "3" } as const;
+const PARA = { left: "0", center: "3", right: "16" } as const;
 const BORDER_SOLID = "2";
 
 /** 본문 폭·표 폭(HWPUNIT) — 템플릿 secPr 기준(A4, 좌우 여백 5669) */
@@ -61,10 +61,14 @@ function fieldsXml(block: Extract<DocBlock, { kind: "fields" }>, values: Deliver
   return block.rows
     .map((row, i) => {
       const value = renderSlot(row, values);
-      // 값이 없는 줄(소제목 등)은 구분자를 붙이지 않는다 — "준 공 금 액(단위 : 원) :" 처럼 어색해진다
+      // 값이 비어도 구분자는 남긴다 — 나중에 손으로 채우는 자리다(사용자 수정본 기준).
+      // 다만 라벨에 이미 콜론이 있으면(예: "준 공 금 액(단위 : 원)") 덧붙이지 않는다.
+      const prefix = numberPrefix(block.numbering, i);
       const line = value
-        ? `${numberPrefix(block.numbering, i)}${padLabel(row.label, labelWidth)} : ${value}`
-        : `${numberPrefix(block.numbering, i)}${row.label}`;
+        ? `${prefix}${padLabel(row.label, labelWidth)} : ${value}`
+        : /[:：]/.test(row.label)
+          ? `${prefix}${row.label}`
+          : `${prefix}${padLabel(row.label, labelWidth)} :`;
       const second = row.secondLine ? renderSlot(row.secondLine, values) : "";
       // 값 둘째 줄(착수계 금액 등)은 값 시작 위치에 맞춰 들여쓴다
       return para(line) + (second ? para(" ".repeat(labelWidth + 5) + second) : "");
@@ -132,6 +136,32 @@ function tableXml(block: Extract<DocBlock, { kind: "table" }>, values: Deliverab
   );
 }
 
+/**
+ * 발주처 확인란 — 원본 양식이 우상단에 두는 **1열 2행 표**(위: "감독자 서명", 아래: 서명 자리).
+ * pdf.ts 도 같은 모양(라벨 행 + 빈 행)으로 그린다.
+ */
+function stampBoxXml(block: Extract<DocBlock, { kind: "stampBox" }>, values: DeliverableValues): string {
+  const w = (block.widthPt ?? 96) * 100;
+  const h = (block.heightPt ?? 46) * 100;
+  const headH = Math.round(h * 0.35);
+  const rows = [
+    cellXml({ text: block.label, align: "center" }, { col: 0, row: 0 }, { w, h: headH }, values),
+    cellXml({ text: "" }, { col: 0, row: 1 }, { w, h: h - headH }, values),
+  ];
+  const tbl =
+    `<hp:tbl id="0" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" ` +
+    `dropcapstyle="None" pageBreak="CELL" repeatHeader="0" rowCnt="2" colCnt="1" cellSpacing="0" ` +
+    `borderFillIDRef="${BORDER_SOLID}" noAdjust="0">` +
+    `<hp:sz width="${w}" widthRelTo="ABSOLUTE" height="${h}" heightRelTo="ABSOLUTE" protect="0"/>` +
+    `<hp:pos treatAsChar="1" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" ` +
+    `vertRelTo="PARA" horzRelTo="PARA" vertAlign="TOP" horzAlign="RIGHT" vertOffset="0" horzOffset="0"/>` +
+    `<hp:outMargin left="283" right="0" top="283" bottom="283"/><hp:tr>${rows[0]}</hp:tr><hp:tr>${rows[1]}</hp:tr></hp:tbl>`;
+  return (
+    `<hp:p id="0" paraPrIDRef="${PARA.right}" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">` +
+    `<hp:run charPrIDRef="${CHAR.body}">${tbl}<hp:t/></hp:run></hp:p>`
+  );
+}
+
 /** 서명란 — 라벨을 맞춰 오른쪽에 몰아 쓴다(양식 관행). */
 function signatureXml(block: Extract<DocBlock, { kind: "signature" }>, values: DeliverableValues, stampXml: string): string {
   const indent = " ".repeat(block.indentPt ? Math.round(block.indentPt / 5) : 30);
@@ -170,20 +200,39 @@ function inlineStamp(sectionXml: string): string {
 }
 
 /**
- * 블록 사이 빈 줄 수(사용자 확정 규칙).
- * LLM 이 준 spacer 에 맡기면 문서마다 들쭉날쭉해서, 여기서 못 박는다.
+ * 블록 사이 빈 줄 수 — 사용자가 손으로 다듬은 결과물을 기준으로 확정한 값(2026-08-08).
+ * LLM 이 준 spacer 에 맡기면 문서마다 들쭉날쭉해서 여기서 못 박고,
+ * PDF·HWPX 가 같은 여백을 갖도록 normalizeSpecSpacing 이 이 규칙으로 spacer 를 다시 심는다.
  */
 function gapBetween(prev: DocBlock["kind"] | null, next: DocBlock["kind"]): number {
   if (!prev) return 0;
-  if (prev === "note") return 0; // "[첨부 1]" 바로 아래가 표제
-  if (prev === "title") return 2;
-  if (next === "receiver") return 3; // 서명란과 수신처는 넉넉히
+  if (prev === "note") return next === "stampBox" ? 0 : 1; // "[첨부 1]" 아래 한 줄
+  if (prev === "stampBox") return 1;
+  if (prev === "title") return 3;
+  if (next === "receiver") return 4; // 서명란과 수신처는 넉넉히
   if (prev === "fields" && next === "para") return 2;
-  if (prev === "para" && next === "dateLine") return 2;
-  if (prev === "dateLine" && next === "signature") return 2;
+  if (prev === "para" && next === "dateLine") return 3;
+  if (prev === "dateLine" && next === "signature") return 3;
   if (prev === "table") return 1;
   if (next === "table") return 0; // 표 바로 위는 보통 "9. 준공금액(단위:원)" 소제목
   return 0;
+}
+
+/**
+ * 블록 사이 여백을 규칙대로 다시 심는다(LLM 이 준 spacer 는 버린다).
+ * 이 결과를 PDF·HWPX 렌더러가 함께 쓰므로 두 산출물의 여백이 갈리지 않는다.
+ */
+export function normalizeSpecSpacing(spec: DeliverableSpec): DeliverableSpec {
+  const blocks: DocBlock[] = [];
+  let prev: DocBlock["kind"] | null = null;
+  for (const b of spec.blocks) {
+    if (b.kind === "spacer") continue;
+    const gap = gapBetween(prev, b.kind);
+    if (gap > 0) blocks.push({ kind: "spacer", heightPt: gap * LINE_HEIGHT_PT });
+    blocks.push(b);
+    prev = b.kind;
+  }
+  return { ...spec, blocks };
 }
 
 function blockXml(block: DocBlock, values: DeliverableValues, stampXml: string): string {
@@ -208,7 +257,7 @@ function blockXml(block: DocBlock, values: DeliverableValues, stampXml: string):
         align: block.align,
       });
     case "stampBox":
-      return para(block.label, { align: "right" as Align });
+      return stampBoxXml(block, values);
     case "spacer":
       return blankPara(Math.max(1, Math.round(block.heightPt / LINE_HEIGHT_PT)));
     default:
@@ -239,16 +288,9 @@ export async function renderSpecHwpx(specs: DeliverableSpec[], values: Deliverab
 
   const body = specs
     .map((spec, si) => {
-      // spacer 는 무시한다 — 여백은 gapBetween 규칙으로 통일한다(LLM 이 주는 값은 문서마다 제각각)
-      const blocks = spec.blocks.filter((b) => b.kind !== "spacer");
+      // 여백은 normalizeSpecSpacing 이 이미 spacer 로 심어 뒀다(PDF 와 같은 값을 쓰기 위함)
       let out = "";
-      let prev: DocBlock["kind"] | null = null;
-      for (const b of blocks) {
-        const xml = blockXml(b, values, stampXml);
-        if (!xml) continue;
-        out += blankPara(gapBetween(prev, b.kind)) + xml;
-        prev = b.kind;
-      }
+      for (const b of spec.blocks) out += blockXml(b, values, stampXml);
       // 둘째 장부터는 첫 문단에 쪽 나눔을 준다(빈 문단으로 넘기면 그 줄이 여백으로 보인다)
       return si > 0 ? out.replace('pageBreak="0"', 'pageBreak="1"') : out;
     })

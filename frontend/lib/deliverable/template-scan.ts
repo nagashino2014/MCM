@@ -26,6 +26,17 @@ const BLOCK_KINDS = new Set([
 ]);
 
 const str = (v: unknown): string => (v == null ? "" : String(v).trim());
+
+/**
+ * amountBoth 는 "일금 …원정(₩… - VAT 별도)" 를 통째로 만들어 낸다.
+ * 문서에 인쇄된 "(VAT별도)" 를 LLM 이 suffix 로 또 넣으면 같은 문구가 두 번 찍힌다 → 떼어낸다.
+ * (프롬프트로도 막지만, 눈에 띄는 오출력이라 여기서 한 번 더 거른다.)
+ */
+function dedupeSuffix(format: string, suffix: string): string | undefined {
+  if (!suffix) return undefined;
+  if (format === "amountBoth" && /vat|부가세/i.test(suffix)) return undefined;
+  return suffix;
+}
 const numOr = (v: unknown, dflt: number): number => {
   const n = Number(v);
   return Number.isFinite(n) ? n : dflt;
@@ -67,6 +78,8 @@ function buildPrompt(kind: DeliverableKind): string {
     "2. 라벨의 자간 공백(\"계   약   명\")을 문자열 그대로 보존하세요 — 서식이 달라 보이면 안 됩니다.\n" +
     "3. 값이 들어갈 자리는 binding 으로, 대응 키가 없으면 \"custom:<영문키>\" 로 두세요(사용자가 채웁니다).\n" +
     "4. 이미 샘플 값이 인쇄돼 있어도 그 값을 text 로 넣지 말고 binding 으로 바꾸세요.\n" +
+    '4-1. 금액 포맷 amountBoth 는 "일금 …원정(₩… - VAT 별도)" 를 통째로 만들어 냅니다. 문서에 "VAT 별도"·' +
+    '"(VAT별도)" 표기가 보여도 suffix 에 다시 넣지 마세요 — 같은 문구가 두 번 찍힙니다.\n' +
     "5. 블록 순서는 문서에 나타난 순서 그대로.\n" +
     "6. 표는 행·열 수와 병합을 문서와 똑같이 맞추세요.\n" +
     "7. **여백을 spacer 로 표현하세요** — 원문에서 줄이 비어 있는 만큼 넣습니다. 특히 본문과 작성일 사이,\n" +
@@ -128,13 +141,13 @@ function sanitizeBlocks(raw: unknown): DocBlock[] {
             binding: str(x.binding) || undefined,
             text: str(x.text) || undefined,
             format: x.format as never,
-            suffix: str(x.suffix) || undefined,
+            suffix: dedupeSuffix(str(x.format), str(x.suffix)),
             secondLine: second
               ? {
                   binding: str(second.binding) || undefined,
                   text: str(second.text) || undefined,
                   format: second.format as never,
-                  suffix: str(second.suffix) || undefined,
+                  suffix: dedupeSuffix(str(second.format), str(second.suffix)),
                 }
               : undefined,
           };

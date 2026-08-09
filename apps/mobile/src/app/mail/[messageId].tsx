@@ -179,7 +179,7 @@ export default function MailViewerScreen() {
 
         {/* 본문 */}
         <View className="overflow-hidden rounded-card border border-cd-border bg-cd-card px-3 py-2">
-          {!showImages ? (
+          {!showImages && /<img/i.test(html) ? (
             <Pressable
               onPress={() => setShowImages(true)}
               className="mb-2 flex-row items-center gap-1.5 rounded-lg bg-cd-warning-soft px-3 py-2 active:opacity-70">

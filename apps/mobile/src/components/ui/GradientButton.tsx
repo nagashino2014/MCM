@@ -13,6 +13,22 @@ import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 export const CTA_FROM = '#6b7cf6';
 export const CTA_TO = '#9b7ef2';
 
+/** CTA 그라데이션 배경 채움 — 부모가 `overflow-hidden` + 라운드를 갖고 이걸 첫 자식으로 깐다. */
+export function CtaGradientFill() {
+  const gid = `cta-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
+  return (
+    <Svg width="100%" height="100%" style={{ position: 'absolute' }}>
+      <Defs>
+        <LinearGradient id={gid} x1="0" y1="0" x2="1" y2="1">
+          <Stop offset="0" stopColor={CTA_FROM} />
+          <Stop offset="1" stopColor={CTA_TO} />
+        </LinearGradient>
+      </Defs>
+      <Rect x={0} y={0} width="100%" height="100%" fill={`url(#${gid})`} />
+    </Svg>
+  );
+}
+
 export function GradientButton({
   label,
   icon,
@@ -26,22 +42,13 @@ export function GradientButton({
   loading?: boolean;
   disabled?: boolean;
 }) {
-  const gid = `cta-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled || loading}
       style={{ opacity: disabled ? 0.5 : 1 }}
       className="h-[46px] items-center justify-center overflow-hidden rounded-[14px] active:opacity-70">
-      <Svg width="100%" height="100%" style={{ position: 'absolute' }}>
-        <Defs>
-          <LinearGradient id={gid} x1="0" y1="0" x2="1" y2="1">
-            <Stop offset="0" stopColor={CTA_FROM} />
-            <Stop offset="1" stopColor={CTA_TO} />
-          </LinearGradient>
-        </Defs>
-        <Rect x={0} y={0} width="100%" height="100%" fill={`url(#${gid})`} />
-      </Svg>
+      <CtaGradientFill />
       {loading ? (
         <ActivityIndicator color="#FFFFFF" />
       ) : (

@@ -38,9 +38,15 @@ export default function MoreScreen() {
 
       <SectionTitle>영업</SectionTitle>
       <ListRow
+        icon="trending-up-outline"
+        title="영업 활동"
+        subtitle="영업건·일정 등록, 경과 입력"
+        onPress={() => router.push('/sales')}
+      />
+      <ListRow
         icon="calendar-outline"
         title="일정"
-        subtitle="월별 영업 활동·경과 입력"
+        subtitle="출장·교육·휴가·영업 캘린더"
         onPress={() => router.push('/schedule')}
       />
       <ListRow

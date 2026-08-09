@@ -224,7 +224,7 @@ export function UpcomingBidsWidget() {
   );
 }
 
-/** 경과 미입력 — 상세는 일정 화면에서 처리한다. */
+/** 경과 미입력 — 상세는 영업 화면(P5)에서 처리한다. */
 export function PendingProgressWidget() {
   const router = useRouter();
   const { data } = useApi<{ reports: { activities?: unknown[] }[] }>('/api/sales/pending-reports', {
@@ -233,7 +233,7 @@ export function PendingProgressWidget() {
   const count = (data?.reports ?? []).reduce((s, r) => s + (r.activities?.length ?? 0), 0);
   if (!count) return null;
   return (
-    <Card title="경과 미입력" onPress={() => router.push('/schedule')}>
+    <Card title="경과 미입력" onPress={() => router.push('/sales')}>
       <Text className="text-[13px] text-cd-muted">
         경과를 입력하지 않은 활동이 <Text className="font-bold text-cd-text">{count}건</Text>{' '}
         있습니다.

@@ -12,7 +12,7 @@ import { apiJson } from '@/lib/api';
  * (`fillMap`)은 폼 렌더러가 한다 — 시트가 양식 스키마를 알 필요가 없다.
  */
 
-export type EntityKind = 'company' | 'contract' | 'contact' | 'asset';
+export type EntityKind = 'company' | 'contract' | 'contact' | 'asset' | 'project';
 
 export interface EntityOption {
   id: string;
@@ -73,6 +73,19 @@ const SOURCES: Record<EntityKind, Source> = {
       ((json as { items?: Record<string, unknown>[] }).items ?? []).map((o) => ({
         id: str(o.id),
         label: `${str(o.personName)}${o.title ? ` ${str(o.title)}` : ''}`,
+        sub: str(o.facilityName),
+        raw: o,
+      })),
+  },
+  project: {
+    title: '영업건 선택',
+    placeholder: '영업건·사업장명 검색',
+    minChars: 0, // 진행 중 영업건은 수십 건 규모 — 전체를 받아 클라이언트에서 거른다
+    path: () => '/api/sales/projects?status=open',
+    parse: (json) =>
+      ((json as { projects?: Record<string, unknown>[] }).projects ?? []).map((o) => ({
+        id: str(o.projectId),
+        label: str(o.title),
         sub: str(o.facilityName),
         raw: o,
       })),

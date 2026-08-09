@@ -58,15 +58,18 @@ export function DatePickerSheet({
       onClose={onClose}
       title={title ?? (mode === 'range' ? '기간 선택' : '날짜 선택')}
       footer={
-        <Button
-          label="확인"
-          disabled={!from}
-          onPress={() => {
-            if (!from) return;
-            onConfirm(from, mode === 'range' ? (to ?? from) : from);
-            onClose();
-          }}
-        />
+        // Sheet footer 는 flex-row — 감싸지 않으면 버튼이 내용 폭으로 좁아진다.
+        <View className="flex-1">
+          <Button
+            label="확인"
+            disabled={!from}
+            onPress={() => {
+              if (!from) return;
+              onConfirm(from, mode === 'range' ? (to ?? from) : from);
+              onClose();
+            }}
+          />
+        </View>
       }>
       <View className="gap-2">
         <Text className="text-[13px] font-bold text-cd-muted">{label}</Text>

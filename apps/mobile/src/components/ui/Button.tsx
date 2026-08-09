@@ -3,11 +3,14 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { useTheme } from "@/theme/useTheme";
 
+import { CTA_FROM, CtaGradientFill } from "./GradientButton";
+
 type Variant = "primary" | "ghost" | "danger" | "soft";
 type Size = "md" | "sm";
 
+// primary 는 단색 채움 대신 CTA 그라데이션(핸드오프 3a)을 깐다 — 배경 클래스 없이 overflow 만 자른다.
 const BOX: Record<Variant, string> = {
-  primary: "bg-cd-primary",
+  primary: "overflow-hidden",
   ghost: "border border-cd-border bg-cd-card",
   danger: "bg-cd-error",
   soft: "bg-cd-primary-soft",
@@ -56,6 +59,7 @@ export function Button({
         full ? "w-full" : "",
         off ? "opacity-45" : "",
       ].join(" ")}>
+      {variant === "primary" ? <CtaGradientFill /> : null}
       {loading ? (
         <ActivityIndicator size="small" color={iconColor} />
       ) : icon ? (
@@ -109,20 +113,19 @@ export function PrimaryIconButton({
   onPress?: () => void;
   size?: number;
 }) {
-  const { c } = useTheme();
   return (
     <Pressable
       onPress={onPress}
       hitSlop={8}
       style={{
-        backgroundColor: c.primary,
-        shadowColor: c.primary,
+        shadowColor: CTA_FROM,
         shadowOpacity: 0.35,
         shadowRadius: 8,
         shadowOffset: { width: 0, height: 3 },
         elevation: 3,
       }}
-      className="h-11 w-11 items-center justify-center rounded-full active:opacity-70">
+      className="h-11 w-11 items-center justify-center overflow-hidden rounded-full active:opacity-70">
+      <CtaGradientFill />
       <Ionicons name={icon} size={size} color="#FFFFFF" />
     </Pressable>
   );

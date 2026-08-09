@@ -211,7 +211,7 @@ export default function HomeScreen() {
               value={pendingCount}
               delta="확인 필요"
               tone={c.warning}
-              onPress={() => router.push('/schedule')}
+              onPress={() => router.push('/sales')}
             />
             {inboxCount == null ? null : (
               <StatTile key="invoice" label="발행 요청" value={inboxCount} delta="확인 필요" tone={c.secondary} />
@@ -263,7 +263,7 @@ export default function HomeScreen() {
             <Card
               title="경과 미입력"
               badge={<Badge label={`${pendingCount}`} tone="warning" />}
-              action={{ label: '경과 입력', onPress: () => router.push('/schedule') }}>
+              action={{ label: '경과 입력', onPress: () => router.push('/sales') }}>
               <View className="mt-1 gap-2">
                 {reports.slice(0, 3).map((r) => (
                   <View key={r.projectId} className="rounded-xl border border-cd-border bg-cd-surface px-3">
@@ -273,7 +273,7 @@ export default function HomeScreen() {
                       meta={r.facilityName ?? undefined}
                       accent={c.warning}
                       right={<Badge label={`${r.activities?.length ?? 0}건`} tone="warning" />}
-                      onPress={() => router.push('/schedule')}
+                      onPress={() => router.push('/sales')}
                     />
                   </View>
                 ))}

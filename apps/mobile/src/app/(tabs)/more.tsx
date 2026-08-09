@@ -71,8 +71,8 @@ export default function MoreScreen() {
       <SectionTitle>근무</SectionTitle>
       <ListRow
         icon="calendar-outline"
-        title="내 휴가"
-        subtitle="잔여 연차·신청·이력"
+        title="근태·휴가"
+        subtitle="연차 잔여·주 초과근무·신청"
         onPress={() => router.push('/leave')}
       />
       <ListRow

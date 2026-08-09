@@ -88,7 +88,8 @@ function RootNavigator() {
         <Stack.Screen name="approval/draft" />
         <Stack.Screen name="mail/[messageId]" options={{ ...header, title: '메일' }} />
         <Stack.Screen name="mail/compose" options={{ ...header, title: '메일 쓰기' }} />
-        <Stack.Screen name="leave" options={{ ...header, title: '내 휴가' }} />
+        {/* 근태·휴가는 연차 게이지·주 초과근무를 담은 자체 헤더를 그린다 */}
+        <Stack.Screen name="leave" />
         <Stack.Screen name="attendance" options={{ ...header, title: '내 근태' }} />
         <Stack.Screen name="bids" options={{ ...header, title: '공공입찰' }} />
       </Stack>

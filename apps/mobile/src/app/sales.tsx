@@ -8,6 +8,7 @@ import {
   Card,
   EmptyState,
   GradientButton,
+  GradientIconButton,
   OutlineButton,
   ScreenHeader,
   Sheet,
@@ -412,15 +413,7 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-/** 연락처 행 우측 원형 액션(전화·문자). */
+/** 연락처 행 우측 원형 액션(전화·문자) — 앱 공통 CTA 그라데이션. */
 function RoundAction({ icon, onPress }: { icon: keyof typeof Ionicons.glyphMap; onPress: () => void }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      hitSlop={6}
-      className="h-9 w-9 items-center justify-center rounded-full active:opacity-60"
-      style={{ backgroundColor: '#e3e6fb' }}>
-      <Ionicons name={icon} size={16} color="#4353e4" />
-    </Pressable>
-  );
+  return <GradientIconButton icon={icon} onPress={onPress} />;
 }

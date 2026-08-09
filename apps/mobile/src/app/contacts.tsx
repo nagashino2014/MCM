@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, TextInput, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, RefreshControl, TextInput, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
+import { GradientIconButton } from '@/components/ui';
 import { useApi } from '@/lib/use-api';
 import { callPhone, sendSms } from '@/lib/format';
 
@@ -90,16 +91,8 @@ function ContactCard({ c }: { c: Contact }) {
       </View>
       {phone ? (
         <View className="flex-row gap-3">
-          <Pressable
-            onPress={() => callPhone(phone)}
-            className="h-9 w-9 items-center justify-center rounded-full bg-primary-light active:opacity-60">
-            <Ionicons name="call" size={18} color="#4A63D8" />
-          </Pressable>
-          <Pressable
-            onPress={() => sendSms(phone)}
-            className="h-9 w-9 items-center justify-center rounded-full bg-primary-light active:opacity-60">
-            <Ionicons name="chatbubble-ellipses" size={18} color="#4A63D8" />
-          </Pressable>
+          <GradientIconButton icon="call" onPress={() => callPhone(phone)} />
+          <GradientIconButton icon="chatbubble-ellipses" onPress={() => sendSms(phone)} />
         </View>
       ) : null}
     </View>

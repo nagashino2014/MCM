@@ -3,7 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
 
-import { Badge, Card, CardRow, EmptyState, ScreenHeader, SkeletonList } from '@/components/ui';
+import { Badge, Card, CardRow, EmptyState, GradientIconButton, ScreenHeader, SkeletonList } from '@/components/ui';
 import { useApi } from '@/lib/use-api';
 import { callPhone, fmtDate, sendSms } from '@/lib/format';
 import { useTheme } from '@/theme/useTheme';
@@ -217,13 +217,6 @@ function Field({
 }
 
 function IconAction({ icon, onPress }: { icon: keyof typeof Ionicons.glyphMap; onPress: () => void }) {
-  const { c } = useTheme();
-  return (
-    <Pressable
-      onPress={onPress}
-      hitSlop={6}
-      className="h-8 w-8 items-center justify-center rounded-full bg-cd-primary-soft active:opacity-70">
-      <Ionicons name={icon} size={15} color={c.primary} />
-    </Pressable>
-  );
+  // 전화·문자 원형 버튼은 앱 공통으로 CTA 그라데이션(담당자 목록·영업 상세와 동일).
+  return <GradientIconButton icon={icon} onPress={onPress} diameter={32} />;
 }

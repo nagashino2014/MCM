@@ -61,6 +61,30 @@ export function GradientButton({
   );
 }
 
+/** 소형 원형 아이콘 버튼(전화·문자 등) — CTA 그라데이션 채움 + 흰 아이콘. */
+export function GradientIconButton({
+  icon,
+  onPress,
+  diameter = 36,
+  iconSize,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  onPress?: () => void;
+  diameter?: number;
+  iconSize?: number;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={6}
+      style={{ width: diameter, height: diameter }}
+      className="items-center justify-center overflow-hidden rounded-full active:opacity-60">
+      <CtaGradientFill />
+      <Ionicons name={icon} size={iconSize ?? Math.round(diameter * 0.46)} color="#FFFFFF" />
+    </Pressable>
+  );
+}
+
 /** 보조 버튼 — 흰 배경 + 테두리(핸드오프의 '초과/휴일근무 신청'). */
 export function OutlineButton({
   label,

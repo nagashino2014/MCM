@@ -16,6 +16,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { File } from 'expo-file-system';
 
+import { CtaGradientFill } from '@/components/ui';
 import { apiFetch, apiJson } from '@/lib/api';
 
 interface CardFields {
@@ -332,9 +333,11 @@ export default function CardScreen() {
 
         {step === 'pick' ? (
           <View className="gap-3">
+            {/* 주 버튼은 앱 공통 CTA 그라데이션 — 높이(56px)는 기존 유지라 채움만 깐다. */}
             <Pressable
               onPress={openCamera}
-              className="h-14 flex-row items-center justify-center gap-2 rounded-2xl bg-primary active:opacity-80">
+              className="h-14 flex-row items-center justify-center gap-2 overflow-hidden rounded-2xl active:opacity-80">
+              <CtaGradientFill />
               <Ionicons name="camera" size={20} color="#fff" />
               <Text className="text-base font-bold text-white">명함 촬영</Text>
             </Pressable>

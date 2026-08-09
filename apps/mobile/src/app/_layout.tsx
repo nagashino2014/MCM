@@ -77,7 +77,9 @@ function RootNavigator() {
         <Stack.Screen name="card" />
         {/* 일정은 태그 칩·참조 지정을 담은 자체 헤더를 그린다 */}
         <Stack.Screen name="schedule" />
-        <Stack.Screen name="facilities" options={{ ...header, title: '사업장' }} />
+        {/* 사업장 탐색·상세는 검색·필터를 담은 자체 헤더를 그린다 */}
+        <Stack.Screen name="facilities" />
+        <Stack.Screen name="facility/[facilityId]" />
         <Stack.Screen name="contacts" options={{ ...header, title: '담당자' }} />
         <Stack.Screen name="settings" options={{ ...header, title: '설정' }} />
         <Stack.Screen name="board/[postId]" options={{ ...header, title: '공지' }} />

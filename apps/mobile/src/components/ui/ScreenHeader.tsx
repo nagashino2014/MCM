@@ -17,30 +17,43 @@ export function ScreenHeader({
   subtitle,
   back,
   right,
+  variant = 'home',
 }: {
   title: string;
   subtitle?: string;
   /** 뒤로가기 버튼(스택 화면). */
   back?: boolean;
   right?: ReactNode;
+  /**
+   * home = 인사말 헤더(21px/700, 핸드오프 2a) / sub = 하위 화면 헤더(19px/800, 핸드오프 3a).
+   * 두 핸드오프가 서로 다른 값을 지정했다 — 화면 성격이 달라 의도된 차이다.
+   */
+  variant?: 'home' | 'sub';
 }) {
   const { c } = useTheme();
   const router = useRouter();
   return (
-    <View className="flex-row items-center justify-between px-[22px] pb-4 pt-3">
+    <View
+      className={`flex-row items-center justify-between ${variant === 'sub' ? 'px-5 pb-3.5 pt-5' : 'px-[22px] pb-4 pt-3'}`}>
       {back ? (
         <Pressable
           onPress={() => router.back()}
           hitSlop={10}
-          className="mr-1 h-9 w-9 items-center justify-center rounded-full active:opacity-60">
-          <Ionicons name="chevron-back" size={24} color={c.text} />
+          className="mr-2 h-8 w-8 items-center justify-center rounded-full active:opacity-60">
+          <Ionicons name="chevron-back" size={20} color={c.text} />
         </Pressable>
       ) : null}
       <View className="flex-1">
-        <Text numberOfLines={1} className="text-[21px] font-bold tracking-tight text-cd-text">
+        <Text
+          numberOfLines={1}
+          className={`tracking-tight text-cd-text ${variant === 'sub' ? 'text-[19px] font-extrabold' : 'text-[21px] font-bold'}`}>
           {title}
         </Text>
-        {subtitle ? <Text className="mt-[3px] text-[12px] text-cd-faint">{subtitle}</Text> : null}
+        {subtitle ? (
+          <Text className={`text-cd-faint ${variant === 'sub' ? 'mt-px text-[11.5px]' : 'mt-[3px] text-[12px]'}`}>
+            {subtitle}
+          </Text>
+        ) : null}
       </View>
       {right ? <View className="flex-row items-center gap-2.5 pl-2">{right}</View> : null}
     </View>

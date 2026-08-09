@@ -11,14 +11,12 @@ import { apiJson } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { useTheme } from '@/theme/useTheme';
 import {
-  CALENDAR_TAG_KEYS,
   CALENDAR_TAG_LABELS,
   CALENDAR_KIND_LABELS,
   DEFAULT_CALENDAR_PREFS,
   SCHEDULE_FORMS,
-  TAG_COLOR,
-  TAG_COLOR_STRONG,
-  TAG_INK,
+  TAG_ORDER,
+  TAG_TINT,
   type CalendarEvent,
   type CalendarPrefs,
   type CalendarRefs,
@@ -96,8 +94,8 @@ export default function ScheduleScreen() {
         startDate: e.startDate,
         endDate: e.endDate,
         title: e.title,
-        color: TAG_COLOR[e.tag],
-        ink: TAG_INK,
+        color: TAG_TINT[e.tag].pillBg,
+        ink: TAG_TINT[e.tag].text,
       })),
     [events]
   );
@@ -113,7 +111,7 @@ export default function ScheduleScreen() {
     for (const arr of map.values()) {
       arr.sort((a, b) => a.startDate.localeCompare(b.startDate) || (a.startTime ?? '').localeCompare(b.startTime ?? ''));
     }
-    return CALENDAR_TAG_KEYS.filter((t) => tags.includes(t) && map.has(t)).map((t) => ({ tag: t, list: map.get(t)! }));
+    return TAG_ORDER.filter((t) => tags.includes(t) && map.has(t)).map((t) => ({ tag: t, list: map.get(t)! }));
   }, [events, tags]);
 
   const toggleTag = (t: CalendarTagKey) => {
@@ -132,40 +130,44 @@ export default function ScheduleScreen() {
         title="일정"
         subtitle={`${cur.y}년 ${cur.m + 1}월`}
         back
+        variant="sub"
         right={
           <Pressable
             onPress={() => setRefsOpen(true)}
             hitSlop={8}
-            className="h-[38px] flex-row items-center gap-1 rounded-full border border-cd-border bg-cd-card px-3 active:opacity-70">
-            <Ionicons name="people-outline" size={15} color={c.body} />
-            <Text className="text-[12px] font-semibold text-cd-body">참조 지정</Text>
+            className="flex-row items-center gap-1.5 rounded-full border border-cd-border bg-cd-card px-[13px] py-2 active:opacity-70">
+            <Ionicons name="people-outline" size={14} color="#565e82" />
+            <Text className="text-[12px] font-semibold" style={{ color: '#565e82' }}>
+              참조 지정
+            </Text>
           </Pressable>
         }
       />
       <ScrollView
         contentContainerStyle={{ padding: 18, gap: 14, paddingBottom: 40 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={reload} tintColor={c.faint} />}>
-        {/* 태그 — 데스크탑 홈 캘린더와 같은 형태(우측 정렬 · 작은 pill · 색 도트) */}
-        <View className="flex-row flex-wrap justify-end gap-1.5">
-          {CALENDAR_TAG_KEYS.map((t) => {
+        {/* 필터 칩 — 선택은 카테고리 컬러 틴트, 비선택은 흰 배경(핸드오프 3a) */}
+        <View className="flex-row flex-wrap justify-end gap-[7px]">
+          {TAG_ORDER.map((t) => {
             const on = tags.includes(t);
             const off = t === 'sales' && data?.salesDenied;
+            const tint = TAG_TINT[t];
             return (
               <Pressable
                 key={t}
                 onPress={() => !off && toggleTag(t)}
-                className={`h-[28px] flex-row items-center gap-1.5 rounded-full border px-2.5 active:opacity-70 ${
+                className={`flex-row items-center gap-[5px] rounded-full px-[13px] py-[7px] active:opacity-70 ${
                   off ? 'opacity-40' : ''
                 }`}
                 style={{
-                  borderColor: on ? c.primary : c.border,
-                  backgroundColor: on ? c.primary : c.card,
+                  backgroundColor: on ? tint.bg : c.card,
+                  borderWidth: on ? 0 : 1,
+                  borderColor: c.border,
                 }}>
-                <View
-                  style={{ backgroundColor: on ? '#FFFFFF' : TAG_COLOR_STRONG[t] }}
-                  className="h-1.5 w-1.5 rounded-full"
-                />
-                <Text className="text-[11.5px] font-bold" style={{ color: on ? '#FFFFFF' : c.muted }}>
+                <View style={{ backgroundColor: tint.dot }} className="h-[7px] w-[7px] rounded-full" />
+                <Text
+                  className={`text-[12px] ${on ? 'font-bold' : 'font-semibold'}`}
+                  style={{ color: on ? tint.text : '#9aa0b8' }}>
                   {CALENDAR_TAG_LABELS[t]}
                 </Text>
               </Pressable>
@@ -174,7 +176,6 @@ export default function ScheduleScreen() {
         </View>
 
         <MonthCalendar
-          grid={false}
           events={bars}
           year={cur.y}
           month0={cur.m}
@@ -192,8 +193,14 @@ export default function ScheduleScreen() {
             <Card
               key={tag}
               title={CALENDAR_TAG_LABELS[tag]}
-              badge={<Badge label={`${list.length}`} tone="neutral" />}
-              icon={<View style={{ backgroundColor: TAG_COLOR_STRONG[tag] }} className="h-2.5 w-2.5 rounded-full" />}>
+              badge={
+                <View className="rounded-full px-2 py-[2px]" style={{ backgroundColor: '#f3f4fa' }}>
+                  <Text className="text-[11px] font-bold" style={{ color: '#878ea8' }}>
+                    {list.length}
+                  </Text>
+                </View>
+              }
+              icon={<View style={{ backgroundColor: TAG_TINT[tag].dot }} className="h-2 w-2 rounded-full" />}>
               <View className="mt-1">
                 {list.map((e, i) => (
                   <CardRow

@@ -19,6 +19,7 @@ import {
   type SegmentItem,
 } from '@/components/ui';
 import { MonthCalendar, type CalendarBar } from '@/components/calendar/MonthCalendar';
+import { TAG_TINT, type CalendarTagKey } from '@/lib/calendar/types';
 import { WeatherWidget } from '@/components/home/weather/WeatherWidget';
 import { type SceneKind } from '@/components/home/weather/rules';
 import { useTheme } from '@/theme/useTheme';
@@ -33,17 +34,19 @@ const ITEMS: SegmentItem<Tab>[] = [
 
 const SCENES: SceneKind[] = ['맑음', '흐림', '비', '눈', '봄', '여름휴가', '가을', '설날', '추석', '크리스마스'];
 
-/** 캘린더 확인용 더미 — 하루짜리·여러 날·주 경계를 넘는 바·레인 초과를 모두 포함한다. */
+const tint = (k: CalendarTagKey) => ({ color: TAG_TINT[k].pillBg, ink: TAG_TINT[k].text });
+
+/** 캘린더 확인용 더미 — 하루짜리·여러 날·주 경계를 넘는 일정·한 칸 다건을 모두 포함한다. */
 function sampleBars(y: number, m0: number): CalendarBar[] {
   const p = (d: number) => `${y}-${String(m0 + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
   return [
-    { id: 'a', startDate: p(3), endDate: p(7), title: '출장 : 통합허가', color: '#BDD7EE' },
-    { id: 'b', startDate: p(5), endDate: p(5), title: '연차', color: '#C5E0B4' },
-    { id: 'c', startDate: p(6), endDate: p(12), title: '차량 : 니로 하이브리드', color: '#FFE699' },
-    { id: 'd', startDate: p(6), endDate: p(8), title: '영업 : ㈜재영물산 방문', color: '#F8CBAD' },
-    { id: 'e', startDate: p(7), endDate: p(9), title: '교육 : 화관법 실무', color: '#CDACE6' },
-    { id: 'f', startDate: p(14), endDate: p(14), title: '반차', color: '#C5E0B4' },
-    { id: 'g', startDate: p(18), endDate: p(24), title: '출장 : 삼척 발전본부', color: '#BDD7EE' },
+    { id: 'a', startDate: p(3), endDate: p(7), title: '출장 : 통합허가', ...tint('self') },
+    { id: 'b', startDate: p(5), endDate: p(5), title: '반차(오전)', ...tint('self') },
+    { id: 'c', startDate: p(6), endDate: p(12), title: '니로 HEV', ...tint('vehicle') },
+    { id: 'd', startDate: p(6), endDate: p(8), title: '㈜재영물산', ...tint('sales') },
+    { id: 'e', startDate: p(7), endDate: p(9), title: '교육 : 화관법', ...tint('dept') },
+    { id: 'f', startDate: p(14), endDate: p(14), title: '반차', ...tint('refs') },
+    { id: 'g', startDate: p(18), endDate: p(24), title: '출장 : 삼척', ...tint('self') },
   ];
 }
 
@@ -66,7 +69,7 @@ export default function DevPreviewScreen() {
       <ScrollView contentContainerStyle={{ padding: 18, gap: 14, paddingBottom: 40 }}>
         {tab === 'calendar' ? (
           <>
-            <Text className="text-[12px] font-bold text-cd-muted">보기 모드 — 이벤트 바·레인 배정·+N</Text>
+            <Text className="text-[12px] font-bold text-cd-muted">보기 모드 — 셀 안 이벤트 필 · +N</Text>
             <MonthCalendar
               events={sampleBars(cur.y, cur.m)}
               year={cur.y}
@@ -78,7 +81,7 @@ export default function DevPreviewScreen() {
               선택 모드 — 기간 선택 {pick.from ?? '-'} ~ {pick.to ?? '-'}
             </Text>
             <MonthCalendar
-              mode="picker"
+              variant="picker"
               year={cur.y}
               month0={cur.m}
               onMonthChange={(y, m) => setCur({ y, m })}

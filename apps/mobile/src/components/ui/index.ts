@@ -2,6 +2,7 @@
 export { Screen } from "./Screen";
 export { Card } from "./Card";
 export { Button, IconButton, PrimaryIconButton, ActionBar } from "./Button";
+export { GradientButton, OutlineButton, CTA_FROM, CTA_TO } from "./GradientButton";
 export { Badge, Count, Chip } from "./Chip";
 export { Avatar } from "./Avatar";
 export { Input, Textarea, SearchBar } from "./Field";

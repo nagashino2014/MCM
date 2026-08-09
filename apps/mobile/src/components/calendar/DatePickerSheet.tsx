@@ -71,7 +71,7 @@ export function DatePickerSheet({
       <View className="gap-2">
         <Text className="text-[13px] font-bold text-cd-muted">{label}</Text>
         <MonthCalendar
-          mode="picker"
+          variant="picker"
           year={cur.y}
           month0={cur.m}
           onMonthChange={(y, m) => setCur({ y, m })}

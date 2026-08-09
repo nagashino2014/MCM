@@ -26,6 +26,33 @@ export const TAG_COLOR: Record<CalendarTagKey, string> = {
 /** 파스텔 배경 위 글자색. */
 export const TAG_INK = '#1f2937';
 
+/**
+ * 모바일 카테고리 틴트 — 핸드오프 3a.
+ * 필터 칩(선택 상태)과 캘린더 이벤트 필이 같은 틴트를 쓴다(파스텔 배경 + 컬러 텍스트 + 도트).
+ * ⚠ 위의 TAG_COLOR(데스크탑 공용 파스텔)와는 다른 값이다 — 3a 가 모바일 전용으로 지정한 팔레트.
+ * '선택(refs)'은 핸드오프에 비선택 상태만 있어, 도트색(#b9a1e8) 계열로 선택 상태를 맞췄다.
+ */
+export const TAG_TINT: Record<CalendarTagKey, { bg: string; text: string; dot: string; pillBg: string }> = {
+  self: { bg: '#e3edfc', text: '#2f6fd8', dot: '#4c86f5', pillBg: '#e3edfc' },
+  sales: { bg: '#fdefdd', text: '#c1761a', dot: '#f59e42', pillBg: '#fdefdd' },
+  dept: { bg: '#e3f3e8', text: '#2e8f4c', dot: '#3fae5a', pillBg: '#e3f3e8' },
+  refs: { bg: '#f0e9fb', text: '#7a5fd0', dot: '#b9a1e8', pillBg: '#f0e9fb' },
+  vehicle: { bg: '#faf0d2', text: '#94721c', dot: '#e5c04b', pillBg: '#f6e8bb' },
+};
+
+/** 칩·목록 표시 순서 — 핸드오프 3a(본인·영업·부서·선택·차량). */
+export const TAG_ORDER: CalendarTagKey[] = ['self', 'sales', 'dept', 'refs', 'vehicle'];
+
+/** 캘린더 muted 색(핸드오프 3a) — 전/익월·요일 라벨·주말. */
+export const CAL_MUTED = {
+  outside: '#ced3e2',
+  outsideSun: '#e8c2be',
+  weekdayLabel: '#a6acc4',
+  sun: '#d98d84',
+  sat: '#8a9bd6',
+  day: '#565e82',
+} as const;
+
 /** 칩 테두리·도트용 진한 대응색(파스텔은 배경에 쓰면 테두리가 묻힌다). */
 export const TAG_COLOR_STRONG: Record<CalendarTagKey, string> = {
   self: '#5B9BD5',

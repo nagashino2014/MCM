@@ -9,6 +9,7 @@ import { notifyPendingSteps, notifyDrafterResult } from "@/lib/approval/notify";
 import { generateDocSummary } from "@/lib/approval/summarize";
 import { markLetterPendingOnApproval } from "@/lib/letter/store";
 import { markQuotePendingOnApproval } from "@/lib/quote/store";
+import { markAgreementApproved } from "@/lib/agreement/store";
 
 /*
  * 전자결재 문서(084) — 기안 저장/상신·채번·결재선 상태 전이·대결 라우팅·결재함 쿼리.
@@ -569,6 +570,8 @@ export async function actOnDoc(params: {
         await markLetterPendingOnApproval(txn, params.docId);
         // 견적(136) 승인 완료 → 발송 대장 pending 등록(산출물 생성·발송은 커밋 후 비동기)
         await markQuotePendingOnApproval(txn, params.docId);
+        // 계약서(147) 승인 완료 → 대장 approved 마킹만 — 자동 발송 없음(수동 발송, 2026-08-10 확정)
+        await markAgreementApproved(txn, params.docId);
       } else {
         await activateOrder(txn, params.docId, Math.min(...nextOrders));
         await txn.run(`UPDATE approval_docs SET updated_at = $2 WHERE doc_id = $1`, [params.docId, now]);

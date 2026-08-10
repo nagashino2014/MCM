@@ -4,11 +4,13 @@
 
 import { LETTER_FORM_ID } from "@/lib/letter/types";
 import { QUOTE_FORM_ID } from "@/lib/quote/types";
+import { AGREEMENT_FORM_ID } from "@/lib/agreement/types";
 
 /** 작성중·반려 문서를 이어서 편집할 화면 경로. */
 export function approvalEditHref(formId: string | null | undefined, docId: string): string {
   const q = `?docId=${encodeURIComponent(docId)}`;
   if (formId === LETTER_FORM_ID) return `/approval/letter${q}`;
   if (formId === QUOTE_FORM_ID) return `/approval/quote${q}`;
+  if (formId === AGREEMENT_FORM_ID) return `/contracts/agreements${q}`;
   return `/approval/draft${q}`;
 }

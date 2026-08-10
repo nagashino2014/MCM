@@ -153,6 +153,7 @@ export const MENU_ITEMS: MenuItem[] = [
       { title: "계약 관리", href: "/contracts" },
       { title: "Dashboard", href: "/contracts/dashboard" },
       { title: "수주/수금/발행 현황", href: "/contracts/billing" },
+      { title: "계약서 작성", href: "/contracts/agreements" },
       { title: "착수계·준공계 작성", href: "/contracts/deliverables" },
       { title: "다운로드/증명서 생성", href: "/contracts/downloads" },
     ],

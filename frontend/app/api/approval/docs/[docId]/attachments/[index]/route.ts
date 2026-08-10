@@ -1,3 +1,4 @@
+import { resolve4 } from "node:dns/promises";
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getDoc } from "@/lib/approval/docs";
@@ -89,9 +90,10 @@ async function convertToPdf(
     return { ok: false, error: "문서 변환 서버가 설정되지 않아 미리보기를 만들 수 없습니다. 내려받아 확인해 주세요.", status: 503 };
   }
   try {
+    const target = await resolveServiceUrl(converterUrl);
     const form = new FormData();
     form.set("file", new Blob([new Uint8Array(source)], { type: attachmentContentType(name) }), name);
-    const res = await fetch(`${converterUrl}/convert/pdf`, { method: "POST", body: form });
+    const res = await fetch(`${target}/convert/pdf`, { method: "POST", body: form });
     if (!res.ok) {
       const detail = await res.json().catch(() => null);
       const message = (detail as { detail?: string } | null)?.detail ?? `변환 실패(HTTP ${res.status})`;
@@ -99,6 +101,30 @@ async function convertToPdf(
     }
     return { ok: true, pdf: Buffer.from(await res.arrayBuffer()) };
   } catch (err) {
-    return { ok: false, error: `문서 변환 서버에 연결하지 못했습니다. (${(err as Error).message})`, status: 503 };
+    // 원인 코드(ENOTFOUND/ECONNREFUSED/ETIMEDOUT)는 fetch 의 message 에 안 실린다 — cause 까지 남긴다.
+    const cause = (err as { cause?: { code?: string; message?: string } }).cause;
+    const detail = [(err as Error).message, cause?.code, cause?.message].filter(Boolean).join(" / ");
+    console.error("[approval/attachments] converter 호출 실패:", converterUrl, detail);
+    return { ok: false, error: `문서 변환 서버에 연결하지 못했습니다. (${detail})`, status: 503 };
+  }
+}
+
+/**
+ * 서비스 URL 의 호스트명을 IP 로 미리 바꾼다.
+ * next 이미지는 alpine(musl) 이라 getaddrinfo 가 CloudMap 의 `*.local` 이름을 풀지 못하는
+ * 경우가 있다(fetch 는 "fetch failed" 만 남기고 실패). c-ares 기반 dns.resolve4 는 같은
+ * resolv.conf 를 쓰면서도 이 경로를 타지 않으므로, 해석되면 IP 로 호출하고 실패하면 원래
+ * 이름을 그대로 쓴다(해석 성공 환경에서는 동작이 바뀌지 않는다).
+ */
+async function resolveServiceUrl(url: string): Promise<string> {
+  try {
+    const u = new URL(url);
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(u.hostname) || u.hostname === "localhost") return url;
+    const [ip] = await resolve4(u.hostname);
+    if (!ip) return url;
+    u.hostname = ip;
+    return u.toString().replace(/\/$/, "");
+  } catch {
+    return url;
   }
 }

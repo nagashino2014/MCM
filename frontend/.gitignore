@@ -1,5 +1,9 @@
 # dependencies
 node_modules
+# 단, Expo 웹 export 가 번들한 아이콘 폰트는 배포 산출물이라 되살린다
+# (.dockerignore 에도 같은 예외가 있다 — 빠지면 /m-app 아이콘이 전부 깨진다)
+!public/m-app/assets/node_modules/
+!public/m-app/assets/node_modules/**
 /.pnp
 .pnp.js
 

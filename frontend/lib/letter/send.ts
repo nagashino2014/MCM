@@ -7,6 +7,7 @@ import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { getDoc } from "@/lib/approval/docs";
 import { sendMail } from "@/lib/mail/send";
+import { listSignatures } from "@/lib/mail/signatures";
 import { readStorageObject } from "@/lib/contracts/document-bundle";
 import { getS3Client } from "@/lib/storage/logo-storage";
 import { markDeliverablesSent } from "@/lib/deliverable/store";
@@ -14,10 +15,10 @@ import { generateLetterArtifacts } from "./generate";
 import { claimLetterSend, finishLetterSend } from "./store";
 import { COMPANY_KO, type LetterFieldValues, type LetterRecipient } from "./types";
 
-/** SES raw 10MB(base64 오버헤드 감안 실효 ~7MB) — lib/mail 첨부 상한과 동일 기준.
- *  동봉 서류 총량은 200MB 까지 허용(사용자 확정)하되, 이 한도를 넘는 발송은 동봉 서류를
- *  다운로드 링크(presigned, 7일)로 자동 전환한다. */
-const ATTACH_LIMIT_BYTES = 7 * 1024 * 1024;
+/** SES v2 raw 40MB(base64 오버헤드 감안 실효 ~28MB). 수신 측 한도(네이버·Gmail 25MB 안팎)를
+ *  고려해 20MB 를 상한으로 둔다 — 웬만한 동봉 서류는 그대로 첨부되어 메일함에 남는다(사용자 확정).
+ *  동봉 서류 총량은 200MB 까지 허용하되, 이 한도를 넘는 발송만 다운로드 링크(presigned, 7일)로 전환. */
+const ATTACH_LIMIT_BYTES = 20 * 1024 * 1024;
 const LINK_EXPIRES_SEC = 7 * 24 * 3600; // presigned GET 최대 유효기간(7일)
 
 interface DownloadLink {
@@ -38,18 +39,43 @@ async function makeDownloadLink(key: string, name: string, size: number): Promis
   }
 }
 
+/** 메일 제목 접두어 — 수신 측 메일함에서 발신 기관이 바로 보이도록(사용자 확정). */
+const COMPANY_SHORT = COMPANY_KO.replace(/^주식회사\s*/, "");
+
+/** 기안자의 기본 메일 서명(HTML). 미등록·조회 실패면 null — 발송을 막지 않는다. */
+async function defaultSignatureHtml(userId: string): Promise<string | null> {
+  try {
+    const sigs = await listSignatures(userId);
+    return sigs.find((s) => s.isDefault)?.bodyHtml?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 function toAddresses(list: LetterRecipient[]): { name?: string; address: string }[] {
   return (list ?? [])
     .filter((r) => (r.email ?? "").includes("@"))
     .map((r) => ({ name: [r.facilityName, r.name].filter(Boolean).join(" ") || undefined, address: String(r.email) }));
 }
 
-function buildMailBody(letterNo: string, title: string, drafterName: string, attachNames: string[], links: DownloadLink[]): string {
+function buildMailBody(input: {
+  letterNo: string;
+  title: string;
+  /** 발송자 표기 — "성명 직함"(직함 없으면 성명만) */
+  senderLabel: string;
+  attachNames: string[];
+  links: DownloadLink[];
+  /** 기안자의 기본 메일 서명(HTML) — 등록돼 있으면 맨 하단에 붙인다. */
+  signatureHtml: string | null;
+  /** 동봉 서류 존재 여부 — 인사말 문구가 "공문 및 첨부서류" / "공문" 으로 갈린다. */
+  hasEnclosures: boolean;
+}): string {
+  const { letterNo, title, senderLabel, attachNames, links, signatureHtml, hasEnclosures } = input;
   const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   return [
     `<div style="font-size:14px;line-height:1.7;color:#222">`,
-    `<p>안녕하십니까, ${esc(COMPANY_KO)}입니다.</p>`,
-    `<p>아래 공문을 송부드리오니 업무에 참고하여 주시기 바랍니다.</p>`,
+    `<p>안녕하세요, ${esc(COMPANY_KO)} ${esc(senderLabel)} 입니다.</p>`,
+    `<p>아래 공문${hasEnclosures ? " 및 첨부서류를" : "을"} 송부드리오니 검토하여 주시기 바랍니다.</p>`,
     `<table style="border-collapse:collapse;margin:12px 0">`,
     `<tr><td style="border:1px solid #d5d7dd;padding:6px 12px;background:#f4f5f8;font-weight:bold">문서번호</td><td style="border:1px solid #d5d7dd;padding:6px 12px">${esc(letterNo)}</td></tr>`,
     `<tr><td style="border:1px solid #d5d7dd;padding:6px 12px;background:#f4f5f8;font-weight:bold">제목</td><td style="border:1px solid #d5d7dd;padding:6px 12px">${esc(title)}</td></tr>`,
@@ -65,7 +91,9 @@ function buildMailBody(letterNo: string, title: string, drafterName: string, att
           `</ul>`,
         ].join("")
       : "",
-    `<p>감사합니다.<br>${esc(COMPANY_KO)} ${esc(drafterName)} 드림</p>`,
+    `<p>감사합니다.<br>${esc(COMPANY_KO)} ${esc(senderLabel)} 드림</p>`,
+    // 메일 서명(등록돼 있을 때만) — 본문 data URL 이미지는 sendMail 이 cid 첨부로 바꿔 보낸다.
+    signatureHtml ? `<div style="margin-top:18px">${signatureHtml}</div>` : "",
     `</div>`,
   ].join("");
 }
@@ -138,14 +166,26 @@ export async function processLetterSend(docId: string): Promise<{ ok: boolean; s
       }
     }
     if (total > ATTACH_LIMIT_BYTES) {
-      throw new Error(`첨부 총량이 메일 한도(7MB)를 초과합니다(${(total / 1024 / 1024).toFixed(1)}MB).`);
+      throw new Error(`첨부 총량이 메일 한도(20MB)를 초과합니다(${(total / 1024 / 1024).toFixed(1)}MB).`);
     }
+
+    // 발송자 표기 = "성명 직함"(기안 시점 스냅샷). 서명은 기안자의 기본 서명이 있을 때만.
+    const senderLabel = [doc.drafterName ?? "", doc.drafterPosition ?? ""].filter(Boolean).join(" ").trim();
+    const signatureHtml = await defaultSignatureHtml(doc.drafterUserId);
 
     const result = await sendMail({
       userId: doc.drafterUserId,
       to,
-      subject: `[공문] ${artifacts.letterNo} ${artifacts.title}`,
-      bodyHtml: buildMailBody(artifacts.letterNo, artifacts.title, doc.drafterName ?? "", attachments.map((a) => a.filename), links),
+      subject: `[${COMPANY_SHORT}] ${artifacts.letterNo} ${artifacts.title}`,
+      bodyHtml: buildMailBody({
+        letterNo: artifacts.letterNo,
+        title: artifacts.title,
+        senderLabel,
+        attachNames: attachments.map((a) => a.filename),
+        links,
+        signatureHtml,
+        hasEnclosures: files.length > 0,
+      }),
       attachments,
       idempotencyKey: `letter-send:${docId}:${claimed.sendAttempts}`,
     });

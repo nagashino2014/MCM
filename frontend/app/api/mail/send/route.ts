@@ -9,8 +9,9 @@ import type { MailAddress } from "@/lib/mail/mime";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// 첨부 총량 상한(요청 전체). SES 원문 메시지 상한(~10MB, base64 오버헤드 감안)에 여유를 둔다.
-const MAX_TOTAL_ATTACH_BYTES = 7 * 1024 * 1024;
+// 첨부 총량 상한(요청 전체). SES v2 원문 메시지 상한 40MB(base64 오버헤드 감안 실효 ~28MB)에서
+// 수신 측 한도(네이버·Gmail 25MB 안팎)를 고려해 20MB 로 둔다(lib/letter/send.ts 와 동일 기준).
+const MAX_TOTAL_ATTACH_BYTES = 20 * 1024 * 1024;
 
 /** "이름 <addr>" 또는 "addr" 형태의 문자열들을 MailAddress 로 파싱. 콤마/세미콜론 구분. */
 function parseRecipients(raw: string | null): MailAddress[] {
@@ -70,7 +71,7 @@ export async function POST(req: NextRequest) {
       const buf = Buffer.from(await f.arrayBuffer());
       totalBytes += buf.length;
       if (totalBytes > MAX_TOTAL_ATTACH_BYTES) {
-        return NextResponse.json({ error: "첨부 파일 총량이 7MB 를 초과했습니다." }, { status: 400 });
+        return NextResponse.json({ error: "첨부 파일 총량이 20MB 를 초과했습니다." }, { status: 400 });
       }
       attachments.push({ filename: f.name || "attachment", contentType: f.type || "application/octet-stream", content: buf });
     }
@@ -91,7 +92,7 @@ export async function POST(req: NextRequest) {
       const buf = Buffer.from(await f.arrayBuffer());
       totalBytes += buf.length;
       if (totalBytes > MAX_TOTAL_ATTACH_BYTES) {
-        return NextResponse.json({ error: "첨부(이미지 포함) 총량이 7MB 를 초과했습니다." }, { status: 400 });
+        return NextResponse.json({ error: "첨부(이미지 포함) 총량이 20MB 를 초과했습니다." }, { status: 400 });
       }
       attachments.push({
         filename: f.name || `image-${i + 1}.png`,

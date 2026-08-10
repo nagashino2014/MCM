@@ -21,7 +21,7 @@ import type { MailMessageDetail } from "@/lib/mail/messages";
 import type { MailSignature } from "@/lib/mail/signatures";
 import "@/components/cdash/cdash.css";
 
-const MAX_TOTAL_ATTACH_BYTES = 7 * 1024 * 1024;
+const MAX_TOTAL_ATTACH_BYTES = 20 * 1024 * 1024;
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -290,7 +290,7 @@ export function MailComposePage() {
         const accepted: File[] = [];
         for (const f of incoming) {
           if (total + f.size > MAX_TOTAL_ATTACH_BYTES) {
-            toast(`'${f.name}' 은 첨부 총량(7MB)을 초과해 제외했습니다.`, "warn");
+            toast(`'${f.name}' 은 첨부 총량(20MB)을 초과해 제외했습니다.`, "warn");
             continue;
           }
           total += f.size;
@@ -314,7 +314,7 @@ export function MailComposePage() {
     for (const f of picked) {
       if (!f.type.startsWith("image/")) continue;
       if (totalAttachedBytes() + f.size > MAX_TOTAL_ATTACH_BYTES) {
-        toast(`'${f.name}' 은 첨부 총량(7MB)을 초과해 제외했습니다.`, "warn");
+        toast(`'${f.name}' 은 첨부 총량(20MB)을 초과해 제외했습니다.`, "warn");
         continue;
       }
       const cid = `${globalThis.crypto?.randomUUID?.() ?? Date.now()}@koensain.app`;
@@ -591,7 +591,7 @@ export function MailComposePage() {
               >
                 문서함
               </CdButton>
-              {totalKB > 0 && <span className="text-[11px] cd-text-faint">합계 {totalKB} KB / 최대 7MB</span>}
+              {totalKB > 0 && <span className="text-[11px] cd-text-faint">합계 {totalKB} KB / 최대 20MB</span>}
             </span>
             {/* 상시 드롭존 — 첨부 순서대로 위→아래 목록 표시. 드래그 중에는 테두리만 실선 강조. */}
             <div

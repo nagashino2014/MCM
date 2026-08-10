@@ -46,6 +46,42 @@ function newId(prefix: string): string {
   return prefix + "-" + crypto.randomUUID().replace(/-/g, "").slice(0, 14);
 }
 
+/** data URL 이미지 확장자 — Content-Type 에서 뽑되 알 수 없으면 png 로 둔다. */
+const IMG_EXT: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/gif": "gif",
+  "image/webp": "webp",
+  "image/svg+xml": "svg",
+};
+
+/**
+ * 본문의 `<img src="data:image/...;base64,...">` 를 cid 인라인 첨부로 분리한다.
+ * 서명 편집기에서 삽입한 명함 이미지가 이 형태로 저장되는데, Gmail·Outlook 등은 data: 이미지를
+ * 차단하므로 그대로 보내면 수신 측에서 깨진다. MIME 은 disposition=inline + Content-ID 로 나간다.
+ */
+function extractDataUrlImages(html: string): { html: string; images: MimeAttachment[] } {
+  const images: MimeAttachment[] = [];
+  if (!html.includes("data:image/")) return { html, images };
+  const out = html.replace(/(<img\b[^>]*\bsrc=)(["'])data:(image\/[a-z+]+);base64,([^"']+)\2/gi, (all, prefix, quote, mime, b64) => {
+    try {
+      const content = Buffer.from(String(b64), "base64");
+      if (!content.length) return all;
+      const cid = `${crypto.randomUUID().replace(/-/g, "")}@${MAIL_DOMAIN}`;
+      images.push({
+        filename: `inline-${images.length + 1}.${IMG_EXT[String(mime).toLowerCase()] ?? "png"}`,
+        contentType: String(mime),
+        content,
+        contentId: cid,
+      });
+      return `${prefix}${quote}cid:${cid}${quote}`;
+    } catch {
+      return all;
+    }
+  });
+  return { html: out, images };
+}
+
 /** 발송 로그를 1회 선점(claim). 새로 선점하면 send_id, 이미 있으면 null(중복). */
 async function claimSend(dedupKey: string, mailboxId: string): Promise<string | null> {
   let sendId: string | null = null;
@@ -82,14 +118,20 @@ export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
   const sendId = await claimSend(dedupKey, mailbox.mailboxId);
   if (!sendId) return { ok: true, duplicate: true };
 
-  const html = input.bodyHtml ?? "";
+  // 본문에 박힌 data URL 이미지(서명 편집기에서 삽입한 명함 등)를 cid 인라인 첨부로 옮긴다.
+  // Gmail 등 주요 클라이언트가 data: 이미지를 차단하기 때문에 그대로 보내면 깨져 보인다.
+  const inlined = extractDataUrlImages(input.bodyHtml ?? "");
+  const html = inlined.html;
   const text = htmlToPlainText(html);
-  const attachments: MimeAttachment[] = (input.attachments ?? []).map((a) => ({
-    filename: a.filename,
-    contentType: a.contentType || "application/octet-stream",
-    content: a.content,
-    contentId: a.contentId,
-  }));
+  const attachments: MimeAttachment[] = [
+    ...(input.attachments ?? []).map((a) => ({
+      filename: a.filename,
+      contentType: a.contentType || "application/octet-stream",
+      content: a.content,
+      contentId: a.contentId,
+    })),
+    ...inlined.images,
+  ];
 
   // 메시지 ID 를 발송 전에 확정 — 수신자별 추적 픽셀 URL(수신 확인, G2-10)에 필요.
   const msgId = newId("mmsg");

@@ -986,7 +986,7 @@ export function ApprovalLetterBoard() {
             {/* 첨부서류 — 공문과 함께 참조자 메일로 순서대로 발송. (추후 대금청구서·준공계·착수계 작성 기능 배치 예정) */}
             <div className="flex flex-col gap-1.5">
               <span className="text-[11px] cd-text-faint">
-                첨부서류 — 공문 PDF 뒤에 첨부 순서대로 메일에 동봉됩니다. 총 7MB 초과 시 다운로드 링크(7일 유효)로 자동 전환 (총 200MB 까지)
+                첨부서류 — 공문 PDF 뒤에 첨부 순서대로 메일에 동봉됩니다. 총 20MB 까지 파일로 직접 첨부되고, 초과분은 다운로드 링크(7일 유효)로 전환됩니다 (총 200MB 까지)
               </span>
               <span className="text-[10.5px] cd-text-faint">
                 결재자가 내용을 확인할 수 있는 형식만 첨부할 수 있습니다 — {ATTACHMENT_ALLOWED_TEXT}

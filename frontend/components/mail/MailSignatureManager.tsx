@@ -35,6 +35,37 @@ export function MailSignatureManager({
   const [isDefault, setIsDefault] = useState(false);
   const [saving, setSaving] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  /**
+   * 서명 이미지 삽입 — 명함 이미지를 data URL 로 본문에 넣는다.
+   * 서명은 저장 시점과 발송 시점이 떨어져 있어(발송 때 cid 를 만들 수 없다) data URL 로 보관하고,
+   * 실제 발송에서 lib/mail/send.ts 가 cid 인라인 첨부로 변환한다.
+   */
+  const onPickImages = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const picked = e.target.files ? Array.from(e.target.files) : [];
+    if (imageInputRef.current) imageInputRef.current.value = "";
+    for (const f of picked) {
+      if (!f.type.startsWith("image/")) continue;
+      // 서명은 모든 메일에 실려 나가므로 큰 이미지는 막는다(명함 스캔은 보통 수백 KB).
+      if (f.size > 2 * 1024 * 1024) {
+        toast(`'${f.name}' 은 2MB 를 초과해 넣지 않았습니다. 이미지를 줄여서 넣어 주세요.`, "warn");
+        continue;
+      }
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(f);
+      }).catch(() => null);
+      if (!dataUrl) {
+        toast(`'${f.name}' 을 읽지 못했습니다.`, "error");
+        continue;
+      }
+      editorRef.current?.focus();
+      document.execCommand("insertHTML", false, `<img src="${dataUrl}" style="max-width:100%"><div><br></div>`);
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -211,6 +242,7 @@ export function MailSignatureManager({
           <MailEditor
             ref={editorRef}
             onInput={() => {}}
+            onPickImage={() => imageInputRef.current?.click()}
             onPasteImageFailed={(reasons) =>
               toast(
                 `이미지 ${reasons.length}건은 원본 사이트(네이버 등)에 로그인해야만 열리는 주소라 가져올 수 없었습니다. 명함은 툴바의 '이미지 삽입'으로 파일을 넣거나, 원본에서 이미지를 우클릭 → '이미지 복사' 후 붙여넣어 주세요.`,
@@ -218,6 +250,9 @@ export function MailSignatureManager({
               )
             }
           />
+          {/* 서명 이미지(명함 등) — 서명 HTML 에 data URL 로 저장하고, 발송 시 sendMail 이
+              cid 인라인 첨부로 바꿔 내보낸다(Gmail 등이 data: 이미지를 차단하기 때문). */}
+          <input ref={imageInputRef} type="file" accept="image/*" multiple hidden onChange={onPickImages} />
           <div className="flex items-center gap-2">
             <CdButton variant="primary" loading={saving} icon={<Check className="w-4 h-4" />} onClick={save}>
               저장

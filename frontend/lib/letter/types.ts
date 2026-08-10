@@ -117,6 +117,10 @@ export interface LetterFieldValues {
   file_attachments?: LetterFileAttachment[]; // 동봉 첨부(발송 메일에 공문 뒤 순서대로)
   /** 이 공문에 첨부된 착수계·준공계 문서 id(142) — 발송 완료 시 상태·시행번호를 역기록한다 */
   deliverable_ids?: string[];
+  /** 내부 참조자(전자결재 참조/열람자)에게 보낼 참조 메일 주소 기준.
+   *  personal = 개인 메일(employee_profiles.email) / company = 회사 메일(@koensain.app).
+   *  앱 전사 배포 전이라 기본은 personal(사용자 확정). */
+  internal_cc_target?: "personal" | "company";
   layout_overrides?: LetterLayoutOverrides; // 레이아웃 미세조정(미리보기 모달)
   recipients_display?: string; // 양식별 조회 표시용 요약(저장 시 생성)
   letter_kind_display?: string;

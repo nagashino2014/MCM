@@ -148,7 +148,8 @@ function SymbolPalette({ onInsert }: { onInsert: (symbol: string) => void }) {
   const [tab, setTab] = useState(SYMBOL_GROUPS[0].key);
   const group = SYMBOL_GROUPS.find((g) => g.key === tab) ?? SYMBOL_GROUPS[0];
   return (
-    <div className="absolute top-full left-0 mt-1 z-50 rounded-xl border cd-border-c cd-card-bg p-2 w-[19rem]" style={{ boxShadow: "var(--cd-shadow)" }}>
+    // 툴바 오른쪽 끝 버튼이라 left 기준으로 펼치면 편집창 밖으로 잘린다 → 오른쪽 끝 정렬.
+    <div className="absolute top-full right-0 mt-1 z-50 rounded-xl border cd-border-c cd-card-bg p-2 w-[19rem]" style={{ boxShadow: "var(--cd-shadow)" }}>
       <div className="flex flex-wrap gap-0.5 mb-1.5 border-b cd-border-c pb-1.5">
         {SYMBOL_GROUPS.map((g) => (
           <button
@@ -846,7 +847,8 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
             <Table2 className="w-3.5 h-3.5" />
           </EBtn>
           {toolPopover === "table" && (
-            <div className="absolute top-full left-0 mt-1 z-50 rounded-xl border cd-border-c cd-card-bg p-2.5" style={{ boxShadow: "var(--cd-shadow)" }}>
+            // 기호 팔레트와 같은 이유로 오른쪽 끝 정렬(툴바 마지막 버튼 — left 기준이면 잘린다).
+            <div className="absolute top-full right-0 mt-1 z-50 rounded-xl border cd-border-c cd-card-bg p-2.5" style={{ boxShadow: "var(--cd-shadow)" }}>
               <p className="text-[11px] cd-text-faint mb-1.5 whitespace-nowrap">
                 {tableHover.r > 0 ? `${tableHover.r}행 × ${tableHover.c}열 (첫 행 = 머리글)` : "크기를 선택하세요"}
               </p>

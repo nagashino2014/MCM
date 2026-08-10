@@ -5,7 +5,9 @@
 
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { getDb, rowsToObjects } from "@/lib/db";
 import { getDoc } from "@/lib/approval/docs";
+import { MAIL_DOMAIN } from "@/lib/mail/mailbox";
 import { sendMail } from "@/lib/mail/send";
 import { listSignatures } from "@/lib/mail/signatures";
 import { readStorageObject } from "@/lib/contracts/document-bundle";
@@ -50,6 +52,39 @@ async function defaultSignatureHtml(userId: string): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * 내부 참조자(전자결재 참조/열람자) 메일 주소 조회.
+ * target=personal → 개인 메일(employee_profiles.email) 우선, 없으면 회사 메일로 폴백.
+ * target=company  → 회사 메일(@koensain.app) 우선, 없으면 개인 메일로 폴백.
+ * 앱을 전사 배포하기 전에는 개인 메일이 기본이다(사용자 확정).
+ */
+async function internalCcAddresses(
+  userIds: string[],
+  target: "personal" | "company"
+): Promise<{ name?: string; address: string }[]> {
+  if (!userIds.length) return [];
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT u.user_id, COALESCE(ep.name, u.email) AS name, ep.email AS personal_email,
+              COALESCE(mb.address, NULLIF(LOWER(u.email_local), '') || '@' || $2) AS company_email
+         FROM users u
+         LEFT JOIN employee_profiles ep ON ep.user_id = u.user_id
+         LEFT JOIN mailboxes mb ON mb.user_id = u.user_id AND mb.status = 'active'
+        WHERE u.user_id = ANY($1)`,
+      [userIds, MAIL_DOMAIN]
+    )
+  );
+  const out: { name?: string; address: string }[] = [];
+  for (const r of rows) {
+    const personal = r.personal_email != null ? String(r.personal_email).trim() : "";
+    const company = r.company_email != null ? String(r.company_email).trim() : "";
+    const picked = target === "personal" ? personal || company : company || personal;
+    if (picked.includes("@")) out.push({ name: r.name != null ? String(r.name) : undefined, address: picked });
+  }
+  return out;
 }
 
 function toAddresses(list: LetterRecipient[]): { name?: string; address: string }[] {
@@ -122,6 +157,12 @@ export async function processLetterSend(docId: string): Promise<{ ok: boolean; s
     const to = toAll.filter((a) => (seen.has(a.address.toLowerCase()) ? false : (seen.add(a.address.toLowerCase()), true)));
     if (!to.length) throw new Error("참조자에 유효한 메일주소가 없습니다. 참조자를 보완 후 재발송하세요.");
 
+    // 내부 참조자(Cc) — 전자결재 참조/열람자로 지정한 자사 직원. 별도 메뉴 없이 결재선 패널의
+    // 참조자 기능을 그대로 쓴다(사용자 확정). To 와 겹치면 제외한다.
+    const watcherIds = doc.watchers.map((w) => w.userId).filter(Boolean);
+    const ccAll = await internalCcAddresses(watcherIds, values.internal_cc_target === "company" ? "company" : "personal");
+    const cc = ccAll.filter((a) => (seen.has(a.address.toLowerCase()) ? false : (seen.add(a.address.toLowerCase()), true)));
+
     const attachments: { filename: string; contentType: string; content: Buffer }[] = [
       { filename: `${artifacts.fileBase}.pdf`, contentType: "application/pdf", content: Buffer.from(artifacts.pdfBytes) },
     ];
@@ -176,6 +217,7 @@ export async function processLetterSend(docId: string): Promise<{ ok: boolean; s
     const result = await sendMail({
       userId: doc.drafterUserId,
       to,
+      cc,
       subject: `[${COMPANY_SHORT}] ${artifacts.letterNo} ${artifacts.title}`,
       bodyHtml: buildMailBody({
         letterNo: artifacts.letterNo,

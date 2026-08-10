@@ -432,6 +432,8 @@ export function ApprovalLetterBoard() {
   const [dragOver, setDragOver] = useState(false);
   // 재편집 문서의 상태·반려 사유·삭제 권한(서버 판정) — 반려 배너와 기안 삭제 버튼 노출용.
   const [editMeta, setEditMeta] = useState<EditDocMeta | null>(null);
+  // 내부 참조자(Cc) 가 참조 메일을 받을 주소 기준 — 앱 전사 배포 전 기본은 개인 메일.
+  const [internalCcTarget, setInternalCcTarget] = useState<"personal" | "company">("personal");
   const editorRef = useRef<HTMLDivElement>(null);
   const pendingHtmlRef = useRef<string | null>(null);
 
@@ -521,6 +523,7 @@ export function ApprovalLetterBoard() {
         if (v.proof_receiver) setProofReceiver(v.proof_receiver);
         setAttachItems(Array.isArray(v.attachments_list) ? v.attachments_list.map((a) => a.text) : []);
         setStampOn(v.stamp !== 0);
+        setInternalCcTarget(v.internal_cc_target === "company" ? "company" : "personal");
         setIncludeHwpx(v.include_hwpx === 1);
         setOverrides(v.layout_overrides ?? {});
         setContactPhone(v.contact_phone || COMPANY_PHONE);
@@ -652,6 +655,7 @@ export function ApprovalLetterBoard() {
       include_hwpx: includeHwpx ? 1 : 0,
       contact_phone: contactPhone,
       contact_email: contactEmail,
+      internal_cc_target: internalCcTarget,
     };
     if (letterKind === "proof") {
       values.proof_sender = proofSender;
@@ -666,7 +670,7 @@ export function ApprovalLetterBoard() {
     values.recipients_display = recipientsDisplay(values);
     values.letter_kind_display = letterKind === "proof" ? "내용증명" : "일반";
     return values;
-  }, [letterKind, recipients, ccRefs, subject, attachItems, stampOn, includeHwpx, contactPhone, contactEmail, proofSender, proofReceiver, overrides, fileAttachments, deliverableId]);
+  }, [letterKind, recipients, ccRefs, subject, attachItems, stampOn, includeHwpx, contactPhone, contactEmail, proofSender, proofReceiver, overrides, fileAttachments, deliverableId, internalCcTarget]);
 
   const persist = useCallback(
     // docIdOverride: 같은 턴에서 save 직후 submit 할 때 — setDocId 는 비동기라 클로저의
@@ -1107,9 +1111,10 @@ export function ApprovalLetterBoard() {
                 <Eye className="w-3.5 h-3.5 cd-text-primary" /> 참조 · 열람
                 <span className="ml-auto text-[10px] font-normal cd-text-faint">사내 참조(결재 시스템)</span>
               </h4>
-              {watchers.length === 0 ? (
-                <p className="text-[11px] cd-text-faint">필요 시 사내 참조/열람자를 지정하세요(선택).</p>
-              ) : (
+              <p className="text-[11px] cd-text-faint leading-relaxed">
+                여기에 지정한 사내 인원은 <b className="cd-text">발송 공문 메일을 참조(Cc)로 함께 받습니다.</b> 사내 공유가 필요한 인원을 추가하세요(선택).
+              </p>
+              {watchers.length === 0 ? null : (
                 watchers.map((w, i) => (
                   <div key={`${w.userId}-${i}`} className="rounded-xl border cd-border-c px-3 py-1.5 flex items-center gap-2">
                     <select
@@ -1131,6 +1136,20 @@ export function ApprovalLetterBoard() {
               <button type="button" className="cd-btn rounded-lg border border-dashed cd-border-c px-3 py-1.5 text-[11px] cd-text-faint" onClick={() => setOrgModal("ref")}>
                 ＋ 참조/열람자 추가
               </button>
+              {/* 참조 메일을 어느 주소로 받을지 — 앱 전사 배포 전에는 개인 메일이 기본(사용자 확정). */}
+              {watchers.length > 0 && (
+                <label className="text-[11px] cd-text-faint flex flex-col gap-1 mt-0.5">
+                  참조 메일 받을 주소
+                  <select
+                    className="cd-select"
+                    value={internalCcTarget}
+                    onChange={(e) => setInternalCcTarget(e.target.value as "personal" | "company")}
+                  >
+                    <option value="personal">개인 메일 주소</option>
+                    <option value="company">회사 메일(@koensain.app)</option>
+                  </select>
+                </label>
+              )}
             </div>
 
             <div className="flex items-center gap-2 mt-1 flex-wrap">

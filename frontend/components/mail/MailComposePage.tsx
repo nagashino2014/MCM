@@ -259,7 +259,9 @@ export function MailComposePage() {
   /** 서명 블록 삽입(드롭다운·관리 모달 공용). */
   const insertSignature = (bodyHtml: string, subjectPrefix?: string | null) => {
     editorRef.current?.focus();
-    document.execCommand("insertHTML", false, `<br><div>--<br>${bodyHtml}</div>`);
+    // 서명 앞에 구분자를 넣지 않는다 — 메일 표준의 "-- " 관례로 넣었던 문자가
+    // 본문에 그대로 찍혀 "입력하지 않은 글자"로 보였다(사용자 지적).
+    document.execCommand("insertHTML", false, `<br><div>${bodyHtml}</div>`);
     // 서명에 사명 표시가 지정돼 있으면 제목 앞에 [사명] 을 반영한다(서명 교체 시 이전 표시는 대체).
     if (subjectPrefix !== undefined) setSubject((prev) => applySubjectPrefix(prev, subjectPrefix));
     scheduleDraftSave();

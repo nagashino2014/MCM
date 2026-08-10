@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, ClipboardCheck, Send, Save, Trash2, Users, Eye, BookmarkPlus, ShieldCheck, AlertTriangle, Info, Ban, Link2 } from "lucide-react";
+import { ArrowLeft, ClipboardCheck, Paperclip, Send, Save, Trash2, Users, Eye, BookmarkPlus, ShieldCheck, AlertTriangle, Info, Ban, Link2 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdModal } from "@/components/cdash/CdModal";
@@ -17,6 +17,10 @@ import { parseTimeRange, timeRangeMinutes, type ApprovalFieldDef } from "@/lib/a
 import { autofillFromRefDoc, compareWithRefDoc } from "@/lib/approval/ref-link";
 import { findInCatalog, type LeaveTypeItem } from "@/lib/approval/leave-types";
 import { OvertimeConsentModal } from "@/components/approval/OvertimeConsentModal";
+import { DeleteDraftButton, RejectedBanner, toEditDocMeta, type EditDocMeta } from "@/components/approval/DraftEditNotice";
+import {
+  ATTACHMENT_ACCEPT, ATTACHMENT_ALLOWED_TEXT, formatBytes, isAllowedAttachment, type DocAttachment,
+} from "@/lib/approval/attachments";
 import type { OvertimeConsent } from "@/lib/approval/overtime-consent";
 import "@/components/cdash/cdash.css";
 
@@ -113,6 +117,13 @@ export function ApprovalDraftBoard() {
   const [presets, setPresets] = useState<LinePreset[]>([]);
   const [precheck, setPrecheck] = useState<PrecheckResult | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
+  // 재편집 문서의 상태·반려 사유·삭제 권한(서버 판정) — 반려 배너와 기안 삭제 버튼 노출용.
+  const [editMeta, setEditMeta] = useState<EditDocMeta | null>(null);
+  // 첨부서류(문서 공통 — 공문과 같은 field_values.file_attachments 규약).
+  // 지출결의·출장보고·교육훈련·휴가처럼 증빙이 필요한 양식에서 쓴다.
+  const [fileAttachments, setFileAttachments] = useState<DocAttachment[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   // 선행 문서 연관(127) — 양식에 선행 양식이 지정된 경우(신청서→보고서)
   const [refDoc, setRefDoc] = useState<RefDocInfo | null>(null);
   const [refCandidates, setRefCandidates] = useState<RefDocInfo[]>([]);
@@ -139,6 +150,8 @@ export function ApprovalDraftBoard() {
   const otRangeKey = isOvertimeForm ? form?.fields.find((f) => f.type === "time_range")?.key : undefined;
   const otRangeValue = otRangeKey ? values[otRangeKey] : undefined;
   const otRangeSigRef = useRef<string | undefined>(undefined);
+  /** 직전 휴가 종류 key — 종류가 바뀌었을 때만 기간·일수를 새 규정으로 재설정한다. */
+  const prevLeaveTypeRef = useRef<string | null>(null);
   useEffect(() => {
     if (!isOvertimeForm || !otRangeKey) return;
     const minutes = timeRangeMinutes(otRangeValue);
@@ -228,7 +241,10 @@ export function ApprovalDraftBoard() {
 
   // 휴가 기간 ↔ 사용일수 ↔ 부여일수 연동(§LM-P2) — 달력일 기준.
   // 부여일수 고정(경조·조의 등): 시작일 입력 → 종료일 자동(days-1 가산)·사용일수=days.
-  // 가변(연차·공가·병가): 시작+종료 입력 → 사용일수 자동 카운팅(초과 상한 없음, 연차 잔여만 안내).
+  // 반차: 하루 안에서 쓰므로 종료일=시작일, 사용일수 0.5(서버 차감과 일치).
+  // 가변(연차·공가(예비군)·병가): 시작+종료 입력 → 사용일수 자동 카운팅(연차 잔여만 안내).
+  // ⚠ 휴가 종류를 바꾸면 이전 종류 기준으로 남아 있던 기간·일수를 새 규정으로 다시 맞춘다
+  //   (2026-08-10 사용자 리포트 — 5일 경조에서 연차로 바꿔도 5일 범위가 그대로 남았다).
   useEffect(() => {
     if (!isLeaveForm || leaveCatalog.length === 0) {
       setLeaveHint(null);
@@ -236,21 +252,36 @@ export function ApprovalDraftBoard() {
     }
     const item = findInCatalog(leaveCatalog, values.leave_type);
     if (!item) {
+      prevLeaveTypeRef.current = null;
       setLeaveHint(null);
       return;
     }
+    // 첫 평가(문서 로드·임시저장 이어쓰기)는 변경으로 보지 않는다 — 저장된 값을 지우면 안 된다.
+    const typeChanged = prevLeaveTypeRef.current !== null && prevLeaveTypeRef.current !== item.key;
+    prevLeaveTypeRef.current = item.key;
+
     const period = (values.leave_period ?? {}) as { from?: string; to?: string };
     const from = period.from;
     if (!from || !/^\d{4}-\d{2}-\d{2}$/.test(from)) {
       setLeaveHint(item.days != null ? `${item.label} — 부여 ${item.days}일 (시작일을 입력하면 종료일이 자동 설정됩니다)` : null);
       return;
     }
-    if (item.days != null) {
+    if (item.deduct === "half") {
+      // 반차: 종료일=시작일 고정, 사용일수 0.5
+      if (period.to !== from || String(values.use_days ?? "") !== "0.5") {
+        setValues((prev) => ({ ...prev, leave_period: { from, to: from }, use_days: "0.5" }));
+      }
+      setLeaveHint(`${item.label} — 0.5일 차감(하루 안에서 사용)`);
+    } else if (item.days != null) {
       // 고정 부여일수: 종료일·사용일수 자동(상한 강제)
       const to = addDays(from, item.days - 1);
       const changed = to !== period.to || String(values.use_days ?? "") !== String(item.days);
       if (changed) setValues((prev) => ({ ...prev, leave_period: { from, to }, use_days: String(item.days) }));
       setLeaveHint(`${item.label} — 부여 ${item.days}일 · 종료일 자동 설정(${to})`);
+    } else if (typeChanged) {
+      // 고정·반차 → 가변 전환: 이전 종료일이 남지 않게 하루로 초기화하고 사용자가 다시 지정한다.
+      setValues((prev) => ({ ...prev, leave_period: { from, to: from }, use_days: "1" }));
+      setLeaveHint(`${item.label} — 종료일을 지정하면 사용일수가 계산됩니다`);
     } else {
       // 가변: 종료일이 있으면 사용일수 카운팅
       if (period.to && /^\d{4}-\d{2}-\d{2}$/.test(period.to)) {
@@ -282,10 +313,12 @@ export function ApprovalDraftBoard() {
           if (!res.ok) throw new Error(data?.error ?? "문서를 불러오지 못했습니다.");
           if (cancelled) return;
           const d = data.doc;
+          setEditMeta(toEditDocMeta(d));
           setForm({ formId: d.formId, name: d.formName, fields: d.fields, refFormId: d.formRefFormId ?? null });
           setTitle(d.title ?? "");
           setUrgent(!!d.urgent);
           setValues(d.fieldValues ?? {});
+          setFileAttachments(Array.isArray(d.fieldValues?.file_attachments) ? d.fieldValues.file_attachments : []);
           if (d.refDoc) setRefDoc(d.refDoc as RefDocInfo);
           setLine(
             (d.steps ?? []).map((s: { stepType: string; assigneeUserId: string; assigneeName: string | null; assigneePosition: string | null }) => ({
@@ -455,7 +488,12 @@ export function ApprovalDraftBoard() {
           title,
           urgent,
           // 12h 초과 동의(전자서명)는 모달에서 ref 로 받으므로 여기서 병합한다(상신 시 서버가 유효성 강제).
-          fieldValues: otConsentRef.current ? { ...values, _overtime_consent: otConsentRef.current } : values,
+          // 첨부는 양식 필드가 아니라 문서 공통 항목이라 field_values 에 같은 키로 싣는다(공문과 동일 규약).
+          fieldValues: {
+            ...values,
+            ...(otConsentRef.current ? { _overtime_consent: otConsentRef.current } : {}),
+            ...(fileAttachments.length ? { file_attachments: fileAttachments } : {}),
+          },
           line,
           watchers: watchers.map((w) => ({ userId: w.userId, kind: w.kind })),
           refDocId: refDoc?.docId ?? null,
@@ -466,8 +504,32 @@ export function ApprovalDraftBoard() {
       setDocId(data.docId);
       return { docId: data.docId, docNo: data.docNo };
     },
-    [form, docId, title, urgent, values, line, watchers, refDoc]
+    [form, docId, title, urgent, values, fileAttachments, line, watchers, refDoc]
   );
+
+  /** 첨부 업로드 — DnD/파일 선택 공용. 결재자가 뷰어에서 열 수 있는 형식만 받는다. */
+  const uploadFiles = useCallback(async (files: FileList | File[]) => {
+    const list = Array.from(files);
+    if (!list.length) return;
+    const rejected = list.filter((f) => !isAllowedAttachment(f.name));
+    if (rejected.length) {
+      alert(`첨부할 수 없는 형식입니다 — ${rejected.map((f) => f.name).join(", ")}\n허용 형식: ${ATTACHMENT_ALLOWED_TEXT}`);
+      return;
+    }
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      for (const f of list) fd.append("files", f);
+      const res = await fetch("/api/approval/attachments", { method: "POST", body: fd });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { error?: string })?.error ?? "첨부 업로드 실패");
+      setFileAttachments((prev) => [...prev, ...((data as { items?: DocAttachment[] }).items ?? [])]);
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  }, []);
 
   const validateForSubmit = useCallback((): boolean => {
     if (!form) return false;
@@ -607,9 +669,12 @@ export function ApprovalDraftBoard() {
         title={form ? `기안 작성 — ${form.name}` : "기안 작성"}
         subtitle="입력 값은 항목별 데이터로 저장되어 결재 완료 후 분류·집계에 활용됩니다."
         actions={
-          <Link href="/approval" className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs flex items-center gap-1.5">
-            <ArrowLeft className="w-3.5 h-3.5" /> 전자결재 홈
-          </Link>
+          <div className="flex items-center gap-2">
+            <DeleteDraftButton docId={docId} meta={editMeta} />
+            <Link href="/approval" className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs flex items-center gap-1.5">
+              <ArrowLeft className="w-3.5 h-3.5" /> 전자결재 홈
+            </Link>
+          </div>
         }
       />
 
@@ -619,8 +684,13 @@ export function ApprovalDraftBoard() {
         <p className="text-sm text-[color:var(--cd-danger,#FA896B)]">{error}</p>
       ) : form ? (
         <>
+        <div className="max-w-[1032px]">
+          <RejectedBanner meta={editMeta} />
+        </div>
         <div className="flex flex-col xl:flex-row gap-4 items-start">
-          <div className="cd-card rounded-3xl p-5 flex-1 min-w-0 flex flex-col gap-4">
+          {/* 본문 카드는 렌더러 고정폭(273mm ≈ 1032px)에 맞춘다 — 공문·견적서 작성 화면과 동일 규칙.
+              제한이 없으면 넓은 화면에서 양식 좌우로 빈 여백만 커진다. */}
+          <div className="cd-card rounded-3xl p-5 flex-1 min-w-0 max-w-[1032px] flex flex-col gap-4">
             <div className="flex items-center gap-3 flex-wrap">
               <label className="text-[11px] cd-text-faint flex flex-col gap-1 flex-1 min-w-[260px]">
                 제목
@@ -723,6 +793,65 @@ export function ApprovalDraftBoard() {
               // 기안 단계에서도 완성 문서와 같은 양식 제목을 보여준다(신청/승인란은 상신 후).
               header={{ formName: form.name }}
             />
+
+            {/* 첨부서류 — 영수증·증빙 등. 결재자는 문서 뷰어의 [첨부서류] 탭에서 내용을 확인한다. */}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[11px] cd-text-faint">
+                첨부서류 — 결재자가 뷰어에서 열 수 있는 형식만 첨부할 수 있습니다 ({ATTACHMENT_ALLOWED_TEXT} · 1건 200MB 까지)
+              </span>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                <label
+                  className={`rounded-xl border-2 border-dashed px-4 py-6 flex flex-col items-center justify-center gap-1.5 cursor-pointer text-center ${
+                    dragOver ? "cd-tint-primary border-[color:var(--cd-primary)]" : "cd-border-c"
+                  }`}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setDragOver(true);
+                  }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragOver(false);
+                    void uploadFiles(e.dataTransfer.files);
+                  }}
+                >
+                  <Paperclip className="w-5 h-5 cd-text-faint" />
+                  <span className="text-[12px] cd-text">{uploading ? "업로드 중..." : "파일을 끌어다 놓거나 클릭해 선택"}</span>
+                  <span className="text-[10.5px] cd-text-faint">영수증·증빙·참고자료</span>
+                  <input
+                    type="file"
+                    multiple
+                    accept={ATTACHMENT_ACCEPT}
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files) void uploadFiles(e.target.files);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+                <div className="rounded-xl border cd-border-c p-2.5 min-h-[104px] flex flex-col gap-1 overflow-auto">
+                  {fileAttachments.length === 0 ? (
+                    <p className="text-[11.5px] cd-text-faint m-auto">첨부된 파일이 없습니다.</p>
+                  ) : (
+                    fileAttachments.map((f, i) => (
+                      <div key={f.key} className="flex items-center gap-2 rounded-lg border cd-border-c px-2.5 py-1.5">
+                        <span className="text-[10px] font-mono cd-text-faint w-4">{i + 1}</span>
+                        <span className="text-[12px] cd-text truncate flex-1" title={f.name}>{f.name}</span>
+                        <span className="text-[10.5px] cd-text-faint shrink-0">{formatBytes(f.size)}</span>
+                        <button
+                          type="button"
+                          className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]"
+                          title="첨부 제거"
+                          onClick={() => setFileAttachments((prev) => prev.filter((_, xi) => xi !== i))}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* 결재선 */}

@@ -16,6 +16,7 @@ import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { AmountInput } from "@/components/ui/AmountInput";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
 import { FacilityRecipientPicker, QuickFacilityModal, RecipientPicker } from "@/components/approval/ApprovalLetterBoard";
+import { DeleteDraftButton, RejectedBanner, toEditDocMeta, type EditDocMeta } from "@/components/approval/DraftEditNotice";
 import type { LetterRecipient } from "@/lib/letter/types";
 import {
   DEFAULT_MD_GRADES,
@@ -133,6 +134,8 @@ export function QuoteBoard() {
   const [nextNo, setNextNo] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  // 재편집 문서의 상태·반려 사유·삭제 권한(서버 판정) — 반려 배너와 기안 삭제 버튼 노출용.
+  const [editMeta, setEditMeta] = useState<EditDocMeta | null>(null);
   // 공급자 블록 담당자 연락처 — E-mail 은 내 메일함 주소 자동(공문 패턴), Mobile 은 선택 입력
   const [contactEmail, setContactEmail] = useState("");
   const [contactMobile, setContactMobile] = useState("");
@@ -215,6 +218,7 @@ export function QuoteBoard() {
         if (cancelled) return;
         const d = data.doc;
         const v = (d.fieldValues ?? {}) as Partial<QuoteFieldValues>;
+        setEditMeta(toEditDocMeta(d));
         setDocNo(d.docNo ?? null);
         setSubject(d.title ?? "");
         if (v.service_type) setServiceType(v.service_type);
@@ -478,10 +482,17 @@ export function QuoteBoard() {
   return (
     <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
       <div className="flex flex-col gap-5 min-h-0">
-        <CdPageHeader title="견적서 작성" />
+        <CdPageHeader
+          title="견적서 작성"
+          actions={<DeleteDraftButton docId={docId} meta={editMeta} label="견적 삭제" />}
+        />
         {loading ? (
           <div className="cd-card rounded-3xl p-10 text-center text-sm cd-text-faint">불러오는 중...</div>
         ) : (
+          <>
+          <div className="max-w-[1032px]">
+            <RejectedBanner meta={editMeta} />
+          </div>
           <div className="flex flex-col xl:flex-row gap-5 items-start">
             {/* 좌: 기본정보 + 사업장 탭 — 폭은 공문 작성(1032px, 전자결재 작성 양식 273mm)과 동일 */}
             <div className="flex-1 min-w-0 max-w-[1032px] flex flex-col gap-4 w-full">
@@ -921,6 +932,7 @@ export function QuoteBoard() {
               </p>
             </div>
           </div>
+          </>
         )}
       </div>
 

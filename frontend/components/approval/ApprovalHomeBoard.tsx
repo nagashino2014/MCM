@@ -2,7 +2,8 @@
 
 // 전자결재 홈(결재함) — G3 3-pane: 좌 결재함 박스 / 중앙 문서 목록 / 우 문서 미리보기.
 // 메일 3-pane(MailBoard)과 같은 구도(CdSplitPane 중첩, <lg 는 pill 탭 + 목록↔뷰어 토글).
-// 문서 상세는 ApprovalDocViewer(모달과 공용), 작성중·반려 문서는 클릭 시 기안 편집으로 이동.
+// 문서 상세는 ApprovalDocViewer(모달과 공용), 작성중 문서는 클릭 시 기안 편집으로 이동.
+// 반려 문서는 상세 뷰어에서 사유를 확인한 뒤 [수정 후 재상신]·[삭제]로 처리한다.
 // 설계: docs/groupware-ux-overhaul-blueprint.md §6, docs/e-approval-blueprint.md §5-1·§5-3.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -20,6 +21,7 @@ import { CdModal } from "@/components/cdash/CdModal";
 import { CdSplitPane } from "@/components/cdash/CdSplitPane";
 import { CdTabs } from "@/components/cdash/CdTabs";
 import { ApprovalDocViewer, DOC_STATUS_LABEL } from "@/components/approval/ApprovalDocModal";
+import { approvalEditHref } from "@/lib/approval/edit-route";
 import "@/components/cdash/cdash.css";
 
 interface DocSummary {
@@ -162,9 +164,10 @@ export function ApprovalHomeBoard() {
   };
 
   const openDoc = (d: DocSummary) => {
-    // 미상신(작성중)·반려 문서는 기안 편집으로 — 기존 흐름 유지.
-    if (box === "draft" && (d.status === "draft" || d.status === "rejected")) {
-      router.push(`/approval/draft?docId=${encodeURIComponent(d.docId)}`);
+    // 미상신(작성중) 문서는 바로 기안 편집으로 — 기존 흐름 유지. 양식 전용 화면(공문·견적서)은 그쪽으로.
+    // 반려 문서는 먼저 상세(반려 사유·결재선)를 보여주고, 뷰어의 [수정 후 재상신]으로 편집에 들어간다.
+    if (box === "draft" && d.status === "draft") {
+      router.push(approvalEditHref(d.formId, d.docId));
       return;
     }
     setSelectedId(d.docId);

@@ -1,6 +1,6 @@
-import { mkdir, writeFile, unlink } from "node:fs/promises";
+import { mkdir, readFile, writeFile, unlink } from "node:fs/promises";
 import path from "node:path";
-import { PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getS3Client } from "@/lib/storage/logo-storage";
 
 export interface StoredContractDocument {
@@ -185,6 +185,32 @@ export async function putContractDocument(
     storageKey,
     publicPath: "/api/contracts/documents?key=" + encodeURIComponent(storageKey),
   };
+}
+
+/**
+ * 저장된 문서 객체를 읽는다(로컬 루트 · S3 공용). 없으면 null.
+ * 전자결재 첨부 미리보기처럼 바이트 자체를 서버에서 다뤄야 할 때 쓴다.
+ */
+export async function readContractDocument(storageKey: string): Promise<Buffer | null> {
+  if (!storageKey || storageKey.includes("..") || storageKey.startsWith("/") || storageKey.startsWith("\\")) {
+    return null;
+  }
+  const localRoot = process.env.CONTRACT_DOCUMENT_STORAGE_ROOT?.trim();
+  if (localRoot) {
+    const root = path.resolve(localRoot);
+    const target = path.resolve(root, storageKey);
+    if (!target.startsWith(root + path.sep)) return null;
+    return readFile(target).catch(() => null);
+  }
+  const bucket = process.env.MCM_STORAGE_BUCKET?.trim();
+  if (!bucket) return null;
+  try {
+    const out = await getS3Client().send(new GetObjectCommand({ Bucket: bucket, Key: storageKey }));
+    const bytes = await out.Body?.transformToByteArray();
+    return bytes ? Buffer.from(bytes) : null;
+  } catch {
+    return null;
+  }
 }
 
 /**

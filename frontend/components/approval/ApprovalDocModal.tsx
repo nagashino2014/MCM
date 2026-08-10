@@ -5,8 +5,12 @@
 // 모달(ApprovalDocModal)은 뷰어를 오버레이로 감싼 래퍼 — 양식별 조회/문서함에서 계속 사용.
 
 import { useEffect, useState, type ReactNode } from "react";
-import { CheckCircle2, Sparkles, Trash2, X } from "lucide-react";
+import Link from "next/link";
+import { CheckCircle2, Paperclip, Pencil, Sparkles, Trash2, X } from "lucide-react";
 import { ApprovalFormRenderer } from "@/components/approval/ApprovalFormRenderer";
+import { DocAttachmentViewer } from "@/components/approval/DocAttachmentViewer";
+import { approvalEditHref } from "@/lib/approval/edit-route";
+import type { DocAttachment } from "@/lib/approval/attachments";
 import type { ApprovalFieldDef } from "@/lib/approval/fields";
 import { LETTER_FORM_ID } from "@/lib/letter/types";
 import { QUOTE_FORM_ID } from "@/lib/quote/types";
@@ -48,8 +52,10 @@ export interface DocDetailData {
   canCancel?: boolean;
   /** 선행 문서 연결(127) — 신청서→보고서 연관 표시(예: 출장보고서에 연결된 출장신청서). */
   refDoc?: { docId: string; docNo: string | null; title: string; formName: string; status: string } | null;
-  /** 문서 삭제 권한(관리자, 승인 완료 포함 전 상태) — 테스트·오기안 문서 정리. */
+  /** 문서 삭제 권한 — 관리자(전 상태) 또는 기안자 본인(작성중·반려). */
   canDelete?: boolean;
+  /** 이어 작성·재기안 권한 — 기안자 본인의 작성중·반려 문서. */
+  canEdit?: boolean;
 }
 
 export const DOC_STATUS_LABEL: Record<string, string> = {
@@ -88,6 +94,9 @@ export function ApprovalDocViewer({
   // 반려 요청(기안자) — 버튼을 누르면 사유 입력 폼이 펼쳐진다.
   const [cancelReasonOpen, setCancelReasonOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  // 본문 / 첨부서류 탭 — 첨부가 있는 문서에서만 노출.
+  const [tab, setTab] = useState<"doc" | "attach">("doc");
+  const attachments = ((detail?.fieldValues?.file_attachments ?? []) as DocAttachment[]).filter((f) => f?.key);
 
   useEffect(() => {
     let cancelled = false;
@@ -95,6 +104,7 @@ export function ApprovalDocViewer({
     setDetail(null);
     setError(null);
     setComment("");
+    setTab("doc");
     fetch(`/api/approval/docs/${encodeURIComponent(docId)}`, { cache: "no-store" })
       .then(async (r) => {
         const data = await r.json();
@@ -179,7 +189,9 @@ export function ApprovalDocViewer({
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    // 문서 렌더러가 273mm(≈1032px) 고정폭이라, 컨테이너를 그 폭에 맞춰 좌우 빈 여백을 없앤다
+    // (전자결재 홈 3-pane 뷰어·작성 화면 공통 규칙 — 공문·견적서 작성 화면과 동일).
+    <div className="flex flex-col gap-4 max-w-[1032px]">
         {error ? (
           <div className="flex items-center gap-2">
             <p className="text-sm text-[color:var(--cd-danger,#FA896B)] flex-1">{error}</p>
@@ -215,11 +227,21 @@ export function ApprovalDocViewer({
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/icons/pdfico.png" alt="PDF" style={{ width: 30, height: 30 }} />
               </button>
+              {/* 이어 작성·재기안 — 본인 기안의 작성중·반려 문서. 양식 전용 화면(공문·견적서)으로 분기한다. */}
+              {detail.canEdit && (
+                <Link
+                  href={approvalEditHref(detail.formId, detail.docId)}
+                  className="cd-btn cd-btn-primary rounded-lg px-3 py-1.5 text-[11.5px] flex items-center gap-1 shrink-0"
+                  title={detail.status === "rejected" ? "반려된 문서를 수정해 다시 상신합니다(문서번호 유지)" : "이어서 작성합니다"}
+                >
+                  <Pencil className="w-3.5 h-3.5" /> {detail.status === "rejected" ? "수정 후 재상신" : "이어 작성"}
+                </Link>
+              )}
               {detail.canDelete && (
                 <button
                   type="button"
                   className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] flex items-center gap-1 cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)] shrink-0"
-                  title="문서 완전 삭제(관리자) — 승인 완료 문서 포함, 테스트·오기안 정리용"
+                  title="문서 완전 삭제 — 되돌릴 수 없습니다"
                   disabled={acting}
                   onClick={async () => {
                     if (
@@ -307,6 +329,33 @@ export function ApprovalDocViewer({
               })}
             </div>
 
+            {/* 반려 문서 — 사유를 상단에 고정 노출한다(하단 '결재 의견'은 이력 성격이라 눈에 띄지 않음).
+                기안자에게는 이어지는 처리(수정 후 재상신 / 삭제)를 함께 안내한다. */}
+            {detail.status === "rejected" && (
+              <div
+                className="rounded-xl border px-3.5 py-2.5 flex flex-col gap-1"
+                style={{ borderColor: "var(--cd-error)", background: "var(--cd-error-soft, rgba(250,137,107,0.1))" }}
+              >
+                {(() => {
+                  const rej = detail.steps.filter((s) => s.status === "rejected").at(-1);
+                  return (
+                    <>
+                      <span className="text-[11.5px] font-bold cd-error-text">
+                        반려됨 — {rej?.assigneeName ?? "결재자"}
+                        {rej?.actedAt ? ` · ${short(rej.actedAt)}` : ""}
+                      </span>
+                      <p className="text-[12.5px] cd-text">{rej?.comment?.trim() || "반려 사유가 입력되지 않았습니다."}</p>
+                    </>
+                  );
+                })()}
+                {detail.canEdit && (
+                  <span className="text-[10.5px] cd-text-faint">
+                    위 [수정 후 재상신]으로 내용을 고쳐 다시 올리거나, [삭제]로 기안을 취소할 수 있습니다. 재상신 시 문서번호는 유지되고 결재선은 처음부터 다시 진행됩니다.
+                  </span>
+                )}
+              </div>
+            )}
+
             {/* 선행 문서 연관(127) — 보고서에 연결된 신청서 표시 */}
             {detail.refDoc && (
               <p className="text-[11.5px] cd-text-faint flex items-center gap-1.5">
@@ -380,6 +429,33 @@ export function ApprovalDocViewer({
               </div>
             )}
 
+            {/* 본문 / 첨부서류 탭 — 첨부가 있으면 결재자가 같은 화면에서 스위칭해 확인한다.
+                첨부 없는 문서는 탭 자체를 감춰 기존 화면과 동일하게 보인다. */}
+            {attachments.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                {([
+                  { key: "doc" as const, label: "문서" },
+                  { key: "attach" as const, label: `첨부서류 ${attachments.length}` },
+                ]).map((t) => (
+                  <button
+                    key={t.key}
+                    type="button"
+                    className={`rounded-lg px-3 py-1.5 text-[12px] border flex items-center gap-1.5 ${
+                      tab === t.key ? "cd-tint-primary font-bold" : "cd-border-c cd-text-muted cd-row-hover"
+                    }`}
+                    onClick={() => setTab(t.key)}
+                  >
+                    {t.key === "attach" && <Paperclip className="w-3.5 h-3.5" />}
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {tab === "attach" && attachments.length > 0 ? (
+              <DocAttachmentViewer docId={docId} items={attachments} />
+            ) : (
+            <>
             {/* 문서 본체 — 다우식 양식(중앙 제목 + 기안 표 + 신청/승인란)을 흰 카드 위에 올린다. */}
             {detail.formId === LETTER_FORM_ID || detail.formId === QUOTE_FORM_ID ? (
               // 공문(135)·견적서(136) — 결재자도 최종 발송/제출 지면(PDF) 그대로 심사한다.
@@ -416,6 +492,8 @@ export function ApprovalDocViewer({
                 }}
               />
             </div>
+            )}
+            </>
             )}
 
             {detail.steps.some((s) => s.comment) && (

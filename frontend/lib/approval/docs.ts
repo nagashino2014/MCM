@@ -408,6 +408,10 @@ export async function deleteDoc(docId: string): Promise<{ docNo: string | null; 
     title = String(rows[0].title ?? "");
     await txn.run(`DELETE FROM annual_leave_ledger WHERE doc_id = $1`, [docId]);
     await txn.run(`UPDATE approval_docs SET ref_doc_id = NULL WHERE ref_doc_id = $1`, [docId]);
+    // 발송 대장 미러(135 공문 · 136 견적) — doc_id 는 FK 가 아니라 함께 지우지 않으면 고아로 남는다.
+    // 백필(imported) 공문은 doc_id 가 NULL 이라 영향 없다. quotation_sites 는 CASCADE.
+    await txn.run(`DELETE FROM official_letters WHERE doc_id = $1`, [docId]);
+    await txn.run(`DELETE FROM quotations WHERE doc_id = $1`, [docId]);
     await txn.run(`DELETE FROM approval_docs WHERE doc_id = $1`, [docId]);
     // 문서번호 반납(130) — 다음 상신이 이 번호를 이어받는다.
     // 형식: 일반 `{약칭}-{연도}-{일련}` / 공문(135) `{연도}-대외-{일련}` / 견적(136) `{연도}-{종류}-{일련}`.

@@ -16,6 +16,8 @@ import {
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
+import { DeleteDraftButton, RejectedBanner, toEditDocMeta, type EditDocMeta } from "@/components/approval/DraftEditNotice";
+import { ATTACHMENT_ACCEPT, ATTACHMENT_ALLOWED_TEXT, isAllowedAttachment } from "@/lib/approval/attachments";
 import { MailEditor } from "@/components/mail/MailEditor";
 import { recipientsDisplay } from "@/lib/letter/compose";
 import {
@@ -428,6 +430,8 @@ export function ApprovalLetterBoard() {
   const [fileAttachments, setFileAttachments] = useState<{ name: string; key: string; size: number }[]>([]);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  // 재편집 문서의 상태·반려 사유·삭제 권한(서버 판정) — 반려 배너와 기안 삭제 버튼 노출용.
+  const [editMeta, setEditMeta] = useState<EditDocMeta | null>(null);
   const editorRef = useRef<HTMLDivElement>(null);
   const pendingHtmlRef = useRef<string | null>(null);
 
@@ -506,6 +510,7 @@ export function ApprovalLetterBoard() {
         if (cancelled) return;
         const d = data.doc;
         const v = (d.fieldValues ?? {}) as Partial<LetterFieldValues>;
+        setEditMeta(toEditDocMeta(d));
         setDocNo(d.docNo ?? null);
         setFileAttachments(Array.isArray(v.file_attachments) ? v.file_attachments : []);
         setSubject(d.title ?? "");
@@ -713,11 +718,17 @@ export function ApprovalLetterBoard() {
   const uploadFiles = useCallback(async (files: FileList | File[]) => {
     const list = Array.from(files);
     if (!list.length) return;
+    // 결재자가 뷰어에서 열 수 없는 형식은 올리기 전에 막는다(서버도 같은 화이트리스트로 재검사).
+    const rejected = list.filter((f) => !isAllowedAttachment(f.name));
+    if (rejected.length) {
+      alert(`첨부할 수 없는 형식입니다 — ${rejected.map((f) => f.name).join(", ")}\n허용 형식: ${ATTACHMENT_ALLOWED_TEXT}`);
+      return;
+    }
     setUploading(true);
     try {
       const fd = new FormData();
       for (const f of list) fd.append("files", f);
-      const res = await fetch("/api/letters/attachments", { method: "POST", body: fd });
+      const res = await fetch("/api/approval/attachments", { method: "POST", body: fd });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error ?? "첨부 업로드 실패");
       setFileAttachments((prev) => [...prev, ...(data.items ?? [])]);
@@ -817,15 +828,22 @@ export function ApprovalLetterBoard() {
         title="공문 작성"
         subtitle="결재 승인이 완료되면 자동 채번되어 수신처 메일로 PDF 공문이 발송됩니다."
         actions={
-          <Link href="/approval" className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs flex items-center gap-1.5">
-            <ArrowLeft className="w-3.5 h-3.5" /> 전자결재 홈
-          </Link>
+          <div className="flex items-center gap-2">
+            <DeleteDraftButton docId={docId} meta={editMeta} label="공문 삭제" />
+            <Link href="/approval" className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs flex items-center gap-1.5">
+              <ArrowLeft className="w-3.5 h-3.5" /> 전자결재 홈
+            </Link>
+          </div>
         }
       />
 
       {loading ? (
         <p className="text-sm cd-text-faint">불러오는 중입니다.</p>
       ) : (
+        <>
+        <div className="max-w-[1032px]">
+          <RejectedBanner meta={editMeta} />
+        </div>
         <div className="flex flex-col xl:flex-row gap-4 items-start">
           {/* 좌: 공문 내용 — 폭은 전자결재 작성 양식(273mm)과 동일 수준(사용자 확정) */}
           <div className="cd-card rounded-3xl p-5 flex-1 min-w-0 max-w-[1032px] flex flex-col gap-4">
@@ -970,6 +988,9 @@ export function ApprovalLetterBoard() {
               <span className="text-[11px] cd-text-faint">
                 첨부서류 — 공문 PDF 뒤에 첨부 순서대로 메일에 동봉됩니다. 총 7MB 초과 시 다운로드 링크(7일 유효)로 자동 전환 (총 200MB 까지)
               </span>
+              <span className="text-[10.5px] cd-text-faint">
+                결재자가 내용을 확인할 수 있는 형식만 첨부할 수 있습니다 — {ATTACHMENT_ALLOWED_TEXT}
+              </span>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                 <label
                   className={`rounded-xl border-2 border-dashed px-4 py-6 flex flex-col items-center justify-center gap-1.5 cursor-pointer text-center ${
@@ -992,6 +1013,7 @@ export function ApprovalLetterBoard() {
                   <input
                     type="file"
                     multiple
+                    accept={ATTACHMENT_ACCEPT}
                     className="hidden"
                     onChange={(e) => {
                       if (e.target.files) void uploadFiles(e.target.files);
@@ -1141,6 +1163,7 @@ export function ApprovalLetterBoard() {
             <p className="text-[10.5px] cd-text-faint">승인 완료 시 공문번호 채번 → PDF/HWPX 생성 → 기안자 명의 메일 자동 발송 순으로 처리됩니다.</p>
           </div>
         </div>
+        </>
       )}
 
       {/* 미리보기 + 레이아웃 미세조정 모달 — 조정값은 저장/상신 시 문서에 실려 발송본에 반영 */}

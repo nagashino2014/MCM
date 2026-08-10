@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 import json
 
 from .services.extraction_service import get_extraction_service, ExtractionService, resolve_file_path
+from .services import office_convert
 from .extractors.base import ExtractionStatus
 from .config import ExtractionConfig, SCRAPING_DATA_DIR, USE_R2
 from .ieps.routes import router as ieps_router
@@ -192,6 +193,32 @@ async def root():
 async def health_check():
     """헬스 체크"""
     return {"status": "healthy"}
+
+
+@app.post("/convert/pdf")
+async def convert_office_to_pdf(file: UploadFile = File(...)):
+    """
+    오피스·한글 문서 → PDF 변환(전자결재 첨부 미리보기용).
+    브라우저가 직접 못 여는 형식(hwpx/docx/xlsx/pptx)을 결재자가 앱 안에서 확인하도록 변환한다.
+    변환 결과 캐시는 호출 측(Next.js)이 S3 에 보관한다.
+    """
+    if not office_convert.is_available():
+        raise HTTPException(status_code=503, detail="문서 변환기(LibreOffice)가 이 서버에 설치되어 있지 않습니다.")
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="빈 파일입니다.")
+    try:
+        # 변환은 CPU 동기 작업 — 이벤트 루프를 막지 않도록 스레드에서 실행한다.
+        pdf = await asyncio.to_thread(office_convert.convert_to_pdf, data, file.filename or "attachment")
+    except office_convert.ConvertError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return StreamingResponse(iter([pdf]), media_type="application/pdf")
+
+
+@app.get("/convert/health")
+async def convert_health():
+    """변환기 설치 여부 — 배포 후 확인용."""
+    return {"available": office_convert.is_available(), "soffice": office_convert.soffice_path()}
 
 
 @app.get("/supported-formats")

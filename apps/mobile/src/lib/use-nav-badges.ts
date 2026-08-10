@@ -6,9 +6,10 @@ import { apiJson } from "./api";
 export interface NavBadges {
   mailUnread: number;
   approvalPending: number;
+  chatUnread: number;
 }
 
-const EMPTY: NavBadges = { mailUnread: 0, approvalPending: 0 };
+const EMPTY: NavBadges = { mailUnread: 0, approvalPending: 0, chatUnread: 0 };
 
 /**
  * 탭 뱃지(미결재·안읽은 메일) — 웹 사이드바와 같은 `/api/nav/badges` 를 쓴다.
@@ -25,6 +26,7 @@ export function useNavBadges(): NavBadges & { reload: () => void } {
       setBadges({
         mailUnread: Number(d.mailUnread ?? 0),
         approvalPending: Number(d.approvalPending ?? 0),
+        chatUnread: Number(d.chatUnread ?? 0),
       });
     } catch {
       // 뱃지는 실패해도 네비가 죽지 않게 조용히 유지한다(웹과 동일 정책).

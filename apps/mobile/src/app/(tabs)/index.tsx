@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Platform, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 
@@ -46,6 +46,23 @@ interface BoardPost {
 interface HomeLayout {
   layout?: { hidden?: string[] };
   available?: { key: string; label: string }[];
+}
+/** 홈 목록 카드용 최소 필드(결재함·메일함의 응답 일부). */
+interface ApprovalDoc {
+  docId: string;
+  title: string;
+  formName: string;
+  drafterName: string | null;
+  urgent?: boolean;
+  submittedAt: string | null;
+}
+interface MailItem {
+  messageId: string;
+  subject: string;
+  fromAddr: string | null;
+  sentAt: string | null;
+  createdAt: string;
+  isRead: boolean;
 }
 
 /** 담당자 아이콘의 퍼플 — cd 토큰에 없는 색이라 웹 `--cd-av-2` 와 같은 값을 직접 쓴다. */
@@ -95,10 +112,15 @@ export default function HomeScreen() {
   const workPlan = useApi<{ rebound?: { count: number }; thisWeek?: { count: number } }>('/api/home/work-plan-todo', {
     cache: true,
   });
+  // 홈에서 바로 보는 목록 3종(사용자 요청 2026-08-10) — 각 탭과 같은 데이터원을 쓴다.
+  const approvals = useApi<{ docs: ApprovalDoc[] }>('/api/approval/docs?box=pending', { cache: true });
+  const mails = useApi<{ items: MailItem[] }>('/api/mail/messages?folder=inbox&limit=20&offset=0', {
+    cache: true,
+  });
 
   const [refreshing, setRefreshing] = useState(false);
-  const latest = useRef({ upcoming, pending, board, home, inbox, workPlan, badges });
-  latest.current = { upcoming, pending, board, home, inbox, workPlan, badges };
+  const latest = useRef({ upcoming, pending, board, home, inbox, workPlan, badges, approvals, mails });
+  latest.current = { upcoming, pending, board, home, inbox, workPlan, badges, approvals, mails };
 
   const reloadAll = useCallback(async () => {
     setRefreshing(true);
@@ -110,6 +132,8 @@ export default function HomeScreen() {
       l.home.reload(),
       l.inbox.reload(),
       l.workPlan.reload(),
+      l.approvals.reload(),
+      l.mails.reload(),
     ]);
     l.badges.reload();
     setRefreshing(false);
@@ -122,6 +146,8 @@ export default function HomeScreen() {
       void l.board.reload();
       void l.upcoming.reload();
       void l.pending.reload();
+      void l.approvals.reload();
+      void l.mails.reload();
     }, [])
   );
 
@@ -137,6 +163,8 @@ export default function HomeScreen() {
   );
   const reports = pending.data?.reports ?? [];
   const pendingCount = reports.reduce((s, r) => s + (r.activities?.length ?? 0), 0);
+  const approvalDocs = approvals.data?.docs ?? [];
+  const unreadMails = useMemo(() => (mails.data?.items ?? []).filter((m) => !m.isRead), [mails.data]);
   const posts = board.data?.posts ?? [];
   const inboxCount = inbox.data?.items?.length ?? null;
   const rebound = workPlan.data?.rebound?.count ?? 0;
@@ -230,7 +258,10 @@ export default function HomeScreen() {
           {/* 빠른 실행 — 탭에 없는 기능으로 1탭 진입 */}
           <Card title="빠른 실행">
             <View className="mt-1.5 flex-row justify-between">
-              <ActionTile icon="camera-outline" label="명함" tone={c.primary} onPress={() => router.push('/card')} />
+              {/* 명함 촬영은 카메라가 필요해 데스크탑 위젯·웹 데모에서는 숨긴다(WID-P0). */}
+              {Platform.OS !== 'web' ? (
+                <ActionTile icon="camera-outline" label="명함" tone={c.primary} onPress={() => router.push('/card')} />
+              ) : null}
               <ActionTile
                 icon="paper-plane-outline"
                 label="휴가"
@@ -256,6 +287,84 @@ export default function HomeScreen() {
                 onPress={() => router.push('/contacts')}
               />
             </View>
+          </Card>
+
+          {/* 결재 대기 → 안읽은 메일 → 오늘 일정(사용자 요청 2026-08-10, 빠른 실행 다음 고정 순서).
+              비어 있어도 자리를 지킨다 — 홈에서 "오늘 볼 것"이 한 번에 잡히게 하기 위함이다. */}
+          <Card
+            title="결재 대기"
+            badge={approvalDocs.length ? <Badge label={`${approvalDocs.length}`} tone="error" /> : undefined}
+            action={{ label: '결재함', onPress: () => router.push('/(tabs)/approval') }}>
+            {approvals.loading && !approvals.data ? (
+              <SkeletonList count={2} />
+            ) : approvalDocs.length === 0 ? (
+              <Text className="py-3 text-[13px] text-cd-faint">결재할 문서가 없습니다.</Text>
+            ) : (
+              <View>
+                {approvalDocs.slice(0, 3).map((d, i) => (
+                  <CardRow
+                    key={d.docId}
+                    first={i === 0}
+                    strong
+                    title={d.title}
+                    meta={`${d.formName}${d.drafterName ? ` · ${d.drafterName}` : ''}${
+                      d.submittedAt ? ` · ${fmtDate(d.submittedAt)}` : ''
+                    }`}
+                    right={d.urgent ? <Badge label="긴급" tone="error" /> : undefined}
+                    onPress={() => router.push({ pathname: '/approval/[docId]', params: { docId: d.docId } })}
+                  />
+                ))}
+              </View>
+            )}
+          </Card>
+
+          <Card
+            title="안읽은 메일"
+            badge={unreadMails.length ? <Badge label={`${unreadMails.length}`} tone="primary" /> : undefined}
+            action={{ label: '메일함', onPress: () => router.push('/(tabs)/mail') }}>
+            {mails.loading && !mails.data ? (
+              <SkeletonList count={2} />
+            ) : unreadMails.length === 0 ? (
+              <Text className="py-3 text-[13px] text-cd-faint">안읽은 메일이 없습니다.</Text>
+            ) : (
+              <View>
+                {unreadMails.slice(0, 3).map((m, i) => (
+                  <CardRow
+                    key={m.messageId}
+                    first={i === 0}
+                    strong
+                    title={m.subject || '(제목 없음)'}
+                    meta={`${m.fromAddr ?? '-'} · ${fmtDate(m.sentAt ?? m.createdAt)}`}
+                    onPress={() =>
+                      router.push({ pathname: '/mail/[messageId]', params: { messageId: m.messageId } })
+                    }
+                  />
+                ))}
+              </View>
+            )}
+          </Card>
+
+          {/* 오늘 일정 — KPI 와 같은 소스(영업 활동 일정) */}
+          <Card
+            title="오늘 일정"
+            badge={today.length ? <Badge label={`${today.length}`} tone="success" /> : undefined}
+            action={{ label: '일정', onPress: () => router.push('/schedule') }}>
+            {today.length === 0 ? (
+              <Text className="py-3 text-[13px] text-cd-faint">오늘 예정된 일정이 없습니다.</Text>
+            ) : (
+              <View>
+                {today.slice(0, 3).map((a, i) => (
+                  <CardRow
+                    key={a.activityId}
+                    first={i === 0}
+                    title={a.projectTitle ?? '(제목 없음)'}
+                    meta={[hhmm(a.scheduledAt), a.facilityName].filter(Boolean).join(' · ')}
+                    accent={c.success}
+                    onPress={() => router.push('/schedule')}
+                  />
+                ))}
+              </View>
+            )}
           </Card>
 
           {/* 경과 미입력 — 건수만이 아니라 어떤 건인지 보여준다 */}

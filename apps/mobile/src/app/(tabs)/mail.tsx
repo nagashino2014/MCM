@@ -18,6 +18,8 @@ import {
 import { apiJson } from '@/lib/api';
 import { useApi, useInfiniteApi } from '@/lib/use-api';
 import { useNavBadges } from '@/lib/use-nav-badges';
+import { personName } from '@/lib/person-name';
+import { useDirectoryPhotos } from '@/lib/use-directory-snapshot';
 import { useTheme } from '@/theme/useTheme';
 
 export interface MailItem {
@@ -77,6 +79,7 @@ export default function MailScreen() {
   const toast = useToast();
   const { c } = useTheme();
   const badges = useNavBadges();
+  const photos = useDirectoryPhotos();
 
   const [folder, setFolder] = useState('inbox');
   const [folderOpen, setFolderOpen] = useState(false);
@@ -224,6 +227,7 @@ export default function MailScreen() {
             <MailRow
               item={item}
               folder={folder}
+              photos={photos}
               onPress={() => {
                 markRead(item.messageId);
                 router.push({ pathname: '/mail/[messageId]', params: { messageId: item.messageId } });
@@ -340,25 +344,37 @@ function ActionRow({
   );
 }
 
+/** "이름 <주소>" 또는 순수 주소에서 주소만. */
+function addressOf(addr?: string | null): string {
+  if (!addr) return '';
+  const m = /<([^>]+)>/.exec(addr);
+  return (m ? m[1] : addr).trim().toLowerCase();
+}
+
 function MailRow({
   item,
   folder,
+  photos,
   onPress,
   onLongPress,
   onStar,
 }: {
   item: MailItem;
   folder: string;
+  photos: { byEmail: Map<string, string>; byName: Map<string, string> };
   onPress: () => void;
   onLongPress: () => void;
   onStar: () => void;
 }) {
   const { c } = useTheme();
   // 보낸편지함·임시보관함은 "받는 사람"을 보여주는 게 맞다.
-  const who =
-    folder === 'sent' || folder === 'drafts'
-      ? (item.toAddrs?.[0]?.name ?? item.toAddrs?.[0]?.address ?? '(수신자 없음)')
-      : displayFrom(item.fromAddr);
+  const outgoing = folder === 'sent' || folder === 'drafts';
+  const who = outgoing
+    ? (item.toAddrs?.[0]?.name ?? item.toAddrs?.[0]?.address ?? '(수신자 없음)')
+    : displayFrom(item.fromAddr);
+  // 사내 임직원이면 등록된 사진을 쓴다(주소 우선, 없으면 이름).
+  const addr = outgoing ? addressOf(item.toAddrs?.[0]?.address) : addressOf(item.fromAddr);
+  const photo = photos.byEmail.get(addr) ?? photos.byName.get(personName(who)) ?? null;
 
   return (
     <Pressable
@@ -366,7 +382,7 @@ function MailRow({
       onLongPress={onLongPress}
       delayLongPress={350}
       className="flex-row gap-3 border-b border-cd-border px-4 py-3 active:bg-cd-surface">
-      <Avatar name={who} size="md" />
+      <Avatar name={who} photoPath={photo} size="md" />
       <View className="flex-1 gap-0.5">
         <View className="flex-row items-center gap-1.5">
           <Text

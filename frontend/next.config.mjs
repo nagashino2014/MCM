@@ -22,6 +22,22 @@ const nextConfig = {
         source: "/uploads/logos/:filename",
         destination: "/api/uploads/logos/:filename",
       },
+      // 모바일 앱 웹 데모(public/m-app, Expo 정적 export) — 클린 URL 을 라우트별 HTML 로.
+      // expo-router 는 /m-app/login 처럼 확장자 없는 경로를 기대한다(_expo·assets·확장자 있는 파일 제외).
+      {
+        source: "/m-app",
+        destination: "/m-app/index.html",
+      },
+      // 동적 라우트의 직접 진입·새로고침 — expo 가 만든 [param].html 로 매핑.
+      // ⚠ 아래 일반 규칙보다 먼저 두어야 한다(rewrites 는 첫 매치 적용).
+      {
+        source: "/m-app/chat/:roomId(\\d+)",
+        destination: "/m-app/chat/[roomId].html",
+      },
+      {
+        source: "/m-app/:route((?!_expo/)(?!assets/)[^.]+)",
+        destination: "/m-app/:route.html",
+      },
     ];
   },
 };

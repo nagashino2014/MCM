@@ -9,6 +9,7 @@
  * 마감 임박 알림은 입찰 서류 생성 진행 건(bid_packages.status='draft')을 대상으로,
  * 수신자 중 '마감 알림'을 체크한 사람에게만 보낸다.
  */
+import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
 import {
   DEFAULT_CONTENT_FIELDS,
@@ -42,6 +43,7 @@ const MATCH_LIMIT = 500;
 interface MatchedBid {
   bidType: NotifyBidType;
   bidId: string;
+  categoryId: string;
   categoryName: string;
   title: string | null;
   orgName: string | null;
@@ -77,7 +79,7 @@ async function searchMatches(
   const cats = (await listCategories())
     .filter((c) => c.enabled)
     .filter((c) => !profile.categoryIds.length || profile.categoryIds.includes(c.categoryId))
-    .map((c) => ({ name: c.name, groups: ruleFromCategory(c) }))
+    .map((c) => ({ categoryId: c.categoryId, name: c.name, groups: ruleFromCategory(c) }))
     .filter((c) => c.groups.length);
   if (!cats.length) return [];
 
@@ -130,6 +132,7 @@ async function searchMatches(
         out.push({
           bidType: type,
           bidId,
+          categoryId: cat.categoryId,
           categoryName: cat.name,
           title: r.title != null ? String(r.title) : null,
           orgName: r.org_name != null ? String(r.org_name) : null,
@@ -235,6 +238,42 @@ export interface DispatchResult {
   profiles?: { name: string; dispatched: number; skipped?: string }[];
 }
 
+/**
+ * 발송에 포함된 매칭 건을 목록 큐(bid_match_notices)에도 적재(upsert) — 알림 건수와
+ * 모바일 공공입찰 목록이 어긋나지 않게 한다(2026-08-10 사용자 리포트: 수집 시점에만 적재되던
+ * 구조라, 큐를 비우거나 분류 규칙을 나중에 만들면 알림은 오는데 목록이 비었다).
+ */
+async function queueMatches(matches: MatchedBid[], nowIso: string, status: "pending" | "sent"): Promise<void> {
+  if (!matches.length) return;
+  await withDbWrite(async (wdb) => {
+    for (const m of matches) {
+      const budget = Number(m.merged.budget);
+      await wdb.run(
+        `INSERT INTO bid_match_notices
+           (notice_id, bid_type, bid_id, category_id, category_name, title, org_name,
+            budget, posted_at, deadline, url, matched_at, status)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+         ON CONFLICT (bid_type, bid_id, category_id) DO NOTHING`,
+        [
+          "bmn_" + crypto.randomBytes(8).toString("hex"),
+          m.bidType,
+          m.bidId,
+          m.categoryId,
+          m.categoryName,
+          m.title,
+          m.orgName,
+          Number.isFinite(budget) && budget > 0 ? budget : null,
+          m.merged.posted_at != null ? String(m.merged.posted_at) : null,
+          m.deadline,
+          m.url,
+          nowIso,
+          status,
+        ]
+      );
+    }
+  });
+}
+
 /** 발송분을 큐에 sent 로 마킹 — 웹의 '발송 대기' 건수와 어긋나지 않도록. */
 async function markQueueSent(matches: MatchedBid[], nowIso: string): Promise<void> {
   if (!matches.length) return;
@@ -307,6 +346,7 @@ async function dispatchProfile(
     });
   }
 
+  await queueMatches(matches, nowIso, "pending"); // 목록 큐 동기화(신규만 — 기존 행은 유지)
   await markQueueSent(matches, nowIso);
   await patchBidNotifyProfile(profile.profileId, { lastDispatchDate: today });
   console.log(
@@ -390,6 +430,9 @@ export async function sendTestNotification(
       dedupKey: `bid.match.test:${profile.profileId}:${new Date().toISOString()}`,
     });
   }
+  // 테스트도 목록 큐에 적재한다(sent — 정기 발송 대기에는 안 잡히게). 알림에 "N건"이라고
+  // 보내 놓고 앱 공공입찰 목록이 비어 있으면 안 되므로(2026-08-10 사용자 리포트).
+  await queueMatches(matches, new Date().toISOString(), "sent");
   console.log(`[bid-notify] TEST "${profile.name}" matched=${matches.length}`, JSON.stringify(channels));
   return { matched: matches.length, channels, recipients: emailTo.length + appUserIds.length };
 }

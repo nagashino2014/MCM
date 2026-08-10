@@ -39,7 +39,8 @@ export const DEFAULT_LEAVE_TYPES: Omit<LeaveTypeItem, "sortOrder" | "active">[] 
   { key: "death_parent_in_law", label: "조의(처·시부모)", group: "경조 · 조의", days: 3, deduct: null },
   { key: "death_sibling", label: "조의(형제·자매)", group: "경조 · 조의", days: 1, deduct: null },
   { key: "official_reserve", label: "공가(예비군)", group: "공가", days: null, deduct: null },
-  { key: "official_civil", label: "공가(민방위)", group: "공가", days: null, deduct: null },
+  // 민방위는 1일 부여(146 마이그레이션에서 DB 도 교정) — 예비군만 실사용 기간만큼이다.
+  { key: "official_civil", label: "공가(민방위)", group: "공가", days: 1, deduct: null },
   { key: "official_checkup", label: "공가(건강검진)", group: "공가", days: 1, deduct: null },
   { key: "sick_paid", label: "병가(유급)", group: "병가", days: null, deduct: null },
   { key: "sick_injury", label: "병가(산재요양)", group: "병가", days: null, deduct: null },

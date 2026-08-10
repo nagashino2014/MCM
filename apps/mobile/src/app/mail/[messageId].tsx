@@ -56,7 +56,6 @@ export default function MailViewerScreen() {
   const { c } = useTheme();
 
   const { data, loading, error } = useApi<MailDetail>(`/api/mail/messages/${messageId}`);
-  const [showImages, setShowImages] = useState(false);
   const [showTo, setShowTo] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   /** cid → data URL (WebView 는 Bearer 를 못 붙여 앱이 미리 받아 심는다). */
@@ -177,20 +176,10 @@ export default function MailViewerScreen() {
           </Pressable>
         </View>
 
-        {/* 본문 */}
+        {/* 본문 — 이미지는 차단·경고 없이 바로 표시한다(사용자 확정 2026-08-10).
+            트레이드오프: 원격 이미지 자동 로드 = 발신자 수신확인 픽셀이 동작한다(사내 메일 위주라 수용). */}
         <View className="overflow-hidden rounded-card border border-cd-border bg-cd-card px-3 py-2">
-          {!showImages && /<img/i.test(html) ? (
-            <Pressable
-              onPress={() => setShowImages(true)}
-              className="mb-2 flex-row items-center gap-1.5 rounded-lg bg-cd-warning-soft px-3 py-2 active:opacity-70">
-              <Ionicons name="eye-off-outline" size={14} color={c.warning} />
-              <Text className="flex-1 text-[12px] text-cd-warning">
-                외부 이미지를 차단했습니다
-              </Text>
-              <Text className="text-[12px] font-bold text-cd-warning">표시</Text>
-            </Pressable>
-          ) : null}
-          <HtmlView html={html} showImages={showImages} />
+          <HtmlView html={html} showImages />
         </View>
 
         {/* 첨부 */}

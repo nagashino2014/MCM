@@ -45,8 +45,16 @@ export function Button({
 }) {
   const { c } = useTheme();
   const off = disabled || loading;
-  const iconColor =
-    variant === "primary" || variant === "danger" ? "#fff" : variant === "soft" ? c.primary : c.text;
+  // 비활성은 반투명 대신 **불투명한 감쇠색**으로 — 시트·겹침 배경 위에서 반쯤 비쳐 보이는
+  // 가시성 문제(2026-08-10 사용자 피드백). 로딩 중에는 원래 모양을 유지한다(진행 표시일 뿐).
+  const dim = !!disabled && !loading;
+  const iconColor = dim
+    ? c.faint
+    : variant === "primary" || variant === "danger"
+      ? "#fff"
+      : variant === "soft"
+        ? c.primary
+        : c.text;
 
   return (
     <Pressable
@@ -55,11 +63,10 @@ export function Button({
       className={[
         "flex-row items-center justify-center gap-1.5 rounded-xl active:opacity-75",
         size === "md" ? "min-h-[44px] px-4 py-3" : "min-h-[36px] px-3 py-2",
-        BOX[variant],
+        dim ? (variant === "ghost" ? "border border-cd-border bg-cd-card" : "bg-cd-surface") : BOX[variant],
         full ? "w-full" : "",
-        off ? "opacity-45" : "",
       ].join(" ")}>
-      {variant === "primary" ? <CtaGradientFill /> : null}
+      {variant === "primary" && !dim ? <CtaGradientFill /> : null}
       {loading ? (
         <ActivityIndicator size="small" color={iconColor} />
       ) : icon ? (
@@ -69,7 +76,7 @@ export function Button({
         className={[
           "font-bold",
           size === "md" ? "text-[15px]" : "text-[13px]",
-          LABEL[variant],
+          dim ? "text-cd-faint" : LABEL[variant],
         ].join(" ")}>
         {label}
       </Text>

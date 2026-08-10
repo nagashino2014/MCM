@@ -1,8 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 
 import { Button, Sheet } from '@/components/ui';
 import { MonthCalendar } from './MonthCalendar';
+
+/** ISO + n 달력일(기안 폼의 휴가 자동 부여와 같은 규칙). */
+function addDays(iso: string, n: number): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(y, m - 1, d + n);
+  const p = (x: number) => String(x).padStart(2, '0');
+  return `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`;
+}
 
 /**
  * 날짜·기간 선택 시트 — 기안 폼의 `date`/`period`, 영업 일정 등록이 공유한다.
@@ -14,6 +22,7 @@ export function DatePickerSheet({
   mode = 'single',
   value,
   valueTo,
+  autoDays,
   onConfirm,
   onClose,
 }: {
@@ -23,6 +32,11 @@ export function DatePickerSheet({
   /** YYYY-MM-DD */
   value?: string | null;
   valueTo?: string | null;
+  /**
+   * 시작일만 고르고 종료일이 규정으로 정해지는 경우의 총 일수(휴가 경조 5일 등).
+   * 주면 라벨에 실제 기간(시작~자동 종료일)을 보여 주고 확인 시에도 그 종료일로 확정한다.
+   */
+  autoDays?: number;
   onConfirm: (from: string, to: string) => void;
   onClose: () => void;
 }) {
@@ -30,6 +44,18 @@ export function DatePickerSheet({
   const [cur, setCur] = useState({ y: base.getFullYear(), m: base.getMonth() });
   const [from, setFrom] = useState<string | null>(value ?? null);
   const [to, setTo] = useState<string | null>(mode === 'range' ? (valueTo ?? null) : null);
+
+  // 시트를 열 때마다 현재 값으로 동기화 — 컴포넌트가 계속 마운트돼 있어 초기값만으로는
+  // 재오픈 시 이전 선택이 남는다(휴가 종류를 바꿔 기간이 재설정된 경우도 반영).
+  useEffect(() => {
+    if (!visible) return;
+    setFrom(value ?? null);
+    setTo(mode === 'range' ? (valueTo ?? null) : null);
+    if (value) {
+      const d = new Date(`${value}T12:00:00`);
+      setCur({ y: d.getFullYear(), m: d.getMonth() });
+    }
+  }, [visible, value, valueTo, mode]);
 
   const onDay = (iso: string) => {
     if (mode === 'single') {
@@ -49,8 +75,13 @@ export function DatePickerSheet({
     }
   };
 
-  const label =
-    mode === 'range' ? `${from ?? '시작일'} ~ ${to ?? from ?? '종료일'}` : (from ?? '날짜를 선택하세요');
+  /** 자동 부여 종료일 — 시작일이 정해졌고 autoDays 가 있을 때만. */
+  const autoTo = autoDays != null && from ? addDays(from, Math.max(1, autoDays) - 1) : null;
+  const label = autoTo
+    ? `${from} ~ ${autoTo}${autoDays! > 1 ? ` (${autoDays}일)` : ''}`
+    : mode === 'range'
+      ? `${from ?? '시작일'} ~ ${to ?? from ?? '종료일'}`
+      : (from ?? '날짜를 선택하세요');
 
   return (
     <Sheet
@@ -65,7 +96,7 @@ export function DatePickerSheet({
             disabled={!from}
             onPress={() => {
               if (!from) return;
-              onConfirm(from, mode === 'range' ? (to ?? from) : from);
+              onConfirm(from, autoTo ?? (mode === 'range' ? (to ?? from) : from));
               onClose();
             }}
           />
@@ -80,7 +111,7 @@ export function DatePickerSheet({
           onMonthChange={(y, m) => setCur({ y, m })}
           onDayPress={onDay}
           selected={from}
-          rangeEnd={to}
+          rangeEnd={autoTo ?? to}
         />
       </View>
     </Sheet>

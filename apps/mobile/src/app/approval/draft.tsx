@@ -107,6 +107,18 @@ const fmtH = (min: number) => {
   return Number.isInteger(h) ? String(h) : h.toFixed(1);
 };
 
+/** ISO 날짜 + n 달력일(주말·공휴일 제외 없음 — 웹 DraftBoard 의 addDays 와 동일 규칙). */
+const addDays = (iso: string, n: number) => {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+/** 양끝 포함 달력일수(웹 DraftBoard 의 dayCount 와 동일). */
+const dayCount = (from: string, to: string) =>
+  Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000) + 1;
+
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 export default function DraftScreen() {
   const params = useLocalSearchParams<{ formId?: string; date?: string }>();
   const router = useRouter();
@@ -184,6 +196,106 @@ export default function DraftScreen() {
     isLeave ? `/api/approval/leave?me=1&year=${new Date().getFullYear()}` : '/api/approval/forms',
     { skip: !isLeave }
   );
+
+  // 휴가: 종류·시작일 → 종료일·사용일수 자동 부여(웹 DraftBoard :229-273 이식).
+  // 고정 부여일수 종류(결혼 5일 등)는 종료일 = 시작일 + (days-1) "달력일", use_days = days.
+  // 가변 종류(연차·병가 등)는 종료일까지 입력되면 use_days 만 자동 카운트. 값 형태는 웹과 동일
+  // (use_days 는 문자열) — 서버 leave.ts 최종 산정·precheck 잔여검증과의 호환 조건.
+  const leaveTypes = useApi<{
+    types: { key: string; label: string; deduct: 'full' | 'half' | null; days: number | null }[];
+  }>('/api/approval/leave-types', { cache: true, skip: !isLeave });
+
+  const leavePeriodKey = isLeave ? fields.find((f) => f.type === 'period')?.key : undefined;
+  const leaveItem = useMemo(() => {
+    if (!isLeave) return null;
+    const types = leaveTypes.data?.types ?? [];
+    const ltKey = fields.find((f) => f.type === 'leave_type')?.key;
+    const v = ltKey ? values[ltKey] : undefined;
+    if (typeof v !== 'string' || !v) return null;
+    // 웹 findInCatalog 와 같은 폴백: key → label(구버전 문서) → "반차" 문자열.
+    return (
+      types.find((t) => t.key === v) ??
+      types.find((t) => t.label === v) ??
+      (v.includes('반차') ? types.find((t) => t.key === 'half_am') : undefined) ??
+      null
+    );
+  }, [isLeave, leaveTypes.data, fields, values]);
+
+  /** 반차 = 하루·0.5일 차감. 고정 부여일수(경조 등)는 days. 둘 다 종료일을 사용자가 못 고른다. */
+  const leaveFixedDays = leaveItem ? (leaveItem.deduct === 'half' ? 1 : leaveItem.days) : null;
+
+  const leaveHint = useMemo(() => {
+    if (!isLeave || !leaveItem || !leavePeriodKey) return null;
+    const period = (values[leavePeriodKey] as { from?: string; to?: string } | undefined) ?? {};
+    if (!period.from || !DAY_RE.test(period.from)) {
+      return leaveItem.days != null
+        ? { text: `${leaveItem.label} — 부여 ${leaveItem.days}일 (시작일을 지정하면 종료일이 자동 설정됩니다)`, over: false }
+        : leaveItem.deduct === 'half'
+          ? { text: `${leaveItem.label} — 0.5일 차감(하루 안에서 사용)`, over: false }
+          : null;
+    }
+    if (leaveItem.deduct === 'half') {
+      return { text: `${leaveItem.label} — 0.5일 차감(하루 안에서 사용)`, over: false };
+    }
+    if (leaveItem.days != null) {
+      const to = addDays(period.from, leaveItem.days - 1);
+      return { text: `${leaveItem.label} — 부여 ${leaveItem.days}일 · 종료일 자동 설정(${to})`, over: false };
+    }
+    if (period.to && DAY_RE.test(period.to)) {
+      const cnt = dayCount(period.from, period.to);
+      if (cnt <= 0) return { text: '종료일이 시작일보다 빠릅니다.', over: true };
+      const remaining = leaveMine.data?.remaining;
+      const over = !!leaveItem.deduct && typeof remaining === 'number' && cnt > remaining;
+      return { text: `사용 ${cnt}일${over ? ` · ⚠ 잔여 연차(${remaining}일) 초과` : ''}`, over };
+    }
+    return { text: `${leaveItem.label} — 시작·종료일을 지정하면 사용일수가 계산됩니다`, over: false };
+  }, [isLeave, leaveItem, leavePeriodKey, values, leaveMine.data]);
+
+  /** 직전 휴가 종류 — 종류가 바뀌었을 때만 기간·일수를 새 규정으로 재설정한다. */
+  const prevLeaveTypeRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isLeave || !leavePeriodKey) return;
+    if (!leaveItem) {
+      prevLeaveTypeRef.current = null;
+      return;
+    }
+    // 첫 평가(문서 로드·임시저장 이어쓰기)는 변경으로 보지 않는다 — 저장된 값을 지우면 안 된다.
+    const typeChanged = prevLeaveTypeRef.current !== null && prevLeaveTypeRef.current !== leaveItem.key;
+    prevLeaveTypeRef.current = leaveItem.key;
+
+    const period = (values[leavePeriodKey] as { from?: string; to?: string } | undefined) ?? {};
+    if (!period.from || !DAY_RE.test(period.from)) return;
+
+    if (leaveItem.deduct === 'half') {
+      // 반차: 종료일=시작일, 사용일수 0.5(서버 차감과 일치).
+      if (period.to !== period.from || String(values.use_days ?? '') !== '0.5') {
+        setValues((prev) => ({ ...prev, [leavePeriodKey]: { from: period.from, to: period.from }, use_days: '0.5' }));
+      }
+      return;
+    }
+    if (leaveItem.days != null) {
+      const to = addDays(period.from, leaveItem.days - 1);
+      if (period.to !== to || String(values.use_days ?? '') !== String(leaveItem.days)) {
+        setValues((prev) => ({
+          ...prev,
+          [leavePeriodKey]: { from: period.from, to },
+          use_days: String(leaveItem.days),
+        }));
+      }
+      return;
+    }
+    if (typeChanged) {
+      // 고정·반차 → 가변 전환: 이전 종료일이 남지 않게 하루로 초기화(사용자가 다시 지정).
+      setValues((prev) => ({ ...prev, [leavePeriodKey]: { from: period.from, to: period.from }, use_days: '1' }));
+      return;
+    }
+    if (period.to && DAY_RE.test(period.to)) {
+      const cnt = dayCount(period.from, period.to);
+      if (cnt > 0 && String(values.use_days ?? '') !== String(cnt)) {
+        setValues((prev) => ({ ...prev, use_days: String(cnt) }));
+      }
+    }
+  }, [isLeave, leaveItem, leavePeriodKey, values]);
 
   // 초과근무: 기사용·잔여 시간을 자동으로 채운다(웹 DraftBoard 와 같은 계산).
   const usage = otUsage.data;
@@ -336,9 +448,12 @@ export default function DraftScreen() {
       return (
         <Pressable
           onPress={() => (ok ? setFormId(f.formId) : toast.show(undraftableReason(f) ?? '', 'error'))}
-          className={`flex-row items-center gap-2.5 border-t border-cd-grid-line py-3 active:opacity-60 ${ok ? '' : 'opacity-50'}`}>
+          // 웹 전용 양식은 반투명 대신 글자색 감쇠(불투명) — 겹침 가시성 문제(2026-08-10 규칙).
+          className="flex-row items-center gap-2.5 border-t border-cd-grid-line py-3 active:opacity-60">
           <View className="flex-1">
-            <Text numberOfLines={1} className="text-[13px] font-semibold text-cd-body">
+            <Text
+              numberOfLines={1}
+              className={`text-[13px] font-semibold ${ok ? 'text-cd-body' : 'text-cd-faint'}`}>
               {f.name}
             </Text>
             {f.description ? (
@@ -434,6 +549,13 @@ export default function DraftScreen() {
                   </Text>
                 </View>
               ) : null}
+              {isLeave && leaveHint ? (
+                <View className={`rounded-xl px-3 py-2.5 ${leaveHint.over ? 'bg-cd-error-soft' : 'bg-cd-surface'}`}>
+                  <Text className={`text-[12.5px] font-bold ${leaveHint.over ? 'text-cd-error' : 'text-cd-muted'}`}>
+                    {leaveHint.text}
+                  </Text>
+                </View>
+              ) : null}
               {isOvertime && otHint ? (
                 <View className={`rounded-xl px-3 py-2.5 ${otHint.over ? 'bg-cd-error-soft' : 'bg-cd-surface'}`}>
                   <Text className={`text-[12.5px] font-bold ${otHint.over ? 'text-cd-error' : 'text-cd-muted'}`}>
@@ -460,6 +582,8 @@ export default function DraftScreen() {
                         linkedFacilityId={linkedFacilityId}
                         allFields={fields}
                         allValues={values}
+                        readOnly={isOvertime && (row[0].key === 'used_hours' || row[0].key === 'remain_hours')}
+                        periodAutoDays={row[0].type === 'period' ? leaveFixedDays : null}
                       />
                     ) : (
                       <View key={row.map((f) => f.key).join('|')} className="flex-row gap-2.5">
@@ -473,6 +597,10 @@ export default function DraftScreen() {
                               linkedFacilityId={linkedFacilityId}
                               allFields={fields}
                               allValues={values}
+                              // 기사용·잔여시간은 주 사용량에서 자동 계산 — 편집을 허용하면
+                              // effect 가 즉시 되돌려 "입력이 안 되는" 혼란만 남는다(2026-08-10).
+                              readOnly={isOvertime && (f.key === 'used_hours' || f.key === 'remain_hours')}
+                              periodAutoDays={f.type === 'period' ? leaveFixedDays : null}
                             />
                           </View>
                         ))}

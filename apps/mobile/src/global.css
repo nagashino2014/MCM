@@ -2,6 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
+/* 스크롤바 숨김(웹 전용 — 네이티브는 CSS 를 쓰지 않는다).
+   데스크탑 위젯·웹 데모에서 모바일 앱과 같은 화면을 유지하려면 브라우저 스크롤바가 없어야 한다.
+   스크롤 자체는 그대로 동작한다(휠·터치·드래그). */
+* {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* 구형 Edge/IE */
+}
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
 :root {
   --font-display:
     Spline Sans, Inter, ui-sans-serif, system-ui, sans-serif, Apple Color Emoji, Segoe UI Emoji,

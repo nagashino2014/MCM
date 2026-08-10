@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <title>MCM</title>
+    <style>
+      /*
+        위젯 셸 — OS 창 장식(decorations:false) 대신 자체 상단 바를 그린다.
+        앱 화면은 iframe 으로 원격(koensain.app/m-app)을 그대로 싣는다.
+        상단 바가 하는 일: 드래그 이동 · 항상 위 고정 토글 · 최소화/최대화/닫기(트레이로).
+      */
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body { height: 100%; overflow: hidden; background: #fff; }
+      body {
+        font-family: Pretendard, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
+        display: flex; flex-direction: column;
+      }
+      #bar {
+        height: 36px; flex: 0 0 36px; display: flex; align-items: center; gap: 6px;
+        padding: 0 4px 0 12px; background: #fff; border-bottom: 1px solid #e5e8f2;
+        user-select: none; -webkit-user-select: none;
+      }
+      #title { font-size: 12.5px; font-weight: 800; color: #1b2144; letter-spacing: .2px; }
+      #spacer { flex: 1; height: 100%; }
+      /* 항상 위 고정 토글 */
+      #pin {
+        display: flex; align-items: center; gap: 6px; padding: 4px 8px; margin-right: 2px;
+        font-size: 11.5px; color: #6a7190; cursor: pointer; border-radius: 8px;
+      }
+      #pin:hover { background: #f2f4fa; }
+      #pin .sw {
+        width: 30px; height: 17px; border-radius: 99px; background: #d7dcea;
+        position: relative; transition: background .15s;
+      }
+      #pin .sw::after {
+        content: ""; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px;
+        border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25);
+        transition: transform .15s;
+      }
+      #pin.on { color: #4353e4; font-weight: 700; }
+      #pin.on .sw { background: #6b7cf6; }
+      #pin.on .sw::after { transform: translateX(13px); }
+      /* 창 버튼 */
+      .btn {
+        width: 34px; height: 28px; display: grid; place-items: center; border: 0;
+        background: transparent; cursor: pointer; border-radius: 7px; color: #565e82;
+      }
+      .btn:hover { background: #f0f2f8; }
+      .btn.close:hover { background: #e2574c; color: #fff; }
+      iframe { flex: 1; width: 100%; border: 0; display: block; }
+      @media (prefers-color-scheme: dark) {
+        html, body { background: #12162a; }
+        #bar { background: #171b2c; border-bottom-color: #2b3147; }
+        #title { color: #e8ebf7; }
+        #pin { color: #9aa1b8; }
+        #pin:hover { background: #232840; }
+        #pin.on { color: #a9b8ff; }
+        .btn { color: #9aa1b8; }
+        .btn:hover { background: #232840; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="bar" data-tauri-drag-region>
+      <span id="title" data-tauri-drag-region>MCM</span>
+      <div id="spacer" data-tauri-drag-region></div>
+
+      <div id="pin" title="다른 창 위에 항상 표시합니다">
+        <span>항상 위</span><span class="sw"></span>
+      </div>
+
+      <button class="btn" id="min" title="최소화" aria-label="최소화">
+        <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 6h8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      </button>
+      <button class="btn" id="max" title="최대화 / 이전 크기" aria-label="최대화">
+        <svg width="12" height="12" viewBox="0 0 12 12"><rect x="2.2" y="2.2" width="7.6" height="7.6" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>
+      </button>
+      <button class="btn close" id="close" title="닫기(트레이로 내려갑니다)" aria-label="닫기">
+        <svg width="12" height="12" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+
+    <iframe id="app" src="https://koensain.app/m-app" title="MCM"></iframe>
+
+    <script>
+      const { getCurrentWindow } = window.__TAURI__.window;
+      const { invoke } = window.__TAURI__.core;
+      const notification = window.__TAURI__.notification;
+      const win = getCurrentWindow();
+      const APP_ORIGIN = "https://koensain.app";
+
+      const pin = document.getElementById("pin");
+      let pinned = false;
+      pin.addEventListener("click", async () => {
+        pinned = !pinned;
+        pin.classList.toggle("on", pinned);
+        await win.setAlwaysOnTop(pinned);
+      });
+
+      document.getElementById("min").addEventListener("click", () => win.minimize());
+      document.getElementById("max").addEventListener("click", () => win.toggleMaximize());
+      // 닫기 = 종료가 아니라 트레이로(메신저는 계속 떠 있어야 알림을 받는다).
+      document.getElementById("close").addEventListener("click", () => win.hide());
+
+      /*
+        웹앱(iframe) → 셸 브리지(WID-P1).
+        iframe 은 원격 오리진이라 Tauri API 를 직접 못 쓴다. 대신 웹앱이 미읽음 폴링 결과를
+        postMessage 로 올려주고, 여기서 트레이 뱃지·OS 알림으로 옮긴다.
+      */
+      let notifyAllowed = false;
+      (async () => {
+        try {
+          notifyAllowed = await notification.isPermissionGranted();
+          if (!notifyAllowed) {
+            notifyAllowed = (await notification.requestPermission()) === "granted";
+          }
+        } catch (_) {
+          notifyAllowed = false;
+        }
+      })();
+
+      // 웹앱은 셸의 오리진을 모르면 아무 것도 보내지 않는다 → 먼저 hello 로 밝힌다.
+      const appFrame = document.getElementById("app");
+      const sayHello = () => {
+        try {
+          appFrame.contentWindow.postMessage({ type: "mcm:widget-hello" }, APP_ORIGIN);
+        } catch (_) {
+          /* 아직 로드 전 — 아래 재시도가 처리한다 */
+        }
+      };
+      appFrame.addEventListener("load", () => {
+        sayHello();
+        // 웹앱(React)이 마운트되기 전일 수 있어 몇 번 더 두드린다.
+        [500, 1500, 4000].forEach((ms) => setTimeout(sayHello, ms));
+      });
+
+      // 처음 받은 값은 기준선으로만 쓴다 — 켜자마자 쌓여 있던 미읽음으로 알림이 쏟아지면 안 된다.
+      let lastSeenKey = null;
+      window.addEventListener("message", async (e) => {
+        if (e.origin !== APP_ORIGIN) return;
+        const d = e.data;
+        if (d && d.type === "mcm:widget-ready") {
+          sayHello();
+          return;
+        }
+        if (!d || d.type !== "mcm:unread") return;
+
+        invoke("set_unread", { count: Number(d.count) || 0 }).catch(() => {});
+
+        const latest = d.latest;
+        if (!latest || !latest.key) return;
+        const first = lastSeenKey === null;
+        const changed = latest.key !== lastSeenKey;
+        lastSeenKey = latest.key;
+        if (first || !changed || !notifyAllowed) return;
+
+        // 창을 보고 있는 중이면 알림은 군더더기다.
+        const [visible, focused] = await Promise.all([
+          win.isVisible().catch(() => false),
+          win.isFocused().catch(() => false),
+        ]);
+        if (visible && focused) return;
+        try {
+          notification.sendNotification({ title: latest.title, body: latest.body });
+        } catch (_) {
+          /* 알림 실패는 무시(뱃지는 이미 반영됨) */
+        }
+      });
+    </script>
+  </body>
+</html>

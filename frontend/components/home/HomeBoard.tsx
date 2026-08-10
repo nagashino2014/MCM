@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, Download, LayoutGrid, RotateCcw, Save } from "lucide-react";
+import { Check, Download, LayoutGrid, Monitor, RotateCcw, Save, Smartphone } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { HomeStats } from "./HomeStats";
@@ -160,6 +160,27 @@ export function HomeBoard({ role }: { role?: string }) {
         meta={todayLabel()}
         actions={
           <div className="flex items-center gap-1.5">
+            {/* 모바일 앱 웹 데모(회의 시연용) — 폰 프레임 래퍼 새 탭 */}
+            <a
+              href="/m-demo.html"
+              target="_blank"
+              rel="noreferrer"
+              className="cd-chip"
+              title="모바일 앱을 브라우저에서 그대로 체험합니다"
+            >
+              <Smartphone className="w-3.5 h-3.5" />
+              모바일 앱 데모
+            </a>
+            {/* 데스크탑 위젯(메신저 상주) 설치 파일 — Windows NSIS 인스톨러 */}
+            <a
+              href="/downloads/MCM-widget-setup.exe"
+              download
+              className="cd-chip"
+              title="메신저를 상주형으로 쓰는 데스크탑 위젯을 설치합니다 (Windows). 설치 후 시작 메뉴에서 'MCM' 으로 실행하세요."
+            >
+              <Monitor className="w-3.5 h-3.5" />
+              데스크탑 위젯 설치
+            </a>
             {/* 저장된 배치 프리셋 빠른 전환 — 편집 모드에 들어가지 않고 바로 갈아입는다. */}
             {(["1", "2", "3"] as const).map(
               (slot) =>

@@ -98,6 +98,8 @@ function buildMatchWhere(opts: {
   today: string;
   categories: string[];
   regions: string[];
+  /** 입찰 소스 필터(모바일 개편) — bid_notice·order_plan·prior_spec. */
+  bidTypes?: string[];
   /** 기간별 삭제(P6 추가) — 공고일 기준(YYYY-MM-DD), 공고일이 없는 행은 매칭일로 대체. */
   dateFrom?: string;
   dateTo?: string;
@@ -110,6 +112,10 @@ function buildMatchWhere(opts: {
   };
   if (opts.byDeadline) {
     where.push(`deadline IS NOT NULL AND deadline <> '' AND substring(deadline, 1, 10) >= ${add(opts.today)}`);
+  }
+  if (opts.bidTypes?.length) {
+    const ph = opts.bidTypes.map((t) => add(t)).join(",");
+    where.push(`bid_type IN (${ph})`);
   }
   if (opts.categories.length) {
     const ph = opts.categories.map((c) => add(c)).join(",");
@@ -156,9 +162,13 @@ export async function GET(req: NextRequest) {
     const byPosted = sp.get("sort") === "posted";
     const categories = parseListParam(sp.get("categories"));
     const regions = parseListParam(sp.get("regions")).filter((g) => REGION_GROUPS[g]);
+    // 입찰 소스(?types=bid_notice,order_plan,prior_spec) — 모바일 소스 3태그 필터.
+    const bidTypes = parseListParam(sp.get("types")).filter((t) =>
+      ["bid_notice", "order_plan", "prior_spec"].includes(t)
+    );
     const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
 
-    const { whereSql, params } = buildMatchWhere({ byDeadline, today, categories, regions });
+    const { whereSql, params } = buildMatchWhere({ byDeadline, today, categories, regions, bidTypes });
     const orderSql = byDeadline
       ? "substring(deadline, 1, 10) ASC"
       : byPosted
@@ -240,6 +250,7 @@ export async function DELETE(req: NextRequest) {
       noticeIds?: unknown;
       all?: boolean;
       filter?: string;
+      types?: unknown;
       categories?: unknown;
       regions?: unknown;
       postedFrom?: unknown;
@@ -267,6 +278,7 @@ export async function DELETE(req: NextRequest) {
         const { whereSql, params } = buildMatchWhere({
           byDeadline: body.filter === "deadline",
           today,
+          bidTypes: asList(body.types).filter((t) => ["bid_notice", "order_plan", "prior_spec"].includes(t)),
           categories: asList(body.categories),
           regions: asList(body.regions).filter((g) => REGION_GROUPS[g]),
           dateFrom: typeof body.postedFrom === "string" && DAY_RE.test(body.postedFrom) ? body.postedFrom : undefined,

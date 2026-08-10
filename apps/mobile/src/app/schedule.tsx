@@ -156,18 +156,20 @@ export default function ScheduleScreen() {
               <Pressable
                 key={t}
                 onPress={() => !off && toggleTag(t)}
-                className={`flex-row items-center gap-[5px] rounded-full px-[13px] py-[7px] active:opacity-70 ${
-                  off ? 'opacity-40' : ''
-                }`}
+                // 권한 없음(off)은 반투명 대신 불투명 감쇠색(2026-08-10 규칙).
+                className="flex-row items-center gap-[5px] rounded-full px-[13px] py-[7px] active:opacity-70"
                 style={{
                   backgroundColor: on ? tint.bg : c.card,
                   borderWidth: on ? 0 : 1,
                   borderColor: c.border,
                 }}>
-                <View style={{ backgroundColor: tint.dot }} className="h-[7px] w-[7px] rounded-full" />
+                <View
+                  style={{ backgroundColor: off ? '#c3c8da' : tint.dot }}
+                  className="h-[7px] w-[7px] rounded-full"
+                />
                 <Text
                   className={`text-[12px] ${on ? 'font-bold' : 'font-semibold'}`}
-                  style={{ color: on ? tint.text : '#9aa0b8' }}>
+                  style={{ color: off ? '#c3c8da' : on ? tint.text : '#9aa0b8' }}>
                   {CALENDAR_TAG_LABELS[t]}
                 </Text>
               </Pressable>

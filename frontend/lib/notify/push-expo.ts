@@ -15,6 +15,7 @@ import type { ChannelSendResult } from "./email-ses";
 
 /** 푸시 이벤트 키 — 앱 설정 화면과 공유하는 카탈로그. */
 export type PushEventKey =
+  | "chat.message"
   | "board.posted"
   | "approval.step_pending"
   | "approval.result"
@@ -34,6 +35,7 @@ export type PushEventKey =
  * OFF 기본이면 이중 옵트인이 되어 "설정했는데 안 온다"가 된다. 앱 토글은 거부용으로 둔다.
  */
 const EVENT_DEFAULT: Record<PushEventKey, boolean> = {
+  "chat.message": true,
   "board.posted": true,
   "approval.step_pending": true,
   "approval.result": true,
@@ -47,6 +49,7 @@ const EVENT_DEFAULT: Record<PushEventKey, boolean> = {
 };
 
 export const PUSH_EVENTS: { key: PushEventKey; label: string; description: string }[] = [
+  { key: "chat.message", label: "메신저 새 메시지", description: "대화방에 새 메시지가 왔을 때(방별 알림 끄기와 별개)" },
   { key: "approval.step_pending", label: "결재 차례 도착", description: "내가 결재할 문서가 올라왔을 때" },
   { key: "approval.result", label: "기안 결과", description: "내가 올린 문서가 승인·반려됐을 때" },
   { key: "approval.remind", label: "결재 재촉", description: "결재가 지연될 때 알림" },

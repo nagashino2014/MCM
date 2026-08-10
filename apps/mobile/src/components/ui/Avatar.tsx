@@ -3,15 +3,20 @@ import { Image } from "expo-image";
 import { Text, View } from "react-native";
 
 import { API_BASE_URL } from "@/lib/config";
+import { personName } from "@/lib/person-name";
 import { getAccessToken } from "@/lib/tokens";
 
 const SIZES = { sm: 28, md: 40, lg: 56 } as const;
 
-/** 한글 이름은 성을 제외한 뒤 두 글자, 영문은 첫 글자 2개까지. */
+/**
+ * 한글 이름은 성을 제외한 뒤 두 글자, 영문은 첫 글자 2개까지.
+ * 회사명·직급이 섞인 표시명("㈜재영물산 이재연")은 personName 으로 이름만 추린 뒤 자른다 —
+ * 예전에는 `slice(1)` 이라 원 안에 "재영물산 이재연"이 통째로 들어갔다.
+ */
 function initials(name?: string | null): string {
-  const n = (name ?? "").trim();
+  const n = personName(name);
   if (!n) return "?";
-  if (/[가-힣]/.test(n)) return n.length > 2 ? n.slice(1) : n;
+  if (/[가-힣]/.test(n)) return n.length > 2 ? n.slice(-2) : n;
   return n
     .split(/\s+/)
     .slice(0, 2)

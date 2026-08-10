@@ -2,6 +2,15 @@
 
 Read the exact versioned docs at https://docs.expo.dev/versions/v57.0.0/ before writing any code.
 
+## Controlled TextInput 에 정규화 함수 금지 (사고 이력 있음)
+
+`parseTimeRange`·`htmlToPlain` 같은 **저장 계약 정규화 함수를 controlled TextInput 의 `value=` 에
+직접 물리지 말 것.** 완성형만 통과시키는 필터는 부분 입력("1", "18:3", 끝 공백)을 리렌더에서
+즉시 되돌려 **타이핑 자체가 불가능**해진다(2026-08-10 초과근무 "시간" 입력 실측 — 웹 AutoTimeInput 의
+로컬 버퍼를 빼고 이식해 발생). 마스킹·검증 입력은 로컬 useState 버퍼를 두고 유효값일 때만
+상위로 커밋한다(`FormField.tsx` 의 `TimeInput` 참조). effect 가 자동 계산해 덮어쓰는 필드는
+편집 UI 로 두지 말고 `readOnly` 잠금으로 렌더한다(초과근무 기사용·잔여시간).
+
 ## OTA 발행 시 API 주소 (사고 이력 있음)
 
 `eas update` 는 `eas.json` 의 `build.*.env` 를 **쓰지 않는다**. 그건 빌드 전용이다.

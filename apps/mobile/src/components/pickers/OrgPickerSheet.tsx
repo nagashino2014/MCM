@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Avatar, Button, EmptyState, SearchBar, Sheet, SkeletonList } from '@/components/ui';
+import { Avatar, Button, EmptyState, OutlineButton, SearchBar, Sheet, SkeletonList } from '@/components/ui';
 import { useApi } from '@/lib/use-api';
 import { useTheme } from '@/theme/useTheme';
 
@@ -35,13 +35,13 @@ interface OrgDept {
   accentColor: string | null;
   isActive: boolean;
 }
-interface OrgSnapshot {
+export interface OrgSnapshot {
   departments: OrgDept[];
   employees: OrgEmployee[];
 }
 
-export function useOrgSnapshot() {
-  return useApi<OrgSnapshot>('/api/sales/org', { cache: true });
+export function useOrgSnapshot(skip?: boolean) {
+  return useApi<OrgSnapshot>('/api/sales/org', { cache: true, skip });
 }
 
 export function OrgPickerSheet({
@@ -53,6 +53,9 @@ export function OrgPickerSheet({
   onSelect,
   onDone,
   onClose,
+  snapshot,
+  onSelectDept,
+  onClearAll,
 }: {
   visible: boolean;
   title?: string;
@@ -64,9 +67,23 @@ export function OrgPickerSheet({
   onSelect: (emp: OrgEmployee) => void;
   onDone?: () => void;
   onClose: () => void;
+  /**
+   * 조직도 데이터 주입 — 기본은 `/api/sales/org`(sales.view 권한)를 스스로 부른다.
+   * 메신저처럼 전 직원이 써야 하는 화면은 `/api/directory` 응답을 이 shape 로 매핑해 넘긴다.
+   */
+  snapshot?: OrgSnapshot;
+  /**
+   * 부서 일괄 선택(multi 전용, MSG-P1) — 주면 부서 행 우측에 체크박스가 생기고,
+   * 탭 시 해당 부서 + 하위 부서의 활성 인원 전체가 넘어온다(전체선택/해제 판단은 호출측).
+   */
+  onSelectDept?: (members: OrgEmployee[]) => void;
+  /** 선택 전체 해제(multi 전용) — 주면 footer 에 "모두 해제" 버튼이 생긴다. */
+  onClearAll?: () => void;
 }) {
   const { c } = useTheme();
-  const { data, loading } = useOrgSnapshot();
+  const { data: fetched, loading: fetching } = useOrgSnapshot(!!snapshot);
+  const data = snapshot ?? fetched;
+  const loading = snapshot ? false : fetching;
   const [q, setQ] = useState('');
   const [open, setOpen] = useState<Record<string, boolean>>({});
 
@@ -140,10 +157,21 @@ export function OrgPickerSheet({
     );
   };
 
+  // 부서 + 하위 부서의 활성 인원 전체(부서 일괄 선택용).
+  const deptTreeMembers = (deptId: string): OrgEmployee[] => {
+    const out = [...(peopleOf.get(deptId) ?? [])];
+    for (const k of childrenOf.get(deptId) ?? []) out.push(...deptTreeMembers(k.deptId));
+    return out;
+  };
+
   const renderDept = (d: OrgDept, depth: number) => {
     const kids = childrenOf.get(d.deptId) ?? [];
     const members = peopleOf.get(d.deptId) ?? [];
     const expanded = open[d.deptId] ?? depth === 0;
+    const treeMembers = onSelectDept && multi ? deptTreeMembers(d.deptId) : [];
+    const allPicked =
+      treeMembers.length > 0 && treeMembers.every((e) => selectedIds.includes(e.employeeId));
+    const somePicked = !allPicked && treeMembers.some((e) => selectedIds.includes(e.employeeId));
     return (
       <View key={d.deptId} style={{ paddingLeft: depth * 10 }}>
         <Pressable
@@ -152,6 +180,21 @@ export function OrgPickerSheet({
           <View style={{ backgroundColor: d.accentColor ?? c.primary }} className="h-2 w-2 rounded-full" />
           <Text className="flex-1 text-[14px] font-bold text-cd-text">{d.deptName}</Text>
           <Text className="text-[12px] text-cd-faint">{members.length}명</Text>
+          {onSelectDept && multi ? (
+            // 부서 전체 선택/해제 — 하위 부서 인원 포함. 전원 선택이면 체크, 일부면 중간 표시.
+            <Pressable
+              hitSlop={10}
+              disabled={!treeMembers.length}
+              onPress={() => onSelectDept(treeMembers)}
+              className="active:opacity-60"
+              style={{ opacity: treeMembers.length ? 1 : 0.35 }}>
+              <Ionicons
+                name={allPicked ? 'checkbox' : somePicked ? 'remove-circle-outline' : 'square-outline'}
+                size={21}
+                color={allPicked || somePicked ? c.primary : c.faint}
+              />
+            </Pressable>
+          ) : null}
           <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={15} color={c.faint} />
         </Pressable>
         {expanded ? (
@@ -172,14 +215,27 @@ export function OrgPickerSheet({
       onClose={onClose}
       title={title}
       footer={
+        // ⚠ Sheet 의 footer 래퍼가 이미 flex-row 다 — 여기서 한 겹 더 감싸면 네이티브(yoga)에서
+        //   부모 폭이 0 으로 잡혀 버튼이 세로 선으로 찌부러진다(2026-08-09 실기기 실측). ConfirmSheet 패턴.
         multi ? (
-          <Button
-            label={`완료${selectedIds.length ? ` (${selectedIds.length})` : ''}`}
-            onPress={() => {
-              onDone?.();
-              onClose();
-            }}
-          />
+          <>
+            {onClearAll && selectedIds.length ? (
+              <View className="flex-1">
+                <OutlineButton label="모두 해제" onPress={onClearAll} />
+              </View>
+            ) : null}
+            <View className="flex-[2]">
+              <Button
+                label={`완료${selectedIds.length ? ` (${selectedIds.length})` : ''}`}
+                onPress={() => {
+                  // ⚠ 닫기를 먼저 커밋한다 — onDone 이 라우팅으로 이어질 때 Modal 이 열린 채
+                  // 화면이 전환되면 뒤 화면이 freeze 되어 시트가 영영 안 닫힌다(2026-08-09 실측).
+                  onClose();
+                  onDone?.();
+                }}
+              />
+            </View>
+          </>
         ) : undefined
       }>
       <View style={{ height: 420 }}>

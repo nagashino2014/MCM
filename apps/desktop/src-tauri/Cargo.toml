@@ -1,0 +1,30 @@
+[package]
+name = "mcm-desktop"
+version = "1.2.0"
+description = "MCM 데스크탑 위젯"
+authors = ["KOENSAIN"]
+edition = "2021"
+
+[lib]
+# Tauri v2 관례 — 셸 로직은 lib 에 두고 main 은 진입점만 가진다.
+name = "mcm_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# image-png = 트레이 아이콘 PNG 디코드(미읽음 뱃지를 런타임에 덧그린다).
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-autostart = "2"
+tauri-plugin-window-state = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-notification = "2"
+
+[profile.release]
+# 설치본 크기 우선(콘텐츠는 원격이라 셸은 작을수록 좋다).
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

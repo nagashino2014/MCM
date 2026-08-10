@@ -2,6 +2,7 @@ import { type ReactNode } from "react";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, Text, View } from "react-native";
 
 import { ThemeVarsScope } from "@/theme/ThemeProvider";
+import { useTheme } from "@/theme/useTheme";
 
 import { IconButton } from "./Button";
 
@@ -22,21 +23,29 @@ export function Sheet({
   children: ReactNode;
   footer?: ReactNode;
 }) {
+  const { c } = useTheme();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       {/* Modal 은 별도 뷰 계층이라 루트의 토큰 주입이 닿지 않을 수 있다 → 여기서 다시 주입. */}
       <ThemeVarsScope>
-        <View className="flex-1 justify-end bg-black/40">
+        {/* 딤은 뒤 화면이 겹쳐 보이지 않게 진하게(사용자 피드백 2026-08-09 — 40% 는 뒤 메뉴가 비쳐 불편). */}
+        <View className="flex-1 justify-end bg-black/70">
           <Pressable className="flex-1" onPress={onClose} />
           <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
-            <View className="max-h-[85%] rounded-t-3xl border-t border-cd-border bg-cd-card pb-6">
+            {/* 본체 배경은 hex 로 명시 — 토큰 변수 미해석 상황에서도 반투명해지지 않게 방어. */}
+            <View
+              className="max-h-[85%] rounded-t-3xl border-t border-cd-border pb-6"
+              style={{ backgroundColor: c.card }}>
               <View className="flex-row items-center gap-2 border-b border-cd-border px-4 py-2.5">
                 <Text className="flex-1 text-[16px] font-extrabold text-cd-text">
                   {title ?? ""}
                 </Text>
                 <IconButton icon="close" onPress={onClose} />
               </View>
-              <View className="px-4 py-4">{children}</View>
+              {/* ⚠ shrink 필수 — RN flexShrink 기본 0 이라, 내용이 max-h 를 넘으면 줄어들지 않고
+                  시트 밖으로 그려져 하단이 잘린다(휴가 종류 목록 실측 2026-08-10). shrink 를 주면
+                  내부 ScrollView 가 남은 높이 안에서 스크롤한다. */}
+              <View className="shrink px-4 py-4">{children}</View>
               {footer ? (
                 <View className="flex-row gap-2 border-t border-cd-border px-4 pt-3">{footer}</View>
               ) : null}

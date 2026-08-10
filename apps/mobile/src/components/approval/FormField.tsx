@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Badge, Chip, HtmlView, Input, Sheet, Textarea } from '@/components/ui';
@@ -33,6 +33,14 @@ interface Props {
   allFields?: ApprovalFieldDef[];
   /** 자동 채움으로 잠긴 필드인지 판정하려면 양식 전체 값이 필요하다. */
   allValues?: Record<string, unknown>;
+  /** 자동 계산 필드(초과근무 기사용·잔여시간 등) — 편집 UI 를 잠금 표시로 렌더한다. */
+  readOnly?: boolean;
+  /**
+   * 휴가 기간 자동 부여 일수(경조 5일·반차 1일 등). 값이 있으면 기간 필드가
+   * **시작일만 고르는 단일 픽커**가 되고 종료일은 규정대로 자동 계산된다.
+   * null = 사용자가 종료일까지 직접 지정(연차·병가·공가(예비군)).
+   */
+  periodAutoDays?: number | null;
 }
 
 /**
@@ -123,15 +131,68 @@ export function htmlToPlain(html: string): string {
     .replace(/<[^>]+>/g, '')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&')
-    .trim();
+    .replace(/&amp;/g, '&');
+  // ⚠ trim 금지 — controlled Textarea 의 value 로 쓰이므로, 끝 공백·빈 줄을 지우면
+  //   타이핑한 스페이스가 리렌더에서 즉시 사라진다(2026-08-10 실측).
 }
 /** 굵게·목록·표 등 모바일에서 재현할 수 없는 서식이 들어 있는가. */
 function hasRichMarkup(html: string): boolean {
   return /<(strong|b|em|i|u|ul|ol|li|table|img|a|h[1-6])\b/i.test(html);
 }
 
-export function FormField({ field: f, value, onSet, onFill, linkedFacilityId, allFields, allValues }: Props) {
+const HHMM_OK = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+/**
+ * HH:MM 시각 입력 — 타이핑 중간 상태("1", "18:3")를 로컬 버퍼에 보존하고,
+ * 유효한 시각이 완성됐을 때만 상위(onCommit)로 커밋한다(웹 AutoTimeInput 과 동일 구조).
+ * ⚠ parseTimeRange 같은 "저장 계약 정규화"를 controlled value 에 직접 물리면 부분 입력이
+ *   매 타이핑마다 '' 로 되돌려져 입력 자체가 불가능해진다(초과근무 "시간" 실측 2026-08-10).
+ */
+function TimeInput({
+  value,
+  onCommit,
+  placeholder,
+}: {
+  value: string;
+  onCommit: (v: string) => void;
+  placeholder?: string;
+}) {
+  const [text, setText] = useState(value);
+  // 외부 변경(문서 로드·자동 채움) 동기화 — 타이핑 중 리렌더는 value 가 불변이라 버퍼가 유지된다.
+  useEffect(() => {
+    setText(value);
+  }, [value]);
+  return (
+    <Input
+      value={text}
+      keyboardType="numeric"
+      placeholder={placeholder}
+      onChangeText={(t: string) => {
+        const d = t.replace(/[^\d]/g, '').slice(0, 4);
+        const masked = d.length > 2 ? `${d.slice(0, 2)}:${d.slice(2)}` : d;
+        setText(masked);
+        if (masked === '') onCommit('');
+        else if (HHMM_OK.test(masked)) onCommit(masked);
+      }}
+      onBlur={() => {
+        // 미완성·무효 입력("99:99")은 마지막 유효값으로 복원 — 잘못된 시각이 문서에 남지 않게.
+        if (text && !HHMM_OK.test(text)) setText(value);
+      }}
+    />
+  );
+}
+
+export function FormField({
+  field: f,
+  value,
+  onSet,
+  onFill,
+  linkedFacilityId,
+  allFields,
+  allValues,
+  readOnly,
+  periodAutoDays,
+}: Props) {
   const { c } = useTheme();
   const [sheet, setSheet] = useState<null | 'date' | 'period' | 'select' | 'org' | 'entity' | 'leave'>(null);
 
@@ -163,7 +224,7 @@ export function FormField({ field: f, value, onSet, onFill, linkedFacilityId, al
     );
   }
 
-  const locked = isAutoFilled(f, allFields ?? [], allValues ?? {});
+  const locked = readOnly || isAutoFilled(f, allFields ?? [], allValues ?? {});
   if (locked) {
     return (
       <View className="gap-1.5">
@@ -189,7 +250,7 @@ export function FormField({ field: f, value, onSet, onFill, linkedFacilityId, al
         if (html && hasRichMarkup(html)) {
           return (
             <View className="gap-1.5">
-              <View className="overflow-hidden rounded-xl border border-cd-border">
+              <View className="overflow-hidden rounded-xl border border-cd-border px-3 py-2">
                 <HtmlView html={html} />
               </View>
               <Text className="text-[11.5px] text-cd-warning">
@@ -219,36 +280,25 @@ export function FormField({ field: f, value, onSet, onFill, linkedFacilityId, al
         );
 
       case 'time':
-        return (
-          <Input
-            value={str(value)}
-            onChangeText={(t: string) => {
-              // HHMM 4자리를 자동으로 HH:MM 으로(웹 AutoTimeInput 과 같은 규칙).
-              const d = t.replace(/[^\d]/g, '').slice(0, 4);
-              onSet(d.length > 2 ? `${d.slice(0, 2)}:${d.slice(2)}` : d);
-            }}
-            keyboardType="numeric"
-            placeholder={f.placeholder ?? 'HH:MM'}
-          />
-        );
+        return <TimeInput value={str(value)} onCommit={onSet} placeholder={f.placeholder ?? 'HH:MM'} />;
 
       case 'time_range': {
         // 시작·종료를 각각 HHMM 으로 받는다(웹 TimeRangeInput 과 같은 규칙·같은 저장 구조).
+        // 입력 자체는 TimeInput 로컬 버퍼가 담당하고, 저장 값은 유효 시각만 들어온다.
         const v = parseTimeRange(value);
         const minutes = timeRangeMinutes(value);
         const onPart = (part: 'start' | 'end') => (t: string) => {
-          const d = t.replace(/[^\d]/g, '').slice(0, 4);
-          onSet({ ...v, [part]: d.length > 2 ? `${d.slice(0, 2)}:${d.slice(2)}` : d });
+          onSet({ ...parseTimeRange(value), [part]: t });
         };
         return (
           <View className="gap-1.5">
             <View className="flex-row items-center gap-2">
               <View className="flex-1">
-                <Input value={v.start ?? ''} onChangeText={onPart('start')} keyboardType="numeric" placeholder="시작 HHMM" />
+                <TimeInput value={v.start ?? ''} onCommit={onPart('start')} placeholder="시작 HHMM" />
               </View>
               <Text className="text-[13px] text-cd-faint">~</Text>
               <View className="flex-1">
-                <Input value={v.end ?? ''} onChangeText={onPart('end')} keyboardType="numeric" placeholder="종료 HHMM" />
+                <TimeInput value={v.end ?? ''} onCommit={onPart('end')} placeholder="종료 HHMM" />
               </View>
             </View>
             {minutes != null ? (
@@ -319,7 +369,7 @@ export function FormField({ field: f, value, onSet, onFill, linkedFacilityId, al
             onPress={() => setSheet('period')}
             className="min-h-[46px] flex-row items-center justify-between rounded-xl border border-cd-border bg-cd-card px-3 active:opacity-70">
             <Text className={`text-[14px] ${from ? 'text-cd-text' : 'text-cd-faint'}`}>
-              {from ? `${from} ~ ${to || from}` : '기간 선택'}
+              {from ? `${from} ~ ${to || from}` : periodAutoDays != null ? '시작일 선택' : '기간 선택'}
             </Text>
             <Ionicons name="calendar-outline" size={17} color={c.faint} />
           </Pressable>
@@ -468,7 +518,10 @@ export function FormField({ field: f, value, onSet, onFill, linkedFacilityId, al
       />
       <DatePickerSheet
         visible={sheet === 'period'}
-        mode="range"
+        // 규정상 일수가 정해진 휴가(경조·반차 등)는 종료일을 고를 수 없다 — 시작일만 받고
+        // autoDays 로 종료일을 계산해 시트 안에서도 실제 기간을 보여 준다.
+        mode={periodAutoDays != null ? 'single' : 'range'}
+        autoDays={periodAutoDays ?? undefined}
         title={`${f.label} 선택`}
         value={str(rec(value).from) || null}
         valueTo={str(rec(value).to) || null}
@@ -561,8 +614,11 @@ function LeaveTypeField({
         <Ionicons name="chevron-down" size={16} color={c.faint} />
       </Pressable>
       <Sheet visible={open} onClose={onClose} title="휴가 종류">
-        <View className="gap-1 pb-2">
-          {types.map((t) => (
+        {/* 종류가 시트 최대 높이(85%)를 넘으면 잘리므로 스크롤 영역으로 감싼다(2026-08-10 사용자 리포트).
+            flexShrink 1 — Sheet 의 shrink 컨테이너 안에서 기기 높이에 맞게 줄어들며 스크롤. */}
+        <ScrollView style={{ maxHeight: 480, flexShrink: 1 }}>
+          <View className="gap-1 pb-2">
+            {types.map((t) => (
             <Pressable
               key={t.key}
               onPress={() => {
@@ -575,14 +631,20 @@ function LeaveTypeField({
               <Text className={`flex-1 text-[15px] ${t.key === str(value) ? 'font-extrabold text-cd-primary' : 'text-cd-text'}`}>
                 {t.label}
               </Text>
-              {t.deduct ? (
-                <Badge label={t.deduct === 'half' ? '0.5일 차감' : `${t.days ?? 1}일 차감`} tone="neutral" />
+              {/* 웹 렌더러와 동일 표기 — 경조사류(부여 N일)가 "차감 없음"으로만 보이던 것 정정. */}
+              {t.deduct === 'full' ? (
+                <Badge label="연차 차감" tone="neutral" />
+              ) : t.deduct === 'half' ? (
+                <Badge label="0.5일 차감" tone="neutral" />
+              ) : t.days != null ? (
+                <Badge label={`부여 ${t.days}일`} tone="success" />
               ) : (
                 <Badge label="차감 없음" tone="success" />
               )}
             </Pressable>
-          ))}
-        </View>
+            ))}
+          </View>
+        </ScrollView>
       </Sheet>
     </>
   );

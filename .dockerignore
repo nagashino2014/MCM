@@ -1,4 +1,7 @@
 **/node_modules
+# 모바일 앱 웹 데모(Expo 정적 export) — 에셋 경로에 node_modules 가 들어 있어 재포함 필요
+!frontend/public/m-app/assets/node_modules
+!frontend/public/m-app/assets/node_modules/**
 **/.next
 **/.next-*
 **/dist

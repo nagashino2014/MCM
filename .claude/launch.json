@@ -29,6 +29,16 @@
       }
     },
     {
+      "name": "mobile-web-alt",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["expo", "start", "--web", "--port", "8091"],
+      "cwd": "apps/mobile",
+      "port": 8091,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "http://localhost:8082"
+      }
+    },
+    {
       "name": "mobile-api-proxy",
       "runtimeExecutable": "node",
       "runtimeArgs": ["scripts/dev-api-proxy.mjs"],

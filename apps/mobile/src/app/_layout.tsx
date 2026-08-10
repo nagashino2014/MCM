@@ -9,6 +9,7 @@ import { LockGate } from '@/components/LockGate';
 import { ToastProvider } from '@/components/ui';
 import { AuthProvider, useAuth } from '@/lib/auth-context';
 import { usePushSetup } from '@/lib/use-push';
+import { useWidgetBridge } from '@/lib/use-widget-bridge';
 import { ThemeProvider } from '@/theme/ThemeProvider';
 import { useTheme } from '@/theme/useTheme';
 
@@ -37,6 +38,8 @@ function RootNavigator() {
   const router = useRouter();
 
   usePushSetup();
+  // 데스크탑 위젯 셸에 미읽음·새 메시지를 알린다(웹 + 위젯 안에서만 동작).
+  useWidgetBridge(status === 'authed');
 
   useEffect(() => {
     if (status === 'loading') return;
@@ -65,6 +68,8 @@ function RootNavigator() {
     headerTitleStyle: { color: c.text, fontWeight: '800' as const },
     headerTintColor: c.text,
     headerShadowVisible: false,
+    // 뒤로가기에 이전 라우트명("(tabs)", "leave")이 붙는 iOS 기본 동작 제거 — 셰브론만.
+    headerBackButtonDisplayMode: 'minimal' as const,
   };
 
   return (
@@ -88,6 +93,8 @@ function RootNavigator() {
         <Stack.Screen name="approval/[docId]" options={{ ...header, title: '결재 문서' }} />
         {/* 기안은 자체 헤더(양식명)를 그린다 */}
         <Stack.Screen name="approval/draft" />
+        {/* 대화방은 방이름을 담은 자체 헤더를 그린다 */}
+        <Stack.Screen name="chat/[roomId]" />
         <Stack.Screen name="mail/[messageId]" options={{ ...header, title: '메일' }} />
         <Stack.Screen name="mail/compose" options={{ ...header, title: '메일 쓰기' }} />
         {/* 근태·휴가는 연차 게이지·주 초과근무를 담은 자체 헤더를 그린다 */}

@@ -10,6 +10,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BrandMark } from "@/components/cdash/BrandMark";
 import { MENU_ITEMS, isMenuVisibleForRole, type MenuItem, type Role } from "@/config/menu";
 import type { NavBadges } from "@/components/layout/useNavBadges";
 
@@ -91,14 +92,12 @@ export function Sidebar({ role, badges, mode = "auto", onNavigate }: SidebarProp
         boxShadow: "var(--cd-shadow)",
       }}
     >
-      {/* 브랜드 — 그라데이션 로고 사각형 + MCM */}
+      {/* 브랜드 — 심볼(확정안 5a) + MCM/GROUPWARE 로크업 */}
       <Link href="/home" onClick={onNavigate} className={cn("mb-[18px] flex items-center gap-2.5", isDrawer ? "px-2.5" : "px-1 2xl:px-2.5 justify-center 2xl:justify-start")}>
-        <span className="w-7 h-7 rounded-[9px] flex items-center justify-center text-[12px] font-extrabold text-white shrink-0 cd-grad-fill">
-          M
-        </span>
-        <span className={cn("items-baseline gap-1.5", labelCls, isDrawer ? "flex" : "hidden 2xl:flex")}>
-          <span className="text-[16px] font-extrabold tracking-tight cd-text">MCM</span>
-          <span className="text-[9.5px] font-semibold cd-text-faint">GROUPWARE</span>
+        <BrandMark className="w-[30px] h-[30px] shrink-0" />
+        <span className={cn("flex-col leading-none", labelCls, isDrawer ? "flex" : "hidden 2xl:flex")}>
+          <span className="text-[15px] font-extrabold tracking-[-0.02em] cd-text">MCM</span>
+          <span className="mt-[3px] text-[7.5px] font-semibold tracking-[0.25em] cd-text-faint">GROUPWARE</span>
         </span>
       </Link>
 

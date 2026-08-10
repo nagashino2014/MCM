@@ -1,0 +1,19 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "MCM 위젯 기본 권한 — 셸(창·트레이·자동시작·알림)만 사용한다.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "autostart:default",
+    "window-state:default",
+    "notification:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-set-always-on-top",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-hide",
+    "core:window:allow-is-visible",
+    "core:window:allow-is-focused"
+  ]
+}

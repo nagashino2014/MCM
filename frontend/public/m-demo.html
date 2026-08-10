@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MCM 모바일 앱 데모</title>
+<link rel="icon" href="/m-app/favicon.ico" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 20px; overflow: hidden;
+    background: radial-gradient(1200px 800px at 70% -10%, #1e2a4a 0%, #0f1524 45%, #0a0e18 100%);
+    font-family: "Plus Jakarta Sans", Pretendard, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
+  }
+  .title { color: #e7ecf6; font-size: 18px; font-weight: 700; letter-spacing: .2px; }
+  .title small { display: block; margin-top: 4px; text-align: center; color: #8b96ad; font-size: 12px; font-weight: 500; }
+  /* 폰 목업: 390x844 화면 + 베젤. 뷰포트에 맞춰 JS 로 scale */
+  .stage { flex: 0 1 auto; display: flex; align-items: center; justify-content: center; }
+  .phone {
+    width: 410px; height: 878px; padding: 17px 10px;
+    border-radius: 54px;
+    background: linear-gradient(160deg, #3a4157 0%, #171c2b 60%);
+    box-shadow: 0 30px 80px rgba(0,0,0,.55), inset 0 1px 1px rgba(255,255,255,.18);
+    position: relative; transform-origin: center center;
+  }
+  .phone::after { /* 사이드 버튼 느낌 */
+    content: ""; position: absolute; right: -3px; top: 200px; width: 3px; height: 90px;
+    border-radius: 2px; background: #2b3247;
+  }
+  .screen {
+    width: 390px; height: 844px; border-radius: 40px; overflow: hidden;
+    background: #fff; position: relative;
+  }
+  .screen iframe { width: 100%; height: 100%; border: 0; display: block; }
+  .hint { color: #6d7891; font-size: 12px; }
+</style>
+</head>
+<body>
+  <div class="title">MCM 모바일 앱<small>웹 데모 — 실제 앱과 동일한 화면·데이터</small></div>
+  <div class="stage"><div class="phone" id="phone">
+    <div class="screen"><iframe src="/m-app" title="MCM 모바일 앱" allow="clipboard-write"></iframe></div>
+  </div></div>
+  <div class="hint">마우스로 클릭·스크롤해 조작할 수 있습니다</div>
+<script>
+  // 화면 높이에 폰 목업이 다 들어가도록 축소(확대는 안 함)
+  function fit() {
+    var phone = document.getElementById("phone");
+    var avail = window.innerHeight - 140; // 타이틀·힌트·여백
+    var scale = Math.min(1, avail / 878, (window.innerWidth - 40) / 410);
+    phone.style.transform = "scale(" + scale + ")";
+    phone.parentElement.style.height = (878 * scale) + "px";
+    phone.parentElement.style.width = (410 * scale) + "px";
+  }
+  window.addEventListener("resize", fit); fit();
+</script>
+</body>
+</html>

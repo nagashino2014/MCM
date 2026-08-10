@@ -20,6 +20,8 @@ export interface DirectoryDepartment {
 
 export interface DirectoryPerson {
   employeeId: string;
+  /** 연결된 계정 user_id — 메신저 새 대화 등 계정 단위 기능용(계정 없는 직원은 null). */
+  userId: string | null;
   name: string;
   deptId: string | null;
   deptName: string | null;
@@ -44,7 +46,7 @@ export async function listDirectory(): Promise<{ departments: DirectoryDepartmen
   );
   const peopleRows = rowsToObjects(
     await db.exec(
-      `SELECT e.employee_id, e.name, e.dept_id, d.dept_name, p.position_name, p.rank_order,
+      `SELECT e.employee_id, e.user_id, e.name, e.dept_id, d.dept_name, p.position_name, p.rank_order,
               e.mobile_phone, e.company_phone, e.photo_public_path, e.hired_at, e.job_duties,
               mb.address AS company_email, u.email_local
          FROM employee_profiles e
@@ -67,6 +69,7 @@ export async function listDirectory(): Promise<{ departments: DirectoryDepartmen
     })),
     people: peopleRows.map((r) => ({
       employeeId: String(r.employee_id),
+      userId: r.user_id != null ? String(r.user_id) : null,
       name: String(r.name),
       deptId: r.dept_id != null ? String(r.dept_id) : null,
       deptName: r.dept_name != null ? String(r.dept_name) : null,

@@ -6,6 +6,8 @@ node_modules/
 # Expo
 .expo/
 dist/
+# 위젯·웹 데모용 정적 export 임시 출력(배포본은 frontend/public/m-app 으로 복사해 커밋한다)
+dist-web/
 web-build/
 expo-env.d.ts
 

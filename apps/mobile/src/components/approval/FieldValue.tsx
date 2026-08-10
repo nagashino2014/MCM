@@ -2,6 +2,7 @@ import { Text, View } from 'react-native';
 
 import { HtmlView } from '@/components/ui';
 import { timeRangeText } from '@/lib/approval/form-types';
+import { useApi } from '@/lib/use-api';
 
 /**
  * 결재 양식 필드의 **읽기 전용** 렌더(웹 ApprovalFormRenderer 의 readOnly 대응).
@@ -73,6 +74,13 @@ function plain(value: unknown, type: string): string {
 }
 
 export function FieldValue({ field, value }: { field: FieldDef; value: unknown }) {
+  // 휴가 종류 카탈로그 — 값이 key("half_am")로 저장되므로 라벨("반차(오전)")로 바꿔 보여준다
+  // (작성 화면 LeaveTypeField 와 동일 소스·캐시. 훅 규칙상 early return 앞에서 호출).
+  const leaveTypes = useApi<{ types: { key: string; label: string }[] }>(
+    '/api/approval/leave-types',
+    { cache: true, skip: field.type !== 'leave_type' }
+  );
+
   // 안내문은 라벨 없이 본문만.
   if (field.type === 'static') {
     return (
@@ -88,7 +96,8 @@ export function FieldValue({ field, value }: { field: FieldDef; value: unknown }
       <View className="gap-1">
         <Text className="text-[12px] font-bold text-cd-faint">{field.label}</Text>
         {html.trim() ? (
-          <View className="overflow-hidden rounded-xl border border-cd-border">
+          // HtmlView 문서 CSS 가 body padding 0 이라 박스 쪽에서 여백을 준다(글자 밀착 방지).
+          <View className="overflow-hidden rounded-xl border border-cd-border px-3 py-2">
             <HtmlView html={html} />
           </View>
         ) : (
@@ -129,7 +138,11 @@ export function FieldValue({ field, value }: { field: FieldDef; value: unknown }
     );
   }
 
-  const text = plain(value, field.type);
+  let text = plain(value, field.type);
+  if (field.type === 'leave_type' && typeof value === 'string' && value) {
+    const t = leaveTypes.data?.types?.find((x) => x.key === value || x.label === value);
+    if (t) text = t.label;
+  }
   return (
     <View className="gap-0.5">
       <Text className="text-[12px] font-bold text-cd-faint">{field.label}</Text>

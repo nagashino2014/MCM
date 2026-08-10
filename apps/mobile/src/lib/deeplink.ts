@@ -19,6 +19,10 @@ export function routeForLink(link: string | null | undefined): Href | null {
     return docId ? { pathname: "/approval/[docId]", params: { docId } } : "/(tabs)/approval";
   }
 
+  // 메신저 — 새 메시지 푸시는 /chat/{roomId} 로 온다(MSG-P1).
+  const chat = /^\/chat\/(\d+)$/.exec(path);
+  if (chat) return { pathname: "/chat/[roomId]", params: { roomId: chat[1] } };
+
   // 메일 — 목록·뷰어는 M3.
   if (path.startsWith("/mail")) return "/(tabs)/mail";
 

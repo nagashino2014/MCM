@@ -54,6 +54,10 @@ export const edgeAuthConfig: NextAuthConfig = {
         path === "/api/mail/track" || // 수신 확인 픽셀(G2-10) — 외부 수신자가 호출
         path === "/api/health" ||
         path === "/manifest.webmanifest" || // PWA manifest 는 설치 시 비인증 fetch
+        path === "/m-app" ||
+        path.startsWith("/m-app/") || // 모바일 앱 웹 데모(Expo 정적 번들) — 정적 파일만 공개, 데이터는 API 인증이 가드
+        path === "/m-demo.html" || // 폰 프레임 시연 래퍼 페이지
+        path === "/privacy.html" || // 개인정보처리방침 — 스토어 심사·직원이 비인증 열람
         path.startsWith("/_next/") ||
         path.startsWith("/static/")
       ) {

@@ -1,5 +1,5 @@
 import { useId } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
@@ -13,15 +13,33 @@ import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 export const CTA_FROM = '#6b7cf6';
 export const CTA_TO = '#9b7ef2';
 
+/**
+ * 연한 변형 — 같은 그라데이션을 흰색과 섞은 톤.
+ * 목록 안에서 여러 번 반복되는 작은 버튼·타일은 원본 채도가 튀어서(2026-08-10 사용자 피드백) 이걸 쓴다.
+ */
+export const CTA_SOFT_FROM = '#8f9bf8';
+export const CTA_SOFT_TO = '#b39ef5';
+
 /** CTA 그라데이션 배경 채움 — 부모가 `overflow-hidden` + 라운드를 갖고 이걸 첫 자식으로 깐다. */
-export function CtaGradientFill() {
+export function CtaGradientFill({ soft }: { soft?: boolean } = {}) {
   const gid = `cta-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   return (
-    <Svg width="100%" height="100%" style={{ position: 'absolute' }}>
+    // ⚠ 크기 지정은 플랫폼별로 다르다 — 세 번의 실측 사고 끝의 결론:
+    //   ① props width/height="100%" + inset 없는 absolute = 네이티브에서 부모 "패딩 안쪽" 기준이라
+    //      패딩 있는 버튼(Button md)에서 쪼그라든 직사각형.
+    //   ② props 100% 와 style inset 병기 = 스타일 병합 충돌로 버튼 높이가 늘어나 화면 밖으로 잘림.
+    //   ③ inset 만 지정 = 네이티브는 stretch 되지만 웹에선 SVG 가 대체 요소라 고유 기본 크기(300×150)로 남음.
+    //   → 네이티브 = absoluteFill(inset 에서 크기 도출), 웹 = absoluteFill + width/height 100%(CSS 기준은 버튼 전체).
+    <Svg
+      style={
+        Platform.OS === 'web'
+          ? [StyleSheet.absoluteFill, { width: '100%', height: '100%' } as object]
+          : StyleSheet.absoluteFill
+      }>
       <Defs>
         <LinearGradient id={gid} x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0" stopColor={CTA_FROM} />
-          <Stop offset="1" stopColor={CTA_TO} />
+          <Stop offset="0" stopColor={soft ? CTA_SOFT_FROM : CTA_FROM} />
+          <Stop offset="1" stopColor={soft ? CTA_SOFT_TO : CTA_TO} />
         </LinearGradient>
       </Defs>
       <Rect x={0} y={0} width="100%" height="100%" fill={`url(#${gid})`} />
@@ -42,19 +60,20 @@ export function GradientButton({
   loading?: boolean;
   disabled?: boolean;
 }) {
+  // 비활성 = 반투명 대신 불투명 감쇠색(Button 과 동일 규칙, 2026-08-10 사용자 피드백).
+  const dim = !!disabled && !loading;
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled || loading}
-      style={{ opacity: disabled ? 0.5 : 1 }}
-      className="h-[46px] items-center justify-center overflow-hidden rounded-[14px] active:opacity-70">
-      <CtaGradientFill />
+      className={`h-[46px] items-center justify-center overflow-hidden rounded-[14px] active:opacity-70 ${dim ? 'bg-cd-surface' : ''}`}>
+      {!dim ? <CtaGradientFill /> : null}
       {loading ? (
         <ActivityIndicator color="#FFFFFF" />
       ) : (
         <View className="flex-row items-center gap-[7px]">
-          {icon ? <Ionicons name={icon} size={17} color="#FFFFFF" /> : null}
-          <Text className="text-[14px] font-bold text-white">{label}</Text>
+          {icon ? <Ionicons name={icon} size={17} color={dim ? '#9aa0b8' : '#FFFFFF'} /> : null}
+          <Text className={`text-[14px] font-bold ${dim ? 'text-cd-faint' : 'text-white'}`}>{label}</Text>
         </View>
       )}
     </Pressable>
@@ -67,19 +86,22 @@ export function GradientIconButton({
   onPress,
   diameter = 36,
   iconSize,
+  soft,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   onPress?: () => void;
   diameter?: number;
   iconSize?: number;
+  /** 목록에서 반복되는 버튼용 연한 톤. */
+  soft?: boolean;
 }) {
   return (
     <Pressable
       onPress={onPress}
-      hitSlop={6}
+      hitSlop={8}
       style={{ width: diameter, height: diameter }}
       className="items-center justify-center overflow-hidden rounded-full active:opacity-60">
-      <CtaGradientFill />
+      <CtaGradientFill soft={soft} />
       <Ionicons name={icon} size={iconSize ?? Math.round(diameter * 0.46)} color="#FFFFFF" />
     </Pressable>
   );

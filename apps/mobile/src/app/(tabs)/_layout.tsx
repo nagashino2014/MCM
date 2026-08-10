@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Text, View } from 'react-native';
+import { Platform, Text, View } from 'react-native';
 
 import { useTheme } from '@/theme/useTheme';
 import { useNavBadges } from '@/lib/use-nav-badges';
@@ -22,6 +22,9 @@ function TabBadge({ count }: { count?: number | null }) {
   );
 }
 
+/** 데스크탑 위젯·웹 데모 여부 — 탭 바를 좌측 세로 바로 바꾸는 기준. */
+const IS_WEB = Platform.OS === 'web';
+
 export default function TabsLayout() {
   const { c } = useTheme();
   const badges = useNavBadges();
@@ -31,7 +34,23 @@ export default function TabsLayout() {
       screenOptions={{
         tabBarActiveTintColor: c.primary,
         tabBarInactiveTintColor: c.faint,
-        tabBarStyle: { backgroundColor: c.card, borderTopColor: c.border },
+        // 데스크탑 위젯은 하단 탭 대신 **좌측 세로 바**(다우 메신저류 관례) — 폰 느낌을 덜고
+        // 넓은 창에서 세로 공간을 콘텐츠에 넘긴다. 네이티브(폰)는 하단 탭 그대로.
+        tabBarPosition: IS_WEB ? 'left' : 'bottom',
+        // ⚠ 좌측 배치에서 'below-icon' 라벨은 uikit 변형이 거부한다(런타임 throw → 화면 백지,
+        //   2026-08-10 실측). 좌측일 때만 material 변형으로 바꿔야 아이콘 아래 라벨이 허용된다.
+        tabBarVariant: IS_WEB ? 'material' : 'uikit',
+        tabBarLabelPosition: 'below-icon',
+        tabBarStyle: IS_WEB
+          ? {
+              backgroundColor: c.card,
+              borderRightColor: c.border,
+              borderRightWidth: 1,
+              borderTopWidth: 0,
+              width: 88,
+              paddingTop: 10,
+            }
+          : { backgroundColor: c.card, borderTopColor: c.border },
         tabBarLabelStyle: { fontSize: 10.5, fontWeight: '600' },
         headerStyle: { backgroundColor: c.card },
         headerTitleStyle: { color: c.text, fontWeight: '800' },
@@ -65,7 +84,10 @@ export default function TabsLayout() {
         options={{
           title: '대화',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="chatbubble-outline" color={color} size={size} />
+            <View>
+              <Ionicons name="chatbubble-outline" color={color} size={size} />
+              <TabBadge count={badges.chatUnread} />
+            </View>
           ),
         }}
       />
@@ -84,7 +106,8 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="more"
         options={{
-          title: '더보기',
+          title: '더보기', // 탭 라벨은 그대로, 화면 타이틀만 "전체 메뉴"(사용자 확정).
+          headerTitle: '전체 메뉴',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="ellipsis-horizontal" color={color} size={size} />
           ),

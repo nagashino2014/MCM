@@ -13,6 +13,22 @@ import { kvClearUserData, kvGet, kvSet } from "./kv";
 import { unregisterPush } from "./push";
 
 const USER_KEY = "auth.user";
+/** 자동 로그인 여부(기본 ON) — OFF 면 앱을 다시 켤 때 저장된 토큰을 버리고 로그인 화면으로 간다. */
+const AUTO_LOGIN_KEY = "auth.autoLogin";
+/** 마지막 로그인 아이디 — 로그인 화면 프리필(비밀번호는 저장하지 않는다). */
+const LAST_ID_KEY = "auth.lastIdentifier";
+
+export async function getAutoLogin(): Promise<boolean> {
+  const v = await kvGet<boolean>(AUTO_LOGIN_KEY);
+  return v?.value !== false; // 미설정 = ON
+}
+export async function setAutoLogin(on: boolean): Promise<void> {
+  await kvSet(AUTO_LOGIN_KEY, on);
+}
+export async function getLastIdentifier(): Promise<string> {
+  const v = await kvGet<string>(LAST_ID_KEY);
+  return v?.value ?? "";
+}
 
 export interface AuthUser {
   id: string;
@@ -27,7 +43,11 @@ type Status = "loading" | "authed" | "guest";
 interface AuthState {
   status: Status;
   user: AuthUser | null;
-  login: (identifier: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  login: (
+    identifier: string,
+    password: string,
+    opts?: { autoLogin?: boolean }
+  ) => Promise<{ ok: boolean; error?: string }>;
   logout: () => Promise<void>;
 }
 
@@ -63,6 +83,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setStatus("guest");
         return;
       }
+      // 자동 로그인 OFF: 저장된 토큰이 있어도 쓰지 않고 로그인 화면으로 보낸다.
+      if (!(await getAutoLogin())) {
+        await clearTokens();
+        setStatus("guest");
+        return;
+      }
       // ① 저장해 둔 사용자로 먼저 화면을 채운다(네트워크가 느리거나 없어도 이름이 보이게).
       const cached = await kvGet<AuthUser>(USER_KEY);
       if (cached?.value) setUser(cached.value);
@@ -80,7 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
-  const login = useCallback(async (identifier: string, password: string) => {
+  const login = useCallback(async (identifier: string, password: string, opts?: { autoLogin?: boolean }) => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/mobile/auth/login`, {
         method: "POST",
@@ -99,6 +125,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await saveTokens(d.accessToken, d.refreshToken);
       setUser(d.user);
       void kvSet(USER_KEY, d.user);
+      void kvSet(AUTO_LOGIN_KEY, opts?.autoLogin !== false);
+      void kvSet(LAST_ID_KEY, identifier);
       setStatus("authed");
       return { ok: true };
     } catch {

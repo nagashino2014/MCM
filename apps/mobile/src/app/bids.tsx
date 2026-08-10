@@ -60,6 +60,13 @@ const TYPE_LABEL: Record<string, string> = {
   bid_notice: '입찰공고',
 };
 
+/** 입찰 소스 3태그(동일 너비 필터) — 정렬 탭 아래 배치(사용자 확정 2026-08-10). */
+const SOURCE_TAGS: { key: string; label: string }[] = [
+  { key: 'bid_notice', label: '입찰 공고' },
+  { key: 'order_plan', label: '발주 계획' },
+  { key: 'prior_spec', label: '사전 규격' },
+];
+
 /** 지역권 키워드 — 서버 `lib/bid/bid-queries.ts` REGION_GROUPS 의 사본(구 서버 응답 폴백용). */
 const REGION_GROUPS: Record<string, string[]> = {
   수도권: ['서울', '경기', '인천'],
@@ -122,14 +129,19 @@ export default function BidsScreen() {
   const canEdit = user?.role === 'admin' || user?.role === 'editor';
   const params = useLocalSearchParams<{ filter?: string }>();
   const [tab, setTab] = useState<Tab>(params.filter === 'deadline' ? 'deadline' : 'recent');
+  const [types, setTypes] = useState<string[]>([]);
   const [cats, setCats] = useState<string[]>([]);
   const [regs, setRegs] = useState<string[]>([]);
+  /** 분류·지역 필터 드롭다운 — 필터 아이콘으로 접고 편다(기본 접힘). */
+  const [filterOpen, setFilterOpen] = useState(false);
   /** 펼쳐 둔 카드(noticeId) — 여러 건 동시에 펼칠 수 있다. */
   const [expanded, setExpanded] = useState<string[]>([]);
   /** 선택 모드 — 카드 탭이 펼침 대신 선택 토글이 된다. */
   const [selecting, setSelecting] = useState(false);
   const [picked, setPicked] = useState<string[]>([]);
-  const [confirm, setConfirm] = useState<null | 'picked' | 'all' | 'range'>(null);
+  const [confirm, setConfirm] = useState<null | 'picked' | 'all' | 'range' | 'one'>(null);
+  /** 개별 삭제 대상(카드 휴지통 버튼). */
+  const [confirmOne, setConfirmOne] = useState<string | null>(null);
   /** 일괄 삭제 방식 선택 시트 · 기간 지정 픽커 · 지정된 기간(공고일 기준). */
   const [bulkOpen, setBulkOpen] = useState(false);
   const [rangeOpen, setRangeOpen] = useState(false);
@@ -139,6 +151,7 @@ export default function BidsScreen() {
   const qs = [
     'limit=60',
     tab === 'deadline' ? 'filter=deadline' : tab === 'posted' ? 'sort=posted' : '',
+    types.length ? `types=${encodeURIComponent(types.join(','))}` : '',
     cats.length ? `categories=${encodeURIComponent(cats.join(','))}` : '',
     regs.length ? `regions=${encodeURIComponent(regs.join(','))}` : '',
   ]
@@ -155,10 +168,11 @@ export default function BidsScreen() {
     () =>
       raw.filter(
         (b) =>
+          (!types.length || types.includes(b.bidType)) &&
           (!cats.length || (b.categoryName != null && cats.includes(b.categoryName))) &&
           (!regs.length || regs.includes(regionOf(b) ?? ''))
       ),
-    [raw, cats, regs]
+    [raw, types, cats, regs]
   );
   const today = list.data?.today ?? new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
   const loading = list.loading && !list.data;
@@ -201,16 +215,19 @@ export default function BidsScreen() {
     setDeleting(true);
     try {
       const body =
-        confirm === 'picked'
-          ? { noticeIds: picked }
-          : {
-              all: true,
-              filter: tab === 'deadline' ? 'deadline' : undefined,
-              categories: cats.length ? cats : undefined,
-              regions: regs.length ? regs : undefined,
-              // 기간별 삭제 — 공고일 기준(공고일이 없는 건은 매칭일로 판정, 서버 규칙).
-              ...(confirm === 'range' && range ? { postedFrom: range.from, postedTo: range.to } : {}),
-            };
+        confirm === 'one'
+          ? { noticeIds: confirmOne ? [confirmOne] : [] }
+          : confirm === 'picked'
+            ? { noticeIds: picked }
+            : {
+                all: true,
+                filter: tab === 'deadline' ? 'deadline' : undefined,
+                types: types.length ? types : undefined,
+                categories: cats.length ? cats : undefined,
+                regions: regs.length ? regs : undefined,
+                // 기간별 삭제 — 공고일 기준(공고일이 없는 건은 매칭일로 판정, 서버 규칙).
+                ...(confirm === 'range' && range ? { postedFrom: range.from, postedTo: range.to } : {}),
+              };
       const res = await apiJson<{ deleted: number }>('/api/sales/bids/matches', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
@@ -333,6 +350,18 @@ export default function BidsScreen() {
             </Text>
             {!selecting ? (
               <>
+                {canEdit ? (
+                  // 개별 삭제(사용자 확정 2026-08-10) — 확인 시트를 거쳐 하드 삭제.
+                  <Pressable
+                    onPress={() => {
+                      setConfirmOne(b.noticeId);
+                      setConfirm('one');
+                    }}
+                    hitSlop={8}
+                    className="mr-2 active:opacity-60">
+                    <Ionicons name="trash-outline" size={15} color={c.faint} />
+                  </Pressable>
+                ) : null}
                 <Text className="text-[11px] font-bold" style={{ color: c.primary }}>
                   {isOpen ? '접기' : '상세 보기'}
                 </Text>
@@ -370,42 +399,100 @@ export default function BidsScreen() {
       );
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, loading, list.error, tab, today, c, expanded, selecting, picked, cats.length, regs.length, catTintMap]);
+  }, [items, loading, list.error, tab, today, c, expanded, selecting, picked, canEdit, cats.length, regs.length, catTintMap]);
 
   return (
     <View className="flex-1">
       <Screen scroll padded={false} refreshing={list.refreshing} onRefresh={list.reload}>
         <SegmentedTabs items={SEGMENTS} value={tab} onChange={setTab} />
 
-        {/* 필터 칩 — 용역 구분·지역권(다중 선택, 서버 필터) + 우측 끝 선택 모드 토글 */}
         <View className="gap-1.5 px-4 pt-1">
-          {catOptions.length ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-              {catOptions.map((x) => (
-                <FilterChip
-                  key={x}
-                  label={x}
-                  on={cats.includes(x)}
-                  tint={tintOf(x)}
-                  onPress={() => setCats((p) => toggleIn(p, x))}
-                />
-              ))}
-            </ScrollView>
-          ) : null}
+          {/* 입찰 소스 3태그(동일 너비) + 우측 끝 필터 토글(분류·지역 드롭다운) */}
           <View className="flex-row items-center gap-1.5">
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }} className="flex-1">
-              {regionOptions.map((x) => (
-                <FilterChip key={x} label={x} on={regs.includes(x)} onPress={() => setRegs((p) => toggleIn(p, x))} />
-              ))}
-            </ScrollView>
-            {canEdit && items.length ? (
+            {SOURCE_TAGS.map((t) => {
+              const on = types.includes(t.key);
+              return (
+                <Pressable
+                  key={t.key}
+                  onPress={() => setTypes((p) => toggleIn(p, t.key))}
+                  className="flex-1 items-center rounded-full py-[7px] active:opacity-70"
+                  style={{
+                    backgroundColor: on ? '#e3e6fb' : 'transparent',
+                    borderWidth: on ? 0 : 1,
+                    borderColor: '#e3e6ef',
+                  }}>
+                  <Text
+                    className={`text-[11.5px] ${on ? 'font-bold' : 'font-semibold'}`}
+                    style={{ color: on ? '#4353e4' : '#9aa0b8' }}>
+                    {t.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+            <Pressable
+              onPress={() => setFilterOpen((v) => !v)}
+              hitSlop={8}
+              className="h-[30px] w-[30px] items-center justify-center rounded-full border active:opacity-60"
+              style={{
+                borderColor: filterOpen || cats.length || regs.length ? '#6b7cf6' : '#e3e6ef',
+                backgroundColor: filterOpen ? '#e3e6fb' : 'transparent',
+              }}>
+              <Ionicons
+                name="options-outline"
+                size={16}
+                color={filterOpen || cats.length || regs.length ? '#4353e4' : c.faint}
+              />
+              {cats.length || regs.length ? (
+                <View className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-cd-primary" />
+              ) : null}
+            </Pressable>
+          </View>
+
+          {/* 드롭다운 — 용역 분류·지역권 칩(다중 선택, 서버 필터). 지역은 "권"을 뗀 2글자 표기. */}
+          {filterOpen ? (
+            <>
+              {catOptions.length ? (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                  {catOptions.map((x) => (
+                    <FilterChip
+                      key={x}
+                      label={x}
+                      on={cats.includes(x)}
+                      tint={tintOf(x)}
+                      onPress={() => setCats((p) => toggleIn(p, x))}
+                    />
+                  ))}
+                </ScrollView>
+              ) : null}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                {regionOptions.map((x) => (
+                  <FilterChip
+                    key={x}
+                    label={x.replace(/권$/, '')}
+                    on={regs.includes(x)}
+                    onPress={() => setRegs((p) => toggleIn(p, x))}
+                  />
+                ))}
+              </ScrollView>
+            </>
+          ) : null}
+
+          {/* 선택 모드·일괄 삭제 진입(편집 권한) — 필터 버튼과 붙으면 오조작이 나서 여백을 둔다. */}
+          {canEdit && items.length ? (
+            <View className="mt-2 flex-row items-center justify-end gap-4 pb-0.5">
               <Pressable onPress={() => (selecting ? exitSelect() : setSelecting(true))} hitSlop={8} className="active:opacity-60">
                 <Text className="text-[12px] font-bold" style={{ color: selecting ? c.faint : '#6b7cf6' }}>
                   {selecting ? '취소' : '선택'}
                 </Text>
               </Pressable>
-            ) : null}
-          </View>
+              {!selecting ? (
+                <Pressable onPress={() => setBulkOpen(true)} hitSlop={8} className="flex-row items-center gap-1 active:opacity-60">
+                  <Ionicons name="trash-outline" size={13} color={c.error} />
+                  <Text className="text-[12px] font-bold text-cd-error">일괄 삭제</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
         </View>
 
         <View className="gap-3 p-4 pt-2">{body}</View>
@@ -419,11 +506,12 @@ export default function BidsScreen() {
               label={`선택 삭제${picked.length ? ` (${picked.length})` : ''}`}
               variant="danger"
               disabled={!picked.length}
+              full
               onPress={() => setConfirm('picked')}
             />
           </View>
           <View className="flex-1">
-            <Button label="기간·전체 삭제" variant="ghost" onPress={() => setBulkOpen(true)} />
+            <Button label="기간·전체 삭제" variant="ghost" full onPress={() => setBulkOpen(true)} />
           </View>
         </ActionBar>
       ) : null}
@@ -471,17 +559,19 @@ export default function BidsScreen() {
         danger
         loading={deleting}
         title={
-          confirm === 'picked'
-            ? `${picked.length}건을 삭제합니다`
-            : confirm === 'range'
-              ? `${range?.from ?? ''} ~ ${range?.to ?? ''} 공고를 삭제합니다`
-              : '현재 조건의 공고를 모두 삭제합니다'
+          confirm === 'one'
+            ? '이 공고를 삭제합니다'
+            : confirm === 'picked'
+              ? `${picked.length}건을 삭제합니다`
+              : confirm === 'range'
+                ? `${range?.from ?? ''} ~ ${range?.to ?? ''} 공고를 삭제합니다`
+                : '현재 조건의 공고를 모두 삭제합니다'
         }
         message={
           (confirm === 'all'
-            ? `정렬·필터에 해당하는 매칭 알림 전체가 대상입니다(화면에 ${items.length}건 표시 중). `
+            ? `정렬·필터(소스 태그 포함)에 해당하는 매칭 알림 전체가 대상입니다(화면에 ${items.length}건 표시 중). `
             : confirm === 'range'
-              ? '지정한 기간의 공고가 대상이며, 켜 둔 용역 구분·지역권 필터도 함께 적용됩니다. '
+              ? '지정한 기간의 공고가 대상이며, 켜 둔 소스·용역 구분·지역권 필터도 함께 적용됩니다. '
               : '') + '삭제하면 되돌릴 수 없으며, 웹의 알림 이력에서도 함께 사라집니다.'
         }
         confirmLabel="삭제"

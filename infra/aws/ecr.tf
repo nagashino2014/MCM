@@ -45,9 +45,10 @@ resource "aws_ecr_repository" "worker" {
 
 resource "aws_ecr_lifecycle_policy" "keep_last_10" {
   for_each = {
-    next    = aws_ecr_repository.next.name
-    backend = aws_ecr_repository.backend.name
-    worker  = aws_ecr_repository.worker.name
+    next      = aws_ecr_repository.next.name
+    backend   = aws_ecr_repository.backend.name
+    worker    = aws_ecr_repository.worker.name
+    converter = aws_ecr_repository.converter.name
   }
 
   repository = each.value

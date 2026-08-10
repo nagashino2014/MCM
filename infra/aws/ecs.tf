@@ -136,6 +136,8 @@ resource "aws_ecs_task_definition" "next" {
         { name = "MCM_JOB_QUEUE_URL", value = aws_sqs_queue.jobs.url },
         { name = "MCM_JOB_QUEUE_MODE", value = "sqs" },
         { name = "MCM_EXTRACTION_BACKEND_URL", value = "http://backend.local:8001" },
+        # 전자결재 첨부 미리보기 — 오피스·hwpx 를 PDF 로 변환하는 경량 서비스(converter-service.tf)
+        { name = "MCM_CONVERTER_URL", value = "http://converter.local:8080" },
         { name = "PGHOST", value = aws_rds_cluster.main.endpoint },
         { name = "PGPORT", value = "5432" },
         { name = "PGDATABASE", value = var.db_name },

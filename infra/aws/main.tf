@@ -164,6 +164,14 @@ resource "aws_security_group" "ecs" {
     self      = true
   }
 
+  # 문서 변환 서비스(converter.local:8080) — next 태스크가 첨부 미리보기용으로 호출한다.
+  ingress {
+    from_port = 8080
+    to_port   = 8080
+    protocol  = "tcp"
+    self      = true
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -190,19 +198,19 @@ resource "aws_security_group" "db" {
 }
 
 resource "aws_rds_cluster" "main" {
-  cluster_identifier     = local.name
-  engine                 = "aurora-postgresql"
-  engine_mode            = "provisioned"
-  database_name          = var.db_name
-  master_username        = var.db_username
+  cluster_identifier          = local.name
+  engine                      = "aurora-postgresql"
+  engine_mode                 = "provisioned"
+  database_name               = var.db_name
+  master_username             = var.db_username
   manage_master_user_password = true
-  db_subnet_group_name   = aws_db_subnet_group.main.name
-  vpc_security_group_ids = [aws_security_group.db.id]
-  backup_retention_period = 7
-  storage_encrypted      = true
-  skip_final_snapshot    = false
+  db_subnet_group_name        = aws_db_subnet_group.main.name
+  vpc_security_group_ids      = [aws_security_group.db.id]
+  backup_retention_period     = 7
+  storage_encrypted           = true
+  skip_final_snapshot         = false
   # 공공입찰 등 수집 데이터가 본격 축적됨 — 실수로 인한 클러스터 삭제 방지(2026-07-16 콘솔 적용과 일치).
-  deletion_protection    = true
+  deletion_protection = true
   serverlessv2_scaling_configuration {
     # min 0 ACU = auto-pause. 커넥션이 없으면(=ECS 내려간 유휴 시간) 자동 일시정지되어
     # ACU 컴퓨트 과금이 0 이 된다. stop-db-cluster 의 7일 자동재시작 제약이 없다.
@@ -211,7 +219,7 @@ resource "aws_rds_cluster" "main" {
     max_capacity             = 4
     seconds_until_auto_pause = 300
   }
-  tags                   = local.tags
+  tags = local.tags
 }
 
 resource "aws_rds_cluster_instance" "main" {

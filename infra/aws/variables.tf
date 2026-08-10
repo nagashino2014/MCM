@@ -53,6 +53,12 @@ variable "container_image_worker" {
   default = "public.ecr.aws/docker/library/node:20-bookworm"
 }
 
+# 문서 변환 서비스(LibreOffice) — 전자결재 첨부 미리보기용.
+variable "container_image_converter" {
+  type    = string
+  default = "public.ecr.aws/docker/library/python:3.11-slim"
+}
+
 # ── 알림/AI 설정(전자결재·공공입찰 알림, AI 요약·사전검토) ──────────────
 # 발신 이메일 — SES 검증된 identity 여야 함(koensain.app 도메인 검증 완료).
 variable "notify_email_from" {

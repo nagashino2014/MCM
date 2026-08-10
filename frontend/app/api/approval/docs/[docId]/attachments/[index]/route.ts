@@ -75,21 +75,23 @@ function pdfResponse(pdf: Buffer, name: string, download: boolean): NextResponse
   });
 }
 
-/** 백엔드(FastAPI) LibreOffice 변환 호출 — 미설정·미설치는 503 으로 구분해 안내한다. */
+/**
+ * 문서 변환 서비스(converter) 호출 — LibreOffice 전용 경량 컨테이너.
+ * OCR 백엔드는 비용 절감으로 상시 가동하지 않으므로 변환은 별도 서비스로 분리돼 있다.
+ * 미설정·연결 실패는 503 으로 구분해 뷰어가 "내려받아 확인" 으로 안내하게 한다.
+ */
 async function convertToPdf(
   source: Buffer,
   name: string
 ): Promise<{ ok: true; pdf: Buffer } | { ok: false; error: string; status: number }> {
-  const backendUrl = (process.env.MCM_EXTRACTION_BACKEND_URL || process.env.MCM_BACKEND_URL || process.env.MCM_JOB_BACKEND_URL || "")
-    .trim()
-    .replace(/\/$/, "");
-  if (!backendUrl) {
+  const converterUrl = (process.env.MCM_CONVERTER_URL || "").trim().replace(/\/$/, "");
+  if (!converterUrl) {
     return { ok: false, error: "문서 변환 서버가 설정되지 않아 미리보기를 만들 수 없습니다. 내려받아 확인해 주세요.", status: 503 };
   }
   try {
     const form = new FormData();
     form.set("file", new Blob([new Uint8Array(source)], { type: attachmentContentType(name) }), name);
-    const res = await fetch(`${backendUrl}/convert/pdf`, { method: "POST", body: form });
+    const res = await fetch(`${converterUrl}/convert/pdf`, { method: "POST", body: form });
     if (!res.ok) {
       const detail = await res.json().catch(() => null);
       const message = (detail as { detail?: string } | null)?.detail ?? `변환 실패(HTTP ${res.status})`;

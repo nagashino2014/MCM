@@ -99,7 +99,36 @@ interface SourceQuote {
 }
 
 const won = (n: number | null | undefined) => (n == null ? "—" : `${Math.round(n).toLocaleString("ko-KR")}원`);
-/** "26-08-11 07:55" — 목록의 작성/승인 일시 */
+/** 상태 배지 — 점 + 은은한 틴트(테두리 pill 보다 정돈된 표현) */
+function StatusPill({
+  kind,
+  children,
+  title,
+}: {
+  kind: "ok" | "bad" | "busy" | "idle";
+  children: React.ReactNode;
+  title?: string;
+}) {
+  const tone: Record<string, { bg: string; fg: string; dot: string }> = {
+    ok: { bg: "rgba(93,135,255,0.13)", fg: "var(--cd-primary)", dot: "var(--cd-primary)" },
+    bad: { bg: "rgba(250,137,107,0.15)", fg: "var(--cd-danger, #FA896B)", dot: "var(--cd-danger, #FA896B)" },
+    busy: { bg: "rgba(255,174,31,0.16)", fg: "#B7791F", dot: "#FFAE1F" },
+    idle: { bg: "rgba(120,130,160,0.12)", fg: "var(--cd-muted)", dot: "var(--cd-faint)" },
+  };
+  const t = tone[kind];
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap"
+      style={{ background: t.bg, color: t.fg }}
+      title={title}
+    >
+      <span className="rounded-full" style={{ width: 5, height: 5, background: t.dot }} />
+      {children}
+    </span>
+  );
+}
+
+/** "26-08-11 07:55" — 목록의 작성/발송 일시 */
 const shortDate = (iso: string | null | undefined) => {
   if (!iso) return "—";
   const m = /^(\d{2})(\d{2})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/.exec(iso);
@@ -135,6 +164,7 @@ export function AgreementBoard() {
   const [listLoading, setListLoading] = useState(true);
   const [listQ, setListQ] = useState("");
   const [sendBusy, setSendBusy] = useState<string | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState<string | null>(null);
 
   // ── 작성 상태 ──
   const [docId, setDocId] = useState<string | null>(editDocId);
@@ -615,6 +645,26 @@ export function AgreementBoard() {
     setMode("edit");
   };
 
+  /** 계약서 삭제 — 대장 + 전자결재 문서를 함께 지운다(테스트 발송분·폐기 건 정리). */
+  const removeAgreement = async (row: DocListRow) => {
+    const warn =
+      row.docStatus === "approved"
+        ? `"${row.title}"\n\n승인 완료된 계약서입니다. 전자결재 문서도 함께 삭제되며 되돌릴 수 없습니다. 계속할까요?`
+        : `"${row.title}"\n\n계약서와 전자결재 문서를 함께 삭제합니다. 계속할까요?`;
+    if (!window.confirm(warn)) return;
+    setDeleteBusy(row.docId);
+    try {
+      const res = await fetch(`/api/contracts/agreements/${encodeURIComponent(row.docId)}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { error?: string })?.error ?? "삭제 실패");
+      loadDocs();
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setDeleteBusy(null);
+    }
+  };
+
   // 수동 발송(승인 후) 다이얼로그 — 수신 담당자·첨부 구성을 확정해 발송(① 확정).
   const [sendTarget, setSendTarget] = useState<DocListRow | null>(null);
   const [sendRecipients, setSendRecipients] = useState<LetterRecipient[]>([]);
@@ -646,6 +696,7 @@ export function AgreementBoard() {
             deptName: r.deptName,
             title: r.title,
             email: r.email,
+            phone: r.phone,
             facilityName: r.facilityName,
             facilityId: r.facilityId,
           })),
@@ -684,7 +735,8 @@ export function AgreementBoard() {
             </div>
           }
         />
-        <div className="cd-card rounded-3xl p-5 flex flex-col gap-3 max-w-[1032px]">
+        {/* 목록은 표시 항목이 많아 메뉴 전체 폭을 쓴다(작성 화면만 1032px 지면 규칙 적용) */}
+        <div className="cd-card rounded-3xl p-5 flex flex-col gap-3 w-full">
           <div className="flex items-center gap-2">
             <div className="relative">
               <Search className="w-3.5 h-3.5 cd-text-faint absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -738,20 +790,25 @@ export function AgreementBoard() {
                         </td>
                         <td className="py-2.5 pr-3 text-right cd-text">{won(row.amountSupply)}</td>
                         <td className="py-2.5 pr-3 cd-text-faint">{row.drafterName ?? "—"}</td>
-                        <td className="py-2.5 pr-3 cd-text-faint whitespace-nowrap text-[11.5px]">
-                          {shortDate(row.createdAt)}
-                          {row.completedAt ? <span className="cd-text"> / {shortDate(row.completedAt)}</span> : ""}
+                        <td className="py-2.5 pr-3 whitespace-nowrap text-[11px] leading-[1.55]">
+                          <div className="cd-text-faint">작성 : {shortDate(row.createdAt)}</div>
+                          <div className={row.sentAt ? "cd-text" : "cd-text-faint"}>
+                            {row.sentAt ? `발송 : ${shortDate(row.sentAt)}` : row.completedAt ? `승인 : ${shortDate(row.completedAt)}` : "발송 : —"}
+                          </div>
                         </td>
                         <td className="py-2.5 pr-3">
-                          <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] border ${row.docStatus === "approved" ? "cd-tint-primary" : row.docStatus === "rejected" ? "text-[color:var(--cd-danger,#FA896B)] cd-border-c" : "cd-border-c cd-text-faint"}`}>
+                          <StatusPill kind={row.docStatus === "approved" ? "ok" : row.docStatus === "rejected" ? "bad" : row.docStatus === "in_progress" ? "busy" : "idle"}>
                             {DOC_STATUS_LABEL[row.docStatus] ?? row.docStatus}
-                          </span>
+                          </StatusPill>
                         </td>
                         <td className="py-2.5 pr-3">
                           {row.sendStatus ? (
-                            <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] border ${row.sendStatus === "sent" ? "cd-tint-primary" : row.sendStatus === "failed" ? "text-[color:var(--cd-danger,#FA896B)] cd-border-c" : "cd-border-c cd-text-faint"}`} title={row.sentAt ?? undefined}>
-                              {AGREEMENT_SEND_STATUS_LABEL[row.sendStatus]}
-                            </span>
+                            <StatusPill
+                              kind={row.sendStatus === "sent" ? "ok" : row.sendStatus === "failed" ? "bad" : row.sendStatus === "sending" ? "busy" : "idle"}
+                              title={row.sentAt ?? undefined}
+                            >
+                              {row.sendStatus === "approved" ? "발송 대기" : AGREEMENT_SEND_STATUS_LABEL[row.sendStatus]}
+                            </StatusPill>
                           ) : (
                             <span className="cd-text-faint text-[11px]">—</span>
                           )}
@@ -763,22 +820,39 @@ export function AgreementBoard() {
                             </a>
                           )}
                           {/* 승인 완료면 산출물이 아직 S3 에 없어도 온디맨드 렌더로 받을 수 있다
-                              (발송 전에는 pdfKey/hwpxKey 가 비어 있다 — 발송 시 생성·보관) */}
+                              (발송 전에는 pdfKey/hwpxKey 가 비어 있다 — 발송 시 생성·보관).
+                              아이콘은 전자결재 문서 뷰어와 동일 규격(HWPX 37px / PDF 32px — 종횡비 보정) */}
                           {(row.pdfKey || row.docStatus === "approved") && (
-                            <a className="cd-btn rounded-lg border cd-border-c px-2 py-1 text-[11px] inline-flex items-center gap-1 mr-1" href={`/api/contracts/agreements/${encodeURIComponent(row.docId)}/hwpx`} title="한글 원본 다운로드">
-                              HWPX
+                            <a className="inline-flex items-center justify-center align-middle mr-0.5" style={{ width: 37, height: 37 }} href={`/api/contracts/agreements/${encodeURIComponent(row.docId)}/hwpx`} title="HWPX 다운로드(한글 원본)">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src="/icons/hwpxico.png?v=4" alt="HWPX" style={{ width: 37, height: 37, objectFit: "contain" }} />
                             </a>
                           )}
                           {(row.pdfKey || row.docStatus === "approved") && (
-                            <a className="cd-btn rounded-lg border cd-border-c px-2 py-1 text-[11px] inline-flex items-center gap-1 mr-1" href={`/api/contracts/agreements/${encodeURIComponent(row.docId)}/pdf`} target="_blank" rel="noreferrer" title="PDF 열기">
-                              PDF
+                            <a className="inline-flex items-center justify-center align-middle mr-1" style={{ width: 32, height: 32 }} href={`/api/contracts/agreements/${encodeURIComponent(row.docId)}/pdf`} target="_blank" rel="noreferrer" title="PDF 열기">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src="/icons/pdfico.png" alt="PDF" style={{ width: 32, height: 32, objectFit: "contain" }} />
                             </a>
                           )}
                           {canSend && (
-                            <button type="button" className="cd-btn cd-btn-primary rounded-lg px-2 py-1 text-[11px] inline-flex items-center gap-1 disabled:opacity-50" disabled={sendBusy === row.docId} onClick={() => openSendDialog(row)}>
+                            <button type="button" className="cd-btn cd-btn-primary rounded-lg px-2.5 py-1.5 text-[11px] inline-flex items-center gap-1 disabled:opacity-50 align-middle" disabled={sendBusy === row.docId} onClick={() => openSendDialog(row)}>
                               <Send className="w-3 h-3" /> {sendBusy === row.docId ? "발송 중" : row.sendStatus === "failed" ? "재발송" : "발주처 발송"}
                             </button>
                           )}
+                          {row.sendStatus === "sent" && (
+                            <button type="button" className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] inline-flex items-center gap-1 align-middle" onClick={() => openSendDialog(row)} title="같은 계약서를 다시 발송합니다">
+                              <Send className="w-3 h-3" /> 재발송
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="cd-btn rounded-lg border cd-border-c px-2 py-1.5 text-[11px] inline-flex items-center align-middle ml-1 cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)] disabled:opacity-40"
+                            disabled={deleteBusy === row.docId}
+                            title="계약서 삭제(전자결재 문서도 함께 삭제)"
+                            onClick={() => removeAgreement(row)}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </td>
                       </tr>
                     );

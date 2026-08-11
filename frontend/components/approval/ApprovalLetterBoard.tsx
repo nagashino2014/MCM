@@ -263,7 +263,7 @@ export function RecipientPicker({
   const [items, setItems] = useState<ContactItem[]>([]);
   const [open, setOpen] = useState(false);
   const [manual, setManual] = useState(false);
-  const [draft, setDraft] = useState<LetterRecipient>({ name: "", deptName: "", title: "", email: "", facilityName: "" });
+  const [draft, setDraft] = useState<LetterRecipient>({ name: "", deptName: "", title: "", email: "", facilityName: "", phone: "" });
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -353,20 +353,25 @@ export function RecipientPicker({
           </div>
         )}
       </div>
+      {/* 직접 입력 — 2줄 배치. 한 줄에 5칸이면 각 칸이 좁아 입력값이 잘린다(2026-08-11 사용자 지적).
+          1줄: 업체·부서·성명·직함 / 2줄: 메일주소·연락처 + 추가 버튼 */}
       {manual && (
-        <div className="rounded-xl border border-dashed cd-border-c p-2.5 grid grid-cols-2 md:grid-cols-5 gap-1.5">
-          <input className="cd-input" placeholder="업체/기관명" value={draft.facilityName ?? ""} onChange={(e) => setDraft({ ...draft, facilityName: e.target.value })} />
-          <input className="cd-input" placeholder="부서" value={draft.deptName ?? ""} onChange={(e) => setDraft({ ...draft, deptName: e.target.value })} />
-          <input className="cd-input" placeholder="성명 *" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-          <input className="cd-input" placeholder="직함" value={draft.title ?? ""} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
+        <div className="rounded-xl border border-dashed cd-border-c p-2.5 flex flex-col gap-1.5">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5">
+            <input className="cd-input" placeholder="업체/기관명" value={draft.facilityName ?? ""} onChange={(e) => setDraft({ ...draft, facilityName: e.target.value })} />
+            <input className="cd-input" placeholder="부서" value={draft.deptName ?? ""} onChange={(e) => setDraft({ ...draft, deptName: e.target.value })} />
+            <input className="cd-input" placeholder="성명 *" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+            <input className="cd-input" placeholder="직함" value={draft.title ?? ""} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
+          </div>
           <div className="flex items-center gap-1.5">
             <input className="cd-input flex-1" placeholder="메일주소" value={draft.email ?? ""} onChange={(e) => setDraft({ ...draft, email: e.target.value })} />
+            <input className="cd-input flex-1" placeholder="연락처" value={draft.phone ?? ""} onChange={(e) => setDraft({ ...draft, phone: e.target.value })} />
             <button
               type="button"
-              className="cd-btn cd-btn-primary rounded-lg px-2.5 py-2 text-[11px] shrink-0"
+              className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-[11px] shrink-0"
               onClick={() => {
                 add(draft);
-                setDraft({ name: "", deptName: "", title: "", email: "", facilityName: "" });
+                setDraft({ name: "", deptName: "", title: "", email: "", facilityName: "", phone: "" });
                 setManual(false);
               }}
             >

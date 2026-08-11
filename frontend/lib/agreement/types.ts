@@ -99,6 +99,7 @@ export interface AgreementRecipient {
   deptName?: string;
   title?: string;
   email: string;
+  phone?: string;
   facilityName?: string;
   facilityId?: string;
 }

@@ -222,14 +222,14 @@ export function ApprovalDocViewer({
                 <button
                   type="button"
                   className="flex items-center justify-center shrink-0"
-                  style={{ width: 32, height: 32 }}
+                  style={{ width: 37, height: 37 }}
                   title="HWPX 다운로드(한글 원본)"
                   onClick={() => window.open(`/api/contracts/agreements/${encodeURIComponent(docId)}/hwpx`, "_blank")}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   {/* 세로로 긴 아이콘(내용 종횡비 0.65)이라 30px 박스에서는 폭이 좁아 작아 보인다 →
                       32px 박스에서 폭 20.8px 로 pdfico(20.7px)와 일치. ?v= 는 캐시 무효화. */}
-                  <img src="/icons/hwpxico.png?v=4" alt="HWPX" style={{ width: 32, height: 32, objectFit: "contain" }} />
+                  <img src="/icons/hwpxico.png?v=4" alt="HWPX" style={{ width: 37, height: 37, objectFit: "contain" }} />
                 </button>
               )}
               {/* PDF 출력 — 사업장 마스터 30px 아이콘 버튼 패턴(FacilityListPanel.tsx:304). 공문은 공문 지면으로 출력. */}

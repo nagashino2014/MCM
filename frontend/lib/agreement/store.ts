@@ -327,6 +327,13 @@ export async function finishAgreementSend(
   });
 }
 
+/** 대장 행 삭제 — 계약서 삭제(문서와 함께) 시. S3 산출물은 보존한다(감사 추적). */
+export async function deleteAgreement(docId: string): Promise<void> {
+  await withDbWrite(async (txn) => {
+    await txn.run(`DELETE FROM contract_agreements WHERE doc_id = $1`, [docId]);
+  });
+}
+
 export async function getAgreementByDocId(docId: string): Promise<AgreementRow | null> {
   const db = await getDb();
   const rows = rowsToObjects(await db.exec(`SELECT ${AGR_SELECT} WHERE a.doc_id = $1`, [docId]));

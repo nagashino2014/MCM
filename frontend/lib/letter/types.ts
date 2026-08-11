@@ -62,6 +62,7 @@ export interface LetterRecipient {
   deptName?: string;
   title?: string; // 직함
   email?: string;
+  phone?: string; // 연락처(직접 입력 시 — 발송 대상 식별 보조)
   facilityName?: string; // 참조자 소속 업체명(표기 보조)
   address?: string; // 수신처 소재지(내용증명형 자동 채움용)
   bizNo?: string; // 수신처 사업자번호

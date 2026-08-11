@@ -144,38 +144,57 @@ function setParaText(pXml: string, value: string): string {
  * 실측 셀은 값 문단 사이에 빈 문단(행간 여백)이 끼어 있으므로(예: 날인란 상호/[빈]/주소/[빈]/대표),
  * 빈 문단은 그대로 보존해야 원본 서식과 같아진다. 값이 텍스트 문단보다 많으면 마지막 텍스트
  * 문단을 복제해 덧붙이고, 적으면 남는 텍스트 문단을 비운다.
+ * paraPrId 를 주면 값 문단의 paraPr 참조를 통일한다(계약명·금액 셀의 left 여백 제거 —
+ * 2026-08-11 사용자 확정: 값 들여쓰기 없이 선행 1칸만).
  */
-function replaceCellParas(tcXml: string, lines: string[]): string {
+function replaceCellParas(tcXml: string, lines: string[], paraPrId?: string): string {
   const subM = /(<hp:subList\b[^>]*>)([\s\S]*?)(<\/hp:subList>)/.exec(tcXml);
   if (!subM) return tcXml;
   const paras = [...subM[2].matchAll(P_G_RE)].map((p) => p[0]);
   if (!paras.length) return tcXml;
   const textIdx = paras.map((p, i) => (/<hp:t>/.test(p) ? i : -1)).filter((i) => i >= 0);
   if (!textIdx.length) return tcXml;
+  const setPara = (pXml: string, value: string): string => {
+    let next = setParaText(pXml, value);
+    if (paraPrId) next = next.replace(/(<hp:p\b[^>]*paraPrIDRef=")\d+(")/, `$1${paraPrId}$2`);
+    return next;
+  };
   const texts = lines.length ? lines : [""];
   const out = [...paras];
   for (let k = 0; k < Math.min(texts.length, textIdx.length); k++) {
-    out[textIdx[k]] = setParaText(paras[textIdx[k]], texts[k]);
+    out[textIdx[k]] = setPara(paras[textIdx[k]], texts[k]);
   }
   for (let k = texts.length; k < textIdx.length; k++) {
-    out[textIdx[k]] = setParaText(paras[textIdx[k]], "");
+    out[textIdx[k]] = setPara(paras[textIdx[k]], "");
   }
   if (texts.length > textIdx.length) {
     const lastI = textIdx[textIdx.length - 1];
-    const extra = texts.slice(textIdx.length).map((t) => setParaText(paras[lastI], t)).join("");
+    const extra = texts.slice(textIdx.length).map((t) => setPara(paras[lastI], t)).join("");
     out[lastI] = out[lastI] + extra;
   }
   return tcXml.replace(subM[0], subM[1] + out.join("") + subM[3]);
 }
 
 /** 갑지 표에서 (colAddr,rowAddr) 셀을 찾아 교체 */
-function replaceTableCell(tblXml: string, col: number, row: number, lines: string[]): string {
+function replaceTableCell(tblXml: string, col: number, row: number, lines: string[], paraPrId?: string): string {
   const tcRe = /<hp:tc\b[\s\S]*?<\/hp:tc>/g;
   return tblXml.replace(tcRe, (tc) => {
     const addr = /colAddr="(\d+)" rowAddr="(\d+)"/.exec(tc);
     if (!addr || Number(addr[1]) !== col || Number(addr[2]) !== row) return tc;
-    return replaceCellParas(tc, lines);
+    return replaceCellParas(tc, lines, paraPrId);
   });
+}
+
+/** 갑지 표에서 (colAddr,rowAddr) 셀의 첫 텍스트 문단 paraPrIDRef 조회 — 값 문단 스타일 통일 기준 */
+function cellParaPrId(tblXml: string, col: number, row: number): string | null {
+  for (const tc of tblXml.match(/<hp:tc\b[\s\S]*?<\/hp:tc>/g) ?? []) {
+    const addr = /colAddr="(\d+)" rowAddr="(\d+)"/.exec(tc);
+    if (!addr || Number(addr[1]) !== col || Number(addr[2]) !== row) continue;
+    for (const p of tc.match(P_G_RE) ?? []) {
+      if (/<hp:t>/.test(p)) return attrOf(p, "hp:p", "paraPrIDRef");
+    }
+  }
+  return null;
 }
 
 function cellXml(
@@ -391,17 +410,19 @@ export async function renderAgreementHwpx(spec: AgreementSpec, fv: AgreementFiel
     const o = fv.orderer;
     // 복수 대표("이시창, 황문성")는 그대로, 단수는 실측 관례대로 벌려 쓴다("장 세 준")
     const ceoDisp = o.ceo ? (o.ceo.includes(",") ? o.ceo : spreadName(o.ceo)) : "";
-    // 값 앞 여백은 전 항목 1칸으로 통일(2026-08-11 사용자 확정 — 원본은 셀마다 0~2칸 제각각)
+    // 값 앞 여백은 전 항목 1칸으로 통일(2026-08-11 사용자 확정 — 원본은 셀마다 0~2칸 제각각).
+    // 값 문단 paraPr 도 발주자명 셀(4,1) 기준으로 통일 — 계약명·금액 셀의 left 여백(들여쓰기) 제거.
     const pad = (s: string) => (s && !s.startsWith(" ") ? ` ${s}` : s);
     let tbl = tblM[0];
+    const basePr = cellParaPrId(tbl, 4, 1) ?? undefined;
     tbl = replaceTableCell(tbl, 4, 1, [pad(o.name)]);
     tbl = replaceTableCell(tbl, 4, 2, [pad(COMPANY_KO)]); // 원본 선행 2칸 → 1칸 통일
     tbl = replaceTableCell(tbl, 4, 3, [pad(COMPANY_BIZ_NO)]);
-    tbl = replaceTableCell(tbl, 4, 4, [pad(fv.title)]);
-    tbl = replaceTableCell(tbl, 4, 5, [pad(String(values["amount.totalLine"]))]);
-    tbl = replaceTableCell(tbl, 4, 6, String(values["amount.supplyVatLines"]).split("\n").map(pad));
-    tbl = replaceTableCell(tbl, 4, 7, String(values["payment.summary"]).split("\n").map(pad));
-    tbl = replaceTableCell(tbl, 4, 8, [pad(fv.periodText)]);
+    tbl = replaceTableCell(tbl, 4, 4, [pad(fv.title)], basePr);
+    tbl = replaceTableCell(tbl, 4, 5, [pad(String(values["amount.totalLine"]))], basePr);
+    tbl = replaceTableCell(tbl, 4, 6, String(values["amount.supplyVatLines"]).split("\n").map(pad), basePr);
+    tbl = replaceTableCell(tbl, 4, 7, String(values["payment.summary"]).split("\n").map(pad), basePr);
+    tbl = replaceTableCell(tbl, 4, 8, [pad(fv.periodText)], basePr);
     // 체결문 셀은 실측이 [체결문]/[빈]/[날짜]/[빈]/[첨부] 구조 — 텍스트 문단 3개에 순서 배정
     tbl = replaceTableCell(tbl, 0, 9, String(values["cover.execText"]).split("\n").filter(Boolean).map(pad));
     // 날인란 — 주소 줄 수를 좌우 맞춰 "대표이사" 줄 높이 일치(빈 줄 보충). 셀 내폭 ≈ 175pt
@@ -426,8 +447,12 @@ export async function renderAgreementHwpx(spec: AgreementSpec, fv: AgreementFiel
       fv.hasClausePage && spec.clausePage && fv.clauses.length
         ? clauseSectionXml(st, spec, fv, values, { titlePageBreak: true, noneBorderFillId: noneFill?.id ?? null })
         : "";
-    // 표를 감싼 문단이 닫힌 직후 위치에 조문 삽입 — tail 의 첫 지점에 넣는다
-    xml = head + clausesXml + tail;
+    // ⚠ 갑지 표는 문단(hp:p > hp:run) 안에 있다 — 조문은 그 문단이 **닫힌 뒤**에 삽입해야 한다.
+    // 표 직후(run 내부)에 넣으면 문단 속 문단 중첩이 되어 한글은 관대하게 렌더하지만
+    // LibreOffice(converter)는 중첩 문단을 통째로 무시한다(실사고: PDF 에서 조문 전체 누락).
+    const wrapClose = tail.indexOf("</hp:p>");
+    const cut = wrapClose >= 0 ? wrapClose + "</hp:p>".length : 0;
+    xml = head + tail.slice(0, cut) + clausesXml + tail.slice(cut);
   } else {
     // ── ② 폴백 — 본문 전면 프로그램 생성(B형·비표준 custom) ──
     const paras = [...xml.matchAll(P_G_RE)].map((mm) => mm[0]);

@@ -49,6 +49,7 @@ export function AgreementTemplateBoard() {
   const [tpl, setTpl] = useState<AgreementTemplateRow | null>(null);
   const [name, setName] = useState("");
   const [clauses, setClauses] = useState<AgreementClause[]>([]);
+  const [clauseTab, setClauseTab] = useState(0);
   const [spec, setSpec] = useState<AgreementSpec | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -70,6 +71,7 @@ export function AgreementTemplateBoard() {
 
   const openEditor = async (serviceType: string, cell: StandardCell) => {
     setEditing({ serviceType, serviceSubtype: cell.serviceSubtype });
+    setClauseTab(0);
     setTpl(null);
     setName("");
     setClauses([]);
@@ -182,7 +184,7 @@ export function AgreementTemplateBoard() {
         <div className="cd-card rounded-3xl p-10 text-center text-sm cd-text-faint">불러오는 중...</div>
       ) : tab === "standard" ? (
         <div className="flex flex-col xl:flex-row gap-5 items-start">
-          <div className="flex-1 min-w-0 flex flex-col gap-3 w-full max-w-[760px]">
+          <div className={`flex-1 min-w-0 flex flex-col gap-3 w-full ${editing ? "xl:max-w-[420px]" : "max-w-[760px]"}`}>
             {/* 용역 대분류 탭 — 세로 스크롤 최소화(2026-08-11 사용자 요청) */}
             <div className="inline-flex self-start rounded-xl border cd-border-c overflow-hidden text-[12px] font-semibold flex-wrap">
               {standard.map((g, gi) => (
@@ -214,7 +216,7 @@ export function AgreementTemplateBoard() {
                       className={`rounded-xl border px-3 py-2 flex items-center gap-2 text-left ${
                         editing?.serviceType === g.serviceType && editing?.serviceSubtype === cell.serviceSubtype
                           ? "cd-tint-primary"
-                          : "cd-border-c hover:cd-tint-primary"
+                          : "cd-solid-bg cd-border-c hover:cd-tint-primary"
                       }`}
                       onClick={() => openEditor(g.serviceType, cell)}
                     >
@@ -241,7 +243,7 @@ export function AgreementTemplateBoard() {
 
           {/* 편집 패널 */}
           {editing && (
-            <div className="cd-card rounded-3xl p-5 w-full xl:w-[560px] shrink-0 flex flex-col gap-3 xl:sticky xl:top-4">
+            <div className="cd-card rounded-3xl p-5 w-full xl:w-[1120px] shrink-0 flex flex-col gap-3 xl:sticky xl:top-4">
               <div className="flex items-center gap-2">
                 <h3 className="font-bold cd-text text-sm">
                   {editing.serviceType} · {editing.serviceSubtype}
@@ -266,32 +268,67 @@ export function AgreementTemplateBoard() {
               </div>
 
               {spec?.clausePage ? (
-                <div className="flex flex-col gap-2 min-h-0 overflow-y-auto max-h-[52vh] pr-1">
-                  {clauses.map((c, i) => (
-                    <div key={c.id} className="rounded-xl border cd-border-c p-2.5 flex flex-col gap-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10.5px] font-mono cd-text-faint w-12 shrink-0">제 {i + 1} 조</span>
-                        <input className="cd-input text-[12.5px] flex-1 font-medium" value={c.title} onChange={(e) => updateClause(i, { title: e.target.value })} />
-                        <button type="button" className="cd-text-faint hover:cd-text disabled:opacity-30" disabled={i === 0} onClick={() => moveClause(i, -1)}>
-                          <ArrowUp className="w-3.5 h-3.5" />
+                /* 좌: 조 목록 / 우: 선택 조 편집 — 계약서 작성 화면 조문 UI 와 동일(사용자 확정) */
+                <div className="flex flex-col md:flex-row gap-4 items-start">
+                  <div className="w-full md:w-[240px] shrink-0 flex flex-col gap-1.5">
+                    <div className="flex flex-col gap-1 max-h-[52vh] overflow-y-auto pr-1">
+                      {clauses.map((c, i) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          className={`rounded-lg px-2.5 py-1.5 text-left text-[12px] border flex items-center gap-1.5 ${
+                            clauseTab === i ? "cd-fill-primary text-white border-transparent font-semibold" : "cd-solid-bg cd-border-c cd-text-muted"
+                          }`}
+                          onClick={() => setClauseTab(i)}
+                        >
+                          <span className={`font-mono text-[10.5px] shrink-0 ${clauseTab === i ? "opacity-80" : "cd-text-faint"}`}>{i + 1}</span>
+                          <span className="truncate">{c.title || "(제목 없음)"}</span>
                         </button>
-                        <button type="button" className="cd-text-faint hover:cd-text disabled:opacity-30" disabled={i === clauses.length - 1} onClick={() => moveClause(i, 1)}>
-                          <ArrowDown className="w-3.5 h-3.5" />
-                        </button>
-                        <button type="button" className="cd-text-faint hover:cd-text" title="아래에 삽입" onClick={() => setClauses((prev) => { const next = [...prev]; next.splice(i + 1, 0, { id: newClauseId(), title: "새 조항", body: "" }); return next; })}>
-                          <Plus className="w-3.5 h-3.5" />
-                        </button>
-                        <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" onClick={() => setClauses((prev) => prev.filter((_, ci) => ci !== i))}>
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                      {c.binding === "payment" ? (
-                        <p className="text-[11px] cd-text-faint rounded-lg cd-tint-primary px-2 py-1">지급 단계 데이터에서 자동 생성되는 조 — 본문은 문서 작성 시 채워집니다.</p>
-                      ) : (
-                        <textarea className="cd-input text-[11.5px] min-h-[56px] leading-relaxed" value={c.body} onChange={(e) => updateClause(i, { body: e.target.value })} />
-                      )}
+                      ))}
                     </div>
-                  ))}
+                    <button
+                      type="button"
+                      className="cd-btn rounded-lg border border-dashed cd-border-c px-3 py-1.5 text-[11.5px] cd-text-faint"
+                      onClick={() => {
+                        setClauses((prev) => [...prev, { id: newClauseId(), title: "새 조항", body: "" }]);
+                        setClauseTab(clauses.length);
+                      }}
+                    >
+                      ＋ 조항 추가
+                    </button>
+                  </div>
+
+                  <div className="flex-1 min-w-0 w-full rounded-2xl border cd-border-c p-3.5 flex flex-col gap-2">
+                    {clauses[Math.min(clauseTab, clauses.length - 1)] && (() => {
+                      const i = Math.min(clauseTab, clauses.length - 1);
+                      const c = clauses[i];
+                      return (
+                        <>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10.5px] font-mono cd-text-faint w-12 shrink-0">제 {i + 1} 조</span>
+                            <input className="cd-input text-[12.5px] flex-1 font-medium" value={c.title} onChange={(e) => updateClause(i, { title: e.target.value })} />
+                            <button type="button" className="cd-text-faint hover:cd-text disabled:opacity-30" disabled={i === 0} title="위로" onClick={() => { moveClause(i, -1); setClauseTab(i - 1); }}>
+                              <ArrowUp className="w-3.5 h-3.5" />
+                            </button>
+                            <button type="button" className="cd-text-faint hover:cd-text disabled:opacity-30" disabled={i === clauses.length - 1} title="아래로" onClick={() => { moveClause(i, 1); setClauseTab(i + 1); }}>
+                              <ArrowDown className="w-3.5 h-3.5" />
+                            </button>
+                            <button type="button" className="cd-text-faint hover:cd-text" title="아래에 삽입" onClick={() => { setClauses((prev) => { const next = [...prev]; next.splice(i + 1, 0, { id: newClauseId(), title: "새 조항", body: "" }); return next; }); setClauseTab(i + 1); }}>
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                            <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" title="삭제" onClick={() => { setClauses((prev) => prev.filter((_, ci) => ci !== i)); setClauseTab(Math.max(0, i - 1)); }}>
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                          {c.binding === "payment" ? (
+                            <p className="text-[11px] cd-text-faint rounded-lg cd-tint-primary px-2 py-1">지급 단계 데이터에서 자동 생성되는 조 — 본문은 문서 작성 시 채워집니다.</p>
+                          ) : (
+                            <textarea className="cd-input text-[12px] min-h-[300px] leading-relaxed" value={c.body} onChange={(e) => updateClause(i, { body: e.target.value })} />
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
                 </div>
               ) : spec ? (
                 <p className="text-[12px] cd-text-faint rounded-xl border cd-border-c px-3 py-2.5">

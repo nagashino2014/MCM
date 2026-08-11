@@ -356,6 +356,10 @@
 }
 
 /* ---------------- 버튼 ---------------- */
+/* 배경 기본값 = 불투명 카드색. 종전에는 배경이 없어(투명) 글라스 셸 위에서 버튼이
+ * 배경과 구분되지 않았다(2026-08-11 사용자 지적 — 전 메뉴 공통). 배경을 명시한 변형
+ * (.cd-btn-primary/-soft/-ghost/-danger, .cd-fill-primary, .cd-tint-primary 등)은
+ * 이 규칙보다 뒤에 정의되거나 조합 클래스로 덮으므로 영향받지 않는다. */
 .cd-btn {
   display: inline-flex;
   align-items: center;
@@ -367,6 +371,8 @@
   line-height: 1;
   border-radius: 11px;
   border: 1px solid transparent;
+  background: var(--cd-card-solid);
+  color: var(--cd-text);
   cursor: pointer;
   white-space: nowrap;
   transition: all 0.18s ease;

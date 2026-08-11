@@ -56,7 +56,7 @@ function mapTemplate(r: Record<string, unknown>): AgreementTemplateRow {
   };
 }
 
-const TPL_SELECT = `t.*, f.name AS origin_facility_name
+const TPL_SELECT = `t.*, f.company_name AS origin_facility_name
    FROM agreement_templates t
    LEFT JOIN facilities f ON f.facility_id = t.origin_facility_id`;
 

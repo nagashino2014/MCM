@@ -75,12 +75,14 @@ interface DocListRow {
   hwpxKey: string | null;
 }
 
+// lib/deliverable/data.ts searchContracts(ContractSearchRow) 반환 필드 그대로
 interface SourceContract {
   contractId: string;
-  contractTitle: string;
-  counterpartyName: string | null;
-  serviceType: string | null;
-  serviceSubtype: string | null;
+  title: string;
+  ordererName: string;
+  siteName: string;
+  serviceType: string;
+  contractDate: string;
 }
 interface SourceQuote {
   quoteId: string;
@@ -136,6 +138,7 @@ export function AgreementBoard() {
   const [orderer, setOrderer] = useState<AgreementOrdererInfo>(EMPTY_ORDERER);
   const [amountSupply, setAmountSupply] = useState(0);
   const [payments, setPayments] = useState<PaymentStep[]>(DEFAULT_PAYMENTS);
+  const [payTab, setPayTab] = useState(0);
   const [periodText, setPeriodText] = useState("계약일 부터 용역 완료 시 까지");
   const [scopeText, setScopeText] = useState("");
   const [issueDate, setIssueDate] = useState(new Date().toISOString().slice(0, 10));
@@ -260,14 +263,21 @@ export function AgreementBoard() {
       .catch(() => {});
   }, []);
 
-  // 발주처 픽커(단일 유지) — 선택 시 상세 자동 채움
+  // 발주처 픽커(단일 유지) — 픽커가 주는 주소·사업자번호는 즉시 반영하고,
+  // 전화번호·자체양식 추천은 상세 API 로 보강한다(실패해도 기본 채움은 유지).
   const onOrdererChange = useCallback(
     (next: LetterRecipient[]) => {
       const last = next.length ? [next[next.length - 1]] : [];
       setOrdererList(last);
       if (last.length) {
-        const r = last[0];
-        setOrderer((prev) => ({ ...prev, facilityId: r.facilityId ?? null, name: r.name ?? "" }));
+        const r = last[0] as LetterRecipient & { address?: string; bizNo?: string };
+        setOrderer((prev) => ({
+          ...prev,
+          facilityId: r.facilityId ?? null,
+          name: r.name ?? "",
+          address: r.address || prev.address,
+          bizNo: r.bizNo || prev.bizNo,
+        }));
         if (r.facilityId) loadOrdererDetail(r.facilityId);
       } else {
         setOrderer(EMPTY_ORDERER);
@@ -281,7 +291,7 @@ export function AgreementBoard() {
     (c: SourceContract) => {
       setContractId(c.contractId);
       setQuotationId(null);
-      setLinkLabel(`계약: ${c.contractTitle}`);
+      setLinkLabel(`계약: ${c.title}`);
       setSrcOpen(false);
       fetch(`/api/contracts/agreements/sources?contractId=${encodeURIComponent(c.contractId)}`, { cache: "no-store" })
         .then((r) => (r.ok ? r.json() : null))
@@ -664,12 +674,13 @@ export function AgreementBoard() {
             </div>
           }
         />
-        <div className="cd-card rounded-3xl p-5 flex flex-col gap-3">
+        <div className="cd-card rounded-3xl p-5 flex flex-col gap-3 max-w-[1032px]">
           <div className="flex items-center gap-2">
             <div className="relative">
-              <Search className="w-3.5 h-3.5 cd-text-faint absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <Search className="w-3.5 h-3.5 cd-text-faint absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
-                className="cd-input text-sm pl-8 w-72"
+                className="cd-input text-sm w-72"
+                style={{ paddingLeft: 32 }}
                 placeholder="계약명·발주처 검색"
                 value={listQ}
                 onChange={(e) => setListQ(e.target.value)}
@@ -764,7 +775,7 @@ export function AgreementBoard() {
         {/* 발주처 발송 다이얼로그 — 수신 담당자·첨부 구성 확정(① 수동 발송 확정) */}
         {sendTarget && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" style={{ background: "rgba(15,20,34,0.5)" }} onClick={() => setSendTarget(null)}>
-            <div className="cdash cd-fields-white rounded-2xl bg-[color:var(--cd-card)] shadow-2xl w-full max-w-[640px] flex flex-col overflow-hidden" data-theme={theme} onClick={(e) => e.stopPropagation()}>
+            <div className="cdash cd-fields-white rounded-2xl cd-solid-bg shadow-2xl w-full max-w-[640px] flex flex-col overflow-hidden" data-theme={theme} onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center px-5 py-3 border-b cd-border-c">
                 <span className="text-sm font-bold cd-text">발주처 발송 — {sendTarget.title}</span>
                 <button type="button" className="ml-auto cd-text-faint hover:cd-text" onClick={() => setSendTarget(null)}>
@@ -860,28 +871,32 @@ export function AgreementBoard() {
                       </div>
                     ) : (
                       <div className="relative">
-                        <Search className="w-3.5 h-3.5 cd-text-faint absolute left-2.5 top-1/2 -translate-y-1/2" />
+                        <Search className="w-3.5 h-3.5 cd-text-faint absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                         <input
-                          className="cd-input text-sm pl-8 w-full"
+                          className="cd-input text-sm w-full"
+                          style={{ paddingLeft: 32 }}
                           placeholder="계약명·발주처·견적번호 검색 후 선택 (직접 입력 시 생략)"
                           value={srcQ}
                           onFocus={() => setSrcOpen(true)}
+                          onBlur={() => setTimeout(() => setSrcOpen(false), 180)}
                           onChange={(e) => setSrcQ(e.target.value)}
                         />
                         {srcOpen && (srcContracts.length > 0 || srcQuotes.length > 0) && (
-                          <div className="absolute z-30 mt-1 w-full max-h-72 overflow-y-auto rounded-xl border cd-border-c bg-[color:var(--cd-card)] shadow-xl p-1.5">
+                          <div className="absolute z-30 mt-1 w-full max-h-72 overflow-y-auto rounded-xl border cd-border-c cd-solid-bg shadow-xl p-1.5">
                             {srcQuotes.length > 0 && <div className="px-2 py-1 text-[10.5px] cd-text-faint">수주 확정 견적</div>}
                             {srcQuotes.map((q) => (
-                              <button key={q.quoteId} type="button" className="w-full text-left rounded-lg px-2.5 py-1.5 hover:cd-tint-primary" onClick={() => applyQuote(q)}>
+                              <button key={q.quoteId} type="button" className="w-full text-left rounded-lg px-2.5 py-1.5 hover:cd-tint-primary" onMouseDown={(e) => e.preventDefault()} onClick={() => applyQuote(q)}>
                                 <span className="text-[12.5px] cd-text">{q.title ?? "(무제)"}</span>
                                 <span className="text-[11px] cd-text-faint ml-1.5">{q.quoteNo} · {q.facilityName ?? "—"} · {won(q.totalAmount)}</span>
                               </button>
                             ))}
                             {srcContracts.length > 0 && <div className="px-2 py-1 text-[10.5px] cd-text-faint">기존 계약</div>}
                             {srcContracts.map((c) => (
-                              <button key={c.contractId} type="button" className="w-full text-left rounded-lg px-2.5 py-1.5 hover:cd-tint-primary" onClick={() => applyContract(c)}>
-                                <span className="text-[12.5px] cd-text">{c.contractTitle}</span>
-                                <span className="text-[11px] cd-text-faint ml-1.5">{c.counterpartyName ?? "—"} · {[c.serviceType, c.serviceSubtype].filter(Boolean).join("/")}</span>
+                              <button key={c.contractId} type="button" className="w-full text-left rounded-lg px-2.5 py-1.5 hover:cd-tint-primary" onMouseDown={(e) => e.preventDefault()} onClick={() => applyContract(c)}>
+                                <span className="text-[12.5px] cd-text">{c.title || "(무제)"}</span>
+                                <span className="text-[11px] cd-text-faint ml-1.5">
+                                  {[c.ordererName || c.siteName || "—", c.serviceType, c.contractDate?.slice(0, 10)].filter(Boolean).join(" · ")}
+                                </span>
                               </button>
                             ))}
                           </div>
@@ -1003,67 +1018,113 @@ export function AgreementBoard() {
                     <FileText className="w-4 h-4 cd-text-primary" /> 계약금액 · 대금 지급 조건
                     <span className="text-[10.5px] font-normal cd-text-faint">지급 단계는 갑지 문구와 「지급방법」 조문 양쪽에 자동 반영됩니다</span>
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
-                    <label className="flex flex-col gap-1">
-                      <span className="text-[11px] cd-text-faint">공급가 (VAT 별도) *</span>
-                      <AmountInput
-                        className="cd-input text-sm text-right"
-                        value={amountSupply || ""}
-                        onChange={(v) => {
-                          const supply = Number(v) || 0;
-                          setAmountSupply(supply);
-                          setPayments((prev) => distributePayments(supply, prev));
-                        }}
-                      />
-                    </label>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-[11px] cd-text-faint">세액 (10%)</span>
-                      <div className="cd-input text-sm text-right opacity-70">{won(amounts.vat)}</div>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-[11px] cd-text-faint">합계 (VAT 포함)</span>
-                      <div className="cd-input text-sm text-right opacity-70">{won(amounts.total)}</div>
-                    </div>
-                  </div>
-                  {amounts.supply > 0 && (
-                    <p className="text-[11px] cd-text-faint -mt-1">{amountLine(amounts.supply)}</p>
-                  )}
-                  <div className="flex flex-col gap-1.5">
-                    <span className="text-[11px] cd-text-faint">지급 단계 — 비율 입력 시 금액 자동 분배(마지막 단계가 잔차 흡수)</span>
-                    {payments.map((p, i) => (
-                      <div key={i} className="flex items-center gap-2 flex-wrap">
-                        <input className="cd-input text-sm w-24" value={p.label} placeholder="착수금" onChange={(e) => setPayments((prev) => prev.map((x, xi) => (xi === i ? { ...x, label: e.target.value } : x)))} />
-                        <label className="flex items-center gap-1 text-[11.5px] cd-text-faint">
-                          <input
-                            className="cd-input w-14 text-right text-[12px]"
-                            value={p.ratio != null ? String(p.ratio) : ""}
-                            placeholder="30"
-                            onChange={(e) => {
-                              const ratio = e.target.value === "" ? null : Number(e.target.value) || 0;
-                              setPayments((prev) => distributePayments(amounts.supply, prev.map((x, xi) => (xi === i ? { ...x, ratio } : x))));
-                            }}
-                          />
-                          %
-                        </label>
+                  {/* 좌: 금액 요약 + 단계 추가 / 우: 지급 단계 탭페이지 (2026-08-11 사용자 요청 — 세로 나열의 공간 낭비 제거) */}
+                  <div className="flex flex-col md:flex-row gap-4 items-start">
+                    <div className="w-full md:w-[280px] shrink-0 flex flex-col gap-2.5">
+                      <label className="flex flex-col gap-1">
+                        <span className="text-[11px] cd-text-faint">공급가 (VAT 별도) *</span>
                         <AmountInput
-                          className="cd-input text-sm w-36 text-right"
-                          value={p.amount || ""}
-                          onChange={(v) => setPayments((prev) => prev.map((x, xi) => (xi === i ? { ...x, ratio: null, amount: Number(v) || 0 } : x)))}
+                          className="cd-input text-sm text-right"
+                          value={amountSupply || ""}
+                          onChange={(v) => {
+                            const supply = Number(v) || 0;
+                            setAmountSupply(supply);
+                            setPayments((prev) => distributePayments(supply, prev));
+                          }}
                         />
-                        <input className="cd-input text-sm flex-1 min-w-[180px]" value={p.condition} placeholder="지급 시점 (예: 계약 완료 후 현금 지급)" onChange={(e) => setPayments((prev) => prev.map((x, xi) => (xi === i ? { ...x, condition: e.target.value } : x)))} />
-                        <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" onClick={() => setPayments((prev) => prev.filter((_, xi) => xi !== i))}>
-                          <X className="w-3.5 h-3.5" />
-                        </button>
+                      </label>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[11px] cd-text-faint">세액 (10%)</span>
+                        <div className="cd-input text-sm text-right opacity-70">{won(amounts.vat)}</div>
                       </div>
-                    ))}
-                    <button type="button" className="cd-btn rounded-lg border border-dashed cd-border-c px-3 py-1.5 text-[11.5px] cd-text-faint self-start" onClick={() => setPayments((prev) => [...prev, { label: "잔금", ratio: null, amount: 0, condition: "" }])}>
-                      ＋ 지급 단계 추가
-                    </button>
-                    {amounts.supply > 0 && payments.reduce((a, p) => a + p.amount, 0) !== amounts.supply && (
-                      <p className="text-[11px] text-[color:var(--cd-danger,#FA896B)]">
-                        지급 단계 합계 {won(payments.reduce((a, p) => a + p.amount, 0))} ≠ 공급가 {won(amounts.supply)}
-                      </p>
-                    )}
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[11px] cd-text-faint">합계 (VAT 포함)</span>
+                        <div className="cd-input text-sm text-right opacity-70">{won(amounts.total)}</div>
+                      </div>
+                      {amounts.supply > 0 && <p className="text-[11px] cd-text-faint">{amountLine(amounts.supply)}</p>}
+                      <button
+                        type="button"
+                        className="cd-btn rounded-lg border border-dashed cd-border-c px-3 py-2 text-[11.5px] cd-text-faint"
+                        onClick={() => {
+                          setPayments((prev) => [...prev, { label: "잔금", ratio: null, amount: 0, condition: "" }]);
+                          setPayTab(payments.length);
+                        }}
+                      >
+                        ＋ 지급 단계 추가
+                      </button>
+                      {amounts.supply > 0 && payments.reduce((a, p) => a + p.amount, 0) !== amounts.supply && (
+                        <p className="text-[11px] text-[color:var(--cd-danger,#FA896B)]">
+                          지급 단계 합계 {won(payments.reduce((a, p) => a + p.amount, 0))} ≠ 공급가 {won(amounts.supply)}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex-1 min-w-0 w-full rounded-2xl border cd-border-c p-3.5 flex flex-col gap-3">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {payments.map((p, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            className={`rounded-lg px-3 py-1.5 text-[12px] border ${payTab === i ? "cd-tint-primary font-bold" : "cd-border-c cd-text-faint"}`}
+                            onClick={() => setPayTab(i)}
+                          >
+                            {p.label || `단계 ${i + 1}`}
+                            {p.ratio != null ? ` ${p.ratio}%` : ""}
+                          </button>
+                        ))}
+                        {payments.length === 0 && <span className="text-[12px] cd-text-faint">좌측 [지급 단계 추가]로 시작하세요.</span>}
+                      </div>
+                      {payments[Math.min(payTab, payments.length - 1)] && (() => {
+                        const i = Math.min(payTab, payments.length - 1);
+                        const p = payments[i];
+                        return (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                            <label className="flex flex-col gap-1">
+                              <span className="text-[11px] cd-text-faint">단계 명칭</span>
+                              <input className="cd-input text-sm" value={p.label} placeholder="착수금" onChange={(e) => setPayments((prev) => prev.map((x, xi) => (xi === i ? { ...x, label: e.target.value } : x)))} />
+                            </label>
+                            <div className="grid grid-cols-2 gap-2">
+                              <label className="flex flex-col gap-1">
+                                <span className="text-[11px] cd-text-faint">비율 (%)</span>
+                                <input
+                                  className="cd-input text-sm text-right"
+                                  value={p.ratio != null ? String(p.ratio) : ""}
+                                  placeholder="30"
+                                  onChange={(e) => {
+                                    const ratio = e.target.value === "" ? null : Number(e.target.value) || 0;
+                                    setPayments((prev) => distributePayments(amounts.supply, prev.map((x, xi) => (xi === i ? { ...x, ratio } : x))));
+                                  }}
+                                />
+                              </label>
+                              <label className="flex flex-col gap-1">
+                                <span className="text-[11px] cd-text-faint">금액 (원)</span>
+                                <AmountInput
+                                  className="cd-input text-sm text-right"
+                                  value={p.amount || ""}
+                                  onChange={(v) => setPayments((prev) => prev.map((x, xi) => (xi === i ? { ...x, ratio: null, amount: Number(v) || 0 } : x)))}
+                                />
+                              </label>
+                            </div>
+                            <label className="flex flex-col gap-1 md:col-span-2">
+                              <span className="text-[11px] cd-text-faint">지급 시점 문구</span>
+                              <input className="cd-input text-sm" value={p.condition} placeholder="예: 계약 완료 후 현금 지급" onChange={(e) => setPayments((prev) => prev.map((x, xi) => (xi === i ? { ...x, condition: e.target.value } : x)))} />
+                            </label>
+                            <div className="md:col-span-2 flex justify-end">
+                              <button
+                                type="button"
+                                className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)] flex items-center gap-1"
+                                onClick={() => {
+                                  setPayments((prev) => prev.filter((_, xi) => xi !== i));
+                                  setPayTab((t) => Math.max(0, Math.min(t, payments.length - 2)));
+                                }}
+                              >
+                                <Trash2 className="w-3 h-3" /> 이 단계 삭제
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
                   </div>
                 </div>
 
@@ -1222,7 +1283,7 @@ export function AgreementBoard() {
       {/* PDF 미리보기 모달 */}
       {previewOpen && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" style={{ background: "rgba(15,20,34,0.5)" }} onClick={() => setPreviewOpen(false)}>
-          <div className="rounded-2xl bg-[color:var(--cd-card)] shadow-2xl w-full max-w-[1100px] h-[94vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+          <div className="rounded-2xl cd-solid-bg shadow-2xl w-full max-w-[1100px] h-[94vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center px-4 py-2.5 border-b cd-border-c">
               <span className="text-sm font-bold cd-text">계약서 미리보기</span>
               <button type="button" className="ml-auto cd-text-faint hover:cd-text" onClick={() => setPreviewOpen(false)}>

@@ -428,7 +428,7 @@ function CustomTemplateTab({ custom, onSaved }: { custom: CustomRow[]; onSaved: 
               <>
                 <input className="cd-input text-sm" value={facilityQ} placeholder="사업장 검색 (2자 이상)" onChange={(e) => setFacilityQ(e.target.value)} />
                 {facilityOptions.length > 0 && (
-                  <div className="absolute z-30 top-full mt-1 w-full rounded-xl border cd-border-c bg-[color:var(--cd-card)] shadow-xl p-1.5 max-h-52 overflow-y-auto">
+                  <div className="absolute z-30 top-full mt-1 w-full rounded-xl border cd-border-c cd-solid-bg shadow-xl p-1.5 max-h-52 overflow-y-auto">
                     {facilityOptions.map((o) => (
                       <button key={o.facilityId} type="button" className="w-full text-left rounded-lg px-2.5 py-1.5 hover:cd-tint-primary text-[12.5px] cd-text" onClick={() => { setFacility(o); setFacilityOptions([]); setFacilityQ(""); }}>
                         {o.companyName}

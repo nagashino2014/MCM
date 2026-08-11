@@ -3,7 +3,10 @@
 // 지급방법 조 자동 생성)를 만든다. 갑지 "대금 지급 조건"과 "지급방법" 조문은 payments 배열
 // 하나에서 양쪽 문구가 나온다(단일 원천 — 블루프린트 §1 관찰 3).
 
-import { COMPANY_ADDRESS, COMPANY_BIZ_NO, COMPANY_CEO, COMPANY_KO, COMPANY_PHONE } from "@/lib/letter/types";
+import { COMPANY_BIZ_NO, COMPANY_CEO, COMPANY_KO, COMPANY_PHONE } from "@/lib/letter/types";
+
+/** 계약서 실측 표기 자사 주소 — 공문 상수("…100, 12층 (가산동, …)")와 표기가 다르다(실측 계약서 그대로) */
+export const AGREEMENT_COMPANY_ADDRESS = "서울특별시 금천구 가산디지털1로 100 에이스골드타워 12층";
 import { spreadName } from "@/lib/deliverable/format";
 import { toHangulAmount } from "@/lib/quote/hangul-amount";
 import type { DeliverableValues } from "@/lib/deliverable/types";
@@ -83,16 +86,53 @@ function signText(name: string, address: string, ceo: string): string {
   return [name, address, ceoLine].filter(Boolean).join("\n");
 }
 
-/** 말미 서명 블록(조문 끝, 실측 2단 무테두리) — "사업장명 : …\n주    소 : …\n대표이사  … (인)" */
-function tailSignText(name: string, address: string, ceo: string): string {
-  const ceoDisp = ceo ? (ceo.includes(",") ? ceo : spreadName(ceo)) : "";
-  return [`사업장명 : ${name}`, `주    소 : ${address}`, `대표이사  ${ceoDisp}  (인)`].join("\n");
-}
-
 /** "2026년 08월 11일" — 갑지 체결문 셀 안 날짜 표기 */
 function dateKorean(iso: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? "");
   return m ? `${m[1]}년  ${m[2]}월  ${m[3]}일` : iso ?? "";
+}
+
+/** 텍스트 폭 근사(pt) — 한글·전각 1em, 그 외 0.5em (letter/hwpx.ts approxTextWidthPt 이식) */
+export function approxTextWidthPt(text: string, fontPt: number): number {
+  let w = 0;
+  for (const ch of text) {
+    w += /[ᄀ-ᇿ　-鿿가-힯豈-﫿！-｠]/.test(ch) ? fontPt : fontPt * 0.5;
+  }
+  return w;
+}
+
+/** 주어진 폭에서 접히는 줄 수 근사 — 날인란·말미 서명의 좌우 대표이사 줄 높이 맞춤용 */
+export function estimateLines(text: string, widthPt: number, fontPt = 10): number {
+  if (!text) return 1;
+  return Math.max(1, Math.ceil(approxTextWidthPt(text, fontPt) / Math.max(widthPt, fontPt)));
+}
+
+/**
+ * 말미 서명 좌우 균형 — 주소 줄 수가 짧은 쪽에 빈 줄을 넣어 "대표이사" 줄 높이를 맞춘다
+ * (2026-08-11 사용자 요청: 발주처 주소가 1줄이면 자사 2줄과 어긋나던 문제).
+ */
+function balanceTail(orderer: { name: string; address: string; ceo: string }, colWidthPt: number): {
+  ordererTail: string;
+  companyTail: string;
+} {
+  const ordLines = estimateLines(`주    소 : ${orderer.address}`, colWidthPt);
+  const coLines = estimateLines(`주    소 : ${AGREEMENT_COMPANY_ADDRESS}`, colWidthPt);
+  const maxL = Math.max(ordLines, coLines);
+  const pad = (n: number) => Array(Math.max(0, n)).fill("").join("\n");
+  const mk = (name: string, address: string, ceo: string, lines: number) => {
+    const ceoDisp = ceo ? (ceo.includes(",") ? ceo : spreadName(ceo)) : "";
+    const gap = maxL - lines;
+    return [
+      `사업장명 : ${name}`,
+      `주    소 : ${address}`,
+      ...(gap > 0 ? [pad(gap)] : []),
+      `대표이사  ${ceoDisp}  (인)`,
+    ].join("\n");
+  };
+  return {
+    ordererTail: mk(orderer.name, orderer.address, orderer.ceo, ordLines),
+    companyTail: mk(COMPANY_KO, AGREEMENT_COMPANY_ADDRESS, COMPANY_CEO, coLines),
+  };
 }
 
 /** 갑지 렌더용 flat 바인딩 값 — deliverable format.ts(renderTemplate/renderBinding)가 소비한다 */
@@ -109,11 +149,11 @@ export function buildCoverValues(fv: AgreementFieldValues): DeliverableValues {
     "orderer.signText": signText(o.name, o.address, o.ceo),
     "company.name": COMPANY_KO,
     "company.nameWithBizNo": `${COMPANY_KO} (${COMPANY_BIZ_NO})`,
-    "company.address": COMPANY_ADDRESS,
+    "company.address": AGREEMENT_COMPANY_ADDRESS,
     "company.ceo": COMPANY_CEO,
     "company.bizNo": COMPANY_BIZ_NO,
     "company.phone": COMPANY_PHONE,
-    "company.signText": signText(COMPANY_KO, COMPANY_ADDRESS, COMPANY_CEO),
+    "company.signText": signText(COMPANY_KO, AGREEMENT_COMPANY_ADDRESS, COMPANY_CEO),
     "contract.title": fv.title,
     "contract.period": fv.periodText,
     "contract.scope": fv.scopeText,
@@ -135,9 +175,11 @@ export function buildCoverValues(fv: AgreementFieldValues): DeliverableValues {
     ]
       .filter((l, i) => i < 3 || l)
       .join("\n"),
-    // 조문 말미 서명(실측 2단 무테두리 — "(발주자)/(과업수행자)" 헤더 아래 3줄)
-    "orderer.tailSign": tailSignText(o.name, o.address, o.ceo),
-    "company.tailSign": tailSignText(COMPANY_KO, COMPANY_ADDRESS, COMPANY_CEO),
+    // 조문 말미 서명(실측 2단 무테두리) — 주소 줄 수를 맞춰 "대표이사" 줄 높이를 좌우 일치시킨다
+    ...(() => {
+      const t = balanceTail(o, 225); // 말미 2단 열 내폭 근사(pt)
+      return { "orderer.tailSign": t.ordererTail, "company.tailSign": t.companyTail };
+    })(),
   };
 }
 

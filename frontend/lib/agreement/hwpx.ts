@@ -11,7 +11,8 @@ import path from "node:path";
 import JSZip from "jszip";
 import { renderBinding, renderTemplate, spreadName } from "@/lib/deliverable/format";
 import type { CellSpec, DeliverableValues, DocBlock } from "@/lib/deliverable/types";
-import { buildCoverValues, resolveClauses } from "./compose";
+import { AGREEMENT_COMPANY_ADDRESS, buildCoverValues, estimateLines, resolveClauses } from "./compose";
+import { COMPANY_BIZ_NO, COMPANY_CEO, COMPANY_KO } from "@/lib/letter/types";
 import type { AgreementFieldValues, AgreementSpec } from "./types";
 
 const LINESEG_RE = /<hp:linesegarray>[\s\S]*?<\/hp:linesegarray>/g;
@@ -390,16 +391,29 @@ export async function renderAgreementHwpx(spec: AgreementSpec, fv: AgreementFiel
     const o = fv.orderer;
     // 복수 대표("이시창, 황문성")는 그대로, 단수는 실측 관례대로 벌려 쓴다("장 세 준")
     const ceoDisp = o.ceo ? (o.ceo.includes(",") ? o.ceo : spreadName(o.ceo)) : "";
+    // 값 앞 여백은 전 항목 1칸으로 통일(2026-08-11 사용자 확정 — 원본은 셀마다 0~2칸 제각각)
+    const pad = (s: string) => (s && !s.startsWith(" ") ? ` ${s}` : s);
     let tbl = tblM[0];
-    tbl = replaceTableCell(tbl, 4, 1, [o.name]);
-    tbl = replaceTableCell(tbl, 4, 4, [fv.title]);
-    tbl = replaceTableCell(tbl, 4, 5, [String(values["amount.totalLine"])]);
-    tbl = replaceTableCell(tbl, 4, 6, String(values["amount.supplyVatLines"]).split("\n"));
-    tbl = replaceTableCell(tbl, 4, 7, String(values["payment.summary"]).split("\n"));
-    tbl = replaceTableCell(tbl, 4, 8, [fv.periodText]);
+    tbl = replaceTableCell(tbl, 4, 1, [pad(o.name)]);
+    tbl = replaceTableCell(tbl, 4, 2, [pad(COMPANY_KO)]); // 원본 선행 2칸 → 1칸 통일
+    tbl = replaceTableCell(tbl, 4, 3, [pad(COMPANY_BIZ_NO)]);
+    tbl = replaceTableCell(tbl, 4, 4, [pad(fv.title)]);
+    tbl = replaceTableCell(tbl, 4, 5, [pad(String(values["amount.totalLine"]))]);
+    tbl = replaceTableCell(tbl, 4, 6, String(values["amount.supplyVatLines"]).split("\n").map(pad));
+    tbl = replaceTableCell(tbl, 4, 7, String(values["payment.summary"]).split("\n").map(pad));
+    tbl = replaceTableCell(tbl, 4, 8, [pad(fv.periodText)]);
     // 체결문 셀은 실측이 [체결문]/[빈]/[날짜]/[빈]/[첨부] 구조 — 텍스트 문단 3개에 순서 배정
-    tbl = replaceTableCell(tbl, 0, 9, String(values["cover.execText"]).split("\n").filter(Boolean));
-    tbl = replaceTableCell(tbl, 2, 10, [o.name, o.address, `대표이사 ${ceoDisp} (인)`]);
+    tbl = replaceTableCell(tbl, 0, 9, String(values["cover.execText"]).split("\n").filter(Boolean).map(pad));
+    // 날인란 — 주소 줄 수를 좌우 맞춰 "대표이사" 줄 높이 일치(빈 줄 보충). 셀 내폭 ≈ 175pt
+    {
+      const ordL = estimateLines(o.address, 172);
+      const coL = estimateLines(AGREEMENT_COMPANY_ADDRESS, 172);
+      const maxL = Math.max(ordL, coL);
+      const fill = (n: number) => Array(Math.max(0, n)).fill("");
+      const coCeo = spreadName(COMPANY_CEO);
+      tbl = replaceTableCell(tbl, 2, 10, [pad(o.name), pad(o.address), ...fill(maxL - ordL), pad(`대표이사 ${ceoDisp} (인)`)]);
+      tbl = replaceTableCell(tbl, 6, 10, [pad(COMPANY_KO), pad(AGREEMENT_COMPANY_ADDRESS), ...fill(maxL - coL), pad(`대표이사 ${coCeo} (인)`)]);
+    }
     xml = xml.replace(tblM[0], tbl);
 
     // 표 이후 문단(조문+말미) 전부 제거 — 표를 감싼 문단은 보존해야 하므로 표 뒤 구간만 다룬다

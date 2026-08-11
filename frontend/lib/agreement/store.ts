@@ -343,6 +343,8 @@ export interface AgreementDocRow {
   drafterUserId: string | null;
   createdAt: string;
   updatedAt: string;
+  submittedAt: string | null;
+  completedAt: string | null; // 최종 승인(또는 반려) 시각
   serviceType: string | null;
   serviceSubtype: string | null;
   ordererName: string | null;
@@ -358,7 +360,8 @@ export interface AgreementDocRow {
 export async function listAgreementDocs(params: { q?: string | null; limit?: number }): Promise<AgreementDocRow[]> {
   const db = await getDb();
   const args: unknown[] = [AGREEMENT_FORM_ID];
-  let where = `d.form_id = $1 AND d.deleted_at IS NULL`;
+  // ⚠ approval_docs 에는 deleted_at 컬럼이 없다(084 스키마) — 참조하면 SQL 에러로 목록이 통째 비어버린다.
+  let where = `d.form_id = $1`;
   if (params.q) {
     args.push(`%${params.q}%`);
     where += ` AND (d.title ILIKE $${args.length} OR d.field_values->'orderer'->>'name' ILIKE $${args.length})`;
@@ -367,7 +370,7 @@ export async function listAgreementDocs(params: { q?: string | null; limit?: num
   const rows = rowsToObjects(
     await db.exec(
       `SELECT d.doc_id, d.doc_no, d.title, d.status AS doc_status, d.drafter_name, d.drafter_user_id,
-              d.created_at, d.updated_at,
+              d.created_at, d.updated_at, d.submitted_at, d.completed_at,
               d.field_values->>'serviceType' AS service_type,
               d.field_values->>'serviceSubtype' AS service_subtype,
               d.field_values->'orderer'->>'name' AS orderer_name,
@@ -392,6 +395,8 @@ export async function listAgreementDocs(params: { q?: string | null; limit?: num
     drafterUserId: sn(r.drafter_user_id),
     createdAt: String(r.created_at ?? ""),
     updatedAt: String(r.updated_at ?? ""),
+    submittedAt: sn(r.submitted_at),
+    completedAt: sn(r.completed_at),
     serviceType: sn(r.service_type),
     serviceSubtype: sn(r.service_subtype),
     ordererName: sn(r.orderer_name),

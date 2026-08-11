@@ -64,6 +64,9 @@ interface DocListRow {
   docStatus: string;
   drafterName: string | null;
   updatedAt: string;
+  createdAt: string;
+  submittedAt: string | null;
+  completedAt: string | null;
   serviceType: string | null;
   serviceSubtype: string | null;
   ordererName: string | null;
@@ -96,6 +99,12 @@ interface SourceQuote {
 }
 
 const won = (n: number | null | undefined) => (n == null ? "—" : `${Math.round(n).toLocaleString("ko-KR")}원`);
+/** "26-08-11 07:55" — 목록의 작성/승인 일시 */
+const shortDate = (iso: string | null | undefined) => {
+  if (!iso) return "—";
+  const m = /^(\d{2})(\d{2})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/.exec(iso);
+  return m ? `${m[2]}-${m[3]}-${m[4]} ${m[5]}:${m[6]}` : iso.slice(0, 10);
+};
 const DOC_STATUS_LABEL: Record<string, string> = {
   draft: "작성 중",
   in_progress: "결재 진행",
@@ -707,6 +716,7 @@ export function AgreementBoard() {
                     <th className="py-2 pr-3 font-medium">분류</th>
                     <th className="py-2 pr-3 font-medium text-right">공급가</th>
                     <th className="py-2 pr-3 font-medium">기안자</th>
+                    <th className="py-2 pr-3 font-medium">작성 / 승인</th>
                     <th className="py-2 pr-3 font-medium">결재</th>
                     <th className="py-2 pr-3 font-medium">발송</th>
                     <th className="py-2 font-medium text-right">작업</th>
@@ -728,6 +738,10 @@ export function AgreementBoard() {
                         </td>
                         <td className="py-2.5 pr-3 text-right cd-text">{won(row.amountSupply)}</td>
                         <td className="py-2.5 pr-3 cd-text-faint">{row.drafterName ?? "—"}</td>
+                        <td className="py-2.5 pr-3 cd-text-faint whitespace-nowrap text-[11.5px]">
+                          {shortDate(row.createdAt)}
+                          {row.completedAt ? <span className="cd-text"> / {shortDate(row.completedAt)}</span> : ""}
+                        </td>
                         <td className="py-2.5 pr-3">
                           <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] border ${row.docStatus === "approved" ? "cd-tint-primary" : row.docStatus === "rejected" ? "text-[color:var(--cd-danger,#FA896B)] cd-border-c" : "cd-border-c cd-text-faint"}`}>
                             {DOC_STATUS_LABEL[row.docStatus] ?? row.docStatus}
@@ -748,14 +762,16 @@ export function AgreementBoard() {
                               <Pencil className="w-3 h-3" /> 편집
                             </a>
                           )}
-                          {row.pdfKey && (
-                            <a className="cd-btn rounded-lg border cd-border-c px-2 py-1 text-[11px] inline-flex items-center gap-1 mr-1" href={`/api/contracts/agreements/${encodeURIComponent(row.docId)}/pdf`} target="_blank" rel="noreferrer">
-                              PDF
+                          {/* 승인 완료면 산출물이 아직 S3 에 없어도 온디맨드 렌더로 받을 수 있다
+                              (발송 전에는 pdfKey/hwpxKey 가 비어 있다 — 발송 시 생성·보관) */}
+                          {(row.pdfKey || row.docStatus === "approved") && (
+                            <a className="cd-btn rounded-lg border cd-border-c px-2 py-1 text-[11px] inline-flex items-center gap-1 mr-1" href={`/api/contracts/agreements/${encodeURIComponent(row.docId)}/hwpx`} title="한글 원본 다운로드">
+                              HWPX
                             </a>
                           )}
-                          {row.hwpxKey && (
-                            <a className="cd-btn rounded-lg border cd-border-c px-2 py-1 text-[11px] inline-flex items-center gap-1 mr-1" href={`/api/contracts/agreements/${encodeURIComponent(row.docId)}/hwpx`}>
-                              HWPX
+                          {(row.pdfKey || row.docStatus === "approved") && (
+                            <a className="cd-btn rounded-lg border cd-border-c px-2 py-1 text-[11px] inline-flex items-center gap-1 mr-1" href={`/api/contracts/agreements/${encodeURIComponent(row.docId)}/pdf`} target="_blank" rel="noreferrer" title="PDF 열기">
+                              PDF
                             </a>
                           )}
                           {canSend && (

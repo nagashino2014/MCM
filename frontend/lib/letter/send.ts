@@ -107,8 +107,10 @@ function buildMailBody(input: {
 }): string {
   const { letterNo, title, senderLabel, attachNames, links, signatureHtml, hasEnclosures } = input;
   const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  // 본문 전체를 왼쪽에서 30pt 들여 쓴다 — 왼쪽 끝에 붙으면 답답해 보인다(사용자 확정).
+  // 표·서명까지 같은 기준선에 놓이도록 바깥 div 한 겹에만 준다.
   return [
-    `<div style="font-size:14px;line-height:1.7;color:#222">`,
+    `<div style="font-size:14px;line-height:1.7;color:#222;padding-left:30pt">`,
     `<p>안녕하세요, ${esc(COMPANY_KO)} ${esc(senderLabel)} 입니다.</p>`,
     `<p>아래 공문${hasEnclosures ? " 및 첨부서류를" : "을"} 송부드리오니 검토하여 주시기 바랍니다.</p>`,
     `<table style="border-collapse:collapse;margin:12px 0">`,

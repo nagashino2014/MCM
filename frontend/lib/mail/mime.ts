@@ -127,29 +127,44 @@ export function buildMimeMessage(input: BuildMimeInput): Buffer {
     `${b64Body(input.html)}${CRLF}` +
     `--${altBoundary}--${CRLF}`;
 
-  const attachments = input.attachments ?? [];
+  const all = input.attachments ?? [];
+  // 인라인 이미지(cid)는 본문과 함께 multipart/related 안에 있어야 한다.
+  // mixed 레벨에 일반 첨부와 나란히 두면 관대한 클라이언트(Gmail)는 찾아 주지만
+  // 엄격한 쪽(네이버 메일 등)은 cid: 참조를 해석하지 못해 이미지가 깨진다.
+  const inlineImages = all.filter((a) => a.contentId);
+  const files = all.filter((a) => !a.contentId);
+
+  const partOf = (att: MimeAttachment, boundary: string): string =>
+    `--${boundary}${CRLF}` +
+    `Content-Type: ${att.contentType}; name="${isPlainAscii(att.filename) ? att.filename.replace(/"/g, "") : "attachment"}"${CRLF}` +
+    `Content-Transfer-Encoding: base64${CRLF}` +
+    (att.contentId ? `Content-ID: <${att.contentId}>${CRLF}` : "") +
+    `Content-Disposition: ${att.contentId ? "inline" : "attachment"}; ${encodeFilename(att.filename)}${CRLF}${CRLF}` +
+    `${foldBase64(att.content.toString("base64"))}${CRLF}`;
+
+  const altPart = `Content-Type: multipart/alternative; boundary="${altBoundary}"${CRLF}${CRLF}${altBody}`;
+
+  // 본문 = alternative, 인라인 이미지가 있으면 related 로 한 번 감싼다
+  let content = altPart;
+  if (inlineImages.length) {
+    const relBoundary = newBoundary("rel");
+    content =
+      `Content-Type: multipart/related; type="multipart/alternative"; boundary="${relBoundary}"${CRLF}${CRLF}` +
+      `--${relBoundary}${CRLF}${altPart}` +
+      inlineImages.map((a) => partOf(a, relBoundary)).join("") +
+      `--${relBoundary}--${CRLF}`;
+  }
+
   let body: string;
-  if (attachments.length) {
+  if (files.length) {
     const mixedBoundary = newBoundary("mix");
-    let s =
+    body =
       `Content-Type: multipart/mixed; boundary="${mixedBoundary}"${CRLF}${CRLF}` +
-      `--${mixedBoundary}${CRLF}` +
-      `Content-Type: multipart/alternative; boundary="${altBoundary}"${CRLF}${CRLF}` +
-      `${altBody}`;
-    for (const att of attachments) {
-      const disposition = att.contentId ? "inline" : "attachment";
-      s +=
-        `--${mixedBoundary}${CRLF}` +
-        `Content-Type: ${att.contentType}; name="${isPlainAscii(att.filename) ? att.filename.replace(/"/g, "") : "attachment"}"${CRLF}` +
-        `Content-Transfer-Encoding: base64${CRLF}` +
-        (att.contentId ? `Content-ID: <${att.contentId}>${CRLF}` : "") +
-        `Content-Disposition: ${disposition}; ${encodeFilename(att.filename)}${CRLF}${CRLF}` +
-        `${foldBase64(att.content.toString("base64"))}${CRLF}`;
-    }
-    s += `--${mixedBoundary}--${CRLF}`;
-    body = s;
+      `--${mixedBoundary}${CRLF}${content}` +
+      files.map((a) => partOf(a, mixedBoundary)).join("") +
+      `--${mixedBoundary}--${CRLF}`;
   } else {
-    body = `Content-Type: multipart/alternative; boundary="${altBoundary}"${CRLF}${CRLF}${altBody}`;
+    body = content;
   }
 
   return Buffer.from(headers.join(CRLF) + CRLF + body, "utf8");

@@ -39,6 +39,7 @@ const newClauseId = () => `c-${Date.now().toString(36)}-${seq++}`;
 export function AgreementTemplateBoard() {
   const { theme } = useCdashTheme();
   const [tab, setTab] = useState<"standard" | "custom">("standard");
+  const [typeTab, setTypeTab] = useState<string>("");
   const [standard, setStandard] = useState<StandardGroup[]>([]);
   const [custom, setCustom] = useState<CustomRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -56,7 +57,10 @@ export function AgreementTemplateBoard() {
     fetch("/api/contracts/agreements/templates", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        if (d?.standard) setStandard(d.standard);
+        if (d?.standard) {
+          setStandard(d.standard);
+          setTypeTab((cur) => cur || d.standard[0]?.serviceType || "");
+        }
         if (d?.custom) setCustom(d.custom);
       })
       .catch(() => {})
@@ -151,17 +155,26 @@ export function AgreementTemplateBoard() {
       <CdPageHeader
         title="계약서 양식 기준 관리"
         actions={
-          <a href="/contracts/agreements" className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs font-semibold">
+          <a href="/contracts/agreements" className="cd-btn cd-solid-bg rounded-lg border cd-border-c px-3 py-2 text-xs font-semibold cd-text">
             계약서 작성으로
           </a>
         }
       />
-      <div className="flex items-center gap-1.5">
-        <button type="button" className={`rounded-lg px-3 py-1.5 text-[12px] border ${tab === "standard" ? "cd-tint-primary font-bold" : "cd-border-c cd-text-faint"}`} onClick={() => setTab("standard")}>
-          <FileSignature className="w-3.5 h-3.5 inline mr-1" /> 용역 분류별 표준 셋
+      {/* 탭 — 업무추진계획(ExecWorkspace) 세그먼트 패턴. 활성=그라데이션, 비활성=불투명 흰색 */}
+      <div className="inline-flex self-start rounded-xl border cd-border-c overflow-hidden text-[12px] font-semibold">
+        <button
+          type="button"
+          className={`px-3.5 py-2 flex items-center gap-1.5 ${tab === "standard" ? "cd-fill-primary text-white" : "cd-solid-bg cd-text-muted"}`}
+          onClick={() => setTab("standard")}
+        >
+          <FileSignature className="w-3.5 h-3.5" /> 용역 분류별 표준 셋
         </button>
-        <button type="button" className={`rounded-lg px-3 py-1.5 text-[12px] border ${tab === "custom" ? "cd-tint-primary font-bold" : "cd-border-c cd-text-faint"}`} onClick={() => setTab("custom")}>
-          <Building2 className="w-3.5 h-3.5 inline mr-1" /> 발주처 자체양식
+        <button
+          type="button"
+          className={`px-3.5 py-2 flex items-center gap-1.5 border-l cd-border-c ${tab === "custom" ? "cd-fill-primary text-white" : "cd-solid-bg cd-text-muted"}`}
+          onClick={() => setTab("custom")}
+        >
+          <Building2 className="w-3.5 h-3.5" /> 발주처 자체양식
         </button>
       </div>
 
@@ -169,8 +182,28 @@ export function AgreementTemplateBoard() {
         <div className="cd-card rounded-3xl p-10 text-center text-sm cd-text-faint">불러오는 중...</div>
       ) : tab === "standard" ? (
         <div className="flex flex-col xl:flex-row gap-5 items-start">
-          <div className="flex-1 min-w-0 flex flex-col gap-4 w-full max-w-[760px]">
-            {standard.map((g) => (
+          <div className="flex-1 min-w-0 flex flex-col gap-3 w-full max-w-[760px]">
+            {/* 용역 대분류 탭 — 세로 스크롤 최소화(2026-08-11 사용자 요청) */}
+            <div className="inline-flex self-start rounded-xl border cd-border-c overflow-hidden text-[12px] font-semibold flex-wrap">
+              {standard.map((g, gi) => (
+                <button
+                  key={g.serviceType}
+                  type="button"
+                  className={`px-3.5 py-2 ${gi > 0 ? "border-l cd-border-c" : ""} ${
+                    typeTab === g.serviceType ? "cd-fill-primary text-white" : "cd-solid-bg cd-text-muted"
+                  }`}
+                  onClick={() => setTypeTab(g.serviceType)}
+                >
+                  {g.serviceType}
+                  <span className={`ml-1.5 text-[10.5px] ${typeTab === g.serviceType ? "opacity-80" : "cd-text-faint"}`}>
+                    {g.subtypes.filter((s) => s.templateId).length}/{g.subtypes.length}
+                  </span>
+                </button>
+              ))}
+            </div>
+            {standard
+              .filter((g) => g.serviceType === (typeTab || standard[0]?.serviceType))
+              .map((g) => (
               <div key={g.serviceType} className="cd-card rounded-3xl p-5 flex flex-col gap-2">
                 <h3 className="font-bold cd-text text-sm">{g.serviceType}</h3>
                 <div className="flex flex-col gap-1">

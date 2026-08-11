@@ -227,7 +227,7 @@ export function ApprovalDocViewer({
                   onClick={() => window.open(`/api/contracts/agreements/${encodeURIComponent(docId)}/hwpx`, "_blank")}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/icons/hwpxico.png" alt="HWPX" style={{ width: 30, height: 30 }} />
+                  <img src="/icons/hwpxico.png" alt="HWPX" style={{ width: 30, height: 30, objectFit: "contain" }} />
                 </button>
               )}
               {/* PDF 출력 — 사업장 마스터 30px 아이콘 버튼 패턴(FacilityListPanel.tsx:304). 공문은 공문 지면으로 출력. */}

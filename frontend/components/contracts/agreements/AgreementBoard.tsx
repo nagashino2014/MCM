@@ -139,6 +139,7 @@ export function AgreementBoard() {
   const [amountSupply, setAmountSupply] = useState(0);
   const [payments, setPayments] = useState<PaymentStep[]>(DEFAULT_PAYMENTS);
   const [payTab, setPayTab] = useState(0);
+  const [clauseTab, setClauseTab] = useState(0);
   const [periodText, setPeriodText] = useState("계약일 부터 용역 완료 시 까지");
   const [scopeText, setScopeText] = useState("");
   const [issueDate, setIssueDate] = useState(new Date().toISOString().slice(0, 10));
@@ -1060,19 +1061,22 @@ export function AgreementBoard() {
                     </div>
 
                     <div className="flex-1 min-w-0 w-full rounded-2xl border cd-border-c p-3.5 flex flex-col gap-3">
-                      <div className="flex items-center gap-1.5 flex-wrap">
+                      {/* 단계 탭 — 활성=그라데이션, 비활성=불투명 흰색(업무추진계획 세그먼트 패턴) */}
+                      <div className="inline-flex self-start rounded-xl border cd-border-c overflow-hidden text-[12px] font-semibold flex-wrap">
                         {payments.map((p, i) => (
                           <button
                             key={i}
                             type="button"
-                            className={`rounded-lg px-3 py-1.5 text-[12px] border ${payTab === i ? "cd-tint-primary font-bold" : "cd-border-c cd-text-faint"}`}
+                            className={`px-3.5 py-2 ${i > 0 ? "border-l cd-border-c" : ""} ${
+                              payTab === i ? "cd-fill-primary text-white" : "cd-solid-bg cd-text-muted"
+                            }`}
                             onClick={() => setPayTab(i)}
                           >
                             {p.label || `단계 ${i + 1}`}
                             {p.ratio != null ? ` ${p.ratio}%` : ""}
                           </button>
                         ))}
-                        {payments.length === 0 && <span className="text-[12px] cd-text-faint">좌측 [지급 단계 추가]로 시작하세요.</span>}
+                        {payments.length === 0 && <span className="px-3 py-2 text-[12px] cd-text-faint">좌측 [지급 단계 추가]로 시작하세요.</span>}
                       </div>
                       {payments[Math.min(payTab, payments.length - 1)] && (() => {
                         const i = Math.min(payTab, payments.length - 1);
@@ -1150,44 +1154,78 @@ export function AgreementBoard() {
                       <ListPlus className="w-4 h-4 cd-text-primary" /> 용역계약 조건 (조문)
                       <span className="text-[10.5px] font-normal cd-text-faint">번호는 순서대로 자동 부여 — 삽입·삭제해도 어긋나지 않습니다</span>
                     </h3>
-                    {clauses.map((c, i) => (
-                      <div key={c.id} className="rounded-xl border cd-border-c p-3 flex flex-col gap-1.5">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[11px] font-mono cd-text-faint w-14 shrink-0">제 {i + 1} 조</span>
-                          <input className="cd-input text-sm flex-1 font-medium" value={c.title} onChange={(e) => updateClause(i, { title: e.target.value })} />
-                          <button type="button" className="cd-text-faint hover:cd-text disabled:opacity-30" disabled={i === 0} title="위로" onClick={() => moveClause(i, -1)}>
-                            <ArrowUp className="w-3.5 h-3.5" />
-                          </button>
-                          <button type="button" className="cd-text-faint hover:cd-text disabled:opacity-30" disabled={i === clauses.length - 1} title="아래로" onClick={() => moveClause(i, 1)}>
-                            <ArrowDown className="w-3.5 h-3.5" />
-                          </button>
-                          <button type="button" className="cd-text-faint hover:cd-text" title="아래에 조항 삽입" onClick={() => insertClause(i)}>
-                            <Plus className="w-3.5 h-3.5" />
-                          </button>
-                          <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" title="삭제" onClick={() => removeClause(i)}>
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                    {/* 좌: 조 목록 / 우: 선택 조 편집 — 세로 스크롤 최소화(2026-08-11 사용자 요청) */}
+                    <div className="flex flex-col md:flex-row gap-4 items-start">
+                      <div className="w-full md:w-[220px] shrink-0 flex flex-col gap-1.5">
+                        <div className="flex flex-col gap-1 max-h-[420px] overflow-y-auto pr-1">
+                          {clauses.map((c, i) => (
+                            <button
+                              key={c.id}
+                              type="button"
+                              className={`rounded-lg px-2.5 py-1.5 text-left text-[12px] border flex items-center gap-1.5 ${
+                                clauseTab === i ? "cd-fill-primary text-white border-transparent font-semibold" : "cd-solid-bg cd-border-c cd-text-muted"
+                              }`}
+                              onClick={() => setClauseTab(i)}
+                            >
+                              <span className={`font-mono text-[10.5px] shrink-0 ${clauseTab === i ? "opacity-80" : "cd-text-faint"}`}>{i + 1}</span>
+                              <span className="truncate">{c.title || "(제목 없음)"}</span>
+                            </button>
+                          ))}
                         </div>
-                        {c.binding === "payment" ? (
-                          <div className="rounded-lg cd-tint-primary px-3 py-2 text-[11.5px] whitespace-pre-wrap">
-                            {payments.length
-                              ? paymentClauseBody(payments, template?.spec.terms ?? { orderer: "발주자", contractor: "과업수행자" })
-                              : "지급 단계를 입력하면 본문이 자동 생성됩니다."}
-                            <div className="text-[10px] cd-text-faint mt-1">위 「계약금액 · 대금 지급 조건」에서 자동 생성 — 직접 수정하려면 조를 삭제하고 새 조항으로 작성하세요.</div>
-                          </div>
-                        ) : (
-                          <textarea
-                            className="cd-input text-[12px] min-h-[64px] leading-relaxed"
-                            value={c.body}
-                            placeholder="조문 본문 — {{contract.scope}} 같은 토큰은 입력값으로 치환됩니다"
-                            onChange={(e) => updateClause(i, { body: e.target.value })}
-                          />
-                        )}
+                        <button
+                          type="button"
+                          className="cd-btn rounded-lg border border-dashed cd-border-c px-3 py-1.5 text-[11.5px] cd-text-faint"
+                          onClick={() => {
+                            insertClause(clauses.length - 1);
+                            setClauseTab(clauses.length);
+                          }}
+                        >
+                          ＋ 조항 추가
+                        </button>
                       </div>
-                    ))}
-                    <button type="button" className="cd-btn rounded-lg border border-dashed cd-border-c px-3 py-1.5 text-[11.5px] cd-text-faint self-start" onClick={() => insertClause(clauses.length - 1)}>
-                      ＋ 조항 추가
-                    </button>
+
+                      <div className="flex-1 min-w-0 w-full rounded-2xl border cd-border-c p-3.5 flex flex-col gap-2">
+                        {clauses[Math.min(clauseTab, clauses.length - 1)] && (() => {
+                          const i = Math.min(clauseTab, clauses.length - 1);
+                          const c = clauses[i];
+                          return (
+                            <>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[11px] font-mono cd-text-faint w-14 shrink-0">제 {i + 1} 조</span>
+                                <input className="cd-input text-sm flex-1 font-medium" value={c.title} onChange={(e) => updateClause(i, { title: e.target.value })} />
+                                <button type="button" className="cd-text-faint hover:cd-text disabled:opacity-30" disabled={i === 0} title="위로" onClick={() => { moveClause(i, -1); setClauseTab(i - 1); }}>
+                                  <ArrowUp className="w-3.5 h-3.5" />
+                                </button>
+                                <button type="button" className="cd-text-faint hover:cd-text disabled:opacity-30" disabled={i === clauses.length - 1} title="아래로" onClick={() => { moveClause(i, 1); setClauseTab(i + 1); }}>
+                                  <ArrowDown className="w-3.5 h-3.5" />
+                                </button>
+                                <button type="button" className="cd-text-faint hover:cd-text" title="아래에 조항 삽입" onClick={() => { insertClause(i); setClauseTab(i + 1); }}>
+                                  <Plus className="w-3.5 h-3.5" />
+                                </button>
+                                <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" title="삭제" onClick={() => { removeClause(i); setClauseTab(Math.max(0, i - 1)); }}>
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                              {c.binding === "payment" ? (
+                                <div className="rounded-lg cd-tint-primary px-3 py-2 text-[11.5px] whitespace-pre-wrap">
+                                  {payments.length
+                                    ? paymentClauseBody(payments, template?.spec.terms ?? { orderer: "발주자", contractor: "과업수행자" })
+                                    : "지급 단계를 입력하면 본문이 자동 생성됩니다."}
+                                  <div className="text-[10px] cd-text-faint mt-1">위 「계약금액 · 대금 지급 조건」에서 자동 생성 — 직접 수정하려면 조를 삭제하고 새 조항으로 작성하세요.</div>
+                                </div>
+                              ) : (
+                                <textarea
+                                  className="cd-input text-[12px] min-h-[260px] leading-relaxed"
+                                  value={c.body}
+                                  placeholder="조문 본문 — {{contract.scope}} 같은 토큰은 입력값으로 치환됩니다"
+                                  onChange={(e) => updateClause(i, { body: e.target.value })}
+                                />
+                              )}
+                            </>
+                          );
+                        })()}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>

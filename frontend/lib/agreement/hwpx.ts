@@ -197,6 +197,39 @@ function cellParaPrId(tblXml: string, col: number, row: number): string | null {
   return null;
 }
 
+/**
+ * PDF 변환용 셀 높이 보정 — LibreOffice(converter)는 hwpx 셀 높이를 사실상 고정으로 취급하고
+ * 줄간도 한글보다 커서, 원본(한글 기준) 높이 그대로면 2줄 라벨·긴 지급조건이 잘린다.
+ * 갑지 표 전체 셀의 height 를 내용 줄 수 기반 최소치로 상향한다(원본보다 클 때만).
+ * ⚠ 발송·보관용 HWPX 에는 적용하지 않는다 — 한글은 자동 확장하므로 원본 실측 높이가 정답.
+ */
+function inflateCellHeights(tblXml: string): string {
+  const LINE_H = 1850; // LO 여유 줄높이(HWPUNIT) — 10pt 폰트 + 여유
+  const PAD_V = 950;
+  return tblXml.replace(/<hp:tc\b[\s\S]*?<\/hp:tc>/g, (tc) => {
+    const sz = /<hp:cellSz width="(\d+)" height="(\d+)"/.exec(tc);
+    if (!sz) return tc;
+    const innerWpt = Number(sz[1]) / 100 - 8;
+    let lines = 0;
+    const subM = /<hp:subList\b[^>]*>([\s\S]*?)<\/hp:subList>/.exec(tc);
+    for (const p of subM?.[1].match(P_G_RE) ?? []) {
+      const text = [...p.matchAll(/<hp:t>([\s\S]*?)<\/hp:t>/g)].map((t) => t[1]).join("");
+      lines += text.trim() ? estimateLines(text, innerWpt) : 1;
+    }
+    if (!lines) return tc;
+    // 안쪽 여백도 보정 — LO 렌더에서 값이 테두리에 붙어 보이는 것(左右)과 상하 잘림 완화
+    let out = tc.replace(
+      /<hp:cellMargin left="\d+" right="\d+" top="\d+" bottom="\d+"\/>/,
+      '<hp:cellMargin left="850" right="510" top="330" bottom="330"/>'
+    );
+    const needH = lines * LINE_H + PAD_V;
+    if (needH > Number(sz[2])) {
+      out = out.replace(/(<hp:cellSz width="\d+" height=")\d+(")/, `$1${needH}$2`);
+    }
+    return out;
+  });
+}
+
 function cellXml(
   st: Styles,
   cell: CellSpec,
@@ -234,7 +267,6 @@ function tableXml(
   const cols = block.columns.length;
   const rows = block.rows.length;
   const colW = block.columns.map((c) => Math.round(CONTENT_W_HWP * c.widthRatio));
-  const rowH = 900;
 
   let preamble = st.tblPreamble
     .replace(/(\browCnt=")\d+(")/, `$1${rows}$2`)
@@ -247,6 +279,23 @@ function tableXml(
   }
   const stUse: Styles = { ...st, tcTpl: tcTplUse };
 
+  // 셀 텍스트 선계산 + 행 높이 = 내용 줄 수 기반(LibreOffice 는 셀 높이를 고정 취급 — 잘림 방지.
+  // 한글은 최소 높이로 취급하므로 발송본에도 무해)
+  const cellTexts: string[][] = block.rows.map((row) =>
+    row.map((cell) => (cell.merged ? "" : cell.binding ? renderBinding(cell.binding, values, cell.format) : renderTemplate(cell.text ?? "", values)))
+  );
+  const rowH = block.rows.map((row, ri) =>
+    Math.max(
+      1,
+      ...row.map((cell, ci) => {
+        if (cell.merged || (cell.rowSpan ?? 1) > 1) return 0;
+        const span = cell.colSpan ?? 1;
+        const wPt = colW.slice(ci, ci + span).reduce((a, b) => a + b, 0) / 100 - 8;
+        return cellTexts[ri][ci].split("\n").reduce((a, ln) => a + estimateLines(ln, wPt), 0);
+      })
+    ) * 1850 + 950
+  );
+
   const trs = block.rows
     .map((row, ri) => {
       const tcs = row
@@ -255,8 +304,8 @@ function tableXml(
           const span = cell.colSpan ?? 1;
           const rspan = cell.rowSpan ?? 1;
           const w = colW.slice(ci, ci + span).reduce((a, b) => a + b, 0);
-          const text = cell.binding ? renderBinding(cell.binding, values, cell.format) : renderTemplate(cell.text ?? "", values);
-          return cellXml(stUse, cell, text, ci, ri, span, rspan, w, rowH * rspan);
+          const h = rowH.slice(ri, ri + rspan).reduce((a, b) => a + b, 0);
+          return cellXml(stUse, cell, cellTexts[ri][ci], ci, ri, span, rspan, w, h);
         })
         .join("");
       return `<hp:tr>${tcs}</hp:tr>`;
@@ -355,7 +404,11 @@ async function loadTemplate(file: string): Promise<Buffer> {
   return bytes;
 }
 
-export async function renderAgreementHwpx(spec: AgreementSpec, fv: AgreementFieldValues): Promise<Uint8Array> {
+export async function renderAgreementHwpx(
+  spec: AgreementSpec,
+  fv: AgreementFieldValues,
+  opts: { forPdf?: boolean } = {}
+): Promise<Uint8Array> {
   const zip = await JSZip.loadAsync(await loadTemplate("agreement.hwpx"));
   const sectionPath = "Contents/section0.xml";
   const section = zip.file(sectionPath);
@@ -426,15 +479,17 @@ export async function renderAgreementHwpx(spec: AgreementSpec, fv: AgreementFiel
     // 체결문 셀은 실측이 [체결문]/[빈]/[날짜]/[빈]/[첨부] 구조 — 텍스트 문단 3개에 순서 배정
     tbl = replaceTableCell(tbl, 0, 9, String(values["cover.execText"]).split("\n").filter(Boolean).map(pad));
     // 날인란 — 주소 줄 수를 좌우 맞춰 "대표이사" 줄 높이 일치(빈 줄 보충). 셀 내폭 ≈ 175pt
+    // 보충 줄은 빈 문자열이 아니라 공백 1자 — LibreOffice 가 빈 run 문단을 0높이로 접는 것을 막는다.
     {
       const ordL = estimateLines(o.address, 172);
       const coL = estimateLines(AGREEMENT_COMPANY_ADDRESS, 172);
       const maxL = Math.max(ordL, coL);
-      const fill = (n: number) => Array(Math.max(0, n)).fill("");
+      const fill = (n: number) => Array(Math.max(0, n)).fill(" ");
       const coCeo = spreadName(COMPANY_CEO);
       tbl = replaceTableCell(tbl, 2, 10, [pad(o.name), pad(o.address), ...fill(maxL - ordL), pad(`대표이사 ${ceoDisp} (인)`)]);
       tbl = replaceTableCell(tbl, 6, 10, [pad(COMPANY_KO), pad(AGREEMENT_COMPANY_ADDRESS), ...fill(maxL - coL), pad(`대표이사 ${coCeo} (인)`)]);
     }
+    if (opts.forPdf) tbl = inflateCellHeights(tbl);
     xml = xml.replace(tblM[0], tbl);
 
     // 표 이후 문단(조문+말미) 전부 제거 — 표를 감싼 문단은 보존해야 하므로 표 뒤 구간만 다룬다

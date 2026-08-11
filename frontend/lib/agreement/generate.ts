@@ -28,7 +28,11 @@ export async function renderAgreementArtifacts(
     console.warn(`[agreement] HWPX 생성 실패 — pdf-lib 직접 렌더로 진행:`, err);
   }
   let pdfBytes: Uint8Array | null = null;
-  if (hwpxBytes) pdfBytes = await convertHwpxToPdf(hwpxBytes, `${name}.hwpx`);
+  if (hwpxBytes) {
+    // 변환용은 셀 높이 보정판(forPdf) — LibreOffice 잘림 방지. 발송·보관 HWPX 는 실측 원본 그대로.
+    const forPdf = await renderAgreementHwpx(spec, fv, { forPdf: true }).catch(() => hwpxBytes);
+    pdfBytes = await convertHwpxToPdf(forPdf ?? hwpxBytes, `${name}.hwpx`);
+  }
   if (!pdfBytes) pdfBytes = await renderAgreementPdf(spec, fv);
   return { pdfBytes, hwpxBytes };
 }

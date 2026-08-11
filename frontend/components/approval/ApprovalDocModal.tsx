@@ -217,6 +217,18 @@ export function ApprovalDocViewer({
                   {detail.docNo ?? "미채번"} · {DOC_STATUS_LABEL[detail.status] ?? detail.status}
                 </span>
               </h3>
+              {/* 계약서(147) — HWPX 다운로드(한글 원본 확인용, 2026-08-11 사용자 요청). 결재 중에도 on-demand 렌더. */}
+              {detail.formId === AGREEMENT_FORM_ID && (
+                <button
+                  type="button"
+                  className="flex items-center justify-center shrink-0 rounded-lg border cd-border-c px-1.5"
+                  style={{ height: 30 }}
+                  title="HWPX 다운로드(한글 원본)"
+                  onClick={() => window.open(`/api/contracts/agreements/${encodeURIComponent(docId)}/hwpx`, "_blank")}
+                >
+                  <span className="text-[10.5px] font-bold cd-text-primary">HWPX</span>
+                </button>
+              )}
               {/* PDF 출력 — 사업장 마스터 30px 아이콘 버튼 패턴(FacilityListPanel.tsx:304). 공문은 공문 지면으로 출력. */}
               <button
                 type="button"

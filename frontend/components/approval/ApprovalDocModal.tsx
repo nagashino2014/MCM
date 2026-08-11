@@ -221,12 +221,13 @@ export function ApprovalDocViewer({
               {detail.formId === AGREEMENT_FORM_ID && (
                 <button
                   type="button"
-                  className="flex items-center justify-center shrink-0 rounded-lg border cd-border-c px-1.5"
-                  style={{ height: 30 }}
+                  className="flex items-center justify-center shrink-0"
+                  style={{ width: 30, height: 30 }}
                   title="HWPX 다운로드(한글 원본)"
                   onClick={() => window.open(`/api/contracts/agreements/${encodeURIComponent(docId)}/hwpx`, "_blank")}
                 >
-                  <span className="text-[10.5px] font-bold cd-text-primary">HWPX</span>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/icons/hwpxico.png" alt="HWPX" style={{ width: 30, height: 30 }} />
                 </button>
               )}
               {/* PDF 출력 — 사업장 마스터 30px 아이콘 버튼 패턴(FacilityListPanel.tsx:304). 공문은 공문 지면으로 출력. */}

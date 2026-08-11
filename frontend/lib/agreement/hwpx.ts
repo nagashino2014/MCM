@@ -198,36 +198,25 @@ function cellParaPrId(tblXml: string, col: number, row: number): string | null {
 }
 
 /**
- * PDF 변환용 셀 높이 보정 — LibreOffice(converter)는 hwpx 셀 높이를 사실상 고정으로 취급하고
- * 줄간도 한글보다 커서, 원본(한글 기준) 높이 그대로면 2줄 라벨·긴 지급조건이 잘린다.
- * 갑지 표 전체 셀의 height 를 내용 줄 수 기반 최소치로 상향한다(원본보다 클 때만).
- * ⚠ 발송·보관용 HWPX 에는 적용하지 않는다 — 한글은 자동 확장하므로 원본 실측 높이가 정답.
+ * PDF 변환용 보정(줄간 축소) — LibreOffice(converter)는 hwpx 셀 높이를 고정으로 취급하는데
+ * 줄간은 한글보다 크게 잡아, 원본 높이 그대로면 2줄 라벨·긴 지급조건이 아래로 잘린다.
+ * 셀 높이를 키우면 갑지 표가 A4 한 장을 넘겨(페이지 분할) 더 나빠지므로, 반대로 **줄간을 줄여**
+ * 같은 높이 안에 들어가게 한다. 문단 서식(글꼴·크기·정렬)은 그대로다.
+ * ⚠ 발송·보관용 HWPX 에는 적용하지 않는다 — 한글은 셀을 자동 확장하므로 원본이 정답.
  */
-function inflateCellHeights(tblXml: string): string {
-  const LINE_H = 1850; // LO 여유 줄높이(HWPUNIT) — 10pt 폰트 + 여유
-  const PAD_V = 950;
-  return tblXml.replace(/<hp:tc\b[\s\S]*?<\/hp:tc>/g, (tc) => {
-    const sz = /<hp:cellSz width="(\d+)" height="(\d+)"/.exec(tc);
-    if (!sz) return tc;
-    const innerWpt = Number(sz[1]) / 100 - 8;
-    let lines = 0;
-    const subM = /<hp:subList\b[^>]*>([\s\S]*?)<\/hp:subList>/.exec(tc);
-    for (const p of subM?.[1].match(P_G_RE) ?? []) {
-      const text = [...p.matchAll(/<hp:t>([\s\S]*?)<\/hp:t>/g)].map((t) => t[1]).join("");
-      lines += text.trim() ? estimateLines(text, innerWpt) : 1;
-    }
-    if (!lines) return tc;
-    // 안쪽 여백도 보정 — LO 렌더에서 값이 테두리에 붙어 보이는 것(左右)과 상하 잘림 완화
-    let out = tc.replace(
-      /<hp:cellMargin left="\d+" right="\d+" top="\d+" bottom="\d+"\/>/,
-      '<hp:cellMargin left="850" right="510" top="330" bottom="330"/>'
-    );
-    const needH = lines * LINE_H + PAD_V;
-    if (needH > Number(sz[2])) {
-      out = out.replace(/(<hp:cellSz width="\d+" height=")\d+(")/, `$1${needH}$2`);
-    }
-    return out;
+function shrinkLineSpacing(headerXml: string): string {
+  return headerXml.replace(/<hh:lineSpacing type="PERCENT" value="(\d+)"/g, (all, v: string) => {
+    const next = Math.max(100, Math.round(Number(v) * 0.72)); // 160%→115%, 130%→100%
+    return all.replace(`value="${v}"`, `value="${next}"`);
   });
+}
+
+/**
+ * PDF 변환용 선행 공백 보정 — LibreOffice 는 XML 텍스트의 선행 공백을 트림해서
+ * "값 앞 1칸 띄어쓰기"가 PDF 에서만 사라진다(값이 테두리에 붙어 보임). NBSP 로 바꿔 보존한다.
+ */
+function preserveLeadingSpace(xml: string): string {
+  return xml.replace(/<hp:t>( +)/g, (_, sp: string) => `<hp:t>${" ".repeat(sp.length)}`);
 }
 
 function cellXml(
@@ -489,7 +478,6 @@ export async function renderAgreementHwpx(
       tbl = replaceTableCell(tbl, 2, 10, [pad(o.name), pad(o.address), ...fill(maxL - ordL), pad(`대표이사 ${ceoDisp} (인)`)]);
       tbl = replaceTableCell(tbl, 6, 10, [pad(COMPANY_KO), pad(AGREEMENT_COMPANY_ADDRESS), ...fill(maxL - coL), pad(`대표이사 ${coCeo} (인)`)]);
     }
-    if (opts.forPdf) tbl = inflateCellHeights(tbl);
     xml = xml.replace(tblM[0], tbl);
 
     // 표 이후 문단(조문+말미) 전부 제거 — 표를 감싼 문단은 보존해야 하므로 표 뒤 구간만 다룬다
@@ -523,6 +511,13 @@ export async function renderAgreementHwpx(
       out.push(clauseSectionXml(st, spec, fv, values, { titlePageBreak: true, noneBorderFillId: noneFill?.id ?? null }));
     }
     xml = xml.replace("__FIRST__", keepFirst + out.join(""));
+  }
+
+  // PDF 변환용 사본만 LO 렌더 보정 — 줄간 축소(셀 높이 고정 취급 대응)·선행 공백 NBSP 보존.
+  // 셀 높이 확대는 갑지 표가 A4 를 넘겨 페이지가 갈라지므로 쓰지 않는다(실측 확인).
+  if (opts.forPdf) {
+    xml = preserveLeadingSpace(xml);
+    if (headerXml) headerXml = shrinkLineSpacing(headerXml);
   }
 
   zip.file(sectionPath, xml);

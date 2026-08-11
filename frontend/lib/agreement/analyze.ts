@@ -98,6 +98,8 @@ export async function analyzeAgreementHwpx(bytes: Uint8Array): Promise<Agreement
 
   const spec: AgreementSpec = {
     coverBlocks: baseSeed.spec.coverBlocks,
+    // A형 갑지 골격이면 HWPX 도 실측 표준 템플릿 보존 경로를 탄다
+    hwpxTemplate: baseSeed.spec.hwpxTemplate,
     clausePage: {
       title: "용역 계약 조건",
       preamble: String(root.preamble ?? "").trim() || undefined,

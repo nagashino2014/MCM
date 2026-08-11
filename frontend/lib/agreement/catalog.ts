@@ -12,58 +12,75 @@
 import type { DocBlock } from "@/lib/deliverable/types";
 import type { AgreementClause, AgreementSpec, AgreementTemplateRow } from "./types";
 
-// ── A형 갑지 — "도 급 계 약 서" (국도화학·코리아써키트 공통 골격) ──
+// ── A형 갑지 — "도 급 계 약 서" (국도화학 실측 11행×7열 표를 그대로 재현) ──
+// 열폭·병합은 실측 hwpx(hp:cellSz) 실측값. 체결문·날짜·첨부·날인란까지 전부 표 안이다
+// (2026-08-11 사용자 지적: 갑지·서명란은 표준 양식과 똑같아야 함).
+
+const COVER_A_COLS = [0.0789, 0.0505, 0.0621, 0.1518, 0.1512, 0.1462, 0.3593];
+const m = { merged: true } as const;
 
 const COVER_A: DocBlock[] = [
   {
     kind: "table",
-    columns: [{ widthRatio: 0.12, align: "center" }, { widthRatio: 0.18, align: "center" }, { widthRatio: 0.7 }],
+    columns: COVER_A_COLS.map((w) => ({ widthRatio: w })),
     rows: [
-      [{ text: "도 급 계 약 서", colSpan: 3, align: "center", bold: true }, { merged: true }, { merged: true }],
+      [{ text: "도 급 계 약 서", colSpan: 7, align: "center", bold: true }, m, m, m, m, m, m],
       [
         { text: "계 약\n당사자", rowSpan: 3, align: "center", bold: true },
-        { text: "발주자", align: "center" },
-        { binding: "orderer.name" },
+        { text: "발주자", colSpan: 3, align: "center" },
+        m,
+        m,
+        { binding: "orderer.name", colSpan: 3 },
+        m,
+        m,
       ],
-      [{ merged: true }, { text: "계약상대자\n상호", align: "center" }, { binding: "company.name" }],
-      [{ merged: true }, { text: "사업자\n등록번호", align: "center" }, { binding: "company.bizNo" }],
       [
-        { text: "계 약\n내 용", rowSpan: 6, align: "center", bold: true },
-        { text: "계  약  명", align: "center" },
-        { binding: "contract.title" },
+        m,
+        { text: "계  약\n상대자", colSpan: 2, rowSpan: 2, align: "center" },
+        m,
+        { text: "상호", align: "center" },
+        { binding: "company.name", colSpan: 3 },
+        m,
+        m,
       ],
-      [{ merged: true }, { text: "계약금액\n공급가", align: "center" }, { binding: "amount.supplyLine" }],
-      [{ merged: true }, { text: "세액", align: "center" }, { binding: "amount.vatLine" }],
-      [{ merged: true }, { text: "합계", align: "center" }, { binding: "amount.totalLine" }],
-      [{ merged: true }, { text: "대금 지급 조건", align: "center" }, { binding: "payment.summary", format: "multiline" }],
-      [{ merged: true }, { text: "계 약 기 간", align: "center" }, { binding: "contract.period" }],
-    ],
-  },
-  { kind: "spacer", heightPt: 10 },
-  {
-    kind: "para",
-    text:
-      "{{orderer.name}}(“발주자”)와 {{company.name}}(“계약상대자”)는 본 계약서와 첨부의 계약문서에 의하여 " +
-      "상기 용역에 대한 계약을 체결하고 신의에 따라 성실히 계약상의 의무를 이행할 것을 확약하며 " +
-      "이 계약의 증거로서 계약서를 작성하여 당사자가 기명날인한 후 각각 1통씩 보관한다.",
-  },
-  { kind: "spacer", heightPt: 8 },
-  { kind: "dateLine", binding: "issue.date", format: "dateKorean", align: "center" },
-  { kind: "para", text: "{{attach.line}}" },
-  { kind: "spacer", heightPt: 16 },
-  {
-    kind: "table",
-    columns: [
-      { widthRatio: 0.15, align: "center" },
-      { widthRatio: 0.35 },
-      { widthRatio: 0.15, align: "center" },
-      { widthRatio: 0.35 },
-    ],
-    rows: [
+      [m, m, m, { text: "사업자\n등록번호", align: "center" }, { binding: "company.bizNo", colSpan: 3 }, m, m],
       [
-        { text: "“발주자” :", bold: true },
-        { binding: "orderer.signText", format: "multiline" },
-        { text: "“계약상대자” :", bold: true },
+        { text: "계 약\n내 용", rowSpan: 5, align: "center", bold: true },
+        { text: "계  약  명", colSpan: 3, align: "center" },
+        m,
+        m,
+        { binding: "contract.title", colSpan: 3 },
+        m,
+        m,
+      ],
+      [
+        m,
+        { text: "계  약\n금  액", colSpan: 2, rowSpan: 2, align: "center" },
+        m,
+        { text: "합계", align: "center" },
+        { binding: "amount.totalLine", colSpan: 3 },
+        m,
+        m,
+      ],
+      [m, m, m, { text: "공급가\n세액", align: "center" }, { binding: "amount.supplyVatLines", colSpan: 3, format: "multiline" }, m, m],
+      [
+        m,
+        { text: "대금 지급 조건", colSpan: 3, align: "center" },
+        m,
+        m,
+        { binding: "payment.summary", colSpan: 3, format: "multiline" },
+        m,
+        m,
+      ],
+      [m, { text: "계 약 기 간", colSpan: 3, align: "center" }, m, m, { binding: "contract.period", colSpan: 3 }, m, m],
+      [{ binding: "cover.execText", colSpan: 7, format: "multiline" }, m, m, m, m, m, m],
+      [
+        { text: "“발주자” :", colSpan: 2, align: "center", bold: true },
+        m,
+        { binding: "orderer.signText", colSpan: 3, format: "multiline" },
+        m,
+        m,
+        { text: "“계약상대자” :", align: "center", bold: true },
         { binding: "company.signText", format: "multiline" },
       ],
     ],
@@ -194,6 +211,7 @@ const CLAUSES_A: AgreementClause[] = [
 
 const SPEC_A: AgreementSpec = {
   coverBlocks: COVER_A,
+  hwpxTemplate: "standard-a",
   clausePage: {
     title: "용역계약 조건",
     preamble:

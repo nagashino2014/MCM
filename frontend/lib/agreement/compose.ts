@@ -76,10 +76,23 @@ export function paymentClauseBody(payments: PaymentStep[], terms: AgreementSpec[
     .join("\n");
 }
 
-/** 날인 블록 텍스트 — "상호\n주소\n대표이사 이 유 억 (인)" */
+/** 날인 블록 텍스트 — "상호\n주소\n대표이사 이 유 억 (인)". 복수 대표("이시창, 황문성")는 벌려 쓰지 않는다 */
 function signText(name: string, address: string, ceo: string): string {
-  const ceoLine = ceo ? `대표이사 ${spreadName(ceo)}  (인)` : "대표이사              (인)";
+  const ceoDisp = ceo ? (ceo.includes(",") ? ceo : spreadName(ceo)) : "";
+  const ceoLine = ceoDisp ? `대표이사 ${ceoDisp}  (인)` : "대표이사              (인)";
   return [name, address, ceoLine].filter(Boolean).join("\n");
+}
+
+/** 말미 서명 블록(조문 끝, 실측 2단 무테두리) — "사업장명 : …\n주    소 : …\n대표이사  … (인)" */
+function tailSignText(name: string, address: string, ceo: string): string {
+  const ceoDisp = ceo ? (ceo.includes(",") ? ceo : spreadName(ceo)) : "";
+  return [`사업장명 : ${name}`, `주    소 : ${address}`, `대표이사  ${ceoDisp}  (인)`].join("\n");
+}
+
+/** "2026년 08월 11일" — 갑지 체결문 셀 안 날짜 표기 */
+function dateKorean(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? "");
+  return m ? `${m[1]}년  ${m[2]}월  ${m[3]}일` : iso ?? "";
 }
 
 /** 갑지 렌더용 flat 바인딩 값 — deliverable format.ts(renderTemplate/renderBinding)가 소비한다 */
@@ -107,10 +120,24 @@ export function buildCoverValues(fv: AgreementFieldValues): DeliverableValues {
     "amount.supplyLine": amountLine(supply),
     "amount.vatLine": amountLine(vat),
     "amount.totalLine": amountLine(total),
+    "amount.supplyVatLines": `${amountLine(supply)}\n${amountLine(vat)}`,
     "amount.totalVatSep": amountLineVatSep(supply),
     "payment.summary": paymentSummary(fv.payments),
     "issue.date": fv.issueDate,
+    "issue.dateKorean": dateKorean(fv.issueDate),
     "attach.line": fv.attachNote ? `첨부 : ${fv.attachNote}` : "",
+    // 갑지 체결문 셀(실측 A형: 체결문+날짜+첨부가 표 안 한 셀) — 렌더러가 줄 단위로 문단화한다
+    "cover.execText": [
+      `${o.name}(“발주자”)와 ${COMPANY_KO}(“계약상대자”)는 본 계약서와 첨부의 계약문서에 의하여 상기 용역에 대한 계약을 체결하고 신의에 따라 성실히 계약상의 의무를 이행할 것을 확약하며 이 계약의 증거로서 계약서를 작성하여 당사자가 기명날인한 후 각각 1통씩 보관한다.`,
+      "",
+      `${dateKorean(fv.issueDate)}`,
+      fv.attachNote ? `첨 부 : ${fv.attachNote}` : "",
+    ]
+      .filter((l, i) => i < 3 || l)
+      .join("\n"),
+    // 조문 말미 서명(실측 2단 무테두리 — "(발주자)/(과업수행자)" 헤더 아래 3줄)
+    "orderer.tailSign": tailSignText(o.name, o.address, o.ceo),
+    "company.tailSign": tailSignText(COMPANY_KO, COMPANY_ADDRESS, COMPANY_CEO),
   };
 }
 

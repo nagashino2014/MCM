@@ -1,13 +1,15 @@
-// 계약서 HWPX 렌더러 — public/hwpx/agreement.hwpx(실측 도급계약서를 그대로 템플릿화)의
-// 스타일(paraPr/charPr)·표 골격(tcTpl)을 추출한 뒤, 본문을 프로그램 생성 XML 로 전면 교체한다.
-// 기법: lib/letter/hwpx.ts(스타일 참조=목록 인덱스라 신규 등록은 목록 끝 append·표 골격 추출)
-// 이식. 공문과 달리 A4 1장 fit 이 없다 — 갑지 표 + 페이지 나눔 + 조문 문단 흐름(한글이
-// linesegarray 를 재계산). HWPX 는 발주처 수정 협의용 편집본이며 검토·보관 원본은 PDF 다.
+// 계약서 HWPX 렌더러 — 두 경로:
+// ① standard-a(실측 표준 도급계약서): public/hwpx/agreement.hwpx 의 갑지 표(11행×7열)·서식을
+//    **그대로 보존**하고 셀 좌표(colAddr,rowAddr)로 값만 치환한다. 조문 구간만 프로그램 생성으로
+//    교체하고, 말미 서명부는 실측(2단 무테두리)을 무테두리 표로 재현한다
+//    (2026-08-11 사용자 확정: hwpx 는 표준 양식과 똑같아야 함).
+// ② 폴백(B형 1장 갑지·비표준 custom): 템플릿 스타일만 빌려 본문 전체를 프로그램 생성한다.
+// 기법: lib/letter/hwpx.ts 이식(스타일 참조=목록 인덱스라 신규 등록은 목록 끝 append·표 골격 추출).
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import JSZip from "jszip";
-import { renderBinding, renderTemplate } from "@/lib/deliverable/format";
+import { renderBinding, renderTemplate, spreadName } from "@/lib/deliverable/format";
 import type { CellSpec, DeliverableValues, DocBlock } from "@/lib/deliverable/types";
 import { buildCoverValues, resolveClauses } from "./compose";
 import type { AgreementFieldValues, AgreementSpec } from "./types";
@@ -16,7 +18,7 @@ const LINESEG_RE = /<hp:linesegarray>[\s\S]*?<\/hp:linesegarray>/g;
 const P_G_RE = /<hp:p\b[\s\S]*?<\/hp:p>/g;
 const T_ALL_RE = /<hp:t>[\s\S]*?<\/hp:t>/g;
 
-/** A4 콘텐츠 폭(HWPUNIT = pt×100) — PDF 렌더(DEFAULT_MARGINS 57/57)와 동일 폭 */
+/** A4 콘텐츠 폭(HWPUNIT = pt×100) — 실측 갑지 표 전폭(50442)과 근사 */
 const CONTENT_W_HWP = Math.round((595.28 - 57 - 57) * 100);
 
 function escapeXml(value: string): string {
@@ -88,24 +90,93 @@ function registerCharPr(
   return xml ? { xml, id: newId } : null;
 }
 
+/** header.xml 에 무테두리 borderFill 등록 — 말미 2단 서명부(실측: 선 없는 2단) */
+function registerNoneBorderFill(headerXml: string): { xml: string; id: string } | null {
+  let maxId = 0;
+  for (const idm of headerXml.matchAll(/<hh:borderFill\b[^>]*\bid="(\d+)"/g)) maxId = Math.max(maxId, Number(idm[1]));
+  if (maxId === 0) return null;
+  const newId = String(maxId + 1);
+  const edge = 'type="NONE" width="0.1 mm" color="#000000"';
+  const fill =
+    `<hh:borderFill id="${newId}" threeD="0" shadow="0" centerLine="NONE" breakCellSeparateLine="0">` +
+    '<hh:slash type="NONE" Crooked="0" isCounter="0"/><hh:backSlash type="NONE" Crooked="0" isCounter="0"/>' +
+    `<hh:leftBorder ${edge}/><hh:rightBorder ${edge}/><hh:topBorder ${edge}/><hh:bottomBorder ${edge}/>` +
+    '<hh:diagonal type="SOLID" width="0.1 mm" color="#000000"/></hh:borderFill>';
+  const xml = appendToList(headerXml, "</hh:borderFills>", "hh:borderFills", fill);
+  return xml ? { xml, id: newId } : null;
+}
+
 interface Styles {
   bodyParaPr: string;
   bodyCharPr: string;
   centerParaPr: string;
-  titleCharPr: string; // 크게+볼드+자간
+  titleCharPr: string;
   boldCharPr: string;
-  tblPreamble: string; // <hp:tbl …> ~ 첫 tr 직전
+  tblPreamble: string;
   tcTpl: string;
 }
 
 function paragraphXml(text: string, paraPr: string, charPr: string, pageBreak = false): string {
-  const runs = text
-    ? `<hp:run charPrIDRef="${charPr}"><hp:t>${escapeXml(text)}</hp:t></hp:run>`
-    : `<hp:run charPrIDRef="${charPr}"><hp:t></hp:t></hp:run>`;
+  const runs = `<hp:run charPrIDRef="${charPr}"><hp:t>${escapeXml(text)}</hp:t></hp:run>`;
   return `<hp:p id="0" paraPrIDRef="${paraPr}" styleIDRef="0" pageBreak="${pageBreak ? 1 : 0}" columnBreak="0" merged="0">${runs}</hp:p>`;
 }
 
-/** 셀 하나 — tcTpl 복제 후 주소·병합·크기·문단 교체(letter fillTcTemplate 이식) */
+/** 문단 XML 텍스트 교체(첫 hp:t 에 값, 나머지 비움) — letter/hwpx.ts setParagraphText 이식 */
+function setParaText(pXml: string, value: string): string {
+  let first = true;
+  if (/<hp:t>/.test(pXml)) {
+    return pXml.replace(T_ALL_RE, () => {
+      if (first) {
+        first = false;
+        return `<hp:t>${escapeXml(value)}</hp:t>`;
+      }
+      return "<hp:t></hp:t>";
+    });
+  }
+  const runClose = pXml.indexOf("</hp:run>");
+  if (runClose >= 0) return pXml.slice(0, runClose) + `<hp:t>${escapeXml(value)}</hp:t>` + pXml.slice(runClose);
+  return pXml;
+}
+
+/**
+ * 셀 subList 안 문단들을 lines 로 교체 — **hp:t 를 가진 텍스트 문단에만** 값을 순서대로 배정한다.
+ * 실측 셀은 값 문단 사이에 빈 문단(행간 여백)이 끼어 있으므로(예: 날인란 상호/[빈]/주소/[빈]/대표),
+ * 빈 문단은 그대로 보존해야 원본 서식과 같아진다. 값이 텍스트 문단보다 많으면 마지막 텍스트
+ * 문단을 복제해 덧붙이고, 적으면 남는 텍스트 문단을 비운다.
+ */
+function replaceCellParas(tcXml: string, lines: string[]): string {
+  const subM = /(<hp:subList\b[^>]*>)([\s\S]*?)(<\/hp:subList>)/.exec(tcXml);
+  if (!subM) return tcXml;
+  const paras = [...subM[2].matchAll(P_G_RE)].map((p) => p[0]);
+  if (!paras.length) return tcXml;
+  const textIdx = paras.map((p, i) => (/<hp:t>/.test(p) ? i : -1)).filter((i) => i >= 0);
+  if (!textIdx.length) return tcXml;
+  const texts = lines.length ? lines : [""];
+  const out = [...paras];
+  for (let k = 0; k < Math.min(texts.length, textIdx.length); k++) {
+    out[textIdx[k]] = setParaText(paras[textIdx[k]], texts[k]);
+  }
+  for (let k = texts.length; k < textIdx.length; k++) {
+    out[textIdx[k]] = setParaText(paras[textIdx[k]], "");
+  }
+  if (texts.length > textIdx.length) {
+    const lastI = textIdx[textIdx.length - 1];
+    const extra = texts.slice(textIdx.length).map((t) => setParaText(paras[lastI], t)).join("");
+    out[lastI] = out[lastI] + extra;
+  }
+  return tcXml.replace(subM[0], subM[1] + out.join("") + subM[3]);
+}
+
+/** 갑지 표에서 (colAddr,rowAddr) 셀을 찾아 교체 */
+function replaceTableCell(tblXml: string, col: number, row: number, lines: string[]): string {
+  const tcRe = /<hp:tc\b[\s\S]*?<\/hp:tc>/g;
+  return tblXml.replace(tcRe, (tc) => {
+    const addr = /colAddr="(\d+)" rowAddr="(\d+)"/.exec(tc);
+    if (!addr || Number(addr[1]) !== col || Number(addr[2]) !== row) return tc;
+    return replaceCellParas(tc, lines);
+  });
+}
+
 function cellXml(
   st: Styles,
   cell: CellSpec,
@@ -133,18 +204,28 @@ function cellXml(
   return tc;
 }
 
-/** table DocBlock → hp:tbl XML (colSpan/rowSpan 병합 지원) */
-function tableXml(st: Styles, block: Extract<DocBlock, { kind: "table" }>, values: DeliverableValues): string {
+/** table DocBlock → hp:tbl XML (colSpan/rowSpan 병합 지원, 폴백 경로·말미 서명부용) */
+function tableXml(
+  st: Styles,
+  block: Extract<DocBlock, { kind: "table" }>,
+  values: DeliverableValues,
+  opts: { borderFillId?: string } = {}
+): string {
   const cols = block.columns.length;
   const rows = block.rows.length;
   const colW = block.columns.map((c) => Math.round(CONTENT_W_HWP * c.widthRatio));
-  const rowH = 900; // 9pt 기본 — 한글이 내용에 맞춰 자동 확장
+  const rowH = 900;
 
   let preamble = st.tblPreamble
     .replace(/(\browCnt=")\d+(")/, `$1${rows}$2`)
     .replace(/(\bcolCnt=")\d+(")/, `$1${cols}$2`);
-  // 표 크기 치환(hp:sz) — 콘텐츠 폭 기준
   preamble = preamble.replace(/(<hp:sz\b[^>]*width=")\d+(")/, `$1${CONTENT_W_HWP}$2`);
+  let tcTplUse = st.tcTpl;
+  if (opts.borderFillId) {
+    preamble = preamble.replace(/(\bborderFillIDRef=")\d+(")/, `$1${opts.borderFillId}$2`);
+    tcTplUse = tcTplUse.replace(/(\bborderFillIDRef=")\d+(")/g, `$1${opts.borderFillId}$2`);
+  }
+  const stUse: Styles = { ...st, tcTpl: tcTplUse };
 
   const trs = block.rows
     .map((row, ri) => {
@@ -155,7 +236,7 @@ function tableXml(st: Styles, block: Extract<DocBlock, { kind: "table" }>, value
           const rspan = cell.rowSpan ?? 1;
           const w = colW.slice(ci, ci + span).reduce((a, b) => a + b, 0);
           const text = cell.binding ? renderBinding(cell.binding, values, cell.format) : renderTemplate(cell.text ?? "", values);
-          return cellXml(st, cell, text, ci, ri, span, rspan, w, rowH * rspan);
+          return cellXml(stUse, cell, text, ci, ri, span, rspan, w, rowH * rspan);
         })
         .join("");
       return `<hp:tr>${tcs}</hp:tr>`;
@@ -165,12 +246,11 @@ function tableXml(st: Styles, block: Extract<DocBlock, { kind: "table" }>, value
   return preamble + trs + "</hp:tbl>";
 }
 
-/** 표를 담는 문단 — 표는 run 안에 들어간다 */
 function tableParagraphXml(st: Styles, tbl: string): string {
   return `<hp:p id="0" paraPrIDRef="${st.centerParaPr}" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="${st.bodyCharPr}">${tbl}<hp:t></hp:t></hp:run></hp:p>`;
 }
 
-/** 갑지 블록 1개 → 문단 XML (계약서 갑지가 쓰는 종류만) */
+/** 갑지 블록 1개 → 문단 XML (폴백 경로 — B형·비표준 custom) */
 function coverBlockXml(st: Styles, block: DocBlock, values: DeliverableValues): string {
   switch (block.kind) {
     case "title":
@@ -194,6 +274,58 @@ function coverBlockXml(st: Styles, block: DocBlock, values: DeliverableValues): 
   }
 }
 
+/** 조문(전문~말미 서명) 문단 시퀀스 생성 — 두 경로가 공유 */
+function clauseSectionXml(
+  st: Styles,
+  spec: AgreementSpec,
+  fv: AgreementFieldValues,
+  values: DeliverableValues,
+  opts: { titlePageBreak: boolean; noneBorderFillId: string | null }
+): string {
+  const cp = spec.clausePage!;
+  const out: string[] = [];
+  out.push(paragraphXml(cp.title, st.centerParaPr, st.titleCharPr, opts.titlePageBreak));
+  out.push(paragraphXml("", st.bodyParaPr, st.bodyCharPr));
+  if (cp.preamble) {
+    const pre = cp.preamble.replace(/\{\{([\w.]+)\}\}/g, (_, k: string) => String(values[k] ?? ""));
+    for (const ln of pre.split(/\r?\n/)) out.push(paragraphXml(ln, st.bodyParaPr, st.bodyCharPr));
+    out.push(paragraphXml("", st.bodyParaPr, st.bodyCharPr));
+  }
+  const resolved = resolveClauses(fv.clauses, { terms: spec.terms, clausePage: cp }, fv, values);
+  for (const c of resolved) {
+    out.push(paragraphXml(c.heading, st.bodyParaPr, st.boldCharPr));
+    for (const ln of c.body.split(/\r?\n/)) {
+      if (ln.trim()) out.push(paragraphXml(`  ${ln}`, st.bodyParaPr, st.bodyCharPr));
+    }
+    out.push(paragraphXml("", st.bodyParaPr, st.bodyCharPr));
+  }
+  if (cp.closing) out.push(paragraphXml(cp.closing, st.bodyParaPr, st.bodyCharPr));
+  if (cp.signAfterClosing) {
+    out.push(paragraphXml("", st.bodyParaPr, st.bodyCharPr));
+    out.push(paragraphXml(renderBinding("issue.dateKorean", values), st.centerParaPr, st.bodyCharPr));
+    out.push(paragraphXml("", st.bodyParaPr, st.bodyCharPr));
+    // 실측 말미: "(발주자)/(과업수행자)" 2단 무테두리 — 무테두리 표로 재현
+    const signTable: Extract<DocBlock, { kind: "table" }> = {
+      kind: "table",
+      columns: [{ widthRatio: 0.5 }, { widthRatio: 0.5 }],
+      rows: [
+        [
+          { text: `(${spec.terms.orderer})`, bold: true, align: "left" },
+          { text: `(${spec.terms.contractor})`, bold: true, align: "left" },
+        ],
+        [
+          { binding: "orderer.tailSign", format: "multiline", align: "left" },
+          { binding: "company.tailSign", format: "multiline", align: "left" },
+        ],
+      ],
+    };
+    out.push(
+      tableParagraphXml(st, tableXml(st, signTable, values, { borderFillId: opts.noneBorderFillId ?? undefined }))
+    );
+  }
+  return out.join("");
+}
+
 const templateCache = new Map<string, Buffer>();
 async function loadTemplate(file: string): Promise<Buffer> {
   const cached = templateCache.get(file);
@@ -212,8 +344,7 @@ export async function renderAgreementHwpx(spec: AgreementSpec, fv: AgreementFiel
   const headerPath = "Contents/header.xml";
   let headerXml = (await zip.file(headerPath)?.async("string")) ?? "";
 
-  // ── 1) 스타일·표 골격 추출 — 실측 문서에서 조문 본문 문단과 갑지 표를 빌린다 ──
-  // 본문 스타일: "제 1 조"를 포함한 문단(제목)과 그 본문 문단 대신, 전문(체결한다) 문단을 기준으로.
+  // ── 스타일·표 골격 추출 (두 경로 공용) ──
   let bodyParaPr = "0";
   let bodyCharPr = "0";
   for (const pm of xml.matchAll(P_G_RE)) {
@@ -233,13 +364,14 @@ export async function renderAgreementHwpx(spec: AgreementSpec, fv: AgreementFiel
   const tcM = /<hp:tc\b[\s\S]*?<\/hp:tc>/.exec(tblM[0]);
   if (!tcM) throw new Error("agreement.hwpx 템플릿 표에 셀이 없습니다");
 
-  // 파생 스타일 등록(전부 목록 끝 append)
   const centerP = registerParaPr(headerXml, bodyParaPr, { align: "CENTER" });
   if (centerP) headerXml = centerP.xml;
-  const titleC = registerCharPr(headerXml, bodyCharPr, { heightPt: 18, bold: true, spacingPct: 30 });
+  const titleC = registerCharPr(headerXml, bodyCharPr, { heightPt: 16, bold: true, spacingPct: 30 });
   if (titleC) headerXml = titleC.xml;
   const boldC = registerCharPr(headerXml, bodyCharPr, { bold: true });
   if (boldC) headerXml = boldC.xml;
+  const noneFill = registerNoneBorderFill(headerXml);
+  if (noneFill) headerXml = noneFill.xml;
 
   const st: Styles = {
     bodyParaPr,
@@ -251,76 +383,53 @@ export async function renderAgreementHwpx(spec: AgreementSpec, fv: AgreementFiel
     tcTpl: tcM[0],
   };
 
-  // ── 2) 본문 전면 교체 — 첫 문단(secPr 보유)만 남기고 나머지 문단 제거 ──
-  const paras = [...xml.matchAll(P_G_RE)].map((m) => m[0]);
-  if (!paras.length) throw new Error("agreement.hwpx 본문 문단을 찾지 못했습니다");
-  const firstPara = paras[0];
-  // 첫 문단은 골격 유지 + 텍스트 비움(섹션 정의 보존)
-  let keepFirst = firstPara;
-  if (T_ALL_RE.test(keepFirst)) {
-    let first = true;
-    keepFirst = keepFirst.replace(T_ALL_RE, () => {
-      if (first) {
-        first = false;
-        return "<hp:t></hp:t>";
-      }
-      return "<hp:t></hp:t>";
-    });
-  }
-  // 첫 문단 내 표(갑지가 첫 문단에 들어있는 실측 구조)도 제거
-  keepFirst = keepFirst.replace(/<hp:tbl\b[\s\S]*?<\/hp:tbl>/g, "");
-  for (const p of paras) xml = xml.replace(p, p === firstPara ? "__FIRST__" : "");
-
-  // ── 3) 본문 생성 ──
   const values = buildCoverValues(fv);
-  const out: string[] = [];
-  for (const block of spec.coverBlocks) out.push(coverBlockXml(st, block, values));
 
-  if (fv.hasClausePage && spec.clausePage && fv.clauses.length) {
-    const cp = spec.clausePage;
-    // 별지 첫 문단은 페이지 나눔
-    out.push(paragraphXml(cp.title, st.centerParaPr, st.titleCharPr, true));
-    out.push(paragraphXml("", st.bodyParaPr, st.bodyCharPr));
-    if (cp.preamble) {
-      const pre = cp.preamble.replace(/\{\{([\w.]+)\}\}/g, (_, k: string) => String(values[k] ?? ""));
-      for (const ln of pre.split(/\r?\n/)) out.push(paragraphXml(ln, st.bodyParaPr, st.bodyCharPr));
-      out.push(paragraphXml("", st.bodyParaPr, st.bodyCharPr));
+  if (spec.hwpxTemplate === "standard-a") {
+    // ── ① 원본 보존 경로 — 갑지 표 셀 치환 + 조문 구간만 교체 ──
+    const o = fv.orderer;
+    // 복수 대표("이시창, 황문성")는 그대로, 단수는 실측 관례대로 벌려 쓴다("장 세 준")
+    const ceoDisp = o.ceo ? (o.ceo.includes(",") ? o.ceo : spreadName(o.ceo)) : "";
+    let tbl = tblM[0];
+    tbl = replaceTableCell(tbl, 4, 1, [o.name]);
+    tbl = replaceTableCell(tbl, 4, 4, [fv.title]);
+    tbl = replaceTableCell(tbl, 4, 5, [String(values["amount.totalLine"])]);
+    tbl = replaceTableCell(tbl, 4, 6, String(values["amount.supplyVatLines"]).split("\n"));
+    tbl = replaceTableCell(tbl, 4, 7, String(values["payment.summary"]).split("\n"));
+    tbl = replaceTableCell(tbl, 4, 8, [fv.periodText]);
+    // 체결문 셀은 실측이 [체결문]/[빈]/[날짜]/[빈]/[첨부] 구조 — 텍스트 문단 3개에 순서 배정
+    tbl = replaceTableCell(tbl, 0, 9, String(values["cover.execText"]).split("\n").filter(Boolean));
+    tbl = replaceTableCell(tbl, 2, 10, [o.name, o.address, `대표이사 ${ceoDisp} (인)`]);
+    xml = xml.replace(tblM[0], tbl);
+
+    // 표 이후 문단(조문+말미) 전부 제거 — 표를 감싼 문단은 보존해야 하므로 표 뒤 구간만 다룬다
+    const tblEnd = xml.indexOf(tbl) + tbl.length;
+    const head = xml.slice(0, tblEnd);
+    let tail = xml.slice(tblEnd);
+    const tailParas = [...tail.matchAll(P_G_RE)].map((p) => p[0]);
+    for (const p of tailParas) tail = tail.replace(p, "");
+    const clausesXml =
+      fv.hasClausePage && spec.clausePage && fv.clauses.length
+        ? clauseSectionXml(st, spec, fv, values, { titlePageBreak: true, noneBorderFillId: noneFill?.id ?? null })
+        : "";
+    // 표를 감싼 문단이 닫힌 직후 위치에 조문 삽입 — tail 의 첫 지점에 넣는다
+    xml = head + clausesXml + tail;
+  } else {
+    // ── ② 폴백 — 본문 전면 프로그램 생성(B형·비표준 custom) ──
+    const paras = [...xml.matchAll(P_G_RE)].map((mm) => mm[0]);
+    if (!paras.length) throw new Error("agreement.hwpx 본문 문단을 찾지 못했습니다");
+    const firstPara = paras[0];
+    let keepFirst = firstPara.replace(T_ALL_RE, "<hp:t></hp:t>");
+    keepFirst = keepFirst.replace(/<hp:tbl\b[\s\S]*?<\/hp:tbl>/g, "");
+    for (const p of paras) xml = xml.replace(p, p === firstPara ? "__FIRST__" : "");
+
+    const out: string[] = [];
+    for (const block of spec.coverBlocks) out.push(coverBlockXml(st, block, values));
+    if (fv.hasClausePage && spec.clausePage && fv.clauses.length) {
+      out.push(clauseSectionXml(st, spec, fv, values, { titlePageBreak: true, noneBorderFillId: noneFill?.id ?? null }));
     }
-    const resolved = resolveClauses(fv.clauses, { terms: spec.terms, clausePage: cp }, fv, values);
-    for (const c of resolved) {
-      out.push(paragraphXml(c.heading, st.bodyParaPr, st.boldCharPr));
-      for (const ln of c.body.split(/\r?\n/)) {
-        if (ln.trim()) out.push(paragraphXml(`  ${ln}`, st.bodyParaPr, st.bodyCharPr));
-      }
-      out.push(paragraphXml("", st.bodyParaPr, st.bodyCharPr));
-    }
-    if (cp.closing) out.push(paragraphXml(cp.closing, st.bodyParaPr, st.bodyCharPr));
-    if (cp.signAfterClosing) {
-      out.push(paragraphXml("", st.bodyParaPr, st.bodyCharPr));
-      out.push(paragraphXml(renderBinding("issue.date", values, "dateKorean"), st.centerParaPr, st.bodyCharPr));
-      out.push(paragraphXml("", st.bodyParaPr, st.bodyCharPr));
-      const signTable: Extract<DocBlock, { kind: "table" }> = {
-        kind: "table",
-        columns: [
-          { widthRatio: 0.15, align: "center" },
-          { widthRatio: 0.35 },
-          { widthRatio: 0.15, align: "center" },
-          { widthRatio: 0.35 },
-        ],
-        rows: [
-          [
-            { text: `(${spec.terms.orderer})`, bold: true },
-            { binding: "orderer.signText", format: "multiline", align: "left" },
-            { text: `(${spec.terms.contractor})`, bold: true },
-            { binding: "company.signText", format: "multiline", align: "left" },
-          ],
-        ],
-      };
-      out.push(tableParagraphXml(st, tableXml(st, signTable, values)));
-    }
+    xml = xml.replace("__FIRST__", keepFirst + out.join(""));
   }
-
-  xml = xml.replace("__FIRST__", keepFirst + out.join(""));
 
   zip.file(sectionPath, xml);
   if (headerXml) zip.file(headerPath, headerXml);

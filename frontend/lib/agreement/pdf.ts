@@ -290,29 +290,36 @@ export async function renderAgreementPdf(spec: AgreementSpec, fv: AgreementField
       flowPara(flow, cp.closing);
     }
     if (cp.signAfterClosing) {
+      // 실측 말미: 날짜(중앙) + "(발주자)/(과업수행자)" 2단 무테두리 서명부
       flow.y -= BODY_PT * 1.5;
-      ensure(flow, BODY_PT * 1.8 * 6 + 40);
-      flowPara(flow, renderBinding("issue.date", values, "dateKorean"), { align: "center" });
-      flow.y -= BODY_PT;
-      // 양측 서명 — 갑지 날인 표와 동일 텍스트를 좌우 병기
-      const signTable: Extract<DocBlock, { kind: "table" }> = {
-        kind: "table",
-        columns: [
-          { widthRatio: 0.15, align: "center" },
-          { widthRatio: 0.35 },
-          { widthRatio: 0.15, align: "center" },
-          { widthRatio: 0.35 },
-        ],
-        rows: [
-          [
-            { text: `(${spec.terms.orderer})`, bold: true },
-            { binding: "orderer.signText", format: "multiline" },
-            { text: `(${spec.terms.contractor})`, bold: true },
-            { binding: "company.signText", format: "multiline" },
-          ],
-        ],
-      };
-      drawTable(flow, signTable);
+      ensure(flow, BODY_PT * 1.7 * 7 + 30);
+      flowPara(flow, renderBinding("issue.dateKorean", values), { align: "center" });
+      flow.y -= BODY_PT * 1.2;
+      const size = BODY_PT;
+      const lineH = size * 1.7;
+      const halfW = flow.contentW / 2;
+      const leftX = flow.m.left;
+      const rightX = flow.m.left + halfW + 8;
+      const leftLines = [`(${spec.terms.orderer})`, ...String(values["orderer.tailSign"] ?? "").split("\n")];
+      const rightLines = [`(${spec.terms.contractor})`, ...String(values["company.tailSign"] ?? "").split("\n")];
+      const rows = Math.max(leftLines.length, rightLines.length);
+      for (let i = 0; i < rows; i++) {
+        const font = i === 0 ? flow.fonts.bold : flow.fonts.regular;
+        for (const [x, text, maxW] of [
+          [leftX, leftLines[i] ?? "", halfW - 12] as const,
+          [rightX, rightLines[i] ?? "", halfW - 12] as const,
+        ]) {
+          let ty = flow.y;
+          for (const ln of wrap(text, font, size, maxW)) {
+            flow.page.drawText(ln, { x, y: ty - size, size, font, color: INK });
+            ty -= lineH;
+          }
+        }
+        // 양쪽 중 더 많이 접힌 줄 수만큼 내린다
+        const usedL = wrap(leftLines[i] ?? "", font, size, halfW - 12).length;
+        const usedR = wrap(rightLines[i] ?? "", font, size, halfW - 12).length;
+        flow.y -= lineH * Math.max(usedL, usedR);
+      }
     }
   }
 

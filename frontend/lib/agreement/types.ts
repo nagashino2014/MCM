@@ -74,6 +74,12 @@ export interface AgreementSpec {
   clausePage?: AgreementClausePage;
   /** 당사자 호칭 — 조문 본문이 이 용어를 그대로 쓰므로 표기용 참고 정보 */
   terms: { orderer: string; contractor: string };
+  /**
+   * HWPX 원본 보존 렌더 경로 — "standard-a" 면 public/hwpx/agreement.hwpx(실측 표준
+   * 도급계약서)의 갑지 표·서식을 그대로 두고 셀 값만 치환한다(2026-08-11 사용자 확정:
+   * hwpx 는 표준 양식과 똑같아야 함). 없으면 프로그램 생성 폴백(B형·비표준 custom).
+   */
+  hwpxTemplate?: "standard-a";
 }
 
 // ── field_values (approval_docs.field_values 저장 형태 — 문서 원본) ──

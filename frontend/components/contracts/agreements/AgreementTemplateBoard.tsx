@@ -7,7 +7,7 @@
 // 발주처 자체양식(custom)은 별도 탭 — 업로드/분석(P3)은 후속.
 
 import { useCallback, useEffect, useState } from "react";
-import { ArrowDown, ArrowUp, Building2, Copy, FileSignature, Plus, Save, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, BookOpen, Building2, Copy, Download, FileSignature, Plus, Save, Trash2, X } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { QUOTE_SERVICE_OPTIONS } from "@/lib/quote/types";
@@ -42,7 +42,7 @@ const newClauseId = () => `c-${Date.now().toString(36)}-${seq++}`;
 
 export function AgreementTemplateBoard() {
   const { theme } = useCdashTheme();
-  const [tab, setTab] = useState<"standard" | "custom">("standard");
+  const [tab, setTab] = useState<"standard" | "custom" | "library">("standard");
   const [typeTab, setTypeTab] = useState<string>("");
   const [standard, setStandard] = useState<StandardGroup[]>([]);
   const [custom, setCustom] = useState<CustomRow[]>([]);
@@ -181,6 +181,13 @@ export function AgreementTemplateBoard() {
           onClick={() => setTab("custom")}
         >
           <Building2 className="w-3.5 h-3.5" /> 발주처 자체양식
+        </button>
+        <button
+          type="button"
+          className={`px-3.5 py-2 flex items-center gap-1.5 border-l cd-border-c ${tab === "library" ? "cd-fill-primary text-white" : "cd-solid-bg cd-text-muted"}`}
+          onClick={() => setTab("library")}
+        >
+          <BookOpen className="w-3.5 h-3.5" /> 조항 라이브러리
         </button>
       </div>
 
@@ -350,8 +357,10 @@ export function AgreementTemplateBoard() {
             </div>
           )}
         </div>
-      ) : (
+      ) : tab === "custom" ? (
         <CustomTemplateTab custom={custom} onSaved={load} />
+      ) : (
+        <ClauseLibraryTab />
       )}
     </div>
   );
@@ -617,6 +626,214 @@ function CustomTemplateTab({ custom, onSaved }: { custom: CustomRow[]; onSaved: 
           )}
           <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold flex items-center gap-1.5 self-end disabled:opacity-50" disabled={busy} onClick={save}>
             <Save className="w-3.5 h-3.5" /> {busy ? "저장 중..." : "자체양식으로 등록"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * 조항 라이브러리 탭(149) — 목록·검색·편집·삭제 + 기존 양식 조문 일괄 수확.
+ * 작성 화면(ClauseLibraryModal)이 여기 쌓인 조항을 검색해 삽입한다.
+ */
+function ClauseLibraryTab() {
+  interface Row {
+    clauseId: string;
+    title: string;
+    body: string;
+    category: string;
+    serviceType: string | null;
+    source: string;
+    usageCount: number;
+  }
+  const [items, setItems] = useState<Row[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [q, setQ] = useState("");
+  const [category, setCategory] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [sel, setSel] = useState<Row | null>(null);
+  const [draftTitle, setDraftTitle] = useState("");
+  const [draftBody, setDraftBody] = useState("");
+  const [draftCat, setDraftCat] = useState("기타");
+
+  const load = useCallback(() => {
+    setLoading(true);
+    const sp = new URLSearchParams();
+    if (q.trim()) sp.set("q", q.trim());
+    if (category) sp.set("category", category);
+    fetch(`/api/contracts/agreements/clauses?${sp.toString()}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        setItems(Array.isArray(d?.clauses) ? d.clauses : []);
+        if (Array.isArray(d?.categories)) setCategories(d.categories);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [q, category]);
+  useEffect(() => {
+    const t = setTimeout(load, 200);
+    return () => clearTimeout(t);
+  }, [load]);
+
+  const openRow = (r: Row) => {
+    setSel(r);
+    setDraftTitle(r.title);
+    setDraftBody(r.body);
+    setDraftCat(r.category);
+  };
+  const newRow = () => {
+    setSel({ clauseId: "", title: "", body: "", category: "기타", serviceType: null, source: "manual", usageCount: 0 });
+    setDraftTitle("");
+    setDraftBody("");
+    setDraftCat("기타");
+  };
+
+  const harvest = async () => {
+    if (!window.confirm("표준 셋·자체양식의 조문을 라이브러리에 일괄 등록합니다. 이미 있는 조항은 건너뜁니다.")) return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/contracts/agreements/clauses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "harvest" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "수확 실패");
+      alert(`${data.added}건 등록, ${data.skipped}건 건너뜀(중복·자동생성 조).`);
+      load();
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const save = async () => {
+    if (!draftTitle.trim() || !draftBody.trim()) return alert("제목과 본문을 입력하세요.");
+    setBusy(true);
+    try {
+      const isNew = !sel?.clauseId;
+      const res = await fetch("/api/contracts/agreements/clauses", {
+        method: isNew ? "POST" : "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          isNew
+            ? { title: draftTitle, body: draftBody, category: draftCat }
+            : { clauseId: sel!.clauseId, title: draftTitle, body: draftBody, category: draftCat }
+        ),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "저장 실패");
+      if (data?.duplicated) alert("같은 내용의 조항이 이미 있습니다.");
+      setSel(null);
+      load();
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async (r: Row) => {
+    if (!window.confirm(`"${r.title}" 조항을 라이브러리에서 삭제할까요?`)) return;
+    try {
+      const res = await fetch(`/api/contracts/agreements/clauses?clauseId=${encodeURIComponent(r.clauseId)}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string })?.error ?? "삭제 실패");
+      if (sel?.clauseId === r.clauseId) setSel(null);
+      load();
+    } catch (err) {
+      alert((err as Error).message);
+    }
+  };
+
+  return (
+    <div className="flex flex-col xl:flex-row gap-5 items-start">
+      <div className="cd-card rounded-3xl p-5 flex flex-col gap-3 w-full max-w-[560px]">
+        <div className="flex items-center gap-2 flex-wrap">
+          <h3 className="font-bold cd-text text-sm">조항 라이브러리</h3>
+          <span className="text-[11px] cd-text-faint">{items.length}건</span>
+          <button type="button" className="ml-auto cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] flex items-center gap-1 disabled:opacity-50" disabled={busy} onClick={harvest} title="표준 셋·자체양식의 조문을 일괄 등록">
+            <Download className="w-3.5 h-3.5" /> 기존 양식 조문 수확
+          </button>
+          <button type="button" className="cd-btn cd-btn-primary rounded-lg px-2.5 py-1.5 text-[11px] flex items-center gap-1" onClick={newRow}>
+            <Plus className="w-3.5 h-3.5" /> 새 조항
+          </button>
+        </div>
+        <p className="text-[11.5px] cd-text-faint">
+          발주처가 요구한 특약을 모아 두면 계약서 작성 화면의 [라이브러리에서 추가]로 바로 삽입할 수 있습니다.
+        </p>
+        <div className="flex items-center gap-2">
+          <input className="cd-input text-sm flex-1" placeholder="제목·본문 검색" value={q} onChange={(e) => setQ(e.target.value)} />
+          <select className="cd-select" style={{ width: 140 }} value={category} onChange={(e) => setCategory(e.target.value)}>
+            <option value="">전체 분류</option>
+            {categories.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-col gap-1 max-h-[58vh] overflow-y-auto pr-1">
+          {loading ? (
+            <p className="text-[12px] cd-text-faint p-6 text-center">불러오는 중...</p>
+          ) : items.length === 0 ? (
+            <p className="text-[12px] cd-text-faint p-6 text-center">
+              등록된 조항이 없습니다. [기존 양식 조문 수확]으로 표준 셋 조문부터 채워 보세요.
+            </p>
+          ) : (
+            items.map((r) => (
+              <div
+                key={r.clauseId}
+                className={`rounded-xl border px-3 py-2 flex items-center gap-2 ${sel?.clauseId === r.clauseId ? "cd-tint-primary border-transparent" : "cd-solid-bg cd-border-c"}`}
+              >
+                <button type="button" className="min-w-0 flex-1 text-left" onClick={() => openRow(r)}>
+                  <span className="block text-[12.5px] font-semibold cd-text truncate">{r.title}</span>
+                  <span className="block text-[11px] cd-text-faint truncate">{r.body.replace(/\s+/g, " ").slice(0, 50)}</span>
+                </button>
+                <span className="text-[10px] cd-text-faint shrink-0">{r.category}</span>
+                {r.usageCount > 0 && <span className="text-[10px] cd-text-faint shrink-0">{r.usageCount}회</span>}
+                <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)] shrink-0" onClick={() => remove(r)}>
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {sel && (
+        <div className="cd-card rounded-3xl p-5 w-full xl:w-[640px] shrink-0 flex flex-col gap-3 xl:sticky xl:top-4">
+          <div className="flex items-center gap-2">
+            <h3 className="font-bold cd-text text-sm">{sel.clauseId ? "조항 편집" : "새 조항 등록"}</h3>
+            {sel.clauseId && (
+              <span className="text-[10px] rounded-full border cd-border-c px-1.5 py-0.5 cd-text-faint">
+                {sel.source === "seed" ? "표준 시드" : sel.source === "harvested" ? "양식 수확" : "직접 등록"}
+              </span>
+            )}
+            <button type="button" className="ml-auto cd-text-faint hover:cd-text" onClick={() => setSel(null)}>
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <label className="flex flex-col gap-1 md:col-span-2">
+              <span className="text-[11px] cd-text-faint">조항 제목 (괄호 안 제목만)</span>
+              <input className="cd-input text-sm" value={draftTitle} onChange={(e) => setDraftTitle(e.target.value)} placeholder="예: 지체상금" />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] cd-text-faint">분류</span>
+              <select className="cd-select" value={draftCat} onChange={(e) => setDraftCat(e.target.value)}>
+                {categories.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] cd-text-faint">본문 — 항·호 포함. {"{{contract.title}}"} 등 토큰 사용 가능</span>
+            <textarea className="cd-input text-[12px] min-h-[300px] leading-relaxed" value={draftBody} onChange={(e) => setDraftBody(e.target.value)} />
+          </label>
+          <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold flex items-center gap-1.5 self-end disabled:opacity-50" disabled={busy} onClick={save}>
+            <Save className="w-3.5 h-3.5" /> {busy ? "저장 중..." : "저장"}
           </button>
         </div>
       )}

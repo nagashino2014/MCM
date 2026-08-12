@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  ArrowDown, ArrowUp, BookmarkPlus, Building2, Eye, FileSignature, FileText, Link2, ListPlus,
+  ArrowDown, ArrowUp, BookmarkPlus, BookOpen, Building2, Eye, FileSignature, FileText, Link2, ListPlus,
   Pencil, Plus, RefreshCw, Save, Search, Send, Settings2, Trash2, Users, X,
 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
@@ -21,6 +21,7 @@ import { AutoDateInput } from "@/components/ui/AutoDateInput";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
 import { FacilityRecipientPicker, QuickFacilityModal, RecipientPicker } from "@/components/approval/ApprovalLetterBoard";
 import { DeleteDraftButton, RejectedBanner, toEditDocMeta, type EditDocMeta } from "@/components/approval/DraftEditNotice";
+import { ClauseLibraryModal } from "@/components/contracts/agreements/ClauseLibraryModal";
 import type { LetterRecipient } from "@/lib/letter/types";
 import { QUOTE_SERVICE_OPTIONS } from "@/lib/quote/types";
 import { amountLine, computeAmounts, distributePayments, paymentClauseBody } from "@/lib/agreement/compose";
@@ -179,6 +180,7 @@ export function AgreementBoard() {
   const [payments, setPayments] = useState<PaymentStep[]>(DEFAULT_PAYMENTS);
   const [payTab, setPayTab] = useState(0);
   const [clauseTab, setClauseTab] = useState(0);
+  const [libraryOpen, setLibraryOpen] = useState(false);
   const [periodText, setPeriodText] = useState("계약일 부터 용역 완료 시 까지");
   const [scopeText, setScopeText] = useState("");
   const [issueDate, setIssueDate] = useState(new Date().toISOString().slice(0, 10));
@@ -631,6 +633,41 @@ export function AgreementBoard() {
       next.splice(i + 1, 0, { id: newClauseId(), title: "추가 조항", body: "" });
       return next;
     });
+
+  /** 라이브러리 조항을 현재 선택 조 뒤에 삽입(복수 선택 가능) — 사용 횟수도 올린다 */
+  const insertFromLibrary = (picked: { clauseId: string; title: string; body: string }[]) => {
+    if (!picked.length) return;
+    const at = Math.min(clauseTab, Math.max(0, clauses.length - 1));
+    setClauses((prev) => {
+      const next = [...prev];
+      next.splice(at + 1, 0, ...picked.map((p) => ({ id: newClauseId(), title: p.title, body: p.body })));
+      return next;
+    });
+    setClauseTab(at + 1);
+    setLibraryOpen(false);
+    void fetch("/api/contracts/agreements/clauses", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "use", clauseIds: picked.map((p) => p.clauseId) }),
+    }).catch(() => {});
+  };
+
+  /** 편집 중인 조항을 라이브러리에 저장 — 발주처가 요구한 특약을 다음 계약에서 재사용 */
+  const saveClauseToLibrary = async (c: AgreementClause) => {
+    if (!c.title.trim() || !c.body.trim()) return alert("제목과 본문이 있어야 저장할 수 있습니다.");
+    try {
+      const res = await fetch("/api/contracts/agreements/clauses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: c.title, body: c.body, serviceType: null }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "저장 실패");
+      alert(data?.duplicated ? "같은 내용의 조항이 이미 라이브러리에 있습니다." : "조항 라이브러리에 저장했습니다.");
+    } catch (err) {
+      alert((err as Error).message);
+    }
+  };
 
   const resetForNew = () => {
     setDocId(null);
@@ -1280,7 +1317,15 @@ export function AgreementBoard() {
                             setClauseTab(clauses.length);
                           }}
                         >
-                          ＋ 조항 추가
+                          ＋ 빈 조항 추가
+                        </button>
+                        {/* 조항 라이브러리(149) — 과거 계약서·표준 셋 조문을 검색해 삽입 */}
+                        <button
+                          type="button"
+                          className="cd-btn rounded-lg border cd-border-c px-3 py-1.5 text-[11.5px] cd-text-primary font-semibold flex items-center justify-center gap-1"
+                          onClick={() => setLibraryOpen(true)}
+                        >
+                          <BookOpen className="w-3.5 h-3.5" /> 라이브러리에서 추가
                         </button>
                       </div>
 
@@ -1301,6 +1346,9 @@ export function AgreementBoard() {
                                 </button>
                                 <button type="button" className="cd-text-faint hover:cd-text" title="아래에 조항 삽입" onClick={() => { insertClause(i); setClauseTab(i + 1); }}>
                                   <Plus className="w-3.5 h-3.5" />
+                                </button>
+                                <button type="button" className="cd-text-faint hover:cd-text-primary" title="이 조항을 라이브러리에 저장" onClick={() => saveClauseToLibrary(c)}>
+                                  <BookmarkPlus className="w-3.5 h-3.5" />
                                 </button>
                                 <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" title="삭제" onClick={() => { removeClause(i); setClauseTab(Math.max(0, i - 1)); }}>
                                   <Trash2 className="w-3.5 h-3.5" />
@@ -1447,6 +1495,15 @@ export function AgreementBoard() {
             onOrdererChange([r]);
             setFacilityModal(false);
           }}
+        />
+      )}
+
+      {libraryOpen && (
+        <ClauseLibraryModal
+          theme={theme}
+          serviceType={serviceType}
+          onClose={() => setLibraryOpen(false)}
+          onInsert={(picked) => insertFromLibrary(picked)}
         />
       )}
 

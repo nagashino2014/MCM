@@ -257,6 +257,12 @@ export function AgreementBoard() {
       setClauses([]);
       return;
     }
+    // overlay 양식은 조문·서식이 원본 그대로 나간다 — 앱에서 편집할 대상이 없다(148)
+    if (template.renderMode === "overlay") {
+      setHasClausePage(false);
+      setClauses([]);
+      return;
+    }
     const tplClauses = template.spec.clausePage?.clauses ?? [];
     setHasClausePage(!!template.spec.clausePage);
     setClauses(tplClauses.map((c) => ({ ...c })));
@@ -1030,7 +1036,11 @@ export function AgreementBoard() {
                             <>
                               {template.name}
                               {template.seeded ? <span className="cd-text-faint text-[10.5px] ml-1.5">(기본 시드)</span> : null}
-                              {template.kind === "custom" ? <span className="cd-text-faint text-[10.5px] ml-1.5">(발주처 자체양식)</span> : null}
+                              {template.kind === "custom" ? (
+                                <span className="cd-text-faint text-[10.5px] ml-1.5">
+                                  (발주처 자체양식{template.renderMode === "overlay" ? " · 원본 서식 보존" : ""})
+                                </span>
+                              ) : null}
                             </>
                           ) : (
                             "이 세분류의 표준 셋 미지정 — 기준 관리에서 등록하세요"

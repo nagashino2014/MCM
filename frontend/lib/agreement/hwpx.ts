@@ -11,6 +11,8 @@ import path from "node:path";
 import JSZip from "jszip";
 import { renderBinding, renderTemplate, spreadName } from "@/lib/deliverable/format";
 import type { CellSpec, DeliverableValues, DocBlock } from "@/lib/deliverable/types";
+import { fillTemplateHwpx } from "@/lib/deliverable/template-fill";
+import type { TemplateProfile } from "@/lib/deliverable/types";
 import { AGREEMENT_COMPANY_ADDRESS, buildCoverValues, estimateLines, resolveClauses } from "./compose";
 import { COMPANY_BIZ_NO, COMPANY_CEO, COMPANY_KO } from "@/lib/letter/types";
 import type { AgreementFieldValues, AgreementSpec } from "./types";
@@ -390,6 +392,24 @@ async function loadTemplate(file: string): Promise<Buffer> {
   if (cached) return cached;
   const bytes = await readFile(path.join(process.cwd(), "public", "hwpx", file));
   templateCache.set(file, bytes);
+  return bytes;
+}
+
+/**
+ * overlay 렌더(148) — 발주처가 준 HWPX **원본을 그대로 두고** 슬롯 좌표에 값만 주입한다.
+ * 주입기는 착수계와 공유(lib/deliverable/template-fill.ts) — 값 맵도 DeliverableValues 로
+ * 호환되므로(buildCoverValues 반환형) 별도 변환이 없다. 조문은 원본 그대로라 편집하지 않는다.
+ */
+export async function renderAgreementOverlayHwpx(
+  source: Uint8Array,
+  profile: TemplateProfile,
+  fv: AgreementFieldValues
+): Promise<Uint8Array> {
+  const values = buildCoverValues(fv);
+  const { bytes, missed } = await fillTemplateHwpx(source, profile, [], values, { keepLineSeg: false });
+  if (missed.length) {
+    console.warn(`[agreement] overlay 주입 실패 슬롯 ${missed.length}건:`, missed.map((s) => s.binding).join(", "));
+  }
   return bytes;
 }
 

@@ -337,6 +337,8 @@ export function seedAsTemplateRow(seed: SeedTemplate, serviceSubtype: string): A
     originFacilityId: null,
     originFacilityName: null,
     spec: seed.spec,
+    renderMode: "spec", // 표준 셋은 spec.hwpxTemplate(standard-a) 경로 — overlay 아님
+    profile: null,
     sourceKind: null,
     sourceKey: null,
     analyzedAt: null,

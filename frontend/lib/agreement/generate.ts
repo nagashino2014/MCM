@@ -6,9 +6,11 @@
 
 import { getDoc } from "@/lib/approval/docs";
 import { putContractDocument, sanitizeFilename } from "@/lib/storage/contract-document-storage";
+import { readStorageObject } from "@/lib/contracts/document-bundle";
 import { getTemplate, setAgreementArtifacts } from "./store";
 import { renderAgreementPdf } from "./pdf";
-import { renderAgreementHwpx } from "./hwpx";
+import { renderAgreementHwpx, renderAgreementOverlayHwpx } from "./hwpx";
+import type { TemplateProfile } from "@/lib/deliverable/types";
 import { convertHwpxToPdf } from "./convert";
 import type { AgreementFieldValues, AgreementSpec } from "./types";
 
@@ -19,18 +21,21 @@ import type { AgreementFieldValues, AgreementSpec } from "./types";
 export async function renderAgreementArtifacts(
   spec: AgreementSpec,
   fv: AgreementFieldValues,
-  name: string
+  name: string,
+  /** overlay 템플릿이면 원본 HWPX + 슬롯 매핑 — 원본 서식을 그대로 두고 값만 주입한다(148) */
+  overlay?: { source: Uint8Array; profile: TemplateProfile } | null
 ): Promise<{ pdfBytes: Uint8Array; hwpxBytes: Uint8Array | null }> {
   let hwpxBytes: Uint8Array | null = null;
   try {
-    hwpxBytes = await renderAgreementHwpx(spec, fv);
+    hwpxBytes = overlay ? await renderAgreementOverlayHwpx(overlay.source, overlay.profile, fv) : await renderAgreementHwpx(spec, fv);
   } catch (err) {
     console.warn(`[agreement] HWPX 생성 실패 — pdf-lib 직접 렌더로 진행:`, err);
   }
   let pdfBytes: Uint8Array | null = null;
   if (hwpxBytes) {
     // 변환용은 셀 높이 보정판(forPdf) — LibreOffice 잘림 방지. 발송·보관 HWPX 는 실측 원본 그대로.
-    const forPdf = await renderAgreementHwpx(spec, fv, { forPdf: true }).catch(() => hwpxBytes);
+    // overlay 는 발주처 원본이라 손대지 않는다(보정이 남의 서식을 흔든다) — 그대로 변환.
+    const forPdf = overlay ? hwpxBytes : await renderAgreementHwpx(spec, fv, { forPdf: true }).catch(() => hwpxBytes);
     pdfBytes = await convertHwpxToPdf(forPdf ?? hwpxBytes, `${name}.hwpx`);
   }
   if (!pdfBytes) pdfBytes = await renderAgreementPdf(spec, fv);
@@ -60,7 +65,14 @@ export async function generateAgreementArtifacts(
 
   const year = (doc.completedAt ?? doc.submittedAt ?? new Date().toISOString()).slice(0, 4);
   const fileBase = sanitizeFilename(doc.title || fv.title || "계약서");
-  const { pdfBytes, hwpxBytes } = await renderAgreementArtifacts(tpl.spec, fv, fileBase);
+  // overlay 템플릿이면 원본 HWPX 를 S3 에서 읽어 값만 주입한다(서식 100% 보존, 148)
+  let overlay: { source: Uint8Array; profile: TemplateProfile } | null = null;
+  if (tpl.renderMode === "overlay" && tpl.sourceKey && tpl.profile?.docs?.length) {
+    const src = await readStorageObject(tpl.sourceKey).catch(() => null);
+    if (src) overlay = { source: new Uint8Array(src), profile: tpl.profile };
+    else console.warn(`[agreement] overlay 원본을 읽지 못했습니다(${tpl.sourceKey}) — spec 경로로 폴백`);
+  }
+  const { pdfBytes, hwpxBytes } = await renderAgreementArtifacts(tpl.spec, fv, fileBase, overlay);
   const pdfKey = `agreements/${year}/${docId}/${fileBase}.pdf`;
   const hwpxKey = hwpxBytes ? `agreements/${year}/${docId}/${fileBase}.hwpx` : null;
 

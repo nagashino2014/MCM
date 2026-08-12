@@ -11,7 +11,8 @@ import { ArrowDown, ArrowUp, Building2, Copy, FileSignature, Plus, Save, Trash2,
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { QUOTE_SERVICE_OPTIONS } from "@/lib/quote/types";
-import type { AgreementClause, AgreementSpec, AgreementTemplateRow } from "@/lib/agreement/types";
+import type { TemplateProfile } from "@/lib/deliverable/types";
+import type { AgreementClause, AgreementRenderMode, AgreementSpec, AgreementTemplateRow } from "@/lib/agreement/types";
 import "@/components/cdash/cdash.css";
 
 interface StandardCell {
@@ -30,6 +31,9 @@ interface CustomRow {
   name: string;
   originFacilityId: string | null;
   originFacilityName: string | null;
+  renderMode?: "spec" | "overlay";
+  slotCount?: number;
+  clauseCount?: number;
   updatedAt: string;
 }
 
@@ -356,7 +360,18 @@ export function AgreementTemplateBoard() {
 /** 발주처 자체양식 탭 — 업로드/AI 분석/검수/저장(P3). 분석 결과는 저장 전까지 화면에만 있다. */
 function CustomTemplateTab({ custom, onSaved }: { custom: CustomRow[]; onSaved: () => void }) {
   const [analyzing, setAnalyzing] = useState(false);
-  const [draft, setDraft] = useState<{ spec: AgreementSpec; note: string | null; fileName: string } | null>(null);
+  // overlay = 발주처 원본 서식 그대로 + 값만 주입(148) / spec = 조문 편집 가능한 재구축
+  const [mode, setMode] = useState<AgreementRenderMode>("overlay");
+  const [draft, setDraft] = useState<{
+    mode: AgreementRenderMode;
+    spec?: AgreementSpec;
+    profile?: TemplateProfile;
+    unmapped?: string[];
+    slotCount?: number;
+    sourceKey?: string;
+    note: string | null;
+    fileName: string;
+  } | null>(null);
   const [name, setName] = useState("");
   const [clauses, setClauses] = useState<AgreementClause[]>([]);
   const [facilityQ, setFacilityQ] = useState("");
@@ -387,10 +402,20 @@ function CustomTemplateTab({ custom, onSaved }: { custom: CustomRow[]; onSaved: 
     try {
       const fd = new FormData();
       fd.append("file", file);
+      fd.append("mode", mode);
       const res = await fetch("/api/contracts/agreements/templates/analyze", { method: "POST", body: fd });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "분석 실패");
-      setDraft({ spec: data.spec, note: data.note ?? null, fileName: data.fileName ?? file.name });
+      setDraft({
+        mode: data.mode === "overlay" ? "overlay" : "spec",
+        spec: data.spec,
+        profile: data.profile,
+        unmapped: data.unmapped ?? [],
+        slotCount: data.slotCount ?? 0,
+        sourceKey: data.sourceKey,
+        note: data.note ?? null,
+        fileName: data.fileName ?? file.name,
+      });
       setClauses((data.spec?.clausePage?.clauses ?? []).map((c: AgreementClause) => ({ ...c })));
       setName(file.name.replace(/\.hwpx$/i, ""));
     } catch (err) {
@@ -405,7 +430,7 @@ function CustomTemplateTab({ custom, onSaved }: { custom: CustomRow[]; onSaved: 
     if (!name.trim()) return alert("양식 이름을 입력하세요.");
     setBusy(true);
     try {
-      const spec: AgreementSpec = draft.spec.clausePage
+      const spec: AgreementSpec | undefined = draft.spec?.clausePage
         ? { ...draft.spec, clausePage: { ...draft.spec.clausePage, clauses } }
         : draft.spec;
       const res = await fetch("/api/contracts/agreements/templates", {
@@ -417,6 +442,10 @@ function CustomTemplateTab({ custom, onSaved }: { custom: CustomRow[]; onSaved: 
           kind: "custom",
           originFacilityId: facility?.facilityId ?? null,
           spec,
+          renderMode: draft.mode,
+          profile: draft.profile ?? null,
+          sourceKind: "hwpx",
+          sourceKey: draft.sourceKey ?? null,
         }),
       });
       const data = await res.json();
@@ -438,9 +467,34 @@ function CustomTemplateTab({ custom, onSaved }: { custom: CustomRow[]; onSaved: 
       <div className="cd-card rounded-3xl p-5 flex flex-col gap-3 w-full max-w-[560px]">
         <h3 className="font-bold cd-text text-sm">발주처 자체양식 업로드/분석</h3>
         <p className="text-[11.5px] cd-text-faint">
-          발주처가 보내온 계약서 양식(HWPX)을 업로드하면 AI 가 조문·당사자 용어를 추출해 편집 가능한
-          셋으로 변환합니다. 갑지는 표준 골격으로 정규화됩니다(원본 서식 그대로가 필요하면 관리자에게 문의).
+          발주처가 보내온 계약서 양식(HWPX)을 업로드하면 AI 가 값 자리·조문을 분석합니다.
+          아래에서 원본 서식을 그대로 쓸지, 조문을 편집할 수 있게 재구축할지 고르세요.
         </p>
+        {/* 렌더 모드 — overlay 는 원본 보존(발주처가 서식을 고집할 때), spec 은 재구축(편집 자유) */}
+        <div className="flex flex-col gap-1.5">
+          <button
+            type="button"
+            className={`rounded-xl border px-3 py-2.5 text-left ${mode === "overlay" ? "cd-tint-primary border-transparent" : "cd-solid-bg cd-border-c"}`}
+            onClick={() => setMode("overlay")}
+          >
+            <span className="text-[12.5px] font-bold cd-text">원본 서식 보존 (권장)</span>
+            <span className="block text-[11px] cd-text-faint mt-0.5">
+              발주처 HWPX 를 그대로 두고 값(계약명·금액·지급조건·날인)만 채웁니다. 표 선·자간·여백이 100% 유지되며,
+              조문은 원본 그대로라 앱에서 편집하지 않습니다.
+            </span>
+          </button>
+          <button
+            type="button"
+            className={`rounded-xl border px-3 py-2.5 text-left ${mode === "spec" ? "cd-tint-primary border-transparent" : "cd-solid-bg cd-border-c"}`}
+            onClick={() => setMode("spec")}
+          >
+            <span className="text-[12.5px] font-bold cd-text">조문 편집형 (재구축)</span>
+            <span className="block text-[11px] cd-text-faint mt-0.5">
+              조문을 추출해 앱에서 수정·삽입할 수 있게 만듭니다. 갑지는 당사 표준 골격으로 정규화되어
+              원본과 서식이 달라질 수 있습니다.
+            </span>
+          </button>
+        </div>
         <label className="cd-btn rounded-lg border border-dashed cd-border-c px-3 py-3 text-xs cd-text-faint text-center cursor-pointer">
           {analyzing ? "분석 중... (수십 초 소요)" : "HWPX 파일 선택 → AI 분석"}
           <input
@@ -461,9 +515,12 @@ function CustomTemplateTab({ custom, onSaved }: { custom: CustomRow[]; onSaved: 
             <p className="text-[12px] cd-text-faint py-2 text-center">등록된 자체양식이 없습니다.</p>
           ) : (
             custom.map((t) => (
-              <div key={t.templateId} className="rounded-xl border cd-border-c px-3 py-2 flex items-center gap-2">
-                <span className="text-[12.5px] cd-text font-medium flex-1">{t.name}</span>
-                <span className="text-[11px] cd-text-faint">{t.originFacilityName ?? "발주처 미지정"}</span>
+              <div key={t.templateId} className="rounded-xl cd-solid-bg border cd-border-c px-3 py-2 flex items-center gap-2">
+                <span className="text-[12.5px] cd-text font-medium flex-1 truncate">{t.name}</span>
+                <span className={`text-[10px] rounded-full px-1.5 py-0.5 shrink-0 ${t.renderMode === "overlay" ? "cd-fill-primary" : "border cd-border-c cd-text-faint"}`}>
+                  {t.renderMode === "overlay" ? `원본 보존 · ${t.slotCount ?? 0}자리` : `조문 편집 · ${t.clauseCount ?? 0}개조`}
+                </span>
+                <span className="text-[11px] cd-text-faint shrink-0">{t.originFacilityName ?? "발주처 미지정"}</span>
               </div>
             ))
           )}
@@ -509,8 +566,34 @@ function CustomTemplateTab({ custom, onSaved }: { custom: CustomRow[]; onSaved: 
               </>
             )}
           </div>
+          {draft.mode === "overlay" ? (
+            /* overlay 검수 — 값 자리 매핑만 확인한다(조문·서식은 원본 그대로라 편집 대상이 아니다) */
+            <>
+              <p className="text-[11px] cd-text-faint">
+                원본 서식 보존 · 값 자리 <b className="cd-text">{draft.slotCount ?? 0}곳</b> 매핑됨. 조문과 표 서식은 원본 그대로 유지됩니다.
+              </p>
+              {(draft.unmapped?.length ?? 0) > 0 && (
+                <p className="text-[11.5px] rounded-lg px-3 py-2" style={{ background: "rgba(250,137,107,0.15)", color: "var(--cd-danger, #FA896B)" }}>
+                  매핑되지 않은 항목: {draft.unmapped!.join(", ")} — 이 값은 계약서에 채워지지 않습니다.
+                  양식에 해당 자리가 없으면 정상이고, 있는데 못 찾았다면 spec(조문 편집형)으로 다시 분석해 보세요.
+                </p>
+              )}
+              <div className="flex flex-col gap-1 min-h-0 overflow-y-auto max-h-[46vh] pr-1">
+                {(draft.profile?.docs?.[0]?.slots ?? []).map((sl, i) => (
+                  <div key={i} className="rounded-lg cd-solid-bg border cd-border-c px-2.5 py-1.5 flex items-center gap-2 text-[11.5px]">
+                    <span className="font-mono text-[10.5px] cd-text-faint shrink-0 w-24">
+                      {sl.target === "cell" ? `표${sl.table} r${sl.row}c${sl.col}` : `문단 ${sl.para}`}
+                    </span>
+                    <span className="cd-text truncate flex-1">{sl.label || "(라벨 없음)"}</span>
+                    <span className="cd-text-primary font-semibold shrink-0">{sl.binding}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+          <>
           <p className="text-[11px] cd-text-faint">
-            당사자 호칭: {draft.spec.terms.orderer} / {draft.spec.terms.contractor} · 조 표기: {draft.spec.clausePage?.noFormat === "bracket" ? "제N조 [제목]" : "제 N 조 (제목)"} · {clauses.length}개조
+            당사자 호칭: {draft.spec?.terms.orderer} / {draft.spec?.terms.contractor} · 조 표기: {draft.spec?.clausePage?.noFormat === "bracket" ? "제N조 [제목]" : "제 N 조 (제목)"} · {clauses.length}개조
           </p>
           <div className="flex flex-col gap-2 min-h-0 overflow-y-auto max-h-[46vh] pr-1">
             {clauses.map((c, i) => (
@@ -530,6 +613,8 @@ function CustomTemplateTab({ custom, onSaved }: { custom: CustomRow[]; onSaved: 
               </div>
             ))}
           </div>
+          </>
+          )}
           <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold flex items-center gap-1.5 self-end disabled:opacity-50" disabled={busy} onClick={save}>
             <Save className="w-3.5 h-3.5" /> {busy ? "저장 중..." : "자체양식으로 등록"}
           </button>

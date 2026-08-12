@@ -6,10 +6,12 @@
 
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
+import type { TemplateProfile } from "@/lib/deliverable/types";
 import { SEED_TEMPLATES, seedForSubtype, seedAsTemplateRow } from "./catalog";
 import {
   AGREEMENT_FORM_ID,
   type AgreementFieldValues,
+  type AgreementRenderMode,
   type AgreementRow,
   type AgreementSendStatus,
   type AgreementSpec,
@@ -47,6 +49,8 @@ function mapTemplate(r: Record<string, unknown>): AgreementTemplateRow {
     originFacilityId: sn(r.origin_facility_id),
     originFacilityName: sn(r.origin_facility_name),
     spec: parseJson<AgreementSpec>(r.spec, { coverBlocks: [], terms: { orderer: "발주자", contractor: "과업수행자" } }),
+    renderMode: String(r.render_mode) === "overlay" ? "overlay" : "spec",
+    profile: parseJson<TemplateProfile | null>(r.profile, null),
     sourceKind: sn(r.source_kind),
     sourceKey: sn(r.source_key),
     analyzedAt: sn(r.analyzed_at),
@@ -125,6 +129,8 @@ export async function upsertTemplate(params: {
   status?: string;
   originFacilityId?: string | null;
   spec: AgreementSpec;
+  renderMode?: AgreementRenderMode;
+  profile?: TemplateProfile | null;
   sourceKind?: string | null;
   sourceKey?: string | null;
   createdBy?: string | null;
@@ -135,16 +141,20 @@ export async function upsertTemplate(params: {
     await txn.run(
       `INSERT INTO agreement_templates
          (template_id, name, kind, service_type, service_subtype, version, status, origin_facility_id,
-          spec, source_kind, source_key, created_by, created_at, updated_at)
+          spec, render_mode, profile, source_kind, source_key, created_by, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5,
                COALESCE((SELECT MAX(version) + 1 FROM agreement_templates
                           WHERE service_type = $4 AND service_subtype = $5 AND template_id <> $1), 1),
-               $6, $7, $8::jsonb, $9, $10, $11, $12, $12)
+               $6, $7, $8::jsonb, $13, $14::jsonb, $9, $10, $11, $12, $12)
        ON CONFLICT (template_id) DO UPDATE SET
          name = EXCLUDED.name,
          status = EXCLUDED.status,
          origin_facility_id = EXCLUDED.origin_facility_id,
          spec = EXCLUDED.spec,
+         render_mode = EXCLUDED.render_mode,
+         profile = EXCLUDED.profile,
+         source_kind = COALESCE(EXCLUDED.source_kind, agreement_templates.source_kind),
+         source_key = COALESCE(EXCLUDED.source_key, agreement_templates.source_key),
          updated_at = EXCLUDED.updated_at`,
       [
         id,
@@ -159,6 +169,8 @@ export async function upsertTemplate(params: {
         params.sourceKey ?? null,
         params.createdBy ?? null,
         now,
+        params.renderMode ?? "spec",
+        JSON.stringify(params.profile ?? {}),
       ]
     );
     // 같은 세분류의 다른 활성 표준 셋은 보관 처리(세분류당 활성 1개)

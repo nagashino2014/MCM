@@ -6,7 +6,7 @@
 // 문서 원본 = approval_docs.field_values(frm-agreement), 대장 = contract_agreements(147).
 // 계약서 고유 대외번호는 없다(전자결재 일반 채번만 — ③ 확정).
 
-import type { DocBlock } from "@/lib/deliverable/types";
+import type { DocBlock, TemplateProfile } from "@/lib/deliverable/types";
 
 export const AGREEMENT_FORM_ID = "frm-agreement";
 
@@ -180,6 +180,14 @@ export interface AgreementRow {
 export type AgreementTemplateKind = "standard" | "custom";
 export type AgreementTemplateStatus = "active" | "draft" | "archived";
 
+/**
+ * 자체양식 렌더 방식(148).
+ * - overlay: 업로드 HWPX 원본을 그대로 두고 profile 이 가리키는 자리에 값만 주입(서식 100% 보존).
+ *   조문은 원본 그대로라 앱에서 편집하지 않는다 — 발주처가 서식을 고집하는 경우.
+ * - spec: AgreementSpec 으로 재구축(조문 편집 자유, 갑지는 표준 골격으로 정규화).
+ */
+export type AgreementRenderMode = "spec" | "overlay";
+
 export interface AgreementTemplateRow {
   templateId: string;
   name: string;
@@ -191,6 +199,10 @@ export interface AgreementTemplateRow {
   originFacilityId: string | null;
   originFacilityName: string | null;
   spec: AgreementSpec;
+  /** custom 전용 — overlay 면 원본 HWPX(source_key) + profile 로 값만 주입한다(148) */
+  renderMode: AgreementRenderMode;
+  /** overlay 슬롯 매핑 — 착수계와 같은 구조(lib/deliverable/types.ts TemplateProfile) */
+  profile: TemplateProfile | null;
   sourceKind: string | null;
   sourceKey: string | null;
   analyzedAt: string | null;

@@ -3,7 +3,8 @@ import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getTemplate, listTemplates, resolveTemplateForSubtype, upsertTemplate } from "@/lib/agreement/store";
 import { QUOTE_SERVICE_OPTIONS } from "@/lib/quote/types";
 import { seedForSubtype, seedAsTemplateRow } from "@/lib/agreement/catalog";
-import type { AgreementSpec } from "@/lib/agreement/types";
+import type { TemplateProfile } from "@/lib/deliverable/types";
+import type { AgreementRenderMode, AgreementSpec } from "@/lib/agreement/types";
 
 // 계약서 양식 템플릿 — 세분류별 표준 셋 resolve(작성 화면) / 기준 관리 목록 / 저장(fork 포함).
 export const runtime = "nodejs";
@@ -55,6 +56,9 @@ export async function GET(req: NextRequest) {
         name: t.name,
         originFacilityId: t.originFacilityId,
         originFacilityName: t.originFacilityName,
+        renderMode: t.renderMode,
+        slotCount: t.profile?.docs?.[0]?.slots.length ?? 0,
+        clauseCount: t.spec.clausePage?.clauses.length ?? 0,
         updatedAt: t.updatedAt,
       }));
     return NextResponse.json({ standard, custom });
@@ -76,10 +80,20 @@ export async function POST(req: NextRequest) {
       status?: string;
       originFacilityId?: string | null;
       spec: AgreementSpec;
+      renderMode?: AgreementRenderMode;
+      profile?: TemplateProfile | null;
+      sourceKind?: string | null;
+      sourceKey?: string | null;
     };
     if (!body?.name?.trim()) return NextResponse.json({ error: "양식 이름을 입력하세요." }, { status: 400 });
-    if (!body.spec || !Array.isArray(body.spec.coverBlocks))
+    const renderMode: AgreementRenderMode = body.renderMode === "overlay" ? "overlay" : "spec";
+    if (renderMode === "overlay") {
+      // overlay 는 원본 파일과 슬롯 매핑이 둘 다 있어야 값 주입이 가능하다(148)
+      if (!body.sourceKey) return NextResponse.json({ error: "원본 양식 파일 정보가 없습니다(재업로드 필요)." }, { status: 400 });
+      if (!body.profile?.docs?.length) return NextResponse.json({ error: "값 자리 매핑이 비어 있습니다." }, { status: 400 });
+    } else if (!body.spec || !Array.isArray(body.spec.coverBlocks)) {
       return NextResponse.json({ error: "양식 spec 이 올바르지 않습니다." }, { status: 400 });
+    }
     if (body.kind === "standard" && (!body.serviceType || !body.serviceSubtype))
       return NextResponse.json({ error: "표준 셋은 용역 대분류·세분류가 필요합니다." }, { status: 400 });
     const templateId = await upsertTemplate({
@@ -90,7 +104,12 @@ export async function POST(req: NextRequest) {
       serviceSubtype: body.serviceSubtype ?? null,
       status: body.status,
       originFacilityId: body.originFacilityId ?? null,
-      spec: body.spec,
+      // overlay 는 spec 을 렌더에 쓰지 않지만, 폴백(원본 유실)·목록 표기를 위해 최소 형태를 남긴다
+      spec: body.spec ?? { coverBlocks: [], terms: { orderer: "발주자", contractor: "과업수행자" } },
+      renderMode,
+      profile: body.profile ?? null,
+      sourceKind: body.sourceKind ?? (body.sourceKey ? "hwpx" : null),
+      sourceKey: body.sourceKey ?? null,
       createdBy: session.userId,
     });
     return NextResponse.json({ templateId });

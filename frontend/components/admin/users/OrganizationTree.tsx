@@ -32,6 +32,10 @@ interface OrganizationTreeProps {
   allowResignedView?: boolean;
   /** 상단 헤더(Organization / 제목) 숨김 — 트리만 노출 */
   hideHeader?: boolean;
+  /** 인원 노드 왼편에 체크박스 표시(다중 선택 UI). 토글은 onSelectEmployee 로 전달된다. */
+  employeeCheckbox?: boolean;
+  /** 체크 상태로 표시할 employeeId 집합 */
+  checkedEmployeeIds?: Iterable<string>;
 }
 
 const MASTER_KEY = "__master__";
@@ -50,8 +54,11 @@ export default function OrganizationTree({
   fillHeight = false,
   allowResignedView = false,
   hideHeader = false,
+  employeeCheckbox = false,
+  checkedEmployeeIds,
 }: OrganizationTreeProps) {
   const [open, setOpen] = useState<Set<string>>(() => new Set(["exec"]));
+  const checkedSet = useMemo(() => new Set(checkedEmployeeIds ?? []), [checkedEmployeeIds]);
   const [viewMode, setViewMode] = useState<"active" | "resigned">("active");
   const departments = snapshot?.departments ?? [];
   const employees = snapshot?.employees ?? [];
@@ -193,6 +200,16 @@ export default function OrganizationTree({
                 style={{ marginLeft: (depth + 1) * 14 }}
               >
                 <span className="w-4 h-4 rounded-bl-md" style={{ borderLeft: "1px solid var(--cd-border)", borderBottom: "1px solid var(--cd-border)" }} />
+                {employeeCheckbox && (
+                  <input
+                    type="checkbox"
+                    readOnly
+                    tabIndex={-1}
+                    checked={checkedSet.has(employee.employeeId)}
+                    className="shrink-0 pointer-events-none"
+                    style={{ width: 13, height: 13 }}
+                  />
+                )}
                 <UserRound className="w-4 h-4" fill="currentColor" style={{ color: accent }} />
                 <span className="text-xs font-normal truncate">{employee.name}</span>
                 <span

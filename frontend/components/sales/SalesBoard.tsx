@@ -32,17 +32,18 @@ const STAGE_PILL: Record<SalesStage, string> = {
   hold: "cd-pill-outline",
 };
 
-// 진행단계 태그 8종(영업 스케쥴 업무 단계). 색은 활동유형 메타에서 파생.
-const STEP_TAGS: { type: SalesActivityType; label: string }[] = [
-  { type: "telemarketing", label: "전화" },
-  { type: "email", label: "메일" },
-  { type: "visit", label: "방문" },
-  { type: "site_briefing", label: "현설" },
-  { type: "quote", label: "견적" },
-  { type: "proposal_meeting", label: "제안" },
-  { type: "bid", label: "투찰" },
-  { type: "result", label: "결과" },
-];
+// 진행단계 태그 8종(영업 스케쥴 업무 단계) 표시명. 색은 활동유형 메타에서 파생.
+// 배치 순서는 고정이 아니라 스케쥴 시작 날짜순이라 라벨 맵으로만 쓴다.
+const STEP_TAG_LABELS: Record<SalesActivityType, string> = {
+  telemarketing: "전화",
+  email: "메일",
+  visit: "방문",
+  site_briefing: "현설",
+  quote: "견적",
+  proposal_meeting: "제안",
+  bid: "투찰",
+  result: "결과",
+};
 
 const PANEL_HEIGHT = 375; // 탭 패널·리스트 카드 높이
 const TAB_PANEL_WIDTH = 616; // 탭 패널 너비
@@ -89,7 +90,8 @@ export function SalesBoard() {
   const { theme } = useCdashTheme();
 
   const [projects, setProjects] = useState<SalesProject[]>([]);
-  const [employees, setEmployees] = useState<SalesEmployeeOption[]>([]);
+  // 담당 필터 모집단 = 영업 담당자 풀(직급 규칙 ∪ '영업 담당 추가' 등록분). 전 직원이 아니다.
+  const [assignees, setAssignees] = useState<SalesEmployeeOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -148,9 +150,9 @@ export function SalesBoard() {
   }, []);
 
   useEffect(() => {
-    fetch("/api/sales/employees", { cache: "no-store" })
+    fetch("/api/sales/assignees", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : { employees: [] }))
-      .then((d) => setEmployees(Array.isArray(d.employees) ? d.employees : []))
+      .then((d) => setAssignees(Array.isArray(d.employees) ? d.employees : []))
       .catch(() => {});
   }, []);
 
@@ -235,7 +237,7 @@ export function SalesBoard() {
             </div>
             <select className="cd-select" style={{ width: "auto" }} value={owner} onChange={(e) => setOwner(e.target.value)}>
               <option value="">담당 전체</option>
-              {employees.map((e) => (
+              {assignees.map((e) => (
                 <option key={e.employeeId} value={e.employeeId}>{e.name}{e.deptName ? ` (${e.deptName})` : ""}</option>
               ))}
             </select>
@@ -418,21 +420,24 @@ function SalesTabPanel({
   );
 }
 
+// 태그 순서는 서버가 내려준 순서(스케쥴 시작 날짜 오름차순)를 그대로 유지한다.
 function StepTags({ types }: { types: SalesActivityType[] }) {
-  const set = new Set(types);
-  const active = STEP_TAGS.filter((s) => set.has(s.type));
-  if (active.length === 0) return <span className="cd-text-faint text-[11px]">—</span>;
+  if (types.length === 0) return <span className="cd-text-faint text-[11px]">—</span>;
   return (
     <span className="inline-flex flex-wrap gap-1 align-middle">
-      {active.map((s) => (
-        <span
-          key={s.type}
-          className="text-[12px] font-bold rounded px-1.5 py-0.5 leading-none"
-          style={{ background: ACTIVITY_TYPE_META[s.type].color, color: "#1f2937" }}
-        >
-          {s.label}
-        </span>
-      ))}
+      {types.map((t) => {
+        const meta = ACTIVITY_TYPE_META[t];
+        if (!meta) return null;
+        return (
+          <span
+            key={t}
+            className="text-[12px] font-bold rounded-full px-2 py-0.5 leading-none"
+            style={{ background: meta.color, color: "#1f2937" }}
+          >
+            {STEP_TAG_LABELS[t] ?? meta.short}
+          </span>
+        );
+      })}
     </span>
   );
 }
@@ -443,10 +448,10 @@ function ListView({ projects, onRowClick }: { projects: SalesProject[]; onRowCli
   }
   return (
     <div className="sales-list-scope cd-card-bg rounded-2xl border cd-border-c overflow-hidden h-full">
-      {/* 리스트 폰트 20% 확대(전역 cd-table은 공유 클래스라 스코프 오버라이드) */}
+      {/* 본문은 좌측 탭 패널 목록(text-sm = 0.875rem)과 동일 크기로 맞춘다. 전역 cd-table은 공유 클래스라 스코프 오버라이드 */}
       <style>{`
-        .sales-list-scope .cd-table thead th { font-size: 0.825rem; }
-        .sales-list-scope .cd-table tbody td { font-size: 0.975rem; }
+        .sales-list-scope .cd-table thead th { font-size: 0.75rem; }
+        .sales-list-scope .cd-table tbody td { font-size: 0.875rem; }
       `}</style>
       <div className="overflow-auto h-full">
         <table className="cd-table">

@@ -14,7 +14,7 @@ import { SalesFacilityInfoCard } from "./SalesFacilityInfoCard";
 import { ScheduleModal } from "./ScheduleModal";
 import OrganizationTree from "@/components/admin/users/OrganizationTree";
 import type { OrganizationEmployeeRow, OrganizationSnapshot } from "@/components/admin/users/types";
-import { filterAssigneeTree } from "@/lib/sales/org-tree";
+import { filterAssigneeTree, filterNonAssigneeTree } from "@/lib/sales/org-tree";
 import "@/components/cdash/cdash.css";
 import {
   ACTIVITY_TYPE_META,
@@ -489,7 +489,23 @@ function MemberModal({ theme, projectId, snapshot, current, onClose, onSaved }: 
   );
   const [activeRole, setActiveRole] = useState("정");
   const [saving, setSaving] = useState(false);
-  const treeSnapshot = useMemo(() => filterAssigneeTree(snapshot), [snapshot]);
+  // 영업 담당자 풀(150) — 조직도 모집단 = 직급 규칙 ∪ 수동 등록분(manualIds).
+  const [manualIds, setManualIds] = useState<string[]>([]);
+  const [adding, setAdding] = useState(false);
+  const [newPicks, setNewPicks] = useState<{ employeeId: string; name: string }[]>([]);
+  const [addSaving, setAddSaving] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/sales/assignees", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : { manualIds: [] }))
+      .then((d) => setManualIds(Array.isArray(d.manualIds) ? d.manualIds : []))
+      .catch(() => {});
+  }, []);
+
+  const treeSnapshot = useMemo(() => filterAssigneeTree(snapshot, manualIds), [snapshot, manualIds]);
+  // 이미 영업 담당인 인원을 뺀 나머지 = '영업 담당 추가' 트리
+  const assigneeIds = useMemo(() => (treeSnapshot?.employees ?? []).map((e) => e.employeeId), [treeSnapshot]);
+  const addTree = useMemo(() => filterNonAssigneeTree(snapshot, assigneeIds), [snapshot, assigneeIds]);
 
   const toggle = (emp: OrganizationEmployeeRow) =>
     setPicks((prev) => {
@@ -497,6 +513,31 @@ function MemberModal({ theme, projectId, snapshot, current, onClose, onSaved }: 
       if (ex) return prev.filter((p) => !(p.employeeId === emp.employeeId && p.role === activeRole));
       return [...prev, { employeeId: emp.employeeId, name: emp.name, role: activeRole }];
     });
+
+  const toggleNew = (emp: OrganizationEmployeeRow) =>
+    setNewPicks((prev) =>
+      prev.some((p) => p.employeeId === emp.employeeId)
+        ? prev.filter((p) => p.employeeId !== emp.employeeId)
+        : [...prev, { employeeId: emp.employeeId, name: emp.name }]
+    );
+
+  const confirmAdd = async () => {
+    if (!newPicks.length || addSaving) return;
+    setAddSaving(true);
+    try {
+      const res = await fetch("/api/sales/assignees", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ employeeIds: newPicks.map((p) => p.employeeId) }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && Array.isArray(d.manualIds)) setManualIds(d.manualIds);
+      setNewPicks([]);
+      setAdding(false);
+    } finally {
+      setAddSaving(false);
+    }
+  };
 
   const save = async () => {
     setSaving(true);
@@ -516,29 +557,66 @@ function MemberModal({ theme, projectId, snapshot, current, onClose, onSaved }: 
     <div className="cd-modal-overlay cdash cd-fields-white" data-theme={theme} onClick={onClose}>
       <div className="cd-modal cd-card-bg w-full" style={{ maxWidth: 520, padding: "1.25rem", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="cd-text text-lg font-extrabold">프로젝트 담당자 설정</h3>
+          <h3 className="cd-text text-lg font-extrabold">{adding ? "영업 담당 추가" : "프로젝트 담당자 설정"}</h3>
           <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={onClose}><X className="w-4 h-4" /></button>
         </div>
-        <label className="cd-label">역할</label>
-        <div className="flex gap-1.5 mb-2">
-          {MEMBER_ROLES.map((r) => (
-            <button key={r} type="button" className="cd-chip cd-chip-sm" data-active={activeRole === r} onClick={() => setActiveRole(r)}>{r}</button>
-          ))}
-        </div>
-        <div className="flex flex-wrap gap-1 mb-2">
-          {picks.map((p) => (
-            <span key={`${p.employeeId}-${p.role}`} className="cd-pill cd-pill-info inline-flex items-center gap-1">
-              {p.role}·{p.name}
-              <button onClick={() => setPicks((prev) => prev.filter((x) => !(x.employeeId === p.employeeId && x.role === p.role)))}><X className="w-3 h-3" /></button>
-            </span>
-          ))}
-          {picks.length === 0 && <span className="cd-text-faint text-xs">역할 선택 후 조직도에서 인원을 클릭하세요.</span>}
-        </div>
-        <OrganizationTree snapshot={treeSnapshot} embedded title="조직도" onSelectEmployee={toggle} />
-        <div className="flex justify-end gap-2 mt-4">
-          <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={onClose}>취소</button>
-          <button className="cd-btn cd-btn-primary cd-btn-sm" onClick={save} disabled={saving}>{saving ? "저장 중…" : "저장"}</button>
-        </div>
+
+        {adding ? (
+          <>
+            <div className="cd-text-faint text-xs mb-2">아직 영업 담당이 아닌 인원입니다. 체크한 인원이 영업 담당자로 등록됩니다.</div>
+            <OrganizationTree
+              snapshot={addTree}
+              embedded
+              title="조직도"
+              employeeCheckbox
+              checkedEmployeeIds={newPicks.map((p) => p.employeeId)}
+              onSelectEmployee={toggleNew}
+            />
+            <div className="flex flex-wrap gap-1 mt-2">
+              {newPicks.map((p) => (
+                <span key={p.employeeId} className="cd-pill cd-pill-success inline-flex items-center gap-1">
+                  {p.name}
+                  <button onClick={() => setNewPicks((prev) => prev.filter((x) => x.employeeId !== p.employeeId))}><X className="w-3 h-3" /></button>
+                </span>
+              ))}
+              {newPicks.length === 0 && <span className="cd-text-faint text-xs">조직도에서 추가할 인원을 체크하세요.</span>}
+            </div>
+            <div className="flex justify-end gap-2 mt-4">
+              <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => { setAdding(false); setNewPicks([]); }}>취소</button>
+              <button className="cd-btn cd-btn-primary cd-btn-sm" onClick={confirmAdd} disabled={addSaving || newPicks.length === 0}>
+                {addSaving ? "추가 중…" : `추가${newPicks.length ? ` (${newPicks.length})` : ""}`}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <label className="cd-label">역할</label>
+            <div className="flex gap-1.5 mb-2">
+              {MEMBER_ROLES.map((r) => (
+                <button key={r} type="button" className="cd-chip cd-chip-sm" data-active={activeRole === r} onClick={() => setActiveRole(r)}>{r}</button>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-1 mb-2">
+              {picks.map((p) => (
+                <span key={`${p.employeeId}-${p.role}`} className="cd-pill cd-pill-info inline-flex items-center gap-1">
+                  {p.role}·{p.name}
+                  <button onClick={() => setPicks((prev) => prev.filter((x) => !(x.employeeId === p.employeeId && x.role === p.role)))}><X className="w-3 h-3" /></button>
+                </span>
+              ))}
+              {picks.length === 0 && <span className="cd-text-faint text-xs">역할 선택 후 조직도에서 인원을 클릭하세요.</span>}
+            </div>
+            <OrganizationTree snapshot={treeSnapshot} embedded title="조직도" onSelectEmployee={toggle} />
+            <div className="flex justify-between items-center gap-2 mt-4">
+              <button className="cd-btn cd-btn-soft cd-btn-sm" onClick={() => setAdding(true)}>
+                <UserPlus className="w-4 h-4" /> 영업 담당 추가
+              </button>
+              <div className="flex gap-2">
+                <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={onClose}>취소</button>
+                <button className="cd-btn cd-btn-primary cd-btn-sm" onClick={save} disabled={saving}>{saving ? "저장 중…" : "저장"}</button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

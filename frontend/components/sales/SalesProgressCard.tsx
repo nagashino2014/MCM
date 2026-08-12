@@ -10,8 +10,11 @@ import {
   type SalesProject,
 } from "@/lib/sales/types";
 
-// 영업활동 진행상황 인포그래픽 파이프라인 순서(전화→미팅→견적→현설→투찰→제안→결과)
-const STAGE_FLOW: SalesActivityType[] = ["telemarketing", "visit", "quote", "site_briefing", "bid", "proposal_meeting", "result"];
+// 타임라인은 스케쥴 날짜순으로 세운다. 아래 순서는 같은 날짜일 때의 tie-break 용도.
+const STAGE_FLOW: SalesActivityType[] = ["telemarketing", "email", "visit", "site_briefing", "quote", "proposal_meeting", "bid", "result"];
+
+// 경과 미입력 태그 테두리 — 전화 마케팅 캘린더 태그와 동일 색
+const PENDING_COLOR = ACTIVITY_TYPE_META.telemarketing.color;
 
 function whenOf(a: SalesActivity): string {
   return (a.scheduledAt ?? a.occurredAt ?? a.createdAt ?? "").slice(0, 16);
@@ -66,21 +69,39 @@ export function SalesProgressCard({ project, activities, orderInfo }: { project:
     const futureTypes = new Set<SalesActivityType>();
     for (const [t, w] of earliestByType) if (w > nowIso) futureTypes.add(t);
 
+    // 경과 미입력 유형: 해당 일정명의 스케쥴 중 경과가 비어 있는 건이 하나라도 있는 경우
+    const pendingTypes = new Set<SalesActivityType>();
+    for (const a of activities) {
+      if (!(a.progressNote && a.progressNote.trim())) pendingTypes.add(a.activityType);
+    }
+
     // 투찰정보
     const allQuotes = activities.filter((a) => a.activityType === "quote").flatMap((a) => a.quotes ?? []);
     const allBids = activities.filter((a) => a.activityType === "bid").flatMap((a) => a.bids ?? []);
     const lastQuote = allQuotes.length ? allQuotes[allQuotes.length - 1].amount : null;
     const lastBid = allBids.length ? allBids[allBids.length - 1].amount : null;
 
-    return { registered, activeType, futureTypes, startIso, elapsedDays, counts, quoteCount: allQuotes.length, lastQuote, bidCount: allBids.length, lastBid };
+    return { registered, activeType, futureTypes, pendingTypes, earliestByType, startIso, elapsedDays, counts, quoteCount: allQuotes.length, lastQuote, bidCount: allBids.length, lastBid };
   }, [activities]);
 
-  const flowTags = STAGE_FLOW.filter((t) => info.registered.has(t));
+  // 일정명별 최초 스케쥴 날짜 오름차순(같은 날짜면 STAGE_FLOW 순).
+  const flowTags = Array.from(info.registered).sort((a, b) => {
+    const wa = info.earliestByType.get(a) ?? "";
+    const wb = info.earliestByType.get(b) ?? "";
+    if (wa !== wb) return wa < wb ? -1 : 1;
+    return STAGE_FLOW.indexOf(a) - STAGE_FLOW.indexOf(b);
+  });
   const detailEntries = Array.from(info.counts.entries());
 
   return (
     <div className="cd-card-bg rounded-2xl border cd-border-c py-4 w-full h-full min-h-0 overflow-y-auto scrollbar-hide" style={{ paddingLeft: 21, paddingRight: 21 }}>
-      <h2 className="cd-text font-extrabold text-sm mb-3">영업활동 진행상황</h2>
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <h2 className="cd-text font-extrabold text-sm">영업활동 진행상황</h2>
+        <span className="flex items-center gap-1.5 text-[11px] cd-text-faint shrink-0">
+          <span className="rounded-full shrink-0" style={{ width: 10, height: 10, border: `1.5px solid ${PENDING_COLOR}`, background: "var(--cd-card-solid)" }} />
+          경과 미입력
+        </span>
+      </div>
 
       {/* 인포그래픽 파이프라인 */}
       {flowTags.length > 0 ? (
@@ -88,14 +109,14 @@ export function SalesProgressCard({ project, activities, orderInfo }: { project:
           <div className="absolute left-1 right-2 top-1/2 -translate-y-1/2 h-2 rounded-full pointer-events-none"
             style={{ background: "linear-gradient(90deg, #FFE9A8, #FDC748)" }} />
           {flowTags.map((t) => {
-            const on = info.activeType === t;
-            const future = !on && info.futureTypes.has(t);
+            const future = info.futureTypes.has(t);
+            const pending = !future && info.pendingTypes.has(t);
             // 배경은 반드시 불투명(--cd-card-solid) — 글라스 토큰을 쓰면 아래 진행 바가 비쳐
             // 태그가 투명하게 보인다.
-            const style = on
-              ? { background: "#EAF7E1", border: "1.5px solid #7EBA56", color: "#4A7A2E" }
-              : future
+            const style = future
               ? { background: "var(--cd-card-solid)", border: "1.5px solid var(--cd-primary)", color: "var(--cd-primary)" }
+              : pending
+              ? { background: "var(--cd-card-solid)", border: `1.5px solid ${PENDING_COLOR}`, color: "var(--cd-text)" }
               : { background: "var(--cd-card-solid)", border: "1px solid var(--cd-ring)", color: "var(--cd-muted)" };
             return (
               <span key={t} className="relative z-10 rounded-full px-3 py-1 text-xs shrink-0" style={style}>

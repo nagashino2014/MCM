@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
+import { ASSIGNEE_EXCLUDE_NAMES, MIN_ASSIGNEE_RANK } from "./org-tree";
 import {
   ACTIVITY_TYPE_META,
   type ActivityAssigneeRole,
@@ -79,7 +80,7 @@ function mapProject(row: Record<string, unknown>): SalesProject {
     updatedAt: String(row.updated_at ?? ""),
     leadMemberId: text(row.lead_member_id),
     leadMemberName: text(row.lead_member_name),
-    activityTypes: [], // attachStepTypes에서 진행/완료 단계만 채운다
+    activityTypes: [], // attachStepTypes에서 시작 날짜순으로 채운다
   };
 }
 
@@ -102,31 +103,10 @@ const PROJECT_SELECT = `
        LIMIT 1
     ) lm ON true`;
 
-// 스케쥴 업무단계 진행/완료 판정. 리스트 '업무 단계' 태그는 done|active만 표시(예정 제외).
-//  - 견적: quotes에 (견적가+제출일시) 입력된 항목 존재 → done
-//  - 투찰: bids에 (투찰가+투찰일시) 입력된 항목 존재 → done
-//  - 결과: bid_result 낙찰/탈락/사업장거절/사업추진중단 → done (미정·재투찰은 미완)
-//  - 그 외(전화/메일/방문/현설/제안): 경과(progress_note) 입력 → done
-//  - active: 시작일시(scheduled_at)가 경과했으나 아직 미완
-function activityStepState(a: Record<string, unknown>, nowKst: string): "done" | "active" | "planned" {
-  const t = String(a.activity_type ?? "");
-  let done = false;
-  if (t === "quote") {
-    done = jsonArray<ActivityQuote>(a.quotes).some((q) => q.amount != null && !!q.submittedAt);
-  } else if (t === "bid") {
-    done = jsonArray<ActivityBid>(a.bids).some((b) => b.amount != null && !!b.biddedAt);
-  } else if (t === "result") {
-    const br = String(a.bid_result ?? "");
-    done = br === "won_bid" || br === "lost_bid" || br === "facility_declined" || br === "project_halted";
-  } else {
-    done = !!String(a.progress_note ?? "").trim();
-  }
-  if (done) return "done";
-  const started = !!a.scheduled_at && String(a.scheduled_at) < nowKst;
-  return started ? "active" : "planned";
-}
-
-// 프로젝트별 '진행 또는 완료된' 업무단계 집합을 계산해 activityTypes에 채운다(예정 제외).
+// 프로젝트별 업무 단계 태그(activityTypes)와 진행 단계(stage)를 채운다.
+//  - 태그: 등록된 '모든' 스케쥴의 유형을 시작 날짜 오름차순으로(예정 포함). 같은 유형은 최초 1회.
+//  - 단계: computeStage — 날짜 기준이라 활동이 그대로여도 시간이 지나면 값이 바뀐다.
+//    저장된 sales_projects.stage 는 마지막 갱신 시점 값이므로 조회 때마다 다시 계산해 덮어쓴다.
 async function attachStepTypes(
   db: Awaited<ReturnType<typeof getDb>>,
   projects: SalesProject[]
@@ -136,23 +116,35 @@ async function attachStepTypes(
   const ph = ids.map((_, i) => `$${i + 1}`).join(",");
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT project_id, activity_type, scheduled_at, progress_note, quotes, bids, bid_result
+      `SELECT project_id, activity_type, scheduled_at, ended_at, occurred_at, created_at, bid_result
          FROM sales_activities WHERE project_id IN (${ph})`,
       ids
     )
   );
-  // scheduled_at은 KST 벽시계(joinIso)라 시작일시 경과 비교도 KST now로.
-  const nowKst = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 19);
-  const byPid = new Map<string, Set<SalesActivityType>>();
+  const byPid = new Map<string, Array<Record<string, unknown>>>();
   for (const a of rows) {
-    if (activityStepState(a, nowKst) === "planned") continue;
     const pid = String(a.project_id ?? "");
     if (!pid) continue;
-    if (!byPid.has(pid)) byPid.set(pid, new Set());
-    byPid.get(pid)!.add(String(a.activity_type) as SalesActivityType);
+    if (!byPid.has(pid)) byPid.set(pid, []);
+    byPid.get(pid)!.push(a);
   }
   for (const p of projects) {
-    p.activityTypes = Array.from(byPid.get(p.projectId) ?? []);
+    const acts = byPid.get(p.projectId) ?? [];
+    if (!acts.length) {
+      p.activityTypes = [];
+      continue;
+    }
+    const earliest = new Map<SalesActivityType, string>();
+    for (const a of acts) {
+      const t = String(a.activity_type) as SalesActivityType;
+      const w = String(a.scheduled_at ?? a.occurred_at ?? a.created_at ?? "");
+      const cur = earliest.get(t);
+      if (cur === undefined || w < cur) earliest.set(t, w);
+    }
+    p.activityTypes = Array.from(earliest.entries())
+      .sort((a, b) => (a[1] === b[1] ? 0 : a[1] < b[1] ? -1 : 1))
+      .map(([t]) => t);
+    p.stage = computeStage(acts);
   }
 }
 
@@ -177,6 +169,8 @@ export async function getSalesProject(projectId: string): Promise<SalesProject |
   const rows = rowsToObjects(await db.exec(`${PROJECT_SELECT} WHERE p.project_id = $1 LIMIT 1`, [projectId]));
   if (!rows.length) return null;
   const project = mapProject(rows[0]);
+  // 상세의 '진행 단계'도 목록과 같은 실시간 값이어야 한다(날짜 기준이라 저장값은 낡는다).
+  await attachStepTypes(db, [project]);
   project.members = await listProjectMembers(projectId);
   return project;
 }
@@ -674,12 +668,88 @@ export async function listActiveEmployees(): Promise<SalesEmployeeOption[]> {
   }));
 }
 
+// ── 영업 담당자 풀(150 sales_assignees) ──────────────────────
+// 목록 '담당' 필터와 담당자 선택 조직도의 모집단.
+// = 직급 규칙(차장 이상, 제외명 제외) ∪ '영업 담당 추가'로 등록한 인원.
+
+// 150 미적용 환경(마이그 반영 전)에서도 직급 규칙만으로 동작하도록 폴백한다.
+async function salesAssigneeTableExists(db: Awaited<ReturnType<typeof getDb>>): Promise<boolean> {
+  const rows = rowsToObjects(await db.exec("SELECT to_regclass('public.sales_assignees') AS t"));
+  return !!rows[0]?.t;
+}
+
+/** 수동 등록분(sales_assignees)만. 조직도를 좁힐 때 직급 규칙과 합집합으로 쓴다. */
+export async function listManualSalesAssigneeIds(): Promise<string[]> {
+  const db = await getDb();
+  if (!(await salesAssigneeTableExists(db))) return [];
+  const rows = rowsToObjects(await db.exec("SELECT employee_id FROM sales_assignees"));
+  return rows.map((r) => String(r.employee_id ?? "")).filter(Boolean);
+}
+
+export async function listSalesAssignees(): Promise<SalesEmployeeOption[]> {
+  const db = await getDb();
+  const manual = (await salesAssigneeTableExists(db))
+    ? "LEFT JOIN sales_assignees sa ON sa.employee_id = e.employee_id"
+    : "";
+  const manualCond = manual ? "sa.employee_id IS NOT NULL OR " : "";
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT e.employee_id, e.name, e.dept_id, d.dept_name, p.position_name
+         FROM employee_profiles e
+         LEFT JOIN departments d ON d.dept_id = e.dept_id
+         LEFT JOIN positions p ON p.position_id = e.position_id
+         ${manual}
+        WHERE e.status = 'active'
+          AND (${manualCond}(COALESCE(p.rank_order, 0) >= $1 AND NOT (e.name = ANY($2::text[]))))
+        ORDER BY COALESCE(d.display_order, 999) ASC, COALESCE(p.rank_order, 0) DESC, e.name ASC`,
+      [MIN_ASSIGNEE_RANK, ASSIGNEE_EXCLUDE_NAMES]
+    )
+  );
+  return rows.map((row) => ({
+    employeeId: String(row.employee_id ?? ""),
+    name: String(row.name ?? ""),
+    deptId: text(row.dept_id),
+    deptName: text(row.dept_name),
+    positionName: text(row.position_name),
+  }));
+}
+
+export async function addSalesAssignees(employeeIds: string[], userId: string | null): Promise<void> {
+  const ids = Array.from(new Set(employeeIds.map((s) => String(s ?? "").trim()).filter(Boolean)));
+  if (!ids.length) return;
+  if (!(await salesAssigneeTableExists(await getDb()))) {
+    throw new Error("영업 담당자 테이블이 아직 준비되지 않았습니다(마이그레이션 150 필요).");
+  }
+  const now = new Date().toISOString();
+  await withDbWrite(async (db) => {
+    for (const employeeId of ids) {
+      await db.run(
+        `INSERT INTO sales_assignees (employee_id, created_by, created_at)
+         VALUES ($1, $2, $3) ON CONFLICT (employee_id) DO NOTHING`,
+        [employeeId, userId, now]
+      );
+    }
+  });
+}
+
 // ── 진행 단계 자동 분류 ──────────────────────────────────────
-// 리드→컨택→입찰→수주/실주를 스케쥴 진행에 따라 자동 판정. (제안·보류는 추후 정의)
-// 진행 단계 = 경과(progress_note)가 입력되어 '종료된' 스케쥴 기준으로 산정.
-// 미래 예정 스케쥴(경과 미입력)은 단계 산정에서 제외한다.
-//   G1 전화/메일 종료 → 컨택, G2 방문/현설 종료 → 제안, G3 견적/제안 종료 → 입찰, G4 투찰 종료 → 입찰(결과 대기).
-//   영업 결과: 낙찰→수주, 탈락·거절·중단→실주.
+// 스케쥴 '날짜' 기준으로 지금 어느 단계에 있는지 판정한다(경과 입력 여부와 무관).
+//   1) 진행 중 = 시작일시가 지났고 기한(종료일시)이 아직 남은 스케쥴 → 그중 가장 늦게 시작한 것
+//   2) 진행 중이 없으면(= 다음 단계 시작일이 아직 도래하지 않음) → 기한이 경과한 것 중 가장 최근 것
+//   3) 전부 미래 예정이면 리드
+// 단, 영업 결과가 확정(낙찰·탈락·거절·중단)된 건은 날짜와 무관하게 수주/실주로 고정한다.
+// 유형→단계: 전화·메일=컨택, 방문·현설=제안, 견적·제안·투찰·결과=입찰.
+const STAGE_BY_ACTIVITY_TYPE: Record<string, SalesStage> = {
+  telemarketing: "contact",
+  email: "contact",
+  visit: "proposal",
+  site_briefing: "proposal",
+  quote: "bidding",
+  proposal_meeting: "bidding",
+  bid: "bidding",
+  result: "bidding",
+};
+
 function computeStage(rows: Array<Record<string, unknown>>): SalesStage {
   const result = rows.find((r) => String(r.activity_type) === "result");
   if (result) {
@@ -688,30 +758,25 @@ function computeStage(rows: Array<Record<string, unknown>>): SalesStage {
     if (br === "lost_bid" || br === "facility_declined" || br === "project_halted") return "lost";
     // rebid(재투찰)/미정은 아래 단계 산정으로 폴백
   }
-  const G1 = new Set(["telemarketing", "email"]);
-  const G2 = new Set(["visit", "site_briefing"]);
-  const G3 = new Set(["quote", "proposal_meeting"]);
-  let topDone = 0; // 경과 입력(종료)된 스케쥴 중 최고 그룹
+  // scheduled_at·ended_at은 KST 벽시계(joinIso)라 비교도 KST now 문자열로.
+  const nowKst = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 19);
+  let running: Record<string, unknown> | null = null;
+  let runningStart = "";
+  let past: Record<string, unknown> | null = null;
+  let pastEnd = "";
   for (const r of rows) {
-    const note = String(r.progress_note ?? "").trim();
-    if (!note) continue; // 경과 미입력(예정/미종료) → 제외
-    const t = String(r.activity_type);
-    if (t === "bid") topDone = Math.max(topDone, 4);
-    else if (G3.has(t)) topDone = Math.max(topDone, 3);
-    else if (G2.has(t)) topDone = Math.max(topDone, 2);
-    else if (G1.has(t)) topDone = Math.max(topDone, 1);
+    const start = String(r.scheduled_at ?? "");
+    if (!start) continue;
+    const end = String(r.ended_at ?? "") || start;
+    if (start <= nowKst && nowKst <= end) {
+      if (!running || start >= runningStart) { running = r; runningStart = start; }
+    } else if (end < nowKst) {
+      if (!past || end >= pastEnd) { past = r; pastEnd = end; }
+    }
   }
-  switch (topDone) {
-    case 4:
-    case 3:
-      return "bidding";
-    case 2:
-      return "proposal";
-    case 1:
-      return "contact";
-    default:
-      return "lead";
-  }
+  const pick = running ?? past;
+  if (!pick) return "lead";
+  return STAGE_BY_ACTIVITY_TYPE[String(pick.activity_type)] ?? "lead";
 }
 
 async function recomputeProjectStage(
@@ -719,7 +784,7 @@ async function recomputeProjectStage(
   projectId: string,
   now: string
 ): Promise<void> {
-  const rows = rowsToObjects(await db.exec("SELECT activity_type, bid_result, progress_note FROM sales_activities WHERE project_id = $1", [projectId]));
+  const rows = rowsToObjects(await db.exec("SELECT activity_type, bid_result, progress_note, scheduled_at, ended_at FROM sales_activities WHERE project_id = $1", [projectId]));
   const stage = computeStage(rows);
   await db.run("UPDATE sales_projects SET stage = $2, updated_at = $3 WHERE project_id = $1", [projectId, stage, now]);
 }

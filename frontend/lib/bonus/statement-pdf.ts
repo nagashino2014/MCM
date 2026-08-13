@@ -235,7 +235,7 @@ export async function renderStatementPdf(input: StatementPdfInput): Promise<Uint
   if (input.lines.length) {
     tables.push({
       label: "용역별 성과급 산정 내역",
-      weights: [7, 47, 23, 23],
+      weights: [7, 55, 19, 19],
       headers: ["연번", "용역명", "계산서 발행일", "성과급 산정액(원)"],
       aligns: ["center", "left", "center", "right"],
       rows: input.lines.map((l, i) => [String(i + 1), l.title, l.issuedDates, fmt(l.amount)]),

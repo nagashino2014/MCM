@@ -89,16 +89,37 @@ function drawCellText(
   rowTop: number,
   rowH: number,
   align: "center" | "left" | "right",
-  size = FONT_SIZE
+  size = FONT_SIZE,
+  /** 지정 시 자동 축소 없이 이 크기로 고정(열 단위 크기 통일용). */
+  fixedSize?: number
 ) {
   if (!text) return;
   const pad = 6;
   const maxW = width - pad * 2;
-  const s = fitSize(text, font, maxW, size, 7);
+  const s = fixedSize ?? fitSize(text, font, maxW, size, 7);
   const shown = truncate(text, font, s, maxW);
   const w = font.widthOfTextAtSize(shown, s);
   const tx = align === "center" ? x + (width - w) / 2 : align === "right" ? x + width - pad - w : x + pad;
   page.drawText(shown, { x: tx, y: rowTop - rowH / 2 - s * 0.34, size: s, font, color: INK });
+}
+
+/** 글자 단위 커스텀 자간 텍스트(중앙 정렬) — 공백 문자 자간보다 촘촘하다. */
+function drawSpacedTextCentered(
+  page: PDFPage,
+  text: string,
+  font: PDFFont,
+  size: number,
+  y: number,
+  spacing: number
+) {
+  const chars = text.split("");
+  const widths = chars.map((c) => font.widthOfTextAtSize(c, size));
+  const total = widths.reduce((a, b) => a + b, 0) + spacing * (chars.length - 1);
+  let x = MARGIN_X + (TABLE_W - total) / 2;
+  chars.forEach((c, i) => {
+    page.drawText(c, { x, y, size, font, color: INK });
+    x += widths[i] + spacing;
+  });
 }
 
 /** 셀 배경 음영(테두리보다 먼저 칠한다). */
@@ -155,17 +176,9 @@ export async function renderStatementPdf(input: StatementPdfInput): Promise<Uint
     y = PAGE_H - 70;
   };
 
-  // ── 제목 + 이중 구분선 ──
+  // ── 제목(커스텀 자간) + 이중 구분선 ──
   const title = `${input.periodLabel} 성과급 지급 명세서`;
-  const spaced = title.split("").join(" ");
-  const tSize = fitSize(spaced, fonts.bold, TABLE_W, 19, 12);
-  page.drawText(spaced, {
-    x: MARGIN_X + (TABLE_W - fonts.bold.widthOfTextAtSize(spaced, tSize)) / 2,
-    y,
-    size: tSize,
-    font: fonts.bold,
-    color: INK,
-  });
+  drawSpacedTextCentered(page, title, fonts.bold, 19, y, 2.2);
   y -= 18;
   page.drawLine({ start: { x: MARGIN_X, y }, end: { x: PAGE_W - MARGIN_X, y }, thickness: 1.6, color: INK });
   page.drawLine({ start: { x: MARGIN_X, y: y - 3 }, end: { x: PAGE_W - MARGIN_X, y: y - 3 }, thickness: 0.6, color: INK });
@@ -245,6 +258,15 @@ export async function renderStatementPdf(input: StatementPdfInput): Promise<Uint
     page.drawText(spec.label, { x: MARGIN_X, y, size: 11, font: fonts.bold, color: INK });
     y -= 12;
     const xs = colXs(spec.weights);
+    // 좌측 정렬 텍스트 열(용역명 등)은 가장 긴 행 기준 크기로 통일한다(행마다 들쭉날쭉 방지)
+    const uniformSizes: Array<number | undefined> = spec.aligns.map((align, i) => {
+      if (align !== "left") return undefined;
+      const colW = xs[i + 1] - xs[i] - 12;
+      return spec.rows.reduce(
+        (acc, row) => Math.min(acc, fitSize(row[i], fonts.regular, colW, FONT_SIZE, 7)),
+        FONT_SIZE
+      );
+    });
     const drawHeader = () => {
       const rowTop = y;
       shadeCell(page, xs[0], xs[xs.length - 1] - xs[0], rowTop, HEADER_H);
@@ -276,7 +298,9 @@ export async function renderStatementPdf(input: StatementPdfInput): Promise<Uint
           xs[i + 1] - xs[i],
           rowTop,
           ROW_H,
-          spec.aligns[i]
+          spec.aligns[i],
+          FONT_SIZE,
+          row.total ? undefined : uniformSizes[i]
         )
       );
       y -= ROW_H;

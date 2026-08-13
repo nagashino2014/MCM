@@ -116,12 +116,13 @@ export const MENU_ITEMS: MenuItem[] = [
     group: "work",
   },
   {
-    title: "사업참여 수행인력",
+    title: "성과급 산정",
     href: "/staffing",
     icon: UserCog,
     submenu: [
-      { title: "수행인력 현황", href: "/staffing" },
-      { title: "반기 참여도·평점", href: "/staffing/evaluations" },
+      { title: "지급 대상 LIST", href: "/staffing" },
+      { title: "참여도·평점", href: "/staffing/evaluations" },
+      { title: "지급 명세서 생성", href: "/staffing/statements" },
     ],
     group: "work",
   },

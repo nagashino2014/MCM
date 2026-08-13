@@ -35,6 +35,8 @@ export const HOME_WIDGETS: HomeWidgetDef[] = [
   { key: "quickFacilities", label: "임시 등록 사업장 완성", permission: "facility.view", defaultW: 8, defaultH: 2 },
   // 데이터 지표(SW-P3 이월분) — 표시할 지표는 카드에서 선택(공개범위는 analytics API 가 필터).
   { key: "metrics", label: "데이터 지표", permission: "approval.view", defaultW: 8, defaultH: 2 },
+  // 본인 반기별 성과급(BS-P3) — API 가 본인 것만 반환.
+  { key: "bonusMe", label: "내 성과급 지급내역", permission: null, defaultW: 8, defaultH: 1 },
 ];
 
 export const HOME_WIDGET_KEYS = HOME_WIDGETS.map((w) => w.key);

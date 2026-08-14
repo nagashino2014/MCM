@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { FileSpreadsheet, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { CheckCircle2, FileSpreadsheet, Plus, Trash2, X } from "lucide-react";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import LedgerCreateModal from "@/components/payroll/LedgerCreateModal";
 import type { PayrollEntryRow, PayrollItemDef, PayrollLedgerMonth } from "@/lib/payroll/queries";
 
 /**
@@ -42,21 +43,35 @@ export default function PayrollLedgerBoard() {
   const [annualItems, setAnnualItems] = useState<AnnualItem[]>([]);
   const [monthTotals, setMonthTotals] = useState<Record<number, { pay: number; ded: number; net: number }>>({});
 
-  // 대장 목록 1회 로드 → 최신 연·월 기본 선택
-  useEffect(() => {
+  // 새 대장 생성(P4)
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editDraft, setEditDraft] = useState<Record<string, string>>({});
+  const [reloadNonce, setReloadNonce] = useState(0);
+
+  // 대장 목록 로드 → 최신(또는 지정) 연·월 선택
+  const reloadLedgers = useCallback((selYear?: number, selMonth?: number) => {
     fetch("/api/payroll/ledgers", { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => {
         const list: PayrollLedgerMonth[] = d.ledgers ?? [];
         setLedgers(list);
-        if (list.length) {
+        if (selYear && selMonth) {
+          setYear(selYear);
+          setMonth(selMonth);
+          setKind("salary");
+        } else if (list.length) {
           setYear(list[0].payYear);
           setMonth(list[0].payMonth);
           setKind(list[0].ledgerKind);
         }
+        setReloadNonce((n) => n + 1);
       })
       .catch(() => setLedgers([]));
   }, []);
+
+  useEffect(() => {
+    reloadLedgers();
+  }, [reloadLedgers]);
 
   const years = useMemo(
     () => [...new Set(ledgers.map((l) => l.payYear))].sort((a, b) => b - a),
@@ -100,7 +115,64 @@ export default function PayrollLedgerBoard() {
         setEntries([]);
       })
       .finally(() => setLoading(false));
-  }, [current]);
+  }, [current, reloadNonce]);
+
+  const isDraft = current?.source === "app" && current?.status === "draft";
+
+  const confirmDraft = async () => {
+    if (!current || !window.confirm(`${year}년 ${month}월분 대장을 확정할까요?\n확정 후에는 수정할 수 없습니다.`)) return;
+    const res = await fetch("/api/payroll/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "confirm", ledgerId: current.ledgerId }),
+    });
+    if (!res.ok) window.alert((await res.json()).error ?? "확정 실패");
+    reloadLedgers(year ?? undefined, month ?? undefined);
+  };
+
+  const deleteDraft = async () => {
+    if (!current || !window.confirm(`작성 중인 ${year}년 ${month}월분 대장을 삭제할까요?`)) return;
+    const res = await fetch("/api/payroll/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "delete", ledgerId: current.ledgerId }),
+    });
+    if (!res.ok) window.alert((await res.json()).error ?? "삭제 실패");
+    reloadLedgers();
+  };
+
+  // draft 상세 패널 편집 저장 — 변경 라인만 update-line.
+  // 지급 항목이 바뀌면 산식 공제(고용보험·소득세·지방세)를 자동 재계산한다(EDI 고지·수기 공제는 유지).
+  const saveEntryEdits = async () => {
+    if (!selected) return;
+    const changes = Object.entries(editDraft).filter(([itemId, v]) => {
+      const prev = selected.lines[itemId] ?? 0;
+      return Number(v || 0) !== prev;
+    });
+    if (!changes.length) return;
+    for (const [itemId, v] of changes) {
+      const res = await fetch("/api/payroll/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "update-line", entryId: selected.entryId, itemId, amount: Number(v || 0) }),
+      });
+      if (!res.ok) {
+        window.alert((await res.json()).error ?? "저장 실패");
+        return;
+      }
+    }
+    const payChanged = changes.some(([itemId]) => payItems.some((i) => i.itemId === itemId));
+    const taxTouched = changes.some(([itemId]) => ["ei", "income-tax", "local-tax"].includes(itemId));
+    if (payChanged && !taxTouched) {
+      await fetch("/api/payroll/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "recalc-taxes", entryId: selected.entryId }),
+      });
+    }
+    setSelected(null);
+    setReloadNonce((n) => n + 1);
+  };
 
   // 연간 뷰: 성명 목록
   useEffect(() => {
@@ -157,6 +229,24 @@ export default function PayrollLedgerBoard() {
         meta={current ? `${current.title ?? `${year}년 ${month}월분`} · ${kpi.count}명` : undefined}
         actions={
           <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            {view === "month" && isDraft && (
+              <>
+                <span className="rounded-full px-2.5 py-1 text-[11px] font-bold" style={{ color: "var(--cd-warning)", background: "var(--cd-warning-soft)" }}>
+                  작성 중
+                </span>
+                <button type="button" className="cd-btn rounded-xl px-3 py-2 text-sm font-semibold flex items-center gap-1.5" onClick={deleteDraft}>
+                  <Trash2 className="w-4 h-4" /> 삭제
+                </button>
+                <button type="button" className="cd-fill-primary text-white rounded-xl px-3 py-2 text-sm font-bold flex items-center gap-1.5" onClick={confirmDraft}>
+                  <CheckCircle2 className="w-4 h-4" /> 확정
+                </button>
+              </>
+            )}
+            {view === "month" && (
+              <button type="button" className="cd-btn rounded-xl px-3 py-2 text-sm font-semibold flex items-center gap-1.5" onClick={() => setCreateOpen(true)}>
+                <Plus className="w-4 h-4" /> 새 대장
+              </button>
+            )}
             <div className="flex rounded-xl border cd-border-c overflow-hidden text-sm font-semibold">
               {(["month", "annual"] as const).map((v) => (
                 <button
@@ -275,7 +365,14 @@ export default function PayrollLedgerBoard() {
                     {entries.map((e) => (
                       <tr
                         key={e.entryId}
-                        onClick={() => setSelected(e)}
+                        onClick={() => {
+                          setSelected(e);
+                          if (isDraft) {
+                            const d: Record<string, string> = {};
+                            for (const i of items) d[i.itemId] = String(e.lines[i.itemId] ?? 0);
+                            setEditDraft(d);
+                          }
+                        }}
                         className="border-b cd-border-c last:border-0 cursor-pointer transition hover:bg-[color:var(--cd-surface)]"
                       >
                         <td className="p-2.5 font-semibold cd-text sticky left-0 z-10 whitespace-nowrap" style={{ background: "var(--cd-card-solid)", boxShadow: "-14px 0 0 var(--cd-card-solid)" }}>
@@ -417,16 +514,32 @@ export default function PayrollLedgerBoard() {
               )}
             </dl>
             {(["pay", "deduction"] as const).map((kd) => {
-              const list = (kd === "pay" ? payItems : dedItems).filter((i) => selected.lines[i.itemId]);
+              const all = kd === "pay" ? payItems : dedItems;
+              const list = isDraft ? all : all.filter((i) => selected.lines[i.itemId]);
               return (
                 <div key={kd} className="border cd-border-c rounded-2xl p-3.5">
                   <h4 className="text-xs font-bold cd-text-faint mb-2">{kd === "pay" ? "기본급여 및 제수당" : "공제"}</h4>
-                  {list.map((i) => (
-                    <div key={i.itemId} className="flex justify-between py-1 text-sm">
-                      <span className="cd-text">{i.name}</span>
-                      <span className="cd-text font-semibold tabular-nums">{fmtTotal(selected.lines[i.itemId])}원</span>
-                    </div>
-                  ))}
+                  {list.map((i) =>
+                    isDraft ? (
+                      <div key={i.itemId} className="flex justify-between items-center py-0.5 text-sm gap-2">
+                        <span className="cd-text">{i.name}</span>
+                        <input
+                          className="cd-input text-sm text-right"
+                          style={{ width: 120 }}
+                          inputMode="numeric"
+                          value={Number(editDraft[i.itemId] ?? 0) ? Number(editDraft[i.itemId]).toLocaleString() : editDraft[i.itemId] === "" ? "" : "0"}
+                          onChange={(ev) =>
+                            setEditDraft((p) => ({ ...p, [i.itemId]: ev.target.value.replace(/[^\d\-]/g, "") }))
+                          }
+                        />
+                      </div>
+                    ) : (
+                      <div key={i.itemId} className="flex justify-between py-1 text-sm">
+                        <span className="cd-text">{i.name}</span>
+                        <span className="cd-text font-semibold tabular-nums">{fmtTotal(selected.lines[i.itemId])}원</span>
+                      </div>
+                    )
+                  )}
                   <div className="flex justify-between pt-2 mt-1 border-t cd-border-c text-sm font-extrabold">
                     <span className="cd-text">{kd === "pay" ? "지급합계" : "공제합계"}</span>
                     <span className="tabular-nums" style={{ color: kd === "pay" ? "var(--cd-primary)" : "var(--cd-warning)" }}>
@@ -436,6 +549,15 @@ export default function PayrollLedgerBoard() {
                 </div>
               );
             })}
+            {isDraft && (
+              <button
+                type="button"
+                className="cd-fill-primary text-white rounded-xl px-3.5 py-2 text-sm font-bold"
+                onClick={saveEntryEdits}
+              >
+                수정 저장(합계 자동 재계산)
+              </button>
+            )}
             <div
               className="rounded-2xl p-3.5 flex justify-between items-center text-sm font-extrabold"
               style={{ background: "var(--cd-primary-soft)", color: "var(--cd-primary)" }}
@@ -450,6 +572,17 @@ export default function PayrollLedgerBoard() {
             )}
           </aside>
         </div>
+      )}
+
+      {/* 새 대장 생성 모달 (P4) */}
+      {createOpen && (
+        <LedgerCreateModal
+          onClose={() => setCreateOpen(false)}
+          onCreated={(y, m) => {
+            setCreateOpen(false);
+            reloadLedgers(y, m);
+          }}
+        />
       )}
     </>
   );

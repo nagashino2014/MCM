@@ -3,12 +3,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Save } from "lucide-react";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import PayrollRulesPanel from "@/components/payroll/PayrollRulesPanel";
+import PayrollTaxPanel from "@/components/payroll/PayrollTaxPanel";
 import type { PayrollItemDef } from "@/lib/payroll/queries";
 
 /**
- * 급여 항목·설정 보드 (PL-P1, 블루프린트 §4-3)
+ * 급여 항목·설정 보드 (PL-P1 항목 사전 + PL-P4 수당 규칙·세액 설정, 블루프린트 §4-3·§6-2)
  * - 항목 사전 CRUD: 정규화 명칭·별칭·통상임금 산입 토글·정렬·활성.
- * - in_ordinary_wage 는 초과근무수당 시급 산정(§6)의 기준이므로 변경 시 안내 문구 표시.
+ * - 수당 규칙: 직원×항목 정액(자격증·주거비·숙박·육아·장기근속·명절상여·학자금) — 대장 생성 시 자동 반영.
+ * - 세액 설정: 원천징수 비율·가족수·자녀수 + 공제신고서 업로드 + 간이세액표 버전 관리.
  */
 
 type Draft = PayrollItemDef & { aliasText: string; dirty?: boolean };
@@ -18,6 +21,7 @@ function toDraft(i: PayrollItemDef): Draft {
 }
 
 export default function PayrollSettingsBoard() {
+  const [topTab, setTopTab] = useState<"items" | "rules" | "tax">("items");
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [kindTab, setKindTab] = useState<"pay" | "deduction">("pay");
   const [saving, setSaving] = useState(false);
@@ -95,41 +99,80 @@ export default function PayrollSettingsBoard() {
         title="급여 항목·설정"
         meta={`지급 ${drafts.filter((d) => d.kind === "pay").length}종 · 공제 ${drafts.filter((d) => d.kind === "deduction").length}종`}
         actions={
-          <div className="flex items-center gap-2">
-            {msg && <span className="text-xs cd-text-faint">{msg}</span>}
-            <button type="button" className="cd-btn rounded-xl px-3 py-2 text-sm font-semibold flex items-center gap-1.5" onClick={addItem}>
-              <Plus className="w-4 h-4" /> 항목 추가
-            </button>
-            <button
-              type="button"
-              disabled={saving || !dirtyCount}
-              onClick={saveAll}
-              className="cd-fill-primary text-white rounded-xl px-3.5 py-2 text-sm font-semibold flex items-center gap-1.5 disabled:opacity-50"
-            >
-              <Save className="w-4 h-4" /> 저장{dirtyCount ? ` (${dirtyCount})` : ""}
-            </button>
-          </div>
+          topTab === "items" ? (
+            <div className="flex items-center gap-2">
+              {msg && <span className="text-xs cd-text-faint">{msg}</span>}
+              <button type="button" className="cd-btn rounded-xl px-3 py-2 text-sm font-semibold flex items-center gap-1.5" onClick={addItem}>
+                <Plus className="w-4 h-4" /> 항목 추가
+              </button>
+              <button
+                type="button"
+                disabled={saving || !dirtyCount}
+                onClick={saveAll}
+                className="cd-fill-primary text-white rounded-xl px-3.5 py-2 text-sm font-semibold flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <Save className="w-4 h-4" /> 저장{dirtyCount ? ` (${dirtyCount})` : ""}
+              </button>
+            </div>
+          ) : undefined
         }
       />
 
       <section className="cd-card rounded-3xl flex-1 min-h-0 flex flex-col cd-reveal">
         <div className="flex items-center justify-between px-5 pt-4 pb-2">
-          <div className="flex rounded-xl border cd-border-c overflow-hidden text-sm font-semibold">
-            {(["pay", "deduction"] as const).map((k) => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => setKindTab(k)}
-                className={`px-3.5 py-1.5 transition ${kindTab === k ? "cd-fill-primary text-white" : "cd-text"}`}
-              >
-                {k === "pay" ? "지급 항목" : "공제 항목"}
-              </button>
-            ))}
+          <div className="flex items-center gap-3">
+            <div className="flex rounded-xl border cd-border-c overflow-hidden text-sm font-semibold">
+              {(
+                [
+                  ["items", "항목 사전"],
+                  ["rules", "수당 규칙"],
+                  ["tax", "세액 설정"],
+                ] as const
+              ).map(([k, label]) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setTopTab(k)}
+                  className={`px-3.5 py-1.5 transition ${topTab === k ? "cd-fill-primary text-white" : "cd-text"}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {topTab === "items" && (
+              <div className="flex rounded-xl border cd-border-c overflow-hidden text-sm font-semibold">
+                {(["pay", "deduction"] as const).map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => setKindTab(k)}
+                    className={`px-3.5 py-1.5 transition ${kindTab === k ? "cd-fill-primary text-white" : "cd-text"}`}
+                  >
+                    {k === "pay" ? "지급 항목" : "공제 항목"}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-          <p className="text-[11px] cd-text-faint">
-            통상임금 산입 항목은 초과근무수당 시급(월 통상임금 ÷ 209) 산정에 사용됩니다.
-          </p>
+          {topTab === "items" && (
+            <p className="text-[11px] cd-text-faint">
+              통상임금 산입 항목은 초과근무수당 시급(월 통상임금 ÷ 209) 산정에 사용됩니다.
+            </p>
+          )}
+          {topTab === "rules" && (
+            <p className="text-[11px] cd-text-faint">
+              등록된 규칙은 새 대장 생성 시 귀속월 기준으로 자동 반영됩니다(같은 항목은 규칙이 전월 복사보다 우선).
+            </p>
+          )}
+          {topTab === "tax" && (
+            <p className="text-[11px] cd-text-faint">
+              소득세 = 간이세액표(월 과세급여 × 가족수) − 자녀 차감 × 개인 비율 · 지방소득세 10% 자동.
+            </p>
+          )}
         </div>
+        {topTab === "rules" && <PayrollRulesPanel />}
+        {topTab === "tax" && <PayrollTaxPanel />}
+        {topTab === "items" && (
         <div className="flex-1 min-h-0 overflow-auto px-4 pb-4">
           {/* 항목 수가 많아 반폭 테이블 2열로 흘린다(좌: 앞 절반, 우: 뒤 절반) */}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-x-8 items-start">
@@ -199,6 +242,7 @@ export default function PayrollSettingsBoard() {
           </div>
           {!list.length && <p className="p-6 text-center text-sm cd-text-faint">항목이 없습니다.</p>}
         </div>
+        )}
       </section>
     </>
   );

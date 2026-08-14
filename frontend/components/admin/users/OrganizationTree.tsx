@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight, Network, ShieldHalf, UserRound, UserRoundX, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type {
@@ -36,6 +36,10 @@ interface OrganizationTreeProps {
   employeeCheckbox?: boolean;
   /** 체크 상태로 표시할 employeeId 집합 */
   checkedEmployeeIds?: Iterable<string>;
+  /** 인원 노드 우측 끝에 붙일 뱃지(예: 근로계약 건수). null/undefined 반환 시 미표시. */
+  employeeBadge?: (employee: OrganizationEmployeeRow) => ReactNode;
+  /** 부서 노드 우측의 소속 인원 수 숨김(인원 뱃지와 혼동될 때). */
+  hideDeptCount?: boolean;
 }
 
 const MASTER_KEY = "__master__";
@@ -56,6 +60,8 @@ export default function OrganizationTree({
   hideHeader = false,
   employeeCheckbox = false,
   checkedEmployeeIds,
+  employeeBadge,
+  hideDeptCount = false,
 }: OrganizationTreeProps) {
   const [open, setOpen] = useState<Set<string>>(() => new Set(["exec"]));
   const checkedSet = useMemo(() => new Set(checkedEmployeeIds ?? []), [checkedEmployeeIds]);
@@ -153,12 +159,12 @@ export default function OrganizationTree({
             if (hasChildren) toggle(dept.deptId);
           }}
           className={cn(
-            "w-full flex items-center gap-2 rounded-xl px-2 py-2 text-left transition",
+            "flex items-center gap-2 rounded-xl px-2 py-2 text-left transition",
             selectedDeptId === dept.deptId
               ? "cd-soft-primary"
               : "cd-text-muted cd-row-hover hover:text-[color:var(--cd-text)]"
           )}
-          style={{ marginLeft: depth * 14 }}
+          style={{ marginLeft: depth * 14, width: `calc(100% - ${depth * 14}px)` }}
         >
           <span className="w-4 h-4 flex items-center justify-center cd-text-faint">
             {hasChildren ? (
@@ -169,7 +175,9 @@ export default function OrganizationTree({
           </span>
           <Network className="w-4 h-4" fill="currentColor" style={{ color: accent }} />
           <span className="text-sm font-semibold truncate">{dept.deptName}</span>
-          <span className="ml-auto mr-1 text-[10px] font-bold cd-text-faint">{childEmployees.length}</span>
+          {!hideDeptCount && (
+            <span className="ml-auto mr-1 text-[10px] font-bold cd-text-faint">{childEmployees.length}</span>
+          )}
         </button>
 
         {isOpen && (
@@ -192,12 +200,12 @@ export default function OrganizationTree({
                   });
                 }}
                 className={cn(
-                  "w-full flex items-center gap-2 rounded-xl px-2 py-1.5 text-left transition",
+                  "flex items-center gap-2 rounded-xl px-2 py-1.5 text-left transition",
                   selectedEmployeeId === employee.employeeId
                     ? "cd-fill-primary"
                     : "cd-text-muted cd-row-hover hover:text-[color:var(--cd-text)]"
                 )}
-                style={{ marginLeft: (depth + 1) * 14 }}
+                style={{ marginLeft: (depth + 1) * 14, width: `calc(100% - ${(depth + 1) * 14}px)` }}
               >
                 <span className="w-4 h-4 rounded-bl-md" style={{ borderLeft: "1px solid var(--cd-border)", borderBottom: "1px solid var(--cd-border)" }} />
                 {employeeCheckbox && (
@@ -220,6 +228,16 @@ export default function OrganizationTree({
                 >
                   {employee.positionName}
                 </span>
+                {employeeBadge && (
+                  <span
+                    className={cn(
+                      "ml-auto mr-1 shrink-0 text-[10px] tabular-nums",
+                      selectedEmployeeId === employee.employeeId ? "text-white/70" : "cd-text-faint"
+                    )}
+                  >
+                    {employeeBadge(employee)}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -262,12 +280,12 @@ export default function OrganizationTree({
                   })
                 }
                 className={cn(
-                  "w-full flex items-center gap-2 rounded-xl px-2 py-1.5 text-left transition",
+                  "flex items-center gap-2 rounded-xl px-2 py-1.5 text-left transition",
                   selectedUserId === user.userId
                     ? "cd-fill-primary"
                     : "cd-text-muted cd-row-hover hover:text-[color:var(--cd-text)]"
                 )}
-                style={{ marginLeft: 14 }}
+                style={{ marginLeft: 14, width: "calc(100% - 14px)" }}
               >
                 <span className="w-4 h-4 rounded-bl-md" style={{ borderLeft: "1px solid var(--cd-border)", borderBottom: "1px solid var(--cd-border)" }} />
                 <UserRound className="w-4 h-4" fill="currentColor" style={{ color: gray }} />

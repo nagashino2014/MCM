@@ -9,6 +9,7 @@ import {
   ClipboardCheck,
   Mail,
   UserCog,
+  Wallet,
   Building2,
   Users as UsersIcon,
   BookUser,
@@ -124,6 +125,19 @@ export const MENU_ITEMS: MenuItem[] = [
       { title: "참여도·평점", href: "/staffing/evaluations" },
       { title: "지급 명세서 생성", href: "/staffing/statements" },
     ],
+    group: "work",
+  },
+  // 급여·근로계약 — 급여대장·근로계약 관리(docs/payroll-labor-contract-blueprint.md). 민감 데이터 admin 전용.
+  {
+    title: "급여·근로계약",
+    href: "/payroll",
+    icon: Wallet,
+    submenu: [
+      { title: "급여대장", href: "/payroll" },
+      { title: "직원별 연봉·근로계약", href: "/payroll/contracts" },
+      { title: "급여 항목·설정", href: "/payroll/settings" },
+    ],
+    minRole: "admin",
     group: "work",
   },
   // 근태·휴가 — 전자결재 하위에서 HR 모듈로 승격(§2.3). 라우트 경로는 무변경(/approval/*).

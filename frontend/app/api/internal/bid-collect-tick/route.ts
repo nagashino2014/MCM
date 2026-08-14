@@ -8,6 +8,7 @@ import {
 import { logScraperRun } from "@/lib/scraper/run-log";
 import { collectBidSource } from "@/lib/bid/bid-sink";
 import { matchAndQueueBidNotices } from "@/lib/bid/match-notify";
+import { TICK_CACHE_BID_COLLECTORS, loadTickCached } from "@/lib/tick-cache";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,6 +37,22 @@ export async function POST(req: NextRequest) {
   }
   try {
     const { hour, date } = kstNow();
+
+    // 사전 판정 — 캐시된 소스 목록으로 "이번 시각에 수집할 소스가 있는지" 부터 본다.
+    // 없으면 DB 를 열지 않고 끝내 Aurora auto-pause 를 유지한다(lib/tick-cache.ts 참고).
+    // 캐시가 낡아도 last_batch_date 가 과거로만 틀리므로 "수집 대상 있음" 쪽으로 새어
+    // 아래 최신 로드로 넘어갈 뿐, 수집을 건너뛰지는 않는다.
+    const cached = await loadTickCached(TICK_CACHE_BID_COLLECTORS, async () =>
+      listEnabledCustomCollectors(await getDb(), "bid")
+    );
+    const due = cached.some(
+      ({ source }) => hour === (source.batchHour ?? DEFAULT_BATCH_HOUR) && source.lastBatchDate !== date
+    );
+    if (!due) {
+      return NextResponse.json({ hour, date, candidates: cached.length, ran: [], skipped: "not-due" });
+    }
+
+    // 수집 대상이 있다 — 최신 상태로 다시 읽어 하루 1회 멱등(last_batch_date)을 정확히 판정한다.
     const db = await getDb();
     const collectors = await listEnabledCustomCollectors(db, "bid");
     const ran: Array<Record<string, unknown>> = [];

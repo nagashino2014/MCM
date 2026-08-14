@@ -6,6 +6,7 @@
  */
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
+import { TICK_CACHE_BID_NOTIFY, invalidateTickCache } from "@/lib/tick-cache";
 
 /** 카카오 알림톡은 앱 푸시로 대체돼 발송 수단에서 제외됐다(구형 저장값은 로드 시 제거). */
 export type NotifyChannel = "email" | "app";
@@ -245,4 +246,6 @@ async function persist(config: BidNotifyConfig, updatedBy: string | null): Promi
       [SETTINGS_KEY, JSON.stringify(config), now, updatedBy]
     );
   });
+  // UI 저장·발송 후 lastDispatchDate 기록 모두 이 경로를 지난다 — 발송 틱의 사전 판정 캐시를 버린다.
+  invalidateTickCache(TICK_CACHE_BID_NOTIFY);
 }

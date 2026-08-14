@@ -10,6 +10,7 @@ import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { sendNotifyEmail, type ChannelSendResult } from "@/lib/notify/email-ses";
 import { sendAlimtalk } from "@/lib/notify/kakao-solapi";
 import { sendPush, type PushEventKey } from "@/lib/notify/push-expo";
+import { TICK_CACHE_APPROVAL_REMIND, invalidateTickCache, loadTickCached } from "@/lib/tick-cache";
 
 export type ApprovalNotifyEvent =
   | "step_pending"
@@ -114,6 +115,7 @@ export async function saveNotifySettings(items: NotifyEventSetting[]): Promise<v
       );
     }
   });
+  invalidateTickCache(TICK_CACHE_APPROVAL_REMIND);
 }
 
 interface Contact {
@@ -319,7 +321,9 @@ export interface RemindResult {
  * instrumentation 타이머가 내부 라우트로 위임 호출한다(next 상시 태스크 = 스케줄 배치).
  */
 export async function dispatchDueReminders(now = new Date()): Promise<RemindResult> {
-  const setting = await getNotifySetting("remind");
+  // 리마인드가 꺼져 있으면 DB 를 열지 않고 끝낸다 — 유휴 시간대 Aurora auto-pause 유지
+  // (배경은 lib/tick-cache.ts). 설정 저장 시 캐시가 무효화되므로 켠 직후부터 바로 돈다.
+  const setting = await loadTickCached(TICK_CACHE_APPROVAL_REMIND, () => getNotifySetting("remind"));
   if (!setting.emailEnabled && !setting.alimtalkEnabled) return { reminded: 0, skipped: "remind-disabled" };
   const hours = setting.remindAfterHours ?? 24;
   const cutoff = new Date(now.getTime() - hours * 3600 * 1000).toISOString();

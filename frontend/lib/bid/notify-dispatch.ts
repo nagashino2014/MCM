@@ -24,6 +24,7 @@ import { REGION_GROUPS } from "@/lib/bid/bid-queries";
 import { listActivePackages } from "@/lib/bid/package-store";
 import { sendNotifyEmail, type ChannelSendResult } from "@/lib/notify/email-ses";
 import { sendPush } from "@/lib/notify/push-expo";
+import { TICK_CACHE_BID_NOTIFY, loadTickCached } from "@/lib/tick-cache";
 
 const TYPE_LABEL: Record<string, string> = {
   order_plan: "발주계획",
@@ -354,6 +355,23 @@ async function dispatchProfile(
     JSON.stringify(channels)
   );
   return { dispatched: matches.length, channels };
+}
+
+/**
+ * 사전 판정 — 캐시된 설정만으로 "이번 틱에 발송할 게 있는지" 를 DB 없이 본다.
+ * 유휴 시간대에 Aurora auto-pause 를 유지하려는 것(배경은 lib/tick-cache.ts).
+ * 캐시가 낡아도 lastDispatchDate 가 과거로만 틀려 "발송할 게 있음" 쪽으로 새므로,
+ * 발송을 건너뛰는 일은 없다(설정 저장 시에도 캐시가 무효화된다).
+ */
+export async function isBidNotifyDue(now = new Date()): Promise<boolean> {
+  const { profiles } = await loadTickCached(TICK_CACHE_BID_NOTIFY, loadBidNotifyConfig);
+  const { date: today, hm } = kstParts(now);
+  return profiles.some((p) => {
+    if (!p.enabled || !p.recipients.length || hm < p.sendTime) return false;
+    if (p.lastDispatchDate !== today) return true; // 매칭 발송(일 1회)
+    // 매칭이 끝난 뒤에도 마감 임박은 따로 돈다(dispatchBidDeadlineReminders).
+    return p.deadlineDays > 0 && p.recipients.some((r) => r.deadlineAlert);
+  });
 }
 
 export async function dispatchDueBidNotices(now = new Date()): Promise<DispatchResult> {

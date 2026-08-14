@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  MCM 스테이징 next 서비스 자동 켜고/끄기 스케줄 설치 (EventBridge Scheduler).
+  MCM 스테이징 next 서비스 자동 켜고/끄기 스케줄 설치/해제 (EventBridge Scheduler).
   매일 08:00 기동 / 평일 22:00 정지 / 주말 20:00 정지 (Asia/Seoul).
 
 .DESCRIPTION
@@ -11,12 +11,19 @@
   - 멱등: 재실행 시 기존 스케줄을 update 한다.
   - 정지 시각 이후 작업이 이어지면 staging-start.ps1 로 다시 올리면 된다(다음 정지 시각까지 유지).
 
+  ⚠ 2026-08-14 현재 이 스케줄은 **해제**되어 있다(-Remove 적용). next 는 24/7 상시 가동한다.
+    22시 정지가 야간 작업을 끊어 불편했고, 틱의 설정 캐시(frontend/lib/tick-cache.ts)로
+    유휴 시간 Aurora auto-pause 가 살아나 상시 가동 추가 비용이 월 $10 대로 내려갔기 때문.
+    다시 자동 정지를 쓰려면 인자 없이 실행하면 된다.
+
 .EXAMPLE
-  pwsh infra/aws/ops/staging-schedule-setup.ps1
+  pwsh infra/aws/ops/staging-schedule-setup.ps1            # 스케줄 설치/갱신
+  pwsh infra/aws/ops/staging-schedule-setup.ps1 -Remove    # 스케줄 삭제(=24/7 상시 가동)
 #>
 param(
   [string]$AwsProfile = "mcm-kesi-staging",
-  [string]$Region     = "ap-northeast-2"
+  [string]$Region     = "ap-northeast-2",
+  [switch]$Remove     # 스케줄 3종을 삭제해 자동 정지를 끈다(그룹·IAM 롤은 남겨 재설치가 쉽도록)
 )
 # aws cli 는 "존재 확인" 호출이 정상적으로도 stderr 를 내므로 Stop 을 쓰지 않고
 # $LASTEXITCODE 로 성패를 직접 판정한다(PS 5.1 NativeCommandError 함정).
@@ -31,6 +38,25 @@ $groupName = "mcm-ieps-staging-ops"
 $tz        = "Asia/Seoul"
 
 function Log($m) { Write-Host "[schedule] $m" }
+
+$scheduleNames = @("next-start-daily", "next-stop-weekday", "next-stop-weekend")
+
+# 0) -Remove: 스케줄 3종만 삭제하고 끝낸다(그룹·IAM 롤은 남겨 재설치가 인자 없는 재실행으로 끝나게).
+if ($Remove) {
+  foreach ($n in $scheduleNames) {
+    $exists = (aws scheduler get-schedule --name $n --group-name $groupName --query "Name" --output text 2>$null)
+    if ($LASTEXITCODE -eq 0 -and $exists) {
+      Log "delete-schedule $n"
+      aws scheduler delete-schedule --name $n --group-name $groupName | Out-Null
+      if ($LASTEXITCODE -ne 0) { throw "$n 스케줄 삭제 실패" }
+    } else {
+      Log "$n 없음 (skip)"
+    }
+  }
+  Log "완료. 자동 정지 해제 — next 는 상시 가동된다(내리려면 staging-stop.ps1 수동 실행)."
+  Log "⚠ 지금 next 가 desired 0 이면 staging-start.ps1 로 한 번 올려야 한다."
+  return
+}
 
 # 1) Scheduler 가 assume 할 IAM 롤 (+ next UpdateService 만 허용하는 인라인 정책)
 $trust = @'

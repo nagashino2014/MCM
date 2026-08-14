@@ -21,20 +21,29 @@ pwsh infra/aws/ops/staging-start.ps1 -Backend -Bastion
 
 전제: `AWS_PROFILE=mcm-kesi-staging` SSO 로그인 상태(`aws sso login --profile mcm-kesi-staging`).
 
-## 자동 스케줄 (2026-08-14 설치)
+## 자동 스케줄 → **해제됨** (2026-08-14 설치, 같은 날 해제)
 
-next 웹 서비스는 EventBridge Scheduler 로 자동 토글된다(`staging-schedule-setup.ps1`, 재실행 시 갱신):
+next 는 현재 **24/7 상시 가동**한다. 자동 정지 스케줄은 삭제했다:
 
-| 스케줄 | 시각 (Asia/Seoul) | 동작 |
-|---|---|---|
-| `next-start-daily` | 매일 08:00 | next desired 1 |
-| `next-stop-weekday` | 평일 22:00 | next desired 0 |
-| `next-stop-weekend` | 토·일 20:00 | next desired 0 |
+```powershell
+pwsh infra/aws/ops/staging-schedule-setup.ps1 -Remove
+```
 
-- 그룹 `mcm-ieps-staging-ops`, IAM 롤 `mcm-ieps-staging-scheduler`(ecs:UpdateService next 한정). Lambda 없음.
-- 정지 시각 이후 계속 작업하려면 `staging-start.ps1` 로 다시 올리면 됨(다음 정지 시각까지 유지).
-- backend(OCR)·bastion 은 스케줄 대상 아님 — 종전대로 수동.
-- 임시로 자동화를 멈추려면: `aws scheduler update-schedule ... --state DISABLED` 또는 콘솔에서 그룹 내 스케줄 비활성.
+**왜 껐나** — 평일 22:00 정지가 야간 작업을 끊었다(첫날 바로 503). 그런데 상시 가동의 비용
+대부분은 Fargate(월 ~$20)가 아니라 **Aurora ACU** 였다. next 안의 주기 틱(`instrumentation.ts`)이
+5분마다 설정 테이블을 조회해 **auto-pause(유휴 300초)가 영영 발동하지 못하던 것**이 원인.
+틱이 캐시된 설정으로 "할 일 없음" 을 먼저 판정하게 고쳐(`frontend/lib/tick-cache.ts`) 유휴
+시간대 auto-pause 를 되살렸고, 상시 가동 추가 비용이 **월 ~$34 → ~$10 대**로 내려갔다.
+
+- 되돌리려면(다시 자동 정지) 인자 없이 재실행: `pwsh infra/aws/ops/staging-schedule-setup.ps1`
+  → 매일 08:00 기동 / 평일 22:00·주말 20:00 정지 (Asia/Seoul).
+- 그룹 `mcm-ieps-staging-ops` 와 IAM 롤 `mcm-ieps-staging-scheduler` 는 남겨뒀다(재설치 편의).
+- 당분간 안 쓸 때 수동으로 내리는 건 종전대로 `staging-stop.ps1`.
+
+### ⚠ 틱을 새로 추가할 때
+`instrumentation.ts` 에 주기 타이머를 추가하면 **매 틱마다 DB 를 열지 않도록** 사전 판정을
+캐시로 처리해야 한다(`lib/tick-cache.ts` 규칙 참고). 안 그러면 Aurora 가 24시간 깨어 있어
+월 ~$50 이 조용히 붙는다. ALB 헬스체크(`/api/health`)가 DB 를 안 건드리는 것과 같은 이유다.
 
 ## 무엇을 끄고 켜나
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { dispatchBidDeadlineReminders, dispatchDueBidNotices } from "@/lib/bid/notify-dispatch";
+import { dispatchBidDeadlineReminders, dispatchDueBidNotices, isBidNotifyDue } from "@/lib/bid/notify-dispatch";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,6 +16,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   try {
+    // 발송 시각 전이면 DB 를 열지 않고 끝낸다 — Aurora auto-pause 유지(lib/tick-cache.ts).
+    if (!(await isBidNotifyDue())) {
+      return NextResponse.json({ dispatched: 0, skipped: "not-due" });
+    }
     const result = await dispatchDueBidNotices();
     // 마감 임박(M6-C)은 매칭 발송과 독립 — 매칭이 "오늘 이미 발송"으로 끝나도 따로 돈다.
     const deadline = await dispatchBidDeadlineReminders();

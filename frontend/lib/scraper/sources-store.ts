@@ -4,6 +4,7 @@
  */
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
+import { TICK_CACHE_BID_COLLECTORS, invalidateTickCache } from "@/lib/tick-cache";
 import { decryptSecret, encryptSecret } from "./secret-crypto";
 import type {
   ApiConfig,
@@ -160,6 +161,7 @@ export async function updateSource(
   await withDbWrite(async (db) => {
     await db.run(`UPDATE scraper_sources SET ${sets.join(", ")} WHERE source_id = $${vals.length}`, vals);
   });
+  invalidateTickCache(TICK_CACHE_BID_COLLECTORS); // enabled·batch_hour 변경이 수집 틱에 바로 반영되도록
 }
 
 /** 실행(수집/미리보기) 시점 전용 — 저장된 인증키를 복호화해 반환. 응답에는 절대 노출 금지. */
@@ -175,6 +177,7 @@ export async function deleteSource(sourceId: string): Promise<void> {
   await withDbWrite(async (db) => {
     await db.run("DELETE FROM scraper_sources WHERE source_id = $1", [sourceId]); // endpoints CASCADE
   });
+  invalidateTickCache(TICK_CACHE_BID_COLLECTORS);
 }
 
 // ── 엔드포인트 ────────────────────────────────────
@@ -261,12 +264,14 @@ export async function updateEndpoint(
   await withDbWrite(async (db) => {
     await db.run(`UPDATE scraper_endpoints SET ${sets.join(", ")} WHERE endpoint_id = $${vals.length}`, vals);
   });
+  invalidateTickCache(TICK_CACHE_BID_COLLECTORS);
 }
 
 export async function deleteEndpoint(endpointId: string): Promise<void> {
   await withDbWrite(async (db) => {
     await db.run("DELETE FROM scraper_endpoints WHERE endpoint_id = $1", [endpointId]);
   });
+  invalidateTickCache(TICK_CACHE_BID_COLLECTORS);
 }
 
 /** 야간 배치·수동 실행용 — 활성 소스×활성 엔드포인트 조합. purpose로 sink 필터. */
@@ -313,4 +318,6 @@ export async function markSourceBatchRun(sourceId: string, kstDate: string): Pro
   await withDbWrite(async (db) => {
     await db.run(`UPDATE scraper_sources SET last_batch_date = $1 WHERE source_id = $2`, [kstDate, sourceId]);
   });
+  // 오늘 수집 완료를 캐시에도 반영 — 남은 배치 시각 동안 틱이 DB 를 다시 열지 않는다.
+  invalidateTickCache(TICK_CACHE_BID_COLLECTORS);
 }

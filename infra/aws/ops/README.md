@@ -21,6 +21,21 @@ pwsh infra/aws/ops/staging-start.ps1 -Backend -Bastion
 
 전제: `AWS_PROFILE=mcm-kesi-staging` SSO 로그인 상태(`aws sso login --profile mcm-kesi-staging`).
 
+## 자동 스케줄 (2026-08-14 설치)
+
+next 웹 서비스는 EventBridge Scheduler 로 자동 토글된다(`staging-schedule-setup.ps1`, 재실행 시 갱신):
+
+| 스케줄 | 시각 (Asia/Seoul) | 동작 |
+|---|---|---|
+| `next-start-daily` | 매일 08:00 | next desired 1 |
+| `next-stop-weekday` | 평일 22:00 | next desired 0 |
+| `next-stop-weekend` | 토·일 20:00 | next desired 0 |
+
+- 그룹 `mcm-ieps-staging-ops`, IAM 롤 `mcm-ieps-staging-scheduler`(ecs:UpdateService next 한정). Lambda 없음.
+- 정지 시각 이후 계속 작업하려면 `staging-start.ps1` 로 다시 올리면 됨(다음 정지 시각까지 유지).
+- backend(OCR)·bastion 은 스케줄 대상 아님 — 종전대로 수동.
+- 임시로 자동화를 멈추려면: `aws scheduler update-schedule ... --state DISABLED` 또는 콘솔에서 그룹 내 스케줄 비활성.
+
 ## 무엇을 끄고 켜나
 
 | 리소스 | stop | start | 절감(월, 대략) |

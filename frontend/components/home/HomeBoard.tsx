@@ -28,6 +28,7 @@ import { MyServicesCard } from "./widgets/MyServicesCard";
 import { MetricHighlightCard } from "./widgets/MetricHighlightCard";
 import { BonusMyCard } from "./widgets/BonusMyCard";
 import { ContractInboxCard } from "./widgets/ContractInboxCard";
+import { PayslipInboxCard } from "./widgets/PayslipInboxCard";
 
 /** "7월 29일 수요일" (KST). */
 function todayLabel(): string {
@@ -127,6 +128,7 @@ export function HomeBoard({ role }: { role?: string }) {
       quickFacilities: <QuickFacilitiesCard role={role} />,
       bonusMe: <BonusMyCard />,
       contractInbox: <ContractInboxCard />,
+      payslipInbox: <PayslipInboxCard />,
       metrics: (
         <MetricHighlightCard
           metricKey={layout.widgetConfig?.metrics?.metricKey}

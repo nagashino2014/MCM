@@ -18,6 +18,7 @@ import {
   UploadCloud,
   UserRoundCheck,
   UserRoundX,
+  Wallet,
 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
@@ -35,6 +36,7 @@ const hm = (min: number | null | undefined): string => {
   return h > 0 ? (r > 0 ? `${h}h ${r}m` : `${h}h`) : `${r}m`;
 };
 const toH = (min: number): string => (min / 60).toFixed(1);
+const won = (v: number): string => Math.round(v).toLocaleString();
 const clock = (iso: string | null): string => {
   if (!iso) return "-";
   const m = /T(\d{2}):(\d{2})/.exec(iso);
@@ -148,7 +150,8 @@ function WeeklyPanel() {
     const totalOt = act.reduce((a, r) => a + r.overtimeMinutes, 0);
     const totalNight = act.reduce((a, r) => a + r.overtimeNightMinutes, 0);
     const overLimit = act.filter((r) => r.overLimit).length;
-    return { totalOt, totalNight, overLimit, people: act.length };
+    const totalPay = act.reduce((a, r) => a + (r.estimatedPay ?? 0), 0);
+    return { totalOt, totalNight, overLimit, totalPay, people: act.length };
   }, [rows]);
 
   return (
@@ -164,9 +167,10 @@ function WeeklyPanel() {
       </div>
 
       {/* KPI */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <Kpi icon={<AlarmClockCheck className="w-4 h-4" />} label="주 인정연장 합" value={`${toH(kpi.totalOt)}h`} />
         <Kpi icon={<Moon className="w-4 h-4" />} label="야간(2.0배) 합" value={`${toH(kpi.totalNight)}h`} />
+        <Kpi icon={<Wallet className="w-4 h-4" />} label="예상 수당 합" value={`${won(kpi.totalPay)}원`} />
         <Kpi icon={<TriangleAlert className="w-4 h-4" />} label="12h 초과 인원" value={`${kpi.overLimit}명`} danger={kpi.overLimit > 0} />
         <Kpi icon={<UserRoundCheck className="w-4 h-4" />} label="대상 인원" value={`${kpi.people}명`} />
       </div>
@@ -185,6 +189,7 @@ function WeeklyPanel() {
             <span className="text-right">실근무</span>
             <span className="text-right">연장(1.5배)</span>
             <span className="text-right">야간(2.0배)</span>
+            <span className="text-right" title="통상시급(최신 근로계약 통상임금 ÷ 209) × (1.5×연장 + 2.0×야간). 급여대장 생성 시 전월 26일~금월 25일분이 자동 반영됩니다.">예상 수당</span>
             <span className="text-right">12h 초과</span>
             <span className="text-center">상태</span>
           </div>
@@ -202,6 +207,13 @@ function WeeklyPanel() {
                 <span className="text-right font-mono text-[13px] cd-text">{hm(r.workedMinutes)}</span>
                 <span className="text-right font-mono text-[13px] cd-text-primary font-semibold">{hm(r.overtimeDayMinutes)}</span>
                 <span className="text-right font-mono text-[13px] font-semibold" style={{ color: r.overtimeNightMinutes > 0 ? "var(--cd-primary)" : "var(--cd-faint)" }}>{hm(r.overtimeNightMinutes)}</span>
+                <span
+                  className="text-right font-mono text-[13px] font-semibold"
+                  style={{ color: r.estimatedPay ? "var(--cd-text)" : "var(--cd-faint)" }}
+                  title={r.hourlyWage ? `통상시급 ${won(r.hourlyWage)}원` : "근로계약 임금 구성 미등록 — 계약 등록 후 산정됩니다"}
+                >
+                  {r.excluded ? "-" : r.estimatedPay ? `${won(r.estimatedPay)}` : r.overtimeMinutes > 0 ? "계약 필요" : "-"}
+                </span>
                 <span className="text-right font-mono text-[13px] font-bold" style={{ color: r.excessMinutes > 0 ? "var(--cd-error)" : "var(--cd-faint)" }}>{r.excessMinutes > 0 ? hm(r.excessMinutes) : "-"}</span>
                 <span className="text-center">
                   {r.excluded ? (
@@ -228,7 +240,7 @@ function WeeklyPanel() {
   );
 }
 
-const gridCols = { display: "grid", gridTemplateColumns: "minmax(0,2.4fr) 0.7fr 1fr 1.1fr 1.1fr 1fr 1.1fr", gap: "8px" } as const;
+const gridCols = { display: "grid", gridTemplateColumns: "minmax(0,2.2fr) 0.6fr 0.9fr 1fr 1fr 1.2fr 0.9fr 1.1fr", gap: "8px" } as const;
 
 function DailyDetail({ rows }: { rows?: DailyRow[] }) {
   if (!rows) return <p className="text-[11.5px] cd-text-faint py-2">불러오는 중입니다.</p>;

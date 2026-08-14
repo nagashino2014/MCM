@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CheckCircle2, FileSpreadsheet, Plus, Trash2, X } from "lucide-react";
+import { CheckCircle2, FileSpreadsheet, Plus, ReceiptText, Trash2, X } from "lucide-react";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import LedgerCreateModal from "@/components/payroll/LedgerCreateModal";
+import StatementSendModal from "@/components/payroll/StatementSendModal";
 import type { PayrollEntryRow, PayrollItemDef, PayrollLedgerMonth } from "@/lib/payroll/queries";
 
 /**
@@ -45,6 +46,7 @@ export default function PayrollLedgerBoard() {
 
   // 새 대장 생성(P4)
   const [createOpen, setCreateOpen] = useState(false);
+  const [statementOpen, setStatementOpen] = useState(false);
   const [editDraft, setEditDraft] = useState<Record<string, string>>({});
   const [reloadNonce, setReloadNonce] = useState(0);
 
@@ -241,6 +243,16 @@ export default function PayrollLedgerBoard() {
                   <CheckCircle2 className="w-4 h-4" /> 확정
                 </button>
               </>
+            )}
+            {view === "month" && current && !isDraft && (
+              <button
+                type="button"
+                className="cd-btn rounded-xl px-3 py-2 text-sm font-semibold flex items-center gap-1.5"
+                onClick={() => setStatementOpen(true)}
+                title="확정 대장의 급여명세서를 직원별로 발행합니다."
+              >
+                <ReceiptText className="w-4 h-4" /> 명세서 발송
+              </button>
             )}
             {view === "month" && (
               <button type="button" className="cd-btn rounded-xl px-3 py-2 text-sm font-semibold flex items-center gap-1.5" onClick={() => setCreateOpen(true)}>
@@ -572,6 +584,11 @@ export default function PayrollLedgerBoard() {
             )}
           </aside>
         </div>
+      )}
+
+      {/* 급여명세서 발송 모달 */}
+      {statementOpen && current && (
+        <StatementSendModal ledgerId={current.ledgerId} onClose={() => setStatementOpen(false)} />
       )}
 
       {/* 새 대장 생성 모달 (P4) */}

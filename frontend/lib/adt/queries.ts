@@ -4,6 +4,7 @@
  */
 
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
+import { weeklyOvertimeEstimates } from "@/lib/payroll/overtime";
 import { loadAttendanceSettings } from "./settings";
 import type { AttendanceSettings } from "./types";
 
@@ -24,6 +25,10 @@ export interface WeeklyRow {
   daysWorked: number;
   overLimit: boolean;
   excluded: boolean; // 초과근무 산정 제외(특수관계인·임원)
+  /** 통상시급(원) — 최신 근로계약의 통상임금 ÷ 209. 계약·임금 미등록 시 null */
+  hourlyWage: number | null;
+  /** 예상 초과근무수당(원) — 통상시급 × (1.5×연장 + 2.0×야간), 10원 절사(블루프린트 §6) */
+  estimatedPay: number | null;
 }
 
 export interface DailyRow {
@@ -94,6 +99,8 @@ export async function listWeekly(weekStart: string): Promise<WeeklyRow[]> {
       [weekStart]
     )
   );
+  // 예상 수당(§6 반영처1) — 통상시급은 근로계약 기준이라 payroll 모듈에서 산정.
+  const estimates = await weeklyOvertimeEstimates(weekStart);
   return rows.map((r) => ({
     adtEmpNo: String(r.adt_emp_no),
     weekStart: String(r.week_start),
@@ -111,6 +118,8 @@ export async function listWeekly(weekStart: string): Promise<WeeklyRow[]> {
     daysWorked: Number(r.days_worked ?? 0),
     overLimit: r.over_limit === true || r.over_limit === "t",
     excluded: r.overtime_excluded === true || r.overtime_excluded === "t",
+    hourlyWage: r.employee_id != null ? estimates.get(String(r.employee_id))?.hourlyWage ?? null : null,
+    estimatedPay: r.employee_id != null ? estimates.get(String(r.employee_id))?.amount ?? null : null,
   }));
 }
 
@@ -157,6 +166,9 @@ export async function listMyWeekly(
     daysWorked: Number(r.days_worked ?? 0),
     overLimit: r.over_limit === true || r.over_limit === "t",
     excluded: r.overtime_excluded === true || r.overtime_excluded === "t",
+    // 예상 수당은 관리자 주별 화면(listWeekly) 전용 — 개인 근태 조회에서는 표시하지 않는다.
+    hourlyWage: null,
+    estimatedPay: null,
   }));
   return { adtEmpNo: weeks[0]?.adtEmpNo ?? null, weeks };
 }

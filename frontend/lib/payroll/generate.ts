@@ -1,5 +1,6 @@
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { getEdiAmounts } from "@/lib/payroll/edi";
+import { overtimeAmounts } from "@/lib/payroll/overtime";
 import { activeRulesFor } from "@/lib/payroll/rules";
 import { NON_TAXABLE_ITEMS, calcEmploymentIns, getInsuranceRate, lookupIncomeTax } from "@/lib/payroll/tax";
 
@@ -56,69 +57,6 @@ function newId(prefix: string): string {
 function toNum(v: unknown): number {
   const n = Number(v ?? 0);
   return Number.isFinite(n) ? n : 0;
-}
-
-/** 통상시급 — 최신 계약 wage_components 중 in_ordinary_wage 항목 합 ÷ 209 (§6) */
-async function ordinaryHourlyWages(): Promise<Map<string, number>> {
-  const db = await getDb();
-  const items = rowsToObjects(
-    await db.exec(`SELECT name FROM payroll_item_defs WHERE in_ordinary_wage = 1`)
-  ).map((r) => String(r.name));
-  const divisor = toNum(
-    rowsToObjects(await db.exec(`SELECT wage_divisor_hours FROM attendance_settings LIMIT 1`))[0]
-      ?.wage_divisor_hours
-  ) || 209;
-  const contracts = rowsToObjects(
-    await db.exec(
-      `SELECT DISTINCT ON (employee_id) employee_id, wage_components
-         FROM labor_contracts
-        WHERE status <> 'void' AND wage_components IS NOT NULL
-        ORDER BY employee_id, contract_date DESC NULLS LAST, created_at DESC`
-    )
-  );
-  const map = new Map<string, number>();
-  for (const c of contracts) {
-    const wage = (c.wage_components ?? {}) as Record<string, number>;
-    const ordinary = items.reduce((a, k) => a + toNum(wage[k]), 0);
-    if (ordinary > 0) map.set(String(c.employee_id), ordinary / divisor);
-  }
-  return map;
-}
-
-/** 초과근무수당 — 귀속: 전월 26 ~ 금월 25(§8-6). 주(week_start+6=토)의 종료일이 구간 내면 그 주 귀속. */
-async function overtimeAmounts(payYear: number, payMonth: number): Promise<Map<string, number>> {
-  const db = await getDb();
-  const settings = rowsToObjects(
-    await db.exec(`SELECT overtime_rate_day, overtime_rate_night FROM attendance_settings LIMIT 1`)
-  )[0];
-  const rateDay = toNum(settings?.overtime_rate_day) || 1.5;
-  const rateNight = toNum(settings?.overtime_rate_night) || 2.0;
-
-  const prev = new Date(Date.UTC(payYear, payMonth - 2, 26));
-  const from = prev.toISOString().slice(0, 10);
-  const to = `${payYear}-${String(payMonth).padStart(2, "0")}-25`;
-  const rows = rowsToObjects(
-    await db.exec(
-      `SELECT employee_id,
-              sum(overtime_day_minutes) AS day_min, sum(overtime_night_minutes) AS night_min
-         FROM attendance_weekly
-        WHERE employee_id IS NOT NULL
-          AND (week_start + 6) >= $1::date AND (week_start + 6) <= $2::date
-        GROUP BY employee_id`,
-      [from, to]
-    )
-  );
-  const hourly = await ordinaryHourlyWages();
-  const map = new Map<string, number>();
-  for (const r of rows) {
-    const empId = String(r.employee_id);
-    const wage = hourly.get(empId);
-    if (!wage) continue;
-    const amount =
-      wage * ((rateDay * toNum(r.day_min)) / 60 + (rateNight * toNum(r.night_min)) / 60);
-    if (amount > 0) map.set(empId, Math.floor(amount / 10) * 10);
-  }
-  return map;
 }
 
 /** 생성 계산(공통) — preview/create 양쪽에서 사용 */

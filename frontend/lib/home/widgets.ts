@@ -39,6 +39,7 @@ export const HOME_WIDGETS: HomeWidgetDef[] = [
   { key: "bonusMe", label: "내 성과급 지급내역", permission: null, defaultW: 8, defaultH: 1 },
   // 본인 근로계약 열람·전자서명(PL-P3) — API 가 본인 것만 반환.
   { key: "contractInbox", label: "내 근로계약", permission: null, defaultW: 8, defaultH: 1 },
+  { key: "payslipInbox", label: "내 급여명세서", permission: null, defaultW: 8, defaultH: 1 },
 ];
 
 export const HOME_WIDGET_KEYS = HOME_WIDGETS.map((w) => w.key);

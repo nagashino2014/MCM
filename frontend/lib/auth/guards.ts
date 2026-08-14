@@ -31,6 +31,12 @@ export function authErrorToResponse(err: unknown): NextResponse {
   if (err instanceof AuthError) {
     return NextResponse.json({ error: err.message }, { status: err.status });
   }
+  // 도메인 계층이 `Object.assign(new Error(...), { status })` 로 던지는 사용자 오류(400·403·404 등)를
+  // 그대로 전달한다. status 가 없으면 종전대로 500.
+  const status = (err as { status?: unknown })?.status;
+  if (typeof status === "number" && status >= 400 && status < 600) {
+    return NextResponse.json({ error: (err as Error)?.message ?? "요청을 처리할 수 없습니다." }, { status });
+  }
   return NextResponse.json(
     { error: (err as Error)?.message ?? "internal error" },
     { status: 500 }

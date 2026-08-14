@@ -36,6 +36,7 @@ export default function StatementSendModal({
   const [data, setData] = useState<Data | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [testEmail, setTestEmail] = useState("");
 
   const load = useCallback(() => {
     fetch(`/api/payroll/statements?ledgerId=${encodeURIComponent(ledgerId)}`, { cache: "no-store" })
@@ -48,20 +49,20 @@ export default function StatementSendModal({
     load();
   }, [load]);
 
-  const send = async (resend: boolean) => {
+  const send = async (resend: boolean, testEmail?: string) => {
     setBusy(true);
     setMsg(null);
     try {
       const res = await fetch("/api/payroll/statements", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "send", ledgerId, resend }),
+        body: JSON.stringify({ action: "send", ledgerId, resend, testEmail }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error ?? "발송 실패");
       const skipped = (d.skipped ?? []) as Array<{ name: string; reason: string }>;
       setMsg(
-        `${d.sent}건 발행 완료` +
+        `${d.sent}건 ${testEmail ? "테스트 발송" : "발행"} 완료` +
           (skipped.length ? ` · 주의 ${skipped.length}건: ${skipped.map((s) => `${s.name}(${s.reason})`).join(", ")}` : "")
       );
       load();
@@ -176,6 +177,28 @@ export default function StatementSendModal({
               전체 재발송
             </button>
           )}
+          {/* 테스트 발송 — 전 인원 명세서를 지정 주소로만(PDF 첨부), 교부 이력 미기록 */}
+          <div className="ml-auto flex items-end gap-1.5">
+            <label className="text-[11px] cd-text-faint">
+              테스트 수신 메일
+              <input
+                className="cd-input text-xs block mt-0.5"
+                style={{ width: 190 }}
+                placeholder="me@example.com"
+                value={testEmail}
+                onChange={(e) => setTestEmail(e.target.value)}
+              />
+            </label>
+            <button
+              type="button"
+              disabled={busy || !confirmed || !testEmail.trim()}
+              className="cd-btn rounded-xl px-3 py-2 text-xs font-semibold disabled:opacity-40"
+              onClick={() => send(false, testEmail.trim())}
+              title="전 인원 명세서를 이 주소로만 보냅니다(PDF 첨부). 직원에게는 전달되지 않고 교부 이력도 남지 않습니다."
+            >
+              테스트 발송
+            </button>
+          </div>
         </div>
       </div>
     </div>

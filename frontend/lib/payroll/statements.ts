@@ -186,12 +186,16 @@ export async function buildPayslipInput(entryId: string): Promise<PayslipPdfInpu
   };
 }
 
-/** 발송 — 확정 대장만. 직원 매칭 행 대상, 메일은 도착 알림(열람 링크)만. */
+/**
+ * 발송 — 확정 대장만. 직원 매칭 행 대상, 메일은 도착 알림(열람 링크)만.
+ * options.testEmail 지정 시 **테스트 발송**: 전 인원 메일을 그 주소로만 보내고 PDF 를 첨부하며,
+ * 교부 이력(statement_sent_at)은 남기지 않는다(관리자 사전 검토용).
+ */
 export async function sendStatements(
   ledgerId: string,
   actorUserId: string,
   appBaseUrl: string,
-  options?: { resend?: boolean }
+  options?: { resend?: boolean; testEmail?: string }
 ): Promise<{ sent: number; skipped: Array<{ name: string; reason: string }> }> {
   const { ledger, targets } = await listStatementTargets(ledgerId);
   if (!ledger) throw Object.assign(new Error("대장을 찾을 수 없습니다."), { status: 404 });
@@ -200,6 +204,7 @@ export async function sendStatements(
   }
   const now = new Date().toISOString();
   const label = `${ledger.payYear}년 ${ledger.payMonth}월분`;
+  const testEmail = options?.testEmail?.trim() || null;
   let sent = 0;
   const skipped: Array<{ name: string; reason: string }> = [];
 
@@ -208,6 +213,32 @@ export async function sendStatements(
       skipped.push({ name: t.name, reason: "직원 미매칭(퇴사자 등)" });
       continue;
     }
+
+    // ── 테스트 발송: 지정 주소로만 PDF 첨부 발송, 교부 이력은 남기지 않는다 ──
+    if (testEmail) {
+      const { renderPayslipPdf } = await import("@/lib/payroll/statement-pdf");
+      const pdf = await renderPayslipPdf(await buildPayslipInput(t.entryId));
+      const res = await sendMail({
+        userId: actorUserId,
+        to: [{ name: "명세서 검토", address: testEmail }],
+        subject: `[테스트] ${label} 급여명세서 — ${t.name}`,
+        bodyHtml: `<p><b>테스트 발송</b>입니다. 실제 직원에게는 전달되지 않았습니다.</p>
+<p>대상: ${t.name}${t.deptName ? ` (${t.deptName})` : ""} · ${label} · 실지급 ${Math.round(t.netPay).toLocaleString("ko-KR")}원</p>
+<p>첨부된 명세서 내용을 확인해 주세요.</p>`,
+        attachments: [
+          {
+            filename: `${t.name} 급여명세서(${ledger.payYear}년 ${ledger.payMonth}월).pdf`,
+            contentType: "application/pdf",
+            content: Buffer.from(pdf),
+          },
+        ],
+        idempotencyKey: `payslip-test:${t.entryId}:${now.slice(0, 16)}`,
+      });
+      if (res.ok) sent += 1;
+      else skipped.push({ name: t.name, reason: `메일 실패: ${res.error ?? ""}` });
+      continue;
+    }
+
     if (t.sentAt && !options?.resend) continue; // 재발송이 아니면 기존 발송분은 건너뜀
     await withDbWrite(async (db) => {
       await db.exec(`UPDATE payroll_entries SET statement_sent_at = $2 WHERE entry_id = $1`, [t.entryId, now]);

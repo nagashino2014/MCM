@@ -27,8 +27,15 @@ export async function POST(req: NextRequest) {
     }
     if (!body.ledgerId) return NextResponse.json({ error: "ledgerId가 필요합니다." }, { status: 400 });
     const origin = new URL(req.url).origin;
+    const testEmail = typeof body.testEmail === "string" ? body.testEmail.trim() : "";
+    if (testEmail && !/.+@.+\..+/.test(testEmail)) {
+      return NextResponse.json({ error: "테스트 수신 메일 주소가 올바르지 않습니다." }, { status: 400 });
+    }
     return NextResponse.json(
-      await sendStatements(String(body.ledgerId), ctx.userId, origin, { resend: body.resend === true })
+      await sendStatements(String(body.ledgerId), ctx.userId, origin, {
+        resend: body.resend === true,
+        testEmail: testEmail || undefined,
+      })
     );
   } catch (err) {
     return authErrorToResponse(err);

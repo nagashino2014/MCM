@@ -179,9 +179,18 @@ export async function buildLedger(payYear: number, payMonth: number): Promise<Ge
       put(rule.itemId, rule.amount, "rule");
     }
 
-    // 3) 초과근무수당 자동
+    // 3) 초과근무수당 자동 — 승인된 신청서 기준(근태 있으면 대조 캡, §6)
     const ot = overtime.get(empId);
-    if (ot) put("overtime", ot, "overtime");
+    if (ot && ot.amount > 0) {
+      put("overtime", ot.amount, "overtime");
+      if (ot.basis === "requested") {
+        warnings.push("초과근무: 근태 기록이 없어 승인 신청 시간으로 산정");
+      } else if (ot.cappedMin > 0) {
+        warnings.push(`초과근무: 근태 대조로 ${Math.round(ot.cappedMin / 60 * 10) / 10}h 차감`);
+      }
+    } else if (ot && ot.basis === "attendance") {
+      warnings.push("초과근무: 근태 기록은 있으나 승인된 신청서가 없어 미산정");
+    }
 
     // 4) EDI 고지액(국민연금·건강·요양·정산)
     const notice = edi.get(empId) ?? edi.get(`name:${String(emp.name)}`);

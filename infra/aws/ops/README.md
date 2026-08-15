@@ -5,28 +5,46 @@
 
 ## 사용법 (PowerShell)
 
+repo 루트에서 실행한다. `pwsh`(PowerShell 7)가 아니라 **Windows 기본 PowerShell 5.1** 로 돈다
+(스크립트가 `#Requires -Version 5.1`). 실행 파일 이름이 `powershell.exe` 라 `pwsh` 는 없는 게 정상.
+
 ```powershell
 # 하루 작업 끝 / 당분간 안 씀 → 내리기
-pwsh infra/aws/ops/staging-stop.ps1
+.\infra\aws\ops\staging-stop.ps1
 
 # 다시 작업 → 올리기 (기본: Aurora + next 웹만)
-pwsh infra/aws/ops/staging-start.ps1
+.\infra\aws\ops\staging-start.ps1
 
 # OCR/파싱 필요 시 백엔드도
-pwsh infra/aws/ops/staging-start.ps1 -Backend
+.\infra\aws\ops\staging-start.ps1 -Backend
 
 # DB 직접접속(SSM 포워딩) 필요 시 bastion 도
-pwsh infra/aws/ops/staging-start.ps1 -Backend -Bastion
+.\infra\aws\ops\staging-start.ps1 -Backend -Bastion
 ```
 
 전제: `AWS_PROFILE=mcm-kesi-staging` SSO 로그인 상태(`aws sso login --profile mcm-kesi-staging`).
+
+- 실행 정책에 막히면: `powershell -ExecutionPolicy Bypass -File .\infra\aws\ops\<스크립트>.ps1`
+- `aws scheduler` 서브커맨드는 **AWS CLI v2** 에 있다(`aws --version` 확인).
+- ⚠ `.ps1` 은 **UTF-8 BOM 으로 저장**한다. PS 5.1 은 BOM 없는 UTF-8 을 CP949 로 해석해 한글 로그가 깨진다.
+
+## next(웹) 재배포
+
+```powershell
+.\infra\aws\ops\staging-deploy-next.ps1              # 빌드 → ECR 푸시 → 새 리비전 → 서비스 갱신
+.\infra\aws\ops\staging-deploy-next.ps1 -Wait        # 배포 안정화까지 대기
+```
+
+태스크 정의가 `:latest` 가 아니라 **고정 태그**를 가리켜서 `force-new-deployment` 만으로는 반영되지
+않는다(옛 태그로 재시작될 뿐). 스크립트가 CLAUDE.md 의 절차(빌드 → 푸시 → image 만 바꾼 새 리비전
+등록 → update-service)를 그대로 수행한다. 프론트 전용 변경은 next 이미지만 재배포하면 된다.
 
 ## 자동 스케줄 → **해제됨** (2026-08-14 설치, 같은 날 해제)
 
 next 는 현재 **24/7 상시 가동**한다. 자동 정지 스케줄은 삭제했다:
 
 ```powershell
-pwsh infra/aws/ops/staging-schedule-setup.ps1 -Remove
+.\infra\aws\ops\staging-schedule-setup.ps1 -Remove
 ```
 
 **왜 껐나** — 평일 22:00 정지가 야간 작업을 끊었다(첫날 바로 503). 그런데 상시 가동의 비용
@@ -35,7 +53,7 @@ pwsh infra/aws/ops/staging-schedule-setup.ps1 -Remove
 틱이 캐시된 설정으로 "할 일 없음" 을 먼저 판정하게 고쳐(`frontend/lib/tick-cache.ts`) 유휴
 시간대 auto-pause 를 되살렸고, 상시 가동 추가 비용이 **월 ~$34 → ~$10 대**로 내려갔다.
 
-- 되돌리려면(다시 자동 정지) 인자 없이 재실행: `pwsh infra/aws/ops/staging-schedule-setup.ps1`
+- 되돌리려면(다시 자동 정지) 인자 없이 재실행: `.\infra\aws\ops\staging-schedule-setup.ps1`
   → 매일 08:00 기동 / 평일 22:00·주말 20:00 정지 (Asia/Seoul).
 - 그룹 `mcm-ieps-staging-ops` 와 IAM 롤 `mcm-ieps-staging-scheduler` 는 남겨뒀다(재설치 편의).
 - 당분간 안 쓸 때 수동으로 내리는 건 종전대로 `staging-stop.ps1`.

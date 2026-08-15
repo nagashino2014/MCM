@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
   MCM 스테이징을 idle 상태로 내려 과금을 최소화한다.

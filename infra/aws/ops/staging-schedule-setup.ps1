@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
   MCM 스테이징 next 서비스 자동 켜고/끄기 스케줄 설치/해제 (EventBridge Scheduler).

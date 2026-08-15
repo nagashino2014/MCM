@@ -107,6 +107,11 @@ export function parseAttendanceWorkbook(buf: Buffer | ArrayBuffer): ParseResult 
     throw new Error("필수 컬럼(사용자ID·근무일자)이 없습니다.");
   }
 
+  // 지사(개인 조회본)는 '부서'·'직급' 열이 없다. 지사 단말은 본사와 **별개의 사번 체계**를 써서
+  // 그대로 적재하면 본사 직원 근태를 덮어쓴다(실측: 울산 0008=최태헌 vs 본사 0008=한도경).
+  // → 지사 파일의 사번에 'U' 접두어를 붙여 네임스페이스를 분리한다(매핑은 attendance_emp_aliases, 마이그 166).
+  const isBranchFile = idx.c_dept == null;
+
   const records: AdtRawRecord[] = [];
   let totalRows = 0;
   let skipped = 0;
@@ -124,7 +129,7 @@ export function parseAttendanceWorkbook(buf: Buffer | ArrayBuffer): ParseResult 
       continue;
     }
     records.push({
-      e_idno: eid,
+      e_idno: isBranchFile && !eid.startsWith("U") ? `U${eid}` : eid,
       c_dept: str(get(row, "c_dept")),
       c_pos: str(get(row, "c_pos")),
       e_name: str(get(row, "e_name")),

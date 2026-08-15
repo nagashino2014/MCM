@@ -112,46 +112,39 @@ export async function overtimeAmounts(
       [from, to]
     )
   );
-  const attendance = new Map(
-    attRows.map((r) => [String(r.employee_id), { day: toNum(r.day_min), night: toNum(r.night_min) }])
-  );
-  const hasAttendance = attRows.length > 0; // 구간에 근태 적재가 아예 없으면 대조 불가
-  const requested = await requestedOvertime(payYear, payMonth);
+  const attendanceEmps = new Set(attRows.map((r) => String(r.employee_id)));
+  const matches = await matchOvertimeRequests(payYear, payMonth);
   const hourly = await ordinaryHourlyWages(rates.divisorHours);
 
+  // 인원별 집계 — 일자별 대조 결과를 그대로 합산한다(주 합계 min 은 일자 간 상쇄가 생겨 쓰지 않는다).
+  const agg = new Map<string, { dayMin: number; nightMin: number; reqMin: number; actualMin: number; noRecord: boolean }>();
+  for (const m of matches) {
+    const cur = agg.get(m.employeeId) ?? { dayMin: 0, nightMin: 0, reqMin: 0, actualMin: 0, noRecord: false };
+    cur.dayMin += m.dayMin;
+    cur.nightMin += m.nightMin;
+    cur.reqMin += m.reqMin;
+    cur.actualMin += m.actualMin;
+    if (m.verdict === "no-record") cur.noRecord = true;
+    agg.set(m.employeeId, cur);
+  }
+
   const map = new Map<string, OvertimeAmount>();
-  const empIds = new Set<string>([...requested.keys(), ...attendance.keys()]);
-  for (const empId of empIds) {
+  for (const [empId, a] of agg) {
     const wage = hourly.get(empId);
     if (!wage) continue;
-    const req = requested.get(empId);
-    const att = attendance.get(empId);
-
-    let dayMin: number;
-    let nightMin: number;
-    let basis: OvertimeAmount["basis"];
-    let cappedMin = 0;
-    if (req && hasAttendance && att) {
-      dayMin = Math.min(req.dayMin, att.day);
-      nightMin = Math.min(req.nightMin, att.night);
-      cappedMin = req.dayMin + req.nightMin - (dayMin + nightMin);
-      basis = "matched";
-    } else if (req) {
-      dayMin = req.dayMin;
-      nightMin = req.nightMin;
-      basis = "requested";
-    } else {
-      // 신청서 없이 근태만 있는 경우 — 사전 승인 없는 근무라 수당 대상이 아니다(기록만 남긴다).
-      map.set(empId, { amount: 0, dayMin: 0, nightMin: 0, basis: "attendance", cappedMin: 0 });
-      continue;
-    }
     map.set(empId, {
-      amount: overtimePay(wage, dayMin, nightMin, rates),
-      dayMin,
-      nightMin,
-      basis,
-      cappedMin,
+      amount: overtimePay(wage, a.dayMin, a.nightMin, rates),
+      dayMin: a.dayMin,
+      nightMin: a.nightMin,
+      basis: a.noRecord ? "requested" : "matched",
+      cappedMin: Math.max(0, a.reqMin - a.actualMin),
     });
+  }
+  // 신청서 없이 근태만 있는 인원 — 사전 승인이 없어 수당 대상이 아니다(기록만 남긴다).
+  for (const empId of attendanceEmps) {
+    if (!agg.has(empId) && hourly.has(empId)) {
+      map.set(empId, { amount: 0, dayMin: 0, nightMin: 0, basis: "attendance", cappedMin: 0 });
+    }
   }
   return map;
 }
@@ -187,21 +180,64 @@ export interface RequestedOvertime {
   docCount: number;
 }
 
+/** 'YYYY-MM-DDTHH:MM' 또는 Date 문자열 → 그 날 00:00 기준 분(익일이면 +1440) */
+function minutesFromBase(iso: string, baseDate: string): number | null {
+  const m = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}):(\d{2})/.exec(iso);
+  if (!m) return null;
+  const dayDiff = Math.round(
+    (Date.parse(`${m[1]}T00:00:00Z`) - Date.parse(`${baseDate}T00:00:00Z`)) / 86400000
+  );
+  return dayDiff * 1440 + Number(m[2]) * 60 + Number(m[3]);
+}
+
+/** 분 구간을 주간/야간(22:00~06:00)으로 쪼갠다. */
+function splitRange(startMin: number, endMin: number): { dayMin: number; nightMin: number } {
+  let dayMin = 0;
+  let nightMin = 0;
+  for (let t = Math.floor(startMin); t < Math.ceil(endMin); t += 1) {
+    const mod = ((t % 1440) + 1440) % 1440;
+    if (mod >= NIGHT_START_MIN || mod < NIGHT_END_MIN) nightMin += 1;
+    else dayMin += 1;
+  }
+  return { dayMin, nightMin };
+}
+
+/** 신청 1건과 그 날 근태의 대조 결과(일자 단위) */
+export interface OvertimeMatchRow {
+  employeeId: string;
+  name: string;
+  workDate: string;
+  reqStart: string;
+  reqEnd: string;
+  reqMin: number;
+  /** 실제 인정분 = 신청 시간대 ∩ 실제 재실 시간대 */
+  actualMin: number;
+  dayMin: number;
+  nightMin: number;
+  /** 'no-record'=근태 없음(대조 불가) · 'absent'=출퇴근 기록 없음/미근무 · 'short'=조기 퇴근 등으로 축소 · 'full'=전량 인정 */
+  verdict: "no-record" | "absent" | "short" | "full";
+}
+
 /**
- * 승인된 초과근무 신청서(frm-overtime-request) 기준 시간 집계 — 귀속 구간 근무일 기준.
- * 실측(2026-05 대장 대조)상 회사는 **승인된 신청 시간**으로 수당을 지급하며,
- * 22시 이후분에는 야간 가산(2.0배)이 적용된다.
+ * 승인된 초과근무 신청서 × 근태 기록 **일자별 대조**.
+ *
+ * 신청 시간대와 실제 재실(출근~퇴근) 시간대의 **교집합**만 인정한다.
+ *   - 신청했으나 출퇴근 기록이 없거나 겹치지 않으면 0분(absent)
+ *   - 신청보다 일찍 퇴근했으면 겹친 만큼만(short)
+ *   - 근태 자체가 적재되지 않은 기간은 대조 불가라 신청 시간을 그대로 인정(no-record)
+ * 22:00~06:00 구간은 야간(2.0배)으로 분리한다.
  */
-export async function requestedOvertime(
+export async function matchOvertimeRequests(
   payYear: number,
   payMonth: number
-): Promise<Map<string, RequestedOvertime>> {
+): Promise<OvertimeMatchRow[]> {
   const db = await getDb();
   const from = new Date(Date.UTC(payYear, payMonth - 2, 26)).toISOString().slice(0, 10);
   const to = `${payYear}-${String(payMonth).padStart(2, "0")}-25`;
-  const rows = rowsToObjects(
+  const reqs = rowsToObjects(
     await db.exec(
       `SELECT d.drafter_employee_id AS employee_id, d.drafter_name,
+              d.field_values->'work_period'->>'from' AS work_date,
               d.field_values->'work_time'->>'start' AS t_start,
               d.field_values->'work_time'->>'end'   AS t_end
          FROM approval_docs d
@@ -211,20 +247,106 @@ export async function requestedOvertime(
       [from, to]
     )
   );
-  const map = new Map<string, RequestedOvertime>();
-  for (const r of rows) {
+  // 같은 구간 근태 일별 기록(KST 기준 문자열로 뽑아 시간대 변환 오류를 피한다)
+  const attRows = rowsToObjects(
+    await db.exec(
+      `SELECT employee_id, to_char(work_date, 'YYYY-MM-DD') AS work_date,
+              to_char(in_at  AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD"T"HH24:MI') AS in_at,
+              to_char(out_at AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD"T"HH24:MI') AS out_at
+         FROM attendance_daily
+        WHERE employee_id IS NOT NULL AND work_date BETWEEN $1::date AND $2::date`,
+      [from, to]
+    )
+  );
+  // 한 직원이 본사·지사 두 단말 사번을 가질 수 있어 같은 날짜에 행이 둘일 수 있다
+  // (예: 최태헌 본사 0020 빈 행 + 울산 U0008 실기록). 출퇴근이 기록된 행을 우선한다.
+  const att = new Map<string, { inAt: string | null; outAt: string | null }>();
+  for (const a of attRows) {
+    const key = `${String(a.employee_id)}|${String(a.work_date)}`;
+    const rec = { inAt: a.in_at ? String(a.in_at) : null, outAt: a.out_at ? String(a.out_at) : null };
+    const prev = att.get(key);
+    if (prev && prev.inAt && prev.outAt && !(rec.inAt && rec.outAt)) continue;
+    att.set(key, rec);
+  }
+  const hasAttendanceInRange = attRows.length > 0;
+
+  const out: OvertimeMatchRow[] = [];
+  for (const r of reqs) {
+    const empId = String(r.employee_id);
+    const workDate = r.work_date ? String(r.work_date) : null;
     const start = r.t_start ? String(r.t_start) : null;
     const end = r.t_end ? String(r.t_end) : null;
-    if (!start || !end) continue;
-    const empId = String(r.employee_id);
-    const { dayMin, nightMin } = splitDayNight(start, end);
-    const cur = map.get(empId) ?? {
-      employeeId: empId, name: String(r.drafter_name ?? ""), dayMin: 0, nightMin: 0, docCount: 0,
+    if (!workDate || !start || !end) continue;
+
+    const [sh, sm] = start.split(":").map(Number);
+    const [eh, em] = end.split(":").map(Number);
+    const reqStartMin = sh * 60 + sm;
+    let reqEndMin = eh * 60 + em;
+    if (reqEndMin <= reqStartMin) reqEndMin += 1440; // 자정 넘김
+    const reqMin = reqEndMin - reqStartMin;
+
+    const a = att.get(`${empId}|${workDate}`);
+    let actualStart = reqStartMin;
+    let actualEnd = reqEndMin;
+    let verdict: OvertimeMatchRow["verdict"];
+
+    if (!hasAttendanceInRange) {
+      verdict = "no-record"; // 근태 미적재 기간 — 신청 시간 그대로
+    } else if (!a || !a.inAt || !a.outAt) {
+      verdict = "absent";
+      actualStart = actualEnd = 0;
+    } else {
+      const inMin = minutesFromBase(a.inAt, workDate);
+      const outMin = minutesFromBase(a.outAt, workDate);
+      if (inMin == null || outMin == null) {
+        verdict = "absent";
+        actualStart = actualEnd = 0;
+      } else {
+        const outAdj = outMin <= inMin ? outMin + 1440 : outMin; // 자정 넘겨 퇴근
+        actualStart = Math.max(reqStartMin, inMin);
+        actualEnd = Math.min(reqEndMin, outAdj);
+        if (actualEnd <= actualStart) {
+          verdict = "absent";
+          actualStart = actualEnd = 0;
+        } else {
+          verdict = actualEnd - actualStart < reqMin ? "short" : "full";
+        }
+      }
+    }
+
+    const actualMin = Math.max(0, actualEnd - actualStart);
+    const split = actualMin > 0 ? splitRange(actualStart, actualEnd) : { dayMin: 0, nightMin: 0 };
+    out.push({
+      employeeId: empId,
+      name: String(r.drafter_name ?? ""),
+      workDate,
+      reqStart: start,
+      reqEnd: end,
+      reqMin,
+      actualMin,
+      dayMin: split.dayMin,
+      nightMin: split.nightMin,
+      verdict,
+    });
+  }
+  return out.sort((x, y) => (x.name === y.name ? x.workDate.localeCompare(y.workDate) : x.name.localeCompare(y.name)));
+}
+
+/** 인원별 집계(대조 반영) */
+export async function requestedOvertime(
+  payYear: number,
+  payMonth: number
+): Promise<Map<string, RequestedOvertime>> {
+  const rows = await matchOvertimeRequests(payYear, payMonth);
+  const map = new Map<string, RequestedOvertime>();
+  for (const r of rows) {
+    const cur = map.get(r.employeeId) ?? {
+      employeeId: r.employeeId, name: r.name, dayMin: 0, nightMin: 0, docCount: 0,
     };
-    cur.dayMin += dayMin;
-    cur.nightMin += nightMin;
+    cur.dayMin += r.dayMin;
+    cur.nightMin += r.nightMin;
     cur.docCount += 1;
-    map.set(empId, cur);
+    map.set(r.employeeId, cur);
   }
   return map;
 }

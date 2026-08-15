@@ -48,6 +48,22 @@ async function loadEmpMap(db: PgDatabase, eidnos: string[]): Promise<Map<string,
     const no = r.employee_no != null ? String(r.employee_no) : "";
     if (no && !map.has(no)) map.set(no, { employeeId: String(r.employee_id), name: r.name != null ? String(r.name) : null });
   }
+  // 지사 단말 별칭(예: 울산 'U0005') — 본사와 사번 체계가 달라 별도 표로 매핑한다(마이그 166).
+  const aliases = rowsToObjects(
+    await db.exec(
+      `SELECT a.adt_emp_no, a.employee_id, p.name
+         FROM attendance_emp_aliases a
+         JOIN employee_profiles p ON p.employee_id = a.employee_id
+        WHERE a.adt_emp_no = ANY($1::text[])`,
+      [eidnos]
+    )
+  );
+  for (const r of aliases) {
+    map.set(String(r.adt_emp_no), {
+      employeeId: String(r.employee_id),
+      name: r.name != null ? String(r.name) : null,
+    });
+  }
   return map;
 }
 

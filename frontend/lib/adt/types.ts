@@ -45,6 +45,42 @@ export interface AttendanceSettings {
   excludeLeaveDays: boolean;
 }
 
+/**
+ * 직원별 근무 유형(attendance_work_schedules, 마이그 167).
+ * 초과근무는 **소정근로 종료(endHhmm) 이후**부터 인정하므로 개인별 출근시각 설정이 산정의 전제다.
+ * 직접 입력 대신 4가지 유형 중 선택 — 선택하면 출·퇴근 시각이 함께 정해진다.
+ */
+export type WorkScheduleKind = "early" | "normal" | "late10" | "late10_care";
+
+export const WORK_SCHEDULE_KINDS: Array<{
+  kind: WorkScheduleKind;
+  label: string;
+  startHhmm: string;
+  endHhmm: string;
+}> = [
+  { kind: "early", label: "조기출근(8시)", startHhmm: "0800", endHhmm: "1700" },
+  { kind: "normal", label: "정시출근(9시)", startHhmm: "0900", endHhmm: "1800" },
+  { kind: "late10", label: "10시 출근", startHhmm: "1000", endHhmm: "1900" },
+  // 육아기 근로시간 단축 — 1일 6시간(휴게 1h 포함 10:00~17:00). 소정 종료가 빨라 연장 시작도 앞당겨진다.
+  { kind: "late10_care", label: "10시 출근(육아단축)", startHhmm: "1000", endHhmm: "1700" },
+];
+
+/** 미설정 직원의 기본값 — 본사·울산 대부분이 8시 출근이다. */
+export const DEFAULT_WORK_SCHEDULE_KIND: WorkScheduleKind = "early";
+
+export interface WorkScheduleRow {
+  employeeId: string;
+  name: string;
+  deptName: string | null;
+  positionName: string | null;
+  photoPath: string | null;
+  kind: WorkScheduleKind;
+  startHhmm: string;
+  endHhmm: string;
+  /** 저장된 설정 없이 기본값이 적용된 상태 */
+  isDefault: boolean;
+}
+
 /** 일별 정규화·산정 결과(attendance_daily 1행). */
 export interface AttendanceDaily {
   adtEmpNo: string;

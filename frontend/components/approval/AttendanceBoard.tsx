@@ -1,7 +1,8 @@
 "use client";
 
 // 근태·초과근무 관리(/approval/attendance, admin) — ADT캡스 근태 수신분의 주별 초과근무 리포트.
-// 탭: ①주별 초과근무(주 선택·직원별 연장/야간/12h초과, 행 펼침→일별) ②미매칭 매핑(ADT 사번↔직원) ③산정 정책.
+// 탭: ①주별 초과근무(주 선택·직원별 연장/야간/12h초과, 행 펼침→일별) ②신청 대조(초과근무 신청서×근태)
+//     ③미매칭 매핑(ADT 사번↔직원) ④산정 정책(엑셀 업로드·산정 기준·직원별 출근시각).
 // 사규: 주 52h(일요일 시작)·야간 22:00~06:00 2.0배·그외 연장 1.5배·주 12h 초과분은 특별휴가 대상(리포트).
 // 설계: docs/ADT_attendance_integration_handoff.md §7-1.
 
@@ -10,6 +11,7 @@ import {
   AlarmClockCheck,
   CalendarClock,
   CheckCircle2,
+  Clock3,
   FileSpreadsheet,
   Link2,
   Moon,
@@ -23,8 +25,10 @@ import {
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { EmployeeAvatar } from "@/components/ui/EmployeeAvatar";
-import type { AttendanceSettings } from "@/lib/adt/types";
+import { WORK_SCHEDULE_KINDS } from "@/lib/adt/types";
+import type { AttendanceSettings, WorkScheduleKind, WorkScheduleRow } from "@/lib/adt/types";
 import type { DailyRow, IgnoredEmp, MappableEmployee, UnmatchedRow, WeeklyRow } from "@/lib/adt/queries";
+import type { OvertimeMatchRow } from "@/lib/payroll/overtime";
 import "@/components/cdash/cdash.css";
 
 /* ---------- 표시 헬퍼 ---------- */
@@ -48,7 +52,7 @@ const dowOf = (d: string): string => {
   return Number.isNaN(t) ? "" : DOW[new Date(t).getUTCDay()];
 };
 
-type Tab = "upload" | "weekly" | "mapping" | "settings";
+type Tab = "weekly" | "match" | "mapping" | "settings";
 
 export function AttendanceBoard() {
   const { theme } = useCdashTheme();
@@ -67,8 +71,8 @@ export function AttendanceBoard() {
         {/* 탭 */}
         <div className="flex items-center gap-1.5 mb-4 flex-wrap">
           {([
-            ["upload", "엑셀 업로드"],
             ["weekly", "주별 초과근무"],
+            ["match", "신청 대조"],
             ["mapping", "미매칭 매핑"],
             ["settings", "산정 정책"],
           ] as [Tab, string][]).map(([k, label]) => (
@@ -89,8 +93,8 @@ export function AttendanceBoard() {
           ))}
         </div>
 
-        {tab === "upload" && <UploadPanel onDone={() => setTab("weekly")} />}
         {tab === "weekly" && <WeeklyPanel />}
+        {tab === "match" && <MatchPanel />}
         {tab === "mapping" && <MappingPanel onCount={setUnmatchedCount} />}
         {tab === "settings" && <SettingsPanel />}
       </div>
@@ -274,6 +278,203 @@ function DailyDetail({ rows }: { rows?: DailyRow[] }) {
 }
 
 const dailyGrid = { display: "grid", gridTemplateColumns: "1.2fr 0.9fr 0.9fr 1fr 0.9fr 1fr 0.9fr", gap: "6px" } as const;
+
+/* ================= 신청 대조 ================= */
+interface MatchResponse {
+  rows: OvertimeMatchRow[];
+  byEmployee: Array<{ employeeId: string; name: string; hourlyWage: number | null; amount: number; dayMin: number; nightMin: number; cappedMin: number; basis: string }>;
+  summary: { docs: number; absent: number; short: number; noRecord: number; requestedHours: number; actualHours: number };
+}
+
+const VERDICT_LABEL: Record<OvertimeMatchRow["verdict"], { text: string; tone: "ok" | "warn" | "bad" | "muted" }> = {
+  full: { text: "전량 인정", tone: "ok" },
+  short: { text: "조기 퇴근", tone: "warn" },
+  absent: { text: "미근무", tone: "bad" },
+  "no-record": { text: "근태 없음", tone: "muted" },
+  override: { text: "예외 승인", tone: "ok" },
+  rejected: { text: "반려", tone: "bad" },
+};
+
+function MatchPanel() {
+  const now = new Date();
+  const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [data, setData] = useState<MatchResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const load = useCallback(async (y: number, m: number) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/payroll/overtime-match?year=${y}&month=${m}`, { cache: "no-store" });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d?.error ?? "대조 내역을 불러오지 못했습니다.");
+      setData(d as MatchResponse);
+    } catch (err) {
+      setError((err as Error).message);
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  useEffect(() => {
+    load(year, month);
+  }, [load, year, month]);
+
+  const override = async (r: OvertimeMatchRow, mode: "approve" | "reject" | "clear") => {
+    let reason: string | null = null;
+    if (mode !== "clear") {
+      const label = mode === "approve" ? "예외 승인" : "반려";
+      reason = prompt(
+        `${r.name} · ${r.workDate} ${r.reqStart}~${r.reqEnd}\n${label} 사유를 입력하세요.` +
+          (mode === "approve" ? "\n(예: 실제 근무했으나 지문 미태그 — 부서장 확인)" : ""),
+        mode === "approve" ? "지문 미태그 — 실근무 확인" : ""
+      );
+      if (reason == null) return; // 취소
+    }
+    setBusy(r.docId);
+    try {
+      const res = await fetch("/api/payroll/overtime-match", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ docId: r.docId, employeeId: r.employeeId, workDate: r.workDate, mode, reason }),
+      });
+      if (!res.ok) throw new Error((await res.json())?.error ?? "처리 실패");
+      await load(year, month);
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const s = data?.summary;
+  const years = [now.getFullYear(), now.getFullYear() - 1];
+
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-[13px] cd-text-muted">
+        승인된 <b>초과근무 신청서</b>와 <b>실제 근태 기록</b>을 일자별로 대조합니다. 인정 시간은 개인별 소정근로 종료 시각(산정 정책 탭) 이후의
+        실제 재실 시간 중 <b>신청 시간을 상한</b>으로 산정됩니다. 지문 미태그 등 확인된 건은 <b>예외 승인</b>으로 신청 시간을 전량 인정할 수 있습니다.
+      </p>
+
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-[12px] cd-text-faint">귀속 월</span>
+        <select className="cd-select" style={{ width: 110 }} value={year} onChange={(e) => setYear(Number(e.target.value))}>
+          {years.map((y) => <option key={y} value={y}>{y}년</option>)}
+        </select>
+        <select className="cd-select" style={{ width: 100 }} value={month} onChange={(e) => setMonth(Number(e.target.value))}>
+          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => <option key={m} value={m}>{m}월</option>)}
+        </select>
+        <span className="text-[11.5px] cd-text-faint">
+          귀속 구간 {month === 1 ? year - 1 : year}-{String(month === 1 ? 12 : month - 1).padStart(2, "0")}-26 ~ {year}-{String(month).padStart(2, "0")}-25
+        </span>
+      </div>
+
+      {s && (
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <Kpi icon={<CalendarClock className="w-4 h-4" />} label="신청 건수" value={`${s.docs}건`} />
+          <Kpi icon={<AlarmClockCheck className="w-4 h-4" />} label="신청 시간" value={`${s.requestedHours}h`} />
+          <Kpi icon={<CheckCircle2 className="w-4 h-4" />} label="인정 시간" value={`${s.actualHours}h`} />
+          <Kpi icon={<UserRoundX className="w-4 h-4" />} label="미근무" value={`${s.absent}건`} danger={s.absent > 0} />
+          <Kpi icon={<TriangleAlert className="w-4 h-4" />} label="조기 퇴근" value={`${s.short}건`} danger={s.short > 0} />
+        </div>
+      )}
+
+      {error && <p className="text-[13px]" style={{ color: "var(--cd-error)" }}>{error}</p>}
+      {loading ? (
+        <p className="text-[13px] cd-text-faint">불러오는 중입니다.</p>
+      ) : !data || data.rows.length === 0 ? (
+        <p className="text-[13px] cd-text-faint py-4">해당 월에 승인된 초과근무 신청서가 없습니다.</p>
+      ) : (
+        <>
+          {/* 인원별 요약 */}
+          {data.byEmployee.length > 0 && (
+            <div className="rounded-2xl border cd-border-c p-3">
+              <div className="text-[11px] font-bold cd-text-faint mb-2">인원별 산정 결과 — 급여대장에 이 금액이 반영됩니다</div>
+              <div className="flex flex-wrap gap-1.5">
+                {data.byEmployee.map((e) => (
+                  <span key={e.employeeId} className="inline-flex items-center gap-1.5 rounded-lg border cd-border-c px-2 py-1 text-[11.5px]">
+                    <span className="cd-text font-semibold">{e.name}</span>
+                    <span className="font-mono cd-text-primary font-bold">{won(e.amount)}원</span>
+                    <span className="cd-text-faint">{toH(e.dayMin + e.nightMin)}h</span>
+                    {e.cappedMin > 0 && (
+                      <span className="font-mono" style={{ color: "var(--cd-error)" }}>-{toH(e.cappedMin)}h</span>
+                    )}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 건별 대조 */}
+          <div className="cd-card overflow-hidden">
+            <div className="hidden md:grid px-3 py-2 text-[11px] font-bold cd-text-faint border-b cd-border-c" style={matchGrid}>
+              <span>직원</span>
+              <span className="text-center">근무일</span>
+              <span className="text-center">신청 시간</span>
+              <span className="text-center">실제 출·퇴근</span>
+              <span className="text-center" title="개인별 소정근로 종료 시각 — 이 시각 이후부터 초과근무로 인정">초과 시작</span>
+              <span className="text-right">신청</span>
+              <span className="text-right">인정</span>
+              <span className="text-center">판정</span>
+              <span className="text-center">예외</span>
+            </div>
+            {data.rows.map((r) => {
+              const v = VERDICT_LABEL[r.verdict];
+              const tone =
+                v.tone === "ok" ? { background: "var(--cd-primary-soft)", color: "var(--cd-primary)" }
+                : v.tone === "bad" ? { background: "var(--cd-error)", color: "#fff" }
+                : v.tone === "warn" ? { background: "var(--cd-warning, #FFAE1F)", color: "#fff" }
+                : { background: "transparent", color: "var(--cd-faint)" };
+              const overridden = r.verdict === "override" || r.verdict === "rejected";
+              return (
+                <div key={r.docId} className="grid items-center px-3 py-2 border-b cd-border-c last:border-b-0 text-[12.5px]" style={matchGrid}>
+                  <span className="cd-text font-semibold truncate">{r.name}</span>
+                  <span className="text-center font-mono cd-text">{r.workDate.slice(5)} ({dowOf(r.workDate)})</span>
+                  <span className="text-center font-mono cd-text">{r.reqStart}~{r.reqEnd}</span>
+                  <span className="text-center font-mono cd-text-muted">
+                    {r.inAt && r.outAt ? `${r.inAt}~${r.outAt}` : <span className="cd-text-faint">기록 없음</span>}
+                  </span>
+                  <span className="text-center font-mono cd-text-faint">{r.otStartAt}</span>
+                  <span className="text-right font-mono cd-text-muted">{hm(r.reqMin)}</span>
+                  <span className="text-right font-mono font-bold" style={{ color: r.actualMin < r.reqMin ? "var(--cd-error)" : "var(--cd-text)" }}>{hm(r.actualMin)}</span>
+                  <span className="text-center">
+                    <span className="inline-flex items-center text-[10.5px] font-bold rounded-full px-2 py-0.5" style={tone} title={r.overrideReason ?? undefined}>
+                      {v.text}
+                    </span>
+                  </span>
+                  <span className="flex items-center justify-center gap-1">
+                    {overridden ? (
+                      <button type="button" disabled={busy === r.docId} onClick={() => override(r, "clear")} className="rounded px-1.5 py-0.5 text-[10px] font-bold border cd-border-c cd-text-faint hover:cd-tint-primary disabled:opacity-50">
+                        해제
+                      </button>
+                    ) : r.verdict === "absent" || r.verdict === "short" ? (
+                      <>
+                        <button type="button" disabled={busy === r.docId} onClick={() => override(r, "approve")} className="rounded px-1.5 py-0.5 text-[10px] font-bold border cd-border-c cd-text-primary hover:cd-tint-primary disabled:opacity-50" title="실근무 확인 — 신청 시간 전량 인정">
+                          승인
+                        </button>
+                        <button type="button" disabled={busy === r.docId} onClick={() => override(r, "reject")} className="rounded px-1.5 py-0.5 text-[10px] font-bold border cd-border-c cd-text-faint hover:cd-tint-primary disabled:opacity-50" title="전량 불인정">
+                          반려
+                        </button>
+                      </>
+                    ) : (
+                      <span className="cd-text-faint text-[11px]">-</span>
+                    )}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+const matchGrid = { display: "grid", gridTemplateColumns: "minmax(0,1fr) 0.9fr 1.1fr 1.2fr 0.8fr 0.7fr 0.7fr 0.9fr 0.9fr", gap: "8px" } as const;
 
 /* ================= 미매칭 매핑 ================= */
 function MappingPanel({ onCount }: { onCount: (n: number) => void }) {
@@ -501,9 +702,24 @@ function SettingsPanel() {
   };
 
   return (
-    <div className="flex flex-col gap-4 max-w-2xl">
-      <p className="text-[13px] cd-text-muted">사규 기준 자체 산정 정책입니다. 규정 변경 시 여기서 조정하면 다음 재산정부터 반영됩니다.</p>
-      <div className="rounded-2xl border cd-border-c p-4 grid grid-cols-2 md:grid-cols-3 gap-4">
+    // 좌: 업로드·산정 기준(고정폭) / 우: 직원별 출근 시각 — 오른쪽 여백을 쓰고 스크롤을 줄인다.
+    <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,540px)_minmax(0,1fr)] gap-6 items-start">
+      <div className="flex flex-col gap-6">
+      {/* ① 근태 엑셀 업로드 */}
+      <section className="flex flex-col gap-3">
+        <h3 className="text-[13.5px] font-bold cd-text flex items-center gap-1.5">
+          <UploadCloud className="w-4 h-4" style={{ color: "var(--cd-primary)" }} /> 근태 엑셀 업로드
+        </h3>
+        <UploadPanel />
+      </section>
+
+      {/* ② 산정 기준 */}
+      <section className="flex flex-col gap-3">
+        <h3 className="text-[13.5px] font-bold cd-text flex items-center gap-1.5">
+          <AlarmClockCheck className="w-4 h-4" style={{ color: "var(--cd-primary)" }} /> 산정 기준
+        </h3>
+        <p className="text-[13px] cd-text-muted">사규 기준 자체 산정 정책입니다. 규정 변경 시 여기서 조정하면 다음 재산정부터 반영됩니다.</p>
+      <div className="rounded-2xl border cd-border-c p-4 grid grid-cols-2 gap-4">
         {numField("weeklyStandardMinutes", "주 소정근로(분)", "40h = 2400")}
         {numField("weeklyOvertimeLimitMinutes", "주 연장 한도(분)", "12h = 720, 초과분=특별휴가")}
         {numField("dailyStandardMinutes", "1일 소정(분)", "참고, 8h = 480")}
@@ -540,9 +756,136 @@ function SettingsPanel() {
       <p className="text-[11.5px] cd-text-faint">
         ※ 수당 금액(월평균임금 ÷ {s.wageDivisorHours} × 배수)은 직원별 급여 데이터 연동 후 지원됩니다. 현재는 시간·배수 대상까지 산정합니다.
       </p>
+      </section>
+      </div>
+
+      {/* ③ 직원별 출근 시각 */}
+      <SchedulePanel />
     </div>
   );
 }
+
+/* ---------- 직원별 출근 시각(근무 유형) ---------- */
+function SchedulePanel() {
+  const [rows, setRows] = useState<WorkScheduleRow[]>([]);
+  const [draft, setDraft] = useState<Record<string, WorkScheduleKind>>({});
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const res = await fetch(`/api/approval/attendance?schedules=1`, { cache: "no-store" });
+    const data = await res.json();
+    if (res.ok) {
+      setRows(data.schedules ?? []);
+      setDraft({});
+    }
+    setLoading(false);
+  }, []);
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const kindOf = (r: WorkScheduleRow): WorkScheduleKind => draft[r.employeeId] ?? r.kind;
+  const startOf = (r: WorkScheduleRow): string => {
+    const k = WORK_SCHEDULE_KINDS.find((x) => x.kind === kindOf(r));
+    return k ? `${k.startHhmm.slice(0, 2)}:${k.startHhmm.slice(2)}` : "-";
+  };
+  const endOf = (r: WorkScheduleRow): string => {
+    const k = WORK_SCHEDULE_KINDS.find((x) => x.kind === kindOf(r));
+    return k ? `${k.endHhmm.slice(0, 2)}:${k.endHhmm.slice(2)}` : "-";
+  };
+  const dirty = Object.keys(draft).length;
+
+  const save = async () => {
+    if (!dirty) return;
+    setBusy(true);
+    try {
+      const items = Object.entries(draft).map(([employeeId, kind]) => ({ employeeId, kind }));
+      const res = await fetch("/api/approval/attendance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ schedules: items }),
+      });
+      if (!res.ok) throw new Error((await res.json())?.error ?? "저장 실패");
+      setSaved(true);
+      await load();
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="flex flex-col gap-3">
+      <h3 className="text-[13.5px] font-bold cd-text flex items-center gap-1.5">
+        <Clock3 className="w-4 h-4" style={{ color: "var(--cd-primary)" }} /> 직원별 출근 시각
+      </h3>
+      <p className="text-[13px] cd-text-muted">
+        초과근무는 <b>개인별 소정근로 종료 시각 이후</b>부터 인정됩니다 — 8시 출근이면 17:00부터가 초과근무입니다.
+        출근 방식을 고르면 출근·종료 시각이 함께 정해집니다. 미설정 직원은 <b>조기출근(8시)</b>으로 산정됩니다.
+      </p>
+
+      {loading ? (
+        <p className="text-[13px] cd-text-faint">불러오는 중입니다.</p>
+      ) : (
+        <>
+          <div className="cd-card overflow-hidden max-h-[68vh] overflow-y-auto">
+            <div className="hidden md:grid px-3 py-2 text-[11px] font-bold cd-text-faint border-b cd-border-c sticky top-0 z-10 cd-solid-bg" style={schedGrid}>
+              <span>성명</span>
+              <span>부서</span>
+              <span>직함</span>
+              <span className="text-center">출근시각</span>
+              <span className="text-center">종료시각</span>
+              <span>출근방식</span>
+            </div>
+            {rows.map((r) => (
+              <div key={r.employeeId} className="grid items-center px-3 py-2 border-b cd-border-c last:border-b-0" style={schedGrid}>
+                <span className="flex items-center gap-2 min-w-0">
+                  <EmployeeAvatar employeeId={r.employeeId} photoPath={r.photoPath} size={26} />
+                  <span className="text-[13px] font-semibold cd-text truncate">{r.name}</span>
+                </span>
+                <span className="text-[12px] cd-text-muted truncate">{r.deptName ?? "-"}</span>
+                <span className="text-[12px] cd-text-muted truncate">{r.positionName ?? "-"}</span>
+                <span className="text-center font-mono text-[13px] font-semibold cd-text">{startOf(r)}</span>
+                <span className="text-center font-mono text-[13px] cd-text-primary font-semibold" title="소정근로 종료 = 초과근무 시작">{endOf(r)}</span>
+                <span className="flex items-center gap-1.5">
+                  <select
+                    className="cd-select"
+                    style={{ width: 168 }}
+                    value={kindOf(r)}
+                    onChange={(e) => {
+                      setDraft((p) => ({ ...p, [r.employeeId]: e.target.value as WorkScheduleKind }));
+                      setSaved(false);
+                    }}
+                  >
+                    {WORK_SCHEDULE_KINDS.map((k) => (
+                      <option key={k.kind} value={k.kind}>{k.label}</option>
+                    ))}
+                  </select>
+                  {r.isDefault && !draft[r.employeeId] && (
+                    <span className="text-[10px] cd-text-faint shrink-0">기본값</span>
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center justify-end gap-3">
+            {saved && <span className="text-[12px]" style={{ color: "var(--cd-primary)" }}>저장되었습니다.</span>}
+            {dirty > 0 && <span className="text-[12px] cd-text-faint">변경 {dirty}건</span>}
+            <button type="button" disabled={busy || !dirty} onClick={save} className="cd-btn cd-btn-primary rounded-lg px-4 py-2 text-[13px] font-semibold disabled:opacity-50">
+              <Save className="w-4 h-4 inline mr-1" /> 출근 시각 저장
+            </button>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+const schedGrid = { display: "grid", gridTemplateColumns: "minmax(0,1.3fr) minmax(0,1.1fr) 0.9fr 0.7fr 0.7fr 190px", gap: "8px" } as const;
 
 /* ================= 엑셀 업로드 ================= */
 interface UploadResult {
@@ -555,7 +898,7 @@ interface UploadResult {
   perFile: Array<{ name: string; records: number; skipped: number; error?: string }>;
 }
 
-function UploadPanel({ onDone }: { onDone: () => void }) {
+function UploadPanel({ onDone }: { onDone?: () => void }) {
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<UploadResult | null>(null);
@@ -585,13 +928,16 @@ function UploadPanel({ onDone }: { onDone: () => void }) {
   };
 
   return (
-    <div className="flex flex-col gap-4 max-w-2xl">
+    <div className="flex flex-col gap-4">
       <p className="text-[13px] cd-text-muted">
         근태처리 후 조회에서 받은 <b>엑셀(.xls/.xlsx)</b>을 올리면 자동으로 파싱·초과근무 산정까지 됩니다. 본사·지사 파일을 함께 선택할 수 있습니다.
       </p>
 
-      {/* 파일 선택 */}
-      <label className="rounded-2xl border border-dashed cd-border-c p-6 flex flex-col items-center gap-2 cursor-pointer hover:cd-tint-primary transition-colors">
+      {/* 파일 선택 — 배경과 구분되도록 흰 바탕 + 점선 테두리 */}
+      <label
+        className="rounded-2xl p-6 flex flex-col items-center gap-2 cursor-pointer hover:cd-tint-primary transition-colors"
+        style={{ background: "var(--cd-card-solid)", border: "1.5px dashed var(--cd-ring)" }}
+      >
         <UploadCloud className="w-8 h-8" style={{ color: "var(--cd-primary)" }} />
         <span className="text-[13px] cd-text font-semibold">엑셀 파일 선택</span>
         <span className="text-[11.5px] cd-text-faint">여러 개 동시 선택 가능 · .xls / .xlsx</span>
@@ -647,9 +993,11 @@ function UploadPanel({ onDone }: { onDone: () => void }) {
               직원 자동연결 안 된 {result.unmatched}건이 있습니다 — <b>미매칭 매핑</b> 탭에서 ADT 사번↔직원을 연결하세요.
             </p>
           )}
-          <button type="button" onClick={onDone} className="cd-btn rounded-lg border cd-border-c px-3 py-1.5 text-xs font-semibold self-start">
-            주별 초과근무 보기 →
-          </button>
+          {onDone && (
+            <button type="button" onClick={onDone} className="cd-btn rounded-lg border cd-border-c px-3 py-1.5 text-xs font-semibold self-start">
+              주별 초과근무 보기 →
+            </button>
+          )}
         </div>
       )}
     </div>

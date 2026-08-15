@@ -6,7 +6,8 @@
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { weeklyOvertimeEstimates } from "@/lib/payroll/overtime";
 import { loadAttendanceSettings } from "./settings";
-import type { AttendanceSettings } from "./types";
+import { DEFAULT_WORK_SCHEDULE_KIND, WORK_SCHEDULE_KINDS } from "./types";
+import type { AttendanceSettings, WorkScheduleKind, WorkScheduleRow } from "./types";
 
 export interface WeeklyRow {
   adtEmpNo: string;
@@ -341,6 +342,66 @@ export async function unmapAdtEmpNo(employeeId: string): Promise<void> {
 
 export async function getAttendanceSettings(): Promise<AttendanceSettings> {
   return loadAttendanceSettings(await getDb());
+}
+
+/**
+ * 직원별 근무 유형 목록(마이그 167) — 재직자 전원. 미설정자는 기본값(조기출근 8시)으로 채워 보여준다.
+ * 초과근무 인정 시작 시각의 근거라 산정 정책 탭에서 관리한다.
+ */
+export async function listWorkSchedules(): Promise<WorkScheduleRow[]> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT e.employee_id, e.name, e.photo_public_path, d.dept_name, p.position_name,
+              s.schedule_kind, s.start_hhmm, s.end_hhmm
+         FROM employee_profiles e
+         LEFT JOIN departments d ON d.dept_id = e.dept_id
+         LEFT JOIN positions p ON p.position_id = e.position_id
+         LEFT JOIN attendance_work_schedules s ON s.employee_id = e.employee_id
+        WHERE e.status = 'active'
+        ORDER BY d.dept_name NULLS LAST, e.name`
+    )
+  );
+  const def = WORK_SCHEDULE_KINDS.find((k) => k.kind === DEFAULT_WORK_SCHEDULE_KIND)!;
+  return rows.map((r) => {
+    const kind = (r.schedule_kind ? String(r.schedule_kind) : null) as WorkScheduleKind | null;
+    const preset = WORK_SCHEDULE_KINDS.find((k) => k.kind === kind);
+    return {
+      employeeId: String(r.employee_id),
+      name: String(r.name ?? ""),
+      deptName: r.dept_name != null ? String(r.dept_name) : null,
+      positionName: r.position_name != null ? String(r.position_name) : null,
+      photoPath: r.photo_public_path != null ? String(r.photo_public_path) : null,
+      kind: kind ?? DEFAULT_WORK_SCHEDULE_KIND,
+      startHhmm: r.start_hhmm != null ? String(r.start_hhmm) : (preset ?? def).startHhmm,
+      endHhmm: r.end_hhmm != null ? String(r.end_hhmm) : (preset ?? def).endHhmm,
+      isDefault: !kind,
+    };
+  });
+}
+
+/** 근무 유형 저장(일괄). 유형을 고르면 출·퇴근 시각은 프리셋에서 결정된다. */
+export async function saveWorkSchedules(
+  items: Array<{ employeeId: string; kind: WorkScheduleKind }>,
+  actorUserId?: string | null
+): Promise<number> {
+  const valid = items
+    .map((it) => ({ ...it, preset: WORK_SCHEDULE_KINDS.find((k) => k.kind === it.kind) }))
+    .filter((it) => it.employeeId && it.preset);
+  if (!valid.length) return 0;
+  await withDbWrite(async (db) => {
+    for (const it of valid) {
+      await db.run(
+        `INSERT INTO attendance_work_schedules (employee_id, schedule_kind, start_hhmm, end_hhmm, updated_by, updated_at)
+         VALUES ($1,$2,$3,$4,$5, now()::text)
+         ON CONFLICT (employee_id) DO UPDATE SET
+           schedule_kind = EXCLUDED.schedule_kind, start_hhmm = EXCLUDED.start_hhmm,
+           end_hhmm = EXCLUDED.end_hhmm, updated_by = EXCLUDED.updated_by, updated_at = now()::text`,
+        [it.employeeId, it.kind, it.preset!.startHhmm, it.preset!.endHhmm, actorUserId ?? null]
+      );
+    }
+  });
+  return valid.length;
 }
 
 /** 정책 저장(부분 갱신). */

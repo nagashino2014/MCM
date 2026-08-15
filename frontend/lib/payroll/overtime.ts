@@ -1,4 +1,5 @@
 import { getDb, rowsToObjects } from "@/lib/db";
+import { getHolidays } from "@/lib/home/holidays";
 
 /**
  * 초과근무수당 산정 공용 모듈 (블루프린트 §6)
@@ -202,29 +203,119 @@ function splitRange(startMin: number, endMin: number): { dayMin: number; nightMi
   return { dayMin, nightMin };
 }
 
+/** 직원별 소정근로 시각(분). 미설정은 조기출근(08:00~17:00). */
+export interface WorkScheduleMin {
+  startMin: number;
+  endMin: number;
+  kind: string;
+}
+
+const DEFAULT_SCHEDULE_MIN: WorkScheduleMin = { startMin: 8 * 60, endMin: 17 * 60, kind: "early" };
+
+const hhmmToMin = (v: string): number => {
+  const s = String(v).replace(/\D/g, "").padStart(4, "0");
+  return Number(s.slice(0, 2)) * 60 + Number(s.slice(2, 4));
+};
+
+/** attendance_work_schedules 로드(마이그 167). 초과근무 인정 시작 시각의 근거. */
+export async function loadWorkSchedules(): Promise<Map<string, WorkScheduleMin>> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(`SELECT employee_id, schedule_kind, start_hhmm, end_hhmm FROM attendance_work_schedules`)
+  );
+  const map = new Map<string, WorkScheduleMin>();
+  for (const r of rows) {
+    map.set(String(r.employee_id), {
+      startMin: hhmmToMin(String(r.start_hhmm)),
+      endMin: hhmmToMin(String(r.end_hhmm)),
+      kind: String(r.schedule_kind),
+    });
+  }
+  return map;
+}
+
+/**
+ * 휴일 날짜 집합 — 소정근로가 없는 날은 재실 전체가 초과(휴일)근무 대상이다.
+ * 토·일 + 공휴일(외부 소스) + 근로자의 날(5/1, 공휴일 목록에 없을 수 있어 항상 포함).
+ * 외부 조회가 실패해도 고정 공휴일은 폴백으로 돌아온다(holidays.ts).
+ */
+async function loadOffDays(years: number[]): Promise<Set<string>> {
+  const set = new Set<string>();
+  for (const y of new Set(years)) {
+    set.add(`${y}-05-01`); // 근로자의 날 — 유급휴일이라 소정근로가 없다
+    try {
+      for (const h of await getHolidays(y)) set.add(h.date);
+    } catch {
+      /* 외부 소스 장애 — 토·일 판정만으로 진행 */
+    }
+  }
+  return set;
+}
+
+/**
+ * 인정 구간 배분 — 초과근무 가능 구간 A 안에서 신청 분(quota)만큼 인정 구간을 잘라낸다.
+ * 신청 시간대(B)와 겹치는 부분을 먼저 쓰고, 모자라면 A의 나머지를 이른 시각부터 채운다.
+ * 예) 소정 종료 17:00 · 재실 17:00~21:00(A) · 신청 19:00~22:00(3h) →
+ *     A∩B=19~21(2h) + 앞 구간 17~18(1h) = 3h 전량 인정(실제로 17시부터 이어 일했으므로).
+ */
+function allocateSegments(
+  a: [number, number],
+  b: [number, number],
+  quota: number
+): Array<[number, number]> {
+  const cand: Array<[number, number]> = [];
+  const inter: [number, number] = [Math.max(a[0], b[0]), Math.min(a[1], b[1])];
+  if (inter[1] > inter[0]) cand.push(inter);
+  if (b[0] > a[0]) cand.push([a[0], Math.min(b[0], a[1])]); // 신청 이전(소정 종료 직후) 구간
+  if (b[1] < a[1]) cand.push([Math.max(b[1], a[0]), a[1]]); // 신청 이후 구간
+
+  const out: Array<[number, number]> = [];
+  let remain = quota;
+  for (const [s, e] of cand) {
+    if (remain <= 0) break;
+    const len = e - s;
+    if (len <= 0) continue;
+    const take = Math.min(len, remain);
+    out.push([s, s + take]);
+    remain -= take;
+  }
+  return out;
+}
+
 /** 신청 1건과 그 날 근태의 대조 결과(일자 단위) */
 export interface OvertimeMatchRow {
+  docId: string;
   employeeId: string;
   name: string;
   workDate: string;
   reqStart: string;
   reqEnd: string;
   reqMin: number;
-  /** 실제 인정분 = 신청 시간대 ∩ 실제 재실 시간대 */
+  /** 실제 인정분 — 소정근로 종료 이후 재실 시간 중 신청 분만큼 */
   actualMin: number;
   dayMin: number;
   nightMin: number;
-  /** 'no-record'=근태 없음(대조 불가) · 'absent'=출퇴근 기록 없음/미근무 · 'short'=조기 퇴근 등으로 축소 · 'full'=전량 인정 */
-  verdict: "no-record" | "absent" | "short" | "full";
+  /** 소정근로 종료(= 초과근무 시작) 시각 'HH:MM' */
+  otStartAt: string;
+  /** 실제 출·퇴근 'HH:MM' (기록 없으면 null) */
+  inAt: string | null;
+  outAt: string | null;
+  /** 'no-record'=근태 없음(대조 불가) · 'absent'=출퇴근 기록 없음/미근무 · 'short'=조기 퇴근 등으로 축소 · 'full'=전량 인정 · 'override'=관리자 예외 승인 · 'rejected'=관리자 반려 */
+  verdict: "no-record" | "absent" | "short" | "full" | "override" | "rejected";
+  /** 예외 승인/반려 사유(있을 때) */
+  overrideReason: string | null;
 }
 
 /**
  * 승인된 초과근무 신청서 × 근태 기록 **일자별 대조**.
  *
- * 신청 시간대와 실제 재실(출근~퇴근) 시간대의 **교집합**만 인정한다.
- *   - 신청했으나 출퇴근 기록이 없거나 겹치지 않으면 0분(absent)
- *   - 신청보다 일찍 퇴근했으면 겹친 만큼만(short)
- *   - 근태 자체가 적재되지 않은 기간은 대조 불가라 신청 시간을 그대로 인정(no-record)
+ * 인정 기준(2026-08-15 사용자 확정):
+ *   ① 초과근무 인정 시작 = **개인별 소정근로 종료 시각**(출근 유형 설정, 마이그 167). 8시 출근이면 17:00.
+ *   ② 그 날 초과근무 가능 구간 = [소정 종료, 실제 퇴근] ∩ 재실. 휴일(토·일)은 재실 전체가 대상.
+ *   ③ 인정분 = 가능 구간 안에서 **신청 분을 상한**으로 배분(allocateSegments).
+ *      → 신청했으나 출퇴근 기록이 없으면 0분(absent), 일찍 퇴근했으면 그만큼만(short).
+ *   ④ 근태 자체가 적재되지 않은 기간은 대조 불가라 신청 시간을 그대로 인정(no-record).
+ *   ⑤ 관리자 예외 승인(overtime_match_overrides)이 있으면 신청 전량 인정(override)/전량 불인정(rejected).
  * 22:00~06:00 구간은 야간(2.0배)으로 분리한다.
  */
 export async function matchOvertimeRequests(
@@ -236,7 +327,7 @@ export async function matchOvertimeRequests(
   const to = `${payYear}-${String(payMonth).padStart(2, "0")}-25`;
   const reqs = rowsToObjects(
     await db.exec(
-      `SELECT d.drafter_employee_id AS employee_id, d.drafter_name,
+      `SELECT d.doc_id, d.drafter_employee_id AS employee_id, d.drafter_name,
               d.field_values->'work_period'->>'from' AS work_date,
               d.field_values->'work_time'->>'start' AS t_start,
               d.field_values->'work_time'->>'end'   AS t_end
@@ -269,6 +360,17 @@ export async function matchOvertimeRequests(
     att.set(key, rec);
   }
   const hasAttendanceInRange = attRows.length > 0;
+  const schedules = await loadWorkSchedules();
+  const offDays = await loadOffDays([payYear, payMonth === 1 ? payYear - 1 : payYear]);
+  const overrides = new Map<string, { mode: string; reason: string | null }>();
+  for (const o of rowsToObjects(
+    await db.exec(`SELECT doc_id, mode, reason FROM overtime_match_overrides`)
+  )) {
+    overrides.set(String(o.doc_id), { mode: String(o.mode), reason: o.reason ? String(o.reason) : null });
+  }
+
+  const clock = (min: number): string =>
+    `${String(Math.floor((((min % 1440) + 1440) % 1440) / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
 
   const out: OvertimeMatchRow[] = [];
   for (const r of reqs) {
@@ -285,38 +387,52 @@ export async function matchOvertimeRequests(
     if (reqEndMin <= reqStartMin) reqEndMin += 1440; // 자정 넘김
     const reqMin = reqEndMin - reqStartMin;
 
+    const sch = schedules.get(empId) ?? DEFAULT_SCHEDULE_MIN;
+    // 토·일·공휴일은 소정근로가 없어 재실 전체가 초과(휴일)근무 대상이다.
+    const dow = new Date(Date.parse(`${workDate}T12:00:00Z`)).getUTCDay();
+    const isOffDay = dow === 0 || dow === 6 || offDays.has(workDate);
+
     const a = att.get(`${empId}|${workDate}`);
-    let actualStart = reqStartMin;
-    let actualEnd = reqEndMin;
+    const inMin = a?.inAt ? minutesFromBase(a.inAt, workDate) : null;
+    const outMinRaw = a?.outAt ? minutesFromBase(a.outAt, workDate) : null;
+    const outMin = inMin != null && outMinRaw != null && outMinRaw <= inMin ? outMinRaw + 1440 : outMinRaw;
+
+    const ov = overrides.get(String(r.doc_id));
+    let segs: Array<[number, number]> = [];
     let verdict: OvertimeMatchRow["verdict"];
 
-    if (!hasAttendanceInRange) {
+    if (ov?.mode === "reject") {
+      verdict = "rejected";
+    } else if (ov?.mode === "approve") {
+      verdict = "override"; // 지문 미태그 등 — 관리자 확인 후 신청 전량 인정
+      segs = [[reqStartMin, reqEndMin]];
+    } else if (!hasAttendanceInRange) {
       verdict = "no-record"; // 근태 미적재 기간 — 신청 시간 그대로
-    } else if (!a || !a.inAt || !a.outAt) {
+      segs = [[reqStartMin, reqEndMin]];
+    } else if (inMin == null || outMin == null) {
       verdict = "absent";
-      actualStart = actualEnd = 0;
     } else {
-      const inMin = minutesFromBase(a.inAt, workDate);
-      const outMin = minutesFromBase(a.outAt, workDate);
-      if (inMin == null || outMin == null) {
+      // 초과근무 가능 구간 = [소정 종료(휴일은 출근), 퇴근]
+      const otStart = isOffDay ? inMin : Math.max(sch.endMin, inMin);
+      if (outMin <= otStart) {
         verdict = "absent";
-        actualStart = actualEnd = 0;
       } else {
-        const outAdj = outMin <= inMin ? outMin + 1440 : outMin; // 자정 넘겨 퇴근
-        actualStart = Math.max(reqStartMin, inMin);
-        actualEnd = Math.min(reqEndMin, outAdj);
-        if (actualEnd <= actualStart) {
-          verdict = "absent";
-          actualStart = actualEnd = 0;
-        } else {
-          verdict = actualEnd - actualStart < reqMin ? "short" : "full";
-        }
+        segs = allocateSegments([otStart, outMin], [reqStartMin, reqEndMin], reqMin);
+        const got = segs.reduce((s, [x, y]) => s + (y - x), 0);
+        verdict = got <= 0 ? "absent" : got < reqMin ? "short" : "full";
       }
     }
 
-    const actualMin = Math.max(0, actualEnd - actualStart);
-    const split = actualMin > 0 ? splitRange(actualStart, actualEnd) : { dayMin: 0, nightMin: 0 };
+    const actualMin = segs.reduce((s, [x, y]) => s + (y - x), 0);
+    const split = segs.reduce(
+      (acc, [x, y]) => {
+        const p = splitRange(x, y);
+        return { dayMin: acc.dayMin + p.dayMin, nightMin: acc.nightMin + p.nightMin };
+      },
+      { dayMin: 0, nightMin: 0 }
+    );
     out.push({
+      docId: String(r.doc_id),
       employeeId: empId,
       name: String(r.drafter_name ?? ""),
       workDate,
@@ -326,7 +442,11 @@ export async function matchOvertimeRequests(
       actualMin,
       dayMin: split.dayMin,
       nightMin: split.nightMin,
+      otStartAt: isOffDay ? "휴일" : clock(sch.endMin),
+      inAt: inMin != null ? clock(inMin) : null,
+      outAt: outMin != null ? clock(outMin) : null,
       verdict,
+      overrideReason: ov?.reason ?? null,
     });
   }
   return out.sort((x, y) => (x.name === y.name ? x.workDate.localeCompare(y.workDate) : x.name.localeCompare(y.name)));

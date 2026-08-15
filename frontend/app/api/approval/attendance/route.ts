@@ -10,13 +10,15 @@ import {
   listUnmatched,
   listWeekStarts,
   listWeekly,
+  listWorkSchedules,
   mapAdtEmpNo,
   saveAttendanceSettings,
+  saveWorkSchedules,
   setOvertimeExcluded,
   unignoreAdtEmpNo,
   unmapAdtEmpNo,
 } from "@/lib/adt/queries";
-import type { AttendanceSettings } from "@/lib/adt/types";
+import type { AttendanceSettings, WorkScheduleKind } from "@/lib/adt/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,6 +31,9 @@ export async function GET(req: NextRequest) {
 
     if (sp.get("settings") === "1") {
       return NextResponse.json({ settings: await getAttendanceSettings() });
+    }
+    if (sp.get("schedules") === "1") {
+      return NextResponse.json({ schedules: await listWorkSchedules() });
     }
     if (sp.get("unmatched") === "1") {
       return NextResponse.json({
@@ -60,6 +65,7 @@ interface PostBody {
   ignore?: { adtEmpNo: string; label?: string | null; reason?: string | null };
   unignore?: { adtEmpNo: string };
   settings?: Partial<AttendanceSettings>;
+  schedules?: Array<{ employeeId: string; kind: WorkScheduleKind }>;
 }
 
 // POST: 매핑(map)·매핑해제(unmap)·정책 저장(settings) — admin 전용
@@ -94,6 +100,11 @@ export async function POST(req: NextRequest) {
       await setOvertimeExcluded(body.exclude.employeeId, !!body.exclude.excluded);
       await recordAuditLog({ actorUserId: actor.userId, action: "adt_attendance_exclude", targetTable: "employee_profiles", targetId: body.exclude.employeeId, after: { overtimeExcluded: !!body.exclude.excluded } });
       return NextResponse.json({ ok: true });
+    }
+    if (body.schedules) {
+      const n = await saveWorkSchedules(body.schedules, actor.userId);
+      await recordAuditLog({ actorUserId: actor.userId, action: "adt_attendance_schedule", targetTable: "attendance_work_schedules", targetId: "bulk", after: { count: n, items: body.schedules } });
+      return NextResponse.json({ ok: true, saved: n });
     }
     if (body.settings) {
       await saveAttendanceSettings(body.settings);

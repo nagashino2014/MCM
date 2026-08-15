@@ -1,5 +1,5 @@
 import { getDb, rowsToObjects } from "@/lib/db";
-import { getHolidays } from "@/lib/home/holidays";
+import { offDaySet } from "@/lib/hr/holidays";
 
 /**
  * 초과근무수당 산정 공용 모듈 (블루프린트 §6)
@@ -235,24 +235,6 @@ export async function loadWorkSchedules(): Promise<Map<string, WorkScheduleMin>>
 }
 
 /**
- * 휴일 날짜 집합 — 소정근로가 없는 날은 재실 전체가 초과(휴일)근무 대상이다.
- * 토·일 + 공휴일(외부 소스) + 근로자의 날(5/1, 공휴일 목록에 없을 수 있어 항상 포함).
- * 외부 조회가 실패해도 고정 공휴일은 폴백으로 돌아온다(holidays.ts).
- */
-async function loadOffDays(years: number[]): Promise<Set<string>> {
-  const set = new Set<string>();
-  for (const y of new Set(years)) {
-    set.add(`${y}-05-01`); // 근로자의 날 — 유급휴일이라 소정근로가 없다
-    try {
-      for (const h of await getHolidays(y)) set.add(h.date);
-    } catch {
-      /* 외부 소스 장애 — 토·일 판정만으로 진행 */
-    }
-  }
-  return set;
-}
-
-/**
  * 인정 구간 배분 — 초과근무 가능 구간 A 안에서 신청 분(quota)만큼 인정 구간을 잘라낸다.
  * 신청 시간대(B)와 겹치는 부분을 먼저 쓰고, 모자라면 A의 나머지를 이른 시각부터 채운다.
  * 예) 소정 종료 17:00 · 재실 17:00~21:00(A) · 신청 19:00~22:00(3h) →
@@ -361,7 +343,8 @@ export async function matchOvertimeRequests(
   }
   const hasAttendanceInRange = attRows.length > 0;
   const schedules = await loadWorkSchedules();
-  const offDays = await loadOffDays([payYear, payMonth === 1 ? payYear - 1 : payYear]);
+  // 휴무일(법정공휴일·근로자의 날·사내 지정) — 소정근로가 없어 재실 전체가 초과근무 대상이다.
+  const offDays = await offDaySet([payYear, payMonth === 1 ? payYear - 1 : payYear]);
   const overrides = new Map<string, { mode: string; reason: string | null }>();
   for (const o of rowsToObjects(
     await db.exec(`SELECT doc_id, mode, reason FROM overtime_match_overrides`)

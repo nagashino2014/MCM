@@ -158,14 +158,49 @@ function WeeklyPanel() {
     return { totalOt, totalNight, overLimit, totalPay, people: act.length };
   }, [rows]);
 
+  // 주 목록을 연·월로 갈라 3단 선택으로 좁힌다 — 데이터가 쌓이면 단일 목록은 못 쓴다.
+  const weekMetas = useMemo(() => weeks.map((w) => ({ w, ...weekMeta(w) })), [weeks]);
+  const sel = weekMetas.find((m) => m.w === weekStart);
+  const years = useMemo(
+    () => [...new Set(weekMetas.map((m) => m.year))].sort((a, b) => b - a),
+    [weekMetas]
+  );
+  const selYear = sel?.year ?? years[0];
+  const months = useMemo(
+    () => [...new Set(weekMetas.filter((m) => m.year === selYear).map((m) => m.month))].sort((a, b) => b - a),
+    [weekMetas, selYear]
+  );
+  const selMonth = sel?.month ?? months[0];
+  const monthWeeks = useMemo(
+    () => weekMetas.filter((m) => m.year === selYear && m.month === selMonth).sort((a, b) => a.nth - b.nth),
+    [weekMetas, selYear, selMonth]
+  );
+
+  /** 연·월을 바꾸면 그 달의 첫 주로 이동한다. */
+  const jump = (y: number, mo: number) => {
+    const first = weekMetas.filter((m) => m.year === y && m.month === mo).sort((a, b) => a.nth - b.nth)[0];
+    if (first) {
+      setWeekStart(first.w);
+      load(first.w);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-[12px] cd-text-faint">주 선택</span>
-        <select className="cd-select" style={{ width: 300 }} value={weekStart} onChange={(e) => { setWeekStart(e.target.value); load(e.target.value); }}>
-          {weeks.length === 0 && <option value="">데이터 없음</option>}
-          {weeks.map((w) => (
-            <option key={w} value={w}>{w} (일) ~ {addDays(w, 6)} (토)</option>
+        <select className="cd-select" style={{ width: 104 }} value={selYear ?? ""} onChange={(e) => jump(Number(e.target.value), selMonth)}>
+          {years.map((y) => <option key={y} value={y}>{y}년</option>)}
+        </select>
+        <select className="cd-select" style={{ width: 92 }} value={selMonth ?? ""} onChange={(e) => jump(selYear, Number(e.target.value))}>
+          {months.map((mo) => <option key={mo} value={mo}>{mo}월</option>)}
+        </select>
+        <select className="cd-select" style={{ width: 320 }} value={weekStart} onChange={(e) => { setWeekStart(e.target.value); load(e.target.value); }}>
+          {monthWeeks.length === 0 && <option value="">데이터 없음</option>}
+          {monthWeeks.map((m) => (
+            <option key={m.w} value={m.w}>
+              {m.month}월 {m.nth}주차 · {m.w} (일) ~ {addDays(m.w, 6)} (토)
+            </option>
           ))}
         </select>
       </div>
@@ -396,7 +431,12 @@ function MatchPanel() {
               <div className="text-[11px] font-bold cd-text-faint mb-2">인원별 산정 결과 — 급여대장에 이 금액이 반영됩니다</div>
               <div className="flex flex-wrap gap-1.5">
                 {data.byEmployee.map((e) => (
-                  <span key={e.employeeId} className="inline-flex items-center gap-1.5 rounded-lg border cd-border-c px-2 py-1 text-[11.5px]">
+                  // 배경을 흰색(카드 solid)으로 — 글라스 배경 위에서 태그 경계가 묻힌다.
+                  <span
+                    key={e.employeeId}
+                    className="inline-flex items-center gap-1.5 rounded-lg border cd-border-c px-2 py-1 text-[11.5px]"
+                    style={{ background: "var(--cd-card-solid)" }}
+                  >
                     <span className="cd-text font-semibold">{e.name}</span>
                     <span className="font-mono cd-text-primary font-bold">{won(e.amount)}원</span>
                     <span className="cd-text-faint">{toH(e.dayMin + e.nightMin)}h</span>
@@ -1034,6 +1074,21 @@ function Kpi({ icon, label, value, danger }: { icon: React.ReactNode; label: str
       </span>
     </div>
   );
+}
+
+/**
+ * 주(일요일 시작) → 소속 연·월·주차.
+ * 소속 월은 **그 주의 목요일**이 속한 달(ISO 관례) — 걸친 주가 두 달에 중복 노출되지 않는다.
+ * 주차는 그 달 1일이 속한 주를 1주차로 센다. 예) 2026-07-19 → 7월 4주차(1주차=6/28~7/4).
+ */
+function weekMeta(weekStart: string): { year: number; month: number; nth: number } {
+  const thu = addDays(weekStart, 4);
+  const [y, m] = thu.split("-").map(Number);
+  const firstOfMonth = `${y}-${String(m).padStart(2, "0")}-01`;
+  const dow = new Date(Date.parse(`${firstOfMonth}T12:00:00Z`)).getUTCDay();
+  const firstWeekStart = addDays(firstOfMonth, -dow);
+  const diff = (Date.parse(`${weekStart}T00:00:00Z`) - Date.parse(`${firstWeekStart}T00:00:00Z`)) / 86400000;
+  return { year: y, month: m, nth: Math.round(diff / 7) + 1 };
 }
 
 function addDays(date: string, n: number): string {

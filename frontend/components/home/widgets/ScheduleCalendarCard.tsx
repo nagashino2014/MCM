@@ -404,12 +404,23 @@ export function ScheduleCalendarCard() {
                 >
                   {day.getDate()}
                 </span>
+                {/* 휴무일명(법정공휴일·명절·사내 지정) — 날짜 아래 한 줄. 색은 날짜와 같은 붉은색. */}
+                {holiday && (
+                  <span
+                    className="w-full text-[9px] font-bold leading-[11px] text-center truncate shrink-0"
+                    style={{ color: "var(--cd-error)", opacity: inMonth ? 1 : 0.45 }}
+                    title={holiday}
+                  >
+                    {holiday}
+                  </span>
+                )}
                 {/* 일정 태그 — 1~2건은 전체 문구 1열, 3건 이상은 2열 압축(성명 3자)으로 최대 4건.
                     건수와 무관하게 압축하면 한산한 날의 정보가 오히려 줄어들기 때문이다.
-                    태그를 누르면 그 날짜의 상세를 글머리 팝업으로 편다. */}
+                    태그를 누르면 그 날짜의 상세를 글머리 팝업으로 편다.
+                    휴무일명이 한 줄을 차지하므로 그 날은 표시 건수를 하나 줄인다(셀 높이 고정 유지). */}
                 {(() => {
                   const dense = list.length > 2;
-                  const cap = dense ? 4 : 2;
+                  const cap = (dense ? 4 : 2) - (holiday ? 1 : 0);
                   const rest = list.length - cap;
                   return (
                     <span

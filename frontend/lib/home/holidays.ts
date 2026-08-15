@@ -26,6 +26,9 @@ interface NagerHoliday {
 const cache = new Map<string, { holidays: Holiday[]; fetchedAt: number }>();
 const TTL_MS = 24 * 3600 * 1000;
 
+/** 제헌절이 공휴일로 되살아난 해 — 2008년 제외 이후 2026년부터 다시 법정공휴일이다. */
+export const CONSTITUTION_DAY_RESTORED_YEAR = 2026;
+
 /** 고정일 공휴일 — 외부 소스 실패 시 폴백이자, 성공 시에도 항상 병합한다.
  *  (Nager 는 대체공휴일이 생기면 당일 대신 대체일만 반환한다 — 예: 광복절이 토요일이면 8/15 가 빠지고
  *  8/17 만 온다. 달력 관례상 당일도 붉게 표시해야 하므로 고정일을 되살린다.) */
@@ -35,6 +38,7 @@ function fixedHolidays(year: number): Holiday[] {
     { date: `${year}-03-01`, name: "삼일절" },
     { date: `${year}-05-05`, name: "어린이날" },
     { date: `${year}-06-06`, name: "현충일" },
+    ...(year >= CONSTITUTION_DAY_RESTORED_YEAR ? [{ date: `${year}-07-17`, name: "제헌절" }] : []),
     { date: `${year}-08-15`, name: "광복절" },
     { date: `${year}-10-03`, name: "개천절" },
     { date: `${year}-10-09`, name: "한글날" },
@@ -56,8 +60,13 @@ export async function getHolidays(year: number): Promise<Holiday[]> {
     const rows = (await res.json()) as NagerHoliday[];
     const fetched = rows
       .map((r) => ({ date: String(r.date), name: String(r.localName || r.name) }))
-      // 제헌절은 국경일이지만 2008년부터 공휴일이 아니다 — Nager 데이터에 섞여 있어 걸러낸다.
-      .filter((h) => /^\d{4}-\d{2}-\d{2}$/.test(h.date) && !h.name.includes("제헌절"));
+      // 제헌절은 2008~2025 사이 공휴일이 아니었다(Nager 데이터에 국경일로 섞여 온다).
+      // 2026년부터 법정공휴일로 되살아났으므로 그 해부터는 남긴다.
+      .filter(
+        (h) =>
+          /^\d{4}-\d{2}-\d{2}$/.test(h.date) &&
+          (!h.name.includes("제헌절") || year >= CONSTITUTION_DAY_RESTORED_YEAR)
+      );
     if (fetched.length === 0) throw new Error("empty");
     // 고정일 국경일 병합(대체공휴일만 온 해에 당일을 복원) 후 날짜순 정렬.
     const seen = new Set(fetched.map((h) => h.date));

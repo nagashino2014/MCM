@@ -68,8 +68,8 @@ export interface MappableEmployee {
   overtimeExcluded: boolean;
 }
 
-/** 최근 주(week_start) 목록 — 화면 드롭다운. */
-export async function listWeekStarts(limit = 26): Promise<string[]> {
+/** 최근 주(week_start) 목록 — 화면 드롭다운(연·월·주차 3단 선택이라 넉넉히 준다). */
+export async function listWeekStarts(limit = 300): Promise<string[]> {
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(

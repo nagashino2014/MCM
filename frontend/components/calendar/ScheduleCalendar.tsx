@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { TAG_COLOR, TAG_INK, type CalendarEvent } from "@/lib/calendar/types";
+import type { OffDay } from "@/lib/hr/holidays";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 const LANE_H = 20; // 바 1개 높이(px)
@@ -33,6 +34,8 @@ export function ScheduleCalendar({
   month0,
   onMonthChange,
   onEventClick,
+  onDayClick,
+  holidayRev = 0,
 }: {
   events: CalendarEvent[];
   /** 표시 연도 — 데이터 로드가 월 단위라 부모가 소유한다. */
@@ -41,9 +44,31 @@ export function ScheduleCalendar({
   month0: number;
   onMonthChange: (year: number, month0: number) => void;
   onEventClick: (ev: CalendarEvent) => void;
+  /** 날짜 셀 클릭(휴무일 지정 화면에서 사용). 없으면 조회 전용. */
+  onDayClick?: (iso: string, holiday: OffDay | null) => void;
+  /** 값이 바뀌면 휴무일을 다시 불러온다(지정·해제 후 갱신용). */
+  holidayRev?: number;
 }) {
   const now = new Date();
   const [openMenu, setOpenMenu] = useState<null | "year" | "month">(null);
+  // 휴무일(법정공휴일·근로자의 날·사내 지정) — 붉은 날짜 + 휴무일명. 소스는 /api/home/holidays 단일 창구.
+  const [offDays, setOffDays] = useState<Map<string, OffDay>>(new Map());
+
+  useEffect(() => {
+    let alive = true;
+    fetch(`/api/home/holidays?year=${year}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d || !alive || !Array.isArray(d.holidays)) return;
+        setOffDays(new Map((d.holidays as OffDay[]).map((h) => [h.date, h])));
+      })
+      .catch(() => {
+        /* 침묵 — 휴무일 표시 없이 동작 */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [year, holidayRev]);
 
   useEffect(() => {
     if (!openMenu) return;
@@ -196,10 +221,14 @@ export function ScheduleCalendar({
               const iso = ymd(day);
               const inMonth = day.getMonth() === month0;
               const dow = day.getDay();
+              const off = offDays.get(iso) ?? null;
+              const clickable = !!onDayClick;
               return (
                 <div
                   key={di}
-                  className="border text-left p-1 flex flex-col"
+                  className={`border text-left p-1 flex flex-col ${clickable ? "cursor-pointer hover:bg-[color:var(--cd-surface)] transition-colors" : ""}`}
+                  onClick={clickable ? () => onDayClick(iso, off) : undefined}
+                  title={clickable ? `${iso} — 클릭해 휴무일 지정` : off?.name}
                   style={{
                     borderColor: iso === todayIso ? "var(--cd-primary)" : "var(--cd-border)",
                     background: "var(--cd-card)",
@@ -207,8 +236,14 @@ export function ScheduleCalendar({
                     opacity: inMonth ? 1 : 0.4,
                   }}
                 >
-                  <span className="text-[11px]" style={{ color: dow === 0 ? "#EF4444" : dow === 6 ? "#3B82F6" : "var(--cd-muted)" }}>
-                    {day.getDate()}
+                  {/* 휴무일(법정공휴일·사내 지정)은 일요일과 같은 붉은색 + 휴무일명 표기 */}
+                  <span className="flex items-baseline gap-1 min-w-0">
+                    <span className="text-[11px] shrink-0" style={{ color: off || dow === 0 ? "#EF4444" : dow === 6 ? "#3B82F6" : "var(--cd-muted)" }}>
+                      {day.getDate()}
+                    </span>
+                    {off && (
+                      <span className="text-[9.5px] font-bold truncate" style={{ color: "#EF4444" }}>{off.name}</span>
+                    )}
                   </span>
                   {overflow[di] > 0 && <span className="cd-text-faint text-[9px] mt-auto">+{overflow[di]}</span>}
                 </div>

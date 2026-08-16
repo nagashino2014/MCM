@@ -18,6 +18,7 @@ import {
   CalendarClock,
   CarFront,
   SlidersHorizontal,
+  Landmark,
   type LucideIcon,
 } from "lucide-react";
 
@@ -173,6 +174,16 @@ export const MENU_ITEMS: MenuItem[] = [
       { title: "착수계·준공계 작성", href: "/contracts/deliverables" },
       { title: "다운로드/증명서 생성", href: "/contracts/downloads" },
     ],
+    group: "main",
+  },
+  // 재무 — 바로빌 연동(계좌·법인카드 원장, 연결 관리). docs/barobill-finance-blueprint.md F0.
+  // 사이드바는 role 기반 노출만 지원하므로 admin 한정. API 는 finance.* RBAC 로 별도 가드.
+  // 화면 내 탭 3개로 충분해 소메뉴는 두지 않는다(사용자 확정).
+  {
+    title: "재무",
+    href: "/finance",
+    icon: Landmark,
+    minRole: "admin",
     group: "main",
   },
   {

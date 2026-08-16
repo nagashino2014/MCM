@@ -3,6 +3,7 @@ import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { hasPermission } from "@/lib/auth/rbac";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { deleteDoc, getDoc, markWatcherRead } from "@/lib/approval/docs";
+import { unlinkDocCards } from "@/lib/barobill/classify";
 import { resolveDocAccess } from "@/lib/approval/access";
 import { CANCELABLE_FORM_IDS, getOpenCancelRequest } from "@/lib/approval/cancel";
 
@@ -65,6 +66,12 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
       }
     }
     const removed = await deleteDoc(docId);
+    // 법인카드 사용건 귀속 해제(P1) — 삭제된 문서에 묶인 매입건을 다시 선택 가능 상태로.
+    try {
+      await unlinkDocCards(docId);
+    } catch (err) {
+      console.error("[approval/docs] 카드 사용건 해제 실패:", err);
+    }
     await recordAuditLog({
       actorUserId: actor.userId,
       action: "approval_doc_delete",

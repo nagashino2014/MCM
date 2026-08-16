@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, ClipboardCheck, Paperclip, Send, Save, Trash2, Users, Eye, BookmarkPlus, ShieldCheck, AlertTriangle, Info, Ban, Link2 } from "lucide-react";
+import { ArrowLeft, ClipboardCheck, Paperclip, Send, Save, Trash2, Users, Eye, BookmarkPlus, ShieldCheck, AlertTriangle, Info, Ban, Link2, CreditCard } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdModal } from "@/components/cdash/CdModal";
@@ -22,7 +22,15 @@ import {
   ATTACHMENT_ACCEPT, ATTACHMENT_ALLOWED_TEXT, formatBytes, isAllowedAttachment, type DocAttachment,
 } from "@/lib/approval/attachments";
 import type { OvertimeConsent } from "@/lib/approval/overtime-consent";
+import { CardPickerModal, type CardPickerItem } from "@/components/finance/CardPickerModal";
 import "@/components/cdash/cdash.css";
+
+// 법인카드 내역 자동 기입 대상 양식(P1) — 지출 내역 표(마이그 116)의 key/사용일시 열 key.
+// 설계: docs/barobill-finance-blueprint.md §4 F1/F2.
+const CARD_EXPENSE_FORMS: Record<string, { tableKey: string; dateKey: string }> = {
+  "frm-expense-report": { tableKey: "expenses", dateKey: "used_on" },
+  "frm-biz-trip-report": { tableKey: "trip_expenses", dateKey: "spent_on" },
+};
 
 interface FormInfo {
   formId: string;
@@ -143,6 +151,41 @@ export function ApprovalDraftBoard() {
   // 12h 초과 상신 동의(전자서명) — 모달에서 받은 동의는 ref 로 들고 있다가 persist 시 field_values 에 병합한다.
   const [consentModal, setConsentModal] = useState(false);
   const otConsentRef = useRef<OvertimeConsent | null>(null);
+  // 법인카드 내역 불러오기(P1) — 지출결의서·출장보고서 한정.
+  const [cardPicker, setCardPicker] = useState(false);
+  const cardExpenseTarget = form ? CARD_EXPENSE_FORMS[form.formId] : undefined;
+  const cardExistingIds = useMemo(() => {
+    if (!cardExpenseTarget) return [] as string[];
+    const rows = values[cardExpenseTarget.tableKey];
+    if (!Array.isArray(rows)) return [] as string[];
+    return rows
+      .map((row) => (row && typeof row === "object" ? (row as Record<string, unknown>)._cardTxnId : null))
+      .filter((v): v is string => typeof v === "string" && v.length > 0);
+  }, [cardExpenseTarget, values]);
+
+  /** 선택된 매입건을 지출 내역 표 행으로 변환해 append(빈 행은 정리). */
+  const appendCardRows = useCallback(
+    (items: CardPickerItem[]) => {
+      if (!cardExpenseTarget) return;
+      const { tableKey, dateKey } = cardExpenseTarget;
+      setValues((prev) => {
+        const current = Array.isArray(prev[tableKey]) ? ([...(prev[tableKey] as unknown[])] as Record<string, unknown>[]) : [];
+        const nonEmpty = current.filter((row) =>
+          row && typeof row === "object" ? Object.values(row).some((v) => String(v ?? "").trim() !== "") : false,
+        );
+        const added = items.map((item) => ({
+          [dateKey]: item.useDate,
+          category: item.formOption ?? "", // 자동 분류 실패 건은 빈 값 → 사용자가 표에서 선택
+          vendor: item.storeName ?? "",
+          amount: String(item.amountTotal),
+          detail: "", // 지출 목적 — 사용자 입력 몫
+          _cardTxnId: item.cardTxnId, // 상신 시 서버가 doc_id 귀속·분류 학습에 사용
+        }));
+        return { ...prev, [tableKey]: [...nonEmpty, ...added] };
+      });
+    },
+    [cardExpenseTarget],
+  );
 
   // 시간 범위(time_range) → 신청시간 자동 계산. 범위가 실제로 바뀔 때만 채우므로
   // 휴게시간 제외 등으로 사용자가 신청시간을 수기 조정하면 그 값이 유지된다.
@@ -786,6 +829,21 @@ export function ApprovalDraftBoard() {
                 )}
               </div>
             )}
+            {/* 법인카드 내역 불러오기(P1) — 지출 내역 표에 매입건을 자동 기입, 사용자는 지출 목적만 입력 */}
+            {cardExpenseTarget && (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="cd-btn cd-btn-soft cd-btn-sm"
+                  onClick={() => setCardPicker(true)}
+                >
+                  <CreditCard className="w-3.5 h-3.5" /> 법인카드 내역 불러오기
+                </button>
+                <span className="text-[11px] cd-text-faint">
+                  바로빌 매입내역에서 선택하면 사용일시·상호·금액·분류가 자동 기입됩니다 — 지출 목적만 입력하세요
+                </span>
+              </div>
+            )}
             <ApprovalFormRenderer
               fields={form.fields}
               values={values}
@@ -1132,6 +1190,17 @@ export function ApprovalDraftBoard() {
             setConsentModal(false);
             void send("submit");
           }}
+        />
+      )}
+
+      {/* 법인카드 내역 불러오기 모달(P1) — 지출결의서·출장보고서 한정 */}
+      {cardExpenseTarget && form && (
+        <CardPickerModal
+          open={cardPicker}
+          onClose={() => setCardPicker(false)}
+          formId={form.formId}
+          existingIds={cardExistingIds}
+          onPick={appendCardRows}
         />
       )}
 

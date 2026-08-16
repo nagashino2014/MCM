@@ -25,7 +25,8 @@ const HOSTS = {
   test: 'https://testws.baroservice.com',
   prod: 'https://ws.baroservice.com',
 };
-const NS = 'http://tempuri.org/';
+// WSDL 실측(2026-08-15): targetNamespace/SOAPAction 모두 ws.baroservice.com (테스트베드 포함)
+const NS = 'http://ws.baroservice.com/';
 
 // --- 은행코드 (우리 6개 + 자주 쓰는 것) ---
 const BANK = {
@@ -83,5 +84,11 @@ function result(xml, method) {
 function isErrCode(v) {
   return typeof v === 'string' && /^-\d{1,5}$/.test(v.trim());
 }
+// XML 엔티티 복원 — leaf 텍스트 값(URL·입금자명 등)에 적용. &amp;를 안 풀면 URL이 깨짐(실측).
+function unesc(s) {
+  return String(s ?? '')
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&');
+}
 
-module.exports = { loadEnv, call, HOSTS, BANK, pick, pickAll, result, isErrCode };
+module.exports = { loadEnv, call, HOSTS, BANK, pick, pickAll, result, isErrCode, unesc };

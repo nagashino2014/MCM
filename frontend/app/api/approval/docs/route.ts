@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { listMyDocs, listInbox, listActedDocs, listRefCandidates, saveDoc, submitDoc, type ApprovalLineStepInput, type ApprovalWatcherInput } from "@/lib/approval/docs";
+import { syncDocCardLinks } from "@/lib/barobill/classify";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -61,6 +62,13 @@ export async function POST(req: NextRequest) {
       refDocId: body.refDocId ?? null,
       actorUserId: ctx.userId,
     });
+    // 법인카드 사용건 연동(P1) — 표 행의 _cardTxnId 를 doc_id 로 귀속/해제 + 분류 학습.
+    // 지출결의서·출장보고서 외 양식은 카드 참조가 없어 no-op. 실패해도 문서 저장은 유지(비핵심 파생).
+    try {
+      await syncDocCardLinks(docId, body.formId, body.fieldValues ?? {});
+    } catch (err) {
+      console.error("[approval/docs] 카드 사용건 연동 실패:", err);
+    }
     let docNo: string | null = null;
     if (body.action === "submit") {
       const res = await submitDoc(docId, ctx.userId);

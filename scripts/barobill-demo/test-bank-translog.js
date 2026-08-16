@@ -39,12 +39,14 @@ function ymd(d) {
     const cur = pick(xml, 'CurrentPage');
     if (isErrCode(cur)) { console.error('  오류코드:', cur); return; }
     maxPage = parseInt(pick(xml, 'MaxPageNum') || '1', 10);
-    const logs = pickAll(xml, 'BankAccountLog').concat(pickAll(xml, 'BankAccountLogEx'));
-    if (currentPage === 1) console.log(`[${env}] 입출금내역 ${account} ${startDate}~${endDate} (총 ${maxPage}p)`);
+    // 실측(2026-08-15): 컨테이너 <BankAccountLogList>, 반복 요소 <BankAccountTransLog>
+    const logs = pickAll(xml, 'BankAccountTransLog');
+    if (currentPage === 1) console.log(`[${env}] 입출금내역 ${account} ${startDate}~${endDate} (총 ${maxPage}p, ${pick(xml, 'MaxIndex')}건)`);
     for (const l of logs) {
       total++;
       const dep = pick(l, 'Deposit'), wd = pick(l, 'Withdraw');
-      console.log(`  ${pick(l, 'TransDT')} | 입금:${dep} 출금:${wd} | ${pick(l, 'TransRemark') || pick(l, 'Trans') || ''} | key:${pick(l, 'TransRefKey')}`);
+      const r1 = pick(l, 'TransRemark1') || '', r2 = pick(l, 'TransRemark2') || '';
+      console.log(`  ${pick(l, 'TransDT')} | ${pick(l, 'TransDirection')} 입:${dep} 출:${wd} | 종류:${pick(l, 'TransType') || ''} | R1:${r1} R2:${r2} | key:${pick(l, 'TransRefKey')}`);
     }
     currentPage++;
   } while (currentPage <= maxPage);

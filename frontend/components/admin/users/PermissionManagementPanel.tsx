@@ -128,6 +128,7 @@ const MODULE_META: Record<string, { label: string; order: number; color: string 
   rbac: { label: "권한 관리", order: 11, color: "#FA5252" },
   audit: { label: "감사 로그", order: 12, color: "#94A3B8" },
   trash: { label: "휴지통", order: 13, color: "#845EF7" },
+  finance: { label: "재무", order: 14, color: "#12B886" },
 };
 const DEFAULT_MODULE_COLOR = "#5D87FF";
 

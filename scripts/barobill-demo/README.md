@@ -47,6 +47,7 @@ node scripts/barobill-demo/test-bank-translog.js test <계좌번호> 20260601 20
 - 은행별 입금자명 필드 매핑·매칭엔진·원장 모델은 [은행 자동대조 블루프린트](../../docs/bank-reconciliation-blueprint.md) 그대로.
 - 바뀌는 건 **수집 커넥터만**(CODEF connectedId → 바로빌 SOAP).
 
-## 미확정(실 CERTKEY로 검증 필요)
-- SOAP 네임스페이스(`http://tempuri.org/`)·정확한 반복요소 태그명은 실제 응답으로 최종 확인.
-- 카드 승인내역(CARD.asmx: GetPeriodCardLog 계열)은 계좌와 동일 패턴으로 확장 예정.
+## 실측 확정 (2026-08-15, 테스트베드 CERTKEY)
+- **SOAP 네임스페이스 = `http://ws.baroservice.com/`** (테스트베드 포함. tempuri.org 아님 — SOAPAction 불일치 시 HTTP 500 SoapException). WSDL: `{host}/BANKACCOUNT.asmx?WSDL`.
+- CERTKEY 인증 왕복 정상: `GetBankAccountEx2` 빈 목록(계좌 미등록 상태) · `GetErrString` 동작 · `CheckCERTIsValid` → `-31100`(등록된 공동인증서 없음 — 세금계산서 발행 전 인증서 등록 필요, 계좌·카드 조회와는 무관).
+- 카드는 **매입내역(PURCHASE) 전용 확정** — CARD.asmx `GetPurchaseHistories` 계열로 확장 예정(승인내역 미사용). 상세는 [바로빌 재무 연동 블루프린트](../../docs/barobill-finance-blueprint.md).

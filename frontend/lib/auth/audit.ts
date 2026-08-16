@@ -93,7 +93,13 @@ export type AuditAction =
   | "auth_find_id"
   | "auth_password_reset"
   | "admin_password_sync"
-  | "alert.ack";
+  | "alert.ack"
+  | "finance_connection_stop"
+  | "finance_connection_resume"
+  | "finance_sync_run"
+  | "finance_card_meta_update"
+  | "finance_recon_run"
+  | "finance_recon_confirm";
 
 export interface AuditEntry {
   actorUserId: string | null;

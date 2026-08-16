@@ -13,6 +13,7 @@ import {
   pickAll,
   isErrCode,
   getErrString,
+  methodResult,
   expectOk,
   expectString,
   formatBarobillDT,
@@ -127,7 +128,7 @@ export async function reRegisterCard(cardNum: string): Promise<void> {
 }
 
 // 즉시 수집 요청 — 수집 중이면 -51008("이미 수집중") → 정상으로 간주
-export async function refreshCardNow(cardNum: string): Promise<{ alreadyRunning: boolean }> {
+export async function refreshCardNow(cardNum: string): Promise<{ alreadyRunning: boolean; code?: string; note?: string }> {
   const { certKey, corpNum, id } = getBarobillConfig();
   const xml = await soapCall("CARD", "RefreshNow", {
     CERTKEY: certKey,
@@ -136,13 +137,17 @@ export async function refreshCardNow(cardNum: string): Promise<{ alreadyRunning:
     CollectTarget: "PURCHASE",
     CardNum: cardNum,
   });
-  try {
-    await expectOk(xml, "RefreshNow");
-    return { alreadyRunning: false };
-  } catch (err) {
-    if (err instanceof BarobillError && err.code === "-51008") return { alreadyRunning: true };
-    throw err;
+  const code = methodResult(xml, "RefreshNow");
+  if (code === "1") return { alreadyRunning: false };
+  if (isErrCode(code)) {
+    if (code === "-51008") return { alreadyRunning: true }; // 이미 수집 진행 중
+    throw new BarobillError(`RefreshNow 실패(${code}): ${await getErrString(code!)}`, code!, "RefreshNow");
   }
+  // ★바로빌 규약상 **음수만 오류**다. 테스트베드는 1 을 주지만 운영은 접수번호/상태값으로 보이는
+  //   양수(실측: 303)를 준다 → 오류로 취급하지 않고 접수로 본다(실제로 수집은 정상 진행됨).
+  //   코드 의미는 참고용으로 조회해 함께 돌려준다.
+  const note = code ? await getErrString(code).catch(() => "") : "";
+  return { alreadyRunning: false, code: code ?? undefined, note: note && !isErrCode(note) ? note : undefined };
 }
 
 function parsePurchase(row: string): BarobillCardPurchase {

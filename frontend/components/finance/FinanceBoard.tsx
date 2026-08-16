@@ -550,6 +550,7 @@ function ConnectionsPanel() {
   const [stale, setStale] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null); // 액션 진행 중 표시 (id:action)
   const [confirmStop, setConfirmStop] = useState<ConnectionRow | null>(null);
   // 수집 범위 선택 모달 — 증분(기본) / 기간 지정(200일 초과는 서버가 자동 분할)
@@ -584,6 +585,7 @@ function ConnectionsPanel() {
       if (confirmMsg && !window.confirm(confirmMsg)) return;
       setBusy(busyKey);
       setError(null);
+      setNotice(null);
       try {
         const res = await fetch("/api/finance/connections", {
           method: "POST",
@@ -665,6 +667,9 @@ function ConnectionsPanel() {
       </div>
 
       {error && <div className="cd-card p-3 cd-error-text text-sm">{error}</div>}
+      {notice && (
+        <div className="cd-card p-3 text-sm" style={{ color: "var(--cd-success)" }}>{notice}</div>
+      )}
 
       {/* 등록 안내 */}
       <div className="text-xs cd-text-muted">
@@ -699,7 +704,16 @@ function ConnectionsPanel() {
             }}
             onRefreshNow={async (row) => {
               const data = await action({ action: "refresh-now", kind: "card", id: row.id }, `refresh:${row.id}`);
-              if (data?.alreadyRunning) setError("바로빌에서 이미 수집이 진행 중입니다. 잠시 후 '지금 수집'으로 가져오세요.");
+              if (data?.alreadyRunning) {
+                setError("바로빌에서 이미 수집이 진행 중입니다. 잠시 후 '지금 수집'으로 가져오세요.");
+              } else if (data?.ok) {
+                // 운영은 접수번호로 보이는 양수(실측 303)를 준다 — 오류가 아니므로 접수 안내로 표시한다.
+                setNotice(
+                  data.code && data.code !== "1"
+                    ? `수집을 요청했습니다(바로빌 응답 ${data.code}${data.note ? ` — ${data.note}` : ""}). 반영까지 수 분 걸립니다.`
+                    : "수집을 요청했습니다. 반영까지 수 분 걸립니다.",
+                );
+              }
             }}
           />
         </div>

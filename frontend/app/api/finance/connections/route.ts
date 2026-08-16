@@ -107,8 +107,8 @@ export async function POST(req: NextRequest) {
 
     if (body.action === "refresh-now") {
       if (body.kind !== "card") return NextResponse.json({ error: "즉시 수집은 카드만 지원합니다." }, { status: 400 });
-      const { alreadyRunning } = await refreshCardNow(secretNo);
-      return NextResponse.json({ ok: true, alreadyRunning });
+      const { alreadyRunning, code, note } = await refreshCardNow(secretNo);
+      return NextResponse.json({ ok: true, alreadyRunning, code, note });
     }
 
     return NextResponse.json({ error: "알 수 없는 액션입니다." }, { status: 400 });

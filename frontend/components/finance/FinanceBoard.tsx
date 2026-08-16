@@ -26,9 +26,9 @@ import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdModal } from "@/components/cdash/CdModal";
 import "@/components/cdash/cdash.css";
 
-type Tab = "connections" | "bank" | "card" | "recon" | "vat";
+type Tab = "connections" | "bank" | "card" | "recon" | "vat" | "invoice";
 
-const TAB_KEYS: Tab[] = ["connections", "bank", "card", "recon", "vat"];
+const TAB_KEYS: Tab[] = ["connections", "bank", "card", "recon", "vat", "invoice"];
 const toTab = (raw: string | null): Tab => (TAB_KEYS.includes(raw as Tab) && raw !== "connections" ? (raw as Tab) : "connections");
 
 interface ConnectionRow {
@@ -331,6 +331,7 @@ export function FinanceBoard() {
             ["card", "법인카드 원장"],
             ["recon", "수금 대조"],
             ["vat", "부가세 집계"],
+            ["invoice", "세금계산서"],
           ] as [Tab, string][]).map(([k, label]) => (
             <button
               key={k}
@@ -349,6 +350,7 @@ export function FinanceBoard() {
         {tab === "card" && <CardLedgerPanel />}
         {tab === "recon" && <ReconPanel />}
         {tab === "vat" && <VatPanel />}
+        {tab === "invoice" && <TaxInvoicePanel />}
       </div>
     </div>
   );
@@ -2346,6 +2348,180 @@ function StoreRuleListCard() {
             {rules.length === 0 && (
               <tr>
                 <td colSpan={6} className="py-6 text-center cd-text-muted text-sm">등록된 고정 규칙이 없습니다.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ================= 전자세금계산서 (P4 F5) ================= */
+
+interface TaxInvoiceRow {
+  invoiceId: string;
+  mgtKey: string;
+  writeDate: string;
+  amountTotal: number;
+  taxTotal: number;
+  totalAmount: number;
+  invoiceeCorpName: string | null;
+  invoiceeEmail: string | null;
+  barobillState: number | null;
+  ntsSendState: number | null;
+  ntsSendKey: string | null;
+  canceledAt: string | null;
+  contractId: string | null;
+  contractTitle: string | null;
+  stageLabel: string | null;
+}
+
+const NTS_LABEL: Record<number, string> = { 1: "전송전", 2: "전송중", 3: "전송중", 4: "전송완료", 5: "전송실패" };
+
+/**
+ * 발행 이력 — 발행 자체는 계약 상세의 청구·수금 단계에서 한다(발주처·단계 정보가 거기 있다).
+ * 이 탭은 발행분의 국세청 전송 상태를 확인·갱신하고 원본을 여는 자리다.
+ */
+function TaxInvoicePanel() {
+  const [rows, setRows] = useState<TaxInvoiceRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    fetch("/api/finance/tax-invoices", { cache: "no-store" })
+      .then(async (r) => {
+        const d = await r.json();
+        if (!r.ok) throw new Error(d?.error ?? "발행 이력을 불러오지 못했습니다.");
+        if (alive) setRows(d.invoices ?? []);
+      })
+      .catch((e) => {
+        if (alive) setError((e as Error).message);
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [reloadKey]);
+
+  const call = async (body: Record<string, unknown>) => {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch("/api/finance/tax-invoices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "요청이 실패했습니다.");
+      return data;
+    } catch (e) {
+      setError((e as Error).message);
+      return null;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const refresh = async () => {
+    const data = await call({ action: "refresh" });
+    if (data) {
+      setNotice(`${data.updated}/${data.checked}건 상태를 갱신했습니다.`);
+      setReloadKey((k) => k + 1);
+    }
+  };
+
+  const openOriginal = async (invoiceId: string) => {
+    const data = await call({ action: "popup-url", invoiceId });
+    if (data?.url) window.open(data.url, "_blank", "noopener,width=1100,height=900");
+  };
+
+  const cancel = async (invoiceId: string) => {
+    const data = await call({ action: "cancel", invoiceId });
+    if (data) {
+      setNotice("발행을 취소했습니다(단계의 발행 기록도 되돌렸습니다).");
+      setReloadKey((k) => k + 1);
+    }
+  };
+
+  return (
+    <div className="cd-card p-4">
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <div className="cd-card-title mr-auto">전자세금계산서 발행 이력</div>
+        <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy} onClick={refresh}>
+          <RefreshCw className="w-3.5 h-3.5" /> 상태 갱신
+        </button>
+      </div>
+      <p className="text-xs cd-text-muted mb-2">
+        발행은 계약 상세의 청구·수금 단계에서 <b>전자발행</b> 버튼으로 합니다. 국세청 전송은 발행 다음 날 일괄 처리되므로, 승인번호는 상태 갱신 후에 표시됩니다.
+      </p>
+      {notice && <div className="text-sm mb-2" style={{ color: "var(--cd-success)" }}>{notice}</div>}
+      {error && <div className="cd-error-text text-sm mb-2">{error}</div>}
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="cd-text-muted text-left">
+              <th className="py-1.5 pr-3 font-normal">작성일자</th>
+              <th className="py-1.5 pr-3 font-normal">공급받는자</th>
+              <th className="py-1.5 pr-3 font-normal">계약·단계</th>
+              <th className="py-1.5 pr-3 font-normal text-right">공급가액</th>
+              <th className="py-1.5 pr-3 font-normal text-right">세액</th>
+              <th className="py-1.5 pr-3 font-normal text-right">합계</th>
+              <th className="py-1.5 pr-3 font-normal">국세청</th>
+              <th className="py-1.5 font-normal" />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.invoiceId} className="border-t cd-hairline-row-c">
+                <td className="py-1.5 pr-3 whitespace-nowrap">{r.writeDate}</td>
+                <td className="py-1.5 pr-3">
+                  {r.invoiceeCorpName ?? "—"}
+                  {r.invoiceeEmail && <span className="block text-[11px] cd-text-faint">{r.invoiceeEmail}</span>}
+                </td>
+                <td className="py-1.5 pr-3 max-w-[240px] truncate text-xs cd-text-muted" title={`${r.contractTitle ?? ""} ${r.stageLabel ?? ""}`}>
+                  {r.contractTitle ?? "—"}
+                  {r.stageLabel ? ` · ${r.stageLabel}` : ""}
+                </td>
+                <td className="py-1.5 pr-3 text-right font-mono">{fmtAmount(r.amountTotal)}</td>
+                <td className="py-1.5 pr-3 text-right font-mono cd-text-muted">{fmtAmount(r.taxTotal)}</td>
+                <td className="py-1.5 pr-3 text-right font-mono font-medium">{fmtAmount(r.totalAmount)}</td>
+                <td className="py-1.5 pr-3 whitespace-nowrap">
+                  {r.canceledAt ? (
+                    <span className="cd-pill cd-pill-error">취소됨</span>
+                  ) : (
+                    <>
+                      <span className={`cd-pill ${r.ntsSendState === 4 ? "cd-pill-success" : r.ntsSendState === 5 ? "cd-pill-error" : "cd-pill-warn"}`}>
+                        {NTS_LABEL[r.ntsSendState ?? 1] ?? "전송전"}
+                      </span>
+                      {r.ntsSendKey && <span className="block text-[11px] cd-text-faint">{r.ntsSendKey}</span>}
+                    </>
+                  )}
+                </td>
+                <td className="py-1.5 text-right whitespace-nowrap">
+                  <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy} onClick={() => void openOriginal(r.invoiceId)}>
+                    원본
+                  </button>
+                  {!r.canceledAt && (r.ntsSendState ?? 1) < 4 && (
+                    <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy} onClick={() => void cancel(r.invoiceId)} title="국세청 전송 전에만 취소할 수 있습니다">
+                      발행 취소
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {!loading && rows.length === 0 && (
+              <tr>
+                <td colSpan={8} className="py-6 text-center cd-text-muted text-sm">발행 이력이 없습니다.</td>
               </tr>
             )}
           </tbody>

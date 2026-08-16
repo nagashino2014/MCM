@@ -32,6 +32,7 @@ import "@/components/cdash/cdash.css";
 import { resolveServiceTypeStyle } from "@/lib/ieps/contract-tree-style";
 import ContractChangeModal from "@/components/contracts/ContractChangeModal";
 import ContractStaffingModal from "@/components/contracts/ContractStaffingModal";
+import TaxInvoiceIssueModal from "@/components/contracts/TaxInvoiceIssueModal";
 import FacilityInfoModal from "@/components/contracts/FacilityInfoModal";
 import { IndustryOptionsEditorButton, useContractIndustryOptions } from "@/components/contracts/IndustryOptionsEditor";
 import {
@@ -260,6 +261,8 @@ function ContractsInner() {
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [invoiceModal, setInvoiceModal] = useState<InvoiceModalState | null>(null);
+  // 전자세금계산서 발행(P4) — 수기 기록(InvoiceUploadModal)과 병존한다.
+  const [taxInvoiceTarget, setTaxInvoiceTarget] = useState<{ milestoneId: string } | null>(null);
   const [newContractModal, setNewContractModal] = useState<NewContractModalState | null>(null);
   const [newStageModal, setNewStageModal] = useState<NewStageModalState | null>(null);
   const [editMilestoneModal, setEditMilestoneModal] = useState<EditMilestoneModalState | null>(null);
@@ -568,6 +571,7 @@ function ContractsInner() {
                     : undefined
                 }
                 onOpenInvoice={setInvoiceModal}
+                onOpenTaxInvoice={(milestoneId) => setTaxInvoiceTarget({ milestoneId })}
                 onOpenNewStage={() => setNewStageModal({ stageLabel: "", amount: "", paymentTerms: "" })}
                 onOpenEditStage={setEditMilestoneModal}
                 onOpenChange={() => setChangeModalOpen(true)}
@@ -618,6 +622,19 @@ function ContractsInner() {
             )}
           </section>
         </div>
+      )}
+
+      {taxInvoiceTarget && selectedId && (
+        <TaxInvoiceIssueModal
+          contractId={selectedId}
+          milestoneId={taxInvoiceTarget.milestoneId}
+          onClose={() => setTaxInvoiceTarget(null)}
+          onIssued={() => {
+            setTaxInvoiceTarget(null);
+            if (selectedId) loadDetail(selectedId);
+            reloadTree();
+          }}
+        />
       )}
 
       {invoiceModal && selectedId && (
@@ -756,6 +773,7 @@ function ContractDetailPanel({
   detail,
   onBackToBilling,
   onOpenInvoice,
+  onOpenTaxInvoice,
   onOpenNewStage,
   onOpenEditStage,
   onOpenChange,
@@ -769,6 +787,7 @@ function ContractDetailPanel({
   /** 수주 현황에서 진입한 경우에만 전달 — 헤더에 돌아가기 버튼 노출 */
   onBackToBilling?: () => void;
   onOpenInvoice: (state: InvoiceModalState) => void;
+  onOpenTaxInvoice: (milestoneId: string) => void;
   onOpenNewStage: () => void;
   onOpenEditStage: (state: EditMilestoneModalState) => void;
   onOpenChange: () => void;
@@ -1236,6 +1255,16 @@ function ContractDetailPanel({
                         >
                           <Paperclip className="w-3 h-3" />
                           발행/수금
+                        </button>
+                        {/* 전자발행(P4) — 바로빌로 실제 계산서를 끊는다. 수기 기록은 왼쪽 발행/수금 그대로. */}
+                        <button
+                          type="button"
+                          className="rounded-lg px-2 py-1 text-[11px] border cd-border-c cd-text-muted hover:bg-[color:var(--cd-surface)] inline-flex items-center gap-1"
+                          onClick={() => onOpenTaxInvoice(milestoneId)}
+                          title="전자세금계산서 발행(바로빌)"
+                        >
+                          <FileText className="w-3 h-3" />
+                          전자발행
                         </button>
                         <button
                           type="button"

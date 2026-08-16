@@ -39,7 +39,7 @@ export function getBarobillConfig(): BarobillConfig {
   return cachedConfig;
 }
 
-const escXml = (value: unknown) =>
+export const escXml = (value: unknown) =>
   String(value ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -57,10 +57,17 @@ export function unescXml(value: string | null | undefined): string {
     .replace(/&amp;/g, "&");
 }
 
+/** 중첩 구조체 파라미터(TaxInvoice 등) — 이미 만들어 둔 XML 조각을 이스케이프 없이 그대로 넣는다. */
+export interface RawXml {
+  __rawXml: string;
+}
+export const rawXml = (xml: string): RawXml => ({ __rawXml: xml });
+const isRawXml = (v: unknown): v is RawXml => typeof v === "object" && v !== null && "__rawXml" in v;
+
 // params 삽입 순서 = 바로빌 파라미터 순서 그대로 (Object 삽입 순서 유지 특성 사용)
 function soapEnvelope(method: string, params: Record<string, unknown>): string {
   const inner = Object.entries(params)
-    .map(([key, value]) => `<${key}>${escXml(value)}</${key}>`)
+    .map(([key, value]) => `<${key}>${isRawXml(value) ? value.__rawXml : escXml(value)}</${key}>`)
     .join("");
   return `<?xml version="1.0" encoding="utf-8"?>
 <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">

@@ -99,7 +99,9 @@ export type AuditAction =
   | "finance_sync_run"
   | "finance_card_meta_update"
   | "finance_recon_run"
-  | "finance_recon_confirm";
+  | "finance_recon_confirm"
+  | "tax_invoice_issue"
+  | "tax_invoice_cancel";
 
 export interface AuditEntry {
   actorUserId: string | null;

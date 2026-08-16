@@ -258,6 +258,17 @@ F1과 동일 컴포넌트 재사용, 대상 표만 `trip_expenses`(키: `spent_o
 
 **F4 구현 범위 조정** — "자동대조" 탭은 계약 billing 이 아니라 **재무 보드의 탭**으로 배치했다(원장·수집 로그와 같은 맥락, `finance.view`/`recon.confirm` 가드 일원화). 확정 결과는 기존 milestone 모델에 그대로 반영되므로 billing 화면은 무수정으로 자동 반영된다.
 
+**F5(P4) WSDL 실사 확정 (2026-08-16)** — `testws.baroservice.com/TI.asmx?WSDL` 에서 구조체 요소명·순서를 직접 확인했다(`s:sequence` 라 순서 준수 필수).
+- `TaxInvoice` = InvoiceKey · InvoicerParty · InvoiceeParty · BrokerParty · InvoiceeASPEmail · IssueDirection · TaxInvoiceType · TaxType · **TaxCalcType**(문서에 없던 필수 int, 1 사용) · PurposeType · ModifyCode · Kwon · Ho · SerialNum · Cash · ChkBill · Note · Credit · WriteDate · AmountTotal · TaxTotal · TotalAmount · Remark1~3 · TaxInvoiceTradeLineItems.
+- `InvoiceParty` = ContactID · CorpNum · **MgtNum** · CorpName · TaxRegID · CEOName · Addr · BizClass · BizType · ContactName · TEL · HP · Email.
+- `GetTaxInvoiceState` 응답 = MgtKey · Remark1~2 · BarobillState · InvoiceKey · IsOpened · NTSSendState · NTSSendKey · **NTSSendResult** · NTSSendDT. 오류는 `BarobillState` 에 음수로 실린다.
+- `GetTaxInvoicePopUpURL(CERTKEY, CorpNum, MgtKey, ID, PWD)` — PWD 는 빈 문자열.
+- soapCall 은 평탄한 파라미터만 지원했으므로 `rawXml()` 마커를 추가해 중첩 구조체를 그대로 넣는다.
+
+**금액 기준 논점(§8-3) 처리** — 계약 단계 금액이 공급가액인지 합계인지 데이터 관례가 확정되지 않아, 발행 모달에서 **"입력 금액 기준"(공급가액 / 합계금액)을 사용자가 고르게** 하고 공급가액·세액·합계를 즉시 보여준다. 국세청에 나가는 값이라 자동 판정하지 않는다.
+
+**발행 담당자 이메일** — 바로빌은 공급자 Email 을 필수로 받는다. `BAROBILL_INVOICER_EMAIL` env 로 기본값을 주되, 미설정 시 모달에서 직접 입력한다.
+
 ---
 
 ## 6. 사용자(비개발) 선행 작업 체크리스트

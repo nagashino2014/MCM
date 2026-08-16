@@ -9,6 +9,8 @@ import { generateLetterArtifacts } from "@/lib/letter/generate";
 import { LETTER_FORM_ID } from "@/lib/letter/types";
 import { generateQuoteArtifacts } from "@/lib/quote/generate";
 import { QUOTE_FORM_ID } from "@/lib/quote/types";
+import { generateAgreementArtifacts } from "@/lib/agreement/generate";
+import { AGREEMENT_FORM_ID } from "@/lib/agreement/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -40,6 +42,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ docI
     } else if (doc.formId === QUOTE_FORM_ID) {
       // 견적(136)도 결재 심사를 최종 제출 지면으로 — on-demand 렌더(저장 안 함)
       const artifacts = await generateQuoteArtifacts(docId, { persist: false });
+      bytes = artifacts.pdfBytes;
+      fileName = `${artifacts.fileBase}.pdf`;
+    } else if (doc.formId === AGREEMENT_FORM_ID) {
+      // 계약서(147) — 결재자도 발주처에 나갈 계약서 지면 그대로 심사한다(on-demand, 저장 안 함)
+      const artifacts = await generateAgreementArtifacts(docId, { persist: false });
       bytes = artifacts.pdfBytes;
       fileName = `${artifacts.fileBase}.pdf`;
     } else {

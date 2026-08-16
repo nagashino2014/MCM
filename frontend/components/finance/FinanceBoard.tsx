@@ -1783,6 +1783,7 @@ interface Receivable {
   baseAmount: number;
   remaining: number;
   collected: boolean;
+  collectedAmount: number;
   settlementAmount: number | null;
 }
 
@@ -2143,12 +2144,15 @@ function ManualMatchModal({ item, onClose, onSaved }: { item: ReconItem | null; 
   const [receivables, setReceivables] = useState<Receivable[]>([]);
   const [keyword, setKeyword] = useState("");
   const [alloc, setAlloc] = useState<Record<string, string>>({});
+  // 이미 수금 처리된 단계 — 금액을 다시 더하지 않고 "이 입금이 그 수금이다"라고 확인만 한다.
+  const [confirmOnly, setConfirmOnly] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!item) return;
     setAlloc({});
+    setConfirmOnly(new Set());
     setKeyword(item.facilityName ?? "");
     setError(null);
     fetch("/api/finance/recon?receivables=1", { cache: "no-store" })
@@ -2164,14 +2168,23 @@ function ManualMatchModal({ item, onClose, onSaved }: { item: ReconItem | null; 
   }, [receivables, keyword]);
 
   const allocatedTotal = Object.values(alloc).reduce((acc, v) => acc + (Number(v) || 0), 0);
+  // 확인만 하는 수금 완료 단계의 금액 합(반영은 안 하지만 입금액과 맞는지 눈으로 대조해야 한다)
+  const confirmTotal = receivables
+    .filter((r) => confirmOnly.has(r.milestoneId))
+    .reduce((acc, r) => acc + (r.settlementAmount && r.settlementAmount > 0 ? r.settlementAmount : r.collectedAmount), 0);
+  const comparedTotal = allocatedTotal + confirmTotal;
 
   const submit = async () => {
     if (!item) return;
-    const lines = Object.entries(alloc)
-      .map(([milestoneId, v]) => ({ milestoneId, allocatedAmount: Number(v) || 0 }))
-      .filter((l) => l.allocatedAmount > 0);
+    const lines = [
+      ...Object.entries(alloc)
+        .map(([milestoneId, v]) => ({ milestoneId, allocatedAmount: Number(v) || 0 }))
+        .filter((l) => l.allocatedAmount > 0),
+      // 수금 완료 단계는 배분액 0 — 승인해도 수금액이 다시 더해지지 않고 입금 건만 닫힌다.
+      ...[...confirmOnly].filter((id) => !Number(alloc[id])).map((milestoneId) => ({ milestoneId, allocatedAmount: 0 })),
+    ];
     if (!lines.length) {
-      setError("배분액을 입력하세요.");
+      setError("배분액을 입력하거나, 이미 수금된 단계를 확인으로 선택하세요.");
       return;
     }
     setBusy(true);
@@ -2204,8 +2217,13 @@ function ManualMatchModal({ item, onClose, onSaved }: { item: ReconItem | null; 
           <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={onClose}>
             취소
           </button>
-          <button type="button" className="cd-btn cd-btn-primary cd-btn-sm" disabled={busy || allocatedTotal <= 0} onClick={submit}>
-            {fmtAmount(allocatedTotal)}원 수금 반영
+          <button
+            type="button"
+            className="cd-btn cd-btn-primary cd-btn-sm"
+            disabled={busy || (allocatedTotal <= 0 && confirmOnly.size === 0)}
+            onClick={submit}
+          >
+            {allocatedTotal > 0 ? `${fmtAmount(allocatedTotal)}원 수금 반영` : `${confirmOnly.size}건 대조 확인`}
           </button>
         </>
       }
@@ -2221,7 +2239,14 @@ function ManualMatchModal({ item, onClose, onSaved }: { item: ReconItem | null; 
         <div className="max-h-[320px] overflow-y-auto rounded-xl border cd-border-c divide-y">
           {filtered.map((r) => {
             // 실적 정산이 있으면 실제 청구액은 정산액 — 채우기·표시 모두 이 기준을 쓴다.
-            const due = r.settlementAmount && r.settlementAmount > 0 ? r.settlementAmount : r.remaining;
+            // 이미 수금된 단계는 잔액이 0 이므로 기록된 수금액을 보여준다(정산이 있으면 정산액).
+            const due =
+              r.settlementAmount && r.settlementAmount > 0
+                ? r.settlementAmount
+                : r.collected
+                  ? r.collectedAmount
+                  : r.remaining;
+            const picked = confirmOnly.has(r.milestoneId);
             return (
               <div key={r.milestoneId} className="p-2 flex items-start gap-3">
                 <div className="flex-1 min-w-0">
@@ -2240,35 +2265,59 @@ function ManualMatchModal({ item, onClose, onSaved }: { item: ReconItem | null; 
                     <span className="block text-[10px] cd-text-faint">실적 정산액</span>
                   )}
                 </div>
-                <input
-                  className="cd-input text-right shrink-0"
-                  style={{ width: 140 }}
-                  placeholder="배분액"
-                  inputMode="numeric"
-                  value={alloc[r.milestoneId] ? Number(alloc[r.milestoneId]).toLocaleString("ko-KR") : ""}
-                  onChange={(e) => setAlloc((prev) => ({ ...prev, [r.milestoneId]: e.target.value.replace(/[^0-9]/g, "") }))}
-                />
-                <button
-                  type="button"
-                  className="cd-btn cd-btn-ghost cd-btn-sm shrink-0"
-                  title="이 단계의 청구액(정산액)을 배분액으로 채웁니다"
-                  onClick={() => setAlloc((prev) => ({ ...prev, [r.milestoneId]: String(Math.round(due)) }))}
-                >
-                  채우기
-                </button>
+                {r.collected ? (
+                  <button
+                    type="button"
+                    className={`cd-btn cd-btn-sm shrink-0 ${picked ? "cd-btn-primary" : "cd-btn-ghost"}`}
+                    style={{ width: 200 }}
+                    title="이 입금이 그 수금이라고 확인만 합니다(수금액은 다시 더해지지 않습니다)"
+                    onClick={() =>
+                      setConfirmOnly((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(r.milestoneId)) next.delete(r.milestoneId);
+                        else next.add(r.milestoneId);
+                        return next;
+                      })
+                    }
+                  >
+                    {picked ? "확인 선택됨" : "이 수금으로 확인"}
+                  </button>
+                ) : (
+                  <>
+                    <input
+                      className="cd-input text-right shrink-0"
+                      style={{ width: 140 }}
+                      placeholder="배분액"
+                      inputMode="numeric"
+                      value={alloc[r.milestoneId] ? Number(alloc[r.milestoneId]).toLocaleString("ko-KR") : ""}
+                      onChange={(e) => setAlloc((prev) => ({ ...prev, [r.milestoneId]: e.target.value.replace(/[^0-9]/g, "") }))}
+                    />
+                    <button
+                      type="button"
+                      className="cd-btn cd-btn-ghost cd-btn-sm shrink-0"
+                      title="이 단계의 청구액(정산액)을 배분액으로 채웁니다"
+                      onClick={() => setAlloc((prev) => ({ ...prev, [r.milestoneId]: String(Math.round(due)) }))}
+                    >
+                      채우기
+                    </button>
+                  </>
+                )}
               </div>
             );
           })}
           {filtered.length === 0 && <div className="p-4 text-center text-xs cd-text-muted">미수 계산서가 없습니다.</div>}
         </div>
         <div className="text-xs cd-text-muted">
-          배분 합계 <b className="cd-text">{fmtAmount(allocatedTotal)}원</b>
-          <span className="ml-1 cd-text-faint">(VAT 포함 {fmtAmount(Math.round(allocatedTotal * 1.1))}원)</span>
-          {item && allocatedTotal !== item.amount && (
-            Math.abs(Math.round(allocatedTotal * 1.1) - item.amount) <= 1 ? (
+          선택 합계 <b className="cd-text">{fmtAmount(comparedTotal)}원</b>
+          <span className="ml-1 cd-text-faint">(VAT 포함 {fmtAmount(Math.round(comparedTotal * 1.1))}원)</span>
+          {confirmTotal > 0 && (
+            <span className="ml-1 cd-text-faint">— 이 중 {fmtAmount(confirmTotal)}원은 확인만(수금액 재반영 없음)</span>
+          )}
+          {item && comparedTotal !== item.amount && (
+            Math.abs(Math.round(comparedTotal * 1.1) - item.amount) <= 1 ? (
               <span className="ml-1" style={{ color: "var(--cd-success)" }}>VAT 포함액이 입금액과 일치합니다</span>
             ) : (
-              <span className="ml-1 cd-warn-text">입금액과 다릅니다({fmtAmount(item.amount - allocatedTotal)}원 차이)</span>
+              <span className="ml-1 cd-warn-text">입금액과 다릅니다({fmtAmount(item.amount - comparedTotal)}원 차이)</span>
             )
           )}
         </div>

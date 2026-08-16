@@ -1782,6 +1782,8 @@ interface Receivable {
   paymentTerms: string | null;
   baseAmount: number;
   remaining: number;
+  collected: boolean;
+  settlementAmount: number | null;
 }
 
 const MATCH_TYPE_LABEL: Record<string, string> = {
@@ -2195,6 +2197,7 @@ function ManualMatchModal({ item, onClose, onSaved }: { item: ReconItem | null; 
     <CdModal
       open={item !== null}
       onClose={onClose}
+      size="xl"
       title="수동 매칭"
       footer={
         <>
@@ -2216,37 +2219,58 @@ function ManualMatchModal({ item, onClose, onSaved }: { item: ReconItem | null; 
         </div>
         <input className="cd-input" placeholder="거래처·계약명 검색" value={keyword} onChange={(e) => setKeyword(e.target.value)} />
         <div className="max-h-[320px] overflow-y-auto rounded-xl border cd-border-c divide-y">
-          {filtered.map((r) => (
-            <div key={r.milestoneId} className="p-2 flex items-center gap-2">
-              <div className="flex-1 min-w-0">
-                <div className="text-xs font-medium truncate">{r.facilityName || "거래처 미지정"}</div>
-                <div className="text-[11px] cd-text-muted truncate">
-                  {r.contractTitle} · {r.stageLabel} · 미수 {fmtAmount(r.remaining)}원{r.invoicedAt ? ` (발행 ${r.invoicedAt})` : ""}
+          {filtered.map((r) => {
+            // 실적 정산이 있으면 실제 청구액은 정산액 — 채우기·표시 모두 이 기준을 쓴다.
+            const due = r.settlementAmount && r.settlementAmount > 0 ? r.settlementAmount : r.remaining;
+            return (
+              <div key={r.milestoneId} className="p-2 flex items-start gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-medium">{r.facilityName || "거래처 미지정"}</div>
+                  <div className="text-[11px] cd-text-muted break-words">
+                    {r.contractTitle} · {r.stageLabel}
+                    {r.invoicedAt ? ` (발행 ${r.invoicedAt})` : ""}
+                  </div>
                 </div>
+                {/* 매칭 대상 금액 — 공급가액과 VAT 포함액을 함께 보여야 입금액과 대조할 수 있다. */}
+                <div className="shrink-0 text-right leading-tight" style={{ width: 150 }}>
+                  <div className="text-xs font-mono font-medium">{fmtAmount(due)}원</div>
+                  <div className="text-[11px] cd-text-faint font-mono">VAT 포함 {fmtAmount(Math.round(due * 1.1))}</div>
+                  {r.collected && <span className="cd-pill cd-pill-idle mt-0.5 inline-block">수금 완료</span>}
+                  {r.settlementAmount != null && r.settlementAmount > 0 && (
+                    <span className="block text-[10px] cd-text-faint">실적 정산액</span>
+                  )}
+                </div>
+                <input
+                  className="cd-input text-right shrink-0"
+                  style={{ width: 140 }}
+                  placeholder="배분액"
+                  inputMode="numeric"
+                  value={alloc[r.milestoneId] ? Number(alloc[r.milestoneId]).toLocaleString("ko-KR") : ""}
+                  onChange={(e) => setAlloc((prev) => ({ ...prev, [r.milestoneId]: e.target.value.replace(/[^0-9]/g, "") }))}
+                />
+                <button
+                  type="button"
+                  className="cd-btn cd-btn-ghost cd-btn-sm shrink-0"
+                  title="이 단계의 청구액(정산액)을 배분액으로 채웁니다"
+                  onClick={() => setAlloc((prev) => ({ ...prev, [r.milestoneId]: String(Math.round(due)) }))}
+                >
+                  채우기
+                </button>
               </div>
-              <input
-                className="cd-input text-right"
-                style={{ width: 130 }}
-                placeholder="배분액"
-                inputMode="numeric"
-                value={alloc[r.milestoneId] ?? ""}
-                onChange={(e) => setAlloc((prev) => ({ ...prev, [r.milestoneId]: e.target.value.replace(/[^0-9]/g, "") }))}
-              />
-              <button
-                type="button"
-                className="cd-btn cd-btn-ghost cd-btn-sm"
-                title="입금액 전액 또는 미수 잔액 중 작은 값"
-                onClick={() => setAlloc((prev) => ({ ...prev, [r.milestoneId]: String(Math.min(r.remaining, item?.amount ?? 0)) }))}
-              >
-                채우기
-              </button>
-            </div>
-          ))}
+            );
+          })}
           {filtered.length === 0 && <div className="p-4 text-center text-xs cd-text-muted">미수 계산서가 없습니다.</div>}
         </div>
         <div className="text-xs cd-text-muted">
           배분 합계 <b className="cd-text">{fmtAmount(allocatedTotal)}원</b>
-          {item && allocatedTotal !== item.amount && <span className="ml-1 cd-warn-text">입금액과 다릅니다({fmtAmount(item.amount - allocatedTotal)}원 차이)</span>}
+          <span className="ml-1 cd-text-faint">(VAT 포함 {fmtAmount(Math.round(allocatedTotal * 1.1))}원)</span>
+          {item && allocatedTotal !== item.amount && (
+            Math.abs(Math.round(allocatedTotal * 1.1) - item.amount) <= 1 ? (
+              <span className="ml-1" style={{ color: "var(--cd-success)" }}>VAT 포함액이 입금액과 일치합니다</span>
+            ) : (
+              <span className="ml-1 cd-warn-text">입금액과 다릅니다({fmtAmount(item.amount - allocatedTotal)}원 차이)</span>
+            )
+          )}
         </div>
         {error && <div className="cd-error-text text-xs">{error}</div>}
       </div>

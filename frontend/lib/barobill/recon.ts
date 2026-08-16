@@ -46,7 +46,12 @@ export interface FacilityIndex {
   names: Map<string, string>; // facilityId → 표시용 상호
 }
 
-export async function buildFacilityIndex(db: PgDatabase): Promise<FacilityIndex> {
+/**
+ * ★모집단 한정(2026-08-16 실증): facilities 전체(IEPS 수만 사업장)로 인덱스를 만들면
+ *   "(주)영풍" 입금이 거래 이력조차 없는 "영풍제지"에 붙는다. 매칭이 의미 있는 대상은
+ *   계약에 등장하는 거래처뿐이므로, 후보 계약의 발주처·대상 사업장으로 좁힌다.
+ */
+export async function buildFacilityIndex(db: PgDatabase, relevantIds: Set<string>): Promise<FacilityIndex> {
   const index: FacilityIndex = { exact: new Map(), list: [], names: new Map() };
   const put = (raw: string | null, facilityId: string, strength: number) => {
     const key = reconKey(raw);
@@ -56,21 +61,32 @@ export async function buildFacilityIndex(db: PgDatabase): Promise<FacilityIndex>
     index.list.push({ key, facilityId });
   };
 
-  const facilities = rowsToObjects(
-    await db.exec(`SELECT facility_id, company_name, normalized_company_name FROM facilities`),
-  );
+  const ids = [...relevantIds].filter(Boolean);
+  const facilities = ids.length
+    ? rowsToObjects(
+        await db.exec(`SELECT facility_id, company_name, normalized_company_name FROM facilities WHERE facility_id = ANY($1::text[])`, [ids]),
+      )
+    : [];
   for (const f of facilities) {
     const id = String(f.facility_id);
     index.names.set(id, String(f.normalized_company_name || f.company_name || ""));
     put((f.normalized_company_name as string | null) ?? null, id, 90);
     put((f.company_name as string | null) ?? null, id, 90);
   }
-  const aliases = rowsToObjects(await db.exec(`SELECT facility_id, alias FROM facility_aliases`));
+  const aliases = ids.length
+    ? rowsToObjects(await db.exec(`SELECT facility_id, alias FROM facility_aliases WHERE facility_id = ANY($1::text[])`, [ids]))
+    : [];
   for (const a of aliases) put(String(a.alias), String(a.facility_id), 80);
 
-  const merged = rowsToObjects(
-    await db.exec(`SELECT target_facility_id, previous_company_name FROM facility_merge_aliases WHERE previous_company_name IS NOT NULL`),
-  );
+  const merged = ids.length
+    ? rowsToObjects(
+        await db.exec(
+          `SELECT target_facility_id, previous_company_name FROM facility_merge_aliases
+            WHERE previous_company_name IS NOT NULL AND target_facility_id = ANY($1::text[])`,
+          [ids],
+        ),
+      )
+    : [];
   for (const m of merged) put(String(m.previous_company_name), String(m.target_facility_id), 70);
 
   // 학습 링크가 최우선 — 사용자가 확정한 이력이라 상호가 달라도 신뢰한다.
@@ -98,7 +114,15 @@ export function identifyFacility(remitter: string, index: FacilityIndex): { faci
     if (ratio < 0.5) continue;
     if (!best || item.key.length > best.len) best = { facilityId: item.facilityId, strength: 60, len: item.key.length };
   }
-  return best ? { facilityId: best.facilityId, strength: best.strength } : null;
+  if (best) return { facilityId: best.facilityId, strength: best.strength };
+  // 접두-유일 완화: "(주)영풍" → "영풍석포제련소"처럼 입금자명이 모기업 축약이라 길이비로는 탈락하는 케이스.
+  // 모집단이 계약 거래처로 좁혀져 있으므로, 접두로 걸리는 회사가 정확히 하나일 때만 인정한다.
+  const prefixHits = new Set<string>();
+  for (const item of index.list) {
+    if (key.length >= 2 && (item.key.startsWith(key) || key.startsWith(item.key))) prefixHits.add(item.facilityId);
+  }
+  if (prefixHits.size === 1) return { facilityId: [...prefixHits][0], strength: 55 };
+  return null;
 }
 
 // ─────────────────────────────────────────────
@@ -111,6 +135,8 @@ export interface Receivable {
   contractTitle: string;
   stageLabel: string;
   facilityId: string | null;
+  /** 매칭에 쓰는 거래처 전체 — 발주처 + 계약 대상 사업장(조달청 경유 계약은 실입금이 수요기관에서 온다). */
+  facilityIds: string[];
   facilityName: string;
   invoicedAt: string | null;
   paymentTerms: string | null;
@@ -165,7 +191,7 @@ export async function loadReceivables(db: PgDatabase): Promise<Receivable[]> {
     await db.exec(
       `SELECT m.milestone_id, m.contract_id, m.stage_label, m.amount, m.invoice_amount, m.collected_amount,
               m.invoice_issued_at, m.payment_terms, m.payment_collected, m.payment_collected_at, m.settlement_amount,
-              c.contract_title, c.counterparty_facility_id,
+              c.contract_title, c.counterparty_facility_id, c.facility_id AS contract_facility_id,
               f.company_name, f.normalized_company_name
          FROM contract_payment_milestones m
          JOIN contracts c ON c.contract_id = m.contract_id
@@ -175,17 +201,43 @@ export async function loadReceivables(db: PgDatabase): Promise<Receivable[]> {
                OR COALESCE(m.payment_collected_at, m.invoice_issued_at, '') >= to_char(now() - interval '18 months', 'YYYY-MM-DD'))`,
     ),
   );
+  // 계약 대상 사업장 — 조달청 경유 계약은 발주처(조달청)가 아니라 수요기관(대상 사업장)이 입금한다.
+  const contractIds = [...new Set(rows.map((r) => String(r.contract_id)))];
+  const siteRows = contractIds.length
+    ? rowsToObjects(
+        await db.exec(`SELECT contract_id, facility_id FROM contract_facilities WHERE contract_id = ANY($1::text[])`, [contractIds]),
+      )
+    : [];
+  const sitesByContract = new Map<string, string[]>();
+  for (const sr of siteRows) {
+    const cid = String(sr.contract_id);
+    const list = sitesByContract.get(cid) ?? [];
+    list.push(String(sr.facility_id));
+    sitesByContract.set(cid, list);
+  }
+
   return rows
     .map((r) => {
       const base = Number(r.invoice_amount ?? r.amount ?? 0);
       const collectedAmount = Number(r.collected_amount ?? 0);
       const collected = Number(r.payment_collected ?? 0) === 1;
+      const contractId = String(r.contract_id);
+      const facilityIds = [
+        ...new Set(
+          [
+            r.counterparty_facility_id ? String(r.counterparty_facility_id) : null,
+            r.contract_facility_id ? String(r.contract_facility_id) : null,
+            ...(sitesByContract.get(contractId) ?? []),
+          ].filter((v): v is string => Boolean(v)),
+        ),
+      ];
       return {
         milestoneId: String(r.milestone_id),
-        contractId: String(r.contract_id),
+        contractId,
         contractTitle: String(r.contract_title ?? ""),
         stageLabel: String(r.stage_label ?? ""),
         facilityId: r.counterparty_facility_id ? String(r.counterparty_facility_id) : null,
+        facilityIds,
         facilityName: String(r.normalized_company_name || r.company_name || ""),
         invoicedAt: r.invoice_issued_at ? String(r.invoice_issued_at).slice(0, 10) : null,
         paymentTerms: r.payment_terms ? String(r.payment_terms) : null,
@@ -253,8 +305,8 @@ interface Candidate {
 }
 
 /** 같은 거래처 미수들 중 합이 입금액과 같은 부분집합 탐색(어음 일괄지급 대응). 후보가 많으면 포기한다. */
-function findSubset(items: Receivable[], target: number): Receivable[] | null {
-  const pool = items.slice(0, 12).sort((a, b) => b.remaining - a.remaining);
+function findSubset(items: Receivable[], target: number, amountOf: (r: Receivable) => number): Receivable[] | null {
+  const pool = items.slice(0, 12).sort((a, b) => amountOf(b) - amountOf(a));
   const found: Receivable[] = [];
   let calls = 0;
   const walk = (start: number, rest: number, picked: Receivable[]): boolean => {
@@ -265,12 +317,16 @@ function findSubset(items: Receivable[], target: number): Receivable[] | null {
     }
     if (rest < -AMOUNT_TOLERANCE) return false;
     for (let i = start; i < pool.length; i += 1) {
-      if (walk(i + 1, rest - pool[i].remaining, [...picked, pool[i]])) return true;
+      if (walk(i + 1, rest - amountOf(pool[i]), [...picked, pool[i]])) return true;
     }
     return false;
   };
   return walk(0, target, []) ? found : null;
 }
+
+/** 합계 매칭용 금액 — 정산이 있으면 정산액, 없으면 잔액/기록된 수금액. */
+const dueAmount = (r: Receivable) => (r.settlementAmount && r.settlementAmount > 0 ? r.settlementAmount : r.remaining);
+const paidAmount = (r: Receivable) => (r.settlementAmount && r.settlementAmount > 0 ? r.settlementAmount : r.collectedAmount);
 
 function buildCandidate(
   txn: { amount: number; date: string; remitter: string; transType: string | null; remark2: string | null },
@@ -299,7 +355,7 @@ function buildCandidate(
     };
   }
 
-  const all = receivables.filter((r) => r.facilityId === facility.facilityId);
+  const all = receivables.filter((r) => r.facilityIds.includes(facility.facilityId));
   const scoped = all.filter((r) => !r.collected && !usedMilestones.has(r.milestoneId)); // 매칭 대상 = 미수
   const done = all.filter((r) => r.collected && !usedMilestones.has(r.milestoneId)); // 이미 수금 처리된 단계(수기 입력 포함)
   const facilityScore = facility?.strength ?? 0;
@@ -375,10 +431,36 @@ function buildCandidate(
     };
   }
 
+  // ①-c 이미 기록된 수금 여러 건의 합계 — 기성금 1·2·3 을 한 번에 받는 사업장(사용자 요구 원안 D5).
+  //     세 단계 모두 수금 처리돼 있으면 미수 합계 매칭(②)에 걸리지 않으므로 별도로 본다.
+  if (done.length >= 2) {
+    const paidSubset =
+      findSubset(done, txn.amount, paidAmount) ?? findSubset(done, Math.round(txn.amount / 1.1), paidAmount);
+    if (paidSubset) {
+      const vatBasis = Math.abs(paidSubset.reduce((a, r) => a + paidAmount(r), 0) - txn.amount) > AMOUNT_TOLERANCE;
+      return {
+        matchType: "already_collected",
+        confidence: Math.min(
+          CONFIDENCE_AUTO - 5, // 조합 우연성이 있어 항상 사람이 본다
+          score({ facility: facilityScore, amount: 95, timing: 85, terms: 80, ambiguous: false }),
+        ),
+        facilityId: facility.facilityId,
+        matchedAmount: txn.amount,
+        residualAmount: 0,
+        lines: paidSubset.map((r) => ({ milestoneId: r.milestoneId, allocatedAmount: 0 })), // 확인만(중복 반영 없음)
+        reason: {
+          rule: `이미 입력된 수금 ${paidSubset.length}건의 합계와 일치${vatBasis ? "(VAT 포함액 기준)" : ""} — 여러 계산서를 한 번에 받은 건입니다`,
+          stages: paidSubset.map((r) => `${r.stageLabel} ${Math.round(paidAmount(r)).toLocaleString("ko-KR")}`).join(" + "),
+          facilityStrength: facilityScore,
+        },
+      };
+    }
+  }
+
   // ② 합계 매칭(거래처가 식별된 경우만 — 전역 조합 탐색은 오매칭 위험)
   if (scoped.length >= 2) {
     // 합계도 공급가액/VAT 포함 두 기준으로 시도
-    const subset = findSubset(scoped, txn.amount) ?? findSubset(scoped, Math.round(txn.amount / 1.1));
+    const subset = findSubset(scoped, txn.amount, dueAmount) ?? findSubset(scoped, Math.round(txn.amount / 1.1), dueAmount);
     if (subset) {
       return {
         matchType: "sum_nto1",
@@ -390,8 +472,33 @@ function buildCandidate(
         facilityId: facility.facilityId,
         matchedAmount: txn.amount,
         residualAmount: 0,
-        lines: subset.map((r) => ({ milestoneId: r.milestoneId, allocatedAmount: r.remaining })),
+        lines: subset.map((r) => ({ milestoneId: r.milestoneId, allocatedAmount: dueAmount(r) })),
         reason: { rule: "여러 계산서 합계 일치(어음 일괄지급 등)", count: subset.length, facilityStrength: facilityScore },
+      };
+    }
+  }
+
+  // ②-b 혼합 합계 — 일부는 미수, 일부는 이미 수금 입력된 단계들을 한 번에 받은 경우.
+  //     수금 처리된 단계는 배분 0(확인만), 미수 단계만 실제로 반영한다.
+  if (all.length >= 2) {
+    const mixedAmount = (r: Receivable) => (r.collected ? paidAmount(r) : dueAmount(r));
+    const mixed = findSubset(all, txn.amount, mixedAmount) ?? findSubset(all, Math.round(txn.amount / 1.1), mixedAmount);
+    if (mixed && mixed.some((r) => !r.collected) && mixed.some((r) => r.collected)) {
+      return {
+        matchType: "sum_nto1",
+        confidence: Math.min(
+          CONFIDENCE_AUTO - 5,
+          score({ facility: facilityScore, amount: 90, timing: 80, terms: 80, ambiguous: false }),
+        ),
+        facilityId: facility.facilityId,
+        matchedAmount: txn.amount,
+        residualAmount: 0,
+        lines: mixed.map((r) => ({ milestoneId: r.milestoneId, allocatedAmount: r.collected ? 0 : dueAmount(r) })),
+        reason: {
+          rule: "여러 계산서 합계와 일치 — 이미 수금 입력된 단계는 금액을 다시 더하지 않습니다",
+          stages: mixed.map((r) => `${r.stageLabel}${r.collected ? "(수금 완료)" : ""}`).join(" + "),
+          facilityStrength: facilityScore,
+        },
       };
     }
   }
@@ -466,8 +573,9 @@ function buildCandidate(
  */
 export async function runRecon(options?: { from?: string; to?: string; includeAll?: boolean }): Promise<{ scanned: number; suggested: number; highConfidence: number }> {
   const db = await getDb();
-  const index = await buildFacilityIndex(db);
   const receivables = await loadReceivables(db);
+  const relevantIds = new Set(receivables.flatMap((r) => r.facilityIds));
+  const index = await buildFacilityIndex(db, relevantIds);
 
   const where: string[] = ["t.direction = 'in'"];
   const args: unknown[] = [];
@@ -948,5 +1056,5 @@ export async function manualMatch(
 export async function listOpenReceivables(facilityId?: string): Promise<Receivable[]> {
   const db = await getDb();
   const all = await loadReceivables(db);
-  return facilityId ? all.filter((r) => r.facilityId === facilityId) : all;
+  return facilityId ? all.filter((r) => r.facilityIds.includes(facilityId)) : all;
 }

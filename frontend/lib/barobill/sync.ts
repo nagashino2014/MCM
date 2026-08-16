@@ -74,6 +74,24 @@ export async function syncRegistry(): Promise<{ accounts: number; cards: number 
         ],
       );
     }
+
+    // 바로빌 목록에 없는 연결은 'unlinked' 로 표시하고 수집에서 뺀다(운영 전환·해지 후 잔존분).
+    // 삭제하지 않는 이유: 원장·분류·학습이 CASCADE 로 함께 사라진다. 같은 번호로 다시 등록하면
+    // account_no/card_num UNIQUE 로 이 행이 그대로 재사용되어 이력이 이어진다.
+    const accountNos = accounts.map((a) => a.accountNum);
+    const cardNums = cards.map((c) => c.cardNum);
+    await db.run(
+      accountNos.length
+        ? `UPDATE bank_accounts SET barobill_status = 'unlinked', updated_at = $2 WHERE NOT (account_no = ANY($1::text[])) AND barobill_status <> 'unlinked'`
+        : `UPDATE bank_accounts SET barobill_status = 'unlinked', updated_at = $2 WHERE barobill_status <> 'unlinked'`,
+      accountNos.length ? [accountNos, KST_NOW()] : [KST_NOW()],
+    );
+    await db.run(
+      cardNums.length
+        ? `UPDATE card_registry SET barobill_status = 'unlinked', updated_at = $2 WHERE NOT (card_num = ANY($1::text[])) AND barobill_status <> 'unlinked'`
+        : `UPDATE card_registry SET barobill_status = 'unlinked', updated_at = $2 WHERE barobill_status <> 'unlinked'`,
+      cardNums.length ? [cardNums, KST_NOW()] : [KST_NOW()],
+    );
   });
   return { accounts: accounts.length, cards: cards.length };
 }

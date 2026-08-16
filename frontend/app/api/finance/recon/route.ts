@@ -5,7 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
-import { listReconQueue, listOpenReceivables, runRecon, confirmMatch, rejectMatch, unconfirmMatch, manualMatch } from "@/lib/barobill/recon";
+import { listReconQueue, listOpenReceivables, runRecon, confirmMatch, rejectMatch, unrejectMatch, unconfirmMatch, manualMatch } from "@/lib/barobill/recon";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,7 +18,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ receivables: await listOpenReceivables(sp.get("facilityId") || undefined) });
     }
     const bucketParam = sp.get("bucket");
-    const bucket = bucketParam === "review" || bucketParam === "other" || bucketParam === "confirmed" ? bucketParam : "high";
+    const bucket =
+      bucketParam === "review" || bucketParam === "other" || bucketParam === "confirmed" || bucketParam === "rejected" ? bucketParam : "high";
     return NextResponse.json(await listReconQueue({ bucket }));
   } catch (err) {
     return authErrorToResponse(err);
@@ -26,7 +27,9 @@ export async function GET(req: NextRequest) {
 }
 
 interface PostBody {
-  action: "run" | "confirm" | "bulk-confirm" | "reject" | "unconfirm" | "manual";
+  action: "run" | "confirm" | "bulk-confirm" | "reject" | "unreject" | "unconfirm" | "manual";
+  rejectReason?: string;
+  rejectNote?: string;
   matchId?: string;
   matchIds?: string[];
   from?: string;
@@ -82,13 +85,26 @@ export async function POST(req: NextRequest) {
 
     if (body.action === "reject") {
       if (!body.matchId) return NextResponse.json({ error: "matchId 가 필요합니다." }, { status: 400 });
-      await rejectMatch(body.matchId);
+      await rejectMatch(body.matchId, body.rejectReason ?? null, body.rejectNote ?? null, actor.userId);
       await recordAuditLog({
         actorUserId: actor.userId,
         action: "finance_recon_confirm",
         targetTable: "recon_matches",
         targetId: body.matchId,
-        after: { rejected: true },
+        after: { rejected: true, reason: body.rejectReason, note: body.rejectNote },
+      });
+      return NextResponse.json({ ok: true });
+    }
+
+    if (body.action === "unreject") {
+      if (!body.matchId) return NextResponse.json({ error: "matchId 가 필요합니다." }, { status: 400 });
+      await unrejectMatch(body.matchId);
+      await recordAuditLog({
+        actorUserId: actor.userId,
+        action: "finance_recon_confirm",
+        targetTable: "recon_matches",
+        targetId: body.matchId,
+        after: { unrejected: true },
       });
       return NextResponse.json({ ok: true });
     }

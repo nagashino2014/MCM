@@ -87,13 +87,16 @@ export function identifyFacility(remitter: string, index: FacilityIndex): { faci
   if (!key) return null;
   const hit = index.exact.get(key);
   if (hit) return hit;
-  // 부분일치 — 입금자명이 잘리거나("영흥산업환경(주)차장") 접두가 붙는 경우. 가장 긴 일치를 채택.
+  // 부분일치 — 입금자명이 잘리거나("영흥산업환경(주)차장") 접두가 붙는 경우.
+  // ⚠ 짧은 상호끼리는 우연히 겹치기 쉬워(3자 한글 등) 조건을 조인다:
+  //   ① 겹치는 쪽 길이 4자 이상 ② 두 이름 길이 비가 50% 이상(한쪽이 다른 쪽의 절반 미만이면 버린다).
   let best: { facilityId: string; strength: number; len: number } | null = null;
   for (const item of index.list) {
-    if (item.key.length < 3) continue;
-    if (key.includes(item.key) || item.key.includes(key)) {
-      if (!best || item.key.length > best.len) best = { facilityId: item.facilityId, strength: 60, len: item.key.length };
-    }
+    if (item.key.length < 4) continue;
+    if (!(key.includes(item.key) || item.key.includes(key))) continue;
+    const ratio = Math.min(key.length, item.key.length) / Math.max(key.length, item.key.length);
+    if (ratio < 0.5) continue;
+    if (!best || item.key.length > best.len) best = { facilityId: item.facilityId, strength: 60, len: item.key.length };
   }
   return best ? { facilityId: best.facilityId, strength: best.strength } : null;
 }
@@ -111,27 +114,72 @@ export interface Receivable {
   facilityName: string;
   invoicedAt: string | null;
   paymentTerms: string | null;
-  baseAmount: number; // 단계 총액
+  baseAmount: number; // 단계 총액(= 공급가액. 실측 확정)
   remaining: number; // 미수 잔액
+  /** 이미 수금 처리된 단계(수기 입력 포함) — 입금 건과 짝을 맞춰 "기록된 수금"으로 확인만 한다. */
+  collected: boolean;
+  collectedAt: string | null;
+  collectedAmount: number;
+  /** 실적 정산액(마이그 113) — 정산으로 감액되면 실제 입금은 청구금액이 아니라 이 금액 기준이다. */
+  settlementAmount: number | null;
 }
 
+/**
+ * ★실측(2026-08-16, 삼척블루파워 준공금): 단계 금액은 **공급가액(VAT 별도)**이고 입금은 VAT 포함이다.
+ *   41,468,050 x 1.1 = 45,614,855(입금액)로 원 단위까지 일치. 그래서 금액 비교는 두 기준을 모두 본다.
+ */
+export const withVat = (supply: number) => Math.round(supply * 1.1);
+
+export type AmountBasis = "supply" | "vat" | "settlement" | "settlement_vat";
+
+export const BASIS_LABEL: Record<AmountBasis, string> = {
+  supply: "공급가액 일치",
+  vat: "VAT 포함액 일치",
+  settlement: "실적 정산액 일치",
+  settlement_vat: "실적 정산액 VAT 포함 일치",
+};
+
+/**
+ * 입금액이 대상 금액과 맞는지 — 네 기준을 모두 시도한다.
+ * ★실측(2026-08-16, 수도권매립지공사 준공금): 실적 정산으로 감액된 건은 **정산액×1.1** 로 입금된다.
+ *   48,932,922 x 1.1 = 53,826,214(입금액). 청구금액(51,320,810)만 보면 영영 매칭되지 않는다.
+ */
+export function amountMatch(target: number, txnAmount: number, settlement?: number | null): { hit: boolean; basis: AmountBasis } {
+  const near = (v: number) => Math.abs(v - txnAmount) <= AMOUNT_TOLERANCE;
+  if (near(target)) return { hit: true, basis: "supply" };
+  if (near(withVat(target))) return { hit: true, basis: "vat" };
+  if (settlement != null && settlement > 0) {
+    if (near(settlement)) return { hit: true, basis: "settlement" };
+    if (near(withVat(settlement))) return { hit: true, basis: "settlement_vat" };
+  }
+  return { hit: false, basis: "supply" };
+}
+
+/**
+ * 매칭 후보 단계 목록.
+ * 미수(payment_collected=0)뿐 아니라 **최근 수금 처리된 단계도 함께** 싣는다 — 사용자가 수기로 넣은
+ * 수금 건도 계좌 입금과 짝지어 "확인"할 수 있어야 하기 때문(중복 반영은 하지 않는다).
+ */
 export async function loadReceivables(db: PgDatabase): Promise<Receivable[]> {
   const rows = rowsToObjects(
     await db.exec(
       `SELECT m.milestone_id, m.contract_id, m.stage_label, m.amount, m.invoice_amount, m.collected_amount,
-              m.invoice_issued_at, m.payment_terms,
+              m.invoice_issued_at, m.payment_terms, m.payment_collected, m.payment_collected_at, m.settlement_amount,
               c.contract_title, c.counterparty_facility_id,
               f.company_name, f.normalized_company_name
          FROM contract_payment_milestones m
          JOIN contracts c ON c.contract_id = m.contract_id
          LEFT JOIN facilities f ON f.facility_id = c.counterparty_facility_id
-        WHERE m.invoice_issued = 1 AND m.payment_collected = 0`,
+        WHERE m.invoice_issued = 1
+          AND (m.payment_collected = 0
+               OR COALESCE(m.payment_collected_at, m.invoice_issued_at, '') >= to_char(now() - interval '18 months', 'YYYY-MM-DD'))`,
     ),
   );
   return rows
     .map((r) => {
       const base = Number(r.invoice_amount ?? r.amount ?? 0);
-      const collected = Number(r.collected_amount ?? 0);
+      const collectedAmount = Number(r.collected_amount ?? 0);
+      const collected = Number(r.payment_collected ?? 0) === 1;
       return {
         milestoneId: String(r.milestone_id),
         contractId: String(r.contract_id),
@@ -142,10 +190,14 @@ export async function loadReceivables(db: PgDatabase): Promise<Receivable[]> {
         invoicedAt: r.invoice_issued_at ? String(r.invoice_issued_at).slice(0, 10) : null,
         paymentTerms: r.payment_terms ? String(r.payment_terms) : null,
         baseAmount: base,
-        remaining: Math.round(base - collected),
+        remaining: Math.round(base - collectedAmount),
+        collected,
+        collectedAt: r.payment_collected_at ? String(r.payment_collected_at).slice(0, 10) : null,
+        collectedAmount: collectedAmount || base,
+        settlementAmount: r.settlement_amount == null ? null : Number(r.settlement_amount),
       };
     })
-    .filter((r) => r.remaining > 0);
+    .filter((r) => r.collected || r.remaining > 0);
 }
 
 // ─────────────────────────────────────────────
@@ -153,6 +205,12 @@ export async function loadReceivables(db: PgDatabase): Promise<Receivable[]> {
 // ─────────────────────────────────────────────
 
 const AMOUNT_TOLERANCE = 1; // 원 단위 반올림 오차만 허용
+
+/** 두 날짜(YYYY-MM-DD) 간 일수 차이. 한쪽이 없으면 크게 벌어진 것으로 본다. */
+function dayGap(a: string | null, b: string | null): number {
+  if (!a || !b) return 999;
+  return Math.round((new Date(`${b}T00:00:00+09:00`).getTime() - new Date(`${a}T00:00:00+09:00`).getTime()) / 86400000);
+}
 
 function timingScore(invoicedAt: string | null, txnDate: string): number {
   if (!invoicedAt) return 50;
@@ -185,7 +243,7 @@ export const CONFIDENCE_REVIEW = 55; // 이 미만 = 미매칭 취급
 // ─────────────────────────────────────────────
 
 interface Candidate {
-  matchType: "exact_1to1" | "sum_nto1" | "partial" | "overpaid" | "prepaid" | "non_receivable" | "unmatched";
+  matchType: "exact_1to1" | "already_collected" | "sum_nto1" | "partial" | "overpaid" | "prepaid" | "non_receivable" | "unmatched";
   confidence: number;
   facilityId: string | null;
   matchedAmount: number;
@@ -218,17 +276,44 @@ function buildCandidate(
   txn: { amount: number; date: string; remitter: string; transType: string | null; remark2: string | null },
   receivables: Receivable[],
   facility: { facilityId: string; strength: number } | null,
+  /** 이번 실행에서 이미 다른 입금에 배분된 단계 — 같은 계산서가 여러 입금에 전액 매칭되는 것을 막는다. */
+  usedMilestones: Set<string> = new Set(),
 ): Candidate {
-  const scoped = facility ? receivables.filter((r) => r.facilityId === facility.facilityId) : receivables;
+  // ★거래처를 못 찾으면 금액 매칭을 아예 시도하지 않는다(2026-08-16 실사용 실증).
+  //   "고용노동부 입금 4,800,000" 이 금액만 같다는 이유로 롯데엠시시 계산서에 붙는 식의 오매칭이
+  //   검토 큐를 뒤덮었다. 금액 일치는 거래처가 확인된 뒤에야 의미가 있다.
+  if (!facility) {
+    const nonReceivableHint = looksNonReceivable(txn.remitter, txn.transType, txn.remark2);
+    return {
+      matchType: nonReceivableHint ? "non_receivable" : "unmatched",
+      confidence: 0,
+      facilityId: null,
+      matchedAmount: 0,
+      residualAmount: txn.amount,
+      lines: [],
+      reason: {
+        rule: nonReceivableHint
+          ? "이자·세금·자금이동 등 수금 아님으로 추정"
+          : `입금자명 "${txn.remitter}" 으로 거래처를 찾지 못했습니다 — 수동 매칭으로 지정하거나 제외로 기록하세요`,
+      },
+    };
+  }
+
+  const all = receivables.filter((r) => r.facilityId === facility.facilityId);
+  const scoped = all.filter((r) => !r.collected && !usedMilestones.has(r.milestoneId)); // 매칭 대상 = 미수
+  const done = all.filter((r) => r.collected && !usedMilestones.has(r.milestoneId)); // 이미 수금 처리된 단계(수기 입력 포함)
   const facilityScore = facility?.strength ?? 0;
   const days = (invoicedAt: string | null) =>
     invoicedAt ? Math.round((new Date(`${txn.date}T00:00:00+09:00`).getTime() - new Date(`${invoicedAt}T00:00:00+09:00`).getTime()) / 86400000) : null;
+  const basisLabel = (b: AmountBasis) => BASIS_LABEL[b];
 
-  // ① 금액 정확 일치
-  const exacts = scoped.filter((r) => Math.abs(r.remaining - txn.amount) <= AMOUNT_TOLERANCE);
+  // ① 금액 정확 일치 — 단계 금액은 공급가액이므로 VAT 포함액도 함께 본다(실측)
+  const exacts = scoped
+    .map((r) => ({ r, m: amountMatch(r.remaining, txn.amount, r.settlementAmount) }))
+    .filter((x) => x.m.hit);
   if (exacts.length) {
     const ranked = exacts
-      .map((r) => ({ r, s: timingScore(r.invoicedAt, txn.date) }))
+      .map((x) => ({ r: x.r, basis: x.m.basis, s: timingScore(x.r.invoicedAt, txn.date) }))
       .sort((a, b) => b.s - a.s);
     const top = ranked[0];
     const ambiguous = ranked.length > 1 && ranked[1].s === top.s;
@@ -241,17 +326,59 @@ function buildCandidate(
         terms: termsScore(top.r.paymentTerms, days(top.r.invoicedAt)),
         ambiguous,
       }),
-      facilityId: facility?.facilityId ?? top.r.facilityId,
+      facilityId: facility.facilityId,
       matchedAmount: txn.amount,
       residualAmount: 0,
-      lines: [{ milestoneId: top.r.milestoneId, allocatedAmount: txn.amount }],
-      reason: { rule: "금액 정확 일치", competitors: ranked.length - 1, facilityStrength: facilityScore, gapDays: days(top.r.invoicedAt) },
+      // 배분액은 단계 잔액(공급가액) 기준 — VAT 포함 입금이어도 수금액은 단계 금액으로 채운다.
+      lines: [{ milestoneId: top.r.milestoneId, allocatedAmount: top.r.remaining }],
+      reason: {
+        rule: `금액 정확 일치(${basisLabel(top.basis)})`,
+        competitors: ranked.length - 1,
+        facilityStrength: facilityScore,
+        gapDays: days(top.r.invoicedAt),
+      },
+    };
+  }
+
+  // ①-b 이미 기록된 수금과 일치 — 수기로 넣어 둔 수금 건을 계좌 입금과 짝지어 확인만 한다(중복 반영 없음).
+  const alreadyDone = done
+    .map((r) => ({ r, m: amountMatch(r.collectedAmount, txn.amount, r.settlementAmount) }))
+    .filter((x) => x.m.hit);
+  if (alreadyDone.length) {
+    const ranked = alreadyDone
+      .map((x) => ({ r: x.r, basis: x.m.basis, gap: Math.abs(dayGap(x.r.collectedAt, txn.date)) }))
+      .sort((a, b) => a.gap - b.gap);
+    const top = ranked[0];
+    return {
+      matchType: "already_collected",
+      // 금액+거래처가 맞고 수금일도 가까우면 확신할 수 있다(승인해도 금액은 다시 더하지 않는다).
+      confidence: score({
+        facility: facilityScore,
+        amount: 100,
+        timing: top.gap <= 7 ? 100 : top.gap <= 30 ? 80 : 60,
+        terms: 80,
+        ambiguous: ranked.length > 1,
+      }),
+      facilityId: facility.facilityId,
+      matchedAmount: txn.amount,
+      residualAmount: 0,
+      lines: [{ milestoneId: top.r.milestoneId, allocatedAmount: 0 }], // 0 = 반영하지 않고 확인만
+      reason: {
+        rule:
+          top.basis === "settlement" || top.basis === "settlement_vat"
+            ? `실적 정산액 기준으로 일치(${basisLabel(top.basis)}) — 단계의 수금금액은 정산 전 청구금액 그대로이니 확인이 필요합니다`
+            : `이미 입력된 수금과 일치(${basisLabel(top.basis)}) — 승인해도 수금액은 다시 더해지지 않습니다`,
+        collectedAt: top.r.collectedAt,
+        gapDays: top.gap,
+        facilityStrength: facilityScore,
+      },
     };
   }
 
   // ② 합계 매칭(거래처가 식별된 경우만 — 전역 조합 탐색은 오매칭 위험)
-  if (facility && scoped.length >= 2) {
-    const subset = findSubset(scoped, txn.amount);
+  if (scoped.length >= 2) {
+    // 합계도 공급가액/VAT 포함 두 기준으로 시도
+    const subset = findSubset(scoped, txn.amount) ?? findSubset(scoped, Math.round(txn.amount / 1.1));
     if (subset) {
       return {
         matchType: "sum_nto1",
@@ -270,8 +397,9 @@ function buildCandidate(
   }
 
   // ③ 부분입금 — 입금액이 특정 미수 잔액보다 작을 때, 잔액이 가장 가까운 건에 배분
-  if (facility && scoped.length) {
-    const partials = scoped.filter((r) => r.remaining > txn.amount).sort((a, b) => a.remaining - b.remaining);
+  if (scoped.length) {
+    // 입금이 VAT 포함으로 들어오므로, 잔액도 VAT 포함으로 환산해 비교한다.
+    const partials = scoped.filter((r) => withVat(r.remaining) > txn.amount).sort((a, b) => a.remaining - b.remaining);
     if (partials.length) {
       const top = partials[0];
       return {
@@ -292,7 +420,7 @@ function buildCandidate(
     }
     // ④ 과대입금 — 미수 합보다 큰 입금
     const totalDue = scoped.reduce((acc, r) => acc + r.remaining, 0);
-    if (totalDue > 0 && txn.amount > totalDue) {
+    if (totalDue > 0 && txn.amount > withVat(totalDue)) {
       return {
         matchType: "overpaid",
         confidence: score({ facility: facilityScore, amount: 50, timing: 70, terms: 60, ambiguous: false }),
@@ -306,7 +434,8 @@ function buildCandidate(
   }
 
   // ⑤ 거래처는 알겠는데 발행된 미수가 없음 = 선입금
-  if (facility && scoped.length === 0) {
+  if (scoped.length === 0) {
+    const note = done.length ? `이 거래처의 단계는 모두 수금 처리됨(${done.length}건) — 금액이 맞지 않아 짝을 찾지 못했습니다` : "거래처는 식별됐으나 미수 계산서 없음(선입금 의심)";
     return {
       matchType: "prepaid",
       confidence: score({ facility: facilityScore, amount: 0, timing: 50, terms: 60, ambiguous: false }),
@@ -314,7 +443,7 @@ function buildCandidate(
       matchedAmount: 0,
       residualAmount: txn.amount,
       lines: [],
-      reason: { rule: "거래처는 식별됐으나 미수 계산서 없음(선입금 의심)", facilityStrength: facilityScore },
+      reason: { rule: note, facilityStrength: facilityScore },
     };
   }
 
@@ -365,6 +494,14 @@ export async function runRecon(options?: { from?: string; to?: string; includeAl
   let suggested = 0;
   let highConfidence = 0;
   const now = KST_NOW();
+  // 이미 확정된 매칭이 물고 있는 단계는 새 후보에서 뺀다(같은 계산서 중복 배분 방지).
+  const usedMilestones = new Set(
+    rowsToObjects(
+      await db.exec(
+        `SELECT l.milestone_id FROM recon_match_lines l JOIN recon_matches m ON m.match_id = l.match_id WHERE m.status = 'confirmed'`,
+      ),
+    ).map((r) => String(r.milestone_id)),
+  );
 
   await withDbWrite(async (tx) => {
     for (const row of txns) {
@@ -380,7 +517,12 @@ export async function runRecon(options?: { from?: string; to?: string; includeAl
         },
         receivables,
         identifyFacility(remitter, index),
+        usedMilestones,
       );
+      // 전액 배분된 단계는 이번 실행 내 다른 입금이 다시 가져가지 못하게 잠근다(부분입금은 예외).
+      if (candidate.matchType !== "partial") {
+        for (const line of candidate.lines) usedMilestones.add(line.milestoneId);
+      }
 
       // 미확정 제안은 매번 갈아끼운다(원장·미수 상태가 바뀌면 결과도 바뀌므로).
       // 사용자가 제외(rejected)한 건은 남겨 판단을 존중한다 — 해당 txn 은 recon_status='ignored' 라 애초에 대상에서 빠진다.
@@ -452,12 +594,15 @@ export interface ReconQueueItem {
   residualAmount: number;
   reason: Record<string, unknown> | null;
   confirmedAt: string | null;
+  rejectReason: string | null;
+  rejectNote: string | null;
   lines: ReconQueueLine[];
 }
 
-export async function listReconQueue(params?: { bucket?: "high" | "review" | "other" | "confirmed"; limit?: number }): Promise<{
+export async function listReconQueue(params?: { bucket?: "high" | "review" | "other" | "confirmed" | "rejected"; limit?: number }): Promise<{
   items: ReconQueueItem[];
-  counts: { high: number; review: number; other: number; confirmed: number };
+  counts: { high: number; review: number; other: number; confirmed: number; rejected: number };
+  lastRunAt: string | null;
 }> {
   const db = await getDb();
   const limit = Math.min(params?.limit ?? 100, 300);
@@ -469,13 +614,14 @@ export async function listReconQueue(params?: { bucket?: "high" | "review" | "ot
     review: `m.status = 'suggested' AND ${conf} >= ${CONFIDENCE_REVIEW} AND ${conf} < ${CONFIDENCE_AUTO} AND ${hasLines}`,
     other: `m.status = 'suggested' AND (${conf} < ${CONFIDENCE_REVIEW} OR NOT ${hasLines})`,
     confirmed: `m.status = 'confirmed'`,
+    rejected: `m.status = 'rejected'`,
   };
   const bucket = params?.bucket ?? "high";
 
   const rows = rowsToObjects(
     await db.exec(
       `SELECT m.match_id, m.txn_id, m.match_type, m.status, m.confidence, m.matched_facility_id, m.matched_amount,
-              m.residual_amount, m.reason_json, m.confirmed_at,
+              m.residual_amount, m.reason_json, m.confirmed_at, m.reject_reason, m.reject_note,
               t.txn_at, t.amount, t.remitter_name_raw, t.trans_type, t.remark2,
               a.account_alias, a.bank_name,
               f.company_name, f.normalized_company_name
@@ -525,7 +671,8 @@ export async function listReconQueue(params?: { bucket?: "high" | "review" | "ot
          COUNT(*) FILTER (WHERE s.status = 'suggested' AND s.has_lines AND s.confidence >= ${CONFIDENCE_AUTO}) AS high,
          COUNT(*) FILTER (WHERE s.status = 'suggested' AND s.has_lines AND s.confidence >= ${CONFIDENCE_REVIEW} AND s.confidence < ${CONFIDENCE_AUTO}) AS review,
          COUNT(*) FILTER (WHERE s.status = 'suggested' AND (NOT s.has_lines OR s.confidence < ${CONFIDENCE_REVIEW})) AS other,
-         COUNT(*) FILTER (WHERE s.status = 'confirmed') AS confirmed
+         COUNT(*) FILTER (WHERE s.status = 'confirmed') AS confirmed,
+         COUNT(*) FILTER (WHERE s.status = 'rejected') AS rejected
        FROM (
          SELECT m.status, COALESCE(m.confidence, 0) AS confidence,
                 EXISTS (SELECT 1 FROM recon_match_lines l WHERE l.match_id = m.match_id) AS has_lines
@@ -533,6 +680,9 @@ export async function listReconQueue(params?: { bucket?: "high" | "review" | "ot
        ) s`,
     ),
   );
+
+  // 지금 보는 목록이 언제 만들어진 것인지 — 규칙을 고쳐도 재실행 전에는 옛 제안이 남기 때문에 표시한다.
+  const lastRunRows = rowsToObjects(await db.exec(`SELECT max(created_at) AS last_at FROM recon_matches WHERE created_by = 'system'`));
 
   return {
     items: rows.map((r) => ({
@@ -553,6 +703,8 @@ export async function listReconQueue(params?: { bucket?: "high" | "review" | "ot
       residualAmount: Number(r.residual_amount || 0),
       reason: (r.reason_json as Record<string, unknown> | null) ?? null,
       confirmedAt: r.confirmed_at ? String(r.confirmed_at) : null,
+      rejectReason: r.reject_reason ? String(r.reject_reason) : null,
+      rejectNote: r.reject_note ? String(r.reject_note) : null,
       lines: linesByMatch.get(String(r.match_id)) ?? [],
     })),
     counts: {
@@ -560,7 +712,9 @@ export async function listReconQueue(params?: { bucket?: "high" | "review" | "ot
       review: Number(countRows[0]?.review || 0),
       other: Number(countRows[0]?.other || 0),
       confirmed: Number(countRows[0]?.confirmed || 0),
+      rejected: Number(countRows[0]?.rejected || 0),
     },
+    lastRunAt: lastRunRows[0]?.last_at ? String(lastRunRows[0].last_at) : null,
   };
 }
 
@@ -645,6 +799,8 @@ export async function confirmMatch(matchId: string, actorUserId: string | null):
     for (const line of lines) {
       const milestoneId = String(line.milestone_id);
       const amount = Number(line.allocated_amount || 0);
+      // 배분액 0 = already_collected(이미 입력된 수금과 짝만 맞추는 건) — 금액을 다시 더하지 않는다.
+      if (amount <= 0) continue;
       const rows = rowsToObjects(
         await db.exec(
           `SELECT amount, invoice_amount, collected_amount, payment_collected_at, partial_payments_json
@@ -720,14 +876,44 @@ export async function unconfirmMatch(matchId: string): Promise<void> {
   });
 }
 
-/** 제안 반려 — 매칭을 버리고 원장은 미매칭으로 되돌린다(재실행 시 다시 후보가 만들어진다). */
-export async function rejectMatch(matchId: string): Promise<void> {
+/** 제외 사유(마이그 174) — 결산·분개 기능이 붙기 전까지 "왜 들어온 돈인지"를 남기는 최소 기록. */
+export const REJECT_REASONS: Array<{ key: string; label: string }> = [
+  { key: "mismatch", label: "오매칭(다른 거래처·금액)" },
+  { key: "subsidy", label: "지원금·보조금 (예: 청년고용장려금)" },
+  { key: "interest", label: "이자·금융수익" },
+  { key: "tax_refund", label: "세금 환급" },
+  { key: "transfer", label: "자금 이동(계좌 간)" },
+  { key: "other", label: "기타" },
+];
+
+/**
+ * 제안 제외 — 수금이 아니거나 매칭이 틀린 건을 사유와 함께 기록한다.
+ * 원장은 'ignored' 가 되어 재실행 대상에서 빠지고, 기록은 '제외됨' 버킷에서 다시 볼 수 있다.
+ */
+export async function rejectMatch(matchId: string, reason?: string | null, note?: string | null, actorUserId?: string | null): Promise<void> {
+  const now = KST_NOW();
   await withDbWrite(async (db) => {
-    await db.run(`UPDATE recon_matches SET status = 'rejected' WHERE match_id = $1`, [matchId]);
+    await db.run(
+      `UPDATE recon_matches
+          SET status = 'rejected', reject_reason = $2, reject_note = $3, rejected_by = $4, rejected_at = $5
+        WHERE match_id = $1`,
+      [matchId, reason ?? null, note ?? null, actorUserId ?? null, now],
+    );
     await db.run(
       `UPDATE bank_transactions SET recon_status = 'ignored' WHERE txn_id = (SELECT txn_id FROM recon_matches WHERE match_id = $1)`,
       [matchId],
     );
+  });
+}
+
+/** 제외 되돌리기 — 다음 대조 실행에서 다시 후보로 잡히게 한다. */
+export async function unrejectMatch(matchId: string): Promise<void> {
+  await withDbWrite(async (db) => {
+    await db.run(
+      `UPDATE bank_transactions SET recon_status = 'unprocessed' WHERE txn_id = (SELECT txn_id FROM recon_matches WHERE match_id = $1)`,
+      [matchId],
+    );
+    await db.run(`DELETE FROM recon_matches WHERE match_id = $1`, [matchId]);
   });
 }
 

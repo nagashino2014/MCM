@@ -29,6 +29,14 @@ import "@/components/cdash/cdash.css";
 type Tab = "connections" | "bank" | "card" | "recon" | "vat" | "invoice";
 
 const TAB_KEYS: Tab[] = ["connections", "bank", "card", "recon", "vat", "invoice"];
+
+/** 사이드바 소메뉴 = 탭 그룹. 소메뉴 진입 시 첫 탭이 열린다(menu.ts 의 href 와 짝). */
+const TAB_GROUPS: Array<{ title: string; tabs: [Tab, string][] }> = [
+  { title: "연결 관리", tabs: [["connections", "연결 관리"]] },
+  { title: "계좌·카드 원장", tabs: [["bank", "계좌 원장"], ["card", "법인카드 원장"]] },
+  { title: "계산서·수금", tabs: [["invoice", "세금계산서"], ["recon", "수금 대조"]] },
+  { title: "부가세 집계", tabs: [["vat", "부가세 집계"]] },
+];
 const toTab = (raw: string | null): Tab => (TAB_KEYS.includes(raw as Tab) && raw !== "connections" ? (raw as Tab) : "connections");
 
 interface ConnectionRow {
@@ -61,6 +69,11 @@ interface SyncLog {
 }
 
 const fmtAmount = (n: number) => n.toLocaleString("ko-KR");
+/** 사업자번호 표시 — 000-00-00000 (10자리가 아니면 원문 그대로) */
+const fmtCorpNum = (v: string) => {
+  const d = String(v ?? "").replace(/[^0-9]/g, "");
+  return d.length === 10 ? `${d.slice(0, 3)}-${d.slice(3, 5)}-${d.slice(5)}` : v;
+};
 const ymdInput = (d: Date) => d.toISOString().slice(0, 10);
 const monthsAgo = (n: number) => {
   const d = new Date();
@@ -319,31 +332,29 @@ export function FinanceBoard() {
     setTab(toTab(searchParams.get("tab")));
   }, [searchParams]);
 
+  // 사이드바 소메뉴 단위로 화면을 나눈다 — 탭은 소메뉴 안에 2개 이상일 때만 쓴다.
+  const group = TAB_GROUPS.find((g) => g.tabs.some(([k]) => k === tab)) ?? TAB_GROUPS[0];
+
   return (
     <div className="cdash cd-fields-white min-h-full p-4 rounded-3xl" data-theme={theme}>
       <div>
-        <CdPageHeader title="재무 · 계좌/법인카드 연동" />
+        <CdPageHeader title={`재무 · ${group.title}`} />
 
-        <div className="flex items-center gap-1.5 mb-4 flex-wrap">
-          {([
-            ["connections", "연결 관리"],
-            ["bank", "계좌 원장"],
-            ["card", "법인카드 원장"],
-            ["recon", "수금 대조"],
-            ["vat", "부가세 집계"],
-            ["invoice", "세금계산서"],
-          ] as [Tab, string][]).map(([k, label]) => (
-            <button
-              key={k}
-              type="button"
-              onClick={() => setTab(k)}
-              className={`cd-chip ${tab === k ? "" : "cd-text-muted"}`}
-              data-active={tab === k || undefined}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        {group.tabs.length > 1 && (
+          <div className="flex items-center gap-1.5 mb-4 flex-wrap">
+            {group.tabs.map(([k, label]) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setTab(k)}
+                className={`cd-chip ${tab === k ? "" : "cd-text-muted"}`}
+                data-active={tab === k || undefined}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {tab === "connections" && <ConnectionsPanel />}
         {tab === "bank" && <BankLedgerPanel />}
@@ -662,8 +673,8 @@ function ConnectionsPanel() {
         카드 수집대상은 <b>매입내역</b>, 수집주기는 <b>1일</b>로 선택하세요.
       </div>
 
-      {/* 좌(계좌+카드) : 우(수집 로그) — 로그 카드는 좁게(사용자 확정 62:38) */}
-      <div className="grid gap-4 items-start xl:grid-cols-[62fr_38fr]">
+      {/* 위: 계좌·법인카드 목록(전체 폭) / 아래: 로고 등록 + 수집 로그 가로 2단 — 폭 합이 위와 일치한다 */}
+      <div className="space-y-4">
         <div className="space-y-4 min-w-0">
           <ConnectionTable
             title="계좌"
@@ -693,8 +704,8 @@ function ConnectionsPanel() {
           />
         </div>
 
-        <div className="space-y-4 min-w-0">
-        {/* 은행·카드사 로고 등록 (수집 로그 상단 — 사용자 요청) */}
+        <div className="grid gap-4 items-start xl:grid-cols-2 min-w-0">
+        {/* 은행·카드사 로고 등록 */}
         <LogoRegistryCard />
 
         {/* 수집 로그 */}
@@ -881,8 +892,11 @@ function ConnectionTable({
                   <td className="py-2 pr-3">{row.alias ?? <span className="cd-text-muted">—</span>}</td>
                   <td className="py-2 pr-3">{row.collectCycle}</td>
                   <td className="py-2 pr-3">
-                    <span className={`cd-pill ${row.barobillStatus === "active" ? "cd-pill-success" : "cd-pill-idle"}`}>
-                      {row.barobillStatus === "active" ? "수집중" : "해지됨"}
+                    <span
+                      className={`cd-pill ${row.barobillStatus === "active" ? "cd-pill-success" : row.barobillStatus === "unlinked" ? "cd-pill-warn" : "cd-pill-idle"}`}
+                      title={row.barobillStatus === "unlinked" ? "바로빌 계정에 이 연결이 없습니다(운영 전환·해지 후 잔존). 적재된 원장은 보존되며, 같은 번호로 다시 등록하면 이어집니다." : undefined}
+                    >
+                      {row.barobillStatus === "active" ? "수집중" : row.barobillStatus === "unlinked" ? "바로빌 미등록" : "해지됨"}
                     </span>
                   </td>
                   <td className="py-2 pr-3 text-right">{row.txnCount.toLocaleString()}</td>
@@ -913,6 +927,8 @@ function ConnectionTable({
                             <StopCircle className="w-3.5 h-3.5" /> 해지
                           </button>
                         </>
+                      ) : row.barobillStatus === "unlinked" ? (
+                        <span className="text-xs cd-text-muted">바로빌에서 등록하면 자동으로 다시 연결됩니다</span>
                       ) : (
                         <>
                           <button
@@ -1739,8 +1755,21 @@ interface ReconItem {
   residualAmount: number;
   reason: Record<string, unknown> | null;
   confirmedAt: string | null;
+  rejectReason: string | null;
+  rejectNote: string | null;
   lines: ReconLine[];
 }
+
+/** 제외 사유(마이그 174) — 결산·분개 기능 전까지 "왜 들어온 돈인지"를 남기는 최소 기록. */
+const REJECT_REASONS: Array<[string, string]> = [
+  ["mismatch", "오매칭(다른 거래처·금액)"],
+  ["subsidy", "지원금·보조금 (예: 청년고용장려금)"],
+  ["interest", "이자·금융수익"],
+  ["tax_refund", "세금 환급"],
+  ["transfer", "자금 이동(계좌 간)"],
+  ["other", "기타"],
+];
+const REJECT_LABEL = Object.fromEntries(REJECT_REASONS) as Record<string, string>;
 
 interface Receivable {
   milestoneId: string;
@@ -1757,6 +1786,7 @@ interface Receivable {
 
 const MATCH_TYPE_LABEL: Record<string, string> = {
   exact_1to1: "금액 일치",
+  already_collected: "기록된 수금 확인",
   sum_nto1: "합계 매칭",
   partial: "부분입금",
   overpaid: "과대입금",
@@ -1766,12 +1796,14 @@ const MATCH_TYPE_LABEL: Record<string, string> = {
   manual: "수동 지정",
 };
 
-type ReconBucket = "high" | "review" | "other" | "confirmed";
+type ReconBucket = "high" | "review" | "other" | "confirmed" | "rejected";
 
 function ReconPanel() {
   const [bucket, setBucket] = useState<ReconBucket>("high");
   const [items, setItems] = useState<ReconItem[]>([]);
-  const [counts, setCounts] = useState({ high: 0, review: 0, other: 0, confirmed: 0 });
+  const [counts, setCounts] = useState({ high: 0, review: 0, other: 0, confirmed: 0, rejected: 0 });
+  const [lastRunAt, setLastRunAt] = useState<string | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<ReconItem | null>(null);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [manualTarget, setManualTarget] = useState<ReconItem | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1791,7 +1823,8 @@ function ReconPanel() {
         if (!res.ok) throw new Error(data?.error ?? "검토 큐를 불러오지 못했습니다.");
         if (!alive) return;
         setItems(data.items ?? []);
-        setCounts(data.counts ?? { high: 0, review: 0, other: 0, confirmed: 0 });
+        setCounts(data.counts ?? { high: 0, review: 0, other: 0, confirmed: 0, rejected: 0 });
+        setLastRunAt(data.lastRunAt ?? null);
         setChecked(new Set());
       } catch (err) {
         if (alive) setError((err as Error).message);
@@ -1847,6 +1880,7 @@ function ReconPanel() {
     ["review", "검토 필요", counts.review],
     ["other", "미매칭·보류", counts.other],
     ["confirmed", "확정됨", counts.confirmed],
+    ["rejected", "제외됨", counts.rejected],
   ];
 
   return (
@@ -1875,7 +1909,7 @@ function ReconPanel() {
               {label} {n}
             </button>
           ))}
-          {bucket !== "confirmed" && items.length > 0 && (
+          {bucket !== "confirmed" && bucket !== "rejected" && items.length > 0 && (
             <button
               type="button"
               className="cd-btn cd-btn-ghost cd-btn-sm ml-2"
@@ -1887,6 +1921,10 @@ function ReconPanel() {
         </div>
         <p className="text-xs cd-text-muted mb-2">
           입금 내역을 발행된 계산서(계약 단계)와 대조해 수금 후보를 제안합니다. 승인해야 실제 수금으로 반영되며, 확정 건은 되돌릴 수 있습니다.
+          {" "}거래처를 식별하지 못한 입금은 금액이 같아도 제안하지 않습니다(오매칭 방지) — 수동 매칭으로 한 번 지정하면 입금자명이 학습됩니다.
+        </p>
+        <p className="text-[11px] cd-text-faint mb-2">
+          {lastRunAt ? `마지막 대조 실행: ${lastRunAt}` : "아직 대조를 실행하지 않았습니다."} · 매칭 규칙이 바뀌면 <b>대조 실행</b>을 다시 눌러야 목록이 갱신됩니다.
         </p>
         {notice && <div className="text-sm mb-2" style={{ color: "var(--cd-success)" }}>{notice}</div>}
         {error && <div className="cd-error-text text-sm mb-2">{error}</div>}
@@ -1901,7 +1939,7 @@ function ReconPanel() {
           {items.map((item) => (
             <div key={item.matchId} className="rounded-xl border cd-border-c p-3">
               <div className="flex items-start gap-3 flex-wrap">
-                {bucket !== "confirmed" && (
+                {bucket !== "confirmed" && bucket !== "rejected" && (
                   <input
                     type="checkbox"
                     className="mt-1"
@@ -1954,12 +1992,22 @@ function ReconPanel() {
                   {item.lines.length > 0 && Boolean(item.reason?.rule) && (
                     <div className="text-[11px] cd-text-faint mt-0.5">근거: {String(item.reason?.rule)}</div>
                   )}
+                  {item.rejectReason && (
+                    <div className="text-xs mt-1">
+                      <span className="cd-pill cd-pill-idle">{REJECT_LABEL[item.rejectReason] ?? item.rejectReason}</span>
+                      {item.rejectNote && <span className="ml-1.5 cd-text-muted">{item.rejectNote}</span>}
+                    </div>
+                  )}
                 </div>
                 {/* 액션 */}
                 <div className="flex items-center gap-1.5">
                   {bucket === "confirmed" ? (
                     <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy} onClick={() => call({ action: "unconfirm", matchId: item.matchId }, "확정을 되돌렸습니다.")}>
                       <Undo2 className="w-3.5 h-3.5" /> 되돌리기
+                    </button>
+                  ) : bucket === "rejected" ? (
+                    <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy} onClick={() => call({ action: "unreject", matchId: item.matchId }, "제외를 되돌렸습니다. 다음 대조 실행에서 다시 후보로 잡힙니다.")}>
+                      <Undo2 className="w-3.5 h-3.5" /> 제외 해제
                     </button>
                   ) : (
                     <>
@@ -1974,8 +2022,8 @@ function ReconPanel() {
                       <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy} onClick={() => setManualTarget(item)}>
                         수동 매칭
                       </button>
-                      <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy} onClick={() => call({ action: "reject", matchId: item.matchId }, "제외 처리했습니다.")}>
-                        제외
+                      <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy} onClick={() => setRejectTarget(item)} title="수금이 아니거나 매칭이 틀린 건 — 사유를 남깁니다">
+                        제외·사유 기록
                       </button>
                     </>
                   )}
@@ -1985,6 +2033,16 @@ function ReconPanel() {
           ))}
         </div>
       </div>
+
+      <RejectReasonModal
+        item={rejectTarget}
+        busy={busy}
+        onClose={() => setRejectTarget(null)}
+        onSubmit={async (reason, note) => {
+          const ok = await call({ action: "reject", matchId: rejectTarget?.matchId, rejectReason: reason, rejectNote: note }, "제외로 기록했습니다.");
+          if (ok) setRejectTarget(null);
+        }}
+      />
 
       <ManualMatchModal
         item={manualTarget}
@@ -1996,6 +2054,85 @@ function ReconPanel() {
         }}
       />
     </div>
+  );
+}
+
+/**
+ * 제외 사유 기록 — 오매칭이거나 애초에 수금이 아닌 입금을 사유와 함께 남긴다.
+ * 정식 분개(결산 원장)는 별도 기능이므로, 여기서는 "왜 들어온 돈인지"만 기록해 둔다.
+ */
+function RejectReasonModal({
+  item,
+  busy,
+  onClose,
+  onSubmit,
+}: {
+  item: ReconItem | null;
+  busy: boolean;
+  onClose: () => void;
+  onSubmit: (reason: string, note: string) => void;
+}) {
+  const [reason, setReason] = useState("mismatch");
+  const [note, setNote] = useState("");
+
+  useEffect(() => {
+    if (!item) return;
+    // 거래처가 안 잡혔거나 매칭 후보가 없으면 수금 자체가 아닐 가능성이 높다 → 기본값을 바꿔 준다.
+    setReason(item.lines.length === 0 || !item.facilityId ? "subsidy" : "mismatch");
+    setNote("");
+  }, [item]);
+
+  return (
+    <CdModal
+      open={item !== null}
+      onClose={onClose}
+      title="제외 · 입금 사유 기록"
+      footer={
+        <>
+          <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={onClose}>
+            취소
+          </button>
+          <button type="button" className="cd-btn cd-btn-primary cd-btn-sm" disabled={busy} onClick={() => onSubmit(reason, note.trim())}>
+            제외로 기록
+          </button>
+        </>
+      }
+    >
+      <div className="text-sm cd-text space-y-3">
+        <div className="rounded-xl border cd-border-c p-3">
+          <div className="font-medium">{item ? fmtAmount(item.amount) : 0}원</div>
+          <div className="text-xs cd-text-muted">
+            {item?.txnAt} · 입금자 {item?.remitterRaw || "—"}
+          </div>
+          {item && item.lines.length > 0 && (
+            <div className="text-xs cd-text-faint mt-1">
+              제안: {item.facilityName} · {item.lines[0].contractTitle} {item.lines[0].stageLabel}
+            </div>
+          )}
+        </div>
+        <div>
+          <div className="cd-label text-xs mb-1">입금 성격</div>
+          <select className="cd-select" value={reason} onChange={(e) => setReason(e.target.value)}>
+            {REJECT_REASONS.map(([k, label]) => (
+              <option key={k} value={k}>{label}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <div className="cd-label text-xs mb-1">메모</div>
+          <input
+            className="cd-input"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="예: 고용노동부 청년고용장려금 지원금"
+          />
+        </div>
+        <p className="text-[11px] cd-text-faint">
+          제외한 건은 대조 대상에서 빠지고 <b>제외됨</b> 탭에 남습니다. 잘못 제외했다면 거기서 되돌릴 수 있습니다.
+          계정과목 분개는 결산 원장 기능이 붙은 뒤 이 기록을 이어받습니다.
+        </p>
+      </div>
+    </CdModal>
   );
 }
 
@@ -2318,6 +2455,7 @@ function StoreRuleListCard() {
           <thead>
             <tr className="cd-text-muted text-left">
               <th className="py-1.5 pr-3 font-normal">가맹점</th>
+              <th className="py-1.5 pr-3 font-normal">업태</th>
               <th className="py-1.5 pr-3 font-normal">기준</th>
               <th className="py-1.5 pr-3 font-normal">계정과목</th>
               <th className="py-1.5 pr-3 font-normal text-right">해당 건수</th>
@@ -2328,12 +2466,10 @@ function StoreRuleListCard() {
           <tbody>
             {rules.map((r) => (
               <tr key={r.ruleId} className="border-t cd-hairline-row-c">
-                <td className="py-1.5 pr-3">
-                  {r.storeName || r.matchValue}
-                  {r.storeBizType && <span className="ml-1 text-xs cd-text-faint">{r.storeBizType}</span>}
-                </td>
-                <td className="py-1.5 pr-3 text-xs cd-text-muted">
-                  {r.matchType === "store_name" ? "상호" : "사업자번호"} · {r.matchValue}
+                <td className="py-1.5 pr-3">{r.storeName || r.matchValue}</td>
+                <td className="py-1.5 pr-3 text-xs cd-text-muted">{r.storeBizType ?? ""}</td>
+                <td className="py-1.5 pr-3 text-xs cd-text-muted whitespace-nowrap">
+                  {r.matchType === "store_name" ? "상호" : "사업자번호"} · {r.matchType === "corp_num" ? fmtCorpNum(r.matchValue) : r.matchValue}
                 </td>
                 <td className="py-1.5 pr-3">{r.categoryLabel}</td>
                 <td className="py-1.5 pr-3 text-right">{r.txnCount.toLocaleString()}</td>
@@ -2347,7 +2483,7 @@ function StoreRuleListCard() {
             ))}
             {rules.length === 0 && (
               <tr>
-                <td colSpan={6} className="py-6 text-center cd-text-muted text-sm">등록된 고정 규칙이 없습니다.</td>
+                <td colSpan={7} className="py-6 text-center cd-text-muted text-sm">등록된 고정 규칙이 없습니다.</td>
               </tr>
             )}
           </tbody>

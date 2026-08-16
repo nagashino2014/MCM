@@ -176,14 +176,20 @@ export const MENU_ITEMS: MenuItem[] = [
     ],
     group: "main",
   },
-  // 재무 — 바로빌 연동(계좌·법인카드 원장, 연결 관리). docs/barobill-finance-blueprint.md F0.
+  // 재무 — 바로빌 연동. docs/barobill-finance-blueprint.md F0~F5.
   // 사이드바는 role 기반 노출만 지원하므로 admin 한정. API 는 finance.* RBAC 로 별도 가드.
-  // 화면 내 탭 3개로 충분해 소메뉴는 두지 않는다(사용자 확정).
+  // 소메뉴 4개로 나누고, 각 소메뉴 안에서만 탭을 쓴다(연결 관리·부가세는 단일 화면이라 탭 없음).
   {
     title: "재무",
     href: "/finance",
     icon: Landmark,
     minRole: "admin",
+    submenu: [
+      { title: "연결 관리", href: "/finance?tab=connections" },
+      { title: "계좌·카드 원장", href: "/finance?tab=bank" },
+      { title: "계산서·수금", href: "/finance?tab=invoice" },
+      { title: "부가세 집계", href: "/finance?tab=vat" },
+    ],
     group: "main",
   },
   {

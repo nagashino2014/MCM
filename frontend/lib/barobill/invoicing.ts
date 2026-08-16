@@ -382,15 +382,24 @@ export async function invoicePopUpUrl(invoiceId: string): Promise<string> {
   return getTaxInvoicePopUpUrl(String(rows[0].mgt_key));
 }
 
-/** 발행 취소(국세청 전송 전) — 성공 시 단계의 발행 플래그도 되돌린다. */
+/**
+ * 임시저장 문서 삭제.
+ * ★실측(2026-08-16 테스트베드): `DeleteTaxInvoice` 는 **임시저장(BarobillState 1000) 전용**이다.
+ *   즉시발행으로 발급완료(3014)된 건은 국세청 전송 전이라도 -21003("삭제 가능한 상태가 아닙니다")로 거부된다.
+ *   → 발급된 계산서의 정정은 **수정세금계산서(RegistModifyTaxInvoice + ModifyCode)** 로만 가능(P5 범위).
+ *   우리 앱은 RegistAndIssue(즉시발행)만 쓰므로 이 경로는 사실상 방어용이다.
+ */
 export async function cancelTaxInvoice(invoiceId: string): Promise<void> {
   const db = await getDb();
   const rows = rowsToObjects(
-    await db.exec(`SELECT mgt_key, milestone_id, nts_send_state FROM tax_invoices WHERE invoice_id = $1`, [invoiceId]),
+    await db.exec(`SELECT mgt_key, milestone_id, nts_send_state, barobill_state FROM tax_invoices WHERE invoice_id = $1`, [invoiceId]),
   );
   if (!rows.length) throw Object.assign(new Error("계산서를 찾을 수 없습니다."), { status: 404 });
-  if (Number(rows[0].nts_send_state ?? 0) >= 4) {
-    throw Object.assign(new Error("국세청 전송이 끝난 계산서는 취소할 수 없습니다(수정세금계산서로 정정)."), { status: 400 });
+  if (Number(rows[0].barobill_state ?? 0) >= 3000) {
+    throw Object.assign(
+      new Error("이미 발급된 계산서는 삭제할 수 없습니다. 정정이 필요하면 수정세금계산서를 발행해야 합니다(바로빌 홈페이지 또는 후속 기능)."),
+      { status: 400 },
+    );
   }
   await deleteTaxInvoice(String(rows[0].mgt_key));
   const now = KST_NOW();

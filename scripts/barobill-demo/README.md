@@ -51,3 +51,17 @@ node scripts/barobill-demo/test-bank-translog.js test <계좌번호> 20260601 20
 - **SOAP 네임스페이스 = `http://ws.baroservice.com/`** (테스트베드 포함. tempuri.org 아님 — SOAPAction 불일치 시 HTTP 500 SoapException). WSDL: `{host}/BANKACCOUNT.asmx?WSDL`.
 - CERTKEY 인증 왕복 정상: `GetBankAccountEx2` 빈 목록(계좌 미등록 상태) · `GetErrString` 동작 · `CheckCERTIsValid` → `-31100`(등록된 공동인증서 없음 — 세금계산서 발행 전 인증서 등록 필요, 계좌·카드 조회와는 무관).
 - 카드는 **매입내역(PURCHASE) 전용 확정** — CARD.asmx `GetPurchaseHistories` 계열로 확장 예정(승인내역 미사용). 상세는 [바로빌 재무 연동 블루프린트](../../docs/barobill-finance-blueprint.md).
+
+## 세금계산서 발행 실증 (2026-08-16, 테스트베드)
+
+`node check-cert.js` — 공동인증서 등록 확인(`CheckCERTIsValid`). **테스트베드와 운영은 별개 계정이라 각각 등록해야 한다.**
+`node test-tax-invoice.js` — 자가 발행 1건으로 발행→상태→원본URL→삭제 시퀀스 검증(공급자·공급받는자 모두 우리 회사).
+
+실측 결과:
+- `RegistAndIssueTaxInvoice` = 1(성공). `TaxInvoice` 는 `s:sequence` 라 **요소 순서 준수 필수**,
+  문서에 없던 필수 int **`TaxCalcType`**(1) 포함해야 한다.
+- `GetTaxInvoiceState` → `BarobillState=3014`(발급완료), `NTSSendState=1`(전송전),
+  **`NTSSendKey` 는 발행 즉시 채워진다**(테스트베드는 8888… 더미). 오류는 `BarobillState` 에 음수로 실린다.
+- `GetTaxInvoicePopUpURL(…, ID, PWD='')` 정상.
+- ⚠ `DeleteTaxInvoice` → **-21003**. 이 API 는 **임시저장(1000) 전용**이며 발급완료 건은 삭제 불가.
+  발급분 정정은 **수정세금계산서(`RegistModifyTaxInvoice` + `ModifyCode`)** 뿐이다.

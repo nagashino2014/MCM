@@ -2462,7 +2462,9 @@ function TaxInvoicePanel() {
         </button>
       </div>
       <p className="text-xs cd-text-muted mb-2">
-        발행은 계약 상세의 청구·수금 단계에서 <b>전자발행</b> 버튼으로 합니다. 국세청 전송은 발행 다음 날 일괄 처리되므로, 승인번호는 상태 갱신 후에 표시됩니다.
+        발행은 계약 상세의 청구·수금 단계에서 <b>전자발행</b> 버튼으로 합니다. 국세청 전송은 발행 다음 날 일괄 처리되므로, 전송 상태는 상태 갱신 후에 반영됩니다.
+        <br />
+        발급된 계산서는 취소할 수 없습니다 — 금액·내용을 정정하려면 수정세금계산서를 발행해야 합니다(현재는 바로빌 홈페이지에서 처리).
       </p>
       {notice && <div className="text-sm mb-2" style={{ color: "var(--cd-success)" }}>{notice}</div>}
       {error && <div className="cd-error-text text-sm mb-2">{error}</div>}
@@ -2511,9 +2513,10 @@ function TaxInvoicePanel() {
                   <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy} onClick={() => void openOriginal(r.invoiceId)}>
                     원본
                   </button>
-                  {!r.canceledAt && (r.ntsSendState ?? 1) < 4 && (
-                    <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy} onClick={() => void cancel(r.invoiceId)} title="국세청 전송 전에만 취소할 수 있습니다">
-                      발행 취소
+                  {/* 실측: 발급완료(3014) 건은 API 취소 불가(-21003) — 임시저장 건에만 삭제를 노출한다. */}
+                  {!r.canceledAt && (r.barobillState ?? 0) < 3000 && (
+                    <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy} onClick={() => void cancel(r.invoiceId)} title="임시저장 문서만 삭제할 수 있습니다">
+                      삭제
                     </button>
                   )}
                 </td>

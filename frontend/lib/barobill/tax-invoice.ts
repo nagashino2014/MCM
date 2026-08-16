@@ -194,7 +194,11 @@ export async function getTaxInvoicePopUpUrl(mgtKey: string): Promise<string> {
   return expectString(xml, "GetTaxInvoicePopUpURL");
 }
 
-/** 국세청 전송 전에만 가능한 발행 취소. 전송 후에는 수정세금계산서로만 정정한다. */
+/**
+ * 임시저장 문서 삭제.
+ * ★실측(2026-08-16): 발급완료(3014) 건은 국세청 전송 전이라도 -21003 으로 거부된다.
+ *   발급분 정정은 수정세금계산서(RegistModifyTaxInvoice + ModifyCode)뿐이다.
+ */
 export async function deleteTaxInvoice(mgtKey: string): Promise<void> {
   const { certKey, corpNum } = getBarobillConfig();
   const xml = await soapCall("TI", "DeleteTaxInvoice", { CERTKEY: certKey, CorpNum: corpNum, MgtKey: mgtKey });

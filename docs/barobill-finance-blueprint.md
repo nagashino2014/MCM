@@ -267,7 +267,18 @@ F1과 동일 컴포넌트 재사용, 대상 표만 `trip_expenses`(키: `spent_o
 
 **금액 기준 논점(§8-3) 처리** — 계약 단계 금액이 공급가액인지 합계인지 데이터 관례가 확정되지 않아, 발행 모달에서 **"입력 금액 기준"(공급가액 / 합계금액)을 사용자가 고르게** 하고 공급가액·세액·합계를 즉시 보여준다. 국세청에 나가는 값이라 자동 판정하지 않는다.
 
-**발행 담당자 이메일** — 바로빌은 공급자 Email 을 필수로 받는다. `BAROBILL_INVOICER_EMAIL` env 로 기본값을 주되, 미설정 시 모달에서 직접 입력한다.
+**발행 담당자 이메일** — 바로빌은 공급자 Email 을 필수로 받는다. `BAROBILL_INVOICER_EMAIL` env 로 기본값을 주되(현재 `kaikan00@koensain.com`), 미설정 시 모달에서 직접 입력한다.
+
+**★발행 시퀀스 실증 (2026-08-16, 테스트베드 자가 발행 1건 — `scripts/barobill-demo/test-tax-invoice.js`)**
+| 단계 | 결과 |
+|---|---|
+| `CheckCERTIsValid` | **1**(인증서 등록 후). 등록 전에는 -31100 — 테스트베드·운영은 **별개 계정이라 각각 등록** 필요 |
+| `RegistAndIssueTaxInvoice` | **1 성공**. 위 XML 구조(요소 순서·`TaxCalcType` 포함)가 그대로 통과 |
+| `GetTaxInvoiceState` | `BarobillState=3014`(발급완료) · `NTSSendState=1`(전송전) · **`NTSSendKey` 는 발행 즉시 채워짐**(테스트베드는 `2026...8888...` 더미) · `IsOpened=0` |
+| `GetTaxInvoicePopUpURL` | 정상(`https://test.barobill.co.kr/interop/?TK=…`) |
+| `DeleteTaxInvoice` | **-21003 "삭제 가능한 상태가 아닙니다"** |
+
+⚠ **취소 설계 수정**: `DeleteTaxInvoice` 는 **임시저장(1000) 전용**이다. 즉시발행으로 발급완료된 건은 국세청 전송 전이라도 삭제되지 않으며, WSDL 에 발급 취소 API 자체가 없다(`RegistModifyTaxInvoice`/`ModifyCode` 뿐). → 화면의 "발행 취소"를 걷어내고 **발급분은 수정세금계산서로만 정정**한다고 안내한다(수정세금계산서 발행 UI 는 P5).
 
 ---
 

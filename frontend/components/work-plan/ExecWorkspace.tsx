@@ -7,6 +7,7 @@ import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { cn } from "@/lib/utils";
 import ReportEditor, { type ReportSubject } from "@/components/work-plan/ReportEditor";
 import type { ExecReportCard } from "@/lib/work-plan/workspace";
+import { summaryLines } from "@/lib/work-plan/summary";
 import "@/components/cdash/cdash.css";
 
 const SERVICE_ROLES = ["관리자", "실무(정)", "실무(부)", "실무(품질검토)"];
@@ -161,7 +162,20 @@ export default function ExecWorkspace() {
                       {/* 추진내역(요약) — 4줄 고정 높이(카드 높이가 요약 길이에 따라 변하지 않게). */}
                       <div className="w-[38%] shrink-0 rounded-xl border cd-border-c p-2">
                         <p className="text-[10px] font-semibold cd-text-faint mb-1">추진내역(요약)</p>
-                        <p className="text-[11px] cd-text-muted leading-relaxed line-clamp-4 h-[72px]">{c.summaryText || "—"}</p>
+                        {(() => {
+                          const lines = summaryLines(c.summaryText);
+                          if (!lines.length) return <p className="text-[11px] cd-text-muted h-[72px]">—</p>;
+                          return (
+                            <ul className="h-[72px] overflow-hidden flex flex-col gap-0.5">
+                              {lines.map((line, i) => (
+                                <li key={i} className="flex gap-1 text-[11px] cd-text-muted leading-relaxed">
+                                  <span className="shrink-0 cd-text-primary">•</span>
+                                  <span className="line-clamp-2">{line}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          );
+                        })()}
                       </div>
                     </div>
                     <div className="mt-1.5 flex items-center gap-1.5">

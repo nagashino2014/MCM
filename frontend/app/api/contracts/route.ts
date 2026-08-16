@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
-import { rowsToObjects, withDbWrite } from "@/lib/db";
+import { withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 import { resolveVisibleContractIds } from "@/lib/auth/contract-scope";
 import { listContracts, type ContractListFilter } from "@/lib/ieps/contracts";
@@ -10,7 +10,6 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const id = () => "ctr_" + crypto.randomUUID().replace(/-/g, "").slice(0, 16);
-const participationId = () => "sp_" + crypto.randomUUID().replace(/-/g, "").slice(0, 16);
 
 export async function GET(req: NextRequest) {
   try {
@@ -49,21 +48,10 @@ export async function POST(req: NextRequest) {
     const contractId = id();
     const now = new Date().toISOString();
     await withDbWrite(async (db) => {
-      // 생성자의 소속 부서·직원 정보. RBAC 가시성(부서장 owning_dept, 실무자 participant scope)에서
-      // 자기가 만든 계약이 목록에 잡히도록 owning_dept_id 와 수행인력을 채운다.
-      const creatorRows = rowsToObjects(
-        await db.exec(
-          `SELECT u.employee_id, ep.dept_id
-             FROM users u
-             LEFT JOIN employee_profiles ep ON ep.employee_id = u.employee_id
-            WHERE u.user_id = $1`,
-          [actor.userId]
-        )
-      );
-      const creatorEmployeeId = creatorRows[0]?.employee_id ? String(creatorRows[0].employee_id) : null;
-      const creatorDeptId = creatorRows[0]?.dept_id ? String(creatorRows[0].dept_id) : null;
+      // 수행부서·수행인력은 계약 등록자와 무관하다(등록은 영업관리본부가 대행). 명시 입력이 없으면
+      // 해당 부서장·담당자가 별도로 지정할 때까지 비워 둔다.
       const owningDeptId =
-        (typeof body.owningDeptId === "string" && body.owningDeptId.trim()) || creatorDeptId;
+        (typeof body.owningDeptId === "string" && body.owningDeptId.trim()) || null;
 
       await db.run(
         `INSERT INTO contracts
@@ -106,16 +94,6 @@ export async function POST(req: NextRequest) {
           now,
         ]
       );
-      // 생성자를 수행인력(service_participants)에 자동 등록 → participant scope 계정이 자기 계약을 볼 수 있게 한다.
-      if (creatorEmployeeId) {
-        await db.run(
-          `INSERT INTO service_participants
-             (participation_id, contract_id, employee_id, role_label, source, created_at, updated_at)
-           VALUES ($1, $2, $3, '관리자', 'manual', $4, $4)
-           ON CONFLICT (contract_id, employee_id, role_label) DO NOTHING`,
-          [participationId(), contractId, creatorEmployeeId, now]
-        );
-      }
       for (const facilityId of facilityIds) {
         await db.run(
           `INSERT INTO contract_facilities

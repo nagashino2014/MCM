@@ -3,7 +3,7 @@ import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { readStorageObject } from "@/lib/contracts/document-bundle";
 import { parseHwpx } from "@/lib/deliverable/hwpx-doc";
 import { outlineHwpx } from "@/lib/deliverable/template-form";
-import { analyzeTemplateHwpx } from "@/lib/deliverable/template-analyze";
+import { analyzeTemplateHwpx, sanitizeProfile } from "@/lib/deliverable/template-analyze";
 import { analyzeTemplateScan } from "@/lib/deliverable/template-scan";
 import { deleteTemplate, getTemplate, saveTemplateProfile, saveTemplateSpec } from "@/lib/deliverable/store";
 import type { TemplateProfile } from "@/lib/deliverable/types";
@@ -66,14 +66,23 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     }
 
     if (body.profile) {
+      if (tpl.renderMode !== "overlay") {
+        return NextResponse.json({ error: "재구축(spec) 양식은 자리 매핑을 저장하지 않습니다." }, { status: 400 });
+      }
+      if (!tpl.sourceKey) return NextResponse.json({ error: "원본 파일이 없어 좌표를 확인할 수 없습니다." }, { status: 400 });
+      // 사용자가 고친 매핑도 좌표 실체와 대조한다 — 없는 문단·셀을 가리키면 주입 때 조용히 빠진다.
+      const outline = outlineHwpx(await parseHwpx(await readStorageObject(tpl.sourceKey)));
+      const before = body.profile.docs?.reduce((a, d) => a + (d.slots?.length ?? 0), 0) ?? 0;
+      const checked = sanitizeProfile(body.profile, outline, tpl.analyzeModel ?? "manual");
+      const after = checked.docs.reduce((a, d) => a + d.slots.length, 0);
       // 사용자가 고친 매핑은 분석 시각·모델을 사람 손으로 표시해 둔다
       const profile: TemplateProfile = {
-        ...body.profile,
+        ...checked,
         analyzedAt: new Date().toISOString(),
         model: `${tpl.analyzeModel ?? "manual"} + 사용자 보정`,
       };
       await saveTemplateProfile(templateId, profile);
-      return NextResponse.json({ profile });
+      return NextResponse.json({ profile, dropped: Math.max(0, before - after) });
     }
     return NextResponse.json({ error: "저장할 내용이 없습니다." }, { status: 400 });
   } catch (err) {

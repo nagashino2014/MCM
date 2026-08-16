@@ -6,9 +6,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, FileUp, RefreshCw, Search, Trash2 } from "lucide-react";
+import { ArrowLeft, FileUp, RefreshCw, Search, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { TemplateMappingEditor } from "./TemplateMappingEditor";
 import { BINDING_LABEL, DELIVERABLE_KIND_LABEL, type DeliverableKind } from "@/lib/deliverable/types";
 import "@/components/cdash/cdash.css";
 
@@ -98,6 +99,8 @@ export function TemplateBoard() {
   const [slots, setSlots] = useState<Record<string, Record<string, RowDetail[]>>>({});
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  /** 매핑 보정 화면(D5) — 좌표를 다루므로 목록과 같은 폭을 쓴다 */
+  const [editing, setEditing] = useState(false);
 
   // 업로드 폼
   const [name, setName] = useState("");
@@ -180,9 +183,10 @@ export function TemplateBoard() {
     }
   };
 
-  const openTemplate = async (templateId: string) => {
+  // force=재분석·보정 직후 — setSlots 는 다음 렌더에 반영되므로 캐시 판단을 믿으면 옛 매핑이 남는다.
+  const openTemplate = async (templateId: string, force = false) => {
     setSelected(templateId);
-    if (slots[templateId]) return;
+    if (!force && slots[templateId]) return;
     try {
       const res = await fetch(`/api/contracts/deliverables/templates/${templateId}`);
       const data = await res.json();
@@ -224,13 +228,8 @@ export function TemplateBoard() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "재분석에 실패했습니다.");
-      setSlots((prev) => {
-        const next = { ...prev };
-        delete next[templateId];
-        return next;
-      });
       await load();
-      await openTemplate(templateId);
+      await openTemplate(templateId, true);
       setMsg("재분석을 마쳤습니다.");
     } catch (err) {
       setMsg((err as Error).message);
@@ -252,6 +251,14 @@ export function TemplateBoard() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const closeEditor = async (changed: boolean) => {
+    setEditing(false);
+    if (!changed) return;
+    await load();
+    await openTemplate(selected, true);
+    setMsg("매핑을 저장했습니다.");
   };
 
   const current = useMemo(() => templates.find((t) => t.templateId === selected) ?? null, [selected, templates]);
@@ -284,6 +291,14 @@ export function TemplateBoard() {
         </div>
       )}
 
+      {editing && current ? (
+        <TemplateMappingEditor
+          templateId={current.templateId}
+          name={current.name}
+          kind={current.kind}
+          onClose={(changed) => void closeEditor(changed)}
+        />
+      ) : (
       <div className="flex flex-col xl:flex-row gap-5 items-start">
         {/* 좌: 업로드 + 목록 */}
         <section className="cd-card rounded-3xl overflow-hidden w-full xl:flex-[5] min-w-0">
@@ -412,6 +427,16 @@ export function TemplateBoard() {
             </div>
             {current && (
               <div className="flex gap-2 shrink-0">
+                {current.renderMode === "overlay" && (
+                  <button
+                    type="button"
+                    className="cd-btn rounded-xl border cd-border-c px-3 py-1.5 text-[12.5px] flex items-center gap-1.5"
+                    onClick={() => setEditing(true)}
+                    disabled={busy}
+                  >
+                    <SlidersHorizontal className="w-3.5 h-3.5" /> 매핑 보정
+                  </button>
+                )}
                 <button
                   type="button"
                   className="cd-btn rounded-xl border cd-border-c px-3 py-1.5 text-[12.5px] flex items-center gap-1.5"
@@ -472,6 +497,7 @@ export function TemplateBoard() {
           )}
         </section>
       </div>
+      )}
     </div>
   );
 }

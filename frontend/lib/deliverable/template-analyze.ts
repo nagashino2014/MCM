@@ -70,8 +70,12 @@ const int = (v: unknown): number | null => {
   return Number.isInteger(n) && n >= 0 ? n : null;
 };
 
-/** LLM 응답을 좌표 실체와 대조해 거른다 — 없는 문단·셀을 가리키는 매핑은 버린다. */
-function sanitize(raw: unknown, outline: FormOutline, model: string): TemplateProfile {
+/**
+ * LLM 응답을 좌표 실체와 대조해 거른다 — 없는 문단·셀을 가리키는 매핑은 버린다.
+ * 사용자가 화면에서 고친 매핑(D5)도 같은 검증을 태운다 — 좌표가 어긋난 채 저장되면
+ * 주입 단계에서 조용히 빠져 버려 원인을 찾기 어렵다.
+ */
+export function sanitizeProfile(raw: unknown, outline: FormOutline, model: string): TemplateProfile {
   const root = (raw ?? {}) as Record<string, unknown>;
   const docsRaw = Array.isArray(root.docs) ? root.docs : [];
   const seen = new Set<string>();
@@ -146,7 +150,7 @@ export async function analyzeTemplateHwpx(bytes: Uint8Array, kind: DeliverableKi
     maxTokens: 8000,
     timeoutMs: 180_000,
   });
-  const profile = sanitize(raw, outline, MODEL);
+  const profile = sanitizeProfile(raw, outline, MODEL);
   if (!profile.docs.length) {
     throw new Error("양식에서 값을 넣을 자리를 찾지 못했습니다. 화면에서 직접 지정해 주세요.");
   }

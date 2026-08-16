@@ -1586,10 +1586,16 @@ function InvoiceUploadModal({
                 placeholder="정산 반영 실제 청구액"
                 value={formatThousands(state.settlementAmount)}
                 onChange={(e) => {
-                  // 실적 정산액(= 정산 반영 실제 청구액)을 입력하면 발행금액도 함께 맞춘다.
+                  // 실적 정산액(= 정산 반영 실제 청구액)을 입력하면 발행금액과 수금금액을 함께 맞춘다.
+                  // 실제로 받는 돈이 정산액이므로 수금금액이 원 청구액으로 남으면 수금 합계·자동대조가 어긋난다.
                   // 차감액은 (단계 원 금액 - 실적 정산액)으로 자동 산출되어 옆 칸에 표시된다.
                   const digits = stripDigits(e.target.value);
-                  onChange({ ...state, settlementAmount: digits, invoiceAmount: digits || state.invoiceAmount });
+                  onChange({
+                    ...state,
+                    settlementAmount: digits,
+                    invoiceAmount: digits || state.invoiceAmount,
+                    collectedAmount: digits || state.collectedAmount,
+                  });
                 }}
               />
               <span className="text-[11px] cd-text-faint">

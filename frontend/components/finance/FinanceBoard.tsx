@@ -2594,6 +2594,7 @@ const NTS_LABEL: Record<number, string> = { 1: "전송전", 2: "전송중", 3: "
  */
 function TaxInvoicePanel() {
   const [rows, setRows] = useState<TaxInvoiceRow[]>([]);
+  const [modifyTarget, setModifyTarget] = useState<TaxInvoiceRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -2722,6 +2723,12 @@ function TaxInvoicePanel() {
                   <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy} onClick={() => void openOriginal(r.invoiceId)}>
                     원본
                   </button>
+                  {/* 수정세금계산서(P5) — 발급분 정정의 유일한 경로. 원본 승인번호가 필요해 전송완료 건만. */}
+                  {!r.canceledAt && r.ntsSendState === 4 && r.ntsSendKey && (
+                    <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy} onClick={() => setModifyTarget(r)}>
+                      수정발행
+                    </button>
+                  )}
                   {/* 실측: 발급완료(3014) 건은 API 취소 불가(-21003) — 임시저장 건에만 삭제를 노출한다. */}
                   {!r.canceledAt && (r.barobillState ?? 0) < 3000 && (
                     <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy} onClick={() => void cancel(r.invoiceId)} title="임시저장 문서만 삭제할 수 있습니다">
@@ -2739,7 +2746,156 @@ function TaxInvoicePanel() {
           </tbody>
         </table>
       </div>
+
+      <ModifyInvoiceModal
+        origin={modifyTarget}
+        onClose={() => setModifyTarget(null)}
+        onIssued={() => {
+          setModifyTarget(null);
+          setNotice("수정세금계산서를 발행했습니다. 국세청 전송 상태는 다음 상태 갱신에서 반영됩니다.");
+          setReloadKey((k) => k + 1);
+        }}
+      />
     </div>
+  );
+}
+
+/** 수정세금계산서 사유(국세청 6종) — lib/barobill/tax-invoice.ts 의 MODIFY_CODES 와 동일. */
+const MODIFY_CODES: Array<{ code: string; label: string; hint: string; negative: boolean }> = [
+  { code: "1", label: "기재사항 착오정정", hint: "금액 외 기재사항을 잘못 적은 경우", negative: false },
+  { code: "2", label: "공급가액 변동", hint: "정산·단가 조정 등 — 증감분만 발행(감액이면 음수)", negative: false },
+  { code: "3", label: "환입", hint: "반품 — 환입 금액만큼 음수 발행", negative: true },
+  { code: "4", label: "계약의 해제", hint: "당초 발행을 되돌림 — 음수 발행", negative: true },
+  { code: "5", label: "내국신용장 사후개설", hint: "내국신용장이 사후 개설된 경우", negative: false },
+  { code: "6", label: "착오에 의한 이중발급", hint: "같은 건 중복 발행 — 당초분 취소(음수)", negative: true },
+];
+
+/**
+ * 수정세금계산서 발행 모달(P5) — 발급분은 취소가 안 되므로(실측) 정정은 이 경로뿐이다.
+ * 환입·계약해제·이중발급은 음수 금액이 원칙이라, 사유를 고르면 부호를 자동으로 맞춰 준다.
+ */
+function ModifyInvoiceModal({ origin, onClose, onIssued }: { origin: TaxInvoiceRow | null; onClose: () => void; onIssued: () => void }) {
+  const [modifyCode, setModifyCode] = useState("2");
+  const [writeDate, setWriteDate] = useState("");
+  const [supplyInput, setSupplyInput] = useState("");
+  const [itemName, setItemName] = useState("");
+  const [remark1, setRemark1] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const meta = MODIFY_CODES.find((m) => m.code === modifyCode) ?? MODIFY_CODES[1];
+
+  useEffect(() => {
+    if (!origin) return;
+    setModifyCode("2");
+    setWriteDate(new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10));
+    setSupplyInput(String(Math.abs(Math.round(origin.amountTotal))));
+    setItemName(`${origin.contractTitle ?? ""} ${origin.stageLabel ?? ""} 수정분`.trim());
+    setRemark1("");
+    setError(null);
+  }, [origin]);
+
+  // 음수 사유면 부호를 자동으로 뒤집는다. 입력은 항상 양수로 받는다.
+  const sign = meta.negative ? -1 : 1;
+  const supply = sign * (Number(supplyInput.replace(/[^0-9]/g, "")) || 0);
+  const tax = Math.round(supply * 0.1);
+  const total = supply + tax;
+
+  const submit = async () => {
+    if (!origin) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/finance/tax-invoices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "modify",
+          originalInvoiceId: origin.invoiceId,
+          modifyCode,
+          writeDate,
+          amountTotal: supply,
+          taxTotal: tax,
+          totalAmount: total,
+          itemName,
+          remark1,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "수정 발행에 실패했습니다.");
+      onIssued();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <CdModal
+      open={origin !== null}
+      onClose={onClose}
+      size="lg"
+      title="수정세금계산서 발행"
+      footer={
+        <>
+          <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={onClose}>
+            취소
+          </button>
+          <button type="button" className="cd-btn cd-btn-primary cd-btn-sm" disabled={busy || !supplyInput || !itemName.trim()} onClick={submit}>
+            {fmtAmount(total)}원 수정 발행
+          </button>
+        </>
+      }
+    >
+      <div className="text-sm cd-text space-y-3">
+        <div className="rounded-xl border cd-border-c p-3 text-xs">
+          <div className="font-medium cd-text mb-0.5">원본: {origin?.invoiceeCorpName} · {origin ? fmtAmount(origin.totalAmount) : 0}원 ({origin?.writeDate})</div>
+          <div className="cd-text-muted">승인번호 {origin?.ntsSendKey} — 수정분은 이 승인번호에 연결되어 국세청에 전송됩니다.</div>
+        </div>
+        <div>
+          <div className="cd-label text-xs mb-1">수정 사유</div>
+          <select className="cd-select" value={modifyCode} onChange={(e) => setModifyCode(e.target.value)}>
+            {MODIFY_CODES.map((m) => (
+              <option key={m.code} value={m.code}>{m.code}. {m.label}</option>
+            ))}
+          </select>
+          <p className="text-[11px] cd-text-faint mt-1">{meta.hint}</p>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <label>
+            <span className="text-[11px] cd-text-faint">작성일자</span>
+            <input type="date" className="cd-input mt-0.5" value={writeDate} onChange={(e) => setWriteDate(e.target.value)} />
+          </label>
+          <label>
+            <span className="text-[11px] cd-text-faint">공급가액{meta.negative ? " (음수로 발행됩니다)" : ""}</span>
+            <input
+              className="cd-input mt-0.5 text-right font-mono"
+              inputMode="numeric"
+              value={supplyInput ? Number(supplyInput.replace(/[^0-9]/g, "")).toLocaleString("ko-KR") : ""}
+              onChange={(e) => setSupplyInput(e.target.value.replace(/[^0-9]/g, ""))}
+            />
+          </label>
+        </div>
+        <label className="block">
+          <span className="text-[11px] cd-text-faint">품목</span>
+          <input className="cd-input mt-0.5" value={itemName} onChange={(e) => setItemName(e.target.value)} />
+        </label>
+        <label className="block">
+          <span className="text-[11px] cd-text-faint">비고</span>
+          <input className="cd-input mt-0.5" value={remark1} onChange={(e) => setRemark1(e.target.value)} placeholder="선택" />
+        </label>
+        <div className="flex items-center gap-4 text-xs">
+          <span><span className="cd-text-muted mr-1">공급가액</span><b className="font-mono">{fmtAmount(supply)}</b></span>
+          <span><span className="cd-text-muted mr-1">세액</span><b className="font-mono">{fmtAmount(tax)}</b></span>
+          <span><span className="cd-text-muted mr-1">합계</span><b className="font-mono text-[13px]">{fmtAmount(total)}원</b></span>
+        </div>
+        <p className="text-[11px] cd-text-faint">
+          ※ 수정 발행도 발급 즉시 되돌릴 수 없습니다. 계약 단계 금액(청구·수금)은 자동으로 바뀌지 않으니, 정정 후 계약 화면에서 확인하세요.
+        </p>
+        {error && <div className="cd-error-text text-xs">{error}</div>}
+      </div>
+    </CdModal>
   );
 }
 

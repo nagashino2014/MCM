@@ -146,6 +146,33 @@ export async function registAndIssueTaxInvoice(
   await expectOk(xml, "RegistAndIssueTaxInvoice");
 }
 
+/** 수정세금계산서 사유 코드(국세청 규정 6종). */
+export const MODIFY_CODES: Array<{ code: string; label: string; hint: string }> = [
+  { code: "1", label: "기재사항 착오정정", hint: "금액 외 기재사항(상호·주소 등)을 잘못 적은 경우" },
+  { code: "2", label: "공급가액 변동", hint: "정산·단가 조정 등으로 금액이 바뀐 경우 — 증감분만 발행" },
+  { code: "3", label: "환입", hint: "재화가 반품된 경우 — 환입 금액만큼 음수 발행" },
+  { code: "4", label: "계약의 해제", hint: "계약이 해제되어 당초 발행을 되돌리는 경우 — 음수 발행" },
+  { code: "5", label: "내국신용장 사후개설", hint: "내국신용장이 사후 개설된 경우" },
+  { code: "6", label: "착오에 의한 이중발급", hint: "같은 건을 두 번 발행한 경우 — 당초분 취소(음수)" },
+];
+
+/**
+ * 수정세금계산서 발행 — RegistModifyTaxInvoice(CERTKEY, CorpNum, Invoice, OriginalNTSSendKey).
+ * WSDL 실사(2026-08-16): 원본 국세청 승인번호를 별도 파라미터로 받는다(Remark1 아님).
+ * Invoice 에는 ModifyCode 가 반드시 들어가야 한다.
+ */
+export async function registModifyTaxInvoice(input: TaxInvoiceInput, originalNtsSendKey: string): Promise<void> {
+  if (!input.modifyCode) throw new BarobillError("수정 사유(ModifyCode)가 필요합니다.");
+  const { certKey, corpNum } = getBarobillConfig();
+  const xml = await soapCall("TI", "RegistModifyTaxInvoice", {
+    CERTKEY: certKey,
+    CorpNum: corpNum,
+    Invoice: rawXml(invoiceXml(input)),
+    OriginalNTSSendKey: originalNtsSendKey,
+  });
+  await expectOk(xml, "RegistModifyTaxInvoice");
+}
+
 export interface TaxInvoiceStateResult {
   mgtKey: string;
   barobillState: number; // 1000 임시 / 3014 발급완료 / 5031 발급 후 취소 …

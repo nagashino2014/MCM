@@ -19,6 +19,7 @@ import { PendingProgressCard } from "./widgets/PendingProgressCard";
 import { UpcomingBidsCard } from "./widgets/UpcomingBidsCard";
 import { WorkPlanTodoCard } from "./widgets/WorkPlanTodoCard";
 import { InvoiceRequestCard } from "./widgets/InvoiceRequestCard";
+import { FinanceAlertsCard } from "./widgets/FinanceAlertsCard";
 import { InvoiceInboxCard } from "./widgets/InvoiceInboxCard";
 import { LeaveNoticeInboxCard } from "./widgets/LeaveNoticeInboxCard";
 import { QuickFacilitiesCard } from "./widgets/QuickFacilitiesCard";
@@ -129,6 +130,7 @@ export function HomeBoard({ role }: { role?: string }) {
       bonusMe: <BonusMyCard />,
       contractInbox: <ContractInboxCard />,
       payslipInbox: <PayslipInboxCard />,
+      financeAlerts: <FinanceAlertsCard />,
       metrics: (
         <MetricHighlightCard
           metricKey={layout.widgetConfig?.metrics?.metricKey}

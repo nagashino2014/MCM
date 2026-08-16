@@ -5,7 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
-import { buildIssuePrefill, listContractInvoices, listRecentInvoices, issueTaxInvoice, refreshInvoiceStates, invoicePopUpUrl, cancelTaxInvoice, type IssueParams } from "@/lib/barobill/invoicing";
+import { buildIssuePrefill, listContractInvoices, listRecentInvoices, issueTaxInvoice, issueModifiedTaxInvoice, refreshInvoiceStates, invoicePopUpUrl, cancelTaxInvoice, type IssueParams, type ModifyParams } from "@/lib/barobill/invoicing";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,8 +24,8 @@ export async function GET(req: NextRequest) {
   }
 }
 
-interface PostBody extends Partial<IssueParams> {
-  action: "issue" | "refresh" | "popup-url" | "cancel";
+interface PostBody extends Partial<IssueParams>, Partial<Omit<ModifyParams, "writeDate" | "amountTotal" | "taxTotal" | "totalAmount" | "itemName" | "remark1">> {
+  action: "issue" | "modify" | "refresh" | "popup-url" | "cancel";
   invoiceId?: string;
   invoiceIds?: string[];
 }
@@ -66,6 +66,35 @@ export async function POST(req: NextRequest) {
           invoicee: body.invoicee?.corpName,
           mgtKey: result.mgtKey,
         },
+      });
+      return NextResponse.json(result);
+    }
+
+    if (body.action === "modify") {
+      const required = ["originalInvoiceId", "modifyCode", "writeDate", "itemName"] as const;
+      for (const key of required) {
+        if (!body[key]) return NextResponse.json({ error: `${key} 가 필요합니다.` }, { status: 400 });
+      }
+      const result = await issueModifiedTaxInvoice(
+        {
+          originalInvoiceId: body.originalInvoiceId!,
+          modifyCode: body.modifyCode!,
+          writeDate: body.writeDate!,
+          amountTotal: Number(body.amountTotal ?? 0),
+          taxTotal: Number(body.taxTotal ?? 0),
+          totalAmount: Number(body.totalAmount ?? 0),
+          itemName: body.itemName!,
+          remark1: body.remark1,
+          invoiceeEmail: body.invoiceeEmail,
+        },
+        actor.userId,
+      );
+      await recordAuditLog({
+        actorUserId: actor.userId,
+        action: "tax_invoice_issue",
+        targetTable: "tax_invoices",
+        targetId: result.invoiceId,
+        after: { modify: true, originalInvoiceId: body.originalInvoiceId, modifyCode: body.modifyCode, totalAmount: body.totalAmount },
       });
       return NextResponse.json(result);
     }

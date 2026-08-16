@@ -264,10 +264,53 @@ function dayGap(a: string | null, b: string | null): number {
   return Math.round((new Date(`${b}T00:00:00+09:00`).getTime() - new Date(`${a}T00:00:00+09:00`).getTime()) / 86400000);
 }
 
-function timingScore(invoicedAt: string | null, txnDate: string): number {
+/** 업체별 결제주기 학습값 — 확정 이력의 (발행일→입금일) 간격 통계. */
+export interface PaymentCycle {
+  avgDays: number;
+  count: number;
+}
+
+/**
+ * 확정된 대조 이력에서 거래처별 평균 결제 간격을 집계한다(P5).
+ * 2건 이상 쌓인 업체만 신뢰한다 — 어음 업체(120일+)와 즉시 입금 업체를 같은 잣대로 재지 않기 위함.
+ */
+export async function loadPaymentCycles(db: PgDatabase): Promise<Map<string, PaymentCycle>> {
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT m.matched_facility_id AS facility_id,
+              AVG( (t.txn_at::date - cm.invoice_issued_at::date) ) AS avg_days,
+              COUNT(*)::int AS n
+         FROM recon_matches m
+         JOIN bank_transactions t ON t.txn_id = m.txn_id
+         JOIN recon_match_lines l ON l.match_id = m.match_id
+         JOIN contract_payment_milestones cm ON cm.milestone_id = l.milestone_id
+        WHERE m.status = 'confirmed' AND m.matched_facility_id IS NOT NULL
+          AND cm.invoice_issued_at IS NOT NULL AND cm.invoice_issued_at <> ''
+        GROUP BY m.matched_facility_id
+       HAVING COUNT(*) >= 2`,
+    ),
+  );
+  const map = new Map<string, PaymentCycle>();
+  for (const r of rows) {
+    const avg = Number(r.avg_days);
+    if (Number.isFinite(avg)) map.set(String(r.facility_id), { avgDays: Math.round(avg), count: Number(r.n || 0) });
+  }
+  return map;
+}
+
+function timingScore(invoicedAt: string | null, txnDate: string, cycle?: PaymentCycle): number {
   if (!invoicedAt) return 50;
   const days = (new Date(`${txnDate}T00:00:00+09:00`).getTime() - new Date(`${invoicedAt}T00:00:00+09:00`).getTime()) / 86400000;
   if (days < -7) return 20; // 발행보다 한참 앞선 입금 — 선입금 의심
+  // 업체별 학습값이 있으면 "그 업체의 평소 간격"과의 편차로 채점한다(P5).
+  // 어음 업체의 150일 입금은 정상이고, 즉시 입금 업체의 150일은 이상 신호다.
+  if (cycle) {
+    const dev = Math.abs(days - cycle.avgDays);
+    if (dev <= 15) return 100;
+    if (dev <= 45) return 85;
+    if (dev <= 90) return 65;
+    return 45;
+  }
   if (days <= 60) return 100;
   if (days <= 120) return 80;
   if (days <= 180) return 60;
@@ -334,6 +377,8 @@ function buildCandidate(
   facility: { facilityId: string; strength: number } | null,
   /** 이번 실행에서 이미 다른 입금에 배분된 단계 — 같은 계산서가 여러 입금에 전액 매칭되는 것을 막는다. */
   usedMilestones: Set<string> = new Set(),
+  /** 이 거래처의 학습된 결제주기(확정 이력 2건 이상일 때만 존재). */
+  cycle?: PaymentCycle,
 ): Candidate {
   // ★거래처를 못 찾으면 금액 매칭을 아예 시도하지 않는다(2026-08-16 실사용 실증).
   //   "고용노동부 입금 4,800,000" 이 금액만 같다는 이유로 롯데엠시시 계산서에 붙는 식의 오매칭이
@@ -369,7 +414,7 @@ function buildCandidate(
     .filter((x) => x.m.hit);
   if (exacts.length) {
     const ranked = exacts
-      .map((x) => ({ r: x.r, basis: x.m.basis, s: timingScore(x.r.invoicedAt, txn.date) }))
+      .map((x) => ({ r: x.r, basis: x.m.basis, s: timingScore(x.r.invoicedAt, txn.date, cycle) }))
       .sort((a, b) => b.s - a.s);
     const top = ranked[0];
     const ambiguous = ranked.length > 1 && ranked[1].s === top.s;
@@ -514,7 +559,7 @@ function buildCandidate(
         confidence: score({
           facility: facilityScore,
           amount: 70,
-          timing: timingScore(top.invoicedAt, txn.date),
+          timing: timingScore(top.invoicedAt, txn.date, cycle),
           terms: termsScore(top.paymentTerms, days(top.invoicedAt)),
           ambiguous: partials.length > 1,
         }),
@@ -576,6 +621,7 @@ export async function runRecon(options?: { from?: string; to?: string; includeAl
   const receivables = await loadReceivables(db);
   const relevantIds = new Set(receivables.flatMap((r) => r.facilityIds));
   const index = await buildFacilityIndex(db, relevantIds);
+  const cycles = await loadPaymentCycles(db); // 업체별 결제주기 학습(P5)
 
   const where: string[] = ["t.direction = 'in'"];
   const args: unknown[] = [];
@@ -615,6 +661,7 @@ export async function runRecon(options?: { from?: string; to?: string; includeAl
     for (const row of txns) {
       const txnId = String(row.txn_id);
       const remitter = String(row.remitter_name_norm || row.remitter_name_raw || "");
+      const facilityHit = identifyFacility(remitter, index);
       const candidate = buildCandidate(
         {
           amount: Number(row.amount || 0),
@@ -624,8 +671,9 @@ export async function runRecon(options?: { from?: string; to?: string; includeAl
           remark2: row.remark2 ? String(row.remark2) : null,
         },
         receivables,
-        identifyFacility(remitter, index),
+        facilityHit,
         usedMilestones,
+        facilityHit ? cycles.get(facilityHit.facilityId) : undefined,
       );
       // 전액 배분된 단계는 이번 실행 내 다른 입금이 다시 가져가지 못하게 잠근다(부분입금은 예외).
       if (candidate.matchType !== "partial") {

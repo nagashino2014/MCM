@@ -6,6 +6,7 @@ import { getDb, withDbWrite, rowsToObjects } from "@/lib/db";
 import { getCompanyProfile } from "@/lib/company/profile";
 import {
   registAndIssueTaxInvoice,
+  registModifyTaxInvoice,
   getTaxInvoiceState,
   getTaxInvoicePopUpUrl,
   deleteTaxInvoice,
@@ -380,6 +381,134 @@ export async function invoicePopUpUrl(invoiceId: string): Promise<string> {
   const rows = rowsToObjects(await db.exec(`SELECT mgt_key FROM tax_invoices WHERE invoice_id = $1`, [invoiceId]));
   if (!rows.length) throw Object.assign(new Error("계산서를 찾을 수 없습니다."), { status: 404 });
   return getTaxInvoicePopUpUrl(String(rows[0].mgt_key));
+}
+
+export interface ModifyParams {
+  originalInvoiceId: string;
+  modifyCode: string; // 1 기재착오 / 2 공급가액 변동 / 3 환입 / 4 계약해제 / 5 내국신용장 / 6 이중발급
+  writeDate: string; // YYYY-MM-DD
+  /** 음수 허용 — 환입(3)·계약해제(4)·이중발급(6)은 마이너스 발행이 원칙. */
+  amountTotal: number;
+  taxTotal: number;
+  totalAmount: number;
+  itemName: string;
+  remark1?: string;
+  invoiceeEmail?: string; // 미지정 시 원본 수신처
+}
+
+/**
+ * 수정세금계산서 발행 (P5) — 발급분은 취소가 불가하므로(실측 -21003) 정정은 이 경로뿐이다.
+ * 원본의 국세청 승인번호(NTSSendKey)가 필요해 **국세청 전송이 끝난 건만** 수정 발행할 수 있다.
+ * milestone 자동 갱신은 하지 않는다 — 수정 유형(증감/환입/취소)마다 회계 처리가 달라
+ * 단계 금액 정정은 사용자가 계약 화면에서 직접 확인·수정하는 것이 안전하다.
+ */
+export async function issueModifiedTaxInvoice(params: ModifyParams, actorUserId: string | null): Promise<{ invoiceId: string; mgtKey: string }> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT contract_id, milestone_id, mgt_key, nts_send_key, nts_send_state, tax_type, purpose_type,
+              invoicee_facility_id, invoicee_corp_num, invoicee_corp_name, invoicee_email, line_items
+         FROM tax_invoices WHERE invoice_id = $1`,
+      [params.originalInvoiceId],
+    ),
+  );
+  if (!rows.length) throw Object.assign(new Error("원본 계산서를 찾을 수 없습니다."), { status: 404 });
+  const origin = rows[0];
+  if (!origin.nts_send_key || Number(origin.nts_send_state ?? 0) < 4) {
+    throw Object.assign(new Error("국세청 전송이 완료된 계산서만 수정 발행할 수 있습니다(승인번호 필요). 상태 갱신 후 다시 시도하세요."), { status: 400 });
+  }
+  if (Math.round(params.amountTotal + params.taxTotal) !== Math.round(params.totalAmount)) {
+    throw Object.assign(new Error("공급가액 + 세액이 합계금액과 맞지 않습니다."), { status: 400 });
+  }
+
+  const profile = await getCompanyProfile();
+  const cfg = getBarobillConfig();
+  const milestoneId = origin.milestone_id ? String(origin.milestone_id) : "modify";
+  const mgtKey = newMgtKey(milestoneId);
+  const writeDate = ymd(params.writeDate);
+  const email = params.invoiceeEmail || (origin.invoicee_email ? String(origin.invoicee_email) : "");
+  if (!email) throw Object.assign(new Error("수신 이메일이 필요합니다."), { status: 400 });
+
+  // 음수 금액은 바로빌에 "-" 붙은 문자열로 그대로 전달한다(수정분 규칙).
+  const amount = String(Math.round(params.amountTotal));
+  const tax = String(Math.round(params.taxTotal));
+  const total = String(Math.round(params.totalAmount));
+
+  await registModifyTaxInvoice(
+    {
+      invoicer: {
+        contactId: cfg.id,
+        corpNum: (profile.bizRegNo || cfg.corpNum).replace(/[^0-9]/g, ""),
+        mgtNum: mgtKey,
+        corpName: toPlainCompanyName(profile.companyName),
+        ceoName: profile.ceoName,
+        addr: profile.address,
+        bizClass: profile.mainBusiness,
+        bizType: profile.bizField,
+        tel: profile.phone,
+        email: process.env.BAROBILL_INVOICER_EMAIL || "",
+      },
+      invoicee: {
+        corpNum: String(origin.invoicee_corp_num ?? ""),
+        corpName: String(origin.invoicee_corp_name ?? ""),
+        email,
+      },
+      taxType: origin.tax_type == null ? 1 : Number(origin.tax_type),
+      purposeType: origin.purpose_type == null ? 2 : Number(origin.purpose_type),
+      modifyCode: params.modifyCode,
+      writeDate,
+      amountTotal: amount,
+      taxTotal: tax,
+      totalAmount: total,
+      remark1: params.remark1,
+      items: [
+        {
+          purchaseExpiry: writeDate,
+          name: params.itemName.slice(0, 100),
+          chargeableUnit: "1",
+          unitPrice: amount,
+          amount,
+          tax,
+        },
+      ],
+    },
+    String(origin.nts_send_key),
+  );
+
+  const invoiceId = `ti-${createHash("sha256").update(mgtKey).digest("hex").slice(0, 12)}`;
+  const now = KST_NOW();
+  await withDbWrite(async (tx) => {
+    await tx.run(
+      `INSERT INTO tax_invoices
+         (invoice_id, mgt_key, contract_id, milestone_id, direction, write_date,
+          amount_total, tax_total, total_amount, tax_type, purpose_type,
+          invoicee_facility_id, invoicee_corp_num, invoicee_corp_name, invoicee_email,
+          line_items, barobill_state, modify_code, original_invoice_id, issued_by, issued_at, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, 'sales', $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::jsonb, 3014, $16, $17, $18, $19, $19, $19)`,
+      [
+        invoiceId,
+        mgtKey,
+        origin.contract_id ? String(origin.contract_id) : null,
+        origin.milestone_id ? String(origin.milestone_id) : null,
+        params.writeDate,
+        Math.round(params.amountTotal),
+        Math.round(params.taxTotal),
+        Math.round(params.totalAmount),
+        origin.tax_type == null ? 1 : Number(origin.tax_type),
+        origin.purpose_type == null ? 2 : Number(origin.purpose_type),
+        origin.invoicee_facility_id ? String(origin.invoicee_facility_id) : null,
+        String(origin.invoicee_corp_num ?? ""),
+        String(origin.invoicee_corp_name ?? ""),
+        email,
+        JSON.stringify([{ name: params.itemName, amount, tax }]),
+        params.modifyCode,
+        params.originalInvoiceId,
+        actorUserId,
+        now,
+      ],
+    );
+  });
+  return { invoiceId, mgtKey };
 }
 
 /**

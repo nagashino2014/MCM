@@ -101,7 +101,10 @@ export type AuditAction =
   | "finance_recon_run"
   | "finance_recon_confirm"
   | "tax_invoice_issue"
-  | "tax_invoice_cancel";
+  | "tax_invoice_cancel"
+  | "journal_regenerate"
+  | "journal_ledger_import"
+  | "journal_ledger_import_delete";
 
 export interface AuditEntry {
   actorUserId: string | null;

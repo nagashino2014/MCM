@@ -18,7 +18,7 @@ export async function GET() {
     const q = Math.floor(now.getUTCMonth() / 3);
     const qStart = `${now.getUTCFullYear()}-${String(q * 3 + 1).padStart(2, "0")}-01`;
 
-    const [cardRows, reconRows, ntsRows] = await Promise.all([
+    const [cardRows, reconRows, ntsRows, journalRows] = await Promise.all([
       db.exec(
         `SELECT count(*) AS n FROM card_transactions
           WHERE category_key IS NULL AND excluded = 0 AND approval_type = '승인' AND approved_at >= $1`,
@@ -35,6 +35,8 @@ export async function GET() {
          ) s`,
       ),
       db.exec(`SELECT count(*) AS n FROM tax_invoices WHERE nts_send_state = 5 AND canceled_at IS NULL`),
+      // 전표 확정 큐(P3) — 계정 미확정 자동분개. 마이그 178 적용 전엔 테이블이 없으므로 0 폴백.
+      db.exec(`SELECT count(*) AS n FROM journal_entries WHERE status = 'pending'`).catch(() => null),
     ]);
 
     return NextResponse.json({
@@ -43,6 +45,7 @@ export async function GET() {
       reconHigh: Number(rowsToObjects(reconRows)[0]?.high || 0),
       reconReview: Number(rowsToObjects(reconRows)[0]?.review || 0),
       ntsFailed: Number(rowsToObjects(ntsRows)[0]?.n || 0),
+      journalPending: journalRows ? Number(rowsToObjects(journalRows)[0]?.n || 0) : 0,
     });
   } catch (err) {
     return authErrorToResponse(err);

@@ -10,6 +10,7 @@ interface FinanceAlerts {
   reconHigh: number;
   reconReview: number;
   ntsFailed: number;
+  journalPending: number;
 }
 
 /**
@@ -22,7 +23,7 @@ export function FinanceAlertsCard() {
 
   if (w.status === "forbidden") return null;
   const d = w.status === "ok" ? w.data : null;
-  const total = d ? d.unclassified + d.reconHigh + d.reconReview + d.ntsFailed : 0;
+  const total = d ? d.unclassified + d.reconHigh + d.reconReview + d.ntsFailed + (d.journalPending ?? 0) : 0;
 
   const rows = d
     ? [
@@ -57,6 +58,14 @@ export function FinanceAlertsCard() {
           href: "/finance?tab=invoice",
           tone: "var(--cd-error)",
           hint: "재발행·바로빌 확인 필요",
+        },
+        {
+          key: "journal-pending",
+          label: "전표 확정 필요(계정 미지정)",
+          count: d.journalPending ?? 0,
+          href: "/finance?tab=journal",
+          tone: "var(--cd-secondary)",
+          hint: "분개장에서 계정만 지정하면 확정",
         },
       ].filter((r) => r.count > 0)
     : [];

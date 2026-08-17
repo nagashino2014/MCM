@@ -19,6 +19,16 @@
       }
     },
     {
+      "name": "frontend-dev-aws",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "scripts/dev-frontend-aws.ps1"],
+      "port": 3000,
+      "env": {
+        "NODE_EXTRA_CA_CERTS": "C:\\ProgramData\\Avast Software\\Avast\\wscert.pem",
+        "AWS_PROFILE": "mcm-kesi-staging"
+      }
+    },
+    {
       "name": "mobile-web",
       "runtimeExecutable": "npx",
       "runtimeArgs": ["expo", "start", "--web", "--port", "8081"],

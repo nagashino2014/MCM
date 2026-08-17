@@ -438,9 +438,32 @@ interface PartyRow {
   tax: number;
 }
 
+interface DeemedRentItem {
+  depositId: string;
+  propertyLabel: string;
+  tenantName: string;
+  depositAmount: number;
+  days: number;
+  amount: number;
+}
+
+interface RentalDeposit {
+  depositId: string;
+  propertyLabel: string;
+  tenantName: string;
+  tenantCorpNum: string | null;
+  depositAmount: number;
+  dateFrom: string;
+  dateTo: string | null;
+  memo: string | null;
+  isActive: boolean;
+}
+
 interface ReturnForm {
   period: PeriodOption;
-  sales: { invoiceTaxable: AmountBlock; invoiceZeroRated: AmountBlock; exemptInvoice: AmountBlock; total: { supply: number; tax: number } };
+  sales: { invoiceTaxable: AmountBlock; deemedRent: AmountBlock; invoiceZeroRated: AmountBlock; exemptInvoice: AmountBlock; total: { supply: number; tax: number } };
+  deemedRentItems: DeemedRentItem[];
+  depositInterestRate: number;
   purchases: { invoiceGeneral: AmountBlock; cardDeductible: AmountBlock; nonDeductible: AmountBlock; exemptInvoice: AmountBlock; totalDeductibleTax: number };
   taxDue: number;
   manual: { label: string; key: string; amount: number }[];
@@ -485,6 +508,8 @@ export function VatReturnPanel() {
   const [form, setForm] = useState<ReturnForm | null>(null);
   const [manual, setManual] = useState<Record<string, number>>({});
   const [saved, setSaved] = useState<SavedReturn[]>([]);
+  const [deposits, setDeposits] = useState<RentalDeposit[]>([]);
+  const [depositForm, setDepositForm] = useState({ propertyLabel: "", tenantName: "", depositAmount: "", dateFrom: "" });
   const [alerts, setAlerts] = useState<{ duplicates: ExpenseAlertItem[]; holiday: ExpenseAlertItem[]; lateNight: ExpenseAlertItem[] } | null>(null);
   const [alertOpen, setAlertOpen] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -496,6 +521,13 @@ export function VatReturnPanel() {
     fetch("/api/finance/vat-return?view=list", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => setSaved(Array.isArray(data.returns) ? data.returns : []))
+      .catch(() => {});
+  }, []);
+
+  const loadDeposits = useCallback(() => {
+    fetch("/api/finance/vat-return?view=deposits", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => setDeposits(Array.isArray(data.deposits) ? data.deposits : []))
       .catch(() => {});
   }, []);
 
@@ -520,6 +552,7 @@ export function VatReturnPanel() {
   }, [current, manual]);
 
   useEffect(loadSaved, [loadSaved]);
+  useEffect(loadDeposits, [loadDeposits]);
   useEffect(compute, [compute]);
   useEffect(() => {
     if (!current) return;
@@ -663,6 +696,8 @@ export function VatReturnPanel() {
               </thead>
               <tbody>
                 {blockRow("매출 · 세금계산서 발급분(과세)", form.sales.invoiceTaxable)}
+                {form.sales.deemedRent.supply > 0 &&
+                  blockRow(`매출 · 기타(간주임대료 ${(form.depositInterestRate * 100).toFixed(1)}%)`, form.sales.deemedRent)}
                 {blockRow("매출 · 영세율 세금계산서", form.sales.invoiceZeroRated, 0)}
                 {form.sales.exemptInvoice.count > 0 && blockRow("매출 · 면세 계산서(참고)", form.sales.exemptInvoice, 0)}
                 <tr className="border-t cd-hairline-row-c font-medium">
@@ -784,6 +819,80 @@ export function VatReturnPanel() {
           </div>
         </div>
       )}
+
+      {/* 임대 보증금 — 간주임대료 근거 (부동산임대공급가액명세서) */}
+      <div className="cd-card p-4">
+        <div className="cd-card-title mb-1">임대 보증금 (간주임대료)</div>
+        <div className="text-xs cd-text-muted mb-3">
+          보증금 × 임대일수 × 고시 이자율{form ? `(${(form.depositInterestRate * 100).toFixed(1)}%)` : ""}이 과세표준에 자동
+          가산됩니다. 보증금·기간이 바뀌면 여기서 수정하세요{deposits.some((d) => d.memo?.includes("역산 시드")) ? " — 시드된 시작일(2026-01-01)은 실제 계약일로 정정해 두면 과거 기수 재계산도 정확해집니다" : ""}.
+        </div>
+        <div className="overflow-x-auto mb-3">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="cd-text-muted text-left">
+                <th className="py-1.5 pr-3 font-normal">물건지</th>
+                <th className="py-1.5 pr-3 font-normal">임차인</th>
+                <th className="py-1.5 pr-3 font-normal text-right">보증금</th>
+                <th className="py-1.5 pr-3 font-normal">기간</th>
+                <th className="py-1.5 font-normal">처리</th>
+              </tr>
+            </thead>
+            <tbody>
+              {deposits.filter((d) => d.isActive).map((d) => (
+                <tr key={d.depositId} className="border-t cd-hairline-row-c">
+                  <td className="py-1.5 pr-3">{d.propertyLabel}</td>
+                  <td className="py-1.5 pr-3">{d.tenantName}</td>
+                  <td className="py-1.5 pr-3 text-right whitespace-nowrap">{won(d.depositAmount)}</td>
+                  <td className="py-1.5 pr-3 whitespace-nowrap text-xs">{d.dateFrom} ~ {d.dateTo ?? "계속"}</td>
+                  <td className="py-1.5">
+                    <button
+                      type="button"
+                      className="cd-btn cd-btn-ghost cd-btn-sm"
+                      disabled={busy}
+                      title="목록에서 제외(과거 기수 이력은 보존)"
+                      onClick={() => void post({ action: "delete_deposit", depositId: d.depositId }, "보증금을 제외했습니다.").then(() => { loadDeposits(); compute(); })}
+                    >
+                      제외
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {deposits.filter((d) => d.isActive).length === 0 && (
+                <tr><td colSpan={5} className="py-4 text-center cd-text-muted text-sm">등록된 보증금이 없습니다 — 보증금이 있으면 간주임대료가 신고서에 가산되어야 합니다.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <input className="cd-input" style={{ width: 210 }} placeholder="물건지 (예: 골드타워 1201호)" value={depositForm.propertyLabel} onChange={(e) => setDepositForm((p) => ({ ...p, propertyLabel: e.target.value }))} />
+          <input className="cd-input" style={{ width: 150 }} placeholder="임차인" value={depositForm.tenantName} onChange={(e) => setDepositForm((p) => ({ ...p, tenantName: e.target.value }))} />
+          <input className="cd-input text-right" style={{ width: 130 }} inputMode="numeric" placeholder="보증금(원)" value={depositForm.depositAmount ? won(Number(depositForm.depositAmount)) : ""} onChange={(e) => setDepositForm((p) => ({ ...p, depositAmount: e.target.value.replace(/[^0-9]/g, "") }))} />
+          <input className="cd-input" style={{ width: 120 }} inputMode="numeric" placeholder="시작일 YYYYMMDD" value={depositForm.dateFrom} onChange={(e) => setDepositForm((p) => ({ ...p, dateFrom: e.target.value.replace(/[^0-9]/g, "").slice(0, 8) }))} />
+          <button
+            type="button"
+            className="cd-btn cd-btn-primary cd-btn-sm"
+            disabled={busy || !depositForm.propertyLabel.trim() || !depositForm.tenantName.trim() || !depositForm.depositAmount || depositForm.dateFrom.length !== 8}
+            onClick={() => {
+              const df = depositForm.dateFrom;
+              void post(
+                {
+                  action: "save_deposit",
+                  deposit: {
+                    propertyLabel: depositForm.propertyLabel,
+                    tenantName: depositForm.tenantName,
+                    depositAmount: Number(depositForm.depositAmount),
+                    dateFrom: `${df.slice(0, 4)}-${df.slice(4, 6)}-${df.slice(6)}`,
+                  },
+                },
+                "보증금을 등록했습니다.",
+              ).then((r) => { if (r) { setDepositForm({ propertyLabel: "", tenantName: "", depositAmount: "", dateFrom: "" }); loadDeposits(); compute(); } });
+            }}
+          >
+            추가
+          </button>
+        </div>
+      </div>
 
       {/* 경비 점검 (P5 ⑥) */}
       {alerts && (

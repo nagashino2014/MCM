@@ -7,8 +7,11 @@ import {
   buildVatReturn,
   buildVatReturnWorkbook,
   confirmVatReturn,
+  deactivateRentalDeposit,
   latestClosedPeriod,
+  listRentalDeposits,
   listVatReturns,
+  saveRentalDeposit,
   saveVatReturn,
   unconfirmVatReturn,
   updateHometaxInvoice,
@@ -46,6 +49,9 @@ export async function GET(req: NextRequest) {
     }
     if (view === "list") {
       return NextResponse.json({ returns: await listVatReturns() });
+    }
+    if (view === "deposits") {
+      return NextResponse.json({ deposits: await listRentalDeposits() });
     }
     if (view === "ledger") {
       const period = parsePeriod(sp);
@@ -94,7 +100,7 @@ export async function GET(req: NextRequest) {
 }
 
 interface PostBody {
-  action?: "save" | "confirm" | "unconfirm" | "set_deductible";
+  action?: "save" | "confirm" | "unconfirm" | "set_deductible" | "save_deposit" | "delete_deposit";
   year?: number;
   term?: number;
   kind?: string;
@@ -104,6 +110,17 @@ interface PostBody {
   vatDeductible?: number | null;
   excluded?: boolean;
   memo?: string | null;
+  deposit?: {
+    depositId?: string;
+    propertyLabel?: string;
+    tenantName?: string;
+    tenantCorpNum?: string | null;
+    depositAmount?: number;
+    dateFrom?: string;
+    dateTo?: string | null;
+    memo?: string | null;
+  };
+  depositId?: string;
 }
 
 // POST: 신고서 저장/확정/확정취소, 매입 계산서 공제·제외 수정 (finance.manage)
@@ -112,6 +129,28 @@ export async function POST(req: NextRequest) {
     const ctx = await requirePermission("finance.manage");
     const body = (await req.json().catch(() => ({}))) as PostBody;
 
+    if (body.action === "save_deposit") {
+      const d = body.deposit;
+      if (!d?.propertyLabel?.trim() || !d?.tenantName?.trim() || !(Number(d.depositAmount) >= 0) || !/^\d{4}-\d{2}-\d{2}$/.test(String(d.dateFrom ?? ""))) {
+        return NextResponse.json({ error: "물건지·임차인·보증금·시작일(YYYY-MM-DD)이 필요합니다." }, { status: 400 });
+      }
+      const depositId = await saveRentalDeposit({
+        depositId: d.depositId,
+        propertyLabel: d.propertyLabel,
+        tenantName: d.tenantName,
+        tenantCorpNum: d.tenantCorpNum,
+        depositAmount: Number(d.depositAmount),
+        dateFrom: String(d.dateFrom),
+        dateTo: d.dateTo && /^\d{4}-\d{2}-\d{2}$/.test(d.dateTo) ? d.dateTo : null,
+        memo: d.memo,
+      });
+      return NextResponse.json({ depositId });
+    }
+    if (body.action === "delete_deposit") {
+      if (!body.depositId) return NextResponse.json({ error: "depositId 가 필요합니다." }, { status: 400 });
+      await deactivateRentalDeposit(body.depositId);
+      return NextResponse.json({ ok: true });
+    }
     if (body.action === "set_deductible") {
       if (!body.htiId) return NextResponse.json({ error: "htiId 가 필요합니다." }, { status: 400 });
       await updateHometaxInvoice(body.htiId, {

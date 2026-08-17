@@ -218,15 +218,148 @@ export interface PartySummaryRow {
   tax: number;
 }
 
+// ── 간주임대료 (임대 보증금 이자상당액 — 과세표준 가산, 신고서 "기타" 란) ──
+// 실측(2026 1기 확정 세무법인 명세서 대사): 보증금 × 겹침일수/연일수 × 고시 이자율(3.1%), 건별 원 미만 절사,
+// 세액은 총액 × 10% 절사. 이자율은 vat_deposit_interest_rates 시드(§7 T4).
+
+export interface RentalDeposit {
+  depositId: string;
+  propertyLabel: string;
+  tenantName: string;
+  tenantCorpNum: string | null;
+  depositAmount: number;
+  dateFrom: string;
+  dateTo: string | null;
+  memo: string | null;
+  isActive: boolean;
+}
+
+export interface DeemedRentItem {
+  depositId: string;
+  propertyLabel: string;
+  tenantName: string;
+  depositAmount: number;
+  days: number;
+  amount: number; // 간주임대료(공급가액)
+}
+
+const dayCount = (from: string, to: string) =>
+  Math.floor((new Date(`${to}T00:00:00Z`).getTime() - new Date(`${from}T00:00:00Z`).getTime()) / 86400000) + 1;
+
+async function computeDeemedRent(period: VatPeriod): Promise<{ rate: number; items: DeemedRentItem[]; supply: number; tax: number }> {
+  const db = await getDb();
+  const rateRows = rowsToObjects(
+    await db.exec(
+      `SELECT rate FROM vat_deposit_interest_rates WHERE year <= $1 ORDER BY year DESC LIMIT 1`,
+      [period.year],
+    ),
+  );
+  const rate = Number(rateRows[0]?.rate || 0);
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT deposit_id, property_label, tenant_name, deposit_amount, date_from, date_to
+         FROM rental_deposits
+        WHERE is_active = 1 AND date_from <= $2 AND (date_to IS NULL OR date_to >= $1)
+        ORDER BY property_label`,
+      [period.from, period.to],
+    ),
+  );
+  const daysInYear = period.year % 4 === 0 && (period.year % 100 !== 0 || period.year % 400 === 0) ? 366 : 365;
+  const items: DeemedRentItem[] = rows.map((r) => {
+    const from = String(r.date_from) > period.from ? String(r.date_from) : period.from;
+    const toRaw = r.date_to ? String(r.date_to) : period.to;
+    const to = toRaw < period.to ? toRaw : period.to;
+    const days = Math.max(0, dayCount(from, to));
+    const deposit = Number(r.deposit_amount || 0);
+    return {
+      depositId: String(r.deposit_id),
+      propertyLabel: String(r.property_label),
+      tenantName: String(r.tenant_name),
+      depositAmount: deposit,
+      days,
+      amount: Math.floor((deposit * rate * days) / daysInYear),
+    };
+  });
+  const supply = items.reduce((acc, it) => acc + it.amount, 0);
+  return { rate, items, supply, tax: Math.floor(supply / 10) }; // 세액 = 총액 × 10% 절사
+}
+
+export async function listRentalDeposits(): Promise<RentalDeposit[]> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT deposit_id, property_label, tenant_name, tenant_corp_num, deposit_amount, date_from, date_to, memo, is_active
+         FROM rental_deposits ORDER BY is_active DESC, property_label`,
+    ),
+  );
+  return rows.map((r) => ({
+    depositId: String(r.deposit_id),
+    propertyLabel: String(r.property_label),
+    tenantName: String(r.tenant_name),
+    tenantCorpNum: r.tenant_corp_num ? String(r.tenant_corp_num) : null,
+    depositAmount: Number(r.deposit_amount || 0),
+    dateFrom: String(r.date_from),
+    dateTo: r.date_to ? String(r.date_to) : null,
+    memo: r.memo ? String(r.memo) : null,
+    isActive: Number(r.is_active || 0) === 1,
+  }));
+}
+
+export async function saveRentalDeposit(input: {
+  depositId?: string;
+  propertyLabel: string;
+  tenantName: string;
+  tenantCorpNum?: string | null;
+  depositAmount: number;
+  dateFrom: string;
+  dateTo?: string | null;
+  memo?: string | null;
+}): Promise<string> {
+  const depositId = input.depositId || hashId("rd", `${input.propertyLabel}:${input.tenantName}:${Date.now()}`);
+  await withDbWrite(async (db) => {
+    await db.run(
+      `INSERT INTO rental_deposits (deposit_id, property_label, tenant_name, tenant_corp_num, deposit_amount, date_from, date_to, memo, created_at)
+       VALUES ($1, $2, $3, NULLIF($4, ''), $5, $6, NULLIF($7, ''), NULLIF($8, ''), $9)
+       ON CONFLICT (deposit_id) DO UPDATE SET
+         property_label = EXCLUDED.property_label, tenant_name = EXCLUDED.tenant_name,
+         tenant_corp_num = EXCLUDED.tenant_corp_num, deposit_amount = EXCLUDED.deposit_amount,
+         date_from = EXCLUDED.date_from, date_to = EXCLUDED.date_to, memo = EXCLUDED.memo,
+         is_active = 1, updated_at = $9`,
+      [
+        depositId,
+        input.propertyLabel.trim(),
+        input.tenantName.trim(),
+        String(input.tenantCorpNum ?? "").replace(/[^0-9]/g, ""),
+        input.depositAmount,
+        input.dateFrom,
+        input.dateTo ?? "",
+        input.memo ?? "",
+        KST_NOW(),
+      ],
+    );
+  });
+  return depositId;
+}
+
+/** 보증금 비활성(소프트 삭제) — 과거 기수 재계산 보존을 위해 행은 남긴다. */
+export async function deactivateRentalDeposit(depositId: string): Promise<void> {
+  await withDbWrite(async (db) => {
+    await db.run(`UPDATE rental_deposits SET is_active = 0, updated_at = $2 WHERE deposit_id = $1`, [depositId, KST_NOW()]);
+  });
+}
+
 export interface VatReturnForm {
   period: VatPeriod;
   // 과세표준 및 매출세액
   sales: {
     invoiceTaxable: AmountBlock; // (1) 세금계산서 발급분 — 과세
+    deemedRent: AmountBlock; // (4) 기타 — 간주임대료(보증금 이자상당액)
     invoiceZeroRated: AmountBlock; // (5) 영세율 세금계산서 발급분
     exemptInvoice: AmountBlock; // 면세 계산서 발급분 (부가세 계산 밖 — 과세표준명세 참고)
     total: { supply: number; tax: number }; // (9) 합계
   };
+  deemedRentItems: DeemedRentItem[]; // 부동산임대공급가액명세서 근거
+  depositInterestRate: number; // 적용 고시 이자율 (예: 0.031)
   // 매입세액
   purchases: {
     invoiceGeneral: AmountBlock; // (10) 세금계산서 수취분 일반매입 (제외 표시 뺀 전체)
@@ -288,7 +421,9 @@ export async function buildVatReturn(
 
   const form: VatReturnForm = {
     period,
-    sales: { invoiceTaxable: emptyBlock(), invoiceZeroRated: emptyBlock(), exemptInvoice: emptyBlock(), total: { supply: 0, tax: 0 } },
+    sales: { invoiceTaxable: emptyBlock(), deemedRent: emptyBlock(), invoiceZeroRated: emptyBlock(), exemptInvoice: emptyBlock(), total: { supply: 0, tax: 0 } },
+    deemedRentItems: [],
+    depositInterestRate: 0,
     purchases: { invoiceGeneral: emptyBlock(), cardDeductible: emptyBlock(), nonDeductible: emptyBlock(), exemptInvoice: emptyBlock(), totalDeductibleTax: 0 },
     taxDue: 0,
     manual: MANUAL_FIELDS.map((f) => ({ ...f, amount: Number(manualInput?.[f.key] ?? 0) })),
@@ -307,8 +442,14 @@ export async function buildVatReturn(
     else if (r.taxType === 3) addRow(form.sales.exemptInvoice, r);
     else addRow(form.sales.invoiceTaxable, r);
   }
-  form.sales.total.supply = form.sales.invoiceTaxable.supply + form.sales.invoiceZeroRated.supply;
-  form.sales.total.tax = form.sales.invoiceTaxable.tax;
+  // 간주임대료 — 과세표준 가산 (신고서 4란 기타, 세금계산서 없는 매출)
+  const deemed = await computeDeemedRent(period);
+  form.depositInterestRate = deemed.rate;
+  form.deemedRentItems = deemed.items.filter((it) => it.amount > 0);
+  form.sales.deemedRent = { count: form.deemedRentItems.length, supply: deemed.supply, tax: deemed.tax };
+
+  form.sales.total.supply = form.sales.invoiceTaxable.supply + form.sales.invoiceZeroRated.supply + deemed.supply;
+  form.sales.total.tax = form.sales.invoiceTaxable.tax + deemed.tax;
 
   for (const r of purchases) {
     if (r.taxType === 3) {
@@ -332,7 +473,9 @@ export async function buildVatReturn(
     form.purchases.invoiceGeneral.tax - form.purchases.nonDeductible.tax + form.purchases.cardDeductible.tax;
   form.taxDue = form.sales.total.tax - form.purchases.totalDeductibleTax;
   const manualDelta = form.manual.reduce((acc, f) => acc + (f.key === "penalty" ? f.amount : -f.amount), 0);
-  form.finalTaxDue = form.taxDue + manualDelta;
+  // 국고금 단수계산: 납부세액 10원 미만 절사 (실측: 79,741,594 → 납부서 79,741,590)
+  const beforeRound = form.taxDue + manualDelta;
+  form.finalTaxDue = beforeRound > 0 ? Math.floor(beforeRound / 10) * 10 : beforeRound;
 
   form.salesByParty = partySummary(sales.filter((r) => r.taxType !== 3));
   form.purchasesByParty = partySummary(purchases.filter((r) => r.taxType !== 3));
@@ -370,7 +513,8 @@ export async function buildVatReturn(
     ),
   );
   form.recon.journalSalesCredit = Number(jr[0]?.sales_credit || 0);
-  form.recon.reportSalesSupply = form.sales.total.supply + form.sales.exemptInvoice.supply;
+  // 간주임대료는 세무상 가산일 뿐 장부 매출이 아니므로 전표 대사에서는 제외
+  form.recon.reportSalesSupply = form.sales.total.supply - form.sales.deemedRent.supply + form.sales.exemptInvoice.supply;
   form.recon.salesDiff = form.recon.reportSalesSupply - form.recon.journalSalesCredit;
   form.recon.journalVatInDebit = Number(jr[0]?.vat_in_debit || 0);
   form.recon.reportDeductibleTax = form.purchases.totalDeductibleTax;
@@ -590,6 +734,7 @@ export async function buildVatReturnWorkbook(form: VatReturnForm): Promise<Buffe
   sum.addRow(["구분", "건수", "공급가액", "세액"]).font = { bold: true };
   const rows: Array<[string, number | string, number, number]> = [
     ["매출 · 세금계산서 발급분(과세)", form.sales.invoiceTaxable.count, form.sales.invoiceTaxable.supply, form.sales.invoiceTaxable.tax],
+    ["매출 · 기타(간주임대료)", form.sales.deemedRent.count, form.sales.deemedRent.supply, form.sales.deemedRent.tax],
     ["매출 · 영세율 세금계산서", form.sales.invoiceZeroRated.count, form.sales.invoiceZeroRated.supply, 0],
     ["매출 · 면세 계산서(참고)", form.sales.exemptInvoice.count, form.sales.exemptInvoice.supply, 0],
     ["매출세액 합계 (과세표준)", "", form.sales.total.supply, form.sales.total.tax],
@@ -618,6 +763,16 @@ export async function buildVatReturnWorkbook(form: VatReturnForm): Promise<Buffe
   addPartySheet("매출처별 합계표", form.salesByParty);
   addPartySheet("매입처별 합계표", form.purchasesByParty);
   addPartySheet("카드 수령명세", form.cardByMerchant);
+
+  if (form.deemedRentItems.length) {
+    const dr = wb.addWorksheet("간주임대료 명세");
+    dr.addRow([`부동산임대공급가액명세서 근거 — 적용 이자율 ${(form.depositInterestRate * 100).toFixed(1)}%`]).font = { bold: true };
+    dr.addRow(["물건지", "임차인", "보증금", "임대일수", "간주임대료", "세액(총액 기준 절사)"]).font = { bold: true };
+    for (const it of form.deemedRentItems) dr.addRow([it.propertyLabel, it.tenantName, it.depositAmount, it.days, it.amount, ""]);
+    dr.addRow(["합계", "", "", "", form.sales.deemedRent.supply, form.sales.deemedRent.tax]).font = { bold: true };
+    dr.columns.forEach((col, i) => (col.width = [28, 24, 14, 10, 14, 16][i] ?? 14));
+    for (const c of [3, 5, 6]) dr.getColumn(c).numFmt = money;
+  }
 
   const led = wb.addWorksheet("매입매출장");
   led.addRow(["작성일", "구분", "유형", "승인번호", "거래처 사업자번호", "거래처", "품목", "공급가액", "세액", "합계", "공제", "비고"]).font = { bold: true };

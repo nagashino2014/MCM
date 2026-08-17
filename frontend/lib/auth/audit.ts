@@ -110,7 +110,8 @@ export type AuditAction =
   | "vat_return_save"
   | "vat_return_confirm"
   | "fixed_asset_save"
-  | "trip_log_sync";
+  | "trip_log_sync"
+  | "fiscal_close";
 
 export interface AuditEntry {
   actorUserId: string | null;

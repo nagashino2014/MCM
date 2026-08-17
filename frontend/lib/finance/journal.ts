@@ -558,6 +558,11 @@ export async function regenerateJournal(from: string, to: string): Promise<Regen
   if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
     throw Object.assign(new Error("기간(YYYY-MM-DD)이 올바르지 않습니다."), { status: 400 });
   }
+  // 결산 마감 연도 잠금(P9) — 마감 스냅 보존. 재계산이 필요하면 결산 탭에서 마감 해제 후.
+  {
+    const { assertRangeNotClosed } = await import("@/lib/finance/closing");
+    await assertRangeNotClosed(from, to);
+  }
   return withDbWrite(async (db) => {
     const drafts = [
       ...(await draftCardEntries(db, from, to)),

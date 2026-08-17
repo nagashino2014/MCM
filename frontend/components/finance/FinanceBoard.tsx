@@ -28,15 +28,16 @@ import { JournalPanel, LedgerPanel, TrialPanel } from "@/components/finance/Jour
 import { PnlPanel, CashPanel } from "@/components/finance/ManagementPanels";
 import { HometaxPanel, VatReturnPanel, WithholdingPanel } from "@/components/finance/VatReturnPanels";
 import { FixedAssetPanel, TripLogPanel, BudgetPanel } from "@/components/finance/AssetBudgetPanels";
+import { BalanceSheetPanel, ClosingPanel } from "@/components/finance/ClosingPanels";
 import "@/components/cdash/cdash.css";
 
 type Tab =
   | "connections" | "bank" | "card" | "recon" | "vat" | "invoice" | "journal" | "ledger" | "trial" | "pnl" | "cash"
-  | "hometax" | "vatreturn" | "fixedassets" | "triplog" | "budget" | "withholding";
+  | "hometax" | "vatreturn" | "fixedassets" | "triplog" | "budget" | "withholding" | "balance" | "closing";
 
 const TAB_KEYS: Tab[] = [
   "connections", "bank", "card", "recon", "vat", "invoice", "journal", "ledger", "trial", "pnl", "cash",
-  "hometax", "vatreturn", "fixedassets", "triplog", "budget", "withholding",
+  "hometax", "vatreturn", "fixedassets", "triplog", "budget", "withholding", "balance", "closing",
 ];
 
 /** 사이드바 소메뉴 = 탭 그룹. 소메뉴 진입 시 첫 탭이 열린다(menu.ts 의 href 와 짝). */
@@ -48,8 +49,8 @@ const TAB_GROUPS: Array<{ title: string; tabs: [Tab, string][] }> = [
   { title: "부가세 신고", tabs: [["vat", "카드 매입 집계"], ["hometax", "매입·매출 계산서"], ["vatreturn", "신고서"], ["withholding", "원천세"]] },
   // 전표·장부(P3) — 자동분개 파생 계층. 회계 관리자 전용(설계: accounting-expansion-blueprint §5 P3).
   { title: "전표·장부", tabs: [["journal", "분개장"], ["ledger", "계정별원장"], ["trial", "시산표·백테스트"]] },
-  // 손익·자금(P4) — 전표·원장에서 파생되는 관리 손익과 자금수지 전망.
-  { title: "손익·자금", tabs: [["pnl", "월별 손익"], ["cash", "자금수지"]] },
+  // 손익·자금(P4) + 결산(P9) — 전표 파생 관리 손익·자금수지·재무상태표·연차 마감.
+  { title: "손익·자금", tabs: [["pnl", "월별 손익"], ["cash", "자금수지"], ["balance", "재무상태표"], ["closing", "결산"]] },
   // 자산·예산(P6) — 고정자산 상각(전표 연동)·운행기록부·연간 예산(기안 사전검토 연동).
   { title: "자산·예산", tabs: [["fixedassets", "고정자산"], ["triplog", "운행기록부"], ["budget", "예산"]] },
 ];
@@ -380,6 +381,8 @@ export function FinanceBoard() {
         {tab === "hometax" && <HometaxPanel />}
         {tab === "vatreturn" && <VatReturnPanel />}
         {tab === "withholding" && <WithholdingPanel />}
+        {tab === "balance" && <BalanceSheetPanel />}
+        {tab === "closing" && <ClosingPanel />}
         {tab === "fixedassets" && <FixedAssetPanel />}
         {tab === "triplog" && <TripLogPanel />}
         {tab === "budget" && <BudgetPanel />}

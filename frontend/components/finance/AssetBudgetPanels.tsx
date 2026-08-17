@@ -223,15 +223,15 @@ export function FixedAssetPanel() {
       </div>
       {/* 등록 폼 — 1행 고정(사용자 확정), 좁은 화면은 가로 스크롤 */}
       <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto pb-1">
-        <input className="cd-input shrink-0" style={{ width: 140 }} placeholder="자산명" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} />
-        <select className="cd-select shrink-0" title="감가상각 유형(자산 구분)" value={form.category} onChange={(e) => setForm((p) => ({ ...p, category: e.target.value, method: e.target.value === "building" ? "straight" : p.method }))}>
+        <input className="cd-input shrink-0" style={{ width: 420 }} placeholder="자산명" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} />
+        <select className="cd-select shrink-0" style={{ width: 96 }} title="감가상각 유형(자산 구분)" value={form.category} onChange={(e) => setForm((p) => ({ ...p, category: e.target.value, method: e.target.value === "building" ? "straight" : p.method }))}>
           {Object.entries(CATEGORY_LABEL).map(([k, v]) => (
             <option key={k} value={k}>{v}</option>
           ))}
         </select>
         <DigitDate value={form.acquisitionDate} onChange={(v) => setForm((p) => ({ ...p, acquisitionDate: v }))} placeholder="취득일" />
         <input className="cd-input text-right shrink-0" style={{ width: 118 }} inputMode="numeric" placeholder="취득가액(원)" value={form.acquisitionCost ? won(Number(form.acquisitionCost)) : ""} onChange={(e) => setForm((p) => ({ ...p, acquisitionCost: e.target.value.replace(/[^0-9]/g, "") }))} />
-        <select className="cd-select shrink-0" title="감가상각 방법" value={form.method} disabled={form.category === "building"} onChange={(e) => setForm((p) => ({ ...p, method: e.target.value }))}>
+        <select className="cd-select shrink-0" style={{ width: 84 }} title="감가상각 방법" value={form.method} disabled={form.category === "building"} onChange={(e) => setForm((p) => ({ ...p, method: e.target.value }))}>
           <option value="straight">정액법</option>
           <option value="declining">정률법</option>
         </select>

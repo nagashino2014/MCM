@@ -41,6 +41,7 @@ const SOURCE_LABEL: Record<string, string> = {
   bank_in: "입금",
   bank_out: "출금",
   tax_invoice: "세금계산서",
+  invoice_manual: "계산서(수기)",
   expense_doc: "지출결의",
   manual: "수동",
 };

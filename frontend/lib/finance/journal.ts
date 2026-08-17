@@ -299,6 +299,47 @@ async function draftInvoiceEntries(db: PgDatabase, from: string, to: string): Pr
   });
 }
 
+/** milestone 수기 발행 기록 → 매출 전표 초안.
+ *  전자발행(tax_invoices) 이전의 발행 이력은 계약 단계에 수기로만 존재한다 — 이를 소스로 삼아야
+ *  용역 매출이 손익에 계상되고, 수금 전표(외상매출금 대변)와 채권이 정합한다.
+ *  금액: 단계 amount = 공급가액(실측 확정, recon 규약과 동일) → 부가세 10% 가산해 채권 계상.
+ *  전자발행분(tax_invoices에 있는 milestone)은 제외(이중 방지). */
+async function draftManualInvoiceEntries(db: PgDatabase, from: string, to: string): Promise<EntryDraft[]> {
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT m.milestone_id, m.invoice_issued_at, m.amount, m.stage_label,
+              c.contract_title, f.company_name
+         FROM contract_payment_milestones m
+         JOIN contracts c ON c.contract_id = m.contract_id
+         LEFT JOIN facilities f ON f.facility_id = c.counterparty_facility_id
+        WHERE m.invoice_issued = 1
+          AND m.invoice_issued_at IS NOT NULL AND m.invoice_issued_at <> ''
+          AND substr(m.invoice_issued_at, 1, 10) BETWEEN $1 AND $2
+          AND NOT EXISTS (SELECT 1 FROM tax_invoices ti WHERE ti.milestone_id = m.milestone_id AND ti.canceled_at IS NULL)`,
+      [from, to],
+    ),
+  );
+  return rows.flatMap((r): EntryDraft[] => {
+    const supply = round(Number(r.amount));
+    if (supply <= 0) return [];
+    const tax = round(supply * 0.1);
+    const party = r.company_name ? String(r.company_name) : null;
+    return [{
+      sourceKind: "invoice_manual",
+      sourceId: String(r.milestone_id),
+      entryDate: String(r.invoice_issued_at).slice(0, 10),
+      description: `세금계산서 발행(수기 기록) — ${String(r.contract_title ?? "")} ${String(r.stage_label ?? "")}`.trim(),
+      partyName: party,
+      status: "auto",
+      lines: [
+        { accountCode: ACCT.receivable, debit: supply + tax, credit: 0, memo: party },
+        { accountCode: ACCT.sales, debit: 0, credit: supply, memo: null },
+        { accountCode: ACCT.vatOut, debit: 0, credit: tax, memo: null },
+      ],
+    }];
+  });
+}
+
 /** 결재종결 지출결의·출장보고 → 분개 초안 (문서 1건 = 전표 1건, 영수증·수기 행만). */
 async function draftExpenseDocEntries(db: PgDatabase, from: string, to: string): Promise<EntryDraft[]> {
   const categories = await loadCategories();
@@ -429,6 +470,7 @@ export async function regenerateJournal(from: string, to: string): Promise<Regen
       ...(await draftBankInEntries(db, from, to)),
       ...(await draftBankOutEntries(db, from, to)),
       ...(await draftInvoiceEntries(db, from, to)),
+      ...(await draftManualInvoiceEntries(db, from, to)),
       ...(await draftExpenseDocEntries(db, from, to)),
     ];
 
@@ -625,6 +667,8 @@ export async function listJournal(params: {
     );
   } else if (params.sourceKind === "bank") {
     conds.push(`e.source_kind IN ('bank_in','bank_out')`);
+  } else if (params.sourceKind === "tax_invoice") {
+    conds.push(`e.source_kind IN ('tax_invoice','invoice_manual')`); // 전자발행 + 수기 발행 기록
   } else if (params.sourceKind) {
     sqlParams.push(params.sourceKind);
     conds.push(`e.source_kind = $${sqlParams.length}`);

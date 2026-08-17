@@ -191,6 +191,8 @@ export const MENU_ITEMS: MenuItem[] = [
       { title: "부가세 집계", href: "/finance?tab=vat" },
       // 전표·장부(P3) — 자동분개·계정별원장·시산표+백테스트. accounting-expansion-blueprint §5 P3.
       { title: "전표·장부", href: "/finance?tab=journal" },
+      // 손익·자금(P4) — 월별 손익·자금수지 전망.
+      { title: "손익·자금", href: "/finance?tab=pnl" },
     ],
     group: "main",
   },

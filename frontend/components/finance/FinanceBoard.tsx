@@ -25,11 +25,12 @@ import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdModal } from "@/components/cdash/CdModal";
 import { JournalPanel, LedgerPanel, TrialPanel } from "@/components/finance/JournalPanels";
+import { PnlPanel, CashPanel } from "@/components/finance/ManagementPanels";
 import "@/components/cdash/cdash.css";
 
-type Tab = "connections" | "bank" | "card" | "recon" | "vat" | "invoice" | "journal" | "ledger" | "trial";
+type Tab = "connections" | "bank" | "card" | "recon" | "vat" | "invoice" | "journal" | "ledger" | "trial" | "pnl" | "cash";
 
-const TAB_KEYS: Tab[] = ["connections", "bank", "card", "recon", "vat", "invoice", "journal", "ledger", "trial"];
+const TAB_KEYS: Tab[] = ["connections", "bank", "card", "recon", "vat", "invoice", "journal", "ledger", "trial", "pnl", "cash"];
 
 /** 사이드바 소메뉴 = 탭 그룹. 소메뉴 진입 시 첫 탭이 열린다(menu.ts 의 href 와 짝). */
 const TAB_GROUPS: Array<{ title: string; tabs: [Tab, string][] }> = [
@@ -39,6 +40,8 @@ const TAB_GROUPS: Array<{ title: string; tabs: [Tab, string][] }> = [
   { title: "부가세 집계", tabs: [["vat", "부가세 집계"]] },
   // 전표·장부(P3) — 자동분개 파생 계층. 회계 관리자 전용(설계: accounting-expansion-blueprint §5 P3).
   { title: "전표·장부", tabs: [["journal", "분개장"], ["ledger", "계정별원장"], ["trial", "시산표·백테스트"]] },
+  // 손익·자금(P4) — 전표·원장에서 파생되는 관리 손익과 자금수지 전망.
+  { title: "손익·자금", tabs: [["pnl", "월별 손익"], ["cash", "자금수지"]] },
 ];
 const toTab = (raw: string | null): Tab => (TAB_KEYS.includes(raw as Tab) && raw !== "connections" ? (raw as Tab) : "connections");
 
@@ -368,6 +371,8 @@ export function FinanceBoard() {
         {tab === "journal" && <JournalPanel />}
         {tab === "ledger" && <LedgerPanel />}
         {tab === "trial" && <TrialPanel />}
+        {tab === "pnl" && <PnlPanel />}
+        {tab === "cash" && <CashPanel />}
       </div>
     </div>
   );

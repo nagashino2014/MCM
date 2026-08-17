@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ChevronRight, ClipboardEdit, CreditCard, Search } from "lucide-react";
+import { ChevronRight, ClipboardEdit, CreditCard, ReceiptText, Search } from "lucide-react";
 import {
   ActivityDetailSheet,
   ActivityTag,
@@ -104,6 +104,10 @@ export function MobileHome() {
         <Link href="/m/card" className="cd-card px-4 py-3.5 !flex-row items-center gap-2.5">
           <CreditCard style={{ width: 18, height: 18 }} className="cd-text-primary" />
           <span className="cd-text text-sm font-bold">명함 촬영</span>
+        </Link>
+        <Link href="/m/receipt" className="cd-card px-4 py-3.5 !flex-row items-center gap-2.5 col-span-2">
+          <ReceiptText style={{ width: 18, height: 18 }} className="cd-text-primary" />
+          <span className="cd-text text-sm font-bold">영수증 촬영 — 개인카드 경비 증빙</span>
         </Link>
       </div>
 

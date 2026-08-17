@@ -3,6 +3,7 @@ import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { listMyDocs, listInbox, listActedDocs, listRefCandidates, saveDoc, submitDoc, type ApprovalLineStepInput, type ApprovalWatcherInput } from "@/lib/approval/docs";
 import { syncDocCardLinks } from "@/lib/barobill/classify";
+import { syncDocReceiptLinks } from "@/lib/finance/receipts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -68,6 +69,12 @@ export async function POST(req: NextRequest) {
       await syncDocCardLinks(docId, body.formId, body.fieldValues ?? {});
     } catch (err) {
       console.error("[approval/docs] 카드 사용건 연동 실패:", err);
+    }
+    // 개인카드 영수증 연동(accounting-expansion P1) — _receiptId 귀속/해제, 기안자 본인 영수증만.
+    try {
+      await syncDocReceiptLinks(docId, body.formId, body.fieldValues ?? {}, ctx.userId);
+    } catch (err) {
+      console.error("[approval/docs] 영수증 연동 실패:", err);
     }
     let docNo: string | null = null;
     if (body.action === "submit") {

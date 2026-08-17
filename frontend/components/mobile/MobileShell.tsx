@@ -24,6 +24,7 @@ const TITLE_BY_PATH: Record<string, string> = {
   "/m/facilities": "사업장",
   "/m/contacts": "담당자",
   "/m/card": "명함 촬영",
+  "/m/receipt": "영수증 촬영",
 };
 
 /** "7월 29일 수요일" (KST) — 헤더 메타. */

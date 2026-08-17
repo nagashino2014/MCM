@@ -23,6 +23,7 @@ import {
 } from "@/lib/approval/attachments";
 import type { OvertimeConsent } from "@/lib/approval/overtime-consent";
 import { CardPickerModal, type CardPickerItem } from "@/components/finance/CardPickerModal";
+import { ReceiptPickerModal, type ReceiptPickerItem } from "@/components/finance/ReceiptPickerModal";
 import "@/components/cdash/cdash.css";
 
 // 법인카드 내역 자동 기입 대상 양식(P1) — 지출 내역 표(마이그 116)의 key/사용일시 열 key.
@@ -182,6 +183,47 @@ export function ApprovalDraftBoard() {
           _cardTxnId: item.cardTxnId, // 상신 시 서버가 doc_id 귀속·분류 학습에 사용
         }));
         return { ...prev, [tableKey]: [...nonEmpty, ...added] };
+      });
+    },
+    [cardExpenseTarget],
+  );
+
+  // 개인카드 영수증 불러오기(accounting-expansion P1) — 법인카드와 같은 표 대상, _receiptId 메타.
+  const [receiptPicker, setReceiptPicker] = useState(false);
+  const receiptExistingIds = useMemo(() => {
+    if (!cardExpenseTarget) return [] as string[];
+    const rows = values[cardExpenseTarget.tableKey];
+    if (!Array.isArray(rows)) return [] as string[];
+    return rows
+      .map((row) => (row && typeof row === "object" ? (row as Record<string, unknown>)._receiptId : null))
+      .filter((v): v is string => typeof v === "string" && v.length > 0);
+  }, [cardExpenseTarget, values]);
+
+  /** 선택된 영수증을 표 행으로 추가 + 증빙 PDF 를 첨부서류에 자동 추가(결재자 원본 확인용). */
+  const appendReceiptRows = useCallback(
+    (items: ReceiptPickerItem[]) => {
+      if (!cardExpenseTarget) return;
+      const { tableKey, dateKey } = cardExpenseTarget;
+      setValues((prev) => {
+        const current = Array.isArray(prev[tableKey]) ? ([...(prev[tableKey] as unknown[])] as Record<string, unknown>[]) : [];
+        const nonEmpty = current.filter((row) =>
+          row && typeof row === "object" ? Object.values(row).some((v) => String(v ?? "").trim() !== "") : false,
+        );
+        const added = items.map((item) => ({
+          [dateKey]: item.paidDate ?? "",
+          category: item.formOption ?? "",
+          vendor: item.storeName ?? "",
+          amount: String(item.totalAmount),
+          detail: "", // 지출 목적 — 사용자 입력 몫
+          _receiptId: item.receiptId, // 상신 시 서버가 doc_id 귀속·분류 학습에 사용
+        }));
+        return { ...prev, [tableKey]: [...nonEmpty, ...added] };
+      });
+      // 영수증 PDF 는 이미 스토리지에 있으므로 재업로드 없이 첨부 목록에 key 로 참조(중복 추가 방지).
+      setFileAttachments((prev) => {
+        const known = new Set(prev.map((a) => a.key));
+        const adds = items.filter((i) => !known.has(i.pdfKey)).map((i) => ({ name: i.pdfName, key: i.pdfKey, size: 0 }));
+        return adds.length ? [...prev, ...adds] : prev;
       });
     },
     [cardExpenseTarget],
@@ -829,9 +871,9 @@ export function ApprovalDraftBoard() {
                 )}
               </div>
             )}
-            {/* 법인카드 내역 불러오기(P1) — 지출 내역 표에 매입건을 자동 기입, 사용자는 지출 목적만 입력 */}
+            {/* 법인카드 내역·개인카드 영수증 불러오기(P1) — 지출 내역 표 자동 기입, 사용자는 지출 목적만 입력 */}
             {cardExpenseTarget && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <button
                   type="button"
                   className="cd-btn cd-btn-soft cd-btn-sm"
@@ -839,8 +881,15 @@ export function ApprovalDraftBoard() {
                 >
                   <CreditCard className="w-3.5 h-3.5" /> 법인카드 내역 불러오기
                 </button>
+                <button
+                  type="button"
+                  className="cd-btn cd-btn-soft cd-btn-sm"
+                  onClick={() => setReceiptPicker(true)}
+                >
+                  <CreditCard className="w-3.5 h-3.5" /> 개인카드 영수증 불러오기
+                </button>
                 <span className="text-[11px] cd-text-faint">
-                  바로빌 매입내역에서 선택하면 사용일시·상호·금액·분류가 자동 기입됩니다 — 지출 목적만 입력하세요
+                  선택하면 사용일시·상호·금액·분류가 자동 기입됩니다 — 지출 목적만 입력하세요
                 </span>
               </div>
             )}
@@ -1201,6 +1250,17 @@ export function ApprovalDraftBoard() {
           formId={form.formId}
           existingIds={cardExistingIds}
           onPick={appendCardRows}
+        />
+      )}
+
+      {/* 개인카드 영수증 불러오기 모달(accounting-expansion P1) — 동일 양식 한정 */}
+      {cardExpenseTarget && form && (
+        <ReceiptPickerModal
+          open={receiptPicker}
+          onClose={() => setReceiptPicker(false)}
+          formId={form.formId}
+          existingIds={receiptExistingIds}
+          onPick={appendReceiptRows}
         />
       )}
 

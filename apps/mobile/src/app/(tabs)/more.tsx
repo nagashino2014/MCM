@@ -44,7 +44,7 @@ export default function MoreScreen() {
         { icon: 'business-outline', tone: c.secondary, title: '사업장', subtitle: '검색·요약 조회', onPress: () => router.push('/facilities') },
         { icon: 'people-outline', tone: purple, title: '담당자', subtitle: '연락처·전화·문자', onPress: () => router.push('/contacts') },
         { icon: 'briefcase-outline', tone: c.primaryStrong, title: '공공입찰', subtitle: '매칭 공고·마감 임박', onPress: () => router.push('/bids') },
-        // 명함 촬영은 카메라 전용 — 데스크탑 위젯·웹 데모에서는 진입점을 숨긴다(WID-P0).
+        // 명함·영수증 촬영은 카메라 전용 — 데스크탑 위젯·웹 데모에서는 진입점을 숨긴다(WID-P0).
         ...(Platform.OS !== 'web'
           ? [
               {
@@ -53,6 +53,13 @@ export default function MoreScreen() {
                 title: '명함 촬영',
                 subtitle: 'AI 인식·담당자 등록',
                 onPress: () => router.push('/card'),
+              },
+              {
+                icon: 'receipt-outline' as const,
+                tone: c.error,
+                title: '영수증 촬영',
+                subtitle: '개인카드 경비 증빙 스톡',
+                onPress: () => router.push('/receipt'),
               },
             ]
           : []),

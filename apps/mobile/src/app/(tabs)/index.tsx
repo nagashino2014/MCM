@@ -257,10 +257,14 @@ export default function HomeScreen() {
 
           {/* 빠른 실행 — 탭에 없는 기능으로 1탭 진입 */}
           <Card title="빠른 실행">
-            <View className="mt-1.5 flex-row justify-between">
-              {/* 명함 촬영은 카메라가 필요해 데스크탑 위젯·웹 데모에서는 숨긴다(WID-P0). */}
+            {/* 네이티브는 타일 6개 — 좁은 기기(375px)에서 넘치지 않게 줄바꿈 허용 */}
+            <View className="mt-1.5 flex-row flex-wrap justify-between gap-y-3">
+              {/* 명함·영수증 촬영은 카메라가 필요해 데스크탑 위젯·웹 데모에서는 숨긴다(WID-P0). */}
               {Platform.OS !== 'web' ? (
                 <ActionTile icon="camera-outline" label="명함" tone={c.primary} onPress={() => router.push('/card')} />
+              ) : null}
+              {Platform.OS !== 'web' ? (
+                <ActionTile icon="receipt-outline" label="영수증" tone={c.error} onPress={() => router.push('/receipt')} />
               ) : null}
               <ActionTile
                 icon="paper-plane-outline"

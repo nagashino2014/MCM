@@ -7,6 +7,7 @@ import { createHash } from "node:crypto";
 import { getDb, withDbWrite, rowsToObjects } from "@/lib/db";
 import ExcelJS from "exceljs";
 import { TRIP_FORM_ID, extractVehicleUse } from "@/lib/approval/trip";
+import { estimateOneWayKm, officeKeyForDept } from "@/lib/assets/distance";
 
 const KST_NOW = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 19).replace("T", " ");
 const hashId = (prefix: string, source: string) =>
@@ -22,6 +23,7 @@ export interface TripLog {
   useKind: string;
   purpose: string | null;
   distanceKm: number | null;
+  distanceEstimated: boolean;
   docId: string | null;
   source: string;
   memo: string | null;
@@ -44,9 +46,11 @@ export async function syncTripLogsFromDocs(year: number): Promise<{ scanned: num
   const to = `${year}-12-31`;
   const docs = rowsToObjects(
     await db.exec(
-      `SELECT d.doc_id, d.field_values, d.drafter_user_id, COALESCE(ep.name, d.drafter_name) AS drafter_name
+      `SELECT d.doc_id, d.field_values, d.drafter_user_id, COALESCE(ep.name, d.drafter_name) AS drafter_name,
+              dept.dept_name AS dept_name
          FROM approval_docs d
          LEFT JOIN employee_profiles ep ON ep.employee_id = d.drafter_employee_id
+         LEFT JOIN departments dept ON dept.dept_id = ep.dept_id
         WHERE d.form_id = $1 AND d.status = 'approved'
           AND (d.field_values->'trip_period'->>'from') <= $3
           AND COALESCE(NULLIF(d.field_values->'trip_period'->>'to', ''), d.field_values->'trip_period'->>'from') >= $2`,
@@ -56,45 +60,82 @@ export async function syncTripLogsFromDocs(year: number): Promise<{ scanned: num
   const assets = rowsToObjects(await db.exec(`SELECT asset_id, name FROM reservable_assets WHERE kind = 'vehicle'`));
   const assetByName = new Map(assets.map((a) => [String(a.name), String(a.asset_id)]));
 
+  // 사전 패스: 문서 해석 + 실도로 거리 추정(사용자 확정 — 기아 연동 대신 카카오 길찾기 추정).
+  // estimateOneWayKm 이 캐시 저장에 자체 withDbWrite 를 쓰므로 트랜잭션 밖에서 계산한다(중첩 금지 규약).
+  interface PlannedRow {
+    assetId: string;
+    date: string;
+    docId: string;
+    drafterUserId: string;
+    drafterName: string;
+    destination: string;
+    distanceKm: number | null; // 1일=왕복 / 다일=첫·마지막날 편도, 중간일 null
+  }
+  const planned: PlannedRow[] = [];
+  const validDocIds: string[] = [];
+  for (const doc of docs) {
+    let values: Record<string, unknown> = {};
+    try {
+      const v = typeof doc.field_values === "string" ? JSON.parse(String(doc.field_values)) : doc.field_values;
+      if (v && typeof v === "object") values = v as Record<string, unknown>;
+    } catch {
+      continue;
+    }
+    const use = extractVehicleUse(values);
+    if (!use) continue;
+    const assetId = use.assetId ?? assetByName.get(use.assetName);
+    if (!assetId) continue;
+    validDocIds.push(String(doc.doc_id));
+    const destination = String(values.destination ?? "").trim();
+    const dates = expandDates(use.period.from, use.period.to).filter((d) => d >= from && d <= to);
+    const oneWayKm = destination ? await estimateOneWayKm(officeKeyForDept(doc.dept_name ? String(doc.dept_name) : null), destination) : null;
+    for (let i = 0; i < dates.length; i += 1) {
+      let distanceKm: number | null = null;
+      if (oneWayKm != null) {
+        if (dates.length === 1) distanceKm = Math.round(oneWayKm * 2 * 10) / 10;
+        else if (i === 0 || i === dates.length - 1) distanceKm = oneWayKm;
+      }
+      planned.push({
+        assetId,
+        date: dates[i],
+        docId: String(doc.doc_id),
+        drafterUserId: doc.drafter_user_id ? String(doc.drafter_user_id) : "",
+        drafterName: doc.drafter_name ? String(doc.drafter_name) : "",
+        destination,
+        distanceKm,
+      });
+    }
+  }
+
   let inserted = 0;
   let removed = 0;
-  const validDocIds: string[] = [];
   await withDbWrite(async (tx) => {
-    for (const doc of docs) {
-      let values: Record<string, unknown> = {};
-      try {
-        const v = typeof doc.field_values === "string" ? JSON.parse(String(doc.field_values)) : doc.field_values;
-        if (v && typeof v === "object") values = v as Record<string, unknown>;
-      } catch {
-        continue;
-      }
-      const use = extractVehicleUse(values);
-      if (!use) continue;
-      const assetId = use.assetId ?? assetByName.get(use.assetName);
-      if (!assetId) continue;
-      validDocIds.push(String(doc.doc_id));
-      const destination = String(values.destination ?? "").trim();
-      for (const date of expandDates(use.period.from, use.period.to)) {
-        if (date < from || date > to) continue;
-        const res = await tx.exec(
-          `INSERT INTO vehicle_trip_logs
-             (log_id, asset_id, drive_date, driver_user_id, driver_name, use_kind, purpose, doc_id, source, created_at)
-           VALUES ($1, $2, $3, NULLIF($4, ''), NULLIF($5, ''), 'business', NULLIF($6, ''), $7, 'trip_doc', $8)
-           ON CONFLICT (asset_id, drive_date, doc_id) WHERE doc_id IS NOT NULL DO NOTHING
-           RETURNING log_id`,
-          [
-            hashId("vtl", `${assetId}:${date}:${doc.doc_id}`),
-            assetId,
-            date,
-            doc.drafter_user_id ? String(doc.drafter_user_id) : "",
-            doc.drafter_name ? String(doc.drafter_name) : "",
-            destination,
-            String(doc.doc_id),
-            KST_NOW(),
-          ],
-        );
-        if (rowsToObjects(res).length) inserted += 1;
-      }
+    for (const row of planned) {
+      // 신규는 추정 거리와 함께 생성. 기존 행은 수기 입력(estimated=0·값 있음)만 보존하고 추정치는 갱신.
+      const res = await tx.exec(
+        `INSERT INTO vehicle_trip_logs
+           (log_id, asset_id, drive_date, driver_user_id, driver_name, use_kind, purpose, doc_id, source,
+            distance_km, distance_estimated, created_at)
+         VALUES ($1, $2, $3, NULLIF($4, ''), NULLIF($5, ''), 'business', NULLIF($6, ''), $7, 'trip_doc', $8, $9, $10)
+         ON CONFLICT (asset_id, drive_date, doc_id) WHERE doc_id IS NOT NULL DO UPDATE SET
+           distance_km = EXCLUDED.distance_km, distance_estimated = EXCLUDED.distance_estimated, updated_at = $10
+         WHERE EXCLUDED.distance_km IS NOT NULL
+           AND (vehicle_trip_logs.distance_km IS NULL OR vehicle_trip_logs.distance_estimated = 1)
+         RETURNING log_id`,
+        [
+          hashId("vtl", `${row.assetId}:${row.date}:${row.docId}`),
+          row.assetId,
+          row.date,
+          row.drafterUserId,
+          row.drafterName,
+          row.destination,
+          row.docId,
+          row.distanceKm,
+          row.distanceKm != null ? 1 : 0,
+          KST_NOW(),
+        ],
+      );
+      if (rowsToObjects(res).length) inserted += 1;
     }
     // 승인 목록에서 빠진 문서의 파생 행 정리 — 거리 미입력분만(사람 입력 보존)
     const removedRes = await tx.exec(
@@ -145,6 +186,7 @@ export async function listTripLogs(params: { assetId?: string; year: number; mon
     useKind: String(r.use_kind ?? "business"),
     purpose: r.purpose ? String(r.purpose) : null,
     distanceKm: r.distance_km == null ? null : Number(r.distance_km),
+    distanceEstimated: Number(r.distance_estimated || 0) === 1,
     docId: r.doc_id ? String(r.doc_id) : null,
     source: String(r.source ?? "manual"),
     memo: r.memo ? String(r.memo) : null,
@@ -185,11 +227,11 @@ export async function saveTripLog(input: {
   return logId;
 }
 
-/** 파생 행의 거리·비고만 갱신(문서 유래 필드는 보존). */
+/** 파생 행의 거리·비고만 갱신(문서 유래 필드는 보존). 수기 입력이므로 추정 표기 해제. */
 export async function updateTripLogDistance(logId: string, distanceKm: number | null, memo?: string | null): Promise<void> {
   await withDbWrite(async (db) => {
     await db.run(
-      `UPDATE vehicle_trip_logs SET distance_km = $2, memo = COALESCE(NULLIF($3, ''), memo), updated_at = $4 WHERE log_id = $1`,
+      `UPDATE vehicle_trip_logs SET distance_km = $2, distance_estimated = 0, memo = COALESCE(NULLIF($3, ''), memo), updated_at = $4 WHERE log_id = $1`,
       [logId, distanceKm, memo ?? "", KST_NOW()],
     );
   });
@@ -269,7 +311,7 @@ export async function buildTripLogWorkbook(year: number, assetId?: string): Prom
         l.purpose ?? "",
         l.distanceKm ?? "",
         l.docId ? "출장신청서" : "수기",
-        l.memo ?? "",
+        [l.distanceEstimated ? "거리 추정(실도로)" : null, l.memo].filter(Boolean).join(" · "),
       ]);
     }
     const totalKm = arr.reduce((acc, l) => acc + (l.distanceKm ?? 0), 0);

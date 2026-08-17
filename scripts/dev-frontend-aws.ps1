@@ -84,6 +84,10 @@ try {
     $env:BAROBILL_INVOICER_EMAIL = "kaikan00@koensain.com"
     Write-Host "Barobill env configured (prod certkey from app secret)."
   }
+  if ($appSecret.KAKAO_REST_API_KEY) {
+    $env:KAKAO_REST_API_KEY = [string]$appSecret.KAKAO_REST_API_KEY
+    Write-Host "Kakao REST key configured (trip distance estimation)."
+  }
 } catch {
   Write-Warning "Barobill secret lookup failed - finance sync will be unavailable: $_"
 }

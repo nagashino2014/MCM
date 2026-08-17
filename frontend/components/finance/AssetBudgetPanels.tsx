@@ -265,6 +265,7 @@ interface TripLogRow {
   useKind: string;
   purpose: string | null;
   distanceKm: number | null;
+  distanceEstimated: boolean;
   docId: string | null;
   source: string;
 }
@@ -387,6 +388,11 @@ export function TripLogPanel() {
                 <td className="py-1.5 pr-3 max-w-[220px]"><div className="truncate" title={l.purpose ?? ""}>{l.purpose ?? "-"}</div></td>
                 <td className="py-1.5 pr-3 whitespace-nowrap text-xs">{l.docId ? "출장신청서" : "수기"}</td>
                 <td className="py-1.5 pr-3 text-right whitespace-nowrap">
+                  {l.distanceEstimated && (
+                    <span className="cd-pill cd-pill-info mr-1" title="사무소↔출장지 실도로 거리 추정치(카카오 길찾기) — 값을 수정하면 실측으로 바뀝니다">
+                      추정
+                    </span>
+                  )}
                   <input
                     className="cd-input text-right"
                     style={{ width: 90 }}

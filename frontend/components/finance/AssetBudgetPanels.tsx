@@ -23,8 +23,8 @@ const post = async (url: string, body: Record<string, unknown>) => {
 function DigitDate({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
   return (
     <input
-      className="cd-input"
-      style={{ width: 118 }}
+      className="cd-input shrink-0"
+      style={{ width: 104 }}
       inputMode="numeric"
       placeholder={placeholder ?? "YYYYMMDD"}
       value={value}
@@ -221,26 +221,27 @@ export function FixedAssetPanel() {
           </tbody>
         </table>
       </div>
-      <div className="flex items-center gap-2 flex-wrap">
-        <input className="cd-input" style={{ width: 180 }} placeholder="자산명" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} />
-        <select className="cd-select" value={form.category} onChange={(e) => setForm((p) => ({ ...p, category: e.target.value, method: e.target.value === "building" ? "straight" : p.method }))}>
+      {/* 등록 폼 — 1행 고정(사용자 확정), 좁은 화면은 가로 스크롤 */}
+      <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto pb-1">
+        <input className="cd-input shrink-0" style={{ width: 140 }} placeholder="자산명" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} />
+        <select className="cd-select shrink-0" title="감가상각 유형(자산 구분)" value={form.category} onChange={(e) => setForm((p) => ({ ...p, category: e.target.value, method: e.target.value === "building" ? "straight" : p.method }))}>
           {Object.entries(CATEGORY_LABEL).map(([k, v]) => (
             <option key={k} value={k}>{v}</option>
           ))}
         </select>
         <DigitDate value={form.acquisitionDate} onChange={(v) => setForm((p) => ({ ...p, acquisitionDate: v }))} placeholder="취득일" />
-        <input className="cd-input text-right" style={{ width: 140 }} inputMode="numeric" placeholder="취득가액(원)" value={form.acquisitionCost ? won(Number(form.acquisitionCost)) : ""} onChange={(e) => setForm((p) => ({ ...p, acquisitionCost: e.target.value.replace(/[^0-9]/g, "") }))} />
-        <select className="cd-select" value={form.method} disabled={form.category === "building"} onChange={(e) => setForm((p) => ({ ...p, method: e.target.value }))}>
+        <input className="cd-input text-right shrink-0" style={{ width: 118 }} inputMode="numeric" placeholder="취득가액(원)" value={form.acquisitionCost ? won(Number(form.acquisitionCost)) : ""} onChange={(e) => setForm((p) => ({ ...p, acquisitionCost: e.target.value.replace(/[^0-9]/g, "") }))} />
+        <select className="cd-select shrink-0" title="감가상각 방법" value={form.method} disabled={form.category === "building"} onChange={(e) => setForm((p) => ({ ...p, method: e.target.value }))}>
           <option value="straight">정액법</option>
           <option value="declining">정률법</option>
         </select>
-        <input className="cd-input text-right" style={{ width: 70 }} inputMode="numeric" title="내용연수(년)" value={form.usefulLifeYears} onChange={(e) => setForm((p) => ({ ...p, usefulLifeYears: e.target.value.replace(/[^0-9]/g, "").slice(0, 2) }))} />
-        <span className="text-xs cd-text-muted">년</span>
-        <input className="cd-input text-right" style={{ width: 140 }} inputMode="numeric" placeholder="기초 누계(기존 자산)" title="세무법인 명세서상 기왕 상각누계액" value={form.openingAccum ? won(Number(form.openingAccum)) : ""} onChange={(e) => setForm((p) => ({ ...p, openingAccum: e.target.value.replace(/[^0-9]/g, "") }))} />
+        <input className="cd-input text-right shrink-0" style={{ width: 56 }} inputMode="numeric" title="내용연수(년)" value={form.usefulLifeYears} onChange={(e) => setForm((p) => ({ ...p, usefulLifeYears: e.target.value.replace(/[^0-9]/g, "").slice(0, 2) }))} />
+        <span className="text-xs cd-text-muted shrink-0">년</span>
+        <input className="cd-input text-right shrink-0" style={{ width: 130 }} inputMode="numeric" placeholder="기초 누계(기존 자산)" title="세무법인 명세서상 기왕 상각누계액" value={form.openingAccum ? won(Number(form.openingAccum)) : ""} onChange={(e) => setForm((p) => ({ ...p, openingAccum: e.target.value.replace(/[^0-9]/g, "") }))} />
         <DigitDate value={form.openingAsOf} onChange={(v) => setForm((p) => ({ ...p, openingAsOf: v }))} placeholder="기초 기준일" />
         <button
           type="button"
-          className="cd-btn cd-btn-primary cd-btn-sm"
+          className="cd-btn cd-btn-primary cd-btn-sm shrink-0"
           disabled={busy || !form.name.trim() || form.acquisitionDate.length !== 8 || !form.acquisitionCost || !Number(form.usefulLifeYears)}
           onClick={save}
         >

@@ -104,7 +104,11 @@ export type AuditAction =
   | "tax_invoice_cancel"
   | "journal_regenerate"
   | "journal_ledger_import"
-  | "journal_ledger_import_delete";
+  | "journal_ledger_import_delete"
+  | "hometax_scrap_regist"
+  | "hometax_sync"
+  | "vat_return_save"
+  | "vat_return_confirm";
 
 export interface AuditEntry {
   actorUserId: string | null;

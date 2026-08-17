@@ -188,7 +188,8 @@ export const MENU_ITEMS: MenuItem[] = [
       { title: "연결 관리", href: "/finance?tab=connections" },
       { title: "계좌·카드 원장", href: "/finance?tab=bank" },
       { title: "계산서·수금", href: "/finance?tab=invoice" },
-      { title: "부가세 집계", href: "/finance?tab=vat" },
+      // 부가세 신고(P5) — 카드 집계 + 홈택스 매입·매출 수집 + 신고서 자동 작성.
+      { title: "부가세 신고", href: "/finance?tab=vat" },
       // 전표·장부(P3) — 자동분개·계정별원장·시산표+백테스트. accounting-expansion-blueprint §5 P3.
       { title: "전표·장부", href: "/finance?tab=journal" },
       // 손익·자금(P4) — 월별 손익·자금수지 전망.

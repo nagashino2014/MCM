@@ -10,12 +10,21 @@
   html, body { height: 100%; }
   body {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 20px; overflow: hidden;
+    gap: 14px; overflow: hidden;
     background: radial-gradient(1200px 800px at 70% -10%, #1e2a4a 0%, #0f1524 45%, #0a0e18 100%);
     font-family: "Plus Jakarta Sans", Pretendard, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
   }
   .title { color: #e7ecf6; font-size: 18px; font-weight: 700; letter-spacing: .2px; }
   .title small { display: block; margin-top: 4px; text-align: center; color: #8b96ad; font-size: 12px; font-weight: 500; }
+  /* 상단 탭 — 앱 직접 조작 / 촬영 시연 영상 */
+  .tabs { display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1); }
+  .tabs button {
+    padding: 7px 16px; border: 0; border-radius: 999px; cursor: pointer;
+    background: transparent; color: #9aa6bd; font-size: 13px; font-weight: 600;
+    font-family: inherit; transition: background .15s, color .15s;
+  }
+  .tabs button:hover { color: #d6def0; }
+  .tabs button[aria-selected="true"] { background: #5D87FF; color: #fff; }
   /* 폰 목업: 390x844 화면 + 베젤. 뷰포트에 맞춰 JS 로 scale */
   .stage { flex: 0 1 auto; display: flex; align-items: center; justify-content: center; }
   .phone {
@@ -34,26 +43,113 @@
     background: #fff; position: relative;
   }
   .screen iframe { width: 100%; height: 100%; border: 0; display: block; }
-  .hint { color: #6d7891; font-size: 12px; }
+  .screen video { width: 100%; height: 100%; display: block; object-fit: contain; background: #000; }
+  /* 탭 패널 — iframe/video 의 height:100% 가 풀리도록 .screen 높이를 그대로 물려준다 */
+  .pane { width: 100%; height: 100%; }
+  .pane[hidden] { display: none; }
+  /* 영상 파일이 아직 없을 때 안내 */
+  .missing {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 10px; padding: 32px;
+    background: #0f1524; color: #8b96ad; font-size: 13px; line-height: 1.7; text-align: center;
+  }
+  .missing strong { color: #d6def0; font-size: 15px; }
+  .missing code { color: #5D87FF; font-size: 12px; }
+  .hint { color: #6d7891; font-size: 12px; height: 16px; }
 </style>
 </head>
 <body>
   <div class="title">MCM 모바일 앱<small>웹 데모 — 실제 앱과 동일한 화면·데이터</small></div>
+  <div class="tabs" role="tablist">
+    <button role="tab" data-pane="app" aria-selected="true">앱 조작</button>
+    <button role="tab" data-pane="namecard" aria-selected="false">명함 촬영</button>
+    <button role="tab" data-pane="receipt" aria-selected="false">영수증 촬영</button>
+  </div>
   <div class="stage"><div class="phone" id="phone">
-    <div class="screen"><iframe src="/m-app" title="MCM 모바일 앱" allow="clipboard-write"></iframe></div>
+    <div class="screen">
+      <div class="pane" id="pane-app">
+        <iframe src="/m-app" title="MCM 모바일 앱" allow="clipboard-write"></iframe>
+      </div>
+      <div class="pane" id="pane-namecard" hidden>
+        <video id="v-namecard" src="/m-demo-video/namecard.mp4?v=2" poster="/m-demo-video/namecard.jpg?v=2"
+               controls loop muted playsinline preload="auto"></video>
+        <div class="missing" hidden><strong>명함 촬영 시연 영상을 불러오지 못했습니다</strong>
+          <span>새로고침(<code>Ctrl+Shift+R</code>)해도 같으면<br /><code>/m-demo-video/namecard.mp4</code> 응답을 확인하세요.</span></div>
+      </div>
+      <div class="pane" id="pane-receipt" hidden>
+        <video id="v-receipt" src="/m-demo-video/receipt.mp4?v=2" poster="/m-demo-video/receipt.jpg?v=2"
+               controls loop muted playsinline preload="auto"></video>
+        <div class="missing" hidden><strong>영수증 촬영 시연 영상을 불러오지 못했습니다</strong>
+          <span>새로고침(<code>Ctrl+Shift+R</code>)해도 같으면<br /><code>/m-demo-video/receipt.mp4</code> 응답을 확인하세요.</span></div>
+      </div>
+    </div>
   </div></div>
-  <div class="hint">마우스로 클릭·스크롤해 조작할 수 있습니다</div>
+  <div class="hint" id="hint">마우스로 클릭·스크롤해 조작할 수 있습니다</div>
 <script>
   // 화면 높이에 폰 목업이 다 들어가도록 축소(확대는 안 함)
+  var GAP = 14; // body 의 flex gap 과 동일
   function fit() {
     var phone = document.getElementById("phone");
-    var avail = window.innerHeight - 140; // 타이틀·힌트·여백
+    var stage = phone.parentElement;
+    // 폰 목업을 뺀 나머지(타이틀·탭·힌트)의 실제 높이를 재서 남는 공간을 구한다.
+    // 고정값으로 빼면 폰트 로딩·브라우저 확대 배율에 따라 아래가 잘린다.
+    var used = 0;
+    [].forEach.call(document.body.children, function (el) {
+      if (el !== stage && el.tagName !== "SCRIPT") used += el.offsetHeight + GAP;
+    });
+    var avail = window.innerHeight - used - GAP; // 마지막 GAP 은 여유분
     var scale = Math.min(1, avail / 878, (window.innerWidth - 40) / 410);
+    if (!(scale > 0.1)) scale = 0.1; // 렌더 전 innerHeight 가 0 이면 음수 scale 이 되는 것 방지
     phone.style.transform = "scale(" + scale + ")";
-    phone.parentElement.style.height = (878 * scale) + "px";
-    phone.parentElement.style.width = (410 * scale) + "px";
+    stage.style.height = (878 * scale) + "px";
+    stage.style.width = (410 * scale) + "px";
   }
   window.addEventListener("resize", fit); fit();
+  // 웹폰트가 늦게 붙어 타이틀 높이가 바뀌면 다시 맞춘다
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
+
+  // 로드 실패 시 한 번은 캐시를 우회해 다시 받아 보고, 그래도 안 되면 안내 문구로 대체한다.
+  // (mp4 가 인증 가드에 걸려 HTML 로 응답하던 시절의 실패 응답이 캐시에 남아 있을 수 있다)
+  ["v-namecard", "v-receipt"].forEach(function (id) {
+    var v = document.getElementById(id);
+    var retried = false;
+    v.addEventListener("error", function () {
+      if (!retried) {
+        retried = true;
+        v.setAttribute("src", v.getAttribute("src").split("?")[0] + "?r=" + new Date().getTime());
+        v.load();
+        return;
+      }
+      v.hidden = true;
+      v.parentElement.querySelector(".missing").hidden = false;
+    });
+  });
+
+  var HINTS = {
+    app: "마우스로 클릭·스크롤해 조작할 수 있습니다",
+    namecard: "명함을 촬영해 연락처가 자동 등록되는 과정입니다",
+    receipt: "영수증을 촬영해 지출 항목이 자동 인식되는 과정입니다"
+  };
+  var tabs = document.querySelectorAll(".tabs button");
+  tabs.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var pane = btn.dataset.pane;
+      tabs.forEach(function (b) { b.setAttribute("aria-selected", String(b === btn)); });
+      ["app", "namecard", "receipt"].forEach(function (p) {
+        document.getElementById("pane-" + p).hidden = (p !== pane);
+      });
+      // 선택한 탭의 영상은 처음부터 자동 재생, 벗어난 영상은 정지
+      // (iframe 은 리로드 방지를 위해 hidden 토글만 한다)
+      ["v-namecard", "v-receipt"].forEach(function (id) {
+        var v = document.getElementById(id);
+        if (v.parentElement.hidden) { v.pause(); return; }
+        v.currentTime = 0;
+        var p = v.play();
+        if (p && p.catch) p.catch(function () {}); // 자동재생이 막히면 포스터+재생버튼으로 둔다
+      });
+      document.getElementById("hint").textContent = HINTS[pane];
+    });
+  });
 </script>
 </body>
 </html>

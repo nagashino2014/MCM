@@ -57,6 +57,7 @@ export const edgeAuthConfig: NextAuthConfig = {
         path === "/m-app" ||
         path.startsWith("/m-app/") || // 모바일 앱 웹 데모(Expo 정적 번들) — 정적 파일만 공개, 데이터는 API 인증이 가드
         path === "/m-demo.html" || // 폰 프레임 시연 래퍼 페이지
+        path.startsWith("/m-demo-video/") || // 시연 래퍼가 재생하는 촬영 시연 영상(명함·영수증)
         path === "/privacy.html" || // 개인정보처리방침 — 스토어 심사·직원이 비인증 열람
         path.startsWith("/_next/") ||
         path.startsWith("/static/")

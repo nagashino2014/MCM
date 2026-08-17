@@ -44,6 +44,7 @@ const SOURCE_LABEL: Record<string, string> = {
   invoice_manual: "계산서(수기)",
   expense_doc: "지출결의",
   depreciation: "감가상각",
+  payroll: "급여",
   manual: "수동",
 };
 

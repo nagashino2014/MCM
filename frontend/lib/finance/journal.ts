@@ -232,6 +232,28 @@ async function draftBankOutEntries(db: PgDatabase, from: string, to: string): Pr
   );
   const partyLinks = await loadPartyAccounts(db);
 
+  // 급여 이체 대조(P7) — 확정 급여대장의 (직원명 정규화, 차인지급액) 쌍과 일치하는 출금은
+  // payroll 총괄 분개(대변 103)가 커버하므로 excluded. 급여월 당월·익월 이체만 인정(동명 오탐 방지).
+  const payrollRows = rowsToObjects(
+    await db.exec(
+      `SELECT pe.name, pe.net_pay, pl.pay_year, pl.pay_month
+         FROM payroll_entries pe JOIN payroll_ledgers pl ON pl.ledger_id = pe.ledger_id
+        WHERE pl.status = 'confirmed' AND pe.net_pay > 0`,
+    ),
+  );
+  const payrollMatch = new Map<string, Set<string>>(); // `${norm}|${amount}` → 허용 이체 월(YYYY-MM) 집합
+  for (const p of payrollRows) {
+    const key = `${normalizeParty(String(p.name))}|${round(Number(p.net_pay))}`;
+    const y = Number(p.pay_year);
+    const m = Number(p.pay_month);
+    const cur = `${y}-${String(m).padStart(2, "0")}`;
+    const next = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
+    const set = payrollMatch.get(key) ?? new Set<string>();
+    set.add(cur);
+    set.add(next);
+    payrollMatch.set(key, set);
+  }
+
   return rows.flatMap((r): EntryDraft[] => {
     const amount = round(Number(r.amount));
     if (!amount) return [];
@@ -246,6 +268,15 @@ async function draftBankOutEntries(db: PgDatabase, from: string, to: string): Pr
 
     if ((partyNorm && COMPANY_NORM && partyNorm.includes(COMPANY_NORM)) || TRANSFER_RE.test(String(r.trans_type ?? "") + (party ?? ""))) {
       return [{ ...base, description: `계좌간 이체 출금 — ${party ?? ""}`, status: "excluded" as const, lines: balanced(ACCT.suspenseOut, ACCT.bank, amount, party) }];
+    }
+    const payrollMonths = partyNorm ? payrollMatch.get(`${partyNorm}|${amount}`) : undefined;
+    if (payrollMonths && payrollMonths.has(String(r.txn_at).slice(0, 7))) {
+      return [{ ...base, description: `급여 이체 — ${party ?? ""} (급여 분개가 커버)`, status: "excluded" as const, lines: balanced(ACCT.suspenseOut, ACCT.bank, amount, party) }];
+    }
+    // 급여 대량이체 — 실측(2026-08-03): 거래명 '급여' 한 건에 전 직원 합산 103,705,413원.
+    // 급여 분개(대변 103)가 총액을 커버하므로 excluded. 개별 이체자는 위 (이름,금액) 매칭이 잡는다.
+    if (partyNorm && /^(급여|급여이체|상여|상여금)$/.test(partyNorm)) {
+      return [{ ...base, description: `급여 대량이체 — ${party ?? ""} (급여 분개가 커버)`, status: "excluded" as const, lines: balanced(ACCT.suspenseOut, ACCT.bank, amount, party) }];
     }
     if (party && CARD_COMPANY_RE.test(party)) {
       // 법인카드 대금 결제 → 카드 매입 분개(미지급금 253)의 상계
@@ -449,6 +480,49 @@ async function loadPartyAccounts(db: PgDatabase): Promise<Map<string, string>> {
   return new Map(rows.map((r) => [String(r.match_norm), String(r.account_code)]));
 }
 
+/** 확정 급여대장 → 월별 총괄 급여 분개(P7). 세무법인 실측(2025-03: 802 월 1건 148,518,534)과 동일 방식:
+ *  (차)802 급여 지급총액 / (대)254 예수금(소득세·지방세·4대보험 본인부담 등 공제총액) + (대)103 실지급액.
+ *  실지급 이체 출금은 draftBankOutEntries의 급여 대조가 excluded 처리(이중 방지).
+ *  entry_date = 급여월 말일. 회사부담 4대보험 납부는 계좌 출금 학습(254 상계)으로 처리. */
+async function draftPayrollEntries(db: PgDatabase, from: string, to: string): Promise<EntryDraft[]> {
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT pl.ledger_id, pl.pay_year, pl.pay_month, pl.ledger_kind, pl.title,
+              COALESCE(SUM(pe.pay_total), 0) AS pay_total,
+              COALESCE(SUM(pe.deduction_total), 0) AS deduction_total,
+              count(*) AS headcount
+         FROM payroll_ledgers pl JOIN payroll_entries pe ON pe.ledger_id = pl.ledger_id
+        WHERE pl.status = 'confirmed'
+        GROUP BY pl.ledger_id, pl.pay_year, pl.pay_month, pl.ledger_kind, pl.title`,
+    ),
+  );
+  const kindLabel: Record<string, string> = { salary: "급여", bonus: "상여", intern: "인턴 급여" };
+  return rows.flatMap((r): EntryDraft[] => {
+    const y = Number(r.pay_year);
+    const m = Number(r.pay_month);
+    const entryDate = `${y}-${String(m).padStart(2, "0")}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`;
+    if (entryDate < from || entryDate > to) return [];
+    const payTotal = round(Number(r.pay_total));
+    const dedTotal = round(Number(r.deduction_total));
+    const netTotal = payTotal - dedTotal; // 라운딩 오차 없이 차대 강제 균형
+    if (payTotal <= 0) return [];
+    const label = kindLabel[String(r.ledger_kind)] ?? "급여";
+    return [{
+      sourceKind: "payroll",
+      sourceId: String(r.ledger_id),
+      entryDate,
+      description: `${label} ${y}.${String(m).padStart(2, "0")} — ${r.headcount}명`,
+      partyName: null,
+      status: "auto" as const,
+      lines: [
+        { accountCode: "802", debit: payTotal, credit: 0, memo: String(r.title ?? "") || null },
+        ...(dedTotal > 0 ? [{ accountCode: "254", debit: 0, credit: dedTotal, memo: "소득세·4대보험 등 공제" }] : []),
+        ...(netTotal > 0 ? [{ accountCode: ACCT.bank, debit: 0, credit: netTotal, memo: "실지급" }] : []),
+      ],
+    }];
+  });
+}
+
 /** 고정자산 월할 상각 → (차)818 감가상각비 / (대)카테고리 누계액(203/207/209/213). P6-A.
  *  세무법인 실측(2025 기계 매월 247,391원 기표)과 동일하게 월말 auto 전표.
  *  완료된 월만 기표(depreciationForRange가 당월 제외) — 재생성 시 전체 재계산. */
@@ -493,6 +567,7 @@ export async function regenerateJournal(from: string, to: string): Promise<Regen
       ...(await draftManualInvoiceEntries(db, from, to)),
       ...(await draftExpenseDocEntries(db, from, to)),
       ...(await draftDepreciationEntries(from, to)),
+      ...(await draftPayrollEntries(db, from, to)),
     ];
 
     // 사람 판단(confirmed/excluded)은 보존, 기계 생성(auto/pending)만 리셋

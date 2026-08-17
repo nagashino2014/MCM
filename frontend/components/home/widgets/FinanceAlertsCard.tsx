@@ -11,6 +11,7 @@ interface FinanceAlerts {
   reconReview: number;
   ntsFailed: number;
   journalPending: number;
+  taxDeadlines?: Array<{ kind: string; label: string; dueDate: string; dday: number }>;
 }
 
 /**
@@ -79,10 +80,26 @@ export function FinanceAlertsCard() {
       hrefLabel="재무 보드"
       loading={w.status === "loading"}
       error={w.status === "error" ? "불러오지 못했습니다." : undefined}
-      empty={w.status === "ok" && rows.length === 0}
+      empty={w.status === "ok" && rows.length === 0 && (d?.taxDeadlines ?? []).length === 0}
       emptyText="처리할 재무 작업이 없습니다."
     >
       <div className="flex flex-col gap-1.5">
+        {/* 신고·납부 기한 D-day (P7) — D-10 이내만 서버가 내려준다 */}
+        {(d?.taxDeadlines ?? []).map((t) => (
+          <Link
+            key={`${t.kind}-${t.dueDate}`}
+            href={t.kind === "vat" ? "/finance?tab=vatreturn" : "/finance?tab=withholding"}
+            className="flex items-center gap-2.5 rounded-xl border cd-border-c px-3 py-2 cd-row-hover"
+          >
+            <span className="text-lg font-bold tabular-nums" style={{ color: t.dday <= 3 ? "var(--cd-error)" : "var(--cd-warning)", minWidth: 34, textAlign: "right" }}>
+              {t.dday === 0 ? "오늘" : `D-${t.dday}`}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[12.5px] font-semibold cd-text truncate">{t.label}</span>
+              <span className="block text-[11px] cd-text-faint truncate">기한 {t.dueDate}</span>
+            </span>
+          </Link>
+        ))}
         {rows.map((r) => (
           <Link
             key={r.key}

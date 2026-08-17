@@ -4,6 +4,7 @@
 // - HometaxPanel: 홈택스 수집 전자(세금)계산서 매입·매출장 — 수집 서비스 신청/수집 실행 + 매입 공제 토글.
 //   홈택스 자격증명은 바로빌에 전달만 하고 앱에 저장하지 않는다(신청 폼 안내 문구 포함).
 // - VatReturnPanel: 기수 선택 → 신고서 자동 계산 → 저장/확정/신고 자료 엑셀. 확정·제출은 항상 사람 액션(§7 T5).
+// - WithholdingPanel: 원천징수이행상황신고 기초자료(P7) — 확정 급여대장 월별 집계 + xlsx.
 // FinanceBoard 의 소메뉴 "부가세 신고" 그룹에서 렌더된다(JournalPanels 스타일 관례 동일).
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -56,6 +57,127 @@ function PeriodSelect({ periods, selected, onChange }: { periods: PeriodOption[]
         <option key={periodKey(p)} value={periodKey(p)}>{p.label}</option>
       ))}
     </select>
+  );
+}
+
+// ─────────────────────────────────────────────
+// 원천세 (원천징수이행상황신고 기초자료)
+// ─────────────────────────────────────────────
+
+interface WithholdingRow {
+  year: number;
+  month: number;
+  dueDate: string;
+  headcount: number;
+  payTotal: number;
+  incomeTax: number;
+  settleIncomeTax: number;
+  yearendIncomeTax: number;
+  farmTax: number;
+  incomeTaxTotal: number;
+  localTax: number;
+}
+
+export function WithholdingPanel() {
+  const thisYear = new Date().getFullYear();
+  const [year, setYear] = useState(thisYear);
+  const [months, setMonths] = useState<WithholdingRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    fetch(`/api/finance/withholding?year=${year}`, { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!alive) return;
+        if (data.error) setError(String(data.error));
+        else setMonths(Array.isArray(data.months) ? data.months : []);
+      })
+      .catch((err) => alive && setError(err instanceof Error ? err.message : String(err)))
+      .finally(() => alive && setLoading(false));
+    return () => {
+      alive = false;
+    };
+  }, [year]);
+
+  const total = (fn: (m: WithholdingRow) => number) => months.reduce((acc, m) => acc + fn(m), 0);
+  const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const upcoming = months.find((m) => m.dueDate >= today);
+
+  return (
+    <div className="cd-card p-4">
+      <div className="flex items-center gap-2 flex-wrap mb-2">
+        <div className="cd-card-title mr-auto">원천세 — 원천징수이행상황신고 기초자료</div>
+        <select className="cd-select" value={year} onChange={(e) => setYear(Number(e.target.value))}>
+          {[thisYear - 1, thisYear].map((y) => (
+            <option key={y} value={y}>{y}년</option>
+          ))}
+        </select>
+        <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => window.open(`/api/finance/withholding?year=${year}&format=xlsx`, "_blank")}>
+          <Download className="w-3.5 h-3.5" /> 집계 엑셀
+        </button>
+      </div>
+      <div className="text-xs cd-text-muted mb-3">
+        확정 급여대장 실측 집계입니다 — 홈택스 신고 시 간이세액(A01) 인원·총지급액·소득세로 대사하세요. 신고·납부 기한은 지급월 익월
+        10일{upcoming ? ` (다음 기한: ${upcoming.dueDate} — ${upcoming.year}.${String(upcoming.month).padStart(2, "0")}분)` : ""}. 지방소득세는 위택스 별도 신고분입니다.
+      </div>
+      {error && <div className="cd-error-text text-sm mb-2">{error}</div>}
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="cd-text-muted text-left">
+              <th className="py-1.5 pr-3 font-normal">지급월</th>
+              <th className="py-1.5 pr-3 font-normal">신고기한</th>
+              <th className="py-1.5 pr-3 font-normal text-right">인원</th>
+              <th className="py-1.5 pr-3 font-normal text-right">총지급액</th>
+              <th className="py-1.5 pr-3 font-normal text-right">간이세액</th>
+              <th className="py-1.5 pr-3 font-normal text-right">정산분</th>
+              <th className="py-1.5 pr-3 font-normal text-right">연말정산</th>
+              <th className="py-1.5 pr-3 font-normal text-right">농특세</th>
+              <th className="py-1.5 pr-3 font-normal text-right">소득세 계</th>
+              <th className="py-1.5 font-normal text-right">지방소득세</th>
+            </tr>
+          </thead>
+          <tbody>
+            {months.map((m) => (
+              <tr key={m.month} className="border-t cd-hairline-row-c">
+                <td className="py-1.5 pr-3 whitespace-nowrap">{m.year}.{String(m.month).padStart(2, "0")}</td>
+                <td className="py-1.5 pr-3 whitespace-nowrap text-xs">{m.dueDate}</td>
+                <td className="py-1.5 pr-3 text-right">{m.headcount}</td>
+                <td className="py-1.5 pr-3 text-right whitespace-nowrap">{won(m.payTotal)}</td>
+                <td className="py-1.5 pr-3 text-right whitespace-nowrap">{won(m.incomeTax)}</td>
+                <td className="py-1.5 pr-3 text-right whitespace-nowrap">{m.settleIncomeTax ? won(m.settleIncomeTax) : "-"}</td>
+                <td className="py-1.5 pr-3 text-right whitespace-nowrap">{m.yearendIncomeTax ? won(m.yearendIncomeTax) : "-"}</td>
+                <td className="py-1.5 pr-3 text-right whitespace-nowrap">{m.farmTax ? won(m.farmTax) : "-"}</td>
+                <td className="py-1.5 pr-3 text-right whitespace-nowrap font-medium">{won(m.incomeTaxTotal)}</td>
+                <td className="py-1.5 text-right whitespace-nowrap">{won(m.localTax)}</td>
+              </tr>
+            ))}
+            {months.length > 0 && (
+              <tr className="border-t cd-hairline-row-c font-semibold">
+                <td className="py-2 pr-3">합계</td>
+                <td className="py-2 pr-3" />
+                <td className="py-2 pr-3" />
+                <td className="py-2 pr-3 text-right whitespace-nowrap">{won(total((m) => m.payTotal))}</td>
+                <td className="py-2 pr-3 text-right whitespace-nowrap">{won(total((m) => m.incomeTax))}</td>
+                <td className="py-2 pr-3 text-right whitespace-nowrap">{won(total((m) => m.settleIncomeTax))}</td>
+                <td className="py-2 pr-3 text-right whitespace-nowrap">{won(total((m) => m.yearendIncomeTax))}</td>
+                <td className="py-2 pr-3 text-right whitespace-nowrap">{won(total((m) => m.farmTax))}</td>
+                <td className="py-2 pr-3 text-right whitespace-nowrap">{won(total((m) => m.incomeTaxTotal))}</td>
+                <td className="py-2 text-right whitespace-nowrap">{won(total((m) => m.localTax))}</td>
+              </tr>
+            )}
+            {!loading && months.length === 0 && (
+              <tr>
+                <td colSpan={10} className="py-6 text-center cd-text-muted text-sm">{year}년 확정 급여대장이 없습니다.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 

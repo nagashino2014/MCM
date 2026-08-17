@@ -39,6 +39,27 @@ export async function GET() {
       db.exec(`SELECT count(*) AS n FROM journal_entries WHERE status = 'pending'`).catch(() => null),
     ]);
 
+    // 신고·납부 기한 D-day (P7) — 원천세(매월 10일)·부가세(1/25·4/25·7/25·10/25). D-10 이내만 노출.
+    const todayYmd = now.toISOString().slice(0, 10);
+    const dday = (due: string) =>
+      Math.round((new Date(`${due}T00:00:00Z`).getTime() - new Date(`${todayYmd}T00:00:00Z`).getTime()) / 86400000);
+    const y = now.getUTCFullYear();
+    const m = now.getUTCMonth() + 1;
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const candidates: Array<{ kind: string; label: string; dueDate: string }> = [
+      { kind: "withholding", label: "원천세 신고·납부", dueDate: `${y}-${pad(m)}-10` },
+      { kind: "withholding", label: "원천세 신고·납부", dueDate: m === 12 ? `${y + 1}-01-10` : `${y}-${pad(m + 1)}-10` },
+      ...[1, 4, 7, 10].flatMap((vm) => [
+        { kind: "vat", label: "부가세 신고·납부", dueDate: `${y}-${pad(vm)}-25` },
+        { kind: "vat", label: "부가세 신고·납부", dueDate: `${y + 1}-${pad(vm)}-25` },
+      ]),
+    ];
+    const taxDeadlines = candidates
+      .map((c) => ({ ...c, dday: dday(c.dueDate) }))
+      .filter((c) => c.dday >= 0 && c.dday <= 10)
+      .sort((a, b) => a.dday - b.dday)
+      .filter((c, i, arr) => arr.findIndex((x) => x.kind === c.kind) === i); // 종류별 가장 임박한 것만
+
     return NextResponse.json({
       unclassified: Number(rowsToObjects(cardRows)[0]?.n || 0),
       quarterStart: qStart,
@@ -46,6 +67,7 @@ export async function GET() {
       reconReview: Number(rowsToObjects(reconRows)[0]?.review || 0),
       ntsFailed: Number(rowsToObjects(ntsRows)[0]?.n || 0),
       journalPending: journalRows ? Number(rowsToObjects(journalRows)[0]?.n || 0) : 0,
+      taxDeadlines,
     });
   } catch (err) {
     return authErrorToResponse(err);

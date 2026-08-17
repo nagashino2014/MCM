@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { authErrorToResponse, requireSession } from "@/lib/auth/guards";
-import { findUserById } from "@/lib/auth/users";
+import { findUserByIdStrict } from "@/lib/auth/users";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,7 +16,8 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const ctx = await requireSession();
-    const u = await findUserById(ctx.userId);
+    // strict: DB 일시 장애는 503 으로 나간다(authErrorToResponse) — 401 이면 앱이 토큰을 폐기하므로.
+    const u = await findUserByIdStrict(ctx.userId);
     if (!u || u.status !== "active") {
       return NextResponse.json({ error: "접근할 수 없는 계정입니다." }, { status: 401 });
     }

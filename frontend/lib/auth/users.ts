@@ -64,7 +64,12 @@ export async function findUserByEmail(email: string): Promise<UserWithHash | nul
   };
 }
 
-export async function findUserById(userId: string): Promise<UserRow | null> {
+/**
+ * findUserById 의 엄격판 — DB 조회 실패(Aurora resume 창·커넥션 오류 등)를 "사용자 없음"과
+ * 구분해 503 오류로 던진다. 모바일 인증(/api/mobile/auth/me·refresh)이 사용:
+ * 일시 장애를 401 로 응답하면 앱이 세션 만료로 오인해 토큰을 폐기한다(2026-08-17 실측).
+ */
+export async function findUserByIdStrict(userId: string): Promise<UserRow | null> {
   invalidateDb();
   const db = await getDb();
   let result;
@@ -74,11 +79,21 @@ export async function findUserById(userId: string): Promise<UserRow | null> {
       [userId]
     );
   } catch {
-    return null;
+    throw Object.assign(new Error("일시적인 서버 오류입니다. 잠시 후 다시 시도해 주세요."), {
+      status: 503,
+    });
   }
   const rows = rowsToObjects(result);
   if (!rows.length) return null;
   return rowToUser(rows[0]);
+}
+
+export async function findUserById(userId: string): Promise<UserRow | null> {
+  try {
+    return await findUserByIdStrict(userId);
+  } catch {
+    return null;
+  }
 }
 
 export async function listUsers(): Promise<UserRow[]> {

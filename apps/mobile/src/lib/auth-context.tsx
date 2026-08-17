@@ -5,7 +5,7 @@
  * - 네트워크가 없을 땐 마지막으로 저장해 둔 사용자로 화면을 채운다(오프라인 표시용).
  * - login/logout 을 제공하고, api.ts 의 refresh 실패 시 자동 로그아웃을 연결한다.
  */
-import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { API_BASE_URL } from "./config";
 import { saveTokens, clearTokens, getAccessToken } from "./tokens";
 import { apiJson, setUnauthorizedHandler } from "./api";
@@ -56,15 +56,26 @@ const AuthContext = createContext<AuthState | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<Status>("loading");
   const [user, setUser] = useState<AuthUser | null>(null);
+  /**
+   * 재진입 가드 — unregisterPush 의 API 호출이 401 을 받으면 onUnauthorized(=logout)가
+   * 다시 불려 logout→401→logout 무한루프가 된다(2026-08-17 요청 폭풍 실측). 진행 중이면 무시.
+   */
+  const loggingOut = useRef(false);
 
   const logout = useCallback(async () => {
-    // 토큰이 아직 유효할 때 이 기기의 푸시 수신을 먼저 끊는다(로그아웃 후엔 API 호출 불가).
-    await unregisterPush();
-    await clearTokens();
-    // 캐시된 업무 데이터(결재·메일 목록 등)가 다음 로그인 사용자에게 보이지 않게 비운다.
-    await kvClearUserData();
-    setUser(null);
-    setStatus("guest");
+    if (loggingOut.current) return;
+    loggingOut.current = true;
+    try {
+      // 토큰이 아직 유효할 때 이 기기의 푸시 수신을 먼저 끊는다(로그아웃 후엔 API 호출 불가).
+      await unregisterPush();
+      await clearTokens();
+      // 캐시된 업무 데이터(결재·메일 목록 등)가 다음 로그인 사용자에게 보이지 않게 비운다.
+      await kvClearUserData();
+      setUser(null);
+      setStatus("guest");
+    } finally {
+      loggingOut.current = false;
+    }
   }, []);
 
   // refresh 실패(세션 만료) → 자동 로그아웃

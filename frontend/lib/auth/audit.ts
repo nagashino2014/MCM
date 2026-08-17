@@ -108,7 +108,9 @@ export type AuditAction =
   | "hometax_scrap_regist"
   | "hometax_sync"
   | "vat_return_save"
-  | "vat_return_confirm";
+  | "vat_return_confirm"
+  | "fixed_asset_save"
+  | "trip_log_sync";
 
 export interface AuditEntry {
   actorUserId: string | null;

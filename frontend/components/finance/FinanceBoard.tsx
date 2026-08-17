@@ -27,13 +27,17 @@ import { CdModal } from "@/components/cdash/CdModal";
 import { JournalPanel, LedgerPanel, TrialPanel } from "@/components/finance/JournalPanels";
 import { PnlPanel, CashPanel } from "@/components/finance/ManagementPanels";
 import { HometaxPanel, VatReturnPanel } from "@/components/finance/VatReturnPanels";
+import { FixedAssetPanel, TripLogPanel, BudgetPanel } from "@/components/finance/AssetBudgetPanels";
 import "@/components/cdash/cdash.css";
 
 type Tab =
   | "connections" | "bank" | "card" | "recon" | "vat" | "invoice" | "journal" | "ledger" | "trial" | "pnl" | "cash"
-  | "hometax" | "vatreturn";
+  | "hometax" | "vatreturn" | "fixedassets" | "triplog" | "budget";
 
-const TAB_KEYS: Tab[] = ["connections", "bank", "card", "recon", "vat", "invoice", "journal", "ledger", "trial", "pnl", "cash", "hometax", "vatreturn"];
+const TAB_KEYS: Tab[] = [
+  "connections", "bank", "card", "recon", "vat", "invoice", "journal", "ledger", "trial", "pnl", "cash",
+  "hometax", "vatreturn", "fixedassets", "triplog", "budget",
+];
 
 /** 사이드바 소메뉴 = 탭 그룹. 소메뉴 진입 시 첫 탭이 열린다(menu.ts 의 href 와 짝). */
 const TAB_GROUPS: Array<{ title: string; tabs: [Tab, string][] }> = [
@@ -46,6 +50,8 @@ const TAB_GROUPS: Array<{ title: string; tabs: [Tab, string][] }> = [
   { title: "전표·장부", tabs: [["journal", "분개장"], ["ledger", "계정별원장"], ["trial", "시산표·백테스트"]] },
   // 손익·자금(P4) — 전표·원장에서 파생되는 관리 손익과 자금수지 전망.
   { title: "손익·자금", tabs: [["pnl", "월별 손익"], ["cash", "자금수지"]] },
+  // 자산·예산(P6) — 고정자산 상각(전표 연동)·운행기록부·연간 예산(기안 사전검토 연동).
+  { title: "자산·예산", tabs: [["fixedassets", "고정자산"], ["triplog", "운행기록부"], ["budget", "예산"]] },
 ];
 const toTab = (raw: string | null): Tab => (TAB_KEYS.includes(raw as Tab) && raw !== "connections" ? (raw as Tab) : "connections");
 
@@ -373,6 +379,9 @@ export function FinanceBoard() {
         {tab === "vat" && <VatPanel />}
         {tab === "hometax" && <HometaxPanel />}
         {tab === "vatreturn" && <VatReturnPanel />}
+        {tab === "fixedassets" && <FixedAssetPanel />}
+        {tab === "triplog" && <TripLogPanel />}
+        {tab === "budget" && <BudgetPanel />}
         {tab === "invoice" && <TaxInvoicePanel />}
         {tab === "journal" && <JournalPanel />}
         {tab === "ledger" && <LedgerPanel />}

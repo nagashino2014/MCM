@@ -449,6 +449,26 @@ async function loadPartyAccounts(db: PgDatabase): Promise<Map<string, string>> {
   return new Map(rows.map((r) => [String(r.match_norm), String(r.account_code)]));
 }
 
+/** 고정자산 월할 상각 → (차)818 감가상각비 / (대)카테고리 누계액(203/207/209/213). P6-A.
+ *  세무법인 실측(2025 기계 매월 247,391원 기표)과 동일하게 월말 auto 전표.
+ *  완료된 월만 기표(depreciationForRange가 당월 제외) — 재생성 시 전체 재계산. */
+async function draftDepreciationEntries(from: string, to: string): Promise<EntryDraft[]> {
+  const { depreciationForRange, FA_ACCOUNTS } = await import("@/lib/finance/depreciation");
+  const rows = await depreciationForRange(from, to);
+  return rows.map((r) => ({
+    sourceKind: "depreciation",
+    sourceId: `${r.faId}:${r.month}`,
+    entryDate: r.entryDate,
+    description: `감가상각 — ${r.name} (${r.month})`,
+    partyName: null,
+    status: "auto" as const,
+    lines: [
+      { accountCode: "818", debit: r.amount, credit: 0 },
+      { accountCode: FA_ACCOUNTS[r.category]?.accum ?? "213", debit: 0, credit: r.amount },
+    ],
+  }));
+}
+
 // ─────────────────────────────────────────────
 // 재생성 배치
 // ─────────────────────────────────────────────
@@ -472,6 +492,7 @@ export async function regenerateJournal(from: string, to: string): Promise<Regen
       ...(await draftInvoiceEntries(db, from, to)),
       ...(await draftManualInvoiceEntries(db, from, to)),
       ...(await draftExpenseDocEntries(db, from, to)),
+      ...(await draftDepreciationEntries(from, to)),
     ];
 
     // 사람 판단(confirmed/excluded)은 보존, 기계 생성(auto/pending)만 리셋

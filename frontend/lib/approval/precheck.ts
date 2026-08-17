@@ -142,6 +142,30 @@ export async function runRuleChecks(docId: string): Promise<PrecheckFinding[]> {
     }
   }
 
+  // 규칙 3: 연간 예산(지출결의류 — 예산이 등록된 카테고리만, P6-C). 정책 없이도 warn, 정책으로 block 승격.
+  if (formId === "frm-expense-report" || formId === "frm-biz-trip-report") {
+    try {
+      const { checkBudgetForExpenseValues } = await import("@/lib/finance/budget");
+      const year = Number(new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 4));
+      const budgetFindings = await checkBudgetForExpenseValues(values, year);
+      if (budgetFindings.length) {
+        const pol = (await listFormPolicies(formId)).find((p) => p.kind === "budget_limit");
+        for (const f of budgetFindings) {
+          const fmt = (n: number) => n.toLocaleString("ko-KR");
+          findings.push({
+            level: f.over ? pol?.severity ?? "warn" : "info",
+            message: f.over
+              ? `${f.categoryLabel} 연간 예산 초과 — 예산 ${fmt(f.budget)} / 집행 ${fmt(f.spent)} / 신청 ${fmt(f.requested)} (잔액 ${fmt(f.remainingAfter)})`
+              : `${f.categoryLabel} 예산 잔액 ${fmt(f.remainingAfter)}원 (예산 ${fmt(f.budget)} · 집행 ${fmt(f.spent)} · 이번 신청 ${fmt(f.requested)})`,
+            source: "budget_limit",
+          });
+        }
+      }
+    } catch {
+      // 예산 테이블 미적용(마이그 전) 등 — 사전검토는 조용히 통과
+    }
+  }
+
   // 정책 기반 규칙(금액 상한·필수 필드)
   const policies = await listFormPolicies(formId);
   for (const p of policies) {

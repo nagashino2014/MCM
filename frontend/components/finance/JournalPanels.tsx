@@ -43,6 +43,7 @@ const SOURCE_LABEL: Record<string, string> = {
   tax_invoice: "세금계산서",
   invoice_manual: "계산서(수기)",
   expense_doc: "지출결의",
+  depreciation: "감가상각",
   manual: "수동",
 };
 

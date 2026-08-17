@@ -194,6 +194,8 @@ export const MENU_ITEMS: MenuItem[] = [
       { title: "전표·장부", href: "/finance?tab=journal" },
       // 손익·자금(P4) — 월별 손익·자금수지 전망.
       { title: "손익·자금", href: "/finance?tab=pnl" },
+      // 자산·예산(P6) — 고정자산 상각·운행기록부·연간 예산.
+      { title: "자산·예산", href: "/finance?tab=fixedassets" },
     ],
     group: "main",
   },

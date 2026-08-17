@@ -60,6 +60,33 @@ export async function syncTripLogsFromDocs(year: number): Promise<{ scanned: num
   const assets = rowsToObjects(await db.exec(`SELECT asset_id, name FROM reservable_assets WHERE kind = 'vehicle'`));
   const assetByName = new Map(assets.map((a) => [String(a.name), String(a.asset_id)]));
 
+  // 출장지 해석 대비: field_12(사업장 선택)의 facilityId → 사업장 주소(실측: destination 비고 사업장 참조만 있는 문서)
+  const facilityIds = [
+    ...new Set(
+      docs
+        .map((d) => {
+          try {
+            const v = typeof d.field_values === "string" ? JSON.parse(String(d.field_values)) : d.field_values;
+            const f12 = (v as Record<string, unknown>)?.field_12 as Record<string, unknown> | undefined;
+            return f12 && typeof f12 === "object" && f12.facilityId ? String(f12.facilityId) : null;
+          } catch {
+            return null;
+          }
+        })
+        .filter(Boolean) as string[],
+    ),
+  ];
+  const facilityAddr = new Map<string, string>();
+  if (facilityIds.length) {
+    const rows = rowsToObjects(
+      await db.exec(
+        `SELECT facility_id, COALESCE(NULLIF(normalized_address, ''), site_address) AS addr FROM facilities WHERE facility_id = ANY($1::text[])`,
+        [facilityIds],
+      ),
+    );
+    for (const r of rows) if (r.addr) facilityAddr.set(String(r.facility_id), String(r.addr));
+  }
+
   // 사전 패스: 문서 해석 + 실도로 거리 추정(사용자 확정 — 기아 연동 대신 카카오 길찾기 추정).
   // estimateOneWayKm 이 캐시 저장에 자체 withDbWrite 를 쓰므로 트랜잭션 밖에서 계산한다(중첩 금지 규약).
   interface PlannedRow {
@@ -86,9 +113,15 @@ export async function syncTripLogsFromDocs(year: number): Promise<{ scanned: num
     const assetId = use.assetId ?? assetByName.get(use.assetName);
     if (!assetId) continue;
     validDocIds.push(String(doc.doc_id));
-    const destination = String(values.destination ?? "").trim();
+    // 목적지: destination 텍스트 → field_12 사업장(주소 우선, 없으면 사업장명 키워드)
+    const destRaw = String(values.destination ?? "").trim();
+    const f12 = values.field_12 as Record<string, unknown> | undefined;
+    const f12Name = f12 && typeof f12 === "object" ? String(f12.name ?? "").trim() : "";
+    const f12Addr = f12 && typeof f12 === "object" && f12.facilityId ? facilityAddr.get(String(f12.facilityId)) ?? "" : "";
+    const destination = destRaw || f12Name; // 표시용(용무)
+    const geoQuery = destRaw || f12Addr || f12Name; // 지오코딩용(주소 우선)
     const dates = expandDates(use.period.from, use.period.to).filter((d) => d >= from && d <= to);
-    const oneWayKm = destination ? await estimateOneWayKm(officeKeyForDept(doc.dept_name ? String(doc.dept_name) : null), destination) : null;
+    const oneWayKm = geoQuery ? await estimateOneWayKm(officeKeyForDept(doc.dept_name ? String(doc.dept_name) : null), geoQuery) : null;
     for (let i = 0; i < dates.length; i += 1) {
       let distanceKm: number | null = null;
       if (oneWayKm != null) {
@@ -118,7 +151,8 @@ export async function syncTripLogsFromDocs(year: number): Promise<{ scanned: num
             distance_km, distance_estimated, created_at)
          VALUES ($1, $2, $3, NULLIF($4, ''), NULLIF($5, ''), 'business', NULLIF($6, ''), $7, 'trip_doc', $8, $9, $10)
          ON CONFLICT (asset_id, drive_date, doc_id) WHERE doc_id IS NOT NULL DO UPDATE SET
-           distance_km = EXCLUDED.distance_km, distance_estimated = EXCLUDED.distance_estimated, updated_at = $10
+           distance_km = EXCLUDED.distance_km, distance_estimated = EXCLUDED.distance_estimated,
+           purpose = COALESCE(vehicle_trip_logs.purpose, EXCLUDED.purpose), updated_at = $10
          WHERE EXCLUDED.distance_km IS NOT NULL
            AND (vehicle_trip_logs.distance_km IS NULL OR vehicle_trip_logs.distance_estimated = 1)
          RETURNING log_id`,

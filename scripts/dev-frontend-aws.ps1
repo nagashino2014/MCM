@@ -68,6 +68,26 @@ $encodedPassword = [Uri]::EscapeDataString([string]$secret.password)
 $env:DATABASE_URL = "postgresql://${encodedUser}:${encodedPassword}@${LocalHost}:${LocalPort}/${Database}"
 $env:PGSSLMODE = "require"
 
+# 바로빌 연동 (staging 태스크 정의와 동일 구성 — CERTKEY 는 앱 시크릿에서 조회, 파일에 저장하지 않음)
+try {
+  $appSecretString = Invoke-AwsText @(
+    "secretsmanager", "get-secret-value",
+    "--secret-id", "mcm-ieps-staging/app",
+    "--query", "SecretString"
+  )
+  $appSecret = $appSecretString | ConvertFrom-Json
+  if ($appSecret.BAROBILL_CERTKEY) {
+    $env:BAROBILL_CERTKEY = [string]$appSecret.BAROBILL_CERTKEY
+    $env:BAROBILL_CORPNUM = "5578600306"
+    $env:BAROBILL_ID = "koensain18"
+    $env:BAROBILL_ENV = "prod"
+    $env:BAROBILL_INVOICER_EMAIL = "kaikan00@koensain.com"
+    Write-Host "Barobill env configured (prod certkey from app secret)."
+  }
+} catch {
+  Write-Warning "Barobill secret lookup failed - finance sync will be unavailable: $_"
+}
+
 Write-Host "Starting frontend with the current RDS secret ($ClusterIdentifier / AWSCURRENT)."
 Write-Host "Database target: ${LocalHost}:${LocalPort}/${Database} as $($secret.username)"
 

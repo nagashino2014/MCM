@@ -112,7 +112,8 @@ function parseRow(xml: string): HometaxInvoiceRow {
     ntsSendDt: formatBarobillDT(raw.NTSSendDT),
     issueDt: formatBarobillDT(raw.IssueDT),
     writeDate: formatBarobillDT(raw.WriteDate),
-    modifyCode: raw.ModifyCode || null,
+    // 실측(2026-08-17): 당초분은 ModifyCode="0" 으로 온다 — 0/00 은 수정 아님
+    modifyCode: raw.ModifyCode && !/^0+$/.test(raw.ModifyCode) ? raw.ModifyCode : null,
     taxType: Number(raw.TaxType || 1),
     purposeType: raw.PurposeType ? Number(raw.PurposeType) : null,
     invoicerCorpNum: raw.InvoicerCorpNum || null,

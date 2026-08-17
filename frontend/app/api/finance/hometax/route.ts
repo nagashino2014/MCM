@@ -96,9 +96,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ url: await getTaxInvoiceScrapRequestUrl() });
     }
     if (body.action === "sync") {
+      // toMonth 미지정 시 이번 달까지 (KST)
+      const nowKst = new Date(Date.now() + 9 * 3600 * 1000);
+      const thisMonth = `${nowKst.getUTCFullYear()}${String(nowKst.getUTCMonth() + 1).padStart(2, "0")}`;
       const range =
         body.fromMonth && /^\d{6}$/.test(body.fromMonth)
-          ? { fromMonth: body.fromMonth, toMonth: body.toMonth && /^\d{6}$/.test(body.toMonth) ? body.toMonth : body.fromMonth }
+          ? { fromMonth: body.fromMonth, toMonth: body.toMonth && /^\d{6}$/.test(body.toMonth) ? body.toMonth : thisMonth }
           : undefined;
       const result = await syncHometaxInvoices(range);
       await recordAuditLog({

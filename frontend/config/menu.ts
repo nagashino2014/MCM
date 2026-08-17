@@ -136,6 +136,8 @@ export const MENU_ITEMS: MenuItem[] = [
     submenu: [
       { title: "급여대장", href: "/payroll" },
       { title: "직원별 연봉·근로계약", href: "/payroll/contracts" },
+      // 연말정산(P8) — 총급여·기납부 자동 + 간소화 PDF 파싱 + 결정세액 계산.
+      { title: "연말정산", href: "/payroll/yearend" },
       { title: "급여 항목·설정", href: "/payroll/settings" },
     ],
     minRole: "admin",

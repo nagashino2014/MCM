@@ -97,6 +97,7 @@ export type AuditAction =
   | "finance_connection_stop"
   | "finance_connection_resume"
   | "finance_sync_run"
+  | "finance_statement_import"
   | "finance_card_meta_update"
   | "finance_recon_run"
   | "finance_recon_confirm"

@@ -6,7 +6,7 @@
 //   해지/해지취소/재등록(Stop 계열 API), 카드 즉시 수집(RefreshNow), 수집 로그.
 // - 수집(catch-up)은 /api/finance/connections GET 이 stale 판정 시 서버가 백그라운드 실행.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   Landmark,
@@ -20,6 +20,7 @@ import {
   Store,
   Trash2,
   AlertTriangle,
+  Upload,
 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
@@ -34,7 +35,7 @@ import { BalanceSheetPanel, ClosingPanel } from "@/components/finance/ClosingPan
 import "@/components/cdash/cdash.css";
 
 /** 최근 수집 로그 카드에 한 번에 보여줄 줄 수. */
-const LOG_PAGE_SIZE = 5;
+const LOG_PAGE_SIZE = 10;
 
 type Tab =
   | "connections" | "bank" | "card" | "recon" | "vat" | "invoice" | "journal" | "ledger" | "trial" | "pnl" | "cash"
@@ -383,6 +384,177 @@ function StatusDot({ ok }: { ok: boolean }) {
   );
 }
 
+
+interface ImportSummary {
+  profileLabel: string;
+  kind: "bank" | "card";
+  fileName: string;
+  accountHint: string | null;
+  period: { from: string | null; to: string | null };
+  target: { id: string; label: string; no: string } | null;
+  guessed: boolean;
+  total: number;
+  canceled: number;
+  duplicated: number;
+  newRows: number;
+  inserted: number;
+  needTarget?: boolean;
+  targets?: { id: string; label: string; no: string }[];
+  sample: Record<string, string | number | null>[];
+}
+
+/**
+ * 계좌·카드내역 엑셀 업로드 — 바로빌이 보유하지 않는 과거분(3개월 이전)을 은행/카드사 엑셀로 채운다.
+ * 파일을 고르면 양식을 자동 판별해 미리보기(대상·기간·신규/중복 건수)를 보여주고, 확인 후 적재한다.
+ */
+function StatementUploadCard({ onImported }: { onImported: () => void }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [summary, setSummary] = useState<ImportSummary | null>(null);
+  const [targetId, setTargetId] = useState("");
+  const [busy, setBusy] = useState<"preview" | "commit" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+
+  const send = async (nextFile: File, mode: "preview" | "commit", target: string) => {
+    setBusy(mode);
+    setError(null);
+    try {
+      const fd = new FormData();
+      fd.set("file", nextFile, nextFile.name);
+      fd.set("mode", mode);
+      if (target) fd.set("targetId", target);
+      const res = await fetch("/api/finance/statements", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "엑셀을 읽지 못했습니다.");
+      setSummary(data as ImportSummary);
+      if (data.target?.id) setTargetId(String(data.target.id));
+      if (mode === "commit") {
+        setDone(`${data.inserted}건 적재 완료 (중복 ${data.duplicated}건 건너뜀)`);
+        onImported();
+      }
+      return data as ImportSummary;
+    } catch (err) {
+      setError((err as Error).message);
+      setSummary(null);
+      return null;
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const pick = async (next: File | null) => {
+    setFile(next);
+    setSummary(null);
+    setDone(null);
+    setTargetId("");
+    if (next) await send(next, "preview", "");
+  };
+
+  const period = summary?.period.from ? `${summary.period.from} ~ ${summary.period.to ?? ""}` : "기간 미상";
+
+  return (
+    <div className="cd-card p-4 min-w-0">
+      <div className="cd-card-title mb-1">계좌/카드내역 엑셀 업로드</div>
+      <p className="text-xs cd-text-muted mb-3">
+        바로빌이 보유하지 않는 과거분(계좌 3개월·카드 2개월 이전)을 은행·카드사에서 내려받은 엑셀로 채웁니다.
+        기업은행·국민은행 계좌, 롯데·기업은행 법인카드 양식을 자동 인식하며, 이미 적재된 건은 중복 없이 건너뜁니다.
+      </p>
+
+      <div className="flex items-center gap-2 flex-wrap">
+        <input
+          ref={inputRef}
+          type="file"
+          accept=".xlsx,.xls"
+          className="hidden"
+          onChange={(e) => void pick(e.target.files?.[0] ?? null)}
+        />
+        <button type="button" className="cd-btn cd-btn-soft cd-btn-sm" onClick={() => inputRef.current?.click()} disabled={busy !== null}>
+          <Upload className="w-4 h-4" /> {busy === "preview" ? "분석 중..." : "엑셀 선택"}
+        </button>
+        {file && <span className="text-xs cd-text-muted truncate max-w-[220px]" title={file.name}>{file.name}</span>}
+      </div>
+
+      {error && <div className="text-xs cd-error-text mt-2">{error}</div>}
+      {done && <div className="text-xs mt-2" style={{ color: "var(--cd-success)" }}>{done}</div>}
+
+      {summary && (
+        <div className="mt-3 rounded-xl border cd-border-c p-3 text-xs space-y-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="cd-pill cd-pill-info">{summary.profileLabel}</span>
+            <span className="cd-text-muted">{period}</span>
+            <span className="cd-text-muted">파일 {summary.total}건</span>
+            {summary.canceled > 0 && <span className="cd-text-muted">취소 {summary.canceled}건 제외</span>}
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="cd-text-faint shrink-0">적재 대상</span>
+            <select
+              className="cd-select"
+              style={{ width: "auto", minWidth: 200 }}
+              value={targetId}
+              onChange={(e) => {
+                setTargetId(e.target.value);
+                if (file && e.target.value) void send(file, "preview", e.target.value);
+              }}
+            >
+              <option value="">선택하세요</option>
+              {(summary.targets ?? []).map((t) => (
+                <option key={t.id} value={t.id}>{t.label} ({t.no})</option>
+              ))}
+            </select>
+            {summary.guessed && summary.target && <span className="cd-pill cd-pill-success">자동 인식</span>}
+            {summary.accountHint && <span className="cd-text-faint">파일 번호 {summary.accountHint}</span>}
+          </div>
+
+          {targetId && (
+            <div className="flex items-center gap-3 flex-wrap">
+              <span>
+                신규 <b>{summary.newRows}</b>건
+              </span>
+              <span className="cd-text-muted">중복 {summary.duplicated}건</span>
+              <button
+                type="button"
+                className="cd-btn cd-btn-primary cd-btn-sm ml-auto"
+                disabled={busy !== null || summary.newRows === 0}
+                onClick={() => file && void send(file, "commit", targetId)}
+              >
+                {busy === "commit" ? "적재 중..." : `${summary.newRows}건 적재`}
+              </button>
+            </div>
+          )}
+
+          {summary.sample.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-[11px]">
+                <thead>
+                  <tr className="cd-text-muted text-left">
+                    {Object.keys(summary.sample[0]).map((k) => (
+                      <th key={k} className="py-1 pr-2 font-normal">{k}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {summary.sample.map((row, i) => (
+                    <tr key={i} className="border-t cd-hairline-row-c">
+                      {Object.values(row).map((v, j) => (
+                        <td key={j} className="py-1 pr-2 whitespace-nowrap">
+                          {typeof v === "number" ? v.toLocaleString("ko-KR") : v ?? ""}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="cd-text-faint mt-1">위 5건은 파일에서 읽은 내용 미리보기입니다.</div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function LogoRegistryCard() {
   const [tab, setTab] = useState<"bank" | "card">("bank");
   const [version, setVersion] = useState(1); // 업로드 후 캐시 무효화 + 재검사
@@ -723,8 +895,11 @@ function ConnectionsPanel() {
         </div>
 
         <div className="grid gap-4 items-start xl:grid-cols-2 min-w-0">
-        {/* 은행·카드사 로고 등록 */}
-        <LogoRegistryCard />
+        {/* 은행·카드사 로고 등록 + 계좌/카드내역 엑셀 업로드 (같은 컬럼 = 같은 너비) */}
+        <div className="space-y-4 min-w-0">
+          <LogoRegistryCard />
+          <StatementUploadCard onImported={() => load(true)} />
+        </div>
 
         {/* 수집 로그 */}
         <div className="cd-card p-4 min-w-0">

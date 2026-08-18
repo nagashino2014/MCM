@@ -5,7 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
-import { buildIssuePrefill, listContractInvoices, listRecentInvoices, issueTaxInvoice, issueModifiedTaxInvoice, refreshInvoiceStates, invoicePopUpUrl, cancelTaxInvoice, type IssueParams, type ModifyParams } from "@/lib/barobill/invoicing";
+import { buildIssuePrefill, listContractInvoices, listRecentInvoices, issueTaxInvoice, issueModifiedTaxInvoice, refreshInvoiceStates, invoicePopUpUrl, cancelTaxInvoice, listIssuerEmails, saveIssuerEmail, deleteIssuerEmail, type IssueParams, type ModifyParams } from "@/lib/barobill/invoicing";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,9 +25,12 @@ export async function GET(req: NextRequest) {
 }
 
 interface PostBody extends Partial<IssueParams>, Partial<Omit<ModifyParams, "writeDate" | "amountTotal" | "taxTotal" | "totalAmount" | "itemName" | "remark1">> {
-  action: "issue" | "modify" | "refresh" | "popup-url" | "cancel";
+  action: "issue" | "modify" | "refresh" | "popup-url" | "cancel" | "save-issuer-email" | "delete-issuer-email";
   invoiceId?: string;
   invoiceIds?: string[];
+  /** 발행 담당자 이메일 목록(188) 관리용. */
+  issuerEmail?: string;
+  issuerLabel?: string;
 }
 
 export async function POST(req: NextRequest) {
@@ -37,6 +40,14 @@ export async function POST(req: NextRequest) {
     if (body.action === "refresh") {
       await requirePermission("finance.view");
       return NextResponse.json(await refreshInvoiceStates(body.invoiceIds));
+    }
+
+    if (body.action === "save-issuer-email" || body.action === "delete-issuer-email") {
+      const actor = await requirePermission("finance.view");
+      if (!body.issuerEmail) return NextResponse.json({ error: "issuerEmail 이 필요합니다." }, { status: 400 });
+      if (body.action === "save-issuer-email") await saveIssuerEmail(body.issuerEmail, body.issuerLabel ?? null, actor.userId);
+      else await deleteIssuerEmail(body.issuerEmail);
+      return NextResponse.json({ issuerEmails: await listIssuerEmails() });
     }
 
     if (body.action === "popup-url") {

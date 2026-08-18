@@ -46,10 +46,16 @@ export interface IssuePrefill {
   stageLabel: string;
   /** 단계 금액 원본 — 부가세 포함 여부는 사용자가 화면에서 고른다(§8 논점 3). */
   stageAmount: number;
+  /** 계약 총액 — 단계 비중(%) 산출 기준. */
+  contractAmount: number;
+  /** 비고 기본값 — "단계명 : 계약금액 대비 비중%". 품목에는 계약명만 남긴다. */
+  defaultRemark: string;
   writeDate: string; // YYYY-MM-DD (오늘)
   invoicer: { corpNum: string; corpName: string; ceoName: string; addr: string; bizClass: string; bizType: string; tel: string; contactId: string; contactName: string; email: string };
   invoicee: { facilityId: string | null; corpNum: string; corpName: string; ceoName: string; addr: string };
   contacts: IssuePrefillContact[];
+  /** 저장해 둔 발행 담당자 이메일(188) — 모달 목록에서 골라 쓴다. env 기본값이 항상 첫 항목. */
+  issuerEmails: Array<{ email: string; label: string | null }>;
   /** 이미 발행된 계산서(재발행 경고용). */
   existing: TaxInvoiceRow[];
   cert: { ok: boolean; message: string };
@@ -158,13 +164,47 @@ function stageRemark(stageLabel: string, pct: number | null): string {
   return pct == null ? label : `${label} : ${pct}%`;
 }
 
+/** 저장된 발행 담당자 이메일 — env 기본값을 항상 맨 앞에 두고, 나머지는 최근 사용순. */
+export async function listIssuerEmails(): Promise<Array<{ email: string; label: string | null }>> {
+  const fallback = (process.env.BAROBILL_INVOICER_EMAIL || "").trim();
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT email, label FROM tax_invoice_issuer_emails
+        ORDER BY COALESCE(used_at, created_at) DESC, email`,
+    ),
+  ).map((r) => ({ email: String(r.email ?? ""), label: r.label ? String(r.label) : null }));
+  const saved = rows.filter((r) => r.email && r.email.toLowerCase() !== fallback.toLowerCase());
+  return fallback ? [{ email: fallback, label: "기본(환경설정)" }, ...saved] : saved;
+}
+
+/** 발행 담당자 이메일 저장 — 같은 주소면 라벨만 갱신한다. */
+export async function saveIssuerEmail(email: string, label: string | null, actorUserId: string | null): Promise<void> {
+  const address = email.trim();
+  if (!/.+@.+\..+/.test(address)) throw Object.assign(new Error("이메일 형식이 아닙니다."), { status: 400 });
+  await withDbWrite(async (db) => {
+    await db.run(
+      `INSERT INTO tax_invoice_issuer_emails (email, label, created_by)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (email) DO UPDATE SET label = EXCLUDED.label`,
+      [address, label?.trim() || null, actorUserId],
+    );
+  });
+}
+
+export async function deleteIssuerEmail(email: string): Promise<void> {
+  await withDbWrite(async (db) => {
+    await db.run(`DELETE FROM tax_invoice_issuer_emails WHERE email = $1`, [email.trim()]);
+  });
+}
+
 /** 발행 모달 프리필 — 공급자는 회사 프로필, 공급받는자는 계약 발주처(facilities) + 담당자 연락처. */
 export async function buildIssuePrefill(contractId: string, milestoneId: string): Promise<IssuePrefill> {
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT m.milestone_id, m.stage_label, m.amount, m.invoice_amount,
-              c.contract_title, c.counterparty_facility_id,
+      `SELECT m.milestone_id, m.stage_label, m.amount, m.invoice_amount, m.amount_ratio,
+              c.contract_title, c.contract_amount, c.counterparty_facility_id,
               f.company_name, f.normalized_company_name, f.business_registration_no, f.representative_name, f.site_address
          FROM contract_payment_milestones m
          JOIN contracts c ON c.contract_id = m.contract_id
@@ -190,9 +230,10 @@ export async function buildIssuePrefill(contractId: string, milestoneId: string)
       )
     : [];
 
-  const [profile, cert] = await Promise.all([
+  const [profile, cert, issuerEmails] = await Promise.all([
     getCompanyProfile(),
     checkCertValid().catch((err) => ({ ok: false, code: null, message: (err as Error).message })),
+    listIssuerEmails().catch(() => []),
   ]);
   const cfg = getBarobillConfig();
 
@@ -202,6 +243,8 @@ export async function buildIssuePrefill(contractId: string, milestoneId: string)
     contractTitle: String(row.contract_title ?? ""),
     stageLabel: String(row.stage_label ?? ""),
     stageAmount: Number(row.invoice_amount ?? row.amount ?? 0),
+    contractAmount: Number(row.contract_amount ?? 0),
+    defaultRemark: stageRemark(String(row.stage_label ?? ""), stageRatioPct(row)),
     writeDate: new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10),
     invoicer: {
       corpNum: (profile.bizRegNo || cfg.corpNum).replace(/[^0-9]/g, ""),
@@ -222,6 +265,7 @@ export async function buildIssuePrefill(contractId: string, milestoneId: string)
       ceoName: String(row.representative_name ?? ""),
       addr: String(row.site_address ?? ""),
     },
+    issuerEmails,
     contacts: contactRows.map((c) => {
       const deptTypes = Array.isArray(c.dept_types) ? (c.dept_types as unknown[]).map((v) => String(v)) : [];
       return {
@@ -405,6 +449,11 @@ export async function issueTaxInvoice(params: IssueParams, actorUserId: string |
       [params.milestoneId, params.writeDate, Math.round(params.totalAmount), new Date().toISOString()],
     );
   });
+
+  // 발행에 쓴 담당자 이메일을 최근 사용으로 올린다(목록 정렬용) — 저장된 주소가 아니면 아무 일도 하지 않는다.
+  await withDbWrite(async (db) => {
+    await db.run(`UPDATE tax_invoice_issuer_emails SET used_at = $2 WHERE email = $1`, [params.invoicer.email.trim(), now]);
+  }).catch(() => {});
 
   // 추가 수신처 안내 메일 — 발행 자체는 이미 끝났으므로 실패해도 예외로 올리지 않는다(로그만).
   if (ccEmails.length) {

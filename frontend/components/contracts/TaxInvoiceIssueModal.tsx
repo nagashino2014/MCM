@@ -26,9 +26,11 @@ interface LineItem {
   qty: string;
   unitPrice: string;
   amount: string;
+  /** 행 비고 — 계산서 비고(Remark1)로 합쳐 보낸다. 보통 1행이라 그대로 한 줄이 된다. */
+  remark: string;
 }
 
-const emptyLine = (): LineItem => ({ name: "", spec: "", qty: "1", unitPrice: "", amount: "" });
+const emptyLine = (): LineItem => ({ name: "", spec: "", qty: "1", unitPrice: "", amount: "", remark: "" });
 
 interface ExistingInvoice {
   invoiceId: string;
@@ -55,6 +57,7 @@ interface Prefill {
   };
   invoicee: { facilityId: string | null; corpNum: string; corpName: string; ceoName: string; addr: string };
   contacts: Contact[];
+  issuerEmails: Array<{ email: string; label: string | null }>;
   existing: ExistingInvoice[];
   cert: { ok: boolean; message: string };
 }
@@ -103,6 +106,8 @@ export default function TaxInvoiceIssueModal({
   const [invoiceeCeo, setInvoiceeCeo] = useState("");
   const [invoiceeAddr, setInvoiceeAddr] = useState("");
   const [invoicerEmail, setInvoicerEmail] = useState("");
+  // 발행 담당자 이메일 목록(188) — 저장해 둔 주소를 눌러 바로 바꿔 쓴다.
+  const [issuerEmails, setIssuerEmails] = useState<Array<{ email: string; label: string | null }>>([]);
   // 추가 수신처 — 대표 수신처(email) 외에 계산서 발송 대상으로 고른 담당자들의 이메일.
   // 바로빌은 공급받는자 이메일을 1개만 받으므로, 추가분은 발행 후 앱이 안내 메일을 보낸다.
   const [ccEmails, setCcEmails] = useState<string[]>([]);
@@ -120,15 +125,17 @@ export default function TaxInvoiceIssueModal({
         setPrefill(p);
         setWriteDate(p.writeDate);
         const stageAmount = String(Math.round(p.stageAmount));
-        setLineItems([{ name: p.contractTitle.trim(), spec: "", qty: "1", unitPrice: stageAmount, amount: stageAmount }]);
+        // 대금 지급 단계는 품목명이 아니라 비고에 "단계명 : 비중%" 으로 적는다.
+        setLineItems([
+          { name: p.contractTitle.trim(), spec: "", qty: "1", unitPrice: stageAmount, amount: stageAmount, remark: p.defaultRemark ?? "" },
+        ]);
         setItemName(p.contractTitle.trim());
-        // 대금 지급 단계는 품목이 아니라 비고에 "단계명 : 비중%" 으로 적는다.
-        setRemark1(p.defaultRemark);
         setInvoiceeCorpNum(p.invoicee.corpNum);
         setInvoiceeCorpName(p.invoicee.corpName);
         setInvoiceeCeo(p.invoicee.ceoName);
         setInvoiceeAddr(p.invoicee.addr);
         setInvoicerEmail(p.invoicer.email);
+        setIssuerEmails(p.issuerEmails ?? []);
         // 사업장 담당자에 '계산서' 태그가 지정돼 있으면 그 담당자가 기본 수신처다(첫 명이 대표, 나머지는 추가).
         const billing = p.contacts.filter((c) => c.billing && c.email);
         const primary = billing[0] ?? p.contacts.find((c) => c.email);
@@ -200,6 +207,22 @@ export default function TaxInvoiceIssueModal({
     [],
   );
 
+  /** 발행 담당자 이메일 저장·삭제 — 목록은 서버 응답으로 갱신한다. */
+  const mutateIssuerEmail = async (action: "save-issuer-email" | "delete-issuer-email", address: string) => {
+    setError(null);
+    const res = await fetch("/api/finance/tax-invoices", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, issuerEmail: address }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setError(data?.error ?? "발행 담당자 이메일을 저장하지 못했습니다.");
+      return;
+    }
+    setIssuerEmails(data.issuerEmails ?? []);
+  };
+
   const issue = async () => {
     if (!prefill) return;
     setBusy(true);
@@ -230,7 +253,7 @@ export default function TaxInvoiceIssueModal({
               amount: row?.supply ?? 0,
               tax: row?.tax ?? 0,
             })),
-          remark1,
+          remark1: lineItems.map((li) => li.remark.trim()).filter(Boolean).join(" / ").slice(0, 100) || remark1,
           invoicee: {
             facilityId: prefill.invoicee.facilityId,
             corpNum: digits(invoiceeCorpNum),
@@ -283,7 +306,10 @@ export default function TaxInvoiceIssueModal({
   return (
     <div className="fixed inset-0 z-[95] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative cd-solid-bg border cd-border-c rounded-3xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
+      <div
+        className="relative cd-solid-bg border cd-border-c rounded-3xl w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl"
+        style={{ maxWidth: 960 }}
+      >
         <div className="flex items-center justify-between gap-3 px-5 py-3 border-b cd-border-c">
           <h3 className="font-bold cd-text flex items-center gap-2">
             <FileText className="w-4 h-4" /> 전자세금계산서 발행
@@ -338,10 +364,52 @@ export default function TaxInvoiceIssueModal({
                     <div>대표 {prefill.invoicer.ceoName || "—"}</div>
                     <div className="truncate" title={prefill.invoicer.addr}>{prefill.invoicer.addr || "—"}</div>
                   </div>
-                  <label className="block mt-2">
-                    <span className="text-[11px] cd-text-faint">발행 담당자 이메일(필수)</span>
+                  <div className="mt-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] cd-text-faint">발행 담당자 이메일(필수)</span>
+                      <button
+                        type="button"
+                        className="rounded-xl border cd-border-c px-2 py-0.5 text-[11px] disabled:opacity-40"
+                        disabled={!isEmail(invoicerEmail) || issuerEmails.some((it) => it.email === invoicerEmail.trim())}
+                        title="이 주소를 목록에 저장"
+                        onClick={() => void mutateIssuerEmail("save-issuer-email", invoicerEmail.trim())}
+                      >
+                        목록에 저장
+                      </button>
+                    </div>
                     <input className="cd-input mt-0.5" value={invoicerEmail} onChange={(e) => setInvoicerEmail(e.target.value)} placeholder="발행자 이메일" />
-                  </label>
+                    {issuerEmails.length > 0 && (
+                      <div className="rounded-xl border cd-border-c mt-1.5 max-h-28 overflow-y-auto">
+                        {issuerEmails.map((it) => {
+                          const on = it.email === invoicerEmail.trim();
+                          return (
+                            <div key={it.email} className="flex items-center gap-2 px-2 py-1 text-[11px] border-b cd-border-c last:border-b-0">
+                              <button
+                                type="button"
+                                className="flex-1 text-left truncate"
+                                onClick={() => setInvoicerEmail(it.email)}
+                                title={it.email}
+                              >
+                                <span className={on ? "cd-text font-semibold" : "cd-text-muted"}>{it.email}</span>
+                                {it.label && <span className="cd-text-faint ml-1.5">{it.label}</span>}
+                              </button>
+                              {on && <span className="rounded-full px-1.5 py-0.5 cd-tint-primary">사용 중</span>}
+                              {!it.label && (
+                                <button
+                                  type="button"
+                                  className="cd-text-faint hover:cd-text"
+                                  title="목록에서 삭제"
+                                  onClick={() => void mutateIssuerEmail("delete-issuer-email", it.email)}
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="rounded-xl border cd-border-c p-3">
@@ -521,16 +589,17 @@ export default function TaxInvoiceIssueModal({
                       <Plus className="w-3 h-3" /> 품목 추가
                     </button>
                   </div>
-                  <div className="grid grid-cols-[1fr_100px_64px_110px_120px_24px] gap-1.5 mt-1 text-[11px] cd-text-faint">
+                  <div className="grid grid-cols-[1fr_92px_56px_104px_112px_150px_24px] gap-1.5 mt-1 text-[11px] cd-text-faint">
                     <span>품목명</span>
                     <span>규격</span>
                     <span className="text-right">수량</span>
                     <span className="text-right">단가</span>
                     <span className="text-right">{amountBase === "total" ? "합계금액" : "공급가액"}</span>
+                    <span>비고 (지급 단계 · 비중)</span>
                     <span />
                   </div>
                   {lineItems.map((li, i) => (
-                    <div key={i} className="grid grid-cols-[1fr_100px_64px_110px_120px_24px] gap-1.5 mt-1 items-center">
+                    <div key={i} className="grid grid-cols-[1fr_92px_56px_104px_112px_150px_24px] gap-1.5 mt-1 items-center">
                       <input className="cd-input" value={li.name} onChange={(e) => updateLine(i, { name: e.target.value })} placeholder="품목명" />
                       <input className="cd-input" value={li.spec} onChange={(e) => updateLine(i, { spec: e.target.value })} placeholder="선택" />
                       <input
@@ -550,6 +619,12 @@ export default function TaxInvoiceIssueModal({
                         inputMode="numeric"
                         value={li.amount ? Number(digits(li.amount)).toLocaleString("ko-KR") : ""}
                         onChange={(e) => updateLine(i, { amount: digits(e.target.value) })}
+                      />
+                      <input
+                        className="cd-input"
+                        value={li.remark}
+                        onChange={(e) => updateLine(i, { remark: e.target.value })}
+                        placeholder="예) 준공금 : 100%"
                       />
                       {lineItems.length > 1 ? (
                         <button
@@ -571,10 +646,7 @@ export default function TaxInvoiceIssueModal({
                     </p>
                   )}
                 </div>
-                <label className="block">
-                  <span className="text-[11px] cd-text-faint">비고 (지급 단계 · 계약금액 대비 비중)</span>
-                  <input className="cd-input mt-0.5" value={remark1} onChange={(e) => setRemark1(e.target.value)} placeholder="예) 준공금 : 100%" />
-                </label>
+
                 <div className="flex items-center gap-4 text-xs pt-1">
                   <span>
                     <span className="cd-text-muted mr-1">공급가액</span>

@@ -232,6 +232,13 @@ export function HometaxPanel() {
   const [jumin7, setJumin7] = useState("");
   // 기간 지정 수집(YYYYMM)
   const [syncFrom, setSyncFrom] = useState("");
+  // 바로빌 홈택스 조회는 최근 36개월만 가능하다(2026-08-18 실측: 202309 성공 / 202308 -10148).
+  const oldestMonth = useMemo(() => {
+    const now = new Date(Date.now() + 9 * 3600 * 1000);
+    const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
+    d.setUTCMonth(d.getUTCMonth() - 35);
+    return `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+  }, []);
 
   const loadStatus = useCallback(() => {
     fetch("/api/finance/hometax", { cache: "no-store" })
@@ -320,8 +327,11 @@ export function HometaxPanel() {
     const data = await post(body, "수집을 실행했습니다.");
     if (data) {
       const errs = Array.isArray(data.errors) ? data.errors.length : 0;
+      const clamped = data.clampedFrom
+        ? ` · 요청 ${data.clampedFrom}은 조회 한계를 넘어 ${data.months?.[0] ?? oldestMonth}부터 수집했습니다`
+        : "";
       setNotice(
-        `수집 완료 — 조회 ${data.fetched ?? 0}건 · 신규 ${data.inserted ?? 0}건${errs ? ` · 오류 ${errs}건(수집 미신청이면 먼저 신청하세요)` : ""}`,
+        `수집 완료 — 조회 ${data.fetched ?? 0}건 · 신규 ${data.inserted ?? 0}건${errs ? ` · 오류 ${errs}건(수집 미신청이면 먼저 신청하세요)` : ""}${clamped}`,
       );
       loadStatus();
       loadLedger();
@@ -381,14 +391,15 @@ export function HometaxPanel() {
             style={{ width: 104 }}
             value={syncFrom}
             onChange={(e) => setSyncFrom(e.target.value.replace(/\D/g, "").slice(0, 6))}
-            title="비워 두면 마지막 수집분 이후만 증분 수집합니다"
+            title={`비워 두면 마지막 수집분 이후만 증분 수집합니다. 조회 가능 시작월은 ${oldestMonth} 입니다(바로빌 최근 36개월).`}
           />
           <button type="button" className="cd-btn cd-btn-primary cd-btn-sm" disabled={busy} onClick={runSync}>
             <RefreshCw className="w-3.5 h-3.5" /> 지금 수집
           </button>
         </div>
         <div className="text-xs cd-text-muted">
-          신청하면 바로빌이 매일 새벽 전날까지의 국세청 전송완료분을 수집해 둡니다. 마지막 수집:{" "}
+          신청하면 바로빌이 매일 새벽 전날까지의 국세청 전송완료분을 수집해 둡니다. 조회 가능 기간은 최근 36개월({oldestMonth} 이후)이며,
+          그보다 과거는 바로빌이 제공하지 않습니다. 마지막 수집:{" "}
           {lastSyncedAt ?? (lastSync ? `${lastSync.startedAt} (${lastSync.status})` : "없음")}
           {lastSync?.error ? ` · 최근 오류: ${lastSync.error}` : ""}
         </div>

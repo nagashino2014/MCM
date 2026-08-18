@@ -187,9 +187,22 @@ export interface HometaxSyncResult {
   fetched: number;
   inserted: number;
   errors: Array<{ month: string; direction: string; error: string }>;
+  /** 요청 시작월이 바로빌 조회 한계보다 이전이라 앞당겨졌을 때, 원래 요청월. */
+  clampedFrom?: string;
 }
 
 const monthOf = (d: Date) => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}`;
+
+/**
+ * 바로빌 홈택스 조회가 허용하는 가장 이른 작성월(YYYYMM).
+ * 실측(2026-08-18): 202309 성공 / 202308 실패(-10148 "조회 기간이 잘못되었습니다") →
+ * 현재월 포함 최근 36개월 롤링. 매달 한 달씩 밀리므로 그보다 과거는 영구히 조회할 수 없다.
+ */
+export function hometaxOldestMonth(now = new Date(Date.now() + 9 * 3600 * 1000)): string {
+  const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
+  d.setUTCMonth(d.getUTCMonth() - 35);
+  return `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
 
 /** fromMonth~toMonth(YYYYMM)의 월 목록. */
 export function monthRange(fromMonth: string, toMonth: string): string[] {
@@ -226,9 +239,14 @@ export async function syncHometaxInvoices(range?: { fromMonth: string; toMonth: 
       fromMonth = `${nowKst.getFullYear()}0101`.slice(0, 6); // 초회: 올해 1월
     }
   }
+  // 조회 한계(최근 36개월)보다 이른 요청은 한계로 앞당긴다 — 그대로 보내면 월마다 -10148 오류만 쌓인다.
+  const oldest = hometaxOldestMonth(nowKst);
+  const requestedFrom = fromMonth;
+  if (fromMonth < oldest) fromMonth = oldest;
   const months = monthRange(fromMonth, toMonth);
 
   const result: HometaxSyncResult = { months, fetched: 0, inserted: 0, errors: [] };
+  if (requestedFrom !== fromMonth) result.clampedFrom = requestedFrom;
   const syncId = hashId("fs", `hometax:${Date.now()}`);
   await withDbWrite(async (db2) => {
     await db2.run(

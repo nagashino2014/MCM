@@ -24,10 +24,10 @@
     - SCP 로 계정 단위 가드레일(버킷 삭제 금지 등) 적용 가능
 
 .EXAMPLE
-  pwsh infra/aws/cloudium/00-create-account.ps1 -Email "nagashino2014+kesidocs@gmail.com" -DryRun
+  .\infra\aws\cloudium\00-create-account.ps1 -Email "nagashino2014+kesidocs@gmail.com" -DryRun
 
 .EXAMPLE
-  pwsh infra/aws/cloudium/00-create-account.ps1 -Email "nagashino2014+kesidocs@gmail.com"
+  .\infra\aws\cloudium\00-create-account.ps1 -Email "nagashino2014+kesidocs@gmail.com"
 #>
 param(
   [Parameter(Mandatory=$true)][string]$Email,
@@ -141,5 +141,5 @@ Write-Host "output = json"
 Write-Host ""
 Log "그다음:"
 Log "  aws sso login --profile $NewProfile"
-Log "  pwsh infra/aws/cloudium/01-create-bucket.ps1 -AwsProfile $NewProfile"
+Log "  .\infra\aws\cloudium\01-create-bucket.ps1 -AwsProfile $NewProfile"
 Warn "SSO 할당이 실제로 반영되기까지 1~2분 걸릴 수 있다. 로그인이 안 되면 잠시 후 재시도할 것."

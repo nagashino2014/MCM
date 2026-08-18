@@ -57,19 +57,19 @@ SSO 프로필만 추가하면 된다. **루트 로그인 없이** 관리 계정�
 
 ```powershell
 # 0) 전용 계정 생성 + SSO 할당 (관리 계정 프로필로 실행)
-pwsh infra/aws/cloudium/00-create-account.ps1 -Email "nagashino2014+kesidocs@gmail.com" -DryRun
-pwsh infra/aws/cloudium/00-create-account.ps1 -Email "nagashino2014+kesidocs@gmail.com"
+.\infra\aws\cloudium\00-create-account.ps1 -Email "nagashino2014+kesidocs@gmail.com" -DryRun
+.\infra\aws\cloudium\00-create-account.ps1 -Email "nagashino2014+kesidocs@gmail.com"
 #    → 출력된 프로필 스니펫을 ~/.aws/config 에 붙여넣고
 aws sso login --profile kesi-docs-prod
 
 # 1) 버킷 + KMS + 암호화 + Object Lock + 버킷정책 + Lifecycle
-pwsh infra/aws/cloudium/01-create-bucket.ps1 -AwsProfile kesi-docs-prod
+.\infra\aws\cloudium\01-create-bucket.ps1 -AwsProfile kesi-docs-prod
 
 # 무엇을 할지만 먼저 확인
-pwsh infra/aws/cloudium/01-create-bucket.ps1 -AwsProfile kesi-docs-prod -DryRun
+.\infra\aws\cloudium\01-create-bucket.ps1 -AwsProfile kesi-docs-prod -DryRun
 
 # 2) IAM 롤 3종 (출력된 버킷명·KMS ARN 을 그대로 넣는다)
-pwsh infra/aws/cloudium/02-create-iam.ps1 `
+.\infra\aws\cloudium\02-create-iam.ps1 `
      -AwsProfile kesi-docs-prod `
      -Bucket kesi-docs-archive-<accountId> `
      -KmsKeyArn arn:aws:kms:ap-northeast-2:<accountId>:key/xxxx
@@ -88,7 +88,7 @@ pwsh infra/aws/cloudium/02-create-iam.ps1 `
 | `lifecycle.json` | Lifecycle 규칙 (아래 표) |
 | `bucket-policy.json` | TLS 강제 + 버전 파괴 Deny (`{{BUCKET}}` 등 치환) |
 | `iam-filegateway-policy.json` | 게이트웨이 최소권한 |
-| `iam-purge-policy.json` | 파기 담당(MFA 필수, Governance 우회) |
+| `iam-purge-policy.json` | 파기 담당(Governance 우회) |
 | `iam-audit-readonly-policy.json` | 감사·조회 전용 |
 
 ### Lifecycle 규칙
@@ -188,14 +188,14 @@ T: 는 가상 드라이브라 **회선 대역폭 계산만으로 일정을 세�
 
 ```powershell
 # 1) 인벤토리만 (복사 없음 — 완전히 안전, 먼저 이것부터)
-pwsh infra/aws/cloudium/04-pilot-measure.ps1 -Source "T:\한국환경안전연구원\통합환경1본부\2024" -InventoryOnly
+.\infra\aws\cloudium\04-pilot-measure.ps1 -Source "T:\한국환경안전연구원\통합환경1본부\2024" -InventoryOnly
 
 # 2) 전체 측정
-pwsh infra/aws/cloudium/04-pilot-measure.ps1 `
+.\infra\aws\cloudium\04-pilot-measure.ps1 `
      -Source "T:\한국환경안전연구원\통합환경1본부\2024" -Staging "D:\cloudium-pilot"
 
 # 3) S3 업로드 처리량까지
-pwsh infra/aws/cloudium/04-pilot-measure.ps1 -Source "T:\...\2024" -Staging "D:\cloudium-pilot" `
+.\infra\aws\cloudium\04-pilot-measure.ps1 -Source "T:\...\2024" -Staging "D:\cloudium-pilot" `
      -TestS3Upload -Bucket kesi-docs-archive-921784996915 -AwsProfile kesi-docs-prod
 ```
 

@@ -27,15 +27,15 @@
 
 .EXAMPLE
   # 인벤토리만 먼저 (복사 없음, 안전)
-  pwsh infra/aws/cloudium/04-pilot-measure.ps1 -Source "T:\한국환경안전연구원\통합환경1본부\2024" -InventoryOnly
+  .\infra\aws\cloudium\04-pilot-measure.ps1 -Source "T:\한국환경안전연구원\통합환경1본부\2024" -InventoryOnly
 
 .EXAMPLE
   # 전체 측정
-  pwsh infra/aws/cloudium/04-pilot-measure.ps1 -Source "T:\한국환경안전연구원\통합환경1본부\2024" -Staging "D:\cloudium-pilot"
+  .\infra\aws\cloudium\04-pilot-measure.ps1 -Source "T:\한국환경안전연구원\통합환경1본부\2024" -Staging "D:\cloudium-pilot"
 
 .EXAMPLE
   # S3 업로드 처리량까지
-  pwsh infra/aws/cloudium/04-pilot-measure.ps1 -Source "T:\...\2024" -Staging "D:\cloudium-pilot" `
+  .\infra\aws\cloudium\04-pilot-measure.ps1 -Source "T:\...\2024" -Staging "D:\cloudium-pilot" `
        -TestS3Upload -Bucket kesi-docs-archive-921784996915 -AwsProfile kesi-docs-prod
 #>
 param(

@@ -32,11 +32,11 @@
   Object Lock 기본 보존을 걸지 않는다(마이그레이션 리허설용 임시 버킷에만 사용).
 
 .EXAMPLE
-  pwsh infra/aws/cloudium/01-create-bucket.ps1 -AwsProfile kesi-docs-prod
+  .\infra\aws\cloudium\01-create-bucket.ps1 -AwsProfile kesi-docs-prod
 
 .EXAMPLE
   # 실제 변경 없이 무엇을 할지만 확인
-  pwsh infra/aws/cloudium/01-create-bucket.ps1 -AwsProfile kesi-docs-prod -DryRun
+  .\infra\aws\cloudium\01-create-bucket.ps1 -AwsProfile kesi-docs-prod -DryRun
 #>
 param(
   [string]$AwsProfile           = "kesi-docs-prod",
@@ -247,7 +247,7 @@ Log "  버킷      : $Bucket"
 Log "  KMS       : $keyArn"
 Log "  Object Lock: GOVERNANCE $(if ($NoDefaultRetention) { '미설정' } else { "$DefaultRetentionDays 일" })"
 Log ""
-Log "다음: pwsh infra/aws/cloudium/02-create-iam.ps1 -Bucket $Bucket -KmsKeyArn $keyArn"
+Log "다음: .\infra\aws\cloudium\02-create-iam.ps1 -Bucket $Bucket -KmsKeyArn $keyArn"
 Warn "MFA Delete 는 루트 액세스 키가 필요해 권장하지 않는다. Object Lock + 버킷 정책 Deny 로 이미 방어된다(README '수동 작업' 참고)."
 
 # 조회 헬퍼가 남긴 aws cli 의 exit code(예: 리소스 없음 254)가 스크립트 반환값으로 새지 않게 한다.

@@ -10,9 +10,9 @@
   ┌ 롤 ──────────────────┬ 신뢰 주체 ─────────────┬ 핵심 ────────────────────────────────┐
   │ *-filegateway        │ storagegateway         │ 읽기·쓰기·삭제마커 O                  │
   │                      │ .amazonaws.com         │ s3:DeleteObjectVersion **미부여** ★   │
-  │ *-purge              │ 계정 사용자 (MFA 필수) │ 버전 삭제 + GovernanceBypass         │
-  │                      │                        │ = 발주처 파기 요구 대응 / 사고 정리   │
-  │ *-audit              │ 계정 사용자 (MFA 필수) │ 읽기 + 감사로그 조회 전용            │
+  │ *-purge              │ SSO 관리자 권한 세트   │ 버전 삭제 + GovernanceBypass         │
+  │                      │ 로 로그인한 principal  │ = 발주처 파기 요구 대응 / 사고 정리   │
+  │ *-audit              │ 동일                   │ 읽기 + 감사로그 조회 전용            │
   └──────────────────────┴────────────────────────┴──────────────────────────────────────┘
 
   ★ AWS 가 안내하는 File Gateway 표준 정책에는 s3:DeleteObjectVersion 이 들어 있으나,
@@ -21,7 +21,7 @@
     AccessDenied 가 보이면 설계대로 막힌 것이며 정상이다(README 참고).
 
 .EXAMPLE
-  pwsh infra/aws/cloudium/02-create-iam.ps1 -Bucket kesi-docs-archive-123456789012 `
+  .\infra\aws\cloudium\02-create-iam.ps1 -Bucket kesi-docs-archive-123456789012 `
        -KmsKeyArn arn:aws:kms:ap-northeast-2:123456789012:key/xxxx
 #>
 param(
@@ -186,12 +186,12 @@ $gwDoc  = Render-Json "iam-filegateway-policy.json" $repl
 $gwPol  = Upsert-Policy "$RolePrefix-filegateway-policy" $gwDoc
 Upsert-Role "$RolePrefix-filegateway" $trustGateway $gwPol
 
-# ── 2) 파기 담당 롤 (MFA 필수) ──────────────────────────────────────────────────
+# ── 2) 파기 담당 롤 ─────────────────────────────────────────────────────────────
 $pgDoc  = Render-Json "iam-purge-policy.json" $repl
 $pgPol  = Upsert-Policy "$RolePrefix-purge-policy" $pgDoc
 Upsert-Role "$RolePrefix-purge" $trustHuman $pgPol
 
-# ── 3) 감사·조회 롤 (읽기 전용, MFA 필수) ───────────────────────────────────────
+# ── 3) 감사·조회 롤 (읽기 전용) ─────────────────────────────────────────────────
 $adDoc  = Render-Json "iam-audit-readonly-policy.json" $repl
 $adPol  = Upsert-Policy "$RolePrefix-audit-policy" $adDoc
 Upsert-Role "$RolePrefix-audit" $trustHuman $adPol

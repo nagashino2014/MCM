@@ -84,7 +84,9 @@ aws sso login --profile kesi-docs-prod
 | `00-create-account.ps1` | Organizations 멤버 계정 생성 + Identity Center 권한 할당 + 프로필 스니펫 출력 |
 | `01-create-bucket.ps1` | KMS CMK → 버킷(Object Lock) → 퍼블릭차단 → SSE-KMS → 기본보존 → 버킷정책 → Lifecycle → 태그 |
 | `02-create-iam.ps1` | 롤·정책 3종 생성/갱신 |
-| `04-pilot-measure.ps1` | **T: 드라이브 성능 파일럿** — 인벤토리·속성복사·스레드별 처리량 측정 후 전체 소요 외삽 |
+| `04-pilot-measure.ps1` | T: 성능 파일럿 — **현재는 열거 차단으로 사용 불가**(벤더가 열거 권한을 열어주면 유효) |
+| `05-verify-staging.ps1` | 탐색기로 복사해 온 로컬 스테이징 검증 — 누락·0바이트·S3 키 길이·특수문자·빈 폴더 |
+| `06-upload-s3.ps1` | 스테이징 → S3 업로드. **중단 후 재개 가능**, 업로드 검증, 옵션으로 로컬 정리 |
 | `lifecycle.json` | Lifecycle 규칙 (아래 표) |
 | `bucket-policy.json` | TLS 강제 + 버전 파괴 Deny (`{{BUCKET}}` 등 치환) |
 | `iam-filegateway-policy.json` | 게이트웨이 최소권한 |
@@ -263,7 +265,62 @@ AWS 표준 File Gateway 정책에는 `s3:DeleteObjectVersion` 이 포함되지�
 A 는 확실히 되므로 이것을 기준선으로 잡고, B 가 풀리면 자동화 범위를 넓히는 편이 안전하다.
 `04-pilot-measure.ps1` 은 B 가 풀린 경우에만 의미가 있다(현재는 열거 차단으로 인벤토리 단계를 못 넘는다).
 
-## 마이그레이션 전 파일럿 측정 (`04-pilot-measure.ps1`)
+## A안 실행 워크플로우 — 탐색기 복사 → 검증 → 업로드
+
+열거 차단 때문에 **T: 에서 꺼내는 단계만 수동**이고, 그 이후는 전부 자동이다.
+`D:` 여유가 1.86TB, 총량이 4.87TB 라 **폴더 단위로 나눠 4회 정도 반복**하게 된다.
+
+### 원본 경로 구조 (2026-08-18 확인)
+
+```
+T:\                                  ← 루트. 아래 6개 항목
+├─ 한국환경안전연구원 (부서 폴더)      ← 전사 폴더 아래 같은 폴더로 가는 바로가기
+├─ 공유 폴더
+├─ 전사 폴더                          ← 실제 계층은 여기
+│   └─ 한국환경안전연구원              ← ★ 실데이터 위치
+│       ├─ 통합환경1본부 / 통합환경2본부 / 화학안전본부 / 부설연구소 / 영업관리본부 / 울산지사 (부서 폴더)
+│       ├─ 통합허가Project / 광양제철 / 녹색기술 / 삼성전자 / … (파일 폴더)
+│       └─ test.xlsx, 이미지 파일.png
+├─ 반출 문서 / 즐겨찾기 / 휴지통       ← 클라우디움 가상 항목. 복사 대상 아님
+```
+
+### 반복 절차
+
+```powershell
+# 1) 탐색기로 폴더 하나를 D:\staging 으로 복사 (수동)
+#    예: T:\전사 폴더\한국환경안전연구원\통합환경1본부  →  D:\staging\통합환경1본부
+
+# 2) 검증 — 누락·0바이트·S3 키 제약 확인
+.\infra\aws\cloudium\05-verify-staging.ps1 -Staging "D:\staging\통합환경1본부"
+
+# 3) 업로드 확인 (실제 전송 없음)
+.\infra\aws\cloudium\06-upload-s3.ps1 -Staging "D:\staging\통합환경1본부" `
+     -Prefix "전사폴더/한국환경안전연구원/통합환경1본부" -DryRun
+
+# 4) 실제 업로드 → 검증 통과 시 로컬 정리(다음 폴더 공간 확보)
+.\infra\aws\cloudium\06-upload-s3.ps1 -Staging "D:\staging\통합환경1본부" `
+     -Prefix "전사폴더/한국환경안전연구원/통합환경1본부" -DeleteLocalAfterVerify
+```
+
+전량을 옮긴 뒤 마지막에 원본 실측치와 대조한다:
+
+```powershell
+.\infra\aws\cloudium\05-verify-staging.ps1 -Staging "D:\staging" `
+     -ExpectedFiles 1193509 -ExpectedBytes 5230692544851
+```
+
+### 주의
+
+- **프리픽스로 원본 구조를 유지할 것.** File Gateway 로 마운트하면 그대로 폴더 트리가 된다.
+  한글 프리픽스도 문제없다.
+- 탐색기 복사 중 오류 창이 뜨면 **건너뛰지 말고 재시도**할 것. 건너뛴 파일은 05 의 누락 검사에서만 드러난다.
+- `06` 은 `aws s3 sync` 기반이라 **중단되면 같은 명령을 다시 실행**하면 이어서 진행된다.
+  중단된 멀티파트는 Lifecycle 의 `abort-incomplete-multipart-7d` 가 정리한다.
+- ⚠ 버킷에 Object Lock GOVERNANCE 90일이 걸려 있다. 잘못 올린 객체는 90일간 삭제되지 않고
+  `kesi-docs-purge` 롤로 bypass 해야 하므로 **처음에는 반드시 `-DryRun`** 을 거칠 것.
+- `s3 sync` 는 빈 폴더를 올리지 않는다. 보존이 필요하면 `06 -KeepEmptyFolders`.
+
+## 마이그레이션 전 파일럿 측정 (`04-pilot-measure.ps1`) — 현재 사용 불가
 
 T: 는 가상 드라이브라 **회선 대역폭 계산만으로 일정을 세울 수 없다.** 대부분의 경우 드라이브 자체가 병목이고,
 평균 4.38MB 문서 119만건이라 "용량 병목"인지 "파일 개수 병목"인지에 따라 대응이 정반대다. 그래서 먼저 실측한다.
@@ -324,8 +381,9 @@ T: 는 가상 드라이브라 **회선 대역폭 계산만으로 일정을 세�
 |---|---|---|
 | 03 | `03-enable-audit.ps1` — CloudTrail 데이터 이벤트 + Storage Lens | 감사·비용 가시화 |
 | ~~04~~ | ~~`04-pilot-measure.ps1` — T: 파일럿 측정~~ | **완료** |
-| 05 | `05-migrate.ps1` — `robocopy` → `aws s3 sync` | 파일럿 수치로 `/MT`·배치 분할·야간 창을 정한 뒤 작성. 재시도·검증·진행률 로그 포함 |
-| 06 | `06-rollback-runbook.md` — 시점 롤백 (Batch Operations) | 랜섬웨어 사고 시. **평시에 리허설 필수** |
-| 07 | `07-purge-project.ps1` — 수동 파기 (옵션) | 발주처 파기 요구 대응. `kesi-docs-purge` 롤로 실행(MFA 는 Identity Center 레벨) |
+| ~~05~~ | ~~`05-verify-staging.ps1` — 스테이징 검증~~ | **완료** |
+| ~~06~~ | ~~`06-upload-s3.ps1` — S3 업로드~~ | **완료** |
+| 07 | `07-rollback-runbook.md` — 시점 롤백 (Batch Operations) | 랜섬웨어 사고 시. **평시에 리허설 필수** |
+| 09 | `09-purge-project.ps1` — 수동 파기 (옵션) | 발주처 파기 요구 대응. `kesi-docs-purge` 롤로 실행(MFA 는 Identity Center 레벨) |
 | 08 | `08-grant-platform-access.ps1` — 플랫폼 크로스 계정 읽기 | 통합허가 계획서 플랫폼(별도 계정)에 읽기 허용. **버킷 정책 + KMS 키 정책 + 플랫폼 롤 IAM 3곳을 모두 열어야 한다**(크로스 계정은 리소스 정책과 IAM 양쪽 필요 — KMS 를 빠뜨려 AccessDenied 나는 것이 가장 흔한 실수). 플랫폼 쓰기는 Object Lock 없는 별도 버킷으로, S3 직접 쓰기 후에는 File Gateway `RefreshCache` 필요 |
 | — | 발주처 제출용 자료 관리 체계 확인서 | 영업 자산 |

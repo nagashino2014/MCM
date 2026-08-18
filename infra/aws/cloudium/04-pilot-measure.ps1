@@ -75,7 +75,34 @@ function Format-Duration($sec) {
 }
 
 # ── 0) 안전 검증 ────────────────────────────────────────────────────────────────
-if (-not (Test-Path -LiteralPath $Source)) { throw "Source 를 찾을 수 없다: $Source" }
+# Test-Path 는 "접근 거부" 일 때도 단순히 False 를 돌려줘 "경로 없음" 으로 오해하게 만든다.
+# 클라우디움은 프로세스 화이트리스트가 기본이라 실제로는 차단이 원인인 경우가 많으므로 구분해서 안내한다.
+$srcDenied = $false
+$srcOk     = $false
+try   { $null = Get-ChildItem -LiteralPath $Source -Force -ErrorAction Stop | Select-Object -First 1; $srcOk = $true }
+catch [System.UnauthorizedAccessException] { $srcDenied = $true }
+catch { }
+
+if ($srcDenied) {
+  # throw 를 쓰면 PowerShell 스택 트레이스가 붙어 정작 읽어야 할 안내가 묻힌다.
+  Write-Host @"
+
+접근 거부(0x80070005): $Source
+
+탐색기에서는 열리는데 이 스크립트만 막힌다면, 클라우디움이 **프로세스 화이트리스트**로
+powershell.exe / robocopy.exe / cmd.exe 를 차단하고 있는 것이다.
+이는 오류가 아니라 랜섬웨어 방어 기능이며, 실측으로 확인된 동작이다(README 참고).
+
+대응 순서:
+  1) 클라우디움 관리 콘솔 → 보안 정책 → 허용(예외) 프로세스에 robocopy.exe 추가
+     ※ 마이그레이션 기간 한정 + 전용 PC 로 제한할 것. 상시 개방은 방어를 무력화한다
+  2) 안 되면 벤더(사이버다임/가비아)에 **일괄 반출 도구** 요청 — 계약 해지 통보 전에 확보
+  3) 그래도 안 되면 탐색기 수동 복사(폴더 단위 분할). 재개·검증·로그가 없으니 최후 수단
+
+"@ -ForegroundColor Yellow
+  exit 1
+}
+if (-not $srcOk) { throw "Source 를 찾을 수 없다: $Source" }
 $srcFull = (Resolve-Path -LiteralPath $Source).Path
 $stgQual = (Split-Path -Qualifier $Staging).ToUpper()
 $srcQual = (Split-Path -Qualifier $srcFull).ToUpper()

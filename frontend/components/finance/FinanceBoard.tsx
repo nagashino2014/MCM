@@ -25,12 +25,16 @@ import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdModal } from "@/components/cdash/CdModal";
 import { FinLogo, logoFileCode } from "@/components/finance/FinLogo";
+import { PaginationControls } from "@/components/ui/PaginationControls";
 import { JournalPanel, LedgerPanel, TrialPanel } from "@/components/finance/JournalPanels";
 import { PnlPanel, CashPanel } from "@/components/finance/ManagementPanels";
 import { HometaxPanel, VatReturnPanel, WithholdingPanel } from "@/components/finance/VatReturnPanels";
 import { FixedAssetPanel, TripLogPanel, BudgetPanel } from "@/components/finance/AssetBudgetPanels";
 import { BalanceSheetPanel, ClosingPanel } from "@/components/finance/ClosingPanels";
 import "@/components/cdash/cdash.css";
+
+/** 최근 수집 로그 카드에 한 번에 보여줄 줄 수. */
+const LOG_PAGE_SIZE = 5;
 
 type Tab =
   | "connections" | "bank" | "card" | "recon" | "vat" | "invoice" | "journal" | "ledger" | "trial" | "pnl" | "cash"
@@ -553,6 +557,8 @@ function ConnectionsPanel() {
   // 수집 범위 선택 모달 — 증분(기본) / 기간 지정(200일 초과는 서버가 자동 분할)
   const [syncModal, setSyncModal] = useState(false);
   const [syncMode, setSyncMode] = useState<"incremental" | "range">("incremental");
+  // 수집 로그는 계좌·카드 수만큼 매번 쌓여 표가 길어진다 — 5행씩 끊어 본다(3개월 지난 로그는 서버에서 정리).
+  const [logOffset, setLogOffset] = useState(0);
   const [syncFrom, setSyncFrom] = useState(() => ymdInput(monthsAgo(3)));
   const [syncTo, setSyncTo] = useState(() => ymdInput(new Date()));
 
@@ -565,6 +571,7 @@ function ConnectionsPanel() {
       if (!res.ok) throw new Error(data?.error ?? "연결 정보를 불러오지 못했습니다.");
       setConnections(data.connections ?? []);
       setLogs(data.logs ?? []);
+      setLogOffset(0);
       setStale(Boolean(data.stale));
     } catch (err) {
       setError((err as Error).message);
@@ -738,7 +745,7 @@ function ConnectionsPanel() {
                   </tr>
                 </thead>
                 <tbody>
-                  {logs.map((l) => (
+                  {logs.slice(logOffset, logOffset + LOG_PAGE_SIZE).map((l) => (
                     <tr key={l.syncId} className="border-t cd-hairline-row-c">
                       <td className="py-1.5 pr-3 whitespace-nowrap text-xs">{l.startedAt}</td>
                       <td className="py-1.5 pr-3">{l.kind === "bank" ? "계좌" : l.kind === "card" ? "카드" : l.kind}</td>
@@ -754,6 +761,15 @@ function ConnectionsPanel() {
                   ))}
                 </tbody>
               </table>
+              <div className="mt-2">
+                <PaginationControls
+                  total={logs.length}
+                  limit={LOG_PAGE_SIZE}
+                  offset={logOffset}
+                  loading={loading}
+                  onPageChange={setLogOffset}
+                />
+              </div>
             </div>
           )}
         </div>
@@ -794,7 +810,10 @@ function ConnectionsPanel() {
             <span>
               <b>기간 지정 수집</b>
               <span className="block text-xs cd-text-muted">
-                지정 기간을 다시 가져옵니다(누락 의심 구간 재수집·과거분 소급). 200일 초과 기간은 자동 분할 조회되며, 이미 적재된 건은 중복 없이 건너뜁니다.
+                지정 기간을 다시 가져옵니다(누락 의심 구간 재수집). 200일 초과 기간은 자동 분할 조회되며, 이미 적재된 건은 중복 없이 건너뜁니다.
+                <b className="block mt-1">
+                  단, 바로빌이 보유한 원장은 최근 3개월(계좌)·2개월+(카드)뿐이라 그보다 과거는 기간을 넓혀도 수집되지 않습니다.
+                </b>
               </span>
             </span>
           </label>

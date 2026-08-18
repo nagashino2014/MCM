@@ -242,6 +242,20 @@ export async function syncCard(
   return { fetched: purchases.length, inserted };
 }
 
+/**
+ * 수집 로그 보존 — 3개월. 화면(최근 수집 로그 카드)에서 오래된 줄은 볼 일이 없고,
+ * 매 수집마다 계좌·카드 수만큼 쌓여 표가 끝없이 길어진다. 수집 시작 때 한 번 정리한다.
+ */
+export async function purgeOldSyncLogs(): Promise<number> {
+  const cutoff = new Date(Date.now() + 9 * 3600 * 1000 - 90 * 86400000).toISOString().slice(0, 19).replace("T", " ");
+  let removed = 0;
+  await withDbWrite(async (db) => {
+    const rows = rowsToObjects(await db.exec(`DELETE FROM finance_sync_logs WHERE started_at < $1 RETURNING sync_id`, [cutoff]));
+    removed = rows.length;
+  });
+  return removed;
+}
+
 // ── 전체 수집 실행 (finance_sync_logs 기록 포함) ──
 export interface FinanceSyncResult {
   ran: boolean;
@@ -279,6 +293,7 @@ export async function runFinanceSync(options?: {
       if (!options?.force && !options?.range && !(await isSyncStale())) return { ran: false, targets: [] };
       const registry = await syncRegistry();
       const db = await getDb();
+      await purgeOldSyncLogs();
       const targets: FinanceSyncResult["targets"] = [];
 
       const accounts = rowsToObjects(

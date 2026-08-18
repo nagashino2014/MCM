@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     await requirePermission("finance.view");
-    const [stale, logs] = await Promise.all([isSyncStale(), listSyncLogs(20)]);
+    const [stale, logs] = await Promise.all([isSyncStale(), listSyncLogs(60)]);
     return NextResponse.json({ stale, logs });
   } catch (err) {
     return authErrorToResponse(err);

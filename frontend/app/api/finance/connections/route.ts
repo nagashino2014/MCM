@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
     await requirePermission("finance.view");
     const refresh = req.nextUrl.searchParams.get("refresh") === "1";
     if (refresh) await syncRegistry();
-    const [connections, logs, stale] = await Promise.all([listConnections(), listSyncLogs(20), isSyncStale()]);
+    const [connections, logs, stale] = await Promise.all([listConnections(), listSyncLogs(60), isSyncStale()]);
     // catch-up: 화면 진입 시 최신 아니면 백그라운드로 수집 시작 (응답은 기다리지 않음)
     if (stale) void runFinanceSync().catch(() => {});
     return NextResponse.json({ connections, logs, stale });

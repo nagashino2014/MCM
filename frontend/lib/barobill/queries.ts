@@ -395,12 +395,12 @@ export interface SyncLogRow {
   finishedAt: string | null;
 }
 
-export async function listSyncLogs(limit = 20): Promise<SyncLogRow[]> {
+export async function listSyncLogs(limit = 60): Promise<SyncLogRow[]> {
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
       `SELECT sync_id, kind, target_id, status, fetched, inserted, error, started_at, finished_at
-         FROM finance_sync_logs ORDER BY started_at DESC LIMIT ${Math.min(limit, 100)}`,
+         FROM finance_sync_logs ORDER BY started_at DESC LIMIT ${Math.min(limit, 300)}`,
     ),
   );
   return rows.map((r) => ({

@@ -84,6 +84,7 @@ pwsh infra/aws/cloudium/02-create-iam.ps1 `
 | `00-create-account.ps1` | Organizations 멤버 계정 생성 + Identity Center 권한 할당 + 프로필 스니펫 출력 |
 | `01-create-bucket.ps1` | KMS CMK → 버킷(Object Lock) → 퍼블릭차단 → SSE-KMS → 기본보존 → 버킷정책 → Lifecycle → 태그 |
 | `02-create-iam.ps1` | 롤·정책 3종 생성/갱신 |
+| `04-pilot-measure.ps1` | **T: 드라이브 성능 파일럿** — 인벤토리·속성복사·스레드별 처리량 측정 후 전체 소요 외삽 |
 | `lifecycle.json` | Lifecycle 규칙 (아래 표) |
 | `bucket-policy.json` | TLS 강제 + 버전 파괴 Deny (`{{BUCKET}}` 등 치환) |
 | `iam-filegateway-policy.json` | 게이트웨이 최소권한 |
@@ -180,6 +181,49 @@ AWS 표준 File Gateway 정책에는 `s3:DeleteObjectVersion` 이 포함되지�
 - **감사 로그 폭증**: 119만 파일을 읽으면 클라우디움 서버에 열람 로그가 그만큼 쌓인다. 이전 작업 전 벤더/관리자와 공유할 것.
 - **개정 이력**: 화면의 "문서 1,193,509" 가 최신본만인지 개정 이력 포함인지 확인 필요. 과거 개정본까지 가져가면 용량이 몇 배가 될 수 있다.
 
+## 마이그레이션 전 파일럿 측정 (`04-pilot-measure.ps1`)
+
+T: 는 가상 드라이브라 **회선 대역폭 계산만으로 일정을 세울 수 없다.** 대부분의 경우 드라이브 자체가 병목이고,
+평균 4.38MB 문서 119만건이라 "용량 병목"인지 "파일 개수 병목"인지에 따라 대응이 정반대다. 그래서 먼저 실측한다.
+
+```powershell
+# 1) 인벤토리만 (복사 없음 — 완전히 안전, 먼저 이것부터)
+pwsh infra/aws/cloudium/04-pilot-measure.ps1 -Source "T:\한국환경안전연구원\통합환경1본부\2024" -InventoryOnly
+
+# 2) 전체 측정
+pwsh infra/aws/cloudium/04-pilot-measure.ps1 `
+     -Source "T:\한국환경안전연구원\통합환경1본부\2024" -Staging "D:\cloudium-pilot"
+
+# 3) S3 업로드 처리량까지
+pwsh infra/aws/cloudium/04-pilot-measure.ps1 -Source "T:\...\2024" -Staging "D:\cloudium-pilot" `
+     -TestS3Upload -Bucket kesi-docs-archive-921784996915 -AwsProfile kesi-docs-prod
+```
+
+### 대상 폴더 고르는 기준
+- **2~10GB** 규모. 수백 MB 면 오차가 크고, 수십 GB 면 측정에만 반나절 걸린다
+- 최상위(전사 폴더)가 아니라 **본부/연도 단위**의 전형적인 실무 폴더
+- 특수한 폴더(동영상만 있다든지)보다 **문서가 섞인 일반적인 구성**
+- `휴지통`·`반출 문서`·`즐겨찾기`·`미 저장 문서`는 클라우디움 가상 항목이므로 피할 것
+
+### 결과 읽는 법
+
+| 지표 | 의미와 대응 |
+|---|---|
+| **병목 = 파일 개수** | 회선을 늘려도 빨라지지 않는다. `/MT` 상향 + 야간 배치 분할이 유효 |
+| **병목 = 용량** | 회선 대역폭이 일정을 좌우한다. `/MT` 는 최적값 이상 올릴 필요 없음 |
+| `/MT:1` 대비 **1.5배 미만** 향상 | 서버측 동시성 제한 의심 → 낮은 `/MT` 로 안정 운영 (무리하면 클라우디움 서버가 불안정해진다) |
+| **260자 이상 경로 건수** | 마이그레이션 스크립트에 긴 경로 처리 필요 |
+| `/COPY:DAT` 실패 | 가상 드라이브가 ACL 복사를 지원하지 않음 → `/COPY:DT` 로 낮추고 권한은 별도 이관 검토 |
+| **열거 소요 시간** | 그 자체가 탐색기 체감 속도 지표. 전체 119만건 스캔 시간도 함께 외삽된다 |
+
+### 측정 시 주의
+- **업무 시간을 피할 것.** 파일을 대량으로 읽으므로 클라우디움 서버에 부하가 간다
+- **1회차만 진짜 cold.** 클라이언트 캐시 때문에 2회차부터 빨라질 수 있어 리포트에 `(cold)` 로 표시된다.
+  정확한 cold 재측정은 클라이언트 재시작 후 첫 라운드만 유효
+- 읽은 파일 수만큼 **클라우디움 감사 로그가 쌓인다.** 사전에 관리자와 공유할 것
+- 스크립트는 T: 에서 **읽기만** 한다. `robocopy /MIR` 은 쓰지 않으며, 삭제는 스테이징 폴더 하위로만 제한된다
+  (스테이징에 `T:`/`S:` 를 지정하면 실행이 거부된다)
+
 ## 예상 비용
 
 | 구분 | 금액 |
@@ -196,9 +240,10 @@ AWS 표준 File Gateway 정책에는 `s3:DeleteObjectVersion` 이 포함되지�
 
 | # | 산출물 | 비고 |
 |---|---|---|
-| 03 | CloudTrail 데이터 이벤트 + Storage Lens | 감사·비용 가시화 |
-| 04 | `robocopy` → `aws s3 sync` 마이그레이션 스크립트 | 재시도·검증·진행률 로그 |
-| 05 | 시점 롤백 런북 (Batch Operations) | 랜섬웨어 사고 시. **평시에 리허설 필수** |
-| 06 | 수동 파기 스크립트 (옵션) | 발주처 파기 요구 대응. `kesi-docs-purge` 롤 + MFA 로만 실행 |
-| 07 | 발주처 제출용 자료 관리 체계 확인서 | 영업 자산 |
-| 08 | `03-grant-platform-access.ps1` | 통합허가 계획서 플랫폼(별도 계정)에 읽기 허용. **버킷 정책 + KMS 키 정책 + 플랫폼 롤 IAM 3곳을 모두 열어야 한다**(크로스 계정은 리소스 정책과 IAM 양쪽 필요 — KMS 를 빠뜨려 AccessDenied 나는 것이 가장 흔한 실수). 플랫폼 쓰기는 Object Lock 없는 별도 버킷으로, S3 직접 쓰기 후에는 File Gateway `RefreshCache` 필요 |
+| 03 | `03-enable-audit.ps1` — CloudTrail 데이터 이벤트 + Storage Lens | 감사·비용 가시화 |
+| ~~04~~ | ~~`04-pilot-measure.ps1` — T: 파일럿 측정~~ | **완료** |
+| 05 | `05-migrate.ps1` — `robocopy` → `aws s3 sync` | 파일럿 수치로 `/MT`·배치 분할·야간 창을 정한 뒤 작성. 재시도·검증·진행률 로그 포함 |
+| 06 | `06-rollback-runbook.md` — 시점 롤백 (Batch Operations) | 랜섬웨어 사고 시. **평시에 리허설 필수** |
+| 07 | `07-purge-project.ps1` — 수동 파기 (옵션) | 발주처 파기 요구 대응. `kesi-docs-purge` 롤로 실행(MFA 는 Identity Center 레벨) |
+| 08 | `08-grant-platform-access.ps1` — 플랫폼 크로스 계정 읽기 | 통합허가 계획서 플랫폼(별도 계정)에 읽기 허용. **버킷 정책 + KMS 키 정책 + 플랫폼 롤 IAM 3곳을 모두 열어야 한다**(크로스 계정은 리소스 정책과 IAM 양쪽 필요 — KMS 를 빠뜨려 AccessDenied 나는 것이 가장 흔한 실수). 플랫폼 쓰기는 Object Lock 없는 별도 버킷으로, S3 직접 쓰기 후에는 File Gateway `RefreshCache` 필요 |
+| — | 발주처 제출용 자료 관리 체계 확인서 | 영업 자산 |

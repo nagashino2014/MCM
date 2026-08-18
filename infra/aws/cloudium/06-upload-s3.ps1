@@ -89,8 +89,12 @@ Log ""
 
 # ── 1) 동시성 설정 ──────────────────────────────────────────────────────────────
 if (-not $DryRun) {
-  aws configure set default.s3.max_concurrent_requests $Concurrency --profile $AwsProfile | Out-Null
-  Log "동시 요청 수 = $Concurrency (프로필 $AwsProfile 에 설정됨)"
+  # ⚠ `configure set default.s3.…` 로 쓰면 --profile 을 줘도 [default] 섹션에 기록되어
+  #   정작 $AwsProfile 로 실행할 때 적용되지 않는다. 접두어 없이 `s3.…` 로 써야 한다.
+  aws configure set s3.max_concurrent_requests $Concurrency --profile $AwsProfile | Out-Null
+  aws configure set s3.max_queue_size 10000 --profile $AwsProfile | Out-Null
+  $applied = aws configure get s3.max_concurrent_requests --profile $AwsProfile
+  Log "동시 요청 수 = $applied (프로필 $AwsProfile)"
 }
 
 # ── 2) 업로드 (재개 가능) ───────────────────────────────────────────────────────

@@ -3,10 +3,12 @@ import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import {
   accountLedger,
+  confirmEntriesBulk,
   confirmEntry,
   listAccounts,
   listJournal,
   regenerateJournal,
+  setCardExpenseKind,
   setEntryStatus,
   trialBalance,
   type JournalLineInput,
@@ -47,6 +49,7 @@ export async function GET(req: NextRequest) {
         accountId: sp.get("accountId") || undefined,
         cardId: sp.get("cardId") || undefined,
         cardCompany: sp.get("cardCompany") || undefined,
+        accounts: sp.getAll("account").filter(Boolean),
         limit: Number(sp.get("limit") ?? 300) || 300,
       }),
     });
@@ -56,11 +59,16 @@ export async function GET(req: NextRequest) {
 }
 
 interface PostBody {
-  action?: "regenerate" | "confirm" | "exclude" | "unconfirm";
+  action?: "regenerate" | "confirm" | "confirm_bulk" | "set_expense_kind" | "exclude" | "unconfirm";
   from?: string;
   to?: string;
   entryId?: string;
   lines?: JournalLineInput[];
+  /** confirm_bulk — 같은 거래상대의 미확정 전표들을 한 계정으로 일괄 확정. */
+  entryIds?: string[];
+  accountCode?: string;
+  /** set_expense_kind — 카드 전표의 경비 성격 사후 지정(trip/expense, null=해제). */
+  expenseKind?: "trip" | "expense" | null;
 }
 
 // POST: 재생성(finance.manage) / 확정·제외·확정취소(finance.manage)
@@ -77,6 +85,31 @@ export async function POST(req: NextRequest) {
         targetTable: "journal_entries",
         targetId: `${body.from}~${body.to}`,
         after: { ...result },
+      });
+      return NextResponse.json(result);
+    }
+    if (body.action === "confirm_bulk") {
+      const ids = Array.isArray(body.entryIds) ? body.entryIds.map(String).filter(Boolean) : [];
+      const result = await confirmEntriesBulk(ids, String(body.accountCode ?? ""), ctx.userId);
+      await recordAuditLog({
+        actorUserId: ctx.userId,
+        action: "journal_confirm_bulk",
+        targetTable: "journal_entries",
+        targetId: ids[0] ?? "",
+        after: { count: result.confirmed, accountCode: body.accountCode },
+      });
+      return NextResponse.json(result);
+    }
+    if (body.action === "set_expense_kind") {
+      const ids = Array.isArray(body.entryIds) ? body.entryIds.map(String).filter(Boolean) : [];
+      const kind = body.expenseKind === "trip" || body.expenseKind === "expense" ? body.expenseKind : null;
+      const result = await setCardExpenseKind(ids, kind, ctx.userId);
+      await recordAuditLog({
+        actorUserId: ctx.userId,
+        action: "journal_card_expense_kind",
+        targetTable: "card_transactions",
+        targetId: ids[0] ?? "",
+        after: { count: result.updated, expenseKind: kind },
       });
       return NextResponse.json(result);
     }

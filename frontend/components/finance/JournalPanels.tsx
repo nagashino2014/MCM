@@ -9,6 +9,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Check, Download, RefreshCw, Trash2, Upload, Undo2, XCircle } from "lucide-react";
+import { CdModal } from "@/components/cdash/CdModal";
+import { FinLogo } from "@/components/finance/FinLogo";
+import { PaginationControls } from "@/components/ui/PaginationControls";
 
 interface Account {
   accountCode: string;
@@ -30,6 +33,9 @@ interface Entry {
   sourceKind: string;
   description: string | null;
   partyName: string | null;
+  partyNorm: string;
+  expenseKind: string | null;
+  expenseKindLocked: boolean;
   status: string;
   docId: string | null;
   total: number;
@@ -60,6 +66,9 @@ const won = (n: number) => n.toLocaleString("ko-KR");
 const ymd = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const SUSPENSE = new Set(["134", "257"]);
+// 분개장 목록 페이지 크기(사용자 확정: 100건/페이지). 조회는 한 번에 받고 화면만 나눈다 —
+// 동일 거래처 일괄 확정 후보를 페이지 경계에 상관없이 조회 결과 전체에서 찾기 위해서다.
+const PAGE_SIZE = 100;
 
 function monthRange(offset: number): { from: string; to: string } {
   const now = new Date();
@@ -85,7 +94,7 @@ function useAccounts(): Account[] {
 }
 
 /** YYYYMMDD 자동완성 날짜 입력(기존 앱 날짜 8자리 관례 — FinanceBoard DigitDateInput과 동일 동작). */
-function DigitDateInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function DigitDateInput({ value, onChange, fill = false }: { value: string; onChange: (v: string) => void; fill?: boolean }) {
   const format = (digits: string) => {
     if (digits.length <= 4) return digits;
     if (digits.length <= 6) return `${digits.slice(0, 4)}-${digits.slice(4)}`;
@@ -99,7 +108,7 @@ function DigitDateInput({ value, onChange }: { value: string; onChange: (v: stri
       inputMode="numeric"
       placeholder="YYYYMMDD"
       className="cd-input"
-      style={{ width: 110 }}
+      style={fill ? { width: "100%", minWidth: 0 } : { width: 110 }}
       value={text}
       onChange={(e) => {
         const digits = e.target.value.replace(/\D/g, "").slice(0, 8);
@@ -143,13 +152,12 @@ function PeriodFilter({
 // 분개장 + 확정 큐
 // ─────────────────────────────────────────────
 
-/** 소스 필터(단일 선택) — 전체 / 계좌별 / 카드사별 / 카드별 / 세금계산서 / 지출결의. */
-type SourceFilter =
-  | { type: "all" }
+/** 우측 계좌·카드 선택(단일) — 좌측 "구분" 태그와 AND 로 조합된다. */
+type PickFilter =
+  | { type: "none" }
   | { type: "account"; id: string }
   | { type: "cardCompany"; code: string }
-  | { type: "card"; id: string; companyCode: string }
-  | { type: "kind"; kind: "tax_invoice" | "expense_doc" };
+  | { type: "card"; id: string; companyCode: string };
 
 interface ConnectionTag {
   id: string;
@@ -163,10 +171,73 @@ interface ConnectionTag {
 /** 카드 태그명 = 별칭 + 뒤 4자리(별칭 없으면 카드사명 + 뒤 4자리). */
 const cardTagLabel = (c: ConnectionTag) => `${c.alias ?? c.label} ${c.numberMasked.replace(/[^0-9]/g, "").slice(-4)}`;
 
+/** 좌측 "구분" 태그 — listJournal.sourceKind 세분 키.
+ *  ⚠ 법인/개인은 결재 양식이 아니라 "행 단위 카드 라벨"로 갈린다 — 지출·출장 문서의 법인카드 행은 card 전표로,
+ *  개인 지출 행만 expense_doc 전표로 생성된다(출장보고서는 법인·개인 혼재라 양식만으로는 못 가른다). */
+const KIND_TAGS: Array<[string, string]> = [
+  ["", "전체"],
+  ["bank_out", "계좌(출금)"],
+  ["bank_in", "계좌(입금)"],
+  ["tax_invoice_manual", "세금계산서(수기)"],
+  ["tax_invoice_auto", "세금계산서(자동)"],
+  ["trip_corp", "출장경비(법인)"],
+  ["trip_personal", "출장경비(개인)"],
+  ["expense_corp", "지출결의(법인)"],
+  ["expense_personal", "지출결의(개인)"],
+  ["card_unassigned", "구분 미지정"],
+];
+
+/** 카드 전표의 경비 성격 배지 라벨(사후 지정 대상 식별용). */
+const EXPENSE_KIND_LABEL: Record<string, string> = { trip: "출장경비", expense: "지출결의" };
+
+const STATUS_TAGS: Array<[string, string]> = [
+  ["", "전체"],
+  ["pending", "확정 필요"],
+  ["auto", "자동"],
+  ["confirmed", "확정됨"],
+  ["excluded", "제외"],
+];
+
+/** 기간 프리셋 — 회계 화면이라 월/연 경계로 끊는다(1개월=이번 달, 3개월=이번 달 포함 최근 3개월). */
+const monthsRange = (n: number): { from: string; to: string } => {
+  const now = new Date();
+  const from = new Date(now.getFullYear(), now.getMonth() - (n - 1), 1);
+  const to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  return { from: ymd(from), to: ymd(to) };
+};
+const yearRange = (y: number) => ({ from: `${y}-01-01`, to: `${y}-12-31` });
+
+/** 필터 태그 공통 — 미선택은 윤곽선만(cdash 규칙: 채움은 선택된 것만). */
+function FilterChip({
+  active,
+  onClick,
+  className,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      className={`cd-chip cd-chip-sm ${active ? "" : "cd-text-muted"} ${className ?? ""}`}
+      data-active={active || undefined}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function JournalPanel() {
-  const [range, setRange] = useState(() => monthRange(0));
+  const [range, setRange] = useState(() => monthsRange(1));
   const [status, setStatus] = useState<string>("");
-  const [source, setSource] = useState<SourceFilter>({ type: "all" });
+  const [kind, setKind] = useState<string>("");
+  const [side, setSide] = useState<"bank" | "card">("bank");
+  const [pick, setPick] = useState<PickFilter>({ type: "none" });
+  const [acctFilter, setAcctFilter] = useState<Set<string>>(() => new Set());
   const [connections, setConnections] = useState<ConnectionTag[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -175,7 +246,17 @@ export function JournalPanel() {
   const [notice, setNotice] = useState<string | null>(null);
   // pending 전표의 계정 지정(전표 → 선택 계정 코드)
   const [assign, setAssign] = useState<Record<string, string>>({});
+  // 동일 거래처 일괄 확정 확인 모달(체크를 풀면 그 건은 대상에서 빠진다)
+  const [bulk, setBulk] = useState<{ base: Entry; accountCode: string; targets: Entry[] } | null>(null);
+  const [bulkOff, setBulkOff] = useState<Set<string>>(() => new Set());
+  const [offset, setOffset] = useState(0);
+  // 카드 전표 경비 성격 사후 지정 — 목록에서 다중 선택해 일괄 부여(마이그 186)
+  const [checked, setChecked] = useState<Set<string>>(() => new Set());
   const accounts = useAccounts();
+  const years = useMemo(() => {
+    const y = new Date().getFullYear();
+    return Array.from({ length: 6 }, (_, i) => y - i);
+  }, []);
 
   // 계좌·카드 태그(등록이 늘어나면 태그도 함께 늘어난다 — 계좌 6·카드 18 대비)
   useEffect(() => {
@@ -207,22 +288,25 @@ export function JournalPanel() {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({ view: "list", from: range.from, to: range.to });
+      const params = new URLSearchParams({ view: "list", from: range.from, to: range.to, limit: "1000" });
       if (status) params.set("status", status);
-      if (source.type === "account") params.set("accountId", source.id);
-      if (source.type === "cardCompany") params.set("cardCompany", source.code);
-      if (source.type === "card") params.set("cardId", source.id);
-      if (source.type === "kind") params.set("kind", source.kind);
+      if (kind) params.set("kind", kind);
+      if (pick.type === "account") params.set("accountId", pick.id);
+      if (pick.type === "cardCompany") params.set("cardCompany", pick.code);
+      if (pick.type === "card") params.set("cardId", pick.id);
+      for (const code of acctFilter) params.append("account", code);
       const res = await fetch(`/api/finance/journal?${params}`, { cache: "no-store" });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "전표를 불러오지 못했습니다.");
       setEntries(data.entries ?? []);
+      setOffset(0); // 필터가 바뀌면 첫 페이지로
+      setChecked(new Set());
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [range, status, source]);
+  }, [range, status, kind, pick, acctFilter]);
 
   useEffect(() => {
     load();
@@ -252,13 +336,8 @@ export function JournalPanel() {
     }
   };
 
-  /** pending 전표 확정 — suspense 라인(가지급금·가수금)의 계정만 선택 계정으로 교체해 전송. */
-  const confirm = (entry: Entry) => {
-    const account = assign[entry.entryId];
-    if (!account) {
-      setError("계정과목을 먼저 선택하세요.");
-      return;
-    }
+  /** pending 전표 1건 확정 — suspense 라인(가지급금·가수금)의 계정만 선택 계정으로 교체해 전송. */
+  const confirmOne = (entry: Entry, account: string) => {
     const lines = entry.lines.map((l) => ({
       accountCode: SUSPENSE.has(l.accountCode) ? account : l.accountCode,
       debit: l.debit,
@@ -268,7 +347,58 @@ export function JournalPanel() {
     void act({ action: "confirm", entryId: entry.entryId, lines }, "확정했습니다 — 같은 거래상대는 다음부터 자동 분개됩니다.");
   };
 
+  /** 확정 버튼 — 적요의 입금/출금처가 완전히 같은 미확정 건이 더 있으면 일괄 확정 여부를 먼저 묻는다. */
+  const confirm = (entry: Entry) => {
+    const account = assign[entry.entryId];
+    if (!account) {
+      setError("계정과목을 먼저 선택하세요.");
+      return;
+    }
+    const targets = entry.partyNorm
+      ? entries.filter((e) => e.entryId !== entry.entryId && e.status === "pending" && e.partyNorm === entry.partyNorm)
+      : [];
+    if (targets.length) {
+      setBulkOff(new Set());
+      setBulk({ base: entry, accountCode: account, targets });
+      return;
+    }
+    confirmOne(entry, account);
+  };
+
+  const runBulk = () => {
+    if (!bulk) return;
+    const ids = [bulk.base.entryId, ...bulk.targets.filter((t) => !bulkOff.has(t.entryId)).map((t) => t.entryId)];
+    const accountCode = bulk.accountCode;
+    setBulk(null);
+    void act(
+      { action: "confirm_bulk", entryIds: ids, accountCode },
+      `${ids.length}건을 확정했습니다 — 같은 거래상대는 다음부터 자동 분개됩니다.`,
+    );
+  };
+
+  /** 선택한 카드 전표에 경비 성격을 부여/해제한다(결재문서 귀속 건은 서버에서 대상 제외). */
+  const applyExpenseKind = (expenseKind: "trip" | "expense" | null) => {
+    const ids = [...checked];
+    if (!ids.length) return;
+    setChecked(new Set());
+    void act(
+      { action: "set_expense_kind", entryIds: ids, expenseKind },
+      expenseKind
+        ? `${ids.length}건을 ${EXPENSE_KIND_LABEL[expenseKind]}(으)로 지정했습니다.`
+        : `${ids.length}건의 구분 지정을 해제했습니다.`,
+    );
+  };
+
   const pendingCount = useMemo(() => entries.filter((e) => e.status === "pending").length, [entries]);
+  // 사후 지정 가능 건 = 카드 전표 중 결재문서에 귀속되지 않은 것
+  const pageEntries = useMemo(() => entries.slice(offset, offset + PAGE_SIZE), [entries, offset]);
+  const assignable = useMemo(() => pageEntries.filter((e) => e.sourceKind === "card" && !e.expenseKindLocked), [pageEntries]);
+  const bankTags = useMemo(() => connections.filter((c) => c.kind === "bank"), [connections]);
+  const cardCompanies = useMemo(
+    () => [...new Map(connections.filter((c) => c.kind === "card").map((c) => [c.code, c.label])).entries()],
+    [connections],
+  );
+  const bulkAccountName = accounts.find((a) => a.accountCode === bulk?.accountCode)?.name ?? bulk?.accountCode ?? "";
 
   return (
     <div className="cd-card p-4">
@@ -278,116 +408,216 @@ export function JournalPanel() {
           <RefreshCw className="w-3.5 h-3.5" /> 재생성
         </button>
       </div>
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <PeriodFilter from={range.from} to={range.to} onChange={setRange} />
-        <span className="mx-1" />
-        {[["", "전체"], ["pending", "확정 필요"], ["auto", "자동"], ["confirmed", "확정됨"], ["excluded", "제외"]].map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            className={`cd-chip cd-chip-sm ${status === key ? "" : "cd-text-muted"}`}
-            data-active={status === key || undefined}
-            onClick={() => setStatus(key)}
-          >
-            {label}
-          </button>
-        ))}
-        {pendingCount > 0 && <span className="cd-pill cd-pill-warn">확정 필요 {pendingCount}건</span>}
-      </div>
-      {/* 소스 필터 태그 — 계좌 6·카드 18 등록을 대비해 은행/카드 구획을 분리 배치(단일 선택).
-          카드는 카드사 태그 → 산하 카드(별칭+뒤4자리) 2단 구조(카드사 선택 시 산하 카드 태그 노출). */}
-      <div className="flex flex-col gap-1.5 mb-3">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[11px] cd-text-faint" style={{ width: 34 }}>구분</span>
-          <button
-            type="button"
-            className={`cd-chip cd-chip-sm ${source.type === "all" ? "" : "cd-text-muted"}`}
-            data-active={source.type === "all" || undefined}
-            onClick={() => setSource({ type: "all" })}
-          >
-            전체
-          </button>
-          {(
-            [
-              ["tax_invoice", "세금계산서"],
-              ["expense_doc", "지출결의"],
-            ] as Array<["tax_invoice" | "expense_doc", string]>
-          ).map(([kind, label]) => (
-            <button
-              key={kind}
-              type="button"
-              className={`cd-chip cd-chip-sm ${source.type === "kind" && source.kind === kind ? "" : "cd-text-muted"}`}
-              data-active={(source.type === "kind" && source.kind === kind) || undefined}
-              onClick={() => setSource(source.type === "kind" && source.kind === kind ? { type: "all" } : { type: "kind", kind })}
-            >
-              {label}
+
+      {/* 필터 — 좌: 기간·구분·상태 / 우: 계좌·카드(로고 태그) / 하단: 계정 과목(전체 폭) */}
+      <div className="rounded-xl border cd-border-c p-3 mb-3">
+        {/* 좌 3 : 우 7 — 컨셉 도면 비율(좌측 기간·구분 블록이 전체 폭의 30%) */}
+        <div className="grid grid-cols-1 xl:grid-cols-10 gap-x-8 gap-y-4">
+          <div className="min-w-0 xl:col-span-3">
+            {/* 프리셋 4칸 균등 + 연도 목록박스(넓게) */}
+            <div className="grid gap-1.5 items-center" style={{ gridTemplateColumns: "repeat(4, minmax(0,1fr)) minmax(0,2.4fr)" }}>
+              <FilterChip className="w-full justify-center" active={false} onClick={() => setRange(monthsRange(1))}>1개월</FilterChip>
+              <FilterChip className="w-full justify-center" active={false} onClick={() => setRange(monthsRange(3))}>3개월</FilterChip>
+              <FilterChip className="w-full justify-center" active={false} onClick={() => setRange(yearRange(new Date().getFullYear()))}>올해</FilterChip>
+              <FilterChip className="w-full justify-center" active={false} onClick={() => setRange(yearRange(new Date().getFullYear() - 1))}>작년</FilterChip>
+              <select
+                className="cd-select"
+                style={{ width: "100%", minWidth: 0 }}
+                value=""
+                onChange={(e) => {
+                  if (e.target.value) setRange(yearRange(Number(e.target.value)));
+                }}
+              >
+                <option value="">연도 선택…</option>
+                {years.map((y) => (
+                  <option key={y} value={y}>{y}년</option>
+                ))}
+              </select>
+            </div>
+            <div className="grid gap-2 items-center mt-2" style={{ gridTemplateColumns: "minmax(0,1fr) auto minmax(0,1fr)" }}>
+              <DigitDateInput fill value={range.from} onChange={(v) => setRange({ from: v, to: range.to })} />
+              <span className="cd-text-muted">~</span>
+              <DigitDateInput fill value={range.to} onChange={(v) => setRange({ from: range.from, to: v })} />
+            </div>
+
+            <div className="cd-label text-xs mt-3 mb-1.5">구분</div>
+            {/* 3열 균등(컨셉 도면) — 전체 / 계좌(출금·입금) / 세금계산서(수기·자동) / 출장경비·지출결의(법인·개인) */}
+            <div className="grid grid-cols-3 gap-1.5">
+              {KIND_TAGS.map(([key, label]) => (
+                <FilterChip key={key} className="w-full justify-center" active={kind === key} onClick={() => setKind(key)}>
+                  {label}
+                </FilterChip>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-1.5 flex-wrap mt-2.5">
+              {STATUS_TAGS.map(([key, label]) => (
+                <FilterChip key={key} active={status === key} onClick={() => setStatus(key)}>
+                  {label}
+                </FilterChip>
+              ))}
+              {pendingCount > 0 && <span className="cd-pill cd-pill-warn">확정 필요 {pendingCount}건</span>}
+            </div>
+          </div>
+
+          <div className="min-w-0 xl:col-span-7">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {(["bank", "card"] as const).map((s) => (
+                <FilterChip
+                  key={s}
+                  active={side === s}
+                  onClick={() => {
+                    setSide(s);
+                    setPick({ type: "none" }); // 축이 바뀌면 선택 해제(계좌 ↔ 카드는 상호배타)
+                  }}
+                >
+                  {s === "bank" ? "계좌" : "카드"}
+                </FilterChip>
+              ))}
+            </div>
+
+            {side === "bank" && (
+              // 은행 태그 5열 균등(컨셉 도면) — 로고 + 계좌 별칭
+              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2 mt-2">
+                {bankTags.map((c) => {
+                  const active = pick.type === "account" && pick.id === c.id;
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => setPick(active ? { type: "none" } : { type: "account", id: c.id })}
+                      className="w-full flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-sm text-left transition-colors"
+                      style={
+                        active
+                          ? { borderColor: "var(--cd-primary)", background: "var(--cd-primary-soft)", color: "var(--cd-primary)" }
+                          : { borderColor: "var(--cd-faint)" }
+                      }
+                    >
+                      <FinLogo kind="bank" code={c.code} label={c.label} size={26} />
+                      <span className="truncate font-medium">{c.alias ?? c.label}</span>
+                    </button>
+                  );
+                })}
+                {bankTags.length === 0 && <span className="text-sm cd-text-muted col-span-full">등록된 계좌가 없습니다.</span>}
+              </div>
+            )}
+
+            {side === "card" && (
+              <>
+                {/* 카드사 태그 5열 균등(컨셉 도면) */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2 mt-2">
+                  {cardCompanies.map(([code, label]) => {
+                    const active =
+                      (pick.type === "cardCompany" && pick.code === code) || (pick.type === "card" && pick.companyCode === code);
+                    return (
+                      <button
+                        key={code}
+                        type="button"
+                        onClick={() => setPick(active ? { type: "none" } : { type: "cardCompany", code })}
+                        className="w-full flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-sm text-left transition-colors"
+                        style={
+                          active
+                            ? { borderColor: "var(--cd-primary)", background: "var(--cd-primary-soft)", color: "var(--cd-primary)" }
+                            : { borderColor: "var(--cd-faint)" }
+                        }
+                      >
+                        <FinLogo kind="card" code={code} label={label} size={26} />
+                        <span className="truncate font-medium">{label}</span>
+                      </button>
+                    );
+                  })}
+                  {cardCompanies.length === 0 && <span className="text-sm cd-text-muted col-span-full">등록된 카드가 없습니다.</span>}
+                </div>
+                {/* 선택된 카드사 산하 카드 태그(별칭+뒤4자리) — 7열 균등(컨셉 도면) */}
+                {(pick.type === "cardCompany" || pick.type === "card") && (
+                  <div className="grid grid-cols-3 sm:grid-cols-5 xl:grid-cols-7 gap-1.5 mt-2">
+                    {connections
+                      .filter((c) => c.kind === "card" && c.code === (pick.type === "cardCompany" ? pick.code : pick.companyCode))
+                      .map((c) => (
+                        <FilterChip
+                          key={c.id}
+                          className="w-full justify-center"
+                          active={pick.type === "card" && pick.id === c.id}
+                          onClick={() =>
+                            setPick(
+                              pick.type === "card" && pick.id === c.id
+                                ? { type: "cardCompany", code: c.code }
+                                : { type: "card", id: c.id, companyCode: c.code },
+                            )
+                          }
+                        >
+                          {cardTagLabel(c)}
+                        </FilterChip>
+                      ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="cd-label text-xs mt-4 mb-1.5">
+          계정 과목
+          {acctFilter.size > 0 && (
+            <button type="button" className="ml-2 cd-text-muted underline text-[11px]" onClick={() => setAcctFilter(new Set())}>
+              선택 해제({acctFilter.size})
             </button>
+          )}
+        </div>
+        <div className="grid grid-cols-3 sm:grid-cols-5 xl:grid-cols-8 gap-1.5">
+          {accounts.map((a) => (
+            <FilterChip
+              key={a.accountCode}
+              className="w-full justify-center"
+              active={acctFilter.has(a.accountCode)}
+              onClick={() =>
+                setAcctFilter((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(a.accountCode)) next.delete(a.accountCode);
+                  else next.add(a.accountCode);
+                  return next;
+                })
+              }
+            >
+              <span className="truncate">{a.name}</span>
+            </FilterChip>
           ))}
         </div>
-        {connections.some((c) => c.kind === "bank") && (
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[11px] cd-text-faint" style={{ width: 34 }}>은행</span>
-            {connections
-              .filter((c) => c.kind === "bank")
-              .map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  className={`cd-chip cd-chip-sm ${source.type === "account" && source.id === c.id ? "" : "cd-text-muted"}`}
-                  data-active={(source.type === "account" && source.id === c.id) || undefined}
-                  onClick={() => setSource(source.type === "account" && source.id === c.id ? { type: "all" } : { type: "account", id: c.id })}
-                >
-                  {c.alias ?? c.label}
-                </button>
-              ))}
-          </div>
-        )}
-        {connections.some((c) => c.kind === "card") && (
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[11px] cd-text-faint" style={{ width: 34 }}>카드</span>
-            {[...new Map(connections.filter((c) => c.kind === "card").map((c) => [c.code, c.label])).entries()].map(([code, label]) => {
-              const companyActive =
-                (source.type === "cardCompany" && source.code === code) || (source.type === "card" && source.companyCode === code);
-              return (
-                <button
-                  key={code}
-                  type="button"
-                  className={`cd-chip cd-chip-sm ${companyActive ? "" : "cd-text-muted"}`}
-                  data-active={companyActive || undefined}
-                  onClick={() => setSource(source.type === "cardCompany" && source.code === code ? { type: "all" } : { type: "cardCompany", code })}
-                >
-                  {label}
-                </button>
-              );
-            })}
-            {/* 선택된 카드사 산하 카드 태그(별칭+뒤4자리) */}
-            {(source.type === "cardCompany" || source.type === "card") &&
-              connections
-                .filter((c) => c.kind === "card" && c.code === (source.type === "cardCompany" ? source.code : source.companyCode))
-                .map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    className={`cd-chip cd-chip-sm ${source.type === "card" && source.id === c.id ? "" : "cd-text-muted"}`}
-                    data-active={(source.type === "card" && source.id === c.id) || undefined}
-                    onClick={() =>
-                      setSource(
-                        source.type === "card" && source.id === c.id
-                          ? { type: "cardCompany", code: c.code }
-                          : { type: "card", id: c.id, companyCode: c.code },
-                      )
-                    }
-                  >
-                    └ {cardTagLabel(c)}
-                  </button>
-                ))}
-          </div>
-        )}
       </div>
+
       <div className="text-xs cd-text-muted mb-3">
         전표는 원장(카드·계좌·세금계산서·지출결의)에서 자동 생성됩니다 — 직접 입력하는 화면은 없으며, 계정이 불분명한 건만 아래에서 계정을 지정해 확정하세요.
         재생성해도 확정·제외한 건은 그대로 보존됩니다.
       </div>
+      {/* 카드 사용내역 구분 사후 지정 — 결재문서에 귀속되지 않은 카드 건을 골라 출장경비/지출결의로 라벨링한다.
+          (귀속 문서가 생기면 그 값이 우선하므로 여기 지정은 자동으로 덮인다) */}
+      {assignable.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap rounded-xl border cd-border-c p-2 mb-3">
+          <span className="text-xs cd-text-muted">
+            카드 사용내역 구분 지정 — 이 페이지에 문서 미귀속 카드 전표 {assignable.length}건
+            {checked.size > 0 && <span className="cd-text"> · 선택 {checked.size}건</span>}
+          </span>
+          <button
+            type="button"
+            className="cd-btn cd-btn-ghost cd-btn-sm"
+            onClick={() =>
+              setChecked((prev) => (prev.size === assignable.length ? new Set() : new Set(assignable.map((e) => e.entryId))))
+            }
+          >
+            {checked.size === assignable.length ? "전체 해제" : "이 페이지 전체 선택"}
+          </button>
+          <span className="mx-auto" />
+          <button type="button" className="cd-btn cd-btn-soft cd-btn-sm" disabled={busy || !checked.size} onClick={() => applyExpenseKind("trip")}>
+            출장경비로 지정
+          </button>
+          <button type="button" className="cd-btn cd-btn-soft cd-btn-sm" disabled={busy || !checked.size} onClick={() => applyExpenseKind("expense")}>
+            지출결의로 지정
+          </button>
+          <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy || !checked.size} onClick={() => applyExpenseKind(null)}>
+            지정 해제
+          </button>
+        </div>
+      )}
       {error && <div className="cd-error-text text-sm mb-2">{error}</div>}
       {notice && <div className="text-sm mb-2" style={{ color: "var(--cd-success,#13DEB9)" }}>{notice}</div>}
 
@@ -395,6 +625,7 @@ export function JournalPanel() {
         <table className="w-full text-sm">
           <thead>
             <tr className="cd-text-muted text-left">
+              <th className="py-1.5 pr-2 font-normal" style={{ width: 28 }}></th>
               <th className="py-1.5 pr-3 font-normal">일자</th>
               <th className="py-1.5 pr-3 font-normal">구분</th>
               <th className="py-1.5 pr-3 font-normal">적요</th>
@@ -406,14 +637,40 @@ export function JournalPanel() {
             </tr>
           </thead>
           <tbody>
-            {entries.map((entry) => {
+            {pageEntries.map((entry) => {
               const meta = STATUS_META[entry.status] ?? { label: entry.status, pill: "cd-pill-idle" };
               const debits = entry.lines.filter((l) => l.debit > 0);
               const credits = entry.lines.filter((l) => l.credit > 0);
+              const canAssign = entry.sourceKind === "card" && !entry.expenseKindLocked;
               return (
                 <tr key={entry.entryId} className="border-t cd-hairline-row-c align-top">
+                  <td className="py-2 pr-2">
+                    {canAssign && (
+                      <input
+                        type="checkbox"
+                        checked={checked.has(entry.entryId)}
+                        onChange={() =>
+                          setChecked((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(entry.entryId)) next.delete(entry.entryId);
+                            else next.add(entry.entryId);
+                            return next;
+                          })
+                        }
+                      />
+                    )}
+                  </td>
                   <td className="py-2 pr-3 whitespace-nowrap text-xs">{entry.entryDate}</td>
-                  <td className="py-2 pr-3 whitespace-nowrap text-xs">{SOURCE_LABEL[entry.sourceKind] ?? entry.sourceKind}</td>
+                  <td className="py-2 pr-3 whitespace-nowrap text-xs">
+                    <div>{SOURCE_LABEL[entry.sourceKind] ?? entry.sourceKind}</div>
+                    {entry.sourceKind === "card" && (
+                      <div className="mt-0.5 cd-text-faint">
+                        {entry.expenseKind
+                          ? `${EXPENSE_KIND_LABEL[entry.expenseKind] ?? entry.expenseKind}${entry.expenseKindLocked ? " (문서)" : ""}`
+                          : "구분 미지정"}
+                      </div>
+                    )}
+                  </td>
                   <td className="py-2 pr-3 max-w-[240px]">
                     <div className="truncate" title={entry.description ?? ""}>{entry.description ?? "-"}</div>
                   </td>
@@ -473,7 +730,7 @@ export function JournalPanel() {
             })}
             {!loading && entries.length === 0 && (
               <tr>
-                <td colSpan={8} className="py-6 text-center cd-text-muted text-sm">
+                <td colSpan={9} className="py-6 text-center cd-text-muted text-sm">
                   전표가 없습니다 — "재생성"을 누르면 이 기간의 원장에서 자동분개를 만듭니다.
                 </td>
               </tr>
@@ -481,6 +738,109 @@ export function JournalPanel() {
           </tbody>
         </table>
       </div>
+      <div className="mt-3">
+        <PaginationControls total={entries.length} limit={PAGE_SIZE} offset={offset} loading={loading} onPageChange={setOffset} />
+      </div>
+
+      {/* 동일 거래처 일괄 확정 — 체크를 풀면 그 건은 대상에서 빠진다(확정 필요 상태 유지). */}
+      <CdModal
+        open={!!bulk}
+        onClose={() => setBulk(null)}
+        size="xl"
+        title="같은 거래처 일괄 확정"
+        footer={
+          bulk ? (
+            <div className="flex items-center gap-2 justify-end">
+              <button type="button" className="cd-btn cd-btn-ghost" onClick={() => setBulk(null)}>취소</button>
+              <button
+                type="button"
+                className="cd-btn cd-btn-soft"
+                onClick={() => {
+                  const base = bulk.base;
+                  const account = bulk.accountCode;
+                  setBulk(null);
+                  confirmOne(base, account);
+                }}
+              >
+                이 건만 확정
+              </button>
+              <button
+                type="button"
+                className="cd-btn cd-btn-primary"
+                onClick={runBulk}
+              >
+                <Check className="w-4 h-4" /> {1 + bulk.targets.filter((t) => !bulkOff.has(t.entryId)).length}건 일괄 확정
+              </button>
+            </div>
+          ) : null
+        }
+      >
+        {bulk && (
+          <div>
+            <div className="text-sm mb-3">
+              <span className="font-bold">{bulk.base.partyName}</span> 건이 <span className="font-bold">{bulkAccountName}</span> 으로 확정됩니다.
+              현재 목록에 입금/출금처가 같은 미확정 전표가 <span className="font-bold">{bulk.targets.length}건</span> 더 있습니다 — 함께 확정할까요?
+            </div>
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => setBulkOff(new Set())}>
+                모두 선택
+              </button>
+              <button
+                type="button"
+                className="cd-btn cd-btn-ghost cd-btn-sm"
+                onClick={() => setBulkOff(new Set(bulk.targets.map((t) => t.entryId)))}
+              >
+                모두 해제
+              </button>
+              <span className="text-xs cd-text-muted">체크를 풀면 그 건은 확정하지 않고 "확정 필요"로 남습니다.</span>
+            </div>
+            <div className="overflow-x-auto" style={{ maxHeight: "46vh" }}>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="cd-text-muted text-left">
+                    <th className="py-1.5 pr-3 font-normal" style={{ width: 56 }}></th>
+                    <th className="py-1.5 pr-3 font-normal">일자</th>
+                    <th className="py-1.5 pr-3 font-normal">구분</th>
+                    <th className="py-1.5 pr-3 font-normal">적요</th>
+                    <th className="py-1.5 font-normal text-right">금액</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-t cd-hairline-row-c">
+                    <td className="py-2 pr-3"><span className="cd-pill cd-pill-info">기준</span></td>
+                    <td className="py-2 pr-3 whitespace-nowrap text-xs">{bulk.base.entryDate}</td>
+                    <td className="py-2 pr-3 whitespace-nowrap text-xs">{SOURCE_LABEL[bulk.base.sourceKind] ?? bulk.base.sourceKind}</td>
+                    <td className="py-2 pr-3"><div className="truncate max-w-[360px]" title={bulk.base.description ?? ""}>{bulk.base.description ?? "-"}</div></td>
+                    <td className="py-2 text-right font-medium whitespace-nowrap">{won(bulk.base.total)}</td>
+                  </tr>
+                  {bulk.targets.map((t) => (
+                    <tr key={t.entryId} className="border-t cd-hairline-row-c">
+                      <td className="py-2 pr-3">
+                        <input
+                          type="checkbox"
+                          checked={!bulkOff.has(t.entryId)}
+                          onChange={() =>
+                            setBulkOff((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(t.entryId)) next.delete(t.entryId);
+                              else next.add(t.entryId);
+                              return next;
+                            })
+                          }
+                        />
+                      </td>
+                      <td className="py-2 pr-3 whitespace-nowrap text-xs">{t.entryDate}</td>
+                      <td className="py-2 pr-3 whitespace-nowrap text-xs">{SOURCE_LABEL[t.sourceKind] ?? t.sourceKind}</td>
+                      <td className="py-2 pr-3"><div className="truncate max-w-[360px]" title={t.description ?? ""}>{t.description ?? "-"}</div></td>
+                      <td className="py-2 text-right font-medium whitespace-nowrap">{won(t.total)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </CdModal>
     </div>
   );
 }

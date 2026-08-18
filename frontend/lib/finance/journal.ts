@@ -630,13 +630,23 @@ export async function confirmEntry(
   lines: JournalLineInput[],
   actorUserId: string,
 ): Promise<void> {
+  await withDbWrite((db) => applyConfirm(db, entryId, lines, actorUserId));
+}
+
+/** 확정 1건의 실제 처리 — confirmEntry(단건)·confirmEntriesBulk(일괄)가 공유한다(같은 트랜잭션 안에서 호출). */
+async function applyConfirm(
+  db: PgDatabase,
+  entryId: string,
+  lines: JournalLineInput[],
+  actorUserId: string,
+): Promise<void> {
   if (!lines.length) throw Object.assign(new Error("분개 라인이 필요합니다."), { status: 400 });
   const debitSum = lines.reduce((s, l) => s + round(l.debit), 0);
   const creditSum = lines.reduce((s, l) => s + round(l.credit), 0);
   if (debitSum !== creditSum || debitSum <= 0) {
     throw Object.assign(new Error(`차변(${debitSum.toLocaleString()})과 대변(${creditSum.toLocaleString()})이 일치해야 합니다.`), { status: 400 });
   }
-  await withDbWrite(async (db) => {
+  {
     const rows = rowsToObjects(await db.exec(`SELECT source_kind, party_name FROM journal_entries WHERE entry_id = $1`, [entryId]));
     if (!rows.length) throw Object.assign(new Error("전표를 찾을 수 없습니다."), { status: 404 });
     const valid = rowsToObjects(
@@ -679,6 +689,78 @@ export async function confirmEntry(
         );
       }
     }
+  }
+}
+
+/** 미확정 전표 일괄 확정 — 가지급금·가수금(미확정) 라인만 지정 계정으로 교체해 여러 건을 한 번에 확정한다.
+ *  적요의 입금/출금처가 같은 건을 하나씩 누르는 수고를 없애기 위한 경로(단건 확정과 동일한 검증·학습을 탄다). */
+export async function confirmEntriesBulk(
+  entryIds: string[],
+  accountCode: string,
+  actorUserId: string,
+): Promise<{ confirmed: number }> {
+  if (!entryIds.length) throw Object.assign(new Error("확정할 전표가 없습니다."), { status: 400 });
+  if (!accountCode) throw Object.assign(new Error("계정과목이 필요합니다."), { status: 400 });
+  const ids = [...new Set(entryIds)];
+  return withDbWrite(async (db) => {
+    const rows = rowsToObjects(
+      await db.exec(
+        `SELECT l.entry_id, l.account_code, l.debit, l.credit, l.memo
+           FROM journal_lines l JOIN journal_entries e ON e.entry_id = l.entry_id
+          WHERE l.entry_id = ANY($1::text[]) AND e.status = 'pending'
+          ORDER BY l.entry_id, l.line_no`,
+        [ids],
+      ),
+    );
+    const byEntry = new Map<string, JournalLineInput[]>();
+    for (const r of rows) {
+      const id = String(r.entry_id);
+      const code = String(r.account_code);
+      if (!byEntry.has(id)) byEntry.set(id, []);
+      byEntry.get(id)!.push({
+        // 미확정 자리(가지급금·가수금)만 지정 계정으로 교체 — 나머지 라인(부가세대급금·미지급금 등)은 보존
+        accountCode: code === ACCT.suspenseOut || code === ACCT.suspenseIn ? accountCode : code,
+        debit: Number(r.debit ?? 0),
+        credit: Number(r.credit ?? 0),
+        memo: r.memo ? String(r.memo) : null,
+      });
+    }
+    let confirmed = 0;
+    for (const [entryId, lines] of byEntry) {
+      await applyConfirm(db, entryId, lines, actorUserId);
+      confirmed += 1;
+    }
+    return { confirmed };
+  });
+}
+
+/** 카드 전표의 경비 성격 사후 지정 — 결재문서에 귀속되지 않은 카드 건에 출장경비/지출결의 구분을 직접 부여한다.
+ *  (마이그 186) 실제 결재문서에 귀속된 건(doc_form_id)은 그 값이 우선이라 대상에서 제외한다.
+ *  값을 지우려면 expenseKind 에 null 을 넘긴다. */
+export async function setCardExpenseKind(
+  entryIds: string[],
+  expenseKind: "trip" | "expense" | null,
+  actorUserId: string,
+): Promise<{ updated: number }> {
+  if (!entryIds.length) throw Object.assign(new Error("지정할 전표가 없습니다."), { status: 400 });
+  const ids = [...new Set(entryIds)];
+  return withDbWrite(async (db) => {
+    const now = KST_NOW();
+    const rows = rowsToObjects(
+      await db.exec(
+        `UPDATE card_transactions ct
+            SET expense_kind = $2::text,
+                expense_kind_by = CASE WHEN $2::text IS NULL THEN NULL ELSE $3::text END,
+                expense_kind_at = CASE WHEN $2::text IS NULL THEN NULL ELSE $4::text END,
+                updated_at = $4::text
+          WHERE ct.doc_form_id IS NULL
+            AND ct.card_txn_id IN (
+              SELECT e.source_id FROM journal_entries e WHERE e.entry_id = ANY($1::text[]) AND e.source_kind = 'card')
+          RETURNING ct.card_txn_id`,
+        [ids, expenseKind, actorUserId, now],
+      ),
+    );
+    return { updated: rows.length };
   });
 }
 
@@ -720,6 +802,12 @@ export interface JournalEntryRow {
   sourceKind: string;
   description: string | null;
   partyName: string | null;
+  /** 거래상대 정규화 키 — 동일 입금/출금처 일괄 확정(프론트 그룹핑)용. */
+  partyNorm: string;
+  /** 카드 전표의 경비 성격: trip / expense / null(미지정). 문서 귀속이 있으면 그것이 우선. */
+  expenseKind: string | null;
+  /** 경비 성격이 결재문서 귀속에서 온 것인지(=사후 지정으로 못 바꾼다). */
+  expenseKindLocked: boolean;
   status: string;
   docId: string | null;
   total: number;
@@ -730,7 +818,10 @@ export async function listJournal(params: {
   from: string;
   to: string;
   status?: string;
-  /** 소스 구분 필터: bank(입출금 전체) / card / tax_invoice / expense_doc */
+  /** 소스 구분 필터. 단순 소스(bank/card/tax_invoice/expense_doc) 외에 화면 태그용 세분 키를 받는다:
+   *  bank_in·bank_out(계좌 입/출금) / tax_invoice_auto·tax_invoice_manual(세금계산서 자동·수기)
+   *  trip_corp·expense_corp(법인카드 결제분 — 귀속 문서 양식별) / trip_personal·expense_personal(개인 지출 환급분).
+   *  ⚠ 법인/개인은 양식이 아니라 "행 단위 카드 라벨"로 갈린다 — 법인카드 행은 card 전표, 개인 지출 행만 expense_doc 전표. */
   sourceKind?: string;
   /** 계좌별 필터(bank_transactions.account_id — 원장 역조회, 스키마 무변경) */
   accountId?: string;
@@ -738,6 +829,8 @@ export async function listJournal(params: {
   cardId?: string;
   /** 카드사별 필터(card_registry.card_company — 산하 카드 전체) */
   cardCompany?: string;
+  /** 계정과목 다중 필터(OR) — 하나라도 라인에 포함된 전표만. */
+  accounts?: string[];
   limit?: number;
 }): Promise<JournalEntryRow[]> {
   const db = await getDb();
@@ -766,22 +859,61 @@ export async function listJournal(params: {
          SELECT 1 FROM card_transactions ct JOIN card_registry cr ON cr.card_id = ct.card_id
           WHERE ct.card_txn_id = e.source_id AND cr.card_company = $${sqlParams.length})`,
     );
-  } else if (params.sourceKind === "bank") {
+  }
+  if (params.sourceKind === "bank") {
     conds.push(`e.source_kind IN ('bank_in','bank_out')`);
   } else if (params.sourceKind === "tax_invoice") {
     conds.push(`e.source_kind IN ('tax_invoice','invoice_manual')`); // 전자발행 + 수기 발행 기록
+  } else if (params.sourceKind === "tax_invoice_auto") {
+    conds.push(`e.source_kind = 'tax_invoice'`);
+  } else if (params.sourceKind === "tax_invoice_manual") {
+    conds.push(`e.source_kind = 'invoice_manual'`);
+  } else if (params.sourceKind === "trip_corp" || params.sourceKind === "expense_corp") {
+    // 법인카드 결제분 — 결재문서 귀속(doc_form_id) 우선, 없으면 사후 지정값(expense_kind, 마이그 186)
+    const isTrip = params.sourceKind === "trip_corp";
+    sqlParams.push(isTrip ? "frm-biz-trip-report" : "frm-expense-report");
+    const formIdx = sqlParams.length;
+    sqlParams.push(isTrip ? "trip" : "expense");
+    conds.push(
+      `e.source_kind = 'card' AND EXISTS (
+         SELECT 1 FROM card_transactions ct
+          WHERE ct.card_txn_id = e.source_id
+            AND CASE WHEN ct.doc_form_id IS NOT NULL THEN ct.doc_form_id = $${formIdx} ELSE ct.expense_kind = $${sqlParams.length} END)`,
+    );
+  } else if (params.sourceKind === "card_unassigned") {
+    // 구분 미지정 — 결재문서 귀속도 사후 지정도 없는 카드 건(지정 대상 찾기용)
+    conds.push(
+      `e.source_kind = 'card' AND EXISTS (
+         SELECT 1 FROM card_transactions ct
+          WHERE ct.card_txn_id = e.source_id AND ct.doc_form_id IS NULL AND ct.expense_kind IS NULL)`,
+    );
+  } else if (params.sourceKind === "trip_personal" || params.sourceKind === "expense_personal") {
+    // 개인 지출 환급분 — expense_doc 전표(법인카드 행은 이미 card 전표가 커버)를 문서 양식으로 가른다
+    sqlParams.push(params.sourceKind === "trip_personal" ? "frm-biz-trip-report" : "frm-expense-report");
+    conds.push(
+      `e.source_kind = 'expense_doc' AND EXISTS (
+         SELECT 1 FROM approval_docs d WHERE d.doc_id = e.doc_id AND d.form_id = $${sqlParams.length})`,
+    );
   } else if (params.sourceKind) {
     sqlParams.push(params.sourceKind);
     conds.push(`e.source_kind = $${sqlParams.length}`);
+  }
+  if (params.accounts?.length) {
+    sqlParams.push(params.accounts);
+    conds.push(
+      `EXISTS (SELECT 1 FROM journal_lines l2 WHERE l2.entry_id = e.entry_id AND l2.account_code = ANY($${sqlParams.length}::text[]))`,
+    );
   }
   const limit = Math.min(Math.max(Number(params.limit ?? 300) || 300, 1), 1000);
   const rows = rowsToObjects(
     await db.exec(
       `SELECT e.entry_id, e.entry_date, e.source_kind, e.description, e.party_name, e.status, e.doc_id,
-              l.line_no, l.account_code, a.name AS account_name, l.debit, l.credit, l.memo
+              l.line_no, l.account_code, a.name AS account_name, l.debit, l.credit, l.memo,
+              ct.doc_form_id AS card_doc_form_id, ct.expense_kind AS card_expense_kind
          FROM journal_entries e
          JOIN journal_lines l ON l.entry_id = e.entry_id
          LEFT JOIN journal_accounts a ON a.account_code = l.account_code
+         LEFT JOIN card_transactions ct ON e.source_kind = 'card' AND ct.card_txn_id = e.source_id
         WHERE ${conds.join(" AND ")}
         ORDER BY e.entry_date DESC, e.entry_id, l.line_no
         LIMIT ${limit * 6}`,
@@ -799,6 +931,15 @@ export async function listJournal(params: {
         sourceKind: String(r.source_kind),
         description: r.description ? String(r.description) : null,
         partyName: r.party_name ? String(r.party_name) : null,
+        partyNorm: normalizeParty(r.party_name ? String(r.party_name) : null),
+        expenseKind: r.card_doc_form_id
+          ? String(r.card_doc_form_id) === "frm-biz-trip-report"
+            ? "trip"
+            : "expense"
+          : r.card_expense_kind
+            ? String(r.card_expense_kind)
+            : null,
+        expenseKindLocked: !!r.card_doc_form_id,
         status: String(r.status),
         docId: r.doc_id ? String(r.doc_id) : null,
         total: 0,

@@ -24,6 +24,7 @@ import {
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdModal } from "@/components/cdash/CdModal";
+import { FinLogo, logoFileCode } from "@/components/finance/FinLogo";
 import { JournalPanel, LedgerPanel, TrialPanel } from "@/components/finance/JournalPanels";
 import { PnlPanel, CashPanel } from "@/components/finance/ManagementPanels";
 import { HometaxPanel, VatReturnPanel, WithholdingPanel } from "@/components/finance/VatReturnPanels";
@@ -120,40 +121,6 @@ const ALL_CARD_COMPANIES: Array<{ code: string; name: string }> = [
   { code: "SAMSUNG", name: "삼성카드" }, { code: "SHINHAN", name: "신한카드" }, { code: "WOORI", name: "우리카드" },
   { code: "SUHYUP", name: "수협카드" }, { code: "KJBANK", name: "광주카드" }, { code: "JBBANK", name: "전북카드" },
 ];
-
-// 로고 파일 코드: 은행 = {code} / 카드사 = CARD_{code} (은행 겸용 코드는 은행 로고 재사용)
-const logoFileCode = (kind: "bank" | "card", code: string) =>
-  kind === "card" ? (["KJBANK", "JBBANK", "SUHYUP"].includes(code) ? code : `CARD_${code}`) : code;
-
-// 서빙: DB 업로드본 우선 → 번들 정적 파일 폴백(/api/finance/logos/img). 갱신 반영용 버전 쿼리.
-const logoSrc = (kind: "bank" | "card", code: string, version = 0) =>
-  `/api/finance/logos/img/${logoFileCode(kind, code)}${version ? `?v=${version}` : ""}`;
-
-function FinLogo({ kind, code, label, size = 36, version = 0 }: { kind: "bank" | "card"; code: string; label: string; size?: number; version?: number }) {
-  const [failed, setFailed] = useState(false);
-  if (failed || !code) {
-    return (
-      <span
-        className="inline-flex items-center justify-center rounded-full font-bold shrink-0"
-        style={{ width: size, height: size, background: "var(--cd-primary-soft)", color: "var(--cd-primary)", fontSize: size * 0.38 }}
-      >
-        {label.slice(0, 1)}
-      </span>
-    );
-  }
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={logoSrc(kind, code, version)}
-      alt={label}
-      width={size}
-      height={size}
-      className="rounded-full shrink-0 object-contain"
-      style={{ background: "#fff", border: "1px solid var(--cd-border)" }}
-      onError={() => setFailed(true)}
-    />
-  );
-}
 
 /* ================= YYYYMMDD 자동완성 날짜 입력 (기존 앱 날짜 8자리 관례) ================= */
 

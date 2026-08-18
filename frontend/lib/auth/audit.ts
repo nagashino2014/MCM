@@ -103,6 +103,8 @@ export type AuditAction =
   | "tax_invoice_issue"
   | "tax_invoice_cancel"
   | "journal_regenerate"
+  | "journal_confirm_bulk"
+  | "journal_card_expense_kind"
   | "journal_ledger_import"
   | "journal_ledger_import_delete"
   | "hometax_scrap_regist"

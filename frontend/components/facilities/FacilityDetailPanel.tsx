@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { loadKsicMap, lookupKsicName } from "@/lib/ieps/ksic-lookup";
 import { Pencil, Save, X, MapPin, Phone, Hash, Building2, FileText, Layers, ClipboardList, Trash2, Plus, History, Upload, Tags, Briefcase, FolderTree, ArrowRight, Search } from "lucide-react";
@@ -121,12 +121,21 @@ interface FacilityContactPerson {
   email: string | null;
   duties: string | null;
   status: string;
+  /** 업무 분류 태그(계약/환경/계산서) — 복수 지정(187). */
+  deptTypes?: string[];
   appointedAt: string | null;
   transferredAt: string | null;
   resignedAt: string | null;
   createdAt?: string;
   updatedAt?: string;
 }
+
+/** 담당자 업무 분류 태그 — 영업 화면의 사업장 담당자 설정과 값이 같아야 한다(dept_types). */
+const CONTACT_DEPT_TAGS: { v: string; l: string }[] = [
+  { v: "contract", l: "계약부서" },
+  { v: "env", l: "환경부서" },
+  { v: "billing", l: "계산서" },
+];
 
 interface FacilityContactLog {
   id: number;
@@ -1238,6 +1247,7 @@ function FacilityContactsModal({
     email: "",
     duties: "",
     status: "active",
+    deptTypes: [] as string[],
     appointedAt: "",
     transferredAt: "",
     resignedAt: "",
@@ -1294,6 +1304,7 @@ function FacilityContactsModal({
         email: f.email ?? "",
         duties: "",
         status: "active",
+        deptTypes: [],
         appointedAt: "",
         transferredAt: "",
         resignedAt: "",
@@ -1461,6 +1472,7 @@ function FacilityContactsModal({
       email: "",
       duties: "",
       status: "active",
+      deptTypes: [],
       appointedAt: "",
       transferredAt: "",
       resignedAt: "",
@@ -1479,6 +1491,7 @@ function FacilityContactsModal({
       email: selectedPerson.email ?? "",
       duties: selectedPerson.duties ?? "",
       status: selectedPerson.status ?? "active",
+      deptTypes: selectedPerson.deptTypes ?? [],
       appointedAt: selectedPerson.appointedAt ?? "",
       transferredAt: selectedPerson.transferredAt ?? "",
       resignedAt: selectedPerson.resignedAt ?? "",
@@ -1502,6 +1515,7 @@ function FacilityContactsModal({
       email: personForm.email.trim() || null,
       duties: personForm.duties.trim() || null,
       status: personForm.status,
+      deptTypes: personForm.deptTypes,
       appointedAt: personForm.appointedAt || null,
       transferredAt: personForm.transferredAt || null,
       resignedAt: personForm.resignedAt || null,
@@ -1904,6 +1918,7 @@ function PersonContactPane({
     email: string;
     duties: string;
     status: string;
+    deptTypes: string[];
     appointedAt: string;
     transferredAt: string;
     resignedAt: string;
@@ -1924,7 +1939,21 @@ function PersonContactPane({
   }
   return (
     <div className="flex flex-col gap-4">
-      <ContactPaneHeader title={editing ? "담당자 정보 입력" : person?.personName ?? "신규 담당자"} canEdit={canEdit} editing={editing} onNew={onNew} onEdit={onEdit} />
+      <ContactPaneHeader
+        title={editing ? "담당자 정보 입력" : person?.personName ?? "신규 담당자"}
+        canEdit={canEdit}
+        editing={editing}
+        onNew={onNew}
+        onEdit={onEdit}
+        tags={
+          /* 업무 분류 태그(복수) — '계산서'가 켜진 담당자는 전자세금계산서 수신처로 기본 지정된다. */
+          <ContactDeptTags
+            value={editing ? form.deptTypes : person?.deptTypes ?? []}
+            readOnly={!editing}
+            onChange={(next) => onFormChange({ ...form, deptTypes: next })}
+          />
+        }
+      />
       {editing ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <ContactInput label="담당자 성명" value={form.personName} onChange={(v) => onFormChange({ ...form, personName: v })} />
@@ -1996,22 +2025,57 @@ function EmptyContactPane({ title, canEdit, onNew }: { title: string; canEdit: b
   );
 }
 
+/** 담당자 업무 분류 태그 — 3개 태그 너비를 맞춰 한 줄에 둔다(영업 화면 사업장 담당자 설정과 동일 값). */
+function ContactDeptTags({
+  value,
+  readOnly,
+  onChange,
+}: {
+  value: string[];
+  readOnly: boolean;
+  onChange: (next: string[]) => void;
+}) {
+  if (readOnly && value.length === 0) return null;
+  return (
+    <div className="flex items-center gap-1.5">
+      {CONTACT_DEPT_TAGS.filter((tag) => !readOnly || value.includes(tag.v)).map((tag) => (
+        <button
+          key={tag.v}
+          type="button"
+          className="cd-chip cd-chip-sm"
+          style={{ minWidth: 74, justifyContent: "center", cursor: readOnly ? "default" : "pointer" }}
+          data-active={value.includes(tag.v)}
+          disabled={readOnly}
+          onClick={() =>
+            onChange(value.includes(tag.v) ? value.filter((v) => v !== tag.v) : [...value, tag.v])
+          }
+        >
+          {tag.l}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function ContactPaneHeader({
   title,
   canEdit,
   editing,
   onNew,
   onEdit,
+  tags,
 }: {
   title: string;
   canEdit: boolean;
   editing: boolean;
   onNew: () => void;
   onEdit: () => void;
+  tags?: ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3">
+    <div className="flex items-center justify-between gap-3 flex-wrap">
       <h4 className="text-lg font-bold cd-text">{title}</h4>
+      {tags}
       {canEdit && !editing && (
         <div className="flex items-center gap-2">
           <button type="button" onClick={onNew} className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs font-bold cd-text-muted">

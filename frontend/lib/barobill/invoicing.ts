@@ -15,6 +15,7 @@ import {
   type TaxInvoiceInput,
 } from "@/lib/barobill/tax-invoice";
 import { getBarobillConfig } from "@/lib/barobill/client";
+import { sendNotifyEmail } from "@/lib/notify/email-ses";
 
 const KST_NOW = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 19).replace("T", " ");
 const ymd = (isoDate: string) => isoDate.replace(/[^0-9]/g, "").slice(0, 8);
@@ -32,6 +33,10 @@ export interface IssuePrefillContact {
   email: string | null;
   tel: string | null;
   mobile: string | null;
+  /** 사업장 담당자에 지정된 업무 분류 태그(계약/환경/계산서 — 187). */
+  deptTypes: string[];
+  /** '계산서' 태그가 켜진 담당자 = 이 사업장의 기본 계산서 수신처. */
+  billing: boolean;
 }
 
 export interface IssuePrefill {
@@ -151,10 +156,11 @@ export async function buildIssuePrefill(contractId: string, milestoneId: string)
   const contactRows = facilityId
     ? rowsToObjects(
         await db.exec(
-          `SELECT person_name, title, email, office_phone, mobile_phone
+          `SELECT person_name, title, email, office_phone, mobile_phone,
+                  COALESCE(NULLIF(dept_types, '{}'), CASE WHEN dept_type IS NULL THEN '{}' ELSE ARRAY[dept_type] END) AS dept_types
              FROM facility_contact_people
             WHERE facility_id = $1 AND status = 'active'
-            ORDER BY (email IS NULL), person_name`,
+            ORDER BY (NOT ('billing' = ANY(COALESCE(dept_types, '{}')))), (email IS NULL), person_name`,
           [facilityId],
         ),
       )
@@ -192,13 +198,18 @@ export async function buildIssuePrefill(contractId: string, milestoneId: string)
       ceoName: String(row.representative_name ?? ""),
       addr: String(row.site_address ?? ""),
     },
-    contacts: contactRows.map((c) => ({
-      name: String(c.person_name ?? ""),
-      title: c.title ? String(c.title) : null,
-      email: c.email ? String(c.email) : null,
-      tel: c.office_phone ? String(c.office_phone) : null,
-      mobile: c.mobile_phone ? String(c.mobile_phone) : null,
-    })),
+    contacts: contactRows.map((c) => {
+      const deptTypes = Array.isArray(c.dept_types) ? (c.dept_types as unknown[]).map((v) => String(v)) : [];
+      return {
+        name: String(c.person_name ?? ""),
+        title: c.title ? String(c.title) : null,
+        email: c.email ? String(c.email) : null,
+        tel: c.office_phone ? String(c.office_phone) : null,
+        mobile: c.mobile_phone ? String(c.mobile_phone) : null,
+        deptTypes,
+        billing: deptTypes.includes("billing"),
+      };
+    }),
     existing: (await listContractInvoices(contractId)).filter((inv) => inv.milestoneId === milestoneId),
     cert: { ok: cert.ok, message: cert.message },
   };
@@ -217,7 +228,8 @@ export interface IssueParams {
   itemName: string;
   itemDescription?: string;
   remark1?: string;
-  invoicee: { facilityId?: string | null; corpNum: string; corpName: string; ceoName?: string; addr?: string; contactName?: string; email: string; tel?: string; hp?: string };
+  /** email = 대표 수신처(바로빌이 메일 발송), ccEmails = 추가 수신처(발행 후 앱이 안내 메일 발송). */
+  invoicee: { facilityId?: string | null; corpNum: string; corpName: string; ceoName?: string; addr?: string; contactName?: string; email: string; tel?: string; hp?: string; ccEmails?: string[] };
   invoicer: { corpNum: string; corpName: string; ceoName?: string; addr?: string; bizClass?: string; bizType?: string; contactName?: string; tel?: string; email: string };
   sendSms?: boolean;
   forceIssue?: boolean;
@@ -233,6 +245,16 @@ export async function issueTaxInvoice(params: IssueParams, actorUserId: string |
     throw Object.assign(new Error("공급가액 + 세액이 합계금액과 맞지 않습니다."), { status: 400 });
   }
   if (params.totalAmount <= 0) throw Object.assign(new Error("금액이 0원입니다."), { status: 400 });
+
+  // 추가 수신처 — 바로빌은 공급받는자 이메일을 1개만 받으므로(InvoiceeParty.Email),
+  // 대표 수신처 외에는 발행 성공 후 앱(SES)이 안내 메일을 따로 보낸다.
+  const ccEmails = Array.from(
+    new Set(
+      (params.invoicee.ccEmails ?? [])
+        .map((e) => String(e).trim())
+        .filter((e) => /.+@.+\..+/.test(e) && e.toLowerCase() !== params.invoicee.email.trim().toLowerCase()),
+    ),
+  );
 
   const mgtKey = newMgtKey(params.milestoneId);
   const writeDate = ymd(params.writeDate);
@@ -298,9 +320,9 @@ export async function issueTaxInvoice(params: IssueParams, actorUserId: string |
       `INSERT INTO tax_invoices
          (invoice_id, mgt_key, contract_id, milestone_id, direction, write_date,
           amount_total, tax_total, total_amount, tax_type, purpose_type,
-          invoicee_facility_id, invoicee_corp_num, invoicee_corp_name, invoicee_email,
+          invoicee_facility_id, invoicee_corp_num, invoicee_corp_name, invoicee_email, invoicee_cc_emails,
           line_items, barobill_state, issued_by, issued_at, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, 'sales', $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::jsonb, 3014, $16, $17, $17, $17)`,
+       VALUES ($1, $2, $3, $4, 'sales', $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::jsonb, 3014, $17, $18, $18, $18)`,
       [
         invoiceId,
         mgtKey,
@@ -316,6 +338,7 @@ export async function issueTaxInvoice(params: IssueParams, actorUserId: string |
         params.invoicee.corpNum,
         params.invoicee.corpName,
         params.invoicee.email,
+        ccEmails.length ? ccEmails.join(", ") : null,
         JSON.stringify(input.items),
         actorUserId,
         now,
@@ -329,6 +352,30 @@ export async function issueTaxInvoice(params: IssueParams, actorUserId: string |
       [params.milestoneId, params.writeDate, Math.round(params.totalAmount), new Date().toISOString()],
     );
   });
+
+  // 추가 수신처 안내 메일 — 발행 자체는 이미 끝났으므로 실패해도 예외로 올리지 않는다(로그만).
+  if (ccEmails.length) {
+    const total = Math.round(params.totalAmount).toLocaleString("ko-KR");
+    const result = await sendNotifyEmail({
+      to: ccEmails,
+      subject: `[세금계산서 발행] ${params.invoicer.corpName} → ${params.invoicee.corpName} ${total}원`,
+      text: [
+        `${params.invoicee.corpName} 담당자님께,`,
+        "",
+        `${params.invoicer.corpName}에서 아래와 같이 전자세금계산서를 발행했습니다.`,
+        "",
+        `  작성일자   ${params.writeDate}`,
+        `  품목       ${params.itemName}`,
+        `  공급가액   ${Math.round(params.amountTotal).toLocaleString("ko-KR")}원`,
+        `  세액       ${Math.round(params.taxTotal).toLocaleString("ko-KR")}원`,
+        `  합계금액   ${total}원`,
+        "",
+        `계산서 원본은 대표 수신처(${params.invoicee.email})로 발송된 바로빌 메일에서 확인하실 수 있습니다.`,
+        "이 메일은 계산서 수신 담당자로 함께 지정되어 발송된 안내 메일입니다.",
+      ].join("\n"),
+    });
+    if (!result.ok) console.warn("[tax-invoice] 추가 수신처 안내 메일 실패:", result.error ?? result.skipped);
+  }
 
   return { invoiceId, mgtKey };
 }

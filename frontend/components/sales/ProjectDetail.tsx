@@ -42,10 +42,19 @@ interface FacilityPerson {
   duties: string | null;
   status: string;
   deptType: string | null;
+  deptTypes?: string[];
   appointedAt: string | null;
   transferredAt: string | null;
   resignedAt: string | null;
 }
+
+/** 담당자의 대표 업무 분류(첫 태그) — 카드 배지 라벨·색에 쓴다. */
+const siteDeptTags = (p: FacilityPerson): string[] => (p.deptTypes?.length ? p.deptTypes : p.deptType ? [p.deptType] : []);
+const SITE_DEPT_PILL: Record<string, { l: string; c: string }> = {
+  contract: { l: "계약부서", c: "cd-pill-warn" },
+  env: { l: "환경부서", c: "cd-pill-success" },
+  billing: { l: "계산서", c: "cd-pill-info" },
+};
 
 const MEMBER_ROLE_PILL: Record<string, string> = {
   정: "cd-pill-info",
@@ -278,8 +287,9 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
             <div className="flex-[6] min-w-0 flex flex-col">
               <h2 className="cd-text font-extrabold text-sm" style={{ marginBottom: 12 }}>사업장 담당자</h2>
               <div className="grid grid-cols-2 gap-1.5 overflow-y-auto scrollbar-hide">
-                {people.filter((p) => p.deptType && p.status === "active").slice(0, 4).map((p) => {
+                {people.filter((p) => siteDeptTags(p).length > 0 && p.status === "active").slice(0, 4).map((p) => {
                   const on = selectedSite?.id === p.id;
+                  const pill = SITE_DEPT_PILL[siteDeptTags(p)[0]] ?? SITE_DEPT_PILL.contract;
                   return (
                     <button
                       key={p.id}
@@ -288,22 +298,22 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
                       className="flex items-center gap-2 text-left rounded-lg px-1.5 py-1 cd-row-hover min-w-0"
                       data-active={on}
                     >
-                      <span className={`cd-pill ${p.deptType === "contract" ? "cd-pill-warn" : "cd-pill-success"} shrink-0`} style={{ minWidth: 56, justifyContent: "center" }}>
-                        {p.deptType === "contract" ? "계약부서" : "환경부서"}
+                      <span className={`cd-pill ${pill.c} shrink-0`} style={{ minWidth: 56, justifyContent: "center" }}>
+                        {pill.l}
                       </span>
                       <span className="cd-text text-sm truncate">{p.personName}</span>
                       {p.title && <span className="cd-text-faint text-xs truncate">{p.title}</span>}
                     </button>
                   );
                 })}
-                {people.filter((p) => p.deptType && p.status === "active").length === 0 && <span className="cd-text-faint text-xs">등록된 담당자가 없습니다.</span>}
+                {people.filter((p) => siteDeptTags(p).length > 0 && p.status === "active").length === 0 && <span className="cd-text-faint text-xs">등록된 담당자가 없습니다.</span>}
               </div>
 
               {selectedSite && (
                 <div className="rounded-xl border cd-border-c p-3 mt-2 text-[13px] flex flex-col gap-1.5">
                   <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
                     <div className="flex gap-2 min-w-0"><span className="cd-text-faint w-10 shrink-0">성명</span><span className="cd-text truncate">{selectedSite.personName}</span></div>
-                    <div className="flex gap-2 min-w-0"><span className="cd-text-faint w-10 shrink-0">부서</span><span className="cd-text truncate">{departments.find((d) => d.id === selectedSite.departmentId)?.departmentName ?? (selectedSite.deptType === "contract" ? "계약부서" : "환경부서")}</span></div>
+                    <div className="flex gap-2 min-w-0"><span className="cd-text-faint w-10 shrink-0">부서</span><span className="cd-text truncate">{departments.find((d) => d.id === selectedSite.departmentId)?.departmentName ?? (SITE_DEPT_PILL[siteDeptTags(selectedSite)[0]]?.l ?? "미지정")}</span></div>
                     <div className="flex gap-2 min-w-0"><span className="cd-text-faint w-10 shrink-0">직급</span><span className="cd-text truncate">{selectedSite.title ?? "—"}</span></div>
                     <div className="flex gap-2 min-w-0"><span className="cd-text-faint w-10 shrink-0">전화</span><span className="cd-text truncate">{selectedSite.mobilePhone ?? selectedSite.officePhone ?? "—"}</span></div>
                   </div>
@@ -624,7 +634,7 @@ function MemberModal({ theme, projectId, snapshot, current, onClose, onSaved }: 
 
 interface SitePersonEdit {
   id: number | null;
-  deptType: string;
+  deptTypes: string[];
   personName: string;
   departmentId: number | null;
   title: string;
@@ -637,9 +647,11 @@ interface SitePersonEdit {
   resignedAt: string;
 }
 
+// 업무 분류 태그(복수) — 사업장 상세의 담당자 관리와 값이 같아야 한다(dept_types, 187).
 const SITE_DEPT_TYPES = [
   { v: "contract", l: "계약부서" },
   { v: "env", l: "환경부서" },
+  { v: "billing", l: "계산서" },
 ];
 
 function SiteContactModal({ theme, facilityId, onClose, onSaved }: {
@@ -670,9 +682,10 @@ function SiteContactModal({ theme, facilityId, onClose, onSaved }: {
         setDepts(Array.isArray(d.departments) ? d.departments : []);
         setRows(
           (Array.isArray(d.people) ? d.people : [])
-            .filter((p: FacilityPerson) => p.deptType)
+            .filter((p: FacilityPerson) => (p.deptTypes?.length ?? 0) > 0 || p.deptType)
             .map((p: FacilityPerson) => ({
-              id: p.id, deptType: p.deptType ?? "contract", personName: p.personName, departmentId: p.departmentId,
+              id: p.id, deptTypes: p.deptTypes?.length ? p.deptTypes : [p.deptType ?? "contract"],
+              personName: p.personName, departmentId: p.departmentId,
               title: p.title ?? "", officePhone: p.officePhone ?? "", mobilePhone: p.mobilePhone ?? "",
               email: p.email ?? "", duties: p.duties ?? "",
               appointedAt: p.appointedAt ?? "", transferredAt: p.transferredAt ?? "", resignedAt: p.resignedAt ?? "",
@@ -683,15 +696,15 @@ function SiteContactModal({ theme, facilityId, onClose, onSaved }: {
   }, [facilityId]);
 
   const upd = (i: number, patch: Partial<SitePersonEdit>) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
-  const addRow = () => setRows((rs) => [...rs, { id: null, deptType: "contract", personName: "", departmentId: null, title: "", officePhone: "", mobilePhone: "", email: "", duties: "", appointedAt: "", transferredAt: "", resignedAt: "" }]);
+  const addRow = () => setRows((rs) => [...rs, { id: null, deptTypes: ["contract"], personName: "", departmentId: null, title: "", officePhone: "", mobilePhone: "", email: "", duties: "", appointedAt: "", transferredAt: "", resignedAt: "" }]);
 
   const save = async () => {
     setSaving(true);
     try {
-      const others = (loaded?.people ?? []).filter((p) => !p.deptType).map((p) => ({ ...p }));
+      const others = (loaded?.people ?? []).filter((p) => !((p.deptTypes?.length ?? 0) > 0 || p.deptType)).map((p) => ({ ...p }));
       const newDepts = depts.filter((d) => d.id < 0).map((d) => ({ id: d.id, departmentName: d.departmentName }));
       const edited = rows.filter((r) => r.personName.trim()).map((r) => ({
-        id: r.id, deptType: r.deptType, personName: r.personName.trim(), departmentId: r.departmentId,
+        id: r.id, deptTypes: r.deptTypes, personName: r.personName.trim(), departmentId: r.departmentId,
         title: r.title || null, officePhone: r.officePhone || null, mobilePhone: r.mobilePhone || null,
         email: r.email || null, duties: r.duties || null,
         appointedAt: r.appointedAt || null, transferredAt: r.transferredAt || null, resignedAt: r.resignedAt || null,
@@ -735,7 +748,16 @@ function SiteContactModal({ theme, facilityId, onClose, onSaved }: {
               <div className="flex items-center justify-between">
                 <div className="flex gap-1.5">
                   {SITE_DEPT_TYPES.map((d) => (
-                    <button key={d.v} type="button" className="cd-chip cd-chip-sm" data-active={r.deptType === d.v} onClick={() => upd(i, { deptType: d.v })}>{d.l}</button>
+                    <button
+                      key={d.v}
+                      type="button"
+                      className="cd-chip cd-chip-sm"
+                      style={{ minWidth: 74, justifyContent: "center" }}
+                      data-active={r.deptTypes.includes(d.v)}
+                      onClick={() => upd(i, { deptTypes: r.deptTypes.includes(d.v) ? r.deptTypes.filter((v) => v !== d.v) : [...r.deptTypes, d.v] })}
+                    >
+                      {d.l}
+                    </button>
                   ))}
                 </div>
                 <button className="cd-text-faint" onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}><Trash2 className="w-3.5 h-3.5" /></button>

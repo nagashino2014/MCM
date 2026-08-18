@@ -22,7 +22,7 @@ interface SalesContact {
   deptType: string | null;
 }
 
-const DEPT_TYPE_LABEL: Record<string, string> = { contract: "계약", env: "환경" };
+const DEPT_TYPE_LABEL: Record<string, string> = { contract: "계약", env: "환경", billing: "계산서" };
 
 export function MobileContacts() {
   const [contacts, setContacts] = useState<SalesContact[]>([]);

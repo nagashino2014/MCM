@@ -42,7 +42,7 @@ interface ExternalContact {
   status: string;
 }
 
-const DEPT_TYPE_LABEL: Record<string, string> = { contract: "계약", env: "환경" };
+const DEPT_TYPE_LABEL: Record<string, string> = { contract: "계약", env: "환경", billing: "계산서" };
 const UNCATEGORIZED = "__none__";
 
 /** 메일 쓰기 딥링크용 수신자 토큰 — "이름 직함 <주소>, " 형태로 넘겨야 작성 화면에서 칩으로 잡힌다. */

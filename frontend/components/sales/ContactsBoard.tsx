@@ -27,8 +27,8 @@ interface SalesContact {
   updatedAt: string;
 }
 
-const DEPT_TYPE_LABEL: Record<string, string> = { contract: "계약", env: "환경" };
-const DEPT_TYPE_PILL: Record<string, string> = { contract: "cd-pill-info", env: "cd-pill-success" };
+const DEPT_TYPE_LABEL: Record<string, string> = { contract: "계약", env: "환경", billing: "계산서" };
+const DEPT_TYPE_PILL: Record<string, string> = { contract: "cd-pill-info", env: "cd-pill-success", billing: "cd-pill-warn" };
 
 function DeptTypeTag({ deptType }: { deptType: string | null }) {
   if (!deptType || !DEPT_TYPE_LABEL[deptType]) return <span className="cd-text-faint">—</span>;
@@ -116,6 +116,7 @@ export function ContactsBoard() {
           <option value="">부서유형 전체</option>
           <option value="contract">계약</option>
           <option value="env">환경</option>
+          <option value="billing">계산서</option>
         </select>
         <select className="cd-select" style={{ width: "auto" }} value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="">재직상태 전체</option>

@@ -29,6 +29,7 @@ interface PersonBody {
   duties?: string | null;
   status?: string | null;
   deptType?: string | null;
+  deptTypes?: string[] | null;
   appointedAt?: string | null;
   transferredAt?: string | null;
   resignedAt?: string | null;
@@ -55,6 +56,9 @@ const nullableText = (value: unknown): string | null => {
   const trimmed = String(value).trim();
   return trimmed || null;
 };
+
+/** 담당자 업무 분류 태그 — 187. billing = 전자세금계산서 수신 담당자. */
+const DEPT_TYPES = ["contract", "env", "billing"] as const;
 
 const numberOrNull = (value: unknown): number | null => {
   if (value == null || value === "") return null;
@@ -106,7 +110,7 @@ export async function GET(_: NextRequest, ctx: RouteContext) {
     const people = rowsToObjects(
       await db.exec(
         `SELECT id, facility_id, department_id, person_name, title, office_phone, mobile_phone,
-                email, duties, status, dept_type, appointed_at, transferred_at, resigned_at, created_at, updated_at
+                email, duties, status, dept_type, dept_types, appointed_at, transferred_at, resigned_at, created_at, updated_at
            FROM facility_contact_people
           WHERE facility_id = $1
           ORDER BY person_name ASC, id ASC`,
@@ -124,6 +128,13 @@ export async function GET(_: NextRequest, ctx: RouteContext) {
       duties: row.duties != null ? String(row.duties) : null,
       status: row.status != null ? String(row.status) : "active",
       deptType: row.dept_type != null ? String(row.dept_type) : null,
+      // 업무 분류(계약/환경/계산서) 복수 태그 — 187 이전 데이터는 dept_type 단일 값으로 채운다.
+      deptTypes:
+        Array.isArray(row.dept_types) && row.dept_types.length > 0
+          ? (row.dept_types as unknown[]).map((v) => String(v))
+          : row.dept_type != null
+            ? [String(row.dept_type)]
+            : [],
       appointedAt: row.appointed_at != null ? String(row.appointed_at) : null,
       transferredAt: row.transferred_at != null ? String(row.transferred_at) : null,
       resignedAt: row.resigned_at != null ? String(row.resigned_at) : null,
@@ -183,6 +194,10 @@ export async function PUT(req: NextRequest, ctx: RouteContext) {
         email: nullableText(item.email),
         duties: nullableText(item.duties),
         status: nullableText(item.status) ?? "active",
+        // deptTypes 를 보내지 않는 저장 흐름(구 화면)에서는 dept_type 단일 값을 잃지 않도록 승격한다.
+        deptTypes: DEPT_TYPES.filter((t) =>
+          (item.deptTypes ?? (item.deptType ? [item.deptType] : [])).includes(t)
+        ) as string[],
         deptType: nullableText(item.deptType),
         appointedAt: nullableText(item.appointedAt),
         transferredAt: nullableText(item.transferredAt),
@@ -258,11 +273,11 @@ export async function PUT(req: NextRequest, ctx: RouteContext) {
         const inserted = await db.exec(
           `INSERT INTO facility_contact_people
             (facility_id, department_id, person_name, title, office_phone, mobile_phone, email,
-             duties, status, dept_type, appointed_at, transferred_at, resigned_at,
+             duties, status, dept_type, dept_types, appointed_at, transferred_at, resigned_at,
              card_storage_provider, card_storage_bucket, card_storage_key, card_public_path,
              card_ocr_text, card_parsed_json, card_captured_at, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-                   $14, $15, $16, $17, $18, $19, $20, $21, $22)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+                   $15, $16, $17, $18, $19, $20, $21, $22, $23)
            RETURNING id`,
           [
             id,
@@ -274,7 +289,9 @@ export async function PUT(req: NextRequest, ctx: RouteContext) {
             person.email,
             person.duties,
             person.status,
-            person.deptType,
+            // dept_type 은 기존 조회 호환용 — 배열의 첫 값과 동기화한다(187).
+            person.deptTypes[0] ?? person.deptType,
+            person.deptTypes,
             person.appointedAt,
             person.transferredAt,
             person.resignedAt,

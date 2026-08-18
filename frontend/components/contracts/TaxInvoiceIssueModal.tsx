@@ -14,6 +14,9 @@ interface Contact {
   email: string | null;
   tel: string | null;
   mobile: string | null;
+  /** 사업장 담당자 업무 분류 태그(187) — 'billing'이 계산서 수신 담당자. */
+  deptTypes?: string[];
+  billing?: boolean;
 }
 
 interface ExistingInvoice {
@@ -45,6 +48,14 @@ interface Prefill {
 
 const fmt = (n: number) => Math.round(n).toLocaleString("ko-KR");
 const digits = (s: string) => s.replace(/[^0-9]/g, "");
+/** 사업자번호 표시 — 입력 중에도 OOO-OO-OOOOO 로 자동 구분한다(저장·전송은 숫자만). */
+const fmtCorpNum = (value: string) => {
+  const d = digits(value).slice(0, 10);
+  if (d.length <= 3) return d;
+  if (d.length <= 5) return `${d.slice(0, 3)}-${d.slice(3)}`;
+  return `${d.slice(0, 3)}-${d.slice(3, 5)}-${d.slice(5)}`;
+};
+const isEmail = (value: string) => /.+@.+\..+/.test(value.trim());
 
 export default function TaxInvoiceIssueModal({
   contractId,
@@ -78,6 +89,10 @@ export default function TaxInvoiceIssueModal({
   const [invoiceeCeo, setInvoiceeCeo] = useState("");
   const [invoiceeAddr, setInvoiceeAddr] = useState("");
   const [invoicerEmail, setInvoicerEmail] = useState("");
+  // 추가 수신처 — 대표 수신처(email) 외에 계산서 발송 대상으로 고른 담당자들의 이메일.
+  // 바로빌은 공급받는자 이메일을 1개만 받으므로, 추가분은 발행 후 앱이 안내 메일을 보낸다.
+  const [ccEmails, setCcEmails] = useState<string[]>([]);
+  const [ccInput, setCcInput] = useState("");
 
   useEffect(() => {
     let alive = true;
@@ -97,12 +112,15 @@ export default function TaxInvoiceIssueModal({
         setInvoiceeCeo(p.invoicee.ceoName);
         setInvoiceeAddr(p.invoicee.addr);
         setInvoicerEmail(p.invoicer.email);
-        const first = p.contacts.find((c) => c.email);
-        if (first) {
-          setEmail(first.email ?? "");
-          setContactName(first.name);
-          setContactTel(first.tel ?? first.mobile ?? "");
+        // 사업장 담당자에 '계산서' 태그가 지정돼 있으면 그 담당자가 기본 수신처다(첫 명이 대표, 나머지는 추가).
+        const billing = p.contacts.filter((c) => c.billing && c.email);
+        const primary = billing[0] ?? p.contacts.find((c) => c.email);
+        if (primary) {
+          setEmail(primary.email ?? "");
+          setContactName(primary.name);
+          setContactTel(primary.tel ?? primary.mobile ?? "");
         }
+        setCcEmails(billing.filter((c) => c.email && c.email !== primary?.email).map((c) => c.email as string));
       })
       .catch((e) => {
         if (alive) setError((e as Error).message);
@@ -127,11 +145,23 @@ export default function TaxInvoiceIssueModal({
     return { supply: input, tax, total: input + tax };
   }, [supplyInput, amountBase, taxType]);
 
+  /** 대표 수신처 지정 — 바로빌이 계산서 메일을 보내는 주소. */
   const pickContact = useCallback((c: Contact) => {
     setEmail(c.email ?? "");
     setContactName(c.name);
     setContactTel(c.tel ?? c.mobile ?? "");
+    setCcEmails((prev) => prev.filter((e) => e !== c.email));
   }, []);
+
+  /** 추가 수신처 토글 — 대표 수신처와 중복되지 않게 관리한다. */
+  const toggleCc = useCallback(
+    (address: string) => {
+      const value = address.trim();
+      if (!value) return;
+      setCcEmails((prev) => (prev.includes(value) ? prev.filter((e) => e !== value) : [...prev, value]));
+    },
+    [],
+  );
 
   const issue = async () => {
     if (!prefill) return;
@@ -162,6 +192,7 @@ export default function TaxInvoiceIssueModal({
             contactName,
             tel: contactTel,
             email,
+            ccEmails: ccEmails.filter((e) => e !== email),
           },
           invoicer: { ...prefill.invoicer, corpNum: digits(prefill.invoicer.corpNum), email: invoicerEmail },
         }),
@@ -245,7 +276,7 @@ export default function TaxInvoiceIssueModal({
                   <div className="text-xs font-semibold mb-2">공급자 (우리 회사)</div>
                   <div className="text-xs cd-text-muted space-y-0.5">
                     <div className="cd-text font-medium">{prefill.invoicer.corpName}</div>
-                    <div>사업자번호 {prefill.invoicer.corpNum || "—"}</div>
+                    <div>사업자번호 {fmtCorpNum(prefill.invoicer.corpNum) || "—"}</div>
                     <div>대표 {prefill.invoicer.ceoName || "—"}</div>
                     <div className="truncate" title={prefill.invoicer.addr}>{prefill.invoicer.addr || "—"}</div>
                   </div>
@@ -264,7 +295,13 @@ export default function TaxInvoiceIssueModal({
                     </label>
                     <label>
                       <span className="text-[11px] cd-text-faint">사업자번호</span>
-                      <input className="cd-input mt-0.5" value={invoiceeCorpNum} onChange={(e) => setInvoiceeCorpNum(e.target.value)} placeholder="10자리" />
+                      <input
+                        className="cd-input mt-0.5"
+                        value={fmtCorpNum(invoiceeCorpNum)}
+                        onChange={(e) => setInvoiceeCorpNum(digits(e.target.value).slice(0, 10))}
+                        inputMode="numeric"
+                        placeholder="000-00-00000"
+                      />
                     </label>
                     <label>
                       <span className="text-[11px] cd-text-faint">대표자</span>
@@ -278,27 +315,48 @@ export default function TaxInvoiceIssueModal({
                 </div>
               </div>
 
-              {/* 수신처 */}
+              {/* 수신처 — 사업장 담당자('계산서' 태그)에서 불러온다. 대표 1명 + 추가 수신처(복수). */}
               <div className="rounded-xl border cd-border-c p-3">
-                <div className="text-xs font-semibold mb-2">계산서 수신처</div>
-                {prefill.contacts.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mb-2">
-                    {prefill.contacts.map((c, i) => (
-                      <button
-                        key={`${c.name}:${i}`}
-                        type="button"
-                        className="rounded-full border cd-border-c px-2.5 py-1 text-[11px] hover:cd-soft-primary"
-                        onClick={() => pickContact(c)}
-                        disabled={!c.email}
-                        title={c.email ?? "이메일 없음"}
-                      >
-                        {c.name}
-                        {c.title ? ` ${c.title}` : ""}
-                        {!c.email && " (이메일 없음)"}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="text-xs font-semibold">계산서 수신처</div>
+                  <div className="text-[11px] cd-text-faint">사업장 상세 &gt; 담당자에 &lsquo;계산서&rsquo; 태그를 지정하면 기본 수신처가 됩니다.</div>
+                </div>
+                <div className="rounded-xl border cd-border-c max-h-40 overflow-y-auto mb-2">
+                  {prefill.contacts.length === 0 && (
+                    <div className="px-2.5 py-3 text-[11px] cd-text-faint">등록된 사업장 담당자가 없습니다. 아래에 직접 입력해 발행할 수 있습니다.</div>
+                  )}
+                  {prefill.contacts.map((c, i) => {
+                    const isPrimary = Boolean(c.email) && c.email === email;
+                    const isCc = c.email != null && ccEmails.includes(c.email);
+                    return (
+                      <div key={`${c.name}:${i}`} className="flex items-center gap-2 px-2.5 py-1.5 text-[11px] border-b cd-border-c last:border-b-0">
+                        <input
+                          type="checkbox"
+                          checked={isPrimary || isCc}
+                          disabled={!c.email || isPrimary}
+                          onChange={() => c.email && toggleCc(c.email)}
+                          title={isPrimary ? "대표 수신처는 해제할 수 없습니다" : "계산서 발송 대상에 추가"}
+                        />
+                        <span className="cd-text font-medium">{c.name}</span>
+                        {c.title && <span className="cd-text-muted">{c.title}</span>}
+                        {c.billing && <span className="rounded-full px-1.5 py-0.5 cd-tint-primary">계산서</span>}
+                        <span className="cd-text-faint truncate flex-1" title={c.email ?? ""}>{c.email ?? "이메일 없음"}</span>
+                        {isPrimary ? (
+                          <span className="rounded-full border cd-border-c px-2 py-0.5 cd-text-muted">대표</span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="rounded-full border cd-border-c px-2 py-0.5 hover:cd-soft-primary disabled:opacity-40"
+                            disabled={!c.email}
+                            onClick={() => pickContact(c)}
+                          >
+                            대표로
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
                 <div className="grid grid-cols-3 gap-2">
                   <label>
                     <span className="text-[11px] cd-text-faint">담당자</span>
@@ -309,9 +367,56 @@ export default function TaxInvoiceIssueModal({
                     <input className="cd-input mt-0.5" value={contactTel} onChange={(e) => setContactTel(e.target.value)} />
                   </label>
                   <label>
-                    <span className="text-[11px] cd-text-faint">이메일(필수)</span>
+                    <span className="text-[11px] cd-text-faint">이메일(필수) · 대표 수신처</span>
                     <input className="cd-input mt-0.5" value={email} onChange={(e) => setEmail(e.target.value)} />
                   </label>
+                </div>
+
+                {/* 추가 수신처 — 바로빌 메일은 대표 1명에게만 나가고, 이쪽은 발행 직후 앱이 안내 메일을 보낸다. */}
+                <div className="mt-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[11px] cd-text-faint">추가 수신처</span>
+                    {ccEmails.filter((e) => e !== email).map((address) => (
+                      <span key={address} className="inline-flex items-center gap-1 rounded-full border cd-border-c px-2 py-0.5 text-[11px]">
+                        {address}
+                        <button type="button" className="cd-text-faint" onClick={() => toggleCc(address)}>
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                    {ccEmails.filter((e) => e !== email).length === 0 && <span className="text-[11px] cd-text-faint">없음</span>}
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-1.5">
+                    <input
+                      className="cd-input"
+                      style={{ maxWidth: 260 }}
+                      value={ccInput}
+                      placeholder="목록에 없는 주소 직접 추가"
+                      onChange={(e) => setCcInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key !== "Enter" || !isEmail(ccInput)) return;
+                        e.preventDefault();
+                        toggleCc(ccInput);
+                        setCcInput("");
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="rounded-xl border cd-border-c px-2.5 py-1.5 text-[11px] disabled:opacity-40"
+                      disabled={!isEmail(ccInput)}
+                      onClick={() => {
+                        toggleCc(ccInput);
+                        setCcInput("");
+                      }}
+                    >
+                      추가
+                    </button>
+                  </div>
+                  {ccEmails.filter((e) => e !== email).length > 0 && (
+                    <p className="text-[11px] cd-text-faint mt-1">
+                      계산서 원본 메일은 바로빌이 대표 수신처로 보내고, 추가 수신처에는 발행 직후 발행 안내 메일이 따로 나갑니다.
+                    </p>
+                  )}
                 </div>
               </div>
 

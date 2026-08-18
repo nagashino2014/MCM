@@ -134,6 +134,30 @@ export async function listRecentInvoices(limit = 100): Promise<TaxInvoiceListRow
   }));
 }
 
+/**
+ * 단계 비중(%) — amount_ratio 는 0~1 비율이지만 실데이터 대부분이 비어 있어(2026-08-18 실측)
+ * 단계 금액 ÷ 계약 총액을 우선 쓴다. 소수 둘째 자리까지만 남긴다(30 / 33.33).
+ */
+function stageRatioPct(row: Record<string, unknown>): number | null {
+  const contractAmount = Number(row.contract_amount ?? 0);
+  const stageAmount = Number(row.invoice_amount ?? row.amount ?? 0);
+  const pct =
+    contractAmount > 0 && stageAmount > 0
+      ? (stageAmount / contractAmount) * 100
+      : row.amount_ratio != null
+        ? Number(row.amount_ratio) * 100
+        : NaN;
+  if (!Number.isFinite(pct) || pct <= 0) return null;
+  return Math.round(pct * 100) / 100;
+}
+
+/** 비고 표기 — "준공금 : 100%". 비중을 못 구하면 단계명만 남긴다. */
+function stageRemark(stageLabel: string, pct: number | null): string {
+  const label = stageLabel.trim();
+  if (!label) return "";
+  return pct == null ? label : `${label} : ${pct}%`;
+}
+
 /** 발행 모달 프리필 — 공급자는 회사 프로필, 공급받는자는 계약 발주처(facilities) + 담당자 연락처. */
 export async function buildIssuePrefill(contractId: string, milestoneId: string): Promise<IssuePrefill> {
   const db = await getDb();
@@ -227,6 +251,11 @@ export interface IssueParams {
   purposeType?: number;
   itemName: string;
   itemDescription?: string;
+  /**
+   * 품목 행 — 홈택스처럼 여러 줄로 발행할 때 쓴다(품목명·규격·수량·단가·공급가액).
+   * 미지정이면 itemName + 총 공급가액으로 1행을 만든다(기존 단일 품목 동작).
+   */
+  items?: Array<{ name: string; spec?: string; qty?: number; unitPrice?: number; amount: number; tax?: number }>;
   remark1?: string;
   /** email = 대표 수신처(바로빌이 메일 발송), ccEmails = 추가 수신처(발행 후 앱이 안내 메일 발송). */
   invoicee: { facilityId?: string | null; corpNum: string; corpName: string; ceoName?: string; addr?: string; contactName?: string; email: string; tel?: string; hp?: string; ccEmails?: string[] };
@@ -245,6 +274,13 @@ export async function issueTaxInvoice(params: IssueParams, actorUserId: string |
     throw Object.assign(new Error("공급가액 + 세액이 합계금액과 맞지 않습니다."), { status: 400 });
   }
   if (params.totalAmount <= 0) throw Object.assign(new Error("금액이 0원입니다."), { status: 400 });
+  const lines = (params.items ?? []).filter((it) => it.name.trim() && Math.round(it.amount) !== 0);
+  if (lines.length) {
+    const lineSupply = lines.reduce((acc, it) => acc + Math.round(it.amount), 0);
+    if (lineSupply !== Math.round(params.amountTotal)) {
+      throw Object.assign(new Error("품목 공급가액 합계가 총 공급가액과 맞지 않습니다."), { status: 400 });
+    }
+  }
 
   // 추가 수신처 — 바로빌은 공급받는자 이메일을 1개만 받으므로(InvoiceeParty.Email),
   // 대표 수신처 외에는 발행 성공 후 앱(SES)이 안내 메일을 따로 보낸다.
@@ -294,17 +330,34 @@ export async function issueTaxInvoice(params: IssueParams, actorUserId: string |
     taxTotal: tax,
     totalAmount: total,
     remark1: params.remark1,
-    items: [
-      {
-        purchaseExpiry: supplyDate,
-        name: params.itemName.slice(0, 100),
-        chargeableUnit: "1",
-        unitPrice: amount,
-        amount,
-        tax,
-        description: params.itemDescription?.slice(0, 100),
-      },
-    ],
+    items: lines.length
+      ? lines.map((it, i) => {
+          // 행 세액은 반올림 오차가 생기므로 마지막 행에서 총 세액과 맞춘다(바로빌은 합계 일치를 본다).
+          const rowTax =
+            i === lines.length - 1
+              ? Math.round(params.taxTotal) - lines.slice(0, -1).reduce((acc, r) => acc + Math.round(r.tax ?? 0), 0)
+              : Math.round(it.tax ?? 0);
+          return {
+            purchaseExpiry: supplyDate,
+            name: it.name.trim().slice(0, 100),
+            chargeableUnit: String(it.qty ?? 1),
+            unitPrice: String(Math.round(it.unitPrice ?? it.amount)),
+            amount: String(Math.round(it.amount)),
+            tax: String(rowTax),
+            description: (it.spec ?? "").trim().slice(0, 100) || undefined,
+          };
+        })
+      : [
+          {
+            purchaseExpiry: supplyDate,
+            name: params.itemName.slice(0, 100),
+            chargeableUnit: "1",
+            unitPrice: amount,
+            amount,
+            tax,
+            description: params.itemDescription?.slice(0, 100),
+          },
+        ],
   };
 
   await registAndIssueTaxInvoice(input, {

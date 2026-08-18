@@ -6,7 +6,7 @@
 // - 금액은 단계 금액이 공급가액인지 합계인지 사용자가 고른다(계약 데이터 관례가 섞여 있어 자동 판정하지 않음).
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ExternalLink, FileText, Loader2, X } from "lucide-react";
+import { AlertTriangle, ExternalLink, FileText, Loader2, Plus, Trash2, X } from "lucide-react";
 
 interface Contact {
   name: string;
@@ -18,6 +18,17 @@ interface Contact {
   deptTypes?: string[];
   billing?: boolean;
 }
+
+/** 품목 행 — 홈택스 발행 화면과 같은 축(품목명·규격·수량·단가·공급가액). 금액은 문자열(숫자만) 보관. */
+interface LineItem {
+  name: string;
+  spec: string;
+  qty: string;
+  unitPrice: string;
+  amount: string;
+}
+
+const emptyLine = (): LineItem => ({ name: "", spec: "", qty: "1", unitPrice: "", amount: "" });
 
 interface ExistingInvoice {
   invoiceId: string;
@@ -35,6 +46,8 @@ interface Prefill {
   contractTitle: string;
   stageLabel: string;
   stageAmount: number;
+  contractAmount: number;
+  defaultRemark: string;
   writeDate: string;
   invoicer: {
     corpNum: string; corpName: string; ceoName: string; addr: string;
@@ -75,8 +88,9 @@ export default function TaxInvoiceIssueModal({
 
   // 편집 상태
   const [writeDate, setWriteDate] = useState("");
-  const [amountBase, setAmountBase] = useState<"supply" | "total">("supply"); // 단계 금액의 성격
-  const [supplyInput, setSupplyInput] = useState("");
+  const [amountBase, setAmountBase] = useState<"supply" | "total">("supply"); // 입력 금액의 성격
+  // 품목 행 — 보통 1행(계약 단계 = 청구 1건)이지만, 발주처가 요구하면 홈택스처럼 여러 줄로 발행한다.
+  const [lineItems, setLineItems] = useState<LineItem[]>([emptyLine()]);
   const [taxType, setTaxType] = useState(1);
   const [purposeType, setPurposeType] = useState(2);
   const [itemName, setItemName] = useState("");
@@ -105,8 +119,11 @@ export default function TaxInvoiceIssueModal({
         const p: Prefill = d.prefill;
         setPrefill(p);
         setWriteDate(p.writeDate);
-        setSupplyInput(String(Math.round(p.stageAmount)));
-        setItemName(`${p.contractTitle} ${p.stageLabel}`.trim());
+        const stageAmount = String(Math.round(p.stageAmount));
+        setLineItems([{ name: p.contractTitle.trim(), spec: "", qty: "1", unitPrice: stageAmount, amount: stageAmount }]);
+        setItemName(p.contractTitle.trim());
+        // 대금 지급 단계는 품목이 아니라 비고에 "단계명 : 비중%" 으로 적는다.
+        setRemark1(p.defaultRemark);
         setInvoiceeCorpNum(p.invoicee.corpNum);
         setInvoiceeCorpName(p.invoicee.corpName);
         setInvoiceeCeo(p.invoicee.ceoName);
@@ -133,17 +150,37 @@ export default function TaxInvoiceIssueModal({
     };
   }, [contractId, milestoneId]);
 
-  // 금액 분해 — 면세(3)는 세액 0.
+  // 금액 분해 — 행별로 공급가액/세액을 구하고 합산한다. 면세(3)는 세액 0.
   const amounts = useMemo(() => {
-    const input = Number(digits(supplyInput) || 0);
-    if (taxType === 3) return { supply: input, tax: 0, total: input };
-    if (amountBase === "total") {
-      const supply = Math.round(input / 1.1);
-      return { supply, tax: input - supply, total: input };
-    }
-    const tax = Math.round(input * 0.1);
-    return { supply: input, tax, total: input + tax };
-  }, [supplyInput, amountBase, taxType]);
+    const rows = lineItems.map((li) => {
+      const input = Number(digits(li.amount) || 0);
+      if (taxType === 3) return { supply: input, tax: 0 };
+      if (amountBase === "total") {
+        const supply = Math.round(input / 1.1);
+        return { supply, tax: input - supply };
+      }
+      return { supply: input, tax: Math.round(input * 0.1) };
+    });
+    const supply = rows.reduce((acc, r) => acc + r.supply, 0);
+    const tax = rows.reduce((acc, r) => acc + r.tax, 0);
+    return { supply, tax, total: supply + tax, rows };
+  }, [lineItems, amountBase, taxType]);
+
+  /** 행 편집 — 수량·단가를 고치면 공급가액을 자동으로 다시 계산한다(직접 입력한 값은 그대로 둔다). */
+  const updateLine = useCallback((index: number, patch: Partial<LineItem>) => {
+    setLineItems((prev) =>
+      prev.map((li, i) => {
+        if (i !== index) return li;
+        const next = { ...li, ...patch };
+        if (patch.qty !== undefined || patch.unitPrice !== undefined) {
+          const qty = Number(digits(next.qty) || 0);
+          const unitPrice = Number(digits(next.unitPrice) || 0);
+          if (qty > 0 && unitPrice > 0) next.amount = String(qty * unitPrice);
+        }
+        return next;
+      }),
+    );
+  }, []);
 
   /** 대표 수신처 지정 — 바로빌이 계산서 메일을 보내는 주소. */
   const pickContact = useCallback((c: Contact) => {
@@ -181,7 +218,18 @@ export default function TaxInvoiceIssueModal({
           totalAmount: amounts.total,
           taxType,
           purposeType,
-          itemName,
+          itemName: lineItems[0]?.name.trim() || itemName,
+          items: lineItems
+            .map((li, i) => ({ li, row: amounts.rows[i] }))
+            .filter(({ li }) => li.name.trim() && Number(digits(li.amount) || 0) > 0)
+            .map(({ li, row }) => ({
+              name: li.name.trim(),
+              spec: li.spec.trim() || undefined,
+              qty: Number(digits(li.qty) || 1),
+              unitPrice: Number(digits(li.unitPrice) || 0) || undefined,
+              amount: row?.supply ?? 0,
+              tax: row?.tax ?? 0,
+            })),
           remark1,
           invoicee: {
             facilityId: prefill.invoicee.facilityId,
@@ -219,8 +267,18 @@ export default function TaxInvoiceIssueModal({
   };
 
   const liveExisting = (prefill?.existing ?? []).filter((e) => !e.canceledAt);
+  // 입력이 시작된 행은 품목명·금액이 모두 채워져야 발행한다(반쯤 적힌 행이 조용히 빠지지 않게).
+  const filledLines = lineItems.filter((li) => li.name.trim() || digits(li.amount));
+  const validLines = filledLines.filter((li) => li.name.trim() && Number(digits(li.amount) || 0) > 0);
   const canIssue =
-    !busy && !loading && Boolean(prefill?.cert.ok) && amounts.total > 0 && digits(invoiceeCorpNum).length === 10 && Boolean(email) && Boolean(itemName.trim());
+    !busy &&
+    !loading &&
+    Boolean(prefill?.cert.ok) &&
+    amounts.total > 0 &&
+    digits(invoiceeCorpNum).length === 10 &&
+    Boolean(email) &&
+    validLines.length > 0 &&
+    validLines.length === filledLines.length;
 
   return (
     <div className="fixed inset-0 z-[95] flex items-center justify-center p-4">
@@ -451,25 +509,72 @@ export default function TaxInvoiceIssueModal({
                     </select>
                   </label>
                 </div>
-                <label className="block">
-                  <span className="text-[11px] cd-text-faint">품목</span>
-                  <input className="cd-input mt-0.5" value={itemName} onChange={(e) => setItemName(e.target.value)} />
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <label>
-                    <span className="text-[11px] cd-text-faint">금액 입력 (단계 금액 {fmt(prefill.stageAmount)}원)</span>
-                    <input
-                      className="cd-input mt-0.5 text-right font-mono"
-                      inputMode="numeric"
-                      value={supplyInput ? Number(digits(supplyInput)).toLocaleString("ko-KR") : ""}
-                      onChange={(e) => setSupplyInput(digits(e.target.value))}
-                    />
-                  </label>
-                  <label>
-                    <span className="text-[11px] cd-text-faint">비고</span>
-                    <input className="cd-input mt-0.5" value={remark1} onChange={(e) => setRemark1(e.target.value)} placeholder="선택" />
-                  </label>
+                {/* 품목 — 보통 1행이면 충분하지만, 홈택스처럼 여러 줄로 나눠 발행할 수도 있다. */}
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] cd-text-faint">품목 (단계 금액 {fmt(prefill.stageAmount)}원)</span>
+                    <button
+                      type="button"
+                      className="rounded-xl border cd-border-c px-2.5 py-1 text-[11px] inline-flex items-center gap-1"
+                      onClick={() => setLineItems((prev) => [...prev, emptyLine()])}
+                    >
+                      <Plus className="w-3 h-3" /> 품목 추가
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-[1fr_100px_64px_110px_120px_24px] gap-1.5 mt-1 text-[11px] cd-text-faint">
+                    <span>품목명</span>
+                    <span>규격</span>
+                    <span className="text-right">수량</span>
+                    <span className="text-right">단가</span>
+                    <span className="text-right">{amountBase === "total" ? "합계금액" : "공급가액"}</span>
+                    <span />
+                  </div>
+                  {lineItems.map((li, i) => (
+                    <div key={i} className="grid grid-cols-[1fr_100px_64px_110px_120px_24px] gap-1.5 mt-1 items-center">
+                      <input className="cd-input" value={li.name} onChange={(e) => updateLine(i, { name: e.target.value })} placeholder="품목명" />
+                      <input className="cd-input" value={li.spec} onChange={(e) => updateLine(i, { spec: e.target.value })} placeholder="선택" />
+                      <input
+                        className="cd-input text-right font-mono"
+                        inputMode="numeric"
+                        value={li.qty}
+                        onChange={(e) => updateLine(i, { qty: digits(e.target.value) })}
+                      />
+                      <input
+                        className="cd-input text-right font-mono"
+                        inputMode="numeric"
+                        value={li.unitPrice ? Number(digits(li.unitPrice)).toLocaleString("ko-KR") : ""}
+                        onChange={(e) => updateLine(i, { unitPrice: digits(e.target.value) })}
+                      />
+                      <input
+                        className="cd-input text-right font-mono"
+                        inputMode="numeric"
+                        value={li.amount ? Number(digits(li.amount)).toLocaleString("ko-KR") : ""}
+                        onChange={(e) => updateLine(i, { amount: digits(e.target.value) })}
+                      />
+                      {lineItems.length > 1 ? (
+                        <button
+                          type="button"
+                          className="cd-text-faint hover:cd-text"
+                          title="이 품목 삭제"
+                          onClick={() => setLineItems((prev) => prev.filter((_, j) => j !== i))}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      ) : (
+                        <span />
+                      )}
+                    </div>
+                  ))}
+                  {lineItems.length > 1 && (
+                    <p className="text-[11px] cd-text-faint mt-1">
+                      품목이 여러 줄이면 각 행의 금액을 합산해 발행합니다. 세액 반올림 잔차는 마지막 행에서 보정됩니다.
+                    </p>
+                  )}
                 </div>
+                <label className="block">
+                  <span className="text-[11px] cd-text-faint">비고 (지급 단계 · 계약금액 대비 비중)</span>
+                  <input className="cd-input mt-0.5" value={remark1} onChange={(e) => setRemark1(e.target.value)} placeholder="예) 준공금 : 100%" />
+                </label>
                 <div className="flex items-center gap-4 text-xs pt-1">
                   <span>
                     <span className="cd-text-muted mr-1">공급가액</span>

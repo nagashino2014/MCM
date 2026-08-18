@@ -10,7 +10,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
-import { normalizeRemitter } from "@/lib/barobill/sync";
+import { normalizeRemitter, bankDedupKey, cardDedupKey } from "@/lib/barobill/sync";
 import { parseStatementWorkbook, maskedCardParts, SUPPORTED_PROFILES, type ParsedStatement } from "@/lib/finance/statement-import";
 import { createHash } from "node:crypto";
 
@@ -145,7 +145,7 @@ export async function POST(req: NextRequest) {
 
       await withDbWrite(async (tx) => {
         for (const r of rows) {
-          const dedupKey = `xls:${onlyDigits(target.no)}:${r.txnAt}:${r.direction}:${r.amount}`;
+          const dedupKey = bankDedupKey(target.no, r.txnAt, r.direction, r.amount, r.balanceAfter);
           const dup = rowsToObjects(
             await tx.exec(
               `SELECT 1 AS x FROM bank_transactions
@@ -214,7 +214,7 @@ export async function POST(req: NextRequest) {
 
       await withDbWrite(async (tx) => {
         for (const r of rows) {
-          const dedupKey = `xls:${onlyDigits(target.no) || target.id}:${r.approvalNum}:${r.approvedAt}`;
+          const dedupKey = cardDedupKey(target.no || target.id, r.approvalNum, r.approvedAt, r.amountTotal);
           const dup = rowsToObjects(
             await tx.exec(
               `SELECT 1 AS x FROM card_transactions

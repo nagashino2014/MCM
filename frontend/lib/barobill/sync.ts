@@ -20,6 +20,27 @@ const hashId = (prefix: string, source: string) =>
   `${prefix}-${createHash("sha256").update(source).digest("hex").slice(0, 12)}`;
 
 // 입금자명 정규화 — 실측: 전각문자 혼입("（주）영흥산업환경") → NFKC 선행 후 기존 상호 정규화 재사용
+/**
+ * 원장 중복 방지 키 — 바로빌 TransRefKey/HistoryKey 는 "거래일시 + 바로빌 내부 시퀀스"라
+ * 재수집할 때마다 값이 바뀐다(2026-08-18 실측: 같은 거래가 08-15 ...0022960011 / 08-17 ...0022964061).
+ * 그 값을 키로 쓰면 기간을 바꿔 재수집할 때 전량 신규로 적재되므로, 거래 자체의 자연키를 쓴다.
+ * 계좌는 잔액까지 넣는다 — 같은 시각·같은 금액이 실제로 두 건이면 잔액이 달라지기 때문이다(마이그 189).
+ */
+export function bankDedupKey(
+  accountNo: string,
+  txnAt: string,
+  direction: string,
+  amount: number,
+  balanceAfter: number | null,
+): string {
+  const bal = balanceAfter == null ? "x" : String(Math.round(balanceAfter));
+  return `nk:${accountNo}:${txnAt}:${direction}:${Math.round(amount)}:${bal}`;
+}
+
+export function cardDedupKey(cardNum: string, approvalNum: string | null, approvedAt: string, amountTotal: number): string {
+  return `nk:${cardNum}:${approvalNum ?? ""}:${approvedAt}:${Math.round(amountTotal)}`;
+}
+
 export function normalizeRemitter(raw: string): string {
   const nfkc = (raw || "").normalize("NFKC").trim();
   return normalizeCompanyName(nfkc) ?? "";
@@ -129,8 +150,8 @@ export async function syncBankAccount(
   let inserted = 0;
   await withDbWrite(async (tx) => {
     for (const log of logs) {
-      const dedupKey = `${accountNo}:${log.transRefKey}`;
       const amount = log.direction === "in" ? log.deposit : log.direction === "out" ? log.withdraw : log.deposit || log.withdraw;
+      const dedupKey = bankDedupKey(accountNo, log.transDT, log.direction, amount, log.balance);
       const before = rowsToObjects(await tx.exec(`SELECT 1 AS x FROM bank_transactions WHERE dedup_key = $1`, [dedupKey]));
       if (before.length) continue;
       await tx.run(
@@ -178,7 +199,7 @@ export async function syncCard(
   let inserted = 0;
   await withDbWrite(async (tx) => {
     for (const p of purchases) {
-      const dedupKey = `${cardNum}:${p.historyKey}`;
+      const dedupKey = cardDedupKey(cardNum, p.approvalNum, p.approvedAt, p.amountTotal);
       // 실측: BC·롯데 모두 Amount(공급가액)=0 → 총액-세액 역산. 면세·해외는 tax=0 → 전액 공급가액.
       const supply = p.amountTotal - p.taxAmount - p.serviceCharge;
       const result = rowsToObjects(

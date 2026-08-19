@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { invalidateTickCache, TICK_CACHE_FILE_RETENTION } from "@/lib/tick-cache";
 import {
   getRetentionPolicies,
   saveRetentionPolicies,
@@ -38,6 +39,7 @@ export async function PUT(req: NextRequest) {
       policies[tier] = val as RetentionValue;
     }
     await saveRetentionPolicies(policies, ctx.userId);
+    invalidateTickCache(TICK_CACHE_FILE_RETENTION); // 다음 삭제 틱이 최신 정책을 읽도록
     return NextResponse.json({ ok: true, policies });
   } catch (err) {
     return authErrorToResponse(err);

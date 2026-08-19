@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { recordAuditLog } from "@/lib/auth/audit";
 import { getS3Client } from "@/lib/storage/logo-storage";
 import { readContractDocument } from "@/lib/storage/contract-document-storage";
 import { attachmentContentType } from "@/lib/approval/attachments";
@@ -13,12 +14,21 @@ export const dynamic = "force-dynamic";
 // 브라우저가 렌더하는 형식(pdf·이미지)은 새 탭에서 열리고, 그 외는 다운로드된다.
 export async function GET(req: NextRequest) {
   try {
-    await requirePermission("files.manage");
+    const ctx = await requirePermission("files.manage");
     const id = req.nextUrl.searchParams.get("id") ?? "";
     const target = await resolveLibraryFile(id);
     if (!target) {
       return NextResponse.json({ error: "파일을 찾을 수 없습니다." }, { status: 404 });
     }
+
+    // 열람 감사로그 — 타 소스(메신저 등) 첨부 실물 접근이므로 접속기록을 남긴다(개보법 접속기록 축).
+    await recordAuditLog({
+      actorUserId: ctx.userId,
+      action: "file_library_open",
+      targetTable: "file_library",
+      targetId: id,
+      after: { fileName: target.fileName },
+    });
 
     const contentType = target.contentType || attachmentContentType(target.fileName);
     const filenameStar = `UTF-8''${encodeURIComponent(target.fileName)}`;

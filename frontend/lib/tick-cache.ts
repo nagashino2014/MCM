@@ -22,6 +22,8 @@ export const TICK_CACHE_BID_NOTIFY = "bid-notify-config";
 export const TICK_CACHE_BID_COLLECTORS = "bid-collectors";
 /** 미결재 리마인드 설정(approval_notify_settings) */
 export const TICK_CACHE_APPROVAL_REMIND = "approval-remind-setting";
+/** 파일 저장 정책(file_retention_policies) — 전부 permanent 면 삭제 배치 no-op */
+export const TICK_CACHE_FILE_RETENTION = "file-retention-policies";
 
 /** 설정 변경은 저장 경로에서 invalidate 되므로 길게 잡아도 안전하다. */
 const DEFAULT_TTL_MS = 60 * 60 * 1000;

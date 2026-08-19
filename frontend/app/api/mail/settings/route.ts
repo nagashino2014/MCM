@@ -35,8 +35,15 @@ export async function PUT(req: NextRequest) {
     await requirePermission("mail.manage");
     if (req.nextUrl.searchParams.get("list") === "1") {
       const db = await getDb();
+      // 개인 문서함 할당(user_storage_quotas, 마이그 191)을 함께 내려준다 — 인원별 용량 배분 모달.
       const rows = rowsToObjects(
-        await db.exec(`SELECT mailbox_id, user_id, address, display_name, quota_bytes, used_bytes FROM mailboxes ORDER BY address`)
+        await db.exec(
+          `SELECT m.mailbox_id, m.user_id, m.address, m.display_name, m.quota_bytes, m.used_bytes,
+                  q.personal_doc_quota_bytes
+             FROM mailboxes m
+             LEFT JOIN user_storage_quotas q ON q.user_id = m.user_id
+            ORDER BY m.address`
+        )
       );
       const pool = rowsToObjects(await db.exec(`SELECT value FROM mail_settings WHERE key = 'total_pool_gb'`));
       return NextResponse.json({
@@ -48,10 +55,16 @@ export async function PUT(req: NextRequest) {
           displayName: r.display_name != null ? String(r.display_name) : "",
           quotaBytes: r.quota_bytes != null ? Number(r.quota_bytes) : null,
           usedBytes: r.used_bytes != null ? Number(r.used_bytes) : null,
+          personalDocQuotaBytes: r.personal_doc_quota_bytes != null ? Number(r.personal_doc_quota_bytes) : null,
         })),
       });
     }
-    const body = (await req.json().catch(() => ({}))) as { mailboxId?: string; quotaBytes?: number; totalPoolGb?: number };
+    const body = (await req.json().catch(() => ({}))) as {
+      mailboxId?: string;
+      quotaBytes?: number;
+      totalPoolGb?: number;
+      personalDocQuotaBytes?: number;
+    };
     if (Number.isFinite(body.totalPoolGb)) {
       // 전사 총 설정 용량 저장(mail_settings key-value).
       await withDbWrite(async (db) => {
@@ -66,12 +79,23 @@ export async function PUT(req: NextRequest) {
     if (!body.mailboxId || !Number.isFinite(body.quotaBytes)) {
       return NextResponse.json({ error: "mailboxId/quotaBytes 가 필요합니다." }, { status: 400 });
     }
+    const ctx2 = await requireSession();
     await withDbWrite(async (db) => {
       await db.run(`UPDATE mailboxes SET quota_bytes = $2, updated_at = $3 WHERE mailbox_id = $1`, [
         body.mailboxId,
         Math.max(0, Math.round(Number(body.quotaBytes))),
         new Date().toISOString(),
       ]);
+      // 개인 문서함 할당(마이그 191) — mailbox 의 user_id 로 upsert.
+      if (Number.isFinite(body.personalDocQuotaBytes)) {
+        await db.run(
+          `INSERT INTO user_storage_quotas (user_id, personal_doc_quota_bytes, updated_at, updated_by)
+           SELECT m.user_id, $2, $3, $4 FROM mailboxes m WHERE m.mailbox_id = $1 AND m.user_id IS NOT NULL
+           ON CONFLICT (user_id) DO UPDATE SET personal_doc_quota_bytes = EXCLUDED.personal_doc_quota_bytes,
+             updated_at = EXCLUDED.updated_at, updated_by = EXCLUDED.updated_by`,
+          [body.mailboxId, Math.max(0, Math.round(Number(body.personalDocQuotaBytes))), new Date().toISOString(), ctx2.userId]
+        );
+      }
     });
     return NextResponse.json({ ok: true });
   } catch (err) {

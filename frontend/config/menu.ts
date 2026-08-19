@@ -84,6 +84,7 @@ export const MENU_ITEMS: MenuItem[] = [
     submenu: [
       { title: "파일함", href: "/files" },
       { title: "문서함", href: "/approval/archive" },
+      { title: "개인문서함", href: "/files/personal" },
     ],
     group: "collab",
   },

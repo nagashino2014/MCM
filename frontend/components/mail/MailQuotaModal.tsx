@@ -1,7 +1,7 @@
 "use client";
 
 // 인원별 용량 배분 모달(G2-13, 관리자 전용) — 좌: 조직도 트리뷰 / 우: 요약(도넛)+선택 인원 용량 설정.
-// 메일 용량은 실제 저장(mailboxes.quota_bytes), 개인 문서함 용량은 문서함 구현 전이라 UI 만(저장 비활성 안내).
+// 메일 용량은 mailboxes.quota_bytes, 개인 문서함 용량은 user_storage_quotas(마이그 191)에 저장.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Minus, Plus, Save } from "lucide-react";
@@ -18,6 +18,7 @@ interface AdminMailbox {
   displayName: string;
   quotaBytes: number | null;
   usedBytes: number | null;
+  personalDocQuotaBytes: number | null;
 }
 
 const GB = 1024 * 1024 * 1024;
@@ -28,7 +29,7 @@ export function MailQuotaModal({ open, onClose, onSaved }: { open: boolean; onCl
   const [mailboxes, setMailboxes] = useState<AdminMailbox[]>([]);
   const [selected, setSelected] = useState<OrganizationEmployeeRow | null>(null);
   const [mailGb, setMailGb] = useState(5);
-  const [docGb, setDocGb] = useState(5); // 개인 문서함 — UI 만(추후 문서함 모듈에서 저장)
+  const [docGb, setDocGb] = useState(5); // 개인 문서함 할당(user_storage_quotas)
   const [saving, setSaving] = useState(false);
   const [totalPoolGb, setTotalPoolGb] = useState(100); // 전사 총 설정 용량 — 관리자 편집(G2-15)
 
@@ -62,7 +63,12 @@ export function MailQuotaModal({ open, onClose, onSaved }: { open: boolean; onCl
   );
 
   useEffect(() => {
-    if (selectedMailbox) setMailGb(selectedMailbox.quotaBytes != null ? Number((selectedMailbox.quotaBytes / GB).toFixed(1)) : 5);
+    if (selectedMailbox) {
+      setMailGb(selectedMailbox.quotaBytes != null ? Number((selectedMailbox.quotaBytes / GB).toFixed(1)) : 5);
+      setDocGb(
+        selectedMailbox.personalDocQuotaBytes != null ? Number((selectedMailbox.personalDocQuotaBytes / GB).toFixed(1)) : 5
+      );
+    }
   }, [selectedMailbox]);
 
   // 요약(도넛) — 총 설정 용량 = 전 인원 quota 합, 사용 = used 합.
@@ -89,10 +95,14 @@ export function MailQuotaModal({ open, onClose, onSaved }: { open: boolean; onCl
       const r = await fetch("/api/mail/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mailboxId: selectedMailbox.mailboxId, quotaBytes: Math.round(mailGb * GB) }),
+        body: JSON.stringify({
+          mailboxId: selectedMailbox.mailboxId,
+          quotaBytes: Math.round(mailGb * GB),
+          personalDocQuotaBytes: Math.round(docGb * GB),
+        }),
       });
       if (r.ok) {
-        toast(`${selected?.name}님 메일 용량을 ${mailGb}GB 로 저장했습니다. (개인 문서함 용량은 문서함 구현 후 적용)`, "success");
+        toast(`${selected?.name}님 용량을 저장했습니다. (메일 ${mailGb}GB · 개인 문서함 ${docGb}GB)`, "success");
         load();
         onSaved();
       } else toast("저장에 실패했습니다.", "error");
@@ -187,9 +197,9 @@ export function MailQuotaModal({ open, onClose, onSaved }: { open: boolean; onCl
                 <p className="cd-label">할당 용량</p>
                 <div className="grid grid-cols-2 gap-3">
                   <Stepper label="메일" value={mailGb} onChange={setMailGb} disabled={!selectedMailbox} />
-                  <Stepper label="개인 문서함 (준비 중)" value={docGb} onChange={setDocGb} disabled={false} />
+                  <Stepper label="개인 문서함" value={docGb} onChange={setDocGb} disabled={!selectedMailbox} />
                 </div>
-                <p className="text-[10px] cd-text-faint">개인 문서함 용량은 문서함 모듈 구현 후 적용됩니다(현재 UI 만).</p>
+                <p className="text-[10px] cd-text-faint">개인 문서함 할당량은 파일 · 문서함 &gt; 개인문서함 화면의 업로드 한도로 적용됩니다.</p>
               </>
             ) : (
               <p className="text-sm cd-text-faint m-auto text-center">조직도에서 인원을 선택하세요.</p>

@@ -14,9 +14,22 @@ import { LetterRecordsTable } from "@/components/approval/LetterRecordsTable";
 import { QuoteRecordsTable } from "@/components/approval/QuoteRecordsTable";
 import type { OfficialLetterRow } from "@/lib/letter/types";
 import type { QuotationRow } from "@/lib/quote/types";
+import { formatBytes } from "@/lib/approval/attachments";
 import "@/components/cdash/cdash.css";
 
-type TopTab = "approval" | "letters" | "quotes";
+type TopTab = "approval" | "letters" | "quotes" | "contracts";
+
+interface ContractDocRow {
+  documentId: string;
+  contractId: string;
+  contractTitle: string;
+  documentType: string;
+  typeLabel: string;
+  fileName: string;
+  byteSize: number | null;
+  storageKey: string | null;
+  createdAt: string | null;
+}
 
 /** YYYYMM → 비교용 YYYY-MM (형식 아니면 null). */
 function ymKey(ym: string): string | null {
@@ -78,6 +91,9 @@ export function ApprovalArchiveBoard() {
   // 발송견적 탭(136)
   const [quotes, setQuotes] = useState<QuotationRow[]>([]);
   const [quotesLoading, setQuotesLoading] = useState(false);
+  // 계약 문서 탭 — contract_documents 목록(계약서·변경계약서·세금계산서 등)
+  const [contractDocs, setContractDocs] = useState<ContractDocRow[]>([]);
+  const [contractDocsLoading, setContractDocsLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -136,11 +152,37 @@ export function ApprovalArchiveBoard() {
       setQuotesLoading(false);
     }
   }, [fromYm, toYm, q]);
+  const loadContractDocs = useCallback(async () => {
+    setContractDocsLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (/^\d{6}$/.test(fromYm.trim())) params.set("from", fromYm.trim());
+      if (/^\d{6}$/.test(toYm.trim())) params.set("to", toYm.trim());
+      if (q.trim()) params.set("q", q.trim());
+      const res = await fetch(`/api/contracts/documents/list?${params.toString()}`, { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "조회 실패");
+      setContractDocs(data.documents ?? []);
+    } catch {
+      setContractDocs([]);
+    } finally {
+      setContractDocsLoading(false);
+    }
+  }, [fromYm, toYm, q]);
+
   useEffect(() => {
     if (topTab === "letters") void loadLetters();
     else if (topTab === "quotes") void loadQuotes();
+    else if (topTab === "contracts") void loadContractDocs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topTab]);
+
+  // 조회 버튼·Enter 공용 — 서버 조회 탭만 재조회(전자결재 탭은 클라이언트 필터라 불필요).
+  const searchAction = () => {
+    if (topTab === "letters") loadLetters();
+    else if (topTab === "quotes") loadQuotes();
+    else if (topTab === "contracts") loadContractDocs();
+  };
 
   const applyYear = (year: string) => {
     setYearSel(year);
@@ -175,7 +217,7 @@ export function ApprovalArchiveBoard() {
       <div className="cd-card rounded-3xl p-5 flex flex-col gap-4">
         {/* 전자결재 / 발송공문 탭 — 양식별 문서 조회와 동일한 work-plan 탭 양식 */}
         <div className="flex items-end gap-1 px-1 -mb-1">
-          {(["approval", "letters", "quotes"] as TopTab[]).map((t) => (
+          {(["approval", "letters", "quotes", "contracts"] as TopTab[]).map((t) => (
             <button
               key={t}
               type="button"
@@ -184,7 +226,7 @@ export function ApprovalArchiveBoard() {
                 topTab === t ? "cd-text-primary border-current cd-tint-primary" : "cd-text-faint border-transparent cd-row-hover"
               }`}
             >
-              {t === "approval" ? "전자결재" : t === "letters" ? "발송공문" : "발송견적"}
+              {t === "approval" ? "전자결재" : t === "letters" ? "발송공문" : t === "quotes" ? "발송견적" : "계약 문서"}
             </button>
           ))}
         </div>
@@ -216,7 +258,7 @@ export function ApprovalArchiveBoard() {
               setFromYm(e.target.value.replace(/\D/g, ""));
               setYearSel("");
             }}
-            onKeyDown={(e) => e.key === "Enter" && (topTab === "letters" ? loadLetters() : topTab === "quotes" ? loadQuotes() : undefined)}
+            onKeyDown={(e) => e.key === "Enter" && searchAction()}
           />
           <span className="cd-text-faint text-xs">~</span>
           <input
@@ -229,7 +271,7 @@ export function ApprovalArchiveBoard() {
               setToYm(e.target.value.replace(/\D/g, ""));
               setYearSel("");
             }}
-            onKeyDown={(e) => e.key === "Enter" && (topTab === "letters" ? loadLetters() : topTab === "quotes" ? loadQuotes() : undefined)}
+            onKeyDown={(e) => e.key === "Enter" && searchAction()}
           />
           <div className="flex items-center gap-1.5">
             <input
@@ -238,10 +280,10 @@ export function ApprovalArchiveBoard() {
               placeholder={topTab === "letters" ? "제목·공문번호·기안자 검색" : "제목·기안자·문서번호 검색"}
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && (topTab === "letters" ? loadLetters() : topTab === "quotes" ? loadQuotes() : undefined)}
+              onKeyDown={(e) => e.key === "Enter" && searchAction()}
             />
             {topTab !== "approval" && (
-              <button type="button" className="cd-btn rounded-lg border cd-border-c px-2.5 py-2" title="조회" onClick={topTab === "letters" ? loadLetters : loadQuotes}>
+              <button type="button" className="cd-btn rounded-lg border cd-border-c px-2.5 py-2" title="조회" onClick={searchAction}>
                 <Search className="w-3.5 h-3.5" />
               </button>
             )}
@@ -268,6 +310,44 @@ export function ApprovalArchiveBoard() {
             <QuoteRecordsTable quotes={quotes} loading={quotesLoading} theme={theme} onChanged={loadQuotes} />
             <p className="text-[10.5px] cd-text-faint">견적을 클릭하면 PDF 확인·PDF/xlsx 다운로드·재발송·수주 결과 기입이 가능합니다.</p>
           </>
+        ) : topTab === "contracts" ? (
+          contractDocsLoading ? (
+            <p className="text-sm cd-text-faint">불러오는 중입니다.</p>
+          ) : contractDocs.length === 0 ? (
+            <p className="text-sm cd-text-faint">계약 문서가 없습니다.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-[12.5px]">
+                <thead>
+                  <tr className="text-left cd-text-faint text-[11px]">
+                    <th className="py-1.5 pr-3 font-semibold">계약</th>
+                    <th className="py-1.5 pr-3 font-semibold">문서 유형</th>
+                    <th className="py-1.5 pr-3 font-semibold">파일명</th>
+                    <th className="py-1.5 pr-3 font-semibold text-right">크기</th>
+                    <th className="py-1.5 font-semibold">등록일</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {contractDocs.map((d) => (
+                    <tr
+                      key={d.documentId}
+                      className="border-t cd-border-c cursor-pointer hover:bg-[color:var(--cd-surface)]"
+                      onClick={() => d.storageKey && window.open(`/api/contracts/documents?key=${encodeURIComponent(d.storageKey)}`, "_blank", "noopener")}
+                      title="클릭하면 문서를 엽니다"
+                    >
+                      <td className="py-2 pr-3 cd-text">{d.contractTitle}</td>
+                      <td className="py-2 pr-3">
+                        <span className="text-[10.5px] rounded-full px-2 py-0.5 border cd-border-c cd-text-faint">{d.typeLabel}</span>
+                      </td>
+                      <td className="py-2 pr-3 cd-text-faint">{d.fileName}</td>
+                      <td className="py-2 pr-3 text-right font-mono text-[11px] cd-text-faint">{formatBytes(d.byteSize ?? 0)}</td>
+                      <td className="py-2 font-mono text-[11px] cd-text-faint">{short(d.createdAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
         ) : loading ? (
           <p className="text-sm cd-text-faint">불러오는 중입니다.</p>
         ) : filteredDocs.length === 0 ? (

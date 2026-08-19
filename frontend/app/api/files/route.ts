@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { recordAuditLog } from "@/lib/auth/audit";
 import {
   deleteLibraryFiles,
   listLibraryFileIds,
@@ -41,7 +42,7 @@ export async function GET(req: NextRequest) {
 // DELETE /api/files — 선택 삭제({ids}) 또는 일괄 삭제({mode:'filtered', filter}).
 export async function DELETE(req: NextRequest) {
   try {
-    await requirePermission("files.manage");
+    const ctx = await requirePermission("files.manage");
     const body = (await req.json().catch(() => ({}))) as {
       ids?: string[];
       mode?: string;
@@ -65,6 +66,14 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "삭제할 파일이 없습니다." }, { status: 400 });
     }
     const result = await deleteLibraryFiles(ids);
+    // 삭제 감사로그 — 대상 id 전체를 남긴다(하드 삭제·복구 불가 작업).
+    await recordAuditLog({
+      actorUserId: ctx.userId,
+      action: "file_library_delete",
+      targetTable: "file_library",
+      targetId: body.mode === "filtered" ? "filtered" : "selected",
+      after: { deleted: result.deleted, failed: result.failed.length, ids: ids.slice(0, 200) },
+    });
     return NextResponse.json(result);
   } catch (err) {
     return authErrorToResponse(err);

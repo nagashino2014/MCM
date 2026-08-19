@@ -447,6 +447,55 @@ export async function getRetentionPolicies(): Promise<RetentionPolicies> {
   }
 }
 
+/** retention 값 → 개월 수(permanent 는 null). */
+function retentionMonths(value: RetentionValue): number | null {
+  return value === "6m" ? 6 : value === "1y" ? 12 : value === "5y" ? 60 : null;
+}
+
+/**
+ * 보존기간이 지난 파일 id 목록 — 자동 삭제 배치(file-retention-tick)용.
+ * tier 조건: le5mb ≤5MB < le50mb ≤50MB < gt50mb. permanent tier 는 대상에서 제외.
+ * uploaded_at 이 없는 행은 판정 불가라 건드리지 않는다.
+ */
+export async function listExpiredLibraryFileIds(policies: RetentionPolicies, limit = 1000): Promise<string[]> {
+  const MB = 1024 * 1024;
+  const tiers: Array<{ min: number | null; max: number | null; retention: RetentionValue }> = [
+    { min: null, max: 5 * MB, retention: policies.le5mb },
+    { min: 5 * MB, max: 50 * MB, retention: policies.le50mb },
+    { min: 50 * MB, max: null, retention: policies.gt50mb },
+  ];
+  const params: unknown[] = [];
+  const conds: string[] = [];
+  const now = new Date();
+  for (const tier of tiers) {
+    const months = retentionMonths(tier.retention);
+    if (months == null) continue;
+    const cutoff = new Date(now);
+    cutoff.setMonth(cutoff.getMonth() - months);
+    const parts: string[] = [];
+    if (tier.min != null) {
+      params.push(tier.min);
+      parts.push(`COALESCE(t.byte_size, 0) > $${params.length}`);
+    }
+    if (tier.max != null) {
+      params.push(tier.max);
+      parts.push(`COALESCE(t.byte_size, 0) <= $${params.length}`);
+    }
+    params.push(cutoff.toISOString());
+    parts.push(`COALESCE(t.uploaded_at, '') <> '' AND t.uploaded_at < $${params.length}`);
+    conds.push(`(${parts.join(" AND ")})`);
+  }
+  if (!conds.length) return [];
+  params.push(limit);
+  const db = await getDb();
+  const sql = `
+    SELECT t.source, t.item_id FROM (${UNION_SQL}) t
+     WHERE ${conds.join(" OR ")}
+     ORDER BY t.uploaded_at ASC LIMIT $${params.length}`;
+  const rows = rowsToObjects(await db.exec(sql, params)) as unknown as RawRow[];
+  return rows.map((r) => `${r.source}:${r.item_id}`);
+}
+
 export async function saveRetentionPolicies(policies: RetentionPolicies, userId: string): Promise<void> {
   const db = await getDb();
   const now = new Date().toISOString();

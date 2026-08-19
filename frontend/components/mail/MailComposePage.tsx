@@ -309,6 +309,43 @@ export function MailComposePage() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
+  // 개인문서함 전송(첨부 프리필) — /mail/compose?attach={documentId,...} 로 진입하면
+  // 본인 개인문서함 파일을 받아 첨부 목록에 미리 삽입한다(20MB 총량 검사는 addFiles 가 수행).
+  const attachSeeded = useRef(false);
+  useEffect(() => {
+    const attachParam = searchParams.get("attach");
+    if (!attachParam || attachSeeded.current) return;
+    attachSeeded.current = true;
+    const ids = attachParam.split(",").map((s) => s.trim()).filter(Boolean);
+    if (!ids.length) return;
+    (async () => {
+      try {
+        const metaRes = await fetch("/api/personal-docs", { cache: "no-store" });
+        if (!metaRes.ok) return;
+        const meta = await metaRes.json();
+        const byId = new Map<string, { fileName: string; contentType: string | null }>(
+          (Array.isArray(meta.docs) ? meta.docs : []).map((d: { documentId: string; fileName: string; contentType: string | null }) => [
+            d.documentId,
+            { fileName: d.fileName, contentType: d.contentType },
+          ])
+        );
+        const loaded: File[] = [];
+        for (const id of ids) {
+          const info = byId.get(id);
+          if (!info) continue;
+          const res = await fetch(`/api/personal-docs/open?id=${encodeURIComponent(id)}`, { cache: "no-store" });
+          if (!res.ok) continue;
+          const blob = await res.blob();
+          loaded.push(new File([blob], info.fileName, { type: info.contentType || blob.type || "application/octet-stream" }));
+        }
+        if (loaded.length) addFiles(loaded);
+      } catch {
+        toast("개인문서함 첨부를 불러오지 못했습니다.", "warn");
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addFiles]);
+
   /** 인라인 이미지 삽입 — blob 미리보기, 발송 시 cid 치환. */
   const onPickImages = (e: React.ChangeEvent<HTMLInputElement>) => {
     const picked = e.target.files ? Array.from(e.target.files) : [];

@@ -209,7 +209,7 @@ function drawTable(ctx: Ctx, block: Extract<DocBlock, { kind: "table" }>, y: num
         page.drawText(ln, { x: tx, y: ty, size, font, color: INK });
         // 셀 인감(대금청구서 청구인) — 마지막 줄 말미 "(인)" 위에 겹쳐 찍는다(signature 규칙과 동일)
         if (cell.stamp && ctx.stamp && li === lines.length - 1) {
-          const stampW = 44;
+          const stampW = 50.08; // 기본양식 HWPX 인감 실측(5008 HWPUNIT)과 동일 — 전 서식 인감 크기 통일(2026-08-19)
           const stampH = (ctx.stamp.height / ctx.stamp.width) * stampW;
           page.drawImage(ctx.stamp, {
             x: tx + tw - stampW * 0.62,
@@ -261,7 +261,7 @@ function drawSignature(ctx: Ctx, block: Extract<DocBlock, { kind: "signature" }>
     // 인감: 대표자 행(마지막 행)의 값 오른쪽 끝에 겹치게
     if (block.stamp && ctx.stamp && i === block.rows.length - 1) {
       const tw = fonts.regular.widthOfTextAtSize(text, size);
-      const stampW = 44;
+      const stampW = 50.08; // 기본양식 HWPX 인감 실측(5008 HWPUNIT)과 동일 — 전 서식 인감 크기 통일(2026-08-19)
       const stampH = (ctx.stamp.height / ctx.stamp.width) * stampW;
       // 실물 규칙: 인감 중심이 말미 "(인)" 위에 오고 세로는 성명 줄에 걸친다
       page.drawImage(ctx.stamp, {

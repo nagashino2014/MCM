@@ -72,20 +72,39 @@ function findSpan(full: string, needle: string, from = 0): { start: number; end:
  *
  * 라벨·접미어와 값이 같은 <hp:t> 조각에 섞여 있어도 조각 단위로 잘라 붙여 서식(굵기 등)을 지킨다.
  */
+/**
+ * 라벨 폭 통일(2026-08-19 사용자 피드백) — "용역명"처럼 짧은 라벨을 "착수년월일" 폭에 맞춰
+ * 글자 사이를 벌린다("용  역  명"). 콜론이 세로로 정렬된다(기본양식 관행, spec-hwpx 와 동일 규칙).
+ */
+function padLabel(label: string, width: number): string {
+  const chars = [...label.replace(/\s+/g, "")];
+  if (chars.length <= 1) return label;
+  const base = chars.reduce((a, ch) => a + textWidth(ch), 0);
+  const slots = chars.length - 1;
+  const need = width - base;
+  if (need <= 0) return chars.join("");
+  const per = Math.floor(need / slots);
+  let extra = need - per * slots;
+  return chars.map((ch, i) => (i === chars.length - 1 ? ch : ch + " ".repeat(per + (extra-- > 0 ? 1 : 0)))).join("");
+}
+
 function fillParaValue(
   fragment: string,
   label: string,
   suffix: string | undefined,
-  value: string
+  value: string,
+  labelDisplay?: string
 ): { xml: string; headWidth: number } | null {
   const { pieces, full } = textPieces(fragment);
   if (!pieces.length) return null;
 
   // 값 시작 = 라벨 끝(+구분자). 라벨이 없으면 문단 처음부터.
   let cut = 0;
+  let labelSpan: { start: number; end: number } | null = null;
   if (label) {
     const span = findSpan(full, label);
     if (!span) return null;
+    labelSpan = span;
     cut = span.end;
     const sep = /^\s*[:：]\s*/.exec(full.slice(cut));
     if (sep) cut += sep[0].length;
@@ -101,7 +120,11 @@ function fillParaValue(
     tailStart = Math.max(cut, s);
   }
 
-  const head = full.slice(0, cut);
+  let head = full.slice(0, cut);
+  // 라벨 폭 통일 — 원문 라벨 구간만 표시용 라벨로 바꾼다(선행 기호·구분자는 원문 유지)
+  if (labelDisplay && labelSpan) {
+    head = full.slice(0, labelSpan.start) + labelDisplay + full.slice(labelSpan.end, cut);
+  }
   // 빈 양식은 "계 약 명 :" 처럼 구분자에서 끝나 값이 콜론에 바로 붙는다 → 한 칸 띄운다.
   const gap = /[:：]$/.test(head) ? " " : "";
   // 접미어 앞도 마찬가지("…㈜대표이사" 처럼 붙지 않게)
@@ -110,6 +133,20 @@ function fillParaValue(
   let out = "";
   let placed = false;
   let cursor = 0;
+  if (labelDisplay && labelSpan) {
+    // 라벨 재작성 시에는 조각 좌표가 원문과 어긋나므로 첫 조각에 통짜로 싣는다
+    for (const p of pieces) {
+      let next = "";
+      if (!placed) {
+        next = head + gap + value + tailGap + (tailStart < full.length ? full.slice(tailStart) : "");
+        placed = true;
+      }
+      out += fragment.slice(cursor, p.start) + `<hp:t>${escapeXml(next)}</hp:t>`;
+      cursor = p.end;
+    }
+    out += fragment.slice(cursor);
+    return placed ? { xml: out, headWidth: textWidth(head + gap) } : null;
+  }
   for (const p of pieces) {
     let next = head.slice(Math.min(p.from, head.length), Math.min(p.to, head.length));
     if (!placed && p.to >= cut) {
@@ -257,6 +294,11 @@ function applySlots(xml: string, slots: TemplateSlot[], values: DeliverableValue
   const edits: Edit[] = [];
   /** 서명부 셀(라벨 없는 회사 셀) — 표 단위 후처리(인감 정렬·글자 크기 통일)용 */
   const signCells: { table: number; binding: string; text: string; editIndex: number }[] = [];
+  // 라벨 폭 통일(2026-08-19) — 항목 라벨("용역명"~"준공년월일")을 최장 라벨 폭에 맞춰 벌린다.
+  // 콜론이 붙은 본문 라벨만 대상(서명부·표 셀 라벨은 제외).
+  const labelCore = (label: string) => label.replace(/\s*[:：]\s*$/, "").replace(/\s+/g, "");
+  const paraLabels = slots.filter((sl) => sl.target === "para" && /[:：]\s*$/.test(sl.label ?? ""));
+  const maxLabelW = Math.max(0, ...paraLabels.map((sl) => textWidth(labelCore(sl.label))));
   for (const slot of slots) {
     const value = valueFor(slot, values);
     if (slot.target === "cell") {
@@ -296,7 +338,10 @@ function applySlots(xml: string, slots: TemplateSlot[], values: DeliverableValue
     const nextXml = nextSpan ? xml.slice(nextSpan.start, nextSpan.end) : "";
     const hasContinuation = !!nextSpan && isContinuation(nextXml, slotParas, slot.para! + 1);
 
-    let filled = fillParaValue(original, slot.label, slot.suffix, value);
+    const wantsPad = slot.target === "para" && /[:：]\s*$/.test(slot.label ?? "") && maxLabelW > 0;
+    // 라벨(slot.label)에 콜론이 포함돼 있어 표시용 라벨에도 구분자를 되붙인다(" : " — 원문 관행)
+    const display = wantsPad ? `${padLabel(labelCore(slot.label), maxLabelW)} : ` : undefined;
+    let filled = fillParaValue(original, slot.label, slot.suffix, value, display);
     if (filled == null) {
       missed.push(slot);
       continue;
@@ -307,7 +352,7 @@ function applySlots(xml: string, slots: TemplateSlot[], values: DeliverableValue
       // 들여쓴다(그냥 넘기면 한글이 접어 왼쪽 끝에 붙는다). 남으면 연장 문단은 지운다.
       const [head, rest] = splitByWidth(value, Math.max(0, origWidth - filled.headWidth));
       if (rest) {
-        const again = fillParaValue(original, slot.label, slot.suffix, head);
+        const again = fillParaValue(original, slot.label, slot.suffix, head, display);
         if (again) filled = again;
         edits.push({ start: nextSpan!.start, end: nextSpan!.end, text: replaceTexts(nextXml, " ".repeat(filled.headWidth) + rest) });
       } else {
@@ -368,13 +413,18 @@ function applySlots(xml: string, slots: TemplateSlot[], values: DeliverableValue
       }
     }
 
-    // 인감 기준 절대 배치 — (인) 중심 x = 인감 중심 x, 마지막 행 세로 중심 = 인감 세로 중심
+    // 서명부·인감 배치(2026-08-19 확정) — 표 오른쪽 끝을 본문 우측에서 40pt 들여 놓고
+    // (세 줄 시작 위치 동일·기본양식 관행), 인감은 대표자 줄 "(인)" 중심으로 옮긴다.
+    // 크기도 기본양식 인감(5008x4899 HWPUNIT)으로 통일한다 — 서식마다 도장 크기가 달랐다.
     const pic = /<hp:pic\b[\s\S]*?<\/hp:pic>/g;
-    let anchor: { x: number; y: number; w: number; h: number } | null = null;
+    let anchor: { xml: string; start: number; end: number; x: number; y: number; w: number; h: number } | null = null;
     let pm: RegExpExecArray | null;
     while ((pm = pic.exec(xml))) {
       if (!/vertRelTo="PAPER"/.test(pm[0])) continue;
       anchor = {
+        xml: pm[0],
+        start: pm.index,
+        end: pm.index + pm[0].length,
         x: Number(/horzOffset="(-?\d+)"/.exec(pm[0])?.[1] ?? 0),
         y: Number(/vertOffset="(-?\d+)"/.exec(pm[0])?.[1] ?? 0),
         w: Number(/<hp:sz width="(\d+)"/.exec(pm[0])?.[1] ?? 0),
@@ -385,12 +435,11 @@ function applySlots(xml: string, slots: TemplateSlot[], values: DeliverableValue
     const ceo = group.find((c) => c.binding === "company.ceo");
     const markAt = ceo ? ceo.text.indexOf("(인)") : -1;
     if (anchor && anchor.w > 0 && ceo && markAt >= 0) {
-      const beforeW = textWidth(ceo.text.slice(0, markAt));
-      const markW = textWidth("(인)");
-      // A4(59528 HWPUNIT) 우측 밖으로 넘치지 않게 — 폭 확장분까지 감안해 왼쪽으로 당긴다
+      // 페이지 기하 — 양식의 secPr 에서 읽는다(없으면 A4 기본값)
+      const pageW = Number(/<hp:pagePr[^>]*width="(\d+)"/.exec(xml)?.[1] ?? 59528);
+      const marginR = Number(/<hp:margin[^>]*right="(\d+)"/.exec(xml)?.[1] ?? 5669);
       const finalW = Math.max(tblW, needW);
-      const maxX = 59528 - finalW - 850;
-      const tableX = Math.min(maxX, Math.max(2000, Math.round(anchor.x + anchor.w / 2 - marginL - (beforeW + markW / 2) * half)));
+      const tableX = Math.max(2000, pageW - marginR - 4000 - finalW);
       const tableY = Math.max(0, Math.round(anchor.y + anchor.h / 2 - tblH + rowH / 2));
       edits.push({
         start: span.start + posM.index,
@@ -399,6 +448,28 @@ function applySlots(xml: string, slots: TemplateSlot[], values: DeliverableValue
           `<hp:pos treatAsChar="0" affectLSpacing="0" flowWithText="0" allowOverlap="1" holdAnchorAndSO="0" ` +
           `vertRelTo="PAPER" horzRelTo="PAPER" vertAlign="TOP" horzAlign="LEFT" vertOffset="${tableY}" horzOffset="${tableX}"/>`,
       });
+      // 인감 이동·크기 통일 — (인) 중심 위에, 5008x4899(기본양식 실측)로
+      const SW = 5008;
+      const SH = 4899;
+      const beforeW = textWidth(ceo.text.slice(0, markAt));
+      const markW = textWidth("(인)");
+      const markCX = tableX + marginL + (beforeW + markW / 2) * half;
+      const oldCY = anchor.y + anchor.h / 2;
+      const orgW = Number(/<hp:orgSz width="(\d+)"/.exec(anchor.xml)?.[1] ?? SW);
+      const orgH = Number(/<hp:orgSz width="\d+" height="(\d+)"/.exec(anchor.xml)?.[1] ?? SH);
+      let nextPic = anchor.xml
+        .replace(/(<hp:curSz width=")\d+(" height=")\d+(")/, `$1${SW}$2${SH}$3`)
+        .replace(/(<hp:sz width=")\d+("[^>]*height=")\d+(")/, `$1${SW}$2${SH}$3`)
+        .replace(/(centerX=")\d+(" centerY=")\d+(")/, `$1${Math.round(SW / 2)}$2${Math.round(SH / 2)}$3`)
+        .replace(/horzOffset="-?\d+"/, `horzOffset="${Math.round(markCX - SW / 2)}"`)
+        .replace(/vertOffset="-?\d+"/, `vertOffset="${Math.round(oldCY - SH / 2)}"`);
+      if (orgW > 0 && orgH > 0) {
+        nextPic = nextPic.replace(
+          /(<hc:scaMatrix e1=")[\d.]+(" e2="0" e3="0" e4="0" e5=")[\d.]+(")/,
+          `$1${(SW / orgW).toFixed(6)}$2${(SH / orgH).toFixed(6)}$3`
+        );
+      }
+      edits.push({ start: anchor.start, end: anchor.end, text: nextPic });
     }
   }
 

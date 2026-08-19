@@ -20,6 +20,7 @@ import {
   SlidersHorizontal,
   Landmark,
   FolderOpen,
+  ScrollText,
   type LucideIcon,
 } from "lucide-react";
 
@@ -98,6 +99,17 @@ export const MENU_ITEMS: MenuItem[] = [
     title: "공지·게시판",
     href: "/board",
     icon: Megaphone,
+    group: "collab",
+  },
+  // 사규 — 규정집 상시 열람(rules.view) + 원문 임포트·개정·동의 수집(rules.manage, 193).
+  {
+    title: "사규",
+    href: "/rules",
+    icon: ScrollText,
+    submenu: [
+      { title: "규정집", href: "/rules" },
+      { title: "원문 임포트·검수", href: "/rules/admin" },
+    ],
     group: "collab",
   },
   {

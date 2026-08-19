@@ -109,11 +109,16 @@
 - 종료 시 대상자 통지 레코드 + 결과 보고서(열람 건수·범위) 자동 생성
 - 퇴직자 계정 열람도 동일 워크플로 경유
 
-### PR-P3 — 암호화·키 관리 (1~2일)
-- `EMPLOYEE_PII_ENCRYPTION_KEY` 전용 키를 Secrets Manager 로 발급·주입(세션 시크릿/하드코딩 폴백 제거 — 폴백 시 기동 실패로 변경)
-- `payroll.rrn_prefix`·`dependents_detail` 내 rrnPrefix 암호화 마이그레이션(기존 평문 재암호화 스크립트)
-- S3 두 버킷에 `aws_s3_bucket_server_side_encryption_configuration` 명시(terraform, `-target` apply — SES drift 주의)
-- RDS `storage_encrypted` 확인(미적용이면 스냅샷 복원 절차 별도 계획)
+### PR-P3 — 암호화·키 관리 ✅ 완료 (08-19)
+- [x] `lib/security/pii-crypto.ts` — 전용 키(EMPLOYEE_PII_ENCRYPTION_KEY, Secrets Manager 주입) 강제(production 기동 실패),
+      복호는 전용→legacy 순 시도(구 암호문 호환). 세션 시크릿/하드코딩 폴백 제거(dev 만 경고 후 허용)
+- [x] 키 발급: Secrets `mcm-ieps-staging/app` 에 신규 무작위 키 추가(값 미출력) + 태스크 정의 secrets 매핑(next:458)
+      ⚠ 키 교체는 전 암호문 재암호화가 선행돼야 한다 — 발급 스크립트는 기존 키가 있으면 변경하지 않는다
+- [x] 기존 주민번호 암호문 32건을 전용 키로 재암호화(실패 0)
+- [x] `rrn_prefix`·`dependents_detail.rrnPrefix` — 암호화 대신 **데이터 최소화**로 해소: 저장 시 생년 2자리만
+      남기고 마스킹(`YY****` — 자녀 나이 판정·EDI 참고 표시에 충분, EDI 매칭은 성명 기준이라 무관). 기존 EDI 59건 마스킹
+- [x] S3 SSE 명시: `s3-encryption.tf`(AES256, app_data·mail_inbound) — `-target` apply
+- [x] RDS `StorageEncrypted = true` 확인(기적용 — 추가 조치 불요)
 
 ### PR-P4 — 보유기간·파기 (1~2일)
 - 파일 저장 정책(190·191, 완료된 크기 기반)에 더해 **통신 데이터 보존 정책**: 메일 정본·메신저 메시지 보존연한 설정(기본 영구, 관리자 설정 시 파기 배치) — file-retention-tick 패턴 재사용

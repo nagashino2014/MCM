@@ -7,7 +7,7 @@ import { assessOverLimitOnSubmit } from "@/lib/approval/overtime";
 import { resolveOpenCancelRequests } from "@/lib/approval/cancel";
 import { notifyPendingSteps, notifyDrafterResult } from "@/lib/approval/notify";
 import { generateDocSummary } from "@/lib/approval/summarize";
-import { markLetterPendingOnApproval } from "@/lib/letter/store";
+import { assignManualDocNo, markLetterPendingOnApproval } from "@/lib/letter/store";
 import { markQuotePendingOnApproval } from "@/lib/quote/store";
 import { markAgreementApproved } from "@/lib/agreement/store";
 
@@ -202,6 +202,7 @@ export async function loadDrafterSnapshot(userId: string): Promise<{
  * 공문(rule_key='대외', 135)은 실측 관행 포맷 `{연도}-대외-{NNNNN}` · 신규 연도 01001 시작.
  */
 const LETTER_RULE_KEY = "대외"; // = lib/letter/types.ts LETTER_RULE_KEY (fields.ts 처럼 DB 계층은 클라이언트 모듈을 참조하지 않는다)
+const LETTER_FORM_ID = "frm-official-letter"; // = lib/letter/types.ts LETTER_FORM_ID (동일 사유)
 
 // 견적(136) — rule_key `견적:{종류}` 5종(통합허가/화관법/HAPs/ESG/기타), 포맷 `{연도}-{종류}-{NNNN}`.
 // = lib/quote/types.ts QUOTE_RULE_PREFIX/QUOTE_NO_LABEL_BY_SERVICE_TYPE (DB 계층은 클라이언트 모듈 미참조)
@@ -303,6 +304,8 @@ export async function saveDoc(params: {
   watchers?: ApprovalWatcherInput[];
   /** 선행 문서 연결(127) — 신청서→보고서 연관(예: 출장신청 → 출장보고). */
   refDocId?: string | null;
+  /** 공문 번호 수동 지정(관리자) — 지정 시 상신 채번을 건너뛰고 이 번호로 확정한다. 공문 양식 전용. */
+  manualDocNo?: string | null;
   actorUserId: string;
 }): Promise<string> {
   const form = await getForm(params.formId);
@@ -388,6 +391,19 @@ export async function saveDoc(params: {
         `INSERT INTO approval_watchers (watcher_id, doc_id, user_id, kind, created_at) VALUES ($1, $2, $3, $4, $5)`,
         ["awch-" + crypto.randomUUID().replace(/-/g, "").slice(0, 14), docId, w.userId, w.kind, now]
       );
+    }
+    // 공문 번호 수동 지정(관리자) — draft 단계에서 doc_no 를 선점한다. 상신은 doc_no 가
+    // 이미 있으면 그대로 쓰므로(submitDoc) 이 번호가 확정 번호가 된다.
+    if (params.manualDocNo !== undefined) {
+      if (params.formId !== LETTER_FORM_ID) throw new Error("문서번호 직접 지정은 공문 양식에서만 가능합니다.");
+      const wanted = (params.manualDocNo ?? "").trim();
+      if (wanted) {
+        await assignManualDocNo(txn, docId, wanted);
+      } else {
+        // 지정 해제 — 자동 채번으로 되돌린다. 상신 이력이 있는 문서(반려 후 재편집)는
+        // 이미 확정된 번호를 유지해야 하므로 건드리지 않는다.
+        await txn.run(`UPDATE approval_docs SET doc_no = NULL WHERE doc_id = $1 AND submitted_at IS NULL`, [docId]);
+      }
     }
   });
   return docId;

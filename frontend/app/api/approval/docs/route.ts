@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { hasPermission } from "@/lib/auth/rbac";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { listMyDocs, listInbox, listActedDocs, listRefCandidates, saveDoc, submitDoc, type ApprovalLineStepInput, type ApprovalWatcherInput } from "@/lib/approval/docs";
 import { syncDocCardLinks } from "@/lib/barobill/classify";
@@ -44,6 +45,8 @@ interface PostBody {
   line?: ApprovalLineStepInput[];
   watchers?: ApprovalWatcherInput[];
   refDocId?: string | null;
+  /** 공문번호 수동 지정(관리자 전용) — 빈 문자열이면 자동 채번으로 되돌린다. */
+  manualDocNo?: string | null;
 }
 
 // POST: 기안 저장(draft) / 상신(저장 후 채번·결재 시작)
@@ -52,6 +55,11 @@ export async function POST(req: NextRequest) {
     const ctx = await requirePermission("approval.view");
     const body = (await req.json().catch(() => ({}))) as PostBody;
     if (!body.formId) return NextResponse.json({ error: "formId 가 필요합니다." }, { status: 400 });
+    // 문서번호 직접 지정은 관리자(approval.manage)만 — 그룹웨어 전사 런칭 전 사외 공문번호와
+    // 어긋난 번호를 맞추기 위한 예외 수단이다(일반 사용자는 종전대로 자동 채번).
+    if (body.manualDocNo !== undefined && !(await hasPermission(ctx.userId, "approval.manage"))) {
+      return NextResponse.json({ error: "문서번호를 직접 지정할 권한이 없습니다." }, { status: 403 });
+    }
     const docId = await saveDoc({
       docId: body.docId ?? null,
       formId: body.formId,
@@ -61,6 +69,7 @@ export async function POST(req: NextRequest) {
       line: Array.isArray(body.line) ? body.line : [],
       watchers: Array.isArray(body.watchers) ? body.watchers : [],
       refDocId: body.refDocId ?? null,
+      manualDocNo: body.manualDocNo,
       actorUserId: ctx.userId,
     });
     // 법인카드 사용건 연동(P1) — 표 행의 _cardTxnId 를 doc_id 로 귀속/해제 + 분류 학습.

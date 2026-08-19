@@ -4,6 +4,19 @@
 
 export const LETTER_FORM_ID = "frm-official-letter";
 export const LETTER_RULE_KEY = "대외"; // 채번 rule_key — {연도}-대외-{NNNNN}, 신규 연도 1001 시작
+export const LETTER_SEQ_START = 1001; // 신규 연도 첫 일련번호
+
+/** 공문번호 형식 — '2026-대외-01036' */
+export const LETTER_NO_RE = /^(\d{4})-대외-(\d{4,5})$/;
+
+export function formatLetterNo(year: string | number, seq: number): string {
+  return `${year}-${LETTER_RULE_KEY}-${String(seq).padStart(5, "0")}`;
+}
+
+export function parseLetterNo(no: string): { year: string; seq: number } | null {
+  const m = LETTER_NO_RE.exec((no ?? "").trim());
+  return m ? { year: m[1], seq: Number(m[2]) } : null;
+}
 
 // ── 레이아웃 상수(pt) — 템플릿 HWP 실측: A4, 여백 L20mm/R18mm/T10mm/B7mm ──
 export const PAGE_W = 595.28;

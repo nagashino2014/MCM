@@ -7,7 +7,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Pencil, RefreshCw, Trash2, X } from "lucide-react";
+import { Pencil, Plus, RefreshCw, Trash2, X } from "lucide-react";
+import { RecipientEditGrid } from "@/components/approval/LetterRecipientGrid";
+import { LetterImportModal } from "@/components/approval/LetterImportModal";
 import { LETTER_SEND_STATUS_LABEL, type LetterRecipient, type LetterSendStatus, type OfficialLetterRow } from "@/lib/letter/types";
 
 const short = (s: string | null) => (s ? s.slice(0, 10) : "-");
@@ -28,32 +30,6 @@ function recipientsSummary(list: LetterRecipient[]): string {
   if (!list.length) return "-";
   const first = [list[0].facilityName, list[0].name].filter(Boolean).join(" ");
   return list.length > 1 ? `${first} 외 ${list.length - 1}` : first;
-}
-
-/** 수신처/참조 인라인 편집 그리드 — 백필 문서의 메일주소 사후 입력용. */
-function RecipientEditGrid({ label, list, onChange }: { label: string; list: LetterRecipient[]; onChange: (next: LetterRecipient[]) => void }) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <span className="text-[11px] font-bold cd-text">{label}</span>
-      {list.map((r, i) => (
-        <div key={i} className="grid grid-cols-2 md:grid-cols-5 gap-1.5 items-center">
-          <input className="cd-input" placeholder="업체/기관" value={r.facilityName ?? ""} onChange={(e) => onChange(list.map((x, xi) => (xi === i ? { ...x, facilityName: e.target.value } : x)))} />
-          <input className="cd-input" placeholder="부서" value={r.deptName ?? ""} onChange={(e) => onChange(list.map((x, xi) => (xi === i ? { ...x, deptName: e.target.value } : x)))} />
-          <input className="cd-input" placeholder="성명" value={r.name} onChange={(e) => onChange(list.map((x, xi) => (xi === i ? { ...x, name: e.target.value } : x)))} />
-          <input className="cd-input" placeholder="직함" value={r.title ?? ""} onChange={(e) => onChange(list.map((x, xi) => (xi === i ? { ...x, title: e.target.value } : x)))} />
-          <div className="flex items-center gap-1">
-            <input className="cd-input flex-1" placeholder="메일주소" value={r.email ?? ""} onChange={(e) => onChange(list.map((x, xi) => (xi === i ? { ...x, email: e.target.value } : x)))} />
-            <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" onClick={() => onChange(list.filter((_, xi) => xi !== i))}>
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-      ))}
-      <button type="button" className="cd-btn rounded-lg border border-dashed cd-border-c px-3 py-1.5 text-[11px] cd-text-faint self-start" onClick={() => onChange([...list, { name: "" }])}>
-        ＋ 추가
-      </button>
-    </div>
-  );
 }
 
 export function LetterViewModal({ letterId, theme, onClose, onChanged }: { letterId: string; theme: string; onClose: () => void; onChanged?: () => void }) {
@@ -114,6 +90,22 @@ export function LetterViewModal({ letterId, theme, onClose, onChanged }: { lette
     }
   };
 
+  const removeImported = async () => {
+    if (!window.confirm("이 이관 등록을 삭제할까요? 공문번호가 다시 결번이 됩니다.")) return;
+    setBusy("save");
+    try {
+      const res = await fetch(`/api/letters/${encodeURIComponent(letterId)}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "삭제 실패");
+      onChanged?.();
+      onClose();
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   if (typeof document === "undefined") return null;
   return createPortal(
     // 포털 모달 — .cdash 밖이라 cdash-vars + cd-fields-white + data-theme 부여(UI 규칙)
@@ -167,6 +159,18 @@ export function LetterViewModal({ letterId, theme, onClose, onChanged }: { lette
             <button type="button" className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] flex items-center gap-1" onClick={() => setEditing((v) => !v)} title="수신처·참조 정보 편집(메일주소 보완)">
               <Pencil className="w-3 h-3" /> 수신처 편집
             </button>
+            {letter && letter.source === "imported" && (
+              <button
+                type="button"
+                className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] flex items-center gap-1 disabled:opacity-50"
+                style={{ color: "var(--cd-danger, #FA896B)" }}
+                disabled={busy != null}
+                onClick={removeImported}
+                title="이관 등록 취소(오등록 정정) — 번호가 다시 결번이 됩니다."
+              >
+                <Trash2 className="w-3 h-3" /> 등록 삭제
+              </button>
+            )}
             <button type="button" className="cd-btn rounded-lg border cd-border-c p-1.5" onClick={onClose}>
               <X className="w-4 h-4" />
             </button>
@@ -226,10 +230,62 @@ export function LetterRecordsTable({
   onChanged: () => void;
 }) {
   const [viewId, setViewId] = useState<string | null>(null);
+  // 이관 등록(커스텀 마이그레이션) — 관리자만. 결번 = 사외에서 발번돼 앱에 없는 번호 자리.
+  const [importNo, setImportNo] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [canImport, setCanImport] = useState(false);
+  const [gaps, setGaps] = useState<string[]>([]);
+
+  const loadNumbering = useCallback(() => {
+    fetch("/api/letters/next-no", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        setCanImport(d?.canAssign === true);
+        setGaps(Array.isArray(d?.gaps) ? d.gaps : []);
+      })
+      .catch(() => {});
+  }, []);
+  useEffect(() => {
+    loadNumbering();
+  }, [loadNumbering]);
+
+  const openImport = (no: string | null) => {
+    setImportNo(no);
+    setImportOpen(true);
+  };
 
   if (loading) return <p className="text-sm cd-text-faint">조회 중입니다.</p>;
   return (
     <>
+      {canImport && (
+        <div className="flex items-center gap-2 flex-wrap pb-2.5">
+          <button
+            type="button"
+            className="cd-btn rounded-lg border cd-border-c px-3 py-1.5 text-[11.5px] flex items-center gap-1"
+            onClick={() => openImport(null)}
+            title="앱 밖에서 발송된 공문을 대장에 등록합니다(파일·수신처 포함)."
+          >
+            <Plus className="w-3.5 h-3.5" /> 공문 이관 등록
+          </button>
+          {gaps.length > 0 && (
+            <>
+              <span className="text-[11px] cd-text-faint">결번(미등록 번호)</span>
+              {gaps.slice(-12).map((no) => (
+                <button
+                  key={no}
+                  type="button"
+                  className="cd-btn rounded-full border border-dashed cd-border-c px-2.5 py-1 text-[10.5px] font-mono cd-text-faint"
+                  onClick={() => openImport(no)}
+                  title="이 번호로 이관 등록"
+                >
+                  {no}
+                </button>
+              ))}
+              {gaps.length > 12 && <span className="text-[10.5px] cd-text-faint">외 {gaps.length - 12}건</span>}
+            </>
+          )}
+        </div>
+      )}
       <div className="overflow-x-auto min-h-0">
         <table className="w-full text-[12px] whitespace-nowrap">
           <thead>
@@ -270,7 +326,28 @@ export function LetterRecordsTable({
           </tbody>
         </table>
       </div>
-      {viewId && <LetterViewModal letterId={viewId} theme={theme} onClose={() => setViewId(null)} onChanged={onChanged} />}
+      {viewId && (
+        <LetterViewModal
+          letterId={viewId}
+          theme={theme}
+          onClose={() => setViewId(null)}
+          onChanged={() => {
+            onChanged();
+            loadNumbering();
+          }}
+        />
+      )}
+      {importOpen && (
+        <LetterImportModal
+          theme={theme}
+          initialNo={importNo}
+          onClose={() => setImportOpen(false)}
+          onSaved={() => {
+            onChanged();
+            loadNumbering();
+          }}
+        />
+      )}
     </>
   );
 }

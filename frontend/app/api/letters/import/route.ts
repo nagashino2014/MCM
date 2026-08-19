@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { recordAuditLog } from "@/lib/auth/audit";
 import { putContractDocument, sanitizeFilename } from "@/lib/storage/contract-document-storage";
 import { insertImportedLetter } from "@/lib/letter/store";
 import type { LetterRecipient } from "@/lib/letter/types";
@@ -18,13 +19,14 @@ interface ImportMeta {
   issueDate?: string | null;
 }
 
-// POST: 과거 발송 공문 백필(scripts/import_letters.py) — multipart/form-data.
+// POST: 과거·사외 발송 공문 이관 등록 — scripts/import_letters.py(일괄)와 발송공문 탭의
+//   '공문 이관 등록' 모달(단건, 결번 메우기)이 공용으로 쓴다. multipart/form-data.
 //   meta:  ImportMeta JSON 문자열
-//   hwp:   공문 hwp 원본(선택) / pdf: 공문 pdf(선택) / attach: 동봉 첨부(복수, 선택)
+//   hwp:   공문 hwp 원본(선택) / hwpx: hwpx 원본(선택) / pdf: 공문 pdf(선택) / attach: 동봉 첨부(복수, 선택)
 // letter_no UNIQUE 충돌 시 skipped 응답(재실행 멱등). 파일은 S3 letters/{연도}/{번호}/ 에 적재.
 export async function POST(req: NextRequest) {
   try {
-    await requirePermission("approval.manage");
+    const ctx = await requirePermission("approval.manage");
     const form = await req.formData();
     const metaRaw = form.get("meta");
     if (typeof metaRaw !== "string") return NextResponse.json({ error: "meta(JSON) 가 필요합니다." }, { status: 400 });
@@ -49,10 +51,12 @@ export async function POST(req: NextRequest) {
     };
 
     const hwpFile = form.get("hwp");
+    const hwpxFile = form.get("hwpx");
     const pdfFile = form.get("pdf");
     const attachFiles = form.getAll("attach").filter((f): f is File => f instanceof File);
 
     const hwp = hwpFile instanceof File ? await putFile(hwpFile, "hwp") : null;
+    const hwpx = hwpxFile instanceof File ? await putFile(hwpxFile, "hwpx") : null;
     const pdf = pdfFile instanceof File ? await putFile(pdfFile, "pdf") : null;
     const attachKeys: { name: string; key: string }[] = [];
     for (const f of attachFiles) attachKeys.push(await putFile(f, "attach"));
@@ -67,12 +71,26 @@ export async function POST(req: NextRequest) {
       issueDate: meta.issueDate ?? null,
       pdfKey: pdf?.key ?? null,
       hwpKey: hwp?.key ?? null,
+      hwpxKey: hwpx?.key ?? null,
       attachKeys,
     });
     if (!result.inserted) {
       return NextResponse.json({ ok: true, skipped: true, reason: "동일 공문번호가 이미 등록되어 있습니다.", letterNo });
     }
-    return NextResponse.json({ ok: true, skipped: false, letterId: result.letterId, letterNo, files: { hwp: hwp?.key ?? null, pdf: pdf?.key ?? null, attachCount: attachKeys.length } });
+    await recordAuditLog({
+      actorUserId: ctx.userId,
+      action: "letter_import",
+      targetTable: "official_letters",
+      targetId: result.letterId ?? letterNo,
+      after: { letterNo, title: meta.title.trim(), issueDate: meta.issueDate ?? null },
+    });
+    return NextResponse.json({
+      ok: true,
+      skipped: false,
+      letterId: result.letterId,
+      letterNo,
+      files: { hwp: hwp?.key ?? null, hwpx: hwpx?.key ?? null, pdf: pdf?.key ?? null, attachCount: attachKeys.length },
+    });
   } catch (err) {
     return authErrorToResponse(err);
   }

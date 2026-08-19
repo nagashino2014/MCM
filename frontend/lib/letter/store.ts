@@ -5,7 +5,16 @@
 
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
-import { LETTER_FORM_ID, type LetterRecipient, type LetterSendStatus, type OfficialLetterRow } from "./types";
+import {
+  LETTER_FORM_ID,
+  LETTER_RULE_KEY,
+  LETTER_SEQ_START,
+  formatLetterNo,
+  parseLetterNo,
+  type LetterRecipient,
+  type LetterSendStatus,
+  type OfficialLetterRow,
+} from "./types";
 
 function newLetterId(): string {
   return "ltr-" + crypto.randomUUID().replace(/-/g, "").slice(0, 14);
@@ -228,7 +237,11 @@ export async function updateLetterMeta(
   });
 }
 
-/** 백필(imported) 등록 — 과거 공문. letter_no UNIQUE 충돌 시 false(스킵, 재실행 멱등). */
+/**
+ * 이관(imported) 등록 — 과거·사외 공문. letter_no UNIQUE 충돌 시 false(스킵, 재실행 멱등).
+ * 결재 문서가 선점 중인 번호(수동 지정 draft 포함)면 오등록이므로 400 으로 막고,
+ * 자동 채번이 같은 번호를 다시 내주지 않도록 시퀀스를 GREATEST 로 끌어올린다.
+ */
 export async function insertImportedLetter(params: {
   letterNo: string;
   title: string;
@@ -246,6 +259,10 @@ export async function insertImportedLetter(params: {
   const letterId = newLetterId();
   let inserted = false;
   await withDbWrite(async (txn) => {
+    const taken = rowsToObjects(await txn.exec(`SELECT title FROM approval_docs WHERE doc_no = $1`, [params.letterNo]));
+    if (taken.length) {
+      throw Object.assign(new Error(`결재 문서가 사용 중인 공문번호입니다(${params.letterNo}).`), { status: 400 });
+    }
     const rows = rowsToObjects(
       await txn.exec(
         `INSERT INTO official_letters
@@ -273,6 +290,128 @@ export async function insertImportedLetter(params: {
       )
     );
     inserted = rows.length > 0;
+    const parsed = parseLetterNo(params.letterNo);
+    if (inserted && parsed) {
+      await txn.run(
+        `INSERT INTO doc_no_sequences (rule_key, year, last_seq) VALUES ($1, $2, $3)
+         ON CONFLICT (rule_key, year) DO UPDATE SET last_seq = GREATEST(doc_no_sequences.last_seq, EXCLUDED.last_seq)`,
+        [LETTER_RULE_KEY, parsed.year, parsed.seq]
+      );
+      await txn.run(`DELETE FROM doc_no_pool WHERE rule_key = $1 AND year = $2 AND seq = $3`, [
+        LETTER_RULE_KEY,
+        parsed.year,
+        parsed.seq,
+      ]);
+    }
   });
   return { inserted, letterId: inserted ? letterId : null };
+}
+
+/**
+ * 공문번호 사용 현황(연도) — 대장(official_letters)과 결재 문서(approval_docs.doc_no)를 합집합으로 본다.
+ * 수동 지정 문서는 상신 전(draft)에도 doc_no 를 선점하므로 approval_docs 도 함께 봐야 중복이 안 난다.
+ */
+export async function listUsedLetterSeqs(year: string): Promise<Map<number, string>> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT letter_no AS no FROM official_letters WHERE letter_no LIKE $1
+        UNION
+       SELECT doc_no AS no FROM approval_docs WHERE form_id = $2 AND doc_no LIKE $1`,
+      [`${year}-${LETTER_RULE_KEY}-%`, LETTER_FORM_ID]
+    )
+  );
+  const out = new Map<number, string>();
+  for (const r of rows) {
+    const parsed = parseLetterNo(String(r.no ?? ""));
+    if (parsed) out.set(parsed.seq, String(r.no));
+  }
+  return out;
+}
+
+/**
+ * 채번 현황 — 다음 자동 채번 번호와 결번(미등록 번호) 목록.
+ * 결번 = 사용 하한(01001 또는 최소 사용 번호)부터 마지막 사용 번호까지 중 비어 있는 번호.
+ * 수동 지정으로 건너뛴 번호(사외에서 이미 쓰인 공문)가 여기 나오고, 커스텀 이관 등록으로 메운다.
+ */
+export async function getLetterNumbering(year: string): Promise<{ nextNo: string; gaps: string[]; usedCount: number }> {
+  const db = await getDb();
+  const used = await listUsedLetterSeqs(year);
+  const pool = rowsToObjects(
+    await db.exec(`SELECT min(seq) AS seq FROM doc_no_pool WHERE rule_key = $1 AND year = $2`, [LETTER_RULE_KEY, year])
+  );
+  let nextSeq = pool[0]?.seq != null ? Number(pool[0].seq) : null;
+  if (nextSeq == null) {
+    const rows = rowsToObjects(
+      await db.exec(`SELECT last_seq FROM doc_no_sequences WHERE rule_key = $1 AND year = $2`, [LETTER_RULE_KEY, year])
+    );
+    nextSeq = rows.length ? Number(rows[0].last_seq) + 1 : LETTER_SEQ_START;
+  }
+  const seqs = [...used.keys()].sort((a, b) => a - b);
+  const gaps: string[] = [];
+  if (seqs.length) {
+    for (let s = Math.min(LETTER_SEQ_START, seqs[0]); s < seqs[seqs.length - 1]; s += 1) {
+      if (!used.has(s)) gaps.push(formatLetterNo(year, s));
+    }
+  }
+  return { nextNo: formatLetterNo(year, nextSeq), gaps, usedCount: used.size };
+}
+
+/** 공문번호 사용 가능 여부 — 중복이면 어디에 쓰였는지(대장 제목/문서 제목)를 함께 돌려준다. */
+export async function checkLetterNoAvailable(letterNo: string, excludeDocId?: string | null): Promise<{ available: boolean; usedBy: string | null }> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT title FROM official_letters WHERE letter_no = $1
+        UNION ALL
+       SELECT title FROM approval_docs WHERE doc_no = $1 AND ($2::text IS NULL OR doc_id <> $2)`,
+      [letterNo, excludeDocId ?? null]
+    )
+  );
+  if (!rows.length) return { available: true, usedBy: null };
+  return { available: false, usedBy: rows[0].title != null ? String(rows[0].title) : "(제목 없음)" };
+}
+
+/**
+ * 수동 지정 번호 선점(관리자) — approval_docs.doc_no 에 기록하고 시퀀스를 동기화한다.
+ * 상신(submitDoc)은 doc_no 가 이미 있으면 그대로 쓰므로 이 값이 확정 번호가 된다.
+ * 시퀀스는 GREATEST 로만 올린다 → 건너뛴 번호는 반납 풀에 넣지 않고 비워 두고(사외 사용분),
+ * 나중에 이관 등록(insertImportedLetter)으로 메운다.
+ */
+export async function assignManualDocNo(txn: PgDatabase, docId: string, letterNo: string): Promise<void> {
+  const parsed = parseLetterNo(letterNo);
+  if (!parsed) throw Object.assign(new Error("공문번호 형식이 올바르지 않습니다(예: 2026-대외-01036)."), { status: 400 });
+  const dup = rowsToObjects(
+    await txn.exec(
+      `SELECT 1 FROM official_letters WHERE letter_no = $1
+        UNION ALL
+       SELECT 1 FROM approval_docs WHERE doc_no = $1 AND doc_id <> $2`,
+      [letterNo, docId]
+    )
+  );
+  if (dup.length) throw Object.assign(new Error(`이미 사용 중인 공문번호입니다(${letterNo}).`), { status: 400 });
+  await txn.run(`UPDATE approval_docs SET doc_no = $2 WHERE doc_id = $1`, [docId, letterNo]);
+  // 자동 채번이 이 번호를 다시 내주지 않도록 시퀀스를 끌어올리고, 반납 풀에 있으면 제거한다.
+  await txn.run(
+    `INSERT INTO doc_no_sequences (rule_key, year, last_seq) VALUES ($1, $2, $3)
+     ON CONFLICT (rule_key, year) DO UPDATE SET last_seq = GREATEST(doc_no_sequences.last_seq, EXCLUDED.last_seq)`,
+    [LETTER_RULE_KEY, parsed.year, parsed.seq]
+  );
+  await txn.run(`DELETE FROM doc_no_pool WHERE rule_key = $1 AND year = $2 AND seq = $3`, [
+    LETTER_RULE_KEY,
+    parsed.year,
+    parsed.seq,
+  ]);
+}
+
+/** 이관 등록(imported) 문서 삭제 — 오등록 정정용(관리자). 시스템 생성분은 대상이 아니다. */
+export async function deleteImportedLetter(letterId: string): Promise<boolean> {
+  let deleted = false;
+  await withDbWrite(async (txn) => {
+    const rows = rowsToObjects(
+      await txn.exec(`DELETE FROM official_letters WHERE letter_id = $1 AND source = 'imported' RETURNING letter_id`, [letterId])
+    );
+    deleted = rows.length > 0;
+  });
+  return deleted;
 }

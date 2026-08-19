@@ -31,6 +31,35 @@
 - **잔여**: ① 사용자 letter.hwpx 템플릿 제작(docs/letter-template-guide.md) 후 hwpx 검증
   ② 마이그 135 staging 적용+배포 ③ 백필 실행(스테이징 대상) ④ 실증(상신→승인→자동 발송)
 
+## v3 채번 예외 수단 — 번호 직접 지정 + 커스텀 이관 등록 (2026-08-19)
+
+그룹웨어 전사 런칭 전 테스트 기간이라 **앱 밖(사외)에서 발번·발송되는 공문이 섞인다**.
+앱은 자동 채번만 지원해 번호가 어긋나므로, ① 사외에서 이미 쓰인 번호를 건너뛰고 내 공문
+번호를 직접 지정하고 ② 건너뛴 번호는 결번으로 남겼다가 나중에 사용자가 직접 이관 등록해
+메우는 두 가지 수단을 추가했다. (사용자 확정 2026-08-19: 지정 권한=관리자만 · 결번=반납 풀에
+넣지 않고 비워 둔 뒤 이관 등록으로 메움)
+
+- **번호 직접 지정(작성 화면 /approval/letter)** — 관리자(`approval.manage`)에게만 '번호 직접
+  지정' 체크박스 노출. 입력은 일련번호 5자리(연도·`대외` 접두는 고정 표기), 350ms 디바운스로
+  중복 확인(`GET /api/letters/next-no?check=`), 결번 목록도 함께 안내.
+  - 저장 경로: `saveDoc({ manualDocNo })` → `assignManualDocNo()`(lib/letter/store.ts)가
+    draft 단계에서 `approval_docs.doc_no` 를 선점한다. 상신(`submitDoc`)은 doc_no 가 이미
+    있으면 그대로 쓰므로 **채번 로직 변경 없이** 지정 번호가 확정 번호가 된다.
+  - 시퀀스는 `GREATEST` 로만 끌어올리고(다음 자동 채번이 뒤로 밀림) 건너뛴 번호는
+    `doc_no_pool` 에 넣지 않는다 → 자동 채번이 사외 사용분을 다시 내주지 않는다.
+  - 지정 해제는 `submitted_at IS NULL` 인 문서만(반려 후 재편집 문서의 확정 번호 보존).
+  - 중복 판정은 **official_letters.letter_no ∪ approval_docs.doc_no**(수동 지정 draft 포함).
+- **커스텀 이관 등록(발송공문 탭)** — `LetterImportModal`. 기존 백필 관문
+  `POST /api/letters/import`(multipart, `approval.manage`)를 그대로 재사용하고 hwpx 슬롯을
+  추가했다. 번호·제목·유형·시행일·기안자·수신처/참조 그리드 + PDF/HWP/HWPX/동봉 첨부 업로드.
+  목록 상단에 **결번 칩**을 띄워 클릭하면 그 번호로 등록 모달이 열린다.
+  - `insertImportedLetter` 는 결재 문서가 선점한 번호면 400 으로 막고, 등록 시 시퀀스를
+    GREATEST 동기화한다(사외에서 앞서 나간 번호를 등록하면 자동 채번이 그 뒤로 밀림).
+  - 오등록 정정: `DELETE /api/letters/[letterId]`(imported 만) — 상세 모달 '등록 삭제'.
+    삭제하면 그 번호는 다시 결번으로 돌아온다.
+  - 감사 로그: `letter_import` · `letter_import_delete`.
+- **DB 변경 없음** — 마이그레이션 불필요(기존 official_letters·doc_no_sequences 재사용).
+
 ---
 
 이하 v1 원문(실측·설계 근거).

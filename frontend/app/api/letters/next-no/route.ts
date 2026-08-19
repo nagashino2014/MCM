@@ -1,28 +1,29 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
-import { getDb, rowsToObjects } from "@/lib/db";
+import { hasPermission } from "@/lib/auth/rbac";
+import { checkLetterNoAvailable, getLetterNumbering } from "@/lib/letter/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// GET: 다음 채번 예정 공문번호 — 작성 화면 상단 표시용(실제 확정은 상신 시 allocateDocNo).
-// 반납 풀(doc_no_pool)의 최소 결번이 있으면 그 번호를, 없으면 시퀀스 다음 번호를 보여준다.
-export async function GET() {
+// GET: 공문 채번 현황 — 작성 화면 상단 표시·직접 지정·이관 등록의 공용 소스.
+//   nextNo   다음 자동 채번 예정 번호(반납 풀의 최소 결번 우선. 실제 확정은 상신 시 allocateDocNo)
+//   gaps     결번(미등록 번호) — 수동 지정으로 건너뛴 사외 공문 자리. 이관 등록으로 메운다.
+//   canAssign 직접 지정 권한(approval.manage) 보유 여부
+//   check=<번호> 를 주면 해당 번호의 사용 가능 여부(available/usedBy)를 함께 판정한다.
+export async function GET(req: NextRequest) {
   try {
-    await requirePermission("approval.view");
-    const db = await getDb();
-    const year = new Date().getFullYear().toString();
-    const pool = rowsToObjects(
-      await db.exec(`SELECT min(seq) AS seq FROM doc_no_pool WHERE rule_key = '대외' AND year = $1`, [year])
-    );
-    let seq = pool[0]?.seq != null ? Number(pool[0].seq) : null;
-    if (seq == null) {
-      const rows = rowsToObjects(
-        await db.exec(`SELECT last_seq FROM doc_no_sequences WHERE rule_key = '대외' AND year = $1`, [year])
-      );
-      seq = rows.length ? Number(rows[0].last_seq) + 1 : 1001;
-    }
-    return NextResponse.json({ nextNo: `${year}-대외-${String(seq).padStart(5, "0")}` });
+    const ctx = await requirePermission("approval.view");
+    const year = String(req.nextUrl.searchParams.get("year") ?? new Date().getFullYear());
+    const numbering = await getLetterNumbering(year);
+    const check = req.nextUrl.searchParams.get("check");
+    const excludeDocId = req.nextUrl.searchParams.get("docId");
+    return NextResponse.json({
+      ...numbering,
+      year,
+      canAssign: await hasPermission(ctx.userId, "approval.manage"),
+      check: check ? { no: check, ...(await checkLetterNoAvailable(check.trim(), excludeDocId)) } : null,
+    });
   } catch (err) {
     return authErrorToResponse(err);
   }

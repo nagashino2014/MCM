@@ -22,7 +22,7 @@ import { MailEditor } from "@/components/mail/MailEditor";
 import { recipientsDisplay } from "@/lib/letter/compose";
 import {
   COMPANY_ADDRESS, COMPANY_BIZ_NO, COMPANY_CEO, COMPANY_CONTACT_EMAIL, COMPANY_KO, COMPANY_PHONE,
-  LETTER_FORM_ID,
+  LETTER_FORM_ID, LETTER_RULE_KEY, formatLetterNo, parseLetterNo,
   type LetterFieldValues, type LetterLayoutOverrides, type LetterRecipient, type ProofParty,
 } from "@/lib/letter/types";
 import "@/components/cdash/cdash.css";
@@ -432,6 +432,14 @@ export function ApprovalLetterBoard() {
   const [facilityModal, setFacilityModal] = useState(false);
   const [docNo, setDocNo] = useState<string | null>(null); // 재편집 문서의 확정 번호
   const [nextNo, setNextNo] = useState<string | null>(null); // 신규 작성 시 채번 예정 번호
+  // 공문번호 직접 지정(관리자) — 전사 런칭 전이라 사외에서 별도 발번된 공문이 섞인다.
+  // 그 번호를 건너뛰고 다음 번호를 골라 쓰기 위한 예외 수단(건너뛴 번호는 결번으로 남고
+  // 발송공문 탭의 '공문 이관 등록'으로 나중에 메운다).
+  const [canAssign, setCanAssign] = useState(false);
+  const [manualOn, setManualOn] = useState(false);
+  const [manualSeq, setManualSeq] = useState("");
+  const [manualCheck, setManualCheck] = useState<{ available: boolean; usedBy: string | null } | null>(null);
+  const [gaps, setGaps] = useState<string[]>([]);
   const [fileAttachments, setFileAttachments] = useState<{ name: string; key: string; size: number }[]>([]);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -450,7 +458,11 @@ export function ApprovalLetterBoard() {
   useEffect(() => {
     fetch("/api/letters/next-no", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => d?.nextNo && setNextNo(d.nextNo))
+      .then((d) => {
+        if (d?.nextNo) setNextNo(d.nextNo);
+        setCanAssign(d?.canAssign === true);
+        setGaps(Array.isArray(d?.gaps) ? d.gaps : []);
+      })
       .catch(() => {});
     fetch("/api/mail/mailbox", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
@@ -519,6 +531,14 @@ export function ApprovalLetterBoard() {
         const v = (d.fieldValues ?? {}) as Partial<LetterFieldValues>;
         setEditMeta(toEditDocMeta(d));
         setDocNo(d.docNo ?? null);
+        // 상신 전 임시저장인데 번호가 있으면 = 직접 지정해 둔 문서(자동 채번은 상신 시 부여)
+        if (d.docNo && d.status === "draft") {
+          const parsed = parseLetterNo(String(d.docNo));
+          if (parsed) {
+            setManualOn(true);
+            setManualSeq(String(parsed.seq).padStart(5, "0"));
+          }
+        }
         setFileAttachments(Array.isArray(v.file_attachments) ? v.file_attachments : []);
         setSubject(d.title ?? "");
         setLetterKind(v.letter_kind === "proof" ? "proof" : "general");
@@ -677,6 +697,32 @@ export function ApprovalLetterBoard() {
     return values;
   }, [letterKind, recipients, ccRefs, subject, attachItems, stampOn, includeHwpx, contactPhone, contactEmail, proofSender, proofReceiver, overrides, fileAttachments, deliverableId, internalCcTarget]);
 
+  // 직접 지정 번호 — 연도는 채번 예정 번호(없으면 확정 번호/올해) 기준.
+  const letterYear = (nextNo ?? docNo ?? "").slice(0, 4) || String(new Date().getFullYear());
+  const manualNo = manualSeq.trim() ? formatLetterNo(letterYear, Number(manualSeq)) : "";
+  // 상신 이력이 있는 문서(반려 후 재편집)는 번호가 이미 확정돼 바꿀 수 없다.
+  const noLocked = !!docNo && editMeta?.status !== "draft";
+
+  // 중복 확인 — 입력이 멎으면 서버에 조회(대장 + 결재 문서 doc_no 합집합).
+  useEffect(() => {
+    if (!manualOn || !manualNo) {
+      setManualCheck(null);
+      return;
+    }
+    const timer = setTimeout(() => {
+      const qs = new URLSearchParams({ check: manualNo, year: letterYear });
+      if (docId) qs.set("docId", docId);
+      fetch(`/api/letters/next-no?${qs.toString()}`, { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          setManualCheck(d?.check ?? null);
+          if (Array.isArray(d?.gaps)) setGaps(d.gaps);
+        })
+        .catch(() => {});
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [manualOn, manualNo, letterYear, docId]);
+
   const persist = useCallback(
     // docIdOverride: 같은 턴에서 save 직후 submit 할 때 — setDocId 는 비동기라 클로저의
     // docId 가 아직 null 이어서 새 문서가 하나 더 생긴다(⚠이중 상신·채번 이중 소모 실사고).
@@ -694,6 +740,8 @@ export function ApprovalLetterBoard() {
           line,
           watchers: watchers.map((w) => ({ userId: w.userId, kind: w.kind })),
           refDocId: null,
+          // 관리자만 전달 — 지정 해제(빈 문자열)는 자동 채번으로 되돌린다는 뜻이다.
+          manualDocNo: canAssign && !noLocked ? (manualOn ? manualNo : "") : undefined,
         }),
       });
       const data = await res.json();
@@ -709,7 +757,7 @@ export function ApprovalLetterBoard() {
       }
       return { docId: data.docId, docNo: data.docNo };
     },
-    [docId, subject, buildFieldValues, line, watchers, deliverableId]
+    [docId, subject, buildFieldValues, line, watchers, deliverableId, canAssign, noLocked, manualOn, manualNo]
   );
 
   const validate = useCallback((): string | null => {
@@ -720,8 +768,12 @@ export function ApprovalLetterBoard() {
     if (!html.replace(/<[^>]+>|&nbsp;/g, "").trim()) return "본문을 작성하세요.";
     if (letterKind === "proof" && (!proofReceiver.company.trim() || !proofReceiver.address.trim())) return "내용증명형은 수신 주소·회사명을 입력하세요.";
     if (line.length === 0) return "결재선에 결재자를 1명 이상 추가하세요.";
+    if (manualOn && !noLocked) {
+      if (!parseLetterNo(manualNo)) return "공문번호 일련번호를 4~5자리 숫자로 입력하세요(예: 01036).";
+      if (manualCheck && !manualCheck.available) return `이미 사용 중인 공문번호입니다 — ${manualCheck.usedBy}`;
+    }
     return null;
-  }, [subject, recipients, ccRefs, letterKind, proofReceiver, line]);
+  }, [subject, recipients, ccRefs, letterKind, proofReceiver, line, manualOn, noLocked, manualNo, manualCheck]);
 
   /** 동봉 첨부 업로드 — DnD/파일 선택 공용. 업로드 순서 = 발송 첨부 순서. */
   const uploadFiles = useCallback(async (files: FileList | File[]) => {
@@ -856,13 +908,67 @@ export function ApprovalLetterBoard() {
         <div className="flex flex-col xl:flex-row gap-4 items-start">
           {/* 좌: 공문 내용 — 폭은 전자결재 작성 양식(273mm)과 동일 수준(사용자 확정) */}
           <div className="cd-card rounded-3xl p-5 flex-1 min-w-0 max-w-[1032px] flex flex-col gap-4">
-            {/* 작성 중 공문번호 — 신규는 채번 예정 번호(상신 시 확정), 재편집은 확정 번호 */}
-            <div className="flex items-center gap-2 rounded-xl border cd-border-c px-3.5 py-2">
+            {/* 작성 중 공문번호 — 신규는 채번 예정 번호(상신 시 확정), 재편집은 확정 번호.
+                관리자는 '번호 직접 지정'으로 사외 발번분을 건너뛴 번호를 고를 수 있다. */}
+            <div className="flex items-center gap-2 rounded-xl border cd-border-c px-3.5 py-2 flex-wrap">
               <FileText className="w-4 h-4 cd-text-primary shrink-0" />
-              <span className="text-[12.5px] cd-text">
-                문서번호 <b className="font-mono">{docNo ?? nextNo ?? "조회 중..."}</b>
-              </span>
-              {!docNo && <span className="text-[10.5px] cd-text-faint">채번 예정 — 상신 시 확정됩니다(먼저 상신되는 문서가 이 번호를 가져갈 수 있음)</span>}
+              {manualOn ? (
+                <span className="text-[12.5px] cd-text flex items-center gap-1.5">
+                  문서번호
+                  <span className="font-mono cd-text-faint">
+                    {letterYear}-{LETTER_RULE_KEY}-
+                  </span>
+                  <input
+                    className="cd-input w-[84px] font-mono text-center"
+                    inputMode="numeric"
+                    maxLength={5}
+                    placeholder="01036"
+                    value={manualSeq}
+                    onChange={(e) => setManualSeq(e.target.value.replace(/\D/g, "").slice(0, 5))}
+                  />
+                </span>
+              ) : (
+                <span className="text-[12.5px] cd-text">
+                  문서번호 <b className="font-mono">{docNo ?? nextNo ?? "조회 중..."}</b>
+                </span>
+              )}
+              {!docNo && !manualOn && (
+                <span className="text-[10.5px] cd-text-faint">채번 예정 — 상신 시 확정됩니다(먼저 상신되는 문서가 이 번호를 가져갈 수 있음)</span>
+              )}
+              {manualOn &&
+                (!manualNo ? (
+                  <span className="text-[10.5px] cd-text-faint">사용할 번호를 입력하세요(자동 채번 예정: {nextNo ?? "-"})</span>
+                ) : manualCheck == null ? (
+                  <span className="text-[10.5px] cd-text-faint">중복 확인 중...</span>
+                ) : manualCheck.available ? (
+                  <span className="text-[10.5px]" style={{ color: "var(--cd-success, #13DEB9)" }}>사용 가능한 번호입니다</span>
+                ) : (
+                  <span className="text-[10.5px]" style={{ color: "var(--cd-danger, #FA896B)" }}>
+                    이미 사용 중 — {manualCheck.usedBy}
+                  </span>
+                ))}
+              {manualOn && gaps.length > 0 && (
+                <span className="text-[10.5px] cd-text-faint" title="사외 발번 등으로 비어 있는 번호 — 발송공문 탭의 '공문 이관 등록'으로 메웁니다.">
+                  결번 {gaps.slice(-6).join(", ")}
+                  {gaps.length > 6 ? ` 외 ${gaps.length - 6}` : ""}
+                </span>
+              )}
+              {canAssign && !noLocked && (
+                <label
+                  className="ml-auto flex items-center gap-1.5 text-[11.5px] cd-text cursor-pointer whitespace-nowrap"
+                  title="사외에서 이미 사용된 공문번호를 건너뛰고 번호를 직접 지정합니다(관리자). 건너뛴 번호는 결번으로 남고 '공문 이관 등록'으로 나중에 메웁니다."
+                >
+                  <input
+                    type="checkbox"
+                    checked={manualOn}
+                    onChange={(e) => {
+                      setManualOn(e.target.checked);
+                      if (e.target.checked && !manualSeq) setManualSeq((nextNo ?? "").slice(-5));
+                    }}
+                  />
+                  번호 직접 지정
+                </label>
+              )}
             </div>
             <div className="flex items-center gap-4 flex-wrap">
               <div className="flex items-center gap-3">

@@ -437,6 +437,11 @@ class Renderer {
         const paraTop = (first ? bodyTop + first.vertpos : bodyTop) + delta * U;
         this.drawPara(page, para, hu(bodyLeft), hu(bodyTop), undefined, { lineStep: step, extraTop: delta });
         for (const table of para.tables) {
+          // 종이 절대 배치 표(서명부 인감 정렬, 2026-08-19) — 문단 흐름과 무관하게 고정 좌표에 그린다
+          if (table.pos?.vertRelTo === "PAPER") {
+            this.drawTable(page, table, table.pos.horzOffset, table.pos.vertOffset);
+            continue;
+          }
           // 표는 문단의 한 글자처럼 앉는다 — 줄 상단 + 바깥 여백이 표 상단이다
           const align = this.doc.paraPr.get(para.paraPrId)?.align ?? "LEFT";
           const avail = first ? first.horzsize : geom.width - geom.left - geom.right;

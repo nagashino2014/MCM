@@ -164,6 +164,8 @@ export interface Table {
   width: number;
   height: number;
   outMargin: { left: number; right: number; top: number; bottom: number };
+  /** 종이 절대 배치(hp:pos vertRelTo=PAPER) — 서명부 표를 인감에 맞춰 고정할 때 쓴다(2026-08-19) */
+  pos?: { vertRelTo: string; horzRelTo: string; vertOffset: number; horzOffset: number };
   cells: Cell[];
 }
 
@@ -237,6 +239,7 @@ function parseSegs(p: XNode): LineSeg[] {
 function parseTable(tbl: XNode): Table {
   const sz = childrenOf(tbl, "hp:sz")[0];
   const om = childrenOf(tbl, "hp:outMargin")[0];
+  const pos = childrenOf(tbl, "hp:pos")[0];
   const cells: Cell[] = [];
   for (const tr of childrenOf(tbl, "hp:tr")) {
     for (const tc of childrenOf(tr, "hp:tc")) {
@@ -270,6 +273,14 @@ function parseTable(tbl: XNode): Table {
     width: num(sz?.attrs.width),
     height: num(sz?.attrs.height),
     outMargin: { left: num(om?.attrs.left), right: num(om?.attrs.right), top: num(om?.attrs.top), bottom: num(om?.attrs.bottom) },
+    pos: pos
+      ? {
+          vertRelTo: pos.attrs.vertRelTo ?? "PARA",
+          horzRelTo: pos.attrs.horzRelTo ?? "PARA",
+          vertOffset: num(pos.attrs.vertOffset),
+          horzOffset: num(pos.attrs.horzOffset),
+        }
+      : undefined,
     cells,
   };
 }

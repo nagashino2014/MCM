@@ -216,7 +216,12 @@ function retargetCellAlign(fragment: string, paraPrId: string | null): string {
  * ("대표이사   이 유 억   (인)")를 라벨 보존 + 성명 벌려쓰기로 재구성(정렬은 원본 유지 —
  * 배분정렬이 "(인)"을 오른쪽 끝에 붙여 종이 절대좌표 인감과 맞는다).
  */
-function fillSignatureCell(cellXml: string, slot: TemplateSlot, values: DeliverableValues, leftParaPr: string | null): string {
+function fillSignatureCell(
+  cellXml: string,
+  slot: TemplateSlot,
+  values: DeliverableValues,
+  leftParaPr: string | null
+): { xml: string; text: string } {
   const raw = renderBinding(slot.binding, values, slot.format);
   if (slot.binding === "company.ceo") {
     const { full } = textPieces(cellXml);
@@ -226,10 +231,10 @@ function fillSignatureCell(cellXml: string, slot: TemplateSlot, values: Delivera
     const parts = full.replace("(인)", "").trim().split(/\s{2,}/).map((t) => t.trim()).filter(Boolean);
     const label = parts.length >= 2 && squeeze(parts[0]) !== squeeze(raw) ? parts[0] : "";
     const text = [label, spreadName(raw), hasMark ? "(인)" : ""].filter(Boolean).join("   ");
-    return retargetCellAlign(replaceTexts(cellXml, text), leftParaPr);
+    return { xml: retargetCellAlign(replaceTexts(cellXml, text), leftParaPr), text };
   }
   const value = slot.binding === "company.address" ? compactAddress(raw) : raw;
-  return retargetCellAlign(replaceTexts(cellXml, value), leftParaPr);
+  return { xml: retargetCellAlign(replaceTexts(cellXml, value), leftParaPr), text: value };
 }
 
 function applySlots(xml: string, slots: TemplateSlot[], values: DeliverableValues, leftParaPr: string | null = null): FillResult {
@@ -250,6 +255,8 @@ function applySlots(xml: string, slots: TemplateSlot[], values: DeliverableValue
     overflow?: number;
   }
   const edits: Edit[] = [];
+  /** 서명부 셀(라벨 없는 회사 셀) — 표 단위 후처리(인감 정렬·글자 크기 통일)용 */
+  const signCells: { table: number; binding: string; text: string; editIndex: number }[] = [];
   for (const slot of slots) {
     const value = valueFor(slot, values);
     if (slot.target === "cell") {
@@ -267,13 +274,13 @@ function applySlots(xml: string, slots: TemplateSlot[], values: DeliverableValue
       const start = span.start + cell.start;
       const end = span.start + cell.end;
       const isSignCell = !slot.label && slot.binding.startsWith("company.");
-      edits.push({
-        start,
-        end,
-        text: isSignCell
-          ? fillSignatureCell(xml.slice(start, end), slot, values, leftParaPr)
-          : replaceTexts(xml.slice(start, end), value),
-      });
+      if (isSignCell) {
+        const filledCell = fillSignatureCell(xml.slice(start, end), slot, values, leftParaPr);
+        edits.push({ start, end, text: filledCell.xml });
+        signCells.push({ table: slot.table as number, binding: slot.binding, text: filledCell.text, editIndex: edits.length - 1 });
+      } else {
+        edits.push({ start, end, text: replaceTexts(xml.slice(start, end), value) });
+      }
       continue;
     }
     const span = slot.para != null ? byPara.get(slot.para) : undefined;
@@ -311,6 +318,88 @@ function applySlots(xml: string, slots: TemplateSlot[], values: DeliverableValue
     // 원본이 한 줄에 들어갔으므로, 그 폭을 넘지 않으면 새 값도 한 줄에 들어간다
     const overflow = textWidth(textPieces(filled.xml).full) - origWidth;
     edits.push({ start: span.start, end: span.end, text: filled.xml, binding: slot.binding, overflow });
+  }
+
+  // ── 서명부 표 후처리(2026-08-19 사용자 피드백) — 인감(종이 절대좌표)과 표(문단 흐름 배치)가
+  //    어긋난다 → 표 머리의 <hp:pos>만 종이 절대 배치로 바꿔 마지막 줄(대표자)이 인감과
+  //    겹치게 하고, 셀 글자 크기(charPr)를 상호 줄 기준으로 통일하며, 값이 넘치면 표 폭을
+  //    왼쪽 시작 위치 고정한 채 늘린다(pos·sz 는 표 머리라 셀 edits 와 구간이 겹치지 않는다).
+  for (const tableIdx of [...new Set(signCells.map((c) => c.table))]) {
+    const group = signCells.filter((c) => c.table === tableIdx);
+    if (group.length < 2) continue;
+    const span = tableSpan.get(tableIdx);
+    if (!span) continue;
+    const tableXml = xml.slice(span.start, span.end);
+    const headEnd = tableXml.indexOf("<hp:tr");
+    if (headEnd < 0) continue;
+    const head = tableXml.slice(0, headEnd);
+
+    // 글자 크기 통일 — 상호(name) 셀의 charPr 을 기준으로 나머지 서명 셀에 적용
+    const nameCell = group.find((c) => c.binding === "company.name") ?? group[0];
+    const charPr = /charPrIDRef="(\d+)"/.exec(edits[nameCell.editIndex].text)?.[1] ?? null;
+    if (charPr) {
+      for (const c of group) {
+        if (c === nameCell) continue;
+        edits[c.editIndex].text = edits[c.editIndex].text.replace(/charPrIDRef="\d+"/g, `charPrIDRef="${charPr}"`);
+      }
+    }
+
+    const szM = /<hp:sz width="(\d+)"[^>]*height="(\d+)"[^>]*\/>/.exec(head);
+    const rowHM = /<hp:cellSz width="\d+" height="(\d+)"/.exec(tableXml);
+    const posM = /<hp:pos[^>]*\/>/.exec(head);
+    if (!szM || !rowHM || !posM) continue;
+    const tblW = Number(szM[1]);
+    const tblH = Number(szM[2]);
+    const rowH = Number(rowHM[1]);
+    const marginL = Number(/<hp:cellMargin left="(\d+)"/.exec(tableXml)?.[1] ?? 141);
+    const charH = 1300; // 서명부 실측 13pt(발주처 준공계 관행 12~13pt) — 반각 폭 = height/2
+    const half = charH / 2;
+
+    // 폭 확장 — 가장 긴 줄이 셀에 접히지 않게. 표 머리 sz 와 각 서명 셀의 cellSz 를 함께 늘린다.
+    const needW = Math.round(Math.max(...group.map((c) => textWidth(c.text))) * half + marginL * 2 + 300);
+    if (needW > tblW) {
+      edits.push({
+        start: span.start + szM.index,
+        end: span.start + szM.index + szM[0].length,
+        text: szM[0].replace(/width="\d+"/, `width="${needW}"`),
+      });
+      for (const c of group) {
+        edits[c.editIndex].text = edits[c.editIndex].text.replace(/(<hp:cellSz width=")\d+(")/, `$1${needW}$2`);
+      }
+    }
+
+    // 인감 기준 절대 배치 — (인) 중심 x = 인감 중심 x, 마지막 행 세로 중심 = 인감 세로 중심
+    const pic = /<hp:pic\b[\s\S]*?<\/hp:pic>/g;
+    let anchor: { x: number; y: number; w: number; h: number } | null = null;
+    let pm: RegExpExecArray | null;
+    while ((pm = pic.exec(xml))) {
+      if (!/vertRelTo="PAPER"/.test(pm[0])) continue;
+      anchor = {
+        x: Number(/horzOffset="(-?\d+)"/.exec(pm[0])?.[1] ?? 0),
+        y: Number(/vertOffset="(-?\d+)"/.exec(pm[0])?.[1] ?? 0),
+        w: Number(/<hp:sz width="(\d+)"/.exec(pm[0])?.[1] ?? 0),
+        h: Number(/<hp:sz width="\d+"[^>]*height="(\d+)"/.exec(pm[0])?.[1] ?? 0),
+      };
+      break;
+    }
+    const ceo = group.find((c) => c.binding === "company.ceo");
+    const markAt = ceo ? ceo.text.indexOf("(인)") : -1;
+    if (anchor && anchor.w > 0 && ceo && markAt >= 0) {
+      const beforeW = textWidth(ceo.text.slice(0, markAt));
+      const markW = textWidth("(인)");
+      // A4(59528 HWPUNIT) 우측 밖으로 넘치지 않게 — 폭 확장분까지 감안해 왼쪽으로 당긴다
+      const finalW = Math.max(tblW, needW);
+      const maxX = 59528 - finalW - 850;
+      const tableX = Math.min(maxX, Math.max(2000, Math.round(anchor.x + anchor.w / 2 - marginL - (beforeW + markW / 2) * half)));
+      const tableY = Math.max(0, Math.round(anchor.y + anchor.h / 2 - tblH + rowH / 2));
+      edits.push({
+        start: span.start + posM.index,
+        end: span.start + posM.index + posM[0].length,
+        text:
+          `<hp:pos treatAsChar="0" affectLSpacing="0" flowWithText="0" allowOverlap="1" holdAnchorAndSO="0" ` +
+          `vertRelTo="PAPER" horzRelTo="PAPER" vertAlign="TOP" horzAlign="LEFT" vertOffset="${tableY}" horzOffset="${tableX}"/>`,
+      });
+    }
   }
 
   // 서명란(계약상대자·주소·상호·대표자)은 값이 원본보다 길어지기 쉽다. 줄을 접는 대신

@@ -165,6 +165,8 @@ export function computeCompletionAmounts(
   cum: { supply: number; vat: number; total: number };
   currentMilestoneId: string | null;
   priorLabel: string;
+  /** 청구 회차의 대금지급단계 명칭(준공금·잔금 등) — 대금청구서 청구 항목 표기 */
+  stageLabel: string;
 } {
   const sorted = [...milestones].sort((a, b) => a.stageOrder - b.stageOrder);
   const fallback = [...sorted].reverse().find(isCompletionStage) ?? sorted[sorted.length - 1];
@@ -184,6 +186,7 @@ export function computeCompletionAmounts(
     cum: splitVat(cumTotal, vatIncluded),
     currentMilestoneId: target?.milestoneId ?? null,
     priorLabel: priorColumnLabel(sorted.length),
+    stageLabel: target?.stageLabel?.trim() || "준공 기성금",
   };
 }
 
@@ -254,6 +257,7 @@ export async function buildAutoValues(
     values["payment.attachNote"] = "법인 통장 사본 1부"; // 대금청구서 별첨(실물 관행)
     values["meta.milestoneId"] = a.currentMilestoneId;
     values["meta.priorLabel"] = a.priorLabel;
+    values["meta.stageLabel"] = a.stageLabel; // 대금청구서 청구 항목 표기(대금지급단계 명칭)
   }
 
   return values;

@@ -31,6 +31,7 @@ import { getDeliverable, getTemplate, setDeliverableArtifacts } from "./store";
 import { fillTemplateHwpx } from "./template-fill";
 import {
   DELIVERABLE_KIND_LABEL,
+  PAYMENT_BANK_KEY,
   parsePhotoRefs,
   type DeliverableRow,
   type DeliverableSpec,
@@ -249,8 +250,23 @@ export async function generateDeliverableArtifacts(
     }
   }
 
-  if (bytes || extraPdf || paymentPdf) {
-    bytes = await mergePdfs([bytes ?? new Uint8Array(), extraPdf ?? new Uint8Array(), paymentPdf ?? new Uint8Array()]);
+  // 법인통장 사본(2026-08-19) — 대금청구서 별첨. 계좌를 고르면 맨 뒤에 병합한다.
+  let bankPdf: Uint8Array | null = null;
+  const bankKey = paymentSelected ? String(row.values[PAYMENT_BANK_KEY] ?? "").trim() : "";
+  if (bankKey) {
+    bankPdf = await readStorageObject(bankKey).catch((e) => {
+      console.warn("[deliverable] 법인통장 사본 로드 실패(제외):", (e as Error).message);
+      return null;
+    });
+  }
+
+  if (bytes || extraPdf || paymentPdf || bankPdf) {
+    bytes = await mergePdfs([
+      bytes ?? new Uint8Array(),
+      extraPdf ?? new Uint8Array(),
+      paymentPdf ?? new Uint8Array(),
+      bankPdf ?? new Uint8Array(),
+    ]);
   }
   if (!bytes) throw new Error("생성할 서식을 선택하세요.");
 

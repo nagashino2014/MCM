@@ -19,10 +19,12 @@ import { resolveServiceTypeStyle } from "@/lib/ieps/contract-tree-style";
 import { CATALOG_ADDON_TYPES, CATALOG_BY_TYPE, DEFAULT_DOC_TYPES, catalogByKind } from "@/lib/deliverable/catalog";
 import { collectBindings } from "@/lib/deliverable/format";
 import {
+  BANK_ACCOUNT_OPTIONS,
   BINDING_LABEL,
   DELIVERABLE_BINDINGS,
   DELIVERABLE_KIND_LABEL,
   OMIT_ORDER_NO_KEY,
+  PAYMENT_BANK_KEY,
   RESULT_PHOTOS_KEY,
   parsePhotoRefs,
   type BindingDef,
@@ -729,6 +731,23 @@ export function DeliverableBoard() {
                 );
               })}
               {catalogOptions.length === 0 && <span className="text-[12px] cd-text-faint">선택할 서식이 없습니다.</span>}
+              {/* 대금청구서 별첨 통장 사본(2026-08-19) — 계좌를 고르면 생성 PDF 마지막에 병합된다 */}
+              {docTypes.includes("payment_request") && (
+                <select
+                  className="cd-input text-[12px]"
+                  style={{ width: "auto" }}
+                  value={String(values[PAYMENT_BANK_KEY] ?? "")}
+                  onChange={(e) => setValue(PAYMENT_BANK_KEY, e.target.value)}
+                  title="대금청구서 별첨 '법인 통장 사본' — 선택한 계좌의 통장 사본 PDF가 함께 첨부됩니다"
+                >
+                  <option value="">통장 사본 선택 안 함</option>
+                  {BANK_ACCOUNT_OPTIONS.map((b) => (
+                    <option key={b.key} value={b.key}>
+                      법인통장 사본 — {b.label}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
           </div>
 

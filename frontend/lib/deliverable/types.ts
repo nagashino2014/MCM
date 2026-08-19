@@ -167,6 +167,13 @@ export const DELIVERABLE_BINDINGS: BindingDef[] = [
   { key: "issue.date", label: "작성일", group: "작성", format: "dateSpaced" },
   { key: "meta.vatNote", label: "VAT 표기", group: "작성", format: "text", hint: "VAT 포함 | VAT 별도" },
   {
+    key: "meta.stageLabel",
+    label: "대금청구서 청구 항목 표기",
+    group: "작성",
+    format: "text",
+    hint: "대금지급단계 명칭(준공금·잔금 등) 자동 — 수정 가능",
+  },
+  {
     key: "meta.priorLabel",
     label: "준공금액 표 앞열 제목",
     group: "작성",
@@ -205,6 +212,20 @@ export function parsePhotoRefs(values: DeliverableValues): DeliverablePhotoRef[]
     return [];
   }
 }
+
+// ── 대금청구서 법인통장 사본(2026-08-19 사용자 확정) ──
+// 별첨 "법인 통장 사본 1부"가 기본이라, 대금청구서 선택 시 계좌를 고르면 생성 PDF 마지막에
+// 해당 통장 사본이 병합된다. 원본 PDF 는 S3 자산(deliverables/assets/bank-accounts/)로 관리.
+export const PAYMENT_BANK_KEY = "payment.bankAccount"; // 값 = 아래 옵션의 key(S3)
+
+export const BANK_ACCOUNT_OPTIONS: { key: string; label: string }[] = [
+  { key: "deliverables/assets/bank-accounts/kookmin.pdf", label: "국민은행" },
+  { key: "deliverables/assets/bank-accounts/woori.pdf", label: "우리은행" },
+  { key: "deliverables/assets/bank-accounts/ibk.pdf", label: "기업은행" },
+  { key: "deliverables/assets/bank-accounts/shinhan.pdf", label: "신한은행" },
+  { key: "deliverables/assets/bank-accounts/hana.pdf", label: "하나은행" },
+  { key: "deliverables/assets/bank-accounts/nh.pdf", label: "농협은행" },
+];
 
 /** 렌더러(pdf.ts·spec-hwpx.ts)가 소비하는 로드된 사진 자산 — generate.ts 가 S3 에서 읽어 만든다 */
 export interface PhotoAsset {

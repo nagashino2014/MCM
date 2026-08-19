@@ -6,7 +6,7 @@
 // ⚠ 문단 재조립은 표 중첩 때문에 위험하다(hwpx.ts 와 같은 판단) → 문자열 구간 치환만 한다.
 
 import JSZip from "jszip";
-import { renderBinding } from "./format";
+import { formatValue, renderBinding, spreadName } from "./format";
 import { compactAddress } from "./hwpx";
 import { dropParagraphs, findCellSpan, replaceTexts, scanParaSpans, escapeXml, type ParaSpan } from "./template-form";
 import type { DeliverableValues, TemplateProfile, TemplateSlot } from "./types";
@@ -203,7 +203,36 @@ function shiftLeft(fragment: string, count: number): string {
   });
 }
 
-function applySlots(xml: string, slots: TemplateSlot[], values: DeliverableValues): FillResult {
+/** 셀 fragment 안 모든 문단의 정렬 스타일을 바꾼다(배분정렬 서명 셀 → 왼쪽 정렬). */
+function retargetCellAlign(fragment: string, paraPrId: string | null): string {
+  if (!paraPrId) return fragment;
+  return fragment.replace(/paraPrIDRef="\d+"/g, `paraPrIDRef="${paraPrId}"`);
+}
+
+/**
+ * 서명부 셀 주입(2026-08-19 사용자 피드백) — 라벨 없는 회사 셀(주소·상호·대표자)은
+ * 원본이 배분정렬(DISTRIBUTE)이라 값을 넣으면 글자가 쫙 벌어진다("1 0 0 , 1 2 층").
+ * 기본양식 서명란 형태를 복제한다: 주소·상호는 왼쪽 정렬로, 대표자는 원본 표기
+ * ("대표이사   이 유 억   (인)")를 라벨 보존 + 성명 벌려쓰기로 재구성(정렬은 원본 유지 —
+ * 배분정렬이 "(인)"을 오른쪽 끝에 붙여 종이 절대좌표 인감과 맞는다).
+ */
+function fillSignatureCell(cellXml: string, slot: TemplateSlot, values: DeliverableValues, leftParaPr: string | null): string {
+  const raw = renderBinding(slot.binding, values, slot.format);
+  if (slot.binding === "company.ceo") {
+    const { full } = textPieces(cellXml);
+    const hasMark = full.includes("(인)");
+    // 원문 "대표이사   이 유 억   (인)" — 2칸 이상 간격으로 가르면 [직함, 성명]이 나온다.
+    // 토큰이 2개 이상일 때 첫 토큰이 직함 라벨(성명만 있으면 토큰 1개 — 벌려쓰기는 1칸 공백).
+    const parts = full.replace("(인)", "").trim().split(/\s{2,}/).map((t) => t.trim()).filter(Boolean);
+    const label = parts.length >= 2 && squeeze(parts[0]) !== squeeze(raw) ? parts[0] : "";
+    const text = [label, spreadName(raw), hasMark ? "(인)" : ""].filter(Boolean).join("   ");
+    return retargetCellAlign(replaceTexts(cellXml, text), leftParaPr);
+  }
+  const value = slot.binding === "company.address" ? compactAddress(raw) : raw;
+  return retargetCellAlign(replaceTexts(cellXml, value), leftParaPr);
+}
+
+function applySlots(xml: string, slots: TemplateSlot[], values: DeliverableValues, leftParaPr: string | null = null): FillResult {
   const missed: TemplateSlot[] = [];
   const slotParas = new Set(slots.filter((s) => s.target === "para" && s.para != null).map((s) => s.para as number));
   // 뒤에서부터 고쳐야 앞 구간의 오프셋이 밀리지 않는다
@@ -237,7 +266,14 @@ function applySlots(xml: string, slots: TemplateSlot[], values: DeliverableValue
       }
       const start = span.start + cell.start;
       const end = span.start + cell.end;
-      edits.push({ start, end, text: replaceTexts(xml.slice(start, end), value) });
+      const isSignCell = !slot.label && slot.binding.startsWith("company.");
+      edits.push({
+        start,
+        end,
+        text: isSignCell
+          ? fillSignatureCell(xml.slice(start, end), slot, values, leftParaPr)
+          : replaceTexts(xml.slice(start, end), value),
+      });
       continue;
     }
     const span = slot.para != null ? byPara.get(slot.para) : undefined;
@@ -298,6 +334,35 @@ function applySlots(xml: string, slots: TemplateSlot[], values: DeliverableValue
   return { xml: out, missed };
 }
 
+/**
+ * 매핑되지 않은 작성일 문단 자동 치환(2026-08-19 사용자 피드백) — 발주처 양식의 가운데
+ * 작성일("2020. 07. 16")이 슬롯 분석에서 빠지면 원본 날짜가 그대로 남는다.
+ * 슬롯이 없는 최상위 문단 중 날짜만 담긴 문단을 issue.date 로 바꾼다(원본 표기 유지:
+ * 년월일 표기는 dateKorean, 점 표기는 dateDotted — 끝 마침표 유무도 원본을 따른다).
+ */
+const DATE_ONLY_RE = /^\d{4}\s*([.년])\s*\d{1,2}\s*[.월]\s*\d{1,2}\s*[.일]?\s*$/;
+
+function fillLooseDateParas(xml: string, slots: TemplateSlot[], values: DeliverableValues): string {
+  const issue = values["issue.date"];
+  if (issue == null || issue === "") return xml;
+  const slotParas = new Set(slots.filter((s) => s.target === "para" && s.para != null).map((s) => s.para as number));
+  const spans = scanParaSpans(xml).filter((sp) => !slotParas.has(sp.index));
+  const edits: { start: number; end: number; text: string }[] = [];
+  for (const sp of spans) {
+    const fragment = xml.slice(sp.start, sp.end);
+    if (fragment.includes("<hp:tbl")) continue; // 표를 품은 문단은 건드리지 않는다
+    const text = textPieces(fragment).full.trim();
+    const m = DATE_ONLY_RE.exec(text);
+    if (!m) continue;
+    let value = formatValue(issue, m[1] === "년" ? "dateKorean" : "dateDotted", values);
+    if (m[1] === "." && !/\.$/.test(text)) value = value.replace(/\.$/, ""); // 원본이 끝점 없는 표기
+    edits.push({ start: sp.start, end: sp.end, text: replaceTexts(fragment, value) });
+  }
+  let out = xml;
+  for (const e of edits.sort((a, b) => b.start - a.start)) out = out.slice(0, e.start) + e.text + out.slice(e.end);
+  return out;
+}
+
 /** 선택하지 않은 서식의 문단 구간을 잘라낸다(한 파일에 여러 장이 든 양식). */
 function keepDocs(xml: string, profile: TemplateProfile, docTypes: string[]): string {
   const keep = new Set(docTypes);
@@ -335,11 +400,20 @@ export async function fillTemplateHwpx(
   const docs = profile.docs.filter((d) => !keep.size || keep.has(d.docType));
   const slots = docs.flatMap((d) => d.slots);
 
+  // 서명 셀 왼쪽 정렬용 — 이 양식 헤더에서 왼쪽 정렬 paraPr 을 찾는다(없으면 정렬 유지)
+  let leftParaPr: string | null = null;
+  const headerXml = await zip.file("Contents/header.xml")?.async("string");
+  if (headerXml) {
+    const m = /<hh:paraPr id="(\d+)"[^>]*>(?:(?!<\/hh:paraPr>)[\s\S])*?<hh:align horizontal="LEFT"/.exec(headerXml);
+    leftParaPr = m ? m[1] : null;
+  }
+
   const original = await entry.async("string");
   // 서식을 먼저 골라낸 뒤 주입해야 남은 문단의 연번이 어긋나지 않는다 —
   // 그래서 골라내기 전 좌표로 주입하고, 골라내기는 마지막에 한다.
-  const applied = applySlots(original, slots, values);
-  let xml = keepDocs(applied.xml, profile, docTypes);
+  const applied = applySlots(original, slots, values, leftParaPr);
+  let xml = fillLooseDateParas(applied.xml, slots, values);
+  xml = keepDocs(xml, profile, docTypes);
   if (opts.dropParas?.length) xml = dropParagraphs(xml, opts.dropParas);
   if (!opts.keepLineSeg) xml = xml.replace(LINESEG_RE, "");
 

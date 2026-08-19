@@ -345,7 +345,7 @@ const PAYMENT_REQUEST: DeliverableSpec = {
         [
           { text: "청구금액", align: "center", bold: true },
           {
-            text: "준공 기성금 : {{completion.currentAmount|amountHangul}}" + "\n" + "(￦{{completion.currentAmount|amountNumber}} {{meta.vatNote}})",
+            text: "{{meta.stageLabel}} : {{completion.currentAmount|amountHangul}}" + "\n" + "(￦{{completion.currentAmount|amountNumber}} {{meta.vatNote}})",
           },
         ],
         [
@@ -371,10 +371,8 @@ const PAYMENT_REQUEST: DeliverableSpec = {
 /**
  * 성과품 사진 별첨 페이지(2026-08-19 사용자 확정) — 용역결과보고서 뒤에 붙는 별도 페이지.
  * 좌상단 "첨부자료" 표기 + (명칭 셀 위 / 사진 셀 아래) 표. 사진 비율에 따라 페이지당 1~4장:
- *   · 1장            → 2x1 표(명칭/사진)
- *   · 가로 사진 2장  → 4x1 표(세로 스택 — 명칭1/사진1/명칭2/사진2)
- *   · 세로 사진 2장  → 2x2 표(나란히 — 명칭행/사진행)
- *   · 세로 사진 4장  → 4x2 표(2열 x 2세트)
+ *   · 1~2장          → 1열(2x1 / 4x1 세로 스택) — 방향 불문(2026-08-19 확정: 2열은 3매부터)
+ *   · 세로 사진 3~4장 → 2열(4x2 — 2열 x 2세트)
  * 치수는 로드된 사진(PhotoAsset)에서 오므로 generate.ts 가 로드 후 호출한다.
  * 같은 방향(가로/세로)이 연속되는 사진끼리만 한 페이지에 묶는다(순서 보존).
  */
@@ -397,8 +395,8 @@ export function buildPhotoAttachmentSpecs(values: DeliverableValues, photos: Pho
     const cap = runPortrait ? 4 : 2;
     for (let i = 0; i < run.length; i += cap) {
       const chunk = run.slice(i, i + cap);
-      // 세로 1장만 남으면 전면(2x1), 2~4장은 2열
-      pages.push({ cols: runPortrait && chunk.length > 1 ? 2 : 1, idxs: chunk });
+      // 2열은 3매 이상부터(2026-08-19 사용자 확정) — 1~2매는 방향 불문 1열(위아래)
+      pages.push({ cols: runPortrait && chunk.length >= 3 ? 2 : 1, idxs: chunk });
     }
     run = [];
   };

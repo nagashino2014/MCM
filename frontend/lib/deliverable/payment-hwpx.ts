@@ -75,6 +75,8 @@ export async function renderPaymentHwpx(values: DeliverableValues, opts: { keepL
       .split("")
       .join(" "), // 원본 표기 "이 유 억"
     __DATE__: dateWide(values["issue.date"]),
+    // 청구 항목 표기 — 계약관리 대금지급단계 명칭(준공금·잔금 등). 값이 없으면 실물 관행.
+    __STAGE__: String(values["meta.stageLabel"] ?? "").trim() || "준공 기성금",
   };
   // hp:t 안의 토큰만 치환한다 — 값은 XML 이스케이프.
   xml = xml.replace(/\{\{\s*(__\w+__)\s*\}\}/g, (_all, key: string) => escapeXml(specials[key] ?? ""));

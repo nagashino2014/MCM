@@ -49,6 +49,7 @@ interface ReceiptItem {
   paidAt: string | null;
   paidDate: string | null;
   storeName: string | null;
+  storeCorpNum: string | null;
   totalAmount: number;
   cardLast4: string | null;
   items: string[];
@@ -63,6 +64,12 @@ interface ReceiptItem {
 }
 
 const won = (n: number) => `${n.toLocaleString('ko-KR')}원`;
+
+/** 표시용 000-00-00000 */
+const fmtCorpNum = (v: string) => {
+  const d = v.replace(/[^0-9]/g, '');
+  return d.length === 10 ? `${d.slice(0, 3)}-${d.slice(3, 5)}-${d.slice(5)}` : v;
+};
 
 /** 목록에 보여 줄 날짜 라벨 — 사용일이 없으면 촬영일로 대신하고 그 사실을 알린다. */
 function dateLabel(r: ReceiptItem): string {
@@ -332,6 +339,11 @@ export default function ReceiptsScreen() {
               onChangeText={(v) => setForm((s) => ({ ...s, storeName: v }))}
               editable={!locked}
             />
+            {editing.storeCorpNum ? (
+              <Text className="-mt-1 text-[11.5px] text-cd-faint">
+                사업자번호 {fmtCorpNum(editing.storeCorpNum)}
+              </Text>
+            ) : null}
             <Input
               label="금액"
               value={form.totalAmount}

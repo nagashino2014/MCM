@@ -32,7 +32,9 @@ type Step = "pick" | "parsing" | "form" | "saving" | "done";
 export function MobileReceipt() {
   const [step, setStep] = useState<Step>("pick");
   const [error, setError] = useState<string | null>(null);
-  const [warning, setWarning] = useState<string | null>(null);
+  // 서버가 판정한 확인 필요 항목(사용일 이상·사업자번호 체크섬)과 자동 보정 안내.
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [notices, setNotices] = useState<string[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [parsed, setParsed] = useState<ReceiptFields | null>(null);
@@ -45,7 +47,8 @@ export function MobileReceipt() {
   const handleFile = async (f: File | null) => {
     if (!f) return;
     setError(null);
-    setWarning(null);
+    setWarnings([]);
+    setNotices([]);
     setFile(f);
     setPreviewUrl((old) => {
       if (old) URL.revokeObjectURL(old);
@@ -59,7 +62,11 @@ export function MobileReceipt() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
       const fields = (data.fields ?? null) as ReceiptFields | null;
-      if (data.warning) setWarning(String(data.warning));
+      setWarnings([
+        ...(data.warning ? [String(data.warning)] : []),
+        ...((data.warnings ?? []) as string[]),
+      ]);
+      setNotices((data.notices ?? []) as string[]);
       setParsed(fields);
       setForm({
         storeName: fields?.storeName ?? "",
@@ -125,7 +132,8 @@ export function MobileReceipt() {
   const reset = () => {
     setStep("pick");
     setError(null);
-    setWarning(null);
+    setWarnings([]);
+    setNotices([]);
     setFile(null);
     setParsed(null);
     setForm({ storeName: "", paidAt: "", totalAmount: "", cardLast4: "", memo: "" });
@@ -140,7 +148,20 @@ export function MobileReceipt() {
   return (
     <div className="flex flex-col gap-3">
       {error && <ErrorBox message={error} />}
-      {warning && <div className="cd-warn-bg cd-warn-text rounded-xl px-4 py-3 text-sm">{warning}</div>}
+      {warnings.length > 0 && (
+        <div className="cd-warn-bg cd-warn-text space-y-1 rounded-xl px-4 py-3 text-sm">
+          {warnings.map((w, i) => (
+            <p key={i}>{w}</p>
+          ))}
+        </div>
+      )}
+      {notices.length > 0 && (
+        <div className="cd-tint-primary space-y-1 rounded-xl px-4 py-3 text-sm">
+          {notices.map((n, i) => (
+            <p key={i}>{n}</p>
+          ))}
+        </div>
+      )}
 
       {step === "pick" && (
         <div className="flex flex-col gap-2">

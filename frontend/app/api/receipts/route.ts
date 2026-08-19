@@ -43,6 +43,7 @@ export async function GET(req: NextRequest) {
         paidAt: r.paidAt,
         paidDate: r.paidAt ? r.paidAt.slice(0, 10) : null,
         storeName: r.storeName,
+        storeCorpNum: r.storeCorpNum,
         totalAmount: r.totalAmount,
         cardLast4: r.cardLast4,
         items: r.items,

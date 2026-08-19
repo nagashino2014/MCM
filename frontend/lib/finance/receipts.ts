@@ -8,6 +8,7 @@ import { getDb, withDbWrite, rowsToObjects } from "@/lib/db";
 import { putContractDocument, deleteContractDocument, sanitizePathSegment } from "@/lib/storage/contract-document-storage";
 import { classifyMany, loadCategories, isPgMerchant } from "@/lib/barobill/classify";
 import { buildReceiptPdf } from "@/lib/finance/receipt-pdf";
+import { isValidCorpNum, lookupStoreByCorpNum } from "@/lib/finance/store-directory";
 import type { ReceiptFields } from "@/lib/finance/receipt-parser";
 
 const KST_NOW = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 19).replace("T", " ");
@@ -142,9 +143,14 @@ export async function saveReceipt(params: {
   await putContractDocument(imageKey, params.image, "image/jpeg");
   await putContractDocument(pdfKey, pdf, "application/pdf");
 
-  // 자동분류 프리셋 — 법인카드와 동일 4단 파이프라인(업태 정보는 없으므로 규칙 단계는 사실상 상호·사업자번호 기반).
+  // 사업자번호가 유효하면 내부 실데이터에서 상호·업태를 끌어온다 — 상호가 비어 있으면 채우고,
+  // 업태는 자동분류의 업태 규칙 단계를 태우는 입력이 된다(법인카드 매입건과 같은 품질로 분류된다).
+  const known = isValidCorpNum(params.fields.storeCorpNum) ? await lookupStoreByCorpNum(params.fields.storeCorpNum) : null;
+  if (!params.fields.storeName && known?.storeName) params.fields.storeName = known.storeName;
+
+  // 자동분류 프리셋 — 법인카드와 동일 4단 파이프라인.
   const [cls] = await classifyMany([
-    { storeCorpNum: params.fields.storeCorpNum, storeBizType: null, storeName: params.fields.storeName },
+    { storeCorpNum: params.fields.storeCorpNum, storeBizType: known?.bizType ?? null, storeName: params.fields.storeName },
   ]);
 
   await withDbWrite(async (db) => {

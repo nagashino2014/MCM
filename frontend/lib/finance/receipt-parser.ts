@@ -5,6 +5,8 @@
 
 import sharp from "sharp";
 
+import { isValidCorpNum, normalizeCorpNum } from "@/lib/finance/store-directory";
+
 const MODEL = process.env.RECEIPT_PARSE_MODEL || "claude-haiku-4-5-20251001";
 const ENDPOINT = "https://api.anthropic.com/v1/messages";
 
@@ -80,6 +82,38 @@ export function normalizePaidAt(v: string | null): string | null {
   return `${date} ${h.padStart(2, "0")}:${mi}`;
 }
 
+/** KST 기준 오늘 YYYY-MM-DD. */
+const kstToday = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+
+/**
+ * 파싱 결과 중 사람이 확인해야 할 지점을 문장으로 만든다. 저장을 막지는 않는다(판단은 사용자 몫).
+ *
+ * 실제 사고: OCR 이 사용일 연도를 2020년으로 읽은 건이 기안 피커의 최근 90일 조회창 밖으로
+ * 떨어져, 저장은 됐는데 어디에도 보이지 않았다(2026-08-19). 그 자리에서 알아채도록 하는 장치다.
+ */
+export function buildReceiptWarnings(fields: ReceiptFields): string[] {
+  const out: string[] = [];
+  const today = kstToday();
+  const paidDate = fields.paidAt?.slice(0, 10) ?? null;
+
+  if (!paidDate) {
+    out.push("사용일을 읽지 못했습니다 — 날짜를 직접 선택해 주세요.");
+  } else if (paidDate > today) {
+    out.push(`사용일이 미래(${paidDate})로 인식됐습니다 — 날짜를 확인해 주세요.`);
+  } else {
+    const days = (Date.parse(`${today}T00:00:00Z`) - Date.parse(`${paidDate}T00:00:00Z`)) / 86400000;
+    if (Number.isFinite(days) && days > 365) {
+      const years = Math.floor(days / 365);
+      out.push(`사용일이 ${years}년 전(${paidDate})으로 인식됐습니다 — 연도가 맞는지 확인해 주세요.`);
+    }
+  }
+
+  if (fields.storeCorpNum && !isValidCorpNum(fields.storeCorpNum)) {
+    out.push("사업자번호가 잘못 읽힌 것 같습니다 — 영수증과 대조해 주세요.");
+  }
+  return out;
+}
+
 /**
  * 영수증 이미지 1장을 필드로 파싱. 키 미설정이면 null(호출부 수동 입력 폴백).
  * 실패(HTTP·파싱)는 throw — 라우트에서 사용자 메시지로 변환.
@@ -94,7 +128,10 @@ export async function parseReceipt(image: Buffer): Promise<ReceiptParseResult | 
     "이 이미지는 카드 결제 지류 영수증입니다(회전·구겨짐·감열지 흐림이 있을 수 있으니 방향을 바로잡아 읽으세요). " +
     "아래 필드를 추출해 JSON 만 출력하세요(설명·코드블록 금지). 없는 필드는 null, 값은 영수증 표기 그대로(추측 금지).\n" +
     "- storeName: 가맹점 상호(영수증 상단의 매장명. 프랜차이즈는 지점명 포함 표기 그대로)\n" +
-    "- storeCorpNum: 사업자번호(123-45-67890 형태 — 하이픈 포함 표기 그대로)\n" +
+    "- storeCorpNum: 사업자등록번호. **가장 중요한 항목이니 특히 주의해서 읽으세요** — " +
+    "'000-00-00000'(3-2-5 자리) 형태이고, 보통 상호명 바로 아래나 '사업자번호/사업자등록번호/사업자' " +
+    "라벨 옆, 또는 대표자명·주소와 함께 머리글 영역에 있습니다. 숫자를 한 자리씩 확인해 읽고, " +
+    "흐려서 확신이 서지 않는 자리가 있으면 추측하지 말고 null 로 두세요\n" +
     '- paidAt: 거래(승인)일시 "YYYY-MM-DD HH:MM"(시각이 없으면 날짜만)\n' +
     "- totalAmount: 합계(승인금액·받을금액 — 고객이 결제한 총액)\n" +
     "- supplyAmount / taxAmount: 공급가액과 부가세(면세 영수증이면 taxAmount 0)\n" +
@@ -147,8 +184,8 @@ export async function parseReceipt(image: Buffer): Promise<ReceiptParseResult | 
   };
 
   // 결정론 보정 — 사업자번호 10자리 검증, 금액 정합(공급가액+부가세=합계 ±1원, 어긋나면 합계 기준 역산).
-  const corpDigits = (fields.storeCorpNum ?? "").replace(/[^0-9]/g, "");
-  fields.storeCorpNum = corpDigits.length === 10 ? corpDigits : null;
+  // 자릿수뿐 아니라 국세청 체크섬까지 본다 — 틀린 번호로 상호 사전을 조회하면 엉뚱한 상호가 박힌다.
+  fields.storeCorpNum = normalizeCorpNum(fields.storeCorpNum);
   if (fields.totalAmount != null) {
     const s = fields.supplyAmount;
     const t = fields.taxAmount;

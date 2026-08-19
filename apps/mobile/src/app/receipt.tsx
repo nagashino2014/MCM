@@ -46,6 +46,12 @@ type Step = 'pick' | 'parsing' | 'form' | 'saving' | 'done';
 
 const PRIMARY = '#4A63D8';
 
+/** 표시용 000-00-00000 (10자리가 아니면 입력값 그대로 둔다 — 타이핑 중 되돌림 금지). */
+const fmtCorpNum = (v: string) => {
+  const d = v.replace(/[^0-9]/g, '');
+  return d.length === 10 ? `${d.slice(0, 3)}-${d.slice(3, 5)}-${d.slice(5)}` : v;
+};
+
 // 라우트 크래시 캐처 — 화면 오류 시 흰 화면 대신 안내+재시도 제공
 export function ErrorBoundary({ error, retry }: { error: Error; retry: () => Promise<void> }) {
   return (
@@ -65,13 +71,24 @@ export default function ReceiptScreen() {
   const router = useRouter();
   const [step, setStep] = useState<Step>('pick');
   const [error, setError] = useState<string | null>(null);
-  const [warning, setWarning] = useState<string | null>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
+  // 안내(자동 보정 결과) — 경고와 톤을 나눈다. 경고=사용자 확인 필요, 안내=이미 처리됨.
+  const [notices, setNotices] = useState<string[]>([]);
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [parsed, setParsed] = useState<ReceiptFields | null>(null);
   // 확인 폼 — 파싱 결과를 문자열 버퍼로 편집(AGENTS.md: controlled input 에 정규화 함수 금지)
   // 사용일은 자유 입력이던 것을 달력 선택으로 바꿨다 — 표기가 제각각이면 목록·피커의 기간 필터에서
   // 빠져 "저장했는데 안 보이는" 건이 생긴다(2026-08-19 원인 분석). 시각만 선택 입력으로 남긴다.
-  const [form, setForm] = useState({ storeName: '', paidDate: '', paidTime: '', totalAmount: '', cardLast4: '', memo: '' });
+  const [form, setForm] = useState({
+    storeName: '',
+    corpNum: '',
+    paidDate: '',
+    paidTime: '',
+    totalAmount: '',
+    cardLast4: '',
+    memo: '',
+  });
+  const [looking, setLooking] = useState(false);
   const [datePicker, setDatePicker] = useState(false);
   const [duplicates, setDuplicates] = useState<DuplicateInfo[] | null>(null);
   const [savedStore, setSavedStore] = useState<string | null>(null);
@@ -148,7 +165,8 @@ export default function ReceiptScreen() {
 
   const handleImage = async (uri: string) => {
     setImageUri(uri);
-    setWarning(null);
+    setWarnings([]);
+    setNotices([]);
     setStep('parsing');
     try {
       const fd = new FormData();
@@ -164,15 +182,19 @@ export default function ReceiptScreen() {
       const data = (await res.json().catch(() => ({}))) as {
         fields?: ReceiptFields | null;
         warning?: string;
+        warnings?: string[];
+        notices?: string[];
         error?: string;
       };
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
       const fields = data.fields ?? null;
-      if (data.warning) setWarning(data.warning);
+      setWarnings([...(data.warning ? [data.warning] : []), ...(data.warnings ?? [])]);
+      setNotices(data.notices ?? []);
       setParsed(fields);
       const paidAt = fields?.paidAt ?? '';
       setForm({
         storeName: fields?.storeName ?? '',
+        corpNum: fmtCorpNum(fields?.storeCorpNum ?? ''),
         paidDate: paidAt.slice(0, 10),
         paidTime: paidAt.length > 10 ? paidAt.slice(11, 16) : '',
         totalAmount: fields?.totalAmount != null ? String(fields.totalAmount) : '',
@@ -202,7 +224,7 @@ export default function ReceiptScreen() {
     try {
       const fields: ReceiptFields = {
         storeName: form.storeName.trim() || null,
-        storeCorpNum: parsed?.storeCorpNum ?? null,
+        storeCorpNum: form.corpNum.replace(/[^0-9]/g, '') || null,
         paidAt: form.paidDate ? (form.paidTime.trim() ? `${form.paidDate} ${form.paidTime.trim()}` : form.paidDate) : null,
         totalAmount: amount,
         // 공급가액·부가세는 서버가 검증·역산(사용자 수정 금액 기준으로 재계산되도록 원 파싱값 전달)
@@ -238,13 +260,43 @@ export default function ReceiptScreen() {
     }
   };
 
+  /** 사업자번호로 상호를 찾아 채운다(내부 거래 이력 조회). 못 찾으면 안내만 남긴다. */
+  const lookupStore = async () => {
+    const digits = form.corpNum.replace(/[^0-9]/g, '');
+    if (digits.length !== 10) {
+      setWarnings((w) => [...w, '사업자번호 10자리를 입력해 주세요.']);
+      return;
+    }
+    setLooking(true);
+    try {
+      const res = await apiFetch(`/api/receipts/store-lookup?corpNum=${digits}`);
+      const d = (await res.json().catch(() => ({}))) as {
+        store?: { storeName: string | null } | null;
+        message?: string | null;
+        error?: string;
+      };
+      if (!res.ok) throw new Error(d.error ?? `HTTP ${res.status}`);
+      if (d.store?.storeName) {
+        setForm((s) => ({ ...s, storeName: d.store!.storeName as string }));
+        setNotices((n) => [...n, `상호를 "${d.store!.storeName}"(으)로 채웠습니다.`]);
+      } else if (d.message) {
+        setNotices((n) => [...n, d.message as string]);
+      }
+    } catch (e) {
+      setError(`상호를 찾지 못했습니다: ${(e as Error).message}`);
+    } finally {
+      setLooking(false);
+    }
+  };
+
   const reset = () => {
     setStep('pick');
     setError(null);
-    setWarning(null);
+    setWarnings([]);
+    setNotices([]);
     setImageUri(null);
     setParsed(null);
-    setForm({ storeName: '', paidDate: '', paidTime: '', totalAmount: '', cardLast4: '', memo: '' });
+    setForm({ storeName: '', corpNum: '', paidDate: '', paidTime: '', totalAmount: '', cardLast4: '', memo: '' });
     setDuplicates(null);
     setSavedStore(null);
   };
@@ -270,9 +322,22 @@ export default function ReceiptScreen() {
             <Text className="text-sm text-cd-error">{error}</Text>
           </View>
         ) : null}
-        {warning ? (
-          <View className="rounded-xl bg-cd-warning-soft px-4 py-3">
-            <Text className="text-sm text-cd-warning">{warning}</Text>
+        {warnings.length ? (
+          <View className="gap-1 rounded-xl bg-cd-warning-soft px-4 py-3">
+            {warnings.map((w, i) => (
+              <Text key={i} className="text-sm text-cd-warning">
+                {w}
+              </Text>
+            ))}
+          </View>
+        ) : null}
+        {notices.length ? (
+          <View className="gap-1 rounded-xl bg-cd-primary-soft px-4 py-3">
+            {notices.map((n, i) => (
+              <Text key={i} className="text-sm text-cd-primary">
+                {n}
+              </Text>
+            ))}
           </View>
         ) : null}
 
@@ -336,6 +401,27 @@ export default function ReceiptScreen() {
             <View className="gap-2 rounded-2xl border border-cd-border bg-cd-card p-3">
               <Text className="text-xs font-bold text-cd-muted">인식 결과 확인 — 틀린 곳만 고쳐주세요</Text>
               <Field label="상호" value={form.storeName} onChange={(v) => setForm((s) => ({ ...s, storeName: v }))} />
+              <View className="flex-row items-center gap-2">
+                <Text className="w-16 text-xs text-cd-faint">사업자번호</Text>
+                <TextInput
+                  className="flex-1 rounded-lg border border-cd-border px-3 py-2 text-base text-cd-text"
+                  value={form.corpNum}
+                  onChangeText={(v) => setForm((s) => ({ ...s, corpNum: v }))}
+                  keyboardType="numbers-and-punctuation"
+                  placeholder="000-00-00000"
+                  placeholderTextColor="#9ca3af"
+                />
+                <Pressable
+                  onPress={() => void lookupStore()}
+                  disabled={looking}
+                  className="rounded-lg border border-cd-border px-3 py-2.5 active:opacity-70">
+                  {looking ? (
+                    <ActivityIndicator size="small" color={PRIMARY} />
+                  ) : (
+                    <Text className="text-xs font-bold text-primary">상호 찾기</Text>
+                  )}
+                </Pressable>
+              </View>
               <View className="flex-row items-center gap-2">
                 <Text className="w-16 text-xs text-cd-faint">사용일</Text>
                 <Pressable

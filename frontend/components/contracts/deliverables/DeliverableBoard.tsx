@@ -16,7 +16,7 @@ import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
 import { AmountInput } from "@/components/ui/AmountInput";
 import { resolveServiceTypeStyle } from "@/lib/ieps/contract-tree-style";
-import { CATALOG_BY_TYPE, DEFAULT_DOC_TYPES, catalogByKind } from "@/lib/deliverable/catalog";
+import { CATALOG_ADDON_TYPES, CATALOG_BY_TYPE, DEFAULT_DOC_TYPES, catalogByKind } from "@/lib/deliverable/catalog";
 import { collectBindings } from "@/lib/deliverable/format";
 import {
   BINDING_LABEL,
@@ -279,7 +279,8 @@ export function DeliverableBoard() {
       const tpl = templates.find((t) => t.templateId === templateId);
       if (tpl) {
         const byType = new Map(tpl.specs.map((s) => [s.docType, s]));
-        const picked = docTypes.map((t) => byType.get(t)).filter((s): s is DeliverableSpec => !!s);
+        // 양식에 없는 서식은 카탈로그 폴백 — 기본 추가 서식(내역서·결과보고서·대금청구서)
+        const picked = docTypes.map((t) => byType.get(t) ?? CATALOG_BY_TYPE[t]).filter((s): s is DeliverableSpec => !!s);
         return picked.length ? picked : tpl.specs;
       }
     }
@@ -289,7 +290,15 @@ export function DeliverableBoard() {
   const template = useMemo(() => templates.find((t) => t.templateId === templateId) ?? null, [templateId, templates]);
 
   const catalogOptions = useMemo(() => {
-    if (template) return template.docs.map((d) => ({ docType: d.docType, title: d.title }));
+    if (template) {
+      // 발주처 양식 + 기본 추가 서식(내역서·결과보고서·대금청구서) 조합(2026-08-19 사용자 확정) —
+      // 발주처 양식이 준공계만 담고 있어도 나머지는 자사 기본 서식으로 함께 낸다
+      const addons = kind === "completion" ? CATALOG_ADDON_TYPES.map((t) => CATALOG_BY_TYPE[t]).filter(Boolean) : [];
+      return [
+        ...template.docs.map((d) => ({ docType: d.docType, title: d.title })),
+        ...addons.map((s) => ({ docType: s.docType, title: `${s.title}(기본)` })),
+      ];
+    }
     return catalogByKind(kind).map((s) => ({ docType: s.docType, title: s.title }));
   }, [kind, template]);
 
@@ -297,7 +306,10 @@ export function DeliverableBoard() {
   const editableBindings = useMemo(() => {
     if (template?.renderMode === "overlay") {
       const picked = template.docs.filter((d) => !docTypes.length || docTypes.includes(d.docType));
-      return [...new Set((picked.length ? picked : template.docs).flatMap((d) => d.bindings))];
+      const mapped = [...new Set((picked.length ? picked : template.docs).flatMap((d) => d.bindings))];
+      // 기본 추가 서식 선택분의 바인딩도 편집 대상에 합친다(overlay 매핑에는 없는 항목들)
+      const addonSpecs = docTypes.map((t) => CATALOG_BY_TYPE[t]).filter(Boolean);
+      return [...new Set([...mapped, ...collectBindings(addonSpecs)])];
     }
     return collectBindings(specs);
   }, [docTypes, specs, template]);

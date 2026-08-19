@@ -432,6 +432,14 @@ export const HWPX_TEMPLATE_DOC_TYPES: Record<DeliverableKind, string[]> = {
   completion: ["completion_inspection", "completion_settlement", "completion_supervision"],
 };
 
+/**
+ * 발주처 자체양식에도 조합 선택할 수 있는 기본 추가 서식(2026-08-19 사용자 확정) —
+ * 발주처 양식이 준공계만 담고 있어도 준공내역서·용역결과보고서(사진 별첨)·대금청구서는
+ * 자사 기본 서식으로 함께 낸다(동두천드림파워 실사례). 대금청구서는 별도 원본 템플릿 경로.
+ */
+export const CATALOG_EXTRA_COMPLETION_TYPES = ["completion_statement", "service_result_report"] as const;
+export const CATALOG_ADDON_TYPES = [...CATALOG_EXTRA_COMPLETION_TYPES, "payment_request"] as const;
+
 export const DELIVERABLE_CATALOG: DeliverableSpec[] = [
   START_NOTICE,
   COMPLETION_INSPECTION,

@@ -15,7 +15,13 @@
 import { PDFDocument } from "pdf-lib";
 import { readStorageObject } from "@/lib/contracts/document-bundle";
 import { putContractDocument, sanitizeFilename } from "@/lib/storage/contract-document-storage";
-import { CATALOG_BY_TYPE, HWPX_TEMPLATE_DOC_TYPES, adjustSpecForValues, buildPhotoAttachmentSpecs } from "./catalog";
+import {
+  CATALOG_BY_TYPE,
+  CATALOG_EXTRA_COMPLETION_TYPES,
+  HWPX_TEMPLATE_DOC_TYPES,
+  adjustSpecForValues,
+  buildPhotoAttachmentSpecs,
+} from "./catalog";
 import { compactAddress, renderDeliverableHwpx } from "./hwpx";
 import { renderHwpxToPdf } from "./hwpx-pdf";
 import { renderDeliverablePdf } from "./pdf";
@@ -39,7 +45,8 @@ export async function resolveSpecs(row: Pick<DeliverableRow, "templateId" | "doc
     const tpl = await getTemplate(row.templateId);
     if (!tpl) throw new Error("발주처 양식을 찾을 수 없습니다.");
     const byType = new Map(tpl.specs.map((s) => [s.docType, s]));
-    const picked = row.docTypes.map((t) => byType.get(t)).filter((s): s is DeliverableSpec => !!s);
+    // 템플릿에 없는 서식은 카탈로그 폴백 — 발주처 양식 + 기본 추가 서식 조합(2026-08-19)
+    const picked = row.docTypes.map((t) => byType.get(t) ?? CATALOG_BY_TYPE[t]).filter((s): s is DeliverableSpec => !!s);
     return picked.length ? picked : tpl.specs;
   }
   return row.docTypes.map((t) => CATALOG_BY_TYPE[t]).filter((s): s is DeliverableSpec => !!s);
@@ -136,82 +143,48 @@ export async function generateDeliverableArtifacts(
     "company.address": compactAddress(String(row.values["company.address"] ?? "")),
   };
 
+  // ── 공통 선계산: 기본 추가 서식(내역서·결과보고서·대금청구서) — 기본양식은 물론
+  //    발주처 자체양식에도 조합 선택할 수 있다(2026-08-19 사용자 확정, 동두천드림파워 실사례).
+  const paymentSelected = row.docTypes.includes("payment_request");
+  const extraTypes = row.docTypes.filter((t) => (CATALOG_EXTRA_COMPLETION_TYPES as readonly string[]).includes(t));
+  const extraSpecs = [
+    ...extraTypes.map((t) => CATALOG_BY_TYPE[t]),
+    ...(extraTypes.includes("service_result_report") ? buildPhotoAttachmentSpecs(row.values, photos) : []),
+  ].map((s) => normalizeSpecSpacing(adjustSpecForValues(s, row.values)));
+
   // HWPX 가 원본인 두 경로 — 기본양식(템플릿 치환)과 발주처 자체양식(원본에 값 주입).
   // PDF 는 어느 쪽이든 같은 HWPX 를 좌표 그대로 옮겨 그린다(서식이 갈리지 않게).
   let hwpxBytes: Uint8Array | null = null;
   let bytes: Uint8Array | null = null;
+  /** 폴백 통합 렌더에 extra 가 이미 포함됐으면 아래 병합에서 중복 방지 */
+  let extraMerged = false;
   // PDF 를 먼저 그린다 — 값이 길어져 늘어난 줄을 흡수하려고 없앤 여백 줄(drops)을
   // 배포용 HWPX 에도 똑같이 적용해야 한글로 열었을 때 같은 배치가 나온다.
   if (!row.templateId) {
-    // 기본양식 — HWPX 템플릿 보유분과 spec 전용분(준공내역서·용역결과보고서)을 분리 렌더 후 병합
+    // 기본양식 — HWPX 템플릿 보유분(착수계·준공 3종)만 여기서 렌더한다
     const tplSet = new Set(HWPX_TEMPLATE_DOC_TYPES[row.kind]);
     const tplTypes = row.docTypes.filter((t) => tplSet.has(t));
-    // 대금청구서는 자체 원본 템플릿(payment.hwpx) 경로 — spec 재구축이 원본 레이아웃을
-    // 재현하지 못한다는 사용자 피드백(2026-08-19)에 따라 준공 3종과 같은 방식으로 뺀다.
-    const paymentSelected = row.docTypes.includes("payment_request");
-    const extraTypes = row.docTypes.filter((t) => !tplSet.has(t) && t !== "payment_request" && CATALOG_BY_TYPE[t]);
-    const extraSpecs = [
-      ...extraTypes.map((t) => CATALOG_BY_TYPE[t]),
-      ...(extraTypes.includes("service_result_report") ? buildPhotoAttachmentSpecs(row.values, photos) : []),
-    ].map((s) => normalizeSpecSpacing(adjustSpecForValues(s, row.values)));
-
-    let tplPdf: Uint8Array | null = null;
     if (tplTypes.length) {
       try {
         const forPdf = await renderDeliverableHwpx(row.kind, tplTypes, row.values, { keepLineSeg: true });
         const out = await renderHwpxToPdf(forPdf);
-        tplPdf = out.pdf;
+        bytes = out.pdf;
         hwpxBytes = await renderDeliverableHwpx(row.kind, tplTypes, row.values, { dropParas: out.drops });
       } catch (err) {
         console.warn("[deliverable] HWPX 경로 실패(자체 렌더러로 진행):", (err as Error).message);
       }
     }
-    let extraPdf: Uint8Array | null = null;
-    if (extraSpecs.length) {
-      extraPdf = await renderDeliverablePdf(extraSpecs, specValues, { photos });
-      if (hwpxBytes && row.kind === "completion") {
-        // 템플릿 산출물 뒤에 spec 장을 이어 붙인다(같은 completion.hwpx 헤더라 스타일 id 호환)
-        try {
-          hwpxBytes = await appendSpecsToHwpx(hwpxBytes, extraSpecs, specValues, { photos });
-        } catch (err) {
-          console.warn("[deliverable] spec 장 HWPX 병합 실패(템플릿 장만 제공):", (err as Error).message);
-        }
-      } else if (!hwpxBytes) {
-        try {
-          hwpxBytes = await renderSpecHwpx(extraSpecs, specValues, { photos });
-        } catch (err) {
-          console.warn("[deliverable] 재구축 HWPX 생성 실패(PDF 만 제공):", (err as Error).message);
-        }
-      }
-    }
-    // 대금청구서 — 원본 템플릿 치환 → 같은 파일로 PDF(레이아웃 실물 그대로). 목록 마지막 순서.
-    let paymentPdf: Uint8Array | null = null;
-    if (paymentSelected) {
-      try {
-        const forPdf = await renderPaymentHwpx(row.values, { keepLineSeg: true });
-        paymentPdf = (await renderHwpxToPdf(forPdf)).pdf;
-        // HWPX 산출물: 대금청구서만 선택했으면 원본 템플릿 배포본을 그대로 낸다.
-        // 다른 서식과 혼합이면 헤더(스타일 카탈로그)가 달라 한 파일로 합칠 수 없어
-        // HWPX 에는 싣지 않는다 — 한글본이 필요하면 대금청구서만 따로 선택해 내려받는다.
-        if (!hwpxBytes && !extraSpecs.length) {
-          hwpxBytes = await renderPaymentHwpx(row.values);
-        }
-      } catch (err) {
-        console.warn("[deliverable] 대금청구서 템플릿 경로 실패(재구축 폴백):", (err as Error).message);
-        const fallback = [normalizeSpecSpacing(adjustSpecForValues(CATALOG_BY_TYPE["payment_request"], row.values))];
-        paymentPdf = await renderDeliverablePdf(fallback, specValues, {});
-      }
-    }
-    if (tplPdf || extraPdf || paymentPdf) {
-      bytes = await mergePdfs([tplPdf ?? new Uint8Array(), extraPdf ?? new Uint8Array(), paymentPdf ?? new Uint8Array()]);
-    }
   } else if (overlay && tpl?.sourceKey && tpl.profile) {
+    // 발주처 자체양식(overlay) — 기본 추가 서식은 양식 원본에 없으므로 빼고 주입한다
+    const tplDocTypes = row.docTypes.filter(
+      (t) => !(CATALOG_EXTRA_COMPLETION_TYPES as readonly string[]).includes(t) && t !== "payment_request"
+    );
     try {
       const source = await readStorageObject(tpl.sourceKey);
-      const forPdf = await fillTemplateHwpx(source, tpl.profile, row.docTypes, row.values, { keepLineSeg: true });
+      const forPdf = await fillTemplateHwpx(source, tpl.profile, tplDocTypes, row.values, { keepLineSeg: true });
       const out = await renderHwpxToPdf(forPdf.bytes);
       bytes = out.pdf;
-      const filled = await fillTemplateHwpx(source, tpl.profile, row.docTypes, row.values, { dropParas: out.drops });
+      const filled = await fillTemplateHwpx(source, tpl.profile, tplDocTypes, row.values, { dropParas: out.drops });
       hwpxBytes = filled.bytes;
       if (filled.missed.length) {
         console.warn(`[deliverable] 양식 ${tpl.templateId}: 값을 넣지 못한 자리 ${filled.missed.length}건`);
@@ -220,28 +193,66 @@ export async function generateDeliverableArtifacts(
       console.warn("[deliverable] 자체양식 주입 실패(자체 렌더러로 진행):", (err as Error).message);
     }
   }
-  // spec 모드(스캔 PDF 재구축) 또는 위 경로 실패 시의 폴백.
+  // spec 모드(스캔 PDF 재구축) 또는 위 경로 실패 시의 폴백 — 본체와 extra 를 통합 spec 렌더.
   // 준공금 100%(기지급 0) 계약은 기지급 열을 제거한 표로 렌더한다.
   if (!bytes) {
-    const specs = await resolveSpecs(row);
-    if (!specs.length) throw new Error("생성할 서식을 선택하세요.");
-    // 여백은 normalizeSpecSpacing 이 규칙대로 다시 심는다 — PDF·HWPX 가 같은 spec 을 보게 해
-    // 두 산출물의 간격이 갈리지 않게 한다(LLM 이 준 spacer 는 문서마다 제각각이다)
-    const adjusted = [
-      ...specs.filter((sp) => row.templateId || sp.docType !== "payment_request"),
-      ...(row.docTypes.includes("service_result_report") && !row.templateId ? buildPhotoAttachmentSpecs(row.values, photos) : []),
-    ].map((s) => normalizeSpecSpacing(adjustSpecForValues(s, row.values)));
-    bytes = await renderDeliverablePdf(adjusted, specValues, { photos });
-    // 재구축 양식도 한글에서 손볼 수 있게 HWPX 를 함께 낸다(사용자 요청) —
-    // 서식이 원본과 똑같지는 않지만 고쳐 쓸 수 있다는 점이 중요하다.
-    if (!hwpxBytes) {
-      try {
-        hwpxBytes = await renderSpecHwpx(adjusted, specValues, { photos });
-      } catch (err) {
-        console.warn("[deliverable] 재구축 HWPX 생성 실패(PDF 만 제공):", (err as Error).message);
+    const baseSpecs = (await resolveSpecs(row)).filter(
+      (sp) => !(CATALOG_EXTRA_COMPLETION_TYPES as readonly string[]).includes(sp.docType) && sp.docType !== "payment_request"
+    );
+    const adjusted = [...baseSpecs.map((sp) => normalizeSpecSpacing(adjustSpecForValues(sp, row.values))), ...extraSpecs];
+    if (adjusted.length) {
+      bytes = await renderDeliverablePdf(adjusted, specValues, { photos });
+      extraMerged = true;
+      // 재구축 양식도 한글에서 손볼 수 있게 HWPX 를 함께 낸다(사용자 요청) —
+      // 서식이 원본과 똑같지는 않지만 고쳐 쓸 수 있다는 점이 중요하다.
+      if (!hwpxBytes) {
+        try {
+          hwpxBytes = await renderSpecHwpx(adjusted, specValues, { photos });
+        } catch (err) {
+          console.warn("[deliverable] 재구축 HWPX 생성 실패(PDF 만 제공):", (err as Error).message);
+        }
       }
     }
   }
+
+  // ── 기본 추가 서식(내역서·결과보고서+사진 별첨) — 본체 뒤에 병합 ──
+  let extraPdf: Uint8Array | null = null;
+  if (extraSpecs.length && !extraMerged) {
+    extraPdf = await renderDeliverablePdf(extraSpecs, specValues, { photos });
+    if (!row.templateId && hwpxBytes && row.kind === "completion") {
+      // 기본양식(completion.hwpx 헤더)만 HWPX 에도 이어 붙인다 — 발주처 원본(overlay)은
+      // 스타일 카탈로그가 달라 병합할 수 없어 HWPX 에는 싣지 않는다(별도 선택으로 내려받음).
+      try {
+        hwpxBytes = await appendSpecsToHwpx(hwpxBytes, extraSpecs, specValues, { photos });
+      } catch (err) {
+        console.warn("[deliverable] spec 장 HWPX 병합 실패(본체 장만 제공):", (err as Error).message);
+      }
+    }
+  }
+
+  // ── 대금청구서 — 원본 템플릿(payment.hwpx) 치환 → 같은 파일로 PDF. 목록 마지막 병합 ──
+  let paymentPdf: Uint8Array | null = null;
+  if (paymentSelected) {
+    try {
+      const forPdf = await renderPaymentHwpx(row.values, { keepLineSeg: true });
+      paymentPdf = (await renderHwpxToPdf(forPdf)).pdf;
+      // HWPX 산출물: 대금청구서만 선택했으면 원본 템플릿 배포본을 그대로 낸다.
+      // 다른 서식과 혼합이면 헤더(스타일 카탈로그)가 달라 한 파일로 합칠 수 없어
+      // HWPX 에는 싣지 않는다 — 한글본이 필요하면 대금청구서만 따로 선택해 내려받는다.
+      if (!hwpxBytes && row.docTypes.length === 1) {
+        hwpxBytes = await renderPaymentHwpx(row.values);
+      }
+    } catch (err) {
+      console.warn("[deliverable] 대금청구서 템플릿 경로 실패(재구축 폴백):", (err as Error).message);
+      const fallback = [normalizeSpecSpacing(adjustSpecForValues(CATALOG_BY_TYPE["payment_request"], row.values))];
+      paymentPdf = await renderDeliverablePdf(fallback, specValues, {});
+    }
+  }
+
+  if (bytes || extraPdf || paymentPdf) {
+    bytes = await mergePdfs([bytes ?? new Uint8Array(), extraPdf ?? new Uint8Array(), paymentPdf ?? new Uint8Array()]);
+  }
+  if (!bytes) throw new Error("생성할 서식을 선택하세요.");
 
   if (!persist) return { pdfKey: null, pdfBytes: bytes, hwpxKey: null, hwpxBytes, fileBase };
 

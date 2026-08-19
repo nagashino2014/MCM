@@ -37,13 +37,19 @@ export async function POST(_req: NextRequest, ctx: RouteContext) {
       storageError = (e as Error).message;
       console.warn("[deliverable] 첨부 산출물 보관 실패:", storageError);
     }
-    // 붙임 목록의 문서명 — 기본양식은 카탈로그, 발주처 자체양식은 그 양식의 서식 제목을 쓴다
+    // 붙임 목록의 문서명 — 기본양식은 카탈로그, 발주처 자체양식은 그 양식의 서식 제목을 쓰되
+    // 양식에 없는 기본 추가 서식(내역서·결과보고서·대금청구서)은 카탈로그 제목으로 채운다(2026-08-19)
     const tpl = row.templateId ? await getTemplate(row.templateId) : null;
-    const docTitles = tpl
-      ? templateDocTitles(tpl)
-          .filter((d) => !row.docTypes.length || row.docTypes.includes(d.docType))
-          .map((d) => d.title)
-      : (await resolveSpecs(row)).map((s) => CATALOG_BY_TYPE[s.docType]?.title ?? s.title);
+    let docTitles: string[];
+    if (tpl) {
+      const titleByType = new Map(templateDocTitles(tpl).map((d) => [d.docType, d.title]));
+      const picked = (row.docTypes.length ? row.docTypes : [...titleByType.keys()])
+        .map((t) => titleByType.get(t) ?? CATALOG_BY_TYPE[t]?.title)
+        .filter((t): t is string => !!t);
+      docTitles = picked;
+    } else {
+      docTitles = (await resolveSpecs(row)).map((s) => CATALOG_BY_TYPE[s.docType]?.title ?? s.title);
+    }
     const contractTitle = String(row.values["contract.title"] ?? row.title);
 
     // 수신처 = 계약 발주처(계약상대 업체). 공문 수신란 표기·주소 자동 채움용.

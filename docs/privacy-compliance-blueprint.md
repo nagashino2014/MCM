@@ -64,7 +64,7 @@
 | G5 | **문서 세트 부재** | 취업규칙 모니터링 조항·개인정보 처리방침·정보보호 서약서 없음(설계 의도만 docs 에 존재) | P5 |
 | G6 | **이력 없는 직접 경로** | bastion SSM→RDS 직접 쿼리, 단일 S3 버킷 콘솔 접근 — 모두 무기록. RDS Activity Streams·CloudTrail data events·S3 access logging 미설정 | P6 |
 | G7 | **비상 우회 스위치** | `RBAC_ENFORCE=false`·`RBAC_ADMIN_BYPASS=true` 환경변수로 전 권한 통과 가능 | P1에 포함(사용 시 감사로그) |
-| G8 | **리포 내 비밀** | 루트에 `ADMIN_PASSWOR.txt` 커밋됨 | **P0 즉시** |
+| G8 | **로컬 평문 비밀 파일** | 루트에 `ADMIN_PASSWOR.txt`(admin 초기 비밀번호 1회 표시본). ~~커밋됨~~ → 08-19 재확인: **git 이력에 없음**(untracked·.gitignore 등재) — 원격 유출 없음. 로컬 파일 삭제 완료 | **P0 완료** |
 | G9 | 별칭 가로채기 잠재 경로 | `mail.manage` 로 타인 수신 별칭을 자기 mailbox 에 연결 가능(향후 수신분) | P1(별칭 변경 감사로그) |
 
 ---
@@ -84,10 +84,12 @@
 
 ## 4. 로드맵
 
-### PR-P0 — 즉시 조치 (½일) ✅ 일부 완료
-- [x] 파일함 열람·삭제 감사로그(`file_library_open`·`file_library_delete`·`file_retention_purge`) — 08-19 반영
-- [ ] `ADMIN_PASSWOR.txt` 리포 제거 + 해당 비밀 로테이션(git 이력에 남으므로 값 변경이 본질) + `.gitignore` 등재
-- [ ] `RBAC_ENFORCE`·`RBAC_ADMIN_BYPASS` 현재 staging 환경변수 값 점검(비상 모드 꺼짐 확인)
+### PR-P0 — 즉시 조치 (½일) ✅ 완료 (08-19)
+- [x] 파일함 열람·삭제 감사로그(`file_library_open`·`file_library_delete`·`file_retention_purge`)
+- [x] `ADMIN_PASSWOR.txt`: git 이력에 없음 확인(untracked·.gitignore 기등재) → 로컬 파일 삭제. 비밀번호 로테이션 스크립트 제공(사용자 실행) —
+      admin 비번은 Secrets `mcm-ieps-staging/app-uzjmuz`:`ADMIN_PASSWORD` 가 원본이고 `ADMIN_PASSWORD_SYNC_ON_BOOT=true` 라 부팅마다 동기화되므로,
+      로테이션은 반드시 Secrets 값 변경 → next 재시작 순서로(앱 UI 변경은 재부팅 시 되돌아감)
+- [x] 비상 스위치 점검: staging next:456 기준 `RBAC_ENFORCE=true`(강제 모드 정상), `RBAC_ADMIN_BYPASS` 미설정(비활성) 확인
 
 ### PR-P1 — 접속기록(개보법 시행령 요건) (2~3일)
 - `access_log` 신설(마이그): `actor_user_id, action(view|download|delete|login|export), target_kind, target_id, detail jsonb, created_at` — **INSERT 전용**
@@ -137,6 +139,6 @@
 
 ## 6. 다음 액션 (사용자 결정 대기)
 
-1. P0 잔여 2건(ADMIN_PASSWOR.txt 제거·로테이션, 비상 스위치 점검) — 즉시 실행 권장
+1. ~~P0~~ 완료. admin 비밀번호 로테이션만 사용자 실행 대기(스크립트 제공됨 — 새 값이 대화 기록에 남지 않도록 직접 실행)
 2. P1 접속기록부터 착수할지, P5 문서 세트(노무사 컨택)를 병행할지
 3. P2 break-glass 는 실제 조사 수요 발생 전까지 보류(권장)

@@ -318,8 +318,9 @@ export function adjustSpecForValues(spec: DeliverableSpec, values: Record<string
 
 /**
  * 7. 대금청구서 — 실측: 2026-대외-01032 동봉본(수도권매립지관리공사 준공 기성금 청구).
- * 4x2 표(계약건명·계약금액·청구금액·청구인) + 별첨 + 청구 문구 + 날짜 + 수신처.
  * 준공계 공문에 대부분 함께 요구되어 준공 서류 목록 **마지막**에 둔다(2026-08-19 사용자 확정).
+ * ⚠ 실제 산출은 원본 템플릿 경로(payment-hwpx.ts — public/hwpx/payment.hwpx 토큰 치환)가
+ * 담당한다. 이 spec 은 목록 노출(제목·docType·바인딩 수집)과 템플릿 실패 시 폴백용 근사다.
  * 청구금액 = 금회 준공 기성금(completion.currentAmount, 기성 자동 채움 값 재사용).
  */
 const PAYMENT_REQUEST: DeliverableSpec = {

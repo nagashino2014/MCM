@@ -65,6 +65,12 @@ interface ReceiptItem {
 
 const won = (n: number) => `${n.toLocaleString('ko-KR')}원`;
 
+/** 천단위 구분자 표시(입력 버퍼에는 숫자만 담긴다). */
+const fmtAmount = (v: string) => {
+  const d = v.replace(/[^0-9]/g, '');
+  return d ? Number(d).toLocaleString('ko-KR') : '';
+};
+
 /** 표시용 000-00-00000 */
 const fmtCorpNum = (v: string) => {
   const d = v.replace(/[^0-9]/g, '');
@@ -346,8 +352,8 @@ export default function ReceiptsScreen() {
             ) : null}
             <Input
               label="금액"
-              value={form.totalAmount}
-              onChangeText={(v) => setForm((s) => ({ ...s, totalAmount: v }))}
+              value={fmtAmount(form.totalAmount)}
+              onChangeText={(v) => setForm((s) => ({ ...s, totalAmount: v.replace(/[^0-9]/g, '') }))}
               keyboardType="number-pad"
               editable={!locked}
             />

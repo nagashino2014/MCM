@@ -264,7 +264,7 @@ export default function HomeScreen() {
                 <ActionTile icon="camera-outline" label="명함" tone={c.primary} onPress={() => router.push('/card')} />
               ) : null}
               {Platform.OS !== 'web' ? (
-                <ActionTile icon="receipt-outline" label="영수증" tone={c.error} onPress={() => router.push('/receipts')} />
+                <ActionTile icon="receipt-outline" label="영수증" tone={c.error} onPress={() => router.push('/receipt-menu')} />
               ) : null}
               <ActionTile
                 icon="paper-plane-outline"

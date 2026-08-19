@@ -57,16 +57,9 @@ export default function MoreScreen() {
               {
                 icon: 'receipt-outline' as const,
                 tone: c.error,
-                title: '영수증 촬영',
-                subtitle: '개인카드 경비 증빙 스톡',
-                onPress: () => router.push('/receipt'),
-              },
-              {
-                icon: 'file-tray-full-outline' as const,
-                tone: c.error,
-                title: '영수증 보관함',
-                subtitle: '찍어 둔 영수증 확인·수정',
-                onPress: () => router.push('/receipts'),
+                title: '영수증',
+                subtitle: '촬영 · 보관함',
+                onPress: () => router.push('/receipt-menu'),
               },
             ]
           : []),

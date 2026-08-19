@@ -47,6 +47,12 @@ type Step = 'pick' | 'parsing' | 'form' | 'saving' | 'done';
 const PRIMARY = '#4A63D8';
 
 /** 표시용 000-00-00000 (10자리가 아니면 입력값 그대로 둔다 — 타이핑 중 되돌림 금지). */
+/** 천단위 구분자 표시(입력 버퍼에는 숫자만 담긴다). */
+const fmtAmount = (v: string) => {
+  const d = v.replace(/[^0-9]/g, '');
+  return d ? Number(d).toLocaleString('ko-KR') : '';
+};
+
 const fmtCorpNum = (v: string) => {
   const d = v.replace(/[^0-9]/g, '');
   return d.length === 10 ? `${d.slice(0, 3)}-${d.slice(3, 5)}-${d.slice(5)}` : v;
@@ -85,10 +91,11 @@ export default function ReceiptScreen() {
     paidDate: '',
     paidTime: '',
     totalAmount: '',
-    cardLast4: '',
     memo: '',
   });
   const [looking, setLooking] = useState(false);
+  /** 상호를 사업자번호로 확정하지 못한 상태 — 이때만 상호 입력란을 연다(평소엔 조회 결과를 보여 준다). */
+  const [manualStore, setManualStore] = useState(false);
   const [datePicker, setDatePicker] = useState(false);
   const [duplicates, setDuplicates] = useState<DuplicateInfo[] | null>(null);
   const [savedStore, setSavedStore] = useState<string | null>(null);
@@ -190,6 +197,7 @@ export default function ReceiptScreen() {
       const fields = data.fields ?? null;
       setWarnings([...(data.warning ? [data.warning] : []), ...(data.warnings ?? [])]);
       setNotices(data.notices ?? []);
+      setManualStore(!data.fields?.storeName);
       setParsed(fields);
       const paidAt = fields?.paidAt ?? '';
       setForm({
@@ -198,7 +206,6 @@ export default function ReceiptScreen() {
         paidDate: paidAt.slice(0, 10),
         paidTime: paidAt.length > 10 ? paidAt.slice(11, 16) : '',
         totalAmount: fields?.totalAmount != null ? String(fields.totalAmount) : '',
-        cardLast4: fields?.cardLast4 ?? '',
         memo: '',
       });
       setDuplicates(null);
@@ -230,7 +237,7 @@ export default function ReceiptScreen() {
         // 공급가액·부가세는 서버가 검증·역산(사용자 수정 금액 기준으로 재계산되도록 원 파싱값 전달)
         supplyAmount: parsed?.totalAmount === amount ? (parsed?.supplyAmount ?? null) : null,
         taxAmount: parsed?.totalAmount === amount ? (parsed?.taxAmount ?? null) : null,
-        cardLast4: form.cardLast4.replace(/[^0-9]/g, '').slice(-4) || null,
+        cardLast4: parsed?.cardLast4 ?? null,
         approvalNum: parsed?.approvalNum ?? null,
         items: parsed?.items ?? [],
       };
@@ -278,8 +285,10 @@ export default function ReceiptScreen() {
       if (!res.ok) throw new Error(d.error ?? `HTTP ${res.status}`);
       if (d.store?.storeName) {
         setForm((s) => ({ ...s, storeName: d.store!.storeName as string }));
+        setManualStore(false);
         setNotices((n) => [...n, `상호를 "${d.store!.storeName}"(으)로 채웠습니다.`]);
       } else if (d.message) {
+        setManualStore(true);
         setNotices((n) => [...n, d.message as string]);
       }
     } catch (e) {
@@ -296,7 +305,8 @@ export default function ReceiptScreen() {
     setNotices([]);
     setImageUri(null);
     setParsed(null);
-    setForm({ storeName: '', corpNum: '', paidDate: '', paidTime: '', totalAmount: '', cardLast4: '', memo: '' });
+    setForm({ storeName: '', corpNum: '', paidDate: '', paidTime: '', totalAmount: '', memo: '' });
+    setManualStore(false);
     setDuplicates(null);
     setSavedStore(null);
   };
@@ -400,7 +410,6 @@ export default function ReceiptScreen() {
 
             <View className="gap-2 rounded-2xl border border-cd-border bg-cd-card p-3">
               <Text className="text-xs font-bold text-cd-muted">인식 결과 확인 — 틀린 곳만 고쳐주세요</Text>
-              <Field label="상호" value={form.storeName} onChange={(v) => setForm((s) => ({ ...s, storeName: v }))} />
               <View className="flex-row items-center gap-2">
                 <Text className="w-16 text-xs text-cd-faint">사업자번호</Text>
                 <TextInput
@@ -422,6 +431,27 @@ export default function ReceiptScreen() {
                   )}
                 </Pressable>
               </View>
+              {manualStore ? (
+                <Field
+                  label="상호"
+                  value={form.storeName}
+                  onChange={(v) => setForm((s) => ({ ...s, storeName: v }))}
+                  placeholder="사업자번호로 찾지 못했다면 직접 입력"
+                />
+              ) : (
+                <View className="flex-row items-center gap-2">
+                  <Text className="w-16 text-xs text-cd-faint">상호</Text>
+                  <Text className="flex-1 text-base font-semibold text-cd-text" numberOfLines={1}>
+                    {form.storeName || '-'}
+                  </Text>
+                  <Pressable
+                    onPress={() => setManualStore(true)}
+                    hitSlop={8}
+                    className="px-2 py-1 active:opacity-60">
+                    <Text className="text-xs font-bold text-primary">수정</Text>
+                  </Pressable>
+                </View>
+              )}
               <View className="flex-row items-center gap-2">
                 <Text className="w-16 text-xs text-cd-faint">사용일</Text>
                 <Pressable
@@ -441,14 +471,8 @@ export default function ReceiptScreen() {
               />
               <Field
                 label="금액 *"
-                value={form.totalAmount}
-                onChange={(v) => setForm((s) => ({ ...s, totalAmount: v }))}
-                keyboardType="number-pad"
-              />
-              <Field
-                label="카드 끝4"
-                value={form.cardLast4}
-                onChange={(v) => setForm((s) => ({ ...s, cardLast4: v }))}
+                value={fmtAmount(form.totalAmount)}
+                onChange={(v) => setForm((s) => ({ ...s, totalAmount: v.replace(/[^0-9]/g, '') }))}
                 keyboardType="number-pad"
               />
               <Field label="메모" value={form.memo} onChange={(v) => setForm((s) => ({ ...s, memo: v }))} placeholder="(선택)" />

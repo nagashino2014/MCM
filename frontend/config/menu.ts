@@ -19,6 +19,7 @@ import {
   CarFront,
   SlidersHorizontal,
   Landmark,
+  FolderOpen,
   type LucideIcon,
 } from "lucide-react";
 
@@ -68,13 +69,23 @@ export const MENU_ITEMS: MenuItem[] = [
       { title: "전자결재 홈", href: "/approval" },
       { title: "공문 작성", href: "/approval/letter" },
       { title: "견적서 작성", href: "/approval/quote" },
-      { title: "문서함", href: "/approval/archive" },
       { title: "양식별 문서 조회", href: "/approval/records" },
       { title: "데이터 분석", href: "/approval/analytics" },
       { title: "결재 인사이트", href: "/approval/insights" },
     ],
     group: "collab",
     badgeKey: "approvalPending",
+  },
+  // 파일 · 문서함 — 파일함(전 소스 업로드 파일 통합 관리, files.manage RBAC) + 전자결재에서 이동한 문서함.
+  {
+    title: "파일 · 문서함",
+    href: "/files",
+    icon: FolderOpen,
+    submenu: [
+      { title: "파일함", href: "/files" },
+      { title: "문서함", href: "/approval/archive" },
+    ],
+    group: "collab",
   },
   {
     title: "주소록·조직도",

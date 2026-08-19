@@ -45,7 +45,8 @@ export type FieldFormat =
   | "dateSpaced" // 2026년    7월     17일 (작성일 서명 위 표기)
   | "period" // 2026년 05월 28일 ~ 2026년 07월 24일
   | "percent" // 100%
-  | "multiline"; // 첨부자료 목록 등 줄바꿈 보존
+  | "multiline" // 첨부자료 목록 등 줄바꿈 보존
+  | "nameSpread"; // 성명 벌려쓰기 "이 유 억" (서명·청구인 표기)
 
 /** 값이 들어갈 자리 — 라벨-값 행 1줄. 착수계 계약금액처럼 값이 2행인 경우 secondLine 사용. */
 export interface FieldRow {
@@ -77,6 +78,8 @@ export interface CellSpec {
   rowSpan?: number;
   /** 병합으로 가려지는 자리(렌더 시 건너뜀) */
   merged?: boolean;
+  /** 셀 마지막 줄 "(인)" 위에 법인 인감을 겹쳐 찍는다(대금청구서 청구인 셀) */
+  stamp?: boolean;
 }
 
 export type DocBlock =
@@ -155,6 +158,7 @@ export const DELIVERABLE_BINDINGS: BindingDef[] = [
   { key: "completion.cumTotal", label: "누계 합계", group: "준공", format: "amountNumber" },
   { key: "completion.progressRate", label: "공정율", group: "준공", format: "percent" },
   { key: "completion.attachList", label: "첨부자료 목록", group: "준공", format: "multiline", manual: true },
+  { key: "payment.attachNote", label: "대금청구서 별첨 표기", group: "준공", format: "text", manual: true, hint: "기본: 법인 통장 사본 1부" },
   { key: "orderer.name", label: "발주처명", group: "발주처", format: "text" },
   { key: "company.name", label: "자사 상호", group: "자사", format: "text" },
   { key: "company.address", label: "자사 주소", group: "자사", format: "text" },

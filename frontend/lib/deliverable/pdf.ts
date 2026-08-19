@@ -202,12 +202,25 @@ function drawTable(ctx: Ctx, block: Extract<DocBlock, { kind: "table" }>, y: num
       const lines = cellLines[ri][ci];
       const textH = lines.length * lineH;
       let ty = ry - (h - textH) / 2 - size;
-      for (const ln of lines) {
+      lines.forEach((ln, li) => {
         const tw = font.widthOfTextAtSize(ln, size);
         const align = cell.align ?? block.columns[ci]?.align ?? "left";
-        page.drawText(ln, { x: alignX(align, colX[ci] + pad, w - pad * 2, tw), y: ty, size, font, color: INK });
+        const tx = alignX(align, colX[ci] + pad, w - pad * 2, tw);
+        page.drawText(ln, { x: tx, y: ty, size, font, color: INK });
+        // 셀 인감(대금청구서 청구인) — 마지막 줄 말미 "(인)" 위에 겹쳐 찍는다(signature 규칙과 동일)
+        if (cell.stamp && ctx.stamp && li === lines.length - 1) {
+          const stampW = 44;
+          const stampH = (ctx.stamp.height / ctx.stamp.width) * stampW;
+          page.drawImage(ctx.stamp, {
+            x: tx + tw - stampW * 0.62,
+            y: ty - stampH * 0.4 + size * 0.5,
+            width: stampW,
+            height: stampH,
+            opacity: 0.92,
+          });
+        }
         ty -= lineH;
-      }
+      });
       cx += 1;
     });
     ry -= rowH[ri];

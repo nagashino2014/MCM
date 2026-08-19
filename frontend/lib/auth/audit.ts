@@ -69,6 +69,7 @@ export type AuditAction =
   | "approval_doc_act"
   | "approval_doc_cancel"
   | "approval_doc_delete"
+  | "approval_doc_recall"
   | "letter_import"
   | "letter_import_delete"
   | "approval_cancel_request"

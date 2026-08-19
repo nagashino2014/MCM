@@ -251,6 +251,7 @@ export async function buildAutoValues(
     values["completion.cumTotal"] = a.cum.total;
     values["completion.progressRate"] = 100;
     values["completion.attachList"] = "";
+    values["payment.attachNote"] = "법인 통장 사본 1부"; // 대금청구서 별첨(실물 관행)
     values["meta.milestoneId"] = a.currentMilestoneId;
     values["meta.priorLabel"] = a.priorLabel;
   }

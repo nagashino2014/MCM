@@ -140,12 +140,8 @@ function buildMailBody(input: {
  * ③ 수신처 메일 발송(To=수신, Cc=참조) ④ sent/failed 확정.
  * 반환: 발송 결과(중복 실행이면 skipped).
  */
-export async function processLetterSend(
-  docId: string,
-  opts: { allowResend?: boolean } = {}
-): Promise<{ ok: boolean; skipped?: boolean; error?: string }> {
-  // allowResend(194) — 발송 완료(sent) 건도 재발송(사용자 명시 조작 한정. 승인 트리거는 종전대로 멱등).
-  const claimed = await claimLetterSend(docId, { allowResend: opts.allowResend === true });
+export async function processLetterSend(docId: string): Promise<{ ok: boolean; skipped?: boolean; error?: string }> {
+  const claimed = await claimLetterSend(docId);
   if (!claimed) return { ok: true, skipped: true };
   try {
     const doc = await getDoc(docId);

@@ -74,8 +74,28 @@ export function LetterViewModal({ letterId, theme, onClose, onChanged }: { lette
   };
 
   const resend = async () => {
-    const nth = (letter?.sendHistory.length ?? 0) + 1;
-    if (!window.confirm(letter?.sendStatus === "sent" ? `이미 발송 완료된 공문입니다. ${nth}차 발송할까요?` : "이 공문을 수신처 메일로 재발송할까요?")) return;
+    // 발송 완료 건은 회수 → 수정 → 재결재 경유(2026-08-19 사용자 확정) — 즉시 재송부는
+    // 발주처 입장에서 "왜 똑같은 공문을 또 보냈지"가 되므로 지원하지 않는다.
+    if (letter?.sendStatus === "sent") {
+      if (!letter.docId) {
+        alert("과거 이관 공문은 재발송 대상이 아닙니다.");
+        return;
+      }
+      const nth = letter.sendHistory.length + 1;
+      if (!window.confirm(`공문을 회수해 수정 후 재발송합니다(${nth}차). 회수하면 결재를 다시 받아야 하며, 승인되면 자동으로 재발송됩니다. 진행할까요?`)) return;
+      setBusy("resend");
+      try {
+        const res = await fetch(`/api/approval/docs/${encodeURIComponent(letter.docId)}/recall`, { method: "POST" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error ?? "회수 실패");
+        window.location.href = `/approval/letter?docId=${encodeURIComponent(letter.docId)}`;
+      } catch (err) {
+        alert((err as Error).message);
+        setBusy(null);
+      }
+      return;
+    }
+    if (!window.confirm("이 공문을 수신처 메일로 재발송할까요?")) return;
     setBusy("resend");
     try {
       const res = await fetch(`/api/letters/${encodeURIComponent(letterId)}/send`, { method: "POST" });
@@ -165,7 +185,7 @@ export function LetterViewModal({ letterId, theme, onClose, onChanged }: { lette
                 onClick={resend}
                 title="수신처 메일로 재발송"
               >
-                <RefreshCw className="w-3 h-3" /> {busy === "resend" ? "발송 중..." : "재발송"}
+                <RefreshCw className="w-3 h-3" /> {busy === "resend" ? "처리 중..." : letter?.sendStatus === "sent" ? "수정 후 재발송" : "재발송"}
               </button>
             )}
             <button type="button" className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] flex items-center gap-1" onClick={() => setEditing((v) => !v)} title="수신처·참조 정보 편집(메일주소 보완)">

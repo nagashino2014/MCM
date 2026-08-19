@@ -60,7 +60,8 @@ function mapRow(r: Record<string, unknown>): OfficialLetterRow {
 
 /**
  * 최종 승인 시 발송 대장 등록(actOnDoc 트랜잭션 내 — 가벼운 upsert 만).
- * 공문 양식 문서가 아니면 no-op. 이미 발송 완료(sent)면 상태를 되돌리지 않는다.
+ * 공문 양식 문서가 아니면 no-op. 재승인(회수 → 수정 → 재상신)이면 send_status 를
+ * pending 으로 되돌려 자동 재발송한다 — 과거 발송은 send_history(194)에 남아 있다.
  */
 export async function markLetterPendingOnApproval(txn: PgDatabase, docId: string): Promise<void> {
   const rows = rowsToObjects(
@@ -91,7 +92,7 @@ export async function markLetterPendingOnApproval(txn: PgDatabase, docId: string
        recipients = EXCLUDED.recipients,
        cc_refs = EXCLUDED.cc_refs,
        issue_date = EXCLUDED.issue_date,
-       send_status = CASE WHEN official_letters.send_status = 'sent' THEN 'sent' ELSE 'pending' END,
+       send_status = 'pending',
        updated_at = EXCLUDED.updated_at`,
     [
       newLetterId(),
@@ -111,20 +112,20 @@ export async function markLetterPendingOnApproval(txn: PgDatabase, docId: string
 
 /**
  * 발송 선점 — pending|failed → generating. 0행이면 이미 발송됨/진행 중(중복 실행 가드).
- * allowResend(194): 발송 완료(sent) 건도 선점한다 — 승인 건 재발송(발주처 사정 등).
- * generating 중복 선점은 어느 모드든 막힌다.
+ * sent 건 즉시 재발송은 지원하지 않는다(2026-08-19 사용자 확정) — 수정 없이 같은 공문을
+ * 다시 보내는 건 무의미. 재발송은 회수(recallLetterDoc) → 수정 → 재결재 승인 경유
+ * (재승인 시 markLetterPendingOnApproval 이 pending 으로 되돌려 이 관문을 다시 통과한다).
  */
-export async function claimLetterSend(docId: string, opts: { allowResend?: boolean } = {}): Promise<OfficialLetterRow | null> {
-  const states = opts.allowResend ? ["pending", "failed", "sent"] : ["pending", "failed"];
+export async function claimLetterSend(docId: string): Promise<OfficialLetterRow | null> {
   let row: OfficialLetterRow | null = null;
   await withDbWrite(async (txn) => {
     const rows = rowsToObjects(
       await txn.exec(
         `UPDATE official_letters
             SET send_status = 'generating', send_attempts = send_attempts + 1, send_error = NULL, updated_at = $2
-          WHERE doc_id = $1 AND send_status = ANY($3::text[])
+          WHERE doc_id = $1 AND send_status IN ('pending', 'failed')
           RETURNING *`,
-        [docId, new Date().toISOString(), states]
+        [docId, new Date().toISOString()]
       )
     );
     row = rows.length ? mapRow(rows[0]) : null;
@@ -379,7 +380,7 @@ export async function checkLetterNoAvailable(letterNo: string, excludeDocId?: st
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT title FROM official_letters WHERE letter_no = $1
+      `SELECT title FROM official_letters WHERE letter_no = $1 AND ($2::text IS NULL OR doc_id IS NULL OR doc_id <> $2)
         UNION ALL
        SELECT title FROM approval_docs WHERE doc_no = $1 AND ($2::text IS NULL OR doc_id <> $2)`,
       [letterNo, excludeDocId ?? null]
@@ -400,7 +401,7 @@ export async function assignManualDocNo(txn: PgDatabase, docId: string, letterNo
   if (!parsed) throw Object.assign(new Error("공문번호 형식이 올바르지 않습니다(예: 2026-대외-01036)."), { status: 400 });
   const dup = rowsToObjects(
     await txn.exec(
-      `SELECT 1 FROM official_letters WHERE letter_no = $1
+      `SELECT 1 FROM official_letters WHERE letter_no = $1 AND (doc_id IS NULL OR doc_id <> $2)
         UNION ALL
        SELECT 1 FROM approval_docs WHERE doc_no = $1 AND doc_id <> $2`,
       [letterNo, docId]

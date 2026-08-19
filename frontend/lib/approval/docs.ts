@@ -410,6 +410,35 @@ export async function saveDoc(params: {
 }
 
 /**
+ * 승인 공문 회수(2026-08-19 사용자 확정) — 발주처 사정 재발송은 반드시 **수정 → 재결재**를
+ * 거친다(내용 그대로 재송부는 무의미하다는 사용자 피드백). 승인 문서를 draft 로 되돌려
+ * 작성 화면에서 고친 뒤 재상신하면 문서번호(doc_no)는 유지되고, 재승인 시 자동으로
+ * 2차 발송된다(발송 이력 N차 누적 — 194). 공문 양식 전용: 일반 결재 문서의 승인 후
+ * 회수는 결재 무결성 논의가 따로 필요해 열지 않는다.
+ */
+export async function recallLetterDoc(docId: string, actorUserId: string, isManager: boolean): Promise<void> {
+  await withDbWrite(async (txn) => {
+    const rows = rowsToObjects(
+      await txn.exec(`SELECT form_id, status, drafter_user_id FROM approval_docs WHERE doc_id = $1`, [docId])
+    );
+    if (!rows.length) throw new Error("문서를 찾을 수 없습니다.");
+    const doc = rows[0];
+    if (String(doc.form_id) !== LETTER_FORM_ID) throw new Error("공문 문서만 회수할 수 있습니다.");
+    if (String(doc.status) !== "approved") throw new Error("승인 완료 문서만 회수할 수 있습니다.");
+    if (String(doc.drafter_user_id) !== actorUserId && !isManager) throw new Error("기안자 본인 또는 관리자만 회수할 수 있습니다.");
+    // 발송 파이프라인이 도는 중이면 회수 금지(생성 중 문서가 바뀌면 산출물이 어긋난다)
+    const letter = rowsToObjects(await txn.exec(`SELECT send_status FROM official_letters WHERE doc_id = $1`, [docId]));
+    if (letter.length && String(letter[0].send_status) === "generating") {
+      throw new Error("발송 처리 중입니다 — 잠시 후 다시 시도하세요.");
+    }
+    await txn.run(`UPDATE approval_docs SET status = 'draft', completed_at = NULL, updated_at = $2 WHERE doc_id = $1`, [
+      docId,
+      new Date().toISOString(),
+    ]);
+  });
+}
+
+/**
  * 문서 완전 삭제(관리자 전용 — 테스트·오기안 문서 정리).
  * steps·watchers·cancel_requests 는 FK CASCADE 로 함께 삭제되고,
  * 연차 대장(annual_leave_ledger)의 이 문서 사용 엔트리는 수동 삭제(잔여 연차 복원),

@@ -904,6 +904,13 @@ export function ApprovalLetterBoard() {
         <>
         <div className="max-w-[1032px]">
           <RejectedBanner meta={editMeta} />
+          {/* 회수 문서(수정 후 재발송, 2026-08-19) — 승인 공문을 회수하면 draft 인데 확정 번호가 있다 */}
+          {editMeta?.status === "draft" && docNo && (
+            <div className="rounded-xl border cd-border-c px-3.5 py-2.5 mb-3 text-[12px] cd-text flex items-center gap-2">
+              <FileText className="w-4 h-4 cd-text-primary shrink-0" />
+              회수된 공문입니다 — 내용을 수정해 재상신하면 <b className="font-mono mx-1">{docNo}</b> 번호 그대로, 재결재 승인 시 자동으로 재발송됩니다(발송 이력에 N차로 누적).
+            </div>
+          )}
         </div>
         <div className="flex flex-col xl:flex-row gap-4 items-start">
           {/* 좌: 공문 내용 — 폭은 전자결재 작성 양식(273mm)과 동일 수준(사용자 확정) */}

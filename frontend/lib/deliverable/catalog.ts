@@ -317,6 +317,57 @@ export function adjustSpecForValues(spec: DeliverableSpec, values: Record<string
 }
 
 /**
+ * 7. 대금청구서 — 실측: 2026-대외-01032 동봉본(수도권매립지관리공사 준공 기성금 청구).
+ * 4x2 표(계약건명·계약금액·청구금액·청구인) + 별첨 + 청구 문구 + 날짜 + 수신처.
+ * 준공계 공문에 대부분 함께 요구되어 준공 서류 목록 **마지막**에 둔다(2026-08-19 사용자 확정).
+ * 청구금액 = 금회 준공 기성금(completion.currentAmount, 기성 자동 채움 값 재사용).
+ */
+const PAYMENT_REQUEST: DeliverableSpec = {
+  docType: "payment_request",
+  title: "대금청구서",
+  kind: "completion",
+  blocks: [
+    { kind: "title", text: "대금청구서", letterSpacingPt: 4 },
+    { kind: "spacer", heightPt: 26 },
+    {
+      kind: "table",
+      columns: [
+        { widthRatio: 0.2, align: "center" },
+        { widthRatio: 0.8, align: "left" },
+      ],
+      rows: [
+        [{ text: "계약건명", align: "center", bold: true }, { text: "{{contract.title}}" }],
+        [
+          { text: "계약금액", align: "center", bold: true },
+          { text: "{{contract.amount|amountHangul}}" + "\n" + "(￦{{contract.amount|amountNumber}} {{meta.vatNote}})" },
+        ],
+        [
+          { text: "청구금액", align: "center", bold: true },
+          {
+            text: "준공 기성금 : {{completion.currentAmount|amountHangul}}" + "\n" + "(￦{{completion.currentAmount|amountNumber}} {{meta.vatNote}})",
+          },
+        ],
+        [
+          { text: "청 구 인", align: "center", bold: true },
+          {
+            text: "1) 상    호 : {{company.name}}" + "\n" + "2) 주    소 : {{company.address}}" + "\n" + "3) 대표이사 : {{company.ceo|nameSpread}}   (인)",
+            stamp: true,
+          },
+        ],
+      ],
+    },
+    { kind: "spacer", heightPt: 18 },
+    { kind: "para", text: "별 첨 : {{payment.attachNote}}", align: "left", indentPt: 6 },
+    { kind: "spacer", heightPt: 26 },
+    { kind: "para", text: "위 금액을 정히 청구합니다.", align: "center" },
+    { kind: "spacer", heightPt: 26 },
+    { kind: "dateLine", binding: "issue.date", format: "dateDotted", align: "center" },
+    { kind: "spacer", heightPt: 30 },
+    { kind: "receiver", binding: "orderer.name", suffix: "귀하", align: "left", bold: true },
+  ],
+};
+
+/**
  * 성과품 사진 별첨 페이지(2026-08-19 사용자 확정) — 용역결과보고서 뒤에 붙는 별도 페이지.
  * 좌상단 "첨부자료" 표기 + (명칭 셀 위 / 사진 셀 아래) 표. 사진 비율에 따라 페이지당 1~4장:
  *   · 1장            → 2x1 표(명칭/사진)
@@ -387,6 +438,7 @@ export const DELIVERABLE_CATALOG: DeliverableSpec[] = [
   COMPLETION_SUPERVISION,
   COMPLETION_STATEMENT,
   SERVICE_RESULT_REPORT,
+  PAYMENT_REQUEST, // 준공 서류 목록 마지막(사용자 확정)
 ];
 
 export const CATALOG_BY_TYPE: Record<string, DeliverableSpec> = Object.fromEntries(

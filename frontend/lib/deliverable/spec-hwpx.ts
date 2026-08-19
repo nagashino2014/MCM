@@ -91,14 +91,39 @@ function fieldsXml(block: Extract<DocBlock, { kind: "fields" }>, values: Deliver
     .join("");
 }
 
-function cellXml(cell: CellSpec, addr: { col: number; row: number }, size: { w: number; h: number }, values: DeliverableValues): string {
+function cellXml(
+  cell: CellSpec,
+  addr: { col: number; row: number },
+  size: { w: number; h: number },
+  values: DeliverableValues,
+  stampSource = ""
+): string {
   const text = renderSlot(cell, values);
   const charPr = cell.bold ? CHAR.thBold : CHAR.td;
   const paraPr = cell.align === "left" ? PARA.left : PARA.center;
+  // 다중 줄 셀(대금청구서 금액·청구인) — 줄마다 문단을 만든다. 마지막 줄 "(인)" 위에는
+  // 셀 인감(cell.stamp)을 signature 규칙(폭 기반 좌표)으로 띄운다.
+  const lines = text.split(String.fromCharCode(10));
+  const body = lines
+    .map((ln, i) => {
+      const isLast = i === lines.length - 1;
+      if (!(cell.stamp && stampSource && isLast)) return para(ln, { charPr, paraPr });
+      const half = BODY_PT * 50;
+      const stamp = stampSize(stampSource);
+      const beforeMark = ln.replace(/\s*\(인\)\s*$/, "");
+      const horz = Math.max(0, widthOf(beforeMark) * half - stamp.w * 0.25);
+      const vert = -(stamp.h - BODY_PT * 100) / 2;
+      const pic = floatingStamp(stampSource, { horz, vert });
+      return (
+        `<hp:p id="0" paraPrIDRef="${paraPr}" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">` +
+        `<hp:run charPrIDRef="${charPr}">${pic}<hp:t>${escapeXml(ln)}</hp:t></hp:run></hp:p>`
+      );
+    })
+    .join("");
   return (
     `<hp:tc name="" header="0" hasMargin="0" protect="0" editable="0" dirty="0" borderFillIDRef="${BORDER_SOLID}">` +
     `<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="CENTER" linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">` +
-    para(text, { charPr, paraPr }) +
+    body +
     `</hp:subList>` +
     `<hp:cellAddr colAddr="${addr.col}" rowAddr="${addr.row}"/>` +
     `<hp:cellSpan colSpan="${cell.colSpan ?? 1}" rowSpan="${cell.rowSpan ?? 1}"/>` +
@@ -107,7 +132,7 @@ function cellXml(cell: CellSpec, addr: { col: number; row: number }, size: { w: 
   );
 }
 
-function tableXml(block: Extract<DocBlock, { kind: "table" }>, values: DeliverableValues): string {
+function tableXml(block: Extract<DocBlock, { kind: "table" }>, values: DeliverableValues, stampSource = ""): string {
   const colCnt = block.columns.length;
   const rowCnt = block.rows.length;
   if (!colCnt || !rowCnt) return "";
@@ -128,7 +153,7 @@ function tableXml(block: Extract<DocBlock, { kind: "table" }>, values: Deliverab
         }
         const w = colW.slice(col, col + span).reduce((a, b) => a + b, 0) || colW[col] || TABLE_WIDTH / colCnt;
         const h = ROW_HEIGHT * Math.max(1, cell.rowSpan ?? 1);
-        tcs.push(cellXml(cell, { col, row: r }, { w, h }, values));
+        tcs.push(cellXml(cell, { col, row: r }, { w, h }, values, stampSource));
         col += perCell ? 1 : span;
       }
       return `<hp:tr>${tcs.join("")}</hp:tr>`;
@@ -376,6 +401,7 @@ function gapBetween(prev: DocBlock["kind"] | null, next: DocBlock["kind"]): numb
   if (prev === "title") return 3;
   if (next === "receiver") return 4; // 서명란과 수신처는 넉넉히
   if (prev === "fields" && next === "para") return 2;
+  if (prev === "para" && next === "para") return 2; // 대금청구서 별첨 ↔ 청구 문구
   if (prev === "para" && next === "dateLine") return 3;
   if (prev === "dateLine" && next === "signature") return 3;
   if (prev === "table") return 1;
@@ -414,7 +440,7 @@ function blockXml(
     case "fields":
       return fieldsXml(block, values);
     case "table":
-      return tableXml(block, values);
+      return tableXml(block, values, stampSource);
     case "para":
       return para(renderTemplate(block.text, values), { align: block.align });
     case "dateLine":

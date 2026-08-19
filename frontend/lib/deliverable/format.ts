@@ -99,6 +99,8 @@ export function formatValue(raw: unknown, format: FieldFormat | undefined, value
       const n = toNumber(raw);
       return n == null ? s : `${n}%`;
     }
+    case "nameSpread":
+      return spreadName(s);
     case "multiline":
     case "text":
     default:

@@ -115,10 +115,10 @@ export function ApprovalDocViewer({
     if (detail?.formId === LETTER_FORM_ID && detail.status === "approved") loadLetter(detail.docId);
   }, [detail?.formId, detail?.status, detail?.docId]);
 
-  const resendLetter = async () => {
+  // 발송 실패·대기 건 — 같은 내용으로 발송 재시도(메일 오류 등)
+  const retryLetterSend = async () => {
     if (!letter) return;
-    const nth = letter.sendHistory.length + 1;
-    if (!window.confirm(letter.sendStatus === "sent" ? `이미 발송 완료된 공문입니다. ${nth}차 발송할까요?` : "이 공문을 수신처 메일로 발송할까요?")) return;
+    if (!window.confirm("이 공문을 수신처 메일로 발송할까요?")) return;
     setResending(true);
     try {
       const res = await fetch(`/api/letters/${encodeURIComponent(letter.letterId)}/send`, { method: "POST" });
@@ -130,6 +130,30 @@ export function ApprovalDocViewer({
       alert((err as Error).message);
       if (letter.docId) loadLetter(letter.docId);
     } finally {
+      setResending(false);
+    }
+  };
+
+  // 발송 완료 건 — 수정 후 재발송(2026-08-19 사용자 확정): 회수 → 작성 화면 수정 → 재상신 →
+  // 재결재 승인 시 자동 2차 발송(문서번호 유지, 이력 N차 누적). 내용 그대로 재송부는 지원하지 않는다.
+  const recallForResend = async () => {
+    if (!detail) return;
+    const nth = (letter?.sendHistory.length ?? 0) + 1;
+    if (
+      !window.confirm(
+        `공문을 회수해 수정 후 재발송합니다(${nth}차).
+회수하면 결재를 다시 받아야 하며, 승인되면 자동으로 재발송됩니다. 진행할까요?`
+      )
+    )
+      return;
+    setResending(true);
+    try {
+      const res = await fetch(`/api/approval/docs/${encodeURIComponent(detail.docId)}/recall`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "회수 실패");
+      window.location.href = approvalEditHref(LETTER_FORM_ID, detail.docId);
+    } catch (err) {
+      alert((err as Error).message);
       setResending(false);
     }
   };
@@ -526,10 +550,14 @@ export function ApprovalDocViewer({
                     type="button"
                     className="ml-auto cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] disabled:opacity-50"
                     disabled={resending || letter.sendStatus === "generating"}
-                    onClick={resendLetter}
-                    title="수신처(참조자) 메일로 다시 발송합니다 — 발송 이력에 N차로 누적"
+                    onClick={letter.sendStatus === "sent" ? recallForResend : retryLetterSend}
+                    title={
+                      letter.sendStatus === "sent"
+                        ? "회수 → 수정 → 재상신 → 재결재 승인 시 자동 재발송(문서번호 유지, 이력 N차 누적)"
+                        : "수신처(참조자) 메일로 발송을 다시 시도합니다"
+                    }
                   >
-                    {resending ? "발송 중..." : letter.sendStatus === "sent" ? "재발송" : "발송"}
+                    {resending ? "처리 중..." : letter.sendStatus === "sent" ? "수정 후 재발송" : "발송"}
                   </button>
                 </div>
                 {letterHistoryOpen &&

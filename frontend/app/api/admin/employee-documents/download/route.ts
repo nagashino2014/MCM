@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { S3ServiceException } from "@aws-sdk/client-s3";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { recordAccessLog } from "@/lib/auth/access-log";
 import { findEmployeeDocumentByKey } from "@/lib/admin/employee-records";
 import { getEmployeeDocument } from "@/lib/storage/employee-document-storage";
 
@@ -14,11 +15,19 @@ function contentDisposition(filename: string): string {
 
 export async function GET(req: NextRequest) {
   try {
-    await requirePermission("staffing.view", { fallbackRoles: ["admin"] });
+    const ctx = await requirePermission("staffing.view", { fallbackRoles: ["admin"] });
     const key = new URL(req.url).searchParams.get("key");
     if (!key) return NextResponse.json({ error: "key가 필요합니다." }, { status: 400 });
     const metadata = await findEmployeeDocumentByKey(key);
     if (!metadata) return NextResponse.json({ error: "문서를 찾을 수 없습니다." }, { status: 404 });
+    // 접속기록(PR-P1) — 타인 인사서류 다운로드.
+    await recordAccessLog({
+      actorUserId: ctx.userId,
+      action: "download",
+      targetKind: "employee_doc",
+      targetId: String(metadata.documentId ?? key),
+      detail: { fileName: metadata.originalFilename || metadata.displayName, employeeId: metadata.employeeId ?? null },
+    });
     const obj = await getEmployeeDocument(key);
     if (!obj.body) return NextResponse.json({ error: "문서를 찾을 수 없습니다." }, { status: 404 });
     const headers = new Headers();

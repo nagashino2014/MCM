@@ -245,6 +245,8 @@ export const MENU_ITEMS: MenuItem[] = [
     submenu: [
       { title: "계정·권한 관리", href: "/admin/users" },
       { title: "사용자 등록·삭제", href: "/admin/users/registry" },
+      // 접속기록(PR-P1) — 로그인·열람·다운로드 이력. security.access_log RBAC 가드.
+      { title: "접속기록 조회", href: "/admin/access-log" },
     ],
     minRole: "admin",
     group: "system",

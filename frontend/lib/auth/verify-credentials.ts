@@ -8,6 +8,7 @@
 import { findUserByLoginIdentifier } from "./users";
 import { verifyPassword } from "./password";
 import { ensureAdminSeeded } from "./seed";
+import { recordAccessLog } from "./access-log";
 import {
   clientIpFrom,
   isLoginBlocked,
@@ -69,6 +70,13 @@ export async function verifyCredentials(
   }
 
   await clearLoginFailures(identifier);
+  // 접속기록(PR-P1) — 로그인 성공 이력. 실패는 login_attempts(브루트포스 방어)가 담당.
+  await recordAccessLog({
+    actorUserId: user.userId,
+    action: "login",
+    targetKind: "session",
+    detail: { identifier, ip },
+  });
   return {
     id: user.userId,
     email: user.email,

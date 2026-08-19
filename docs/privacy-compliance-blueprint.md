@@ -91,12 +91,15 @@
       로테이션은 반드시 Secrets 값 변경 → next 재시작 순서로(앱 UI 변경은 재부팅 시 되돌아감)
 - [x] 비상 스위치 점검: staging next:456 기준 `RBAC_ENFORCE=true`(강제 모드 정상), `RBAC_ADMIN_BYPASS` 미설정(비활성) 확인
 
-### PR-P1 — 접속기록(개보법 시행령 요건) (2~3일)
-- `access_log` 신설(마이그): `actor_user_id, action(view|download|delete|login|export), target_kind, target_id, detail jsonb, created_at` — **INSERT 전용**
-  - append-only: 앱 DB 계정에 `REVOKE UPDATE, DELETE ON access_log` + 월 파티션(1년 이상 보관, 삭제는 파티션 DROP 을 별도 운영 계정으로만)
-- 기록 지점: 로그인 성공(현재 실패만 기록) / 파일함·개인문서함 외 **타인 개인정보 화면**(인사서류 다운로드, 급여 조회, 연말정산 열람, 근태 상세) / 메일 별칭 변경(G9)
-- `RBAC_ENFORCE=false`·`ADMIN_BYPASS` 기동 시 경고 로그 + access_log 1행
-- 열람 UI: 관리 메뉴에 "접속기록 조회"(admin, 조회 자체도 기록)
+### PR-P1 — 접속기록(개보법 시행령 요건) ✅ 구현 완료 (08-19, 마이그 192)
+- [x] `access_log` 신설: `actor_user_id, action(login|view|download|delete|export|admin_change), target_kind, target_id, detail jsonb, created_at`
+  - append-only 는 **트리거 차단**(`access_log_protect` — UPDATE/DELETE 시 예외)으로 구현. 월 파티션은 데이터량이 적어 보류
+    (보관 무기한 = 1년 요건 초과 충족. REVOKE 는 앱 계정이 owner 라 실효 없음 — DB 원권한 통제는 P6).
+- [x] 기록 지점: 로그인 성공(`verifyCredentials` — 웹·모바일 공용, IP 포함) / 인사서류 다운로드 / 급여대장 상세 조회 /
+      연말정산 조회 / 메일 별칭 생성·수정·삭제(G9) / RBAC 비상모드 기동(프로세스당 1회) / 접속기록 조회 자체
+- [x] 열람 UI: 사용자 관리 > **접속기록 조회**(/admin/access-log) — `security.access_log` 권한(tpl-system-admin 시드),
+      access_log + 파일함 감사로그(file_library_*) 통합 뷰, 기간·대상·동작·사용자 필터
+- 후속(P1.5 후보): 근태 상세 열람 기록, 개인 영수증 타인 조회 기록, 기록 지점 점진 확대
 
 ### PR-P2 — break-glass 열람 승인 워크플로 (3~4일, 필요 시점에)
 > 현재 타인 메일·메신저 본문 열람 경로가 코드에 없으므로 **당장 만들 필요는 없음**. 유출 사고 조사 요구가 실제로 생기면

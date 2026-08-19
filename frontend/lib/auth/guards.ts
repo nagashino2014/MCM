@@ -118,6 +118,23 @@ export async function requireAuthenticated(): Promise<AuthContext> {
  */
 const RBAC_ENFORCE = process.env.RBAC_ENFORCE !== "false";
 
+// 비상 호환 모드 기동 감지(PR-P1/G7) — 프로세스당 1회 접속기록 + 경고.
+// 평시에는 절대 켜지지 않아야 하는 스위치라, 켜진 채 기동한 사실 자체를 기록한다.
+let bypassLogged = false;
+function logRbacBypassOnce(userId: string): void {
+  if (bypassLogged) return;
+  bypassLogged = true;
+  console.warn("[auth] ⚠ RBAC_ENFORCE=false 비상 호환 모드로 동작 중 — 권한 템플릿 판정이 꺼져 있습니다.");
+  void import("./access-log").then(({ recordAccessLog }) =>
+    recordAccessLog({
+      actorUserId: userId,
+      action: "admin_change",
+      targetKind: "rbac_bypass",
+      detail: { note: "RBAC_ENFORCE=false 상태로 requirePermission 통과 시작" },
+    })
+  );
+}
+
 /**
  * RBAC 권한키 가드.
  *
@@ -135,6 +152,7 @@ export async function requirePermission(
 
   if (!RBAC_ENFORCE) {
     // 비상 호환 모드 — 옛 role 기준으로만 판정한다.
+    logRbacBypassOnce(ctx.userId);
     if (ctx.role === "admin") return ctx;
     const roles = opts?.fallbackRoles;
     if (!roles || roles.includes(ctx.role)) return ctx;

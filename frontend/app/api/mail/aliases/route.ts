@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AuthError, authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { recordAccessLog } from "@/lib/auth/access-log";
 import { createAlias, deleteAlias, listAliases, updateAlias } from "@/lib/mail/aliases";
 
 export const runtime = "nodejs";
@@ -18,7 +19,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    await requirePermission("mail.manage");
+    const ctx = await requirePermission("mail.manage");
     const body = (await req.json().catch(() => ({}))) as { aliasLocal?: string; kind?: "alias" | "list"; targetMailboxIds?: string[] };
     if (!body.aliasLocal?.trim()) {
       return NextResponse.json({ error: "aliasLocal 이 필요합니다." }, { status: 400 });
@@ -27,6 +28,14 @@ export async function POST(req: NextRequest) {
       aliasLocal: body.aliasLocal,
       kind: body.kind === "list" ? "list" : "alias",
       targetMailboxIds: Array.isArray(body.targetMailboxIds) ? body.targetMailboxIds.map(String) : [],
+    });
+    // 접속기록(PR-P1/G9) — 별칭은 타인 수신 메일의 라우팅을 바꿀 수 있는 민감 설정.
+    await recordAccessLog({
+      actorUserId: ctx.userId,
+      action: "admin_change",
+      targetKind: "mail_alias",
+      targetId: body.aliasLocal.trim(),
+      detail: { op: "create", targets: body.targetMailboxIds ?? [] },
     });
     return NextResponse.json(created);
   } catch (err) {
@@ -40,7 +49,7 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
-    await requirePermission("mail.manage");
+    const ctx = await requirePermission("mail.manage");
     const body = (await req.json().catch(() => ({}))) as {
       aliasId?: string;
       aliasLocal?: string;
@@ -55,6 +64,13 @@ export async function PATCH(req: NextRequest) {
       targetMailboxIds: Array.isArray(body.targetMailboxIds) ? body.targetMailboxIds.map(String) : undefined,
       active: body.active,
     });
+    await recordAccessLog({
+      actorUserId: ctx.userId,
+      action: "admin_change",
+      targetKind: "mail_alias",
+      targetId: body.aliasId,
+      detail: { op: "update", targets: body.targetMailboxIds, active: body.active },
+    });
     return NextResponse.json({ ok: true });
   } catch (err) {
     if (err instanceof AuthError) return authErrorToResponse(err);
@@ -67,10 +83,17 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    await requirePermission("mail.manage");
+    const ctx = await requirePermission("mail.manage");
     const aliasId = req.nextUrl.searchParams.get("aliasId");
     if (!aliasId) return NextResponse.json({ error: "aliasId 가 필요합니다." }, { status: 400 });
     await deleteAlias(aliasId);
+    await recordAccessLog({
+      actorUserId: ctx.userId,
+      action: "admin_change",
+      targetKind: "mail_alias",
+      targetId: aliasId,
+      detail: { op: "delete" },
+    });
     return NextResponse.json({ ok: true });
   } catch (err) {
     return authErrorToResponse(err);

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requireAdmin } from "@/lib/auth/guards";
+import { recordAccessLog } from "@/lib/auth/access-log";
 import { listSettlements, saveSettlement, setSettlementStatus, type YearendInputs } from "@/lib/finance/yearend";
 import { parseSimplifiedPdf } from "@/lib/finance/yearend-pdf-parser";
 
@@ -9,9 +10,12 @@ export const dynamic = "force-dynamic";
 // GET: 귀속연도 직원별 정산 목록(총급여·기납부 자동 + 저장된 입력·결과). 급여는 admin 전용(§8-4).
 export async function GET(req: NextRequest) {
   try {
-    await requireAdmin();
+    const ctx = await requireAdmin();
     const year = Number(req.nextUrl.searchParams.get("year") ?? 0) || new Date().getFullYear() - 1;
-    return NextResponse.json({ year, rows: await listSettlements(year) });
+    const rows = await listSettlements(year);
+    // 접속기록(PR-P1) — 연말정산(전 직원 소득·부양가족) 열람.
+    await recordAccessLog({ actorUserId: ctx.userId, action: "view", targetKind: "yearend", targetId: String(year) });
+    return NextResponse.json({ year, rows });
   } catch (err) {
     return authErrorToResponse(err);
   }

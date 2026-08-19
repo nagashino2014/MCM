@@ -19,6 +19,8 @@ export interface ReceiptPickerItem {
   items: string[];
   memo: string | null;
   docId: string | null;
+  /** 촬영일 — 사용일이 없는 건의 날짜 표시에 쓴다. */
+  createdAt: string;
   pdfKey: string;
   pdfName: string;
   categoryKey: string | null;
@@ -27,7 +29,9 @@ export interface ReceiptPickerItem {
   formOption: string | null;
 }
 
-const ymdInput = (d: Date) => d.toISOString().slice(0, 10);
+/** 입력용 YYYY-MM-DD (KST 기준) — toISOString 은 UTC 라, 오전 9시 이전에는 "오늘"이 하루 밀려
+ *  그날 찍은 영수증이 조회 범위에서 빠졌다. 저장 값(KST)과 기준을 맞춘다. */
+const ymdInput = (ms: number) => new Date(ms + 9 * 3600 * 1000).toISOString().slice(0, 10);
 
 export function ReceiptPickerModal({
   open,
@@ -43,8 +47,10 @@ export function ReceiptPickerModal({
   existingIds: string[];
   onPick: (items: ReceiptPickerItem[]) => void;
 }) {
-  const [from, setFrom] = useState(() => ymdInput(new Date(Date.now() - 90 * 86400000)));
-  const [to, setTo] = useState(() => ymdInput(new Date()));
+  const [from, setFrom] = useState(() => ymdInput(Date.now() - 90 * 86400000));
+  const [to, setTo] = useState(() => ymdInput(Date.now()));
+  /** 기간 무시하고 전부 — 사용일이 잘못 인식된 건을 찾을 때 쓴다. */
+  const [allTime, setAllTime] = useState(false);
   const [items, setItems] = useState<ReceiptPickerItem[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
@@ -55,7 +61,11 @@ export function ReceiptPickerModal({
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({ formId, from, to, unusedOnly: "1" });
+      const params = new URLSearchParams({ formId, unusedOnly: "1" });
+      if (!allTime) {
+        params.set("from", from);
+        params.set("to", to);
+      }
       const res = await fetch(`/api/receipts?${params}`, { cache: "no-store" });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "영수증을 불러오지 못했습니다.");
@@ -65,7 +75,7 @@ export function ReceiptPickerModal({
     } finally {
       setLoading(false);
     }
-  }, [formId, from, to]);
+  }, [formId, from, to, allTime]);
 
   useEffect(() => {
     if (open) {
@@ -119,13 +129,25 @@ export function ReceiptPickerModal({
       <div className="space-y-3">
         <div className="flex items-center gap-2 flex-wrap">
           <label className="cd-label text-xs">기간</label>
-          <input type="date" className="cd-input" value={from} onChange={(e) => setFrom(e.target.value)} />
+          <input
+            type="date"
+            className="cd-input"
+            value={from}
+            disabled={allTime}
+            onChange={(e) => setFrom(e.target.value)}
+          />
           <span className="cd-text-muted">~</span>
-          <input type="date" className="cd-input" value={to} onChange={(e) => setTo(e.target.value)} />
+          <input type="date" className="cd-input" value={to} disabled={allTime} onChange={(e) => setTo(e.target.value)} />
+          <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+            <input type="checkbox" checked={allTime} onChange={(e) => setAllTime(e.target.checked)} />
+            전체 기간
+          </label>
           <button type="button" className="cd-btn cd-btn-soft cd-btn-sm" onClick={load} disabled={loading}>
             <RefreshCw className="w-3.5 h-3.5" /> 조회
           </button>
-          <span className="text-[11px] cd-text-faint ml-auto">모바일 앱 "영수증 촬영"으로 찍어둔 본인 영수증만 표시됩니다</span>
+          <span className="text-[11px] cd-text-faint ml-auto">
+            모바일 앱 "영수증 촬영"으로 찍어둔 본인 영수증만 표시됩니다 — 안 보이면 [전체 기간]으로 조회하세요
+          </span>
         </div>
 
         {error && <div className="cd-error-text text-sm">{error}</div>}
@@ -174,7 +196,13 @@ export function ReceiptPickerModal({
                         }}
                       />
                     </td>
-                    <td className="py-1.5 pr-3 whitespace-nowrap text-xs">{item.paidDate ?? "-"}</td>
+                    <td className="py-1.5 pr-3 whitespace-nowrap text-xs">
+                      {item.paidDate ?? (
+                        <span className="cd-text-faint" title="사용일이 인식되지 않은 건 — 촬영일 기준으로 표시합니다">
+                          미상 ({item.createdAt?.slice(0, 10) ?? "-"})
+                        </span>
+                      )}
+                    </td>
                     <td className="py-1.5 pr-3 max-w-[220px] truncate" title={item.storeName ?? ""}>
                       {item.storeName ?? "-"}
                       {used && <span className="ml-1.5 text-[10px] cd-text-faint">(이미 담김)</span>}

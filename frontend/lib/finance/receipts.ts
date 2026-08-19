@@ -15,6 +15,16 @@ const KST_NOW = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice
 const hashId = (prefix: string, source: string) =>
   `${prefix}-${createHash("sha256").update(source).digest("hex").slice(0, 12)}`;
 
+/** paid_at 이 ISO(YYYY-MM-DD…) 형태인지 — text 컬럼이라 형식이 깨진 값이 들어올 수 있다. */
+const PAID_AT_ISO_R = `r.paid_at ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'`;
+
+/**
+ * 조회 기준일. paid_at 이 비었거나 ISO 형태가 아니면 촬영일(created_at)로 대체한다.
+ * paid_at 을 그대로 문자열 비교하던 종전 방식은 날짜 미상('' → NULL)·비ISO 표기("26-08-16" 등)를
+ * 범위 밖으로 떨어뜨려, 저장된 영수증이 피커에서 영영 보이지 않게 만들었다(2026-08-19 원인 분석).
+ */
+const BASIS_DATE = `(CASE WHEN ${PAID_AT_ISO_R} THEN substr(r.paid_at, 1, 10) ELSE substr(r.created_at, 1, 10) END)`;
+
 export interface PersonalReceipt {
   receiptId: string;
   ownerUserId: string;
@@ -33,6 +43,10 @@ export interface PersonalReceipt {
   pdfKey: string;
   docId: string | null;
   docFormId: string | null;
+  /** 귀속 문서 표시용(목록 조인 시에만 채워진다) */
+  docTitle: string | null;
+  docNo: string | null;
+  docStatus: string | null;
   excluded: boolean;
   memo: string | null;
   createdAt: string;
@@ -57,10 +71,20 @@ function toReceipt(r: Record<string, unknown>): PersonalReceipt {
     pdfKey: String(r.pdf_key),
     docId: r.doc_id ? String(r.doc_id) : null,
     docFormId: r.doc_form_id ? String(r.doc_form_id) : null,
+    docTitle: r.doc_title ? String(r.doc_title) : null,
+    docNo: r.doc_no ? String(r.doc_no) : null,
+    docStatus: r.doc_status ? String(r.doc_status) : null,
     excluded: Boolean(Number(r.excluded ?? 0)),
     memo: r.memo ? String(r.memo) : null,
     createdAt: String(r.created_at),
   };
+}
+
+/** 기준일과 그 전후 하루 — 중복 감지의 "±1일" 비교용(문자열 목록). */
+function neighborDates(ymd: string): string[] {
+  const base = new Date(`${ymd}T00:00:00Z`);
+  if (Number.isNaN(base.getTime())) return [ymd];
+  return [-1, 0, 1].map((n) => new Date(base.getTime() + n * 86400000).toISOString().slice(0, 10));
 }
 
 /** 저장 전 소프트 중복 감지 — 승인번호 일치 또는 (거래일 ±1일 & 금액 일치). 차단 아님(지류 재발행 허용). */
@@ -76,8 +100,10 @@ export async function findDuplicateReceipts(
     conds.push(`approval_num = $${params.length}`);
   }
   if (fields.paidAt && fields.totalAmount != null) {
-    params.push(fields.totalAmount, fields.paidAt.slice(0, 10));
-    conds.push(`(total_amount = $${params.length - 1} AND abs((substr(paid_at,1,10))::date - $${params.length}::date) <= 1)`);
+    // 거래일 ±1일은 문자열 목록 비교로 판정한다 — paid_at 은 text 라 ::date 캐스트를 쓰면
+    // "2026-02-30" 같은 실재하지 않는 날짜 한 건에 쿼리 전체가 예외로 죽는다(실측).
+    params.push(fields.totalAmount, neighborDates(fields.paidAt.slice(0, 10)));
+    conds.push(`(total_amount = $${params.length - 1} AND substr(paid_at,1,10) = ANY($${params.length}::text[]))`);
   }
   if (!conds.length) return [];
   const rows = rowsToObjects(
@@ -160,30 +186,43 @@ export async function saveReceipt(params: {
   return toReceipt(rows[0]);
 }
 
-/** 내 영수증 목록 — 기본 미제외 전체, unusedOnly 로 미귀속(기안 피커용)만. */
+/** 목록 범위 — 기안 피커는 unused, 모바일 보관함은 탭별로 골라 쓴다. */
+export type ReceiptScope = "unused" | "used" | "excluded" | "all";
+
+/**
+ * 내 영수증 목록. 기본은 미제외 전체(scope='all'), 기안 피커는 scope='unused'.
+ * 귀속 문서(approval_docs)를 조인해 "어느 결의서에 실렸는지"를 함께 준다(모바일 보관함 표시용).
+ */
 export async function listMyReceipts(params: {
   ownerUserId: string;
-  unusedOnly?: boolean;
+  scope?: ReceiptScope;
   from?: string;
   to?: string;
   limit?: number;
 }): Promise<PersonalReceipt[]> {
   const db = await getDb();
-  const conds = ["owner_user_id = $1", "excluded = 0"];
+  const scope = params.scope ?? "all";
+  const conds = ["r.owner_user_id = $1"];
   const sqlParams: unknown[] = [params.ownerUserId];
-  if (params.unusedOnly) conds.push("doc_id IS NULL");
+  conds.push(scope === "excluded" ? "r.excluded = 1" : "r.excluded = 0");
+  if (scope === "unused") conds.push("r.doc_id IS NULL");
+  if (scope === "used") conds.push("r.doc_id IS NOT NULL");
   if (params.from) {
     sqlParams.push(params.from);
-    conds.push(`paid_at >= $${sqlParams.length}`);
+    conds.push(`${BASIS_DATE} >= $${sqlParams.length}`);
   }
   if (params.to) {
-    sqlParams.push(params.to + " 23:59");
-    conds.push(`paid_at <= $${sqlParams.length}`);
+    sqlParams.push(params.to);
+    conds.push(`${BASIS_DATE} <= $${sqlParams.length}`);
   }
   const limit = Math.min(Math.max(Number(params.limit ?? 100) || 100, 1), 200);
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT * FROM personal_receipts WHERE ${conds.join(" AND ")} ORDER BY paid_at DESC NULLS LAST, created_at DESC LIMIT ${limit}`,
+      `SELECT r.*, d.title AS doc_title, d.doc_no AS doc_no, d.status AS doc_status
+         FROM personal_receipts r
+         LEFT JOIN approval_docs d ON d.doc_id = r.doc_id
+        WHERE ${conds.join(" AND ")}
+        ORDER BY ${BASIS_DATE} DESC, r.created_at DESC LIMIT ${limit}`,
       sqlParams,
     ),
   );

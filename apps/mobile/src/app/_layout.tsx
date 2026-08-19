@@ -80,6 +80,8 @@ function RootNavigator() {
         <Stack.Screen name="login" />
         {/* 명함 화면은 자체 헤더를 그린다(iOS 헤더 갱신 루프 회피 이력). */}
         <Stack.Screen name="card" />
+        {/* 영수증 촬영·보관함도 같은 이유로 자체 헤더를 그린다 */}
+        <Stack.Screen name="receipts" />
         {/* 일정은 태그 칩·참조 지정을 담은 자체 헤더를 그린다 */}
         <Stack.Screen name="schedule" />
         {/* 사업장 탐색·상세는 검색·필터를 담은 자체 헤더를 그린다 */}

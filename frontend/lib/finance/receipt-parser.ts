@@ -50,14 +50,34 @@ const money = (v: unknown): number | null => {
   return Number.isFinite(n) && n !== 0 ? Math.round(n) : Number.isFinite(n) && n === 0 ? 0 : null;
 };
 
-/** 거래일시 정규화 — "2026-08-16 12:30:11"/"2026/08/16" 등 → "YYYY-MM-DD HH:MM" 또는 날짜만. */
-function normalizePaidAt(v: string | null): string | null {
+/**
+ * 거래일시 정규화 — "2026-08-16 12:30:11"/"2026/08/16"/"26.08.16"/"2026년 8월 16일" 등을
+ * "YYYY-MM-DD HH:MM"(시각 불명이면 날짜만)으로 맞춘다. 해석 불가면 null.
+ *
+ * 저장 계약이다 — paid_at 은 text 컬럼이고 조회가 문자열 비교라, 여기서 걸러지지 않은 표기는
+ * 목록 기간 필터 밖으로 떨어진다. 파싱 결과뿐 아니라 **사용자 입력(모바일 확인 폼·수정)도**
+ * 저장 라우트에서 이 함수를 통과시킨다.
+ */
+export function normalizePaidAt(v: string | null): string | null {
   if (!v) return null;
-  const m = v.replace(/[.\/]/g, "-").match(/(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T]+(\d{1,2}):(\d{2}))?/);
+  const s = v
+    .replace(/\s*년\s*/g, "-")
+    .replace(/\s*월\s*/g, "-")
+    .replace(/\s*일\s*/g, " ")
+    .replace(/[.\/]/g, "-");
+  // 연도는 4자리 우선, 없으면 2자리(감열지 영수증에 흔한 "26-08-16")를 2000년대로 본다.
+  const m = s.match(/(\d{4}|\d{2})-(\d{1,2})-(\d{1,2})(?:[ T]+(\d{1,2}):(\d{2}))?/);
   if (!m) return null;
-  const [, y, mo, d, h, mi] = m;
+  const [, yRaw, mo, d, h, mi] = m;
+  const y = yRaw.length === 4 ? yRaw : String(2000 + Number(yRaw));
+  const mon = Number(mo);
+  const day = Number(d);
+  if (!(mon >= 1 && mon <= 12) || !(day >= 1 && day <= 31)) return null;
   const date = `${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}`;
-  return h ? `${date} ${h.padStart(2, "0")}:${mi}` : date;
+  if (!h) return date;
+  const hour = Number(h);
+  if (!(hour >= 0 && hour <= 23) || !(Number(mi) >= 0 && Number(mi) <= 59)) return date;
+  return `${date} ${h.padStart(2, "0")}:${mi}`;
 }
 
 /**

@@ -16,6 +16,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { File } from 'expo-file-system';
 
+import { DatePickerSheet } from '@/components/calendar/DatePickerSheet';
 import { CtaGradientFill } from '@/components/ui';
 import { apiFetch } from '@/lib/api';
 
@@ -68,7 +69,10 @@ export default function ReceiptScreen() {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [parsed, setParsed] = useState<ReceiptFields | null>(null);
   // 확인 폼 — 파싱 결과를 문자열 버퍼로 편집(AGENTS.md: controlled input 에 정규화 함수 금지)
-  const [form, setForm] = useState({ storeName: '', paidAt: '', totalAmount: '', cardLast4: '', memo: '' });
+  // 사용일은 자유 입력이던 것을 달력 선택으로 바꿨다 — 표기가 제각각이면 목록·피커의 기간 필터에서
+  // 빠져 "저장했는데 안 보이는" 건이 생긴다(2026-08-19 원인 분석). 시각만 선택 입력으로 남긴다.
+  const [form, setForm] = useState({ storeName: '', paidDate: '', paidTime: '', totalAmount: '', cardLast4: '', memo: '' });
+  const [datePicker, setDatePicker] = useState(false);
   const [duplicates, setDuplicates] = useState<DuplicateInfo[] | null>(null);
   const [savedStore, setSavedStore] = useState<string | null>(null);
   // 자체 카메라(expo-camera) — 명함 화면과 동일(iOS 시스템 픽커 promise 유실 버그 대체)
@@ -166,9 +170,11 @@ export default function ReceiptScreen() {
       const fields = data.fields ?? null;
       if (data.warning) setWarning(data.warning);
       setParsed(fields);
+      const paidAt = fields?.paidAt ?? '';
       setForm({
         storeName: fields?.storeName ?? '',
-        paidAt: fields?.paidAt ?? '',
+        paidDate: paidAt.slice(0, 10),
+        paidTime: paidAt.length > 10 ? paidAt.slice(11, 16) : '',
         totalAmount: fields?.totalAmount != null ? String(fields.totalAmount) : '',
         cardLast4: fields?.cardLast4 ?? '',
         memo: '',
@@ -197,7 +203,7 @@ export default function ReceiptScreen() {
       const fields: ReceiptFields = {
         storeName: form.storeName.trim() || null,
         storeCorpNum: parsed?.storeCorpNum ?? null,
-        paidAt: form.paidAt.trim() || null,
+        paidAt: form.paidDate ? (form.paidTime.trim() ? `${form.paidDate} ${form.paidTime.trim()}` : form.paidDate) : null,
         totalAmount: amount,
         // 공급가액·부가세는 서버가 검증·역산(사용자 수정 금액 기준으로 재계산되도록 원 파싱값 전달)
         supplyAmount: parsed?.totalAmount === amount ? (parsed?.supplyAmount ?? null) : null,
@@ -238,7 +244,7 @@ export default function ReceiptScreen() {
     setWarning(null);
     setImageUri(null);
     setParsed(null);
-    setForm({ storeName: '', paidAt: '', totalAmount: '', cardLast4: '', memo: '' });
+    setForm({ storeName: '', paidDate: '', paidTime: '', totalAmount: '', cardLast4: '', memo: '' });
     setDuplicates(null);
     setSavedStore(null);
   };
@@ -250,7 +256,13 @@ export default function ReceiptScreen() {
         <Pressable onPress={() => router.back()} className="h-10 w-10 items-center justify-center active:opacity-60">
           <Ionicons name="chevron-back" size={24} color={PRIMARY} />
         </Pressable>
-        <Text className="text-base font-extrabold text-cd-text">영수증 촬영</Text>
+        <Text className="flex-1 text-base font-extrabold text-cd-text">영수증 촬영</Text>
+        <Pressable
+          onPress={() => router.push('/receipts')}
+          hitSlop={8}
+          className="h-10 w-10 items-center justify-center active:opacity-60">
+          <Ionicons name="file-tray-full-outline" size={21} color={PRIMARY} />
+        </Pressable>
       </View>
       <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
         {error ? (
@@ -324,11 +336,22 @@ export default function ReceiptScreen() {
             <View className="gap-2 rounded-2xl border border-cd-border bg-cd-card p-3">
               <Text className="text-xs font-bold text-cd-muted">인식 결과 확인 — 틀린 곳만 고쳐주세요</Text>
               <Field label="상호" value={form.storeName} onChange={(v) => setForm((s) => ({ ...s, storeName: v }))} />
+              <View className="flex-row items-center gap-2">
+                <Text className="w-16 text-xs text-cd-faint">사용일</Text>
+                <Pressable
+                  onPress={() => setDatePicker(true)}
+                  className="flex-1 flex-row items-center justify-between rounded-lg border border-cd-border px-3 py-2.5 active:opacity-70">
+                  <Text className={`text-base ${form.paidDate ? 'text-cd-text' : 'text-cd-faint'}`}>
+                    {form.paidDate || '날짜 선택'}
+                  </Text>
+                  <Ionicons name="calendar-outline" size={16} color="#6b7280" />
+                </Pressable>
+              </View>
               <Field
-                label="사용일시"
-                value={form.paidAt}
-                onChange={(v) => setForm((s) => ({ ...s, paidAt: v }))}
-                placeholder="2026-08-16 12:30"
+                label="시각"
+                value={form.paidTime}
+                onChange={(v) => setForm((s) => ({ ...s, paidTime: v }))}
+                placeholder="12:30 (선택)"
               />
               <Field
                 label="금액 *"
@@ -375,7 +398,7 @@ export default function ReceiptScreen() {
               <Ionicons name="checkmark" size={28} color="#16a34a" />
             </View>
             <Text className="text-center text-sm font-bold text-cd-text">
-              {savedStore} 영수증을 저장했습니다.{'\n'}지출결의서 작성 때 불러올 수 있어요.
+              {savedStore} 영수증을 저장했습니다.{'\n'}보관함에서 확인하고, 지출결의서 작성 때 불러올 수 있어요.
             </Text>
             <View className="flex-row gap-2">
               <Pressable
@@ -393,6 +416,17 @@ export default function ReceiptScreen() {
           </View>
         ) : null}
       </ScrollView>
+
+      <DatePickerSheet
+        visible={datePicker}
+        title="사용일 선택"
+        value={form.paidDate || null}
+        onConfirm={(from) => {
+          setForm((s) => ({ ...s, paidDate: from }));
+          setDatePicker(false);
+        }}
+        onClose={() => setDatePicker(false)}
+      />
 
       {/* 자체 카메라 — 명함 화면과 동일한 absolute 전체 덮개 */}
       {cameraOpen ? (

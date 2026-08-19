@@ -1,20 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
-import { normalizeReceiptImage, type ReceiptFields } from "@/lib/finance/receipt-parser";
-import { findDuplicateReceipts, listMyReceipts, saveReceipt } from "@/lib/finance/receipts";
+import { normalizePaidAt, normalizeReceiptImage, type ReceiptFields } from "@/lib/finance/receipt-parser";
+import { findDuplicateReceipts, listMyReceipts, saveReceipt, type ReceiptScope } from "@/lib/finance/receipts";
 import { classifyMany, loadCategories } from "@/lib/barobill/classify";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// GET: 내 영수증 목록. unusedOnly=1(기안 피커) 이면 미귀속 건만 + 대상 양식 분류 옵션 문자열 포함.
+const SCOPES: ReceiptScope[] = ["unused", "used", "excluded", "all"];
+
+// GET: 내 영수증 목록.
+//  - scope=unused|used|excluded|all (모바일 보관함 탭). unusedOnly=1 은 기안 피커의 종전 규약(=unused).
+//  - 기간(from/to)은 선택 — 없으면 전 기간에서 최근 순으로 준다.
+//  - formId 를 주면 그 양식의 분류 select 옵션 문자열(formOption)까지 매핑해 준다(card-picker 규약).
 export async function GET(req: NextRequest) {
   try {
     const ctx = await requirePermission("approval.view");
     const sp = req.nextUrl.searchParams;
+    const scopeRaw = sp.get("scope") as ReceiptScope | null;
+    const scope: ReceiptScope =
+      scopeRaw && SCOPES.includes(scopeRaw) ? scopeRaw : sp.get("unusedOnly") === "1" ? "unused" : "all";
     const receipts = await listMyReceipts({
       ownerUserId: ctx.userId,
-      unusedOnly: sp.get("unusedOnly") === "1",
+      scope,
       from: sp.get("from") || undefined,
       to: sp.get("to") || undefined,
       limit: Number(sp.get("limit") ?? 100) || 100,
@@ -40,6 +48,11 @@ export async function GET(req: NextRequest) {
         items: r.items,
         memo: r.memo,
         docId: r.docId,
+        docTitle: r.docTitle,
+        docNo: r.docNo,
+        docStatus: r.docStatus,
+        excluded: r.excluded,
+        createdAt: r.createdAt,
         pdfKey: r.pdfKey,
         pdfName: `영수증_${(r.storeName ?? "미상").slice(0, 30)}_${r.paidAt?.slice(0, 10) ?? ""}.pdf`,
         categoryKey,
@@ -79,6 +92,9 @@ export async function POST(req: NextRequest) {
     if (fields.totalAmount == null || !(Number(fields.totalAmount) > 0)) {
       return NextResponse.json({ error: "결제 금액을 입력하세요." }, { status: 400 });
     }
+    // 사용일시는 저장 계약(YYYY-MM-DD HH:MM)으로 맞춰서 넣는다 — 확인 폼에서 자유 입력된 표기가
+    // 그대로 들어가면 목록의 기간 필터(문자열 비교) 밖으로 떨어진다. 해석 불가면 null(=날짜 미상).
+    fields.paidAt = normalizePaidAt(fields.paidAt ?? null);
 
     if (String(form.get("force") ?? "") !== "1") {
       const duplicates = await findDuplicateReceipts(ctx.userId, {

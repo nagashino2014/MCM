@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { deleteReceipt, updateReceipt } from "@/lib/finance/receipts";
+import { normalizePaidAt } from "@/lib/finance/receipt-parser";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,6 +18,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ re
       excluded?: boolean;
       memo?: string | null;
     };
+    // 저장 계약은 POST 와 동일 — 수정 입력도 정규화해서 넣는다(미해석 시 날짜 미상으로).
+    if (body.paidAt !== undefined) body.paidAt = normalizePaidAt(body.paidAt ?? null);
     await updateReceipt(receiptId, ctx.userId, body);
     return NextResponse.json({ ok: true });
   } catch (err) {

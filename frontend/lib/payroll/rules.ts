@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
+import { maskRrnPrefix } from "@/lib/security/pii-crypto";
 
 /**
  * 수당 지급 규칙 + 직원 원천징수 설정 (PL-P4, 블루프린트 §6-2 A·B)
@@ -246,7 +247,8 @@ export async function parseTaxForm(buf: Buffer): Promise<{
           if (/^\d{6}-?\d{7}$/.test(t)) { rrn = t.slice(0, 6); break; }
         }
       }
-      dependents.push({ relation: code, name: depName, rrnPrefix: rrn });
+      // 데이터 최소화(PR-P3) — 부양가족 주민번호 앞자리는 생년 2자리만 보존(자녀 나이 판정에 충분).
+      dependents.push({ relation: code, name: depName, rrnPrefix: maskRrnPrefix(rrn) });
       break;
     }
   }

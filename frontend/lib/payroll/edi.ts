@@ -1,4 +1,5 @@
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
+import { maskRrnPrefix } from "@/lib/security/pii-crypto";
 
 /**
  * 4대보험 EDI 개인별 고지산출내역 CSV 업로드 (PL-P4, EDI_ANALYSIS.md §2-1 실증 포맷)
@@ -49,7 +50,8 @@ export function parseEdiCsv(buf: ArrayBuffer | Buffer): EdiParsed {
     if (!c[0] || !/^\d+$/.test(c[0])) continue; // 순번 없는 행(합계 등) 제외
     const name = (c[3] ?? "").trim();
     if (!name) continue;
-    const rrnPrefix = (c[2] ?? "").slice(0, 6) || null;
+    // 데이터 최소화(PR-P3) — 주민번호 앞자리는 생년 2자리만 남기고 마스킹 저장(매칭은 성명 기준이라 무관).
+    const rrnPrefix = maskRrnPrefix((c[2] ?? "").slice(0, 6));
     if (isNhis) {
       rows.push({
         name,

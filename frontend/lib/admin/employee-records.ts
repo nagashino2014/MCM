@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
+import { encryptPii } from "@/lib/security/pii-crypto";
 
 export const POSITION_OPTIONS = [
   "대표이사",
@@ -193,21 +194,9 @@ function numOrNull(value: unknown): number | null {
   return Number.isFinite(next) ? next : null;
 }
 
-function encryptionKey(): Buffer {
-  const source =
-    process.env.EMPLOYEE_PII_ENCRYPTION_KEY ||
-    process.env.NEXTAUTH_SECRET ||
-    process.env.AUTH_SECRET ||
-    "mcm-local-development-key";
-  return crypto.createHash("sha256").update(source).digest();
-}
-
+// PII 암호화는 공용 모듈로 이관(PR-P3) — 전용 키 강제 + legacy 복호 폴백은 pii-crypto 가 담당.
 function encrypt(text: string): string {
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv("aes-256-gcm", encryptionKey(), iv);
-  const encrypted = Buffer.concat([cipher.update(text, "utf8"), cipher.final()]);
-  const tag = cipher.getAuthTag();
-  return [iv.toString("base64"), tag.toString("base64"), encrypted.toString("base64")].join(".");
+  return encryptPii(text);
 }
 
 export function parseResidentRegistrationNo(value: string): RrnInfo {

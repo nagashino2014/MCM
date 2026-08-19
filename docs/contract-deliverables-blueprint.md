@@ -287,3 +287,21 @@ D0~D3이 실사용 최소선(기본양식으로 발송까지). D4~D5는 자체�
   치수가 필요해 generate 가 사진 로드 후 호출). PDF=photoGrid DocBlock(pdf.ts),
   HWPX=BinData+content.hpf item+hp:pic 합성(spec-hwpx — scaMatrix=표시/원본, imgClip=px*75).
   업로드 `/api/contracts/deliverables/photos`(PNG·JPG 30MB), 보드 '준공' 탭 명칭 입력 UI.
+
+## 2026-08-19 대금청구서(payment_request) — 준공 서류 목록 마지막
+
+실측: 2026-대외-01032(수도권매립지관리공사 준공 기성금) 동봉 hwpx. 준공계 공문에 대부분
+함께 요구되어 준공 카탈로그 마지막에 추가(사용자 확정).
+- 4x2 표 — 계약건명(contract.title) / 계약금액(amountHangul+숫자 2줄) /
+  청구금액("준공 기성금 :" + completion.currentAmount 2줄) / 청구인(상호·주소·대표이사+셀 인감)
+- 별첨 = payment.attachNote(manual, 기본 "법인 통장 사본 1부" — data.ts 자동 채움) ·
+  "위 금액을 정히 청구합니다." · dateDotted · 수신처 귀하
+- 렌더 신설: CellSpec.stamp(셀 인감 — 서명란 규칙 재사용), FieldFormat nameSpread,
+  표 셀 다중 줄(개행) PDF·HWPX 지원, para→para 간격 2줄
+
+## 2026-08-19 공문 재발송 = 회수·수정·재결재(문서번호 유지)
+
+즉시 재발송은 "수정 없이 같은 공문 재송부"라 폐기(사용자 피드백). 승인 공문 회수
+(recallLetterDoc: approved→draft, 공문 양식 전용) → 작성 화면 수정 → 재상신(doc_no 유지) →
+재결재 승인 시 markLetterPendingOnApproval 이 send_status 를 pending 으로 되돌려 자동
+2차 발송(이력은 official_letters.send_history 에 N차 누적 — 마이그 194).

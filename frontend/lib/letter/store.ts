@@ -12,6 +12,7 @@ import {
   formatLetterNo,
   parseLetterNo,
   type LetterRecipient,
+  type LetterSendRecord,
   type LetterSendStatus,
   type OfficialLetterRow,
 } from "./types";
@@ -51,6 +52,7 @@ function mapRow(r: Record<string, unknown>): OfficialLetterRow {
     sendError: r.send_error != null ? String(r.send_error) : null,
     sendAttempts: Number(r.send_attempts ?? 0),
     sentAt: r.sent_at != null ? String(r.sent_at) : null,
+    sendHistory: parseJsonArr<LetterSendRecord>(r.send_history),
     createdAt: String(r.created_at ?? ""),
     updatedAt: String(r.updated_at ?? ""),
   };
@@ -107,17 +109,22 @@ export async function markLetterPendingOnApproval(txn: PgDatabase, docId: string
   );
 }
 
-/** 발송 선점 — pending|failed → generating. 0행이면 이미 발송됨/진행 중(중복 실행 가드). */
-export async function claimLetterSend(docId: string): Promise<OfficialLetterRow | null> {
+/**
+ * 발송 선점 — pending|failed → generating. 0행이면 이미 발송됨/진행 중(중복 실행 가드).
+ * allowResend(194): 발송 완료(sent) 건도 선점한다 — 승인 건 재발송(발주처 사정 등).
+ * generating 중복 선점은 어느 모드든 막힌다.
+ */
+export async function claimLetterSend(docId: string, opts: { allowResend?: boolean } = {}): Promise<OfficialLetterRow | null> {
+  const states = opts.allowResend ? ["pending", "failed", "sent"] : ["pending", "failed"];
   let row: OfficialLetterRow | null = null;
   await withDbWrite(async (txn) => {
     const rows = rowsToObjects(
       await txn.exec(
         `UPDATE official_letters
             SET send_status = 'generating', send_attempts = send_attempts + 1, send_error = NULL, updated_at = $2
-          WHERE doc_id = $1 AND send_status IN ('pending', 'failed')
+          WHERE doc_id = $1 AND send_status = ANY($3::text[])
           RETURNING *`,
-        [docId, new Date().toISOString()]
+        [docId, new Date().toISOString(), states]
       )
     );
     row = rows.length ? mapRow(rows[0]) : null;
@@ -134,13 +141,23 @@ export async function setLetterArtifacts(docId: string, pdfKey: string, hwpxKey:
   });
 }
 
-export async function finishLetterSend(docId: string, result: { ok: boolean; error?: string | null; messageId?: string | null }): Promise<void> {
+export async function finishLetterSend(
+  docId: string,
+  result: { ok: boolean; error?: string | null; messageId?: string | null; to?: string[]; cc?: string[] }
+): Promise<void> {
   const now = new Date().toISOString();
   await withDbWrite(async (txn) => {
     if (result.ok) {
+      // 발송 이력 누적(194) — 1차부터 N차까지. sent_at 은 최근 발송 시각.
+      const entry: LetterSendRecord = { sentAt: now, messageId: result.messageId ?? null };
+      if (result.to?.length) entry.to = result.to;
+      if (result.cc?.length) entry.cc = result.cc;
       await txn.run(
-        `UPDATE official_letters SET send_status = 'sent', sent_at = $2, sent_message_id = $3, send_error = NULL, updated_at = $2 WHERE doc_id = $1`,
-        [docId, now, result.messageId ?? null]
+        `UPDATE official_letters
+            SET send_status = 'sent', sent_at = $2, sent_message_id = $3, send_error = NULL,
+                send_history = COALESCE(send_history, '[]'::jsonb) || $4::jsonb, updated_at = $2
+          WHERE doc_id = $1`,
+        [docId, now, result.messageId ?? null, JSON.stringify([entry])]
       );
     } else {
       await txn.run(`UPDATE official_letters SET send_status = 'failed', send_error = $2, updated_at = $3 WHERE doc_id = $1`, [

@@ -140,8 +140,12 @@ function buildMailBody(input: {
  * ③ 수신처 메일 발송(To=수신, Cc=참조) ④ sent/failed 확정.
  * 반환: 발송 결과(중복 실행이면 skipped).
  */
-export async function processLetterSend(docId: string): Promise<{ ok: boolean; skipped?: boolean; error?: string }> {
-  const claimed = await claimLetterSend(docId);
+export async function processLetterSend(
+  docId: string,
+  opts: { allowResend?: boolean } = {}
+): Promise<{ ok: boolean; skipped?: boolean; error?: string }> {
+  // allowResend(194) — 발송 완료(sent) 건도 재발송(사용자 명시 조작 한정. 승인 트리거는 종전대로 멱등).
+  const claimed = await claimLetterSend(docId, { allowResend: opts.allowResend === true });
   if (!claimed) return { ok: true, skipped: true };
   try {
     const doc = await getDoc(docId);
@@ -235,7 +239,12 @@ export async function processLetterSend(docId: string): Promise<{ ok: boolean; s
     });
     if (!result.ok) throw new Error(result.error ?? "메일 발송 실패");
 
-    await finishLetterSend(docId, { ok: true, messageId: result.messageId ?? null });
+    await finishLetterSend(docId, {
+      ok: true,
+      messageId: result.messageId ?? null,
+      to: to.map((a) => a.address),
+      cc: cc.map((a) => a.address),
+    });
     // 첨부된 착수계·준공계에 발송 사실을 역기록(계약 메뉴 이력에서 시행번호로 추적 가능)
     if (values.deliverable_ids?.length) {
       await markDeliverablesSent(docId, artifacts.letterNo).catch((e) =>

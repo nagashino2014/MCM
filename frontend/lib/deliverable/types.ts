@@ -101,6 +101,9 @@ export type DocBlock =
   | { kind: "receiver"; binding: string; suffix: string; fontPt?: number; align?: Align; bold?: boolean }
   /** 우상단 확인란 박스(발주처 양식의 "감독자 서명" 등) */
   | { kind: "stampBox"; label: string; widthPt?: number; heightPt?: number }
+  /** 성과품 사진 별첨 페이지(용역결과보고서) — 명칭 셀+사진 셀 표.
+   *  비율 따라 페이지당 1~4장: 1장=2x1, 가로 2장=4x1, 세로 2장=2x2, 세로 4장=4x2(2026-08-19 확정) */
+  | { kind: "photoGrid"; cols: 1 | 2; items: { caption: string; photoIndex: number }[] }
   | { kind: "spacer"; heightPt: number };
 
 export interface DeliverableSpec {
@@ -174,6 +177,40 @@ export const BINDING_LABEL: Record<string, string> = Object.fromEntries(
 
 /** field_values 저장 형태 — 바인딩 키 → 확정값(원시 문자열·숫자). 렌더 시 format 이 적용된다. */
 export type DeliverableValues = Record<string, string | number | null>;
+
+// ── 용역결과보고서 옵션(2026-08-19 사용자 확정) ──
+// 발주번호 행 제외 토글 — 발주처가 발주번호를 안 쓰는 계약용(행 자체를 빼고 번호를 당긴다)
+export const OMIT_ORDER_NO_KEY = "meta.omitOrderNo";
+// 성과품 사진 별첨 — JSON 문자열 [{name(성과품 명칭), key(S3), size}]. 사진 1장 = 별첨 1페이지.
+export const RESULT_PHOTOS_KEY = "completion.resultPhotos";
+
+export interface DeliverablePhotoRef {
+  /** 성과품 명칭 — 별첨 페이지 캡션 */
+  name: string;
+  key: string;
+  size?: number;
+}
+
+export function parsePhotoRefs(values: DeliverableValues): DeliverablePhotoRef[] {
+  const raw = values[RESULT_PHOTOS_KEY];
+  if (typeof raw !== "string" || !raw.trim()) return [];
+  try {
+    const arr = JSON.parse(raw) as DeliverablePhotoRef[];
+    return Array.isArray(arr) ? arr.filter((p) => p && typeof p.key === "string" && p.key) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** 렌더러(pdf.ts·spec-hwpx.ts)가 소비하는 로드된 사진 자산 — generate.ts 가 S3 에서 읽어 만든다 */
+export interface PhotoAsset {
+  name: string;
+  bytes: Uint8Array;
+  mime: "image/png" | "image/jpeg";
+  /** 원본 픽셀 크기 — 1x1 박스 안 contain fit 계산용 */
+  w: number;
+  h: number;
+}
 
 /** 자동 채움값을 사용자가 수동 수정했는지(잠금 해제) — 초과근무 양식 UX 답습 */
 export type DeliverableUnlocked = Record<string, boolean>;

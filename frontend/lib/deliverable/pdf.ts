@@ -21,6 +21,7 @@ import {
   type DocBlock,
   type FieldRow,
   type Margins,
+  type PhotoAsset,
 } from "./types";
 
 const INK = rgb(0.1, 0.1, 0.12);
@@ -94,6 +95,8 @@ interface Ctx {
   fonts: Fonts;
   values: DeliverableValues;
   stamp: PDFImage | null;
+  /** 성과품 사진(별첨 페이지) — generate.ts 가 로드한 것. 로드 실패 자리는 null(자리 문구 렌더) */
+  photos: ({ asset: PhotoAsset; image: PDFImage } | null)[];
   m: Margins;
   bodyPt: number;
   contentW: number;
@@ -335,6 +338,51 @@ function drawBlock(ctx: Ctx, block: DocBlock, y: number): number {
       });
       return y - size * 1.8;
     }
+    case "photoGrid": {
+      // 성과품 사진 별첨(2026-08-19 사용자 확정) — 세트마다 (명칭 셀 / 사진 셀) 2행.
+      // 1장=2x1 · 가로 2장=4x1 · 세로 2장=2x2 · 세로 4장=4x2. 셀 테두리는 표 선과 동일.
+      const size = ctx.bodyPt - 1;
+      const capH = size * 2.1; // 명칭 셀 높이
+      const cols = block.cols;
+      const setRows = Math.ceil(block.items.length / cols);
+      const availH = y - ctx.m.bottom;
+      const setH = availH / setRows;
+      const cellW = ctx.contentW / cols;
+      const photoH = Math.max(80, setH - capH);
+      block.items.forEach((item, idx) => {
+        const col = idx % cols;
+        const rowI = Math.floor(idx / cols);
+        const x = ctx.m.left + col * cellW;
+        const top = y - rowI * setH;
+        // 명칭 셀
+        page.drawRectangle({ x, y: top - capH, width: cellW, height: capH, borderColor: INK, borderWidth: LINE });
+        const cap = item.caption?.trim() ?? "";
+        for (const ln of wrap(cap, fonts.bold, size, cellW - 12).slice(0, 1)) {
+          const tw = fonts.bold.widthOfTextAtSize(ln, size);
+          page.drawText(ln, { x: x + (cellW - tw) / 2, y: top - capH / 2 - size * 0.36, size, font: fonts.bold, color: INK });
+        }
+        // 사진 셀
+        page.drawRectangle({ x, y: top - capH - photoH, width: cellW, height: photoH, borderColor: INK, borderWidth: LINE });
+        const slot = ctx.photos[item.photoIndex];
+        if (slot) {
+          const pad = 8;
+          const scale = Math.min((cellW - pad * 2) / slot.asset.w, (photoH - pad * 2) / slot.asset.h);
+          const dw = slot.asset.w * scale;
+          const dh = slot.asset.h * scale;
+          page.drawImage(slot.image, {
+            x: x + (cellW - dw) / 2,
+            y: top - capH - photoH + (photoH - dh) / 2,
+            width: dw,
+            height: dh,
+          });
+        } else {
+          const note = "사진을 불러오지 못했습니다.";
+          const tw = fonts.regular.widthOfTextAtSize(note, size - 2);
+          page.drawText(note, { x: x + (cellW - tw) / 2, y: top - capH - photoH / 2, size: size - 2, font: fonts.regular, color: INK });
+        }
+      });
+      return y - setRows * setH;
+    }
     case "stampBox": {
       const size = ctx.bodyPt - 2;
       const w = block.widthPt ?? 96;
@@ -355,7 +403,11 @@ function drawBlock(ctx: Ctx, block: DocBlock, y: number): number {
 }
 
 /** 서식 여러 종을 순서대로 이어 붙여 1개 PDF 로 생성한다. */
-export async function renderDeliverablePdf(specs: DeliverableSpec[], values: DeliverableValues): Promise<Uint8Array> {
+export async function renderDeliverablePdf(
+  specs: DeliverableSpec[],
+  values: DeliverableValues,
+  opts: { photos?: PhotoAsset[] } = {}
+): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   doc.registerFontkit(fontkit);
   // 글꼴은 HWPX 템플릿(명조 계열)과 결을 맞춘다 — 공공기관 제출 시 두 산출물이 달라 보이면 안 된다.
@@ -376,6 +428,17 @@ export async function renderDeliverablePdf(specs: DeliverableSpec[], values: Del
     bold: await doc.embedFont(await pick(["HANBatangB.ttf", "kopub-batang-bd.ttf", "malgunbd.ttf"]), { subset: true }),
   };
   const stamp = await loadStamp(doc);
+  const photos: Ctx["photos"] = [];
+  for (const asset of opts.photos ?? []) {
+    if (!asset.bytes.length || !asset.w || !asset.h) {
+      photos.push(null); // 로드 실패 — photoIndex 를 어긋내지 않고 자리 문구를 그린다
+      continue;
+    }
+    photos.push({
+      asset,
+      image: asset.mime === "image/png" ? await doc.embedPng(asset.bytes) : await doc.embedJpg(asset.bytes),
+    });
+  }
 
   for (const spec of specs) {
     const page = doc.addPage([PAGE_W, PAGE_H]);
@@ -385,6 +448,7 @@ export async function renderDeliverablePdf(specs: DeliverableSpec[], values: Del
       fonts,
       values,
       stamp,
+      photos,
       m,
       bodyPt: spec.page?.bodyPt ?? DEFAULT_BODY_PT,
       contentW: PAGE_W - m.left - m.right,

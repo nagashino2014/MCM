@@ -10,10 +10,14 @@
 
 import {
   DEFAULT_BODY_PT,
+  OMIT_ORDER_NO_KEY,
+  parsePhotoRefs,
   type CellSpec,
   type DeliverableKind,
   type DeliverableSpec,
+  type DeliverableValues,
   type FieldRow,
+  type PhotoAsset,
 } from "./types";
 
 // ── 준공 3종 공통 조각 ──
@@ -285,6 +289,15 @@ const SERVICE_RESULT_REPORT: DeliverableSpec = {
  * 금회·누계만 보인다(사용자 확정 2026-08-07). 남은 열은 같은 총폭을 균등 분할한다.
  */
 export function adjustSpecForValues(spec: DeliverableSpec, values: Record<string, unknown>): DeliverableSpec {
+  // 용역결과보고서 발주번호 제외 토글(2026-08-19 사용자 확정) — 행 자체를 빼고 번호를 당긴다
+  if (spec.docType === "service_result_report" && Number(values[OMIT_ORDER_NO_KEY] ?? 0) === 1) {
+    spec = {
+      ...spec,
+      blocks: spec.blocks.map((b) =>
+        b.kind === "fields" ? { ...b, rows: b.rows.filter((r) => r.binding !== "contract.orderNo") } : b
+      ),
+    };
+  }
   const prevTotal = Number(values["completion.prevTotal"] ?? 0);
   if (!Number.isFinite(prevTotal) || prevTotal > 0) return spec;
   let touched = false;
@@ -302,6 +315,70 @@ export function adjustSpecForValues(spec: DeliverableSpec, values: Record<string
   });
   return touched ? { ...spec, blocks } : spec;
 }
+
+/**
+ * 성과품 사진 별첨 페이지(2026-08-19 사용자 확정) — 용역결과보고서 뒤에 붙는 별도 페이지.
+ * 좌상단 "첨부자료" 표기 + (명칭 셀 위 / 사진 셀 아래) 표. 사진 비율에 따라 페이지당 1~4장:
+ *   · 1장            → 2x1 표(명칭/사진)
+ *   · 가로 사진 2장  → 4x1 표(세로 스택 — 명칭1/사진1/명칭2/사진2)
+ *   · 세로 사진 2장  → 2x2 표(나란히 — 명칭행/사진행)
+ *   · 세로 사진 4장  → 4x2 표(2열 x 2세트)
+ * 치수는 로드된 사진(PhotoAsset)에서 오므로 generate.ts 가 로드 후 호출한다.
+ * 같은 방향(가로/세로)이 연속되는 사진끼리만 한 페이지에 묶는다(순서 보존).
+ */
+export function buildPhotoAttachmentSpecs(values: DeliverableValues, photos: PhotoAsset[]): DeliverableSpec[] {
+  const refs = parsePhotoRefs(values);
+  if (!refs.length) return [];
+  const caption = (i: number) => refs[i]?.name?.trim() || `성과품 사진 ${i + 1}`;
+  // 치수를 모르는 사진(로드 실패)은 가로로 간주 — 크게 한 장씩 배치돼 안전하다
+  const isPortrait = (i: number) => {
+    const p = photos[i];
+    return !!p && p.w > 0 && p.h > p.w;
+  };
+
+  // 방향이 같은 연속 구간으로 나눈 뒤, 페이지 용량(가로 2 / 세로 4)씩 끊는다
+  const pages: { cols: 1 | 2; idxs: number[] }[] = [];
+  let run: number[] = [];
+  let runPortrait = false;
+  const flush = () => {
+    if (!run.length) return;
+    const cap = runPortrait ? 4 : 2;
+    for (let i = 0; i < run.length; i += cap) {
+      const chunk = run.slice(i, i + cap);
+      // 세로 1장만 남으면 전면(2x1), 2~4장은 2열
+      pages.push({ cols: runPortrait && chunk.length > 1 ? 2 : 1, idxs: chunk });
+    }
+    run = [];
+  };
+  refs.forEach((_, i) => {
+    const portrait = isPortrait(i);
+    if (run.length && portrait !== runPortrait) flush();
+    runPortrait = portrait;
+    run.push(i);
+  });
+  flush();
+
+  return pages.map((pg, pi) => ({
+    docType: `service_result_photo:${pi}`,
+    title: "첨부자료(성과품 사진)",
+    kind: "completion",
+    blocks: [
+      { kind: "note", text: "첨부자료" },
+      { kind: "spacer", heightPt: 8 },
+      { kind: "photoGrid", cols: pg.cols, items: pg.idxs.map((i) => ({ caption: caption(i), photoIndex: i })) },
+    ],
+  }));
+}
+
+/**
+ * HWPX 원본 템플릿이 장(section)을 보유한 서식 — 이 목록만 템플릿 치환 경로(hwpx.ts)로 간다.
+ * 준공내역서·용역결과보고서(인천공항에너지 실측)는 템플릿에 장이 없어 spec 렌더(pdf.ts)로
+ * 만들고 산출물을 병합한다(generate.ts). ⚠이 분리가 없으면 두 서식이 산출물에서 조용히 빠진다.
+ */
+export const HWPX_TEMPLATE_DOC_TYPES: Record<DeliverableKind, string[]> = {
+  start: ["start_notice"],
+  completion: ["completion_inspection", "completion_settlement", "completion_supervision"],
+};
 
 export const DELIVERABLE_CATALOG: DeliverableSpec[] = [
   START_NOTICE,

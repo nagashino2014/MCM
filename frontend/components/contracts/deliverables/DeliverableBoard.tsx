@@ -22,8 +22,12 @@ import {
   BINDING_LABEL,
   DELIVERABLE_BINDINGS,
   DELIVERABLE_KIND_LABEL,
+  OMIT_ORDER_NO_KEY,
+  RESULT_PHOTOS_KEY,
+  parsePhotoRefs,
   type BindingDef,
   type DeliverableKind,
+  type DeliverablePhotoRef,
   type DeliverableSpec,
   type DeliverableValues,
 } from "@/lib/deliverable/types";
@@ -271,6 +275,31 @@ export function DeliverableBoard() {
 
   const toggleLock = (key: string) => setUnlocked((prev) => ({ ...prev, [key]: !prev[key] }));
 
+  // ── 성과품 사진(용역결과보고서 별첨, 2026-08-19) — 값은 RESULT_PHOTOS_KEY 에 JSON 으로 저장 ──
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const photoRefs = useMemo(() => parsePhotoRefs(values), [values]);
+  const setPhotoRefs = (list: DeliverablePhotoRef[]) => setValue(RESULT_PHOTOS_KEY, list.length ? JSON.stringify(list) : "");
+
+  const uploadPhotos = async (files: FileList | File[]) => {
+    const list = Array.from(files);
+    if (!list.length) return;
+    setPhotoUploading(true);
+    try {
+      const fd = new FormData();
+      for (const f of list) fd.append("files", f);
+      const res = await fetch("/api/contracts/deliverables/photos", { method: "POST", body: fd });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { error?: string })?.error ?? "사진 업로드 실패");
+      const items = (data.items ?? []) as { name: string; key: string; size: number }[];
+      // 성과품 명칭 기본값 = 파일명(확장자 제외) — 업로드 후 입력란에서 고친다
+      setPhotoRefs([...photoRefs, ...items.map((it) => ({ name: it.name.replace(/\.[^.]+$/, ""), key: it.key, size: it.size }))]);
+    } catch (err) {
+      setMsg((err as Error).message);
+    } finally {
+      setPhotoUploading(false);
+    }
+  };
+
   const save = async (): Promise<string | null> => {
     if (!contract) {
       setMsg("계약을 먼저 선택하세요.");
@@ -373,6 +402,26 @@ export function DeliverableBoard() {
     }
     if (def?.format === "multiline") {
       return <textarea className={common} rows={3} value={value} disabled={locked} onChange={(e) => setValue(key, e.target.value)} />;
+    }
+    if (key === "contract.orderNo") {
+      // 발주번호 제외 토글(2026-08-19 사용자 확정) — 발주처가 발주번호를 안 쓰는 계약은
+      // 용역결과보고서에서 행 자체를 빼고 아래 번호를 당긴다(그때그때 켜고 끈다).
+      const omitted = Number(values[OMIT_ORDER_NO_KEY] ?? 0) === 1;
+      return (
+        <div className="flex items-center gap-2">
+          <input
+            className={`${common} flex-1`}
+            type="text"
+            value={value}
+            disabled={locked || omitted}
+            onChange={(e) => setValue(key, e.target.value)}
+          />
+          <label className="flex items-center gap-1.5 text-[11px] cd-text-faint cursor-pointer whitespace-nowrap" title="용역결과보고서에서 발주번호 행을 빼고 아래 항목 번호를 당깁니다.">
+            <input type="checkbox" checked={omitted} onChange={(e) => setValue(OMIT_ORDER_NO_KEY, e.target.checked ? "1" : "0")} />
+            문서에서 제외
+          </label>
+        </div>
+      );
     }
     if (def?.format?.startsWith("date")) {
       return <AutoDateInput className={common} value={value.slice(0, 10)} disabled={locked} onChange={(next) => setValue(key, next)} />;
@@ -679,6 +728,48 @@ export function DeliverableBoard() {
                 ))}
                 {(bindingsByGroup.get(tab) ?? []).length === 0 && (
                   <span className="text-[12px] cd-text-faint">서식을 선택하면 기재 사항이 표시됩니다.</span>
+                )}
+                {/* 성과품 사진 별첨(2026-08-19 사용자 확정) — 용역결과보고서 뒤에 사진 1장 = 별첨 1페이지
+                    (좌상단 '첨부자료' 표기 + 명칭 + 1x1 표 박스에 사진 fit) */}
+                {tab === "준공" && docTypes.includes("service_result_report") && (
+                  <div className="md:col-span-2 flex flex-col gap-2 rounded-xl border cd-border-c p-3">
+                    <span className="text-[11px] font-bold cd-text">
+                      성과품 사진 별첨 <span className="font-normal cd-text-faint">— 용역결과보고서 뒤에 사진 1장당 별첨 1페이지로 붙습니다</span>
+                    </span>
+                    {photoRefs.map((ph, i) => (
+                      <div key={ph.key} className="flex items-center gap-2">
+                        <span className="text-[11px] cd-text-faint shrink-0">{i + 1}.</span>
+                        <input
+                          className="cd-input flex-1"
+                          placeholder="성과품 명칭(별첨 페이지 캡션)"
+                          value={ph.name}
+                          onChange={(e) => setPhotoRefs(photoRefs.map((x, xi) => (xi === i ? { ...x, name: e.target.value } : x)))}
+                        />
+                        <span className="text-[10.5px] cd-text-faint font-mono shrink-0">{ph.size ? `${(ph.size / 1024 / 1024).toFixed(1)}MB` : ""}</span>
+                        <button
+                          type="button"
+                          className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)] shrink-0"
+                          onClick={() => setPhotoRefs(photoRefs.filter((_, xi) => xi !== i))}
+                          title="사진 제거"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                    <label className="flex items-center gap-2 rounded-lg border border-dashed cd-border-c px-3 py-2 cursor-pointer text-[11.5px] cd-text-faint self-start">
+                      {photoUploading ? "업로드 중..." : "＋ 사진 추가(PNG·JPG)"}
+                      <input
+                        type="file"
+                        multiple
+                        accept="image/png,image/jpeg"
+                        className="hidden"
+                        onChange={(e) => {
+                          if (e.target.files) void uploadPhotos(e.target.files);
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
+                  </div>
                 )}
               </div>
             )}

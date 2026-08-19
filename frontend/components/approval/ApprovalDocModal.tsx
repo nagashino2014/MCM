@@ -12,7 +12,7 @@ import { DocAttachmentViewer } from "@/components/approval/DocAttachmentViewer";
 import { approvalEditHref } from "@/lib/approval/edit-route";
 import type { DocAttachment } from "@/lib/approval/attachments";
 import type { ApprovalFieldDef } from "@/lib/approval/fields";
-import { LETTER_FORM_ID } from "@/lib/letter/types";
+import { LETTER_FORM_ID, LETTER_SEND_STATUS_LABEL, type OfficialLetterRow } from "@/lib/letter/types";
 import { QUOTE_FORM_ID } from "@/lib/quote/types";
 import { AGREEMENT_FORM_ID } from "@/lib/agreement/types";
 
@@ -98,6 +98,41 @@ export function ApprovalDocViewer({
   // 본문 / 첨부서류 탭 — 첨부가 있는 문서에서만 노출.
   const [tab, setTab] = useState<"doc" | "attach">("doc");
   const attachments = ((detail?.fieldValues?.file_attachments ?? []) as DocAttachment[]).filter((f) => f?.key);
+  // 공문 발송 대장(194) — 승인 완료 공문의 발송 상태·이력(N차)·재발송. 실패해도 문서 열람은 유지.
+  const [letter, setLetter] = useState<OfficialLetterRow | null>(null);
+  const [letterHistoryOpen, setLetterHistoryOpen] = useState(false);
+  const [resending, setResending] = useState(false);
+
+  const loadLetter = (id: string) => {
+    fetch(`/api/letters/by-doc/${encodeURIComponent(id)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setLetter(d?.letter ?? null))
+      .catch(() => {});
+  };
+  useEffect(() => {
+    setLetter(null);
+    setLetterHistoryOpen(false);
+    if (detail?.formId === LETTER_FORM_ID && detail.status === "approved") loadLetter(detail.docId);
+  }, [detail?.formId, detail?.status, detail?.docId]);
+
+  const resendLetter = async () => {
+    if (!letter) return;
+    const nth = letter.sendHistory.length + 1;
+    if (!window.confirm(letter.sendStatus === "sent" ? `이미 발송 완료된 공문입니다. ${nth}차 발송할까요?` : "이 공문을 수신처 메일로 발송할까요?")) return;
+    setResending(true);
+    try {
+      const res = await fetch(`/api/letters/${encodeURIComponent(letter.letterId)}/send`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "발송 실패");
+      alert(data.skipped ? "이미 발송 처리 중입니다." : "발송되었습니다.");
+      loadLetter(letter.docId ?? "");
+    } catch (err) {
+      alert((err as Error).message);
+      if (letter.docId) loadLetter(letter.docId);
+    } finally {
+      setResending(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -472,6 +507,44 @@ export function ApprovalDocViewer({
               <DocAttachmentViewer docId={docId} items={attachments} />
             ) : (
             <>
+            {/* 공문 발송 상태·이력(194) — 승인 완료 공문: N차 발송 합산 + 재발송(발주처 사정 등) */}
+            {detail.formId === LETTER_FORM_ID && detail.status === "approved" && letter && (
+              <div className="rounded-[14px] px-4 py-3 flex flex-col gap-2" style={{ border: "1px solid var(--cd-active-border)" }}>
+                <div className="flex items-center gap-2 flex-wrap text-[12px] cd-text">
+                  <span className="font-bold">발송</span>
+                  <span className="cd-text-faint">
+                    {LETTER_SEND_STATUS_LABEL[letter.sendStatus] ?? letter.sendStatus}
+                    {letter.sentAt ? ` · ${letter.sendHistory.length > 1 ? `${letter.sendHistory.length}차 ` : ""}${letter.sentAt.slice(0, 16).replace("T", " ")}` : ""}
+                  </span>
+                  {letter.sendError && <span className="text-[11px]" style={{ color: "var(--cd-danger, #FA896B)" }}>{letter.sendError}</span>}
+                  {letter.sendHistory.length > 0 && (
+                    <button type="button" className="text-[11px] cd-text-faint underline decoration-dotted" onClick={() => setLetterHistoryOpen((v) => !v)}>
+                      {letterHistoryOpen ? "이력 닫기" : `발송 이력(${letter.sendHistory.length})`}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="ml-auto cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] disabled:opacity-50"
+                    disabled={resending || letter.sendStatus === "generating"}
+                    onClick={resendLetter}
+                    title="수신처(참조자) 메일로 다시 발송합니다 — 발송 이력에 N차로 누적"
+                  >
+                    {resending ? "발송 중..." : letter.sendStatus === "sent" ? "재발송" : "발송"}
+                  </button>
+                </div>
+                {letterHistoryOpen &&
+                  letter.sendHistory.map((h, i) => (
+                    <div key={i} className="flex items-baseline gap-2 text-[11.5px]">
+                      <span className="font-mono cd-text shrink-0">{i + 1}차</span>
+                      <span className="font-mono cd-text-faint shrink-0">{(h.sentAt ?? "").slice(0, 16).replace("T", " ")}</span>
+                      <span className="cd-text-faint truncate">
+                        {(h.to ?? []).join(", ")}
+                        {h.cc?.length ? ` (참조 ${h.cc.length}명)` : ""}
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            )}
             {/* 문서 본체 — 다우식 양식(중앙 제목 + 기안 표 + 신청/승인란)을 흰 카드 위에 올린다. */}
             {detail.formId === LETTER_FORM_ID || detail.formId === QUOTE_FORM_ID || detail.formId === AGREEMENT_FORM_ID ? (
               // 공문(135)·견적서(136)·계약서(147) — 결재자도 최종 발송/제출 지면(PDF) 그대로 심사한다.

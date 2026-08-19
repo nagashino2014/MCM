@@ -38,6 +38,7 @@ export function LetterViewModal({ letterId, theme, onClose, onChanged }: { lette
   const [recipients, setRecipients] = useState<LetterRecipient[]>([]);
   const [ccRefs, setCcRefs] = useState<LetterRecipient[]>([]);
   const [busy, setBusy] = useState<"save" | "resend" | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/letters/${encodeURIComponent(letterId)}`, { cache: "no-store" });
@@ -73,7 +74,8 @@ export function LetterViewModal({ letterId, theme, onClose, onChanged }: { lette
   };
 
   const resend = async () => {
-    if (!window.confirm("이 공문을 수신처 메일로 재발송할까요?")) return;
+    const nth = (letter?.sendHistory.length ?? 0) + 1;
+    if (!window.confirm(letter?.sendStatus === "sent" ? `이미 발송 완료된 공문입니다. ${nth}차 발송할까요?` : "이 공문을 수신처 메일로 재발송할까요?")) return;
     setBusy("resend");
     try {
       const res = await fetch(`/api/letters/${encodeURIComponent(letterId)}/send`, { method: "POST" });
@@ -118,7 +120,17 @@ export function LetterViewModal({ letterId, theme, onClose, onChanged }: { lette
             </span>
             <span className="text-[11px] cd-text-faint flex items-center gap-1.5">
               {letter && statusBadge(letter.sendStatus)}
-              {letter?.sentAt ? <span>발송 {short(letter.sentAt)}</span> : null}
+              {/* 발송 이력(194) — 1차부터 N차까지 합산 관리. 2회 이상이면 회차를 표기한다 */}
+              {letter?.sentAt ? (
+                <span>
+                  {letter.sendHistory.length > 1 ? `${letter.sendHistory.length}차 ` : ""}발송 {short(letter.sentAt)}
+                </span>
+              ) : null}
+              {(letter?.sendHistory.length ?? 0) > 0 && (
+                <button type="button" className="underline decoration-dotted hover:cd-text" onClick={() => setHistoryOpen((v) => !v)}>
+                  {historyOpen ? "이력 닫기" : "발송 이력"}
+                </button>
+              )}
               {letter?.source === "imported" && <span>과거 이관 문서</span>}
               {letter?.sendError && <span className="text-[color:var(--cd-danger,#FA896B)]">{letter.sendError}</span>}
             </span>
@@ -177,6 +189,21 @@ export function LetterViewModal({ letterId, theme, onClose, onChanged }: { lette
           </div>
         </div>
 
+        {historyOpen && letter && letter.sendHistory.length > 0 && (
+          <div className="px-5 py-3 border-b cd-border-c flex flex-col gap-1.5 max-h-[26vh] overflow-auto">
+            <span className="text-[11px] font-bold cd-text">발송 이력 — 이 공문의 모든 발송이 한 건으로 합산 관리됩니다</span>
+            {letter.sendHistory.map((h, i) => (
+              <div key={i} className="flex items-baseline gap-2 text-[11.5px]">
+                <span className="font-mono cd-text shrink-0">{i + 1}차</span>
+                <span className="font-mono cd-text-faint shrink-0">{(h.sentAt ?? "").slice(0, 16).replace("T", " ")}</span>
+                <span className="cd-text-faint truncate">
+                  {(h.to ?? []).join(", ")}
+                  {h.cc?.length ? ` (참조 ${h.cc.length}명)` : ""}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
         {editing && (
           <div className="px-5 py-3.5 border-b cd-border-c flex flex-col gap-3 max-h-[38vh] overflow-auto">
             <RecipientEditGrid label="수신처" list={recipients} onChange={setRecipients} />
@@ -312,6 +339,7 @@ export function LetterRecordsTable({
                 <td className="py-2 pr-3 font-mono text-[11px] cd-text-faint">{l.issueDate ?? "-"}</td>
                 <td className="py-2 pr-3">
                   {statusBadge(l.sendStatus)}
+                  {l.sendHistory.length > 1 && <span className="ml-1.5 text-[10.5px] cd-text-faint">{l.sendHistory.length}차</span>}
                   {l.sendStatus === "failed" && <span className="ml-1.5 text-[10.5px] text-[color:var(--cd-danger,#FA896B)]">클릭 후 재발송</span>}
                 </td>
               </tr>

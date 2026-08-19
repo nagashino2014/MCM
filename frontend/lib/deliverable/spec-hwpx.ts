@@ -11,7 +11,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import JSZip from "jszip";
 import { numberPrefix, renderBinding, renderSlot, renderTemplate, spreadName } from "./format";
-import type { Align, CellSpec, DeliverableSpec, DeliverableValues, DocBlock, FieldRow } from "./types";
+import type { Align, CellSpec, DeliverableSpec, DeliverableValues, DocBlock, FieldRow, PhotoAsset } from "./types";
 
 // 기본양식 템플릿(completion.hwpx) 의 스타일 id — 실물에서 확인한 값
 const CHAR = {
@@ -151,6 +151,134 @@ function tableXml(block: Extract<DocBlock, { kind: "table" }>, values: Deliverab
   );
 }
 
+// ── 성과품 사진 별첨(2026-08-19 사용자 확정) ──
+// 별첨 페이지: 좌상단 "첨부자료" + 성과품 명칭 + 1x1 표 박스 안에 사진 contain fit.
+// HWPUNIT 환산: 1pt = 100, 1px(96dpi) = 75.
+
+/** 별첨 박스 크기(HWPUNIT) — A4 본문에서 캡션 아래 남는 높이 근사(pdf.ts 와 비슷한 비율) */
+const PHOTO_BOX_W = TABLE_WIDTH;
+const PHOTO_BOX_H = 62000;
+
+/**
+ * hp:pic 합성 — 템플릿 인감 pic 의 좌표 체계를 따른다(실측: imgClip = px*75,
+ * scaMatrix = 표시/원본 비율). 셀 안에 글자처럼(treatAsChar=1) 앉힌다.
+ */
+function photoPicXml(binId: string, asset: PhotoAsset, fit: { w: number; h: number }): string {
+  const orgW = asset.w * 75;
+  const orgH = asset.h * 75;
+  const scaleX = fit.w / orgW;
+  const scaleY = fit.h / orgH;
+  return (
+    `<hp:pic id="0" zOrder="0" numberingType="PICTURE" textWrap="SQUARE" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" href="" groupLevel="0" instid="0" reverse="0">` +
+    `<hp:offset x="0" y="0"/><hp:orgSz width="${orgW}" height="${orgH}"/><hp:curSz width="${fit.w}" height="${fit.h}"/>` +
+    `<hp:flip horizontal="0" vertical="0"/><hp:rotationInfo angle="0" centerX="${Math.round(fit.w / 2)}" centerY="${Math.round(fit.h / 2)}" rotateimage="1"/>` +
+    `<hp:renderingInfo><hc:transMatrix e1="1" e2="0" e3="0" e4="0" e5="1" e6="0"/>` +
+    `<hc:scaMatrix e1="${scaleX.toFixed(6)}" e2="0" e3="0" e4="0" e5="${scaleY.toFixed(6)}" e6="0"/>` +
+    `<hc:rotMatrix e1="1" e2="0" e3="0" e4="0" e5="1" e6="0"/></hp:renderingInfo>` +
+    `<hp:imgRect><hc:pt0 x="0" y="0"/><hc:pt1 x="${orgW}" y="0"/><hc:pt2 x="${orgW}" y="${orgH}"/><hc:pt3 x="0" y="${orgH}"/></hp:imgRect>` +
+    `<hp:imgClip left="0" right="${asset.w * 75}" top="0" bottom="${asset.h * 75}"/>` +
+    `<hp:inMargin left="0" right="0" top="0" bottom="0"/>` +
+    `<hc:img binaryItemIDRef="${binId}" bright="0" contrast="0" effect="REAL_PIC" alpha="0"/><hp:effects/>` +
+    `<hp:sz width="${fit.w}" widthRelTo="ABSOLUTE" height="${fit.h}" heightRelTo="ABSOLUTE" protect="0"/>` +
+    `<hp:pos treatAsChar="1" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="PARA" vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="0"/>` +
+    `<hp:outMargin left="0" right="0" top="0" bottom="0"/><hp:shapeComment/></hp:pic>`
+  );
+}
+
+/** 별첨 표 셀 공통 — 명칭 셀(위)·사진 셀(아래). borderFill 은 표 선과 동일. */
+function photoCellXml(inner: string, addr: { col: number; row: number }, size: { w: number; h: number }): string {
+  return (
+    `<hp:tc name="" header="0" hasMargin="0" protect="0" editable="0" dirty="0" borderFillIDRef="${BORDER_SOLID}">` +
+    `<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="CENTER" linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">` +
+    inner +
+    `</hp:subList><hp:cellAddr colAddr="${addr.col}" rowAddr="${addr.row}"/><hp:cellSpan colSpan="1" rowSpan="1"/>` +
+    `<hp:cellSz width="${Math.round(size.w)}" height="${Math.round(size.h)}"/><hp:cellMargin left="141" right="141" top="141" bottom="141"/></hp:tc>`
+  );
+}
+
+/**
+ * 성과품 사진 별첨 표(2026-08-19 확정) — 세트마다 (명칭 셀 / 사진 셀) 2행.
+ * 1장=2x1 · 가로 2장=4x1 · 세로 2장=2x2 · 세로 4장=4x2. 사진은 셀 안 contain fit.
+ */
+function photoGridXml(block: Extract<DocBlock, { kind: "photoGrid" }>, photos: PhotoAsset[], photoBinIds: string[]): string {
+  const cols = block.cols;
+  const setRows = Math.ceil(block.items.length / cols);
+  const capH = 1400; // 명칭 셀 높이(HWPUNIT ≒ 14pt 줄)
+  const cellW = TABLE_WIDTH / cols;
+  const photoH = Math.max(8000, Math.floor((PHOTO_BOX_H - capH * setRows) / setRows));
+  const pad = 600;
+
+  const trs: string[] = [];
+  for (let r = 0; r < setRows; r++) {
+    const capCells: string[] = [];
+    const picCells: string[] = [];
+    for (let c = 0; c < cols; c++) {
+      const idx = r * cols + c;
+      const item = block.items[idx];
+      if (!item) {
+        // 홀수 개수로 빈 자리가 생기면 빈 셀(테두리 유지)
+        capCells.push(photoCellXml(para("", { charPr: CHAR.td, paraPr: PARA.center }), { col: c, row: r * 2 }, { w: cellW, h: capH }));
+        picCells.push(photoCellXml(para("", { charPr: CHAR.td, paraPr: PARA.center }), { col: c, row: r * 2 + 1 }, { w: cellW, h: photoH }));
+        continue;
+      }
+      capCells.push(
+        photoCellXml(para(item.caption ?? "", { charPr: CHAR.thBold, paraPr: PARA.center }), { col: c, row: r * 2 }, { w: cellW, h: capH })
+      );
+      const asset = photos[item.photoIndex];
+      const binId = photoBinIds[item.photoIndex];
+      let inner: string;
+      if (asset && binId && asset.w > 0) {
+        const scale = Math.min((cellW - pad * 2) / (asset.w * 75), (photoH - pad * 2) / (asset.h * 75));
+        const fit = { w: Math.round(asset.w * 75 * scale), h: Math.round(asset.h * 75 * scale) };
+        inner =
+          `<hp:p id="0" paraPrIDRef="${PARA.center}" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">` +
+          `<hp:run charPrIDRef="${CHAR.body}">${photoPicXml(binId, asset, fit)}<hp:t/></hp:run></hp:p>`;
+      } else {
+        inner = para("(사진 자리)", { align: "center" });
+      }
+      picCells.push(photoCellXml(inner, { col: c, row: r * 2 + 1 }, { w: cellW, h: photoH }));
+    }
+    trs.push(`<hp:tr>${capCells.join("")}</hp:tr>`, `<hp:tr>${picCells.join("")}</hp:tr>`);
+  }
+
+  const totalH = (capH + photoH) * setRows;
+  const tbl =
+    `<hp:tbl id="0" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" ` +
+    `dropcapstyle="None" pageBreak="CELL" repeatHeader="0" rowCnt="${setRows * 2}" colCnt="${cols}" cellSpacing="0" ` +
+    `borderFillIDRef="${BORDER_SOLID}" noAdjust="0">` +
+    `<hp:sz width="${TABLE_WIDTH}" widthRelTo="ABSOLUTE" height="${totalH}" heightRelTo="ABSOLUTE" protect="0"/>` +
+    `<hp:pos treatAsChar="1" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" ` +
+    `vertRelTo="PARA" horzRelTo="PARA" vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="0"/>` +
+    `<hp:outMargin left="283" right="283" top="283" bottom="283"/>${trs.join("")}</hp:tbl>`;
+  return (
+    `<hp:p id="0" paraPrIDRef="${PARA.left}" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">` +
+    `<hp:run charPrIDRef="${CHAR.body}">${tbl}<hp:t/></hp:run></hp:p>`
+  );
+}
+
+/** 사진 바이너리를 zip(BinData)·manifest(content.hpf)에 등록하고 bin id 목록을 돌려준다. */
+async function addPhotoBinData(zip: JSZip, photos: PhotoAsset[]): Promise<string[]> {
+  if (!photos.length) return [];
+  const hpfEntry = zip.file("Contents/content.hpf");
+  let hpf = hpfEntry ? await hpfEntry.async("string") : "";
+  const ids: string[] = [];
+  photos.forEach((p, i) => {
+    const ext = p.mime === "image/png" ? "png" : "jpg";
+    // 템플릿 기존 image1 과 충돌하지 않는 id
+    const id = `photo${i + 1}`;
+    zip.file(`BinData/${id}.${ext}`, p.bytes);
+    if (hpf && !hpf.includes(`id="${id}"`)) {
+      hpf = hpf.replace(
+        /(<opf:item id="section0")/,
+        `<opf:item id="${id}" href="BinData/${id}.${ext}" media-type="${p.mime}" isEmbeded="1"/>$1`
+      );
+    }
+    ids.push(id);
+  });
+  if (hpf) zip.file("Contents/content.hpf", hpf);
+  return ids;
+}
+
 /**
  * 발주처 확인란 — 원본 양식이 우상단에 두는 **1열 2행 표**(위: "감독자 서명", 아래: 서명 자리).
  * pdf.ts 도 같은 모양(라벨 행 + 빈 행)으로 그린다.
@@ -272,7 +400,12 @@ export function normalizeSpecSpacing(spec: DeliverableSpec): DeliverableSpec {
   return { ...spec, blocks };
 }
 
-function blockXml(block: DocBlock, values: DeliverableValues, stampSource: string): string {
+function blockXml(
+  block: DocBlock,
+  values: DeliverableValues,
+  stampSource: string,
+  photoCtx: { photos: PhotoAsset[]; binIds: string[] }
+): string {
   switch (block.kind) {
     case "note":
       return para(renderTemplate(block.text, values), { align: block.align });
@@ -295,6 +428,8 @@ function blockXml(block: DocBlock, values: DeliverableValues, stampSource: strin
       });
     case "stampBox":
       return stampBoxXml(block, values);
+    case "photoGrid":
+      return photoGridXml(block, photoCtx.photos, photoCtx.binIds);
     case "spacer":
       return blankPara(Math.max(1, Math.round(block.heightPt / LINE_HEIGHT_PT)));
     default:
@@ -311,7 +446,11 @@ async function loadSkeleton(): Promise<JSZip> {
  * 재구축 양식(spec) → HWPX. 서식이 원본과 똑같지는 않지만 한글에서 손볼 수 있다.
  * 서식이 여러 장이면 장 사이에 쪽 나눔을 넣는다.
  */
-export async function renderSpecHwpx(specs: DeliverableSpec[], values: DeliverableValues): Promise<Uint8Array> {
+export async function renderSpecHwpx(
+  specs: DeliverableSpec[],
+  values: DeliverableValues,
+  opts: { photos?: PhotoAsset[] } = {}
+): Promise<Uint8Array> {
   if (!specs.length) throw new Error("생성할 서식이 없습니다.");
   const zip = await loadSkeleton();
   const entry = zip.file("Contents/section0.xml");
@@ -321,23 +460,62 @@ export async function renderSpecHwpx(specs: DeliverableSpec[], values: Deliverab
   const head = source.slice(0, source.indexOf("<hp:p "));
   const secPr = /<hp:secPr[\s\S]*?<\/hp:secPr>/.exec(source)?.[0] ?? "";
   const colPr = /<hp:ctrl><hp:colPr[\s\S]*?<\/hp:ctrl>/.exec(source)?.[0] ?? "";
-  // 인감 원본 XML — 서명란에서 좌표를 계산해 띄운다
-  const stampSource = /<hp:pic\b[\s\S]*?<\/hp:pic>/.exec(source)?.[0] ?? "";
-
-  const body = specs
-    .map((spec, si) => {
-      // 여백은 normalizeSpecSpacing 이 이미 spacer 로 심어 뒀다(PDF 와 같은 값을 쓰기 위함)
-      let out = "";
-      for (const b of spec.blocks) out += blockXml(b, values, stampSource);
-      // 둘째 장부터는 첫 문단에 쪽 나눔을 준다(빈 문단으로 넘기면 그 줄이 여백으로 보인다)
-      return si > 0 ? out.replace('pageBreak="0"', 'pageBreak="1"') : out;
-    })
-    .join("");
+  const photos = opts.photos ?? [];
+  const binIds = await addPhotoBinData(zip, photos);
+  const body = buildSpecBodyXml(specs, values, source, { photos, binIds, pageBreakFirst: false });
 
   // 용지 설정(secPr)은 **첫 문단 안**에 실어야 한다 — 별도 빈 문단으로 두면 그게 맨 위 여백이 된다
   const withSec = body.replace(/(<hp:run charPrIDRef="[^"]*">)/, `$1${secPr}${colPr}`);
 
   zip.file("Contents/section0.xml", `${head}${withSec}</hs:sec>`);
+  const mimetype = zip.file("mimetype");
+  if (mimetype) zip.file("mimetype", await mimetype.async("uint8array"), { compression: "STORE" });
+  return zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
+}
+
+/** spec 목록 → 문단 XML(장 사이 쪽 나눔). stampSource 는 섹션 원문에서 추출한다. */
+function buildSpecBodyXml(
+  specs: DeliverableSpec[],
+  values: DeliverableValues,
+  sectionSource: string,
+  opts: { photos: PhotoAsset[]; binIds: string[]; pageBreakFirst: boolean }
+): string {
+  // 인감 원본 XML — 서명란에서 좌표를 계산해 띄운다
+  const stampSource = /<hp:pic\b[\s\S]*?<\/hp:pic>/.exec(sectionSource)?.[0] ?? "";
+  return specs
+    .map((spec, si) => {
+      // 여백은 normalizeSpecSpacing 이 이미 spacer 로 심어 뒀다(PDF 와 같은 값을 쓰기 위함)
+      let out = "";
+      for (const b of spec.blocks) out += blockXml(b, values, stampSource, { photos: opts.photos, binIds: opts.binIds });
+      // 둘째 장부터는 첫 문단에 쪽 나눔을 준다(빈 문단으로 넘기면 그 줄이 여백으로 보인다)
+      return si > 0 || opts.pageBreakFirst ? out.replace('pageBreak="0"', 'pageBreak="1"') : out;
+    })
+    .join("");
+}
+
+/**
+ * 템플릿 치환 산출물(HWPX) 뒤에 spec 서식 장을 이어 붙인다 — 준공 3종(템플릿) +
+ * 준공내역서·용역결과보고서(spec)를 한 파일로 배포하기 위함(2026-08-19).
+ * base 는 completion.hwpx 계열이어야 한다(spec 빌더의 charPr/paraPr id 가 그 헤더 기준).
+ */
+export async function appendSpecsToHwpx(
+  base: Uint8Array,
+  specs: DeliverableSpec[],
+  values: DeliverableValues,
+  opts: { photos?: PhotoAsset[] } = {}
+): Promise<Uint8Array> {
+  if (!specs.length) return base;
+  const zip = await JSZip.loadAsync(base);
+  const entry = zip.file("Contents/section0.xml");
+  if (!entry) throw new Error("HWPX 산출물에 section0.xml 이 없습니다.");
+  const source = await entry.async("string");
+  const photos = opts.photos ?? [];
+  const binIds = await addPhotoBinData(zip, photos);
+  const body = buildSpecBodyXml(specs, values, source, { photos, binIds, pageBreakFirst: true });
+  // 구버전 산출물은 장 제거 때 닫힘 태그까지 잘려 있을 수 있다 — 그 경우 끝에 덧붙이고 닫는다
+  const closeIdx = source.lastIndexOf("</hs:sec>");
+  const next = closeIdx >= 0 ? source.slice(0, closeIdx) + body + source.slice(closeIdx) : source + body + "</hs:sec>";
+  zip.file("Contents/section0.xml", next);
   const mimetype = zip.file("mimetype");
   if (mimetype) zip.file("mimetype", await mimetype.async("uint8array"), { compression: "STORE" });
   return zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });

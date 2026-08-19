@@ -181,6 +181,14 @@ export interface LetterLayout {
 // ── 발송 대장 행(official_letters) ──
 export type LetterSendStatus = "pending" | "generating" | "sent" | "failed" | "archived";
 
+/** 발송 이력 1건(194) — 1차부터 N차까지 send_history 에 누적된다. */
+export interface LetterSendRecord {
+  sentAt: string;
+  messageId?: string | null;
+  to?: string[];
+  cc?: string[];
+}
+
 export interface OfficialLetterRow {
   letterId: string;
   docId: string | null;
@@ -201,6 +209,8 @@ export interface OfficialLetterRow {
   sendError: string | null;
   sendAttempts: number;
   sentAt: string | null;
+  /** 발송 이력(194) — 최초(1차)부터 N차까지. sentAt 은 최근 발송 시각 */
+  sendHistory: LetterSendRecord[];
   createdAt: string;
   updatedAt: string;
 }

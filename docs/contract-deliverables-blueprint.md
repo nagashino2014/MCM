@@ -268,3 +268,22 @@ CREATE TABLE IF NOT EXISTS contract_deliverables (      -- 작성된 착수계·
 | **D5** | 웹 편집기(§7) + 작성 이력(탭3) | 사용자 보정 |
 
 D0~D3이 실사용 최소선(기본양식으로 발송까지). D4~D5는 자체양식 고집 발주처 대응.
+
+
+## 2026-08-19 결과보고서 개편 — 발주번호 토글·성과품 사진 별첨·생성 경로 수정
+
+- **선행 버그픽스**: completion.hwpx 템플릿에는 준공 3종 장만 있다 — 준공내역서·용역결과보고서
+  선택 시 산출물에서 조용히 빠지던 문제를 `HWPX_TEMPLATE_DOC_TYPES`(catalog) 분리로 해결.
+  PDF 는 템플릿 경로 산출물과 spec 렌더 산출물을 pdf-lib 로 병합, HWPX 는 `appendSpecsToHwpx`
+  (spec-hwpx)로 템플릿 section 뒤에 spec 장을 append(같은 헤더라 charPr/paraPr 인덱스 호환).
+  장 제거 시 `</hs:sec>` 닫힘 태그까지 잘리던 결함도 수정(sectionRanges tail 제한).
+- **발주번호 토글**: `meta.omitOrderNo`(OMIT_ORDER_NO_KEY) — adjustSpecForValues 가
+  결과보고서 fields 에서 contract.orderNo 행을 제거하고 번호를 당긴다. 작성 화면 '계약' 탭
+  발주번호 입력 옆 '문서에서 제외' 체크박스(그때그때 on/off).
+- **성과품 사진 별첨**: `completion.resultPhotos`(RESULT_PHOTOS_KEY, JSON [{name,key,size}]).
+  결과보고서 뒤 **별도 페이지**(좌상단 '첨부자료' 표기) — 명칭 셀(위)+사진 셀(아래) 표.
+  비율 따라 페이지당 1~4장(사용자 확정): 1장=2x1 / 가로 2장=4x1(세로 스택) / 세로 2장=2x2 /
+  세로 4장=4x2. 같은 방향 연속 사진끼리만 한 페이지에 묶는다(순서 보존, buildPhotoAttachmentSpecs —
+  치수가 필요해 generate 가 사진 로드 후 호출). PDF=photoGrid DocBlock(pdf.ts),
+  HWPX=BinData+content.hpf item+hp:pic 합성(spec-hwpx — scaMatrix=표시/원본, imgClip=px*75).
+  업로드 `/api/contracts/deliverables/photos`(PNG·JPG 30MB), 보드 '준공' 탭 명칭 입력 UI.

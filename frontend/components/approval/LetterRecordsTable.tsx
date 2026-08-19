@@ -88,7 +88,11 @@ export function LetterViewModal({ letterId, theme, onClose, onChanged }: { lette
         const res = await fetch(`/api/approval/docs/${encodeURIComponent(letter.docId)}/recall`, { method: "POST" });
         const data = await res.json();
         if (!res.ok) throw new Error(data?.error ?? "회수 실패");
-        window.location.href = `/approval/letter?docId=${encodeURIComponent(letter.docId)}`;
+        // 착수계·준공계 연계 공문 — 서류 재작성이 먼저이므로 작성 화면으로 회귀(2026-08-19)
+        const dlv = (data.deliverables ?? []) as { deliverableId: string }[];
+        window.location.href = dlv.length
+          ? `/contracts/deliverables?deliverable=${encodeURIComponent(dlv[0].deliverableId)}`
+          : `/approval/letter?docId=${encodeURIComponent(letter.docId)}`;
       } catch (err) {
         alert((err as Error).message);
         setBusy(null);

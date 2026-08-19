@@ -3,6 +3,7 @@ import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { hasPermission } from "@/lib/auth/rbac";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { recallLetterDoc } from "@/lib/approval/docs";
+import { reopenDeliverablesForLetter } from "@/lib/deliverable/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,6 +16,9 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ do
     const ctx = await requirePermission("approval.view");
     const { docId } = await params;
     await recallLetterDoc(docId, ctx.userId, await hasPermission(ctx.userId, "approval.manage"));
+    // 착수계·준공계 연계 공문이면 서류도 다시 열어 준다(sent 잠금 해제) — 회수의 핵심은
+    // 첨부 서류(준공계 등) 재작성이라 프론트가 이 목록으로 작성 화면으로 안내한다.
+    const deliverables = await reopenDeliverablesForLetter(docId);
     await recordAuditLog({
       actorUserId: ctx.userId,
       action: "approval_doc_recall",
@@ -22,7 +26,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ do
       targetId: docId,
       after: { reason: "수정 후 재발송(회수)" },
     });
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, deliverables });
   } catch (err) {
     return authErrorToResponse(err);
   }

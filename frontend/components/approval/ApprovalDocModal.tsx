@@ -151,7 +151,12 @@ export function ApprovalDocViewer({
       const res = await fetch(`/api/approval/docs/${encodeURIComponent(detail.docId)}/recall`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "회수 실패");
-      window.location.href = approvalEditHref(LETTER_FORM_ID, detail.docId);
+      // 착수계·준공계 연계 공문(2026-08-19) — 서류 자체를 다시 만들어야 하므로 준공계
+      // 작성 화면으로 회귀한다. 수정 후 '공문 발송'을 누르면 이 공문으로 돌아와 첨부가 교체된다.
+      const dlv = (data.deliverables ?? []) as { deliverableId: string }[];
+      window.location.href = dlv.length
+        ? `/contracts/deliverables?deliverable=${encodeURIComponent(dlv[0].deliverableId)}`
+        : approvalEditHref(LETTER_FORM_ID, detail.docId);
     } catch (err) {
       alert((err as Error).message);
       setResending(false);

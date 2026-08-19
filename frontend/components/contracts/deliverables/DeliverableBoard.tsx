@@ -9,7 +9,7 @@
 //  · 좌우 카드 높이를 화면 하단에 맞춰 고정
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { CheckSquare, ChevronDown, ChevronRight, Download, Eye, FileCog, Lock, Save, Search, Send, Unlock } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
@@ -81,6 +81,9 @@ const fmtMoney = (n: number | null | undefined) => (n == null ? "—" : `${Math.
 export function DeliverableBoard() {
   const { theme } = useCdashTheme();
   const router = useRouter();
+  // 회수 재작성 진입(2026-08-19) — 공문 회수 후 ?deliverable=<id> 로 기존 문서를 다시 연다
+  const sp = useSearchParams();
+  const editDeliverableId = sp.get("deliverable");
 
   // ── 계약 트리 ──
   const [tree, setTree] = useState<TreePayload | null>(null);
@@ -102,6 +105,8 @@ export function DeliverableBoard() {
   const [values, setValues] = useState<DeliverableValues>({});
   const [unlocked, setUnlocked] = useState<Record<string, boolean>>({});
   const [deliverableId, setDeliverableId] = useState<string | null>(null);
+  // 이 문서가 이미 공문에 연계돼 있으면(회수 재작성) '공문 발송'이 그 공문으로 돌아간다
+  const [letterDocId, setLetterDocId] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [tab, setTab] = useState<string>("계약");
   const [busy, setBusy] = useState(false);
@@ -188,11 +193,61 @@ export function DeliverableBoard() {
   const pickContract = async (c: TreeContractNode) => {
     setContract(c);
     setDeliverableId(null);
+    setLetterDocId(null);
     setPreviewUrl(null);
     setUnlocked({});
     setMilestoneId("");
     await loadAutoValues(c.contractId, kind);
   };
+
+  // 회수 재작성(2026-08-19) — ?deliverable=<id> 로 진입하면 저장된 문서를 그대로 복원한다.
+  // 자동 채움(loadAutoValues)은 저장값을 덮어쓰므로 부르지 않고, 기성회차·양식 목록만 로드한다.
+  useEffect(() => {
+    if (!editDeliverableId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/contracts/deliverables/${encodeURIComponent(editDeliverableId)}`, { cache: "no-store" });
+        const row = await res.json();
+        if (!res.ok) throw new Error((row as { error?: string })?.error ?? "문서를 불러오지 못했습니다.");
+        if (cancelled) return;
+        setDeliverableId(row.deliverableId);
+        setLetterDocId(row.letterDocId ?? null);
+        setKind(row.kind === "start" ? "start" : "completion");
+        setDocTypes(Array.isArray(row.docTypes) ? row.docTypes : []);
+        setTemplateId(row.templateId ?? "");
+        setValues((row.values ?? {}) as DeliverableValues);
+        setUnlocked((row.unlocked ?? {}) as Record<string, boolean>);
+        setMilestoneId(String(row.values?.["meta.milestoneId"] ?? ""));
+        setContract({
+          contractId: row.contractId,
+          contractTitle: String(row.values?.["contract.title"] ?? row.title ?? ""),
+          counterpartyName: String(row.values?.["orderer.name"] ?? ""),
+          serviceSubtype: null,
+          contractDate: null,
+        });
+        // 기성회차·발주처 양식 목록 — 값은 건드리지 않고 목록만 받는다
+        const q = new URLSearchParams({ contractId: row.contractId, kind: row.kind });
+        const src = await fetch(`/api/contracts/deliverables/sources?${q.toString()}`);
+        if (src.ok) {
+          const data = await src.json();
+          if (!cancelled) {
+            setMilestones(Array.isArray(data?.contract?.milestones) ? data.contract.milestones : []);
+            setTemplates(Array.isArray(data?.templates) ? data.templates : []);
+          }
+        }
+        if (!cancelled && row.letterDocId) {
+          setMsg("회수된 공문의 서류입니다 — 수정 후 '공문 발송'을 누르면 기존 공문으로 돌아가 첨부가 교체됩니다.");
+        }
+      } catch (err) {
+        if (!cancelled) setMsg((err as Error).message);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editDeliverableId]);
 
   const changeKind = async (next: DeliverableKind) => {
     setKind(next);
@@ -382,7 +437,10 @@ export function DeliverableBoard() {
 
   const goLetter = async () => {
     const id = await save();
-    if (id) router.push(`/approval/letter?deliverable=${id}`);
+    if (!id) return;
+    // 회수 재작성이면 기존 공문(문서번호 유지)으로 돌아간다 — 공문 화면이 첨부를 재생성본으로 교체
+    if (letterDocId) router.push(`/approval/letter?docId=${encodeURIComponent(letterDocId)}&deliverable=${id}`);
+    else router.push(`/approval/letter?deliverable=${id}`);
   };
 
   const inputFor = (key: string) => {

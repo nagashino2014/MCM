@@ -571,6 +571,26 @@ export function ApprovalLetterBoard() {
             kind: w.kind === "view" ? "view" : "ref",
           }))
         );
+        // 회수 재작성 복귀(2026-08-19) — ?docId=&deliverable= 동시 진입: 준공계 작성 화면에서
+        // 서류를 고쳐 돌아온 것이므로 첨부를 재생성본으로 교체한다. 제목·본문·수신처는
+        // 사용자가 수정한 문서 값을 그대로 둔다(붙임 목록만 서류 구성에 맞춰 갱신).
+        if (deliverableId) {
+          const ar = await fetch(`/api/contracts/deliverables/${encodeURIComponent(deliverableId)}/attach`, { method: "POST" });
+          const ad = await ar.json();
+          if (!ar.ok) throw new Error(ad?.error ?? "착수계·준공계 첨부를 갱신하지 못했습니다.");
+          if (cancelled) return;
+          if (ad.attachment?.key) {
+            setFileAttachments((prev) => [
+              // 이전 산출물 제거 — 파일명 규약 "(착수계|준공계)….pdf"(generate.ts fileBase)
+              ...prev.filter((f) => !/^\((착수계|준공계)\).*\.pdf$/i.test(f.name)),
+              ad.attachment,
+            ]);
+          } else if (ad.storageError) {
+            alert(`착수계·준공계 PDF 재생성에 실패했습니다. 파일을 직접 교체해 주세요.
+(${ad.storageError})`);
+          }
+          if (Array.isArray(ad.attachItems) && ad.attachItems.length) setAttachItems(ad.attachItems);
+        }
       } catch (err) {
         alert((err as Error).message);
       } finally {
@@ -580,6 +600,7 @@ export function ApprovalLetterBoard() {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editDocId]);
 
   // 에디터 마운트 후 본문 주입(재편집 로드가 먼저 끝난 경우)

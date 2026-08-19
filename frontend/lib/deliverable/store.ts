@@ -158,6 +158,30 @@ export async function linkDeliverableToLetter(deliverableId: string, docId: stri
   });
 }
 
+/**
+ * 공문 회수 시 연계 문서 재개(2026-08-19) — 발송 완료(sent)로 잠긴 착수계·준공계를
+ * attached 로 되돌려 작성 화면에서 다시 수정·재생성할 수 있게 한다.
+ * 반환 = 이 공문에 연계된 문서 목록(회수 후 이동 분기용).
+ */
+export async function reopenDeliverablesForLetter(
+  docId: string
+): Promise<{ deliverableId: string; kind: DeliverableKind; title: string }[]> {
+  const out: { deliverableId: string; kind: DeliverableKind; title: string }[] = [];
+  await withDbWrite(async (txn) => {
+    await txn.run(
+      `UPDATE contract_deliverables SET status = 'attached', updated_at = $2 WHERE letter_doc_id = $1 AND status = 'sent'`,
+      [docId, new Date().toISOString()]
+    );
+    const rows = rowsToObjects(
+      await txn.exec(`SELECT deliverable_id, kind, title FROM contract_deliverables WHERE letter_doc_id = $1 ORDER BY created_at`, [docId])
+    );
+    for (const r of rows) {
+      out.push({ deliverableId: s(r.deliverable_id), kind: s(r.kind) === "start" ? "start" : "completion", title: s(r.title) });
+    }
+  });
+  return out;
+}
+
 /** 공문 발송 완료 시 상태·시행번호 역기록(D3). */
 export async function markDeliverablesSent(docId: string, letterNo: string | null): Promise<void> {
   await withDbWrite(async (txn) => {

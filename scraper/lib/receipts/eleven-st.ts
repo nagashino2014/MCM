@@ -236,8 +236,8 @@ export async function collectReceipts(site: string, opts: CollectOptions = {}): 
       );
     }
 
-    // 영수증 주소 템플릿이 있으면(11번가) 주문번호 → 영수증 주소로 바로 간다. 클릭·팝업이 필요 없다.
-    if (cfg.receiptUrlTemplate) {
+    // 주문번호만으로 영수증 문서를 열 수 있으면(11번가) 그 경로로 간다. 클릭·팝업 대기가 필요 없다.
+    if (cfg.receiptRequest || cfg.receiptUrlTemplate) {
       await runByOrderNo(site, cfg, page, { ...opts, pages, delay }, collected, stats);
       return;
     }
@@ -432,20 +432,22 @@ async function runByOrderNo(
         continue;
       }
 
-      const key = `${ordNo}::영수증`;
+      const label = cfg.receiptLabel || "영수증";
+      const key = `${ordNo}::${label}`;
       if (collected.has(key)) {
         stats.skipped++;
         continue;
       }
 
       if (dryRun) {
-        console.log(`${tag} [dry-run] ${orderDate || "날짜?"} / ${ordNo} → ${receiptUrl(cfg, ordNo)}`);
+        const target = cfg.receiptRequest ? `POST ${cfg.receiptRequest.url}` : receiptUrl(cfg, ordNo);
+        console.log(`${tag} [dry-run] ${orderDate || "날짜?"} / ${ordNo} / ${label} → ${target}`);
         continue;
       }
 
       const receipt = await page.context().newPage();
       try {
-        await receipt.goto(receiptUrl(cfg, ordNo), { waitUntil: "domcontentloaded", timeout: 60_000 });
+        await openReceiptDocument(receipt, cfg, ordNo);
         await receipt.waitForTimeout(1500);
 
         if (new RegExp(cfg.loggedOutPattern, "i").test(receipt.url())) {
@@ -454,7 +456,7 @@ async function runByOrderNo(
 
         const month = (orderDate || "unknown").slice(0, 7);
         const outDir = ensureSiteDir(site, path.join("receipts", month));
-        const outBase = path.join(outDir, safeName(`${orderDate || "nodate"}_${ordNo}_영수증`));
+        const outBase = path.join(outDir, safeName(`${orderDate || "nodate"}_${ordNo}_${label}`));
 
         const result: SaveResult = await savePageAsPdf(receipt, outBase);
 
@@ -465,7 +467,7 @@ async function runByOrderNo(
           // 품목·금액은 영수증 PDF 안에 있다. 목록에서 추정해 잘못된 값을 넣느니 비워 둔다(실측 후 추가).
           title: "",
           amount: "",
-          receiptType: "영수증",
+          receiptType: label,
           method: result.method,
           files: result.files.map((f) => path.relative(siteDir(site), f)).join(" | "),
           collectedAt: new Date().toISOString(),
@@ -494,6 +496,50 @@ async function runByOrderNo(
       }
     }
   }
+}
+
+/**
+ * 영수증 문서를 연다.
+ * - 11번가의 신용카드 매출전표는 GET 이 아니라 **폼 POST** 로만 열린다(실측).
+ *   그래서 지정된 페이지로 먼저 이동해 세션·리퍼러를 갖춘 뒤, 그 문서에 폼을 만들어 제출한다.
+ * - receiptRequest 가 없으면 단순 GET 이동.
+ */
+async function openReceiptDocument(page: Page, cfg: SiteConfig, ordNo: string): Promise<void> {
+  const req = cfg.receiptRequest;
+
+  if (!req) {
+    await page.goto(receiptUrl(cfg, ordNo), { waitUntil: "domcontentloaded", timeout: 60_000 });
+    return;
+  }
+
+  await page.goto(req.refererUrl || cfg.orderListUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
+
+  const fields: Record<string, string> = {};
+  for (const [name, value] of Object.entries(req.fields)) fields[name] = value.replace("{ordNo}", ordNo);
+
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 60_000 }),
+    page.evaluate(
+      ({ url, fields }) => {
+        const form = document.createElement("form");
+        // 필드 이름에 method 가 있어 IDL 속성(form.method)과 부딪힌다 → content attribute 로 지정한다.
+        form.setAttribute("method", "post");
+        form.setAttribute("action", url);
+
+        for (const [name, value] of Object.entries(fields)) {
+          const input = document.createElement("input");
+          input.type = "hidden";
+          input.name = name;
+          input.value = value;
+          form.appendChild(input);
+        }
+
+        document.body.appendChild(form);
+        form.submit();
+      },
+      { url: req.url, fields }
+    ),
+  ]);
 }
 
 function receiptUrl(cfg: SiteConfig, ordNo: string): string {

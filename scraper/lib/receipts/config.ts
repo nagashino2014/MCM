@@ -36,6 +36,18 @@ export interface SiteConfig {
    * 이게 있으면 목록에서 버튼을 클릭할 필요 없이 영수증 주소로 바로 이동한다 — 훨씬 빠르고 안정적이다.
    */
   receiptUrlTemplate?: string;
+  /**
+   * 영수증이 GET 이 아니라 **폼 POST** 로 열리는 경우의 요청 정의. 있으면 receiptUrlTemplate 보다 우선한다.
+   * 값에 들어간 `{ordNo}` 는 주문번호로 치환된다.
+   */
+  receiptRequest?: {
+    url: string;
+    fields: Record<string, string>;
+    /** 폼을 보내기 전에 머무를 페이지 — 세션·리퍼러를 자연스럽게 만든다 */
+    refererUrl?: string;
+  };
+  /** 수집 문서의 이름(파일명·대장의 receiptType 에 쓰인다) */
+  receiptLabel?: string;
 }
 
 /**
@@ -73,6 +85,30 @@ export const ELEVEN_ST: SiteConfig = {
   //   '나의11번가 > 증빙서류 발급'(documentaryEvidence.tmall)에서 발급된다 → 그쪽 주소를 실측 중.
   receiptUrlTemplate:
     "https://buy.11st.co.kr/my11st/receipt/viewReceipt.tmall?method=orderReceipt&ordNo={ordNo}&isSSL=Y",
+
+  /**
+   * 실측(2026-08): '증빙서류 발급 > 영수증' 에서 [신용카드 매출전표] 를 누르면 아래 폼 POST 가 나간다.
+   *   POST https://buy.11st.co.kr/remittance/documentaryEvidencePop.tmall
+   *   method=displayCardPop&ordNo=...&ordPrdSeq=1&prdSeqCnt=&prdSeq=0&prdTypCd=01&prfItmClfCd=
+   * 이쪽이 세무 증빙으로 쓰는 문서라 수집 대상은 이것이다(위 결제영수증은 효력 없음).
+   *
+   * ⚠ ordPrdSeq 는 주문 내 상품 순번으로 보인다. 한 주문에 상품이 여러 개일 때 어떻게 되는지는
+   *   아직 확인되지 않아 1 로 고정해 뒀다.
+   */
+  receiptRequest: {
+    url: "https://buy.11st.co.kr/remittance/documentaryEvidencePop.tmall",
+    fields: {
+      method: "displayCardPop",
+      ordNo: "{ordNo}",
+      ordPrdSeq: "1",
+      prdSeqCnt: "",
+      prdSeq: "0",
+      prdTypCd: "01",
+      prfItmClfCd: "",
+    },
+    refererUrl: "https://buy.11st.co.kr/my11st/remittance/documentaryEvidence.tmall?method=displayDocumentaryEvidenceIssue",
+  },
+  receiptLabel: "신용카드매출전표",
 };
 
 const SITES: Record<string, SiteConfig> = {

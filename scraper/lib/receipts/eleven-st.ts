@@ -44,6 +44,8 @@ export interface CollectOptions {
    * 주문번호가 잡히고 개수가 안정되면 기다림을 멈추고 바로 수집을 시작한다.
    */
   waitSeconds?: number;
+  /** 전표 페이지의 텍스트를 .txt 로 함께 저장한다(품목 확인·다상품 진단용) */
+  withText?: boolean;
 }
 
 interface CollectStats {
@@ -358,6 +360,104 @@ export async function collectReceipts(site: string, opts: CollectOptions = {}): 
 }
 
 /**
+ * 전표 진단 — 한 주문번호에 대해 ordPrdSeq 를 바꿔가며 전표를 열어 본다.
+ *
+ * 한 주문에 상품이 여러 개일 때 전표가 상품별로 나뉘는지(=순번을 순회해야 하는지),
+ * 아니면 주문 단위로 한 장에 다 나오는지(=순번 고정으로 충분한지)를 가른다.
+ * 결과 텍스트는 data/receipts/<site>/probe/receipt-<주문번호>-seq<N>.txt 로 남는다.
+ */
+export async function probeReceiptSeq(site: string, ordNo: string, seqs: number[]): Promise<void> {
+  const cfg = loadSiteConfig(site);
+  const tag = `[${site}]`;
+
+  if (!cfg.receiptRequest) {
+    console.log(`${tag} 이 사이트는 폼 POST 전표 정의(receiptRequest)가 없습니다.`);
+    return;
+  }
+
+  const outDir = ensureSiteDir(site, "probe");
+  const { browser, context } = await openContext({ site, headless: true, useSession: true });
+  const results: { seq: number; text: string; tokens: Set<string> }[] = [];
+
+  try {
+    const page = await context.newPage();
+
+    for (const seq of seqs) {
+      try {
+        await openReceiptDocument(page, cfg, ordNo, { ordPrdSeq: String(seq) });
+        await page.waitForTimeout(1000);
+
+        const text = (await page.innerText("body").catch(() => "")).replace(/\s+/g, " ").trim();
+        fs.writeFileSync(path.join(outDir, `receipt-${ordNo}-seq${seq}.txt`), text, "utf-8");
+        results.push({ seq, text, tokens: new Set(text.split(" ").filter(Boolean)) });
+
+        console.log(`${tag} ordPrdSeq=${seq}: ${text.length}자 — ${text.slice(0, 120)}`);
+      } catch (e) {
+        console.log(`${tag} ordPrdSeq=${seq}: 실패 — ${String(e).slice(0, 150)}`);
+      }
+
+      await page.waitForTimeout(1500);
+    }
+
+    reportSeqDiff(tag, results);
+    console.log(`${tag} 원문: ${outDir}`);
+  } finally {
+    await context.close().catch(() => {});
+    await browser.close().catch(() => {});
+  }
+}
+
+/**
+ * 순번별 전표가 실제로 다른 문서인지 보고한다.
+ * - 전표에는 순번 값이나 발행 시각처럼 내용과 무관한 차이가 섞이므로, 같다/다르다를 단정하기보다
+ *   **무엇이 달라졌는지**를 보여주고 명확한 경우에만 판정한다.
+ */
+function reportSeqDiff(tag: string, results: { seq: number; text: string; tokens: Set<string> }[]): void {
+  console.log(`${tag} ─────────────────────────────────────────────`);
+
+  if (results.length < 2) {
+    console.log(`${tag} 비교할 결과가 부족합니다.`);
+    return;
+  }
+
+  const base = results[0];
+  let allIdentical = true;
+  let maxDiffTokens = 0;
+
+  for (const r of results.slice(1)) {
+    if (r.text === base.text) {
+      console.log(`${tag} seq=${r.seq}: seq=${base.seq} 과 완전히 동일`);
+      continue;
+    }
+
+    allIdentical = false;
+    const added = [...r.tokens].filter((t) => !base.tokens.has(t));
+    const removed = [...base.tokens].filter((t) => !r.tokens.has(t));
+    const union = new Set([...base.tokens, ...r.tokens]).size;
+    const similarity = union === 0 ? 1 : 1 - (added.length + removed.length) / union;
+    maxDiffTokens = Math.max(maxDiffTokens, added.length + removed.length);
+
+    console.log(`${tag} seq=${r.seq}: seq=${base.seq} 과 유사도 ${(similarity * 100).toFixed(1)}%`);
+    if (added.length) console.log(`${tag}   추가: ${added.slice(0, 15).join(" ")}`);
+    if (removed.length) console.log(`${tag}   빠짐: ${removed.slice(0, 15).join(" ")}`);
+  }
+
+  if (allIdentical) {
+    console.log(`${tag} 판정: 순번을 바꿔도 전표가 같습니다 → 주문 단위 문서. ordPrdSeq 고정으로 충분합니다.`);
+    return;
+  }
+
+  if (maxDiffTokens <= 3) {
+    console.log(`${tag} 판정: 차이가 몇 토큰뿐입니다. 위 '추가/빠짐' 이 품목명이면 상품별 전표이고,`);
+    console.log(`${tag}   순번 값이나 발행 시각뿐이면 주문 단위 문서입니다 — 한 번만 눈으로 확인해 주세요.`);
+    return;
+  }
+
+  console.log(`${tag} 판정: 순번마다 내용이 크게 다릅니다 → 전표가 상품별로 나뉩니다.`);
+  console.log(`${tag}   수집기가 순번을 순회하도록 고쳐야 합니다.`);
+}
+
+/**
  * 사용자가 브라우저에서 조회 기간을 바꾸는 동안 기다린다.
  * - 3초마다 주문번호를 세어, 1건 이상 잡히고 직전 관측과 개수가 같으면(=조회가 끝났다고 보고) 진행한다.
  * - 제한 시간까지 아무것도 안 잡히면 그대로 진행한다(빈 목록으로 처리).
@@ -460,6 +560,12 @@ async function runByOrderNo(
 
         const result: SaveResult = await savePageAsPdf(receipt, outBase);
 
+        if (opts.withText) {
+          const textPath = `${outBase}.txt`;
+          fs.writeFileSync(textPath, await receipt.innerText("body").catch(() => ""), "utf-8");
+          result.files.push(textPath);
+        }
+
         appendLedger(site, {
           site,
           orderNo: ordNo,
@@ -504,7 +610,12 @@ async function runByOrderNo(
  *   그래서 지정된 페이지로 먼저 이동해 세션·리퍼러를 갖춘 뒤, 그 문서에 폼을 만들어 제출한다.
  * - receiptRequest 가 없으면 단순 GET 이동.
  */
-async function openReceiptDocument(page: Page, cfg: SiteConfig, ordNo: string): Promise<void> {
+async function openReceiptDocument(
+  page: Page,
+  cfg: SiteConfig,
+  ordNo: string,
+  overrides: Record<string, string> = {}
+): Promise<void> {
   const req = cfg.receiptRequest;
 
   if (!req) {
@@ -516,6 +627,7 @@ async function openReceiptDocument(page: Page, cfg: SiteConfig, ordNo: string): 
 
   const fields: Record<string, string> = {};
   for (const [name, value] of Object.entries(req.fields)) fields[name] = value.replace("{ordNo}", ordNo);
+  Object.assign(fields, overrides);
 
   await Promise.all([
     page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 60_000 }),

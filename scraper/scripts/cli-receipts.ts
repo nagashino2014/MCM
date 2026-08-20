@@ -21,7 +21,7 @@
 import { interactiveLogin, checkSession, hasSession, siteDir } from "../lib/receipts/session";
 import { loadSiteConfig, saveSiteConfig } from "../lib/receipts/config";
 import { probeOrderList } from "../lib/receipts/probe";
-import { collectReceipts } from "../lib/receipts/eleven-st";
+import { collectReceipts, probeReceiptSeq } from "../lib/receipts/eleven-st";
 import { summarize } from "../lib/receipts/ledger";
 
 interface Args {
@@ -38,6 +38,9 @@ interface Args {
   dryRun: boolean;
   watch: boolean;
   save: boolean;
+  withText: boolean;
+  ordNo?: string;
+  seq?: string;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -62,6 +65,9 @@ function parseArgs(argv: string[]): Args {
     dryRun: "dry-run" in opt,
     watch: "watch" in opt,
     save: "save" in opt,
+    withText: "with-text" in opt,
+    ordNo: opt.ordNo || opt["ord-no"],
+    seq: opt.seq,
   };
 }
 
@@ -78,7 +84,11 @@ function usage(): void {
   npm run receipts -- collect [--from 2026-07-01] [--to 2026-07-31]
                               [--pages 3] [--limit 2] [--delay 2000] [--headed] [--dry-run]
                               [--wait 180]  화면을 띄우고 직접 기간 조회할 시간을 준 뒤 수집
+                              [--with-text] 전표 텍스트를 .txt 로 함께 저장(품목 확인용)
                                                    주문목록 순회 → 영수증 PDF 저장 → 대장 기록
+  npm run receipts -- receipt --ordNo <주문번호> [--seq 1,2,3]
+                                                   전표 진단 — 주문 내 상품 순번(ordPrdSeq)을 바꿔가며 열어
+                                                   전표가 상품별로 나뉘는지 판정
   npm run receipts -- summary [--site 11st]        수집 대장 요약
 
   산출물 경로: ${siteDir("11st")}
@@ -130,10 +140,21 @@ async function main(): Promise<void> {
       limit: args.limit,
       delay: args.delay,
       waitSeconds: args.wait,
+      withText: args.withText,
       // 사용자가 직접 기간을 조회하려면 화면이 보여야 한다.
       headless: args.wait ? false : !args.headed,
       dryRun: args.dryRun,
     });
+    return;
+  }
+
+  if (command === "receipt") {
+    if (!args.ordNo) {
+      console.log("주문번호가 필요합니다: npm run receipts -- receipt --ordNo <주문번호> [--seq 1,2,3]");
+      return;
+    }
+    const seqs = (args.seq || "1,2,3").split(",").map((v) => Number(v.trim())).filter((v) => v > 0);
+    await probeReceiptSeq(site, args.ordNo, seqs);
     return;
   }
 

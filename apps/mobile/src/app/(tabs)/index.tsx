@@ -258,6 +258,7 @@ export default function HomeScreen() {
                 value={workTodo}
                 delta={rebound > 0 ? `재작성 ${rebound}건` : '확인 필요'}
                 tone={c.error}
+                onPress={() => router.push('/work-reports')}
               />
             )}
           </TileGrid>

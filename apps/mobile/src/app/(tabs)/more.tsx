@@ -89,6 +89,13 @@ export default function MoreScreen() {
           subtitle: '세금계산서 발행 요청·수신함',
           onPress: () => router.push('/invoice-requests'),
         },
+        {
+          icon: 'clipboard-outline',
+          tone: c.primaryStrong,
+          title: '업무보고',
+          subtitle: '용역 추진 보고 작성·확인',
+          onPress: () => router.push('/work-reports'),
+        },
       ],
     },
     {

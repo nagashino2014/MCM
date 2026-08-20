@@ -85,6 +85,10 @@ function RootNavigator() {
         <Stack.Screen name="receipts" />
         {/* 발행 요청(IR-M1)도 자체 헤더를 그린다 */}
         <Stack.Screen name="invoice-requests" />
+        {/* 업무보고(WR-M1) — 목록·상세·작성 모두 자체 헤더 */}
+        <Stack.Screen name="work-reports" />
+        <Stack.Screen name="work-report/[reportId]" />
+        <Stack.Screen name="work-report-draft" />
         {/* 일정은 태그 칩·참조 지정을 담은 자체 헤더를 그린다 */}
         <Stack.Screen name="schedule" />
         {/* 사업장 탐색·상세는 검색·필터를 담은 자체 헤더를 그린다 */}

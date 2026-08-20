@@ -8,13 +8,16 @@
  *   YYYY.MM.DD=주문일) 마크업이 바뀌어도 버티고, 안 맞으면 probe 로 실측해 site-config.json 에 덮어쓴다.
  * - 기간 조회 UI 조작은 몰마다 제각각이라 스파이크에서는 다루지 않는다. 화면에 보이는 목록을 페이지네이션으로
  *   훑으면서 **주문일 텍스트로 필터**한다. 기간 파라미터가 실측되면 config 에 URL 템플릿을 추가하는 편이 낫다.
- * - 영수증은 팝업(window.open) / 같은 탭 이동 / 레이어 모달 세 가지로 뜰 수 있어 전부 처리한다.
+ * - 11번가는 실측 결과 **주문번호만으로 영수증 주소가 열린다**(config.receiptUrlTemplate).
+ *   그래서 목록에서 버튼을 클릭할 필요 없이 주문번호를 모아 영수증 주소로 바로 이동한다.
+ *   템플릿이 없는 몰을 위해 버튼 클릭 경로(팝업 / 같은 탭 이동 / 레이어 모달)도 함께 남겨 둔다.
+ * - 주문 목록은 **iframe 안에** 그려지므로 주문번호 수집은 모든 프레임을 훑는다.
  * - 계정 잠금을 피하려고 건마다 딜레이를 둔다. 속도보다 안전이 우선.
  */
 
 import path from "node:path";
 import fs from "node:fs";
-import { BrowserContext, Locator, Page } from "playwright";
+import { BrowserContext, Frame, Locator, Page } from "playwright";
 
 import { openContext, ensureSiteDir, siteDir } from "./session";
 import { loadSiteConfig, SiteConfig } from "./config";
@@ -34,6 +37,12 @@ export interface CollectOptions {
   dryRun?: boolean;
   /** 건당 대기(ms) — 너무 빠르면 봇으로 잡힌다 */
   delay?: number;
+}
+
+interface CollectStats {
+  saved: number;
+  skipped: number;
+  failed: number;
 }
 
 interface OrderRow {
@@ -57,6 +66,55 @@ function inRange(date: string, from?: string, to?: string): boolean {
   if (from && date < from) return false;
   if (to && date > to) return false;
   return true;
+}
+
+/**
+ * 11번가 주문번호는 앞 8자리가 주문일이다(예: 20251027006519699 → 2025-10-27).
+ * 목록에서 날짜 칸을 파싱하지 않고도 기간 필터를 걸 수 있다.
+ */
+function dateFromOrderNo(ordNo: string): string {
+  const m = ordNo.match(/^(20\d{2})(\d{2})(\d{2})/);
+  if (!m) return "";
+
+  const [, y, mo, d] = m;
+  if (Number(mo) < 1 || Number(mo) > 12 || Number(d) < 1 || Number(d) > 31) return "";
+  return `${y}-${mo}-${d}`;
+}
+
+/**
+ * 주문목록에서 주문번호를 전부 긁는다.
+ * - 목록이 iframe 안에 그려지므로 메인 문서 + 모든 프레임을 훑는다.
+ * - 화면 텍스트뿐 아니라 href/onclick/value 속성에도 주문번호가 들어 있어 함께 본다.
+ */
+async function collectOrderNos(page: Page): Promise<string[]> {
+  const found = new Set<string>();
+  const scopes: (Page | Frame)[] = [page, ...page.frames().filter((f) => f !== page.mainFrame())];
+
+  for (const scope of scopes) {
+    const values = await scope
+      .evaluate(() => {
+        const out: string[] = [];
+        const push = (v?: string | null) => {
+          for (const hit of (v || "").match(/\b\d{15,20}\b/g) || []) out.push(hit);
+        };
+
+        push(document.body?.innerText);
+        document.querySelectorAll("a, input, [onclick], [data-ordno], [data-ord-no]").forEach((el) => {
+          push(el.getAttribute("href"));
+          push(el.getAttribute("onclick"));
+          push(el.getAttribute("value"));
+          push(el.getAttribute("data-ordno"));
+          push(el.getAttribute("data-ord-no"));
+        });
+
+        return out;
+      })
+      .catch(() => [] as string[]);
+
+    for (const v of values) found.add(v);
+  }
+
+  return [...found].sort().reverse(); // 최신 주문부터
 }
 
 /** 매칭 건수가 가장 많은 행 셀렉터를 고른다. 전부 0이면 null */
@@ -155,9 +213,7 @@ export async function collectReceipts(site: string, opts: CollectOptions = {}): 
   const collected = loadCollectedKeys(site);
   const { browser, context } = await openContext({ site, headless, useSession: true });
 
-  let saved = 0;
-  let skipped = 0;
-  let failed = 0;
+  const stats: CollectStats = { saved: 0, skipped: 0, failed: 0 };
 
   try {
     const page = await context.newPage();
@@ -173,6 +229,12 @@ export async function collectReceipts(site: string, opts: CollectOptions = {}): 
       );
     }
 
+    // 영수증 주소 템플릿이 있으면(11번가) 주문번호 → 영수증 주소로 바로 간다. 클릭·팝업이 필요 없다.
+    if (cfg.receiptUrlTemplate) {
+      await runByOrderNo(site, cfg, page, { ...opts, pages, delay }, collected, stats);
+      return;
+    }
+
     for (let pageNo = 1; pageNo <= pages; pageNo++) {
       const rowSelector = await pickRowSelector(page, cfg);
       if (!rowSelector) {
@@ -186,7 +248,7 @@ export async function collectReceipts(site: string, opts: CollectOptions = {}): 
       console.log(`${tag} ${pageNo}페이지: 행 ${count}건 (셀렉터 ${rowSelector})`);
 
       for (let i = 0; i < count; i++) {
-        if (limit && saved >= limit) {
+        if (limit && stats.saved >= limit) {
           console.log(`${tag} 상한(${limit}건) 도달 — 중단`);
           return;
         }
@@ -194,19 +256,19 @@ export async function collectReceipts(site: string, opts: CollectOptions = {}): 
         const order = await parseRow(rows.nth(i), i);
 
         if (!inRange(order.orderDate, from, to)) {
-          skipped++;
+          stats.skipped++;
           continue;
         }
 
         const trigger = await findReceiptTrigger(order.locator, cfg.receiptKeywords);
         if (!trigger) {
-          skipped++;
+          stats.skipped++;
           continue;
         }
 
         const key = `${order.orderNo || `p${pageNo}-r${i}`}::${trigger.label}`;
         if (collected.has(key)) {
-          skipped++;
+          stats.skipped++;
           continue;
         }
 
@@ -243,7 +305,7 @@ export async function collectReceipts(site: string, opts: CollectOptions = {}): 
           };
           appendLedger(site, row);
           collected.add(key);
-          saved++;
+          stats.saved++;
 
           console.log(
             `${tag} ✅ ${order.orderDate || "?"} ${order.orderNo || "?"} [${trigger.label}] ` +
@@ -264,7 +326,7 @@ export async function collectReceipts(site: string, opts: CollectOptions = {}): 
             await page.waitForTimeout(500);
           }
         } catch (e) {
-          failed++;
+          stats.failed++;
           console.log(`${tag} ❌ ${order.orderNo || `p${pageNo}r${i}`} 실패: ${String(e).slice(0, 200)}`);
           await dumpFailure(site, page, key, String(e));
         }
@@ -281,23 +343,137 @@ export async function collectReceipts(site: string, opts: CollectOptions = {}): 
       }
     }
   } finally {
-    console.log(`${tag} 저장 ${saved}건 / 건너뜀 ${skipped}건 / 실패 ${failed}건`);
+    console.log(`${tag} 저장 ${stats.saved}건 / 건너뜀 ${stats.skipped}건 / 실패 ${stats.failed}건`);
     console.log(`${tag} 산출물: ${siteDir(site)}`);
     await context.close().catch(() => {});
     await browser.close().catch(() => {});
   }
 }
 
-async function goNextPage(page: Page, cfg: SiteConfig): Promise<boolean> {
-  for (const selector of cfg.nextPageSelectors) {
-    const next = page.locator(selector).first();
-    if ((await next.count().catch(() => 0)) === 0) continue;
-    if (!(await next.isEnabled().catch(() => false))) continue;
+/**
+ * 주문번호 기반 수집 — 목록에서 주문번호만 모아 영수증 주소로 직접 이동한다.
+ * 버튼 클릭·팝업 대기가 없어 훨씬 빠르고, 마크업이 바뀌어도 잘 버틴다.
+ */
+async function runByOrderNo(
+  site: string,
+  cfg: SiteConfig,
+  page: Page,
+  opts: CollectOptions,
+  collected: Set<string>,
+  stats: CollectStats
+): Promise<void> {
+  const tag = `[${site}]`;
+  const { from, to, limit, dryRun = false, delay = 2000, pages = 1 } = opts;
 
-    await next.click({ timeout: 15_000 }).catch(() => {});
-    await page.waitForLoadState("domcontentloaded", { timeout: 30_000 }).catch(() => {});
-    await page.waitForTimeout(2500);
-    return true;
+  for (let pageNo = 1; pageNo <= pages; pageNo++) {
+    // 목록은 iframe 안에서 XHR 로 채워지므로 네트워크가 잦아들 때까지 기다린다.
+    await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => {});
+    await page.waitForTimeout(1500);
+
+    const ordNos = await collectOrderNos(page);
+    console.log(`${tag} ${pageNo}페이지: 주문번호 ${ordNos.length}건`);
+
+    if (ordNos.length === 0) {
+      console.log(`${tag} ⚠ 주문번호가 없습니다. 조회 기간에 주문이 없거나 목록이 아직 안 그려진 상태입니다.`);
+      console.log(`${tag}   브라우저에서 조회 기간을 바꿔야 하면 '--headed' 로 실행해 직접 조회한 뒤 진행하세요.`);
+      await dumpFailure(site, page, `no-orders-p${pageNo}`, "주문번호 0건");
+    }
+
+    for (const ordNo of ordNos) {
+      if (limit && stats.saved >= limit) {
+        console.log(`${tag} 상한(${limit}건) 도달 — 중단`);
+        return;
+      }
+
+      const orderDate = dateFromOrderNo(ordNo);
+      if (!inRange(orderDate, from, to)) {
+        stats.skipped++;
+        continue;
+      }
+
+      const key = `${ordNo}::영수증`;
+      if (collected.has(key)) {
+        stats.skipped++;
+        continue;
+      }
+
+      if (dryRun) {
+        console.log(`${tag} [dry-run] ${orderDate || "날짜?"} / ${ordNo} → ${receiptUrl(cfg, ordNo)}`);
+        continue;
+      }
+
+      const receipt = await page.context().newPage();
+      try {
+        await receipt.goto(receiptUrl(cfg, ordNo), { waitUntil: "domcontentloaded", timeout: 60_000 });
+        await receipt.waitForTimeout(1500);
+
+        if (new RegExp(cfg.loggedOutPattern, "i").test(receipt.url())) {
+          throw new Error(`영수증 페이지가 로그인을 요구합니다: ${receipt.url()}`);
+        }
+
+        const month = (orderDate || "unknown").slice(0, 7);
+        const outDir = ensureSiteDir(site, path.join("receipts", month));
+        const outBase = path.join(outDir, safeName(`${orderDate || "nodate"}_${ordNo}_영수증`));
+
+        const result: SaveResult = await savePageAsPdf(receipt, outBase);
+
+        appendLedger(site, {
+          site,
+          orderNo: ordNo,
+          orderDate,
+          // 품목·금액은 영수증 PDF 안에 있다. 목록에서 추정해 잘못된 값을 넣느니 비워 둔다(실측 후 추가).
+          title: "",
+          amount: "",
+          receiptType: "영수증",
+          method: result.method,
+          files: result.files.map((f) => path.relative(siteDir(site), f)).join(" | "),
+          collectedAt: new Date().toISOString(),
+        });
+        collected.add(key);
+        stats.saved++;
+
+        console.log(`${tag} ✅ ${orderDate || "?"} ${ordNo} → ${result.method}`);
+        for (const a of result.attempts) console.log(`${tag}    ↳ ${a.method} 실패: ${a.error}`);
+      } catch (e) {
+        stats.failed++;
+        console.log(`${tag} ❌ ${ordNo} 실패: ${String(e).slice(0, 200)}`);
+        await dumpFailure(site, receipt, key, String(e));
+      } finally {
+        await receipt.close().catch(() => {});
+      }
+
+      await page.waitForTimeout(delay);
+    }
+
+    if (pageNo < pages) {
+      const moved = await goNextPage(page, cfg);
+      if (!moved) {
+        console.log(`${tag} 다음 페이지 없음 — 종료`);
+        break;
+      }
+    }
+  }
+}
+
+function receiptUrl(cfg: SiteConfig, ordNo: string): string {
+  return (cfg.receiptUrlTemplate || "").replace("{ordNo}", ordNo);
+}
+
+async function goNextPage(page: Page, cfg: SiteConfig): Promise<boolean> {
+  // 페이지네이션도 목록과 같은 iframe 안에 있을 수 있어 모든 프레임을 뒤진다.
+  const scopes: (Page | Frame)[] = [page, ...page.frames().filter((f) => f !== page.mainFrame())];
+
+  for (const selector of cfg.nextPageSelectors) {
+    for (const scope of scopes) {
+      const next = scope.locator(selector).first();
+      if ((await next.count().catch(() => 0)) === 0) continue;
+      if (!(await next.isEnabled().catch(() => false))) continue;
+
+      await next.click({ timeout: 15_000 }).catch(() => {});
+      await page.waitForLoadState("domcontentloaded", { timeout: 30_000 }).catch(() => {});
+      await page.waitForTimeout(2500);
+      return true;
+    }
   }
   return false;
 }

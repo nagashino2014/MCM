@@ -31,6 +31,11 @@ export interface SiteConfig {
   orderRowSelectors: string[];
   /** 다음 페이지 이동 요소 후보 */
   nextPageSelectors: string[];
+  /**
+   * 주문번호만으로 영수증을 여는 URL 템플릿(`{ordNo}` 치환).
+   * 이게 있으면 목록에서 버튼을 클릭할 필요 없이 영수증 주소로 바로 이동한다 — 훨씬 빠르고 안정적이다.
+   */
+  receiptUrlTemplate?: string;
 }
 
 /**
@@ -43,8 +48,9 @@ export const ELEVEN_ST: SiteConfig = {
   key: "11st",
   name: "11번가",
   loginUrl: "https://login.11st.co.kr/auth/front/login.tmall",
-  orderListUrl: "https://www.11st.co.kr/order/OrderList.tmall",
-  checkUrl: "https://www.11st.co.kr/order/OrderList.tmall",
+  // 실측(2026-08): 마이 11번가 > 주문/배송조회. 주문 목록 자체는 이 페이지의 **iframe** 안에 그려진다.
+  orderListUrl: "https://buy.11st.co.kr/my11st/order/OrderList.tmall",
+  checkUrl: "https://buy.11st.co.kr/my11st/order/OrderList.tmall",
   loggedOutPattern: "login|signin|auth",
   receiptKeywords: ["카드영수증", "영수증", "거래명세서", "명세서"],
   orderRowSelectors: [
@@ -59,6 +65,9 @@ export const ELEVEN_ST: SiteConfig = {
     "[class*='paging'] a[class*='next']",
     "button:has-text('다음')",
   ],
+  // 실측(2026-08): 주문상세의 [영수증] 버튼이 여는 팝업 주소. 주문번호만 있으면 바로 열린다.
+  receiptUrlTemplate:
+    "https://buy.11st.co.kr/my11st/receipt/viewReceipt.tmall?method=orderReceipt&ordNo={ordNo}&isSSL=Y",
 };
 
 const SITES: Record<string, SiteConfig> = {

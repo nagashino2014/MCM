@@ -66,6 +66,11 @@ export const ELEVEN_ST: SiteConfig = {
     "button:has-text('다음')",
   ],
   // 실측(2026-08): 주문상세의 [영수증] 버튼이 여는 팝업 주소. 주문번호만 있으면 바로 열린다.
+  //
+  // ⚠ 다만 이 문서는 "결제영수증"이고, 문서 본문에 **세무상의 지출증빙 효력이 없다**고 명시돼 있다.
+  //   (품목·카드번호는 찍히지만 소득공제용 영수증·매입 세금계산서로는 쓸 수 없음)
+  //   부가세 증빙으로 쓸 신용카드 매출전표·지출증빙 현금영수증은
+  //   '나의11번가 > 증빙서류 발급'(documentaryEvidence.tmall)에서 발급된다 → 그쪽 주소를 실측 중.
   receiptUrlTemplate:
     "https://buy.11st.co.kr/my11st/receipt/viewReceipt.tmall?method=orderReceipt&ordNo={ordNo}&isSSL=Y",
 };

@@ -1,18 +1,30 @@
 import { useCallback, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 
-import { Badge, Button, Card, ConfirmSheet, EmptyState, ScreenHeader, SkeletonList, Textarea, useToast } from '@/components/ui';
-import { apiFetch } from '@/lib/api';
+import {
+  Badge,
+  Button,
+  Card,
+  ConfirmSheet,
+  EmptyState,
+  ScreenHeader,
+  SkeletonList,
+  Textarea,
+  useToast,
+} from '@/components/ui';
+import { apiFetch, apiJson } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { useTheme } from '@/theme/useTheme';
 
 /**
- * 업무보고 상세(WR-M1·M2) — 열람 + 실무자 수정·재제출 + 부서장 검토(?review=1).
+ * 업무보고 상세(WR-M1~M3) — 열람 + 실무자 수정·재제출 + 부서장 검토(?review=1) + 임원 지시(?exec=1).
  * 검토 규칙은 웹 ReportEditor 와 동일: 의견 분류 중 '보완 요구'·'오기 정정 요청'일 때만 반려 가능,
- * 확인(confirm)은 머징 대상으로 분류 — 합본·임원 발표는 웹 감독 화면에서. 임원 지시는 WR-M3.
+ * 확인(confirm)은 머징 대상으로 분류 — 합본·발표는 웹 감독 화면에서.
+ * 임원 지시는 EXEC_DIRECTIVE_ACTIONABLE(보완요구·진행촉구·추가보고)만 하달 가능(웹과 동일).
+ * 부서장은 지시가 내려온 보고에서 답변(재보고, 1회 제한)을 보낸다.
  */
 
 interface StageRow {
@@ -21,6 +33,11 @@ interface StageRow {
   stageName: string;
   status: 'pending' | 'in_progress' | 'done';
   progressPct?: number | null;
+}
+interface AsOfStage {
+  stageOrder: number;
+  status: 'pending' | 'in_progress' | 'done';
+  progressPct: number;
 }
 interface ReportDetail {
   reportId: string;
@@ -41,10 +58,21 @@ interface ReportDetail {
   reviewerComment: string | null;
   reviewerCommentKind: string | null;
   reviewStatus: string | null;
+  execStatus: string | null;
+  directorResponse: string | null;
+  reReportCount: number;
   execDirective: { kind: string; message: string | null } | null;
   currentStageName: string | null;
   currentStagePct: number | null;
   stages: StageRow[];
+  asOfStages: AsOfStage[];
+}
+/** 대상 공정표 행(전체 타임라인의 이름·순서 소스). */
+interface ProcessStage {
+  stageOrder: number;
+  stageName: string;
+  status: 'pending' | 'in_progress' | 'done';
+  progressPct: number;
 }
 
 const COMMENT_KIND_LABEL: Record<string, string> = {
@@ -59,13 +87,23 @@ const REVIEW_KINDS: { value: string; label: string }[] = [
   { value: 'correction', label: '오기 정정 요청' },
 ];
 const REJECTABLE = ['supplement', 'correction'];
+/** 임원 지시 분류(웹 EXEC_DIRECTIVE_KINDS) — '의견'은 기록용이라 하달 비활성(ACTIONABLE 제외). */
+const EXEC_KINDS: { value: string; label: string }[] = [
+  { value: 'supplement_request', label: '보완 요구' },
+  { value: 'expedite', label: '진행 촉구' },
+  { value: 'additional_report', label: '추가보고 지시' },
+  { value: 'opinion', label: '의견' },
+];
+const EXEC_ACTIONABLE = ['supplement_request', 'expedite', 'additional_report'];
+const EXEC_KIND_LABEL = Object.fromEntries(EXEC_KINDS.map((k) => [k.value, k.label]));
 const STAGE_STATUS: Record<string, string> = { pending: '예정', in_progress: '진행', done: '완료' };
 
 export default function WorkReportDetailScreen() {
   const router = useRouter();
   const { c } = useTheme();
-  const { reportId, review } = useLocalSearchParams<{ reportId: string; review?: string }>();
+  const { reportId, review, exec } = useLocalSearchParams<{ reportId: string; review?: string; exec?: string }>();
   const reviewMode = review === '1';
+  const execMode = exec === '1';
   const toast = useToast();
   const { data, loading, refreshing, error, reload } = useApi<{ report: ReportDetail }>(
     `/api/work-plan/report/${reportId}`
@@ -79,10 +117,39 @@ export default function WorkReportDetailScreen() {
   );
 
   const r = data?.report;
-  // 수정·재제출 진입 조건 — 작성 중이거나 반려/보완 상태의 보고(권한 검증은 서버 몫). 검토 모드에서는 숨긴다.
-  const editable = !reviewMode && !!r && (r.status === 'draft' || r.reviewStatus === 'rejected');
+  // 수정·재제출 진입 조건 — 작성 중이거나 반려/보완 상태의 보고(권한 검증은 서버 몫). 검토·임원 모드에서는 숨긴다.
+  const editable = !reviewMode && !execMode && !!r && (r.status === 'draft' || r.reviewStatus === 'rejected');
 
-  // 부서장 검토(WR-M2) — 의견 분류·의견 텍스트, 반려는 확인 시트를 거친다.
+  // ── 공정 타임라인(사용자 요청 2026-08-20) — 현재 공정 배지 옆 ∨ 로 펼친다.
+  //    이름·순서는 대상 공정표에서, 상태는 이 보고 시점 누적(asOfStages)으로 덮는다(미보고 단계는 예정).
+  const [timelineOpen, setTimelineOpen] = useState(false);
+  const [timeline, setTimeline] = useState<ProcessStage[] | null>(null);
+  const toggleTimeline = async () => {
+    const next = !timelineOpen;
+    setTimelineOpen(next);
+    if (!next || timeline || !r) return;
+    try {
+      const path =
+        r.subjectKind === 'task'
+          ? `/api/work-tasks/${r.taskId}/process-stages`
+          : `/api/contracts/${r.contractId}/process-stages`;
+      const d = await apiJson<{ stages: ProcessStage[] }>(path);
+      const asOf = new Map(r.asOfStages.map((s) => [s.stageOrder, s]));
+      setTimeline(
+        [...d.stages]
+          .sort((a, b) => a.stageOrder - b.stageOrder)
+          .map((s) => {
+            const o = asOf.get(s.stageOrder);
+            return { ...s, status: o?.status ?? 'pending', progressPct: o?.progressPct ?? 0 };
+          })
+      );
+    } catch (e) {
+      setTimeline([]);
+      toast.show(`공정표를 불러오지 못했습니다: ${(e as Error).message}`, 'error');
+    }
+  };
+
+  // ── 부서장 검토(WR-M2) — 의견 분류·의견 텍스트, 반려는 확인 시트를 거친다.
   const [kind, setKind] = useState('amend');
   const [comment, setComment] = useState('');
   const [commentSeeded, setCommentSeeded] = useState(false);
@@ -126,6 +193,63 @@ export default function WorkReportDetailScreen() {
     }
   };
 
+  // ── 임원 지시(WR-M3) — ACTIONABLE 분류만 하달 가능.
+  const [execKind, setExecKind] = useState(EXEC_KINDS[0].value);
+  const [execMsg, setExecMsg] = useState('');
+  const [execSending, setExecSending] = useState(false);
+  const submitDirective = async () => {
+    if (!r) return;
+    if (!execMsg.trim()) {
+      toast.show('지시 내용을 입력하세요.', 'error');
+      return;
+    }
+    setExecSending(true);
+    try {
+      const res = await apiFetch(`/api/work-plan/report/${r.reportId}/directive`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: execKind, message: execMsg.trim(), contractId: r.contractId }),
+      });
+      const d = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(d.error ?? `HTTP ${res.status}`);
+      toast.show('지시를 하달했습니다 — 부서장 재보고 대상이 됩니다.', 'success');
+      setExecMsg('');
+      await reload();
+    } catch (e) {
+      toast.show((e as Error).message, 'error');
+    } finally {
+      setExecSending(false);
+    }
+  };
+
+  // ── 부서장 재보고(임원 지시 답변, 1회 제한) — 검토 모드에서 지시가 내려온 보고에만.
+  const [respMsg, setRespMsg] = useState('');
+  const [respSending, setRespSending] = useState(false);
+  const submitResponse = async () => {
+    if (!r) return;
+    if (!respMsg.trim()) {
+      toast.show('답변 내용을 입력하세요.', 'error');
+      return;
+    }
+    setRespSending(true);
+    try {
+      const res = await apiFetch(`/api/work-plan/report/${r.reportId}/re-report`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ directorResponse: respMsg.trim() }),
+      });
+      const d = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(d.error ?? `HTTP ${res.status}`);
+      toast.show('재보고를 제출했습니다.', 'success');
+      setRespMsg('');
+      await reload();
+    } catch (e) {
+      toast.show((e as Error).message, 'error');
+    } finally {
+      setRespSending(false);
+    }
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-cd-bg">
       <ScreenHeader title="업무보고" subtitle={r?.title || `${r?.periodStart ?? ''} ~ ${r?.periodEnd ?? ''}`} back variant="sub" />
@@ -155,11 +279,70 @@ export default function WorkReportDetailScreen() {
                 {r.authorName ? ` · 작성 ${r.authorName}` : ''}
               </Text>
               {r.currentStageName ? (
-                <Badge label={`현재 공정 ${r.currentStageName}${r.currentStagePct != null ? ` ${r.currentStagePct}%` : ''}`} tone="primary" />
+                <>
+                  {/* 현재 공정 + 전체 타임라인 펼침(∨) — 사용자 요청 2026-08-20 */}
+                  <View className="flex-row items-center gap-2">
+                    <View className="shrink">
+                      <Badge
+                        label={`현재 공정 ${r.currentStageName}${r.currentStagePct != null ? ` ${r.currentStagePct}%` : ''}`}
+                        tone="primary"
+                      />
+                    </View>
+                    <Pressable
+                      onPress={() => void toggleTimeline()}
+                      hitSlop={8}
+                      className="h-7 w-7 items-center justify-center rounded-full border border-cd-border bg-cd-card active:opacity-60">
+                      <Ionicons name={timelineOpen ? 'chevron-up' : 'chevron-down'} size={15} color={c.primary} />
+                    </Pressable>
+                  </View>
+                  {timelineOpen ? (
+                    timeline == null ? (
+                      <ActivityIndicator className="py-3" color={c.primary} />
+                    ) : timeline.length === 0 ? (
+                      <Text className="py-1 text-[12px] text-cd-faint">공정표가 없습니다.</Text>
+                    ) : (
+                      <View className="mt-1 items-start gap-0.5">
+                        {timeline.map((s, i) => {
+                          const on = s.status !== 'pending';
+                          const done = s.status === 'done';
+                          return (
+                            <View key={s.stageOrder} className="items-start" style={{ width: '55%' }}>
+                              {i > 0 ? (
+                                <View className="w-full items-center py-0.5">
+                                  <Ionicons name="arrow-down" size={13} color={c.faint} />
+                                </View>
+                              ) : null}
+                              <View
+                                className={`w-full flex-row items-center gap-1.5 rounded-xl border px-3 py-2 ${
+                                  done
+                                    ? 'border-cd-success bg-cd-success-soft'
+                                    : on
+                                      ? 'border-cd-primary bg-cd-primary-soft'
+                                      : 'border-cd-border bg-cd-card'
+                                }`}>
+                                <Text
+                                  numberOfLines={1}
+                                  className={`flex-1 text-[12px] font-bold ${
+                                    done ? 'text-cd-success' : on ? 'text-cd-primary' : 'text-cd-muted'
+                                  }`}>
+                                  {s.stageName}
+                                </Text>
+                                <Text
+                                  className={`text-[10.5px] ${done ? 'text-cd-success' : on ? 'text-cd-primary' : 'text-cd-faint'}`}>
+                                  {done ? '완료' : on ? `${s.progressPct}%` : '예정'}
+                                </Text>
+                              </View>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    )
+                  ) : null}
+                </>
               ) : null}
             </View>
 
-            {/* 부서장 의견 / 임원 지시 — 있으면 본문보다 먼저 보여 준다(재제출 판단 근거) */}
+            {/* 부서장 의견 / 임원 지시·재보고 — 본문보다 먼저(판단 근거) */}
             {r.reviewerComment ? (
               <View className="gap-1 rounded-2xl border p-3.5" style={{ backgroundColor: '#fffaf0', borderColor: '#f5e3c0' }}>
                 <View className="flex-row items-center gap-1.5">
@@ -177,9 +360,17 @@ export default function WorkReportDetailScreen() {
               <View className="gap-1 rounded-2xl bg-cd-primary-soft p-3.5">
                 <View className="flex-row items-center gap-1.5">
                   <Ionicons name="megaphone" size={14} color={c.primary} />
-                  <Text className="text-[12.5px] font-bold text-cd-primary">임원 지시</Text>
+                  <Text className="text-[12.5px] font-bold text-cd-primary">
+                    임원 지시{EXEC_KIND_LABEL[r.execDirective.kind] ? ` — ${EXEC_KIND_LABEL[r.execDirective.kind]}` : ''}
+                  </Text>
                 </View>
                 <Text className="text-[13px] leading-5 text-cd-text">{r.execDirective.message}</Text>
+                {r.directorResponse ? (
+                  <View className="mt-1 gap-0.5 rounded-xl bg-cd-card px-3 py-2">
+                    <Text className="text-[11.5px] font-bold text-cd-muted">부서장 답변 (재보고)</Text>
+                    <Text className="text-[12.5px] leading-4 text-cd-body">{r.directorResponse}</Text>
+                  </View>
+                ) : null}
               </View>
             ) : null}
 
@@ -195,7 +386,7 @@ export default function WorkReportDetailScreen() {
             </Card>
 
             {r.stages.length ? (
-              <Card title="공정 진행">
+              <Card title="공정 진행 (이 보고의 갱신)">
                 <View className="mt-1 gap-1">
                   {r.stages.map((s, i) => (
                     <View
@@ -284,6 +475,68 @@ export default function WorkReportDetailScreen() {
                     <Text className="text-[11px] leading-4 text-cd-faint">
                       반려는 [보완 요구]·[오기 정정 요청] 의견일 때만 가능합니다. 합본(머징)·임원 보고는 웹
                       감독 화면에서 진행합니다.
+                    </Text>
+                  ) : null}
+                </View>
+              </Card>
+            ) : null}
+
+            {/* 부서장 재보고(WR-M3) — 임원 지시가 내려온 보고에 답변(1회 제한) */}
+            {reviewMode && r.execStatus === 'directed' ? (
+              r.reReportCount >= 1 ? (
+                <Text className="px-1 text-center text-[11.5px] text-cd-faint">재보고(1회)를 이미 제출했습니다.</Text>
+              ) : (
+                <Card title="임원 지시 답변 (재보고)">
+                  <View className="mt-2 gap-3">
+                    <Textarea
+                      minHeight={80}
+                      value={respMsg}
+                      onChangeText={setRespMsg}
+                      placeholder="지시에 대한 조치·답변 내용 (재보고는 1회만 가능합니다)"
+                    />
+                    <Button
+                      label="재보고 제출"
+                      icon="arrow-undo-outline"
+                      loading={respSending}
+                      onPress={() => void submitResponse()}
+                      full
+                    />
+                  </View>
+                </Card>
+              )
+            ) : null}
+
+            {/* 임원 지시 패널(WR-M3) — 제출된 보고만, '의견' 분류는 하달 비활성(웹 동일) */}
+            {execMode && r.status === 'submitted' ? (
+              <Card title="임원 검토·지시">
+                <View className="mt-2 gap-3">
+                  <View className="flex-row flex-wrap gap-2">
+                    {EXEC_KINDS.map((k) => (
+                      <Pressable
+                        key={k.value}
+                        onPress={() => setExecKind(k.value)}
+                        className={`rounded-full border px-3.5 py-2 active:opacity-70 ${
+                          execKind === k.value ? 'border-cd-primary bg-cd-primary-soft' : 'border-cd-border bg-cd-card'
+                        }`}>
+                        <Text
+                          className={`text-[12.5px] font-bold ${execKind === k.value ? 'text-cd-primary' : 'text-cd-muted'}`}>
+                          {k.label}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <Textarea minHeight={80} value={execMsg} onChangeText={setExecMsg} placeholder="부서장에게 하달할 지시 내용" />
+                  <Button
+                    label="지시 하달"
+                    icon="megaphone-outline"
+                    disabled={!EXEC_ACTIONABLE.includes(execKind) || execSending}
+                    loading={execSending}
+                    onPress={() => void submitDirective()}
+                    full
+                  />
+                  {!EXEC_ACTIONABLE.includes(execKind) ? (
+                    <Text className="text-[11px] leading-4 text-cd-faint">
+                      [의견] 분류는 기록용이라 하달할 수 없습니다 — 의견 기록은 웹 임원 검토 화면에서 진행합니다.
                     </Text>
                   ) : null}
                 </View>

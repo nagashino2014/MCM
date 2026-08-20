@@ -23,7 +23,9 @@ import { useTheme } from '@/theme/useTheme';
  *
  * 내 업무 탭(실무자): 반려된 보고(재제출 대상) + 내 진행 용역·Task → 보고 이력 → 상세/작성.
  * 부서 검토 탭(부서장, WR-M2): 부서 용역·Task 의 보고를 열어 의견·보완요구·반려·확인 처리.
+ * 임원 검토 탭(WR-M3): exec-cards(통합완료/지시됨/재보고) → 상세(?exec=1)에서 지시 하달.
  *   부서는 review-context 규칙 그대로 — 관리자만 부서 선택, 그 외는 본인 부서 고정.
+ *   탭 노출은 웹 메뉴와 같은 개방 정책 — 하달 권한(work_plan.directive)은 서버가 가드한다.
  * 합본(머징)·임원 보고 발표는 웹 감독 화면 전용. 서버 무변경 — 기존 라우트만 쓴다.
  */
 
@@ -75,6 +77,20 @@ interface ReportLogRow {
   status: string;
   title: string | null;
 }
+interface ExecCard {
+  reportId: string;
+  subjectKind: SubjectKind;
+  subjectLabel: string | null;
+  subtitle: string | null;
+  subjectDate: string | null;
+  progressStage: string | null;
+  progressPct: number | null;
+  summaryText: string | null;
+  meetingLabel: string | null;
+  meetingSeq: number | null;
+  execStatus: string | null;
+  directorResponse: string | null;
+}
 interface ReviewContext {
   isAdmin: boolean;
   deptId: string | null;
@@ -82,7 +98,13 @@ interface ReviewContext {
   departments?: { deptId: string; deptName: string }[];
 }
 
-type Tab = 'mine' | 'dept';
+type Tab = 'mine' | 'dept' | 'exec';
+type ExecFilter = 'merged' | 'directed' | 're_reported';
+const EXEC_FILTERS: { key: ExecFilter; label: string }[] = [
+  { key: 'merged', label: '통합완료' },
+  { key: 'directed', label: '지시됨' },
+  { key: 're_reported', label: '재보고' },
+];
 
 const STATUS_LABEL: Record<string, string> = { draft: '작성 중', submitted: '제출됨' };
 
@@ -131,6 +153,13 @@ export default function WorkReportsScreen() {
     skip: tab !== 'dept' || !deptId,
   });
 
+  // 임원 검토(WR-M3) — 필터별 카드. 부서는 부서 검토와 같은 선택을 공유한다.
+  const [execFilter, setExecFilter] = useState<ExecFilter>('merged');
+  const execCards = useApi<{ cards: ExecCard[] }>(
+    `/api/work-plan/exec-cards?filter=${execFilter}${deptId ? `&dept=${encodeURIComponent(deptId)}` : ''}`,
+    { skip: tab !== 'exec' || !deptId }
+  );
+
   const [refreshing, setRefreshing] = useState(false);
 
   useFocusEffect(
@@ -150,6 +179,7 @@ export default function WorkReportsScreen() {
       tasks.reload(),
       rebound.reload(),
       ...(tab === 'dept' ? [deptServices.reload(), deptTasks.reload()] : []),
+      ...(tab === 'exec' ? [execCards.reload()] : []),
     ]);
     setRefreshing(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -186,6 +216,7 @@ export default function WorkReportsScreen() {
   const tabs: SegmentItem<Tab>[] = [
     { key: 'mine', label: '내 업무' },
     { key: 'dept', label: '부서 검토' },
+    { key: 'exec', label: '임원 검토' },
   ];
 
   const renderCard = (card: SubjectCard, review: boolean) => (
@@ -304,6 +335,78 @@ export default function WorkReportsScreen() {
             )}
           </>
         )}
+
+        {/* 임원 검토(WR-M3) — 필터별 exec 카드 → 상세(?exec=1)에서 지시 하달 */}
+        {tab === 'exec' ? (
+          <>
+            <View className="flex-row gap-2">
+              {EXEC_FILTERS.map((f) => (
+                <Pressable
+                  key={f.key}
+                  onPress={() => setExecFilter(f.key)}
+                  className={`rounded-full border px-3.5 py-2 active:opacity-70 ${
+                    execFilter === f.key ? 'border-cd-primary bg-cd-primary-soft' : 'border-cd-border bg-cd-card'
+                  }`}>
+                  <Text className={`text-[12.5px] font-bold ${execFilter === f.key ? 'text-cd-primary' : 'text-cd-muted'}`}>
+                    {f.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            {!deptId ? (
+              <EmptyState icon="git-network-outline" title="부서 정보가 없습니다" />
+            ) : execCards.loading && !execCards.data ? (
+              <SkeletonList count={3} />
+            ) : !(execCards.data?.cards ?? []).length ? (
+              <EmptyState
+                icon="ribbon-outline"
+                title={
+                  execFilter === 'merged'
+                    ? '검토 대기(통합완료) 보고가 없습니다'
+                    : execFilter === 'directed'
+                      ? '지시 하달된 보고가 없습니다'
+                      : '재보고된 보고가 없습니다'
+                }
+              />
+            ) : (
+              (execCards.data?.cards ?? []).map((card) => (
+                <Pressable
+                  key={card.reportId}
+                  onPress={() =>
+                    router.push({ pathname: '/work-report/[reportId]', params: { reportId: card.reportId, exec: '1' } })
+                  }
+                  className="gap-1.5 rounded-2xl border border-cd-border bg-cd-card p-3.5 active:opacity-70">
+                  <View className="flex-row items-center gap-2">
+                    <Badge label={card.subjectKind === 'task' ? 'Task' : '용역'} tone={card.subjectKind === 'task' ? 'secondary' : 'primary'} />
+                    <Text numberOfLines={1} className="flex-1 text-[14px] font-bold text-cd-text">
+                      {card.subjectLabel ?? '보고'}
+                    </Text>
+                    {card.execStatus === 'directed' ? <Badge label="지시됨" tone="warning" /> : null}
+                    {card.execStatus === 're_reported' ? <Badge label="재보고" tone="success" /> : null}
+                  </View>
+                  <Text numberOfLines={1} className="text-[11.5px] text-cd-faint">
+                    {[card.subtitle, card.meetingLabel, card.meetingSeq ? `${card.meetingSeq}차` : null, card.subjectDate?.slice(0, 10)]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </Text>
+                  {card.progressStage ? (
+                    <View className="flex-row">
+                      <Badge
+                        label={`${card.progressStage}${card.progressPct != null ? ` ${card.progressPct}%` : ''}`}
+                        tone="primary"
+                      />
+                    </View>
+                  ) : null}
+                  {card.summaryText ? (
+                    <Text numberOfLines={2} className="text-[12px] leading-4 text-cd-muted">
+                      {card.summaryText}
+                    </Text>
+                  ) : null}
+                </Pressable>
+              ))
+            )}
+          </>
+        ) : null}
       </ScrollView>
 
       {/* 보고 이력 시트 — 실무자 진입에서만 [새 보고 작성] 노출 */}

@@ -4,12 +4,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 
+import { DatePickerSheet } from '@/components/calendar/DatePickerSheet';
 import {
   Badge,
   Button,
   ConfirmSheet,
   EmptyState,
   GradientButton,
+  Input,
   ScreenHeader,
   SegmentedTabs,
   Sheet,
@@ -26,7 +28,8 @@ import { useTheme } from '@/theme/useTheme';
  * 세금계산서 발행 요청(IR-M1) — 블루프린트 docs/mobile-invoice-workreport-blueprint.md.
  *
  * 실무자: 내가 참여한 용역의 미발행 대금 단위를 골라 발행 담당자에게 요청/취소.
- * 담당자(billing.receivable.manage): 요청 수신함 확인 — 실제 발행(바로빌)은 웹에서.
+ * 담당자(billing.receivable.manage): 요청 수신함 확인 + 발행 완료 처리(IR-M2 — 웹 수신함
+ * 위젯과 같은 마일스톤 PATCH, 권한은 서버 contract.edit 가드). 바로빌 전자발행 자체는 웹에서.
  * 역할 분기는 전용 권한 API 없이 수신함 API 의 403 을 신호로 쓴다(권한 로직 이원화 방지).
  */
 
@@ -62,6 +65,12 @@ interface InboxItem {
 type Tab = 'inbox' | 'mine';
 
 const won = (n: number | null) => (n == null ? '금액 미정' : `${n.toLocaleString('ko-KR')}원`);
+const fmtAmount = (v: string) => {
+  const d = v.replace(/[^0-9]/g, '');
+  return d ? Number(d).toLocaleString('ko-KR') : '';
+};
+/** KST 오늘 YYYY-MM-DD — 발행일 기본값. */
+const todayKst = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
 
 /** 수신함 — 403(담당자 아님)을 구분해야 해서 useApi 대신 status 를 직접 본다. */
 function useInbox() {
@@ -122,6 +131,40 @@ export default function InvoiceRequestsScreen() {
   const [cancelFor, setCancelFor] = useState<{ contract: MyContract; m: Milestone } | null>(null);
   const [detail, setDetail] = useState<InboxItem | null>(null);
   const [busy, setBusy] = useState(false);
+  // 발행 완료 처리(IR-M2) — 발행일·금액 확인 후 마킹. 요청 상태는 invoice_issued=1 로 자동 해소된다.
+  const [issueDate, setIssueDate] = useState('');
+  const [issueAmount, setIssueAmount] = useState('');
+  const [issueOpen, setIssueOpen] = useState(false);
+  const [datePicker, setDatePicker] = useState(false);
+  const [confirmIssue, setConfirmIssue] = useState(false);
+
+  const submitIssue = async () => {
+    if (!detail) return;
+    setBusy(true);
+    try {
+      const res = await apiFetch(`/api/contracts/${detail.contractId}/milestones/${detail.milestoneId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          invoiceIssued: true,
+          invoiceIssuedAt: issueDate || todayKst(),
+          invoiceAmount: issueAmount.replace(/[^0-9]/g, '') === '' ? null : Number(issueAmount.replace(/[^0-9]/g, '')),
+        }),
+      });
+      const d = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(d.error ?? `HTTP ${res.status}`);
+      toast.show('발행 완료로 처리했습니다.', 'success');
+      setConfirmIssue(false);
+      setIssueOpen(false);
+      setDetail(null);
+      await reloadAll();
+    } catch (e) {
+      setConfirmIssue(false);
+      toast.show((e as Error).message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const submitRequest = async () => {
     if (!requestFor) return;
@@ -338,7 +381,13 @@ export default function InvoiceRequestsScreen() {
       />
 
       {/* 수신함 상세 */}
-      <Sheet visible={!!detail} onClose={() => setDetail(null)} title="발행 요청 상세">
+      <Sheet
+        visible={!!detail && !datePicker}
+        onClose={() => {
+          setDetail(null);
+          setIssueOpen(false);
+        }}
+        title="발행 요청 상세">
         {detail ? (
           <View className="gap-2.5">
             <InfoRow label="계약" value={detail.contractTitle ?? '-'} />
@@ -351,13 +400,69 @@ export default function InvoiceRequestsScreen() {
             <View className="mt-1 flex-row items-start gap-2 rounded-xl bg-cd-primary-soft px-3 py-2.5">
               <Ionicons name="information-circle" size={15} color={c.primary} />
               <Text className="flex-1 text-[12px] leading-4 text-cd-primary">
-                계산서 발행(바로빌 전자발행)은 웹 홈의 발행 요청 수신함에서 진행합니다. 발행이 완료되면 이
-                목록에서 자동으로 사라집니다.
+                계산서 발행(바로빌 전자발행)은 웹 홈의 발행 요청 수신함에서 진행합니다. 이미 발행을
+                마쳤다면 아래에서 완료 처리하세요 — 요청이 목록에서 사라집니다.
               </Text>
             </View>
+
+            {/* 발행 완료 처리(IR-M2) — 웹 수신함 위젯과 동일한 마킹 */}
+            {issueOpen ? (
+              <View className="gap-2.5 rounded-xl border border-cd-border p-3">
+                <View className="gap-1.5">
+                  <Text className="text-[13px] font-bold text-cd-muted">발행일</Text>
+                  <Pressable
+                    onPress={() => setDatePicker(true)}
+                    className="min-h-[44px] flex-row items-center justify-between rounded-xl border border-cd-border bg-cd-card px-3.5 active:opacity-70">
+                    <Text className="text-[14px] font-semibold text-cd-text">{issueDate || todayKst()}</Text>
+                    <Ionicons name="calendar-outline" size={16} color={c.muted} />
+                  </Pressable>
+                </View>
+                <Input
+                  label="발행 금액 (공급가액)"
+                  value={fmtAmount(issueAmount)}
+                  onChangeText={(v) => setIssueAmount(v.replace(/[^0-9]/g, ''))}
+                  keyboardType="number-pad"
+                  placeholder="비우면 금액 기록 없이 완료 처리"
+                />
+                <Button label="발행 완료 처리" loading={busy} onPress={() => setConfirmIssue(true)} full />
+              </View>
+            ) : (
+              <Button
+                label="발행 완료 처리"
+                variant="soft"
+                icon="checkmark-done-outline"
+                onPress={() => {
+                  setIssueDate(todayKst());
+                  setIssueAmount(detail.amount != null ? String(detail.amount) : '');
+                  setIssueOpen(true);
+                }}
+                full
+              />
+            )}
           </View>
         ) : null}
       </Sheet>
+
+      <DatePickerSheet
+        visible={datePicker}
+        title="발행일 선택"
+        value={issueDate || todayKst()}
+        onConfirm={(d) => {
+          setIssueDate(d);
+          setDatePicker(false);
+        }}
+        onClose={() => setDatePicker(false)}
+      />
+
+      <ConfirmSheet
+        visible={confirmIssue}
+        title="발행 완료로 처리할까요?"
+        message={`${detail?.stageLabel ?? '대금 단계'} · ${issueDate || todayKst()} 발행 — 요청이 수신함에서 사라집니다.`}
+        confirmLabel="완료 처리"
+        loading={busy}
+        onConfirm={() => void submitIssue()}
+        onCancel={() => setConfirmIssue(false)}
+      />
     </SafeAreaView>
   );
 }

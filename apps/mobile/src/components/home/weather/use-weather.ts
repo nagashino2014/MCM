@@ -151,12 +151,14 @@ function useHolidaySeasons(): HolidaySeason[] {
 }
 
 export function useWeather(): {
+  coords: Coords;
   locLabel: string | null;
   weather: WeatherData | null;
   seasons: HolidaySeason[];
 } {
   const coords = useCoords();
   return {
+    coords,
     locLabel: useLocationLabel(coords),
     weather: useForecast(coords),
     seasons: useHolidaySeasons(),

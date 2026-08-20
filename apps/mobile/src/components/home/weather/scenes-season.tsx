@@ -20,13 +20,13 @@ import { useLinearLoop, usePingPong } from "./anim";
 import Animated, { useAnimatedStyle } from "react-native-reanimated";
 
 // ── 벚나무/단풍나무 — 줄기 + 원형 캐노피(색만 다르다) ──────────────────────────
-interface Canopy {
+export interface Canopy {
   cx: number;
   cy: number;
   r: number;
   f: string;
 }
-interface TwinkleDot {
+export interface TwinkleDot {
   cx: number;
   cy: number;
   r: number;
@@ -35,7 +35,7 @@ interface TwinkleDot {
   delay?: number;
 }
 
-function SceneTree({ trunk, canopy, twinkle }: { trunk: string; canopy: Canopy[]; twinkle: TwinkleDot[] }) {
+export function SceneTree({ trunk, canopy, twinkle }: { trunk: string; canopy: Canopy[]; twinkle: TwinkleDot[] }) {
   return (
     <G>
       <Path
@@ -95,7 +95,7 @@ const AUTUMN_TWINKLE: TwinkleDot[] = [
 ];
 
 /** 나무 한 그루(스웨이 포함) — 큰 나무/뒤쪽 작은 나무가 같은 그림을 쓴다. */
-function TreeSprite({
+export function TreeSprite({
   size,
   style,
   duration,

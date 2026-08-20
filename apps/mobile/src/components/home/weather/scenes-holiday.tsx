@@ -92,18 +92,52 @@ export function SeolScene(p: SceneProps) {
           <Line x1={242} y1={142} x2={242} y2={152} stroke="#B98A2E" strokeWidth={1.6} />
           <Rect x={237} y={152} width={10} height={5} rx={2} fill="#E3A63B" />
           <Circle cx={242} cy={163} r={9} fill="#D84B3F" />
-          {/* 연줄 + 세배하는 인물 */}
-          <Path d="M96 76 Q130 140 158 172" stroke="rgba(90,95,120,0.4)" strokeWidth={1.4} fill="none" />
-          <Path d="M153 149 q9 -12 18 0 z" fill="#2F2A33" />
-          <Circle cx={162} cy={150} r={8.5} fill="#F7D9C4" />
-          <Path d="M154 145 q8 -8 16 0" stroke="#2F2A33" strokeWidth={4} fill="none" strokeLinecap="round" />
-          <Polygon points="150,158 174,158 178,172 146,172" fill="#5468C9" />
-          <Path d="M162 160 v9 M162 164 q5 2 7 5" stroke="#F3E7D3" strokeWidth={1.7} fill="none" strokeLinecap="round" />
-          <Polygon points="148,172 176,172 184,196 140,196" fill="#D84B3F" />
-          <Circle cx={196} cy={160} r={6.5} fill="#F7D9C4" />
-          <Path d="M190 156 q6 -7 12 0" stroke="#2F2A33" strokeWidth={3.4} fill="none" strokeLinecap="round" />
-          <Polygon points="189,166 203,166 206,180 186,180" fill="#E3A63B" />
-          <Polygon points="185,180 207,180 210,196 182,196" fill="#5468C9" />
+          {/* 한복 인물 2명(핸드오프 디테일 확정판) — 연줄 잡은 소녀: 색동 소매·저고리 옷고름·치마 주름·버선 */}
+          <Path d="M96 76 Q124 128 152 156" stroke="rgba(90,95,120,0.4)" strokeWidth={1.4} fill="none" />
+          <Path d="M156 163 L151.5 157.5" stroke="#FBF6EC" strokeWidth={4.4} strokeLinecap="round" />
+          <Circle cx={151.5} cy={157} r={2} fill="#F7D9C4" />
+          <Path d="M168 163 L173.5 168.5" stroke="#FBF6EC" strokeWidth={4.4} strokeLinecap="round" />
+          <Circle cx={174} cy={169} r={2} fill="#F7D9C4" />
+          <Path d="M153.2 158.6 l2.4 -2 M170.9 166 l-2.3 2.1" stroke="#D84B3F" strokeWidth={1.1} />
+          <Path d="M154.5 160 l2.3 -1.9 M169.6 164.6 l-2.3 2" stroke="#5468C9" strokeWidth={1.1} />
+          <Path d="M152 162 h20 q2 5 1.6 8.5 h-23.2 q-0.4 -3.5 1.6 -8.5 Z" fill="#FBF6EC" stroke="#D8CBA8" strokeWidth={0.7} />
+          <Path d="M162 164 q-3.2 1.4 -4 5.4" stroke="#D84B3F" strokeWidth={1.6} fill="none" strokeLinecap="round" />
+          <Rect x={160.6} y={163.2} width={2.8} height={2} rx={0.6} fill="#D84B3F" />
+          <Path d="M151 170.5 h22 l5.5 23 q-16.5 5 -33 0 Z" fill="#D84B3F" />
+          <Path d="M158 174 l-2.6 17 M166 174 l2.6 17 M162 174 l0 18" stroke="#B03A32" strokeWidth={0.9} fill="none" />
+          <Ellipse cx={156} cy={194.5} rx={3} ry={1.6} fill="#FBF6EC" />
+          <Ellipse cx={168} cy={194.5} rx={3} ry={1.6} fill="#FBF6EC" />
+          <Circle cx={162} cy={150} r={7.5} fill="#F7D9C4" />
+          <Path d="M153.8 148.5 q8.2 -10 16.4 0 l-1.2 2.8 q-7 -5.6 -14 0 Z" fill="#2F2A33" />
+          <Path d="M154.5 150 q-1.5 3 -1 5.5 M169.5 150 q1.5 3 1 5.5" stroke="#2F2A33" strokeWidth={2} fill="none" strokeLinecap="round" />
+          <Path d="M153.5 155.5 l-0.6 2.4 M170.5 155.5 l0.6 2.4" stroke="#D84B3F" strokeWidth={1.4} strokeLinecap="round" />
+          <Circle cx={159.2} cy={150} r={0.9} fill="#2F2A33" />
+          <Circle cx={164.8} cy={150} r={0.9} fill="#2F2A33" />
+          <Path d="M160.6 153.2 q1.4 1.3 2.8 0" stroke="#B0684A" strokeWidth={0.9} fill="none" strokeLinecap="round" />
+          <Circle cx={157} cy={152.3} r={1.2} fill="rgba(240,150,150,0.5)" />
+          <Circle cx={167} cy={152.3} r={1.2} fill="rgba(240,150,150,0.5)" />
+          {/* 연을 가리키는 소년 — 남바위(흰 테두리)·금색 조끼·바지·짚신 */}
+          <Path d="M191 168 L185.5 161.5" stroke="#5468C9" strokeWidth={4} strokeLinecap="round" />
+          <Circle cx={185} cy={161} r={1.8} fill="#F7D9C4" />
+          <Path d="M201.5 169 L206 173.5" stroke="#5468C9" strokeWidth={4} strokeLinecap="round" />
+          <Circle cx={206.4} cy={174} r={1.8} fill="#F7D9C4" />
+          <Path d="M187.2 163 l2.2 -1.8 M203.8 171 l-2.1 1.9" stroke="#E3A63B" strokeWidth={1} />
+          <Path d="M188 167 h16 q1.8 4.5 1.4 7.5 h-18.8 q-0.4 -3 1.4 -7.5 Z" fill="#5468C9" stroke="#3E4C9A" strokeWidth={0.7} />
+          <Path d="M196 168.5 q-2.6 1.2 -3.2 4.4" stroke="#F3E7D3" strokeWidth={1.4} fill="none" strokeLinecap="round" />
+          <Path d="M192.5 175 q-1 9 -1.3 15.5" stroke="#E8DFC8" strokeWidth={5} fill="none" strokeLinecap="round" />
+          <Path d="M199.5 175 q1 9 1.3 15.5" stroke="#E8DFC8" strokeWidth={5} fill="none" strokeLinecap="round" />
+          <Path d="M189.8 186 l3.4 0.6 M198.8 186.6 l3.4 -0.6" stroke="#5468C9" strokeWidth={1.2} />
+          <Ellipse cx={191} cy={192} rx={3.2} ry={1.7} fill="#2F2A33" />
+          <Ellipse cx={201} cy={192} rx={3.2} ry={1.7} fill="#2F2A33" />
+          <Circle cx={196} cy={158} r={6.5} fill="#F7D9C4" />
+          <Path d="M188.8 157 q7.2 -9.5 14.4 0 l0 2.6 q-7.2 -4.6 -14.4 0 Z" fill="#2F2A33" />
+          <Path d="M189 159.4 q7 -4.4 14 0" stroke="#FBF6EC" strokeWidth={1.6} fill="none" strokeLinecap="round" />
+          <Circle cx={196} cy={149.5} r={1.6} fill="#D84B3F" />
+          <Circle cx={193.6} cy={158.6} r={0.85} fill="#2F2A33" />
+          <Circle cx={198.4} cy={158.6} r={0.85} fill="#2F2A33" />
+          <Ellipse cx={196} cy={161.6} rx={1.3} ry={1.6} fill="#B0684A" />
+          <Circle cx={191.6} cy={160.4} r={1.1} fill="rgba(240,150,150,0.5)" />
+          <Circle cx={200.4} cy={160.4} r={1.1} fill="rgba(240,150,150,0.5)" />
           {/* 눈사람 */}
           <Ellipse cx={70} cy={200} rx={26} ry={4.5} fill="rgba(200,210,235,0.5)" />
           <Circle cx={70} cy={186} r={12} fill="#FFFFFF" stroke="#DCE3F0" strokeWidth={1.4} />
@@ -130,10 +164,22 @@ export function SeolScene(p: SceneProps) {
 }
 
 export function ChuseokScene(p: SceneProps) {
-  // 떡방아 — 몸통 기울임(cdLean)과 수직 절구질(cdPoundV)이 2.2s 로 동기화된다.
+  // 떡방아 — 몸통 기울임(cdLean)과 절굿공이 아크 모션(cdPoundV)이 2.2s 로 동기화된다.
   const pound = usePingPong(2200);
   const leanSt = useAnimatedStyle(() => ({ transform: [{ rotate: `${6 * pound.value}deg` }] }));
-  const poundSt = useAnimatedStyle(() => ({ transform: [{ translateY: 9 * pound.value }] }));
+  // cdPoundV 아크 모션(시안 확정판) — 들어올림(-8°/-8px) → 내려찍음(+9px)을 왕복값으로 근사.
+  const poundSt = useAnimatedStyle(() => {
+    const t = pound.value;
+    const lift = t < 0.4 ? t / 0.4 : 0;
+    const strike = t >= 0.4 ? (t - 0.4) / 0.6 : 0;
+    return {
+      transform: [
+        { translateX: -2 * lift - 1 * strike },
+        { translateY: -8 * lift + 9 * strike },
+        { rotate: `${-8 * lift + 3 * strike}deg` },
+      ],
+    };
+  });
 
   return (
     <>

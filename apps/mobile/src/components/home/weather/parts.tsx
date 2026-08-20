@@ -322,7 +322,7 @@ export function Sun({
 // 위상 오프셋만 요소별로 다르게 준다(타이머 수를 파티클 수에서 주기 수로 줄인다).
 
 /** 빗줄기 1개(cdRain). */
-function RainDrop({ p, offset, left, height }: { p: { value: number }; offset: number; left: number; height: number }) {
+function RainDrop({ p, offset, left, height, color }: { p: { value: number }; offset: number; left: number; height: number; color: string }) {
   const st = useAnimatedStyle(() => {
     const t = phase(p.value, offset);
     return {
@@ -333,7 +333,7 @@ function RainDrop({ p, offset, left, height }: { p: { value: number }; offset: n
   return (
     <Animated.View
       style={[
-        { position: "absolute", top: 0, left: `${left}%`, width: 2, height, borderRadius: 2, backgroundColor: "rgba(90,120,220,0.62)" },
+        { position: "absolute", top: 0, left: `${left}%`, width: 2, height, borderRadius: 2, backgroundColor: color },
         st,
       ]}
     />
@@ -347,12 +347,13 @@ const RAINS = Array.from({ length: 10 }, (_, i) => ({
   off: (i * 0.19) % 1,
 }));
 
-export function RainLayer({ style }: { style: StyleProp<ViewStyle> }) {
+/** 빗줄기 레이어 — 주간 rgba(90,120,220) / 야간 rgba(140,170,240)(발광 톤). */
+export function RainLayer({ style, color = "rgba(90,120,220,0.62)" }: { style: StyleProp<ViewStyle>; color?: string }) {
   const loops = [useLinearLoop(1000), useLinearLoop(1140), useLinearLoop(1280)];
   return (
     <View pointerEvents="none" style={[{ position: "absolute", overflow: "hidden" }, style]}>
       {RAINS.map((r, i) => (
-        <RainDrop key={i} p={loops[r.group]} offset={r.off} left={r.l} height={r.h} />
+        <RainDrop key={i} p={loops[r.group]} offset={r.off} left={r.l} height={r.h} color={color} />
       ))}
     </View>
   );
@@ -366,6 +367,7 @@ function SnowFlake({
   size,
   opacity,
   tall,
+  glow,
 }: {
   p: { value: number };
   offset: number;
@@ -373,6 +375,8 @@ function SnowFlake({
   size: number;
   opacity: number;
   tall?: boolean;
+  /** 야간 발광 눈송이 — 웹의 box-shadow rgba(200,215,255,0.85) 를 후광 원으로 근사. */
+  glow?: boolean;
 }) {
   const st = useAnimatedStyle(() => {
     const t = phase(p.value, offset);
@@ -411,18 +415,25 @@ function SnowFlake({
   return (
     <Animated.View
       style={[
-        {
-          position: "absolute",
-          top: 0,
-          left: `${left}%`,
-          width: size,
-          height: size,
-          borderRadius: 999,
-          backgroundColor: `rgba(255,255,255,${opacity})`,
-        },
+        { position: "absolute", top: 0, left: `${left}%`, width: size, height: size },
         st,
       ]}
-    />
+    >
+      {glow ? (
+        <View
+          style={{
+            position: "absolute",
+            left: -size * 0.4,
+            top: -size * 0.4,
+            width: size * 1.8,
+            height: size * 1.8,
+            borderRadius: 999,
+            backgroundColor: "rgba(200,215,255,0.45)",
+          }}
+        />
+      ) : null}
+      <View style={{ width: size, height: size, borderRadius: 999, backgroundColor: `rgba(255,255,255,${opacity})` }} />
+    </Animated.View>
   );
 }
 
@@ -434,12 +445,12 @@ const SNOWS = Array.from({ length: 12 }, (_, i) => ({
   off: (i * 0.55) % 1,
 }));
 
-export function SnowLayer({ style, tall }: { style: StyleProp<ViewStyle>; tall?: boolean }) {
+export function SnowLayer({ style, tall, glow }: { style: StyleProp<ViewStyle>; tall?: boolean; glow?: boolean }) {
   const loops = [useLinearLoop(2600), useLinearLoop(3100), useLinearLoop(3600), useLinearLoop(4100)];
   return (
     <View pointerEvents="none" style={[{ position: "absolute", overflow: "hidden" }, style]}>
       {SNOWS.map((s, i) => (
-        <SnowFlake key={i} p={loops[s.group]} offset={s.off} left={s.l} size={s.s} opacity={s.o} tall={tall} />
+        <SnowFlake key={i} p={loops[s.group]} offset={s.off} left={s.l} size={s.s} opacity={s.o} tall={tall} glow={glow} />
       ))}
     </View>
   );
@@ -583,5 +594,377 @@ export function SkyBirds({ stroke = "#9AA1B8" }: { stroke?: string }) {
     <Svg style={{ position: "absolute", left: 0, bottom: 0 }} width={SCENE_W} height={240} viewBox="0 0 400 240">
       <Path d="M66 52 q7 -8 15 0 M92 42 q7 -8 15 0" stroke={stroke} strokeWidth={2.2} fill="none" strokeLinecap="round" />
     </Svg>
+  );
+}
+
+// ── 야간 공용 파츠(핸드오프 야간 공통 규칙 ①·② — 밤하늘·야간 광원) ─────────────────────
+
+/** 트윙클 별 1개 — 웹의 2~3px 원 + cdTwinkle. */
+export function NightStar({
+  top,
+  right,
+  s,
+  duration,
+  delay = 0,
+  bright,
+}: {
+  top: number;
+  right: number;
+  s: number;
+  duration: number;
+  delay?: number;
+  bright?: boolean;
+}) {
+  const p = usePingPong(duration, delay);
+  const st = useAnimatedStyle(() => ({ opacity: 1 - 0.8 * p.value }));
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        {
+          position: "absolute",
+          top,
+          right,
+          width: s,
+          height: s,
+          borderRadius: 999,
+          backgroundColor: bright ? "#EAF0FF" : "#CBD6F5",
+        },
+        st,
+      ]}
+    />
+  );
+}
+
+/** 십자 반짝이 별(별모양 svg) — 맑은 밤·밤바다의 큰 별. */
+export function SparkleStar({
+  top,
+  right,
+  s,
+  duration,
+  delay = 0,
+  fill = "#F2F6FF",
+}: {
+  top: number;
+  right: number;
+  s: number;
+  duration: number;
+  delay?: number;
+  fill?: string;
+}) {
+  const p = usePingPong(duration, delay);
+  const st = useAnimatedStyle(() => ({ opacity: 1 - 0.8 * p.value }));
+  return (
+    <Animated.View pointerEvents="none" style={[{ position: "absolute", top, right, width: s, height: s }, st]}>
+      <Svg width={s} height={s} viewBox="0 0 14 14">
+        <Path d="M7 0 L8.3 5.7 L14 7 L8.3 8.3 L7 14 L5.7 8.3 L0 7 L5.7 5.7 Z" fill={fill} />
+      </Svg>
+    </Animated.View>
+  );
+}
+
+/** 달 — radial 코어(+크레이터) 와 후광 원. 웹의 box-shadow 글로우는 후광 원으로 근사. */
+export function Moon({
+  top,
+  right,
+  s,
+  craters,
+}: {
+  top: number;
+  right: number;
+  s: number;
+  craters?: { t: number; l: number; s: number; o: number }[];
+}) {
+  const glowS = s * 1.9;
+  return (
+    <View pointerEvents="none" style={{ position: "absolute", top: top - (glowS - s) / 2, right: right - (glowS - s) / 2, width: glowS, height: glowS }}>
+      <Svg width={glowS} height={glowS}>
+        <Defs>
+          <RadialGradient id="moonGlow" cx="50%" cy="50%" r="50%">
+            <Stop offset="0" stopColor="#F0E6AF" stopOpacity={0.32} />
+            <Stop offset="1" stopColor="#F0E6AF" stopOpacity={0} />
+          </RadialGradient>
+          <RadialGradient id="moonCore" cx="36%" cy="32%" r="70%">
+            <Stop offset="0" stopColor="#FDFBEE" />
+            <Stop offset="0.58" stopColor="#EFE7C6" />
+            <Stop offset="1" stopColor="#D9CFA6" />
+          </RadialGradient>
+        </Defs>
+        <Circle cx={glowS / 2} cy={glowS / 2} r={glowS / 2} fill="url(#moonGlow)" />
+        <Circle cx={glowS / 2} cy={glowS / 2} r={s / 2} fill="url(#moonCore)" />
+        {craters?.map((c, i) => (
+          <Circle
+            key={i}
+            cx={(glowS - s) / 2 + c.l + c.s / 2}
+            cy={(glowS - s) / 2 + c.t + c.s / 2}
+            r={c.s / 2}
+            fill={`rgba(200,188,145,${c.o})`}
+          />
+        ))}
+      </Svg>
+    </View>
+  );
+}
+
+/** 달무리(광륜) — cdMoonHalo(opacity 0.55↔1 펄스). */
+export function MoonHalo({
+  top,
+  right,
+  s,
+  alpha = 0.16,
+  duration = 5000,
+}: {
+  top: number;
+  right: number;
+  s: number;
+  alpha?: number;
+  duration?: number;
+}) {
+  const p = usePingPong(duration);
+  const st = useAnimatedStyle(() => ({ opacity: 0.55 + 0.45 * p.value }));
+  return (
+    <Animated.View pointerEvents="none" style={[{ position: "absolute", top, right, width: s, height: s }, st]}>
+      <Svg width={s} height={s}>
+        <Defs>
+          <RadialGradient id="haloG" cx="50%" cy="50%" r="50%">
+            <Stop offset="0" stopColor="#F0E8B4" stopOpacity={alpha} />
+            <Stop offset="0.66" stopColor="#F0E8B4" stopOpacity={0} />
+          </RadialGradient>
+        </Defs>
+        <Circle cx={s / 2} cy={s / 2} r={s / 2} fill="url(#haloG)" />
+      </Svg>
+    </Animated.View>
+  );
+}
+
+/** 반딧불 — cdFirefly 궤적(부유 + 명멸) + 노란 후광. */
+export function Firefly({
+  top,
+  left,
+  s,
+  duration,
+  delay = 0,
+  soft,
+}: {
+  top: number;
+  left: number;
+  s: number;
+  duration: number;
+  delay?: number;
+  soft?: boolean;
+}) {
+  const p = useLinearLoop(duration, delay);
+  const st = useAnimatedStyle(() => {
+    const t = p.value;
+    // cdFirefly: 0%,100% (0,0)/o0.1 · 22% o1 · 50% (13,-11)/o0.25 · 74% o1
+    const x = t < 0.5 ? 13 * (t / 0.5) : 13 * (1 - (t - 0.5) / 0.5);
+    const y = t < 0.5 ? -11 * (t / 0.5) : -11 * (1 - (t - 0.5) / 0.5);
+    let o: number;
+    if (t < 0.22) o = 0.1 + 0.9 * (t / 0.22);
+    else if (t < 0.5) o = 1 - 0.75 * ((t - 0.22) / 0.28);
+    else if (t < 0.74) o = 0.25 + 0.75 * ((t - 0.5) / 0.24);
+    else o = 1 - 0.9 * ((t - 0.74) / 0.26);
+    return { transform: [{ translateX: x }, { translateY: y }], opacity: o };
+  });
+  const glowS = s * 3;
+  return (
+    <Animated.View pointerEvents="none" style={[{ position: "absolute", top, left, width: s, height: s }, st]}>
+      <View
+        style={{
+          position: "absolute",
+          left: -(glowS - s) / 2,
+          top: -(glowS - s) / 2,
+          width: glowS,
+          height: glowS,
+          borderRadius: 999,
+          backgroundColor: "rgba(255,224,130,0.3)",
+        }}
+      />
+      <View style={{ width: s, height: s, borderRadius: 999, backgroundColor: soft ? "#FFF1BE" : "#FFE9A0" }} />
+    </Animated.View>
+  );
+}
+
+/** 유성 — cdShoot(8s 주기: 62% 대기 → 66% 점등 → 78% 좌하향 이탈). */
+export function ShootingStar({ top, right, w = 64 }: { top: number; right: number; w?: number }) {
+  const p = useLinearLoop(8000);
+  const st = useAnimatedStyle(() => {
+    const t = p.value;
+    const move = t < 0.62 ? 0 : Math.min(1, (t - 0.62) / 0.16);
+    const o = t < 0.62 ? 0 : t < 0.66 ? (t - 0.62) / 0.04 : t < 0.78 ? 1 - (t - 0.66) / 0.12 : 0;
+    return { transform: [{ translateX: -130 * move }, { translateY: 66 * move }], opacity: o };
+  });
+  return (
+    <Animated.View pointerEvents="none" style={[{ position: "absolute", top, right, width: w, height: 2 }, st]}>
+      <Svg width={w} height={16} style={{ transform: [{ rotate: "-27deg" }] }}>
+        <Defs>
+          <LinearGradient id="shootG" x1="0" y1="0" x2="1" y2="0">
+            <Stop offset="0" stopColor="#FFFFFF" stopOpacity={1} />
+            <Stop offset="1" stopColor="#FFFFFF" stopOpacity={0} />
+          </LinearGradient>
+        </Defs>
+        <Rect x={0} y={7} width={w} height={2} rx={1} fill="url(#shootG)" />
+      </Svg>
+    </Animated.View>
+  );
+}
+
+/** 모닥불 불꽃 1장(cdFlame) — 스케일 펄스 + 미세 회전. */
+export function Flame({
+  style,
+  w,
+  h,
+  colors,
+  duration,
+  delay = 0,
+}: {
+  style: StyleProp<ViewStyle>;
+  w: number;
+  h: number;
+  /** [상단, 중단, 하단] — 단색이면 같은 값 3개. */
+  colors: [string, string, string];
+  duration: number;
+  delay?: number;
+}) {
+  const p = useLinearLoop(duration, delay);
+  const st = useAnimatedStyle(() => {
+    const t = p.value;
+    // cdFlame: 0/100% scale(1,1) · 30% (1.1,0.9,-2°) · 60% (0.9,1.08,2°)
+    let sx = 1;
+    let sy = 1;
+    let r = 0;
+    if (t < 0.3) {
+      const k = t / 0.3;
+      sx = 1 + 0.1 * k;
+      sy = 1 - 0.1 * k;
+      r = -2 * k;
+    } else if (t < 0.6) {
+      const k = (t - 0.3) / 0.3;
+      sx = 1.1 - 0.2 * k;
+      sy = 0.9 + 0.18 * k;
+      r = -2 + 4 * k;
+    } else {
+      const k = (t - 0.6) / 0.4;
+      sx = 0.9 + 0.1 * k;
+      sy = 1.08 - 0.08 * k;
+      r = 2 - 2 * k;
+    }
+    return { transform: [{ translateY: (h / 2) * (1 - sy) }, { scaleX: sx }, { scaleY: sy }, { rotate: `${r}deg` }] };
+  });
+  return (
+    <Animated.View pointerEvents="none" style={[{ position: "absolute", width: w, height: h }, style, st]}>
+      <Svg width={w} height={h}>
+        <Defs>
+          <LinearGradient id="flameG" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor={colors[0]} />
+            <Stop offset="0.68" stopColor={colors[1]} />
+            <Stop offset="1" stopColor={colors[2]} />
+          </LinearGradient>
+        </Defs>
+        {/* 물방울형 불꽃 — 웹 border-radius 50%/62% 62% 38% 38% 근사 */}
+        <Path
+          d={`M${w / 2} 0 C ${w * 0.96} ${h * 0.18}, ${w} ${h * 0.55}, ${w} ${h * 0.72} A ${w / 2} ${h * 0.28} 0 1 1 0 ${h * 0.72} C 0 ${h * 0.55}, ${w * 0.04} ${h * 0.18}, ${w / 2} 0 Z`}
+          fill="url(#flameG)"
+        />
+      </Svg>
+    </Animated.View>
+  );
+}
+
+/** 모닥불 불티(cdSpark) — 위로 떠오르며 사라진다. */
+export function Spark({
+  style,
+  s,
+  color,
+  duration,
+  delay = 0,
+}: {
+  style: StyleProp<ViewStyle>;
+  s: number;
+  color: string;
+  duration: number;
+  delay?: number;
+}) {
+  const p = useLinearLoop(duration, delay);
+  const st = useAnimatedStyle(() => {
+    const t = p.value;
+    return {
+      transform: [{ translateY: -32 * t }],
+      opacity: t < 0.18 ? t / 0.18 : 1 - (t - 0.18) / 0.82,
+    };
+  });
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[{ position: "absolute", width: s, height: s, borderRadius: 999, backgroundColor: color }, style, st]}
+    />
+  );
+}
+
+/** 원거리 번개(cdFlash) — 7s 주기 이중 섬광(88·91% 점등, 89.5% 반감). */
+export function Flash({ style, children }: { style: StyleProp<ViewStyle>; children: ReactNode }) {
+  const p = useLinearLoop(7000);
+  const st = useAnimatedStyle(() => {
+    const t = p.value;
+    let o = 0;
+    if (t >= 0.86 && t < 0.88) o = (t - 0.86) / 0.02;
+    else if (t >= 0.88 && t < 0.895) o = 1 - 0.75 * ((t - 0.88) / 0.015);
+    else if (t >= 0.895 && t < 0.91) o = 0.25 + 0.75 * ((t - 0.895) / 0.015);
+    else if (t >= 0.91 && t < 0.94) o = 1 - (t - 0.91) / 0.03;
+    return { opacity: o };
+  });
+  return (
+    <Animated.View pointerEvents="none" style={[{ position: "absolute" }, style, st]}>
+      {children}
+    </Animated.View>
+  );
+}
+
+/** 널뛰기 널판(cdBoard) — ±6° 시소 회전. jumpers 와 같은 2.4s 주기로 돈다. */
+export function SeesawBoard({
+  style,
+  p,
+  children,
+}: {
+  style: StyleProp<ViewStyle>;
+  p: { value: number };
+  children: ReactNode;
+}) {
+  const st = useAnimatedStyle(() => {
+    const t = p.value;
+    // cdBoard: 0/50/100% 0° · 25% +6° · 75% −6°
+    const r = t < 0.25 ? 6 * (t / 0.25) : t < 0.5 ? 6 * (1 - (t - 0.25) / 0.25) : t < 0.75 ? -6 * ((t - 0.5) / 0.25) : -6 * (1 - (t - 0.75) / 0.25);
+    return { transform: [{ rotate: `${r}deg` }] };
+  });
+  return (
+    <Animated.View pointerEvents="none" style={[{ position: "absolute" }, style, st]}>
+      {children}
+    </Animated.View>
+  );
+}
+
+/** 널뛰기 점퍼(cdJumpA/B) — 교대 점프. phaseB=true 면 반대 위상. */
+export function SeesawJumper({
+  style,
+  p,
+  phaseB,
+  children,
+}: {
+  style: StyleProp<ViewStyle>;
+  p: { value: number };
+  phaseB?: boolean;
+  children: ReactNode;
+}) {
+  const st = useAnimatedStyle(() => {
+    let t = p.value;
+    if (phaseB) t = (t + 0.5) % 1;
+    // cdJumpA: 0/50/100% 0 · 25% −22px · 75% +3px
+    const y = t < 0.25 ? -22 * (t / 0.25) : t < 0.5 ? -22 * (1 - (t - 0.25) / 0.25) : t < 0.75 ? 3 * ((t - 0.5) / 0.25) : 3 * (1 - (t - 0.75) / 0.25);
+    return { transform: [{ translateY: y }] };
+  });
+  return (
+    <Animated.View pointerEvents="none" style={[{ position: "absolute" }, style, st]}>
+      {children}
+    </Animated.View>
   );
 }

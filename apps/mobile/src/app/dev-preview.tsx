@@ -137,12 +137,20 @@ export default function DevPreviewScreen() {
             </Card>
           </>
         ) : (
-          SCENES.map((s) => (
-            <View key={s} className="gap-1.5">
-              <Text className="text-[12px] font-bold text-cd-muted">{s}</Text>
-              <WeatherWidget sceneOverride={s} />
-            </View>
-          ))
+          <>
+            {SCENES.map((s) => (
+              <View key={s} className="gap-1.5">
+                <Text className="text-[12px] font-bold text-cd-muted">{s}</Text>
+                <WeatherWidget sceneOverride={s} nightOverride={false} />
+              </View>
+            ))}
+            {SCENES.map((s) => (
+              <View key={`n-${s}`} className="gap-1.5">
+                <Text className="text-[12px] font-bold text-cd-muted">{s} · 밤</Text>
+                <WeatherWidget sceneOverride={s} nightOverride />
+              </View>
+            ))}
+          </>
         )}
       </ScrollView>
     </SafeAreaView>

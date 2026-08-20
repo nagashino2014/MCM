@@ -6,7 +6,7 @@
 import { createHash } from "node:crypto";
 import { getDb, withDbWrite, rowsToObjects } from "@/lib/db";
 import { putContractDocument, deleteContractDocument, sanitizePathSegment } from "@/lib/storage/contract-document-storage";
-import { classifyMany, loadCategories, isPgMerchant } from "@/lib/barobill/classify";
+import { classifyMany, loadCategories, isEcommerceMerchant } from "@/lib/barobill/classify";
 import { buildReceiptPdf } from "@/lib/finance/receipt-pdf";
 import { isValidCorpNum, lookupStoreByCorpNum } from "@/lib/finance/store-directory";
 import type { ReceiptFields } from "@/lib/finance/receipt-parser";
@@ -380,7 +380,8 @@ export async function syncDocReceiptLinks(
           await db.exec(`SELECT store_corp_num, store_name FROM personal_receipts WHERE receipt_id = $1`, [ref.receiptId]),
         );
         const corpNum = rows[0]?.store_corp_num ? String(rows[0].store_corp_num) : null;
-        if (corpNum && !isPgMerchant(null)) {
+        const storeName = rows[0]?.store_name ? String(rows[0].store_name) : null;
+        if (corpNum && !isEcommerceMerchant(storeName)) {
           await db.run(
             `INSERT INTO card_merchant_links (store_corp_num, category_key, store_name_snapshot, confirm_count, last_confirmed_at, created_at)
              VALUES ($1, $2, $3, 1, $4, $4)
@@ -389,7 +390,7 @@ export async function syncDocReceiptLinks(
                store_name_snapshot = EXCLUDED.store_name_snapshot,
                confirm_count = card_merchant_links.confirm_count + 1,
                last_confirmed_at = EXCLUDED.last_confirmed_at`,
-            [corpNum, categoryKey, rows[0]?.store_name ? String(rows[0].store_name) : null, now],
+            [corpNum, categoryKey, storeName, now],
           );
         }
       }

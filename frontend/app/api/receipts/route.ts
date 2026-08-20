@@ -32,8 +32,11 @@ export async function GET(req: NextRequest) {
     const formId = sp.get("formId") || "";
     const categories = await loadCategories();
     const byKey = new Map(categories.map((c) => [c.categoryKey, c]));
+    // 개인카드 영수증만 사업자번호 학습으로 분류를 물려받는다(사용자 확정 2026-08-20).
+    // 쿠팡·네이버페이 같은 전자상거래는 같은 매입처라도 건마다 계정이 갈리므로 자동 지정에서 뺀다.
     const reclassed = await classifyMany(
       receipts.map((r) => ({ storeCorpNum: r.storeCorpNum, storeBizType: null, storeName: r.storeName })),
+      { skipEcommerce: true },
     );
     const items = receipts.map((r, i) => {
       const categoryKey = r.categoryKey ?? reclassed[i]?.categoryKey ?? null;

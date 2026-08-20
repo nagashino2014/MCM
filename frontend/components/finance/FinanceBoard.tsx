@@ -12,6 +12,7 @@ import {
   Landmark,
   CreditCard,
   RefreshCw,
+  ShoppingCart,
   Plus,
   StopCircle,
   RotateCcw,
@@ -1403,6 +1404,8 @@ function CardLedgerPanel() {
   const [cardTotals, setCardTotals] = useState({ count: 0, amountTotal: 0, supplyAmount: 0, taxAmount: 0 });
   const [page, setPage] = useState(0);
   const [filter, setFilter] = useState<LedgerFilter>(EMPTY_FILTER);
+  /** 전자상거래 매입건만 — 쿠팡·네이버페이처럼 건마다 계정과목이 갈려 직접 골라야 하는 건들(2026-08-20). */
+  const [ecommerceOnly, setEcommerceOnly] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // P2 분류 편집
@@ -1432,6 +1435,7 @@ function CardLedgerPanel() {
         // 카드 개별 선택이 있으면 그 카드들, 없으면 선택된 카드사의 전체 카드로 조회
         const scopeIds = selectedCards.size ? [...selectedCards] : companyCards.map((c) => c.id);
         if (scopeIds.length) params.set("cardIds", scopeIds.join(","));
+        if (ecommerceOnly) params.set("ecommerceOnly", "1");
         filterToParams(filter, params);
         const res = await fetch(`/api/finance/transactions?${params}`, { cache: "no-store" });
         const data = await res.json();
@@ -1450,7 +1454,7 @@ function CardLedgerPanel() {
     return () => {
       alive = false;
     };
-  }, [page, filter, selectedCards, companyCards, reloadKey]);
+  }, [page, filter, ecommerceOnly, selectedCards, companyCards, reloadKey]);
 
   const callVat = async (body: Record<string, unknown>) => {
     setBusy(true);
@@ -1600,6 +1604,17 @@ function CardLedgerPanel() {
         </button>
         <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm flex-none" disabled={busy} onClick={() => callVat({ action: "auto-classify" })}>
           <RefreshCw className="w-3.5 h-3.5" /> 자동분류 재실행
+        </button>
+        <button
+          type="button"
+          className={`cd-btn cd-btn-sm flex-none ml-auto ${ecommerceOnly ? "cd-btn-primary" : "cd-btn-soft"}`}
+          title="쿠팡·네이버페이 등 전자상거래·결제대행 매입건 — 같은 매입처라도 건마다 계정과목이 달라 자동 분류에서 빼 둔 건들입니다."
+          onClick={() => {
+            setEcommerceOnly((v) => !v);
+            setPage(0);
+          }}
+        >
+          <ShoppingCart className="w-3.5 h-3.5" /> 전자상거래 건만
         </button>
       </div>
       {error && <div className="cd-error-text text-sm mb-2">{error}</div>}

@@ -140,6 +140,8 @@ export interface ApprovalTableColumn {
   options?: string[];
   /** 필수 입력 열 — 값이 있는 행에서 이 열이 비면 상신을 막는다(지출 목적 등). */
   required?: boolean;
+  /** 열 도움말 — 헤더의 (?) 에 붙는다. 분류 열의 "어떤 지출이 어디로 가는지" 예시 안내용. */
+  hint?: string;
   /** 열 단위 데이터 의미 태그(지출 내역 표의 금액 열 = cost.travel 등) */
   semantic?: ApprovalFieldSemantic;
 }
@@ -208,6 +210,7 @@ export function parseFields(value: unknown): ApprovalFieldDef[] {
               type: String(c.type ?? "text"),
               options: Array.isArray(c.options) ? c.options.map(String) : undefined,
               required: c.required === true,
+              hint: c.hint != null ? String(c.hint) : undefined,
               semantic: parseSemantic(c.semantic),
             }))
           : undefined,

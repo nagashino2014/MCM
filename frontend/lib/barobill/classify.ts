@@ -92,11 +92,45 @@ export function isPgMerchant(storeBizType: string | null | undefined): boolean {
   return stripSpaces(storeBizType ?? "").toUpperCase().includes("PG");
 }
 
+/**
+ * 전자상거래·결제대행 매입처 — 같은 가맹점에서도 건마다 계정과목이 갈린다(사용자 확정 2026-08-20).
+ * 예: 쿠팡에서 사무용품을 사기도 하고 탕비실 비품을 사기도 한다. 과거 선택을 그대로 물려주면
+ * 틀린 분류가 조용히 굳으므로 **자동 지정도, 학습 저장도 하지 않고 사용자가 매번 직접 고른다.**
+ * 단 사용자가 명시한 고정 규칙(card_store_rules)은 본인 판단이므로 그대로 존중한다.
+ * 음식점·주유소·숙박처럼 용도가 하나인 매입처는 여기 해당하지 않는다.
+ */
+export const ECOMMERCE_KEYWORDS = [
+  "쿠팡", "네이버", "네이버페이", "NAVER", "스마트스토어", "NHN", "KCP", "이니시스", "INICIS",
+  "11번가", "지마켓", "G마켓", "GMARKET", "옥션", "AUCTION", "인터파크", "티몬", "위메프",
+  "SSG", "신세계몰", "롯데온", "홈앤쇼핑", "GS샵", "CJ온스타일", "카카오페이", "카카오쇼핑",
+  "토스페이먼츠", "나이스페이", "페이코", "PAYCO", "다날", "알리익스프레스", "테무", "TEMU",
+  "오늘의집", "무신사", "마켓컬리", "컬리",
+];
+export const ECOMMERCE_BIZ_TYPES = ["전자상거래", "통신판매", "결제대행", "온라인쇼핑", "인터넷쇼핑"];
+
+export function isEcommerceMerchant(
+  storeName: string | null | undefined,
+  storeBizType?: string | null,
+): boolean {
+  if (isPgMerchant(storeBizType)) return true;
+  const biz = stripSpaces(storeBizType ?? "");
+  if (biz && ECOMMERCE_BIZ_TYPES.some((t) => biz.includes(t))) return true;
+  const name = stripSpaces(storeName ?? "").toUpperCase();
+  if (!name) return false;
+  return ECOMMERCE_KEYWORDS.some((kw) => name.includes(stripSpaces(kw).toUpperCase()));
+}
+
+export interface ClassifyOptions {
+  /** 전자상거래·결제대행 매입처의 자동 지정을 건너뛴다(개인카드 영수증 전용 — 아래 주석 참고). */
+  skipEcommerce?: boolean;
+}
+
 export function classifyOne(
   input: ClassifyInput,
   categories: ExpenseCategory[],
   learned: Map<string, string>,
   storeRules: StoreRuleSet = EMPTY_STORE_RULES,
+  options: ClassifyOptions = {},
 ): ClassifyResult | null {
   // ⓪ 사용자 고정 규칙 — 사업자번호 우선, 없으면 상호(PG 경유 결제 대응)
   const corpKey = normalizeCorpNum(input.storeCorpNum);
@@ -109,6 +143,9 @@ export function classifyOne(
     const key = storeRules.byName.get(nameKey);
     if (key) return { categoryKey: key, source: "store_rule" };
   }
+  // 전자상거래·결제대행은 여기서 끝 — 학습·키워드·업태 어느 것으로도 자동 지정하지 않는다.
+  // (개인카드 영수증 경로에서만 켠다. 법인카드는 원장에서 계정과목을 직접 지정하므로 그대로 둔다.)
+  if (options.skipEcommerce && isEcommerceMerchant(input.storeName, input.storeBizType)) return null;
   if (input.storeCorpNum) {
     const key = learned.get(input.storeCorpNum);
     if (key) return { categoryKey: key, source: "learned" };
@@ -132,10 +169,13 @@ export function classifyOne(
   return null;
 }
 
-export async function classifyMany(inputs: ClassifyInput[]): Promise<Array<ClassifyResult | null>> {
+export async function classifyMany(
+  inputs: ClassifyInput[],
+  options: ClassifyOptions = {},
+): Promise<Array<ClassifyResult | null>> {
   const categories = await loadCategories();
   const [learned, storeRules] = await Promise.all([loadMerchantLinks(inputs.map((i) => i.storeCorpNum ?? "")), loadStoreRules()]);
-  return inputs.map((i) => classifyOne(i, categories, learned, storeRules));
+  return inputs.map((i) => classifyOne(i, categories, learned, storeRules, options));
 }
 
 // ─────────────────────────────────────────────

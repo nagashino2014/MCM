@@ -48,6 +48,7 @@ export async function GET(req: NextRequest) {
       amountMin: Number.isFinite(amountMin) ? amountMin : undefined,
       amountMax: Number.isFinite(amountMax) ? amountMax : undefined,
       unusedOnly: sp.get("unusedOnly") === "1",
+      ecommerceOnly: sp.get("ecommerceOnly") === "1",
       limit,
       offset,
     });

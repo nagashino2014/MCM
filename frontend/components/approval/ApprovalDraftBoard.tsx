@@ -14,6 +14,7 @@ import { CdModal } from "@/components/cdash/CdModal";
 import { ApprovalFormRenderer } from "@/components/approval/ApprovalFormRenderer";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
 import { missingTableRequirements, parseTimeRange, timeRangeMinutes, type ApprovalFieldDef } from "@/lib/approval/fields";
+import { DraftAttachmentModal } from "@/components/approval/DraftAttachmentModal";
 import { autofillFromRefDoc, compareWithRefDoc } from "@/lib/approval/ref-link";
 import { findInCatalog, type LeaveTypeItem } from "@/lib/approval/leave-types";
 import { OvertimeConsentModal } from "@/components/approval/OvertimeConsentModal";
@@ -128,6 +129,8 @@ export function ApprovalDraftBoard() {
   const [aiBusy, setAiBusy] = useState(false);
   // 재편집 문서의 상태·반려 사유·삭제 권한(서버 판정) — 반려 배너와 기안 삭제 버튼 노출용.
   const [editMeta, setEditMeta] = useState<EditDocMeta | null>(null);
+  /** 미리보기로 띄운 첨부(기안 화면 전용 — key 로 읽는다). */
+  const [previewAttachment, setPreviewAttachment] = useState<DocAttachment | null>(null);
   // 첨부서류(문서 공통 — 공문과 같은 field_values.file_attachments 규약).
   // 지출결의·출장보고·교육훈련·휴가처럼 증빙이 필요한 양식에서 쓴다.
   const [fileAttachments, setFileAttachments] = useState<DocAttachment[]>([]);
@@ -976,7 +979,14 @@ export function ApprovalDraftBoard() {
                     fileAttachments.map((f, i) => (
                       <div key={f.key} className="flex items-center gap-2 rounded-lg border cd-border-c px-2.5 py-1.5">
                         <span className="text-[10px] font-mono cd-text-faint w-4">{i + 1}</span>
-                        <span className="text-[12px] cd-text truncate flex-1" title={f.name}>{f.name}</span>
+                        <button
+                          type="button"
+                          className="text-[12px] cd-text truncate flex-1 text-left hover:cd-text-primary hover:underline"
+                          title={`${f.name} — 클릭하면 미리보기`}
+                          onClick={() => setPreviewAttachment(f)}
+                        >
+                          {f.name}
+                        </button>
                         <span className="text-[10.5px] cd-text-faint shrink-0">{formatBytes(f.size)}</span>
                         <button
                           type="button"
@@ -1296,6 +1306,8 @@ export function ApprovalDraftBoard() {
           onPick={appendReceiptRows}
         />
       )}
+
+      <DraftAttachmentModal item={previewAttachment} onClose={() => setPreviewAttachment(null)} />
 
       {/* 조직도 선택 모달(공용, G3) */}
       <OrgPickerModal

@@ -2,6 +2,7 @@
 
 import { getDb, withDbWrite, rowsToObjects } from "@/lib/db";
 import { BANK_NAME_TO_CODE } from "@/lib/barobill/bank";
+import { ECOMMERCE_BIZ_TYPES, ECOMMERCE_KEYWORDS } from "@/lib/barobill/classify";
 
 // 저장분이 한글 은행명일 수 있어(마이그 172 이전 적재) 코드 형식이 아니면 이름으로 역매핑한다.
 const normalizeBankCode = (code: string, name: string) =>
@@ -291,6 +292,8 @@ export async function listCardTransactions(params: {
   amountMin?: number;
   amountMax?: number;
   unusedOnly?: boolean;
+  /** 전자상거래·결제대행 매입처 건만(계정과목을 건마다 직접 골라야 하는 건들) */
+  ecommerceOnly?: boolean;
   limit?: number;
   offset?: number;
 }): Promise<{ rows: CardTxnRow[]; total: number; totals: { count: number; amountTotal: number; supplyAmount: number; taxAmount: number } }> {
@@ -327,6 +330,16 @@ export async function listCardTransactions(params: {
   }
   if (params.unusedOnly) {
     where.push(`t.doc_id IS NULL AND t.excluded = 0 AND t.approval_type = '승인'`);
+  }
+  // 전자상거래·결제대행 — 상호 키워드 또는 업태로 판정(classify.ts 의 isEcommerceMerchant 와 같은 기준).
+  if (params.ecommerceOnly) {
+    args.push(ECOMMERCE_KEYWORDS.map((k) => `%${k}%`));
+    const nameArg = args.length;
+    args.push(ECOMMERCE_BIZ_TYPES.map((k) => `%${k}%`));
+    const bizArg = args.length;
+    where.push(
+      `(t.store_name ILIKE ANY($${nameArg}::text[]) OR t.store_biz_type ILIKE ANY($${bizArg}::text[]) OR upper(replace(COALESCE(t.store_biz_type,''), ' ', '')) LIKE '%PG%')`,
+    );
   }
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
   const totalRows = rowsToObjects(await db.exec(`SELECT count(*) AS n FROM card_transactions t ${whereSql}`, args));

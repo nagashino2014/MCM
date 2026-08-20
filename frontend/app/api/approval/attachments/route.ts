@@ -1,8 +1,9 @@
 import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
-import { ATTACHMENT_ALLOWED_TEXT, attachmentContentType, isAllowedAttachment } from "@/lib/approval/attachments";
-import { putContractDocument, sanitizeFilename } from "@/lib/storage/contract-document-storage";
+import { ATTACHMENT_ALLOWED_TEXT, attachmentContentType, attachmentPreviewKind, isAllowedAttachment } from "@/lib/approval/attachments";
+import { putContractDocument, readContractDocument, sanitizeFilename } from "@/lib/storage/contract-document-storage";
+import { convertToPdf, pdfResponse, previewKey, rawResponse } from "@/lib/approval/attachment-preview";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -40,6 +41,44 @@ export async function POST(req: NextRequest) {
       items.push({ name, key, size: file.size });
     }
     return NextResponse.json({ items });
+  } catch (err) {
+    return authErrorToResponse(err);
+  }
+}
+
+/**
+ * 아직 문서로 저장되지 않은 첨부(기안 화면)의 미리보기 — 스토리지 key 로 직접 읽는다.
+ * 저장된 문서는 docId 경로(`/api/approval/docs/{docId}/attachments/{index}`)를 쓴다.
+ * 임의 파일 열람을 막기 위해 **경로 접두어 화이트리스트**로 제한한다 — 결재 첨부, 개인카드
+ * 영수증 증빙, 법인카드 전자 전표. 이 셋은 모두 approval.view 권한자가 기안에 담을 수 있는 것들이다.
+ */
+const READABLE_PREFIXES = ["approval/attachments/", "receipts/", "card-slips/"];
+
+export async function GET(req: NextRequest) {
+  try {
+    await requirePermission("approval.view");
+    const key = req.nextUrl.searchParams.get("key") ?? "";
+    if (!key || key.includes("..") || !READABLE_PREFIXES.some((p) => key.startsWith(p))) {
+      return NextResponse.json({ error: "열람할 수 없는 경로입니다." }, { status: 400 });
+    }
+    const name = key.split("/").pop() || "첨부파일";
+    const mode = req.nextUrl.searchParams.get("mode") ?? "raw";
+    const download = req.nextUrl.searchParams.get("download") === "1";
+
+    if (mode === "pdf" && attachmentPreviewKind(name) === "convert") {
+      const cached = await readContractDocument(previewKey(key));
+      if (cached) return pdfResponse(cached, name, download);
+      const source = await readContractDocument(key);
+      if (!source) return NextResponse.json({ error: "첨부 원본을 읽을 수 없습니다." }, { status: 404 });
+      const converted = await convertToPdf(source, name);
+      if (!converted.ok) return NextResponse.json({ error: converted.error }, { status: converted.status });
+      await putContractDocument(previewKey(key), converted.pdf, "application/pdf").catch(() => {});
+      return pdfResponse(converted.pdf, name, download);
+    }
+
+    const body = await readContractDocument(key);
+    if (!body) return NextResponse.json({ error: "첨부 원본을 읽을 수 없습니다." }, { status: 404 });
+    return rawResponse(body, name, download);
   } catch (err) {
     return authErrorToResponse(err);
   }

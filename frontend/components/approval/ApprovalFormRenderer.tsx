@@ -6,7 +6,7 @@
 // 설계: docs/e-approval-blueprint.md §3·§5. 표(table) 필드는 행 추가/삭제+합계 자동.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Users, X } from "lucide-react";
+import { HelpCircle, Plus, Users, X } from "lucide-react";
 import { ApprovalDocHead, type DocHeadInfo } from "@/components/approval/ApprovalDocHead";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
@@ -1152,6 +1152,12 @@ function TableInput({
               <th key={c.key} className="border cd-border-c px-2 py-1.5 cd-surface-bg cd-text font-bold whitespace-nowrap">
                 {c.required && <span className="text-[color:var(--cd-danger,#FA896B)] mr-0.5">*</span>}
                 {c.label}
+                {/* 도움말 — 분류처럼 "무엇을 어디에 넣는지" 헷갈리는 열에 예시를 붙인다. */}
+                {c.hint && (
+                  <span className="ml-1 cd-text-faint cursor-help" title={c.hint}>
+                    <HelpCircle className="w-3 h-3 inline align-[-1px]" />
+                  </span>
+                )}
               </th>
             ))}
             {!readOnly && <th className="border-0 w-7" />}
@@ -1232,8 +1238,11 @@ function TableInput({
                         c.type === "currency" || c.type === "number" ? "text-right" : ""
                       }`}
                       disabled={readOnly}
-                      value={String(r[c.key] ?? "")}
-                      onChange={(e) => update(ri, c.key, e.target.value)}
+                      // 금액 열은 천단위 구분자를 보여 준다 — 저장값은 숫자만(합계·PDF·집계가 같은 값을 쓴다).
+                      value={c.type === "currency" ? fmtComma(String(r[c.key] ?? "")) : String(r[c.key] ?? "")}
+                      onChange={(e) =>
+                        update(ri, c.key, c.type === "currency" ? e.target.value.replace(/[^\d.-]/g, "") : e.target.value)
+                      }
                     />
                   )}
                 </td>

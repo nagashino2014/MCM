@@ -48,6 +48,11 @@ export interface CollectOptions {
   withText?: boolean;
 }
 
+/** 한 주문에서 훑어볼 상품 순번 상한 — 빈 양식이 나오면 그 전에 멈춘다 */
+const MAX_PRD_SEQ = 20;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 interface CollectStats {
   saved: number;
   skipped: number;
@@ -506,6 +511,8 @@ async function runByOrderNo(
     await waitForUserQuery(site, page, opts.waitSeconds);
   }
 
+  let previousPageOrders: Set<string> | null = null;
+
   for (let pageNo = 1; pageNo <= pages; pageNo++) {
     // 목록은 iframe 안에서 XHR 로 채워지므로 네트워크가 잦아들 때까지 기다린다.
     await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => {});
@@ -513,6 +520,14 @@ async function runByOrderNo(
 
     const ordNos = await collectOrderNos(page);
     console.log(`${tag} ${pageNo}페이지: 주문번호 ${ordNos.length}건`);
+
+    // '다음' 을 눌러도 목록이 그대로면 페이지 이동에 실패한 것이다 — 같은 목록을 반복해 읽지 않는다.
+    if (previousPageOrders && ordNos.length > 0 && ordNos.every((o) => previousPageOrders!.has(o))) {
+      console.log(`${tag} 이전 페이지와 같은 목록입니다 — 페이지 이동이 안 되는 것으로 보고 종료합니다.`);
+      console.log(`${tag}   목록이 더 있으면 브라우저에서 조회 조건을 바꿔 다시 실행하세요.`);
+      break;
+    }
+    previousPageOrders = new Set(ordNos);
 
     if (ordNos.length === 0) {
       console.log(`${tag} ⚠ 주문번호가 없습니다. 조회 기간에 주문이 없거나 목록이 아직 안 그려진 상태입니다.`);
@@ -533,11 +548,6 @@ async function runByOrderNo(
       }
 
       const label = cfg.receiptLabel || "영수증";
-      const key = `${ordNo}::${label}`;
-      if (collected.has(key)) {
-        stats.skipped++;
-        continue;
-      }
 
       if (dryRun) {
         const target = cfg.receiptRequest ? `POST ${cfg.receiptRequest.url}` : receiptUrl(cfg, ordNo);
@@ -545,53 +555,83 @@ async function runByOrderNo(
         continue;
       }
 
-      const receipt = await page.context().newPage();
-      try {
-        await openReceiptDocument(receipt, cfg, ordNo);
-        await receipt.waitForTimeout(1500);
-
-        if (new RegExp(cfg.loggedOutPattern, "i").test(receipt.url())) {
-          throw new Error(`영수증 페이지가 로그인을 요구합니다: ${receipt.url()}`);
+      // 실측: 한 주문에 상품이 여러 개면 전표도 상품별로 나뉜다(처리일련번호가 순번마다 다르다).
+      // 순번을 1부터 올리다가 본문에 주문번호가 없는 빈 양식이 나오면 그 주문은 끝난 것으로 본다.
+      for (let seq = 1; seq <= MAX_PRD_SEQ; seq++) {
+        if (limit && stats.saved >= limit) {
+          console.log(`${tag} 상한(${limit}건) 도달 — 중단`);
+          return;
+        }
+        if (page.isClosed()) {
+          console.log(`${tag} 브라우저가 닫혔습니다 — 중단`);
+          return;
         }
 
-        const month = (orderDate || "unknown").slice(0, 7);
-        const outDir = ensureSiteDir(site, path.join("receipts", month));
-        const outBase = path.join(outDir, safeName(`${orderDate || "nodate"}_${ordNo}_${label}`));
-
-        const result: SaveResult = await savePageAsPdf(receipt, outBase);
-
-        if (opts.withText) {
-          const textPath = `${outBase}.txt`;
-          fs.writeFileSync(textPath, await receipt.innerText("body").catch(() => ""), "utf-8");
-          result.files.push(textPath);
+        // seq=1 은 키·파일명을 그대로 둬 이전 수집분과 이어지게 한다.
+        const key = seq === 1 ? `${ordNo}::${label}` : `${ordNo}#${seq}::${label}`;
+        if (collected.has(key)) {
+          stats.skipped++;
+          continue;
         }
 
-        appendLedger(site, {
-          site,
-          orderNo: ordNo,
-          orderDate,
-          // 품목·금액은 영수증 PDF 안에 있다. 목록에서 추정해 잘못된 값을 넣느니 비워 둔다(실측 후 추가).
-          title: "",
-          amount: "",
-          receiptType: label,
-          method: result.method,
-          files: result.files.map((f) => path.relative(siteDir(site), f)).join(" | "),
-          collectedAt: new Date().toISOString(),
-        });
-        collected.add(key);
-        stats.saved++;
+        const receipt = await page.context().newPage();
+        let isEmptyForm = false;
 
-        console.log(`${tag} ✅ ${orderDate || "?"} ${ordNo} → ${result.method}`);
-        for (const a of result.attempts) console.log(`${tag}    ↳ ${a.method} 실패: ${a.error}`);
-      } catch (e) {
-        stats.failed++;
-        console.log(`${tag} ❌ ${ordNo} 실패: ${String(e).slice(0, 200)}`);
-        await dumpFailure(site, receipt, key, String(e));
-      } finally {
-        await receipt.close().catch(() => {});
+        try {
+          await openReceiptDocument(receipt, cfg, ordNo, { ordPrdSeq: String(seq) });
+          await sleep(1500);
+
+          if (new RegExp(cfg.loggedOutPattern, "i").test(receipt.url())) {
+            throw new Error(`영수증 페이지가 로그인을 요구합니다: ${receipt.url()}`);
+          }
+
+          const text = await receipt.innerText("body").catch(() => "");
+          if (!text.includes(ordNo)) {
+            // 값이 채워지지 않은 빈 양식 — 이 순번에는 상품이 없다.
+            isEmptyForm = true;
+          } else {
+            const month = (orderDate || "unknown").slice(0, 7);
+            const outDir = ensureSiteDir(site, path.join("receipts", month));
+            const stem = seq === 1 ? `${orderDate || "nodate"}_${ordNo}` : `${orderDate || "nodate"}_${ordNo}-${seq}`;
+            const outBase = path.join(outDir, safeName(`${stem}_${label}`));
+
+            const result: SaveResult = await savePageAsPdf(receipt, outBase);
+
+            if (opts.withText) {
+              const textPath = `${outBase}.txt`;
+              fs.writeFileSync(textPath, text, "utf-8");
+              result.files.push(textPath);
+            }
+
+            appendLedger(site, {
+              site,
+              orderNo: seq === 1 ? ordNo : `${ordNo}#${seq}`,
+              orderDate,
+              // 품목·금액은 전표 PDF 안에 있다. 목록에서 추정해 잘못된 값을 넣느니 비워 둔다.
+              title: "",
+              amount: "",
+              receiptType: label,
+              method: result.method,
+              files: result.files.map((f) => path.relative(siteDir(site), f)).join(" | "),
+              collectedAt: new Date().toISOString(),
+            });
+            collected.add(key);
+            stats.saved++;
+
+            console.log(`${tag} ✅ ${orderDate || "?"} ${ordNo}${seq > 1 ? `#${seq}` : ""} → ${result.method}`);
+            for (const a of result.attempts) console.log(`${tag}    ↳ ${a.method} 실패: ${a.error}`);
+          }
+        } catch (e) {
+          stats.failed++;
+          console.log(`${tag} ❌ ${ordNo}#${seq} 실패: ${String(e).slice(0, 200)}`);
+          await dumpFailure(site, receipt, key, String(e));
+        } finally {
+          await receipt.close().catch(() => {});
+        }
+
+        if (isEmptyForm) break;
+        await sleep(delay);
       }
-
-      await page.waitForTimeout(delay);
     }
 
     if (pageNo < pages) {

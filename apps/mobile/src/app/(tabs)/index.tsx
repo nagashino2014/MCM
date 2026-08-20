@@ -242,7 +242,14 @@ export default function HomeScreen() {
               onPress={() => router.push('/sales')}
             />
             {inboxCount == null ? null : (
-              <StatTile key="invoice" label="발행 요청" value={inboxCount} delta="확인 필요" tone={c.secondary} />
+              <StatTile
+                key="invoice"
+                label="발행 요청"
+                value={inboxCount}
+                delta="확인 필요"
+                tone={c.secondary}
+                onPress={() => router.push('/invoice-requests')}
+              />
             )}
             {workTodo == null ? null : (
               <StatTile

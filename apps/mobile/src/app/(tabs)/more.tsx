@@ -80,6 +80,18 @@ export default function MoreScreen() {
       ],
     },
     {
+      label: '업무',
+      items: [
+        {
+          icon: 'paper-plane-outline',
+          tone: c.accent,
+          title: '발행 요청',
+          subtitle: '세금계산서 발행 요청·수신함',
+          onPress: () => router.push('/invoice-requests'),
+        },
+      ],
+    },
+    {
       label: '근무',
       items: [
         { icon: 'calendar-outline', tone: c.success, title: '근태·휴가', subtitle: '연차·초과근무·신청', onPress: () => router.push('/leave') },

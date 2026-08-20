@@ -36,6 +36,7 @@ interface Args {
   headed: boolean;
   dryRun: boolean;
   watch: boolean;
+  save: boolean;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -58,6 +59,7 @@ function parseArgs(argv: string[]): Args {
     headed: "headed" in opt,
     dryRun: "dry-run" in opt,
     watch: "watch" in opt,
+    save: "save" in opt,
   };
 }
 
@@ -67,9 +69,10 @@ function usage(): void {
 
   npm run receipts -- login   [--site 11st]        세션 저장(브라우저에서 직접 로그인 후 주문목록까지 이동)
   npm run receipts -- check   [--site 11st]        세션 유효성 확인
-  npm run receipts -- probe   [--url <주문목록>] [--watch]
+  npm run receipts -- probe   [--url <주문목록>] [--watch] [--save]
                                                    주문목록 실측 — 셀렉터·영수증 팝업 주소 확보
                                                    --watch: headed 로 띄워 직접 클릭하며 팝업/XHR 기록
+                                                   --save:  --url 로 본 주소를 수집 시작점으로 저장
   npm run receipts -- collect [--from 2026-07-01] [--to 2026-07-31]
                               [--pages 3] [--limit 2] [--delay 2000] [--headed] [--dry-run]
                                                    주문목록 순회 → 영수증 PDF 저장 → 대장 기록
@@ -112,7 +115,7 @@ async function main(): Promise<void> {
   }
 
   if (command === "probe") {
-    await probeOrderList(site, { url: args.url, watch: args.watch });
+    await probeOrderList(site, { url: args.url, watch: args.watch, save: args.save });
     return;
   }
 

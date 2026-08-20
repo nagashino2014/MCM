@@ -125,7 +125,7 @@ export async function interactiveLogin(
 
     console.log(`[${site}] 브라우저가 열렸습니다.`);
     console.log(`[${site}] 창에서 직접 로그인하세요(캡차·2차인증 포함). 스크립트는 계정 정보를 저장하지 않습니다.`);
-    console.log(`[${site}] 로그인 후 **주문목록(주문/배송조회) 화면까지 이동**한 뒤 창을 닫으세요.`);
+    console.log(`[${site}] 로그인 후 주문목록(주문/배송조회) 화면까지 이동한 뒤 창을 닫으세요.`);
     console.log(`[${site}] 창을 닫는 순간의 주소를 주문목록 URL 로 기록합니다.`);
 
     // 3초마다 현재 세션·URL 을 갱신 — 창을 닫는 순간의 상태가 남는다.

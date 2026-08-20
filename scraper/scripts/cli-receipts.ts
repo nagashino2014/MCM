@@ -33,6 +33,7 @@ interface Args {
   pages?: number;
   limit?: number;
   delay?: number;
+  wait?: number;
   headed: boolean;
   dryRun: boolean;
   watch: boolean;
@@ -56,6 +57,7 @@ function parseArgs(argv: string[]): Args {
     pages: opt.pages ? Number(opt.pages) : undefined,
     limit: opt.limit ? Number(opt.limit) : undefined,
     delay: opt.delay ? Number(opt.delay) : undefined,
+    wait: opt.wait ? Number(opt.wait) : undefined,
     headed: "headed" in opt,
     dryRun: "dry-run" in opt,
     watch: "watch" in opt,
@@ -75,6 +77,7 @@ function usage(): void {
                                                    --save:  --url 로 본 주소를 수집 시작점으로 저장
   npm run receipts -- collect [--from 2026-07-01] [--to 2026-07-31]
                               [--pages 3] [--limit 2] [--delay 2000] [--headed] [--dry-run]
+                              [--wait 180]  화면을 띄우고 직접 기간 조회할 시간을 준 뒤 수집
                                                    주문목록 순회 → 영수증 PDF 저장 → 대장 기록
   npm run receipts -- summary [--site 11st]        수집 대장 요약
 
@@ -126,7 +129,9 @@ async function main(): Promise<void> {
       pages: args.pages ?? 1,
       limit: args.limit,
       delay: args.delay,
-      headless: !args.headed,
+      waitSeconds: args.wait,
+      // 사용자가 직접 기간을 조회하려면 화면이 보여야 한다.
+      headless: args.wait ? false : !args.headed,
       dryRun: args.dryRun,
     });
     return;

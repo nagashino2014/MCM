@@ -37,6 +37,13 @@ export interface CollectOptions {
   dryRun?: boolean;
   /** 건당 대기(ms) — 너무 빠르면 봇으로 잡힌다 */
   delay?: number;
+  /**
+   * 목록 화면에서 사용자가 **직접 조회 기간을 바꿀** 시간을 준다(초).
+   * 기본 조회 기간 밖의 주문은 화면에 없어 주문번호도 안 잡히는데, 기간 조회 URL 파라미터가
+   * 아직 실측되지 않아 코드가 기간을 지정하지 못한다. 그동안의 우회로.
+   * 주문번호가 잡히고 개수가 안정되면 기다림을 멈추고 바로 수집을 시작한다.
+   */
+  waitSeconds?: number;
 }
 
 interface CollectStats {
@@ -351,6 +358,36 @@ export async function collectReceipts(site: string, opts: CollectOptions = {}): 
 }
 
 /**
+ * 사용자가 브라우저에서 조회 기간을 바꾸는 동안 기다린다.
+ * - 3초마다 주문번호를 세어, 1건 이상 잡히고 직전 관측과 개수가 같으면(=조회가 끝났다고 보고) 진행한다.
+ * - 제한 시간까지 아무것도 안 잡히면 그대로 진행한다(빈 목록으로 처리).
+ */
+async function waitForUserQuery(site: string, page: Page, seconds: number): Promise<void> {
+  const tag = `[${site}]`;
+  console.log(`${tag} ─────────────────────────────────────────────`);
+  console.log(`${tag} 브라우저에서 조회 기간을 원하는 기간으로 바꿔 조회하세요.`);
+  console.log(`${tag} 주문 목록이 뜨면 자동으로 수집을 시작합니다(최대 ${seconds}초 대기).`);
+
+  const deadline = Date.now() + seconds * 1000;
+  let previous = -1;
+
+  while (Date.now() < deadline) {
+    await page.waitForTimeout(3000);
+
+    const count = (await collectOrderNos(page).catch(() => [])).length;
+    if (count > 0 && count === previous) {
+      console.log(`${tag} 주문번호 ${count}건 확인 — 수집을 시작합니다.`);
+      return;
+    }
+
+    if (count !== previous) console.log(`${tag} 대기 중... 주문번호 ${count}건`);
+    previous = count;
+  }
+
+  console.log(`${tag} 대기 시간 종료 — 현재 화면 기준으로 진행합니다.`);
+}
+
+/**
  * 주문번호 기반 수집 — 목록에서 주문번호만 모아 영수증 주소로 직접 이동한다.
  * 버튼 클릭·팝업 대기가 없어 훨씬 빠르고, 마크업이 바뀌어도 잘 버틴다.
  */
@@ -364,6 +401,10 @@ async function runByOrderNo(
 ): Promise<void> {
   const tag = `[${site}]`;
   const { from, to, limit, dryRun = false, delay = 2000, pages = 1 } = opts;
+
+  if (opts.waitSeconds) {
+    await waitForUserQuery(site, page, opts.waitSeconds);
+  }
 
   for (let pageNo = 1; pageNo <= pages; pageNo++) {
     // 목록은 iframe 안에서 XHR 로 채워지므로 네트워크가 잦아들 때까지 기다린다.

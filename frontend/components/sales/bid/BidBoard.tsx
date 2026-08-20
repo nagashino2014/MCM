@@ -1632,7 +1632,9 @@ export function BidBoard() {
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="text-[13px] cd-text whitespace-nowrap">발송 시각</span>
                   {sendTimesDraft.map((draft, ti) => (
-                    <span key={ti} className="flex items-center gap-0.5">
+                    // 제거 버튼은 입력 박스 위에 겹쳐 두고 마우스를 올렸을 때만 보인다
+                    // (상시 노출하면 칩 폭이 늘어 4개가 다음 줄로 넘어간다).
+                    <span key={ti} className="relative group">
                       <input
                         className="cd-input text-[13px] text-center"
                         style={{ width: 64, height: 34 }}
@@ -1649,11 +1651,12 @@ export function BidBoard() {
                       {sendTimesDraft.length > 1 && (
                         <button
                           type="button"
-                          className="cd-text-faint hover:opacity-70"
+                          className="cd-solid-bg cd-border-c cd-text-faint hover:cd-error-text absolute -top-1.5 -right-1.5 hidden group-hover:flex items-center justify-center rounded-full border"
+                          style={{ width: 17, height: 17 }}
                           title="이 시각 제거"
                           onClick={() => setSendTimesDraft((prev) => prev.filter((_, i) => i !== ti))}
                         >
-                          <X className="w-3.5 h-3.5" />
+                          <X className="w-3 h-3" />
                         </button>
                       )}
                     </span>

@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
-import { parseFields, type ApprovalFieldDef } from "@/lib/approval/fields";
+import { missingTableRequirements, parseFields, type ApprovalFieldDef } from "@/lib/approval/fields";
 import { getForm } from "@/lib/approval/forms";
 import { recordLeaveUsageOnApproval } from "@/lib/approval/leave";
 import { assessOverLimitOnSubmit } from "@/lib/approval/overtime";
@@ -514,8 +514,8 @@ export async function submitDoc(docId: string, actorUserId: string): Promise<{ d
   await withDbWrite(async (txn) => {
     const rows = rowsToObjects(
       await txn.exec(
-        `SELECT d.status, d.drafter_user_id, d.doc_no, f.doc_no_rule, f.name AS form_name,
-                d.field_values->>'service_type' AS quote_service_type
+        `SELECT d.status, d.drafter_user_id, d.doc_no, f.doc_no_rule, f.name AS form_name, f.fields,
+                d.field_values, d.field_values->>'service_type' AS quote_service_type
            FROM approval_docs d JOIN approval_forms f ON f.form_id = d.form_id
           WHERE d.doc_id = $1`,
         [docId]
@@ -527,6 +527,12 @@ export async function submitDoc(docId: string, actorUserId: string): Promise<{ d
     if (!["draft", "rejected"].includes(String(doc.status))) throw new Error("작성중/반려 문서만 상신할 수 있습니다.");
     const stepCount = rowsToObjects(await txn.exec(`SELECT count(*) AS c FROM approval_steps WHERE doc_id = $1`, [docId]));
     if (Number(stepCount[0]?.c ?? 0) === 0) throw new Error("결재선에 결재자를 1명 이상 지정하세요.");
+    // 표 필수 열(지출 내역의 지출 목적 등) — 기안 화면과 같은 규칙으로 서버에서도 막는다.
+    const rowMissing = missingTableRequirements(
+      parseFields(doc.fields),
+      (doc.field_values as Record<string, unknown> | null) ?? {},
+    );
+    if (rowMissing.length) throw new Error(`다음 항목을 입력하세요 — ${rowMissing.join(" / ")}`);
 
     const now = new Date().toISOString();
     const year = now.slice(0, 4);

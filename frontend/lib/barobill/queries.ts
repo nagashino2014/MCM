@@ -278,6 +278,8 @@ export interface CardTxnRow {
   vatDeductible: number | null;
   excluded: boolean;
   docId: string | null;
+  /** 사전 생성된 전자 전표 PDF 의 스토리지 key(null = 미생성 — 선택 시 온디맨드 생성) */
+  slipKey: string | null;
 }
 
 export async function listCardTransactions(params: {
@@ -346,7 +348,8 @@ export async function listCardTransactions(params: {
     await db.exec(
       `SELECT t.card_txn_id, c.card_alias, c.card_company_name, t.approved_at, t.approval_type,
               t.amount_total, t.supply_amount, t.tax_amount, t.store_name, t.store_biz_type, t.store_corp_num,
-              t.is_purchased, t.category_key, t.category_source, t.vat_deductible, t.excluded, t.doc_id
+              t.is_purchased, t.category_key, t.category_source, t.vat_deductible, t.excluded, t.doc_id,
+              t.slip_key
          FROM card_transactions t JOIN card_registry c ON c.card_id = t.card_id
         ${whereSql}
         ORDER BY t.approved_at DESC
@@ -379,6 +382,7 @@ export async function listCardTransactions(params: {
       vatDeductible: r.vat_deductible == null ? null : Number(r.vat_deductible),
       excluded: Boolean(r.excluded),
       docId: (r.doc_id as string | null) ?? null,
+      slipKey: (r.slip_key as string | null) ?? null,
     })),
   };
 }

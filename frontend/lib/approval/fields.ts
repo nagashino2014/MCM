@@ -138,6 +138,8 @@ export interface ApprovalTableColumn {
   label: string;
   type: string; // text|date|time(HHMM 자동완성)|select|currency|number|rowno(자동 연번)|people(조직도 복수 선택 — 값은 {employeeId,name,position}[])
   options?: string[];
+  /** 필수 입력 열 — 값이 있는 행에서 이 열이 비면 상신을 막는다(지출 목적 등). */
+  required?: boolean;
   /** 열 단위 데이터 의미 태그(지출 내역 표의 금액 열 = cost.travel 등) */
   semantic?: ApprovalFieldSemantic;
 }
@@ -205,6 +207,7 @@ export function parseFields(value: unknown): ApprovalFieldDef[] {
               label: String(c.label ?? ""),
               type: String(c.type ?? "text"),
               options: Array.isArray(c.options) ? c.options.map(String) : undefined,
+              required: c.required === true,
               semantic: parseSemantic(c.semantic),
             }))
           : undefined,
@@ -224,6 +227,41 @@ export function parseFields(value: unknown): ApprovalFieldDef[] {
   } catch {
     return [];
   }
+}
+
+/** 표 행에 붙는 내부 메타 키(귀속 참조) — 행이 비었는지 판정할 때는 값으로 세지 않는다. */
+const TABLE_META_KEYS = new Set(["_cardTxnId", "_receiptId"]);
+
+function cellFilled(v: unknown): boolean {
+  if (Array.isArray(v)) return v.length > 0;
+  return String(v ?? "").trim() !== "";
+}
+
+/**
+ * 표 필수 열(required) 미입력 목록 — "표 이름 3행: 지출 목적" 형태의 안내 문자열.
+ * 값이 하나도 없는 행은 아직 안 쓴 행이므로 건너뛴다(최소 행 수만큼 빈 행이 늘 존재한다).
+ * 법인카드·영수증에서 불러온 행도 예외가 아니다 — 지출 목적은 사용자가 직접 적어야 한다.
+ */
+export function missingTableRequirements(
+  fields: ApprovalFieldDef[],
+  values: Record<string, unknown>,
+): string[] {
+  const out: string[] = [];
+  for (const f of fields) {
+    if (f.type !== "table") continue;
+    const cols = (f.tableColumns ?? []).filter((c) => c.required && c.type !== "rowno");
+    if (!cols.length) continue;
+    const rows = Array.isArray(values[f.key]) ? (values[f.key] as unknown[]) : [];
+    rows.forEach((row, i) => {
+      if (!row || typeof row !== "object") return;
+      const entries = Object.entries(row as Record<string, unknown>);
+      if (!entries.some(([k, v]) => !TABLE_META_KEYS.has(k) && cellFilled(v))) return;
+      for (const c of cols) {
+        if (!cellFilled((row as Record<string, unknown>)[c.key])) out.push(`${f.label} ${i + 1}행: ${c.label}`);
+      }
+    });
+  }
+  return out;
 }
 
 /** 필드 key 중복·누락 검사 — 저장 전 검증(구조화 저장의 무결성 핵심). */

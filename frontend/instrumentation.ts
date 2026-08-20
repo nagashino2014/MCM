@@ -13,6 +13,7 @@ export async function register() {
     __approvalRemindTimer?: ReturnType<typeof setInterval>;
     __mailInboundTimer?: ReturnType<typeof setInterval>;
     __fileRetentionTimer?: ReturnType<typeof setInterval>;
+    __cardSlipTimer?: ReturnType<typeof setInterval>;
   };
   const port = process.env.PORT ?? "3000";
   const callTick = async (path: string, tag: string) => {
@@ -53,6 +54,14 @@ export async function register() {
     const retentionTick = () => callTick("/api/internal/file-retention-tick", "file-retention");
     g.__fileRetentionTimer = setInterval(retentionTick, 6 * 60 * 60 * 1000);
     setTimeout(retentionTick, 90 * 1000); // 기동 직후 1회
+  }
+
+  // 법인카드 전자 전표 사전 생성 — 1시간마다 체크, 실제 생성은 KST 02~04시 일 1회(라우트가 판정).
+  // 지출결의서·출장보고서 작성 때 전표를 만들지 않기 위한 사전 작업이다.
+  if (!g.__cardSlipTimer) {
+    const slipTick = () => callTick("/api/internal/card-slip-tick", "card-slip");
+    g.__cardSlipTimer = setInterval(slipTick, 60 * 60 * 1000);
+    setTimeout(slipTick, 120 * 1000); // 기동 직후 1회
   }
 
   // 코넨사인 메일 수신(P2) — 1분마다 SQS 폴링(큐 미생성 시 no-op). 처리 멱등.

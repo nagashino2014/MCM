@@ -13,7 +13,7 @@ import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdModal } from "@/components/cdash/CdModal";
 import { ApprovalFormRenderer } from "@/components/approval/ApprovalFormRenderer";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
-import { parseTimeRange, timeRangeMinutes, type ApprovalFieldDef } from "@/lib/approval/fields";
+import { missingTableRequirements, parseTimeRange, timeRangeMinutes, type ApprovalFieldDef } from "@/lib/approval/fields";
 import { autofillFromRefDoc, compareWithRefDoc } from "@/lib/approval/ref-link";
 import { findInCatalog, type LeaveTypeItem } from "@/lib/approval/leave-types";
 import { OvertimeConsentModal } from "@/components/approval/OvertimeConsentModal";
@@ -184,6 +184,33 @@ export function ApprovalDraftBoard() {
         }));
         return { ...prev, [tableKey]: [...nonEmpty, ...added] };
       });
+      // 전자 전표(매출전표 PDF)를 증빙 첨부로 자동 추가 — 영수증과 같은 규약(재업로드 없이 key 참조).
+      // 대부분 야간 배치가 미리 만들어 둔 것이고, 아직 없는 최신 건만 서버가 그 자리에서 만든다.
+      void (async () => {
+        const preset = items.filter((i) => i.slipKey);
+        const pending = items.filter((i) => !i.slipKey).map((i) => i.cardTxnId);
+        const adds = preset.map((i) => ({ name: i.slipName, key: i.slipKey as string, size: 0 }));
+        if (pending.length) {
+          try {
+            const res = await fetch("/api/finance/card-slips", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ cardTxnIds: pending }),
+            });
+            const d = (await res.json().catch(() => ({}))) as { slips?: Array<{ key: string; name: string }> };
+            for (const s of d.slips ?? []) adds.push({ name: s.name, key: s.key, size: 0 });
+          } catch {
+            // 전표 생성 실패는 기안을 막지 않는다 — 증빙은 결재 전에 수동 첨부할 수 있다.
+          }
+        }
+        if (adds.length) {
+          setFileAttachments((prev) => {
+            const known = new Set(prev.map((a) => a.key));
+            const fresh = adds.filter((a) => !known.has(a.key));
+            return fresh.length ? [...prev, ...fresh] : prev;
+          });
+        }
+      })();
     },
     [cardExpenseTarget],
   );
@@ -214,7 +241,7 @@ export function ApprovalDraftBoard() {
           category: item.formOption ?? "",
           vendor: item.storeName ?? "",
           amount: String(item.totalAmount),
-          detail: "", // 지출 목적 — 사용자 입력 몫
+          detail: item.memo ?? "", // 지출 목적 — 촬영 때 적어 둔 값이 있으면 그대로 승계
           _receiptId: item.receiptId, // 상신 시 서버가 doc_id 귀속·분류 학습에 사용
         }));
         return { ...prev, [tableKey]: [...nonEmpty, ...added] };
@@ -635,6 +662,12 @@ export function ApprovalDraftBoard() {
       });
     if (missing.length) {
       alert(`필수 항목을 입력하세요: ${missing.map((f) => f.label).join(", ")}`);
+      return false;
+    }
+    // 표 필수 열(지출 내역의 지출 목적 등) — 카드·영수증에서 불러온 행도 목적은 직접 적어야 한다.
+    const rowMissing = missingTableRequirements(form.fields, values);
+    if (rowMissing.length) {
+      alert(["다음 항목을 입력하세요.", "", ...rowMissing].join("\n"));
       return false;
     }
     if (line.length === 0) {

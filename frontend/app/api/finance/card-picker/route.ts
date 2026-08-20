@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { listCardTransactions } from "@/lib/barobill/queries";
 import { classifyMany, loadCategories } from "@/lib/barobill/classify";
+import { cardSlipName } from "@/lib/finance/card-slip";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,6 +44,9 @@ export async function GET(req: NextRequest) {
         categoryKey: cls?.categoryKey ?? null,
         categoryLabel: cat?.label ?? null,
         categorySource: cls?.source ?? null,
+        // 전자 전표(증빙) — 야간 배치가 미리 만들어 둔 PDF. 없는 건은 선택 시 서버가 그 자리에서 만든다.
+        slipKey: r.slipKey,
+        slipName: cardSlipName(r.storeName, r.approvedAt),
         // 대상 양식의 분류 select 옵션 문자열(없으면 null → 사용자가 직접 선택)
         formOption: cat ? cat.formOptionMap[formId] ?? null : null,
       };

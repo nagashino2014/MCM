@@ -14,12 +14,21 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ re
     const body = (await req.json().catch(() => ({}))) as {
       paidAt?: string | null;
       storeName?: string | null;
+      storeCorpNum?: string | null;
       totalAmount?: number;
       excluded?: boolean;
       memo?: string | null;
     };
     // 저장 계약은 POST 와 동일 — 수정 입력도 정규화해서 넣는다(미해석 시 날짜 미상으로).
     if (body.paidAt !== undefined) body.paidAt = normalizePaidAt(body.paidAt ?? null);
+    // 사업자번호는 숫자만 남겨 저장한다(표시 하이픈은 화면 몫) — 분류 학습 키와 형식을 맞춘다.
+    if (body.storeCorpNum !== undefined) {
+      const digits = (body.storeCorpNum ?? "").replace(/[^0-9]/g, "");
+      if (digits && digits.length !== 10) {
+        return NextResponse.json({ error: "사업자번호는 10자리입니다." }, { status: 400 });
+      }
+      body.storeCorpNum = digits || null;
+    }
     await updateReceipt(receiptId, ctx.userId, body);
     return NextResponse.json({ ok: true });
   } catch (err) {

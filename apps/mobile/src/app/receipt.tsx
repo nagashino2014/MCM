@@ -452,6 +452,9 @@ export default function ReceiptScreen() {
                   </Pressable>
                 </View>
               )}
+              <Text className="text-[11px] leading-4 text-cd-faint">
+                한글 상호명은 오인식 가능성이 높으니 실제 상호명과 다른 경우 꼭 정확한 상호명을 기입해 주세요.
+              </Text>
               <View className="flex-row items-center gap-2">
                 <Text className="w-16 text-xs text-cd-faint">사용일</Text>
                 <Pressable
@@ -475,7 +478,12 @@ export default function ReceiptScreen() {
                 onChange={(v) => setForm((s) => ({ ...s, totalAmount: v.replace(/[^0-9]/g, '') }))}
                 keyboardType="number-pad"
               />
-              <Field label="메모" value={form.memo} onChange={(v) => setForm((s) => ({ ...s, memo: v }))} placeholder="(선택)" />
+              <Field
+                label="지출목적"
+                value={form.memo}
+                onChange={(v) => setForm((s) => ({ ...s, memo: v }))}
+                placeholder="지금 적어 두면 지출결의서에 그대로 실립니다"
+              />
             </View>
 
             <View className="flex-row gap-2">

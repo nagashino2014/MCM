@@ -1002,6 +1002,12 @@ function TableColumnsEditor({
               </option>
             ))}
           </select>
+          {c.type !== "rowno" && (
+            <label className="text-[11px] cd-text-faint flex items-center gap-1 whitespace-nowrap" title="값이 있는 행에서 이 열이 비면 상신을 막는다">
+              <input type="checkbox" checked={c.required === true} onChange={(e) => setCol(i, { required: e.target.checked })} />
+              필수
+            </label>
+          )}
           <button
             type="button"
             className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]"

@@ -248,6 +248,7 @@ export async function updateReceipt(
   patch: {
     paidAt?: string | null;
     storeName?: string | null;
+    storeCorpNum?: string | null;
     totalAmount?: number;
     excluded?: boolean;
     memo?: string | null;
@@ -257,7 +258,11 @@ export async function updateReceipt(
   if (!existing || existing.ownerUserId !== ownerUserId) {
     throw Object.assign(new Error("영수증을 찾을 수 없습니다."), { status: 404 });
   }
-  const fieldPatch = patch.paidAt !== undefined || patch.storeName !== undefined || patch.totalAmount !== undefined;
+  const fieldPatch =
+    patch.paidAt !== undefined ||
+    patch.storeName !== undefined ||
+    patch.storeCorpNum !== undefined ||
+    patch.totalAmount !== undefined;
   if (fieldPatch && existing.docId) {
     throw Object.assign(new Error("결의서에 사용된 영수증은 내용을 수정할 수 없습니다."), { status: 400 });
   }
@@ -267,6 +272,7 @@ export async function updateReceipt(
       `UPDATE personal_receipts SET
          paid_at = CASE WHEN $3 THEN NULLIF($4,'') ELSE paid_at END,
          store_name = CASE WHEN $5 THEN NULLIF($6,'') ELSE store_name END,
+         store_corp_num = CASE WHEN $11 THEN NULLIF($12,'') ELSE store_corp_num END,
          total_amount = COALESCE($7, total_amount),
          excluded = COALESCE($8, excluded),
          memo = CASE WHEN $9 THEN NULLIF($10,'') ELSE memo END,
@@ -283,6 +289,8 @@ export async function updateReceipt(
         patch.excluded === undefined ? null : patch.excluded ? 1 : 0,
         patch.memo !== undefined,
         patch.memo ?? "",
+        patch.storeCorpNum !== undefined,
+        patch.storeCorpNum ?? "",
       ],
     );
   });

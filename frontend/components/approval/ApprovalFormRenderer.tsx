@@ -1150,6 +1150,7 @@ function TableInput({
           <tr>
             {cols.map((c) => (
               <th key={c.key} className="border cd-border-c px-2 py-1.5 cd-surface-bg cd-text font-bold whitespace-nowrap">
+                {c.required && <span className="text-[color:var(--cd-danger,#FA896B)] mr-0.5">*</span>}
                 {c.label}
               </th>
             ))}

@@ -22,6 +22,9 @@ export interface CardPickerItem {
   categoryKey: string | null;
   categoryLabel: string | null;
   categorySource: string | null;
+  /** 사전 생성된 전자 전표 PDF key(null = 아직 미생성 — 담을 때 서버가 만든다) */
+  slipKey: string | null;
+  slipName: string;
   formOption: string | null;
 }
 

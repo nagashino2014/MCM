@@ -113,7 +113,7 @@ export default function ReceiptsScreen() {
   // 수정 시트 — 날짜 피커를 띄우는 동안에는 시트를 접는다(중첩 Modal 회피).
   const [editing, setEditing] = useState<ReceiptItem | null>(null);
   const [datePicker, setDatePicker] = useState(false);
-  const [form, setForm] = useState({ date: '', time: '', storeName: '', totalAmount: '', memo: '' });
+  const [form, setForm] = useState({ date: '', time: '', storeName: '', corpNum: '', totalAmount: '', memo: '' });
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -123,6 +123,7 @@ export default function ReceiptsScreen() {
       date: r.paidAt ? r.paidAt.slice(0, 10) : '',
       time: r.paidAt && r.paidAt.length > 10 ? r.paidAt.slice(11, 16) : '',
       storeName: r.storeName ?? '',
+      corpNum: r.storeCorpNum ? fmtCorpNum(r.storeCorpNum) : '',
       totalAmount: String(r.totalAmount ?? ''),
       memo: r.memo ?? '',
     });
@@ -164,8 +165,19 @@ export default function ReceiptsScreen() {
       return;
     }
     const paidAt = form.date ? (form.time.trim() ? `${form.date} ${form.time.trim()}` : form.date) : null;
+    const corpNum = form.corpNum.replace(/[^0-9]/g, '');
+    if (corpNum && corpNum.length !== 10) {
+      toast.show('사업자번호는 10자리입니다.', 'error');
+      return;
+    }
     void patch(
-      { paidAt, storeName: form.storeName.trim() || null, totalAmount: amount, memo: form.memo.trim() || null },
+      {
+        paidAt,
+        storeName: form.storeName.trim() || null,
+        storeCorpNum: corpNum || null,
+        totalAmount: amount,
+        memo: form.memo.trim() || null,
+      },
       '영수증을 수정했습니다.'
     );
   };
@@ -253,7 +265,7 @@ export default function ReceiptsScreen() {
                 </Text>
                 <Text numberOfLines={1} className="mt-[2px] text-[11.5px] text-cd-faint">
                   {dateLabel(r)}
-                  {r.cardLast4 ? ` · ****${r.cardLast4}` : ''}
+                  {r.storeCorpNum ? ` · ${fmtCorpNum(r.storeCorpNum)}` : ''}
                 </Text>
                 {r.docTitle ? (
                   <Text numberOfLines={1} className="mt-[3px] text-[11px] text-cd-primary">
@@ -277,7 +289,7 @@ export default function ReceiptsScreen() {
 
       {/* 수정 시트 — 날짜 피커를 여는 동안에는 접는다(iOS 중첩 Modal 회피) */}
       <Sheet
-        visible={!!editing && !datePicker}
+        visible={!!editing && !datePicker && !confirmDelete}
         onClose={close}
         title="영수증 상세"
         footer={
@@ -345,11 +357,14 @@ export default function ReceiptsScreen() {
               onChangeText={(v) => setForm((s) => ({ ...s, storeName: v }))}
               editable={!locked}
             />
-            {editing.storeCorpNum ? (
-              <Text className="-mt-1 text-[11.5px] text-cd-faint">
-                사업자번호 {fmtCorpNum(editing.storeCorpNum)}
-              </Text>
-            ) : null}
+            <Input
+              label="사업자번호"
+              value={form.corpNum}
+              onChangeText={(v) => setForm((s) => ({ ...s, corpNum: v }))}
+              placeholder="000-00-00000"
+              keyboardType="numbers-and-punctuation"
+              editable={!locked}
+            />
             <Input
               label="금액"
               value={fmtAmount(form.totalAmount)}
@@ -358,10 +373,10 @@ export default function ReceiptsScreen() {
               editable={!locked}
             />
             <Input
-              label="메모"
+              label="지출목적"
               value={form.memo}
               onChangeText={(v) => setForm((s) => ({ ...s, memo: v }))}
-              placeholder="(선택)"
+              placeholder="여기서 적어 두면 지출결의서에 그대로 실립니다"
             />
 
             {!locked ? (

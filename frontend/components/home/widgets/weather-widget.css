@@ -60,10 +60,11 @@
 @keyframes cdReed { 0%, 100% { transform: rotate(-7deg); } 50% { transform: rotate(8deg); } }
 @keyframes cdReedSoft { 0%, 100% { transform: rotate(-4deg); } 50% { transform: rotate(5deg); } }
 @keyframes cdPoundV {
-  0%, 14% { transform: translateY(0); }
-  44%, 54% { transform: translateY(9px); }
-  82% { transform: translateY(-1px); }
-  100% { transform: translateY(0); }
+  0%, 12% { transform: translate(0, 0) rotate(0deg); }
+  36% { transform: translate(-2px, -8px) rotate(-8deg); }
+  46%, 56% { transform: translate(0, 9px) rotate(3deg); }
+  80% { transform: translate(-1px, -2px) rotate(-3deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
 }
 @keyframes cdLean {
   0%, 14% { transform: rotate(0deg); }
@@ -88,3 +89,35 @@
   80% { transform: translate(7px, 168px); opacity: 1; }
   100% { transform: translate(-2px, 214px); opacity: 0; }
 }
+
+/* ── 야간 전용(핸드오프 야간 20 variant) ── */
+@keyframes cdShoot {
+  0%, 62% { transform: translate(0, 0); opacity: 0; }
+  66% { opacity: 1; }
+  78%, 100% { transform: translate(-130px, 66px); opacity: 0; }
+}
+@keyframes cdMoonHalo { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+@keyframes cdFirefly {
+  0%, 100% { transform: translate(0, 0); opacity: 0.1; }
+  22% { opacity: 1; }
+  50% { transform: translate(13px, -11px); opacity: 0.25; }
+  74% { opacity: 1; }
+}
+@keyframes cdFlame {
+  0%, 100% { transform: scale(1, 1); }
+  30% { transform: scale(1.1, 0.9) rotate(-2deg); }
+  60% { transform: scale(0.9, 1.08) rotate(2deg); }
+}
+@keyframes cdSpark {
+  0% { transform: translateY(0); opacity: 0; }
+  18% { opacity: 1; }
+  100% { transform: translateY(-32px); opacity: 0; }
+}
+@keyframes cdFlash {
+  0%, 86%, 94%, 100% { opacity: 0; }
+  88%, 91% { opacity: 1; }
+  89.5% { opacity: 0.25; }
+}
+@keyframes cdBoard { 0%, 50%, 100% { transform: rotate(0deg); } 25% { transform: rotate(6deg); } 75% { transform: rotate(-6deg); } }
+@keyframes cdJumpA { 0%, 50%, 100% { transform: translateY(0); } 25% { transform: translateY(-22px); } 75% { transform: translateY(3px); } }
+@keyframes cdJumpB { 0%, 50%, 100% { transform: translateY(0); } 25% { transform: translateY(3px); } 75% { transform: translateY(-22px); } }

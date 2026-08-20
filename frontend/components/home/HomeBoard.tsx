@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, Download, LayoutGrid, Monitor, RotateCcw, Save, Smartphone } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Check, CloudSun, Download, LayoutGrid, Monitor, RotateCcw, Save, Smartphone } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { HomeStats } from "./HomeStats";
@@ -13,7 +13,7 @@ import "@/components/cdash/cdash.css";
 import { ApprovalPendingCard } from "./widgets/ApprovalPendingCard";
 import { MailUnreadCard } from "./widgets/MailUnreadCard";
 import { ScheduleCalendarCard } from "./widgets/ScheduleCalendarCard";
-import { WeatherWidget } from "./widgets/WeatherWidget";
+import { WeatherWidget, SCENE_KINDS, type SceneKind } from "./widgets/WeatherWidget";
 import { LeaveGaugeCard } from "./widgets/LeaveGaugeCard";
 import { PendingProgressCard } from "./widgets/PendingProgressCard";
 import { UpcomingBidsCard } from "./widgets/UpcomingBidsCard";
@@ -53,6 +53,21 @@ export function HomeBoard({ role }: { role?: string }) {
   const [presets, setPresets] = useState<HomePresets>({});
   const [available, setAvailable] = useState<Array<{ key: string; label: string }>>([]);
   const [loaded, setLoaded] = useState(false);
+  // 날씨 씬 미리보기(관리자 전용) — 헤더 옵션 박스에서 씬·주야를 강제한다(null=자동).
+  const [wxOpen, setWxOpen] = useState(false);
+  const [wxScene, setWxScene] = useState<SceneKind | null>(null);
+  const [wxNight, setWxNight] = useState<boolean | null>(null);
+  const wxBoxRef = useRef<HTMLSpanElement>(null);
+
+  // 옵션 박스 바깥 클릭 시 닫기.
+  useEffect(() => {
+    if (!wxOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (wxBoxRef.current && !wxBoxRef.current.contains(e.target as Node)) setWxOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [wxOpen]);
 
   useEffect(() => {
     let alive = true;
@@ -179,6 +194,71 @@ export function HomeBoard({ role }: { role?: string }) {
               <Smartphone className="w-3.5 h-3.5" />
               모바일 앱 데모
             </a>
+            {/* 날씨 씬 미리보기(관리자 전용) — 시기·기상 조건과 무관하게 20 variant(주간/야간 × 10씬)를 확인 */}
+            {role === "admin" && (
+              <span ref={wxBoxRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setWxOpen((v) => !v)}
+                  data-active={(wxOpen || wxScene !== null || wxNight !== null) || undefined}
+                  className="cd-chip"
+                  title="날씨 위젯의 씬과 주간/야간을 강제로 바꿔 확인합니다 (이 화면에서만, 저장되지 않음)"
+                >
+                  <CloudSun className="w-3.5 h-3.5" />
+                  날씨 씬
+                </button>
+                {wxOpen && (
+                  <div
+                    className="absolute right-0 top-full mt-1.5 z-50 cd-card px-3.5 py-3 gap-2.5 w-[264px]"
+                    style={{ background: "var(--cd-card-solid)" }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-[12.5px] font-extrabold cd-text">날씨 씬 미리보기</h3>
+                      <span className="text-[10.5px] cd-text-faint">저장되지 않는 확인용</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => setWxScene(null)}
+                        data-active={wxScene === null || undefined}
+                        className="cd-chip cd-chip-sm"
+                      >
+                        자동
+                      </button>
+                      {SCENE_KINDS.map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => setWxScene(s)}
+                          data-active={wxScene === s || undefined}
+                          className="cd-chip cd-chip-sm"
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-1.5 pt-1.5 border-t cd-hairline-c">
+                      <span className="text-[11px] font-bold cd-text-muted mr-0.5">시간대</span>
+                      {([
+                        ["자동", null],
+                        ["주간", false],
+                        ["야간", true],
+                      ] as const).map(([label, v]) => (
+                        <button
+                          key={label}
+                          type="button"
+                          onClick={() => setWxNight(v)}
+                          data-active={wxNight === v || undefined}
+                          className="cd-chip cd-chip-sm"
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </span>
+            )}
             {/* 데스크탑 위젯(메신저 상주) 설치 파일 — Windows NSIS 인스톨러 */}
             <a
               href="/downloads/MCM-widget-setup.exe"
@@ -296,7 +376,7 @@ export function HomeBoard({ role }: { role?: string }) {
           (Tailwind 는 정적 클래스만 생성하므로 상수를 문자열에 끼워 넣을 수 없다). */}
       <div className="grid grid-cols-1 gap-4 items-start xl:grid-cols-[repeat(24,minmax(0,1fr))]">
         <div className="flex flex-col gap-4 min-w-0 xl:[grid-column:span_7]" style={{ height: HOME_CALENDAR_H }}>
-          <WeatherWidget />
+          <WeatherWidget forceScene={wxScene ?? undefined} forceNight={wxNight ?? undefined} />
           <LeaveGaugeCard />
         </div>
         <div className="flex flex-col gap-4 min-w-0 xl:[grid-column:span_7]">

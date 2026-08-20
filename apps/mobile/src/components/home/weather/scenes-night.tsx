@@ -36,7 +36,7 @@ import {
   type SceneProps,
 } from "./parts";
 import { SCENE_H, SCENE_W } from "./rules";
-import { SceneTree, TreeSprite, type Canopy, type TwinkleDot } from "./scenes-season";
+import { TreeSprite, type Canopy, type TwinkleDot } from "./scenes-season";
 
 /** 지면(bottom 앵커) 씬 하늘 오브젝트의 하향 보정 — 카드가 캔버스 위 29px 를 잘라내는 몫. */
 const SKY = 16;

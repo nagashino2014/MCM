@@ -8,6 +8,11 @@
 // 설·추석은 당일 20일 전~연휴 마지막 날(기상 무관, /api/home/holidays 의 seasons),
 // 크리스마스는 12월 내내(기상 무관).
 //
+// 야간 모드(핸드오프 야간 확정안) — 일몰~일출 사이에는 10씬 전부 야간 variant 로 전환한다:
+// 딥 네이비 캔버스 + 달·별·야간 광원(weather-night.tsx), 텍스트/스크림 야간 반전,
+// 배지는 기상특보성(호우·한파·열대야)만 유지하고 시즌 문구 배지는 제거.
+// 일몰·일출은 NOAA 근사식으로 현재 좌표에서 직접 계산한다(오차 ±수 분 — 씬 전환 용도로 충분).
+//
 // 렌더 구조 — 시안 씬은 400×286 고정 좌표계인데 실제 카드는 폭이 가변이라 3층으로 나눈다:
 //  ① 풍경 밴드(바다·모래·언덕·눈밭): preserveAspectRatio="none" 으로 카드 폭에 꽉 채움(가로 스트레치)
 //  ② 오브젝트 캔버스(400×286): 통째 scale — 인물·나무·건물이 왜곡되지 않는다
@@ -16,14 +21,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MapPin } from "lucide-react";
 import { HOME_HALF_H } from "@/lib/home/widgets";
+import {
+  SCENE_W, SCENE_H, type SceneProps,
+  SceneCanvas, SceneBand, SnowLayer, RainLayer, Sun, Cloud, SceneTree, SkyBirds,
+  PETALS, MAPLES, W_WHITE, W_WHITE2,
+} from "./weather-parts";
+import { NIGHT_SCENES } from "./weather-night";
 import "./weather-widget.css";
 
-/** 씬 캔버스 원본 크기 — 시안의 모든 씬 좌표(SVG·absolute 오브젝트)가 이 좌표계 기준이다. */
-const SCENE_W = 400;
-const SCENE_H = 286;
-
 type BaseKind = "맑음" | "흐림" | "비" | "눈";
-type SceneKind = BaseKind | "봄" | "여름휴가" | "가을" | "설날" | "추석" | "크리스마스";
+export type SceneKind = BaseKind | "봄" | "여름휴가" | "가을" | "설날" | "추석" | "크리스마스";
+
+/** 씬 10종 나열 순서 — 미리보기 옵션 박스(HomeBoard)가 그대로 쓴다. */
+export const SCENE_KINDS: SceneKind[] = ["맑음", "흐림", "비", "눈", "봄", "여름휴가", "가을", "설날", "추석", "크리스마스"];
 
 interface HolidaySeason {
   kind: "seol" | "chuseok";
@@ -39,140 +49,113 @@ interface WeatherData {
   base: BaseKind;
 }
 
-interface SceneProps {
-  scale: number;
-}
-
 // 위치 미허용/실패 시 기본 위치 — 본사(서울 금천구). 권한을 허용하면 실제 좌표로 대체된다.
 const DEFAULT_LOC = { lat: 37.4569, lon: 126.8956, label: "서울특별시 금천구" };
 
-/** 씬별 카드 배경/설명 서픽스/배지 톤(시안 WMAP 그대로). */
-const SCENE_META: Record<SceneKind, { bg: string; desc?: string; badgeBg: string; badgeFg: string }> = {
-  맑음: { bg: "linear-gradient(160deg,rgba(255,228,170,0.55),rgba(190,210,255,0.45) 58%,rgba(255,255,255,0.6))", badgeBg: "", badgeFg: "" },
-  흐림: { bg: "linear-gradient(160deg,rgba(206,214,230,0.7),rgba(226,231,242,0.55) 62%,rgba(255,255,255,0.6))", badgeBg: "", badgeFg: "" },
-  비: { bg: "linear-gradient(160deg,rgba(168,186,222,0.6),rgba(205,218,240,0.5) 60%,rgba(255,255,255,0.6))", badgeBg: "", badgeFg: "" },
-  눈: { bg: "linear-gradient(160deg,rgba(214,224,240,0.75),rgba(235,240,250,0.6) 60%,rgba(255,255,255,0.65))", badgeBg: "", badgeFg: "" },
-  설날: { bg: "linear-gradient(160deg,rgba(255,208,190,0.55),rgba(255,236,214,0.5) 56%,rgba(255,255,255,0.65))", desc: "설 연휴 시즌", badgeBg: "rgba(216,75,63,0.14)", badgeFg: "#C4483C" },
-  추석: { bg: "linear-gradient(160deg,rgba(198,188,240,0.5),rgba(255,224,196,0.45) 58%,rgba(255,255,255,0.62))", desc: "추석 연휴 시즌", badgeBg: "rgba(142,134,238,0.18)", badgeFg: "#7568D8" },
-  크리스마스: { bg: "linear-gradient(160deg,rgba(186,226,212,0.55),rgba(212,226,248,0.5) 58%,rgba(255,255,255,0.65))", desc: "크리스마스 시즌", badgeBg: "rgba(59,175,142,0.18)", badgeFg: "#2E8C71" },
-  여름휴가: { bg: "linear-gradient(160deg,rgba(255,236,170,0.5),rgba(150,214,240,0.48) 56%,rgba(188,234,222,0.5))", desc: "여름 휴가철", badgeBg: "rgba(95,182,232,0.22)", badgeFg: "#2E6FA0" },
-  봄: { bg: "linear-gradient(160deg,rgba(250,205,218,0.5),rgba(214,236,222,0.45) 58%,rgba(255,255,255,0.62))", desc: "벚꽃 개화", badgeBg: "rgba(240,150,175,0.2)", badgeFg: "#C2557E" },
-  가을: { bg: "linear-gradient(160deg,rgba(240,196,150,0.5),rgba(250,226,196,0.45) 58%,rgba(255,255,255,0.62))", desc: "단풍 절정", badgeBg: "rgba(219,123,60,0.18)", badgeFg: "#B05A28" },
+/** 씬별 카드 배경(주간 WMAP + 야간 165deg 3-stop)/설명 서픽스/배지 톤(시안 그대로). */
+const SCENE_META: Record<SceneKind, { bg: string; nightBg: string; desc?: string; badgeBg: string; badgeFg: string }> = {
+  맑음: {
+    bg: "linear-gradient(160deg,rgba(255,228,170,0.55),rgba(190,210,255,0.45) 58%,rgba(255,255,255,0.6))",
+    nightBg: "linear-gradient(165deg,#141B36 0%,#232E54 55%,#35406B 100%)",
+    badgeBg: "", badgeFg: "",
+  },
+  흐림: {
+    bg: "linear-gradient(160deg,rgba(206,214,230,0.7),rgba(226,231,242,0.55) 62%,rgba(255,255,255,0.6))",
+    nightBg: "linear-gradient(165deg,#1A2138 0%,#28304E 55%,#39415F 100%)",
+    badgeBg: "", badgeFg: "",
+  },
+  비: {
+    bg: "linear-gradient(160deg,rgba(168,186,222,0.6),rgba(205,218,240,0.5) 60%,rgba(255,255,255,0.6))",
+    nightBg: "linear-gradient(165deg,#141A30 0%,#222C4A 55%,#2E3A5C 100%)",
+    badgeBg: "", badgeFg: "",
+  },
+  눈: {
+    bg: "linear-gradient(160deg,rgba(214,224,240,0.75),rgba(235,240,250,0.6) 60%,rgba(255,255,255,0.65))",
+    nightBg: "linear-gradient(165deg,#181F3A 0%,#262F54 55%,#39456E 100%)",
+    badgeBg: "", badgeFg: "",
+  },
+  설날: {
+    bg: "linear-gradient(160deg,rgba(255,208,190,0.55),rgba(255,236,214,0.5) 56%,rgba(255,255,255,0.65))",
+    nightBg: "linear-gradient(165deg,#1A1E3E 0%,#2C2E56 55%,#403C6A 100%)",
+    desc: "설 연휴 시즌", badgeBg: "rgba(216,75,63,0.14)", badgeFg: "#C4483C",
+  },
+  추석: {
+    bg: "linear-gradient(160deg,rgba(198,188,240,0.5),rgba(255,224,196,0.45) 58%,rgba(255,255,255,0.62))",
+    nightBg: "linear-gradient(165deg,#161A38 0%,#2A2A52 55%,#3E3866 100%)",
+    desc: "추석 연휴 시즌", badgeBg: "rgba(142,134,238,0.18)", badgeFg: "#7568D8",
+  },
+  크리스마스: {
+    bg: "linear-gradient(160deg,rgba(186,226,212,0.55),rgba(212,226,248,0.5) 58%,rgba(255,255,255,0.65))",
+    nightBg: "linear-gradient(165deg,#12183A 0%,#1F2A52 55%,#2C3A66 100%)",
+    desc: "크리스마스 시즌", badgeBg: "rgba(59,175,142,0.18)", badgeFg: "#2E8C71",
+  },
+  여름휴가: {
+    bg: "linear-gradient(160deg,rgba(255,236,170,0.5),rgba(150,214,240,0.48) 56%,rgba(188,234,222,0.5))",
+    nightBg: "linear-gradient(165deg,#101830 0%,#1B2A4E 52%,#243554 100%)",
+    desc: "여름 휴가철", badgeBg: "rgba(95,182,232,0.22)", badgeFg: "#2E6FA0",
+  },
+  봄: {
+    bg: "linear-gradient(160deg,rgba(250,205,218,0.5),rgba(214,236,222,0.45) 58%,rgba(255,255,255,0.62))",
+    nightBg: "linear-gradient(165deg,#1D2142 0%,#33305A 58%,#453E6B 100%)",
+    desc: "벚꽃 개화", badgeBg: "rgba(240,150,175,0.2)", badgeFg: "#C2557E",
+  },
+  가을: {
+    bg: "linear-gradient(160deg,rgba(240,196,150,0.5),rgba(250,226,196,0.45) 58%,rgba(255,255,255,0.62))",
+    nightBg: "linear-gradient(165deg,#1C1E3C 0%,#322C52 55%,#463A62 100%)",
+    desc: "단풍 절정", badgeBg: "rgba(219,123,60,0.18)", badgeFg: "#B05A28",
+  },
 };
-
-// ── 낙하 파티클 — 음수 animation-delay 로 시작 즉시 무작위 분포(시안 생성 공식 그대로) ──
-const RAINS = Array.from({ length: 10 }, (_, i) => ({
-  l: 3 + i * 10, h: 9 + (i % 3) * 4, sp: (1.0 + (i % 4) * 0.14).toFixed(2), d: (i * 0.19 % 1.3).toFixed(2),
-}));
-const SNOWS = Array.from({ length: 12 }, (_, i) => ({
-  l: 2 + i * 8.5, s: 3 + (i % 4), o: (0.55 + (i % 3) * 0.2).toFixed(2), sp: (2.6 + (i % 4) * 0.5).toFixed(1), d: (i * 0.55 % 3.8).toFixed(2),
-}));
-const PETALS = Array.from({ length: 14 }, (_, i) => ({
-  l: 2 + i * 7, s: 6 + (i % 3), s2: 5 + (i % 2) * 2,
-  c: ["#F7C7D4", "#F4B7C8", "#F0A9BE"][i % 3],
-  sp: (4.4 + (i % 4) * 0.7).toFixed(1), d: (i * 0.62 % 4.9).toFixed(2),
-}));
-const MAPLES = Array.from({ length: 9 }, (_, i) => ({
-  l: 3 + i * 11, c: ["#D45C33", "#E7A14E", "#C94B2E", "#DB7B3C", "#B0432A"][i % 5],
-  sp: (4.6 + (i % 4) * 0.6).toFixed(1), d: (i * 0.7 % 4.8).toFixed(2),
-}));
 
 const kstToday = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
 
-/** ② 오브젝트 캔버스 — 400×286 좌표계를 통째로 스케일한다(비왜곡).
- *  bottom: 지면이 있는 풍경 씬(하단 중앙 고정) / topRight: 하늘 씬(구름·해가 우상단 코너 기준). */
-function SceneCanvas({ scale, anchor = "bottom", children }: { scale: number; anchor?: "bottom" | "topRight"; children: React.ReactNode }) {
-  const pos: React.CSSProperties =
-    anchor === "topRight"
-      ? { right: 0, top: 0, transform: `scale(${scale})`, transformOrigin: "100% 0%" }
-      : { left: "50%", bottom: 0, transform: `translateX(-50%) scale(${scale})`, transformOrigin: "50% 100%" };
-  return (
-    <div className="absolute pointer-events-none" style={{ width: SCENE_W, height: SCENE_H, ...pos }}>
-      {children}
-    </div>
+// ── 일출·일몰(NOAA 근사) — 주/야 전환 판정 ──────────────────────────────────────
+const RAD = Math.PI / 180;
+
+/** 해당 날짜·좌표의 일출/일몰(UTC 기준 Date). 극야·백야(한국엔 없음)면 null. */
+function sunTime(d: Date, lat: number, lon: number, rising: boolean): Date | null {
+  const dayOfYear = Math.floor(
+    (Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - Date.UTC(d.getFullYear(), 0, 0)) / 86400000
   );
+  const lngHour = lon / 15;
+  const t = dayOfYear + ((rising ? 6 : 18) - lngHour) / 24;
+  const M = 0.9856 * t - 3.289;
+  let L = M + 1.916 * Math.sin(M * RAD) + 0.02 * Math.sin(2 * M * RAD) + 282.634;
+  L = ((L % 360) + 360) % 360;
+  let RA = Math.atan(0.91764 * Math.tan(L * RAD)) / RAD;
+  RA = ((RA % 360) + 360) % 360;
+  RA += (Math.floor(L / 90) - Math.floor(RA / 90)) * 90;
+  RA /= 15;
+  const sinDec = 0.39782 * Math.sin(L * RAD);
+  const cosDec = Math.cos(Math.asin(sinDec));
+  const cosH = (Math.cos(90.833 * RAD) - sinDec * Math.sin(lat * RAD)) / (cosDec * Math.cos(lat * RAD));
+  if (cosH > 1 || cosH < -1) return null;
+  const H = (rising ? 360 - Math.acos(cosH) / RAD : Math.acos(cosH) / RAD) / 15;
+  const T = H + RA - 0.06571 * t - 6.622;
+  const UT = (((T - lngHour) % 24) + 24) % 24;
+  return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) + UT * 3600000);
 }
 
-/** ① 풍경 밴드 — 지면·수면을 카드 폭에 꽉 채운다(가로 스트레치, 세로는 캔버스 스케일과 동기). */
-function SceneBand({ scale, vbH, children }: { scale: number; vbH: number; children: React.ReactNode }) {
-  return (
-    <svg
-      className="absolute left-0 bottom-0 w-full pointer-events-none"
-      style={{ height: vbH * scale }}
-      viewBox={`0 0 ${SCENE_W} ${vbH}`}
-      preserveAspectRatio="none"
-    >
-      {children}
-    </svg>
-  );
+/** 지금이 밤인가 — 일출 전이거나 일몰 후. */
+function isNightAt(now: Date, lat: number, lon: number): boolean {
+  const sunrise = sunTime(now, lat, lon, true);
+  const sunset = sunTime(now, lat, lon, false);
+  if (!sunrise || !sunset) return false;
+  // UTC 날짜 경계 때문에 일몰이 일출보다 앞으로 계산되는 시간대(자정~아침)를 흡수한다:
+  // "일출~일몰 사이"가 낮이라는 판정을 시각(시·분)만으로 비교한다 — 한국 위도에선 항상 성립.
+  const mins = (x: Date) => x.getHours() * 60 + x.getMinutes();
+  const n = mins(now);
+  return n < mins(sunrise) || n >= mins(sunset);
 }
 
-/** ③ 눈 파티클 레이어(카드 전폭) — 기본 눈=cdSnow 94px / 설날·크리스마스=cdSnowTall 전체 높이. */
-function SnowLayer({ tall, top }: { tall?: boolean; top: React.CSSProperties }) {
-  return (
-    <span style={{ position: "absolute", overflow: "hidden", display: "block", pointerEvents: "none", ...top }}>
-      {SNOWS.map((s, i) => (
-        <span
-          key={i}
-          style={{
-            position: "absolute", top: 0, left: `${s.l}%`, width: s.s, height: s.s, borderRadius: 999,
-            background: `rgba(255,255,255,${s.o})`, boxShadow: "0 0 5px rgba(170,190,235,0.7)",
-            animation: `${tall ? "cdSnowTall" : "cdSnow"} ${s.sp}s linear infinite`, animationDelay: `-${s.d}s`,
-          }}
-        />
-      ))}
-    </span>
-  );
+/** 야간 배지 — 기상특보성만(핸드오프 정책). 실제 특보 API 가 없어 실황으로 근사한다:
+ *  비→호우주의 / 눈→한파주의 / 밤 최저 25°↑→열대야. 시즌 문구 배지는 야간에서 제거. */
+function nightBadge(weather: WeatherData | null): { text: string; bg: string; fg: string } | null {
+  if (!weather) return null;
+  if (weather.base === "비") return { text: "호우주의", bg: "rgba(90,140,240,0.3)", fg: "#A9C4F8" };
+  if (weather.base === "눈") return { text: "한파주의", bg: "rgba(120,160,255,0.26)", fg: "#BCD0FF" };
+  if (weather.lo >= 25) return { text: "열대야", bg: "rgba(232,112,95,0.28)", fg: "#FFB9AC" };
+  return null;
 }
-
-/** 태양(광선 회전 + 코어 펄스) — 맑음/여름휴가 공용. */
-function Sun({ ray, core, glow }: { ray: React.CSSProperties; core: React.CSSProperties; glow: React.CSSProperties }) {
-  return (
-    <>
-      <span style={{ position: "absolute", borderRadius: 999, ...glow }} />
-      <span style={{ position: "absolute", display: "block", animation: "cdSpin 26s linear infinite", opacity: 0.85, ...ray }}>
-        <svg width="100%" height="100%" viewBox="0 0 68 68">
-          <g stroke="#F0AC3F" strokeWidth={3.2} strokeLinecap="round">
-            <line x1={34} y1={3} x2={34} y2={12} /><line x1={34} y1={56} x2={34} y2={65} />
-            <line x1={3} y1={34} x2={12} y2={34} /><line x1={56} y1={34} x2={65} y2={34} />
-          </g>
-          <g stroke="#F0AC3F" strokeWidth={3.2} strokeLinecap="round" transform="rotate(45 34 34)">
-            <line x1={34} y1={3} x2={34} y2={12} /><line x1={34} y1={56} x2={34} y2={65} />
-            <line x1={3} y1={34} x2={12} y2={34} /><line x1={56} y1={34} x2={65} y2={34} />
-          </g>
-        </svg>
-      </span>
-      <span
-        style={{
-          position: "absolute", borderRadius: 999, animation: "cdSunPulse 3.8s ease-in-out infinite",
-          background: "radial-gradient(circle at 32% 30%,#FFEBB8,#F7B94E 62%,#EE9E2E)", ...core,
-        }}
-      />
-    </>
-  );
-}
-
-/** 둥근 뭉게구름 — 바닥 캡슐 + 원 1~2개(시안 구조 그대로 좌표만 받는다). */
-function Cloud({
-  wrap, base, puffs, anim,
-}: {
-  wrap: React.CSSProperties;
-  base: { w: number; h: number; c: string };
-  puffs: { b: number; l: number; s: number; c: string }[];
-  anim: string;
-}) {
-  return (
-    <span style={{ position: "absolute", ...wrap, animation: anim }}>
-      <span style={{ position: "absolute", bottom: 0, left: 0, width: base.w, height: base.h, borderRadius: 999, background: base.c }} />
-      {puffs.map((p, i) => (
-        <span key={i} style={{ position: "absolute", bottom: p.b, left: p.l, width: p.s, height: p.s, borderRadius: 999, background: p.c }} />
-      ))}
-    </span>
-  );
-}
-
-const W_WHITE = "linear-gradient(180deg,#FFFFFF,#EAEFF8)";
-const W_WHITE2 = "linear-gradient(180deg,#FFFFFF,#F0F3FA)";
 
 function SunnyScene({ scale }: SceneProps) {
   return (
@@ -239,18 +222,7 @@ function CloudyScene({ scale }: SceneProps) {
 function RainScene({ scale }: SceneProps) {
   return (
     <SceneCanvas scale={scale} anchor="topRight">
-      <span style={{ position: "absolute", top: 52, right: 8, width: 225, height: 130, overflow: "hidden", display: "block", transform: "rotate(7deg)" }}>
-        {RAINS.map((r, i) => (
-          <span
-            key={i}
-            style={{
-              position: "absolute", top: 0, left: `${r.l}%`, width: 2, height: r.h, borderRadius: 2,
-              background: "linear-gradient(180deg,rgba(90,120,220,0),rgba(90,120,220,0.62))",
-              animation: `cdRain ${r.sp}s linear infinite`, animationDelay: `-${r.d}s`,
-            }}
-          />
-        ))}
-      </span>
+      <RainLayer top={{ top: 52, right: 8, width: 225, height: 130 }} />
       <Cloud
         wrap={{ top: 38, right: 126, width: 96, height: 34, opacity: 0.8, zIndex: 1 }}
         anim="cdCloudB 10s ease-in-out infinite"
@@ -293,33 +265,6 @@ function SnowScene({ scale }: SceneProps) {
   );
 }
 
-/** 벚나무/단풍나무 — 봄·가을 공용 구조(줄기 + 원형 캐노피, 색만 다르다). id 로 작은 나무가 재사용. */
-function SceneTree({ id, trunk, canopy, twinkle }: {
-  id: string;
-  trunk: string;
-  canopy: { cx: number; cy: number; r: number; f: string }[];
-  twinkle: { cx: number; cy: number; r: number; f: string; sp: string; delay?: string }[];
-}) {
-  return (
-    <g id={id}>
-      <path
-        d="M112 200 C106 154 116 120 98 82 M110 146 C82 126 66 110 58 90 M112 118 C136 100 152 90 162 72 M111 166 C126 157 136 151 146 144"
-        stroke={trunk} strokeWidth={8} fill="none" strokeLinecap="round"
-      />
-      <path d="M76 106 C66 96 60 88 58 78 M144 98 C154 88 158 80 160 72" stroke={trunk} strokeWidth={4} fill="none" strokeLinecap="round" />
-      {canopy.map((c, i) => (
-        <circle key={i} cx={c.cx} cy={c.cy} r={c.r} fill={c.f} />
-      ))}
-      {twinkle.map((t, i) => (
-        <circle
-          key={`t${i}`} cx={t.cx} cy={t.cy} r={t.r} fill={t.f}
-          style={{ animation: `cdTwinkle ${t.sp} ease-in-out infinite`, animationDelay: t.delay }}
-        />
-      ))}
-    </g>
-  );
-}
-
 const SPRING_CANOPY = [
   { cx: 52, cy: 78, r: 17, f: "#F4B7C8" }, { cx: 78, cy: 58, r: 21, f: "#F7C7D4" }, { cx: 108, cy: 46, r: 24, f: "#F4B7C8" },
   { cx: 140, cy: 52, r: 22, f: "#F7C7D4" }, { cx: 164, cy: 68, r: 19, f: "#F4B7C8" }, { cx: 178, cy: 92, r: 16, f: "#F0A9BE" },
@@ -351,15 +296,6 @@ const AUTUMN_TWINKLE = [
   { cx: 146, cy: 72, r: 3.4, f: "#B0432A", sp: "3.8s", delay: "1s" },
   { cx: 74, cy: 82, r: 3, f: "#B0432A", sp: "3.6s", delay: "1.8s" },
 ];
-
-/** 하늘의 새 2마리 — 봄·가을 공용 오브젝트(스트레치되면 안 되므로 캔버스에 얹는다). */
-function SkyBirds() {
-  return (
-    <svg style={{ position: "absolute", left: 0, bottom: 0 }} width={SCENE_W} height={240} viewBox="0 0 400 240">
-      <path d="M66 52 q7 -8 15 0 M92 42 q7 -8 15 0" stroke="#9AA1B8" strokeWidth={2.2} fill="none" strokeLinecap="round" />
-    </svg>
-  );
-}
 
 function SpringScene({ scale }: SceneProps) {
   return (
@@ -523,17 +459,53 @@ function SeolScene({ scale }: SceneProps) {
           <line x1={242} y1={142} x2={242} y2={152} stroke="#B98A2E" strokeWidth={1.6} />
           <rect x={237} y={152} width={10} height={5} rx={2} fill="#E3A63B" />
           <circle cx={242} cy={163} r={9} fill="#D84B3F" />
-          <path d="M96 76 Q130 140 158 172" stroke="rgba(90,95,120,0.4)" strokeWidth={1.4} fill="none" />
-          <path d="M153 149 q9 -12 18 0 z" fill="#2F2A33" />
-          <circle cx={162} cy={150} r={8.5} fill="#F7D9C4" />
-          <path d="M154 145 q8 -8 16 0" stroke="#2F2A33" strokeWidth={4} fill="none" strokeLinecap="round" />
-          <polygon points="150,158 174,158 178,172 146,172" fill="#5468C9" />
-          <path d="M162 160 v9 M162 164 q5 2 7 5" stroke="#F3E7D3" strokeWidth={1.7} fill="none" strokeLinecap="round" />
-          <polygon points="148,172 176,172 184,196 140,196" fill="#D84B3F" />
-          <circle cx={196} cy={160} r={6.5} fill="#F7D9C4" />
-          <path d="M190 156 q6 -7 12 0" stroke="#2F2A33" strokeWidth={3.4} fill="none" strokeLinecap="round" />
-          <polygon points="189,166 203,166 206,180 186,180" fill="#E3A63B" />
-          <polygon points="185,180 207,180 210,196 182,196" fill="#5468C9" />
+          {/* 한복 인물 2명(핸드오프 디테일 확정판) — 연줄 잡은 소녀: 색동 소매·저고리 옷고름·치마 주름·버선 */}
+          <path d="M96 76 Q124 128 152 156" stroke="rgba(90,95,120,0.4)" strokeWidth={1.4} fill="none" />
+          <path d="M156 163 L151.5 157.5" stroke="#FBF6EC" strokeWidth={4.4} strokeLinecap="round" />
+          <circle cx={151.5} cy={157} r={2} fill="#F7D9C4" />
+          <path d="M168 163 L173.5 168.5" stroke="#FBF6EC" strokeWidth={4.4} strokeLinecap="round" />
+          <circle cx={174} cy={169} r={2} fill="#F7D9C4" />
+          <path d="M153.2 158.6 l2.4 -2 M170.9 166 l-2.3 2.1" stroke="#D84B3F" strokeWidth={1.1} />
+          <path d="M154.5 160 l2.3 -1.9 M169.6 164.6 l-2.3 2" stroke="#5468C9" strokeWidth={1.1} />
+          <path d="M152 162 h20 q2 5 1.6 8.5 h-23.2 q-0.4 -3.5 1.6 -8.5 Z" fill="#FBF6EC" stroke="#D8CBA8" strokeWidth={0.7} />
+          <path d="M162 164 q-3.2 1.4 -4 5.4" stroke="#D84B3F" strokeWidth={1.6} fill="none" strokeLinecap="round" />
+          <rect x={160.6} y={163.2} width={2.8} height={2} rx={0.6} fill="#D84B3F" />
+          <path d="M151 170.5 h22 l5.5 23 q-16.5 5 -33 0 Z" fill="#D84B3F" />
+          <path d="M158 174 l-2.6 17 M166 174 l2.6 17 M162 174 l0 18" stroke="#B03A32" strokeWidth={0.9} fill="none" />
+          <ellipse cx={156} cy={194.5} rx={3} ry={1.6} fill="#FBF6EC" />
+          <ellipse cx={168} cy={194.5} rx={3} ry={1.6} fill="#FBF6EC" />
+          <circle cx={162} cy={150} r={7.5} fill="#F7D9C4" />
+          <path d="M153.8 148.5 q8.2 -10 16.4 0 l-1.2 2.8 q-7 -5.6 -14 0 Z" fill="#2F2A33" />
+          <path d="M154.5 150 q-1.5 3 -1 5.5 M169.5 150 q1.5 3 1 5.5" stroke="#2F2A33" strokeWidth={2} fill="none" strokeLinecap="round" />
+          <path d="M153.5 155.5 l-0.6 2.4 M170.5 155.5 l0.6 2.4" stroke="#D84B3F" strokeWidth={1.4} strokeLinecap="round" />
+          <circle cx={159.2} cy={150} r={0.9} fill="#2F2A33" />
+          <circle cx={164.8} cy={150} r={0.9} fill="#2F2A33" />
+          <path d="M160.6 153.2 q1.4 1.3 2.8 0" stroke="#B0684A" strokeWidth={0.9} fill="none" strokeLinecap="round" />
+          <circle cx={157} cy={152.3} r={1.2} fill="rgba(240,150,150,0.5)" />
+          <circle cx={167} cy={152.3} r={1.2} fill="rgba(240,150,150,0.5)" />
+          {/* 연을 가리키는 소년 — 남바위(흰 테두리)·금색 조끼·바지·짚신 */}
+          <path d="M191 168 L185.5 161.5" stroke="#5468C9" strokeWidth={4} strokeLinecap="round" />
+          <circle cx={185} cy={161} r={1.8} fill="#F7D9C4" />
+          <path d="M201.5 169 L206 173.5" stroke="#5468C9" strokeWidth={4} strokeLinecap="round" />
+          <circle cx={206.4} cy={174} r={1.8} fill="#F7D9C4" />
+          <path d="M187.2 163 l2.2 -1.8 M203.8 171 l-2.1 1.9" stroke="#E3A63B" strokeWidth={1} />
+          <path d="M188 167 h16 q1.8 4.5 1.4 7.5 h-18.8 q-0.4 -3 1.4 -7.5 Z" fill="#5468C9" stroke="#3E4C9A" strokeWidth={0.7} />
+          <path d="M196 168.5 q-2.6 1.2 -3.2 4.4" stroke="#F3E7D3" strokeWidth={1.4} fill="none" strokeLinecap="round" />
+          <path d="M192.5 175 q-1 9 -1.3 15.5" stroke="#E8DFC8" strokeWidth={5} fill="none" strokeLinecap="round" />
+          <path d="M199.5 175 q1 9 1.3 15.5" stroke="#E8DFC8" strokeWidth={5} fill="none" strokeLinecap="round" />
+          <path d="M189.8 186 l3.4 0.6 M198.8 186.6 l3.4 -0.6" stroke="#5468C9" strokeWidth={1.2} />
+          <ellipse cx={191} cy={192} rx={3.2} ry={1.7} fill="#2F2A33" />
+          <ellipse cx={201} cy={192} rx={3.2} ry={1.7} fill="#2F2A33" />
+          <circle cx={196} cy={158} r={6.5} fill="#F7D9C4" />
+          <path d="M188.8 157 q7.2 -9.5 14.4 0 l0 2.6 q-7.2 -4.6 -14.4 0 Z" fill="#2F2A33" />
+          <path d="M189 159.4 q7 -4.4 14 0" stroke="#FBF6EC" strokeWidth={1.6} fill="none" strokeLinecap="round" />
+          <circle cx={196} cy={149.5} r={1.6} fill="#D84B3F" />
+          <circle cx={193.6} cy={158.6} r={0.85} fill="#2F2A33" />
+          <circle cx={198.4} cy={158.6} r={0.85} fill="#2F2A33" />
+          <ellipse cx={196} cy={161.6} rx={1.3} ry={1.6} fill="#B0684A" />
+          <circle cx={191.6} cy={160.4} r={1.1} fill="rgba(240,150,150,0.5)" />
+          <circle cx={200.4} cy={160.4} r={1.1} fill="rgba(240,150,150,0.5)" />
+          {/* 눈사람 */}
           <ellipse cx={70} cy={200} rx={26} ry={4.5} fill="rgba(200,210,235,0.5)" />
           <circle cx={70} cy={186} r={12} fill="#FFFFFF" stroke="#DCE3F0" strokeWidth={1.4} />
           <circle cx={70} cy={168} r={8.5} fill="#FFFFFF" stroke="#DCE3F0" strokeWidth={1.4} />
@@ -572,10 +544,10 @@ function ChuseokScene({ scale }: SceneProps) {
           <circle cx={66} cy={112} r={5} fill="rgba(228,186,110,0.38)" />
           <ellipse cx={86} cy={136} rx={15} ry={2.6} fill="rgba(180,150,90,0.3)" />
           <ellipse cx={114} cy={139} rx={12} ry={2.4} fill="rgba(180,150,90,0.3)" />
-          {/* 떡방아 토끼 — 몸통 기울임(cdLean)과 수직 절구질(cdPoundV) 2.2s 동기화 */}
+          {/* 떡방아 토끼 — 몸통 기울임(cdLean)과 절굿공이 아크 모션(cdPoundV) 2.2s 동기화 */}
           <g style={{ transformBox: "fill-box", transformOrigin: "55% 96%", animation: "cdLean 2.2s ease-in-out infinite" }}>
             <circle cx={74} cy={122} r={4.5} fill="#FFFFFF" />
-            <ellipse cx={86} cy={118} rx={12} ry={16} fill="#FBF8F0" stroke="#D8CBA8" strokeWidth={1.2} />
+            <ellipse cx={84.5} cy={118} rx={14.5} ry={16.5} fill="#FBF8F0" stroke="#D8CBA8" strokeWidth={1.2} />
             <ellipse cx={80} cy={133} rx={5.5} ry={3} fill="#FBF8F0" stroke="#D8CBA8" strokeWidth={1} />
             <ellipse cx={93} cy={133} rx={5.5} ry={3} fill="#FBF8F0" stroke="#D8CBA8" strokeWidth={1} />
             <ellipse cx={82} cy={74} rx={4} ry={14} fill="#FBF8F0" stroke="#D8CBA8" strokeWidth={1} transform="rotate(-10 82 74)" />
@@ -592,7 +564,7 @@ function ChuseokScene({ scale }: SceneProps) {
           <path d="M104 116 h20 M105 126 h18" stroke="#6E4A2A" strokeWidth={1.2} />
           <ellipse cx={114} cy={106} rx={11} ry={3} fill="#A97B4F" />
           <ellipse cx={114} cy={105} rx={7} ry={2.2} fill="#FFF8E8" />
-          <g style={{ animation: "cdPoundV 2.2s ease-in-out infinite" }}>
+          <g style={{ transformBox: "fill-box", transformOrigin: "30% 88%", animation: "cdPoundV 2.2s ease-in-out infinite" }}>
             <rect x={111} y={70} width={6} height={34} rx={3} fill="#B98A63" />
             <rect x={108} y={63} width={12} height={11} rx={4} fill="#A97B4F" />
             <path d="M93 108 Q103 102 112 93" stroke="#FBF8F0" strokeWidth={5} fill="none" strokeLinecap="round" />
@@ -818,7 +790,8 @@ const SCENES: Record<SceneKind, (p: SceneProps) => React.ReactElement> = {
   크리스마스: XmasScene,
 };
 
-export function WeatherWidget() {
+/** forceScene/forceNight — 미리보기 강제 표시(홈 헤더 옵션 박스). URL 쿼리(?wx·?wxScene)보다 우선한다. */
+export function WeatherWidget({ forceScene, forceNight }: { forceScene?: SceneKind; forceNight?: boolean } = {}) {
   const [now, setNow] = useState(() => new Date());
   // 씬 스케일 — 씬은 400×286 고정 좌표계로 그려져 있어, 카드 실측에 맞춰 확대한다.
   const frameRef = useRef<HTMLElement>(null);
@@ -827,6 +800,19 @@ export function WeatherWidget() {
   const [locLabel, setLocLabel] = useState<string | null>(null);
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [seasons, setSeasons] = useState<HolidaySeason[]>([]);
+  // 확인용 강제 표시 — /home?wx=night|day&wxScene=설날 처럼 씬·주야를 고정해 볼 수 있다.
+  const [force, setForce] = useState<{ night?: boolean; scene?: SceneKind }>({});
+
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const wx = q.get("wx");
+    const ws = q.get("wxScene");
+    const f: { night?: boolean; scene?: SceneKind } = {};
+    if (wx === "night") f.night = true;
+    else if (wx === "day") f.night = false;
+    if (ws && ws in SCENE_META) f.scene = ws as SceneKind;
+    setForce(f);
+  }, []);
 
   useEffect(() => {
     const el = frameRef.current;
@@ -932,7 +918,7 @@ export function WeatherWidget() {
   const base: BaseKind = weather?.base ?? "맑음";
 
   // 씬 결정 — 명절 시즌 > 크리스마스(12월) > 맑음 한정 계절 씬 > 기본 날씨.
-  const { scene, badge } = useMemo(() => {
+  const { scene: picked, badge } = useMemo(() => {
     const month = now.getMonth() + 1;
     const season = seasons.find((s) => todayYmd >= s.start && todayYmd <= s.end);
     const dday = (target: string) =>
@@ -954,12 +940,37 @@ export function WeatherWidget() {
     return { scene: base as SceneKind, badge: null as string | null };
   }, [base, now, seasons, todayYmd]);
 
+  // 주/야 판정 — 분 단위로만 다시 계산(1s 시계 리렌더마다 삼각함수를 돌리지 않는다).
+  const nowMinuteKey = `${todayYmd} ${now.getHours()}:${now.getMinutes()}`;
+  const autoNight = useMemo(
+    () => isNightAt(now, loc.lat, loc.lon),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [nowMinuteKey, loc]
+  );
+  const night = forceNight ?? force.night ?? autoNight;
+  const scene = forceScene ?? force.scene ?? picked;
+  const forced = scene !== picked;
+
   const meta = SCENE_META[scene];
-  const Scene = SCENES[scene];
+  const Scene = night ? NIGHT_SCENES[scene] : SCENES[scene];
+  const nBadge = night ? nightBadge(weather) : null;
+  // 씬을 강제한 미리보기에서는 배지·상태 문구도 그 씬을 따라간다 — 실제 시즌·기상과 어긋나 보이지 않게.
+  const shownBadge = forced ? (meta.desc ?? null) : badge;
+  const descBase: BaseKind = forced && (["맑음", "흐림", "비", "눈"] as SceneKind[]).includes(scene) ? (scene as BaseKind) : base;
   const p2 = (n: number) => String(n).padStart(2, "0");
   const WD = ["일", "월", "화", "수", "목", "금", "토"];
   const dateStr = `${now.getMonth() + 1}월 ${now.getDate()}일 ${WD[now.getDay()]}요일`;
-  const desc = weather ? (meta.desc ? `${base} · ${meta.desc}` : base) : "-";
+  const desc = weather ? (meta.desc ? `${descBase} · ${meta.desc}` : descBase) : "-";
+
+  // 야간 텍스트/스크림 반전(핸드오프 규칙 ③).
+  const C = night
+    ? { icon: "#93A0C8", loc: "#C7D0EC", clock: "#F2F5FF", sec: "#8E99BE", date: "#A9B3D2", temp: "#F2F5FF", desc: "#C7D0EC", hilo: "#7E89AC" }
+    : { icon: "#6E7690", loc: "#5B6479", clock: "#2A3040", sec: "#7B839C", date: "#6E7690", temp: "#2A3040", desc: "#5B6479", hilo: "#9AA1B8" };
+  const scrim = night
+    ? scene === "추석"
+      ? "linear-gradient(90deg,rgba(13,18,38,0.55) 0%,rgba(13,18,38,0.28) 36%,rgba(13,18,38,0) 60%)"
+      : "linear-gradient(90deg,rgba(13,18,38,0.6) 0%,rgba(13,18,38,0.32) 36%,rgba(13,18,38,0) 60%)"
+    : "linear-gradient(90deg,rgba(255,255,255,0.58) 0%,rgba(255,255,255,0.32) 36%,rgba(255,255,255,0) 60%)";
 
   return (
     <section
@@ -969,54 +980,60 @@ export function WeatherWidget() {
         // 내 차례인 결재 카드와 같은 높이 — 좌열(날씨+연차)과 중열(결재+메일)이 정확히 대칭이 된다.
         height: HOME_HALF_H,
         borderRadius: 18,
-        border: "1px solid rgba(255,255,255,0.78)",
-        boxShadow: "var(--cd-shadow), 0 0 0 1px var(--cd-ring)",
+        border: night ? "1px solid rgba(130,148,205,0.35)" : "1px solid rgba(255,255,255,0.78)",
+        boxShadow: night ? "0 8px 28px rgba(18,26,54,0.3)" : "var(--cd-shadow), 0 0 0 1px var(--cd-ring)",
         padding: "16px 18px",
-        background: meta.bg,
+        background: night ? meta.nightBg : meta.bg,
       }}
     >
       <Scene scale={sceneScale} />
-      {/* 좌측 텍스트 가독용 가로 화이트 그라데이션 오버레이 */}
-      <span
-        className="absolute inset-0 pointer-events-none"
-        style={{ background: "linear-gradient(90deg,rgba(255,255,255,0.58) 0%,rgba(255,255,255,0.32) 36%,rgba(255,255,255,0) 60%)" }}
-      />
+      {/* 좌측 텍스트 가독용 가로 그라데이션 스크림(주간 화이트 / 야간 딥네이비) */}
+      <span className="absolute inset-0 pointer-events-none" style={{ background: scrim }} />
       <div className="flex items-center gap-1.5 relative">
-        <MapPin className="w-[13px] h-[13px]" style={{ color: "#6E7690" }} strokeWidth={2} />
-        <span className="text-xs font-bold" style={{ color: "#5B6479" }}>
+        <MapPin className="w-[13px] h-[13px]" style={{ color: C.icon }} strokeWidth={2} />
+        <span className="text-xs font-bold" style={{ color: C.loc }}>
           {locLabel ?? "위치 확인 중"}
         </span>
-        {badge && (
+        {/* 배지 — 주간: 시즌 문구 / 야간: 기상특보성(호우·한파·열대야)만(핸드오프 정책) */}
+        {!night && shownBadge && (
           <span
             className="text-[10px] font-extrabold rounded-full px-2 py-[3px] whitespace-nowrap"
             style={{ background: meta.badgeBg, color: meta.badgeFg }}
           >
-            {badge}
+            {shownBadge}
+          </span>
+        )}
+        {night && nBadge && (
+          <span
+            className="text-[10px] font-extrabold rounded-full px-2 py-[3px] whitespace-nowrap"
+            style={{ background: nBadge.bg, color: nBadge.fg }}
+          >
+            {nBadge.text}
           </span>
         )}
       </div>
       <div className="mt-auto relative">
         <div className="flex items-baseline gap-1">
-          <span className="text-[34px] font-extrabold tabular-nums leading-none tracking-[-0.03em]" style={{ color: "#2A3040" }}>
+          <span className="text-[34px] font-extrabold tabular-nums leading-none tracking-[-0.03em]" style={{ color: C.clock }}>
             {p2(now.getHours())}:{p2(now.getMinutes())}
           </span>
-          <span className="text-[12.5px] font-bold tabular-nums" style={{ color: "#7B839C" }}>
+          <span className="text-[12.5px] font-bold tabular-nums" style={{ color: C.sec }}>
             {p2(now.getSeconds())}
           </span>
         </div>
-        <p className="mt-[5px] text-xs font-semibold" style={{ color: "#6E7690" }}>
+        <p className="mt-[5px] text-xs font-semibold" style={{ color: C.date }}>
           {dateStr}
         </p>
       </div>
       <div className="mt-2.5 flex items-end gap-2 relative">
-        <span className="text-2xl font-extrabold tracking-[-0.02em]" style={{ color: "#2A3040" }}>
+        <span className="text-2xl font-extrabold tracking-[-0.02em]" style={{ color: C.temp }}>
           {weather ? `${weather.temp.toFixed(1)}°` : "--°"}
         </span>
         <span className="flex flex-col gap-[1px] pb-[3px]">
-          <span className="text-xs font-bold" style={{ color: "#5B6479" }}>
+          <span className="text-xs font-bold" style={{ color: C.desc }}>
             {desc}
           </span>
-          <span className="text-[11px]" style={{ color: "#9AA1B8" }}>
+          <span className="text-[11px]" style={{ color: C.hilo }}>
             {weather ? `최고 ${weather.hi}° · 최저 ${weather.lo}°` : " "}
           </span>
         </span>

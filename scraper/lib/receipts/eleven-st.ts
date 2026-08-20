@@ -231,8 +231,8 @@ export async function collectReceipts(site: string, opts: CollectOptions = {}): 
 
   try {
     const page = await context.newPage();
-    await page.goto(cfg.orderListUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
-    await page.waitForTimeout(3000);
+    await openOrderList(page, cfg, from, to, tag);
+    await sleep(3000);
 
     if (new RegExp(cfg.loggedOutPattern, "i").test(page.url())) {
       throw new Error(
@@ -642,6 +642,78 @@ async function runByOrderNo(
       }
     }
   }
+}
+
+/** ISO 날짜(YYYY-MM-DD)를 사이트가 쓰는 형식으로 바꾼다 */
+function formatDate(iso: string, fmt = "YYYYMMDD"): string {
+  const [y, m, d] = iso.split("-");
+  return fmt.replace("YYYY", y).replace("MM", m).replace("DD", d);
+}
+
+/**
+ * 주문목록을 연다.
+ * - config.listRequest 가 있으면 조회 기간을 직접 지정해 연다(무인 실행). GET·POST 둘 다 지원.
+ * - 없으면 기본 주문목록 주소로 이동한다. 이 경우 화면의 기본 조회 기간 밖 주문은 안 보이므로
+ *   --wait 로 사람이 기간을 조회해 줘야 한다.
+ */
+async function openOrderList(
+  page: Page,
+  cfg: SiteConfig,
+  from: string | undefined,
+  to: string | undefined,
+  tag: string
+): Promise<void> {
+  const req = cfg.listRequest;
+
+  if (!req || !from || !to) {
+    if (req && (!from || !to)) {
+      console.log(`${tag} 조회 기간(--from/--to)이 없어 기본 목록을 엽니다.`);
+    }
+    await page.goto(cfg.orderListUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
+    return;
+  }
+
+  const fields: Record<string, string> = {};
+  for (const [name, value] of Object.entries(req.fields)) {
+    fields[name] = value
+      .replace("{from}", formatDate(from, req.dateFormat))
+      .replace("{to}", formatDate(to, req.dateFormat));
+  }
+
+  if ((req.method || "GET") === "GET") {
+    const url = new URL(req.url);
+    for (const [name, value] of Object.entries(fields)) url.searchParams.set(name, value);
+
+    console.log(`${tag} 기간 지정 조회: ${url.toString()}`);
+    await page.goto(url.toString(), { waitUntil: "domcontentloaded", timeout: 60_000 });
+    return;
+  }
+
+  console.log(`${tag} 기간 지정 조회(POST): ${req.url}`);
+  await page.goto(req.refererUrl || cfg.orderListUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
+
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 60_000 }),
+    page.evaluate(
+      ({ url, fields }) => {
+        const form = document.createElement("form");
+        form.setAttribute("method", "post");
+        form.setAttribute("action", url);
+
+        for (const [name, value] of Object.entries(fields)) {
+          const input = document.createElement("input");
+          input.type = "hidden";
+          input.name = name;
+          input.value = value;
+          form.appendChild(input);
+        }
+
+        document.body.appendChild(form);
+        form.submit();
+      },
+      { url: req.url, fields }
+    ),
+  ]);
 }
 
 /**

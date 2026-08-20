@@ -60,6 +60,8 @@ interface ProbeResult {
   frames: FrameInspection[];
   popupUrls?: string[];
   xhrUrls?: string[];
+  /** 프레임 이동·네비게이션 요청(폼 POST 포함) — 기간 조회 요청을 찾는 단서 */
+  navUrls?: string[];
 }
 
 /** 페이지에서 키워드가 들어간 클릭 요소를 전부 긁는다 */
@@ -128,7 +130,9 @@ export async function probeOrderList(
 
   const popupUrls: string[] = [];
   const xhrUrls: string[] = [];
-  const xhrLogFile = path.join(outDir, "xhr-log.jsonl");
+  const navUrls: string[] = [];
+  // 실행마다 덮어쓰면 직전 실측을 잃는다 — 시각을 붙여 남긴다.
+  const xhrLogFile = path.join(outDir, `xhr-log-${new Date().toISOString().replace(/[:.]/g, "-")}.jsonl`);
   const xhrStream = opts.watch ? fs.createWriteStream(xhrLogFile, { flags: "w" }) : null;
 
   try {
@@ -146,6 +150,23 @@ export async function probeOrderList(
       });
       // XHR 은 주소만이 아니라 JSON 응답 앞부분까지 남긴다 — 목록·영수증을 내려주는 내부 API 를 찾으면
       // DOM 파싱보다 훨씬 견고하게 수집할 수 있다(lib/daou/probe.ts 와 같은 접근).
+      // 기간 조회는 iframe 이 통째로 이동하는 형태로 일어나는 경우가 많아, 프레임 이동과
+      // 네비게이션 요청(폼 POST 포함)을 따로 추적한다. XHR 만 봐서는 놓친다.
+      page.on("framenavigated", (frame) => {
+        if (frame === page.mainFrame()) return;
+        console.log(`[${site}] iframe 이동: ${frame.url()}`);
+        navUrls.push(`FRAME ${frame.url()}`);
+      });
+
+      context.on("request", (req) => {
+        if (!req.isNavigationRequest()) return;
+
+        const postData = req.postData();
+        const line = `${req.method()} ${req.url()}${postData ? `\n[${site}]   폼 데이터: ${postData.slice(0, 400)}` : ""}`;
+        console.log(`[${site}] 네비게이션: ${line}`);
+        navUrls.push(`${req.method()} ${req.url()}${postData ? ` | ${postData.slice(0, 400)}` : ""}`);
+      });
+
       context.on("response", async (res) => {
         const req = res.request();
         // 기간 조회는 XHR 이 아니라 폼 POST(document 네비게이션)로 도는 경우가 많아 document 도 남긴다.
@@ -229,7 +250,13 @@ export async function probeOrderList(
       orderNoCandidates,
       dateCandidates,
       frames,
-      ...(opts.watch ? { popupUrls: [...new Set(popupUrls)], xhrUrls: [...new Set(xhrUrls)].slice(0, 200) } : {}),
+      ...(opts.watch
+        ? {
+            popupUrls: [...new Set(popupUrls)],
+            xhrUrls: [...new Set(xhrUrls)].slice(0, 200),
+            navUrls: [...new Set(navUrls)].slice(0, 100),
+          }
+        : {}),
     };
 
     const resultFile = path.join(outDir, `probe-${stamp}.json`);

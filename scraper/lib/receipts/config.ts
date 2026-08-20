@@ -48,6 +48,20 @@ export interface SiteConfig {
   };
   /** 수집 문서의 이름(파일명·대장의 receiptType 에 쓰인다) */
   receiptLabel?: string;
+  /**
+   * 조회 기간을 직접 지정해 주문목록을 여는 요청(무인 실행용).
+   * 이게 있으면 사람이 화면에서 기간을 고를 필요가 없다(--wait 불필요).
+   * 값의 `{from}`/`{to}` 는 dateFormat 에 맞춰 치환된다.
+   */
+  listRequest?: {
+    url: string;
+    method?: "GET" | "POST";
+    fields: Record<string, string>;
+    /** 날짜 치환 형식 — "YYYYMMDD" | "YYYY-MM-DD" | "YYYY.MM.DD" (기본 YYYYMMDD) */
+    dateFormat?: string;
+    /** POST 일 때 폼을 보내기 전에 머무를 페이지 */
+    refererUrl?: string;
+  };
 }
 
 /**

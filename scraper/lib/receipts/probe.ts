@@ -34,6 +34,23 @@ interface ClickableCandidate {
   ancestors: string;
 }
 
+interface FormField {
+  tag: string;
+  name: string;
+  type: string;
+  value: string;
+  /** 날짜로 보이는 값이거나 이름이 날짜스러운 필드 — 기간 조회 폼을 찾는 단서 */
+  looksLikeDate: boolean;
+}
+
+interface FormInfo {
+  action: string | null;
+  method: string | null;
+  target: string | null;
+  id: string | null;
+  fields: FormField[];
+}
+
 interface FrameInspection {
   /** 메인 문서면 "main", iframe 이면 그 주소 */
   frameUrl: string;
@@ -41,6 +58,8 @@ interface FrameInspection {
   receiptCandidates: ClickableCandidate[];
   orderNoCandidates: string[];
   dateCandidates: string[];
+  /** 화면의 폼 구조 — 조회 버튼을 누르지 않고도 기간 조회 요청을 알아내기 위한 것 */
+  forms: FormInfo[];
 }
 
 interface ProbeResult {
@@ -98,6 +117,37 @@ async function findReceiptCandidates(scope: Page | Frame, keywords: string[]): P
   }, keywords);
 }
 
+/** 프레임의 폼 구조를 긁는다(action·method·target 과 전체 필드) */
+async function collectForms(scope: Page | Frame): Promise<FormInfo[]> {
+  return scope
+    .evaluate(() => {
+      const isDateish = (name: string, value: string) =>
+        /^\d{8}$/.test(value) ||
+        /^\d{4}[.\-/]\d{1,2}[.\-/]\d{1,2}$/.test(value) ||
+        /(dt|date|day|ymd)/i.test(name);
+
+      return Array.from(document.querySelectorAll("form")).map((form) => ({
+        // form.action/method 는 같은 이름의 input 에 가려질 수 있어 속성으로 읽는다.
+        action: form.getAttribute("action"),
+        method: form.getAttribute("method"),
+        target: form.getAttribute("target"),
+        id: form.getAttribute("id"),
+        fields: Array.from(form.querySelectorAll("input, select, textarea")).map((el) => {
+          const name = el.getAttribute("name") || "";
+          const value = (el as HTMLInputElement).value || "";
+          return {
+            tag: el.tagName.toLowerCase(),
+            name,
+            type: el.getAttribute("type") || "",
+            value: value.slice(0, 60),
+            looksLikeDate: isDateish(name, value),
+          };
+        }),
+      }));
+    })
+    .catch(() => [] as FormInfo[]);
+}
+
 /** 프레임(메인 문서 또는 iframe) 하나를 훑어 관측치를 모은다 */
 async function inspectFrame(scope: Page | Frame, frameUrl: string, cfg: SiteConfig): Promise<FrameInspection> {
   const rowSelectorMatches: { selector: string; count: number }[] = [];
@@ -111,6 +161,7 @@ async function inspectFrame(scope: Page | Frame, frameUrl: string, cfg: SiteConf
 
   return {
     frameUrl,
+    forms: await collectForms(scope),
     rowSelectorMatches,
     receiptCandidates,
     orderNoCandidates: [...new Set(bodyText.match(/\b\d{9,}\b/g) || [])].slice(0, 30),
@@ -352,6 +403,24 @@ function printSummary(r: ProbeResult, resultFile: string): void {
 
   console.log(`${tag} 주문번호 후보: ${r.orderNoCandidates.slice(0, 8).join(", ") || "-"}`);
   console.log(`${tag} 날짜 후보: ${r.dateCandidates.slice(0, 8).join(", ") || "-"}`);
+
+  // 기간 조회 폼을 찾기 위한 덤프 — 조회 버튼을 누르지 않아도 구조를 알 수 있다.
+  for (const f of r.frames) {
+    const withDate = f.forms.filter((form) => form.fields.some((x) => x.looksLikeDate));
+    if (withDate.length === 0) continue;
+
+    console.log(`${tag} 날짜 필드를 가진 폼 (${f.frameUrl}):`);
+    for (const form of withDate) {
+      console.log(
+        `${tag}   action=${form.action || "-"} method=${form.method || "GET"} ` +
+          `target=${form.target || "-"} id=${form.id || "-"}`
+      );
+      for (const x of form.fields) {
+        const mark = x.looksLikeDate ? "★" : " ";
+        console.log(`${tag}    ${mark} ${x.name || "(이름없음)"} = ${x.value || '""'} [${x.tag}${x.type ? ":" + x.type : ""}]`);
+      }
+    }
+  }
 
   // 목록이 iframe 안에 있으면 메인 문서에서는 아무것도 안 잡힌다 — 프레임별로 따로 보여준다.
   const subFrames = r.frames.filter((f) => f.frameUrl !== "main");

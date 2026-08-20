@@ -62,6 +62,8 @@ interface ProbeResult {
   xhrUrls?: string[];
   /** 프레임 이동·네비게이션 요청(폼 POST 포함) — 기간 조회 요청을 찾는 단서 */
   navUrls?: string[];
+  /** 화면에서 제출된 폼의 action·method·필드값 — 기간 조회 파라미터가 여기 잡힌다 */
+  formSubmits?: string[];
 }
 
 /** 페이지에서 키워드가 들어간 클릭 요소를 전부 긁는다 */
@@ -131,6 +133,7 @@ export async function probeOrderList(
   const popupUrls: string[] = [];
   const xhrUrls: string[] = [];
   const navUrls: string[] = [];
+  const formSubmits: string[] = [];
   // 실행마다 덮어쓰면 직전 실측을 잃는다 — 시각을 붙여 남긴다.
   const xhrLogFile = path.join(outDir, `xhr-log-${new Date().toISOString().replace(/[:.]/g, "-")}.jsonl`);
   const xhrStream = opts.watch ? fs.createWriteStream(xhrLogFile, { flags: "w" }) : null;
@@ -150,6 +153,51 @@ export async function probeOrderList(
       });
       // XHR 은 주소만이 아니라 JSON 응답 앞부분까지 남긴다 — 목록·영수증을 내려주는 내부 API 를 찾으면
       // DOM 파싱보다 훨씬 견고하게 수집할 수 있다(lib/daou/probe.ts 와 같은 접근).
+      // 기간 조회는 iframe 을 타깃으로 한 폼 submit 으로 도는 경우가 많다. 이때 네비게이션 요청이
+      // 리스너에 안 잡히는 경우가 있어(iframe 이 about:blank 로만 보인다), 폼 제출 자체를 후킹해
+      // action·method·필드값을 통째로 기록한다. 이게 조회 파라미터를 잡는 가장 확실한 방법이다.
+      await context.addInitScript(() => {
+        const report = (form: HTMLFormElement, how: string) => {
+          try {
+            const data: Record<string, string> = {};
+            new FormData(form).forEach((value, key) => {
+              data[key] = String(value).slice(0, 120);
+            });
+            // form.method / form.action 은 같은 이름의 input 이 있으면 그 엘리먼트에 가려진다
+            // (11번가 조회 폼에는 name="method" 필드가 있다) → 속성으로 읽는다.
+            console.log(
+              "[[FORM_SUBMIT]] " +
+                JSON.stringify({
+                  how,
+                  action: form.getAttribute("action"),
+                  method: form.getAttribute("method"),
+                  target: form.getAttribute("target"),
+                  data,
+                })
+            );
+          } catch {
+            // 폼을 읽을 수 없으면 조용히 넘어간다(진단이 본 작업을 막지 않는다)
+          }
+        };
+
+        const originalSubmit = HTMLFormElement.prototype.submit;
+        HTMLFormElement.prototype.submit = function (this: HTMLFormElement, ...args: unknown[]) {
+          report(this, "submit()");
+          return originalSubmit.apply(this, args as []);
+        };
+
+        document.addEventListener("submit", (e) => report(e.target as HTMLFormElement, "event"), true);
+      });
+
+      page.on("console", (msg) => {
+        const text = msg.text();
+        if (!text.startsWith("[[FORM_SUBMIT]]")) return;
+
+        const payload = text.slice("[[FORM_SUBMIT]]".length).trim();
+        console.log(`[${site}] 폼 제출: ${payload.slice(0, 600)}`);
+        formSubmits.push(payload);
+      });
+
       // 기간 조회는 iframe 이 통째로 이동하는 형태로 일어나는 경우가 많아, 프레임 이동과
       // 네비게이션 요청(폼 POST 포함)을 따로 추적한다. XHR 만 봐서는 놓친다.
       page.on("framenavigated", (frame) => {
@@ -255,6 +303,7 @@ export async function probeOrderList(
             popupUrls: [...new Set(popupUrls)],
             xhrUrls: [...new Set(xhrUrls)].slice(0, 200),
             navUrls: [...new Set(navUrls)].slice(0, 100),
+            formSubmits: [...new Set(formSubmits)].slice(0, 50),
           }
         : {}),
     };

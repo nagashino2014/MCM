@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { submitReReport } from "@/lib/work-plan/workspace";
+import { pushReReported } from "@/lib/work-plan/push-notify";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,6 +18,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     const { reportId } = await ctx.params;
     const body = (await req.json()) as { directorResponse?: string | null };
     await submitReReport(reportId, body.directorResponse ?? null);
+    void pushReReported(reportId); // 지시 임원 앱 푸시(work.report)
     await recordAuditLog({
       actorUserId: actor.userId,
       action: "work_plan_save",

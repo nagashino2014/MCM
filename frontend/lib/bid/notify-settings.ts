@@ -31,8 +31,10 @@ export interface BidNotifyProfile {
   /** 태그에 표시되는 이름. */
   name: string;
   enabled: boolean;
-  /** 발송 시각(KST, "HH:MM") — 이 시각 이후 첫 체크에서 발송(일 1회). UI 입력은 HHMM 4자리. */
+  /** @deprecated 첫 발송 시각 미러(sendTimes[0]) — 구코드·구클라이언트 호환용. 판정은 sendTimes 로. */
   sendTime: string;
+  /** 발송 시각 목록(KST "HH:MM", 1~4개 오름차순) — 각 시각 이후 첫 체크에서 발송(시각별 1회, 2026-08-20). */
+  sendTimes: string[];
   /** 매칭 범위(일) — 발송일 기준 N일 전 00:00(KST) 이후 게시분에서 조건을 검색한다. */
   rangeDays: number;
   /** 발송 대상 종류. */
@@ -46,8 +48,10 @@ export interface BidNotifyProfile {
   recipients: NotifyRecipient[];
   /** 종류별 발송 항목 구성(순서 보존). 없으면 기본 구성(DEFAULT_CONTENT_FIELDS). */
   contentFields: Partial<Record<NotifyBidType, NotifyContentField[]>>;
-  /** 마지막 발송 처리일(KST YYYY-MM-DD) — 일 1회 멱등 가드. */
+  /** @deprecated 마지막 발송 처리일 — lastDispatchKey 이전 저장본 호환용. */
   lastDispatchDate?: string;
+  /** 마지막 발송 처리 슬롯(KST "YYYY-MM-DD HH:MM") — 시각별 1회 멱등 가드. */
+  lastDispatchKey?: string;
 }
 
 export interface BidNotifyConfig {
@@ -117,6 +121,7 @@ export function defaultProfile(name = "기본 알림"): BidNotifyProfile {
     name,
     enabled: false,
     sendTime: "08:30",
+    sendTimes: ["08:30"],
     rangeDays: 1,
     bidTypes: [...BID_TYPES],
     categoryIds: [],
@@ -135,7 +140,14 @@ export function normalizeProfile(raw: unknown): BidNotifyProfile {
 function sanitizeProfile(raw: unknown, index: number): BidNotifyProfile {
   const r = (raw ?? {}) as Partial<BidNotifyProfile>;
   const base = defaultProfile();
-  const sendTime = /^\d{2}:\d{2}$/.test(String(r.sendTime ?? "")) ? String(r.sendTime) : base.sendTime;
+  // 발송 시각 — sendTimes(신) 우선, 없으면 sendTime(구) 1개로 승격. 1~4개, 중복 제거·오름차순.
+  const HHMM = /^\d{2}:\d{2}$/;
+  const rawTimes = Array.isArray((r as { sendTimes?: unknown }).sendTimes)
+    ? ((r as { sendTimes?: unknown }).sendTimes as unknown[]).map((t) => String(t))
+    : [String(r.sendTime ?? "")];
+  const sendTimes = [...new Set(rawTimes.filter((t) => HHMM.test(t)))].sort().slice(0, 4);
+  if (!sendTimes.length) sendTimes.push(base.sendTime);
+  const sendTime = sendTimes[0];
   const recipients: NotifyRecipient[] = Array.isArray(r.recipients)
     ? r.recipients
         .map((p) => ({
@@ -175,6 +187,7 @@ function sanitizeProfile(raw: unknown, index: number): BidNotifyProfile {
     name: String(r.name ?? "").trim().slice(0, 40) || `알림 ${index + 1}`,
     enabled: r.enabled === true,
     sendTime,
+    sendTimes,
     rangeDays: Number.isFinite(rd) && rd >= 1 ? Math.min(Math.trunc(rd), 30) : base.rangeDays,
     bidTypes,
     categoryIds: Array.isArray(r.categoryIds)
@@ -187,6 +200,9 @@ function sanitizeProfile(raw: unknown, index: number): BidNotifyProfile {
     recipients,
     contentFields,
     ...(typeof r.lastDispatchDate === "string" ? { lastDispatchDate: r.lastDispatchDate } : {}),
+    ...(typeof (r as { lastDispatchKey?: unknown }).lastDispatchKey === "string"
+      ? { lastDispatchKey: String((r as { lastDispatchKey?: unknown }).lastDispatchKey) }
+      : {}),
   };
 }
 

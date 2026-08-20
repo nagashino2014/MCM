@@ -68,6 +68,50 @@ function addDays(date: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** 프로파일의 마지막 처리 슬롯 키 — 구저장본(lastDispatchDate)은 그날 전체 처리로 승격. */
+function lastSlotKey(p: BidNotifyProfile): string {
+  if (p.lastDispatchKey) return p.lastDispatchKey;
+  if (p.lastDispatchDate) return `${p.lastDispatchDate} 24:00`;
+  return "";
+}
+
+/**
+ * 이번 체크에서 처리할 발송 슬롯 — sendTimes(오름차순) 중 시각이 지났고 아직 처리 안 된 가장 늦은 것.
+ * (하나만 돌려 슬롯당 1회 발송. 여러 슬롯을 놓쳤다면 가장 최근 슬롯 1회로 합쳐 보낸다 — 재기동 직후 스팸 방지.)
+ */
+function dueSlot(p: BidNotifyProfile, today: string, hm: string): string | null {
+  const last = lastSlotKey(p);
+  const passed = p.sendTimes.filter((t) => t <= hm && `${today} ${t}` > last);
+  return passed.length ? passed[passed.length - 1] : null;
+}
+
+/** "HH:MM" 에서 분을 뺀다(같은 날 안에서만 — 자정 이전으로 내려가면 "00:00"). */
+function minusMinutes(hm: string, minutes: number): string {
+  const total = Number(hm.slice(0, 2)) * 60 + Number(hm.slice(3, 5)) - minutes;
+  if (total <= 0) return "00:00";
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
+/** 발송 전 최신화(프리페치) 리드타임(분) — 각 발송 시각 10분 전부터 수집을 돌린다(2026-08-20). */
+export const PREFETCH_LEAD_MINUTES = 10;
+
+/**
+ * 지금이 프리페치 창(발송 슬롯 10분 전 ~ 슬롯 직전)인 활성 프로파일들의 슬롯 목록.
+ * bid-notify-tick 이 이 슬롯들에 대해 입찰공고·사전규격·발주계획 수집을 먼저 돌려 DB 를 최신화한다.
+ */
+export function duePrefetchSlots(profiles: BidNotifyProfile[], now = new Date()): string[] {
+  const { date: today, hm } = kstParts(now);
+  const out = new Set<string>();
+  for (const p of profiles) {
+    if (!p.enabled || !p.recipients.length || !p.bidTypes.length) continue;
+    for (const t of p.sendTimes) {
+      if (`${today} ${t}` <= lastSlotKey(p)) continue; // 이미 발송된 슬롯
+      if (hm >= minusMinutes(t, PREFETCH_LEAD_MINUTES) && hm < t) out.add(t);
+    }
+  }
+  return [...out].sort();
+}
+
 /**
  * 매칭 범위 내 게시분에서 프로파일 조건에 맞는 건을 검색한다.
  * 게시일(posted_at)이 비어 있으면 수집시각(created_at)으로 대체 판정.
@@ -311,15 +355,15 @@ async function dispatchProfile(
   nowIso: string
 ): Promise<{ dispatched: number; skipped?: string; channels?: Record<string, ChannelSendResult> }> {
   if (!profile.enabled || !profile.recipients.length) return { dispatched: 0, skipped: "disabled" };
-  if (hm < profile.sendTime) return { dispatched: 0, skipped: "before-send-time" };
-  if (profile.lastDispatchDate === today) return { dispatched: 0, skipped: "already-dispatched" };
+  const slot = dueSlot(profile, today, hm);
+  if (!slot) return { dispatched: 0, skipped: "no-due-slot" };
   if (!profile.bidTypes.length) return { dispatched: 0, skipped: "no-bid-type" };
 
   const fromDate = addDays(today, -profile.rangeDays);
   const matches = await searchMatches(db, profile, fromDate);
   if (!matches.length) {
-    // 대상이 없어도 오늘 체크는 완료 처리 — 매 주기 재검색 방지.
-    await patchBidNotifyProfile(profile.profileId, { lastDispatchDate: today });
+    // 대상이 없어도 이 슬롯 체크는 완료 처리 — 매 주기 재검색 방지.
+    await patchBidNotifyProfile(profile.profileId, { lastDispatchKey: `${today} ${slot}`, lastDispatchDate: today });
     return { dispatched: 0, skipped: "no-match" };
   }
 
@@ -343,13 +387,13 @@ async function dispatchProfile(
       body: pushSummary(matches),
       link: "/bids",
       targetRef: today,
-      dedupKey: `bid.match:${profile.profileId}:${today}`,
+      dedupKey: `bid.match:${profile.profileId}:${today}:${slot}`,
     });
   }
 
   await queueMatches(matches, nowIso, "pending"); // 목록 큐 동기화(신규만 — 기존 행은 유지)
   await markQueueSent(matches, nowIso);
-  await patchBidNotifyProfile(profile.profileId, { lastDispatchDate: today });
+  await patchBidNotifyProfile(profile.profileId, { lastDispatchKey: `${today} ${slot}`, lastDispatchDate: today });
   console.log(
     `[bid-notify] "${profile.name}" dispatched ${matches.length} matches (range ${profile.rangeDays}d)`,
     JSON.stringify(channels)
@@ -366,9 +410,12 @@ async function dispatchProfile(
 export async function isBidNotifyDue(now = new Date()): Promise<boolean> {
   const { profiles } = await loadTickCached(TICK_CACHE_BID_NOTIFY, loadBidNotifyConfig);
   const { date: today, hm } = kstParts(now);
+  // 발송 슬롯 10분 전 프리페치 창이어도 DB 를 열어야 한다(수집 최신화).
+  if (duePrefetchSlots(profiles, now).length) return true;
   return profiles.some((p) => {
-    if (!p.enabled || !p.recipients.length || hm < p.sendTime) return false;
-    if (p.lastDispatchDate !== today) return true; // 매칭 발송(일 1회)
+    if (!p.enabled || !p.recipients.length) return false;
+    if (dueSlot(p, today, hm)) return true; // 매칭 발송(슬롯별 1회)
+    if (hm < p.sendTimes[0]) return false;
     // 매칭이 끝난 뒤에도 마감 임박은 따로 돈다(dispatchBidDeadlineReminders).
     return p.deadlineDays > 0 && p.recipients.some((r) => r.deadlineAlert);
   });

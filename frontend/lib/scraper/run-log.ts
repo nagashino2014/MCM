@@ -7,7 +7,7 @@ import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import type { ScraperEndpointRow, ScraperSourceRow } from "./types";
 
-export type RunTrigger = "batch" | "manual" | "backfill";
+export type RunTrigger = "batch" | "manual" | "backfill" | "prefetch";
 
 export interface ScraperRunLogInput {
   source: Pick<ScraperSourceRow, "sourceId" | "slug">;

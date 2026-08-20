@@ -98,7 +98,10 @@ interface BidNotifyProfile {
   profileId: string;
   name: string;
   enabled: boolean;
+  /** @deprecated 첫 발송 시각 미러 — 저장 시 sendTimes[0] 로 채운다. */
   sendTime: string;
+  /** 발송 시각 목록("HH:MM", 1~4개) — 각 시각 이후 첫 체크에서 발송. */
+  sendTimes: string[];
   /** 매칭 범위(일) — 발송일 기준 N일 전 00:00 이후 게시분에서 검색. */
   rangeDays: number;
   /** 발송 대상 종류. */
@@ -277,8 +280,8 @@ export function BidBoard() {
   const [notifyModal, setNotifyModal] = useState(false);
   const [notifyProfiles, setNotifyProfiles] = useState<BidNotifyProfile[]>([]);
   const [notifyIdx, setNotifyIdx] = useState(0);
-  /** 발송 시각 입력(HHMM 4자리) — 저장 시 "HH:MM" 으로 변환. */
-  const [sendTimeDraft, setSendTimeDraft] = useState("");
+  /** 발송 시각 입력(최대 4개, HHMM 4자리) — 저장 시 "HH:MM" 으로 변환. */
+  const [sendTimesDraft, setSendTimesDraft] = useState<string[]>([""]);
   const [notifyPending, setNotifyPending] = useState(0);
   const [notifyLastSentAt, setNotifyLastSentAt] = useState<string | null>(null);
   const [defaultFields, setDefaultFields] = useState<Partial<Record<BidType, NotifyContentField[]>>>({});
@@ -512,9 +515,14 @@ export function BidBoard() {
     return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
   };
 
+  const timesOf = (p?: BidNotifyProfile): string[] => {
+    const arr = p?.sendTimes?.length ? p.sendTimes : p?.sendTime ? [p.sendTime] : ["08:30"];
+    return arr.slice(0, 4);
+  };
+
   const selectProfile = (idx: number) => {
     setNotifyIdx(idx);
-    setSendTimeDraft(notifyProfiles[idx]?.sendTime ?? "");
+    setSendTimesDraft(timesOf(notifyProfiles[idx]));
   };
 
   const addProfile = () => {
@@ -523,6 +531,7 @@ export function BidBoard() {
       name: `알림 ${notifyProfiles.length + 1}`,
       enabled: false,
       sendTime: "08:30",
+      sendTimes: ["08:30"],
       rangeDays: 1,
       bidTypes: ["order_plan", "prior_spec", "bid_notice"],
       categoryIds: [],
@@ -533,7 +542,7 @@ export function BidBoard() {
     };
     setNotifyProfiles((prev) => [...prev, p]);
     setNotifyIdx(notifyProfiles.length);
-    setSendTimeDraft("08:30");
+    setSendTimesDraft(["08:30"]);
   };
 
   const removeProfile = (idx: number) => {
@@ -542,7 +551,7 @@ export function BidBoard() {
     setNotifyProfiles(next);
     const ni = Math.max(0, Math.min(notifyIdx, next.length - 1));
     setNotifyIdx(ni);
-    setSendTimeDraft(next[ni]?.sendTime ?? "");
+    setSendTimesDraft(timesOf(next[ni]));
   };
 
   const openNotifyModal = async () => {
@@ -556,7 +565,7 @@ export function BidBoard() {
       const profiles: BidNotifyProfile[] = Array.isArray(d?.profiles) ? d.profiles : [];
       setNotifyProfiles(profiles);
       setNotifyIdx(0);
-      setSendTimeDraft(profiles[0]?.sendTime ?? "");
+      setSendTimesDraft(timesOf(profiles[0]));
       setNotifyPending(Number(d?.pending ?? 0));
       setNotifyLastSentAt(d?.lastSentAt ?? null);
       if (d?.defaultContentFields) setDefaultFields(d.defaultContentFields);
@@ -571,13 +580,20 @@ export function BidBoard() {
   const saveNotifySettings = async () => {
     // 입력 중이던 발송 시각(HHMM)을 먼저 반영 — 형식이 어긋나면 저장을 막는다.
     let profiles = notifyProfiles;
-    if (notifyProfile && sendTimeDraft) {
-      const hhmm = draftToHHMM(sendTimeDraft);
-      if (!hhmm) {
+    if (notifyProfile) {
+      const parsed = sendTimesDraft.filter((d) => d.trim() !== "").map((d) => draftToHHMM(d));
+      if (parsed.some((t) => !t)) {
         setError("발송 시각은 HHMM 4자리로 입력하세요 (예: 0830).");
         return;
       }
-      profiles = notifyProfiles.map((p, i) => (i === notifyIdx ? { ...p, sendTime: hhmm } : p));
+      const sendTimes = [...new Set(parsed as string[])].sort();
+      if (!sendTimes.length) {
+        setError("발송 시각을 1개 이상 입력하세요.");
+        return;
+      }
+      profiles = notifyProfiles.map((p, i) =>
+        i === notifyIdx ? { ...p, sendTimes, sendTime: sendTimes[0] } : p
+      );
       setNotifyProfiles(profiles);
     }
     setNotifyBusy(true);
@@ -598,8 +614,8 @@ export function BidBoard() {
   /** 편집 중 조건 그대로 즉시 1회 발송 — 저장·큐·발송이력에는 영향 없음. */
   const sendTestNotify = async () => {
     if (!notifyProfile) return;
-    const hhmm = draftToHHMM(sendTimeDraft);
-    const profile = { ...notifyProfile, ...(hhmm ? { sendTime: hhmm } : {}) };
+    const times = sendTimesDraft.map((d) => draftToHHMM(d)).filter((t): t is string => !!t);
+    const profile = { ...notifyProfile, ...(times.length ? { sendTimes: times, sendTime: times[0] } : {}) };
     setNotifyBusy(true);
     setNotifyTestResult(null);
     try {
@@ -1539,10 +1555,20 @@ export function BidBoard() {
                   </button>
                 </span>
               ))}
-              <span className="text-[11px] cd-text-faint ml-auto">
+              <span className="text-[11px] cd-text-faint">
                 {notifyPending > 0 && <>발송 대기 <b>{notifyPending}건</b></>}
                 {notifyLastSentAt && <> · 최근 발송 {short(notifyLastSentAt)}</>}
               </span>
+              {notifyProfile && (
+                <button
+                  type="button"
+                  className="cd-btn cd-btn-soft text-[12px] ml-auto"
+                  style={{ height: 30 }}
+                  onClick={openFieldModal}
+                >
+                  <ListOrdered className="w-4 h-4" /> 발송 항목 구성
+                </button>
+              )}
             </div>
 
             {!notifyProfile && (
@@ -1558,8 +1584,7 @@ export function BidBoard() {
               <div className="flex flex-col gap-2" style={{ width: 344 }}>
                 <div className="flex items-center gap-2">
                   <input
-                    className="cd-input text-[13px]"
-                    style={{ width: 190 }}
+                    className="cd-input text-[13px] flex-1"
                     placeholder="조건 이름"
                     value={notifyProfile.name}
                     onChange={(e) => updateProfile({ name: e.target.value })}
@@ -1589,31 +1614,7 @@ export function BidBoard() {
                       <option value="7">D-7</option>
                     </select>
                   </label>
-                  <span className="flex items-center gap-1.5 text-[13px] cd-text whitespace-nowrap ml-auto">
-                    발송 시각
-                    <input
-                      className="cd-input text-[13px] text-center"
-                      style={{ width: 68, height: 34 }}
-                      inputMode="numeric"
-                      maxLength={5}
-                      placeholder="HH:MM"
-                      value={sendTimeDraft}
-                      // 숫자만 받아 2자리를 넘기면 콜론을 자동으로 끼워 넣는다(HH:MM).
-                      onChange={(e) => setSendTimeDraft(formatTimeInput(e.target.value))}
-                      onBlur={() => {
-                        const hhmm = draftToHHMM(sendTimeDraft);
-                        if (hhmm) {
-                          updateProfile({ sendTime: hhmm });
-                          setSendTimeDraft(hhmm);
-                        } else {
-                          setSendTimeDraft(notifyProfile.sendTime);
-                        }
-                      }}
-                    />
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <label className="flex items-center gap-1.5 text-[13px] cd-text whitespace-nowrap">
+                  <label className="flex items-center gap-1.5 text-[13px] cd-text whitespace-nowrap ml-auto">
                     매칭 범위
                     <select
                       className="cd-input text-[13px]"
@@ -1626,17 +1627,52 @@ export function BidBoard() {
                       ))}
                     </select>
                   </label>
-                  <button
-                    type="button"
-                    className="cd-btn cd-btn-soft text-[12px] ml-auto justify-center"
-                    style={{ height: 34, minWidth: 148 }}
-                    onClick={openFieldModal}
-                  >
-                    <ListOrdered className="w-4 h-4" /> 발송 항목 구성
-                  </button>
+                </div>
+                {/* 발송 시각 — 최대 4개. 각 시각 10분 전에 대상 종류를 최신 수집한 뒤 발송한다(2026-08-20). */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[13px] cd-text whitespace-nowrap">발송 시각</span>
+                  {sendTimesDraft.map((draft, ti) => (
+                    <span key={ti} className="flex items-center gap-0.5">
+                      <input
+                        className="cd-input text-[13px] text-center"
+                        style={{ width: 64, height: 34 }}
+                        inputMode="numeric"
+                        maxLength={5}
+                        placeholder="HH:MM"
+                        value={draft}
+                        // 숫자만 받아 2자리를 넘기면 콜론을 자동으로 끼워 넣는다(HH:MM).
+                        onChange={(e) => {
+                          const v = formatTimeInput(e.target.value);
+                          setSendTimesDraft((prev) => prev.map((d, i) => (i === ti ? v : d)));
+                        }}
+                      />
+                      {sendTimesDraft.length > 1 && (
+                        <button
+                          type="button"
+                          className="cd-text-faint hover:opacity-70"
+                          title="이 시각 제거"
+                          onClick={() => setSendTimesDraft((prev) => prev.filter((_, i) => i !== ti))}
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </span>
+                  ))}
+                  {sendTimesDraft.length < 4 && (
+                    <button
+                      type="button"
+                      className="cd-btn cd-btn-soft text-[12px]"
+                      style={{ height: 34, width: 34, padding: 0, justifyContent: "center" }}
+                      title="발송 시각 추가 (최대 4개)"
+                      onClick={() => setSendTimesDraft((prev) => [...prev, ""])}
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
                 <p className="text-[10px] cd-text-faint">
-                  발송일 기준 {notifyProfile.rangeDays}일 전 0시 이후 게시분에서 조건을 검색합니다.
+                  발송일 기준 {notifyProfile.rangeDays}일 전 0시 이후 게시분에서 조건을 검색하며, 각 발송
+                  시각 10분 전에 대상 정보를 최신 수집한 뒤 발송합니다.
                 </p>
               </div>
 

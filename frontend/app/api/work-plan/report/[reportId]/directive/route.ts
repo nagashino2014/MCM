@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { setExecDirective } from "@/lib/work-plan/workspace";
+import { pushDirectiveIssued } from "@/lib/work-plan/push-notify";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,6 +19,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     const body = (await req.json()) as { kind: string; message?: string | null; contractId?: string | null };
     if (!body.kind) return NextResponse.json({ error: "지시 분류가 필요합니다." }, { status: 400 });
     await setExecDirective(actor.userId, reportId, body);
+    void pushDirectiveIssued(reportId, actor.userId); // 부서장 앱 푸시(work.report)
     await recordAuditLog({
       actorUserId: actor.userId,
       action: "work_plan_save",

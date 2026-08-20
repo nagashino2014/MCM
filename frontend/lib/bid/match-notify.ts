@@ -1,7 +1,9 @@
 /**
  * 공공입찰 사업분야 매칭 → 알림 큐 적재(bid_match_notices, 077).
  * bid-sink 적재 직후 신규 건(insertedItems)에 대해 분류 조건 그룹(match_rule)을 평가하고,
- * 매칭 건을 큐 + alerts(웹 벨)에 넣는다. 실제 채널 발송은 notify-dispatch 가 설정된 시각에 수행.
+ * 매칭 건을 큐에 넣고, alerts(웹 벨)는 **활성 알림 프로파일의 분류·지역 조건에 드는 건만** 넣는다
+ * (2026-08-20 — 종전에는 전 분류·전 지역이 벨에 실려, 설정과 무관한 ESG·타 지역 알림이 아침 수집
+ *  때마다 도착했다). 실제 채널 발송은 notify-dispatch 가 설정된 시각에 수행.
  * 백필(과거 대량 수집) 경로에서는 호출하지 않는다 — 과거 건 알림 스팸 방지.
  */
 import crypto from "node:crypto";
@@ -10,6 +12,8 @@ import { listCategories } from "@/lib/bid/category-store";
 import { evaluateGroups, ruleFromCategory } from "@/lib/bid/match";
 import type { InsertedBid } from "@/lib/bid/bid-sink";
 import type { BidType } from "@/lib/scraper/types";
+import { loadBidNotifyConfig } from "@/lib/bid/notify-settings";
+import { REGION_GROUPS } from "@/lib/bid/bid-queries";
 
 const TYPE_LABEL: Record<BidType, string> = {
   order_plan: "발주계획",
@@ -38,6 +42,18 @@ export async function matchAndQueueBidNotices(
     .filter((c) => c.groups.length);
   if (!categories.length) return result;
 
+  // 활성 프로파일의 (종류, 분류, 지역) 합집합 — 벨 고지 대상 판정용. 프로파일이 없으면 벨 생략.
+  const { profiles } = await loadBidNotifyConfig();
+  const active = profiles.filter((p) => p.enabled && p.recipients.length && p.bidTypes.includes(bidType));
+  const alertWanted = (categoryId: string, orgName: string | null): boolean =>
+    active.some((p) => {
+      if (p.categoryIds.length && !p.categoryIds.includes(categoryId)) return false;
+      if (!p.regionGroups.length) return true;
+      // 지역 판정 — 수집 항목엔 raw 가 없어 기관명 기준(디스패처의 org_name LIKE 와 동일 축).
+      const keys = p.regionGroups.flatMap((g) => REGION_GROUPS[g] ?? []);
+      return keys.some((k) => (orgName ?? "").includes(k));
+    });
+
   const nowIso = new Date().toISOString();
   await withDbWrite(async (db) => {
     let alerted = 0;
@@ -63,7 +79,7 @@ export async function matchAndQueueBidNotices(
         );
         if (!rows.length) continue; // 이미 큐잉된 건
         result.queued++;
-        if (alerted < MAX_ALERTS_PER_RUN) {
+        if (alerted < MAX_ALERTS_PER_RUN && alertWanted(cat.categoryId, it.orgName)) {
           alerted++;
           await db.run(
             `INSERT INTO alerts (severity, source, code, title, body, payload_json, created_at)

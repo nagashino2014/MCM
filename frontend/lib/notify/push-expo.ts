@@ -24,6 +24,7 @@ export type PushEventKey =
   | "mail.received"
   | "leave.notice"
   | "invoice.request"
+  | "work.report"
   | "bid.match"
   | "bid.deadline";
 
@@ -44,6 +45,7 @@ const EVENT_DEFAULT: Record<PushEventKey, boolean> = {
   "mail.received": true,
   "leave.notice": true,
   "invoice.request": true,
+  "work.report": true,
   "bid.match": true,
   "bid.deadline": true,
 };
@@ -58,6 +60,7 @@ export const PUSH_EVENTS: { key: PushEventKey; label: string; description: strin
   { key: "mail.received", label: "새 메일", description: "새 메일을 받았을 때" },
   { key: "leave.notice", label: "연차 촉진 고지", description: "연차 사용 촉진 고지가 도착했을 때" },
   { key: "invoice.request", label: "세금계산서 발행", description: "발행 요청·처리 소식" },
+  { key: "work.report", label: "업무보고", description: "보고 제출·검토 의견·임원 지시가 도착했을 때" },
   { key: "bid.match", label: "공공입찰 매칭", description: "사업분야에 맞는 공고가 수집됐을 때" },
   { key: "bid.deadline", label: "입찰 마감 임박", description: "매칭된 공고의 마감일이 다가올 때" },
 ];

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { setReportReview } from "@/lib/work-plan/workspace";
+import { pushReportReviewed } from "@/lib/work-plan/push-notify";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,6 +21,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       return NextResponse.json({ error: "action 은 reject|confirm 이어야 합니다." }, { status: 400 });
     }
     await setReportReview(reportId, body);
+    void pushReportReviewed(reportId, body.action); // 작성자 앱 푸시(work.report)
     await recordAuditLog({
       actorUserId: actor.userId,
       action: "work_plan_save",

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { GradientButton, Input, Sheet, Textarea, useToast } from '@/components/ui';
@@ -89,7 +89,9 @@ export function NewProjectSheet({
         onClose={onClose}
         title="신규 영업건"
         footer={<View className="flex-1"><GradientButton label="등록" loading={saving} onPress={submit} /></View>}>
-        <View className="gap-3.5">
+        {/* 영업 일정 등록과 같은 겹침 케이스 — 폼을 스크롤 영역으로. */}
+        <ScrollView style={{ flexShrink: 1 }} keyboardShouldPersistTaps="handled">
+          <View className="gap-3.5 pb-2">
           <View className="gap-1.5">
             <Text className="text-[13px] font-bold text-cd-muted">사업장 *</Text>
             <Pressable
@@ -149,6 +151,7 @@ export function NewProjectSheet({
           />
           <Textarea label="메모" minHeight={72} maxLength={200} value={memo} onChangeText={setMemo} placeholder="선택 입력" />
         </View>
+        </ScrollView>
       </Sheet>
 
       <EntityPickerSheet

@@ -5,6 +5,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   Text,
   TextInput,
   View,
@@ -667,7 +668,8 @@ export default function ChatRoomScreen() {
             ) : null}
 
             <Text className="text-[13px] font-bold text-cd-muted">멤버 {detail.members.length}명</Text>
-            <View className="max-h-[220px]">
+            {/* 멤버가 많으면 max-h 를 넘어 아래 액션 버튼과 겹쳤다 — 스크롤 영역으로. */}
+            <ScrollView style={{ maxHeight: 220 }}>
               {detail.members.map((m) => (
                 <View key={m.userId} className="flex-row items-center gap-2.5 border-b border-cd-grid-line py-2">
                   <Avatar name={m.name} photoPath={m.photoPath} size="sm" />
@@ -682,7 +684,7 @@ export default function ChatRoomScreen() {
                   ) : null}
                 </View>
               ))}
-            </View>
+            </ScrollView>
 
             <View className="gap-2 pt-1">
               {detail.roomType === 'group' ? (

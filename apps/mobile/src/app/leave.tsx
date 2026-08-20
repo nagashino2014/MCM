@@ -88,7 +88,9 @@ const hOnly = (min: number) => {
 
 export default function LeaveScreen() {
   const router = useRouter();
-  const { c } = useTheme();
+  const { c, dark } = useTheme();
+  // 수치·제목 잉크 — 라이트는 핸드오프 고정색, 다크는 카드 레이블과 같은 테마 텍스트색(가독성 실측 2026-08-20).
+  const ink = dark ? c.text : CHART.ink;
   const year = String(new Date().getFullYear());
   const [tab, setTab] = useState<'leave' | 'work'>('leave');
 
@@ -171,11 +173,11 @@ export default function LeaveScreen() {
           <Card title="연차">
             {s ? (
               <View className="mt-3 flex-row items-center gap-5">
-                <DonutGauge value={s.remaining} total={s.granted || 1} label={d1(s.remaining)} />
+                <DonutGauge value={s.remaining} total={s.granted || 1} label={d1(s.remaining)} inkColor={ink} />
                 <View className="flex-1 gap-[9px]">
-                  <StatRow label="총 연차" value={`${d1(s.granted)}일`} />
-                  <StatRow label="사용" value={`${d1(s.used)}일`} tone="#7b7ef4" />
-                  <StatRow label="잔여" value={`${d1(s.remaining)}일`} strong divider />
+                  <StatRow label="총 연차" value={`${d1(s.granted)}일`} ink={ink} />
+                  <StatRow label="사용" value={`${d1(s.used)}일`} tone="#7b7ef4" ink={ink} />
+                  <StatRow label="잔여" value={`${d1(s.remaining)}일`} strong divider ink={ink} />
                 </View>
               </View>
             ) : (
@@ -223,7 +225,7 @@ export default function LeaveScreen() {
                 <View className="flex-row items-baseline">
                   <Text
                     className="text-[24px] font-extrabold leading-none"
-                    style={{ color: otUsed > otLimit ? CHART.gaugeOver : CHART.ink }}>
+                    style={{ color: otUsed > otLimit ? CHART.gaugeOver : ink }}>
                     {hOnly(otUsed)}
                   </Text>
                   <Text className="text-[13px] font-semibold" style={{ color: CHART.weekday }}>
@@ -252,7 +254,7 @@ export default function LeaveScreen() {
 
               {dayBars.length ? (
                 <>
-                  <Text className="mt-3.5 text-[12px] font-bold" style={{ color: CHART.ink }}>
+                  <Text className="mt-3.5 text-[12px] font-bold" style={{ color: ink }}>
                     일별 근무
                   </Text>
                   <View className="mt-2.5">
@@ -317,12 +319,15 @@ function StatRow({
   tone,
   strong,
   divider,
+  ink = CHART.ink,
 }: {
   label: string;
   value: string;
   tone?: string;
   strong?: boolean;
   divider?: boolean;
+  /** 값 텍스트 기본색 — 다크에서 테마 텍스트색을 넘긴다. */
+  ink?: string;
 }) {
   return (
     <View
@@ -331,7 +336,7 @@ function StatRow({
       <Text className="text-[12px]" style={{ color: CHART.weekday }}>
         {label}
       </Text>
-      <Text className={`text-[13px] ${strong ? 'font-extrabold' : 'font-bold'}`} style={{ color: tone ?? CHART.ink }}>
+      <Text className={`text-[13px] ${strong ? 'font-extrabold' : 'font-bold'}`} style={{ color: tone ?? ink }}>
         {value}
       </Text>
     </View>

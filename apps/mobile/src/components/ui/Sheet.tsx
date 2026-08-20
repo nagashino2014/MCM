@@ -45,7 +45,9 @@ export function Sheet({
               {/* ⚠ shrink 필수 — RN flexShrink 기본 0 이라, 내용이 max-h 를 넘으면 줄어들지 않고
                   시트 밖으로 그려져 하단이 잘린다(휴가 종류 목록 실측 2026-08-10). shrink 를 주면
                   내부 ScrollView 가 남은 높이 안에서 스크롤한다. */}
-              <View className="shrink px-4 py-4">{children}</View>
+              {/* overflow-hidden — 내용이 max-h 를 넘어도 footer 와 겹치지 않게 잘라낸다(넘치는 시트는
+                  자체 ScrollView 로 감싼다 — 영업 일정 등록 겹침 실측 2026-08-20). */}
+              <View className="shrink overflow-hidden px-4 py-4">{children}</View>
               {footer ? (
                 <View className="flex-row gap-2 border-t border-cd-border px-4 pt-3">{footer}</View>
               ) : null}

@@ -34,6 +34,20 @@ export default function MoreScreen() {
           subtitle: '공지·주소록·조직도',
           onPress: () => router.push('/(tabs)/collab'),
         },
+        {
+          icon: 'mail-outline',
+          tone: c.secondary,
+          title: '메일',
+          subtitle: '회사 메일함',
+          onPress: () => router.push('/(tabs)/mail'),
+        },
+        {
+          icon: 'checkbox-outline',
+          tone: purple,
+          title: '전자결재',
+          subtitle: '결재함·기안',
+          onPress: () => router.push('/(tabs)/approval'),
+        },
       ],
     },
     {

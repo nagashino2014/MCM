@@ -128,11 +128,30 @@ export async function listWeekly(weekStart: string): Promise<WeeklyRow[]> {
  * 본인 근태(모바일 M5) — user_id 로 최근 N주 요약을 돌려준다.
  * 관리자 화면(listWeekly)은 주 단위로 전 직원을 보지만, 여기는 **본인 것만** 본다.
  */
+/** 내 근태가 존재하는 월 목록('YYYY-MM', 최신순) — 모바일 연/월 탐색용. */
+export async function listMyAttendanceMonths(userId: string): Promise<string[]> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT DISTINCT to_char(w.week_start, 'YYYY-MM') AS ym
+         FROM users u
+         JOIN employee_profiles e ON e.employee_id = u.employee_id
+         JOIN attendance_weekly w ON w.employee_id = e.employee_id
+        WHERE u.user_id = $1
+        ORDER BY ym DESC`,
+      [userId]
+    )
+  );
+  return rows.map((r) => String(r.ym));
+}
+
 export async function listMyWeekly(
   userId: string,
-  limit = 8
+  limit = 8,
+  month?: string | null // 'YYYY-MM' — 지정 시 그 달에 시작하는 주만(모바일 연/월 탐색)
 ): Promise<{ adtEmpNo: string | null; weeks: WeeklyRow[] }> {
   const db = await getDb();
+  const monthCond = month && /^\d{4}-\d{2}$/.test(month) ? month : null;
   const rows = rowsToObjects(
     await db.exec(
       `SELECT w.adt_emp_no, to_char(w.week_start, 'YYYY-MM-DD') AS week_start, w.employee_id, w.emp_name,
@@ -145,9 +164,10 @@ export async function listMyWeekly(
          LEFT JOIN departments d ON d.dept_id = e.dept_id
          LEFT JOIN positions p ON p.position_id = e.position_id
         WHERE u.user_id = $1
+          AND ($3::text IS NULL OR to_char(w.week_start, 'YYYY-MM') = $3)
         ORDER BY w.week_start DESC
         LIMIT $2`,
-      [userId, limit]
+      [userId, monthCond ? 100 : limit, monthCond]
     )
   );
   const weeks = rows.map((r) => ({

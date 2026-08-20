@@ -3,6 +3,8 @@ import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from '
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
+import { useTheme } from '@/theme/useTheme';
+
 /**
  * 화면 주 CTA — 핸드오프 3a 의 그라데이션 버튼(linear-gradient(135deg,#6b7cf6,#9b7ef2)).
  *
@@ -117,12 +119,16 @@ export function OutlineButton({
   icon?: keyof typeof Ionicons.glyphMap;
   onPress?: () => void;
 }) {
+  // 다크에서 고정 잉크(#565e82)와 기본 테두리가 배경에 묻혔다 — 테마 텍스트색·진한 테두리로(2026-08-20).
+  const { c, dark } = useTheme();
+  const fg = dark ? c.text : '#565e82';
   return (
     <Pressable
       onPress={onPress}
-      className="h-[44px] flex-row items-center justify-center gap-[7px] rounded-[14px] border border-cd-border bg-cd-card active:opacity-70">
-      {icon ? <Ionicons name={icon} size={16} color="#565e82" /> : null}
-      <Text className="text-[13.5px] font-bold" style={{ color: '#565e82' }}>
+      className="h-[44px] flex-row items-center justify-center gap-[7px] rounded-[14px] border border-cd-border bg-cd-card active:opacity-70"
+      style={dark ? { borderColor: c.muted } : undefined}>
+      {icon ? <Ionicons name={icon} size={16} color={fg} /> : null}
+      <Text className="text-[13.5px] font-bold" style={{ color: fg }}>
         {label}
       </Text>
     </Pressable>

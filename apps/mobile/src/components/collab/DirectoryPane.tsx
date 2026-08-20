@@ -26,6 +26,8 @@ export interface DirPerson {
   companyEmail: string | null;
   mobilePhone: string | null;
   companyPhone: string | null;
+  /** 증명사진 API 경로 — Avatar 가 인증 헤더를 붙여 불러온다. */
+  photoPath: string | null;
 }
 
 export function useDirectory() {
@@ -106,7 +108,7 @@ export function DirectoryPane() {
         renderItem={({ item }) => (
           <View className="gap-2 border-b border-cd-border px-4 py-3">
             <View className="flex-row items-center gap-3">
-              <Avatar name={item.name} size="md" />
+              <Avatar name={item.name} photoPath={item.photoPath} size="md" />
               <View className="flex-1">
                 <Text className="text-[15px] font-bold text-cd-text">
                   {item.name}

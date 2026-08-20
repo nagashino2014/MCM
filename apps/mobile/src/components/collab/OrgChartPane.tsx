@@ -86,7 +86,7 @@ export function OrgChartPane() {
               <View
                 key={p.employeeId}
                 className="flex-row items-center gap-2.5 border-b border-cd-border py-2 pl-8 pr-4">
-                <Avatar name={p.name} size="sm" />
+                <Avatar name={p.name} photoPath={p.photoPath} size="sm" />
                 <Text className="flex-1 text-[14px] text-cd-text">
                   {p.name}
                   {p.positionName ? (

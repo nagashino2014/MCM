@@ -39,6 +39,7 @@ export function DonutGauge({
   thickness = 9,
   label,
   caption = '잔여',
+  inkColor,
 }: {
   value: number;
   total: number;
@@ -46,6 +47,8 @@ export function DonutGauge({
   thickness?: number;
   label?: string;
   caption?: string;
+  /** 중앙 수치 색 — 다크 배경에서는 CHART.ink(진네이비)가 묻혀 테마 텍스트색을 넘긴다. */
+  inkColor?: string;
 }) {
   const gid = `ring-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const r = (size - thickness) / 2;
@@ -74,7 +77,7 @@ export function DonutGauge({
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
         />
       </Svg>
-      <Text className="text-[18px] font-extrabold leading-none" style={{ color: CHART.ink }}>
+      <Text className="text-[18px] font-extrabold leading-none" style={{ color: inkColor ?? CHART.ink }}>
         {label ?? value}
       </Text>
       <Text className="mt-0.5 text-[10px]" style={{ color: CHART.weekday }}>

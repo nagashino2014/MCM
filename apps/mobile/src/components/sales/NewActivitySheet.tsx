@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { GradientButton, Input, Sheet, Textarea, useToast } from '@/components/ui';
@@ -112,7 +112,9 @@ export function NewActivitySheet({
         onClose={onClose}
         title="영업 일정 등록"
         footer={<View className="flex-1"><GradientButton label="등록" loading={saving} onPress={submit} /></View>}>
-        <View className="gap-3.5">
+        {/* 폼이 시트 최대 높이를 넘으면 footer 와 겹쳤다(작은 기기 실측) — 휴가 종류 시트와 같은 스크롤 패턴. */}
+        <ScrollView style={{ flexShrink: 1 }} keyboardShouldPersistTaps="handled">
+          <View className="gap-3.5 pb-2">
           <View className="gap-1.5">
             <Text className="text-[13px] font-bold text-cd-muted">영업건 *</Text>
             <Pressable
@@ -168,7 +170,8 @@ export function NewActivitySheet({
             onChangeText={setSummary}
             placeholder="100자 이내"
           />
-        </View>
+          </View>
+        </ScrollView>
       </Sheet>
 
       <EntityPickerSheet

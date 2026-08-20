@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
-import { getAttendanceSettings, listDailyForWeek, listMyWeekly } from "@/lib/adt/queries";
+import { getAttendanceSettings, listDailyForWeek, listMyAttendanceMonths, listMyWeekly } from "@/lib/adt/queries";
 import { DEFAULT_ATTENDANCE_SETTINGS } from "@/lib/adt/settings";
 
 export const runtime = "nodejs";
@@ -12,11 +12,17 @@ export const dynamic = "force-dynamic";
  * 관리자 화면(/api/approval/attendance)은 approval.manage 로 전 직원을 보지만,
  * 이 라우트는 **본인 것만** 돌려주므로 approval.view 로 충분하다.
  * ?week=YYYY-MM-DD 를 주면 그 주의 일별 출퇴근까지 함께 준다.
+ * ?month=YYYY-MM 을 주면 그 달에 시작하는 주만 돌려준다(모바일 연/월 탐색 — 2026-08-20).
+ *   응답의 months 는 기록이 있는 전체 월 목록(최신순)이다.
  */
 export async function GET(req: NextRequest) {
   try {
     const ctx = await requirePermission("approval.view");
-    const { adtEmpNo, weeks } = await listMyWeekly(ctx.userId, 8);
+    const month = req.nextUrl.searchParams.get("month");
+    const [{ adtEmpNo, weeks }, months] = await Promise.all([
+      listMyWeekly(ctx.userId, 8, month),
+      listMyAttendanceMonths(ctx.userId),
+    ]);
 
     const week = req.nextUrl.searchParams.get("week") ?? weeks[0]?.weekStart ?? null;
     const daily = adtEmpNo && week ? await listDailyForWeek(adtEmpNo, week) : [];
@@ -35,7 +41,7 @@ export async function GET(req: NextRequest) {
       weeklyOvertimeLimitMinutes: s.weeklyOvertimeLimitMinutes,
     };
 
-    return NextResponse.json({ weeks, week, daily, limits });
+    return NextResponse.json({ weeks, week, daily, limits, months });
   } catch (err) {
     return authErrorToResponse(err);
   }

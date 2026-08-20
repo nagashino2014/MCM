@@ -529,7 +529,9 @@ export function FormField({
         onClose={() => setSheet(null)}
       />
       <Sheet visible={sheet === 'select'} onClose={() => setSheet(null)} title={f.label}>
-        <View className="gap-1 pb-2">
+        {/* 옵션 수는 양식에 따라 무제한 — 휴가 종류 시트와 같은 스크롤 패턴(잘림 방지). */}
+        <ScrollView style={{ maxHeight: 480, flexShrink: 1 }}>
+          <View className="gap-1 pb-2">
           {(f.options ?? []).map((o) => (
             <Pressable
               key={o}
@@ -541,7 +543,8 @@ export function FormField({
               <Text className={`text-[15px] ${str(value) === o ? 'font-extrabold text-cd-primary' : 'text-cd-text'}`}>{o}</Text>
             </Pressable>
           ))}
-        </View>
+          </View>
+        </ScrollView>
       </Sheet>
       <OrgPickerSheet
         visible={sheet === 'org'}

@@ -179,10 +179,11 @@ export default function SalesScreen() {
                       style={{ backgroundColor: '#fffaf0', borderColor: '#f5e3c0' }}>
                       <TypeTag short={meta.short} color={meta.color} ink={meta.ink} />
                       <View className="flex-1">
-                        <Text numberOfLines={1} className="text-[13px] font-semibold text-cd-text">
+                        {/* 카드 배경이 테마 무관 크림색이라 글자색도 고정 잉크로(다크에서 밝은 토큰색이 묻힘). */}
+                        <Text numberOfLines={1} className="text-[13px] font-semibold" style={{ color: '#4a3a12' }}>
                           {r.title}
                         </Text>
-                        <Text numberOfLines={1} className="mt-0.5 text-[11.5px] text-cd-faint">
+                        <Text numberOfLines={1} className="mt-0.5 text-[11.5px]" style={{ color: '#8d7c50' }}>
                           {[r.facilityName, (a.endedAt ?? a.scheduledAt)?.slice(0, 10)].filter(Boolean).join(' · ')}
                         </Text>
                       </View>

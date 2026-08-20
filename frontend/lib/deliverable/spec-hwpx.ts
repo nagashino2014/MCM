@@ -62,11 +62,11 @@ function padLabel(label: string, width: number): string {
   const slots = chars.length - 1;
   const need = width - base;
   if (slots <= 0 || need <= 0) return label + " ".repeat(Math.max(0, width - widthOf(label)));
-  const per = Math.floor(need / slots);
-  let extra = need - per * slots;
-  const spread = chars
-    .map((ch, i) => (i === chars.length - 1 ? ch : ch + " ".repeat(per + (extra-- > 0 ? 1 : 0))))
-    .join("");
+  // 글자 사이를 **균등하게** 벌린다(2026-08-19 사용자 확정) — 나머지를 앞 슬롯에만 몰면
+  // "용 역 금액"처럼 마지막 글자만 붙어 어색하다. 반올림이라 목표 폭을 1칸 넘길 수 있는데,
+  // 콜론은 라벨 열 최댓값 기준으로 정렬되므로 문제되지 않는다.
+  const per = Math.max(0, Math.round(need / slots));
+  const spread = chars.map((ch, i) => (i === chars.length - 1 ? ch : ch + " ".repeat(per))).join("");
   return spread + " ".repeat(Math.max(0, width - widthOf(spread)));
 }
 

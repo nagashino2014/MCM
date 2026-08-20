@@ -83,9 +83,10 @@ function padLabel(label: string, width: number): string {
   const slots = chars.length - 1;
   const need = width - base;
   if (need <= 0) return chars.join("");
-  const per = Math.floor(need / slots);
-  let extra = need - per * slots;
-  return chars.map((ch, i) => (i === chars.length - 1 ? ch : ch + " ".repeat(per + (extra-- > 0 ? 1 : 0)))).join("");
+  // 균등 분배(2026-08-19 사용자 확정) — 3글자는 2칸, 4글자는 1칸이 되어 라벨 폭이 고르게 보인다.
+  // 나머지를 앞 슬롯에만 몰면 "용 역 금액"처럼 마지막 글자만 붙는다.
+  const per = Math.max(0, Math.round(need / slots));
+  return chars.map((ch, i) => (i === chars.length - 1 ? ch : ch + " ".repeat(per))).join("");
 }
 
 function fillParaValue(

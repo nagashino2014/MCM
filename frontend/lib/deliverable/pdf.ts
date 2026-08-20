@@ -115,16 +115,24 @@ function drawFields(
   const indent = block.indentPt ?? 0;
   const x0 = ctx.m.left + indent;
 
-  // 라벨 열 폭 = (번호접두 + 최장 라벨) 실측
-  const labelTexts = block.rows.map((r, i) => numberPrefix(block.numbering, i) + r.label);
-  const labelW = block.labelWidthPt ?? Math.max(...labelTexts.map((t) => fonts.regular.widthOfTextAtSize(t, size)));
+  // 라벨 열 폭 = 번호접두 + 최장 라벨. 라벨은 그 폭에 맞춰 **자간을 벌려** 양끝맞춤한다
+  // (2026-08-19 사용자 확정 — 글자 수가 달라도 라벨 블록 너비가 정확히 같아진다).
+  const prefixes = block.rows.map((_, i) => numberPrefix(block.numbering, i));
+  const cores = block.rows.map((r) => r.label.replace(/\s+/g, ""));
+  const prefixW = Math.max(0, ...prefixes.map((t) => fonts.regular.widthOfTextAtSize(t, size)));
+  const coreW = Math.max(...cores.map((t) => fonts.regular.widthOfTextAtSize(t, size)));
+  const labelW = block.labelWidthPt ?? prefixW + coreW;
   const sep = " : ";
   const sepW = fonts.regular.widthOfTextAtSize(sep, size);
   const valueX = x0 + labelW + sepW;
   const valueW = PAGE_W - ctx.m.right - valueX;
 
   block.rows.forEach((row: FieldRow, i) => {
-    page.drawText(labelTexts[i], { x: x0, y: y - size, size, font: fonts.regular, color: INK });
+    if (prefixes[i]) page.drawText(prefixes[i], { x: x0, y: y - size, size, font: fonts.regular, color: INK });
+    const core = cores[i];
+    // ⚠ 이름을 letterGap 으로 — 바깥의 행 간격 gap 을 가리면 행 간격이 자간 값으로 계산된다
+    const letterGap = core.length > 1 ? (coreW - fonts.regular.widthOfTextAtSize(core, size)) / (core.length - 1) : 0;
+    drawSpaced(page, core, x0 + prefixW, y - size, fonts.regular, size, letterGap);
     page.drawText(":", { x: x0 + labelW + sepW / 2 - 2, y: y - size, size, font: fonts.regular, color: INK });
     const value = renderSlot(row, values);
     const lines = wrap(value, fonts.regular, size, valueW);

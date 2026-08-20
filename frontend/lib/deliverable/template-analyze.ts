@@ -53,6 +53,8 @@ function buildPrompt(kind: DeliverableKind, serialized: string): string {
     "5. 대응하는 바인딩 키가 없으면 binding 을 \"custom:<간단한영문키>\" 로 만들고 label 에 양식 라벨을 그대로 쓰세요 " +
     "(사용자가 화면에서 직접 값을 채웁니다).\n" +
     "6. 자사 정보(상호·주소·대표자)와 발주처명, 작성일 서명란도 빠뜨리지 마세요.\n" +
+    '6-1. 준공계의 "준공년월일·준공일·실준공일"은 실제 준공한 날(completion.actualDate)입니다 — ' +
+    "계약상 완료 예정일(contract.endDate)과 다를 수 있으니 혼동하지 마세요.\n" +
     "7. 확신이 없어도 가장 그럴듯한 매핑을 내세요 — 사용자가 화면에서 보정합니다. " +
     "다만 값 자리가 아닌 것이 분명한 곳(안내 문구, 고정 문장)은 매핑하지 마세요.\n" +
     "8. 애매했던 판단이나 사용자가 확인해야 할 점은 note 에 한국어 한두 문장으로 적으세요.\n\n" +
@@ -75,6 +77,19 @@ const int = (v: unknown): number | null => {
  * 사용자가 화면에서 고친 매핑(D5)도 같은 검증을 태운다 — 좌표가 어긋난 채 저장되면
  * 주입 단계에서 조용히 빠져 버려 원인을 찾기 어렵다.
  */
+/**
+ * 준공일 매핑 보정(2026-08-19 사용자 지적) — "준공년월일·준공일"은 실제 준공한 날인데
+ * LLM 이 계약 완료 예정일(contract.endDate)로 매핑하는 일이 잦다(동두천드림파워 실사례:
+ * 용역기간 종료일 2026-12-31 이 찍혔다). 라벨이 준공일을 가리키면 실준공일로 바로잡는다.
+ * "준공예정일"은 예정일이 맞으므로 제외한다.
+ */
+function fixCompletionDate(binding: string, label: string): string {
+  if (binding !== "contract.endDate") return binding;
+  const core = label.replace(/\s+/g, "");
+  if (/준공예정/.test(core) || !/준공(년월|연월)?일/.test(core)) return binding;
+  return "completion.actualDate";
+}
+
 export function sanitizeProfile(raw: unknown, outline: FormOutline, model: string): TemplateProfile {
   const root = (raw ?? {}) as Record<string, unknown>;
   const docsRaw = Array.isArray(root.docs) ? root.docs : [];
@@ -96,7 +111,7 @@ export function sanitizeProfile(raw: unknown, outline: FormOutline, model: strin
           if (table == null || row == null || col == null) return null;
           const t = outline.tables[table];
           if (!t || !t.cells.some((c) => c.row === row && c.col === col)) return null;
-          return { target: "cell" as const, table, row, col, binding, label, format };
+          return { target: "cell" as const, table, row, col, binding: fixCompletionDate(binding, label), label, format };
         }
         const para = int(x.para);
         if (para == null || !outline.paras[para]) return null;
@@ -104,7 +119,7 @@ export function sanitizeProfile(raw: unknown, outline: FormOutline, model: strin
         // 예외: 문단 전체가 값인 자리는 둘 다 없어도 되지만, 그런 문단은 고정 문구와 구분되지 않아 받지 않는다.
         const suffix = String(x.suffix ?? "").trim() || undefined;
         if (!label && !suffix) return null;
-        return { target: "para" as const, para, binding, label, suffix, format };
+        return { target: "para" as const, para, binding: fixCompletionDate(binding, label), label, suffix, format };
       })
       .filter((s): s is TemplateSlot => s !== null)
       // 같은 자리에 두 번 매핑되면 앞의 것만 남긴다

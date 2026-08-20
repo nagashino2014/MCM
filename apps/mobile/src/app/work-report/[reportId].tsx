@@ -1,16 +1,18 @@
-import { useCallback } from 'react';
-import { RefreshControl, ScrollView, Text, View } from 'react-native';
+import { useCallback, useState } from 'react';
+import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 
-import { Badge, Button, Card, EmptyState, ScreenHeader, SkeletonList } from '@/components/ui';
+import { Badge, Button, Card, ConfirmSheet, EmptyState, ScreenHeader, SkeletonList, Textarea, useToast } from '@/components/ui';
+import { apiFetch } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { useTheme } from '@/theme/useTheme';
 
 /**
- * 업무보고 상세(WR-M1) — 열람 + 실무자 수정·재제출 진입.
- * 부서장 피드백·임원 지시 "액션"은 WR-M2/M3 — 여기서는 남긴 의견·지시를 보여 주기만 한다.
+ * 업무보고 상세(WR-M1·M2) — 열람 + 실무자 수정·재제출 + 부서장 검토(?review=1).
+ * 검토 규칙은 웹 ReportEditor 와 동일: 의견 분류 중 '보완 요구'·'오기 정정 요청'일 때만 반려 가능,
+ * 확인(confirm)은 머징 대상으로 분류 — 합본·임원 발표는 웹 감독 화면에서. 임원 지시는 WR-M3.
  */
 
 interface StageRow {
@@ -50,12 +52,21 @@ const COMMENT_KIND_LABEL: Record<string, string> = {
   supplement: '보완 요청',
   correction: '반려(정정)',
 };
+/** 부서장 의견 분류(웹 REVIEW_COMMENT_KINDS와 동일) — supplement·correction 만 반려 가능. */
+const REVIEW_KINDS: { value: string; label: string }[] = [
+  { value: 'amend', label: '의견 첨삭' },
+  { value: 'supplement', label: '보완 요구' },
+  { value: 'correction', label: '오기 정정 요청' },
+];
+const REJECTABLE = ['supplement', 'correction'];
 const STAGE_STATUS: Record<string, string> = { pending: '예정', in_progress: '진행', done: '완료' };
 
 export default function WorkReportDetailScreen() {
   const router = useRouter();
   const { c } = useTheme();
-  const { reportId } = useLocalSearchParams<{ reportId: string }>();
+  const { reportId, review } = useLocalSearchParams<{ reportId: string; review?: string }>();
+  const reviewMode = review === '1';
+  const toast = useToast();
   const { data, loading, refreshing, error, reload } = useApi<{ report: ReportDetail }>(
     `/api/work-plan/report/${reportId}`
   );
@@ -68,8 +79,52 @@ export default function WorkReportDetailScreen() {
   );
 
   const r = data?.report;
-  // 수정·재제출 진입 조건 — 작성 중이거나 반려/보완 상태의 계약 보고(권한 검증은 서버 몫).
-  const editable = !!r && r.subjectKind === 'contract' && (r.status === 'draft' || r.reviewStatus === 'rejected');
+  // 수정·재제출 진입 조건 — 작성 중이거나 반려/보완 상태의 보고(권한 검증은 서버 몫). 검토 모드에서는 숨긴다.
+  const editable = !reviewMode && !!r && (r.status === 'draft' || r.reviewStatus === 'rejected');
+
+  // 부서장 검토(WR-M2) — 의견 분류·의견 텍스트, 반려는 확인 시트를 거친다.
+  const [kind, setKind] = useState('amend');
+  const [comment, setComment] = useState('');
+  const [commentSeeded, setCommentSeeded] = useState(false);
+  const [confirmReject, setConfirmReject] = useState(false);
+  const [acting, setActing] = useState<'reject' | 'confirm' | null>(null);
+  // 기존 의견 프리필(1회) — 렌더 중 setState 금지 규칙에 따라 시드 플래그로 처리.
+  if (reviewMode && r && !commentSeeded) {
+    setCommentSeeded(true);
+    if (r.reviewerComment) setComment(r.reviewerComment);
+    if (r.reviewerCommentKind) setKind(r.reviewerCommentKind);
+  }
+
+  const submitReview = async (action: 'reject' | 'confirm') => {
+    if (!r) return;
+    if (action === 'reject' && !comment.trim()) {
+      toast.show('반려 사유(의견)를 입력하세요.', 'error');
+      return;
+    }
+    setActing(action);
+    try {
+      const res = await apiFetch(`/api/work-plan/report/${r.reportId}/review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, reviewerComment: comment.trim() || null, reviewerCommentKind: kind }),
+      });
+      const d = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(d.error ?? `HTTP ${res.status}`);
+      toast.show(
+        action === 'reject'
+          ? '반려했습니다 — 작성자에게 재제출 대상으로 표시됩니다.'
+          : '확인 완료 — 머징(임원 보고) 대상으로 분류됩니다.',
+        'success'
+      );
+      setConfirmReject(false);
+      await reload();
+    } catch (e) {
+      setConfirmReject(false);
+      toast.show((e as Error).message, 'error');
+    } finally {
+      setActing(null);
+    }
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-cd-bg">
@@ -169,15 +224,85 @@ export default function WorkReportDetailScreen() {
                 onPress={() =>
                   router.push({
                     pathname: '/work-report-draft',
-                    params: { reportId: r.reportId, contractId: r.contractId ?? '' },
+                    params: {
+                      reportId: r.reportId,
+                      subjectKind: r.subjectKind,
+                      subjectId: r.subjectKind === 'task' ? (r.taskId ?? '') : (r.contractId ?? ''),
+                    },
                   })
                 }
                 full
               />
             ) : null}
+
+            {/* 부서장 검토 패널(WR-M2) — 제출된 보고만 */}
+            {reviewMode && r.status === 'submitted' ? (
+              <Card title="부서장 검토">
+                <View className="mt-2 gap-3">
+                  <View className="flex-row flex-wrap gap-2">
+                    {REVIEW_KINDS.map((k) => (
+                      <Pressable
+                        key={k.value}
+                        onPress={() => setKind(k.value)}
+                        className={`rounded-full border px-3.5 py-2 active:opacity-70 ${
+                          kind === k.value ? 'border-cd-primary bg-cd-primary-soft' : 'border-cd-border bg-cd-card'
+                        }`}>
+                        <Text className={`text-[12.5px] font-bold ${kind === k.value ? 'text-cd-primary' : 'text-cd-muted'}`}>
+                          {k.label}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <Textarea
+                    minHeight={80}
+                    value={comment}
+                    onChangeText={setComment}
+                    placeholder="작성자에게 전달할 의견"
+                  />
+                  <View className="flex-row gap-2">
+                    <View className="flex-1">
+                      <Button
+                        label="반려"
+                        variant="danger"
+                        disabled={!REJECTABLE.includes(kind) || !!acting}
+                        loading={acting === 'reject'}
+                        onPress={() => setConfirmReject(true)}
+                        full
+                      />
+                    </View>
+                    <View className="flex-[1.4]">
+                      <Button
+                        label="확인 (머징 대상)"
+                        disabled={!!acting}
+                        loading={acting === 'confirm'}
+                        onPress={() => void submitReview('confirm')}
+                        full
+                      />
+                    </View>
+                  </View>
+                  {!REJECTABLE.includes(kind) ? (
+                    <Text className="text-[11px] leading-4 text-cd-faint">
+                      반려는 [보완 요구]·[오기 정정 요청] 의견일 때만 가능합니다. 합본(머징)·임원 보고는 웹
+                      감독 화면에서 진행합니다.
+                    </Text>
+                  ) : null}
+                </View>
+              </Card>
+            ) : null}
           </>
         )}
       </ScrollView>
+
+      <ConfirmSheet
+        visible={confirmReject}
+        title="이 보고를 반려할까요?"
+        message="작성자에게 재제출 대상으로 표시되고, 입력한 의견이 전달됩니다."
+        confirmLabel="반려"
+        danger
+        loading={acting === 'reject'}
+        onConfirm={() => void submitReview('reject')}
+        onCancel={() => setConfirmReject(false)}
+      />
     </SafeAreaView>
   );
 }

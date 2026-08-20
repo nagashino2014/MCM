@@ -10,7 +10,8 @@ import { apiFetch, apiJson } from '@/lib/api';
 import { useTheme } from '@/theme/useTheme';
 
 /**
- * 업무보고 작성(WR-M1) — 모바일 경량 작성: 기간·회의 종류·제목·추진내역·추진계획만 받는다.
+ * 업무보고 작성(WR-M1·M2) — 모바일 경량 작성: 기간·회의 종류·제목·추진내역·추진계획만 받는다.
+ * 용역(contract)·Task 둘 다 지원한다(subjectKind 파라미터).
  * 공정 델타(stages)는 웹 전용 — 수정 시에는 **기존 stages 를 그대로 되돌려 보낸다**
  * (saveReport 가 수정 때 stages 를 전량 교체하므로, 빈 배열을 보내면 웹에서 넣은 델타가 지워진다).
  * 저장 계약: POST /api/work-plan/report (SaveReportInput, subjectKind='contract').
@@ -30,6 +31,7 @@ interface StageInput {
 interface ReportDetail {
   reportId: string;
   contractId: string | null;
+  taskId: string | null;
   periodStart: string;
   periodEnd: string;
   meetingLabel: string | null;
@@ -57,13 +59,22 @@ export default function WorkReportDraftScreen() {
   const router = useRouter();
   const { c } = useTheme();
   const toast = useToast();
-  const params = useLocalSearchParams<{ reportId?: string; contractId?: string; contractTitle?: string }>();
+  const params = useLocalSearchParams<{
+    reportId?: string;
+    subjectKind?: string;
+    subjectId?: string;
+    subjectTitle?: string;
+    // 구 파라미터(WR-M1 초기) 호환
+    contractId?: string;
+    contractTitle?: string;
+  }>();
+  const [subjectKind, setSubjectKind] = useState<'contract' | 'task'>(params.subjectKind === 'task' ? 'task' : 'contract');
   const editingId = params.reportId || null;
 
-  const week = useRef(thisWeek()).current;
   const [loading, setLoading] = useState(!!editingId);
-  const [from, setFrom] = useState(week.from);
-  const [to, setTo] = useState(week.to);
+  // 기본 기간(이번 주 월~금) — lazy initializer 로 1회만 계산한다.
+  const [from, setFrom] = useState(() => thisWeek().from);
+  const [to, setTo] = useState(() => thisWeek().to);
   const [meeting, setMeeting] = useState<string>(MEETING_LABELS[0]);
   const [title, setTitle] = useState('');
   const [progressText, setProgressText] = useState('');
@@ -76,7 +87,7 @@ export default function WorkReportDraftScreen() {
     currentStageName: null,
     currentStagePct: null,
   });
-  const [contractId, setContractId] = useState(params.contractId || '');
+  const [subjectId, setSubjectId] = useState(params.subjectId || params.contractId || '');
 
   // 수정 진입 — 기존 보고 프리필(1회).
   useEffect(() => {
@@ -85,7 +96,9 @@ export default function WorkReportDraftScreen() {
     void apiJson<{ report: ReportDetail }>(`/api/work-plan/report/${editingId}`)
       .then(({ report }) => {
         if (!alive) return;
-        setContractId(report.contractId ?? '');
+        const isTask = !!report.taskId;
+        setSubjectKind(isTask ? 'task' : 'contract');
+        setSubjectId((isTask ? report.taskId : report.contractId) ?? '');
         setFrom(report.periodStart);
         setTo(report.periodEnd);
         setMeeting(report.meetingLabel ?? MEETING_LABELS[0]);
@@ -107,8 +120,8 @@ export default function WorkReportDraftScreen() {
   }, [editingId]);
 
   const save = async (status: 'draft' | 'submitted') => {
-    if (!contractId) {
-      toast.show('대상 용역 정보가 없습니다. 목록에서 다시 진입해 주세요.', 'error');
+    if (!subjectId) {
+      toast.show('대상 정보가 없습니다. 목록에서 다시 진입해 주세요.', 'error');
       return;
     }
     if (status === 'submitted' && !progressText.trim()) {
@@ -122,8 +135,8 @@ export default function WorkReportDraftScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           reportId: editingId ?? undefined,
-          subjectKind: 'contract',
-          subjectId: contractId,
+          subjectKind,
+          subjectId,
           periodStart: from,
           periodEnd: to,
           reportDate: to,
@@ -152,7 +165,7 @@ export default function WorkReportDraftScreen() {
     <SafeAreaView className="flex-1 bg-cd-bg">
       <ScreenHeader
         title={editingId ? '보고 수정' : '보고 작성'}
-        subtitle={params.contractTitle || '업무보고'}
+        subtitle={params.subjectTitle || params.contractTitle || '업무보고'}
         back
         variant="sub"
       />

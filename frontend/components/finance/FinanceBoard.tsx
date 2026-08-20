@@ -26,6 +26,7 @@ import {
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdModal } from "@/components/cdash/CdModal";
+import { DigitDateInput } from "@/components/finance/DigitDateInput";
 import { FinLogo, logoFileCode } from "@/components/finance/FinLogo";
 import { PaginationControls } from "@/components/ui/PaginationControls";
 import { JournalPanel, LedgerPanel, TrialPanel } from "@/components/finance/JournalPanels";
@@ -129,42 +130,6 @@ const ALL_CARD_COMPANIES: Array<{ code: string; name: string }> = [
 ];
 
 /* ================= YYYYMMDD 자동완성 날짜 입력 (기존 앱 날짜 8자리 관례) ================= */
-
-function DigitDateInput({
-  value,
-  onChange,
-  mode = "ymd",
-  className,
-}: {
-  value: string; // "YYYY-MM-DD" | "YYYY-MM" | ""
-  onChange: (v: string) => void;
-  mode?: "ymd" | "ym";
-  className?: string;
-}) {
-  const maxDigits = mode === "ymd" ? 8 : 6;
-  const format = (digits: string) => {
-    if (digits.length <= 4) return digits;
-    if (digits.length <= 6) return `${digits.slice(0, 4)}-${digits.slice(4)}`;
-    return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6)}`;
-  };
-  const [text, setText] = useState(value);
-  useEffect(() => setText(value), [value]);
-  return (
-    <input
-      type="text"
-      inputMode="numeric"
-      placeholder={mode === "ymd" ? "YYYYMMDD" : "YYYYMM"}
-      className={className ?? "cd-input w-full"}
-      value={text}
-      onChange={(e) => {
-        const digits = e.target.value.replace(/\D/g, "").slice(0, maxDigits);
-        const formatted = format(digits);
-        setText(formatted);
-        onChange(digits.length === maxDigits ? formatted : "");
-      }}
-    />
-  );
-}
 
 /* ================= 원장 공용 검색 필터 (PDF 레이아웃 — 좌측 세로 열) ================= */
 
@@ -879,6 +844,13 @@ function ConnectionsPanel() {
               const ok = await action({ action: kind, kind: row.kind, id: row.id }, `${kind}:${row.id}`);
               if (ok) await load();
             }}
+            onSaveAlias={async (row, alias) => {
+              const ok = await action(
+                { action: "update-meta", kind: "card", id: row.id, meta: { alias: alias || null } },
+                `alias:${row.id}`,
+              );
+              if (ok) await load();
+            }}
             onRefreshNow={async (row) => {
               const data = await action({ action: "refresh-now", kind: "card", id: row.id }, `refresh:${row.id}`);
               if (data?.alreadyRunning) {
@@ -1039,6 +1011,50 @@ function ConnectionsPanel() {
   );
 }
 
+/**
+ * 카드 별칭 셀 — 바로빌이 별칭을 주지 않는 카드가 있어(실측 2장 공백) 직접 적을 수 있어야 한다.
+ * 이 별칭이 기안 화면 카드 피커의 **부서 묶음 기준**이 된다(lib/finance/card-dept.ts).
+ */
+function AliasCell({ row, onSave }: { row: ConnectionRow; onSave: (row: ConnectionRow, alias: string) => void | Promise<void> }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(row.alias ?? "");
+  useEffect(() => setDraft(row.alias ?? ""), [row.alias]);
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        className="text-left w-full truncate hover:cd-text-primary"
+        title="클릭해 별칭 수정 — 부서명을 넣으면(예: 통합1본부1) 기안 화면에서 부서 카드로 묶입니다."
+        onClick={() => setEditing(true)}
+      >
+        {row.alias || <span className="cd-text-muted">— 입력</span>}
+      </button>
+    );
+  }
+  const commit = async () => {
+    setEditing(false);
+    if (draft.trim() !== (row.alias ?? "")) await onSave(row, draft.trim());
+  };
+  return (
+    <input
+      className="cd-input text-xs w-full"
+      autoFocus
+      value={draft}
+      placeholder="예: 통합1본부1"
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => void commit()}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") void commit();
+        if (e.key === "Escape") {
+          setDraft(row.alias ?? "");
+          setEditing(false);
+        }
+      }}
+    />
+  );
+}
+
 function ConnectionTable({
   title,
   icon,
@@ -1047,6 +1063,7 @@ function ConnectionTable({
   onStop,
   onResume,
   onRefreshNow,
+  onSaveAlias,
 }: {
   title: string;
   icon: React.ReactNode;
@@ -1055,6 +1072,8 @@ function ConnectionTable({
   onStop: (row: ConnectionRow) => void;
   onResume: (row: ConnectionRow, action: "cancel-stop" | "re-regist") => void;
   onRefreshNow?: (row: ConnectionRow) => void;
+  /** 카드 별칭 저장(카드 표에서만 전달) — 별칭이 부서 매핑의 기준이라 비워 둘 수 없다. */
+  onSaveAlias?: (row: ConnectionRow, alias: string) => void | Promise<void>;
 }) {
   return (
     <div className="cd-card p-4">
@@ -1095,7 +1114,9 @@ function ConnectionTable({
                 <tr key={row.id} className="border-t cd-hairline-row-c">
                   <td className="py-2 pr-3 truncate">{row.label}</td>
                   <td className="py-2 pr-3 truncate font-mono text-xs" title={row.numberMasked}>{row.numberMasked}</td>
-                  <td className="py-2 pr-3">{row.alias ?? <span className="cd-text-muted">—</span>}</td>
+                  <td className="py-2 pr-3">
+                    {onSaveAlias ? <AliasCell row={row} onSave={onSaveAlias} /> : row.alias ?? <span className="cd-text-muted">—</span>}
+                  </td>
                   <td className="py-2 pr-3">{row.collectCycle}</td>
                   <td className="py-2 pr-3">
                     <span

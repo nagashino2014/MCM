@@ -1,27 +1,57 @@
 // 기안 화면 "법인카드 내역 불러오기" API (블루프린트 P1 F1/F2)
 // 미사용(결의서 미귀속)·미제외·승인 건 목록 + 자동 분류(3단) 결과를 양식 옵션 문자열로 내려준다.
 // 권한: approval.view — 법인카드는 공용 운영이라 기안자 전원이 선택 가능(이중 기입은 doc_id 귀속으로 차단).
+// 카드 태그(부서별)·내 부서 정보도 함께 준다 — 등록 카드 전체를 한 목록에 늘어놓으면 본인 사용분을
+// 찾기 어렵다는 실사용 지적(2026-08-20)에 따라 피커가 내 부서 카드를 먼저 보여 준다.
 
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
-import { listCardTransactions } from "@/lib/barobill/queries";
+import { listCardOptions, listCardTransactions } from "@/lib/barobill/queries";
 import { classifyMany, loadCategories } from "@/lib/barobill/classify";
 import { cardSlipName } from "@/lib/finance/card-slip";
+import { cardDeptId, cardTagLabel } from "@/lib/finance/card-dept";
+import { getDb, rowsToObjects } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/** 로그인 사용자의 소속 부서(없으면 null) — 내 부서 카드를 먼저 보여 주기 위한 값. */
+async function myDepartment(userId: string): Promise<{ deptId: string; deptName: string } | null> {
+  try {
+    const db = await getDb();
+    const rows = rowsToObjects(
+      await db.exec(
+        `SELECT e.dept_id, d.dept_name
+           FROM employee_profiles e
+           LEFT JOIN departments d ON d.dept_id = e.dept_id
+          WHERE e.user_id = $1
+          LIMIT 1`,
+        [userId],
+      ),
+    );
+    const deptId = rows[0]?.dept_id ? String(rows[0].dept_id) : null;
+    if (!deptId) return null;
+    return { deptId, deptName: rows[0]?.dept_name ? String(rows[0].dept_name) : deptId };
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(req: NextRequest) {
   try {
-    await requirePermission("approval.view");
+    const ctx = await requirePermission("approval.view");
     const sp = req.nextUrl.searchParams;
     const formId = sp.get("formId") || "";
     const from = sp.get("from") || undefined;
     const to = sp.get("to") || undefined;
+    const keyword = sp.get("keyword")?.trim() || undefined;
+    const cardIds = (sp.get("cardIds") || "").split(",").map((v) => v.trim()).filter(Boolean);
 
-    const [{ rows }, categories] = await Promise.all([
-      listCardTransactions({ from, to, unusedOnly: true, limit: 200 }),
+    const [{ rows }, categories, cardRows, myDept] = await Promise.all([
+      listCardTransactions({ from, to, keyword, cardIds, unusedOnly: true, limit: 200 }),
       loadCategories(),
+      listCardOptions(),
+      myDepartment(ctx.userId),
     ]);
 
     const results = await classifyMany(
@@ -52,7 +82,15 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    return NextResponse.json({ items });
+    const cards = cardRows.map((c) => ({
+      cardId: c.cardId,
+      label: cardTagLabel(c.alias, c.last4, c.companyName),
+      deptId: cardDeptId(c.alias),
+      companyName: c.companyName,
+      last4: c.last4,
+    }));
+
+    return NextResponse.json({ items, cards, myDept });
   } catch (err) {
     return authErrorToResponse(err);
   }

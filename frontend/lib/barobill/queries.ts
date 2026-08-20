@@ -283,6 +283,32 @@ export interface CardTxnRow {
   slipKey: string | null;
 }
 
+export interface CardOptionRow {
+  cardId: string;
+  companyName: string;
+  alias: string | null;
+  last4: string;
+}
+
+/** 활성 카드 목록(피커 태그용) — 별칭·뒤 4자리만. */
+export async function listCardOptions(): Promise<CardOptionRow[]> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT card_id, card_company_name, card_alias, right(card_num, 4) AS last4
+         FROM card_registry
+        WHERE is_active = 1
+        ORDER BY card_alias NULLS LAST, card_company_name`,
+    ),
+  );
+  return rows.map((r) => ({
+    cardId: String(r.card_id),
+    companyName: String(r.card_company_name ?? ""),
+    alias: r.card_alias ? String(r.card_alias) : null,
+    last4: String(r.last4 ?? ""),
+  }));
+}
+
 export async function listCardTransactions(params: {
   cardId?: string;
   cardIds?: string[]; // 등록 카드/카드사 태그 다중 선택(빈 배열 = 전체)

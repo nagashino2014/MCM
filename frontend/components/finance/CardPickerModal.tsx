@@ -7,8 +7,10 @@
 // - 실측 안내: 매입내역은 카드 사용 후 확정까지 2~5일 지연될 수 있다.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { RefreshCw, AlertTriangle } from "lucide-react";
+import { RefreshCw, AlertTriangle, Search } from "lucide-react";
 import { CdModal } from "@/components/cdash/CdModal";
+import { DigitDateInput } from "@/components/finance/DigitDateInput";
+import { DEPT_CARD_RULES } from "@/lib/finance/card-dept";
 
 export interface CardPickerItem {
   cardTxnId: string;
@@ -28,7 +30,22 @@ export interface CardPickerItem {
   formOption: string | null;
 }
 
+/** 피커 상단 카드 태그 — 부서별로 묶어 보여 준다(내 부서 먼저). */
+interface CardOption {
+  cardId: string;
+  label: string;
+  deptId: string | null;
+  companyName: string;
+  last4: string;
+}
+
 const ymdInput = (d: Date) => d.toISOString().slice(0, 10);
+
+/** 오늘 기준 n일 전 — "1주"·"1개월" 빠른 기간 태그. */
+const daysAgo = (n: number) => ymdInput(new Date(Date.now() - n * 86400000));
+
+const deptShort = (deptId: string | null) =>
+  DEPT_CARD_RULES.find((r) => r.deptId === deptId)?.short ?? "기타";
 
 export function CardPickerModal({
   open,
@@ -46,7 +63,14 @@ export function CardPickerModal({
 }) {
   const [from, setFrom] = useState(() => ymdInput(new Date(Date.now() - 30 * 86400000)));
   const [to, setTo] = useState(() => ymdInput(new Date()));
+  const [keyword, setKeyword] = useState("");
   const [items, setItems] = useState<CardPickerItem[]>([]);
+  const [cards, setCards] = useState<CardOption[]>([]);
+  const [myDept, setMyDept] = useState<{ deptId: string; deptName: string } | null>(null);
+  /** 선택한 카드(빈 값 = 내 부서 카드 기본 적용, 그것도 없으면 전체) */
+  const [cardFilter, setCardFilter] = useState<Set<string>>(new Set());
+  /** 타 부서 카드 태그를 펼쳐 볼 부서 */
+  const [openDept, setOpenDept] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,16 +80,20 @@ export function CardPickerModal({
     setError(null);
     try {
       const params = new URLSearchParams({ formId, from, to });
+      if (keyword.trim()) params.set("keyword", keyword.trim());
+      if (cardFilter.size) params.set("cardIds", [...cardFilter].join(","));
       const res = await fetch(`/api/finance/card-picker?${params}`, { cache: "no-store" });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "카드 내역을 불러오지 못했습니다.");
       setItems(data.items ?? []);
+      setCards(data.cards ?? []);
+      setMyDept(data.myDept ?? null);
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [formId, from, to]);
+  }, [formId, from, to, keyword, cardFilter]);
 
   useEffect(() => {
     if (open) {
@@ -73,6 +101,44 @@ export function CardPickerModal({
       load();
     }
   }, [open, load]);
+
+  // 첫 응답에서 내 부서 카드를 기본 필터로 건다(사용자가 태그를 만지면 그 뒤로는 관여하지 않는다).
+  const [autoApplied, setAutoApplied] = useState(false);
+  useEffect(() => {
+    if (!open) setAutoApplied(false);
+  }, [open]);
+  useEffect(() => {
+    if (!open || autoApplied || !cards.length) return;
+    setAutoApplied(true);
+    const mine = cards.filter((c) => myDept && c.deptId === myDept.deptId).map((c) => c.cardId);
+    if (mine.length) setCardFilter(new Set(mine));
+  }, [open, autoApplied, cards, myDept]);
+
+  const myCards = useMemo(() => cards.filter((c) => myDept && c.deptId === myDept.deptId), [cards, myDept]);
+  /** 내 부서를 뺀 나머지 — 부서(미지정은 "기타")별로 묶는다. */
+  const otherDepts = useMemo(() => {
+    const map = new Map<string, CardOption[]>();
+    for (const c of cards) {
+      if (myDept && c.deptId === myDept.deptId) continue;
+      const key = c.deptId ?? "__none__";
+      const list = map.get(key) ?? [];
+      list.push(c);
+      map.set(key, list);
+    }
+    return [...map.entries()].map(([deptId, list]) => ({
+      deptId,
+      label: deptId === "__none__" ? "미지정" : deptShort(deptId),
+      cards: list,
+    }));
+  }, [cards, myDept]);
+
+  const toggleCard = (cardId: string) =>
+    setCardFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(cardId)) next.delete(cardId);
+      else next.add(cardId);
+      return next;
+    });
 
   const existing = useMemo(() => new Set(existingIds), [existingIds]);
 
@@ -118,9 +184,27 @@ export function CardPickerModal({
       <div className="space-y-3">
         <div className="flex items-center gap-2 flex-wrap">
           <label className="cd-label text-xs">기간</label>
-          <input type="date" className="cd-input" value={from} onChange={(e) => setFrom(e.target.value)} />
+          {/* YYYYMMDD 자동완성 — 종전 <input type="date"> 는 폭을 줄일 수 없었다. */}
+          <DigitDateInput value={from} onChange={setFrom} className="cd-input text-center" style={{ width: 116 }} />
           <span className="cd-text-muted">~</span>
-          <input type="date" className="cd-input" value={to} onChange={(e) => setTo(e.target.value)} />
+          <DigitDateInput value={to} onChange={setTo} className="cd-input text-center" style={{ width: 116 }} />
+          <button type="button" className="cd-btn cd-btn-soft cd-btn-sm" onClick={() => { setFrom(daysAgo(7)); setTo(ymdInput(new Date())); }}>
+            1주
+          </button>
+          <button type="button" className="cd-btn cd-btn-soft cd-btn-sm" onClick={() => { setFrom(daysAgo(30)); setTo(ymdInput(new Date())); }}>
+            1개월
+          </button>
+          <span className="relative flex items-center">
+            <Search className="w-3.5 h-3.5 cd-text-faint absolute left-2" />
+            <input
+              className="cd-input text-[13px]"
+              style={{ width: 168, paddingLeft: 26 }}
+              placeholder="매입처 검색"
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && load()}
+            />
+          </span>
           <button type="button" className="cd-btn cd-btn-soft cd-btn-sm" onClick={load} disabled={loading}>
             <RefreshCw className="w-3.5 h-3.5" /> 조회
           </button>
@@ -128,6 +212,62 @@ export function CardPickerModal({
             매입내역은 카드 사용 후 확정까지 2~5일 걸릴 수 있습니다
           </span>
         </div>
+
+        {/* 카드 태그 — 내 부서 카드를 먼저, 그 아래 타 부서(태그를 누르면 그 부서 카드가 펼쳐진다).
+            옆 부서 카드를 빌려 쓰는 경우가 있어 다른 부서도 고를 수 있어야 한다(사용자 요구). */}
+        {cards.length > 0 && (
+          <div className="flex flex-col gap-1.5 rounded-xl border cd-border-c px-3 py-2.5">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-xs font-bold cd-text whitespace-nowrap">{myDept?.deptName ?? "내 부서"}</span>
+              {myCards.length ? (
+                myCards.map((c) => (
+                  <button
+                    key={c.cardId}
+                    type="button"
+                    className={`cd-btn cd-btn-sm ${cardFilter.has(c.cardId) ? "cd-btn-primary" : "cd-btn-soft"}`}
+                    onClick={() => toggleCard(c.cardId)}
+                  >
+                    {c.label}
+                  </button>
+                ))
+              ) : (
+                <span className="text-[11px] cd-text-faint">부서로 등록된 카드가 없습니다 — 재무 &gt; 연결 관리에서 카드 별칭을 넣어 주세요.</span>
+              )}
+              {cardFilter.size > 0 && (
+                <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm ml-auto" onClick={() => setCardFilter(new Set())}>
+                  전체 보기
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[11px] cd-text-faint whitespace-nowrap">다른 부서</span>
+              {otherDepts.map((d) => (
+                <button
+                  key={d.deptId}
+                  type="button"
+                  className={`cd-btn cd-btn-sm ${openDept === d.deptId ? "cd-btn-soft font-bold" : "cd-btn-ghost"}`}
+                  onClick={() => setOpenDept((prev) => (prev === d.deptId ? null : d.deptId))}
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
+            {openDept && (
+              <div className="flex items-center gap-1.5 flex-wrap pl-1">
+                {(otherDepts.find((d) => d.deptId === openDept)?.cards ?? []).map((c) => (
+                  <button
+                    key={c.cardId}
+                    type="button"
+                    className={`cd-btn cd-btn-sm ${cardFilter.has(c.cardId) ? "cd-btn-primary" : "cd-btn-soft"}`}
+                    onClick={() => toggleCard(c.cardId)}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {error && <div className="cd-error-text text-sm">{error}</div>}
         {tripLikeSelected && (

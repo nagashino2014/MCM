@@ -8,7 +8,8 @@
     "worker:aws": "ts-node --project tsconfig.json scripts/aws-worker.ts",
     "recon": "ts-node --project tsconfig.json scripts/cli-recon.ts",
     "scrape": "ts-node --project tsconfig.json scripts/cli-scraper.ts",
-    "daou": "ts-node --project tsconfig.json scripts/cli-daou.ts"
+    "daou": "ts-node --project tsconfig.json scripts/cli-daou.ts",
+    "receipts": "ts-node --project tsconfig.json scripts/cli-receipts.ts"
   },
   "dependencies": {
     "@aws-sdk/client-sqs": "^3.1048.0",

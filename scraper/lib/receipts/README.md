@@ -5,7 +5,7 @@
 | 사이트 | `--site` | 상태 |
 |---|---|---|
 | 11번가 | `11st` (기본) | ✅ 무인 수집 동작 — 로그인만 사람이 한다 |
-| G마켓 | `gmarket` | 🔶 설정 골격만. 주소·전표 열기 방식 실측 필요 |
+| G마켓 | `gmarket` | 🔶 Cloudflare 봇 확인이 있어 stealth 모드로 접근 중. 주소·전표 열기 방식 실측 필요 |
 
 사이트별 차이는 전부 `config.ts` 의 `SiteConfig` 로 표현하고, 수집 절차(`collector.ts`)는 공통이다.
 
@@ -80,10 +80,9 @@ failed/                 실패 건 진단 덤프
 ## 이 스파이크로 확인하려는 것
 
 1. **세션 재사용이 되는가** — 저장한 세션으로 headless 접근 시 로그인 페이지로 튕기지 않는지. 튕기면 `--headed`.
-2. **어떤 방식으로 PDF 가 만들어지는가** — `lib/receipts/pdf.ts` 가 아래 순서로 시도하고 성공한 방식을 대장의 `method` 열에 남긴다.
-   - `page.pdf` — headless Chromium 전용. 가장 깔끔.
-   - `cdp.printToPDF` — headed 에서도 되는지가 미확인 쟁점.
-   - `html-snapshot` — 위 둘이 막혔을 때. PDF 가 아니므로 후처리(별도 headless 렌더)가 필요하다.
+2. ~~어떤 방식으로 PDF 가 만들어지는가~~ — 확정. 실측(Playwright 1.59 / Chromium)에서 `page.pdf` 가
+   headless 는 물론 **headed 에서도 동작**한다. 봇 확인 때문에 화면을 띄워야 하는 사이트에서도 PDF 가 그대로 나온다.
+   버전·환경에 따라 막힐 수 있어 `cdp.printToPDF` → `html-snapshot` 폴백은 남겨 뒀고, 성공한 방식은 대장의 `method` 열에 남는다.
 3. ~~영수증이 어떻게 뜨는가~~ — 확정. 11번가는 주문번호로 직접 여는 경로를 쓴다(위 참고).
    버튼 클릭 경로(팝업/이동/레이어)는 `receiptUrlTemplate` 이 없는 다른 몰을 위해 남겨 뒀다.
 4. **품목이 실제로 찍히는가** — 11번가의 "카드영수증"은 결제 전표라 품목이 없고 "거래명세서" 쪽에 품목이 있을 수 있다.
@@ -128,3 +127,16 @@ npm run receipts -- probe --site gmarket --watch --url "<주문내역 주소>"  
 4. **주문번호 형식**(`orderNoPattern`) — probe 의 `주문번호 후보` 를 보고 좁힌다.
    11번가처럼 앞 8자리가 주문일이면 `orderDateFromOrderNo: true` 를 켠다. 아니면 날짜는 비워 두는데,
    기간 조회로 이미 범위가 좁혀져 있어 수집 자체에는 지장이 없다(파일이 `unknown` 월 폴더로 갈 뿐).
+
+## 봇 확인이 있는 사이트 (`stealth: true`)
+
+G마켓은 접속하면 Cloudflare 봇 확인 화면이 뜬다. `SiteConfig.stealth` 를 켜면:
+
+- **UA·viewport 를 덮어쓰지 않는다.** 덮어쓴 UA 는 브라우저가 함께 보내는 Client Hints 와 어긋나고,
+  그 모순 자체가 봇 신호가 된다(우리 기본값이 `Chrome/120` 고정이라 오히려 해로웠다).
+- 자동화 표식을 숨긴다(`--disable-blink-features=AutomationControlled`, `navigator.webdriver`).
+- 번들 Chromium 대신 **설치된 Chrome**(`channel: "chrome"`)을 쓴다. `RECEIPTS_CHROME_PATH` 로 직접 지정해도 된다.
+- headless 는 거의 확실히 막히므로 `collect` 도 화면을 띄워 실행한다(PDF 는 그대로 나온다 — 위 참고).
+
+그래도 통과가 보장되지는 않는다. Cloudflare 가 막으면 그 사이트는 수동 수집으로 남기는 편이 낫다 —
+캡차 우회 서비스는 약관 위반 강도와 계정 정지 위험을 함께 키운다.

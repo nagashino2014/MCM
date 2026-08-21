@@ -179,7 +179,7 @@ export async function probeOrderList(
 
   // watch 모드는 사용자가 직접 클릭해야 하므로 headed.
   const headless = !opts.watch;
-  const { context, close } = await openContext({ site, headless, useSession: true });
+  const { context, close } = await openContext({ site, headless: cfg.stealth ? false : headless, useSession: true, stealth: cfg.stealth });
 
   const popupUrls: string[] = [];
   const xhrUrls: string[] = [];

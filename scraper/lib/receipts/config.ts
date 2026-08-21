@@ -33,6 +33,11 @@ export interface SiteConfig {
   orderNoPattern?: string;
   /** 주문번호 앞 8자리가 주문일인 사이트(11번가)에서 켠다 */
   orderDateFromOrderNo?: boolean;
+  /**
+   * 봇 확인(Cloudflare Turnstile 등)이 있는 사이트에서 켠다.
+   * UA·viewport 를 덮어쓰지 않고 자동화 표식을 숨기며, headless 대신 headed 로 돈다.
+   */
+  stealth?: boolean;
   /** 다음 페이지 이동 요소 후보 */
   nextPageSelectors: string[];
   /**
@@ -198,6 +203,8 @@ export const GMARKET: SiteConfig = {
   nextPageSelectors: ["a:has-text('다음')", "[class*='paging'] a[class*='next']", "button:has-text('다음')"],
   // 주문번호 형식 미상 — 우선 넓게 잡고 probe 결과로 좁힌다.
   orderNoPattern: "\\b\\d{9,20}\\b",
+  // 실측(2026-08): 접속하면 Cloudflare 봇 확인 화면이 뜬다. 지문을 건드리지 않고 headed 로 돌아야 한다.
+  stealth: true,
 };
 
 const SITES: Record<string, SiteConfig> = {

@@ -1,12 +1,12 @@
 /**
  * 영수증 페이지 → PDF 저장 (3단 폴백)
  *
- * 배경: Playwright 의 page.pdf() 는 **headless Chromium 에서만** 동작한다.
- *   그런데 쇼핑몰은 headless 를 탐지해 막는 경우가 있어 headed 로 돌려야 할 때가 있다.
- *   그래서 아래 순서로 시도하고, 성공한 방식을 기록해 둔다(어느 방식이 통하는지가 이 스파이크의 관측 대상).
+ * 배경: 봇 확인이 있는 사이트는 headless 가 막혀 headed 로 돌려야 하는데, page.pdf() 는 오래도록
+ *   headless 전용이었다. 실측(Playwright 1.59 / Chromium)에서는 **headed 에서도 page.pdf() 가
+ *   성공**했지만, 버전·환경에 따라 다시 막힐 수 있어 폴백을 남겨 둔다. 성공한 방식은 대장의 method 열에 남는다.
  *
- *   1) page.pdf()            — headless 일 때만. 가장 깔끔.
- *   2) CDP Page.printToPDF   — headed 에서도 동작할 가능성이 있는 경로. 실측 대상.
+ *   1) page.pdf()            — 가장 깔끔. 실측상 headed 에서도 동작한다.
+ *   2) CDP Page.printToPDF   — page.pdf() 가 막힌 환경용.
  *   3) HTML + 전체 스크린샷  — 위 둘이 다 막혀도 증빙 원본은 남긴다(항상 성공).
  *
  * 3) 로 떨어지면 PDF 가 아니므로, 제출용 PDF 가 필요하면 저장된 HTML 을 별도 headless 렌더로

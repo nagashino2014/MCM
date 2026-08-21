@@ -79,8 +79,16 @@ export async function openContext(opts: {
   headless?: boolean;
   useSession?: boolean;
   acceptDownloads?: boolean;
+  /**
+   * 봇 확인(Cloudflare Turnstile 등)이 있는 사이트용.
+   * - UA·viewport 를 덮어쓰지 않는다. 덮어쓴 UA 는 브라우저가 함께 보내는 Client Hints 와 어긋나
+   *   그 모순 자체가 봇 신호가 된다.
+   * - 자동화 표식(navigator.webdriver, AutomationControlled)을 숨기고, 가능하면 실제 설치된 Chrome 을 쓴다.
+   * - headless 는 거의 확실히 막히므로 호출부에서 headed 로 돌린다.
+   */
+  stealth?: boolean;
 }): Promise<{ context: BrowserContext; close: () => Promise<void> }> {
-  const { site, headless = true, useSession = true, acceptDownloads = true } = opts;
+  const { site, headless = true, useSession = true, acceptDownloads = true, stealth = false } = opts;
 
   if (useSession && !hasSession(site)) {
     throw new Error(
@@ -88,16 +96,41 @@ export async function openContext(opts: {
     );
   }
 
-  const context = await chromium.launchPersistentContext(profileDir(site), {
+  const launchOptions: Record<string, unknown> = {
     headless,
     timeout: 60_000,
-    userAgent: USER_AGENT,
-    viewport: { width: 1600, height: 1000 },
     locale: "ko-KR",
     timezoneId: "Asia/Seoul",
     acceptDownloads,
     ...(CHROME_PATH ? { executablePath: CHROME_PATH } : {}),
-  });
+  };
+
+  if (stealth) {
+    launchOptions.args = ["--disable-blink-features=AutomationControlled"];
+    launchOptions.viewport = null;
+    // 번들 Chromium 보다 실제 Chrome 이 지문상 유리하다(설치돼 있을 때만).
+    if (!CHROME_PATH) launchOptions.channel = "chrome";
+  } else {
+    launchOptions.userAgent = USER_AGENT;
+    launchOptions.viewport = { width: 1600, height: 1000 };
+  }
+
+  let context: BrowserContext;
+  try {
+    context = await chromium.launchPersistentContext(profileDir(site), launchOptions as never);
+  } catch (e) {
+    if (!launchOptions.channel) throw e;
+    console.log(`[${site}] 설치된 Chrome 을 찾지 못해 번들 Chromium 으로 실행합니다(봇 확인을 통과하지 못할 수 있음).`);
+    delete launchOptions.channel;
+    context = await chromium.launchPersistentContext(profileDir(site), launchOptions as never);
+  }
+
+  if (stealth) {
+    await context.addInitScript(() => {
+      Object.defineProperty(navigator, "webdriver", { get: () => undefined });
+    });
+  }
+
   context.setDefaultTimeout(60_000);
 
   // 프로필이 잃어버린 세션 쿠키를 되살린다.
@@ -120,11 +153,12 @@ export async function openContext(opts: {
  */
 export async function interactiveLogin(
   site: string,
-  startUrl: string
+  startUrl: string,
+  stealth = false
 ): Promise<{ saved: boolean; lastUrl: string | null }> {
   ensureSiteDir(site);
 
-  const { context } = await openContext({ site, headless: false, useSession: false });
+  const { context } = await openContext({ site, headless: false, useSession: false, stealth });
 
   try {
     const page = context.pages()[0] || (await context.newPage());
@@ -167,9 +201,10 @@ export async function checkSession(
   site: string,
   url: string,
   loggedOutPattern: string,
-  headless = true
+  headless = true,
+  stealth = false
 ): Promise<boolean> {
-  const { context, close } = await openContext({ site, headless, useSession: true });
+  const { context, close } = await openContext({ site, headless, useSession: true, stealth });
   try {
     const page = context.pages()[0] || (await context.newPage());
     const res = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60_000 });

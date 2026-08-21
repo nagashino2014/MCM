@@ -113,7 +113,7 @@ async function main(): Promise<void> {
   const cfg = loadSiteConfig(site);
 
   if (command === "login") {
-    const { saved, lastUrl } = await interactiveLogin(site, cfg.loginUrl);
+    const { saved, lastUrl } = await interactiveLogin(site, cfg.loginUrl, cfg.stealth);
     // 사용자가 마지막으로 머문 화면이 주문목록일 가능성이 높다 → 다음 실행의 시작점으로 기록.
     // 조회 요청(listRequest)이 정의돼 있으면 수집 시작점은 그쪽이다. 사용자가 마지막에 머문 화면이
     // 전표 팝업일 수도 있어, 그 주소를 시작점으로 덮어쓰면 오히려 해가 된다.
@@ -137,7 +137,7 @@ async function main(): Promise<void> {
       console.log(`[${site}] 세션이 없습니다. 먼저 login 을 실행하세요.`);
       return;
     }
-    const ok = await checkSession(site, cfg.checkUrl, cfg.loggedOutPattern, !args.headed);
+    const ok = await checkSession(site, cfg.checkUrl, cfg.loggedOutPattern, cfg.stealth ? false : !args.headed, cfg.stealth);
     console.log(`[${site}] 세션 ${ok ? "✅ 유효" : "❌ 만료(또는 headless 차단)"}`);
     if (!ok) console.log(`[${site}] --headed 로 다시 확인해 보고, 그래도 안 되면 login 을 다시 실행하세요.`);
     return;

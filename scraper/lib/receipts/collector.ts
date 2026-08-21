@@ -225,7 +225,16 @@ export async function collectReceipts(site: string, opts: CollectOptions = {}): 
   const tag = `[${site}]`;
 
   const collected = loadCollectedKeys(site);
-  const { context, close } = await openContext({ site, headless, useSession: true });
+  // 봇 확인이 있는 사이트는 headless 가 막히므로 화면을 띄운다(PDF 는 CDP 폴백으로 만든다).
+  const effectiveHeadless = cfg.stealth ? false : headless;
+  if (cfg.stealth && headless) console.log(`${tag} 봇 확인이 있는 사이트라 화면을 띄워 실행합니다.`);
+
+  const { context, close } = await openContext({
+    site,
+    headless: effectiveHeadless,
+    useSession: true,
+    stealth: cfg.stealth,
+  });
 
   const stats: CollectStats = { saved: 0, skipped: 0, failed: 0 };
 
@@ -380,7 +389,7 @@ export async function probeReceiptSeq(site: string, ordNo: string, seqs: number[
   }
 
   const outDir = ensureSiteDir(site, "probe");
-  const { context, close } = await openContext({ site, headless: true, useSession: true });
+  const { context, close } = await openContext({ site, headless: !cfg.stealth, useSession: true, stealth: cfg.stealth });
   const results: { seq: number; text: string; tokens: Set<string> }[] = [];
 
   try {

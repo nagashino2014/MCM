@@ -13,6 +13,21 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# 포트가 이미 쓰이고 있는지 (Test-NetConnection 은 느리다)
+function Test-PortInUse([int]$port) {
+  $client = New-Object System.Net.Sockets.TcpClient
+  try {
+    $async = $client.BeginConnect("127.0.0.1", $port, $null, $null)
+    if (-not $async.AsyncWaitHandle.WaitOne(500)) { return $false }
+    $client.EndConnect($async)
+    return $true
+  } catch {
+    return $false
+  } finally {
+    $client.Close()
+  }
+}
+
 $repo = Split-Path -Parent $PSScriptRoot
 $frontend = Join-Path $repo "frontend"
 $scraper = Join-Path $repo "scraper"
@@ -24,6 +39,16 @@ Write-Host "  저장소: $repo"
 
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
   Write-Host "Node.js 가 설치돼 있지 않습니다. https://nodejs.org 에서 LTS 를 설치한 뒤 다시 실행하세요." -ForegroundColor Red
+  Read-Host "엔터를 누르면 닫힙니다"
+  exit 1
+}
+
+# 3000 이 이미 쓰이고 있으면 이 앱은 3001 로 밀리는데, 브라우저는 먼저 떠 있던 쪽에 붙는다.
+# 그 서버에는 RECEIPTS_LOCAL_TOOLS 가 없어 "로컬에서만 쓸 수 있습니다" 만 보이므로 미리 막는다.
+if (Test-PortInUse 3000) {
+  Write-Host "3000 포트를 이미 다른 프로그램이 쓰고 있습니다." -ForegroundColor Red
+  Write-Host "다른 창에서 띄워 둔 npm run dev 를 닫은 뒤 다시 실행해 주세요."
+  Write-Host "(그대로 두면 이 앱은 3001 로 밀리고, 브라우저는 수집 기능이 꺼진 3000 쪽에 붙습니다.)"
   Read-Host "엔터를 누르면 닫힙니다"
   exit 1
 }
@@ -65,6 +90,7 @@ if (-not (Test-Path (Join-Path $frontend ".env.local"))) {
 }
 
 Write-Host "  앱을 띄웁니다. 창을 닫으면 앱도 함께 종료됩니다." -ForegroundColor Green
+Write-Host "  주소: $url"
 Push-Location $frontend
 
 # 앱이 뜨면 브라우저를 연다(포트가 열릴 때까지 잠깐 기다린다).

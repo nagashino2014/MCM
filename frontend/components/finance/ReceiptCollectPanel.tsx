@@ -19,6 +19,10 @@ interface ShopStatus {
   hint?: string;
   loggedIn: boolean;
   sessionAt: string | null;
+  /** 실제 접근으로 확인한 세션 상태 — true 유효 / false 만료 / null 미확인 */
+  sessionOk: boolean | null;
+  sessionCheckedAt: string | null;
+  sessionReason: string | null;
   collected: number;
   lastCollectedAt: string | null;
 }
@@ -32,10 +36,41 @@ function quarterRange(year: number, q: number): { from: string; to: string } {
   return { from: `${year}-${p(startMonth)}-01`, to: `${year}-${p(endMonth)}-${p(lastDay)}` };
 }
 
+/** 쿠팡 매출전표 일괄 신청을 하는 화면 */
+const COUPANG_REQUEST_URL = "https://mc.coupang.com/ssr/desktop/payment-receipt";
+
+/**
+ * 쿠팡 신청 ID 는 신청 결과 주소에 들어 있다.
+ *   https://payment.coupang.com/card-receipt-requests/5320399?page=0  →  5320399
+ * 주소를 통째로 붙여넣어도 되도록 숫자만 뽑아낸다.
+ */
+function extractRequestId(input: string): string {
+  const text = input.trim();
+  const fromUrl = /card-receipt-requests\/(\d+)/.exec(text);
+  if (fromUrl) return fromUrl[1];
+  return /^\d+$/.test(text) ? text : "";
+}
+
 function formatDate(iso: string | null): string {
   if (!iso) return "-";
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? "-" : d.toLocaleDateString("ko-KR");
+}
+
+/** 세션은 하루 남짓이면 풀린다 — 확인 시각은 분 단위까지 보여 준다 */
+function formatDateTime(iso: string | null): string {
+  if (!iso) return "-";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "-";
+  return `${d.toLocaleDateString("ko-KR")} ${d.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}`;
+}
+
+/** 화면에 보여 줄 세션 상태 — 쿠키 존재가 아니라 실제 접근 결과를 기준으로 한다 */
+function sessionBadge(shop: ShopStatus): { label: string; className: string } {
+  if (!shop.loggedIn) return { label: "로그인 필요", className: "cd-pill cd-pill-warn" };
+  if (shop.sessionOk === true) return { label: "세션 유효", className: "cd-pill cd-pill-success" };
+  if (shop.sessionOk === false) return { label: "세션 만료", className: "cd-pill cd-pill-warn" };
+  return { label: "확인 필요", className: "cd-pill" };
 }
 
 export function ReceiptCollectPanel() {
@@ -161,6 +196,13 @@ export function ReceiptCollectPanel() {
     }
   };
 
+  /** 실제로 접근해 세션이 살아 있는지 본다(결과는 수집기가 파일로 남기고 상태에 반영된다) */
+  const checkSession = async (shop: ShopStatus) => {
+    appendLog(`— ${shop.name}: 세션을 확인합니다. 창이 잠깐 열릴 수 있습니다.`);
+    await runCommand({ command: "check", site: shop.key }, `${shop.name} 세션 확인`);
+    await loadStatus();
+  };
+
   const login = async (shop: ShopStatus) => {
     appendLog(`— ${shop.name}: 브라우저가 열립니다. 로그인 후 목록 화면까지 이동한 뒤 창을 닫으세요.`);
     await runCommand({ command: "login", site: shop.key }, `${shop.name} 로그인`);
@@ -182,12 +224,21 @@ export function ReceiptCollectPanel() {
         continue;
       }
 
+      if (shop.sessionOk === false) {
+        appendLog(`— ${shop.name}: 지난번에 세션이 만료돼 있었습니다. 실패하면 [다시 로그인] 후 재시도하세요.`);
+      }
+
       if (shop.mode === "bulk") {
         if (!requestId.trim()) {
           appendLog(`— ${shop.name}: 신청 ID 가 없어 건너뜁니다(쿠팡 화면에서 일괄 신청 후 ID 를 입력하세요).`);
           continue;
         }
-        await runCommand({ command: "bulk", site: shop.key, requestId: requestId.trim() }, `${shop.name} 묶음 전표`);
+        const id = extractRequestId(requestId);
+        if (!id) {
+          appendLog(`— ${shop.name}: 신청 ID 를 찾지 못했습니다. 신청 결과 주소(.../card-receipt-requests/5320399?page=0)나 그 숫자를 넣어 주세요.`);
+          continue;
+        }
+        await runCommand({ command: "bulk", site: shop.key, requestId: id }, `${shop.name} 묶음 전표`);
         continue;
       }
 
@@ -328,14 +379,19 @@ export function ReceiptCollectPanel() {
                       }}
                     />
                     <span className="cd-text font-semibold mr-auto">{shop.name}</span>
-                    <span className={shop.loggedIn ? "cd-pill cd-pill-success" : "cd-pill cd-pill-warn"}>
-                      {shop.loggedIn ? "로그인됨" : "로그인 필요"}
-                    </span>
+                    <span className={sessionBadge(shop).className}>{sessionBadge(shop).label}</span>
                   </div>
 
                   <div className="text-xs cd-text-muted space-y-0.5">
                     <div>수집 {shop.collected.toLocaleString()}건 · 최근 {formatDate(shop.lastCollectedAt)}</div>
-                    <div>세션 확인 {formatDate(shop.sessionAt)}</div>
+                    <div>
+                      {shop.sessionCheckedAt
+                        ? `세션 확인 ${formatDateTime(shop.sessionCheckedAt)}`
+                        : `로그인 기록 ${formatDate(shop.sessionAt)} · 세션은 아직 확인 전`}
+                    </div>
+                    {shop.sessionOk === false && shop.sessionReason && (
+                      <div className="cd-error-text">{shop.sessionReason}</div>
+                    )}
                     {shop.hint && <div className="cd-text-faint">{shop.hint}</div>}
                   </div>
 
@@ -348,15 +404,50 @@ export function ReceiptCollectPanel() {
                     >
                       <LogIn size={14} /> {shop.loggedIn ? "다시 로그인" : "로그인"}
                     </button>
-                    {shop.mode === "bulk" && (
+                    {shop.loggedIn && (
+                      <button
+                        type="button"
+                        className="cd-btn cd-btn-sm"
+                        onClick={() => void checkSession(shop)}
+                        disabled={Boolean(running)}
+                      >
+                        <RefreshCw size={14} /> 세션 확인
+                      </button>
+                    )}
+                  </div>
+
+                  {shop.mode === "bulk" && (
+                    <div className="mt-2 space-y-1">
                       <input
-                        className="cd-input flex-1"
-                        placeholder="쿠팡 신청 ID"
+                        className="cd-input w-full"
+                        placeholder="신청 ID 또는 신청 결과 주소 붙여넣기"
                         value={requestId}
                         onChange={(e) => setRequestId(e.target.value)}
                       />
-                    )}
-                  </div>
+                      {requestId.trim() && (
+                        <div className="text-xs cd-text-faint">
+                          {extractRequestId(requestId)
+                            ? `신청 ID: ${extractRequestId(requestId)}`
+                            : "숫자로 된 신청 ID 를 찾지 못했습니다."}
+                        </div>
+                      )}
+                      <ol className="text-xs cd-text-muted list-decimal pl-4 space-y-0.5">
+                        <li>
+                          <a
+                            className="cd-text-primary underline"
+                            href={COUPANG_REQUEST_URL}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            쿠팡 영수증 화면
+                          </a>
+                          에서 기간을 정해 <b>매출전표 일괄 신청</b>
+                        </li>
+                        <li>처리에 몇 분 걸립니다. 끝나면 신청 내역에서 결과를 엽니다</li>
+                        <li>그 주소(…/card-receipt-requests/<b>5320399</b>?page=0)를 위 칸에 붙여넣기</li>
+                      </ol>
+                    </div>
+                  )}
                 </div>
               );
             })}

@@ -19,7 +19,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { BrowserContext, Frame, Locator, Page } from "playwright";
 
-import { openContext, ensureSiteDir, siteDir } from "./session";
+import { openContext, ensureSiteDir, siteDir, saveSessionCheck } from "./session";
 import { loadSiteConfig, SiteConfig } from "./config";
 import { savePageAsPdf, safeName, SaveResult } from "./pdf";
 import { appendLedger, loadCollectedKeys, LedgerRow } from "./ledger";
@@ -413,6 +413,7 @@ export async function collectReceipts(site: string, opts: CollectOptions = {}): 
     await sleep(3000);
 
     if (new RegExp(cfg.loggedOutPattern, "i").test(page.url())) {
+      saveSessionCheck(site, false, { url: page.url(), reason: "주문목록에서 로그인 페이지로 튕김" });
       throw new Error(
         `로그인 페이지로 튕겼습니다: ${page.url()}\n` +
           `  세션 만료이거나 headless 접근이 차단된 경우입니다.\n` +
@@ -420,6 +421,7 @@ export async function collectReceipts(site: string, opts: CollectOptions = {}): 
           `  2) '--headed' 옵션으로 다시 실행하세요.`
       );
     }
+    saveSessionCheck(site, true, { url: page.url(), reason: "주문목록 조회 성공" });
 
     // 주문번호만으로 영수증 문서를 열 수 있으면(11번가) 그 경로로 간다. 클릭·팝업 대기가 필요 없다.
     if (cfg.receiptRequest || cfg.receiptUrlTemplate || cfg.receiptKey) {
@@ -580,8 +582,10 @@ export async function collectBulkReceipts(
       await sleep(2000);
 
       if (new RegExp(cfg.loggedOutPattern, "i").test(page.url())) {
+        saveSessionCheck(site, false, { url: page.url(), reason: "묶음 전표 화면에서 로그인 요구" });
         throw new Error(`로그인이 필요합니다: ${page.url()}`);
       }
+      saveSessionCheck(site, true, { url: page.url(), reason: "묶음 전표 화면 열림" });
 
       const text = await page.innerText("body").catch(() => "");
       const orderNos = [...new Set(text.match(new RegExp(cfg.orderNoPattern || "\\b\\d{12,16}\\b", "g")) || [])];
@@ -913,6 +917,7 @@ async function runCollect(
           await sleep(1500);
 
           if (new RegExp(cfg.loggedOutPattern, "i").test(receipt.url())) {
+            saveSessionCheck(site, false, { url: receipt.url(), reason: "전표 페이지에서 로그인 요구" });
             throw new Error(`영수증 페이지가 로그인을 요구합니다: ${receipt.url()}`);
           }
 

@@ -29,10 +29,24 @@ export interface SiteConfig {
   receiptKeywords: string[];
   /** 주문 행 후보 셀렉터(위에서부터 시도, 매칭되는 첫 셀렉터를 쓴다) */
   orderRowSelectors: string[];
-  /** 화면에서 주문번호를 골라내는 정규식(기본: 15~20자리 숫자) */
+  /** 화면에서 주문번호를 골라내는 정규식(기본: 15~20자리 숫자). receiptKey 가 있으면 그쪽이 우선한다 */
   orderNoPattern?: string;
+  /**
+   * 목록에서 **전표 식별자**를 뽑는 규칙. 캡처한 값은 receiptRequest.fields 와
+   * receiptUrlTemplate 의 `{이름}` 토큰으로 치환된다.
+   *   11번가 — 주문번호 하나면 된다:      { pattern: "\\b(\\d{15,20})\\b", groups: ["ordNo"] }
+   *   G마켓  — 전표마다 세 값이 필요하다: { pattern: "seqNo=(…)&custNo=(…)&contrNo=(…)", groups: [...] }
+   */
+  receiptKey?: { pattern: string; groups: string[] };
   /** 주문번호 앞 8자리가 주문일인 사이트(11번가)에서 켠다 */
   orderDateFromOrderNo?: boolean;
+  /** 전표 문서 안에 찍힌 날짜를 주문일로 쓴다(주문번호에 날짜가 없는 사이트) */
+  orderDateFromDocument?: boolean;
+  /**
+   * 한 주문에 상품별로 전표가 나뉘는 사이트(11번가)에서 켠다.
+   * ordPrdSeq 를 1부터 올려가며 받다가 빈 양식이 나오면 멈춘다.
+   */
+  iterateItemSeq?: boolean;
   /**
    * 봇 확인(Cloudflare Turnstile 등)이 있는 사이트에서 켠다.
    * UA·viewport 를 덮어쓰지 않고 자동화 표식을 숨기며, headless 대신 headed 로 돈다.
@@ -96,7 +110,9 @@ export const ELEVEN_ST: SiteConfig = {
   loggedOutPattern: "login|signin|auth",
   receiptKeywords: ["카드영수증", "영수증", "거래명세서", "명세서"],
   orderNoPattern: "\\b\\d{15,20}\\b",
+  receiptKey: { pattern: "\\b(\\d{15,20})\\b", groups: ["ordNo"] },
   orderDateFromOrderNo: true,
+  iterateItemSeq: true,
   orderRowSelectors: [
     "[class*='order_list'] > li",
     "[class*='orderList'] > li",
@@ -205,10 +221,37 @@ export const GMARKET: SiteConfig = {
     "li[class*='order']",
   ],
   nextPageSelectors: ["a:has-text('다음')", "[class*='paging'] a[class*='next']", "button:has-text('다음')"],
-  // 주문번호 형식 미상 — 우선 넓게 잡고 probe 결과로 좁힌다.
-  orderNoPattern: "\\b\\d{9,20}\\b",
   // 실측(2026-08): 접속하면 Cloudflare 봇 확인 화면이 뜬다. 지문을 건드리지 않고 headed 로 돌아야 한다.
   stealth: true,
+
+  /**
+   * 실측(2026-08): 주문목록의 '거래영수증'은 11번가 결제영수증처럼 세무 효력이 없다.
+   * 매입세액공제용 신용카드 매출전표는 **영수증 조회 화면**(receipt.gmarket.co.kr)에서 나온다.
+   *
+   *   목록  POST https://receipt.gmarket.co.kr/Card/CardSalesSlipForm/
+   *         sDay=20220101&eDay=20260831&pageNo=1&pageUnit=10
+   *   전표  GET  https://receipt.gmarket.co.kr/Card/CardReceiptFormCover
+   *         ?seqNo=1924402893&custNo=<인코딩>&contrNo=3664897233
+   *
+   * 11번가와 달리 전표를 여는 열쇠가 주문번호가 아니라 seqNo·custNo·contrNo 세 값이라,
+   * 목록 HTML 에서 셋을 한꺼번에 캡처한다.
+   */
+  listRequest: {
+    url: "https://receipt.gmarket.co.kr/Card/CardSalesSlipForm/",
+    method: "POST",
+    fields: { sDay: "{from}", eDay: "{to}", pageNo: "{page}", pageUnit: "100" },
+    dateFormat: "YYYYMMDD",
+    refererUrl: "https://receipt.gmarket.co.kr/Card/cardsalesslip",
+  },
+  receiptKey: {
+    pattern: "seqNo=([^&\"'\\s<>]+)&(?:amp;)?custNo=([^&\"'\\s<>]+)&(?:amp;)?contrNo=([^&\"'\\s<>]+)",
+    groups: ["seqNo", "custNo", "contrNo"],
+  },
+  receiptUrlTemplate:
+    "https://receipt.gmarket.co.kr/Card/CardReceiptFormCover?seqNo={seqNo}&custNo={custNo}&contrNo={contrNo}",
+  receiptLabel: "신용카드매출전표",
+  // 주문번호에 날짜가 없다 — 전표 문서에 찍힌 거래일자를 쓴다.
+  orderDateFromDocument: true,
 };
 
 /**

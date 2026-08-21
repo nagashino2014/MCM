@@ -56,6 +56,52 @@ export function cookiesFile(site: string): string {
   return path.join(siteDir(site), "cookies.json");
 }
 
+/**
+ * 세션이 **실제로 살아 있는지** 마지막으로 확인한 결과.
+ *
+ * 쿠키 파일이 있다고 로그인이 유지되는 것은 아니다 — 만료되거나(하루쯤), 도메인이 갈려
+ * (G마켓: gmarket.co.kr 은 되는데 receipt.gmarket.co.kr 은 다시 로그인 요구) 튕기기도 한다.
+ * 그래서 접근해 본 결과를 남겨 두고 화면은 그것을 보여 준다.
+ * check 뿐 아니라 collect·bulk 도 결과를 남기므로 수집 한 번이 곧 세션 확인이 된다.
+ */
+export interface SessionCheck {
+  ok: boolean;
+  checkedAt: string;
+  url?: string;
+  reason?: string;
+}
+
+export function sessionCheckFile(site: string): string {
+  return path.join(siteDir(site), "session-check.json");
+}
+
+export function saveSessionCheck(site: string, ok: boolean, detail?: { url?: string; reason?: string }): void {
+  try {
+    ensureSiteDir(site);
+    const body: SessionCheck = { ok, checkedAt: new Date().toISOString(), ...detail };
+    fs.writeFileSync(sessionCheckFile(site), JSON.stringify(body, null, 2), "utf-8");
+  } catch {
+    // 기록에 실패해도 수집 자체는 계속한다.
+  }
+}
+
+/** 로그인을 새로 했을 때처럼 이전 판정이 더는 유효하지 않은 경우 지운다(=확인 필요 상태) */
+export function clearSessionCheck(site: string): void {
+  try {
+    fs.rmSync(sessionCheckFile(site), { force: true });
+  } catch {
+    // 없으면 그만이다.
+  }
+}
+
+export function readSessionCheck(site: string): SessionCheck | null {
+  try {
+    return JSON.parse(fs.readFileSync(sessionCheckFile(site), "utf-8")) as SessionCheck;
+  } catch {
+    return null;
+  }
+}
+
 /** 로그인한 적이 있는지 — 프로필이 만들어져 있으면 참(유효성은 checkSession 으로 확인) */
 export function hasSession(site: string): boolean {
   return fs.existsSync(path.join(profileDir(site), "Default")) || fs.existsSync(cookiesFile(site));
@@ -221,6 +267,14 @@ export async function interactiveLogin(
     console.log(`[${site}] 로그인 프로필 저장 완료: ${profileDir(site)}`);
     console.log(`[${site}] 세션 쿠키 ${cookieCount}개 저장: ${cookiesFile(site)}`);
 
+    // 로그인 창을 닫았다고 대상 화면까지 열린다는 보장은 없다(도메인이 갈리는 사이트가 있다).
+    // 그래서 성공을 단정하지 않고 이전 판정을 지워 '확인 필요' 로 되돌린다.
+    if (stillOnLogin) {
+      saveSessionCheck(site, false, { url: lastUrl ?? undefined, reason: "로그인 창을 닫을 때 아직 로그인 페이지였습니다" });
+    } else {
+      clearSessionCheck(site);
+    }
+
     if (stillOnLogin) {
       console.log(`[${site}] ⚠ 창을 닫을 때 화면이 아직 로그인 페이지였습니다: ${lastUrl}`);
       console.log(`[${site}]   로그인을 끝내고 목록 화면이 보이는 상태에서 창을 닫아야 세션이 남습니다.`);
@@ -251,6 +305,7 @@ export async function checkSession(
     const finalUrl = page.url();
     const looksLoggedOut = new RegExp(loggedOutPattern, "i").test(finalUrl);
     console.log(`[${site}] 최종 URL: ${finalUrl} (HTTP ${res?.status()})`);
+    saveSessionCheck(site, !looksLoggedOut, { url: finalUrl });
     return !looksLoggedOut;
   } finally {
     await close();

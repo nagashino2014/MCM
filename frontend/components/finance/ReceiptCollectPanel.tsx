@@ -19,6 +19,10 @@ interface ShopStatus {
   hint?: string;
   loggedIn: boolean;
   sessionAt: string | null;
+  /** 실제 접근으로 확인한 세션 상태 — true 유효 / false 만료 / null 미확인 */
+  sessionOk: boolean | null;
+  sessionCheckedAt: string | null;
+  sessionReason: string | null;
   collected: number;
   lastCollectedAt: string | null;
 }
@@ -51,6 +55,22 @@ function formatDate(iso: string | null): string {
   if (!iso) return "-";
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? "-" : d.toLocaleDateString("ko-KR");
+}
+
+/** 세션은 하루 남짓이면 풀린다 — 확인 시각은 분 단위까지 보여 준다 */
+function formatDateTime(iso: string | null): string {
+  if (!iso) return "-";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "-";
+  return `${d.toLocaleDateString("ko-KR")} ${d.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}`;
+}
+
+/** 화면에 보여 줄 세션 상태 — 쿠키 존재가 아니라 실제 접근 결과를 기준으로 한다 */
+function sessionBadge(shop: ShopStatus): { label: string; className: string } {
+  if (!shop.loggedIn) return { label: "로그인 필요", className: "cd-pill cd-pill-warn" };
+  if (shop.sessionOk === true) return { label: "세션 유효", className: "cd-pill cd-pill-success" };
+  if (shop.sessionOk === false) return { label: "세션 만료", className: "cd-pill cd-pill-warn" };
+  return { label: "확인 필요", className: "cd-pill" };
 }
 
 export function ReceiptCollectPanel() {
@@ -176,6 +196,13 @@ export function ReceiptCollectPanel() {
     }
   };
 
+  /** 실제로 접근해 세션이 살아 있는지 본다(결과는 수집기가 파일로 남기고 상태에 반영된다) */
+  const checkSession = async (shop: ShopStatus) => {
+    appendLog(`— ${shop.name}: 세션을 확인합니다. 창이 잠깐 열릴 수 있습니다.`);
+    await runCommand({ command: "check", site: shop.key }, `${shop.name} 세션 확인`);
+    await loadStatus();
+  };
+
   const login = async (shop: ShopStatus) => {
     appendLog(`— ${shop.name}: 브라우저가 열립니다. 로그인 후 목록 화면까지 이동한 뒤 창을 닫으세요.`);
     await runCommand({ command: "login", site: shop.key }, `${shop.name} 로그인`);
@@ -195,6 +222,10 @@ export function ReceiptCollectPanel() {
       if (!shop.loggedIn) {
         appendLog(`— ${shop.name}: 로그인이 필요합니다. 건너뜁니다.`);
         continue;
+      }
+
+      if (shop.sessionOk === false) {
+        appendLog(`— ${shop.name}: 지난번에 세션이 만료돼 있었습니다. 실패하면 [다시 로그인] 후 재시도하세요.`);
       }
 
       if (shop.mode === "bulk") {
@@ -348,14 +379,19 @@ export function ReceiptCollectPanel() {
                       }}
                     />
                     <span className="cd-text font-semibold mr-auto">{shop.name}</span>
-                    <span className={shop.loggedIn ? "cd-pill cd-pill-success" : "cd-pill cd-pill-warn"}>
-                      {shop.loggedIn ? "로그인됨" : "로그인 필요"}
-                    </span>
+                    <span className={sessionBadge(shop).className}>{sessionBadge(shop).label}</span>
                   </div>
 
                   <div className="text-xs cd-text-muted space-y-0.5">
                     <div>수집 {shop.collected.toLocaleString()}건 · 최근 {formatDate(shop.lastCollectedAt)}</div>
-                    <div>세션 확인 {formatDate(shop.sessionAt)}</div>
+                    <div>
+                      {shop.sessionCheckedAt
+                        ? `세션 확인 ${formatDateTime(shop.sessionCheckedAt)}`
+                        : `로그인 기록 ${formatDate(shop.sessionAt)} · 세션은 아직 확인 전`}
+                    </div>
+                    {shop.sessionOk === false && shop.sessionReason && (
+                      <div className="cd-error-text">{shop.sessionReason}</div>
+                    )}
                     {shop.hint && <div className="cd-text-faint">{shop.hint}</div>}
                   </div>
 
@@ -368,6 +404,16 @@ export function ReceiptCollectPanel() {
                     >
                       <LogIn size={14} /> {shop.loggedIn ? "다시 로그인" : "로그인"}
                     </button>
+                    {shop.loggedIn && (
+                      <button
+                        type="button"
+                        className="cd-btn cd-btn-sm"
+                        onClick={() => void checkSession(shop)}
+                        disabled={Boolean(running)}
+                      >
+                        <RefreshCw size={14} /> 세션 확인
+                      </button>
+                    )}
                   </div>
 
                   {shop.mode === "bulk" && (

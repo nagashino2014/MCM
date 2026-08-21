@@ -23,9 +23,30 @@ interface ShopStatus {
   loggedIn: boolean;
   /** 로그인 흔적이 마지막으로 갱신된 시각 */
   sessionAt: string | null;
+  /** 실제로 접근해 본 결과 — true 유효 / false 만료 / null 아직 확인 안 함 */
+  sessionOk: boolean | null;
+  sessionCheckedAt: string | null;
+  sessionReason: string | null;
   collected: number;
   lastCollectedAt: string | null;
   ledgerPath: string | null;
+}
+
+/**
+ * 세션 판정 결과 — 수집기(scraper)가 실제 접근 결과를 남긴 파일.
+ * 쿠키 파일 존재만으로는 로그인이 살아 있는지 알 수 없어 이 값을 함께 보여 준다.
+ */
+function readSessionCheck(dir: string): { ok: boolean; checkedAt: string; reason?: string } | null {
+  const file = path.join(dir, "session-check.json");
+  if (!fs.existsSync(file)) return null;
+
+  try {
+    const body = JSON.parse(fs.readFileSync(file, "utf-8"));
+    if (typeof body?.ok !== "boolean" || typeof body?.checkedAt !== "string") return null;
+    return { ok: body.ok, checkedAt: body.checkedAt, reason: body.reason };
+  } catch {
+    return null;
+  }
 }
 
 function countLedger(dir: string): { rows: number; lastAt: string | null } {
@@ -63,6 +84,7 @@ export async function GET() {
     const cookies = path.join(dir, "cookies.json");
     const hasCookies = fs.existsSync(cookies);
     const ledger = countLedger(dir);
+    const check = readSessionCheck(dir);
 
     return {
       key: shop.key,
@@ -71,6 +93,9 @@ export async function GET() {
       hint: shop.hint,
       loggedIn: hasCookies,
       sessionAt: hasCookies ? fs.statSync(cookies).mtime.toISOString() : null,
+      sessionOk: check ? check.ok : null,
+      sessionCheckedAt: check ? check.checkedAt : null,
+      sessionReason: check?.reason ?? null,
       collected: ledger.rows,
       lastCollectedAt: ledger.lastAt,
       ledgerPath: ledger.rows > 0 ? path.join(dir, "ledger.csv") : null,

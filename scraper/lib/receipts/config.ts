@@ -435,8 +435,17 @@ export const COUPANG: SiteConfig = {
   name: "쿠팡",
   // 메인에서 사람이 직접 로그인한다. 주문목록으로 바로 들어가면 로그인 리다이렉트가 끼어 감지를 자극한다.
   loginUrl: "https://www.coupang.com/",
-  orderListUrl: "https://mc.coupang.com/ssr/desktop/order/list",
-  checkUrl: "https://mc.coupang.com/ssr/desktop/order/list",
+  /**
+   * 실측(2026-08): 로그인 통과 확인. 주문목록은 mc.coupang.com/ssr/desktop/order/list 이고,
+   * **영수증은 전용 화면**이 따로 있다 — 다른 세 몰과 같은 구조다.
+   *   영수증 조회/출력  https://mc.coupang.com/ssr/desktop/payment-receipt
+   * 수집 시작점을 그쪽으로 잡는다(전표를 뽑는 화면이 거기다).
+   *
+   * 참고: 쿠팡 프런트는 styled-components 해시 클래스(sc-xxxxx)라 class 기반 행 셀렉터가 안 맞는다.
+   * 우리 방식(식별자 정규식)이 오히려 잘 맞는다.
+   */
+  orderListUrl: "https://mc.coupang.com/ssr/desktop/payment-receipt",
+  checkUrl: "https://mc.coupang.com/ssr/desktop/payment-receipt",
   loggedOutPattern: "login\\.coupang\\.com|/login|signin",
   receiptKeywords: ["카드영수증", "거래명세서", "결제영수증", "영수증", "매출전표"],
   orderRowSelectors: [

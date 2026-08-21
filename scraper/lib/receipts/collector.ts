@@ -23,7 +23,7 @@ import { openContext, ensureSiteDir, siteDir, saveSessionCheck } from "./session
 import { loadSiteConfig, SiteConfig } from "./config";
 import { savePageAsPdf, safeName, SaveResult } from "./pdf";
 import { appendLedger, loadCollectedKeys, LedgerRow } from "./ledger";
-import { extractDocumentFields, dateFromText } from "./parse";
+import { extractDocumentFields, extractPaymentFields, dateFromText } from "./parse";
 
 export interface CollectOptions {
   from?: string;
@@ -943,8 +943,9 @@ async function runCollect(
               result.files.push(textPath);
             }
 
-            // 품목·금액은 전표 문서에서 뽑는다(못 찾으면 빈 칸 — 증빙 자체는 PDF 원본이다).
+            // 품목·금액과 원장 매칭 키(승인번호·카드끝4)는 전표 문서에서 뽑는다(못 찾으면 빈 칸).
             const fields = extractDocumentFields(text, cfg);
+            const payment = extractPaymentFields(text);
 
             appendLedger(site, {
               site,
@@ -956,6 +957,8 @@ async function runCollect(
               method: result.method,
               files: result.files.map((f) => path.relative(siteDir(site), f)).join(" | "),
               collectedAt: new Date().toISOString(),
+              approvalNum: payment.approvalNum,
+              cardLast4: payment.cardLast4,
             });
             collected.add(ledgerKey);
             stats.saved++;

@@ -27,7 +27,7 @@ import { loadSiteConfig, saveSiteConfig } from "../lib/receipts/config";
 import { probeOrderList } from "../lib/receipts/probe";
 import { collectReceipts, probeReceiptSeq, collectBulkReceipts } from "../lib/receipts/collector";
 import { summarize, enrichLedger } from "../lib/receipts/ledger";
-import { extractDocumentFields } from "../lib/receipts/parse";
+import { extractDocumentFields, extractPaymentFields } from "../lib/receipts/parse";
 import { importInbox } from "../lib/receipts/inbox";
 
 interface Args {
@@ -239,7 +239,7 @@ async function main(): Promise<void> {
   }
 
   if (command === "enrich") {
-    enrichLedger(site, (text) => extractDocumentFields(text, cfg));
+    enrichLedger(site, (text) => ({ ...extractDocumentFields(text, cfg), ...extractPaymentFields(text) }));
     return;
   }
 

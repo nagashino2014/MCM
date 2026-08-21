@@ -10,9 +10,10 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Download, LogIn, Loader2, RefreshCw, FolderOpen, AlertTriangle } from "lucide-react";
+import { Download, LogIn, Loader2, RefreshCw, FolderOpen, AlertTriangle, UploadCloud } from "lucide-react";
 
 import { CdDateInput, isValidDateString } from "@/components/cdash";
+import { ShopReceiptRecords } from "@/components/finance/ShopReceiptRecords";
 
 interface ShopStatus {
   key: string;
@@ -95,6 +96,8 @@ export function ReceiptCollectPanel() {
   const [log, setLog] = useState<string[]>([]);
 
   const [origin, setOrigin] = useState("");
+  /** 올리기가 끝나면 아래 목록을 다시 읽게 하는 값 */
+  const [uploaded, setUploaded] = useState(0);
 
   const logRef = useRef<HTMLDivElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -144,15 +147,15 @@ export function ReceiptCollectPanel() {
 
   const appendLog = (line: string) => setLog((prev) => [...prev.slice(-500), line]);
 
-  /** CLI 한 번 실행 — 로그를 흘려받아 화면에 붙인다 */
-  const runCommand = async (body: Record<string, unknown>, label: string): Promise<boolean> => {
+  /** SSE 로 로그를 흘려주는 엔드포인트를 호출해 화면 로그창에 붙인다 */
+  const runStream = async (url: string, body: Record<string, unknown>, label: string): Promise<boolean> => {
     const controller = new AbortController();
     abortRef.current = controller;
     setRunning(label);
     appendLog(`▶ ${label}`);
 
     try {
-      const res = await fetch("/api/receipts/shop/run", {
+      const res = await fetch(url, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
@@ -198,6 +201,16 @@ export function ReceiptCollectPanel() {
       setRunning(null);
       abortRef.current = null;
     }
+  };
+
+  /** CLI 한 번 실행 */
+  const runCommand = (body: Record<string, unknown>, label: string) =>
+    runStream("/api/receipts/shop/run", body, label);
+
+  /** 개인 PC 에 쌓인 대장·PDF 를 스테이징으로 올린다 */
+  const uploadToStaging = async () => {
+    const ok = await runStream("/api/receipts/shop/sync", {}, "스테이징으로 올리기");
+    if (ok) setUploaded((n) => n + 1);
   };
 
   /** 실제로 접근해 세션이 살아 있는지 본다(결과는 수집기가 파일로 남기고 상태에 반영된다) */
@@ -274,39 +287,49 @@ export function ReceiptCollectPanel() {
 
   if (localOnly) {
     return (
-      <div className="cd-card p-6">
-        <div className="flex items-start gap-3">
-          <AlertTriangle size={20} className="mt-0.5 shrink-0" style={{ color: "var(--cd-warning)" }} />
-          <div className="space-y-2">
-            <div className="cd-card-title">이 기능은 내 PC 에서 실행한 앱에서만 쓸 수 있습니다</div>
-            <p className="text-sm cd-text-muted leading-relaxed">
-              쇼핑몰 로그인 상태와 브라우저가 각자 PC 에 있어야 전표를 받을 수 있습니다.
-              서버에 올라간 앱에는 그 둘이 없어 수집을 실행할 수 없습니다.
-            </p>
-            {isLocalOrigin ? (
-              <>
-                <p className="text-sm cd-text-muted leading-relaxed">
-                  주소({origin})는 로컬이 맞는데도 이 메시지가 보인다면, <b>지금 붙어 있는 dev 서버가 바로가기로 띄운 것이 아닙니다.</b>
-                  다른 창에서 <code className="cd-text">npm run dev</code> 가 이미 떠 있으면 바로가기로 띄운 앱은 다른 포트(3001 등)로 밀리고,
-                  브라우저는 먼저 떠 있던 쪽에 붙습니다.
-                </p>
-                <p className="text-sm cd-text-muted leading-relaxed">
-                  기존 dev 서버 창을 모두 닫고 바탕화면의 <b>전표 수집</b> 바로가기로 다시 띄워 주세요.
-                  바로가기 창에 찍힌 포트 번호도 확인해 보시면 됩니다.
-                </p>
-              </>
-            ) : (
+      <div className="space-y-4">
+        <div className="cd-card p-6">
+          <div className="flex items-start gap-3">
+            <AlertTriangle size={20} className="mt-0.5 shrink-0" style={{ color: "var(--cd-warning)" }} />
+            <div className="space-y-2">
+              <div className="cd-card-title">이 기능은 내 PC 에서 실행한 앱에서만 쓸 수 있습니다</div>
               <p className="text-sm cd-text-muted leading-relaxed">
-                지금 보고 있는 주소는 <code className="cd-text">{origin || "(확인 중)"}</code> — 서버에 올라간 앱입니다.
-                바탕화면의 <b>전표 수집</b> 바로가기로 앱을 띄운 뒤 <code className="cd-text">http://localhost:3000/finance?tab=shopreceipt</code> 를 열어 주세요.
-                바로가기가 없으면 <code className="cd-text">scripts\install-receipts-shortcut.ps1</code> 을 한 번 실행하면 만들어집니다.
+                쇼핑몰 로그인 상태와 브라우저가 각자 PC 에 있어야 전표를 받을 수 있습니다.
+                서버에 올라간 앱에는 그 둘이 없어 수집을 실행할 수 없습니다.
               </p>
-            )}
-            <button className="cd-btn cd-btn-sm" onClick={() => void loadStatus()}>
-              <RefreshCw size={14} /> 다시 확인
-            </button>
+              {isLocalOrigin ? (
+                <>
+                  <p className="text-sm cd-text-muted leading-relaxed">
+                    주소({origin})는 로컬이 맞는데도 이 메시지가 보인다면, <b>지금 붙어 있는 dev 서버가 바로가기로 띄운 것이 아닙니다.</b>
+                    다른 창에서 <code className="cd-text">npm run dev</code> 가 이미 떠 있으면 바로가기로 띄운 앱은 다른 포트(3001 등)로 밀리고,
+                    브라우저는 먼저 떠 있던 쪽에 붙습니다.
+                  </p>
+                  <p className="text-sm cd-text-muted leading-relaxed">
+                    기존 dev 서버 창을 모두 닫고 바탕화면의 <b>전표 수집</b> 바로가기로 다시 띄워 주세요.
+                    바로가기 창에 찍힌 포트 번호도 확인해 보시면 됩니다.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm cd-text-muted leading-relaxed">
+                    지금 보고 있는 주소는 <code className="cd-text">{origin || "(확인 중)"}</code> — 서버에 올라간 앱입니다.
+                    수집만 개인 PC 에서 합니다. 바탕화면의 <b>전표 수집</b> 바로가기로 앱을 띄운 뒤
+                    <code className="cd-text"> http://localhost:3000/finance?tab=shopreceipt </code> 를 열어 주세요.
+                  </p>
+                  <p className="text-sm cd-text-muted leading-relaxed">
+                    <b>이미 올려 둔 전표는 아래에서 그대로 조회·내려받을 수 있습니다.</b> 신고 작업은 여기서 하시면 됩니다.
+                  </p>
+                </>
+              )}
+              <button className="cd-btn cd-btn-sm" onClick={() => void loadStatus()}>
+                <RefreshCw size={14} /> 다시 확인
+              </button>
+            </div>
           </div>
         </div>
+
+        {/* 수집은 못 해도 올라온 전표는 어디서든 볼 수 있다(신고는 여기서 한다). */}
+        <ShopReceiptRecords from={range.from} to={range.to} reloadToken={uploaded} />
       </div>
     );
   }
@@ -371,9 +394,21 @@ export function ReceiptCollectPanel() {
             </button>
           </div>
 
+          <button
+            type="button"
+            className="cd-btn cd-btn-sm w-full"
+            onClick={() => void uploadToStaging()}
+            disabled={Boolean(running) || loading}
+          >
+            <UploadCloud size={14} /> 스테이징으로 올리기
+          </button>
+
           <p className="text-xs cd-text-muted">
             선택한 쇼핑몰을 차례로 돌며 신용카드 매출전표를 PDF 로 받아 <code className="cd-text">{receiptsDir || "data/receipts"}</code> 아래에 쌓습니다.
             이미 받은 건은 건너뜁니다.
+          </p>
+          <p className="text-xs cd-text-faint">
+            받은 전표는 이 PC 에만 있습니다. <b>스테이징으로 올리기</b> 를 해야 신고 화면(스테이징)과 다른 사람에게 보입니다.
           </p>
         </div>
 
@@ -497,6 +532,9 @@ export function ReceiptCollectPanel() {
           )}
         </div>
       </div>
+
+      {/* 올라온 전표 — 스테이징에서 보는 것과 같은 목록 */}
+      <ShopReceiptRecords from={range.from} to={range.to} reloadToken={uploaded} />
 
       {/* 진행 로그 */}
       {log.length > 0 && (

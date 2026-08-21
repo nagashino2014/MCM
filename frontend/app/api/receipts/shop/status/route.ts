@@ -11,6 +11,7 @@ import path from "node:path";
 
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { SHOPS, shopDir, localToolsEnabled, receiptsDir } from "@/lib/receipts/shops";
+import { parseLedgerCsv } from "@/lib/receipts/ledger-csv";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -67,12 +68,9 @@ function countLedger(dir: string): { rows: number; lastAt: string | null } {
   if (!fs.existsSync(file)) return { rows: 0, lastAt: null };
 
   try {
-    const lines = fs.readFileSync(file, "utf-8").replace(/^﻿/, "").trim().split(/\r?\n/);
-    const body = lines.slice(1).filter((l: string) => l.trim());
-    // collectedAt 은 마지막 열이다.
-    const last = body[body.length - 1] || "";
-    const at = last.split(",").pop()?.replace(/^"|"$/g, "") ?? null;
-    return { rows: body.length, lastAt: at && /^\d{4}-/.test(at) ? at : null };
+    const rows = parseLedgerCsv(fs.readFileSync(file, "utf-8"));
+    const at = rows[rows.length - 1]?.collectedAt ?? null;
+    return { rows: rows.length, lastAt: at && /^\d{4}-/.test(at) ? at : null };
   } catch {
     return { rows: 0, lastAt: null };
   }

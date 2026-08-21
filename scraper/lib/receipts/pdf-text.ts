@@ -14,13 +14,19 @@ import fs from "node:fs";
 const LINE_TOLERANCE = 2;
 
 function loadPdfjs(): any {
-  // canvas 모듈이 없다는 경고가 뜨는데, 그건 그리기용이라 텍스트 추출에는 지장이 없다.
-  const warn = console.warn;
+  // 불러올 때 canvas 모듈이 없다는 경고를 여러 줄 뱉는데(DOMMatrix·Path2D), 그건 그리기용이라
+  // 텍스트 추출에는 지장이 없다. 로그가 그걸로 도배되지 않게 잠깐 막는다.
+  const { log, warn } = console;
+  console.log = () => {};
   console.warn = () => {};
+
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    return require("pdfjs-dist/legacy/build/pdf.js");
+    const pdfjs = require("pdfjs-dist/legacy/build/pdf.js");
+    pdfjs.setVerbosityLevel?.(pdfjs.VerbosityLevel?.ERRORS ?? 0);
+    return pdfjs;
   } finally {
+    console.log = log;
     console.warn = warn;
   }
 }
@@ -50,6 +56,14 @@ function joinRow(parts: { x: number; w: number; h: number; s: string }[]): strin
 }
 
 export async function extractPdfText(file: string): Promise<string> {
+  return (await extractPdfPages(file)).join("\n\n");
+}
+
+/**
+ * 페이지별 텍스트. 묶음 전표를 건별 PDF 로 쪼갤 때 "몇 페이지가 어느 전표인지" 를
+ * 알아야 해서 페이지 단위를 유지한 버전을 따로 둔다.
+ */
+export async function extractPdfPages(file: string): Promise<string[]> {
   const pdfjs = loadPdfjs();
   const data = new Uint8Array(fs.readFileSync(file));
   const doc = await pdfjs.getDocument({ data, useSystemFonts: true, isEvalSupported: false }).promise;
@@ -86,5 +100,5 @@ export async function extractPdfText(file: string): Promise<string> {
     await doc.destroy();
   }
 
-  return pages.join("\n\n");
+  return pages;
 }

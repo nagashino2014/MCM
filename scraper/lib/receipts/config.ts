@@ -83,6 +83,11 @@ export interface SiteConfig {
   /** 수집 문서의 이름(파일명·대장의 receiptType 에 쓰인다) */
   receiptLabel?: string;
   /**
+   * 건당 기본 대기(ms). --delay 를 주지 않았을 때 쓴다.
+   * 봇 탐지가 트래픽 패턴을 보는 사이트(쿠팡)는 넉넉히 둔다 — 속도보다 안 잘리는 게 중요하다.
+   */
+  defaultDelay?: number;
+  /**
    * 조회 기간을 직접 지정해 주문목록을 여는 요청(무인 실행용).
    * 이게 있으면 사람이 화면에서 기간을 고를 필요가 없다(--wait 불필요).
    * 값의 `{from}`/`{to}` 는 dateFormat 에 맞춰 치환된다.
@@ -413,11 +418,47 @@ export const NAVER_PAY: SiteConfig = {
   receiptLabel: "카드영수증",
 };
 
+/**
+ * 쿠팡.
+ * - 증빙 경로(고객센터 안내): 마이쿠팡 > 주문목록 > 주문 상세보기 > 결제영수증 정보 > [카드영수증]/[거래명세서].
+ *   PC 웹에만 있고 모바일 앱에는 없다.
+ * - **네 몰 중 가장 어렵다.** Akamai Bot Manager 가 붙어 있고 TLS 지문까지 본다는 보고가 있다.
+ *   stealth(UA 미변조·자동화 표식 숨김·실제 Chrome·headed)를 켜고, 건당 대기를 넉넉히 잡아
+ *   사람이 클릭하는 속도에 가깝게 돈다. 그래도 막힐 수 있다.
+ *
+ * ⚠ 아직 모르는 것 — `login` → `probe` 로 채운다:
+ *     주문목록 주소·기간 조회 요청·전표 여는 방법·주문번호 형식.
+ *     11번가·G마켓과 마찬가지로 주문내역의 '영수증'이 세무 효력이 없을 수 있으니 문서 확인도 필요하다.
+ */
+export const COUPANG: SiteConfig = {
+  key: "coupang",
+  name: "쿠팡",
+  // 메인에서 사람이 직접 로그인한다. 주문목록으로 바로 들어가면 로그인 리다이렉트가 끼어 감지를 자극한다.
+  loginUrl: "https://www.coupang.com/",
+  orderListUrl: "https://mc.coupang.com/ssr/desktop/order/list",
+  checkUrl: "https://mc.coupang.com/ssr/desktop/order/list",
+  loggedOutPattern: "login\\.coupang\\.com|/login|signin",
+  receiptKeywords: ["카드영수증", "거래명세서", "결제영수증", "영수증", "매출전표"],
+  orderRowSelectors: [
+    "[class*='order-list'] li",
+    "[class*='order'] li",
+    "table[class*='order'] tbody tr",
+    "li[class*='order']",
+  ],
+  nextPageSelectors: ["a:has-text('다음')", "[class*='paging'] a[class*='next']", "button:has-text('다음')"],
+  // 주문번호 형식 미상 — 넓게 잡고 probe 결과로 좁힌다.
+  orderNoPattern: "\\b\\d{10,20}\\b",
+  stealth: true,
+  // 트래픽 패턴을 보는 곳이라 기본 대기를 길게 둔다(다른 몰의 2초 → 5초).
+  defaultDelay: 5000,
+};
+
 const SITES: Record<string, SiteConfig> = {
   [ELEVEN_ST.key]: ELEVEN_ST,
   [GMARKET.key]: GMARKET,
   [AUCTION.key]: AUCTION,
   [NAVER_PAY.key]: NAVER_PAY,
+  [COUPANG.key]: COUPANG,
 };
 
 export function configFile(site: string): string {

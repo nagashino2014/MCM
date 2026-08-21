@@ -176,7 +176,16 @@ G마켓은 접속하면 Cloudflare 봇 확인 화면이 뜬다. `SiteConfig.stea
 
 ## 옥션 (진행 중)
 
-G마켓과 같은 계열이지만 도메인·화면이 다르다(레거시 .aspx). 시작점만 넣어 뒀다.
+G마켓과 같은 계열이지만 화면이 다르다. 실측된 것:
+
+```
+주문내역  https://escrow.auction.co.kr/Close/OrderProcessList.aspx?tabType=S&SearchStatus=10&SearchOption=0
+영수증    <button onclick="openReceiptListWindow()">  → 별도 창으로 열린다(주소는 인자에 없다)
+```
+
+주문내역 화면은 ASP.NET WebForms 라 기간 조회가 postback(`__VIEWSTATE`·`btnTerm3M`·`btnSearch`)이다.
+폼을 새로 만들어 POST 하는 우리 방식으론 재현하기 어렵지만, **영수증은 별도 창에서 뽑으므로**
+그 창의 주소와 조회 요청만 알면 된다. 그 창은 G마켓 영수증 조회 화면과 비슷한 구조로 보인다.
 
 ```bash
 npm run receipts -- login --site auction     # 로그인 후 마이옥션까지 이동하고 창 닫기

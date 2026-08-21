@@ -329,10 +329,51 @@ export const AUCTION: SiteConfig = {
   orderDateFromDocument: true,
 };
 
+/**
+ * 네이버페이.
+ * - 주문내역: https://pay.naver.com/pc/history?page=1 (실측 제공). React SPA 라 목록은 XHR 로 채워질 가능성이 높다.
+ * - 네이버는 자동화 탐지가 강한 편이라 stealth 를 켠다(UA 를 덮어쓰지 않고, 화면을 띄워 실행).
+ *   로그인은 사람이 직접 하므로 캡차·2차인증은 그때 통과하면 된다.
+ *
+ * ⚠ 아직 모르는 것 — `login` → `probe` 로 채운다:
+ *     - 기간 조회 요청(listRequest). 지금은 page 파라미터만 알고 있다.
+ *     - 전표를 여는 방법(주소 GET / 폼 POST / 목록 링크 클릭)과 그 식별자.
+ *     - 세무 효력이 있는 문서가 무엇인지. 11번가·G마켓 모두 주문내역의 '영수증'은 효력이 없었고
+ *       별도 증빙 화면의 신용카드 매출전표라야 했다 — 네이버페이도 확인이 필요하다.
+ */
+export const NAVER_PAY: SiteConfig = {
+  key: "naver",
+  name: "네이버페이",
+  // 로그인 안 된 상태로 열면 네이버 로그인으로 넘어가고, 로그인하면 이 화면으로 돌아온다.
+  loginUrl: "https://pay.naver.com/pc/history?page=1",
+  orderListUrl: "https://pay.naver.com/pc/history?page=1",
+  checkUrl: "https://pay.naver.com/pc/history?page=1",
+  loggedOutPattern: "nid\\.naver\\.com|nidlogin|/login",
+  receiptKeywords: ["카드영수증", "매출전표", "영수증", "현금영수증", "결제상세", "주문상세"],
+  orderRowSelectors: [
+    "[class*='history'] li",
+    "[class*='order'] li",
+    "table[class*='order'] tbody tr",
+    "li[class*='item']",
+  ],
+  nextPageSelectors: ["a:has-text('다음')", "[class*='paging'] a[class*='next']", "button:has-text('다음')"],
+  // 주문번호 형식 미상 — 넓게 잡고 probe 결과로 좁힌다.
+  orderNoPattern: "\\b\\d{10,20}\\b",
+  stealth: true,
+  // 목록에 페이지 파라미터가 있다. 기간 파라미터는 실측 후 여기에 더한다.
+  listRequest: {
+    url: "https://pay.naver.com/pc/history",
+    method: "GET",
+    fields: { page: "{page}" },
+    dateFormat: "YYYYMMDD",
+  },
+};
+
 const SITES: Record<string, SiteConfig> = {
   [ELEVEN_ST.key]: ELEVEN_ST,
   [GMARKET.key]: GMARKET,
   [AUCTION.key]: AUCTION,
+  [NAVER_PAY.key]: NAVER_PAY,
 };
 
 export function configFile(site: string): string {

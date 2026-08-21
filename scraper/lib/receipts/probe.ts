@@ -203,7 +203,18 @@ async function inspectFrame(scope: Page | Frame, frameUrl: string, cfg: SiteConf
   }
 
   const receiptCandidates = await findReceiptCandidates(scope, cfg.receiptKeywords).catch(() => []);
-  const bodyText = await scope.evaluate(() => document.body?.innerText || "").catch(() => "");
+
+  // 화면 텍스트 + 링크 속성. 주문번호가 본문에는 없고 상세 링크 주소에만 있는 경우가 있다(네이버페이).
+  const bodyText = await scope
+    .evaluate(() => {
+      const text = document.body?.innerText || "";
+      const attrs = Array.from(document.querySelectorAll("a[href], [onclick], input[value]"))
+        .slice(0, 500)
+        .map((el) => `${el.getAttribute("href") || ""} ${el.getAttribute("onclick") || ""} ${el.getAttribute("value") || ""}`)
+        .join(" ");
+      return `${text}\n${attrs}`;
+    })
+    .catch(() => "");
 
   return {
     frameUrl,

@@ -113,7 +113,7 @@ async function main(): Promise<void> {
   const cfg = loadSiteConfig(site);
 
   if (command === "login") {
-    const { saved, lastUrl } = await interactiveLogin(site, cfg.loginUrl, cfg.stealth);
+    const { saved, lastUrl } = await interactiveLogin(site, cfg.loginUrl, cfg.stealth, cfg.loggedOutPattern);
     // 사용자가 마지막으로 머문 화면이 주문목록일 가능성이 높다 → 다음 실행의 시작점으로 기록.
     // 조회 요청(listRequest)이 정의돼 있으면 수집 시작점은 그쪽이다. 사용자가 마지막에 머문 화면이
     // 전표 팝업일 수도 있어, 그 주소를 시작점으로 덮어쓰면 오히려 해가 된다.

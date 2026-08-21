@@ -154,7 +154,8 @@ export async function openContext(opts: {
 export async function interactiveLogin(
   site: string,
   startUrl: string,
-  stealth = false
+  stealth = false,
+  loggedOutPattern?: string
 ): Promise<{ saved: boolean; lastUrl: string | null }> {
   ensureSiteDir(site);
 
@@ -186,11 +187,27 @@ export async function interactiveLogin(
     await waitForContextClose(context);
     clearInterval(timer);
 
+    // 창을 닫는 순간 로그인 화면이었다면 로그인이 끝나지 않은 것이다 — 그대로 두면
+    // 다음 명령이 "세션 만료"로 보여 원인을 오해하기 쉽다.
+    const stillOnLogin = Boolean(lastUrl && loggedOutPattern && new RegExp(loggedOutPattern, "i").test(lastUrl));
+    let cookieCount = 0;
+    try {
+      cookieCount = JSON.parse(fs.readFileSync(cookiesFile(site), "utf-8")).length;
+    } catch {
+      cookieCount = 0;
+    }
+
     console.log(`[${site}] 로그인 프로필 저장 완료: ${profileDir(site)}`);
-    console.log(`[${site}] 세션 쿠키 저장: ${cookiesFile(site)}`);
+    console.log(`[${site}] 세션 쿠키 ${cookieCount}개 저장: ${cookiesFile(site)}`);
+
+    if (stillOnLogin) {
+      console.log(`[${site}] ⚠ 창을 닫을 때 화면이 아직 로그인 페이지였습니다: ${lastUrl}`);
+      console.log(`[${site}]   로그인을 끝내고 목록 화면이 보이는 상태에서 창을 닫아야 세션이 남습니다.`);
+      console.log(`[${site}]   'npm run receipts -- login --site ${site}' 를 다시 실행해 주세요.`);
+    }
     console.log(`[${site}] ⚠ 이 디렉터리는 로그인 상태 그 자체입니다. 외부 공유·커밋 금지(.gitignore 등록됨).`);
 
-    return { saved: hasSession(site) || fs.existsSync(cookiesFile(site)), lastUrl };
+    return { saved: !stillOnLogin && (hasSession(site) || fs.existsSync(cookiesFile(site))), lastUrl };
   } finally {
     await context.close().catch(() => {});
   }

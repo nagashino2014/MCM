@@ -190,9 +190,12 @@ export const GMARKET: SiteConfig = {
   name: "G마켓",
   // 로그인 주소는 수시로 바뀌므로 메인에서 사용자가 직접 로그인하게 둔다(어차피 사람이 조작한다).
   loginUrl: "https://www.gmarket.co.kr/",
-  // myG 홈에 최근 주문내역이 있다. 주문내역 상세 경로는 실측으로 확정한다.
-  orderListUrl: "https://myg.gmarket.co.kr/",
-  checkUrl: "https://myg.gmarket.co.kr/",
+  // 실측(2026-08): 나의 지마켓은 my.gmarket.co.kr 의 SPA 다.
+  //   홈       https://my.gmarket.co.kr/ko/pc/main
+  //   주문내역 https://my.gmarket.co.kr/ko/pc/list/all
+  // 홈의 '영수증/계산서 조회' 버튼(div.box__button)이 증빙 화면 진입점으로 보인다.
+  orderListUrl: "https://my.gmarket.co.kr/ko/pc/list/all",
+  checkUrl: "https://my.gmarket.co.kr/ko/pc/list/all",
   loggedOutPattern: "login|signin|member\\.gmarket\\.co\\.kr/Login",
   receiptKeywords: ["카드전표", "신용카드 매출전표", "영수증/계산서", "영수증", "거래명세서"],
   orderRowSelectors: [

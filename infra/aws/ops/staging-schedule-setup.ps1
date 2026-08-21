@@ -17,8 +17,8 @@
     다시 자동 정지를 쓰려면 인자 없이 실행하면 된다.
 
 .EXAMPLE
-  pwsh infra/aws/ops/staging-schedule-setup.ps1            # 스케줄 설치/갱신
-  pwsh infra/aws/ops/staging-schedule-setup.ps1 -Remove    # 스케줄 삭제(=24/7 상시 가동)
+  .\infra\aws\ops\staging-schedule-setup.ps1            # 스케줄 설치/갱신
+  .\infra\aws\ops\staging-schedule-setup.ps1 -Remove    # 스케줄 삭제(=24/7 상시 가동)
 #>
 param(
   [string]$AwsProfile = "mcm-kesi-staging",

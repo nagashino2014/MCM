@@ -1,9 +1,9 @@
 ﻿# laptop-setup.ps1 — 노트북 개발환경 일괄 설치 스크립트
 # 사용법 (repo 루트에서):
-#   pwsh scripts/laptop-setup.ps1                # 필수 도구 + frontend 의존성
-#   pwsh scripts/laptop-setup.ps1 -Scraper       # + scraper 의존성 (Playwright 포함)
-#   pwsh scripts/laptop-setup.ps1 -Backend       # + backend Python 3.11 venv (수 GB, 오래 걸림)
-#   pwsh scripts/laptop-setup.ps1 -SkipTools     # 도구 설치 건너뛰고 npm/pip만
+#   powershell -ExecutionPolicy Bypass -File scripts\laptop-setup.ps1                # 필수 도구 + frontend 의존성
+#   powershell -ExecutionPolicy Bypass -File scripts\laptop-setup.ps1 -Scraper       # + scraper 의존성 (Playwright 포함)
+#   powershell -ExecutionPolicy Bypass -File scripts\laptop-setup.ps1 -Backend       # + backend Python 3.11 venv (수 GB, 오래 걸림)
+#   powershell -ExecutionPolicy Bypass -File scripts\laptop-setup.ps1 -SkipTools     # 도구 설치 건너뛰고 npm/pip만
 # 체크리스트 본문: docs/laptop-setup-checklist.md
 
 param(

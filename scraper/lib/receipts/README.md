@@ -176,25 +176,27 @@ G마켓은 접속하면 Cloudflare 봇 확인 화면이 뜬다. `SiteConfig.stea
 
 ## 옥션 (진행 중)
 
-G마켓과 같은 계열이지만 화면이 다르다. 실측된 것:
+영수증은 마이옥션 주문내역의 [영수증/계산서 조회] 버튼이 여는 **별도 창**에서 뽑는다. 실측된 것:
 
 ```
-주문내역  https://escrow.auction.co.kr/Close/OrderProcessList.aspx?tabType=S&SearchStatus=10&SearchOption=0
-영수증    <button onclick="openReceiptListWindow()">  → 별도 창으로 열린다(주소는 인자에 없다)
+창(현금영수증 탭)  https://accounting.auction.co.kr/Receipts/CashInfoList.aspx
+신용카드전표 탭    https://accounting.auction.co.kr/Receipts/CardInfoList.aspx
+기간 조회          .../CardInfoList.aspx?from=20220101&to=20260821&pageNum=1   ← GET 쿼리스트링
 ```
 
-주문내역 화면은 ASP.NET WebForms 라 기간 조회가 postback(`__VIEWSTATE`·`btnTerm3M`·`btnSearch`)이다.
-폼을 새로 만들어 POST 하는 우리 방식으론 재현하기 어렵지만, **영수증은 별도 창에서 뽑으므로**
-그 창의 주소와 조회 요청만 알면 된다. 그 창은 G마켓 영수증 조회 화면과 비슷한 구조로 보인다.
+주문내역 화면(`escrow.auction.co.kr/Close/OrderProcessList.aspx`)은 ASP.NET WebForms 라 기간 조회가
+postback(`__VIEWSTATE`)이지만, 전표는 위 창에서 뽑으므로 그쪽은 건드릴 필요가 없다.
+
+**아직 모르는 것**: 목록에서 개별 전표를 여는 주소(`receiptUrlTemplate`).
+그래서 지금은 전표 링크를 직접 클릭하는 경로로 동작한다. 주소를 알면 G마켓처럼 바로 열 수 있다:
 
 ```bash
-npm run receipts -- login --site auction     # 로그인 후 마이옥션까지 이동하고 창 닫기
-npm run receipts -- probe --site auction --url "<영수증 조회 화면 주소>"
+npm run receipts -- probe --site auction --watch --url "https://accounting.auction.co.kr/Receipts/CardInfoList.aspx"
 ```
 
-식별자 규칙(`receiptKey`)은 **후보를 배열로** 걸어 뒀다 — G마켓과 같은 함수 호출 형태와
-쿼리스트링 형태를 위에서부터 시도해 처음 건을 찾은 규칙을 쓴다. 둘 다 안 맞으면 목록이 비었을 때
-"화면이 값을 담고 있는 곳"(input value·onclick·href)이 출력되므로 그걸 보고 규칙을 고치면 된다.
+[신용카드전표] 탭에서 기간을 조회하고 전표 하나를 클릭하면 `팝업 로드 완료:` 에 그 주소가 찍힌다.
+
+식별자 규칙(`receiptKey`)은 후보 셋을 걸어 뒀다 — G마켓과 같은 `openCardReceipt(...)`,
+이름만 다른 3인자 함수(`viewCardSlip` 등), 쿼리스트링. 위에서부터 시도해 처음 건을 찾은 규칙을 쓴다.
 
 알려진 제약: 옥션은 **1년이 지난 구매내역의 영수증 출력이 막혀 있다**(고객센터 안내).
-오래된 기간은 수집 자체가 불가능할 수 있다.

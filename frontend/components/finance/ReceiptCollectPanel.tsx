@@ -304,9 +304,9 @@ export function ReceiptCollectPanel() {
 
   return (
     <div className="space-y-4">
-      {/* 기간 + 실행 3 : 쇼핑몰 목록 7 */}
-      <div className="grid gap-4 lg:grid-cols-10 items-start">
-        <div className="cd-card p-4 lg:col-span-3 space-y-3">
+      {/* 기간 + 실행 2 : 쇼핑몰 목록 9 (items-stretch 기본값이라 두 카드 높이가 맞는다) */}
+      <div className="grid gap-4 lg:grid-cols-11">
+        <div className="cd-card p-4 lg:col-span-2 space-y-3">
           <div className="cd-card-title">쇼핑몰 전표 수집</div>
 
           <select
@@ -347,7 +347,7 @@ export function ReceiptCollectPanel() {
             />
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <button type="button" className="cd-btn cd-btn-sm cd-btn-ghost" onClick={() => void loadStatus()}>
               <RefreshCw size={14} /> 새로고침
             </button>
@@ -369,16 +369,16 @@ export function ReceiptCollectPanel() {
         </div>
 
         {/* 사이트 목록 */}
-        <div className="cd-card p-4 lg:col-span-7">
+        <div className="cd-card p-4 lg:col-span-9">
           {error && <div className="cd-error-text text-sm mb-3">{error}</div>}
           {loading && <div className="text-sm cd-text-muted">불러오는 중…</div>}
 
           {!loading && (
-            <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 items-stretch">
             {shops.map((shop) => {
               const checked = selected.has(shop.key);
               return (
-                <div key={shop.key} className="border cd-border-c rounded-xl p-3">
+                <div key={shop.key} className="border cd-border-c rounded-xl p-3 flex flex-col">
                   <div className="flex items-center gap-2 mb-2">
                     <input
                       type="checkbox"

@@ -1,7 +1,7 @@
-# receipts-app.ps1 — 쇼핑몰 전표 수집용 로컬 앱 실행
+﻿# receipts-app.ps1 — 쇼핑몰 전표 수집용 로컬 앱 실행
 # 사용법:
 #   바탕화면의 '전표 수집' 바로가기를 더블클릭
-#   (바로가기가 없으면 pwsh scripts/install-receipts-shortcut.ps1 을 한 번 실행)
+#   (바로가기가 없으면 powershell -ExecutionPolicy Bypass -File scripts\install-receipts-shortcut.ps1 을 한 번 실행)
 #
 # 전표 수집은 쇼핑몰 로그인 상태와 브라우저가 있는 PC 에서만 할 수 있다(서버에는 둘 다 없다).
 # 그래서 이 스크립트가 MCM 앱을 내 PC 에서 띄우고 수집 화면을 브라우저로 열어 준다.

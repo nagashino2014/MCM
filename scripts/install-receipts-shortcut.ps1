@@ -1,12 +1,12 @@
-# install-receipts-shortcut.ps1 — '전표 수집' 바탕화면 바로가기 만들기
+﻿# install-receipts-shortcut.ps1 — '전표 수집' 바탕화면 바로가기 만들기
 # 사용법 (repo 루트에서):
-#   pwsh scripts/install-receipts-shortcut.ps1
+#   powershell -ExecutionPolicy Bypass -File scripts\install-receipts-shortcut.ps1
 #
 # 한 번만 실행하면 바탕화면에 바로가기가 생긴다. 이후에는 그것만 더블클릭하면
 # 앱이 뜨고 수집 화면이 열린다.
 #
 # 다른 사람 PC 에 배치할 때:
-#   1) Node.js LTS 설치 (또는 pwsh scripts/laptop-setup.ps1 -Scraper)
+#   1) Node.js LTS 설치 (또는 powershell -ExecutionPolicy Bypass -File scripts\laptop-setup.ps1 -Scraper)
 #   2) 이 저장소를 내려받기
 #   3) 이 스크립트 실행 → 바탕화면 바로가기 생성
 #   4) '전표 수집' 실행 → 각 쇼핑몰에 한 번씩 로그인

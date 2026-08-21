@@ -344,8 +344,10 @@ export const AUCTION: SiteConfig = {
 export const NAVER_PAY: SiteConfig = {
   key: "naver",
   name: "네이버페이",
-  // 로그인 안 된 상태로 열면 네이버 로그인으로 넘어가고, 로그인하면 이 화면으로 돌아온다.
-  loginUrl: "https://pay.naver.com/pc/history?page=1",
+  // 로그인은 네이버 메인에서 시작한다. 주문내역 주소로 바로 들어가면 로그인 리다이렉트가
+  // 한 번 더 끼어 자동화 감지를 자극할 수 있다(실측에서 창이 곧바로 닫혔다).
+  // 로그인 후 pay.naver.com/pc/history 로 이동한 다음 창을 닫으면 된다.
+  loginUrl: "https://www.naver.com/",
   orderListUrl: "https://pay.naver.com/pc/history?page=1",
   checkUrl: "https://pay.naver.com/pc/history?page=1",
   loggedOutPattern: "nid\\.naver\\.com|nidlogin|/login",

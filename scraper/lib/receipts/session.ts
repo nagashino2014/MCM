@@ -161,6 +161,18 @@ export async function interactiveLogin(
 
   const { context } = await openContext({ site, headless: false, useSession: false, stealth });
 
+  // 사용자가 로그인하는 동안 페이지 스크립트가 창을 닫아버리는 경우가 있다(네이버).
+  // 로그인 창은 사람이 닫는 것이 종료 신호이므로, 스크립트발 close 는 막는다.
+  await context.addInitScript(() => {
+    try {
+      window.close = () => {};
+    } catch {
+      // 막지 못해도 로그인 자체에는 지장이 없다
+    }
+  });
+
+  const openedAt = Date.now();
+
   try {
     const page = context.pages()[0] || (await context.newPage());
     await page.goto(startUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
@@ -190,6 +202,15 @@ export async function interactiveLogin(
     // 창을 닫는 순간 로그인 화면이었다면 로그인이 끝나지 않은 것이다 — 그대로 두면
     // 다음 명령이 "세션 만료"로 보여 원인을 오해하기 쉽다.
     const stillOnLogin = Boolean(lastUrl && loggedOutPattern && new RegExp(loggedOutPattern, "i").test(lastUrl));
+    const openSeconds = Math.round((Date.now() - openedAt) / 1000);
+
+    // 로그인할 시간도 없이 닫혔다면 사람이 닫은 게 아니다 — 원인을 짚어 준다.
+    if (openSeconds < 20) {
+      console.log(`[${site}] ⚠ 창이 ${openSeconds}초 만에 닫혔습니다. 사람이 닫은 것이 아니라면:`);
+      console.log(`[${site}]   · 사이트가 자동화를 감지해 창을 닫았을 수 있습니다(네이버가 그렇습니다).`);
+      console.log(`[${site}]   · 같은 사이트의 다른 명령이 아직 돌고 있으면 프로필이 잠겨 바로 종료됩니다.`);
+      console.log(`[${site}]   · RECEIPTS_CHROME_PATH 로 실제 Chrome 을 지정하면 나아지는 경우가 있습니다.`);
+    }
     let cookieCount = 0;
     try {
       cookieCount = JSON.parse(fs.readFileSync(cookiesFile(site), "utf-8")).length;

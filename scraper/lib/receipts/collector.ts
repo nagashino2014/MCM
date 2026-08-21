@@ -198,6 +198,49 @@ async function explainEmptyList(tag: string, page: Page, rule: { pattern: string
   if (sample) console.log(`${tag}   실제 모양: ${sample[0].replace(/\s+/g, " ")}`);
 }
 
+/**
+ * 목록에 건은 보이는데 식별자를 못 찾을 때, 화면이 값을 어디에 담고 있는지 보여준다.
+ * 전표를 여는 값이 링크가 아니라 체크박스 value 나 스크립트 호출에 들어 있는 경우가 있다(G마켓).
+ */
+async function dumpValueCarriers(tag: string, page: Page): Promise<void> {
+  const scopes: (Page | Frame)[] = [page, ...page.frames().filter((f) => f !== page.mainFrame())];
+
+  for (const scope of scopes) {
+    const found = await scope
+      .evaluate(() => {
+        const trim = (v: string) => v.replace(/\s+/g, " ").slice(0, 160);
+
+        const inputs = Array.from(document.querySelectorAll("input"))
+          .filter((el) => (el as HTMLInputElement).value)
+          .slice(0, 12)
+          .map((el) => {
+            const i = el as HTMLInputElement;
+            return trim(`<input type=${i.type} name=${i.name || "-"}> = ${i.value}`);
+          });
+
+        const clicks = Array.from(document.querySelectorAll("[onclick]"))
+          .slice(0, 12)
+          .map((el) => trim(`${el.tagName.toLowerCase()} onclick=${el.getAttribute("onclick")}`));
+
+        const links = Array.from(document.querySelectorAll("a[href]"))
+          .map((el) => (el as HTMLAnchorElement).getAttribute("href") || "")
+          .filter((href) => href && !href.startsWith("#") && !href.startsWith("javascript:void"))
+          .slice(0, 12)
+          .map(trim);
+
+        return { inputs, clicks, links };
+      })
+      .catch(() => ({ inputs: [] as string[], clicks: [] as string[], links: [] as string[] }));
+
+    if (found.inputs.length + found.clicks.length + found.links.length === 0) continue;
+
+    console.log(`${tag}   ── 화면이 값을 담고 있는 곳 (${scope === page ? "main" : (scope as Frame).url()})`);
+    for (const v of found.inputs) console.log(`${tag}     ${v}`);
+    for (const v of found.clicks) console.log(`${tag}     ${v}`);
+    for (const v of found.links) console.log(`${tag}     a href=${v}`);
+  }
+}
+
 /** 매칭 건수가 가장 많은 행 셀렉터를 고른다. 전부 0이면 null */
 async function pickRowSelector(page: Page, cfg: SiteConfig): Promise<string | null> {
   let best: { selector: string; count: number } | null = null;
@@ -613,6 +656,7 @@ async function runCollect(
 
       console.log(`${tag} ⚠ 전표를 못 찾았습니다.`);
       await explainEmptyList(tag, page, rule);
+      await dumpValueCarriers(tag, page);
       await dumpFailure(site, page, `no-keys-p${pageNo}`, "전표 0건");
     }
 

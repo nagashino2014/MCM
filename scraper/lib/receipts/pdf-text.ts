@@ -14,13 +14,19 @@ import fs from "node:fs";
 const LINE_TOLERANCE = 2;
 
 function loadPdfjs(): any {
-  // canvas 모듈이 없다는 경고가 뜨는데, 그건 그리기용이라 텍스트 추출에는 지장이 없다.
-  const warn = console.warn;
+  // 불러올 때 canvas 모듈이 없다는 경고를 여러 줄 뱉는데(DOMMatrix·Path2D), 그건 그리기용이라
+  // 텍스트 추출에는 지장이 없다. 로그가 그걸로 도배되지 않게 잠깐 막는다.
+  const { log, warn } = console;
+  console.log = () => {};
   console.warn = () => {};
+
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    return require("pdfjs-dist/legacy/build/pdf.js");
+    const pdfjs = require("pdfjs-dist/legacy/build/pdf.js");
+    pdfjs.setVerbosityLevel?.(pdfjs.VerbosityLevel?.ERRORS ?? 0);
+    return pdfjs;
   } finally {
+    console.log = log;
     console.warn = warn;
   }
 }

@@ -17,6 +17,9 @@ param(
 $ErrorActionPreference = "Stop"
 $repo = Split-Path -Parent $PSScriptRoot
 
+# powershell -File 로 부르면 "a.sql,b.sql" 이 한 문자열로 들어온다 — 콤마를 여기서 쪼갠다.
+$Sql = @($Sql | ForEach-Object { $_ -split "," } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+
 & (Join-Path $PSScriptRoot "db-tunnel.ps1") -LocalPort $LocalPort
 if ($LASTEXITCODE -ne 0) {
   Write-Host "DB 터널을 열지 못해 중단합니다." -ForegroundColor Red

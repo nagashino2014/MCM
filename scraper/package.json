@@ -19,6 +19,7 @@
     "cheerio": "^1.0.0-rc.12",
     "iconv-lite": "^0.6.3",
     "node-cron": "^4.2.1",
+    "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^3.11.174",
     "playwright": "^1.57.0",
     "sql.js": "^1.13.0",

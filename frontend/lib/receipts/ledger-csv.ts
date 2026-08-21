@@ -15,9 +15,15 @@ export interface LedgerRow {
   method: string;
   files: string;
   collectedAt: string;
+  /** 카드 원장 매칭 키 — 구버전 대장에는 없어 빈 값이 된다 */
+  approvalNum: string;
+  cardLast4: string;
 }
 
-const HEADER = ["site", "orderNo", "orderDate", "title", "amount", "receiptType", "method", "files", "collectedAt"];
+const HEADER = [
+  "site", "orderNo", "orderDate", "title", "amount", "receiptType", "method", "files", "collectedAt",
+  "approvalNum", "cardLast4",
+];
 
 export function parseCsvLine(line: string): string[] {
   const cells: string[] = [];

@@ -21,12 +21,21 @@ export interface ShopReceiptInput {
   storageKey: string | null;
   fileName: string | null;
   collectedAt: string;
+  /** 카드 원장 매칭 키 — 전표에 찍힌 승인번호·카드끝4 (없으면 빈 값) */
+  approvalNum: string;
+  cardLast4: string;
 }
 
 export interface ShopReceipt extends ShopReceiptInput {
   receiptId: string;
   uploadedBy: string | null;
   uploadedAt: string;
+  /** 매칭 결과 (197) — null 이면 미매칭 */
+  matchedTxnId: string | null;
+  matchStatus: "auto" | "manual" | null;
+  matchBasis: string | null;
+  /** 매칭된 원장 건 요약(조인) */
+  matchedTxn: { approvedAt: string; amountTotal: number; storeName: string; cardAlias: string; cardLast4: string } | null;
 }
 
 const KST_NOW = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 19).replace("T", " ");
@@ -56,8 +65,8 @@ export async function upsertShopReceipts(rows: ShopReceiptInput[], uploadedBy: s
       await db.run(
         `INSERT INTO shop_receipts
            (receipt_id, site, order_no, order_date, title, amount, receipt_type, method,
-            storage_key, file_name, collected_at, uploaded_by, uploaded_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+            storage_key, file_name, collected_at, uploaded_by, uploaded_at, approval_num, card_last4)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
          ON CONFLICT (receipt_id) DO UPDATE SET
            order_date  = EXCLUDED.order_date,
            title       = EXCLUDED.title,
@@ -67,7 +76,9 @@ export async function upsertShopReceipts(rows: ShopReceiptInput[], uploadedBy: s
            file_name   = COALESCE(EXCLUDED.file_name, shop_receipts.file_name),
            collected_at = EXCLUDED.collected_at,
            uploaded_by = EXCLUDED.uploaded_by,
-           uploaded_at = EXCLUDED.uploaded_at`,
+           uploaded_at = EXCLUDED.uploaded_at,
+           approval_num = COALESCE(NULLIF(EXCLUDED.approval_num, ''), shop_receipts.approval_num),
+           card_last4   = COALESCE(NULLIF(EXCLUDED.card_last4, ''), shop_receipts.card_last4)`,
         [
           shopReceiptId(row.site, row.orderNo, row.receiptType),
           row.site,
@@ -82,6 +93,8 @@ export async function upsertShopReceipts(rows: ShopReceiptInput[], uploadedBy: s
           row.collectedAt || null,
           uploadedBy,
           now,
+          row.approvalNum || null,
+          row.cardLast4 || null,
         ]
       );
     }
@@ -128,9 +141,13 @@ export async function listShopReceipts(q: ShopReceiptQuery): Promise<ShopReceipt
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT * FROM shop_receipts
-        ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
-        ORDER BY order_date DESC NULLS LAST, site, order_no
+      `SELECT sr.*, ct.approved_at AS m_approved_at, ct.amount_total AS m_amount, ct.store_name AS m_store,
+              cr.card_alias AS m_card_alias, cr.card_num AS m_card_num
+         FROM shop_receipts sr
+         LEFT JOIN card_transactions ct ON ct.card_txn_id = sr.matched_txn_id
+         LEFT JOIN card_registry cr ON cr.card_id = ct.card_id
+        ${where.length ? `WHERE ${where.map((w) => w.replace(/\b(order_date|site)\b/g, "sr.$1")).join(" AND ")}` : ""}
+        ORDER BY sr.order_date DESC NULLS LAST, sr.site, sr.order_no
         LIMIT $${params.length}`,
       params
     )
@@ -148,7 +165,21 @@ export async function listShopReceipts(q: ShopReceiptQuery): Promise<ShopReceipt
     storageKey: r.storage_key ? String(r.storage_key) : null,
     fileName: r.file_name ? String(r.file_name) : null,
     collectedAt: r.collected_at ? String(r.collected_at) : "",
+    approvalNum: r.approval_num ? String(r.approval_num) : "",
+    cardLast4: r.card_last4 ? String(r.card_last4) : "",
     uploadedBy: r.uploaded_by ? String(r.uploaded_by) : null,
     uploadedAt: String(r.uploaded_at),
+    matchedTxnId: r.matched_txn_id ? String(r.matched_txn_id) : null,
+    matchStatus: (r.match_status as "auto" | "manual" | null) ?? null,
+    matchBasis: r.match_basis ? String(r.match_basis) : null,
+    matchedTxn: r.matched_txn_id
+      ? {
+          approvedAt: String(r.m_approved_at ?? ""),
+          amountTotal: Number(r.m_amount ?? 0),
+          storeName: r.m_store ? String(r.m_store) : "",
+          cardAlias: r.m_card_alias ? String(r.m_card_alias) : "",
+          cardLast4: String(r.m_card_num ?? "").slice(-4),
+        }
+      : null,
   }));
 }

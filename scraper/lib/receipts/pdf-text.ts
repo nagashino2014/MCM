@@ -56,6 +56,14 @@ function joinRow(parts: { x: number; w: number; h: number; s: string }[]): strin
 }
 
 export async function extractPdfText(file: string): Promise<string> {
+  return (await extractPdfPages(file)).join("\n\n");
+}
+
+/**
+ * 페이지별 텍스트. 묶음 전표를 건별 PDF 로 쪼갤 때 "몇 페이지가 어느 전표인지" 를
+ * 알아야 해서 페이지 단위를 유지한 버전을 따로 둔다.
+ */
+export async function extractPdfPages(file: string): Promise<string[]> {
   const pdfjs = loadPdfjs();
   const data = new Uint8Array(fs.readFileSync(file));
   const doc = await pdfjs.getDocument({ data, useSystemFonts: true, isEvalSupported: false }).promise;
@@ -92,5 +100,5 @@ export async function extractPdfText(file: string): Promise<string> {
     await doc.destroy();
   }
 
-  return pages.join("\n\n");
+  return pages;
 }

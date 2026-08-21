@@ -115,6 +115,8 @@ export async function POST(req: NextRequest) {
               storageKey,
               fileName,
               collectedAt: row.collectedAt,
+              approvalNum: row.approvalNum,
+              cardLast4: row.cardLast4,
             });
           }
 

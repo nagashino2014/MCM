@@ -21,9 +21,16 @@ export interface LedgerRow {
   method: string;
   files: string;
   collectedAt: string;
+  /** 카드 원장 매칭 키 — 전표에 찍힌 승인번호·카드 끝4 (없으면 빈 값) */
+  approvalNum?: string;
+  cardLast4?: string;
 }
 
-const HEADER = ["site", "orderNo", "orderDate", "title", "amount", "receiptType", "method", "files", "collectedAt"];
+// 매칭 키 컬럼은 끝에 덧붙였다 — 옛 대장(9열)도 위치가 어긋나지 않고, 없는 칸은 빈 값으로 읽힌다.
+const HEADER = [
+  "site", "orderNo", "orderDate", "title", "amount", "receiptType", "method", "files", "collectedAt",
+  "approvalNum", "cardLast4",
+];
 const BOM = "﻿";
 
 export function ledgerFile(site: string): string {
@@ -96,10 +103,21 @@ export function appendLedger(site: string, row: LedgerRow): void {
 
   if (!fs.existsSync(file)) {
     fs.writeFileSync(file, BOM + HEADER.join(",") + "\n", "utf-8");
+  } else {
+    upgradeHeaderIfNeeded(file);
   }
 
-  const line = HEADER.map((k) => csvCell((row as unknown as Record<string, string>)[k])).join(",");
+  const line = HEADER.map((k) => csvCell((row as unknown as Record<string, string>)[k] ?? "")).join(",");
   fs.appendFileSync(file, line + "\n", "utf-8");
+}
+
+/** 매칭 키 컬럼이 생기기 전의 대장이면 머리글만 새 것으로 바꾼다(값 칸은 빈 채 읽혀도 안전). */
+function upgradeHeaderIfNeeded(file: string): void {
+  const content = fs.readFileSync(file, "utf-8");
+  const body = content.replace(/^\ufeff/, "");
+  const firstLine = body.slice(0, body.indexOf("\n"));
+  if (firstLine.trim() === HEADER.join(",")) return;
+  fs.writeFileSync(file, BOM + HEADER.join(",") + body.slice(body.indexOf("\n")), "utf-8");
 }
 
 export function summarize(site: string): void {
@@ -135,7 +153,7 @@ export function summarize(site: string): void {
  */
 export function enrichLedger(
   site: string,
-  extract: (text: string) => { title: string; amount: string }
+  extract: (text: string) => { title: string; amount: string; approvalNum?: string; cardLast4?: string }
 ): { filled: number; skipped: number } {
   const file = ledgerFile(site);
   if (!fs.existsSync(file)) {
@@ -144,7 +162,7 @@ export function enrichLedger(
   }
 
   const lines = fs.readFileSync(file, "utf-8").replace(/^\ufeff/, "").trim().split(/\r?\n/);
-  const out: string[] = [lines[0]];
+  const out: string[] = [HEADER.join(",")];
   let filled = 0;
   let skipped = 0;
 
@@ -154,9 +172,11 @@ export function enrichLedger(
     const cols = parseCsvLine(line);
     const titleIdx = HEADER.indexOf("title");
     const amountIdx = HEADER.indexOf("amount");
+    const approvalIdx = HEADER.indexOf("approvalNum");
+    const cardIdx = HEADER.indexOf("cardLast4");
 
-    // 이미 값이 있으면 그대로 둔다.
-    if (cols[titleIdx] || cols[amountIdx]) {
+    // 이미 값이 있으면 그대로 둔다(매칭 키만 비어 있어도 다시 본다).
+    if ((cols[titleIdx] || cols[amountIdx]) && cols[approvalIdx]) {
       out.push(line);
       continue;
     }
@@ -176,14 +196,16 @@ export function enrichLedger(
     }
 
     const fields = extract(fs.readFileSync(textPath, "utf-8"));
-    if (!fields.title && !fields.amount) {
+    if (!fields.title && !fields.amount && !fields.approvalNum) {
       out.push(line);
       skipped++;
       continue;
     }
 
-    cols[titleIdx] = fields.title;
-    cols[amountIdx] = fields.amount;
+    cols[titleIdx] = cols[titleIdx] || fields.title;
+    cols[amountIdx] = cols[amountIdx] || fields.amount;
+    cols[approvalIdx] = cols[approvalIdx] || fields.approvalNum || "";
+    cols[cardIdx] = cols[cardIdx] || fields.cardLast4 || "";
     out.push(HEADER.map((_, i) => csvCell(cols[i] || "")).join(","));
     filled++;
   }

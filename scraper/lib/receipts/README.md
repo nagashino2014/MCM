@@ -7,7 +7,7 @@
 | 11번가 | `11st` (기본) | ✅ 무인 수집 동작 — 로그인만 사람이 한다 |
 | G마켓 | `gmarket` | ✅ 무인 수집 동작(실계정 확인) |
 | 옥션 | `auction` | 🔶 실측 반영 완료. 실계정 전표 저장 검증만 남음 |
-| 네이버페이 | `naver` | 🔶 골격만. 주문내역 주소만 알고 있다 |
+| 네이버페이 | `naver` | 🔶 실측 반영 완료(2단계). 실계정 전표 저장 검증만 남음 |
 
 사이트별 차이는 전부 `config.ts` 의 `SiteConfig` 로 표현하고, 수집 절차(`collector.ts`)는 공통이다.
 
@@ -207,3 +207,24 @@ GET https://accounting.auction.co.kr/Card/CardReceiptRevised.aspx?orderNo=248640
 | 폼 POST | `receiptRequest` | 11번가 |
 | 주소로 GET | `receiptUrlTemplate` | G마켓, 옥션 |
 | 목록에서 링크 클릭 | (둘 다 없을 때) `receiptKey` 로 찾은 식별자를 담은 링크를 눌러 팝업을 잡는다 | 주소를 모르는 사이트의 폴백 |
+
+## 네이버페이
+
+전표까지 **두 단계**다. 목록에는 전표 열쇠가 없고 중간 화면에서만 나온다.
+
+```
+① 목록      https://pay.naver.com/pc/history?page=1
+             → 주문 상세 링크에 주문번호: orders.pay.naver.com/order/status/2026052979829321
+② 발급이력  https://pay.naver.com/receipts/issue-history?orderNo=2026052979829321
+             → '구매영수증'과 '카드영수증' 링크
+③ 카드영수증 https://pay.naver.com/receipts/preview/card
+             ?tid=20260529162353665940&productOrderNo=PD2026052915794841
+```
+
+`SiteConfig.receiptKeyResolve` 가 ②를 표현한다 — 목록 키로 중간 화면을 열고 거기서 최종 열쇠를 뽑는다.
+한 주문에 상품이 여러 개면 `productOrderNo` 가 여러 개 나오고 각각 저장한다.
+
+주문번호 16자리의 **앞 8자리가 주문일**이라(11번가와 같은 성질) 기간 필터를 주문번호만으로 건다.
+
+⚠ '구매영수증'은 11번가·G마켓의 결제영수증처럼 세무 효력이 없을 수 있어 **카드영수증만** 받는다.
+네이버페이는 판매자가 개별 스마트스토어 사업자라, 판매자 명의 세금계산서가 필요한 건이면 전표로는 부족할 수 있다.

@@ -71,6 +71,15 @@ export interface SiteConfig {
     /** 폼을 보내기 전에 머무를 페이지 — 세션·리퍼러를 자연스럽게 만든다 */
     refererUrl?: string;
   };
+  /**
+   * 목록의 식별자만으로는 전표를 못 열고 **중간 화면**을 한 번 거쳐야 하는 사이트용(네이버페이).
+   * 목록에서 얻은 키로 url 을 열고, 그 화면에서 key 규칙으로 최종 식별자를 뽑는다.
+   * 한 주문에 전표가 여러 장이면 여러 개가 나오고, 각각 저장한다.
+   */
+  receiptKeyResolve?: {
+    url: string;
+    key: { pattern: string; groups: string[] };
+  };
   /** 수집 문서의 이름(파일명·대장의 receiptType 에 쓰인다) */
   receiptLabel?: string;
   /**
@@ -382,11 +391,26 @@ export const NAVER_PAY: SiteConfig = {
   },
 
   /**
-   * ⚠ 전표(영수증)를 여는 주소는 아직 모른다.
-   *   목록의 '영수증 조회·출력' 링크는 추적 주소(tr.pay.naver.com/...)라 실제 화면 주소가 아니다.
-   *   probe --watch 로 그 버튼을 눌러 열리는 주소를 확인해 receiptUrlTemplate 을 채운다.
-   *   그때까지는 목록에서 링크를 눌러 여는 폴백 경로로 동작한다.
+   * 실측(2026-08): 네이버페이는 전표까지 **두 단계**다.
+   *   ① 발급이력  https://pay.naver.com/receipts/issue-history?orderNo=2026052979829321
+   *      → 여기에 '구매영수증'과 '카드영수증' 링크가 있다.
+   *   ② 카드영수증 https://pay.naver.com/receipts/preview/card
+   *      ?tid=20260529162353665940&productOrderNo=PD2026052915794841
+   *
+   * 전표 열쇠(tid·productOrderNo)가 목록에는 없고 ①에서만 나오므로 중간 단계를 한 번 거친다.
+   * 한 주문에 상품이 여러 개면 productOrderNo 가 여러 개 나오고, 각각 저장한다.
+   *
+   * ⚠ '구매영수증'은 11번가·G마켓의 결제영수증처럼 세무 효력이 없을 수 있어 카드영수증만 받는다.
    */
+  receiptKeyResolve: {
+    url: "https://pay.naver.com/receipts/issue-history?orderNo={orderNo}",
+    key: {
+      pattern: "/receipts/preview/card\\?tid=([^&\"'\\s<>]+)&(?:amp;)?productOrderNo=([^&\"'\\s<>]+)",
+      groups: ["tid", "productOrderNo"],
+    },
+  },
+  receiptUrlTemplate: "https://pay.naver.com/receipts/preview/card?tid={tid}&productOrderNo={productOrderNo}",
+  receiptLabel: "카드영수증",
 };
 
 const SITES: Record<string, SiteConfig> = {

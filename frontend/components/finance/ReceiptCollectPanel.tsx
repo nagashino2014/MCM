@@ -12,6 +12,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Download, LogIn, Loader2, RefreshCw, FolderOpen, AlertTriangle } from "lucide-react";
 
+import { CdDateInput, isValidDateString } from "@/components/cdash";
+
 interface ShopStatus {
   key: string;
   name: string;
@@ -217,6 +219,11 @@ export function ReceiptCollectPanel() {
       return;
     }
 
+    if (!isValidDateString(range.from) || !isValidDateString(range.to)) {
+      appendLog("✖ 기간을 YYYYMMDD 8자리로 채워 주세요.");
+      return;
+    }
+
     setLog([]);
     for (const shop of targets) {
       if (!shop.loggedIn) {
@@ -297,70 +304,77 @@ export function ReceiptCollectPanel() {
 
   return (
     <div className="space-y-4">
-      {/* 기간 + 실행 */}
-      <div className="cd-card p-4">
-        <div className="flex items-center gap-2 mb-3 flex-wrap">
-          <div className="cd-card-title mr-auto">쇼핑몰 전표 수집</div>
+      {/* 기간 + 실행 3 : 쇼핑몰 목록 7 */}
+      <div className="grid gap-4 lg:grid-cols-10 items-start">
+        <div className="cd-card p-4 lg:col-span-3 space-y-3">
+          <div className="cd-card-title">쇼핑몰 전표 수집</div>
 
-          <select className="cd-select" value={year} onChange={(e) => applyQuarter(Number(e.target.value), quarter)}>
+          <select
+            className="cd-select w-full"
+            value={year}
+            onChange={(e) => applyQuarter(Number(e.target.value), quarter)}
+          >
             {years.map((y) => (
               <option key={y} value={y}>{y}년</option>
             ))}
           </select>
 
-          {[1, 2, 3, 4].map((q) => (
-            <button
-              key={q}
-              type="button"
-              className={`cd-chip ${quarter === q ? "" : "cd-text-muted"}`}
-              data-active={quarter === q || undefined}
-              onClick={() => applyQuarter(year, q)}
-            >
-              {q}분기
+          <div className="flex items-center gap-2 flex-wrap">
+            {[1, 2, 3, 4].map((q) => (
+              <button
+                key={q}
+                type="button"
+                className={`cd-chip ${quarter === q ? "" : "cd-text-muted"}`}
+                data-active={quarter === q || undefined}
+                onClick={() => applyQuarter(year, q)}
+              >
+                {q}분기
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <CdDateInput
+              className="flex-1 min-w-0"
+              value={range.from}
+              onChange={(v) => setRange((r) => ({ ...r, from: v }))}
+            />
+            <span className="cd-text-faint">~</span>
+            <CdDateInput
+              className="flex-1 min-w-0"
+              value={range.to}
+              onChange={(v) => setRange((r) => ({ ...r, to: v }))}
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button type="button" className="cd-btn cd-btn-sm cd-btn-ghost" onClick={() => void loadStatus()}>
+              <RefreshCw size={14} /> 새로고침
             </button>
-          ))}
+            <button
+              type="button"
+              className="cd-btn cd-btn-sm cd-btn-primary ml-auto"
+              onClick={() => void collectSelected()}
+              disabled={Boolean(running) || loading}
+            >
+              {running ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+              {running ? "수집 중…" : "선택한 몰 수집"}
+            </button>
+          </div>
 
-          <input
-            type="date"
-            className="cd-input"
-            value={range.from}
-            onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))}
-          />
-          <span className="cd-text-faint">~</span>
-          <input
-            type="date"
-            className="cd-input"
-            value={range.to}
-            onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))}
-          />
-
-          <button type="button" className="cd-btn cd-btn-sm cd-btn-ghost" onClick={() => void loadStatus()}>
-            <RefreshCw size={14} /> 새로고침
-          </button>
-          <button
-            type="button"
-            className="cd-btn cd-btn-sm cd-btn-primary"
-            onClick={() => void collectSelected()}
-            disabled={Boolean(running) || loading}
-          >
-            {running ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-            {running ? "수집 중…" : "선택한 몰 수집"}
-          </button>
+          <p className="text-xs cd-text-muted">
+            선택한 쇼핑몰을 차례로 돌며 신용카드 매출전표를 PDF 로 받아 <code className="cd-text">{receiptsDir || "data/receipts"}</code> 아래에 쌓습니다.
+            이미 받은 건은 건너뜁니다.
+          </p>
         </div>
 
-        <p className="text-xs cd-text-muted">
-          선택한 쇼핑몰을 차례로 돌며 신용카드 매출전표를 PDF 로 받아 <code className="cd-text">{receiptsDir || "data/receipts"}</code> 아래에 쌓습니다.
-          이미 받은 건은 건너뜁니다.
-        </p>
-      </div>
+        {/* 사이트 목록 */}
+        <div className="cd-card p-4 lg:col-span-7">
+          {error && <div className="cd-error-text text-sm mb-3">{error}</div>}
+          {loading && <div className="text-sm cd-text-muted">불러오는 중…</div>}
 
-      {/* 사이트 목록 */}
-      <div className="cd-card p-4">
-        {error && <div className="cd-error-text text-sm mb-3">{error}</div>}
-        {loading && <div className="text-sm cd-text-muted">불러오는 중…</div>}
-
-        {!loading && (
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {!loading && (
+            <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
             {shops.map((shop) => {
               const checked = selected.has(shop.key);
               return (
@@ -451,8 +465,9 @@ export function ReceiptCollectPanel() {
                 </div>
               );
             })}
-          </div>
-        )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* 진행 로그 */}

@@ -160,6 +160,12 @@ export async function openContext(opts: {
      * 기본 인자에서 빼서 일반 브라우저와 같은 모양으로 띄운다.
      */
     launchOptions.ignoreDefaultArgs = ["--enable-automation"];
+    /**
+     * Playwright 는 기본으로 샌드박스를 끄고(`--no-sandbox`) 띄운다.
+     * 이것도 "지원되지 않는 명령줄 플래그" 안내줄을 띄우는 데다 일반 브라우저에는 없는 모양이라
+     * 봇 신호가 된다. 보안상으로도 켜 두는 편이 낫다(실패하면 아래에서 끄고 다시 띄운다).
+     */
+    launchOptions.chromiumSandbox = true;
     launchOptions.viewport = null;
     // 번들 Chromium 보다 실제 Chrome 이 지문상 유리하다(설치돼 있을 때만).
     if (!CHROME_PATH) launchOptions.channel = "chrome";
@@ -172,9 +178,17 @@ export async function openContext(opts: {
   try {
     context = await chromium.launchPersistentContext(profileDir(site), launchOptions as never);
   } catch (e) {
-    if (!launchOptions.channel) throw e;
-    console.log(`[${site}] 설치된 Chrome 을 찾지 못해 번들 Chromium 으로 실행합니다(봇 확인을 통과하지 못할 수 있음).`);
-    delete launchOptions.channel;
+    // 실행에 실패하면 지문상 불리하더라도 뜨는 쪽을 택한다 — 설치된 Chrome 이 없거나
+    // 환경이 샌드박스를 막는 경우다.
+    if (!launchOptions.channel && !launchOptions.chromiumSandbox) throw e;
+    if (launchOptions.channel) {
+      console.log(`[${site}] 설치된 Chrome 을 찾지 못해 번들 Chromium 으로 실행합니다(봇 확인을 통과하지 못할 수 있음).`);
+      delete launchOptions.channel;
+    }
+    if (launchOptions.chromiumSandbox) {
+      console.log(`[${site}] 샌드박스를 켜고 띄우지 못해 끄고 다시 실행합니다.`);
+      launchOptions.chromiumSandbox = false;
+    }
     context = await chromium.launchPersistentContext(profileDir(site), launchOptions as never);
   }
 

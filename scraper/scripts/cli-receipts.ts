@@ -39,6 +39,7 @@ interface Args {
   watch: boolean;
   save: boolean;
   withText: boolean;
+  noProbe: boolean;
   ordNo?: string;
   seq?: string;
 }
@@ -66,6 +67,7 @@ function parseArgs(argv: string[]): Args {
     watch: "watch" in opt,
     save: "save" in opt,
     withText: "with-text" in opt,
+    noProbe: "no-probe" in opt,
     ordNo: opt.ordNo || opt["ord-no"],
     seq: opt.seq,
   };
@@ -75,7 +77,9 @@ function usage(): void {
   console.log(`
 전자상거래 카드영수증 수집 CLI (기본 사이트: 11번가)
 
-  npm run receipts -- login   [--site 11st]        세션 저장(브라우저에서 직접 로그인 후 주문목록까지 이동)
+  npm run receipts -- login   [--site 11st] [--no-probe]
+                                                   세션 저장(브라우저에서 직접 로그인 후 주문목록까지 이동)
+                                                   저장 뒤 화면 구조(기간 조회 폼 등)를 함께 확인한다
   npm run receipts -- check   [--site 11st]        세션 유효성 확인
   npm run receipts -- probe   [--url <주문목록>] [--watch] [--save]
                                                    주문목록 실측 — 셀렉터·영수증 팝업 주소 확보
@@ -112,6 +116,14 @@ async function main(): Promise<void> {
     if (saved && lastUrl && !new RegExp(cfg.loggedOutPattern, "i").test(lastUrl)) {
       saveSiteConfig(site, { orderListUrl: lastUrl, checkUrl: lastUrl });
       console.log(`[${site}] 주문목록 URL 로 기록: ${lastUrl}`);
+    }
+
+    // 세션은 하루 남짓이면 만료된다. 로그인한 김에 화면 구조(특히 기간 조회 폼)를 바로 떠 둔다
+    // — 나중에 따로 probe 하려 하면 그때는 이미 세션이 죽어 있기 십상이다.
+    if (saved && !args.noProbe) {
+      console.log(`[${site}] ─────────────────────────────────────────────`);
+      console.log(`[${site}] 로그인한 김에 화면 구조를 확인합니다(--no-probe 로 끌 수 있음).`);
+      await probeOrderList(site, {}).catch((e) => console.log(`[${site}] 구조 확인 실패: ${String(e).slice(0, 150)}`));
     }
     return;
   }

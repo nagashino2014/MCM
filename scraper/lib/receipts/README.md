@@ -5,7 +5,7 @@
 | 사이트 | `--site` | 상태 |
 |---|---|---|
 | 11번가 | `11st` (기본) | ✅ 무인 수집 동작 — 로그인만 사람이 한다 |
-| G마켓 | `gmarket` | 🔶 실측 반영 완료(아래). 실계정 수집 검증만 남음 |
+| G마켓 | `gmarket` | 🔶 로그인·기간조회·목록·식별자까지 실측 반영. 실계정 전표 저장 검증만 남음 |
 | 옥션 | `auction` | 🔶 G마켓과 같은 계열이라 같은 골격. 실측 필요 |
 
 사이트별 차이는 전부 `config.ts` 의 `SiteConfig` 로 표현하고, 수집 절차(`collector.ts`)는 공통이다.
@@ -120,6 +120,13 @@ failed/                 실패 건 진단 덤프
               sDay=20220101&eDay=20260831&pageNo=1&pageUnit=10
 전표          GET  https://receipt.gmarket.co.kr/Card/CardReceiptFormCover
               ?seqNo=1924402893&custNo=<인코딩>&contrNo=3664897233
+```
+
+목록에서 전표를 여는 링크는 쿼리스트링이 아니라 **함수 호출** 형태다:
+
+```html
+<a href="javascript:openCardReceipt('2454083498', 'DEyNR38T…/Rw==', '4252259234');">
+                     seqNo           custNo(base64)        contrNo(=주문번호)
 ```
 
 11번가와 **전표를 여는 열쇠가 다르다** — 주문번호 하나가 아니라 `seqNo`·`custNo`·`contrNo` 세 값이다.

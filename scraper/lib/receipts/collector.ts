@@ -190,6 +190,47 @@ async function collectReceiptKeys(page: Page, cfg: SiteConfig): Promise<{ keys: 
 }
 
 /**
+ * 목록의 식별자만으로 전표를 못 여는 사이트를 위해 중간 화면을 한 번 거친다(네이버페이).
+ * 그 화면에서 최종 전표 열쇠를 뽑아, 원래 키와 합쳐 돌려준다(주문일 같은 정보를 잃지 않으려고).
+ * 한 주문에 전표가 여러 장이면 여러 개가 나온다.
+ */
+async function resolveReceiptKeys(page: Page, cfg: SiteConfig, key: ReceiptKey): Promise<ReceiptKey[]> {
+  const step = cfg.receiptKeyResolve;
+  if (!step) return [key];
+
+  const helper = await page.context().newPage();
+
+  try {
+    await helper.goto(fillKeyTokens(step.url, key, true), { waitUntil: "domcontentloaded", timeout: 60_000 });
+    await sleep(1500);
+
+    const html = await helper.content();
+    const re = new RegExp(step.key.pattern, "g");
+    const seen = new Set<string>();
+    const out: ReceiptKey[] = [];
+    let m: RegExpExecArray | null;
+
+    while ((m = re.exec(html)) !== null) {
+      const resolved: ReceiptKey = { ...key };
+      step.key.groups.forEach((name, i) => {
+        resolved[name] = m![i + 1] ?? m![0];
+      });
+
+      const id = step.key.groups.map((g) => resolved[g]).join("|");
+      if (!seen.has(id)) {
+        seen.add(id);
+        out.push(resolved);
+      }
+      if (m.index === re.lastIndex) re.lastIndex++;
+    }
+
+    return out;
+  } finally {
+    await helper.close().catch(() => {});
+  }
+}
+
+/**
  * 목록이 비었을 때 원인을 그 자리에서 알려준다.
  * - 로그인 요구인지, 정말 건이 없는지, 아니면 식별자 규칙이 안 맞는지를 가른다.
  * - 식별자 이름(seqNo 등)이 HTML 에는 있는데 규칙이 안 맞으면 그 주변을 보여준다 — 정규식을 고칠 재료다.
@@ -699,9 +740,28 @@ async function runCollect(
         continue;
       }
 
+      // 목록 식별자로 바로 못 여는 사이트(네이버페이)는 중간 화면에서 전표 열쇠를 먼저 얻는다.
+      // 한 주문에 전표가 여러 장이면 여러 개가 나오고, 각각 저장한다.
+      let targets: ReceiptKey[] = [key];
+      if (cfg.receiptKeyResolve) {
+        try {
+          targets = await resolveReceiptKeys(page, cfg, key);
+        } catch (e) {
+          stats.failed++;
+          console.log(`${tag} ❌ ${main} 전표 열쇠 조회 실패: ${String(e).slice(0, 150)}`);
+          continue;
+        }
+
+        if (targets.length === 0) {
+          console.log(`${tag} · ${main}: 카드영수증이 없습니다(현금결제이거나 발급 대상이 아닐 수 있음)`);
+          stats.skipped++;
+          continue;
+        }
+      }
+
       // 11번가는 한 주문에 상품별로 전표가 나뉘어 순번을 올려가며 받아야 한다.
       // G마켓처럼 목록의 한 줄이 곧 전표 한 장인 사이트는 한 번만 받는다.
-      const maxSeq = cfg.iterateItemSeq ? MAX_PRD_SEQ : 1;
+      const maxSeq = cfg.iterateItemSeq ? MAX_PRD_SEQ : targets.length;
 
       for (let seq = 1; seq <= maxSeq; seq++) {
         if (limit && stats.saved >= limit) {
@@ -712,6 +772,10 @@ async function runCollect(
           console.log(`${tag} 브라우저가 닫혔습니다 — 중단`);
           return;
         }
+
+        // 여러 장이면 seq 번째 전표를 연다(중간 화면에서 얻은 것 또는 상품 순번).
+        const target = cfg.receiptKeyResolve ? targets[seq - 1] : key;
+        if (!target) break;
 
         // seq=1 은 키·파일명을 그대로 둬 이전 수집분과 이어지게 한다.
         const ledgerKey = seq === 1
@@ -731,7 +795,7 @@ async function runCollect(
         if (byRequest) {
           receipt = await page.context().newPage();
         } else {
-          const opened = await openReceiptByClick(page, key, rule);
+          const opened = await openReceiptByClick(page, target, rule);
           if (!opened) {
             stats.failed++;
             console.log(`${tag} ❌ ${main} 실패: 목록에서 이 전표를 여는 링크를 못 찾았습니다`);
@@ -744,7 +808,7 @@ async function runCollect(
         let isEmptyForm = false;
 
         try {
-          if (byRequest) await openReceiptDocument(receipt, cfg, key, { ordPrdSeq: String(seq) });
+          if (byRequest) await openReceiptDocument(receipt, cfg, target, { ordPrdSeq: String(seq) });
           await sleep(1500);
 
           if (new RegExp(cfg.loggedOutPattern, "i").test(receipt.url())) {

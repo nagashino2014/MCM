@@ -35,9 +35,11 @@ export interface SiteConfig {
    * 목록에서 **전표 식별자**를 뽑는 규칙. 캡처한 값은 receiptRequest.fields 와
    * receiptUrlTemplate 의 `{이름}` 토큰으로 치환된다.
    *   11번가 — 주문번호 하나면 된다:      { pattern: "\\b(\\d{15,20})\\b", groups: ["ordNo"] }
-   *   G마켓  — 전표마다 세 값이 필요하다: { pattern: "seqNo=(…)&custNo=(…)&contrNo=(…)", groups: [...] }
+   *   G마켓  — 전표마다 세 값이 필요하다: openCardReceipt('seqNo','custNo','contrNo') 에서 캡처
+   * 규칙을 배열로 주면 위에서부터 시도해 **처음으로 건을 찾은 규칙**을 쓴다.
+   * 화면 구조가 확실치 않은 사이트에 후보를 여러 개 걸어 둘 때 쓴다.
    */
-  receiptKey?: { pattern: string; groups: string[] };
+  receiptKey?: { pattern: string; groups: string[] } | { pattern: string; groups: string[] }[];
   /** 주문번호 앞 8자리가 주문일인 사이트(11번가)에서 켠다 */
   orderDateFromOrderNo?: boolean;
   /** 전표 문서 안에 찍힌 날짜를 주문일로 쓴다(주문번호에 날짜가 없는 사이트) */
@@ -272,8 +274,9 @@ export const AUCTION: SiteConfig = {
   key: "auction",
   name: "옥션",
   loginUrl: "https://www.auction.co.kr/",
-  orderListUrl: "https://myauction.auction.co.kr/",
-  checkUrl: "https://myauction.auction.co.kr/",
+  // 마이옥션(전체주문내역). 영수증 조회 화면 주소는 login → probe 로 확인해 채운다.
+  orderListUrl: "http://member.auction.co.kr/myauction/Default.aspx",
+  checkUrl: "http://member.auction.co.kr/myauction/Default.aspx",
   loggedOutPattern: "login|signin|memberssl\\.auction\\.co\\.kr",
   receiptKeywords: ["신용카드영수증", "신용카드 매출전표", "카드전표", "구매영수증", "영수증", "거래명세서"],
   orderRowSelectors: [
@@ -286,6 +289,24 @@ export const AUCTION: SiteConfig = {
   orderNoPattern: "\\b\\d{9,20}\\b",
   // G마켓이 Cloudflare 봇 확인을 쓰므로 같은 계열인 옥션도 켜 둔다(불필요하면 꺼도 동작에는 지장 없다).
   stealth: true,
+
+  /**
+   * 실측 전 후보들 — 위에서부터 시도해 처음 건을 찾은 규칙을 쓴다.
+   * 같은 계열이라 G마켓과 같은 형태(함수 호출)일 가능성이 높고, 아니면 쿼리스트링일 수 있다.
+   * 둘 다 안 맞으면 probe 가 "화면이 값을 담고 있는 곳"을 찍어 주므로 그걸 보고 규칙을 고친다.
+   */
+  receiptKey: [
+    {
+      pattern: "openCardReceipt\\(\\s*'([^']+)'\\s*,\\s*'([^']+)'\\s*,\\s*'([^']+)'\\s*\\)",
+      groups: ["seqNo", "custNo", "contrNo"],
+    },
+    {
+      pattern: "seqNo=([^&\"'\\s<>]+)&(?:amp;)?custNo=([^&\"'\\s<>]+)&(?:amp;)?contrNo=([^&\"'\\s<>]+)",
+      groups: ["seqNo", "custNo", "contrNo"],
+    },
+  ],
+  // 옥션은 1년 이상 지난 구매내역의 영수증 출력이 막혀 있다(고객센터 안내) — 오래된 기간은 못 받을 수 있다.
+  orderDateFromDocument: true,
 };
 
 const SITES: Record<string, SiteConfig> = {

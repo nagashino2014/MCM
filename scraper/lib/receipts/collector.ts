@@ -98,8 +98,18 @@ function dateFromOrderNo(ordNo: string): string {
 /** 전표 하나를 여는 데 필요한 식별자들 — 11번가는 {ordNo}, G마켓은 {seqNo,custNo,contrNo} */
 type ReceiptKey = Record<string, string>;
 
-function keyRule(cfg: SiteConfig): { pattern: string; groups: string[] } {
-  return cfg.receiptKey || { pattern: cfg.orderNoPattern || "\\b(\\d{15,20})\\b", groups: ["ordNo"] };
+type KeyRule = { pattern: string; groups: string[] };
+
+/** 시도할 식별자 규칙들(위에서부터). 배열로 준 사이트는 처음 건을 찾은 규칙을 쓴다 */
+function keyRules(cfg: SiteConfig): KeyRule[] {
+  if (Array.isArray(cfg.receiptKey)) return cfg.receiptKey;
+  if (cfg.receiptKey) return [cfg.receiptKey];
+  return [{ pattern: cfg.orderNoPattern || "\\b(\\d{15,20})\\b", groups: ["ordNo"] }];
+}
+
+/** 대표 규칙(로그·진단용) — 실제 수집은 collectReceiptKeys 가 고른 규칙을 따른다 */
+function keyRule(cfg: SiteConfig): KeyRule {
+  return keyRules(cfg)[0];
 }
 
 /** 식별자를 사람이 읽고 중복 판정에도 쓸 수 있는 한 줄로 */
@@ -118,58 +128,65 @@ function keyMain(key: ReceiptKey, groups: string[]): string {
  * - 화면 텍스트뿐 아니라 HTML(링크 파라미터·onclick)까지 본다. G마켓처럼 식별자가
  *   링크 쿼리스트링에만 있는 경우가 있다.
  */
-async function collectReceiptKeys(page: Page, cfg: SiteConfig): Promise<ReceiptKey[]> {
-  const rule = keyRule(cfg);
-  const found = new Map<string, ReceiptKey>();
+async function collectReceiptKeys(page: Page, cfg: SiteConfig): Promise<{ keys: ReceiptKey[]; rule: KeyRule }> {
   const scopes: (Page | Frame)[] = [page, ...page.frames().filter((f) => f !== page.mainFrame())];
 
-  for (const scope of scopes) {
-    const keys = await scope
-      .evaluate(
-        ({ pattern, groups }) => {
-          const out: Record<string, string>[] = [];
+  for (const rule of keyRules(cfg)) {
+    const found = new Map<string, ReceiptKey>();
 
-          const scan = (text?: string | null) => {
-            if (!text) return;
-            const re = new RegExp(pattern, "g");
-            let m: RegExpExecArray | null;
+    for (const scope of scopes) {
+      const keys = await scope
+        .evaluate(
+          ({ pattern, groups }) => {
+            const out: Record<string, string>[] = [];
 
-            while ((m = re.exec(text)) !== null) {
-              const key: Record<string, string> = {};
-              groups.forEach((name, i) => {
-                key[name] = m![i + 1] ?? m![0];
+            const scan = (text?: string | null) => {
+              if (!text) return;
+              const re = new RegExp(pattern, "g");
+              let m: RegExpExecArray | null;
+
+              while ((m = re.exec(text)) !== null) {
+                const key: Record<string, string> = {};
+                groups.forEach((name, i) => {
+                  key[name] = m![i + 1] ?? m![0];
+                });
+                out.push(key);
+                if (m.index === re.lastIndex) re.lastIndex++; // 빈 매치 무한루프 방지
+              }
+            };
+
+            // 화면 텍스트와 "의미 있는 속성"만 본다.
+            // HTML 전체를 훑으면 URL 인코딩된 문자열(예: "주문번호%2020260728...")에서
+            // %20 의 0 과 숫자가 붙어 있지도 않은 식별자가 만들어진다.
+            scan(document.body?.innerText);
+
+            const attrs = ["href", "onclick", "value", "data-ordno", "data-ord-no", "data-seqno", "data-key"];
+            document
+              .querySelectorAll("a, area, button, input, [onclick], [data-ordno], [data-ord-no], [data-seqno], [data-key]")
+              .forEach((el) => {
+                for (const name of attrs) scan(el.getAttribute(name));
               });
-              out.push(key);
-              if (m.index === re.lastIndex) re.lastIndex++; // 빈 매치 무한루프 방지
-            }
-          };
 
-          // 화면 텍스트와 "의미 있는 속성"만 본다.
-          // HTML 전체를 훑으면 URL 인코딩된 문자열(예: "주문번호%2020260728...")에서
-          // %20 의 0 과 숫자가 붙어 있지도 않은 식별자가 만들어진다.
-          scan(document.body?.innerText);
+            return out;
+          },
+          { pattern: rule.pattern, groups: rule.groups }
+        )
+        .catch(() => [] as ReceiptKey[]);
 
-          const attrs = ["href", "onclick", "value", "data-ordno", "data-ord-no", "data-seqno", "data-key"];
-          document
-            .querySelectorAll("a, area, button, input, [onclick], [data-ordno], [data-ord-no], [data-seqno], [data-key]")
-            .forEach((el) => {
-              for (const name of attrs) scan(el.getAttribute(name));
-            });
+      for (const key of keys) {
+        const id = keyId(key, rule.groups);
+        if (id && !found.has(id)) found.set(id, key);
+      }
+    }
 
-          return out;
-        },
-        { pattern: rule.pattern, groups: rule.groups }
-      )
-      .catch(() => [] as ReceiptKey[]);
-
-    for (const key of keys) {
-      const id = keyId(key, rule.groups);
-      if (id && !found.has(id)) found.set(id, key);
+    if (found.size > 0) {
+      // 식별자가 대체로 증가하는 값이라 역순이 최신이다.
+      const keys = [...found.values()].sort((a, b) => keyId(b, rule.groups).localeCompare(keyId(a, rule.groups)));
+      return { keys, rule };
     }
   }
 
-  // 최신 건부터 — 식별자가 대체로 증가하는 값이라 역순이 최신이다.
-  return [...found.values()].sort((a, b) => keyId(b, rule.groups).localeCompare(keyId(a, rule.groups)));
+  return { keys: [], rule: keyRule(cfg) };
 }
 
 /**
@@ -596,7 +613,7 @@ async function waitForUserQuery(site: string, page: Page, cfg: SiteConfig, secon
   while (Date.now() < deadline) {
     await page.waitForTimeout(3000);
 
-    const count = (await collectReceiptKeys(page, cfg).catch(() => [])).length;
+    const count = (await collectReceiptKeys(page, cfg).catch(() => ({ keys: [] }))).keys.length;
     if (count > 0 && count === previous) {
       console.log(`${tag} 전표 ${count}건 확인 — 수집을 시작합니다.`);
       return;
@@ -628,7 +645,6 @@ async function runCollect(
     await waitForUserQuery(site, page, cfg, opts.waitSeconds);
   }
 
-  const rule = keyRule(cfg);
   let previousPageKeys: Set<string> | null = null;
 
   for (let pageNo = 1; pageNo <= pages; pageNo++) {
@@ -636,7 +652,7 @@ async function runCollect(
     await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => {});
     await sleep(1500);
 
-    const keys = await collectReceiptKeys(page, cfg);
+    const { keys, rule } = await collectReceiptKeys(page, cfg);
     console.log(`${tag} ${pageNo}페이지: 전표 ${keys.length}건`);
 
     // 페이지를 넘겼는데 목록이 그대로면 이동에 실패한 것이다 — 같은 목록을 반복해 읽지 않는다.

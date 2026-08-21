@@ -97,7 +97,17 @@ foreach ($dir in @($frontend, $scraper)) {
   if ($needInstall) {
     Write-Host "  필요한 파일을 받습니다: $(Split-Path -Leaf $dir)" -ForegroundColor Yellow
     Push-Location $dir
-    npm install
+    # package-lock.json 이 있으면 npm ci 를 쓴다. npm install 은 잠금 파일을 고쳐 쓰는 일이 있어
+    # 다음 git pull 이 "local changes would be overwritten" 으로 막힌다.
+    if (Test-Path (Join-Path $dir "package-lock.json")) {
+      npm ci
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "  npm ci 가 실패해 npm install 로 받습니다." -ForegroundColor Yellow
+        npm install
+      }
+    } else {
+      npm install
+    }
     Pop-Location
   }
 }

@@ -86,5 +86,5 @@ Write-Host @"
  1. 시크릿 복사: frontend/.env.local, backend/.env, infra/aws/staging.tfvars
  2. AWS SSO:    aws configure sso  (프로필 mcm-kesi-staging) → aws sso login
  3. git 인증:   gh auth login
- 4. DB 터널:    staging-start.ps1 -Bastion → SSM 포트포워딩(15432) → npm run dev
+ 4. DB 터널:    powershell -ExecutionPolicy Bypass -File scripts\db-tunnel.ps1  → npm run dev
 "@ -ForegroundColor Green

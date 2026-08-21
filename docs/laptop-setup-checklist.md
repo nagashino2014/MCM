@@ -65,7 +65,15 @@ pip install -r requirements.txt
 
 ## 5. DB 연결 (SSM 터널) — 개발 서버 띄우는 순서
 
-staging 리소스는 on-demand 토글([infra/aws/ops/README.md](../infra/aws/ops/README.md))이므로 순서대로:
+staging 리소스는 on-demand 토글([infra/aws/ops/README.md](../infra/aws/ops/README.md))이므로 순서대로.
+**①~③은 [scripts/db-tunnel.ps1](../scripts/db-tunnel.ps1) 한 번으로 끝난다**(SSO 만료 확인 → bastion 기동 → 포트포워딩까지 자동, 이미 열려 있으면 그대로 둔다):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\db-tunnel.ps1
+powershell -ExecutionPolicy Bypass -File scripts\db-tunnel.ps1 -Stop   # 작업 끝나면 터널만 닫기
+```
+
+아래는 그 스크립트가 대신 해 주는 수동 절차(디버깅용 참고):
 
 ```powershell
 # ① SSO 로그인 + bastion 기동

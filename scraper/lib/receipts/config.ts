@@ -456,6 +456,18 @@ export const COUPANG: SiteConfig = {
   ],
   nextPageSelectors: ["a:has-text('다음')", "[class*='paging'] a[class*='next']", "button:has-text('다음')"],
   /**
+   * ★ 실측(2026-08): 쿠팡에는 **매출전표 일괄 신청** 기능이 있다. 건별로 긁을 필요가 없다.
+   *
+   *   POST https://mc.coupang.com/ssr/api/payment-receipt/card/request-download-receipt
+   *   {"from":"2026.01.01","to":"2026.08.22","totalCount":54,"totalAmount":9167030,
+   *    "cardId":"","cardNumber":"","displayCardName":""}
+   *
+   *   신청 후 처리에 시간이 걸리고, '신용카드 매출전표 신청내역' 화면에서 결과를 받는다.
+   *   요청 1회로 끝나므로 봇 탐지 위험이 거의 없고, 쿠팡이 공식 제공하는 기능이라 약관상으로도 안전하다.
+   *   → 쿠팡은 건별 수집 대신 이 경로를 쓴다(신청내역 조회·다운로드 주소는 실측 중).
+   *
+   * 아래 건별 경로는 일괄 신청이 막히거나 일부 건이 누락될 때의 폴백으로 남겨 둔다.
+   *
    * 실측(2026-08): 카드영수증 주소를 확보했다.
    *   https://payment.coupang.com/v2/card-receipt/view
    *     ?orderId=20102411842987&vendorIds=A00010028&cancel=false

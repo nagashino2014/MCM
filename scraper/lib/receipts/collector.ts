@@ -23,6 +23,7 @@ import { openContext, ensureSiteDir, siteDir } from "./session";
 import { loadSiteConfig, SiteConfig } from "./config";
 import { savePageAsPdf, safeName, SaveResult } from "./pdf";
 import { appendLedger, loadCollectedKeys, LedgerRow } from "./ledger";
+import { extractDocumentFields } from "./parse";
 
 export interface CollectOptions {
   from?: string;
@@ -541,6 +542,104 @@ export async function collectReceipts(site: string, opts: CollectOptions = {}): 
 }
 
 /**
+ * 묶음 전표 수집 — 신청 ID 의 뷰어 페이지들을 그대로 PDF 로 저장한다(쿠팡).
+ *
+ * 쿠팡은 기간을 주면 전표를 한 번에 신청할 수 있고, 그 결과 화면이 곧 전표 묶음 문서다.
+ * 건별로 열 필요가 없어 요청이 페이지 수만큼으로 줄고, 공식 기능이라 약관상으로도 안전하다.
+ */
+export async function collectBulkReceipts(
+  site: string,
+  opts: { requestId: string; pages?: number; withText?: boolean; headless?: boolean }
+): Promise<void> {
+  const cfg = loadSiteConfig(site);
+  const tag = `[${site}]`;
+
+  if (!cfg.bulkViewerUrlTemplate) {
+    console.log(`${tag} 이 사이트는 묶음 전표(bulkViewerUrlTemplate) 정의가 없습니다.`);
+    return;
+  }
+
+  const label = cfg.receiptLabel ? `${cfg.receiptLabel}(묶음)` : "전표묶음";
+  const collected = loadCollectedKeys(site);
+  const headless = cfg.stealth ? false : opts.headless !== false;
+  const { context, close } = await openContext({ site, headless, useSession: true, stealth: cfg.stealth });
+
+  let saved = 0;
+
+  try {
+    const page = context.pages()[0] || (await context.newPage());
+    const maxPages = opts.pages ?? 50;
+
+    for (let pageNo = 0; pageNo < maxPages; pageNo++) {
+      const url = cfg
+        .bulkViewerUrlTemplate!.replace("{requestId}", opts.requestId)
+        .replace("{page}", String(pageNo));
+
+      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60_000 });
+      await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => {});
+      await sleep(2000);
+
+      if (new RegExp(cfg.loggedOutPattern, "i").test(page.url())) {
+        throw new Error(`로그인이 필요합니다: ${page.url()}`);
+      }
+
+      const text = await page.innerText("body").catch(() => "");
+      const orderNos = [...new Set(text.match(new RegExp(cfg.orderNoPattern || "\\b\\d{12,16}\\b", "g")) || [])];
+
+      // 전표가 하나도 없으면 마지막 페이지를 지난 것이다.
+      if (orderNos.length === 0) {
+        console.log(`${tag} ${pageNo}페이지: 전표 없음 — 마지막 페이지까지 받았습니다`);
+        break;
+      }
+
+      const key = `${opts.requestId}#p${pageNo}::${label}`;
+      if (collected.has(key)) {
+        console.log(`${tag} ${pageNo}페이지: 이미 받음 — 건너뜀`);
+        continue;
+      }
+
+      // 묶음 안의 거래일자 범위를 파일명에 적어 어느 기간 묶음인지 알아볼 수 있게 한다.
+      const dates = (text.match(/20\d{2}[.\-/]\d{1,2}[.\-/]\d{1,2}/g) || [])
+        .map((d) => normalizeDate(d))
+        .filter(Boolean)
+        .sort();
+      const span = dates.length > 0 ? `${dates[0]}_${dates[dates.length - 1]}` : "nodate";
+
+      const outDir = ensureSiteDir(site, path.join("receipts", "bulk"));
+      const outBase = path.join(outDir, safeName(`${span}_${opts.requestId}-p${pageNo}_${label}`));
+      const result: SaveResult = await savePageAsPdf(page, outBase);
+
+      if (opts.withText) {
+        const textPath = `${outBase}.txt`;
+        fs.writeFileSync(textPath, text, "utf-8");
+        result.files.push(textPath);
+      }
+
+      appendLedger(site, {
+        site,
+        orderNo: `${opts.requestId}#p${pageNo}`,
+        orderDate: dates[0] || "",
+        title: `전표 ${orderNos.length}건 묶음`,
+        amount: "",
+        receiptType: label,
+        method: result.method,
+        files: result.files.map((f) => path.relative(siteDir(site), f)).join(" | "),
+        collectedAt: new Date().toISOString(),
+      });
+      collected.add(key);
+      saved++;
+
+      console.log(`${tag} ✅ ${pageNo}페이지: 전표 ${orderNos.length}건 (${span}) → ${result.method}`);
+      await sleep(cfg.defaultDelay ?? 2000);
+    }
+  } finally {
+    console.log(`${tag} 묶음 ${saved}개 저장`);
+    console.log(`${tag} 산출물: ${siteDir(site)}`);
+    await close();
+  }
+}
+
+/**
  * 전표 진단 — 한 주문번호에 대해 ordPrdSeq 를 바꿔가며 전표를 열어 본다.
  *
  * 한 주문에 상품이 여러 개일 때 전표가 상품별로 나뉘는지(=순번을 순회해야 하는지),
@@ -839,13 +938,15 @@ async function runCollect(
               result.files.push(textPath);
             }
 
+            // 품목·금액은 전표 문서에서 뽑는다(못 찾으면 빈 칸 — 증빙 자체는 PDF 원본이다).
+            const fields = extractDocumentFields(text, cfg);
+
             appendLedger(site, {
               site,
               orderNo: seq === 1 ? main : `${main}#${seq}`,
               orderDate,
-              // 품목·금액은 전표 PDF 안에 있다. 목록에서 추정해 잘못된 값을 넣느니 비워 둔다.
-              title: "",
-              amount: "",
+              title: fields.title,
+              amount: fields.amount,
               receiptType: label,
               method: result.method,
               files: result.files.map((f) => path.relative(siteDir(site), f)).join(" | "),

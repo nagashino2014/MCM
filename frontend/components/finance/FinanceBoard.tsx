@@ -31,6 +31,7 @@ import { JournalPanel, LedgerPanel, TrialPanel } from "@/components/finance/Jour
 import { PnlPanel, CashPanel } from "@/components/finance/ManagementPanels";
 import { HometaxPanel, VatReturnPanel, WithholdingPanel } from "@/components/finance/VatReturnPanels";
 import { FixedAssetPanel, TripLogPanel, BudgetPanel } from "@/components/finance/AssetBudgetPanels";
+import { ReceiptCollectPanel } from "@/components/finance/ReceiptCollectPanel";
 import { BalanceSheetPanel, ClosingPanel } from "@/components/finance/ClosingPanels";
 import "@/components/cdash/cdash.css";
 
@@ -39,11 +40,13 @@ const LOG_PAGE_SIZE = 10;
 
 type Tab =
   | "connections" | "bank" | "card" | "recon" | "vat" | "invoice" | "journal" | "ledger" | "trial" | "pnl" | "cash"
-  | "hometax" | "vatreturn" | "fixedassets" | "triplog" | "budget" | "withholding" | "balance" | "closing";
+  | "hometax" | "vatreturn" | "fixedassets" | "triplog" | "budget" | "withholding" | "balance" | "closing"
+  | "shopreceipt";
 
 const TAB_KEYS: Tab[] = [
   "connections", "bank", "card", "recon", "vat", "invoice", "journal", "ledger", "trial", "pnl", "cash",
   "hometax", "vatreturn", "fixedassets", "triplog", "budget", "withholding", "balance", "closing",
+  "shopreceipt",
 ];
 
 /** 사이드바 소메뉴 = 탭 그룹. 소메뉴 진입 시 첫 탭이 열린다(menu.ts 의 href 와 짝). */
@@ -52,7 +55,7 @@ const TAB_GROUPS: Array<{ title: string; tabs: [Tab, string][] }> = [
   { title: "계좌·카드 원장", tabs: [["bank", "계좌 원장"], ["card", "법인카드 원장"]] },
   { title: "계산서·수금", tabs: [["invoice", "세금계산서"], ["recon", "수금 대조"]] },
   // 부가세 신고(P5) — 카드 매입 집계 + 홈택스 매입·매출 계산서 + 신고서 자동 작성(accounting-expansion §5 P5).
-  { title: "부가세 신고", tabs: [["vat", "카드 매입 집계"], ["hometax", "매입·매출 계산서"], ["vatreturn", "신고서"], ["withholding", "원천세"]] },
+  { title: "부가세 신고", tabs: [["vat", "카드 매입 집계"], ["shopreceipt", "쇼핑몰 전표 수집"], ["hometax", "매입·매출 계산서"], ["vatreturn", "신고서"], ["withholding", "원천세"]] },
   // 전표·장부(P3) — 자동분개 파생 계층. 회계 관리자 전용(설계: accounting-expansion-blueprint §5 P3).
   { title: "전표·장부", tabs: [["journal", "분개장"], ["ledger", "계정별원장"], ["trial", "시산표·백테스트"]] },
   // 손익·자금(P4) + 결산(P9) — 전표 파생 관리 손익·자금수지·재무상태표·연차 마감.
@@ -350,6 +353,7 @@ export function FinanceBoard() {
         {tab === "card" && <CardLedgerPanel />}
         {tab === "recon" && <ReconPanel />}
         {tab === "vat" && <VatPanel />}
+        {tab === "shopreceipt" && <ReceiptCollectPanel />}
         {tab === "hometax" && <HometaxPanel />}
         {tab === "vatreturn" && <VatReturnPanel />}
         {tab === "withholding" && <WithholdingPanel />}

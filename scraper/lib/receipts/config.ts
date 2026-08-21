@@ -359,9 +359,20 @@ export const NAVER_PAY: SiteConfig = {
     "li[class*='item']",
   ],
   nextPageSelectors: ["a:has-text('다음')", "[class*='paging'] a[class*='next']", "button:has-text('다음')"],
-  // 주문번호 형식 미상 — 넓게 잡고 probe 결과로 좁힌다.
-  orderNoPattern: "\\b\\d{10,20}\\b",
   stealth: true,
+
+  /**
+   * 실측(2026-08): 목록의 '주문 상세 보기' 링크에 주문번호가 들어 있다.
+   *   https://orders.pay.naver.com/order/status/2026052979829321?returnUrl=...
+   * 16자리이고 **앞 8자리가 주문일**이다(2026-05-29) — 11번가와 같은 성질이라 기간 필터를 바로 걸 수 있다.
+   */
+  orderNoPattern: "\\b(20\\d{14})\\b",
+  receiptKey: [
+    { pattern: "orders\\.pay\\.naver\\.com/order/status/(20\\d{14})", groups: ["orderNo"] },
+    { pattern: "\\b(20\\d{14})\\b", groups: ["orderNo"] },
+  ],
+  orderDateFromOrderNo: true,
+
   // 목록에 페이지 파라미터가 있다. 기간 파라미터는 실측 후 여기에 더한다.
   listRequest: {
     url: "https://pay.naver.com/pc/history",
@@ -369,6 +380,13 @@ export const NAVER_PAY: SiteConfig = {
     fields: { page: "{page}" },
     dateFormat: "YYYYMMDD",
   },
+
+  /**
+   * ⚠ 전표(영수증)를 여는 주소는 아직 모른다.
+   *   목록의 '영수증 조회·출력' 링크는 추적 주소(tr.pay.naver.com/...)라 실제 화면 주소가 아니다.
+   *   probe --watch 로 그 버튼을 눌러 열리는 주소를 확인해 receiptUrlTemplate 을 채운다.
+   *   그때까지는 목록에서 링크를 눌러 여는 폴백 경로로 동작한다.
+   */
 };
 
 const SITES: Record<string, SiteConfig> = {

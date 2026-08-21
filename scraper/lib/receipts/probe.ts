@@ -51,6 +51,11 @@ interface FormInfo {
   fields: FormField[];
 }
 
+interface NavLink {
+  text: string;
+  href: string;
+}
+
 interface FrameInspection {
   /** 메인 문서면 "main", iframe 이면 그 주소 */
   frameUrl: string;
@@ -60,6 +65,8 @@ interface FrameInspection {
   dateCandidates: string[];
   /** 화면의 폼 구조 — 조회 버튼을 누르지 않고도 기간 조회 요청을 알아내기 위한 것 */
   forms: FormInfo[];
+  /** 주문내역·증빙 화면으로 가는 링크 후보 — 시작 주소를 모를 때 여기서 찾는다 */
+  navLinks: NavLink[];
 }
 
 interface ProbeResult {
@@ -148,6 +155,32 @@ async function collectForms(scope: Page | Frame): Promise<FormInfo[]> {
     .catch(() => [] as FormInfo[]);
 }
 
+/** 주문내역·증빙 화면으로 가는 링크를 긁는다(메인 페이지에서 시작 주소를 찾기 위한 것) */
+async function collectNavLinks(scope: Page | Frame): Promise<NavLink[]> {
+  return scope
+    .evaluate(() => {
+      const keywords = ["주문", "구매", "마이", "영수증", "증빙", "내역", "배송", "결제"];
+      const seen = new Set<string>();
+      const out: { text: string; href: string }[] = [];
+
+      for (const el of Array.from(document.querySelectorAll("a[href]"))) {
+        const text = (el.textContent || "").replace(/\s+/g, " ").trim();
+        if (!text || text.length > 30) continue;
+        if (!keywords.some((k) => text.includes(k))) continue;
+
+        const href = (el as HTMLAnchorElement).href;
+        if (!href || href.startsWith("javascript:")) continue;
+        if (seen.has(href)) continue;
+
+        seen.add(href);
+        out.push({ text, href });
+      }
+
+      return out.slice(0, 40);
+    })
+    .catch(() => [] as NavLink[]);
+}
+
 /** 프레임(메인 문서 또는 iframe) 하나를 훑어 관측치를 모은다 */
 async function inspectFrame(scope: Page | Frame, frameUrl: string, cfg: SiteConfig): Promise<FrameInspection> {
   const rowSelectorMatches: { selector: string; count: number }[] = [];
@@ -162,6 +195,7 @@ async function inspectFrame(scope: Page | Frame, frameUrl: string, cfg: SiteConf
   return {
     frameUrl,
     forms: await collectForms(scope),
+    navLinks: await collectNavLinks(scope),
     rowSelectorMatches,
     receiptCandidates,
     orderNoCandidates: [...new Set(bodyText.match(/\b\d{9,}\b/g) || [])].slice(0, 30),
@@ -402,6 +436,15 @@ function printSummary(r: ProbeResult, resultFile: string): void {
 
   console.log(`${tag} 주문번호 후보: ${r.orderNoCandidates.slice(0, 8).join(", ") || "-"}`);
   console.log(`${tag} 날짜 후보: ${r.dateCandidates.slice(0, 8).join(", ") || "-"}`);
+
+  // 주문내역 주소를 모를 때(메인 페이지 등에서 찍었을 때) 다음 목적지를 알려준다.
+  const navLinks = r.frames.flatMap((f) => f.navLinks);
+  if (r.orderNoCandidates.length === 0 && navLinks.length > 0) {
+    console.log(`${tag} 이 화면에는 주문이 없습니다. 아래 링크로 다시 probe 해 보세요:`);
+    for (const link of navLinks.slice(0, 15)) {
+      console.log(`${tag}   "${link.text}" → ${link.href}`);
+    }
+  }
 
   // 기간 조회 폼을 찾기 위한 덤프 — 조회 버튼을 누르지 않아도 구조를 알 수 있다.
   for (const f of r.frames) {

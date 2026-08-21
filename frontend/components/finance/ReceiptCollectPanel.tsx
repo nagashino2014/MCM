@@ -27,6 +27,8 @@ interface ShopStatus {
   sessionReason: string | null;
   collected: number;
   lastCollectedAt: string | null;
+  inboxCount: number;
+  inboxPath: string;
 }
 
 /** 분기 프리셋 — 부가세 신고 단위로 고르는 일이 대부분이다 */
@@ -202,6 +204,13 @@ export function ReceiptCollectPanel() {
   const checkSession = async (shop: ShopStatus) => {
     appendLog(`— ${shop.name}: 세션을 확인합니다. 창이 잠깐 열릴 수 있습니다.`);
     await runCommand({ command: "check", site: shop.key }, `${shop.name} 세션 확인`);
+    await loadStatus();
+  };
+
+  /** 손으로 받아 inbox 에 넣어 둔 전표 PDF 를 대장에 올린다(쿠팡처럼 자동 수집이 막힌 몰) */
+  const importInbox = async (shop: ShopStatus) => {
+    appendLog(`— ${shop.name}: ${shop.inboxPath} 의 PDF 를 읽습니다.`);
+    await runCommand({ command: "import", site: shop.key }, `${shop.name} PDF 가져오기`);
     await loadStatus();
   };
 
@@ -460,6 +469,25 @@ export function ReceiptCollectPanel() {
                         <li>처리에 몇 분 걸립니다. 끝나면 신청 내역에서 결과를 엽니다</li>
                         <li>그 주소(…/card-receipt-requests/<b>5320399</b>?page=0)를 위 칸에 붙여넣기</li>
                       </ol>
+
+                      <div className="border-t cd-border-c pt-2 mt-2 space-y-1">
+                        <div className="text-xs cd-text-muted">
+                          쿠팡 로그인 화면이 자동화를 막아 위 방법이 실패하면, 결과 페이지를 브라우저에서
+                          <b> Ctrl+P → PDF 저장</b> 한 뒤 아래로 가져오면 됩니다.
+                        </div>
+                        <div className="text-xs cd-text-faint break-all">
+                          넣는 곳: <code className="cd-text">{shop.inboxPath}</code>
+                        </div>
+                        <button
+                          type="button"
+                          className="cd-btn cd-btn-sm cd-btn-soft"
+                          onClick={() => void importInbox(shop)}
+                          disabled={Boolean(running)}
+                        >
+                          <FolderOpen size={14} /> PDF 가져오기
+                          {shop.inboxCount > 0 && <span className="cd-pill">{shop.inboxCount}</span>}
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>

@@ -56,6 +56,13 @@ export interface SiteConfig {
   listRequest?: {
     url: string;
     method?: "GET" | "POST";
+    /**
+     * 값에 쓰는 치환 토큰:
+     *   {from} {to}                     dateFormat 형식의 시작·종료일
+     *   {fromYYYY} {fromMM} {fromDD}    시작일을 년/월/일로 나눈 값
+     *   {toYYYY} {toMM} {toDD}          종료일을 년/월/일로 나눈 값
+     *   {page}                          페이지 번호(1부터) — 있으면 페이지 이동도 이 요청으로 한다
+     */
     fields: Record<string, string>;
     /** 날짜 치환 형식 — "YYYYMMDD" | "YYYY-MM-DD" | "YYYY.MM.DD" (기본 YYYYMMDD) */
     dateFormat?: string;
@@ -123,6 +130,36 @@ export const ELEVEN_ST: SiteConfig = {
     refererUrl: "https://buy.11st.co.kr/my11st/remittance/documentaryEvidence.tmall?method=displayDocumentaryEvidenceIssue",
   },
   receiptLabel: "신용카드매출전표",
+
+  /**
+   * 실측(2026-08): '증빙서류 발급 > 영수증' 의 기간 조회 파라미터.
+   * 조회 후 세션이 끊겼을 때 로그인 페이지의 returnURL 에 그대로 실려 나온 값에서 확보했다.
+   *   ...documentaryEvidence.tmall?method=displayDocumentaryEvidenceIssue&docTyp=ord
+   *   &stDate=20240701&endDate=20260821&startYY=2024&startMM=07&startDD=01
+   *   &endYY=2026&endMM=08&endDD=21&pageNo=1&limit=10
+   *
+   * limit 을 키워 한 번에 많이 받고, 그래도 넘치면 pageNo 를 올린다(목록의 '다음' 버튼에 기대지 않는다).
+   * 전표를 뽑는 화면이 바로 여기라 주문목록(OrderList.tmall)보다 이쪽이 수집 시작점으로 알맞다.
+   */
+  listRequest: {
+    url: "https://buy.11st.co.kr/my11st/remittance/documentaryEvidence.tmall",
+    method: "GET",
+    fields: {
+      method: "displayDocumentaryEvidenceIssue",
+      docTyp: "ord",
+      stDate: "{from}",
+      endDate: "{to}",
+      startYY: "{fromYYYY}",
+      startMM: "{fromMM}",
+      startDD: "{fromDD}",
+      endYY: "{toYYYY}",
+      endMM: "{toMM}",
+      endDD: "{toDD}",
+      pageNo: "{page}",
+      limit: "100",
+    },
+    dateFormat: "YYYYMMDD",
+  },
 };
 
 const SITES: Record<string, SiteConfig> = {

@@ -528,8 +528,14 @@ async function runByOrderNo(
     previousPageOrders = new Set(ordNos);
 
     if (ordNos.length === 0) {
+      // 2페이지 이후가 비었으면 그냥 목록 끝이다 — 경고할 일이 아니다.
+      if (pageNo > 1) {
+        console.log(`${tag} 목록 끝 — 종료`);
+        break;
+      }
+
       console.log(`${tag} ⚠ 주문번호가 없습니다. 조회 기간에 주문이 없거나 목록이 아직 안 그려진 상태입니다.`);
-      console.log(`${tag}   브라우저에서 조회 기간을 바꿔야 하면 '--headed' 로 실행해 직접 조회한 뒤 진행하세요.`);
+      console.log(`${tag}   기간을 화면에서 직접 골라야 하면 '--wait 180' 으로 실행하세요.`);
       await dumpFailure(site, page, `no-orders-p${pageNo}`, "주문번호 0건");
     }
 
@@ -633,6 +639,14 @@ async function runByOrderNo(
     }
 
     if (pageNo < pages) {
+      // 조회 요청에 페이지 토큰이 있으면 '다음' 버튼을 찾는 대신 번호를 올려 다시 요청한다(훨씬 견고).
+      const pagedByRequest = Object.values(cfg.listRequest?.fields || {}).some((v) => v.includes("{page}"));
+
+      if (pagedByRequest && from && to) {
+        await openOrderList(page, cfg, from, to, tag, pageNo + 1);
+        continue;
+      }
+
       const moved = await goNextPage(page, cfg);
       if (!moved) {
         console.log(`${tag} 다음 페이지 없음 — 종료`);
@@ -648,6 +662,23 @@ function formatDate(iso: string, fmt = "YYYYMMDD"): string {
   return fmt.replace("YYYY", y).replace("MM", m).replace("DD", d);
 }
 
+/** 조회 요청 필드의 치환 토큰을 실제 값으로 바꾼다 */
+function applyTokens(value: string, from: string, to: string, fmt: string | undefined, pageNo: number): string {
+  const [fromY, fromM, fromD] = from.split("-");
+  const [toY, toM, toD] = to.split("-");
+
+  return value
+    .replace(/\{from\}/g, formatDate(from, fmt))
+    .replace(/\{to\}/g, formatDate(to, fmt))
+    .replace(/\{fromYYYY\}/g, fromY)
+    .replace(/\{fromMM\}/g, fromM)
+    .replace(/\{fromDD\}/g, fromD)
+    .replace(/\{toYYYY\}/g, toY)
+    .replace(/\{toMM\}/g, toM)
+    .replace(/\{toDD\}/g, toD)
+    .replace(/\{page\}/g, String(pageNo));
+}
+
 /**
  * 주문목록을 연다.
  * - config.listRequest 가 있으면 조회 기간을 직접 지정해 연다(무인 실행). GET·POST 둘 다 지원.
@@ -659,7 +690,8 @@ async function openOrderList(
   cfg: SiteConfig,
   from: string | undefined,
   to: string | undefined,
-  tag: string
+  tag: string,
+  pageNo = 1
 ): Promise<void> {
   const req = cfg.listRequest;
 
@@ -673,9 +705,7 @@ async function openOrderList(
 
   const fields: Record<string, string> = {};
   for (const [name, value] of Object.entries(req.fields)) {
-    fields[name] = value
-      .replace("{from}", formatDate(from, req.dateFormat))
-      .replace("{to}", formatDate(to, req.dateFormat));
+    fields[name] = applyTokens(value, from, to, req.dateFormat, pageNo);
   }
 
   if ((req.method || "GET") === "GET") {

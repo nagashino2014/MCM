@@ -53,6 +53,16 @@ failed/                 실패 건 진단 덤프
   method=displayCardPop&ordNo={ordNo}&ordPrdSeq=1&prdSeqCnt=&prdSeq=0&prdTypCd=01&prfItmClfCd=
   ```
   주문번호만 있으면 되므로, 증빙 페이지로 이동한 뒤 폼을 만들어 제출하는 방식으로 자동화했다(`config.receiptRequest`).
+- **기간 조회는 URL 파라미터로 된다**(증빙서류 발급 화면):
+  ```
+  https://buy.11st.co.kr/my11st/remittance/documentaryEvidence.tmall
+    ?method=displayDocumentaryEvidenceIssue&docTyp=ord
+    &stDate=20240701&endDate=20260821
+    &startYY=2024&startMM=07&startDD=01&endYY=2026&endMM=08&endDD=21
+    &pageNo=1&limit=10
+  ```
+  `config.listRequest` 가 이 요청을 쓴다. `limit` 을 키워 한 번에 많이 받고, 넘치면 `pageNo` 를 올린다
+  — 목록의 '다음' 버튼에 기대지 않으므로 페이지 이동이 훨씬 견고하다.
 - **전표는 주문 내 상품별로 나뉜다.** `ordPrdSeq` 를 1부터 올리면 상품마다 처리일련번호가 다른 전표가 나오고,
   상품 수를 넘기면 값이 비어 있는 양식이 나온다. 그래서 수집기는 순번을 올려가며 받다가
   **본문에 주문번호가 없는 빈 양식**이 나오면 그 주문을 끝낸다.
@@ -72,18 +82,7 @@ failed/                 실패 건 진단 덤프
 
 ## 아직 확정되지 않은 것
 
-- **기간 조회 파라미터(무인화의 마지막 조각).** 목록의 기본 조회 기간 밖 주문은 화면에 없어 주문번호도 안 잡힌다.
-  `config.listRequest` 에 조회 요청(GET/POST·필드·날짜 형식)을 넣으면 `--wait` 없이 무인 수집이 되도록
-  구현은 끝나 있고, **11번가의 실제 조회 요청만 아직 못 잡았다.** 실측 방법:
-
-  ```bash
-  npm run receipts -- probe --watch --url "https://buy.11st.co.kr/my11st/order/OrderList.tmall"
-  ```
-
-  띄워진 화면에서 기간을 바꿔 조회하면 콘솔에 `iframe 이동:` / `네비게이션:`(폼 데이터 포함)이 찍힌다.
-  그 주소·파라미터를 `listRequest` 에 옮기면 끝. 그때까지는 `--wait` 로 사람이 조회해 주면 된다.
-- **대장의 품목·금액이 비어 있다.** 값은 영수증 PDF 안에 있는데, 목록에서 추정해 틀린 값을 넣느니 비워 뒀다.
-  영수증 페이지 구조를 실측하면 채운다.
+- (해결) ~~기간 조회 파라미터~~ — 아래 "실측으로 확정된 것" 참고.
 - **페이지네이션이 실제로 동작하는지** 확인되지 않았다. 지금은 '다음' 을 눌러도 목록이 그대로면
   이동 실패로 보고 종료한다(같은 목록을 반복해 읽지 않는다). 주문이 많아 목록이 여러 장인 경우를
   아직 만나지 못해, 그때 `nextPageSelectors` 가 맞는지는 미검증이다.

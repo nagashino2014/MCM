@@ -29,6 +29,10 @@ export interface SiteConfig {
   receiptKeywords: string[];
   /** 주문 행 후보 셀렉터(위에서부터 시도, 매칭되는 첫 셀렉터를 쓴다) */
   orderRowSelectors: string[];
+  /** 화면에서 주문번호를 골라내는 정규식(기본: 15~20자리 숫자) */
+  orderNoPattern?: string;
+  /** 주문번호 앞 8자리가 주문일인 사이트(11번가)에서 켠다 */
+  orderDateFromOrderNo?: boolean;
   /** 다음 페이지 이동 요소 후보 */
   nextPageSelectors: string[];
   /**
@@ -86,6 +90,8 @@ export const ELEVEN_ST: SiteConfig = {
   checkUrl: "https://buy.11st.co.kr/my11st/order/OrderList.tmall",
   loggedOutPattern: "login|signin|auth",
   receiptKeywords: ["카드영수증", "영수증", "거래명세서", "명세서"],
+  orderNoPattern: "\\b\\d{15,20}\\b",
+  orderDateFromOrderNo: true,
   orderRowSelectors: [
     "[class*='order_list'] > li",
     "[class*='orderList'] > li",
@@ -162,8 +168,41 @@ export const ELEVEN_ST: SiteConfig = {
   },
 };
 
+/**
+ * G마켓.
+ * - 증빙 경로(고객센터 안내): 나의 G마켓 > 주문내역 > [영수증/계산서조회], 또는 주문상세의 [카드전표].
+ *   신용카드 구매분은 카드매출전표가 자동 발급되고, 이것이 매입세액공제용 적격증빙이다.
+ * - 영수증 전용 도메인 `receipt.gmarket.co.kr` 이 따로 있다.
+ *
+ * ⚠ 아래 주소·패턴은 **실측 전 추정값**이다. `login` 후 `probe` 로 실제 값을 확인해
+ *   site-config.json 에 덮어쓰거나 이 파일을 고친다. 특히 아직 모르는 것:
+ *     - 주문목록/증빙 화면의 실제 주소와 기간 조회 파라미터(listRequest)
+ *     - 카드전표를 여는 방법(주소 직접 열기인지 폼 POST 인지) → receiptUrlTemplate / receiptRequest
+ *     - 주문번호 형식(11번가와 달리 날짜가 들어 있지 않을 가능성이 높다)
+ */
+export const GMARKET: SiteConfig = {
+  key: "gmarket",
+  name: "G마켓",
+  // 로그인 주소는 수시로 바뀌므로 메인에서 사용자가 직접 로그인하게 둔다(어차피 사람이 조작한다).
+  loginUrl: "https://www.gmarket.co.kr/",
+  orderListUrl: "https://myg.gmarket.co.kr/Order/OrderList",
+  checkUrl: "https://myg.gmarket.co.kr/Order/OrderList",
+  loggedOutPattern: "login|signin|member\\.gmarket\\.co\\.kr/Login",
+  receiptKeywords: ["카드전표", "신용카드 매출전표", "영수증/계산서", "영수증", "거래명세서"],
+  orderRowSelectors: [
+    "table[class*='order'] tbody tr",
+    "[class*='order_list'] > li",
+    "[class*='orderList'] > li",
+    "li[class*='order']",
+  ],
+  nextPageSelectors: ["a:has-text('다음')", "[class*='paging'] a[class*='next']", "button:has-text('다음')"],
+  // 주문번호 형식 미상 — 우선 넓게 잡고 probe 결과로 좁힌다.
+  orderNoPattern: "\\b\\d{9,20}\\b",
+};
+
 const SITES: Record<string, SiteConfig> = {
   [ELEVEN_ST.key]: ELEVEN_ST,
+  [GMARKET.key]: GMARKET,
 };
 
 export function configFile(site: string): string {

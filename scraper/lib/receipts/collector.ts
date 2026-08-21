@@ -1,17 +1,17 @@
 /**
- * 11번가 영수증 수집기 (스파이크)
+ * 영수증 수집기 (사이트 중립)
  *
- * 관통 목표: 저장된 세션으로 주문목록을 열고 → 각 주문의 영수증 화면을 띄워 → PDF 로 저장 → 대장(CSV)에 기록.
+ * 관통 목표: 저장된 로그인으로 주문/증빙 목록을 열고 → 각 주문의 영수증(전표)을 띄워 → PDF 로 저장 →
+ * 대장(CSV)에 기록. 사이트별 차이는 전부 `config.ts` 의 SiteConfig 로 표현하고 이 파일은 공통 절차만 담는다.
  *
  * 설계 메모
- * - 고정 셀렉터 대신 **텍스트·정규식 휴리스틱** 우선. ("영수증/거래명세서" 텍스트, 9자리 이상 숫자=주문번호,
- *   YYYY.MM.DD=주문일) 마크업이 바뀌어도 버티고, 안 맞으면 probe 로 실측해 site-config.json 에 덮어쓴다.
- * - 기간 조회 UI 조작은 몰마다 제각각이라 스파이크에서는 다루지 않는다. 화면에 보이는 목록을 페이지네이션으로
- *   훑으면서 **주문일 텍스트로 필터**한다. 기간 파라미터가 실측되면 config 에 URL 템플릿을 추가하는 편이 낫다.
- * - 11번가는 실측 결과 **주문번호만으로 영수증 주소가 열린다**(config.receiptUrlTemplate).
- *   그래서 목록에서 버튼을 클릭할 필요 없이 주문번호를 모아 영수증 주소로 바로 이동한다.
- *   템플릿이 없는 몰을 위해 버튼 클릭 경로(팝업 / 같은 탭 이동 / 레이어 모달)도 함께 남겨 둔다.
- * - 주문 목록은 **iframe 안에** 그려지므로 주문번호 수집은 모든 프레임을 훑는다.
+ * - 고정 셀렉터 대신 **텍스트·정규식 휴리스틱** 우선. 마크업이 바뀌어도 버티고, 안 맞으면 probe 로
+ *   실측해 site-config.json 에 덮어쓴다.
+ * - 목록은 iframe 안에 그려지는 경우가 있어(11번가) 주문번호 수집·페이지네이션이 모든 프레임을 훑는다.
+ * - 영수증을 여는 방법은 세 갈래다. config 에 정의된 것을 우선 쓴다.
+ *     receiptRequest      폼 POST 로만 열리는 문서(11번가 신용카드 매출전표)
+ *     receiptUrlTemplate  주문번호를 넣은 주소로 바로 열리는 문서
+ *     (둘 다 없으면)      목록에서 버튼을 클릭 — 팝업 / 같은 탭 이동 / 레이어 모달 전부 처리
  * - 계정 잠금을 피하려고 건마다 딜레이를 둔다. 속도보다 안전이 우선.
  */
 
@@ -83,8 +83,8 @@ function inRange(date: string, from?: string, to?: string): boolean {
 }
 
 /**
- * 11번가 주문번호는 앞 8자리가 주문일이다(예: 20251027006519699 → 2025-10-27).
- * 목록에서 날짜 칸을 파싱하지 않고도 기간 필터를 걸 수 있다.
+ * 주문번호에 주문일이 들어 있는 사이트를 위한 변환(11번가: 20251027006519699 → 2025-10-27).
+ * `config.orderDateFromOrderNo` 가 켜진 사이트에서만 쓴다.
  */
 function dateFromOrderNo(ordNo: string): string {
   const m = ordNo.match(/^(20\d{2})(\d{2})(\d{2})/);
@@ -100,16 +100,16 @@ function dateFromOrderNo(ordNo: string): string {
  * - 목록이 iframe 안에 그려지므로 메인 문서 + 모든 프레임을 훑는다.
  * - 화면 텍스트뿐 아니라 href/onclick/value 속성에도 주문번호가 들어 있어 함께 본다.
  */
-async function collectOrderNos(page: Page): Promise<string[]> {
+async function collectOrderNos(page: Page, cfg: SiteConfig): Promise<string[]> {
   const found = new Set<string>();
   const scopes: (Page | Frame)[] = [page, ...page.frames().filter((f) => f !== page.mainFrame())];
 
   for (const scope of scopes) {
     const values = await scope
-      .evaluate(() => {
+      .evaluate((pattern) => {
         const out: string[] = [];
         const push = (v?: string | null) => {
-          for (const hit of (v || "").match(/\b\d{15,20}\b/g) || []) out.push(hit);
+          for (const hit of (v || "").match(new RegExp(pattern, "g")) || []) out.push(hit);
         };
 
         push(document.body?.innerText);
@@ -122,7 +122,7 @@ async function collectOrderNos(page: Page): Promise<string[]> {
         });
 
         return out;
-      })
+      }, cfg.orderNoPattern || "\\b\\d{15,20}\\b")
       .catch(() => [] as string[]);
 
     for (const v of values) found.add(v);
@@ -465,7 +465,7 @@ function reportSeqDiff(tag: string, results: { seq: number; text: string; tokens
  * - 3초마다 주문번호를 세어, 1건 이상 잡히고 직전 관측과 개수가 같으면(=조회가 끝났다고 보고) 진행한다.
  * - 제한 시간까지 아무것도 안 잡히면 그대로 진행한다(빈 목록으로 처리).
  */
-async function waitForUserQuery(site: string, page: Page, seconds: number): Promise<void> {
+async function waitForUserQuery(site: string, page: Page, cfg: SiteConfig, seconds: number): Promise<void> {
   const tag = `[${site}]`;
   console.log(`${tag} ─────────────────────────────────────────────`);
   console.log(`${tag} 브라우저에서 조회 기간을 원하는 기간으로 바꿔 조회하세요.`);
@@ -477,7 +477,7 @@ async function waitForUserQuery(site: string, page: Page, seconds: number): Prom
   while (Date.now() < deadline) {
     await page.waitForTimeout(3000);
 
-    const count = (await collectOrderNos(page).catch(() => [])).length;
+    const count = (await collectOrderNos(page, cfg).catch(() => [])).length;
     if (count > 0 && count === previous) {
       console.log(`${tag} 주문번호 ${count}건 확인 — 수집을 시작합니다.`);
       return;
@@ -506,7 +506,7 @@ async function runByOrderNo(
   const { from, to, limit, dryRun = false, delay = 2000, pages = 1 } = opts;
 
   if (opts.waitSeconds) {
-    await waitForUserQuery(site, page, opts.waitSeconds);
+    await waitForUserQuery(site, page, cfg, opts.waitSeconds);
   }
 
   let previousPageOrders: Set<string> | null = null;
@@ -516,7 +516,7 @@ async function runByOrderNo(
     await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => {});
     await page.waitForTimeout(1500);
 
-    const ordNos = await collectOrderNos(page);
+    const ordNos = await collectOrderNos(page, cfg);
     console.log(`${tag} ${pageNo}페이지: 주문번호 ${ordNos.length}건`);
 
     // '다음' 을 눌러도 목록이 그대로면 페이지 이동에 실패한 것이다 — 같은 목록을 반복해 읽지 않는다.
@@ -545,7 +545,9 @@ async function runByOrderNo(
         return;
       }
 
-      const orderDate = dateFromOrderNo(ordNo);
+      // 주문번호에 날짜가 들어 있는 사이트만 여기서 날짜를 얻는다. 그 외에는 기간 조회로 이미
+      // 범위가 좁혀져 있으므로 날짜를 몰라도 수집에는 지장이 없다(파일이 unknown 월 폴더로 갈 뿐).
+      const orderDate = cfg.orderDateFromOrderNo ? dateFromOrderNo(ordNo) : "";
       if (!inRange(orderDate, from, to)) {
         stats.skipped++;
         continue;

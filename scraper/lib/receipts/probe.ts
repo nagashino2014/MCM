@@ -159,21 +159,34 @@ async function collectForms(scope: Page | Frame): Promise<FormInfo[]> {
 async function collectNavLinks(scope: Page | Frame): Promise<NavLink[]> {
   return scope
     .evaluate(() => {
-      const keywords = ["주문", "구매", "마이", "영수증", "증빙", "내역", "배송", "결제"];
+      const keywords = ["주문", "구매", "마이", "나의", "myg", "영수증", "증빙", "내역", "결제"];
       const seen = new Set<string>();
       const out: { text: string; href: string }[] = [];
 
-      for (const el of Array.from(document.querySelectorAll("a[href]"))) {
+      // GNB 의 마이페이지 링크가 <a href> 가 아니라 스크립트로 이동하는 경우가 있어(G마켓)
+      // onclick 안의 주소까지 본다.
+      const urlOf = (el: Element): string => {
+        const href = el.getAttribute("href") || "";
+        if (href && !href.startsWith("javascript:")) return (el as HTMLAnchorElement).href;
+
+        const script = `${el.getAttribute("onclick") || ""} ${href}`;
+        const abs = script.match(/https?:\/\/[^\s'"()]+/);
+        if (abs) return abs[0];
+
+        const rel = script.match(/['"](\/[^\s'"()]+)['"]/);
+        return rel ? new URL(rel[1], location.href).href : "";
+      };
+
+      for (const el of Array.from(document.querySelectorAll("a, button, [onclick]"))) {
         const text = (el.textContent || "").replace(/\s+/g, " ").trim();
         if (!text || text.length > 30) continue;
-        if (!keywords.some((k) => text.includes(k))) continue;
+        if (!keywords.some((k) => text.toLowerCase().includes(k))) continue;
 
-        const href = (el as HTMLAnchorElement).href;
-        if (!href || href.startsWith("javascript:")) continue;
-        if (seen.has(href)) continue;
+        const url = urlOf(el);
+        if (!url || seen.has(url)) continue;
 
-        seen.add(href);
-        out.push({ text, href });
+        seen.add(url);
+        out.push({ text, href: url });
       }
 
       return out.slice(0, 40);

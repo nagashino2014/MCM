@@ -243,8 +243,15 @@ export const GMARKET: SiteConfig = {
     dateFormat: "YYYYMMDD",
     refererUrl: "https://receipt.gmarket.co.kr/Card/cardsalesslip",
   },
+  /**
+   * 실측(2026-08): 목록의 전표 링크는 쿼리스트링이 아니라 함수 호출이다.
+   *   <a href="javascript:openCardReceipt('2454083498', 'DEyNR38T…/Rw==', '4252259234');">
+   *                        seqNo           custNo(base64)          contrNo(=주문번호)
+   * 이 세 값을 그대로 CardReceiptFormCover 주소에 넣으면 전표가 열린다.
+   * custNo 에 / 와 = 가 들어 있어 URL 조립 때 인코딩된다(encodeKeyValue).
+   */
   receiptKey: {
-    pattern: "seqNo=([^&\"'\\s<>]+)&(?:amp;)?custNo=([^&\"'\\s<>]+)&(?:amp;)?contrNo=([^&\"'\\s<>]+)",
+    pattern: "openCardReceipt\\(\\s*'([^']+)'\\s*,\\s*'([^']+)'\\s*,\\s*'([^']+)'\\s*\\)",
     groups: ["seqNo", "custNo", "contrNo"],
   },
   receiptUrlTemplate:

@@ -153,6 +153,13 @@ export async function openContext(opts: {
 
   if (stealth) {
     launchOptions.args = ["--disable-blink-features=AutomationControlled"];
+    /**
+     * Playwright 는 기본으로 `--enable-automation` 을 붙인다. 이 스위치가 주소창 아래
+     * "Chrome이 자동화된 테스트 소프트웨어에 의해 제어되고 있습니다" 줄을 띄우고,
+     * 그 자체가 봇 판정 신호로 쓰인다(쿠팡 로그인 페이지가 Akamai Access Denied 로 막혔다).
+     * 기본 인자에서 빼서 일반 브라우저와 같은 모양으로 띄운다.
+     */
+    launchOptions.ignoreDefaultArgs = ["--enable-automation"];
     launchOptions.viewport = null;
     // 번들 Chromium 보다 실제 Chrome 이 지문상 유리하다(설치돼 있을 때만).
     if (!CHROME_PATH) launchOptions.channel = "chrome";

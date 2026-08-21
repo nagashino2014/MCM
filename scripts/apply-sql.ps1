@@ -6,7 +6,7 @@
 # node scripts\apply-sql.mjs 에 넘긴다. `infra/aws/NNN_*.sql` 은 전부 멱등이라 여러 번 돌려도 된다.
 
 param(
-  [Parameter(Mandatory = $true)][string]$Sql,
+  [Parameter(Mandatory = $true)][string[]]$Sql,   # 여러 개면 순서대로 적용
   [string]$AwsProfile = "mcm-kesi-staging",
   [string]$Region = "ap-northeast-2",
   [string]$ClusterIdentifier = "mcm-ieps-staging",
@@ -24,6 +24,14 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $env:AWS_PROFILE = $AwsProfile
+
+# 터널이 이미 열려 있으면 db-tunnel.ps1 이 SSO 확인을 건너뛴다 — 여기서 한 번 더 확인한다.
+& aws sts get-caller-identity --profile $AwsProfile --region $Region --output text 2>$null | Out-Null
+if ($LASTEXITCODE -ne 0) {
+  Write-Host "SSO 세션이 만료됐습니다. 브라우저에서 로그인하세요." -ForegroundColor Yellow
+  & aws sso login --profile $AwsProfile
+  if ($LASTEXITCODE -ne 0) { Write-Host "aws sso login 실패." -ForegroundColor Red; exit 1 }
+}
 
 # RDS 관리형 마스터 시크릿에서 접속 정보를 받는다(dev-frontend-aws.ps1 과 같은 경로).
 $secretArn = & aws rds describe-db-clusters --profile $AwsProfile --region $Region `
@@ -43,7 +51,10 @@ $env:DATABASE_URL = "postgresql://${user}:${pass}@localhost:${LocalPort}/${Datab
 
 Push-Location $repo
 try {
-  node scripts/apply-sql.mjs $Sql
+  foreach ($file in $Sql) {
+    node scripts/apply-sql.mjs $file
+    if ($LASTEXITCODE -ne 0) { exit 1 }
+  }
 } finally {
   Pop-Location
   $env:DATABASE_URL = $null

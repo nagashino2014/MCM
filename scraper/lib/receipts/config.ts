@@ -274,9 +274,17 @@ export const AUCTION: SiteConfig = {
   key: "auction",
   name: "옥션",
   loginUrl: "https://www.auction.co.kr/",
-  // 마이옥션(전체주문내역). 영수증 조회 화면 주소는 login → probe 로 확인해 채운다.
-  orderListUrl: "http://member.auction.co.kr/myauction/Default.aspx",
-  checkUrl: "http://member.auction.co.kr/myauction/Default.aspx",
+  /**
+   * 실측(2026-08): 마이옥션 주문내역조회.
+   *   https://escrow.auction.co.kr/Close/OrderProcessList.aspx?tabType=S&SearchStatus=10&SearchOption=0
+   *
+   * ⚠ 이 화면은 ASP.NET WebForms 다(__VIEWSTATE·__EVENTTARGET·btnTerm3M·btnSearch).
+   *   기간 조회가 postback 이라 폼을 새로 만들어 POST 하는 방식으론 재현하기 어렵다.
+   *   다행히 영수증은 [영수증/계산서 조회] 버튼이 여는 **별도 창**에서 뽑고(openReceiptListWindow),
+   *   그 창은 G마켓의 영수증 조회 화면과 비슷한 구조로 보인다 → 그쪽 주소·조회 요청을 쓰면 된다.
+   */
+  orderListUrl: "https://escrow.auction.co.kr/Close/OrderProcessList.aspx?tabType=S&SearchStatus=10&SearchOption=0",
+  checkUrl: "https://escrow.auction.co.kr/Close/OrderProcessList.aspx?tabType=S&SearchStatus=10&SearchOption=0",
   loggedOutPattern: "login|signin|memberssl\\.auction\\.co\\.kr",
   receiptKeywords: ["신용카드영수증", "신용카드 매출전표", "카드전표", "구매영수증", "영수증", "거래명세서"],
   orderRowSelectors: [

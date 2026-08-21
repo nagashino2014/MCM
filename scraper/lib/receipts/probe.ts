@@ -216,6 +216,29 @@ async function inspectFrame(scope: Page | Frame, frameUrl: string, cfg: SiteConf
   };
 }
 
+/** 팝업 안에서 찾은 것들을 그 자리에서 보여준다(창이 닫히면 못 보므로) */
+function printPopupSummary(tag: string, f: FrameInspection): void {
+  console.log(`${tag} ── 팝업 내용: ${f.frameUrl}`);
+
+  const rows = f.rowSelectorMatches.filter((m) => m.count > 0);
+  if (rows.length) console.log(`${tag}   행매칭: ${rows.map((m) => `${m.count}건(${m.selector})`).join(", ")}`);
+  if (f.orderNoCandidates.length) console.log(`${tag}   주문번호 후보: ${f.orderNoCandidates.slice(0, 6).join(", ")}`);
+  if (f.dateCandidates.length) console.log(`${tag}   날짜 후보: ${f.dateCandidates.slice(0, 6).join(", ")}`);
+
+  for (const c of f.receiptCandidates.slice(0, 8)) {
+    console.log(`${tag}   <${c.tag}> "${c.text}" href=${c.href || "-"} onclick=${(c.onclick || "-").slice(0, 80)}`);
+  }
+
+  for (const form of f.forms) {
+    console.log(`${tag}   폼 action=${form.action || "-"} method=${form.method || "GET"} target=${form.target || "-"}`);
+    for (const x of form.fields.slice(0, 12)) {
+      console.log(`${tag}     ${x.looksLikeDate ? "★" : " "} ${x.name || "(이름없음)"} = ${x.value || '""'}`);
+    }
+  }
+
+  for (const link of f.navLinks.slice(0, 8)) console.log(`${tag}   링크 "${link.text}" → ${link.href}`);
+}
+
 export async function probeOrderList(
   site: string,
   opts: { url?: string; watch?: boolean; save?: boolean } = {}
@@ -232,6 +255,7 @@ export async function probeOrderList(
   const xhrUrls: string[] = [];
   const navUrls: string[] = [];
   const formSubmits: string[] = [];
+  const frames: FrameInspection[] = [];
   // 실행마다 덮어쓰면 직전 실측을 잃는다 — 시각을 붙여 남긴다.
   const xhrLogFile = path.join(outDir, `xhr-log-${new Date().toISOString().replace(/[:.]/g, "-")}.jsonl`);
   const xhrStream = opts.watch ? fs.createWriteStream(xhrLogFile, { flags: "w" }) : null;
@@ -243,10 +267,22 @@ export async function probeOrderList(
       context.on("page", (p) => {
         popupUrls.push(p.url());
         console.log(`[${site}] 새 창/팝업: ${p.url()}`);
+
         // 팝업은 열린 직후 about:blank 인 경우가 많아 이동 후 주소를 한 번 더 잡는다.
-        p.once("domcontentloaded", () => {
+        // 영수증 조회가 별도 창으로 열리는 사이트(옥션)에서는 이 창 안이 정작 중요한 화면이라,
+        // 주소만이 아니라 폼·링크·식별자 후보까지 그 자리에서 훑는다.
+        p.once("domcontentloaded", async () => {
           popupUrls.push(p.url());
           console.log(`[${site}] 팝업 로드 완료: ${p.url()}`);
+
+          try {
+            await p.waitForTimeout(2000);
+            const inspection = await inspectFrame(p, `popup:${p.url()}`, cfg);
+            frames.push(inspection);
+            printPopupSummary(`[${site}]`, inspection);
+          } catch {
+            // 팝업이 곧바로 닫히면 그냥 넘어간다
+          }
         });
       });
       // XHR 은 주소만이 아니라 JSON 응답 앞부분까지 남긴다 — 목록·영수증을 내려주는 내부 API 를 찾으면
@@ -362,7 +398,7 @@ export async function probeOrderList(
 
     // 메인 문서 + 모든 iframe 을 훑는다(목록이 iframe 안에 있는 경우를 놓치지 않으려고).
     const main = await inspectFrame(page, "main", cfg);
-    const frames: FrameInspection[] = [main];
+    frames.unshift(main);
 
     for (const frame of page.frames()) {
       if (frame === page.mainFrame()) continue;

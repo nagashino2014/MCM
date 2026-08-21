@@ -303,24 +303,19 @@ export const AUCTION: SiteConfig = {
    * 같은 계열이라 G마켓과 같은 형태(함수 호출)일 가능성이 높고, 아니면 쿼리스트링일 수 있다.
    * 둘 다 안 맞으면 probe 가 "화면이 값을 담고 있는 곳"을 찍어 주므로 그걸 보고 규칙을 고친다.
    */
+  /**
+   * 실측(2026-08): 옥션 전표는 **주문번호 하나로** 열린다(G마켓의 세 값과 다르다).
+   *   GET https://accounting.auction.co.kr/Card/CardReceiptRevised.aspx?orderNo=2486409195
+   *
+   * 목록에서 주문번호를 뽑는 규칙은 좁은 것부터 시도한다: 전표 주소에 박힌 형태 →
+   * orderNo 파라미터 → 화면의 10자리 숫자.
+   */
   receiptKey: [
-    // G마켓과 같은 형태
-    {
-      pattern: "openCardReceipt\\(\\s*'([^']+)'\\s*,\\s*'([^']+)'\\s*,\\s*'([^']+)'\\s*\\)",
-      groups: ["seqNo", "custNo", "contrNo"],
-    },
-    // 이름만 다른 전표 열기 함수(3인자) — receipt/card/slip 이 든 함수명을 넓게 받는다
-    {
-      pattern:
-        "\\b\\w*(?:[Rr]eceipt|[Cc]ard|[Ss]lip)\\w*\\(\\s*'([^']+)'\\s*,\\s*'([^']+)'\\s*,\\s*'([^']+)'\\s*\\)",
-      groups: ["seqNo", "custNo", "contrNo"],
-    },
-    // 쿼리스트링 형태
-    {
-      pattern: "seqNo=([^&\"'\\s<>]+)&(?:amp;)?custNo=([^&\"'\\s<>]+)&(?:amp;)?contrNo=([^&\"'\\s<>]+)",
-      groups: ["seqNo", "custNo", "contrNo"],
-    },
+    { pattern: "CardReceiptRevised\\.aspx\\?orderNo=(\\d+)", groups: ["orderNo"] },
+    { pattern: "orderNo=(\\d+)", groups: ["orderNo"] },
+    { pattern: "\\b(\\d{10})\\b", groups: ["orderNo"] },
   ],
+  receiptUrlTemplate: "https://accounting.auction.co.kr/Card/CardReceiptRevised.aspx?orderNo={orderNo}",
 
   /** 전표 목록: GET ?from=YYYYMMDD&to=YYYYMMDD&pageNum=N */
   listRequest: {

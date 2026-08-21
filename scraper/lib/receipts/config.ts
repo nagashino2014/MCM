@@ -455,8 +455,30 @@ export const COUPANG: SiteConfig = {
     "li[class*='order']",
   ],
   nextPageSelectors: ["a:has-text('다음')", "[class*='paging'] a[class*='next']", "button:has-text('다음')"],
-  // 주문번호 형식 미상 — 넓게 잡고 probe 결과로 좁힌다.
-  orderNoPattern: "\\b\\d{10,20}\\b",
+  /**
+   * 실측(2026-08): 카드영수증 주소를 확보했다.
+   *   https://payment.coupang.com/v2/card-receipt/view
+   *     ?orderId=20102411842987&vendorIds=A00010028&cancel=false
+   *
+   * 전표를 여는 데 **orderId 와 vendorIds(판매자 ID) 두 값**이 필요하다.
+   * 주문번호는 14자리이고 날짜가 들어 있지 않아(20102411842987 → 실제 주문일 2026-08-20)
+   * 주문일은 전표 문서에서 읽는다.
+   *
+   * ⚠ 아직 확인 못 한 것: 영수증 목록 화면(payment-receipt)이 두 값을 어떤 모양으로 담고 있는지.
+   *   주문 상세의 [카드영수증]은 React 버튼이라 HTML 에 주소가 없다. 목록 화면 구조를 보고 정한다.
+   */
+  orderNoPattern: "\\b\\d{12,16}\\b",
+  receiptKey: [
+    // 링크에 두 값이 함께 있는 경우
+    {
+      pattern: "card-receipt/view\\?orderId=(\\d+)&(?:amp;)?vendorIds=([^&\"'\\s<>]+)",
+      groups: ["orderId", "vendorIds"],
+    },
+  ],
+  receiptUrlTemplate:
+    "https://payment.coupang.com/v2/card-receipt/view?orderId={orderId}&vendorIds={vendorIds}&cancel=false",
+  receiptLabel: "카드영수증",
+  orderDateFromDocument: true,
   stealth: true,
   // 트래픽 패턴을 보는 곳이라 기본 대기를 길게 둔다(다른 몰의 2초 → 5초).
   defaultDelay: 5000,

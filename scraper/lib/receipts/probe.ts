@@ -18,7 +18,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { Frame, Page } from "playwright";
 
-import { openContext, ensureSiteDir, waitForBrowserClose } from "./session";
+import { openContext, ensureSiteDir, waitForContextClose } from "./session";
 import { loadSiteConfig, saveSiteConfig, SiteConfig } from "./config";
 
 /** XHR 응답 본문 저장 상한(개인정보·용량 고려) */
@@ -179,7 +179,7 @@ export async function probeOrderList(
 
   // watch 모드는 사용자가 직접 클릭해야 하므로 headed.
   const headless = !opts.watch;
-  const { browser, context } = await openContext({ site, headless, useSession: true });
+  const { context, close } = await openContext({ site, headless, useSession: true });
 
   const popupUrls: string[] = [];
   const xhrUrls: string[] = [];
@@ -190,7 +190,7 @@ export async function probeOrderList(
   const xhrStream = opts.watch ? fs.createWriteStream(xhrLogFile, { flags: "w" }) : null;
 
   try {
-    const page = await context.newPage();
+    const page = context.pages()[0] || (await context.newPage());
 
     if (opts.watch) {
       context.on("page", (p) => {
@@ -333,7 +333,7 @@ export async function probeOrderList(
       console.log(`[${site}] ─────────────────────────────────────────────`);
       console.log(`[${site}] 브라우저에서 영수증 버튼을 직접 눌러보세요.`);
       console.log(`[${site}] 열리는 팝업 주소와 XHR 을 기록합니다. 다 되면 창을 닫으세요.`);
-      await waitForBrowserClose(browser);
+      await waitForContextClose(context);
     }
 
     const result: ProbeResult = {
@@ -379,8 +379,7 @@ export async function probeOrderList(
       xhrStream.end();
       console.log(`[${site}] XHR 기록: ${xhrLogFile}`);
     }
-    await context.close().catch(() => {});
-    await browser.close().catch(() => {});
+    await close();
   }
 }
 

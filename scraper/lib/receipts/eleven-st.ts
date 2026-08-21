@@ -225,12 +225,12 @@ export async function collectReceipts(site: string, opts: CollectOptions = {}): 
   const tag = `[${site}]`;
 
   const collected = loadCollectedKeys(site);
-  const { browser, context } = await openContext({ site, headless, useSession: true });
+  const { context, close } = await openContext({ site, headless, useSession: true });
 
   const stats: CollectStats = { saved: 0, skipped: 0, failed: 0 };
 
   try {
-    const page = await context.newPage();
+    const page = context.pages()[0] || (await context.newPage());
     await openOrderList(page, cfg, from, to, tag);
     await sleep(3000);
 
@@ -359,8 +359,7 @@ export async function collectReceipts(site: string, opts: CollectOptions = {}): 
   } finally {
     console.log(`${tag} 저장 ${stats.saved}건 / 건너뜀 ${stats.skipped}건 / 실패 ${stats.failed}건`);
     console.log(`${tag} 산출물: ${siteDir(site)}`);
-    await context.close().catch(() => {});
-    await browser.close().catch(() => {});
+    await close();
   }
 }
 
@@ -381,11 +380,11 @@ export async function probeReceiptSeq(site: string, ordNo: string, seqs: number[
   }
 
   const outDir = ensureSiteDir(site, "probe");
-  const { browser, context } = await openContext({ site, headless: true, useSession: true });
+  const { context, close } = await openContext({ site, headless: true, useSession: true });
   const results: { seq: number; text: string; tokens: Set<string> }[] = [];
 
   try {
-    const page = await context.newPage();
+    const page = context.pages()[0] || (await context.newPage());
 
     for (const seq of seqs) {
       try {
@@ -407,8 +406,7 @@ export async function probeReceiptSeq(site: string, ordNo: string, seqs: number[
     reportSeqDiff(tag, results);
     console.log(`${tag} 원문: ${outDir}`);
   } finally {
-    await context.close().catch(() => {});
-    await browser.close().catch(() => {});
+    await close();
   }
 }
 

@@ -207,9 +207,37 @@ export const GMARKET: SiteConfig = {
   stealth: true,
 };
 
+/**
+ * 옥션 — G마켓과 같은 계열(신세계 지마켓)이라 구조가 비슷할 것으로 보고 같은 골격으로 둔다.
+ * 증빙 경로(고객센터 안내): 마이 옥션 > 주문에서 [신용카드영수증 출력].
+ * 카드 결제분은 신용카드 매출전표, 계좌이체분은 현금영수증으로 나뉜다.
+ *
+ * ⚠ 주소·패턴은 실측 전 추정값. G마켓과 마찬가지로 `login` → `probe` 로 확인해 채운다.
+ */
+export const AUCTION: SiteConfig = {
+  key: "auction",
+  name: "옥션",
+  loginUrl: "https://www.auction.co.kr/",
+  orderListUrl: "https://myauction.auction.co.kr/",
+  checkUrl: "https://myauction.auction.co.kr/",
+  loggedOutPattern: "login|signin|memberssl\\.auction\\.co\\.kr",
+  receiptKeywords: ["신용카드영수증", "신용카드 매출전표", "카드전표", "구매영수증", "영수증", "거래명세서"],
+  orderRowSelectors: [
+    "table[class*='order'] tbody tr",
+    "[class*='order_list'] > li",
+    "[class*='orderList'] > li",
+    "li[class*='order']",
+  ],
+  nextPageSelectors: ["a:has-text('다음')", "[class*='paging'] a[class*='next']", "button:has-text('다음')"],
+  orderNoPattern: "\\b\\d{9,20}\\b",
+  // G마켓이 Cloudflare 봇 확인을 쓰므로 같은 계열인 옥션도 켜 둔다(불필요하면 꺼도 동작에는 지장 없다).
+  stealth: true,
+};
+
 const SITES: Record<string, SiteConfig> = {
   [ELEVEN_ST.key]: ELEVEN_ST,
   [GMARKET.key]: GMARKET,
+  [AUCTION.key]: AUCTION,
 };
 
 export function configFile(site: string): string {

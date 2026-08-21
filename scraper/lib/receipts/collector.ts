@@ -23,6 +23,7 @@ import { openContext, ensureSiteDir, siteDir } from "./session";
 import { loadSiteConfig, SiteConfig } from "./config";
 import { savePageAsPdf, safeName, SaveResult } from "./pdf";
 import { appendLedger, loadCollectedKeys, LedgerRow } from "./ledger";
+import { extractDocumentFields } from "./parse";
 
 export interface CollectOptions {
   from?: string;
@@ -937,13 +938,15 @@ async function runCollect(
               result.files.push(textPath);
             }
 
+            // 품목·금액은 전표 문서에서 뽑는다(못 찾으면 빈 칸 — 증빙 자체는 PDF 원본이다).
+            const fields = extractDocumentFields(text, cfg);
+
             appendLedger(site, {
               site,
               orderNo: seq === 1 ? main : `${main}#${seq}`,
               orderDate,
-              // 품목·금액은 전표 PDF 안에 있다. 목록에서 추정해 잘못된 값을 넣느니 비워 둔다.
-              title: "",
-              amount: "",
+              title: fields.title,
+              amount: fields.amount,
               receiptType: label,
               method: result.method,
               files: result.files.map((f) => path.relative(siteDir(site), f)).join(" | "),

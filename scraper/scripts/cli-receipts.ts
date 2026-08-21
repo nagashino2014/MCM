@@ -26,7 +26,8 @@ import { interactiveLogin, checkSession, hasSession, siteDir, cookiesFile } from
 import { loadSiteConfig, saveSiteConfig } from "../lib/receipts/config";
 import { probeOrderList } from "../lib/receipts/probe";
 import { collectReceipts, probeReceiptSeq, collectBulkReceipts } from "../lib/receipts/collector";
-import { summarize } from "../lib/receipts/ledger";
+import { summarize, enrichLedger } from "../lib/receipts/ledger";
+import { extractDocumentFields } from "../lib/receipts/parse";
 
 interface Args {
   command: string;
@@ -126,6 +127,8 @@ function usage(): void {
   npm run receipts -- receipt --ordNo <주문번호> [--seq 1,2,3]
                                                    전표 진단 — 주문 내 상품 순번(ordPrdSeq)을 바꿔가며 열어
                                                    전표가 상품별로 나뉘는지 판정
+  npm run receipts -- enrich  [--site 11st]        대장의 품목·금액을 전표 텍스트로 채운다
+                                                   (--with-text 로 받아 둔 건만 가능)
   npm run receipts -- summary [--site 11st]        수집 대장 요약
 
   산출물 경로: ${siteDir("11st")}
@@ -220,6 +223,11 @@ async function main(): Promise<void> {
     }
     const seqs = (args.seq || "1,2,3").split(",").map((v) => Number(v.trim())).filter((v) => v > 0);
     await probeReceiptSeq(site, args.ordNo, seqs);
+    return;
+  }
+
+  if (command === "enrich") {
+    enrichLedger(site, (text) => extractDocumentFields(text, cfg));
     return;
   }
 

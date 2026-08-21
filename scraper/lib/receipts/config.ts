@@ -86,6 +86,11 @@ export interface SiteConfig {
    * `{requestId}` 와 `{page}` 가 치환된다. page 는 0부터.
    */
   bulkViewerUrlTemplate?: string;
+  /**
+   * 전표 문서 텍스트에서 품목·금액을 뽑는 정규식(캡처 그룹 1을 쓴다).
+   * 양식이 사이트마다 달라, 기본 휴리스틱이 빗나가는 곳만 여기에 적는다.
+   */
+  documentFields?: { title?: string; amount?: string };
   /** 수집 문서의 이름(파일명·대장의 receiptType 에 쓰인다) */
   receiptLabel?: string;
   /**

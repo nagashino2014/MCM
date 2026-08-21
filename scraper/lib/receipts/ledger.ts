@@ -128,3 +128,68 @@ export function summarize(site: string): void {
   console.log(`[${site}] 월별: ${[...byMonth].sort().map(([k, v]) => `${k}=${v}`).join(", ") || "-"}`);
   console.log(`[${site}] 대장 파일: ${file}`);
 }
+
+/**
+ * 이미 수집한 건들의 품목·금액을 뒤늦게 채운다.
+ * `--with-text` 로 함께 저장해 둔 전표 텍스트를 읽어 대장의 빈 칸만 메운다(값이 있는 행은 건드리지 않는다).
+ */
+export function enrichLedger(
+  site: string,
+  extract: (text: string) => { title: string; amount: string }
+): { filled: number; skipped: number } {
+  const file = ledgerFile(site);
+  if (!fs.existsSync(file)) {
+    console.log(`[${site}] 대장이 없습니다: ${file}`);
+    return { filled: 0, skipped: 0 };
+  }
+
+  const lines = fs.readFileSync(file, "utf-8").replace(/^\ufeff/, "").trim().split(/\r?\n/);
+  const out: string[] = [lines[0]];
+  let filled = 0;
+  let skipped = 0;
+
+  for (const line of lines.slice(1)) {
+    if (!line.trim()) continue;
+
+    const cols = parseCsvLine(line);
+    const titleIdx = HEADER.indexOf("title");
+    const amountIdx = HEADER.indexOf("amount");
+
+    // 이미 값이 있으면 그대로 둔다.
+    if (cols[titleIdx] || cols[amountIdx]) {
+      out.push(line);
+      continue;
+    }
+
+    const textRel = (cols[HEADER.indexOf("files")] || "").split(" | ").find((f) => f.trim().endsWith(".txt"));
+    if (!textRel) {
+      out.push(line);
+      skipped++;
+      continue;
+    }
+
+    const textPath = path.join(siteDir(site), textRel.trim());
+    if (!fs.existsSync(textPath)) {
+      out.push(line);
+      skipped++;
+      continue;
+    }
+
+    const fields = extract(fs.readFileSync(textPath, "utf-8"));
+    if (!fields.title && !fields.amount) {
+      out.push(line);
+      skipped++;
+      continue;
+    }
+
+    cols[titleIdx] = fields.title;
+    cols[amountIdx] = fields.amount;
+    out.push(HEADER.map((_, i) => csvCell(cols[i] || "")).join(","));
+    filled++;
+  }
+
+  fs.writeFileSync(file, BOM + out.join("\n") + "\n", "utf-8");
+  console.log(`[${site}] 품목·금액 ${filled}건 보강 / ${skipped}건은 근거 텍스트가 없어 건너뜀`);
+  console.log(`[${site}]   텍스트가 없으면 'collect ... --with-text' 로 다시 받아야 채울 수 있습니다.`);
+  return { filled, skipped };
+}

@@ -19,7 +19,9 @@
  * - 산출물(세션·영수증·대장)은 전부 `data/receipts/` 아래에 쌓인다(git 제외).
  */
 
-import { interactiveLogin, checkSession, hasSession, siteDir } from "../lib/receipts/session";
+import fs from "node:fs";
+
+import { interactiveLogin, checkSession, hasSession, siteDir, cookiesFile } from "../lib/receipts/session";
 import { loadSiteConfig, saveSiteConfig } from "../lib/receipts/config";
 import { probeOrderList } from "../lib/receipts/probe";
 import { collectReceipts, probeReceiptSeq } from "../lib/receipts/collector";
@@ -72,6 +74,29 @@ function parseArgs(argv: string[]): Args {
     ordNo: opt.ordNo || opt["ord-no"],
     seq: opt.seq,
   };
+}
+
+/** 저장된 쿠키를 요약 출력 — 로그인 흔적이 남았는지 눈으로 확인하는 용도 */
+function reportCookies(site: string): void {
+  const file = cookiesFile(site);
+
+  if (!fs.existsSync(file)) {
+    console.log(`[${site}] 쿠키 파일이 없습니다: ${file}`);
+    return;
+  }
+
+  try {
+    const cookies: { name: string; domain: string }[] = JSON.parse(fs.readFileSync(file, "utf-8"));
+    const names = [...new Set(cookies.map((c) => c.name))];
+
+    // 로그인 세션을 담는 쿠키는 사이트마다 이름이 다르다 — 흔한 것들만 짚어 준다.
+    const authLike = names.filter((n) => /NID_AUT|NID_SES|SESSION|AUTH|LOGIN|TOKEN|MEMBER/i.test(n));
+
+    console.log(`[${site}] 저장된 쿠키 ${cookies.length}개 (${file})`);
+    console.log(`[${site}]   로그인 관련으로 보이는 쿠키: ${authLike.slice(0, 8).join(", ") || "없음"}`);
+  } catch {
+    console.log(`[${site}] 쿠키 파일을 읽지 못했습니다: ${file}`);
+  }
 }
 
 function usage(): void {
@@ -137,6 +162,9 @@ async function main(): Promise<void> {
       console.log(`[${site}] 세션이 없습니다. 먼저 login 을 실행하세요.`);
       return;
     }
+
+    // 로그인이 실제로 됐는지 가늠할 수 있게 저장된 쿠키를 요약해 준다(경로를 직접 뒤지지 않도록).
+    reportCookies(site);
     const ok = await checkSession(site, cfg.checkUrl, cfg.loggedOutPattern, cfg.stealth ? false : !args.headed, cfg.stealth);
     console.log(`[${site}] 세션 ${ok ? "✅ 유효" : "❌ 만료(또는 headless 차단)"}`);
     if (!ok) console.log(`[${site}] --headed 로 다시 확인해 보고, 그래도 안 되면 login 을 다시 실행하세요.`);

@@ -32,6 +32,21 @@ function quarterRange(year: number, q: number): { from: string; to: string } {
   return { from: `${year}-${p(startMonth)}-01`, to: `${year}-${p(endMonth)}-${p(lastDay)}` };
 }
 
+/** 쿠팡 매출전표 일괄 신청을 하는 화면 */
+const COUPANG_REQUEST_URL = "https://mc.coupang.com/ssr/desktop/payment-receipt";
+
+/**
+ * 쿠팡 신청 ID 는 신청 결과 주소에 들어 있다.
+ *   https://payment.coupang.com/card-receipt-requests/5320399?page=0  →  5320399
+ * 주소를 통째로 붙여넣어도 되도록 숫자만 뽑아낸다.
+ */
+function extractRequestId(input: string): string {
+  const text = input.trim();
+  const fromUrl = /card-receipt-requests\/(\d+)/.exec(text);
+  if (fromUrl) return fromUrl[1];
+  return /^\d+$/.test(text) ? text : "";
+}
+
 function formatDate(iso: string | null): string {
   if (!iso) return "-";
   const d = new Date(iso);
@@ -187,7 +202,12 @@ export function ReceiptCollectPanel() {
           appendLog(`— ${shop.name}: 신청 ID 가 없어 건너뜁니다(쿠팡 화면에서 일괄 신청 후 ID 를 입력하세요).`);
           continue;
         }
-        await runCommand({ command: "bulk", site: shop.key, requestId: requestId.trim() }, `${shop.name} 묶음 전표`);
+        const id = extractRequestId(requestId);
+        if (!id) {
+          appendLog(`— ${shop.name}: 신청 ID 를 찾지 못했습니다. 신청 결과 주소(.../card-receipt-requests/5320399?page=0)나 그 숫자를 넣어 주세요.`);
+          continue;
+        }
+        await runCommand({ command: "bulk", site: shop.key, requestId: id }, `${shop.name} 묶음 전표`);
         continue;
       }
 
@@ -348,15 +368,40 @@ export function ReceiptCollectPanel() {
                     >
                       <LogIn size={14} /> {shop.loggedIn ? "다시 로그인" : "로그인"}
                     </button>
-                    {shop.mode === "bulk" && (
+                  </div>
+
+                  {shop.mode === "bulk" && (
+                    <div className="mt-2 space-y-1">
                       <input
-                        className="cd-input flex-1"
-                        placeholder="쿠팡 신청 ID"
+                        className="cd-input w-full"
+                        placeholder="신청 ID 또는 신청 결과 주소 붙여넣기"
                         value={requestId}
                         onChange={(e) => setRequestId(e.target.value)}
                       />
-                    )}
-                  </div>
+                      {requestId.trim() && (
+                        <div className="text-xs cd-text-faint">
+                          {extractRequestId(requestId)
+                            ? `신청 ID: ${extractRequestId(requestId)}`
+                            : "숫자로 된 신청 ID 를 찾지 못했습니다."}
+                        </div>
+                      )}
+                      <ol className="text-xs cd-text-muted list-decimal pl-4 space-y-0.5">
+                        <li>
+                          <a
+                            className="cd-text-primary underline"
+                            href={COUPANG_REQUEST_URL}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            쿠팡 영수증 화면
+                          </a>
+                          에서 기간을 정해 <b>매출전표 일괄 신청</b>
+                        </li>
+                        <li>처리에 몇 분 걸립니다. 끝나면 신청 내역에서 결과를 엽니다</li>
+                        <li>그 주소(…/card-receipt-requests/<b>5320399</b>?page=0)를 위 칸에 붙여넣기</li>
+                      </ol>
+                    </div>
+                  )}
                 </div>
               );
             })}

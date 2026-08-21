@@ -120,6 +120,19 @@ npm run receipts -- import --site coupang --keep   # 원본을 inbox 에 남기�
 - 이미 대장에 있는 건만 들어 있는 파일은 옮기지 않고 inbox 에 그대로 둔다.
 - 스캔 이미지 PDF 는 글자가 없어 읽지 못한다(브라우저에서 인쇄한 PDF 는 글자가 들어 있다).
 
+## 스테이징으로 올리기
+
+수집은 개인 PC 에서만 되지만 **부가세 신고는 스테이징에서** 한다. 그래서 대장과 PDF 를 서버로 올린다.
+
+- 앱(로컬)에서 **[스테이징으로 올리기]** → `POST /api/receipts/shop/sync`
+  - 대장 행은 `shop_receipts` 테이블로(`infra/aws/196_shop_receipts.sql`),
+    PDF 는 계약문서 스토리지에 `shop-receipts/<몰>/<YYYY-MM>/<파일명>` 으로 올라간다.
+  - `receipt_id = sha256(몰|주문번호|전표종류)` 라 다시 올려도 한 행이다.
+    품목·금액은 갱신되고, 새 값이 없으면 기존 storage_key 를 지우지 않는다.
+  - 쿠팡 묶음처럼 여러 행이 한 파일을 가리키면 파일은 한 번만 올린다.
+- 조회는 **어디서든** 된다 — 스테이징 화면의 "올라온 전표" 목록이 같은 데이터를 본다.
+- 마이그레이션 적용: `powershell -ExecutionPolicy Bypass -File scripts\apply-sql.ps1 -Sql infra\aws\196_shop_receipts.sql`
+
 ## 세션 수명
 
 11번가 세션은 하루 남짓이면 만료된다(전날 로그인한 프로필로 다음 날 열면 로그인 페이지로 튕긴다).

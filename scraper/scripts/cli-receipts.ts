@@ -1,7 +1,8 @@
 #!/usr/bin/env npx ts-node
 /**
  * 전자상거래 카드영수증 수집 CLI (부가세 신고 증빙용).
- *   지원 사이트: 11st(11번가) · gmarket(G마켓) · auction(옥션) · naver(네이버페이). `--site <키>`(기본 11st).
+ *   지원 사이트: 11st(11번가) · gmarket(G마켓) · auction(옥션) · naver(네이버페이) · coupang(쿠팡).
+ *   `--site <키>` 로 고른다(기본 11st).
  *
  * 사용법:
  *   npm run receipts -- login                                  세션 저장(사용자가 직접 로그인)
@@ -102,7 +103,7 @@ function reportCookies(site: string): void {
 function usage(): void {
   console.log(`
 전자상거래 카드영수증 수집 CLI
-  지원 사이트: 11st(11번가) · gmarket(G마켓) · auction(옥션) · naver(네이버페이) — 기본값 11st
+  지원 사이트: 11st · gmarket · auction · naver · coupang — 기본값 11st
 
   npm run receipts -- login   [--site 11st] [--no-probe]
                                                    세션 저장(브라우저에서 직접 로그인 후 주문목록까지 이동)

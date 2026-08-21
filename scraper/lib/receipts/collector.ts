@@ -680,7 +680,9 @@ async function runCollect(
   stats: CollectStats
 ): Promise<void> {
   const tag = `[${site}]`;
-  const { from, to, limit, dryRun = false, delay = 2000, pages = 1 } = opts;
+  const { from, to, limit, dryRun = false, pages = 1 } = opts;
+  // --delay 를 주지 않으면 사이트별 기본값을 쓴다(봇 탐지가 심한 곳은 더 느리게).
+  const delay = opts.delay ?? cfg.defaultDelay ?? 2000;
 
   if (opts.waitSeconds) {
     await waitForUserQuery(site, page, cfg, opts.waitSeconds);

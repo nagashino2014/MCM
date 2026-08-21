@@ -8,7 +8,7 @@
 | G마켓 | `gmarket` | ✅ 무인 수집 동작(실계정 확인) |
 | 옥션 | `auction` | 🔶 실측 반영 완료. 실계정 전표 저장 검증만 남음 |
 | 네이버페이 | `naver` | ✅ 2단계 수집 동작(실계정 확인) |
-| 쿠팡 | `coupang` | 🔶 골격만. Akamai 봇 탐지가 있어 가장 어렵다 |
+| 쿠팡 | `coupang` | ✅ 묶음 전표 수집(일괄 신청 기능 활용) |
 
 사이트별 차이는 전부 `config.ts` 의 `SiteConfig` 로 표현하고, 수집 절차(`collector.ts`)는 공통이다.
 
@@ -229,3 +229,31 @@ GET https://accounting.auction.co.kr/Card/CardReceiptRevised.aspx?orderNo=248640
 
 ⚠ '구매영수증'은 11번가·G마켓의 결제영수증처럼 세무 효력이 없을 수 있어 **카드영수증만** 받는다.
 네이버페이는 판매자가 개별 스마트스토어 사업자라, 판매자 명의 세금계산서가 필요한 건이면 전표로는 부족할 수 있다.
+
+## 쿠팡 — 묶음 전표
+
+쿠팡에는 **매출전표 일괄 신청** 기능이 있어 건별로 긁을 필요가 없다. 다른 몰과 접근이 다르다.
+
+```
+① 신청  영수증 조회/출력 화면에서 기간을 지정해 신청
+        POST /ssr/api/payment-receipt/card/request-download-receipt
+        {"from":"2026.01.01","to":"2026.08.22","totalCount":71, ...}
+② 뷰어  https://payment.coupang.com/card-receipt-requests/5320399?page=0   (1~50건)
+                                                            ?page=1   (51~71건)
+        ← 이 페이지 자체가 전표 묶음 문서다
+```
+
+신청은 화면에서 한 번 누르고(처리에 시간이 걸린다), 결과는 명령으로 받는다:
+
+```bash
+npm run receipts -- bulk --site coupang --request-id 5320399 --with-text
+```
+
+빈 페이지가 나올 때까지 순회하며 각 페이지를 PDF 로 저장한다. 파일명에 그 묶음의 거래일자 범위가 들어가고,
+대장에는 묶음별 건수가 남는다. 이미 받은 페이지는 건너뛴다.
+
+**요청이 페이지 수만큼(보통 1~2회)으로 끝나** 봇 탐지 위험이 사실상 없고, 쿠팡이 공식 제공하는 기능이라
+약관상으로도 안전하다. 건별 경로(`card-receipt/view?orderId=&vendorIds=`)는 일괄 신청이 막히거나
+일부가 누락될 때의 폴백으로 config 에 남겨 뒀다.
+
+⚠ Akamai Bot Manager 가 있어 stealth + 실제 Chrome(`RECEIPTS_CHROME_PATH`)을 쓰는 편이 안전하다.

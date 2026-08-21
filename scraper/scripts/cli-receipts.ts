@@ -25,7 +25,7 @@ import fs from "node:fs";
 import { interactiveLogin, checkSession, hasSession, siteDir, cookiesFile } from "../lib/receipts/session";
 import { loadSiteConfig, saveSiteConfig } from "../lib/receipts/config";
 import { probeOrderList } from "../lib/receipts/probe";
-import { collectReceipts, probeReceiptSeq } from "../lib/receipts/collector";
+import { collectReceipts, probeReceiptSeq, collectBulkReceipts } from "../lib/receipts/collector";
 import { summarize } from "../lib/receipts/ledger";
 
 interface Args {
@@ -46,6 +46,7 @@ interface Args {
   noProbe: boolean;
   ordNo?: string;
   seq?: string;
+  requestId?: string;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -73,6 +74,7 @@ function parseArgs(argv: string[]): Args {
     withText: "with-text" in opt,
     noProbe: "no-probe" in opt,
     ordNo: opt.ordNo || opt["ord-no"],
+    requestId: opt.requestId || opt["request-id"],
     seq: opt.seq,
   };
 }
@@ -118,6 +120,9 @@ function usage(): void {
                               [--wait 180]  화면을 띄우고 직접 기간 조회할 시간을 준 뒤 수집
                               [--with-text] 전표 텍스트를 .txt 로 함께 저장(품목 확인용)
                                                    주문목록 순회 → 영수증 PDF 저장 → 대장 기록
+  npm run receipts -- bulk --site coupang --request-id <신청ID> [--pages 10] [--with-text]
+                                                   묶음 전표 받기 — 신청내역 뷰어를 통째로 PDF 로 저장
+                                                   (쿠팡은 기간별 일괄 신청을 지원한다)
   npm run receipts -- receipt --ordNo <주문번호> [--seq 1,2,3]
                                                    전표 진단 — 주문 내 상품 순번(ordPrdSeq)을 바꿔가며 열어
                                                    전표가 상품별로 나뉘는지 판정
@@ -189,6 +194,21 @@ async function main(): Promise<void> {
       // 사용자가 직접 기간을 조회하려면 화면이 보여야 한다.
       headless: args.wait ? false : !args.headed,
       dryRun: args.dryRun,
+    });
+    return;
+  }
+
+  if (command === "bulk") {
+    if (!args.requestId) {
+      console.log("신청 ID 가 필요합니다: npm run receipts -- bulk --site coupang --request-id <ID>");
+      console.log("  (쿠팡 '신용카드 매출전표 신청내역' 주소의 숫자 — 예: .../card-receipt-requests/5320399)");
+      return;
+    }
+    await collectBulkReceipts(site, {
+      requestId: args.requestId,
+      pages: args.pages,
+      withText: args.withText,
+      headless: !args.headed,
     });
     return;
   }

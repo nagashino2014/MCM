@@ -80,6 +80,12 @@ export interface SiteConfig {
     url: string;
     key: { pattern: string; groups: string[] };
   };
+  /**
+   * 전표를 **묶음으로 신청해서 받는** 사이트용(쿠팡).
+   * 신청하면 신청 ID 가 생기고, 그 뷰어 페이지 자체가 전표 묶음 문서다.
+   * `{requestId}` 와 `{page}` 가 치환된다. page 는 0부터.
+   */
+  bulkViewerUrlTemplate?: string;
   /** 수집 문서의 이름(파일명·대장의 receiptType 에 쓰인다) */
   receiptLabel?: string;
   /**
@@ -462,7 +468,10 @@ export const COUPANG: SiteConfig = {
    *   {"from":"2026.01.01","to":"2026.08.22","totalCount":54,"totalAmount":9167030,
    *    "cardId":"","cardNumber":"","displayCardName":""}
    *
-   *   신청 후 처리에 시간이 걸리고, '신용카드 매출전표 신청내역' 화면에서 결과를 받는다.
+   *   신청 후 처리에 시간이 걸리고, 신청 ID 가 붙은 뷰어에서 결과를 받는다:
+   *     https://payment.coupang.com/card-receipt-requests/5320399?page=0   (1~50건)
+   *     https://payment.coupang.com/card-receipt-requests/5320399?page=1   (51~71건)
+   *   이 페이지 자체가 전표 묶음이라 그대로 PDF 로 저장하면 된다(건별 접근이 필요 없다).
    *   요청 1회로 끝나므로 봇 탐지 위험이 거의 없고, 쿠팡이 공식 제공하는 기능이라 약관상으로도 안전하다.
    *   → 쿠팡은 건별 수집 대신 이 경로를 쓴다(신청내역 조회·다운로드 주소는 실측 중).
    *
@@ -492,6 +501,7 @@ export const COUPANG: SiteConfig = {
   receiptLabel: "카드영수증",
   orderDateFromDocument: true,
   stealth: true,
+  bulkViewerUrlTemplate: "https://payment.coupang.com/card-receipt-requests/{requestId}?page={page}",
   // 트래픽 패턴을 보는 곳이라 기본 대기를 길게 둔다(다른 몰의 2초 → 5초).
   defaultDelay: 5000,
 };

@@ -17,7 +17,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /** 허용하는 명령만 받는다 */
-const COMMANDS = ["login", "check", "collect", "bulk", "enrich"] as const;
+const COMMANDS = ["login", "check", "collect", "bulk", "import", "enrich"] as const;
 type Command = (typeof COMMANDS)[number];
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;

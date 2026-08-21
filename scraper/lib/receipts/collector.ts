@@ -23,7 +23,7 @@ import { openContext, ensureSiteDir, siteDir, saveSessionCheck } from "./session
 import { loadSiteConfig, SiteConfig } from "./config";
 import { savePageAsPdf, safeName, SaveResult } from "./pdf";
 import { appendLedger, loadCollectedKeys, LedgerRow } from "./ledger";
-import { extractDocumentFields } from "./parse";
+import { extractDocumentFields, dateFromText } from "./parse";
 
 export interface CollectOptions {
   from?: string;
@@ -1180,12 +1180,6 @@ function receiptUrl(cfg: SiteConfig, key: ReceiptKey): string {
 }
 
 /** 문서 텍스트에서 첫 날짜를 찾는다(전표에 찍힌 거래일자) */
-function dateFromText(text: string): string {
-  const m = text.match(/(20\d{2})[.\-/\s]+(\d{1,2})[.\-/\s]+(\d{1,2})/);
-  if (!m) return "";
-  return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
-}
-
 
 
 async function goNextPage(page: Page, cfg: SiteConfig): Promise<boolean> {

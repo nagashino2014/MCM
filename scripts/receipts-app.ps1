@@ -84,12 +84,30 @@ if (Test-PortInUse 3000) {
   Write-Host "  3000 을 비웠습니다." -ForegroundColor Green
 }
 
-# 처음 실행이면 의존성을 받는다(시간이 좀 걸린다).
+# 처음 실행이거나 의존성 목록이 바뀌었으면 받는다(시간이 좀 걸린다).
 foreach ($dir in @($frontend, $scraper)) {
-  if (-not (Test-Path (Join-Path $dir "node_modules"))) {
-    Write-Host "  처음 실행이라 필요한 파일을 받습니다: $(Split-Path -Leaf $dir)" -ForegroundColor Yellow
+  $modules = Join-Path $dir "node_modules"
+  $manifest = Join-Path $dir "package.json"
+  $needInstall = -not (Test-Path $modules)
+  if (-not $needInstall) {
+    # git pull 로 package.json 이 새로워졌으면 새 의존성이 빠져 있다.
+    $needInstall = (Get-Item $manifest).LastWriteTime -gt (Get-Item $modules).LastWriteTime
+  }
+
+  if ($needInstall) {
+    Write-Host "  필요한 파일을 받습니다: $(Split-Path -Leaf $dir)" -ForegroundColor Yellow
     Push-Location $dir
-    npm install
+    # package-lock.json 이 있으면 npm ci 를 쓴다. npm install 은 잠금 파일을 고쳐 쓰는 일이 있어
+    # 다음 git pull 이 "local changes would be overwritten" 으로 막힌다.
+    if (Test-Path (Join-Path $dir "package-lock.json")) {
+      npm ci
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "  npm ci 가 실패해 npm install 로 받습니다." -ForegroundColor Yellow
+        npm install
+      }
+    } else {
+      npm install
+    }
     Pop-Location
   }
 }

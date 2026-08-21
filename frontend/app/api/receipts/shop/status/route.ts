@@ -30,6 +30,9 @@ interface ShopStatus {
   collected: number;
   lastCollectedAt: string | null;
   ledgerPath: string | null;
+  /** 손으로 넣어 둔, 아직 가져오지 않은 PDF 수 */
+  inboxCount: number;
+  inboxPath: string;
 }
 
 /**
@@ -46,6 +49,16 @@ function readSessionCheck(dir: string): { ok: boolean; checkedAt: string; reason
     return { ok: body.ok, checkedAt: body.checkedAt, reason: body.reason };
   } catch {
     return null;
+  }
+}
+
+/** inbox 에 사용자가 넣어 둔 PDF 수 — 폴더가 없으면 0 */
+function countInbox(dir: string): number {
+  const inbox = path.join(dir, "inbox");
+  try {
+    return fs.readdirSync(inbox).filter((f) => f.toLowerCase().endsWith(".pdf")).length;
+  } catch {
+    return 0;
   }
 }
 
@@ -99,6 +112,8 @@ export async function GET() {
       collected: ledger.rows,
       lastCollectedAt: ledger.lastAt,
       ledgerPath: ledger.rows > 0 ? path.join(dir, "ledger.csv") : null,
+      inboxCount: countInbox(dir),
+      inboxPath: path.join(dir, "inbox"),
     };
   });
 

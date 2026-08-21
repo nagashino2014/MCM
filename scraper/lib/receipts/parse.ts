@@ -60,3 +60,10 @@ export function extractDocumentFields(text: string, cfg: SiteConfig): { title: s
 
   return { title, amount };
 }
+
+/** 문서에서 처음 나오는 날짜 — 2026.08.20 / 2026-08-20 / 2026 08 20 */
+export function dateFromText(text: string): string {
+  const m = text.match(/(20\d{2})[.\-/\s]+(\d{1,2})[.\-/\s]+(\d{1,2})/);
+  if (!m) return "";
+  return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
+}

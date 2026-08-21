@@ -28,6 +28,7 @@ import { probeOrderList } from "../lib/receipts/probe";
 import { collectReceipts, probeReceiptSeq, collectBulkReceipts } from "../lib/receipts/collector";
 import { summarize, enrichLedger } from "../lib/receipts/ledger";
 import { extractDocumentFields } from "../lib/receipts/parse";
+import { importInbox } from "../lib/receipts/inbox";
 
 interface Args {
   command: string;
@@ -48,6 +49,7 @@ interface Args {
   ordNo?: string;
   seq?: string;
   requestId?: string;
+  keep: boolean;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -74,6 +76,7 @@ function parseArgs(argv: string[]): Args {
     save: "save" in opt,
     withText: "with-text" in opt,
     noProbe: "no-probe" in opt,
+    keep: "keep" in opt,
     ordNo: opt.ordNo || opt["ord-no"],
     requestId: opt.requestId || opt["request-id"],
     seq: opt.seq,
@@ -127,6 +130,10 @@ function usage(): void {
   npm run receipts -- receipt --ordNo <주문번호> [--seq 1,2,3]
                                                    전표 진단 — 주문 내 상품 순번(ordPrdSeq)을 바꿔가며 열어
                                                    전표가 상품별로 나뉘는지 판정
+  npm run receipts -- import  [--site coupang] [--keep]
+                                                   손으로 받은 전표 PDF 를 대장에 넣는다
+                                                   data/receipts/<몰>/inbox/ 에 PDF 를 두고 실행
+                                                   --keep: 원본을 inbox 에 그대로 둔다(기본은 옮김)
   npm run receipts -- enrich  [--site 11st]        대장의 품목·금액을 전표 텍스트로 채운다
                                                    (--with-text 로 받아 둔 건만 가능)
   npm run receipts -- summary [--site 11st]        수집 대장 요약
@@ -223,6 +230,11 @@ async function main(): Promise<void> {
     }
     const seqs = (args.seq || "1,2,3").split(",").map((v) => Number(v.trim())).filter((v) => v > 0);
     await probeReceiptSeq(site, args.ordNo, seqs);
+    return;
+  }
+
+  if (command === "import") {
+    await importInbox(site, { keep: args.keep });
     return;
   }
 

@@ -7,9 +7,11 @@
 #
 # 다른 사람 PC 에 배치할 때:
 #   1) Node.js LTS 설치 (또는 powershell -ExecutionPolicy Bypass -File scripts\laptop-setup.ps1 -Scraper)
-#   2) 이 저장소를 내려받기
-#   3) 이 스크립트 실행 → 바탕화면 바로가기 생성
-#   4) '전표 수집' 실행 → 각 쇼핑몰에 한 번씩 로그인
+#   2) AWS CLI + session-manager-plugin 설치, aws configure sso 로 프로필 mcm-kesi-staging 등록
+#      (앱이 DB 를 보려면 SSM 터널이 필요하다 — scripts\db-tunnel.ps1 이 자동으로 연다)
+#   3) 이 저장소를 내려받기
+#   4) 이 스크립트 실행 → 바탕화면 바로가기 생성
+#   5) '전표 수집' 실행 → 각 쇼핑몰에 한 번씩 로그인
 
 $ErrorActionPreference = "Stop"
 

@@ -5,7 +5,7 @@
 | 사이트 | `--site` | 상태 |
 |---|---|---|
 | 11번가 | `11st` (기본) | ✅ 무인 수집 동작 — 로그인만 사람이 한다 |
-| G마켓 | `gmarket` | 🔶 stealth 모드로 로그인 통과. 주소·전표 열기 방식 실측 필요 |
+| G마켓 | `gmarket` | 🔶 실측 반영 완료(아래). 실계정 수집 검증만 남음 |
 | 옥션 | `auction` | 🔶 G마켓과 같은 계열이라 같은 골격. 실측 필요 |
 
 사이트별 차이는 전부 `config.ts` 의 `SiteConfig` 로 표현하고, 수집 절차(`collector.ts`)는 공통이다.
@@ -108,7 +108,32 @@ failed/                 실패 건 진단 덤프
   건당 딜레이(`--delay`, 기본 2초)를 유지하고 저빈도(신고철 월 1회)로 돌린다. 캡차 우회 도구는 쓰지 않는다.
 - `RECEIPTS_CHROME_PATH` 로 실제 설치된 Chrome 을 지정할 수 있다(번들 Chromium 보다 탐지를 덜 받는 경우가 있음).
 
-## 새 사이트 붙이기 (G마켓 진행 중)
+## G마켓 실측 (2026-08)
+
+주문목록의 '거래영수증'은 11번가 결제영수증과 마찬가지로 **세무 효력이 없다.**
+매입세액공제용 신용카드 매출전표는 주문목록 우상단 **[영수증 조회]** 로 들어가는
+`receipt.gmarket.co.kr` 화면에서 나온다.
+
+```
+나의 지마켓   https://my.gmarket.co.kr/ko/pc/list/all   (SPA)
+전표 목록     POST https://receipt.gmarket.co.kr/Card/CardSalesSlipForm/
+              sDay=20220101&eDay=20260831&pageNo=1&pageUnit=10
+전표          GET  https://receipt.gmarket.co.kr/Card/CardReceiptFormCover
+              ?seqNo=1924402893&custNo=<인코딩>&contrNo=3664897233
+```
+
+11번가와 **전표를 여는 열쇠가 다르다** — 주문번호 하나가 아니라 `seqNo`·`custNo`·`contrNo` 세 값이다.
+그래서 식별자를 `SiteConfig.receiptKey`(정규식 + 캡처 그룹 이름)로 일반화했고, 캡처한 값이
+`receiptUrlTemplate`·`receiptRequest.fields` 의 `{이름}` 토큰으로 치환된다.
+
+| | 11번가 | G마켓 |
+|---|---|---|
+| 식별자 | `{ordNo}` | `{seqNo}` `{custNo}` `{contrNo}` |
+| 전표 여는 법 | 폼 POST | 주소로 GET |
+| 상품별 전표 | 있음(`iterateItemSeq`) | 없음(목록 한 줄 = 전표 한 장) |
+| 주문일 | 주문번호 앞 8자리 | 전표 문서의 거래일자(`orderDateFromDocument`) |
+
+## 새 사이트 붙이기
 
 `config.ts` 에 `SiteConfig` 를 하나 더 쓰면 된다. 알아내야 하는 것은 넷이고, 전부 `probe` 로 나온다.
 

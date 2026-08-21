@@ -95,40 +95,81 @@ function dateFromOrderNo(ordNo: string): string {
   return `${y}-${mo}-${d}`;
 }
 
+/** 전표 하나를 여는 데 필요한 식별자들 — 11번가는 {ordNo}, G마켓은 {seqNo,custNo,contrNo} */
+type ReceiptKey = Record<string, string>;
+
+function keyRule(cfg: SiteConfig): { pattern: string; groups: string[] } {
+  return cfg.receiptKey || { pattern: cfg.orderNoPattern || "\\b(\\d{15,20})\\b", groups: ["ordNo"] };
+}
+
+/** 식별자를 사람이 읽고 중복 판정에도 쓸 수 있는 한 줄로 */
+function keyId(key: ReceiptKey, groups: string[]): string {
+  return groups.map((g) => key[g]).join("|");
+}
+
+/** 파일명·대장에 쓰는 대표 값(첫 그룹) */
+function keyMain(key: ReceiptKey, groups: string[]): string {
+  return key[groups[0]] || "";
+}
+
 /**
- * 주문목록에서 주문번호를 전부 긁는다.
- * - 목록이 iframe 안에 그려지므로 메인 문서 + 모든 프레임을 훑는다.
- * - 화면 텍스트뿐 아니라 href/onclick/value 속성에도 주문번호가 들어 있어 함께 본다.
+ * 목록에서 전표 식별자를 전부 긁는다.
+ * - 목록이 iframe 안에 그려지는 경우가 있어 메인 문서 + 모든 프레임을 훑는다.
+ * - 화면 텍스트뿐 아니라 HTML(링크 파라미터·onclick)까지 본다. G마켓처럼 식별자가
+ *   링크 쿼리스트링에만 있는 경우가 있다.
  */
-async function collectOrderNos(page: Page, cfg: SiteConfig): Promise<string[]> {
-  const found = new Set<string>();
+async function collectReceiptKeys(page: Page, cfg: SiteConfig): Promise<ReceiptKey[]> {
+  const rule = keyRule(cfg);
+  const found = new Map<string, ReceiptKey>();
   const scopes: (Page | Frame)[] = [page, ...page.frames().filter((f) => f !== page.mainFrame())];
 
   for (const scope of scopes) {
-    const values = await scope
-      .evaluate((pattern) => {
-        const out: string[] = [];
-        const push = (v?: string | null) => {
-          for (const hit of (v || "").match(new RegExp(pattern, "g")) || []) out.push(hit);
-        };
+    const keys = await scope
+      .evaluate(
+        ({ pattern, groups }) => {
+          const out: Record<string, string>[] = [];
 
-        push(document.body?.innerText);
-        document.querySelectorAll("a, input, [onclick], [data-ordno], [data-ord-no]").forEach((el) => {
-          push(el.getAttribute("href"));
-          push(el.getAttribute("onclick"));
-          push(el.getAttribute("value"));
-          push(el.getAttribute("data-ordno"));
-          push(el.getAttribute("data-ord-no"));
-        });
+          const scan = (text?: string | null) => {
+            if (!text) return;
+            const re = new RegExp(pattern, "g");
+            let m: RegExpExecArray | null;
 
-        return out;
-      }, cfg.orderNoPattern || "\\b\\d{15,20}\\b")
-      .catch(() => [] as string[]);
+            while ((m = re.exec(text)) !== null) {
+              const key: Record<string, string> = {};
+              groups.forEach((name, i) => {
+                key[name] = m![i + 1] ?? m![0];
+              });
+              out.push(key);
+              if (m.index === re.lastIndex) re.lastIndex++; // 빈 매치 무한루프 방지
+            }
+          };
 
-    for (const v of values) found.add(v);
+          // 화면 텍스트와 "의미 있는 속성"만 본다.
+          // HTML 전체를 훑으면 URL 인코딩된 문자열(예: "주문번호%2020260728...")에서
+          // %20 의 0 과 숫자가 붙어 있지도 않은 식별자가 만들어진다.
+          scan(document.body?.innerText);
+
+          const attrs = ["href", "onclick", "value", "data-ordno", "data-ord-no", "data-seqno", "data-key"];
+          document
+            .querySelectorAll("a, area, button, input, [onclick], [data-ordno], [data-ord-no], [data-seqno], [data-key]")
+            .forEach((el) => {
+              for (const name of attrs) scan(el.getAttribute(name));
+            });
+
+          return out;
+        },
+        { pattern: rule.pattern, groups: rule.groups }
+      )
+      .catch(() => [] as ReceiptKey[]);
+
+    for (const key of keys) {
+      const id = keyId(key, rule.groups);
+      if (id && !found.has(id)) found.set(id, key);
+    }
   }
 
-  return [...found].sort().reverse(); // 최신 주문부터
+  // 최신 건부터 — 식별자가 대체로 증가하는 값이라 역순이 최신이다.
+  return [...found.values()].sort((a, b) => keyId(b, rule.groups).localeCompare(keyId(a, rule.groups)));
 }
 
 /** 매칭 건수가 가장 많은 행 셀렉터를 고른다. 전부 0이면 null */
@@ -254,7 +295,7 @@ export async function collectReceipts(site: string, opts: CollectOptions = {}): 
 
     // 주문번호만으로 영수증 문서를 열 수 있으면(11번가) 그 경로로 간다. 클릭·팝업 대기가 필요 없다.
     if (cfg.receiptRequest || cfg.receiptUrlTemplate) {
-      await runByOrderNo(site, cfg, page, { ...opts, pages, delay }, collected, stats);
+      await runCollect(site, cfg, page, { ...opts, pages, delay }, collected, stats);
       return;
     }
 
@@ -397,7 +438,7 @@ export async function probeReceiptSeq(site: string, ordNo: string, seqs: number[
 
     for (const seq of seqs) {
       try {
-        await openReceiptDocument(page, cfg, ordNo, { ordPrdSeq: String(seq) });
+        await openReceiptDocument(page, cfg, { ordNo }, { ordPrdSeq: String(seq) });
         await page.waitForTimeout(1000);
 
         const text = (await page.innerText("body").catch(() => "")).replace(/\s+/g, " ").trim();
@@ -486,13 +527,13 @@ async function waitForUserQuery(site: string, page: Page, cfg: SiteConfig, secon
   while (Date.now() < deadline) {
     await page.waitForTimeout(3000);
 
-    const count = (await collectOrderNos(page, cfg).catch(() => [])).length;
+    const count = (await collectReceiptKeys(page, cfg).catch(() => [])).length;
     if (count > 0 && count === previous) {
-      console.log(`${tag} 주문번호 ${count}건 확인 — 수집을 시작합니다.`);
+      console.log(`${tag} 전표 ${count}건 확인 — 수집을 시작합니다.`);
       return;
     }
 
-    if (count !== previous) console.log(`${tag} 대기 중... 주문번호 ${count}건`);
+    if (count !== previous) console.log(`${tag} 대기 중... 전표 ${count}건`);
     previous = count;
   }
 
@@ -503,7 +544,7 @@ async function waitForUserQuery(site: string, page: Page, cfg: SiteConfig, secon
  * 주문번호 기반 수집 — 목록에서 주문번호만 모아 영수증 주소로 직접 이동한다.
  * 버튼 클릭·팝업 대기가 없어 훨씬 빠르고, 마크업이 바뀌어도 잘 버틴다.
  */
-async function runByOrderNo(
+async function runCollect(
   site: string,
   cfg: SiteConfig,
   page: Page,
@@ -518,46 +559,48 @@ async function runByOrderNo(
     await waitForUserQuery(site, page, cfg, opts.waitSeconds);
   }
 
-  let previousPageOrders: Set<string> | null = null;
+  const rule = keyRule(cfg);
+  let previousPageKeys: Set<string> | null = null;
 
   for (let pageNo = 1; pageNo <= pages; pageNo++) {
-    // 목록은 iframe 안에서 XHR 로 채워지므로 네트워크가 잦아들 때까지 기다린다.
+    // 목록이 iframe·XHR 로 채워지는 경우가 있어 네트워크가 잦아들 때까지 기다린다.
     await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => {});
-    await page.waitForTimeout(1500);
+    await sleep(1500);
 
-    const ordNos = await collectOrderNos(page, cfg);
-    console.log(`${tag} ${pageNo}페이지: 주문번호 ${ordNos.length}건`);
+    const keys = await collectReceiptKeys(page, cfg);
+    console.log(`${tag} ${pageNo}페이지: 전표 ${keys.length}건`);
 
-    // '다음' 을 눌러도 목록이 그대로면 페이지 이동에 실패한 것이다 — 같은 목록을 반복해 읽지 않는다.
-    if (previousPageOrders && ordNos.length > 0 && ordNos.every((o) => previousPageOrders!.has(o))) {
+    // 페이지를 넘겼는데 목록이 그대로면 이동에 실패한 것이다 — 같은 목록을 반복해 읽지 않는다.
+    const ids = keys.map((k) => keyId(k, rule.groups));
+    if (previousPageKeys && ids.length > 0 && ids.every((id) => previousPageKeys!.has(id))) {
       console.log(`${tag} 이전 페이지와 같은 목록입니다 — 페이지 이동이 안 되는 것으로 보고 종료합니다.`);
-      console.log(`${tag}   목록이 더 있으면 브라우저에서 조회 조건을 바꿔 다시 실행하세요.`);
       break;
     }
-    previousPageOrders = new Set(ordNos);
+    previousPageKeys = new Set(ids);
 
-    if (ordNos.length === 0) {
+    if (keys.length === 0) {
       // 2페이지 이후가 비었으면 그냥 목록 끝이다 — 경고할 일이 아니다.
       if (pageNo > 1) {
         console.log(`${tag} 목록 끝 — 종료`);
         break;
       }
 
-      console.log(`${tag} ⚠ 주문번호가 없습니다. 조회 기간에 주문이 없거나 목록이 아직 안 그려진 상태입니다.`);
+      console.log(`${tag} ⚠ 전표를 못 찾았습니다. 조회 기간에 건이 없거나 목록이 아직 안 그려진 상태입니다.`);
       console.log(`${tag}   기간을 화면에서 직접 골라야 하면 '--wait 180' 으로 실행하세요.`);
-      await dumpFailure(site, page, `no-orders-p${pageNo}`, "주문번호 0건");
+      await dumpFailure(site, page, `no-keys-p${pageNo}`, "전표 0건");
     }
 
-    for (const ordNo of ordNos) {
+    for (const key of keys) {
       if (limit && stats.saved >= limit) {
         console.log(`${tag} 상한(${limit}건) 도달 — 중단`);
         return;
       }
 
-      // 주문번호에 날짜가 들어 있는 사이트만 여기서 날짜를 얻는다. 그 외에는 기간 조회로 이미
-      // 범위가 좁혀져 있으므로 날짜를 몰라도 수집에는 지장이 없다(파일이 unknown 월 폴더로 갈 뿐).
-      const orderDate = cfg.orderDateFromOrderNo ? dateFromOrderNo(ordNo) : "";
-      if (!inRange(orderDate, from, to)) {
+      const main = keyMain(key, rule.groups);
+      // 주문번호에 날짜가 든 사이트(11번가)만 여기서 날짜를 얻는다. 그 외에는 전표 문서에서 읽거나,
+      // 못 읽어도 기간 조회로 범위가 좁혀져 있어 수집에는 지장이 없다(파일이 nodate 로 갈 뿐).
+      const dateFromKey = cfg.orderDateFromOrderNo ? dateFromOrderNo(main) : "";
+      if (!inRange(dateFromKey, from, to)) {
         stats.skipped++;
         continue;
       }
@@ -565,14 +608,16 @@ async function runByOrderNo(
       const label = cfg.receiptLabel || "영수증";
 
       if (dryRun) {
-        const target = cfg.receiptRequest ? `POST ${cfg.receiptRequest.url}` : receiptUrl(cfg, ordNo);
-        console.log(`${tag} [dry-run] ${orderDate || "날짜?"} / ${ordNo} / ${label} → ${target}`);
+        const target = cfg.receiptRequest ? `POST ${cfg.receiptRequest.url}` : receiptUrl(cfg, key);
+        console.log(`${tag} [dry-run] ${dateFromKey || "날짜?"} / ${keyId(key, rule.groups)} / ${label} → ${target}`);
         continue;
       }
 
-      // 실측: 한 주문에 상품이 여러 개면 전표도 상품별로 나뉜다(처리일련번호가 순번마다 다르다).
-      // 순번을 1부터 올리다가 본문에 주문번호가 없는 빈 양식이 나오면 그 주문은 끝난 것으로 본다.
-      for (let seq = 1; seq <= MAX_PRD_SEQ; seq++) {
+      // 11번가는 한 주문에 상품별로 전표가 나뉘어 순번을 올려가며 받아야 한다.
+      // G마켓처럼 목록의 한 줄이 곧 전표 한 장인 사이트는 한 번만 받는다.
+      const maxSeq = cfg.iterateItemSeq ? MAX_PRD_SEQ : 1;
+
+      for (let seq = 1; seq <= maxSeq; seq++) {
         if (limit && stats.saved >= limit) {
           console.log(`${tag} 상한(${limit}건) 도달 — 중단`);
           return;
@@ -583,8 +628,11 @@ async function runByOrderNo(
         }
 
         // seq=1 은 키·파일명을 그대로 둬 이전 수집분과 이어지게 한다.
-        const key = seq === 1 ? `${ordNo}::${label}` : `${ordNo}#${seq}::${label}`;
-        if (collected.has(key)) {
+        const ledgerKey = seq === 1
+          ? `${keyId(key, rule.groups)}::${label}`
+          : `${keyId(key, rule.groups)}#${seq}::${label}`;
+
+        if (collected.has(ledgerKey)) {
           stats.skipped++;
           continue;
         }
@@ -593,7 +641,7 @@ async function runByOrderNo(
         let isEmptyForm = false;
 
         try {
-          await openReceiptDocument(receipt, cfg, ordNo, { ordPrdSeq: String(seq) });
+          await openReceiptDocument(receipt, cfg, key, { ordPrdSeq: String(seq) });
           await sleep(1500);
 
           if (new RegExp(cfg.loggedOutPattern, "i").test(receipt.url())) {
@@ -601,13 +649,17 @@ async function runByOrderNo(
           }
 
           const text = await receipt.innerText("body").catch(() => "");
-          if (!text.includes(ordNo)) {
-            // 값이 채워지지 않은 빈 양식 — 이 순번에는 상품이 없다.
+
+          // 상품 순번을 올려가는 사이트에서만 "빈 양식"을 끝 신호로 쓴다.
+          if (cfg.iterateItemSeq && !text.includes(main)) {
             isEmptyForm = true;
           } else {
+            const orderDate = dateFromKey || (cfg.orderDateFromDocument ? dateFromText(text) : "");
             const month = (orderDate || "unknown").slice(0, 7);
             const outDir = ensureSiteDir(site, path.join("receipts", month));
-            const stem = seq === 1 ? `${orderDate || "nodate"}_${ordNo}` : `${orderDate || "nodate"}_${ordNo}-${seq}`;
+            const stem = seq === 1
+              ? `${orderDate || "nodate"}_${main}`
+              : `${orderDate || "nodate"}_${main}-${seq}`;
             const outBase = path.join(outDir, safeName(`${stem}_${label}`));
 
             const result: SaveResult = await savePageAsPdf(receipt, outBase);
@@ -620,7 +672,7 @@ async function runByOrderNo(
 
             appendLedger(site, {
               site,
-              orderNo: seq === 1 ? ordNo : `${ordNo}#${seq}`,
+              orderNo: seq === 1 ? main : `${main}#${seq}`,
               orderDate,
               // 품목·금액은 전표 PDF 안에 있다. 목록에서 추정해 잘못된 값을 넣느니 비워 둔다.
               title: "",
@@ -630,16 +682,16 @@ async function runByOrderNo(
               files: result.files.map((f) => path.relative(siteDir(site), f)).join(" | "),
               collectedAt: new Date().toISOString(),
             });
-            collected.add(key);
+            collected.add(ledgerKey);
             stats.saved++;
 
-            console.log(`${tag} ✅ ${orderDate || "?"} ${ordNo}${seq > 1 ? `#${seq}` : ""} → ${result.method}`);
+            console.log(`${tag} ✅ ${orderDate || "?"} ${main}${seq > 1 ? `#${seq}` : ""} → ${result.method}`);
             for (const a of result.attempts) console.log(`${tag}    ↳ ${a.method} 실패: ${a.error}`);
           }
         } catch (e) {
           stats.failed++;
-          console.log(`${tag} ❌ ${ordNo}#${seq} 실패: ${String(e).slice(0, 200)}`);
-          await dumpFailure(site, receipt, key, String(e));
+          console.log(`${tag} ❌ ${main}#${seq} 실패: ${String(e).slice(0, 200)}`);
+          await dumpFailure(site, receipt, ledgerKey, String(e));
         } finally {
           await receipt.close().catch(() => {});
         }
@@ -691,9 +743,9 @@ function applyTokens(value: string, from: string, to: string, fmt: string | unde
 }
 
 /**
- * 주문목록을 연다.
+ * 목록(주문내역 또는 증빙 발급 화면)을 연다.
  * - config.listRequest 가 있으면 조회 기간을 직접 지정해 연다(무인 실행). GET·POST 둘 다 지원.
- * - 없으면 기본 주문목록 주소로 이동한다. 이 경우 화면의 기본 조회 기간 밖 주문은 안 보이므로
+ * - 없으면 기본 목록 주소로 이동한다. 이 경우 화면의 기본 조회 기간 밖 건은 안 보이므로
  *   --wait 로 사람이 기간을 조회해 줘야 한다.
  */
 async function openOrderList(
@@ -707,9 +759,7 @@ async function openOrderList(
   const req = cfg.listRequest;
 
   if (!req || !from || !to) {
-    if (req && (!from || !to)) {
-      console.log(`${tag} 조회 기간(--from/--to)이 없어 기본 목록을 엽니다.`);
-    }
+    if (req && (!from || !to)) console.log(`${tag} 조회 기간(--from/--to)이 없어 기본 목록을 엽니다.`);
     await page.goto(cfg.orderListUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
     return;
   }
@@ -728,64 +778,48 @@ async function openOrderList(
     return;
   }
 
-  console.log(`${tag} 기간 지정 조회(POST): ${req.url}`);
+  console.log(`${tag} 기간 지정 조회(POST): ${req.url} ${JSON.stringify(fields)}`);
   await page.goto(req.refererUrl || cfg.orderListUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
-
-  await Promise.all([
-    page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 60_000 }),
-    page.evaluate(
-      ({ url, fields }) => {
-        const form = document.createElement("form");
-        form.setAttribute("method", "post");
-        form.setAttribute("action", url);
-
-        for (const [name, value] of Object.entries(fields)) {
-          const input = document.createElement("input");
-          input.type = "hidden";
-          input.name = name;
-          input.value = value;
-          form.appendChild(input);
-        }
-
-        document.body.appendChild(form);
-        form.submit();
-      },
-      { url: req.url, fields }
-    ),
-  ]);
+  await submitForm(page, req.url, fields);
 }
 
 /**
- * 영수증 문서를 연다.
- * - 11번가의 신용카드 매출전표는 GET 이 아니라 **폼 POST** 로만 열린다(실측).
- *   그래서 지정된 페이지로 먼저 이동해 세션·리퍼러를 갖춘 뒤, 그 문서에 폼을 만들어 제출한다.
- * - receiptRequest 가 없으면 단순 GET 이동.
+ * 영수증(전표) 문서를 연다.
+ * - receiptRequest 가 있으면 폼 POST(11번가), 없으면 receiptUrlTemplate 로 GET(G마켓).
+ * - 폼 POST 는 지정된 페이지로 먼저 이동해 세션·리퍼러를 갖춘 뒤 제출한다.
  */
 async function openReceiptDocument(
   page: Page,
   cfg: SiteConfig,
-  ordNo: string,
+  key: ReceiptKey,
   overrides: Record<string, string> = {}
 ): Promise<void> {
   const req = cfg.receiptRequest;
 
   if (!req) {
-    await page.goto(receiptUrl(cfg, ordNo), { waitUntil: "domcontentloaded", timeout: 60_000 });
+    await page.goto(receiptUrl(cfg, key), { waitUntil: "domcontentloaded", timeout: 60_000 });
     return;
   }
 
   await page.goto(req.refererUrl || cfg.orderListUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
 
   const fields: Record<string, string> = {};
-  for (const [name, value] of Object.entries(req.fields)) fields[name] = value.replace("{ordNo}", ordNo);
+  for (const [name, value] of Object.entries(req.fields)) fields[name] = fillKeyTokens(value, key, false);
   Object.assign(fields, overrides);
 
+  await submitForm(page, req.url, fields);
+}
+
+/**
+ * 현재 페이지에 폼을 만들어 제출한다(POST 로만 열리는 문서·목록용).
+ * 필드 이름에 method 가 있으면 IDL 속성(form.method)과 부딪히므로 content attribute 로 지정한다.
+ */
+async function submitForm(page: Page, url: string, fields: Record<string, string>): Promise<void> {
   await Promise.all([
     page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 60_000 }),
     page.evaluate(
       ({ url, fields }) => {
         const form = document.createElement("form");
-        // 필드 이름에 method 가 있어 IDL 속성(form.method)과 부딪힌다 → content attribute 로 지정한다.
         form.setAttribute("method", "post");
         form.setAttribute("action", url);
 
@@ -800,14 +834,38 @@ async function openReceiptDocument(
         document.body.appendChild(form);
         form.submit();
       },
-      { url: req.url, fields }
+      { url, fields }
     ),
   ]);
 }
 
-function receiptUrl(cfg: SiteConfig, ordNo: string): string {
-  return (cfg.receiptUrlTemplate || "").replace("{ordNo}", ordNo);
+/** 식별자 값을 URL·폼에 넣기 좋게 다듬는다(이미 인코딩된 값은 그대로 둔다) */
+function encodeKeyValue(value: string): string {
+  if (value.includes("%")) return value;
+  return /[^A-Za-z0-9_.~-]/.test(value) ? encodeURIComponent(value) : value;
 }
+
+/** 템플릿의 {이름} 토큰을 식별자 값으로 치환 */
+function fillKeyTokens(template: string, key: ReceiptKey, encode: boolean): string {
+  let out = template;
+  for (const [name, value] of Object.entries(key)) {
+    out = out.split(`{${name}}`).join(encode ? encodeKeyValue(value) : value);
+  }
+  return out;
+}
+
+function receiptUrl(cfg: SiteConfig, key: ReceiptKey): string {
+  return fillKeyTokens(cfg.receiptUrlTemplate || "", key, true);
+}
+
+/** 문서 텍스트에서 첫 날짜를 찾는다(전표에 찍힌 거래일자) */
+function dateFromText(text: string): string {
+  const m = text.match(/(20\d{2})[.\-/\s]+(\d{1,2})[.\-/\s]+(\d{1,2})/);
+  if (!m) return "";
+  return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
+}
+
+
 
 async function goNextPage(page: Page, cfg: SiteConfig): Promise<boolean> {
   // 페이지네이션도 목록과 같은 iframe 안에 있을 수 있어 모든 프레임을 뒤진다.

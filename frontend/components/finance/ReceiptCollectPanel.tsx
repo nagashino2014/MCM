@@ -55,6 +55,8 @@ export function ReceiptCollectPanel() {
   const [running, setRunning] = useState<string | null>(null);
   const [log, setLog] = useState<string[]>([]);
 
+  const [origin, setOrigin] = useState("");
+
   const logRef = useRef<HTMLDivElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -85,6 +87,11 @@ export function ReceiptCollectPanel() {
   useEffect(() => {
     void loadStatus();
   }, [loadStatus]);
+
+  // localOnly 안내에서 "지금 보고 있는 주소" 를 알려 주려고 쓴다(원인 구분용).
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
 
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight });
@@ -196,6 +203,8 @@ export function ReceiptCollectPanel() {
 
   const years = [now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2];
 
+  const isLocalOrigin = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+
   if (localOnly) {
     return (
       <div className="cd-card p-6">
@@ -207,10 +216,28 @@ export function ReceiptCollectPanel() {
               쇼핑몰 로그인 상태와 브라우저가 각자 PC 에 있어야 전표를 받을 수 있습니다.
               서버에 올라간 앱에는 그 둘이 없어 수집을 실행할 수 없습니다.
             </p>
-            <p className="text-sm cd-text-muted leading-relaxed">
-              바탕화면의 <b>전표 수집</b> 바로가기로 앱을 띄운 뒤 이 화면을 열어 주세요.
-              바로가기가 없으면 <code className="cd-text">scripts/install-receipts-shortcut.ps1</code> 을 한 번 실행하면 만들어집니다.
-            </p>
+            {isLocalOrigin ? (
+              <>
+                <p className="text-sm cd-text-muted leading-relaxed">
+                  주소({origin})는 로컬이 맞는데도 이 메시지가 보인다면, <b>지금 붙어 있는 dev 서버가 바로가기로 띄운 것이 아닙니다.</b>
+                  다른 창에서 <code className="cd-text">npm run dev</code> 가 이미 떠 있으면 바로가기로 띄운 앱은 다른 포트(3001 등)로 밀리고,
+                  브라우저는 먼저 떠 있던 쪽에 붙습니다.
+                </p>
+                <p className="text-sm cd-text-muted leading-relaxed">
+                  기존 dev 서버 창을 모두 닫고 바탕화면의 <b>전표 수집</b> 바로가기로 다시 띄워 주세요.
+                  바로가기 창에 찍힌 포트 번호도 확인해 보시면 됩니다.
+                </p>
+              </>
+            ) : (
+              <p className="text-sm cd-text-muted leading-relaxed">
+                지금 보고 있는 주소는 <code className="cd-text">{origin || "(확인 중)"}</code> — 서버에 올라간 앱입니다.
+                바탕화면의 <b>전표 수집</b> 바로가기로 앱을 띄운 뒤 <code className="cd-text">http://localhost:3000/finance?tab=shopreceipt</code> 를 열어 주세요.
+                바로가기가 없으면 <code className="cd-text">scripts\install-receipts-shortcut.ps1</code> 을 한 번 실행하면 만들어집니다.
+              </p>
+            )}
+            <button className="cd-btn cd-btn-sm" onClick={() => void loadStatus()}>
+              <RefreshCw size={14} /> 다시 확인
+            </button>
           </div>
         </div>
       </div>

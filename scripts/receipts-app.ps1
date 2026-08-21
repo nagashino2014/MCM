@@ -13,6 +13,21 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# 포트가 이미 쓰이고 있는지 (Test-NetConnection 은 느리다)
+function Test-PortInUse([int]$port) {
+  $client = New-Object System.Net.Sockets.TcpClient
+  try {
+    $async = $client.BeginConnect("127.0.0.1", $port, $null, $null)
+    if (-not $async.AsyncWaitHandle.WaitOne(500)) { return $false }
+    $client.EndConnect($async)
+    return $true
+  } catch {
+    return $false
+  } finally {
+    $client.Close()
+  }
+}
+
 $repo = Split-Path -Parent $PSScriptRoot
 $frontend = Join-Path $repo "frontend"
 $scraper = Join-Path $repo "scraper"
@@ -26,6 +41,47 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
   Write-Host "Node.js 가 설치돼 있지 않습니다. https://nodejs.org 에서 LTS 를 설치한 뒤 다시 실행하세요." -ForegroundColor Red
   Read-Host "엔터를 누르면 닫힙니다"
   exit 1
+}
+
+# 3000 이 이미 쓰이고 있으면 이 앱은 3001 로 밀리는데, 브라우저는 먼저 떠 있던 쪽에 붙는다.
+# 그 서버에는 RECEIPTS_LOCAL_TOOLS 가 없어 "로컬에서만 쓸 수 있습니다" 만 보이므로 미리 정리한다.
+if (Test-PortInUse 3000) {
+  $owner = $null
+  try {
+    $conn = Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction Stop | Select-Object -First 1
+    if ($conn) { $owner = Get-Process -Id $conn.OwningProcess -ErrorAction SilentlyContinue }
+  } catch {
+    # Get-NetTCPConnection 이 없는 환경 — 누가 쓰는지는 못 알아낸다.
+  }
+
+  Write-Host "3000 포트를 이미 다른 프로그램이 쓰고 있습니다." -ForegroundColor Yellow
+  if ($owner) { Write-Host ("  쓰는 중: {0} (PID {1})" -f $owner.ProcessName, $owner.Id) }
+  Write-Host "  그대로 두면 이 앱은 3001 로 밀리고, 브라우저는 수집 기능이 꺼진 3000 쪽에 붙습니다."
+
+  if (-not $owner) {
+    Write-Host "3000 을 쓰는 창(다른 npm run dev 등)을 닫은 뒤 다시 실행해 주세요." -ForegroundColor Red
+    Read-Host "엔터를 누르면 닫힙니다"
+    exit 1
+  }
+
+  $answer = Read-Host "  이 프로세스를 종료하고 계속할까요? (Y/N)"
+  if ($answer -notmatch '^[Yy]') {
+    Write-Host "취소했습니다. 3000 을 쓰는 창을 닫은 뒤 다시 실행해 주세요." -ForegroundColor Red
+    Read-Host "엔터를 누르면 닫힙니다"
+    exit 1
+  }
+
+  Stop-Process -Id $owner.Id -Force
+  for ($i = 0; $i -lt 20; $i++) {
+    if (-not (Test-PortInUse 3000)) { break }
+    Start-Sleep -Milliseconds 300
+  }
+  if (Test-PortInUse 3000) {
+    Write-Host "3000 이 여전히 열려 있습니다. 해당 창을 직접 닫은 뒤 다시 실행해 주세요." -ForegroundColor Red
+    Read-Host "엔터를 누르면 닫힙니다"
+    exit 1
+  }
+  Write-Host "  3000 을 비웠습니다." -ForegroundColor Green
 }
 
 # 처음 실행이면 의존성을 받는다(시간이 좀 걸린다).
@@ -65,6 +121,7 @@ if (-not (Test-Path (Join-Path $frontend ".env.local"))) {
 }
 
 Write-Host "  앱을 띄웁니다. 창을 닫으면 앱도 함께 종료됩니다." -ForegroundColor Green
+Write-Host "  주소: $url"
 Push-Location $frontend
 
 # 앱이 뜨면 브라우저를 연다(포트가 열릴 때까지 잠깐 기다린다).

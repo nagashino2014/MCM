@@ -380,7 +380,7 @@ export async function collectReceipts(site: string, opts: CollectOptions = {}): 
     }
 
     // 주문번호만으로 영수증 문서를 열 수 있으면(11번가) 그 경로로 간다. 클릭·팝업 대기가 필요 없다.
-    if (cfg.receiptRequest || cfg.receiptUrlTemplate) {
+    if (cfg.receiptRequest || cfg.receiptUrlTemplate || cfg.receiptKey) {
       await runCollect(site, cfg, page, { ...opts, pages, delay }, collected, stats);
       return;
     }
@@ -723,11 +723,28 @@ async function runCollect(
           continue;
         }
 
-        const receipt = await page.context().newPage();
+        // 전표를 여는 방법은 셋이다: 폼 POST / 주소로 GET / (주소를 모르면) 목록에서 링크 클릭.
+        const byRequest = Boolean(cfg.receiptRequest || cfg.receiptUrlTemplate);
+        let receipt: Page;
+        let closeAfter = true;
+
+        if (byRequest) {
+          receipt = await page.context().newPage();
+        } else {
+          const opened = await openReceiptByClick(page, key, rule);
+          if (!opened) {
+            stats.failed++;
+            console.log(`${tag} ❌ ${main} 실패: 목록에서 이 전표를 여는 링크를 못 찾았습니다`);
+            continue;
+          }
+          receipt = opened.page;
+          closeAfter = opened.isPopup;
+        }
+
         let isEmptyForm = false;
 
         try {
-          await openReceiptDocument(receipt, cfg, key, { ordPrdSeq: String(seq) });
+          if (byRequest) await openReceiptDocument(receipt, cfg, key, { ordPrdSeq: String(seq) });
           await sleep(1500);
 
           if (new RegExp(cfg.loggedOutPattern, "i").test(receipt.url())) {
@@ -779,7 +796,13 @@ async function runCollect(
           console.log(`${tag} ❌ ${main}#${seq} 실패: ${String(e).slice(0, 200)}`);
           await dumpFailure(site, receipt, ledgerKey, String(e));
         } finally {
-          await receipt.close().catch(() => {});
+          if (closeAfter) {
+            await receipt.close().catch(() => {});
+          } else {
+            // 같은 탭에서 열렸으면 목록으로 되돌아가야 다음 건을 이어서 처리할 수 있다.
+            await openOrderList(page, cfg, from, to, tag, pageNo).catch(() => {});
+            await sleep(1000);
+          }
         }
 
         if (isEmptyForm) break;
@@ -894,6 +917,46 @@ async function openReceiptDocument(
   Object.assign(fields, overrides);
 
   await submitForm(page, req.url, fields);
+}
+
+/**
+ * 전표 주소를 모를 때, 목록에서 그 식별자를 담고 있는 링크를 찾아 눌러서 연다.
+ * 옥션처럼 "목록에서 식별자는 읽히는데 여는 주소는 안 나오는" 경우를 위한 경로다.
+ * 팝업으로 열리면 그 페이지를, 같은 탭에서 열리면 현재 페이지를 돌려준다.
+ */
+async function openReceiptByClick(
+  page: Page,
+  key: ReceiptKey,
+  rule: KeyRule
+): Promise<{ page: Page; isPopup: boolean } | null> {
+  const main = keyMain(key, rule.groups);
+  if (!main) return null;
+
+  const context = page.context();
+  const scopes: (Page | Frame)[] = [page, ...page.frames().filter((f) => f !== page.mainFrame())];
+
+  for (const scope of scopes) {
+    const candidate = scope.locator(`a[href*="${main}"], [onclick*="${main}"]`).first();
+    if ((await candidate.count().catch(() => 0)) === 0) continue;
+
+    const urlBefore = page.url();
+    const popupPromise = context.waitForEvent("page", { timeout: 10_000 }).catch(() => null);
+
+    await candidate.click({ timeout: 15_000 });
+
+    const popup = await popupPromise;
+    if (popup) {
+      await popup.waitForLoadState("domcontentloaded", { timeout: 30_000 }).catch(() => {});
+      await sleep(1000);
+      return { page: popup, isPopup: true };
+    }
+
+    // 팝업이 아니면 같은 탭 이동이거나 레이어 모달 — 어느 쪽이든 현재 페이지를 캡처한다.
+    await sleep(2000);
+    return { page, isPopup: false, ...(page.url() !== urlBefore ? {} : {}) };
+  }
+
+  return null;
 }
 
 /**

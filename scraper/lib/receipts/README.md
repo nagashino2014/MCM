@@ -6,7 +6,7 @@
 |---|---|---|
 | 11번가 | `11st` (기본) | ✅ 무인 수집 동작 — 로그인만 사람이 한다 |
 | G마켓 | `gmarket` | ✅ 무인 수집 동작(실계정 확인) |
-| 옥션 | `auction` | 🔶 시작점만. 로그인 후 probe 로 화면 주소·조회 요청 확인 필요 |
+| 옥션 | `auction` | 🔶 실측 반영 완료. 실계정 전표 저장 검증만 남음 |
 
 사이트별 차이는 전부 `config.ts` 의 `SiteConfig` 로 표현하고, 수집 절차(`collector.ts`)는 공통이다.
 
@@ -187,16 +187,22 @@ G마켓은 접속하면 Cloudflare 봇 확인 화면이 뜬다. `SiteConfig.stea
 주문내역 화면(`escrow.auction.co.kr/Close/OrderProcessList.aspx`)은 ASP.NET WebForms 라 기간 조회가
 postback(`__VIEWSTATE`)이지만, 전표는 위 창에서 뽑으므로 그쪽은 건드릴 필요가 없다.
 
-**아직 모르는 것**: 목록에서 개별 전표를 여는 주소(`receiptUrlTemplate`).
-그래서 지금은 전표 링크를 직접 클릭하는 경로로 동작한다. 주소를 알면 G마켓처럼 바로 열 수 있다:
+전표는 **주문번호 하나로** 열린다(G마켓의 세 값과 다르다):
 
-```bash
-npm run receipts -- probe --site auction --watch --url "https://accounting.auction.co.kr/Receipts/CardInfoList.aspx"
+```
+GET https://accounting.auction.co.kr/Card/CardReceiptRevised.aspx?orderNo=2486409195
 ```
 
-[신용카드전표] 탭에서 기간을 조회하고 전표 하나를 클릭하면 `팝업 로드 완료:` 에 그 주소가 찍힌다.
-
-식별자 규칙(`receiptKey`)은 후보 셋을 걸어 뒀다 — G마켓과 같은 `openCardReceipt(...)`,
-이름만 다른 3인자 함수(`viewCardSlip` 등), 쿼리스트링. 위에서부터 시도해 처음 건을 찾은 규칙을 쓴다.
+주문번호를 뽑는 규칙은 좁은 것부터 시도한다 — 전표 주소에 박힌 형태 → `orderNo` 파라미터 → 화면의 10자리 숫자.
 
 알려진 제약: 옥션은 **1년이 지난 구매내역의 영수증 출력이 막혀 있다**(고객센터 안내).
+
+## 전표를 여는 세 가지 경로
+
+사이트마다 다르고, config 에 정의된 것을 위에서부터 쓴다.
+
+| 경로 | 설정 | 쓰는 곳 |
+|---|---|---|
+| 폼 POST | `receiptRequest` | 11번가 |
+| 주소로 GET | `receiptUrlTemplate` | G마켓, 옥션 |
+| 목록에서 링크 클릭 | (둘 다 없을 때) `receiptKey` 로 찾은 식별자를 담은 링크를 눌러 팝업을 잡는다 | 주소를 모르는 사이트의 폴백 |

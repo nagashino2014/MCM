@@ -46,9 +46,19 @@ export function ensureSiteDir(site: string, sub?: string): string {
   return dir;
 }
 
+/**
+ * 프로필과 별개로 보관하는 쿠키 파일.
+ * Chromium 은 만료 없는 **세션 쿠키를 디스크에 저장하지 않는다** — 프로필만 재사용하면
+ * 브라우저를 닫는 순간 로그인이 풀린다. 그래서 쿠키는 따로 떠서 다음 실행에 주입한다.
+ * (쿠키만 읽는 context.cookies() 는 storageState 와 달리 임시 페이지를 열지 않아 창이 깜빡이지 않는다)
+ */
+export function cookiesFile(site: string): string {
+  return path.join(siteDir(site), "cookies.json");
+}
+
 /** 로그인한 적이 있는지 — 프로필이 만들어져 있으면 참(유효성은 checkSession 으로 확인) */
 export function hasSession(site: string): boolean {
-  return fs.existsSync(path.join(profileDir(site), "Default"));
+  return fs.existsSync(path.join(profileDir(site), "Default")) || fs.existsSync(cookiesFile(site));
 }
 
 /** 브라우저 창이 닫힐 때까지 대기(창 닫기를 종료 신호로 쓴다) */
@@ -90,6 +100,16 @@ export async function openContext(opts: {
   });
   context.setDefaultTimeout(60_000);
 
+  // 프로필이 잃어버린 세션 쿠키를 되살린다.
+  if (useSession && fs.existsSync(cookiesFile(site))) {
+    try {
+      const cookies = JSON.parse(fs.readFileSync(cookiesFile(site), "utf-8"));
+      if (Array.isArray(cookies) && cookies.length > 0) await context.addCookies(cookies);
+    } catch {
+      console.log(`[${site}] ⚠ 쿠키 파일을 읽지 못했습니다: ${cookiesFile(site)}`);
+    }
+  }
+
   return { context, close: () => context.close().catch(() => {}) };
 }
 
@@ -115,20 +135,28 @@ export async function interactiveLogin(
     console.log(`[${site}] 로그인 후 주문목록(주문/배송조회) 화면까지 이동한 뒤 창을 닫으세요.`);
     console.log(`[${site}] 로그인 상태는 프로필에 저장됩니다: ${profileDir(site)}`);
 
-    // 열린 페이지의 주소만 가볍게 따라간다(페이지를 새로 만들지 않으므로 창이 깜빡이지 않는다).
+    // 주소와 쿠키만 가볍게 따라간다(페이지를 새로 만들지 않으므로 창이 깜빡이지 않는다).
     let lastUrl: string | null = null;
-    const timer = setInterval(() => {
-      const pages = context.pages().filter((p) => !p.isClosed());
-      if (pages.length > 0) lastUrl = pages[pages.length - 1].url();
+    const timer = setInterval(async () => {
+      try {
+        const pages = context.pages().filter((p) => !p.isClosed());
+        if (pages.length > 0) lastUrl = pages[pages.length - 1].url();
+
+        const cookies = await context.cookies();
+        if (cookies.length > 0) fs.writeFileSync(cookiesFile(site), JSON.stringify(cookies, null, 2), "utf-8");
+      } catch {
+        // 브라우저 종료 중이면 무시
+      }
     }, 2000);
 
     await waitForContextClose(context);
     clearInterval(timer);
 
     console.log(`[${site}] 로그인 프로필 저장 완료: ${profileDir(site)}`);
+    console.log(`[${site}] 세션 쿠키 저장: ${cookiesFile(site)}`);
     console.log(`[${site}] ⚠ 이 디렉터리는 로그인 상태 그 자체입니다. 외부 공유·커밋 금지(.gitignore 등록됨).`);
 
-    return { saved: hasSession(site), lastUrl };
+    return { saved: hasSession(site) || fs.existsSync(cookiesFile(site)), lastUrl };
   } finally {
     await context.close().catch(() => {});
   }

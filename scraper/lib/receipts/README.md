@@ -8,6 +8,8 @@
 - 쿠팡(Akamai Bot Manager)·네이버는 headless 브라우저를 탐지해 막는다. 11번가도 자동 로그인은 봇으로 잡힐 수 있다.
   → **로그인은 사람이 직접**(캡차·2차인증 포함), 스크립트는 그 뒤의 **브라우저 프로필**만 재사용한다.
   (storageState 파일 방식은 저장할 때마다 Playwright 가 origin 마다 임시 페이지를 열고 닫아 로그인 중 창이 깜빡였다)
+  단, Chromium 은 만료 없는 **세션 쿠키를 프로필에 저장하지 않으므로** 쿠키만 따로 떠서(`cookies.json`)
+  다음 실행에 주입한다. 쿠키만 읽는 `context.cookies()` 는 임시 페이지를 열지 않아 깜빡임이 없다.
 - 영수증 화면은 4개 몰 모두 **PC 웹에만** 있다(모바일 앱에는 없음). 그래서 데스크톱 UA·뷰포트로 접근한다.
 - 무인 실행(ECS worker)에는 맞지 않는다. **로컬 CLI** 로 신고철에 돌리는 용도다.
 
@@ -28,7 +30,8 @@ npm run receipts -- summary               # 대장 요약
 산출물은 전부 `data/receipts/11st/` 아래(.gitignore 대상):
 
 ```
-browser-profile/        로그인 상태가 담긴 브라우저 프로필 — 외부 공유·커밋 금지
+browser-profile/        브라우저 프로필 — 외부 공유·커밋 금지
+cookies.json            세션 쿠키 — 로그인 상태 그 자체. 외부 공유·커밋 금지
 site-config.json        probe/login 이 실측한 URL·셀렉터(기본값보다 우선 적용)
 receipts/YYYY-MM/*.pdf  영수증
 ledger.csv              수집 대장(주문번호·품명·금액·영수증종류·파일경로)

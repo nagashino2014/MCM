@@ -172,6 +172,32 @@ async function collectReceiptKeys(page: Page, cfg: SiteConfig): Promise<ReceiptK
   return [...found.values()].sort((a, b) => keyId(b, rule.groups).localeCompare(keyId(a, rule.groups)));
 }
 
+/**
+ * 목록이 비었을 때 원인을 그 자리에서 알려준다.
+ * - 로그인 요구인지, 정말 건이 없는지, 아니면 식별자 규칙이 안 맞는지를 가른다.
+ * - 식별자 이름(seqNo 등)이 HTML 에는 있는데 규칙이 안 맞으면 그 주변을 보여준다 — 정규식을 고칠 재료다.
+ */
+async function explainEmptyList(tag: string, page: Page, rule: { pattern: string; groups: string[] }): Promise<void> {
+  const text = (await page.innerText("body").catch(() => "")).replace(/\s+/g, " ").trim();
+  console.log(`${tag}   최종 URL: ${page.url()}`);
+  console.log(`${tag}   화면 텍스트: ${text.slice(0, 200) || "(비어 있음)"}`);
+
+  const html = await page.content().catch(() => "");
+  const name = rule.groups[0];
+  const hits = (html.match(new RegExp(name, "gi")) || []).length;
+
+  if (hits === 0) {
+    console.log(`${tag}   '${name}' 이 화면에 없습니다 → 조회 기간에 건이 없거나, 로그인이 필요한 화면입니다.`);
+    return;
+  }
+
+  console.log(`${tag}   '${name}' 은 화면에 ${hits}번 있는데 식별자 규칙과 맞지 않습니다.`);
+  console.log(`${tag}   규칙: ${rule.pattern}`);
+
+  const sample = html.match(new RegExp(`.{0,100}${name}.{0,160}`, "i"));
+  if (sample) console.log(`${tag}   실제 모양: ${sample[0].replace(/\s+/g, " ")}`);
+}
+
 /** 매칭 건수가 가장 많은 행 셀렉터를 고른다. 전부 0이면 null */
 async function pickRowSelector(page: Page, cfg: SiteConfig): Promise<string | null> {
   let best: { selector: string; count: number } | null = null;
@@ -585,8 +611,8 @@ async function runCollect(
         break;
       }
 
-      console.log(`${tag} ⚠ 전표를 못 찾았습니다. 조회 기간에 건이 없거나 목록이 아직 안 그려진 상태입니다.`);
-      console.log(`${tag}   기간을 화면에서 직접 골라야 하면 '--wait 180' 으로 실행하세요.`);
+      console.log(`${tag} ⚠ 전표를 못 찾았습니다.`);
+      await explainEmptyList(tag, page, rule);
       await dumpFailure(site, page, `no-keys-p${pageNo}`, "전표 0건");
     }
 

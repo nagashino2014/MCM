@@ -77,6 +77,13 @@ function splitByReceipt(pages: string[], cfg: SiteConfig): ReceiptChunk[] {
   if (orderNos.length === 0) return [];
   if (orderNos.length === 1) return [{ orderNo: firstOrderNo(text, pattern), text }];
 
+  // ── 0순위: 페이지 단위 — 전표가 페이지마다 한 장씩 찍히는 묶음(쿠팡 뷰어)에서 가장 정확하다.
+  // 아래 텍스트 기반 방법들은 경계를 추정하는데, 쿠팡은 거래일시·승인번호가 **주문번호보다 앞에**
+  // 찍혀 있어 주문번호 위치로 자르면 옆 전표의 날짜·승인번호가 섞여 들어온다(실사고 2026-08).
+  // 페이지가 곧 전표면 추정이 필요 없다.
+  const byPage = splitByPage(pages, pattern, orderNos.length);
+  if (byPage) return byPage;
+
   // 오프셋 → 페이지 번호 변환표
   const pageStarts: number[] = [];
   let acc = 0;
@@ -99,7 +106,7 @@ function splitByReceipt(pages: string[], cfg: SiteConfig): ReceiptChunk[] {
       return {
         orderNo: c.orderNo,
         text: c.text,
-        pageFrom: i === 0 ? 0 : startPages[i], // 첫 전표는 문서 표지까지 함께
+        pageFrom: startPages[i],
         pageTo: i + 1 < chunks.length ? startPages[i + 1] - 1 : pages.length - 1,
       };
     });
@@ -140,6 +147,40 @@ function splitByReceipt(pages: string[], cfg: SiteConfig): ReceiptChunk[] {
       text: text.slice(i === 0 ? 0 : hit.at, i + 1 < hits.length ? hits[i + 1].at : text.length),
     }))
   );
+}
+
+/**
+ * 페이지 단위 분할.
+ * 규칙: 주문번호가 정확히 1개인 페이지가 전표의 시작(같은 번호가 이어지면 같은 전표),
+ * 주문번호 없는 페이지는 앞이면 표지(버림), 뒤면 직전 전표의 이어짐이다.
+ * 한 페이지에 서로 다른 주문번호가 2개 이상이거나 건수가 안 맞으면 이 방법을 포기한다(null).
+ */
+function splitByPage(pages: string[], pattern: string, expected: number): ReceiptChunk[] | null {
+  const chunks: Required<ReceiptChunk>[] = [];
+
+  for (let i = 0; i < pages.length; i++) {
+    const found = [...new Set(pages[i].match(new RegExp(pattern, "g")) || [])];
+    if (found.length > 1) return null;
+
+    const last = chunks[chunks.length - 1];
+    if (found.length === 0) {
+      // 표지/안내 페이지(앞) 또는 직전 전표의 이어짐(뒤)
+      if (last) {
+        last.text += "\n\n" + pages[i];
+        last.pageTo = i;
+      }
+      continue;
+    }
+
+    if (last && last.orderNo === found[0]) {
+      last.text += "\n\n" + pages[i];
+      last.pageTo = i;
+    } else {
+      chunks.push({ orderNo: found[0], text: pages[i], pageFrom: i, pageTo: i });
+    }
+  }
+
+  return chunks.length === expected ? chunks : null;
 }
 
 /** 원본 PDF 에서 페이지 범위만 뽑아 새 PDF 로 저장한다. */

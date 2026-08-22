@@ -236,6 +236,7 @@ export async function importInbox(
     const fresh = chunks.filter((c) => !collected.has(`${c.orderNo}::${label}`));
     if (chunks.length > 0 && fresh.length === 0) {
       console.log(`${tag} — ${name}: ${chunks.length}건 모두 이미 대장에 있습니다. 파일은 그대로 두었습니다.`);
+      console.log(`${tag}   같은 파일을 다시 처리하려면(예: 날짜 재추출) ledger.csv 를 지우고 다시 실행하세요.`);
       skipped += chunks.length;
       continue;
     }
@@ -337,6 +338,11 @@ export async function importInbox(
       added++;
       if (fields.title || fields.amount) filled++;
       if (payment.approvalNum || payment.cardLast4) matched++;
+
+      console.log(
+        `${tag}   · ${chunk.orderNo} | ${orderDate || "날짜?"} | ${fields.amount || "-"} | ` +
+          `승인 ${payment.approvalNum || "-"} | ${fields.title.slice(0, 24) || "-"}`
+      );
     }
 
     rows += added;

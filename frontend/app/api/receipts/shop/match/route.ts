@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
-import { listCandidates, runAutoMatch, setManualMatch } from "@/lib/receipts/shop-receipt-match";
+import { listCandidates, runAutoMatch, setExcluded, setManualMatch } from "@/lib/receipts/shop-receipt-match";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,13 +45,21 @@ export async function PATCH(req: NextRequest) {
     return authErrorToResponse(err);
   }
 
-  const body = (await req.json().catch(() => ({}))) as { receiptId?: string; txnId?: string | null };
+  const body = (await req.json().catch(() => ({}))) as {
+    receiptId?: string;
+    txnId?: string | null;
+    excluded?: boolean;
+  };
   if (!body.receiptId) {
     return NextResponse.json({ error: "receiptId 가 필요합니다." }, { status: 400 });
   }
 
   try {
-    await setManualMatch(body.receiptId, body.txnId ?? null);
+    if (typeof body.excluded === "boolean") {
+      await setExcluded(body.receiptId, body.excluded);
+    } else {
+      await setManualMatch(body.receiptId, body.txnId ?? null);
+    }
     return NextResponse.json({ ok: true });
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 500 });

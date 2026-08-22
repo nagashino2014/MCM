@@ -30,6 +30,8 @@ export interface ShopReceipt extends ShopReceiptInput {
   receiptId: string;
   uploadedBy: string | null;
   uploadedAt: string;
+  /** 매칭 제외 — 개인카드 결제 등 원장에 상대가 없는 건(198) */
+  excluded: boolean;
   /** 매칭 결과 (197) — null 이면 미매칭 */
   matchedTxnId: string | null;
   matchStatus: "auto" | "manual" | null;
@@ -169,6 +171,7 @@ export async function listShopReceipts(q: ShopReceiptQuery): Promise<ShopReceipt
     cardLast4: r.card_last4 ? String(r.card_last4) : "",
     uploadedBy: r.uploaded_by ? String(r.uploaded_by) : null,
     uploadedAt: String(r.uploaded_at),
+    excluded: Number(r.excluded ?? 0) === 1,
     matchedTxnId: r.matched_txn_id ? String(r.matched_txn_id) : null,
     matchStatus: (r.match_status as "auto" | "manual" | null) ?? null,
     matchBasis: r.match_basis ? String(r.match_basis) : null,

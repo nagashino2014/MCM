@@ -42,7 +42,8 @@ export async function GET(req: NextRequest) {
         ? await listUncoveredShopTxns(from, to).catch(() => [])
         : [];
 
-    const total = rows.reduce((sum, r) => sum + r.amount, 0);
+    // 합계는 신고 대상 기준 — 매칭 제외(개인 결제) 건은 빼고 본다.
+    const total = rows.reduce((sum, r) => sum + (r.excluded ? 0 : r.amount), 0);
     return NextResponse.json({ rows, count: rows.length, total, uncovered });
   } catch (err) {
     // 마이그레이션(196) 전이면 테이블이 없다 — 화면이 빈 목록으로 뜨도록 사유만 알려 준다.

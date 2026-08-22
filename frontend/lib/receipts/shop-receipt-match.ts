@@ -181,7 +181,7 @@ export async function runAutoMatch(from: string, to: string): Promise<{ matched:
     await db.exec(
       `SELECT receipt_id, site, order_no, order_date, amount, approval_num, card_last4
          FROM shop_receipts
-        WHERE matched_txn_id IS NULL
+        WHERE matched_txn_id IS NULL AND excluded = 0
           AND (order_date IS NULL OR (order_date >= $1 AND order_date <= $2))`,
       [from, to]
     )
@@ -232,6 +232,27 @@ export async function setManualMatch(receiptId: string, cardTxnId: string | null
           WHERE receipt_id = $1`,
         [receiptId]
       );
+    }
+  });
+}
+
+/**
+ * 매칭 제외 표시 / 복원.
+ * 개인카드 결제 등 원장에 상대가 없는 전표를 걷어낸다. 제외하면 기존 연결도 함께 푼다
+ * (잘못 연결해 두고 제외하는 경우를 막기 위해). 복원은 표시만 되돌린다 — 매칭은 다시
+ * [자동 매칭] 이나 [연결] 로 잇는다.
+ */
+export async function setExcluded(receiptId: string, excluded: boolean): Promise<void> {
+  await withDbWrite(async (tx) => {
+    if (excluded) {
+      await tx.run(
+        `UPDATE shop_receipts
+            SET excluded = 1, matched_txn_id = NULL, match_status = NULL, match_basis = NULL, matched_at = NULL
+          WHERE receipt_id = $1`,
+        [receiptId]
+      );
+    } else {
+      await tx.run(`UPDATE shop_receipts SET excluded = 0 WHERE receipt_id = $1`, [receiptId]);
     }
   });
 }

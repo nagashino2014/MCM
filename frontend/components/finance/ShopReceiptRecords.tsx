@@ -8,7 +8,7 @@
  */
 
 import { Fragment, useCallback, useEffect, useState } from "react";
-import { CheckCircle2, FileText, Link2, Loader2, RefreshCw, Unlink, Wand2 } from "lucide-react";
+import { Ban, CheckCircle2, FileText, Link2, Loader2, RefreshCw, RotateCcw, Unlink, Wand2 } from "lucide-react";
 
 interface MatchedTxn {
   approvedAt: string;
@@ -29,6 +29,7 @@ interface ShopReceiptRow {
   approvalNum: string;
   cardLast4: string;
   storageKey: string | null;
+  excluded: boolean;
   matchStatus: "auto" | "manual" | null;
   matchBasis: string | null;
   matchedTxn: MatchedTxn | null;
@@ -152,6 +153,23 @@ export function ShopReceiptRecords({ from, to, reloadToken }: Props) {
     }
   };
 
+  /** 매칭 제외(개인카드 결제 등) / 복원 — 실수로 눌러도 [복원] 으로 바로 되돌린다 */
+  const setExcluded = async (receiptId: string, excluded: boolean) => {
+    try {
+      const res = await fetch("/api/receipts/shop/match", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ receiptId, excluded }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "제외 처리에 실패했습니다.");
+      setPickerFor(null);
+      await load();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
   const setMatch = async (receiptId: string, txnId: string | null) => {
     try {
       const res = await fetch("/api/receipts/shop/match", {
@@ -169,7 +187,8 @@ export function ShopReceiptRecords({ from, to, reloadToken }: Props) {
   };
 
   const matchedCount = rows.filter((r) => r.matchStatus).length;
-  const unmatchedCount = rows.length - matchedCount;
+  const excludedCount = rows.filter((r) => r.excluded).length;
+  const unmatchedCount = rows.length - matchedCount - excludedCount;
 
   return (
     <div className="cd-card p-4">
@@ -199,6 +218,7 @@ export function ShopReceiptRecords({ from, to, reloadToken }: Props) {
         <span className="cd-pill">전표 {rows.length.toLocaleString()}건 · {total.toLocaleString()}원</span>
         <span className="cd-pill cd-pill-success">매칭 {matchedCount}</span>
         {unmatchedCount > 0 && <span className="cd-pill cd-pill-warn">미매칭 {unmatchedCount}</span>}
+        {excludedCount > 0 && <span className="cd-pill">제외 {excludedCount}</span>}
         {uncovered.length > 0 && (
           <button type="button" className="cd-pill cd-pill-warn cursor-pointer" onClick={() => setShowUncovered((v) => !v)}>
             전표 없는 쇼핑몰 결제 {uncovered.length}건 {showUncovered ? "접기" : "보기"}
@@ -251,7 +271,7 @@ export function ShopReceiptRecords({ from, to, reloadToken }: Props) {
             <tbody>
               {rows.map((row) => (
                 <Fragment key={row.receiptId}>
-                  <tr className="border-t cd-border-c">
+                  <tr className={`border-t cd-border-c ${row.excluded ? "opacity-50" : ""}`}>
                     <td className="py-1.5 pr-3 whitespace-nowrap">{SITE_NAMES[row.site] ?? row.site}</td>
                     <td className="py-1.5 pr-3 whitespace-nowrap cd-text-muted">{row.orderDate || "-"}</td>
                     <td className="py-1.5 pr-3 whitespace-nowrap cd-text-muted">{row.orderNo}</td>
@@ -287,10 +307,34 @@ export function ShopReceiptRecords({ from, to, reloadToken }: Props) {
                             <Unlink size={12} />
                           </button>
                         </span>
+                      ) : row.excluded ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="cd-pill inline-flex items-center gap-1">
+                            <Ban size={12} /> 매칭 제외
+                          </span>
+                          <button
+                            type="button"
+                            className="cd-btn cd-btn-sm cd-btn-ghost"
+                            title="제외를 되돌린다 — 이후 [자동 매칭]이나 [연결] 로 다시 잇는다"
+                            onClick={() => void setExcluded(row.receiptId, false)}
+                          >
+                            <RotateCcw size={12} /> 복원
+                          </button>
+                        </span>
                       ) : (
-                        <button type="button" className="cd-btn cd-btn-sm cd-btn-soft" onClick={() => void openPicker(row.receiptId)}>
-                          <Link2 size={13} /> 연결
-                        </button>
+                        <span className="inline-flex items-center gap-1.5">
+                          <button type="button" className="cd-btn cd-btn-sm cd-btn-soft" onClick={() => void openPicker(row.receiptId)}>
+                            <Link2 size={13} /> 연결
+                          </button>
+                          <button
+                            type="button"
+                            className="cd-btn cd-btn-sm cd-btn-ghost"
+                            title="개인카드 결제 등 법인카드 원장에 없는 건을 매칭 대상에서 뺀다"
+                            onClick={() => void setExcluded(row.receiptId, true)}
+                          >
+                            <Ban size={13} /> 제외
+                          </button>
+                        </span>
                       )}
                     </td>
                   </tr>

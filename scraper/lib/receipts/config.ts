@@ -458,7 +458,9 @@ export const COUPANG: SiteConfig = {
   orderListUrl: "https://mc.coupang.com/ssr/desktop/payment-receipt",
   checkUrl: "https://mc.coupang.com/ssr/desktop/payment-receipt",
   loggedOutPattern: "login\\.coupang\\.com|/login|signin",
-  receiptKeywords: ["카드영수증", "거래명세서", "결제영수증", "영수증", "매출전표"],
+  // "결제정보" 는 쿠팡 전표의 첫 섹션 제목 — 페이지 단위 분할이 안 되는 배치(한 페이지에
+  // 여러 전표)에서도 이 경계로 자르면 거래일시·승인번호가 옆 전표와 섞이지 않는다.
+  receiptKeywords: ["결제정보", "카드영수증", "거래명세서", "결제영수증", "영수증", "매출전표"],
   orderRowSelectors: [
     "[class*='order-list'] li",
     "[class*='order'] li",

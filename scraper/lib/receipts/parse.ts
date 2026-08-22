@@ -61,9 +61,19 @@ export function extractDocumentFields(text: string, cfg: SiteConfig): { title: s
   return { title, amount };
 }
 
-/** 문서에서 처음 나오는 날짜 — 2026.08.20 / 2026-08-20 / 2026 08 20 */
+const DATE_BODY = "(20\\d{2})[.\\-/\\s]+(\\d{1,2})[.\\-/\\s]+(\\d{1,2})";
+
+/** 거래 날짜를 가리키는 라벨 — 발행일·신청일 같은 다른 날짜와 섞이지 않게 이쪽을 우선한다 */
+const LABELED_DATE = new RegExp(
+  `(?:거\\s*래\\s*일\\s*시|승\\s*인\\s*일\\s*시|결\\s*제\\s*일\\s*시?|거\\s*래\\s*일\\s*자|주\\s*문\\s*일\\s*자?)\\s*[:：]?\\s*${DATE_BODY}`
+);
+
+/**
+ * 문서에서 거래 날짜 — `거래일시` 류 라벨이 있으면 그 값을, 없으면 처음 나오는 날짜를 쓴다.
+ * (쿠팡 전표는 발행 안내 등 다른 날짜가 앞에 올 수 있어 첫 날짜만 믿으면 틀린다)
+ */
 export function dateFromText(text: string): string {
-  const m = text.match(/(20\d{2})[.\-/\s]+(\d{1,2})[.\-/\s]+(\d{1,2})/);
+  const m = LABELED_DATE.exec(text) ?? text.match(new RegExp(DATE_BODY));
   if (!m) return "";
   return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
 }

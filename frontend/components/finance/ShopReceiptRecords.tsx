@@ -56,6 +56,18 @@ const SITE_NAMES: Record<string, string> = {
   coupang: "쿠팡",
 };
 
+/**
+ * 매칭 검증 — 전표의 주문일과 원장 승인일이 이틀 넘게 벌어지면 의심 건으로 표시한다.
+ * (전표 날짜 오추출로 잘못 붙은 매칭을 눈으로 골라내는 용도)
+ */
+function dateSuspicious(row: ShopReceiptRow): boolean {
+  if (!row.matchedTxn || !row.orderDate) return false;
+  const approved = row.matchedTxn.approvedAt.slice(0, 10);
+  if (!approved) return false;
+  const diff = Math.abs(new Date(row.orderDate).getTime() - new Date(approved).getTime());
+  return diff > 2 * 86400000;
+}
+
 const BASIS_LABELS: Record<string, string> = {
   approval: "승인번호 일치",
   card: "카드끝4+금액+날짜",
@@ -186,6 +198,7 @@ export function ShopReceiptRecords({ from, to, reloadToken }: Props) {
     }
   };
 
+  const suspiciousCount = rows.filter(dateSuspicious).length;
   const matchedCount = rows.filter((r) => r.matchStatus).length;
   const excludedCount = rows.filter((r) => r.excluded).length;
   const unmatchedCount = rows.length - matchedCount - excludedCount;
@@ -219,6 +232,11 @@ export function ShopReceiptRecords({ from, to, reloadToken }: Props) {
         <span className="cd-pill cd-pill-success">매칭 {matchedCount}</span>
         {unmatchedCount > 0 && <span className="cd-pill cd-pill-warn">미매칭 {unmatchedCount}</span>}
         {excludedCount > 0 && <span className="cd-pill">제외 {excludedCount}</span>}
+        {suspiciousCount > 0 && (
+          <span className="cd-pill cd-pill-warn" title="전표 주문일과 원장 승인일이 이틀 넘게 다른 매칭 — 확인 후 필요하면 해제하세요">
+            날짜 불일치 {suspiciousCount}
+          </span>
+        )}
         {uncovered.length > 0 && (
           <button type="button" className="cd-pill cd-pill-warn cursor-pointer" onClick={() => setShowUncovered((v) => !v)}>
             전표 없는 쇼핑몰 결제 {uncovered.length}건 {showUncovered ? "접기" : "보기"}
@@ -303,6 +321,11 @@ export function ShopReceiptRecords({ from, to, reloadToken }: Props) {
                           <span className="text-xs cd-text-faint">
                             {row.matchedTxn.approvedAt.slice(5, 16)} · {BASIS_LABELS[row.matchBasis ?? ""] ?? row.matchBasis}
                           </span>
+                          {dateSuspicious(row) && (
+                            <span className="cd-pill cd-pill-warn" title="전표 주문일과 원장 승인일이 이틀 넘게 다릅니다">
+                              날짜 불일치
+                            </span>
+                          )}
                           <button type="button" className="cd-btn cd-btn-sm cd-btn-ghost" title="연결 해제" onClick={() => void setMatch(row.receiptId, null)}>
                             <Unlink size={12} />
                           </button>

@@ -21,6 +21,18 @@ export function letterBodyFor(kind: DeliverableKind, contractTitle: string): str
   return [`<p>1. 귀사의 무궁한 발전을 기원합니다.</p>`, `<p>${escapeHtml(second)}</p>`].join("");
 }
 
+/** 대금청구서 단독 제출 공문 제목(2026-08-24) — 공문 화면의 대금청구서 작성 경로. */
+export function paymentLetterSubjectFor(contractTitle: string): string {
+  return `「${contractTitle}」 대금청구서 제출`;
+}
+
+/** 대금청구서 단독 제출 공문 본문 — 청구 항목(대금지급단계 명칭)을 함께 표기한다. */
+export function paymentLetterBodyFor(contractTitle: string, stageLabel: string): string {
+  const stage = stageLabel.trim();
+  const second = `2. 「${contractTitle}」 과 관련하여 ${stage ? `${stage} ` : ""}대금청구서를 붙임과 같이 제출하오니 지급하여 주시기 바랍니다.`;
+  return [`<p>1. 귀사의 무궁한 발전을 기원합니다.</p>`, `<p>${escapeHtml(second)}</p>`].join("");
+}
+
 /**
  * 붙임 항목 — "준공검사원    1부." 형식. 문서명과 '1부' 사이는 4칸 띄운다(사용자 확정).
  * 마지막 항목에는 "끝."을 붙인다.

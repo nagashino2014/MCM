@@ -17,6 +17,7 @@ import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
 import { DeleteDraftButton, RejectedBanner, toEditDocMeta, type EditDocMeta } from "@/components/approval/DraftEditNotice";
+import PaymentRequestModal, { type PaymentRequestCreated } from "@/components/approval/PaymentRequestModal";
 import { ATTACHMENT_ACCEPT, ATTACHMENT_ALLOWED_TEXT, isAllowedAttachment } from "@/lib/approval/attachments";
 import { MailEditor } from "@/components/mail/MailEditor";
 import { recipientsDisplay } from "@/lib/letter/compose";
@@ -445,6 +446,10 @@ export function ApprovalLetterBoard() {
   const [dragOver, setDragOver] = useState(false);
   // 재편집 문서의 상태·반려 사유·삭제 권한(서버 판정) — 반려 배너와 기안 삭제 버튼 노출용.
   const [editMeta, setEditMeta] = useState<EditDocMeta | null>(null);
+  // 대금청구서 작성 모달(2026-08-24) — 첨부서류 섹션에서 바로 생성해 첨부한다.
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  // 모달로 생성한 대금청구서 문서 id — 발송 완료 시 상태 역기록(deliverable_ids)에 합류.
+  const [extraDeliverableIds, setExtraDeliverableIds] = useState<string[]>([]);
   // 임시저장 공문 목록(2026-08-24 사용자 요청) — 전자결재 홈까지 가지 않고 여기서 이어서 작성.
   const [letterDrafts, setLetterDrafts] = useState<
     Array<{ docId: string; title: string; status: string; docNo: string | null; updatedAt: string }>
@@ -743,15 +748,16 @@ export function ApprovalLetterBoard() {
       values.proof_receiver = proofReceiver;
     }
     if (fileAttachments.length) values.file_attachments = fileAttachments;
-    // 첨부된 착수계·준공계 — 발송 완료 시 lib/letter/send.ts 가 이 목록으로 상태를 역기록한다
-    if (deliverableId) values.deliverable_ids = [deliverableId];
+    // 첨부된 착수계·준공계·대금청구서 — 발송 완료 시 lib/letter/send.ts 가 이 목록으로 상태를 역기록한다
+    const dlvIds = [...(deliverableId ? [deliverableId] : []), ...extraDeliverableIds];
+    if (dlvIds.length) values.deliverable_ids = dlvIds;
     if (Object.values(overrides).some((v) => v !== undefined && v !== null)) {
       values.layout_overrides = overrides;
     }
     values.recipients_display = recipientsDisplay(values);
     values.letter_kind_display = letterKind === "proof" ? "내용증명" : "일반";
     return values;
-  }, [letterKind, recipients, ccRefs, subject, attachItems, stampOn, includeHwpx, contactPhone, contactEmail, proofSender, proofReceiver, overrides, fileAttachments, deliverableId, internalCcTarget]);
+  }, [letterKind, recipients, ccRefs, subject, attachItems, stampOn, includeHwpx, contactPhone, contactEmail, proofSender, proofReceiver, overrides, fileAttachments, deliverableId, extraDeliverableIds, internalCcTarget]);
 
   // 직접 지정 번호 — 연도는 채번 예정 번호(없으면 확정 번호/올해) 기준.
   const letterYear = (nextNo ?? docNo ?? "").slice(0, 4) || String(new Date().getFullYear());
@@ -803,9 +809,9 @@ export function ApprovalLetterBoard() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "저장 실패");
       setDocId(data.docId);
-      // 착수계·준공계 연계(D3) — 계약 메뉴 이력에서 이 공문을 역참조할 수 있게 연결해 둔다
-      if (deliverableId) {
-        void fetch(`/api/contracts/deliverables/${encodeURIComponent(deliverableId)}`, {
+      // 착수계·준공계·대금청구서 연계(D3) — 계약 메뉴 이력에서 이 공문을 역참조할 수 있게 연결해 둔다
+      for (const dlvId of [...(deliverableId ? [deliverableId] : []), ...extraDeliverableIds]) {
+        void fetch(`/api/contracts/deliverables/${encodeURIComponent(dlvId)}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ letterDocId: data.docId }),
@@ -813,7 +819,7 @@ export function ApprovalLetterBoard() {
       }
       return { docId: data.docId, docNo: data.docNo };
     },
-    [docId, subject, buildFieldValues, line, watchers, deliverableId, canAssign, noLocked, manualOn, manualNo]
+    [docId, subject, buildFieldValues, line, watchers, deliverableId, extraDeliverableIds, canAssign, noLocked, manualOn, manualNo]
   );
 
   const validate = useCallback((): string | null => {
@@ -830,6 +836,30 @@ export function ApprovalLetterBoard() {
     }
     return null;
   }, [subject, recipients, ccRefs, letterKind, proofReceiver, line, manualOn, noLocked, manualNo, manualCheck]);
+
+  /** 대금청구서 생성 완료 — 첨부에 추가하고, 비어 있는 제목·본문·붙임·수신처를 채운다. */
+  const onPaymentCreated = useCallback(
+    (r: PaymentRequestCreated) => {
+      setPaymentModalOpen(false);
+      setExtraDeliverableIds((prev) => (prev.includes(r.deliverableId) ? prev : [...prev, r.deliverableId]));
+      if (r.attachment) {
+        const att = r.attachment;
+        setFileAttachments((prev) => (prev.some((f) => f.key === att.key) ? prev : [...prev, att]));
+      } else if (r.storageError) {
+        alert(`대금청구서 PDF 보관에 실패해 자동 첨부되지 않았습니다. 파일을 직접 첨부해 주세요.\n(${r.storageError})`);
+      }
+      if (!subject.trim() && r.subject) setSubject(r.subject);
+      setAttachItems((prev) => (prev.length ? prev : r.attachItems));
+      const editor = editorRef.current;
+      if (editor && !editor.innerHTML.replace(/<[^>]+>|&nbsp;/g, "").trim() && r.bodyHtml) {
+        editor.innerHTML = r.bodyHtml;
+      }
+      if (r.recipient?.name) {
+        setRecipients((prev) => (prev.length ? prev : [{ name: r.recipient!.name, facilityName: r.recipient!.facilityName }]));
+      }
+    },
+    [subject]
+  );
 
   /** 동봉 첨부 업로드 — DnD/파일 선택 공용. 업로드 순서 = 발송 첨부 순서. */
   const uploadFiles = useCallback(async (files: FileList | File[]) => {
@@ -1203,11 +1233,21 @@ export function ApprovalLetterBoard() {
               </label>
             </div>
 
-            {/* 첨부서류 — 공문과 함께 참조자 메일로 순서대로 발송. (추후 대금청구서·준공계·착수계 작성 기능 배치 예정) */}
+            {/* 첨부서류 — 공문과 함께 참조자 메일로 순서대로 발송. 대금청구서는 여기서 바로 작성(2026-08-24). */}
             <div className="flex flex-col gap-1.5">
-              <span className="text-[11px] cd-text-faint">
-                첨부서류 — 공문 PDF 뒤에 첨부 순서대로 메일에 동봉됩니다. 총 20MB 까지 파일로 직접 첨부되고, 초과분은 다운로드 링크(7일 유효)로 전환됩니다 (총 200MB 까지)
-              </span>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] cd-text-faint">
+                  첨부서류 — 공문 PDF 뒤에 첨부 순서대로 메일에 동봉됩니다. 총 20MB 까지 파일로 직접 첨부되고, 초과분은 다운로드 링크(7일 유효)로 전환됩니다 (총 200MB 까지)
+                </span>
+                <button
+                  type="button"
+                  className="rounded-xl border cd-border-c px-2.5 py-1.5 text-[11px] cd-text-muted hover:cd-soft-primary inline-flex items-center gap-1 whitespace-nowrap shrink-0"
+                  title="계약을 골라 대금청구서 PDF 를 만들어 이 공문에 첨부합니다"
+                  onClick={() => setPaymentModalOpen(true)}
+                >
+                  <FileText className="w-3.5 h-3.5" /> 대금청구서 작성
+                </button>
+              </div>
               <span className="text-[10.5px] cd-text-faint">
                 결재자가 내용을 확인할 수 있는 형식만 첨부할 수 있습니다 — {ATTACHMENT_ALLOWED_TEXT}
               </span>
@@ -1510,6 +1550,8 @@ export function ApprovalLetterBoard() {
       )}
 
       {/* 사업장 간편 등록(수신처) — 영업 사업장 정보 신규 등록 이식 */}
+      {paymentModalOpen && <PaymentRequestModal onClose={() => setPaymentModalOpen(false)} onCreated={onPaymentCreated} />}
+
       {facilityModal && (
         <QuickFacilityModal
           theme={theme}

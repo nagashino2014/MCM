@@ -333,7 +333,10 @@ function deleteCol(cell: HTMLTableCellElement): void {
 }
 
 function freezeTableWidths(table: HTMLTableElement): void {
-  if (table.style.tableLayout === "fixed") return;
+  // 이미 px 합 기반(width:auto + fixed)이면 할 일 없음. ⚠fixed 여부만 보면 안 된다 —
+  // 신규 삽입 표는 fixed + width:92% 라, 테이블 폭이 %로 고정된 채 개별 열을 줄이면
+  // 줄인 만큼이 열들에 도로 재배분되어 상쇄된다(Alt+← 축소 불능 실사고, 2026-08-24).
+  if (table.style.tableLayout === "fixed" && table.style.width === "auto") return;
   const firstRow = table.rows[0];
   if (!firstRow) return;
   for (const td of Array.from(firstRow.cells)) td.style.width = `${td.offsetWidth}px`;
@@ -670,11 +673,11 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
       const el = node instanceof HTMLElement ? node : (node?.parentElement ?? null);
       const cell = (el?.closest?.("td,th") ?? null) as HTMLTableCellElement | null;
       setActiveCell(cell && innerRef.current?.contains(cell) ? cell : null);
-      // 기존 문서의 표(auto 레이아웃)는 편집 진입 시 현재 폭으로 고정한다(2026-08-24) —
-      // 입력할 때마다 열이 넓어지는 문제의 소급 해소. 신규 표는 삽입부터 fixed.
+      // 편집 진입 시 표 폭을 px 합 기반으로 고정한다(2026-08-24) — 기존 auto 표(입력마다
+      // 열 넓어짐)와 신규 92% 표(열 축소 상쇄) 모두 해당. 중복 실행은 함수 내부 가드가 막는다.
       if (cell) {
         const table = cell.closest("table") as HTMLTableElement | null;
-        if (table && table.style.tableLayout !== "fixed") freezeTableWidths(table);
+        if (table) freezeTableWidths(table);
       }
       // 위/아래 첨자 토글 활성 표시 — 커서가 에디터 안에 있을 때만 판독.
       if (node && innerRef.current?.contains(node instanceof HTMLElement ? node : node.parentElement)) {
@@ -1024,14 +1027,19 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
             if (p) for (let c = p.c; c < p.c + cell.colSpan; c++) cols.add(c);
           }
           for (const c of cols) {
+            // 열의 대표 폭을 먼저 읽고 일괄 설정 — 순차 설정 중 리플로우로 기준이 흔들리지 않게.
+            const targetsInCol: HTMLTableCellElement[] = [];
             for (let r = 0; r < grid.length; r++) {
               const cell = grid[r]?.[c];
-              if (!cell) continue;
+              if (!cell || targetsInCol.includes(cell)) continue;
               const p = cellPos(grid, cell)!;
               // 열 폭은 그 열에서 시작하는 단일 폭 셀에만 건다(병합 셀은 span 이 배분).
               if (p.c !== c || cell.colSpan > 1) continue;
-              cell.style.width = `${Math.max(36, cell.offsetWidth + delta)}px`;
+              targetsInCol.push(cell);
             }
+            if (!targetsInCol.length) continue;
+            const w = Math.max(36, targetsInCol[0].offsetWidth + delta);
+            for (const cell of targetsInCol) cell.style.width = `${w}px`;
           }
         } else {
           const delta = e.key === "ArrowDown" ? 4 : -4;

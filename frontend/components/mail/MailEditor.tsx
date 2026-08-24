@@ -378,7 +378,26 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
   const [imgBox, setImgBox] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
   const imgDragRef = useRef<{ startX: number; startW: number; ratio: number } | null>(null);
 
+  /** 정렬 명령 ↔ text-align 값 — 셀 다중 선택 상태의 일괄 정렬에 쓴다(2026-08-24). */
+  const JUSTIFY_ALIGN: Record<string, string> = {
+    justifyLeft: "left",
+    justifyCenter: "center",
+    justifyRight: "right",
+    justifyFull: "justify",
+  };
+
   const exec = (cmd: string, value?: string) => {
+    // 셀 다중 선택 중 정렬 — 브라우저 selection 이 없어 execCommand 가 무시되므로
+    // 선택된 셀들에 text-align 을 직접 건다(셀 내부 블록의 개별 정렬은 초기화해 상속시킨다).
+    const align = JUSTIFY_ALIGN[cmd];
+    if (align && cellSelRef.current && cellSelRef.current.cells.length > 0) {
+      for (const cell of cellSelRef.current.cells) {
+        cell.style.textAlign = align;
+        for (const b of Array.from(cell.querySelectorAll<HTMLElement>("div,p"))) b.style.textAlign = "";
+      }
+      onInput();
+      return;
+    }
     innerRef.current?.focus();
     document.execCommand(cmd, false, value);
     onInput();
@@ -1214,10 +1233,10 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
                       type="button"
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => {
-                        if (activeCell) {
-                          activeCell.style.backgroundColor = c.color ?? "";
-                          onInput();
-                        }
+                        // 다중 선택 중이면 선택 셀 전체, 아니면 커서 셀 하나(2026-08-24)
+                        const targets = cellSelRef.current?.cells.length ? cellSelRef.current.cells : activeCell ? [activeCell] : [];
+                        for (const cell of targets) cell.style.backgroundColor = c.color ?? "";
+                        if (targets.length) onInput();
                         setToolPopover(null);
                       }}
                       className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] cd-text hover:cd-soft-primary whitespace-nowrap"

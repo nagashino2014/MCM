@@ -914,6 +914,50 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
 
   /** 자동 글머리 — "-"/"*"/"1." 뒤 Space 또는 Enter 로 목록 전환(IME 조합 중 제외). */
   const onEditorKeyDown = (e: React.KeyboardEvent) => {
+    // Alt+방향키 = 셀 크기 조절(2026-08-24, 한글 워드프로세서 관례) — 커서 셀 또는
+    // 드래그로 선택한 복수 셀이 걸친 열 너비(←→)·행 높이(↑↓)를 한 단계씩 조절한다.
+    // 방향키 단독은 커서 이동이라 Alt 조합만 가로챈다. 선택 해제 로직보다 먼저 처리.
+    if (e.altKey && (e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "ArrowUp" || e.key === "ArrowDown")) {
+      const targets = cellSelRef.current?.cells.length ? cellSelRef.current.cells : activeCell ? [activeCell] : [];
+      const table = targets[0]?.closest("table") as HTMLTableElement | null;
+      if (targets.length && table && innerRef.current?.contains(table)) {
+        e.preventDefault();
+        if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+          freezeTableWidths(table);
+          const delta = e.key === "ArrowRight" ? 8 : -8;
+          const grid = buildGrid(table);
+          const cols = new Set<number>();
+          for (const cell of targets) {
+            const p = cellPos(grid, cell);
+            if (p) for (let c = p.c; c < p.c + cell.colSpan; c++) cols.add(c);
+          }
+          for (const c of cols) {
+            for (let r = 0; r < grid.length; r++) {
+              const cell = grid[r]?.[c];
+              if (!cell) continue;
+              const p = cellPos(grid, cell)!;
+              // 열 폭은 그 열에서 시작하는 단일 폭 셀에만 건다(병합 셀은 span 이 배분).
+              if (p.c !== c || cell.colSpan > 1) continue;
+              cell.style.width = `${Math.max(36, cell.offsetWidth + delta)}px`;
+            }
+          }
+        } else {
+          const delta = e.key === "ArrowDown" ? 4 : -4;
+          const rows = new Set<HTMLTableRowElement>();
+          for (const cell of targets) {
+            const tr = cell.closest("tr");
+            if (tr) rows.add(tr);
+          }
+          for (const tr of rows) {
+            for (const td of Array.from(tr.cells)) {
+              td.style.height = `${Math.max(24, td.offsetHeight + delta)}px`;
+            }
+          }
+        }
+        onInput();
+        return;
+      }
+    }
     // 셀 다중 선택 중 키 입력 — 하이라이트 속성이 저장 HTML 에 남지 않게 먼저 해제.
     if (cellSelRef.current && e.key !== "Shift" && e.key !== "Control" && e.key !== "Alt") clearCellSelection();
     if ((e.nativeEvent as KeyboardEvent).isComposing) return;
@@ -1254,7 +1298,9 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
           {divider}
           <TableBtn label="표 삭제" icon={<Trash2 className="w-3 h-3" />} onClick={() => tableAct((c) => c.closest("table")?.remove())} danger />
           <span className="ml-auto cd-text-faint hidden md:inline">
-            {selCellCount > 1 ? `${selCellCount}개 셀 선택됨 — 셀 병합을 누르세요` : "셀 경계 드래그 = 크기 조절 · 셀에서 드래그 = 다중 선택"}
+            {selCellCount > 1
+              ? `${selCellCount}개 셀 선택됨 — 셀 병합 또는 Alt+방향키로 크기 조절`
+              : "셀 경계 드래그 = 크기 조절 · 셀에서 드래그 = 다중 선택 · Alt+방향키 = 셀 크기"}
           </span>
         </div>
       )}

@@ -75,7 +75,11 @@ export default function FacilityInfoModal({
     return () => controller.abort();
   }, [activeId]);
 
-  const region = [info?.regionSido, info?.regionSigungu].filter(Boolean).join(" ");
+  // 지역 컬럼이 빈 사업장(거래처 등록 경로는 95%가 미기재 — 2026-08-24 실사)은
+  // 소재지 앞 두 토큰(시도 시군구)으로 파생해 표시한다.
+  const region =
+    [info?.regionSido, info?.regionSigungu].filter(Boolean).join(" ") ||
+    (info?.siteAddress ?? "").trim().split(/\s+/).slice(0, 2).join(" ");
   const businessType = [info?.businessCertificateBusinessType, info?.businessCertificateBusinessItem]
     .filter(Boolean)
     .join(" · ");

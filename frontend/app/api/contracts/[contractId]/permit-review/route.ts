@@ -57,9 +57,36 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
 
     // 대상사업장 — 검토결과서의 허가 정보가 기입될 사업장(통상 1개, 첫 연결 사용).
     const facilityRows = rowsToObjects(
-      await db.exec(`SELECT facility_id FROM contract_facilities WHERE contract_id = $1 LIMIT 1`, [contractId])
+      await db.exec(
+        `SELECT cf.facility_id, f.company_name
+           FROM contract_facilities cf
+           JOIN facilities f ON f.facility_id = cf.facility_id AND f.deleted_at IS NULL
+          WHERE cf.contract_id = $1 LIMIT 1`,
+        [contractId]
+      )
     );
-    const facilityId = facilityRows.length ? String(facilityRows[0].facility_id) : null;
+    let facilityId = facilityRows.length ? String(facilityRows[0].facility_id) : null;
+    let facilityName = facilityRows.length ? String(facilityRows[0].company_name ?? "") : "";
+    let facilityVia: "target" | "counterparty" | null = facilityId ? "target" : null;
+    if (!facilityId) {
+      // 폴백(2026-08-24 실사): 대상사업장 연결이 없는 레거시 계약이 1,080건 —
+      // 통합허가 용역은 발주처가 곧 대상사업장인 경우가 대부분이라 발주처 사업장으로
+      // 폴백한다. 응답 facilityVia 로 경로를 알려 UI 가 어느 사업장에 반영됐는지 명시한다.
+      const cpRows = rowsToObjects(
+        await db.exec(
+          `SELECT f.facility_id, f.company_name
+             FROM contracts c
+             JOIN facilities f ON f.facility_id = c.counterparty_facility_id AND f.deleted_at IS NULL
+            WHERE c.contract_id = $1`,
+          [contractId]
+        )
+      );
+      if (cpRows.length) {
+        facilityId = String(cpRows[0].facility_id);
+        facilityName = String(cpRows[0].company_name ?? "");
+        facilityVia = "counterparty";
+      }
+    }
 
     const buf = Buffer.from(await file.arrayBuffer());
     const sha256 = crypto.createHash("sha256").update(buf).digest("hex");
@@ -157,7 +184,15 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
           action: "contract_update",
           targetTable: "contracts",
           targetId: contractId,
-          after: { permitReviewParsed: { permitNo: parsed.permitNo, permitDate: parsed.permitDate, facilityApplied } },
+          after: {
+            permitReviewParsed: {
+              permitNo: parsed.permitNo,
+              permitDate: parsed.permitDate,
+              facilityApplied,
+              facilityId,
+              facilityVia,
+            },
+          },
         });
       });
     } else if (!parsed) {
@@ -169,6 +204,8 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       documentId,
       parsed,
       facilityApplied,
+      facilityVia,
+      facilityName,
       ...(skippedReason ? { skippedReason } : {}),
     });
   } catch (err) {

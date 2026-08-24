@@ -1368,6 +1368,8 @@ function PermitInfoSection({
         error?: string;
         parsed?: { permitNo?: string; permitDate?: string; products?: unknown[] } | null;
         facilityApplied?: boolean;
+        facilityVia?: "target" | "counterparty" | null;
+        facilityName?: string;
         skippedReason?: string;
       };
       if (!res.ok) throw new Error(data?.error ?? "HTTP " + res.status);
@@ -1378,9 +1380,11 @@ function PermitInfoSection({
       if (data.parsed.permitDate) setIssuedAt(data.parsed.permitDate);
       if (data.parsed.permitNo) setNo(data.parsed.permitNo);
       const facilityMsg = data.facilityApplied
-        ? " 사업장 허가 정보에도 반영했습니다."
+        ? data.facilityVia === "counterparty"
+          ? ` 대상사업장 연결이 없어 발주처 사업장(${data.facilityName || "발주처"})의 허가 정보에 반영했습니다.`
+          : ` 사업장(${data.facilityName || "대상사업장"}) 허가 정보에도 반영했습니다.`
         : data.skippedReason === "no-facility"
-          ? " (대상사업장이 없어 사업장 반영은 생략)"
+          ? " (대상사업장·발주처 사업장이 없어 사업장 반영은 생략)"
           : data.skippedReason === "no-permit-no"
             ? " (허가번호 인식 실패로 사업장 반영은 생략)"
             : "";

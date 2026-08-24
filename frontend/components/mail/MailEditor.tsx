@@ -333,25 +333,54 @@ function deleteCol(cell: HTMLTableCellElement): void {
 }
 
 function freezeTableWidths(table: HTMLTableElement): void {
-  // 이미 px 합 기반(width:auto + fixed)이면 할 일 없음. ⚠fixed 여부만 보면 안 된다 —
-  // 신규 삽입 표는 fixed + width:92% 라, 테이블 폭이 %로 고정된 채 개별 열을 줄이면
-  // 줄인 만큼이 열들에 도로 재배분되어 상쇄된다(Alt+← 축소 불능 실사고, 2026-08-24).
-  if (table.style.tableLayout === "fixed" && table.style.width === "auto") return;
-  const firstRow = table.rows[0];
-  if (!firstRow) return;
-  for (const td of Array.from(firstRow.cells)) td.style.width = `${td.offsetWidth}px`;
+  if (!table.rows[0]) return;
+  // 그리드 기반 전 열 px 고정(2026-08-24 재작성). ⚠fixed 여부·첫 행만 보면 안 된다 —
+  // ① 신규 표는 fixed + width:92% 라 테이블 폭이 %로 고정된 채 열 축소분이 재배분·상쇄되고,
+  // ② 과거 버전을 거친 표는 fixed + auto 인데 일부 열만 px 라 미지정 열이 잔여 배분을 받아
+  //    조절이 상쇄되고 텍스트 열이 멋대로 쪼그라들었다(같은 날 실사고 2건).
+  // 열마다 "그 열에서 시작하는 단일 폭 셀" 전부에 px 를 지정해야 병합 표에서도 폭이 확정된다.
+  const grid = buildGrid(table);
+  const cols = gridColCount(grid);
+  if (!cols) return;
+  const colStarts: HTMLTableCellElement[][] = [];
+  for (let c = 0; c < cols; c++) {
+    colStarts[c] = [];
+    for (let r = 0; r < grid.length; r++) {
+      const cell = grid[r]?.[c];
+      if (!cell || cell.colSpan !== 1) continue;
+      if (cellPos(grid, cell)?.c !== c) continue;
+      if (!colStarts[c].includes(cell)) colStarts[c].push(cell);
+    }
+  }
+  const alreadyFrozen =
+    table.style.tableLayout === "fixed" &&
+    table.style.width === "auto" &&
+    colStarts.every((cells) => cells.every((td) => /px$/.test(td.style.width)));
+  if (alreadyFrozen) return;
+  // 측정과 설정을 섞으면 리플로우로 기준이 왜곡된다 — 열별 렌더 폭을 전부 읽은 뒤 일괄 지정.
+  const widths = colStarts.map((cells) => cells[0]?.offsetWidth ?? 0);
+  for (let c = 0; c < cols; c++) {
+    if (!widths[c]) continue;
+    for (const cell of colStarts[c]) cell.style.width = `${widths[c]}px`;
+  }
   table.style.tableLayout = "fixed";
   table.style.width = "auto";
 }
 
-/** 열 너비 같게 — 현재 표 폭을 유지한 채 모든 열을 균등 분배. */
+/** 열 너비 같게 — 현재 표 폭을 유지한 채 모든 열을 균등 분배(그리드 기준, 병합 셀은 span 배분). */
 function equalizeCols(cell: HTMLTableCellElement): void {
   const table = cell.closest("table") as HTMLTableElement | null;
-  const firstRow = table?.rows[0];
-  if (!table || !firstRow) return;
+  if (!table || !table.rows[0]) return;
+  const cols = gridColCount(buildGrid(table));
+  if (!cols) return;
   const total = table.offsetWidth;
-  const w = Math.max(36, Math.floor(total / firstRow.cells.length));
-  for (const row of Array.from(table.rows)) for (const td of Array.from(row.cells)) td.style.width = `${w}px`;
+  const w = Math.max(36, Math.floor(total / cols));
+  for (const row of Array.from(table.rows)) {
+    for (const td of Array.from(row.cells)) {
+      if (td.colSpan > 1) td.style.removeProperty("width");
+      else td.style.width = `${w}px`;
+    }
+  }
   table.style.tableLayout = "fixed";
   table.style.width = "auto";
 }
@@ -987,11 +1016,18 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
     if (rect.right - e.clientX < EDGE) {
       e.preventDefault();
       freezeTableWidths(table);
-      const idx = cell.cellIndex;
-      const cells = Array.from(table.rows)
-        .map((r) => r.cells[idx])
-        .filter(Boolean) as HTMLTableCellElement[];
-      dragRef.current = { kind: "col", cells, startPos: e.clientX, startSize: cell.offsetWidth };
+      // 드래그한 경계가 속한 그리드 열의 "시작 단일 폭 셀"들만 조절(2026-08-24) —
+      // 종전 cellIndex 기반은 병합 표에서 행마다 다른 열을 집었다.
+      const grid = buildGrid(table);
+      const p = cellPos(grid, cell);
+      const edgeC = p ? p.c + cell.colSpan - 1 : cell.cellIndex;
+      const cells: HTMLTableCellElement[] = [];
+      for (let r = 0; r < grid.length; r++) {
+        const cand = grid[r]?.[edgeC];
+        if (cand && cand.colSpan === 1 && cellPos(grid, cand)?.c === edgeC && !cells.includes(cand)) cells.push(cand);
+      }
+      if (!cells.length) return;
+      dragRef.current = { kind: "col", cells, startPos: e.clientX, startSize: cells[0].offsetWidth };
       document.body.style.cursor = "col-resize";
       document.body.style.userSelect = "none";
     } else if (rect.bottom - e.clientY < EDGE) {

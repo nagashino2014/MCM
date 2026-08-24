@@ -192,52 +192,144 @@ function SymbolPalette({ onInsert }: { onInsert: (symbol: string) => void }) {
 }
 
 // ── 표 DOM 편집 유틸 ─────────────────────────────────────────────
-function insertRow(cell: HTMLTableCellElement, where: "above" | "below"): void {
-  const tr = cell.closest("tr");
-  if (!tr) return;
-  const cols = tr.cells.length;
-  const newTr = document.createElement("tr");
-  for (let i = 0; i < cols; i++) {
-    const td = document.createElement("td");
-    td.setAttribute("style", BODY_TD_STYLE);
-    td.innerHTML = "&nbsp;";
-    newTr.appendChild(td);
+// 행/열 연산은 전부 그리드(시각적 행·열) 기준(2026-08-24 재작성) — 종전 cellIndex 기반은
+// 병합(rowSpan/colSpan) 셀이 있으면 행마다 같은 번호가 다른 시각적 열을 가리켜, 열 삭제가
+// 엉뚱한 열의 셀을 지우는 실사고가 났다(삼성전기 청구 공문 표). buildGrid/cellPos 는 아래
+// 셀 병합 섹션에 정의(함수 선언 호이스팅으로 참조 가능).
+
+/** 표의 총 그리드 열 수. */
+function gridColCount(grid: (HTMLTableCellElement | undefined)[][]): number {
+  return grid.reduce((acc, r) => Math.max(acc, r?.length ?? 0), 0);
+}
+
+/** 행 r 에서 그리드 열 fromC 이후에 "시작"하는 첫 셀 — 새 셀 삽입 기준점. */
+function rowInsertRef(
+  grid: (HTMLTableCellElement | undefined)[][],
+  r: number,
+  fromC: number
+): HTMLTableCellElement | null {
+  for (let c = fromC; c < (grid[r]?.length ?? 0); c++) {
+    const cand = grid[r]?.[c];
+    if (cand && cellPos(grid, cand)?.r === r) return cand;
   }
-  if (where === "above") tr.before(newTr);
-  else tr.after(newTr);
+  return null;
+}
+
+function newTd(style?: string | null): HTMLTableCellElement {
+  const td = document.createElement("td");
+  td.setAttribute("style", style || `${BODY_TD_STYLE}word-break:break-all;`);
+  td.innerHTML = "&nbsp;";
+  return td;
+}
+
+function insertRow(cell: HTMLTableCellElement, where: "above" | "below"): void {
+  const table = cell.closest("table") as HTMLTableElement | null;
+  if (!table) return;
+  const grid = buildGrid(table);
+  const pos = cellPos(grid, cell);
+  if (!pos) return;
+  // 새 행이 차지할 그리드 행 번호 — below 는 병합 셀의 끝 다음.
+  const insertAt = where === "above" ? pos.r : pos.r + cell.rowSpan;
+  const cols = gridColCount(grid);
+  const newTr = document.createElement("tr");
+  const grown = new Set<HTMLTableCellElement>();
+  for (let c = 0; c < cols; c++) {
+    // 경계를 세로로 가로지르는 병합 셀(위·아래가 같은 셀)은 rowSpan 만 1 늘린다.
+    const above = insertAt > 0 ? grid[insertAt - 1]?.[c] : undefined;
+    const below = grid[insertAt]?.[c];
+    if (above && below && above === below) {
+      if (!grown.has(above)) {
+        above.rowSpan += 1;
+        grown.add(above);
+      }
+      continue;
+    }
+    newTr.appendChild(newTd());
+  }
+  const refTr = table.rows[insertAt];
+  if (refTr) refTr.before(newTr);
+  else table.rows[table.rows.length - 1]?.parentElement?.appendChild(newTr);
 }
 
 function deleteRow(cell: HTMLTableCellElement): void {
   const tr = cell.closest("tr");
-  const table = cell.closest("table");
+  const table = cell.closest("table") as HTMLTableElement | null;
   if (!tr || !table) return;
-  if (table.rows.length <= 1) table.remove();
-  else tr.remove();
+  if (table.rows.length <= 1) {
+    table.remove();
+    return;
+  }
+  const grid = buildGrid(table);
+  const r = tr.rowIndex;
+  const handled = new Set<HTMLTableCellElement>();
+  for (let c = 0; c < (grid[r]?.length ?? 0); c++) {
+    const cellAt = grid[r]?.[c];
+    if (!cellAt || handled.has(cellAt)) continue;
+    handled.add(cellAt);
+    if (cellAt.rowSpan <= 1) continue; // tr.remove() 와 함께 사라짐
+    const p = cellPos(grid, cellAt)!;
+    cellAt.rowSpan -= 1;
+    if (p.r === r) {
+      // 이 행에서 시작하는 세로 병합 셀 — 내용을 살려 다음 행으로 이관.
+      const nextTr = table.rows[r + 1];
+      if (nextTr) {
+        const ref = rowInsertRef(grid, r + 1, p.c + cellAt.colSpan);
+        if (ref) ref.before(cellAt);
+        else nextTr.appendChild(cellAt);
+      }
+    }
+  }
+  tr.remove();
 }
 
 function insertCol(cell: HTMLTableCellElement, where: "left" | "right"): void {
-  const table = cell.closest("table");
+  const table = cell.closest("table") as HTMLTableElement | null;
   if (!table) return;
-  const idx = cell.cellIndex;
-  for (const row of Array.from(table.rows)) {
-    const ref = row.cells[Math.min(idx, row.cells.length - 1)];
-    const td = document.createElement("td");
-    td.setAttribute("style", ref?.getAttribute("style") || BODY_TD_STYLE);
-    td.innerHTML = "&nbsp;";
-    if (where === "left") ref?.before(td);
-    else ref?.after(td);
+  const grid = buildGrid(table);
+  const pos = cellPos(grid, cell);
+  if (!pos) return;
+  // 새 열이 차지할 그리드 열 번호 — right 는 병합 셀의 끝 다음.
+  const targetC = where === "left" ? pos.c : pos.c + cell.colSpan;
+  const grown = new Set<HTMLTableCellElement>();
+  for (let r = 0; r < table.rows.length; r++) {
+    // 경계를 가로로 가로지르는 병합 셀(좌·우가 같은 셀)은 colSpan 만 1 늘린다.
+    const left = targetC > 0 ? grid[r]?.[targetC - 1] : undefined;
+    const right = grid[r]?.[targetC];
+    if (left && right && left === right) {
+      if (!grown.has(left)) {
+        left.colSpan += 1;
+        grown.add(left);
+      }
+      continue;
+    }
+    const tr = table.rows[r];
+    const ref = rowInsertRef(grid, r, targetC);
+    const td = newTd(ref?.getAttribute("style") ?? tr.cells[tr.cells.length - 1]?.getAttribute("style"));
+    if (ref) ref.before(td);
+    else tr.appendChild(td);
   }
 }
 
 function deleteCol(cell: HTMLTableCellElement): void {
-  const table = cell.closest("table");
+  const table = cell.closest("table") as HTMLTableElement | null;
   if (!table) return;
-  const idx = cell.cellIndex;
-  if (table.rows[0] && table.rows[0].cells.length <= 1) {
+  const grid = buildGrid(table);
+  const pos = cellPos(grid, cell);
+  if (!pos) return;
+  if (gridColCount(grid) <= 1) {
     table.remove();
     return;
   }
-  for (const row of Array.from(table.rows)) row.cells[idx]?.remove();
+  const c = pos.c;
+  const handled = new Set<HTMLTableCellElement>();
+  for (let r = 0; r < table.rows.length; r++) {
+    const cellAt = grid[r]?.[c];
+    if (!cellAt || handled.has(cellAt)) continue;
+    handled.add(cellAt);
+    // 가로 병합 셀은 한 칸만 좁히고, 단일 폭 셀만 제거한다.
+    if (cellAt.colSpan > 1) cellAt.colSpan -= 1;
+    else cellAt.remove();
+  }
 }
 
 function freezeTableWidths(table: HTMLTableElement): void {

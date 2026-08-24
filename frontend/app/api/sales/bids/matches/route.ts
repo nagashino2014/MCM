@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
-import { REGION_GROUPS } from "@/lib/bid/bid-queries";
+import { REGION_GROUPS, regionGroupOf } from "@/lib/bid/bid-queries";
 import { fieldValue } from "@/lib/bid/notify-dispatch";
 import {
   DEFAULT_CONTENT_FIELDS,
@@ -82,15 +82,6 @@ async function loadDetails(
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-/** 발주기관명에서 지역권(REGION_GROUPS 키)을 판정 — 첫 매칭 그룹. */
-function regionGroupOf(orgName: string | null): string | null {
-  if (!orgName) return null;
-  for (const [group, keys] of Object.entries(REGION_GROUPS)) {
-    if (keys.some((k) => orgName.includes(k))) return group;
-  }
-  return null;
-}
 
 /** 목록·삭제가 공유하는 필터 WHERE 조립(큐 행 대상). */
 function buildMatchWhere(opts: {

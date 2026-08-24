@@ -59,6 +59,24 @@ function spacedWidth(text: string, font: PDFFont, size: number, spacing: number)
   return font.widthOfTextAtSize(text, size) + spacing * Math.max(0, text.length - 1);
 }
 
+/**
+ * 청구 단위 전개(2026-08-24 사용자 확정) — "1,2차 변경 준공금" 같은 복합 단계명을
+ * "1차 변경 준공금"/"2차 변경 준공금" 줄들로 풀어 금회 청구액 아래에 표기한다.
+ * "A + B" 조인 라벨은 구분자로 나눈다. 패턴이 아니면 원문 한 줄.
+ */
+export function expandStageLabels(stageLabel: string): string[] {
+  const t = stageLabel.trim();
+  if (!t) return [];
+  const m = t.match(/^(\d+(?:\s*[,·]\s*\d+)+)\s*차\s*(.*)$/);
+  if (m) {
+    const nums = m[1].split(/[,·]/).map((x) => x.trim()).filter(Boolean);
+    const tail = m[2].trim();
+    return nums.map((num) => `${num}차${tail ? ` ${tail}` : ""}`);
+  }
+  if (t.includes("+")) return t.split("+").map((x) => x.trim()).filter(Boolean);
+  return [t];
+}
+
 /** 폭 초과 시 글자 단위 줄바꿈(계약건명이 긴 경우). */
 function wrapChars(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
   const lines: string[] = [];
@@ -80,16 +98,22 @@ export async function renderPaymentRequestPdf(values: DeliverableValues): Promis
   const pick = async (names: string[]) => {
     for (const name of names) {
       try {
-        return await readFile(path.join(fontsDir, name));
+        return { name, bytes: await readFile(path.join(fontsDir, name)) };
       } catch {
         /* 다음 후보 */
       }
     }
     throw new Error("본문 글꼴을 찾을 수 없습니다(public/fonts).");
   };
+  // 글꼴은 나눔고딕(사용자 확정, 2026-08-24) — 없으면 명조·맑은고딕 폴백.
+  // ⚠나눔고딕 TTF 는 fontkit subset 임베드에서 글리프가 대량 누락된다(실측) — 전체 임베드.
+  const embed = async (names: string[]) => {
+    const f = await pick(names);
+    return doc.embedFont(f.bytes, { subset: !f.name.startsWith("Nanum") });
+  };
   const fonts: Fonts = {
-    regular: await doc.embedFont(await pick(["HANBatang.ttf", "kopub-batang-md.ttf", "malgun.ttf"]), { subset: true }),
-    bold: await doc.embedFont(await pick(["HANBatangB.ttf", "kopub-batang-bd.ttf", "malgunbd.ttf"]), { subset: true }),
+    regular: await embed(["NanumGothic.ttf", "HANBatang.ttf", "kopub-batang-md.ttf", "malgun.ttf"]),
+    bold: await embed(["NanumGothicBold.ttf", "HANBatangB.ttf", "kopub-batang-bd.ttf", "malgunbd.ttf"]),
   };
   let stamp: PDFImage | null = null;
   try {
@@ -195,24 +219,28 @@ export async function renderPaymentRequestPdf(values: DeliverableValues): Promis
   }
   y -= 8;
 
-  // ── 청구 내역 표 ──
-  const col0 = 118;
+  // ── 청구 내역 표 — 금회 행은 라벨 아래에 청구 단위를 줄바꿈 표기(행 높이 가변) ──
+  const col0 = 128;
   const colW = (CONTENT_W - col0) / 3;
   const rowH = 25;
+  const subLineH = 12;
   const headers = ["구  분", "공급가액", `부가세`, "합  계"];
-  const rows: Array<{ label: string; v: { supply: number; vat: number; total: number }; em?: boolean }> = [
+  const stageLines = expandStageLabels(stageLabel);
+  const rows: Array<{ label: string; sub?: string[]; v: { supply: number; vat: number; total: number }; em?: boolean }> = [
     { label: "계약금액", v: contractAmount },
     { label: priorLabel, v: prev },
-    { label: `금회 청구액 (${stageLabel})`, v: cur, em: true },
+    { label: "금회 청구액", sub: stageLines, v: cur, em: true },
     { label: "청구 후 잔액", v: remain },
   ];
+  const rowHeights = rows.map((r) => rowH + (r.sub?.length ? r.sub.length * subLineH + 3 : 0));
   const tableTop = y;
-  const tableH = rowH * (rows.length + 1);
+  const tableH = rowH + rowHeights.reduce((a, b) => a + b, 0);
+  const rowTop = (i: number) => tableTop - rowH - rowHeights.slice(0, i).reduce((a, b) => a + b, 0);
   // 헤더 배경 + 강조 행 배경
   page.drawRectangle({ x: MARGIN, y: tableTop - rowH, width: CONTENT_W, height: rowH, color: SOFT });
   rows.forEach((r, i) => {
     if (r.em) {
-      page.drawRectangle({ x: MARGIN, y: tableTop - rowH * (i + 2), width: CONTENT_W, height: rowH, color: TINT });
+      page.drawRectangle({ x: MARGIN, y: rowTop(i) - rowHeights[i], width: CONTENT_W, height: rowHeights[i], color: TINT });
     }
   });
   // 헤더 텍스트(중앙)
@@ -222,27 +250,32 @@ export async function renderPaymentRequestPdf(values: DeliverableValues): Promis
     const w = fonts.bold.widthOfTextAtSize(h, 10);
     page.drawText(h, { x: cx + (cw - w) / 2, y: tableTop - rowH + 8.5, size: 10, font: fonts.bold, color: INK });
   });
-  // 데이터 행
+  // 데이터 행 — 라벨·금액은 첫 줄 기준, 하위 청구 단위는 그 아래 작은 글씨.
   rows.forEach((r, i) => {
-    const rowY = tableTop - rowH * (i + 2) + 8.5;
+    const top = rowTop(i);
+    const firstY = top - rowH + 8.5;
     const font = r.em ? fonts.bold : fonts.regular;
     const color = r.em ? NAVY : INK;
-    page.drawText(r.label, { x: MARGIN + 10, y: rowY, size: 10, font, color });
+    page.drawText(r.label, { x: MARGIN + 10, y: firstY, size: 10, font, color });
+    (r.sub ?? []).forEach((line, k) => {
+      page.drawText(`· ${line}`, { x: MARGIN + 18, y: firstY - (k + 1) * subLineH, size: 8.8, font: fonts.regular, color: GRAY });
+    });
     [r.v.supply, r.v.vat, r.v.total].forEach((num, j) => {
       const text = formatMoney(num);
       const w = font.widthOfTextAtSize(text, 10.2);
-      page.drawText(text, { x: MARGIN + col0 + colW * (j + 1) - 10 - w, y: rowY, size: 10.2, font, color });
+      page.drawText(text, { x: MARGIN + col0 + colW * (j + 1) - 10 - w, y: firstY, size: 10.2, font, color });
     });
   });
   // 라인 — 외곽 상하 굵게, 내부 가로 가늘게, 세로 구분선
   page.drawLine({ start: { x: MARGIN, y: tableTop }, end: { x: MARGIN + CONTENT_W, y: tableTop }, thickness: 1.1, color: INK });
   page.drawLine({ start: { x: MARGIN, y: tableTop - tableH }, end: { x: MARGIN + CONTENT_W, y: tableTop - tableH }, thickness: 1.1, color: INK });
-  for (let i = 1; i <= rows.length; i++) {
+  for (let i = 0; i < rows.length; i++) {
+    const lineY = rowTop(i);
     page.drawLine({
-      start: { x: MARGIN, y: tableTop - rowH * i },
-      end: { x: MARGIN + CONTENT_W, y: tableTop - rowH * i },
-      thickness: i === 1 ? 0.9 : 0.45,
-      color: i === 1 ? INK : LINE_C,
+      start: { x: MARGIN, y: lineY },
+      end: { x: MARGIN + CONTENT_W, y: lineY },
+      thickness: i === 0 ? 0.9 : 0.45,
+      color: i === 0 ? INK : LINE_C,
     });
   }
   for (let j = 0; j <= 2; j++) {
@@ -272,7 +305,7 @@ export async function renderPaymentRequestPdf(values: DeliverableValues): Promis
   const dateKor = koreanDate(issueDate);
   const dateW = fonts.regular.widthOfTextAtSize(dateKor, 11.5);
   page.drawText(dateKor, { x: MARGIN + (CONTENT_W - dateW) / 2, y, size: 11.5, font: fonts.regular, color: INK });
-  y -= 44;
+  y -= 56;
 
   const companyName = s(values, "company.name");
   const companyAddr = s(values, "company.address");
@@ -283,9 +316,9 @@ export async function renderPaymentRequestPdf(values: DeliverableValues): Promis
   if (companyAddr) {
     const addrW = fonts.regular.widthOfTextAtSize(companyAddr, 9.5);
     page.drawText(companyAddr, { x: MARGIN + (CONTENT_W - addrW) / 2, y, size: 9.5, font: fonts.regular, color: GRAY });
-    y -= 24;
+    y -= 36;
   } else {
-    y -= 10;
+    y -= 14;
   }
   const ceoLine = `대표이사   ${[...ceo].join(" ")}   (인)`;
   const ceoW = fonts.bold.widthOfTextAtSize(ceoLine, 12.5);

@@ -32,7 +32,8 @@ function buildTableHtml(rows: number, cols: number): string {
     `<td style="${header ? HEADER_TD_STYLE : BODY_TD_STYLE}${w}word-break:break-all;">&nbsp;</td>`;
   const tr = (header: boolean) => `<tr>${Array.from({ length: cols }, () => td(header)).join("")}</tr>`;
   const body = Array.from({ length: rows }, (_, i) => tr(i === 0)).join("");
-  return `<table style="border-collapse:collapse;margin:8px 0;width:100%;table-layout:fixed"><tbody>${body}</tbody></table><div><br></div>`;
+  // 표 폭 92% + 가운데 정렬(2026-08-24 사용자 확정) — 본문 양끝에 붙지 않게 좌우 여백을 둔다.
+  return `<table style="border-collapse:collapse;margin:8px auto;width:92%;table-layout:fixed"><tbody>${body}</tbody></table><div><br></div>`;
 }
 
 // 글꼴(메일 안전 폰트 위주 — 수신측 미설치 시 유사 폰트 폴백).

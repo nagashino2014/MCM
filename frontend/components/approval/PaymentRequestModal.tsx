@@ -47,7 +47,8 @@ export default function PaymentRequestModal({
   const [contracts, setContracts] = useState<ContractRow[]>([]);
   const [contract, setContract] = useState<ContractRow | null>(null);
   const [milestones, setMilestones] = useState<MilestoneRow[]>([]);
-  const [milestoneId, setMilestoneId] = useState("");
+  // 청구 단계 복수 선택(2026-08-24) — 여러 단계를 한 장의 대금청구서로 청구(단위별 금액 분해 표기).
+  const [milestoneIds, setMilestoneIds] = useState<string[]>([]);
   const [vatNote, setVatNote] = useState("VAT 별도");
   const [bankKey, setBankKey] = useState("");
   const [attachNote, setAttachNote] = useState("법인 통장 사본 1부");
@@ -89,7 +90,7 @@ export default function PaymentRequestModal({
     let alive = true;
     setLoadingCtx(true);
     const params = new URLSearchParams({ contractId: contract.contractId, kind: "completion", vatNote });
-    if (milestoneId) params.set("milestoneId", milestoneId);
+    if (milestoneIds.length) params.set("milestoneIds", milestoneIds.join(","));
     fetch(`/api/contracts/deliverables/sources?${params.toString()}`, { cache: "no-store" })
       .then(async (r) => {
         const d = await r.json();
@@ -100,7 +101,7 @@ export default function PaymentRequestModal({
         setServerValues((d.values ?? {}) as Record<string, unknown>);
         // 서버가 고른 청구 회차(준공·잔금 우선)를 초기 선택으로 반영
         const chosen = String(d.values?.["meta.milestoneId"] ?? "");
-        if (!milestoneId && chosen && chosen !== "virtual-1") setMilestoneId(chosen);
+        if (!milestoneIds.length && chosen && chosen !== "virtual-1") setMilestoneIds([chosen]);
         setError(null);
       })
       .catch((e) => {
@@ -113,7 +114,7 @@ export default function PaymentRequestModal({
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contract, milestoneId, vatNote]);
+  }, [contract, milestoneIds, vatNote]);
 
   const curTotal = Number(serverValues?.["completion.curTotal"] ?? 0);
   const stageLabel = String(serverValues?.["meta.stageLabel"] ?? "");
@@ -131,7 +132,7 @@ export default function PaymentRequestModal({
           kind: "completion",
           templateId: null,
           docTypes: ["payment_request"],
-          milestoneId: milestoneId || null,
+          milestoneId: milestoneIds[0] ?? null,
         }),
       });
       const created = await createRes.json();
@@ -191,7 +192,7 @@ export default function PaymentRequestModal({
                   onClick={() => {
                     setContract(null);
                     setMilestones([]);
-                    setMilestoneId("");
+                    setMilestoneIds([]);
                     setServerValues(null);
                     setQuery("");
                   }}
@@ -232,18 +233,39 @@ export default function PaymentRequestModal({
 
           {contract && (
             <>
+              <div className="grid gap-1">
+                <span className="text-[11px] cd-text-faint font-semibold">
+                  청구 단계 — 복수 선택 시 한 장으로 합산 청구되고 단계별 금액이 표에 표기됩니다
+                </span>
+                <div className="rounded-xl border cd-border-c max-h-44 overflow-y-auto">
+                  {milestones.length === 0 && (
+                    <div className="px-3 py-2.5 text-xs cd-text-faint">등록된 대금지급단계가 없습니다 — 계약금액 전액으로 청구됩니다.</div>
+                  )}
+                  {milestones.map((m) => (
+                    <label
+                      key={m.milestoneId}
+                      className="flex items-center gap-2 px-3 py-1.5 text-[12px] border-b cd-border-c last:border-b-0 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={milestoneIds.includes(m.milestoneId)}
+                        onChange={() =>
+                          setMilestoneIds((prev) =>
+                            prev.includes(m.milestoneId) ? prev.filter((x) => x !== m.milestoneId) : [...prev, m.milestoneId]
+                          )
+                        }
+                      />
+                      <span className="cd-text font-medium truncate flex-1">{m.stageLabel || `${m.stageOrder}차`}</span>
+                      {m.invoiceIssued && (
+                        <span className="rounded-full border cd-border-c px-1.5 py-0.5 text-[10px] cd-text-faint shrink-0">발행됨</span>
+                      )}
+                      <span className="tabular-nums cd-text-muted shrink-0">{fmt(m.amount)}원</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
-                <label className="grid gap-1">
-                  <span className="text-[11px] cd-text-faint font-semibold">청구 단계</span>
-                  <select className="cd-select" value={milestoneId} onChange={(e) => setMilestoneId(e.target.value)}>
-                    {milestones.length === 0 && <option value="">회차 없음 — 계약금액 전액</option>}
-                    {milestones.map((m) => (
-                      <option key={m.milestoneId} value={m.milestoneId}>
-                        {m.stageLabel || `${m.stageOrder}차`} — {fmt(m.amount)}원{m.invoiceIssued ? " (발행됨)" : ""}
-                      </option>
-                    ))}
-                  </select>
-                </label>
                 <label className="grid gap-1">
                   <span className="text-[11px] cd-text-faint font-semibold">VAT 표기</span>
                   <select className="cd-select" value={vatNote} onChange={(e) => setVatNote(e.target.value)}>

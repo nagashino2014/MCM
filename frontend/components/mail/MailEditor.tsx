@@ -11,7 +11,8 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useSta
 import {
   AlignCenter, AlignJustify, AlignLeft, AlignRight, ArrowDown, ArrowLeft, ArrowRight, ArrowUp,
   Baseline, Bold, Image as ImageIcon, Indent, Italic, Link2, List, ListOrdered, Minus as MinusIcon,
-  Omega, Outdent, Paintbrush, Plus, SeparatorHorizontal, Strikethrough, Subscript, Superscript, Table2, Trash2,
+  Omega, Outdent, Paintbrush, Plus, SeparatorHorizontal, Strikethrough, Subscript, Superscript, Table2,
+  TableCellsMerge, TableCellsSplit, Trash2,
   Underline as UnderlineIcon, UnfoldHorizontal, UnfoldVertical,
 } from "lucide-react";
 import { CdIconButton } from "@/components/cdash/CdButton";
@@ -24,10 +25,14 @@ const TABLE_MAX_COLS = 8;
 const HR_HTML = `<hr style="border:none;border-top:1px solid #c8c8cc;margin:12px 0">`;
 
 function buildTableHtml(rows: number, cols: number): string {
-  const td = (header: boolean) => `<td style="${header ? HEADER_TD_STYLE : BODY_TD_STYLE}">&nbsp;</td>`;
+  // table-layout:fixed(2026-08-24) — auto 레이아웃은 텍스트를 입력할 때마다 그 열이
+  // 계속 넓어진다. 고정 레이아웃 + 열 균등 폭으로 만들고, 넘치는 텍스트는 줄바꿈한다.
+  const w = `width:${(100 / cols).toFixed(3)}%;`;
+  const td = (header: boolean) =>
+    `<td style="${header ? HEADER_TD_STYLE : BODY_TD_STYLE}${w}word-break:break-all;">&nbsp;</td>`;
   const tr = (header: boolean) => `<tr>${Array.from({ length: cols }, () => td(header)).join("")}</tr>`;
   const body = Array.from({ length: rows }, (_, i) => tr(i === 0)).join("");
-  return `<table style="border-collapse:collapse;margin:8px 0;width:100%"><tbody>${body}</tbody></table><div><br></div>`;
+  return `<table style="border-collapse:collapse;margin:8px 0;width:100%;table-layout:fixed"><tbody>${body}</tbody></table><div><br></div>`;
 }
 
 // 글꼴(메일 안전 폰트 위주 — 수신측 미설치 시 유사 폰트 폴백).
@@ -263,6 +268,79 @@ function equalizeRows(cell: HTMLTableCellElement): void {
   for (const row of Array.from(table.rows)) for (const td of Array.from(row.cells)) td.style.height = `${max}px`;
 }
 
+// ── 셀 다중 선택·병합(2026-08-24) ────────────────────────────────
+/** 표를 (행, 열) 그리드로 펼친다 — rowSpan/colSpan 셀은 걸치는 모든 위치에 참조가 들어간다. */
+function buildGrid(table: HTMLTableElement): (HTMLTableCellElement | undefined)[][] {
+  const grid: (HTMLTableCellElement | undefined)[][] = [];
+  for (let r = 0; r < table.rows.length; r++) {
+    grid[r] ??= [];
+    let c = 0;
+    for (const cell of Array.from(table.rows[r].cells)) {
+      while (grid[r][c]) c++;
+      for (let dr = 0; dr < cell.rowSpan; dr++) {
+        for (let dc = 0; dc < cell.colSpan; dc++) {
+          (grid[r + dr] ??= [])[c + dc] = cell;
+        }
+      }
+      c += cell.colSpan;
+    }
+  }
+  return grid;
+}
+
+/** 셀의 그리드 좌상단 좌표. */
+function cellPos(grid: (HTMLTableCellElement | undefined)[][], cell: HTMLTableCellElement): { r: number; c: number } | null {
+  for (let r = 0; r < grid.length; r++) {
+    for (let c = 0; c < (grid[r]?.length ?? 0); c++) {
+      if (grid[r][c] === cell) return { r, c };
+    }
+  }
+  return null;
+}
+
+/**
+ * anchor~focus 를 감싸는 사각형 범위 — 기병합(span) 셀이 걸치면 그 셀 전체가 들어오도록
+ * 범위를 반복 확장한다(닫힘 보장 → 병합 시 항상 완전한 직사각형).
+ */
+function selectionRect(
+  grid: (HTMLTableCellElement | undefined)[][],
+  anchor: HTMLTableCellElement,
+  focus: HTMLTableCellElement
+): { r1: number; c1: number; r2: number; c2: number; cells: HTMLTableCellElement[] } | null {
+  const a = cellPos(grid, anchor);
+  const f = cellPos(grid, focus);
+  if (!a || !f) return null;
+  let r1 = Math.min(a.r, f.r);
+  let r2 = Math.max(a.r, f.r);
+  let c1 = Math.min(a.c, f.c);
+  let c2 = Math.max(a.c, f.c);
+  for (let pass = 0; pass < 20; pass++) {
+    let changed = false;
+    for (let r = r1; r <= r2; r++) {
+      for (let c = c1; c <= c2; c++) {
+        const cell = grid[r]?.[c];
+        if (!cell) continue;
+        const p = cellPos(grid, cell)!;
+        const er2 = p.r + cell.rowSpan - 1;
+        const ec2 = p.c + cell.colSpan - 1;
+        if (p.r < r1) { r1 = p.r; changed = true; }
+        if (p.c < c1) { c1 = p.c; changed = true; }
+        if (er2 > r2) { r2 = er2; changed = true; }
+        if (ec2 > c2) { c2 = ec2; changed = true; }
+      }
+    }
+    if (!changed) break;
+  }
+  const cells: HTMLTableCellElement[] = [];
+  for (let r = r1; r <= r2; r++) {
+    for (let c = c1; c <= c2; c++) {
+      const cell = grid[r]?.[c];
+      if (cell && !cells.includes(cell)) cells.push(cell);
+    }
+  }
+  return { r1, c1, r2, c2, cells };
+}
+
 const EDGE = 5;
 
 export interface MailEditorProps {
@@ -289,6 +367,10 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
   const [supActive, setSupActive] = useState(false); // 위 첨자 토글 상태(G2-14)
   const [subActive, setSubActive] = useState(false); // 아래 첨자 토글 상태
   const dragRef = useRef<{ kind: "col" | "row"; cells: HTMLTableCellElement[]; startPos: number; startSize: number } | null>(null);
+  // 셀 다중 선택(병합용, 2026-08-24) — 드래그 중 상태와 확정된 선택 사각형.
+  const cellDragRef = useRef<{ anchor: HTMLTableCellElement; table: HTMLTableElement; multi: boolean } | null>(null);
+  const cellSelRef = useRef<{ table: HTMLTableElement; rect: { r1: number; c1: number; r2: number; c2: number }; cells: HTMLTableCellElement[] } | null>(null);
+  const [selCellCount, setSelCellCount] = useState(0);
   /** 직전 붙여넣기의 클립보드 이미지 파일 — 외부 URL 수집 실패 시 대체 소스로 쓴다. */
   const pastedImageFiles = useRef<File[]>([]);
   /** 크기 조절 중인 이미지(선택 상태) + 핸들 위치. */
@@ -469,11 +551,19 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
   // 커서 위치의 표 셀 추적 + 첨자 토글 상태(G2-14) 동기.
   useEffect(() => {
     const onSel = () => {
+      // 셀 다중 선택 중에는 브라우저 selection 이 비어 있다 — 활성 셀(anchor)을 유지한다.
+      if (cellSelRef.current || cellDragRef.current?.multi) return;
       const sel = window.getSelection();
       const node = sel?.anchorNode;
       const el = node instanceof HTMLElement ? node : (node?.parentElement ?? null);
       const cell = (el?.closest?.("td,th") ?? null) as HTMLTableCellElement | null;
       setActiveCell(cell && innerRef.current?.contains(cell) ? cell : null);
+      // 기존 문서의 표(auto 레이아웃)는 편집 진입 시 현재 폭으로 고정한다(2026-08-24) —
+      // 입력할 때마다 열이 넓어지는 문제의 소급 해소. 신규 표는 삽입부터 fixed.
+      if (cell) {
+        const table = cell.closest("table") as HTMLTableElement | null;
+        if (table && table.style.tableLayout !== "fixed") freezeTableWidths(table);
+      }
       // 위/아래 첨자 토글 활성 표시 — 커서가 에디터 안에 있을 때만 판독.
       if (node && innerRef.current?.contains(node instanceof HTMLElement ? node : node.parentElement)) {
         try {
@@ -605,11 +695,153 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
     document.body.style.userSelect = "none";
   };
 
+  // ── 셀 다중 선택·병합(2026-08-24) ────────────────────────────
+  /** 선택 하이라이트 제거 — data 속성은 저장 HTML 에 남으면 안 되므로 항상 여기로 정리한다. */
+  const clearCellSelection = useCallback(() => {
+    const editor = innerRef.current;
+    if (editor) {
+      for (const el of Array.from(editor.querySelectorAll("[data-cell-sel]"))) el.removeAttribute("data-cell-sel");
+    }
+    cellSelRef.current = null;
+    setSelCellCount(0);
+  }, []);
+
+  /** anchor~focus 사각형 범위를 계산해 하이라이트한다(드래그 중 반복 호출). */
+  const applyCellSelection = useCallback((anchor: HTMLTableCellElement, focus: HTMLTableCellElement) => {
+    const table = anchor.closest("table") as HTMLTableElement | null;
+    if (!table || focus.closest("table") !== table) return;
+    const grid = buildGrid(table);
+    const rect = selectionRect(grid, anchor, focus);
+    if (!rect) return;
+    const editor = innerRef.current;
+    if (editor) {
+      for (const el of Array.from(editor.querySelectorAll("[data-cell-sel]"))) el.removeAttribute("data-cell-sel");
+    }
+    for (const cell of rect.cells) cell.setAttribute("data-cell-sel", "1");
+    cellSelRef.current = { table, rect: { r1: rect.r1, c1: rect.c1, r2: rect.r2, c2: rect.c2 }, cells: rect.cells };
+    setSelCellCount(rect.cells.length);
+  }, []);
+
+  /** 선택 사각형을 한 셀로 병합 — 내용은 위→아래·왼→오른 순서로 <br> 이어붙인다. */
+  const mergeSelectedCells = useCallback(() => {
+    const sel = cellSelRef.current;
+    if (!sel || sel.cells.length < 2) return;
+    const grid = buildGrid(sel.table);
+    const { r1, c1, r2, c2 } = sel.rect;
+    const first = grid[r1]?.[c1];
+    if (!first) return;
+    const parts: string[] = [];
+    const removed = new Set<HTMLTableCellElement>([first]);
+    for (let r = r1; r <= r2; r++) {
+      for (let c = c1; c <= c2; c++) {
+        const cell = grid[r]?.[c];
+        if (!cell || removed.has(cell)) continue;
+        removed.add(cell);
+        const text = (cell.textContent ?? "").replace(/ /g, " ").trim();
+        if (text) parts.push(cell.innerHTML);
+        cell.remove();
+      }
+    }
+    const firstText = (first.textContent ?? "").replace(/ /g, " ").trim();
+    if (parts.length) first.innerHTML = [firstText ? first.innerHTML : null, ...parts].filter(Boolean).join("<br>");
+    first.rowSpan = r2 - r1 + 1;
+    first.colSpan = c2 - c1 + 1;
+    // 고정 레이아웃에서 병합 셀의 px/% 폭이 남으면 열 폭 배분이 왜곡된다 — span 에 맡긴다.
+    if (first.colSpan > 1) first.style.removeProperty("width");
+    // 한 행의 셀이 전부 병합돼 빈 <tr> 이 남으면 제거하고 rowSpan 을 그만큼 줄인다.
+    for (const tr of Array.from(sel.table.rows)) {
+      if (tr.cells.length === 0) {
+        tr.remove();
+        first.rowSpan = Math.max(1, first.rowSpan - 1);
+      }
+    }
+    clearCellSelection();
+    setActiveCell(first);
+    innerRef.current?.focus();
+    onInput();
+  }, [clearCellSelection, onInput]);
+
+  /** 병합 해제 — span 을 1 로 되돌리고 비는 자리마다 새 셀을 만든다. */
+  const unmergeActiveCell = useCallback(() => {
+    const cell = activeCell;
+    const table = cell?.closest("table") as HTMLTableElement | null;
+    if (!cell || !table || (cell.rowSpan <= 1 && cell.colSpan <= 1)) return;
+    const grid = buildGrid(table);
+    const pos = cellPos(grid, cell);
+    if (!pos) return;
+    const rs = cell.rowSpan;
+    const cs = cell.colSpan;
+    // 행마다 삽입 기준(범위 오른쪽 첫 셀)을 병합 해제 전 그리드에서 미리 구한다.
+    const anchors: (HTMLTableCellElement | null)[] = [];
+    for (let r = pos.r; r < pos.r + rs; r++) {
+      let next: HTMLTableCellElement | null = null;
+      for (let c = pos.c + cs; c < (grid[r]?.length ?? 0); c++) {
+        const cand = grid[r]?.[c];
+        if (cand && cellPos(grid, cand)?.r === r) {
+          next = cand;
+          break;
+        }
+      }
+      anchors[r - pos.r] = next;
+    }
+    cell.rowSpan = 1;
+    cell.colSpan = 1;
+    const style = `${BODY_TD_STYLE}word-break:break-all;`;
+    for (let r = pos.r; r < pos.r + rs; r++) {
+      const tr = table.rows[r];
+      if (!tr) continue;
+      const count = r === pos.r ? cs - 1 : cs;
+      let ref: HTMLTableCellElement | Element | null = r === pos.r ? cell : null;
+      for (let i = 0; i < count; i++) {
+        const td = document.createElement("td");
+        td.setAttribute("style", style);
+        td.innerHTML = "&nbsp;";
+        const next = anchors[r - pos.r];
+        if (ref) ref.after(td);
+        else if (next) next.before(td);
+        else tr.appendChild(td);
+        ref = td;
+      }
+    }
+    clearCellSelection();
+    innerRef.current?.focus();
+    onInput();
+  }, [activeCell, clearCellSelection, onInput]);
+
+  // 드래그 종료(선택은 유지) — 에디터 밖에서 놓아도 잡히게 document 레벨.
+  useEffect(() => {
+    const onUp = () => {
+      if (!cellDragRef.current) return;
+      const wasMulti = cellDragRef.current.multi;
+      const anchor = cellDragRef.current.anchor;
+      cellDragRef.current = null;
+      document.body.style.userSelect = "";
+      // 다중 선택이면 브라우저 selection 이 없어 표 툴바가 닫히므로 anchor 를 활성 셀로 유지.
+      if (wasMulti) setActiveCell(anchor.isConnected ? anchor : null);
+    };
+    document.addEventListener("mouseup", onUp);
+    return () => document.removeEventListener("mouseup", onUp);
+  }, []);
+
   const onEditorMouseMove = (e: React.MouseEvent) => {
     if (dragRef.current) return;
     const editor = innerRef.current;
     if (!editor) return;
     const cell = (e.target as HTMLElement).closest?.("td,th") as HTMLTableCellElement | null;
+    // 셀 드래그 선택 — anchor 와 다른 셀로 끌면 다중 선택 모드로 전환(텍스트 선택 대신).
+    const cellDrag = cellDragRef.current;
+    if (cellDrag && cell && editor.contains(cell) && cell.closest("table") === cellDrag.table) {
+      if (!cellDrag.multi && cell !== cellDrag.anchor) {
+        cellDrag.multi = true;
+        document.body.style.userSelect = "none";
+      }
+      if (cellDrag.multi) {
+        e.preventDefault();
+        window.getSelection()?.removeAllRanges();
+        applyCellSelection(cellDrag.anchor, cell);
+        return;
+      }
+    }
     if (!cell || !editor.contains(cell)) {
       editor.style.cursor = "";
       return;
@@ -631,6 +863,8 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
       setSelectedImg(null);
     }
     const cell = target.closest?.("td,th") as HTMLTableCellElement | null;
+    // 새 클릭이 시작되면 이전 셀 다중 선택은 해제한다(표 밖 클릭 포함).
+    if (cellSelRef.current) clearCellSelection();
     if (!cell || !editor.contains(cell)) return;
     const rect = cell.getBoundingClientRect();
     const table = cell.closest("table") as HTMLTableElement | null;
@@ -652,11 +886,16 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
       dragRef.current = { kind: "row", cells: Array.from(tr.cells) as HTMLTableCellElement[], startPos: e.clientY, startSize: cell.offsetHeight };
       document.body.style.cursor = "row-resize";
       document.body.style.userSelect = "none";
+    } else if (e.button === 0) {
+      // 셀 안 좌클릭 — 다른 셀로 드래그하면 다중 선택으로 전환한다(병합용, 2026-08-24).
+      cellDragRef.current = { anchor: cell, table, multi: false };
     }
   };
 
   /** 자동 글머리 — "-"/"*"/"1." 뒤 Space 또는 Enter 로 목록 전환(IME 조합 중 제외). */
   const onEditorKeyDown = (e: React.KeyboardEvent) => {
+    // 셀 다중 선택 중 키 입력 — 하이라이트 속성이 저장 HTML 에 남지 않게 먼저 해제.
+    if (cellSelRef.current && e.key !== "Shift" && e.key !== "Control" && e.key !== "Alt") clearCellSelection();
     if (e.key !== " " && e.key !== "Enter") return;
     if ((e.nativeEvent as KeyboardEvent).isComposing) return;
     const sel = window.getSelection();
@@ -680,6 +919,8 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
 
   const tableAct = (fn: (cell: HTMLTableCellElement) => void) => {
     if (!activeCell) return;
+    // 행/열/표 삭제로 선택 셀이 문서에서 떨어질 수 있다 — 다중 선택은 먼저 해제.
+    if (cellSelRef.current) clearCellSelection();
     fn(activeCell);
     innerRef.current?.focus();
     onInput();
@@ -907,6 +1148,17 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
           <TableBtn label="너비 같게" icon={<UnfoldHorizontal className="w-3 h-3" />} onClick={() => tableAct(equalizeCols)} />
           <TableBtn label="높이 같게" icon={<UnfoldVertical className="w-3 h-3" />} onClick={() => tableAct(equalizeRows)} />
           {divider}
+          {/* 셀 병합(2026-08-24) — 셀에서 드래그해 여러 셀을 선택한 뒤 누른다. */}
+          <TableBtn
+            label={selCellCount > 1 ? `셀 병합(${selCellCount})` : "셀 병합"}
+            icon={<TableCellsMerge className="w-3 h-3" />}
+            onClick={mergeSelectedCells}
+            disabled={selCellCount < 2}
+          />
+          {(activeCell.rowSpan > 1 || activeCell.colSpan > 1) && (
+            <TableBtn label="병합 해제" icon={<TableCellsSplit className="w-3 h-3" />} onClick={unmergeActiveCell} />
+          )}
+          {divider}
 
           {/* 셀 배경색 */}
           <span className="relative inline-flex" data-tool-popover>
@@ -939,7 +1191,9 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
 
           {divider}
           <TableBtn label="표 삭제" icon={<Trash2 className="w-3 h-3" />} onClick={() => tableAct((c) => c.closest("table")?.remove())} danger />
-          <span className="ml-auto cd-text-faint hidden md:inline">셀 경계를 드래그하면 크기 조절</span>
+          <span className="ml-auto cd-text-faint hidden md:inline">
+            {selCellCount > 1 ? `${selCellCount}개 셀 선택됨 — 셀 병합을 누르세요` : "셀 경계 드래그 = 크기 조절 · 셀에서 드래그 = 다중 선택"}
+          </span>
         </div>
       )}
 
@@ -990,15 +1244,16 @@ function EBtn({ label, active, onClick, children }: { label: string; active?: bo
   );
 }
 
-function TableBtn({ label, icon, onClick, danger }: { label: string; icon: ReactNode; onClick: () => void; danger?: boolean }) {
+function TableBtn({ label, icon, onClick, danger, disabled }: { label: string; icon: ReactNode; onClick: () => void; danger?: boolean; disabled?: boolean }) {
   return (
     <button
       type="button"
       title={label}
+      disabled={disabled}
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
       className={
-        "flex items-center gap-0.5 px-1.5 py-1 rounded-md transition-colors " +
+        "flex items-center gap-0.5 px-1.5 py-1 rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed " +
         (danger ? "cd-error-text hover:cd-error-bg" : "cd-text-muted hover:text-[color:var(--cd-text)] hover:bg-white/60")
       }
     >

@@ -445,6 +445,11 @@ export function ApprovalLetterBoard() {
   const [dragOver, setDragOver] = useState(false);
   // 재편집 문서의 상태·반려 사유·삭제 권한(서버 판정) — 반려 배너와 기안 삭제 버튼 노출용.
   const [editMeta, setEditMeta] = useState<EditDocMeta | null>(null);
+  // 임시저장 공문 목록(2026-08-24 사용자 요청) — 전자결재 홈까지 가지 않고 여기서 이어서 작성.
+  const [letterDrafts, setLetterDrafts] = useState<
+    Array<{ docId: string; title: string; status: string; docNo: string | null; updatedAt: string }>
+  >([]);
+  const [draftsOpen, setDraftsOpen] = useState(false);
   // 내부 참조자(Cc) 가 참조 메일을 받을 주소 기준 — 앱 전사 배포 전 기본은 개인 메일.
   const [internalCcTarget, setInternalCcTarget] = useState<"personal" | "company">("personal");
   const editorRef = useRef<HTMLDivElement>(null);
@@ -470,7 +475,37 @@ export function ApprovalLetterBoard() {
         if (d?.address) setMyEmail(String(d.address));
       })
       .catch(() => {});
+    // 내 임시저장(반려 포함) 공문 — box=draft 를 공문 양식으로 좁혀 목록화.
+    fetch("/api/approval/docs?box=draft", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const docs = Array.isArray(d?.docs) ? d.docs : [];
+        setLetterDrafts(
+          docs
+            .filter((doc: { formId?: string }) => doc.formId === LETTER_FORM_ID)
+            .map((doc: { docId: string; title?: string; status?: string; docNo?: string | null; updatedAt?: string }) => ({
+              docId: String(doc.docId),
+              title: String(doc.title ?? ""),
+              status: String(doc.status ?? "draft"),
+              docNo: doc.docNo ?? null,
+              updatedAt: String(doc.updatedAt ?? ""),
+            }))
+        );
+      })
+      .catch(() => {});
   }, []);
+
+  /** 임시저장 문서 열기 — 작성 중 내용이 있으면 유실 경고 후 이동. */
+  const openDraftDoc = useCallback(
+    (targetDocId: string) => {
+      if (targetDocId === docId) return;
+      const hasContent =
+        subject.trim().length > 0 || (editorRef.current?.textContent ?? "").trim().length > 0;
+      if (hasContent && !window.confirm("현재 화면에 작성 중인 내용은 저장되지 않습니다. 선택한 임시저장 공문을 열까요?")) return;
+      window.location.href = `/approval/letter?docId=${encodeURIComponent(targetDocId)}`;
+    },
+    [docId, subject]
+  );
 
   // 사용자 메일 도착 시 — 직접 입력 모드가 아니면 하단 메일 표기를 내 주소로.
   // 재편집 문서도 저장값이 내 주소와 같으면 자동 모드로 되돌린다.
@@ -925,6 +960,48 @@ export function ApprovalLetterBoard() {
         <>
         <div className="max-w-[1032px]">
           <RejectedBanner meta={editMeta} />
+          {/* 임시저장 공문 목록(2026-08-24) — 전자결재 홈의 작성중/반려까지 가지 않고 바로 이어서 작성 */}
+          {letterDrafts.length > 0 && (
+            <div className="rounded-xl border cd-border-c px-3.5 py-2.5 mb-3 text-[12px]">
+              <button
+                type="button"
+                className="flex items-center gap-1.5 font-semibold cd-text w-full text-left"
+                onClick={() => setDraftsOpen((v) => !v)}
+              >
+                <Save className="w-4 h-4 cd-text-primary shrink-0" />
+                임시저장 공문 {letterDrafts.length}건
+                <span className="cd-text-faint font-normal">{draftsOpen ? "접기 ▲" : "펼쳐서 이어서 작성 ▼"}</span>
+              </button>
+              {draftsOpen && (
+                <div className="mt-2 grid gap-1 max-h-56 overflow-y-auto">
+                  {letterDrafts.map((d) => {
+                    const current = d.docId === docId;
+                    return (
+                      <button
+                        key={d.docId}
+                        type="button"
+                        disabled={current}
+                        onClick={() => openDraftDoc(d.docId)}
+                        className={
+                          "flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left " +
+                          (current ? "cd-tint-primary border-[color:var(--cd-primary)]" : "cd-border-c hover:cd-soft-primary")
+                        }
+                      >
+                        <FileText className="w-3.5 h-3.5 cd-text-faint shrink-0" />
+                        <span className="cd-text truncate flex-1">{d.title || "(제목 없음)"}</span>
+                        {d.status === "rejected" && (
+                          <span className="rounded-full px-1.5 py-0.5 text-[10px] cd-error-text border border-current shrink-0">반려</span>
+                        )}
+                        {d.docNo && <span className="font-mono text-[10.5px] cd-text-faint shrink-0">{d.docNo}</span>}
+                        <span className="text-[10.5px] cd-text-faint shrink-0">{d.updatedAt.slice(0, 10)}</span>
+                        {current && <span className="text-[10.5px] cd-text-primary shrink-0">편집 중</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
           {/* 회수 문서(수정 후 재발송, 2026-08-19) — 승인 공문을 회수하면 draft 인데 확정 번호가 있다 */}
           {editMeta?.status === "draft" && docNo && (
             <div className="rounded-xl border cd-border-c px-3.5 py-2.5 mb-3 text-[12px] cd-text flex items-center gap-2">

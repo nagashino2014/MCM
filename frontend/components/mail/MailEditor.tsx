@@ -896,14 +896,56 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
   const onEditorKeyDown = (e: React.KeyboardEvent) => {
     // 셀 다중 선택 중 키 입력 — 하이라이트 속성이 저장 HTML 에 남지 않게 먼저 해제.
     if (cellSelRef.current && e.key !== "Shift" && e.key !== "Control" && e.key !== "Alt") clearCellSelection();
-    if (e.key !== " " && e.key !== "Enter") return;
     if ((e.nativeEvent as KeyboardEvent).isComposing) return;
+    // 목록 항목 맨 앞에서 Backspace = 글번호 제거(2026-08-24) — 기본 동작(이전 항목과 병합,
+    // 번호는 그대로 남음) 대신 그 항목을 목록에서 빼 일반 문단으로 되돌린다.
+    if (e.key === "Backspace") {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0 && sel.isCollapsed) {
+        const node = sel.anchorNode;
+        const el2 = node instanceof HTMLElement ? node : (node?.parentElement ?? null);
+        const li = el2?.closest?.("li");
+        if (li && innerRef.current?.contains(li)) {
+          const probe = document.createRange();
+          probe.selectNodeContents(li);
+          probe.collapse(true);
+          if (sel.getRangeAt(0).compareBoundaryPoints(Range.START_TO_START, probe) === 0) {
+            e.preventDefault();
+            document.execCommand("outdent");
+            onInput();
+            return;
+          }
+        }
+      }
+    }
+    if (e.key !== " " && e.key !== "Enter") return;
     const sel = window.getSelection();
     const node = sel?.anchorNode;
     if (!node) return;
     const el = node instanceof HTMLElement ? node : (node.parentElement ?? null);
     const block = el?.closest?.("div,p,td,li");
-    if (!block || block.tagName === "LI" || !innerRef.current?.contains(block)) return;
+    if (!block || !innerRef.current?.contains(block)) return;
+    // "- 아 래 -" 표기(공문 관용구) 다음 줄에는 번호 목록을 이어가지 않는다(2026-08-24) —
+    // 목록 항목이든 목록 사이 문단이든, Enter 시 목록 밖 새 문단으로 빠져나온다.
+    if (e.key === "Enter") {
+      const compact = (block.textContent ?? "").replace(/[\s ]/g, "");
+      if (block !== innerRef.current && /^[-–—―]?아래[-–—―]?$/.test(compact)) {
+        e.preventDefault();
+        const li = block.closest("li");
+        const host = (li?.closest("ol,ul") ?? block) as HTMLElement;
+        const next = document.createElement("div");
+        next.innerHTML = "<br>";
+        host.after(next);
+        const range = document.createRange();
+        range.selectNodeContents(next);
+        range.collapse(true);
+        sel!.removeAllRanges();
+        sel!.addRange(range);
+        onInput();
+        return;
+      }
+    }
+    if (block.tagName === "LI") return;
     const text = (block.textContent ?? "").trim();
     if (text !== "-" && text !== "*" && text !== "1.") return;
     e.preventDefault();

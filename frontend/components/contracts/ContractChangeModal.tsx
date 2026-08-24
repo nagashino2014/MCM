@@ -152,6 +152,37 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
     suspensionReason: DEFAULT_SUSPENSION_REASONS[0],
   });
 
+  // 발주처(계약상대 업체) 변경(2026-08-24) — 엑셀 임포트 오기재 정정용. 선택 시에만 전송.
+  const [counterpartyChange, setCounterpartyChange] = useState<{ facilityId: string; name: string } | null>(null);
+  const [counterpartyQuery, setCounterpartyQuery] = useState("");
+  const [counterpartyOptions, setCounterpartyOptions] = useState<FacilitySearchItem[]>([]);
+  useEffect(() => {
+    const q = counterpartyQuery.trim();
+    if (q.length < 2) {
+      setCounterpartyOptions([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({ q, limit: "10", sort: "name" });
+        const res = await fetch(`/api/facilities?${params.toString()}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!res.ok) return;
+        const json = (await res.json()) as { items?: FacilitySearchItem[] };
+        setCounterpartyOptions(json.items ?? []);
+      } catch {
+        if (!controller.signal.aborted) setCounterpartyOptions([]);
+      }
+    }, 160);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [counterpartyQuery]);
+
   // 단가 계약(2026-08-24) — 단가 기준표를 여기서도 수정한다. 저장 시 변경분만 PUT.
   const isUnitPrice = props.contractKind === "unit_price";
   const [rateItems, setRateItems] = useState<RateCardItem[]>([]);
@@ -360,6 +391,10 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
       }
       if (orderingSubjectChanged) {
         requestBody.newOrderingSubjectType = nextServiceCategory.orderingSubjectType;
+      }
+      if (counterpartyChange) {
+        requestBody.newCounterpartyFacilityId = counterpartyChange.facilityId;
+        changedFields.push("counterparty");
       }
       if (lifecycle.terminatedAt) {
         requestBody.contractTerminatedAt = lifecycle.terminatedAt;
@@ -574,6 +609,48 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
             <div className="grid gap-3">
               <p className="text-[11px] cd-text-faint">변경할 항목만 입력하세요. 입력한 항목만 계약 정보에 반영되며, 비워 둔 항목은 기존 값이 유지됩니다.</p>
               <div className="grid grid-cols-2 gap-3">
+                {/* 발주처 변경(2026-08-24) — 임포트 오기재 정정. 검색해 선택한 경우에만 반영. */}
+                <div className="grid gap-1 text-sm col-span-2 relative">
+                  <span className="font-bold cd-text-muted">발주처(계약상대 업체) 변경</span>
+                  <input
+                    type="text"
+                    className="cd-input"
+                    placeholder={`현재: ${props.counterpartyName} — 변경할 업체명 또는 사업자번호 검색`}
+                    value={counterpartyQuery}
+                    onChange={(e) => setCounterpartyQuery(e.target.value)}
+                  />
+                  {counterpartyChange && (
+                    <p className="text-xs cd-text-primary flex items-center gap-2">
+                      변경 선택됨: {counterpartyChange.name}
+                      <button
+                        type="button"
+                        className="underline cd-text-faint"
+                        onClick={() => setCounterpartyChange(null)}
+                      >
+                        선택 취소
+                      </button>
+                    </p>
+                  )}
+                  {counterpartyOptions.length > 0 && (
+                    <div className="absolute z-10 top-[70px] left-0 right-0 rounded-xl border cd-border-c cd-card-bg shadow-lg max-h-56 overflow-y-auto">
+                      {counterpartyOptions.map((entity) => (
+                        <button
+                          key={entity.facilityId}
+                          type="button"
+                          className="w-full px-3 py-2 text-left text-sm hover:bg-[color:var(--cd-surface)]"
+                          onClick={() => {
+                            setCounterpartyChange({ facilityId: entity.facilityId, name: entity.companyName });
+                            setCounterpartyQuery("");
+                            setCounterpartyOptions([]);
+                          }}
+                        >
+                          <span className="cd-text">{entity.companyName}</span>
+                          <span className="ml-2 text-xs cd-text-faint">{entity.businessRegistrationNo ?? ""}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <label className="grid gap-1 text-sm">
                   <span className="font-bold cd-text-muted">기존 대분류</span>
                   <input type="text" disabled className="cd-input disabled:opacity-60"

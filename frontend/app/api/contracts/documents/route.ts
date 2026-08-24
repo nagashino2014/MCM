@@ -8,6 +8,19 @@ import { getS3Client } from "@/lib/storage/logo-storage";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/**
+ * 다운로드 파일명 헤더(2026-08-24 사용자 요청) — 저장 키의 마지막 세그먼트가 이미
+ * "(계약일)계약명 계약서.pdf" 규약이라 그대로 파일명으로 쓴다. inline 이므로 뷰어에는
+ * 그대로 열리고, 브라우저 PDF 뷰어의 다운로드 버튼이 이 이름으로 저장한다.
+ * 한글은 RFC 5987(filename*=UTF-8'') — encodeURIComponent 가 남기는 ( ) ' * 도
+ * attr-char 가 아니라 수동 이스케이프한다(mime.ts RFC2231 괄호 미인코딩 SES 거부 교훈).
+ */
+function contentDisposition(key: string): string {
+  const base = key.split("/").pop() || "document.pdf";
+  const encoded = encodeURIComponent(base).replace(/[()'*]/g, (c) => "%" + c.charCodeAt(0).toString(16).toUpperCase());
+  return `inline; filename="document.pdf"; filename*=UTF-8''${encoded}`;
+}
+
 export async function GET(req: NextRequest) {
   try {
     await requirePermission("contract.view");
@@ -29,6 +42,7 @@ export async function GET(req: NextRequest) {
         headers: {
           "Content-Type": "application/pdf",
           "Content-Length": String(info.size),
+          "Content-Disposition": contentDisposition(key),
           "Cache-Control": "private, max-age=300",
         },
       });
@@ -45,6 +59,7 @@ export async function GET(req: NextRequest) {
       headers: {
         "Content-Type": out.ContentType ?? "application/pdf",
         "Content-Length": out.ContentLength != null ? String(out.ContentLength) : "",
+        "Content-Disposition": contentDisposition(key),
         "Cache-Control": "private, max-age=300",
       },
     });

@@ -103,6 +103,10 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       if (body.newOrderingSubjectType !== undefined) {
         pushSet("ordering_subject_type", normalizeOrderingSubjectType(body.newOrderingSubjectType));
       }
+      // 발주처(계약상대 업체) 변경(2026-08-24) — 엑셀 임포트 오기재 정정용(한솔제지 실사례).
+      if (typeof body.newCounterpartyFacilityId === "string" && body.newCounterpartyFacilityId.trim()) {
+        pushSet("counterparty_facility_id", body.newCounterpartyFacilityId.trim());
+      }
       if (newFacilityIds !== null) {
         pushSet("facility_id", newFacilityIds[0] || null);
       }

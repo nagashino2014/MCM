@@ -64,6 +64,11 @@ export interface ContractTreeContractNode {
   contractStatus: string;
   /** True when the total collected amount has reached the full contract amount. */
   isFullyCollected: boolean;
+  /**
+   * 완료 건 판정(2026-08-24, 트리 하단 집계용) — 완료일(허가일: permit_issued_at) 혹은
+   * 완료일(발행일: 최종 대금지급단위의 발행일)이 존재하는 계약(completions-status 와 동일 정의).
+   */
+  isCompleted: boolean;
 }
 
 export interface ContractTreeServiceGroup {
@@ -297,7 +302,8 @@ export async function listContractsForTree(
               COALESCE(c.current_amount, c.contract_amount) AS current_amount,
               c.contract_date,
               COALESCE(ms.total_milestone_amount, 0) AS total_milestone_amount,
-              COALESCE(ms.total_collected_amount, 0) AS total_collected_amount
+              COALESCE(ms.total_collected_amount, 0) AS total_collected_amount,
+              (NULLIF(c.permit_issued_at, '') IS NOT NULL OR lm.invoice_done = 1) AS is_completed
        FROM contracts c
        JOIN facilities cp ON cp.facility_id = c.counterparty_facility_id
        LEFT JOIN facilities f ON f.facility_id = c.facility_id
@@ -308,6 +314,13 @@ export async function listContractsForTree(
          FROM contract_payment_milestones
          GROUP BY contract_id
        ) ms ON ms.contract_id = c.contract_id
+       LEFT JOIN (
+         -- 완료일(발행일) = 최종 대금지급단위(stage_order 최대)의 발행 완료 여부(completions-status 와 동일)
+         SELECT DISTINCT ON (contract_id) contract_id,
+                CASE WHEN COALESCE(invoice_issued, 0) = 1 THEN 1 ELSE 0 END AS invoice_done
+         FROM contract_payment_milestones
+         ORDER BY contract_id, stage_order DESC
+       ) lm ON lm.contract_id = c.contract_id
        ${whereSql}
        ORDER BY
          COALESCE(NULLIF(c.contract_date, ''), c.started_at, c.created_at) ASC NULLS LAST,
@@ -338,6 +351,7 @@ export async function listContractsForTree(
       contractDate: row.contract_date != null ? String(row.contract_date) : null,
       contractStatus: String(row.contract_status ?? "active"),
       isFullyCollected: baseAmount > 0 && collected >= baseAmount,
+      isCompleted: row.is_completed === true || row.is_completed === 1,
     };
     if (!groupMap.has(serviceType)) groupMap.set(serviceType, []);
     groupMap.get(serviceType)!.push(node);
@@ -431,6 +445,8 @@ export async function listContractsForTreeByFacility(facilityId: string): Promis
       contractDate: row.contract_date != null ? String(row.contract_date) : null,
       contractStatus: String(row.contract_status ?? "active"),
       isFullyCollected: baseAmount > 0 && collected >= baseAmount,
+      // 이 뷰(사업장 수주 모달)는 하단 집계를 쓰지 않아 완료 판정 서브쿼리를 생략한다.
+      isCompleted: false,
     };
     if (!groupMap.has(serviceType)) groupMap.set(serviceType, []);
     groupMap.get(serviceType)!.push(node);

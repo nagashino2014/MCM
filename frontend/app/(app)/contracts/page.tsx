@@ -59,6 +59,8 @@ interface ContractTreeContractNode {
   contractDate: string | null;
   contractStatus: string;
   isFullyCollected: boolean;
+  /** 완료 건 — 완료일(허가일) 혹은 완료일(발행일)이 존재(서버 판정, 트리 하단 집계용). */
+  isCompleted: boolean;
 }
 
 interface ContractTreeServiceGroup {
@@ -369,6 +371,21 @@ function ContractsInner() {
     [filteredGroups]
   );
 
+  // 트리 하단 집계(2026-08-24) — 해지 > 중지 > 완료(허가일·발행일 존재) > 수행 순의 배타 분류.
+  const treeStats = useMemo(() => {
+    const stats = { total: 0, active: 0, completed: 0, suspended: 0, terminated: 0 };
+    for (const g of tree?.groups ?? []) {
+      for (const c of g.contracts) {
+        stats.total += 1;
+        if (c.contractStatus === "terminated") stats.terminated += 1;
+        else if (c.contractStatus === "suspended") stats.suspended += 1;
+        else if (c.isCompleted) stats.completed += 1;
+        else stats.active += 1;
+      }
+    }
+    return stats;
+  }, [tree]);
+
   /**
    * Flatten the tree into a single ordered list of rows for the virtual
    * scroller. Group headers are always emitted; child rows are emitted only
@@ -520,8 +537,13 @@ function ContractsInner() {
                 />
               )}
             </div>
-            <div className="p-3 text-xs cd-text-faint text-right border-t cd-border-c">
-              계약 건수: {tree?.totalCount.toLocaleString() ?? 0}
+            {/* 왼쪽 정렬 + 수행/완료(+조건부 중지/해지) 집계(2026-08-24 사용자 요청) */}
+            <div className="p-3 text-xs cd-text-faint border-t cd-border-c flex items-center gap-3 flex-wrap">
+              <span>계약 건수: {treeStats.total.toLocaleString()}</span>
+              <span>수행: {treeStats.active.toLocaleString()}</span>
+              <span>완료: {treeStats.completed.toLocaleString()}</span>
+              {treeStats.suspended > 0 && <span>중지: {treeStats.suspended.toLocaleString()}</span>}
+              {treeStats.terminated > 0 && <span>해지: {treeStats.terminated.toLocaleString()}</span>}
             </div>
           </section>
 

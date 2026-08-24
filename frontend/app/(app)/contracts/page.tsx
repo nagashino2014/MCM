@@ -1954,7 +1954,8 @@ function NewContractModal({
       try {
         const match = await findFacilityByBusinessRegistrationNo(
           state.counterpartyBusinessRegistrationNo,
-          controller.signal
+          controller.signal,
+          { facilityId: state.counterpartyFacilityId, companyName: state.counterpartyName }
         );
         if (match) {
           onChange({ ...state, selectedFacilities: [match], facilityQuery: "" });
@@ -2022,7 +2023,10 @@ function NewContractModal({
     }
     let selectedFacilities = state.selectedFacilities;
     if (state.orderingSubjectType === ORDERING_SUBJECT_SITE_DIRECT && selectedFacilities.length === 0) {
-      const match = await findFacilityByBusinessRegistrationNo(state.counterpartyBusinessRegistrationNo);
+      const match = await findFacilityByBusinessRegistrationNo(state.counterpartyBusinessRegistrationNo, undefined, {
+        facilityId: state.counterpartyFacilityId,
+        companyName: state.counterpartyName,
+      });
       if (!match) {
         toast.show("계약상대 업체와 일치하는 사업장을 찾지 못했습니다. 사업장 마스터의 사업자번호를 확인하세요.", "error");
         setTab("basic");

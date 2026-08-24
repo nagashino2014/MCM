@@ -88,6 +88,10 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       if (body.newContractDate !== undefined) {
         pushSet("contract_date", body.newContractDate || null);
       }
+      // 계약명 정정(2026-08-24) — 빈 값으로는 덮지 않는다(오기재 정정 전용).
+      if (typeof body.newContractTitle === "string" && body.newContractTitle.trim()) {
+        pushSet("contract_title", body.newContractTitle.trim());
+      }
       if (body.newServiceType !== undefined) {
         pushSet("service_type", body.newServiceType || null);
       }

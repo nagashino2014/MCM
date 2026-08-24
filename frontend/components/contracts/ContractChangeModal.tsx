@@ -94,6 +94,8 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
   // 계약일은 원칙적으로 변경계약 대상이 아니지만, 신규 입력 시 오기재한 경우
   // 바로잡을 수 있도록 편집을 허용한다. 초기값과 달라진 경우에만 서버로 전송한다.
   const [contractDate, setContractDate] = useState(props.contractDate ?? "");
+  // 계약명도 같은 원칙(2026-08-24 사용자 요청) — 오기재 정정용, 달라진 경우에만 전송.
+  const [contractTitle, setContractTitle] = useState(props.contractTitle);
   const outsourcingFileRef = useRef<File | null>(null);
   const [outsourcingFileName, setOutsourcingFileName] = useState("");
   const [outsourcingTypes, setOutsourcingTypes] = useState(DEFAULT_OUTSOURCING_TYPES);
@@ -270,7 +272,8 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
       try {
         const match = await findFacilityByBusinessRegistrationNo(
           props.counterpartyBusinessRegistrationNo,
-          controller.signal
+          controller.signal,
+          { companyName: props.counterpartyName }
         );
         if (match) {
           setServiceCategory((prev) => ({ ...prev, targetFacilities: [match] }));
@@ -324,7 +327,9 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
         serviceCategory.orderingSubjectType === ORDERING_SUBJECT_SITE_DIRECT &&
         serviceCategory.targetFacilities.length === 0
       ) {
-        const match = await findFacilityByBusinessRegistrationNo(props.counterpartyBusinessRegistrationNo);
+        const match = await findFacilityByBusinessRegistrationNo(props.counterpartyBusinessRegistrationNo, undefined, {
+          companyName: props.counterpartyName,
+        });
         if (!match) {
           toast.show("계약상대 업체와 일치하는 사업장을 찾지 못했습니다. 사업장 마스터의 사업자번호를 확인하세요.", "error");
           setSaving(false);
@@ -361,6 +366,9 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
       if (outsourcing.outsourcingTitle) changedFields.push("outsourcing");
       const contractDateChanged = contractDate !== (props.contractDate ?? "");
       if (contractDateChanged) changedFields.push("contractDate");
+      const contractTitleChanged =
+        contractTitle.trim().length > 0 && contractTitle.trim() !== props.contractTitle.trim();
+      if (contractTitleChanged) changedFields.push("contractTitle");
 
       // 변경계약 저장 요청 본문. 계약 테이블을 갱신하는 필드는 "실제로 새 값이
       // 입력된 항목만" 포함한다. 빈 값/ null 을 보내면 서버(changes route)가
@@ -380,6 +388,7 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
       };
       if (newCurrentAmount != null) requestBody.newCurrentAmount = newCurrentAmount;
       if (contractDateChanged) requestBody.newContractDate = contractDate || null;
+      if (contractTitleChanged) requestBody.newContractTitle = contractTitle.trim();
       const nextEndedAt = lifecycle.terminatedAt || closing.completionDate || servicePeriod.next;
       if (nextEndedAt) requestBody.newEndedAt = nextEndedAt;
       if (nextServiceCategory.nextType.trim()) requestBody.newServiceType = nextServiceCategory.nextType.trim();
@@ -495,6 +504,13 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
           <button type="button" onClick={props.onClose} className="cd-text-faint hover:opacity-70">
             <X className="w-5 h-5" />
           </button>
+        </div>
+
+        <div className="px-5 pt-3 grid gap-1 text-xs">
+          <label className="grid gap-1">
+            <span className="font-bold cd-text-faint">계약명</span>
+            <input type="text" className="cd-input" value={contractTitle} onChange={(e) => setContractTitle(e.target.value)} />
+          </label>
         </div>
 
         <div className="px-5 pt-3 grid grid-cols-3 gap-2 text-xs">

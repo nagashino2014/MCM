@@ -40,7 +40,13 @@ export interface OrderingTargetFacilitySearchItem {
  */
 export async function findFacilityByBusinessRegistrationNo(
   businessRegistrationNo: string | null | undefined,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  /**
+   * 동일 사업자번호 복수 사업장 대응(2026-08-24, 케이지스틸 실사례 — 인천·당진공장이
+   * 법인 번호를 공유해 이름순 첫 일치(당진)가 잡히던 문제). 번호가 일치하는 후보가
+   * 여럿이면 계약상대 업체 자신(facilityId) → 상호 정확 일치 순으로 우선 선택한다.
+   */
+  prefer?: { facilityId?: string | null; companyName?: string | null }
 ): Promise<OrderingTargetFacilitySearchItem | null> {
   const original = (businessRegistrationNo ?? "").trim();
   const digits = normalizeBrn(original);
@@ -51,6 +57,7 @@ export async function findFacilityByBusinessRegistrationNo(
     : "";
   const queries = Array.from(new Set([original, formatted, digits].filter(Boolean)));
 
+  const preferName = (prefer?.companyName ?? "").trim();
   for (const q of queries) {
     const params = new URLSearchParams({ q, limit: "20", sort: "name" });
     const res = await fetch(`/api/facilities?${params.toString()}`, {
@@ -59,10 +66,15 @@ export async function findFacilityByBusinessRegistrationNo(
     });
     if (!res.ok) continue;
     const json = (await res.json()) as { items?: OrderingTargetFacilitySearchItem[] };
-    const match = (json.items ?? []).find(
+    const matches = (json.items ?? []).filter(
       (item) => normalizeBrn(item.businessRegistrationNo) === digits
     );
-    if (match) return match;
+    if (!matches.length) continue;
+    return (
+      (prefer?.facilityId ? matches.find((m) => m.facilityId === prefer.facilityId) : undefined) ??
+      (preferName ? matches.find((m) => (m.companyName ?? "").trim() === preferName) : undefined) ??
+      matches[0]
+    );
   }
 
   return null;

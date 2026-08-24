@@ -5,6 +5,8 @@ import { X } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
 import { IndustryOptionsEditorButton, useContractIndustryOptions } from "@/components/contracts/IndustryOptionsEditor";
+import { CONTRACT_SERVICE_OPTIONS } from "@/lib/contracts/service-options";
+import { RateCardEditor, type RateCardItem } from "@/components/contracts/RateCardEditor";
 import {
   ORDERING_SUBJECT_OPTIONS,
   ORDERING_SUBJECT_SITE_DIRECT,
@@ -52,17 +54,20 @@ interface ContractChangeModalProps {
   initialOrderingSubjectType?: string | null;
   initialEndedAt: string | null;
   initialCurrentAmount: number | null;
+  /** 계약 종류 — 'unit_price'(단가 계약)면 단가 계약 탭이 추가된다(2026-08-24). */
+  contractKind?: string;
   onClose: () => void;
   onSaved: () => void;
 }
 
-type TabKey = "amount" | "period" | "terms" | "service" | "outsourcing" | "lifecycle" | "closing";
+type TabKey = "amount" | "period" | "terms" | "service" | "ratecard" | "outsourcing" | "lifecycle" | "closing";
 
 const TABS: Array<{ key: TabKey; label: string }> = [
   { key: "amount", label: "금액" },
   { key: "period", label: "용역기간" },
   { key: "terms", label: "지급조건" },
   { key: "service", label: "용역분류" },
+  { key: "ratecard", label: "단가 계약" },
   { key: "outsourcing", label: "외주 용역" },
   { key: "lifecycle", label: "계약중지/해지" },
   { key: "closing", label: "준공일 및 기타" },
@@ -146,6 +151,36 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
     suspendedAt: "",
     suspensionReason: DEFAULT_SUSPENSION_REASONS[0],
   });
+
+  // 단가 계약(2026-08-24) — 단가 기준표를 여기서도 수정한다. 저장 시 변경분만 PUT.
+  const isUnitPrice = props.contractKind === "unit_price";
+  const [rateItems, setRateItems] = useState<RateCardItem[]>([]);
+  const rateLoadedJson = useRef<string>("[]");
+  useEffect(() => {
+    if (!isUnitPrice) return;
+    let alive = true;
+    fetch(`/api/contracts/${encodeURIComponent(props.contractId)}/rate-card`, { cache: "no-store" })
+      .then(async (r) => {
+        if (!r.ok) return;
+        const d = (await r.json()) as { items?: RateCardItem[] };
+        const items = Array.isArray(d.items) ? d.items : [];
+        if (alive) {
+          setRateItems(items);
+          rateLoadedJson.current = JSON.stringify(items);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.contractId, isUnitPrice]);
+
+  // 변경 대분류에 따라 세분류 옵션이 갈린다(신규 계약 모달과 동일 체계).
+  const nextSubtypeOptions = useMemo(
+    () => CONTRACT_SERVICE_OPTIONS.find((item) => item.type === serviceCategory.nextType)?.subtypes ?? [],
+    [serviceCategory.nextType]
+  );
 
   const newCurrentAmount = useMemo(() => {
     const totalNext = amounts.reduce((acc, item) => acc + (Number(item.nextAmount) || 0), 0);
@@ -335,6 +370,20 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
         requestBody.contractSuspensionReason = lifecycle.suspensionReason;
       }
 
+      // 단가 기준표 변경분 저장 — 변경 이벤트와 별개로 계약당 1건을 통째 교체한다.
+      if (isUnitPrice && JSON.stringify(rateItems) !== rateLoadedJson.current) {
+        const rateRes = await fetch(`/api/contracts/${encodeURIComponent(props.contractId)}/rate-card`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: rateItems }),
+        });
+        if (!rateRes.ok) {
+          const body = await rateRes.json().catch(() => ({}));
+          throw new Error(body?.error ?? "단가 기준표 저장 실패");
+        }
+        rateLoadedJson.current = JSON.stringify(rateItems);
+      }
+
       const res = await fetch(`/api/contracts/${encodeURIComponent(props.contractId)}/changes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -429,7 +478,7 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
         </div>
 
         <div className="px-5 mt-4 flex gap-1 border-b cd-border-c">
-          {TABS.map((tab) => (
+          {TABS.filter((tab) => tab.key !== "ratecard" || isUnitPrice).map((tab) => (
             <button
               key={tab.key}
               type="button"
@@ -511,6 +560,16 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
             </div>
           )}
 
+          {activeTab === "ratecard" && isUnitPrice && (
+            <div className="grid gap-3">
+              <p className="text-[11px] cd-text-faint">
+                단가 기준표를 수정하면 저장 시 함께 반영됩니다. 지급 구분 소계가 청구·수금 단계 추가 시 금액으로
+                자동 적용됩니다(이미 만들어진 단계의 금액은 금액 탭에서 변경).
+              </p>
+              <RateCardEditor items={rateItems} onChange={setRateItems} />
+            </div>
+          )}
+
           {activeTab === "service" && (
             <div className="grid gap-3">
               <p className="text-[11px] cd-text-faint">변경할 항목만 입력하세요. 입력한 항목만 계약 정보에 반영되며, 비워 둔 항목은 기존 값이 유지됩니다.</p>
@@ -532,15 +591,41 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
                 </label>
                 <label className="grid gap-1 text-sm">
                   <span className="font-bold cd-text-muted">변경 대분류</span>
-                  <input type="text" className="cd-input"
+                  {/* 자유 입력 → 목록 선택(2026-08-24) — 오타 값이 contracts.service_type 에 저장되던 문제 */}
+                  <select
+                    className="cd-select"
                     value={serviceCategory.nextType}
-                    onChange={(e) => setServiceCategory({ ...serviceCategory, nextType: e.target.value })} />
+                    onChange={(e) => {
+                      const nextType = e.target.value;
+                      const subtypes = CONTRACT_SERVICE_OPTIONS.find((item) => item.type === nextType)?.subtypes ?? [];
+                      setServiceCategory({
+                        ...serviceCategory,
+                        nextType,
+                        nextSubtype: subtypes.some((s) => s === serviceCategory.nextSubtype)
+                          ? serviceCategory.nextSubtype
+                          : "",
+                      });
+                    }}
+                  >
+                    <option value="">변경 없음</option>
+                    {CONTRACT_SERVICE_OPTIONS.map((option) => (
+                      <option key={option.type} value={option.type}>{option.type}</option>
+                    ))}
+                  </select>
                 </label>
                 <label className="grid gap-1 text-sm">
                   <span className="font-bold cd-text-muted">변경 세분류</span>
-                  <input type="text" className="cd-input"
+                  <select
+                    className="cd-select"
                     value={serviceCategory.nextSubtype}
-                    onChange={(e) => setServiceCategory({ ...serviceCategory, nextSubtype: e.target.value })} />
+                    disabled={!serviceCategory.nextType}
+                    onChange={(e) => setServiceCategory({ ...serviceCategory, nextSubtype: e.target.value })}
+                  >
+                    <option value="">{serviceCategory.nextType ? "변경 없음" : "대분류를 먼저 선택"}</option>
+                    {nextSubtypeOptions.map((subtype) => (
+                      <option key={subtype} value={subtype}>{subtype}</option>
+                    ))}
+                  </select>
                 </label>
                 <div className="grid gap-1 text-sm col-span-2">
                   <span className="font-bold cd-text-muted">변경 업종</span>

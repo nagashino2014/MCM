@@ -35,6 +35,8 @@ import ContractStaffingModal from "@/components/contracts/ContractStaffingModal"
 import TaxInvoiceIssueModal from "@/components/contracts/TaxInvoiceIssueModal";
 import FacilityInfoModal from "@/components/contracts/FacilityInfoModal";
 import { IndustryOptionsEditorButton, useContractIndustryOptions } from "@/components/contracts/IndustryOptionsEditor";
+import { CONTRACT_SERVICE_OPTIONS } from "@/lib/contracts/service-options";
+import { RateCardEditor, rateCardGroupNames, rateCardGroupTotal, type RateCardItem } from "@/components/contracts/RateCardEditor";
 import {
   ORDERING_SUBJECT_OPTIONS,
   ORDERING_SUBJECT_SITE_DIRECT,
@@ -139,6 +141,8 @@ interface NewContractModalState {
   industryCategory: string;
   memo: string;
   milestones: ContractMilestoneDraft[];
+  /** 단가 계약(contractKind='unit_price') 전용 — 단가 기준표 행. */
+  rateItems: RateCardItem[];
   outsourcing: OutsourcingDraft;
 }
 
@@ -175,42 +179,6 @@ interface PdfViewerState {
   title: string;
   url: string;
 }
-
-const CONTRACT_SERVICE_OPTIONS = [
-  {
-    type: "통합허가",
-    subtypes: ["최초허가", "변경허가", "변경신고", "통합교육", "사후관리", "재검토"],
-  },
-  {
-    // 2026-08-06 정리(마이그 138): 영업허가는 장외&화관법 소속, 대분류 중복 항목 제외,
-    // 장외영향평가 → 화학사고예방관리계획 개칭. 견적 QUOTE_SERVICE_OPTIONS 와 동일 체계.
-    type: "장외&화관법",
-    subtypes: [
-      "영업허가",
-      "화학사고예방관리계획",
-      "설치검사",
-      "화관법기준",
-      "위해관리계획",
-      "배출저감계획",
-      "배출량조사",
-      "판매업허가",
-      "정기검사",
-      "안전진단",
-    ],
-  },
-  {
-    type: "HAPs",
-    subtypes: ["HAPs", "HAPs최초", "HAPs변경", "HAPs연간", "시설구축", "명판부착", "배출저감", "정기점검대응"],
-  },
-  {
-    type: "ESG탄소중립",
-    subtypes: ["ESG탄소중립", "ESG경영", "CBAM", "공급망실사", "LCA평가", "배출량산정", "배출권관련"],
-  },
-  {
-    type: "기타",
-    subtypes: ["기타", "총량제신고", "매체별인허가", "환경자문", "환경R&D", "기타인허가"],
-  },
-] as const;
 
 const DEFAULT_OUTSOURCING_TYPES = ["도면 작성", "산업안전 관련", "측정/분석", "디자인", "번역"];
 const PAYMENT_METHOD_OPTIONS = ["현금", "어음 : 1개월 이하", "어음 : 2개월 이하", "어음 : 2개월 이상"];
@@ -654,6 +622,7 @@ function ContractsInner() {
       {newStageModal && selectedId && (
         <NewStageModal
           contractId={selectedId}
+          contractKind={String(detail?.contract.contract_kind ?? "standard")}
           state={newStageModal}
           onChange={setNewStageModal}
           onClose={() => setNewStageModal(null)}
@@ -703,6 +672,7 @@ function ContractsInner() {
               : null
           }
           contractDate={selected.contractDate}
+          contractKind={String(detail.contract.contract_kind ?? "standard")}
           initialMilestones={detail.milestones.map((m) => ({
             stageLabel: String(m.stage_label ?? ""),
             amount: Number(m.amount ?? 0),
@@ -1256,10 +1226,11 @@ function ContractDetailPanel({
                           <Paperclip className="w-3 h-3" />
                           발행/수금
                         </button>
-                        {/* 전자발행(P4) — 바로빌로 실제 계산서를 끊는다. 수기 기록은 왼쪽 발행/수금 그대로. */}
+                        {/* 전자발행(P4) — 바로빌로 실제 계산서를 끊는다. 수기 기록은 왼쪽 발행/수금 그대로.
+                            노란색 강조(2026-08-24 사용자 요청 — 무채색 아웃라인이라 눈에 안 띄던 문제) */}
                         <button
                           type="button"
-                          className="rounded-lg px-2 py-1 text-[11px] border cd-border-c cd-text-muted hover:bg-[color:var(--cd-surface)] inline-flex items-center gap-1"
+                          className="rounded-lg px-2 py-1 text-[11px] border border-amber-400 bg-amber-400 text-amber-950 font-semibold shadow-sm hover:bg-amber-300 inline-flex items-center gap-1"
                           onClick={() => onOpenTaxInvoice(milestoneId)}
                           title="전자세금계산서 발행(바로빌)"
                         >
@@ -1379,6 +1350,49 @@ function PermitInfoSection({
   const [no, setNo] = useState(permitNo);
   const [note, setNote] = useState(permitNote);
   const [saving, setSaving] = useState(false);
+  // 검토결과서 업로드(2026-08-24) — S3 저장 + Claude 파싱으로 허가번호·허가일·종규모·생산품을
+  // 계약(여기)과 대상사업장 허가 정보에 자동 기입한다.
+  const [uploading, setUploading] = useState(false);
+  const reviewFileRef = useRef<HTMLInputElement | null>(null);
+
+  const uploadReview = async (file: File) => {
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.set("file", file);
+      const res = await fetch(`/api/contracts/${encodeURIComponent(contractId)}/permit-review`, {
+        method: "POST",
+        body: form,
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        parsed?: { permitNo?: string; permitDate?: string; products?: unknown[] } | null;
+        facilityApplied?: boolean;
+        skippedReason?: string;
+      };
+      if (!res.ok) throw new Error(data?.error ?? "HTTP " + res.status);
+      if (!data.parsed) {
+        toast.show("검토결과서를 저장했습니다. 자동 인식에 실패해 허가 정보는 직접 입력해 주세요.", "error");
+        return;
+      }
+      if (data.parsed.permitDate) setIssuedAt(data.parsed.permitDate);
+      if (data.parsed.permitNo) setNo(data.parsed.permitNo);
+      const facilityMsg = data.facilityApplied
+        ? " 사업장 허가 정보에도 반영했습니다."
+        : data.skippedReason === "no-facility"
+          ? " (대상사업장이 없어 사업장 반영은 생략)"
+          : data.skippedReason === "no-permit-no"
+            ? " (허가번호 인식 실패로 사업장 반영은 생략)"
+            : "";
+      toast.show(`검토결과서를 저장하고 허가 정보를 자동 기입했습니다.${facilityMsg}`, "success");
+      onSaved();
+    } catch (err) {
+      toast.show("검토결과서 업로드 실패: " + (err as Error).message, "error");
+    } finally {
+      setUploading(false);
+      if (reviewFileRef.current) reviewFileRef.current.value = "";
+    }
+  };
 
   // 다른 계약 선택/저장 후 재조회 시 폼을 서버 값으로 동기화
   useEffect(() => {
@@ -1426,7 +1440,7 @@ function PermitInfoSection({
         <h3 className="font-bold cd-text">허가 정보</h3>
         <span className="text-[11px] cd-text-faint">해당 계약 건으로 진행된 허가 완료 내역</span>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-[220px_220px_minmax(0,1fr)_auto] gap-3 items-end">
+      <div className="grid grid-cols-1 md:grid-cols-[220px_220px_minmax(0,1fr)_auto_auto] gap-3 items-end">
         <label className="grid gap-1 text-sm">
           <span className="font-bold cd-text-muted">허가일</span>
           <DateInput value={issuedAt} onChange={setIssuedAt} />
@@ -1461,6 +1475,26 @@ function PermitInfoSection({
         >
           {saving ? "저장 중…" : "저장"}
         </button>
+        <button
+          type="button"
+          onClick={() => reviewFileRef.current?.click()}
+          disabled={uploading}
+          className="rounded-xl border cd-border-c px-4 py-2 text-xs cd-text-muted hover:cd-soft-primary disabled:opacity-50 inline-flex items-center gap-1.5 whitespace-nowrap"
+          title="허가 검토결과서 PDF 를 업로드하면 허가번호·허가일·종규모·생산품을 자동 인식해 계약·사업장 허가 정보에 기입합니다"
+        >
+          <Paperclip className="w-3.5 h-3.5" />
+          {uploading ? "분석 중…" : "검토결과서 업로드"}
+        </button>
+        <input
+          ref={reviewFileRef}
+          type="file"
+          accept="application/pdf"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) void uploadReview(f);
+          }}
+        />
       </div>
     </div>
   );
@@ -1716,7 +1750,7 @@ function NewContractModal({
 }) {
   const toast = useToast();
   const [saving, setSaving] = useState(false);
-  const [tab, setTab] = useState<"basic" | "milestones" | "outsourcing" | "document">("basic");
+  const [tab, setTab] = useState<"basic" | "ratecard" | "milestones" | "outsourcing" | "document">("basic");
   const [entityOptions, setEntityOptions] = useState<FacilitySearchItem[]>([]);
   const [facilityOptions, setFacilityOptions] = useState<FacilitySearchItem[]>([]);
   const [outsourcingEntityOptions, setOutsourcingEntityOptions] = useState<FacilitySearchItem[]>([]);
@@ -1821,6 +1855,59 @@ function NewContractModal({
       ...state,
       milestones: state.milestones.map((m) => (m.id === id ? { ...m, ...patch } : m)),
     });
+  };
+
+  // 계약금액 = 청구·수금 단계 금액 합계(2026-08-24 사용자 확정 — 이중 입력 제거).
+  // basic 탭의 계약금액 란은 읽기 전용 표시이며, 저장도 이 합계를 쓴다.
+  const milestoneSum = useMemo(
+    () => state.milestones.reduce((acc, m) => acc + (Number(m.amount) || 0), 0),
+    [state.milestones]
+  );
+
+  // 단가 계약 — 단가 기준표의 지급 구분명이 청구·수금 단계명 목록박스 옵션이 된다.
+  const rateGroups = useMemo(() => rateCardGroupNames(state.rateItems), [state.rateItems]);
+
+  const [checkingTitle, setCheckingTitle] = useState(false);
+  /**
+   * 계약명 중복확인(2026-08-24) — 중복이면 규칙대로 자동 수정한다.
+   * ① 연도 표기 없음 → "계약명 (YYYY년)" ② "(YYYY년)"/"(YYYY년 N차)" → 차수를 올린다.
+   * 수정 후보가 또 중복이면 차수를 계속 올려 재확인한다(최대 30회).
+   */
+  const checkTitle = async () => {
+    const base = state.contractTitle.trim();
+    if (!base) {
+      toast.show("계약명을 먼저 입력하세요.", "error");
+      return;
+    }
+    setCheckingTitle(true);
+    try {
+      const isDup = async (t: string): Promise<boolean> => {
+        const res = await fetch(`/api/contracts/check-title?title=${encodeURIComponent(t)}`, { cache: "no-store" });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        return Boolean(((await res.json()) as { duplicate?: boolean }).duplicate);
+      };
+      if (!(await isDup(base))) {
+        toast.show("사용 가능한 계약명입니다.", "success");
+        return;
+      }
+      const fallbackYear = (state.contractDate || "").slice(0, 4) || String(new Date().getFullYear());
+      const m = base.match(/^(.*?)\s*\((\d{4})년(?:\s*(\d+)차)?\)$/);
+      const stem = m ? m[1].trim() : base;
+      const year = m ? m[2] : fallbackYear;
+      let nth = m ? (m[3] ? Number(m[3]) + 1 : 2) : 1;
+      let candidate = base;
+      for (let i = 0; i < 30; i++) {
+        candidate = nth <= 1 ? `${stem} (${year}년)` : `${stem} (${year}년 ${nth}차)`;
+        if (!(await isDup(candidate))) break;
+        nth += 1;
+      }
+      onChange({ ...state, contractTitle: candidate });
+      toast.show(`동일한 계약명이 있어 '${candidate}' 로 수정했습니다.`, "success");
+    } catch (err) {
+      toast.show("중복 확인 실패: " + (err as Error).message, "error");
+    } finally {
+      setCheckingTitle(false);
+    }
   };
 
   // 발주 주체 = 대상사업장 본인: 계약상대 업체의 사업자등록번호와 일치하는
@@ -1937,9 +2024,10 @@ function NewContractModal({
           contractDate: state.contractDate,
           startedAt: state.startedAt || state.contractDate,
           endedAt: state.endedAt || null,
-          contractAmount: state.currentAmount ? Number(state.currentAmount) : null,
-          originalAmount: state.currentAmount ? Number(state.currentAmount) : null,
-          currentAmount: state.currentAmount ? Number(state.currentAmount) : null,
+          // 계약금액 = 청구·수금 단계 합계(이중 입력 제거, 2026-08-24)
+          contractAmount: milestoneSum > 0 ? milestoneSum : null,
+          originalAmount: milestoneSum > 0 ? milestoneSum : null,
+          currentAmount: milestoneSum > 0 ? milestoneSum : null,
           memo: state.memo || null,
         }),
       });
@@ -1948,6 +2036,19 @@ function NewContractModal({
         throw new Error(body?.error ?? "HTTP " + createRes.status);
       }
       const { contractId } = (await createRes.json()) as { contractId: string };
+
+      // 단가 계약 — 단가 기준표 저장(청구·수금 단계보다 먼저, 단계명이 구분명을 참조하므로).
+      if (state.contractKind === "unit_price" && state.rateItems.length > 0) {
+        const res = await fetch(`/api/contracts/${encodeURIComponent(contractId)}/rate-card`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: state.rateItems }),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body?.error ?? "단가 기준표 저장 실패");
+        }
+      }
 
       for (let i = 0; i < validMilestones.length; i++) {
         const m = validMilestones[i];
@@ -2017,12 +2118,14 @@ function NewContractModal({
   return (
     <ModalShell title="신규 계약 입력" onClose={onClose} wide>
       <div className="border-b cd-border-c px-5 pt-4 flex gap-2">
-        {[
+        {([
           ["basic", "계약 상세정보"],
+          // 단가 계약일 때만 단가 기준표 탭 노출(청구·수금 단계가 구분명을 참조하므로 그 앞에 둔다)
+          ...(state.contractKind === "unit_price" ? ([["ratecard", "단가 계약"]] as const) : []),
           ["milestones", "청구·수금 단계"],
           ["outsourcing", "외주 용역"],
           ["document", "계약서 PDF"],
-        ].map(([key, label]) => (
+        ] as ReadonlyArray<readonly [string, string]>).map(([key, label]) => (
           <button
             key={key}
             type="button"
@@ -2042,7 +2145,18 @@ function NewContractModal({
           <div className="grid grid-cols-2 gap-3">
             <label className="grid gap-1 text-sm col-span-2">
               <span className="font-bold cd-text-muted">계약명</span>
-              <input className="cd-input" value={state.contractTitle} onChange={(e) => onChange({ ...state, contractTitle: e.target.value })} />
+              <div className="flex items-center gap-2">
+                <input className="cd-input min-w-0 flex-1" value={state.contractTitle} onChange={(e) => onChange({ ...state, contractTitle: e.target.value })} />
+                <button
+                  type="button"
+                  className="rounded-xl border cd-border-c px-3 py-2 text-xs cd-text-muted whitespace-nowrap hover:cd-soft-primary disabled:opacity-50"
+                  disabled={checkingTitle || !state.contractTitle.trim()}
+                  title="같은 계약명이 있으면 (YYYY년)·(YYYY년 N차)를 붙여 자동 수정합니다"
+                  onClick={() => void checkTitle()}
+                >
+                  {checkingTitle ? "확인 중…" : "중복확인"}
+                </button>
+              </div>
             </label>
             <label className="grid gap-1 text-sm col-span-2 relative">
               <span className="font-bold cd-text-muted">계약상대 업체</span>
@@ -2208,7 +2322,16 @@ function NewContractModal({
             </div>
             <label className="grid gap-1 text-sm">
               <span className="font-bold cd-text-muted">계약금액</span>
-              <input className="cd-input tabular-nums" inputMode="numeric" value={formatThousands(state.currentAmount)} onChange={(e) => onChange({ ...state, currentAmount: stripDigits(e.target.value) })} />
+              {/* 청구·수금 단계 금액 합계가 자동 반영된다(이중 입력 제거, 2026-08-24) — 직접 입력 불가 */}
+              <input
+                className="cd-input tabular-nums opacity-70 cursor-not-allowed"
+                inputMode="numeric"
+                readOnly
+                value={milestoneSum > 0 ? milestoneSum.toLocaleString("ko-KR") : ""}
+                placeholder="청구·수금 단계 합계 자동 반영"
+                title="청구·수금 단계 탭의 금액 합계가 자동으로 채워집니다."
+              />
+              <span className="text-[11px] cd-text-faint">청구·수금 단계 탭의 금액 합계가 자동 반영됩니다.</span>
             </label>
             <label className="grid gap-1 text-sm">
               <span className="font-bold cd-text-muted">계약일</span>
@@ -2225,14 +2348,49 @@ function NewContractModal({
           </div>
         )}
 
+        {tab === "ratecard" && state.contractKind === "unit_price" && (
+          <RateCardEditor items={state.rateItems} onChange={(rateItems) => onChange({ ...state, rateItems })} />
+        )}
+
         {tab === "milestones" && (
           <div className="grid gap-3">
+            {state.contractKind === "unit_price" && rateGroups.length === 0 && (
+              <p className="rounded-xl border cd-border-c p-3 text-xs cd-text-muted">
+                단가 계약은 <b>단가 계약</b> 탭에서 단가 기준표를 먼저 작성하세요. 지급 구분명이 아래 단계명
+                목록으로 나오고, 구분을 선택하면 해당 소계가 청구금액으로 자동 적용됩니다.
+              </p>
+            )}
             {state.milestones.map((m, idx) => (
               <div key={m.id} className="grid grid-cols-[56px_1fr_150px_1.2fr_40px] gap-2 items-end rounded-2xl border cd-border-c cd-surface-bg p-3">
                 <div className="text-xs cd-text-faint pb-2">{idx + 1}차</div>
                 <label className="grid gap-1 text-xs">
                   <span className="cd-text-faint">단계명</span>
-                  <input className="cd-input" value={m.stageLabel} onChange={(e) => updateMilestone(m.id, { stageLabel: e.target.value })} placeholder="선급금 / 중도금1 / 준공금" />
+                  {state.contractKind === "unit_price" ? (
+                    // 단가 계약 — 단계명은 단가 기준표의 지급 구분에서 고른다(직접 입력 대신, 2026-08-24).
+                    // 구분을 선택하면 그 구분의 소계가 청구금액으로 자동 적용된다.
+                    <select
+                      className="cd-select"
+                      value={m.stageLabel}
+                      onChange={(e) => {
+                        const groupName = e.target.value;
+                        const total = rateCardGroupTotal(state.rateItems, groupName);
+                        updateMilestone(m.id, {
+                          stageLabel: groupName,
+                          ...(groupName && total > 0 ? { amount: String(total) } : {}),
+                        });
+                      }}
+                    >
+                      <option value="">지급 구분 선택</option>
+                      {rateGroups.map((g) => (
+                        <option key={g} value={g}>{g}</option>
+                      ))}
+                      {m.stageLabel && !rateGroups.includes(m.stageLabel) && (
+                        <option value={m.stageLabel}>{m.stageLabel}</option>
+                      )}
+                    </select>
+                  ) : (
+                    <input className="cd-input" value={m.stageLabel} onChange={(e) => updateMilestone(m.id, { stageLabel: e.target.value })} placeholder="선급금 / 중도금1 / 준공금" />
+                  )}
                 </label>
                 <label className="grid gap-1 text-xs">
                   <span className="cd-text-faint">청구금액</span>
@@ -2584,12 +2742,14 @@ function EditMilestoneModal({
 
 function NewStageModal({
   contractId,
+  contractKind = "standard",
   state,
   onChange,
   onClose,
   onSaved,
 }: {
   contractId: string;
+  contractKind?: string;
   state: NewStageModalState;
   onChange: (state: NewStageModalState) => void;
   onClose: () => void;
@@ -2597,6 +2757,24 @@ function NewStageModal({
 }) {
   const toast = useToast();
   const [saving, setSaving] = useState(false);
+  // 단가 계약 — 단계명을 단가 기준표의 지급 구분에서 고른다(2026-08-24). 구분 소계가 금액으로 자동 적용.
+  const isUnitPrice = contractKind === "unit_price";
+  const [rateItems, setRateItems] = useState<RateCardItem[]>([]);
+  useEffect(() => {
+    if (!isUnitPrice) return;
+    let alive = true;
+    fetch(`/api/contracts/${encodeURIComponent(contractId)}/rate-card`, { cache: "no-store" })
+      .then(async (r) => {
+        if (!r.ok) return;
+        const d = (await r.json()) as { items?: RateCardItem[] };
+        if (alive) setRateItems(Array.isArray(d.items) ? d.items : []);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [contractId, isUnitPrice]);
+  const rateGroups = useMemo(() => rateCardGroupNames(rateItems), [rateItems]);
 
   const submit = async () => {
     if (!state.stageLabel.trim()) {
@@ -2632,8 +2810,39 @@ function NewStageModal({
       <div className="p-5 grid gap-3">
         <label className="grid gap-1 text-sm">
           <span className="font-bold cd-text-muted">단계명</span>
-          <input type="text" className="cd-input" placeholder="예: 1차 기성금"
-            value={state.stageLabel} onChange={(e) => onChange({ ...state, stageLabel: e.target.value })} />
+          {isUnitPrice ? (
+            <>
+              <select
+                className="cd-select"
+                value={state.stageLabel}
+                onChange={(e) => {
+                  const groupName = e.target.value;
+                  const total = rateCardGroupTotal(rateItems, groupName);
+                  onChange({
+                    ...state,
+                    stageLabel: groupName,
+                    ...(groupName && total > 0 ? { amount: String(total) } : {}),
+                  });
+                }}
+              >
+                <option value="">지급 구분 선택</option>
+                {rateGroups.map((g) => (
+                  <option key={g} value={g}>{g}</option>
+                ))}
+                {state.stageLabel && !rateGroups.includes(state.stageLabel) && (
+                  <option value={state.stageLabel}>{state.stageLabel}</option>
+                )}
+              </select>
+              {rateGroups.length === 0 && (
+                <span className="text-[11px] cd-text-faint">
+                  단가 기준표가 비어 있습니다. 변경계약 입력의 단가 계약 탭에서 먼저 작성하세요.
+                </span>
+              )}
+            </>
+          ) : (
+            <input type="text" className="cd-input" placeholder="예: 1차 기성금"
+              value={state.stageLabel} onChange={(e) => onChange({ ...state, stageLabel: e.target.value })} />
+          )}
         </label>
         <label className="grid gap-1 text-sm">
           <span className="font-bold cd-text-muted">청구금액</span>
@@ -3100,6 +3309,7 @@ function createEmptyContractState(): NewContractModalState {
       { ...createMilestoneDraft(), stageLabel: "선급금" },
       { ...createMilestoneDraft(), stageLabel: "준공금" },
     ],
+    rateItems: [],
     outsourcing: {
       outsourcingTitle: "",
       counterpartyQuery: "",

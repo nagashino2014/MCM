@@ -58,6 +58,11 @@ export interface IssuePrefill {
   issuerEmails: Array<{ email: string; label: string | null }>;
   /** 이미 발행된 계산서(재발행 경고용). */
   existing: TaxInvoiceRow[];
+  /**
+   * 이 계약의 미청구 단계 목록(2026-08-24) — 복수 단계를 한 장으로 묶어 발행할 때
+   * '청구 단계 추가' 선택지로 쓴다. 현재 열려 있는 단계도 포함된다.
+   */
+  openStages: Array<{ milestoneId: string; stageLabel: string; amount: number }>;
   cert: { ok: boolean; message: string };
 }
 
@@ -266,6 +271,19 @@ export async function buildIssuePrefill(contractId: string, milestoneId: string)
       addr: String(row.site_address ?? ""),
     },
     issuerEmails,
+    openStages: rowsToObjects(
+      await db.exec(
+        `SELECT milestone_id, stage_label, amount, invoice_amount
+           FROM contract_payment_milestones
+          WHERE contract_id = $1 AND COALESCE(invoice_issued, 0) = 0
+          ORDER BY stage_order ASC`,
+        [contractId],
+      ),
+    ).map((m) => ({
+      milestoneId: String(m.milestone_id),
+      stageLabel: String(m.stage_label ?? ""),
+      amount: Number(m.invoice_amount ?? m.amount ?? 0),
+    })),
     contacts: contactRows.map((c) => {
       const deptTypes = Array.isArray(c.dept_types) ? (c.dept_types as unknown[]).map((v) => String(v)) : [];
       return {
@@ -286,6 +304,12 @@ export async function buildIssuePrefill(contractId: string, milestoneId: string)
 export interface IssueParams {
   contractId: string;
   milestoneId: string;
+  /**
+   * 묶음 발행(2026-08-24) — 이 계산서 한 장이 커버하는 단계 전체(milestoneId 포함).
+   * 발행 성공 시 전부 발행 완료로 마킹된다(invoice_amount 는 각 단계 자체 금액).
+   * 미지정이면 milestoneId 한 단계만 마킹(기존 동작).
+   */
+  milestoneIds?: string[];
   writeDate: string; // YYYY-MM-DD
   supplyDate?: string; // 공급일자(품목) — 미지정 시 작성일자
   amountTotal: number; // 공급가액
@@ -442,12 +466,26 @@ export async function issueTaxInvoice(params: IssueParams, actorUserId: string |
       ],
     );
     // 기존 수금 모델 반영 — 발행요청 해소·미수금 집계가 그대로 따라온다.
-    await db.run(
-      `UPDATE contract_payment_milestones
-          SET invoice_issued = 1, invoice_issued_at = $2, invoice_amount = $3, updated_at = $4
-        WHERE milestone_id = $1`,
-      [params.milestoneId, params.writeDate, Math.round(params.totalAmount), new Date().toISOString()],
-    );
+    // 묶음 발행(milestoneIds)이면 포함된 단계 전부 마킹하고, 각 단계의 invoice_amount 는
+    // 계산서 총액이 아니라 단계 자체 금액으로 남긴다(단계별 미수금 집계가 어긋나지 않게).
+    const targetIds = Array.from(new Set([params.milestoneId, ...(params.milestoneIds ?? [])].filter(Boolean)));
+    if (targetIds.length > 1) {
+      const ph = targetIds.map((_, i) => `$${i + 3}`).join(",");
+      await db.run(
+        `UPDATE contract_payment_milestones
+            SET invoice_issued = 1, invoice_issued_at = $1,
+                invoice_amount = COALESCE(amount, invoice_amount), updated_at = $2
+          WHERE milestone_id IN (${ph})`,
+        [params.writeDate, new Date().toISOString(), ...targetIds],
+      );
+    } else {
+      await db.run(
+        `UPDATE contract_payment_milestones
+            SET invoice_issued = 1, invoice_issued_at = $2, invoice_amount = $3, updated_at = $4
+          WHERE milestone_id = $1`,
+        [params.milestoneId, params.writeDate, Math.round(params.totalAmount), new Date().toISOString()],
+      );
+    }
   });
 
   // 발행에 쓴 담당자 이메일을 최근 사용으로 올린다(목록 정렬용) — 저장된 주소가 아니면 아무 일도 하지 않는다.

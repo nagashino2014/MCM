@@ -36,7 +36,8 @@ import TaxInvoiceIssueModal from "@/components/contracts/TaxInvoiceIssueModal";
 import FacilityInfoModal from "@/components/contracts/FacilityInfoModal";
 import { IndustryOptionsEditorButton, useContractIndustryOptions } from "@/components/contracts/IndustryOptionsEditor";
 import { CONTRACT_SERVICE_OPTIONS } from "@/lib/contracts/service-options";
-import { RateCardEditor, rateCardGroupNames, rateCardGroupTotal, type RateCardItem } from "@/components/contracts/RateCardEditor";
+import { RateCardEditor, type RateCardData } from "@/components/contracts/RateCardEditor";
+import { createRateCard, rateCardHasContent, rateCardStageOptions, upgradeRateCard } from "@/lib/contracts/rate-card";
 import {
   ORDERING_SUBJECT_OPTIONS,
   ORDERING_SUBJECT_SITE_DIRECT,
@@ -143,8 +144,8 @@ interface NewContractModalState {
   industryCategory: string;
   memo: string;
   milestones: ContractMilestoneDraft[];
-  /** 단가 계약(contractKind='unit_price') 전용 — 단가 기준표 행. */
-  rateItems: RateCardItem[];
+  /** 단가 계약(contractKind='unit_price') 전용 — 단가 기준표(항목 마스터 + 차수별 수량). */
+  rateCard: RateCardData;
   outsourcing: OutsourcingDraft;
 }
 
@@ -1890,8 +1891,8 @@ function NewContractModal({
     [state.milestones]
   );
 
-  // 단가 계약 — 단가 기준표의 지급 구분명이 청구·수금 단계명 목록박스 옵션이 된다.
-  const rateGroups = useMemo(() => rateCardGroupNames(state.rateItems), [state.rateItems]);
+  // 단가 계약 — 단계명 옵션: 차수 미사용이면 구분 소계, 차수 사용이면 차수별 선급금/준공금(2026-08-25).
+  const rateStageOptions = useMemo(() => rateCardStageOptions(state.rateCard), [state.rateCard]);
 
   const [checkingTitle, setCheckingTitle] = useState(false);
   /**
@@ -2068,11 +2069,11 @@ function NewContractModal({
       const { contractId } = (await createRes.json()) as { contractId: string };
 
       // 단가 계약 — 단가 기준표 저장(청구·수금 단계보다 먼저, 단계명이 구분명을 참조하므로).
-      if (state.contractKind === "unit_price" && state.rateItems.length > 0) {
+      if (state.contractKind === "unit_price" && rateCardHasContent(state.rateCard)) {
         const res = await fetch(`/api/contracts/${encodeURIComponent(contractId)}/rate-card`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ items: state.rateItems }),
+          body: JSON.stringify({ card: state.rateCard }),
         });
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
@@ -2379,16 +2380,35 @@ function NewContractModal({
         )}
 
         {tab === "ratecard" && state.contractKind === "unit_price" && (
-          <RateCardEditor items={state.rateItems} onChange={(rateItems) => onChange({ ...state, rateItems })} />
+          <RateCardEditor data={state.rateCard} onChange={(rateCard) => onChange({ ...state, rateCard })} />
         )}
 
         {tab === "milestones" && (
           <div className="grid gap-3">
-            {state.contractKind === "unit_price" && rateGroups.length === 0 && (
+            {state.contractKind === "unit_price" && rateStageOptions.length === 0 && (
               <p className="rounded-xl border cd-border-c p-3 text-xs cd-text-muted">
-                단가 계약은 <b>단가 계약</b> 탭에서 단가 기준표를 먼저 작성하세요. 지급 구분명이 아래 단계명
-                목록으로 나오고, 구분을 선택하면 해당 소계가 청구금액으로 자동 적용됩니다.
+                단가 계약은 <b>단가 계약</b> 탭에서 단가 기준표를 먼저 작성하세요. 구분 소계(차수를 나눈 계약은
+                차수별 선급금/준공금)가 아래 단계명 목록으로 나오고, 선택하면 금액이 자동 적용됩니다.
               </p>
+            )}
+            {state.contractKind === "unit_price" && rateStageOptions.length > 0 && (
+              <button
+                type="button"
+                className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs font-bold cd-text-primary justify-self-start"
+                title="단가 기준표에서 파생된 단계 전체로 아래 목록을 다시 구성합니다."
+                onClick={() =>
+                  onChange({
+                    ...state,
+                    milestones: rateStageOptions.map((o) => ({
+                      ...createMilestoneDraft(),
+                      stageLabel: o.label,
+                      amount: o.amount > 0 ? String(o.amount) : "",
+                    })),
+                  })
+                }
+              >
+                단가표 기준으로 단계 자동 구성 ({rateStageOptions.length}단계)
+              </button>
             )}
             {state.milestones.map((m, idx) => (
               <div key={m.id} className="grid grid-cols-[56px_1fr_150px_1.2fr_40px] gap-2 items-end rounded-2xl border cd-border-c cd-surface-bg p-3">
@@ -2396,25 +2416,25 @@ function NewContractModal({
                 <label className="grid gap-1 text-xs">
                   <span className="cd-text-faint">단계명</span>
                   {state.contractKind === "unit_price" ? (
-                    // 단가 계약 — 단계명은 단가 기준표의 지급 구분에서 고른다(직접 입력 대신, 2026-08-24).
-                    // 구분을 선택하면 그 구분의 소계가 청구금액으로 자동 적용된다.
+                    // 단가 계약 — 단계명은 단가 기준표 파생 옵션에서 고른다(직접 입력 대신, 2026-08-24).
+                    // 선택하면 해당 소계(차수형은 선급/준공 분해액)가 청구금액으로 자동 적용된다.
                     <select
                       className="cd-select"
                       value={m.stageLabel}
                       onChange={(e) => {
-                        const groupName = e.target.value;
-                        const total = rateCardGroupTotal(state.rateItems, groupName);
+                        const label = e.target.value;
+                        const option = rateStageOptions.find((o) => o.label === label);
                         updateMilestone(m.id, {
-                          stageLabel: groupName,
-                          ...(groupName && total > 0 ? { amount: String(total) } : {}),
+                          stageLabel: label,
+                          ...(option && option.amount > 0 ? { amount: String(option.amount) } : {}),
                         });
                       }}
                     >
-                      <option value="">지급 구분 선택</option>
-                      {rateGroups.map((g) => (
-                        <option key={g} value={g}>{g}</option>
+                      <option value="">단계 선택</option>
+                      {rateStageOptions.map((o) => (
+                        <option key={o.label} value={o.label}>{o.label}</option>
                       ))}
-                      {m.stageLabel && !rateGroups.includes(m.stageLabel) && (
+                      {m.stageLabel && !rateStageOptions.some((o) => o.label === m.stageLabel) && (
                         <option value={m.stageLabel}>{m.stageLabel}</option>
                       )}
                     </select>
@@ -2787,24 +2807,24 @@ function NewStageModal({
 }) {
   const toast = useToast();
   const [saving, setSaving] = useState(false);
-  // 단가 계약 — 단계명을 단가 기준표의 지급 구분에서 고른다(2026-08-24). 구분 소계가 금액으로 자동 적용.
+  // 단가 계약 — 단계명을 단가 기준표 파생 옵션에서 고른다(2026-08-24). 소계/선급·준공 분해액이 금액으로 자동 적용.
   const isUnitPrice = contractKind === "unit_price";
-  const [rateItems, setRateItems] = useState<RateCardItem[]>([]);
+  const [rateCard, setRateCard] = useState<RateCardData>(() => createRateCard());
   useEffect(() => {
     if (!isUnitPrice) return;
     let alive = true;
     fetch(`/api/contracts/${encodeURIComponent(contractId)}/rate-card`, { cache: "no-store" })
       .then(async (r) => {
         if (!r.ok) return;
-        const d = (await r.json()) as { items?: RateCardItem[] };
-        if (alive) setRateItems(Array.isArray(d.items) ? d.items : []);
+        const d = (await r.json()) as { card?: unknown; items?: unknown };
+        if (alive) setRateCard(upgradeRateCard(d.card ?? d.items));
       })
       .catch(() => {});
     return () => {
       alive = false;
     };
   }, [contractId, isUnitPrice]);
-  const rateGroups = useMemo(() => rateCardGroupNames(rateItems), [rateItems]);
+  const rateStageOptions = useMemo(() => rateCardStageOptions(rateCard), [rateCard]);
 
   const submit = async () => {
     if (!state.stageLabel.trim()) {
@@ -2846,24 +2866,24 @@ function NewStageModal({
                 className="cd-select"
                 value={state.stageLabel}
                 onChange={(e) => {
-                  const groupName = e.target.value;
-                  const total = rateCardGroupTotal(rateItems, groupName);
+                  const label = e.target.value;
+                  const option = rateStageOptions.find((o) => o.label === label);
                   onChange({
                     ...state,
-                    stageLabel: groupName,
-                    ...(groupName && total > 0 ? { amount: String(total) } : {}),
+                    stageLabel: label,
+                    ...(option && option.amount > 0 ? { amount: String(option.amount) } : {}),
                   });
                 }}
               >
-                <option value="">지급 구분 선택</option>
-                {rateGroups.map((g) => (
-                  <option key={g} value={g}>{g}</option>
+                <option value="">단계 선택</option>
+                {rateStageOptions.map((o) => (
+                  <option key={o.label} value={o.label}>{o.label}</option>
                 ))}
-                {state.stageLabel && !rateGroups.includes(state.stageLabel) && (
+                {state.stageLabel && !rateStageOptions.some((o) => o.label === state.stageLabel) && (
                   <option value={state.stageLabel}>{state.stageLabel}</option>
                 )}
               </select>
-              {rateGroups.length === 0 && (
+              {rateStageOptions.length === 0 && (
                 <span className="text-[11px] cd-text-faint">
                   단가 기준표가 비어 있습니다. 변경계약 입력의 단가 계약 탭에서 먼저 작성하세요.
                 </span>
@@ -3339,7 +3359,7 @@ function createEmptyContractState(): NewContractModalState {
       { ...createMilestoneDraft(), stageLabel: "선급금" },
       { ...createMilestoneDraft(), stageLabel: "준공금" },
     ],
-    rateItems: [],
+    rateCard: createRateCard(),
     outsourcing: {
       outsourcingTitle: "",
       counterpartyQuery: "",

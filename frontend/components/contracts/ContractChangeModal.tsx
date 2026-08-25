@@ -6,7 +6,8 @@ import { useToast } from "@/components/ui/Toast";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
 import { IndustryOptionsEditorButton, useContractIndustryOptions } from "@/components/contracts/IndustryOptionsEditor";
 import { CONTRACT_SERVICE_OPTIONS } from "@/lib/contracts/service-options";
-import { RateCardEditor, type RateCardItem } from "@/components/contracts/RateCardEditor";
+import { RateCardEditor, type RateCardData, type RateCardRound } from "@/components/contracts/RateCardEditor";
+import { createRateCard, upgradeRateCard, type RateCardStageOption } from "@/lib/contracts/rate-card";
 import {
   ORDERING_SUBJECT_OPTIONS,
   ORDERING_SUBJECT_SITE_DIRECT,
@@ -187,19 +188,19 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
 
   // 단가 계약(2026-08-24) — 단가 기준표를 여기서도 수정한다. 저장 시 변경분만 PUT.
   const isUnitPrice = props.contractKind === "unit_price";
-  const [rateItems, setRateItems] = useState<RateCardItem[]>([]);
-  const rateLoadedJson = useRef<string>("[]");
+  const [rateCard, setRateCard] = useState<RateCardData>(() => createRateCard());
+  const rateLoadedJson = useRef<string>("");
   useEffect(() => {
     if (!isUnitPrice) return;
     let alive = true;
     fetch(`/api/contracts/${encodeURIComponent(props.contractId)}/rate-card`, { cache: "no-store" })
       .then(async (r) => {
         if (!r.ok) return;
-        const d = (await r.json()) as { items?: RateCardItem[] };
-        const items = Array.isArray(d.items) ? d.items : [];
+        const d = (await r.json()) as { card?: unknown; items?: unknown };
+        const card = upgradeRateCard(d.card ?? d.items);
         if (alive) {
-          setRateItems(items);
-          rateLoadedJson.current = JSON.stringify(items);
+          setRateCard(card);
+          rateLoadedJson.current = JSON.stringify(card);
         }
       })
       .catch(() => {});
@@ -208,6 +209,70 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.contractId, isUnitPrice]);
+
+  /** 단가 기준표를 서버에 저장(변경된 경우만). 차수 단계 추가·모달 저장 양쪽에서 쓴다. */
+  const saveRateCardIfDirty = async () => {
+    const json = JSON.stringify(rateCard);
+    if (json === rateLoadedJson.current) return;
+    const res = await fetch(`/api/contracts/${encodeURIComponent(props.contractId)}/rate-card`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ card: rateCard }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error((body as { error?: string })?.error ?? "단가 기준표 저장 실패");
+    }
+    rateLoadedJson.current = json;
+  };
+
+  /**
+   * 차수 파생 단계(선급금/준공금)를 청구·수금 단계로 즉시 추가(2026-08-25).
+   * 삼성전기식 "N차 변경" 추가 발주 대응 — 단가표를 먼저 저장한 뒤 마일스톤을 생성하고,
+   * 금액 탭에 증액분을 채워 저장 시 계약금액(변경 합계)에 반영되게 한다.
+   */
+  const addRoundStages = async (round: RateCardRound, stages: RateCardStageOption[]) => {
+    if (!stages.length) {
+      toast.show("이 차수에서 파생할 단계가 없습니다(소계 0원).", "error");
+      return;
+    }
+    const existing = new Set([
+      ...props.initialMilestones.map((m) => m.stageLabel.trim()),
+      ...amounts.map((a) => a.stageLabel.trim()),
+    ]);
+    const fresh = stages.filter((s) => !existing.has(s.label.trim()));
+    if (!fresh.length) {
+      toast.show("이미 같은 이름의 단계가 있습니다. 차수명을 확인하세요.", "error");
+      return;
+    }
+    try {
+      await saveRateCardIfDirty();
+      for (const s of fresh) {
+        const res = await fetch(`/api/contracts/${encodeURIComponent(props.contractId)}/milestones`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ stageLabel: s.label, amount: s.amount > 0 ? s.amount : null }),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error((body as { error?: string })?.error ?? "단계 추가 실패");
+        }
+      }
+      // 금액 탭 반영 — 변경 합계(newCurrentAmount)는 변경 금액 입력분의 합이므로,
+      // 기존 행의 변경 금액이 비어 있으면 기존 금액을 채워 합계가 축소되지 않게 한다.
+      setAmounts((prev) => [
+        ...prev.map((a) => (a.nextAmount === "" ? { ...a, nextAmount: a.previousAmount } : a)),
+        ...fresh.map((s) => ({ stageLabel: s.label, previousAmount: "", nextAmount: String(s.amount) })),
+      ]);
+      setPaymentTerms((prev) => [...prev, ...fresh.map((s) => ({ stageLabel: s.label, previous: "", next: "" }))]);
+      toast.show(
+        `${round.label || "차수"}의 단계 ${fresh.length}건이 추가되고 금액 탭에 증액분이 반영되었습니다. 저장 시 계약금액이 갱신됩니다.`,
+        "success"
+      );
+    } catch (err) {
+      toast.show("단계 추가 실패: " + (err as Error).message, "error");
+    }
+  };
 
   // 변경 대분류에 따라 세분류 옵션이 갈린다(신규 계약 모달과 동일 체계).
   const nextSubtypeOptions = useMemo(
@@ -415,18 +480,7 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
       }
 
       // 단가 기준표 변경분 저장 — 변경 이벤트와 별개로 계약당 1건을 통째 교체한다.
-      if (isUnitPrice && JSON.stringify(rateItems) !== rateLoadedJson.current) {
-        const rateRes = await fetch(`/api/contracts/${encodeURIComponent(props.contractId)}/rate-card`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ items: rateItems }),
-        });
-        if (!rateRes.ok) {
-          const body = await rateRes.json().catch(() => ({}));
-          throw new Error(body?.error ?? "단가 기준표 저장 실패");
-        }
-        rateLoadedJson.current = JSON.stringify(rateItems);
-      }
+      if (isUnitPrice) await saveRateCardIfDirty();
 
       const res = await fetch(`/api/contracts/${encodeURIComponent(props.contractId)}/changes`, {
         method: "POST",
@@ -614,10 +668,11 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
           {activeTab === "ratecard" && isUnitPrice && (
             <div className="grid gap-3">
               <p className="text-[11px] cd-text-faint">
-                단가 기준표를 수정하면 저장 시 함께 반영됩니다. 지급 구분 소계가 청구·수금 단계 추가 시 금액으로
-                자동 적용됩니다(이미 만들어진 단계의 금액은 금액 탭에서 변경).
+                단가 기준표를 수정하면 저장 시 함께 반영됩니다. 추가 발주(N차 변경)는 <b>차수 추가</b> 후 수량을
+                입력하고, 차수별 요약의 <b>청구·수금 단계로 추가</b>를 누르면 선급금/준공금 단계가 만들어지며 금액
+                탭에 증액분이 채워집니다(이미 만들어진 단계의 금액은 금액 탭에서 변경).
               </p>
-              <RateCardEditor items={rateItems} onChange={setRateItems} />
+              <RateCardEditor data={rateCard} onChange={setRateCard} onAddStages={addRoundStages} />
             </div>
           )}
 

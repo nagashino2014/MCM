@@ -715,7 +715,13 @@ function ContractsInner() {
           initialOrderingSubjectType={detail.contract.ordering_subject_type != null ? String(detail.contract.ordering_subject_type) : null}
           initialEndedAt={String(detail.contract.ended_at ?? "") || null}
           initialCurrentAmount={selected.currentAmount}
-          onClose={() => setChangeModalOpen(false)}
+          onClose={() => {
+            setChangeModalOpen(false);
+            // 차수 단계 추가는 모달 안에서 즉시 커밋된다(2026-08-25) — 저장 없이 닫아도
+            // 밀레스톤·계약금액이 서버에서 이미 바뀌었을 수 있어 상세·트리를 다시 읽는다.
+            if (selectedId) loadDetail(selectedId);
+            reloadTree();
+          }}
           onSaved={() => {
             setChangeModalOpen(false);
             if (selectedId) loadDetail(selectedId);

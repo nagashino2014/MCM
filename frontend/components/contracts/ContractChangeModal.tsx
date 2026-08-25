@@ -260,13 +260,51 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
       }
       // 금액 탭 반영 — 변경 합계(newCurrentAmount)는 변경 금액 입력분의 합이므로,
       // 기존 행의 변경 금액이 비어 있으면 기존 금액을 채워 합계가 축소되지 않게 한다.
-      setAmounts((prev) => [
-        ...prev.map((a) => (a.nextAmount === "" ? { ...a, nextAmount: a.previousAmount } : a)),
+      const nextAmounts = [
+        ...amounts.map((a) => (a.nextAmount === "" ? { ...a, nextAmount: a.previousAmount } : a)),
         ...fresh.map((s) => ({ stageLabel: s.label, previousAmount: "", nextAmount: String(s.amount) })),
-      ]);
-      setPaymentTerms((prev) => [...prev, ...fresh.map((s) => ({ stageLabel: s.label, previous: "", next: "" }))]);
+      ];
+      const nextTerms = [...paymentTerms, ...fresh.map((s) => ({ stageLabel: s.label, previous: "", next: "" }))];
+      setAmounts(nextAmounts);
+      setPaymentTerms(nextTerms);
+      // 계약금액 즉시 갱신(2026-08-25) — 단계는 위에서 이미 생성됐으므로, 모달 저장을 누르지
+      // 않고 닫아도 밀레스톤 합과 계약금액이 어긋나지 않게 변경 이벤트를 여기서 바로 커밋한다
+      // (삼성전기 1차 재추가 +30만원 미반영 실사례). 이후 모달 저장은 delta 0 이벤트라 무해.
+      const prevTotal = amounts.reduce((acc, a) => acc + (Number(a.previousAmount) || 0), 0);
+      const nextTotal = nextAmounts.reduce((acc, a) => acc + (Number(a.nextAmount) || 0), 0);
+      if (nextTotal > 0) {
+        const commitRes = await fetch(`/api/contracts/${encodeURIComponent(props.contractId)}/changes`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            changedAt: meta.changedAt || new Date().toISOString().slice(0, 10),
+            previousAmount: prevTotal || null,
+            deltaAmount: prevTotal ? nextTotal - prevTotal : null,
+            newCurrentAmount: nextTotal,
+            detail: `${round.label || "차수"} 청구·수금 단계 추가(단가 차수표 자동 반영)`,
+            payload: {
+              amounts: nextAmounts,
+              servicePeriod,
+              paymentTerms: nextTerms,
+              serviceCategory,
+              closing,
+              termination: lifecycle,
+              outsourcing,
+              meta,
+            },
+            changedFields: ["amounts"],
+          }),
+        });
+        if (!commitRes.ok) {
+          const body = await commitRes.json().catch(() => ({}));
+          throw new Error(
+            ((body as { error?: string })?.error ?? "계약금액 갱신 실패") +
+              " — 단계는 추가되었으니 금액 탭에서 저장해 주세요."
+          );
+        }
+      }
       toast.show(
-        `${round.label || "차수"}의 단계 ${fresh.length}건이 추가되고 금액 탭에 증액분이 반영되었습니다. 저장 시 계약금액이 갱신됩니다.`,
+        `${round.label || "차수"}의 단계 ${fresh.length}건이 추가되고 계약금액이 ${nextTotal.toLocaleString()}원으로 갱신되었습니다.`,
         "success"
       );
     } catch (err) {

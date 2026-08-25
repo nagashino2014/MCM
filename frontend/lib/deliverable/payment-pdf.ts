@@ -185,7 +185,8 @@ export async function renderPaymentRequestPdf(values: DeliverableValues): Promis
   page.drawRectangle({ x: MARGIN, y: y - boxH + 12, width: 3.2, height: boxH, color: NAVY });
   const boxPad = 16;
   page.drawText("금회 청구금액", { x: MARGIN + boxPad, y: y - 8, size: 10, font: fonts.bold, color: GRAY });
-  page.drawText(`청구 항목 · ${stageLabel}`, { x: MARGIN + boxPad, y: y - boxH + 24, size: 10.5, font: fonts.regular, color: INK });
+  // 청구 항목 나열은 하단 표의 단계별 분해와 중복 + 항목이 많으면 우측 한글 금액과 겹친다
+  // (2026-08-25 사용자 요청) — 요약 박스는 금액만 표기한다.
   const bigAmount = `￦ ${formatMoney(cur.total)}`;
   const bigW = fonts.bold.widthOfTextAtSize(bigAmount, 19);
   page.drawText(bigAmount, { x: MARGIN + CONTENT_W - boxPad - bigW, y: y - 12, size: 19, font: fonts.bold, color: NAVY });

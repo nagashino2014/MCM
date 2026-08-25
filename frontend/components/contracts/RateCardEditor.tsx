@@ -16,16 +16,19 @@ import {
   type RateCardData,
   type RateCardRound,
   type RateCardStageOption,
-  advanceSplit,
   cellAmount,
   cellAutoAmount,
   createRateCardItem,
+  createRateCardPayments,
   createRateCardRound,
+  decimalStr,
+  paymentSplit,
   rateCardGroupNames,
   rateCardGroupTotal,
   rateCardTotal,
   roundStageOptions,
   roundTotal,
+  validPayments,
 } from "@/lib/contracts/rate-card";
 
 export type { RateCardData, RateCardItem, RateCardRound } from "@/lib/contracts/rate-card";
@@ -35,7 +38,6 @@ const fmtNum = (s: string | number | undefined) => {
   const d = digits(String(s ?? ""));
   return d ? Number(d).toLocaleString("ko-KR") : "";
 };
-const rateOf = (round: RateCardRound) => Number(digits(round.advanceRate) || 0);
 
 export function RateCardEditor({
   data,
@@ -51,8 +53,8 @@ export function RateCardEditor({
   const activeRound = data.rounds.find((r) => r.id === activeRoundId) ?? data.rounds[0];
   const dual = data.dualPrice;
   const groups = rateCardGroupNames(data);
-  // 단일 차수 + 선급률 없음 = 구분 소계 청구(에이에스이코리아식). 요약도 그 기준으로.
-  const groupMode = data.rounds.length === 1 && !(rateOf(data.rounds[0]) > 0 && rateOf(data.rounds[0]) < 100);
+  // 단일 차수 + 지급 단위 없음 = 구분 소계 청구(에이에스이코리아식). 요약도 그 기준으로.
+  const groupMode = data.rounds.length === 1 && validPayments(data.rounds[0]).length === 0;
 
   const updateItem = (id: string, patch: Partial<(typeof data.items)[number]>) => {
     onChange({ ...data, items: data.items.map((it) => (it.id === id ? { ...it, ...patch } : it)) });
@@ -85,8 +87,11 @@ export function RateCardEditor({
       const m = r.label.match(/(\d+)\s*차/);
       return m ? Math.max(acc, Number(m[1])) : acc;
     }, 0);
-    const prevRate = data.rounds.length ? data.rounds[data.rounds.length - 1].advanceRate : "30";
-    const round = createRateCardRound(`${maxNth + 1}차 변경`, prevRate);
+    const prev = data.rounds[data.rounds.length - 1];
+    const round = createRateCardRound(
+      `${maxNth + 1}차 변경`,
+      prev && prev.payments.length ? prev.payments.map((p) => ({ ...p })) : createRateCardPayments()
+    );
     onChange({ ...data, rounds: [...data.rounds, round] });
     setActiveRoundId(round.id);
   };
@@ -117,9 +122,10 @@ export function RateCardEditor({
     <div className="grid gap-3">
       <p className="text-[11px] cd-text-faint leading-relaxed">
         <b>① 단가 기준표</b>에 발주처 단가표의 항목·단가만 옮겨 적고, 수량과 금액 산출은 <b>② 차수표</b>가
-        전담합니다. 삼성전기처럼 추가 발주를 <b>1차 변경, 2차 변경…</b> 으로 덧붙이는 계약은 차수를 늘려 수량만 새로
-        치면 되고, 차수 소계가 선급률에 따라 <b>선급금/준공금</b>으로 나뉘어 청구·수금 단계 목록에 나옵니다. 차수가
-        1개뿐이고 선급률을 비우면 <b>구분별 소계</b>가 단계 목록이 됩니다(지급 구분 방식 발주처).
+        전담합니다(감소율 등은 소수 수량 — 예: 16.7 — 이나 금액 셀 직접 보정으로 반영). 삼성전기처럼 추가 발주를{" "}
+        <b>1차 변경, 2차 변경…</b> 으로 덧붙이는 계약은 차수를 늘려 수량만 새로 치면 되고, 차수 소계가 지급 단위
+        비율(기본 선급금 30/준공금 70, 중도금 추가 가능)에 따라 나뉘어 청구·수금 단계 목록에 나옵니다. 차수가
+        1개뿐이고 지급 단위를 모두 지우면 <b>구분별 소계</b>가 단계 목록이 됩니다(지급 구분 방식 발주처).
       </p>
 
       {/* ① 단가 기준표 — 항목·단가만 */}
@@ -249,43 +255,90 @@ export function RateCardEditor({
 
       {activeRound && (
         <>
-          {/* 선택 차수 상세 */}
-          <div className="rounded-xl border cd-border-c p-2.5 grid grid-cols-[minmax(0,1fr)_150px_130px_28px] gap-2 items-end">
-            <label className="grid gap-1 text-[11px]">
-              <span className="cd-text-faint font-bold">차수명</span>
-              <input
-                className="cd-input"
-                value={activeRound.label}
-                placeholder="예: 1차 변경"
-                onChange={(e) => updateRound(activeRound.id, { label: e.target.value })}
-              />
-            </label>
-            <label className="grid gap-1 text-[11px]">
-              <span className="cd-text-faint font-bold">견적 기준일</span>
-              <AutoDateInput
-                className="cd-input tabular-nums"
-                value={activeRound.date}
-                onChange={(date) => updateRound(activeRound.id, { date })}
-              />
-            </label>
-            <label className="grid gap-1 text-[11px]">
-              <span className="cd-text-faint font-bold">선급률(%) — 비우면 구분별 청구</span>
-              <input
-                className="cd-input text-right tabular-nums"
-                inputMode="numeric"
-                value={activeRound.advanceRate}
-                placeholder="30"
-                onChange={(e) => updateRound(activeRound.id, { advanceRate: digits(e.target.value).slice(0, 3) })}
-              />
-            </label>
-            <button
-              type="button"
-              className="rounded-lg p-1.5 text-rose-600 hover:bg-rose-50 mb-0.5"
-              title="이 차수 삭제"
-              onClick={() => removeRound(activeRound.id)}
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
+          {/* 선택 차수 상세 — 차수명·기준일 + 지급 단위(선급/중도/준공) 목록 */}
+          <div className="rounded-xl border cd-border-c p-2.5 grid gap-2">
+            <div className="grid grid-cols-[minmax(0,1fr)_150px_28px] gap-2 items-end">
+              <label className="grid gap-1 text-[11px]">
+                <span className="cd-text-faint font-bold">차수명</span>
+                <input
+                  className="cd-input"
+                  value={activeRound.label}
+                  placeholder="예: 1차 변경"
+                  onChange={(e) => updateRound(activeRound.id, { label: e.target.value })}
+                />
+              </label>
+              <label className="grid gap-1 text-[11px]">
+                <span className="cd-text-faint font-bold">견적 기준일</span>
+                <AutoDateInput
+                  className="cd-input tabular-nums"
+                  value={activeRound.date}
+                  onChange={(date) => updateRound(activeRound.id, { date })}
+                />
+              </label>
+              <button
+                type="button"
+                className="rounded-lg p-1.5 text-rose-600 hover:bg-rose-50 mb-0.5"
+                title="이 차수 삭제"
+                onClick={() => removeRound(activeRound.id)}
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] cd-text-faint font-bold mr-0.5">지급 단위</span>
+              {activeRound.payments.map((p, idx) => (
+                <span key={idx} className="inline-flex items-center gap-1 rounded-lg border cd-border-c px-1.5 py-1">
+                  <input
+                    className="cd-input !py-0.5 !px-1.5 w-[76px] text-[11px]"
+                    value={p.label}
+                    placeholder="선급금"
+                    onChange={(e) => {
+                      const payments = activeRound.payments.map((x, i) => (i === idx ? { ...x, label: e.target.value } : x));
+                      updateRound(activeRound.id, { payments });
+                    }}
+                  />
+                  <input
+                    className="cd-input !py-0.5 !px-1.5 w-[44px] text-[11px] text-right tabular-nums"
+                    inputMode="numeric"
+                    value={p.ratePct}
+                    placeholder="%"
+                    onChange={(e) => {
+                      const ratePct = digits(e.target.value).slice(0, 3);
+                      const payments = activeRound.payments.map((x, i) => (i === idx ? { ...x, ratePct } : x));
+                      updateRound(activeRound.id, { payments });
+                    }}
+                  />
+                  <span className="text-[10px] cd-text-faint">%</span>
+                  <button
+                    type="button"
+                    className="text-rose-600 hover:opacity-70"
+                    title="이 지급 단위 삭제"
+                    onClick={() => updateRound(activeRound.id, { payments: activeRound.payments.filter((_, i) => i !== idx) })}
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+              <button
+                type="button"
+                className="rounded-lg px-2 py-1 text-[11px] font-bold border border-dashed cd-border-c cd-text-faint hover:cd-tint-primary inline-flex items-center gap-1"
+                title="중도금 등 지급 단위 추가 — 마지막 단위(준공금) 앞에 끼워 넣습니다."
+                onClick={() => {
+                  const payments = activeRound.payments.slice();
+                  const inserted = { label: payments.length ? "중도금" : "선급금", ratePct: "" };
+                  // 마지막 단위(준공금=잔액) 앞에 삽입 — 비어 있으면 그냥 추가.
+                  payments.splice(Math.max(payments.length - 1, 0), 0, inserted);
+                  updateRound(activeRound.id, { payments });
+                }}
+              >
+                <Plus className="w-3 h-3" />
+                지급 단위 추가
+              </button>
+              <span className="text-[10px] cd-text-faint">
+                마지막 단위 금액은 잔액으로 맞춰집니다. 모두 지우면 구분별 청구.
+              </span>
+            </div>
           </div>
 
           {data.items.length === 0 ? (
@@ -324,16 +377,18 @@ export function RateCardEditor({
                     </div>
                     <input
                       className="cd-input text-right tabular-nums"
-                      inputMode="numeric"
+                      inputMode="decimal"
+                      title="감소율 등은 소수 수량으로 반영할 수 있습니다(예: 16.7)"
                       value={cell?.qty ?? ""}
-                      onChange={(e) => updateCell(activeRound, it.id, { qty: digits(e.target.value) })}
+                      onChange={(e) => updateCell(activeRound, it.id, { qty: decimalStr(e.target.value) })}
                     />
                     {dual && (
                       <input
                         className="cd-input text-right tabular-nums"
-                        inputMode="numeric"
+                        inputMode="decimal"
+                        title="감소율 등은 소수 수량으로 반영할 수 있습니다(예: 16.7)"
                         value={cell?.qty2 ?? ""}
-                        onChange={(e) => updateCell(activeRound, it.id, { qty2: digits(e.target.value) })}
+                        onChange={(e) => updateCell(activeRound, it.id, { qty2: decimalStr(e.target.value) })}
                       />
                     )}
                     <input
@@ -376,12 +431,11 @@ export function RateCardEditor({
 
       {!groupMode && data.rounds.length > 0 && (
         <div className="rounded-2xl border cd-border-c p-3 grid gap-1.5 text-xs">
-          <div className="font-bold cd-text-muted mb-0.5">차수별 소계 · 선급/준공 분해</div>
+          <div className="font-bold cd-text-muted mb-0.5">차수별 소계 · 지급 단위 분해</div>
           {data.rounds.map((r) => {
             const total = roundTotal(data, r);
             if (total <= 0) return null;
-            const rate = rateOf(r);
-            const split = rate > 0 && rate < 100 ? advanceSplit(total, rate) : null;
+            const split = paymentSplit(total, r.payments);
             return (
               <div key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <span className="cd-text-muted font-bold min-w-[92px]">
@@ -389,9 +443,9 @@ export function RateCardEditor({
                   {r.date ? <span className="cd-text-faint font-normal"> {r.date}</span> : null}
                 </span>
                 <span className="tabular-nums cd-text">{total.toLocaleString("ko-KR")}원</span>
-                {split && (
+                {split.length > 0 && (
                   <span className="cd-text-faint tabular-nums">
-                    선급 {split.advance.toLocaleString("ko-KR")} / 준공 {split.completion.toLocaleString("ko-KR")}
+                    {split.map((s) => `${s.label} ${s.amount.toLocaleString("ko-KR")}`).join(" / ")}
                   </span>
                 )}
                 {onAddStages && (

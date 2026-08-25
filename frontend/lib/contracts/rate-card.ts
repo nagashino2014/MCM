@@ -27,12 +27,18 @@ export interface RateCardItem {
 
 /** 차수 × 항목 셀 — 수량과 (감소율 등으로 자동 계산과 다를 때만) 금액 보정값. */
 export interface RateCardCell {
-  /** 단가① 적용 수량 */
+  /** 단가① 적용 수량 — 감소율 반영을 위한 소수 허용(예: 16.7) */
   qty: string;
-  /** 단가② 적용 수량 */
+  /** 단가② 적용 수량 — 소수 허용 */
   qty2: string;
   /** 금액(계) 수동 보정 — 비어 있으면 단가×수량 자동 계산 */
   amount?: string;
+}
+
+/** 차수 지급 단위 — 예: 선급금 30% / 중도금 30% / 준공금 40%. 마지막 단위 금액은 잔액(합계 보존). */
+export interface RateCardPayment {
+  label: string;
+  ratePct: string;
 }
 
 export interface RateCardRound {
@@ -41,8 +47,8 @@ export interface RateCardRound {
   label: string;
   /** 차수 견적 기준일(YYYY-MM-DD) — 선택 */
   date: string;
-  /** 선급률(%) — 차수 소계를 선급금/준공금으로 분해. 0 또는 빈값이면 분해 없이 단일 청구 */
-  advanceRate: string;
+  /** 지급 단위 목록 — 기본 [선급금 30, 준공금 70]. 단일 차수에서 모두 지우면 구분별 청구(지급 구분 방식) */
+  payments: RateCardPayment[];
   /** itemId → 셀. 미기재 항목은 수량 0 취급 */
   cells: Record<string, RateCardCell>;
 }
@@ -64,12 +70,31 @@ const newId = (prefix: string) => prefix + "_" + Math.random().toString(36).slic
 const digits = (v: unknown) => String(v ?? "").replace(/[^0-9]/g, "");
 const num = (v: unknown) => Number(digits(v) || 0);
 
+/** 수량용 소수 문자열 정제 — 숫자와 소수점 1개만 허용(감소율 반영 수량, 예: 16.7). */
+export function decimalStr(v: unknown): string {
+  const s = String(v ?? "").replace(/[^0-9.]/g, "");
+  const i = s.indexOf(".");
+  const clean = i === -1 ? s : s.slice(0, i + 1) + s.slice(i + 1).replace(/\./g, "");
+  return clean.slice(0, 12);
+}
+const qnum = (v: unknown) => {
+  const n = parseFloat(decimalStr(v));
+  return Number.isFinite(n) ? n : 0;
+};
+
 export function createRateCardItem(groupName = ""): RateCardItem {
   return { id: newId("rci"), groupName, name: "", unit: "건", unitPrice: "", unitPrice2: "", note: "" };
 }
 
-export function createRateCardRound(label: string, advanceRate = "30"): RateCardRound {
-  return { id: newId("rcr"), label, date: "", advanceRate, cells: {} };
+export function createRateCardPayments(): RateCardPayment[] {
+  return [
+    { label: "선급금", ratePct: "30" },
+    { label: "준공금", ratePct: "70" },
+  ];
+}
+
+export function createRateCardRound(label: string, payments?: RateCardPayment[]): RateCardRound {
+  return { id: newId("rcr"), label, date: "", payments: payments ?? createRateCardPayments(), cells: {} };
 }
 
 export function createRateCard(): RateCardData {
@@ -78,10 +103,10 @@ export function createRateCard(): RateCardData {
   return { version: 2, dualPrice: false, items: [], rounds: [] };
 }
 
-/** 셀 자동 계산 금액 = 단가①×수량① + 단가②×수량② */
+/** 셀 자동 계산 금액 = 단가①×수량① + 단가②×수량② (수량은 소수 허용, 결과는 원 단위 반올림) */
 export function cellAutoAmount(item: RateCardItem, cell: RateCardCell | undefined): number {
   if (!cell) return 0;
-  return num(item.unitPrice) * num(cell.qty) + num(item.unitPrice2) * num(cell.qty2);
+  return Math.round(num(item.unitPrice) * qnum(cell.qty) + num(item.unitPrice2) * qnum(cell.qty2));
 }
 
 /** 셀 확정 금액 — 수동 보정값이 있으면 그것, 없으면 자동 계산. */
@@ -121,42 +146,56 @@ export function rateCardGroupTotal(data: RateCardData, groupName: string): numbe
   return acc;
 }
 
-/** 선급/준공 분해 — 선급 = 반올림, 준공 = 나머지(합계 보존). */
-export function advanceSplit(total: number, ratePct: number): { advance: number; completion: number } {
-  const advance = Math.round((total * ratePct) / 100);
-  return { advance, completion: total - advance };
+/** 라벨이 입력된 유효 지급 단위만. */
+export function validPayments(round: RateCardRound): RateCardPayment[] {
+  return round.payments.filter((p) => p.label.trim());
 }
 
-/** 한 차수에서 파생되는 청구 단계 — 선급률이 있으면 [선급금, 준공금], 없으면 차수 단일 청구. */
+/**
+ * 차수 소계를 지급 단위별로 분해 — 각 단위는 비율 반올림, 마지막 단위는 잔액(합계 보존, 준공금=잔액 관행).
+ * 마지막 단위의 표기 비율이 비어 있으면 100 - 앞 단위 합으로 채워 보여준다.
+ */
+export function paymentSplit(
+  total: number,
+  payments: RateCardPayment[]
+): Array<{ label: string; ratePct: number; amount: number }> {
+  const pays = payments.filter((p) => p.label.trim());
+  if (!pays.length) return [];
+  const out: Array<{ label: string; ratePct: number; amount: number }> = [];
+  let acc = 0;
+  let pctAcc = 0;
+  pays.forEach((p, i) => {
+    const last = i === pays.length - 1;
+    const rawPct = Number(digits(p.ratePct) || 0);
+    const pct = last && !rawPct ? Math.max(0, 100 - pctAcc) : rawPct;
+    const amount = last ? total - acc : Math.round((total * pct) / 100);
+    acc += amount;
+    pctAcc += pct;
+    out.push({ label: p.label.trim(), ratePct: pct, amount });
+  });
+  return out;
+}
+
+/** 한 차수에서 파생되는 청구 단계 — 지급 단위가 있으면 단위별 분해, 없으면 차수 단일 청구. */
 export function roundStageOptions(data: RateCardData, round: RateCardRound): RateCardStageOption[] {
   const total = roundTotal(data, round);
   if (total <= 0) return [];
-  const rate = Number(digits(round.advanceRate) || 0);
   const label = round.label.trim() || "차수";
-  if (rate > 0 && rate < 100) {
-    const { advance, completion } = advanceSplit(total, rate);
-    return [
-      { label: `${label} 선급금(${rate}%)`, amount: advance },
-      { label: `${label} 준공금(${100 - rate}%)`, amount: completion },
-    ];
-  }
-  return [{ label, amount: total }];
+  const split = paymentSplit(total, round.payments);
+  if (!split.length) return [{ label, amount: total }];
+  return split.map((s) => ({ label: `${label} ${s.label}(${s.ratePct}%)`, amount: s.amount }));
 }
 
 /**
  * 청구·수금 단계명 목록박스 옵션.
  *  - 차수 없음: 옵션 없음(차수표를 먼저 작성해야 금액이 산출된다).
- *  - 차수 1개 + 선급률 없음: 구분명 → 구분 소계(에이에스이코리아식 지급 구분 청구, v1 동작 유지).
- *  - 그 외(선급률 있는 차수·차수 2개 이상): 차수별 선급금/준공금.
+ *  - 차수 1개 + 지급 단위 없음: 구분명 → 구분 소계(에이에스이코리아식 지급 구분 청구, v1 동작 유지).
+ *  - 그 외: 차수별 지급 단위(선급금/중도금/준공금) 분해.
  */
 export function rateCardStageOptions(data: RateCardData): RateCardStageOption[] {
   if (data.rounds.length === 0) return [];
-  if (data.rounds.length === 1) {
-    const round = data.rounds[0];
-    const rate = Number(digits(round.advanceRate) || 0);
-    if (!(rate > 0 && rate < 100)) {
-      return rateCardGroupNames(data).map((g) => ({ label: g, amount: rateCardGroupTotal(data, g) }));
-    }
+  if (data.rounds.length === 1 && validPayments(data.rounds[0]).length === 0) {
+    return rateCardGroupNames(data).map((g) => ({ label: g, amount: rateCardGroupTotal(data, g) }));
   }
   return data.rounds.flatMap((round) => roundStageOptions(data, round));
 }
@@ -189,22 +228,39 @@ function normalizeItem(raw: Partial<RateCardItem>): RateCardItem {
   };
 }
 
-function normalizeRound(raw: Partial<RateCardRound>, index: number): RateCardRound {
+function normalizeRound(raw: Partial<RateCardRound> & { advanceRate?: unknown }, index: number): RateCardRound {
   const cells: Record<string, RateCardCell> = {};
   if (raw.cells && typeof raw.cells === "object") {
     for (const [itemId, cell] of Object.entries(raw.cells as Record<string, Partial<RateCardCell>>)) {
       if (!cell || typeof cell !== "object") continue;
-      const qty = digits(cell.qty).slice(0, 9);
-      const qty2 = digits(cell.qty2).slice(0, 9);
+      const qty = decimalStr(cell.qty);
+      const qty2 = decimalStr(cell.qty2);
       const amount = cell.amount != null && cell.amount !== "" ? digits(cell.amount).slice(0, 15) : undefined;
       if (qty || qty2 || amount != null) cells[text(itemId, 24)] = amount != null ? { qty, qty2, amount } : { qty, qty2 };
     }
+  }
+  let payments: RateCardPayment[];
+  if (Array.isArray(raw.payments)) {
+    payments = (raw.payments as Array<Partial<RateCardPayment>>)
+      .slice(0, 8)
+      .map((p) => ({ label: text(p?.label, 40), ratePct: digits(p?.ratePct).slice(0, 3) }))
+      .filter((p) => p.label || p.ratePct);
+  } else {
+    // 구버전(선급률 단일 필드) 데이터 — 유효한 선급률은 [선급금, 준공금] 2단위로 변환한다.
+    const rate = Number(digits(raw.advanceRate) || 0);
+    payments =
+      rate > 0 && rate < 100
+        ? [
+            { label: "선급금", ratePct: String(rate) },
+            { label: "준공금", ratePct: String(100 - rate) },
+          ]
+        : [];
   }
   return {
     id: text(raw.id, 24) || newId("rcr"),
     label: text(raw.label, 40) || (index === 0 ? "기본" : `${index}차 변경`),
     date: text(raw.date, 10),
-    advanceRate: digits(raw.advanceRate).slice(0, 3),
+    payments,
     cells,
   };
 }
@@ -229,8 +285,8 @@ export function upgradeRateCard(raw: unknown): RateCardData {
   }
 
   const v1 = Array.isArray(raw) ? (raw as LegacyV1Item[]).slice(0, 200) : [];
-  // v1 은 구분 소계 청구 방식이었으므로 선급률 없는 차수로 승격한다(수량이 하나도 없으면 차수 자체를 만들지 않는다).
-  const base = createRateCardRound("기본", "");
+  // v1 은 구분 소계 청구 방식이었으므로 지급 단위 없는 차수로 승격한다(수량이 하나도 없으면 차수 자체를 만들지 않는다).
+  const base = createRateCardRound("기본", []);
   const items: RateCardItem[] = [];
   for (const r of v1) {
     const item = normalizeItem({

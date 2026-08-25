@@ -2387,9 +2387,9 @@ function NewContractModal({
           <div className="grid gap-3">
             {state.contractKind === "unit_price" && rateStageOptions.length === 0 && (
               <p className="rounded-xl border cd-border-c p-3 text-xs cd-text-muted">
-                단가 계약은 <b>단가 계약</b> 탭에서 단가 기준표와 차수표(산정 수량)를 먼저 작성하세요. 차수별
-                선급금/준공금(선급률을 비운 단일 차수는 구분 소계)이 아래 단계명 목록으로 나오고, 선택하면 금액이
-                자동 적용됩니다.
+                단가 계약은 <b>단가 계약</b> 탭에서 단가 기준표와 차수표(산정 수량)를 먼저 작성하세요. 차수별 지급
+                단위(선급금/중도금/준공금 — 지급 단위를 비운 단일 차수는 구분 소계)가 아래 단계명 목록으로 나오고,
+                선택하면 금액이 자동 적용됩니다.
               </p>
             )}
             {state.contractKind === "unit_price" && rateStageOptions.length > 0 && (

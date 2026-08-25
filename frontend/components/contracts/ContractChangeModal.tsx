@@ -668,9 +668,10 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
           {activeTab === "ratecard" && isUnitPrice && (
             <div className="grid gap-3">
               <p className="text-[11px] cd-text-faint">
-                단가 기준표를 수정하면 저장 시 함께 반영됩니다. 추가 발주(N차 변경)는 <b>차수 추가</b> 후 수량을
-                입력하고, 차수별 요약의 <b>청구·수금 단계로 추가</b>를 누르면 선급금/준공금 단계가 만들어지며 금액
-                탭에 증액분이 채워집니다(이미 만들어진 단계의 금액은 금액 탭에서 변경).
+                단가 기준표(단가)와 차수표(산정 수량)를 수정하면 저장 시 함께 반영됩니다. 추가 발주(N차 변경)는{" "}
+                <b>차수 추가</b> 후 수량을 입력하고, 차수별 요약의 <b>청구·수금 단계로 추가</b>를 누르면
+                선급금/준공금 단계가 만들어지며 금액 탭에 증액분이 채워집니다(이미 만들어진 단계의 금액은 금액
+                탭에서 변경).
               </p>
               <RateCardEditor data={rateCard} onChange={setRateCard} onAddStages={addRoundStages} />
             </div>

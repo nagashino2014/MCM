@@ -73,7 +73,9 @@ export function createRateCardRound(label: string, advanceRate = "30"): RateCard
 }
 
 export function createRateCard(): RateCardData {
-  return { version: 2, dualPrice: false, items: [], rounds: [createRateCardRound("기본")] };
+  // 단가 기준표는 단가만 담고, 수량·금액 산출은 차수표가 전담한다(2026-08-25 사용자 확정).
+  // 차수는 사용자가 명시적으로 추가한다 — 처음엔 0개.
+  return { version: 2, dualPrice: false, items: [], rounds: [] };
 }
 
 /** 셀 자동 계산 금액 = 단가①×수량① + 단가②×수량② */
@@ -143,12 +145,18 @@ export function roundStageOptions(data: RateCardData, round: RateCardRound): Rat
 
 /**
  * 청구·수금 단계명 목록박스 옵션.
- *  - 차수 1개(차수 미사용): 구분명 → 구분 소계(v1 동작 유지).
- *  - 차수 2개 이상(차수 누적형): 차수별 선급금/준공금.
+ *  - 차수 없음: 옵션 없음(차수표를 먼저 작성해야 금액이 산출된다).
+ *  - 차수 1개 + 선급률 없음: 구분명 → 구분 소계(에이에스이코리아식 지급 구분 청구, v1 동작 유지).
+ *  - 그 외(선급률 있는 차수·차수 2개 이상): 차수별 선급금/준공금.
  */
 export function rateCardStageOptions(data: RateCardData): RateCardStageOption[] {
-  if (data.rounds.length <= 1) {
-    return rateCardGroupNames(data).map((g) => ({ label: g, amount: rateCardGroupTotal(data, g) }));
+  if (data.rounds.length === 0) return [];
+  if (data.rounds.length === 1) {
+    const round = data.rounds[0];
+    const rate = Number(digits(round.advanceRate) || 0);
+    if (!(rate > 0 && rate < 100)) {
+      return rateCardGroupNames(data).map((g) => ({ label: g, amount: rateCardGroupTotal(data, g) }));
+    }
   }
   return data.rounds.flatMap((round) => roundStageOptions(data, round));
 }
@@ -211,7 +219,7 @@ export function upgradeRateCard(raw: unknown): RateCardData {
     const items = (Array.isArray(d.items) ? d.items.slice(0, 200) : []).map((it) => normalizeItem(it ?? {}));
     const kept = items.filter((it) => it.groupName || it.name || it.unitPrice || it.unitPrice2);
     const keptIds = new Set(kept.map((it) => it.id));
-    const rounds = (Array.isArray(d.rounds) && d.rounds.length ? d.rounds.slice(0, 30) : [createRateCardRound("기본")])
+    const rounds = (Array.isArray(d.rounds) ? d.rounds.slice(0, 30) : [])
       .map((r, i) => normalizeRound(r ?? {}, i))
       .map((r) => ({
         ...r,
@@ -221,7 +229,8 @@ export function upgradeRateCard(raw: unknown): RateCardData {
   }
 
   const v1 = Array.isArray(raw) ? (raw as LegacyV1Item[]).slice(0, 200) : [];
-  const base = createRateCardRound("기본");
+  // v1 은 구분 소계 청구 방식이었으므로 선급률 없는 차수로 승격한다(수량이 하나도 없으면 차수 자체를 만들지 않는다).
+  const base = createRateCardRound("기본", "");
   const items: RateCardItem[] = [];
   for (const r of v1) {
     const item = normalizeItem({
@@ -237,5 +246,5 @@ export function upgradeRateCard(raw: unknown): RateCardData {
     const qty = digits(r.qty).slice(0, 9);
     if (qty) base.cells[item.id] = { qty, qty2: "" };
   }
-  return { version: 2, dualPrice: false, items, rounds: [base] };
+  return { version: 2, dualPrice: false, items, rounds: Object.keys(base.cells).length ? [base] : [] };
 }

@@ -47,7 +47,13 @@ async def render_url_pdf(body: RenderUrlBody):
         raise HTTPException(status_code=503, detail="Chromium 캡처 모듈(playwright)이 설치되어 있지 않습니다.")
     try:
         async with async_playwright() as p:
-            browser = await p.chromium.launch(args=["--no-sandbox", "--disable-dev-shm-usage"])
+            # 시스템 chromium 사용(MCM_CHROMIUM_PATH) — playwright 배포 브라우저는 설치하지 않는다(Dockerfile 참고).
+            import os
+
+            executable = os.environ.get("MCM_CHROMIUM_PATH") or None
+            browser = await p.chromium.launch(
+                executable_path=executable, args=["--no-sandbox", "--disable-dev-shm-usage"]
+            )
             try:
                 page = await browser.new_page(viewport={"width": 900, "height": 1400})
                 await page.goto(url, wait_until="networkidle", timeout=30000)

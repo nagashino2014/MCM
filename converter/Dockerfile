@@ -44,10 +44,12 @@ RUN set -eux; \
 COPY converter/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 바로빌 계산서 인쇄 화면 캡처용 headless Chromium(playwright) — 브라우저와 시스템 의존성 설치.
-# HOME=/tmp 이므로 브라우저 경로를 고정 위치에 둔다(런타임 사용자와 무관하게 접근 가능).
-ENV PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers
-RUN playwright install --with-deps chromium
+# 바로빌 계산서 인쇄 화면 캡처용 Chromium — playwright 의 --with-deps 는 최신 Debian 에서
+# 구식 폰트 패키지명(ttf-unifont 등)을 참조해 실패한다(실측). 시스템 chromium 패키지를 쓰면
+# 의존성이 apt 로 전부 해결되고, app.py 가 executable_path 로 이 바이너리를 지정한다.
+RUN apt-get update && apt-get install -y --no-install-recommends chromium \
+  && rm -rf /var/lib/apt/lists/*
+ENV MCM_CHROMIUM_PATH=/usr/bin/chromium
 
 COPY converter/app.py converter/office_convert.py ./
 

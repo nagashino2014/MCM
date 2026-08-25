@@ -2859,6 +2859,17 @@ function TaxInvoicePanel() {
     }
   };
 
+  // 국세청 전송은 바로빌이 익일 일괄 처리 — 수동 버튼만으로는 "전송전"이 계속 남는다(2026-08-25 사용자 리포트).
+  // 미전송 건이 보이면 화면 진입 시 1회 자동 갱신한다(보관 PDF 백필도 이 호출에 함께 실린다).
+  const autoRefreshed = useRef(false);
+  useEffect(() => {
+    if (loading || autoRefreshed.current) return;
+    if (!rows.some((r) => !r.canceledAt && (r.ntsSendState ?? 1) < 4)) return;
+    autoRefreshed.current = true;
+    void refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, rows]);
+
   const openOriginal = async (invoiceId: string) => {
     const data = await call({ action: "popup-url", invoiceId });
     if (data?.url) window.open(data.url, "_blank", "noopener,width=1100,height=900");

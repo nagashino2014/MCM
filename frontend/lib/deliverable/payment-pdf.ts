@@ -28,7 +28,10 @@ interface Fonts {
   bold: PDFFont;
 }
 
-const s = (values: DeliverableValues, key: string): string => String(values[key] ?? "").trim();
+// ⚠나눔고딕에는 ㈜(U+321C) 글리프가 없어 빈칸으로 렌더된다(삼성전기㈜ 수신란 실측, 2026-08-25)
+// — 이 렌더러를 지나는 모든 문자열 값에서 "(주)" 표기로 치환한다.
+const s = (values: DeliverableValues, key: string): string =>
+  String(values[key] ?? "").trim().replace(/㈜/g, "(주)");
 const n = (values: DeliverableValues, key: string): number => {
   const v = Number(values[key] ?? 0);
   return Number.isFinite(v) ? v : 0;

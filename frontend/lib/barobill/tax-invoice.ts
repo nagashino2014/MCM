@@ -208,6 +208,19 @@ export async function getTaxInvoiceState(mgtKey: string): Promise<TaxInvoiceStat
   };
 }
 
+/** 인쇄 화면 URL(바로빌 호스팅) — 보관용 PDF 캡처(converter Chromium)가 이 화면을 그대로 뜬다. */
+export async function getTaxInvoicePrintUrl(mgtKey: string): Promise<string> {
+  const { certKey, corpNum, id } = getBarobillConfig();
+  const xml = await soapCall("TI", "GetTaxInvoicePrintURL", {
+    CERTKEY: certKey,
+    CorpNum: corpNum,
+    MgtKey: mgtKey,
+    ID: id,
+    PWD: "",
+  });
+  return expectString(xml, "GetTaxInvoicePrintURL");
+}
+
 /** 발행 원본 보기 팝업 URL(바로빌 호스팅). */
 export async function getTaxInvoicePopUpUrl(mgtKey: string): Promise<string> {
   const { certKey, corpNum, id } = getBarobillConfig();

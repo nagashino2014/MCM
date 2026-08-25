@@ -44,3 +44,29 @@ export async function convertOfficeToPdf(bytes: Uint8Array, name: string, mime: 
 export async function convertHwpxToPdf(hwpxBytes: Uint8Array, name: string): Promise<Uint8Array | null> {
   return convertOfficeToPdf(hwpxBytes, name, "application/vnd.hancom.hwpx");
 }
+
+/**
+ * 웹 페이지 URL → PDF 캡처(converter 의 headless Chromium, 바로빌 계산서 인쇄 화면 전용).
+ * converter 미설정·실패 시 null(호출부가 폴백).
+ */
+export async function renderUrlToPdf(url: string): Promise<Uint8Array | null> {
+  const converterUrl = (process.env.MCM_CONVERTER_URL || "").trim().replace(/\/$/, "");
+  if (!converterUrl) return null;
+  try {
+    const target = await resolveServiceUrl(converterUrl);
+    const res = await fetch(`${target}/render/url-pdf`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    if (!res.ok) {
+      console.warn(`[convert] URL 캡처 실패(HTTP ${res.status}) — 폴백`);
+      return null;
+    }
+    return new Uint8Array(await res.arrayBuffer());
+  } catch (err) {
+    const cause = (err as { cause?: { code?: string } }).cause;
+    console.warn(`[convert] converter 연결 실패(${cause?.code ?? (err as Error).message}) — 폴백`);
+    return null;
+  }
+}

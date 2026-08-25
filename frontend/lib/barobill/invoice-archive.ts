@@ -1,9 +1,11 @@
 // 전자발행 세금계산서 PDF 자동 보관 (2026-08-25).
 //
-// 바로빌은 PDF 다운로드 API 가 없으므로(조회/인쇄 URL 만 제공 — 실측) 발행 데이터로
-// 사용자 제공 홈택스 양식 XLSX(tax-invoice-xlsx)를 채우고 converter(LibreOffice)로 PDF 변환해
-// 수동 발행과 같은 자리(contract_documents 'tax_invoice' + contract_invoices)에 저장한다
-// → 문서함·계약 화면이 무수정으로 호환된다. converter 실패 시 pdf-lib 직접 렌더 폴백.
+// 바로빌은 PDF 다운로드 API 가 없다(조회/인쇄 URL 만 제공 — 실측).
+// 주 경로(2026-08-25 사용자 확정): **바로빌 인쇄 화면(GetTaxInvoicePrintURL)을 converter 의
+// headless Chromium 으로 그대로 PDF 캡처** — 국세청 양식과 동일한 모습이 보장된다.
+// 캡처 실패 시 홈택스 양식 XLSX(tax-invoice-xlsx)→LibreOffice 변환, 그다음 pdf-lib 렌더 폴백.
+// 저장 자리는 수동 발행과 동일(contract_documents 'tax_invoice' + contract_invoices)
+// → 문서함·계약 화면이 무수정으로 호환된다.
 //  - 발행 직후: issueTaxInvoice 가 호출(실패해도 발행은 유지 — soft).
 //  - 국세청 전송 완료 시: refreshInvoiceStates 가 승인번호를 반영해 재생성(force).
 //  - 기존 발행분: backfillInvoicePdfs — 재무 화면의 상태 갱신(refresh) 흐름에 얹혀 자동 백필.
@@ -15,7 +17,8 @@ import { getCompanyProfile } from "@/lib/company/profile";
 import { getInvoiceStorageKey, putContractDocument } from "@/lib/storage/contract-document-storage";
 import { renderTaxInvoicePdf } from "@/lib/barobill/tax-invoice-pdf";
 import { buildTaxInvoiceXlsx } from "@/lib/barobill/tax-invoice-xlsx";
-import { convertOfficeToPdf } from "@/lib/agreement/convert";
+import { getTaxInvoicePrintUrl } from "@/lib/barobill/tax-invoice";
+import { convertOfficeToPdf, renderUrlToPdf } from "@/lib/agreement/convert";
 
 const MODIFY_REASON_LABELS: Record<string, string> = {
   "1": "기재사항착오정정",
@@ -43,11 +46,13 @@ function toPlainCompanyName(name: string): string {
 /**
  * 발행 1건의 보관용 PDF 를 생성해 계약 문서함에 저장한다.
  *  - force=false: 이미 해당 단계에 세금계산서 문서가 있으면 건너뛴다(수동본·기존 자동본 유지).
- *  - force=true: 자동 생성본(barobill_auto)을 교체한다(승인번호 반영 재생성). 수동본이 있으면 여전히 건너뛴다.
+ *  - force=true: 자동 생성본을 교체한다(승인번호 반영 재생성·캡처본 업그레이드). 수동본이 있으면 여전히 건너뛴다.
+ *  - requireCapture=true: 바로빌 인쇄 화면 캡처가 성공했을 때만 저장(양식 렌더본→캡처본 업그레이드용 —
+ *    캡처가 안 되면 기존 것을 유지한다).
  */
 export async function archiveTaxInvoicePdf(
   invoiceId: string,
-  opts: { force?: boolean } = {}
+  opts: { force?: boolean; requireCapture?: boolean } = {}
 ): Promise<{ saved: boolean; reason?: string }> {
   const db = await getDb();
   const rows = rowsToObjects(
@@ -72,6 +77,7 @@ export async function archiveTaxInvoicePdf(
   const milestoneId = inv.milestone_id ? String(inv.milestone_id) : null;
 
   // 기존 문서 판정 — 수동 업로드본이 있으면 절대 건드리지 않는다.
+  const AUTO_SOURCES = new Set(["barobill_auto", "barobill_print"]);
   const priorDocs = rowsToObjects(
     await db.exec(
       `SELECT document_id, storage_key, source FROM contract_documents
@@ -80,7 +86,7 @@ export async function archiveTaxInvoicePdf(
       [contractId, milestoneId]
     )
   );
-  if (priorDocs.some((d) => String(d.source ?? "") !== "barobill_auto")) return { saved: false, reason: "manual-exists" };
+  if (priorDocs.some((d) => !AUTO_SOURCES.has(String(d.source ?? "")))) return { saved: false, reason: "manual-exists" };
   if (priorDocs.length && !opts.force) return { saved: false, reason: "already" };
 
   // 공급받는자 상세(대표자·주소)는 tax_invoices 에 없다 — 사업장 마스터에서 보강.
@@ -135,19 +141,36 @@ export async function archiveTaxInvoicePdf(
     items,
     issuedAt: inv.issued_at ? String(inv.issued_at) : null,
   };
-  // 주 경로: 사용자 제공 양식 XLSX → converter(LibreOffice) PDF 변환. 실패 시 pdf-lib 직접 렌더.
+  // 주 경로: 바로빌 인쇄 화면을 Chromium 으로 그대로 PDF 캡처(국세청 양식과 동일).
   let buffer: Buffer | null = null;
+  let viaCapture = false;
   try {
-    const xlsx = await buildTaxInvoiceXlsx(renderInput);
-    const converted = await convertOfficeToPdf(
-      xlsx,
-      "tax-invoice.xlsx",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    );
-    if (converted) buffer = Buffer.from(converted);
+    const printUrl = await getTaxInvoicePrintUrl(String(inv.mgt_key));
+    const captured = await renderUrlToPdf(printUrl);
+    if (captured) {
+      buffer = Buffer.from(captured);
+      viaCapture = true;
+    }
   } catch (err) {
-    console.warn("[tax-invoice] XLSX 생성 실패 — pdf-lib 폴백:", (err as Error).message);
+    console.warn("[tax-invoice] 바로빌 인쇄 화면 캡처 실패 — 양식 폴백:", (err as Error).message);
   }
+  // 업그레이드 모드(양식 렌더본 교체)는 캡처가 성공했을 때만 진행 — 실패 시 기존 것을 유지한다.
+  if (!buffer && opts.requireCapture) return { saved: false, reason: "capture-failed" };
+  // 폴백 1: 홈택스 양식 XLSX → converter(LibreOffice) PDF 변환.
+  if (!buffer) {
+    try {
+      const xlsx = await buildTaxInvoiceXlsx(renderInput);
+      const converted = await convertOfficeToPdf(
+        xlsx,
+        "tax-invoice.xlsx",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      );
+      if (converted) buffer = Buffer.from(converted);
+    } catch (err) {
+      console.warn("[tax-invoice] XLSX 생성 실패 — pdf-lib 폴백:", (err as Error).message);
+    }
+  }
+  // 폴백 2: pdf-lib 직접 렌더.
   if (!buffer) buffer = Buffer.from(await renderTaxInvoicePdf(renderInput));
 
   const issueDate = String(inv.write_date);
@@ -180,7 +203,7 @@ export async function archiveTaxInvoicePdf(
        VALUES
         ($1, $2, $3, 'tax_invoice', $4,
          $5, 'application/pdf', $6, $7,
-         $8, $9, $10, $11, 'barobill_auto',
+         $8, $9, $10, $11, '${viaCapture ? "barobill_print" : "barobill_auto"}',
          $12, $13, $13)`,
       [
         documentId,
@@ -207,7 +230,7 @@ export async function archiveTaxInvoicePdf(
        VALUES
         ($1, $2, $3, $4, $5,
          $6, $7, $8, $9, $10,
-         0, NULL, 'barobill_auto', NULL,
+         0, NULL, '${viaCapture ? "barobill_print" : "barobill_auto"}', NULL,
          $11, $12, $12)`,
       [
         recordId,
@@ -229,12 +252,13 @@ export async function archiveTaxInvoicePdf(
 }
 
 /**
- * PDF 미보관 발행분 일괄 생성 — 재무 화면의 상태 갱신(refresh) 흐름에 얹혀 실행된다.
- * 해당 단계에 세금계산서 문서(수동본 포함)가 이미 있으면 대상에서 빠진다.
+ * PDF 미보관 발행분 일괄 생성 + 양식 렌더본(barobill_auto)의 바로빌 캡처본 업그레이드.
+ * 재무 화면의 상태 갱신(refresh) 흐름에 얹혀 실행된다.
+ * 해당 단계에 수동본이 있으면 대상에서 빠지고, 업그레이드는 캡처 성공 시에만 교체된다.
  */
 export async function backfillInvoicePdfs(limit = 50): Promise<{ checked: number; saved: number }> {
   const db = await getDb();
-  const rows = rowsToObjects(
+  const missing = rowsToObjects(
     await db.exec(
       `SELECT t.invoice_id FROM tax_invoices t
         WHERE t.canceled_at IS NULL AND t.contract_id IS NOT NULL
@@ -247,8 +271,22 @@ export async function backfillInvoicePdfs(limit = 50): Promise<{ checked: number
       [limit]
     )
   );
+  // 양식 렌더본으로 저장된 건 — 바로빌 인쇄 화면 캡처본으로 교체 대상(barobill_print 는 이미 최종).
+  const upgradable = rowsToObjects(
+    await db.exec(
+      `SELECT t.invoice_id FROM tax_invoices t
+        WHERE t.canceled_at IS NULL AND t.contract_id IS NOT NULL
+          AND EXISTS (
+            SELECT 1 FROM contract_documents d
+             WHERE d.contract_id = t.contract_id
+               AND COALESCE(d.milestone_id, '') = COALESCE(t.milestone_id, '')
+               AND d.document_type = 'tax_invoice' AND d.source = 'barobill_auto')
+        ORDER BY t.created_at ASC LIMIT $1`,
+      [limit]
+    )
+  );
   let saved = 0;
-  for (const row of rows) {
+  for (const row of missing) {
     try {
       const result = await archiveTaxInvoicePdf(String(row.invoice_id));
       if (result.saved) saved += 1;
@@ -256,5 +294,13 @@ export async function backfillInvoicePdfs(limit = 50): Promise<{ checked: number
       console.warn("[tax-invoice] PDF 백필 실패:", String(row.invoice_id), (err as Error).message);
     }
   }
-  return { checked: rows.length, saved };
+  for (const row of upgradable) {
+    try {
+      const result = await archiveTaxInvoicePdf(String(row.invoice_id), { force: true, requireCapture: true });
+      if (result.saved) saved += 1;
+    } catch (err) {
+      console.warn("[tax-invoice] 캡처본 업그레이드 실패:", String(row.invoice_id), (err as Error).message);
+    }
+  }
+  return { checked: missing.length + upgradable.length, saved };
 }

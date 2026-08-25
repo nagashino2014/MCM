@@ -44,6 +44,11 @@ RUN set -eux; \
 COPY converter/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
+# 바로빌 계산서 인쇄 화면 캡처용 headless Chromium(playwright) — 브라우저와 시스템 의존성 설치.
+# HOME=/tmp 이므로 브라우저 경로를 고정 위치에 둔다(런타임 사용자와 무관하게 접근 가능).
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers
+RUN playwright install --with-deps chromium
+
 COPY converter/app.py converter/office_convert.py ./
 
 EXPOSE 8080

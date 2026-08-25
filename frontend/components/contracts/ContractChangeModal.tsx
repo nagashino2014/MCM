@@ -319,8 +319,12 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
   );
 
   const newCurrentAmount = useMemo(() => {
-    const totalNext = amounts.reduce((acc, item) => acc + (Number(item.nextAmount) || 0), 0);
-    if (totalNext > 0) return totalNext;
+    // 계약금액 = 단계 합 원칙(신규 계약 모달과 동일, 2026-08-25) — 변경 금액이 빈 행은
+    // 기존 금액 유지로 간주해 합산한다. 종전에는 입력된 행만 합산해, 일부만 입력하면
+    // 합계가 축소되고 전부 비우면 계약금액이 갱신되지 않아 밀레스톤 합과 어긋났다
+    // (삼성전기 잔액 -30만원 실사례 — 단계 금액은 맞는데 계약금액만 낡은 값).
+    const total = amounts.reduce((acc, item) => acc + (Number(item.nextAmount || item.previousAmount) || 0), 0);
+    if (total > 0) return total;
     return null;
   }, [amounts]);
 

@@ -18,7 +18,8 @@ import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
 import { DeleteDraftButton, RejectedBanner, toEditDocMeta, type EditDocMeta } from "@/components/approval/DraftEditNotice";
 import PaymentRequestModal, { type PaymentRequestCreated } from "@/components/approval/PaymentRequestModal";
-import { ATTACHMENT_ACCEPT, ATTACHMENT_ALLOWED_TEXT, isAllowedAttachment } from "@/lib/approval/attachments";
+import AttachmentPreviewModal from "@/components/approval/AttachmentPreviewModal";
+import { ATTACHMENT_ACCEPT, ATTACHMENT_ALLOWED_TEXT, isAllowedAttachment, type DocAttachment } from "@/lib/approval/attachments";
 import { MailEditor } from "@/components/mail/MailEditor";
 import { recipientsDisplay } from "@/lib/letter/compose";
 import {
@@ -444,6 +445,8 @@ export function ApprovalLetterBoard() {
   const [fileAttachments, setFileAttachments] = useState<{ name: string; key: string; size: number }[]>([]);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  // 첨부 미리보기(2026-08-25) — 항목을 누르면 상신 전에도 내용을 확인한다(대금청구서 등).
+  const [previewItem, setPreviewItem] = useState<DocAttachment | null>(null);
   // 재편집 문서의 상태·반려 사유·삭제 권한(서버 판정) — 반려 배너와 기안 삭제 버튼 노출용.
   const [editMeta, setEditMeta] = useState<EditDocMeta | null>(null);
   // 대금청구서 작성 모달(2026-08-24) — 첨부서류 섹션에서 바로 생성해 첨부한다.
@@ -1288,7 +1291,14 @@ export function ApprovalLetterBoard() {
                     fileAttachments.map((f, i) => (
                       <div key={f.key} className="flex items-center gap-2 rounded-lg border cd-border-c px-2.5 py-1.5">
                         <span className="text-[10px] font-mono cd-text-faint w-4">{i + 1}</span>
-                        <span className="text-[12px] cd-text truncate flex-1" title={f.name}>{f.name}</span>
+                        <button
+                          type="button"
+                          className="text-[12px] cd-text truncate flex-1 text-left hover:underline"
+                          title={`${f.name} — 클릭해 미리보기`}
+                          onClick={() => setPreviewItem(f)}
+                        >
+                          {f.name}
+                        </button>
                         <span className="text-[10.5px] cd-text-faint shrink-0">{(f.size / 1024 / 1024).toFixed(2)}MB</span>
                         <button
                           type="button"
@@ -1551,6 +1561,7 @@ export function ApprovalLetterBoard() {
 
       {/* 사업장 간편 등록(수신처) — 영업 사업장 정보 신규 등록 이식 */}
       {paymentModalOpen && <PaymentRequestModal onClose={() => setPaymentModalOpen(false)} onCreated={onPaymentCreated} />}
+      {previewItem && <AttachmentPreviewModal item={previewItem} onClose={() => setPreviewItem(null)} />}
 
       {facilityModal && (
         <QuickFacilityModal

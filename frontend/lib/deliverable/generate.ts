@@ -134,7 +134,13 @@ export async function generateDeliverableArtifacts(
   const overlay = tpl?.renderMode === "overlay";
 
   const kindLabel = DELIVERABLE_KIND_LABEL[row.kind];
-  const fileBase = sanitizeFilename(`(${kindLabel})${row.title}`);
+  // 대금청구서 단독 문서(공문 화면 직접 작성, 2026-08-25)는 kind 가 completion 이라도
+  // "(준공계)" 접두가 아니라 "<계약명> 대금청구서" 로 파일명을 만든다.
+  const paymentOnly = row.docTypes.length === 1 && row.docTypes[0] === "payment_request";
+  const contractTitle = String(row.values["contract.title"] ?? "").trim();
+  const fileBase = sanitizeFilename(
+    paymentOnly ? `${contractTitle || row.title} 대금청구서` : `(${kindLabel})${row.title}`
+  );
 
   // 성과품 사진 별첨(용역결과보고서, 2026-08-19) — 렌더 전 S3 에서 로드
   const photos = row.docTypes.includes("service_result_report") ? await loadPhotoAssets(row.values) : [];

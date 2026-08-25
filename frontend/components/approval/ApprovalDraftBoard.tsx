@@ -18,6 +18,7 @@ import { autofillFromRefDoc, compareWithRefDoc } from "@/lib/approval/ref-link";
 import { findInCatalog, type LeaveTypeItem } from "@/lib/approval/leave-types";
 import { OvertimeConsentModal } from "@/components/approval/OvertimeConsentModal";
 import { DeleteDraftButton, RejectedBanner, toEditDocMeta, type EditDocMeta } from "@/components/approval/DraftEditNotice";
+import AttachmentPreviewModal from "@/components/approval/AttachmentPreviewModal";
 import {
   ATTACHMENT_ACCEPT, ATTACHMENT_ALLOWED_TEXT, formatBytes, isAllowedAttachment, type DocAttachment,
 } from "@/lib/approval/attachments";
@@ -128,6 +129,8 @@ export function ApprovalDraftBoard() {
   const [aiBusy, setAiBusy] = useState(false);
   // 재편집 문서의 상태·반려 사유·삭제 권한(서버 판정) — 반려 배너와 기안 삭제 버튼 노출용.
   const [editMeta, setEditMeta] = useState<EditDocMeta | null>(null);
+  // 첨부 미리보기(2026-08-25) — 항목을 누르면 상신 전에도 내용을 확인한다(영수증 증빙 등).
+  const [previewItem, setPreviewItem] = useState<DocAttachment | null>(null);
   // 첨부서류(문서 공통 — 공문과 같은 field_values.file_attachments 규약).
   // 지출결의·출장보고·교육훈련·휴가처럼 증빙이 필요한 양식에서 쓴다.
   const [fileAttachments, setFileAttachments] = useState<DocAttachment[]>([]);
@@ -943,7 +946,14 @@ export function ApprovalDraftBoard() {
                     fileAttachments.map((f, i) => (
                       <div key={f.key} className="flex items-center gap-2 rounded-lg border cd-border-c px-2.5 py-1.5">
                         <span className="text-[10px] font-mono cd-text-faint w-4">{i + 1}</span>
-                        <span className="text-[12px] cd-text truncate flex-1" title={f.name}>{f.name}</span>
+                        <button
+                          type="button"
+                          className="text-[12px] cd-text truncate flex-1 text-left hover:underline"
+                          title={`${f.name} — 클릭해 미리보기`}
+                          onClick={() => setPreviewItem(f)}
+                        >
+                          {f.name}
+                        </button>
                         <span className="text-[10.5px] cd-text-faint shrink-0">{formatBytes(f.size)}</span>
                         <button
                           type="button"
@@ -1263,6 +1273,9 @@ export function ApprovalDraftBoard() {
           onPick={appendReceiptRows}
         />
       )}
+
+      {/* 첨부 미리보기 모달(2026-08-25) — 상신 전 첨부 내용 확인 */}
+      {previewItem && <AttachmentPreviewModal item={previewItem} onClose={() => setPreviewItem(null)} />}
 
       {/* 조직도 선택 모달(공용, G3) */}
       <OrgPickerModal

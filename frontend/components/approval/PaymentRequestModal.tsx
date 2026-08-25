@@ -117,7 +117,6 @@ export default function PaymentRequestModal({
   }, [contract, milestoneIds, vatNote]);
 
   const curTotal = Number(serverValues?.["completion.curTotal"] ?? 0);
-  const stageLabel = String(serverValues?.["meta.stageLabel"] ?? "");
 
   const create = async () => {
     if (!contract || !serverValues) return;
@@ -296,7 +295,8 @@ export default function PaymentRequestModal({
                   </span>
                 ) : (
                   <>
-                    <span className="text-xs cd-text-muted">금회 청구금액{stageLabel ? ` (${stageLabel})` : ""}</span>
+                    {/* 단계 나열은 위 체크박스 목록과 중복이라 표기하지 않는다(2026-08-25 사용자 요청) */}
+                    <span className="text-xs cd-text-muted">금회 청구금액</span>
                     <b className="ml-auto tabular-nums cd-text-primary">{fmt(curTotal)}원</b>
                     <span className="text-[11px] cd-text-faint">{vatNote} 합계</span>
                   </>

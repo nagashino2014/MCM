@@ -15,6 +15,7 @@ import {
   type TaxInvoiceInput,
 } from "@/lib/barobill/tax-invoice";
 import { getBarobillConfig } from "@/lib/barobill/client";
+import { archiveTaxInvoicePdf } from "@/lib/barobill/invoice-archive";
 import { sendNotifyEmail } from "@/lib/notify/email-ses";
 
 const KST_NOW = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 19).replace("T", " ");
@@ -517,6 +518,15 @@ export async function issueTaxInvoice(params: IssueParams, actorUserId: string |
     if (!result.ok) console.warn("[tax-invoice] 추가 수신처 안내 메일 실패:", result.error ?? result.skipped);
   }
 
+  // 보관용 PDF 자동 생성(2026-08-25) — 발행 자체는 이미 끝났으므로 실패해도 예외로 올리지 않는다.
+  // 국세청 전송 완료 시 refreshInvoiceStates 가 승인번호를 반영해 재생성한다.
+  try {
+    const archived = await archiveTaxInvoicePdf(invoiceId);
+    if (!archived.saved) console.warn("[tax-invoice] 보관 PDF 생성 건너뜀:", invoiceId, archived.reason);
+  } catch (err) {
+    console.warn("[tax-invoice] 보관 PDF 생성 실패:", invoiceId, (err as Error).message);
+  }
+
   return { invoiceId, mgtKey };
 }
 
@@ -524,10 +534,12 @@ export async function issueTaxInvoice(params: IssueParams, actorUserId: string |
 export async function refreshInvoiceStates(invoiceIds?: string[]): Promise<{ checked: number; updated: number }> {
   const db = await getDb();
   const rows = invoiceIds?.length
-    ? rowsToObjects(await db.exec(`SELECT invoice_id, mgt_key FROM tax_invoices WHERE invoice_id = ANY($1::text[])`, [invoiceIds]))
+    ? rowsToObjects(
+        await db.exec(`SELECT invoice_id, mgt_key, nts_send_state, nts_send_key FROM tax_invoices WHERE invoice_id = ANY($1::text[])`, [invoiceIds]),
+      )
     : rowsToObjects(
         await db.exec(
-          `SELECT invoice_id, mgt_key FROM tax_invoices
+          `SELECT invoice_id, mgt_key, nts_send_state, nts_send_key FROM tax_invoices
             WHERE canceled_at IS NULL AND (nts_send_state IS NULL OR nts_send_state < 4)
             ORDER BY created_at DESC LIMIT 100`,
         ),
@@ -556,6 +568,13 @@ export async function refreshInvoiceStates(invoiceIds?: string[]): Promise<{ che
         );
       });
       updated += 1;
+      // 승인번호가 새로 확정된 건은 보관 PDF 를 승인번호 반영본으로 재생성한다(자동 생성본만 교체).
+      const hadKey = Boolean(row.nts_send_key);
+      if (!hadKey && state.ntsSendKey && Number(state.ntsSendState ?? 0) >= 4) {
+        await archiveTaxInvoicePdf(String(row.invoice_id), { force: true }).catch((err) =>
+          console.warn("[tax-invoice] 승인번호 반영 PDF 재생성 실패:", String(row.invoice_id), (err as Error).message),
+        );
+      }
     } catch {
       // 개별 실패는 건너뛴다(다음 폴링에서 재시도).
     }

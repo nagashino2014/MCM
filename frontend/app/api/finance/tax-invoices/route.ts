@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { buildIssuePrefill, listContractInvoices, listRecentInvoices, issueTaxInvoice, issueModifiedTaxInvoice, refreshInvoiceStates, invoicePopUpUrl, cancelTaxInvoice, listIssuerEmails, saveIssuerEmail, deleteIssuerEmail, type IssueParams, type ModifyParams } from "@/lib/barobill/invoicing";
+import { backfillInvoicePdfs } from "@/lib/barobill/invoice-archive";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,7 +40,13 @@ export async function POST(req: NextRequest) {
 
     if (body.action === "refresh") {
       await requirePermission("finance.view");
-      return NextResponse.json(await refreshInvoiceStates(body.invoiceIds));
+      const result = await refreshInvoiceStates(body.invoiceIds);
+      // 보관 PDF 미생성 발행분(기존 발행 건 포함) 자동 백필 — 상태 갱신 흐름에 얹는다(2026-08-25).
+      const pdf = await backfillInvoicePdfs().catch((err) => {
+        console.warn("[tax-invoice] PDF 백필 실패:", (err as Error).message);
+        return { checked: 0, saved: 0 };
+      });
+      return NextResponse.json({ ...result, pdf });
     }
 
     if (body.action === "save-issuer-email" || body.action === "delete-issuer-email") {

@@ -155,7 +155,23 @@ export function parseLetterHtml(html: string): LetterBlock[] {
 
   const flushCellLine = () => {
     if (!table?.curCell) return;
-    table.curCell.lines.push(table.cellRuns.length ? table.cellRuns : [{ text: "" }]);
+    // 셀 줄의 앞뒤 공백(&nbsp; 포함) 제거(2026-08-25) — 에디터 입력에 섞인 공백 위치가
+    // 행마다 달라 같은 정렬(center/right)인데도 렌더에서 어긋나 보인다(대금 청구 표 실사례).
+    // 정렬은 스타일이 담당하므로 표 셀에서 가장자리 공백은 시각 노이즈다.
+    const line = [...table.cellRuns];
+    while (line.length) {
+      const first = line[0];
+      first.text = first.text.replace(/^\s+/, "");
+      if (first.text) break;
+      line.shift();
+    }
+    while (line.length) {
+      const last = line[line.length - 1];
+      last.text = last.text.replace(/\s+$/, "");
+      if (last.text) break;
+      line.pop();
+    }
+    table.curCell.lines.push(line.length ? line : [{ text: "" }]);
     table.cellRuns = [];
   };
 

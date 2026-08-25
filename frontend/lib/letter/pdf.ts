@@ -259,11 +259,12 @@ export async function renderLetterPdf(layout: LetterLayout, opts: { fit?: FitPar
   // ── 1) 상단 헤더(로고 + 회사명) — 그룹 중앙 정렬 ──
   let y = PAGE_H - 46; // 상단 시작
   {
-    const logoH = 44;
+    // 로고 10% 확대·사명과의 간격 축소·영문 사명은 국문 시작 위치에 맞춘다(2026-08-25 사용자 요청)
+    const logoH = 48;
     const logoW = logo ? (logo.width / logo.height) * logoH : 0;
     const nameSize = 21;
     const enSize = 10;
-    const gap = 12;
+    const gap = 7;
     const nameW = fonts.bold.widthOfTextAtSize(layout.companyKo, nameSize);
     const enW = fonts.bold.widthOfTextAtSize(layout.companyEn, enSize);
     const textW = Math.max(nameW, enW);
@@ -273,7 +274,7 @@ export async function renderLetterPdf(layout: LetterLayout, opts: { fit?: FitPar
     if (logo) page.drawImage(logo, { x: x0, y: y - logoH, width: logoW, height: logoH });
     const tx = x0 + logoW + (logoW ? gap : 0);
     page.drawText(layout.companyKo, { x: tx, y: centerY + 2, size: nameSize, font: fonts.bold, color: INK });
-    page.drawText(layout.companyEn, { x: tx + (nameW - enW) / 2, y: centerY - enSize - 3, size: enSize, font: fonts.bold, color: INK });
+    page.drawText(layout.companyEn, { x: tx, y: centerY - enSize - 3, size: enSize, font: fonts.bold, color: INK });
     y -= logoH + 30;
   }
 

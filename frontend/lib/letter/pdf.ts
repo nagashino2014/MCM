@@ -168,24 +168,59 @@ function topGap(fit: FitParams): number {
   return [18, 14, 10][fit.gapLevel];
 }
 
-function measureTable(t: Extract<LetterBlock, { kind: "table" }>, fonts: Fonts, size: number): number {
+/**
+ * 표 레이아웃 공통 계산(2026-08-25, 셀 병합 지원) — 셀별 줄바꿈 결과와 행 높이.
+ * covered(병합 점유) 자리는 null, 병합 시작 셀은 스팬 폭 기준으로 접는다.
+ * 행 높이는 1행 스팬 셀로 먼저 정하고, 세로 병합 셀의 내용이 스팬 행 합계보다
+ * 크면 마지막 스팬 행에 부족분을 가산한다.
+ */
+function layoutTable(
+  t: Extract<LetterBlock, { kind: "table" }>,
+  fonts: Fonts,
+  size: number
+): { widths: number[]; rowHs: number[]; wrapped: (StyledSeg[][] | null)[][]; cellLineH: number; pad: number } {
   const cellSize = size; // 표 글자 크기 = 본문과 동일(사용자 확정)
   const cellLineH = cellSize * 1.4;
   const pad = 3;
-  let h = 0;
   const widths = t.colRatios.map((r) => r * (CONTENT_W - 2));
-  for (const row of t.rows) {
+  const spanWidth = (ci: number, colSpan: number) =>
+    widths.slice(ci, ci + colSpan).reduce((a, b) => a + b, 0);
+
+  const wrapped: (StyledSeg[][] | null)[][] = t.rows.map((row) =>
+    row.map((cell, ci) => {
+      if (cell.covered) return null;
+      const w = spanWidth(ci, cell.colSpan ?? 1) - pad * 2;
+      const lines: StyledSeg[][] = [];
+      for (const line of cell.lines) {
+        for (const seg of wrapRuns(line, fonts, cellSize, w, w)) lines.push(seg);
+      }
+      return lines.length ? lines : [[{ text: "", bold: false, underline: false }]];
+    })
+  );
+
+  const rowHs = t.rows.map((row, ri) => {
     let maxLines = 1;
     row.forEach((cell, ci) => {
-      let n = 0;
-      for (const line of cell.lines) {
-        n += wrapRuns(line, fonts, cellSize, widths[ci] - pad * 2, widths[ci] - pad * 2).length;
-      }
-      maxLines = Math.max(maxLines, n || 1);
+      if (cell.covered || (cell.rowSpan ?? 1) > 1) return; // 세로 병합 셀은 2차 보정에서
+      maxLines = Math.max(maxLines, wrapped[ri][ci]?.length ?? 1);
     });
-    h += maxLines * cellLineH + pad * 2;
-  }
-  return h;
+    return maxLines * cellLineH + pad * 2;
+  });
+  // 세로 병합 셀 내용이 스팬 행 합계를 넘으면 마지막 스팬 행을 늘린다
+  t.rows.forEach((row, ri) => {
+    row.forEach((cell, ci) => {
+      const rs = cell.rowSpan ?? 1;
+      if (cell.covered || rs <= 1) return;
+      const need = (wrapped[ri][ci]?.length ?? 1) * cellLineH + pad * 2;
+      const got = rowHs.slice(ri, ri + rs).reduce((a, b) => a + b, 0);
+      if (need > got) rowHs[Math.min(ri + rs, rowHs.length) - 1] += need - got;
+    });
+  });
+  return { widths, rowHs, wrapped, cellLineH, pad };
+}
+
+function measureTable(t: Extract<LetterBlock, { kind: "table" }>, fonts: Fonts, size: number): number {
+  return layoutTable(t, fonts, size).rowHs.reduce((a, b) => a + b, 0);
 }
 
 async function loadImage(doc: PDFDocument, rel: string): Promise<PDFImage | null> {
@@ -487,32 +522,30 @@ export async function measureSignTextWidths(companyKo: string, ceoName: string, 
 
 function drawTable(page: PDFPage, t: Extract<LetterBlock, { kind: "table" }>, fonts: Fonts, size: number, yTop: number): number {
   const cellSize = size; // 표 글자 크기 = 본문과 동일(사용자 확정)
-  const cellLineH = cellSize * 1.4;
-  const pad = 3;
-  const tableW = CONTENT_W - 2;
+  const { widths, rowHs, wrapped, cellLineH, pad } = layoutTable(t, fonts, size);
   const x0 = MARGIN_L + 1;
-  const widths = t.colRatios.map((r) => r * tableW);
   let y = yTop;
-  for (const row of t.rows) {
-    // 행 높이 = 최대 줄 수
-    const wrapped = row.map((cell, ci) => {
-      const lines: StyledSeg[][] = [];
-      for (const line of cell.lines) {
-        for (const seg of wrapRuns(line, fonts, cellSize, widths[ci] - pad * 2, widths[ci] - pad * 2)) lines.push(seg);
-      }
-      return lines.length ? lines : [[{ text: "", bold: false, underline: false }]];
-    });
-    const rowLines = Math.max(...wrapped.map((l) => l.length), 1);
-    const rowH = rowLines * cellLineH + pad * 2;
+  t.rows.forEach((row, ri) => {
     let cx = x0;
     row.forEach((cell, ci) => {
-      page.drawRectangle({ x: cx, y: y - rowH, width: widths[ci], height: rowH, borderColor: INK, borderWidth: 0.6 });
-      let ty = y - pad;
-      for (const segs of wrapped[ci]) {
+      const cs = cell.colSpan ?? 1;
+      const rs = cell.rowSpan ?? 1;
+      if (cell.covered) {
+        cx += widths[ci];
+        return; // 병합에 덮인 자리 — 시작 셀이 스팬 크기로 그린다
+      }
+      const cellW = widths.slice(ci, ci + cs).reduce((a, b) => a + b, 0);
+      const cellH = rowHs.slice(ri, ri + rs).reduce((a, b) => a + b, 0);
+      page.drawRectangle({ x: cx, y: y - cellH, width: cellW, height: cellH, borderColor: INK, borderWidth: 0.6 });
+      const lines = wrapped[ri][ci] ?? [[{ text: "", bold: false, underline: false }]];
+      // 세로 병합 셀은 세로 중앙, 일반 셀은 종전대로 상단 정렬
+      const contentH = lines.length * cellLineH;
+      let ty = y - pad - (rs > 1 ? Math.max(0, (cellH - pad * 2 - contentH) / 2) : 0);
+      for (const segs of lines) {
         const lineW = segs.reduce((w, s) => w + (s.bold ? fonts.bold : fonts.regular).widthOfTextAtSize(s.text, cellSize), 0);
         let sx = cx + pad;
-        if (cell.align === "center") sx = cx + (widths[ci] - lineW) / 2;
-        else if (cell.align === "right") sx = cx + widths[ci] - pad - lineW;
+        if (cell.align === "center") sx = cx + (cellW - lineW) / 2;
+        else if (cell.align === "right") sx = cx + cellW - pad - lineW;
         let scx = sx;
         for (const s of segs) {
           const font = s.bold ? fonts.bold : fonts.regular;
@@ -523,7 +556,7 @@ function drawTable(page: PDFPage, t: Extract<LetterBlock, { kind: "table" }>, fo
       }
       cx += widths[ci];
     });
-    y -= rowH;
-  }
+    y -= rowHs[ri];
+  });
   return y;
 }

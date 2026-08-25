@@ -60,6 +60,13 @@ function styleOf(attrs: string): string {
   return (m?.[2] ?? m?.[3] ?? "").toLowerCase();
 }
 
+/** td/th 의 rowspan/colspan 속성(1 미만·비수치는 1). */
+function spanOf(attrs: string, name: "rowspan" | "colspan"): number {
+  const m = new RegExp(`${name}\\s*=\\s*["']?(\\d+)`, "i").exec(attrs);
+  const n = m ? Number(m[1]) : 1;
+  return Number.isFinite(n) && n > 1 ? Math.min(n, 100) : 1;
+}
+
 function alignOf(style: string): "left" | "center" | "right" | undefined {
   const m = /text-align\s*:\s*(left|center|right|justify)/.exec(style);
   if (!m) return undefined;
@@ -122,12 +129,49 @@ export function parseLetterHtml(html: string): LetterBlock[] {
   const listStack: { ordered: boolean; count: number }[] = [];
 
   // ── 표 상태 ──
-  let table: { rows: TableCell[][]; widths: number[]; curRow: TableCell[] | null; curCell: TableCell | null; cellRuns: TextRun[]; depth: number } | null = null;
+  // pending[col] = 위 행의 rowspan 병합이 이 열을 앞으로 몇 행 더 덮는지.
+  // 셀을 앉히기 전 커서 위치의 pending 을 covered 플레이스홀더로 소모해
+  // rowspan 이 있어도 각 셀이 원래 열에 앉는다(2026-08-25 — 열 밀림 실사례).
+  let table: {
+    rows: TableCell[][];
+    widths: number[];
+    curRow: TableCell[] | null;
+    curCell: TableCell | null;
+    cellRuns: TextRun[];
+    depth: number;
+    pending: number[];
+  } | null = null;
+
+  const coveredCell = (): TableCell => ({ lines: [[{ text: "" }]], covered: true });
+
+  /** 커서(curRow.length) 위치부터 연속된 병합 점유 열을 covered 로 채운다. */
+  const consumePending = () => {
+    if (!table?.curRow) return;
+    while ((table.pending[table.curRow.length] ?? 0) > 0) {
+      table.pending[table.curRow.length] -= 1;
+      table.curRow.push(coveredCell());
+    }
+  };
 
   const flushCellLine = () => {
     if (!table?.curCell) return;
     table.curCell.lines.push(table.cellRuns.length ? table.cellRuns : [{ text: "" }]);
     table.cellRuns = [];
+  };
+
+  /** 닫힌 셀을 행에 앉히고 colspan 자리·rowspan 점유를 기록한다. */
+  const seatCell = () => {
+    if (!table?.curCell || !table.curRow) return;
+    const cell = table.curCell;
+    const startCol = table.curRow.length;
+    const colSpan = cell.colSpan ?? 1;
+    const rowSpan = cell.rowSpan ?? 1;
+    table.curRow.push(cell);
+    for (let i = 1; i < colSpan; i++) table.curRow.push(coveredCell());
+    if (rowSpan > 1) {
+      for (let i = 0; i < colSpan; i++) table.pending[startCol + i] = rowSpan - 1;
+    }
+    table.curCell = null;
   };
 
   for (const t of toks) {
@@ -156,7 +200,8 @@ export function parseLetterHtml(html: string): LetterBlock[] {
             table.depth--; // 중첩 표 종료 — 평탄화 계속
           } else {
             flushCellLine();
-            if (table.curCell && table.curRow) table.curRow.push(table.curCell);
+            seatCell();
+            consumePending();
             if (table.curRow?.length) table.rows.push(table.curRow);
             if (table.rows.length) {
               const cols = Math.max(...table.rows.map((r) => r.length));
@@ -173,7 +218,7 @@ export function parseLetterHtml(html: string): LetterBlock[] {
           table.depth++; // 중첩 표 — 텍스트 평탄화
         } else {
           flushPara(); // 표 앞 문단 확정
-          table = { rows: [], widths: [], curRow: null, curCell: null, cellRuns: [], depth: 1 };
+          table = { rows: [], widths: [], curRow: null, curCell: null, cellRuns: [], depth: 1, pending: [] };
         }
       }
       continue;
@@ -183,8 +228,8 @@ export function parseLetterHtml(html: string): LetterBlock[] {
       if (tag === "tr") {
         if (t.close) {
           flushCellLine();
-          if (table.curCell && table.curRow) table.curRow.push(table.curCell);
-          table.curCell = null;
+          seatCell();
+          consumePending(); // 행 끝의 rowspan 점유 열(예: 마지막 열 세로 병합) 채움
           if (table.curRow) table.rows.push(table.curRow);
           table.curRow = null;
         } else {
@@ -195,16 +240,25 @@ export function parseLetterHtml(html: string): LetterBlock[] {
       if (tag === "td" || tag === "th") {
         if (t.close) {
           flushCellLine();
-          if (table.curCell && table.curRow) table.curRow.push(table.curCell);
-          table.curCell = null;
+          seatCell();
         } else {
           if (!table.curRow) table.curRow = [];
+          consumePending(); // 셀이 앉을 열 커서를 먼저 확정
           const style = styleOf(t.attrs);
+          const colSpan = spanOf(t.attrs, "colspan");
+          const rowSpan = spanOf(t.attrs, "rowspan");
           if (table.rows.length === 0) {
+            // 첫 행 열 폭 수집 — colspan 셀은 균등 분할해 열 수를 맞춘다
             const wm = /width\s*:\s*([\d.]+)(px|%)/.exec(style);
-            table.widths.push(wm ? Number(wm[1]) : 0);
+            const w = wm ? Number(wm[1]) / colSpan : 0;
+            for (let i = 0; i < colSpan; i++) table.widths.push(w);
           }
-          table.curCell = { lines: [], align: alignOf(style) };
+          table.curCell = {
+            lines: [],
+            align: alignOf(style),
+            rowSpan: rowSpan > 1 ? rowSpan : undefined,
+            colSpan: colSpan > 1 ? colSpan : undefined,
+          };
           table.cellRuns = [];
         }
         continue;
@@ -329,7 +383,12 @@ export function blocksToPlainText(blocks: LetterBlock[]): string {
       out.push(b.runs.map((r) => r.text).join(""));
     } else {
       for (const row of b.rows) {
-        out.push(row.map((c) => c.lines.map((l) => l.map((r) => r.text).join("")).join(" ")).join(" | "));
+        out.push(
+          row
+            .filter((c) => !c.covered) // 병합 점유 자리는 내용이 없다
+            .map((c) => c.lines.map((l) => l.map((r) => r.text).join("")).join(" "))
+            .join(" | ")
+        );
       }
     }
   }

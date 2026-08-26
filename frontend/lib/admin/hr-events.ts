@@ -1,16 +1,18 @@
 /**
- * 인사 이력(employee_hr_events) read/write — 승진/부서이동/퇴사.
+ * 인사 이력(employee_hr_events) read/write — 승진/부서이동/퇴사/휴직/복직.
  * - 첨부 문서는 employee_documents(target_table='employee_hr_events', target_id=event_id)로 연결.
- * - 퇴사(resignation) 기록 시 employee_profiles.status='inactive' + 연결 계정 users.status='disabled'.
- *   삭제 시 'active'로 복구.
- * 마이그레이션: infra/aws/045_employee_hr_events.sql
+ * - 퇴사(resignation) 기록 시 퇴사일이 오늘 이전이면 즉시 employee_profiles.status='inactive' +
+ *   연결 계정 users.status='disabled'. 퇴사일이 미래면 보류 — 리마인드 틱의 applyDueResignations 가
+ *   도래 시 비활성화한다(FRM-P3, 08-26 확정: 승인 즉시가 아니라 퇴사일 도래 시). 삭제 시 'active' 복구.
+ * - 휴직(leave_start)/복직(leave_end)은 이력 기록만(계정 상태 무변경 — 206).
+ * 마이그레이션: infra/aws/045_employee_hr_events.sql + 206_hr_forms.sql(event_type 확장)
  */
 
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 
-export type HrEventType = "promotion" | "transfer" | "resignation";
+export type HrEventType = "promotion" | "transfer" | "resignation" | "leave_start" | "leave_end";
 
 export interface HrEventRow {
   eventId: string;
@@ -119,8 +121,8 @@ export async function createHrEvent(
       ]
     );
 
-    // 퇴사: 인원 비활성화 + 연결 계정 비활성화.
-    if (input.eventType === "resignation") {
+    // 퇴사: 퇴사일이 오늘 이전이면 즉시 비활성화 — 미래(퇴사 예정)면 틱(applyDueResignations)이 도래 시 처리.
+    if (input.eventType === "resignation" && input.eventDate <= now.slice(0, 10)) {
       await db.run(
         "UPDATE employee_profiles SET status = 'inactive', updated_at = $1 WHERE employee_id = $2",
         [now, input.employeeId]

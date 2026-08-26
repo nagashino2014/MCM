@@ -175,6 +175,8 @@ export const MENU_ITEMS: MenuItem[] = [
     submenu: [
       { title: "직원별 휴가 관리", href: "/approval/leave" },
       { title: "근태·초과근무 관리", href: "/approval/attendance" },
+      // 증명서 발급 관리(FRM-P2, 204) — 증명신청서 승인 건의 발급 파이프라인.
+      { title: "증명서 발급 관리", href: "/approval/certificates" },
       { title: "연차촉진제도 관리", href: "/approval/leave-promotion" },
       { title: "휴무일 지정", href: "/approval/holidays" },
       { title: "휴가 종류 규정", href: "/approval/leave-types" },
@@ -222,6 +224,8 @@ export const MENU_ITEMS: MenuItem[] = [
       { title: "손익·자금", href: "/finance?tab=pnl" },
       // 자산·예산(P6) — 고정자산 상각·운행기록부·연간 예산.
       { title: "자산·예산", href: "/finance?tab=fixedassets" },
+      // 개인카드 경비 정산(FRM-P6) — 월 1회 일괄 정산·CMS 생성·부가세 자료 발송.
+      { title: "경비 정산", href: "/finance?tab=expsettle" },
     ],
     group: "main",
   },

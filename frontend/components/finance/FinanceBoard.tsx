@@ -33,6 +33,9 @@ import { HometaxPanel, VatReturnPanel, WithholdingPanel } from "@/components/fin
 import { FixedAssetPanel, TripLogPanel, BudgetPanel } from "@/components/finance/AssetBudgetPanels";
 import { ReceiptCollectPanel } from "@/components/finance/ReceiptCollectPanel";
 import { BalanceSheetPanel, ClosingPanel } from "@/components/finance/ClosingPanels";
+import { ExpenseSettlementPanel } from "@/components/finance/ExpenseSettlementPanel";
+import { IncomeLedgerPanel } from "@/components/finance/IncomeLedgerPanel";
+import { SeverancePanel } from "@/components/finance/SeverancePanel";
 import "@/components/cdash/cdash.css";
 
 /** 최근 수집 로그 카드에 한 번에 보여줄 줄 수. */
@@ -41,12 +44,12 @@ const LOG_PAGE_SIZE = 10;
 type Tab =
   | "connections" | "bank" | "card" | "recon" | "vat" | "invoice" | "journal" | "ledger" | "trial" | "pnl" | "cash"
   | "hometax" | "vatreturn" | "fixedassets" | "triplog" | "budget" | "withholding" | "balance" | "closing"
-  | "shopreceipt";
+  | "shopreceipt" | "expsettle" | "incomeledger" | "severance";
 
 const TAB_KEYS: Tab[] = [
   "connections", "bank", "card", "recon", "vat", "invoice", "journal", "ledger", "trial", "pnl", "cash",
   "hometax", "vatreturn", "fixedassets", "triplog", "budget", "withholding", "balance", "closing",
-  "shopreceipt",
+  "shopreceipt", "expsettle", "incomeledger", "severance",
 ];
 
 /** 사이드바 소메뉴 = 탭 그룹. 소메뉴 진입 시 첫 탭이 열린다(menu.ts 의 href 와 짝). */
@@ -55,13 +58,15 @@ const TAB_GROUPS: Array<{ title: string; tabs: [Tab, string][] }> = [
   { title: "계좌·카드 원장", tabs: [["bank", "계좌 원장"], ["card", "법인카드 원장"]] },
   { title: "계산서·수금", tabs: [["invoice", "세금계산서"], ["recon", "수금 대조"]] },
   // 부가세 신고(P5) — 카드 매입 집계 + 홈택스 매입·매출 계산서 + 신고서 자동 작성(accounting-expansion §5 P5).
-  { title: "부가세 신고", tabs: [["vat", "카드 매입 집계"], ["shopreceipt", "쇼핑몰 전표 수집"], ["hometax", "매입·매출 계산서"], ["vatreturn", "신고서"], ["withholding", "원천세"]] },
+  { title: "부가세 신고", tabs: [["vat", "카드 매입 집계"], ["shopreceipt", "쇼핑몰 전표 수집"], ["hometax", "매입·매출 계산서"], ["vatreturn", "신고서"], ["withholding", "원천세"], ["incomeledger", "소득대장"]] },
   // 전표·장부(P3) — 자동분개 파생 계층. 회계 관리자 전용(설계: accounting-expansion-blueprint §5 P3).
   { title: "전표·장부", tabs: [["journal", "분개장"], ["ledger", "계정별원장"], ["trial", "시산표·백테스트"]] },
   // 손익·자금(P4) + 결산(P9) — 전표 파생 관리 손익·자금수지·재무상태표·연차 마감.
   { title: "손익·자금", tabs: [["pnl", "월별 손익"], ["cash", "자금수지"], ["balance", "재무상태표"], ["closing", "결산"]] },
   // 자산·예산(P6) — 고정자산 상각(전표 연동)·운행기록부·연간 예산(기안 사전검토 연동).
   { title: "자산·예산", tabs: [["fixedassets", "고정자산"], ["triplog", "운행기록부"], ["budget", "예산"]] },
+  // 개인카드 경비 정산(FRM-P6, 203)·퇴직 정산(FRM-P5, 207).
+  { title: "경비 정산", tabs: [["expsettle", "개인카드 경비 정산"], ["severance", "퇴직 정산"]] },
 ];
 const toTab = (raw: string | null): Tab => (TAB_KEYS.includes(raw as Tab) && raw !== "connections" ? (raw as Tab) : "connections");
 
@@ -368,6 +373,9 @@ export function FinanceBoard() {
         {tab === "trial" && <TrialPanel />}
         {tab === "pnl" && <PnlPanel />}
         {tab === "cash" && <CashPanel />}
+        {tab === "expsettle" && <ExpenseSettlementPanel />}
+        {tab === "incomeledger" && <IncomeLedgerPanel />}
+        {tab === "severance" && <SeverancePanel />}
       </div>
     </div>
   );

@@ -136,8 +136,10 @@ export function resolveFieldConcept(f: { type: ApprovalFieldType; semantic?: App
 export interface ApprovalTableColumn {
   key: string;
   label: string;
-  type: string; // text|date|time(HHMM 자동완성)|select|currency|number|rowno(자동 연번)|people(조직도 복수 선택 — 값은 {employeeId,name,position}[])
+  type: string; // text|date|time(HHMM 자동완성)|select|currency|number|rowno(자동 연번)|people(조직도 복수 선택 — 값은 {employeeId,name,position}[])|link(URL — 입력 확정 시 fillTarget 열에 페이지 제목 자동 채움)
   options?: string[];
+  /** link 열 전용 — 수집한 페이지 제목(og:title)을 채울 같은 표의 열 key */
+  fillTarget?: string;
   /** 열 단위 데이터 의미 태그(지출 내역 표의 금액 열 = cost.travel 등) */
   semantic?: ApprovalFieldSemantic;
 }
@@ -205,6 +207,7 @@ export function parseFields(value: unknown): ApprovalFieldDef[] {
               label: String(c.label ?? ""),
               type: String(c.type ?? "text"),
               options: Array.isArray(c.options) ? c.options.map(String) : undefined,
+              fillTarget: c.fillTarget != null ? String(c.fillTarget) : undefined,
               semantic: parseSemantic(c.semantic),
             }))
           : undefined,

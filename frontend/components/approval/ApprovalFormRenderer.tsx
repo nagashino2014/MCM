@@ -16,6 +16,7 @@ import {
   parseTimeRange,
   timeRangeMinutes,
   type ApprovalFieldDef,
+  type ApprovalTableColumn,
   type ApprovalTimeRange,
 } from "@/lib/approval/fields";
 import { findInCatalog, type LeaveTypeItem } from "@/lib/approval/leave-types";
@@ -1135,6 +1136,29 @@ function TableInput({
   };
   // people 열 조직도 모달 대상(행·열) — 모달은 표당 1개만 렌더한다
   const [peopleTarget, setPeopleTarget] = useState<{ ri: number; colKey: string } | null>(null);
+  // link 열 — URL 확정(blur) 시 페이지 제목(og:title)을 수집해 fillTarget 열에 자동 채움.
+  // fetch 완료 시점의 최신 행을 봐야 하므로 ref 경유(수집 중 다른 셀 수정 유실 방지).
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+  const [linkBusy, setLinkBusy] = useState<string | null>(null); // `${ri}:${colKey}`
+  const fetchLinkTitle = async (ri: number, col: ApprovalTableColumn) => {
+    const url = String(rowsRef.current[ri]?.[col.key] ?? "").trim();
+    const target = col.fillTarget;
+    if (!target || !/^https?:\/\//i.test(url)) return;
+    if (String(rowsRef.current[ri]?.[target] ?? "").trim()) return; // 이미 입력됨 — 덮지 않음(수동 우선)
+    setLinkBusy(`${ri}:${col.key}`);
+    try {
+      const res = await fetch(`/api/approval/link-preview?url=${encodeURIComponent(url)}`);
+      const data = (await res.json().catch(() => ({}))) as { title?: string | null };
+      const title = typeof data.title === "string" ? data.title.trim() : "";
+      if (title && !String(rowsRef.current[ri]?.[target] ?? "").trim()) {
+        onSet(rowsRef.current.map((r, i) => (i === ri ? { ...r, [target]: title } : r)));
+      }
+    } catch {
+      // 수집 실패(차단 사이트 등)는 정상 경로 — 수동 입력 폴백
+    }
+    setLinkBusy(null);
+  };
   const peopleAt = (ri: number, colKey: string): TablePerson[] => {
     const v = rows[ri]?.[colKey];
     return Array.isArray(v) ? (v as TablePerson[]).filter((p) => p && p.employeeId) : [];
@@ -1163,6 +1187,31 @@ function TableInput({
                 <td key={c.key} className="border cd-border-c p-0 align-middle">
                   {c.type === "rowno" ? (
                     <div className="px-1.5 py-1.5 text-center cd-text-faint">{ri + 1}</div>
+                  ) : c.type === "link" ? (
+                    readOnly ? (
+                      String(r[c.key] ?? "").trim() ? (
+                        <a
+                          className="block px-1.5 py-1.5 text-[12px] underline truncate max-w-[200px] text-[color:var(--cd-primary,#5D87FF)]"
+                          href={String(r[c.key])}
+                          target="_blank"
+                          rel="noreferrer"
+                          title={String(r[c.key])}
+                        >
+                          {String(r[c.key])}
+                        </a>
+                      ) : (
+                        <div className="px-1.5 py-1.5" />
+                      )
+                    ) : (
+                      <input
+                        type="text"
+                        className="w-full bg-transparent px-1.5 py-1.5 text-[12px] cd-text outline-none"
+                        placeholder={linkBusy === `${ri}:${c.key}` ? "품명 수집 중…" : "https:// (붙여넣으면 품명 자동)"}
+                        value={String(r[c.key] ?? "")}
+                        onChange={(e) => update(ri, c.key, e.target.value)}
+                        onBlur={() => void fetchLinkTitle(ri, c)}
+                      />
+                    )
                   ) : c.type === "select" ? (
                     <select
                       className="w-full bg-transparent px-1.5 py-1.5 text-[12px] cd-text outline-none"

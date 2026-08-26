@@ -10,6 +10,7 @@ import { generateDocSummary } from "@/lib/approval/summarize";
 import { assignManualDocNo, markLetterPendingOnApproval } from "@/lib/letter/store";
 import { markQuotePendingOnApproval } from "@/lib/quote/store";
 import { markAgreementApproved } from "@/lib/agreement/store";
+import { runFormActionsForDoc } from "@/lib/approval/actions";
 
 /*
  * 전자결재 문서(084) — 기안 저장/상신·채번·결재선 상태 전이·대결 라우팅·결재함 쿼리.
@@ -546,6 +547,8 @@ export async function submitDoc(docId: string, actorUserId: string): Promise<{ d
     // 초과근무 신청 — 주 12h 초과 판정을 상신 시점에 고정 저장(결재 화면 경고 배너의 근거).
     await assessOverLimitOnSubmit(txn, docId);
   });
+  // 커밋 후 — 등록 액션 실행(201 레지스트리, submitted 트리거. 내부에서 실패 격리)
+  await runFormActionsForDoc(docId, "submitted");
   // 커밋 후 — 첫 결재자에게 알림(fire-and-forget, 실패해도 상신은 완료)
   await notifyPendingSteps(docId);
   // AI 요약 생성(상신 시 자동, 비차단) — 결재자가 열기 전 준비. 실패해도 원문 폴백.
@@ -623,6 +626,9 @@ export async function actOnDoc(params: {
       }
     }
   });
+  // 커밋 후 — 등록 액션 실행(201 레지스트리, 실패해도 결재는 유효·재실행 가능. 내부에서 실패 격리)
+  if (docStatus === "approved") await runFormActionsForDoc(params.docId, "approved");
+  else if (docStatus === "rejected") await runFormActionsForDoc(params.docId, "rejected");
   // 커밋 후 알림 — 최종 승인/반려는 기안자에게, 진행 중이면 다음 결재자에게(단계별 멱등).
   if (docStatus === "approved") await notifyDrafterResult(params.docId, "approved");
   else if (docStatus === "rejected") await notifyDrafterResult(params.docId, "rejected");

@@ -996,9 +996,9 @@ function TableColumnsEditor({
           <input className="cd-input font-mono" style={{ width: 84 }} placeholder="col_key" value={c.key} onChange={(e) => setCol(i, { key: e.target.value })} />
           <input className="cd-input flex-1 min-w-[80px]" placeholder="열 라벨" value={c.label} onChange={(e) => setCol(i, { label: e.target.value })} />
           <select className="cd-select" style={{ width: 82 }} value={c.type} onChange={(e) => setCol(i, { type: e.target.value })}>
-            {["text", "date", "time", "select", "number", "currency", "rowno", "people"].map((t) => (
+            {["text", "date", "time", "select", "number", "currency", "rowno", "people", "link"].map((t) => (
               <option key={t} value={t}>
-                {t === "rowno" ? "연번(자동)" : t === "time" ? "시각(HHMM)" : t === "people" ? "인원(조직도)" : t}
+                {t === "rowno" ? "연번(자동)" : t === "time" ? "시각(HHMM)" : t === "people" ? "인원(조직도)" : t === "link" ? "링크(URL)" : t}
               </option>
             ))}
           </select>
@@ -1017,6 +1017,24 @@ function TableColumnsEditor({
               value={(c.options ?? []).join(", ")}
               onChange={(e) => setCol(i, { options: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })}
             />
+          )}
+          {c.type === "link" && (
+            <label className="w-full flex items-center gap-1.5 text-[10.5px] cd-text-faint min-w-0">
+              제목 채울 열
+              <select
+                className="cd-select flex-1"
+                style={{ width: 0, minWidth: 0 }}
+                value={c.fillTarget ?? ""}
+                onChange={(e) => setCol(i, { fillTarget: e.target.value || undefined })}
+              >
+                <option value="">채우지 않음</option>
+                {cols.filter((x) => x.type === "text").map((x) => (
+                  <option key={x.key} value={x.key}>
+                    {x.label || x.key}
+                  </option>
+                ))}
+              </select>
+            </label>
           )}
           {conceptsForType(concepts, c.type).length > 0 && (
             <label className="w-full flex items-center gap-1.5 text-[10.5px] cd-text-faint min-w-0">

@@ -27,11 +27,14 @@ import { CardPickerModal, type CardPickerItem } from "@/components/finance/CardP
 import { ReceiptPickerModal, type ReceiptPickerItem } from "@/components/finance/ReceiptPickerModal";
 import "@/components/cdash/cdash.css";
 
-// 법인카드 내역 자동 기입 대상 양식(P1) — 지출 내역 표(마이그 116)의 key/사용일시 열 key.
+// 카드 내역 자동 기입 대상 양식(P1) — 지출 내역 표(마이그 116)의 key/사용일시 열 key.
+// corporate=법인카드(card_transactions)·personal=개인카드 영수증 스톡(personal_receipts) 버튼 노출.
+// 지출결의서는 법인/개인 양식이 분리(202)되어 각자 해당 소스만 불러온다(FRM-P1 확정).
 // 설계: docs/barobill-finance-blueprint.md §4 F1/F2.
-const CARD_EXPENSE_FORMS: Record<string, { tableKey: string; dateKey: string }> = {
-  "frm-expense-report": { tableKey: "expenses", dateKey: "used_on" },
-  "frm-biz-trip-report": { tableKey: "trip_expenses", dateKey: "spent_on" },
+const CARD_EXPENSE_FORMS: Record<string, { tableKey: string; dateKey: string; corporate: boolean; personal: boolean }> = {
+  "frm-expense-report": { tableKey: "expenses", dateKey: "used_on", corporate: true, personal: false },
+  "frm-expense-personal": { tableKey: "expenses", dateKey: "used_on", corporate: false, personal: true },
+  "frm-biz-trip-report": { tableKey: "trip_expenses", dateKey: "spent_on", corporate: true, personal: true },
 };
 
 interface FormInfo {
@@ -147,6 +150,11 @@ export function ApprovalDraftBoard() {
   const [leaveCatalog, setLeaveCatalog] = useState<LeaveTypeItem[]>([]);
   const [leaveHint, setLeaveHint] = useState<string | null>(null);
   const isLeaveForm = form?.formId === "frm-leave-request";
+  // 결근사유서(FRM-P1) — 내 열린 제출 요청 배너 + 결근 기간 자동 채움.
+  const isAbsenceForm = form?.formId === "frm-absence-statement";
+  const [absenceRequests, setAbsenceRequests] = useState<
+    { requestId: string; dateFrom: string; dateTo: string; note: string | null }[]
+  >([]);
   // 초과근무 신청 양식이면 신청 주의 사용량(기존 신청+근태 실적)을 조회해 주 12h 초과를 경고한다.
   const [otUsage, setOtUsage] = useState<{ weekStart: string; weekEnd: string; requestedMinutes: number; attendanceOvertimeMinutes: number; limitMinutes: number } | null>(null);
   const [otHint, setOtHint] = useState<string | null>(null);
@@ -326,6 +334,54 @@ export function ApprovalDraftBoard() {
       cancelled = true;
     };
   }, [isLeaveForm]);
+
+  // 연차수당(FRM-P5) — 잔여 연차일수 × 1일 통상임금 = 지급 대상액 자동 계산.
+  // 직전 자동값과 같을 때만 덮어써 수기 조정을 보존한다(초과근무 신청시간 패턴).
+  const leavePayAutoRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (form?.formId !== "frm-annual-leave-pay") return;
+    const days = Number(String(values.remaining_days ?? "").replace(/[^\d.]/g, ""));
+    const wage = Number(String(values.daily_wage ?? "").replace(/[^\d]/g, ""));
+    if (!days || !wage) return;
+    const auto = String(Math.round(days * wage));
+    const cur = String(values.total_amount ?? "").replace(/[^\d]/g, "");
+    if (cur && cur !== leavePayAutoRef.current && leavePayAutoRef.current != null) return; // 수기 조정 보존
+    if (cur === auto) {
+      leavePayAutoRef.current = auto;
+      return;
+    }
+    leavePayAutoRef.current = auto;
+    setValues((prev) => ({ ...prev, total_amount: auto }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form?.formId, values.remaining_days, values.daily_wage]);
+
+  // 결근사유서 — 내 열린 제출 요청 조회(202). 새 문서이고 기간이 비어 있으면 첫 요청 기간을 채운다.
+  useEffect(() => {
+    if (!isAbsenceForm) {
+      setAbsenceRequests([]);
+      return;
+    }
+    let cancelled = false;
+    fetch("/api/approval/absence-requests?mine=1", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled || !Array.isArray(d?.requests)) return;
+        setAbsenceRequests(d.requests);
+        const first = d.requests[0];
+        if (first && !editDocId) {
+          setValues((prev) => {
+            const cur = (prev.absence_period ?? {}) as { from?: string; to?: string };
+            if (String(cur.from ?? "").trim()) return prev;
+            return { ...prev, absence_period: { from: first.dateFrom, to: first.dateTo } };
+          });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAbsenceForm, editDocId]);
 
   // 휴가 기간 ↔ 사용일수 ↔ 부여일수 연동(§LM-P2) — 달력일 기준.
   // 부여일수 고정(경조·조의 등): 시작일 입력 → 종료일 자동(days-1 가산)·사용일수=days.
@@ -874,23 +930,46 @@ export function ApprovalDraftBoard() {
                 )}
               </div>
             )}
+            {/* 결근사유서 제출 요청 배너(FRM-P1) — 요청 기간·메모 안내, 클릭으로 기간 채움 */}
+            {isAbsenceForm && absenceRequests.length > 0 && (
+              <div className="rounded-lg border cd-border-c cd-tint-primary px-3 py-2 flex flex-col gap-1">
+                {absenceRequests.map((r) => (
+                  <button
+                    key={r.requestId}
+                    type="button"
+                    className="text-left text-[12px] cd-text flex items-center gap-2 flex-wrap"
+                    title="클릭하면 결근 기간이 입력됩니다"
+                    onClick={() => setValues((prev) => ({ ...prev, absence_period: { from: r.dateFrom, to: r.dateTo } }))}
+                  >
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--cd-warning,#FFAE1F)" }} />
+                    결근사유서 제출 요청 — {r.dateFrom}
+                    {r.dateTo !== r.dateFrom ? ` ~ ${r.dateTo}` : ""}
+                    {r.note ? <span className="cd-text-faint">({r.note})</span> : null}
+                  </button>
+                ))}
+              </div>
+            )}
             {/* 법인카드 내역·개인카드 영수증 불러오기(P1) — 지출 내역 표 자동 기입, 사용자는 지출 목적만 입력 */}
             {cardExpenseTarget && (
               <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  type="button"
-                  className="cd-btn cd-btn-soft cd-btn-sm"
-                  onClick={() => setCardPicker(true)}
-                >
-                  <CreditCard className="w-3.5 h-3.5" /> 법인카드 내역 불러오기
-                </button>
-                <button
-                  type="button"
-                  className="cd-btn cd-btn-soft cd-btn-sm"
-                  onClick={() => setReceiptPicker(true)}
-                >
-                  <CreditCard className="w-3.5 h-3.5" /> 개인카드 영수증 불러오기
-                </button>
+                {cardExpenseTarget.corporate && (
+                  <button
+                    type="button"
+                    className="cd-btn cd-btn-soft cd-btn-sm"
+                    onClick={() => setCardPicker(true)}
+                  >
+                    <CreditCard className="w-3.5 h-3.5" /> 법인카드 내역 불러오기
+                  </button>
+                )}
+                {cardExpenseTarget.personal && (
+                  <button
+                    type="button"
+                    className="cd-btn cd-btn-soft cd-btn-sm"
+                    onClick={() => setReceiptPicker(true)}
+                  >
+                    <CreditCard className="w-3.5 h-3.5" /> 개인카드 영수증 불러오기
+                  </button>
+                )}
                 <span className="text-[11px] cd-text-faint">
                   선택하면 사용일시·상호·금액·분류가 자동 기입됩니다 — 지출 목적만 입력하세요
                 </span>
@@ -1252,8 +1331,8 @@ export function ApprovalDraftBoard() {
         />
       )}
 
-      {/* 법인카드 내역 불러오기 모달(P1) — 지출결의서·출장보고서 한정 */}
-      {cardExpenseTarget && form && (
+      {/* 법인카드 내역 불러오기 모달(P1) — 지출결의서(법인)·출장보고서 한정 */}
+      {cardExpenseTarget?.corporate && form && (
         <CardPickerModal
           open={cardPicker}
           onClose={() => setCardPicker(false)}
@@ -1263,8 +1342,8 @@ export function ApprovalDraftBoard() {
         />
       )}
 
-      {/* 개인카드 영수증 불러오기 모달(accounting-expansion P1) — 동일 양식 한정 */}
-      {cardExpenseTarget && form && (
+      {/* 개인카드 영수증 불러오기 모달(accounting-expansion P1) — 지출결의서(개인)·출장보고서 한정 */}
+      {cardExpenseTarget?.personal && form && (
         <ReceiptPickerModal
           open={receiptPicker}
           onClose={() => setReceiptPicker(false)}

@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { AbsenceRequestPanel } from "@/components/approval/AbsenceRequestPanel";
 import { EmployeeAvatar } from "@/components/ui/EmployeeAvatar";
 import { WORK_SCHEDULE_KINDS } from "@/lib/adt/types";
 import type { AttendanceSettings, WorkScheduleKind, WorkScheduleRow } from "@/lib/adt/types";
@@ -52,7 +53,7 @@ const dowOf = (d: string): string => {
   return Number.isNaN(t) ? "" : DOW[new Date(t).getUTCDay()];
 };
 
-type Tab = "weekly" | "match" | "mapping" | "settings";
+type Tab = "weekly" | "match" | "mapping" | "settings" | "absence";
 
 export function AttendanceBoard() {
   const { theme } = useCdashTheme();
@@ -75,6 +76,7 @@ export function AttendanceBoard() {
             ["match", "신청 대조"],
             ["mapping", "미매칭 매핑"],
             ["settings", "산정 정책"],
+            ["absence", "결근사유서"],
           ] as [Tab, string][]).map(([k, label]) => (
             <button
               key={k}
@@ -97,6 +99,7 @@ export function AttendanceBoard() {
         {tab === "match" && <MatchPanel />}
         {tab === "mapping" && <MappingPanel onCount={setUnmatchedCount} />}
         {tab === "settings" && <SettingsPanel />}
+        {tab === "absence" && <AbsenceRequestPanel />}
       </div>
     </div>
   );

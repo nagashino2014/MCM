@@ -189,11 +189,22 @@ export async function archiveTaxInvoicePdf(
   const fiscalQuarter = Math.floor(date.getMonth() / 3) + 1;
 
   await withDbWrite(async (tx) => {
-    // 기존 자동 생성본 교체(수동본은 위에서 이미 걸렀다).
-    for (const d of priorDocs) {
-      await tx.run(`DELETE FROM contract_invoices WHERE document_id = $1`, [String(d.document_id)]);
-      await tx.run(`DELETE FROM contract_documents WHERE document_id = $1`, [String(d.document_id)]);
-    }
+    // 기존 자동 생성본 교체(수동본은 위에서 이미 걸렀다) — 함수 초입 스냅샷(priorDocs)이 아니라
+    // 트랜잭션 안에서 조건으로 지운다. 화면 갱신이 겹쳐 backfill 이 동시 실행되면 스냅샷 방식은
+    // 서로의 새 문서를 못 보고 각자 INSERT 해 계산서가 중복으로 남았다(2026-08-26 실사례).
+    await tx.run(
+      `DELETE FROM contract_invoices WHERE document_id IN (
+         SELECT document_id FROM contract_documents
+          WHERE contract_id = $1 AND COALESCE(milestone_id, '') = COALESCE($2, '')
+            AND document_type = 'tax_invoice' AND source IN ('barobill_auto', 'barobill_print'))`,
+      [contractId, milestoneId]
+    );
+    await tx.run(
+      `DELETE FROM contract_documents
+        WHERE contract_id = $1 AND COALESCE(milestone_id, '') = COALESCE($2, '')
+          AND document_type = 'tax_invoice' AND source IN ('barobill_auto', 'barobill_print')`,
+      [contractId, milestoneId]
+    );
     await tx.run(
       `INSERT INTO contract_documents
         (document_id, contract_id, milestone_id, document_type, display_name,

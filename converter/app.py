@@ -31,10 +31,11 @@ class RenderUrlBody(BaseModel):
 
 
 # 바로빌 인쇄 화면에는 인쇄 옵션 UI(인쇄옵션·인쇄방식·스탬프·인쇄하기)가 계산서와 함께 있다.
-# 계산서 본문("전자세금계산서"+"공급가액"+"합계금액"을 모두 담는 가장 깊은 요소)만 남기고
-# 나머지를 비워 PDF 에 표만 실리게 한다(2026-08-26 사용자 요청). 본문을 못 찾으면 아무것도
-# 바꾸지 않고 false 를 돌려 전체 페이지 캡처(종전 동작)로 남는다.
-EXTRACT_INVOICE_JS = """
+# 계산서 본문("전자세금계산서"+"공급가액"+"합계금액"을 모두 담는 가장 깊은 요소)에 표식을 남겨
+# 그 영역만 스크린샷으로 잘라 PDF 에 앉힌다(2026-08-26 사용자 요청). ⚠DOM 을 들어내는 방식은
+# 스타일이 조상 선택자에 걸려 있어 표 서식이 전부 사라졌다(실측) — 렌더된 화면을 자르는 것만 안전.
+# 본문을 못 찾으면 false 를 돌려 전체 페이지 캡처(종전 동작)로 남는다.
+MARK_INVOICE_JS = """
 (() => {
   const MUST = ["전자세금계산서", "공급가액", "합계금액"];
   let best = null;
@@ -45,7 +46,7 @@ EXTRACT_INVOICE_JS = """
   }
   if (!best) return false;
   let root = best;
-  // 표 내부 태그(tbody 등)가 잡히면 표 골격째 들어내야 스타일이 산다.
+  // 표 내부 태그(tbody 등)가 잡히면 표 전체를 캡처 대상으로 승격한다.
   if (["TBODY", "THEAD", "TFOOT", "TR", "TD", "TH", "COLGROUP"].includes(root.tagName)) {
     root = root.closest("table") || root;
   }
@@ -62,11 +63,7 @@ EXTRACT_INVOICE_JS = """
     if ((parent.textContent || "").includes("인쇄하기")) break;
     root = parent;
   }
-  document.body.innerHTML = "";
-  document.body.appendChild(root);
-  document.body.style.background = "#ffffff";
-  document.body.style.margin = "0";
-  document.body.style.padding = "0";
+  root.setAttribute("data-mcm-capture", "1");
   return true;
 })()
 """
@@ -97,7 +94,8 @@ async def render_url_pdf(body: RenderUrlBody):
                 executable_path=executable, args=["--no-sandbox", "--disable-dev-shm-usage"]
             )
             try:
-                page = await browser.new_page(viewport={"width": 900, "height": 1400})
+                # device_scale_factor 2 — 요소 스크린샷을 인쇄 품질(약 240dpi)로 뜬다.
+                page = await browser.new_page(viewport={"width": 900, "height": 1400}, device_scale_factor=2)
                 await page.goto(url, wait_until="networkidle", timeout=30000)
                 # 계산서가 iframe 안에 있으면 그 프레임 문서를 직접 연다(같은 바로빌 도메인만).
                 for frame in page.frames:
@@ -112,15 +110,34 @@ async def render_url_pdf(body: RenderUrlBody):
                             break
                     except Exception:  # noqa: BLE001 — 프레임 접근 실패는 무시(본문 발췌가 폴백)
                         continue
-                extracted = await page.evaluate(EXTRACT_INVOICE_JS)
-                if not extracted:
+                pdf = None
+                marked = await page.evaluate(MARK_INVOICE_JS)
+                if marked:
+                    # 렌더된 화면에서 계산서 영역만 스크린샷 → 빈 페이지에 앉혀 PDF 로.
+                    import base64
+
+                    png = await page.locator('[data-mcm-capture="1"]').screenshot(type="png")
+                    b64 = base64.b64encode(png).decode("ascii")
+                    view = await browser.new_page()
+                    await view.set_content(
+                        '<html><head><style>body{margin:0}img{display:block;width:100%}</style></head>'
+                        f'<body><img src="data:image/png;base64,{b64}"></body></html>',
+                        wait_until="load",
+                    )
+                    pdf = await view.pdf(
+                        format="A4",
+                        print_background=True,
+                        margin={"top": "10mm", "bottom": "10mm", "left": "8mm", "right": "8mm"},
+                    )
+                else:
                     print("[render] 계산서 본문 미검출 — 전체 페이지 캡처로 폴백")
-                pdf = await page.pdf(
-                    format="A4",
-                    print_background=True,
-                    prefer_css_page_size=True,
-                    margin={"top": "10mm", "bottom": "10mm", "left": "8mm", "right": "8mm"},
-                )
+                if pdf is None:
+                    pdf = await page.pdf(
+                        format="A4",
+                        print_background=True,
+                        prefer_css_page_size=True,
+                        margin={"top": "10mm", "bottom": "10mm", "left": "8mm", "right": "8mm"},
+                    )
             finally:
                 await browser.close()
     except HTTPException:

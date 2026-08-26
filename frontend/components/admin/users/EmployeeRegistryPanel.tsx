@@ -1172,7 +1172,7 @@ function HrTab({
 
 /** 경비/급여 입금 계좌 편집 — 전용 PATCH(bank-account) 경로. 은행코드는 금융결제원 표준 숫자 코드. */
 function BankAccountSection({ employeeId, toast }: { employeeId: string; toast: (message: string, type?: "success" | "error") => void }) {
-  const [form, setForm] = useState({ bankCode: "", bankAccount: "", accountHolder: "" });
+  const [form, setForm] = useState({ bankName: "", bankCode: "", bankAccount: "", accountHolder: "" });
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -1180,7 +1180,8 @@ function BankAccountSection({ employeeId, toast }: { employeeId: string; toast: 
     fetch("/api/admin/employees/" + encodeURIComponent(employeeId) + "/bank-account", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        if (!cancelled && d) setForm({ bankCode: d.bankCode ?? "", bankAccount: d.bankAccount ?? "", accountHolder: d.accountHolder ?? "" });
+        if (!cancelled && d)
+          setForm({ bankName: d.bankName ?? "", bankCode: d.bankCode ?? "", bankAccount: d.bankAccount ?? "", accountHolder: d.accountHolder ?? "" });
       })
       .catch(() => {});
     return () => {
@@ -1208,10 +1209,13 @@ function BankAccountSection({ employeeId, toast }: { employeeId: string; toast: 
   return (
     <section className="rounded-2xl cd-surface-bg border cd-border-c p-4">
       <h3 className="font-bold cd-text mb-1">경비/급여 입금 계좌</h3>
-      <p className="text-xs cd-text-faint mb-3">개인카드 경비 정산의 CMS 이체 파일에 자동 기입됩니다. 은행코드는 금융결제원 표준 숫자 코드(예: 국민 4, 기업 3, 신한 88, 우리 20, 농협 11).</p>
-      <div className="grid md:grid-cols-[120px_1fr_160px_auto] gap-2 items-end">
+      <p className="text-xs cd-text-faint mb-3">개인카드 경비 정산의 CMS 이체 파일에 자동 기입됩니다. 은행코드는 금융결제원 표준 3자리 코드(예: 국민 004, 기업 003, 농협 011, 우리 020, 신한 088).</p>
+      <div className="grid md:grid-cols-[150px_120px_1fr_160px_auto] gap-2 items-end">
+        <Field label="은행명">
+          <input className="cd-input" placeholder="예: 국민" value={form.bankName} onChange={(e) => setForm((f) => ({ ...f, bankName: e.target.value }))} />
+        </Field>
         <Field label="은행코드">
-          <input className="cd-input" inputMode="numeric" placeholder="예: 4" value={form.bankCode} onChange={(e) => setForm((f) => ({ ...f, bankCode: e.target.value.replace(/\D/g, "") }))} />
+          <input className="cd-input" inputMode="numeric" placeholder="예: 004" value={form.bankCode} onChange={(e) => setForm((f) => ({ ...f, bankCode: e.target.value.replace(/\D/g, "") }))} />
         </Field>
         <Field label="계좌번호">
           <input className="cd-input" inputMode="numeric" placeholder="숫자만 입력" value={form.bankAccount} onChange={(e) => setForm((f) => ({ ...f, bankAccount: e.target.value.replace(/[^\d-]/g, "") }))} />

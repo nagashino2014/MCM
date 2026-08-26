@@ -5,13 +5,15 @@
 // 이체 실행은 담당자가 KB 기업뱅킹에서 수동(CMS 파일 업로드) — 앱은 파일 생성·이력까지.
 
 import { useCallback, useEffect, useState } from "react";
-import { Banknote, ChevronDown, ChevronRight, Download, FileSpreadsheet, Mail, Play, TriangleAlert } from "lucide-react";
+import { Banknote, ChevronDown, ChevronRight, Download, FileSpreadsheet, ListTree, Mail, Play, TriangleAlert } from "lucide-react";
+import { CdModal } from "@/components/cdash/CdModal";
 
 interface UnsettledItem {
   rowRef: string;
   docId: string;
   docNo: string | null;
   formId: string;
+  employeeId: string | null;
   employeeName: string | null;
   usedOn: string | null;
   vendor: string | null;
@@ -64,6 +66,8 @@ export function ExpenseSettlementPanel() {
   const [notice, setNotice] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [detail, setDetail] = useState<{ items: UnsettledItem[]; persons: PersonTotal[] } | null>(null);
+  // 인별 미정산 상세 모달(2026-08-26 사용자 요청) — 지급대상액 옆 [상세] 태그로 연다.
+  const [personDetail, setPersonDetail] = useState<PersonTotal | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -228,7 +232,19 @@ export function ExpenseSettlementPanel() {
                     <td className="px-3 py-2 cd-text whitespace-nowrap">{p.employeeName}</td>
                     <td className="px-3 py-2 cd-text-muted whitespace-nowrap">{p.positionName ?? "-"}</td>
                     <td className="px-3 py-2 cd-text whitespace-nowrap">{p.count}건</td>
-                    <td className="px-3 py-2 cd-text font-bold whitespace-nowrap text-right">{comma(p.amount)}원</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-right">
+                      <span className="inline-flex items-center gap-2">
+                        <button
+                          type="button"
+                          className="rounded-full border cd-border-c px-2 py-0.5 text-[10.5px] cd-text-muted hover:cd-tint-primary inline-flex items-center gap-1"
+                          title="지출 항목별 내역 보기"
+                          onClick={() => setPersonDetail(p)}
+                        >
+                          <ListTree className="w-3 h-3" /> 상세
+                        </button>
+                        <span className="cd-text font-bold">{comma(p.amount)}원</span>
+                      </span>
+                    </td>
                     <td className="px-3 py-2 cd-text-muted whitespace-nowrap">{p.bankCode ?? <span style={{ color: "var(--cd-warning,#FFAE1F)" }}>미등록</span>}</td>
                     <td className="px-3 py-2 cd-text-muted whitespace-nowrap">{p.bankAccount ?? "-"}</td>
                   </tr>
@@ -292,6 +308,44 @@ export function ExpenseSettlementPanel() {
           </div>
         )}
       </div>
+
+      {/* 인별 미정산 상세 모달 — 지출결의서·출장보고서 지출내역 행 그대로(2026-08-26) */}
+      <CdModal
+        open={personDetail != null}
+        onClose={() => setPersonDetail(null)}
+        size="xl"
+        title={personDetail ? `${personDetail.employeeName} 미정산 지출 내역 — ${comma(personDetail.amount)}원 (${personDetail.count}건)` : ""}
+      >
+        {personDetail && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12px]">
+              <thead>
+                <tr>
+                  {["사용일시", "분류", "상호", "금액", "지출 목적", "출처"].map((h) => (
+                    <th key={h} className="px-3 py-2 text-left cd-surface-bg cd-text font-bold whitespace-nowrap border-b cd-border-c">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {items
+                  .filter((i) => (i.employeeId ?? i.employeeName ?? "unknown") === (personDetail.employeeId ?? personDetail.employeeName))
+                  .map((i) => (
+                    <tr key={i.rowRef} className="border-b cd-border-c last:border-b-0">
+                      <td className="px-3 py-2 cd-text whitespace-nowrap">{i.usedOn ?? "-"}</td>
+                      <td className="px-3 py-2 cd-text-muted whitespace-nowrap">{i.category ?? "-"}</td>
+                      <td className="px-3 py-2 cd-text whitespace-nowrap">{i.vendor ?? "-"}</td>
+                      <td className="px-3 py-2 cd-text font-bold whitespace-nowrap text-right">{comma(i.amount)}원</td>
+                      <td className="px-3 py-2 cd-text-muted">{i.detail ?? "-"}</td>
+                      <td className="px-3 py-2 cd-text-faint whitespace-nowrap">
+                        {(FORM_LABEL[i.formId] ?? i.formId) + (i.docNo ? ` · ${i.docNo}` : "")}
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CdModal>
     </div>
   );
 }

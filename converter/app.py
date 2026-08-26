@@ -68,6 +68,21 @@ MARK_INVOICE_JS = """
     if ((parent.textContent || "").includes("인쇄하기")) break;
     root = parent;
   }
+  // 안내 문구 아래의 조작 UI(인쇄여부·메모·인쇄/재전송/다운로드 버튼)는 증빙이 아니므로 잘라낸다
+  // (2026-08-26 사용자 요청). 안내 문구 요소에서 root 까지 올라가며 각 단계의 '이후 형제'를 숨긴다.
+  const NOTICE = "법적 효력을 갖습니다";
+  let notice = null;
+  for (const el of root.querySelectorAll("*")) {
+    if (el.tagName === "SCRIPT" || el.tagName === "STYLE") continue;
+    if ((el.textContent || "").includes(NOTICE)) notice = el; // 가장 안쪽
+  }
+  if (notice) {
+    let node = notice;
+    while (node && node !== root) {
+      for (let sib = node.nextElementSibling; sib; sib = sib.nextElementSibling) sib.style.display = "none";
+      node = node.parentElement;
+    }
+  }
   root.setAttribute("data-mcm-capture", "1");
   return true;
 })()

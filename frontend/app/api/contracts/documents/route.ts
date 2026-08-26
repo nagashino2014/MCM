@@ -43,7 +43,9 @@ export async function GET(req: NextRequest) {
           "Content-Type": "application/pdf",
           "Content-Length": String(info.size),
           "Content-Disposition": contentDisposition(key),
-          "Cache-Control": "private, max-age=300",
+          // 계산서 재캡처 등 같은 키로 교체되는 문서가 5분 캐시로 옛것을 보여줬다(2026-08-26)
+          // — 문서 열람은 빈도가 낮아 캐시 이득이 없다. 항상 새로 받는다.
+          "Cache-Control": "private, no-store",
         },
       });
     }

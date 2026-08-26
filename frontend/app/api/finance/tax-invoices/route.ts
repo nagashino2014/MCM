@@ -41,12 +41,12 @@ export async function POST(req: NextRequest) {
     if (body.action === "refresh") {
       await requirePermission("finance.view");
       const result = await refreshInvoiceStates(body.invoiceIds);
-      // 보관 PDF 미생성 발행분(기존 발행 건 포함) 자동 백필 — 상태 갱신 흐름에 얹는다(2026-08-25).
-      const pdf = await backfillInvoicePdfs().catch((err) => {
+      // 보관 PDF 백필(2026-08-25)은 Chromium 캡처가 실려 건당 수 초가 걸린다 — 응답을 막으면
+      // 화면 버튼이 그동안 비활성으로 남는다(2026-08-26 사용자 리포트). 뒤에서 돌리고 바로 응답한다.
+      void backfillInvoicePdfs().catch((err) => {
         console.warn("[tax-invoice] PDF 백필 실패:", (err as Error).message);
-        return { checked: 0, saved: 0 };
       });
-      return NextResponse.json({ ...result, pdf });
+      return NextResponse.json(result);
     }
 
     if (body.action === "save-issuer-email" || body.action === "delete-issuer-email") {

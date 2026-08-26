@@ -2838,10 +2838,13 @@ function TaxInvoicePanel() {
     };
   }, [reloadKey]);
 
-  const call = async (body: Record<string, unknown>) => {
-    setBusy(true);
-    setError(null);
-    setNotice(null);
+  // silent: 화면 진입 자동 갱신용 — busy 를 잠그지 않아 버튼이 비활성으로 묶이지 않는다(2026-08-26).
+  const call = async (body: Record<string, unknown>, opts: { silent?: boolean } = {}) => {
+    if (!opts.silent) {
+      setBusy(true);
+      setError(null);
+      setNotice(null);
+    }
     try {
       const res = await fetch("/api/finance/tax-invoices", {
         method: "POST",
@@ -2852,15 +2855,15 @@ function TaxInvoicePanel() {
       if (!res.ok) throw new Error(data?.error ?? "요청이 실패했습니다.");
       return data;
     } catch (e) {
-      setError((e as Error).message);
+      if (!opts.silent) setError((e as Error).message);
       return null;
     } finally {
-      setBusy(false);
+      if (!opts.silent) setBusy(false);
     }
   };
 
-  const refresh = async () => {
-    const data = await call({ action: "refresh" });
+  const refresh = async (opts: { silent?: boolean } = {}) => {
+    const data = await call({ action: "refresh" }, opts);
     if (data) {
       setNotice(`${data.updated}/${data.checked}건 상태를 갱신했습니다.`);
       setReloadKey((k) => k + 1);
@@ -2868,13 +2871,13 @@ function TaxInvoicePanel() {
   };
 
   // 국세청 전송은 바로빌이 익일 일괄 처리 — 수동 버튼만으로는 "전송전"이 계속 남는다(2026-08-25 사용자 리포트).
-  // 미전송 건이 보이면 화면 진입 시 1회 자동 갱신한다(보관 PDF 백필도 이 호출에 함께 실린다).
+  // 미전송 건이 보이면 화면 진입 시 1회 자동 갱신한다(보관 PDF 백필은 서버가 응답 뒤에서 돌린다).
   const autoRefreshed = useRef(false);
   useEffect(() => {
     if (loading || autoRefreshed.current) return;
     if (!rows.some((r) => !r.canceledAt && (r.ntsSendState ?? 1) < 4)) return;
     autoRefreshed.current = true;
-    void refresh();
+    void refresh({ silent: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, rows]);
 
@@ -2895,7 +2898,7 @@ function TaxInvoicePanel() {
     <div className="cd-card p-4">
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <div className="cd-card-title mr-auto">전자세금계산서 발행 이력</div>
-        <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy} onClick={refresh}>
+        <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy} onClick={() => void refresh()}>
           <RefreshCw className="w-3.5 h-3.5" /> 상태 갱신
         </button>
       </div>

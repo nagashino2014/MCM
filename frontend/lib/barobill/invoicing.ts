@@ -53,7 +53,7 @@ export interface IssuePrefill {
   defaultRemark: string;
   writeDate: string; // YYYY-MM-DD (오늘)
   invoicer: { corpNum: string; corpName: string; ceoName: string; addr: string; bizClass: string; bizType: string; tel: string; contactId: string; contactName: string; email: string };
-  invoicee: { facilityId: string | null; corpNum: string; corpName: string; ceoName: string; addr: string };
+  invoicee: { facilityId: string | null; corpNum: string; corpName: string; ceoName: string; addr: string; bizType: string; bizClass: string };
   contacts: IssuePrefillContact[];
   /** 저장해 둔 발행 담당자 이메일(188) — 모달 목록에서 골라 쓴다. env 기본값이 항상 첫 항목. */
   issuerEmails: Array<{ email: string; label: string | null }>;
@@ -211,7 +211,9 @@ export async function buildIssuePrefill(contractId: string, milestoneId: string)
     await db.exec(
       `SELECT m.milestone_id, m.stage_label, m.amount, m.invoice_amount, m.amount_ratio,
               c.contract_title, c.contract_amount, c.counterparty_facility_id,
-              f.company_name, f.normalized_company_name, f.business_registration_no, f.representative_name, f.site_address
+              f.company_name, f.normalized_company_name, f.business_registration_no, f.representative_name, f.site_address,
+              -- 공급받는자 업태·종목(2026-08-26) — 사업자등록증 파싱 값. 없으면 빈 값으로 발행된다.
+              f.business_certificate_business_type, f.business_certificate_business_item
          FROM contract_payment_milestones m
          JOIN contracts c ON c.contract_id = m.contract_id
          LEFT JOIN facilities f ON f.facility_id = c.counterparty_facility_id
@@ -270,6 +272,9 @@ export async function buildIssuePrefill(contractId: string, milestoneId: string)
       corpName: toPlainCompanyName(String(row.normalized_company_name || row.company_name || "")),
       ceoName: String(row.representative_name ?? ""),
       addr: String(row.site_address ?? ""),
+      // 바로빌 규약: BizType=업태 / BizClass=종목(공급자 매핑과 동일).
+      bizType: String(row.business_certificate_business_type ?? ""),
+      bizClass: String(row.business_certificate_business_item ?? ""),
     },
     issuerEmails,
     openStages: rowsToObjects(
@@ -327,7 +332,7 @@ export interface IssueParams {
   items?: Array<{ name: string; spec?: string; qty?: number; unitPrice?: number; amount: number; tax?: number }>;
   remark1?: string;
   /** email = 대표 수신처(바로빌이 메일 발송), ccEmails = 추가 수신처(발행 후 앱이 안내 메일 발송). */
-  invoicee: { facilityId?: string | null; corpNum: string; corpName: string; ceoName?: string; addr?: string; contactName?: string; email: string; tel?: string; hp?: string; ccEmails?: string[] };
+  invoicee: { facilityId?: string | null; corpNum: string; corpName: string; ceoName?: string; addr?: string; bizType?: string; bizClass?: string; contactName?: string; email: string; tel?: string; hp?: string; ccEmails?: string[] };
   invoicer: { corpNum: string; corpName: string; ceoName?: string; addr?: string; bizClass?: string; bizType?: string; contactName?: string; tel?: string; email: string };
   sendSms?: boolean;
   forceIssue?: boolean;
@@ -361,6 +366,40 @@ export async function issueTaxInvoice(params: IssueParams, actorUserId: string |
     ),
   );
 
+  // 공급받는자 업태·종목 보강(2026-08-26 사용자 확정) — 사업장 마스터에 사업자등록증 기반
+  // 업태·종목이 있으면 반드시 계산서에 실린다. 화면이 값을 안 보내던 회귀가 있어(한일스틸 실사례)
+  // 서버에서 사업장(facilityId 우선, 없으면 사업자번호)으로 직접 조회해 채운다.
+  let inBizType = String(params.invoicee.bizType ?? "").trim();
+  let inBizClass = String(params.invoicee.bizClass ?? "").trim();
+  if (!inBizType || !inBizClass) {
+    try {
+      const db = await getDb();
+      const facilityId = params.invoicee.facilityId ? String(params.invoicee.facilityId) : null;
+      const found = rowsToObjects(
+        facilityId
+          ? await db.exec(
+              `SELECT business_certificate_business_type AS t, business_certificate_business_item AS i
+                 FROM facilities WHERE facility_id = $1`,
+              [facilityId],
+            )
+          : await db.exec(
+              `SELECT business_certificate_business_type AS t, business_certificate_business_item AS i
+                 FROM facilities
+                WHERE regexp_replace(COALESCE(business_registration_no, ''), '[^0-9]', '', 'g') = $1
+                  AND (business_certificate_business_type IS NOT NULL OR business_certificate_business_item IS NOT NULL)
+                LIMIT 1`,
+              [params.invoicee.corpNum],
+            ),
+      );
+      if (found.length) {
+        if (!inBizType) inBizType = String(found[0].t ?? "").trim();
+        if (!inBizClass) inBizClass = String(found[0].i ?? "").trim();
+      }
+    } catch (err) {
+      console.warn("[tax-invoice] 공급받는자 업태·종목 보강 실패:", (err as Error).message);
+    }
+  }
+
   const mgtKey = newMgtKey(params.milestoneId);
   const writeDate = ymd(params.writeDate);
   const supplyDate = ymd(params.supplyDate || params.writeDate);
@@ -387,6 +426,8 @@ export async function issueTaxInvoice(params: IssueParams, actorUserId: string |
       corpName: params.invoicee.corpName,
       ceoName: params.invoicee.ceoName,
       addr: params.invoicee.addr,
+      bizType: inBizType || undefined,
+      bizClass: inBizClass || undefined,
       contactName: params.invoicee.contactName,
       tel: params.invoicee.tel,
       hp: params.invoicee.hp,
@@ -638,6 +679,24 @@ export async function issueModifiedTaxInvoice(params: ModifyParams, actorUserId:
   const email = params.invoiceeEmail || (origin.invoicee_email ? String(origin.invoicee_email) : "");
   if (!email) throw Object.assign(new Error("수신 이메일이 필요합니다."), { status: 400 });
 
+  // 공급받는자 업태·종목(2026-08-26) — 정발행과 동일하게 사업장 마스터에서 채운다.
+  const modBiz = rowsToObjects(
+    origin.invoicee_facility_id
+      ? await db.exec(
+          `SELECT business_certificate_business_type AS t, business_certificate_business_item AS i
+             FROM facilities WHERE facility_id = $1`,
+          [String(origin.invoicee_facility_id)],
+        )
+      : await db.exec(
+          `SELECT business_certificate_business_type AS t, business_certificate_business_item AS i
+             FROM facilities
+            WHERE regexp_replace(COALESCE(business_registration_no, ''), '[^0-9]', '', 'g') = $1
+              AND (business_certificate_business_type IS NOT NULL OR business_certificate_business_item IS NOT NULL)
+            LIMIT 1`,
+          [String(origin.invoicee_corp_num ?? "").replace(/[^0-9]/g, "")],
+        ),
+  );
+
   // 음수 금액은 바로빌에 "-" 붙은 문자열로 그대로 전달한다(수정분 규칙).
   const amount = String(Math.round(params.amountTotal));
   const tax = String(Math.round(params.taxTotal));
@@ -660,6 +719,8 @@ export async function issueModifiedTaxInvoice(params: ModifyParams, actorUserId:
       invoicee: {
         corpNum: String(origin.invoicee_corp_num ?? ""),
         corpName: String(origin.invoicee_corp_name ?? ""),
+        bizType: modBiz.length && modBiz[0].t ? String(modBiz[0].t) : undefined,
+        bizClass: modBiz.length && modBiz[0].i ? String(modBiz[0].i) : undefined,
         email,
       },
       taxType: origin.tax_type == null ? 1 : Number(origin.tax_type),

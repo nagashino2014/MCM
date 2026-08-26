@@ -55,7 +55,7 @@ interface Prefill {
     corpNum: string; corpName: string; ceoName: string; addr: string;
     bizClass: string; bizType: string; tel: string; contactId: string; contactName: string; email: string;
   };
-  invoicee: { facilityId: string | null; corpNum: string; corpName: string; ceoName: string; addr: string };
+  invoicee: { facilityId: string | null; corpNum: string; corpName: string; ceoName: string; addr: string; bizType?: string; bizClass?: string };
   contacts: Contact[];
   issuerEmails: Array<{ email: string; label: string | null }>;
   existing: ExistingInvoice[];
@@ -310,6 +310,9 @@ export default function TaxInvoiceIssueModal({
             corpName: invoiceeCorpName,
             ceoName: invoiceeCeo,
             addr: invoiceeAddr,
+            // 업태·종목(2026-08-26) — 사업장 사업자등록증 값 그대로 전달(서버도 비면 DB 로 보강).
+            bizType: prefill.invoicee.bizType,
+            bizClass: prefill.invoicee.bizClass,
             contactName,
             tel: contactTel,
             email,

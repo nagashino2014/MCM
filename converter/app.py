@@ -54,14 +54,15 @@ MARK_INVOICE_JS = """
   if (["TBODY", "THEAD", "TFOOT", "TR", "TD", "TH", "COLGROUP"].includes(root.tagName)) {
     root = root.closest("table") || root;
   }
-  // 국세청승인번호 표기가 본문 컨테이너 밖(위 형제)에 있으면 그것까지 담는 부모로 확장하되,
-  // 인쇄 옵션 UI("인쇄하기" 버튼 영역)를 삼키는 확장은 하지 않는다.
-  const hasNts = (document.body.textContent || "").includes("국세청승인번호");
-  for (
-    let i = 0;
-    hasNts && i < 4 && !(root.textContent || "").includes("국세청승인번호");
-    i++
-  ) {
+  // 계산서 주변 표기(위: 국세청승인번호 / 아래: 법적 효력 안내 문구)를 모두 담는 부모까지 확장한다.
+  // 원본 팝업은 form-container 가 스탬프 하단·안내 문구를 잘라내므로 invoice-view 까지 올라가야
+  // 스탬프가 온전히 담긴다(2026-08-26 실측). 인쇄 옵션 UI("인쇄하기")를 삼키는 확장은 하지 않는다.
+  const WANT = ["국세청승인번호", "법적 효력을 갖습니다"];
+  const pageText = document.body.textContent || "";
+  for (let i = 0; i < 6; i++) {
+    const rootText = root.textContent || "";
+    const missing = WANT.filter((k) => pageText.includes(k) && !rootText.includes(k));
+    if (!missing.length) break;
     const parent = root.parentElement;
     if (!parent || parent === document.body) break;
     if ((parent.textContent || "").includes("인쇄하기")) break;

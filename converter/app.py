@@ -5,13 +5,16 @@
 OCR 백엔드(15GB, 상시 미가동)와 분리된 경량 서비스 — LibreOffice 만 담는다.
 
 엔드포인트:
-  POST /convert/pdf     multipart file → application/pdf
-  POST /render/url-pdf  {url} → 해당 웹 페이지를 Chromium 으로 열어 PDF 캡처(바로빌 계산서 인쇄 화면 전용)
-  GET  /health          변환기 설치 여부(배포 확인용)
+  POST /convert/pdf      multipart file → application/pdf
+  POST /render/url-pdf   {url} → 해당 웹 페이지를 Chromium 으로 열어 PDF 캡처(바로빌 계산서 인쇄 화면 전용)
+  POST /render/url-meta  {url} → 상품 페이지를 Chromium 으로 열어 {title, price} 추출
+                         (구매품의서 링크 품명·단가 자동 기입 — 쇼핑몰이 서버 fetch 를 차단해 브라우저 렌더 필수)
+  GET  /health           변환기 설치 여부(배포 확인용)
 
 호출자는 Next.js 뿐이고, VPC 내부 service discovery(converter.local)로만 접근한다.
 """
 import asyncio
+import re
 from urllib.parse import urlparse
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
@@ -145,6 +148,89 @@ async def render_url_pdf(body: RenderUrlBody):
     except Exception as exc:  # noqa: BLE001 — 캡처 실패는 호출자가 폴백한다
         raise HTTPException(status_code=422, detail=f"페이지 캡처 실패: {exc}")
     return StreamingResponse(iter([pdf]), media_type="application/pdf")
+
+
+# 상품 페이지에서 제목·가격 추출 — og:title/JSON-LD(schema.org Product)/가격 메타 순.
+# 쇼핑몰 스크립트가 늦게 채우는 경우가 있어 호출부에서 짧은 대기 후 재평가한다.
+EXTRACT_META_JS = """
+(() => {
+  const meta = (sel) => document.querySelector(sel)?.getAttribute("content")?.trim() || null;
+  let title = meta('meta[property="og:title"]') || null;
+  let price = meta('meta[property="product:price:amount"]') || meta('meta[property="og:price:amount"]') || null;
+  for (const s of document.querySelectorAll('script[type="application/ld+json"]')) {
+    try {
+      const parsed = JSON.parse(s.textContent || "null");
+      const nodes = Array.isArray(parsed) ? parsed : parsed && parsed["@graph"] ? parsed["@graph"] : [parsed];
+      for (const node of nodes) {
+        if (!node || typeof node !== "object") continue;
+        const types = [].concat(node["@type"] || []);
+        if (!types.includes("Product")) continue;
+        if (!title && typeof node.name === "string") title = node.name.trim();
+        const offers = [].concat(node.offers || []);
+        for (const offer of offers) {
+          const p = offer && (offer.price ?? offer.lowPrice);
+          if (!price && (typeof p === "number" || (typeof p === "string" && p))) price = String(p);
+        }
+      }
+    } catch {}
+  }
+  if (!title) {
+    const t = (document.title || "").trim();
+    if (t) title = t;
+  }
+  return { title, price };
+})()
+"""
+
+PRIVATE_HOST_RE = re.compile(r"^(localhost|127\.|10\.|192\.168\.|169\.254\.|0\.|172\.(1[6-9]|2\d|3[01])\.)|\.local$", re.I)
+
+
+@app.post("/render/url-meta")
+async def render_url_meta(body: RenderUrlBody):
+    url = (body.url or "").strip()
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower()
+    # 공개 웹 대상 — https 만, 사설/루프백 대역·IP 리터럴 호스트는 거부(SSRF 방지).
+    if parsed.scheme != "https" or not host or PRIVATE_HOST_RE.search(host) or host.replace(".", "").isdigit():
+        raise HTTPException(status_code=400, detail="허용되지 않은 URL 입니다.")
+    try:
+        from playwright.async_api import async_playwright
+    except ImportError:
+        raise HTTPException(status_code=503, detail="Chromium 모듈(playwright)이 설치되어 있지 않습니다.")
+    try:
+        async with async_playwright() as p:
+            import os
+
+            executable = os.environ.get("MCM_CHROMIUM_PATH") or None
+            browser = await p.chromium.launch(
+                executable_path=executable,
+                # AutomationControlled 비활성 — 쇼핑몰 headless 감지 완화(품명 수집 성공률).
+                args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-blink-features=AutomationControlled"],
+            )
+            try:
+                page = await browser.new_page(
+                    viewport={"width": 1280, "height": 900},
+                    locale="ko-KR",
+                    user_agent=(
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                        " (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+                    ),
+                )
+                # networkidle 은 쇼핑몰 트래커 때문에 타임아웃이 잦다 — DOM 로드 후 짧게 재평가.
+                await page.goto(url, wait_until="domcontentloaded", timeout=20000)
+                result = await page.evaluate(EXTRACT_META_JS)
+                for _ in range(3):
+                    if result and result.get("title") and result.get("price"):
+                        break
+                    await page.wait_for_timeout(1200)
+                    result = await page.evaluate(EXTRACT_META_JS)
+            finally:
+                await browser.close()
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001 — 실패는 호출자가 직접 fetch 로 폴백
+        raise HTTPException(status_code=422, detail=f"메타 추출 실패: {exc}")
+    return {"title": (result or {}).get("title"), "price": (result or {}).get("price")}
 
 
 @app.post("/convert/pdf")

@@ -1136,7 +1136,7 @@ function TableInput({
   };
   // people 열 조직도 모달 대상(행·열) — 모달은 표당 1개만 렌더한다
   const [peopleTarget, setPeopleTarget] = useState<{ ri: number; colKey: string } | null>(null);
-  // link 열 — URL 확정(blur) 시 페이지 제목(og:title)을 수집해 fillTarget 열에 자동 채움.
+  // link 열 — URL 확정(blur) 시 페이지 제목·판매 단가를 수집해 fillTarget/fillPriceTarget 열에 자동 채움.
   // fetch 완료 시점의 최신 행을 봐야 하므로 ref 경유(수집 중 다른 셀 수정 유실 방지).
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
@@ -1144,15 +1144,21 @@ function TableInput({
   const fetchLinkTitle = async (ri: number, col: ApprovalTableColumn) => {
     const url = String(rowsRef.current[ri]?.[col.key] ?? "").trim();
     const target = col.fillTarget;
-    if (!target || !/^https?:\/\//i.test(url)) return;
-    if (String(rowsRef.current[ri]?.[target] ?? "").trim()) return; // 이미 입력됨 — 덮지 않음(수동 우선)
+    const priceTarget = col.fillPriceTarget;
+    if ((!target && !priceTarget) || !/^https?:\/\//i.test(url)) return;
+    const empty = (key?: string) => !!key && !String(rowsRef.current[ri]?.[key] ?? "").trim();
+    if (!empty(target) && !empty(priceTarget)) return; // 둘 다 입력됨 — 덮지 않음(수동 우선)
     setLinkBusy(`${ri}:${col.key}`);
     try {
       const res = await fetch(`/api/approval/link-preview?url=${encodeURIComponent(url)}`);
-      const data = (await res.json().catch(() => ({}))) as { title?: string | null };
+      const data = (await res.json().catch(() => ({}))) as { title?: string | null; price?: string | null };
       const title = typeof data.title === "string" ? data.title.trim() : "";
-      if (title && !String(rowsRef.current[ri]?.[target] ?? "").trim()) {
-        onSet(rowsRef.current.map((r, i) => (i === ri ? { ...r, [target]: title } : r)));
+      const price = typeof data.price === "string" ? data.price.trim() : "";
+      const patch: Record<string, unknown> = {};
+      if (title && target && empty(target)) patch[target] = title;
+      if (price && priceTarget && empty(priceTarget)) patch[priceTarget] = price;
+      if (Object.keys(patch).length) {
+        onSet(rowsRef.current.map((r, i) => (i === ri ? { ...r, ...patch } : r)));
       }
     } catch {
       // 수집 실패(차단 사이트 등)는 정상 경로 — 수동 입력 폴백

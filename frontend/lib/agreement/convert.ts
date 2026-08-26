@@ -46,6 +46,34 @@ export async function convertHwpxToPdf(hwpxBytes: Uint8Array, name: string): Pro
 }
 
 /**
+ * 상품 페이지 URL → {title, price} 추출(converter 의 headless Chromium — 구매품의서 링크 품명·단가).
+ * 쇼핑몰(쿠팡·네이버·G마켓 등)이 서버 fetch 를 차단해 브라우저 렌더가 필수(2026-08-26 실측).
+ * converter 미설정·실패 시 null(호출부가 직접 fetch 폴백).
+ */
+export async function fetchUrlMeta(url: string): Promise<{ title: string | null; price: string | null } | null> {
+  const converterUrl = (process.env.MCM_CONVERTER_URL || "").trim().replace(/\/$/, "");
+  if (!converterUrl) return null;
+  try {
+    const target = await resolveServiceUrl(converterUrl);
+    const res = await fetch(`${target}/render/url-meta`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    if (!res.ok) {
+      console.warn(`[convert] url-meta 실패(HTTP ${res.status}) — 폴백`);
+      return null;
+    }
+    const data = (await res.json()) as { title?: string | null; price?: string | null };
+    return { title: data.title ?? null, price: data.price ?? null };
+  } catch (err) {
+    const cause = (err as { cause?: { code?: string } }).cause;
+    console.warn(`[convert] converter 연결 실패(${cause?.code ?? (err as Error).message}) — 폴백`);
+    return null;
+  }
+}
+
+/**
  * 웹 페이지 URL → PDF 캡처(converter 의 headless Chromium, 바로빌 계산서 인쇄 화면 전용).
  * converter 미설정·실패 시 null(호출부가 폴백).
  */

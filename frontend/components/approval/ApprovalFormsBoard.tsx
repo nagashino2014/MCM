@@ -1034,6 +1034,20 @@ function TableColumnsEditor({
                   </option>
                 ))}
               </select>
+              단가 채울 열
+              <select
+                className="cd-select flex-1"
+                style={{ width: 0, minWidth: 0 }}
+                value={c.fillPriceTarget ?? ""}
+                onChange={(e) => setCol(i, { fillPriceTarget: e.target.value || undefined })}
+              >
+                <option value="">채우지 않음</option>
+                {cols.filter((x) => x.type === "currency" || x.type === "number").map((x) => (
+                  <option key={x.key} value={x.key}>
+                    {x.label || x.key}
+                  </option>
+                ))}
+              </select>
             </label>
           )}
           {conceptsForType(concepts, c.type).length > 0 && (

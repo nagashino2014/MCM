@@ -140,6 +140,8 @@ export interface ApprovalTableColumn {
   options?: string[];
   /** link 열 전용 — 수집한 페이지 제목(og:title)을 채울 같은 표의 열 key */
   fillTarget?: string;
+  /** link 열 전용 — 수집한 판매 단가(JSON-LD/가격 메타)를 채울 같은 표의 열 key */
+  fillPriceTarget?: string;
   /** 열 단위 데이터 의미 태그(지출 내역 표의 금액 열 = cost.travel 등) */
   semantic?: ApprovalFieldSemantic;
 }
@@ -208,6 +210,7 @@ export function parseFields(value: unknown): ApprovalFieldDef[] {
               type: String(c.type ?? "text"),
               options: Array.isArray(c.options) ? c.options.map(String) : undefined,
               fillTarget: c.fillTarget != null ? String(c.fillTarget) : undefined,
+              fillPriceTarget: c.fillPriceTarget != null ? String(c.fillPriceTarget) : undefined,
               semantic: parseSemantic(c.semantic),
             }))
           : undefined,

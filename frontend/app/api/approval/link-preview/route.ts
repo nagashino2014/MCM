@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { fetchUrlMeta } from "@/lib/agreement/convert";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
 /*
- * 상품 링크 → 페이지 제목 수집(FRM-P1, 구매품의서 link 열) — og:title 우선, <title> 폴백.
- * 일부 쇼핑몰(쿠팡 등)은 서버발 요청을 차단하므로 실패는 정상 경로 — 클라이언트는 수동 입력 폴백.
- * SSRF 방지: http(s) + 기본 포트만, 사설/루프백 대역 호스트 거부.
+ * 상품 링크 → 품명·단가 수집(FRM-P1, 구매품의서 link 열).
+ * 1차: converter 의 headless Chromium 렌더(/render/url-meta) — 쿠팡·네이버·G마켓 등 주요 쇼핑몰은
+ *      서버 단순 fetch 를 차단(403/로그인 우회/차단 페이지, 2026-08-26 실측)하므로 브라우저 렌더가 주경로.
+ *      JSON-LD(schema.org Product)·가격 메타에서 단가까지 추출한다.
+ * 2차 폴백: 직접 fetch 로 og:title/<title> — converter 미가용 시. 실패는 정상 경로(수동 입력 폴백).
+ * SSRF 방지: http(s) + 기본 포트만, 사설/루프백 대역 호스트 거부(converter 쪽도 자체 거부).
  */
 
 const PRIVATE_HOST_RE =
@@ -36,7 +41,7 @@ function extractTitle(html: string): string | null {
   return null;
 }
 
-// GET ?url= : {title} — 수집 실패 시 {title: null}(에러 아님, 수동 입력 폴백)
+// GET ?url= : {title, price} — 수집 실패 시 null 값(에러 아님, 수동 입력 폴백)
 export async function GET(req: NextRequest) {
   try {
     await requirePermission("approval.view");
@@ -50,6 +55,13 @@ export async function GET(req: NextRequest) {
     if (!["http:", "https:"].includes(url.protocol) || (url.port && !["80", "443"].includes(url.port)) || PRIVATE_HOST_RE.test(url.hostname)) {
       return NextResponse.json({ error: "허용되지 않는 주소입니다." }, { status: 400 });
     }
+    // 1차 — converter Chromium 렌더(쇼핑몰 봇 차단 우회 + 단가 추출)
+    const meta = await fetchUrlMeta(url.toString());
+    if (meta?.title) {
+      const price = meta.price ? String(meta.price).replace(/[^\d.]/g, "") : null;
+      return NextResponse.json({ title: meta.title, price: price && Number(price) > 0 ? String(Math.round(Number(price))) : null });
+    }
+    // 2차 폴백 — 직접 fetch(og:title/<title> 만, 단가 없음)
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 8000);
     try {
@@ -63,9 +75,9 @@ export async function GET(req: NextRequest) {
           "Accept-Language": "ko,en;q=0.8",
         },
       });
-      if (!res.ok) return NextResponse.json({ title: null });
+      if (!res.ok) return NextResponse.json({ title: null, price: null });
       const type = res.headers.get("content-type") ?? "";
-      if (!type.includes("html")) return NextResponse.json({ title: null });
+      if (!type.includes("html")) return NextResponse.json({ title: null, price: null });
       // 제목은 문서 앞부분에 있다 — 앞 256KB 만 읽어 대용량 페이지 방어
       const reader = res.body?.getReader();
       let html = "";
@@ -81,9 +93,9 @@ export async function GET(req: NextRequest) {
       } else {
         html = (await res.text()).slice(0, 256 * 1024);
       }
-      return NextResponse.json({ title: extractTitle(html) });
+      return NextResponse.json({ title: extractTitle(html), price: null });
     } catch {
-      return NextResponse.json({ title: null });
+      return NextResponse.json({ title: null, price: null });
     } finally {
       clearTimeout(timer);
     }

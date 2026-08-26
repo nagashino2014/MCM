@@ -1190,6 +1190,15 @@ function TableInput({
                         onChange={(e) => update(ri, c.key, e.target.value)}
                       />
                     )
+                  ) : c.readonly && !readOnly ? (
+                    // 자동 채움 전용 열(2026-08-26 — 지출 표의 분류) — 기안자는 편집 불가.
+                    // 자동 분류 실패(빈 값) 건은 재무의 카드 원장에서 수동 분류한다.
+                    <div
+                      className="px-1.5 py-1.5 text-[12px] cd-text-muted whitespace-nowrap"
+                      title="자동으로 채워지는 항목입니다. 미분류 건은 재무 담당자가 카드 원장에서 분류합니다."
+                    >
+                      {String(r[c.key] ?? "").trim() || <span className="cd-text-faint">자동</span>}
+                    </div>
                   ) : c.type === "select" ? (
                     <select
                       className="w-full bg-transparent px-1.5 py-1.5 text-[12px] cd-text outline-none"
@@ -1250,12 +1259,26 @@ function TableInput({
                         </button>
                       )}
                     </div>
+                  ) : c.type === "currency" ? (
+                    // 금액 열 천단위 구분(2026-08-26 사용자 요청) — 표시만 콤마, 저장 값은 숫자 문자열 유지.
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      className="w-full bg-transparent px-1.5 py-1.5 text-[12px] cd-text outline-none text-right"
+                      disabled={readOnly}
+                      value={(() => {
+                        const raw = String(r[c.key] ?? "");
+                        const n = Number(raw.replace(/[^\d.-]/g, ""));
+                        return raw.trim() !== "" && Number.isFinite(n) && /\d/.test(raw) ? fmtComma(n) : raw;
+                      })()}
+                      onChange={(e) => update(ri, c.key, e.target.value.replace(/[^\d.-]/g, ""))}
+                    />
                   ) : (
                     <input
                       type="text"
-                      inputMode={c.type === "currency" || c.type === "number" ? "numeric" : undefined}
+                      inputMode={c.type === "number" ? "numeric" : undefined}
                       className={`w-full bg-transparent px-1.5 py-1.5 text-[12px] cd-text outline-none ${
-                        c.type === "currency" || c.type === "number" ? "text-right" : ""
+                        c.type === "number" ? "text-right" : ""
                       }`}
                       disabled={readOnly}
                       value={String(r[c.key] ?? "")}

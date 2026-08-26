@@ -175,10 +175,47 @@ export function ApprovalDraftBoard() {
       .filter((v): v is string => typeof v === "string" && v.length > 0);
   }, [cardExpenseTarget, values]);
 
+  // 출장보고서 — 사용일이 출장기간 밖인 카드/영수증은 오인 등록이므로 걸러낸다(2026-08-26 사용자 확정).
+  // 기간 미입력이면 대조 자체가 불가라 등록 전에 기간 입력을 요구하고, 사용일 미상 건도 차단한다.
+  const filterByTripPeriod = useCallback(
+    <T,>(items: T[], dateOf: (item: T) => string | null, labelOf: (item: T) => string): T[] | null => {
+      if (form?.formId !== "frm-biz-trip-report") return items;
+      const p = (values.trip_period ?? {}) as { from?: string; to?: string };
+      const from = String(p.from ?? "").trim();
+      const to = String(p.to ?? "").trim();
+      if (!from || !to) {
+        alert("출장기간을 먼저 입력하세요.\n사용일시가 출장기간 내인 내역만 등록할 수 있습니다.");
+        return null;
+      }
+      const outside = items.filter((i) => {
+        const d = String(dateOf(i) ?? "").slice(0, 10);
+        return !d || d < from || d > to;
+      });
+      if (outside.length) {
+        alert(
+          `출장기간(${from} ~ ${to}) 밖의 내역 ${outside.length}건은 이 출장과 관련없는 사용 건이라 등록할 수 없습니다:\n` +
+            outside.map((i) => `· ${labelOf(i)}`).join("\n")
+        );
+      }
+      return items.filter((i) => {
+        const d = String(dateOf(i) ?? "").slice(0, 10);
+        return d && d >= from && d <= to;
+      });
+    },
+    [form, values]
+  );
+
   /** 선택된 매입건을 지출 내역 표 행으로 변환해 append(빈 행은 정리). */
   const appendCardRows = useCallback(
-    (items: CardPickerItem[]) => {
+    (picked: CardPickerItem[]) => {
       if (!cardExpenseTarget) return;
+      const filtered = filterByTripPeriod(
+        picked,
+        (i) => i.useDate,
+        (i) => `${i.useDate ?? "사용일 미상"} ${i.storeName ?? ""} ${i.amountTotal.toLocaleString("ko-KR")}원`
+      );
+      if (!filtered || !filtered.length) return;
+      const items = filtered;
       const { tableKey, dateKey } = cardExpenseTarget;
       setValues((prev) => {
         const current = Array.isArray(prev[tableKey]) ? ([...(prev[tableKey] as unknown[])] as Record<string, unknown>[]) : [];
@@ -218,7 +255,7 @@ export function ApprovalDraftBoard() {
         }
       })();
     },
-    [cardExpenseTarget],
+    [cardExpenseTarget, filterByTripPeriod],
   );
 
   // 개인카드 영수증 불러오기(accounting-expansion P1) — 법인카드와 같은 표 대상, _receiptId 메타.
@@ -234,8 +271,15 @@ export function ApprovalDraftBoard() {
 
   /** 선택된 영수증을 표 행으로 추가 + 증빙 PDF 를 첨부서류에 자동 추가(결재자 원본 확인용). */
   const appendReceiptRows = useCallback(
-    (items: ReceiptPickerItem[]) => {
+    (picked: ReceiptPickerItem[]) => {
       if (!cardExpenseTarget) return;
+      const filtered = filterByTripPeriod(
+        picked,
+        (i) => i.paidDate ?? null,
+        (i) => `${i.paidDate ?? "사용일 미상"} ${i.storeName ?? ""} ${i.totalAmount.toLocaleString("ko-KR")}원`
+      );
+      if (!filtered || !filtered.length) return;
+      const items = filtered;
       const { tableKey, dateKey } = cardExpenseTarget;
       setValues((prev) => {
         const current = Array.isArray(prev[tableKey]) ? ([...(prev[tableKey] as unknown[])] as Record<string, unknown>[]) : [];
@@ -259,7 +303,7 @@ export function ApprovalDraftBoard() {
         return adds.length ? [...prev, ...adds] : prev;
       });
     },
-    [cardExpenseTarget],
+    [cardExpenseTarget, filterByTripPeriod],
   );
 
   // 시간 범위(time_range) → 신청시간 자동 계산. 범위가 실제로 바뀔 때만 채우므로
@@ -697,8 +741,37 @@ export function ApprovalDraftBoard() {
     }
   }, []);
 
+  // 지출 표의 분류 열은 자동 분류 전용(2026-08-26 사용자 확정) — 기안자가 계정과 다른 분류를
+  // 고르는 것을 막는다. 자동 분류 실패(빈 값) 건은 재무의 카드 원장에서 수동 분류한다.
+  const renderFields = useMemo(() => {
+    if (!form) return [] as ApprovalFieldDef[];
+    if (!cardExpenseTarget) return form.fields;
+    return form.fields.map((f) =>
+      f.type === "table" && f.key === cardExpenseTarget.tableKey && f.tableColumns
+        ? { ...f, tableColumns: f.tableColumns.map((c) => (c.key === "category" ? { ...c, readonly: true } : c)) }
+        : f
+    );
+  }, [form, cardExpenseTarget]);
+
   const validateForSubmit = useCallback((): boolean => {
     if (!form) return false;
+    // 지출 목적 필수(2026-08-26 사용자 확정) — 내용이 있는 지출 행마다 지출 목적을 요구한다.
+    if (cardExpenseTarget) {
+      const rows = Array.isArray(values[cardExpenseTarget.tableKey])
+        ? (values[cardExpenseTarget.tableKey] as Record<string, unknown>[])
+        : [];
+      const active = rows.filter(
+        (r) =>
+          r &&
+          typeof r === "object" &&
+          Object.entries(r).some(([k, v]) => !k.startsWith("_") && String(v ?? "").trim() !== "")
+      );
+      const noDetail = active.filter((r) => !String(r.detail ?? "").trim());
+      if (noDetail.length) {
+        alert(`지출 내역의 '지출 목적'이 비어 있는 행이 ${noDetail.length}건 있습니다.\n모든 지출 건에 지출 목적을 입력해야 상신할 수 있습니다.`);
+        return false;
+      }
+    }
     const missing = form.fields
       .filter((f) => f.required && f.type !== "static")
       .filter((f) => {
@@ -998,7 +1071,7 @@ export function ApprovalDraftBoard() {
               </div>
             )}
             <ApprovalFormRenderer
-              fields={form.fields}
+              fields={renderFields}
               values={values}
               onChange={(key, value) => setValues((prev) => ({ ...prev, [key]: value }))}
               // 기안 단계에서도 완성 문서와 같은 양식 제목을 보여준다(신청/승인란은 상신 후).

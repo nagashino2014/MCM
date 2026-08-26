@@ -140,6 +140,8 @@ export interface ApprovalTableColumn {
   options?: string[];
   /** 열 단위 데이터 의미 태그(지출 내역 표의 금액 열 = cost.travel 등) */
   semantic?: ApprovalFieldSemantic;
+  /** 기안자 편집 잠금 — 자동 채움 전용 열(지출 표의 분류: 자동 분류 실패 건은 재무 카드 원장에서 분류, 2026-08-26) */
+  readonly?: boolean;
 }
 
 /** 양식 필드 정의 — row(같은 행 배치)·span(행 내 폭 비중 1~3)으로 레이아웃까지 표현 */
@@ -206,6 +208,7 @@ export function parseFields(value: unknown): ApprovalFieldDef[] {
               type: String(c.type ?? "text"),
               options: Array.isArray(c.options) ? c.options.map(String) : undefined,
               semantic: parseSemantic(c.semantic),
+              readonly: c.readonly === true,
             }))
           : undefined,
         minRows: f.minRows != null ? Number(f.minRows) : undefined,

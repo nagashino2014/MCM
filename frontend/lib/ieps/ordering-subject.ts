@@ -6,11 +6,15 @@
 export const ORDERING_SUBJECT_SITE_DIRECT = "SITE_DIRECT";
 export const ORDERING_SUBJECT_PARENT_CORP = "PARENT_CORP";
 export const ORDERING_SUBJECT_CONSIGNED_OPERATOR = "CONSIGNED_OPERATOR";
+// EPC사(2026-08-26) — 발전소·폐기물처리시설 공사 일체를 맡은 시공 총괄사가 발주하는 계약.
+// 대상사업장과 법인·운영 관계가 없으므로 대상사업장 선택 제약은 두지 않는다.
+export const ORDERING_SUBJECT_EPC = "EPC";
 
 export const ORDERING_SUBJECT_OPTIONS = [
   { value: ORDERING_SUBJECT_SITE_DIRECT, label: "대상사업장 본인" },
   { value: ORDERING_SUBJECT_PARENT_CORP, label: "소속 법인·모회사" },
   { value: ORDERING_SUBJECT_CONSIGNED_OPERATOR, label: "위탁운영사" },
+  { value: ORDERING_SUBJECT_EPC, label: "EPC사(설계·조달·시공)" },
   { value: "THIRD_PARTY_PARTNER", label: "협력사(제3자)" },
   { value: "ETC", label: "기타" },
 ] as const;
@@ -92,7 +96,7 @@ interface OrderingValidationFacility {
  * 발주 주체 구분에 따라 대상사업장으로 선택하려는 사업장이 유효한지 검증한다.
  * - 소속 법인·모회사: 대상사업장의 그룹 연결 법인 사업자번호가 계약상대 업체와 일치해야 함
  * - 위탁운영사: 대상사업장의 운영 주체(운영 관계)가 계약상대 업체와 일치해야 함
- * - 그 외(협력사/기타/대상사업장 본인): 제약 없음
+ * - 그 외(EPC사/협력사/기타/대상사업장 본인): 제약 없음
  */
 export function validateOrderingTargetFacility(
   orderingSubjectType: string,

@@ -195,6 +195,28 @@ export function ApprovalDraftBoard() {
         }));
         return { ...prev, [tableKey]: [...nonEmpty, ...added] };
       });
+      // 법인카드 매출전표 자동 첨부(2026-08-26 사용자 확정 — 건당 1장) — 실물 영수증이 없는
+      // 법인카드 건은 승인내역 기반 전표 PDF 를 서버가 만들어 첨부서류에 싣는다(개인카드 영수증과 대칭).
+      void (async () => {
+        try {
+          const res = await fetch("/api/finance/card-slips", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ cardTxnIds: items.map((i) => i.cardTxnId) }),
+          });
+          const data = (await res.json().catch(() => ({}))) as { items?: { name: string; key: string; size: number }[]; error?: string };
+          if (!res.ok) throw new Error(data?.error ?? "전표 생성 실패");
+          const slips = data.items ?? [];
+          if (!slips.length) return;
+          setFileAttachments((prev) => {
+            const known = new Set(prev.map((a) => a.key));
+            const adds = slips.filter((s) => !known.has(s.key)).map((s) => ({ name: s.name, key: s.key, size: s.size }));
+            return adds.length ? [...prev, ...adds] : prev;
+          });
+        } catch (err) {
+          console.warn("[draft] 법인카드 전표 첨부 실패:", err);
+        }
+      })();
     },
     [cardExpenseTarget],
   );

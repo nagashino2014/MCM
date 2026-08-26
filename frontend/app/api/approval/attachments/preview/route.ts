@@ -17,8 +17,8 @@ export const maxDuration = 180;
  *  - download=1: 첨부로 내려받기
  */
 
-/** 작성 화면 첨부에 실릴 수 있는 키 출처 — 업로드·대금청구서(산출물)·개인카드 영수증. */
-const ALLOWED_KEY_PREFIXES = ["approval/attachments/", "deliverables/", "receipts/"];
+/** 작성 화면 첨부에 실릴 수 있는 키 출처 — 업로드·대금청구서(산출물)·개인카드 영수증·법인카드 전표. */
+const ALLOWED_KEY_PREFIXES = ["approval/attachments/", "approval/card-slips/", "deliverables/", "receipts/"];
 
 export async function GET(req: NextRequest) {
   try {

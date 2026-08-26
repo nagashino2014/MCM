@@ -136,12 +136,8 @@ export function resolveFieldConcept(f: { type: ApprovalFieldType; semantic?: App
 export interface ApprovalTableColumn {
   key: string;
   label: string;
-  type: string; // text|date|time(HHMM 자동완성)|select|currency|number|rowno(자동 연번)|people(조직도 복수 선택 — 값은 {employeeId,name,position}[])|link(URL — 입력 확정 시 fillTarget 열에 페이지 제목 자동 채움)
+  type: string; // text|date|time(HHMM 자동완성)|select|currency|number|rowno(자동 연번)|people(조직도 복수 선택 — 값은 {employeeId,name,position}[])|link(URL — 읽기 모드에서 새 탭 링크. ⚠품명 자동 수집은 쿠팡·네이버·G마켓 봇 방어로 폐기, 2026-08-26 사용자 확정)
   options?: string[];
-  /** link 열 전용 — 수집한 페이지 제목(og:title)을 채울 같은 표의 열 key */
-  fillTarget?: string;
-  /** link 열 전용 — 수집한 판매 단가(JSON-LD/가격 메타)를 채울 같은 표의 열 key */
-  fillPriceTarget?: string;
   /** 열 단위 데이터 의미 태그(지출 내역 표의 금액 열 = cost.travel 등) */
   semantic?: ApprovalFieldSemantic;
 }
@@ -209,8 +205,6 @@ export function parseFields(value: unknown): ApprovalFieldDef[] {
               label: String(c.label ?? ""),
               type: String(c.type ?? "text"),
               options: Array.isArray(c.options) ? c.options.map(String) : undefined,
-              fillTarget: c.fillTarget != null ? String(c.fillTarget) : undefined,
-              fillPriceTarget: c.fillPriceTarget != null ? String(c.fillPriceTarget) : undefined,
               semantic: parseSemantic(c.semantic),
             }))
           : undefined,

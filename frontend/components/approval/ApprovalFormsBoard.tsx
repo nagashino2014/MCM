@@ -1018,38 +1018,6 @@ function TableColumnsEditor({
               onChange={(e) => setCol(i, { options: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })}
             />
           )}
-          {c.type === "link" && (
-            <label className="w-full flex items-center gap-1.5 text-[10.5px] cd-text-faint min-w-0">
-              제목 채울 열
-              <select
-                className="cd-select flex-1"
-                style={{ width: 0, minWidth: 0 }}
-                value={c.fillTarget ?? ""}
-                onChange={(e) => setCol(i, { fillTarget: e.target.value || undefined })}
-              >
-                <option value="">채우지 않음</option>
-                {cols.filter((x) => x.type === "text").map((x) => (
-                  <option key={x.key} value={x.key}>
-                    {x.label || x.key}
-                  </option>
-                ))}
-              </select>
-              단가 채울 열
-              <select
-                className="cd-select flex-1"
-                style={{ width: 0, minWidth: 0 }}
-                value={c.fillPriceTarget ?? ""}
-                onChange={(e) => setCol(i, { fillPriceTarget: e.target.value || undefined })}
-              >
-                <option value="">채우지 않음</option>
-                {cols.filter((x) => x.type === "currency" || x.type === "number").map((x) => (
-                  <option key={x.key} value={x.key}>
-                    {x.label || x.key}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
           {conceptsForType(concepts, c.type).length > 0 && (
             <label className="w-full flex items-center gap-1.5 text-[10.5px] cd-text-faint min-w-0">
               의미

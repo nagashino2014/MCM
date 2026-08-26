@@ -8,7 +8,8 @@ OCR 백엔드(15GB, 상시 미가동)와 분리된 경량 서비스 — LibreOff
   POST /convert/pdf      multipart file → application/pdf
   POST /render/url-pdf   {url} → 해당 웹 페이지를 Chromium 으로 열어 PDF 캡처(바로빌 계산서 인쇄 화면 전용)
   POST /render/url-meta  {url} → 상품 페이지를 Chromium 으로 열어 {title, price} 추출
-                         (구매품의서 링크 품명·단가 자동 기입 — 쇼핑몰이 서버 fetch 를 차단해 브라우저 렌더 필수)
+                         (⚠현재 호출처 없음 — 구매품의서 자동 기입용이었으나 쿠팡·네이버·G마켓의
+                          상용 봇 방어로 실효성이 없어 08-26 폐기, 추후 재활용 대비 엔드포인트만 유지)
   GET  /health           변환기 설치 여부(배포 확인용)
 
 호출자는 Next.js 뿐이고, VPC 내부 service discovery(converter.local)로만 접근한다.

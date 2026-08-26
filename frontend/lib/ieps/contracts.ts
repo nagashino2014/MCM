@@ -507,7 +507,13 @@ export async function getContractDetail(contractId: string) {
   );
   const invoices = rowsToObjects(
     await db.exec(
-      `SELECT i.*, d.public_path, d.display_name AS document_display_name
+      // public_path 에 문서 갱신 시각을 버전으로 붙인다(2026-08-26) — 세금계산서 보관 PDF 는
+      // 같은 키로 교체되므로(재캡처·승인번호 반영) URL 이 고정이면 브라우저가 옛 파일을 계속 보여준다.
+      // 프록시(api/contracts/documents)는 key 만 읽으므로 v 파라미터는 무해하다.
+      `SELECT i.*, d.display_name AS document_display_name,
+              CASE WHEN d.public_path IS NULL THEN NULL
+                   ELSE d.public_path || '&v=' || COALESCE(replace(d.updated_at, ' ', 'T'), d.created_at)
+              END AS public_path
        FROM contract_invoices i
        LEFT JOIN contract_documents d ON d.document_id = i.document_id
        WHERE i.contract_id = $1

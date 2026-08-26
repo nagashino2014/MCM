@@ -568,11 +568,14 @@ export async function refreshInvoiceStates(invoiceIds?: string[]): Promise<{ che
         );
       });
       updated += 1;
-      // 승인번호가 새로 확정된 건은 보관 PDF 를 승인번호 반영본으로 재생성한다(자동 생성본만 교체).
-      const hadKey = Boolean(row.nts_send_key);
-      if (!hadKey && state.ntsSendKey && Number(state.ntsSendState ?? 0) >= 4) {
+      // 국세청 전송이 이번 갱신에서 완료된 건은 보관 PDF 를 전송 완료본으로 재생성한다(자동 생성본만 교체).
+      // ⚠승인번호(nts_send_key) 유무로 전이를 판정하면 안 된다 — 바로빌은 발행 즉시 승인번호를
+      // 부여하고 국세청 전송만 익일이라, 번호는 처음부터 있고 상태(nts_send_state)만 나중에 4로
+      // 바뀐다(2026-08-26 실사례: "미전송" 문구 캡처본이 전송 완료 후에도 교체되지 않았다).
+      const wasSent = Number(row.nts_send_state ?? 0) >= 4;
+      if (!wasSent && Number(state.ntsSendState ?? 0) >= 4) {
         await archiveTaxInvoicePdf(String(row.invoice_id), { force: true }).catch((err) =>
-          console.warn("[tax-invoice] 승인번호 반영 PDF 재생성 실패:", String(row.invoice_id), (err as Error).message),
+          console.warn("[tax-invoice] 전송 완료 PDF 재생성 실패:", String(row.invoice_id), (err as Error).message),
         );
       }
     } catch {

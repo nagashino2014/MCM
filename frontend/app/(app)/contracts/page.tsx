@@ -43,6 +43,7 @@ import {
   ORDERING_SUBJECT_SITE_DIRECT,
   ORDERING_SUBJECT_PARENT_CORP,
   ORDERING_SUBJECT_CONSIGNED_OPERATOR,
+  ORDERING_SUBJECT_EPC,
   findFacilityByBusinessRegistrationNo,
   getOrderingSubjectLabel,
   validateOrderingTargetFacility,
@@ -1786,6 +1787,7 @@ function NewContractModal({
   const [tab, setTab] = useState<"basic" | "ratecard" | "milestones" | "outsourcing" | "document">("basic");
   const [entityOptions, setEntityOptions] = useState<FacilitySearchItem[]>([]);
   const [facilityOptions, setFacilityOptions] = useState<FacilitySearchItem[]>([]);
+  const [quickRegistering, setQuickRegistering] = useState(false);
   const [outsourcingEntityOptions, setOutsourcingEntityOptions] = useState<FacilitySearchItem[]>([]);
   const [outsourcingTypeOptions, setOutsourcingTypeOptions] = useState(DEFAULT_OUTSOURCING_TYPES);
   const { industryOptions, setIndustryOptions } = useContractIndustryOptions();
@@ -2010,6 +2012,67 @@ function NewContractModal({
       facilityQuery: "",
       selectedFacilities: [...state.selectedFacilities, facility],
     });
+  };
+
+  /**
+   * 대상사업장 간이 등록(2026-08-26 사용자 확정) — EPC사 발주 건은 최초허가라 대상사업장이
+   * 사업장 DB 에 없고 EPC 를 통해서는 상세 정보를 얻을 수 없다. 사업장명만으로 먼저 등록해
+   * 계약을 진행하고, 정보가 확보되면 홈 "임시 등록 사업장 완성" 위젯에서 보완·승격한다
+   * (모바일 명함 간이 등록과 같은 source='mobile-quick' 파이프라인 재사용).
+   */
+  const quickRegisterFacility = async () => {
+    const companyName = state.facilityQuery.trim();
+    if (!companyName) return;
+    setQuickRegistering(true);
+    try {
+      const res = await fetch("/api/facilities/manual", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ companyName, source: "mobile-quick" }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        facilityId?: string;
+        error?: string;
+        duplicateFacility?: { facilityId: string; companyName: string | null; businessRegistrationNo: string | null; siteAddress: string | null };
+      };
+      if (!res.ok) {
+        const dup = data.duplicateFacility;
+        if (dup?.facilityId) {
+          // 이미 있는 사업장이면 새로 만들지 않고 그대로 붙인다.
+          onChange({
+            ...state,
+            facilityQuery: "",
+            selectedFacilities: [
+              ...state.selectedFacilities,
+              {
+                facilityId: dup.facilityId,
+                companyName: dup.companyName ?? companyName,
+                businessRegistrationNo: dup.businessRegistrationNo,
+                siteAddress: dup.siteAddress,
+              },
+            ],
+          });
+          toast.show("이미 등록된 사업장이라 기존 사업장을 선택했습니다.", "success");
+          return;
+        }
+        throw new Error(data.error ?? "사업장 등록 실패");
+      }
+      const facilityId = String(data.facilityId ?? "");
+      if (!facilityId) throw new Error("사업장 ID 를 받지 못했습니다.");
+      onChange({
+        ...state,
+        facilityQuery: "",
+        selectedFacilities: [
+          ...state.selectedFacilities,
+          { facilityId, companyName, businessRegistrationNo: null, siteAddress: null },
+        ],
+      });
+      toast.show(`'${companyName}' 을(를) 이름만으로 등록했습니다. 상세 정보는 홈의 '임시 등록 사업장 완성'에서 보완하세요.`, "success");
+    } catch (err) {
+      toast.show("사업장 등록 실패: " + (err as Error).message, "error");
+    } finally {
+      setQuickRegistering(false);
+    }
   };
 
   const submit = async () => {
@@ -2260,6 +2323,24 @@ function NewContractModal({
                       </button>
                     </span>
                   ))}
+                </div>
+              )}
+              {/* EPC사 발주 건 간이 등록(2026-08-26) — 최초허가라 대상사업장이 DB 에 없고 상세 정보도
+                  아직 없는 경우, 사업장명만으로 먼저 등록해 계약을 진행한다. */}
+              {state.orderingSubjectType === ORDERING_SUBJECT_EPC && state.facilityQuery.trim().length >= 2 && (
+                <div className="flex items-center gap-2 mt-1">
+                  <button
+                    type="button"
+                    className="cd-btn cd-btn-soft cd-btn-sm"
+                    disabled={quickRegistering}
+                    onClick={() => void quickRegisterFacility()}
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    {quickRegistering ? "등록 중…" : `'${state.facilityQuery.trim()}' 이름만으로 등록`}
+                  </button>
+                  <span className="text-[11px] cd-text-faint">
+                    검색에 없는 신규 사업장이면 이름만 먼저 등록하고, 정보는 홈의 &lsquo;임시 등록 사업장 완성&rsquo;에서 보완하세요.
+                  </span>
                 </div>
               )}
               {state.orderingSubjectType !== ORDERING_SUBJECT_SITE_DIRECT && facilityOptions.length > 0 && (

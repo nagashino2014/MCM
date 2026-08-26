@@ -17,7 +17,7 @@ import { getCompanyProfile } from "@/lib/company/profile";
 import { getInvoiceStorageKey, putContractDocument } from "@/lib/storage/contract-document-storage";
 import { renderTaxInvoicePdf } from "@/lib/barobill/tax-invoice-pdf";
 import { buildTaxInvoiceXlsx } from "@/lib/barobill/tax-invoice-xlsx";
-import { getTaxInvoicePrintUrl } from "@/lib/barobill/tax-invoice";
+import { getTaxInvoicePopUpUrl } from "@/lib/barobill/tax-invoice";
 import { convertOfficeToPdf, renderUrlToPdf } from "@/lib/agreement/convert";
 
 const MODIFY_REASON_LABELS: Record<string, string> = {
@@ -141,11 +141,13 @@ export async function archiveTaxInvoicePdf(
     items,
     issuedAt: inv.issued_at ? String(inv.issued_at) : null,
   };
-  // 주 경로: 바로빌 인쇄 화면을 Chromium 으로 그대로 PDF 캡처(국세청 양식과 동일).
+  // 주 경로: 바로빌 원본 보기 팝업을 Chromium 으로 캡처(계산서 영역만 발췌는 converter 몫).
+  // ⚠인쇄 화면(GetTaxInvoicePrintURL)은 국세청 전송 완료 후에도 "미전송" 문구를 계속 표시한다
+  // (2026-08-26 실측) — 원본 팝업(GetTaxInvoicePopUpURL)이 전송완료 스탬프가 찍힌 정식 표기다.
   let buffer: Buffer | null = null;
   let viaCapture = false;
   try {
-    const printUrl = await getTaxInvoicePrintUrl(String(inv.mgt_key));
+    const printUrl = await getTaxInvoicePopUpUrl(String(inv.mgt_key));
     const captured = await renderUrlToPdf(printUrl);
     if (captured) {
       buffer = Buffer.from(captured);

@@ -1141,6 +1141,8 @@ function TableInput({
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
   const [linkBusy, setLinkBusy] = useState<string | null>(null); // `${ri}:${colKey}`
+  // 자동 수집이 차단된 행 안내(쿠팡·네이버·G마켓 등 상용 봇 방어 — 2026-08-26 실측: Chromium 렌더로도 불가)
+  const [linkFailRows, setLinkFailRows] = useState<number[]>([]);
   const fetchLinkTitle = async (ri: number, col: ApprovalTableColumn) => {
     const url = String(rowsRef.current[ri]?.[col.key] ?? "").trim();
     const target = col.fillTarget;
@@ -1149,6 +1151,7 @@ function TableInput({
     const empty = (key?: string) => !!key && !String(rowsRef.current[ri]?.[key] ?? "").trim();
     if (!empty(target) && !empty(priceTarget)) return; // 둘 다 입력됨 — 덮지 않음(수동 우선)
     setLinkBusy(`${ri}:${col.key}`);
+    let filled = false;
     try {
       const res = await fetch(`/api/approval/link-preview?url=${encodeURIComponent(url)}`);
       const data = (await res.json().catch(() => ({}))) as { title?: string | null; price?: string | null };
@@ -1158,12 +1161,18 @@ function TableInput({
       if (title && target && empty(target)) patch[target] = title;
       if (price && priceTarget && empty(priceTarget)) patch[priceTarget] = price;
       if (Object.keys(patch).length) {
+        filled = true;
         onSet(rowsRef.current.map((r, i) => (i === ri ? { ...r, ...patch } : r)));
       }
     } catch {
       // 수집 실패(차단 사이트 등)는 정상 경로 — 수동 입력 폴백
     }
     setLinkBusy(null);
+    setLinkFailRows((prev) => {
+      const has = prev.includes(ri);
+      if (filled) return has ? prev.filter((x) => x !== ri) : prev;
+      return has ? prev : [...prev, ri];
+    });
   };
   const peopleAt = (ri: number, colKey: string): TablePerson[] => {
     const v = rows[ri]?.[colKey];
@@ -1326,6 +1335,11 @@ function TableInput({
         >
           <Plus className="w-3.5 h-3.5" /> 행 추가
         </button>
+      )}
+      {!readOnly && linkFailRows.length > 0 && (
+        <p className="mt-1 text-[11px]" style={{ color: "var(--cd-warning,#FFAE1F)" }}>
+          {linkFailRows.map((ri) => ri + 1).join(", ")}행 링크: 이 쇼핑몰은 자동 수집을 차단합니다(쿠팡·네이버쇼핑·G마켓 등) — 품명·단가를 직접 입력해 주세요.
+        </p>
       )}
       <OrgPickerModal
         open={peopleTarget != null}

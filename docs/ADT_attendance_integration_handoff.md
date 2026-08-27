@@ -298,7 +298,9 @@ ON CONFLICT (emp_no, work_date) DO UPDATE
   env: `CAPS_EXPORT_DIR`·`MCM_BASE_URL`·`MCM_CRON_KEY`·`CAPS_DAYS`(기본 3일 재스캔).
   인코딩은 UTF-8 시도 후 깨지면 CP949(EUC-KR) 재디코딩. 전송 상태는
   `.local-logs/collect-caps-state.json`(크기·수정시각) — 서버가 멱등이라 상태 유실에도 안전.
-- **배포 시 수동 절차**: ① `200_adt_event_log.sql` psql 적용 ② next 이미지 재배포
+- **배포 시 수동 절차**: ① 마이그 200~204 적용 —
+  `.\infra\aws\ops\staging-apply-migrations.ps1`(터널 자동 기동, 기본값이 이 5종)
+  ② next 이미지 재배포 — `.\infra\aws\ops\staging-deploy-next.ps1 -Wait`
   ③ 수집기 PC 에서 `collect-caps-task.ps1 -Register` 실행(레포 클론 + `frontend/.env.local`
   의 AUTH_SECRET 또는 `MCM_CRON_KEY` 필요).
 - **범위 주의**: 이벤트 로그는 본사 단말(0003~0009)만 커버한다. 울산 등 지사는 종전대로

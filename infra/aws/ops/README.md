@@ -28,6 +28,19 @@ repo 루트에서 실행한다. `pwsh`(PowerShell 7)가 아니라 **Windows 기�
 - `aws scheduler` 서브커맨드는 **AWS CLI v2** 에 있다(`aws --version` 확인).
 - ⚠ `.ps1` 은 **UTF-8 BOM 으로 저장**한다. PS 5.1 은 BOM 없는 UTF-8 을 CP949 로 해석해 한글 로그가 깨진다.
 
+## DB 마이그레이션 적용
+
+```powershell
+.\infra\aws\ops\staging-apply-migrations.ps1                     # 기본: 200~204(근태 이벤트·식대)
+.\infra\aws\ops\staging-apply-migrations.ps1 -Files 205_foo.sql  # 특정 파일만
+.\infra\aws\ops\staging-apply-migrations.ps1 -KeepTunnel         # 적용 후 터널 유지
+```
+
+bastion SSM 포트포워딩(localhost:15432)을 통해 psql 로 `infra/aws/NNN_*.sql` 을 적용한다.
+터널이 없으면 bastion 기동(stopped 면 start)부터 터널까지 자동으로 열고, 끝나면 자동
+기동분만 정리한다. 접속 정보는 RDS 매니지드 마스터 시크릿에서 받는다(파일 저장 없음).
+전제: psql 클라이언트 + Session Manager plugin 설치, SSO 로그인 상태.
+
 ## next(웹) 재배포
 
 ```powershell

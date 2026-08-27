@@ -265,6 +265,45 @@ ON CONFLICT (emp_no, work_date) DO UPDATE
 - 급여 데이터 연동 → 수당 금액 산정(월평균임금÷209×배수). 특별휴가 자동 적립(선택).
 - 엑셀 형식 변형(신규 지사·헤더 변경) 대응, 실제 월 운영 실증.
 
+## 7-5. 운용 방식 재확정 — 이벤트 로그 시간별 자동 수집 ★ (2026-08)
+
+§7-3 웹 업로드의 전제(근태처리가 월 1회 수동)가 바뀌었다. ADT 기술지원을 받아 캡스 근태
+매니저가 **매시 28분에 인원별 태그 기록 txt** 를 `C:\Caps\ACServer\UniWorkProService\export`
+에 자동 저장하도록 설정 → **시간별 자동 수집이 주 경로**가 된다(월 1회 엑셀 업로드는 지사·
+백필용 보조 경로로 유지).
+
+```
+캡스 근태 매니저 ─(매시 28분, txt)→ export 폴더
+  → 사내 수집기 collect-caps-local.mjs (작업 스케줄러, 기본 매시 35분·분은 등록 옵션)
+     → POST /api/internal/adt-events-ingest (x-cron-key = AUTH_SECRET)
+        → 라인 파싱(lib/adt/events.ts) → adt_event_raw(마이그 200, 태그 무손실)
+        → (사번, 일자) 출근/퇴근 집계 → adt_attendance_raw upsert(source='event',
+          출근/퇴근/성명만 갱신 — 엑셀 업로드의 부서/벤더 산정치는 보존)
+        → 기존 ingestStaging → attendance_daily → attendance_weekly → 특별휴가 대조(공용)
+```
+
+- **txt 라인 형식**(구분자 없음, 컨트롤러 "필드 선택" 순서): 시간(6)·사원번호·이름·
+  근태내역(1)·카드번호(13)·단말기ID(4)·고정값(없음)·일자+시간(14).
+  예) `0907040001이재영50000000000000000520260826090704`. 근태내역 1=출근·2=퇴근·5=출입.
+  가변 필드(사원번호·이름)가 가운데라 앞 6 + 뒤 32(1+13+4+14)를 고정으로 잘라 파싱.
+- **단말기ID 명칭**: 0003 소회의실 · 0004 대회의실 · 0005 1208호 · 0006 1206호 외부 ·
+  0007 1206호 내부 · 0008 고문실 · 0009 대표실 (`lib/adt/events.ts` `TERMINAL_NAMES`).
+- **집계 규칙**: 출근 = '1' 최초, 없으면 '5' 최초. 퇴근 = '2' 최후, 없으면 '5' 최후
+  (단일 태그면 퇴근 미정). 06:00 미만 새벽 태그는 전일에 태그가 있으면 전일 퇴근으로 귀속
+  (computeDaily 의 자정 +1일 보정과 연계). 파서·집계 32케이스 검증 통과.
+- **낮 시간대 부분 데이터**: 퇴근 전에는 마지막 출입이 임시 퇴근으로 잡히고 매시 갱신되며
+  퇴근 태그(또는 최종 출입)로 수렴한다. 값이 실제로 바뀐 (사번, 일자)만 재산정한다.
+- **수집기 설정**(상용화 대비 시각 옵션): `collect-caps-task.ps1 -Register [-Minute 35]`
+  — 고객사 컨트롤러 저장 시각(매시 28분 등)에 맞춰 실행 분을 바꿔 등록한다.
+  env: `CAPS_EXPORT_DIR`·`MCM_BASE_URL`·`MCM_CRON_KEY`·`CAPS_DAYS`(기본 3일 재스캔).
+  인코딩은 UTF-8 시도 후 깨지면 CP949(EUC-KR) 재디코딩. 전송 상태는
+  `.local-logs/collect-caps-state.json`(크기·수정시각) — 서버가 멱등이라 상태 유실에도 안전.
+- **배포 시 수동 절차**: ① `200_adt_event_log.sql` psql 적용 ② next 이미지 재배포
+  ③ 수집기 PC 에서 `collect-caps-task.ps1 -Register` 실행(레포 클론 + `frontend/.env.local`
+  의 AUTH_SECRET 또는 `MCM_CRON_KEY` 필요).
+- **범위 주의**: 이벤트 로그는 본사 단말(0003~0009)만 커버한다. 울산 등 지사는 종전대로
+  엑셀 업로드(또는 지사 수집기 추가 등록)로 반입한다.
+
 ## 7. 참고 자료
 
 - 세콤/SK쉴더스/KT텔레캅 연동 유의사항(샤플): https://www.shoplworks.com/help-center/help-center-admin/security-attendance-integration-cautions

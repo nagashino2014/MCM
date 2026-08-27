@@ -25,8 +25,8 @@ export interface AdtRawRecord {
   allow_time?: string | null;
 }
 
-/** 수신 경로. */
-export type AttendanceSourceKind = "db" | "file";
+/** 수신 경로. 'event' = 캡스 태그 이벤트 로그 집계(lib/adt/events.ts, 마이그 200). */
+export type AttendanceSourceKind = "db" | "file" | "event";
 
 /** 자체 초과근무 산정 정책(attendance_settings). */
 export interface AttendanceSettings {

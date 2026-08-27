@@ -92,6 +92,11 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       if (typeof body.newContractTitle === "string" && body.newContractTitle.trim()) {
         pushSet("contract_title", body.newContractTitle.trim());
       }
+      // 계약 종류 변경(2026-08-26) — 일반 계약으로 등록했다가 실제로는 단가 계약(추가 기성 발생)인
+      // 건을 변경계약에서 바로잡는다. 허용값 외에는 무시한다.
+      if (body.newContractKind === "standard" || body.newContractKind === "unit_price") {
+        pushSet("contract_kind", body.newContractKind);
+      }
       if (body.newServiceType !== undefined) {
         pushSet("service_type", body.newServiceType || null);
       }

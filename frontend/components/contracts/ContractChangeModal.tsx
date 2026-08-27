@@ -190,8 +190,14 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
     };
   }, [counterpartyQuery]);
 
+  // 계약 종류 변경(2026-08-26 사용자 요청) — 일반 계약으로 등록했으나 실제로는 단가 계약(용역
+  // 진행에 따라 기성 추가 발생)인 건이 있어 변경계약에서 바로잡는다. 단가로 바꾸면 '단가 계약'
+  // 탭이 즉시 나타나고, 저장 시 contract_kind 가 갱신된다.
+  const [contractKind, setContractKind] = useState<"standard" | "unit_price">(
+    props.contractKind === "unit_price" ? "unit_price" : "standard"
+  );
   // 단가 계약(2026-08-24) — 단가 기준표를 여기서도 수정한다. 저장 시 변경분만 PUT.
-  const isUnitPrice = props.contractKind === "unit_price";
+  const isUnitPrice = contractKind === "unit_price";
   const [rateCard, setRateCard] = useState<RateCardData>(() => createRateCard());
   const rateLoadedJson = useRef<string>("");
   useEffect(() => {
@@ -500,6 +506,10 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
       if (newCurrentAmount != null) requestBody.newCurrentAmount = newCurrentAmount;
       if (contractDateChanged) requestBody.newContractDate = contractDate || null;
       if (contractTitleChanged) requestBody.newContractTitle = contractTitle.trim();
+      // 계약 종류는 달라진 경우에만 전송(선례: 계약일·계약명 정정과 동일 원칙).
+      if (contractKind !== (props.contractKind === "unit_price" ? "unit_price" : "standard")) {
+        requestBody.newContractKind = contractKind;
+      }
       const nextEndedAt = lifecycle.terminatedAt || closing.completionDate || servicePeriod.next;
       if (nextEndedAt) requestBody.newEndedAt = nextEndedAt;
       if (nextServiceCategory.nextType.trim()) requestBody.newServiceType = nextServiceCategory.nextType.trim();
@@ -853,6 +863,20 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
                       <option key={option} value={option}>{option}</option>
                     ))}
                   </select>
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="font-bold cd-text-muted">계약 종류</span>
+                  <select
+                    className="cd-select"
+                    value={contractKind}
+                    onChange={(e) => setContractKind(e.target.value === "unit_price" ? "unit_price" : "standard")}
+                  >
+                    <option value="standard">일반 계약</option>
+                    <option value="unit_price">단가 계약</option>
+                  </select>
+                  <span className="text-[11px] cd-text-faint">
+                    단가 계약으로 바꾸면 상단에 &lsquo;단가 계약&rsquo; 탭이 나타나 단가표·차수를 입력할 수 있습니다.
+                  </span>
                 </label>
                 <label className="grid gap-1 text-sm">
                   <span className="font-bold cd-text-muted">발주 주체 구분</span>

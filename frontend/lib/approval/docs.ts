@@ -4,6 +4,7 @@ import { missingTableRequirements, parseFields, type ApprovalFieldDef } from "@/
 import { getForm } from "@/lib/approval/forms";
 import { recordLeaveUsageOnApproval } from "@/lib/approval/leave";
 import { assessOverLimitOnSubmit } from "@/lib/approval/overtime";
+import { assessMealChecksOnSubmit } from "@/lib/approval/overtime-meal";
 import { resolveOpenCancelRequests } from "@/lib/approval/cancel";
 import { notifyPendingSteps, notifyDrafterResult } from "@/lib/approval/notify";
 import { generateDocSummary } from "@/lib/approval/summarize";
@@ -551,6 +552,9 @@ export async function submitDoc(docId: string, actorUserId: string): Promise<{ d
     await activateOrder(txn, docId, 1);
     // 초과근무 신청 — 주 12h 초과 판정을 상신 시점에 고정 저장(결재 화면 경고 배너의 근거).
     await assessOverLimitOnSubmit(txn, docId);
+    // 지출결의서 — 식대(복리후생비) 사용을 그 날 초과근무 신청(평일 2h·휴일 4h)과 대조해
+    // 미달분을 경고 스냅샷·이력으로 남긴다(상신 차단 없음, 결재 화면 배너의 근거).
+    await assessMealChecksOnSubmit(txn, docId);
   });
   // 커밋 후 — 첫 결재자에게 알림(fire-and-forget, 실패해도 상신은 완료)
   await notifyPendingSteps(docId);

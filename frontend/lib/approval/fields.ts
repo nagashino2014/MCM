@@ -169,6 +169,8 @@ export interface ApprovalFieldDef {
   fillMap?: ApprovalFillRule[];
   /** asset_select 전용 — 선택지로 보여줄 자산 종류(reservable_assets.kind). 미지정 시 전체 */
   assetKind?: string;
+  /** period 전용 — 단일 날짜만 입력(to=from 저장). 초과근무 신청처럼 1일 1건인 양식용 */
+  singleDay?: boolean;
   /** 데이터 의미 태그 — fillMap(입력 편의)과 별개로 분석 집계의 근거가 된다 */
   semantic?: ApprovalFieldSemantic;
 }
@@ -218,6 +220,7 @@ export function parseFields(value: unknown): ApprovalFieldDef[] {
         sumColumn: f.sumColumn != null ? String(f.sumColumn) : undefined,
         multiple: f.multiple === true,
         assetKind: f.assetKind != null ? String(f.assetKind) : undefined,
+        singleDay: f.singleDay === true || undefined,
         fillMap: Array.isArray(f.fillMap)
           ? (f.fillMap as Record<string, unknown>[])
               .filter((r) => r && typeof r === "object")

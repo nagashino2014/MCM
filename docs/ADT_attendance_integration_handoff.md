@@ -304,6 +304,24 @@ ON CONFLICT (emp_no, work_date) DO UPDATE
 - **범위 주의**: 이벤트 로그는 본사 단말(0003~0009)만 커버한다. 울산 등 지사는 종전대로
   엑셀 업로드(또는 지사 수집기 추가 등록)로 반입한다.
 
+## 7-6. 대조 정책 확정 3건 (2026-08-27)
+
+1. **초과근무 신청은 1일 1건** — 일자별 대조(matchOvertimeRequests)가 근무일 하루를
+   전제하므로: ①양식 `work_period` 를 `singleDay`(period 단일 날짜, to=from 저장,
+   저장 구조 유지) 로 개정(마이그 202, 웹·모바일 렌더러 지원 추가) ②상신 시 from≠to 를
+   서버가 거부(assessOverLimitOnSubmit). 기존 다일 문서는 손대지 않는다.
+2. **휴일 근무 휴게 공제 폐지** — 휴일(토·일·공휴일)은 재실 전체 인정
+   (computeDaily isOffDay, 마이그 201 재산정). 평일 점심 60분 공제는 유지.
+3. **식대 × 초과근무 신청 대조** (마이그 203, `lib/approval/overtime-meal.ts`) —
+   저녁 식대 인정 기준: 평일 그 날 초과근무 신청 2h 이상, 휴일 4h 이상.
+   지출결의서(frm-expense-report) 상신 시 식대(복리후생비) 행을 판정한다:
+   평일은 결제 17:00 이후 건만(점심 회식 오탐 방지, 결제 시각은 법인카드
+   `card_transactions.approved_at`·개인영수증 `personal_receipts.paid_at`, 시각
+   미상 수기 행은 제외), 휴일은 시각 무관. 미달이면 `field_values._meal_check`
+   스냅샷 + `overtime_meal_warnings` 이력을 남기고 결재 화면(ApprovalDocModal)에
+   경고 배너를 띄운다 — 1차는 경고(주황), 과거 이력이 있으면 재발(빨강,
+   사용액 반환 청구 검토 대상)로 표시. 상신 차단은 하지 않는다(처분은 결재자 판단).
+
 ## 7. 참고 자료
 
 - 세콤/SK쉴더스/KT텔레캅 연동 유의사항(샤플): https://www.shoplworks.com/help-center/help-center-admin/security-attendance-integration-cautions

@@ -297,6 +297,12 @@ function FieldInput({
       return <TimeRangeInput value={value} onSet={onSet} readOnly={dis} />;
     case "period": {
       const v = (value ?? {}) as { from?: string; to?: string };
+      // singleDay: 1일 1건 양식(초과근무 신청 등) — 날짜 하나만 받고 to=from 으로 저장한다.
+      if (f.singleDay) {
+        return (
+          <AutoDateInput className={base} disabled={dis} value={v.from ?? ""} onChange={(from) => onSet({ from, to: from })} />
+        );
+      }
       return (
         <div className="flex items-center gap-1.5 w-full">
           <AutoDateInput className={base} disabled={dis} value={v.from ?? ""} onChange={(from) => onSet({ ...v, from })} />

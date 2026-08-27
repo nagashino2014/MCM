@@ -488,6 +488,49 @@ export function ApprovalDocViewer({
               );
             })()}
 
+            {/* 지출결의서 식대 × 초과근무 신청 대조 경고 — 상신 시점 판정(field_values._meal_check) */}
+            {(() => {
+              const mc = (detail.fieldValues as Record<string, unknown> | undefined)?._meal_check as
+                | {
+                    priorWarningCount: number;
+                    violations: Array<{
+                      rowNo: number;
+                      usedOn: string;
+                      vendor: string | null;
+                      amount: number | null;
+                      paidAtHm: string | null;
+                      isOffDay: boolean;
+                      requiredMinutes: number;
+                      appliedMinutes: number;
+                    }>;
+                  }
+                | undefined;
+              if (!mc || typeof mc !== "object" || !Array.isArray(mc.violations) || !mc.violations.length) return null;
+              const repeat = Number(mc.priorWarningCount || 0) > 0;
+              const h = (min: number) => {
+                const v = Math.round((Number(min || 0) / 60) * 10) / 10;
+                return Number.isInteger(v) ? String(v) : v.toFixed(1);
+              };
+              const tone = repeat ? "var(--cd-danger,#FA896B)" : "var(--cd-warning,#FFAE1F)";
+              const toneSoft = repeat ? "var(--cd-danger-soft, rgba(250,137,107,0.1))" : "var(--cd-warning-soft, rgba(255,174,31,0.1))";
+              return (
+                <div className="rounded-xl border px-3.5 py-2.5 flex flex-col gap-0.5" style={{ borderColor: tone, background: toneSoft }}>
+                  <span className="text-[11.5px] font-bold" style={{ color: tone }}>
+                    ⚠ 식대 인정 기준 미달 {mc.violations.length}건 — 초과근무 신청(평일 2h·휴일 4h) 없이 사용된 식대입니다
+                    {repeat ? ` · 과거 경고 ${mc.priorWarningCount}회(재발 — 사용액 반환 청구 검토 대상)` : " · 1차 — 경고 처리 대상"}
+                  </span>
+                  {mc.violations.map((v, i) => (
+                    <span key={i} className="text-[10.5px] cd-text-faint">
+                      · {v.usedOn}
+                      {v.isOffDay ? "(휴일)" : ""} {v.vendor ?? "사용처 미상"}
+                      {v.amount != null ? ` ${Number(v.amount).toLocaleString()}원` : ""}
+                      {v.paidAtHm ? ` · 결제 ${v.paidAtHm}` : ""} — 신청 {h(v.appliedMinutes)}h / 기준 {h(v.requiredMinutes)}h
+                    </span>
+                  ))}
+                </div>
+              );
+            })()}
+
             {detail.aiSummary && (detail.aiSummary.lines.length > 0 || detail.aiSummary.figures.length > 0) && (
               <div className="rounded-xl cd-tint-primary p-3 flex flex-col gap-1.5">
                 <span className="text-[11px] font-bold cd-text-primary flex items-center gap-1">

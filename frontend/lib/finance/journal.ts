@@ -411,6 +411,22 @@ async function draftExpenseDocEntries(db: PgDatabase, from: string, to: string):
     });
   }
 
+  // 식대 불지급(withhold) 처분 행(마이그 203·204) — 회사가 환급하지 않으므로 비용·미지급금에서 제외.
+  // 키 = doc_id|row_no(표 순번 1부터, overtime_meal_warnings 규약). 마이그 미적용 환경은 빈 세트.
+  const withheld = new Set<string>();
+  try {
+    for (const r of rowsToObjects(
+      await db.exec(
+        `SELECT doc_id, row_no FROM overtime_meal_warnings WHERE action = 'withhold' AND doc_id = ANY($1::text[])`,
+        [docs.map((d) => String(d.doc_id))],
+      ),
+    )) {
+      withheld.add(`${String(r.doc_id)}|${Number(r.row_no)}`);
+    }
+  } catch {
+    /* 마이그 203·204 미적용 — 제외 없음 */
+  }
+
   const drafts: EntryDraft[] = [];
   for (const doc of docs) {
     const docId = String(doc.doc_id);
@@ -423,9 +439,10 @@ async function draftExpenseDocEntries(db: PgDatabase, from: string, to: string):
     const byAccount = new Map<string, { amount: number; memos: string[] }>();
     let total = 0;
     let hasUnmapped = false;
-    for (const row of rows) {
+    for (const [rowIdx, row] of rows.entries()) {
       if (!row || typeof row !== "object") continue;
       if (typeof row._cardTxnId === "string" && row._cardTxnId) continue;
+      if (withheld.has(`${docId}|${rowIdx + 1}`)) continue; // 식대 불지급 처분 — 환급 대상 아님
       const amount = round(Number(String(row.amount ?? "").replace(/[^0-9.-]/g, "")));
       if (!amount) continue;
       const receiptId = typeof row._receiptId === "string" ? row._receiptId : null;

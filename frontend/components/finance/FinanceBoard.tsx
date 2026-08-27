@@ -34,6 +34,7 @@ import { PnlPanel, CashPanel } from "@/components/finance/ManagementPanels";
 import { HometaxPanel, VatReturnPanel, WithholdingPanel } from "@/components/finance/VatReturnPanels";
 import { FixedAssetPanel, TripLogPanel, BudgetPanel } from "@/components/finance/AssetBudgetPanels";
 import { BalanceSheetPanel, ClosingPanel } from "@/components/finance/ClosingPanels";
+import { ReimbursePanel } from "@/components/finance/ReimbursePanels";
 import "@/components/cdash/cdash.css";
 
 /** 최근 수집 로그 카드에 한 번에 보여줄 줄 수. */
@@ -41,17 +42,18 @@ const LOG_PAGE_SIZE = 10;
 
 type Tab =
   | "connections" | "bank" | "card" | "recon" | "vat" | "invoice" | "journal" | "ledger" | "trial" | "pnl" | "cash"
-  | "hometax" | "vatreturn" | "fixedassets" | "triplog" | "budget" | "withholding" | "balance" | "closing";
+  | "hometax" | "vatreturn" | "fixedassets" | "triplog" | "budget" | "withholding" | "balance" | "closing" | "reimburse";
 
 const TAB_KEYS: Tab[] = [
   "connections", "bank", "card", "recon", "vat", "invoice", "journal", "ledger", "trial", "pnl", "cash",
-  "hometax", "vatreturn", "fixedassets", "triplog", "budget", "withholding", "balance", "closing",
+  "hometax", "vatreturn", "fixedassets", "triplog", "budget", "withholding", "balance", "closing", "reimburse",
 ];
 
 /** 사이드바 소메뉴 = 탭 그룹. 소메뉴 진입 시 첫 탭이 열린다(menu.ts 의 href 와 짝). */
 const TAB_GROUPS: Array<{ title: string; tabs: [Tab, string][] }> = [
   { title: "연결 관리", tabs: [["connections", "연결 관리"]] },
-  { title: "계좌·카드 원장", tabs: [["bank", "계좌 원장"], ["card", "법인카드 원장"]] },
+  // 경비 환급(§2) — 개인 지출 환급 이체 목록(불지급 처분 자동 제외). 이체 실행은 수동.
+  { title: "계좌·카드 원장", tabs: [["bank", "계좌 원장"], ["card", "법인카드 원장"], ["reimburse", "경비 환급"]] },
   { title: "계산서·수금", tabs: [["invoice", "세금계산서"], ["recon", "수금 대조"]] },
   // 부가세 신고(P5) — 카드 매입 집계 + 홈택스 매입·매출 계산서 + 신고서 자동 작성(accounting-expansion §5 P5).
   { title: "부가세 신고", tabs: [["vat", "카드 매입 집계"], ["hometax", "매입·매출 계산서"], ["vatreturn", "신고서"], ["withholding", "원천세"]] },
@@ -314,6 +316,7 @@ export function FinanceBoard() {
         {tab === "connections" && <ConnectionsPanel />}
         {tab === "bank" && <BankLedgerPanel />}
         {tab === "card" && <CardLedgerPanel />}
+        {tab === "reimburse" && <ReimbursePanel />}
         {tab === "recon" && <ReconPanel />}
         {tab === "vat" && <VatPanel />}
         {tab === "hometax" && <HometaxPanel />}

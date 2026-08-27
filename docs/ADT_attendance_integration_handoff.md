@@ -328,6 +328,13 @@ ON CONFLICT (emp_no, work_date) DO UPDATE
    급여 차감(**사용액이 급여대장 생성 시 '식대환수'(meal-clawback) 공제 라인으로
    자동 반영** — `buildLedger` 3-1 단계, 귀속 구간 전월26~금월25). 감사 로그
    `overtime_meal_action`.
+5. **환급 이체 목록 + 불지급 자동 제외** — 재무 화면 "계좌·카드 원장 > 경비 환급" 탭
+   (`/api/finance/reimbursements`, finance.view / `lib/finance/reimbursements.ts`):
+   결재 종결된 지출결의·출장보고의 개인 지출 행(영수증·수기, 법인카드 제외)을 기안자별로
+   집계한 별도 이체 근거 목록(급여 합산 금지 원칙, 이체 실행은 수동). **불지급(withhold)
+   처분 행은 합계에서 자동 제외**(취소선+뱃지 표시)되고, 분개(`journal.ts` expense_doc)
+   에서도 동일하게 제외된다(비용·미지급금 미계상 — 처분 변경 후 분개 "재생성" 시 반영).
+   급여 차감(deduct) 행은 환급에 포함 + 뱃지 표시(회수는 '식대환수' 공제 — 이중 불이익 방지).
 
 ## 7. 참고 자료
 

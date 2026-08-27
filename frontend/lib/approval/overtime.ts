@@ -138,6 +138,12 @@ export async function assessOverLimitOnSubmit(txn: PgDatabase, docId: string): P
   const period = (fv.work_period ?? {}) as { from?: string; to?: string };
   const from = period.from;
   if (!employeeId || !from || !/^\d{4}-\d{2}-\d{2}$/.test(from)) return;
+  // 초과근무 신청은 1일 1건(2026-08-27 확정) — 일자별 대조(matchOvertimeRequests)가 근무일
+  // 하루를 전제하므로 기간(from≠to) 신청은 상신 단계에서 막는다. 여러 날은 날짜별로 나눠 상신.
+  const to = period.to;
+  if (to && /^\d{4}-\d{2}-\d{2}$/.test(to) && to !== from) {
+    throw new Error("초과근무 신청은 1일 1건입니다 — 근무일을 하루씩 나눠 상신해 주세요.");
+  }
 
   let settings = DEFAULT_ATTENDANCE_SETTINGS;
   try {

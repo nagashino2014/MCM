@@ -153,8 +153,14 @@ export function UncollectedCard({
                     {item.contractTitle}
                   </span>
                   <span style={{ color: "var(--cd-muted)" }}>{item.stageLabel}</span>
+                  {/* 부분입금이 있으면 잔액을 보여준다(2026-08-26 사용자 요청) — 원 발행액은 보조 표기 */}
                   <span className="text-right tabular-nums font-extrabold" style={{ color }}>
-                    {fmtFull(item.amount)}
+                    {fmtFull(item.outstandingAmount)}
+                    {item.outstandingAmount < item.amount && (
+                      <span className="block font-normal" style={{ fontSize: "0.6875rem", color: "var(--cd-faint)" }}>
+                        발행 {fmtFull(item.amount)}
+                      </span>
+                    )}
                   </span>
                 </div>
               );

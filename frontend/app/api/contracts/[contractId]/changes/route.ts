@@ -146,8 +146,19 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
         if (!label || !nextRaw) continue;
         const amount = Number(nextRaw.replace(/[^\d.-]/g, ""));
         if (!Number.isFinite(amount)) continue;
+        // 금액이 바뀌면 수금비율(기준액 대비)·수금완료 판정도 새 금액 기준으로 다시 계산한다
+        // (2026-08-26 사용자 리포트 — 5,000만→3,000만 감액 후에도 비율이 옛 기준 40% 로 남았다).
+        // 실제 입금액(collected_amount)은 사실이라 그대로 두고 비율만 파생 재계산.
         await db.run(
-          `UPDATE contract_payment_milestones SET amount = $3, updated_at = $4
+          `UPDATE contract_payment_milestones
+              SET amount = $3,
+                  collection_ratio = CASE
+                    WHEN $3 > 0 THEN ROUND((COALESCE(collected_amount, 0) / $3)::numeric, 3)
+                    ELSE collection_ratio END,
+                  payment_collected = CASE
+                    WHEN $3 > 0 THEN (CASE WHEN COALESCE(collected_amount, 0) >= $3 - 1 THEN 1 ELSE 0 END)
+                    ELSE payment_collected END,
+                  updated_at = $4
             WHERE contract_id = $1 AND stage_label = $2`,
           [contractId, label, amount, now]
         );

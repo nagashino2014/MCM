@@ -525,7 +525,10 @@ export async function issueTaxInvoice(params: IssueParams, actorUserId: string |
         `UPDATE contract_payment_milestones
             SET invoice_issued = 1, invoice_issued_at = $2, invoice_amount = $3, updated_at = $4
           WHERE milestone_id = $1`,
-        [params.milestoneId, params.writeDate, Math.round(params.totalAmount), new Date().toISOString()],
+        // ⚠invoice_amount 는 공급가액(부가세 제외) 기준 청구액이다 — 수동 발행 기록·미수금 집계가
+        // 모두 그 규약을 쓴다. 종전에는 단건 발행만 totalAmount(부가세 포함)를 넣어 미수금 리스트에
+        // 부가세 포함 건이 섞였다(2026-08-26 사용자 리포트, 태영건설 하남교산 등 최근 전자발행분).
+        [params.milestoneId, params.writeDate, Math.round(params.amountTotal), new Date().toISOString()],
       );
     }
   });

@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { rowsToObjects, type PgDatabase } from "@/lib/db";
+import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
 import { timeRangeMinutes } from "@/lib/approval/fields";
 import { OVERTIME_FORM_ID } from "@/lib/approval/overtime";
 import { offDaySet } from "@/lib/hr/holidays";
@@ -240,4 +240,126 @@ export async function assessMealChecksOnSubmit(txn: PgDatabase, docId: string): 
     }
   }
   await txn.run(`UPDATE approval_docs SET field_values = $2::jsonb WHERE doc_id = $1`, [docId, JSON.stringify(next)]);
+}
+
+/* ── 관리자 처분(마이그 204) — 경고/불지급/급여 차감 ─────────────────────── */
+
+/** 처분: warning=경고(기본) · withhold=불지급(환급 제외, 급여 영향 없음) · deduct=급여 차감(식대환수 공제). */
+export type MealWarningAction = "warning" | "withhold" | "deduct";
+export const MEAL_WARNING_ACTIONS: MealWarningAction[] = ["warning", "withhold", "deduct"];
+
+export interface MealWarningRow {
+  warningId: string;
+  employeeId: string;
+  empName: string;
+  docId: string;
+  docNo: string | null;
+  docStatus: string | null;
+  usedOn: string;
+  rowNo: number;
+  vendor: string | null;
+  amount: number | null;
+  paidAtHm: string | null;
+  isOffDay: boolean;
+  requiredMinutes: number;
+  appliedMinutes: number;
+  /** 이 건 이전의 누적 경고 수(재발 판정 — 1·2회는 경고, 반복 시 불지급·차감 대상) */
+  priorCount: number;
+  action: MealWarningAction;
+  actionNote: string | null;
+  actionAt: string | null;
+  createdAt: string;
+}
+
+/** 귀속 구간(전월 26 ~ 금월 25 — 급여·대조와 동일)의 식대 경고 이력 + 직원별 누적. */
+export async function listMealWarnings(payYear: number, payMonth: number): Promise<MealWarningRow[]> {
+  const db = await getDb();
+  const from = new Date(Date.UTC(payYear, payMonth - 2, 26)).toISOString().slice(0, 10);
+  const to = `${payYear}-${String(payMonth).padStart(2, "0")}-25`;
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT w.warning_id, w.employee_id, p.name AS emp_name, w.doc_id, d.doc_no, d.status AS doc_status,
+              to_char(w.used_on, 'YYYY-MM-DD') AS used_on, w.row_no, w.vendor, w.amount, w.paid_at_hm,
+              w.is_off_day, w.required_minutes, w.applied_minutes,
+              w.action, w.action_note, w.action_at, w.created_at,
+              (SELECT count(*) FROM overtime_meal_warnings x
+                WHERE x.employee_id = w.employee_id AND x.used_on < w.used_on) AS prior_count
+         FROM overtime_meal_warnings w
+         JOIN employee_profiles p ON p.employee_id = w.employee_id
+         LEFT JOIN approval_docs d ON d.doc_id = w.doc_id
+        WHERE w.used_on BETWEEN $1::date AND $2::date
+        ORDER BY p.name, w.used_on, w.row_no`,
+      [from, to]
+    )
+  );
+  return rows.map((r) => ({
+    warningId: String(r.warning_id),
+    employeeId: String(r.employee_id),
+    empName: String(r.emp_name ?? ""),
+    docId: String(r.doc_id),
+    docNo: r.doc_no != null ? String(r.doc_no) : null,
+    docStatus: r.doc_status != null ? String(r.doc_status) : null,
+    usedOn: String(r.used_on),
+    rowNo: Number(r.row_no),
+    vendor: r.vendor != null ? String(r.vendor) : null,
+    amount: r.amount != null ? Number(r.amount) : null,
+    paidAtHm: r.paid_at_hm != null ? String(r.paid_at_hm) : null,
+    isOffDay: r.is_off_day === true || r.is_off_day === "t",
+    requiredMinutes: Number(r.required_minutes),
+    appliedMinutes: Number(r.applied_minutes),
+    priorCount: Number(r.prior_count ?? 0),
+    action: (MEAL_WARNING_ACTIONS as string[]).includes(String(r.action)) ? (String(r.action) as MealWarningAction) : "warning",
+    actionNote: r.action_note != null ? String(r.action_note) : null,
+    actionAt: r.action_at != null ? String(r.action_at) : null,
+    createdAt: String(r.created_at ?? ""),
+  }));
+}
+
+/** 처분 지정 — 경고로 되돌리면 메모·처분자 이력도 함께 지운다. */
+export async function setMealWarningAction(
+  warningId: string,
+  action: MealWarningAction,
+  note: string | null,
+  actorUserId: string
+): Promise<void> {
+  await withDbWrite(async (db) => {
+    await db.run(
+      `UPDATE overtime_meal_warnings
+          SET action = $2,
+              action_note = $3,
+              action_by = CASE WHEN $2 = 'warning' THEN NULL ELSE $4 END,
+              action_at = CASE WHEN $2 = 'warning' THEN NULL ELSE now()::text END
+        WHERE warning_id = $1`,
+      [warningId, action, action === "warning" ? null : note, actorUserId]
+    );
+  });
+}
+
+/**
+ * 급여대장 생성용 — 귀속 구간의 '급여 차감(deduct)' 처분 합계(직원별).
+ * buildLedger 가 '식대환수'(meal-clawback) 공제 라인으로 반영한다.
+ */
+export async function mealClawbackAmounts(
+  payYear: number,
+  payMonth: number
+): Promise<Map<string, { amount: number; count: number }>> {
+  const db = await getDb();
+  const from = new Date(Date.UTC(payYear, payMonth - 2, 26)).toISOString().slice(0, 10);
+  const to = `${payYear}-${String(payMonth).padStart(2, "0")}-25`;
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT employee_id, sum(amount) AS amount, count(*) AS n
+         FROM overtime_meal_warnings
+        WHERE action = 'deduct' AND amount IS NOT NULL
+          AND used_on BETWEEN $1::date AND $2::date
+        GROUP BY employee_id`,
+      [from, to]
+    )
+  );
+  const map = new Map<string, { amount: number; count: number }>();
+  for (const r of rows) {
+    const amount = Math.round(Number(r.amount ?? 0));
+    if (amount > 0) map.set(String(r.employee_id), { amount, count: Number(r.n ?? 0) });
+  }
+  return map;
 }

@@ -1,4 +1,5 @@
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
+import { mealClawbackAmounts } from "@/lib/approval/overtime-meal";
 import { getEdiAmounts } from "@/lib/payroll/edi";
 import { overtimeAmounts } from "@/lib/payroll/overtime";
 import { activeRulesFor } from "@/lib/payroll/rules";
@@ -110,6 +111,7 @@ export async function buildLedger(payYear: number, payMonth: number): Promise<Ge
   const rules = await activeRulesFor(payYear, payMonth);
   const edi = await getEdiAmounts(payYear, payMonth);
   const overtime = await overtimeAmounts(payYear, payMonth);
+  const mealClawback = await mealClawbackAmounts(payYear, payMonth);
   const taxProfiles = new Map(
     rowsToObjects(
       await db.exec(
@@ -190,6 +192,13 @@ export async function buildLedger(payYear: number, payMonth: number): Promise<Ge
       }
     } else if (ot && ot.basis === "attendance") {
       warnings.push("초과근무: 근태 기록은 있으나 승인된 신청서가 없어 미산정");
+    }
+
+    // 3-1) 식대 환수 — 부당 사용(초과근무 신청 미달)에 관리자가 '급여 차감' 처분한 건의 합(마이그 204)
+    const clawback = mealClawback.get(empId);
+    if (clawback && clawback.amount > 0) {
+      put("meal-clawback", clawback.amount, "calc");
+      warnings.push(`식대 환수 ${clawback.amount.toLocaleString()}원 — 부당 사용 ${clawback.count}건 급여 차감 처분`);
     }
 
     // 4) EDI 고지액(국민연금·건강·요양·정산)

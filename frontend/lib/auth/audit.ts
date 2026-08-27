@@ -88,6 +88,7 @@ export type AuditAction =
   | "adt_attendance_ignore"
   | "adt_attendance_schedule"
   | "overtime_match_override"
+  | "overtime_meal_action"
   | "company_holiday_set"
   | "approval_notify_settings_update"
   | "approval_ai_summary"

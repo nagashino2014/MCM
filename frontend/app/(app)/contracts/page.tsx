@@ -572,7 +572,7 @@ function ContractsInner() {
                 onDeleteContract={() => setDeleteModalOpen(true)}
                 onDeleteStage={async (milestoneId) => {
                   if (!selected) return;
-                  if (!confirm("해당 청구·수금 단계를 삭제할까요? 단계 삭제는 휴지통으로 이동하지 않고 즉시 삭제됩니다.")) return;
+                  if (!confirm("해당 청구·수금 단계를 삭제할까요?\n이 단계에 등록된 세금계산서 파일도 함께 삭제됩니다(휴지통 없이 즉시 삭제).\n※ 이미 발행된 계산서는 국세청·바로빌에는 그대로 남습니다 — 필요하면 발행 이력에서 먼저 취소하세요.")) return;
                   try {
                     const res = await fetch(
                       `/api/contracts/${encodeURIComponent(selected.contractId)}/milestones/${encodeURIComponent(milestoneId)}`,

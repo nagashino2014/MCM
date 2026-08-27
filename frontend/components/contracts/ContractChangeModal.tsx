@@ -139,6 +139,10 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
   });
   const [closing, setClosing] = useState({ completionDate: "", permitAcquiredAt: "", etc: "" });
   const [amendmentFile, setAmendmentFile] = useState<File | null>(null);
+  // 첨부 계약서 종류(2026-08-26 사용자 요청) — 계약 정보만 먼저 입력하고 원 계약서를 나중에
+  // 올리는 경우가 있어 '누락'(원 계약서=contract)과 '변경'(변경계약서=amendment)을 고른다.
+  // 기본값은 종전 동작인 변경계약서. 둘은 배타 선택이라 라디오로 둔다.
+  const [amendmentDocType, setAmendmentDocType] = useState<"amendment" | "contract">("amendment");
   const [outsourcing, setOutsourcing] = useState({
     outsourcingTitle: "",
     counterpartyName: "",
@@ -542,9 +546,10 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
         try {
           const created = (await res.json().catch(() => ({}))) as { changeId?: string };
           const docForm = new FormData();
-          docForm.set("documentType", "amendment");
+          docForm.set("documentType", amendmentDocType);
           docForm.set("documentDate", meta.changedAt);
-          if (created.changeId) docForm.set("changeEventId", created.changeId);
+          // 변경 이벤트 연결은 변경계약서일 때만 — 누락 보완분은 원 계약서라 특정 변경 건에 매이지 않는다.
+          if (created.changeId && amendmentDocType === "amendment") docForm.set("changeEventId", created.changeId);
           docForm.set("file", amendmentFile);
           const docRes = await fetch(
             `/api/contracts/${encodeURIComponent(props.contractId)}/documents`,
@@ -555,7 +560,7 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
             throw new Error(body?.error ?? "HTTP " + docRes.status);
           }
         } catch (uploadErr) {
-          toast.show("변경계약서 PDF 업로드 실패: " + (uploadErr as Error).message, "error");
+          toast.show(`${amendmentDocType === "amendment" ? "변경계약서" : "계약서"} PDF 업로드 실패: ` + (uploadErr as Error).message, "error");
         }
       }
 
@@ -1060,7 +1065,24 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
                   value={closing.etc} onChange={(e) => setClosing({ ...closing, etc: e.target.value })} />
               </label>
               <label className="grid gap-1 text-sm">
-                <span className="font-bold cd-text-muted">변경계약서 PDF (선택)</span>
+                <span className="font-bold cd-text-muted">계약서 PDF (선택)</span>
+                <div className="flex items-center gap-4">
+                  {[
+                    { value: "amendment" as const, label: "변경", hint: "변경 계약서" },
+                    { value: "contract" as const, label: "누락", hint: "계약서(원 계약)" },
+                  ].map((opt) => (
+                    <label key={opt.value} className="inline-flex items-center gap-1.5 text-[12px] cd-text cursor-pointer">
+                      <input
+                        type="radio"
+                        name="amendment-doc-type"
+                        checked={amendmentDocType === opt.value}
+                        onChange={() => setAmendmentDocType(opt.value)}
+                      />
+                      <span className="font-bold">{opt.label}</span>
+                      <span className="cd-text-faint">{opt.hint}</span>
+                    </label>
+                  ))}
+                </div>
                 <input
                   type="file"
                   accept="application/pdf,.pdf"
@@ -1068,7 +1090,9 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
                   onChange={(e) => setAmendmentFile(e.target.files?.[0] ?? null)}
                 />
                 <span className="text-[11px] cd-text-faint">
-                  업로드 시 원 계약 폴더에 동일 형식(<code>(YYYY-MM-DD)계약명 변경계약서.pdf</code>)으로 저장됩니다.
+                  업로드 시 원 계약 폴더에 동일 형식(
+                  <code>{amendmentDocType === "amendment" ? "(YYYY-MM-DD)계약명 변경계약서.pdf" : "(YYYY-MM-DD)계약명 계약서.pdf"}</code>
+                  )으로 저장됩니다. 계약 입력 때 못 받은 원 계약서를 뒤늦게 올리는 경우 <b>누락</b>을 고르세요.
                 </span>
               </label>
             </div>
@@ -1076,7 +1100,7 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
         </div>
 
         <div className="p-5 border-t cd-border-c flex justify-between items-center gap-2">
-          <p className="text-[11px] cd-text-faint">변경계약서 PDF는 &quot;준공일 및 기타&quot; 탭에서 첨부할 수 있습니다.</p>
+          <p className="text-[11px] cd-text-faint">계약서·변경계약서 PDF는 &quot;준공일 및 기타&quot; 탭에서 첨부할 수 있습니다.</p>
           <div className="flex gap-2">
             <button type="button" onClick={props.onClose} className="cd-btn cd-btn-ghost rounded-xl px-4 py-2 text-sm font-bold cd-text-muted">
               닫기

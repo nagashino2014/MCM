@@ -132,6 +132,28 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       } else if (body.contractSuspendedAt) {
         pushSet("contract_status", "suspended");
       }
+      // 금액 탭의 '변경 금액'을 실제 청구·수금 단계 금액에 반영(2026-08-26 사용자 리포트).
+      // 종전에는 변경 이벤트 이력과 contracts.current_amount 만 갱신하고 단계 금액은 그대로 두어,
+      // 감액(국일인토트 5,000만→3,000만 실사례)이 화면에 전혀 반영되지 않았다.
+      // 단계 매칭은 stage_label 기준(payload 가 라벨만 들고 있다), 빈 값은 '유지'라 건너뛴다.
+      const amountRows = Array.isArray((payload as { amounts?: unknown }).amounts)
+        ? ((payload as { amounts: unknown[] }).amounts as Record<string, unknown>[])
+        : [];
+      let milestoneUpdates = 0;
+      for (const row of amountRows) {
+        const label = String(row?.stageLabel ?? "").trim();
+        const nextRaw = String(row?.nextAmount ?? "").trim();
+        if (!label || !nextRaw) continue;
+        const amount = Number(nextRaw.replace(/[^\d.-]/g, ""));
+        if (!Number.isFinite(amount)) continue;
+        await db.run(
+          `UPDATE contract_payment_milestones SET amount = $3, updated_at = $4
+            WHERE contract_id = $1 AND stage_label = $2`,
+          [contractId, label, amount, now]
+        );
+        milestoneUpdates += 1;
+      }
+
       if (contractUpdates.length > 0) {
         contractUpdates.push(`updated_at = $${values.length + 1}`);
         values.push(now);
@@ -158,7 +180,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
         action: "contract_update",
         targetTable: "contract_change_events",
         targetId: changeId,
-        after: { contractId, changeId, payload, changedFields, deltaAmount },
+        after: { contractId, changeId, payload, changedFields, deltaAmount, milestoneUpdates },
       });
     });
 

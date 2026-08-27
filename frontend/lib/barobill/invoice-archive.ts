@@ -275,6 +275,9 @@ export async function backfillInvoicePdfs(limit = 50): Promise<{ checked: number
     await db.exec(
       `SELECT t.invoice_id FROM tax_invoices t
         WHERE t.canceled_at IS NULL AND t.contract_id IS NOT NULL
+          -- 단계가 지워진 발행 건은 보관 PDF 를 다시 만들지 않는다(2026-08-26 — 사용자가 지운
+          -- 계산서 파일이 갱신 때 되살아나던 문제).
+          AND EXISTS (SELECT 1 FROM contract_payment_milestones m WHERE m.milestone_id = t.milestone_id)
           AND NOT EXISTS (
             SELECT 1 FROM contract_documents d
              WHERE d.contract_id = t.contract_id

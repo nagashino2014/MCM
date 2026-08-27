@@ -588,6 +588,26 @@ function ContractsInner() {
                     toast.show("삭제 실패: " + (err as Error).message, "error");
                   }
                 }}
+                onDeleteInvoice={async (invoiceId, title) => {
+                  if (!selected) return;
+                  if (!confirm(`'${title}' 세금계산서 파일을 삭제할까요?
+휴지통 없이 즉시 삭제됩니다.
+※ 이미 발행된 계산서는 국세청·바로빌에는 그대로 남습니다.`)) return;
+                  try {
+                    const res = await fetch(
+                      `/api/contracts/${encodeURIComponent(selected.contractId)}/invoices/${encodeURIComponent(invoiceId)}`,
+                      { method: "DELETE" }
+                    );
+                    if (!res.ok) {
+                      const body = await res.json().catch(() => ({}));
+                      throw new Error(body?.error ?? "HTTP " + res.status);
+                    }
+                    toast.show("세금계산서 파일을 삭제했습니다.", "success");
+                    loadDetail(selected.contractId);
+                  } catch (err) {
+                    toast.show("삭제 실패: " + (err as Error).message, "error");
+                  }
+                }}
                 onReorderStages={async (orderedIds) => {
                   if (!selected) return;
                   try {
@@ -780,6 +800,7 @@ function ContractDetailPanel({
   onOpenPdf,
   onDeleteContract,
   onDeleteStage,
+  onDeleteInvoice,
   onReorderStages,
   onReloadDetail,
 }: {
@@ -794,6 +815,7 @@ function ContractDetailPanel({
   onOpenPdf: (state: PdfViewerState) => void;
   onDeleteContract: () => void;
   onDeleteStage: (milestoneId: string) => void;
+  onDeleteInvoice: (invoiceId: string, title: string) => void;
   onReorderStages: (orderedIds: string[]) => void;
   /** 허가 정보 저장 등 패널 내부 갱신 후 상세 재조회 */
   onReloadDetail: () => void;
@@ -1333,16 +1355,29 @@ function ContractDetailPanel({
             const title = String(invoice.document_display_name ?? invoice.invoice_id);
             const url = String(invoice.public_path ?? "");
             return (
-            <button
+            <div
               key={String(invoice.invoice_id)}
-              type="button"
-              disabled={!url}
-              onClick={() => url && onOpenPdf({ title, url })}
-              className="rounded-xl border cd-border-c cd-surface-bg px-3 py-2 text-sm hover:bg-[color:var(--cd-surface)] flex items-center justify-between gap-3"
+              className="rounded-xl border cd-border-c cd-surface-bg px-3 py-2 text-sm flex items-center justify-between gap-3"
             >
-              <span>{title}</span>
-              <span className="text-xs cd-text-faint">{String(invoice.issue_date ?? "")}</span>
-            </button>
+              <button
+                type="button"
+                disabled={!url}
+                onClick={() => url && onOpenPdf({ title, url })}
+                className="flex-1 min-w-0 text-left hover:underline disabled:opacity-60"
+              >
+                {title}
+              </button>
+              <span className="text-xs cd-text-faint shrink-0">{String(invoice.issue_date ?? "")}</span>
+              {/* 개별 삭제(2026-08-26 사용자 요청) — 단계가 이미 지워져 고아로 남은 파일 정리용 */}
+              <button
+                type="button"
+                className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)] shrink-0"
+                title="이 세금계산서 파일 삭제"
+                onClick={() => onDeleteInvoice(String(invoice.invoice_id), title)}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
           );
           })}
           {detail.invoices.length === 0 && <p className="text-sm cd-text-faint">등록된 세금계산서 PDF가 없습니다.</p>}

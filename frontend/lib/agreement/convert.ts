@@ -60,7 +60,8 @@ export async function renderUrlToPdf(url: string): Promise<Uint8Array | null> {
       body: JSON.stringify({ url }),
     });
     if (!res.ok) {
-      console.warn(`[convert] URL 캡처 실패(HTTP ${res.status}) — 폴백`);
+      const detail = await res.text().catch(() => "");
+      console.warn(`[convert] URL 캡처 실패(HTTP ${res.status}) — 폴백`, detail.slice(0, 300));
       return null;
     }
     return new Uint8Array(await res.arrayBuffer());

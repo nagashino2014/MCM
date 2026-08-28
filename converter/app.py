@@ -116,7 +116,14 @@ async def render_url_pdf(body: RenderUrlBody):
             try:
                 # device_scale_factor 2 — 요소 스크린샷을 인쇄 품질(약 240dpi)로 뜬다.
                 page = await browser.new_page(viewport={"width": 900, "height": 1400}, device_scale_factor=2)
-                await page.goto(url, wait_until="networkidle", timeout=30000)
+                # networkidle 을 goto 조건으로 걸면 상태 폴링이 도는 화면(국세청 전송 전 팝업 실측)에서
+                # 영영 유휴가 오지 않아 30초 타임아웃 → 422 폴백이 됐다(2026-08-28).
+                # 로드 완료로 열고, 유휴는 짧게만 기다린 뒤 렌더 여유를 주고 진행한다.
+                await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                try:
+                    await page.wait_for_load_state("networkidle", timeout=8000)
+                except Exception:  # noqa: BLE001 — 폴링 화면은 유휴가 오지 않는다
+                    await page.wait_for_timeout(2500)
                 # 계산서가 iframe 안에 있으면 그 프레임 문서를 직접 연다(같은 바로빌 도메인만).
                 for frame in page.frames:
                     if frame == page.main_frame:
@@ -126,7 +133,11 @@ async def render_url_pdf(body: RenderUrlBody):
                         if not any(fhost == s.lstrip(".") or fhost.endswith(s) for s in RENDER_ALLOWED_SUFFIXES):
                             continue
                         if "전자세금계산서" in (await frame.content()):
-                            await page.goto(frame.url, wait_until="networkidle", timeout=30000)
+                            await page.goto(frame.url, wait_until="domcontentloaded", timeout=30000)
+                            try:
+                                await page.wait_for_load_state("networkidle", timeout=8000)
+                            except Exception:  # noqa: BLE001
+                                await page.wait_for_timeout(2500)
                             break
                     except Exception:  # noqa: BLE001 — 프레임 접근 실패는 무시(본문 발췌가 폴백)
                         continue
@@ -163,6 +174,7 @@ async def render_url_pdf(body: RenderUrlBody):
     except HTTPException:
         raise
     except Exception as exc:  # noqa: BLE001 — 캡처 실패는 호출자가 폴백한다
+        print(f"[render] 캡처 실패({type(exc).__name__}): {exc}")  # 서버 로그에도 사유를 남긴다(진단용)
         raise HTTPException(status_code=422, detail=f"페이지 캡처 실패: {exc}")
     return StreamingResponse(iter([pdf]), media_type="application/pdf")
 

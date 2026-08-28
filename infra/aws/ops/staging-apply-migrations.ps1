@@ -114,6 +114,9 @@ if ($portOpen) {
 # 3) psql 적용 (멱등, 파일 단위 ON_ERROR_STOP)
 $env:PGPASSWORD = [string]$secret.password
 $env:PGSSLMODE  = "require"
+# Windows psql 은 클라이언트 인코딩을 UHC(CP949)로 잡아 UTF-8 SQL 의 한글 주석에서
+# "byte sequence ... in encoding UHC" 오류가 난다(2026-08-28 실측) — UTF8 로 고정.
+$env:PGCLIENTENCODING = "UTF8"
 $failed = $false
 try {
   foreach ($f in $Files) {
@@ -124,6 +127,7 @@ try {
   }
 } finally {
   $env:PGPASSWORD = $null
+  $env:PGCLIENTENCODING = $null
   if ($tunnelProc -and -not $KeepTunnel) {
     Log "자동 기동한 터널 종료"
     Stop-Process -Id $tunnelProc.Id -Force -ErrorAction SilentlyContinue

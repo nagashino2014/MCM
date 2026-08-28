@@ -996,9 +996,9 @@ function TableColumnsEditor({
           <input className="cd-input font-mono" style={{ width: 84 }} placeholder="col_key" value={c.key} onChange={(e) => setCol(i, { key: e.target.value })} />
           <input className="cd-input flex-1 min-w-[80px]" placeholder="열 라벨" value={c.label} onChange={(e) => setCol(i, { label: e.target.value })} />
           <select className="cd-select" style={{ width: 82 }} value={c.type} onChange={(e) => setCol(i, { type: e.target.value })}>
-            {["text", "date", "time", "select", "number", "currency", "rowno", "people"].map((t) => (
+            {["text", "date", "time", "select", "number", "currency", "rowno", "people", "link"].map((t) => (
               <option key={t} value={t}>
-                {t === "rowno" ? "연번(자동)" : t === "time" ? "시각(HHMM)" : t === "people" ? "인원(조직도)" : t}
+                {t === "rowno" ? "연번(자동)" : t === "time" ? "시각(HHMM)" : t === "people" ? "인원(조직도)" : t === "link" ? "링크(URL)" : t}
               </option>
             ))}
           </select>

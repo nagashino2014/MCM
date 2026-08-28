@@ -171,6 +171,7 @@ function normalizeOrderingSubjectType(value: unknown): string | null {
     "SITE_DIRECT",
     "PARENT_CORP",
     "CONSIGNED_OPERATOR",
+    "EPC",
     "THIRD_PARTY_PARTNER",
     "ETC",
   ].includes(text)

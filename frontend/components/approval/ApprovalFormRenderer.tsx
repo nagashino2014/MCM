@@ -1141,6 +1141,9 @@ function TableInput({
   };
   // people 열 조직도 모달 대상(행·열) — 모달은 표당 1개만 렌더한다
   const [peopleTarget, setPeopleTarget] = useState<{ ri: number; colKey: string } | null>(null);
+  // link 열 — URL 입력 전용(읽기 모드에서 새 탭 링크). 품명·단가 자동 수집은 주요 쇼핑몰
+  // (쿠팡·네이버·G마켓)의 봇 방어로 오히려 챌린지 페이지 제목이 채워지는 오동작이 있어 폐기
+  // (2026-08-26 사용자 확정 — 기안자가 직접 입력).
   const peopleAt = (ri: number, colKey: string): TablePerson[] => {
     const v = rows[ri]?.[colKey];
     return Array.isArray(v) ? (v as TablePerson[]).filter((p) => p && p.employeeId) : [];
@@ -1176,6 +1179,39 @@ function TableInput({
                 <td key={c.key} className="border cd-border-c p-0 align-middle">
                   {c.type === "rowno" ? (
                     <div className="px-1.5 py-1.5 text-center cd-text-faint">{ri + 1}</div>
+                  ) : c.type === "link" ? (
+                    readOnly ? (
+                      String(r[c.key] ?? "").trim() ? (
+                        <a
+                          className="block px-1.5 py-1.5 text-[12px] underline truncate max-w-[200px] text-[color:var(--cd-primary,#5D87FF)]"
+                          href={String(r[c.key])}
+                          target="_blank"
+                          rel="noreferrer"
+                          title={String(r[c.key])}
+                        >
+                          {String(r[c.key])}
+                        </a>
+                      ) : (
+                        <div className="px-1.5 py-1.5" />
+                      )
+                    ) : (
+                      <input
+                        type="text"
+                        className="w-full bg-transparent px-1.5 py-1.5 text-[12px] cd-text outline-none"
+                        placeholder="https://"
+                        value={String(r[c.key] ?? "")}
+                        onChange={(e) => update(ri, c.key, e.target.value)}
+                      />
+                    )
+                  ) : c.readonly && !readOnly ? (
+                    // 자동 채움 전용 열(2026-08-26 — 지출 표의 분류) — 기안자는 편집 불가.
+                    // 자동 분류 실패(빈 값) 건은 재무의 카드 원장에서 수동 분류한다.
+                    <div
+                      className="px-1.5 py-1.5 text-[12px] cd-text-muted whitespace-nowrap"
+                      title="자동으로 채워지는 항목입니다. 미분류 건은 재무 담당자가 카드 원장에서 분류합니다."
+                    >
+                      {String(r[c.key] ?? "").trim() || <span className="cd-text-faint">자동</span>}
+                    </div>
                   ) : c.type === "select" ? (
                     <select
                       className="w-full bg-transparent px-1.5 py-1.5 text-[12px] cd-text outline-none"
@@ -1236,12 +1272,26 @@ function TableInput({
                         </button>
                       )}
                     </div>
+                  ) : c.type === "currency" ? (
+                    // 금액 열 천단위 구분(2026-08-26 사용자 요청) — 표시만 콤마, 저장 값은 숫자 문자열 유지.
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      className="w-full bg-transparent px-1.5 py-1.5 text-[12px] cd-text outline-none text-right"
+                      disabled={readOnly}
+                      value={(() => {
+                        const raw = String(r[c.key] ?? "");
+                        const n = Number(raw.replace(/[^\d.-]/g, ""));
+                        return raw.trim() !== "" && Number.isFinite(n) && /\d/.test(raw) ? fmtComma(n) : raw;
+                      })()}
+                      onChange={(e) => update(ri, c.key, e.target.value.replace(/[^\d.-]/g, ""))}
+                    />
                   ) : (
                     <input
                       type="text"
-                      inputMode={c.type === "currency" || c.type === "number" ? "numeric" : undefined}
+                      inputMode={c.type === "number" ? "numeric" : undefined}
                       className={`w-full bg-transparent px-1.5 py-1.5 text-[12px] cd-text outline-none ${
-                        c.type === "currency" || c.type === "number" ? "text-right" : ""
+                        c.type === "number" ? "text-right" : ""
                       }`}
                       disabled={readOnly}
                       // 금액 열은 천단위 구분자를 보여 준다 — 저장값은 숫자만(합계·PDF·집계가 같은 값을 쓴다).

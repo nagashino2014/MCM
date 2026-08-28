@@ -16,7 +16,7 @@
     이들까지 없애려면 NAT 제거 리팩터가 필요(현재 범위 밖).
 
 .EXAMPLE
-  pwsh infra/aws/ops/staging-stop.ps1
+  .\infra\aws\ops\staging-stop.ps1
 #>
 param(
   [string]$AwsProfile = "mcm-kesi-staging",

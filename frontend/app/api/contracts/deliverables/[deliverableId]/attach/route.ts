@@ -2,7 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { CATALOG_BY_TYPE } from "@/lib/deliverable/catalog";
 import { generateDeliverableArtifacts, resolveSpecs, templateDocTitles } from "@/lib/deliverable/generate";
-import { letterAttachItemsFor, letterBodyFor, letterSubjectFor } from "@/lib/deliverable/letter-template";
+import {
+  letterAttachItemsFor,
+  letterBodyFor,
+  letterSubjectFor,
+  paymentLetterBodyFor,
+  paymentLetterSubjectFor,
+} from "@/lib/deliverable/letter-template";
 import { getDeliverable, getTemplate } from "@/lib/deliverable/store";
 import { loadContractContext } from "@/lib/deliverable/data";
 
@@ -55,13 +61,18 @@ export async function POST(_req: NextRequest, ctx: RouteContext) {
     // 수신처 = 계약 발주처(계약상대 업체). 공문 수신란 표기·주소 자동 채움용.
     const ctxRow = await loadContractContext(row.contractId);
 
+    // 대금청구서 단독 문서(공문 화면 직접 작성 경로, 2026-08-24)는 "준공계 제출"이 아니라
+    // 대금 청구 문구를 쓴다.
+    const paymentOnly = row.docTypes.length === 1 && row.docTypes[0] === "payment_request";
+    const stageLabel = String(row.values["meta.stageLabel"] ?? "");
+
     return NextResponse.json({
       deliverableId,
       kind: row.kind,
       attachment,
       storageError,
-      subject: letterSubjectFor(row.kind, contractTitle),
-      bodyHtml: letterBodyFor(row.kind, contractTitle),
+      subject: paymentOnly ? paymentLetterSubjectFor(contractTitle) : letterSubjectFor(row.kind, contractTitle),
+      bodyHtml: paymentOnly ? paymentLetterBodyFor(contractTitle, stageLabel) : letterBodyFor(row.kind, contractTitle),
       attachItems: letterAttachItemsFor(docTitles),
       recipient: ctxRow
         ? { name: ctxRow.ordererName, facilityName: ctxRow.ordererName, address: ctxRow.siteAddress }

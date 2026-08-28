@@ -136,7 +136,7 @@ export function resolveFieldConcept(f: { type: ApprovalFieldType; semantic?: App
 export interface ApprovalTableColumn {
   key: string;
   label: string;
-  type: string; // text|date|time(HHMM 자동완성)|select|currency|number|rowno(자동 연번)|people(조직도 복수 선택 — 값은 {employeeId,name,position}[])
+  type: string; // text|date|time(HHMM 자동완성)|select|currency|number|rowno(자동 연번)|people(조직도 복수 선택 — 값은 {employeeId,name,position}[])|link(URL — 읽기 모드에서 새 탭 링크. ⚠품명 자동 수집은 쿠팡·네이버·G마켓 봇 방어로 폐기, 2026-08-26 사용자 확정)
   options?: string[];
   /** 필수 입력 열 — 값이 있는 행에서 이 열이 비면 상신을 막는다(지출 목적 등). */
   required?: boolean;
@@ -144,6 +144,8 @@ export interface ApprovalTableColumn {
   hint?: string;
   /** 열 단위 데이터 의미 태그(지출 내역 표의 금액 열 = cost.travel 등) */
   semantic?: ApprovalFieldSemantic;
+  /** 기안자 편집 잠금 — 자동 채움 전용 열(지출 표의 분류: 자동 분류 실패 건은 재무 카드 원장에서 분류, 2026-08-26) */
+  readonly?: boolean;
 }
 
 /** 양식 필드 정의 — row(같은 행 배치)·span(행 내 폭 비중 1~3)으로 레이아웃까지 표현 */
@@ -214,6 +216,7 @@ export function parseFields(value: unknown): ApprovalFieldDef[] {
               required: c.required === true,
               hint: c.hint != null ? String(c.hint) : undefined,
               semantic: parseSemantic(c.semantic),
+              readonly: c.readonly === true,
             }))
           : undefined,
         minRows: f.minRows != null ? Number(f.minRows) : undefined,

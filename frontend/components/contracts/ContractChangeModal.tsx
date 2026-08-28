@@ -5,6 +5,9 @@ import { X } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
 import { IndustryOptionsEditorButton, useContractIndustryOptions } from "@/components/contracts/IndustryOptionsEditor";
+import { CONTRACT_SERVICE_OPTIONS } from "@/lib/contracts/service-options";
+import { RateCardEditor, type RateCardData, type RateCardRound } from "@/components/contracts/RateCardEditor";
+import { createRateCard, upgradeRateCard, type RateCardStageOption } from "@/lib/contracts/rate-card";
 import {
   ORDERING_SUBJECT_OPTIONS,
   ORDERING_SUBJECT_SITE_DIRECT,
@@ -52,17 +55,20 @@ interface ContractChangeModalProps {
   initialOrderingSubjectType?: string | null;
   initialEndedAt: string | null;
   initialCurrentAmount: number | null;
+  /** 계약 종류 — 'unit_price'(단가 계약)면 단가 계약 탭이 추가된다(2026-08-24). */
+  contractKind?: string;
   onClose: () => void;
   onSaved: () => void;
 }
 
-type TabKey = "amount" | "period" | "terms" | "service" | "outsourcing" | "lifecycle" | "closing";
+type TabKey = "amount" | "period" | "terms" | "service" | "ratecard" | "outsourcing" | "lifecycle" | "closing";
 
 const TABS: Array<{ key: TabKey; label: string }> = [
   { key: "amount", label: "금액" },
   { key: "period", label: "용역기간" },
   { key: "terms", label: "지급조건" },
   { key: "service", label: "용역분류" },
+  { key: "ratecard", label: "단가 계약" },
   { key: "outsourcing", label: "외주 용역" },
   { key: "lifecycle", label: "계약중지/해지" },
   { key: "closing", label: "준공일 및 기타" },
@@ -89,6 +95,8 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
   // 계약일은 원칙적으로 변경계약 대상이 아니지만, 신규 입력 시 오기재한 경우
   // 바로잡을 수 있도록 편집을 허용한다. 초기값과 달라진 경우에만 서버로 전송한다.
   const [contractDate, setContractDate] = useState(props.contractDate ?? "");
+  // 계약명도 같은 원칙(2026-08-24 사용자 요청) — 오기재 정정용, 달라진 경우에만 전송.
+  const [contractTitle, setContractTitle] = useState(props.contractTitle);
   const outsourcingFileRef = useRef<File | null>(null);
   const [outsourcingFileName, setOutsourcingFileName] = useState("");
   const [outsourcingTypes, setOutsourcingTypes] = useState(DEFAULT_OUTSOURCING_TYPES);
@@ -131,6 +139,10 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
   });
   const [closing, setClosing] = useState({ completionDate: "", permitAcquiredAt: "", etc: "" });
   const [amendmentFile, setAmendmentFile] = useState<File | null>(null);
+  // 첨부 계약서 종류(2026-08-26 사용자 요청) — 계약 정보만 먼저 입력하고 원 계약서를 나중에
+  // 올리는 경우가 있어 '누락'(원 계약서=contract)과 '변경'(변경계약서=amendment)을 고른다.
+  // 기본값은 종전 동작인 변경계약서. 둘은 배타 선택이라 라디오로 둔다.
+  const [amendmentDocType, setAmendmentDocType] = useState<"amendment" | "contract">("amendment");
   const [outsourcing, setOutsourcing] = useState({
     outsourcingTitle: "",
     counterpartyName: "",
@@ -147,9 +159,182 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
     suspensionReason: DEFAULT_SUSPENSION_REASONS[0],
   });
 
+  // 발주처(계약상대 업체) 변경(2026-08-24) — 엑셀 임포트 오기재 정정용. 선택 시에만 전송.
+  const [counterpartyChange, setCounterpartyChange] = useState<{ facilityId: string; name: string } | null>(null);
+  const [counterpartyQuery, setCounterpartyQuery] = useState("");
+  const [counterpartyOptions, setCounterpartyOptions] = useState<FacilitySearchItem[]>([]);
+  useEffect(() => {
+    const q = counterpartyQuery.trim();
+    if (q.length < 2) {
+      setCounterpartyOptions([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({ q, limit: "10", sort: "name" });
+        const res = await fetch(`/api/facilities?${params.toString()}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!res.ok) return;
+        const json = (await res.json()) as { items?: FacilitySearchItem[] };
+        setCounterpartyOptions(json.items ?? []);
+      } catch {
+        if (!controller.signal.aborted) setCounterpartyOptions([]);
+      }
+    }, 160);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [counterpartyQuery]);
+
+  // 계약 종류 변경(2026-08-26 사용자 요청) — 일반 계약으로 등록했으나 실제로는 단가 계약(용역
+  // 진행에 따라 기성 추가 발생)인 건이 있어 변경계약에서 바로잡는다. 단가로 바꾸면 '단가 계약'
+  // 탭이 즉시 나타나고, 저장 시 contract_kind 가 갱신된다.
+  const [contractKind, setContractKind] = useState<"standard" | "unit_price">(
+    props.contractKind === "unit_price" ? "unit_price" : "standard"
+  );
+  // 단가 계약(2026-08-24) — 단가 기준표를 여기서도 수정한다. 저장 시 변경분만 PUT.
+  const isUnitPrice = contractKind === "unit_price";
+  const [rateCard, setRateCard] = useState<RateCardData>(() => createRateCard());
+  const rateLoadedJson = useRef<string>("");
+  useEffect(() => {
+    if (!isUnitPrice) return;
+    let alive = true;
+    fetch(`/api/contracts/${encodeURIComponent(props.contractId)}/rate-card`, { cache: "no-store" })
+      .then(async (r) => {
+        if (!r.ok) return;
+        const d = (await r.json()) as { card?: unknown; items?: unknown };
+        const card = upgradeRateCard(d.card ?? d.items);
+        if (alive) {
+          setRateCard(card);
+          rateLoadedJson.current = JSON.stringify(card);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.contractId, isUnitPrice]);
+
+  /** 단가 기준표를 서버에 저장(변경된 경우만). 차수 단계 추가·모달 저장 양쪽에서 쓴다. */
+  const saveRateCardIfDirty = async () => {
+    const json = JSON.stringify(rateCard);
+    if (json === rateLoadedJson.current) return;
+    const res = await fetch(`/api/contracts/${encodeURIComponent(props.contractId)}/rate-card`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ card: rateCard }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error((body as { error?: string })?.error ?? "단가 기준표 저장 실패");
+    }
+    rateLoadedJson.current = json;
+  };
+
+  /**
+   * 차수 파생 단계(선급금/준공금)를 청구·수금 단계로 즉시 추가(2026-08-25).
+   * 삼성전기식 "N차 변경" 추가 발주 대응 — 단가표를 먼저 저장한 뒤 마일스톤을 생성하고,
+   * 금액 탭에 증액분을 채워 저장 시 계약금액(변경 합계)에 반영되게 한다.
+   */
+  const addRoundStages = async (round: RateCardRound, stages: RateCardStageOption[]) => {
+    if (!stages.length) {
+      toast.show("이 차수에서 파생할 단계가 없습니다(소계 0원).", "error");
+      return;
+    }
+    const existing = new Set([
+      ...props.initialMilestones.map((m) => m.stageLabel.trim()),
+      ...amounts.map((a) => a.stageLabel.trim()),
+    ]);
+    const fresh = stages.filter((s) => !existing.has(s.label.trim()));
+    if (!fresh.length) {
+      toast.show("이미 같은 이름의 단계가 있습니다. 차수명을 확인하세요.", "error");
+      return;
+    }
+    try {
+      await saveRateCardIfDirty();
+      for (const s of fresh) {
+        const res = await fetch(`/api/contracts/${encodeURIComponent(props.contractId)}/milestones`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ stageLabel: s.label, amount: s.amount > 0 ? s.amount : null }),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error((body as { error?: string })?.error ?? "단계 추가 실패");
+        }
+      }
+      // 금액 탭 반영 — 변경 합계(newCurrentAmount)는 변경 금액 입력분의 합이므로,
+      // 기존 행의 변경 금액이 비어 있으면 기존 금액을 채워 합계가 축소되지 않게 한다.
+      const nextAmounts = [
+        ...amounts.map((a) => (a.nextAmount === "" ? { ...a, nextAmount: a.previousAmount } : a)),
+        ...fresh.map((s) => ({ stageLabel: s.label, previousAmount: "", nextAmount: String(s.amount) })),
+      ];
+      const nextTerms = [...paymentTerms, ...fresh.map((s) => ({ stageLabel: s.label, previous: "", next: "" }))];
+      setAmounts(nextAmounts);
+      setPaymentTerms(nextTerms);
+      // 계약금액 즉시 갱신(2026-08-25) — 단계는 위에서 이미 생성됐으므로, 모달 저장을 누르지
+      // 않고 닫아도 밀레스톤 합과 계약금액이 어긋나지 않게 변경 이벤트를 여기서 바로 커밋한다
+      // (삼성전기 1차 재추가 +30만원 미반영 실사례). 이후 모달 저장은 delta 0 이벤트라 무해.
+      const prevTotal = amounts.reduce((acc, a) => acc + (Number(a.previousAmount) || 0), 0);
+      const nextTotal = nextAmounts.reduce((acc, a) => acc + (Number(a.nextAmount) || 0), 0);
+      if (nextTotal > 0) {
+        const commitRes = await fetch(`/api/contracts/${encodeURIComponent(props.contractId)}/changes`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            changedAt: meta.changedAt || new Date().toISOString().slice(0, 10),
+            previousAmount: prevTotal || null,
+            deltaAmount: prevTotal ? nextTotal - prevTotal : null,
+            newCurrentAmount: nextTotal,
+            detail: `${round.label || "차수"} 청구·수금 단계 추가(단가 차수표 자동 반영)`,
+            payload: {
+              amounts: nextAmounts,
+              servicePeriod,
+              paymentTerms: nextTerms,
+              serviceCategory,
+              closing,
+              termination: lifecycle,
+              outsourcing,
+              meta,
+            },
+            changedFields: ["amounts"],
+          }),
+        });
+        if (!commitRes.ok) {
+          const body = await commitRes.json().catch(() => ({}));
+          throw new Error(
+            ((body as { error?: string })?.error ?? "계약금액 갱신 실패") +
+              " — 단계는 추가되었으니 금액 탭에서 저장해 주세요."
+          );
+        }
+      }
+      toast.show(
+        `${round.label || "차수"}의 단계 ${fresh.length}건이 추가되고 계약금액이 ${nextTotal.toLocaleString()}원으로 갱신되었습니다.`,
+        "success"
+      );
+    } catch (err) {
+      toast.show("단계 추가 실패: " + (err as Error).message, "error");
+    }
+  };
+
+  // 변경 대분류에 따라 세분류 옵션이 갈린다(신규 계약 모달과 동일 체계).
+  const nextSubtypeOptions = useMemo(
+    () => CONTRACT_SERVICE_OPTIONS.find((item) => item.type === serviceCategory.nextType)?.subtypes ?? [],
+    [serviceCategory.nextType]
+  );
+
   const newCurrentAmount = useMemo(() => {
-    const totalNext = amounts.reduce((acc, item) => acc + (Number(item.nextAmount) || 0), 0);
-    if (totalNext > 0) return totalNext;
+    // 계약금액 = 단계 합 원칙(신규 계약 모달과 동일, 2026-08-25) — 변경 금액이 빈 행은
+    // 기존 금액 유지로 간주해 합산한다. 종전에는 입력된 행만 합산해, 일부만 입력하면
+    // 합계가 축소되고 전부 비우면 계약금액이 갱신되지 않아 밀레스톤 합과 어긋났다
+    // (삼성전기 잔액 -30만원 실사례 — 단계 금액은 맞는데 계약금액만 낡은 값).
+    const total = amounts.reduce((acc, item) => acc + (Number(item.nextAmount || item.previousAmount) || 0), 0);
+    if (total > 0) return total;
     return null;
   }, [amounts]);
 
@@ -204,7 +389,8 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
       try {
         const match = await findFacilityByBusinessRegistrationNo(
           props.counterpartyBusinessRegistrationNo,
-          controller.signal
+          controller.signal,
+          { companyName: props.counterpartyName }
         );
         if (match) {
           setServiceCategory((prev) => ({ ...prev, targetFacilities: [match] }));
@@ -258,7 +444,9 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
         serviceCategory.orderingSubjectType === ORDERING_SUBJECT_SITE_DIRECT &&
         serviceCategory.targetFacilities.length === 0
       ) {
-        const match = await findFacilityByBusinessRegistrationNo(props.counterpartyBusinessRegistrationNo);
+        const match = await findFacilityByBusinessRegistrationNo(props.counterpartyBusinessRegistrationNo, undefined, {
+          companyName: props.counterpartyName,
+        });
         if (!match) {
           toast.show("계약상대 업체와 일치하는 사업장을 찾지 못했습니다. 사업장 마스터의 사업자번호를 확인하세요.", "error");
           setSaving(false);
@@ -295,6 +483,9 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
       if (outsourcing.outsourcingTitle) changedFields.push("outsourcing");
       const contractDateChanged = contractDate !== (props.contractDate ?? "");
       if (contractDateChanged) changedFields.push("contractDate");
+      const contractTitleChanged =
+        contractTitle.trim().length > 0 && contractTitle.trim() !== props.contractTitle.trim();
+      if (contractTitleChanged) changedFields.push("contractTitle");
 
       // 변경계약 저장 요청 본문. 계약 테이블을 갱신하는 필드는 "실제로 새 값이
       // 입력된 항목만" 포함한다. 빈 값/ null 을 보내면 서버(changes route)가
@@ -314,6 +505,11 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
       };
       if (newCurrentAmount != null) requestBody.newCurrentAmount = newCurrentAmount;
       if (contractDateChanged) requestBody.newContractDate = contractDate || null;
+      if (contractTitleChanged) requestBody.newContractTitle = contractTitle.trim();
+      // 계약 종류는 달라진 경우에만 전송(선례: 계약일·계약명 정정과 동일 원칙).
+      if (contractKind !== (props.contractKind === "unit_price" ? "unit_price" : "standard")) {
+        requestBody.newContractKind = contractKind;
+      }
       const nextEndedAt = lifecycle.terminatedAt || closing.completionDate || servicePeriod.next;
       if (nextEndedAt) requestBody.newEndedAt = nextEndedAt;
       if (nextServiceCategory.nextType.trim()) requestBody.newServiceType = nextServiceCategory.nextType.trim();
@@ -326,6 +522,10 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
       if (orderingSubjectChanged) {
         requestBody.newOrderingSubjectType = nextServiceCategory.orderingSubjectType;
       }
+      if (counterpartyChange) {
+        requestBody.newCounterpartyFacilityId = counterpartyChange.facilityId;
+        changedFields.push("counterparty");
+      }
       if (lifecycle.terminatedAt) {
         requestBody.contractTerminatedAt = lifecycle.terminatedAt;
         requestBody.contractTerminationReason = lifecycle.terminationReason;
@@ -334,6 +534,9 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
         requestBody.contractSuspendedAt = lifecycle.suspendedAt;
         requestBody.contractSuspensionReason = lifecycle.suspensionReason;
       }
+
+      // 단가 기준표 변경분 저장 — 변경 이벤트와 별개로 계약당 1건을 통째 교체한다.
+      if (isUnitPrice) await saveRateCardIfDirty();
 
       const res = await fetch(`/api/contracts/${encodeURIComponent(props.contractId)}/changes`, {
         method: "POST",
@@ -353,9 +556,10 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
         try {
           const created = (await res.json().catch(() => ({}))) as { changeId?: string };
           const docForm = new FormData();
-          docForm.set("documentType", "amendment");
+          docForm.set("documentType", amendmentDocType);
           docForm.set("documentDate", meta.changedAt);
-          if (created.changeId) docForm.set("changeEventId", created.changeId);
+          // 변경 이벤트 연결은 변경계약서일 때만 — 누락 보완분은 원 계약서라 특정 변경 건에 매이지 않는다.
+          if (created.changeId && amendmentDocType === "amendment") docForm.set("changeEventId", created.changeId);
           docForm.set("file", amendmentFile);
           const docRes = await fetch(
             `/api/contracts/${encodeURIComponent(props.contractId)}/documents`,
@@ -366,7 +570,7 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
             throw new Error(body?.error ?? "HTTP " + docRes.status);
           }
         } catch (uploadErr) {
-          toast.show("변경계약서 PDF 업로드 실패: " + (uploadErr as Error).message, "error");
+          toast.show(`${amendmentDocType === "amendment" ? "변경계약서" : "계약서"} PDF 업로드 실패: ` + (uploadErr as Error).message, "error");
         }
       }
 
@@ -413,6 +617,13 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
           </button>
         </div>
 
+        <div className="px-5 pt-3 grid gap-1 text-xs">
+          <label className="grid gap-1">
+            <span className="font-bold cd-text-faint">계약명</span>
+            <input type="text" className="cd-input" value={contractTitle} onChange={(e) => setContractTitle(e.target.value)} />
+          </label>
+        </div>
+
         <div className="px-5 pt-3 grid grid-cols-3 gap-2 text-xs">
           <label className="grid gap-1">
             <span className="font-bold cd-text-faint">계약일</span>
@@ -429,7 +640,7 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
         </div>
 
         <div className="px-5 mt-4 flex gap-1 border-b cd-border-c">
-          {TABS.map((tab) => (
+          {TABS.filter((tab) => tab.key !== "ratecard" || isUnitPrice).map((tab) => (
             <button
               key={tab.key}
               type="button"
@@ -511,10 +722,64 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
             </div>
           )}
 
+          {activeTab === "ratecard" && isUnitPrice && (
+            <div className="grid gap-3">
+              <p className="text-[11px] cd-text-faint">
+                단가 기준표(단가)와 차수표(산정 수량)를 수정하면 저장 시 함께 반영됩니다. 추가 발주(N차 변경)는{" "}
+                <b>차수 추가</b> 후 수량을 입력하고, 차수별 요약의 <b>청구·수금 단계로 추가</b>를 누르면
+                선급금/준공금 단계가 만들어지며 금액 탭에 증액분이 채워집니다(이미 만들어진 단계의 금액은 금액
+                탭에서 변경).
+              </p>
+              <RateCardEditor data={rateCard} onChange={setRateCard} onAddStages={addRoundStages} />
+            </div>
+          )}
+
           {activeTab === "service" && (
             <div className="grid gap-3">
               <p className="text-[11px] cd-text-faint">변경할 항목만 입력하세요. 입력한 항목만 계약 정보에 반영되며, 비워 둔 항목은 기존 값이 유지됩니다.</p>
               <div className="grid grid-cols-2 gap-3">
+                {/* 발주처 변경(2026-08-24) — 임포트 오기재 정정. 검색해 선택한 경우에만 반영. */}
+                <div className="grid gap-1 text-sm col-span-2 relative">
+                  <span className="font-bold cd-text-muted">발주처(계약상대 업체) 변경</span>
+                  <input
+                    type="text"
+                    className="cd-input"
+                    placeholder={`현재: ${props.counterpartyName} — 변경할 업체명 또는 사업자번호 검색`}
+                    value={counterpartyQuery}
+                    onChange={(e) => setCounterpartyQuery(e.target.value)}
+                  />
+                  {counterpartyChange && (
+                    <p className="text-xs cd-text-primary flex items-center gap-2">
+                      변경 선택됨: {counterpartyChange.name}
+                      <button
+                        type="button"
+                        className="underline cd-text-faint"
+                        onClick={() => setCounterpartyChange(null)}
+                      >
+                        선택 취소
+                      </button>
+                    </p>
+                  )}
+                  {counterpartyOptions.length > 0 && (
+                    <div className="absolute z-10 top-[70px] left-0 right-0 rounded-xl border cd-border-c cd-card-bg shadow-lg max-h-56 overflow-y-auto">
+                      {counterpartyOptions.map((entity) => (
+                        <button
+                          key={entity.facilityId}
+                          type="button"
+                          className="w-full px-3 py-2 text-left text-sm hover:bg-[color:var(--cd-surface)]"
+                          onClick={() => {
+                            setCounterpartyChange({ facilityId: entity.facilityId, name: entity.companyName });
+                            setCounterpartyQuery("");
+                            setCounterpartyOptions([]);
+                          }}
+                        >
+                          <span className="cd-text">{entity.companyName}</span>
+                          <span className="ml-2 text-xs cd-text-faint">{entity.businessRegistrationNo ?? ""}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <label className="grid gap-1 text-sm">
                   <span className="font-bold cd-text-muted">기존 대분류</span>
                   <input type="text" disabled className="cd-input disabled:opacity-60"
@@ -532,15 +797,41 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
                 </label>
                 <label className="grid gap-1 text-sm">
                   <span className="font-bold cd-text-muted">변경 대분류</span>
-                  <input type="text" className="cd-input"
+                  {/* 자유 입력 → 목록 선택(2026-08-24) — 오타 값이 contracts.service_type 에 저장되던 문제 */}
+                  <select
+                    className="cd-select"
                     value={serviceCategory.nextType}
-                    onChange={(e) => setServiceCategory({ ...serviceCategory, nextType: e.target.value })} />
+                    onChange={(e) => {
+                      const nextType = e.target.value;
+                      const subtypes = CONTRACT_SERVICE_OPTIONS.find((item) => item.type === nextType)?.subtypes ?? [];
+                      setServiceCategory({
+                        ...serviceCategory,
+                        nextType,
+                        nextSubtype: subtypes.some((s) => s === serviceCategory.nextSubtype)
+                          ? serviceCategory.nextSubtype
+                          : "",
+                      });
+                    }}
+                  >
+                    <option value="">변경 없음</option>
+                    {CONTRACT_SERVICE_OPTIONS.map((option) => (
+                      <option key={option.type} value={option.type}>{option.type}</option>
+                    ))}
+                  </select>
                 </label>
                 <label className="grid gap-1 text-sm">
                   <span className="font-bold cd-text-muted">변경 세분류</span>
-                  <input type="text" className="cd-input"
+                  <select
+                    className="cd-select"
                     value={serviceCategory.nextSubtype}
-                    onChange={(e) => setServiceCategory({ ...serviceCategory, nextSubtype: e.target.value })} />
+                    disabled={!serviceCategory.nextType}
+                    onChange={(e) => setServiceCategory({ ...serviceCategory, nextSubtype: e.target.value })}
+                  >
+                    <option value="">{serviceCategory.nextType ? "변경 없음" : "대분류를 먼저 선택"}</option>
+                    {nextSubtypeOptions.map((subtype) => (
+                      <option key={subtype} value={subtype}>{subtype}</option>
+                    ))}
+                  </select>
                 </label>
                 <div className="grid gap-1 text-sm col-span-2">
                   <span className="font-bold cd-text-muted">변경 업종</span>
@@ -572,6 +863,20 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
                       <option key={option} value={option}>{option}</option>
                     ))}
                   </select>
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="font-bold cd-text-muted">계약 종류</span>
+                  <select
+                    className="cd-select"
+                    value={contractKind}
+                    onChange={(e) => setContractKind(e.target.value === "unit_price" ? "unit_price" : "standard")}
+                  >
+                    <option value="standard">일반 계약</option>
+                    <option value="unit_price">단가 계약</option>
+                  </select>
+                  <span className="text-[11px] cd-text-faint">
+                    단가 계약으로 바꾸면 상단에 &lsquo;단가 계약&rsquo; 탭이 나타나 단가표·차수를 입력할 수 있습니다.
+                  </span>
                 </label>
                 <label className="grid gap-1 text-sm">
                   <span className="font-bold cd-text-muted">발주 주체 구분</span>
@@ -784,7 +1089,24 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
                   value={closing.etc} onChange={(e) => setClosing({ ...closing, etc: e.target.value })} />
               </label>
               <label className="grid gap-1 text-sm">
-                <span className="font-bold cd-text-muted">변경계약서 PDF (선택)</span>
+                <span className="font-bold cd-text-muted">계약서 PDF (선택)</span>
+                <div className="flex items-center gap-4">
+                  {[
+                    { value: "amendment" as const, label: "변경", hint: "변경 계약서" },
+                    { value: "contract" as const, label: "누락", hint: "계약서(원 계약)" },
+                  ].map((opt) => (
+                    <label key={opt.value} className="inline-flex items-center gap-1.5 text-[12px] cd-text cursor-pointer">
+                      <input
+                        type="radio"
+                        name="amendment-doc-type"
+                        checked={amendmentDocType === opt.value}
+                        onChange={() => setAmendmentDocType(opt.value)}
+                      />
+                      <span className="font-bold">{opt.label}</span>
+                      <span className="cd-text-faint">{opt.hint}</span>
+                    </label>
+                  ))}
+                </div>
                 <input
                   type="file"
                   accept="application/pdf,.pdf"
@@ -792,7 +1114,9 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
                   onChange={(e) => setAmendmentFile(e.target.files?.[0] ?? null)}
                 />
                 <span className="text-[11px] cd-text-faint">
-                  업로드 시 원 계약 폴더에 동일 형식(<code>(YYYY-MM-DD)계약명 변경계약서.pdf</code>)으로 저장됩니다.
+                  업로드 시 원 계약 폴더에 동일 형식(
+                  <code>{amendmentDocType === "amendment" ? "(YYYY-MM-DD)계약명 변경계약서.pdf" : "(YYYY-MM-DD)계약명 계약서.pdf"}</code>
+                  )으로 저장됩니다. 계약 입력 때 못 받은 원 계약서를 뒤늦게 올리는 경우 <b>누락</b>을 고르세요.
                 </span>
               </label>
             </div>
@@ -800,7 +1124,7 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
         </div>
 
         <div className="p-5 border-t cd-border-c flex justify-between items-center gap-2">
-          <p className="text-[11px] cd-text-faint">변경계약서 PDF는 &quot;준공일 및 기타&quot; 탭에서 첨부할 수 있습니다.</p>
+          <p className="text-[11px] cd-text-faint">계약서·변경계약서 PDF는 &quot;준공일 및 기타&quot; 탭에서 첨부할 수 있습니다.</p>
           <div className="flex gap-2">
             <button type="button" onClick={props.onClose} className="cd-btn cd-btn-ghost rounded-xl px-4 py-2 text-sm font-bold cd-text-muted">
               닫기

@@ -26,6 +26,7 @@ import { compactAddress, renderDeliverableHwpx } from "./hwpx";
 import { renderHwpxToPdf } from "./hwpx-pdf";
 import { renderDeliverablePdf } from "./pdf";
 import { renderPaymentHwpx } from "./payment-hwpx";
+import { renderPaymentRequestPdf } from "./payment-pdf";
 import { appendSpecsToHwpx, normalizeSpecSpacing, renderSpecHwpx } from "./spec-hwpx";
 import { getDeliverable, getTemplate, setDeliverableArtifacts } from "./store";
 import { fillTemplateHwpx } from "./template-fill";
@@ -133,7 +134,13 @@ export async function generateDeliverableArtifacts(
   const overlay = tpl?.renderMode === "overlay";
 
   const kindLabel = DELIVERABLE_KIND_LABEL[row.kind];
-  const fileBase = sanitizeFilename(`(${kindLabel})${row.title}`);
+  // 대금청구서 단독 문서(공문 화면 직접 작성, 2026-08-25)는 kind 가 completion 이라도
+  // "(준공계)" 접두가 아니라 "<계약명> 대금청구서" 로 파일명을 만든다.
+  const paymentOnly = row.docTypes.length === 1 && row.docTypes[0] === "payment_request";
+  const contractTitle = String(row.values["contract.title"] ?? "").trim();
+  const fileBase = sanitizeFilename(
+    paymentOnly ? `${contractTitle || row.title} 대금청구서` : `(${kindLabel})${row.title}`
+  );
 
   // 성과품 사진 별첨(용역결과보고서, 2026-08-19) — 렌더 전 S3 에서 로드
   const photos = row.docTypes.includes("service_result_report") ? await loadPhotoAssets(row.values) : [];
@@ -231,22 +238,32 @@ export async function generateDeliverableArtifacts(
     }
   }
 
-  // ── 대금청구서 — 원본 템플릿(payment.hwpx) 치환 → 같은 파일로 PDF. 목록 마지막 병합 ──
+  // ── 대금청구서 — 전용 리디자인 렌더러(payment-pdf.ts, 2026-08-24)가 주 경로. 목록 마지막 병합 ──
+  // 종전 주 경로(실물 스캔형 payment.hwpx 좌표 복제)는 실패 시 폴백으로 남긴다.
   let paymentPdf: Uint8Array | null = null;
   if (paymentSelected) {
     try {
-      const forPdf = await renderPaymentHwpx(row.values, { keepLineSeg: true });
-      paymentPdf = (await renderHwpxToPdf(forPdf)).pdf;
-      // HWPX 산출물: 대금청구서만 선택했으면 원본 템플릿 배포본을 그대로 낸다.
-      // 다른 서식과 혼합이면 헤더(스타일 카탈로그)가 달라 한 파일로 합칠 수 없어
-      // HWPX 에는 싣지 않는다 — 한글본이 필요하면 대금청구서만 따로 선택해 내려받는다.
-      if (!hwpxBytes && row.docTypes.length === 1) {
-        hwpxBytes = await renderPaymentHwpx(row.values);
-      }
+      paymentPdf = await renderPaymentRequestPdf(row.values);
     } catch (err) {
-      console.warn("[deliverable] 대금청구서 템플릿 경로 실패(재구축 폴백):", (err as Error).message);
-      const fallback = [normalizeSpecSpacing(adjustSpecForValues(CATALOG_BY_TYPE["payment_request"], row.values))];
-      paymentPdf = await renderDeliverablePdf(fallback, specValues, {});
+      console.warn("[deliverable] 대금청구서 리디자인 렌더 실패(HWPX 템플릿 폴백):", (err as Error).message);
+      try {
+        const forPdf = await renderPaymentHwpx(row.values, { keepLineSeg: true });
+        paymentPdf = (await renderHwpxToPdf(forPdf)).pdf;
+      } catch (err2) {
+        console.warn("[deliverable] 대금청구서 템플릿 경로 실패(재구축 폴백):", (err2 as Error).message);
+        const fallback = [normalizeSpecSpacing(adjustSpecForValues(CATALOG_BY_TYPE["payment_request"], row.values))];
+        paymentPdf = await renderDeliverablePdf(fallback, specValues, {});
+      }
+    }
+    // HWPX 산출물: 대금청구서만 선택했으면 원본 템플릿 배포본을 그대로 낸다(한글 편집용).
+    // 다른 서식과 혼합이면 헤더(스타일 카탈로그)가 달라 한 파일로 합칠 수 없어
+    // HWPX 에는 싣지 않는다 — 한글본이 필요하면 대금청구서만 따로 선택해 내려받는다.
+    if (!hwpxBytes && row.docTypes.length === 1) {
+      try {
+        hwpxBytes = await renderPaymentHwpx(row.values);
+      } catch (err) {
+        console.warn("[deliverable] 대금청구서 HWPX 배포본 생성 실패(PDF 만 제공):", (err as Error).message);
+      }
     }
   }
 

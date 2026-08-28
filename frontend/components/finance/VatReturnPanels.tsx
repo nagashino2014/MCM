@@ -74,6 +74,11 @@ interface WithholdingRow {
   settleIncomeTax: number;
   yearendIncomeTax: number;
   farmTax: number;
+  // 사업(A25)·기타(A42) 소득 — 전문가활용비 승인 적재분(FRM-P4)
+  bizPayTotal: number;
+  bizIncomeTax: number;
+  otherPayTotal: number;
+  otherIncomeTax: number;
   incomeTaxTotal: number;
   localTax: number;
 }
@@ -136,6 +141,8 @@ export function WithholdingPanel() {
               <th className="py-1.5 pr-3 font-normal text-right">정산분</th>
               <th className="py-1.5 pr-3 font-normal text-right">연말정산</th>
               <th className="py-1.5 pr-3 font-normal text-right">농특세</th>
+              <th className="py-1.5 pr-3 font-normal text-right">사업소득(A25)</th>
+              <th className="py-1.5 pr-3 font-normal text-right">기타소득(A42)</th>
               <th className="py-1.5 pr-3 font-normal text-right">소득세 계</th>
               <th className="py-1.5 font-normal text-right">지방소득세</th>
             </tr>
@@ -151,6 +158,8 @@ export function WithholdingPanel() {
                 <td className="py-1.5 pr-3 text-right whitespace-nowrap">{m.settleIncomeTax ? won(m.settleIncomeTax) : "-"}</td>
                 <td className="py-1.5 pr-3 text-right whitespace-nowrap">{m.yearendIncomeTax ? won(m.yearendIncomeTax) : "-"}</td>
                 <td className="py-1.5 pr-3 text-right whitespace-nowrap">{m.farmTax ? won(m.farmTax) : "-"}</td>
+                <td className="py-1.5 pr-3 text-right whitespace-nowrap" title={m.bizPayTotal ? `지급액 ${won(m.bizPayTotal)}` : undefined}>{m.bizIncomeTax ? won(m.bizIncomeTax) : "-"}</td>
+                <td className="py-1.5 pr-3 text-right whitespace-nowrap" title={m.otherPayTotal ? `지급액 ${won(m.otherPayTotal)}` : undefined}>{m.otherIncomeTax || m.otherPayTotal ? won(m.otherIncomeTax) : "-"}</td>
                 <td className="py-1.5 pr-3 text-right whitespace-nowrap font-medium">{won(m.incomeTaxTotal)}</td>
                 <td className="py-1.5 text-right whitespace-nowrap">{won(m.localTax)}</td>
               </tr>
@@ -165,13 +174,15 @@ export function WithholdingPanel() {
                 <td className="py-2 pr-3 text-right whitespace-nowrap">{won(total((m) => m.settleIncomeTax))}</td>
                 <td className="py-2 pr-3 text-right whitespace-nowrap">{won(total((m) => m.yearendIncomeTax))}</td>
                 <td className="py-2 pr-3 text-right whitespace-nowrap">{won(total((m) => m.farmTax))}</td>
+                <td className="py-2 pr-3 text-right whitespace-nowrap">{won(total((m) => m.bizIncomeTax))}</td>
+                <td className="py-2 pr-3 text-right whitespace-nowrap">{won(total((m) => m.otherIncomeTax))}</td>
                 <td className="py-2 pr-3 text-right whitespace-nowrap">{won(total((m) => m.incomeTaxTotal))}</td>
                 <td className="py-2 text-right whitespace-nowrap">{won(total((m) => m.localTax))}</td>
               </tr>
             )}
             {!loading && months.length === 0 && (
               <tr>
-                <td colSpan={10} className="py-6 text-center cd-text-muted text-sm">{year}년 확정 급여대장이 없습니다.</td>
+                <td colSpan={12} className="py-6 text-center cd-text-muted text-sm">{year}년 확정 급여대장이 없습니다.</td>
               </tr>
             )}
           </tbody>

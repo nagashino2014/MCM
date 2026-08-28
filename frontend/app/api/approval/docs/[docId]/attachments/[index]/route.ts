@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getDoc } from "@/lib/approval/docs";
 import { resolveDocAccess } from "@/lib/approval/access";
-import { attachmentPreviewKind, type DocAttachment } from "@/lib/approval/attachments";
-import { convertToPdf, pdfResponse, previewKey, rawResponse } from "@/lib/approval/attachment-preview";
+import { attachmentContentType, attachmentPreviewKind, type DocAttachment } from "@/lib/approval/attachments";
+import { convertToPdf, pdfResponse, previewKey } from "@/lib/approval/attachment-preview";
 import { putContractDocument, readContractDocument } from "@/lib/storage/contract-document-storage";
 
 export const runtime = "nodejs";
@@ -16,6 +16,7 @@ export const maxDuration = 180;
  *  - mode=pdf        : 오피스·hwpx 를 PDF 로 변환해 반환(백엔드 LibreOffice). 결과는 S3 에 캐시.
  *  - download=1      : 첨부로 내려받기(Content-Disposition attachment)
  * 열람 권한은 문서 상세와 동일 규칙(resolveDocAccess).
+ * 변환·응답 로직은 작성 중 첨부 미리보기와 공용(lib/approval/attachment-preview.ts).
  */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ docId: string; index: string }> }) {
   try {
@@ -32,6 +33,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ docI
 
     const mode = req.nextUrl.searchParams.get("mode") ?? "raw";
     const download = req.nextUrl.searchParams.get("download") === "1";
+    const filenameStar = `filename*=UTF-8''${encodeURIComponent(item.name)}`;
 
     if (mode === "pdf" && attachmentPreviewKind(item.name) === "convert") {
       const cached = await readContractDocument(previewKey(item.key));
@@ -47,7 +49,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ docI
 
     const body = await readContractDocument(item.key);
     if (!body) return NextResponse.json({ error: "첨부 원본을 읽을 수 없습니다." }, { status: 404 });
-    return rawResponse(body, item.name, download);
+    return new NextResponse(new Uint8Array(body), {
+      headers: {
+        "Content-Type": attachmentContentType(item.name),
+        "Content-Length": String(body.length),
+        "Content-Disposition": `${download ? "attachment" : "inline"}; ${filenameStar}`,
+        "Cache-Control": "private, max-age=300",
+      },
+    });
   } catch (err) {
     return authErrorToResponse(err);
   }

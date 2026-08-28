@@ -41,6 +41,9 @@ IEPS(통합환경허가) 데이터 수집·파싱 + 계약/사업장 관리 모�
   - 페이지 루트: `<div className="cdash cd-fields-white ..." data-theme={theme}>` + `CdPageHeader`. 테마는 `useCdashTheme`(localStorage `cdash-theme` 공유).
   - **포털(`createPortal`) 모달**은 `.cdash` 밖이라 토큰이 안 풀린다 → 루트에 `cdash-vars`(+`cd-fields-white`) + `data-theme` 부여.
   - **박스/항목은 배경 채움 대신 윤곽선(`border cd-border-c`) 기본**, 선택·강조 요소만 `cd-tint-primary`/`cd-fill-primary`로 채운다. 입력류는 `cd-fields-white` 스코프에서 흰색.
+  - **날짜 입력은 네이티브 `<input type="date">` 금지**. `CdDateInput`(`components/cdash`)을 쓴다 —
+    `YYYYMMDD` 8자리를 이어 치면 `2026-07-01` 로 자동 완성된다(값은 `YYYY-MM-DD` 문자열 그대로).
+    새로 날짜 입력을 놓을 때도, 기존 화면을 손볼 때도 이 컴포넌트로 통일한다.
   - 구식 잔재 금지: `glass-*`, 녹색 `bg-primary`(#16A34A), `text-stone-*`, gradient 히어로 등 → cd 토큰으로.
   - `dashboard.css`/`billing.css`와 `cdash.css`가 공유하는 클래스는 값이 동일해야 한다(분기 금지). 공유 컴포넌트(예: `FacilityOrdersModal`, `PaginationControls`)는 비-cdash 화면에서도 깨지지 않게 hex 폴백 사용.
 

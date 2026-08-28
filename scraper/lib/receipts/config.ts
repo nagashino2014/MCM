@@ -1,0 +1,564 @@
+/**
+ * 전자상거래 영수증 수집 — 사이트 설정
+ *
+ * ⚠ 셀렉터/URL 은 **실측 전 추정값**이다.
+ *   - 11번가는 주문목록·영수증 화면이 PC 웹에만 있고 마크업이 수시로 바뀐다.
+ *   - 그래서 수집기는 고정 셀렉터에 의존하지 않고 "텍스트(영수증/거래명세서) + 날짜/주문번호 정규식"
+ *     휴리스틱을 우선 쓴다. 휴리스틱이 빗나가면 `probe` 로 실측해 site-config.json 에 덮어쓴다.
+ *   - site-config.json 이 있으면 아래 기본값보다 **우선** 적용된다.
+ */
+
+import path from "node:path";
+import fs from "node:fs";
+
+import { siteDir, ensureSiteDir } from "./session";
+
+export interface SiteConfig {
+  /** 사이트 키 — 산출물 디렉터리명으로도 쓰인다 */
+  key: string;
+  name: string;
+  /** login 명령이 처음 띄우는 주소 */
+  loginUrl: string;
+  /** 주문목록(마이페이지) 주소 — probe/collect 의 시작점 */
+  orderListUrl: string;
+  /** 세션 유효성 확인용 주소(보통 주문목록과 동일) */
+  checkUrl: string;
+  /** 로그인 페이지로 튕겼는지 판정하는 URL 패턴 */
+  loggedOutPattern: string;
+  /** 영수증 진입점을 찾을 때 쓰는 텍스트 후보(우선순위 순) */
+  receiptKeywords: string[];
+  /** 주문 행 후보 셀렉터(위에서부터 시도, 매칭되는 첫 셀렉터를 쓴다) */
+  orderRowSelectors: string[];
+  /** 화면에서 주문번호를 골라내는 정규식(기본: 15~20자리 숫자). receiptKey 가 있으면 그쪽이 우선한다 */
+  orderNoPattern?: string;
+  /**
+   * 목록에서 **전표 식별자**를 뽑는 규칙. 캡처한 값은 receiptRequest.fields 와
+   * receiptUrlTemplate 의 `{이름}` 토큰으로 치환된다.
+   *   11번가 — 주문번호 하나면 된다:      { pattern: "\\b(\\d{15,20})\\b", groups: ["ordNo"] }
+   *   G마켓  — 전표마다 세 값이 필요하다: openCardReceipt('seqNo','custNo','contrNo') 에서 캡처
+   * 규칙을 배열로 주면 위에서부터 시도해 **처음으로 건을 찾은 규칙**을 쓴다.
+   * 화면 구조가 확실치 않은 사이트에 후보를 여러 개 걸어 둘 때 쓴다.
+   */
+  receiptKey?: { pattern: string; groups: string[] } | { pattern: string; groups: string[] }[];
+  /** 주문번호 앞 8자리가 주문일인 사이트(11번가)에서 켠다 */
+  orderDateFromOrderNo?: boolean;
+  /** 전표 문서 안에 찍힌 날짜를 주문일로 쓴다(주문번호에 날짜가 없는 사이트) */
+  orderDateFromDocument?: boolean;
+  /**
+   * 한 주문에 상품별로 전표가 나뉘는 사이트(11번가)에서 켠다.
+   * ordPrdSeq 를 1부터 올려가며 받다가 빈 양식이 나오면 멈춘다.
+   */
+  iterateItemSeq?: boolean;
+  /**
+   * 봇 확인(Cloudflare Turnstile 등)이 있는 사이트에서 켠다.
+   * UA·viewport 를 덮어쓰지 않고 자동화 표식을 숨기며, headless 대신 headed 로 돈다.
+   */
+  stealth?: boolean;
+  /** 다음 페이지 이동 요소 후보 */
+  nextPageSelectors: string[];
+  /**
+   * 주문번호만으로 영수증을 여는 URL 템플릿(`{ordNo}` 치환).
+   * 이게 있으면 목록에서 버튼을 클릭할 필요 없이 영수증 주소로 바로 이동한다 — 훨씬 빠르고 안정적이다.
+   */
+  receiptUrlTemplate?: string;
+  /**
+   * 영수증이 GET 이 아니라 **폼 POST** 로 열리는 경우의 요청 정의. 있으면 receiptUrlTemplate 보다 우선한다.
+   * 값에 들어간 `{ordNo}` 는 주문번호로 치환된다.
+   */
+  receiptRequest?: {
+    url: string;
+    fields: Record<string, string>;
+    /** 폼을 보내기 전에 머무를 페이지 — 세션·리퍼러를 자연스럽게 만든다 */
+    refererUrl?: string;
+  };
+  /**
+   * 목록의 식별자만으로는 전표를 못 열고 **중간 화면**을 한 번 거쳐야 하는 사이트용(네이버페이).
+   * 목록에서 얻은 키로 url 을 열고, 그 화면에서 key 규칙으로 최종 식별자를 뽑는다.
+   * 한 주문에 전표가 여러 장이면 여러 개가 나오고, 각각 저장한다.
+   */
+  receiptKeyResolve?: {
+    url: string;
+    key: { pattern: string; groups: string[] };
+  };
+  /**
+   * 전표를 **묶음으로 신청해서 받는** 사이트용(쿠팡).
+   * 신청하면 신청 ID 가 생기고, 그 뷰어 페이지 자체가 전표 묶음 문서다.
+   * `{requestId}` 와 `{page}` 가 치환된다. page 는 0부터.
+   */
+  bulkViewerUrlTemplate?: string;
+  /**
+   * 전표 문서 텍스트에서 품목·금액을 뽑는 정규식(캡처 그룹 1을 쓴다).
+   * 양식이 사이트마다 달라, 기본 휴리스틱이 빗나가는 곳만 여기에 적는다.
+   */
+  documentFields?: { title?: string; amount?: string };
+  /** 수집 문서의 이름(파일명·대장의 receiptType 에 쓰인다) */
+  receiptLabel?: string;
+  /**
+   * 건당 기본 대기(ms). --delay 를 주지 않았을 때 쓴다.
+   * 봇 탐지가 트래픽 패턴을 보는 사이트(쿠팡)는 넉넉히 둔다 — 속도보다 안 잘리는 게 중요하다.
+   */
+  defaultDelay?: number;
+  /**
+   * 조회 기간을 직접 지정해 주문목록을 여는 요청(무인 실행용).
+   * 이게 있으면 사람이 화면에서 기간을 고를 필요가 없다(--wait 불필요).
+   * 값의 `{from}`/`{to}` 는 dateFormat 에 맞춰 치환된다.
+   */
+  listRequest?: {
+    url: string;
+    method?: "GET" | "POST";
+    /**
+     * 값에 쓰는 치환 토큰:
+     *   {from} {to}                     dateFormat 형식의 시작·종료일
+     *   {fromYYYY} {fromMM} {fromDD}    시작일을 년/월/일로 나눈 값
+     *   {toYYYY} {toMM} {toDD}          종료일을 년/월/일로 나눈 값
+     *   {page}                          페이지 번호(1부터) — 있으면 페이지 이동도 이 요청으로 한다
+     */
+    fields: Record<string, string>;
+    /** 날짜 치환 형식 — "YYYYMMDD" | "YYYY-MM-DD" | "YYYY.MM.DD" (기본 YYYYMMDD) */
+    dateFormat?: string;
+    /** POST 일 때 폼을 보내기 전에 머무를 페이지 */
+    refererUrl?: string;
+  };
+}
+
+/**
+ * 11번가.
+ * - 로그인: login.11st.co.kr
+ * - 주문목록: 마이 11번가 > 주문/배송조회. 계정·시점에 따라 주소가 달라질 수 있어
+ *   login 단계에서 사용자가 실제로 머문 URL 을 site-config.json 에 기록해 덮어쓴다.
+ */
+export const ELEVEN_ST: SiteConfig = {
+  key: "11st",
+  name: "11번가",
+  loginUrl: "https://login.11st.co.kr/auth/front/login.tmall",
+  // 실측(2026-08): 마이 11번가 > 주문/배송조회. 주문 목록 자체는 이 페이지의 **iframe** 안에 그려진다.
+  orderListUrl: "https://buy.11st.co.kr/my11st/order/OrderList.tmall",
+  checkUrl: "https://buy.11st.co.kr/my11st/order/OrderList.tmall",
+  loggedOutPattern: "login|signin|auth",
+  receiptKeywords: ["카드영수증", "영수증", "거래명세서", "명세서"],
+  orderNoPattern: "\\b\\d{15,20}\\b",
+  receiptKey: { pattern: "\\b(\\d{15,20})\\b", groups: ["ordNo"] },
+  orderDateFromOrderNo: true,
+  iterateItemSeq: true,
+  orderRowSelectors: [
+    "[class*='order_list'] > li",
+    "[class*='orderList'] > li",
+    "table[class*='order'] tbody tr",
+    "[class*='c_list_order'] li",
+    "li[class*='order']",
+  ],
+  nextPageSelectors: [
+    "a:has-text('다음')",
+    "[class*='paging'] a[class*='next']",
+    "button:has-text('다음')",
+  ],
+  // 실측(2026-08): 주문상세의 [영수증] 버튼이 여는 팝업 주소. 주문번호만 있으면 바로 열린다.
+  //
+  // ⚠ 다만 이 문서는 "결제영수증"이고, 문서 본문에 **세무상의 지출증빙 효력이 없다**고 명시돼 있다.
+  //   (품목·카드번호는 찍히지만 소득공제용 영수증·매입 세금계산서로는 쓸 수 없음)
+  //   부가세 증빙으로 쓸 신용카드 매출전표·지출증빙 현금영수증은
+  //   '나의11번가 > 증빙서류 발급'(documentaryEvidence.tmall)에서 발급된다 → 그쪽 주소를 실측 중.
+  receiptUrlTemplate:
+    "https://buy.11st.co.kr/my11st/receipt/viewReceipt.tmall?method=orderReceipt&ordNo={ordNo}&isSSL=Y",
+
+  /**
+   * 실측(2026-08): '증빙서류 발급 > 영수증' 에서 [신용카드 매출전표] 를 누르면 아래 폼 POST 가 나간다.
+   *   POST https://buy.11st.co.kr/remittance/documentaryEvidencePop.tmall
+   *   method=displayCardPop&ordNo=...&ordPrdSeq=1&prdSeqCnt=&prdSeq=0&prdTypCd=01&prfItmClfCd=
+   * 이쪽이 세무 증빙으로 쓰는 문서라 수집 대상은 이것이다(위 결제영수증은 효력 없음).
+   *
+   * ⚠ ordPrdSeq 는 주문 내 상품 순번으로 보인다. 한 주문에 상품이 여러 개일 때 어떻게 되는지는
+   *   아직 확인되지 않아 1 로 고정해 뒀다.
+   */
+  receiptRequest: {
+    url: "https://buy.11st.co.kr/remittance/documentaryEvidencePop.tmall",
+    fields: {
+      method: "displayCardPop",
+      ordNo: "{ordNo}",
+      ordPrdSeq: "1",
+      prdSeqCnt: "",
+      prdSeq: "0",
+      prdTypCd: "01",
+      prfItmClfCd: "",
+    },
+    refererUrl: "https://buy.11st.co.kr/my11st/remittance/documentaryEvidence.tmall?method=displayDocumentaryEvidenceIssue",
+  },
+  receiptLabel: "신용카드매출전표",
+
+  /**
+   * 실측(2026-08): '증빙서류 발급 > 영수증' 의 기간 조회 파라미터.
+   * 조회 후 세션이 끊겼을 때 로그인 페이지의 returnURL 에 그대로 실려 나온 값에서 확보했다.
+   *   ...documentaryEvidence.tmall?method=displayDocumentaryEvidenceIssue&docTyp=ord
+   *   &stDate=20240701&endDate=20260821&startYY=2024&startMM=07&startDD=01
+   *   &endYY=2026&endMM=08&endDD=21&pageNo=1&limit=10
+   *
+   * limit 을 키워 한 번에 많이 받고, 그래도 넘치면 pageNo 를 올린다(목록의 '다음' 버튼에 기대지 않는다).
+   * 전표를 뽑는 화면이 바로 여기라 주문목록(OrderList.tmall)보다 이쪽이 수집 시작점으로 알맞다.
+   */
+  listRequest: {
+    url: "https://buy.11st.co.kr/my11st/remittance/documentaryEvidence.tmall",
+    method: "GET",
+    fields: {
+      method: "displayDocumentaryEvidenceIssue",
+      docTyp: "ord",
+      stDate: "{from}",
+      endDate: "{to}",
+      startYY: "{fromYYYY}",
+      startMM: "{fromMM}",
+      startDD: "{fromDD}",
+      endYY: "{toYYYY}",
+      endMM: "{toMM}",
+      endDD: "{toDD}",
+      pageNo: "{page}",
+      limit: "100",
+    },
+    dateFormat: "YYYYMMDD",
+  },
+};
+
+/**
+ * G마켓.
+ * - 증빙 경로(고객센터 안내): 나의 G마켓 > 주문내역 > [영수증/계산서조회], 또는 주문상세의 [카드전표].
+ *   신용카드 구매분은 카드매출전표가 자동 발급되고, 이것이 매입세액공제용 적격증빙이다.
+ * - 영수증 전용 도메인 `receipt.gmarket.co.kr` 이 따로 있다.
+ *
+ * ⚠ 아래 주소·패턴은 **실측 전 추정값**이다. `login` 후 `probe` 로 실제 값을 확인해
+ *   site-config.json 에 덮어쓰거나 이 파일을 고친다. 특히 아직 모르는 것:
+ *     - 주문목록/증빙 화면의 실제 주소와 기간 조회 파라미터(listRequest)
+ *     - 카드전표를 여는 방법(주소 직접 열기인지 폼 POST 인지) → receiptUrlTemplate / receiptRequest
+ *     - 주문번호 형식(11번가와 달리 날짜가 들어 있지 않을 가능성이 높다)
+ */
+export const GMARKET: SiteConfig = {
+  key: "gmarket",
+  name: "G마켓",
+  // 로그인 주소는 수시로 바뀌므로 메인에서 사용자가 직접 로그인하게 둔다(어차피 사람이 조작한다).
+  loginUrl: "https://www.gmarket.co.kr/",
+  // 실측(2026-08): 나의 지마켓은 my.gmarket.co.kr 의 SPA 다.
+  //   홈       https://my.gmarket.co.kr/ko/pc/main
+  //   주문내역 https://my.gmarket.co.kr/ko/pc/list/all
+  // 홈의 '영수증/계산서 조회' 버튼(div.box__button)이 증빙 화면 진입점으로 보인다.
+  orderListUrl: "https://my.gmarket.co.kr/ko/pc/list/all",
+  checkUrl: "https://my.gmarket.co.kr/ko/pc/list/all",
+  loggedOutPattern: "login|signin|member\\.gmarket\\.co\\.kr/Login",
+  receiptKeywords: ["카드전표", "신용카드 매출전표", "영수증/계산서", "영수증", "거래명세서"],
+  orderRowSelectors: [
+    "table[class*='order'] tbody tr",
+    "[class*='order_list'] > li",
+    "[class*='orderList'] > li",
+    "li[class*='order']",
+  ],
+  nextPageSelectors: ["a:has-text('다음')", "[class*='paging'] a[class*='next']", "button:has-text('다음')"],
+  // 실측(2026-08): 접속하면 Cloudflare 봇 확인 화면이 뜬다. 지문을 건드리지 않고 headed 로 돌아야 한다.
+  stealth: true,
+
+  /**
+   * 실측(2026-08): 주문목록의 '거래영수증'은 11번가 결제영수증처럼 세무 효력이 없다.
+   * 매입세액공제용 신용카드 매출전표는 **영수증 조회 화면**(receipt.gmarket.co.kr)에서 나온다.
+   *
+   *   목록  POST https://receipt.gmarket.co.kr/Card/CardSalesSlipForm/
+   *         sDay=20220101&eDay=20260831&pageNo=1&pageUnit=10
+   *   전표  GET  https://receipt.gmarket.co.kr/Card/CardReceiptFormCover
+   *         ?seqNo=1924402893&custNo=<인코딩>&contrNo=3664897233
+   *
+   * 11번가와 달리 전표를 여는 열쇠가 주문번호가 아니라 seqNo·custNo·contrNo 세 값이라,
+   * 목록 HTML 에서 셋을 한꺼번에 캡처한다.
+   */
+  listRequest: {
+    url: "https://receipt.gmarket.co.kr/Card/CardSalesSlipForm/",
+    method: "POST",
+    fields: { sDay: "{from}", eDay: "{to}", pageNo: "{page}", pageUnit: "100" },
+    dateFormat: "YYYYMMDD",
+    refererUrl: "https://receipt.gmarket.co.kr/Card/cardsalesslip",
+  },
+  /**
+   * 실측(2026-08): 목록의 전표 링크는 쿼리스트링이 아니라 함수 호출이다.
+   *   <a href="javascript:openCardReceipt('2454083498', 'DEyNR38T…/Rw==', '4252259234');">
+   *                        seqNo           custNo(base64)          contrNo(=주문번호)
+   * 이 세 값을 그대로 CardReceiptFormCover 주소에 넣으면 전표가 열린다.
+   * custNo 에 / 와 = 가 들어 있어 URL 조립 때 인코딩된다(encodeKeyValue).
+   */
+  receiptKey: {
+    pattern: "openCardReceipt\\(\\s*'([^']+)'\\s*,\\s*'([^']+)'\\s*,\\s*'([^']+)'\\s*\\)",
+    groups: ["seqNo", "custNo", "contrNo"],
+  },
+  receiptUrlTemplate:
+    "https://receipt.gmarket.co.kr/Card/CardReceiptFormCover?seqNo={seqNo}&custNo={custNo}&contrNo={contrNo}",
+  receiptLabel: "신용카드매출전표",
+  // 주문번호에 날짜가 없다 — 전표 문서에 찍힌 거래일자를 쓴다.
+  orderDateFromDocument: true,
+};
+
+/**
+ * 옥션 — G마켓과 같은 계열(신세계 지마켓)이라 구조가 비슷할 것으로 보고 같은 골격으로 둔다.
+ * 증빙 경로(고객센터 안내): 마이 옥션 > 주문에서 [신용카드영수증 출력].
+ * 카드 결제분은 신용카드 매출전표, 계좌이체분은 현금영수증으로 나뉜다.
+ *
+ * ⚠ 주소·패턴은 실측 전 추정값. G마켓과 마찬가지로 `login` → `probe` 로 확인해 채운다.
+ */
+export const AUCTION: SiteConfig = {
+  key: "auction",
+  name: "옥션",
+  loginUrl: "https://www.auction.co.kr/",
+  /**
+   * 실측(2026-08): 영수증은 마이옥션 주문내역의 [영수증/계산서 조회] 버튼이 여는 별도 창에서 뽑는다.
+   *   창(현금영수증 탭)  https://accounting.auction.co.kr/Receipts/CashInfoList.aspx
+   *   신용카드전표 탭    https://accounting.auction.co.kr/Receipts/CardInfoList.aspx
+   *   기간 조회          .../CardInfoList.aspx?from=20220101&to=20260821&pageNum=1   ← GET 쿼리스트링
+   *
+   * 주문내역 화면(escrow.auction.co.kr/Close/OrderProcessList.aspx)은 ASP.NET WebForms 라
+   * 기간 조회가 postback(__VIEWSTATE)이지만, 전표는 위 창에서 뽑으므로 그쪽은 건드릴 필요가 없다.
+   */
+  orderListUrl: "https://accounting.auction.co.kr/Receipts/CardInfoList.aspx",
+  checkUrl: "https://accounting.auction.co.kr/Receipts/CardInfoList.aspx",
+  loggedOutPattern: "login|signin|memberssl\\.auction\\.co\\.kr",
+  receiptKeywords: ["신용카드영수증", "신용카드 매출전표", "카드전표", "구매영수증", "영수증", "거래명세서"],
+  orderRowSelectors: [
+    "table[class*='order'] tbody tr",
+    "[class*='order_list'] > li",
+    "[class*='orderList'] > li",
+    "li[class*='order']",
+  ],
+  nextPageSelectors: ["a:has-text('다음')", "[class*='paging'] a[class*='next']", "button:has-text('다음')"],
+  orderNoPattern: "\\b\\d{9,20}\\b",
+  // G마켓이 Cloudflare 봇 확인을 쓰므로 같은 계열인 옥션도 켜 둔다(불필요하면 꺼도 동작에는 지장 없다).
+  stealth: true,
+
+  /**
+   * 실측 전 후보들 — 위에서부터 시도해 처음 건을 찾은 규칙을 쓴다.
+   * 같은 계열이라 G마켓과 같은 형태(함수 호출)일 가능성이 높고, 아니면 쿼리스트링일 수 있다.
+   * 둘 다 안 맞으면 probe 가 "화면이 값을 담고 있는 곳"을 찍어 주므로 그걸 보고 규칙을 고친다.
+   */
+  /**
+   * 실측(2026-08): 옥션 전표는 **주문번호 하나로** 열린다(G마켓의 세 값과 다르다).
+   *   GET https://accounting.auction.co.kr/Card/CardReceiptRevised.aspx?orderNo=2486409195
+   *
+   * 목록에서 주문번호를 뽑는 규칙은 좁은 것부터 시도한다: 전표 주소에 박힌 형태 →
+   * orderNo 파라미터 → 화면의 10자리 숫자.
+   */
+  receiptKey: [
+    { pattern: "CardReceiptRevised\\.aspx\\?orderNo=(\\d+)", groups: ["orderNo"] },
+    { pattern: "orderNo=(\\d+)", groups: ["orderNo"] },
+    { pattern: "\\b(\\d{10})\\b", groups: ["orderNo"] },
+  ],
+  receiptUrlTemplate: "https://accounting.auction.co.kr/Card/CardReceiptRevised.aspx?orderNo={orderNo}",
+
+  /** 전표 목록: GET ?from=YYYYMMDD&to=YYYYMMDD&pageNum=N */
+  listRequest: {
+    url: "https://accounting.auction.co.kr/Receipts/CardInfoList.aspx",
+    method: "GET",
+    fields: { from: "{from}", to: "{to}", pageNum: "{page}" },
+    dateFormat: "YYYYMMDD",
+  },
+  receiptLabel: "신용카드매출전표",
+  // 옥션은 1년 이상 지난 구매내역의 영수증 출력이 막혀 있다(고객센터 안내) — 오래된 기간은 못 받을 수 있다.
+  orderDateFromDocument: true,
+};
+
+/**
+ * 네이버페이.
+ * - 주문내역: https://pay.naver.com/pc/history?page=1 (실측 제공). React SPA 라 목록은 XHR 로 채워질 가능성이 높다.
+ * - 네이버는 자동화 탐지가 강한 편이라 stealth 를 켠다(UA 를 덮어쓰지 않고, 화면을 띄워 실행).
+ *   로그인은 사람이 직접 하므로 캡차·2차인증은 그때 통과하면 된다.
+ *
+ * ⚠ 아직 모르는 것 — `login` → `probe` 로 채운다:
+ *     - 기간 조회 요청(listRequest). 지금은 page 파라미터만 알고 있다.
+ *     - 전표를 여는 방법(주소 GET / 폼 POST / 목록 링크 클릭)과 그 식별자.
+ *     - 세무 효력이 있는 문서가 무엇인지. 11번가·G마켓 모두 주문내역의 '영수증'은 효력이 없었고
+ *       별도 증빙 화면의 신용카드 매출전표라야 했다 — 네이버페이도 확인이 필요하다.
+ */
+export const NAVER_PAY: SiteConfig = {
+  key: "naver",
+  name: "네이버페이",
+  // 로그인은 네이버 메인에서 시작한다. 주문내역 주소로 바로 들어가면 로그인 리다이렉트가
+  // 한 번 더 끼어 자동화 감지를 자극할 수 있다(실측에서 창이 곧바로 닫혔다).
+  // 로그인 후 pay.naver.com/pc/history 로 이동한 다음 창을 닫으면 된다.
+  loginUrl: "https://www.naver.com/",
+  orderListUrl: "https://pay.naver.com/pc/history?page=1",
+  checkUrl: "https://pay.naver.com/pc/history?page=1",
+  loggedOutPattern: "nid\\.naver\\.com|nidlogin|/login",
+  receiptKeywords: ["카드영수증", "매출전표", "영수증", "현금영수증", "결제상세", "주문상세"],
+  orderRowSelectors: [
+    "[class*='history'] li",
+    "[class*='order'] li",
+    "table[class*='order'] tbody tr",
+    "li[class*='item']",
+  ],
+  nextPageSelectors: ["a:has-text('다음')", "[class*='paging'] a[class*='next']", "button:has-text('다음')"],
+  stealth: true,
+
+  /**
+   * 실측(2026-08): 목록의 '주문 상세 보기' 링크에 주문번호가 들어 있다.
+   *   https://orders.pay.naver.com/order/status/2026052979829321?returnUrl=...
+   * 16자리이고 **앞 8자리가 주문일**이다(2026-05-29) — 11번가와 같은 성질이라 기간 필터를 바로 걸 수 있다.
+   */
+  orderNoPattern: "\\b(20\\d{14})\\b",
+  receiptKey: [
+    { pattern: "orders\\.pay\\.naver\\.com/order/status/(20\\d{14})", groups: ["orderNo"] },
+    { pattern: "\\b(20\\d{14})\\b", groups: ["orderNo"] },
+  ],
+  orderDateFromOrderNo: true,
+
+  // 목록에 페이지 파라미터가 있다. 기간 파라미터는 실측 후 여기에 더한다.
+  listRequest: {
+    url: "https://pay.naver.com/pc/history",
+    method: "GET",
+    fields: { page: "{page}" },
+    dateFormat: "YYYYMMDD",
+  },
+
+  /**
+   * 실측(2026-08): 네이버페이는 전표까지 **두 단계**다.
+   *   ① 발급이력  https://pay.naver.com/receipts/issue-history?orderNo=2026052979829321
+   *      → 여기에 '구매영수증'과 '카드영수증' 링크가 있다.
+   *   ② 카드영수증 https://pay.naver.com/receipts/preview/card
+   *      ?tid=20260529162353665940&productOrderNo=PD2026052915794841
+   *
+   * 전표 열쇠(tid·productOrderNo)가 목록에는 없고 ①에서만 나오므로 중간 단계를 한 번 거친다.
+   * 한 주문에 상품이 여러 개면 productOrderNo 가 여러 개 나오고, 각각 저장한다.
+   *
+   * ⚠ '구매영수증'은 11번가·G마켓의 결제영수증처럼 세무 효력이 없을 수 있어 카드영수증만 받는다.
+   */
+  receiptKeyResolve: {
+    url: "https://pay.naver.com/receipts/issue-history?orderNo={orderNo}",
+    key: {
+      pattern: "/receipts/preview/card\\?tid=([^&\"'\\s<>]+)&(?:amp;)?productOrderNo=([^&\"'\\s<>]+)",
+      groups: ["tid", "productOrderNo"],
+    },
+  },
+  receiptUrlTemplate: "https://pay.naver.com/receipts/preview/card?tid={tid}&productOrderNo={productOrderNo}",
+  receiptLabel: "카드영수증",
+};
+
+/**
+ * 쿠팡.
+ * - 증빙 경로(고객센터 안내): 마이쿠팡 > 주문목록 > 주문 상세보기 > 결제영수증 정보 > [카드영수증]/[거래명세서].
+ *   PC 웹에만 있고 모바일 앱에는 없다.
+ * - **네 몰 중 가장 어렵다.** Akamai Bot Manager 가 붙어 있고 TLS 지문까지 본다는 보고가 있다.
+ *   stealth(UA 미변조·자동화 표식 숨김·실제 Chrome·headed)를 켜고, 건당 대기를 넉넉히 잡아
+ *   사람이 클릭하는 속도에 가깝게 돈다. 그래도 막힐 수 있다.
+ *
+ * ⚠ 아직 모르는 것 — `login` → `probe` 로 채운다:
+ *     주문목록 주소·기간 조회 요청·전표 여는 방법·주문번호 형식.
+ *     11번가·G마켓과 마찬가지로 주문내역의 '영수증'이 세무 효력이 없을 수 있으니 문서 확인도 필요하다.
+ */
+export const COUPANG: SiteConfig = {
+  key: "coupang",
+  name: "쿠팡",
+  // 메인에서 사람이 직접 로그인한다. 주문목록으로 바로 들어가면 로그인 리다이렉트가 끼어 감지를 자극한다.
+  loginUrl: "https://www.coupang.com/",
+  /**
+   * 실측(2026-08): 로그인 통과 확인. 주문목록은 mc.coupang.com/ssr/desktop/order/list 이고,
+   * **영수증은 전용 화면**이 따로 있다 — 다른 세 몰과 같은 구조다.
+   *   영수증 조회/출력  https://mc.coupang.com/ssr/desktop/payment-receipt
+   * 수집 시작점을 그쪽으로 잡는다(전표를 뽑는 화면이 거기다).
+   *
+   * 참고: 쿠팡 프런트는 styled-components 해시 클래스(sc-xxxxx)라 class 기반 행 셀렉터가 안 맞는다.
+   * 우리 방식(식별자 정규식)이 오히려 잘 맞는다.
+   */
+  orderListUrl: "https://mc.coupang.com/ssr/desktop/payment-receipt",
+  checkUrl: "https://mc.coupang.com/ssr/desktop/payment-receipt",
+  loggedOutPattern: "login\\.coupang\\.com|/login|signin",
+  // "결제정보" 는 쿠팡 전표의 첫 섹션 제목 — 페이지 단위 분할이 안 되는 배치(한 페이지에
+  // 여러 전표)에서도 이 경계로 자르면 거래일시·승인번호가 옆 전표와 섞이지 않는다.
+  receiptKeywords: ["결제정보", "카드영수증", "거래명세서", "결제영수증", "영수증", "매출전표"],
+  orderRowSelectors: [
+    "[class*='order-list'] li",
+    "[class*='order'] li",
+    "table[class*='order'] tbody tr",
+    "li[class*='order']",
+  ],
+  nextPageSelectors: ["a:has-text('다음')", "[class*='paging'] a[class*='next']", "button:has-text('다음')"],
+  /**
+   * ★ 실측(2026-08): 쿠팡에는 **매출전표 일괄 신청** 기능이 있다. 건별로 긁을 필요가 없다.
+   *
+   *   POST https://mc.coupang.com/ssr/api/payment-receipt/card/request-download-receipt
+   *   {"from":"2026.01.01","to":"2026.08.22","totalCount":54,"totalAmount":9167030,
+   *    "cardId":"","cardNumber":"","displayCardName":""}
+   *
+   *   신청 후 처리에 시간이 걸리고, 신청 ID 가 붙은 뷰어에서 결과를 받는다:
+   *     https://payment.coupang.com/card-receipt-requests/5320399?page=0   (1~50건)
+   *     https://payment.coupang.com/card-receipt-requests/5320399?page=1   (51~71건)
+   *   이 페이지 자체가 전표 묶음이라 그대로 PDF 로 저장하면 된다(건별 접근이 필요 없다).
+   *   요청 1회로 끝나므로 봇 탐지 위험이 거의 없고, 쿠팡이 공식 제공하는 기능이라 약관상으로도 안전하다.
+   *   → 쿠팡은 건별 수집 대신 이 경로를 쓴다(신청내역 조회·다운로드 주소는 실측 중).
+   *
+   * 아래 건별 경로는 일괄 신청이 막히거나 일부 건이 누락될 때의 폴백으로 남겨 둔다.
+   *
+   * 실측(2026-08): 카드영수증 주소를 확보했다.
+   *   https://payment.coupang.com/v2/card-receipt/view
+   *     ?orderId=20102411842987&vendorIds=A00010028&cancel=false
+   *
+   * 전표를 여는 데 **orderId 와 vendorIds(판매자 ID) 두 값**이 필요하다.
+   * 주문번호는 14자리이고 날짜가 들어 있지 않아(20102411842987 → 실제 주문일 2026-08-20)
+   * 주문일은 전표 문서에서 읽는다.
+   *
+   * ⚠ 아직 확인 못 한 것: 영수증 목록 화면(payment-receipt)이 두 값을 어떤 모양으로 담고 있는지.
+   *   주문 상세의 [카드영수증]은 React 버튼이라 HTML 에 주소가 없다. 목록 화면 구조를 보고 정한다.
+   */
+  orderNoPattern: "\\b\\d{12,16}\\b",
+  receiptKey: [
+    // 링크에 두 값이 함께 있는 경우
+    {
+      pattern: "card-receipt/view\\?orderId=(\\d+)&(?:amp;)?vendorIds=([^&\"'\\s<>]+)",
+      groups: ["orderId", "vendorIds"],
+    },
+  ],
+  receiptUrlTemplate:
+    "https://payment.coupang.com/v2/card-receipt/view?orderId={orderId}&vendorIds={vendorIds}&cancel=false",
+  receiptLabel: "카드영수증",
+  orderDateFromDocument: true,
+  stealth: true,
+  bulkViewerUrlTemplate: "https://payment.coupang.com/card-receipt-requests/{requestId}?page={page}",
+  // 트래픽 패턴을 보는 곳이라 기본 대기를 길게 둔다(다른 몰의 2초 → 5초).
+  defaultDelay: 5000,
+};
+
+const SITES: Record<string, SiteConfig> = {
+  [ELEVEN_ST.key]: ELEVEN_ST,
+  [GMARKET.key]: GMARKET,
+  [AUCTION.key]: AUCTION,
+  [NAVER_PAY.key]: NAVER_PAY,
+  [COUPANG.key]: COUPANG,
+};
+
+export function configFile(site: string): string {
+  return path.join(siteDir(site), "site-config.json");
+}
+
+/** 기본 설정 + probe 가 실측해 저장한 값(site-config.json) 병합 */
+export function loadSiteConfig(site: string): SiteConfig {
+  const base = SITES[site];
+  if (!base) {
+    throw new Error(`알 수 없는 사이트: ${site} (지원: ${Object.keys(SITES).join(", ")})`);
+  }
+
+  const file = configFile(site);
+  if (!fs.existsSync(file)) return { ...base };
+
+  try {
+    const saved = JSON.parse(fs.readFileSync(file, "utf-8"));
+    return { ...base, ...saved };
+  } catch {
+    console.log(`[${site}] ⚠ site-config.json 을 읽지 못해 기본값을 씁니다: ${file}`);
+    return { ...base };
+  }
+}
+
+/** 실측 결과를 site-config.json 에 부분 저장(다음 실행부터 우선 적용) */
+export function saveSiteConfig(site: string, patch: Partial<SiteConfig>): void {
+  ensureSiteDir(site);
+  const file = configFile(site);
+
+  let current: Record<string, unknown> = {};
+  if (fs.existsSync(file)) {
+    try {
+      current = JSON.parse(fs.readFileSync(file, "utf-8"));
+    } catch {
+      current = {};
+    }
+  }
+
+  const next = { ...current, ...patch };
+  fs.writeFileSync(file, JSON.stringify(next, null, 2), "utf-8");
+  console.log(`[${site}] 사이트 설정 저장: ${file}`);
+}

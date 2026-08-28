@@ -88,6 +88,15 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       if (body.newContractDate !== undefined) {
         pushSet("contract_date", body.newContractDate || null);
       }
+      // 계약명 정정(2026-08-24) — 빈 값으로는 덮지 않는다(오기재 정정 전용).
+      if (typeof body.newContractTitle === "string" && body.newContractTitle.trim()) {
+        pushSet("contract_title", body.newContractTitle.trim());
+      }
+      // 계약 종류 변경(2026-08-26) — 일반 계약으로 등록했다가 실제로는 단가 계약(추가 기성 발생)인
+      // 건을 변경계약에서 바로잡는다. 허용값 외에는 무시한다.
+      if (body.newContractKind === "standard" || body.newContractKind === "unit_price") {
+        pushSet("contract_kind", body.newContractKind);
+      }
       if (body.newServiceType !== undefined) {
         pushSet("service_type", body.newServiceType || null);
       }
@@ -102,6 +111,10 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       }
       if (body.newOrderingSubjectType !== undefined) {
         pushSet("ordering_subject_type", normalizeOrderingSubjectType(body.newOrderingSubjectType));
+      }
+      // 발주처(계약상대 업체) 변경(2026-08-24) — 엑셀 임포트 오기재 정정용(한솔제지 실사례).
+      if (typeof body.newCounterpartyFacilityId === "string" && body.newCounterpartyFacilityId.trim()) {
+        pushSet("counterparty_facility_id", body.newCounterpartyFacilityId.trim());
       }
       if (newFacilityIds !== null) {
         pushSet("facility_id", newFacilityIds[0] || null);
@@ -119,6 +132,39 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       } else if (body.contractSuspendedAt) {
         pushSet("contract_status", "suspended");
       }
+      // 금액 탭의 '변경 금액'을 실제 청구·수금 단계 금액에 반영(2026-08-26 사용자 리포트).
+      // 종전에는 변경 이벤트 이력과 contracts.current_amount 만 갱신하고 단계 금액은 그대로 두어,
+      // 감액(국일인토트 5,000만→3,000만 실사례)이 화면에 전혀 반영되지 않았다.
+      // 단계 매칭은 stage_label 기준(payload 가 라벨만 들고 있다), 빈 값은 '유지'라 건너뛴다.
+      const amountRows = Array.isArray((payload as { amounts?: unknown }).amounts)
+        ? ((payload as { amounts: unknown[] }).amounts as Record<string, unknown>[])
+        : [];
+      let milestoneUpdates = 0;
+      for (const row of amountRows) {
+        const label = String(row?.stageLabel ?? "").trim();
+        const nextRaw = String(row?.nextAmount ?? "").trim();
+        if (!label || !nextRaw) continue;
+        const amount = Number(nextRaw.replace(/[^\d.-]/g, ""));
+        if (!Number.isFinite(amount)) continue;
+        // 금액이 바뀌면 수금비율(기준액 대비)·수금완료 판정도 새 금액 기준으로 다시 계산한다
+        // (2026-08-26 사용자 리포트 — 5,000만→3,000만 감액 후에도 비율이 옛 기준 40% 로 남았다).
+        // 실제 입금액(collected_amount)은 사실이라 그대로 두고 비율만 파생 재계산.
+        await db.run(
+          `UPDATE contract_payment_milestones
+              SET amount = $3,
+                  collection_ratio = CASE
+                    WHEN $3 > 0 THEN ROUND((COALESCE(collected_amount, 0) / $3)::numeric, 3)
+                    ELSE collection_ratio END,
+                  payment_collected = CASE
+                    WHEN $3 > 0 THEN (CASE WHEN COALESCE(collected_amount, 0) >= $3 - 1 THEN 1 ELSE 0 END)
+                    ELSE payment_collected END,
+                  updated_at = $4
+            WHERE contract_id = $1 AND stage_label = $2`,
+          [contractId, label, amount, now]
+        );
+        milestoneUpdates += 1;
+      }
+
       if (contractUpdates.length > 0) {
         contractUpdates.push(`updated_at = $${values.length + 1}`);
         values.push(now);
@@ -145,7 +191,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
         action: "contract_update",
         targetTable: "contract_change_events",
         targetId: changeId,
-        after: { contractId, changeId, payload, changedFields, deltaAmount },
+        after: { contractId, changeId, payload, changedFields, deltaAmount, milestoneUpdates },
       });
     });
 
@@ -178,6 +224,7 @@ function normalizeOrderingSubjectType(value: unknown): string | null {
     "SITE_DIRECT",
     "PARENT_CORP",
     "CONSIGNED_OPERATOR",
+    "EPC",
     "THIRD_PARTY_PARTNER",
     "ETC",
   ].includes(text)

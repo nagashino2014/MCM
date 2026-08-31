@@ -92,8 +92,12 @@ function prevYmd8(d: string): string {
 
 /**
  * 이벤트 → (사번, 일자) 출근/퇴근 집계(순수 함수).
- * · 출근 = 출근('1') 최초 태그, 없으면 출입('5') 최초 태그.
- * · 퇴근 = 퇴근('2') 최후 태그, 없으면 출입('5') 최후 태그(출근과 같은 단일 태그면 미정).
+ * · 출근 = 당일 첫 진입 태그(출근 '1'·출입 '5' 중 최초). ⚠'1' 우선이 아니다 — 07:06 출입 후
+ *   07:20 출근 버튼을 찍으면 첫 진입 07:06 이 실질 출근이고, '1' 우선으로 잡으면 그 이전
+ *   태그가 퇴근 후보로 남아 out<in(가짜 철야 23h)이 된다(2026-08-31 조옥환 실측 사고).
+ * · 퇴근 = 출근 **이후** 태그만 후보: 퇴근('2') 최후, 없으면 출입('5') 최후(없으면 미정).
+ *   아침 오태그('2' 등)가 출근보다 앞서면 퇴근으로 쓰지 않는다 — 당일 태그끼리는
+ *   out ≥ in 이 보장되고, 자정 보정(+1일)은 아래 전일 귀속 경로에서만 발생한다.
  * · 새벽(06:00 미만) 태그는 전일에 태그가 있으면 전일 퇴근 후보로 귀속
  *   — out_time 에 새벽 HHMMSS 그대로 저장하면 computeDaily 가 out<in 자정 보정(+1일)한다.
  * 알 수 없는 근태내역 코드는 무시한다(원본은 adt_event_raw 에 보존).
@@ -127,16 +131,17 @@ export function aggregateEvents(events: CapsEvent[]): AdtRawRecord[] {
       const minT = (list: CapsEvent[]) => (list.length ? list.reduce((a, b) => (a.tTime <= b.tTime ? a : b)) : null);
       const maxT = (list: CapsEvent[]) => (list.length ? list.reduce((a, b) => (a.tTime >= b.tTime ? a : b)) : null);
 
-      const inEv = minT(codes(day.own, EVENT_CODE.IN)) ?? minT(codes(day.own, EVENT_CODE.PASS));
+      // 출근 = 첫 진입('1'·'5' 중 최초). 퇴근 태그('2')만 있는 날은 출근 미정.
+      const inEv = minT([...codes(day.own, EVENT_CODE.IN), ...codes(day.own, EVENT_CODE.PASS)]);
 
-      // 퇴근: 익일 새벽 귀속분이 있으면 그중 최후(당일 저녁보다 늦다), 없으면 당일에서.
-      let outEv =
+      // 퇴근: 익일 새벽 귀속분이 있으면 그중 최후(당일 저녁보다 늦다), 없으면 당일에서 —
+      // 출근 이후 태그만 후보로 삼는다(아침 오태그가 퇴근으로 잡혀 가짜 철야가 되는 것 방지).
+      const afterIn = (list: CapsEvent[]) => (inEv ? list.filter((e) => e.tTime > inEv.tTime) : list);
+      const outEv =
         maxT(codes(day.overnight, EVENT_CODE.OUT)) ??
         maxT(codes(day.overnight, EVENT_CODE.PASS)) ??
-        maxT(codes(day.own, EVENT_CODE.OUT)) ??
-        maxT(codes(day.own, EVENT_CODE.PASS));
-      // 출근과 동일한 단일 태그라면 퇴근 미정(재실 0분 방지).
-      if (outEv && inEv && outEv === inEv) outEv = null;
+        maxT(afterIn(codes(day.own, EVENT_CODE.OUT))) ??
+        maxT(afterIn(codes(day.own, EVENT_CODE.PASS)));
 
       const name = [...day.own, ...day.overnight].map((e) => e.eName).find((n) => n) ?? null;
       records.push({

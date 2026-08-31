@@ -279,7 +279,7 @@ export default function BonusStatementsBoard() {
 
       <div className="flex flex-1 min-h-0 gap-4">
         {/* 좌측 사이드바 */}
-        <aside className="w-64 shrink-0 flex flex-col gap-4 overflow-y-auto scrollbar-hide">
+        <aside className="w-[332px] shrink-0 flex flex-col gap-4 overflow-y-auto scrollbar-hide">
           <section className="cd-card rounded-3xl p-4 cd-reveal delay-1 flex flex-col gap-2">
             <h3 className="text-xs font-bold cd-text-faint">조직도 (성과급 상세 산정 대상자)</h3>
             {snapshot ? (

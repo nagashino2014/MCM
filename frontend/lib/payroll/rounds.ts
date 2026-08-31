@@ -24,9 +24,12 @@ export interface RoundSummary {
   scope: string;
   status: string;
   approvalDocId: string | null;
+  approvalDocNo: string | null;
   contractCount: number;
   signedCount: number;
   sentCount: number;
+  /** 라운드 대상자 이름(진행 현황 카드 표시용) */
+  employeeNames: string[];
   createdAt: string;
 }
 
@@ -105,10 +108,14 @@ export async function listRounds(): Promise<RoundSummary[]> {
       `SELECT r.*,
               count(c.contract_id) AS contract_count,
               count(c.contract_id) FILTER (WHERE c.status = 'signed') AS signed_count,
-              count(c.contract_id) FILTER (WHERE c.status IN ('sent','signed')) AS sent_count
+              count(c.contract_id) FILTER (WHERE c.status IN ('sent','signed')) AS sent_count,
+              array_agg(DISTINCT p.name) FILTER (WHERE p.name IS NOT NULL) AS employee_names,
+              d.doc_no AS approval_doc_no
          FROM labor_contract_rounds r
          LEFT JOIN labor_contracts c ON c.round_id = r.round_id
-        GROUP BY r.round_id
+         LEFT JOIN employee_profiles p ON p.employee_id = c.employee_id
+         LEFT JOIN approval_docs d ON d.doc_id = r.approval_doc_id
+        GROUP BY r.round_id, d.doc_no
         ORDER BY r.base_date DESC`
     )
   );
@@ -122,9 +129,11 @@ export async function listRounds(): Promise<RoundSummary[]> {
     scope: String(r.scope),
     status: String(r.status),
     approvalDocId: r.approval_doc_id ? String(r.approval_doc_id) : null,
+    approvalDocNo: r.approval_doc_no ? String(r.approval_doc_no) : null,
     contractCount: Number(r.contract_count ?? 0),
     signedCount: Number(r.signed_count ?? 0),
     sentCount: Number(r.sent_count ?? 0),
+    employeeNames: Array.isArray(r.employee_names) ? r.employee_names.map(String) : [],
     createdAt: String(r.created_at ?? ""),
   }));
 }

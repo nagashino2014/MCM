@@ -171,11 +171,10 @@ export const MENU_ITEMS: MenuItem[] = [
   // 본인용(내 휴가·내 근태)은 전 직원, 전 직원 데이터를 다루는 관리 화면은 admin 전용(2026-08-31 확정).
   {
     title: "근태·휴가",
-    href: "/approval/my-leave",
+    href: "/approval/my-hr",
     icon: CalendarClock,
     submenu: [
-      { title: "내 휴가", href: "/approval/my-leave" },
-      { title: "내 근태·초과근무", href: "/approval/my-attendance" },
+      { title: "내 휴가·근태", href: "/approval/my-hr" },
       { title: "직원별 휴가 관리", href: "/approval/leave", minRole: "admin" },
       { title: "근태·초과근무 관리", href: "/approval/attendance", minRole: "admin" },
       // 증명서 발급 관리(FRM-P2, 204) — 증명신청서 승인 건의 발급 파이프라인.

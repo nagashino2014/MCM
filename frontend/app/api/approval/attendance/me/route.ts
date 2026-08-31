@@ -10,6 +10,7 @@ import {
   listMyMealWarnings,
   listMyAbsenceRequests,
 } from "@/lib/adt/queries";
+import { myPayBasis, overtimePay } from "@/lib/payroll/overtime";
 import { DEFAULT_ATTENDANCE_SETTINGS } from "@/lib/adt/settings";
 
 export const runtime = "nodejs";
@@ -32,13 +33,14 @@ export async function GET(req: NextRequest) {
     const month = req.nextUrl.searchParams.get("month");
     const full = req.nextUrl.searchParams.get("full") === "1";
     const year = String(month ?? "").slice(0, 4) || String(new Date(Date.now() + 9 * 3600 * 1000).getUTCFullYear());
-    const [{ adtEmpNo, weeks }, months, trend, lateMonthly, mealWarnings, absenceRequests] = await Promise.all([
+    const [{ adtEmpNo, weeks }, months, trend, lateMonthly, mealWarnings, absenceRequests, pay] = await Promise.all([
       listMyWeekly(ctx.userId, 8, month),
       listMyAttendanceMonths(ctx.userId),
       full ? listMyMonthlyTrend(ctx.userId, 12) : Promise.resolve([]),
       full ? listMyMonthlyLateDays(ctx.userId, 12) : Promise.resolve([]),
       full ? listMyMealWarnings(ctx.userId, year) : Promise.resolve([]),
       full ? listMyAbsenceRequests(ctx.userId) : Promise.resolve([]),
+      full ? myPayBasis(ctx.userId) : Promise.resolve(null),
     ]);
 
     const week = req.nextUrl.searchParams.get("week") ?? weeks[0]?.weekStart ?? null;
@@ -59,7 +61,25 @@ export async function GET(req: NextRequest) {
     };
 
     if (!full) return NextResponse.json({ weeks, week, daily, limits, months });
-    return NextResponse.json({ weeks, week, daily, limits, months, trend, lateMonthly, mealWarnings, absenceRequests });
+    // 수당 환산 — 급여 엔진과 같은 규칙(통상시급 100원 반올림·overtimePay 10원 절사)을 서버에서 적용한다.
+    const wage = pay?.hourlyWage ?? null;
+    const rates = pay ? { rateDay: pay.rateDay, rateNight: pay.rateNight, divisorHours: pay.divisorHours } : null;
+    const estPay = (dayMin: number, nightMin: number) =>
+      wage != null && rates ? overtimePay(wage, dayMin, nightMin, rates) : null;
+    const trendWithPay = trend.map((t) => ({ ...t, estimatedPay: estPay(t.overtimeDayMinutes, t.overtimeNightMinutes) }));
+    const weeksWithPay = weeks.map((w) => ({ ...w, estimatedPay: estPay(w.overtimeDayMinutes, w.overtimeNightMinutes) }));
+    return NextResponse.json({
+      weeks: weeksWithPay,
+      week,
+      daily,
+      limits,
+      months,
+      trend: trendWithPay,
+      lateMonthly,
+      mealWarnings,
+      absenceRequests,
+      pay,
+    });
   } catch (err) {
     return authErrorToResponse(err);
   }

@@ -24,6 +24,8 @@ export interface LeaveEntry {
   usedOn: string | null; // YYYY-MM-DD (use)
   leaveTypeKey: string | null;
   leaveLabel: string | null; // 카탈로그 라벨(표시용)
+  /** 카탈로그 그룹명("경조 · 결혼", "공가" …) — 내 휴가 캘린더 도트 색 판정용. */
+  leaveGroup: string | null;
   deduct: "full" | "half" | null;
   docId: string | null;
   source: "groupware" | "excel" | "manual"; // 입력 출처 — 그룹웨어(휴가신청 승인)/엑셀 임포트/수기
@@ -162,7 +164,7 @@ export async function listLeaveEntries(employeeId: string, year: string): Promis
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT l.*, lt.label AS type_label, lt.deduct AS type_deduct
+      `SELECT l.*, lt.label AS type_label, lt.deduct AS type_deduct, lt.group_name AS type_group
          FROM annual_leave_ledger l
          LEFT JOIN leave_types lt ON lt.key = l.leave_type_key
         WHERE l.employee_id = $1 AND l.year = $2
@@ -183,6 +185,7 @@ export async function listLeaveEntries(employeeId: string, year: string): Promis
       usedOn: r.used_on != null ? String(r.used_on) : null,
       leaveTypeKey: r.leave_type_key != null ? String(r.leave_type_key) : null,
       leaveLabel: r.type_label != null ? String(r.type_label) : r.leave_type_key != null ? String(r.leave_type_key) : null,
+      leaveGroup: r.type_group != null ? String(r.type_group) : null,
       deduct: r.type_deduct === "full" || r.type_deduct === "half" ? r.type_deduct : null,
       docId,
       source,

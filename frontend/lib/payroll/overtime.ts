@@ -454,6 +454,31 @@ export async function requestedOvertime(
   return map;
 }
 
+export interface MyPayBasis {
+  /** 통상시급(100원 반올림) — 최신 근로계약 통상임금 ÷ 209. 계약 미등록이면 null. */
+  hourlyWage: number | null;
+  rateDay: number; // 연장 배율(1.5)
+  rateNight: number; // 야간 배율(2.0)
+  divisorHours: number; // 월 기준 근로시간(209)
+}
+
+/** 내 근태 화면용 — 본인 통상시급·배율. 수당 환산은 overtimePay 와 같은 규칙을 쓴다. */
+export async function myPayBasis(userId: string): Promise<MyPayBasis> {
+  const db = await getDb();
+  const rates = await getOvertimeRates();
+  const rows = rowsToObjects(
+    await db.exec(`SELECT employee_id FROM users WHERE user_id = $1`, [userId])
+  );
+  const employeeId = rows[0]?.employee_id != null ? String(rows[0].employee_id) : null;
+  const hourly = employeeId ? (await ordinaryHourlyWages(rates.divisorHours)).get(employeeId) ?? null : null;
+  return {
+    hourlyWage: hourly != null ? Math.round(hourly) : null,
+    rateDay: rates.rateDay,
+    rateNight: rates.rateNight,
+    divisorHours: rates.divisorHours,
+  };
+}
+
 export interface WeeklyPayEstimate {
   hourlyWage: number;
   amount: number;

@@ -11,7 +11,7 @@ import { usePathname } from "next/navigation";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BrandMark } from "@/components/cdash/BrandMark";
-import { MENU_ITEMS, isMenuVisibleForRole, type MenuItem, type Role } from "@/config/menu";
+import { MENU_ITEMS, isMenuVisibleForRole, visibleSubmenu, type MenuItem, type Role } from "@/config/menu";
 import type { NavBadges } from "@/components/layout/useNavBadges";
 
 interface SidebarProps {
@@ -68,7 +68,9 @@ export function Sidebar({ role, badges, mode = "auto", onNavigate }: SidebarProp
     });
   };
 
-  const visible = MENU_ITEMS.filter((m) => isMenuVisibleForRole(m, role));
+  const visible = MENU_ITEMS.filter((m) => isMenuVisibleForRole(m, role)).map((m) =>
+    m.submenu ? { ...m, submenu: visibleSubmenu(m, role) } : m
+  );
   const groups: Array<{ key: string; items: MenuItem[] }> = ["home", "collab", "work", "main", "system"]
     .map((key) => ({ key, items: visible.filter((m) => (m.group ?? "main") === key) }))
     .filter((g) => g.items.length > 0);

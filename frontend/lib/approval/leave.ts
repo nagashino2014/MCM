@@ -468,3 +468,87 @@ export async function getMyLeaveRemaining(userId: string, year: string): Promise
   if (granted === 0 && used === 0) return null;
   return { granted, used, remaining: Math.round((granted - used) * 100) / 100 };
 }
+
+/* ---------- 내 휴가(본인 스코프 — /approval/my-leave) ---------- */
+
+export interface MyLeaveOverview {
+  year: string;
+  employeeId: string | null;
+  hiredAt: string | null;
+  accrualBasis: AccrualBasis;
+  /** 이번 연도 연차 발생일 — jan1 이면 1/1, hire_date 면 입사일의 해당 연도 도래일. */
+  accrualDate: string | null;
+  /** 규정상 발생 연차(근속 기준 참고값). */
+  accrual: number | null;
+  granted: number;
+  usedAnnual: number;
+  remaining: number;
+  otherUsed: number;
+  entries: LeaveEntry[];
+  special: { remaining: SpecialLeaveRemaining[]; entries: SpecialLeaveEntry[] };
+  /** 기록이 있는 연도 목록(연도 탐색용, 최신순). */
+  years: string[];
+}
+
+/**
+ * 본인 휴가 현황 — 관리자용 listLeaveSummary/listLeaveEntries 와 같은 집계 규칙을
+ * users.user_id → employee_id 스코프로 좁혀서 쓴다(본인 것 외에는 조회 불가).
+ */
+export async function getMyLeaveOverview(userId: string, year: string): Promise<MyLeaveOverview> {
+  const db = await getDb();
+  const empRows = rowsToObjects(
+    await db.exec(
+      `SELECT u.employee_id, e.hired_at FROM users u
+         LEFT JOIN employee_profiles e ON e.employee_id = u.employee_id
+        WHERE u.user_id = $1`,
+      [userId]
+    )
+  );
+  const employeeId = empRows[0]?.employee_id != null ? String(empRows[0].employee_id) : null;
+  const hiredAt = empRows[0]?.hired_at != null ? String(empRows[0].hired_at) : null;
+  const { accrualBasis } = await getLeaveSettings();
+
+  if (!employeeId) {
+    return {
+      year, employeeId: null, hiredAt: null, accrualBasis, accrualDate: null, accrual: null,
+      granted: 0, usedAnnual: 0, remaining: 0, otherUsed: 0,
+      entries: [], special: { remaining: [], entries: [] }, years: [],
+    };
+  }
+
+  const [entries, specialEntries, specialRemaining, yearRows] = await Promise.all([
+    listLeaveEntries(employeeId, year),
+    listSpecialLeaveEntries(employeeId),
+    getMySpecialLeaveRemaining(userId),
+    db.exec(`SELECT DISTINCT year FROM annual_leave_ledger WHERE employee_id = $1 ORDER BY year DESC`, [employeeId]),
+  ]);
+
+  const granted = entries.filter((e) => e.entryType === "grant" || e.entryType === "adjust").reduce((a, e) => a + e.days, 0);
+  const usedAnnual = entries
+    .filter((e) => e.entryType === "use" && (e.deduct !== null || e.leaveTypeKey === null))
+    .reduce((a, e) => a + e.days, 0);
+  const otherUsed = entries
+    .filter((e) => e.entryType === "use" && e.leaveTypeKey !== null && e.deduct === null)
+    .reduce((a, e) => a + e.days, 0);
+
+  // 연차 발생일 — 회계연도(jan1)면 해당 연도 1/1, 입사일 기준이면 입사 월·일의 해당 연도 도래일.
+  let accrualDate: string | null = null;
+  if (accrualBasis === "jan1") accrualDate = `${year}-01-01`;
+  else if (hiredAt && /^\d{4}-\d{2}-\d{2}/.test(hiredAt)) accrualDate = `${year}-${hiredAt.slice(5, 10)}`;
+
+  return {
+    year,
+    employeeId,
+    hiredAt,
+    accrualBasis,
+    accrualDate,
+    accrual: computeAccrual(hiredAt, year, accrualBasis),
+    granted: Math.round(granted * 100) / 100,
+    usedAnnual: Math.round(usedAnnual * 100) / 100,
+    remaining: Math.round((granted - usedAnnual) * 100) / 100,
+    otherUsed: Math.round(otherUsed * 100) / 100,
+    entries,
+    special: { remaining: specialRemaining, entries: specialEntries },
+    years: rowsToObjects(yearRows).map((r) => String(r.year)),
+  };
+}

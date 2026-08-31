@@ -46,6 +46,13 @@ export const queueCertificatesConnector: ActionConnector = {
     { key: "target_year", label: "귀속연도" },
     { key: "copies", label: "매수" },
   ],
+  async preview(ctx) {
+    const raw = ctx.slot("kinds");
+    const labels = Array.isArray(raw) ? raw.map(String) : String(raw ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+    const kinds = labels.map((l) => kindByLabel.get(l)).filter((k): k is CertKind => !!k);
+    if (!kinds.length) return "신청된 증명서 종류를 해석하지 못해 실행이 실패합니다 — 슬롯 매핑을 확인하세요.";
+    return `발급 대기 ${kinds.length}건이 생성됩니다: ${kinds.map(certLabel).join(", ")} (담당자가 증명서 발급 관리에서 발급).`;
+  },
   async run(ctx) {
     const raw = ctx.slot("kinds");
     const labels = Array.isArray(raw) ? raw.map(String) : String(raw ?? "").split(",").map((s) => s.trim()).filter(Boolean);

@@ -62,6 +62,15 @@ export async function listAbsenceRequests(status?: string): Promise<AbsenceReque
   return rows.map(mapRow);
 }
 
+/** 직원의 열린 요청 — 커넥터 preview/run 공용(employee_id 로 조회). */
+export async function listMyOpenAbsenceRequestsByEmployee(employeeId: string): Promise<AbsenceRequestRow[]> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(`${BASE_SELECT} WHERE r.status = 'pending' AND r.employee_id = $1 ORDER BY r.created_at`, [employeeId])
+  );
+  return rows.map(mapRow);
+}
+
 /** 본인의 열린 요청 — 기안 화면 배너·홈 노출용(user_id 로 조회). */
 export async function listMyOpenAbsenceRequests(userId: string): Promise<AbsenceRequestRow[]> {
   const db = await getDb();
@@ -115,6 +124,17 @@ export const closeAbsenceRequestConnector: ActionConnector = {
   label: "결근사유서 요청 마감",
   description: "상신된 결근사유서를 대상자의 열린 제출 요청에 연결하고 요청을 마감합니다.",
   slots: [{ key: "period", label: "결근 기간", hint: "period 필드 — 요청과 기간이 겹치는 건을 우선 매칭" }],
+  async preview(ctx) {
+    if (!ctx.drafterEmployeeId) return "기안자 직원 정보가 없어 요청 매칭이 생략됩니다.";
+    const open = await listMyOpenAbsenceRequestsByEmployee(ctx.drafterEmployeeId);
+    if (!open.length) return "열린 제출 요청이 없어 자발 제출로 기록됩니다(요청 마감 없음).";
+    const period = (ctx.slot("period") ?? {}) as { from?: string; to?: string };
+    const from = String(period.from ?? "");
+    const to = String(period.to ?? from);
+    const overlap = from ? open.find((r) => r.dateFrom <= to && r.dateTo >= from) : undefined;
+    const target = overlap ?? open[0];
+    return `제출 요청 ${open.length}건 중 ${overlap ? "기간이 겹치는" : "가장 오래된"} 요청(${target.dateFrom}${target.dateTo !== target.dateFrom ? `~${target.dateTo}` : ""})이 마감 처리됩니다.`;
+  },
   async run(ctx) {
     const employeeId = ctx.drafterEmployeeId;
     if (!employeeId) return { detail: "기안자 직원 정보 없음 — 매칭 생략" };

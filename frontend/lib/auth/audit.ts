@@ -66,6 +66,7 @@ export type AuditAction =
   | "trash_purge"
   | "approval_form_update"
   | "approval_action_rerun"
+  | "approval_form_actions_update"
   | "certificate_issue"
   | "certificate_deliver"
   | "expense_settlement_run"

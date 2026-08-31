@@ -5,10 +5,9 @@ import {
   deliverCertificate,
   issueAutoCertificate,
   issueStampedCertificate,
+  issueWithholdingFromYearend,
   listCertificateIssues,
 } from "@/lib/approval/certificates";
-import { getDb, rowsToObjects } from "@/lib/db";
-import { readContractDocument } from "@/lib/storage/contract-document-storage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -54,19 +53,8 @@ export async function POST(req: NextRequest) {
     }
     if (body.action === "issue-yearend") {
       // 앱이 보유한 연말정산 PDF(yearend_settlements.pdf_key)를 원본으로 직인본 생성 — 원천징수영수증 자동 경로.
-      const issue = (await listCertificateIssues()).find((i) => i.issueId === issueId);
-      if (!issue) return NextResponse.json({ error: "발급 항목을 찾을 수 없습니다." }, { status: 404 });
-      const db = await getDb();
-      const rows = rowsToObjects(
-        await db.exec(
-          `SELECT pdf_key FROM yearend_settlements WHERE employee_id = $1 AND target_year = $2 AND pdf_key IS NOT NULL ORDER BY target_year DESC LIMIT 1`,
-          [issue.employeeId, Number(issue.targetYear ?? "") || new Date().getFullYear() - 1]
-        )
-      );
-      const pdfKey = rows.length && rows[0].pdf_key != null ? String(rows[0].pdf_key) : null;
-      const buf = pdfKey ? await readContractDocument(pdfKey) : null;
-      if (!buf) return NextResponse.json({ error: "해당 귀속연도의 연말정산 PDF가 없습니다 — 스캔본을 업로드하세요." }, { status: 404 });
-      const updated = await issueStampedCertificate(issueId, actor.userId, buf);
+      const updated = await issueWithholdingFromYearend(issueId, actor.userId);
+      if (!updated) return NextResponse.json({ error: "해당 귀속연도의 연말정산 PDF가 없습니다 — 스캔본을 업로드하세요." }, { status: 404 });
       await recordAuditLog({ actorUserId: actor.userId, action: "certificate_issue", targetTable: "certificate_issues", targetId: issueId });
       return NextResponse.json({ issue: updated });
     }

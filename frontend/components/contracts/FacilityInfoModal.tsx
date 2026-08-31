@@ -34,6 +34,7 @@ interface DepositRow {
   bankName: string | null;
   bankCode: string | null;
   matched: boolean;
+  noteKind: string | null;
   noteBank: string | null;
   noteMaturityDate: string | null;
   noteLoanExecutedDate: string | null;
@@ -411,7 +412,9 @@ function DepositHistoryModal({
                           {method ? (
                             <span className="cd-text" title={row.paymentMethod ?? undefined}>
                               {method}
-                              {method === "어음" && row.noteBank ? <span className="cd-text-faint"> · {row.noteBank}</span> : null}
+                              {method === "어음" && (row.noteKind || row.noteBank) ? (
+                                <span className="cd-text-faint"> · {[row.noteKind, row.noteBank].filter(Boolean).join(" · ")}</span>
+                              ) : null}
                             </span>
                           ) : (
                             <span className="cd-text-faint">-</span>

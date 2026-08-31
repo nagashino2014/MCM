@@ -25,6 +25,7 @@ export interface FacilityDepositRow {
   bankName: string | null; // 입금 은행 — 계좌 원장(바로빌/엑셀) 매칭 건만 채워진다
   bankCode: string | null; // 바로빌 은행코드 (FinLogo 용)
   matched: boolean; // 수금 자동대조(확정)로 계좌 원장과 연결된 행인지
+  noteKind: string | null; // 어음 종류(전자어음/외담대/상생협력론 등, 단계 입력값)
   noteBank: string | null; // 어음 취급 은행(단계 입력값)
   noteMaturityDate: string | null;
   noteLoanExecutedDate: string | null;
@@ -48,7 +49,7 @@ export async function GET(_: NextRequest, ctx: RouteContext) {
                 m.amount, m.invoice_amount, m.invoice_issued_at,
                 m.payment_collected, m.payment_collected_at, m.collected_amount,
                 m.settlement_amount, m.partial_payments_json,
-                m.note_bank, m.note_maturity_date, m.note_loan_executed_date,
+                m.note_kind, m.note_bank, m.note_maturity_date, m.note_loan_executed_date,
                 c.contract_title, c.payment_method
            FROM contract_payment_milestones m
            JOIN contracts c ON c.contract_id = m.contract_id
@@ -112,6 +113,7 @@ export async function GET(_: NextRequest, ctx: RouteContext) {
         invoiceAmount: base > 0 ? base : null,
         collected,
         remaining: collected ? 0 : Math.max(0, Math.round(base - collectedAmount)),
+        noteKind: m.note_kind ? String(m.note_kind) : null,
         noteBank: m.note_bank ? String(m.note_bank) : null,
         noteMaturityDate: m.note_maturity_date ? String(m.note_maturity_date) : null,
         noteLoanExecutedDate: m.note_loan_executed_date ? String(m.note_loan_executed_date) : null,

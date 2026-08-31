@@ -163,7 +163,8 @@ interface EditMilestoneModalState {
   partialPaymentMemo: string;
   /** 계약의 대금 지급 방식 — "어음"으로 시작하면 어음 상세 입력을 노출한다. */
   paymentMethod: string;
-  // 어음 수금 상세(마이그 200) — 만기일·대출실행일은 수금 자동대조의 날짜 매칭 근거가 된다.
+  // 어음 수금 상세(마이그 200·201) — 만기일·대출실행일은 수금 자동대조의 날짜 매칭 근거가 된다.
+  noteKind: string;
   noteBank: string;
   noteIssuedDate: string;
   noteMaturityDate: string;
@@ -224,6 +225,8 @@ const CONTRACT_SERVICE_OPTIONS = [
 
 const DEFAULT_OUTSOURCING_TYPES = ["도면 작성", "산업안전 관련", "측정/분석", "디자인", "번역"];
 const PAYMENT_METHOD_OPTIONS = ["현금", "어음 : 1개월 이하", "어음 : 2개월 이하", "어음 : 2개월 이상"];
+// 어음 종류 제안 목록(자유 입력) — 담당자가 어음 상품을 특정할 수 있게 명기해 둔다(마이그 201).
+const NOTE_KIND_OPTIONS = ["전자어음", "외담대(외상매출채권 담보대출)", "상생협력론", "구매론", "종이어음"];
 
 // 실적 정산(출장 경비·인쇄비 등의 차액 정산)은 준공금 성격의 최종 대금 지급 단계에만
 // 적용된다. 단계명이 아래 목록에 해당하면서 청구·수금 단계의 마지막 행일 때만 노출.
@@ -1294,6 +1297,7 @@ function ContractDetailPanel({
                               collectionRatio: String(milestone.collection_ratio ?? ""),
                               partialPaymentMemo: firstPartialPaymentMemo(milestone.partial_payments_json),
                               paymentMethod: String(contract.payment_method ?? ""),
+                              noteKind: String(milestone.note_kind ?? ""),
                               noteBank: String(milestone.note_bank ?? ""),
                               noteIssuedDate: String(milestone.note_issued_date ?? ""),
                               noteMaturityDate: String(milestone.note_maturity_date ?? ""),
@@ -2483,6 +2487,7 @@ function EditMilestoneModal({
             collectionRatio: state.collectionRatio ? Number(state.collectionRatio) : null,
             collectedAmount: state.collectedAmount ? Number(state.collectedAmount) : null,
             partialPaymentMemo: state.paymentCollected && !invoiceFile ? state.partialPaymentMemo : undefined,
+            noteKind: state.noteKind || null,
             noteBank: state.noteBank || null,
             noteIssuedDate: state.noteIssuedDate || null,
             noteMaturityDate: state.noteMaturityDate || null,
@@ -2576,6 +2581,21 @@ function EditMilestoneModal({
                 어음 수수료는 별도 출금되므로 입금은 발행액 전액 기준으로 대조합니다.
               </span>
             </p>
+            <label className="grid gap-1 text-sm">
+              <span className="font-bold cd-text-muted">어음 종류</span>
+              <input
+                className="cd-input"
+                placeholder="예: 전자어음 / 외담대 / 상생협력론"
+                list="note-kind-options"
+                value={state.noteKind}
+                onChange={(e) => onChange({ ...state, noteKind: e.target.value })}
+              />
+              <datalist id="note-kind-options">
+                {NOTE_KIND_OPTIONS.map((option) => (
+                  <option key={option} value={option} />
+                ))}
+              </datalist>
+            </label>
             <label className="grid gap-1 text-sm">
               <span className="font-bold cd-text-muted">어음 취급 은행</span>
               <input className="cd-input" placeholder="예: 기업은행" value={state.noteBank} onChange={(e) => onChange({ ...state, noteBank: e.target.value })} />

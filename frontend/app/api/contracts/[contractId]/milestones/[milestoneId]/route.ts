@@ -36,7 +36,8 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     if (body.collectionRatio !== undefined) pushSet("collection_ratio", toNullableNumber(body.collectionRatio));
     if (body.collectedAmount !== undefined) pushSet("collected_amount", toNullableNumber(body.collectedAmount));
     if (body.settlementAmount !== undefined) pushSet("settlement_amount", toNullableNumber(body.settlementAmount));
-    // 어음 수금 상세(마이그 200) — 만기일·대출실행일은 수금 자동대조의 날짜 매칭 근거가 된다.
+    // 어음 수금 상세(마이그 200·201) — 만기일·대출실행일은 수금 자동대조의 날짜 매칭 근거가 된다.
+    if (body.noteKind !== undefined) pushSet("note_kind", String(body.noteKind ?? "").trim() || null);
     if (body.noteBank !== undefined) pushSet("note_bank", String(body.noteBank ?? "").trim() || null);
     if (body.noteIssuedDate !== undefined) pushSet("note_issued_date", body.noteIssuedDate || null);
     if (body.noteMaturityDate !== undefined) pushSet("note_maturity_date", body.noteMaturityDate || null);

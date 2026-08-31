@@ -26,7 +26,10 @@ export async function POST(req: NextRequest) {
     const body = (await req.json().catch(() => ({}))) as { docId?: string };
     const docId = String(body.docId ?? "").trim();
     if (!docId) return NextResponse.json({ error: "docId가 필요합니다." }, { status: 400 });
-    await rerunFormActions(docId);
+    const { reran } = await rerunFormActions(docId);
+    if (!reran) {
+      return NextResponse.json({ error: "기안(draft) 상태 문서는 재실행할 액션이 없습니다." }, { status: 400 });
+    }
     await recordAuditLog({
       actorUserId: actor.userId,
       action: "approval_action_rerun",

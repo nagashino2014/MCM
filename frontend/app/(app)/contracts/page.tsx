@@ -35,7 +35,9 @@ import ContractStaffingModal from "@/components/contracts/ContractStaffingModal"
 import TaxInvoiceIssueModal from "@/components/contracts/TaxInvoiceIssueModal";
 import FacilityInfoModal from "@/components/contracts/FacilityInfoModal";
 import { BAROBILL_BANKS } from "@/components/finance/FinLogo";
-import { IndustryOptionsEditorButton, useContractIndustryOptions } from "@/components/contracts/IndustryOptionsEditor";
+import { INTEGRATED_PERMIT_OPTION_SUFFIX, IndustryOptionsEditorButton, useContractIndustryOptions } from "@/components/contracts/IndustryOptionsEditor";
+import { IndustryPermitLookupButton } from "@/components/contracts/IndustryPermitLookupButton";
+import { findIntegratedPermitIndustry, industryIdFromKsic } from "@/lib/ieps/integrated-permit-industries";
 import { CONTRACT_SERVICE_OPTIONS } from "@/lib/contracts/service-options";
 import { RateCardEditor, type RateCardData } from "@/components/contracts/RateCardEditor";
 import { createRateCard, rateCardHasContent, rateCardStageOptions, upgradeRateCard } from "@/lib/contracts/rate-card";
@@ -189,6 +191,15 @@ interface FacilitySearchItem {
   businessRegistrationNo: string | null;
   siteAddress: string | null;
   integratedPermitTarget?: string | null;
+  /** 사업장 마스터의 KSIC(복수는 줄바꿈/쉼표 연결) — 계약 업종 프리필용(2026-08-26) */
+  industryCode?: string | null;
+}
+
+/** 사업장 KSIC → 계약 업종 옵션명("반도체(통합허가)" 형식). 대상 업종이 아니면 null. */
+function industryOptionFromKsic(industryCode?: string | null): string | null {
+  const id = industryIdFromKsic(industryCode);
+  const label = id ? findIntegratedPermitIndustry(id)?.label : null;
+  return label ? `${label}${INTEGRATED_PERMIT_OPTION_SUFFIX}` : null;
 }
 
 interface PdfViewerState {
@@ -2420,6 +2431,8 @@ function NewContractModal({
                           counterpartyName: entity.companyName,
                           counterpartyQuery: entity.companyName,
                           counterpartyBusinessRegistrationNo: entity.businessRegistrationNo ?? null,
+                          // 사업장 마스터의 KSIC 로 업종 프리필(비어 있을 때만 — 공장별로 다를 수 있어 수정 가능)
+                          industryCategory: state.industryCategory || industryOptionFromKsic(entity.industryCode) || state.industryCategory,
                         })
                       }
                     >
@@ -2570,10 +2583,16 @@ function NewContractModal({
               <div className="flex items-center gap-2">
                 <select className="cd-select min-w-0 flex-1" value={state.industryCategory} onChange={(e) => onChange({ ...state, industryCategory: e.target.value })}>
                   <option value="">업종 선택</option>
+                  {/* 프리필/조회 적용 값이 편집된 옵션 목록에 없어도 표시되도록 가드 */}
+                  {state.industryCategory && !industryOptions.includes(state.industryCategory) && (
+                    <option value={state.industryCategory}>{state.industryCategory}</option>
+                  )}
                   {industryOptions.map((option) => (
                     <option key={option} value={option}>{option}</option>
                   ))}
                 </select>
+                {/* KSIC 코드·업종명 → 통합허가 20개 업종 판정(2026-08-26 — 반도체/전자부품 등 유사 업종 구분) */}
+                <IndustryPermitLookupButton onApply={(optionName) => onChange({ ...state, industryCategory: optionName })} />
                 <IndustryOptionsEditorButton options={industryOptions} onOptionsChange={setIndustryOptions} />
               </div>
             </div>

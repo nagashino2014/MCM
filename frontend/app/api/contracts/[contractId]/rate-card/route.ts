@@ -12,8 +12,9 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ contractId: string }> }) {
   try {
-    await requirePermission("contract.view");
     const { contractId } = await params;
+    // 다른 계약 라우트와 동일하게 target 을 넘긴다 — 참여자 스코프 권한이 임의 계약에 닿지 않게.
+    await requirePermission("contract.view", { target: { contractId } });
     const db = await getDb();
     const rows = rowsToObjects(
       await db.exec(`SELECT items, updated_at FROM contract_rate_cards WHERE contract_id = $1`, [contractId])
@@ -29,8 +30,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ con
 /** 단가 기준표 저장(전체 교체) — 신규 계약·변경계약 모달의 '단가 계약' 탭이 호출. v2 구조로 정제해 저장. */
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ contractId: string }> }) {
   try {
-    const actor = await requirePermission("contract.edit", { fallbackRoles: ["editor"] });
     const { contractId } = await params;
+    const actor = await requirePermission("contract.edit", { fallbackRoles: ["editor"], target: { contractId } });
     const body = (await req.json().catch(() => ({}))) as { card?: unknown; items?: unknown };
     // 구버전 클라이언트({items: [...]})와 신버전({card: {...}}) 모두 수용한다.
     const card = upgradeRateCard(body.card ?? body.items);

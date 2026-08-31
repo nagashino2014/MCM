@@ -16,8 +16,15 @@ import { offDaySet } from "@/lib/hr/holidays";
  * 불지급/경고/반환은 결재자가 판단한다.
  */
 
-/** 식대로 보는 분류 옵션(마이그 199 — 회식·다과·직원 식대가 복리후생비로 통합). */
-const MEAL_CATEGORY = "복리후생비";
+/**
+ * 검증 대상 양식 → 식대로 보는 분류 옵션. 양식별 라벨이 다르다:
+ * 법인카드 지출결의서는 '복리후생비'(마이그 199 통합), 개인카드 지출결의서는 '식대'(마이그 202).
+ * 둘 다 expenses 표·used_on 열을 쓴다. 출장보고서의 '식비'는 출장 중 식대라 대상이 아니다.
+ */
+const MEAL_FORM_CATEGORY: Record<string, string> = {
+  "frm-expense-report": "복리후생비",
+  "frm-expense-personal": "식대",
+};
 /** 평일 저녁 식사로 보는 결제 시각 하한 — 점심 회식·다과(초과근무와 무관)를 오탐하지 않기 위한 경계. */
 const DINNER_FROM_HM = "17:00";
 /** 인정 기준(분): 평일 2시간, 휴일 4시간. */
@@ -121,7 +128,9 @@ export async function assessMealChecksOnSubmit(txn: PgDatabase, docId: string): 
       [docId]
     )
   );
-  if (!rows.length || String(rows[0].form_id) !== "frm-expense-report") return;
+  if (!rows.length) return;
+  const mealCategory = MEAL_FORM_CATEGORY[String(rows[0].form_id)];
+  if (!mealCategory) return;
   const employeeId = rows[0].drafter_employee_id != null ? String(rows[0].drafter_employee_id) : null;
   if (!employeeId) return;
   let fv: Record<string, unknown> = {};
@@ -133,10 +142,10 @@ export async function assessMealChecksOnSubmit(txn: PgDatabase, docId: string): 
   }
 
   const expenses = Array.isArray(fv.expenses) ? (fv.expenses as Array<Record<string, unknown>>) : [];
-  // 식대(복리후생비) 행만 대상 — 행 순번은 표 순서 기준 1부터(비식대 행 포함 순번).
+  // 식대 분류 행만 대상 — 행 순번은 표 순서 기준 1부터(비식대 행 포함 순번).
   const mealRows = expenses
     .map((row, i) => ({ row, rowNo: i + 1 }))
-    .filter(({ row }) => row && typeof row === "object" && String(row.category ?? "") === MEAL_CATEGORY);
+    .filter(({ row }) => row && typeof row === "object" && String(row.category ?? "") === mealCategory);
 
   let violations: MealViolation[] = [];
   if (mealRows.length) {

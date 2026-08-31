@@ -510,25 +510,27 @@ export async function issueTaxInvoice(params: IssueParams, actorUserId: string |
     // 기존 수금 모델 반영 — 발행요청 해소·미수금 집계가 그대로 따라온다.
     // 묶음 발행(milestoneIds)이면 포함된 단계 전부 마킹하고, 각 단계의 invoice_amount 는
     // 계산서 총액이 아니라 단계 자체 금액으로 남긴다(단계별 미수금 집계가 어긋나지 않게).
+    // ⚠ contract_id 필터 필수 — milestoneIds 에 다른 계약의(또는 오염된) ID 가 섞여 들어오면
+    // 무관한 계약의 단계가 발행 처리되어 미수금·분개·발행요청이 오염된다(Codex 리뷰, PR#1).
     const targetIds = Array.from(new Set([params.milestoneId, ...(params.milestoneIds ?? [])].filter(Boolean)));
     if (targetIds.length > 1) {
-      const ph = targetIds.map((_, i) => `$${i + 3}`).join(",");
+      const ph = targetIds.map((_, i) => `$${i + 4}`).join(",");
       await db.run(
         `UPDATE contract_payment_milestones
             SET invoice_issued = 1, invoice_issued_at = $1,
                 invoice_amount = COALESCE(amount, invoice_amount), updated_at = $2
-          WHERE milestone_id IN (${ph})`,
-        [params.writeDate, new Date().toISOString(), ...targetIds],
+          WHERE contract_id = $3 AND milestone_id IN (${ph})`,
+        [params.writeDate, new Date().toISOString(), params.contractId, ...targetIds],
       );
     } else {
       await db.run(
         `UPDATE contract_payment_milestones
             SET invoice_issued = 1, invoice_issued_at = $2, invoice_amount = $3, updated_at = $4
-          WHERE milestone_id = $1`,
+          WHERE milestone_id = $1 AND contract_id = $5`,
         // ⚠invoice_amount 는 공급가액(부가세 제외) 기준 청구액이다 — 수동 발행 기록·미수금 집계가
         // 모두 그 규약을 쓴다. 종전에는 단건 발행만 totalAmount(부가세 포함)를 넣어 미수금 리스트에
         // 부가세 포함 건이 섞였다(2026-08-26 사용자 리포트, 태영건설 하남교산 등 최근 전자발행분).
-        [params.milestoneId, params.writeDate, Math.round(params.amountTotal), new Date().toISOString()],
+        [params.milestoneId, params.writeDate, Math.round(params.amountTotal), new Date().toISOString(), params.contractId],
       );
     }
   });

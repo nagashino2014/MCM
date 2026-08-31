@@ -8,6 +8,10 @@
       "port": 8791
     },
     {
+      "name": "frontend-attach",
+      "url": "http://localhost:3000"
+    },
+    {
       "name": "frontend-dev",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],

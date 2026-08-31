@@ -216,7 +216,10 @@ function fillTcTemplate(
 ): string {
   let tc = tcTpl;
   tc = tc.replace(/(<hp:cellAddr\b[^>]*colAddr=")\d+(")/, `$1${col}$2`).replace(/(\browAddr=")\d+(")/, `$1${row}$2`);
-  tc = tc.replace(/(<hp:cellSpan\b[^>]*colSpan=")\d+(")/, `$11$2`).replace(/(\browSpan=")\d+(")/, `$11$2`);
+  // 셀 병합(2026-08-25) — IR 의 rowSpan/colSpan 을 그대로 싣는다(병합 점유 자리는 tc 자체를 생략).
+  tc = tc
+    .replace(/(<hp:cellSpan\b[^>]*colSpan=")\d+(")/, `$1${cell.colSpan ?? 1}$2`)
+    .replace(/(\browSpan=")\d+(")/, `$1${cell.rowSpan ?? 1}$2`);
   tc = tc.replace(/(<hp:cellSz\b[^>]*width=")\d+(")/, `$1${widthHwp}$2`).replace(/(<hp:cellSz\b[^>]*height=")\d+(")/, `$1${heightHwp}$2`);
   // subList 내부 문단 전부 교체
   const subM = /<hp:subList\b[^>]*>([\s\S]*?)<\/hp:subList>/.exec(tc);
@@ -687,22 +690,40 @@ function buildTableXml(
   const totalW = Number(attrOf(tpl.preamble, "hp:sz", "width") ?? Math.round(487 * 100));
   const widths = t.colRatios.map((r) => Math.round(r * totalW));
   // 행 높이 = 행 내 최대 줄 수 기준(줄간 180% + 셀 여백) — 참조 셀 높이는 과대해 치환한다.
+  // 세로 병합 셀은 1행 스팬 셀로 높이를 정한 뒤, 내용이 스팬 합계를 넘으면 마지막 행에 가산(2026-08-25).
   const lineHwp = Math.round(fontPt * 1.8 * 100);
   const rowHeights = t.rows.map((row) => {
-    const maxLines = Math.max(1, ...row.map((c) => Math.max(1, c.lines.length)));
+    const single = row.filter((c) => !c.covered && (c.rowSpan ?? 1) <= 1);
+    const maxLines = Math.max(1, ...single.map((c) => Math.max(1, c.lines.length)));
     return maxLines * lineHwp + 600;
+  });
+  t.rows.forEach((row, ri) => {
+    row.forEach((cell) => {
+      const rs = cell.rowSpan ?? 1;
+      if (cell.covered || rs <= 1) return;
+      const need = Math.max(1, cell.lines.length) * lineHwp + 600;
+      const got = rowHeights.slice(ri, ri + rs).reduce((a, b) => a + b, 0);
+      if (need > got) rowHeights[Math.min(ri + rs, rowHeights.length) - 1] += need - got;
+    });
   });
   const totalH = rowHeights.reduce((a, b) => a + b, 0);
   const preamble = tpl.preamble
     .replace(/(\browCnt=")\d+(")/, `$1${rows}$2`)
     .replace(/(\bcolCnt=")\d+(")/, `$1${cols}$2`)
     .replace(/(<hp:sz\b[^>]*height=")\d+(")/, `$1${totalH}$2`);
+  const colW = (ci: number, colSpan: number) => {
+    let w = 0;
+    for (let i = ci; i < ci + colSpan; i++) w += widths[i] ?? Math.round(totalW / cols);
+    return w;
+  };
   const trs = t.rows
     .map((row, ri) => {
       const tcs = row
-        .map((cell, ci) =>
-          fillTcTemplate(tpl.tcTpl, cell, ci, ri, widths[ci] ?? Math.round(totalW / cols), rowHeights[ri], charPr, boldCharPr, alignParaPrOf)
-        )
+        .map((cell, ci) => {
+          if (cell.covered) return ""; // 병합 점유 자리 — 시작 셀의 cellSpan 이 대신한다
+          const spanH = rowHeights.slice(ri, ri + (cell.rowSpan ?? 1)).reduce((a, b) => a + b, 0);
+          return fillTcTemplate(tpl.tcTpl, cell, ci, ri, colW(ci, cell.colSpan ?? 1), spanH, charPr, boldCharPr, alignParaPrOf);
+        })
         .join("");
       return `<hp:tr>${tcs}</hp:tr>`;
     })

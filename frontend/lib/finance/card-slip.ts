@@ -7,7 +7,8 @@ import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { putContractDocument, sanitizePathSegment } from "@/lib/storage/contract-document-storage";
 import { loadCategories } from "@/lib/barobill/classify";
 import { getCompanyProfile } from "@/lib/company/profile";
-import { buildCardSlipPdf, type CardSlipData } from "@/lib/finance/card-slip-pdf";
+// 브랜치 통합(2026-08-28) — 사전 생성 전용 렌더러는 card-slip-pre-pdf 로 분리 보존(card-slip-pdf 는 지출결의 첨부용).
+import { buildCardSlipPdf, type CardSlipData } from "@/lib/finance/card-slip-pre-pdf";
 
 const KST_NOW = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 19).replace("T", " ");
 

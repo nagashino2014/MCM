@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { rowsToObjects, withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
-import { buildInvoiceFileName } from "@/lib/storage/contract-document-storage";
+import { buildInvoiceFileName, deleteContractDocument } from "@/lib/storage/contract-document-storage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -172,6 +172,7 @@ export async function DELETE(_: NextRequest, ctx: RouteContext) {
   try {
     const { contractId, milestoneId } = await ctx.params;
     const actor = await requirePermission("contract.edit", { fallbackRoles: ["editor"], target: { contractId } });
+    let removedKeys: string[] = [];
     await withDbWrite(async (db) => {
       const exists = rowsToObjects(
         await db.exec(
@@ -180,6 +181,31 @@ export async function DELETE(_: NextRequest, ctx: RouteContext) {
         )
       );
       if (exists.length === 0) throw new Error("단계를 찾을 수 없습니다.");
+
+      // 이 단계에 딸린 세금계산서 파일도 함께 지운다(2026-08-26 사용자 요청).
+      // contract_documents·contract_invoices 의 milestone_id 는 ON DELETE SET NULL 이라
+      // 단계만 지우면 계산서 파일이 계약에 그대로 남는다(실사례).
+      const docs = rowsToObjects(
+        await db.exec(
+          `SELECT document_id, storage_key FROM contract_documents
+            WHERE contract_id = $1 AND milestone_id = $2 AND document_type = 'tax_invoice'`,
+          [contractId, milestoneId]
+        )
+      );
+      removedKeys = docs.map((d) => String(d.storage_key ?? "")).filter(Boolean);
+      await db.run(`DELETE FROM contract_invoices WHERE contract_id = $1 AND milestone_id = $2`, [contractId, milestoneId]);
+      for (const d of docs) {
+        await db.run(`DELETE FROM contract_invoices WHERE document_id = $1`, [String(d.document_id)]);
+        await db.run(`DELETE FROM contract_documents WHERE document_id = $1`, [String(d.document_id)]);
+      }
+      // 바로빌 발행 원장(tax_invoices)은 국세청에 나간 사실 자체라 지우지 않고 계약 연결만 끊는다.
+      // contract_id 를 비우면 보관 PDF 백필(backfillInvoicePdfs)이 이 건을 다시 만들지 않는다.
+      await db.run(
+        `UPDATE tax_invoices SET contract_id = NULL, updated_at = $3
+          WHERE contract_id = $1 AND milestone_id = $2`,
+        [contractId, milestoneId, new Date().toISOString()]
+      );
+
       await db.run("DELETE FROM contract_payment_milestones WHERE milestone_id = $1 AND contract_id = $2", [milestoneId, contractId]);
       await recordAuditLogInline(db, {
         actorUserId: actor.userId,
@@ -187,10 +213,16 @@ export async function DELETE(_: NextRequest, ctx: RouteContext) {
         targetTable: "contract_payment_milestones",
         targetId: milestoneId,
         before: { contractId },
-        after: { deleted: true },
+        after: { deleted: true, removedInvoiceDocuments: docs.length },
       });
     });
-    return NextResponse.json({ ok: true });
+    // 스토리지 정리는 트랜잭션 밖에서 — 실패해도 DB 정합에는 영향이 없다(고아 객체만 남음).
+    for (const key of removedKeys) {
+      await deleteContractDocument(key).catch((err) =>
+        console.warn("[milestone] 계산서 파일 삭제 실패:", key, (err as Error).message)
+      );
+    }
+    return NextResponse.json({ ok: true, removedInvoiceDocuments: removedKeys.length });
   } catch (err) {
     return authErrorToResponse(err);
   }

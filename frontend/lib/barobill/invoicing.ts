@@ -15,6 +15,7 @@ import {
   type TaxInvoiceInput,
 } from "@/lib/barobill/tax-invoice";
 import { getBarobillConfig } from "@/lib/barobill/client";
+import { archiveTaxInvoicePdf } from "@/lib/barobill/invoice-archive";
 import { sendNotifyEmail } from "@/lib/notify/email-ses";
 
 const KST_NOW = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 19).replace("T", " ");
@@ -52,12 +53,17 @@ export interface IssuePrefill {
   defaultRemark: string;
   writeDate: string; // YYYY-MM-DD (오늘)
   invoicer: { corpNum: string; corpName: string; ceoName: string; addr: string; bizClass: string; bizType: string; tel: string; contactId: string; contactName: string; email: string };
-  invoicee: { facilityId: string | null; corpNum: string; corpName: string; ceoName: string; addr: string };
+  invoicee: { facilityId: string | null; corpNum: string; corpName: string; ceoName: string; addr: string; bizType: string; bizClass: string };
   contacts: IssuePrefillContact[];
   /** 저장해 둔 발행 담당자 이메일(188) — 모달 목록에서 골라 쓴다. env 기본값이 항상 첫 항목. */
   issuerEmails: Array<{ email: string; label: string | null }>;
   /** 이미 발행된 계산서(재발행 경고용). */
   existing: TaxInvoiceRow[];
+  /**
+   * 이 계약의 미청구 단계 목록(2026-08-24) — 복수 단계를 한 장으로 묶어 발행할 때
+   * '청구 단계 추가' 선택지로 쓴다. 현재 열려 있는 단계도 포함된다.
+   */
+  openStages: Array<{ milestoneId: string; stageLabel: string; amount: number }>;
   cert: { ok: boolean; message: string };
 }
 
@@ -205,7 +211,9 @@ export async function buildIssuePrefill(contractId: string, milestoneId: string)
     await db.exec(
       `SELECT m.milestone_id, m.stage_label, m.amount, m.invoice_amount, m.amount_ratio,
               c.contract_title, c.contract_amount, c.counterparty_facility_id,
-              f.company_name, f.normalized_company_name, f.business_registration_no, f.representative_name, f.site_address
+              f.company_name, f.normalized_company_name, f.business_registration_no, f.representative_name, f.site_address,
+              -- 공급받는자 업태·종목(2026-08-26) — 사업자등록증 파싱 값. 없으면 빈 값으로 발행된다.
+              f.business_certificate_business_type, f.business_certificate_business_item
          FROM contract_payment_milestones m
          JOIN contracts c ON c.contract_id = m.contract_id
          LEFT JOIN facilities f ON f.facility_id = c.counterparty_facility_id
@@ -264,8 +272,24 @@ export async function buildIssuePrefill(contractId: string, milestoneId: string)
       corpName: toPlainCompanyName(String(row.normalized_company_name || row.company_name || "")),
       ceoName: String(row.representative_name ?? ""),
       addr: String(row.site_address ?? ""),
+      // 바로빌 규약: BizType=업태 / BizClass=종목(공급자 매핑과 동일).
+      bizType: String(row.business_certificate_business_type ?? ""),
+      bizClass: String(row.business_certificate_business_item ?? ""),
     },
     issuerEmails,
+    openStages: rowsToObjects(
+      await db.exec(
+        `SELECT milestone_id, stage_label, amount, invoice_amount
+           FROM contract_payment_milestones
+          WHERE contract_id = $1 AND COALESCE(invoice_issued, 0) = 0
+          ORDER BY stage_order ASC`,
+        [contractId],
+      ),
+    ).map((m) => ({
+      milestoneId: String(m.milestone_id),
+      stageLabel: String(m.stage_label ?? ""),
+      amount: Number(m.invoice_amount ?? m.amount ?? 0),
+    })),
     contacts: contactRows.map((c) => {
       const deptTypes = Array.isArray(c.dept_types) ? (c.dept_types as unknown[]).map((v) => String(v)) : [];
       return {
@@ -286,6 +310,12 @@ export async function buildIssuePrefill(contractId: string, milestoneId: string)
 export interface IssueParams {
   contractId: string;
   milestoneId: string;
+  /**
+   * 묶음 발행(2026-08-24) — 이 계산서 한 장이 커버하는 단계 전체(milestoneId 포함).
+   * 발행 성공 시 전부 발행 완료로 마킹된다(invoice_amount 는 각 단계 자체 금액).
+   * 미지정이면 milestoneId 한 단계만 마킹(기존 동작).
+   */
+  milestoneIds?: string[];
   writeDate: string; // YYYY-MM-DD
   supplyDate?: string; // 공급일자(품목) — 미지정 시 작성일자
   amountTotal: number; // 공급가액
@@ -302,7 +332,7 @@ export interface IssueParams {
   items?: Array<{ name: string; spec?: string; qty?: number; unitPrice?: number; amount: number; tax?: number }>;
   remark1?: string;
   /** email = 대표 수신처(바로빌이 메일 발송), ccEmails = 추가 수신처(발행 후 앱이 안내 메일 발송). */
-  invoicee: { facilityId?: string | null; corpNum: string; corpName: string; ceoName?: string; addr?: string; contactName?: string; email: string; tel?: string; hp?: string; ccEmails?: string[] };
+  invoicee: { facilityId?: string | null; corpNum: string; corpName: string; ceoName?: string; addr?: string; bizType?: string; bizClass?: string; contactName?: string; email: string; tel?: string; hp?: string; ccEmails?: string[] };
   invoicer: { corpNum: string; corpName: string; ceoName?: string; addr?: string; bizClass?: string; bizType?: string; contactName?: string; tel?: string; email: string };
   sendSms?: boolean;
   forceIssue?: boolean;
@@ -336,6 +366,40 @@ export async function issueTaxInvoice(params: IssueParams, actorUserId: string |
     ),
   );
 
+  // 공급받는자 업태·종목 보강(2026-08-26 사용자 확정) — 사업장 마스터에 사업자등록증 기반
+  // 업태·종목이 있으면 반드시 계산서에 실린다. 화면이 값을 안 보내던 회귀가 있어(한일스틸 실사례)
+  // 서버에서 사업장(facilityId 우선, 없으면 사업자번호)으로 직접 조회해 채운다.
+  let inBizType = String(params.invoicee.bizType ?? "").trim();
+  let inBizClass = String(params.invoicee.bizClass ?? "").trim();
+  if (!inBizType || !inBizClass) {
+    try {
+      const db = await getDb();
+      const facilityId = params.invoicee.facilityId ? String(params.invoicee.facilityId) : null;
+      const found = rowsToObjects(
+        facilityId
+          ? await db.exec(
+              `SELECT business_certificate_business_type AS t, business_certificate_business_item AS i
+                 FROM facilities WHERE facility_id = $1`,
+              [facilityId],
+            )
+          : await db.exec(
+              `SELECT business_certificate_business_type AS t, business_certificate_business_item AS i
+                 FROM facilities
+                WHERE regexp_replace(COALESCE(business_registration_no, ''), '[^0-9]', '', 'g') = $1
+                  AND (business_certificate_business_type IS NOT NULL OR business_certificate_business_item IS NOT NULL)
+                LIMIT 1`,
+              [params.invoicee.corpNum],
+            ),
+      );
+      if (found.length) {
+        if (!inBizType) inBizType = String(found[0].t ?? "").trim();
+        if (!inBizClass) inBizClass = String(found[0].i ?? "").trim();
+      }
+    } catch (err) {
+      console.warn("[tax-invoice] 공급받는자 업태·종목 보강 실패:", (err as Error).message);
+    }
+  }
+
   const mgtKey = newMgtKey(params.milestoneId);
   const writeDate = ymd(params.writeDate);
   const supplyDate = ymd(params.supplyDate || params.writeDate);
@@ -362,6 +426,8 @@ export async function issueTaxInvoice(params: IssueParams, actorUserId: string |
       corpName: params.invoicee.corpName,
       ceoName: params.invoicee.ceoName,
       addr: params.invoicee.addr,
+      bizType: inBizType || undefined,
+      bizClass: inBizClass || undefined,
       contactName: params.invoicee.contactName,
       tel: params.invoicee.tel,
       hp: params.invoicee.hp,
@@ -442,12 +508,29 @@ export async function issueTaxInvoice(params: IssueParams, actorUserId: string |
       ],
     );
     // 기존 수금 모델 반영 — 발행요청 해소·미수금 집계가 그대로 따라온다.
-    await db.run(
-      `UPDATE contract_payment_milestones
-          SET invoice_issued = 1, invoice_issued_at = $2, invoice_amount = $3, updated_at = $4
-        WHERE milestone_id = $1`,
-      [params.milestoneId, params.writeDate, Math.round(params.totalAmount), new Date().toISOString()],
-    );
+    // 묶음 발행(milestoneIds)이면 포함된 단계 전부 마킹하고, 각 단계의 invoice_amount 는
+    // 계산서 총액이 아니라 단계 자체 금액으로 남긴다(단계별 미수금 집계가 어긋나지 않게).
+    const targetIds = Array.from(new Set([params.milestoneId, ...(params.milestoneIds ?? [])].filter(Boolean)));
+    if (targetIds.length > 1) {
+      const ph = targetIds.map((_, i) => `$${i + 3}`).join(",");
+      await db.run(
+        `UPDATE contract_payment_milestones
+            SET invoice_issued = 1, invoice_issued_at = $1,
+                invoice_amount = COALESCE(amount, invoice_amount), updated_at = $2
+          WHERE milestone_id IN (${ph})`,
+        [params.writeDate, new Date().toISOString(), ...targetIds],
+      );
+    } else {
+      await db.run(
+        `UPDATE contract_payment_milestones
+            SET invoice_issued = 1, invoice_issued_at = $2, invoice_amount = $3, updated_at = $4
+          WHERE milestone_id = $1`,
+        // ⚠invoice_amount 는 공급가액(부가세 제외) 기준 청구액이다 — 수동 발행 기록·미수금 집계가
+        // 모두 그 규약을 쓴다. 종전에는 단건 발행만 totalAmount(부가세 포함)를 넣어 미수금 리스트에
+        // 부가세 포함 건이 섞였다(2026-08-26 사용자 리포트, 태영건설 하남교산 등 최근 전자발행분).
+        [params.milestoneId, params.writeDate, Math.round(params.amountTotal), new Date().toISOString()],
+      );
+    }
   });
 
   // 발행에 쓴 담당자 이메일을 최근 사용으로 올린다(목록 정렬용) — 저장된 주소가 아니면 아무 일도 하지 않는다.
@@ -479,6 +562,15 @@ export async function issueTaxInvoice(params: IssueParams, actorUserId: string |
     if (!result.ok) console.warn("[tax-invoice] 추가 수신처 안내 메일 실패:", result.error ?? result.skipped);
   }
 
+  // 보관용 PDF 자동 생성(2026-08-25) — 발행 자체는 이미 끝났으므로 실패해도 예외로 올리지 않는다.
+  // 국세청 전송 완료 시 refreshInvoiceStates 가 승인번호를 반영해 재생성한다.
+  try {
+    const archived = await archiveTaxInvoicePdf(invoiceId);
+    if (!archived.saved) console.warn("[tax-invoice] 보관 PDF 생성 건너뜀:", invoiceId, archived.reason);
+  } catch (err) {
+    console.warn("[tax-invoice] 보관 PDF 생성 실패:", invoiceId, (err as Error).message);
+  }
+
   return { invoiceId, mgtKey };
 }
 
@@ -486,10 +578,12 @@ export async function issueTaxInvoice(params: IssueParams, actorUserId: string |
 export async function refreshInvoiceStates(invoiceIds?: string[]): Promise<{ checked: number; updated: number }> {
   const db = await getDb();
   const rows = invoiceIds?.length
-    ? rowsToObjects(await db.exec(`SELECT invoice_id, mgt_key FROM tax_invoices WHERE invoice_id = ANY($1::text[])`, [invoiceIds]))
+    ? rowsToObjects(
+        await db.exec(`SELECT invoice_id, mgt_key, nts_send_state, nts_send_key FROM tax_invoices WHERE invoice_id = ANY($1::text[])`, [invoiceIds]),
+      )
     : rowsToObjects(
         await db.exec(
-          `SELECT invoice_id, mgt_key FROM tax_invoices
+          `SELECT invoice_id, mgt_key, nts_send_state, nts_send_key FROM tax_invoices
             WHERE canceled_at IS NULL AND (nts_send_state IS NULL OR nts_send_state < 4)
             ORDER BY created_at DESC LIMIT 100`,
         ),
@@ -518,6 +612,16 @@ export async function refreshInvoiceStates(invoiceIds?: string[]): Promise<{ che
         );
       });
       updated += 1;
+      // 국세청 전송이 이번 갱신에서 완료된 건은 보관 PDF 를 전송 완료본으로 재생성한다(자동 생성본만 교체).
+      // ⚠승인번호(nts_send_key) 유무로 전이를 판정하면 안 된다 — 바로빌은 발행 즉시 승인번호를
+      // 부여하고 국세청 전송만 익일이라, 번호는 처음부터 있고 상태(nts_send_state)만 나중에 4로
+      // 바뀐다(2026-08-26 실사례: "미전송" 문구 캡처본이 전송 완료 후에도 교체되지 않았다).
+      const wasSent = Number(row.nts_send_state ?? 0) >= 4;
+      if (!wasSent && Number(state.ntsSendState ?? 0) >= 4) {
+        await archiveTaxInvoicePdf(String(row.invoice_id), { force: true }).catch((err) =>
+          console.warn("[tax-invoice] 전송 완료 PDF 재생성 실패:", String(row.invoice_id), (err as Error).message),
+        );
+      }
     } catch {
       // 개별 실패는 건너뛴다(다음 폴링에서 재시도).
     }
@@ -578,6 +682,24 @@ export async function issueModifiedTaxInvoice(params: ModifyParams, actorUserId:
   const email = params.invoiceeEmail || (origin.invoicee_email ? String(origin.invoicee_email) : "");
   if (!email) throw Object.assign(new Error("수신 이메일이 필요합니다."), { status: 400 });
 
+  // 공급받는자 업태·종목(2026-08-26) — 정발행과 동일하게 사업장 마스터에서 채운다.
+  const modBiz = rowsToObjects(
+    origin.invoicee_facility_id
+      ? await db.exec(
+          `SELECT business_certificate_business_type AS t, business_certificate_business_item AS i
+             FROM facilities WHERE facility_id = $1`,
+          [String(origin.invoicee_facility_id)],
+        )
+      : await db.exec(
+          `SELECT business_certificate_business_type AS t, business_certificate_business_item AS i
+             FROM facilities
+            WHERE regexp_replace(COALESCE(business_registration_no, ''), '[^0-9]', '', 'g') = $1
+              AND (business_certificate_business_type IS NOT NULL OR business_certificate_business_item IS NOT NULL)
+            LIMIT 1`,
+          [String(origin.invoicee_corp_num ?? "").replace(/[^0-9]/g, "")],
+        ),
+  );
+
   // 음수 금액은 바로빌에 "-" 붙은 문자열로 그대로 전달한다(수정분 규칙).
   const amount = String(Math.round(params.amountTotal));
   const tax = String(Math.round(params.taxTotal));
@@ -600,6 +722,8 @@ export async function issueModifiedTaxInvoice(params: ModifyParams, actorUserId:
       invoicee: {
         corpNum: String(origin.invoicee_corp_num ?? ""),
         corpName: String(origin.invoicee_corp_name ?? ""),
+        bizType: modBiz.length && modBiz[0].t ? String(modBiz[0].t) : undefined,
+        bizClass: modBiz.length && modBiz[0].i ? String(modBiz[0].i) : undefined,
         email,
       },
       taxType: origin.tax_type == null ? 1 : Number(origin.tax_type),

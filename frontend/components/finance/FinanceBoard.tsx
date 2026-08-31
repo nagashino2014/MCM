@@ -33,8 +33,12 @@ import { JournalPanel, LedgerPanel, TrialPanel } from "@/components/finance/Jour
 import { PnlPanel, CashPanel } from "@/components/finance/ManagementPanels";
 import { HometaxPanel, VatReturnPanel, WithholdingPanel } from "@/components/finance/VatReturnPanels";
 import { FixedAssetPanel, TripLogPanel, BudgetPanel } from "@/components/finance/AssetBudgetPanels";
+import { ReceiptCollectPanel } from "@/components/finance/ReceiptCollectPanel";
 import { BalanceSheetPanel, ClosingPanel } from "@/components/finance/ClosingPanels";
 import { ReimbursePanel } from "@/components/finance/ReimbursePanels";
+import { ExpenseSettlementPanel } from "@/components/finance/ExpenseSettlementPanel";
+import { IncomeLedgerPanel } from "@/components/finance/IncomeLedgerPanel";
+import { SeverancePanel } from "@/components/finance/SeverancePanel";
 import "@/components/cdash/cdash.css";
 
 /** 최근 수집 로그 카드에 한 번에 보여줄 줄 수. */
@@ -42,11 +46,13 @@ const LOG_PAGE_SIZE = 10;
 
 type Tab =
   | "connections" | "bank" | "card" | "recon" | "vat" | "invoice" | "journal" | "ledger" | "trial" | "pnl" | "cash"
-  | "hometax" | "vatreturn" | "fixedassets" | "triplog" | "budget" | "withholding" | "balance" | "closing" | "reimburse";
+  | "hometax" | "vatreturn" | "fixedassets" | "triplog" | "budget" | "withholding" | "balance" | "closing"
+  | "reimburse" | "shopreceipt" | "expsettle" | "incomeledger" | "severance";
 
 const TAB_KEYS: Tab[] = [
   "connections", "bank", "card", "recon", "vat", "invoice", "journal", "ledger", "trial", "pnl", "cash",
-  "hometax", "vatreturn", "fixedassets", "triplog", "budget", "withholding", "balance", "closing", "reimburse",
+  "hometax", "vatreturn", "fixedassets", "triplog", "budget", "withholding", "balance", "closing",
+  "reimburse", "shopreceipt", "expsettle", "incomeledger", "severance",
 ];
 
 /** 사이드바 소메뉴 = 탭 그룹. 소메뉴 진입 시 첫 탭이 열린다(menu.ts 의 href 와 짝). */
@@ -56,13 +62,15 @@ const TAB_GROUPS: Array<{ title: string; tabs: [Tab, string][] }> = [
   { title: "계좌·카드 원장", tabs: [["bank", "계좌 원장"], ["card", "법인카드 원장"], ["reimburse", "경비 환급"]] },
   { title: "계산서·수금", tabs: [["invoice", "세금계산서"], ["recon", "수금 대조"]] },
   // 부가세 신고(P5) — 카드 매입 집계 + 홈택스 매입·매출 계산서 + 신고서 자동 작성(accounting-expansion §5 P5).
-  { title: "부가세 신고", tabs: [["vat", "카드 매입 집계"], ["hometax", "매입·매출 계산서"], ["vatreturn", "신고서"], ["withholding", "원천세"]] },
+  { title: "부가세 신고", tabs: [["vat", "카드 매입 집계"], ["shopreceipt", "쇼핑몰 전표 수집"], ["hometax", "매입·매출 계산서"], ["vatreturn", "신고서"], ["withholding", "원천세"], ["incomeledger", "소득대장"]] },
   // 전표·장부(P3) — 자동분개 파생 계층. 회계 관리자 전용(설계: accounting-expansion-blueprint §5 P3).
   { title: "전표·장부", tabs: [["journal", "분개장"], ["ledger", "계정별원장"], ["trial", "시산표·백테스트"]] },
   // 손익·자금(P4) + 결산(P9) — 전표 파생 관리 손익·자금수지·재무상태표·연차 마감.
   { title: "손익·자금", tabs: [["pnl", "월별 손익"], ["cash", "자금수지"], ["balance", "재무상태표"], ["closing", "결산"]] },
   // 자산·예산(P6) — 고정자산 상각(전표 연동)·운행기록부·연간 예산(기안 사전검토 연동).
   { title: "자산·예산", tabs: [["fixedassets", "고정자산"], ["triplog", "운행기록부"], ["budget", "예산"]] },
+  // 개인카드 경비 정산(FRM-P6, 203)·퇴직 정산(FRM-P5, 207).
+  { title: "경비 정산", tabs: [["expsettle", "개인카드 경비 정산"], ["severance", "퇴직 정산"]] },
 ];
 const toTab = (raw: string | null): Tab => (TAB_KEYS.includes(raw as Tab) && raw !== "connections" ? (raw as Tab) : "connections");
 
@@ -319,6 +327,7 @@ export function FinanceBoard() {
         {tab === "reimburse" && <ReimbursePanel />}
         {tab === "recon" && <ReconPanel />}
         {tab === "vat" && <VatPanel />}
+        {tab === "shopreceipt" && <ReceiptCollectPanel />}
         {tab === "hometax" && <HometaxPanel />}
         {tab === "vatreturn" && <VatReturnPanel />}
         {tab === "withholding" && <WithholdingPanel />}
@@ -333,6 +342,9 @@ export function FinanceBoard() {
         {tab === "trial" && <TrialPanel />}
         {tab === "pnl" && <PnlPanel />}
         {tab === "cash" && <CashPanel />}
+        {tab === "expsettle" && <ExpenseSettlementPanel />}
+        {tab === "incomeledger" && <IncomeLedgerPanel />}
+        {tab === "severance" && <SeverancePanel />}
       </div>
     </div>
   );
@@ -2865,10 +2877,13 @@ function TaxInvoicePanel() {
     };
   }, [reloadKey]);
 
-  const call = async (body: Record<string, unknown>) => {
-    setBusy(true);
-    setError(null);
-    setNotice(null);
+  // silent: 화면 진입 자동 갱신용 — busy 를 잠그지 않아 버튼이 비활성으로 묶이지 않는다(2026-08-26).
+  const call = async (body: Record<string, unknown>, opts: { silent?: boolean } = {}) => {
+    if (!opts.silent) {
+      setBusy(true);
+      setError(null);
+      setNotice(null);
+    }
     try {
       const res = await fetch("/api/finance/tax-invoices", {
         method: "POST",
@@ -2879,20 +2894,31 @@ function TaxInvoicePanel() {
       if (!res.ok) throw new Error(data?.error ?? "요청이 실패했습니다.");
       return data;
     } catch (e) {
-      setError((e as Error).message);
+      if (!opts.silent) setError((e as Error).message);
       return null;
     } finally {
-      setBusy(false);
+      if (!opts.silent) setBusy(false);
     }
   };
 
-  const refresh = async () => {
-    const data = await call({ action: "refresh" });
+  const refresh = async (opts: { silent?: boolean } = {}) => {
+    const data = await call({ action: "refresh" }, opts);
     if (data) {
       setNotice(`${data.updated}/${data.checked}건 상태를 갱신했습니다.`);
       setReloadKey((k) => k + 1);
     }
   };
+
+  // 국세청 전송은 바로빌이 익일 일괄 처리 — 수동 버튼만으로는 "전송전"이 계속 남는다(2026-08-25 사용자 리포트).
+  // 미전송 건이 보이면 화면 진입 시 1회 자동 갱신한다(보관 PDF 백필은 서버가 응답 뒤에서 돌린다).
+  const autoRefreshed = useRef(false);
+  useEffect(() => {
+    if (loading || autoRefreshed.current) return;
+    if (!rows.some((r) => !r.canceledAt && (r.ntsSendState ?? 1) < 4)) return;
+    autoRefreshed.current = true;
+    void refresh({ silent: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, rows]);
 
   const openOriginal = async (invoiceId: string) => {
     const data = await call({ action: "popup-url", invoiceId });
@@ -2911,7 +2937,7 @@ function TaxInvoicePanel() {
     <div className="cd-card p-4">
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <div className="cd-card-title mr-auto">전자세금계산서 발행 이력</div>
-        <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy} onClick={refresh}>
+        <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy} onClick={() => void refresh()}>
           <RefreshCw className="w-3.5 h-3.5" /> 상태 갱신
         </button>
       </div>

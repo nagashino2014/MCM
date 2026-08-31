@@ -20,7 +20,7 @@ import {
 } from "@/lib/bid/notify-settings";
 import { listCategories } from "@/lib/bid/category-store";
 import { buildRuleWhere, ruleFromCategory } from "@/lib/bid/match";
-import { REGION_GROUPS } from "@/lib/bid/bid-queries";
+import { REGION_GROUPS, regionGroupOf } from "@/lib/bid/bid-queries";
 import { listActivePackages } from "@/lib/bid/package-store";
 import { sendNotifyEmail, type ChannelSendResult } from "@/lib/notify/email-ses";
 import { sendPush } from "@/lib/notify/push-expo";
@@ -174,13 +174,27 @@ async function searchMatches(
         } catch {
           // raw 파싱 실패 시 표준 컬럼만
         }
+        const orgName = r.org_name != null ? String(r.org_name) : null;
+        // 지역권 확정 판정(2026-08-24 사용자 리포트) — SQL LIKE 만으로는 참가가능지역
+        // (raw cnstwkRgnNm)에 지역을 나열("서울…경북…")한 타 지역 발주 공고가 그대로
+        // 통과한다. 발주기관명으로 지역권이 판정되면 설정 지역권에 들어야 통과시키고,
+        // 판정 불가(중앙부처·공단 본사 등)일 때만 참가가능지역 폴백을 쓴다.
+        if (regionKeys.length) {
+          const orgRegion = regionGroupOf(orgName);
+          if (orgRegion) {
+            if (!profile.regionGroups.includes(orgRegion)) continue;
+          } else {
+            const cnstwk = String(raw.cnstwkRgnNm ?? "");
+            if (!regionKeys.some((k) => cnstwk.includes(k))) continue;
+          }
+        }
         out.push({
           bidType: type,
           bidId,
           categoryId: cat.categoryId,
           categoryName: cat.name,
           title: r.title != null ? String(r.title) : null,
-          orgName: r.org_name != null ? String(r.org_name) : null,
+          orgName,
           deadline: r.deadline != null ? String(r.deadline) : null,
           url: r.url != null ? String(r.url) : null,
           merged: {
@@ -333,6 +347,61 @@ async function markQueueSent(matches: MatchedBid[], nowIso: string): Promise<voi
   });
 }
 
+/**
+ * 프로파일별 기발송 건 제외(2026-08-24 사용자 리포트) — 슬롯마다 rangeDays 창을 통째로
+ * 재검색하는 구조라, 이력 없이는 신규 공고가 없어도 같은 건이 알림 시간대마다 반복
+ * 발송됐다. 발송 이력(bid_notify_dispatch_log, 199)에 있는 건을 걸러 신규 매칭만 남긴다.
+ */
+async function filterAlreadyDispatched(
+  db: PgDatabase,
+  profileId: string,
+  matches: MatchedBid[]
+): Promise<MatchedBid[]> {
+  if (!matches.length) return matches;
+  try {
+    const params: unknown[] = [profileId];
+    const tuples = matches
+      .map((m) => {
+        params.push(m.bidType, m.bidId);
+        return `($${params.length - 1}, $${params.length})`;
+      })
+      .join(",");
+    const rows = rowsToObjects(
+      await db.exec(
+        `SELECT bid_type, bid_id FROM bid_notify_dispatch_log
+          WHERE profile_id = $1 AND (bid_type, bid_id) IN (${tuples})`,
+        params
+      )
+    );
+    const sent = new Set(rows.map((r) => `${String(r.bid_type)}:${String(r.bid_id)}`));
+    return matches.filter((m) => !sent.has(`${m.bidType}:${m.bidId}`));
+  } catch (err) {
+    // 테이블 부재(마이그 199 미적용) 등 — 종전 동작(전량 발송)으로 폴백
+    console.error("[bid-notify] dispatch log read error", err);
+    return matches;
+  }
+}
+
+/** 발송분을 프로파일별 이력에 기록 — 다음 슬롯부터 같은 건을 재발송하지 않는다. */
+async function markDispatched(profileId: string, matches: MatchedBid[], nowIso: string): Promise<void> {
+  if (!matches.length) return;
+  try {
+    await withDbWrite(async (wdb) => {
+      for (const m of matches) {
+        await wdb.run(
+          `INSERT INTO bid_notify_dispatch_log (profile_id, bid_type, bid_id, sent_at)
+           VALUES ($1,$2,$3,$4)
+           ON CONFLICT (profile_id, bid_type, bid_id) DO NOTHING`,
+          [profileId, m.bidType, m.bidId, nowIso]
+        );
+      }
+    });
+  } catch (err) {
+    // 이력 기록 실패는 발송 자체를 되돌리지 않는다(다음 슬롯에 중복될 수 있을 뿐)
+    console.error("[bid-notify] dispatch log write error", err);
+  }
+}
+
 /** 어떤 프로파일의 매칭 범위에도 들지 않는 오래된 pending 정리 — 큐가 무한히 쌓이지 않게. */
 async function expireStalePending(maxRangeDays: number, today: string, nowIso: string): Promise<void> {
   const cutoff = addDays(today, -maxRangeDays);
@@ -344,6 +413,14 @@ async function expireStalePending(maxRangeDays: number, today: string, nowIso: s
         WHERE status = 'pending' AND substring(matched_at, 1, 10) < $2`,
       [nowIso, cutoff]
     );
+    // 발송 이력도 함께 정리 — 매칭 범위 최대 30일이라 60일 지난 행은 중복 판정에 쓰이지 않는다.
+    try {
+      await wdb.run(`DELETE FROM bid_notify_dispatch_log WHERE substring(sent_at, 1, 10) < $1`, [
+        addDays(today, -60),
+      ]);
+    } catch {
+      // 테이블 부재(마이그 199 미적용) 시 무시
+    }
   });
 }
 
@@ -360,11 +437,13 @@ async function dispatchProfile(
   if (!profile.bidTypes.length) return { dispatched: 0, skipped: "no-bid-type" };
 
   const fromDate = addDays(today, -profile.rangeDays);
-  const matches = await searchMatches(db, profile, fromDate);
+  const found = await searchMatches(db, profile, fromDate);
+  // 전 슬롯까지 발송한 건은 제외 — 신규 매칭이 없으면 발송하지 않는다(중복 알림 방지).
+  const matches = await filterAlreadyDispatched(db, profile.profileId, found);
   if (!matches.length) {
     // 대상이 없어도 이 슬롯 체크는 완료 처리 — 매 주기 재검색 방지.
     await patchBidNotifyProfile(profile.profileId, { lastDispatchKey: `${today} ${slot}`, lastDispatchDate: today });
-    return { dispatched: 0, skipped: "no-match" };
+    return { dispatched: 0, skipped: found.length ? "no-new-match" : "no-match" };
   }
 
   const contacts = await loadRecipientContacts(db, profile);
@@ -393,6 +472,7 @@ async function dispatchProfile(
 
   await queueMatches(matches, nowIso, "pending"); // 목록 큐 동기화(신규만 — 기존 행은 유지)
   await markQueueSent(matches, nowIso);
+  await markDispatched(profile.profileId, matches, nowIso); // 다음 슬롯 중복 발송 방지
   await patchBidNotifyProfile(profile.profileId, { lastDispatchKey: `${today} ${slot}`, lastDispatchDate: today });
   console.log(
     `[bid-notify] "${profile.name}" dispatched ${matches.length} matches (range ${profile.rangeDays}d)`,
@@ -450,7 +530,7 @@ export async function dispatchDueBidNotices(now = new Date()): Promise<DispatchR
 
 /**
  * 테스트 전송 — 지금 편집 중인 조건 그대로 즉시 1회 발송한다.
- * 발송 시각·활성화·일1회 멱등을 모두 무시하고, 큐 마킹과 lastDispatchDate 기록도 하지 않는다.
+ * 발송 시각·활성화·일1회 멱등·기발송 제외를 모두 무시하고, 큐 마킹·lastDispatchDate·발송 이력 기록도 하지 않는다.
  * 매칭이 0건이어도 채널 점검이 되도록 "0건" 본문으로 발송한다.
  */
 export async function sendTestNotification(

@@ -98,7 +98,7 @@ export function ReceiptPickerModal({
 
   // 채널 가드(법인카드 모달과 동일, 경고만): 지출결의서에 출장성 분류 건을 담으면 안내.
   const tripLikeSelected =
-    formId === "frm-expense-report" &&
+    (formId === "frm-expense-report" || formId === "frm-expense-personal") &&
     items.some((i) => selected.has(i.receiptId) && (i.categoryKey === "travel" || i.categoryKey === "lodging" || i.categoryKey === "fuel"));
 
   const submit = () => {

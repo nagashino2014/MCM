@@ -1,9 +1,9 @@
 ﻿# laptop-setup.ps1 — 노트북 개발환경 일괄 설치 스크립트
 # 사용법 (repo 루트에서):
-#   pwsh scripts/laptop-setup.ps1                # 필수 도구 + frontend 의존성
-#   pwsh scripts/laptop-setup.ps1 -Scraper       # + scraper 의존성 (Playwright 포함)
-#   pwsh scripts/laptop-setup.ps1 -Backend       # + backend Python 3.11 venv (수 GB, 오래 걸림)
-#   pwsh scripts/laptop-setup.ps1 -SkipTools     # 도구 설치 건너뛰고 npm/pip만
+#   powershell -ExecutionPolicy Bypass -File scripts\laptop-setup.ps1                # 필수 도구 + frontend 의존성
+#   powershell -ExecutionPolicy Bypass -File scripts\laptop-setup.ps1 -Scraper       # + scraper 의존성 (Playwright 포함)
+#   powershell -ExecutionPolicy Bypass -File scripts\laptop-setup.ps1 -Backend       # + backend Python 3.11 venv (수 GB, 오래 걸림)
+#   powershell -ExecutionPolicy Bypass -File scripts\laptop-setup.ps1 -SkipTools     # 도구 설치 건너뛰고 npm/pip만
 # 체크리스트 본문: docs/laptop-setup-checklist.md
 
 param(
@@ -86,5 +86,5 @@ Write-Host @"
  1. 시크릿 복사: frontend/.env.local, backend/.env, infra/aws/staging.tfvars
  2. AWS SSO:    aws configure sso  (프로필 mcm-kesi-staging) → aws sso login
  3. git 인증:   gh auth login
- 4. DB 터널:    staging-start.ps1 -Bastion → SSM 포트포워딩(15432) → npm run dev
+ 4. DB 터널:    powershell -ExecutionPolicy Bypass -File scripts\db-tunnel.ps1  → npm run dev
 "@ -ForegroundColor Green

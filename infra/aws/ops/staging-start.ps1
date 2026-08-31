@@ -10,9 +10,9 @@
   - DB 에 직접 붙어야 하면(SSM 포트포워딩) -Bastion 으로 점프박스도 기동.
 
 .EXAMPLE
-  pwsh infra/aws/ops/staging-start.ps1                 # Aurora + next 만
-  pwsh infra/aws/ops/staging-start.ps1 -Backend        # + OCR 백엔드
-  pwsh infra/aws/ops/staging-start.ps1 -Backend -Bastion
+  .\infra\aws\ops\staging-start.ps1                 # Aurora + next 만
+  .\infra\aws\ops\staging-start.ps1 -Backend        # + OCR 백엔드
+  .\infra\aws\ops\staging-start.ps1 -Backend -Bastion
 #>
 param(
   [string]$AwsProfile = "mcm-kesi-staging",

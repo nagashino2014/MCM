@@ -128,6 +128,11 @@ export async function loadContractContext(contractId: string): Promise<ContractC
 export interface AutoValueOptions {
   /** 준공 금회 회차. 미지정 시 마지막 회차(stage_order 최대) */
   milestoneId?: string | null;
+  /**
+   * 금회 청구 회차 복수 지정(2026-08-24, 대금청구서 전용) — 지정 시 금회 = 지정 회차 합,
+   * 단위별 분해(payment.stageBreakdown)가 값에 실려 대금청구서 표에 줄별 금액으로 표기된다.
+   */
+  milestoneIds?: string[] | null;
   /** 실준공일. 미지정 시 계약 종료일 */
   actualDate?: string | null;
   /** 작성일. 미지정 시 오늘 */
@@ -239,7 +244,40 @@ export async function buildAutoValues(
             collected: false,
           } satisfies MilestoneInfo,
         ];
-    const a = computeCompletionAmounts(milestones, opts.milestoneId ?? null, vatIncluded);
+    // 복수 회차 청구(2026-08-24, 대금청구서 전용) — 지정 회차들의 합을 금회로 놓고
+    // 단위별 분해를 payment.stageBreakdown 에 싣는다(대금청구서 표의 줄별 금액 표기).
+    const multiIds = (opts.milestoneIds ?? []).filter(Boolean);
+    const sortedAll = [...milestones].sort((x, z) => x.stageOrder - z.stageOrder);
+    const targets = multiIds.length ? sortedAll.filter((m) => multiIds.includes(m.milestoneId)) : [];
+    const a = targets.length
+      ? (() => {
+          const currentTotal = targets.reduce((sum, m) => sum + (m.amount ?? 0), 0);
+          const minOrder = Math.min(...targets.map((m) => m.stageOrder));
+          const prevTotal = sortedAll
+            .filter((m) => m.stageOrder < minOrder && !multiIds.includes(m.milestoneId))
+            .reduce((sum, m) => sum + (m.amount ?? 0), 0);
+          return {
+            current: currentTotal,
+            cumulative: prevTotal + currentTotal,
+            prev: splitVat(prevTotal, vatIncluded),
+            cur: splitVat(currentTotal, vatIncluded),
+            cum: splitVat(prevTotal + currentTotal, vatIncluded),
+            currentMilestoneId: targets[0].milestoneId,
+            priorLabel: priorColumnLabel(sortedAll.length),
+            stageLabel: targets.map((m) => m.stageLabel?.trim() || `${m.stageOrder}차`).join(", "),
+          };
+        })()
+      : computeCompletionAmounts(milestones, opts.milestoneId ?? null, vatIncluded);
+    if (targets.length) {
+      // 값 타입 제약(string|number|null)으로 JSON 문자열 보관 — 렌더러(payment-pdf)가 파싱한다.
+      values["payment.stageBreakdown"] = JSON.stringify(
+        targets.map((m) => ({
+          label: m.stageLabel?.trim() || `${m.stageOrder}차`,
+          ...splitVat(m.amount ?? 0, vatIncluded),
+        }))
+      );
+      values["meta.milestoneIds"] = targets.map((m) => m.milestoneId).join(",");
+    }
     values["completion.actualDate"] = opts.actualDate || ctx.endedAt;
     values["completion.currentAmount"] = a.current;
     values["completion.cumulativeAmount"] = a.cumulative;

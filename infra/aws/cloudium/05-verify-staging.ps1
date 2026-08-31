@@ -64,6 +64,16 @@ if ($files.Count -eq 0) { throw "파일이 없다. 복사가 실제로 되었는
 
 $totalBytes = ($files | Measure-Object -Property Length -Sum).Sum
 $zeroByte   = @($files | Where-Object { $_.Length -eq 0 })
+
+# 0바이트라고 다 복사 실패가 아니다. 실측 결과 대부분이 원본에서도 0바이트였다:
+#  · 프로그램 부산물(.tmp/.log/.err/.dwl2/.fileTableLock …)
+#  · **파일명 자체가 메모인 빈 파일** — 예: "★ 제작도면, 탱크시험성적서 ….txt"
+#    (폴더에 안내를 남기려고 만든 것이라 내용이 없는 게 정상)
+# 그래서 부산물 확장자는 분리하고, 문서형만 표본 확인 대상으로 올린다.
+$benignZeroExt = @('.tmp','.log','.err','.dat','.out','.lock','.dwl','.dwl2',
+                   '.filetablelock','.ldb','.bak','.crdownload','.part')
+$zeroBenign = @($zeroByte | Where-Object { $benignZeroExt -contains $_.Extension.ToLower() })
+$zeroDocs   = @($zeroByte | Where-Object { $benignZeroExt -notcontains $_.Extension.ToLower() })
 $emptyDirs  = @($dirs  | Where-Object { -not (Get-ChildItem -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue) })
 
 # S3 키 = 스테이징 루트 기준 상대경로, 구분자는 '/'
@@ -91,11 +101,23 @@ Log ""
 
 $problems = 0
 
-if ($zeroByte.Count -gt 0) {
-  Bad ("0바이트 파일 {0:N0}건 — 탐색기 복사가 중간에 끊겼을 수 있다. 해당 폴더를 재복사할 것" -f $zeroByte.Count)
-  $problems++
-  if ($ListProblems) { $zeroByte | Select-Object -First 20 | ForEach-Object { Log ("    " + $_.FullName) } }
-} else { Ok "0바이트 파일 없음" }
+if ($zeroByte.Count -eq 0) {
+  Ok "0바이트 파일 없음"
+} else {
+  Log ("0바이트 파일 {0:N0}건" -f $zeroByte.Count)
+  if ($zeroBenign.Count -gt 0) {
+    Ok ("  · 프로그램 부산물 {0:N0}건 (.tmp/.log/.err 등) — 원본도 0바이트다. 정상" -f $zeroBenign.Count)
+  }
+  if ($zeroDocs.Count -gt 0) {
+    Warn ("  · 문서형 {0:N0}건 — 표본 확인 권장" -f $zeroDocs.Count)
+    Log  "     원본이 이미 0바이트인 경우가 많다(파일명이 메모인 빈 파일 등). 확인 방법:"
+    Log  "       robocopy `"<T: 원본폴더>`" `"$env:TEMP\chk`" `"<파일명>`" /L /R:0 /W:0 /NJH /NJS /NC /BYTES"
+    Log  "     원본도 0이면 정상이고, 원본에 크기가 있으면 그 폴더만 재복사할 것."
+    $ext = $zeroDocs | Group-Object Extension | Sort-Object Count -Descending | Select-Object -First 6
+    Log  ("     확장자: " + (($ext | ForEach-Object { "{0}({1})" -f $(if($_.Name){$_.Name}else{"없음"}), $_.Count }) -join ", "))
+    if ($ListProblems) { $zeroDocs | Select-Object -First 20 | ForEach-Object { Log ("       " + $_.FullName) } }
+  }
+}
 
 if ($longKeys.Count -gt 0) {
   Bad ("S3 키 {0}바이트 초과 {1:N0}건 — 업로드가 거부된다. 폴더명 단축 필요" -f $MaxKeyBytes, $longKeys.Count)
@@ -138,7 +160,8 @@ else { Bad "$problems 개 항목에서 문제 발견 — 해결 후 재검증할
 
 $result = [ordered]@{
   timestamp=$stamp; staging=$root; files=$files.Count; bytes=$totalBytes
-  dirs=$dirs.Count; emptyDirs=$emptyDirs.Count; zeroByte=$zeroByte.Count
+  dirs=$dirs.Count; emptyDirs=$emptyDirs.Count
+  zeroByte=$zeroByte.Count; zeroBenign=$zeroBenign.Count; zeroDocs=$zeroDocs.Count
   longKeys=$longKeys.Count; oddChars=$oddChars.Count; enumErrors=$(if($ev){$ev.Count}else{0})
   expectedFiles=$ExpectedFiles; expectedBytes=$ExpectedBytes; problems=$problems
 }

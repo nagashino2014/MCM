@@ -7,7 +7,16 @@ export { CdButton, CdIconButton, type CdButtonProps, type CdButtonVariant } from
 export { CdBadge, CdCount, type CdBadgeProps, type CdBadgeTone } from "./CdBadge";
 export { CdAvatar, type CdAvatarProps } from "./CdAvatar";
 export { CdEmptyState, type CdEmptyStateProps } from "./CdEmptyState";
-export { CdInput, CdSelect, CdTextarea, CdCheckbox } from "./CdField";
+export {
+  CdInput,
+  CdSelect,
+  CdTextarea,
+  CdCheckbox,
+  CdDateInput,
+  formatDateDigits,
+  isValidDateString,
+  type CdDateInputProps,
+} from "./CdField";
 export { CdTabs, type CdTabItem } from "./CdTabs";
 export { CdModal, CdDrawer, type CdModalProps, type CdDrawerProps } from "./CdModal";
 export { CdToastProvider, useCdToast, type CdToastTone } from "./CdToast";

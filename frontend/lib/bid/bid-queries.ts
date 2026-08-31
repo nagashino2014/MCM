@@ -43,6 +43,20 @@ export const REGION_GROUPS: Record<string, string[]> = {
   제주권: ["제주"],
 };
 
+/**
+ * 발주기관명 → 지역권(REGION_GROUPS 키) 판정 — 첫 매칭 그룹.
+ * 기관명에 지역 키워드가 없으면(중앙부처·공단 본사 등) null.
+ * 알림 발송·큐 적재·모바일 목록이 같은 판정을 쓴다(2026-08-24 — 판정 축이 갈려
+ * 타 지역권 건이 알림에 섞이던 문제의 재발 방지).
+ */
+export function regionGroupOf(orgName: string | null | undefined): string | null {
+  if (!orgName) return null;
+  for (const [group, keys] of Object.entries(REGION_GROUPS)) {
+    if (keys.some((k) => orgName.includes(k))) return group;
+  }
+  return null;
+}
+
 export interface BidListFilter {
   bidType: BidType;
   q?: string;

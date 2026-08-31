@@ -19,23 +19,55 @@ async function resolveServiceUrl(url: string): Promise<string> {
   }
 }
 
-/** HWPX 바이트 → PDF 바이트. converter 미설정·실패 시 null(호출부가 pdf-lib 폴백). */
-export async function convertHwpxToPdf(hwpxBytes: Uint8Array, name: string): Promise<Uint8Array | null> {
+/** 오피스 문서 바이트 → PDF 바이트. converter 미설정·실패 시 null(호출부가 폴백). */
+export async function convertOfficeToPdf(bytes: Uint8Array, name: string, mime: string): Promise<Uint8Array | null> {
   const converterUrl = (process.env.MCM_CONVERTER_URL || "").trim().replace(/\/$/, "");
   if (!converterUrl) return null;
   try {
     const target = await resolveServiceUrl(converterUrl);
     const form = new FormData();
-    form.set("file", new Blob([new Uint8Array(hwpxBytes)], { type: "application/vnd.hancom.hwpx" }), name);
+    form.set("file", new Blob([new Uint8Array(bytes)], { type: mime }), name);
     const res = await fetch(`${target}/convert/pdf`, { method: "POST", body: form });
     if (!res.ok) {
-      console.warn(`[agreement] converter 변환 실패(HTTP ${res.status}) — pdf-lib 폴백`);
+      console.warn(`[convert] converter 변환 실패(HTTP ${res.status}) — 폴백`);
       return null;
     }
     return new Uint8Array(await res.arrayBuffer());
   } catch (err) {
     const cause = (err as { cause?: { code?: string } }).cause;
-    console.warn(`[agreement] converter 연결 실패(${cause?.code ?? (err as Error).message}) — pdf-lib 폴백`);
+    console.warn(`[convert] converter 연결 실패(${cause?.code ?? (err as Error).message}) — 폴백`);
+    return null;
+  }
+}
+
+/** HWPX 바이트 → PDF 바이트. converter 미설정·실패 시 null(호출부가 pdf-lib 폴백). */
+export async function convertHwpxToPdf(hwpxBytes: Uint8Array, name: string): Promise<Uint8Array | null> {
+  return convertOfficeToPdf(hwpxBytes, name, "application/vnd.hancom.hwpx");
+}
+
+/**
+ * 웹 페이지 URL → PDF 캡처(converter 의 headless Chromium, 바로빌 계산서 인쇄 화면 전용).
+ * converter 미설정·실패 시 null(호출부가 폴백).
+ */
+export async function renderUrlToPdf(url: string): Promise<Uint8Array | null> {
+  const converterUrl = (process.env.MCM_CONVERTER_URL || "").trim().replace(/\/$/, "");
+  if (!converterUrl) return null;
+  try {
+    const target = await resolveServiceUrl(converterUrl);
+    const res = await fetch(`${target}/render/url-pdf`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      console.warn(`[convert] URL 캡처 실패(HTTP ${res.status}) — 폴백`, detail.slice(0, 300));
+      return null;
+    }
+    return new Uint8Array(await res.arrayBuffer());
+  } catch (err) {
+    const cause = (err as { cause?: { code?: string } }).cause;
+    console.warn(`[convert] converter 연결 실패(${cause?.code ?? (err as Error).message}) — 폴백`);
     return null;
   }
 }

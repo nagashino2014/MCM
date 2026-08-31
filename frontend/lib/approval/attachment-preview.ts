@@ -1,13 +1,25 @@
-// 첨부 미리보기 공용 — 문서 뷰어(docId 경로)와 기안 화면(key 경로)이 같은 로직을 쓴다.
-// pdf·이미지는 원본 그대로, hwpx·docx·xlsx·pptx 는 converter 컨테이너(LibreOffice)로 변환한다.
-// 원래 app/api/approval/docs/[docId]/attachments/[index]/route.ts 안에 있던 것을 그대로 옮겼다.
-
 import { resolve4 } from "node:dns/promises";
 import { NextResponse } from "next/server";
 import { attachmentContentType } from "@/lib/approval/attachments";
 
+// 첨부 미리보기 서버 공통(2026-08-25) — 결재 문서 첨부([docId]/attachments/[index])와
+// 작성 중 첨부(key 기반 preview 라우트)가 같은 변환·응답 로직을 쓴다.
+// 오피스·hwpx 는 문서 변환 서비스(converter, LibreOffice)로 PDF 를 만들고 S3 에 캐시한다.
+
 /** 변환 PDF 캐시 키 — 원본 옆에 같은 이름으로 둔다(첨부가 지워지면 함께 정리 대상). */
 export const previewKey = (key: string) => `${key}.preview.pdf`;
+
+/** 원본 그대로 응답(이미지·PDF 등 변환이 필요 없는 첨부) — 브랜치 통합(2026-08-28)으로 복원. */
+export function rawResponse(body: Buffer, name: string, download: boolean): NextResponse {
+  return new NextResponse(new Uint8Array(body), {
+    headers: {
+      "Content-Type": attachmentContentType(name),
+      "Content-Length": String(body.length),
+      "Content-Disposition": `${download ? "attachment" : "inline"}; filename*=UTF-8''${encodeURIComponent(name)}`,
+      "Cache-Control": "private, max-age=300",
+    },
+  });
+}
 
 export function pdfResponse(pdf: Buffer, name: string, download: boolean): NextResponse {
   const pdfName = name.replace(/\.[^.]+$/, "") + ".pdf";
@@ -21,18 +33,6 @@ export function pdfResponse(pdf: Buffer, name: string, download: boolean): NextR
   });
 }
 
-/** 원본 그대로 반환(inline/attachment) — pdf·이미지는 브라우저가 바로 렌더한다. */
-export function rawResponse(body: Buffer, name: string, download: boolean): NextResponse {
-  return new NextResponse(new Uint8Array(body), {
-    headers: {
-      "Content-Type": attachmentContentType(name),
-      "Content-Length": String(body.length),
-      "Content-Disposition": `${download ? "attachment" : "inline"}; filename*=UTF-8''${encodeURIComponent(name)}`,
-      "Cache-Control": "private, max-age=300",
-    },
-  });
-}
-
 /**
  * 문서 변환 서비스(converter) 호출 — LibreOffice 전용 경량 컨테이너.
  * OCR 백엔드는 비용 절감으로 상시 가동하지 않으므로 변환은 별도 서비스로 분리돼 있다.
@@ -40,7 +40,7 @@ export function rawResponse(body: Buffer, name: string, download: boolean): Next
  */
 export async function convertToPdf(
   source: Buffer,
-  name: string,
+  name: string
 ): Promise<{ ok: true; pdf: Buffer } | { ok: false; error: string; status: number }> {
   const converterUrl = (process.env.MCM_CONVERTER_URL || "").trim().replace(/\/$/, "");
   if (!converterUrl) {

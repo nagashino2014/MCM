@@ -2,12 +2,46 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Building2, ExternalLink, X } from "lucide-react";
+import { Building2, ExternalLink, Landmark, X } from "lucide-react";
+import { FinLogo } from "@/components/finance/FinLogo";
 
 /** 계약 상세에서 업체명·대상사업장 KPI를 눌렀을 때 띄우는 사업장 정보 팝업. */
 interface FacilityInfoTarget {
   facilityId: string;
   companyName: string;
+}
+
+/** /api/facilities/[id]/deposits 응답 — 거래 은행 태그 + 입금 내역 상세 모달 데이터. */
+interface DepositBankSummary {
+  bankName: string;
+  bankCode: string | null;
+  count: number;
+  totalAmount: number;
+}
+
+interface DepositRow {
+  milestoneId: string;
+  contractId: string;
+  contractTitle: string;
+  stageLabel: string;
+  paymentMethod: string | null;
+  invoiceIssuedAt: string | null;
+  invoiceAmount: number | null;
+  collected: boolean;
+  remaining: number;
+  depositAt: string | null;
+  depositAmount: number | null;
+  bankName: string | null;
+  bankCode: string | null;
+  matched: boolean;
+  noteBank: string | null;
+  noteMaturityDate: string | null;
+  noteLoanExecutedDate: string | null;
+}
+
+interface DepositData {
+  banks: DepositBankSummary[];
+  rows: DepositRow[];
 }
 
 interface FacilityInfo {
@@ -43,6 +77,9 @@ export default function FacilityInfoModal({
   const [info, setInfo] = useState<FacilityInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deposits, setDeposits] = useState<DepositData | null>(null);
+  const [depositsLoading, setDepositsLoading] = useState(false);
+  const [depositDetailOpen, setDepositDetailOpen] = useState(false);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -71,6 +108,28 @@ export default function FacilityInfoModal({
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [activeId]);
+
+  // 거래 은행 카드용 — 확정 수금 대조(바로빌 계좌·엑셀 업로드 원장)에서 집계한 입금 은행.
+  useEffect(() => {
+    if (!activeId) return;
+    const controller = new AbortController();
+    setDeposits(null);
+    setDepositDetailOpen(false);
+    setDepositsLoading(true);
+    fetch(`/api/facilities/${encodeURIComponent(activeId)}/deposits`, { cache: "no-store", signal: controller.signal })
+      .then(async (res) => {
+        if (!res.ok) throw new Error("입금 내역을 불러오지 못했습니다.");
+        return (await res.json()) as DepositData;
+      })
+      .then(setDeposits)
+      .catch(() => {
+        if (!controller.signal.aborted) setDeposits(null);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setDepositsLoading(false);
       });
     return () => controller.abort();
   }, [activeId]);
@@ -155,6 +214,11 @@ export default function FacilityInfoModal({
                 />
                 {businessType && <Field label="업태·종목" value={businessType} wide />}
                 <Field label="통합허가 건수" value={info.permits?.length ? `${info.permits.length}건` : "-"} />
+                <DepositBanksField
+                  deposits={deposits}
+                  loading={depositsLoading}
+                  onOpenDetail={() => setDepositDetailOpen(true)}
+                />
               </div>
             </div>
           )}
@@ -172,6 +236,208 @@ export default function FacilityInfoModal({
           ) : (
             <span />
           )}
+          <button type="button" onClick={onClose} className="cd-btn cd-btn-ghost rounded-xl px-4 py-2 text-sm font-bold cd-text-muted">
+            닫기
+          </button>
+        </div>
+      </div>
+
+      {/* cd-card 는 backdrop-filter 때문에 fixed 자손의 containing block 이 된다 → 카드 밖에서 렌더 */}
+      {depositDetailOpen && (
+        <DepositHistoryModal
+          companyName={info?.companyName ?? title}
+          deposits={deposits}
+          onClose={() => setDepositDetailOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+const formatAmount = (value: number) => `${Math.round(value).toLocaleString("ko-KR")}원`;
+
+/** 지급 방식 요약 — "어음 : 2개월 이하" → "어음". 원문은 title 로 남긴다. */
+const paymentMethodShort = (method: string | null) => {
+  if (!method) return null;
+  return method.startsWith("어음") ? "어음" : method;
+};
+
+/** 거래 은행 카드 — 확정된 수금 대조로 확인된 입금 은행을 태그로 보여준다. */
+function DepositBanksField({
+  deposits,
+  loading,
+  onOpenDetail,
+}: {
+  deposits: DepositData | null;
+  loading: boolean;
+  onOpenDetail: () => void;
+}) {
+  const banks = deposits?.banks ?? [];
+  const hasRows = (deposits?.rows.length ?? 0) > 0;
+  return (
+    <div className="rounded-2xl border cd-border-c p-3">
+      <p className="text-[11px] cd-text-faint">거래 은행</p>
+      <div className="mt-1 flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+          {loading ? (
+            <span className="text-sm cd-text-faint">확인 중…</span>
+          ) : banks.length === 0 ? (
+            <span className="text-sm cd-text" title="계좌 원장과 확정 대조된 입금이 아직 없습니다.">-</span>
+          ) : (
+            banks.map((bank) => (
+              <span
+                key={bank.bankName}
+                className="inline-flex items-center gap-1 rounded-full cd-tint-primary px-2 py-0.5 text-[11px] font-bold cd-text-primary"
+                title={`${bank.bankName} 입금 ${bank.count}건 · ${formatAmount(bank.totalAmount)}`}
+              >
+                <FinLogo kind="bank" code={bank.bankCode ?? ""} label={bank.bankName} size={16} />
+                {bank.bankName}
+              </span>
+            ))
+          )}
+        </div>
+        {hasRows && (
+          <button
+            type="button"
+            onClick={onOpenDetail}
+            className="cd-btn cd-btn-ghost rounded-lg px-2 py-1 text-[11px] font-bold cd-text-primary shrink-0 inline-flex items-center gap-1"
+          >
+            <Landmark className="w-3 h-3" />
+            상세 보기
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** 입금 내역 상세 — 이 거래처 계약의 모든 청구 단계(수금·미수)를 입금 단위로 펼쳐 보여준다. */
+function DepositHistoryModal({
+  companyName,
+  deposits,
+  onClose,
+}: {
+  companyName: string;
+  deposits: DepositData | null;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [onClose]);
+
+  const rows = deposits?.rows ?? [];
+  const depositedRows = rows.filter((row) => row.depositAmount != null);
+  const uncollectedRows = rows.filter((row) => !row.collected && row.remaining > 0);
+  const depositedTotal = depositedRows.reduce((acc, row) => acc + (row.depositAmount ?? 0), 0);
+  const uncollectedTotal = uncollectedRows.reduce((acc, row) => acc + row.remaining, 0);
+
+  return (
+    <div className="fixed inset-0 z-[60] bg-stone-950/30 flex items-center justify-center p-4" onClick={(e) => { e.stopPropagation(); onClose(); }}>
+      <div
+        className="cd-card rounded-3xl w-[min(980px,calc(100vw-32px))] max-h-[min(720px,calc(100vh-32px))] shadow-2xl flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="p-5 border-b cd-border-c flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h3 className="text-lg font-bold cd-text inline-flex items-center gap-2">
+              <Landmark className="w-4 h-4 cd-text-primary" />
+              {companyName} 입금 내역
+            </h3>
+            <p className="text-xs cd-text-faint mt-1">
+              입금 {depositedRows.length}건 {formatAmount(depositedTotal)}
+              {uncollectedRows.length > 0 && (
+                <>
+                  {" · "}
+                  <span className="cd-error-text">미수 {uncollectedRows.length}건 {formatAmount(uncollectedTotal)}</span>
+                </>
+              )}
+              {" — 입금 은행은 계좌 원장(바로빌·엑셀 업로드)과 확정 대조된 건만 표시됩니다."}
+            </p>
+          </div>
+          <button type="button" onClick={onClose} className="cd-text-faint hover:opacity-70">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-5 overflow-y-auto scrollbar-hide">
+          {rows.length === 0 ? (
+            <p className="py-10 text-center text-sm cd-text-faint">이 거래처의 청구·수금 내역이 없습니다.</p>
+          ) : (
+            <div className="overflow-x-auto rounded-2xl border cd-border-c">
+              <table className="w-full text-sm min-w-[860px]">
+                <thead>
+                  <tr className="text-left text-[11px] cd-text-faint border-b cd-border-c">
+                    <th className="px-3 py-2 font-bold">용역명</th>
+                    <th className="px-3 py-2 font-bold">청구 단계</th>
+                    <th className="px-3 py-2 font-bold">계산서 발행일</th>
+                    <th className="px-3 py-2 font-bold text-right">입금액</th>
+                    <th className="px-3 py-2 font-bold">입금일자</th>
+                    <th className="px-3 py-2 font-bold">입금은행</th>
+                    <th className="px-3 py-2 font-bold">지급 방식</th>
+                    <th className="px-3 py-2 font-bold">상태</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row, idx) => {
+                    const uncollected = !row.collected && row.depositAmount == null;
+                    const method = paymentMethodShort(row.paymentMethod);
+                    return (
+                      <tr key={`${row.milestoneId}-${idx}`} className="border-b cd-border-c last:border-b-0">
+                        <td className="px-3 py-2 cd-text break-words max-w-[240px]">{row.contractTitle || "-"}</td>
+                        <td className="px-3 py-2 cd-text whitespace-nowrap">{row.stageLabel || "-"}</td>
+                        <td className="px-3 py-2 cd-text-muted whitespace-nowrap tabular-nums">{row.invoiceIssuedAt ?? "-"}</td>
+                        <td className="px-3 py-2 cd-text text-right whitespace-nowrap tabular-nums">
+                          {row.depositAmount != null ? formatAmount(row.depositAmount) : "-"}
+                        </td>
+                        <td className="px-3 py-2 cd-text-muted whitespace-nowrap tabular-nums">{row.depositAt ?? "-"}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          {row.bankName ? (
+                            <span className="inline-flex items-center gap-1.5 cd-text">
+                              <FinLogo kind="bank" code={row.bankCode ?? ""} label={row.bankName} size={18} />
+                              {row.bankName}
+                            </span>
+                          ) : (
+                            <span className="cd-text-faint" title={row.depositAmount != null ? "계좌 원장과 대조되지 않은 수기 수금 기록입니다." : undefined}>-</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          {method ? (
+                            <span className="cd-text" title={row.paymentMethod ?? undefined}>
+                              {method}
+                              {method === "어음" && row.noteBank ? <span className="cd-text-faint"> · {row.noteBank}</span> : null}
+                            </span>
+                          ) : (
+                            <span className="cd-text-faint">-</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          {uncollected ? (
+                            <span className="rounded-full px-2 py-0.5 text-[11px] font-bold" style={{ background: "#FCEBEB", color: "#791F1F" }}>
+                              미수
+                            </span>
+                          ) : row.collected ? (
+                            <span className="rounded-full px-2 py-0.5 text-[11px] font-bold cd-tint-primary cd-text-primary">수금</span>
+                          ) : (
+                            <span className="rounded-full border cd-border-c px-2 py-0.5 text-[11px] font-bold cd-text-muted">부분입금</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div className="p-5 border-t cd-border-c flex justify-end">
           <button type="button" onClick={onClose} className="cd-btn cd-btn-ghost rounded-xl px-4 py-2 text-sm font-bold cd-text-muted">
             닫기
           </button>

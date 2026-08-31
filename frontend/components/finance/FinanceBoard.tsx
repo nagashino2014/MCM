@@ -2032,6 +2032,7 @@ const MATCH_TYPE_LABEL: Record<string, string> = {
   exact_1to1: "금액 일치",
   already_collected: "기록된 수금 확인",
   sum_nto1: "합계 매칭",
+  note_date: "어음 만기일 매칭",
   partial: "부분입금",
   overpaid: "과대입금",
   prepaid: "선입금",

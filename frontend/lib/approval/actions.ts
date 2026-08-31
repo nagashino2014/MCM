@@ -215,23 +215,21 @@ async function runSingleAction(
 
 /**
  * 실패 액션 재실행 — 관리자용. ok 가 없는 액션만 다시 돈다(성공분은 멱등 skip).
- * 문서가 실제로 도달한 트리거만 실행한다 — 미승인(draft·반려·진행 중) 문서에 approved
- * 액션(소득원장·인사이벤트·계정 비활성화 등)이 돌면 안 된다.
+ * 문서가 실제로 도달한 트리거만 실행한다 — 미승인 문서에 approved 액션(소득원장·
+ * 인사이벤트·계정 비활성화 등)이 돌면 안 된다. 반려 문서도 상신은 거쳤으므로
+ * submitted 와 rejected 트리거는 재실행 대상이다(draft 만 no-op).
  */
 export async function rerunFormActions(docId: string): Promise<{ reran: boolean }> {
   const db = await getDb();
   const rows = rowsToObjects(await db.exec(`SELECT status FROM approval_docs WHERE doc_id = $1`, [docId]));
   const status = rows.length ? String(rows[0].status) : "";
-  if (status === "approved") {
-    await runFormActionsForDoc(docId, "approved");
-    await runFormActionsForDoc(docId, "submitted");
-    return { reran: true };
-  }
-  if (status === "in_progress") {
-    await runFormActionsForDoc(docId, "submitted");
-    return { reran: true };
-  }
-  return { reran: false };
+  const triggers: ActionTrigger[] =
+    status === "approved" ? ["approved", "submitted"]
+    : status === "rejected" ? ["rejected", "submitted"]
+    : status === "in_progress" ? ["submitted"]
+    : [];
+  for (const t of triggers) await runFormActionsForDoc(docId, t);
+  return { reran: triggers.length > 0 };
 }
 
 export interface ActionRunLog {

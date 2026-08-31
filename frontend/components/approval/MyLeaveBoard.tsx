@@ -57,7 +57,6 @@ interface Overview {
 
 const fmtDays = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
-const SOURCE_LABEL: Record<string, string> = { groupware: "그룹웨어", excel: "엑셀", manual: "수기" };
 
 /**
  * 휴가 도트 4유형 — 연차(파랑)·반차(하늘)·경조(주황)·공가 등(녹색).
@@ -317,37 +316,38 @@ export function MyLeaveSection() {
         </div>
       </div>
 
-      {/* 사용 내역 */}
+      {/* 사용 내역 — 행이 짧아 한 열이면 여백이 많이 남는다 → 월 그룹을 2열로 흘린다. */}
       <div className="cd-card p-4 rounded-2xl">
         <div className="cd-card-title mb-2">사용 내역</div>
         {usesByMonth.length === 0 && <div className="text-sm cd-text-muted py-5 text-center">{year}년 휴가 사용 내역이 없습니다.</div>}
-        {usesByMonth.map((g) => (
-          <div key={g.month} className="mb-3 last:mb-0">
-            <div className="flex items-center gap-2 text-xs font-bold cd-text-muted mb-1">
-              {Number(g.month.slice(5, 7))}월
-              <span className="cd-text-faint font-medium">연차 차감 {fmtDays(g.days)}일</span>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5">
+          {usesByMonth.map((g) => (
+            <div key={g.month} className="mb-3 last:mb-0 min-w-0">
+              <div className="flex items-center gap-2 text-xs font-bold cd-text-muted mb-1">
+                {Number(g.month.slice(5, 7))}월
+                <span className="cd-text-faint font-medium">연차 차감 {fmtDays(g.days)}일</span>
+              </div>
+              {g.rows.map((e) => {
+                const d = new Date(e.usedOn! + "T00:00:00");
+                const kind = dotKind(e);
+                return (
+                  <div key={e.entryId} className="flex items-center gap-2 text-[12.5px] py-1.5 border-t cd-hairline-row-c">
+                    <span className="tabular-nums cd-text w-[84px] shrink-0">
+                      {e.usedOn!.slice(5)} ({WEEKDAYS[d.getDay()]})
+                    </span>
+                    <span className="flex items-center gap-1.5 min-w-0">
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: DOT_COLOR[kind] }} />
+                      <span className="cd-text truncate">{e.leaveLabel ?? "연차"}</span>
+                    </span>
+                    <span className="tabular-nums cd-text-muted ml-auto shrink-0">
+                      {kind === "annual" || kind === "half" ? `${fmtDays(e.days)}일 차감` : "차감 없음"}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
-            {g.rows.map((e) => {
-              const d = new Date(e.usedOn! + "T00:00:00");
-              const kind = dotKind(e);
-              return (
-                <div key={e.entryId} className="flex items-center gap-2 text-[12.5px] py-1.5 border-t cd-hairline-row-c">
-                  <span className="tabular-nums cd-text w-[84px] shrink-0">
-                    {e.usedOn!.slice(5)} ({WEEKDAYS[d.getDay()]})
-                  </span>
-                  <span className="flex items-center gap-1.5 min-w-0">
-                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: DOT_COLOR[kind] }} />
-                    <span className="cd-text truncate">{e.leaveLabel ?? "연차"}</span>
-                  </span>
-                  <span className="tabular-nums cd-text-muted ml-auto shrink-0">
-                    {kind === "annual" || kind === "half" ? `${fmtDays(e.days)}일 차감` : "차감 없음"}
-                  </span>
-                  <span className="cd-text-faint text-[11px] shrink-0">{SOURCE_LABEL[e.source]}</span>
-                </div>
-              );
-            })}
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
       {/* 특별휴가 — 부여·이력이 있을 때만 */}

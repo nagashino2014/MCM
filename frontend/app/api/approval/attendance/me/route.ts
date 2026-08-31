@@ -78,7 +78,8 @@ export async function GET(req: NextRequest) {
       lateMonthly,
       mealWarnings,
       absenceRequests,
-      pay,
+      // canTest: 산정 제외자 수당 표시 test 버튼(관리자 한정 — 기능 동작 확인용, 2026-08-31).
+      pay: pay ? { ...pay, canTest: ctx.role === "admin" } : null,
     });
   } catch (err) {
     return authErrorToResponse(err);

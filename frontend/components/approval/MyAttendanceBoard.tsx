@@ -70,6 +70,9 @@ interface PayBasis {
   rateDay: number;
   rateNight: number;
   divisorHours: number;
+  /** 초과근무수당 산정 제외자 — 수당을 표시하지 않는다(test 토글은 admin 한정). */
+  excluded: boolean;
+  canTest: boolean;
 }
 
 interface MeResponse {
@@ -102,6 +105,8 @@ export function MyAttendanceSection({ theme }: { theme: CdTheme }) {
   const [openWeek, setOpenWeek] = useState<string | null>(null);
   const [daily, setDaily] = useState<Record<string, DailyRow[]>>({});
   const [loading, setLoading] = useState(true);
+  // 산정 제외자의 수당 강제 표시(admin 전용 test 토글 — 산정 기능 동작 확인용).
+  const [testPay, setTestPay] = useState(false);
 
   const load = useCallback(async (m: string | null) => {
     setLoading(true);
@@ -173,6 +178,8 @@ export function MyAttendanceSection({ theme }: { theme: CdTheme }) {
   const yearWarnings = data?.mealWarnings ?? [];
   const pay = data?.pay ?? null;
   const limits = data?.limits;
+  // 산정 제외자는 수당을 숨긴다(admin 이 test 토글을 켠 동안만 표시).
+  const hidePay = Boolean(pay?.excluded) && !testPay;
 
   const pal = chartPalette(theme);
   const baseBarOptions = useCallback(
@@ -273,8 +280,10 @@ export function MyAttendanceSection({ theme }: { theme: CdTheme }) {
           {
             icon: Banknote,
             label: "전월 초과근무수당",
-            value: kpi.prevPay != null ? `${Math.round(kpi.prevPay).toLocaleString("ko-KR")}원` : "—",
-            sub: `${Number(prevMonthKey.slice(5, 7))}월분${pay?.hourlyWage == null ? " · 근로계약 미등록" : ""}`,
+            value: hidePay ? "—" : kpi.prevPay != null ? `${Math.round(kpi.prevPay).toLocaleString("ko-KR")}원` : "—",
+            sub: pay?.excluded
+              ? `산정 제외 대상${testPay ? ` · test 표시 중 (${Number(prevMonthKey.slice(5, 7))}월분)` : ""}`
+              : `${Number(prevMonthKey.slice(5, 7))}월분${pay?.hourlyWage == null ? " · 근로계약 미등록" : ""}`,
           },
         ].map((k) => (
           <div key={k.label} className="cd-card p-4 rounded-2xl">
@@ -350,7 +359,9 @@ export function MyAttendanceSection({ theme }: { theme: CdTheme }) {
           </div>
           <div className="cd-card p-4 rounded-2xl">
             <div className="cd-card-title mb-1">초과근무수당 추이 (최근 12개월)</div>
-            {pay?.hourlyWage == null ? (
+            {hidePay ? (
+              <div className="text-sm cd-text-muted py-6 text-center">초과근무수당 산정 제외 대상입니다.</div>
+            ) : pay?.hourlyWage == null ? (
               <div className="text-sm cd-text-muted py-6 text-center">근로계약(임금)이 등록되지 않아 수당을 계산할 수 없습니다.</div>
             ) : (data?.trend ?? []).length === 0 ? (
               <div className="text-sm cd-text-muted py-6 text-center">근태 기록이 없습니다.</div>
@@ -441,9 +452,25 @@ export function MyAttendanceSection({ theme }: { theme: CdTheme }) {
           {/* 주별 초과근무수당 — 우상단에 시급·1.5배·2.0배 기준액 */}
           <div className="cd-card p-4 rounded-2xl">
             <div className="flex items-start justify-between gap-3 mb-2 flex-wrap">
-              <div className="cd-card-title">주별 초과근무수당</div>
+              <div className="cd-card-title flex items-center gap-1.5">
+                주별 초과근무수당
+                {pay?.excluded && pay.canTest && (
+                  <button
+                    type="button"
+                    className="cd-chip cd-chip-sm"
+                    data-active={testPay}
+                    title="산정 제외자 수당 표시(관리자 test — 산정 기능 동작 확인용)"
+                    onClick={() => setTestPay((v) => !v)}
+                  >
+                    test
+                  </button>
+                )}
+                {pay?.excluded && <span className="cd-pill cd-pill-idle">산정 제외</span>}
+              </div>
               <div className="text-[11px] cd-text-muted text-right leading-relaxed">
-                {pay?.hourlyWage != null ? (
+                {hidePay ? (
+                  <span className="cd-text-faint">산정 제외 대상 — 수당을 표시하지 않습니다</span>
+                ) : pay?.hourlyWage != null ? (
                   <>
                     <span className="mr-2">
                       시간당 임금 <b className="cd-text tabular-nums">{pay.hourlyWage.toLocaleString("ko-KR")}원</b>
@@ -473,7 +500,7 @@ export function MyAttendanceSection({ theme }: { theme: CdTheme }) {
                 <span className="tabular-nums text-right cd-text-muted">{hm(w.overtimeDayMinutes)}</span>
                 <span className="tabular-nums text-right cd-text-muted">{hm(w.overtimeNightMinutes)}</span>
                 <span className="tabular-nums text-right font-bold cd-text">
-                  {w.estimatedPay != null ? `${Math.round(w.estimatedPay).toLocaleString("ko-KR")}원` : "—"}
+                  {!hidePay && w.estimatedPay != null ? `${Math.round(w.estimatedPay).toLocaleString("ko-KR")}원` : "—"}
                 </span>
               </div>
             ))}

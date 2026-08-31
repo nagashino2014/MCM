@@ -143,7 +143,10 @@ export interface BonusSettings {
   contribExecPct: number;
   deptHeadRates: Record<string, number>;
   calcMethod: "base" | "salary" | "profit";
+  /** 인건비 반영 산정 시 매출액 중 적용 비율(%) — null 이면 applyRate 사용 */
   salaryApplyRate: number | null;
+  /** 인건비 반영 산정 시 반기 인건비 차감 배수(엑셀 성과산정액2=1.0 / 3=1.5) */
+  salaryMultiplier: number;
   profitApplyRate: number | null;
   operatingProfit: number | null;
   absoluteGrading: boolean;

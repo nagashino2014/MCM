@@ -131,6 +131,7 @@ const DEFAULT_SETTINGS: Omit<BonusSettings, "periodYear" | "periodHalf" | "exist
   deptHeadRates: {},
   calcMethod: "base",
   salaryApplyRate: null,
+  salaryMultiplier: 1,
   profitApplyRate: null,
   operatingProfit: null,
   absoluteGrading: false,
@@ -168,6 +169,7 @@ export async function getBonusSettings(year: number, half: "H1" | "H2"): Promise
     deptHeadRates: parseJsonRecord(row.dept_head_rates_json),
     calcMethod: (String(row.calc_method ?? "base") as BonusSettings["calcMethod"]) || "base",
     salaryApplyRate: row.salary_apply_rate != null ? toNum(row.salary_apply_rate) : null,
+    salaryMultiplier: row.salary_multiplier != null ? toNum(row.salary_multiplier) : 1,
     profitApplyRate: row.profit_apply_rate != null ? toNum(row.profit_apply_rate) : null,
     operatingProfit: row.operating_profit != null ? toNum(row.operating_profit) : null,
     absoluteGrading: Number(row.absolute_grading ?? 0) === 1,
@@ -183,6 +185,10 @@ export interface BonusSettingsInput {
   deptHeadRates: Record<string, number>;
   absoluteGrading?: boolean;
   gradeCaps?: Record<string, number>;
+  /** 산정방식(BS-P4) — 'salary' 는 인건비 반영 산정. 미지정이면 기존 값 유지 */
+  calcMethod?: BonusSettings["calcMethod"];
+  salaryApplyRate?: number | null;
+  salaryMultiplier?: number;
 }
 
 export async function saveBonusSettings(
@@ -195,8 +201,10 @@ export async function saveBonusSettings(
     await db.run(
       `INSERT INTO bonus_period_settings
          (period_year, period_half, apply_rate, contrib_support_pct, contrib_exec_pct,
-          dept_head_rates_json, absolute_grading, grade_cap_json, updated_by, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8::jsonb, $9, now()::text)
+          dept_head_rates_json, absolute_grading, grade_cap_json,
+          calc_method, salary_apply_rate, salary_multiplier, updated_by, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8::jsonb,
+               COALESCE($9, 'base'), $10, COALESCE($11, 1.0), $12, now()::text)
        ON CONFLICT (period_year, period_half) DO UPDATE SET
          apply_rate = EXCLUDED.apply_rate,
          contrib_support_pct = EXCLUDED.contrib_support_pct,
@@ -204,6 +212,9 @@ export async function saveBonusSettings(
          dept_head_rates_json = EXCLUDED.dept_head_rates_json,
          absolute_grading = EXCLUDED.absolute_grading,
          grade_cap_json = EXCLUDED.grade_cap_json,
+         calc_method = COALESCE($9, bonus_period_settings.calc_method),
+         salary_apply_rate = COALESCE($10, bonus_period_settings.salary_apply_rate),
+         salary_multiplier = COALESCE($11, bonus_period_settings.salary_multiplier),
          updated_by = EXCLUDED.updated_by,
          updated_at = EXCLUDED.updated_at`,
       [
@@ -215,6 +226,9 @@ export async function saveBonusSettings(
         JSON.stringify(input.deptHeadRates ?? {}),
         input.absoluteGrading ? 1 : 0,
         JSON.stringify(input.gradeCaps ?? {}),
+        input.calcMethod ?? null,
+        input.salaryApplyRate ?? null,
+        input.salaryMultiplier ?? null,
         actorUserId,
       ]
     );

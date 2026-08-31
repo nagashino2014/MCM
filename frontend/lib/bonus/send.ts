@@ -8,6 +8,7 @@ import {
   type StatementDetail,
   type StatementOverviewRow,
 } from "@/lib/bonus/statements";
+import { getBonusPlanApproval } from "@/lib/bonus/draft";
 import { renderStatementPdf } from "@/lib/bonus/statement-pdf";
 import { sendMail } from "@/lib/mail/send";
 
@@ -60,6 +61,10 @@ async function buildPdfContext(p: BonusPeriod): Promise<PdfContext> {
 
 async function renderFor(ctx: PdfContext, row: StatementOverviewRow, detail: StatementDetail): Promise<Uint8Array> {
   const deptHeadAmounts = (detail.meta?.deptHeadAmounts ?? {}) as Record<string, number>;
+  // 인건비 반영 산정 결과에는 개인별 차감 내역이 meta 에 동결돼 있다(없으면 기존 산정방식).
+  const sd = detail.meta?.salaryDeduction as
+    | { salaryTotal?: number; multiplier?: number; deducted?: number }
+    | undefined;
   return renderStatementPdf({
     periodLabel: ctx.label,
     employeeName: row.employeeName,
@@ -71,6 +76,14 @@ async function renderFor(ctx: PdfContext, row: StatementOverviewRow, detail: Sta
       issuedDates: (ctx.issuedDatesByContract.get(l.contractId) ?? []).join(", ") || "-",
       amount: l.amount,
     })),
+    salaryDeduction:
+      sd && Number(sd.deducted ?? 0) > 0
+        ? {
+            salaryTotal: Number(sd.salaryTotal ?? 0),
+            multiplier: Number(sd.multiplier ?? 1),
+            deducted: Number(sd.deducted ?? 0),
+          }
+        : null,
     deptHeadRows: Object.entries(deptHeadAmounts).map(([deptId, amount]) => ({
       deptName: ctx.deptNames.get(deptId) ?? deptId,
       gross: ctx.deptApplied.get(deptId) ?? 0,
@@ -97,6 +110,23 @@ export async function sendStatementEmails(
     throw Object.assign(new Error("테스트 발송(overrideEmail)은 대상 1명 지정 시에만 가능합니다."), {
       status: 400,
     });
+  }
+  // 발송 게이트(2026-08-31 사용자 확정) — 성과급 기안이 승인되기 전에는 명세서를 보내지 않는다.
+  const plan = await getBonusPlanApproval(p);
+  if (!plan) {
+    throw Object.assign(new Error("성과급 기안을 먼저 생성·상신하세요. 승인 후 명세서를 발송할 수 있습니다."), {
+      status: 400,
+    });
+  }
+  if (plan.status !== "approved") {
+    throw Object.assign(
+      new Error(
+        plan.status === "rejected"
+          ? "성과급 기안이 반려되었습니다. 재기안 후 승인되어야 발송할 수 있습니다."
+          : "성과급 기안이 아직 승인되지 않았습니다. 결재 완료 후 발송할 수 있습니다."
+      ),
+      { status: 400 }
+    );
   }
   const overview = await listStatementsOverview(p);
   const wanted = new Set(employeeIds ?? []);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Calculator, FileText, Save, Send } from "lucide-react";
+import { Calculator, ExternalLink, FileText, Save, Send } from "lucide-react";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import OrganizationTree from "@/components/admin/users/OrganizationTree";
 import type { OrganizationEmployeeRow, OrganizationSnapshot } from "@/components/admin/users/types";
@@ -9,7 +9,18 @@ import {
   BONUS_TARGET_DEPT_IDS,
   EXEC_RANK_CUTOFF,
 } from "@/lib/bonus/shared";
+import type { BonusSettings } from "@/lib/bonus/shared";
+import type { BonusPlanApproval } from "@/lib/bonus/draft";
 import type { AllocationBoard, StatementDetail, StatementOverviewRow } from "@/lib/bonus/statements";
+
+/** 성과급 기안 문서 상태 — 명세서 발송 게이트(승인 전 발송 불가)의 표시 라벨 */
+const PLAN_STATUS_LABELS: Record<string, string> = {
+  draft: "작성중(미상신)",
+  in_progress: "결재 진행중",
+  approved: "승인",
+  rejected: "반려",
+  canceled: "취소",
+};
 
 const BUCKET_LABELS: Record<string, string> = {
   participant: "참여인력",
@@ -55,6 +66,11 @@ export default function BonusStatementsBoard() {
   const [board, setBoard] = useState<AllocationBoard | null>(null);
   const [allocDraft, setAllocDraft] = useState<Record<string, number>>({});
   const [snapshot, setSnapshot] = useState<OrganizationSnapshot | null>(null);
+  const [settings, setSettings] = useState<BonusSettings | null>(null);
+  const [calcMethod, setCalcMethod] = useState<BonusSettings["calcMethod"]>("base");
+  const [salaryRate, setSalaryRate] = useState("");
+  const [salaryMultiplier, setSalaryMultiplier] = useState("1");
+  const [plan, setPlan] = useState<BonusPlanApproval | null>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -64,17 +80,27 @@ export default function BonusStatementsBoard() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [ov, al] = await Promise.all([
+      const [ov, al, st, dr] = await Promise.all([
         fetch(`/api/bonus/statements?period=${period}`, { cache: "no-store" }).then((r) => r.json()),
         fetch(`/api/bonus/allocations?period=${period}`, { cache: "no-store" }).then((r) => r.json()),
+        fetch(`/api/bonus/settings?period=${period}`, { cache: "no-store" }).then((r) => r.json()),
+        fetch(`/api/bonus/draft?period=${period}`, { cache: "no-store" }).then((r) => r.json()),
       ]);
       setOverview(ov.overview ?? []);
       setIsAdmin(Boolean(ov.isAdmin));
       setBoard(al.board ?? null);
       setAllocDraft({});
+      const cfg: BonusSettings | null = st.settings ?? null;
+      setSettings(cfg);
+      setCalcMethod(cfg?.calcMethod ?? "base");
+      setSalaryRate(cfg?.salaryApplyRate != null ? String(cfg.salaryApplyRate) : "");
+      setSalaryMultiplier(cfg?.salaryMultiplier != null ? String(cfg.salaryMultiplier) : "1");
+      setPlan(dr.plan ?? null);
     } catch {
       setOverview([]);
       setBoard(null);
+      setSettings(null);
+      setPlan(null);
     } finally {
       setLoading(false);
     }
@@ -144,8 +170,44 @@ export default function BonusStatementsBoard() {
       setMsg(
         `일괄산정 완료 — 참여인력 ${s.participants}명 · 본부장 ${s.deptHeads}건 · ` +
           `기준액 ${fmtAmount(s.totalTarget)}원` +
+          (s.calcMethod === "salary"
+            ? ` · 인건비 차감 ${fmtAmount(s.salaryDeducted ?? 0)}원` +
+              (s.salaryMissing ? ` (급여대장 없음 ${s.salaryMissing}명 — 차감 0)` : "")
+            : "") +
           (s.unassignedDeptContracts ? ` · 수행부서 미지정 ${s.unassignedDeptContracts}건(본부장 차감 제외)` : "")
       );
+      await load();
+    } catch (err) {
+      setMsg((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** 산정방식·비율 저장 — 기존 설정(기여도·적용비율 등)은 그대로 실어 보낸다(지급 대상 LIST 화면과 공유). */
+  const saveCalcSettings = async () => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/bonus/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          period,
+          applyRate: settings?.applyRate ?? 4,
+          contribSupportPct: settings?.contribSupportPct ?? 0,
+          contribExecPct: settings?.contribExecPct ?? 0,
+          deptHeadRates: settings?.deptHeadRates ?? {},
+          absoluteGrading: settings?.absoluteGrading ?? false,
+          gradeCaps: settings?.gradeCaps ?? {},
+          calcMethod,
+          salaryApplyRate: calcMethod === "salary" ? salaryRate : (salaryRate === "" ? null : salaryRate),
+          salaryMultiplier: salaryMultiplier === "" ? undefined : salaryMultiplier,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "산정방식 저장에 실패했습니다.");
+      setMsg("산정방식이 저장되었습니다. 일괄산정을 다시 실행하면 명세에 반영됩니다.");
       await load();
     } catch (err) {
       setMsg((err as Error).message);
@@ -167,6 +229,7 @@ export default function BonusStatementsBoard() {
       if (!res.ok) throw new Error(data.error ?? "기안 생성에 실패했습니다.");
       setMsg("지급 계획 기안이 생성되었습니다. 기안 화면에서 검토 후 상신하세요.");
       window.open(data.href, "_blank");
+      await load();
     } catch (err) {
       setMsg((err as Error).message);
     } finally {
@@ -236,6 +299,15 @@ export default function BonusStatementsBoard() {
 
   const periodLabel = `${year}년 ${half === "H1" ? "상반기" : "하반기"}`;
 
+  // 명세서 발송 게이트 — 성과급 기안이 승인된 뒤에만 발송(2026-08-31 사용자 확정).
+  const sendBlockReason = !plan
+    ? "성과급 기안을 먼저 생성·상신하고 승인받아야 발송할 수 있습니다."
+    : plan.status === "approved"
+      ? null
+      : plan.status === "rejected"
+        ? "성과급 기안이 반려되었습니다. 재기안·승인 후 발송할 수 있습니다."
+        : `성과급 기안이 ${PLAN_STATUS_LABELS[plan.status] ?? plan.status} 상태입니다. 승인 후 발송할 수 있습니다.`;
+
   return (
     <>
       <CdPageHeader
@@ -269,8 +341,22 @@ export default function BonusStatementsBoard() {
                   className="rounded-xl px-4 py-2 text-sm font-semibold border cd-border-c cd-text inline-flex items-center gap-1.5 disabled:opacity-50 whitespace-nowrap shrink-0"
                   title="산정 결과를 표로 담은 지급 계획서를 기안(대표이사 직결)합니다"
                 >
-                  <FileText className="w-4 h-4" /> 성과급 기안
+                  <FileText className="w-4 h-4" /> {plan ? "성과급 재기안" : "성과급 기안"}
                 </button>
+                {plan && (
+                  <a
+                    href={`/approval?docId=${encodeURIComponent(plan.docId)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11px] font-semibold rounded-lg px-2 py-1.5 border cd-border-c inline-flex items-center gap-1 whitespace-nowrap"
+                    style={plan.status === "approved" ? { color: "var(--cd-success)" } : { color: "var(--cd-primary)" }}
+                    title="성과급 기안 문서 열기"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    기안 {PLAN_STATUS_LABELS[plan.status] ?? plan.status}
+                    {plan.docNo ? ` · ${plan.docNo}` : ""}
+                  </a>
+                )}
               </>
             )}
           </div>
@@ -300,18 +386,32 @@ export default function BonusStatementsBoard() {
 
           <section className="cd-card rounded-3xl p-4 cd-reveal delay-2 flex flex-col gap-2.5 grow">
             <h3 className="text-xs font-bold cd-text-faint">산정방식 옵션</h3>
-            <label className="flex items-start gap-2 text-sm cd-text">
-              <input type="checkbox" checked readOnly className="mt-0.5" />
+            <label className={`flex items-start gap-2 text-sm ${isAdmin ? "cd-text" : "cd-text-faint"}`}>
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                disabled={!isAdmin}
+                checked={calcMethod === "base"}
+                onChange={() => setCalcMethod("base")}
+              />
               <span>
                 기존 산정방식
                 <span className="block text-[10px] cd-text-faint">지급대상 총액 규모를 매출액의 3.5~5% 적용</span>
               </span>
             </label>
-            <label className="flex items-start gap-2 text-sm cd-text-faint">
-              <input type="checkbox" disabled className="mt-0.5" />
+            <label className={`flex items-start gap-2 text-sm ${isAdmin ? "cd-text" : "cd-text-faint"}`}>
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                disabled={!isAdmin}
+                checked={calcMethod === "salary"}
+                onChange={() => setCalcMethod("salary")}
+              />
               <span>
                 인건비 반영 산정
-                <span className="block text-[10px]">급여 데이터 구축 후 제공 예정</span>
+                <span className="block text-[10px] cd-text-faint">
+                  매출액에 아래 비율 적용 후, 개인별 산정액에서 본인 반기 인건비 × 배수를 차감
+                </span>
               </span>
             </label>
             <label className="flex items-start gap-2 text-sm cd-text-faint">
@@ -328,17 +428,55 @@ export default function BonusStatementsBoard() {
             <label className="flex items-center justify-between gap-2 text-sm cd-text-faint">
               <span className="text-xs">인건비 반영 시 매출액 중 적용 비율</span>
               <span className="flex items-center gap-1">
-                <input type="number" disabled className="cd-input text-sm text-right" style={{ width: 56 }} value="" readOnly />
+                <input
+                  type="number"
+                  step="0.1"
+                  className="cd-input text-sm text-right"
+                  style={{ width: 64 }}
+                  disabled={!isAdmin || calcMethod !== "salary"}
+                  value={salaryRate}
+                  placeholder={String(settings?.applyRate ?? 4)}
+                  onChange={(e) => setSalaryRate(e.target.value)}
+                />
                 <span className="text-xs">%</span>
+              </span>
+            </label>
+            <label className="flex items-center justify-between gap-2 text-sm cd-text-faint">
+              <span className="text-xs">
+                인건비 차감 배수
+                <span className="block text-[10px]">반기 인건비 × 배수를 차감 (1.0 / 1.5)</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <input
+                  type="number"
+                  step="0.1"
+                  className="cd-input text-sm text-right"
+                  style={{ width: 64 }}
+                  disabled={!isAdmin || calcMethod !== "salary"}
+                  value={salaryMultiplier}
+                  onChange={(e) => setSalaryMultiplier(e.target.value)}
+                />
+                <span className="text-xs">배</span>
               </span>
             </label>
             <label className="flex items-center justify-between gap-2 text-sm cd-text-faint">
               <span className="text-xs">영업이익 기반 산정 시 적용 비율</span>
               <span className="flex items-center gap-1">
-                <input type="number" disabled className="cd-input text-sm text-right" style={{ width: 56 }} value="" readOnly />
+                <input type="number" disabled className="cd-input text-sm text-right" style={{ width: 64 }} value="" readOnly />
                 <span className="text-xs">%</span>
               </span>
             </label>
+            {isAdmin && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={saveCalcSettings}
+                className="mt-1 rounded-xl px-3 py-2 text-sm font-semibold border cd-border-c cd-text inline-flex items-center justify-center gap-1.5 disabled:opacity-50"
+                title="산정방식·비율을 저장합니다. 반영하려면 일괄산정을 다시 실행하세요."
+              >
+                <Save className="w-4 h-4" /> 산정방식 저장
+              </button>
+            )}
           </section>
         </aside>
 
@@ -387,12 +525,28 @@ export default function BonusStatementsBoard() {
               {tab === "statements" && view === "all" && isAdmin && overview.length > 0 && (
                 <button
                   type="button"
-                  disabled={busy}
+                  disabled={busy || sendBlockReason != null}
                   onClick={() => sendStatements()}
                   className="rounded-xl px-4 py-2 text-sm text-white cd-fill-primary inline-flex items-center gap-1.5 disabled:opacity-50"
-                  title="참여인력·본부장 전원에게 명세서 이메일(PDF 첨부)을 발송합니다"
+                  title={sendBlockReason ?? "참여인력·본부장 전원에게 명세서 이메일(PDF 첨부)을 발송합니다"}
                 >
                   <Send className="w-4 h-4" /> 명세서 일괄 발송
+                </button>
+              )}
+              {tab === "statements" && view === "individual" && isAdmin && detail && selectedEmployee && (
+                <button
+                  type="button"
+                  disabled={busy || sendBlockReason != null || (detail.bucket !== "participant" && detail.bucket !== "dept_head")}
+                  onClick={() => sendStatements([selectedEmployee.employeeId])}
+                  className="rounded-xl px-4 py-2 text-sm text-white cd-fill-primary inline-flex items-center gap-1.5 disabled:opacity-50"
+                  title={
+                    sendBlockReason ??
+                    (detail.bucket !== "participant" && detail.bucket !== "dept_head"
+                      ? "발송 대상이 아닌 구분입니다(유관부서·임원)."
+                      : `${selectedEmployee.name} 님에게 명세서 이메일(PDF 첨부)을 발송합니다`)
+                  }
+                >
+                  <Send className="w-4 h-4" /> {selectedEmployee.name} 명세서 발송
                 </button>
               )}
               {tab === "related" && isAdmin && (
@@ -464,10 +618,10 @@ export default function BonusStatementsBoard() {
                                   </a>
                                   <button
                                     type="button"
-                                    disabled={busy}
+                                    disabled={busy || sendBlockReason != null}
                                     onClick={() => sendStatements([row.employeeId])}
                                     className="text-[11px] font-semibold rounded-md px-1.5 py-0.5 border cd-border-c cd-text disabled:opacity-50"
-                                    title={row.email ? `${row.email}로 발송` : "이메일 미등록"}
+                                    title={sendBlockReason ?? (row.email ? `${row.email}로 발송` : "이메일 미등록")}
                                   >
                                     발송
                                   </button>
@@ -510,6 +664,25 @@ export default function BonusStatementsBoard() {
                     </span>
                     <span className="cd-text font-extrabold">금기 {fmtAmount(detail.totalAmount)}원</span>
                   </div>
+                  {(() => {
+                    const sd = detail.meta?.salaryDeduction as
+                      | { gross?: number; salaryTotal?: number; multiplier?: number; deducted?: number; months?: number }
+                      | undefined;
+                    if (!sd) return null;
+                    return (
+                      <p className="text-[11px] cd-text-faint px-1">
+                        인건비 반영 산정 — 참여 산정액 {fmtAmount(Number(sd.gross ?? 0))}원 − 반기 인건비{" "}
+                        {fmtAmount(Number(sd.salaryTotal ?? 0))}원 × {Number(sd.multiplier ?? 1)} ={" "}
+                        <span className="cd-text font-semibold">차감 {fmtAmount(Number(sd.deducted ?? 0))}원</span>
+                        {Number(sd.months ?? 0) > 0 && Number(sd.months ?? 0) < 6 && (
+                          <span style={{ color: "var(--cd-error)" }}> · 급여대장 {Number(sd.months)}개월분만 집계됨</span>
+                        )}
+                        {Number(sd.months ?? 0) === 0 && (
+                          <span style={{ color: "var(--cd-error)" }}> · 급여대장 없음(차감 0)</span>
+                        )}
+                      </p>
+                    );
+                  })()}
                   {Object.keys((detail.meta?.deptHeadAmounts as Record<string, number>) ?? {}).length > 0 && (
                     <p className="text-[11px] cd-text-faint px-1">
                       본부장 산정 포함:{" "}

@@ -3,12 +3,17 @@ import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import type { BonusPeriod } from "@/lib/bonus/source";
 import { getBonusSettings, listBonusTargets } from "@/lib/bonus/targets";
 import { EXEC_RANK_CUTOFF, GRADE_WEIGHTS } from "@/lib/bonus/shared";
+import { listHalfLaborCosts, type HalfLaborCost } from "@/lib/bonus/salary";
 
 /**
  * 성과급 산정 엔진 + 지급 명세 조회 (docs/bonus-calculation-blueprint.md §6)
- * 산식(v1 = 기존 산정방식만):
+ * 산식(기존 산정방식 base):
  *   pool(c)  = applied(c) × 적용비율 × (1 − (지원/영업% + 임원% + 소속본부장%))
  *   bonus(i) = Σ_c pool(c) × 참여도(i,c) × 평점가중치   (grade 미부여 = C(×1.0) 취급)
+ * 인건비 반영 산정(salary, §1.3 BS-P4 — 2026-08-31 사용자 확정):
+ *   적용비율은 salary_apply_rate(미지정 시 apply_rate)를 쓰고, 개인별 참여 산정액에서
+ *   본인 반기 인건비(급여대장의 통상임금 산입 항목 합계) × salary_multiplier 를 차감한다.
+ *   차감은 참여분에만 적용(음수는 0) — 본부장 산정액·유관부서 수기 배분은 차감하지 않는다.
  *   본부장   = Σ_{c∈본부} applied(c) × 적용비율 × 본부장비율
  *     — 수령자 추정: 본부 대상 용역들의 관리자(role='관리자') 최빈 인물 → 없으면 부서 최고 직급 재직자
  *   유관부서/임원 = 수기 배분(bonus_manual_allocations)을 스냅샷으로 복사
@@ -31,13 +36,24 @@ export interface CalculateSummary {
   totalApplied: number;
   totalTarget: number;
   unassignedDeptContracts: number;
+  /** 산정에 실제로 쓰인 방식 */
+  calcMethod: "base" | "salary" | "profit";
+  /** 인건비 반영 산정 — 차감 합계 */
+  salaryDeducted: number;
+  /** 인건비 반영 산정 — 급여대장에 반기 급여가 없어 차감하지 못한 인원 수 */
+  salaryMissing: number;
 }
 
 export async function calculateBonus(actorUserId: string, p: BonusPeriod): Promise<CalculateSummary> {
   const settings = await getBonusSettings(p.year, p.half);
   const targets = await listBonusTargets(p);
   const db = await getDb();
-  const rate = settings.applyRate / 100;
+  // 인건비 반영 산정은 전용 적용비율(비율 조정 카드)을 쓴다 — 미지정이면 기존 적용비율.
+  const method = settings.calcMethod;
+  const rate = (method === "salary" ? (settings.salaryApplyRate ?? settings.applyRate) : settings.applyRate) / 100;
+  const salaryMultiplier = method === "salary" ? settings.salaryMultiplier : 0;
+  const laborCosts: Map<string, HalfLaborCost> =
+    method === "salary" ? await listHalfLaborCosts(p) : new Map();
   const supportPct = settings.contribSupportPct / 100;
   const execPct = settings.contribExecPct / 100;
 
@@ -176,7 +192,9 @@ export async function calculateBonus(actorUserId: string, p: BonusPeriod): Promi
   }
 
   const meta = {
-    applyRate: settings.applyRate,
+    calcMethod: method,
+    applyRate: method === "salary" ? (settings.salaryApplyRate ?? settings.applyRate) : settings.applyRate,
+    salaryMultiplier: method === "salary" ? salaryMultiplier : undefined,
     contribSupportPct: settings.contribSupportPct,
     contribExecPct: settings.contribExecPct,
     deptHeadRates: settings.deptHeadRates,
@@ -188,10 +206,39 @@ export async function calculateBonus(actorUserId: string, p: BonusPeriod): Promi
   const now = new Date().toISOString();
 
   // 인물별 statements 병합(참여 + 본부장 겸직 가능 — 25H2 한도경 사례: 통합2 본부장 + 화학 본부장)
-  const totals = new Map<string, { bucket: string; amount: number; deptMeta?: Record<string, number> }>();
+  interface SalaryDeductionMeta {
+    /** 차감 전 참여 산정액 */
+    gross: number;
+    /** 반기 인건비(통상임금 산입 항목 합계) */
+    salaryTotal: number;
+    multiplier: number;
+    /** 실제 차감액(참여 산정액을 넘지 않음) */
+    deducted: number;
+    /** 집계된 급여대장 월수 — 6 미만이면 급여 데이터 누락 가능 */
+    months: number;
+  }
+  const totals = new Map<
+    string,
+    { bucket: string; amount: number; deptMeta?: Record<string, number>; salaryMeta?: SalaryDeductionMeta }
+  >();
+  let salaryDeducted = 0;
+  let salaryMissing = 0;
   for (const [employeeId, lines] of linesByEmployee) {
-    const sum = lines.reduce((a, b) => a + b.amount, 0);
-    totals.set(employeeId, { bucket: "participant", amount: sum });
+    const gross = lines.reduce((a, b) => a + b.amount, 0);
+    if (method !== "salary") {
+      totals.set(employeeId, { bucket: "participant", amount: gross });
+      continue;
+    }
+    const cost = laborCosts.get(employeeId);
+    if (!cost) salaryMissing += 1;
+    const salaryTotal = cost?.total ?? 0;
+    const deducted = Math.min(gross, salaryTotal * salaryMultiplier);
+    salaryDeducted += deducted;
+    totals.set(employeeId, {
+      bucket: "participant",
+      amount: Math.max(0, gross - deducted),
+      salaryMeta: { gross, salaryTotal, multiplier: salaryMultiplier, deducted, months: cost?.months ?? 0 },
+    });
   }
   for (const dh of deptHeadStatements) {
     const cur = totals.get(dh.employeeId);
@@ -225,7 +272,7 @@ export async function calculateBonus(actorUserId: string, p: BonusPeriod): Promi
         `INSERT INTO bonus_statements
            (statement_id, period_year, period_half, employee_id, bucket, total_amount,
             prev_amount, calc_method, meta_json, calculated_by, calculated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, 'base', $8::jsonb, $9, $10)`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11)`,
         [
           statementId,
           p.year,
@@ -234,7 +281,8 @@ export async function calculateBonus(actorUserId: string, p: BonusPeriod): Promi
           t.bucket,
           t.amount,
           prevMap.get(employeeId) ?? null,
-          JSON.stringify({ ...meta, deptHeadAmounts: t.deptMeta ?? undefined }),
+          method,
+          JSON.stringify({ ...meta, deptHeadAmounts: t.deptMeta ?? undefined, salaryDeduction: t.salaryMeta ?? undefined }),
           actorUserId,
           now,
         ]
@@ -258,6 +306,9 @@ export async function calculateBonus(actorUserId: string, p: BonusPeriod): Promi
     totalApplied,
     totalTarget,
     unassignedDeptContracts,
+    calcMethod: method,
+    salaryDeducted,
+    salaryMissing,
   };
 }
 
@@ -408,7 +459,9 @@ export async function getAllocationBoard(p: BonusPeriod): Promise<AllocationBoar
   const settings = await getBonusSettings(p.year, p.half);
   const targets = await listBonusTargets(p);
   const db = await getDb();
-  const rate = settings.applyRate / 100;
+  // 산정 엔진과 같은 적용비율(인건비 반영 산정이면 전용 비율)로 할당액을 잡는다.
+  const rate =
+    (settings.calcMethod === "salary" ? (settings.salaryApplyRate ?? settings.applyRate) : settings.applyRate) / 100;
   const totalApplied = targets.reduce((a, t) => a + t.appliedInPeriod, 0);
   const totalTarget = totalApplied * rate;
 

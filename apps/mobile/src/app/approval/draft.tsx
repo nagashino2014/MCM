@@ -583,7 +583,8 @@ export default function DraftScreen() {
                         allFields={fields}
                         allValues={values}
                         readOnly={isOvertime && (row[0].key === 'used_hours' || row[0].key === 'remain_hours')}
-                        periodAutoDays={row[0].type === 'period' ? leaveFixedDays : null}
+                        // singleDay 양식(초과근무 등)은 시작일만 받고 종료일 = 시작일(autoDays 1일).
+                        periodAutoDays={row[0].type === 'period' ? (row[0].singleDay ? 1 : leaveFixedDays) : null}
                       />
                     ) : (
                       <View key={row.map((f) => f.key).join('|')} className="flex-row gap-2.5">
@@ -600,7 +601,7 @@ export default function DraftScreen() {
                               // 기사용·잔여시간은 주 사용량에서 자동 계산 — 편집을 허용하면
                               // effect 가 즉시 되돌려 "입력이 안 되는" 혼란만 남는다(2026-08-10).
                               readOnly={isOvertime && (f.key === 'used_hours' || f.key === 'remain_hours')}
-                              periodAutoDays={f.type === 'period' ? leaveFixedDays : null}
+                              periodAutoDays={f.type === 'period' ? (f.singleDay ? 1 : leaveFixedDays) : null}
                             />
                           </View>
                         ))}

@@ -5,6 +5,7 @@
 
 import ExcelJS from "exceljs";
 import { getDb, rowsToObjects } from "@/lib/db";
+import { incomeWithholdingByMonth } from "@/lib/finance/income-ledger";
 
 export interface WithholdingMonth {
   year: number;
@@ -16,8 +17,15 @@ export interface WithholdingMonth {
   settleIncomeTax: number; // 중도·수정 정산분
   yearendIncomeTax: number; // 연말정산분
   farmTax: number; // 농특세(당월+연말정산)
-  incomeTaxTotal: number; // 소득세 계열 납부 대상 합
-  localTax: number; // 지방소득세(당월+연말정산+정산) — 지방세 별도 신고
+  // 사업(A25)·기타(A42) 소득 — 전문가활용비 승인 적재분(205 income_payment_ledger, FRM-P4)
+  bizHeadcount: number;
+  bizPayTotal: number;
+  bizIncomeTax: number; // A25 사업소득 3%
+  otherHeadcount: number;
+  otherPayTotal: number;
+  otherIncomeTax: number; // A42 기타소득 20%
+  incomeTaxTotal: number; // 소득세 계열 납부 대상 합(A01+정산+연말+농특+A25+A42)
+  localTax: number; // 지방소득세(당월+연말정산+정산+사업·기타) — 지방세 별도 신고
   ledgerCount: number;
 }
 
@@ -64,27 +72,55 @@ export async function withholdingByMonth(year: number): Promise<WithholdingMonth
   const sumGroup = (m: number, group: string[]) =>
     Math.round(group.reduce((acc, id) => acc + (byMonth.get(m)?.get(id) ?? 0), 0));
 
-  return rows.map((r) => {
-    const month = Number(r.pay_month);
+  // 사업(A25)·기타(A42) 소득 월별 집계 — 급여 대장 없는 달에도 지급이 있으면 행을 만든다.
+  const incomeRows = await incomeWithholdingByMonth(year);
+  const incomeByMonth = new Map<number, { biz: { headcount: number; gross: number; tax: number; local: number }; other: { headcount: number; gross: number; tax: number; local: number } }>();
+  for (const r of incomeRows) {
+    const slot = incomeByMonth.get(r.month) ?? {
+      biz: { headcount: 0, gross: 0, tax: 0, local: 0 },
+      other: { headcount: 0, gross: 0, tax: 0, local: 0 },
+    };
+    const side = r.kind === "business" ? slot.biz : slot.other;
+    side.headcount += r.headcount;
+    side.gross += r.grossTotal;
+    side.tax += r.incomeTax;
+    side.local += r.localTax;
+    incomeByMonth.set(r.month, slot);
+  }
+  const months = [...new Set([...rows.map((r) => Number(r.pay_month)), ...incomeByMonth.keys()])].sort((a, b) => a - b);
+  const rowByMonth = new Map(rows.map((r) => [Number(r.pay_month), r]));
+
+  return months.map((month) => {
+    const r = rowByMonth.get(month);
     const nextY = month === 12 ? year + 1 : year;
     const nextM = month === 12 ? 1 : month + 1;
     const incomeTax = sumGroup(month, DED_GROUPS.income);
     const settleIncomeTax = sumGroup(month, DED_GROUPS.settleIncome);
     const yearendIncomeTax = sumGroup(month, DED_GROUPS.yearendIncome);
     const farmTax = sumGroup(month, DED_GROUPS.farm);
+    const inc = incomeByMonth.get(month) ?? {
+      biz: { headcount: 0, gross: 0, tax: 0, local: 0 },
+      other: { headcount: 0, gross: 0, tax: 0, local: 0 },
+    };
     return {
       year,
       month,
       dueDate: `${nextY}-${String(nextM).padStart(2, "0")}-10`,
-      headcount: Number(r.headcount || 0),
-      payTotal: Math.round(Number(r.pay_total || 0)),
+      headcount: Number(r?.headcount || 0),
+      payTotal: Math.round(Number(r?.pay_total || 0)),
       incomeTax,
       settleIncomeTax,
       yearendIncomeTax,
       farmTax,
-      incomeTaxTotal: incomeTax + settleIncomeTax + yearendIncomeTax + farmTax,
-      localTax: sumGroup(month, DED_GROUPS.local),
-      ledgerCount: Number(r.ledger_count || 0),
+      bizHeadcount: inc.biz.headcount,
+      bizPayTotal: inc.biz.gross,
+      bizIncomeTax: inc.biz.tax,
+      otherHeadcount: inc.other.headcount,
+      otherPayTotal: inc.other.gross,
+      otherIncomeTax: inc.other.tax,
+      incomeTaxTotal: incomeTax + settleIncomeTax + yearendIncomeTax + farmTax + inc.biz.tax + inc.other.tax,
+      localTax: sumGroup(month, DED_GROUPS.local) + inc.biz.local + inc.other.local,
+      ledgerCount: Number(r?.ledger_count || 0),
     };
   });
 }
@@ -93,8 +129,8 @@ export async function buildWithholdingWorkbook(year: number): Promise<Buffer> {
   const months = await withholdingByMonth(year);
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("원천징수 집계");
-  ws.addRow([`원천징수이행상황신고 기초자료 (${year}년) — 확정 급여대장 집계`]).font = { bold: true, size: 13 };
-  ws.addRow(["지급월", "신고·납부 기한", "인원", "총지급액", "간이세액 소득세", "정산분", "연말정산분", "농특세", "소득세 계열 합계", "지방소득세(별도 신고)"]).font = { bold: true };
+  ws.addRow([`원천징수이행상황신고 기초자료 (${year}년) — 확정 급여대장 + 사업·기타소득 대장 집계`]).font = { bold: true, size: 13 };
+  ws.addRow(["지급월", "신고·납부 기한", "인원", "총지급액", "간이세액 소득세", "정산분", "연말정산분", "농특세", "사업소득 A25(인원/지급액/세액)", "", "", "기타소득 A42(인원/지급액/세액)", "", "", "소득세 계열 합계", "지방소득세(별도 신고)"]).font = { bold: true };
   for (const m of months) {
     ws.addRow([
       `${m.year}.${String(m.month).padStart(2, "0")}`,
@@ -105,13 +141,19 @@ export async function buildWithholdingWorkbook(year: number): Promise<Buffer> {
       m.settleIncomeTax,
       m.yearendIncomeTax,
       m.farmTax,
+      m.bizHeadcount,
+      m.bizPayTotal,
+      m.bizIncomeTax,
+      m.otherHeadcount,
+      m.otherPayTotal,
+      m.otherIncomeTax,
       m.incomeTaxTotal,
       m.localTax,
     ]);
   }
   const t = (fn: (m: WithholdingMonth) => number) => months.reduce((acc, m) => acc + fn(m), 0);
-  ws.addRow(["합계", "", "", t((m) => m.payTotal), t((m) => m.incomeTax), t((m) => m.settleIncomeTax), t((m) => m.yearendIncomeTax), t((m) => m.farmTax), t((m) => m.incomeTaxTotal), t((m) => m.localTax)]).font = { bold: true };
-  ws.columns.forEach((col, i) => (col.width = [10, 14, 8, 16, 15, 12, 13, 10, 15, 16][i] ?? 12));
-  for (let c = 4; c <= 10; c += 1) ws.getColumn(c).numFmt = "#,##0";
+  ws.addRow(["합계", "", "", t((m) => m.payTotal), t((m) => m.incomeTax), t((m) => m.settleIncomeTax), t((m) => m.yearendIncomeTax), t((m) => m.farmTax), "", t((m) => m.bizPayTotal), t((m) => m.bizIncomeTax), "", t((m) => m.otherPayTotal), t((m) => m.otherIncomeTax), t((m) => m.incomeTaxTotal), t((m) => m.localTax)]).font = { bold: true };
+  ws.columns.forEach((col, i) => (col.width = [10, 14, 8, 16, 15, 12, 13, 10, 8, 14, 12, 8, 14, 12, 15, 16][i] ?? 12));
+  for (let c = 4; c <= 16; c += 1) ws.getColumn(c).numFmt = "#,##0";
   return Buffer.from(await wb.xlsx.writeBuffer());
 }

@@ -148,6 +148,11 @@ export interface Receivable {
   collectedAmount: number;
   /** 실적 정산액(마이그 113) — 정산으로 감액되면 실제 입금은 청구금액이 아니라 이 금액 기준이다. */
   settlementAmount: number | null;
+  /** 어음 수금 상세(마이그 200) — 만기일·대출실행일 입금은 입금자명이 없어도 날짜로 매칭한다. */
+  noteBank: string | null;
+  noteMaturityDate: string | null;
+  noteLoanExecutedDate: string | null;
+  noteLoanInterestAmount: number | null;
 }
 
 /**
@@ -191,6 +196,7 @@ export async function loadReceivables(db: PgDatabase): Promise<Receivable[]> {
     await db.exec(
       `SELECT m.milestone_id, m.contract_id, m.stage_label, m.amount, m.invoice_amount, m.collected_amount,
               m.invoice_issued_at, m.payment_terms, m.payment_collected, m.payment_collected_at, m.settlement_amount,
+              m.note_bank, m.note_maturity_date, m.note_loan_executed_date, m.note_loan_interest_amount,
               c.contract_title, c.counterparty_facility_id, c.facility_id AS contract_facility_id,
               f.company_name, f.normalized_company_name
          FROM contract_payment_milestones m
@@ -247,6 +253,10 @@ export async function loadReceivables(db: PgDatabase): Promise<Receivable[]> {
         collectedAt: r.payment_collected_at ? String(r.payment_collected_at).slice(0, 10) : null,
         collectedAmount: collectedAmount || base,
         settlementAmount: r.settlement_amount == null ? null : Number(r.settlement_amount),
+        noteBank: r.note_bank ? String(r.note_bank) : null,
+        noteMaturityDate: r.note_maturity_date ? String(r.note_maturity_date).slice(0, 10) : null,
+        noteLoanExecutedDate: r.note_loan_executed_date ? String(r.note_loan_executed_date).slice(0, 10) : null,
+        noteLoanInterestAmount: r.note_loan_interest_amount == null ? null : Number(r.note_loan_interest_amount),
       };
     })
     .filter((r) => r.collected || r.remaining > 0);
@@ -338,13 +348,107 @@ export const CONFIDENCE_REVIEW = 55; // 이 미만 = 미매칭 취급
 // ─────────────────────────────────────────────
 
 interface Candidate {
-  matchType: "exact_1to1" | "already_collected" | "sum_nto1" | "partial" | "overpaid" | "prepaid" | "non_receivable" | "unmatched";
+  matchType: "exact_1to1" | "already_collected" | "sum_nto1" | "partial" | "overpaid" | "prepaid" | "non_receivable" | "unmatched" | "note_date";
   confidence: number;
   facilityId: string | null;
   matchedAmount: number;
   residualAmount: number;
   lines: Array<{ milestoneId: string; allocatedAmount: number }>;
   reason: Record<string, unknown>;
+}
+
+/** 어음 만기·대출실행 날짜 창 — 만기일이 휴일이면 다음 영업일에 결제되므로 며칠의 여유를 둔다. */
+const NOTE_DATE_WINDOW_DAYS = 5;
+
+interface NoteDateHit {
+  r: Receivable;
+  kind: "maturity" | "loan";
+  gap: number;
+  basisLabel: string;
+  approx: boolean;
+}
+
+/**
+ * 어음 날짜 매칭(마이그 200) — 어음 만기 입금은 입금자명에 발주처가 안 적혀 오는 경우가 많아,
+ * 사용자가 입력해 둔 만기일/대출 실행일 근처의 입금을 금액으로 확인한다.
+ * ★어음 수수료는 만기액에서 차감되는 게 아니라 별도 출금으로 나간다(2026-08-31 실무 확인)
+ *   → 만기 입금은 발행액 "전액" 기준으로만 대조한다. 담보 대출만 이자 선차감 실행이 있어
+ *   이자액 차감 금액(미입력 시 95% 이상 근사)을 함께 본다.
+ */
+function findNoteDateHits(scoped: Receivable[], txn: { amount: number; date: string }): NoteDateHit[] {
+  const hits: NoteDateHit[] = [];
+  for (const r of scoped) {
+    const target = r.remaining > 0 ? r.remaining : r.baseAmount;
+    if (!(target > 0)) continue;
+    const dates: Array<{ kind: "maturity" | "loan"; date: string | null }> = [
+      { kind: "maturity", date: r.noteMaturityDate },
+      { kind: "loan", date: r.noteLoanExecutedDate },
+    ];
+    for (const d of dates) {
+      if (!d.date) continue;
+      const gap = Math.abs(dayGap(d.date, txn.date));
+      if (gap > NOTE_DATE_WINDOW_DAYS) continue;
+      const exact = amountMatch(target, txn.amount, r.settlementAmount);
+      if (exact.hit) {
+        hits.push({ r, kind: d.kind, gap, basisLabel: BASIS_LABEL[exact.basis], approx: false });
+        continue;
+      }
+      if (d.kind === "loan") {
+        // 대출 실행 입금 = 어음 액면(공급가/VAT 포함/정산액) - 선취 이자.
+        const interest = r.noteLoanInterestAmount ?? 0;
+        if (interest > 0) {
+          const nets = [target - interest, withVat(target) - interest];
+          if (r.settlementAmount && r.settlementAmount > 0) {
+            nets.push(r.settlementAmount - interest, withVat(r.settlementAmount) - interest);
+          }
+          if (nets.some((v) => Math.abs(v - txn.amount) <= AMOUNT_TOLERANCE)) {
+            hits.push({ r, kind: "loan", gap, basisLabel: "대출 이자 차감액 일치", approx: false });
+            continue;
+          }
+        }
+        // 이자액 미입력 — 액면(VAT 포함) 대비 95~100% 입금이면 근사 후보로만 올린다(항상 사람 검토).
+        const gross = withVat(target);
+        if (txn.amount <= gross && txn.amount >= gross * 0.95) {
+          hits.push({ r, kind: "loan", gap, basisLabel: "대출 실행 추정(이자 차감 근사)", approx: true });
+        }
+      }
+    }
+  }
+  // 정확 일치 우선, 같은 급이면 날짜가 가까운 순.
+  return hits.sort((a, b) => (a.approx === b.approx ? a.gap - b.gap : a.approx ? 1 : -1));
+}
+
+/** 어음 날짜 매칭 후보 → Candidate. 조합 우연성이 있으니 고신뢰 임계는 넘지 못하게 눌러 둔다. */
+function noteDateCandidate(hits: NoteDateHit[], txnAmount: number, facilityScore: number): Candidate {
+  const top = hits[0];
+  const ambiguous = hits.length > 1 && hits[1].gap === top.gap && hits[1].approx === top.approx;
+  return {
+    matchType: "note_date",
+    confidence: Math.min(
+      CONFIDENCE_AUTO - 5,
+      score({
+        facility: facilityScore,
+        amount: top.approx ? 70 : 100,
+        timing: top.gap === 0 ? 100 : top.gap <= 2 ? 90 : 80,
+        terms: 100,
+        ambiguous,
+      }),
+    ),
+    facilityId: top.r.facilityId,
+    matchedAmount: txnAmount,
+    residualAmount: 0,
+    // 실입금이 이자 차감액이어도 수금은 단계 잔액 전액으로 채운다 — 차감분(이자)은 비용이지 미수가 아니다.
+    lines: [{ milestoneId: top.r.milestoneId, allocatedAmount: top.r.remaining }],
+    reason: {
+      rule: `${top.kind === "maturity" ? "어음 만기일" : "어음 담보대출 실행일"} ${top.gap === 0 ? "당일" : `±${top.gap}일`} 입금 + ${top.basisLabel}`,
+      noteBank: top.r.noteBank,
+      contract: top.r.contractTitle,
+      stage: top.r.stageLabel,
+      facilityName: top.r.facilityName,
+      gapDays: top.gap,
+      competitors: hits.length - 1,
+    },
+  };
 }
 
 /** 같은 거래처 미수들 중 합이 입금액과 같은 부분집합 탐색(어음 일괄지급 대응). 후보가 많으면 포기한다. */
@@ -383,7 +487,13 @@ function buildCandidate(
   // ★거래처를 못 찾으면 금액 매칭을 아예 시도하지 않는다(2026-08-16 실사용 실증).
   //   "고용노동부 입금 4,800,000" 이 금액만 같다는 이유로 롯데엠시시 계산서에 붙는 식의 오매칭이
   //   검토 큐를 뒤덮었다. 금액 일치는 거래처가 확인된 뒤에야 의미가 있다.
+  //   예외 = 어음(마이그 200): 어음 만기·대출 실행 입금은 애초에 입금자명에 발주처가 없다.
+  //   사용자가 입력한 만기일/대출실행일 + 금액이 동시에 맞을 때만 날짜 근거로 후보를 만든다.
   if (!facility) {
+    const openForNote = receivables.filter((r) => !r.collected && !usedMilestones.has(r.milestoneId));
+    const noteHits = findNoteDateHits(openForNote, txn);
+    if (noteHits.length) return noteDateCandidate(noteHits, txn.amount, 50);
+
     const nonReceivableHint = looksNonReceivable(txn.remitter, txn.transType, txn.remark2);
     return {
       matchType: nonReceivableHint ? "non_receivable" : "unmatched",
@@ -439,6 +549,13 @@ function buildCandidate(
         gapDays: days(top.r.invoicedAt),
       },
     };
+  }
+
+  // ①-노트: 어음 날짜 매칭 — 거래처는 식별됐지만 담보대출 이자 차감 등으로 금액이 어긋나는 경우,
+  //         입력된 만기일/대출실행일이 입금일과 맞으면 날짜 근거로 보강한다(전액 일치는 ①에서 이미 잡힌다).
+  {
+    const noteHits = findNoteDateHits(scoped, txn);
+    if (noteHits.length) return noteDateCandidate(noteHits, txn.amount, facilityScore);
   }
 
   // ①-b 이미 기록된 수금과 일치 — 수기로 넣어 둔 수금 건을 계좌 입금과 짝지어 확인만 한다(중복 반영 없음).
@@ -936,7 +1053,7 @@ export async function confirmMatch(matchId: string, actorUserId: string | null):
   await withDbWrite(async (db) => {
     const matches = rowsToObjects(
       await db.exec(
-        `SELECT m.match_id, m.txn_id, m.status, m.matched_facility_id, m.confidence, t.txn_at, t.amount, t.remitter_name_norm, t.remitter_name_raw
+        `SELECT m.match_id, m.txn_id, m.status, m.match_type, m.matched_facility_id, m.confidence, t.txn_at, t.amount, t.remitter_name_norm, t.remitter_name_raw
            FROM recon_matches m JOIN bank_transactions t ON t.txn_id = m.txn_id
           WHERE m.match_id = $1`,
         [matchId],
@@ -996,8 +1113,10 @@ export async function confirmMatch(matchId: string, actorUserId: string | null):
     await db.run(`UPDATE bank_transactions SET recon_status = 'confirmed' WHERE txn_id = $1`, [String(match.txn_id)]);
 
     // 입금자명 학습 — 다음 회차부터 같은 이름이면 거래처가 바로 잡힌다.
+    // 단 어음 날짜 매칭(note_date)은 입금자명이 발주처가 아니라 어음 교환·은행 명의라 학습하면
+    // 이후 다른 어음 입금이 엉뚱한 거래처로 식별된다 → 학습에서 제외.
     const remitter = String(match.remitter_name_norm || match.remitter_name_raw || "");
-    if (remitter && match.matched_facility_id) {
+    if (remitter && match.matched_facility_id && String(match.match_type) !== "note_date") {
       await db.run(
         `INSERT INTO bank_remitter_links (remitter_name_norm, facility_id, confidence_seed, confirm_count, last_confirmed_at, created_at)
          VALUES ($1, $2, $3, 1, $4, $4)

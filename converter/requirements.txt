@@ -1,3 +1,5 @@
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
 python-multipart==0.0.20
+# 바로빌 전자세금계산서 인쇄 화면 PDF 캡처(/render/url-pdf) — headless Chromium
+playwright==1.49.1

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dispatchDueReminders } from "@/lib/approval/notify";
+import { applyDueResignations } from "@/lib/approval/hr-actions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,7 +18,9 @@ export async function POST(req: NextRequest) {
   }
   try {
     const result = await dispatchDueReminders();
-    return NextResponse.json(result);
+    // 퇴사일 도래 비활성(FRM-P3, 206) — 같은 틱에 얹는다(멱등, 실패해도 리마인드 결과는 반환).
+    const resignations = await applyDueResignations().catch(() => ({ deactivated: 0 }));
+    return NextResponse.json({ ...result, resignationsDeactivated: resignations.deactivated });
   } catch (err) {
     console.error("[approval-remind] tick error", err);
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });

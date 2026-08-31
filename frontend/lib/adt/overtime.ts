@@ -93,8 +93,16 @@ export interface DailyComputed {
   earlyMinutes: number | null;
 }
 
-/** 일별 원천 산정: 재실·휴게·실근무·야간분·자정보정. */
-export function computeDaily(raw: AdtRawRecord, settings: AttendanceSettings): DailyComputed {
+/**
+ * 일별 원천 산정: 재실·휴게·실근무·야간분·자정보정.
+ * 휴게 공제는 소정근로일의 점심(breakMinutes)만 — 휴일(토·일·공휴일, isOffDay)은 소정근로가
+ * 없어 재실 전체가 초과근무 대상이므로 공제 없이 전액 인정한다(근로기준법·2026-08-27 확정).
+ */
+export function computeDaily(
+  raw: AdtRawRecord,
+  settings: AttendanceSettings,
+  opts: { isOffDay?: boolean } = {}
+): DailyComputed {
   const date = ymd8ToDate(raw.d_date);
   const inMs = kstMs(date, raw.in_time);
   let outMs = kstMs(date, raw.out_time);
@@ -121,7 +129,7 @@ export function computeDaily(raw: AdtRawRecord, settings: AttendanceSettings): D
   if (outMs < inMs) outMs += MS_PER_DAY;
 
   const presentMinutes = Math.max(0, Math.round((outMs - inMs) / MS_PER_MIN));
-  const breakMinutes = Math.min(settings.breakMinutes, presentMinutes);
+  const breakMinutes = opts.isOffDay ? 0 : Math.min(settings.breakMinutes, presentMinutes);
   const workedMinutes = Math.max(0, presentMinutes - breakMinutes);
   const night = nightMinutes(inMs, outMs, date, settings);
 

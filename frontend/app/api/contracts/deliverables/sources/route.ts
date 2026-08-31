@@ -24,6 +24,8 @@ export async function GET(req: NextRequest) {
     if (!ctx) return NextResponse.json({ error: "계약을 찾을 수 없습니다." }, { status: 404 });
     const values = await buildAutoValues(ctx, kind, {
       milestoneId: sp.get("milestoneId"),
+      // 복수 회차 청구(대금청구서) — ?milestoneIds=a,b 콤마 구분
+      milestoneIds: (sp.get("milestoneIds") ?? "").split(",").map((v) => v.trim()).filter(Boolean),
       actualDate: sp.get("actualDate"),
       issueDate: sp.get("issueDate"),
       vatNote: sp.get("vatNote"),

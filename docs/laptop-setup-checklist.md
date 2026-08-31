@@ -1,7 +1,7 @@
 # 노트북 개발환경 셋업 체크리스트
 
 사무실 PC 외 기기(여행용 노트북 등)에서 MCM 개발을 이어가기 위한 준비 문서.
-설치 명령 모음은 [scripts/laptop-setup.ps1](../scripts/laptop-setup.ps1) 참고 — `pwsh scripts/laptop-setup.ps1` 로 일괄 실행 가능.
+설치 명령 모음은 [scripts/laptop-setup.ps1](../scripts/laptop-setup.ps1) 참고 — `powershell -ExecutionPolicy Bypass -File scripts\laptop-setup.ps1` 로 일괄 실행 가능.
 
 ## 0. 아키텍처 요약 — 왜 이 목록인가
 
@@ -65,12 +65,20 @@ pip install -r requirements.txt
 
 ## 5. DB 연결 (SSM 터널) — 개발 서버 띄우는 순서
 
-staging 리소스는 on-demand 토글([infra/aws/ops/README.md](../infra/aws/ops/README.md))이므로 순서대로:
+staging 리소스는 on-demand 토글([infra/aws/ops/README.md](../infra/aws/ops/README.md))이므로 순서대로.
+**①~③은 [scripts/db-tunnel.ps1](../scripts/db-tunnel.ps1) 한 번으로 끝난다**(SSO 만료 확인 → bastion 기동 → 포트포워딩까지 자동, 이미 열려 있으면 그대로 둔다):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\db-tunnel.ps1
+powershell -ExecutionPolicy Bypass -File scripts\db-tunnel.ps1 -Stop   # 작업 끝나면 터널만 닫기
+```
+
+아래는 그 스크립트가 대신 해 주는 수동 절차(디버깅용 참고):
 
 ```powershell
 # ① SSO 로그인 + bastion 기동
 aws sso login --profile mcm-kesi-staging
-pwsh infra/aws/ops/staging-start.ps1 -Bastion    # OCR도 쓰면 -Backend 추가
+.\infra\aws\ops\staging-start.ps1 -Bastion    # OCR도 쓰면 -Backend 추가
 
 # ② bastion 인스턴스 ID + RDS 엔드포인트 조회
 $env:AWS_PROFILE = "mcm-kesi-staging"
@@ -92,7 +100,7 @@ npm run dev        # .env.local의 PG* 값 사용
 ```
 
 - Aurora는 min 0 ACU auto-pause — **첫 쿼리가 수 초~수십 초 걸릴 수 있음**(자동 재개), 오류 아님.
-- 작업 종료 시 `pwsh infra/aws/ops/staging-stop.ps1` 로 내려서 비용 절약.
+- 작업 종료 시 `.\infra\aws\ops\staging-stop.ps1` 로 내려서 비용 절약.
 
 ## 6. 배포 (여행 중 주의사항)
 

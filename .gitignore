@@ -34,6 +34,7 @@ data/ieps/logs/
 data/ieps/scrape/
 data/ieps/db.sqlite
 data/daou/
+data/receipts/
 table_cache/
 frontend/public/uploads/
 frontend/data/chromadb/

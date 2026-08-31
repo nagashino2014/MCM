@@ -105,6 +105,8 @@ export interface ApprovalFieldDef {
   fillMap?: ApprovalFillRule[];
   /** asset_select 자산 종류 필터 */
   assetKind?: string;
+  /** period 단일 날짜 입력(to=from 저장) — 초과근무 신청처럼 1일 1건인 양식 */
+  singleDay?: boolean;
 }
 
 export interface ApprovalForm {

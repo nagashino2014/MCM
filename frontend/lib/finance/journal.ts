@@ -387,7 +387,7 @@ async function draftExpenseDocEntries(db: PgDatabase, from: string, to: string):
     await db.exec(
       `SELECT doc_id, form_id, doc_no, title, field_values, completed_at
          FROM approval_docs
-        WHERE status = 'approved' AND form_id IN ('frm-expense-report', 'frm-biz-trip-report')
+        WHERE status = 'approved' AND form_id IN ('frm-expense-report', 'frm-biz-trip-report', 'frm-expense-personal')
           AND substr(completed_at, 1, 10) BETWEEN $1 AND $2`,
       [from, to],
     ),
@@ -411,11 +411,27 @@ async function draftExpenseDocEntries(db: PgDatabase, from: string, to: string):
     });
   }
 
+  // 식대 불지급(withhold) 처분 행(마이그 203·204) — 회사가 환급하지 않으므로 비용·미지급금에서 제외.
+  // 키 = doc_id|row_no(표 순번 1부터, overtime_meal_warnings 규약). 마이그 미적용 환경은 빈 세트.
+  const withheld = new Set<string>();
+  try {
+    for (const r of rowsToObjects(
+      await db.exec(
+        `SELECT doc_id, row_no FROM overtime_meal_warnings WHERE action = 'withhold' AND doc_id = ANY($1::text[])`,
+        [docs.map((d) => String(d.doc_id))],
+      ),
+    )) {
+      withheld.add(`${String(r.doc_id)}|${Number(r.row_no)}`);
+    }
+  } catch {
+    /* 마이그 203·204 미적용 — 제외 없음 */
+  }
+
   const drafts: EntryDraft[] = [];
   for (const doc of docs) {
     const docId = String(doc.doc_id);
     const fv = (doc.field_values ?? {}) as Record<string, unknown>;
-    const tableKey = String(doc.form_id) === "frm-expense-report" ? "expenses" : "trip_expenses";
+    const tableKey = String(doc.form_id) === "frm-biz-trip-report" ? "trip_expenses" : "expenses";
     const rows = Array.isArray(fv[tableKey]) ? (fv[tableKey] as Record<string, unknown>[]) : [];
     const docReceipts = receiptsByDoc.get(docId);
 
@@ -423,9 +439,10 @@ async function draftExpenseDocEntries(db: PgDatabase, from: string, to: string):
     const byAccount = new Map<string, { amount: number; memos: string[] }>();
     let total = 0;
     let hasUnmapped = false;
-    for (const row of rows) {
+    for (const [rowIdx, row] of rows.entries()) {
       if (!row || typeof row !== "object") continue;
       if (typeof row._cardTxnId === "string" && row._cardTxnId) continue;
+      if (withheld.has(`${docId}|${rowIdx + 1}`)) continue; // 식대 불지급 처분 — 환급 대상 아님
       const amount = round(Number(String(row.amount ?? "").replace(/[^0-9.-]/g, "")));
       if (!amount) continue;
       const receiptId = typeof row._receiptId === "string" ? row._receiptId : null;
@@ -523,6 +540,40 @@ async function draftPayrollEntries(db: PgDatabase, from: string, to: string): Pr
   });
 }
 
+/** 사업·기타소득 지급(205 income_payment_ledger — 전문가활용비 승인 적재분) → 소득 구분별 비용 분개.
+ *  (차)805 잡급(기타 일비) / 831 지급수수료(사업 자문료), (대)254 예수금(징수세액) + 103 차감지급액.
+ *  세액 계산은 대장 적재 시 확정(income-ledger.ts) — 여기서는 대장 수치를 그대로 기표한다. */
+async function draftIncomeDocEntries(db: PgDatabase, from: string, to: string): Promise<EntryDraft[]> {
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT entry_id, income_kind, pay_date, payee_name, gross_amount, withheld_total, net_amount, note, doc_id, doc_no
+         FROM income_payment_ledger WHERE pay_date BETWEEN $1 AND $2`,
+      [from, to],
+    ),
+  );
+  return rows.flatMap((r): EntryDraft[] => {
+    const gross = round(Number(r.gross_amount));
+    const withheld = round(Number(r.withheld_total));
+    const net = gross - withheld; // 라운딩 오차 없이 차대 강제 균형
+    if (gross <= 0) return [];
+    const isBiz = String(r.income_kind) === "business";
+    return [{
+      sourceKind: "income_doc",
+      sourceId: String(r.entry_id),
+      entryDate: String(r.pay_date),
+      description: `${isBiz ? "사업소득" : "기타소득"} 지급 — ${String(r.payee_name)} ${String(r.note ?? "")}`.trim(),
+      partyName: String(r.payee_name),
+      status: "auto" as const,
+      docId: r.doc_id != null ? String(r.doc_id) : undefined,
+      lines: [
+        { accountCode: isBiz ? "831" : "805", debit: gross, credit: 0, memo: String(r.note ?? "") || null },
+        ...(withheld > 0 ? [{ accountCode: "254", debit: 0, credit: withheld, memo: "원천세 예수(소득세+지방세)" }] : []),
+        ...(net > 0 ? [{ accountCode: ACCT.bank, debit: 0, credit: net, memo: "차감지급액" }] : []),
+      ],
+    }];
+  });
+}
+
 /** 고정자산 월할 상각 → (차)818 감가상각비 / (대)카테고리 누계액(203/207/209/213). P6-A.
  *  세무법인 실측(2025 기계 매월 247,391원 기표)과 동일하게 월말 auto 전표.
  *  완료된 월만 기표(depreciationForRange가 당월 제외) — 재생성 시 전체 재계산. */
@@ -571,6 +622,7 @@ export async function regenerateJournal(from: string, to: string): Promise<Regen
       ...(await draftInvoiceEntries(db, from, to)),
       ...(await draftManualInvoiceEntries(db, from, to)),
       ...(await draftExpenseDocEntries(db, from, to)),
+      ...(await draftIncomeDocEntries(db, from, to)),
       ...(await draftDepreciationEntries(from, to)),
       ...(await draftPayrollEntries(db, from, to)),
     ];

@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { buildIssuePrefill, listContractInvoices, listRecentInvoices, issueTaxInvoice, issueModifiedTaxInvoice, refreshInvoiceStates, invoicePopUpUrl, cancelTaxInvoice, listIssuerEmails, saveIssuerEmail, deleteIssuerEmail, type IssueParams, type ModifyParams } from "@/lib/barobill/invoicing";
+import { backfillInvoicePdfs } from "@/lib/barobill/invoice-archive";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,7 +40,13 @@ export async function POST(req: NextRequest) {
 
     if (body.action === "refresh") {
       await requirePermission("finance.view");
-      return NextResponse.json(await refreshInvoiceStates(body.invoiceIds));
+      const result = await refreshInvoiceStates(body.invoiceIds);
+      // 보관 PDF 백필(2026-08-25)은 Chromium 캡처가 실려 건당 수 초가 걸린다 — 응답을 막으면
+      // 화면 버튼이 그동안 비활성으로 남는다(2026-08-26 사용자 리포트). 뒤에서 돌리고 바로 응답한다.
+      void backfillInvoicePdfs().catch((err) => {
+        console.warn("[tax-invoice] PDF 백필 실패:", (err as Error).message);
+      });
+      return NextResponse.json(result);
     }
 
     if (body.action === "save-issuer-email" || body.action === "delete-issuer-email") {

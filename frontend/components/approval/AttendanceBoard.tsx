@@ -2,7 +2,8 @@
 
 // 근태·초과근무 관리(/approval/attendance, admin) — ADT캡스 근태 수신분의 주별 초과근무 리포트.
 // 탭: ①주별 초과근무(주 선택·직원별 연장/야간/12h초과, 행 펼침→일별) ②신청 대조(초과근무 신청서×근태)
-//     ③미매칭 매핑(ADT 사번↔직원) ④산정 정책(엑셀 업로드·산정 기준·직원별 출근시각).
+//     ③식대 경고(식대×초과근무 신청 대조 위반 — 경고/불지급/급여 차감 처분, 마이그 203·204)
+//     ④미매칭 매핑(ADT 사번↔직원) ⑤산정 정책(엑셀 업로드·산정 기준·직원별 출근시각).
 // 사규: 주 52h(일요일 시작)·야간 22:00~06:00 2.0배·그외 연장 1.5배·주 12h 초과분은 특별휴가 대상(리포트).
 // 설계: docs/ADT_attendance_integration_handoff.md §7-1.
 
@@ -20,15 +21,18 @@ import {
   UploadCloud,
   UserRoundCheck,
   UserRoundX,
+  UtensilsCrossed,
   Wallet,
 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { AbsenceRequestPanel } from "@/components/approval/AbsenceRequestPanel";
 import { EmployeeAvatar } from "@/components/ui/EmployeeAvatar";
 import { WORK_SCHEDULE_KINDS } from "@/lib/adt/types";
 import type { AttendanceSettings, WorkScheduleKind, WorkScheduleRow } from "@/lib/adt/types";
 import type { DailyRow, IgnoredEmp, MappableEmployee, UnmatchedRow, WeeklyRow } from "@/lib/adt/queries";
 import type { OvertimeMatchRow } from "@/lib/payroll/overtime";
+import type { MealWarningAction, MealWarningRow } from "@/lib/approval/overtime-meal";
 import "@/components/cdash/cdash.css";
 
 /* ---------- 표시 헬퍼 ---------- */
@@ -52,7 +56,7 @@ const dowOf = (d: string): string => {
   return Number.isNaN(t) ? "" : DOW[new Date(t).getUTCDay()];
 };
 
-type Tab = "weekly" | "match" | "mapping" | "settings";
+type Tab = "weekly" | "match" | "meal" | "mapping" | "settings" | "absence";
 
 export function AttendanceBoard() {
   const { theme } = useCdashTheme();
@@ -73,8 +77,10 @@ export function AttendanceBoard() {
           {([
             ["weekly", "주별 초과근무"],
             ["match", "신청 대조"],
+            ["meal", "식대 경고"],
             ["mapping", "미매칭 매핑"],
             ["settings", "산정 정책"],
+            ["absence", "결근사유서"],
           ] as [Tab, string][]).map(([k, label]) => (
             <button
               key={k}
@@ -95,8 +101,10 @@ export function AttendanceBoard() {
 
         {tab === "weekly" && <WeeklyPanel />}
         {tab === "match" && <MatchPanel />}
+        {tab === "meal" && <MealPanel />}
         {tab === "mapping" && <MappingPanel onCount={setUnmatchedCount} />}
         {tab === "settings" && <SettingsPanel />}
+        {tab === "absence" && <AbsenceRequestPanel />}
       </div>
     </div>
   );
@@ -515,6 +523,169 @@ function MatchPanel() {
 }
 
 const matchGrid = { display: "grid", gridTemplateColumns: "minmax(0,1fr) 0.9fr 1.1fr 1.2fr 0.8fr 0.7fr 0.7fr 0.9fr 0.9fr", gap: "8px" } as const;
+
+/* ================= 식대 경고 (마이그 203·204) ================= */
+interface MealResponse {
+  rows: MealWarningRow[];
+  summary: { count: number; people: number; repeat: number; deduct: number; withhold: number; deductTotal: number };
+}
+
+const MEAL_ACTION_LABEL: Record<MealWarningAction, string> = {
+  warning: "경고",
+  withhold: "불지급",
+  deduct: "급여 차감",
+};
+
+function MealPanel() {
+  const now = new Date();
+  const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [data, setData] = useState<MealResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const load = useCallback(async (y: number, m: number) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/payroll/meal-warnings?year=${y}&month=${m}`, { cache: "no-store" });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d?.error ?? "식대 경고 내역을 불러오지 못했습니다.");
+      setData(d as MealResponse);
+    } catch (err) {
+      setError((err as Error).message);
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  useEffect(() => {
+    load(year, month);
+  }, [load, year, month]);
+
+  const setAction = async (r: MealWarningRow, action: MealWarningAction) => {
+    let note: string | null = null;
+    if (action !== "warning") {
+      note = prompt(
+        `${r.empName} · ${r.usedOn} ${r.vendor ?? "사용처 미상"}${r.amount != null ? ` ${won(r.amount)}원` : ""}\n` +
+          `${MEAL_ACTION_LABEL[action]} 처분 사유를 입력하세요.` +
+          (action === "deduct" ? "\n(사용액이 다음 급여대장 생성 시 '식대환수' 공제로 반영됩니다)" : ""),
+        r.priorCount > 0 ? `반복 위반(${r.priorCount + 1}회차)` : ""
+      );
+      if (note == null) return; // 취소
+    }
+    setBusy(r.warningId);
+    try {
+      const res = await fetch("/api/payroll/meal-warnings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ warningId: r.warningId, action, note }),
+      });
+      if (!res.ok) throw new Error((await res.json())?.error ?? "처리 실패");
+      await load(year, month);
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const s = data?.summary;
+  const years = [now.getFullYear(), now.getFullYear() - 1];
+
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-[13px] cd-text-muted">
+        지출결의서의 <b>식대(복리후생비)</b> 사용을 그 날 <b>초과근무 신청</b>과 대조해 기준 미달 건을 자동 검출합니다
+        (평일: 결제 17시 이후·신청 2시간 이상 / 휴일: 신청 4시간 이상). 1·2회는 <b>경고</b>로 처리하고, 반복되면
+        <b> 불지급</b> 또는 <b>급여 차감</b>(사용액이 급여대장 &lsquo;식대환수&rsquo; 공제로 자동 반영)을 지정할 수 있습니다.
+      </p>
+
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-[12px] cd-text-faint">귀속 월</span>
+        <select className="cd-select" style={{ width: 110 }} value={year} onChange={(e) => setYear(Number(e.target.value))}>
+          {years.map((y) => <option key={y} value={y}>{y}년</option>)}
+        </select>
+        <select className="cd-select" style={{ width: 100 }} value={month} onChange={(e) => setMonth(Number(e.target.value))}>
+          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => <option key={m} value={m}>{m}월</option>)}
+        </select>
+        <span className="text-[11.5px] cd-text-faint">
+          귀속 구간 {month === 1 ? year - 1 : year}-{String(month === 1 ? 12 : month - 1).padStart(2, "0")}-26 ~ {year}-{String(month).padStart(2, "0")}-25
+        </span>
+      </div>
+
+      {s && (
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <Kpi icon={<UtensilsCrossed className="w-4 h-4" />} label="검출 건수" value={`${s.count}건`} />
+          <Kpi icon={<UserRoundX className="w-4 h-4" />} label="대상 인원" value={`${s.people}명`} />
+          <Kpi icon={<TriangleAlert className="w-4 h-4" />} label="반복 위반" value={`${s.repeat}건`} danger={s.repeat > 0} />
+          <Kpi icon={<CheckCircle2 className="w-4 h-4" />} label="불지급 처분" value={`${s.withhold}건`} />
+          <Kpi icon={<Wallet className="w-4 h-4" />} label="급여 차감" value={s.deduct > 0 ? `${s.deduct}건 · ${won(s.deductTotal)}원` : "0건"} danger={s.deduct > 0} />
+        </div>
+      )}
+
+      {error && <p className="text-[13px]" style={{ color: "var(--cd-error)" }}>{error}</p>}
+      {loading ? (
+        <p className="text-[13px] cd-text-faint">불러오는 중입니다.</p>
+      ) : !data || data.rows.length === 0 ? (
+        <p className="text-[13px] cd-text-faint py-4">해당 월에 검출된 식대 위반 건이 없습니다.</p>
+      ) : (
+        <div className="rounded-2xl border cd-border-c overflow-x-auto">
+          <div className="hidden md:grid px-3 py-2 text-[11px] font-bold cd-text-faint border-b cd-border-c" style={mealGrid}>
+            <span>직원</span>
+            <span>사용일</span>
+            <span>사용처</span>
+            <span className="text-right">금액</span>
+            <span>결제</span>
+            <span>신청/기준</span>
+            <span>누적</span>
+            <span>처분</span>
+            <span>메모</span>
+          </div>
+          {data.rows.map((r) => (
+            <div key={r.warningId} className="grid items-center px-3 py-2 border-b cd-border-c last:border-b-0 text-[12.5px]" style={mealGrid}>
+              <span className="font-semibold cd-text truncate">{r.empName}</span>
+              <span className="cd-text">
+                {r.usedOn.slice(5)}({dowOf(r.usedOn)}){r.isOffDay ? <span className="ml-1 text-[10px] font-bold" style={{ color: "var(--cd-error)" }}>휴일</span> : null}
+              </span>
+              <span className="cd-text truncate" title={r.docNo ? `문서 ${r.docNo}` : undefined}>{r.vendor ?? "미상"}</span>
+              <span className="cd-text text-right">{r.amount != null ? `${won(r.amount)}원` : "-"}</span>
+              <span className="cd-text-faint">{r.paidAtHm ?? "-"}</span>
+              <span className="cd-text">
+                {toH(r.appliedMinutes)}h <span className="cd-text-faint">/ {toH(r.requiredMinutes)}h</span>
+              </span>
+              <span
+                className="text-[11px] font-bold"
+                style={{ color: r.priorCount > 0 ? "var(--cd-error)" : "var(--cd-warning,#FFAE1F)" }}
+              >
+                {r.priorCount + 1}회차
+              </span>
+              <span>
+                <select
+                  className="cd-select"
+                  style={{ width: "100%", minWidth: 96 }}
+                  disabled={busy === r.warningId}
+                  value={r.action}
+                  onChange={(e) => setAction(r, e.target.value as MealWarningAction)}
+                >
+                  {(Object.keys(MEAL_ACTION_LABEL) as MealWarningAction[]).map((a) => (
+                    <option key={a} value={a}>{MEAL_ACTION_LABEL[a]}</option>
+                  ))}
+                </select>
+              </span>
+              <span className="cd-text-faint text-[11px] truncate" title={r.actionNote ?? undefined}>
+                {r.actionNote ?? "-"}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const mealGrid = { display: "grid", gridTemplateColumns: "minmax(0,0.9fr) 0.9fr minmax(0,1.2fr) 0.8fr 0.6fr 0.8fr 0.6fr 1fr minmax(0,1fr)", gap: "8px" } as const;
 
 /* ================= 미매칭 매핑 ================= */
 function MappingPanel({ onCount }: { onCount: (n: number) => void }) {

@@ -10,6 +10,7 @@ import type { AdtRawRecord, AttendanceSettings } from "./types";
 import { loadAttendanceSettings } from "./settings";
 import { computeDaily, computeWeekly, weekStartOf, ymd8ToDate, type WeeklyDailyInput } from "./overtime";
 import { syncOvertimeCompForWeeks } from "@/lib/approval/overtime";
+import { offDaySet } from "@/lib/hr/holidays";
 import { AttendanceSource, DbStagingSource, FileSource, S3Source, type CollectResult } from "./source";
 
 export interface IngestResult {
@@ -155,6 +156,8 @@ export async function ingestStaging(db: PgDatabase, opts: { batchLimit?: number 
   const empIds = Array.from(new Set(Array.from(empMap.values()).map((e) => e.employeeId)));
   const dates = Array.from(new Set(raws.map((r) => ymd8ToDate(String(r.d_date))).filter(Boolean)));
   const leaveSet = await loadLeaveDays(db, empIds, dates);
+  // 휴일(토·일·공휴일)은 휴게 공제 없이 재실 전체를 인정한다(computeDaily isOffDay).
+  const offDays = await offDaySet(Array.from(new Set(dates.map((d) => Number(d.slice(0, 4))))));
 
   const affectedWeeks = new Set<string>();
   let dailyUpserts = 0;
@@ -167,7 +170,9 @@ export async function ingestStaging(db: PgDatabase, opts: { batchLimit?: number 
     const emp = empMap.get(String(raw.e_idno)) ?? null;
     if (emp) matched += 1; else unmatched += 1;
     const isLeaveDay = emp ? leaveSet.has(`${emp.employeeId}|${date}`) : false;
-    const c = computeDaily(raw, settings);
+    const dow = new Date(Date.parse(`${date}T12:00:00Z`)).getUTCDay();
+    const isOffDay = dow === 0 || dow === 6 || offDays.has(date);
+    const c = computeDaily(raw, settings, { isOffDay });
 
     await db.run(
       `INSERT INTO attendance_daily

@@ -801,7 +801,7 @@ function UploadRow({
 interface HrEventRow {
   eventId: string;
   employeeId: string;
-  eventType: "promotion" | "transfer" | "resignation";
+  eventType: "promotion" | "transfer" | "resignation" | "leave_start" | "leave_end";
   eventDate: string;
   positionId: string | null;
   positionName: string | null;
@@ -837,6 +837,8 @@ function HrTab({
   const [promo, setPromo] = useState({ positionId: "", eventDate: "", note: "" });
   const [transfer, setTransfer] = useState({ fromDeptId: "", toDeptId: "", eventDate: "", note: "" });
   const [resign, setResign] = useState({ eventDate: "", note: "" });
+  // 휴직(leave_start)/복직(leave_end) — 206. 계정 상태는 바꾸지 않는 이력 기록.
+  const [leave, setLeave] = useState({ eventDate: "", note: "" });
 
   const sortedPositions = [...positions].sort((a, b) => b.rankOrder - a.rankOrder);
 
@@ -958,6 +960,9 @@ function HrTab({
   const promotions = events.filter((e) => e.eventType === "promotion");
   const transfers = events.filter((e) => e.eventType === "transfer");
   const resignations = events.filter((e) => e.eventType === "resignation");
+  const leaves = events.filter((e) => e.eventType === "leave_start" || e.eventType === "leave_end");
+  // 현재 휴직 중 = 마지막 휴직 이벤트가 leave_start(events 는 최신순 정렬)
+  const onLeave = leaves.length > 0 && leaves[0].eventType === "leave_start";
 
   return (
     <div className="flex flex-col gap-5">
@@ -1063,10 +1068,63 @@ function HrTab({
         </div>
       </section>
 
+      {/* 휴직/복직(206) — 휴직원 승인 시 자동 기록되고, 여기서 수기 기록·복직 처리한다 */}
+      <section className="rounded-2xl cd-surface-bg border cd-border-c p-4">
+        <h3 className="font-bold cd-text mb-1">
+          휴직 {onLeave && <span className="cd-pill cd-pill-info ml-1 align-middle">휴직 중</span>}
+        </h3>
+        <p className="text-xs cd-text-muted mb-3">휴직원 승인 시 휴직 시작이 자동 기록됩니다. 복직하면 [복직 기록]으로 종료 처리하세요(계정 상태는 바뀌지 않습니다).</p>
+        <div className="grid md:grid-cols-[160px_1fr_auto_auto] gap-2 items-end mb-3">
+          <Field label="일자">
+            <input type="date" className="cd-input" value={leave.eventDate} onChange={(e) => setLeave((l) => ({ ...l, eventDate: e.target.value }))} />
+          </Field>
+          <Field label="비고">
+            <input className="cd-input" value={leave.note} onChange={(e) => setLeave((l) => ({ ...l, note: e.target.value }))} placeholder="예: 육아 휴직 / 복직" />
+          </Field>
+          <button
+            type="button"
+            disabled={busy || !leave.eventDate || onLeave}
+            onClick={async () => {
+              const id = await createEvent({ eventType: "leave_start", eventDate: leave.eventDate, note: leave.note });
+              if (id) setLeave({ eventDate: "", note: "" });
+            }}
+            className="cd-btn cd-btn-primary cd-btn-sm"
+          >
+            <Plus className="w-3.5 h-3.5" /> 휴직 기록
+          </button>
+          <button
+            type="button"
+            disabled={busy || !leave.eventDate || !onLeave}
+            onClick={async () => {
+              const id = await createEvent({ eventType: "leave_end", eventDate: leave.eventDate, note: leave.note });
+              if (id) setLeave({ eventDate: "", note: "" });
+            }}
+            className="cd-btn cd-btn-soft cd-btn-sm"
+          >
+            <Plus className="w-3.5 h-3.5" /> 복직 기록
+          </button>
+        </div>
+        <div className="flex flex-col gap-2">
+          {leaves.map((ev) => (
+            <div key={ev.eventId} className="rounded-xl cd-card-bg border cd-border-c p-3 flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm cd-text">
+                  {ev.eventType === "leave_start" ? "휴직" : "복직"} · {ev.eventDate}
+                  {ev.note && <span className="cd-text-muted"> · {ev.note}</span>}
+                </div>
+                <button type="button" disabled={busy} onClick={() => removeEvent(ev.eventId)} className="cd-btn cd-btn-danger cd-btn-sm">삭제</button>
+              </div>
+              {renderAttach(ev.eventId, ev.eventType === "leave_start" ? "휴직원" : "복직원")}
+            </div>
+          ))}
+          {leaves.length === 0 && <div className="text-xs cd-text-faint py-2 text-center">휴직 이력이 없습니다.</div>}
+        </div>
+      </section>
+
       {/* 퇴사 */}
       <section className="rounded-2xl cd-surface-bg border cd-border-c p-4">
         <h3 className="font-bold cd-text mb-1">퇴사</h3>
-        <p className="text-xs cd-text-muted mb-3">퇴사 기록 시 해당 인원·계정이 비활성화되어 조직도/로그인에서 제외됩니다. 이력 삭제 시 복구됩니다.</p>
+        <p className="text-xs cd-text-muted mb-3">퇴사 기록 시 퇴사일이 지났으면 즉시, 미래(퇴사 예정)면 퇴사일 도래 시 인원·계정이 비활성화됩니다. 이력 삭제 시 복구됩니다.</p>
         <div className="grid md:grid-cols-[160px_1fr_auto] gap-2 items-end mb-3">
           <Field label="퇴사일자">
             <input type="date" className="cd-input" value={resign.eventDate} onChange={(e) => setResign((r) => ({ ...r, eventDate: e.target.value }))} />
@@ -1105,7 +1163,69 @@ function HrTab({
           {resignations.length === 0 && <div className="text-xs cd-text-faint py-2 text-center">퇴사 기록이 없습니다.</div>}
         </div>
       </section>
+
+      {/* 경비/급여 입금 계좌(203) — 개인카드 경비 정산 CMS 파일에 자동 기입된다 */}
+      <BankAccountSection employeeId={employeeId} toast={toast} />
     </div>
+  );
+}
+
+/** 경비/급여 입금 계좌 편집 — 전용 PATCH(bank-account) 경로. 은행코드는 금융결제원 표준 숫자 코드. */
+function BankAccountSection({ employeeId, toast }: { employeeId: string; toast: (message: string, type?: "success" | "error") => void }) {
+  const [form, setForm] = useState({ bankName: "", bankCode: "", bankAccount: "", accountHolder: "" });
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/admin/employees/" + encodeURIComponent(employeeId) + "/bank-account", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled && d)
+          setForm({ bankName: d.bankName ?? "", bankCode: d.bankCode ?? "", bankAccount: d.bankAccount ?? "", accountHolder: d.accountHolder ?? "" });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [employeeId]);
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/admin/employees/" + encodeURIComponent(employeeId) + "/bank-account", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "저장 실패");
+      toast("입금 계좌를 저장했습니다.");
+    } catch (e) {
+      toast("실패: " + (e as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="rounded-2xl cd-surface-bg border cd-border-c p-4">
+      <h3 className="font-bold cd-text mb-1">경비/급여 입금 계좌</h3>
+      <p className="text-xs cd-text-faint mb-3">개인카드 경비 정산의 CMS 이체 파일에 자동 기입됩니다. 은행코드는 금융결제원 표준 3자리 코드(예: 국민 004, 기업 003, 농협 011, 우리 020, 신한 088).</p>
+      <div className="grid md:grid-cols-[150px_120px_1fr_160px_auto] gap-2 items-end">
+        <Field label="은행명">
+          <input className="cd-input" placeholder="예: 국민" value={form.bankName} onChange={(e) => setForm((f) => ({ ...f, bankName: e.target.value }))} />
+        </Field>
+        <Field label="은행코드">
+          <input className="cd-input" inputMode="numeric" placeholder="예: 004" value={form.bankCode} onChange={(e) => setForm((f) => ({ ...f, bankCode: e.target.value.replace(/\D/g, "") }))} />
+        </Field>
+        <Field label="계좌번호">
+          <input className="cd-input" inputMode="numeric" placeholder="숫자만 입력" value={form.bankAccount} onChange={(e) => setForm((f) => ({ ...f, bankAccount: e.target.value.replace(/[^\d-]/g, "") }))} />
+        </Field>
+        <Field label="예금주(본인이면 비움)">
+          <input className="cd-input" value={form.accountHolder} onChange={(e) => setForm((f) => ({ ...f, accountHolder: e.target.value }))} />
+        </Field>
+        <button type="button" disabled={busy} onClick={() => void save()} className="cd-btn cd-btn-primary cd-btn-sm">저장</button>
+      </div>
+    </section>
   );
 }
 

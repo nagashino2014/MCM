@@ -44,6 +44,13 @@ RUN set -eux; \
 COPY converter/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
+# 바로빌 계산서 인쇄 화면 캡처용 Chromium — playwright 의 --with-deps 는 최신 Debian 에서
+# 구식 폰트 패키지명(ttf-unifont 등)을 참조해 실패한다(실측). 시스템 chromium 패키지를 쓰면
+# 의존성이 apt 로 전부 해결되고, app.py 가 executable_path 로 이 바이너리를 지정한다.
+RUN apt-get update && apt-get install -y --no-install-recommends chromium \
+  && rm -rf /var/lib/apt/lists/*
+ENV MCM_CHROMIUM_PATH=/usr/bin/chromium
+
 COPY converter/app.py converter/office_convert.py ./
 
 EXPOSE 8080

@@ -13,12 +13,12 @@ import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdModal } from "@/components/cdash/CdModal";
 import { ApprovalFormRenderer } from "@/components/approval/ApprovalFormRenderer";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
-import { missingTableRequirements, parseTimeRange, timeRangeMinutes, type ApprovalFieldDef } from "@/lib/approval/fields";
-import { DraftAttachmentModal } from "@/components/approval/DraftAttachmentModal";
+import { parseTimeRange, timeRangeMinutes, type ApprovalFieldDef } from "@/lib/approval/fields";
 import { autofillFromRefDoc, compareWithRefDoc } from "@/lib/approval/ref-link";
 import { findInCatalog, type LeaveTypeItem } from "@/lib/approval/leave-types";
 import { OvertimeConsentModal } from "@/components/approval/OvertimeConsentModal";
 import { DeleteDraftButton, RejectedBanner, toEditDocMeta, type EditDocMeta } from "@/components/approval/DraftEditNotice";
+import AttachmentPreviewModal from "@/components/approval/AttachmentPreviewModal";
 import {
   ATTACHMENT_ACCEPT, ATTACHMENT_ALLOWED_TEXT, formatBytes, isAllowedAttachment, type DocAttachment,
 } from "@/lib/approval/attachments";
@@ -27,11 +27,14 @@ import { CardPickerModal, type CardPickerItem } from "@/components/finance/CardP
 import { ReceiptPickerModal, type ReceiptPickerItem } from "@/components/finance/ReceiptPickerModal";
 import "@/components/cdash/cdash.css";
 
-// 법인카드 내역 자동 기입 대상 양식(P1) — 지출 내역 표(마이그 116)의 key/사용일시 열 key.
+// 카드 내역 자동 기입 대상 양식(P1) — 지출 내역 표(마이그 116)의 key/사용일시 열 key.
+// corporate=법인카드(card_transactions)·personal=개인카드 영수증 스톡(personal_receipts) 버튼 노출.
+// 지출결의서는 법인/개인 양식이 분리(202)되어 각자 해당 소스만 불러온다(FRM-P1 확정).
 // 설계: docs/barobill-finance-blueprint.md §4 F1/F2.
-const CARD_EXPENSE_FORMS: Record<string, { tableKey: string; dateKey: string }> = {
-  "frm-expense-report": { tableKey: "expenses", dateKey: "used_on" },
-  "frm-biz-trip-report": { tableKey: "trip_expenses", dateKey: "spent_on" },
+const CARD_EXPENSE_FORMS: Record<string, { tableKey: string; dateKey: string; corporate: boolean; personal: boolean }> = {
+  "frm-expense-report": { tableKey: "expenses", dateKey: "used_on", corporate: true, personal: false },
+  "frm-expense-personal": { tableKey: "expenses", dateKey: "used_on", corporate: false, personal: true },
+  "frm-biz-trip-report": { tableKey: "trip_expenses", dateKey: "spent_on", corporate: true, personal: true },
 };
 
 interface FormInfo {
@@ -129,8 +132,8 @@ export function ApprovalDraftBoard() {
   const [aiBusy, setAiBusy] = useState(false);
   // 재편집 문서의 상태·반려 사유·삭제 권한(서버 판정) — 반려 배너와 기안 삭제 버튼 노출용.
   const [editMeta, setEditMeta] = useState<EditDocMeta | null>(null);
-  /** 미리보기로 띄운 첨부(기안 화면 전용 — key 로 읽는다). */
-  const [previewAttachment, setPreviewAttachment] = useState<DocAttachment | null>(null);
+  // 첨부 미리보기(2026-08-25) — 항목을 누르면 상신 전에도 내용을 확인한다(영수증 증빙 등).
+  const [previewItem, setPreviewItem] = useState<DocAttachment | null>(null);
   // 첨부서류(문서 공통 — 공문과 같은 field_values.file_attachments 규약).
   // 지출결의·출장보고·교육훈련·휴가처럼 증빙이 필요한 양식에서 쓴다.
   const [fileAttachments, setFileAttachments] = useState<DocAttachment[]>([]);
@@ -147,8 +150,21 @@ export function ApprovalDraftBoard() {
   const [leaveCatalog, setLeaveCatalog] = useState<LeaveTypeItem[]>([]);
   const [leaveHint, setLeaveHint] = useState<string | null>(null);
   const isLeaveForm = form?.formId === "frm-leave-request";
+  // 결근사유서(FRM-P1) — 내 열린 제출 요청 배너 + 결근 기간 자동 채움.
+  const isAbsenceForm = form?.formId === "frm-absence-statement";
+  const [absenceRequests, setAbsenceRequests] = useState<
+    { requestId: string; dateFrom: string; dateTo: string; note: string | null }[]
+  >([]);
   // 초과근무 신청 양식이면 신청 주의 사용량(기존 신청+근태 실적)을 조회해 주 12h 초과를 경고한다.
-  const [otUsage, setOtUsage] = useState<{ weekStart: string; weekEnd: string; requestedMinutes: number; attendanceOvertimeMinutes: number; limitMinutes: number } | null>(null);
+  const [otUsage, setOtUsage] = useState<{
+    weekStart: string;
+    weekEnd: string;
+    requestedMinutes: number;
+    attendanceOvertimeMinutes: number;
+    limitMinutes: number;
+    /** 같은 근무일의 기존 신청 — 추가 신청 안내(원 신청 자동 연동·시간대 겹침 불가) */
+    sameDay?: Array<{ docId: string; docNo: string | null; start: string | null; end: string | null; applyMinutes: number }>;
+  } | null>(null);
   const [otHint, setOtHint] = useState<string | null>(null);
   const isOvertimeForm = form?.formId === "frm-overtime-request";
   const otFrom = isOvertimeForm ? ((values.work_period ?? {}) as { from?: string }).from : undefined;
@@ -167,10 +183,47 @@ export function ApprovalDraftBoard() {
       .filter((v): v is string => typeof v === "string" && v.length > 0);
   }, [cardExpenseTarget, values]);
 
+  // 출장보고서 — 사용일이 출장기간 밖인 카드/영수증은 오인 등록이므로 걸러낸다(2026-08-26 사용자 확정).
+  // 기간 미입력이면 대조 자체가 불가라 등록 전에 기간 입력을 요구하고, 사용일 미상 건도 차단한다.
+  const filterByTripPeriod = useCallback(
+    <T,>(items: T[], dateOf: (item: T) => string | null, labelOf: (item: T) => string): T[] | null => {
+      if (form?.formId !== "frm-biz-trip-report") return items;
+      const p = (values.trip_period ?? {}) as { from?: string; to?: string };
+      const from = String(p.from ?? "").trim();
+      const to = String(p.to ?? "").trim();
+      if (!from || !to) {
+        alert("출장기간을 먼저 입력하세요.\n사용일시가 출장기간 내인 내역만 등록할 수 있습니다.");
+        return null;
+      }
+      const outside = items.filter((i) => {
+        const d = String(dateOf(i) ?? "").slice(0, 10);
+        return !d || d < from || d > to;
+      });
+      if (outside.length) {
+        alert(
+          `출장기간(${from} ~ ${to}) 밖의 내역 ${outside.length}건은 이 출장과 관련없는 사용 건이라 등록할 수 없습니다:\n` +
+            outside.map((i) => `· ${labelOf(i)}`).join("\n")
+        );
+      }
+      return items.filter((i) => {
+        const d = String(dateOf(i) ?? "").slice(0, 10);
+        return d && d >= from && d <= to;
+      });
+    },
+    [form, values]
+  );
+
   /** 선택된 매입건을 지출 내역 표 행으로 변환해 append(빈 행은 정리). */
   const appendCardRows = useCallback(
-    (items: CardPickerItem[]) => {
+    (picked: CardPickerItem[]) => {
       if (!cardExpenseTarget) return;
+      const filtered = filterByTripPeriod(
+        picked,
+        (i) => i.useDate,
+        (i) => `${i.useDate ?? "사용일 미상"} ${i.storeName ?? ""} ${i.amountTotal.toLocaleString("ko-KR")}원`
+      );
+      if (!filtered || !filtered.length) return;
+      const items = filtered;
       const { tableKey, dateKey } = cardExpenseTarget;
       setValues((prev) => {
         const current = Array.isArray(prev[tableKey]) ? ([...(prev[tableKey] as unknown[])] as Record<string, unknown>[]) : [];
@@ -187,35 +240,30 @@ export function ApprovalDraftBoard() {
         }));
         return { ...prev, [tableKey]: [...nonEmpty, ...added] };
       });
-      // 전자 전표(매출전표 PDF)를 증빙 첨부로 자동 추가 — 영수증과 같은 규약(재업로드 없이 key 참조).
-      // 대부분 야간 배치가 미리 만들어 둔 것이고, 아직 없는 최신 건만 서버가 그 자리에서 만든다.
+      // 법인카드 매출전표 자동 첨부(2026-08-26 사용자 확정 — 건당 1장) — 실물 영수증이 없는
+      // 법인카드 건은 승인내역 기반 전표 PDF 를 서버가 만들어 첨부서류에 싣는다(개인카드 영수증과 대칭).
       void (async () => {
-        const preset = items.filter((i) => i.slipKey);
-        const pending = items.filter((i) => !i.slipKey).map((i) => i.cardTxnId);
-        const adds = preset.map((i) => ({ name: i.slipName, key: i.slipKey as string, size: 0 }));
-        if (pending.length) {
-          try {
-            const res = await fetch("/api/finance/card-slips", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ cardTxnIds: pending }),
-            });
-            const d = (await res.json().catch(() => ({}))) as { slips?: Array<{ key: string; name: string }> };
-            for (const s of d.slips ?? []) adds.push({ name: s.name, key: s.key, size: 0 });
-          } catch {
-            // 전표 생성 실패는 기안을 막지 않는다 — 증빙은 결재 전에 수동 첨부할 수 있다.
-          }
-        }
-        if (adds.length) {
+        try {
+          const res = await fetch("/api/finance/card-slips", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ cardTxnIds: items.map((i) => i.cardTxnId) }),
+          });
+          const data = (await res.json().catch(() => ({}))) as { items?: { name: string; key: string; size: number }[]; error?: string };
+          if (!res.ok) throw new Error(data?.error ?? "전표 생성 실패");
+          const slips = data.items ?? [];
+          if (!slips.length) return;
           setFileAttachments((prev) => {
             const known = new Set(prev.map((a) => a.key));
-            const fresh = adds.filter((a) => !known.has(a.key));
-            return fresh.length ? [...prev, ...fresh] : prev;
+            const adds = slips.filter((s) => !known.has(s.key)).map((s) => ({ name: s.name, key: s.key, size: s.size }));
+            return adds.length ? [...prev, ...adds] : prev;
           });
+        } catch (err) {
+          console.warn("[draft] 법인카드 전표 첨부 실패:", err);
         }
       })();
     },
-    [cardExpenseTarget],
+    [cardExpenseTarget, filterByTripPeriod],
   );
 
   // 개인카드 영수증 불러오기(accounting-expansion P1) — 법인카드와 같은 표 대상, _receiptId 메타.
@@ -231,8 +279,15 @@ export function ApprovalDraftBoard() {
 
   /** 선택된 영수증을 표 행으로 추가 + 증빙 PDF 를 첨부서류에 자동 추가(결재자 원본 확인용). */
   const appendReceiptRows = useCallback(
-    (items: ReceiptPickerItem[]) => {
+    (picked: ReceiptPickerItem[]) => {
       if (!cardExpenseTarget) return;
+      const filtered = filterByTripPeriod(
+        picked,
+        (i) => i.paidDate ?? null,
+        (i) => `${i.paidDate ?? "사용일 미상"} ${i.storeName ?? ""} ${i.totalAmount.toLocaleString("ko-KR")}원`
+      );
+      if (!filtered || !filtered.length) return;
+      const items = filtered;
       const { tableKey, dateKey } = cardExpenseTarget;
       setValues((prev) => {
         const current = Array.isArray(prev[tableKey]) ? ([...(prev[tableKey] as unknown[])] as Record<string, unknown>[]) : [];
@@ -244,7 +299,7 @@ export function ApprovalDraftBoard() {
           category: item.formOption ?? "",
           vendor: item.storeName ?? "",
           amount: String(item.totalAmount),
-          detail: item.memo ?? "", // 지출 목적 — 촬영 때 적어 둔 값이 있으면 그대로 승계
+          detail: "", // 지출 목적 — 사용자 입력 몫
           _receiptId: item.receiptId, // 상신 시 서버가 doc_id 귀속·분류 학습에 사용
         }));
         return { ...prev, [tableKey]: [...nonEmpty, ...added] };
@@ -256,7 +311,7 @@ export function ApprovalDraftBoard() {
         return adds.length ? [...prev, ...adds] : prev;
       });
     },
-    [cardExpenseTarget],
+    [cardExpenseTarget, filterByTripPeriod],
   );
 
   // 시간 범위(time_range) → 신청시간 자동 계산. 범위가 실제로 바뀔 때만 채우므로
@@ -353,6 +408,54 @@ export function ApprovalDraftBoard() {
       cancelled = true;
     };
   }, [isLeaveForm]);
+
+  // 연차수당(FRM-P5) — 잔여 연차일수 × 1일 통상임금 = 지급 대상액 자동 계산.
+  // 직전 자동값과 같을 때만 덮어써 수기 조정을 보존한다(초과근무 신청시간 패턴).
+  const leavePayAutoRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (form?.formId !== "frm-annual-leave-pay") return;
+    const days = Number(String(values.remaining_days ?? "").replace(/[^\d.]/g, ""));
+    const wage = Number(String(values.daily_wage ?? "").replace(/[^\d]/g, ""));
+    if (!days || !wage) return;
+    const auto = String(Math.round(days * wage));
+    const cur = String(values.total_amount ?? "").replace(/[^\d]/g, "");
+    if (cur && cur !== leavePayAutoRef.current && leavePayAutoRef.current != null) return; // 수기 조정 보존
+    if (cur === auto) {
+      leavePayAutoRef.current = auto;
+      return;
+    }
+    leavePayAutoRef.current = auto;
+    setValues((prev) => ({ ...prev, total_amount: auto }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form?.formId, values.remaining_days, values.daily_wage]);
+
+  // 결근사유서 — 내 열린 제출 요청 조회(202). 새 문서이고 기간이 비어 있으면 첫 요청 기간을 채운다.
+  useEffect(() => {
+    if (!isAbsenceForm) {
+      setAbsenceRequests([]);
+      return;
+    }
+    let cancelled = false;
+    fetch("/api/approval/absence-requests?mine=1", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled || !Array.isArray(d?.requests)) return;
+        setAbsenceRequests(d.requests);
+        const first = d.requests[0];
+        if (first && !editDocId) {
+          setValues((prev) => {
+            const cur = (prev.absence_period ?? {}) as { from?: string; to?: string };
+            if (String(cur.from ?? "").trim()) return prev;
+            return { ...prev, absence_period: { from: first.dateFrom, to: first.dateTo } };
+          });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAbsenceForm, editDocId]);
 
   // 휴가 기간 ↔ 사용일수 ↔ 부여일수 연동(§LM-P2) — 달력일 기준.
   // 부여일수 고정(경조·조의 등): 시작일 입력 → 종료일 자동(days-1 가산)·사용일수=days.
@@ -646,8 +749,37 @@ export function ApprovalDraftBoard() {
     }
   }, []);
 
+  // 지출 표의 분류 열은 자동 분류 전용(2026-08-26 사용자 확정) — 기안자가 계정과 다른 분류를
+  // 고르는 것을 막는다. 자동 분류 실패(빈 값) 건은 재무의 카드 원장에서 수동 분류한다.
+  const renderFields = useMemo(() => {
+    if (!form) return [] as ApprovalFieldDef[];
+    if (!cardExpenseTarget) return form.fields;
+    return form.fields.map((f) =>
+      f.type === "table" && f.key === cardExpenseTarget.tableKey && f.tableColumns
+        ? { ...f, tableColumns: f.tableColumns.map((c) => (c.key === "category" ? { ...c, readonly: true } : c)) }
+        : f
+    );
+  }, [form, cardExpenseTarget]);
+
   const validateForSubmit = useCallback((): boolean => {
     if (!form) return false;
+    // 지출 목적 필수(2026-08-26 사용자 확정) — 내용이 있는 지출 행마다 지출 목적을 요구한다.
+    if (cardExpenseTarget) {
+      const rows = Array.isArray(values[cardExpenseTarget.tableKey])
+        ? (values[cardExpenseTarget.tableKey] as Record<string, unknown>[])
+        : [];
+      const active = rows.filter(
+        (r) =>
+          r &&
+          typeof r === "object" &&
+          Object.entries(r).some(([k, v]) => !k.startsWith("_") && String(v ?? "").trim() !== "")
+      );
+      const noDetail = active.filter((r) => !String(r.detail ?? "").trim());
+      if (noDetail.length) {
+        alert(`지출 내역의 '지출 목적'이 비어 있는 행이 ${noDetail.length}건 있습니다.\n모든 지출 건에 지출 목적을 입력해야 상신할 수 있습니다.`);
+        return false;
+      }
+    }
     const missing = form.fields
       .filter((f) => f.required && f.type !== "static")
       .filter((f) => {
@@ -665,12 +797,6 @@ export function ApprovalDraftBoard() {
       });
     if (missing.length) {
       alert(`필수 항목을 입력하세요: ${missing.map((f) => f.label).join(", ")}`);
-      return false;
-    }
-    // 표 필수 열(지출 내역의 지출 목적 등) — 카드·영수증에서 불러온 행도 목적은 직접 적어야 한다.
-    const rowMissing = missingTableRequirements(form.fields, values);
-    if (rowMissing.length) {
-      alert(["다음 항목을 입력하세요.", "", ...rowMissing].join("\n"));
       return false;
     }
     if (line.length === 0) {
@@ -847,6 +973,14 @@ export function ApprovalDraftBoard() {
                   {otHint}
                 </span>
               )}
+              {/* 같은 날 추가 신청(2026-08-28) — 원 신청에 자동 연동, 시간대 겹침은 상신 불가 */}
+              {isOvertimeForm && (otUsage?.sameDay?.length ?? 0) > 0 && (
+                <span className="mt-1.5 text-[11.5px] rounded-full px-2.5 py-1 border border-[color:var(--cd-warning,#FFAE1F)] text-[color:var(--cd-warning,#FFAE1F)]">
+                  이 날 기존 신청 {otUsage!.sameDay!.length}건(
+                  {otUsage!.sameDay!.map((r) => (r.start && r.end ? `${r.start}~${r.end}` : "시간 미기재")).join(", ")}
+                  ) — 추가 신청은 원 신청에 자동 연동되며, 시간대가 겹치면 상신할 수 없습니다.
+                </span>
+              )}
             </div>
             {/* 선행 문서 연결(127) — 신청서→보고서 연관. 배너는 렌더러 위에 상시 표시된다. */}
             {form.refFormId && (
@@ -907,30 +1041,53 @@ export function ApprovalDraftBoard() {
                 )}
               </div>
             )}
+            {/* 결근사유서 제출 요청 배너(FRM-P1) — 요청 기간·메모 안내, 클릭으로 기간 채움 */}
+            {isAbsenceForm && absenceRequests.length > 0 && (
+              <div className="rounded-lg border cd-border-c cd-tint-primary px-3 py-2 flex flex-col gap-1">
+                {absenceRequests.map((r) => (
+                  <button
+                    key={r.requestId}
+                    type="button"
+                    className="text-left text-[12px] cd-text flex items-center gap-2 flex-wrap"
+                    title="클릭하면 결근 기간이 입력됩니다"
+                    onClick={() => setValues((prev) => ({ ...prev, absence_period: { from: r.dateFrom, to: r.dateTo } }))}
+                  >
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--cd-warning,#FFAE1F)" }} />
+                    결근사유서 제출 요청 — {r.dateFrom}
+                    {r.dateTo !== r.dateFrom ? ` ~ ${r.dateTo}` : ""}
+                    {r.note ? <span className="cd-text-faint">({r.note})</span> : null}
+                  </button>
+                ))}
+              </div>
+            )}
             {/* 법인카드 내역·개인카드 영수증 불러오기(P1) — 지출 내역 표 자동 기입, 사용자는 지출 목적만 입력 */}
             {cardExpenseTarget && (
               <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  type="button"
-                  className="cd-btn cd-btn-soft cd-btn-sm"
-                  onClick={() => setCardPicker(true)}
-                >
-                  <CreditCard className="w-3.5 h-3.5" /> 법인카드 내역 불러오기
-                </button>
-                <button
-                  type="button"
-                  className="cd-btn cd-btn-soft cd-btn-sm"
-                  onClick={() => setReceiptPicker(true)}
-                >
-                  <CreditCard className="w-3.5 h-3.5" /> 개인카드 영수증 불러오기
-                </button>
+                {cardExpenseTarget.corporate && (
+                  <button
+                    type="button"
+                    className="cd-btn cd-btn-soft cd-btn-sm"
+                    onClick={() => setCardPicker(true)}
+                  >
+                    <CreditCard className="w-3.5 h-3.5" /> 법인카드 내역 불러오기
+                  </button>
+                )}
+                {cardExpenseTarget.personal && (
+                  <button
+                    type="button"
+                    className="cd-btn cd-btn-soft cd-btn-sm"
+                    onClick={() => setReceiptPicker(true)}
+                  >
+                    <CreditCard className="w-3.5 h-3.5" /> 개인카드 영수증 불러오기
+                  </button>
+                )}
                 <span className="text-[11px] cd-text-faint">
                   선택하면 사용일시·상호·금액·분류가 자동 기입됩니다 — 지출 목적만 입력하세요
                 </span>
               </div>
             )}
             <ApprovalFormRenderer
-              fields={form.fields}
+              fields={renderFields}
               values={values}
               onChange={(key, value) => setValues((prev) => ({ ...prev, [key]: value }))}
               // 기안 단계에서도 완성 문서와 같은 양식 제목을 보여준다(신청/승인란은 상신 후).
@@ -981,9 +1138,9 @@ export function ApprovalDraftBoard() {
                         <span className="text-[10px] font-mono cd-text-faint w-4">{i + 1}</span>
                         <button
                           type="button"
-                          className="text-[12px] cd-text truncate flex-1 text-left hover:cd-text-primary hover:underline"
-                          title={`${f.name} — 클릭하면 미리보기`}
-                          onClick={() => setPreviewAttachment(f)}
+                          className="text-[12px] cd-text truncate flex-1 text-left hover:underline"
+                          title={`${f.name} — 클릭해 미리보기`}
+                          onClick={() => setPreviewItem(f)}
                         >
                           {f.name}
                         </button>
@@ -1285,8 +1442,8 @@ export function ApprovalDraftBoard() {
         />
       )}
 
-      {/* 법인카드 내역 불러오기 모달(P1) — 지출결의서·출장보고서 한정 */}
-      {cardExpenseTarget && form && (
+      {/* 법인카드 내역 불러오기 모달(P1) — 지출결의서(법인)·출장보고서 한정 */}
+      {cardExpenseTarget?.corporate && form && (
         <CardPickerModal
           open={cardPicker}
           onClose={() => setCardPicker(false)}
@@ -1296,8 +1453,8 @@ export function ApprovalDraftBoard() {
         />
       )}
 
-      {/* 개인카드 영수증 불러오기 모달(accounting-expansion P1) — 동일 양식 한정 */}
-      {cardExpenseTarget && form && (
+      {/* 개인카드 영수증 불러오기 모달(accounting-expansion P1) — 지출결의서(개인)·출장보고서 한정 */}
+      {cardExpenseTarget?.personal && form && (
         <ReceiptPickerModal
           open={receiptPicker}
           onClose={() => setReceiptPicker(false)}
@@ -1307,7 +1464,8 @@ export function ApprovalDraftBoard() {
         />
       )}
 
-      <DraftAttachmentModal item={previewAttachment} onClose={() => setPreviewAttachment(null)} />
+      {/* 첨부 미리보기 모달(2026-08-25) — 상신 전 첨부 내용 확인 */}
+      {previewItem && <AttachmentPreviewModal item={previewItem} onClose={() => setPreviewItem(null)} />}
 
       {/* 조직도 선택 모달(공용, G3) */}
       <OrgPickerModal

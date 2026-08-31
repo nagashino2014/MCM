@@ -6,7 +6,7 @@
 // - 금액은 단계 금액이 공급가액인지 합계인지 사용자가 고른다(계약 데이터 관례가 섞여 있어 자동 판정하지 않음).
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ExternalLink, FileText, Loader2, Plus, Trash2, X } from "lucide-react";
+import { AlertTriangle, ExternalLink, FileText, ListPlus, Loader2, Plus, Trash2, X } from "lucide-react";
 
 interface Contact {
   name: string;
@@ -55,10 +55,12 @@ interface Prefill {
     corpNum: string; corpName: string; ceoName: string; addr: string;
     bizClass: string; bizType: string; tel: string; contactId: string; contactName: string; email: string;
   };
-  invoicee: { facilityId: string | null; corpNum: string; corpName: string; ceoName: string; addr: string };
+  invoicee: { facilityId: string | null; corpNum: string; corpName: string; ceoName: string; addr: string; bizType?: string; bizClass?: string };
   contacts: Contact[];
   issuerEmails: Array<{ email: string; label: string | null }>;
   existing: ExistingInvoice[];
+  /** 이 계약의 미청구 단계 — 복수 단계를 한 장으로 묶어 발행할 때의 선택지(2026-08-24). */
+  openStages?: Array<{ milestoneId: string; stageLabel: string; amount: number }>;
   cert: { ok: boolean; message: string };
 }
 
@@ -112,6 +114,9 @@ export default function TaxInvoiceIssueModal({
   // 바로빌은 공급받는자 이메일을 1개만 받으므로, 추가분은 발행 후 앱이 안내 메일을 보낸다.
   const [ccEmails, setCcEmails] = useState<string[]>([]);
   const [ccInput, setCcInput] = useState("");
+  // 묶음 발행(2026-08-24) — 복수 청구 단계를 한 장으로 발행. 현재 단계는 항상 포함.
+  const [stagePickerOpen, setStagePickerOpen] = useState(false);
+  const [bundledStageIds, setBundledStageIds] = useState<string[]>([milestoneId]);
 
   useEffect(() => {
     let alive = true;
@@ -189,6 +194,49 @@ export default function TaxInvoiceIssueModal({
     );
   }, []);
 
+  /**
+   * 묶음 대상 단계 목록 — 현재 단계(항상 포함) + 이 계약의 다른 미청구 단계.
+   * 현재 단계가 미청구 목록에도 있으면 중복 없이 한 번만 노출한다.
+   */
+  const bundleStages = useMemo(() => {
+    if (!prefill) return [] as Array<{ milestoneId: string; stageLabel: string; amount: number }>;
+    const current = { milestoneId, stageLabel: prefill.stageLabel, amount: prefill.stageAmount };
+    const others = (prefill.openStages ?? []).filter((s) => s.milestoneId !== milestoneId);
+    return [current, ...others];
+  }, [prefill, milestoneId]);
+
+  /**
+   * 묶음 선택 반영 — 선택 단계 금액 합을 첫 품목의 단가·금액에, 비고에는
+   * "단계명들 : 계약총액 대비 비중%" 를 넣는다(단일 발행의 defaultRemark 와 같은 형식).
+   */
+  const applyBundle = useCallback(
+    (ids: string[]) => {
+      setBundledStageIds(ids);
+      const stages = bundleStages.filter((s) => ids.includes(s.milestoneId));
+      const total = Math.round(stages.reduce((acc, s) => acc + (s.amount || 0), 0));
+      const labels = stages.map((s) => s.stageLabel.trim()).filter(Boolean);
+      const contractAmount = prefill?.contractAmount ?? 0;
+      const pct = contractAmount > 0 && total > 0 ? Math.round((total / contractAmount) * 10000) / 100 : null;
+      const remark = labels.length ? (pct != null ? `${labels.join(" + ")} : ${pct}%` : labels.join(" + ")) : "";
+      setLineItems((prev) => {
+        const first = prev[0] ?? emptyLine();
+        return [
+          { ...first, qty: "1", unitPrice: String(total), amount: String(total), remark },
+          ...prev.slice(1),
+        ];
+      });
+    },
+    [bundleStages, prefill],
+  );
+
+  const toggleBundleStage = useCallback(
+    (id: string) => {
+      if (id === milestoneId) return; // 현재 단계는 항상 포함
+      applyBundle(bundledStageIds.includes(id) ? bundledStageIds.filter((x) => x !== id) : [...bundledStageIds, id]);
+    },
+    [applyBundle, bundledStageIds, milestoneId],
+  );
+
   /** 대표 수신처 지정 — 바로빌이 계산서 메일을 보내는 주소. */
   const pickContact = useCallback((c: Contact) => {
     setEmail(c.email ?? "");
@@ -235,6 +283,8 @@ export default function TaxInvoiceIssueModal({
           action: "issue",
           contractId,
           milestoneId,
+          // 묶음 발행 — 이 계산서가 커버하는 단계 전부(서버가 일괄 발행 완료 마킹)
+          milestoneIds: bundledStageIds,
           writeDate,
           amountTotal: amounts.supply,
           taxTotal: amounts.tax,
@@ -260,6 +310,9 @@ export default function TaxInvoiceIssueModal({
             corpName: invoiceeCorpName,
             ceoName: invoiceeCeo,
             addr: invoiceeAddr,
+            // 업태·종목(2026-08-26) — 사업장 사업자등록증 값 그대로 전달(서버도 비면 DB 로 보강).
+            bizType: prefill.invoicee.bizType,
+            bizClass: prefill.invoicee.bizClass,
             contactName,
             tel: contactTel,
             email,
@@ -581,14 +634,60 @@ export default function TaxInvoiceIssueModal({
                 <div>
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[11px] cd-text-faint">품목 (단계 금액 {fmt(prefill.stageAmount)}원)</span>
-                    <button
-                      type="button"
-                      className="rounded-xl border cd-border-c px-2.5 py-1 text-[11px] inline-flex items-center gap-1"
-                      onClick={() => setLineItems((prev) => [...prev, emptyLine()])}
-                    >
-                      <Plus className="w-3 h-3" /> 품목 추가
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      {/* 복수 청구 단계 묶음 발행(2026-08-24) — 미청구 단계를 골라 합산 발행 */}
+                      <button
+                        type="button"
+                        className={
+                          "rounded-xl border px-2.5 py-1 text-[11px] inline-flex items-center gap-1 " +
+                          (bundledStageIds.length > 1 ? "cd-tint-primary border-[color:var(--cd-primary)]" : "cd-border-c")
+                        }
+                        onClick={() => setStagePickerOpen((v) => !v)}
+                        title="미청구 대금 지급 단계를 묶어 한 장으로 발행"
+                      >
+                        <ListPlus className="w-3 h-3" /> 청구 단계 추가
+                        {bundledStageIds.length > 1 && <span>({bundledStageIds.length})</span>}
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-xl border cd-border-c px-2.5 py-1 text-[11px] inline-flex items-center gap-1"
+                        onClick={() => setLineItems((prev) => [...prev, emptyLine()])}
+                      >
+                        <Plus className="w-3 h-3" /> 품목 추가
+                      </button>
+                    </div>
                   </div>
+                  {stagePickerOpen && (
+                    <div className="rounded-xl border cd-border-c p-2.5 mt-1.5">
+                      <div className="text-[11px] cd-text-faint mb-1.5">
+                        함께 묶어 발행할 미청구 단계를 선택하세요. 선택 합계가 첫 품목의 단가에, 단계명과 계약금액
+                        대비 비율이 비고에 자동 반영됩니다.
+                      </div>
+                      {bundleStages.map((s) => {
+                        const isCurrent = s.milestoneId === milestoneId;
+                        return (
+                          <label
+                            key={s.milestoneId}
+                            className="flex items-center gap-2 px-1 py-1 text-[11px] border-b cd-border-c last:border-b-0 cursor-pointer"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={bundledStageIds.includes(s.milestoneId)}
+                              disabled={isCurrent}
+                              onChange={() => toggleBundleStage(s.milestoneId)}
+                              title={isCurrent ? "발행을 연 단계는 항상 포함됩니다" : undefined}
+                            />
+                            <span className="cd-text font-medium">{s.stageLabel || "(단계명 없음)"}</span>
+                            {isCurrent && <span className="rounded-full border cd-border-c px-1.5 py-0.5 cd-text-faint">현재 단계</span>}
+                            <span className="cd-text-muted ml-auto tabular-nums">{fmt(s.amount)}원</span>
+                          </label>
+                        );
+                      })}
+                      {bundleStages.length <= 1 && (
+                        <div className="px-1 py-1.5 text-[11px] cd-text-faint">묶을 수 있는 다른 미청구 단계가 없습니다.</div>
+                      )}
+                    </div>
+                  )}
                   <div className="grid grid-cols-[1fr_92px_56px_104px_112px_150px_24px] gap-1.5 mt-1 text-[11px] cd-text-faint">
                     <span>품목명</span>
                     <span>규격</span>

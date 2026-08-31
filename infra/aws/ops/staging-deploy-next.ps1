@@ -26,7 +26,8 @@ param(
   [string]$Region     = "ap-northeast-2",
   [string]$Tag        = "",   # 비우면 deploy-yyyyMMdd-HHmmss
   [switch]$SkipBuild,         # 이미 푸시한 태그로 태스크 정의만 갱신
-  [switch]$Wait               # services-stable 까지 대기
+  [switch]$Wait,              # services-stable 까지 대기
+  [switch]$Force              # 갈라진 배포 가드(다른 브랜치 커밋 누락 경고) 생략
 )
 # aws cli 는 정상 흐름에서도 stderr 를 내므로 Stop 을 쓰지 않고 $LASTEXITCODE 로 판정한다
 # (PS 5.1 NativeCommandError 함정 — 다른 ops 스크립트와 동일한 방식).
@@ -49,6 +50,27 @@ $image = "${registry}/${repo}:${Tag}"
 
 Log "repo root : $repoRoot"
 Log "image     : $image"
+
+# ── 갈라진 배포 가드 ────────────────────────────────────────────────
+# 세션 브랜치가 여럿이라, 다른 브랜치의 기능이 빠진 체크아웃에서 배포하면 그 기능이
+# 통째로 사라진 이미지로 덮인다(2026-08-26·08-31 두 차례 실측 사고). 배포 전에 원격
+# 브랜치 중 현재 HEAD 에 없는 커밋이 있으면 나열하고 확인을 받는다. -Force 로 생략.
+if (-not $Force) {
+  git -C $repoRoot fetch origin --quiet 2>$null
+  $behind = @()
+  foreach ($b in (git -C $repoRoot branch -r --format "%(refname:short)" | Where-Object { $_ -match "^origin/(claude/|main$)" })) {
+    $n = git -C $repoRoot rev-list --count "HEAD..$b" 2>$null
+    if ($LASTEXITCODE -eq 0 -and [int]$n -gt 0) { $behind += "{0}  (+{1} 커밋)" -f $b, $n }
+  }
+  if ($behind.Count) {
+    Log "⚠ 현재 체크아웃에 포함되지 않은 원격 커밋이 있다:"
+    $behind | ForEach-Object { Log "    $_" }
+    $answer = Read-Host "[deploy] 이대로 배포하면 위 브랜치의 기능이 빠진 이미지로 덮입니다. 계속할까요? (y/N)"
+    if ($answer -ne "y") { Fail "중단 — 먼저 해당 브랜치를 통합(merge)한 뒤 배포하세요" }
+  } else {
+    Log "갈라진 배포 가드: 원격 브랜치 커밋 모두 포함됨"
+  }
+}
 
 if (-not $SkipBuild) {
   # 1) ECR 로그인 → 빌드 → 푸시(설명 태그 + latest)

@@ -417,6 +417,7 @@ export function ReceivablesSection({ theme }: { theme: CdTheme }) {
             <span>조건</span>
             <span className="text-center">발행일</span>
             <span className="text-right">발행금액</span>
+            <span className="text-right">잔액</span>
           </div>
 
           {/* 한 번에 16건이 보이도록 (행 높이 약 50px 기준) */}
@@ -458,8 +459,20 @@ export function ReceivablesSection({ theme }: { theme: CdTheme }) {
                   <span className="text-center tabular-nums text-[11px]" style={{ color: "var(--cd-muted)" }}>
                     {row.invoiceIssuedAt ?? "-"}
                   </span>
-                  <span className="text-right tabular-nums font-bold" style={{ color: "var(--cd-text)" }}>
+                  <span className="text-right tabular-nums" style={{ color: "var(--cd-muted)" }}>
                     {fmtFull(row.invoiceAmount)}
+                  </span>
+                  {/* 잔액 = 발행금액 - 부분입금(2026-08-26) — 부분입금이 있으면 강조해 구분한다 */}
+                  <span
+                    className="text-right tabular-nums font-extrabold"
+                    style={{ color: row.outstandingAmount < row.invoiceAmount ? "var(--cd-warning, #FFAE1F)" : "var(--cd-text)" }}
+                    title={
+                      row.outstandingAmount < row.invoiceAmount
+                        ? `부분입금 ${fmtFull(row.invoiceAmount - row.outstandingAmount)}원 차감`
+                        : undefined
+                    }
+                  >
+                    {fmtFull(row.outstandingAmount)}
                   </span>
                 </div>
               ))

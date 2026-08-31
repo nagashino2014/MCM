@@ -136,7 +136,7 @@ export function resolveFieldConcept(f: { type: ApprovalFieldType; semantic?: App
 export interface ApprovalTableColumn {
   key: string;
   label: string;
-  type: string; // text|date|time(HHMM 자동완성)|select|currency|number|rowno(자동 연번)|people(조직도 복수 선택 — 값은 {employeeId,name,position}[])
+  type: string; // text|date|time(HHMM 자동완성)|select|currency|number|rowno(자동 연번)|people(조직도 복수 선택 — 값은 {employeeId,name,position}[])|link(URL — 읽기 모드에서 새 탭 링크. ⚠품명 자동 수집은 쿠팡·네이버·G마켓 봇 방어로 폐기, 2026-08-26 사용자 확정)
   options?: string[];
   /** 필수 입력 열 — 값이 있는 행에서 이 열이 비면 상신을 막는다(지출 목적 등). */
   required?: boolean;
@@ -144,6 +144,8 @@ export interface ApprovalTableColumn {
   hint?: string;
   /** 열 단위 데이터 의미 태그(지출 내역 표의 금액 열 = cost.travel 등) */
   semantic?: ApprovalFieldSemantic;
+  /** 기안자 편집 잠금 — 자동 채움 전용 열(지출 표의 분류: 자동 분류 실패 건은 재무 카드 원장에서 분류, 2026-08-26) */
+  readonly?: boolean;
 }
 
 /** 양식 필드 정의 — row(같은 행 배치)·span(행 내 폭 비중 1~3)으로 레이아웃까지 표현 */
@@ -169,6 +171,8 @@ export interface ApprovalFieldDef {
   fillMap?: ApprovalFillRule[];
   /** asset_select 전용 — 선택지로 보여줄 자산 종류(reservable_assets.kind). 미지정 시 전체 */
   assetKind?: string;
+  /** period 전용 — 단일 날짜만 입력(to=from 저장). 초과근무 신청처럼 1일 1건인 양식용 */
+  singleDay?: boolean;
   /** 데이터 의미 태그 — fillMap(입력 편의)과 별개로 분석 집계의 근거가 된다 */
   semantic?: ApprovalFieldSemantic;
 }
@@ -212,12 +216,14 @@ export function parseFields(value: unknown): ApprovalFieldDef[] {
               required: c.required === true,
               hint: c.hint != null ? String(c.hint) : undefined,
               semantic: parseSemantic(c.semantic),
+              readonly: c.readonly === true,
             }))
           : undefined,
         minRows: f.minRows != null ? Number(f.minRows) : undefined,
         sumColumn: f.sumColumn != null ? String(f.sumColumn) : undefined,
         multiple: f.multiple === true,
         assetKind: f.assetKind != null ? String(f.assetKind) : undefined,
+        singleDay: f.singleDay === true || undefined,
         fillMap: Array.isArray(f.fillMap)
           ? (f.fillMap as Record<string, unknown>[])
               .filter((r) => r && typeof r === "object")

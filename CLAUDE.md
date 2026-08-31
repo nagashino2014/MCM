@@ -3,6 +3,13 @@
 IEPS(통합환경허가) 데이터 수집·파싱 + 계약/사업장 관리 모노레포. 상세 도메인 설명은 [README.md](README.md) 참고.
 이 문서는 Claude Code가 이 저장소에서 작업할 때의 **운영 규칙**이다. (사람이 읽는 문서는 README, AI 작업 규칙은 여기)
 
+## 브랜치·배포 운영 규칙 (모든 세션 공통) ★
+여러 Claude 세션이 각자 브랜치에서 작업하다 **다른 브랜치 기능이 빠진 이미지가 배포되는 사고가 2회**(2026-08-26·08-31) 있었다. 어느 세션이든 다음을 지킨다.
+- **작업 시작 전**: `git fetch origin` 후 원격 브랜치 상황을 확인하고, **최신 main(또는 진행 중인 통합 브랜치)에서 분기**한다. 오래된 분기점 위에 새 작업을 쌓지 않는다.
+- **배포는 반드시 `infra/aws/ops/staging-deploy-next.ps1` 로**: 원격 `claude/*`·`main` 커밋 누락을 검사하는 **갈라진 배포 가드**가 들어 있다. 경고가 뜨면 배포를 멈추고 해당 브랜치를 먼저 머지한 뒤 배포한다(`-Force` 남용 금지).
+- **마이그레이션 번호**: 갈래별 중복 사고로 **200~210 이 소진**됐다 — 신규는 **211부터**, 번호 확정 전 `git fetch` 후 원격 전 브랜치의 `infra/aws/` 를 확인한다. DB 적용은 `infra/aws/ops/staging-apply-migrations.ps1 -Files <파일들>`.
+- **main 수렴**: 통합 PR([#1](https://github.com/nagashino2014/MCM/pull/1))이 머지된 뒤에는 세션 브랜치를 main 에서 재분기한다. 통합 브랜치에 기능이 있는데 자기 브랜치에 없다면, 삭제하지 말고 머지로 가져온다.
+
 ## 언어 / 출력
 - **사고 과정(thinking/reasoning) 로그는 기본적으로 한국어로 작성한다.** 사용자가 한국어 화자라, 로그가 길어질수록 영어 reasoning은 가독성이 크게 떨어진다.
 - 단, **코드·식별자·파일경로·명령어·에러 메시지·기술 고유명사는 영어 원문 그대로** 둔다(번역하지 말 것).
@@ -41,6 +48,9 @@ IEPS(통합환경허가) 데이터 수집·파싱 + 계약/사업장 관리 모�
   - 페이지 루트: `<div className="cdash cd-fields-white ..." data-theme={theme}>` + `CdPageHeader`. 테마는 `useCdashTheme`(localStorage `cdash-theme` 공유).
   - **포털(`createPortal`) 모달**은 `.cdash` 밖이라 토큰이 안 풀린다 → 루트에 `cdash-vars`(+`cd-fields-white`) + `data-theme` 부여.
   - **박스/항목은 배경 채움 대신 윤곽선(`border cd-border-c`) 기본**, 선택·강조 요소만 `cd-tint-primary`/`cd-fill-primary`로 채운다. 입력류는 `cd-fields-white` 스코프에서 흰색.
+  - **날짜 입력은 네이티브 `<input type="date">` 금지**. `CdDateInput`(`components/cdash`)을 쓴다 —
+    `YYYYMMDD` 8자리를 이어 치면 `2026-07-01` 로 자동 완성된다(값은 `YYYY-MM-DD` 문자열 그대로).
+    새로 날짜 입력을 놓을 때도, 기존 화면을 손볼 때도 이 컴포넌트로 통일한다.
   - 구식 잔재 금지: `glass-*`, 녹색 `bg-primary`(#16A34A), `text-stone-*`, gradient 히어로 등 → cd 토큰으로.
   - `dashboard.css`/`billing.css`와 `cdash.css`가 공유하는 클래스는 값이 동일해야 한다(분기 금지). 공유 컴포넌트(예: `FacilityOrdersModal`, `PaginationControls`)는 비-cdash 화면에서도 깨지지 않게 hex 폴백 사용.
 

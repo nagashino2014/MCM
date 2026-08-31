@@ -8,7 +8,8 @@
     "worker:aws": "ts-node --project tsconfig.json scripts/aws-worker.ts",
     "recon": "ts-node --project tsconfig.json scripts/cli-recon.ts",
     "scrape": "ts-node --project tsconfig.json scripts/cli-scraper.ts",
-    "daou": "ts-node --project tsconfig.json scripts/cli-daou.ts"
+    "daou": "ts-node --project tsconfig.json scripts/cli-daou.ts",
+    "receipts": "ts-node --project tsconfig.json scripts/cli-receipts.ts"
   },
   "dependencies": {
     "@aws-sdk/client-sqs": "^3.1048.0",
@@ -18,6 +19,8 @@
     "cheerio": "^1.0.0-rc.12",
     "iconv-lite": "^0.6.3",
     "node-cron": "^4.2.1",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^3.11.174",
     "playwright": "^1.57.0",
     "sql.js": "^1.13.0",
     "uuid": "^13.0.0",

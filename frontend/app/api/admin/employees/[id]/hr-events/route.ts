@@ -33,7 +33,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       toDeptId?: string | null;
       note?: string | null;
     };
-    if (!body.eventType || !["promotion", "transfer", "resignation"].includes(body.eventType)) {
+    if (!body.eventType || !["promotion", "transfer", "resignation", "leave_start", "leave_end"].includes(body.eventType)) {
       return NextResponse.json({ error: "eventType이 올바르지 않습니다." }, { status: 400 });
     }
     const event = await createHrEvent(actor.userId, {

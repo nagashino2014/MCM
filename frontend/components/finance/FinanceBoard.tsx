@@ -27,7 +27,7 @@ import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdModal } from "@/components/cdash/CdModal";
 import { DigitDateInput } from "@/components/finance/DigitDateInput";
-import { FinLogo, logoFileCode } from "@/components/finance/FinLogo";
+import { BAROBILL_BANKS, FinLogo, logoFileCode } from "@/components/finance/FinLogo";
 import { PaginationControls } from "@/components/ui/PaginationControls";
 import { JournalPanel, LedgerPanel, TrialPanel } from "@/components/finance/JournalPanels";
 import { PnlPanel, CashPanel } from "@/components/finance/ManagementPanels";
@@ -123,15 +123,8 @@ const lastDayOfMonth = (ym: string) => {
 /* ================= 은행·카드사 로고 (public/finance/logos, 공식 파비콘 수집본) ================= */
 
 // 바로빌 지원 전체 기관(로고 등록 카드의 목록용 — 원장 태그 버튼은 등록된 연결만 렌더).
-const ALL_BANKS: Array<{ code: string; name: string }> = [
-  { code: "KB", name: "국민은행" }, { code: "SHINHAN", name: "신한은행" }, { code: "NH", name: "농협은행" },
-  { code: "HANA", name: "하나은행" }, { code: "SC", name: "제일은행" }, { code: "WOORI", name: "우리은행" },
-  { code: "IBK", name: "기업은행" }, { code: "KDB", name: "산업은행" }, { code: "KFCC", name: "새마을금고" },
-  { code: "CITI", name: "씨티은행" }, { code: "SUHYUP", name: "수협은행" }, { code: "CU", name: "신협은행" },
-  { code: "EPOST", name: "우체국" }, { code: "KJBANK", name: "광주은행" }, { code: "JBBANK", name: "전북은행" },
-  { code: "DGB", name: "대구은행" }, { code: "BUSANBANK", name: "부산은행" }, { code: "KNBANK", name: "경남은행" },
-  { code: "EJEJUBANK", name: "제주은행" }, { code: "KBANK", name: "케이뱅크" }, { code: "TOSS", name: "토스뱅크" },
-];
+// 목록 원본은 FinLogo 의 BAROBILL_BANKS — 어음 취급 은행 select 와 공유한다.
+const ALL_BANKS: Array<{ code: string; name: string }> = BAROBILL_BANKS;
 const ALL_CARD_COMPANIES: Array<{ code: string; name: string }> = [
   { code: "BC", name: "비씨카드" }, { code: "HANA", name: "하나카드" }, { code: "HYUNDAI", name: "현대카드" },
   { code: "KB", name: "KB카드" }, { code: "LOTTE", name: "롯데카드" }, { code: "NH", name: "NH카드" },
@@ -2047,6 +2040,7 @@ const MATCH_TYPE_LABEL: Record<string, string> = {
   exact_1to1: "금액 일치",
   already_collected: "기록된 수금 확인",
   sum_nto1: "합계 매칭",
+  note_date: "어음 만기일 매칭",
   partial: "부분입금",
   overpaid: "과대입금",
   prepaid: "선입금",

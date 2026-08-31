@@ -34,6 +34,7 @@ import ContractChangeModal from "@/components/contracts/ContractChangeModal";
 import ContractStaffingModal from "@/components/contracts/ContractStaffingModal";
 import TaxInvoiceIssueModal from "@/components/contracts/TaxInvoiceIssueModal";
 import FacilityInfoModal from "@/components/contracts/FacilityInfoModal";
+import { BAROBILL_BANKS } from "@/components/finance/FinLogo";
 import { IndustryOptionsEditorButton, useContractIndustryOptions } from "@/components/contracts/IndustryOptionsEditor";
 import { CONTRACT_SERVICE_OPTIONS } from "@/lib/contracts/service-options";
 import { RateCardEditor, type RateCardData } from "@/components/contracts/RateCardEditor";
@@ -169,6 +170,17 @@ interface EditMilestoneModalState {
   collectedAmount: string;
   collectionRatio: string;
   partialPaymentMemo: string;
+  /** 계약의 대금 지급 방식 — "어음"으로 시작하면 어음 상세 입력을 노출한다. */
+  paymentMethod: string;
+  // 어음 수금 상세(마이그 200·201) — 만기일·대출실행일은 수금 자동대조의 날짜 매칭 근거가 된다.
+  noteKind: string;
+  noteBank: string;
+  noteIssuedDate: string;
+  noteMaturityDate: string;
+  noteFee: string;
+  noteLoanInterestRate: string;
+  noteLoanInterestAmount: string;
+  noteLoanExecutedDate: string;
 }
 
 interface FacilitySearchItem {
@@ -186,6 +198,8 @@ interface PdfViewerState {
 
 const DEFAULT_OUTSOURCING_TYPES = ["도면 작성", "산업안전 관련", "측정/분석", "디자인", "번역"];
 const PAYMENT_METHOD_OPTIONS = ["현금", "어음 : 1개월 이하", "어음 : 2개월 이하", "어음 : 2개월 이상"];
+// 어음 종류 제안 목록(자유 입력) — 담당자가 어음 상품을 특정할 수 있게 명기해 둔다(마이그 201).
+const NOTE_KIND_OPTIONS = ["전자어음", "외담대(외상매출채권 담보대출)", "상생협력론", "구매론", "종이어음"];
 
 // 실적 정산(출장 경비·인쇄비 등의 차액 정산)은 준공금 성격의 최종 대금 지급 단계에만
 // 적용된다. 단계명이 아래 목록에 해당하면서 청구·수금 단계의 마지막 행일 때만 노출.
@@ -1306,6 +1320,15 @@ function ContractDetailPanel({
                               collectedAmount: String(milestone.collected_amount ?? ""),
                               collectionRatio: String(milestone.collection_ratio ?? ""),
                               partialPaymentMemo: firstPartialPaymentMemo(milestone.partial_payments_json),
+                              paymentMethod: String(contract.payment_method ?? ""),
+                              noteKind: String(milestone.note_kind ?? ""),
+                              noteBank: String(milestone.note_bank ?? ""),
+                              noteIssuedDate: String(milestone.note_issued_date ?? ""),
+                              noteMaturityDate: String(milestone.note_maturity_date ?? ""),
+                              noteFee: String(milestone.note_fee ?? ""),
+                              noteLoanInterestRate: String(milestone.note_loan_interest_rate ?? ""),
+                              noteLoanInterestAmount: String(milestone.note_loan_interest_amount ?? ""),
+                              noteLoanExecutedDate: String(milestone.note_loan_executed_date ?? ""),
                             })
                           }
                           title="단계 수정"
@@ -2772,6 +2795,8 @@ function EditMilestoneModal({
   const [saving, setSaving] = useState(false);
   const invoiceFileRef = useRef<File | null>(null);
   const [invoiceFileName, setInvoiceFileName] = useState("");
+  // 어음 상세 노출 — 계약의 대금 지급 방식이 어음이거나, 단계 지급조건에 어음이 명시된 경우.
+  const isNotePayment = state.paymentMethod.startsWith("어음") || /어음|전자어음/.test(state.paymentTerms);
 
   const submit = async () => {
     setSaving(true);
@@ -2794,6 +2819,14 @@ function EditMilestoneModal({
             collectionRatio: state.collectionRatio ? Number(state.collectionRatio) : null,
             collectedAmount: state.collectedAmount ? Number(state.collectedAmount) : null,
             partialPaymentMemo: state.paymentCollected && !invoiceFile ? state.partialPaymentMemo : undefined,
+            noteKind: state.noteKind || null,
+            noteBank: state.noteBank || null,
+            noteIssuedDate: state.noteIssuedDate || null,
+            noteMaturityDate: state.noteMaturityDate || null,
+            noteFee: state.noteFee ? Number(state.noteFee) : null,
+            noteLoanInterestRate: state.noteLoanInterestRate ? Number(state.noteLoanInterestRate) : null,
+            noteLoanInterestAmount: state.noteLoanInterestAmount ? Number(state.noteLoanInterestAmount) : null,
+            noteLoanExecutedDate: state.noteLoanExecutedDate || null,
           }),
         }
       );
@@ -2871,6 +2904,85 @@ function EditMilestoneModal({
           {invoiceFileName && <span className="text-xs cd-text-faint">선택됨: {invoiceFileName}</span>}
           <span className="text-xs cd-text-faint">파일을 선택하면 새 계산서 PDF가 같은 단계의 최신 계산서로 추가 등록됩니다.</span>
         </label>
+        {isNotePayment && (
+          <div className="col-span-2 rounded-2xl border cd-border-c p-3 grid gap-3 grid-cols-2">
+            <p className="col-span-2 text-xs font-bold cd-text-muted">
+              어음 수금 상세
+              <span className="block mt-0.5 font-normal cd-text-faint">
+                만기일·대출 실행일을 입력하면 해당 일자의 입금이 발주처명 없이 들어와도 수금 자동대조 후보로 잡힙니다.
+                어음 수수료는 별도 출금되므로 입금은 발행액 전액 기준으로 대조합니다.
+              </span>
+            </p>
+            <label className="grid gap-1 text-sm">
+              <span className="font-bold cd-text-muted">어음 종류</span>
+              <input
+                className="cd-input"
+                placeholder="예: 전자어음 / 외담대 / 상생협력론"
+                list="note-kind-options"
+                value={state.noteKind}
+                onChange={(e) => onChange({ ...state, noteKind: e.target.value })}
+              />
+              <datalist id="note-kind-options">
+                {NOTE_KIND_OPTIONS.map((option) => (
+                  <option key={option} value={option} />
+                ))}
+              </datalist>
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="font-bold cd-text-muted">어음 취급 은행</span>
+              <select className="cd-select" value={state.noteBank} onChange={(e) => onChange({ ...state, noteBank: e.target.value })}>
+                <option value="">선택</option>
+                {/* select 도입 전 자유 입력으로 저장된 값 — 목록에 없어도 값이 사라지지 않게 옵션으로 유지 */}
+                {state.noteBank && !BAROBILL_BANKS.some((bank) => bank.name === state.noteBank) && (
+                  <option value={state.noteBank}>{state.noteBank}</option>
+                )}
+                {BAROBILL_BANKS.map((bank) => (
+                  <option key={bank.code} value={bank.name}>{bank.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="font-bold cd-text-muted">어음 발행일</span>
+              <DateInput value={state.noteIssuedDate} onChange={(noteIssuedDate) => onChange({ ...state, noteIssuedDate })} />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="font-bold cd-text-muted">어음 만기일</span>
+              <DateInput value={state.noteMaturityDate} onChange={(noteMaturityDate) => onChange({ ...state, noteMaturityDate })} />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="font-bold cd-text-muted">어음 수수료</span>
+              <input
+                className="cd-input tabular-nums"
+                inputMode="numeric"
+                value={formatThousands(state.noteFee)}
+                onChange={(e) => onChange({ ...state, noteFee: stripDigits(e.target.value) })}
+              />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="font-bold cd-text-muted">담보 대출 이자율(%)</span>
+              <input
+                className="cd-input tabular-nums"
+                inputMode="decimal"
+                placeholder="예: 5.5"
+                value={state.noteLoanInterestRate}
+                onChange={(e) => onChange({ ...state, noteLoanInterestRate: e.target.value.replace(/[^0-9.]/g, "") })}
+              />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="font-bold cd-text-muted">담보 대출 이자액</span>
+              <input
+                className="cd-input tabular-nums"
+                inputMode="numeric"
+                value={formatThousands(state.noteLoanInterestAmount)}
+                onChange={(e) => onChange({ ...state, noteLoanInterestAmount: stripDigits(e.target.value) })}
+              />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="font-bold cd-text-muted">대출 실행일</span>
+              <DateInput value={state.noteLoanExecutedDate} onChange={(noteLoanExecutedDate) => onChange({ ...state, noteLoanExecutedDate })} />
+            </label>
+          </div>
+        )}
         <label className="flex items-center gap-2 text-sm font-bold cd-text-muted col-span-2">
           <input type="checkbox" checked={state.paymentCollected} onChange={(e) => onChange({ ...state, paymentCollected: e.target.checked })} />
           수금 정보 등록

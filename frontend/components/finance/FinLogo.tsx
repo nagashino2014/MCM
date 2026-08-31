@@ -5,6 +5,17 @@
 
 import { useState } from "react";
 
+// 바로빌 지원 전체 은행 — FinanceBoard 로고 카드와 어음 취급 은행 select 가 같은 목록을 쓴다.
+export const BAROBILL_BANKS: Array<{ code: string; name: string }> = [
+  { code: "KB", name: "국민은행" }, { code: "SHINHAN", name: "신한은행" }, { code: "NH", name: "농협은행" },
+  { code: "HANA", name: "하나은행" }, { code: "SC", name: "제일은행" }, { code: "WOORI", name: "우리은행" },
+  { code: "IBK", name: "기업은행" }, { code: "KDB", name: "산업은행" }, { code: "KFCC", name: "새마을금고" },
+  { code: "CITI", name: "씨티은행" }, { code: "SUHYUP", name: "수협은행" }, { code: "CU", name: "신협은행" },
+  { code: "EPOST", name: "우체국" }, { code: "KJBANK", name: "광주은행" }, { code: "JBBANK", name: "전북은행" },
+  { code: "DGB", name: "대구은행" }, { code: "BUSANBANK", name: "부산은행" }, { code: "KNBANK", name: "경남은행" },
+  { code: "EJEJUBANK", name: "제주은행" }, { code: "KBANK", name: "케이뱅크" }, { code: "TOSS", name: "토스뱅크" },
+];
+
 // 로고 파일 코드: 은행 = {code} / 카드사 = CARD_{code} (은행 겸용 코드는 은행 로고 재사용)
 export const logoFileCode = (kind: "bank" | "card", code: string) =>
   kind === "card" ? (["KJBANK", "JBBANK", "SUHYUP"].includes(code) ? code : `CARD_${code}`) : code;

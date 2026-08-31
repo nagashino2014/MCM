@@ -34,6 +34,7 @@ import ContractChangeModal from "@/components/contracts/ContractChangeModal";
 import ContractStaffingModal from "@/components/contracts/ContractStaffingModal";
 import TaxInvoiceIssueModal from "@/components/contracts/TaxInvoiceIssueModal";
 import FacilityInfoModal from "@/components/contracts/FacilityInfoModal";
+import { BAROBILL_BANKS } from "@/components/finance/FinLogo";
 import { IndustryOptionsEditorButton, useContractIndustryOptions } from "@/components/contracts/IndustryOptionsEditor";
 import {
   ORDERING_SUBJECT_OPTIONS,
@@ -2598,7 +2599,16 @@ function EditMilestoneModal({
             </label>
             <label className="grid gap-1 text-sm">
               <span className="font-bold cd-text-muted">어음 취급 은행</span>
-              <input className="cd-input" placeholder="예: 기업은행" value={state.noteBank} onChange={(e) => onChange({ ...state, noteBank: e.target.value })} />
+              <select className="cd-select" value={state.noteBank} onChange={(e) => onChange({ ...state, noteBank: e.target.value })}>
+                <option value="">선택</option>
+                {/* select 도입 전 자유 입력으로 저장된 값 — 목록에 없어도 값이 사라지지 않게 옵션으로 유지 */}
+                {state.noteBank && !BAROBILL_BANKS.some((bank) => bank.name === state.noteBank) && (
+                  <option value={state.noteBank}>{state.noteBank}</option>
+                )}
+                {BAROBILL_BANKS.map((bank) => (
+                  <option key={bank.code} value={bank.name}>{bank.name}</option>
+                ))}
+              </select>
             </label>
             <label className="grid gap-1 text-sm">
               <span className="font-bold cd-text-muted">어음 발행일</span>

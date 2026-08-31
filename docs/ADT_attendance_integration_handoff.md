@@ -312,6 +312,13 @@ ON CONFLICT (emp_no, work_date) DO UPDATE
    전제하므로: ①양식 `work_period` 를 `singleDay`(period 단일 날짜, to=from 저장,
    저장 구조 유지) 로 개정(마이그 202, 웹·모바일 렌더러 지원 추가) ②상신 시 from≠to 를
    서버가 거부(assessOverLimitOnSubmit). 기존 다일 문서는 손대지 않는다.
+   - **같은 날 추가 신청은 허용**(2026-08-28 확정 — 예정보다 길어진 근무를 별도 문서로
+     추가 상신하는 관행 대응): 상신 시 같은 근무일의 기존 신청(진행+승인)이 있으면
+     ①시간대(work_time)가 겹치는 신청은 거부(같은 재실 구간 이중 인정 방지,
+     `timeRangesOverlap`) ②원 신청(그 날 최초 상신 건)에 `ref_doc_id` 자동 연동
+     (마이그 127 — 결재 화면 "선행 문서" 표시, 수동 지정은 유지). 주 12h 합산·식대
+     검증·일자별 대조는 원래 날짜 키 합산이라 변경 없음. 기안 화면은 week-usage 의
+     `sameDay` 로 "기존 신청 N건 — 자동 연동·겹침 불가" 안내 pill 을 띄운다.
 2. **휴일 근무 휴게 공제 폐지** — 휴일(토·일·공휴일)은 재실 전체 인정
    (computeDaily isOffDay, 마이그 201 재산정). 평일 점심 60분 공제는 유지.
 3. **식대 × 초과근무 신청 대조** (마이그 203, `lib/approval/overtime-meal.ts`) —

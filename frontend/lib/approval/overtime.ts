@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, type PgDatabase } from "@/lib/db";
+import { parseTimeRange } from "@/lib/approval/fields";
 import { CONSENT_VERSION, type OvertimeConsent } from "@/lib/approval/overtime-consent";
 import { getAttendanceSettings } from "@/lib/adt/queries";
 import { DEFAULT_ATTENDANCE_SETTINGS } from "@/lib/adt/settings";
@@ -66,6 +67,67 @@ const addDaysYmd = (ymd: string, n: number): string => {
   return d.toISOString().slice(0, 10);
 };
 
+/** 같은 근무일의 기존 신청 1건(추가 신청 연동·겹침 검사용). */
+export interface SameDayRequest {
+  docId: string;
+  docNo: string | null;
+  start: string | null; // 'HH:MM'
+  end: string | null;
+  applyMinutes: number;
+}
+
+/**
+ * 같은 근무일(date)과 겹치는 본인 초과근무 신청(진행+승인) — 상신 순.
+ * 업무 특성상 예정보다 길어진 근무를 같은 날 **추가 신청**으로 허용하므로(2026-08-28 확정),
+ * 상신 시 이 목록으로 ①시간대 겹침(이중 인정)을 막고 ②원 신청에 ref_doc_id 로 자동 연동한다.
+ */
+export async function listSameDayRequests(
+  db: PgDatabase,
+  employeeId: string,
+  date: string,
+  excludeDocId?: string | null
+): Promise<SameDayRequest[]> {
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT d.doc_id, d.doc_no, d.field_values->'work_time' AS work_time,
+              d.field_values->>'apply_hours' AS apply_hours
+         FROM approval_docs d
+        WHERE d.form_id = $1 AND d.status IN ('in_progress','approved')
+          AND d.drafter_employee_id = $2
+          AND ($4::text IS NULL OR d.doc_id <> $4)
+          AND (d.field_values->'work_period'->>'from') <= $3
+          AND COALESCE(NULLIF(d.field_values->'work_period'->>'to',''),
+                       d.field_values->'work_period'->>'from') >= $3
+        ORDER BY d.submitted_at NULLS LAST, d.created_at`,
+      [OVERTIME_FORM_ID, employeeId, date, excludeDocId ?? null]
+    )
+  );
+  return rows.map((r) => {
+    const t = parseTimeRange(r.work_time);
+    return {
+      docId: String(r.doc_id),
+      docNo: r.doc_no != null ? String(r.doc_no) : null,
+      start: t.start || null,
+      end: t.end || null,
+      applyMinutes: hoursToMin(r.apply_hours),
+    };
+  });
+}
+
+/** 'HH:MM' 두 구간의 겹침 여부 — 종료가 시작보다 이르면 자정 넘김(+1일)으로 본다. */
+export function timeRangesOverlap(a: { start: string; end: string }, b: { start: string; end: string }): boolean {
+  const toMin = (hm: string) => Number(hm.slice(0, 2)) * 60 + Number(hm.slice(3, 5));
+  const span = (r: { start: string; end: string }): [number, number] => {
+    const s = toMin(r.start);
+    let e = toMin(r.end);
+    if (e <= s) e += 1440;
+    return [s, e];
+  };
+  const [aS, aE] = span(a);
+  const [bS, bE] = span(b);
+  return aS < bE && bS < aE;
+}
+
 export interface WeeklyOvertimeUsage {
   weekStart: string;
   weekEnd: string;
@@ -74,6 +136,8 @@ export interface WeeklyOvertimeUsage {
   /** 근태 실적 연장(인정+초과) — 분. 기록이 없으면 0. */
   attendanceOvertimeMinutes: number;
   limitMinutes: number;
+  /** 같은 근무일의 기존 신청 — 추가 신청 안내(자동 연동·겹침 불가) 표시용. */
+  sameDay: SameDayRequest[];
 }
 
 /** 기안 화면용 — 사용자의 해당 주 초과근무 사용량(기존 신청 합 + 근태 실적). */
@@ -111,8 +175,9 @@ export async function getWeeklyOvertimeUsage(
   const attendanceOvertimeMinutes = attRows.length
     ? Number(attRows[0].overtime_minutes ?? 0) + Number(attRows[0].excess_minutes ?? 0)
     : 0;
+  const sameDay = await listSameDayRequests(db, employeeId, date, excludeDocId);
 
-  return { weekStart, weekEnd, requestedMinutes, attendanceOvertimeMinutes, limitMinutes: settings.weeklyOvertimeLimitMinutes };
+  return { weekStart, weekEnd, requestedMinutes, attendanceOvertimeMinutes, limitMinutes: settings.weeklyOvertimeLimitMinutes, sameDay };
 }
 
 /**
@@ -143,6 +208,32 @@ export async function assessOverLimitOnSubmit(txn: PgDatabase, docId: string): P
   const to = period.to;
   if (to && /^\d{4}-\d{2}-\d{2}$/.test(to) && to !== from) {
     throw new Error("초과근무 신청은 1일 1건입니다 — 근무일을 하루씩 나눠 상신해 주세요.");
+  }
+
+  // 같은 날 추가 신청(예정보다 길어진 근무, 2026-08-28 확정) — 허용하되:
+  // ① 기존 신청과 시간대가 겹치면 같은 재실 구간이 이중 인정되므로 상신을 막는다.
+  // ② 원 신청(그 날 최초 상신 건)에 ref_doc_id 로 자동 연동해 "같은 용역·같은 날의
+  //    연속 초과근무"로 묶는다(결재 화면 선행 문서 표시, 마이그 127). 수동 지정은 유지.
+  const sameDay = await listSameDayRequests(txn, employeeId, from, docId);
+  if (sameDay.length) {
+    const mine = parseTimeRange(fv.work_time);
+    if (mine.start && mine.end) {
+      const clash = sameDay.find(
+        (r) => r.start && r.end && timeRangesOverlap({ start: mine.start!, end: mine.end! }, { start: r.start, end: r.end })
+      );
+      if (clash) {
+        throw new Error(
+          `같은 날 기존 신청(${clash.docNo ? `${clash.docNo} · ` : ""}${clash.start}~${clash.end})과 시간대가 겹칩니다 — ` +
+            `기존 근무 이후 시간대로 신청해 주세요.`
+        );
+      }
+    }
+    const refRows = rowsToObjects(
+      await txn.exec(`SELECT ref_doc_id FROM approval_docs WHERE doc_id = $1`, [docId])
+    );
+    if (!refRows.length || refRows[0].ref_doc_id == null || String(refRows[0].ref_doc_id) === "") {
+      await txn.run(`UPDATE approval_docs SET ref_doc_id = $2 WHERE doc_id = $1`, [docId, sameDay[0].docId]);
+    }
   }
 
   let settings = DEFAULT_ATTENDANCE_SETTINGS;

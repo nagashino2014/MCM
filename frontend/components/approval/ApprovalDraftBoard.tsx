@@ -148,7 +148,15 @@ export function ApprovalDraftBoard() {
   const [leaveHint, setLeaveHint] = useState<string | null>(null);
   const isLeaveForm = form?.formId === "frm-leave-request";
   // 초과근무 신청 양식이면 신청 주의 사용량(기존 신청+근태 실적)을 조회해 주 12h 초과를 경고한다.
-  const [otUsage, setOtUsage] = useState<{ weekStart: string; weekEnd: string; requestedMinutes: number; attendanceOvertimeMinutes: number; limitMinutes: number } | null>(null);
+  const [otUsage, setOtUsage] = useState<{
+    weekStart: string;
+    weekEnd: string;
+    requestedMinutes: number;
+    attendanceOvertimeMinutes: number;
+    limitMinutes: number;
+    /** 같은 근무일의 기존 신청 — 추가 신청 안내(원 신청 자동 연동·시간대 겹침 불가) */
+    sameDay?: Array<{ docId: string; docNo: string | null; start: string | null; end: string | null; applyMinutes: number }>;
+  } | null>(null);
   const [otHint, setOtHint] = useState<string | null>(null);
   const isOvertimeForm = form?.formId === "frm-overtime-request";
   const otFrom = isOvertimeForm ? ((values.work_period ?? {}) as { from?: string }).from : undefined;
@@ -845,6 +853,14 @@ export function ApprovalDraftBoard() {
                   }`}
                 >
                   {otHint}
+                </span>
+              )}
+              {/* 같은 날 추가 신청(2026-08-28) — 원 신청에 자동 연동, 시간대 겹침은 상신 불가 */}
+              {isOvertimeForm && (otUsage?.sameDay?.length ?? 0) > 0 && (
+                <span className="mt-1.5 text-[11.5px] rounded-full px-2.5 py-1 border border-[color:var(--cd-warning,#FFAE1F)] text-[color:var(--cd-warning,#FFAE1F)]">
+                  이 날 기존 신청 {otUsage!.sameDay!.length}건(
+                  {otUsage!.sameDay!.map((r) => (r.start && r.end ? `${r.start}~${r.end}` : "시간 미기재")).join(", ")}
+                  ) — 추가 신청은 원 신청에 자동 연동되며, 시간대가 겹치면 상신할 수 없습니다.
                 </span>
               )}
             </div>

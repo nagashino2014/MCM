@@ -155,16 +155,22 @@ export default function BonusStatementsBoard() {
     }
   };
 
-  const calculate = async () => {
+  const calculate = async (force = false) => {
     setBusy(true);
     setMsg(null);
     try {
       const res = await fetch("/api/bonus/calculate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ period }),
+        body: JSON.stringify({ period, force }),
       });
       const data = await res.json();
+      // 덮어쓰기 가드 — 임포트 명세가 있거나 참여도·평점이 없는 반기는 확인 후에만 재생성한다.
+      if (res.status === 409 && data.needsForce) {
+        setBusy(false);
+        if (window.confirm(`${data.error}\n\n그래도 일괄산정을 진행할까요?`)) await calculate(true);
+        return;
+      }
       if (!res.ok) throw new Error(data.error ?? "일괄산정에 실패했습니다.");
       const s = data.summary;
       setMsg(
@@ -329,7 +335,7 @@ export default function BonusStatementsBoard() {
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={calculate}
+                  onClick={() => calculate()}
                   className="rounded-xl px-4 py-2 text-sm text-white cd-fill-primary inline-flex items-center gap-1.5 disabled:opacity-50 whitespace-nowrap shrink-0"
                 >
                   <Calculator className="w-4 h-4" /> {busy ? "산정 중..." : "일괄산정"}

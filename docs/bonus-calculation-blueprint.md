@@ -253,6 +253,9 @@ cdash 관례(`cd-card`·`cd-fields-white`·`CdPageHeader title/meta/actions/tabs
 `POST /api/bonus/calculate?period=` (admin): 설정+제비용+참여도/평점 로드 → §1.2 산식으로
 전 인원 산정 → `bonus_statements`/`bonus_statement_lines` 반기 단위 재생성(스냅샷).
 급여 차감·영업이익 방식은 calc_method에 따라 분기. 산정 파라미터는 meta_json에 동결.
+- **덮어쓰기 가드(2026-08-31)**: 반기 스냅샷 전량 재생성이라 근거 없이 실행하면 기존 명세가 사라진다.
+  ① 엑셀 임포트 스냅샷(`meta_json.source`, 예: 25H2 `excel-25h2`)이 있는 반기,
+  ② 참여도·평점이 0건인데 기존 명세는 있는 반기 → 409 + `needsForce`, 화면 확인(confirm) 후에만 진행.
 
 ### 성과급 기안 (전자결재 연동)
 - 버튼 → 성과급 지급 계획서 1장: 전 인원 표(성명/부서/직함/지급대상액) + 하단 합계.

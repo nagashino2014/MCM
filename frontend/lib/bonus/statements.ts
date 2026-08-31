@@ -44,7 +44,55 @@ export interface CalculateSummary {
   salaryMissing: number;
 }
 
-export async function calculateBonus(actorUserId: string, p: BonusPeriod): Promise<CalculateSummary> {
+/**
+ * 일괄산정 덮어쓰기 가드 — 반기 statements 는 전량 재생성(스냅샷)이라, 산정 근거가 없는 상태로
+ * 실행하면 기존 명세가 사라진다. 다음 두 경우는 확인(force) 없이는 실행하지 않는다.
+ *  ① 엑셀 임포트 스냅샷(meta_json.source, 예: 25H2 'excel-25h2')이 남아 있는 반기
+ *  ② 반기 참여도·평점(service_evaluations)이 한 건도 없는데 기존 명세는 있는 경우
+ */
+async function assertOverwriteAllowed(p: BonusPeriod, evalCount: number): Promise<void> {
+  const db = await getDb();
+  const row = rowsToObjects(
+    await db.exec(
+      `SELECT count(*) AS total,
+              count(*) FILTER (WHERE meta_json ? 'source') AS imported
+         FROM bonus_statements
+        WHERE period_year = $1 AND period_half = $2`,
+      [p.year, p.half]
+    )
+  )[0];
+  const total = Number(row?.total ?? 0);
+  const imported = Number(row?.imported ?? 0);
+  if (imported > 0) {
+    throw Object.assign(
+      new Error(
+        `이 반기에는 엑셀에서 임포트한 명세 ${imported}건이 있습니다. ` +
+          "일괄산정은 반기 명세를 전량 삭제하고 재생성하므로 임포트 데이터가 사라집니다."
+      ),
+      { status: 409, needsForce: true }
+    );
+  }
+  if (total > 0 && evalCount === 0) {
+    throw Object.assign(
+      new Error(
+        `이 반기에는 참여도·평점 입력이 한 건도 없습니다. 지금 산정하면 참여인력 명세 없이 ` +
+          `기존 명세 ${total}건이 지워집니다(본부장·수기 배분만 남음).`
+      ),
+      { status: 409, needsForce: true }
+    );
+  }
+}
+
+export interface CalculateOptions {
+  /** 덮어쓰기 가드를 통과시킨다(화면에서 사용자가 확인한 경우만) */
+  force?: boolean;
+}
+
+export async function calculateBonus(
+  actorUserId: string,
+  p: BonusPeriod,
+  opts: CalculateOptions = {}
+): Promise<CalculateSummary> {
   const settings = await getBonusSettings(p.year, p.half);
   const targets = await listBonusTargets(p);
   const db = await getDb();
@@ -78,6 +126,8 @@ export async function calculateBonus(actorUserId: string, p: BonusPeriod): Promi
         )
       )
     : [];
+  if (!opts.force) await assertOverwriteAllowed(p, evals.length);
+
   const evalsByContract = new Map<string, Array<{ employeeId: string; pct: number; grade: string | null }>>();
   for (const row of evals) {
     const cid = String(row.contract_id ?? "");

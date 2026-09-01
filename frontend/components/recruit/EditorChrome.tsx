@@ -529,6 +529,40 @@ export function EditorChrome({
   }, [selectedId, canRemove, isRepeat, ops, flushEditing]);
 
   // ── 리사이즈 핸들 드래그 ─────────────────────────────
+  /** 선택 테두리 드래그 = 블록 이동 — 총 이동량을 nudgeNode 로 커밋(0,0 복귀 시 오프셋 제거). */
+  const startDragMove = useCallback(
+    (e: React.MouseEvent) => {
+      const el = selEl();
+      if (!el || !selectedId) return;
+      e.preventDefault();
+      e.stopPropagation();
+      resizingRef.current = true;
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const startLeft = parseFloat(el.style.left) || 0;
+      const startTop = parseFloat(el.style.top) || 0;
+      let dx = 0;
+      let dy = 0;
+      const onMove = (ev: MouseEvent) => {
+        dx = ev.clientX - startX;
+        dy = ev.clientY - startY;
+        if (!el.style.position || el.style.position === "static") el.style.position = "relative";
+        el.style.left = `${Math.round(startLeft + dx)}px`;
+        el.style.top = `${Math.round(startTop + dy)}px`;
+        updateRect();
+      };
+      const onUp = () => {
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+        setTimeout(() => { resizingRef.current = false; }, 0);
+        if (dx !== 0 || dy !== 0) ops.nudgeNode(selectedId, Math.round(dx), Math.round(dy));
+      };
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+    },
+    [selEl, selectedId, ops, updateRect]
+  );
+
   const startResize = useCallback(
     (e: React.MouseEvent, mode: "e" | "s" | "se") => {
       const el = selEl();
@@ -730,9 +764,25 @@ export function EditorChrome({
               zIndex: 25,
             }}
           >
-            <div title="너비 조절" style={{ ...HANDLE, right: -6, top: "50%", marginTop: -5, cursor: "ew-resize" }} onMouseDown={(e) => startResize(e, "e")} />
-            <div title="높이 조절" style={{ ...HANDLE, bottom: -6, left: "50%", marginLeft: -5, cursor: "ns-resize" }} onMouseDown={(e) => startResize(e, "s")} />
-            <div title="크기 조절" style={{ ...HANDLE, right: -6, bottom: -6, cursor: "nwse-resize" }} onMouseDown={(e) => startResize(e, "se")} />
+            {/* 테두리 스트립 — 잡아끌면 블록 이동(문서 흐름 유지, 시각 오프셋) */}
+            {(
+              [
+                { top: -5, left: 0, right: 0, height: 8 },
+                { bottom: -5, left: 0, right: 0, height: 8 },
+                { left: -5, top: 0, bottom: 0, width: 8 },
+                { right: -5, top: 0, bottom: 0, width: 8 },
+              ] as React.CSSProperties[]
+            ).map((edge, i) => (
+              <div
+                key={i}
+                title="드래그로 위치 이동"
+                style={{ position: "absolute", ...edge, cursor: "move", pointerEvents: "auto" }}
+                onMouseDown={startDragMove}
+              />
+            ))}
+            <div title="너비 조절" style={{ ...HANDLE, right: -6, top: "50%", marginTop: -5, cursor: "ew-resize", zIndex: 1 }} onMouseDown={(e) => startResize(e, "e")} />
+            <div title="높이 조절" style={{ ...HANDLE, bottom: -6, left: "50%", marginLeft: -5, cursor: "ns-resize", zIndex: 1 }} onMouseDown={(e) => startResize(e, "s")} />
+            <div title="크기 조절" style={{ ...HANDLE, right: -6, bottom: -6, cursor: "nwse-resize", zIndex: 1 }} onMouseDown={(e) => startResize(e, "se")} />
           </div>,
           containerRef.current
         )}

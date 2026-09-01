@@ -469,7 +469,7 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
               <li><b>기호</b> — Ω 버튼으로 커서 위치에 특수기호 삽입.</li>
               <li><b>글머리</b> — 도트 넣기/빼기, ≪ ≫ 로 여백 조절.</li>
               <li><b>크기</b> — 선택 테두리의 핸들을 끌어 너비/높이 조절.</li>
-              <li><b>이동</b> — 편집 캐럿 없을 때 화살표 = 1px(Shift 8px).</li>
+              <li><b>이동</b> — 선택 테두리를 잡아 드래그, 또는 화살표 키 1px(Shift 8px).</li>
               <li><b>삭제</b> — 선택 후 Delete 또는 휴지통 버튼.</li>
               <li><b>이미지</b> — 편집 중: 커서 위치 / 블록 선택: 아래 / 선택 없음: 자유 배치(드래그 이동).</li>
               <li><b>저장</b> — 자동 저장 + 상단 버전 저장으로 스냅샷.</li>

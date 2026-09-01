@@ -5,6 +5,7 @@
 import { parseLetterHtml } from "./html-parse";
 import type { LetterBlock } from "./types";
 import {
+  COMPANY_ADDRESS,
   COMPANY_CEO,
   COMPANY_CONTACT_EMAIL,
   COMPANY_EN,
@@ -124,6 +125,8 @@ export function composeLetter(values: LetterFieldValues, doc: LetterDocSnapshot)
     contactPosition: doc.drafterPosition ?? "",
     contactPhone: values.contact_phone || COMPANY_PHONE,
     contactEmail: values.contact_email || COMPANY_CONTACT_EMAIL,
+    includeAddress: values.include_address === 1,
+    companyAddress: COMPANY_ADDRESS,
     ceoName: COMPANY_CEO,
     companyKo: COMPANY_KO,
     companyEn: COMPANY_EN,

@@ -644,6 +644,17 @@ export async function renderLetterHwpx(layout: LetterLayout, opts: HwpxRenderOpt
     xml = removeStampPicture(xml);
   }
 
+  // ── 5-9) 하단 고정부 주소 줄(선택, 2026-08-20) — '시행' 문단을 복제해 그 아래 한 줄 넣는다.
+  //   템플릿에 토큰을 새로 심지 않는 이유: 주소 표기는 켜고 끄는 값이라 문단이 있고 없고가
+  //   갈리는데, 빈 토큰만 남기면 꺼진 공문에 빈 줄이 생겨 하단부가 벌어진다.
+  if (layout.includeAddress) {
+    const issueP = findParagraphWith(xml, "{{LETTER_NO}}");
+    if (issueP) {
+      const at = xml.indexOf(issueP) + issueP.length;
+      xml = xml.slice(0, at) + setParagraphText(issueP, `주   소 : ${layout.companyAddress}`) + xml.slice(at);
+    }
+  }
+
   // ── 6) 토큰 치환 ──
   const tokens: Record<string, string> = {
     RECEIVER: layout.receiverText ?? "",

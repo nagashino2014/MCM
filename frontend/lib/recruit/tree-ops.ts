@@ -66,6 +66,65 @@ export function removeNode(root: DocNode, id: string): DocNode {
   return next;
 }
 
+/** 장식 불릿 span 판정 — 원형(border-radius 50%) + 배경색 + 자식 없음. */
+function isBulletSpan(node: DocNode | undefined): boolean {
+  if (!node || node.tag !== "span" || (node.children?.length ?? 0) > 0) return false;
+  const s = node.style ?? {};
+  return /50%|999/.test(s.borderRadius ?? "") && Boolean(s.background ?? s.backgroundColor);
+}
+
+/** 글머리 기호 토글 — 블록 첫머리에 액센트 도트를 넣거나 뺀다(템플릿 불릿과 동일한 룩). */
+export function toggleBulletNode(root: DocNode, id: string): DocNode {
+  const next = clone(root);
+  const hit = findWithParent(next, id);
+  if (!hit || hit.node.tag === "#text") return root;
+  const children = (hit.node.children ??= []);
+  if (isBulletSpan(children[0])) {
+    children.shift();
+    // 도트 뒤 공백 텍스트가 남아 있으면 앞 공백만 정리
+    if (children[0]?.tag === "#text") children[0].text = (children[0].text ?? "").replace(/^\s+/, "");
+  } else {
+    children.unshift({
+      id: genId(),
+      tag: "span",
+      style: {
+        display: "inline-block",
+        width: "5px",
+        height: "5px",
+        background: "var(--accent)",
+        borderRadius: "50%",
+        marginRight: "10px",
+        verticalAlign: "middle",
+        flexShrink: "0",
+      },
+    });
+  }
+  return next;
+}
+
+/** 지정 노드 바로 뒤에 새 노드 삽입 — 독립 이미지 블록 등. */
+export function insertNodeAfter(root: DocNode, refId: string, node: DocNode): DocNode {
+  const next = clone(root);
+  const hit = findWithParent(next, refId);
+  if (!hit || !hit.parent) return root;
+  const copy = clone(node);
+  reassignIds(copy);
+  const children = hit.parent.children!;
+  children.splice(children.indexOf(hit.node) + 1, 0, copy);
+  return next;
+}
+
+/** 블록 크기 조절 커밋 — 리사이즈 핸들 드래그 종료 시 width/height(px) 반영. */
+export function resizeNode(root: DocNode, id: string, size: { width?: number; height?: number }): DocNode {
+  const next = clone(root);
+  const hit = findWithParent(next, id);
+  if (!hit || hit.node.tag === "#text") return root;
+  const style = (hit.node.style ??= {});
+  if (size.width != null) style.width = `${Math.max(8, Math.round(size.width))}px`;
+  if (size.height != null) style.height = `${Math.max(8, Math.round(size.height))}px`;
+  return next;
+}
+
 /**
  * 위치 미세조정(nudge) — position:relative 오프셋을 px 단위로 누적.
  * 플로우 레이아웃을 유지한 채 시각 위치만 살짝 옮긴다(0,0 이 되면 오프셋 제거).

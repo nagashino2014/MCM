@@ -7,6 +7,7 @@
  *   색이 현재 액센트와 같으면 var(--accent) 로 저장해 테마 변경을 따라가게 한다.
  */
 import type { DocNode } from "./types";
+import { ALLOWED_STYLES } from "./sanitize";
 
 const INLINE_TAGS = new Set(["#text", "span", "strong", "em", "b", "i", "u", "s", "small", "br", "a", "img"]);
 
@@ -52,15 +53,24 @@ export function renderInlineHtml(nodes: DocNode[]): string {
   return out;
 }
 
-// 편집 DOM 에서 살릴 인라인 스타일 — 서식(색·굵기·기울임·밑줄·크기)과 이미지 치수만.
-const INLINE_STYLE_KEYS = ["color", "fontWeight", "fontStyle", "textDecoration", "fontSize"] as const;
-const IMG_STYLE_KEYS = ["width", "height", "maxWidth", "verticalAlign"] as const;
+const toCamel = (prop: string) => prop.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
 
-function pickStyles(el: HTMLElement, keys: readonly string[], accentHex: string): Record<string, string> | undefined {
+/**
+ * 편집 DOM 요소의 인라인 스타일을 원문 그대로 보존(화이트리스트 필터 + 액센트 정규화).
+ * CSSStyleDeclaration 순회는 shorthand 를 분해하므로 style 속성 원문을 직접 파싱한다.
+ * 서식 키만 취하면 글머리 도트 같은 장식 span(width/background 등)이 커밋 때 소실된다 — 전체 보존이 원칙.
+ */
+function pickStyles(el: HTMLElement, accentHex: string): Record<string, string> | undefined {
+  const raw = el.getAttribute("style");
+  if (!raw) return undefined;
   const style: Record<string, string> = {};
-  for (const k of keys) {
-    const v = (el.style as unknown as Record<string, string>)[k];
-    if (v) style[k] = k === "color" ? normalizeAccent(v, accentHex) : v;
+  for (const decl of raw.split(";")) {
+    const colon = decl.indexOf(":");
+    if (colon <= 0) continue;
+    const key = toCamel(decl.slice(0, colon).trim());
+    const value = decl.slice(colon + 1).trim();
+    if (!ALLOWED_STYLES.has(key) || !value) continue;
+    style[key] = key === "color" ? normalizeAccent(value, accentHex) : value;
   }
   return Object.keys(style).length > 0 ? style : undefined;
 }
@@ -106,7 +116,7 @@ export function domToInlineNodes(container: Element, accentHex: string): DocNode
     if (tag === "IMG") {
       const src = e.getAttribute("src") ?? "";
       if (/^data:image\/(png|jpe?g|gif|webp);base64,/.test(src)) {
-        acc.push({ id: genId(), tag: "img", src, style: pickStyles(e, IMG_STYLE_KEYS, accentHex) });
+        acc.push({ id: genId(), tag: "img", src, style: pickStyles(e, accentHex) });
       }
       return;
     }
@@ -118,26 +128,31 @@ export function domToInlineNodes(container: Element, accentHex: string): DocNode
       if (children.length > 0) acc.push({ id: genId(), tag: t, style, children });
     };
 
-    if (tag === "B" || tag === "STRONG") return emit("strong", pickStyles(e, INLINE_STYLE_KEYS, accentHex));
-    if (tag === "I" || tag === "EM") return emit("em", pickStyles(e, INLINE_STYLE_KEYS, accentHex));
-    if (tag === "U") return emit("u", pickStyles(e, INLINE_STYLE_KEYS, accentHex));
-    if (tag === "S" || tag === "STRIKE") return emit("s", pickStyles(e, INLINE_STYLE_KEYS, accentHex));
+    if (tag === "B" || tag === "STRONG") return emit("strong", pickStyles(e, accentHex));
+    if (tag === "I" || tag === "EM") return emit("em", pickStyles(e, accentHex));
+    if (tag === "U") return emit("u", pickStyles(e, accentHex));
+    if (tag === "S" || tag === "STRIKE") return emit("s", pickStyles(e, accentHex));
     if (tag === "A") {
       const href = e.getAttribute("href") ?? "";
-      if (children.length > 0) acc.push({ id: genId(), tag: "a", href, style: pickStyles(e, INLINE_STYLE_KEYS, accentHex), children });
+      if (children.length > 0) acc.push({ id: genId(), tag: "a", href, style: pickStyles(e, accentHex), children });
       return;
     }
     if (tag === "FONT") {
       // execCommand('foreColor') 가 만드는 레거시 <font color> 정규화
       const color = e.getAttribute("color");
-      const style = color ? { color: normalizeAccent(color, accentHex) } : pickStyles(e, INLINE_STYLE_KEYS, accentHex);
+      const style = color ? { color: normalizeAccent(color, accentHex) } : pickStyles(e, accentHex);
       if (style) return emit("span", style);
       acc.push(...children);
       return;
     }
     if (tag === "SPAN") {
-      const style = pickStyles(e, INLINE_STYLE_KEYS, accentHex);
-      if (style) return emit("span", style);
+      const style = pickStyles(e, accentHex);
+      // 글머리 도트 같은 "빈 장식 span"(width/background 등)은 자식이 없어도 보존해야
+      // 개행·수정 커밋 후에도 불릿이 사라지지 않는다.
+      if (style) {
+        acc.push({ id: genId(), tag: "span", style, children: children.length > 0 ? children : undefined });
+        return;
+      }
       acc.push(...children); // 서식 없는 span 은 평탄화
       return;
     }

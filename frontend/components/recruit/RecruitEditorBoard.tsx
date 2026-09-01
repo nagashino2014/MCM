@@ -23,18 +23,21 @@ import type { DocNode, DocTheme, RecruitPostingRow } from "@/lib/recruit/types";
 import {
   addRepeatItem,
   duplicateNode,
+  insertNodeAfter,
   moveNode,
   moveRepeatItem,
   nudgeNode,
   removeNode,
   removeRepeatItem,
   replaceNodeChildren,
+  resizeNode,
+  toggleBulletNode,
   updateNodeText,
 } from "@/lib/recruit/tree-ops";
 import { exportElementPdf, exportElementPng } from "@/lib/recruit/export";
 import { DocEditorProvider, type DocEditorCallbacks } from "./DocNodeView";
 import { DocCanvas, DocEditorStyles } from "./DocCanvas";
-import { BlockControlsOverlay, InlineToolbar } from "./EditorOverlays";
+import { EditorChrome, type ChromeOps } from "./EditorChrome";
 
 const AUTOSAVE_DELAY = 1500;
 
@@ -176,15 +179,26 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
     [editable, accentHex, applyOp]
   );
 
-  const blockOps = useMemo(
+  const chromeOps = useMemo<ChromeOps>(
     () => ({
-      addRepeatItem: (id: string) => applyOp((cur) => addRepeatItem(cur, id)),
-      removeRepeatItem: (id: string) => applyOp((cur) => removeRepeatItem(cur, id)),
-      moveRepeatItem: (id: string, dir: -1 | 1) => applyOp((cur) => moveRepeatItem(cur, id, dir)),
-      duplicateNode: (id: string) => applyOp((cur) => duplicateNode(cur, id)),
-      removeNode: (id: string) => applyOp((cur) => removeNode(cur, id)),
-      moveNode: (id: string, dir: -1 | 1) => applyOp((cur) => moveNode(cur, id, dir)),
-      nudgeNode: (id: string, dx: number, dy: number) => applyOp((cur) => nudgeNode(cur, id, dx, dy)),
+      addRepeatItem: (id) => applyOp((cur) => addRepeatItem(cur, id)),
+      removeRepeatItem: (id) => applyOp((cur) => removeRepeatItem(cur, id)),
+      moveRepeatItem: (id, dir) => applyOp((cur) => moveRepeatItem(cur, id, dir)),
+      duplicateNode: (id) => applyOp((cur) => duplicateNode(cur, id)),
+      removeNode: (id) => applyOp((cur) => removeNode(cur, id)),
+      moveNode: (id, dir) => applyOp((cur) => moveNode(cur, id, dir)),
+      nudgeNode: (id, dx, dy) => applyOp((cur) => nudgeNode(cur, id, dx, dy)),
+      resizeNode: (id, size) => applyOp((cur) => resizeNode(cur, id, size)),
+      toggleBullet: (id) => applyOp((cur) => toggleBulletNode(cur, id)),
+      insertImageBlock: (refId, dataUri) =>
+        applyOp((cur) =>
+          insertNodeAfter(cur, refId, {
+            id: "tmp",
+            tag: "img",
+            src: dataUri,
+            style: { display: "block", width: "160px", maxWidth: "100%" },
+          })
+        ),
     }),
     [applyOp]
   );
@@ -309,8 +323,19 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
         }
       />
 
-      <div className="flex gap-5 items-start flex-1 min-h-0">
-        {/* 문서 캔버스 — 데스크 배경 위 실제 크기 문서 + 편집 오버레이(블록 컨트롤·서식 툴바) */}
+      <div className="flex gap-4 items-start flex-1 min-h-0">
+        {/* 좌측 고정 도구 바 — 블록/텍스트 선택 시 해당 도구가 활성화된다 */}
+        {editable && tree && (
+          <EditorChrome
+            containerRef={scrollRef}
+            tree={tree}
+            ctx={callbacks}
+            ops={chromeOps}
+            onError={(m) => toast(m, "error")}
+          />
+        )}
+
+        {/* 문서 캔버스 — 데스크 배경 위 실제 크기 문서 */}
         <div
           ref={scrollRef}
           className="flex-1 overflow-auto rounded-2xl border cd-border-c relative"
@@ -330,12 +355,6 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
               </div>
             )}
           </div>
-          {editable && tree && (
-            <>
-              <BlockControlsOverlay containerRef={scrollRef} tree={tree} ops={blockOps} />
-              <InlineToolbar containerRef={scrollRef} ctx={callbacks} onError={(m) => toast(m, "error")} />
-            </>
-          )}
         </div>
 
         {/* 우측 설정 패널 */}
@@ -434,10 +453,11 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
           </div>
 
           <div className="border-t cd-border-c pt-4 text-[11px] leading-relaxed cd-text-faint">
-            문단을 클릭해 바로 수정하고, <b>Enter</b> 로 줄을 바꿉니다. 드래그로 선택하면 굵게·밑줄·
-            액센트 강조·이미지 삽입 툴바가 나타나고, 문단·항목에 마우스를 올리면 복제·이동·삭제
-            버튼이 나타납니다. 변경사항은 자동 저장되며, 중요한 시점엔 상단의 <b>버전 저장</b>으로
-            스냅샷을 남기세요.
+            블록을 <b>클릭해 선택</b>하면 왼쪽 도구 바에서 해당 기능이 활성화됩니다. 텍스트는 클릭해
+            바로 수정(<b>Enter</b> 줄바꿈), 드래그 선택 후 굵게·액센트 강조. 선택 테두리의 핸들을
+            끌면 <b>너비/높이 조절</b>, 편집 캐럿이 없을 때 <b>화살표 키 = 1px 이동</b>(Shift 8px),
+            <b>Delete = 삭제</b>. 이미지는 클릭하면 크기·좌우 배치 도구가 나타납니다. 변경사항은
+            자동 저장되며, 중요한 시점엔 상단의 <b>버전 저장</b>으로 스냅샷을 남기세요.
           </div>
 
           <CdButton variant="ghost" size="sm" onClick={() => router.push("/admin/recruit")}>

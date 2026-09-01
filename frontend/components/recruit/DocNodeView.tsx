@@ -99,7 +99,13 @@ function ElementNodeView({ node }: { node: DocNode }) {
 
   if (node.tag === "br" || node.tag === "hr") return createElement(node.tag);
   if (node.tag === "img") {
-    return createElement("img", { src: node.src, style: node.style as CSSProperties | undefined, alt: "" });
+    // 독립 이미지 블록 — 편집 모드에선 선택 대상(data-rcid)이 되어 크기조절·이동·삭제 가능.
+    return createElement("img", {
+      src: node.src,
+      style: node.style as CSSProperties | undefined,
+      alt: "",
+      ...(editable ? { "data-rcid": node.id } : {}),
+    });
   }
   if (editable && isInlineBlock(node)) return <InlineBlockView node={node} />;
 

@@ -21,7 +21,8 @@ const IMG_SRC_RE = /^data:image\/(png|jpe?g|gif|webp);base64,[A-Za-z0-9+/=]+$/;
 const MAX_IMG_SRC = 1_000_000; // base64 기준 약 730KB 원본
 
 // camelCase 스타일 키 화이트리스트 — 레이아웃·타이포·장식 전반. (position:fixed 는 값에서 차단)
-const ALLOWED_STYLES = new Set([
+// inline.ts(편집 DOM 역파싱)도 같은 기준으로 필터한다.
+export const ALLOWED_STYLES = new Set([
   "display", "flexDirection", "flexWrap", "flex", "flexShrink", "flexGrow", "alignItems",
   "alignSelf", "justifyContent", "gap", "rowGap", "columnGap",
   "gridTemplateColumns", "gridTemplateRows", "gridColumn", "gridRow", "placeItems",
@@ -38,6 +39,7 @@ const ALLOWED_STYLES = new Set([
   "position", "top", "right", "bottom", "left", "zIndex", "transform",
   "flexBasis", "textOverflow", "borderTopLeftRadius", "borderTopRightRadius",
   "borderBottomLeftRadius", "borderBottomRightRadius", "aspectRatio", "textIndent",
+  "float", "clear", "objectFit",
 ]);
 
 const MAX_NODES = 5000;

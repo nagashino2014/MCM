@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
   MCM 스테이징 converter(문서 변환) 재배포 — 이미지 빌드 → ECR 푸시 → 태스크 정의 새 리비전 → 서비스 갱신.

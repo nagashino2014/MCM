@@ -10,7 +10,27 @@
 
 import { createContext, createElement, useContext, type CSSProperties, type ReactNode } from "react";
 import type { DocNode } from "@/lib/recruit/types";
-import { domToInlineNodes, isInlineBlock, renderInlineHtml } from "@/lib/recruit/inline";
+import { domToInlineNodes, isInlineBlock, isInlineNode, renderInlineHtml } from "@/lib/recruit/inline";
+
+/**
+ * 필(pill) 배지 렌더 방어 — 인라인 내용만 담은 둥근 배지는 줄바꿈되면 항상 깨진다.
+ * PNG/PDF 캡처(SVG 직렬화)는 텍스트 폭이 화면과 서브픽셀 수준으로 달라질 수 있어,
+ * 여유가 몇 px 뿐인 배지가 캡처에서만 줄바꿈되는 사고("경력직 채용")가 난다.
+ * 저장된 트리를 고치는 대신 렌더 시점에 nowrap 을 보강한다(기존 공고 데이터에도 즉시 적용).
+ */
+function pillSafeStyle(node: DocNode): CSSProperties | undefined {
+  const style = node.style;
+  if (
+    style &&
+    /999|9999px/.test(style.borderRadius ?? "") &&
+    !style.whiteSpace &&
+    (node.children?.length ?? 0) > 0 &&
+    node.children!.every(isInlineNode)
+  ) {
+    return { ...style, whiteSpace: "nowrap" } as CSSProperties;
+  }
+  return style as CSSProperties | undefined;
+}
 
 export interface DocEditorCallbacks {
   editable: boolean;
@@ -69,7 +89,7 @@ function InlineBlockView({ node }: { node: DocNode }) {
   const ctx = useContext(DocEditorContext)!;
   const html = renderInlineHtml(node.children ?? []);
   return createElement(node.tag, {
-    style: node.style as CSSProperties | undefined,
+    style: pillSafeStyle(node),
     className: "rc-inline-block",
     "data-rcid": node.id,
     contentEditable: true,
@@ -109,7 +129,7 @@ function ElementNodeView({ node }: { node: DocNode }) {
   }
   if (editable && isInlineBlock(node)) return <InlineBlockView node={node} />;
 
-  const props: Record<string, unknown> = { style: node.style as CSSProperties | undefined };
+  const props: Record<string, unknown> = { style: pillSafeStyle(node) };
   if (editable && controlKind(node)) props["data-rcid"] = node.id;
   if (node.tag === "a") {
     props.href = node.href ?? "#";

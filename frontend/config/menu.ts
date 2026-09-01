@@ -12,6 +12,7 @@ import {
   Wallet,
   Building2,
   Users as UsersIcon,
+  UserPlus,
   BookUser,
   Megaphone,
   CalendarDays,
@@ -271,6 +272,18 @@ export const MENU_ITEMS: MenuItem[] = [
     title: "회사 프로필 관리",
     href: "/admin/company-profile",
     icon: Building2,
+    minRole: "admin",
+    group: "system",
+  },
+  // 홍보·채용공고 — 클로드 디자인 핸드오프 템플릿 기반 채용공고 편집기(마이그 212, recruit.*).
+  {
+    title: "홍보·채용공고",
+    href: "/admin/recruit",
+    icon: UserPlus,
+    submenu: [
+      { title: "채용 공고 관리", href: "/admin/recruit" },
+      { title: "템플릿 관리", href: "/admin/recruit/templates" },
+    ],
     minRole: "admin",
     group: "system",
   },

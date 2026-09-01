@@ -250,9 +250,10 @@ const kdate = (iso: string | null): string => {
 async function buildHrCertificatePdf(kind: "employment" | "career", data: EmployeeCertData, issue: CertificateIssueRow): Promise<Buffer> {
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
+  // 회사 서식이 휴먼명조라 폴백 렌더도 명조 계열(KoPub 바탕)로 맞춘다(2026-09-01).
   const fontsDir = path.join(process.cwd(), "public", "fonts");
-  const regular = await pdf.embedFont(await readFile(path.join(fontsDir, "malgun.ttf")), { subset: true });
-  const bold = await pdf.embedFont(await readFile(path.join(fontsDir, "malgunbd.ttf")), { subset: true });
+  const regular = await pdf.embedFont(await readFile(path.join(fontsDir, "kopub-batang-md.ttf")), { subset: true });
+  const bold = await pdf.embedFont(await readFile(path.join(fontsDir, "kopub-batang-bd.ttf")), { subset: true });
   const page = pdf.addPage([PAGE_W, PAGE_H]);
   const title = kind === "employment" ? "재 직 증 명 서" : "경 력 증 명 서";
 

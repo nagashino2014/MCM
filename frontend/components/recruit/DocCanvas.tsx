@@ -17,8 +17,11 @@ export const DocCanvas = forwardRef<HTMLDivElement, { tree: DocNode; theme: DocT
     const vars = buildDocCssVars(theme) as CSSProperties;
     return (
       <div ref={ref} data-rc-doc style={{ ...vars, width }}>
-        {/* React 19 가 head 로 호이스팅한다 — 같은 href 는 중복 로드되지 않는다. */}
-        <link rel="stylesheet" href={PRETENDARD_CSS} precedence="default" />
+        {/* React 19 가 head 로 호이스팅한다 — 같은 href 는 중복 로드되지 않는다.
+            crossOrigin: CORS 모드로 로드해야 PNG/PDF 캡처(html-to-image)가 이 시트의 @font-face 를
+            읽어 폰트를 임베드할 수 있다. 없으면 폴백 폰트로 캡처되어 글자 폭이 달라지고
+            "경력직 채용" 배지처럼 여유 없는 요소가 줄바꿈되는 캔버스↔출력 불일치가 생긴다. */}
+        <link rel="stylesheet" href={PRETENDARD_CSS} precedence="default" crossOrigin="anonymous" />
         <DocNodeView node={tree} />
       </div>
     );

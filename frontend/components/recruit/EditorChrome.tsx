@@ -632,8 +632,9 @@ export function EditorChrome({
   return (
     <>
       {/* 좌측 고정 도구 바 */}
+      {/* z-30: 기호 팔레트(absolute)가 뒤 형제인 캔버스 컨테이너에 가려지지 않게 도구 바를 위 레이어로 */}
       <aside
-        className="w-12 shrink-0 rounded-2xl border cd-border-c cd-card-bg p-1.5 flex flex-col items-center sticky top-6 self-start relative"
+        className="w-12 shrink-0 rounded-2xl border cd-border-c cd-card-bg p-1.5 flex flex-col items-center sticky top-6 self-start relative z-30"
         style={{ boxShadow: "var(--cd-shadow)" }}
       >
         <ToolBtn icon={<Bold className="w-4 h-4" />} title="굵게 (텍스트 선택 후)" disabled={!textToolsOn} onClick={() => exec("bold")} />

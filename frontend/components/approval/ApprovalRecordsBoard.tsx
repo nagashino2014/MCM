@@ -52,8 +52,13 @@ interface RecordRow {
 
 const short = (s: string | null) => (s ? s.slice(0, 10) : "-");
 
-/** 필드 값 평탄화 — 타입별 표시 문자열(테이블·CSV 공용) */
-function flatten(field: ApprovalFieldDef, value: unknown, leaveCatalog: LeaveTypeItem[]): string {
+/** 필드 값 평탄화 — 타입별 표시 문자열(테이블·CSV 공용). assetNames = assetId→현재 자산명(차종명) */
+function flatten(
+  field: ApprovalFieldDef,
+  value: unknown,
+  leaveCatalog: LeaveTypeItem[],
+  assetNames: Map<string, string>
+): string {
   if (value == null) return "";
   switch (field.type) {
     case "multitext": {
@@ -70,10 +75,17 @@ function flatten(field: ApprovalFieldDef, value: unknown, leaveCatalog: LeaveTyp
       return timeRangeText(value);
     case "checkbox":
       return Array.isArray(value) ? value.map(String).join(", ") : String(value);
-    case "user_select": {
+    case "user_select":
+    case "contact_select": {
       const arr = Array.isArray(value) ? value : [value];
       return arr
-        .map((p) => (p && typeof p === "object" ? String((p as { name?: string }).name ?? "") : String(p ?? "")))
+        .map((p) => {
+          if (p && typeof p === "object") {
+            const o = p as { name?: string; title?: string; facilityName?: string };
+            return [o.facilityName, o.name, o.title].filter(Boolean).join(" ");
+          }
+          return String(p ?? "");
+        })
         .filter(Boolean)
         .join(", ");
     }
@@ -84,6 +96,16 @@ function flatten(field: ApprovalFieldDef, value: unknown, leaveCatalog: LeaveTyp
     case "contract_select": {
       const v = value as { title?: string; manual?: boolean };
       return v && typeof v === "object" ? `${v.title ?? ""}${v.manual ? " (직접입력)" : ""}` : String(value);
+    }
+    case "asset_select": {
+      // 자산 선택 값은 {assetId,name} — 자산관리에 등록된 이름(차량은 차종명)을 표시한다.
+      // (구버전 select 시절 문자열 값 호환. 서버판 doc-pdf.ts flattenValue 와 동일 규칙)
+      if (value && typeof value === "object") {
+        const v = value as { name?: string; assetId?: string };
+        const current = v.assetId ? assetNames.get(String(v.assetId)) : undefined;
+        return String(current ?? v.name ?? v.assetId ?? "");
+      }
+      return String(value);
     }
     case "leave_type": {
       const it = findInCatalog(leaveCatalog, value);
@@ -103,6 +125,13 @@ function flatten(field: ApprovalFieldDef, value: unknown, leaveCatalog: LeaveTyp
       return `${rows.length}행`;
     }
     default:
+      // 객체 값을 가진 필드가 타입 변경 등으로 여기 떨어져도 [object Object] 로 새지 않게 한다.
+      if (typeof value === "object") {
+        const o = value as Record<string, unknown>;
+        const label = o.name ?? o.title ?? o.label ?? o.text;
+        if (label != null) return String(label);
+        return Array.isArray(value) ? value.map(String).join(", ") : JSON.stringify(value);
+      }
       return String(value);
   }
 }
@@ -122,6 +151,7 @@ export function ApprovalRecordsBoard() {
   const [loading, setLoading] = useState(false);
   const [detailDocId, setDetailDocId] = useState<string | null>(null);
   const [leaveCatalog, setLeaveCatalog] = useState<LeaveTypeItem[]>([]);
+  const [assetNames, setAssetNames] = useState<Map<string, string>>(new Map());
   const [letters, setLetters] = useState<OfficialLetterRow[]>([]);
   const [lettersLoading, setLettersLoading] = useState(false);
   const [quotes, setQuotes] = useState<QuotationRow[]>([]);
@@ -138,6 +168,16 @@ export function ApprovalRecordsBoard() {
     fetch("/api/approval/leave-types", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => d?.types && setLeaveCatalog(d.types))
+      .catch(() => {});
+    // asset_select 열(이용차량 등)은 문서에 저장된 이름 스냅샷 대신 자산관리의 현재 이름을 보여준다.
+    fetch("/api/assets", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!Array.isArray(d?.assets)) return;
+        setAssetNames(
+          new Map((d.assets as Array<{ assetId: string; name: string }>).map((a) => [String(a.assetId), String(a.name)]))
+        );
+      })
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -232,10 +272,10 @@ export function ApprovalRecordsBoard() {
       d.deptName ?? "",
       short(d.submittedAt),
       DOC_STATUS_LABEL[d.status] ?? d.status,
-      ...fields.map((f) => flatten(f, d.fieldValues[f.key], leaveCatalog)),
+      ...fields.map((f) => flatten(f, d.fieldValues[f.key], leaveCatalog, assetNames)),
     ]);
     return [head, ...lines].map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\r\n");
-  }, [docs, fields, leaveCatalog]);
+  }, [docs, fields, leaveCatalog, assetNames]);
 
   const download = () => {
     const formName = forms.find((f) => f.formId === formId)?.name ?? "양식";
@@ -398,8 +438,8 @@ export function ApprovalRecordsBoard() {
                       </span>
                     </td>
                     {fields.map((f) => (
-                      <td key={f.key} className="py-2 pr-3 cd-text max-w-[260px] overflow-hidden text-ellipsis" title={flatten(f, d.fieldValues[f.key], leaveCatalog)}>
-                        {flatten(f, d.fieldValues[f.key], leaveCatalog) || <span className="cd-text-faint">-</span>}
+                      <td key={f.key} className="py-2 pr-3 cd-text max-w-[260px] overflow-hidden text-ellipsis" title={flatten(f, d.fieldValues[f.key], leaveCatalog, assetNames)}>
+                        {flatten(f, d.fieldValues[f.key], leaveCatalog, assetNames) || <span className="cd-text-faint">-</span>}
                       </td>
                     ))}
                   </tr>

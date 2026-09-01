@@ -20,6 +20,8 @@ export interface StatementPdfInput {
   totalAmount: number;
   /** 참여인력 용역별 내역 (없으면 섹션 생략) */
   lines: Array<{ title: string; issuedDates: string; amount: number }>;
+  /** 인건비 반영 산정(BS-P4) 차감 내역 — 있으면 용역별 표 하단에 차감·차감 후 행을 덧붙인다 */
+  salaryDeduction?: { salaryTotal: number; multiplier: number; deducted: number } | null;
   /** 부서장 본부별 내역 (없으면 섹션 생략) */
   deptHeadRows: Array<{ deptName: string; gross: number; ratePct: number; amount: number }>;
 }
@@ -230,6 +232,8 @@ export async function renderStatementPdf(input: StatementPdfInput): Promise<Uint
     aligns: Array<"center" | "left" | "right">;
     rows: string[][];
     totalRow: string[];
+    /** 합계 행 뒤에 붙는 추가 강조 행(인건비 차감 등) */
+    extraRows?: string[][];
   }
   const tables: TableSpec[] = [];
   if (input.lines.length) {
@@ -240,6 +244,22 @@ export async function renderStatementPdf(input: StatementPdfInput): Promise<Uint
       aligns: ["center", "left", "center", "right"],
       rows: input.lines.map((l, i) => [String(i + 1), l.title, l.issuedDates, fmt(l.amount)]),
       totalRow: ["", "합계", "", fmt(input.lines.reduce((a, b) => a + b.amount, 0))],
+      extraRows: input.salaryDeduction
+        ? [
+            [
+              "",
+              `인건비 차감 (반기 인건비 ${fmt(input.salaryDeduction.salaryTotal)}원 × ${input.salaryDeduction.multiplier})`,
+              "",
+              `- ${fmt(input.salaryDeduction.deducted)}`,
+            ],
+            [
+              "",
+              "차감 후 지급액",
+              "",
+              fmt(Math.max(0, input.lines.reduce((a, b) => a + b.amount, 0) - input.salaryDeduction.deducted)),
+            ],
+          ]
+        : undefined,
     });
   }
   if (input.deptHeadRows.length) {
@@ -280,6 +300,7 @@ export async function renderStatementPdf(input: StatementPdfInput): Promise<Uint
     let hLines: number[] = [tableTop, y];
     const allRows = spec.rows.map((r) => ({ cells: r, total: false }));
     allRows.push({ cells: spec.totalRow, total: true });
+    for (const extra of spec.extraRows ?? []) allRows.push({ cells: extra, total: true });
     for (const row of allRows) {
       if (y - ROW_H < bottomLimit) {
         drawGrid(page, xs, tableTop, y, hLines);

@@ -13,9 +13,14 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const p = parsePeriod(String(body?.period ?? ""));
     if (!p) return NextResponse.json({ error: "period 형식은 YYYY-H1/H2 입니다." }, { status: 400 });
-    const summary = await calculateBonus(ctx.userId, p);
+    const summary = await calculateBonus(ctx.userId, p, { force: Boolean(body?.force) });
     return NextResponse.json({ ok: true, summary });
   } catch (err) {
+    // 덮어쓰기 가드(409) — 화면에서 확인 후 force 로 재요청한다.
+    const e = err as { status?: number; needsForce?: boolean; message?: string };
+    if (e?.status === 409) {
+      return NextResponse.json({ error: e.message, needsForce: true }, { status: 409 });
+    }
     return authErrorToResponse(err);
   }
 }

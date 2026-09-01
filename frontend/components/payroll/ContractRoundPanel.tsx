@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, RefreshCw, Send, Trash2, X } from "lucide-react";
+import { CheckCircle2, ExternalLink, RefreshCw, Send, Trash2, X } from "lucide-react";
 
 /**
  * 근로계약서 작성/갱신 패널 (PL-P3, UI 컨셉 PDF §1-3)
@@ -32,9 +32,11 @@ interface RoundRow {
   scope: string;
   status: string;
   approvalDocId: string | null;
+  approvalDocNo: string | null;
   contractCount: number;
   signedCount: number;
   sentCount: number;
+  employeeNames: string[];
 }
 
 interface PromotionCtx {
@@ -52,6 +54,13 @@ const STATUS_LABELS: Record<string, string> = {
   sent: "발송됨",
   closed: "마감",
 };
+
+/** 진행 현황 카드의 대상자 표기 — 3명까지 나열, 초과분은 '외 N명'(전체는 title 툴팁) */
+function targetText(names: string[], count: number): string {
+  if (!names.length) return `${count}명`;
+  if (names.length <= 3) return names.join(", ");
+  return `${names.slice(0, 3).join(", ")} 외 ${names.length - 3}명`;
+}
 
 /** 미리보기 '예외' 체크 인원의 개인별 산정 입력(§4-2 예외 산정 모달) */
 interface ClientOverride {
@@ -464,16 +473,32 @@ export default function ContractRoundPanel({
               >
                 {r.roundKind === "annual" ? "일괄" : "승진"}
               </span>
-              <div className="min-w-0">
-                <p className="cd-text font-semibold">
-                  {r.baseDate} 기준 · {r.contractCount}명
+              <div className="min-w-0 flex-1">
+                <p className="cd-text font-semibold truncate" title={r.employeeNames.join(", ")}>
+                  {r.baseDate} 기준 · {targetText(r.employeeNames, r.contractCount)}
+                  <span className="cd-text-faint font-normal"> ({r.contractCount}명)</span>
                   {r.roundKind === "annual" && r.cpiRate != null && (
                     <span className="cd-text-faint font-normal"> · {r.cpiRate}%+{r.extraRate ?? 0}%</span>
                   )}
                 </p>
-                <p className="text-[11px] cd-text-faint">
-                  {STATUS_LABELS[r.status] ?? r.status}
-                  {r.sentCount > 0 && ` · 서명 ${r.signedCount}/${r.sentCount}`}
+                <p className="text-[11px] cd-text-faint flex items-center gap-1.5 flex-wrap">
+                  <span>
+                    {STATUS_LABELS[r.status] ?? r.status}
+                    {r.sentCount > 0 && ` · 서명 ${r.signedCount}/${r.sentCount}`}
+                  </span>
+                  {r.approvalDocId && (
+                    <a
+                      href={`/approval?docId=${encodeURIComponent(r.approvalDocId)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-0.5 font-semibold"
+                      style={{ color: "var(--cd-primary)" }}
+                      title="전자결재 문서 열기"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                      {r.approvalDocNo ?? "결재 문서"}
+                    </a>
+                  )}
                 </p>
               </div>
               <div className="ml-auto flex items-center gap-1.5">

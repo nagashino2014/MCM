@@ -13,9 +13,14 @@ import { COMPANY_KO, COMPANY_CEO, COMPANY_ADDRESS, COMPANY_BIZ_NO } from "@/lib/
 import type { ActionConnector } from "@/lib/approval/actions";
 
 /*
- * 증명서 발급 파이프라인(FRM-P2, 204) — 증명신청서 승인 → 종류별 발급 대기(certificate_issues) →
- * 재직·경력증명서는 인사 데이터 자동 기입 PDF(직인 포함) 생성, 갑종근로소득세 납세증명·원천징수영수증은
- * 스캔 PDF 에 직인을 얹은 직인본 생성 → 발급 완료 시 기안자 개인문서함으로 전송 + 이력 기록.
+ * 증명서 발급 파이프라인(FRM-P2, 204) — 증명신청서 승인 → 종류별 발급 대기(certificate_issues) 생성 후
+ * 승인 액션에서 곧바로 자동 발급까지 시도한다(2026-08-31: 승인만 되고 파일이 안 생기던 문제 —
+ * 담당자 수동 발급 대기 구조를 자동 발급으로 전환).
+ *  - 재직·경력증명서: 회사 HWPX 서식 채움 → converter 로 PDF 변환 → 직인 날인 → 기안자 개인문서함 전송.
+ *  - 원천징수영수증: 앱 보유 연말정산 PDF(yearend_settlements)가 있으면 직인본 자동 생성·전송.
+ *  - 갑종근로소득세 납세증명(및 연말정산 PDF 없는 원천징수영수증): 스캔 PDF 업로드가 필요해 발급 대기로 남고,
+ *    /approval/certificates 발급 관리 화면에서 담당자가 스캔본을 올려 직인본을 만든다.
+ * 자동 발급 실패 건도 발급 대기로 남아 같은 화면에서 수동 처리(재생성) 가능 — 실패 사유는 액션 로그에 남는다.
  */
 
 export const CERT_KINDS = [
@@ -78,7 +83,35 @@ export const queueCertificatesConnector: ActionConnector = {
         created += 1;
       }
     });
-    return { detail: `발급 대기 ${created}건 생성(${kinds.map(certLabel).join(", ")})`, result: { kinds } };
+    // 대기 생성 직후 자동 발급 — 실패해도 대기 항목은 남아 발급 관리 화면에서 수동 처리한다.
+    // 재실행(rerunFormActions) 시 이미 발급·전달된 항목은 status 가드로 건너뛴다(멱등).
+    const actor = ctx.drafterUserId ?? "system";
+    const outcomes: string[] = [];
+    for (const kind of kinds) {
+      const issue = await getIssueByDocKind(ctx.docId, kind);
+      if (!issue || issue.status !== "pending") continue;
+      const label = certLabel(kind);
+      try {
+        if (issue.auto) {
+          await issueAutoCertificate(issue.issueId, actor);
+          await deliverCertificate(issue.issueId);
+          outcomes.push(`${label} 자동 발급·개인문서함 전송`);
+        } else if (kind === "withholding") {
+          const issued = await issueWithholdingFromYearend(issue.issueId, actor);
+          if (issued) {
+            await deliverCertificate(issue.issueId);
+            outcomes.push(`${label} 연말정산 PDF 직인본 발급·전송`);
+          } else {
+            outcomes.push(`${label} 대기(연말정산 PDF 없음 — 스캔 업로드 필요)`);
+          }
+        } else {
+          outcomes.push(`${label} 대기(스캔 PDF 업로드 필요)`);
+        }
+      } catch (err) {
+        outcomes.push(`${label} 자동 발급 실패: ${err instanceof Error ? err.message : String(err)} — 발급 관리에서 수동 처리`);
+      }
+    }
+    return { detail: `발급 대기 ${created}건 생성 — ${outcomes.join(" / ") || kinds.map(certLabel).join(", ")}`, result: { kinds } };
   },
 };
 
@@ -147,6 +180,13 @@ export async function getCertificateIssue(issueId: string): Promise<CertificateI
   return rows.length ? mapIssue(rows[0]) : null;
 }
 
+/** 문서+종류로 발급 항목 조회 — 승인 액션의 자동 발급이 방금 만든(또는 기존) 행을 집는다. */
+async function getIssueByDocKind(docId: string, kind: CertKind): Promise<CertificateIssueRow | null> {
+  const db = await getDb();
+  const rows = rowsToObjects(await db.exec(`SELECT * FROM certificate_issues WHERE doc_id = $1 AND cert_kind = $2`, [docId, kind]));
+  return rows.length ? mapIssue(rows[0]) : null;
+}
+
 /* ---------- 재직·경력증명서 PDF ---------- */
 
 const PAGE_W = 595.28;
@@ -210,9 +250,10 @@ const kdate = (iso: string | null): string => {
 async function buildHrCertificatePdf(kind: "employment" | "career", data: EmployeeCertData, issue: CertificateIssueRow): Promise<Buffer> {
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
+  // 회사 서식이 휴먼명조라 폴백 렌더도 명조 계열(KoPub 바탕)로 맞춘다(2026-09-01).
   const fontsDir = path.join(process.cwd(), "public", "fonts");
-  const regular = await pdf.embedFont(await readFile(path.join(fontsDir, "malgun.ttf")), { subset: true });
-  const bold = await pdf.embedFont(await readFile(path.join(fontsDir, "malgunbd.ttf")), { subset: true });
+  const regular = await pdf.embedFont(await readFile(path.join(fontsDir, "kopub-batang-md.ttf")), { subset: true });
+  const bold = await pdf.embedFont(await readFile(path.join(fontsDir, "kopub-batang-bd.ttf")), { subset: true });
   const page = pdf.addPage([PAGE_W, PAGE_H]);
   const title = kind === "employment" ? "재 직 증 명 서" : "경 력 증 명 서";
 
@@ -379,8 +420,10 @@ export async function issueAutoCertificate(issueId: string, actorUserId: string)
   const hwpx = await buildCertificateHwpx(kind, data, issue);
   const hwpxName = sanitizeFilename(`${issue.certLabel}_${issue.employeeName ?? ""}.hwpx`);
   const converted = await convertHwpxToPdf(hwpx, hwpxName);
+  // 회사 서식 HWPX 에는 (인) 위 직인 이미지가 이미 들어 있다(BinData) — 변환본에 추가 날인하면
+  // 우하단에 직인이 중복으로 찍히므로 변환본은 그대로 쓴다(2026-08-31 변환 실측).
   const pdf = converted
-    ? await stampScannedPdf(Buffer.from(converted)) // 변환본 우하단 (인) 자리에 직인
+    ? Buffer.from(converted)
     : await buildHrCertificatePdf(kind, data, issue); // 폴백 렌더(자체 직인 포함)
 
   await saveIssueFile(issue, Buffer.from(pdf), actorUserId);
@@ -399,6 +442,24 @@ export async function issueStampedCertificate(issueId: string, actorUserId: stri
   const stamped = await stampScannedPdf(scanned);
   await saveIssueFile(issue, stamped, actorUserId);
   return (await getCertificateIssue(issueId))!;
+}
+
+/** 원천징수영수증 자동 경로 — 앱 보유 연말정산 PDF(yearend_settlements.pdf_key)에 직인을 얹어 발급.
+ *  해당 귀속연도 PDF 가 없으면 null(호출부가 스캔 업로드 안내 — 발급 대기 유지). */
+export async function issueWithholdingFromYearend(issueId: string, actorUserId: string): Promise<CertificateIssueRow | null> {
+  const issue = await getCertificateIssue(issueId);
+  if (!issue) throw new Error("발급 항목을 찾을 수 없습니다.");
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT pdf_key FROM yearend_settlements WHERE employee_id = $1 AND target_year = $2 AND pdf_key IS NOT NULL ORDER BY target_year DESC LIMIT 1`,
+      [issue.employeeId, Number(issue.targetYear ?? "") || new Date().getFullYear() - 1]
+    )
+  );
+  const pdfKey = rows.length && rows[0].pdf_key != null ? String(rows[0].pdf_key) : null;
+  const buf = pdfKey ? await readContractDocument(pdfKey) : null;
+  if (!buf) return null;
+  return await issueStampedCertificate(issueId, actorUserId, buf);
 }
 
 /** 발급본을 기안자 개인문서함으로 전송 + delivered 처리. */

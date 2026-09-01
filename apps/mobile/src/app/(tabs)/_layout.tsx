@@ -22,8 +22,14 @@ function TabBadge({ count }: { count?: number | null }) {
   );
 }
 
-/** 데스크탑 위젯·웹 데모 여부 — 탭 바를 좌측 세로 바로 바꾸는 기준. */
-const IS_WEB = Platform.OS === 'web';
+/** 폰 목업 데모(m-demo.html) 여부 — 부모 iframe 이 name="mcm-phone-demo" 로 자신을 밝힌다.
+ *  window.name 은 SPA 네비게이션·리로드에도 유지되므로 첫 렌더에 동기 판정할 수 있다. */
+const IS_PHONE_DEMO =
+  Platform.OS === 'web' && typeof window !== 'undefined' && window.name === 'mcm-phone-demo';
+
+/** 데스크탑 위젯·브라우저 미리보기 여부 — 탭 바를 좌측 세로 바로 바꾸는 기준.
+ *  폰 목업 데모는 390px 좁은 화면이라 네이티브와 같은 하단 탭으로 렌더한다(88px 좌측 바가 콘텐츠를 짜부라뜨림). */
+const IS_WEB = Platform.OS === 'web' && !IS_PHONE_DEMO;
 
 export default function TabsLayout() {
   const { c } = useTheme();

@@ -30,6 +30,82 @@ export function findNode(root: DocNode, id: string): DocNode | null {
   return findWithParent(root, id)?.node ?? null;
 }
 
+export function findParent(root: DocNode, id: string): DocNode | null {
+  return findWithParent(root, id)?.parent ?? null;
+}
+
+/** 문단 블록 편집 커밋 — 해당 노드의 자식만 통째로 교체(노드 자체의 스타일·그룹 마킹은 유지). */
+export function replaceNodeChildren(root: DocNode, id: string, children: DocNode[]): DocNode {
+  const next = clone(root);
+  const hit = findWithParent(next, id);
+  if (!hit || hit.node.tag === "#text") return root;
+  hit.node.children = children.length > 0 ? children.map((c) => clone(c)) : undefined;
+  return next;
+}
+
+/** 범용 블록 복제 — 반복 그룹이 아니어도 임의의 블록을 같은 서식으로 바로 뒤에 복제. */
+export function duplicateNode(root: DocNode, id: string): DocNode {
+  const next = clone(root);
+  const hit = findWithParent(next, id);
+  if (!hit || !hit.parent) return root;
+  const children = hit.parent.children!;
+  const copy = clone(hit.node);
+  reassignIds(copy);
+  // 반복 그룹 항목을 이 경로로 복제하면 그룹 카운트가 늘어나는 건 동일하므로 마킹은 유지한다.
+  children.splice(children.indexOf(hit.node) + 1, 0, copy);
+  return next;
+}
+
+/** 범용 블록 삭제 — 루트는 불가. */
+export function removeNode(root: DocNode, id: string): DocNode {
+  const next = clone(root);
+  const hit = findWithParent(next, id);
+  if (!hit || !hit.parent) return root;
+  const children = hit.parent.children!;
+  children.splice(children.indexOf(hit.node), 1);
+  return next;
+}
+
+/**
+ * 위치 미세조정(nudge) — position:relative 오프셋을 px 단위로 누적.
+ * 플로우 레이아웃을 유지한 채 시각 위치만 살짝 옮긴다(0,0 이 되면 오프셋 제거).
+ */
+export function nudgeNode(root: DocNode, id: string, dx: number, dy: number): DocNode {
+  const next = clone(root);
+  const hit = findWithParent(next, id);
+  if (!hit || !hit.parent || hit.node.tag === "#text") return root;
+  const style = (hit.node.style ??= {});
+  const px = (v: string | undefined) => {
+    const m = /^(-?\d+(?:\.\d+)?)px$/.exec(v ?? "");
+    return m ? Number(m[1]) : 0;
+  };
+  const left = px(style.left) + dx;
+  const top = px(style.top) + dy;
+  if (left === 0 && top === 0 && (style.position === "relative" || !style.position)) {
+    delete style.left;
+    delete style.top;
+    if (style.position === "relative") delete style.position;
+  } else {
+    if (!style.position) style.position = "relative";
+    style.left = `${left}px`;
+    style.top = `${top}px`;
+  }
+  return next;
+}
+
+/** 범용 블록 이동 — 같은 부모 안에서 이웃 형제와 자리 교환. */
+export function moveNode(root: DocNode, id: string, dir: -1 | 1): DocNode {
+  const next = clone(root);
+  const hit = findWithParent(next, id);
+  if (!hit || !hit.parent) return root;
+  const children = hit.parent.children!;
+  const idx = children.indexOf(hit.node);
+  const target = idx + dir;
+  if (target < 0 || target >= children.length) return root;
+  [children[idx], children[target]] = [children[target], children[idx]];
+  return next;
+}
+
 /** 텍스트 노드의 내용 교체. */
 export function updateNodeText(root: DocNode, id: string, text: string): DocNode {
   const next = clone(root);

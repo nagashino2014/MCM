@@ -12,9 +12,13 @@ import type { DocNode } from "./types";
 
 const ALLOWED_TAGS = new Set([
   "#text", "div", "span", "p", "h1", "h2", "h3", "h4", "h5", "h6",
-  "ul", "ol", "li", "strong", "em", "b", "i", "u", "s", "small", "br", "hr", "a",
+  "ul", "ol", "li", "strong", "em", "b", "i", "u", "s", "small", "br", "hr", "a", "img",
   "table", "thead", "tbody", "tr", "td", "th", "blockquote", "section", "header", "footer",
 ]);
+
+// 삽입 이미지(로고 등)는 외부 URL 대신 data URI 로만 — 외부 리소스 로드·추적 차단, 내보내기에도 그대로 포함.
+const IMG_SRC_RE = /^data:image\/(png|jpe?g|gif|webp);base64,[A-Za-z0-9+/=]+$/;
+const MAX_IMG_SRC = 1_000_000; // base64 기준 약 730KB 원본
 
 // camelCase 스타일 키 화이트리스트 — 레이아웃·타이포·장식 전반. (position:fixed 는 값에서 차단)
 const ALLOWED_STYLES = new Set([
@@ -87,6 +91,11 @@ export function sanitizeTree(input: unknown): SanitizeResult {
 
     if (tag === "a" && typeof n.href === "string" && /^https?:\/\//i.test(n.href)) {
       out.href = n.href.slice(0, 1000);
+    }
+    if (tag === "img") {
+      const src = typeof n.src === "string" ? n.src : "";
+      if (!IMG_SRC_RE.test(src) || src.length > MAX_IMG_SRC) return null;
+      out.src = src;
     }
     if (typeof n.repeatGroup === "string") out.repeatGroup = n.repeatGroup.slice(0, 40);
     if (n.separator === true) out.separator = true;

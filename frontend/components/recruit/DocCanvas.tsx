@@ -62,14 +62,18 @@ export function DocMiniPreview({
   );
 }
 
-/** 에디터 전용 스타일 — 편집 가능 텍스트의 호버/포커스 표시. 문서 트리 밖에서 한 번만 주입. */
+/** 에디터 전용 스타일 — 편집 가능 블록/텍스트의 호버·포커스 표시. 문서 트리 밖에서 한 번만 주입. */
 export function DocEditorStyles(): ReactNode {
   return (
     <style>{`
       .rc-edit-text { border-radius: 3px; outline: none; }
       .rc-edit-text:hover { box-shadow: 0 0 0 1px rgba(93,135,255,0.55); }
       .rc-edit-text:focus { box-shadow: 0 0 0 2px rgba(93,135,255,0.85); background: rgba(93,135,255,0.06); }
-      .rc-repeat-item:hover { box-shadow: 0 0 0 1px rgba(93,135,255,0.45); border-radius: 6px; }
+      .rc-inline-block { outline: none; border-radius: 4px; }
+      .rc-inline-block:hover { box-shadow: 0 0 0 1px rgba(93,135,255,0.45); }
+      .rc-inline-block:focus { box-shadow: 0 0 0 2px rgba(93,135,255,0.85); background: rgba(93,135,255,0.05); }
+      .rc-inline-block img { cursor: pointer; }
+      [data-rcid]:not(.rc-inline-block):hover { box-shadow: 0 0 0 1px rgba(93,135,255,0.4); border-radius: 6px; }
     `}</style>
   );
 }

@@ -12,17 +12,29 @@ import {
   Eye,
   FileText,
   History,
+  LayoutTemplate,
   Loader2,
   Pencil,
   Redo2,
   Undo2,
 } from "lucide-react";
-import { CdButton, CdPageHeader, useCdashTheme, useCdToast } from "@/components/cdash";
+import { CdButton, CdModal, CdPageHeader, useCdashTheme, useCdToast } from "@/components/cdash";
 import type { DocNode, DocTheme, RecruitPostingRow } from "@/lib/recruit/types";
-import { addRepeatItem, moveRepeatItem, removeRepeatItem, updateNodeText } from "@/lib/recruit/tree-ops";
+import {
+  addRepeatItem,
+  duplicateNode,
+  moveNode,
+  moveRepeatItem,
+  nudgeNode,
+  removeNode,
+  removeRepeatItem,
+  replaceNodeChildren,
+  updateNodeText,
+} from "@/lib/recruit/tree-ops";
 import { exportElementPdf, exportElementPng } from "@/lib/recruit/export";
-import { DocEditorProvider } from "./DocNodeView";
+import { DocEditorProvider, type DocEditorCallbacks } from "./DocNodeView";
 import { DocCanvas, DocEditorStyles } from "./DocCanvas";
+import { BlockControlsOverlay, InlineToolbar } from "./EditorOverlays";
 
 const AUTOSAVE_DELAY = 1500;
 
@@ -46,8 +58,13 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
   const [future, setFuture] = useState<DocNode[]>([]);
 
   const canvasRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const loadedRef = useRef(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [saveTplOpen, setSaveTplOpen] = useState(false);
+  const [tplName, setTplName] = useState("");
+  const [tplDesc, setTplDesc] = useState("");
+  const [tplSaving, setTplSaving] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -101,9 +118,13 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
   }, [tree, docTheme, title, status, save]);
 
-  const applyTree = useCallback((next: DocNode) => {
+  // 편집 조작 적용 — 항상 "최신" 트리에 함수형으로 적용한다.
+  // (문단 블록 blur 커밋 직후 같은 클릭으로 다른 조작이 이어져도 커밋이 유실되지 않게)
+  const applyOp = useCallback((op: (cur: DocNode) => DocNode) => {
     setTree((cur) => {
-      if (!cur || next === cur) return cur;
+      if (!cur) return cur;
+      const next = op(cur);
+      if (next === cur) return cur;
       setPast((p) => [...p.slice(-49), cur]);
       setFuture([]);
       return next;
@@ -143,16 +164,58 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [undo, redo]);
 
-  const callbacks = useMemo(
+  const accentHex = docTheme.accentColor ?? docTheme.cssVars?.["--accent"] ?? "#0F5C49";
+
+  const callbacks = useMemo<DocEditorCallbacks>(
     () => ({
       editable,
-      onCommitText: (id: string, text: string) => tree && applyTree(updateNodeText(tree, id, text)),
-      onAddItem: (id: string) => tree && applyTree(addRepeatItem(tree, id)),
-      onRemoveItem: (id: string) => tree && applyTree(removeRepeatItem(tree, id)),
-      onMoveItem: (id: string, dir: -1 | 1) => tree && applyTree(moveRepeatItem(tree, id, dir)),
+      accentHex,
+      onReplaceChildren: (id, children) => applyOp((cur) => replaceNodeChildren(cur, id, children)),
+      onCommitText: (id, text) => applyOp((cur) => updateNodeText(cur, id, text)),
     }),
-    [editable, tree, applyTree]
+    [editable, accentHex, applyOp]
   );
+
+  const blockOps = useMemo(
+    () => ({
+      addRepeatItem: (id: string) => applyOp((cur) => addRepeatItem(cur, id)),
+      removeRepeatItem: (id: string) => applyOp((cur) => removeRepeatItem(cur, id)),
+      moveRepeatItem: (id: string, dir: -1 | 1) => applyOp((cur) => moveRepeatItem(cur, id, dir)),
+      duplicateNode: (id: string) => applyOp((cur) => duplicateNode(cur, id)),
+      removeNode: (id: string) => applyOp((cur) => removeNode(cur, id)),
+      moveNode: (id: string, dir: -1 | 1) => applyOp((cur) => moveNode(cur, id, dir)),
+      nudgeNode: (id: string, dx: number, dy: number) => applyOp((cur) => nudgeNode(cur, id, dx, dy)),
+    }),
+    [applyOp]
+  );
+
+  // 현재 문서를 부문별 템플릿으로 저장 — 이후 "새 공고 작성"의 선택지로 나타난다.
+  const saveAsTemplate = useCallback(async () => {
+    if (!tree || !tplName.trim()) return;
+    setTplSaving(true);
+    try {
+      const res = await fetch("/api/recruit/templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: tplName,
+          description: tplDesc,
+          tree,
+          theme: docTheme,
+          docWidth: posting?.docWidth ?? 900,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json())?.error || "템플릿 저장 실패");
+      toast(`「${tplName.trim()}」 템플릿으로 저장했습니다.`, "success");
+      setSaveTplOpen(false);
+      setTplName("");
+      setTplDesc("");
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setTplSaving(false);
+    }
+  }, [tree, tplName, tplDesc, docTheme, posting, toast]);
 
   const doExport = useCallback(
     async (kind: "png" | "pdf") => {
@@ -247,9 +310,10 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
       />
 
       <div className="flex gap-5 items-start flex-1 min-h-0">
-        {/* 문서 캔버스 — 데스크 배경 위 실제 크기 문서 */}
+        {/* 문서 캔버스 — 데스크 배경 위 실제 크기 문서 + 편집 오버레이(블록 컨트롤·서식 툴바) */}
         <div
-          className="flex-1 overflow-auto rounded-2xl border cd-border-c"
+          ref={scrollRef}
+          className="flex-1 overflow-auto rounded-2xl border cd-border-c relative"
           style={{ background: docTheme.deskColor ?? "#E9ECEA", maxHeight: "calc(100vh - 150px)" }}
         >
           <DocEditorStyles />
@@ -266,6 +330,12 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
               </div>
             )}
           </div>
+          {editable && tree && (
+            <>
+              <BlockControlsOverlay containerRef={scrollRef} tree={tree} ops={blockOps} />
+              <InlineToolbar containerRef={scrollRef} ctx={callbacks} onError={(m) => toast(m, "error")} />
+            </>
+          )}
         </div>
 
         {/* 우측 설정 패널 */}
@@ -348,10 +418,26 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
             </button>
           </div>
 
+          <div className="border-t cd-border-c pt-4">
+            <CdButton
+              variant="soft"
+              size="sm"
+              block
+              icon={<LayoutTemplate className="w-4 h-4" />}
+              onClick={() => { setTplName(title); setSaveTplOpen(true); }}
+            >
+              부문 템플릿으로 저장
+            </CdButton>
+            <p className="text-[11px] mt-1.5 cd-text-faint">
+              현재 내용을 새 템플릿으로 등록합니다. 부문별(통합환경허가·화관법·ESG 등) 라인업을 만들 때 사용하세요.
+            </p>
+          </div>
+
           <div className="border-t cd-border-c pt-4 text-[11px] leading-relaxed cd-text-faint">
-            텍스트는 클릭해 바로 수정합니다. 목록·카드·전형 스텝 같은 반복 항목은 마우스를 올리면
-            추가·이동·삭제 버튼이 나타납니다. 변경사항은 자동 저장되며, 중요한 시점엔 상단의
-            <b> 버전 저장</b>으로 스냅샷을 남기세요.
+            문단을 클릭해 바로 수정하고, <b>Enter</b> 로 줄을 바꿉니다. 드래그로 선택하면 굵게·밑줄·
+            액센트 강조·이미지 삽입 툴바가 나타나고, 문단·항목에 마우스를 올리면 복제·이동·삭제
+            버튼이 나타납니다. 변경사항은 자동 저장되며, 중요한 시점엔 상단의 <b>버전 저장</b>으로
+            스냅샷을 남기세요.
           </div>
 
           <CdButton variant="ghost" size="sm" onClick={() => router.push("/admin/recruit")}>
@@ -359,6 +445,47 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
           </CdButton>
         </aside>
       </div>
+
+      {/* 부문 템플릿으로 저장 */}
+      <CdModal
+        open={saveTplOpen}
+        onClose={() => setSaveTplOpen(false)}
+        title="부문 템플릿으로 저장"
+        size="md"
+        footer={
+          <div className="flex justify-end gap-2">
+            <CdButton onClick={() => setSaveTplOpen(false)}>취소</CdButton>
+            <CdButton variant="primary" loading={tplSaving} disabled={!tplName.trim()} onClick={() => void saveAsTemplate()}>
+              템플릿 저장
+            </CdButton>
+          </div>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          <div>
+            <label className="block text-xs font-bold mb-1 cd-text-muted">템플릿 이름 (부문명)</label>
+            <input
+              className="cd-input w-full"
+              value={tplName}
+              onChange={(e) => setTplName(e.target.value)}
+              placeholder="예: 화관법 컨설팅 채용공고"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold mb-1 cd-text-muted">설명 (선택)</label>
+            <textarea
+              className="cd-input w-full resize-none"
+              rows={3}
+              value={tplDesc}
+              onChange={(e) => setTplDesc(e.target.value)}
+              placeholder="예: 에코씨앤엠 기술진단 신입/경력 공고용 — 본문 내용 포함"
+            />
+          </div>
+          <p className="text-[11px] cd-text-faint">
+            현재 문서의 내용·서식·테마가 그대로 템플릿이 되어, 새 공고 작성 시 선택지로 나타납니다.
+          </p>
+        </div>
+      </CdModal>
     </div>
   );
 }

@@ -142,6 +142,40 @@ export function setNodeFontSize(root: DocNode, id: string, px: number): DocNode 
   return next;
 }
 
+/**
+ * 자유 배치 이미지 — 문서 루트에 absolute 이미지를 추가한다(텍스트 박스 없는 위치에 배치).
+ * 루트에 position 이 없으면 relative 를 부여해 좌표 기준을 문서로 고정한다.
+ */
+export function insertFreeImage(root: DocNode, src: string, left: number, top: number): DocNode {
+  const next = clone(root);
+  const style = (next.style ??= {});
+  if (!style.position) style.position = "relative";
+  (next.children ??= []).push({
+    id: genId(),
+    tag: "img",
+    src,
+    style: {
+      position: "absolute",
+      left: `${Math.round(left)}px`,
+      top: `${Math.round(top)}px`,
+      width: "160px",
+      maxWidth: "100%",
+    },
+  });
+  return next;
+}
+
+/** 자유 배치(absolute) 노드의 좌표 커밋 — 드래그 이동 종료 시. */
+export function setNodePosition(root: DocNode, id: string, left: number, top: number): DocNode {
+  const next = clone(root);
+  const hit = findWithParent(next, id);
+  if (!hit || hit.node.tag === "#text") return root;
+  const style = (hit.node.style ??= {});
+  style.left = `${Math.round(left)}px`;
+  style.top = `${Math.round(top)}px`;
+  return next;
+}
+
 /** 지정 노드 바로 뒤에 새 노드 삽입 — 독립 이미지 블록 등. */
 export function insertNodeAfter(root: DocNode, refId: string, node: DocNode): DocNode {
   const next = clone(root);

@@ -16,7 +16,7 @@ export const DocCanvas = forwardRef<HTMLDivElement, { tree: DocNode; theme: DocT
   function DocCanvas({ tree, theme, width }, ref) {
     const vars = buildDocCssVars(theme) as CSSProperties;
     return (
-      <div ref={ref} style={{ ...vars, width }}>
+      <div ref={ref} data-rc-doc style={{ ...vars, width }}>
         {/* React 19 가 head 로 호이스팅한다 — 같은 href 는 중복 로드되지 않는다. */}
         <link rel="stylesheet" href={PRETENDARD_CSS} precedence="default" />
         <DocNodeView node={tree} />

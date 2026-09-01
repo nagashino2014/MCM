@@ -32,7 +32,9 @@ import {
   replaceNodeChildren,
   resizeNode,
   adjustBulletGap,
+  insertFreeImage,
   setNodeFontSize,
+  setNodePosition,
   toggleBulletNode,
   updateNodeText,
 } from "@/lib/recruit/tree-ops";
@@ -194,6 +196,8 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
       toggleBullet: (id) => applyOp((cur) => toggleBulletNode(cur, id)),
       adjustBulletGap: (id, delta) => applyOp((cur) => adjustBulletGap(cur, id, delta)),
       setFontSize: (id, px) => applyOp((cur) => setNodeFontSize(cur, id, px)),
+      insertFreeImage: (dataUri, left, top) => applyOp((cur) => insertFreeImage(cur, dataUri, left, top)),
+      setNodePosition: (id, left, top) => applyOp((cur) => setNodePosition(cur, id, left, top)),
       insertImageBlock: (refId, dataUri) =>
         applyOp((cur) =>
           insertNodeAfter(cur, refId, {
@@ -467,7 +471,7 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
               <li><b>크기</b> — 선택 테두리의 핸들을 끌어 너비/높이 조절.</li>
               <li><b>이동</b> — 편집 캐럿 없을 때 화살표 = 1px(Shift 8px).</li>
               <li><b>삭제</b> — 선택 후 Delete 또는 휴지통 버튼.</li>
-              <li><b>이미지</b> — 클릭하면 크기·좌우 배치 도구 활성화.</li>
+              <li><b>이미지</b> — 편집 중: 커서 위치 / 블록 선택: 아래 / 선택 없음: 자유 배치(드래그 이동).</li>
               <li><b>저장</b> — 자동 저장 + 상단 버전 저장으로 스냅샷.</li>
             </ul>
           </div>

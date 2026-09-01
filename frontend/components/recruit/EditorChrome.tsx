@@ -50,6 +50,8 @@ export interface ChromeOps {
   toggleBullet: (id: string) => void;
   adjustBulletGap: (id: string, delta: number) => void;
   setFontSize: (id: string, px: number) => void;
+  insertFreeImage: (dataUri: string, left: number, top: number) => void;
+  setNodePosition: (id: string, left: number, top: number) => void;
 }
 
 // 기호 삽입 팔레트 — 채용공고에서 쓸 법한 글머리·강조·화살표류 위주.
@@ -142,6 +144,8 @@ export function EditorChrome({
   const savedRange = useRef<Range | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const resizingRef = useRef(false);
+  // 파일 선택창이 열리면 편집 포커스(blur)가 사라지므로, 삽입 방식은 버튼 클릭 시점에 캡처해 둔다.
+  const insertModeRef = useRef<{ kind: "inline" } | { kind: "block"; id: string } | { kind: "free" }>({ kind: "free" });
 
   const selEl = useCallback((): HTMLElement | null => {
     const container = containerRef.current;
@@ -190,6 +194,13 @@ export function EditorChrome({
       setSelectedImg(null);
       const block = t.closest("[data-rcid]");
       setSelectedId(block ? block.getAttribute("data-rcid") : null);
+      if (!block) {
+        // 텍스트 박스 밖(배경) 클릭 — 편집 포커스도 함께 해제(블러 커밋 포함).
+        // 배경이 포커서블이 아니면 브라우저가 blur 를 안 해 주는 경우가 있어 명시적으로 푼다.
+        const active = document.activeElement as HTMLElement | null;
+        if (active?.isContentEditable) active.blur();
+        savedRange.current = null; // 다음 이미지 삽입이 자유 배치 모드로 잡히게
+      }
     };
     const onScroll = () => updateRect();
     container.addEventListener("click", onClick);
@@ -199,6 +210,43 @@ export function EditorChrome({
       container.removeEventListener("scroll", onScroll);
     };
   }, [containerRef, selectedImg, updateRect]);
+
+  // 자유 배치(absolute) 이미지 드래그 이동 — 놓으면 좌표 커밋.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as HTMLElement;
+      if (t.tagName !== "IMG" || !t.hasAttribute("data-rcid")) return;
+      if (getComputedStyle(t).position !== "absolute") return;
+      e.preventDefault();
+      const id = t.getAttribute("data-rcid")!;
+      setSelectedImg(null);
+      setSelectedId(id);
+      resizingRef.current = true; // 드래그 종료 click 이 선택을 바꾸지 않게
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const startLeft = parseFloat(t.style.left) || 0;
+      const startTop = parseFloat(t.style.top) || 0;
+      let moved = false;
+      const onMove = (ev: MouseEvent) => {
+        moved = true;
+        t.style.left = `${Math.round(startLeft + ev.clientX - startX)}px`;
+        t.style.top = `${Math.round(startTop + ev.clientY - startY)}px`;
+        updateRect();
+      };
+      const onUp = (ev: MouseEvent) => {
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+        setTimeout(() => { resizingRef.current = false; }, 0);
+        if (moved) ops.setNodePosition(id, startLeft + ev.clientX - startX, startTop + ev.clientY - startY);
+      };
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+    };
+    container.addEventListener("mousedown", onDown);
+    return () => container.removeEventListener("mousedown", onDown);
+  }, [containerRef, ops, updateRect]);
 
   // 편집(캐럿) 상태 추적 + 선택 범위 저장(이미지 삽입 위치 복원용)
   useEffect(() => {
@@ -346,45 +394,81 @@ export function EditorChrome({
     document.execCommand("insertText", false, ch);
   }, []);
 
+  /**
+   * 인라인 이미지 DOM 조작 후 즉시 트리 커밋 + 리렌더된 같은 위치의 img 를 다시 선택.
+   * (커밋을 블러에 미루면 파일 선택창이 블러를 소모해 변경이 트리에 남지 않고 사라진다)
+   */
+  const commitAndRebindImg = useCallback(
+    (img: HTMLImageElement) => {
+      const host = img.closest("[contenteditable][data-rcid]") as HTMLElement | null;
+      if (!host) return;
+      const hostId = host.getAttribute("data-rcid")!;
+      const index = Array.from(host.querySelectorAll("img")).indexOf(img);
+      commitEditableElement(host, ctx);
+      setTimeout(() => {
+        const newHost = containerRef.current?.querySelector<HTMLElement>(`[data-rcid="${CSS.escape(hostId)}"]`);
+        const newImg = newHost?.querySelectorAll("img")[index] as HTMLImageElement | undefined;
+        if (newImg) {
+          newImg.classList.add("rc-img-selected");
+          setSelectedImg(newImg);
+        } else {
+          setSelectedImg(null);
+        }
+      }, 0);
+    },
+    [ctx, containerRef]
+  );
+
   const insertImage = useCallback(
     async (file: File) => {
       try {
         const uri = await fileToDataUri(file);
-        if (editingActive || savedRange.current) {
-          // 편집 캐럿 위치에 인라인 삽입 — 커밋은 블록 블러 시점에 일어난다
+        const mode = insertModeRef.current;
+        const container = containerRef.current;
+        if (mode.kind === "inline" && savedRange.current) {
+          // 편집 캐럿 위치에 인라인 삽입 → 즉시 커밋
           const sel = document.getSelection();
-          if (savedRange.current && sel) {
+          if (sel) {
             sel.removeAllRanges();
             sel.addRange(savedRange.current);
           }
           document.execCommand("insertImage", false, uri);
-          const container = containerRef.current;
           const imgs = container?.querySelectorAll<HTMLImageElement>(`img[src="${CSS.escape(uri)}"]`);
           const img = imgs && imgs.length > 0 ? imgs[imgs.length - 1] : null;
           if (img) {
             if (!img.style.width) img.style.width = "140px";
             img.style.maxWidth = "100%";
             img.style.verticalAlign = "middle";
+            commitAndRebindImg(img);
           }
-        } else if (selectedId) {
-          ops.insertImageBlock(selectedId, uri);
+        } else if (mode.kind === "block") {
+          ops.insertImageBlock(mode.id, uri);
+        } else if (container) {
+          // 자유 배치 — 현재 보이는 영역 중앙의 문서 좌표에 absolute 이미지로
+          const doc = container.querySelector<HTMLElement>("[data-rc-doc]");
+          const docRect = doc?.getBoundingClientRect();
+          const cRect = container.getBoundingClientRect();
+          const left = docRect ? Math.max(0, cRect.left + cRect.width / 2 - docRect.left - 80) : 80;
+          const top = docRect ? Math.max(0, cRect.top + cRect.height / 2 - docRect.top - 60) : 80;
+          ops.insertFreeImage(uri, left, top);
         }
       } catch (e) {
         onError((e as Error).message);
       }
     },
-    [editingActive, selectedId, containerRef, ops, onError]
+    [containerRef, ops, onError, commitAndRebindImg]
   );
 
-  /** 인라인 이미지 조작 — DOM 에 즉시 반영, 트리 커밋은 블록 블러 시(참조 유지). */
+  /** 인라인 이미지 조작 — DOM 반영 후 즉시 커밋(+재선택). */
   const resizeImg = useCallback(
     (factor: number) => {
       if (!selectedImg) return;
       const w = selectedImg.getBoundingClientRect().width;
       selectedImg.style.width = `${Math.max(20, Math.round(w * factor))}px`;
       selectedImg.style.height = "auto";
+      commitAndRebindImg(selectedImg);
     },
-    [selectedImg]
+    [selectedImg, commitAndRebindImg]
   );
 
   const setImgFloat = useCallback(
@@ -400,8 +484,9 @@ export function EditorChrome({
         selectedImg.style.marginRight = "";
         selectedImg.style.marginBottom = "";
       }
+      commitAndRebindImg(selectedImg);
     },
-    [selectedImg]
+    [selectedImg, commitAndRebindImg]
   );
 
   const deleteImg = useCallback(() => {
@@ -498,7 +583,6 @@ export function EditorChrome({
   const fontSizeOn = editingActive || blockToolsOn;
   const bulletOn = editingActive || blockToolsOn;
   const gapOn = bulletOn && hasBullet(targetNode);
-  const imageInsertOn = editingActive || blockToolsOn;
   const imgToolsOn = Boolean(selectedImg) || blockImgSelected;
 
   const HANDLE: React.CSSProperties = {
@@ -561,9 +645,16 @@ export function EditorChrome({
         />
         <ToolBtn
           icon={<ImagePlus className="w-4 h-4" />}
-          title="이미지 삽입 — 편집 중이면 커서 위치에, 블록 선택 시 그 아래에 (500KB 이하)"
-          disabled={!imageInsertOn}
-          onClick={() => fileRef.current?.click()}
+          title="이미지 삽입 — 편집 중: 커서 위치 / 블록 선택: 그 아래 / 선택 없음: 문서 위 자유 배치(드래그 이동) · 500KB 이하"
+          onClick={() => {
+            insertModeRef.current =
+              editingActive && savedRange.current
+                ? { kind: "inline" }
+                : selectedId
+                  ? { kind: "block", id: selectedId }
+                  : { kind: "free" };
+            fileRef.current?.click();
+          }}
         />
         <Divider />
         <ToolBtn icon={<Copy className="w-4 h-4" />} title="블록 복제 (반복 항목이면 항목 추가)" disabled={!blockToolsOn} onClick={duplicate} />

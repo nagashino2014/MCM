@@ -9,15 +9,20 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import {
+  AArrowDown,
+  AArrowUp,
   ArrowDown,
   ArrowUp,
   Bold,
+  ChevronsLeft,
+  ChevronsRight,
   Copy,
   Dot,
   Eraser,
   Highlighter,
   ImagePlus,
   Minus,
+  Omega,
   PanelLeft,
   PanelRight,
   Plus,
@@ -27,7 +32,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { DocNode } from "@/lib/recruit/types";
-import { findNode, findParent } from "@/lib/recruit/tree-ops";
+import { findNode, findParent, hasBullet } from "@/lib/recruit/tree-ops";
 import { commitEditableElement, type DocEditorCallbacks } from "./DocNodeView";
 
 const MAX_IMAGE_BYTES = 500 * 1024;
@@ -43,7 +48,16 @@ export interface ChromeOps {
   resizeNode: (id: string, size: { width?: number; height?: number }) => void;
   insertImageBlock: (refId: string, dataUri: string) => void;
   toggleBullet: (id: string) => void;
+  adjustBulletGap: (id: string, delta: number) => void;
+  setFontSize: (id: string, px: number) => void;
 }
+
+// 기호 삽입 팔레트 — 채용공고에서 쓸 법한 글머리·강조·화살표류 위주.
+const SYMBOLS = [
+  "※", "·", "ㆍ", "•", "●", "○", "■", "□", "◆", "◇", "▶", "▷",
+  "▲", "△", "▼", "▽", "★", "☆", "→", "⇒", "↔", "✓", "✔", "―",
+  "①", "②", "③", "④", "⑤", "＋", "﹡", "◎",
+];
 
 function fileToDataUri(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -122,6 +136,8 @@ export function EditorChrome({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedImg, setSelectedImg] = useState<HTMLImageElement | null>(null);
   const [editingActive, setEditingActive] = useState(false);
+  const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
+  const [symbolsOpen, setSymbolsOpen] = useState(false);
   const [selRect, setSelRect] = useState<SelRect | null>(null);
   const savedRange = useRef<Range | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -189,7 +205,9 @@ export function EditorChrome({
     const container = containerRef.current;
     const onFocusChange = () => {
       const active = document.activeElement as HTMLElement | null;
-      setEditingActive(Boolean(active?.isContentEditable && container?.contains(active)));
+      const editing = Boolean(active?.isContentEditable && container?.contains(active));
+      setEditingActive(editing);
+      setActiveBlockId(editing ? active!.getAttribute("data-rcid") : null);
     };
     const onSelectionChange = () => {
       const sel = document.getSelection();
@@ -255,18 +273,78 @@ export function EditorChrome({
     if (!document.queryCommandState("bold")) exec("bold");
   }, [exec, ctx.accentHex]);
 
-  /** 불릿 토글 대상 — 편집 중이면 그 블록, 아니면 선택 블록. 편집 중엔 현재 DOM 먼저 커밋. */
-  const toggleBullet = useCallback(() => {
+  /** 도구 적용 대상 블록 — 편집 중이면 그 블록, 아니면 선택 블록. */
+  const targetBlockId = editingActive ? activeBlockId : selectedId;
+  const targetNode = targetBlockId ? findNode(tree, targetBlockId) : null;
+
+  /** 편집 중이면 현재 DOM 을 먼저 커밋(blur)하고, 대상을 선택 상태로 남겨 연속 조작을 가능하게 한다. */
+  const flushToSelection = useCallback((): string | null => {
+    const id = targetBlockId;
+    if (!id) return null;
     const active = document.activeElement as HTMLElement | null;
-    if (editingActive && active?.isContentEditable) {
-      const id = active.getAttribute("data-rcid");
-      if (!id) return;
-      active.blur(); // onBlur 커밋이 동기 실행된 뒤 토글이 최신 트리에 적용된다
-      ops.toggleBullet(id);
-      return;
+    if (active?.isContentEditable) active.blur(); // onBlur 커밋이 동기 실행된다
+    setSelectedId(id);
+    return id;
+  }, [targetBlockId]);
+
+  const toggleBullet = useCallback(() => {
+    const id = flushToSelection();
+    if (id) ops.toggleBullet(id);
+  }, [flushToSelection, ops]);
+
+  /** 글머리 기호와 텍스트 사이 여백 ±2px. */
+  const adjustGap = useCallback(
+    (delta: number) => {
+      const id = flushToSelection();
+      if (id) ops.adjustBulletGap(id, delta);
+    },
+    [flushToSelection, ops]
+  );
+
+  /**
+   * 글자 크기 ±1px — 편집 중 드래그 선택 영역이 있으면 그 부분만(span font-size),
+   * 아니면 대상 블록 전체의 fontSize 를 조절한다.
+   */
+  const adjustFontSize = useCallback(
+    (delta: number) => {
+      const sel = document.getSelection();
+      const active = document.activeElement as HTMLElement | null;
+      if (editingActive && active?.isContentEditable && sel && !sel.isCollapsed) {
+        const anchorEl =
+          sel.anchorNode instanceof Element ? sel.anchorNode : sel.anchorNode?.parentElement ?? active;
+        const cur = parseFloat(getComputedStyle(anchorEl as Element).fontSize) || 14;
+        const target = Math.min(Math.max(Math.round(cur) + delta, 8), 96);
+        // execCommand('fontSize', 7) 이 만든 마커(font size=7 / xxx-large span)를 px 스팬으로 치환하는 고전 트릭
+        document.execCommand("styleWithCSS", false, "false");
+        document.execCommand("fontSize", false, "7");
+        active.querySelectorAll('font[size="7"], span[style*="xxx-large"]').forEach((f) => {
+          const span = document.createElement("span");
+          span.style.fontSize = `${target}px`;
+          while (f.firstChild) span.appendChild(f.firstChild);
+          f.replaceWith(span);
+        });
+        return;
+      }
+      const id = targetBlockId;
+      const container = containerRef.current;
+      const el = id && container ? container.querySelector<HTMLElement>(`[data-rcid="${CSS.escape(id)}"]`) : null;
+      if (!id || !el) return;
+      const cur = parseFloat(getComputedStyle(el).fontSize) || 14;
+      flushToSelection();
+      ops.setFontSize(id, Math.round(cur) + delta);
+    },
+    [editingActive, targetBlockId, containerRef, flushToSelection, ops]
+  );
+
+  /** 기호 삽입 — 편집 캐럿(저장해 둔 선택 범위) 위치에 문자를 넣는다. */
+  const insertSymbol = useCallback((ch: string) => {
+    const sel = document.getSelection();
+    if (savedRange.current && sel) {
+      sel.removeAllRanges();
+      sel.addRange(savedRange.current);
     }
-    if (selectedId) ops.toggleBullet(selectedId);
-  }, [editingActive, selectedId, ops]);
+    document.execCommand("insertText", false, ch);
+  }, []);
 
   const insertImage = useCallback(
     async (file: File) => {
@@ -402,10 +480,26 @@ export function EditorChrome({
     [selEl, selectedId, ops, updateRect]
   );
 
+  /** 선택 블록이 독립 이미지 블록이면 도구 바의 이미지 크기 버튼으로 조절(핸들 드래그와 병행). */
+  const blockImgSelected = node?.tag === "img";
+  const resizeAnyImg = useCallback(
+    (factor: number) => {
+      if (selectedImg) return resizeImg(factor);
+      const el = selEl();
+      if (el && selectedId && blockImgSelected) {
+        ops.resizeNode(selectedId, { width: el.getBoundingClientRect().width * factor });
+      }
+    },
+    [selectedImg, resizeImg, selEl, selectedId, blockImgSelected, ops]
+  );
+
   const textToolsOn = editingActive;
   const blockToolsOn = Boolean(selectedId);
+  const fontSizeOn = editingActive || blockToolsOn;
   const bulletOn = editingActive || blockToolsOn;
+  const gapOn = bulletOn && hasBullet(targetNode);
   const imageInsertOn = editingActive || blockToolsOn;
+  const imgToolsOn = Boolean(selectedImg) || blockImgSelected;
 
   const HANDLE: React.CSSProperties = {
     position: "absolute",
@@ -421,7 +515,7 @@ export function EditorChrome({
     <>
       {/* 좌측 고정 도구 바 */}
       <aside
-        className="w-12 shrink-0 rounded-2xl border cd-border-c cd-card-bg p-1.5 flex flex-col items-center sticky top-6 self-start"
+        className="w-12 shrink-0 rounded-2xl border cd-border-c cd-card-bg p-1.5 flex flex-col items-center sticky top-6 self-start relative"
         style={{ boxShadow: "var(--cd-shadow)" }}
       >
         <ToolBtn icon={<Bold className="w-4 h-4" />} title="굵게 (텍스트 선택 후)" disabled={!textToolsOn} onClick={() => exec("bold")} />
@@ -433,8 +527,38 @@ export function EditorChrome({
           onClick={applyAccent}
         />
         <ToolBtn icon={<Eraser className="w-4 h-4" />} title="서식 지우기" disabled={!textToolsOn} onClick={() => exec("removeFormat")} />
+        <ToolBtn
+          icon={<AArrowUp className="w-4 h-4" />}
+          title="글자 크게 (+1px) — 드래그 선택 부분만, 선택 없으면 블록 전체"
+          disabled={!fontSizeOn}
+          onClick={() => adjustFontSize(1)}
+        />
+        <ToolBtn
+          icon={<AArrowDown className="w-4 h-4" />}
+          title="글자 작게 (−1px)"
+          disabled={!fontSizeOn}
+          onClick={() => adjustFontSize(-1)}
+        />
+        <ToolBtn
+          icon={<Omega className="w-4 h-4" />}
+          title="기호 삽입 (편집 커서 위치에)"
+          disabled={!editingActive && !savedRange.current}
+          onClick={() => setSymbolsOpen((v) => !v)}
+        />
         <Divider />
         <ToolBtn icon={<Dot className="w-6 h-6 -m-1" />} title="글머리 기호 넣기/빼기" disabled={!bulletOn} onClick={toggleBullet} />
+        <ToolBtn
+          icon={<ChevronsLeft className="w-4 h-4" />}
+          title="글머리 여백 좁게 (−2px)"
+          disabled={!gapOn}
+          onClick={() => adjustGap(-2)}
+        />
+        <ToolBtn
+          icon={<ChevronsRight className="w-4 h-4" />}
+          title="글머리 여백 넓게 (+2px)"
+          disabled={!gapOn}
+          onClick={() => adjustGap(2)}
+        />
         <ToolBtn
           icon={<ImagePlus className="w-4 h-4" />}
           title="이미지 삽입 — 편집 중이면 커서 위치에, 블록 선택 시 그 아래에 (500KB 이하)"
@@ -452,16 +576,38 @@ export function EditorChrome({
           danger
           onClick={removeSelected}
         />
-        {selectedImg && (
+        {imgToolsOn && (
           <>
             <Divider />
-            <ToolBtn icon={<Minus className="w-4 h-4" />} title="이미지 작게" onClick={() => resizeImg(0.85)} />
-            <ToolBtn icon={<Plus className="w-4 h-4" />} title="이미지 크게" onClick={() => resizeImg(1.2)} />
-            <ToolBtn icon={<PanelLeft className="w-4 h-4" />} title="왼쪽 배치 (텍스트가 오른쪽으로 흐름)" onClick={() => setImgFloat("left")} />
-            <ToolBtn icon={<PanelRight className="w-4 h-4" />} title="오른쪽 배치 (텍스트가 왼쪽으로 흐름)" onClick={() => setImgFloat("right")} />
-            <ToolBtn icon={<Square className="w-4 h-4" />} title="배치 해제 (글자처럼 배치)" onClick={() => setImgFloat(null)} />
-            <ToolBtn icon={<Trash2 className="w-4 h-4" />} title="이미지 삭제" danger onClick={deleteImg} />
+            <ToolBtn icon={<Minus className="w-4 h-4" />} title="이미지 작게 (−15%)" onClick={() => resizeAnyImg(0.85)} />
+            <ToolBtn icon={<Plus className="w-4 h-4" />} title="이미지 크게 (+20%)" onClick={() => resizeAnyImg(1.2)} />
+            {selectedImg && (
+              <>
+                <ToolBtn icon={<PanelLeft className="w-4 h-4" />} title="왼쪽 배치 (텍스트가 오른쪽으로 흐름)" onClick={() => setImgFloat("left")} />
+                <ToolBtn icon={<PanelRight className="w-4 h-4" />} title="오른쪽 배치 (텍스트가 왼쪽으로 흐름)" onClick={() => setImgFloat("right")} />
+                <ToolBtn icon={<Square className="w-4 h-4" />} title="배치 해제 (글자처럼 배치)" onClick={() => setImgFloat(null)} />
+                <ToolBtn icon={<Trash2 className="w-4 h-4" />} title="이미지 삭제" danger onClick={deleteImg} />
+              </>
+            )}
           </>
+        )}
+        {symbolsOpen && (
+          <div
+            className="absolute left-full ml-2 top-24 rounded-xl border cd-border-c cd-card-bg p-2 grid grid-cols-8 gap-0.5 z-40"
+            style={{ boxShadow: "var(--cd-shadow)", width: 236 }}
+            onMouseDown={(e) => e.preventDefault()}
+          >
+            {SYMBOLS.map((ch) => (
+              <button
+                key={ch}
+                type="button"
+                className="w-7 h-7 rounded-md text-sm cd-text hover:cd-soft-primary"
+                onClick={() => insertSymbol(ch)}
+              >
+                {ch}
+              </button>
+            ))}
+          </div>
         )}
         <input
           ref={fileRef}

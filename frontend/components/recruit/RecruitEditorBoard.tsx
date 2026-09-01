@@ -31,6 +31,8 @@ import {
   removeRepeatItem,
   replaceNodeChildren,
   resizeNode,
+  adjustBulletGap,
+  setNodeFontSize,
   toggleBulletNode,
   updateNodeText,
 } from "@/lib/recruit/tree-ops";
@@ -190,6 +192,8 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
       nudgeNode: (id, dx, dy) => applyOp((cur) => nudgeNode(cur, id, dx, dy)),
       resizeNode: (id, size) => applyOp((cur) => resizeNode(cur, id, size)),
       toggleBullet: (id) => applyOp((cur) => toggleBulletNode(cur, id)),
+      adjustBulletGap: (id, delta) => applyOp((cur) => adjustBulletGap(cur, id, delta)),
+      setFontSize: (id, px) => applyOp((cur) => setNodeFontSize(cur, id, px)),
       insertImageBlock: (refId, dataUri) =>
         applyOp((cur) =>
           insertNodeAfter(cur, refId, {
@@ -453,11 +457,19 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
           </div>
 
           <div className="border-t cd-border-c pt-4 text-[11px] leading-relaxed cd-text-faint">
-            블록을 <b>클릭해 선택</b>하면 왼쪽 도구 바에서 해당 기능이 활성화됩니다. 텍스트는 클릭해
-            바로 수정(<b>Enter</b> 줄바꿈), 드래그 선택 후 굵게·액센트 강조. 선택 테두리의 핸들을
-            끌면 <b>너비/높이 조절</b>, 편집 캐럿이 없을 때 <b>화살표 키 = 1px 이동</b>(Shift 8px),
-            <b>Delete = 삭제</b>. 이미지는 클릭하면 크기·좌우 배치 도구가 나타납니다. 변경사항은
-            자동 저장되며, 중요한 시점엔 상단의 <b>버전 저장</b>으로 스냅샷을 남기세요.
+            <div className="font-bold mb-1.5 cd-text-muted">사용법</div>
+            <ul className="flex flex-col gap-1 list-disc pl-4">
+              <li><b>선택</b> — 블록을 클릭하면 왼쪽 도구 바에서 해당 기능이 활성화됩니다.</li>
+              <li><b>텍스트</b> — 클릭해 바로 수정, Enter = 줄바꿈.</li>
+              <li><b>서식</b> — 드래그 선택 후 굵게·밑줄·액센트 강조·글자 크기.</li>
+              <li><b>기호</b> — Ω 버튼으로 커서 위치에 특수기호 삽입.</li>
+              <li><b>글머리</b> — 도트 넣기/빼기, ≪ ≫ 로 여백 조절.</li>
+              <li><b>크기</b> — 선택 테두리의 핸들을 끌어 너비/높이 조절.</li>
+              <li><b>이동</b> — 편집 캐럿 없을 때 화살표 = 1px(Shift 8px).</li>
+              <li><b>삭제</b> — 선택 후 Delete 또는 휴지통 버튼.</li>
+              <li><b>이미지</b> — 클릭하면 크기·좌우 배치 도구 활성화.</li>
+              <li><b>저장</b> — 자동 저장 + 상단 버전 저장으로 스냅샷.</li>
+            </ul>
           </div>
 
           <CdButton variant="ghost" size="sm" onClick={() => router.push("/admin/recruit")}>

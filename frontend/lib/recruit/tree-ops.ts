@@ -79,6 +79,9 @@ export function toggleBulletNode(root: DocNode, id: string): DocNode {
   const hit = findWithParent(next, id);
   if (!hit || hit.node.tag === "#text") return root;
   const children = (hit.node.children ??= []);
+  // flex + gap 블록(템플릿 근무환경 항목 등)은 gap 이 이미 간격을 주므로 도트에 margin 을 겹치지 않는다.
+  const blockStyle = hit.node.style ?? {};
+  const hasFlexGap = (blockStyle.display ?? "").includes("flex") && Boolean(blockStyle.gap);
   if (isBulletSpan(children[0])) {
     children.shift();
     // 도트 뒤 공백 텍스트가 남아 있으면 앞 공백만 정리
@@ -93,12 +96,49 @@ export function toggleBulletNode(root: DocNode, id: string): DocNode {
         height: "5px",
         background: "var(--accent)",
         borderRadius: "50%",
-        marginRight: "10px",
+        ...(hasFlexGap ? {} : { marginRight: "10px" }),
         verticalAlign: "middle",
         flexShrink: "0",
       },
     });
   }
+  return next;
+}
+
+/** 블록 첫머리에 글머리 도트가 있는지 — 여백 조절 버튼 활성 판정용. */
+export function hasBullet(node: DocNode | null): boolean {
+  return Boolean(node && isBulletSpan(node.children?.[0]));
+}
+
+/**
+ * 글머리 기호와 텍스트 사이 여백 조절(px 단위 증감).
+ * flex+gap 블록이면 블록의 gap 을, 아니면 도트의 marginRight 를 조절한다(최소 0).
+ */
+export function adjustBulletGap(root: DocNode, id: string, delta: number): DocNode {
+  const next = clone(root);
+  const hit = findWithParent(next, id);
+  if (!hit || !isBulletSpan(hit.node.children?.[0])) return root;
+  const px = (v: string | undefined, fallback: number) => {
+    const m = /^(-?\d+(?:\.\d+)?)px$/.exec(v ?? "");
+    return m ? Number(m[1]) : fallback;
+  };
+  const blockStyle = (hit.node.style ??= {});
+  const dot = hit.node.children![0];
+  const dotStyle = (dot.style ??= {});
+  if ((blockStyle.display ?? "").includes("flex") && blockStyle.gap) {
+    blockStyle.gap = `${Math.max(0, px(blockStyle.gap, 10) + delta)}px`;
+  } else {
+    dotStyle.marginRight = `${Math.max(0, px(dotStyle.marginRight, 10) + delta)}px`;
+  }
+  return next;
+}
+
+/** 블록 글자 크기 지정(px) — 도구 바 A−/A+ 커밋. */
+export function setNodeFontSize(root: DocNode, id: string, px: number): DocNode {
+  const next = clone(root);
+  const hit = findWithParent(next, id);
+  if (!hit || hit.node.tag === "#text") return root;
+  (hit.node.style ??= {}).fontSize = `${Math.min(Math.max(px, 8), 96)}px`;
   return next;
 }
 

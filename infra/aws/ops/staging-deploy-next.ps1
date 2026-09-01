@@ -77,7 +77,10 @@ if (-not $SkipBuild) {
   Log "ECR 로그인"
   $pw = (aws ecr get-login-password --region $Region)
   if ($LASTEXITCODE -ne 0 -or -not $pw) { Fail "ECR 토큰 발급 실패 — aws sso login --profile $AwsProfile 먼저" }
-  $pw | docker login --username AWS --password-stdin $registry
+  # 주의: PS 5.1 에서 `$pw | docker login --password-stdin` 은 파이프 인코딩(UTF-16/CRLF) 탓에
+  #   토큰이 깨져 400 Bad Request 로 떨어진다(2026-09-01 실측). --password 로 직접 넘긴다
+  #   — 로컬 운영 스크립트이고 토큰은 12시간짜리라 노출보다 배포 실패가 더 문제다.
+  docker login --username AWS --password ($pw.Trim()) $registry
   if ($LASTEXITCODE -ne 0) { Fail "docker login" }
 
   Log "이미지 빌드 (linux/amd64) — 수 분 걸린다"

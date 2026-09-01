@@ -134,6 +134,9 @@ export interface LetterFieldValues {
   include_hwpx: 0 | 1; // 발송 메일에 HWPX 동봉
   contact_phone: string; // 하단 담당 연락처(기본 회사 대표번호)
   contact_email: string;
+  /** 하단 고정부에 회사 주소 한 줄 표기(2026-08-20 내부 의견) — 1=표기, 0/미지정=미표기.
+   *  신규 작성은 표기가 기본이고, 값이 없는 과거 문서는 재생성해도 종전대로 나온다. */
+  include_address?: 0 | 1;
   file_attachments?: LetterFileAttachment[]; // 동봉 첨부(발송 메일에 공문 뒤 순서대로)
   /** 이 공문에 첨부된 착수계·준공계 문서 id(142) — 발송 완료 시 상태·시행번호를 역기록한다 */
   deliverable_ids?: string[];
@@ -178,6 +181,9 @@ export interface LetterLayout {
   contactPosition: string;
   contactPhone: string;
   contactEmail: string;
+  /** 하단 고정부 주소 표기 여부 — 켜면 '시행' 줄 아래에 "주    소 : …" 한 줄이 붙는다 */
+  includeAddress: boolean;
+  companyAddress: string;
   ceoName: string;
   companyKo: string;
   companyEn: string;

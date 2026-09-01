@@ -34,6 +34,8 @@ const FOOT_PHONE_Y = 58;
 const FOOT_ISSUE_Y = 76;
 const FOOT_CONTACT_Y = 94;
 const FOOT_THIN_Y = 112; // 하단부 상단 얇은선
+/** 하단 고정부 줄 간격(pt) — 주소 표기를 켜면 '시행' 위쪽이 이만큼 올라간다 */
+const FOOT_ROW_STEP = 18;
 const SIGNATURE_CLEARANCE = 40; // 본문 하한 = 서명줄 y + 이 값
 
 interface Fonts {
@@ -474,9 +476,11 @@ export async function renderLetterPdf(layout: LetterLayout, opts: { fit?: FitPar
   // ── 7) 하단 고정부 — 구분선은 위 1개만(상단 구분선과 동일 굵기, 사용자 확정) ──
   {
     const fSize = 10;
+    // 주소 한 줄을 넣으면 '시행' 위(담당·구분선)를 한 줄만큼 올린다 — 전화·주소는 제자리
+    const addrShift = layout.includeAddress ? FOOT_ROW_STEP : 0;
     page.drawLine({
-      start: { x: MARGIN_L, y: FOOT_THIN_Y + footLift },
-      end: { x: PAGE_W - MARGIN_R, y: FOOT_THIN_Y + footLift },
+      start: { x: MARGIN_L, y: FOOT_THIN_Y + addrShift + footLift },
+      end: { x: PAGE_W - MARGIN_R, y: FOOT_THIN_Y + addrShift + footLift },
       thickness: LINE_THICK,
       color: INK,
     });
@@ -485,17 +489,19 @@ export async function renderLetterPdf(layout: LetterLayout, opts: { fit?: FitPar
       page.drawText(label, { x: MARGIN_L + 2, y: yy + footLift, size: fSize, font: fonts.bold, color: INK });
       page.drawText(`: ${value}`, { x: MARGIN_L + 2 + contactLabelW + 6, y: yy + footLift, size: fSize, font: fonts.regular, color: INK });
     };
-    put("담    당", `${spread(layout.contactName)}  ${layout.contactPosition}`, FOOT_CONTACT_Y);
+    put("담    당", `${spread(layout.contactName)}  ${layout.contactPosition}`, FOOT_CONTACT_Y + addrShift);
     // 우측: 대표이사
     const ceoText = `대 표 이 사 : ${spread(layout.ceoName)}`;
     page.drawText(ceoText, {
       x: PAGE_W - MARGIN_R - fonts.bold.widthOfTextAtSize(ceoText, fSize) - 12,
-      y: FOOT_CONTACT_Y + footLift,
+      y: FOOT_CONTACT_Y + addrShift + footLift,
       size: fSize,
       font: fonts.bold,
       color: INK,
     });
-    put("시    행", `${layout.letterNo ?? "(채번 예정)"}     (${layout.issueDate})`, FOOT_ISSUE_Y);
+    put("시    행", `${layout.letterNo ?? "(채번 예정)"}     (${layout.issueDate})`, FOOT_ISSUE_Y + addrShift);
+    // 주소 표기(선택) — 시행 아래·전화 위. 켜면 위쪽 줄들이 한 칸 올라간다.
+    if (layout.includeAddress) put("주    소", layout.companyAddress, FOOT_ISSUE_Y);
     put("전    화", `${layout.contactPhone}  /  ${layout.contactEmail}`, FOOT_PHONE_Y);
   }
 

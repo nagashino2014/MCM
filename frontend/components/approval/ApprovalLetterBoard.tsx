@@ -418,6 +418,9 @@ export function ApprovalLetterBoard() {
   const [attachItems, setAttachItems] = useState<string[]>([]);
   const [stampOn, setStampOn] = useState(true);
   const [includeHwpx, setIncludeHwpx] = useState(false);
+  // 하단 고정부 회사 주소 표기(2026-08-20 내부 의견) — 신규 작성은 표기가 기본,
+  // 재편집 문서는 저장값을 따른다(값이 없던 과거 공문은 종전대로 미표기).
+  const [includeAddress, setIncludeAddress] = useState(true);
   const [contactPhone, setContactPhone] = useState(COMPANY_PHONE);
   const [contactEmail, setContactEmail] = useState(COMPANY_CONTACT_EMAIL);
   const [line, setLine] = useState<LineStep[]>([]);
@@ -593,6 +596,7 @@ export function ApprovalLetterBoard() {
         setStampOn(v.stamp !== 0);
         setInternalCcTarget(v.internal_cc_target === "company" ? "company" : "personal");
         setIncludeHwpx(v.include_hwpx === 1);
+        setIncludeAddress(v.include_address === 1);
         setOverrides(v.layout_overrides ?? {});
         setContactPhone(v.contact_phone || COMPANY_PHONE);
         setContactEmail(v.contact_email || COMPANY_CONTACT_EMAIL);
@@ -742,6 +746,7 @@ export function ApprovalLetterBoard() {
       attachments_list: attachItems.map((t, i) => ({ no: i + 1, text: t })).filter((a) => a.text.trim()),
       stamp: stampOn ? 1 : 0,
       include_hwpx: includeHwpx ? 1 : 0,
+      include_address: includeAddress ? 1 : 0,
       contact_phone: contactPhone,
       contact_email: contactEmail,
       internal_cc_target: internalCcTarget,
@@ -760,7 +765,7 @@ export function ApprovalLetterBoard() {
     values.recipients_display = recipientsDisplay(values);
     values.letter_kind_display = letterKind === "proof" ? "내용증명" : "일반";
     return values;
-  }, [letterKind, recipients, ccRefs, subject, attachItems, stampOn, includeHwpx, contactPhone, contactEmail, proofSender, proofReceiver, overrides, fileAttachments, deliverableId, extraDeliverableIds, internalCcTarget]);
+  }, [letterKind, recipients, ccRefs, subject, attachItems, stampOn, includeHwpx, includeAddress, contactPhone, contactEmail, proofSender, proofReceiver, overrides, fileAttachments, deliverableId, extraDeliverableIds, internalCcTarget]);
 
   // 직접 지정 번호 — 연도는 채번 예정 번호(없으면 확정 번호/올해) 기준.
   const letterYear = (nextNo ?? docNo ?? "").slice(0, 4) || String(new Date().getFullYear());
@@ -1128,6 +1133,9 @@ export function ApprovalLetterBoard() {
               </label>
               <label className="flex items-center gap-1.5 text-[12px] cd-text cursor-pointer" title="발송 메일에 PDF 외 HWPX 원본도 첨부합니다.">
                 <input type="checkbox" checked={includeHwpx} onChange={(e) => setIncludeHwpx(e.target.checked)} /> HWPX 동봉
+              </label>
+              <label className="flex items-center gap-1.5 text-[12px] cd-text cursor-pointer" title="공문 하단 고정부(담당·시행·전화)에 회사 주소 한 줄을 넣습니다.">
+                <input type="checkbox" checked={includeAddress} onChange={(e) => setIncludeAddress(e.target.checked)} /> 주소 표기
               </label>
             </div>
 

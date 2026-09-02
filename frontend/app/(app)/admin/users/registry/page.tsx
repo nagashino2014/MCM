@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
-import { KeyRound, RefreshCw, ShieldAlert, UserRoundPlus } from "lucide-react";
+import { FolderPlus, KeyRound, RefreshCw, ShieldAlert, UserRoundPlus } from "lucide-react";
 import EmployeeRegistryPanel from "@/components/admin/users/EmployeeRegistryPanel";
 import OrganizationTree from "@/components/admin/users/OrganizationTree";
 import type {
@@ -100,6 +100,32 @@ function Inner() {
     [toast]
   );
 
+  // 신규 부서 생성 — 이름만 받아 기본값(division·순서 100)으로 만들고, 상위 부서·직급은
+  // 생성 직후 선택되는 기존 "부서 편집" 폼에서 조정한다(저장 API 는 upsert 라 그대로 재사용).
+  const addDepartment = useCallback(async () => {
+    const name = prompt("새 부서 이름을 입력하세요.")?.trim();
+    if (!name) return;
+    if (organization?.departments.some((dept) => dept.deptName === name)) {
+      toast.show("같은 이름의 부서가 이미 있습니다.", "error");
+      return;
+    }
+    try {
+      const res = await fetch("/api/admin/organization", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ deptName: name }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "부서 생성 실패");
+      toast.show(`'${name}' 부서가 추가되었습니다. 상위 부서·직급은 부서 편집에서 조정하세요.`, "success");
+      setSelectedEmployee(null);
+      setSelectedDept(data.department as DepartmentRow);
+      await reload();
+    } catch (err) {
+      toast.show("실패: " + (err as Error).message, "error");
+    }
+  }, [organization, reload, toast]);
+
   useEffect(() => {
     if (sessionStatus === "authenticated") void reload();
   }, [reload, sessionStatus]);
@@ -131,6 +157,10 @@ function Inner() {
         subtitle="조직도 기반으로 부서 위계와 직급 사용 범위를 관리하고, 직원의 기본 정보·학력·자격·증빙을 등록합니다."
         actions={
           <>
+            <button type="button" onClick={addDepartment} className="cd-btn cd-btn-ghost cd-btn-sm">
+              <FolderPlus className="w-3.5 h-3.5" />
+              부서 추가
+            </button>
             <button type="button" onClick={reload} className="cd-btn cd-btn-ghost cd-btn-sm">
               <RefreshCw className={"w-3.5 h-3.5 " + (loading ? "animate-spin" : "")} />
               새로고침

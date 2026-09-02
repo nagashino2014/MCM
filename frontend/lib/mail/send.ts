@@ -183,8 +183,12 @@ export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
   const snippet = text.slice(0, 200);
 
   // 첨부는 트랜잭션 밖에서 S3 업로드(멱등 키 = message_id/파일명).
+  // ⚠ input.attachments 가 아니라 **MIME 에 실린 전체**(= 사용자 첨부 + 서명에서 뽑아낸 인라인
+  //   이미지)를 저장한다. 2026-09-01 실사고: 인라인 이미지를 빼먹어 보낸편지함 본문의
+  //   <img src="cid:…"> 를 풀 첨부 레코드가 없었고(뷰어는 content_id 로 치환한다),
+  //   앱 메일 뷰어에서만 서명 명함이 깨져 보였다(수신 측은 MIME 안에 있으니 정상).
   const storedAtts: { filename: string; contentType: string; size: number; s3Key: string; contentId: string | null }[] = [];
-  for (const a of input.attachments ?? []) {
+  for (const a of attachments) {
     const fname = sanitizeFilename(a.filename || "attachment");
     const storageKey = ["mail", mailbox.mailboxId, msgId, fname].join("/");
     const stored = await putContractDocument(storageKey, a.content, a.contentType || "application/octet-stream");
@@ -221,7 +225,8 @@ export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
         text,
         html,
         rawLength,
-        attachments.length ? 1 : 0,
+        // 첨부 표시(목록 클립)는 실제 파일 기준 — 서명 인라인 이미지만 있는 메일은 첨부 없음
+        attachments.some((a) => !a.contentId) ? 1 : 0,
         sesMessageId ?? null,
         now,
       ]

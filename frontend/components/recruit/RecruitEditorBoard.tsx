@@ -240,7 +240,7 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
   }, [tree, tplName, tplDesc, docTheme, posting, toast]);
 
   const doExport = useCallback(
-    async (kind: "png" | "pdf") => {
+    async (kind: "png" | "pdf", pngWidthPx?: number) => {
       const el = canvasRef.current;
       if (!el) return;
       setExporting(kind);
@@ -249,7 +249,7 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
       try {
         await new Promise((r) => setTimeout(r, 60));
         const base = (title || "채용공고").replace(/[\\/:*?"<>|]/g, "_");
-        if (kind === "png") await exportElementPng(el, base);
+        if (kind === "png") await exportElementPng(el, base, pngWidthPx);
         else await exportElementPdf(el, base);
         toast(`${kind.toUpperCase()} 로 내보냈습니다.`, "success");
       } catch (e) {
@@ -261,6 +261,20 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
     },
     [editable, title, toast]
   );
+
+  // PNG 해상도 선택 — 가로 px 를 입력하면 세로는 문서 비율로 자동 계산(사람인 최대 860×9000 대응).
+  const [pngOpen, setPngOpen] = useState(false);
+  const [pngWidth, setPngWidth] = useState("860");
+  const [docRatio, setDocRatio] = useState(0); // 세로/가로 비율(모달 열 때 측정)
+
+  const openPngModal = useCallback(() => {
+    const el = canvasRef.current;
+    if (el && el.offsetWidth > 0) setDocRatio(el.offsetHeight / el.offsetWidth);
+    setPngOpen(true);
+  }, []);
+
+  const pngWidthNum = Math.min(Math.max(Number(pngWidth) || 0, 0), 4000);
+  const pngHeightNum = docRatio > 0 ? Math.round(pngWidthNum * docRatio) : 0;
 
   const accentSwatches = useMemo(() => {
     const opts = docTheme.accentOptions ?? [];
@@ -311,7 +325,7 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
               variant="soft"
               icon={exporting === "png" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
               disabled={exporting !== null}
-              onClick={() => void doExport("png")}
+              onClick={openPngModal}
             >
               PNG
             </CdButton>
@@ -481,6 +495,70 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
           </CdButton>
         </aside>
       </div>
+
+      {/* PNG 내보내기 — 해상도 선택 */}
+      <CdModal
+        open={pngOpen}
+        onClose={() => setPngOpen(false)}
+        title="PNG 내보내기"
+        size="sm"
+        footer={
+          <div className="flex justify-end gap-2">
+            <CdButton onClick={() => setPngOpen(false)}>취소</CdButton>
+            <CdButton
+              variant="primary"
+              disabled={pngWidthNum < 100}
+              onClick={() => {
+                setPngOpen(false);
+                void doExport("png", pngWidthNum);
+              }}
+            >
+              내보내기
+            </CdButton>
+          </div>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          <div>
+            <label className="block text-xs font-bold mb-1 cd-text-muted">가로 픽셀</label>
+            <input
+              className="cd-input w-full"
+              inputMode="numeric"
+              value={pngWidth}
+              onChange={(e) => setPngWidth(e.target.value.replace(/[^0-9]/g, ""))}
+            />
+            <p className="text-[11px] mt-1 cd-text-faint">
+              세로는 비율에 맞춰 자동:{" "}
+              <b className="cd-text">{pngWidthNum >= 100 && pngHeightNum > 0 ? `${pngWidthNum} × ${pngHeightNum}px` : "-"}</b>
+              {pngHeightNum > 9000 && (
+                <span style={{ color: "var(--cd-warning)" }}> — 세로 9,000px 초과(사람인 제한). 가로를 줄이거나 내용을 줄여 주세요.</span>
+              )}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            {[
+              { label: "사람인 (860)", w: 860 },
+              { label: "원본 (900)", w: 900 },
+              { label: "고해상도 (1800)", w: 1800 },
+            ].map((p) => (
+              <button
+                key={p.w}
+                type="button"
+                onClick={() => setPngWidth(String(p.w))}
+                className="cd-btn cd-btn-sm flex-1"
+                style={
+                  pngWidthNum === p.w
+                    ? { background: "var(--cd-primary)", color: "#fff" }
+                    : { background: "var(--cd-primary-soft)", color: "var(--cd-primary)" }
+                }
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-[11px] cd-text-faint">사람인 게시 이미지 규격: 최대 가로 860 × 세로 9,000px · 4MB.</p>
+        </div>
+      </CdModal>
 
       {/* 부문 템플릿으로 저장 */}
       <CdModal

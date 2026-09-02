@@ -275,7 +275,7 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
   }, [tree, tplMode, tplName, tplDesc, tplTargetId, tplList, docTheme, posting, toast]);
 
   const doExport = useCallback(
-    async (kind: "png" | "pdf", pngWidthPx?: number) => {
+    async (kind: "png" | "pdf", pngWidthPx?: number, pngFormat: "png" | "jpeg" = "png") => {
       const el = canvasRef.current;
       if (!el) return;
       setExporting(kind);
@@ -284,7 +284,7 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
       try {
         await new Promise((r) => setTimeout(r, 60));
         const base = (title || "채용공고").replace(/[\\/:*?"<>|]/g, "_");
-        if (kind === "png") await exportElementPng(el, base, pngWidthPx);
+        if (kind === "png") await exportElementPng(el, base, pngWidthPx, pngFormat);
         else await exportElementPdf(el, base);
         toast(`${kind.toUpperCase()} 로 내보냈습니다.`, "success");
       } catch (e) {
@@ -300,6 +300,7 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
   // PNG 해상도 선택 — 가로 px 를 입력하면 세로는 문서 비율로 자동 계산(사람인 최대 860×9000 대응).
   const [pngOpen, setPngOpen] = useState(false);
   const [pngWidth, setPngWidth] = useState("860");
+  const [pngFormat, setPngFormat] = useState<"png" | "jpeg">("png");
   const [docRatio, setDocRatio] = useState(0); // 세로/가로 비율(모달 열 때 측정)
 
   const openPngModal = useCallback(() => {
@@ -549,7 +550,7 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
               disabled={pngWidthNum < 100}
               onClick={() => {
                 setPngOpen(false);
-                void doExport("png", pngWidthNum);
+                void doExport("png", pngWidthNum, pngFormat);
               }}
             >
               내보내기
@@ -595,7 +596,35 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
               </button>
             ))}
           </div>
-          <p className="text-[11px] cd-text-faint">사람인 게시 이미지 규격: 최대 가로 860 × 세로 9,000px · 4MB.</p>
+          <div>
+            <label className="block text-xs font-bold mb-1 cd-text-muted">파일 형식</label>
+            <div className="flex gap-2">
+              {(
+                [
+                  { key: "png", label: "PNG (무손실 · 권장)" },
+                  { key: "jpeg", label: "JPG (용량 작음)" },
+                ] as const
+              ).map((f) => (
+                <button
+                  key={f.key}
+                  type="button"
+                  onClick={() => setPngFormat(f.key)}
+                  className="cd-btn cd-btn-sm flex-1"
+                  style={
+                    pngFormat === f.key
+                      ? { background: "var(--cd-primary)", color: "#fff" }
+                      : { background: "var(--cd-primary-soft)", color: "var(--cd-primary)" }
+                  }
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <p className="text-[11px] cd-text-faint">
+            사람인 게시 이미지 규격: 최대 가로 860 × 세로 9,000px · 4MB. 저해상도 출력도 2배로
+            크게 찍은 뒤 고품질 축소(슈퍼샘플링)하므로 텍스트가 선명하게 유지됩니다.
+          </p>
         </div>
       </CdModal>
 

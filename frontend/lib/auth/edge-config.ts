@@ -59,6 +59,7 @@ export const edgeAuthConfig: NextAuthConfig = {
         path === "/m-demo.html" || // 폰 프레임 시연 래퍼 페이지
         path.startsWith("/m-demo-video/") || // 시연 래퍼가 재생하는 촬영 시연 영상(명함·영수증)
         path === "/privacy.html" || // 개인정보처리방침 — 스토어 심사·직원이 비인증 열람
+        path === "/googlef3a19fec3271c24d.html" || // Search Console 소유권 확인 — 구글 크롤러가 비인증 접근(삭제 금지)
         path.startsWith("/_next/") ||
         path.startsWith("/static/")
       ) {

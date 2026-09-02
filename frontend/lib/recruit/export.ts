@@ -38,7 +38,8 @@ async function downscaleToDataUrl(
   dataUrl: string,
   targetW: number,
   targetH: number,
-  format: "png" | "jpeg"
+  format: "png" | "jpeg",
+  sharpen: boolean
 ): Promise<string> {
   let src: CanvasImageSource = await loadImage(dataUrl);
   let curW = (src as HTMLImageElement).width;
@@ -66,7 +67,32 @@ async function downscaleToDataUrl(
     ctx.fillRect(0, 0, targetW, targetH);
   }
   ctx.drawImage(src, 0, 0, targetW, targetH);
+  if (sharpen) applyUnsharpMask(ctx, targetW, targetH);
   return out.toDataURL(format === "jpeg" ? "image/jpeg" : "image/png", 0.92);
+}
+
+/**
+ * 언샤프 마스크 — out = 원본 + amount × (원본 − 블러). 축소 스무딩으로 잃은 텍스트 경계
+ * 대비를 되살린다(비교 검증에서 축소 단독 대비 체감 선명도가 뚜렷이 개선됨).
+ */
+function applyUnsharpMask(ctx: CanvasRenderingContext2D, w: number, h: number, amount = 0.5): void {
+  const blurCanvas = document.createElement("canvas");
+  blurCanvas.width = w;
+  blurCanvas.height = h;
+  const bctx = blurCanvas.getContext("2d")!;
+  bctx.filter = "blur(1px)";
+  bctx.drawImage(ctx.canvas, 0, 0);
+  const sharp = ctx.getImageData(0, 0, w, h);
+  const blur = bctx.getImageData(0, 0, w, h);
+  const s = sharp.data;
+  const b = blur.data;
+  for (let i = 0; i < s.length; i += 4) {
+    for (let k = 0; k < 3; k++) {
+      const v = s[i + k] + amount * (s[i + k] - b[i + k]);
+      s[i + k] = v < 0 ? 0 : v > 255 ? 255 : v;
+    }
+  }
+  ctx.putImageData(sharp, 0, 0);
 }
 
 /**
@@ -91,7 +117,9 @@ export async function exportElementPng(
   const dataUrl = await captureNode(el, captureRatio);
   const targetH = Math.round((el.offsetHeight * targetWidth) / el.offsetWidth);
   const finalUrl =
-    supersample || format === "jpeg" ? await downscaleToDataUrl(dataUrl, targetWidth, targetH, format) : dataUrl;
+    supersample || format === "jpeg"
+      ? await downscaleToDataUrl(dataUrl, targetWidth, targetH, format, supersample)
+      : dataUrl;
   downloadUrl(finalUrl, name);
 }
 

@@ -105,6 +105,38 @@ export async function createTemplate(input: {
   return (await getTemplate(id))!;
 }
 
+/**
+ * 템플릿 갱신 — 주어진 필드만 바꾼다. 이름·설명 변경과
+ * "기존 템플릿 덮어쓰기"(에디터 콘텐츠로 design_tree/theme 교체) 공용.
+ */
+export async function updateTemplate(input: {
+  templateId: string;
+  name?: string;
+  description?: string;
+  tree?: unknown;
+  theme?: unknown;
+  docWidth?: number;
+}): Promise<RecruitTemplateRow> {
+  const existing = await getTemplate(input.templateId);
+  if (!existing) throw Object.assign(new Error("템플릿을 찾을 수 없습니다."), { status: 404 });
+  const name = input.name != null ? input.name.trim() : existing.name;
+  if (!name) throw Object.assign(new Error("템플릿 이름을 입력하세요."), { status: 400 });
+  const tree = input.tree != null ? sanitizeTree(input.tree).tree : existing.designTree;
+  const theme = input.theme != null ? sanitizeTheme(input.theme) : existing.theme;
+  const description = input.description != null ? input.description.trim() || null : existing.description;
+  const docWidth = input.docWidth != null
+    ? Math.min(Math.max(Number(input.docWidth) || 900, 320), 2400)
+    : existing.docWidth;
+  const db = await getDb();
+  await db.exec(
+    `UPDATE recruit_templates
+        SET name = $2, description = $3, design_tree = $4::jsonb, theme = $5::jsonb, doc_width = $6, updated_at = $7
+      WHERE template_id = $1`,
+    [input.templateId, name, description, JSON.stringify(tree), JSON.stringify(theme), docWidth, nowIso()]
+  );
+  return (await getTemplate(input.templateId))!;
+}
+
 export async function setTemplateActive(templateId: string, isActive: boolean): Promise<void> {
   const db = await getDb();
   await db.exec(

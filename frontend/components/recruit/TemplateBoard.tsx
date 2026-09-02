@@ -95,6 +95,32 @@ export function TemplateBoard() {
     }
   }, [dupTarget, dupName, load, toast]);
 
+  // 이름·설명 수정
+  const [renameTarget, setRenameTarget] = useState<RecruitTemplateRow | null>(null);
+  const [renameName, setRenameName] = useState("");
+  const [renameDesc, setRenameDesc] = useState("");
+  const [renameBusy, setRenameBusy] = useState(false);
+
+  const renameTemplate = useCallback(async () => {
+    if (!renameTarget || !renameName.trim()) return;
+    setRenameBusy(true);
+    try {
+      const res = await fetch(`/api/recruit/templates/${renameTarget.templateId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: renameName, description: renameDesc }),
+      });
+      if (!res.ok) throw new Error((await res.json())?.error || "수정 실패");
+      toast("템플릿 정보를 수정했습니다.", "success");
+      setRenameTarget(null);
+      await load();
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setRenameBusy(false);
+    }
+  }, [renameTarget, renameName, renameDesc, load, toast]);
+
   // 템플릿 내용 편집 — 편집용 공고를 만들어 에디터로 이동. 수정 후 "부문 템플릿으로 저장"으로 마무리.
   const [editingId, setEditingId] = useState<string | null>(null);
   const editTemplate = useCallback(
@@ -184,7 +210,21 @@ export function TemplateBoard() {
               />
               <div className="p-4 flex flex-col gap-1.5 flex-1">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-bold cd-text truncate">{t.name}</span>
+                  <span className="text-sm font-bold cd-text truncate flex items-center gap-1 min-w-0">
+                    <span className="truncate">{t.name}</span>
+                    <button
+                      type="button"
+                      title="이름·설명 수정"
+                      className="p-0.5 rounded cd-text-faint hover:text-[color:var(--cd-primary)] shrink-0"
+                      onClick={() => {
+                        setRenameTarget(t);
+                        setRenameName(t.name);
+                        setRenameDesc(t.description ?? "");
+                      }}
+                    >
+                      <Pencil className="w-3 h-3" />
+                    </button>
+                  </span>
                   <CdBadge tone={t.isActive ? "success" : "idle"}>{t.isActive ? "사용중" : "비활성"}</CdBadge>
                 </div>
                 {t.description && <p className="text-xs cd-text-muted line-clamp-2">{t.description}</p>}
@@ -226,6 +266,33 @@ export function TemplateBoard() {
         onClose={() => setUploadOpen(false)}
         onRegistered={() => { setUploadOpen(false); void load(); }}
       />
+
+      {/* 이름·설명 수정 */}
+      <CdModal
+        open={renameTarget !== null}
+        onClose={() => setRenameTarget(null)}
+        title="템플릿 정보 수정"
+        size="sm"
+        footer={
+          <div className="flex justify-end gap-2">
+            <CdButton onClick={() => setRenameTarget(null)}>취소</CdButton>
+            <CdButton variant="primary" loading={renameBusy} disabled={!renameName.trim()} onClick={() => void renameTemplate()}>
+              저장
+            </CdButton>
+          </div>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          <div>
+            <label className="block text-xs font-bold mb-1 cd-text-muted">템플릿 이름</label>
+            <input className="cd-input w-full" value={renameName} onChange={(e) => setRenameName(e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-xs font-bold mb-1 cd-text-muted">설명</label>
+            <textarea className="cd-input w-full resize-none" rows={3} value={renameDesc} onChange={(e) => setRenameDesc(e.target.value)} />
+          </div>
+        </div>
+      </CdModal>
 
       {/* 템플릿 복제 — 새 이름 지정 */}
       <CdModal

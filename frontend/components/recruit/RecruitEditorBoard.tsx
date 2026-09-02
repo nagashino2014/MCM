@@ -213,23 +213,57 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
   );
 
   // 현재 문서를 부문별 템플릿으로 저장 — 이후 "새 공고 작성"의 선택지로 나타난다.
+  // 저장 모드 — 새 템플릿 등록 또는 기존 템플릿 덮어쓰기(내용·테마 교체, 이름 유지)
+  const [tplMode, setTplMode] = useState<"new" | "overwrite">("new");
+  const [tplTargetId, setTplTargetId] = useState("");
+  const [tplList, setTplList] = useState<{ templateId: string; name: string }[] | null>(null);
+
+  const openSaveTpl = useCallback(async () => {
+    setTplName(title);
+    setTplMode("new");
+    setSaveTplOpen(true);
+    try {
+      const res = await fetch("/api/recruit/templates", { cache: "no-store" });
+      const data = await res.json();
+      if (res.ok) {
+        const list = (data.templates as { templateId: string; name: string }[]).map((t) => ({
+          templateId: t.templateId,
+          name: t.name,
+        }));
+        setTplList(list);
+        // 이 공고의 원본 템플릿을 덮어쓰기 기본 대상으로
+        setTplTargetId(list.some((t) => t.templateId === posting?.templateId) ? posting!.templateId : list[0]?.templateId ?? "");
+      }
+    } catch {
+      setTplList([]);
+    }
+  }, [title, posting]);
+
   const saveAsTemplate = useCallback(async () => {
-    if (!tree || !tplName.trim()) return;
+    if (!tree) return;
+    if (tplMode === "new" && !tplName.trim()) return;
+    if (tplMode === "overwrite" && !tplTargetId) return;
     setTplSaving(true);
     try {
-      const res = await fetch("/api/recruit/templates", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: tplName,
-          description: tplDesc,
-          tree,
-          theme: docTheme,
-          docWidth: posting?.docWidth ?? 900,
-        }),
-      });
-      if (!res.ok) throw new Error((await res.json())?.error || "템플릿 저장 실패");
-      toast(`「${tplName.trim()}」 템플릿으로 저장했습니다.`, "success");
+      const payload = { tree, theme: docTheme, docWidth: posting?.docWidth ?? 900 };
+      if (tplMode === "new") {
+        const res = await fetch("/api/recruit/templates", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: tplName, description: tplDesc, ...payload }),
+        });
+        if (!res.ok) throw new Error((await res.json())?.error || "템플릿 저장 실패");
+        toast(`「${tplName.trim()}」 템플릿으로 저장했습니다.`, "success");
+      } else {
+        const res = await fetch(`/api/recruit/templates/${tplTargetId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error((await res.json())?.error || "덮어쓰기 실패");
+        const name = tplList?.find((t) => t.templateId === tplTargetId)?.name ?? "";
+        toast(`「${name}」 템플릿을 현재 내용으로 덮어썼습니다.`, "success");
+      }
       setSaveTplOpen(false);
       setTplName("");
       setTplDesc("");
@@ -238,7 +272,7 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
     } finally {
       setTplSaving(false);
     }
-  }, [tree, tplName, tplDesc, docTheme, posting, toast]);
+  }, [tree, tplMode, tplName, tplDesc, tplTargetId, tplList, docTheme, posting, toast]);
 
   const doExport = useCallback(
     async (kind: "png" | "pdf", pngWidthPx?: number) => {
@@ -470,7 +504,7 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
               size="sm"
               block
               icon={<LayoutTemplate className="w-4 h-4" />}
-              onClick={() => { setTplName(title); setSaveTplOpen(true); }}
+              onClick={() => void openSaveTpl()}
             >
               부문 템플릿으로 저장
             </CdButton>
@@ -574,35 +608,94 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
         footer={
           <div className="flex justify-end gap-2">
             <CdButton onClick={() => setSaveTplOpen(false)}>취소</CdButton>
-            <CdButton variant="primary" loading={tplSaving} disabled={!tplName.trim()} onClick={() => void saveAsTemplate()}>
-              템플릿 저장
+            <CdButton
+              variant="primary"
+              loading={tplSaving}
+              disabled={tplMode === "new" ? !tplName.trim() : !tplTargetId}
+              onClick={() => void saveAsTemplate()}
+            >
+              {tplMode === "new" ? "템플릿 저장" : "덮어쓰기"}
             </CdButton>
           </div>
         }
       >
         <div className="flex flex-col gap-3">
-          <div>
-            <label className="block text-xs font-bold mb-1 cd-text-muted">템플릿 이름 (부문명)</label>
-            <input
-              className="cd-input w-full"
-              value={tplName}
-              onChange={(e) => setTplName(e.target.value)}
-              placeholder="예: 화관법 컨설팅 채용공고"
-            />
+          <div className="flex gap-2">
+            {(
+              [
+                { key: "new", label: "새 템플릿으로 저장" },
+                { key: "overwrite", label: "기존 템플릿 덮어쓰기" },
+              ] as const
+            ).map((m) => (
+              <button
+                key={m.key}
+                type="button"
+                onClick={() => setTplMode(m.key)}
+                className="cd-btn cd-btn-sm flex-1"
+                style={
+                  tplMode === m.key
+                    ? { background: "var(--cd-primary)", color: "#fff" }
+                    : { background: "var(--cd-primary-soft)", color: "var(--cd-primary)" }
+                }
+              >
+                {m.label}
+              </button>
+            ))}
           </div>
-          <div>
-            <label className="block text-xs font-bold mb-1 cd-text-muted">설명 (선택)</label>
-            <textarea
-              className="cd-input w-full resize-none"
-              rows={3}
-              value={tplDesc}
-              onChange={(e) => setTplDesc(e.target.value)}
-              placeholder="예: 에코씨앤엠 기술진단 신입/경력 공고용 — 본문 내용 포함"
-            />
-          </div>
-          <p className="text-[11px] cd-text-faint">
-            현재 문서의 내용·서식·테마가 그대로 템플릿이 되어, 새 공고 작성 시 선택지로 나타납니다.
-          </p>
+
+          {tplMode === "new" ? (
+            <>
+              <div>
+                <label className="block text-xs font-bold mb-1 cd-text-muted">템플릿 이름 (부문명)</label>
+                <input
+                  className="cd-input w-full"
+                  value={tplName}
+                  onChange={(e) => setTplName(e.target.value)}
+                  placeholder="예: 화관법 컨설팅 채용공고"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold mb-1 cd-text-muted">설명 (선택)</label>
+                <textarea
+                  className="cd-input w-full resize-none"
+                  rows={3}
+                  value={tplDesc}
+                  onChange={(e) => setTplDesc(e.target.value)}
+                  placeholder="예: 에코씨앤엠 기술진단 신입/경력 공고용 — 본문 내용 포함"
+                />
+              </div>
+              <p className="text-[11px] cd-text-faint">
+                현재 문서의 내용·서식·테마가 그대로 템플릿이 되어, 새 공고 작성 시 선택지로 나타납니다.
+              </p>
+            </>
+          ) : (
+            <>
+              <div>
+                <label className="block text-xs font-bold mb-1 cd-text-muted">덮어쓸 템플릿</label>
+                {tplList === null ? (
+                  <div className="flex items-center gap-2 text-sm cd-text-muted py-2">
+                    <Loader2 className="w-4 h-4 animate-spin" /> 템플릿 불러오는 중…
+                  </div>
+                ) : (
+                  <select
+                    className="cd-input w-full"
+                    value={tplTargetId}
+                    onChange={(e) => setTplTargetId(e.target.value)}
+                  >
+                    {tplList.map((t) => (
+                      <option key={t.templateId} value={t.templateId}>
+                        {t.name}{t.templateId === posting?.templateId ? " (이 공고의 원본)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+              <p className="text-[11px]" style={{ color: "var(--cd-warning)" }}>
+                선택한 템플릿의 디자인·내용이 현재 문서로 교체됩니다(이름·설명은 유지). 이미 만든 공고들은
+                영향받지 않지만, 템플릿 교체는 되돌릴 수 없으니 확인 후 진행하세요.
+              </p>
+            </>
+          )}
         </div>
       </CdModal>
     </div>

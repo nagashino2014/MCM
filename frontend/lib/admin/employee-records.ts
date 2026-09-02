@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 import { encryptPii } from "@/lib/security/pii-crypto";
+import { recordGradeChangeFiling } from "@/lib/filings/store";
 
 export const POSITION_OPTIONS = [
   "대표이사",
@@ -131,6 +132,8 @@ export interface EmployeeDetail extends EmployeeListItem {
   engGrade: string | null;
   envGrade: string | null;
   specialtyField: string | null;
+  /** 엔지니어링협회 회원번호(ETIS 기술자 선택 키, 213) */
+  etisMemberNo: string | null;
   address: string | null;
   residentRegistrationMasked: string | null;
   birthDate: string | null;
@@ -158,6 +161,7 @@ export interface SaveEmployeeInput {
   engGrade?: string | null;
   envGrade?: string | null;
   specialtyField?: string | null;
+  etisMemberNo?: string | null;
   address?: string | null;
   residentRegistrationNo?: string | null;
   mobilePhone?: string | null;
@@ -310,6 +314,7 @@ export async function getEmployeeDetail(employeeId: string): Promise<EmployeeDet
     engGrade: row.eng_grade != null ? String(row.eng_grade) : null,
     envGrade: row.env_grade != null ? String(row.env_grade) : null,
     specialtyField: row.specialty_field != null ? String(row.specialty_field) : null,
+    etisMemberNo: row.etis_member_no != null ? String(row.etis_member_no) : null,
     address: row.address != null ? String(row.address) : null,
     residentRegistrationMasked:
       row.resident_registration_masked != null ? String(row.resident_registration_masked) : null,
@@ -395,8 +400,10 @@ export async function saveEmployeeDetail(
         (employee_id, user_id, employee_no, name, dept_id, position_id, hired_at, job_duties,
          agent_registered_at, eng_grade, env_grade, specialty_field, address,
          resident_registration_encrypted, resident_registration_masked, birth_date, gender,
-         nationality_kind, mobile_phone, email, company_phone, status, memo, created_by, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $25)
+         nationality_kind, mobile_phone, email, company_phone, status, memo, created_by, created_at, updated_at,
+         etis_member_no)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $25,
+         $26)
        ON CONFLICT (employee_id) DO UPDATE SET
          user_id = EXCLUDED.user_id,
          employee_no = EXCLUDED.employee_no,
@@ -420,7 +427,8 @@ export async function saveEmployeeDetail(
          company_phone = EXCLUDED.company_phone,
          status = EXCLUDED.status,
          memo = EXCLUDED.memo,
-         updated_at = EXCLUDED.updated_at`,
+         updated_at = EXCLUDED.updated_at,
+         etis_member_no = EXCLUDED.etis_member_no`,
       [
         employeeId,
         input.userId || null,
@@ -447,10 +455,31 @@ export async function saveEmployeeDetail(
         nullable(input.memo),
         actorUserId,
         now,
+        nullable(input.etisMemberNo),
       ]
     );
 
     await replaceChildren(db, employeeId, input, now);
+
+    // 환경부 등급·전문분야 변경 → IEPS 기술인력 변경신고 대기열(213). 실패해도 저장은 유지 —
+    // 같은 트랜잭션이라 SAVEPOINT 로 감싸 실패 시 이 구간만 되돌린다(미적용 마이그레이션 대비).
+    if (before) {
+      await db.run("SAVEPOINT rf_grade");
+      try {
+        await recordGradeChangeFiling(db, {
+          employeeId,
+          name,
+          beforeGrade: before.env_grade != null ? String(before.env_grade) : null,
+          beforeSpecialty: before.specialty_field != null ? String(before.specialty_field) : null,
+          afterGrade: nullable(input.envGrade),
+          afterSpecialty: nullable(input.specialtyField),
+        });
+        await db.run("RELEASE SAVEPOINT rf_grade");
+      } catch (err) {
+        await db.run("ROLLBACK TO SAVEPOINT rf_grade");
+        console.warn("[filings] grade change record failed", err);
+      }
+    }
 
     if (input.userId) {
       await db.run(

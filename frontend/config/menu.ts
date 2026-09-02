@@ -202,6 +202,7 @@ export const MENU_ITEMS: MenuItem[] = [
       { title: "계약서 작성", href: "/contracts/agreements" },
       { title: "착수계·준공계 작성", href: "/contracts/deliverables" },
       { title: "다운로드/증명서 생성", href: "/contracts/downloads" },
+      { title: "대외 신고 대기열", href: "/contracts/filings" },
     ],
     group: "main",
   },

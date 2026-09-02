@@ -4,8 +4,9 @@
 // 기본 템플릿(저장소 번들 채용공고 디자인)은 목록이 비어 있을 때 원클릭으로 설치할 수 있다.
 
 import { useCallback, useEffect, useState } from "react";
-import { LayoutTemplate, Loader2, Sparkles, Upload } from "lucide-react";
-import { CdBadge, CdButton, CdEmptyState, CdPageHeader, useCdashTheme, useCdToast } from "@/components/cdash";
+import { useRouter } from "next/navigation";
+import { Copy, LayoutTemplate, Loader2, Pencil, Sparkles, Upload } from "lucide-react";
+import { CdBadge, CdButton, CdEmptyState, CdModal, CdPageHeader, useCdashTheme, useCdToast } from "@/components/cdash";
 import type { RecruitTemplateRow } from "@/lib/recruit/types";
 import { parseHandoffHtml } from "@/lib/recruit/parse";
 import { DocMiniPreview } from "./DocCanvas";
@@ -60,6 +61,61 @@ export function TemplateBoard() {
       setSeeding(false);
     }
   }, [load, toast]);
+
+  // 템플릿 복제 — 새 이름으로 디자인·내용 그대로 사본 등록(예: 잡코리아 → 사람인 변형 만들기).
+  const [dupTarget, setDupTarget] = useState<RecruitTemplateRow | null>(null);
+  const [dupName, setDupName] = useState("");
+  const [dupBusy, setDupBusy] = useState(false);
+  const router = useRouter();
+
+  const duplicateTemplate = useCallback(async () => {
+    if (!dupTarget || !dupName.trim()) return;
+    setDupBusy(true);
+    try {
+      const res = await fetch("/api/recruit/templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: dupName,
+          description: dupTarget.description ?? "",
+          tree: dupTarget.designTree,
+          theme: dupTarget.theme,
+          docWidth: dupTarget.docWidth,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json())?.error || "복제 실패");
+      toast(`「${dupName.trim()}」 템플릿을 만들었습니다. 내용 수정은 '내용 편집'으로 이어가세요.`, "success");
+      setDupTarget(null);
+      setDupName("");
+      await load();
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setDupBusy(false);
+    }
+  }, [dupTarget, dupName, load, toast]);
+
+  // 템플릿 내용 편집 — 편집용 공고를 만들어 에디터로 이동. 수정 후 "부문 템플릿으로 저장"으로 마무리.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const editTemplate = useCallback(
+    async (t: RecruitTemplateRow) => {
+      setEditingId(t.templateId);
+      try {
+        const res = await fetch("/api/recruit/postings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ templateId: t.templateId, title: `${t.name} — 템플릿 편집용` }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || "편집용 공고 생성 실패");
+        router.push(`/admin/recruit/${data.posting.postingId}`);
+      } catch (e) {
+        toast((e as Error).message, "error");
+        setEditingId(null);
+      }
+    },
+    [router, toast]
+  );
 
   const toggleActive = useCallback(
     async (t: RecruitTemplateRow) => {
@@ -133,7 +189,28 @@ export function TemplateBoard() {
                 </div>
                 {t.description && <p className="text-xs cd-text-muted line-clamp-2">{t.description}</p>}
                 <div className="text-[11px] cd-text-faint">등록 {t.createdAt.slice(0, 10)}</div>
-                <div className="mt-auto pt-2">
+                <div className="mt-auto pt-2 flex flex-col gap-1.5">
+                  <div className="flex gap-1.5">
+                    <CdButton
+                      size="sm"
+                      variant="soft"
+                      className="flex-1"
+                      icon={<Copy className="w-3.5 h-3.5" />}
+                      onClick={() => { setDupTarget(t); setDupName(`${t.name} 사본`); }}
+                    >
+                      복제
+                    </CdButton>
+                    <CdButton
+                      size="sm"
+                      variant="soft"
+                      className="flex-1"
+                      icon={editingId === t.templateId ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Pencil className="w-3.5 h-3.5" />}
+                      disabled={editingId !== null}
+                      onClick={() => void editTemplate(t)}
+                    >
+                      내용 편집
+                    </CdButton>
+                  </div>
                   <CdButton size="sm" block onClick={() => void toggleActive(t)}>
                     {t.isActive ? "비활성으로 전환" : "다시 활성화"}
                   </CdButton>
@@ -149,6 +226,38 @@ export function TemplateBoard() {
         onClose={() => setUploadOpen(false)}
         onRegistered={() => { setUploadOpen(false); void load(); }}
       />
+
+      {/* 템플릿 복제 — 새 이름 지정 */}
+      <CdModal
+        open={dupTarget !== null}
+        onClose={() => setDupTarget(null)}
+        title="템플릿 복제"
+        size="sm"
+        footer={
+          <div className="flex justify-end gap-2">
+            <CdButton onClick={() => setDupTarget(null)}>취소</CdButton>
+            <CdButton variant="primary" loading={dupBusy} disabled={!dupName.trim()} onClick={() => void duplicateTemplate()}>
+              복제
+            </CdButton>
+          </div>
+        }
+      >
+        <div className="flex flex-col gap-2">
+          <label className="block text-xs font-bold cd-text-muted">새 템플릿 이름</label>
+          <input
+            className="cd-input w-full"
+            value={dupName}
+            onChange={(e) => setDupName(e.target.value)}
+            placeholder="예: 사람인 채용공고 템플릿"
+          />
+          <p className="text-[11px] cd-text-faint">
+            「{dupTarget?.name}」의 디자인과 내용을 그대로 사본으로 만듭니다.
+            텍스트를 고친 변형 템플릿이 목적이라면, 복제 대신 원본 카드의 <b>내용 편집</b>으로
+            들어가 수정한 뒤 <b>부문 템플릿으로 저장</b>에서 새 이름을 붙이는 쪽이 한 번에 끝납니다
+            (편집용 공고는 공고 목록에서 지우면 됩니다).
+          </p>
+        </div>
+      </CdModal>
     </div>
   );
 }

@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  ArrowLeft,
   Check,
   Download,
   Eye,
@@ -306,6 +307,10 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
         }
         actions={
           <div className="flex items-center gap-2 flex-wrap">
+            {/* 공고 목록(새 공고의 템플릿 선택 진입점)으로 복귀 — 변경사항은 자동 저장되어 있다. */}
+            <CdButton size="sm" icon={<ArrowLeft className="w-4 h-4" />} onClick={() => router.push("/admin/recruit")}>
+              공고 목록
+            </CdButton>
             <CdButton size="sm" icon={<Undo2 className="w-4 h-4" />} disabled={past.length === 0} onClick={undo}>
               실행취소
             </CdButton>

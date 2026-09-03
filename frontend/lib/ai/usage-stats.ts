@@ -122,6 +122,22 @@ export async function getKpis(asOf: string, windowDays = 7): Promise<AiUsageKpis
   };
 }
 
+/** 예산 scope(org | feature:<key> | model:<family>) 의 기간 비용 합계(예산 평가용). */
+export async function sumScopeCost(scope: string, from: string, to: string): Promise<number> {
+  const db = await getDb();
+  const values: unknown[] = [];
+  const conds = [rangeCond("l", values, from, to)];
+  if (scope.startsWith("feature:")) {
+    values.push(scope.slice(8));
+    conds.push(`l.feature_key = $${values.length}`);
+  } else if (scope.startsWith("model:")) {
+    values.push(scope.slice(6));
+    conds.push(`l.model_family = $${values.length}`);
+  }
+  const rows = rowsToObjects(await db.exec(`SELECT coalesce(sum(cost_usd), 0) AS cost FROM ai_usage_log l WHERE ${conds.join(" AND ")}`, values));
+  return num(rows[0]?.cost);
+}
+
 // ── 기능별 / 모델별 ─────────────────────────────────────────────────────
 
 export interface FeatureStat {

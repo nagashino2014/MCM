@@ -11,18 +11,22 @@ export interface AiSettings {
   featureModelOverrides: Record<string, string>;
   usdKrwRate: number | null;
   forecastWindowDays: number;
+  /** 단건 고비용 경고 임계(USD). null/0 이면 끔. */
+  singleCallAlertUsd: number | null;
 }
 
 export const AI_SETTINGS_DEFAULTS: AiSettings = {
   featureModelOverrides: {},
   usdKrwRate: null,
   forecastWindowDays: 7,
+  singleCallAlertUsd: 1,
 };
 
 const KEY_MAP: Record<keyof AiSettings, string> = {
   featureModelOverrides: "feature_model_overrides",
   usdKrwRate: "usd_krw_rate",
   forecastWindowDays: "forecast_window_days",
+  singleCallAlertUsd: "single_call_alert_usd",
 };
 
 const CACHE_TTL_MS = 30 * 1000;
@@ -49,6 +53,11 @@ function coerce(settings: AiSettings, key: string, json: unknown): void {
     case "forecast_window_days": {
       const n = Number(json);
       settings.forecastWindowDays = Number.isInteger(n) && n >= 1 && n <= 31 ? n : AI_SETTINGS_DEFAULTS.forecastWindowDays;
+      break;
+    }
+    case "single_call_alert_usd": {
+      const n = json == null ? null : Number(json);
+      settings.singleCallAlertUsd = n != null && Number.isFinite(n) && n > 0 ? n : null;
       break;
     }
     default:

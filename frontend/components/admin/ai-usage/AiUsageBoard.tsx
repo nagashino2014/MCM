@@ -14,9 +14,10 @@ import { DashboardTab } from "./DashboardTab";
 import { FeaturesTab } from "./FeaturesTab";
 import { PricesTab } from "./PricesTab";
 import { SettingsTab } from "./SettingsTab";
+import { BudgetsTab } from "./BudgetsTab";
 import { fmtInt, fmtKrw, fmtPct, fmtUsd, fmtUsdSmall, type RangePreset, type SummaryResponse } from "./types";
 
-type TabKey = "dashboard" | "features" | "prices" | "settings";
+type TabKey = "dashboard" | "features" | "budgets" | "prices" | "settings";
 
 const KST_OFFSET_MS = 9 * 3600 * 1000;
 const todayKst = () => new Date(Date.now() + KST_OFFSET_MS).toISOString().slice(0, 10);
@@ -141,6 +142,7 @@ export function AiUsageBoard() {
   const tabs = [
     { key: "dashboard" as const, label: "대시보드" },
     { key: "features" as const, label: "기능별 현황", count: data?.features.filter((f) => f.calls > 0).length },
+    { key: "budgets" as const, label: "예산 · 알림" },
     { key: "prices" as const, label: "단가 · 모델" },
     { key: "settings" as const, label: "설정 · 이력" },
   ];
@@ -185,6 +187,23 @@ export function AiUsageBoard() {
       {error && (
         <div className="cd-card rounded-2xl p-4 text-sm cd-error-text">{error}</div>
       )}
+
+      {k && k.budget.limitUsd != null && k.budget.limitUsd > 0 && (() => {
+        const limit = k.budget.limitUsd;
+        const over = k.month.cost >= limit;
+        const willOver = !over && k.forecast.blended >= limit;
+        const days = !over && k.window.dailyAvg > 0 ? Math.ceil((limit - k.month.cost) / k.window.dailyAvg) : null;
+        if (!over && !willOver) return null;
+        return (
+          <div className="rounded-2xl border px-4 py-2.5 text-sm flex items-center gap-2" style={{ borderColor: over ? "var(--cd-error)" : "var(--cd-warning)", background: over ? "var(--cd-error-soft)" : "var(--cd-warning-soft)", color: over ? "var(--cd-error)" : "var(--cd-warning)" }}>
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            {over
+              ? `이번 달 AI API 비용 ${fmtUsd(k.month.cost)} 이(가) 예산 ${fmtUsd(limit, 0)} 을(를) 넘었습니다${k.budget.action === "notify" ? " (정책: 경고만)" : k.budget.action === "block_all" ? " (정책: 전체 차단 중)" : " (정책: 비필수 기능 차단 중)"}.`
+              : `지금 속도면 ${days != null ? `${days}일 뒤` : "이번 달 안에"} 예산 ${fmtUsd(limit, 0)} 에 도달합니다 — 월 예상 ${fmtUsd(k.forecast.blended)}.`}
+            <button type="button" className="ml-auto cd-chip cd-chip-sm" onClick={() => setTab("budgets")}>예산 보기</button>
+          </div>
+        );
+      })()}
 
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
         {(kpiCards.length ? kpiCards : Array.from({ length: 6 }, () => null)).map((c, i) => (
@@ -232,6 +251,8 @@ export function AiUsageBoard() {
         <DashboardTab data={data} theme={theme} />
       ) : tab === "features" ? (
         <FeaturesTab data={data} canManage={data.canManage} onChanged={load} />
+      ) : tab === "budgets" ? (
+        <BudgetsTab data={data} canManage={data.canManage} onChanged={load} />
       ) : tab === "prices" ? (
         <PricesTab data={data} canManage={data.canManage} onChanged={load} />
       ) : (

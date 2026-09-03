@@ -41,12 +41,18 @@ function describeHistory(r: HistoryRow): string {
   }
   if (r.targetId === "usd_krw_rate") return `환율 ${String(r.before ?? "(없음)")} → ${String(r.after ?? "(없음)")}`;
   if (r.targetId === "forecast_window_days") return `예측 창 ${String(r.before ?? 7)}일 → ${String(r.after ?? 7)}일`;
+  if (r.targetId === "single_call_alert_usd") return `단건 고비용 임계 $${String(r.before ?? "(기본 1)")} → $${String(r.after ?? "(끔)")}`;
+  if (r.targetTable === "ai_budgets") {
+    const a = r.after as Record<string, unknown> | null;
+    return a ? `예산 ${String(a.label ?? r.targetId)}: 한도 $${String(a.monthlyLimitUsd ?? "?")} · 임계 ${Array.isArray(a.warnPcts) ? a.warnPcts.join("/") : "?"}% · 정책 ${String(a.action ?? "notify")}` : `예산 ${r.targetId} 삭제`;
+  }
   return `${r.targetTable}.${r.targetId} 변경`;
 }
 
 export function SettingsTab({ data, canManage, onChanged }: Props) {
   const [rate, setRate] = useState(data.settings.usdKrwRate != null ? String(data.settings.usdKrwRate) : "");
   const [windowDays, setWindowDays] = useState(String(data.settings.forecastWindowDays));
+  const [singleCall, setSingleCall] = useState(data.settings.singleCallAlertUsd != null ? String(data.settings.singleCallAlertUsd) : "");
   const [saving, setSaving] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [history, setHistory] = useState<HistoryRow[]>([]);
@@ -70,6 +76,7 @@ export function SettingsTab({ data, canManage, onChanged }: Props) {
   useEffect(() => {
     setRate(data.settings.usdKrwRate != null ? String(data.settings.usdKrwRate) : "");
     setWindowDays(String(data.settings.forecastWindowDays));
+    setSingleCall(data.settings.singleCallAlertUsd != null ? String(data.settings.singleCallAlertUsd) : "");
   }, [data.settings]);
 
   const save = async (body: Record<string, unknown>, key: string) => {
@@ -115,6 +122,16 @@ export function SettingsTab({ data, canManage, onChanged }: Props) {
           </div>
           <span className="text-[11px] cd-text-faint">기본 7일 = 기준일 −3 ~ +3. 미래 구간은 자동으로 잘립니다.</span>
         </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="cd-label">단건 고비용 경고 임계 (USD, 호출 1건)</span>
+          <div className="flex items-center gap-2">
+            <input className="cd-input" style={{ width: 90 }} inputMode="decimal" placeholder="1" value={singleCall} onChange={(e) => setSingleCall(e.target.value.replace(/[^0-9.]/g, ""))} disabled={!canManage} />
+            <CdButton size="sm" variant="soft" disabled={!canManage || saving === "single"} onClick={() => save({ singleCallAlertUsd: singleCall ? Number(singleCall) : null }, "single")} icon={saving === "single" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}>
+              저장
+            </CdButton>
+          </div>
+          <span className="text-[11px] cd-text-faint">이 금액 이상인 호출 1건마다 홈 알림벨·푸시·메일로 알립니다. 비우면 끕니다.</span>
+        </label>
         {msg && <div className="text-xs cd-text-muted">{msg}</div>}
       </div>
 
@@ -142,7 +159,7 @@ export function SettingsTab({ data, canManage, onChanged }: Props) {
             <span className="cd-pill cd-pill-idle text-[11px]">미연동 — 법인 조직 전환 후</span>
           </div>
         </div>
-        <p className="text-[11px] cd-text-faint">예산 편집·경고 알림 발송은 P2 에서, Console CSV 수동 대조는 P1 후반에 붙습니다.</p>
+        <p className="text-[11px] cd-text-faint">예산 한도·임계·정책·수신자는 "예산 · 알림" 탭에서 편집합니다. Console CSV 수동 대조는 후속.</p>
       </div>
 
       <div className="cd-card rounded-3xl p-5 flex flex-col gap-3 xl:col-span-3">

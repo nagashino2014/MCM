@@ -12,6 +12,7 @@ import { AI_FEATURES, type AiFeatureKey } from "./features";
 import { computeCostUsd, getModelPrices, normalizeModelFamily, type ClaudeUsage } from "./pricing";
 import { currentAiEnv, logAiUsage, type AiCallStatus } from "./usage-log";
 import { getFeatureModelOverride } from "./settings";
+import { afterCallBudgetCheck, budgetGate } from "./budget";
 
 const ENDPOINT = "https://api.anthropic.com/v1/messages";
 const API_VERSION = "2023-06-01";
@@ -151,6 +152,27 @@ export async function claudeMessages(req: ClaudeMessagesRequest): Promise<Claude
     env,
   };
 
+  // 예산 가드(P2) — 정책이 block_* 이고 한도를 넘었으면 호출하지 않는다. 호출부의 기존 폴백(수동 입력·원문)이 작동한다.
+  const gate = await budgetGate(req.feature, modelFamily);
+  if (gate.blocked) {
+    if (timer) clearTimeout(timer);
+    void logAiUsage({
+      ...base,
+      inputTokens: 0,
+      cacheCreationInputTokens: 0,
+      cacheReadInputTokens: 0,
+      outputTokens: 0,
+      costUsd: null,
+      latencyMs: 0,
+      status: "budget_blocked",
+      httpStatus: null,
+      stopReason: null,
+      requestId: null,
+      meta: { ...shapeMeta(req), reason: gate.reason },
+    });
+    throw new ClaudeClientError(`llm_budget_exceeded: ${gate.reason}`);
+  }
+
   try {
     const res = await fetch(ENDPOINT, {
       method: "POST",
@@ -206,7 +228,7 @@ export async function claudeMessages(req: ClaudeMessagesRequest): Promise<Claude
       stopReason,
       requestId,
       meta: shapeMeta(req),
-    });
+    }).then((logId) => afterCallBudgetCheck({ logId, feature: req.feature, modelFamily, costUsd }));
 
     return { ok: true, status: res.status, data, errorText: null, requestId, usage, costUsd, model, latencyMs, text: joinTextBlocks(data) };
   } catch (e) {

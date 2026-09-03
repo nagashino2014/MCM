@@ -28,7 +28,7 @@ async function listHistory(limit = 50): Promise<AiSettingsHistoryRow[]> {
          FROM audit_log a
          LEFT JOIN users u ON u.user_id = a.actor_user_id
          LEFT JOIN employee_profiles e ON e.user_id = a.actor_user_id
-        WHERE a.target_table IN ('ai_settings', 'ai_model_prices')
+        WHERE a.target_table IN ('ai_settings', 'ai_model_prices', 'ai_budgets')
         ORDER BY a.id DESC
         LIMIT $1`,
       [limit]
@@ -67,6 +67,7 @@ export async function PUT(req: NextRequest) {
       featureModel?: { feature?: unknown; model?: unknown };
       usdKrwRate?: unknown;
       forecastWindowDays?: unknown;
+      singleCallAlertUsd?: unknown;
     };
 
     if (body.featureModel) {
@@ -92,6 +93,13 @@ export async function PUT(req: NextRequest) {
       const n = body.usdKrwRate == null || body.usdKrwRate === "" ? null : Number(body.usdKrwRate);
       if (n != null && (!Number.isFinite(n) || n <= 0)) return NextResponse.json({ error: "환율은 양수여야 합니다." }, { status: 400 });
       await saveAiSetting("usdKrwRate", n, actor.userId);
+      return NextResponse.json({ ok: true });
+    }
+
+    if ("singleCallAlertUsd" in body) {
+      const n = body.singleCallAlertUsd == null || body.singleCallAlertUsd === "" ? null : Number(body.singleCallAlertUsd);
+      if (n != null && (!Number.isFinite(n) || n <= 0)) return NextResponse.json({ error: "단건 고비용 임계는 양수여야 합니다." }, { status: 400 });
+      await saveAiSetting("singleCallAlertUsd", n, actor.userId);
       return NextResponse.json({ ok: true });
     }
 

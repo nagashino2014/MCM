@@ -333,7 +333,22 @@ P0 에서 미룬 것: 라우트별 `userId` 전달(현재 결재 분석·지표 
 | 메뉴 | `config/menu.ts` 사용자 관리 하위 "AI API 사용량" | |
 | 검증 | 스테이징 DB 터널 + `frontend-dev-aws` 로 실측: 4탭 렌더, 모델 변경 what-if($0.0025→$0.0051)·저장·이력·되돌리기 동작, `ai_settings` 원복 확인 | |
 
-P1 에서 미룬 것: Console CSV 수동 대조(탭 ⑤, 218 테이블), 라우트별 `userId` 보강, 시간대 히트맵. 예산 편집·알림은 P2.
+P1 에서 미룬 것: Console CSV 수동 대조(탭 ⑤), 라우트별 `userId` 보강, 시간대 히트맵.
+
+### 8.3 P2 구현 현황 (2026-09-03 코드 완료 · 마이그 218 적용 · 스테이징 DB 로 알림 E2E 확인)
+
+| 산출물 | 파일 | 비고 |
+|---|---|---|
+| 마이그레이션 | `infra/aws/218_ai_budget_alerts_kind.sql` | `ai_budget_alerts.kind/day/message` + 종류별 유니크 dedup, `ai_budgets.label`. (CSV 대조 테이블은 후속 번호로) |
+| 예산 모듈 | `frontend/lib/ai/budget.ts` | CRUD·상태(누계·N일 뒤 도달·예상)·`evaluateBudgets`(임계 월 1회, 초과 전망 일 1회)·`checkSingleCallAlert`(단건 고비용, 설정 `single_call_alert_usd` 기본 $1)·`budgetGate`(60초 캐시)·`afterCallBudgetCheck`(5분 스로틀) |
+| 발송 | `dispatch()` | 홈 알림벨(`alerts` source=ai) + 푸시(`ai.budget` 이벤트 신설) + 메일(SES, `BID_NOTIFY_EMAIL_FROM` 필요). 수신자 비면 `tpl-system-admin` 배정자. dedup 은 INSERT 성공 시에만 발송 |
+| 게이트웨이 | `claude-client.ts` | 호출 전 `budgetGate` → 차단 시 `budget_blocked` 로그 + throw(호출부 폴백). 성공 로그 후 `afterCallBudgetCheck`. `logAiUsage` 가 `log_id` 반환 |
+| 틱 | `app/api/internal/ai-budget-tick` + `instrumentation.ts`(1시간) | KST 09시 이후 일 1회, "오늘 실행" 판정은 메모리 플래그(Aurora auto-pause 보호 규칙) |
+| API | `app/api/admin/ai-usage/budgets` GET/PUT/DELETE | 한도 ≥ $0.01(numeric(12,2)), 저장 직후 1회 평가, 감사 기록 |
+| 화면 | `components/admin/ai-usage/BudgetsTab.tsx` + Board 배너 | 예산 카드(게이지·임계 칩·정책·수신자·차단 중, **한 줄 3열·최대 3개** — 화면·API 모두 제한)·편집 모달(범위 전체/기능/모델, 수신자 `OrgPickerModal`)·알림 이력(카드 아래). KPI 아래 "N일 뒤 도달 / 초과" 배너. 설정 탭에 단건 고비용 임계 |
+| 검증 | 스테이징 DB 로컬 실측 | 한도 $0.01·임계 10/20/50 로 저장 → 10%·20% 알림 2건(bell,push) 발송·이력 표시·배너 표시 확인 후 $100 원복·테스트 행 삭제. 틱 2회 호출 → 1회 실행·1회 done-today |
+
+P2 에서 미룬 것: 스파이크·실패율 알림, 월간 리포트 메일(P5), 자동 강등(P4).
 
 ---
 

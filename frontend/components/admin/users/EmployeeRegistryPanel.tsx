@@ -47,6 +47,7 @@ interface EmployeeDetail {
   engGrade?: string | null;
   envGrade?: string | null;
   specialtyField?: string | null;
+  etisMemberNo?: string | null;
   address?: string | null;
   residentRegistrationNo?: string;
   residentRegistrationMasked?: string | null;
@@ -545,6 +546,7 @@ function BasicTab({
       <TextField label="회사 직통 번호" value={employee.companyPhone ?? ""} onChange={(value) => setEmployee((prev) => ({ ...prev, companyPhone: formatPhoneNumber(value) }))} inputMode="numeric" />
       <TextField label="담당업무" value={employee.jobDuties ?? ""} onChange={(value) => setEmployee((prev) => ({ ...prev, jobDuties: value }))} placeholder="예: 통합허가 인허가 총괄" />
       <TextField label="대행인력등록일" value={employee.agentRegisteredAt ?? ""} onChange={(value) => setEmployee((prev) => ({ ...prev, agentRegisteredAt: formatDateInput(value) }))} placeholder="YYYY-MM-DD" inputMode="numeric" />
+      <TextField label="엔지니어링협회 회원번호" value={employee.etisMemberNo ?? ""} onChange={(value) => setEmployee((prev) => ({ ...prev, etisMemberNo: value.replace(/\D/g, "") }))} placeholder="ETIS 기술자 회원번호" inputMode="numeric" />
       <Field label="기술등급(엔지니어링)">
         <select className="cd-select" value={employee.engGrade ?? ""} onChange={(e) => setEmployee((prev) => ({ ...prev, engGrade: e.target.value || null }))}>
           <option value="">선택</option>

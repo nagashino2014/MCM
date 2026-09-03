@@ -732,6 +732,7 @@ function ContractsInner() {
           contractDate={selected.contractDate}
           contractKind={String(detail.contract.contract_kind ?? "standard")}
           initialMilestones={detail.milestones.map((m) => ({
+            milestoneId: String(m.milestone_id ?? ""),
             stageLabel: String(m.stage_label ?? ""),
             amount: Number(m.amount ?? 0),
             paymentTerms: String(m.payment_terms ?? ""),

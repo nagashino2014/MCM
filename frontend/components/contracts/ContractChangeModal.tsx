@@ -18,7 +18,8 @@ import {
 } from "@/lib/ieps/ordering-subject";
 
 export interface ContractChangePayload {
-  amounts: Array<{ stageLabel: string; previousAmount: string; nextAmount: string }>;
+  // milestoneId: 기존 단계의 식별자 — 단계명을 바꿔도 서버가 어느 단계인지 알 수 있게 함께 보낸다(없으면 신규 행).
+  amounts: Array<{ milestoneId?: string; stageLabel: string; previousAmount: string; nextAmount: string }>;
   servicePeriod: { previous: string; next: string };
   paymentTerms: Array<{ stageLabel: string; previous: string; next: string }>;
   serviceCategory: {
@@ -46,7 +47,7 @@ interface ContractChangeModalProps {
   counterpartyName: string;
   counterpartyBusinessRegistrationNo?: string | null;
   contractDate: string | null;
-  initialMilestones: Array<{ stageLabel: string; amount: number; paymentTerms: string }>;
+  initialMilestones: Array<{ milestoneId?: string; stageLabel: string; amount: number; paymentTerms: string }>;
   initialServiceType: string;
   initialServiceSubtype: string;
   initialIndustryCategory: string;
@@ -108,6 +109,7 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
 
   const [amounts, setAmounts] = useState(
     props.initialMilestones.map((m) => ({
+      milestoneId: m.milestoneId,
       stageLabel: m.stageLabel,
       previousAmount: String(m.amount ?? ""),
       nextAmount: "",
@@ -272,7 +274,7 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
       // 기존 행의 변경 금액이 비어 있으면 기존 금액을 채워 합계가 축소되지 않게 한다.
       const nextAmounts = [
         ...amounts.map((a) => (a.nextAmount === "" ? { ...a, nextAmount: a.previousAmount } : a)),
-        ...fresh.map((s) => ({ stageLabel: s.label, previousAmount: "", nextAmount: String(s.amount) })),
+        ...fresh.map((s) => ({ milestoneId: undefined, stageLabel: s.label, previousAmount: "", nextAmount: String(s.amount) })),
       ];
       const nextTerms = [...paymentTerms, ...fresh.map((s) => ({ stageLabel: s.label, previous: "", next: "" }))];
       setAmounts(nextAmounts);
@@ -669,14 +671,15 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
                 <div key={idx} className="grid grid-cols-[1fr_140px_140px] gap-2 items-center">
                   <input type="text" className="cd-input" value={row.stageLabel}
                     onChange={(e) => updateAt(amounts, setAmounts, idx, { stageLabel: e.target.value })} />
-                  <input className="cd-input tabular-nums text-right" inputMode="numeric" value={formatThousands(row.previousAmount)}
-                    onChange={(e) => updateAt(amounts, setAmounts, idx, { previousAmount: stripDigits(e.target.value) })} />
+                  {/* 기존 금액은 참고용 표시 전용 — 편집을 열어 두면 변경 금액과 헷갈려 오인 입력이 생긴다(2026-09-03 사용자 리포트). */}
+                  <input disabled className="cd-input tabular-nums text-right disabled:opacity-60" inputMode="numeric"
+                    value={formatThousands(row.previousAmount)} />
                   <input className="cd-input tabular-nums text-right" inputMode="numeric" value={formatThousands(row.nextAmount)}
                     onChange={(e) => updateAt(amounts, setAmounts, idx, { nextAmount: stripDigits(e.target.value) })} />
                 </div>
               ))}
               <div className="flex justify-end gap-2 mt-2">
-                <button type="button" onClick={() => setAmounts([...amounts, { stageLabel: `${amounts.length + 1}차`, previousAmount: "", nextAmount: "" }])}
+                <button type="button" onClick={() => setAmounts([...amounts, { milestoneId: undefined, stageLabel: `${amounts.length + 1}차`, previousAmount: "", nextAmount: "" }])}
                   className="cd-btn cd-btn-ghost rounded-lg px-3 py-1.5 text-[11px] font-bold cd-text-muted">+ 단계 추가</button>
                 <button type="button" onClick={() => setAmounts(amounts.slice(0, -1))} disabled={amounts.length === 0}
                   className="cd-btn cd-btn-ghost rounded-lg px-3 py-1.5 text-[11px] font-bold cd-text-muted disabled:opacity-50">- 단계 삭제</button>

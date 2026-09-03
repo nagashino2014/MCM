@@ -135,33 +135,83 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       // 금액 탭의 '변경 금액'을 실제 청구·수금 단계 금액에 반영(2026-08-26 사용자 리포트).
       // 종전에는 변경 이벤트 이력과 contracts.current_amount 만 갱신하고 단계 금액은 그대로 두어,
       // 감액(국일인토트 5,000만→3,000만 실사례)이 화면에 전혀 반영되지 않았다.
-      // 단계 매칭은 stage_label 기준(payload 가 라벨만 들고 있다), 빈 값은 '유지'라 건너뛴다.
+      // 2026-09-03 보완: ① $금액 파라미터가 amount(double)와 CASE 정수 비교에 섞여 쓰여
+      // "inconsistent types deduced for parameter" 로 저장 전체가 실패했다 → ::double precision 명시.
+      // ② 단계명을 바꾸면 라벨 매칭이 빗나가 반영이 안 됐다 → 모달이 보내는 milestoneId 우선 매칭,
+      //    라벨 매칭도 실패한 신규 행(모달 '+단계 추가')은 새 단계로 INSERT 한다.
       const amountRows = Array.isArray((payload as { amounts?: unknown }).amounts)
         ? ((payload as { amounts: unknown[] }).amounts as Record<string, unknown>[])
         : [];
       let milestoneUpdates = 0;
-      for (const row of amountRows) {
-        const label = String(row?.stageLabel ?? "").trim();
-        const nextRaw = String(row?.nextAmount ?? "").trim();
-        if (!label || !nextRaw) continue;
-        const amount = Number(nextRaw.replace(/[^\d.-]/g, ""));
-        if (!Number.isFinite(amount)) continue;
-        // 금액이 바뀌면 수금비율(기준액 대비)·수금완료 판정도 새 금액 기준으로 다시 계산한다
-        // (2026-08-26 사용자 리포트 — 5,000만→3,000만 감액 후에도 비율이 옛 기준 40% 로 남았다).
-        // 실제 입금액(collected_amount)은 사실이라 그대로 두고 비율만 파생 재계산.
-        await db.run(
-          `UPDATE contract_payment_milestones
-              SET amount = $3,
+      // 금액이 바뀌면 수금비율(기준액 대비)·수금완료 판정도 새 금액 기준으로 다시 계산한다.
+      // 실제 입금액(collected_amount)은 사실이라 그대로 두고 비율만 파생 재계산.
+      const amountRecalcSql = `
+              SET amount = $3::double precision,
+                  stage_label = $5,
                   collection_ratio = CASE
-                    WHEN $3 > 0 THEN ROUND((COALESCE(collected_amount, 0) / $3)::numeric, 3)
+                    WHEN $3::double precision > 0
+                      THEN ROUND((COALESCE(collected_amount, 0) / $3::double precision)::numeric, 3)
                     ELSE collection_ratio END,
                   payment_collected = CASE
-                    WHEN $3 > 0 THEN (CASE WHEN COALESCE(collected_amount, 0) >= $3 - 1 THEN 1 ELSE 0 END)
+                    WHEN $3::double precision > 0
+                      THEN (CASE WHEN COALESCE(collected_amount, 0) >= $3::double precision - 1 THEN 1 ELSE 0 END)
                     ELSE payment_collected END,
-                  updated_at = $4
-            WHERE contract_id = $1 AND stage_label = $2`,
-          [contractId, label, amount, now]
+                  updated_at = $4`;
+      for (const row of amountRows) {
+        const rowMilestoneId = String(row?.milestoneId ?? "").trim();
+        const label = String(row?.stageLabel ?? "").trim();
+        const nextRaw = String(row?.nextAmount ?? "").trim();
+        const amount = nextRaw ? Number(nextRaw.replace(/[^\d.-]/g, "")) : null;
+        const hasAmount = amount != null && Number.isFinite(amount);
+        if (!label) continue;
+
+        if (rowMilestoneId) {
+          // 기존 단계 — 단계명은 항상 갱신, 금액은 새 값이 입력된 경우만(빈 값 = 유지).
+          if (hasAmount) {
+            await db.run(
+              `UPDATE contract_payment_milestones ${amountRecalcSql}
+                WHERE contract_id = $1 AND milestone_id = $2`,
+              [contractId, rowMilestoneId, amount, now, label]
+            );
+          } else {
+            await db.run(
+              `UPDATE contract_payment_milestones SET stage_label = $3, updated_at = $4
+                WHERE contract_id = $1 AND milestone_id = $2 AND stage_label <> $3`,
+              [contractId, rowMilestoneId, label, now]
+            );
+          }
+          milestoneUpdates += 1;
+          continue;
+        }
+
+        if (!hasAmount) continue;
+        // milestoneId 가 없는 행(구버전 payload·차수 파생 단계) — 라벨 매칭 폴백.
+        const updated = rowsToObjects(
+          await db.exec(
+            `UPDATE contract_payment_milestones ${amountRecalcSql}
+              WHERE contract_id = $1 AND stage_label = $2
+              RETURNING milestone_id`,
+            [contractId, label, amount, now, label]
+          )
         );
+        if (updated.length === 0) {
+          // 모달 '+단계 추가'로 새로 만든 행 — 청구·수금 단계로 실제 생성한다.
+          const maxRow = rowsToObjects(
+            await db.exec(
+              "SELECT COALESCE(MAX(stage_order), 0) AS max_order FROM contract_payment_milestones WHERE contract_id = $1",
+              [contractId]
+            )
+          );
+          const stageOrder = Number(maxRow[0]?.max_order ?? 0) + 1;
+          const milestoneId = "mil_" + crypto.randomUUID().replace(/-/g, "").slice(0, 16);
+          await db.run(
+            `INSERT INTO contract_payment_milestones
+              (milestone_id, contract_id, stage_key, stage_label, stage_order, amount,
+               invoice_issued, payment_collected, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, 0, 0, $7, $7)`,
+            [milestoneId, contractId, `stage_${stageOrder}_${milestoneId.slice(-6)}`, label, stageOrder, amount, now]
+          );
+        }
         milestoneUpdates += 1;
       }
 

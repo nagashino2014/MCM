@@ -74,6 +74,8 @@ ${metricDoc}
 규칙: 가능하면 기존 지표를 재사용(1번). 존재하지 않는 키·태그·필드를 지어내지 말 것.`,
       user: question,
       maxTokens: 600,
+      feature: "approval.analytics_ask",
+      userId: actor.userId,
     });
 
     let result: MetricResult;

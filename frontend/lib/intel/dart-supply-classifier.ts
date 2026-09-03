@@ -7,9 +7,9 @@
 import type { IntelSignalType } from "./signal-extractor";
 import type { IntelIndustryItem } from "./intel-settings";
 import type { IndustryRelevance } from "./industry-rules";
+import { claudeMessages } from "@/lib/ai/claude-client";
 
 const MODEL = "claude-haiku-4-5-20251001";
-const ENDPOINT = "https://api.anthropic.com/v1/messages";
 
 export interface SupplyContractClassification {
   isTarget: boolean; // 통합허가 대상 시설의 건설·증설·설비 계약 여부
@@ -135,23 +135,16 @@ export async function classifySupplyContract(
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return null;
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 20000);
-    const res = await fetch(ENDPOINT, {
-      method: "POST",
-      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 500,
-        system: SYSTEM,
-        messages: [{ role: "user", content: buildPrompt(filerName, reportName, docExcerpt, industries) }],
-      }),
-      signal: controller.signal,
+    const r = await claudeMessages({
+      feature: "intel.dart_supply_classify",
+      model: MODEL,
+      max_tokens: 500,
+      system: SYSTEM,
+      messages: [{ role: "user", content: buildPrompt(filerName, reportName, docExcerpt, industries) }],
+      timeoutMs: 20000,
     });
-    clearTimeout(timer);
-    if (!res.ok) return null;
-    const data = (await res.json()) as { content?: { type: string; text?: string }[] };
-    const text = (data.content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join("").trim();
+    if (!r.ok) return null;
+    const text = r.text;
     const j = extractJson(text);
     return j ? normalize(j, industries) : null;
   } catch {

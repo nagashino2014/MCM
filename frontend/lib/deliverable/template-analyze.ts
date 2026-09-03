@@ -160,6 +160,7 @@ export async function analyzeTemplateHwpx(bytes: Uint8Array, kind: DeliverableKi
     throw new Error("양식에서 본문을 찾지 못했습니다. HWPX 파일인지 확인하세요.");
   }
   const raw = await anthropicChatJson<unknown>({
+    feature: "deliverable.template_analyze",
     user: buildPrompt(kind, serializeOutline(outline)),
     model: MODEL,
     maxTokens: 8000,

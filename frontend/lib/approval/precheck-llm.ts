@@ -109,6 +109,8 @@ export async function runLlmCheck(docId: string): Promise<LlmPrecheckResult> {
 
   try {
     const out = await anthropicChatJson<{ findings?: unknown; similar?: unknown }>({
+      feature: "approval.precheck",
+      subject: { type: "approval_doc", id: docId },
       system,
       user,
       model: PRECHECK_MODEL,

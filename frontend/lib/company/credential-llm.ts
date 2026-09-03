@@ -6,11 +6,11 @@
  */
 
 import sharp from "sharp";
+import { claudeMessages } from "@/lib/ai/claude-client";
 
 // 등록증은 생년월일·발행일 등 혼동 요소가 많아 상위 모델 기본(실측: Haiku 는 대표자 생년월일을
 // 취득일로 오파싱). 빈도 낮은 작업이라 비용 영향 미미. env 로 조정 가능.
 const DEFAULT_MODEL = process.env.CREDENTIAL_PARSE_MODEL || "claude-sonnet-5";
-const ENDPOINT = "https://api.anthropic.com/v1/messages";
 
 export interface CredentialFields {
   kind: "license" | "certification";
@@ -74,25 +74,17 @@ export async function parseCredentialWithLlm(file: File): Promise<CredentialFiel
   if (!apiKey) return null;
 
   const block = await toContentBlock(file);
-  const res = await fetch(ENDPOINT, {
-    method: "POST",
-    headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      model: DEFAULT_MODEL,
-      max_tokens: 1000,
-      messages: [{ role: "user", content: [block, { type: "text", text: PROMPT }] }],
-    }),
+  const r = await claudeMessages({
+    feature: "company.credential_parse",
+    model: DEFAULT_MODEL,
+    max_tokens: 1000,
+    messages: [{ role: "user", content: [block, { type: "text", text: PROMPT }] }],
+    meta: { block_type: String((block as { type?: unknown }).type ?? "") },
   });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`면허/인증 분석 API 오류 (HTTP ${res.status}) ${body.slice(0, 200)}`);
+  if (!r.ok) {
+    throw new Error(`면허/인증 분석 API 오류 (HTTP ${r.status}) ${(r.errorText ?? "").slice(0, 200)}`);
   }
-  const json = (await res.json()) as { content?: { type: string; text?: string }[] };
-  const text = (json.content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join("").trim();
+  const text = r.text;
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) throw new Error("면허/인증 분석 결과를 해석하지 못했습니다.");
   const raw = JSON.parse(match[0]) as Record<string, unknown>;

@@ -304,7 +304,7 @@ export const AI_FEATURES = {
 
 P0 는 다른 모든 단계의 전제라 **가장 먼저 배포**해 데이터를 모은다. P0+P1 이 1차 배포 단위.
 
-### 8.1 P0 구현 현황 (2026-09-03 코드 완료, 미커밋·미배포)
+### 8.1 P0 구현 현황 (2026-09-03 커밋 cd79e63 · 마이그 215~216 적용 · next:565 배포)
 
 | 산출물 | 파일 | 비고 |
 |---|---|---|
@@ -317,7 +317,23 @@ P0 는 다른 모든 단계의 전제라 **가장 먼저 배포**해 데이터�
 | 마이그레이션 | `infra/aws/215_ai_usage_log.sql`, `216_ai_model_prices.sql` | 로그 테이블·일별 뷰·권한 `ai.usage.view/manage`·단가 시드 6종 |
 | 검증 | `tsc --noEmit`(수정 파일 필터 에러 0), `scripts/build-batch.mjs` 번들 OK | 실호출 검증은 스테이징 배포 후 영수증·요약 1건으로 `ai_usage_log` 적재 확인 |
 
-P0 에서 미룬 것: 라우트별 `userId` 전달(현재 결재 분석·지표 제안·브리핑 3곳만), DB 모델 오버라이드 해석(P1 에서 `resolveModel` 에 훅), 예산 가드(P2).
+P0 에서 미룬 것: 라우트별 `userId` 전달(현재 결재 분석·지표 제안·브리핑 3곳만), 예산 가드(P2).
+
+### 8.2 P1 구현 현황 (2026-09-03 코드 완료 · 마이그 217 적용 · 스테이징 DB 로 로컬 실측 확인)
+
+| 산출물 | 파일 | 비고 |
+|---|---|---|
+| 마이그레이션 | `infra/aws/217_ai_settings_budgets.sql` | `ai_settings`(kv)·`ai_budgets`(org $100·notify 시드)·`ai_budget_alerts`·뷰 `ai_model_prices_current` |
+| 설정 | `frontend/lib/ai/settings.ts` | 기능별 모델 오버라이드·환율·예측 창. 30초 캐시. 변경은 `audit_log`(action `ai_settings_change`) |
+| 모델 해석 | `claude-client.ts` `resolveModel` (async) | **오버라이드 → 호출부(env) → 코드 기본** |
+| 집계 | `frontend/lib/ai/usage-stats.ts` | KPI(당월·예상 2종·오늘·30일·창)·기능별(입력비/출력비 분해·스파크)·모델별(캐시 적중률)·일별/월별·이력 |
+| 단가 CRUD | `pricing.ts` `listCurrentModelPrices/upsertModelPrice` | 적용일별 이력 보존 |
+| API | `app/api/admin/ai-usage/{summary,logs,prices,settings}` | `ai.usage.view` 조회 / `ai.usage.manage` 변경. logs 는 `format=csv` |
+| 화면 | `components/admin/ai-usage/*` + `app/(app)/admin/ai-usage/page.tsx` | KPI 6 · 기간 프리셋/직접(`CdDateInput`) · 탭 4(대시보드 차트 4종 / 기능별 표+모델 셀렉트+what-if+되돌리기+이력 드로어 / 단가표 편집+실측 모델 단가 / 설정·변경 이력) |
+| 메뉴 | `config/menu.ts` 사용자 관리 하위 "AI API 사용량" | |
+| 검증 | 스테이징 DB 터널 + `frontend-dev-aws` 로 실측: 4탭 렌더, 모델 변경 what-if($0.0025→$0.0051)·저장·이력·되돌리기 동작, `ai_settings` 원복 확인 | |
+
+P1 에서 미룬 것: Console CSV 수동 대조(탭 ⑤, 218 테이블), 라우트별 `userId` 보강, 시간대 히트맵. 예산 편집·알림은 P2.
 
 ---
 

@@ -265,6 +265,8 @@ export const MENU_ITEMS: MenuItem[] = [
       { title: "사용자 등록·삭제", href: "/admin/users/registry" },
       // 접속기록(PR-P1) — 로그인·열람·다운로드 이력. security.access_log RBAC 가드.
       { title: "접속기록 조회", href: "/admin/access-log" },
+      // AI API 사용량·과금(docs/ai-api-usage-management-blueprint.md P1) — ai.usage.view RBAC 가드.
+      { title: "AI API 사용량", href: "/admin/ai-usage" },
     ],
     minRole: "admin",
     group: "system",

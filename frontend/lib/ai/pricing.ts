@@ -87,6 +87,109 @@ export function invalidateModelPriceCache(): void {
   cache = null;
 }
 
+// ── 관리 화면용 CRUD(P1) ─────────────────────────────────────────────────
+
+export interface ModelPriceRow extends ModelPrice {
+  modelFamily: string;
+  effectiveFrom: string;
+  displayName: string;
+  supportsVision: boolean;
+  contextTokens: number;
+  selectable: boolean;
+  deprecatedAt: string | null;
+  note: string | null;
+  updatedAt: string;
+}
+
+function toRow(r: Record<string, unknown>): ModelPriceRow {
+  return {
+    modelFamily: String(r.model_family),
+    effectiveFrom: String(r.effective_from).slice(0, 10),
+    displayName: String(r.display_name ?? r.model_family),
+    inputPerMtok: Number(r.input_per_mtok),
+    cacheWritePerMtok: Number(r.cache_write_per_mtok),
+    cacheReadPerMtok: Number(r.cache_read_per_mtok),
+    outputPerMtok: Number(r.output_per_mtok),
+    supportsVision: Number(r.supports_vision ?? 1) === 1,
+    contextTokens: Number(r.context_tokens ?? 200000),
+    selectable: Number(r.selectable ?? 1) === 1,
+    deprecatedAt: r.deprecated_at != null ? String(r.deprecated_at).slice(0, 10) : null,
+    note: r.note != null ? String(r.note) : null,
+    updatedAt: String(r.updated_at ?? ""),
+  };
+}
+
+/** 모델별 현재 단가 행(적용일 최신). 관리 화면 단가표·모델 셀렉트 후보. */
+export async function listCurrentModelPrices(): Promise<ModelPriceRow[]> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT DISTINCT ON (model_family) *
+         FROM ai_model_prices
+        WHERE effective_from <= CURRENT_DATE
+        ORDER BY model_family, effective_from DESC`
+    )
+  );
+  return rows.map(toRow).sort((a, b) => a.inputPerMtok - b.inputPerMtok || a.modelFamily.localeCompare(b.modelFamily));
+}
+
+/** 단가 이력(모델별 적용일 전부). */
+export async function listModelPriceHistory(modelFamily: string): Promise<ModelPriceRow[]> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec("SELECT * FROM ai_model_prices WHERE model_family = $1 ORDER BY effective_from DESC", [modelFamily])
+  );
+  return rows.map(toRow);
+}
+
+export interface ModelPriceInput {
+  modelFamily: string;
+  effectiveFrom: string;
+  displayName: string;
+  inputPerMtok: number;
+  cacheWritePerMtok: number;
+  cacheReadPerMtok: number;
+  outputPerMtok: number;
+  supportsVision: boolean;
+  contextTokens: number;
+  selectable: boolean;
+  deprecatedAt?: string | null;
+  note?: string | null;
+}
+
+/** (model_family, effective_from) 단위 upsert. 호출 후 캐시를 비운다. 감사 기록은 라우트가 남긴다. */
+export async function upsertModelPrice(input: ModelPriceInput): Promise<void> {
+  const db = await getDb();
+  await db.run(
+    `INSERT INTO ai_model_prices
+       (model_family, effective_from, display_name, input_per_mtok, cache_write_per_mtok, cache_read_per_mtok, output_per_mtok,
+        supports_vision, context_tokens, selectable, deprecated_at, note, updated_at)
+     VALUES ($1, $2::date, $3, $4, $5, $6, $7, $8, $9, $10, $11::date, $12, $13)
+     ON CONFLICT (model_family, effective_from) DO UPDATE SET
+       display_name = EXCLUDED.display_name, input_per_mtok = EXCLUDED.input_per_mtok,
+       cache_write_per_mtok = EXCLUDED.cache_write_per_mtok, cache_read_per_mtok = EXCLUDED.cache_read_per_mtok,
+       output_per_mtok = EXCLUDED.output_per_mtok, supports_vision = EXCLUDED.supports_vision,
+       context_tokens = EXCLUDED.context_tokens, selectable = EXCLUDED.selectable,
+       deprecated_at = EXCLUDED.deprecated_at, note = EXCLUDED.note, updated_at = EXCLUDED.updated_at`,
+    [
+      normalizeModelFamily(input.modelFamily),
+      input.effectiveFrom,
+      input.displayName,
+      input.inputPerMtok,
+      input.cacheWritePerMtok,
+      input.cacheReadPerMtok,
+      input.outputPerMtok,
+      input.supportsVision ? 1 : 0,
+      input.contextTokens,
+      input.selectable ? 1 : 0,
+      input.deprecatedAt ?? null,
+      input.note ?? null,
+      new Date().toISOString(),
+    ]
+  );
+  invalidateModelPriceCache();
+}
+
 /** usage → USD. 단가를 모르는 모델이면 null(로그에는 토큰만 남고 비용은 화면에서 '단가 미등록' 표기). */
 export function computeCostUsd(usage: ClaudeUsage, price: ModelPrice | undefined): number | null {
   if (!price) return null;

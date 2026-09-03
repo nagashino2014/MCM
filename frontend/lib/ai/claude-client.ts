@@ -11,6 +11,7 @@
 import { AI_FEATURES, type AiFeatureKey } from "./features";
 import { computeCostUsd, getModelPrices, normalizeModelFamily, type ClaudeUsage } from "./pricing";
 import { currentAiEnv, logAiUsage, type AiCallStatus } from "./usage-log";
+import { getFeatureModelOverride } from "./settings";
 
 const ENDPOINT = "https://api.anthropic.com/v1/messages";
 const API_VERSION = "2023-06-01";
@@ -69,8 +70,13 @@ export function hasClaudeApiKey(): boolean {
   return Boolean(process.env.ANTHROPIC_API_KEY);
 }
 
-/** 기능의 적용 모델 해석: 호출부 지정 → (P1) 관리 화면 오버라이드 → 코드 기본값. */
-export function resolveModel(feature: AiFeatureKey, requested?: string | null): string {
+/**
+ * 기능의 적용 모델 해석(블루프린트 §3.6): 관리 화면 오버라이드(ai_settings) → 호출부 지정(env var) → 코드 기본값.
+ * 오버라이드 조회는 30초 캐시·실패 시 null 이라 호출 경로를 막지 않는다.
+ */
+export async function resolveModel(feature: AiFeatureKey, requested?: string | null): Promise<string> {
+  const override = await getFeatureModelOverride(feature);
+  if (override) return override;
   if (requested && requested.trim()) return requested.trim();
   return AI_FEATURES[feature].defaultModel;
 }
@@ -113,7 +119,7 @@ export async function claudeMessages(req: ClaudeMessagesRequest): Promise<Claude
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new ClaudeClientError("llm_not_configured");
 
-  const model = resolveModel(req.feature, req.model);
+  const model = await resolveModel(req.feature, req.model);
   const modelFamily = normalizeModelFamily(model);
   const env = currentAiEnv();
   const startedAt = Date.now();

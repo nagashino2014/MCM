@@ -142,6 +142,7 @@ export async function classifySupplyContract(
       system: SYSTEM,
       messages: [{ role: "user", content: buildPrompt(filerName, reportName, docExcerpt, industries) }],
       timeoutMs: 20000,
+      cacheSystem: true,
     });
     if (!r.ok) return null;
     const text = r.text;

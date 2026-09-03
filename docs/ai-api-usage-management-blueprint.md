@@ -348,7 +348,20 @@ P1 에서 미룬 것: Console CSV 수동 대조(탭 ⑤), 라우트별 `userId` 
 | 화면 | `components/admin/ai-usage/BudgetsTab.tsx` + Board 배너 | 예산 카드(게이지·임계 칩·정책·수신자·차단 중, **한 줄 3열·최대 3개** — 화면·API 모두 제한)·편집 모달(범위 전체/기능/모델, 수신자 `OrgPickerModal`)·알림 이력(카드 아래). KPI 아래 "N일 뒤 도달 / 초과" 배너. 설정 탭에 단건 고비용 임계 |
 | 검증 | 스테이징 DB 로컬 실측 | 한도 $0.01·임계 10/20/50 로 저장 → 10%·20% 알림 2건(bell,push) 발송·이력 표시·배너 표시 확인 후 $100 원복·테스트 행 삭제. 틱 2회 호출 → 1회 실행·1회 done-today |
 
-P2 에서 미룬 것: 스파이크·실패율 알림, 월간 리포트 메일(P5), 자동 강등(P4).
+P2 에서 미룬 것: 스파이크·실패율 알림, 월간 리포트 메일(P5).
+
+### 8.4 P4 구현 현황 (2026-09-03 코드 완료 · 스테이징 DB 로 화면 실측)
+
+| 레버 | 파일 | 비고 |
+|---|---|---|
+| 킬 스위치 | `settings.ts` `feature_enabled` · 게이트웨이 · 기능별 표 체크박스 | 끈 기능은 호출 전 `status=disabled` 로그 + throw(호출부 폴백). 행 흐림 + "중지" 배지 |
+| thinking/effort 제어 | `lib/ai/model-caps.ts`(모델 능력표) · `feature_thinking` · 기능별 표 셀렉트 | 모델이 지원하는 조합만 body 에 반영(Sonnet 5/Opus 계열 `thinking: adaptive|disabled`, `output_config.effort`; Opus 5 는 xhigh/max 에서 disabled 불가; Haiku 4.5 는 미지원 → 숨김). 로그 meta `thinking` |
+| 자동 강등 | `auto_downgrade` 설정 · `claude-client.applyAutoDowngrade` · `budget.getOrgBudgetPct`(60초 캐시) · 설정 탭 카드 | 전체 예산 누계 ≥ atPct 면 비필수 기능을 대상 모델(기본 Haiku 4.5)로. 로그 meta `downgraded_from`, 기능별 표 "강등 N" 배지 |
+| 프롬프트 캐싱 | 게이트웨이 `cacheSystem` → `system` 블록에 `cache_control` · 분류기 3종+브리핑 적용 | ⚠ 현재 system 은 수백 자라 최소 캐시 길이(Haiku 2048·Sonnet 1024 토큰) 미만 → 실효 없음. 캐시 적중률(모델 탭)로 관찰, 효과를 보려면 `feedbackBlock`·업종 목록을 system 으로 옮기는 프롬프트 재구성이 필요(후속) |
+| 출력 상한 정합성 | `usage-stats` `avg_max_tokens` · 기능별 표 "출력/상한" 컬럼 | 평균 출력 ÷ 요청 max_tokens. 90% 초과는 경고색(잘림 위험) |
+| 검증 | 스테이징 DB 로컬 실측 | thinking off 저장→유지→원복, 킬 스위치 중지→배지→원복, 설정 탭 자동 강등 카드·변경 이력(킬 스위치/thinking 항목) 확인, `ai_settings` 원복 |
+
+P4 에서 미룬 것: 스크래퍼 카탈로그 분석 사전 확인 모달(§7-11), env var 6종 제거(P1 배포 한 달 뒤), 야간 분류 Batch API 전환(P5), 프롬프트 재구성으로 캐시 실효화.
 
 ---
 

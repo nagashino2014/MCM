@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { History, Loader2, Save } from "lucide-react";
 import { CdButton } from "@/components/cdash/CdButton";
-import { fmtUsd, type SummaryResponse } from "./types";
+import { fmtKstFull, fmtUsd, type SummaryResponse } from "./types";
 
 interface HistoryRow {
   id: number;
@@ -42,6 +42,27 @@ function describeHistory(r: HistoryRow): string {
   if (r.targetId === "usd_krw_rate") return `환율 ${String(r.before ?? "(없음)")} → ${String(r.after ?? "(없음)")}`;
   if (r.targetId === "forecast_window_days") return `예측 창 ${String(r.before ?? 7)}일 → ${String(r.after ?? 7)}일`;
   if (r.targetId === "single_call_alert_usd") return `단건 고비용 임계 $${String(r.before ?? "(기본 1)")} → $${String(r.after ?? "(끔)")}`;
+  if (r.targetId === "feature_enabled") {
+    const b = (r.before ?? {}) as Record<string, boolean>;
+    const a = (r.after ?? {}) as Record<string, boolean>;
+    const keys = new Set([...Object.keys(b), ...Object.keys(a)]);
+    const ch: string[] = [];
+    for (const k of keys) if (b[k] !== a[k]) ch.push(`${k}: ${a[k] === false ? "중지" : "사용"}`);
+    return `킬 스위치 — ${ch.join(", ") || "변경"}`;
+  }
+  if (r.targetId === "feature_thinking") {
+    const b = (r.before ?? {}) as Record<string, { thinking?: string; effort?: string }>;
+    const a = (r.after ?? {}) as Record<string, { thinking?: string; effort?: string }>;
+    const keys = new Set([...Object.keys(b), ...Object.keys(a)]);
+    const fmtT = (t?: { thinking?: string; effort?: string }) => (t ? [t.thinking && `thinking ${t.thinking}`, t.effort && `effort ${t.effort}`].filter(Boolean).join("·") || "(기본)" : "(기본)");
+    const ch: string[] = [];
+    for (const k of keys) if (JSON.stringify(b[k]) !== JSON.stringify(a[k])) ch.push(`${k}: ${fmtT(b[k])} → ${fmtT(a[k])}`);
+    return `thinking/effort — ${ch.join(", ") || "변경"}`;
+  }
+  if (r.targetId === "auto_downgrade") {
+    const a = (r.after ?? {}) as Record<string, unknown>;
+    return `자동 강등 ${a.enabled ? "사용" : "끔"} · ${String(a.atPct ?? 80)}% 이상 → ${String(a.targetModel ?? "")}`;
+  }
   if (r.targetTable === "ai_budgets") {
     const a = r.after as Record<string, unknown> | null;
     return a ? `예산 ${String(a.label ?? r.targetId)}: 한도 $${String(a.monthlyLimitUsd ?? "?")} · 임계 ${Array.isArray(a.warnPcts) ? a.warnPcts.join("/") : "?"}% · 정책 ${String(a.action ?? "notify")}` : `예산 ${r.targetId} 삭제`;
@@ -53,6 +74,7 @@ export function SettingsTab({ data, canManage, onChanged }: Props) {
   const [rate, setRate] = useState(data.settings.usdKrwRate != null ? String(data.settings.usdKrwRate) : "");
   const [windowDays, setWindowDays] = useState(String(data.settings.forecastWindowDays));
   const [singleCall, setSingleCall] = useState(data.settings.singleCallAlertUsd != null ? String(data.settings.singleCallAlertUsd) : "");
+  const [ad, setAd] = useState({ enabled: data.settings.autoDowngrade.enabled, atPct: String(data.settings.autoDowngrade.atPct), targetModel: data.settings.autoDowngrade.targetModel });
   const [saving, setSaving] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [history, setHistory] = useState<HistoryRow[]>([]);
@@ -77,6 +99,7 @@ export function SettingsTab({ data, canManage, onChanged }: Props) {
     setRate(data.settings.usdKrwRate != null ? String(data.settings.usdKrwRate) : "");
     setWindowDays(String(data.settings.forecastWindowDays));
     setSingleCall(data.settings.singleCallAlertUsd != null ? String(data.settings.singleCallAlertUsd) : "");
+    setAd({ enabled: data.settings.autoDowngrade.enabled, atPct: String(data.settings.autoDowngrade.atPct), targetModel: data.settings.autoDowngrade.targetModel });
   }, [data.settings]);
 
   const save = async (body: Record<string, unknown>, key: string) => {
@@ -135,6 +158,31 @@ export function SettingsTab({ data, canManage, onChanged }: Props) {
         {msg && <div className="text-xs cd-text-muted">{msg}</div>}
       </div>
 
+      <div className="cd-card rounded-3xl p-5 flex flex-col gap-4">
+        <h3 className="cd-card-title">자동 강등 (P4)</h3>
+        <p className="text-[11px] cd-text-faint">
+          전체 예산 누계가 기준 %에 도달하면 <b>비필수</b> 기능(영업 인텔·양식 분석·스크래퍼 등)의 호출을 대상 모델로 바꿉니다. 필수(사용자 대면) 기능은 그대로. 강등된 호출은 기능별 표에 "강등 N" 으로 표시됩니다.
+        </p>
+        <label className="inline-flex items-center gap-2 cursor-pointer text-sm">
+          <input type="checkbox" checked={ad.enabled} onChange={(e) => setAd({ ...ad, enabled: e.target.checked })} disabled={!canManage} /> 자동 강등 사용
+        </label>
+        <div className="flex items-center gap-2 flex-wrap text-sm">
+          <span className="cd-label">기준</span>
+          <input className="cd-input" style={{ width: 70 }} inputMode="numeric" value={ad.atPct} onChange={(e) => setAd({ ...ad, atPct: e.target.value.replace(/\D/g, "") })} disabled={!canManage} />
+          <span className="cd-text-muted">% 이상</span>
+          <span className="cd-label ml-2">대상</span>
+          <select className="cd-select" style={{ width: 170 }} value={ad.targetModel} onChange={(e) => setAd({ ...ad, targetModel: e.target.value })} disabled={!canManage}>
+            {data.prices.filter((p) => p.selectable).map((p) => (
+              <option key={p.modelFamily} value={p.modelFamily}>{p.displayName} (${p.inputPerMtok}/${p.outputPerMtok})</option>
+            ))}
+          </select>
+          <CdButton size="sm" variant="soft" disabled={!canManage || saving === "downgrade"} onClick={() => save({ autoDowngrade: { enabled: ad.enabled, atPct: Number(ad.atPct), targetModel: ad.targetModel } }, "downgrade")} icon={saving === "downgrade" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}>
+            저장
+          </CdButton>
+        </div>
+        <p className="text-[11px] cd-text-faint">현재 전체 예산 대비 {data.kpis.budget.pctOfLimit != null ? `${data.kpis.budget.pctOfLimit.toFixed(1)}%` : "예산 미설정"}. 판정은 60초 캐시.</p>
+      </div>
+
       <div className="cd-card rounded-3xl p-5 flex flex-col gap-3">
         <h3 className="cd-card-title">예산 · 연동 상태</h3>
         <div className="flex flex-col gap-2 text-sm">
@@ -171,7 +219,7 @@ export function SettingsTab({ data, canManage, onChanged }: Props) {
           <table className="w-full text-sm">
             <thead>
               <tr className="cd-text-faint text-xs border-b cd-border-c">
-                <th className="py-2 px-2 text-left w-40">일시</th>
+                <th className="py-2 px-2 text-left w-40">일시(KST)</th>
                 <th className="py-2 px-2 text-left w-32">변경자</th>
                 <th className="py-2 px-2 text-left">내용</th>
               </tr>
@@ -184,7 +232,7 @@ export function SettingsTab({ data, canManage, onChanged }: Props) {
               ) : (
                 history.map((r) => (
                   <tr key={r.id} className="border-b cd-border-c">
-                    <td className="py-2 px-2 font-mono text-[11px] cd-text-faint">{r.createdAt.slice(0, 19).replace("T", " ")}</td>
+                    <td className="py-2 px-2 font-mono text-[11px] cd-text-faint">{fmtKstFull(r.createdAt)}</td>
                     <td className="py-2 px-2">{r.actorName ?? r.actorUserId ?? "시스템"}</td>
                     <td className="py-2 px-2 text-xs">{describeHistory(r)}</td>
                   </tr>

@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Download, Loader2, RotateCcw, Search } from "lucide-react";
 import { CdButton } from "@/components/cdash/CdButton";
 import { CdDrawer, CdModal } from "@/components/cdash/CdModal";
+import { modelCaps, type EffortLevel, type ThinkingMode, type ThinkingSetting } from "@/lib/ai/model-caps";
 import {
   GROUP_ORDER,
   STATUS_LABEL,
@@ -75,6 +76,19 @@ export function FeaturesTab({ data, canManage, onChanged }: Props) {
 
   const currentModel = (f: FeatureStat) => overrides[f.featureKey] ?? f.topModel ?? f.defaultModel;
 
+  /** 킬 스위치·thinking/effort 저장(P4) — settings PUT 공통. */
+  const putSetting = async (body: Record<string, unknown>) => {
+    setErr(null);
+    try {
+      const res = await fetch("/api/admin/ai-usage/settings", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j?.error ?? "저장하지 못했습니다.");
+      onChanged();
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  };
+
   const commit = async () => {
     if (!pending) return;
     setSaving(true);
@@ -112,8 +126,9 @@ export function FeaturesTab({ data, canManage, onChanged }: Props) {
       <div className="flex items-center gap-3 flex-wrap">
         <h3 className="cd-card-title">기능별 현황</h3>
         <span className="text-[11px] cd-text-faint">
-          {data.range.from} ~ {data.range.to} · 호출당 입력비/출력비는 현재 단가로 재계산 · 스파크라인은 최근 7일
+          {data.range.from} ~ {data.range.to} · 호출당 입력비/출력비는 현재 단가로 재계산 · 스파크라인은 최근 7일 · 사용 체크 해제 = 킬 스위치(호출 안 함, 기능은 폴백)
         </span>
+        {err && !pending && <span className="text-xs cd-error-text">{err}</span>}
         <label className="ml-auto inline-flex items-center gap-1.5 text-xs cd-text-muted cursor-pointer">
           <input type="checkbox" checked={hideIdle} onChange={(e) => setHideIdle(e.target.checked)} />
           호출 없는 기능 숨김
@@ -125,10 +140,11 @@ export function FeaturesTab({ data, canManage, onChanged }: Props) {
           <thead>
             <tr className="cd-text-faint text-xs border-b cd-border-c">
               <th className="py-2 px-2 text-left min-w-[200px]">기능</th>
-              <th className="py-2 px-2 text-left min-w-[170px]">적용 모델</th>
+              <th className="py-2 px-2 text-left min-w-[190px]">적용 모델 · thinking / effort</th>
               <th className="py-2 px-2 text-right">호출</th>
               <th className="py-2 px-2 text-right">성공률</th>
               <th className="py-2 px-2 text-right">평균 입력/출력 tok</th>
+              <th className="py-2 px-2 text-right" title="평균 출력 토큰 / 요청 max_tokens — 낮으면 상한을 줄이고, 잘림이 있으면 늘린다">출력/상한</th>
               <th className="py-2 px-2 text-right">호출당 입력비</th>
               <th className="py-2 px-2 text-right">호출당 출력비</th>
               <th className="py-2 px-2 text-right">호출당 합계</th>
@@ -142,7 +158,7 @@ export function FeaturesTab({ data, canManage, onChanged }: Props) {
           <tbody>
             {grouped.length === 0 ? (
               <tr>
-                <td colSpan={13} className="py-10 text-center cd-text-faint">표시할 기능이 없습니다.</td>
+                <td colSpan={14} className="py-10 text-center cd-text-faint">표시할 기능이 없습니다.</td>
               </tr>
             ) : (
               grouped.map(({ group, rows }) => (
@@ -152,11 +168,15 @@ export function FeaturesTab({ data, canManage, onChanged }: Props) {
                   rows={rows}
                   prices={prices}
                   overrides={overrides}
+                  enabledMap={data.settings.featureEnabled}
+                  thinkingMap={data.settings.featureThinking}
                   canManage={canManage}
                   selectable={selectable}
                   currentModel={currentModel}
                   onPick={(f, model) => setPending({ f, model })}
                   onDrill={setDrill}
+                  onToggleEnabled={(f, enabled) => putSetting({ featureEnabled: { feature: f.featureKey, enabled } })}
+                  onThinking={(f, t) => putSetting({ featureThinking: { feature: f.featureKey, thinking: t.thinking ?? null, effort: t.effort ?? null } })}
                 />
               ))
             )}
@@ -213,25 +233,37 @@ export function FeaturesTab({ data, canManage, onChanged }: Props) {
   );
 }
 
+const EFFORT_OPTIONS: { v: EffortLevel; label: string }[] = [
+  { v: "low", label: "effort low" },
+  { v: "medium", label: "effort medium" },
+  { v: "high", label: "effort high" },
+  { v: "xhigh", label: "effort xhigh" },
+  { v: "max", label: "effort max" },
+];
+
 function GroupRows({
-  group, rows, prices, overrides, canManage, selectable, currentModel, onPick, onDrill,
+  group, rows, prices, overrides, enabledMap, thinkingMap, canManage, selectable, currentModel, onPick, onDrill, onToggleEnabled, onThinking,
 }: {
   group: string;
   rows: FeatureStat[];
   prices: ModelPriceRow[];
   overrides: Record<string, string>;
+  enabledMap: Record<string, boolean>;
+  thinkingMap: Record<string, ThinkingSetting>;
   canManage: boolean;
   selectable: (f: FeatureStat) => ModelPriceRow[];
   currentModel: (f: FeatureStat) => string;
   onPick: (f: FeatureStat, model: string | null) => void;
   onDrill: (f: FeatureStat) => void;
+  onToggleEnabled: (f: FeatureStat, enabled: boolean) => void;
+  onThinking: (f: FeatureStat, t: ThinkingSetting) => void;
 }) {
   const groupCost = rows.reduce((s, r) => s + r.cost, 0);
   const groupCalls = rows.reduce((s, r) => s + r.calls, 0);
   return (
     <>
       <tr className="cd-surface-bg">
-        <td colSpan={13} className="py-1.5 px-2 text-xs font-semibold cd-text-muted">
+        <td colSpan={14} className="py-1.5 px-2 text-xs font-semibold cd-text-muted">
           {group}
           <span className="ml-2 font-normal cd-text-faint">{fmtInt(groupCalls)}회 · {fmtUsd(groupCost, 3)}</span>
         </td>
@@ -242,44 +274,92 @@ function GroupRows({
         const ok = f.calls ? (f.okCalls / f.calls) * 100 : null;
         const avgIn = f.calls && f.costIn != null ? f.costIn / f.calls : null;
         const avgOut = f.calls && f.costOut != null ? f.costOut / f.calls : null;
+        const enabled = enabledMap[f.featureKey] !== false;
+        const caps = modelCaps(cur);
+        const ts = thinkingMap[f.featureKey] ?? {};
+        const outRatio = f.avgMaxTokens && f.avgMaxTokens > 0 ? (f.avgOutputTokens / f.avgMaxTokens) * 100 : null;
         return (
-          <tr key={f.featureKey} className="border-b cd-border-c cd-row-hover">
+          <tr key={f.featureKey} className={`border-b cd-border-c cd-row-hover ${enabled ? "" : "opacity-60"}`}>
             <td className="py-2 px-2">
               <div className="flex items-center gap-1.5">
+                {canManage && f.registered && (
+                  <input
+                    type="checkbox"
+                    checked={enabled}
+                    title={enabled ? "사용 중 — 해제하면 이 기능의 Claude 호출을 막습니다" : "사용 중지(킬 스위치)"}
+                    onChange={(e) => onToggleEnabled(f, e.target.checked)}
+                  />
+                )}
                 <span className="font-medium">{f.label}</span>
+                {!enabled && <span className="cd-pill cd-pill-error text-[10px]">중지</span>}
                 {f.critical && <span className="cd-pill cd-pill-info text-[10px]">필수</span>}
                 {f.vision && <span className="cd-pill cd-pill-outline text-[10px]">비전</span>}
                 {!f.registered && <span className="cd-pill cd-pill-warn text-[10px]">미등록 키</span>}
+                {f.downgradedCalls > 0 && <span className="cd-pill cd-pill-warn text-[10px]" title="예산 자동 강등으로 다른 모델이 쓰인 호출">강등 {f.downgradedCalls}</span>}
               </div>
               <div className="text-[10px] cd-text-faint font-mono">{f.featureKey}</div>
             </td>
             <td className="py-2 px-2">
               {canManage && f.registered ? (
-                <div className="flex items-center gap-1">
-                  <select
-                    className="cd-select"
-                    style={{ width: 150 }}
-                    value={cur}
-                    onChange={(e) => onPick(f, e.target.value)}
-                    title={overridden ? "관리 화면 오버라이드 적용 중" : "기본값(코드·env)"}
-                  >
-                    {!selectable(f).some((p) => p.modelFamily === cur) && <option value={cur}>{modelLabel(cur, prices)}</option>}
-                    {selectable(f).map((p) => (
-                      <option key={p.modelFamily} value={p.modelFamily}>
-                        {p.displayName} (${p.inputPerMtok}/${p.outputPerMtok})
-                      </option>
-                    ))}
-                  </select>
-                  {overridden && (
-                    <button type="button" className="cd-btn rounded-lg border cd-border-c p-1.5" title="기본값으로" onClick={() => onPick(f, null)}>
-                      <RotateCcw className="w-3.5 h-3.5" />
-                    </button>
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-1">
+                    <select
+                      className="cd-select"
+                      style={{ width: 150 }}
+                      value={cur}
+                      onChange={(e) => onPick(f, e.target.value)}
+                      title={overridden ? "관리 화면 오버라이드 적용 중" : "기본값(코드·env)"}
+                    >
+                      {!selectable(f).some((p) => p.modelFamily === cur) && <option value={cur}>{modelLabel(cur, prices)}</option>}
+                      {selectable(f).map((p) => (
+                        <option key={p.modelFamily} value={p.modelFamily}>
+                          {p.displayName} (${p.inputPerMtok}/${p.outputPerMtok})
+                        </option>
+                      ))}
+                    </select>
+                    {overridden && (
+                      <button type="button" className="cd-btn rounded-lg border cd-border-c p-1.5" title="기본값으로" onClick={() => onPick(f, null)}>
+                        <RotateCcw className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  {(caps.adaptiveThinking || caps.effort) && (
+                    <div className="flex items-center gap-1">
+                      {caps.adaptiveThinking && (
+                        <select
+                          className="cd-select text-[11px]"
+                          style={{ width: 88, padding: "3px 6px" }}
+                          value={ts.thinking ?? ""}
+                          title={`thinking — 미설정이면 모델 기본(${caps.thinkingDefaultOn ? "켜짐" : "꺼짐"}). 구조 추출류는 off 로 출력 토큰 절감`}
+                          onChange={(e) => onThinking(f, { thinking: (e.target.value || null) as ThinkingMode | null, effort: ts.effort ?? null })}
+                        >
+                          <option value="">thinking 기본</option>
+                          <option value="adaptive">thinking on</option>
+                          {caps.thinkingDisable && <option value="off">thinking off</option>}
+                        </select>
+                      )}
+                      {caps.effort && (
+                        <select
+                          className="cd-select text-[11px]"
+                          style={{ width: 104, padding: "3px 6px" }}
+                          value={ts.effort ?? ""}
+                          title="effort — 미설정이면 high. 낮출수록 thinking·출력이 줄어 비용 절감"
+                          onChange={(e) => onThinking(f, { thinking: ts.thinking ?? null, effort: (e.target.value || null) as EffortLevel | null })}
+                        >
+                          <option value="">effort 기본</option>
+                          {EFFORT_OPTIONS.filter((o) => caps.effortLevels.includes(o.v)).map((o) => (
+                            <option key={o.v} value={o.v}>{o.label}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
                   )}
                 </div>
               ) : (
                 <span className="text-xs">
                   {modelLabel(cur, prices)}
                   {overridden && <span className="ml-1 cd-pill cd-pill-info text-[10px]">오버라이드</span>}
+                  {(ts.thinking || ts.effort) && <span className="ml-1 cd-text-faint">{[ts.thinking && `thinking ${ts.thinking}`, ts.effort && `effort ${ts.effort}`].filter(Boolean).join(" · ")}</span>}
                 </span>
               )}
             </td>
@@ -289,6 +369,9 @@ function GroupRows({
               {f.truncatedCalls > 0 && <div className="text-[10px] cd-warn-text">잘림 {f.truncatedCalls}</div>}
             </td>
             <td className="py-2 px-2 text-right tabular-nums text-xs">{fmtInt(f.avgInputTokens)} / {fmtInt(f.avgOutputTokens)}</td>
+            <td className={`py-2 px-2 text-right tabular-nums text-xs ${outRatio != null && outRatio > 90 ? "cd-warn-text" : ""}`} title={f.avgMaxTokens ? `평균 max_tokens ${fmtInt(f.avgMaxTokens)}` : ""}>
+              {outRatio != null ? fmtPct(outRatio) : "-"}
+            </td>
             <td className="py-2 px-2 text-right tabular-nums">{fmtUsdSmall(avgIn)}</td>
             <td className="py-2 px-2 text-right tabular-nums">{fmtUsdSmall(avgOut)}</td>
             <td className="py-2 px-2 text-right tabular-nums font-semibold">{fmtUsdSmall(f.avgCost)}</td>

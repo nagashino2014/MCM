@@ -391,6 +391,7 @@ let lastAfterCallEval = 0;
 
 export function invalidateBudgetCache(): void {
   gateCache = null;
+  orgPctCache = null;
 }
 
 async function loadGate(): Promise<NonNullable<typeof gateCache>> {
@@ -416,6 +417,26 @@ async function loadGate(): Promise<NonNullable<typeof gateCache>> {
   }
   gateCache = state;
   return state;
+}
+
+/** 전체(org) 예산 대비 당월 누계 %(자동 강등 판정용, 60초 캐시). 예산이 없거나 실패면 null. */
+let orgPctCache: { at: number; pct: number | null } | null = null;
+export async function getOrgBudgetPct(): Promise<number | null> {
+  const now = Date.now();
+  if (orgPctCache && now - orgPctCache.at < GATE_TTL_MS) return orgPctCache.pct;
+  let pct: number | null = null;
+  try {
+    const org = (await listBudgets()).find((b) => b.scope === "org" && b.enabled && b.monthlyLimitUsd > 0);
+    if (org) {
+      const mb = monthBounds(kstToday());
+      const cost = await sumScopeCost("org", mb.from, mb.to);
+      pct = (cost / org.monthlyLimitUsd) * 100;
+    }
+  } catch {
+    pct = null;
+  }
+  orgPctCache = { at: now, pct };
+  return pct;
 }
 
 /** 호출 전 예산 가드. 차단이면 사유를 돌려준다(게이트웨이가 로그 후 throw). */

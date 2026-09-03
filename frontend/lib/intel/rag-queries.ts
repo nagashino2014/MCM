@@ -327,6 +327,7 @@ async function callClaude(
     timeoutMs: 180000,
     userId: opts.userId,
     subject: opts.subject,
+    cacheSystem: true,
   });
   if (!r.ok) {
     const detail = r.errorText ?? "";

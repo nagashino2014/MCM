@@ -127,6 +127,7 @@ export async function classifyEiass(
       system: SYSTEM,
       messages: [{ role: "user", content: buildPrompt(input, industries, feedbackBlock) }],
       timeoutMs: 20000,
+      cacheSystem: true,
     });
     if (!r.ok) return null;
     const text = r.text;

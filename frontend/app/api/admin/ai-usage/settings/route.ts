@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getDb, rowsToObjects } from "@/lib/db";
-import { loadAiSettings, saveAiSetting, setFeatureModelOverride } from "@/lib/ai/settings";
+import { loadAiSettings, saveAiSetting, setFeatureEnabled, setFeatureModelOverride, setFeatureThinking } from "@/lib/ai/settings";
 import { AI_FEATURES, isAiFeatureKey } from "@/lib/ai/features";
 import { listCurrentModelPrices, normalizeModelFamily } from "@/lib/ai/pricing";
+import { invalidateBudgetCache } from "@/lib/ai/budget";
+import type { EffortLevel, ThinkingMode } from "@/lib/ai/model-caps";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -65,10 +67,43 @@ export async function PUT(req: NextRequest) {
     const actor = await requirePermission("ai.usage.manage");
     const body = (await req.json().catch(() => ({}))) as {
       featureModel?: { feature?: unknown; model?: unknown };
+      featureEnabled?: { feature?: unknown; enabled?: unknown };
+      featureThinking?: { feature?: unknown; thinking?: unknown; effort?: unknown };
+      autoDowngrade?: { enabled?: unknown; atPct?: unknown; targetModel?: unknown };
       usdKrwRate?: unknown;
       forecastWindowDays?: unknown;
       singleCallAlertUsd?: unknown;
     };
+
+    if (body.featureEnabled) {
+      const feature = body.featureEnabled.feature;
+      if (!isAiFeatureKey(feature)) return NextResponse.json({ error: "알 수 없는 기능 키입니다." }, { status: 400 });
+      const map = await setFeatureEnabled(feature, body.featureEnabled.enabled !== false, actor.userId);
+      return NextResponse.json({ ok: true, featureEnabled: map });
+    }
+
+    if (body.featureThinking) {
+      const feature = body.featureThinking.feature;
+      if (!isAiFeatureKey(feature)) return NextResponse.json({ error: "알 수 없는 기능 키입니다." }, { status: 400 });
+      const t = body.featureThinking.thinking;
+      const e = body.featureThinking.effort;
+      const thinking = t === "adaptive" || t === "off" ? (t as ThinkingMode) : null;
+      const effort = typeof e === "string" && ["low", "medium", "high", "xhigh", "max"].includes(e) ? (e as EffortLevel) : null;
+      const map = await setFeatureThinking(feature, { thinking, effort }, actor.userId);
+      return NextResponse.json({ ok: true, featureThinking: map });
+    }
+
+    if (body.autoDowngrade) {
+      const ad = body.autoDowngrade;
+      const pct = Number(ad.atPct ?? 80);
+      if (!Number.isFinite(pct) || pct <= 0 || pct > 100) return NextResponse.json({ error: "강등 기준 %는 1~100 사이여야 합니다." }, { status: 400 });
+      const target = normalizeModelFamily(String(ad.targetModel ?? "claude-haiku-4-5"));
+      const price = (await listCurrentModelPrices()).find((p) => p.modelFamily === target);
+      if (!price) return NextResponse.json({ error: "강등 대상 모델은 단가표에 있어야 합니다." }, { status: 400 });
+      await saveAiSetting("autoDowngrade", { enabled: ad.enabled === true, atPct: pct, targetModel: target }, actor.userId);
+      invalidateBudgetCache();
+      return NextResponse.json({ ok: true });
+    }
 
     if (body.featureModel) {
       const feature = body.featureModel.feature;

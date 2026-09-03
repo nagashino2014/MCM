@@ -5,7 +5,7 @@
  */
 import { getDb, rowsToObjects } from "@/lib/db";
 
-export type AiCallStatus = "ok" | "error" | "timeout" | "refusal" | "truncated" | "budget_blocked";
+export type AiCallStatus = "ok" | "error" | "timeout" | "refusal" | "truncated" | "budget_blocked" | "disabled";
 
 export interface AiUsageLogRow {
   provider?: string;

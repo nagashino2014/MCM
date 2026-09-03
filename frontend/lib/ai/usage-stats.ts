@@ -157,6 +157,10 @@ export interface FeatureStat {
   avgOutputTokens: number;
   avgCacheReadTokens: number;
   avgLatencyMs: number | null;
+  /** 요청 max_tokens 평균(로그 meta) — 출력 상한 사용률(avgOutputTokens/avgMaxTokens) 계산용. */
+  avgMaxTokens: number | null;
+  downgradedCalls: number;
+  disabledCalls: number;
   cost: number;
   costIn: number | null;
   costOut: number | null;
@@ -178,6 +182,9 @@ export async function getFeatureStats(from: string, to: string, sparkTo: string)
               count(*) FILTER (WHERE l.status IN ('error','timeout')) AS failed_calls,
               avg(l.input_tokens) AS avg_in, avg(l.output_tokens) AS avg_out, avg(l.cache_read_input_tokens) AS avg_cr,
               avg(l.latency_ms) AS avg_latency,
+              avg(NULLIF(l.meta->>'max_tokens', '')::numeric) AS avg_max_tokens,
+              count(*) FILTER (WHERE l.meta ? 'downgraded_from') AS downgraded_calls,
+              count(*) FILTER (WHERE l.status = 'disabled') AS disabled_calls,
               sum(l.cost_usd) AS cost, max(l.cost_usd) AS max_cost,
               sum(${COST_IN_EXPR}) AS cost_in, sum(${COST_OUT_EXPR}) AS cost_out,
               max(l.called_at) AS last_called,
@@ -237,6 +244,9 @@ export async function getFeatureStats(from: string, to: string, sparkTo: string)
       avgOutputTokens: num(r?.avg_out),
       avgCacheReadTokens: num(r?.avg_cr),
       avgLatencyMs: numOrNull(r?.avg_latency),
+      avgMaxTokens: numOrNull(r?.avg_max_tokens),
+      downgradedCalls: num(r?.downgraded_calls),
+      disabledCalls: num(r?.disabled_calls),
       cost: num(r?.cost),
       costIn: numOrNull(r?.cost_in),
       costOut: numOrNull(r?.cost_out),

@@ -11,8 +11,9 @@
 import { AI_FEATURES, type AiFeatureKey } from "./features";
 import { computeCostUsd, getModelPrices, normalizeModelFamily, type ClaudeUsage } from "./pricing";
 import { currentAiEnv, logAiUsage, type AiCallStatus } from "./usage-log";
-import { getFeatureModelOverride } from "./settings";
-import { afterCallBudgetCheck, budgetGate } from "./budget";
+import { getFeatureModelOverride, loadAiSettings } from "./settings";
+import { afterCallBudgetCheck, budgetGate, getOrgBudgetPct } from "./budget";
+import { buildThinkingParams } from "./model-caps";
 
 const ENDPOINT = "https://api.anthropic.com/v1/messages";
 const API_VERSION = "2023-06-01";
@@ -47,8 +48,10 @@ export interface ClaudeMessagesRequest {
   subject?: { type: string; id: string } | null;
   /** 형상 메타(페이지 수·이미지 크기 등). 원문 금지. */
   meta?: Record<string, unknown>;
-  /** body 에 추가로 얹을 파라미터(thinking·output_config 등, P4). */
+  /** body 에 추가로 얹을 파라미터(호출부가 직접 지정, 설정보다 우선). */
   extra?: Record<string, unknown>;
+  /** system 프롬프트에 cache_control(ephemeral) 부착 — 고정 system 이 길 때만 효과(모델별 최소 512~4096 토큰). */
+  cacheSystem?: boolean;
 }
 
 export interface ClaudeMessagesResult {
@@ -80,6 +83,31 @@ export async function resolveModel(feature: AiFeatureKey, requested?: string | n
   if (override) return override;
   if (requested && requested.trim()) return requested.trim();
   return AI_FEATURES[feature].defaultModel;
+}
+
+/**
+ * 자동 강등(P4, 블루프린트 §7-5): 설정이 켜져 있고 전체 예산 누계가 atPct 이상이면 비필수 기능을 target 모델로.
+ * 비전 기능은 target 이 비전을 지원할 때만, 이미 target 이하 단가면 그대로. 실패는 조용히 무시.
+ */
+async function applyAutoDowngrade(feature: AiFeatureKey, model: string): Promise<{ model: string; downgradedFrom: string | null }> {
+  try {
+    const s = await loadAiSettings();
+    const ad = s.autoDowngrade;
+    if (!ad.enabled || AI_FEATURES[feature].critical) return { model, downgradedFrom: null };
+    const target = normalizeModelFamily(ad.targetModel);
+    const family = normalizeModelFamily(model);
+    if (family === target) return { model, downgradedFrom: null };
+    const pct = await getOrgBudgetPct();
+    if (pct == null || pct < ad.atPct) return { model, downgradedFrom: null };
+    const prices = await getModelPrices();
+    const cur = prices[family];
+    const tgt = prices[target];
+    // target 단가를 모르거나 현재 모델이 이미 target 이하 단가면 강등 의미 없음. (비전 지원 여부는 설정 저장 시 단가표로 검증)
+    if (!tgt || (cur && cur.inputPerMtok + cur.outputPerMtok <= tgt.inputPerMtok + tgt.outputPerMtok)) return { model, downgradedFrom: null };
+    return { model: target, downgradedFrom: model };
+  } catch {
+    return { model, downgradedFrom: null };
+  }
 }
 
 export function joinTextBlocks(data: ClaudeResponse | null | undefined): string {
@@ -120,10 +148,12 @@ export async function claudeMessages(req: ClaudeMessagesRequest): Promise<Claude
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new ClaudeClientError("llm_not_configured");
 
-  const model = await resolveModel(req.feature, req.model);
+  const resolved = await resolveModel(req.feature, req.model);
+  const { model, downgradedFrom } = await applyAutoDowngrade(req.feature, resolved);
   const modelFamily = normalizeModelFamily(model);
   const env = currentAiEnv();
   const startedAt = Date.now();
+  const settings = await loadAiSettings();
 
   let controller: AbortController | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -134,12 +164,25 @@ export async function claudeMessages(req: ClaudeMessagesRequest): Promise<Claude
     timer = setTimeout(() => controller?.abort(), req.timeoutMs ?? DEFAULT_TIMEOUT_MS);
   }
 
+  // thinking/effort(P4) — 기능 설정 → 모델 능력표로 걸러 body 에 반영. 호출부 extra 가 우선.
+  const thinking = buildThinkingParams(modelFamily, settings.featureThinking[req.feature]);
+  const system = req.system
+    ? req.cacheSystem
+      ? [{ type: "text", text: req.system, cache_control: { type: "ephemeral" } }]
+      : req.system
+    : undefined;
   const body: Record<string, unknown> = {
     model,
     max_tokens: req.max_tokens,
-    ...(req.system ? { system: req.system } : {}),
+    ...(system ? { system } : {}),
     messages: req.messages,
+    ...thinking.body,
     ...(req.extra ?? {}),
+  };
+  const extraMeta: Record<string, unknown> = {
+    ...(downgradedFrom ? { downgraded_from: downgradedFrom } : {}),
+    ...(Object.keys(thinking.applied).length ? { thinking: thinking.applied } : {}),
+    ...(req.cacheSystem && req.system ? { cache_system: true } : {}),
   };
 
   const base = {
@@ -151,6 +194,26 @@ export async function claudeMessages(req: ClaudeMessagesRequest): Promise<Claude
     subjectId: req.subject?.id ?? null,
     env,
   };
+
+  // 킬 스위치(P4) — 관리 화면에서 끈 기능은 호출하지 않는다(호출부 폴백 동작).
+  if (settings.featureEnabled[req.feature] === false) {
+    if (timer) clearTimeout(timer);
+    void logAiUsage({
+      ...base,
+      inputTokens: 0,
+      cacheCreationInputTokens: 0,
+      cacheReadInputTokens: 0,
+      outputTokens: 0,
+      costUsd: null,
+      latencyMs: 0,
+      status: "disabled",
+      httpStatus: null,
+      stopReason: null,
+      requestId: null,
+      meta: { ...shapeMeta(req), reason: "feature_disabled" },
+    });
+    throw new ClaudeClientError("llm_feature_disabled: 관리 화면에서 사용 중지된 기능");
+  }
 
   // 예산 가드(P2) — 정책이 block_* 이고 한도를 넘었으면 호출하지 않는다. 호출부의 기존 폴백(수동 입력·원문)이 작동한다.
   const gate = await budgetGate(req.feature, modelFamily);
@@ -227,7 +290,7 @@ export async function claudeMessages(req: ClaudeMessagesRequest): Promise<Claude
       httpStatus: res.status,
       stopReason,
       requestId,
-      meta: shapeMeta(req),
+      meta: { ...shapeMeta(req), ...extraMeta },
     }).then((logId) => afterCallBudgetCheck({ logId, feature: req.feature, modelFamily, costUsd }));
 
     return { ok: true, status: res.status, data, errorText: null, requestId, usage, costUsd, model, latencyMs, text: joinTextBlocks(data) };

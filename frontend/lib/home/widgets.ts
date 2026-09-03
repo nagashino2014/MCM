@@ -42,6 +42,8 @@ export const HOME_WIDGETS: HomeWidgetDef[] = [
   { key: "payslipInbox", label: "내 급여명세서", permission: null, defaultW: 8, defaultH: 1 },
   // 재무 알림(P5) — 미분류 카드·수금 대조 대기·세금계산서 전송실패. finance.view 보유자만.
   { key: "financeAlerts", label: "재무 알림", permission: "finance.view", defaultW: 8, defaultH: 1 },
+  // 대외 신고 대기(213) — IEPS 기술인력·대행 실적, ETIS 기술자 변경신고. filing.view 보유자만.
+  { key: "filingQueue", label: "대외 신고 대기", permission: "filing.view", defaultW: 8, defaultH: 1 },
 ];
 
 export const HOME_WIDGET_KEYS = HOME_WIDGETS.map((w) => w.key);

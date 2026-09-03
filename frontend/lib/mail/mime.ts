@@ -86,16 +86,76 @@ function formatAddressList(list: MailAddress[]): string {
   return list.map(formatAddress).join(", ");
 }
 
-/** RFC2231 filename*=UTF-8''<pct> — 비ASCII 파일명 안전 처리.
+/** RFC2231 ext-value(pct-encoded).
  *  ⚠ encodeURIComponent 는 !'()* 를 남기는데, RFC2231 ext-value 에서 괄호·아포스트로피는
  *  attribute-char 가 아니라 SES 가 헤더 파싱을 거부한다(실사고: "(2026-대외-…)" 공문 파일명
  *  발송 실패) — 잔여 특수문자까지 pct-encoding 한다. */
-function encodeFilename(filename: string): string {
-  if (isPlainAscii(filename) && !/["\\()']/.test(filename)) {
-    return `filename="${filename}"`;
+function pctFilename(filename: string): string {
+  return encodeURIComponent(filename).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+}
+
+/**
+ * 비ASCII 파일명의 폴백 이름 — **확장자를 반드시 남긴다**.
+ * 한글을 걷어내고 남은 ASCII 조각(공문번호 등)을 이어 붙이고, 남는 게 없으면 attachment.
+ * 예) "(2026-대외-01050)한국동서발전 당진발전본부 준공계 제출.pdf" → "2026-01050.pdf"
+ */
+function asciiFallbackName(filename: string): string {
+  const dot = filename.lastIndexOf(".");
+  const ext = dot > 0 ? filename.slice(dot).replace(/[^A-Za-z0-9.]/g, "") : "";
+  const base = (dot > 0 ? filename.slice(0, dot) : filename)
+    .replace(/[^\x20-\x7e]+/g, " ")
+    .replace(/["\\()';=,]/g, " ")
+    .trim()
+    .replace(/[\s_]+/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^-|-$/g, "");
+  return (base || "attachment") + ext;
+}
+
+/**
+ * 첨부 파일명 파라미터 — Content-Type 의 name 과 Content-Disposition 의 filename 을 함께 만든다.
+ *
+ * ⚠ 2026-09-01 실사고: 한글 파일명일 때 name 을 "attachment" 고정으로 두고 filename 은
+ * RFC2231(filename*=) 만 보냈다. RFC2231 을 해석하지 못하는 수신 측(공기업 내부 그룹웨어 등)은
+ * 폴백으로 name 을 쓰는데 그 값이 확장자 없는 "attachment" 라, 받는 사람 화면에 확장자 없는
+ * 파일로 떨어져 열리지 않았다(한국동서발전 ewp.co.kr 사례).
+ * → name·filename 에는 **확장자가 살아 있는 ASCII 폴백**을 넣고, filename* 로 원본 한글명을
+ *   함께 보낸다. RFC2231 을 아는 클라이언트는 한글 이름으로, 모르는 쪽도 확장자가 있어 열린다.
+ *   (filename 에 RFC2047 encoded-word 를 넣는 방식은 quoted-string 안에서 접히면 파서마다
+ *    해석이 갈리고, 그마저 못 읽으면 "=?UTF-8?B?…?=" 가 그대로 이름이 돼 확장자를 잃는다.)
+ */
+function filenameParams(filename: string, fallbackOf: (f: string) => string): { name: string; disposition: string } {
+  // 따옴표·역슬래시·괄호·세미콜론 등은 quoted-string 파싱을 흔들 수 있어 ASCII 라도 폴백을 쓴다
+  if (isPlainAscii(filename) && !/["\\()';=]/.test(filename)) {
+    return { name: `name="${filename}"`, disposition: `filename="${filename}"` };
   }
-  const pct = encodeURIComponent(filename).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
-  return `filename*=UTF-8''${pct}`;
+  const fallback = fallbackOf(filename);
+  return {
+    name: `name="${fallback}"`,
+    disposition: `filename="${fallback}"; filename*=UTF-8''${pctFilename(filename)}`,
+  };
+}
+
+/** 메시지 안에서 폴백 이름이 겹치지 않게(첨부가 여럿이면 모두 attachment.pdf 가 될 수 있다) */
+function fallbackNamer(): (filename: string) => string {
+  const used = new Set<string>();
+  return (filename: string): string => {
+    const base = asciiFallbackName(filename);
+    if (!used.has(base)) {
+      used.add(base);
+      return base;
+    }
+    const dot = base.lastIndexOf(".");
+    const stem = dot > 0 ? base.slice(0, dot) : base;
+    const ext = dot > 0 ? base.slice(dot) : "";
+    for (let i = 2; ; i += 1) {
+      const cand = `${stem}-${i}${ext}`;
+      if (!used.has(cand)) {
+        used.add(cand);
+        return cand;
+      }
+    }
+  };
 }
 
 function newBoundary(tag: string): string {
@@ -134,13 +194,18 @@ export function buildMimeMessage(input: BuildMimeInput): Buffer {
   const inlineImages = all.filter((a) => a.contentId);
   const files = all.filter((a) => !a.contentId);
 
-  const partOf = (att: MimeAttachment, boundary: string): string =>
-    `--${boundary}${CRLF}` +
-    `Content-Type: ${att.contentType}; name="${isPlainAscii(att.filename) ? att.filename.replace(/"/g, "") : "attachment"}"${CRLF}` +
-    `Content-Transfer-Encoding: base64${CRLF}` +
-    (att.contentId ? `Content-ID: <${att.contentId}>${CRLF}` : "") +
-    `Content-Disposition: ${att.contentId ? "inline" : "attachment"}; ${encodeFilename(att.filename)}${CRLF}${CRLF}` +
-    `${foldBase64(att.content.toString("base64"))}${CRLF}`;
+  const nextFallback = fallbackNamer();
+  const partOf = (att: MimeAttachment, boundary: string): string => {
+    const fn = filenameParams(att.filename, nextFallback);
+    return (
+      `--${boundary}${CRLF}` +
+      `Content-Type: ${att.contentType}; ${fn.name}${CRLF}` +
+      `Content-Transfer-Encoding: base64${CRLF}` +
+      (att.contentId ? `Content-ID: <${att.contentId}>${CRLF}` : "") +
+      `Content-Disposition: ${att.contentId ? "inline" : "attachment"}; ${fn.disposition}${CRLF}${CRLF}` +
+      `${foldBase64(att.content.toString("base64"))}${CRLF}`
+    );
+  };
 
   const altPart = `Content-Type: multipart/alternative; boundary="${altBoundary}"${CRLF}${CRLF}${altBody}`;
 

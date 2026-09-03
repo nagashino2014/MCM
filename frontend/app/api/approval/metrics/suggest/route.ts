@@ -54,6 +54,8 @@ ${metricDoc}
 규칙: 비용·금액 요청은 대개 approval_docs 태그 집계. 마진율·비율은 composite. "수행 기간" 분석은 system.participants 의 duration_days 를 쓴다(계약 시작·종료일보다 정확). "규모/금액대로 묶어" 요청은 dim.amount_band. 인원별 지표(ref.employee)는 민감 정보다. 존재하지 않는 태그·필드·지표 키를 만들어내지 말 것. **요청이 위 스키마로 정확히 표현되지 않으면 그럴듯한 조합을 지어내지 말고, 가장 가까운 유효한 정의를 고른 뒤 description 에 "요청 중 ~는 현재 지원되지 않아 ~로 근사했습니다"라고 반드시 명시하라.**`,
       user: prompt,
       maxTokens: 800,
+      feature: "approval.metrics_suggest",
+      userId: actor.userId,
     });
 
     const definition = parseMetricDefinition(out?.definition);

@@ -2,50 +2,74 @@
 
 // 노드트리 재귀 렌더러 — 채용공고 문서의 뷰이자 인라인 에디터.
 // 업로드 HTML 을 innerHTML 로 꽂지 않고 React 엘리먼트로만 그린다(스크립트 실행 경로 차단).
-// - 편집 모드: 텍스트 노드는 contentEditable(블러 시 커밋), 반복 항목은 호버 시 추가/삭제/이동 컨트롤.
-// - 읽기 모드(미리보기·축소 카드): 순수 렌더.
+// 편집 모드:
+// - 자식이 전부 인라인인 요소(문단 블록)는 통째로 contentEditable — Enter 줄바꿈, 드래그 선택 후
+//   부분 볼드/색 강조/이미지 삽입이 가능하고, 블러 시 DOM 을 역파싱해 트리에 커밋한다.
+// - 반복 항목·문단 블록·리프 장식 블록에는 data-rcid 를 달아, 캔버스 오버레이(EditorOverlays)가
+//   호버 컨트롤(추가/복제/이동/삭제)을 그 위에 띄운다.
 
-import {
-  createContext,
-  createElement,
-  useContext,
-  useState,
-  type CSSProperties,
-  type ReactNode,
-} from "react";
-import { ArrowDown, ArrowUp, Plus, X } from "lucide-react";
+import { createContext, createElement, useContext, type CSSProperties, type ReactNode } from "react";
 import type { DocNode } from "@/lib/recruit/types";
+import { domToInlineNodes, isInlineBlock, isInlineNode, renderInlineHtml } from "@/lib/recruit/inline";
+
+/**
+ * 필(pill) 배지 렌더 방어 — 인라인 내용만 담은 둥근 배지는 줄바꿈되면 항상 깨진다.
+ * PNG/PDF 캡처(SVG 직렬화)는 텍스트 폭이 화면과 서브픽셀 수준으로 달라질 수 있어,
+ * 여유가 몇 px 뿐인 배지가 캡처에서만 줄바꿈되는 사고("경력직 채용")가 난다.
+ * 저장된 트리를 고치는 대신 렌더 시점에 nowrap 을 보강한다(기존 공고 데이터에도 즉시 적용).
+ */
+function pillSafeStyle(node: DocNode): CSSProperties | undefined {
+  const style = node.style;
+  if (
+    style &&
+    /999|9999px/.test(style.borderRadius ?? "") &&
+    !style.whiteSpace &&
+    (node.children?.length ?? 0) > 0 &&
+    node.children!.every(isInlineNode)
+  ) {
+    return { ...style, whiteSpace: "nowrap" } as CSSProperties;
+  }
+  return style as CSSProperties | undefined;
+}
 
 export interface DocEditorCallbacks {
   editable: boolean;
+  /** 액센트 hex — 편집 중 칠한 색을 var(--accent) 로 정규화할 때 비교 기준. */
+  accentHex: string;
+  /** 문단 블록 편집 커밋 — 자식 노드 배열 교체. */
+  onReplaceChildren: (id: string, children: DocNode[]) => void;
+  /** 문단 블록 밖 단독 텍스트 런의 폴백 커밋. */
   onCommitText: (id: string, text: string) => void;
-  onAddItem: (id: string) => void;
-  onRemoveItem: (id: string) => void;
-  onMoveItem: (id: string, dir: -1 | 1) => void;
 }
 
 const DocEditorContext = createContext<DocEditorCallbacks | null>(null);
 export const DocEditorProvider = DocEditorContext.Provider;
 
-// 반복 항목 호버 컨트롤 색 — 문서는 cdash 스코프 밖이라 hex 고정(cd-primary 계열).
-const CTRL_BG = "#5d87ff";
+/** 오버레이 컨트롤 대상 판정 — EditorOverlays 와 공유. */
+export function controlKind(node: DocNode): "repeat" | "block" | null {
+  if (node.separator || node.tag === "#text") return null;
+  if (node.repeatGroup) return "repeat";
+  if (isInlineBlock(node)) return "block";
+  if (!node.children || node.children.length === 0) return "block"; // 브랜드 마크 같은 리프 장식 블록
+  return null;
+}
+
+/** 편집된 contentEditable 요소를 트리에 커밋 — 툴바(이미지 조작 등)에서도 호출한다. */
+export function commitEditableElement(el: HTMLElement, ctx: DocEditorCallbacks): void {
+  const id = el.getAttribute("data-rcid");
+  if (id) ctx.onReplaceChildren(id, domToInlineNodes(el, ctx.accentHex));
+}
 
 function TextNodeView({ node }: { node: DocNode }) {
   const ctx = useContext(DocEditorContext);
   if (!ctx?.editable) return <>{node.text ?? ""}</>;
+  // 문단 블록에 속하지 않는(혼합 콘텐츠 부모의) 텍스트 런 폴백 — 단일 문구 편집만 지원.
   return (
     <span
       className="rc-edit-text"
       contentEditable
       suppressContentEditableWarning
       spellCheck={false}
-      onKeyDown={(e) => {
-        // 텍스트 런은 단일 문구 단위 — Enter 는 줄바꿈 대신 커밋으로 처리한다.
-        if (e.key === "Enter") {
-          e.preventDefault();
-          (e.target as HTMLElement).blur();
-        }
-      }}
       onPaste={(e) => {
         e.preventDefault();
         document.execCommand("insertText", false, e.clipboardData.getData("text/plain"));
@@ -60,89 +84,53 @@ function TextNodeView({ node }: { node: DocNode }) {
   );
 }
 
-/** 반복 항목 위 호버 컨트롤(추가/이동/삭제). 문서 레이아웃을 건드리지 않게 absolute 오버레이. */
-function RepeatControls({ node, canRemove }: { node: DocNode; canRemove: boolean }) {
+/** 문단 블록 — 통째 contentEditable. 내용은 직렬화 HTML 로 그리고, 블러 시 역파싱 커밋. */
+function InlineBlockView({ node }: { node: DocNode }) {
   const ctx = useContext(DocEditorContext)!;
-  const btn: CSSProperties = {
-    width: 22,
-    height: 22,
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    border: "none",
-    borderRadius: 6,
-    background: CTRL_BG,
-    color: "#fff",
-    cursor: "pointer",
-    padding: 0,
-  };
-  return (
-    <span
-      className="rc-item-controls"
-      style={{
-        position: "absolute",
-        top: -11,
-        right: -6,
-        zIndex: 20,
-        display: "flex",
-        gap: 3,
-        background: "#ffffff",
-        border: "1px solid #dbe3ef",
-        borderRadius: 8,
-        padding: 3,
-        boxShadow: "0 4px 10px rgba(0,0,0,0.12)",
-      }}
-      contentEditable={false}
-    >
-      <button type="button" title="항목 추가" style={btn} onClick={() => ctx.onAddItem(node.id)}>
-        <Plus size={13} />
-      </button>
-      <button type="button" title="위로 이동" style={btn} onClick={() => ctx.onMoveItem(node.id, -1)}>
-        <ArrowUp size={13} />
-      </button>
-      <button type="button" title="아래로 이동" style={btn} onClick={() => ctx.onMoveItem(node.id, 1)}>
-        <ArrowDown size={13} />
-      </button>
-      <button
-        type="button"
-        title={canRemove ? "항목 삭제" : "마지막 항목은 삭제할 수 없습니다"}
-        style={{ ...btn, background: canRemove ? "#fa896b" : "#c3ccda", cursor: canRemove ? "pointer" : "not-allowed" }}
-        onClick={() => canRemove && ctx.onRemoveItem(node.id)}
-      >
-        <X size={13} />
-      </button>
-    </span>
-  );
+  const html = renderInlineHtml(node.children ?? []);
+  return createElement(node.tag, {
+    style: pillSafeStyle(node),
+    className: "rc-inline-block",
+    "data-rcid": node.id,
+    contentEditable: true,
+    suppressContentEditableWarning: true,
+    spellCheck: false,
+    dangerouslySetInnerHTML: { __html: html },
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if (e.key === "Enter") {
+        // 사용자 임의 개행 — div 분할 대신 <br> 삽입으로 통일.
+        e.preventDefault();
+        document.execCommand("insertLineBreak");
+      } else if (e.key === "Escape") {
+        (e.target as HTMLElement).blur();
+      }
+    },
+    onPaste: (e: React.ClipboardEvent) => {
+      e.preventDefault();
+      document.execCommand("insertText", false, e.clipboardData.getData("text/plain"));
+    },
+    onBlur: (e: React.FocusEvent) => commitEditableElement(e.currentTarget as HTMLElement, ctx),
+  });
 }
 
-function ElementNodeView({ node, canRemove }: { node: DocNode; canRemove?: boolean }) {
+function ElementNodeView({ node }: { node: DocNode }) {
   const ctx = useContext(DocEditorContext);
-  const [hover, setHover] = useState(false);
   const editable = ctx?.editable ?? false;
-  const isRepeatItem = editable && !!node.repeatGroup && !node.separator;
 
-  const style: CSSProperties = { ...(node.style as CSSProperties | undefined) };
-  if (isRepeatItem && !style.position) style.position = "relative";
-
-  // 같은 부모 아래 그룹별 항목 수 — 자식의 삭제 가능 여부 판정.
-  const counts = new Map<string, number>();
-  for (const c of node.children ?? []) {
-    if (c.repeatGroup && !c.separator) counts.set(c.repeatGroup, (counts.get(c.repeatGroup) ?? 0) + 1);
+  if (node.tag === "br" || node.tag === "hr") return createElement(node.tag);
+  if (node.tag === "img") {
+    // 독립 이미지 블록 — 편집 모드에선 선택 대상(data-rcid)이 되어 크기조절·이동·삭제 가능.
+    return createElement("img", {
+      src: node.src,
+      style: node.style as CSSProperties | undefined,
+      alt: "",
+      ...(editable ? { "data-rcid": node.id } : {}),
+    });
   }
+  if (editable && isInlineBlock(node)) return <InlineBlockView node={node} />;
 
-  const children: ReactNode[] = (node.children ?? []).map((c) => (
-    <DocNodeView key={c.id} node={c} canRemove={(counts.get(c.repeatGroup ?? "") ?? 0) > 1} />
-  ));
-  if (isRepeatItem && hover) {
-    children.push(<RepeatControls key="__ctrl" node={node} canRemove={canRemove ?? false} />);
-  }
-
-  const props: Record<string, unknown> = { style };
-  if (isRepeatItem) {
-    props.onMouseEnter = () => setHover(true);
-    props.onMouseLeave = () => setHover(false);
-    props.className = "rc-repeat-item";
-  }
+  const props: Record<string, unknown> = { style: pillSafeStyle(node) };
+  if (editable && controlKind(node)) props["data-rcid"] = node.id;
   if (node.tag === "a") {
     props.href = node.href ?? "#";
     props.target = "_blank";
@@ -150,11 +138,11 @@ function ElementNodeView({ node, canRemove }: { node: DocNode; canRemove?: boole
     if (editable) props.onClick = (e: React.MouseEvent) => e.preventDefault();
   }
 
-  if (node.tag === "br" || node.tag === "hr") return createElement(node.tag, { key: node.id });
+  const children: ReactNode[] = (node.children ?? []).map((c) => <DocNodeView key={c.id} node={c} />);
   return createElement(node.tag, props, ...(children.length > 0 ? children : []));
 }
 
-export function DocNodeView({ node, canRemove }: { node: DocNode; canRemove?: boolean }) {
+export function DocNodeView({ node }: { node: DocNode }) {
   if (node.tag === "#text") return <TextNodeView node={node} />;
-  return <ElementNodeView node={node} canRemove={canRemove} />;
+  return <ElementNodeView node={node} />;
 }

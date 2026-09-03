@@ -9,6 +9,7 @@
 import { PgDatabase, withDbWrite } from "../db";
 
 export type AuditAction =
+  | "ai_settings_change" // AI API 관리 — 기능별 모델·단가·설정 변경(docs/ai-api-usage-management-blueprint.md §3.6)
   | "review_apply"
   | "facility_merge"
   | "facility_manual_create"

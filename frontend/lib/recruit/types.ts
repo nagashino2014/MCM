@@ -19,6 +19,8 @@ export interface DocNode {
   children?: DocNode[];
   /** a 태그 전용 — http(s) URL 만 허용. */
   href?: string;
+  /** img 태그 전용 — data:image/* URI 만 허용(로고 등 삽입 이미지를 트리에 내장). */
+  src?: string;
   /**
    * 반복 그룹 id. 같은 부모 아래 동일 repeatGroup 을 가진 형제들이
    * "추가/삭제/순서변경 가능한 리스트 항목"으로 취급된다(파서가 구조 유사도로 자동 감지).

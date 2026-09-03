@@ -39,6 +39,14 @@ function elementToNode(el: Element): DocNode | null {
     }
     if (Object.keys(style).length > 0) node.style = style;
   }
+  // 필(pill) 배지 방어 — 둥근 배지가 줄바꿈되면 항상 깨진다. 캡처 폰트가 미세하게 달라도
+  // 안전하게, 텍스트만 담은 pill 요소에 nowrap 이 없으면 부여한다("경력직 채용" 배지 사례).
+  if (node.style && /999|9999px/.test(node.style.borderRadius ?? "") && !node.style.whiteSpace) {
+    const onlyText = Array.from(el.childNodes).every(
+      (c) => c.nodeType === Node.TEXT_NODE || (c.nodeType === Node.ELEMENT_NODE && (c as Element).childElementCount === 0)
+    );
+    if (onlyText) node.style.whiteSpace = "nowrap";
+  }
   if (tag === "a") {
     const href = el.getAttribute("href");
     if (href) node.href = href;

@@ -153,6 +153,8 @@ export async function generateDocSummary(docId: string): Promise<DocAiSummary | 
       `"precedent":"전례 대비 한 줄 비고(없으면 빈 문자열)"}`;
 
     const out = await anthropicChatJson<{ lines?: unknown; figures?: unknown; precedent?: unknown }>({
+      feature: "approval.doc_summary",
+      subject: { type: "approval_doc", id: docId },
       system,
       user,
       model: SUMMARY_MODEL,

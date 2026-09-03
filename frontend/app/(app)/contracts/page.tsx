@@ -1371,6 +1371,16 @@ function ContractDetailPanel({
           onSaved={onReloadDetail}
         />
       )}
+      {isIntegratedPermit && (
+        <AgencyReportInfoSection
+          contractId={String(contract.contract_id ?? "")}
+          awardRate={contract.award_rate != null ? String(contract.award_rate) : ""}
+          preconsultNotifiedAt={
+            contract.preconsult_notified_at ? String(contract.preconsult_notified_at).slice(0, 10) : ""
+          }
+          onSaved={onReloadDetail}
+        />
+      )}
 
       <div>
         <h3 className="font-bold cd-text mb-3">세금계산서 파일</h3>
@@ -1406,6 +1416,103 @@ function ContractDetailPanel({
           })}
           {detail.invoices.length === 0 && <p className="text-sm cd-text-faint">등록된 세금계산서 PDF가 없습니다.</p>}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 대행 실적 보고 정보(213) — IEPS 대행 실적 보고 양식에 있으나 계약에 없던 두 항목.
+ * 낙찰률·사전협의 통보일자. 준공일자는 허가 정보의 허가일(완료일(허가일))을 쓴다.
+ * 신고 대기열(/contracts/filings)의 대행 실적 보고 항목에 자동 반영된다.
+ */
+function AgencyReportInfoSection({
+  contractId,
+  awardRate,
+  preconsultNotifiedAt,
+  onSaved,
+}: {
+  contractId: string;
+  awardRate: string;
+  preconsultNotifiedAt: string;
+  onSaved: () => void;
+}) {
+  const toast = useToast();
+  const [rate, setRate] = useState(awardRate);
+  const [notifiedAt, setNotifiedAt] = useState(preconsultNotifiedAt);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setRate(awardRate);
+    setNotifiedAt(preconsultNotifiedAt);
+  }, [contractId, awardRate, preconsultNotifiedAt]);
+
+  const dirty = rate !== awardRate || notifiedAt !== preconsultNotifiedAt;
+
+  const save = async () => {
+    if (saving || !dirty) return;
+    if (rate.trim() && !/^\d{1,3}(\.\d{1,2})?$/.test(rate.trim())) {
+      toast.show("낙찰률은 % 숫자(소수 둘째 자리까지)로 입력해 주세요.", "error");
+      return;
+    }
+    if (notifiedAt && !/^\d{4}-\d{2}-\d{2}$/.test(notifiedAt)) {
+      toast.show("사전협의 통보일자는 8자리(YYYYMMDD)로 입력해 주세요.", "error");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/contracts/${encodeURIComponent(contractId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          awardRate: rate.trim() ? Number(rate.trim()) : null,
+          preconsultNotifiedAt: notifiedAt || null,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? "HTTP " + res.status);
+      }
+      toast.show("대행 실적 보고 정보를 저장했습니다.", "success");
+      onSaved();
+    } catch (err) {
+      toast.show("저장 실패: " + (err as Error).message, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="rounded-2xl border cd-border-c p-4">
+      <div className="flex items-baseline gap-2 mb-3">
+        <h3 className="font-bold cd-text">대행 실적 보고 정보</h3>
+        <span className="text-[11px] cd-text-faint">IEPS 대행 실적 보고 양식 항목 — 준공일자는 허가일을 사용</span>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-[220px_220px_minmax(0,1fr)_auto] gap-3 items-end">
+        <label className="grid gap-1 text-sm">
+          <span className="font-bold cd-text-muted">(변경)낙찰률(%)</span>
+          <input
+            type="text"
+            className="cd-input tabular-nums"
+            inputMode="decimal"
+            placeholder="예: 87.5"
+            value={rate}
+            onChange={(e) => setRate(e.target.value)}
+          />
+        </label>
+        <label className="grid gap-1 text-sm">
+          <span className="font-bold cd-text-muted">사전협의 통보일자</span>
+          <DateInput value={notifiedAt} onChange={setNotifiedAt} />
+        </label>
+        <span className="text-[11px] cd-text-faint md:pb-2.5">신고 대기열의 대행 실적 보고 항목에 자동 반영됩니다.</span>
+        <button
+          type="button"
+          onClick={save}
+          disabled={saving || !dirty}
+          className="cd-btn cd-btn-primary rounded-xl px-4 py-2 text-sm font-bold disabled:opacity-50"
+        >
+          {saving ? "저장 중…" : "저장"}
+        </button>
       </div>
     </div>
   );

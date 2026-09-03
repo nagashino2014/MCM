@@ -160,6 +160,7 @@ export async function analyzeApiSource(input: AnalyzeInput): Promise<AnalyzeResu
   const raw = await anthropicChatJson<Partial<AnalyzeResult>>({
     system: "너는 임의의 공개 REST/OPEN API 명세를 분석해 실행 가능한 프로파일을 생성하는 전문가다. 반드시 JSON 하나만 출력한다.",
     user: buildPrompt(input, combined),
+    feature: "scraper.analyze_source:profile",
     model: "claude-sonnet-5",
     maxTokens: 6000,
     timeoutMs: 60000,
@@ -238,6 +239,7 @@ async function extractOpDetail(
 
 ## 문서 발췌
 ${doc}`.trim(),
+    feature: "scraper.analyze_source:op_detail",
     model: "claude-sonnet-5",
     maxTokens: 24000,
     timeoutMs: 180000,
@@ -308,6 +310,7 @@ export async function extractCatalog(input: AnalyzeInput): Promise<ExtractCatalo
 ## 입력
 ORG: ${input.name} (slug: ${input.slug})
 ${combined}`.trim(),
+    feature: "scraper.analyze_source:catalog",
     model: "claude-sonnet-5",
     maxTokens: 8000,
     timeoutMs: 120000,
@@ -529,6 +532,7 @@ ${epText}`.trim();
   }>({
     system: "너는 API 카탈로그를 실행 가능한 프로파일로 정제하는 전문가다. 반드시 JSON 하나만 출력한다.",
     user: prompt,
+    feature: "scraper.analyze_source:build",
     model: "claude-sonnet-5",
     maxTokens: 16000,
     timeoutMs: 120000,

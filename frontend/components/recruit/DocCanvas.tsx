@@ -16,9 +16,12 @@ export const DocCanvas = forwardRef<HTMLDivElement, { tree: DocNode; theme: DocT
   function DocCanvas({ tree, theme, width }, ref) {
     const vars = buildDocCssVars(theme) as CSSProperties;
     return (
-      <div ref={ref} style={{ ...vars, width }}>
-        {/* React 19 가 head 로 호이스팅한다 — 같은 href 는 중복 로드되지 않는다. */}
-        <link rel="stylesheet" href={PRETENDARD_CSS} precedence="default" />
+      <div ref={ref} data-rc-doc style={{ ...vars, width }}>
+        {/* React 19 가 head 로 호이스팅한다 — 같은 href 는 중복 로드되지 않는다.
+            crossOrigin: CORS 모드로 로드해야 PNG/PDF 캡처(html-to-image)가 이 시트의 @font-face 를
+            읽어 폰트를 임베드할 수 있다. 없으면 폴백 폰트로 캡처되어 글자 폭이 달라지고
+            "경력직 채용" 배지처럼 여유 없는 요소가 줄바꿈되는 캔버스↔출력 불일치가 생긴다. */}
+        <link rel="stylesheet" href={PRETENDARD_CSS} precedence="default" crossOrigin="anonymous" />
         <DocNodeView node={tree} />
       </div>
     );
@@ -62,14 +65,19 @@ export function DocMiniPreview({
   );
 }
 
-/** 에디터 전용 스타일 — 편집 가능 텍스트의 호버/포커스 표시. 문서 트리 밖에서 한 번만 주입. */
+/** 에디터 전용 스타일 — 편집 가능 블록/텍스트의 호버·포커스 표시. 문서 트리 밖에서 한 번만 주입. */
 export function DocEditorStyles(): ReactNode {
   return (
     <style>{`
       .rc-edit-text { border-radius: 3px; outline: none; }
       .rc-edit-text:hover { box-shadow: 0 0 0 1px rgba(93,135,255,0.55); }
       .rc-edit-text:focus { box-shadow: 0 0 0 2px rgba(93,135,255,0.85); background: rgba(93,135,255,0.06); }
-      .rc-repeat-item:hover { box-shadow: 0 0 0 1px rgba(93,135,255,0.45); border-radius: 6px; }
+      .rc-inline-block { outline: none; border-radius: 4px; }
+      .rc-inline-block:hover { box-shadow: 0 0 0 1px rgba(93,135,255,0.45); }
+      .rc-inline-block:focus { box-shadow: 0 0 0 2px rgba(93,135,255,0.85); background: rgba(93,135,255,0.05); }
+      .rc-inline-block img { cursor: pointer; }
+      .rc-img-selected { outline: 2px solid #5d87ff; outline-offset: 1px; }
+      [data-rcid]:not(.rc-inline-block):hover { box-shadow: 0 0 0 1px rgba(93,135,255,0.4); border-radius: 6px; }
     `}</style>
   );
 }

@@ -33,20 +33,19 @@ export function PostingListBoard() {
 
   useEffect(() => { void load(); }, [load]);
 
+  // 열 때마다 재조회 — 캐시하면 방금 "부문 템플릿으로 저장"한 새 템플릿이 목록에 안 나타난다.
   const openPicker = useCallback(async () => {
     setPickerOpen(true);
-    if (templates === null) {
-      try {
-        const res = await fetch("/api/recruit/templates", { cache: "no-store" });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data?.error || "템플릿을 불러오지 못했습니다.");
-        setTemplates(data.templates as RecruitTemplateRow[]);
-      } catch (e) {
-        toast((e as Error).message, "error");
-        setTemplates([]);
-      }
+    try {
+      const res = await fetch("/api/recruit/templates", { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "템플릿을 불러오지 못했습니다.");
+      setTemplates(data.templates as RecruitTemplateRow[]);
+    } catch (e) {
+      toast((e as Error).message, "error");
+      setTemplates([]);
     }
-  }, [templates, toast]);
+  }, [toast]);
 
   const createFrom = useCallback(
     async (t: RecruitTemplateRow) => {

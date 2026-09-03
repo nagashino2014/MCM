@@ -329,7 +329,7 @@ export interface IssueParams {
    * 품목 행 — 홈택스처럼 여러 줄로 발행할 때 쓴다(품목명·규격·수량·단가·공급가액).
    * 미지정이면 itemName + 총 공급가액으로 1행을 만든다(기존 단일 품목 동작).
    */
-  items?: Array<{ name: string; spec?: string; qty?: number; unitPrice?: number; amount: number; tax?: number }>;
+  items?: Array<{ name: string; spec?: string; remark?: string; qty?: number; unitPrice?: number; amount: number; tax?: number }>;
   remark1?: string;
   /** email = 대표 수신처(바로빌이 메일 발송), ccEmails = 추가 수신처(발행 후 앱이 안내 메일 발송). */
   invoicee: { facilityId?: string | null; corpNum: string; corpName: string; ceoName?: string; addr?: string; bizType?: string; bizClass?: string; contactName?: string; email: string; tel?: string; hp?: string; ccEmails?: string[] };
@@ -454,7 +454,9 @@ export async function issueTaxInvoice(params: IssueParams, actorUserId: string |
             unitPrice: String(Math.round(it.unitPrice ?? it.amount)),
             amount: String(Math.round(it.amount)),
             tax: String(rowTax),
-            description: (it.spec ?? "").trim().slice(0, 100) || undefined,
+            // 규격 = Information(규격 열), 비고 = Description(품목행 비고 열).
+            information: (it.spec ?? "").trim().slice(0, 100) || undefined,
+            description: (it.remark ?? "").trim().slice(0, 100) || undefined,
           };
         })
       : [

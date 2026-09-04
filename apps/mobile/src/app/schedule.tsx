@@ -92,6 +92,11 @@ export default function ScheduleScreen() {
   const access: CalendarAccess = data?.access ?? { meeting: false, interview: false };
 
   // 등록/편집 화면에서 돌아오면 다시 읽는다(첫 포커스는 useApi 가 이미 로드하므로 건너뜀).
+  // ⚠ useApi 의 reload 는 렌더마다 새 함수다 — 의존성에 넣으면 useFocusEffect 가 매 렌더 재실행돼
+  //   reload→리렌더→reload 무한 루프(상단 새로고침 표시 반복·시트 미표시·아바타 점멸, 09-04 실기기 실측).
+  //   ref 로 최신 reload 를 들고 콜백은 고정한다.
+  const reloadRef = useRef(reload);
+  reloadRef.current = reload;
   const firstFocus = useRef(true);
   useFocusEffect(
     useCallback(() => {
@@ -99,8 +104,8 @@ export default function ScheduleScreen() {
         firstFocus.current = false;
         return;
       }
-      void reload();
-    }, [reload])
+      void reloadRef.current();
+    }, [])
   );
 
   const bars: CalendarBar[] = useMemo(
@@ -176,7 +181,7 @@ export default function ScheduleScreen() {
                 key={t}
                 onPress={() => !off && toggleTag(t)}
                 // 권한 없음(off)은 반투명 대신 불투명 감쇠색(2026-08-10 규칙).
-                className="flex-row items-center gap-[3px] rounded-full px-[7px] py-[5px] active:opacity-70"
+                className="flex-row items-center gap-[3px] rounded-full px-[8px] py-[6px] active:opacity-70"
                 style={{
                   backgroundColor: on ? tint.bg : c.card,
                   borderWidth: on ? 0 : 1,
@@ -184,10 +189,10 @@ export default function ScheduleScreen() {
                 }}>
                 <View
                   style={{ backgroundColor: off ? '#c3c8da' : tint.dot }}
-                  className="h-[5px] w-[5px] rounded-full"
+                  className="h-[6px] w-[6px] rounded-full"
                 />
                 <Text
-                  className={`text-[10.5px] ${on ? 'font-bold' : 'font-semibold'}`}
+                  className={`text-[11px] ${on ? 'font-bold' : 'font-semibold'}`}
                   style={{ color: off ? '#c3c8da' : on ? tint.text : '#9aa0b8' }}>
                   {CALENDAR_TAG_LABELS[t]}
                 </Text>

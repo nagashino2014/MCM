@@ -84,7 +84,12 @@ export function MonthCalendar({
   /** 범위 선택의 종료일. */
   rangeEnd?: string | null;
 }) {
-  const { c } = useTheme();
+  const { c, dark } = useTheme();
+  // 날짜 숫자 색 — 상수(라이트 전용 hex)를 다크에서 그대로 쓰면 당월이 어둡고 전·익월이 밝아
+  // 뒤집혀 보인다(09-04 실기기 실측). 다크는 테마 토큰으로: 당월=본문색, 전·익월=흐린색.
+  const dayInk = dark ? c.text : DAY_INK;
+  const outside = dark ? c.faint : OUTSIDE;
+  const outsideSun = dark ? `${SUN}66` : OUTSIDE_SUN;
   const [pick, setPick] = useState<null | 'year' | 'month'>(null);
   const now = useMemo(() => new Date(), []);
   const todayIso = ymdOf(now);
@@ -160,7 +165,7 @@ export function MonthCalendar({
           <Pressable
             onPress={() => onMonthChange(now.getFullYear(), now.getMonth())}
             className="rounded-full border border-cd-border px-[11px] py-1 active:opacity-60">
-            <Text className="text-[11px] font-semibold" style={{ color: DAY_INK }}>
+            <Text className="text-[11px] font-semibold" style={{ color: dayInk }}>
               오늘
             </Text>
           </Pressable>
@@ -224,13 +229,13 @@ export function MonthCalendar({
               const dayPills = variant === 'pills' ? spans.filter((it) => dn >= it.s && dn <= it.e) : [];
               const numColor = !inMonth
                 ? dow === 0
-                  ? OUTSIDE_SUN
-                  : OUTSIDE
+                  ? outsideSun
+                  : outside
                 : dow === 0
                   ? SUN
                   : dow === 6
                     ? SAT
-                    : DAY_INK;
+                    : dayInk;
 
               return (
                 <Pressable

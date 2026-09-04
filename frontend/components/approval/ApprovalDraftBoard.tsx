@@ -115,6 +115,7 @@ export function ApprovalDraftBoard() {
   const sp = useSearchParams();
   const formId = sp.get("formId") ?? "";
   const editDocId = sp.get("docId");
+  const prefillDate = sp.get("date");
 
   const [form, setForm] = useState<FormInfo | null>(null);
   const [docId, setDocId] = useState<string | null>(editDocId);
@@ -561,6 +562,13 @@ export function ApprovalDraftBoard() {
           if (cancelled) return;
           setForm({ formId: data.form.formId, name: data.form.name, fields: data.form.fields, refFormId: data.form.refFormId ?? null });
           setTitle(data.form.name);
+          // 날짜 프리필(?date=YYYY-MM-DD) — 일정 캘린더 날짜 셀에서 진입할 때. 모바일 draft 와 같은 규칙:
+          // 첫 date/period 필드에 넣는다(period 는 from=to).
+          if (prefillDate && /^\d{4}-\d{2}-\d{2}$/.test(prefillDate)) {
+            const fields = (data.form.fields ?? []) as { key: string; type: string }[];
+            const d = fields.find((f) => f.type === "date" || f.type === "period");
+            if (d) setValues((prev) => ({ ...prev, [d.key]: d.type === "period" ? { from: prefillDate, to: prefillDate } : prefillDate }));
+          }
         }
       } catch (err) {
         if (!cancelled) setError((err as Error).message);
@@ -571,7 +579,7 @@ export function ApprovalDraftBoard() {
     return () => {
       cancelled = true;
     };
-  }, [formId, editDocId]);
+  }, [formId, editDocId, prefillDate]);
 
   // 선행 문서 후보 + 선행 양식 스키마(자동 완성 라벨 매칭용) 로드
   useEffect(() => {

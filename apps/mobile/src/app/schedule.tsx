@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 
 import { Badge, Button, Card, CardRow, EmptyState, ScreenHeader, Sheet, SkeletonList } from '@/components/ui';
 import { MonthCalendar, type CalendarBar } from '@/components/calendar/MonthCalendar';
@@ -14,9 +14,11 @@ import {
   CALENDAR_TAG_LABELS,
   CALENDAR_KIND_LABELS,
   DEFAULT_CALENDAR_PREFS,
+  ENTRY_ACTIONS,
   SCHEDULE_FORMS,
   TAG_ORDER,
   TAG_TINT,
+  type CalendarAccess,
   type CalendarEvent,
   type CalendarPrefs,
   type CalendarRefs,
@@ -32,6 +34,7 @@ import {
  *
  * 새 일정 등록은 **기안으로 보낸다** — 출장·교육·휴가는 전부 결재 문서가 원천이고,
  * 일정은 그 문서의 투영이다(웹과 같은 원칙). 영업 스케줄만 예외로 직접 등록한다(P5).
+ * 회의·면접·미팅(219)은 결재 없이 직접 등록한다(/calendar-entry) — 웹 날짜 셀 메뉴와 같은 구성.
  */
 
 const monthKey = (y: number, m0: number) => `${y}-${String(m0 + 1).padStart(2, '0')}`;
@@ -81,15 +84,28 @@ export default function ScheduleScreen() {
   );
 
   const month = monthKey(cur.y, cur.m);
-  const { data, loading, refreshing, reload } = useApi<{ events: CalendarEvent[]; salesDenied?: boolean }>(
+  const { data, loading, refreshing, reload } = useApi<{ events: CalendarEvent[]; salesDenied?: boolean; access?: CalendarAccess }>(
     `/api/calendar?month=${month}&tags=${tags.join(',')}`,
     { cache: true }
   );
   const events = data?.events ?? [];
+  const access: CalendarAccess = data?.access ?? { meeting: false, interview: false };
+
+  // 등록/편집 화면에서 돌아오면 다시 읽는다(첫 포커스는 useApi 가 이미 로드하므로 건너뜀).
+  const firstFocus = useRef(true);
+  useFocusEffect(
+    useCallback(() => {
+      if (firstFocus.current) {
+        firstFocus.current = false;
+        return;
+      }
+      void reload();
+    }, [reload])
+  );
 
   const bars: CalendarBar[] = useMemo(
     () =>
-      events.map((e) => ({
+      events.filter((e) => !e.canceled).map((e) => ({
         id: e.id,
         startDate: e.startDate,
         endDate: e.endDate,
@@ -122,7 +138,9 @@ export default function ScheduleScreen() {
   };
 
   const period = (e: CalendarEvent) =>
-    `${e.startDate}${e.endDate && e.endDate !== e.startDate ? ` ~ ${e.endDate}` : ''}${e.startTime ? ` ${e.startTime}` : ''}`;
+    `${e.startDate}${e.endDate && e.endDate !== e.startDate ? ` ~ ${e.endDate}` : ''}${
+      e.startTime ? ` ${e.startTime}${e.endTime ? `~${e.endTime}` : ''}` : ''
+    }`;
 
   return (
     <SafeAreaView edges={['top']} style={{ backgroundColor: c.bg }} className="flex-1 bg-cd-bg">
@@ -146,8 +164,9 @@ export default function ScheduleScreen() {
       <ScrollView
         contentContainerStyle={{ padding: 18, gap: 14, paddingBottom: 40 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={reload} tintColor={c.faint} />}>
-        {/* 필터 칩 — 선택은 카테고리 컬러 틴트, 비선택은 흰 배경(핸드오프 3a) */}
-        <View className="flex-row flex-wrap justify-end gap-[7px]">
+        {/* 필터 칩 — 선택은 카테고리 컬러 틴트, 비선택은 흰 배경(핸드오프 3a).
+            회의·면접(219) 추가로 7개가 되어 폰트·패딩을 줄여 375 폭에서도 1행에 맞춘다(사용자 요청). */}
+        <View className="flex-row flex-nowrap justify-between gap-[4px]">
           {TAG_ORDER.map((t) => {
             const on = tags.includes(t);
             const off = t === 'sales' && data?.salesDenied;
@@ -157,7 +176,7 @@ export default function ScheduleScreen() {
                 key={t}
                 onPress={() => !off && toggleTag(t)}
                 // 권한 없음(off)은 반투명 대신 불투명 감쇠색(2026-08-10 규칙).
-                className="flex-row items-center gap-[5px] rounded-full px-[13px] py-[7px] active:opacity-70"
+                className="flex-row items-center gap-[3px] rounded-full px-[7px] py-[5px] active:opacity-70"
                 style={{
                   backgroundColor: on ? tint.bg : c.card,
                   borderWidth: on ? 0 : 1,
@@ -165,10 +184,10 @@ export default function ScheduleScreen() {
                 }}>
                 <View
                   style={{ backgroundColor: off ? '#c3c8da' : tint.dot }}
-                  className="h-[7px] w-[7px] rounded-full"
+                  className="h-[5px] w-[5px] rounded-full"
                 />
                 <Text
-                  className={`text-[12px] ${on ? 'font-bold' : 'font-semibold'}`}
+                  className={`text-[10.5px] ${on ? 'font-bold' : 'font-semibold'}`}
                   style={{ color: off ? '#c3c8da' : on ? tint.text : '#9aa0b8' }}>
                   {CALENDAR_TAG_LABELS[t]}
                 </Text>
@@ -241,6 +260,17 @@ export default function ScheduleScreen() {
                 <Text className="text-[14px] leading-6 text-cd-text">{detail.summary}</Text>
               </View>
             ) : null}
+            {detail.entryId ? (
+              <Button
+                label={detail.canEdit ? '일정 편집' : '일정 상세'}
+                variant={detail.canEdit ? 'primary' : 'soft'}
+                onPress={() => {
+                  const id = detail.entryId as string;
+                  setDetail(null);
+                  router.push({ pathname: '/calendar-entry', params: { entryId: id } });
+                }}
+              />
+            ) : null}
             {detail.docId ? (
               <Button
                 label="결재 문서 보기"
@@ -275,6 +305,31 @@ export default function ScheduleScreen() {
               <Ionicons name="chevron-forward" size={15} color={c.faint} />
             </Pressable>
           ))}
+          {/* 직접 등록(219) — 회의는 관리자·임원, 면접은 면접 관리자, 미팅은 누구나 */}
+          <View className="my-1 h-px bg-cd-border" />
+          <Text className="pb-1 text-[12.5px] text-cd-faint">회의·면접·미팅은 캘린더에 바로 등록됩니다. 참석자에게 알림이 갑니다.</Text>
+          {ENTRY_ACTIONS.map((a) => {
+            const allowed = a.needs ? access[a.needs] : true;
+            return (
+              <Pressable
+                key={a.kind}
+                disabled={!allowed}
+                onPress={() => {
+                  const date = newFor;
+                  setNewFor(null);
+                  router.push({ pathname: '/calendar-entry', params: { kind: a.kind, date: date ?? '' } });
+                }}
+                className="flex-row items-center gap-2 rounded-xl px-4 py-3 active:opacity-70"
+                style={{ opacity: allowed ? 1 : 0.4 }}>
+                <Ionicons name="calendar-outline" size={17} color={c.primary} />
+                <View className="flex-1">
+                  <Text className="text-[15px] text-cd-text">{a.label}</Text>
+                  <Text className="text-[11.5px] text-cd-faint">{a.hint}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={15} color={c.faint} />
+              </Pressable>
+            );
+          })}
         </View>
       </Sheet>
 

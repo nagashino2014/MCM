@@ -28,7 +28,8 @@ export type PushEventKey =
   | "bid.match"
   | "bid.deadline"
   | "filing.due"
-  | "ai.budget";
+  | "ai.budget"
+  | "calendar.schedule";
 
 /**
  * 이벤트 기본 수신 여부(사용자 설정 행이 없을 때).
@@ -52,6 +53,7 @@ const EVENT_DEFAULT: Record<PushEventKey, boolean> = {
   "bid.deadline": true,
   "filing.due": true,
   "ai.budget": true,
+  "calendar.schedule": true,
 };
 
 export const PUSH_EVENTS: { key: PushEventKey; label: string; description: string }[] = [
@@ -69,6 +71,7 @@ export const PUSH_EVENTS: { key: PushEventKey; label: string; description: strin
   { key: "bid.deadline", label: "입찰 마감 임박", description: "매칭된 공고의 마감일이 다가올 때" },
   { key: "filing.due", label: "대외 신고 기한", description: "IEPS·ETIS 신고 기한이 임박하거나 지났을 때(수신자 지정)" },
   { key: "ai.budget", label: "AI API 예산 경고", description: "Claude API 월 예산 임계 도달·초과 전망·단건 고비용(관리자)" },
+  { key: "calendar.schedule", label: "회의·면접·미팅 일정", description: "참석자로 지정된 회의·면접·미팅 일정이 등록·변경됐을 때" },
 ];
 
 let expo: Expo | null = null;

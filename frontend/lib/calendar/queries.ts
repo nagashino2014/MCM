@@ -24,6 +24,7 @@ import { LEAVE_FORM_ID } from "@/lib/approval/leave";
 import { listActivitiesByMonth } from "@/lib/sales/queries";
 import { ACTIVITY_TYPE_META } from "@/lib/sales/types";
 import { expandRefs, loadCalendarPrefs } from "@/lib/calendar/prefs";
+import { canViewInterview, listMonthEntryRows, resolvePeople, type EntryAccess, canEditEntry } from "@/lib/calendar/entries";
 import type { CalendarEvent, CalendarPerson, CalendarTagKey } from "@/lib/calendar/types";
 
 /** multitext(HTML) 값을 1줄 요약 텍스트로. */
@@ -126,8 +127,10 @@ export async function listCalendarEvents(params: {
   month: string; // YYYY-MM
   tags: CalendarTagKey[];
   includeSales: boolean;
+  /** 직접 등록 일정(회의·면접·미팅) 권한 — 면접 열람·편집 가능 판정에 쓴다. */
+  access: EntryAccess;
 }): Promise<CalendarEvent[]> {
-  const { userId, month, tags } = params;
+  const { userId, month, tags, access } = params;
   const wants = new Set(tags);
   const events: CalendarEvent[] = [];
   const db = await getDb();
@@ -363,6 +366,55 @@ export async function listCalendarEvents(params: {
         summary: use.carTime ? `이용시간 ${use.carTime}` : null,
         docId: doc.docId,
         status: doc.status,
+      });
+    }
+  }
+
+  // ── 직접 등록 일정(219) — 회의(태그)·면접(태그, 참석자·관리자만)·미팅(태그 없음, 인적 집합 매칭) ──
+  const wantsEntries = wants.has("meeting") || wants.has("interview") || (needPeople && targetIds.length > 0);
+  if (wantsEntries) {
+    const rows = await listMonthEntryRows(month);
+    const people = await resolvePeople(rows.flatMap((r) => r.attendeeIds));
+    const TAG_RANK: Record<string, number> = { self: 0, dept: 1, refs: 2 };
+    for (const r of rows) {
+      const attendees = r.attendeeIds.map((id) => people.get(id)).filter((p): p is CalendarPerson => !!p);
+      let tag: CalendarTagKey | null = null;
+      let summary: string | null = null;
+      if (r.kind === "meeting") {
+        if (!wants.has("meeting")) continue;
+        tag = "meeting";
+        summary = r.location ?? r.note;
+      } else if (r.kind === "interview") {
+        if (!wants.has("interview") || !canViewInterview(r, access)) continue;
+        tag = "interview";
+        summary = [r.extra.postingTitle, r.location].filter(Boolean).join(" · ") || r.note;
+      } else {
+        // 미팅 — 참석자 중 본인/부서/선택 집합에 있는 사람의 태그(우선순위 본인→부서→선택)
+        let best: CalendarTagKey | null = null;
+        for (const id of r.attendeeIds) {
+          const t = tagOf(id);
+          if (t && (best == null || TAG_RANK[t] < TAG_RANK[best])) best = t;
+        }
+        if (!best) continue;
+        tag = best;
+        summary = [r.extra.contractTitle || r.extra.topic, r.location].filter(Boolean).join(" · ") || r.note;
+      }
+      events.push({
+        id: `ent:${r.entryId}`,
+        tag,
+        kind: r.kind,
+        title: r.isCanceled ? `(미시행) ${r.title}` : r.title,
+        startDate: r.date,
+        endDate: r.date,
+        startTime: r.startTime,
+        endTime: r.endTime,
+        people: attendees,
+        summary,
+        docId: null,
+        entryId: r.entryId,
+        canEdit: canEditEntry(r, access),
+        canceled: r.isCanceled,
+        status: null,
       });
     }
   }

@@ -6,7 +6,7 @@
 
 import { forwardRef } from "react";
 import Link from "next/link";
-import { ExternalLink, FileText } from "lucide-react";
+import { ExternalLink, FileText, Pencil, Eye } from "lucide-react";
 import {
   CALENDAR_KIND_LABELS,
   CALENDAR_TAG_LABELS,
@@ -20,7 +20,8 @@ function fmtDate(ev: CalendarEvent): string {
   const s = ev.startDate.slice(5).replace("-", ".");
   const e = ev.endDate.slice(5).replace("-", ".");
   const range = ev.endDate !== ev.startDate ? `${s} ~ ${e}` : s;
-  return ev.startTime ? `${range} ${ev.startTime}` : range;
+  if (!ev.startTime) return range;
+  return ev.endTime ? `${range} ${ev.startTime}~${ev.endTime}` : `${range} ${ev.startTime}`;
 }
 
 export const CategoryScheduleList = forwardRef<
@@ -31,8 +32,10 @@ export const CategoryScheduleList = forwardRef<
     /** 캘린더 바 클릭으로 강조할 이벤트 id */
     highlightId: string | null;
     onOpenDoc: (docId: string) => void;
+    /** 직접 등록 일정(회의·면접·미팅) 상세/편집 모달 열기 */
+    onOpenEntry?: (entryId: string) => void;
   }
->(function CategoryScheduleList({ tags, events, highlightId, onOpenDoc }, ref) {
+>(function CategoryScheduleList({ tags, events, highlightId, onOpenDoc, onOpenEntry }, ref) {
   return (
     <div ref={ref} className="cd-card p-4 gap-4">
       {tags.map((tag) => {
@@ -60,7 +63,7 @@ export const CategoryScheduleList = forwardRef<
                     <div
                       key={ev.id}
                       data-event-id={ev.id}
-                      className="rounded-xl border p-3 flex flex-col gap-1 transition-colors"
+                      className={`rounded-xl border p-3 flex flex-col gap-1 transition-colors ${ev.canceled ? "opacity-55" : ""}`}
                       style={{
                         borderTopColor: edge,
                         borderRightColor: edge,
@@ -74,6 +77,19 @@ export const CategoryScheduleList = forwardRef<
                         <span className="flex-1 min-w-0 text-[13px] font-bold cd-text truncate" title={ev.title}>
                           {ev.title}
                         </span>
+                        {ev.canceled && (
+                          <span className="shrink-0 text-[10px] rounded-full px-1.5 py-0.5 border cd-border-c cd-text-faint">미시행</span>
+                        )}
+                        {ev.entryId && onOpenEntry && (
+                          <button
+                            type="button"
+                            className="shrink-0 p-1 rounded-md cd-text-faint hover:text-[color:var(--cd-primary)]"
+                            title={ev.canEdit ? "일정 편집" : "일정 상세"}
+                            onClick={() => onOpenEntry(ev.entryId!)}
+                          >
+                            {ev.canEdit ? <Pencil className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          </button>
+                        )}
                         {ev.status === "in_progress" && (
                           <span className="shrink-0 text-[10px] rounded-full px-1.5 py-0.5 border cd-border-c cd-text-faint">결재중</span>
                         )}

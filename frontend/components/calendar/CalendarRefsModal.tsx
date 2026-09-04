@@ -42,7 +42,7 @@ export function CalendarRefsModal({
   useEffect(() => {
     if (!open || snapshotCache) return;
     let cancelled = false;
-    fetch("/api/sales/org", { cache: "no-store" })
+    fetch("/api/calendar/org", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (d && !cancelled) {

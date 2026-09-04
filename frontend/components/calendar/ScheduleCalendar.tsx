@@ -1,8 +1,8 @@
 "use client";
 
 // 일정 메뉴(G6-C) 월 캘린더 — SalesCalendar 의 6주 격자·레인 배정을 복제 확장한 통합판.
-// 원본과 달리 셀 클릭 등록이 없고(조회 전용), 바 색은 카테고리(TAG_COLOR)로 구분하며,
-// 바 클릭은 하단 카테고리 목록의 해당 카드로 연결된다(onEventClick).
+// 바 색은 카테고리(TAG_COLOR)로 구분하며, 바 클릭은 하단 카테고리 목록의 해당 카드로 연결된다(onEventClick).
+// 날짜 셀 클릭(onDayClick)은 일정 메뉴에서는 일정 추가 메뉴, 휴무일 지정 화면에서는 휴무일 지정으로 쓴다.
 // 복수 태그 동시 표시로 밀도가 높아 레인을 3→4로 늘렸다. 초과분은 셀 하단 "+N".
 
 import { useEffect, useMemo, useState } from "react";
@@ -35,6 +35,7 @@ export function ScheduleCalendar({
   onMonthChange,
   onEventClick,
   onDayClick,
+  dayClickHint = "클릭해 휴무일 지정",
   holidayRev = 0,
 }: {
   events: CalendarEvent[];
@@ -46,6 +47,8 @@ export function ScheduleCalendar({
   onEventClick: (ev: CalendarEvent) => void;
   /** 날짜 셀 클릭(휴무일 지정 화면에서 사용). 없으면 조회 전용. */
   onDayClick?: (iso: string, holiday: OffDay | null) => void;
+  /** 날짜 셀 title 안내 문구(클릭 가능할 때). */
+  dayClickHint?: string;
   /** 값이 바뀌면 휴무일을 다시 불러온다(지정·해제 후 갱신용). */
   holidayRev?: number;
 }) {
@@ -90,7 +93,8 @@ export function ScheduleCalendar({
   const spans = useMemo<EventSpan[]>(
     () =>
       events
-        .filter((ev) => ev.startDate)
+        // 미시행 회의(canceled)는 바를 그리지 않는다 — 하단 목록에만 흐리게 남긴다.
+        .filter((ev) => ev.startDate && !ev.canceled)
         .map((ev) => ({ ev, s: dayNum(ev.startDate), e: Math.max(dayNum(ev.endDate || ev.startDate), dayNum(ev.startDate)) }))
         .sort((x, y) => x.s - y.s || x.ev.id.localeCompare(y.ev.id)),
     [events]
@@ -228,7 +232,7 @@ export function ScheduleCalendar({
                   key={di}
                   className={`border text-left p-1 flex flex-col ${clickable ? "cursor-pointer hover:bg-[color:var(--cd-surface)] transition-colors" : ""}`}
                   onClick={clickable ? () => onDayClick(iso, off) : undefined}
-                  title={clickable ? `${iso} — 클릭해 휴무일 지정` : off?.name}
+                  title={clickable ? `${iso} — ${dayClickHint}` : off?.name}
                   style={{
                     borderColor: iso === todayIso ? "var(--cd-primary)" : "var(--cd-border)",
                     background: "var(--cd-card)",

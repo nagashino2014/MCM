@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Dimensions, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -8,6 +8,7 @@ import { Badge, Button, Card, CardRow, EmptyState, ScreenHeader, Sheet, Skeleton
 import { MonthCalendar, type CalendarBar } from '@/components/calendar/MonthCalendar';
 import { OrgPickerSheet } from '@/components/pickers/OrgPickerSheet';
 import { apiJson } from '@/lib/api';
+import { openAttachment } from '@/lib/open-attachment';
 import { useApi } from '@/lib/use-api';
 import { useTheme } from '@/theme/useTheme';
 import {
@@ -19,6 +20,7 @@ import {
   TAG_ORDER,
   TAG_TINT,
   type CalendarAccess,
+  type CalendarEntry,
   type CalendarEvent,
   type CalendarPrefs,
   type CalendarRefs,
@@ -48,6 +50,25 @@ export default function ScheduleScreen() {
   const [refs, setRefs] = useState<CalendarRefs>({ ...DEFAULT_CALENDAR_PREFS.refs });
   const [prefsLoaded, setPrefsLoaded] = useState(false);
   const [detail, setDetail] = useState<CalendarEvent | null>(null);
+  /** 직접 등록 일정(회의·면접·미팅)의 본문 — 상세 시트에서 장소·참석자·공고·이력서를 보여주기 위해 따로 받는다. */
+  const [entry, setEntry] = useState<CalendarEntry | null>(null);
+  useEffect(() => {
+    const id = detail?.entryId;
+    if (!id) return;
+    let alive = true;
+    apiJson<{ entry: CalendarEntry }>(`/api/calendar/entries/${encodeURIComponent(id)}`)
+      .then((d) => alive && setEntry(d.entry))
+      .catch(() => {
+        /* 본문 실패 시 이벤트 정보만 표시 */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [detail?.entryId]);
+  const closeDetail = () => {
+    setDetail(null);
+    setEntry(null);
+  };
   const [newFor, setNewFor] = useState<string | null>(null);
   const [refsOpen, setRefsOpen] = useState(false);
 
@@ -96,7 +117,9 @@ export default function ScheduleScreen() {
   //   reload→리렌더→reload 무한 루프(상단 새로고침 표시 반복·시트 미표시·아바타 점멸, 09-04 실기기 실측).
   //   ref 로 최신 reload 를 들고 콜백은 고정한다.
   const reloadRef = useRef(reload);
-  reloadRef.current = reload;
+  useEffect(() => {
+    reloadRef.current = reload;
+  });
   const firstFocus = useRef(true);
   useFocusEffect(
     useCallback(() => {
@@ -243,51 +266,39 @@ export default function ScheduleScreen() {
         )}
       </ScrollView>
 
-      {/* 일정 상세 */}
-      <Sheet visible={!!detail} onClose={() => setDetail(null)} title={detail?.title ?? '일정'}>
-        {detail ? (
-          <View className="gap-3">
-            <View className="flex-row items-center gap-2">
-              <Badge label={CALENDAR_KIND_LABELS[detail.kind]} tone="neutral" />
-              <Text className="text-[13px] text-cd-body">{period(detail)}</Text>
-            </View>
-            {detail.people.length ? (
-              <View className="gap-1">
-                <Text className="text-[12px] font-bold text-cd-faint">대상</Text>
-                <Text className="text-[14px] text-cd-text">
-                  {detail.people.map((p) => `${p.name}${p.positionName ? ` ${p.positionName}` : ''}`).join(', ')}
-                </Text>
-              </View>
-            ) : null}
-            {detail.summary ? (
-              <View className="gap-1">
-                <Text className="text-[12px] font-bold text-cd-faint">내용</Text>
-                <Text className="text-[14px] leading-6 text-cd-text">{detail.summary}</Text>
-              </View>
-            ) : null}
-            {detail.entryId ? (
+      {/* 일정 상세 — 종류별 항목(회의/면접/미팅=장소·참석자·부가정보, 휴가=휴가자·사유, 출장·교육=대상·내용 …).
+          본문 높이는 화면의 55% 로 **고정**(내용이 적어도 같은 높이, 넘치면 내부 스크롤)해 버튼이 잘리지 않게 한다(사용자 피드백 09-04). 버튼은 footer 슬롯. */}
+      <Sheet
+        visible={!!detail}
+        onClose={closeDetail}
+        title={detail?.title ?? '일정'}
+        footer={
+          detail?.entryId ? (
+            <View className="flex-1">
               <Button
                 label={detail.canEdit ? '일정 편집' : '일정 상세'}
                 variant={detail.canEdit ? 'primary' : 'soft'}
                 onPress={() => {
                   const id = detail.entryId as string;
-                  setDetail(null);
+                  closeDetail();
                   router.push({ pathname: '/calendar-entry', params: { entryId: id } });
                 }}
               />
-            ) : null}
-            {detail.docId ? (
+            </View>
+          ) : detail?.docId ? (
+            <View className="flex-1">
               <Button
                 label="결재 문서 보기"
                 onPress={() => {
                   const id = detail.docId as string;
-                  setDetail(null);
+                  closeDetail();
                   router.push({ pathname: '/approval/[docId]', params: { docId: id } });
                 }}
               />
-            ) : null}
-          </View>
-        ) : null}
+            </View>
+          ) : undefined
+        }>
+        {detail ? <DetailBody ev={detail} entry={detail.entryId && entry?.entryId === detail.entryId ? entry : null} /> : null}
       </Sheet>
 
       {/* 날짜 탭 → 새 일정(기안으로) */}
@@ -359,5 +370,114 @@ export default function ScheduleScreen() {
         }}
       />
     </SafeAreaView>
+  );
+}
+
+function Row({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <View className="gap-1">
+      <Text className="text-[12px] font-bold text-cd-faint">{label}</Text>
+      {children}
+    </View>
+  );
+}
+function Txt({ v }: { v: string | null | undefined }) {
+  return <Text className="text-[14px] leading-6 text-cd-text">{v && v.trim() ? v : '-'}</Text>;
+}
+
+/** 상세 시트 본문 — 일정 종류에 맞는 항목만 배치한다. */
+function DetailBody({ ev, entry }: { ev: CalendarEvent; entry: CalendarEntry | null }) {
+  const { c } = useTheme();
+  // 고정 높이 — 종류마다 항목 수가 달라도 시트 크기가 흔들리지 않게 한다(사용자 요청: 비고정 → 고정).
+  const fixedH = Math.round(Dimensions.get('window').height * 0.55);
+  const period = `${ev.startDate}${ev.endDate && ev.endDate !== ev.startDate ? ` ~ ${ev.endDate}` : ''}${
+    ev.startTime ? ` ${ev.startTime}${ev.endTime ? `~${ev.endTime}` : ''}` : ''
+  }`;
+  const people = entry?.attendees ?? ev.people;
+  const isEntry = ev.kind === 'meeting' || ev.kind === 'interview' || ev.kind === 'visit';
+  // 휴가는 제목이 "[종류] : [휴가자]" — 대상 인원 배열이 비어 있어 제목에서 이름을 꺼낸다.
+  const leaveName = ev.kind === 'leave' ? ev.title.split(' : ').slice(1).join(' : ') : '';
+  const peopleLabel =
+    ev.kind === 'leave' ? '휴가자' : ev.kind === 'trip' ? '출장자' : ev.kind === 'vehicle' ? '이용자' : ev.kind === 'sales' ? '담당' : isEntry ? '참석자' : '대상';
+  const summaryLabel =
+    ev.kind === 'leave' ? '사유' : ev.kind === 'trip' ? '목적' : ev.kind === 'vehicle' ? '이용시간' : ev.kind === 'meeting' ? '비고' : ev.kind === 'interview' ? '채용 공고' : ev.kind === 'visit' ? '방문자·관련 업무' : '내용';
+  const location = entry?.location ?? ev.location ?? null;
+
+  return (
+    <ScrollView style={{ height: fixedH }} contentContainerStyle={{ gap: 14, paddingBottom: 8 }} showsVerticalScrollIndicator={false}>
+      <View className="flex-row items-center gap-2">
+        <Badge label={CALENDAR_KIND_LABELS[ev.kind]} tone="neutral" />
+        <Text className="text-[14px] font-semibold text-cd-text">{period}</Text>
+        {ev.canceled ? <Badge label="미시행" tone="neutral" /> : null}
+      </View>
+
+      {isEntry ? (
+        <Row label="장소">
+          <Txt v={location} />
+        </Row>
+      ) : null}
+
+      {ev.kind === 'interview' ? (
+        <Row label="채용 공고">
+          <Txt v={entry?.extra.postingTitle ?? ev.summary} />
+        </Row>
+      ) : null}
+      {ev.kind === 'visit' ? (
+        <>
+          <Row label="방문자">
+            <Txt v={entry?.extra.visitors ?? ev.summary} />
+          </Row>
+          <Row label="관련 업무">
+            <Txt v={entry ? entry.extra.contractTitle || entry.extra.topic : null} />
+          </Row>
+        </>
+      ) : null}
+
+      <Row label={peopleLabel}>
+        {people.length ? (
+          <View className="flex-row flex-wrap gap-1.5">
+            {people.map((p) => (
+              <View key={p.employeeId} className="rounded-full px-2.5 py-1" style={{ backgroundColor: '#e3edfc' }}>
+                <Text className="text-[12.5px] font-bold" style={{ color: '#2f6fd8' }}>
+                  {p.name}
+                  {p.positionName ? <Text className="font-medium"> {p.positionName}</Text> : null}
+                </Text>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <Txt v={leaveName || (isEntry ? '참석자 없음' : null)} />
+        )}
+      </Row>
+
+      {ev.kind === 'interview' ? (
+        <Row label="이력서">
+          {entry?.extra.resume ? (
+            <Pressable
+              onPress={() => {
+                const r = entry.extra.resume!;
+                void openAttachment(`/api/calendar/entries/${encodeURIComponent(entry.entryId)}/resume?disposition=attachment`, r.fileName).catch(() => {});
+              }}
+              className="flex-row items-center gap-2 rounded-xl border border-cd-border bg-cd-card px-3.5 py-2.5 active:opacity-70">
+              <Ionicons name="document-attach-outline" size={16} color={c.primary} />
+              <Text className="flex-1 text-[13.5px] font-bold text-cd-text" numberOfLines={1}>{entry.extra.resume.fileName}</Text>
+              <Text className="text-[11.5px] text-cd-faint">열기</Text>
+            </Pressable>
+          ) : (
+            <Txt v={entry ? null : '불러오는 중…'} />
+          )}
+        </Row>
+      ) : null}
+
+      {ev.kind === 'meeting' || ev.kind === 'visit' ? (
+        <Row label="비고">
+          <Txt v={entry ? entry.note : ev.kind === 'meeting' ? ev.summary : null} />
+        </Row>
+      ) : ev.kind !== 'interview' ? (
+        <Row label={summaryLabel}>
+          <Txt v={ev.summary} />
+        </Row>
+      ) : null}
+    </ScrollView>
   );
 }

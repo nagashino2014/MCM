@@ -103,6 +103,8 @@ export interface CalendarEvent {
   startTime: string | null;
   /** HH:mm — 직접 등록 일정(회의·면접·미팅)만 */
   endTime?: string | null;
+  /** 장소 — 직접 등록 일정(회의·면접·미팅)만 */
+  location?: string | null;
   people: CalendarPerson[];
   summary: string | null;
   docId: string | null;

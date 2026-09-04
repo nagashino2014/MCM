@@ -92,6 +92,8 @@ export interface CalendarEvent {
   startTime: string | null; // HH:mm (영업·직접 등록 일정)
   /** HH:mm — 직접 등록 일정(회의·면접·미팅)만. */
   endTime?: string | null;
+  /** 장소 — 직접 등록 일정(회의·면접·미팅)만. */
+  location?: string | null;
   /** 대상 인원 — 휴가는 제목에 이미 이름이 있어 빈 배열. */
   people: CalendarPerson[];
   summary: string | null;

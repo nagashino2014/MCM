@@ -116,6 +116,7 @@ export const CategoryScheduleList = forwardRef<
                       <div className="text-[11.5px] cd-text-muted tabular-nums">
                         {fmtDate(ev)}
                         <span className="ml-1.5 text-[10.5px] cd-text-faint">{CALENDAR_KIND_LABELS[ev.kind]}</span>
+                        {ev.location && <span className="ml-1.5 text-[10.5px] cd-text-faint">· {ev.location}</span>}
                       </div>
                       {people && <div className="text-[11.5px] cd-text-muted truncate">{people}</div>}
                       {ev.summary && (

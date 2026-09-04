@@ -383,11 +383,11 @@ export async function listCalendarEvents(params: {
       if (r.kind === "meeting") {
         if (!wants.has("meeting")) continue;
         tag = "meeting";
-        summary = r.location ?? r.note;
+        summary = r.note;
       } else if (r.kind === "interview") {
         if (!wants.has("interview") || !canViewInterview(r, access)) continue;
         tag = "interview";
-        summary = [r.extra.postingTitle, r.location].filter(Boolean).join(" · ") || r.note;
+        summary = r.extra.postingTitle || r.note;
       } else {
         // 미팅 — 참석자 중 본인/부서/선택 집합에 있는 사람의 태그(우선순위 본인→부서→선택)
         let best: CalendarTagKey | null = null;
@@ -397,7 +397,7 @@ export async function listCalendarEvents(params: {
         }
         if (!best) continue;
         tag = best;
-        summary = [r.extra.contractTitle || r.extra.topic, r.location].filter(Boolean).join(" · ") || r.note;
+        summary = [r.extra.visitors, r.extra.contractTitle || r.extra.topic].filter(Boolean).join(" · ") || r.note;
       }
       events.push({
         id: `ent:${r.entryId}`,
@@ -408,6 +408,7 @@ export async function listCalendarEvents(params: {
         endDate: r.date,
         startTime: r.startTime,
         endTime: r.endTime,
+        location: r.location,
         people: attendees,
         summary,
         docId: null,

@@ -514,3 +514,21 @@ ack 액션은 `audit_log.action='alert.ack'` 으로 기록되어 추적 가능.
   푸시(`filing.due`)는 결재 리마인드 틱에서 하루 1회.
 - 데이터 보강: 계약 상세 "대행 실적 보고 정보"(낙찰률·사전협의 통보일자, `award_rate`/`preconsult_notified_at`),
   직원 등록 "엔지니어링협회 회원번호"(`etis_member_no`). 선임 신고를 제출 완료로 표시하면 대행인력등록일이 비어 있을 때 채워진다.
+
+### 11.1 로컬 반자동 입력 도구 (`scraper`, 2단계)
+
+담당자 PC 에서 `cd scraper && npm run filings -- <명령>` 으로 실행한다. 두 사이트 모두 **무인 제출은 하지 않는다** —
+IEPS 는 문자인증, ETIS 는 공동인증서라 로그인은 사람이 하고, 제출 버튼도 사람이 누른다(오제출 방지).
+
+- `mcm-login` — MCM 계정으로 토큰 발급(모바일 로그인 API, refresh 30일). 비밀번호는 저장하지 않는다.
+- `login --site ieps|etis` — headed Chrome 을 띄워 사람이 로그인 → 브라우저 프로필·세션 쿠키 저장(`data/filings/<site>/`, git 제외).
+  IEPS 세션은 약 1시간이라 대기 건을 한 번에 몰아서 처리한다. `check --site …` 로 세션 생존 확인.
+- `open --kind ieps_staff|ieps_agency|etis_career` (또는 `--id <filingId>`) — 로그인된 창에 신고 화면을 열고
+  화면 우하단에 **입력 보조 패널**을 띄운다. 대기열의 양식 값이 항목별로 보이고, 값 클릭=복사, [채우기]=사이트에서
+  마지막에 클릭한 입력칸에 값 넣기. [이전]/[다음] 으로 같은 종류의 대기 건 순회, 제출 뒤 [제출 완료](접수번호)·[제외] 를 누르면
+  MCM 대기열 상태가 바뀐다. 패널은 사이트 안 어느 화면으로 이동해도 따라간다.
+- `probe --site ieps [--url …]` — 신고 화면의 입력 요소(iframe 포함)를 라벨과 함께 덤프(`data/filings/<site>/probe-*.json`).
+  이 결과로 `data/filings/config.json` 의 `fill` (양식 라벨 → CSS 셀렉터) 을 채우면 패널에 [자동 채우기] 가 생긴다.
+  사이트 DOM 은 실측 전이라 기본 매핑은 비어 있다. 화면 URL 도 `config.json` 의 `sites.*.screens` 에서 고친다.
+- `done <filingId> [--receipt …] [--date …]` — 패널 없이 제출 완료 표시.
+- 환경변수: `MCM_BASE_URL`(기본 http://localhost:3000, `mcm-login --base` 로도 지정), `FILINGS_CHROME_PATH`(설치 Chrome 경로, 기본은 `channel: chrome`).

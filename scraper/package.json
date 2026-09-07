@@ -9,7 +9,8 @@
     "recon": "ts-node --project tsconfig.json scripts/cli-recon.ts",
     "scrape": "ts-node --project tsconfig.json scripts/cli-scraper.ts",
     "daou": "ts-node --project tsconfig.json scripts/cli-daou.ts",
-    "receipts": "ts-node --project tsconfig.json scripts/cli-receipts.ts"
+    "receipts": "ts-node --project tsconfig.json scripts/cli-receipts.ts",
+    "filings": "ts-node --project tsconfig.json scripts/cli-filings.ts"
   },
   "dependencies": {
     "@aws-sdk/client-sqs": "^3.1048.0",

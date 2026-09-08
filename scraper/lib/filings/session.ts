@@ -113,8 +113,18 @@ export async function openContext(
   let context: BrowserContext;
   try {
     context = await chromium.launchPersistentContext(profileDir(site), launch as never);
-  } catch {
-    // 설치된 Chrome 이 없으면 번들 Chromium
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // 설치된 Chrome 이 없을 때만 번들 Chromium 으로 폴백한다. 그 밖의 실패(대개 같은 프로필을 다른 창이 쓰는 중)는
+    // 폴백해도 같은 이유로 실패하므로 원인을 짚어 주고 멈춘다.
+    const noChrome = /Executable doesn't exist|not found|Chromium distribution|Failed to launch|ENOENT/i.test(msg)
+      && !/has been closed/i.test(msg);
+    if (!noChrome) {
+      throw new Error(
+        `브라우저를 열지 못했습니다. 같은 사이트의 다른 창(open/login/probe)이 떠 있으면 프로필(${profileDir(site)})이 잠겨 있습니다 — ` +
+          `그 창을 닫고 다시 실행하세요. (open 창이 떠 있을 때 폼 실측은 패널의 [폼 덤프] 버튼을 쓰세요)\n원인: ${msg.split("\n")[0]}`
+      );
+    }
     delete launch.channel;
     delete launch.executablePath;
     console.log(`[${site}] 설치된 Chrome 을 찾지 못해 번들 Chromium 으로 실행합니다.`);

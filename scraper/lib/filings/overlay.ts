@@ -36,7 +36,8 @@ export type OverlayAction =
   | { type: "next" }
   | { type: "prev" }
   | { type: "submitted"; receiptNo: string }
-  | { type: "skipped"; note: string };
+  | { type: "skipped"; note: string }
+  | { type: "probe" };
 
 export const ACTION_FN = "__mcmFilingsAction";
 export const RENDER_FN = "__mcmFilingsRender";
@@ -285,6 +286,12 @@ export function renderOverlay(data: OverlayData): void {
         })
       );
     }
+    const probeBtn = mk("폼 덤프", "", () => {
+      act({ type: "probe" });
+      flash(probeBtn, "저장 중…");
+    });
+    probeBtn.title = "이 화면의 입력 요소를 파일로 저장합니다(자동 채우기 셀렉터 확보용)";
+    ft.appendChild(probeBtn);
     ft.appendChild(mk("◀ 이전", "", () => act({ type: "prev" })));
     ft.appendChild(mk("다음 ▶", "", () => act({ type: "next" })));
     const sp = document.createElement("div");

@@ -4,7 +4,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { Frame } from "playwright";
+import { Frame, Page } from "playwright";
 import { FilingSite, SiteConfig, siteDir } from "./config";
 import { promptLine } from "./mcm-api";
 import { openContext } from "./session";
@@ -70,6 +70,27 @@ async function dumpFrame(frame: Frame): Promise<ProbedField[]> {
   return rows.map((r) => ({ frame: name, ...r }));
 }
 
+/** 현재 페이지(iframe 포함)의 입력 요소를 덤프해 `data/filings/<site>/probe-*.json` 에 저장하고 터미널에 요약한다. */
+export async function dumpPage(site: FilingSite, target: Page): Promise<string> {
+  const fields: ProbedField[] = [];
+  for (const fr of target.frames()) fields.push(...(await dumpFrame(fr)));
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  const file = path.join(siteDir(site), `probe-${stamp}.json`);
+  const title = await target.title().catch(() => "");
+  fs.writeFileSync(file, JSON.stringify({ url: target.url(), title, fields }, null, 2), "utf-8");
+  console.log(`[${site}] ${target.url()}`);
+  console.log(`[${site}] 입력 요소 ${fields.length}개:`);
+  for (const f of fields) {
+    console.log(`  ${f.frame !== "(main)" ? `[${f.frame}] ` : ""}${f.tag}/${f.type}  ${f.selector}  ← ${f.label || "(라벨 없음)"}${f.value ? `  = ${f.value}` : ""}`);
+  }
+  console.log(`[${site}] 저장: ${file}`);
+  console.log(`[${site}] 이 목록을 공유하면 config.json 의 fill 매핑(양식 라벨 → 셀렉터)을 채울 수 있습니다.`);
+  return file;
+}
+
+/**
+ * 단독 실측 — 자체 창을 연다. ⚠ `open` 창이 떠 있으면 같은 프로필을 못 열므로, 그때는 `open` 패널의 [폼 덤프] 를 쓴다.
+ */
 export async function runProbe(site: FilingSite, cfg: SiteConfig, url?: string): Promise<string> {
   const { context } = await openContext(site);
   try {
@@ -78,19 +99,7 @@ export async function runProbe(site: FilingSite, cfg: SiteConfig, url?: string):
     console.log(`[${site}] 브라우저에서 실측할 신고 화면(입력 폼이 보이는 상태)까지 이동한 뒤 이 터미널에서 Enter 를 누르세요.`);
     await promptLine("");
     const target = context.pages().filter((p) => !p.isClosed()).pop() ?? page;
-    const fields: ProbedField[] = [];
-    for (const fr of target.frames()) fields.push(...(await dumpFrame(fr)));
-    const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-    const file = path.join(siteDir(site), `probe-${stamp}.json`);
-    fs.writeFileSync(file, JSON.stringify({ url: target.url(), title: await target.title(), fields }, null, 2), "utf-8");
-    console.log(`[${site}] ${target.url()}`);
-    console.log(`[${site}] 입력 요소 ${fields.length}개:`);
-    for (const f of fields) {
-      console.log(`  ${f.frame !== "(main)" ? `[${f.frame}] ` : ""}${f.tag}/${f.type}  ${f.selector}  ← ${f.label || "(라벨 없음)"}${f.value ? `  = ${f.value}` : ""}`);
-    }
-    console.log(`[${site}] 저장: ${file}`);
-    console.log(`[${site}] 이 목록을 공유하면 config.json 의 fill 매핑(양식 라벨 → 셀렉터)을 채울 수 있습니다.`);
-    return file;
+    return await dumpPage(site, target);
   } finally {
     await context.close().catch(() => {});
   }

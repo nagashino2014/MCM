@@ -8,6 +8,7 @@ import { BrowserContext, Page } from "playwright";
 import { FilingKind, FilingsConfig, KIND_LABEL, KIND_SITE } from "./config";
 import { FilingRow, getFiling, listPendingFilings, markFiling } from "./mcm-api";
 import { ACTION_FN, OverlayAction, OverlayData, RENDER_FN, renderOverlay } from "./overlay";
+import { dumpPage } from "./probe";
 import { openContext, snapshotCookies, waitForContextClose } from "./session";
 
 const DATA_FN = "__mcmFilingsGetData";
@@ -94,7 +95,14 @@ export async function runAssist(opts: { cfg: FilingsConfig; kind?: FilingKind; f
   await context.exposeFunction(ACTION_FN, async (a: OverlayAction) => {
     try {
       const cur = items[index];
-      if (a.type === "next") index = items.length ? (index + 1) % items.length : 0;
+      if (a.type === "probe") {
+        // 패널이 떠 있는 바로 그 창의 현재 페이지를 덤프한다(별도 창은 같은 프로필을 못 연다)
+        const target = context.pages().filter((p) => !p.isClosed()).pop();
+        if (target) {
+          const file = await dumpPage(site, target);
+          notices.push({ at: Date.now(), text: `폼 덤프 저장: ${file}` });
+        }
+      } else if (a.type === "next") index = items.length ? (index + 1) % items.length : 0;
       else if (a.type === "prev") index = items.length ? (index - 1 + items.length) % items.length : 0;
       else if (cur && (a.type === "submitted" || a.type === "skipped")) {
         await markFiling(cur.filingId, {

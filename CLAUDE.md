@@ -76,6 +76,17 @@ IEPS(통합환경허가) 데이터 수집·파싱 + 계약/사업장 관리 모�
   - ❌ `force-new-deployment`만 하면 **옛 태그로 재시작**될 뿐 반영 안 됨.
 - modernize 같은 **프론트 전용 변경은 `next` 이미지만** 재배포(가벼움). 백엔드 OCR 이미지(~15GB)는 백엔드 변경 시에만.
 - `.dockerignore`는 `data/`·venv·`.git`·대용량 스캔파일을 제외해야 빌드 컨텍스트가 작아진다(미제외 시 14GB 전송).
+- **배포 명령 자동 출력(★ 사용자 요청 2026-09-08)**: Claude Code 원격 세션은 AWS 자격증명·PowerShell 이 없어 직접 배포할 수 없다. 따라서 **기능 커밋·푸시를 마쳤거나 사용자가 스테이징 반영/배포를 언급하면, "로컬에서 해주세요" 식 안내로 끝내지 말고 로컬 PowerShell 에 그대로 붙여 넣을 수 있는 명령 블록을 반드시 함께 출력**한다. 기본 형태:
+  ```powershell
+  git fetch origin
+  git checkout <세션 브랜치>          # 없으면 git checkout -b <세션 브랜치> origin/<세션 브랜치>
+  git pull origin <세션 브랜치>
+  $env:AWS_PROFILE = "mcm-kesi-staging"
+  .\infra\aws\ops\staging-deploy-next.ps1 -Wait   # 프론트 변경 → next 이미지만
+  ```
+  - 백엔드/워커 변경이면 해당 이미지(`backend`/`worker`) 절차(위 1→2→3)를 aws 명령으로 함께 나열한다. 마이그레이션이 있으면 `staging-apply-migrations.ps1 -Files ...` 를 배포 앞에 붙인다.
+  - 갈라진 배포 가드 경고가 예상되면(원격에 미머지 브랜치가 있을 때) 어떤 브랜치가 누락되는지와 `y` 진행 가능 여부를 한 줄로 덧붙인다. `-Force` 는 권하지 않는다.
+  - 빌드 로그에서 `RUN npm run build` 가 `CACHED` 면 소스가 반영되지 않은 것(체크아웃에 커밋 누락) — 이 확인 포인트도 같이 안내한다.
 
 ## 일반 작업 원칙
 - 되돌리기 어렵거나 외부 반영(배포·푸시·삭제) 작업은 **먼저 확인**받고 실행한다. 결과는 사실대로 보고(실패는 실패로).

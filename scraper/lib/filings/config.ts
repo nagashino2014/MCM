@@ -37,6 +37,20 @@ export interface SiteConfig {
   checkUrl: string;
   /** 신고 종류별 시작 화면(모르면 루트 — 사람이 메뉴로 이동, 패널은 어느 화면에서든 뜬다) */
   screens: Partial<Record<FilingKind, string>>;
+  /**
+   * 사업장 검색 팝업(대행 실적보고 › 대행사업장 명칭) 자동화. 실측(2026-09-08): 팝업 bplcCodeNmPopup, 검색어 칸 #file.
+   * 검색 버튼·결과 행 구조는 실측 전이라 텍스트로 찾는다 — 못 찾으면 팝업을 열어 둔 채 사람이 고른다.
+   */
+  siteSearch?: {
+    /** 대기열 양식 라벨 — 이 값의 값을 검색어로 쓴다 */
+    queryLabel: string;
+    /** 본문에서 팝업을 여는 버튼 */
+    openButton: string;
+    /** 팝업의 검색어 입력칸 */
+    input: string;
+    /** 팝업의 검색 버튼(없으면 Enter) */
+    submit: string;
+  };
 }
 
 /** 라벨 하나에 셀렉터 하나(text/select/textarea) 또는 값별 셀렉터(radio: { "체결": "#...001", ... }) */
@@ -108,6 +122,12 @@ export const DEFAULT_CONFIG: FilingsConfig = {
         ieps_staff: IEPS_STAFF_URL,
         // My환경허가 › 대행업무처리현황 › 대행 실적보고
         ieps_agency: IEPS_AGENCY_URL,
+      },
+      siteSearch: {
+        queryLabel: "대행사업장 명칭",
+        openButton: 'input[value="사업장 검색"], button:has-text("사업장 검색"), a:has-text("사업장 검색")',
+        input: "#file",
+        submit: 'input[value="검색"], button:has-text("검색"), a:has-text("검색"), img[alt="검색"]',
       },
     },
     etis: {

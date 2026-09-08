@@ -30,6 +30,8 @@ export interface OverlayData {
   fill: Record<string, string | Record<string, string>>;
   /** 사이트 alert 메시지(최근) — 패널 상단 배너 */
   notices?: string[];
+  /** 사업장 검색 팝업 자동화를 지원하면 검색어(대행사업장 명칭) */
+  siteSearchQuery?: string;
 }
 
 export type OverlayAction =
@@ -37,7 +39,8 @@ export type OverlayAction =
   | { type: "prev" }
   | { type: "submitted"; receiptNo: string }
   | { type: "skipped"; note: string }
-  | { type: "probe" };
+  | { type: "probe" }
+  | { type: "siteSearch" };
 
 export const ACTION_FN = "__mcmFilingsAction";
 export const RENDER_FN = "__mcmFilingsRender";
@@ -291,6 +294,14 @@ export function renderOverlay(data: OverlayData): void {
           alert(`자동 채우기: ${ok}개 입력, ${miss}개 실패(셀렉터 불일치). 화면에서 값을 확인한 뒤 직접 저장·제출하세요.`);
         })
       );
+    }
+    if (data.siteSearchQuery) {
+      const sb = mk("사업장 검색", "pri", () => {
+        act({ type: "siteSearch" });
+        flash(sb, "팝업 여는 중…");
+      });
+      sb.title = `사업장 검색 팝업을 열어 "${data.siteSearchQuery}" 로 검색하고 일치하는 행을 고릅니다`;
+      ft.appendChild(sb);
     }
     const probeBtn = mk("폼 덤프", "", () => {
       act({ type: "probe" });

@@ -9,6 +9,13 @@ import { FilingSite, SiteConfig, siteDir } from "./config";
 import { promptLine } from "./mcm-api";
 import { openContext } from "./session";
 
+interface ProbedControl {
+  frame: string;
+  tag: string;
+  text: string;
+  selector: string;
+}
+
 interface ProbedField {
   frame: string;
   tag: string;
@@ -70,18 +77,57 @@ async function dumpFrame(frame: Frame): Promise<ProbedField[]> {
   return rows.map((r) => ({ frame: name, ...r }));
 }
 
+/** 버튼·링크·표 헤더/첫 행 — 자동 클릭 대상(검색 버튼, 결과 행) 실측용. */
+async function dumpControls(frame: Frame): Promise<ProbedControl[]> {
+  const rows = await frame
+    .evaluate(() => {
+      const out: Omit<ProbedControl, "frame">[] = [];
+      const cssEsc = (s: string) => (window.CSS && CSS.escape ? CSS.escape(s) : s.replace(/([^\w-])/g, "\\$1"));
+      const sel = (el: Element, i: number) =>
+        (el as HTMLElement).id ? `#${cssEsc((el as HTMLElement).id)}` : `${el.tagName.toLowerCase()}:nth-of-type(${i + 1})`;
+      const ctrls = Array.from(
+        document.querySelectorAll('button, input[type="button"], input[type="submit"], input[type="image"], a[href^="javascript"], a[onclick], img[onclick]')
+      );
+      ctrls.forEach((el, i) => {
+        const r = el.getBoundingClientRect();
+        if (r.width === 0 && r.height === 0) return;
+        const text = ((el as HTMLInputElement).value || el.getAttribute("alt") || el.getAttribute("title") || el.textContent || "").trim().slice(0, 40);
+        out.push({ tag: el.tagName.toLowerCase(), text, selector: sel(el, i) });
+      });
+      document.querySelectorAll("table").forEach((t, i) => {
+        const head = Array.from(t.querySelectorAll("th")).map((th) => th.textContent?.trim() ?? "").filter(Boolean).slice(0, 12).join(" | ");
+        const first = t.querySelector("tbody tr, tr:nth-child(2)");
+        const firstText = first ? Array.from(first.querySelectorAll("td")).map((td) => td.textContent?.trim() ?? "").slice(0, 12).join(" | ") : "";
+        const firstOnclick = first?.getAttribute("onclick") || first?.querySelector("[onclick]")?.getAttribute("onclick") || "";
+        if (head || firstText) out.push({ tag: "table", text: `헤더: ${head} / 첫행: ${firstText}${firstOnclick ? ` / onclick: ${firstOnclick.slice(0, 80)}` : ""}`, selector: t.id ? `#${cssEsc(t.id)}` : `table:nth-of-type(${i + 1})` });
+      });
+      return out;
+    })
+    .catch(() => [] as Omit<ProbedControl, "frame">[]);
+  const name = frame.parentFrame() ? frame.name() || frame.url() : "(main)";
+  return rows.map((r) => ({ frame: name, ...r }));
+}
+
 /** 현재 페이지(iframe 포함)의 입력 요소를 덤프해 `data/filings/<site>/probe-*.json` 에 저장하고 터미널에 요약한다. */
 export async function dumpPage(site: FilingSite, target: Page): Promise<string> {
   const fields: ProbedField[] = [];
-  for (const fr of target.frames()) fields.push(...(await dumpFrame(fr)));
+  const controls: ProbedControl[] = [];
+  for (const fr of target.frames()) {
+    fields.push(...(await dumpFrame(fr)));
+    controls.push(...(await dumpControls(fr)));
+  }
   const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
   const file = path.join(siteDir(site), `probe-${stamp}.json`);
   const title = await target.title().catch(() => "");
-  fs.writeFileSync(file, JSON.stringify({ url: target.url(), title, fields }, null, 2), "utf-8");
+  fs.writeFileSync(file, JSON.stringify({ url: target.url(), title, fields, controls }, null, 2), "utf-8");
   console.log(`[${site}] ${target.url()}`);
   console.log(`[${site}] 입력 요소 ${fields.length}개:`);
   for (const f of fields) {
     console.log(`  ${f.frame !== "(main)" ? `[${f.frame}] ` : ""}${f.tag}/${f.type}  ${f.selector}  ← ${f.label || "(라벨 없음)"}${f.value ? `  = ${f.value}` : ""}`);
+  }
+  console.log(`[${site}] 버튼·링크·표 ${controls.length}개:`);
+  for (const c of controls) {
+    console.log(`  ${c.frame !== "(main)" ? `[${c.frame}] ` : ""}${c.tag}  ${c.selector}  ${c.text}`);
   }
   console.log(`[${site}] 저장: ${file}`);
   console.log(`[${site}] 이 목록을 공유하면 config.json 의 fill 매핑(양식 라벨 → 셀렉터)을 채울 수 있습니다.`);

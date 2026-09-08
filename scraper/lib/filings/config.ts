@@ -67,6 +67,20 @@ export interface FilingsConfig {
   fill: Partial<Record<FilingKind, Record<string, FillTarget>>>;
   /** MCM 값이 비어 있을 때 채우는 자사 상수 — { 종류: { 라벨: 값 } } */
   defaults: Partial<Record<FilingKind, Record<string, string>>>;
+  /**
+   * 파일 첨부(직인·첨부서류). "찾아보기" 클릭 시 뜨는 파일 선택기를 도구가 가로채 파일을 넣으므로
+   * 숨겨진 <input type=file> 구조를 몰라도 된다. 실측(2026-09-08): 직인 칸 #SEAL_FILE_NM, 첨부서류 칸 #fileNm.
+   */
+  attachments: {
+    /** 직인 이미지 경로 — 기본은 저장소의 frontend/public/letter/stamp.png */
+    sealPath: string;
+    /** 직인 표시 칸(같은 칸의 찾아보기·저장 버튼을 찾는 기준) */
+    sealField: string;
+    /** 첨부서류 표시 칸 */
+    docField: string;
+    browseButton: string;
+    saveButton: string;
+  };
 }
 
 // IEPS 폼 실측(2026-09-08, [폼 덤프]) — 대행 실적보고 contractReportForm(583) / 대행업 변경등록 appForm(580)
@@ -146,7 +160,21 @@ export const DEFAULT_CONFIG: FilingsConfig = {
     // 제출자 현황(IEPS 표시값). MCM 회사 프로필·면허에 등록돼 있으면 MCM 값이 우선한다.
     ieps_agency: { "주 계약자": "주식회사 한국환경안전연구원", "통합허가대행업 등록번호": "제044호" },
   },
+  attachments: {
+    sealPath: process.env.FILINGS_SEAL_PATH || path.join(MCM_ROOT, "frontend", "public", "letter", "stamp.png"),
+    sealField: "#SEAL_FILE_NM",
+    docField: "#fileNm",
+    browseButton: 'input[value="찾아보기"], button:has-text("찾아보기"), a:has-text("찾아보기"), label:has-text("찾아보기")',
+    saveButton: 'input[value="저장"], button:has-text("저장"), a:has-text("저장")',
+  },
 };
+
+/** 첨부 임시 폴더(MCM 에서 내려받은 계약서 등) */
+export function tmpDir(): string {
+  const dir = path.join(FILINGS_DIR, "tmp");
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
 
 export function configFile(): string {
   return path.join(FILINGS_DIR, "config.json");

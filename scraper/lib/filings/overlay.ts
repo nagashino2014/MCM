@@ -32,6 +32,8 @@ export interface OverlayData {
   notices?: string[];
   /** 사업장 검색 팝업 자동화를 지원하면 검색어(대행사업장 명칭) */
   siteSearchQuery?: string;
+  /** 첨부 지원 — 직인 파일 유무, 이 건에 붙일 계약 첨부 요약(예: "계약서 1") */
+  attach?: { seal: boolean; docs: string[] };
 }
 
 export type OverlayAction =
@@ -40,7 +42,9 @@ export type OverlayAction =
   | { type: "submitted"; receiptNo: string }
   | { type: "skipped"; note: string }
   | { type: "probe" }
-  | { type: "siteSearch" };
+  | { type: "siteSearch" }
+  | { type: "attachSeal" }
+  | { type: "attachDocs" };
 
 export const ACTION_FN = "__mcmFilingsAction";
 export const RENDER_FN = "__mcmFilingsRender";
@@ -304,6 +308,22 @@ export function renderOverlay(data: OverlayData): void {
       });
       sb.title = `사업장 검색 팝업을 열어 "${data.siteSearchQuery}" 로 검색하고 일치하는 행을 고릅니다`;
       ft.appendChild(sb);
+    }
+    if (data.attach?.seal) {
+      const b = mk("직인 첨부", "", () => {
+        act({ type: "attachSeal" });
+        flash(b, "첨부 중…");
+      });
+      b.title = "직인 이미지를 직인 칸에 첨부하고 저장합니다(신청서 저장 후 가능)";
+      ft.appendChild(b);
+    }
+    if (data.attach?.docs?.length) {
+      const b = mk(`서류 첨부(${data.attach.docs.length})`, "", () => {
+        act({ type: "attachDocs" });
+        flash(b, "첨부 중…");
+      });
+      b.title = `MCM 계약 첨부를 첨부서류 칸에 올리고 저장합니다: ${data.attach.docs.join(", ")}`;
+      ft.appendChild(b);
     }
     const probeBtn = mk("폼 덤프", "", () => {
       act({ type: "probe" });

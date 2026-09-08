@@ -818,6 +818,8 @@ export interface FacilityListFilter {
   source?: string;
   /** 누락 항목 필터. 지정된 항목 중 하나라도 비어 있는 사업장만 포함(OR). */
   missing?: FacilityMissingField[];
+  /** 거래 이력 업체만: 계약상대(counterparty)로 잡힌 계약 건이 1건 이상 존재하는 사업장(해지·완료 포함). */
+  hasContractHistory?: boolean;
   limit?: number;
   offset?: number;
   sort?: "recent" | "name";
@@ -938,6 +940,14 @@ export async function listFacilities(
           AND sp.status = 'open' AND sp.stage NOT IN ('won','lost','hold'))`);
     }
     if (engConds.length) where.push(`(${engConds.join(" OR ")})`);
+  }
+  // 거래 이력 업체 — engagement=contract(진행 중)와 달리 해지·완료된 계약도 이력으로 본다.
+  // 휴지통(soft delete)에 들어간 계약만 제외.
+  if (filter.hasContractHistory) {
+    where.push(`EXISTS (
+      SELECT 1 FROM contracts c
+      WHERE c.counterparty_facility_id = f.facility_id
+        AND c.deleted_at IS NULL)`);
   }
   if (filter.integratedPermitTarget) {
     where.push(

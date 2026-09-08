@@ -62,6 +62,8 @@ export interface FacilityListFilter {
   source?: string;
   /** 누락 항목 필터. 지정된 항목 중 하나라도 비어 있는 사업장만 포함(OR). */
   missing?: FacilityMissingField[];
+  /** 거래 이력 업체만: 계약상대(counterparty)로 잡힌 계약 건이 1건 이상 존재하는 사업장. */
+  hasContractHistory?: boolean;
   limit?: number;
   offset?: number;
   sort?: "recent" | "name";

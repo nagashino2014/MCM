@@ -146,6 +146,7 @@ export function FacilityListPanel({
     if (filter.airClass != null) params.set("airClass", String(filter.airClass));
     if (filter.waterClass != null) params.set("waterClass", String(filter.waterClass));
     if (filter.source) params.set("source", filter.source);
+    if (filter.hasContractHistory) params.set("hasContractHistory", "1");
     if (filter.sort) params.set("sort", filter.sort);
     params.set("format", format);
     return params;
@@ -300,6 +301,20 @@ export function FacilityListPanel({
               onSelect: () => onFilterChange({ ...filter, source: s.value, offset: 0 }),
             }))}
           />
+
+          {/* 거래 이력 업체 — 위 필터 조건에 해당하는 사업장 중 계약 건(해지·완료 포함)이
+              1건 이상 있는 업체만 남긴다. 내보내기(엑셀·PDF)에도 같은 조건이 전달된다. */}
+          <label
+            className="flex items-center gap-1.5 text-xs font-bold cd-text-muted shrink-0 cursor-pointer select-none"
+            title="설정한 필터 조건 중 계약 건이 존재하는 업체만 표시"
+          >
+            <input
+              type="checkbox"
+              checked={!!filter.hasContractHistory}
+              onChange={(e) => onFilterChange({ ...filter, hasContractHistory: e.target.checked, offset: 0 })}
+            />
+            거래 이력 업체
+          </label>
 
           {/* 내보내기 — 수주/수금/발행 현황 리스트와 같은 엑셀·PDF 아이콘 2개(30px). */}
           <div className="ml-auto shrink-0 flex items-center gap-1">

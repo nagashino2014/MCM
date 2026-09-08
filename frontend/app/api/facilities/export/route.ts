@@ -66,6 +66,7 @@ export async function GET(req: NextRequest) {
       ? INTEGRATED_PERMIT_INDUSTRIES.find((c) => c.id === industryCategoryId)?.label ?? ""
       : "";
     const isIntegrated = Boolean(industryCategoryId);
+    const hasContractHistory = searchParams.get("hasContractHistory") === "1";
 
     const filter: FacilityListFilter = {
       q: searchParams.get("q") || undefined,
@@ -78,6 +79,7 @@ export async function GET(req: NextRequest) {
         ? Number(searchParams.get("waterClass"))
         : undefined,
       source: searchParams.get("source") || undefined,
+      hasContractHistory,
       sort: (searchParams.get("sort") as "recent" | "name") || "recent",
       limit: 100000,
       offset: 0,
@@ -113,9 +115,11 @@ export async function GET(req: NextRequest) {
     // 파일명·표 제목 조합
     // 통합허가 업종인 경우: [업종] [지역1]·[지역2]... 사업장 리스트(YY.MM.DD.)
     // 아닌 경우:            [지역1]·[지역2]... 사업장 리스트(YY.MM.DD.)
+    // 거래 이력 업체 체크 시:  ... 거래 이력 업체 리스트(YY.MM.DD.)
     const regionPart = sidoList.length > 0 ? ` ${sidoList.join("·")}` : "";
     const industryPart = isIntegrated && industryLabel ? `${industryLabel} ` : "";
-    const titleBase = `${industryPart}${regionPart.trimStart()} 사업장 리스트`.trim();
+    const listLabel = hasContractHistory ? "거래 이력 업체 리스트" : "사업장 리스트";
+    const titleBase = `${industryPart}${regionPart.trimStart()} ${listLabel}`.trim();
 
     const now = new Date();
     const fileStamp = stampDisplay(now);

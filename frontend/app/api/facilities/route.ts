@@ -63,6 +63,7 @@ export async function GET(req: NextRequest) {
               ["brn", "representative", "phone", "address", "industry"].includes(s)
             ) as FacilityMissingField[])
         : undefined,
+      hasContractHistory: searchParams.get("hasContractHistory") === "1",
       sort: (searchParams.get("sort") as "recent" | "name") || "recent",
       limit: clampLimit(Number(searchParams.get("limit") ?? "50")),
       offset: Math.max(0, Number(searchParams.get("offset") ?? "0")),

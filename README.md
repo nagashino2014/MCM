@@ -530,7 +530,8 @@ IEPS 는 문자인증, ETIS 는 공동인증서라 로그인은 사람이 하고
 - 폼 실측 — `open` 패널의 **[폼 덤프]** 버튼(권장, 같은 창에서 저장) 또는 단독 `probe --site ieps [--url …]`(자체 창을 열므로
   `open` 창이 떠 있으면 프로필이 잠겨 실패). 신고 화면의 입력 요소(iframe 포함)를 라벨과 함께 덤프(`data/filings/<site>/probe-*.json`).
   이 결과로 `data/filings/config.json` 의 `fill` (양식 라벨 → CSS 셀렉터) 을 채우면 패널에 [자동 채우기] 가 생긴다.
-  사이트 DOM 은 실측 전이라 기본 매핑은 비어 있다. 화면 URL 도 `config.json` 의 `sites.*.screens` 에서 고친다.
+  IEPS 두 화면(대행 실적보고 583 · 대행업 변경등록 580)은 2026-09-08 실측으로 기본 매핑·URL 이 들어 있다(`lib/filings/config.ts`).
+  대행사업장 명칭·소재지는 사업장 검색 팝업 전용, 기술인력 그리드는 편집 셀을 만든 뒤 [채우기]. `config.json` 에는 바꿀 항목만 적는다(기본값과 deepMerge).
 - `done <filingId> [--receipt …] [--date …]` — 패널 없이 제출 완료 표시.
 - 사이트 팝업(alert·confirm·prompt)은 Playwright 가 자동으로 닫아 버리므로 도구가 가로채 **터미널과 패널 배너에 표시**한다.
   확인 창(confirm)은 터미널에서 y/n 으로 답한다(팝업이 떠 있는 동안 페이지가 멈춰 있어 화면 안에 대체 창을 그릴 수 없다).

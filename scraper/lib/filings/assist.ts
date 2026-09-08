@@ -5,7 +5,7 @@
  * 한 번 실행에 같은 종류의 대기 건을 [이전]/[다음] 으로 순회한다(IEPS 세션 1시간 안에 몰아서 처리).
  */
 import { BrowserContext, Page } from "playwright";
-import { FilingKind, FilingsConfig, KIND_LABEL, KIND_SITE } from "./config";
+import { FillTarget, FilingKind, FilingsConfig, KIND_LABEL, KIND_SITE } from "./config";
 import { FilingRow, getFiling, listPendingFilings, markFiling } from "./mcm-api";
 import { ACTION_FN, OverlayAction, OverlayData, RENDER_FN, renderOverlay } from "./overlay";
 import { dumpPage } from "./probe";
@@ -13,7 +13,13 @@ import { openContext, snapshotCookies, waitForContextClose } from "./session";
 
 const DATA_FN = "__mcmFilingsGetData";
 
-function toOverlay(f: FilingRow | null, index: number, total: number, fill: Record<string, string>): OverlayData {
+function toOverlay(
+  f: FilingRow | null,
+  index: number,
+  total: number,
+  fill: Record<string, FillTarget>,
+  defaults: Record<string, string>
+): OverlayData {
   if (!f) {
     return {
       filingId: "",
@@ -35,7 +41,10 @@ function toOverlay(f: FilingRow | null, index: number, total: number, fill: Reco
     subtitle: f.subtitle,
     screen: f.payload.screen,
     dueOn: f.dueOn,
-    fields: f.payload.fields,
+    // MCM 값이 비어 있으면 자사 상수(config.defaults)로 보충
+    fields: f.payload.fields.map((fld) =>
+      !fld.value && defaults[fld.label] ? { ...fld, value: defaults[fld.label], hint: fld.hint ?? "설정 기본값" } : fld
+    ),
     index,
     total,
     fill,
@@ -62,6 +71,7 @@ export async function runAssist(opts: { cfg: FilingsConfig; kind?: FilingKind; f
   const site = KIND_SITE[kind];
   const siteCfg = cfg.sites[site];
   const fill = cfg.fill[kind] ?? {};
+  const defaults = cfg.defaults?.[kind] ?? {};
   let index = 0;
 
   console.log(`[filings] ${KIND_LABEL[kind]} 대기 ${items.length}건 — ${siteCfg.label} 창을 엽니다.`);
@@ -75,7 +85,7 @@ export async function runAssist(opts: { cfg: FilingsConfig; kind?: FilingKind; f
   });
 
   const current = (): OverlayData => ({
-    ...toOverlay(items[index] ?? null, index, items.length, fill),
+    ...toOverlay(items[index] ?? null, index, items.length, fill, defaults),
     notices: notices.filter((n) => Date.now() - n.at < 20_000).map((n) => n.text),
   });
   const rerender = async () => {

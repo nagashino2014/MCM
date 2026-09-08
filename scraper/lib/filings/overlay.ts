@@ -26,8 +26,8 @@ export interface OverlayData {
   fields: OverlayField[];
   index: number;
   total: number;
-  /** 라벨 → CSS 셀렉터(자동 채우기) */
-  fill: Record<string, string>;
+  /** 라벨 → CSS 셀렉터, 또는 radio 처럼 값별 셀렉터 { 값: 셀렉터 } (자동 채우기) */
+  fill: Record<string, string | Record<string, string>>;
   /** 사이트 alert 메시지(최근) — 패널 상단 배너 */
   notices?: string[];
 }
@@ -276,8 +276,14 @@ export function renderOverlay(data: OverlayData): void {
           let ok = 0;
           let miss = 0;
           for (const f of data.fields) {
-            const sel = data.fill[f.label];
-            if (!sel || !f.value) continue;
+            const target = data.fill[f.label];
+            if (!target || !f.value) continue;
+            // 값별 셀렉터(radio): 값과 같은 키의 셀렉터를 고른다
+            const sel = typeof target === "string" ? target : target[f.value.trim()];
+            if (!sel) {
+              miss += 1;
+              continue;
+            }
             const el = document.querySelector(sel) as HTMLElement | null;
             if (el && setValue(el, f.value)) ok += 1;
             else miss += 1;

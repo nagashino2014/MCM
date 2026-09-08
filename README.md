@@ -531,4 +531,6 @@ IEPS 는 문자인증, ETIS 는 공동인증서라 로그인은 사람이 하고
   이 결과로 `data/filings/config.json` 의 `fill` (양식 라벨 → CSS 셀렉터) 을 채우면 패널에 [자동 채우기] 가 생긴다.
   사이트 DOM 은 실측 전이라 기본 매핑은 비어 있다. 화면 URL 도 `config.json` 의 `sites.*.screens` 에서 고친다.
 - `done <filingId> [--receipt …] [--date …]` — 패널 없이 제출 완료 표시.
+- 사이트 팝업(alert·confirm·prompt)은 Playwright 가 자동으로 닫아 버리므로 도구가 가로채 **터미널과 패널 배너에 표시**한다.
+  확인 창(confirm)은 터미널에서 y/n 으로 답한다(팝업이 떠 있는 동안 페이지가 멈춰 있어 화면 안에 대체 창을 그릴 수 없다).
 - 환경변수: `MCM_BASE_URL`(기본 http://localhost:3000, `mcm-login --base` 로도 지정), `FILINGS_CHROME_PATH`(설치 Chrome 경로, 기본은 `channel: chrome`).

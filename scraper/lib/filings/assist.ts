@@ -64,9 +64,19 @@ export async function runAssist(opts: { cfg: FilingsConfig; kind?: FilingKind; f
   let index = 0;
 
   console.log(`[filings] ${KIND_LABEL[kind]} 대기 ${items.length}건 — ${siteCfg.label} 창을 엽니다.`);
-  const { context } = await openContext(site);
+  // 사이트 alert 메시지 — 패널 상단 배너로도 보여 준다(페이지가 바뀌어도 20초 안이면 다시 표시).
+  const notices: { at: number; text: string }[] = [];
+  const { context } = await openContext(site, {
+    onNotice: (text) => {
+      notices.push({ at: Date.now(), text });
+      void rerender();
+    },
+  });
 
-  const current = () => toOverlay(items[index] ?? null, index, items.length, fill);
+  const current = (): OverlayData => ({
+    ...toOverlay(items[index] ?? null, index, items.length, fill),
+    notices: notices.filter((n) => Date.now() - n.at < 20_000).map((n) => n.text),
+  });
   const rerender = async () => {
     const d = current();
     for (const p of context.pages()) {
@@ -115,6 +125,7 @@ export async function runAssist(opts: { cfg: FilingsConfig; kind?: FilingKind; f
 
   console.log(`[filings] 패널에서 값을 복사·채우고, 사이트에서 저장·제출한 뒤 패널의 [제출 완료] 를 누르세요.`);
   console.log(`[filings] 신고 화면 URL 이 다르면 메뉴로 이동하세요(패널은 어느 화면에서든 따라갑니다). 창을 닫으면 종료.`);
+  console.log(`[filings] 사이트 팝업(알림·확인 창)은 이 터미널과 패널에 표시됩니다 — 확인 창은 여기서 y/n 으로 답하세요.`);
   const timer = setInterval(() => void snapshotCookies(site, context), 5000);
   await waitForContextClose(context);
   clearInterval(timer);

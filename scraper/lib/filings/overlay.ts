@@ -28,6 +28,8 @@ export interface OverlayData {
   total: number;
   /** 라벨 → CSS 셀렉터(자동 채우기) */
   fill: Record<string, string>;
+  /** 사이트 alert 메시지(최근) — 패널 상단 배너 */
+  notices?: string[];
 }
 
 export type OverlayAction =
@@ -169,6 +171,9 @@ export function renderOverlay(data: OverlayData): void {
       #${ID} .ft { display:flex; gap:6px; padding:10px 12px; border-top:1px solid #e5eaef; background:#f8fafc; flex-wrap:wrap; }
       #${ID} .ft .sp { flex:1; }
       #${ID}.collapsed .meta, #${ID}.collapsed .list, #${ID}.collapsed .ft { display:none; }
+      #${ID} .nt { display:flex; align-items:flex-start; gap:8px; padding:8px 12px; background:#fff8e1; color:#7a5a00; border-bottom:1px solid #f5e6b8; font-size:12px; }
+      #${ID} .nt span { flex:1; white-space:pre-wrap; word-break:break-all; }
+      #${ID} .nt button { padding:0 6px; }
     `;
     root.appendChild(style);
 
@@ -182,6 +187,19 @@ export function renderOverlay(data: OverlayData): void {
     };
     root.appendChild(hd);
     if (collapsed) root.classList.add("collapsed");
+
+    for (const text of data.notices ?? []) {
+      const nt = document.createElement("div");
+      nt.className = "nt";
+      const span = document.createElement("span");
+      span.textContent = `🔔 사이트 알림: ${text}`;
+      const close = document.createElement("button");
+      close.textContent = "×";
+      close.title = "닫기";
+      close.onclick = () => nt.remove();
+      nt.append(span, close);
+      root.appendChild(nt);
+    }
 
     const meta = document.createElement("div");
     meta.className = "meta";

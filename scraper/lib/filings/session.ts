@@ -9,6 +9,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { chromium, BrowserContext } from "playwright";
 import { FilingSite, SiteConfig, siteDir } from "./config";
+import { promptLine } from "./mcm-api";
 
 const CHROME_PATH = process.env.FILINGS_CHROME_PATH;
 
@@ -20,6 +21,56 @@ export function cookiesFile(site: FilingSite): string {
 }
 export function hasSession(site: FilingSite): boolean {
   return fs.existsSync(path.join(profileDir(site), "Default")) || fs.existsSync(cookiesFile(site));
+}
+
+/**
+ * 사이트 팝업(alert/confirm/prompt) 처리.
+ * Playwright 는 핸들러가 없으면 팝업을 **자동으로 닫아 버려** "로그인 성공"·"저장되었습니다"·유효성 오류가
+ * 사람 눈에 띄지 않는다. alert 는 메시지를 터미널(과 패널)에 보여 준 뒤 닫고, confirm/prompt 는 터미널에서 사람이 답한다.
+ * (팝업이 떠 있는 동안 페이지 스크립트가 멈춰 있어 화면 안에 대체 창을 그릴 수 없다.)
+ */
+export function installDialogHandler(
+  context: BrowserContext,
+  site: string,
+  onNotice?: (text: string) => void,
+  interactive = true
+): void {
+  context.on("dialog", async (dialog) => {
+    const type = dialog.type();
+    const msg = dialog.message().trim();
+    try {
+      if (type === "beforeunload") {
+        await dialog.accept();
+        return;
+      }
+      // headless 세션 확인(check) 처럼 사람이 없는 실행 — 알림은 기록만, 확인 창은 취소로 닫는다
+      if (!interactive) {
+        console.log(`[${site}] 사이트 팝업(${type}): ${msg}`);
+        if (type === "alert") await dialog.accept();
+        else await dialog.dismiss();
+        return;
+      }
+      if (type === "alert") {
+        console.log(`[${site}] 🔔 사이트 알림: ${msg}`);
+        onNotice?.(msg);
+        await dialog.accept();
+        return;
+      }
+      if (type === "confirm") {
+        console.log(`[${site}] ❓ 사이트 확인 창: ${msg}`);
+        const answer = await promptLine(`[${site}]   → 확인은 y, 취소는 n 입력 후 Enter: `);
+        if (/^y/i.test(answer)) await dialog.accept();
+        else await dialog.dismiss();
+        return;
+      }
+      console.log(`[${site}] ✏ 사이트 입력 창: ${msg}`);
+      const value = await promptLine(`[${site}]   → 입력값(비우고 Enter 면 취소): `);
+      if (value) await dialog.accept(value);
+      else await dialog.dismiss();
+    } catch {
+      // 사람이 창을 닫아 팝업이 이미 사라진 경우
+    }
+  });
 }
 
 export function waitForContextClose(context: BrowserContext): Promise<void> {
@@ -41,8 +92,11 @@ export async function snapshotCookies(site: FilingSite, context: BrowserContext)
  * 브라우저 컨텍스트(프로필 재사용). 정부 사이트는 headed 로만 쓴다 — 보안 모듈·인증서 창이 뜨고,
  * 제출 직전 확인은 사람이 하기 때문이다.
  */
-export async function openContext(site: FilingSite, opts: { useSession?: boolean; headless?: boolean } = {}) {
-  const { useSession = true, headless = false } = opts;
+export async function openContext(
+  site: FilingSite,
+  opts: { useSession?: boolean; headless?: boolean; onNotice?: (text: string) => void } = {}
+) {
+  const { useSession = true, headless = false, onNotice } = opts;
   if (useSession && !hasSession(site)) {
     throw new Error(`로그인 프로필이 없습니다: ${profileDir(site)}\n먼저 'npm run filings -- login --site ${site}' 를 실행하세요.`);
   }
@@ -67,6 +121,7 @@ export async function openContext(site: FilingSite, opts: { useSession?: boolean
     context = await chromium.launchPersistentContext(profileDir(site), launch as never);
   }
   context.setDefaultTimeout(60_000);
+  installDialogHandler(context, site, onNotice, !headless);
   if (useSession && fs.existsSync(cookiesFile(site))) {
     try {
       const cookies = JSON.parse(fs.readFileSync(cookiesFile(site), "utf-8"));
@@ -88,6 +143,7 @@ export async function interactiveLogin(site: FilingSite, cfg: SiteConfig): Promi
     console.log(`[${site}] ${cfg.label} 창이 열렸습니다. 직접 로그인하세요` +
       (site === "ieps" ? "(아이디/비밀번호 → 문자 인증번호)." : "(공동인증서 선택 → 비밀번호)."));
     console.log(`[${site}] 로그인 뒤 신고 메뉴 화면까지 이동한 다음 창을 닫으면 세션이 저장됩니다.`);
+    console.log(`[${site}] 사이트 팝업(알림·확인 창)은 이 터미널에 표시됩니다 — 확인 창은 여기서 y/n 으로 답하세요.`);
     let lastUrl = "";
     const timer = setInterval(async () => {
       try {

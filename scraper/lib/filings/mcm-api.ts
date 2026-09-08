@@ -6,7 +6,6 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import readline from "node:readline";
 import { FILINGS_DIR } from "./config";
 
 export interface FilingField {
@@ -63,30 +62,105 @@ export function hasMcmAuth(): boolean {
   return readAuth() !== null;
 }
 
-/** 터미널에서 비밀번호를 에코 없이 읽는다(Windows 콘솔·git-bash 모두 동작). */
-export function promptSecret(question: string): Promise<string> {
-  return new Promise((resolve) => {
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true });
-    const orig = (rl as unknown as { _writeToOutput: (s: string) => void })._writeToOutput;
-    process.stdout.write(question);
-    (rl as unknown as { _writeToOutput: (s: string) => void })._writeToOutput = () => {};
-    rl.question("", (answer) => {
-      (rl as unknown as { _writeToOutput: (s: string) => void })._writeToOutput = orig;
-      process.stdout.write("\n");
-      rl.close();
-      resolve(answer);
-    });
+/**
+ * 터미널 입력 — readline 을 쓰지 않는다.
+ * readline 은 파이프 입력을 한꺼번에 삼켜 다음 프롬프트가 굶고, Windows 콘솔에서는 두 번째 인터페이스의
+ * 프롬프트가 찍히지 않아 "사번 입력 직후 멈춤"처럼 보였다. stdin 을 직접 읽고 에코도 직접 한다.
+ * - TTY: raw 모드로 글자 단위(Enter 완료, Ctrl+C 취소, Backspace 지우기). mask 면 에코하지 않는다.
+ * - 파이프: 공유 버퍼에서 줄 단위로 꺼낸다(남은 줄은 다음 프롬프트가 쓴다).
+ */
+let pipeBuffer = "";
+
+function readInput(question: string, mask: boolean): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const stdin = process.stdin;
+    const out = process.stdout;
+    out.write(question);
+    stdin.setEncoding("utf8");
+
+    if (!stdin.isTTY || typeof stdin.setRawMode !== "function") {
+      const takeLine = (): string | null => {
+        const nl = pipeBuffer.indexOf("\n");
+        if (nl < 0) return null;
+        const line = pipeBuffer.slice(0, nl).replace(/\r$/, "");
+        pipeBuffer = pipeBuffer.slice(nl + 1);
+        return line;
+      };
+      const ready = takeLine();
+      if (ready !== null) {
+        out.write(mask ? "\n" : `${ready}\n`);
+        resolve(ready);
+        return;
+      }
+      const onData = (chunk: string) => {
+        pipeBuffer += chunk;
+        const line = takeLine();
+        if (line === null) return;
+        stdin.removeListener("data", onData);
+        stdin.removeListener("end", onEnd);
+        stdin.pause();
+        out.write(mask ? "\n" : `${line}\n`);
+        resolve(line);
+      };
+      const onEnd = () => {
+        stdin.removeListener("data", onData);
+        const rest = pipeBuffer;
+        pipeBuffer = "";
+        out.write("\n");
+        resolve(rest.replace(/\r$/, ""));
+      };
+      stdin.on("data", onData);
+      stdin.once("end", onEnd);
+      stdin.resume();
+      return;
+    }
+
+    let value = "";
+    const cleanup = () => {
+      stdin.removeListener("data", onData);
+      stdin.setRawMode(false);
+      stdin.pause();
+    };
+    const onData = (chunk: string) => {
+      for (const ch of chunk) {
+        if (ch === "\r" || ch === "\n") {
+          cleanup();
+          out.write("\n");
+          resolve(value);
+          return;
+        }
+        if (ch === "\u0003") {
+          cleanup();
+          out.write("\n");
+          reject(new Error("입력을 취소했습니다."));
+          return;
+        }
+        if (ch === "\u007f" || ch === "\b") {
+          if (value.length > 0) {
+            value = value.slice(0, -1);
+            if (!mask) out.write("\b \b");
+          }
+          continue;
+        }
+        if (ch < " ") continue; // 방향키 등 제어 시퀀스는 무시
+        value += ch;
+        if (!mask) out.write(ch);
+      }
+    };
+    stdin.setRawMode(true);
+    stdin.on("data", onData);
+    stdin.resume();
   });
 }
 
+/** 한 줄 입력(에코). */
 export function promptLine(question: string): Promise<string> {
-  return new Promise((resolve) => {
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    rl.question(question, (answer) => {
-      rl.close();
-      resolve(answer.trim());
-    });
-  });
+  return readInput(question, false).then((v) => v.trim());
+}
+
+/** 비밀번호 입력(에코 없음). */
+export function promptSecret(question: string): Promise<string> {
+  return readInput(question, true);
 }
 
 async function fetchJson<T>(url: string, init: RequestInit): Promise<{ status: number; body: T }> {

@@ -8,6 +8,7 @@
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
 import type {
+  FilingAttachment,
   FilingField,
   FilingKind,
   FilingPayload,
@@ -856,13 +857,38 @@ function rowToFiling(r: Record<string, unknown>, today: string): FilingRow {
     createdAt: str(r.created_at),
     updatedAt: str(r.updated_at),
     daysLeft: dueOn ? diffDays(today, dueOn) : null,
+    attachments: parseAttachments(r.attachments_json),
   };
 }
 
 const SELECT_FILING = `
-  SELECT f.*, u.name AS submitted_by_name
+  SELECT f.*, u.name AS submitted_by_name, att.attachments_json
     FROM regulatory_filings f
-    LEFT JOIN users u ON u.user_id = f.submitted_by`;
+    LEFT JOIN users u ON u.user_id = f.submitted_by
+    -- 계약 첨부(계약서·변경계약서·세금계산서) — 로컬 도구가 IEPS 첨부서류 칸에 올린다
+    LEFT JOIN LATERAL (
+      SELECT json_agg(json_build_object(
+               'documentId', d.document_id, 'type', d.document_type, 'name', d.display_name,
+               'storageKey', d.storage_key, 'createdAt', d.created_at)
+             ORDER BY d.created_at DESC) AS attachments_json
+        FROM contract_documents d
+       WHERE d.contract_id = f.contract_id AND d.document_type IN ('contract', 'amendment', 'invoice')
+    ) att ON f.contract_id IS NOT NULL`;
+
+const ATTACHMENT_TYPE_LABEL: Record<string, string> = { contract: "계약서", amendment: "변경계약서", invoice: "세금계산서" };
+
+function parseAttachments(raw: unknown): FilingAttachment[] {
+  const list = parseJson<Array<Record<string, unknown>>>(raw, []);
+  if (!Array.isArray(list)) return [];
+  return list.map((d) => ({
+    documentId: str(d.documentId),
+    type: str(d.type),
+    typeLabel: ATTACHMENT_TYPE_LABEL[str(d.type)] ?? str(d.type),
+    name: str(d.name) || str(d.storageKey).split("/").pop() || "문서",
+    downloadPath: `/api/contracts/documents?key=${encodeURIComponent(str(d.storageKey))}`,
+    createdAt: str(d.createdAt),
+  }));
+}
 
 export interface FilingListFilter {
   status?: FilingStatus | "all";

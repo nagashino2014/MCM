@@ -358,6 +358,16 @@ function FilingDetailModal({
           </div>
         )}
         {filing.status === "skipped" && filing.note && <div className="mt-1">제외 사유: {filing.note}</div>}
+        {filing.attachments.length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+            <span>첨부:</span>
+            {filing.attachments.map((a) => (
+              <a key={a.documentId} href={a.downloadPath} target="_blank" rel="noreferrer" className="cd-text-primary underline">
+                {a.typeLabel} · {a.name}
+              </a>
+            ))}
+          </div>
+        )}
       </div>
 
       {mode === "view" && (

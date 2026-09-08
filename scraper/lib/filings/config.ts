@@ -37,6 +37,20 @@ export interface SiteConfig {
   checkUrl: string;
   /** 신고 종류별 시작 화면(모르면 루트 — 사람이 메뉴로 이동, 패널은 어느 화면에서든 뜬다) */
   screens: Partial<Record<FilingKind, string>>;
+  /**
+   * 사업장 검색 팝업(대행 실적보고 › 대행사업장 명칭) 자동화. 실측(2026-09-08): 팝업 bplcCodeNmPopup, 검색어 칸 #file.
+   * 검색 버튼·결과 행 구조는 실측 전이라 텍스트로 찾는다 — 못 찾으면 팝업을 열어 둔 채 사람이 고른다.
+   */
+  siteSearch?: {
+    /** 대기열 양식 라벨 — 이 값의 값을 검색어로 쓴다 */
+    queryLabel: string;
+    /** 본문에서 팝업을 여는 버튼 */
+    openButton: string;
+    /** 팝업의 검색어 입력칸 */
+    input: string;
+    /** 팝업의 검색 버튼(없으면 Enter) */
+    submit: string;
+  };
 }
 
 /** 라벨 하나에 셀렉터 하나(text/select/textarea) 또는 값별 셀렉터(radio: { "체결": "#...001", ... }) */
@@ -53,6 +67,20 @@ export interface FilingsConfig {
   fill: Partial<Record<FilingKind, Record<string, FillTarget>>>;
   /** MCM 값이 비어 있을 때 채우는 자사 상수 — { 종류: { 라벨: 값 } } */
   defaults: Partial<Record<FilingKind, Record<string, string>>>;
+  /**
+   * 파일 첨부(직인·첨부서류). "찾아보기" 클릭 시 뜨는 파일 선택기를 도구가 가로채 파일을 넣으므로
+   * 숨겨진 <input type=file> 구조를 몰라도 된다. 실측(2026-09-08): 직인 칸 #SEAL_FILE_NM, 첨부서류 칸 #fileNm.
+   */
+  attachments: {
+    /** 직인 이미지 경로 — 기본은 저장소의 frontend/public/letter/stamp.png */
+    sealPath: string;
+    /** 직인 표시 칸(같은 칸의 찾아보기·저장 버튼을 찾는 기준) */
+    sealField: string;
+    /** 첨부서류 표시 칸 */
+    docField: string;
+    browseButton: string;
+    saveButton: string;
+  };
 }
 
 // IEPS 폼 실측(2026-09-08, [폼 덤프]) — 대행 실적보고 contractReportForm(583) / 대행업 변경등록 appForm(580)
@@ -109,6 +137,12 @@ export const DEFAULT_CONFIG: FilingsConfig = {
         // My환경허가 › 대행업무처리현황 › 대행 실적보고
         ieps_agency: IEPS_AGENCY_URL,
       },
+      siteSearch: {
+        queryLabel: "대행사업장 명칭",
+        openButton: 'input[value="사업장 검색"], button:has-text("사업장 검색"), a:has-text("사업장 검색")',
+        input: "#file",
+        submit: 'input[value="검색"], button:has-text("검색"), a:has-text("검색"), img[alt="검색"]',
+      },
     },
     etis: {
       label: "엔지니어링종합정보시스템",
@@ -126,7 +160,21 @@ export const DEFAULT_CONFIG: FilingsConfig = {
     // 제출자 현황(IEPS 표시값). MCM 회사 프로필·면허에 등록돼 있으면 MCM 값이 우선한다.
     ieps_agency: { "주 계약자": "주식회사 한국환경안전연구원", "통합허가대행업 등록번호": "제044호" },
   },
+  attachments: {
+    sealPath: process.env.FILINGS_SEAL_PATH || path.join(MCM_ROOT, "frontend", "public", "letter", "stamp.png"),
+    sealField: "#SEAL_FILE_NM",
+    docField: "#fileNm",
+    browseButton: 'input[value="찾아보기"], button:has-text("찾아보기"), a:has-text("찾아보기"), label:has-text("찾아보기")',
+    saveButton: 'input[value="저장"], button:has-text("저장"), a:has-text("저장")',
+  },
 };
+
+/** 첨부 임시 폴더(MCM 에서 내려받은 계약서 등) */
+export function tmpDir(): string {
+  const dir = path.join(FILINGS_DIR, "tmp");
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
 
 export function configFile(): string {
   return path.join(FILINGS_DIR, "config.json");

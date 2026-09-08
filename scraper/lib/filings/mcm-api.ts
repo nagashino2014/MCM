@@ -18,6 +18,14 @@ export interface FilingPayload {
   screen: string;
   fields: FilingField[];
 }
+export interface FilingAttachment {
+  documentId: string;
+  type: string;
+  typeLabel: string;
+  name: string;
+  downloadPath: string;
+  createdAt: string;
+}
 export interface FilingRow {
   filingId: string;
   filingKind: "ieps_staff" | "ieps_agency" | "etis_career";
@@ -30,6 +38,7 @@ export interface FilingRow {
   payload: FilingPayload;
   daysLeft: number | null;
   receiptNo: string | null;
+  attachments?: FilingAttachment[];
 }
 
 interface AuthFile {
@@ -247,6 +256,23 @@ async function api<T>(pathname: string, init: RequestInit = {}): Promise<T> {
     throw new Error(r.body?.error ?? `MCM API ${pathname} 실패 (HTTP ${r.status})`);
   }
   return r.body;
+}
+
+/** 계약 첨부를 내려받아 임시 폴더에 둔다(사이트 첨부용). 파일명은 원본 표시명을 유지한다. */
+export async function downloadAttachment(att: FilingAttachment, dir: string): Promise<string> {
+  let auth = await withAuth();
+  const run = (a: AuthFile) => fetch(`${a.baseUrl}${att.downloadPath}`, { headers: { Authorization: `Bearer ${a.accessToken}` } });
+  let res = await run(auth);
+  if (res.status === 401) {
+    auth = await refreshAccess(auth);
+    res = await run(auth);
+  }
+  if (!res.ok) throw new Error(`첨부 내려받기 실패 (HTTP ${res.status}): ${att.name}`);
+  fs.mkdirSync(dir, { recursive: true });
+  const safe = att.name.replace(/[\\/:*?"<>|]/g, "_") || "document.pdf";
+  const file = path.join(dir, /\.[a-z0-9]{2,5}$/i.test(safe) ? safe : `${safe}.pdf`);
+  fs.writeFileSync(file, Buffer.from(await res.arrayBuffer()));
+  return file;
 }
 
 export function mcmBaseUrl(): string | null {

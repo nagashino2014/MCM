@@ -30,6 +30,10 @@ export interface OverlayData {
   fill: Record<string, string | Record<string, string>>;
   /** 사이트 alert 메시지(최근) — 패널 상단 배너 */
   notices?: string[];
+  /** 사업장 검색 팝업 자동화를 지원하면 검색어(대행사업장 명칭) */
+  siteSearchQuery?: string;
+  /** 첨부 지원 — 직인 파일 유무, 이 건에 붙일 계약 첨부 요약(예: "계약서 1") */
+  attach?: { seal: boolean; docs: string[] };
 }
 
 export type OverlayAction =
@@ -37,7 +41,10 @@ export type OverlayAction =
   | { type: "prev" }
   | { type: "submitted"; receiptNo: string }
   | { type: "skipped"; note: string }
-  | { type: "probe" };
+  | { type: "probe" }
+  | { type: "siteSearch" }
+  | { type: "attachSeal" }
+  | { type: "attachDocs" };
 
 export const ACTION_FN = "__mcmFilingsAction";
 export const RENDER_FN = "__mcmFilingsRender";
@@ -144,7 +151,7 @@ export function renderOverlay(data: OverlayData): void {
     root.setAttribute(
       "style",
       [
-        "position:fixed", "right:16px", "bottom:16px", "z-index:2147483647", "width:420px", "max-height:82vh",
+        "position:fixed", "right:16px", "bottom:16px", "z-index:2147483647", "width:min(600px, calc(100vw - 32px))", "max-height:82vh",
         "display:flex", "flex-direction:column", "background:#fff", "color:#2a3547", "border:1px solid #e5eaef",
         "border-radius:14px", "box-shadow:0 8px 30px rgba(0,0,0,.18)", "font:13px/1.45 'Pretendard','Malgun Gothic',sans-serif",
         "overflow:hidden",
@@ -156,12 +163,14 @@ export function renderOverlay(data: OverlayData): void {
       #${ID} .hd { display:flex; align-items:center; gap:8px; padding:10px 12px; background:#5D87FF; color:#fff; cursor:pointer; }
       #${ID} .hd b { font-size:13px; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
       #${ID} .hd small { opacity:.85; }
-      #${ID} .meta { padding:8px 12px; border-bottom:1px solid #e5eaef; color:#5a6a85; font-size:12px; }
+      #${ID} .meta { padding:8px 12px; border-bottom:1px solid #e5eaef; color:#5a6a85; font-size:12px; overflow-wrap:anywhere; }
       #${ID} .meta b { color:#2a3547; }
-      #${ID} .list { overflow:auto; flex:1; }
-      #${ID} .row { display:grid; grid-template-columns: 110px 1fr auto auto; gap:6px; align-items:center; padding:6px 12px; border-bottom:1px solid #f1f4f8; }
-      #${ID} .row .lb { color:#5a6a85; font-size:12px; }
-      #${ID} .row .vl { word-break:break-all; cursor:pointer; }
+      #${ID} .list { overflow-y:auto; overflow-x:hidden; flex:1; }
+      /* 라벨·값 칸은 minmax(0, …) 로 두어 긴 내용이 패널 밖으로 밀려나지(가로 스크롤) 않게 한다 */
+      #${ID} .row { display:grid; grid-template-columns: minmax(0, 140px) minmax(0, 1fr) auto auto; gap:6px; align-items:center; padding:6px 12px; border-bottom:1px solid #f1f4f8; }
+      #${ID} .row .lb { color:#5a6a85; font-size:12px; word-break:keep-all; overflow-wrap:anywhere; }
+      #${ID} .row .vl { min-width:0; overflow-wrap:anywhere; word-break:break-all; cursor:pointer; }
+      #${ID} .row button { white-space:nowrap; }
       #${ID} .row .vl.empty { color:#9aa8bf; font-style:italic; }
       #${ID} .row .ht { grid-column: 2 / span 3; color:#9aa8bf; font-size:11px; margin-top:-2px; }
       #${ID} button { border:1px solid #d9e0ea; background:#f2f6fa; color:#2a3547; border-radius:8px; padding:3px 8px; font-size:12px; cursor:pointer; }
@@ -291,6 +300,30 @@ export function renderOverlay(data: OverlayData): void {
           alert(`자동 채우기: ${ok}개 입력, ${miss}개 실패(셀렉터 불일치). 화면에서 값을 확인한 뒤 직접 저장·제출하세요.`);
         })
       );
+    }
+    if (data.siteSearchQuery) {
+      const sb = mk("사업장 검색", "pri", () => {
+        act({ type: "siteSearch" });
+        flash(sb, "팝업 여는 중…");
+      });
+      sb.title = `사업장 검색 팝업을 열어 "${data.siteSearchQuery}" 로 검색하고 일치하는 행을 고릅니다`;
+      ft.appendChild(sb);
+    }
+    if (data.attach?.seal) {
+      const b = mk("직인 첨부", "", () => {
+        act({ type: "attachSeal" });
+        flash(b, "첨부 중…");
+      });
+      b.title = "직인 이미지를 직인 칸에 첨부하고 저장합니다(신청서 저장 후 가능)";
+      ft.appendChild(b);
+    }
+    if (data.attach?.docs?.length) {
+      const b = mk(`서류 첨부(${data.attach.docs.length})`, "", () => {
+        act({ type: "attachDocs" });
+        flash(b, "첨부 중…");
+      });
+      b.title = `MCM 계약 첨부를 첨부서류 칸에 올리고 저장합니다: ${data.attach.docs.join(", ")}`;
+      ft.appendChild(b);
     }
     const probeBtn = mk("폼 덤프", "", () => {
       act({ type: "probe" });

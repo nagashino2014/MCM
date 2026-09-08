@@ -23,6 +23,7 @@ const HEADERS = [
   "사업장명",
   "시도 분류",
   "소재지",
+  "전화번호",
   "대기 종",
   "수질 종",
 ];
@@ -35,6 +36,7 @@ const ALIGNS: ("center" | "left" | "right")[] = [
   "left",
   "center",
   "left",
+  "center",
   "center",
   "center",
 ];
@@ -107,6 +109,7 @@ export async function GET(req: NextRequest) {
         formatCompanyName(f.companyName) ?? f.companyName,
         f.regionSido ?? "",
         f.siteAddress ?? "",
+        f.phoneNumber ?? "",
         f.airClass != null ? `${f.airClass}종` : "",
         f.waterClass != null ? `${f.waterClass}종` : "",
       ];
@@ -128,8 +131,9 @@ export async function GET(req: NextRequest) {
     const spec: TableDocumentSpec = {
       headers: HEADERS,
       aligns: ALIGNS,
-      pdfColWidths: [30, 64, 62, 130, 125, 56, 228, 33, 33],
-      xlsxColChars: [6, 14, 12, 30, 30, 12, 44, 8, 8],
+      // 전화번호 열(소재지·대기 종 사이) 추가 — 최소 폭 합계는 가로 A4 가용 폭(≈760) 안에 맞춘다.
+      pdfColWidths: [30, 64, 62, 118, 118, 56, 176, 70, 33, 33],
+      xlsxColChars: [6, 14, 12, 30, 30, 12, 44, 14, 8, 8],
       sheetName: "사업장목록",
       orientation: "landscape",
       rows,

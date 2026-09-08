@@ -200,9 +200,18 @@ function etisBusinessKind(specialty: string): string {
   return "";
 }
 
+/** IEPS 대행업 변경등록 신청서 공통 머리 — 신청 구분 라디오 + 변경등록 내용 textarea(#CHANGE_REQST_CN) */
+function staffHead(detail: string): FilingField[] {
+  return [
+    { label: "신청 구분", value: "변경등록" },
+    { label: "변경등록 내용", value: `기술인력사항 변경\n- ${detail}` },
+  ];
+}
+const GRID_HINT = "기술인력 그리드 — 셀을 편집 상태로 만든 뒤 [채우기]";
+
 function staffFields(e: EmployeeRec): FilingField[] {
   return [
-    { label: "성명", value: e.name },
+    { label: "성명", value: e.name, hint: GRID_HINT },
     { label: "연락처", value: e.mobilePhone, hint: "010-0000-0000 형식" },
     { label: "생년월일", value: e.birthDate ?? "" },
     { label: "인력등급", value: envGradeLabel(e.envGrade, e.specialty) },
@@ -212,23 +221,41 @@ function staffFields(e: EmployeeRec): FilingField[] {
   ];
 }
 
+/** 전화번호 "02-6672-0035" → [지역번호, 국번, 끝자리]. 하이픈이 없으면 앞자리(02/0xx)로 나눈다. */
+function splitTel(raw: string): [string, string, string] {
+  const parts = raw.replace(/[^\d-]/g, "").split("-").filter(Boolean);
+  if (parts.length === 3) return [parts[0], parts[1], parts[2]];
+  const d = raw.replace(/\D/g, "");
+  if (!d) return ["", "", ""];
+  const area = d.startsWith("02") ? 2 : 3;
+  const last = 4;
+  return [d.slice(0, area), d.slice(area, Math.max(area, d.length - last)), d.slice(-last)];
+}
+
 function agencyFields(c: ContractRec, co: Company, opts: { changedOn?: string; amendDetail?: string; complete?: boolean }): FilingField[] {
   const amount = opts.changedOn ? (c.currentAmount ?? c.amount) : (c.amount ?? c.currentAmount);
+  const tel = splitTel(c.counterpartyPhone);
+  // 라벨은 IEPS 대행 실적보고 화면(contractReportForm) 입력칸 단위 — 로컬 도구의 자동 채우기 매핑 키.
   return [
-    { label: "대행사업장 명칭", value: c.facilityName || c.counterpartyName, hint: "사업장 검색으로 선택" },
-    { label: "사업장 소재지", value: c.facilityAddress },
+    { label: "보고 구분", value: opts.changedOn ? "변경" : opts.complete ? "이행" : "체결" },
+    { label: "대행사업장 명칭", value: c.facilityName || c.counterpartyName, hint: "사업장 검색 팝업으로 선택(직접 입력 불가)" },
+    { label: "사업장 소재지", value: c.facilityAddress, hint: "사업장 선택 시 자동" },
     { label: "통합허가구분", value: permitCategory(c.serviceSubtype) },
-    { label: "허가번호", value: c.permitNo },
-    { label: "대행업무 기간", value: period(c.startedAt, c.endedAt) },
+    { label: "허가번호", value: c.permitNo, hint: "이행 보고 시 목록에서 선택" },
+    { label: "대행업무 시작일", value: c.startedAt ?? "" },
+    { label: "대행업무 종료일", value: c.endedAt ?? "" },
     { label: "대행업무의 개요", value: c.title },
     { label: "발주자(기관)", value: c.counterpartyName },
-    { label: "전화번호", value: c.counterpartyPhone },
+    { label: "전화번호(지역번호)", value: tel[0] },
+    { label: "전화번호(국번)", value: tel[1] },
+    { label: "전화번호(끝자리)", value: tel[2] },
     { label: "주 계약자", value: co.name },
     { label: "통합허가대행업 등록번호", value: co.agencyRegNo },
-    { label: "지분금액(백만원)", value: toMillion(amount) },
-    { label: "지분율(%)", value: "100", hint: "단독계약 기준" },
+    { label: "주계약 지분금액(백만원)", value: toMillion(amount) },
+    { label: "주계약 지분율(%)", value: "100", hint: "단독계약 기준" },
     { label: "(변경)계약일자", value: opts.changedOn ?? c.contractDate ?? "" },
-    { label: "(변경)계약기간", value: period(c.startedAt, c.endedAt) },
+    { label: "(변경)계약 시작일", value: c.startedAt ?? "" },
+    { label: "(변경)계약 종료일", value: c.endedAt ?? "" },
     { label: "(변경)계약금액(백만원)", value: toMillion(amount) },
     { label: "(변경)낙찰률(%)", value: c.awardRate != null ? String(c.awardRate) : "" },
     { label: "사전협의 통보일자", value: c.preconsultNotifiedAt ?? "" },
@@ -415,7 +442,7 @@ async function buildCandidates(db: PgDatabase, settings: FilingSettings): Promis
         payload: {
           site: "ieps",
           screen: "대행업 변경신고 › 기술인력보유현황 (+행추가)",
-          fields: [...staffFields(e), { label: "선임일자", value: e.hiredAt, hint: "입사일 기준 — 다르면 수정" }],
+          fields: [...staffHead(`선임 1명(${e.name})`), ...staffFields(e), { label: "선임일자", value: e.hiredAt, hint: "입사일 기준 — 다르면 수정" }],
         },
       });
     }
@@ -464,7 +491,8 @@ async function buildCandidates(db: PgDatabase, settings: FilingSettings): Promis
           site: "ieps",
           screen: "대행업 변경신고 › 기술인력보유현황",
           fields: [
-            { label: "성명", value: e.name },
+            ...staffHead(`해임 1명(${e.name})`),
+            { label: "성명", value: e.name, hint: GRID_HINT },
             { label: "해임일자", value: on, hint: "행삭제 하지 말고 해임일자만 입력" },
           ],
         },
@@ -720,6 +748,8 @@ export async function recordGradeChangeFiling(
         site: "ieps",
         screen: "대행업 변경신고 › 기술인력보유현황 (해당 행 수정)",
         fields: [
+          { label: "신청 구분", value: "변경등록" },
+          { label: "변경등록 내용", value: `기술인력사항 변경\n- 등급 변경 1명(${input.name}: ${before} → ${after})` },
           { label: "성명", value: input.name },
           { label: "변경 전 인력등급", value: before },
           { label: "변경 후 인력등급", value: after },

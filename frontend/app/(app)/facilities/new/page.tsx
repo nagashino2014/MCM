@@ -77,6 +77,7 @@ function Inner() {
     { businessType: "", businessItem: "" },
   ]);
   const [certificateCorporateNo, setCertificateCorporateNo] = useState("");
+  const [corporateRegistrationNo, setCorporateRegistrationNo] = useState("");
   const [certificateOcrText, setCertificateOcrText] = useState("");
   const [certificateFileName, setCertificateFileName] = useState("");
   const [certificateFile, setCertificateFile] = useState<File | null>(null);
@@ -133,6 +134,7 @@ function Inner() {
           businessCertificateBusinessType: normalizedCertificateKinds.map((row) => row.businessType).join("\n") || null,
           businessCertificateBusinessItem: normalizedCertificateKinds.map((row) => row.businessItem).join("\n") || null,
           businessCertificateCorporateRegistrationNo: certificateCorporateNo || null,
+          corporateRegistrationNo: corporateRegistrationNo || null,
           businessCertificateOcrText: certificateOcrText || null,
           aliases: alias.trim() ? [{ alias: alias.trim(), aliasType: "site", isPrimary: true }] : [],
           serviceCategories,
@@ -517,7 +519,7 @@ function Inner() {
               </div>
             ))}
           </div>
-          <Field label="법인등록번호">
+          <Field label="등록증 법인등록번호">
             <input
               className="cd-input"
               value={certificateCorporateNo}
@@ -525,6 +527,7 @@ function Inner() {
               placeholder="000000-0000000"
             />
           </Field>
+          <Field label="법인등록번호 (마스터)"><input className="cd-input" value={corporateRegistrationNo} onChange={e=>setCorporateRegistrationNo(e.target.value)} placeholder="000000-0000000" /></Field>
           <div className="md:col-span-2">
             <Field label="OCR 원문 확인·보정 참고">
               <textarea

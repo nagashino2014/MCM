@@ -4,7 +4,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Plus, GitMerge, ClipboardList, RefreshCw } from "lucide-react";
-import { useSession } from "next-auth/react";
+import { useFacilityEditPermission } from "@/components/facilities/useFacilityEditPermission";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
 import { FacilityListPanel } from "@/components/facilities/FacilityListPanel";
 import { FacilityDetailPanel } from "@/components/facilities/FacilityDetailPanel";
@@ -28,9 +28,7 @@ export default function FacilitiesPage() {
 }
 
 function Inner() {
-  const { data: session } = useSession();
-  const role = (session?.user as { role?: "admin" | "editor" | "viewer" } | undefined)?.role ?? "viewer";
-  const canEdit = role === "admin" || role === "editor";
+  const canEdit = useFacilityEditPermission();
 
   const searchParams = useSearchParams();
   const focusId = searchParams.get("focus");
@@ -145,7 +143,7 @@ function Inner() {
             {canEdit && (
               <>
                 <Link href="/facilities/missing" className="cd-btn cd-btn-ghost cd-btn-sm">
-                  <ClipboardList className="w-3.5 h-3.5" /> 누락 점검
+                  <ClipboardList className="w-3.5 h-3.5" /> 정보 전수 점검
                 </Link>
                 <Link href="/facilities/merge" className="cd-btn cd-btn-ghost cd-btn-sm">
                   <GitMerge className="w-3.5 h-3.5" /> 중복 병합

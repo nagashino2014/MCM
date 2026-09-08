@@ -70,7 +70,7 @@ export interface FacilityListFilter {
 }
 
 /** 누락 점검 화면의 항목 키. 서버 queries.ts 의 FacilityMissingField 와 동일 모양. */
-export type FacilityMissingField = "brn" | "representative" | "phone" | "address" | "industry";
+export type FacilityMissingField = "brn" | "representative" | "phone" | "address" | "industry" | "crn";
 
 export type FacilityMissingStats = Record<FacilityMissingField, number>;
 
@@ -107,6 +107,7 @@ export interface PermitDetail {
 }
 
 export interface FacilityDetail {
+  corporateRegistrationNo?: string | null;
   facilityId: string;
   companyName: string;
   businessRegistrationNo: string | null;

@@ -89,6 +89,7 @@ export async function getCompanyBrn(corpCode: string): Promise<string | null> {
 
 /** 기업개황(company.json) 주요 항목. 사업장 자동 보완(누락 점검)에서 사용. */
 export interface DartCompanyProfile {
+  corporateRegistrationNo?: string | null;
   corpName: string;
   bizrNo: string; // 숫자 10자리
   ceoName: string | null;
@@ -116,6 +117,7 @@ export async function getCompanyProfile(corpCode: string): Promise<DartCompanyPr
     phoneNo: s(data.phn_no),
     address: s(data.adres),
     indutyCode: s(data.induty_code),
+    corporateRegistrationNo: s(data.jurir_no),
   };
 }
 

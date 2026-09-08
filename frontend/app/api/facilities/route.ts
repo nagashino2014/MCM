@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
             .split(",")
             .map((s) => s.trim())
             .filter((s): s is FacilityMissingField =>
-              ["brn", "representative", "phone", "address", "industry"].includes(s)
+              ["brn", "representative", "phone", "address", "industry", "crn"].includes(s)
             ) as FacilityMissingField[])
         : undefined,
       hasContractHistory: searchParams.get("hasContractHistory") === "1",

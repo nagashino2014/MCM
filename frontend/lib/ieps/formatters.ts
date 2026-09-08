@@ -32,7 +32,8 @@ export function normalizeCompanyName(value: string | null | undefined): string |
 
 export function formatBusinessRegistrationNo(value: string | null | undefined): string | null {
   if (!value) return null;
-  const digits = String(value).replace(/\D/g, "");
+  if (!/^[\d\s-]+$/.test(String(value))) return String(value).trim() || null;
+  const digits = String(value).replace(/[\s-]/g, "");
   if (digits.length === 10) {
     return `${digits.slice(0, 3)}-${digits.slice(3, 5)}-${digits.slice(5)}`;
   }

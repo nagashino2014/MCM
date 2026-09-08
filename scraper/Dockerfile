@@ -1,9 +1,9 @@
-FROM mcr.microsoft.com/playwright:v1.57.0-jammy
+FROM mcr.microsoft.com/playwright:v1.59.1-jammy
 
 WORKDIR /app/scraper
 
 COPY scraper/package*.json ./
-RUN npm install
+RUN npm ci --no-audit --no-fund
 
 COPY scraper ./
 COPY data/ksic /app/data/ksic

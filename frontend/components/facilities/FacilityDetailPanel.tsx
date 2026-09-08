@@ -2290,9 +2290,10 @@ function ReadView({
       />
       <DetailField
         icon={Hash}
-        label="법인등록번호"
+        label="등록증 법인등록번호"
         value={detail.businessCertificateCorporateRegistrationNo ?? null}
       />
+      <DetailField icon={Hash} label="법인등록번호 (마스터)" value={detail.corporateRegistrationNo ?? null} />
       <OperatingEntityCard detail={detail} />
       <GroupInfoCard detail={detail} />
     </div>
@@ -2414,6 +2415,7 @@ function EditView({
 }) {
   const [companyName, setCompanyName] = useState(formatCompanyName(detail.companyName) ?? "");
   const [businessRegistrationNo, setBrn] = useState(formatBusinessRegistrationNo(detail.businessRegistrationNo) ?? "");
+  const [corporateRegistrationNo, setCorporateRegistrationNo] = useState(detail.corporateRegistrationNo ?? "");
   const [representativeName, setRepresentativeName] = useState(detail.representativeName ?? "");
   const [siteAddress, setSiteAddress] = useState(detail.siteAddress ?? "");
   const [hasMultipleSites, setHasMultipleSites] = useState(
@@ -2553,6 +2555,7 @@ function EditView({
           businessCertificateBusinessItem:
             normalizedCertificateKinds.map((row) => row.businessItem).join("\n") || null,
           businessCertificateCorporateRegistrationNo: certificateCorporateNo || null,
+          corporateRegistrationNo: corporateRegistrationNo || null,
           logoPath: nextLogoPath || null,
           companySize: companySize || null,
         }),
@@ -2597,6 +2600,7 @@ function EditView({
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <FieldInput label="상호" value={companyName} onChange={setCompanyName} />
       <FieldInput label="사업자등록번호" value={businessRegistrationNo} onChange={setBrn} />
+      <FieldInput label="법인등록번호 (마스터)" value={corporateRegistrationNo} onChange={setCorporateRegistrationNo} />
       <FieldInput label="대표자명" value={representativeName} onChange={setRepresentativeName} multiline />
       <FieldInput
         label={hasMultipleSites ? "소재지 (대표)" : "소재지"}

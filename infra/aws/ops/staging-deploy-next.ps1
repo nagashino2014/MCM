@@ -27,6 +27,7 @@ param(
   [string]$Tag        = "",   # 비우면 deploy-yyyyMMdd-HHmmss
   [switch]$SkipBuild,         # 이미 푸시한 태그로 태스크 정의만 갱신
   [switch]$Wait,              # services-stable 까지 대기
+  [string]$FacilityQualityEnvironmentFile = "", # 정비 워커 연결 설정 JSON, 비밀 값 금지
   [switch]$Force              # 갈라진 배포 가드(다른 브랜치 커밋 누락 경고) 생략
 )
 # aws cli 는 정상 흐름에서도 stderr 를 내므로 Stop 을 쓰지 않고 $LASTEXITCODE 로 판정한다
@@ -117,6 +118,17 @@ if (-not $target) { Fail "컨테이너 '$container' 를 태스크 정의에서 �
 Log "image 교체: $($target.image)"
 Log "        -> $image"
 $target.image = $image
+
+if ($FacilityQualityEnvironmentFile) {
+  $qualityEnv = Get-Content -LiteralPath $FacilityQualityEnvironmentFile -Raw | ConvertFrom-Json
+  if (-not $qualityEnv) { Fail "정비 워커 환경 설정을 읽지 못함" }
+  $allowedQualityKeys = @("MCM_FACILITY_QUALITY_WORKER_READY", "MCM_FACILITY_QUALITY_TASK_DEFINITION", "MCM_FACILITY_QUALITY_CLUSTER", "MCM_FACILITY_QUALITY_SUBNETS", "MCM_FACILITY_QUALITY_SECURITY_GROUPS")
+  foreach ($entry in $qualityEnv.PSObject.Properties) {
+    if ($entry.Name -notin $allowedQualityKeys -or $entry.Value -isnot [string]) { Fail "허용되지 않은 정비 환경 설정: $($entry.Name)" }
+    $target.environment = @($target.environment | Where-Object { $_.name -ne $entry.Name }) + @(@{ name = $entry.Name; value = $entry.Value })
+    Log "정비 워커 연결 설정: $($entry.Name)"
+  }
+}
 
 # AWS CLI 는 BOM 붙은 JSON 을 파싱하지 못하므로 BOM 없는 UTF-8 로 쓴다.
 $tdPath = Join-Path $env:TEMP "mcm_next_taskdef.json"

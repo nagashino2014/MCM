@@ -1,6 +1,8 @@
 # 사업장 마스터 정비 구현·검증 결과
 
-작성일: 2026-09-08. 구현 위치: `codex/facility-quality` 브랜치의 로컬 작업 사본. 운영 배포·운영 마스터 수정·커밋·푸시는 수행하지 않았다.
+작성일: 2026-09-08. 코드 커밋 `4eb9304`를 `codex/facility-quality`와 `main`에 푸시하고 앱 배포를 완료했다. 운영 마스터의 후보 선택 반영은 수행하지 않았다.
+
+배포 기록: 마이그레이션 `220_facility_quality.sql`, 앱 태스크 `mcm-ieps-staging-next:583`, 워커 `mcm-ieps-staging-worker:3`, 이미지 태그 `facility-quality-20260908`. 앱 서비스 안정화 완료(실행 1, 대기 0), `/api/health` HTTP 200, 비로그인 정비 API HTTP 401을 확인했다. AWS 워커에서 DB·브라우저 기동 및 DART·금융위 인증 설정 검사가 통과했다. 인증 후 전체 UI 조작은 실제 사용자 세션에서 확인해야 한다.
 
 ## 제공 기능
 
@@ -94,7 +96,7 @@
 
 배포 준비 중 운영 환경에 SQS 워커 실행기가 없음을 확인하여, 외부 조회 요청 시 `RunTask`로 워커를 기동하도록 연결을 추가했다. 워커는 `--drain`으로 대기 큐를 처리하고 종료한다. `facility-quality-worker.tf`는 해당 클러스터·워커 정의와 기존 태스크 역할만 허용하는 실행 권한이다. 프론트에는 `MCM_FACILITY_QUALITY_TASK_DEFINITION`, `MCM_FACILITY_QUALITY_CLUSTER`, `MCM_FACILITY_QUALITY_SUBNETS`, `MCM_FACILITY_QUALITY_SECURITY_GROUPS`도 필요하다. 배포 스크립트의 `-FacilityQualityEnvironmentFile`은 이 설정과 준비 플래그만 받는다. 실제 컨테이너의 Playwright 버전도 잠금 파일의 1.59.1과 일치시켰다.
 
-아래는 아직 실행하지 않은 배포 절차다. 저장소의 배포 가드를 따라 별도로 진행한다.
+아래는 이번 배포에 사용한 구성과 후속 재배포 절차다. 저장소의 배포 가드를 사용했고 원격 브랜치 커밋이 모두 포함되었음을 확인했다.
 
 1. 배포 직전 원격 브랜치를 다시 확인하고 신규 마이그레이션 번호 충돌 여부를 확인한다. `infra/aws/ops/staging-apply-migrations.ps1 -Files 220_facility_quality.sql`을 이용한다. 이미 적용한 마이그레이션을 수정하거나 번호를 재사용하지 않는다.
 2. 새 워커 이미지를 빌드하고 현재 태스크 정의의 설정을 보존하여 새 리비전을 등록한다. `PGHOST`, `PGPORT`, `PGDATABASE`, Secret 참조의 `PGUSER`, `PGPASSWORD`, 기존 `DART_API_KEY`, `DATA_GO_KR_API_KEY`가 필요하다. 기존 고정 IP DART 프록시 설정도 보존한다. DB 네트워크와 인증, 네이버·비즈노 브라우저 실행을 확인한다.

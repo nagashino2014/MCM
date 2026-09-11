@@ -67,6 +67,19 @@ function spanOf(attrs: string, name: "rowspan" | "colspan"): number {
   return Number.isFinite(n) && n > 1 ? Math.min(n, 100) : 1;
 }
 
+/**
+ * style 문자열에서 속성값(px|%)을 읽는다. ⚠ 선언 경계(^ 또는 ;)를 반드시 요구한다 —
+ * 경계 없이 /width:/ 로 찾으면 **border-width: 1px 가 먼저 잡혀** 모든 셀 폭이 1px 로
+ * 읽히고, 표 열 폭이 전부 균등해진다(2026-09-11 실사례: 저장 HTML 의 셀 style 은
+ * "border-width: 1px; ... width: 298px" 순서였다).
+ */
+function cssLen(style: string, prop: string): { value: number; unit: "px" | "%" } | null {
+  const m = new RegExp(`(?:^|;)\\s*${prop}\\s*:\\s*([\\d.]+)\\s*(px|%)`).exec(style);
+  if (!m) return null;
+  const value = Number(m[1]);
+  return Number.isFinite(value) && value > 0 ? { value, unit: m[2] as "px" | "%" } : null;
+}
+
 function alignOf(style: string): "left" | "center" | "right" | undefined {
   const m = /text-align\s*:\s*(left|center|right|justify)/.exec(style);
   if (!m) return undefined;
@@ -134,7 +147,9 @@ export function parseLetterHtml(html: string): LetterBlock[] {
   // rowspan 이 있어도 각 셀이 원래 열에 앉는다(2026-08-25 — 열 밀림 실사례).
   let table: {
     rows: TableCell[][];
-    widths: number[];
+    widths: { v: number; unit: "px" | "%" }[];
+    /** 행 인덱스 → 에디터에서 지정된 높이(px). 비어 있는 행은 내용 기준 자동. */
+    heights: number[];
     widthPct?: number;
     curRow: TableCell[] | null;
     curCell: TableCell | null;
@@ -229,6 +244,7 @@ export function parseLetterHtml(html: string): LetterBlock[] {
                 kind: "table",
                 rows: table.rows,
                 colRatios: ratios,
+                rowRatios: computeRowRatios(table.heights, table.rows.length),
                 widthPct: table.widthPct,
               } satisfies TableBlock);
             }
@@ -240,13 +256,13 @@ export function parseLetterHtml(html: string): LetterBlock[] {
           table.depth++; // 중첩 표 — 텍스트 평탄화
         } else {
           flushPara(); // 표 앞 문단 확정
-          table = { rows: [], widths: [], curRow: null, curCell: null, cellRuns: [], depth: 1, pending: [] };
+          table = { rows: [], widths: [], heights: [], curRow: null, curCell: null, cellRuns: [], depth: 1, pending: [] };
           // 표 전체 폭 — data-w(에디터가 남기는 %) 우선, 없으면 style width:%(2026-09-11).
           {
             const attrs = t.attrs ?? "";
             const dw = /data-w\s*=\s*["']?(\d+(?:\.\d+)?)/.exec(attrs);
-            const sw = /width\s*:\s*(\d+(?:\.\d+)?)\s*%/.exec(styleOf(attrs));
-            const pct = dw ? Number(dw[1]) : sw ? Number(sw[1]) : NaN;
+            const sw = cssLen(styleOf(attrs), "width");
+            const pct = dw ? Number(dw[1]) : sw && sw.unit === "%" ? sw.value : NaN;
             if (Number.isFinite(pct) && pct > 0) table.widthPct = Math.min(100, Math.max(20, pct));
           }
         }
@@ -279,9 +295,17 @@ export function parseLetterHtml(html: string): LetterBlock[] {
           const rowSpan = spanOf(t.attrs, "rowspan");
           if (table.rows.length === 0) {
             // 첫 행 열 폭 수집 — colspan 셀은 균등 분할해 열 수를 맞춘다
-            const wm = /width\s*:\s*([\d.]+)(px|%)/.exec(style);
-            const w = wm ? Number(wm[1]) / colSpan : 0;
-            for (let i = 0; i < colSpan; i++) table.widths.push(w);
+            const wm = cssLen(style, "width");
+            const w = wm ? wm.value / colSpan : 0;
+            for (let i = 0; i < colSpan; i++) table.widths.push({ v: w, unit: wm?.unit ?? "px" });
+          }
+          // 행 높이 — 에디터에서 셀 높이를 조절하면 td 에 height 가 남는다(rowSpan 셀은 제외).
+          if (rowSpan <= 1) {
+            const hm = cssLen(style, "height");
+            if (hm && hm.unit === "px") {
+              const ri = table.rows.length;
+              table.heights[ri] = Math.max(table.heights[ri] ?? 0, hm.value);
+            }
           }
           table.curCell = {
             lines: [],
@@ -290,6 +314,15 @@ export function parseLetterHtml(html: string): LetterBlock[] {
             colSpan: colSpan > 1 ? colSpan : undefined,
           };
           table.cellRuns = [];
+        }
+        continue;
+      }
+      if ((tag === "div" || tag === "p") && !t.close) {
+        // 셀 내부 블록의 정렬을 셀 정렬로 승계 — td 에 정렬이 없을 때만.
+        // 구버전 문서는 execCommand 가 정렬을 셀이 아니라 내부 블록에 남겼다(2026-09-11).
+        if (table.curCell && !table.curCell.align) {
+          const a = alignOf(styleOf(t.attrs));
+          if (a) table.curCell.align = a;
         }
         continue;
       }
@@ -394,15 +427,42 @@ export function parseLetterHtml(html: string): LetterBlock[] {
   return blocks;
 }
 
-function computeColRatios(widths: number[], cols: number): number[] {
+/**
+ * 첫 행의 셀 폭 → 열 비율(합 1).
+ * - px 와 % 가 섞여 있으면 둘을 그대로 더할 수 없다 → 다수파 단위만 채택하고 나머지는 미지정 취급.
+ * - 일부 열만 지정돼 있으면(사용자가 몇 개 열만 조절한 경우) 지정된 열의 비율은 지키고
+ *   남은 폭을 미지정 열에 균등 분배한다. 종전에는 하나라도 비면 전부 균등으로 뭉갰다.
+ */
+function computeColRatios(widths: { v: number; unit: "px" | "%" }[], cols: number): number[] {
   const w = widths.slice(0, cols);
-  while (w.length < cols) w.push(0);
-  const known = w.filter((v) => v > 0);
-  if (known.length === cols && known.length > 0) {
-    const sum = known.reduce((a, b) => a + b, 0);
-    return w.map((v) => v / sum);
-  }
-  return new Array(cols).fill(1 / cols);
+  while (w.length < cols) w.push({ v: 0, unit: "px" });
+  const pxCnt = w.filter((x) => x.v > 0 && x.unit === "px").length;
+  const pctCnt = w.filter((x) => x.v > 0 && x.unit === "%").length;
+  if (pxCnt === 0 && pctCnt === 0) return new Array(cols).fill(1 / cols);
+  const unit: "px" | "%" = pxCnt >= pctCnt ? "px" : "%";
+  const vals = w.map((x) => (x.v > 0 && x.unit === unit ? x.v : 0));
+  const knownSum = vals.reduce((a, b) => a + b, 0);
+  const unknown = vals.filter((v) => v === 0).length;
+  if (unknown === 0) return vals.map((v) => v / knownSum);
+  // 미지정 열에는 지정된 열들의 평균 폭을 준 뒤 전체를 정규화한다.
+  const fill = knownSum / (cols - unknown);
+  const filled = vals.map((v) => (v > 0 ? v : fill));
+  const sum = filled.reduce((a, b) => a + b, 0);
+  return filled.map((v) => v / sum);
+}
+
+/**
+ * 행 높이(px) → 행 비율(합 1). 지정된 행이 하나도 없으면 null(=내용 기준 자동 높이).
+ * 미지정 행은 지정된 행들의 평균으로 메운다.
+ */
+function computeRowRatios(heights: number[], rows: number): number[] | undefined {
+  const h = Array.from({ length: rows }, (_, i) => (heights[i] > 0 ? heights[i] : 0));
+  const known = h.filter((v) => v > 0);
+  if (!known.length) return undefined;
+  const fill = known.reduce((a, b) => a + b, 0) / known.length;
+  const filled = h.map((v) => (v > 0 ? v : fill));
+  const sum = filled.reduce((a, b) => a + b, 0);
+  return sum > 0 ? filled.map((v) => v / sum) : undefined;
 }
 
 /** IR → 평문(문단·표 줄 단위 보존). doc-pdf(multitext)·요약 표시 등에서 재사용. */

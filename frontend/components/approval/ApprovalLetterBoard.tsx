@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { CdDateInput } from "@/components/cdash/CdField";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
 import { DeleteDraftButton, RejectedBanner, toEditDocMeta, type EditDocMeta } from "@/components/approval/DraftEditNotice";
 import PaymentRequestModal, { type PaymentRequestCreated } from "@/components/approval/PaymentRequestModal";
@@ -26,7 +27,7 @@ import { MailEditor } from "@/components/mail/MailEditor";
 import { recipientsDisplay } from "@/lib/letter/compose";
 import {
   COMPANY_ADDRESS, COMPANY_BIZ_NO, COMPANY_CEO, COMPANY_CONTACT_EMAIL, COMPANY_KO, COMPANY_PHONE,
-  LETTER_FORM_ID, LETTER_RULE_KEY, formatLetterNo, parseLetterNo,
+  ISO_DATE_RE, LETTER_FORM_ID, LETTER_RULE_KEY, formatLetterNo, parseLetterNo,
   type LetterFieldValues, type LetterLayoutOverrides, type LetterRecipient, type ProofParty,
 } from "@/lib/letter/types";
 import "@/components/cdash/cdash.css";
@@ -423,6 +424,9 @@ export function ApprovalLetterBoard() {
   // 하단 고정부 회사 주소 표기(2026-08-20 내부 의견) — 신규 작성은 표기가 기본,
   // 재편집 문서는 저장값을 따른다(값이 없던 과거 공문은 종전대로 미표기).
   const [includeAddress, setIncludeAddress] = useState(true);
+  // 시행일 직접 지정(2026-09-11) — 발주처가 특정 일자를 요구하는 사례가 있다.
+  // 빈 값이면 종전대로 결재 완료일(미승인 상태의 미리보기는 오늘).
+  const [issueDate, setIssueDate] = useState("");
   const [contactPhone, setContactPhone] = useState(COMPANY_PHONE);
   const [contactEmail, setContactEmail] = useState(COMPANY_CONTACT_EMAIL);
   const [line, setLine] = useState<LineStep[]>([]);
@@ -601,6 +605,7 @@ export function ApprovalLetterBoard() {
         setInternalCcTarget(v.internal_cc_target === "company" ? "company" : "personal");
         setIncludeHwpx(v.include_hwpx === 1);
         setIncludeAddress(v.include_address === 1);
+        setIssueDate(ISO_DATE_RE.test(v.issue_date ?? "") ? (v.issue_date as string) : "");
         setOverrides(v.layout_overrides ?? {});
         setContactPhone(v.contact_phone || COMPANY_PHONE);
         setContactEmail(v.contact_email || COMPANY_CONTACT_EMAIL);
@@ -751,6 +756,7 @@ export function ApprovalLetterBoard() {
       stamp: stampOn ? 1 : 0,
       include_hwpx: includeHwpx ? 1 : 0,
       include_address: includeAddress ? 1 : 0,
+      ...(ISO_DATE_RE.test(issueDate) ? { issue_date: issueDate } : {}),
       contact_phone: contactPhone,
       contact_email: contactEmail,
       internal_cc_target: internalCcTarget,
@@ -769,7 +775,7 @@ export function ApprovalLetterBoard() {
     values.recipients_display = recipientsDisplay(values);
     values.letter_kind_display = letterKind === "proof" ? "내용증명" : "일반";
     return values;
-  }, [letterKind, recipients, ccRefs, subject, attachItems, stampOn, includeHwpx, includeAddress, contactPhone, contactEmail, proofSender, proofReceiver, overrides, fileAttachments, deliverableId, extraDeliverableIds, internalCcTarget]);
+  }, [letterKind, recipients, ccRefs, subject, attachItems, stampOn, includeHwpx, includeAddress, issueDate, contactPhone, contactEmail, proofSender, proofReceiver, overrides, fileAttachments, deliverableId, extraDeliverableIds, internalCcTarget]);
 
   // 직접 지정 번호 — 연도는 채번 예정 번호(없으면 확정 번호/올해) 기준.
   const letterYear = (nextNo ?? docNo ?? "").slice(0, 4) || String(new Date().getFullYear());
@@ -1158,6 +1164,19 @@ export function ApprovalLetterBoard() {
               </label>
               <label className="flex items-center gap-1.5 text-[12px] cd-text cursor-pointer" title="공문 하단 고정부(담당·시행·전화)에 회사 주소 한 줄을 넣습니다.">
                 <input type="checkbox" checked={includeAddress} onChange={(e) => setIncludeAddress(e.target.checked)} /> 주소 표기
+              </label>
+              {/* 시행일 직접 지정(2026-09-11) — 비우면 결재 완료일이 들어간다. */}
+              <label
+                className="flex items-center gap-1.5 text-[12px] cd-text"
+                title="공문 하단 '시행' 줄의 날짜입니다. 비워 두면 결재 완료일이 들어갑니다. 발주처가 특정 일자를 요구할 때만 지정하세요."
+              >
+                시행일
+                <CdDateInput value={issueDate} onChange={setIssueDate} placeholder="자동(결재일)" style={{ width: 128 }} />
+                {issueDate && (
+                  <button type="button" className="cd-btn cd-text-faint text-[11px] underline" onClick={() => setIssueDate("")}>
+                    자동으로
+                  </button>
+                )}
               </label>
             </div>
 

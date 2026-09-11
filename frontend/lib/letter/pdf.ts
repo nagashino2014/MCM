@@ -228,6 +228,16 @@ function layoutTable(
       if (need > got) rowHs[Math.min(ri + rs, rowHs.length) - 1] += need - got;
     });
   });
+  // 편집 화면에서 지정한 행 높이 비율 반영(2026-09-11) — 내용에 필요한 높이는 그대로 두고,
+  // 비율상 더 커야 하는 행만 늘린다. 표 전체 높이 기준은 "자동 높이 합"이라 A4 fit 을 깨지 않는다.
+  const rr = t.rowRatios;
+  if (rr && rr.length === rowHs.length) {
+    const autoTotal = rowHs.reduce((a, b) => a + b, 0);
+    for (let i = 0; i < rowHs.length; i++) {
+      const want = autoTotal * rr[i];
+      if (want > rowHs[i]) rowHs[i] = want;
+    }
+  }
   return { widths, rowHs, wrapped, cellLineH, pad };
 }
 

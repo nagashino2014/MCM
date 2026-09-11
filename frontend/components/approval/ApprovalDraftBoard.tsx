@@ -7,12 +7,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, ClipboardCheck, Paperclip, Send, Save, Trash2, Users, Eye, BookmarkPlus, ShieldCheck, AlertTriangle, Info, Ban, Link2, CreditCard } from "lucide-react";
+import { ArrowLeft, ClipboardCheck, GripVertical, Paperclip, Send, Save, Trash2, Users, Eye, BookmarkPlus, ShieldCheck, AlertTriangle, Info, Ban, Link2, CreditCard } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdModal } from "@/components/cdash/CdModal";
 import { ApprovalFormRenderer } from "@/components/approval/ApprovalFormRenderer";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
+import { useDragOrder } from "@/components/approval/useDragOrder";
 import { parseTimeRange, timeRangeMinutes, type ApprovalFieldDef } from "@/lib/approval/fields";
 import { autofillFromRefDoc, compareWithRefDoc } from "@/lib/approval/ref-link";
 import { findInCatalog, type LeaveTypeItem } from "@/lib/approval/leave-types";
@@ -138,6 +139,8 @@ export function ApprovalDraftBoard() {
   // 첨부서류(문서 공통 — 공문과 같은 field_values.file_attachments 규약).
   // 지출결의·출장보고·교육훈련·휴가처럼 증빙이 필요한 양식에서 쓴다.
   const [fileAttachments, setFileAttachments] = useState<DocAttachment[]>([]);
+  // 첨부 순서 = 메일 동봉 순서 — 끌어서 바꾼다(2026-09-11 사용자 요청).
+  const attachDrag = useDragOrder(fileAttachments, setFileAttachments);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   // 선행 문서 연관(127) — 양식에 선행 양식이 지정된 경우(신청서→보고서)
@@ -1142,7 +1145,13 @@ export function ApprovalDraftBoard() {
                     <p className="text-[11.5px] cd-text-faint m-auto">첨부된 파일이 없습니다.</p>
                   ) : (
                     fileAttachments.map((f, i) => (
-                      <div key={f.key} className="flex items-center gap-2 rounded-lg border cd-border-c px-2.5 py-1.5">
+                      <div
+                        key={f.key}
+                        {...attachDrag.rowProps(i)}
+                        className={`flex items-center gap-2 rounded-lg border cd-border-c px-2.5 py-1.5 transition-colors ${attachDrag.rowClass(i)}`}
+                        title="끌어서 첨부 순서를 바꿉니다"
+                      >
+                        <GripVertical className="w-3.5 h-3.5 cd-text-faint shrink-0 cursor-grab" aria-hidden />
                         <span className="text-[10px] font-mono cd-text-faint w-4">{i + 1}</span>
                         <button
                           type="button"
@@ -1230,7 +1239,7 @@ export function ApprovalDraftBoard() {
               </button>
               <button
                 type="button"
-                className="cd-btn rounded-lg border cd-border-c px-2.5 py-2 text-[11px] cd-text-faint flex items-center gap-1"
+                className="cd-btn rounded-lg border cd-border-c px-2.5 py-2 text-[11px] cd-text-faint flex-1 flex items-center justify-center gap-1"
                 onClick={saveAsPreset}
                 title="현재 결재선·참조자를 프리셋으로 저장"
               >
@@ -1280,7 +1289,7 @@ export function ApprovalDraftBoard() {
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               <button
                 type="button"
-                className="cd-btn rounded-lg border cd-border-c px-3.5 py-2 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
+                className="cd-btn rounded-lg border cd-border-c px-3.5 py-2 text-xs font-semibold flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50"
                 disabled={busy != null}
                 onClick={() => send("save")}
               >
@@ -1288,7 +1297,7 @@ export function ApprovalDraftBoard() {
               </button>
               <button
                 type="button"
-                className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
+                className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs font-semibold flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50"
                 disabled={busy != null || aiBusy}
                 onClick={aiReview}
                 title="AI 사전검토 + 유사 과거 문서(수동)"
@@ -1297,7 +1306,7 @@ export function ApprovalDraftBoard() {
               </button>
               <button
                 type="button"
-                className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
+                className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50"
                 disabled={busy != null}
                 onClick={() => send("submit")}
               >

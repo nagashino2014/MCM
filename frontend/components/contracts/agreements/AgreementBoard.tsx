@@ -946,7 +946,7 @@ export function AgreementBoard() {
                 <button type="button" className="cd-btn rounded-lg border cd-border-c px-3.5 py-2 text-xs font-semibold" onClick={() => setSendTarget(null)}>
                   취소
                 </button>
-                <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50" disabled={sendBusy != null} onClick={runSend}>
+                <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50" disabled={sendBusy != null} onClick={runSend}>
                   <Send className="w-3.5 h-3.5" /> {sendBusy ? "발송 중..." : "발송"}
                 </button>
               </div>
@@ -1368,8 +1368,11 @@ export function AgreementBoard() {
                                   <div className="text-[10px] cd-text-faint mt-1">위 「계약금액 · 대금 지급 조건」에서 자동 생성 — 직접 수정하려면 조를 삭제하고 새 조항으로 작성하세요.</div>
                                 </div>
                               ) : (
+                                /* 조문 본문은 여러 항을 한눈에 봐야 한다 — 실측 54px 의 5배(2026-09-11 사용자 요청).
+                                   min-h 유틸리티가 .cd-input 규칙에 밀리던 이력이 있어 인라인으로 고정한다. */
                                 <textarea
-                                  className="cd-input text-[12px] min-h-[260px] leading-relaxed"
+                                  className="cd-input text-[12px] leading-relaxed"
+                                  style={{ minHeight: 280 }}
                                   value={c.body}
                                   placeholder="조문 본문 — {{contract.scope}} 같은 토큰은 입력값으로 치환됩니다"
                                   onChange={(e) => updateClause(i, { body: e.target.value })}
@@ -1424,7 +1427,7 @@ export function AgreementBoard() {
                   <button type="button" className="cd-btn rounded-lg border border-dashed cd-border-c px-3 py-2 text-xs cd-text-faint flex-1" onClick={() => setOrgModal("approve")}>
                     ＋ 결재자 추가
                   </button>
-                  <button type="button" className="cd-btn rounded-lg border cd-border-c px-2.5 py-2 text-[11px] cd-text-faint flex items-center gap-1" onClick={saveAsPreset} title="현재 결재선·참조자를 프리셋으로 저장">
+                  <button type="button" className="cd-btn rounded-lg border cd-border-c px-2.5 py-2 text-[11px] cd-text-faint flex-1 flex items-center justify-center gap-1" onClick={saveAsPreset} title="현재 결재선·참조자를 프리셋으로 저장">
                     <BookmarkPlus className="w-3.5 h-3.5" /> 프리셋 저장
                   </button>
                 </div>
@@ -1453,13 +1456,13 @@ export function AgreementBoard() {
                   </button>
                 </div>
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
-                  <button type="button" className="cd-btn rounded-lg border cd-border-c px-3.5 py-2 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50" disabled={busy != null} onClick={() => send("save")}>
+                  <button type="button" className="cd-btn rounded-lg border cd-border-c px-3.5 py-2 text-xs font-semibold flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50" disabled={busy != null} onClick={() => send("save")}>
                     <Save className="w-3.5 h-3.5" /> {busy === "save" ? "저장 중..." : "임시저장"}
                   </button>
-                  <button type="button" className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50" disabled={busy != null} onClick={openPreview} title="현재 내용을 계약서 PDF 로 미리보기">
+                  <button type="button" className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs font-semibold flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50" disabled={busy != null} onClick={openPreview} title="현재 내용을 계약서 PDF 로 미리보기">
                     <FileText className="w-3.5 h-3.5" /> {busy === "preview" ? "생성 중..." : "미리보기"}
                   </button>
-                  <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50" disabled={busy != null} onClick={() => send("submit")}>
+                  <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50" disabled={busy != null} onClick={() => send("submit")}>
                     <Send className="w-3.5 h-3.5" /> {busy === "submit" ? "상신 중..." : "상신"}
                   </button>
                 </div>

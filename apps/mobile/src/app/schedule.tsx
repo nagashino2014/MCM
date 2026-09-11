@@ -193,8 +193,10 @@ export default function ScheduleScreen() {
         contentContainerStyle={{ padding: 18, gap: 14, paddingBottom: 40 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={reload} tintColor={c.faint} />}>
         {/* 필터 칩 — 선택은 카테고리 컬러 틴트, 비선택은 흰 배경(핸드오프 3a).
-            회의·면접(219) 추가로 7개가 되어 폰트·패딩을 줄여 375 폭에서도 1행에 맞춘다(사용자 요청). */}
-        <View className="flex-row flex-nowrap justify-between gap-[4px]">
+            회의·면접(219) 추가로 7개가 되어 폰트·패딩을 줄여 375 폭에서도 1행에 맞춘다(사용자 요청).
+            정렬은 오른쪽 + 고정 간격 — 양쪽 정렬(justify-between)은 넓은 화면(데스크탑 위젯)에서
+            칩 사이가 벌어져 보기 나쁘다(사용자 피드백 09-11). */}
+        <View className="flex-row flex-nowrap justify-end gap-[5px]">
           {TAG_ORDER.map((t) => {
             const on = tags.includes(t);
             const off = t === 'sales' && data?.salesDenied;

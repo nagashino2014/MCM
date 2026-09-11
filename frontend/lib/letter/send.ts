@@ -20,17 +20,17 @@ import { COMPANY_KO, type LetterFieldValues, type LetterRecipient } from "./type
 /** SES v2 raw 40MB(base64 오버헤드 감안 실효 ~28MB). 수신 측 한도(네이버·Gmail 25MB 안팎)를
  *  고려해 20MB 를 상한으로 둔다 — 웬만한 동봉 서류는 그대로 첨부되어 메일함에 남는다(사용자 확정).
  *  동봉 서류 총량은 200MB 까지 허용하되, 이 한도를 넘는 발송만 다운로드 링크(presigned, 7일)로 전환. */
-const ATTACH_LIMIT_BYTES = 20 * 1024 * 1024;
+export const ATTACH_LIMIT_BYTES = 20 * 1024 * 1024;
 const LINK_EXPIRES_SEC = 7 * 24 * 3600; // presigned GET 최대 유효기간(7일)
 
-interface DownloadLink {
+export interface DownloadLink {
   name: string;
   url: string;
   sizeMB: string;
 }
 
 /** 동봉 서류 presigned 다운로드 링크 생성 — S3 모드에서만 가능(로컬 스토리지는 null). */
-async function makeDownloadLink(key: string, name: string, size: number): Promise<DownloadLink | null> {
+export async function makeDownloadLink(key: string, name: string, size: number): Promise<DownloadLink | null> {
   const bucket = process.env.MCM_STORAGE_BUCKET?.trim();
   if (!bucket || process.env.CONTRACT_DOCUMENT_STORAGE_ROOT?.trim()) return null;
   try {
@@ -45,7 +45,7 @@ async function makeDownloadLink(key: string, name: string, size: number): Promis
 const COMPANY_SHORT = COMPANY_KO.replace(/^주식회사\s*/, "");
 
 /** 기안자의 기본 메일 서명(HTML). 미등록·조회 실패면 null — 발송을 막지 않는다. */
-async function defaultSignatureHtml(userId: string): Promise<string | null> {
+export async function defaultSignatureHtml(userId: string): Promise<string | null> {
   try {
     const sigs = await listSignatures(userId);
     return sigs.find((s) => s.isDefault)?.bodyHtml?.trim() || null;
@@ -60,10 +60,10 @@ async function defaultSignatureHtml(userId: string): Promise<string | null> {
  * target=company  → 회사 메일(@koensain.app) 우선, 없으면 개인 메일로 폴백.
  * 앱을 전사 배포하기 전에는 개인 메일이 기본이다(사용자 확정).
  */
-async function internalCcAddresses(
+export async function internalCcAddresses(
   userIds: string[],
   target: "personal" | "company"
-): Promise<{ name?: string; address: string }[]> {
+): Promise<{ userId: string; name?: string; address: string }[]> {
   if (!userIds.length) return [];
   const db = await getDb();
   const rows = rowsToObjects(
@@ -77,12 +77,14 @@ async function internalCcAddresses(
       [userIds, MAIL_DOMAIN]
     )
   );
-  const out: { name?: string; address: string }[] = [];
+  const out: { userId: string; name?: string; address: string }[] = [];
   for (const r of rows) {
     const personal = r.personal_email != null ? String(r.personal_email).trim() : "";
     const company = r.company_email != null ? String(r.company_email).trim() : "";
     const picked = target === "personal" ? personal || company : company || personal;
-    if (picked.includes("@")) out.push({ name: r.name != null ? String(r.name) : undefined, address: picked });
+    if (picked.includes("@")) {
+      out.push({ userId: String(r.user_id ?? ""), name: r.name != null ? String(r.name) : undefined, address: picked });
+    }
   }
   return out;
 }

@@ -80,6 +80,12 @@ function cssLen(style: string, prop: string): { value: number; unit: "px" | "%" 
   return Number.isFinite(value) && value > 0 ? { value, unit: m[2] as "px" | "%" } : null;
 }
 
+/** 셀 세로 정렬 — td 의 vertical-align(top|middle|bottom). */
+function valignOf(style: string): "top" | "middle" | "bottom" | undefined {
+  const m = /vertical-align\s*:\s*(top|middle|bottom)/.exec(style);
+  return m ? (m[1] as "top" | "middle" | "bottom") : undefined;
+}
+
 function alignOf(style: string): "left" | "center" | "right" | undefined {
   const m = /text-align\s*:\s*(left|center|right|justify)/.exec(style);
   if (!m) return undefined;
@@ -310,6 +316,7 @@ export function parseLetterHtml(html: string): LetterBlock[] {
           table.curCell = {
             lines: [],
             align: alignOf(style),
+            valign: valignOf(style),
             rowSpan: rowSpan > 1 ? rowSpan : undefined,
             colSpan: colSpan > 1 ? colSpan : undefined,
           };

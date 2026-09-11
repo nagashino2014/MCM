@@ -10,6 +10,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from "react";
 import {
   AlignCenter, AlignJustify, AlignLeft, AlignRight, ArrowDown, ArrowLeft, ArrowRight, ArrowUp,
+  AlignVerticalJustifyCenter, AlignVerticalJustifyEnd, AlignVerticalJustifyStart,
   Baseline, Bold, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Expand,
   Image as ImageIcon, Indent, Italic, Link2, List, ListOrdered, Minus as MinusIcon,
   Omega, Outdent, Paintbrush, Plus, SeparatorHorizontal, Shrink, Strikethrough, Subscript, Superscript, Table2,
@@ -1260,6 +1261,12 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
     onInput();
   };
 
+  /** 셀 세로 정렬 지정(2026-09-11) — td 의 vertical-align 에 직접 건다(공문 파서가 읽는 위치). */
+  const setCellValign = (cells: HTMLTableCellElement[], v: "top" | "middle" | "bottom") => {
+    for (const cell of cells) cell.style.verticalAlign = v;
+    onInput();
+  };
+
   const tableAct = (fn: (cell: HTMLTableCellElement, sel: HTMLTableCellElement[]) => void) => {
     if (!activeCell) return;
     // ⚠ 선택 셀 목록을 **해제 전에** 캡처한다 — 종전에는 clearCellSelection() 이 먼저라
@@ -1493,6 +1500,24 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
           {divider}
           <TableBtn label="너비 같게" icon={<UnfoldHorizontal className="w-3 h-3" />} onClick={() => tableAct(equalizeCols)} />
           <TableBtn label="높이 같게" icon={<UnfoldVertical className="w-3 h-3" />} onClick={() => tableAct(equalizeRows)} />
+          {divider}
+          {/* 셀 세로 정렬(2026-09-11) — 행 높이가 내용보다 클 때 값이 위쪽에 붙어 보이던 문제.
+              선택된 셀들(없으면 커서 셀)에 vertical-align 을 직접 건다 — 파서가 td 스타일을 읽는다. */}
+          <TableBtn
+            label="셀 위로"
+            icon={<AlignVerticalJustifyStart className="w-3 h-3" />}
+            onClick={() => tableAct((c, sel) => setCellValign(sel.length ? sel : [c], "top"))}
+          />
+          <TableBtn
+            label="셀 가운데"
+            icon={<AlignVerticalJustifyCenter className="w-3 h-3" />}
+            onClick={() => tableAct((c, sel) => setCellValign(sel.length ? sel : [c], "middle"))}
+          />
+          <TableBtn
+            label="셀 아래로"
+            icon={<AlignVerticalJustifyEnd className="w-3 h-3" />}
+            onClick={() => tableAct((c, sel) => setCellValign(sel.length ? sel : [c], "bottom"))}
+          />
           {divider}
           {/* 셀 크기 — 경계 드래그가 어려운 맨 오른쪽 열도 여기서 조절한다(2026-09-11).
               셀을 블록으로 지정하면 방향키만으로도 같은 조절이 된다(아래아한글 동작). */}

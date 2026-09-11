@@ -222,6 +222,9 @@ function fillTcTemplate(
     .replace(/(<hp:cellSpan\b[^>]*colSpan=")\d+(")/, `$1${cell.colSpan ?? 1}$2`)
     .replace(/(\browSpan=")\d+(")/, `$1${cell.rowSpan ?? 1}$2`);
   tc = tc.replace(/(<hp:cellSz\b[^>]*width=")\d+(")/, `$1${widthHwp}$2`).replace(/(<hp:cellSz\b[^>]*height=")\d+(")/, `$1${heightHwp}$2`);
+  // 셀 세로 정렬(2026-09-11) — IR 의 valign 을 한글 vertAlign(TOP|CENTER|BOTTOM)으로 싣는다.
+  const vertAlign = cell.valign === "middle" ? "CENTER" : cell.valign === "bottom" ? "BOTTOM" : cell.valign === "top" ? "TOP" : null;
+  if (vertAlign) tc = tc.replace(/(<hp:subList\b[^>]*\bvertAlign=")[^"]*(")/, `$1${vertAlign}$2`);
   // subList 내부 문단 전부 교체
   const subM = /<hp:subList\b[^>]*>([\s\S]*?)<\/hp:subList>/.exec(tc);
   if (subM) {

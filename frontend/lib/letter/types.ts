@@ -55,6 +55,8 @@ export interface ParagraphBlock {
 export interface TableCell {
   lines: TextRun[][]; // 셀 내 줄 단위 런
   align?: "left" | "center" | "right";
+  /** 셀 높이 기준 세로 정렬(2026-09-11 사용자 요청). 미지정이면 위쪽(종전 동작). */
+  valign?: "top" | "middle" | "bottom";
   // 셀 병합(2026-08-25) — rows 는 항상 rowCnt×colCnt 균일 격자를 유지하고,
   // 병합 시작 셀에 rowSpan/colSpan(>1)을, 병합에 덮인 자리에는 covered 플레이스홀더를 둔다.
   // 렌더러(pdf/hwpx)는 covered 를 건너뛰고 시작 셀을 span 크기로 그린다.

@@ -979,9 +979,9 @@ export function WeatherWidget({ forceScene, forceNight }: { forceScene?: SceneKi
       style={{
         // 내 차례인 결재 카드와 같은 높이 — 좌열(날씨+연차)과 중열(결재+메일)이 정확히 대칭이 된다.
         height: HOME_HALF_H,
-        borderRadius: 18,
-        border: night ? "1px solid rgba(130,148,205,0.35)" : "1px solid rgba(255,255,255,0.78)",
-        boxShadow: night ? "0 8px 28px rgba(18,26,54,0.3)" : "var(--cd-shadow), 0 0 0 1px var(--cd-ring)",
+        borderRadius: 8,
+        border: "1px solid var(--cd-border)",
+        boxShadow: "none",
         padding: "16px 18px",
         background: night ? meta.nightBg : meta.bg,
       }}

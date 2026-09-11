@@ -45,7 +45,7 @@ export function toPerson(emp: OrganizationEmployeeRow, snapshot: OrganizationSna
 export function AttendeeTag({ person, onRemove }: { person: CalendarPerson; onRemove?: () => void }) {
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[12px] font-bold cd-text"
+      className="cd-action inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[12px] font-bold cd-text"
       style={{ borderColor: "var(--cd-primary)", background: "var(--cd-primary-soft)" }}
       title={person.deptName ?? undefined}
     >

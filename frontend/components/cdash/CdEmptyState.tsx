@@ -19,8 +19,7 @@ export function CdEmptyState({ icon, title, description, action, className }: Cd
     <div className={cn("flex flex-col items-center justify-center gap-2 py-12 px-6 text-center", className)}>
       {icon && (
         <div
-          className="w-12 h-12 rounded-2xl flex items-center justify-center mb-1"
-          style={{ background: "var(--cd-primary-soft)", color: "var(--cd-primary)" }}
+          className="w-8 h-8 flex items-center justify-center mb-1 cd-text-muted"
         >
           {icon}
         </div>

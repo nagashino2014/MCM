@@ -131,8 +131,10 @@ export default function ServiceListPanel({
             key={t}
             type="button"
             onClick={() => onTabChange(t)}
+            data-active={tab === t}
+            aria-pressed={tab === t}
             className={cn(
-              "rounded-t-xl px-4 py-2 text-sm font-semibold border-b-2",
+              "cd-choice rounded-t-xl px-4 py-2 text-sm font-semibold border-b-2",
               tab === t ? "cd-text-primary border-current cd-tint-primary" : "cd-text-faint border-transparent cd-row-hover"
             )}
           >
@@ -150,21 +152,27 @@ export default function ServiceListPanel({
           <button
             type="button"
             onClick={() => setMode("progress")}
-            className={cn("px-3 py-1.5", mode === "progress" ? "cd-fill-primary text-white" : "cd-text-muted")}
+            data-active={mode === "progress"}
+            aria-pressed={mode === "progress"}
+            className={cn("cd-choice px-3 py-1.5", mode === "progress" ? "cd-fill-primary text-white" : "cd-text-muted")}
           >
             {isService ? "진행용역" : "진행 Task"}
           </button>
           <button
             type="button"
             onClick={() => setMode("done")}
-            className={cn("px-3 py-1.5 border-l cd-border-c", mode === "done" ? "cd-fill-primary text-white" : "cd-text-muted")}
+            data-active={mode === "done"}
+            aria-pressed={mode === "done"}
+            className={cn("cd-choice px-3 py-1.5 border-l cd-border-c", mode === "done" ? "cd-fill-primary text-white" : "cd-text-muted")}
           >
             완료
           </button>
           <button
             type="button"
             onClick={() => setMode("log")}
-            className={cn("px-3 py-1.5 border-l cd-border-c", mode === "log" ? "cd-fill-primary text-white" : "cd-text-muted")}
+            data-active={mode === "log"}
+            aria-pressed={mode === "log"}
+            className={cn("cd-choice px-3 py-1.5 border-l cd-border-c", mode === "log" ? "cd-fill-primary text-white" : "cd-text-muted")}
           >
             보고 Log
           </button>
@@ -172,7 +180,9 @@ export default function ServiceListPanel({
             <button
               type="button"
               onClick={() => setMode("exec")}
-              className={cn("px-3 py-1.5 border-l cd-border-c inline-flex items-center gap-1", mode === "exec" ? "cd-fill-primary text-white" : "cd-text-muted")}
+              data-active={mode === "exec"}
+              aria-pressed={mode === "exec"}
+              className={cn("cd-choice px-3 py-1.5 border-l cd-border-c inline-flex items-center gap-1", mode === "exec" ? "cd-fill-primary text-white" : "cd-text-muted")}
             >
               임원지시
               {execDirectedItems && execDirectedItems.length > 0 && (
@@ -186,8 +196,10 @@ export default function ServiceListPanel({
             <button
               type="button"
               onClick={onToggleRebound}
+              data-active={reboundActive}
+              aria-pressed={reboundActive}
               className={cn(
-                "rounded-xl px-3 py-1.5 text-xs font-semibold inline-flex items-center gap-1.5 border",
+                "cd-choice rounded-xl px-3 py-1.5 text-xs font-semibold inline-flex items-center gap-1.5 border",
                 reboundActive ? "cd-fill-primary text-white border-transparent" : "cd-border-c cd-text-muted"
               )}
             >

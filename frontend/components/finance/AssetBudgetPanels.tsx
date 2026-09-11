@@ -138,7 +138,7 @@ export function FixedAssetPanel() {
       {notice && <div className="text-sm mb-2" style={{ color: "var(--cd-success,#13DEB9)" }}>{notice}</div>}
       <div className="overflow-x-auto mb-3">
         <table className="w-full text-sm">
-          <thead>
+          <thead className="cd-table-head">
             <tr className="cd-text-muted text-left">
               <th className="py-1.5 pr-3 font-normal">자산</th>
               <th className="py-1.5 pr-3 font-normal">구분</th>
@@ -356,7 +356,7 @@ export function TripLogPanel() {
           <Download className="w-3.5 h-3.5" /> 운행기록부 엑셀
         </button>
       </div>
-      <div className="flex gap-2 flex-wrap mb-2 text-xs">
+      <div className="flex gap-2 flex-wrap mb-3 text-xs">
         {summary.map((s) => (
           <span key={s.assetId} className="cd-chip cd-chip-sm">
             {s.assetName}: {s.totalDays}일{s.totalKm > 0 ? ` · ${won(s.totalKm)}km` : ""}
@@ -368,7 +368,7 @@ export function TripLogPanel() {
       {notice && <div className="text-sm mb-2" style={{ color: "var(--cd-success,#13DEB9)" }}>{notice}</div>}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead>
+          <thead className="cd-table-head">
             <tr className="cd-text-muted text-left">
               <th className="py-1.5 pr-3 font-normal">일자</th>
               <th className="py-1.5 pr-3 font-normal">차량</th>
@@ -504,7 +504,7 @@ export function BudgetPanel() {
       {notice && <div className="text-sm mb-2" style={{ color: "var(--cd-success,#13DEB9)" }}>{notice}</div>}
       <div className="overflow-x-auto mb-3">
         <table className="w-full text-sm max-w-[760px]">
-          <thead>
+          <thead className="cd-table-head">
             <tr className="cd-text-muted text-left">
               <th className="py-1.5 pr-3 font-normal">계정과목</th>
               <th className="py-1.5 pr-3 font-normal text-right">예산</th>

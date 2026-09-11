@@ -95,7 +95,7 @@ export default function ExecWorkspace() {
         icon={<ShieldCheck className="w-5 h-5" />}
         eyebrow="Work · Executive"
         title="임원 검토·지시"
-        subtitle="부서 통합 보고를 용역·Task별로 검토하고, 보완 요구·진행 촉구·추가보고 지시를 하달합니다."
+        help="부서 통합 보고를 용역·Task별로 검토하고, 보완 요구·진행 촉구·추가보고 지시를 하달합니다."
       />
 
       <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[900px_1fr] gap-5">
@@ -107,8 +107,10 @@ export default function ExecWorkspace() {
                 key={d.deptId}
                 type="button"
                 onClick={() => setDeptId(d.deptId)}
+                data-active={d.deptId === deptId}
+                aria-pressed={d.deptId === deptId}
                 className={cn(
-                  "rounded-xl px-3 py-1.5 text-xs font-semibold border",
+                  "cd-choice rounded-xl px-3 py-1.5 text-xs font-semibold border",
                   d.deptId === deptId ? "cd-fill-primary text-white border-transparent" : "cd-border-c cd-text-muted cd-row-hover"
                 )}
               >
@@ -124,7 +126,9 @@ export default function ExecWorkspace() {
                 key={t.value}
                 type="button"
                 onClick={() => setTab(t.value)}
-                className={cn("px-3 py-1.5 border-l first:border-l-0 cd-border-c", tab === t.value ? "cd-fill-primary text-white" : "cd-text-muted")}
+                data-active={tab === t.value}
+                aria-pressed={tab === t.value}
+                className={cn("cd-choice px-3 py-1.5 border-l first:border-l-0 cd-border-c", tab === t.value ? "cd-fill-primary text-white" : "cd-text-muted")}
               >
                 {t.label}
               </button>

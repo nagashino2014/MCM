@@ -247,7 +247,7 @@ export function ShopReceiptRecords({ from, to, reloadToken }: Props) {
       {/* 원장 기준 커버리지 — 전표가 안 붙은 쇼핑몰 결제(수집 누락 확인) */}
       {showUncovered && uncovered.length > 0 && (
         <div className="border cd-border-c rounded-xl p-3 mb-3">
-          <div className="text-xs cd-text-muted mb-2">
+          <div className="text-xs cd-text-muted mb-3">
             법인카드 원장에서 쇼핑몰/PG 가맹점으로 보이는데 전표가 붙지 않은 결제입니다.
             해당 기간을 다시 수집하거나, 아래 전표의 [연결] 로 직접 이어 주세요.
           </div>
@@ -275,7 +275,7 @@ export function ShopReceiptRecords({ from, to, reloadToken }: Props) {
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead>
+            <thead className="cd-table-head">
               <tr className="cd-text-muted text-xs">
                 <th className="text-left font-normal py-1.5 pr-3">쇼핑몰</th>
                 <th className="text-left font-normal py-1.5 pr-3">주문일</th>

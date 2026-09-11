@@ -4,6 +4,7 @@
   "private": true,
   "description": "MCM IEPS 통합환경허가 데이터 관리 Next.js 프론트엔드",
   "scripts": {
+    "test:menu-route": "node scripts/test-menu-route.mjs",
     "test:facility-quality": "node scripts/test-facility-quality.mjs",
     "dev": "next dev",
     "dev:aws": "powershell -ExecutionPolicy Bypass -File ../scripts/dev-frontend-aws.ps1",

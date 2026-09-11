@@ -217,7 +217,7 @@ export function SettingsTab({ data, canManage, onChanged }: Props) {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead>
+            <thead className="cd-table-head">
               <tr className="cd-text-faint text-xs border-b cd-border-c">
                 <th className="py-2 px-2 text-left w-40">일시(KST)</th>
                 <th className="py-2 px-2 text-left w-32">변경자</th>

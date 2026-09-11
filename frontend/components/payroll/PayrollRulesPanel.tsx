@@ -170,8 +170,8 @@ export default function PayrollRulesPanel() {
       {/* 규칙 목록 */}
       <div className="flex-1 min-h-0 overflow-auto border cd-border-c rounded-2xl">
         <table className="w-full text-sm">
-          <thead>
-            <tr className="cd-text-faint text-[11px] border-b cd-border-c sticky top-0" style={{ background: "var(--cd-card-solid)" }}>
+          <thead className="cd-table-head">
+            <tr className="cd-text-faint text-[11px] border-b cd-border-c sticky top-0" style={{ background: "var(--cd-surface)" }}>
               <th className="text-left font-semibold p-2">직원</th>
               <th className="text-left font-semibold p-2">항목</th>
               <th className="text-right font-semibold p-2">월 금액</th>

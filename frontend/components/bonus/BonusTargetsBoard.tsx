@@ -203,7 +203,9 @@ export default function BonusTargetsBoard() {
                 key={c.key}
                 type="button"
                 onClick={() => setCategory(c.key)}
-                className={`rounded-xl px-3 py-2 text-sm font-semibold border transition ${
+                data-active={category === c.key}
+                aria-pressed={category === c.key}
+                className={`cd-choice rounded-xl px-3 py-2 text-sm font-semibold border transition ${
                   category === c.key
                     ? "cd-fill-primary text-white border-transparent"
                     : "cd-border-c cd-text"
@@ -330,7 +332,9 @@ export default function BonusTargetsBoard() {
             <button
               type="button"
               onClick={() => setTab("list")}
-              className={`rounded-xl px-4 py-2 text-sm font-semibold border ${
+              data-active={tab === "list"}
+              aria-pressed={tab === "list"}
+              className={`cd-choice rounded-xl px-4 py-2 text-sm font-semibold border ${
                 tab === "list" ? "cd-fill-primary text-white border-transparent" : "cd-border-c cd-text"
               }`}
             >
@@ -339,7 +343,9 @@ export default function BonusTargetsBoard() {
             <button
               type="button"
               onClick={() => setTab("costs")}
-              className={`rounded-xl px-4 py-2 text-sm font-semibold border ${
+              data-active={tab === "costs"}
+              aria-pressed={tab === "costs"}
+              className={`cd-choice rounded-xl px-4 py-2 text-sm font-semibold border ${
                 tab === "costs" ? "cd-fill-primary text-white border-transparent" : "cd-border-c cd-text"
               }`}
             >
@@ -369,7 +375,7 @@ export default function BonusTargetsBoard() {
               </div>
             ) : tab === "list" ? (
               <table className="text-sm" style={{ minWidth: 900 + maxStages * 150 }}>
-                <thead>
+                <thead className="cd-table-head">
                   <tr className="cd-text-faint text-[11px] border-b cd-border-c">
                     <th className="text-left font-semibold p-2.5" style={{ minWidth: 240 }}>용역명</th>
                     <th className="text-left font-semibold p-2.5" style={{ minWidth: 140 }}>발주처</th>
@@ -432,7 +438,7 @@ export default function BonusTargetsBoard() {
               </table>
             ) : (
               <table className="w-full text-sm" style={{ minWidth: 900 }}>
-                <thead>
+                <thead className="cd-table-head">
                   <tr className="cd-text-faint text-[11px] border-b cd-border-c">
                     <th className="text-left font-semibold p-2.5">용역명</th>
                     <th className="text-left font-semibold p-2.5" style={{ width: "14%" }}>발주처</th>

@@ -2,30 +2,29 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Soft Glass Ink 기준 전역값. cdash 토큰(--cd-*)은 `.cdash` 스코프 전용이라
-   AppShell 밖 화면(로그인·토스트·빈 상태)에서는 아래 리터럴 값을 쓴다. */
+/* Precision 전역 폴백. 앱 내부는 같은 의미의 --cd-* 토큰을 사용한다. */
 :root {
-  --background: #EFF1F8;
-  --foreground: #2A3040;
-  --primary: #4A63D8;
-  --primary-rgb: 74, 99, 216;
+  --mcm-action-radius: 8px;
+  --background: hsl(0 0% 100%);
+  --foreground: hsl(225 15% 15%);
+  --primary: hsl(221 83% 53%);
+  --primary-rgb: 36, 99, 235;
 }
 
 html, body {
   background: var(--background);
   color: var(--foreground);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: Inter, "Noto Sans KR", Pretendard, "Malgun Gothic", system-ui, sans-serif;
 }
 
-/* 글라스 서페이스 — Soft Glass Ink 규정(cdash `.cd-card` 와 동일 값).
-   AppShell 밖(로그인·토스트·빈 상태)에서만 사용한다. 앱 내부는 `.cd-card` 를 쓸 것. */
+/* 이전 클래스 이름도 무광 표면으로 연결한다. 신규 화면은 cd-card 사용. */
 .glass-panel,
 .glass-card {
-  background: rgba(255, 255, 255, 0.6);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border: 1px solid rgba(255, 255, 255, 0.75);
-  box-shadow: 0 6px 24px rgba(80, 95, 150, 0.06);
+  background: var(--cd-card-solid, #fff);
+  backdrop-filter: none;
+  border: 1px solid var(--cd-border, hsl(220 13% 90%));
+  border-radius: 8px;
+  box-shadow: none;
 }
 
 /* Custom scrollbar */
@@ -59,21 +58,21 @@ html, body {
   width: 100%;
   padding: 0.5rem 0.75rem;
   font-size: 0.75rem;
-  border-radius: 0.625rem;
-  background: rgba(255, 255, 255, 0.85);
-  border: 1px solid #e7e5e4;
-  color: #292524;
+  border-radius: var(--mcm-action-radius);
+  background: var(--cd-card-solid, #fff);
+  border: 1px solid var(--cd-line, hsl(220 13% 84%));
+  color: var(--cd-text, hsl(225 15% 15%));
   transition: all 0.2s ease;
 }
-.input-field::placeholder { color: #a8a29e; }
+.input-field::placeholder { color: var(--cd-muted, hsl(220 9% 43%)); }
 .input-field:focus {
   outline: none;
   box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.2);
   border-color: var(--primary);
 }
 .input-field:disabled {
-  background: rgba(245, 244, 243, 0.7);
-  color: #a8a29e;
+  background: var(--cd-surface, hsl(220 16% 97%));
+  color: var(--cd-muted, hsl(220 9% 43%));
   cursor: not-allowed;
 }
 
@@ -81,10 +80,10 @@ html, body {
   width: 100%;
   padding: 0.625rem 0.75rem;
   font-size: 0.8125rem;
-  border-radius: 0.75rem;
-  background: rgba(255, 255, 255, 0.85);
-  border: 1px solid #e7e5e4;
-  color: #292524;
+  border-radius: var(--mcm-action-radius);
+  background: var(--cd-card-solid, #fff);
+  border: 1px solid var(--cd-line, hsl(220 13% 84%));
+  color: var(--cd-text, hsl(225 15% 15%));
   transition: all 0.2s ease;
   resize: vertical;
   min-height: 64px;
@@ -99,10 +98,10 @@ html, body {
   width: 100%;
   padding: 0.5rem 0.75rem;
   font-size: 0.8125rem;
-  border-radius: 0.625rem;
-  background: rgba(255, 255, 255, 0.85);
-  border: 1px solid #e7e5e4;
-  color: #292524;
+  border-radius: var(--mcm-action-radius);
+  background: var(--cd-card-solid, #fff);
+  border: 1px solid var(--cd-line, hsl(220 13% 84%));
+  color: var(--cd-text, hsl(225 15% 15%));
   transition: all 0.2s ease;
 }
 .ui-select:focus {
@@ -111,51 +110,51 @@ html, body {
   border-color: var(--primary);
 }
 .ui-select:disabled {
-  background: rgba(245, 244, 243, 0.7);
-  color: #a8a29e;
+  background: var(--cd-surface, hsl(220 16% 97%));
+  color: var(--cd-muted, hsl(220 9% 43%));
   cursor: not-allowed;
 }
 
 /* Chip pattern */
 .ui-chip {
   padding: 0.375rem 0.75rem;
-  border-radius: 9999px;
+  border-radius: var(--mcm-action-radius);
   font-size: 0.75rem;
   font-weight: 700;
   transition: all 0.2s ease;
   cursor: pointer;
-  background: rgba(255, 255, 255, 0.6);
-  color: #57534e;
-  border: 1px solid rgba(255, 255, 255, 0.7);
+  background: var(--cd-card-solid, #fff);
+  color: var(--cd-muted, hsl(220 9% 43%));
+  border: 1px solid var(--cd-border, hsl(220 13% 90%));
   line-height: 1;
 }
 .ui-chip:hover {
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--cd-card-solid, #fff);
 }
 .ui-chip[data-active="true"] {
   background: var(--primary);
   color: white;
   border-color: var(--primary);
-  box-shadow: 0 2px 8px rgba(var(--primary-rgb), 0.25);
+  box-shadow: none;
 }
 
 /* Toggle (segmented) */
 .range-toggle {
   display: inline-flex;
-  border-radius: 0.75rem;
-  background: rgba(255, 255, 255, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: var(--mcm-action-radius);
+  background: var(--cd-card-solid, #fff);
+  border: 1px solid var(--cd-border, hsl(220 13% 90%));
   padding: 0.25rem;
   gap: 0.25rem;
   width: fit-content;
 }
 .range-toggle button {
-  border-radius: 0.5rem;
+  border-radius: var(--mcm-action-radius);
   padding: 0.25rem 0.75rem;
   font-size: 0.75rem;
   font-weight: 700;
   transition: all 0.2s ease;
-  color: #78716c;
+  color: var(--cd-muted, hsl(220 9% 43%));
 }
 .range-toggle button[data-active="true"] {
   background: white;
@@ -170,17 +169,17 @@ html, body {
   align-items: center;
   gap: 0.375rem;
   padding: 0.375rem 0.625rem 0.375rem 0.75rem;
-  border-radius: 9999px;
+  border-radius: var(--mcm-action-radius);
   font-size: 0.75rem;
   font-weight: 700;
   transition: all 0.2s ease;
   cursor: pointer;
-  background: rgba(255, 255, 255, 0.6);
-  color: #57534e;
-  border: 1px solid rgba(255, 255, 255, 0.7);
+  background: var(--cd-card-solid, #fff);
+  color: var(--cd-muted, hsl(220 9% 43%));
+  border: 1px solid var(--cd-border, hsl(220 13% 90%));
   line-height: 1;
 }
-.rule-chip:hover { background: rgba(255, 255, 255, 0.9); }
+.rule-chip:hover { background: var(--cd-card-solid, #fff); }
 .rule-chip[data-active="true"] {
   background: rgba(var(--primary-rgb), 0.12);
   color: var(--primary);
@@ -195,7 +194,7 @@ html, body {
   justify-content: center;
   width: 18px;
   height: 18px;
-  border-radius: 9999px;
+  border-radius: var(--mcm-action-radius);
   background: rgba(0, 0, 0, 0.05);
   transition: background 0.2s ease;
 }
@@ -208,10 +207,10 @@ html, body {
   align-items: center;
   gap: 0.25rem;
   padding: 0.375rem 0.75rem;
-  border-radius: 9999px;
+  border-radius: var(--mcm-action-radius);
   font-size: 0.75rem;
   font-weight: 700;
-  color: #78716c;
+  color: var(--cd-muted, hsl(220 9% 43%));
   background: transparent;
   border: 1px dashed #d6d3d1;
   transition: all 0.2s ease;
@@ -229,8 +228,8 @@ html, body {
   position: fixed;
   inset: 0;
   z-index: 100;
-  background: rgba(28, 25, 23, 0.45);
-  backdrop-filter: blur(6px);
+  background: hsl(224 24% 10% / 24%);
+  backdrop-filter: none;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -248,7 +247,8 @@ html, body {
   cursor: pointer;
   flex-shrink: 0;
 }
-.switch input { display: none; }
+.switch input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+.switch input:focus-visible + .switch-slider { outline: 2px solid var(--cd-primary, var(--primary)); outline-offset: 3px; }
 .switch-slider {
   position: absolute;
   inset: 0;
@@ -280,7 +280,7 @@ html, body {
   padding: 0.75rem 1rem;
   font-size: 0.8125rem;
   font-weight: 600;
-  color: #292524;
+  color: var(--cd-text, hsl(225 15% 15%));
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
@@ -293,8 +293,8 @@ html, body {
   position: fixed;
   inset: 0;
   z-index: 90;
-  background: rgba(28, 25, 23, 0.25);
-  backdrop-filter: blur(2px);
+  background: hsl(224 24% 10% / 24%);
+  backdrop-filter: none;
   animation: fadeIn 0.18s ease;
 }
 .drawer {
@@ -303,11 +303,10 @@ html, body {
   right: 0;
   height: 100vh;
   width: min(440px, 92vw);
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: var(--cd-card-solid, #fff);
+  backdrop-filter: none;
   box-shadow: -8px 0 30px rgba(0, 0, 0, 0.08);
-  border-left: 1px solid rgba(255, 255, 255, 0.6);
+  border-left: 1px solid var(--cd-border, hsl(220 13% 90%));
   z-index: 95;
   display: flex;
   flex-direction: column;
@@ -325,22 +324,14 @@ html, body {
 }
 .progress-bar {
   height: 100%;
-  background: linear-gradient(90deg, rgba(var(--primary-rgb), 0.7), var(--primary));
+  background: var(--cd-primary, var(--primary));
   border-radius: 9999px;
   transition: width 0.3s ease;
 }
 
-/* Concept (dummy) card hatched background — 라운드 2B */
+/* 이전 컨셉 카드 클래스의 호환 표면. */
 .concept-hatched {
-  background-image:
-    repeating-linear-gradient(
-      135deg,
-      rgba(120, 113, 108, 0.05) 0,
-      rgba(120, 113, 108, 0.05) 1px,
-      transparent 1px,
-      transparent 7px
-    ),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.35));
+  background: var(--cd-card-solid, #fff);
 }
 
 /* Region map (라운드 2B) */
@@ -372,7 +363,7 @@ html, body {
   align-items: center;
   gap: 0.375rem;
   font-size: 0.6875rem;
-  color: #78716c;
+  color: var(--cd-muted, hsl(220 9% 43%));
 }
 .region-legend .swatch {
   display: inline-block;
@@ -389,7 +380,7 @@ html, body {
   top: 0.75rem;
   left: 0.75rem;
   padding: 0.45rem 0.8rem;
-  border-radius: 9999px;
+  border-radius: var(--mcm-action-radius);
   color: var(--primary);
   font-size: 0.75rem;
   font-weight: 900;
@@ -448,12 +439,12 @@ html, body {
   gap: 0.25rem;
   padding: 0.125rem 0.5rem;
   border-radius: 9999px;
-  font-size: 0.625rem;
+  font-size: 0.6875rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
-.status-pill--idle { background: rgba(120, 113, 108, 0.12); color: #57534e; }
+.status-pill--idle { background: rgba(120, 113, 108, 0.12); color: var(--cd-muted, hsl(220 9% 43%)); }
 .status-pill--running { background: rgba(var(--primary-rgb), 0.12); color: var(--primary); }
 .status-pill--success { background: rgba(var(--primary-rgb), 0.18); color: var(--primary); }
 .status-pill--error { background: rgba(220, 38, 38, 0.12); color: #b91c1c; }
@@ -466,7 +457,7 @@ html, body {
   padding: 0 0.4rem;
   margin-right: 0.35rem;
   border-radius: 9999px;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.04em;
   line-height: 1.5;
@@ -474,7 +465,7 @@ html, body {
 }
 .method-http {
   background: rgba(120, 113, 108, 0.12);
-  color: #57534e;
+  color: var(--cd-muted, hsl(220 9% 43%));
   border-color: rgba(120, 113, 108, 0.25);
 }
 .method-playwright {
@@ -496,4 +487,35 @@ html, body {
   background: rgba(217, 119, 6, 0.18);
   color: #b45309;
   border-color: rgba(217, 119, 6, 0.35);
+}
+
+/* 사용자 지정: 모든 동작 버튼·태그형 버튼·탭은 네 모서리 8px.
+   페이지 CSS, Tailwind rounded-*, 인라인 스타일의 혼용을 이 속성에만 한정해 차단한다.
+   body로 옮겨지는 팝업에도 적용한다. 링크/label 동작은 cd-action으로 표시한다.
+   카드·표 행·도표·스위치 노브·문서 콘텐츠에는 반경을 일괄 덮어쓰지 않는다. */
+:is(button, input[type="button"], input[type="submit"], input[type="reset"],
+    [role="tab"], .cd-action, .cd-btn, .cd-icon-button, .cd-tab, .cdb-tab,
+    .cd-chip, a.cd-pill, .ui-chip, .rule-chip, .rule-add-btn,
+    .rule-chip .edit-btn, .region-summary-toggle) {
+  border-radius: var(--mcm-action-radius) !important;
+}
+
+/* 네이티브 컨트롤도 공통 치수·포커스를 유지한다. */
+.input-field, .ui-select { min-height: 36px; font-size: 13px; }
+.ui-textarea { padding: 8px 12px; }
+:where(button, a, input, select, textarea):focus-visible {
+  outline: 2px solid var(--cd-primary, var(--primary));
+  outline-offset: 3px;
+}
+
+/* 버튼 포커스는 기존 경계에 겹쳐 표시해 분리된 이중선을 만들지 않는다.
+   입력·문서 편집기의 포커스와 셀 선택 표시는 기존 규칙을 유지한다. */
+:is(button, [role="button"], [role="tab"], a.cd-btn, a.cd-action, .rule-chip):focus-visible {
+  outline: 2px solid var(--cd-choice-color, var(--cd-primary, var(--primary))) !important;
+  outline-offset: -2px !important;
+  box-shadow: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-delay: 0ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+  .reveal, .cd-reveal { opacity: 1; transform: none; }
 }

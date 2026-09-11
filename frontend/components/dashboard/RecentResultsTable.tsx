@@ -62,7 +62,7 @@ export function RecentResultsTable({ refreshKey }: { refreshKey?: number }) {
       {/* 헤더와 행 영역의 좌측 시작 위치를 일치시키기 위해 동일 그리드 + 동일 좌우 패딩(p-3) 사용.
           행 영역의 `overflow-y-auto` 가 만드는 스크롤바 gutter 만큼 헤더 우측에 padding 을 보태
           fr 분배가 헤더/행에서 동일하게 되도록 보정한다. */}
-      <div className="hidden md:grid grid-cols-[1.5fr_1fr_1fr_0.8fr] gap-3 p-3 pr-[14px] text-left text-[10px] font-bold uppercase cd-text-faint tracking-wide">
+      <div className="cd-table-head hidden md:grid grid-cols-[1.5fr_1fr_1fr_0.8fr] gap-3 p-3 pr-[14px] text-left text-[10px] font-bold uppercase cd-text-faint tracking-wide">
         <div className="text-left">상호 / 소재지</div>
         <div className="text-left">결정번호 · 허가일</div>
         <div className="text-left">업종</div>

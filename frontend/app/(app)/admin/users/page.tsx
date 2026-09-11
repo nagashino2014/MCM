@@ -109,7 +109,7 @@ function Inner() {
         icon={<UsersIcon className="w-5 h-5" />}
         eyebrow="시스템"
         title="계정·권한 관리"
-        subtitle="먼저 권한 템플릿을 구성한 뒤 개별 계정에 부서·직급 범위에 맞는 권한을 적용합니다."
+        help="먼저 권한 템플릿을 구성한 뒤 개별 계정에 부서·직급 범위에 맞는 권한을 적용합니다."
         actions={
           <button type="button" onClick={reload} className="cd-btn cd-btn-ghost cd-btn-sm">
             <RefreshCw className={"w-3.5 h-3.5 " + (loading ? "animate-spin" : "")} />

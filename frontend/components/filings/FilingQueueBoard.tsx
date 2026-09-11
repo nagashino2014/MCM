@@ -118,6 +118,8 @@ export function FilingQueueBoard() {
       <CdPageHeader
         breadcrumbs={[{ label: "계약" }, { label: "대외 신고 대기열" }]}
         title="대외 신고 대기열"
+        help="직원·인사·계약·참여인력 변경에서 신고 대상을 찾습니다. 항목을 열어 값을 복사하고, 외부 사이트에 제출한 뒤 ‘제출 완료’로 표시하세요. 해당하지 않는 건은 ‘제외’를 선택합니다."
+        subtitle={settings ? `기준일 ${settings.cutoffOn} 이후 발생분` : undefined}
         meta={rows ? `${rows.length}건` : ""}
         actions={
           <div className="flex gap-2">
@@ -131,12 +133,6 @@ export function FilingQueueBoard() {
         }
         tabs={<CdTabs items={STATUS_TABS} active={status} onChange={setStatus} />}
       />
-
-      <p className="text-xs cd-text-muted mb-4">
-        직원 등록·인사 이벤트·계약·참여인력에서 신고 사유를 자동으로 찾아 올립니다. 항목을 열면 사이트 양식 순서대로 정리된 값을
-        복사해 입력하고, 제출 후 <b>제출 완료</b>로 표시하세요. 해당 없음은 <b>제외</b>.
-        {settings ? ` 기준일 ${settings.cutoffOn} 이후 발생분만 대상.` : ""}
-      </p>
 
       <div className="mb-4">
         <CdTabs
@@ -164,7 +160,7 @@ export function FilingQueueBoard() {
         <div className="rounded-2xl border cd-border-c cd-card-bg overflow-hidden" style={{ boxShadow: "var(--cd-shadow)" }}>
           <div className="overflow-x-auto">
             <table className="w-full text-sm min-w-[860px]">
-              <thead>
+              <thead className="cd-table-head">
                 <tr className="text-left text-xs cd-text-muted">
                   <th className="px-5 py-3 font-semibold">신고 종류</th>
                   <th className="px-5 py-3 font-semibold">사유</th>

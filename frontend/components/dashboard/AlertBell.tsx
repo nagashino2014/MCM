@@ -49,12 +49,13 @@ export function AlertBell({ variant = "sidebar", canAck }: AlertBellProps) {
           onClick={() => setOpen(true)}
           className="relative rounded-xl w-9 h-9 flex items-center justify-center cd-surface-bg border cd-border-c cd-text-muted hover:text-[color:var(--cd-text)]"
           title="운영 알람"
+          aria-label="운영 알람"
         >
           <Bell className="w-4 h-4" />
           {hasUnread && (
             <span
-              className="absolute -top-1 -right-1 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full text-white text-[10px] font-bold flex items-center justify-center"
-              style={{ background: "var(--cd-error)" }}
+              className="absolute -top-1 -right-1 min-w-[1.1rem] h-[1.1rem] px-1 rounded border cd-border-c cd-surface-bg cd-text-muted text-[11px] font-medium flex items-center justify-center"
+
             >
               {count}
             </span>
@@ -81,6 +82,7 @@ export function AlertBell({ variant = "sidebar", canAck }: AlertBellProps) {
         )}
         style={hasUnread ? { borderColor: "var(--cd-error)" } : undefined}
         title="운영 알람"
+          aria-label="운영 알람"
       >
         <div
           className={cn(
@@ -91,8 +93,8 @@ export function AlertBell({ variant = "sidebar", canAck }: AlertBellProps) {
           <Bell className="w-4 h-4" />
           {hasUnread && (
             <span
-              className="absolute -top-1 -right-1 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full text-white text-[10px] font-bold flex items-center justify-center"
-              style={{ background: "var(--cd-error)" }}
+              className="absolute -top-1 -right-1 min-w-[1.1rem] h-[1.1rem] px-1 rounded border cd-border-c cd-surface-bg cd-text-muted text-[11px] font-medium flex items-center justify-center"
+
             >
               {count}
             </span>

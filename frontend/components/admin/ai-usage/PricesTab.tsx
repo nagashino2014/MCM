@@ -122,7 +122,7 @@ export function PricesTab({ data, canManage, onChanged }: Props) {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead>
+            <thead className="cd-table-head">
               <tr className="cd-text-faint text-xs border-b cd-border-c">
                 <th className="py-2 px-2 text-left">모델</th>
                 <th className="py-2 px-2 text-left">적용일</th>
@@ -174,7 +174,7 @@ export function PricesTab({ data, canManage, onChanged }: Props) {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead>
+            <thead className="cd-table-head">
               <tr className="cd-text-faint text-xs border-b cd-border-c">
                 <th className="py-2 px-2 text-left">모델</th>
                 <th className="py-2 px-2 text-right">호출</th>

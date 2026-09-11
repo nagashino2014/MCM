@@ -1,172 +1,135 @@
-/* ---------------------------------------------------------------------------
- * cdash — Modernize UI 키트 공용 토큰 & 프리미티브 (라이트/다크 듀얼 테마)
- * 색상 출처: Modernize DefaultColors.tsx (계약 대시보드 dashboard.css 와 동일 값)
- * 폰트: Plus Jakarta Sans (라틴) + Pretendard Variable (한글)
- * 사용: 페이지/패널 루트에 <div className="cdash" data-theme={theme}> 를 두고
- *       이 파일을 import 한다. (dashboard.css 와 동시 import 금지 — 중복 정의)
- * ------------------------------------------------------------------------- */
-@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap");
-@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css");
+/* Precision v1.0 — 기존 cdash API를 유지하는 토큰 어댑터.
+ * 값 정본: precision-tokens.css. 기본 면은 불투명, 그림자는 오버레이만 허용한다. */
+@import "./precision-tokens.css";
 
-/* `.cdash` = 토큰 + 페이지 배경/글자색까지. `.cdash-vars` = 토큰만(배경 없음).
- * 포털로 body 에 렌더되는 모달 오버레이는 `.cdash-vars` 를 써서 스크림이 투명하게
- * 유지되도록 한다(.cdash 의 background 가 오버레이를 불투명하게 덮는 문제 방지). */
 .cdash,
 .cdash-vars {
-  /* ── 캔버스/서페이스 ── */
-  --cd-bg: #eff1f8;                        /* 베이스 — 앰비언트 글로우는 .cd-canvas 에서 */
-  --cd-card: rgba(255, 255, 255, 0.6);     /* 글라스 카드 */
-  --cd-card-solid: #ffffff;                /* blur 불가 컨텍스트(입력·인쇄·메일 본문) 대체 */
-  --cd-surface: rgba(255, 255, 255, 0.5);  /* inset 서페이스 */
-  --cd-border: rgba(255, 255, 255, 0.75);  /* 글라스 하이라이트 보더(안쪽 광택) */
-  /* 카드·칩 바깥 경계선. 흰 하이라이트만으로는 밝은 캔버스 위에서 경계가 사라져
-   * 카드와 배경이 붙어 보인다 — 광택은 두고 바깥에 옅은 링을 한 겹 더한다. */
-  --cd-ring: rgba(120, 135, 180, 0.2);
-  --cd-hairline: rgba(120, 135, 180, 0.15);      /* 카드 내부 구분선(헤더) */
-  --cd-hairline-row: rgba(120, 135, 180, 0.13);  /* 행 구분선 */
-
-  /* ── 텍스트 ── */
-  --cd-text: #2a3040;        /* 잉크(제목) */
-  --cd-body: #3a4055;        /* 본문 */
-  --cd-muted: #7b839c;
-  --cd-nav-muted: #6e7690;   /* nav 비활성 라벨 */
-  --cd-faint: #9aa1b8;
-
-  /* ── 프라이머리 ── */
-  --cd-primary: #4a63d8;                   /* 텍스트/아이콘용 */
-  --cd-primary-soft: rgba(106, 131, 239, 0.13);
-  --cd-primary-strong: #3d53c2;
-  --cd-grad: linear-gradient(135deg, #6a83ef, #8e86ee);        /* CTA/배지 */
-  --cd-grad-text: linear-gradient(90deg, #5f74d8, #8a7fd0);    /* 헤더 메타 텍스트 */
-  --cd-grad-shadow: 0 6px 16px rgba(106, 131, 239, 0.25);
-
-  /* ── 시그널 (accent 폐기 — error 로 통합) ── */
-  --cd-secondary: #3d8fc4;                       /* sky 텍스트 */
-  --cd-secondary-soft: rgba(95, 182, 232, 0.14);
-  --cd-success: #2e8c71;
-  --cd-success-soft: rgba(59, 175, 142, 0.14);
-  --cd-warning: #b57f1d;
-  --cd-warning-soft: rgba(227, 166, 59, 0.16);
-  --cd-error: #d05743;
-  --cd-error-soft: rgba(232, 112, 95, 0.14);
-  --cd-stamp: #d0453b;                           /* 결재 도장 */
-
-  /* ── 아바타 전용 팔레트 ──
-   * 상태색(성공/경고/위험)과 같은 팔레트를 아바타에 쓰면 "의미 있는 색"으로 오독된다
-   * (분석 §2 /directory). 아바타는 상태색과 색조가 겹치지 않는 저채도 계열로 분리한다. */
+  --cd-bg: hsl(var(--precision-background));
+  --cd-card: hsl(var(--precision-card));
+  --cd-card-solid: var(--cd-card);
+  --cd-popover: hsl(var(--precision-popover));
+  --cd-surface: hsl(var(--precision-muted));
+  --cd-border: hsl(var(--precision-border));
+  --cd-ring: var(--cd-border);
+  --cd-hairline: var(--cd-border);
+  --cd-hairline-row: var(--cd-border);
+  --cd-text: hsl(var(--precision-foreground));
+  --cd-body: var(--cd-text);
+  --cd-muted: hsl(var(--precision-muted-foreground));
+  --cd-faint: var(--cd-muted);
+  --cd-nav-muted: hsl(var(--precision-sidebar-muted));
+  --cd-sidebar: hsl(var(--precision-sidebar));
+  --cd-sidebar-text: hsl(var(--precision-sidebar-foreground));
+  --cd-sidebar-muted: hsl(var(--precision-sidebar-muted));
+  --cd-sidebar-border: hsl(var(--precision-sidebar-border));
+  --cd-sidebar-selected: hsl(var(--precision-sidebar-selected));
+  --cd-sidebar-selected-text: hsl(var(--precision-sidebar-selected-text));
+  --cd-sidebar-hover: hsl(var(--precision-sidebar-hover));
+  /* 2026-09-10 사용자 보존 요청: 기존 MCM 블루·보라 버튼 팔레트. */
+  --cd-primary: #4a63d8;
+  --cd-primary-foreground: #fff;
+  --cd-action-background: linear-gradient(135deg, #6a83ef, #8e86ee);
+  --cd-action-foreground: #fff;
+  --primary: var(--cd-primary);
+  --cd-primary-soft: color-mix(in srgb, var(--cd-primary) 6.5%, var(--cd-card));
+  --cd-primary-strong: hsl(var(--precision-accent-foreground));
+  /* 이전 클래스명 호환: gradient 이름이 남아 있어도 단색만 반환한다. */
+  --cd-grad: var(--cd-primary);
+  --cd-grad-text: var(--cd-muted);
+  --cd-grad-shadow: none;
+  --cd-secondary: #3d8fc4;
+  --cd-secondary-soft: color-mix(in srgb, var(--cd-secondary) 8%, var(--cd-card));
+  --cd-info: var(--cd-primary);
+  --cd-info-soft: var(--cd-primary-soft);
+  --cd-success: hsl(var(--precision-success));
+  --cd-success-soft: color-mix(in srgb, var(--cd-success) 8%, var(--cd-card));
+  --cd-warning: hsl(var(--precision-warning));
+  --cd-warning-soft: color-mix(in srgb, var(--cd-warning) 9%, var(--cd-card));
+  --cd-error: hsl(var(--precision-destructive));
+  --cd-error-soft: color-mix(in srgb, var(--cd-error) 7%, var(--cd-card));
+  --cd-error-foreground: #fff;
+  --cd-stamp: #d0453b;
   --cd-av-1: #5b6bc0;
   --cd-av-2: #7a6bb8;
   --cd-av-3: #4a7fa8;
   --cd-av-4: #4e8c7a;
   --cd-av-5: #8a7a5c;
   --cd-av-6: #a0616b;
-  /* accent 는 폐기 토큰: 신규 사용 금지, 기존 사용처 호환을 위해 error 로 alias */
   --cd-accent: var(--cd-error);
   --cd-accent-soft: var(--cd-error-soft);
   --cd-accent-strong: var(--cd-error);
-
-  /* ── 깊이/효과 ── */
-  --cd-grid-line: rgba(120, 135, 180, 0.13);
-  --cd-shadow: 0 6px 24px rgba(80, 95, 150, 0.06);             /* rest */
-  --cd-shadow-hover: 0 10px 32px rgba(80, 95, 150, 0.12);
-  --cd-blur: blur(18px);
-  --cd-hover: rgba(255, 255, 255, 0.55);                       /* row/menu hover */
-  --cd-active-fill: rgba(255, 255, 255, 0.9);                  /* 선택 항목 */
-  --cd-active-border: rgba(255, 255, 255, 0.95);
-  --cd-active-shadow: 0 4px 14px rgba(90, 105, 180, 0.1);
-  --cd-chip-bg: rgba(255, 255, 255, 0.1);                      /* 비활성 nav 글라스 칩 */
-  --cd-chip-border: rgba(120, 135, 180, 0.22);                 /* 칩은 광택보다 경계가 중요 */
-  --cd-line: rgba(120, 135, 180, 0.3);                         /* 컨트롤 윤곽선(글라스 위) */
-  --cd-form-line: rgba(90, 105, 150, 0.22);                    /* 결재 양식 표선 */
-  --cd-form-line-strong: rgba(90, 105, 150, 0.28);
-  --cd-form-label: rgba(120, 135, 180, 0.1);                   /* 양식 라벨셀 */
-
-  font-family: "Plus Jakarta Sans", "Pretendard Variable", Pretendard, -apple-system,
-    BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --cd-grid-line: var(--cd-border);
+  --cd-shadow: none;
+  --cd-shadow-hover: none;
+  --cd-blur: none;
+  --cd-hover: var(--cd-surface);
+  --cd-active-fill: var(--cd-sidebar-selected);
+  --cd-active-border: var(--cd-border);
+  --cd-active-shadow: none;
+  --cd-chip-bg: var(--cd-card);
+  --cd-chip-border: var(--cd-border);
+  --cd-line: hsl(var(--precision-input));
+  --cd-form-line: var(--cd-border);
+  --cd-form-line-strong: var(--cd-line);
+  --cd-form-label: var(--cd-surface);
+  --cd-row-selected: color-mix(in srgb, var(--cd-primary) 5.5%, var(--cd-card));
+  --cd-overlay: hsl(224 24% 10% / 24%);
+  --cd-shadow-dialog: 0 16px 60px hsl(var(--precision-shadow-color) / 18%);
+  --cd-shadow-sheet: -16px 0 48px hsl(var(--precision-shadow-color) / 12%);
+  --cd-shadow-popover: 0 6px 24px hsl(var(--precision-shadow-color) / 12%);
+  --cd-shadow-toast: 0 6px 24px hsl(var(--precision-shadow-color) / 12%);
+  --cd-radius-card: var(--precision-ui-radius-card);
+  --cd-radius-control: var(--mcm-action-radius, 8px);
+  --cd-table-header-bg: var(--cd-surface);
+  --cd-table-toolbar-gap: 12px;
+  font-family: Inter, "Noto Sans KR", "Pretendard Variable", Pretendard, "Malgun Gothic", system-ui, sans-serif;
+  font-size: var(--precision-ui-font-body);
+  font-variant-numeric: tabular-nums;
+  color: var(--cd-text);
 }
-
-.cdash[data-theme="dark"],
-.cdash-vars[data-theme="dark"] {
-  --cd-bg: #141824;
-  --cd-card: rgba(30, 36, 56, 0.55);
-  --cd-card-solid: #1b2136;
-  --cd-surface: rgba(255, 255, 255, 0.05);
-  --cd-border: rgba(255, 255, 255, 0.09);
-  --cd-ring: rgba(0, 0, 0, 0.25);
-  --cd-hairline: rgba(255, 255, 255, 0.09);
-  --cd-hairline-row: rgba(255, 255, 255, 0.08);
-
-  --cd-text: #e7eaf4;
-  --cd-body: #c6cde0;
-  --cd-muted: #9aa3bc;
-  --cd-nav-muted: #9aa3bc;
-  --cd-faint: #6e7a96;
-
+html[data-theme="dark"] .cdash, html[data-theme="dark"] .cdash-vars,
+.cdash[data-theme="dark"], .cdash-vars[data-theme="dark"] {
   --cd-primary: #a9b8ff;
-  --cd-primary-soft: rgba(143, 165, 255, 0.16);
-  --cd-primary-strong: #8fa5ff;
-  --cd-grad-text: linear-gradient(90deg, #8fa5ff, #b3a6ff);
-  --cd-grad-shadow: 0 6px 20px rgba(106, 131, 239, 0.4);
-
+  --cd-primary-foreground: hsl(225 35% 10%);
   --cd-secondary: #7ec8f0;
-  --cd-secondary-soft: rgba(126, 200, 240, 0.14);
-  --cd-success: #5fc7a5;
-  --cd-success-soft: rgba(95, 199, 165, 0.14);
-  --cd-warning: #ebc06a;
-  --cd-warning-soft: rgba(235, 192, 106, 0.16);
-  --cd-error: #f09a8b;
-  --cd-error-soft: rgba(240, 154, 139, 0.16);
-
+  --cd-error-foreground: hsl(225 35% 10%);
   --cd-av-1: #9ba8e8;
   --cd-av-2: #b0a2e0;
   --cd-av-3: #8ab4d8;
   --cd-av-4: #8fc4b0;
   --cd-av-5: #c0b08c;
   --cd-av-6: #d0989f;
-
-  --cd-grid-line: rgba(255, 255, 255, 0.07);
-  --cd-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-  --cd-shadow-hover: 0 12px 40px rgba(0, 0, 0, 0.4);
-  --cd-hover: rgba(255, 255, 255, 0.08);
-  --cd-active-fill: rgba(255, 255, 255, 0.1);
-  --cd-active-border: rgba(255, 255, 255, 0.16);
-  --cd-active-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
-  --cd-chip-bg: rgba(255, 255, 255, 0.03);
-  --cd-chip-border: rgba(255, 255, 255, 0.12);
-  --cd-line: rgba(255, 255, 255, 0.2);
-  --cd-form-line: rgba(255, 255, 255, 0.14);
-  --cd-form-line-strong: rgba(255, 255, 255, 0.18);
-  --cd-form-label: rgba(255, 255, 255, 0.06);
 }
-
-/* 페이지 루트(.cdash)만 배경/글자색을 칠한다. */
-.cdash {
-  background: var(--cd-bg);
-  color: var(--cd-text);
-  transition: background 0.25s ease, color 0.25s ease;
+.cdash, .cd-canvas, .cdash.cd-canvas { background: var(--cd-bg); }
+/* 2026-09-11 사용자 요청: 검토한 베이지 바탕을 운영 셸에도 적용한다.
+ * 화면 바탕만 연결하며 카드·입력·문서 면과 다크/인쇄 색은 유지한다. */
+@media screen {
+  .cd-canvas[data-theme="light"] {
+    background-color: #f9f6f0;
+    background-image: linear-gradient(135deg, #fcfaf7 0%, #f9f6f0 52%, #f6f1e8 100%);
+  }
+  .cd-canvas[data-theme="light"] #main-content > div > .cdash:not(.cd-card),
+  .cd-canvas[data-theme="light"] #main-content > div > div:not(.cdash) > .cdash:not(.cd-card) {
+    background: transparent;
+  }
 }
-
-/* ---------------- 앰비언트 캔버스 (AppShell 루트) ----------------
- * `.cdash` 의 단색 배경을 덮어야 하므로 반드시 그 뒤에 정의한다. */
-.cd-canvas,
-.cdash.cd-canvas {
-  background:
-    radial-gradient(760px 500px at 6% -4%, rgba(148, 172, 255, 0.26), transparent 62%),
-    radial-gradient(680px 440px at 98% 16%, rgba(255, 186, 152, 0.18), transparent 62%),
-    radial-gradient(760px 520px at 52% 112%, rgba(140, 216, 188, 0.16), transparent 62%),
-    var(--cd-bg);
-  background-attachment: fixed;
+.cdash :focus-visible, .cdash-vars :focus-visible {
+  outline: 2px solid var(--cd-primary);
+  outline-offset: 2px;
 }
-.cdash[data-theme="dark"].cd-canvas,
-.cdash[data-theme="dark"] .cd-canvas,
-.cd-canvas[data-theme="dark"] {
-  background:
-    radial-gradient(760px 500px at 6% -4%, rgba(106, 131, 239, 0.18), transparent 62%),
-    radial-gradient(680px 440px at 98% 16%, rgba(142, 134, 238, 0.13), transparent 62%),
-    radial-gradient(760px 520px at 52% 112%, rgba(59, 175, 142, 0.1), transparent 62%),
-    var(--cd-bg);
-  background-attachment: fixed;
+.cd-nav-link {
+  border: 1px solid transparent;
+  color: var(--cd-sidebar-muted);
+  border-radius: var(--cd-radius-control);
 }
+.cd-nav-link:hover { color: var(--cd-sidebar-text); background: var(--cd-sidebar-hover); }
+.cd-nav-link.cd-nav-current, .cd-nav-current {
+  color: var(--cd-sidebar-selected-text);
+  background: var(--cd-sidebar-selected);
+  border: 1px solid var(--cd-sidebar-border);
+  font-weight: 600;
+}
+.cd-nav-parent-current { color: var(--cd-sidebar-text); font-weight: 600; }
 
 /* ---------------- 텍스트 색 유틸 ---------------- */
 .cd-text { color: var(--cd-text); }
@@ -176,28 +139,21 @@
 
 .cd-text-body { color: var(--cd-body); }
 
-/* ---------------- Soft Glass Ink 표면 유틸 ---------------- */
-/* 그라데이션 CTA/뱃지 — 채움은 이 유틸로만(hex 직접 기입 금지). */
-.cd-grad-fill { background: var(--cd-grad); color: #fff; box-shadow: var(--cd-grad-shadow); }
-/* 헤더 메타 1줄 등 그라데이션 텍스트. */
-.cd-grad-text {
-  background: var(--cd-grad-text);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-/* 비활성 nav/세그먼트 = 보일락 말락한 글라스 칩(확정안 4a). */
+/* ---------------- 이전 클래스명 호환용 단색 표면 ---------------- */
+.cd-grad-fill { background: var(--cd-primary); color: var(--cd-primary-foreground); box-shadow: none; }
+.cd-grad-text { color: var(--cd-muted); }
+/* 이전 nav/세그먼트 클래스는 중립 단색으로 호환한다. */
 .cd-glass-chip {
   background: var(--cd-chip-bg);
   border: 1px solid var(--cd-chip-border);
   transition: background 0.12s ease, color 0.12s ease;
 }
 .cd-glass-chip:hover { background: var(--cd-hover); color: var(--cd-text); }
-/* 선택(active) = 흰 글라스 필. */
+/* 선택 항목은 불투명 면·경계·블루 글자. */
 .cd-glass-active {
   background: var(--cd-active-fill);
   border: 1px solid var(--cd-active-border);
-  box-shadow: 0 0 0 1px var(--cd-ring), var(--cd-active-shadow);
+  box-shadow: none;
   color: var(--cd-primary);
 }
 /* 좌측 내비게이션은 항목 테두리를 두지 않는다 — 항목마다 사각 윤곽이 생겨 목록이 산만해진다.
@@ -211,60 +167,53 @@
   border-color: transparent;
   box-shadow: none;
 }
-/* 반투명 inset 서페이스(상세 섹션·폼 그룹). */
+/* 상세 섹션·폼 그룹의 중립 보조 면. */
 .cd-inset {
   background: var(--cd-surface);
   border: 1px solid var(--cd-border);
-  border-radius: 14px;
+  border-radius: var(--cd-radius-card);
 }
 /* 헤어라인 구분선 — 카드 헤더(강)/행(약). */
 .cd-hairline-c { border-color: var(--cd-hairline); }
 .cd-hairline-row-c { border-color: var(--cd-hairline-row); }
-/* 글라스 위 컨트롤 윤곽선(입력·ghost 버튼). */
+/* 입력·보조 버튼 윤곽선. */
 .cd-line-c { border-color: var(--cd-line); }
 
 /* ---------------- 마이그레이션 보조 유틸 (배경/테두리/상태색 → 토큰) ---------------- */
 .cd-surface-bg { background: var(--cd-surface); }
 .cd-card-bg { background: var(--cd-card); }
-/* 스크림 위에 뜨는 표면(모달·드로어·바텀시트·팝오버)은 반드시 불투명.
- * 글라스 토큰(--cd-card)을 쓰면 뒤 화면이 그대로 비쳐 내용을 읽을 수 없다. */
+/* 모달·드로어·바텀시트·팝오버의 불투명 표면. */
 .cd-solid-bg { background: var(--cd-card-solid); }
-/* 개별 모달이 .cd-card / .cd-card-bg 를 그대로 쓰더라도 스크림 위에서는 글라스를 끈다.
- * (오버레이 = fixed inset-0 스크림. 그 안쪽 표면은 뒤 화면이 비치면 안 된다.) */
+/* 이전 모달의 카드 클래스에도 불투명 규칙을 유지한다. */
 .fixed.inset-0 .cd-card,
 .fixed.inset-0 .cd-card-bg {
   background: var(--cd-card-solid);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
-/* 박스 경계 유틸 — 흰 하이라이트(--cd-border)는 밝은 캔버스 위에서 사라지므로
- * 실제 테두리로 쓰이는 이 유틸은 링 색(옅은 블루그레이)을 쓴다. */
+/* 박스 경계는 중립 border 토큰. */
 .cd-border-c { border-color: var(--cd-ring); }
-.cd-fill-primary { background: var(--cd-grad); color: #fff; box-shadow: var(--cd-grad-shadow); }
+.cd-fill-primary, .cdash .cd-fill-primary, .cdash-vars .cd-fill-primary { background: var(--cd-primary); color: var(--cd-primary-foreground); box-shadow: none; }
 .cd-fill-primary:hover { filter: brightness(1.04); }
 .cd-soft-primary { background: var(--cd-primary-soft); color: var(--cd-primary); }
 .cd-tint-primary { background: var(--cd-primary-soft); }
 .cd-error-bg { background: var(--cd-error-soft); }
 .cd-error-text { color: var(--cd-error); }
-.cd-error-border { border-color: var(--cd-error-soft); }
-.cd-fill-error { background: var(--cd-error); color: #fff; }
+.cd-error-border { border-color: color-mix(in srgb, var(--cd-error) 35%, var(--cd-card)); }
+.cd-fill-error { background: var(--cd-error); color: var(--cd-error-foreground); }
 .cd-success-bg { background: var(--cd-success-soft); }
 .cd-success-text { color: var(--cd-success); }
 .cd-warn-bg { background: var(--cd-warning-soft); }
 .cd-warn-text { color: var(--cd-warning); }
 
-/* ---------------- 카드 프레임 (글라스) ----------------
- * backdrop-filter 는 -webkit- 접두 병기. 성능 이슈 시 목록 "행" 단위가 아닌
- * 카드/패널 단위에만 blur 를 적용할 것. */
+/* ---------------- 카드 프레임 ---------------- */
 .cd-card {
   background: var(--cd-card);
-  backdrop-filter: var(--cd-blur);
-  -webkit-backdrop-filter: var(--cd-blur);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   border: 1px solid var(--cd-border);
-  border-radius: 18px;
-  /* 0 0 0 1px 링 = 카드와 캔버스의 경계선. 흰 보더(광택)와 함께 이중으로 둘러 밝은 배경에서도
-   * 카드 윤곽이 읽히게 한다. */
-  box-shadow: 0 0 0 1px var(--cd-ring), var(--cd-shadow);
+  border-radius: var(--cd-radius-card);
+  box-shadow: none;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -272,8 +221,8 @@
 }
 
 .cd-card-title {
-  font-size: 0.875rem; /* 14px — 카드 제목 14/800 */
-  font-weight: 800;
+  font-size: var(--precision-ui-font-section);
+  font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--cd-text);
   display: inline-flex;
@@ -301,7 +250,7 @@
 .cd-label {
   display: block;
   font-size: 0.75rem;
-  font-weight: 700;
+  font-weight: 500;
   color: var(--cd-muted);
   margin-bottom: 0.35rem;
 }
@@ -312,20 +261,20 @@
   width: 100%;
   padding: 0.5rem 0.75rem;
   font-size: 0.8125rem;
-  border-radius: 10px;
-  background: var(--cd-surface);
+  border-radius: var(--cd-radius-control);
+  background: var(--cd-card-solid);
   border: 1px solid var(--cd-line);
   color: var(--cd-text);
-  transition: all 0.18s ease;
+  transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
 }
 
-/* `.cd-fields-white` 스코프 안에서는 입력류를 불투명 흰색(카드 solid)으로 — 글라스 위에서
- * 반투명 입력이 겹쳐 읽히는 것을 막는다. (계약 대시보드/빌링은 이 클래스 미사용) */
+/* 기존 cd-fields-white 클래스도 테마별 불투명 입력을 유지한다. */
 .cd-fields-white .cd-input,
 .cd-fields-white .cd-select,
 .cd-fields-white .cd-textarea {
   background: var(--cd-card-solid);
 }
+.cd-input, .cd-select { min-height: var(--precision-ui-control-height); line-height: 18px; }
 .cd-input::placeholder,
 .cd-textarea::placeholder { color: var(--cd-faint); }
 .cd-input:focus,
@@ -367,26 +316,27 @@
   gap: 0.4rem;
   padding: 0.5rem 0.9rem;
   font-size: 0.8125rem;
-  font-weight: 700;
-  line-height: 1;
-  border-radius: 11px;
+  font-weight: 500;
+  line-height: 18px;
+  min-height: var(--precision-ui-control-height);
+  border-radius: var(--cd-radius-control);
   border: 1px solid transparent;
   background: var(--cd-card-solid);
   color: var(--cd-text);
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.18s ease;
+  transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
 }
 .cd-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.cd-btn-sm { padding: 0.38rem 0.7rem; font-size: 0.75rem; border-radius: 9px; }
+.cd-btn-sm { min-height: var(--precision-ui-control-height-sm); padding: 6px 12px; font-size: 13px; border-radius: var(--cd-radius-control); }
 .cd-btn-block { width: 100%; }
 
-/* 주 CTA = 블루→바이올렛 그라데이션. */
-.cd-btn-primary { background: var(--cd-grad); color: #fff; box-shadow: var(--cd-grad-shadow); }
+/* 주 CTA는 작업면당 하나, 단색 Primary와 전용 글자색을 짝으로 쓴다. */
+.cd-btn.cd-btn-primary { background: var(--cd-action-background); color: var(--cd-action-foreground); border-color: transparent; box-shadow: none; font-weight: 600; }
 .cd-btn-primary:not(:disabled):hover { filter: brightness(1.05); }
 
 .cd-btn-soft { background: var(--cd-primary-soft); color: var(--cd-primary); }
-.cd-btn-soft:not(:disabled):hover { background: var(--cd-grad); color: #fff; }
+.cd-btn-soft:not(:disabled):hover { background: var(--cd-surface); color: var(--cd-primary-strong); }
 
 .cd-btn-ghost {
   background: var(--cd-surface);
@@ -398,17 +348,18 @@
 .cd-mail-surface .cd-btn-ghost { background: var(--cd-card-solid); }
 
 .cd-btn-danger { background: var(--cd-error-soft); color: var(--cd-error); border-color: var(--cd-error-soft); }
-.cd-btn-danger:not(:disabled):hover { background: var(--cd-error); color: #fff; }
+.cd-btn-danger:not(:disabled):hover { background: var(--cd-error); color: var(--cd-error-foreground); }
 
 /* ---------------- 칩 (필터/세그먼트) ---------------- */
 .cd-chip {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.4rem 0.85rem;
-  border-radius: 10px;
+  min-height: 32px;
+  padding: 6px 12px;
+  border-radius: var(--cd-radius-control);
   font-size: 0.75rem;
-  font-weight: 700;
+  font-weight: 500;
   line-height: 1;
   cursor: pointer;
   background: var(--cd-chip-bg);
@@ -417,13 +368,37 @@
   transition: background 0.12s ease, color 0.12s ease;
 }
 .cd-chip:hover { background: var(--cd-hover); color: var(--cd-text); }
-.cd-chip-sm { padding: 0.32rem 0.7rem; font-size: 0.71875rem; }
-/* 선택 칩 = 그라데이션 채움(사업장 필터 칩 등). */
+.cd-chip-sm { min-height: 32px; padding: 6px 12px; font-size: 12px; }
+/* 선택형 버튼은 단일 테두리와 같은 계열의 옅은 그라데이션으로 표시한다. */
 .cd-chip[data-active="true"] {
-  background: var(--cd-grad);
-  border-color: transparent;
-  color: #ffffff;
-  box-shadow: var(--cd-grad-shadow);
+  border-color: var(--cd-primary);
+  color: var(--cd-primary);
+  box-shadow: none;
+}
+
+:is(.cd-chip, .ui-chip, .rule-chip, .cd-choice, .cdb-option-box)[data-active="true"],
+.range-toggle button[data-active="true"],
+.cd-tab[aria-selected="true"],
+.cdb-tab[data-active="true"] {
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--cd-choice-color, var(--cd-primary)) 7%, var(--cd-card)),
+    color-mix(in srgb, var(--cd-choice-color, var(--cd-primary)) 14%, var(--cd-card))) !important;
+  border-color: var(--cd-choice-color, var(--cd-primary)) !important;
+  color: var(--cd-choice-text, var(--cd-choice-color, var(--cd-primary))) !important;
+  box-shadow: none !important;
+}
+
+/* 기존 테두리가 없는 개별 선택 버튼도 크기 변화 없이 같은 한 줄 경계를 갖는다. */
+.cd-choice[data-active="true"] {
+  outline: 1px solid var(--cd-choice-color, var(--cd-primary));
+  outline-offset: -1px;
+}
+
+/* 클릭 선택에는 추가 링이 없고, 키보드 포커스는 테두리와 겹쳐 한 줄로 보인다. */
+:is(.cdash, .cdash-vars) :is(.cd-chip, .ui-chip, .rule-chip, .cd-choice, .cd-tab, .cdb-tab, .range-toggle button):focus-visible {
+  outline: 2px solid var(--cd-choice-color, var(--cd-primary));
+  outline-offset: -2px;
+  box-shadow: none;
 }
 
 /* ---------------- 상태 pill (soft-tint) ---------------- */
@@ -433,8 +408,8 @@
   gap: 0.3rem;
   padding: 0.16rem 0.55rem;
   border-radius: 9999px;
-  font-size: 0.6875rem;
-  font-weight: 700;
+  font-size: 0.75rem;
+  font-weight: 500;
   line-height: 1.5;
   white-space: nowrap;
 }
@@ -461,20 +436,25 @@
 
 /* ---------------- 테이블 ---------------- */
 .cd-table { width: 100%; border-collapse: collapse; }
+/* 앱 데이터 표의 열 머리글. 문서·인쇄 양식은 명시적으로 이 클래스를 쓰지 않는다. */
+.cd-table > thead, .cd-table-head { background-color: var(--cd-table-header-bg); }
+/* 기존 상단 간격이 12px 미만인 표의 기존 wrapper에만 적용한다. */
+.cd-table-section { margin-block-start: var(--cd-table-toolbar-gap); }
+:where(.cd-table thead th) { text-align: left; }
 .cd-table thead th {
-  text-align: left;
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--cd-faint);
-  padding: 0.6rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: normal;
+  color: var(--cd-muted);
+  height: var(--precision-ui-table-header-height);
+  padding: 8px 12px;
   border-bottom: 1px solid var(--cd-hairline);
   white-space: nowrap;
 }
 .cd-table tbody td {
-  padding: 0.7rem 0.75rem;
-  font-size: 0.8125rem;
+  padding: 8px 12px;
+  height: var(--precision-ui-table-row-height);
+  font-size: var(--precision-ui-font-table);
   color: var(--cd-text);
   border-bottom: 1px solid var(--cd-hairline-row);
 }
@@ -486,18 +466,18 @@
 .cd-row-hover { transition: background 0.12s ease, color 0.12s ease; }
 .cd-row-hover:hover { background: var(--cd-hover); }
 
-/* 선택 가능한 리스트 아이템 (좌측 목록 등) — 비활성 글라스 칩 / 선택 흰 글라스 필 */
+/* 선택 가능한 리스트 항목. */
 .cd-listitem {
   background: var(--cd-chip-bg);
   border: 1px solid var(--cd-chip-border);
-  box-shadow: 0 0 0 1px var(--cd-ring);
+  box-shadow: none;
   transition: background 0.12s ease, border-color 0.12s ease;
 }
 .cd-listitem:hover { background: var(--cd-hover); }
 .cd-listitem[data-active="true"] {
   background: var(--cd-active-fill);
   border-color: var(--cd-active-border);
-  box-shadow: 0 0 0 1px var(--cd-ring), var(--cd-active-shadow);
+  box-shadow: none;
 }
 
 /* ---------------- 모달 / 드로어 ---------------- */
@@ -505,22 +485,20 @@
   position: fixed;
   inset: 0;
   z-index: 100;
-  background: rgba(23, 28, 44, 0.42);
-  backdrop-filter: blur(3px);
-  -webkit-backdrop-filter: blur(3px);
+  background: var(--cd-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 1rem;
   animation: cd-fade 0.18s ease;
 }
-/* 모달 본체는 스크림 위에 놓이므로 불투명 카드색(가독성 우선) — 라운드는 프레임 24. */
+/* 모달 본체는 불투명 표면과 한 단계 중립 그림자를 사용한다. */
 .cd-modal {
   background: var(--cd-card-solid);
   color: var(--cd-text);
   border: 1px solid var(--cd-border);
-  border-radius: 24px;
-  box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.45), 0 8px 20px -8px rgba(0, 0, 0, 0.3);
+  border-radius: var(--cd-radius-card);
+  box-shadow: var(--cd-shadow-dialog);
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -534,7 +512,7 @@
   from { opacity: 0; transform: translateY(-4px) scale(0.985); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
-.cd-reveal { opacity: 0; transform: translateY(6px); animation: cd-reveal 0.4s ease forwards; }
+.cd-reveal { opacity: 1; transform: none; }
 @keyframes cd-reveal { to { opacity: 1; transform: translateY(0); } }
 
 /* ---------------- 스크롤바 ---------------- */
@@ -547,7 +525,7 @@
   background: var(--cd-card-solid) !important;
   border: 1px solid var(--cd-line) !important;
   color: var(--cd-text) !important;
-  box-shadow: var(--cd-shadow) !important;
+  box-shadow: var(--cd-shadow-popover) !important;
 }
 .cdash .apexcharts-tooltip-title {
   background: var(--cd-surface) !important;
@@ -618,5 +596,26 @@
 .cd-mail-editor td[data-cell-sel], .cd-mail-editor th[data-cell-sel] {
   outline: 2px solid var(--cd-primary);
   outline-offset: -2px;
-  background-image: linear-gradient(rgba(93, 135, 255, 0.14), rgba(93, 135, 255, 0.14));
+  background-color: var(--cd-row-selected);
+}
+
+/* 기존 underline/pill 형태를 보존하고 표면·글자만 조정한다. */
+.cd-tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; background: var(--cd-surface); border: 1px solid var(--cd-border); border-radius: var(--cd-radius-card); }
+.cd-tab { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 6px 12px; border: 1px solid transparent; border-radius: var(--cd-radius-control); font-size: 13px; color: var(--cd-muted); }
+.cd-tab:hover { color: var(--cd-text); }
+.cd-tab[aria-selected="true"] { background: var(--cd-card); border-color: var(--cd-border); color: var(--cd-text); font-weight: 500; }
+.cd-tab:disabled { opacity: .5; cursor: not-allowed; }
+.cd-tabs[data-variant="underline"] { gap: 24px; padding: 0; border-width: 0 0 1px; border-radius: 0; background: transparent; }
+.cd-tabs[data-variant="underline"] .cd-tab { padding: 10px 4px; border-width: 0 0 2px; border-radius: var(--cd-radius-control); background: transparent; }
+.cd-tabs[data-variant="underline"] .cd-tab[aria-selected="true"] { border-color: var(--cd-primary); color: var(--cd-primary); }
+.cd-icon-button { width: 36px; height: 36px; padding: 0; border-radius: var(--cd-radius-control); }
+.cd-icon-button-sm { width: 32px; height: 32px; }
+.cd-input:focus-visible, .cd-select:focus-visible, .cd-textarea:focus-visible {
+  outline: 2px solid var(--cd-primary);
+  outline-offset: 2px;
+}
+.cd-table tbody tr[aria-selected="true"] { background: var(--cd-row-selected); }
+@media (min-width: 1600px) { .cd-table tbody td { font-size: var(--precision-ui-font-table-wide); } }
+@media (prefers-reduced-motion: reduce) {
+  .cdash *, .cdash-vars * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }

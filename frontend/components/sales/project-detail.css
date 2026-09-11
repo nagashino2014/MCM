@@ -1,0 +1,23 @@
+/* 화면 해상도보다 실제 브라우저 가용 폭으로 판단한다. 확대된 4K에서도 FHD 배치를 쓴다. */
+.mcm-sales-detail { height: auto; min-height: 100%; }
+.mcm-sales-detail-layout { display: grid; gap: 12px; min-width: 0; padding-bottom: 8px; }
+.mcm-sales-detail-primary { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.mcm-sales-detail-overview { min-height: 420px; }
+.mcm-sales-detail-secondary { display: grid; gap: 12px; min-width: 0; }
+.mcm-sales-detail-timeline { min-width: 0; min-height: 400px; max-height: 560px; }
+.mcm-sales-detail-contacts { min-width: 0; min-height: 280px; }
+
+/* FHD 하단: 이력과 담당자를 나란히 놓고 달력의 가로 폭을 확보한다. */
+@media (min-width: 1600px) {
+  .mcm-sales-detail-secondary { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
+}
+
+/* 넓은 작업 환경에서는 원본 640px 우측 패널과 7:3 높이 비율을 유지한다. */
+@media (min-width: 2560px) {
+  .mcm-sales-detail { height: 100%; }
+  .mcm-sales-detail-layout { grid-template-columns: minmax(0, 1fr) 640px; flex: 1; min-height: 0; padding-bottom: 0; }
+  .mcm-sales-detail-primary { min-height: 0; }
+  .mcm-sales-detail-overview { flex: 1; min-height: 0; }
+  .mcm-sales-detail-secondary { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 7fr) minmax(0, 3fr); min-height: 0; }
+  .mcm-sales-detail-timeline, .mcm-sales-detail-contacts { min-height: 0; max-height: none; }
+}

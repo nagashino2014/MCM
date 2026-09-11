@@ -296,7 +296,9 @@ export default function BonusEvaluationsBoard() {
                 key={c.key}
                 type="button"
                 onClick={() => setCategory(c.key)}
-                className={`rounded-xl px-3 py-2 text-sm font-semibold border transition ${
+                data-active={category === c.key}
+                aria-pressed={category === c.key}
+                className={`cd-choice rounded-xl px-3 py-2 text-sm font-semibold border transition ${
                   category === c.key ? "cd-fill-primary text-white border-transparent" : "cd-border-c cd-text"
                 }`}
               >
@@ -312,7 +314,9 @@ export default function BonusEvaluationsBoard() {
                 key={kind}
                 type="button"
                 onClick={() => toggleChangeFilter(kind)}
-                className={`rounded-xl px-3 py-2 text-sm font-semibold border transition ${
+                data-active={changeFilter.has(kind)}
+                aria-pressed={changeFilter.has(kind)}
+                className={`cd-choice rounded-xl px-3 py-2 text-sm font-semibold border transition ${
                   changeFilter.has(kind) ? "cd-fill-primary text-white border-transparent" : "cd-border-c cd-text"
                 }`}
               >
@@ -385,7 +389,9 @@ export default function BonusEvaluationsBoard() {
             <button
               type="button"
               onClick={() => setTab("participation")}
-              className={`rounded-xl px-4 py-2 text-sm font-semibold border ${
+              data-active={tab === "participation"}
+              aria-pressed={tab === "participation"}
+              className={`cd-choice rounded-xl px-4 py-2 text-sm font-semibold border ${
                 tab === "participation" ? "cd-fill-primary text-white border-transparent" : "cd-border-c cd-text"
               }`}
             >
@@ -394,7 +400,9 @@ export default function BonusEvaluationsBoard() {
             <button
               type="button"
               onClick={() => setTab("grade")}
-              className={`rounded-xl px-4 py-2 text-sm font-semibold border ${
+              data-active={tab === "grade"}
+              aria-pressed={tab === "grade"}
+              className={`cd-choice rounded-xl px-4 py-2 text-sm font-semibold border ${
                 tab === "grade" ? "cd-fill-primary text-white border-transparent" : "cd-border-c cd-text"
               }`}
             >
@@ -430,7 +438,7 @@ export default function BonusEvaluationsBoard() {
               </div>
             ) : (
               <table className="w-full text-sm" style={{ minWidth: 950 + maxSlots * 126 }}>
-                <thead>
+                <thead className="cd-table-head">
                   <tr className="cd-text-faint text-[11px] border-b cd-border-c">
                     <th className="text-left font-semibold p-2.5" style={{ minWidth: 320 }}>용역명</th>
                     <th className="text-left font-semibold p-2.5" style={{ minWidth: 190 }}>발주처</th>

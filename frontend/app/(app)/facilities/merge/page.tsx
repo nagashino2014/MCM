@@ -431,7 +431,7 @@ function Inner() {
         icon={<GitMerge className="w-5 h-5" />}
         eyebrow="Facility Merge"
         title="사업장 중복 병합"
-        subtitle="사업자번호·상호·사업장 소재지 일치 후보를 카테고리별로 확인하고, 직접 상호 검색으로 병합 대상도 구성할 수 있습니다."
+        help="사업자번호·상호·소재지가 같은 후보를 확인하거나 상호를 직접 검색해 병합 대상을 선택합니다."
         actions={
           <>
             <Link href="/facilities" className="cd-btn cd-btn-ghost cd-btn-sm">
@@ -612,7 +612,7 @@ function Inner() {
                       : activeMatch
                       ? `${MATCH_LABEL[activeMatch.matchType]} · ${activeMatch.matchValue}`
                       : "선택한 후보입니다."}{" "}
-                    유지할 facility(target)를 선택하세요.
+                    유지할 사업장을 선택하세요.
                   </p>
                 </div>
                 {active?.kind === "auto" && (

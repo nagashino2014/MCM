@@ -354,7 +354,7 @@ export default function BonusStatementsBoard() {
                     href={`/approval?docId=${encodeURIComponent(plan.docId)}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-[11px] font-semibold rounded-lg px-2 py-1.5 border cd-border-c inline-flex items-center gap-1 whitespace-nowrap"
+                    className="cd-action text-[11px] font-semibold rounded-lg px-2 py-1.5 border cd-border-c inline-flex items-center gap-1 whitespace-nowrap"
                     style={plan.status === "approved" ? { color: "var(--cd-success)" } : { color: "var(--cd-primary)" }}
                     title="성과급 기안 문서 열기"
                   >
@@ -492,7 +492,9 @@ export default function BonusStatementsBoard() {
             <button
               type="button"
               onClick={() => setTab("statements")}
-              className={`rounded-xl px-4 py-2 text-sm font-semibold border ${
+              data-active={tab === "statements"}
+              aria-pressed={tab === "statements"}
+              className={`cd-choice rounded-xl px-4 py-2 text-sm font-semibold border ${
                 tab === "statements" ? "cd-fill-primary text-white border-transparent" : "cd-border-c cd-text"
               }`}
             >
@@ -501,7 +503,9 @@ export default function BonusStatementsBoard() {
             <button
               type="button"
               onClick={() => setTab("related")}
-              className={`rounded-xl px-4 py-2 text-sm font-semibold border ${
+              data-active={tab === "related"}
+              aria-pressed={tab === "related"}
+              className={`cd-choice rounded-xl px-4 py-2 text-sm font-semibold border ${
                 tab === "related" ? "cd-fill-primary text-white border-transparent" : "cd-border-c cd-text"
               }`}
             >
@@ -512,14 +516,18 @@ export default function BonusStatementsBoard() {
                 <button
                   type="button"
                   onClick={() => setView("all")}
-                  className={`px-3 py-1.5 text-xs font-semibold ${view === "all" ? "cd-fill-primary text-white" : "cd-text"}`}
+                  data-active={view === "all"}
+                  aria-pressed={view === "all"}
+                  className={`cd-choice px-3 py-1.5 text-xs font-semibold ${view === "all" ? "cd-fill-primary text-white" : "cd-text"}`}
                 >
                   전체
                 </button>
                 <button
                   type="button"
                   onClick={() => setView("individual")}
-                  className={`px-3 py-1.5 text-xs font-semibold ${view === "individual" ? "cd-fill-primary text-white" : "cd-text"}`}
+                  data-active={view === "individual"}
+                  aria-pressed={view === "individual"}
+                  className={`cd-choice px-3 py-1.5 text-xs font-semibold ${view === "individual" ? "cd-fill-primary text-white" : "cd-text"}`}
                 >
                   개별
                 </button>
@@ -578,7 +586,7 @@ export default function BonusStatementsBoard() {
                 </div>
               ) : (
                 <table className="w-full text-sm" style={{ minWidth: 860 }}>
-                  <thead>
+                  <thead className="cd-table-head">
                     <tr className="cd-text-faint text-[11px] border-b cd-border-c">
                       <th className="text-left font-semibold p-2.5">성명</th>
                       <th className="text-left font-semibold p-2.5">소속</th>
@@ -617,7 +625,7 @@ export default function BonusStatementsBoard() {
                                     href={`/api/bonus/statements/pdf?period=${period}&employeeId=${encodeURIComponent(row.employeeId)}`}
                                     target="_blank"
                                     rel="noreferrer"
-                                    className="text-[11px] font-semibold rounded-md px-1.5 py-0.5 border cd-border-c cd-text"
+                                    className="cd-action text-[11px] font-semibold rounded-md px-1.5 py-0.5 border cd-border-c cd-text"
                                     title="명세서 PDF 미리보기"
                                   >
                                     PDF
@@ -701,7 +709,7 @@ export default function BonusStatementsBoard() {
                     <p className="p-6 text-center text-sm cd-text-faint">용역별 참여 산정 내역이 없습니다.</p>
                   ) : (
                     <table className="w-full text-sm" style={{ minWidth: 820 }}>
-                      <thead>
+                      <thead className="cd-table-head">
                         <tr className="cd-text-faint text-[11px] border-b cd-border-c">
                           <th className="text-left font-semibold p-2.5">용역명</th>
                           <th className="text-left font-semibold p-2.5">발주처</th>
@@ -762,12 +770,12 @@ export default function BonusStatementsBoard() {
                 </div>
 
                 <div>
-                  <h4 className="text-xs font-bold cd-text-faint mb-1.5">본부장 성과급 (비율 확정)</h4>
+                  <h4 className="text-xs font-bold cd-text-faint mb-3">본부장 성과급 (비율 확정)</h4>
                   {board.deptHeads.length === 0 ? (
                     <p className="text-sm cd-text-faint p-3">본부장 비율이 설정된 본부가 없습니다. (지급 대상 LIST에서 설정)</p>
                   ) : (
                     <table className="w-full text-sm">
-                      <thead>
+                      <thead className="cd-table-head">
                         <tr className="cd-text-faint text-[11px] border-b cd-border-c">
                           <th className="text-left font-semibold p-2">본부</th>
                           <th className="text-left font-semibold p-2">본부장(추정)</th>
@@ -790,9 +798,9 @@ export default function BonusStatementsBoard() {
                 </div>
 
                 <div>
-                  <h4 className="text-xs font-bold cd-text-faint mb-1.5">개별 배분 (할당액 한도 내, 미만 허용)</h4>
+                  <h4 className="text-xs font-bold cd-text-faint mb-3">개별 배분 (할당액 한도 내, 미만 허용)</h4>
                   <table className="w-full text-sm">
-                    <thead>
+                    <thead className="cd-table-head">
                       <tr className="cd-text-faint text-[11px] border-b cd-border-c">
                         <th className="text-left font-semibold p-2">성명</th>
                         <th className="text-left font-semibold p-2">소속</th>

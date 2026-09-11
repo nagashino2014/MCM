@@ -555,7 +555,7 @@ export default function TaxInvoiceIssueModal({
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className="text-[11px] cd-text-faint">추가 수신처</span>
                     {ccEmails.filter((e) => e !== email).map((address) => (
-                      <span key={address} className="inline-flex items-center gap-1 rounded-full border cd-border-c px-2 py-0.5 text-[11px]">
+                      <span key={address} className="cd-action inline-flex items-center gap-1 rounded-full border cd-border-c px-2 py-0.5 text-[11px]">
                         {address}
                         <button type="button" className="cd-text-faint" onClick={() => toggleCc(address)}>
                           <X className="w-3 h-3" />
@@ -687,7 +687,7 @@ export default function TaxInvoiceIssueModal({
                       )}
                     </div>
                   )}
-                  <div className="grid grid-cols-[1fr_92px_56px_104px_112px_150px_24px] gap-1.5 mt-1 text-[11px] cd-text-faint">
+                  <div className="cd-table-head grid grid-cols-[1fr_92px_56px_104px_112px_150px_24px] gap-1.5 mt-3 py-2 text-[11px] cd-text-faint">
                     <span>품목명</span>
                     <span>규격</span>
                     <span className="text-right">수량</span>

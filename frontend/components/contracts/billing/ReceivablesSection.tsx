@@ -258,7 +258,7 @@ export function ReceivablesSection({ theme }: { theme: CdTheme }) {
 
           {/* 3개월 이상 장기 미수금 리스트 */}
           <div className="cdb-box p-4">
-            <div className="flex items-center justify-between gap-2 mb-2">
+            <div className="flex items-center justify-between gap-2 mb-3">
               <p className="cd-card-title">
                 <span className="cd-title-icon">
                   <FileWarning className="w-4 h-4" />
@@ -271,8 +271,8 @@ export function ReceivablesSection({ theme }: { theme: CdTheme }) {
             </div>
 
             <div
-              className="cdb-longterm-row !cursor-default text-[10px] font-extrabold"
-              style={{ color: "var(--cd-faint)", background: "transparent" }}
+              className="cdb-longterm-row cd-table-head !cursor-default text-[10px] font-extrabold"
+              style={{ color: "var(--cd-faint)" }}
             >
               <span>용역명</span>
               <span>조건</span>
@@ -381,7 +381,7 @@ export function ReceivablesSection({ theme }: { theme: CdTheme }) {
           </div>
 
           {/* 경과 필터 태그 + 요약 */}
-          <div className="flex items-center gap-2 mb-2 flex-wrap">
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
             {AGING_FILTERS.map((f) => (
               <button
                 key={f.id}
@@ -410,8 +410,8 @@ export function ReceivablesSection({ theme }: { theme: CdTheme }) {
 
           {/* 열 레이블 */}
           <div
-            className="cdb-recv-row !cursor-default text-[11px] font-extrabold"
-            style={{ color: "var(--cd-faint)", background: "transparent" }}
+            className="cdb-recv-row cd-table-head !cursor-default text-[11px] font-extrabold"
+            style={{ color: "var(--cd-faint)" }}
           >
             <span>용역명</span>
             <span>조건</span>

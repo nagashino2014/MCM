@@ -226,7 +226,9 @@ export function ApprovalSemanticsBoard() {
                       key={i}
                       type="button"
                       onClick={() => selectEdge(e)}
-                      className={`rounded-lg border px-2 py-1 text-[10.5px] ${on ? "cd-glass-active" : "cd-border-c cd-text-faint cd-row-hover"}`}
+                      data-active={!!on}
+                      aria-pressed={!!on}
+                      className={`cd-choice rounded-lg border px-2 py-1 text-[10.5px] ${on ? "cd-glass-active" : "cd-border-c cd-text-faint cd-row-hover"}`}
                     >
                       {e.formName} → {e.entityLabel}
                       <b className="ml-1" style={{ color: rateColor(rate) }}>
@@ -302,7 +304,7 @@ export function ApprovalSemanticsBoard() {
                       {missingDocs && missingDocs.length > 0 && (
                         <div className="overflow-x-auto">
                           <table className="w-full text-[11.5px]">
-                            <thead>
+                            <thead className="cd-table-head">
                               <tr className="text-left cd-text-faint text-[10.5px]">
                                 <th className="py-1 pr-2 font-semibold">문서번호</th>
                                 <th className="py-1 pr-2 font-semibold">기안자</th>

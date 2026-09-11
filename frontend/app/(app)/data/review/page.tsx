@@ -126,7 +126,7 @@ function ReviewPageInner() {
         icon={<ClipboardCheck className="w-5 h-5" />}
         eyebrow="Data · Review"
         title="데이터 · 검수 대기열"
-        subtitle="OCR 추출 시 신뢰도가 낮거나 필수 항목이 빈 값으로 잡힌 필드가 표시됩니다. 우측 패널에서 source text를 확인한 뒤 확정 값을 입력하세요."
+        help="신뢰도가 낮거나 필수 값이 누락된 추출 결과를 검수합니다. 우측 원문을 확인한 뒤 확정 값을 입력하세요."
         actions={
           <>
             <label className="flex items-center gap-2 text-xs font-bold cd-text-muted">

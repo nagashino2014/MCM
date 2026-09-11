@@ -1642,7 +1642,7 @@ function FacilityContactsModal({
                         setSelectedDepartmentId(department.id);
                         setEditing(false);
                       }}
-                      className={cn("text-left rounded-xl border p-3", selectedDepartmentId === department.id ? "border-[color:var(--cd-primary)] cd-tint-primary" : "cd-border-c cd-surface-bg")}
+                      className={cn("text-left rounded-xl border p-3", selectedDepartmentId === department.id ? "border-[color:var(--cd-primary)] cd-tint-primary" : "cd-border-c cd-solid-bg")}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-sm font-bold cd-text truncate">{department.departmentName}</span>
@@ -1666,7 +1666,7 @@ function FacilityContactsModal({
                       setSelectedPersonId(person.id);
                       setEditing(false);
                     }}
-                    className={cn("text-left rounded-xl border p-3", selectedPersonId === person.id ? "border-[color:var(--cd-primary)] cd-tint-primary" : "cd-border-c cd-surface-bg")}
+                    className={cn("text-left rounded-xl border p-3", selectedPersonId === person.id ? "border-[color:var(--cd-primary)] cd-tint-primary" : "cd-border-c cd-solid-bg")}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm font-bold cd-text truncate">{person.personName}</span>
@@ -1678,7 +1678,7 @@ function FacilityContactsModal({
               </div>
             )}
             <div className="mt-3 pt-3 border-t cd-border-c">
-              <div className="rounded-2xl cd-surface-bg border cd-border-c p-3">
+              <div className="rounded-2xl cd-solid-bg border cd-border-c p-3">
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <div>
                     <div className="text-[11px] font-bold cd-text-faint uppercase tracking-wide">
@@ -1876,7 +1876,7 @@ function DepartmentContactPane({
             <div className="flex flex-col gap-2">
               {people.length === 0 && <div className="text-sm cd-text-faint py-4 text-center">등록된 담당 직원이 없습니다.</div>}
               {people.map((person) => (
-                <button key={person.id} type="button" onClick={() => onSelectPerson(person.id)} className="text-left rounded-xl cd-surface-bg border cd-border-c p-2">
+                <button key={person.id} type="button" onClick={() => onSelectPerson(person.id)} className="text-left rounded-xl cd-solid-bg border cd-border-c p-2">
                   <span className="text-sm font-bold cd-text">{person.personName}</span>
                   <span className="text-xs cd-text-faint ml-2">{person.title ?? "직함 미입력"}</span>
                 </button>
@@ -2139,7 +2139,7 @@ function ContactTextarea({ label, value, onChange }: { label: string; value: str
 
 function ContactValue({ label, value, full }: { label: string; value: string | null | undefined; full?: boolean }) {
   return (
-    <div className={cn("rounded-xl cd-surface-bg border cd-border-c p-3", full && "sm:col-span-2")}>
+    <div className={cn("rounded-xl cd-solid-bg border cd-border-c p-3", full && "sm:col-span-2")}>
       <div className="text-[10px] font-bold cd-text-faint uppercase tracking-wide">{label}</div>
       <div className="text-sm font-semibold cd-text mt-1 whitespace-pre-line">{value || "—"}</div>
     </div>
@@ -2153,7 +2153,7 @@ function ContactLogBox({ logs }: { logs: FacilityContactLog[] }) {
       <div className="max-h-44 overflow-y-auto scrollbar-hide flex flex-col gap-2">
         {logs.length === 0 && <div className="text-sm cd-text-faint py-4 text-center">등록된 변동 이력이 없습니다.</div>}
         {logs.map((log) => (
-          <div key={log.id} className="rounded-xl cd-surface-bg border cd-border-c p-2 text-xs">
+          <div key={log.id} className="rounded-xl cd-solid-bg border cd-border-c p-2 text-xs">
             <div className="flex items-center justify-between gap-2">
               <b className="cd-text">{contactEventLabel(log.eventType)}</b>
               <span className="cd-text-faint">{log.eventDate ?? log.createdAt?.slice(0, 10) ?? "—"}</span>
@@ -2391,7 +2391,7 @@ function BusinessCertificatesSection({
                   href={item.publicPath}
                   target="_blank"
                   rel="noreferrer"
-                  className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold cd-text-muted cd-surface-bg hover:bg-[color:var(--cd-surface)]"
+                  className="cd-action shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold cd-text-muted cd-surface-bg hover:bg-[color:var(--cd-surface)]"
                 >
                   PDF 보기
                 </a>

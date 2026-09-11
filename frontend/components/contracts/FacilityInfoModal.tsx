@@ -377,7 +377,7 @@ function DepositHistoryModal({
           ) : (
             <div className="overflow-x-auto rounded-2xl border cd-border-c">
               <table className="w-full text-sm min-w-[860px]">
-                <thead>
+                <thead className="cd-table-head">
                   <tr className="text-left text-[11px] cd-text-faint border-b cd-border-c">
                     <th className="px-3 py-2 font-bold">용역명</th>
                     <th className="px-3 py-2 font-bold">청구 단계</th>

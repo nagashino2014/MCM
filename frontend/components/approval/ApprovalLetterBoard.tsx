@@ -129,7 +129,7 @@ export function FacilityRecipientPicker({
       {list.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {list.map((r, i) => (
-            <span key={i} className="inline-flex items-center gap-1.5 rounded-full border cd-border-c pl-2.5 pr-1.5 py-1 text-[11.5px] cd-text">
+            <span key={i} className="cd-action inline-flex items-center gap-1.5 rounded-full border cd-border-c pl-2.5 pr-1.5 py-1 text-[11.5px] cd-text">
               <span className="font-semibold">{r.name || r.facilityName}</span>
               {r.bizNo && <span className="cd-text-faint">{r.bizNo}</span>}
               <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" onClick={() => onChange(list.filter((_, xi) => xi !== i))}>
@@ -301,7 +301,7 @@ export function RecipientPicker({
       {list.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {list.map((r, i) => (
-            <span key={i} className="inline-flex items-center gap-1.5 rounded-full border cd-border-c pl-2.5 pr-1.5 py-1 text-[11.5px] cd-text">
+            <span key={i} className="cd-action inline-flex items-center gap-1.5 rounded-full border cd-border-c pl-2.5 pr-1.5 py-1 text-[11.5px] cd-text">
               <span className="font-semibold">{r.facilityName ? `${r.facilityName} · ` : ""}{r.name}{r.title ? ` ${r.title}` : ""}</span>
               <span className={r.email ? "cd-text-faint" : "text-[color:var(--cd-danger,#FA896B)]"}>{r.email || "메일 없음"}</span>
               <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" onClick={() => onChange(list.filter((_, xi) => xi !== i))}>
@@ -1356,7 +1356,7 @@ export function ApprovalLetterBoard() {
               <div className="flex flex-wrap items-center gap-1">
                 <span className="text-[10.5px] cd-text-faint mr-0.5">불러오기</span>
                 {presets.map((p) => (
-                  <span key={p.presetId} className="inline-flex items-center rounded-full border cd-border-c overflow-hidden">
+                  <span key={p.presetId} className="cd-action inline-flex items-center rounded-full border cd-border-c overflow-hidden">
                     <button type="button" className="text-[11px] px-2 py-0.5 hover:cd-tint-primary" onClick={() => applyPreset(p)} title="이 결재선 불러오기">
                       {p.name}
                     </button>

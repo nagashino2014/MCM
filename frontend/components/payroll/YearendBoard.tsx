@@ -179,7 +179,7 @@ export default function YearendBoard() {
 
   return (
     <>
-      <CdPageHeader title="연말정산" subtitle="" />
+      <CdPageHeader title="연말정산" />
       <div className="cd-card p-4">
         <div className="flex items-center gap-2 flex-wrap mb-2">
           <div className="cd-card-title mr-auto">귀속 {year}년 — 직원별 정산</div>
@@ -201,7 +201,7 @@ export default function YearendBoard() {
         {notice && <div className="text-sm mb-2" style={{ color: "var(--cd-success,#13DEB9)" }}>{notice}</div>}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead>
+            <thead className="cd-table-head">
               <tr className="cd-text-muted text-left">
                 <th className="py-1.5 pr-3 font-normal">직원</th>
                 <th className="py-1.5 pr-3 font-normal">부서</th>

@@ -13,8 +13,9 @@ import {
 // 타임라인은 스케쥴 날짜순으로 세운다. 아래 순서는 같은 날짜일 때의 tie-break 용도.
 const STAGE_FLOW: SalesActivityType[] = ["telemarketing", "email", "visit", "site_briefing", "quote", "proposal_meeting", "bid", "result"];
 
-// 경과 미입력 태그 테두리 — 전화 마케팅 캘린더 태그와 동일 색
+// 단계 테두리와 별개인 경과 미입력 표시 — 전화 마케팅 캘린더 태그와 동일 색
 const PENDING_COLOR = ACTIVITY_TYPE_META.telemarketing.color;
+const CURRENT_STAGE_COLOR = "#7EBA56";
 
 function whenOf(a: SalesActivity): string {
   return (a.scheduledAt ?? a.occurredAt ?? a.createdAt ?? "").slice(0, 16);
@@ -109,18 +110,28 @@ export function SalesProgressCard({ project, activities, orderInfo }: { project:
           <div className="absolute left-1 right-2 top-1/2 -translate-y-1/2 h-2 rounded-full pointer-events-none"
             style={{ background: "linear-gradient(90deg, #FFE9A8, #FDC748)" }} />
           {flowTags.map((t) => {
+            const current = info.activeType === t;
             const future = info.futureTypes.has(t);
             const pending = !future && info.pendingTypes.has(t);
+            const progressState = current ? "current" : future ? "future" : "past";
+            const statusLabel = current ? "현재 단계" : future ? "예정 단계" : "지난 단계";
+            const borderColor = current ? CURRENT_STAGE_COLOR : future ? "var(--cd-primary)" : "var(--cd-muted)";
             // 배경은 반드시 불투명(--cd-card-solid) — 글라스 토큰을 쓰면 아래 진행 바가 비쳐
             // 태그가 투명하게 보인다.
             const style = future
-              ? { background: "var(--cd-card-solid)", border: "1.5px solid var(--cd-primary)", color: "var(--cd-primary)" }
+              ? { background: "var(--cd-card-solid)", border: `1.5px solid ${borderColor}`, color: "var(--cd-primary)" }
               : pending
-              ? { background: "var(--cd-card-solid)", border: `1.5px solid ${PENDING_COLOR}`, color: "var(--cd-text)" }
-              : { background: "var(--cd-card-solid)", border: "1px solid var(--cd-ring)", color: "var(--cd-muted)" };
+              ? { background: "var(--cd-card-solid)", border: `1.5px solid ${borderColor}`, color: "var(--cd-text)" }
+              : { background: "var(--cd-card-solid)", border: `1px solid ${borderColor}`, color: "var(--cd-muted)" };
             return (
-              <span key={t} className="relative z-10 rounded-full px-3 py-1 text-xs shrink-0" style={style}>
+              <span key={t} className="relative z-10 rounded-full px-3 py-1 text-xs shrink-0" style={style}
+                data-progress-state={progressState}
+                aria-current={current ? "step" : undefined}
+                title={`${ACTIVITY_TYPE_META[t].label} · ${statusLabel}${pending ? " · 경과 미입력" : ""}`}>
                 {ACTIVITY_TYPE_META[t].short}
+                <span className="sr-only"> · {statusLabel}{pending ? " · 경과 미입력" : ""}</span>
+                {pending && <span aria-hidden className="absolute right-1 top-1 rounded-full"
+                  style={{ width: 5, height: 5, border: `1.5px solid ${PENDING_COLOR}`, background: "var(--cd-card-solid)" }} />}
               </span>
             );
           })}

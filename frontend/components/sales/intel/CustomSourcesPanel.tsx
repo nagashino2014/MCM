@@ -586,10 +586,10 @@ export function CustomSourcesPanel({ purpose = "intel" }: { purpose?: "intel" | 
         icon={<Radar className="w-5 h-5" />}
         eyebrow={isBid ? "Bid · Custom Sources" : "Intel · Custom Sources"}
         title={isBid ? "공공입찰 API 소스" : "커스텀 API 소스"}
-        subtitle={
+        help={
           isBid
-            ? "나라장터 등 공공입찰 API를 등록하면 API Profile을 AI가 자동 생성해 수집합니다. 결과는 공공입찰 종류별 테이블로 적재됩니다."
-            : "임의의 공개 API를 등록하면 API Profile을 AI가 자동 생성해 수집합니다. 결과는 인텔 신호로 적재됩니다."
+            ? "나라장터 등 공공입찰 API를 등록하면 수집 설정을 자동으로 생성합니다. 수집 결과는 공공입찰에서 확인합니다."
+            : "공개 API를 등록하면 수집 설정을 자동으로 생성합니다. 수집 결과는 인텔 신호에서 확인합니다."
         }
         actions={
           <div className="flex items-center gap-2">

@@ -168,7 +168,7 @@ export function MailListPane({
                 <CdDropdown
                   align="left"
                   trigger={() => (
-                    <span className="flex items-center gap-1 px-2 py-1 rounded-md transition-colors cd-text-muted hover:text-[color:var(--cd-text)] cd-row-hover cursor-pointer" role="button" title="보관(카테고리 선택)">
+                    <span className="cd-action flex items-center gap-1 px-2 py-1 rounded-md transition-colors cd-text-muted hover:text-[color:var(--cd-text)] cd-row-hover cursor-pointer" role="button" title="보관(카테고리 선택)">
                       <Archive className="w-4 h-4" />
                       <span className="hidden xl:inline">보관</span>
                     </span>

@@ -173,14 +173,14 @@ function ContactSheet({ contact: c, onClose }: { contact: SalesContact; onClose:
 function ActionButton({ href, icon, label }: { href: string | null; icon: React.ReactNode; label: string }) {
   if (!href) {
     return (
-      <span className="cd-surface-bg rounded-xl py-2.5 flex flex-col items-center gap-1 opacity-40">
+      <span className="cd-action cd-surface-bg rounded-xl py-2.5 flex flex-col items-center gap-1 opacity-40">
         <span className="cd-text-faint">{icon}</span>
         <span className="cd-text-faint text-xs font-bold">{label}</span>
       </span>
     );
   }
   return (
-    <a href={href} className="cd-tint-primary rounded-xl py-2.5 flex flex-col items-center gap-1">
+    <a href={href} className="cd-action cd-tint-primary rounded-xl py-2.5 flex flex-col items-center gap-1">
       <span className="cd-text-primary">{icon}</span>
       <span className="cd-text-primary text-xs font-bold">{label}</span>
     </a>

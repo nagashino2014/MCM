@@ -195,7 +195,7 @@ export function ApprovalLeaveBoard() {
         icon={<CalendarCheck2 className="w-5 h-5" />}
         eyebrow="Approval · Leave"
         title="직원별 휴가 관리"
-        subtitle="연차와 연차 외 휴가(경조·공가·병가)를 날짜별 이력으로 관리합니다. 사용은 휴가신청 승인 시 자동 반영되며 직접 보정할 수 있습니다."
+        help="직원 행을 열고 월을 선택하면 연차·기타 휴가의 일별 내역을 확인하고 보정할 수 있습니다. 휴가신청이 승인되면 사용 내역이 자동 반영됩니다."
         actions={
           <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold flex items-center gap-1.5" onClick={() => router.push("/approval/leave-promotion")}>
             <BellRing className="w-3.5 h-3.5" /> 연차촉진제 관리
@@ -249,7 +249,7 @@ export function ApprovalLeaveBoard() {
         ) : (
           <div className="flex flex-col gap-1.5">
             {/* 헤더 */}
-            <div className="hidden md:grid grid-cols-[1.6fr_1fr_repeat(5,0.7fr)] gap-2 px-3 text-[10.5px] font-bold uppercase tracking-wider cd-text-faint">
+            <div className="cd-table-head hidden md:grid grid-cols-[1.6fr_1fr_repeat(5,0.7fr)] gap-2 px-3 py-2 text-[10.5px] font-bold uppercase tracking-wider cd-text-faint">
               <span>직원</span>
               <span>부서</span>
               <span className="text-right">부여</span>
@@ -278,7 +278,6 @@ export function ApprovalLeaveBoard() {
           </div>
         )}
         <p className="text-[10.5px] cd-text-faint">
-          직원 행을 클릭하면 날짜별 이력이 연차·연차 외로 나뉘어 월별로 펼쳐집니다. 월 태그를 누르면 일별 내역이 표시되고, 직접 추가·수정·삭제할 수 있습니다(초기값 보정).
           &apos;규정 발생&apos;은 근로기준법 기준 자동 계산값(참고)입니다.
         </p>
       </div>
@@ -503,11 +502,13 @@ function MonthGrouped({
                   key={m}
                   type="button"
                   onClick={() => setSel(active ? null : m)}
-                  className={`rounded-lg border px-1.5 py-1 text-[10.5px] font-mono flex flex-col items-center ${active ? "cd-fill-primary border-transparent text-white" : "cd-border-c cd-text hover:cd-tint-primary"}`}
+                  data-active={active}
+                  aria-pressed={active}
+                  className={`cd-choice rounded-lg border px-1.5 py-1 text-[10.5px] font-mono flex flex-col items-center ${active ? "cd-fill-primary border-transparent text-white" : "cd-border-c cd-text hover:cd-tint-primary"}`}
                   title={`${m} · ${fmtDays(days)}일`}
                 >
                   <span>{m}</span>
-                  <span className={active ? "text-white/80" : "cd-text-faint"}>{fmtDays(days)}일</span>
+                  <span className={active ? "opacity-80" : "cd-text-faint"}>{fmtDays(days)}일</span>
                 </button>
               );
             })}

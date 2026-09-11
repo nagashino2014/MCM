@@ -112,8 +112,8 @@ export default function StatementSendModal({
 
         <div className="flex-1 min-h-0 overflow-auto border cd-border-c rounded-2xl">
           <table className="w-full text-xs">
-            <thead>
-              <tr className="cd-text-faint border-b cd-border-c sticky top-0" style={{ background: "var(--cd-card-solid)" }}>
+            <thead className="cd-table-head">
+              <tr className="cd-text-faint border-b cd-border-c sticky top-0" style={{ background: "var(--cd-surface)" }}>
                 <th className="text-left font-semibold p-2">성명</th>
                 <th className="text-left font-semibold p-2">부서</th>
                 <th className="text-right font-semibold p-2">실지급액</th>

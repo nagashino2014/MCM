@@ -52,14 +52,19 @@ $image = "${registry}/${repo}:${Tag}"
 Log "repo root : $repoRoot"
 Log "image     : $image"
 
+# -Force로도 미커밋/미통합 소스 배포를 허용하지 않는다.
+git -C $repoRoot fetch origin --quiet
+if ($LASTEXITCODE -ne 0) { Fail "원격 갱신 실패 — 최신 통합 상태를 확인할 수 없습니다" }
+try { & (Join-Path $PSScriptRoot 'assert-deploy-source.ps1') -RepoRoot $repoRoot }
+catch { Fail $_.Exception.Message }
+
 # ── 갈라진 배포 가드 ────────────────────────────────────────────────
 # 세션 브랜치가 여럿이라, 다른 브랜치의 기능이 빠진 체크아웃에서 배포하면 그 기능이
 # 통째로 사라진 이미지로 덮인다(2026-08-26·08-31 두 차례 실측 사고). 배포 전에 원격
 # 브랜치 중 현재 HEAD 에 없는 커밋이 있으면 나열하고 확인을 받는다. -Force 로 생략.
 if (-not $Force) {
-  git -C $repoRoot fetch origin --quiet 2>$null
   $behind = @()
-  foreach ($b in (git -C $repoRoot branch -r --format "%(refname:short)" | Where-Object { $_ -match "^origin/(claude/|main$)" })) {
+  foreach ($b in (git -C $repoRoot branch -r --format "%(refname:short)" | Where-Object { $_ -match "^origin/(claude/|codex/|main$)" })) {
     $n = git -C $repoRoot rev-list --count "HEAD..$b" 2>$null
     if ($LASTEXITCODE -eq 0 -and [int]$n -gt 0) { $behind += "{0}  (+{1} 커밋)" -f $b, $n }
   }

@@ -86,7 +86,7 @@ export function ApprovalInsightsBoard() {
         icon={<BarChart3 className="w-5 h-5" />}
         eyebrow="Approval · Insights"
         title="결재 인사이트"
-        subtitle="결재 소요시간·반려율·단계 체류를 집계해 병목을 진단합니다. AI 사전검토·요약 도입 효과의 비교 기준이 됩니다."
+        help="결재 소요시간·반려율·단계별 체류시간을 비교해 지연되는 구간을 확인합니다."
       />
 
       {loading ? (
@@ -128,7 +128,7 @@ export function ApprovalInsightsBoard() {
                 <p className="text-[12px] cd-text-faint">데이터가 없습니다.</p>
               ) : (
                 <table className="w-full text-[12.5px]">
-                  <thead>
+                  <thead className="cd-table-head">
                     <tr className="text-left cd-text-faint text-[11px]">
                       <th className="py-1.5 pr-3 font-semibold">결재자</th>
                       <th className="py-1.5 pr-3 font-semibold text-right">처리 건수</th>
@@ -153,7 +153,7 @@ export function ApprovalInsightsBoard() {
                 <p className="text-[12px] cd-text-faint">데이터가 없습니다.</p>
               ) : (
                 <table className="w-full text-[12.5px]">
-                  <thead>
+                  <thead className="cd-table-head">
                     <tr className="text-left cd-text-faint text-[11px]">
                       <th className="py-1.5 pr-3 font-semibold">양식</th>
                       <th className="py-1.5 pr-3 font-semibold text-right">건수</th>

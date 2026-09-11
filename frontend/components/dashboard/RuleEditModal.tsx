@@ -229,6 +229,7 @@ export function RuleEditModal({ rule, extractionRange, onSave, onDelete, onClose
             <label className="switch">
               <input
                 type="checkbox"
+                aria-label="필수 항목"
                 checked={required}
                 onChange={(e) => setRequired(e.target.checked)}
               />

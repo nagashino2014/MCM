@@ -22,9 +22,7 @@ import {
   CALENDAR_TAG_KEYS,
   CALENDAR_TAG_LABELS,
   DEFAULT_CALENDAR_PREFS,
-  TAG_COLOR,
   TAG_COLOR_STRONG,
-  TAG_INK,
   type CalendarAccess,
   type CalendarEntry,
   type CalendarEntryKind,
@@ -204,7 +202,7 @@ function CalendarBoardInner() {
       />
 
       {/* 카테고리 태그 토글(복수) */}
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center gap-1 flex-wrap" role="group" aria-label="캘린더 표시 종류">
         {CALENDAR_TAG_KEYS.map((key) => {
           const on = tags.includes(key);
           const denied = key === "sales" && salesDenied;
@@ -213,7 +211,9 @@ function CalendarBoardInner() {
               key={key}
               type="button"
               onClick={() => toggleTag(key)}
+              aria-pressed={on}
               disabled={denied}
+              data-active={on || undefined}
               title={
                 denied
                   ? "영업 일정 열람 권한이 없습니다."
@@ -221,16 +221,9 @@ function CalendarBoardInner() {
                     ? "면접 일정은 참석자·면접 관리자에게만 표시됩니다."
                     : undefined
               }
-              className="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-bold transition disabled:opacity-40"
-              style={{
-                // 켜진 칩: 연한 파스텔 배경 + 진한 대응색 테두리 — 파스텔 테두리는 배경에 묻힌다.
-                borderColor: on ? TAG_COLOR_STRONG[key] : "var(--cd-line)",
-                background: on ? `color-mix(in srgb, ${TAG_COLOR[key]} 62%, white)` : "transparent",
-                color: on ? TAG_INK : "var(--cd-muted)",
-              }}
+              className="cd-chip cd-chip-sm disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {/* 도트도 진한 대응색 — 파스텔 도트는 연한 배경 위에서 구분이 안 된다. */}
-              <span className="w-2 h-2 rounded-full" style={{ background: TAG_COLOR_STRONG[key] }} />
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: on ? "currentColor" : TAG_COLOR_STRONG[key] }} />
               {CALENDAR_TAG_LABELS[key]}
             </button>
           );

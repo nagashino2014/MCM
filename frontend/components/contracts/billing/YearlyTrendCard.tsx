@@ -309,9 +309,9 @@ export function YearlyTrendCard({
           <p className="text-[11px] font-extrabold mb-1" style={{ color: "var(--cd-faint)" }}>
             3개년 수주액
           </p>
-          <div className="text-[11px] mt-1">
+          <div className="cd-table-section text-[11px]">
             <div
-              className="grid grid-cols-[56px_1fr_1fr] gap-x-2 items-center px-2 py-1.5 font-bold"
+              className="cd-table-head grid grid-cols-[56px_1fr_1fr] gap-x-2 items-center px-2 py-1.5 font-bold"
               style={{ color: "var(--cd-faint)" }}
             >
               <span>연도</span>

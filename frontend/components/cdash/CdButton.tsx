@@ -35,6 +35,7 @@ export const CdButton = forwardRef<HTMLButtonElement, CdButtonProps>(function Cd
       ref={ref}
       type={rest.type ?? "button"}
       disabled={disabled || loading}
+      aria-busy={loading || undefined}
       className={cn(
         "cd-btn inline-flex items-center justify-center gap-1.5",
         VARIANT_CLASS[variant],
@@ -69,8 +70,8 @@ export const CdIconButton = forwardRef<HTMLButtonElement, CdIconButtonProps>(fun
       aria-label={label}
       title={label}
       className={cn(
-        "rounded-xl transition-colors inline-flex items-center justify-center",
-        size === "sm" ? "p-1.5" : "p-2.5",
+        "cd-icon-button transition-colors inline-flex items-center justify-center",
+        size === "sm" && "cd-icon-button-sm",
         active
           ? "cd-soft-primary"
           : "cd-text-muted hover:bg-[var(--cd-primary-soft)] hover:text-[color:var(--cd-primary)]",

@@ -662,7 +662,7 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
         <div className="p-5 h-[440px] overflow-y-auto scrollbar-hide">
           {activeTab === "amount" && (
             <div className="grid gap-2">
-              <div className="grid grid-cols-[1fr_140px_140px] gap-2 text-[11px] font-bold cd-text-faint">
+              <div className="cd-table-head grid grid-cols-[1fr_140px_140px] gap-2 py-2 text-[11px] font-bold cd-text-faint">
                 <span>단계</span>
                 <span className="text-right">기존 금액</span>
                 <span className="text-right">변경 금액</span>
@@ -707,7 +707,7 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
 
           {activeTab === "terms" && (
             <div className="grid gap-2">
-              <div className="grid grid-cols-[1fr_1fr_1fr] gap-2 text-[11px] font-bold cd-text-faint">
+              <div className="cd-table-head grid grid-cols-[1fr_1fr_1fr] gap-2 py-2 text-[11px] font-bold cd-text-faint">
                 <span>단계</span>
                 <span>기존 지급조건</span>
                 <span>변경 지급조건</span>
@@ -912,7 +912,7 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
                   {serviceCategory.targetFacilities.length > 0 && (
                     <div className="flex flex-wrap gap-2 mt-1">
                       {serviceCategory.targetFacilities.map((facility) => (
-                        <span key={facility.facilityId} className="inline-flex items-center gap-1 rounded-full cd-tint-primary px-2.5 py-1 text-xs cd-text-primary">
+                        <span key={facility.facilityId} className="cd-action inline-flex items-center gap-1 rounded-full cd-tint-primary px-2.5 py-1 text-xs cd-text-primary">
                           {facility.companyName}
                           <button
                             type="button"

@@ -179,7 +179,9 @@ export function ScheduleCalendar({
                   const sel = m === month0 + 1;
                   return (
                     <button key={m} type="button" onClick={() => { onMonthChange(year, m - 1); setOpenMenu(null); }}
-                      className="py-2.5 rounded-lg text-sm font-semibold transition"
+                      data-active={sel}
+                      aria-pressed={sel}
+                      className="cd-choice py-2.5 rounded-lg text-sm font-semibold transition"
                       style={sel ? { background: "var(--cd-primary)", color: "#fff", fontWeight: 800 } : { background: "var(--cd-surface)", color: "var(--cd-muted)" }}>{m}월</button>
                   );
                 })}

@@ -611,7 +611,7 @@ export function CompletionsSection({ theme }: { theme: CdTheme }) {
           </div>
 
           {/* 총 완료 건수 */}
-          <div className="flex items-center justify-end gap-2 mb-2 flex-wrap">
+          <div className="flex items-center justify-end gap-2 mb-3 flex-wrap">
             <span className="text-[11px] font-bold" style={{ color: "var(--cd-muted)" }}>
               총 완료 건수{" "}
               <span className="tabular-nums font-extrabold" style={{ color: "var(--cd-text)" }}>
@@ -622,8 +622,8 @@ export function CompletionsSection({ theme }: { theme: CdTheme }) {
 
           {/* 열 레이블 */}
           <div
-            className="cdb-completion-row !cursor-default text-[11px] font-extrabold"
-            style={{ color: "var(--cd-faint)", background: "transparent" }}
+            className="cdb-completion-row cd-table-head !cursor-default text-[11px] font-extrabold"
+            style={{ color: "var(--cd-faint)" }}
           >
             <span>용역명</span>
             <span className="text-center">계약일</span>

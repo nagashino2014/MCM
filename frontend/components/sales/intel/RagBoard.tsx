@@ -213,7 +213,7 @@ export function RagBoard() {
         icon={<BookOpenText className="w-5 h-5" />}
         eyebrow="SALES & MARKETING"
         title="RAG & 영업 발굴"
-        subtitle="수집 신호 전량을 벡터 DB에 축적해 질의형 AI 브리핑을 생성하고, 정제된 후보군으로 영업 대상을 발굴합니다."
+        help="수집한 신호에 관해 질문하면 AI 브리핑과 영업 대상 후보를 확인할 수 있습니다."
       />
 
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-4 items-start">

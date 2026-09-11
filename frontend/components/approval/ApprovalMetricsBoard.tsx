@@ -149,7 +149,8 @@ export function ApprovalMetricsBoard() {
     <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
       <CdPageHeader
         title="데이터 지표"
-        meta={`${metrics.length}개 지표 · 실행 결과에는 항상 산출 근거(대상·제외 사유)가 따라붙습니다`}
+        meta={`${metrics.length}개 지표`}
+        help="결재 항목의 데이터 의미를 연결해 지표를 정의합니다. 실행 결과에서 대상·제외 사유 등 산출 근거를 확인할 수 있습니다."
         actions={
           <button type="button" className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs flex items-center gap-1.5" onClick={addNew}>
             <Plus className="w-3.5 h-3.5" /> 새 지표
@@ -244,9 +245,7 @@ export function ApprovalMetricsBoard() {
                     onChange={(e) => setEditJson(e.target.value)}
                   />
                   <p className="text-[10.5px] cd-text-faint leading-relaxed">
-                    정의는 선언 JSON 입니다 — 지표는 필드가 아닌 <b>데이터 의미 태그</b>(예: cost.travel)를 참조하므로 양식이 바뀌어도 태그만
-                    붙이면 그대로 동작합니다. 소스: approval_docs(태그 집계) · system.contracts/participants/attendance/leave. 복합(composite)은
-                    지표 키·사칙연산·괄호 토큰만 허용됩니다.
+                    JSON으로 정의합니다. 복합 수식에는 지표 키·사칙연산·괄호만 사용할 수 있습니다.
                   </p>
                 </div>
 
@@ -274,7 +273,7 @@ export function ApprovalMetricsBoard() {
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-[12px]">
-                        <thead>
+                        <thead className="cd-table-head">
                           <tr className="text-left cd-text-faint text-[11px]">
                             <th className="py-1.5 pr-2 font-semibold">구분</th>
                             {result.hasTime && <th className="py-1.5 pr-2 font-semibold">기간</th>}

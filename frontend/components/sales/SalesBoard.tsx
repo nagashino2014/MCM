@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlarmClock, Briefcase, CalendarClock, ClipboardList, Plus, Search, Siren, X,
@@ -197,7 +197,7 @@ export function SalesBoard() {
         eyebrow="SALES & MARKETING"
         title="영업/마케팅"
         titleSuffix={`${filtered.length}건${hasFilter ? ` / ${projects.length}` : ""}`}
-        subtitle="사업장별 영업건을 단계로 관리하고, 활동 이력·견적·입찰을 한 타임라인으로 추적합니다."
+        help="사업장별 영업건을 단계로 관리하고, 활동 이력·견적·입찰을 한 타임라인으로 추적합니다."
         actions={
           canEdit && (
             <button className="cd-btn cd-btn-primary cd-btn-sm" onClick={() => setCreating(true)}>
@@ -345,8 +345,10 @@ function SalesTabPanel({
             <button
               key={t.key}
               onClick={() => onTab(t.key)}
-              className={`flex-1 flex items-center justify-center gap-1 px-1.5 py-2.5 border-b-2 min-w-0 ${active ? "cd-text" : "cd-text-muted"}`}
-              style={{ borderColor: active ? t.color : "transparent" }}
+              className={`cd-choice flex-1 flex items-center justify-center gap-1 px-1.5 py-2.5 border-b-2 min-w-0 ${active ? "cd-text" : "cd-text-muted"}`}
+              data-active={active}
+              aria-pressed={active}
+              style={{ borderColor: active ? t.color : "transparent", "--cd-choice-color": t.color } as CSSProperties}
             >
               <t.Icon className="w-4 h-4 shrink-0" style={{ color: t.color }} />
               <span className="text-xs font-bold truncate">{t.label}</span>

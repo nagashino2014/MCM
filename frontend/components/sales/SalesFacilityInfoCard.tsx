@@ -528,7 +528,8 @@ function HistoryTab({ facilityId }: { facilityId: string }) {
       <div className="flex flex-wrap gap-1.5">
         {catTabs.map((t) => (
           <button key={t.code} type="button" onClick={() => { setCat(t.code); setSub("all"); }}
-            className="rounded-full px-3.5 py-1 text-xs font-bold border transition"
+            className="cd-choice rounded-full px-3.5 py-1 text-xs font-bold border transition"
+            data-active={cat === t.code} aria-pressed={cat === t.code}
             style={cat === t.code
               ? { background: "var(--cd-primary-soft)", borderColor: "var(--cd-primary)", color: "var(--cd-primary)" }
               : { borderColor: "var(--cd-border)", color: "var(--cd-muted)" }}>{t.label}</button>
@@ -538,7 +539,8 @@ function HistoryTab({ facilityId }: { facilityId: string }) {
       <div className="flex flex-wrap gap-1.5">
         {subTabs.map((t) => (
           <button key={t.code} type="button" onClick={() => setSub(t.code)}
-            className="rounded-lg px-2.5 py-0.5 text-[11px] font-semibold border transition"
+            className="cd-choice rounded-lg px-2.5 py-0.5 text-[11px] font-semibold border transition"
+            data-active={sub === t.code} aria-pressed={sub === t.code}
             style={sub === t.code
               ? { background: "var(--cd-primary)", borderColor: "var(--cd-primary)", color: "#fff" }
               : { background: "var(--cd-surface)", borderColor: "transparent", color: "var(--cd-muted)" }}>{t.label}</button>

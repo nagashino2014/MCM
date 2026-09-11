@@ -151,7 +151,7 @@ export function AiUsageBoard() {
     <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
       <CdPageHeader
         title="AI API 사용량 · 과금"
-        meta="Claude 호출 계측(ai_usage_log) — 기능별 호출·비용, 월 예상, 예산, 모델 단가"
+        help="기능별 AI 사용량·비용과 월 예상 비용을 조회하고 예산·모델 단가를 관리합니다."
         actions={
           <button type="button" className="cd-btn rounded-lg border cd-border-c px-2.5 py-2" title="새로고침" onClick={load} disabled={loading}>
             {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}

@@ -375,9 +375,11 @@ export function EndpointConfigBuilder({
                 key={f.name}
                 type="button"
                 onClick={() => toggleField(f.name)}
+                data-active={on}
+                aria-pressed={on}
                 title={`${f.name_ko ?? f.name}${f.type ? ` (${f.type})` : ""}${f.description ? ` — ${f.description}` : ""}`}
                 className={
-                  "w-full px-2 py-1.5 rounded-lg border transition-colors flex flex-col items-center gap-0.5 min-w-0 " +
+                  "cd-choice w-full px-2 py-1.5 rounded-lg border transition-colors flex flex-col items-center gap-0.5 min-w-0 " +
                   (on ? "cd-fill-primary border-transparent" : "cd-border-c hover:bg-[color:var(--cd-surface)]")
                 }
               >

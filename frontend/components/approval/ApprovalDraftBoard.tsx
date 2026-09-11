@@ -922,7 +922,7 @@ export function ApprovalDraftBoard() {
         icon={<ClipboardCheck className="w-5 h-5" />}
         eyebrow="Approval · Draft"
         title={form ? `기안 작성 — ${form.name}` : "기안 작성"}
-        subtitle="입력 값은 항목별 데이터로 저장되어 결재 완료 후 분류·집계에 활용됩니다."
+        help="결재가 완료된 문서의 입력 항목은 문서 기록에서 조회·집계할 수 있습니다."
         actions={
           <div className="flex items-center gap-2">
             <DeleteDraftButton docId={docId} meta={editMeta} />
@@ -1181,7 +1181,7 @@ export function ApprovalDraftBoard() {
               <div className="flex flex-wrap items-center gap-1">
                 <span className="text-[10.5px] cd-text-faint mr-0.5">불러오기</span>
                 {presets.map((p) => (
-                  <span key={p.presetId} className="inline-flex items-center rounded-full border cd-border-c overflow-hidden">
+                  <span key={p.presetId} className="cd-action inline-flex items-center rounded-full border cd-border-c overflow-hidden">
                     <button type="button" className="text-[11px] px-2 py-0.5 hover:cd-tint-primary" onClick={() => applyPreset(p)} title="이 결재선 불러오기">
                       {p.name}
                     </button>

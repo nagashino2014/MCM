@@ -71,7 +71,7 @@ export function ApprovalNotifySettingsBoard() {
         icon={<BellRing className="w-5 h-5" />}
         eyebrow="Approval · Settings"
         title="결재 알림 설정"
-        subtitle="결재 이벤트별로 이메일·카카오 알림톡 발송 여부를 설정합니다. 채널 자격증명은 서버 환경변수로 관리됩니다."
+        help="결재 단계별로 이메일·카카오 알림톡을 보낼지 설정합니다."
         actions={
           <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold disabled:opacity-50" disabled={saving || loading} onClick={save}>
             {saving ? "저장 중..." : "저장"}
@@ -85,7 +85,7 @@ export function ApprovalNotifySettingsBoard() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-[12.5px]">
-              <thead>
+              <thead className="cd-table-head">
                 <tr className="text-left cd-text-faint text-[11px]">
                   <th className="py-1.5 pr-3 font-semibold">이벤트</th>
                   <th className="py-1.5 pr-3 font-semibold text-center">이메일</th>

@@ -153,7 +153,9 @@ export function ClauseLibraryModal({
                   {preview.usageCount > 0 && <span className="text-[10.5px] cd-text-faint">{preview.usageCount}회 사용</span>}
                   <button
                     type="button"
-                    className={`ml-auto cd-btn rounded-lg px-3 py-1.5 text-[11.5px] font-semibold ${picked[preview.clauseId] ? "cd-btn-primary" : "border cd-border-c"}`}
+                    data-active={!!picked[preview.clauseId]}
+                    aria-pressed={!!picked[preview.clauseId]}
+                    className={`cd-choice ml-auto cd-btn rounded-lg px-3 py-1.5 text-[11.5px] font-semibold ${picked[preview.clauseId] ? "cd-btn-primary" : "border cd-border-c"}`}
                     onClick={() => toggle(preview)}
                   >
                     {picked[preview.clauseId] ? "선택됨" : "선택"}

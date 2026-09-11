@@ -414,13 +414,13 @@ function SettlementRowView({
             {!detail ? (
               <p className="text-[12px] cd-text-faint">불러오는 중…</p>
             ) : (
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-3">
                 <p className="text-[11.5px] cd-text-faint">
                   인별: {detail.persons.map((p) => `${p.employeeName} ${comma(p.amount)}원(${p.count}건)`).join(" · ")}
                 </p>
                 <div className="overflow-x-auto">
                   <table className="w-full text-[11.5px]">
-                    <thead>
+                    <thead className="cd-table-head">
                       <tr>
                         {["성명", "문서", "양식", "사용일", "분류", "상호", "금액", "지출 목적"].map((h) => (
                           <th key={h} className="px-2 py-1.5 text-left cd-text font-bold whitespace-nowrap border-b cd-border-c">{h}</th>

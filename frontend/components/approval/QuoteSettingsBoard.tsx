@@ -75,7 +75,7 @@ function BucketTable({ title, buckets, compact = false }: { title: string; bucke
     ? ["26%", "8%", "8%", "8%", "12%", "24%", "14%"]
     : [undefined, "56px", "56px", "56px", "80px", "112px", "96px"];
   return (
-    <div className="rounded-2xl border cd-border-c p-3.5 flex flex-col gap-2 min-w-0">
+    <div className="rounded-2xl border cd-border-c p-3.5 flex flex-col gap-3 min-w-0">
       <p className="text-[12px] font-semibold cd-text">{title}</p>
       <div className={compact ? "" : "overflow-x-auto"}>
         <table className={`w-full ${fs} border-collapse table-fixed ${compact ? "" : "min-w-[560px]"}`}>
@@ -84,7 +84,7 @@ function BucketTable({ title, buckets, compact = false }: { title: string; bucke
               <col key={i} style={w ? { width: w } : undefined} />
             ))}
           </colgroup>
-          <thead>
+          <thead className="cd-table-head">
             <tr>
               <th className={`border cd-border-c ${pad} text-left cd-text-faint font-semibold`}>구분</th>
               <th className={`border cd-border-c ${pad} cd-text-faint font-semibold`}>건수</th>
@@ -497,7 +497,9 @@ export function QuoteSettingsBoard() {
                 key={t}
                 type="button"
                 onClick={() => setTab(t)}
-                className={`rounded-t-xl px-4 py-2 text-sm font-semibold border-b-2 flex items-center gap-1.5 ${
+                data-active={tab === t}
+                aria-pressed={tab === t}
+                className={`cd-choice rounded-t-xl px-4 py-2 text-sm font-semibold border-b-2 flex items-center gap-1.5 ${
                   tab === t ? "cd-text-primary border-current cd-tint-primary" : "cd-text-faint border-transparent cd-row-hover"
                 }`}
               >
@@ -609,7 +611,7 @@ export function QuoteSettingsBoard() {
                     </div>
 
                     {/* 항목 트리(base_md) */}
-                    <div className="rounded-2xl border cd-border-c p-3.5 flex flex-col gap-2">
+                    <div className="rounded-2xl border cd-border-c p-3.5 flex flex-col gap-3">
                       <p className="text-[12px] font-semibold cd-text">업무 항목 트리 (별첨1) — 표준 MD = 역산 분배 가중치</p>
                       {/* 기술등급 축(가변) — 등급을 빼면 그 MD를 남은 등급에 비율대로 재분배한다 */}
                       <div className="flex items-center gap-2 flex-wrap text-[11.5px]">
@@ -620,7 +622,9 @@ export function QuoteSettingsBoard() {
                             <button
                               key={g}
                               type="button"
-                              className={`rounded-lg px-2.5 py-1 border ${on ? "cd-tint-primary border-[color:var(--cd-primary)] cd-text" : "cd-border-c cd-text-faint"}`}
+                              data-active={on}
+                              aria-pressed={on}
+                              className={`cd-choice rounded-lg px-2.5 py-1 border ${on ? "cd-tint-primary border-[color:var(--cd-primary)] cd-text" : "cd-border-c cd-text-faint"}`}
                               onClick={() => toggleGrade(g)}
                             >
                               {g}
@@ -642,7 +646,7 @@ export function QuoteSettingsBoard() {
                             ))}
                             <col style={{ width: "36px" }} />
                           </colgroup>
-                          <thead>
+                          <thead className="cd-table-head">
                             <tr>
                               <th className="border cd-border-c px-2 py-1.5 text-left cd-text-faint font-semibold">대항목</th>
                               <th className="border cd-border-c px-2 py-1.5 text-left cd-text-faint font-semibold">항목명</th>
@@ -755,7 +759,7 @@ export function QuoteSettingsBoard() {
             <div className="flex flex-col gap-4 max-w-[880px]">
               <div className="overflow-x-auto">
                 <table className="w-full text-[12px] border-collapse min-w-[640px]">
-                  <thead>
+                  <thead className="cd-table-head">
                     <tr>
                       <th className="border cd-border-c px-2 py-1.5 cd-text-faint font-semibold w-20">연도</th>
                       {LABOR_GRADES.map((g) => (
@@ -906,11 +910,11 @@ export function QuoteSettingsBoard() {
                   </div>
 
                   {/* 보정계수 제안 */}
-                  <div className="rounded-2xl border cd-border-c p-3.5 flex flex-col gap-2">
+                  <div className="rounded-2xl border cd-border-c p-3.5 flex flex-col gap-3">
                     <p className="text-[12px] font-semibold cd-text">시장 보정계수 제안 — 실주 건의 (경쟁 낙찰가 / 자사 견적가) 중앙값 기반</p>
                     <div className="overflow-x-auto">
                       <table className="w-full text-[11.5px] border-collapse min-w-[720px]">
-                        <thead>
+                        <thead className="cd-table-head">
                           <tr>
                             <th className="border cd-border-c px-2 py-1.5 text-left cd-text-faint font-semibold">세분류</th>
                             <th className="border cd-border-c px-2 py-1.5 cd-text-faint font-semibold w-20">표본</th>

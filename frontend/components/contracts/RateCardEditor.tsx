@@ -137,7 +137,7 @@ export function RateCardEditor({
         </label>
       </div>
 
-      <div className={`grid ${masterCols} gap-1.5 text-[11px] cd-text-faint px-1`}>
+      <div className={`cd-table-head grid ${masterCols} gap-1.5 text-[11px] cd-text-faint px-1 py-2`}>
         <span>구분</span>
         <span>항목 (세부내용)</span>
         <span>단위</span>
@@ -345,7 +345,7 @@ export function RateCardEditor({
             <p className="text-[11px] cd-text-faint px-1">단가 기준표에 항목을 먼저 추가하세요.</p>
           ) : (
             <>
-              <div className={`grid ${roundCols} gap-1.5 text-[11px] cd-text-faint px-1`}>
+              <div className={`cd-table-head grid ${roundCols} gap-1.5 text-[11px] cd-text-faint px-1 py-2`}>
                 <span>항목</span>
                 <span className="text-right">단가{dual ? " (허가 / 신고)" : ""}</span>
                 {dual ? (

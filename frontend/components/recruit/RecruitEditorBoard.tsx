@@ -439,7 +439,9 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
                   key={s}
                   type="button"
                   onClick={() => setStatus(s)}
-                  className="cd-btn cd-btn-sm flex-1"
+                  data-active={status === s}
+                  aria-pressed={status === s}
+                  className="cd-choice cd-btn cd-btn-sm flex-1"
                   style={
                     status === s
                       ? { background: "var(--cd-primary)", color: "#fff" }
@@ -466,7 +468,6 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
                     style={{
                       background: hex,
                       borderColor: docTheme.accentColor === hex ? "var(--cd-primary)" : "transparent",
-                      outline: "1px solid var(--cd-border)",
                     }}
                   />
                 ))}
@@ -585,7 +586,9 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
                 key={p.w}
                 type="button"
                 onClick={() => setPngWidth(String(p.w))}
-                className="cd-btn cd-btn-sm flex-1"
+                data-active={pngWidthNum === p.w}
+                aria-pressed={pngWidthNum === p.w}
+                className="cd-choice cd-btn cd-btn-sm flex-1"
                 style={
                   pngWidthNum === p.w
                     ? { background: "var(--cd-primary)", color: "#fff" }
@@ -609,7 +612,9 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
                   key={f.key}
                   type="button"
                   onClick={() => setPngFormat(f.key)}
-                  className="cd-btn cd-btn-sm flex-1"
+                  data-active={pngFormat === f.key}
+                  aria-pressed={pngFormat === f.key}
+                  className="cd-choice cd-btn cd-btn-sm flex-1"
                   style={
                     pngFormat === f.key
                       ? { background: "var(--cd-primary)", color: "#fff" }
@@ -622,8 +627,7 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
             </div>
           </div>
           <p className="text-[11px] cd-text-faint">
-            사람인 게시 이미지 규격: 최대 가로 860 × 세로 9,000px · 4MB. 저해상도 출력도 2배로
-            크게 찍은 뒤 고품질 축소(슈퍼샘플링)하므로 텍스트가 선명하게 유지됩니다.
+            사람인 게시 규격: 최대 860 × 9,000px · 4MB
           </p>
         </div>
       </CdModal>
@@ -660,7 +664,9 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
                 key={m.key}
                 type="button"
                 onClick={() => setTplMode(m.key)}
-                className="cd-btn cd-btn-sm flex-1"
+                data-active={tplMode === m.key}
+                aria-pressed={tplMode === m.key}
+                className="cd-choice cd-btn cd-btn-sm flex-1"
                 style={
                   tplMode === m.key
                     ? { background: "var(--cd-primary)", color: "#fff" }

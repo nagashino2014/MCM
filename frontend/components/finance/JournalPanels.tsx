@@ -486,7 +486,9 @@ export function JournalPanel() {
                       key={c.id}
                       type="button"
                       onClick={() => setPick(active ? { type: "none" } : { type: "account", id: c.id })}
-                      className="w-full flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-sm text-left transition-colors"
+                      data-active={active}
+                      aria-pressed={active}
+                      className="cd-choice w-full flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-sm text-left transition-colors"
                       style={
                         active
                           ? { borderColor: "var(--cd-primary)", background: "var(--cd-primary-soft)", color: "var(--cd-primary)" }
@@ -514,7 +516,9 @@ export function JournalPanel() {
                         key={code}
                         type="button"
                         onClick={() => setPick(active ? { type: "none" } : { type: "cardCompany", code })}
-                        className="w-full flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-sm text-left transition-colors"
+                        data-active={active}
+                        aria-pressed={active}
+                        className="cd-choice w-full flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-sm text-left transition-colors"
                         style={
                           active
                             ? { borderColor: "var(--cd-primary)", background: "var(--cd-primary-soft)", color: "var(--cd-primary)" }
@@ -623,7 +627,7 @@ export function JournalPanel() {
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead>
+          <thead className="cd-table-head">
             <tr className="cd-text-muted text-left">
               <th className="py-1.5 pr-2 font-normal" style={{ width: 28 }}></th>
               <th className="py-1.5 pr-3 font-normal">일자</th>
@@ -781,7 +785,7 @@ export function JournalPanel() {
               <span className="font-bold">{bulk.base.partyName}</span> 건이 <span className="font-bold">{bulkAccountName}</span> 으로 확정됩니다.
               현재 목록에 입금/출금처가 같은 미확정 전표가 <span className="font-bold">{bulk.targets.length}건</span> 더 있습니다 — 함께 확정할까요?
             </div>
-            <div className="flex items-center gap-2 mb-2 flex-wrap">
+            <div className="flex items-center gap-2 mb-3 flex-wrap">
               <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => setBulkOff(new Set())}>
                 모두 선택
               </button>
@@ -796,7 +800,7 @@ export function JournalPanel() {
             </div>
             <div className="overflow-x-auto" style={{ maxHeight: "46vh" }}>
               <table className="w-full text-sm">
-                <thead>
+                <thead className="cd-table-head">
                   <tr className="cd-text-muted text-left">
                     <th className="py-1.5 pr-3 font-normal" style={{ width: 56 }}></th>
                     <th className="py-1.5 pr-3 font-normal">일자</th>
@@ -909,7 +913,7 @@ export function LedgerPanel() {
       {error && <div className="cd-error-text text-sm mb-2">{error}</div>}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead>
+          <thead className="cd-table-head">
             <tr className="cd-text-muted text-left">
               <th className="py-1.5 pr-3 font-normal">일자</th>
               <th className="py-1.5 pr-3 font-normal">적요</th>
@@ -1028,7 +1032,7 @@ export function TrialPanel() {
         {error && <div className="cd-error-text text-sm mb-2">{error}</div>}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead>
+            <thead className="cd-table-head">
               <tr className="cd-text-muted text-left">
                 <th className="py-1.5 pr-3 font-normal">코드</th>
                 <th className="py-1.5 pr-3 font-normal">계정과목</th>
@@ -1196,7 +1200,7 @@ function BacktestCard() {
       {report && (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead>
+            <thead className="cd-table-head">
               <tr className="cd-text-muted text-left">
                 <th className="py-1.5 pr-3 font-normal">계정과목</th>
                 <th className="py-1.5 pr-3 font-normal text-right">세무법인 차변</th>

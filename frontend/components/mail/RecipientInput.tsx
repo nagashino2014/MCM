@@ -151,7 +151,7 @@ export function RecipientInput({
         {tokens.map((t, i) => (
           <span
             key={`${t.raw}-${i}`}
-            className="inline-flex items-center gap-1 rounded-full cd-tint-primary pl-2.5 pr-1 py-0.5 text-[12px] max-w-full"
+            className="cd-action inline-flex items-center gap-1 rounded-full cd-tint-primary pl-2.5 pr-1 py-0.5 text-[12px] max-w-full"
             title={t.raw}
           >
             {/* 동명이인·외부 담당자 식별을 위해 이름(직함)과 메일 주소를 함께 표시한다. */}

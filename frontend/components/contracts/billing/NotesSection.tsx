@@ -305,7 +305,7 @@ function NoteList({
 }) {
   return (
     <div className="cdb-box p-4 min-w-0">
-      <div className="flex items-center gap-2 mb-2 flex-wrap">
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
         <p className="cd-card-title">
           <span className="cd-title-icon">{icon}</span>
           {title}
@@ -341,7 +341,7 @@ function NoteList({
 
       {/* 열 레이블 */}
       <div
-        className="grid grid-cols-[minmax(0,1fr)_92px_76px_96px_58px] gap-2 items-center px-2 py-1.5 text-[11px] font-extrabold"
+        className="cd-table-head grid grid-cols-[minmax(0,1fr)_92px_76px_96px_58px] gap-2 items-center px-2 py-1.5 text-[11px] font-extrabold"
         style={{ color: "var(--cd-faint)" }}
       >
         <span>발주처 · 용역명</span>

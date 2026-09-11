@@ -97,7 +97,7 @@ export function BalanceSheetPanel() {
 
   const section = (title: string, lines: BalanceLine[], sign: 1 | -1, total: number) => (
     <div className="mb-3">
-      <div className="text-sm font-semibold mb-1">{title} — {won(total)}원</div>
+      <div className="text-sm font-semibold mb-3">{title} — {won(total)}원</div>
       <table className="w-full text-sm">
         <tbody>
           {lines.map((l) => (
@@ -271,7 +271,7 @@ export function ClosingPanel() {
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead>
+          <thead className="cd-table-head">
             <tr className="cd-text-muted text-left">
               <th className="py-1.5 pr-3 font-normal">규칙</th>
               <th className="py-1.5 pr-3 font-normal">일자</th>

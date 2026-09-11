@@ -160,7 +160,7 @@ export function ReceiptPickerModal({
 
         <div className="overflow-x-auto max-h-[50vh] overflow-y-auto border cd-border-c rounded-xl">
           <table className="w-full text-sm">
-            <thead className="sticky top-0" style={{ background: "var(--cd-card-solid)" }}>
+            <thead className="cd-table-head sticky top-0">
               <tr className="cd-text-muted text-left">
                 <th className="py-2 px-3 font-normal w-8"></th>
                 <th className="py-2 pr-3 font-normal">영수증</th>

@@ -563,7 +563,9 @@ export function ApprovalDocViewer({
                   <button
                     key={t.key}
                     type="button"
-                    className={`rounded-lg px-3 py-1.5 text-[12px] border flex items-center gap-1.5 ${
+                    data-active={tab === t.key}
+                    aria-pressed={tab === t.key}
+                    className={`cd-choice rounded-lg px-3 py-1.5 text-[12px] border flex items-center gap-1.5 ${
                       tab === t.key ? "cd-tint-primary font-bold" : "cd-border-c cd-text-muted cd-row-hover"
                     }`}
                     onClick={() => setTab(t.key)}
@@ -786,7 +788,7 @@ export function ApprovalDocModal({
   return (
     <div
       className="fixed inset-0 z-[70] flex items-center justify-center p-4"
-      style={{ background: "rgba(23, 28, 44, 0.42)", backdropFilter: "blur(3px)", WebkitBackdropFilter: "blur(3px)" }}
+      style={{ background: "hsl(224 24% 10% / 24%)" }}
       onClick={onClose}
     >
       <div

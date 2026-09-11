@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { ShoppingBasket } from "lucide-react";
 import { CardFrame, CardSkeleton } from "./CardFrame";
 import { fmtFull, type DashboardData } from "./types";
@@ -76,11 +76,10 @@ export function RecentCollectionsCard({
         <div className="flex items-center gap-2">
           <button
             type="button"
-            className="cd-legend px-2 py-1 rounded-lg border transition-colors"
-            style={{
-              borderColor: recency === null ? "var(--cd-accent)" : "transparent",
-              background: recency === null ? "var(--cd-accent-soft)" : "transparent",
-            }}
+            className="cd-legend cd-choice px-2 py-1 rounded-lg border transition-colors"
+            data-active={recency === null}
+            aria-pressed={recency === null}
+            style={{ "--cd-choice-color": "var(--cd-accent)" } as CSSProperties}
             onClick={() => setRecency(null)}
           >
             <span className="swatch" style={{ background: "var(--cd-accent)" }} />
@@ -88,11 +87,10 @@ export function RecentCollectionsCard({
           </button>
           <button
             type="button"
-            className="cd-legend px-2 py-1 rounded-lg border transition-colors"
-            style={{
-              borderColor: recency === "2weeks" ? "var(--cd-primary)" : "transparent",
-              background: recency === "2weeks" ? "var(--cd-primary-soft)" : "transparent",
-            }}
+            className="cd-legend cd-choice px-2 py-1 rounded-lg border transition-colors"
+            data-active={recency === "2weeks"}
+            aria-pressed={recency === "2weeks"}
+            style={{ "--cd-choice-color": "var(--cd-primary)" } as CSSProperties}
             onClick={() => toggle("2weeks")}
           >
             <span className="swatch" style={{ background: "var(--cd-primary)" }} />
@@ -100,11 +98,10 @@ export function RecentCollectionsCard({
           </button>
           <button
             type="button"
-            className="cd-legend px-2 py-1 rounded-lg border transition-colors"
-            style={{
-              borderColor: recency === "1month" ? "var(--cd-success)" : "transparent",
-              background: recency === "1month" ? "var(--cd-success-soft)" : "transparent",
-            }}
+            className="cd-legend cd-choice px-2 py-1 rounded-lg border transition-colors"
+            data-active={recency === "1month"}
+            aria-pressed={recency === "1month"}
+            style={{ "--cd-choice-color": "var(--cd-success)" } as CSSProperties}
             onClick={() => toggle("1month")}
           >
             <span className="swatch" style={{ background: "var(--cd-success)" }} />

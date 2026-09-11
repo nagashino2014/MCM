@@ -129,6 +129,7 @@ function Inner() {
     >
       <CdPageHeader
         title="사업장"
+        help="왼쪽에서 사업장을 검색·선택하면 오른쪽에서 기본정보와 허가 이력을 확인할 수 있습니다. 지역·업종·종 규모·출처 필터를 함께 사용할 수 있습니다."
         meta={total > 0 ? `${total.toLocaleString("ko-KR")}개 · ${items.length}건 표시` : undefined}
         actions={
           <>

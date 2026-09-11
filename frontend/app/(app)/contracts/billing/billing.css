@@ -1,67 +1,15 @@
-/* ---------------------------------------------------------------------------
- * 수주/수금/발행 현황 — 연결형 서브메뉴 탭 바 (Modernize 토큰 cdash 기반)
- * 활성 탭이 콘텐츠 패널과 같은 배경/테두리로 이어져 보이도록 구성한다.
- * ------------------------------------------------------------------------- */
-
-.cdb-tabs {
-  display: flex;
-  align-items: flex-end;
-  gap: 6px;
-  padding: 0 14px;
-  position: relative;
-  z-index: 1;
-}
-
-.cdb-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.72rem 1.25rem;
-  font-size: 0.8125rem;
-  font-weight: 700;
-  line-height: 1;
-  color: var(--cd-muted);
-  background: var(--cd-surface);
-  border: 1px solid var(--cd-border);
-  border-bottom: none;
-  border-radius: 14px 14px 0 0;
-  cursor: pointer;
-  margin-bottom: 0;
-  transition: all 0.18s ease;
-}
-
-.cdb-tab:hover {
-  color: var(--cd-primary);
-}
-
-.cdb-tab[data-active="true"] {
-  background: var(--cd-card);
-  color: var(--cd-primary);
-  padding-top: 0.85rem;
-  padding-bottom: 0.85rem;
-  /* 패널 상단 테두리를 덮어 탭-패널이 이어진 형태 */
-  margin-bottom: -1px;
-}
-
-.cdb-tab .cdb-tab-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 7px;
-  background: transparent;
-  color: inherit;
-}
-
-.cdb-tab[data-active="true"] .cdb-tab-icon {
-  background: var(--cd-primary-soft);
-}
+/* 수주/수금/발행 현황: 사용자 설계 연결형 탭을 유지하고 표면·간격만 정리한다. */
+.cdb-tabs { display: flex; align-items: flex-end; gap: 6px; padding: 0 14px; position: relative; z-index: 1; }
+.cdb-tab { display: inline-flex; align-items: center; gap: 8px; padding: .72rem 1.25rem; font-size: 13px; font-weight: 500; line-height: 1; color: var(--cd-muted); background: var(--cd-surface); border: 1px solid var(--cd-border); border-bottom: none; border-radius: var(--cd-radius-control); cursor: pointer; margin-bottom: 0; transition: color .15s ease; }
+.cdb-tab:hover { color: var(--cd-primary); }
+.cdb-tab[data-active="true"] { background: var(--cd-card); color: var(--cd-primary); padding-top: .85rem; padding-bottom: .85rem; margin-bottom: -1px; }
+.cdb-tab .cdb-tab-icon { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 6px; background: transparent; color: inherit; }
+.cdb-tab[data-active="true"] .cdb-tab-icon { background: var(--cd-primary-soft); }
 
 .cdb-panel {
   background: var(--cd-card);
   border: 1px solid var(--cd-border);
-  border-radius: 20px;
+  border-radius: var(--cd-radius-card);
   box-shadow: var(--cd-shadow);
   padding: 18px;
   min-height: 640px;
@@ -70,7 +18,7 @@
 /* 패널 내부 박스 (지도 / 리스트) */
 .cdb-box {
   border: 1px solid var(--cd-border);
-  border-radius: 16px;
+  border-radius: var(--cd-radius-card);
   background: var(--cd-card);
   display: flex;
   flex-direction: column;
@@ -146,7 +94,7 @@
 /* KPI 카드 */
 .cdb-kpi {
   border: 1px solid var(--cd-border);
-  border-radius: 14px;
+  border-radius: var(--cd-radius-card);
   background: var(--cd-card);
   padding: 0.8rem 0.95rem;
   display: flex;
@@ -155,8 +103,8 @@
   min-width: 0;
 }
 .cdb-kpi .cdb-kpi-label {
-  font-size: 0.6875rem;
-  font-weight: 800;
+  font-size: 0.75rem;
+  font-weight: 600;
   color: var(--cd-muted);
   display: inline-flex;
   align-items: center;
@@ -164,14 +112,14 @@
 }
 .cdb-kpi .cdb-kpi-value {
   font-size: 1.05rem;
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--cd-text);
   white-space: nowrap;
 }
 .cdb-kpi .cdb-kpi-sub {
-  font-size: 0.6875rem;
-  font-weight: 700;
+  font-size: 0.75rem;
+  font-weight: 500;
   color: var(--cd-faint);
 }
 
@@ -216,8 +164,8 @@
   align-items: center;
   padding: 0.16rem 0.5rem;
   border-radius: 7px;
-  font-size: 0.625rem;
-  font-weight: 800;
+  font-size: 0.75rem;
+  font-weight: 600;
   line-height: 1.2;
   color: #ffffff;
   white-space: nowrap;
@@ -227,7 +175,7 @@
 .cdb-aging-tag.cdb-tag-xs {
   padding: 0.06rem 0.38rem;
   border-radius: 5px;
-  font-size: 0.625rem;
+  font-size: 0.75rem;
   font-weight: 400;
 }
 
@@ -237,10 +185,10 @@
   align-items: center;
   padding: 0.06rem 0.38rem;
   border-radius: 5px;
-  font-size: 0.625rem;
+  font-size: 0.75rem;
   font-weight: 400;
   line-height: 1.2;
-  color: #ffffff;
+  color: var(--cd-primary-foreground);
   background: var(--cd-primary);
   white-space: nowrap;
 }
@@ -253,9 +201,9 @@
   justify-content: center;
   gap: 0.3rem;
   padding: 0.55rem 0.35rem;
-  border-radius: 12px;
+  border-radius: var(--cd-radius-card);
   font-size: 0.71875rem;
-  font-weight: 800;
+  font-weight: 600;
   white-space: nowrap;
   background: var(--cd-surface);
   color: var(--cd-muted);
@@ -268,16 +216,16 @@
   color: var(--cd-primary);
 }
 .cdb-option-box[data-active="true"] {
-  background: var(--cd-primary);
+  background: var(--cd-primary-soft);
   border-color: var(--cd-primary);
-  color: #ffffff;
-  box-shadow: 0 4px 12px rgba(93, 135, 255, 0.35);
+  color: var(--cd-primary);
+  box-shadow: none;
 }
 
 /* 대응 조치 항목 박스 */
 .cdb-action-entry {
   border: 1px solid var(--cd-border);
-  border-radius: 12px;
+  border-radius: var(--cd-radius-card);
   padding: 0.7rem 0.8rem;
   display: flex;
   flex-direction: column;
@@ -289,8 +237,7 @@
   position: fixed;
   inset: 0;
   z-index: 60;
-  background: rgba(8, 12, 20, 0.55);
-  backdrop-filter: blur(3px);
+  background: var(--cd-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -303,7 +250,7 @@
   overflow-y: auto;
   background: var(--cd-card);
   border: 1px solid var(--cd-border);
-  border-radius: 18px;
-  box-shadow: var(--cd-shadow);
+  border-radius: var(--cd-radius-card);
+  box-shadow: var(--cd-shadow-dialog);
   padding: 1.25rem;
 }

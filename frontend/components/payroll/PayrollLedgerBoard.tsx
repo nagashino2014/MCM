@@ -265,7 +265,9 @@ export default function PayrollLedgerBoard() {
                   key={v}
                   type="button"
                   onClick={() => setView(v)}
-                  className={`px-3 py-1.5 transition ${view === v ? "cd-fill-primary text-white" : "cd-text"}`}
+                  data-active={view === v}
+                  aria-pressed={view === v}
+                  className={`cd-choice px-3 py-1.5 transition ${view === v ? "cd-fill-primary text-white" : "cd-text"}`}
                 >
                   {v === "month" ? "월별 대장" : "직원별 연간"}
                 </button>
@@ -343,7 +345,7 @@ export default function PayrollLedgerBoard() {
 
           {/* 그리드 */}
           <section className="cd-card rounded-3xl flex-1 min-h-0 flex flex-col cd-reveal delay-1">
-            <div className="flex items-center justify-between px-5 pt-4 pb-2">
+            <div className="flex items-center justify-between px-5 pt-4 pb-3">
               <h2 className="text-[15px] font-extrabold tracking-tight cd-text">월별 대장</h2>
               {current?.sourceFile && (
                 <span className="flex items-center gap-1.5 text-[11px] cd-text-faint" title={current.sourceFile}>
@@ -357,9 +359,9 @@ export default function PayrollLedgerBoard() {
                 <p className="p-4 text-sm cd-text-faint">불러오는 중…</p>
               ) : (
                 <table className="w-full text-sm" style={{ minWidth: 640 + (payItems.length + dedItems.length) * 96 }}>
-                  <thead>
+                  <thead className="cd-table-head">
                     <tr className="cd-text-faint text-[11px] border-b cd-border-c">
-                      <th className="text-left font-semibold p-2.5 sticky left-0 z-10" style={{ background: "var(--cd-card-solid)", boxShadow: "-14px 0 0 var(--cd-card-solid)" }}>성명</th>
+                      <th className="text-left font-semibold p-2.5 sticky left-0 z-10" style={{ background: "var(--cd-surface)", boxShadow: "-14px 0 0 var(--cd-surface)" }}>성명</th>
                       <th className="text-left font-semibold p-2.5">직급</th>
                       <th className="text-left font-semibold p-2.5">부서</th>
                       {payItems.map((i) => (
@@ -426,7 +428,7 @@ export default function PayrollLedgerBoard() {
 
       {view === "annual" && (
         <section className="cd-card rounded-3xl flex-1 min-h-0 flex flex-col cd-reveal">
-          <div className="flex items-center justify-between px-5 pt-4 pb-2">
+          <div className="flex items-center justify-between px-5 pt-4 pb-3">
             <h2 className="text-[15px] font-extrabold tracking-tight cd-text">
               {annualName || "-"} · {year}년 연간 추이
             </h2>
@@ -436,9 +438,9 @@ export default function PayrollLedgerBoard() {
               <p className="p-4 text-sm cd-text-faint">불러오는 중…</p>
             ) : (
               <table className="w-full text-sm" style={{ minWidth: 320 + annualMonths.length * 92 }}>
-                <thead>
+                <thead className="cd-table-head">
                   <tr className="cd-text-faint text-[11px] border-b cd-border-c">
-                    <th className="text-left font-semibold p-2.5 sticky left-0 z-10" style={{ background: "var(--cd-card-solid)", boxShadow: "-14px 0 0 var(--cd-card-solid)" }}>항목</th>
+                    <th className="text-left font-semibold p-2.5 sticky left-0 z-10" style={{ background: "var(--cd-surface)", boxShadow: "-14px 0 0 var(--cd-surface)" }}>항목</th>
                     {annualMonths.map((m) => (
                       <th key={m} className="text-right font-semibold p-2.5">{m}월</th>
                     ))}

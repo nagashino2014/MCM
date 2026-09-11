@@ -804,7 +804,7 @@ export function AgreementBoard() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-[12.5px]">
-                <thead>
+                <thead className="cd-table-head">
                   <tr className="text-left cd-text-faint text-[11px] border-b cd-border-c">
                     <th className="py-2 pr-3 font-medium">계약명</th>
                     <th className="py-2 pr-3 font-medium">발주처</th>
@@ -1091,7 +1091,9 @@ export function AgreementBoard() {
                             <button
                               key={t.templateId}
                               type="button"
-                              className={`text-[11px] rounded-full border px-2 py-0.5 ${template?.templateId === t.templateId ? "cd-fill-primary" : "cd-border-c hover:cd-tint-primary"}`}
+                              data-active={template?.templateId === t.templateId}
+                              aria-pressed={template?.templateId === t.templateId}
+                              className={`cd-choice text-[11px] rounded-full border px-2 py-0.5 ${template?.templateId === t.templateId ? "cd-fill-primary" : "cd-border-c hover:cd-tint-primary"}`}
                               onClick={() => {
                                 fetch(`/api/contracts/agreements/templates?templateId=${encodeURIComponent(t.templateId)}`, { cache: "no-store" })
                                   .then((r) => (r.ok ? r.json() : null))
@@ -1204,7 +1206,9 @@ export function AgreementBoard() {
                           <button
                             key={i}
                             type="button"
-                            className={`px-3.5 py-2 ${i > 0 ? "border-l cd-border-c" : ""} ${
+                            data-active={payTab === i}
+                            aria-pressed={payTab === i}
+                            className={`cd-choice px-3.5 py-2 ${i > 0 ? "border-l cd-border-c" : ""} ${
                               payTab === i ? "cd-fill-primary text-white" : "cd-solid-bg cd-text-muted"
                             }`}
                             onClick={() => setPayTab(i)}
@@ -1299,7 +1303,9 @@ export function AgreementBoard() {
                             <button
                               key={c.id}
                               type="button"
-                              className={`rounded-lg px-2.5 py-1.5 text-left text-[12px] border flex items-center gap-1.5 ${
+                              data-active={clauseTab === i}
+                              aria-pressed={clauseTab === i}
+                              className={`cd-choice rounded-lg px-2.5 py-1.5 text-left text-[12px] border flex items-center gap-1.5 ${
                                 clauseTab === i ? "cd-fill-primary text-white border-transparent font-semibold" : "cd-solid-bg cd-border-c cd-text-muted"
                               }`}
                               onClick={() => setClauseTab(i)}
@@ -1388,7 +1394,7 @@ export function AgreementBoard() {
                   <div className="flex flex-wrap items-center gap-1">
                     <span className="text-[10.5px] cd-text-faint mr-0.5">불러오기</span>
                     {presets.map((p) => (
-                      <span key={p.presetId} className="inline-flex items-center rounded-full border cd-border-c overflow-hidden">
+                      <span key={p.presetId} className="cd-action inline-flex items-center rounded-full border cd-border-c overflow-hidden">
                         <button type="button" className="text-[11px] px-2 py-0.5 hover:cd-tint-primary" onClick={() => applyPreset(p)} title="이 결재선 불러오기">{p.name}</button>
                         <button type="button" className="text-[10px] px-1 cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" onClick={() => deletePreset(p.presetId)} title="프리셋 삭제">×</button>
                       </span>

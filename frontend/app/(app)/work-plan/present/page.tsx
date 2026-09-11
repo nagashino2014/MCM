@@ -196,7 +196,7 @@ export default function PresentPage() {
         icon={<Play className="w-5 h-5" />}
         eyebrow="Work · Presentation"
         title="발표 모드"
-        subtitle="회의·간담회용 부서 보고 발표. ←/→ 또는 버튼으로 페이지 이동."
+        help="부서를 선택한 뒤 방향키(←/→) 또는 이동 버튼으로 보고 페이지를 넘깁니다."
         actions={
           <div className="flex items-center gap-2">
             <select

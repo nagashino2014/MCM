@@ -528,7 +528,7 @@ export default function ContractDownloadsPage() {
         icon={<Archive className="w-5 h-5" />}
         eyebrow="Contract · Documents"
         title="다운로드/증명서 생성"
-        subtitle="계약서, 변경계약서, 세금계산서 PDF를 선택한 계약 단위로 다운로드하거나 병합합니다."
+        help="계약서, 변경계약서, 세금계산서 PDF를 선택한 계약 단위로 다운로드하거나 병합합니다."
       />
 
       <div className="grid min-h-0 flex-1 grid-cols-1 xl:grid-cols-[minmax(360px,0.9fr)_minmax(620px,1.4fr)] gap-5">
@@ -631,7 +631,7 @@ export default function ContractDownloadsPage() {
 
           {/* 좌: [병합옵션·병합대상] 위 / [증명서 생성] 아래(하단까지) · 우: [선택 계약 리스트] 위 / [실적증명서 송부] 아래 */}
           <div className="grid grid-cols-1 2xl:grid-cols-4 2xl:grid-rows-[360px_1fr_auto] gap-4 flex-1 min-h-0 overflow-y-auto scrollbar-hide">
-            <div className="rounded-2xl border cd-border-c p-3 h-[360px] overflow-hidden 2xl:col-start-1 2xl:row-start-1">
+            <div className="rounded-2xl border cd-border-c p-3 h-[360px] overflow-y-auto 2xl:col-start-1 2xl:row-start-1">
               <h3 className="font-bold cd-text mb-3">병합 옵션</h3>
               <div className="grid grid-cols-1 gap-2">
                 <OptionCard
@@ -835,7 +835,7 @@ export default function ContractDownloadsPage() {
                     <label
                       key={opt.v}
                       className={
-                        "flex items-center justify-center gap-2 rounded-xl border px-2 py-2 text-xs text-center cursor-pointer " +
+                        "cd-action flex items-center justify-center gap-2 rounded-xl border px-2 py-2 text-xs text-center cursor-pointer " +
                         (certOption === opt.v ? "border-[color:var(--cd-primary)] cd-tint-primary" : "cd-border-c")
                       }
                     >

@@ -475,7 +475,7 @@ export function OrdersStatusSection({ theme }: { theme: CdTheme }) {
         <div className="flex flex-col gap-4 min-w-0">
         <div className="cdb-box p-4 h-[486px] flex flex-col min-w-0">
           {/* 제목 · 요약 태그 · 다운로드 버튼을 한 행에 배치 */}
-          <div className="flex items-center gap-2 mb-2 flex-wrap">
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
             <p className="cd-card-title">
               <span className="cd-title-icon">
                 <ListOrdered className="w-4 h-4" />
@@ -528,8 +528,8 @@ export function OrdersStatusSection({ theme }: { theme: CdTheme }) {
 
           {/* 열 레이블 */}
           <div
-            className="cdb-list-row !cursor-default text-[11px] font-extrabold"
-            style={{ color: "var(--cd-faint)", background: "transparent" }}
+            className="cdb-list-row cd-table-head !cursor-default text-[11px] font-extrabold"
+            style={{ color: "var(--cd-faint)" }}
           >
             <span>용역명</span>
             <span className="text-center">계약일</span>
@@ -676,11 +676,11 @@ function OrdersMapSummary({
 
   return (
     <div
-      className="absolute right-4 bottom-4 w-[382px] rounded-3xl p-4 backdrop-blur-md"
+      className="absolute right-4 bottom-4 w-[382px] max-w-[calc(100%-2rem)] rounded-lg p-4"
       style={{
-        background: theme === "dark" ? "rgba(29,37,48,0.84)" : "rgba(255,255,255,0.84)",
+        background: "var(--cd-popover)",
         border: "1px solid var(--cd-border)",
-        boxShadow: theme === "dark" ? "0 8px 18px rgba(0,0,0,0.12)" : "0 8px 18px rgba(15,23,42,0.08)",
+        boxShadow: "var(--cd-shadow-popover)",
       }}
     >
       <div className="flex items-start justify-between gap-3 mb-3">

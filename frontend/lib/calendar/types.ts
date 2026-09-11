@@ -4,7 +4,7 @@
  */
 
 /**
- * 캘린더 태그(카테고리) 7종 — 홈 위젯(lib/home/widgets.ts CALENDAR_TAGS)은 앞 5종만 쓴다.
+ * 캘린더 태그(카테고리) 7종 — 홈 위젯(lib/home/widgets.ts CALENDAR_TAGS)도 같은 7종을 쓴다.
  * meeting(회의)·interview(면접)는 직접 등록 일정(219, lib/calendar/entries.ts).
  * 미팅(visit)은 별도 태그가 없고 참석자가 본인/부서/선택 집합에 있으면 그 태그로 표시된다.
  */

@@ -294,7 +294,7 @@ export function ApprovalRecordsBoard() {
         icon={<Table2 className="w-5 h-5" />}
         eyebrow="Approval · Records"
         title="양식별 문서 조회"
-        subtitle="양식의 모든 입력 항목이 컬럼으로 펼쳐집니다 — 필터·정렬·엑셀 내보내기로 문서 속 데이터를 활용하세요."
+        help="양식별 입력 항목을 표로 조회합니다. 필터·정렬 결과를 엑셀로 내보낼 수 있습니다."
       />
 
       <div className="cd-card rounded-3xl p-5 flex flex-col gap-4 min-h-0">
@@ -305,7 +305,9 @@ export function ApprovalRecordsBoard() {
               key={t}
               type="button"
               onClick={() => setTab(t)}
-              className={`rounded-t-xl px-4 py-2 text-sm font-semibold border-b-2 ${
+              data-active={tab === t}
+              aria-pressed={tab === t}
+              className={`cd-choice rounded-t-xl px-4 py-2 text-sm font-semibold border-b-2 ${
                 tab === t ? "cd-text-primary border-current cd-tint-primary" : "cd-text-faint border-transparent cd-row-hover"
               }`}
             >
@@ -405,7 +407,7 @@ export function ApprovalRecordsBoard() {
         ) : (
           <div className="overflow-x-auto min-h-0">
             <table className="w-full text-[12px] whitespace-nowrap">
-              <thead>
+              <thead className="cd-table-head">
                 <tr className="text-left cd-text-faint text-[11px]">
                   <th className="py-1.5 pr-3 font-semibold">문서번호</th>
                   <th className="py-1.5 pr-3 font-semibold">기안자</th>

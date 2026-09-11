@@ -589,8 +589,10 @@ function CreateTemplateModal({
                       type="button"
                       disabled={!activePermKey || !supported || already}
                       onClick={() => addScopeToActive(s)}
+                      data-active={already}
+                      aria-pressed={already}
                       className={cn(
-                        "cd-pill text-[11px]",
+                        "cd-choice cd-pill text-[11px]",
                         !activePermKey || !supported
                           ? "cd-pill-idle opacity-40 cursor-not-allowed"
                           : already
@@ -890,8 +892,10 @@ function AccountDetailPanel({
                 key={template.templateId}
                 disabled={already}
                 onClick={() => toggleAssign(template.templateId)}
+                data-active={picked}
+                aria-pressed={picked}
                 className={cn(
-                  "cd-pill",
+                  "cd-choice cd-pill",
                   already ? "cd-pill-idle opacity-60 cursor-not-allowed" : picked ? "cd-fill-primary" : "cd-pill-info"
                 )}
               >

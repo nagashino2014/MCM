@@ -90,7 +90,9 @@ export default function HistoryModal({
                 key={t.value}
                 type="button"
                 onClick={() => setTab(t.value)}
-                className={cn("px-3 py-1.5 border-l first:border-l-0 cd-border-c", tab === t.value ? "cd-fill-primary text-white" : "cd-text-muted")}
+                data-active={tab === t.value}
+                aria-pressed={tab === t.value}
+                className={cn("cd-choice px-3 py-1.5 border-l first:border-l-0 cd-border-c", tab === t.value ? "cd-fill-primary text-white" : "cd-text-muted")}
               >
                 {t.label}
               </button>
@@ -159,7 +161,7 @@ export default function HistoryModal({
                           href={a.publicPath ?? "#"}
                           target="_blank"
                           rel="noreferrer"
-                          className="inline-flex items-center gap-1 text-[10px] rounded-md border cd-border-c px-1.5 py-0.5 cd-text-primary hover:underline"
+                          className="cd-action inline-flex items-center gap-1 text-[10px] rounded-md border cd-border-c px-1.5 py-0.5 cd-text-primary hover:underline"
                         >
                           <Paperclip className="w-3 h-3 cd-text-faint" /> {a.fileName} <Download className="w-2.5 h-2.5" />
                         </a>

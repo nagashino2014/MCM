@@ -1463,10 +1463,12 @@ function TabButton({ active, onClick, icon, label }: { active: boolean; onClick:
     <button
       type="button"
       onClick={onClick}
+      data-active={active}
+      aria-pressed={active}
       className={
         active
-          ? "rounded-t-xl cd-soft-primary px-4 py-2 text-xs font-bold flex items-center gap-2 border-b-2 border-[color:var(--cd-primary)]"
-          : "rounded-t-xl px-4 py-2 text-xs font-bold cd-text-muted hover:text-[color:var(--cd-text)] flex items-center gap-2 border-b-2 border-transparent"
+          ? "cd-choice rounded-t-xl cd-soft-primary px-4 py-2 text-xs font-bold flex items-center gap-2 border-b-2 border-[color:var(--cd-primary)]"
+          : "cd-choice rounded-t-xl px-4 py-2 text-xs font-bold cd-text-muted hover:text-[color:var(--cd-text)] flex items-center gap-2 border-b-2 border-transparent"
       }
     >
       {icon}

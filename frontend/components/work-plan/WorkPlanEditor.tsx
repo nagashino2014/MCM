@@ -225,7 +225,7 @@ export default function WorkPlanEditor({
         icon={<ClipboardList className="w-5 h-5" />}
         eyebrow="Work · Reporting"
         title={mode === "new" ? "업무추진계획 작성" : "업무추진계획 편집"}
-        subtitle="수행 부서를 선택하고 용역(계약) 또는 업무단위별 추진내역과 담당자를 입력합니다."
+        help="수행 부서를 선택하고 용역(계약) 또는 업무단위별 추진내역과 담당자를 입력합니다."
         actions={
           <div className="flex items-center gap-2">
             <button
@@ -306,14 +306,18 @@ export default function WorkPlanEditor({
                 <div className="inline-flex shrink-0 rounded-lg border cd-border-c overflow-hidden text-[11px] font-semibold">
                   <button
                     type="button"
-                    className={cn("px-2.5 py-1.5", row.subjectKind === "contract" ? "cd-fill-primary text-white" : "cd-text-muted")}
+                      data-active={row.subjectKind === "contract"}
+                      aria-pressed={row.subjectKind === "contract"}
+                      className={cn("cd-choice px-2.5 py-1.5", row.subjectKind === "contract" ? "cd-fill-primary text-white" : "cd-text-muted")}
                     onClick={() => updateRow(row.key, { subjectKind: "contract" })}
                   >
                     용역
                   </button>
                   <button
                     type="button"
-                    className={cn("px-2.5 py-1.5", row.subjectKind === "free" ? "cd-fill-primary text-white" : "cd-text-muted")}
+                      data-active={row.subjectKind === "free"}
+                      aria-pressed={row.subjectKind === "free"}
+                      className={cn("cd-choice px-2.5 py-1.5", row.subjectKind === "free" ? "cd-fill-primary text-white" : "cd-text-muted")}
                     onClick={() => updateRow(row.key, { subjectKind: "free" })}
                   >
                     업무단위

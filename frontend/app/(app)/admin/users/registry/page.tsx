@@ -154,7 +154,7 @@ function Inner() {
         icon={<UserRoundPlus className="w-5 h-5" />}
         eyebrow="시스템"
         title="사용자 등록·삭제"
-        subtitle="조직도 기반으로 부서 위계와 직급 사용 범위를 관리하고, 직원의 기본 정보·학력·자격·증빙을 등록합니다."
+        help="조직도 기반으로 부서 위계와 직급 사용 범위를 관리하고, 직원의 기본 정보·학력·자격·증빙을 등록합니다."
         actions={
           <>
             <button type="button" onClick={addDepartment} className="cd-btn cd-btn-ghost cd-btn-sm">

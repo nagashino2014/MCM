@@ -138,12 +138,7 @@ function SettingsPageInner() {
         icon={<SettingsIcon className="w-5 h-5" />}
         eyebrow="Data · Settings"
         title="데이터 · 설정"
-        subtitle={
-          <>
-            자주 사용하는 수집 옵션을 저장하고, 기본 옵션을 지정합니다. 저장된 옵션은{" "}
-            <b className="cd-text-primary">/data/status</b>의 옵션 카드 상단 드롭다운에서 즉시 불러올 수 있습니다.
-          </>
-        }
+        help="자주 쓰는 수집 옵션을 저장하거나 기본값으로 지정합니다. 저장한 옵션은 수집 현황의 옵션 목록에서 불러올 수 있습니다."
         actions={
           <>
             <button type="button" onClick={reload} className="cd-btn cd-btn-ghost cd-btn-sm">

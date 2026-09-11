@@ -167,24 +167,30 @@ export function AgreementTemplateBoard() {
         }
       />
       {/* 탭 — 업무추진계획(ExecWorkspace) 세그먼트 패턴. 활성=그라데이션, 비활성=불투명 흰색 */}
-      <div className="inline-flex self-start rounded-xl border cd-border-c overflow-hidden text-[12px] font-semibold">
+      <div className="inline-flex self-start shrink-0 rounded-xl border cd-border-c overflow-hidden text-[12px] font-semibold">
         <button
           type="button"
-          className={`px-3.5 py-2 flex items-center gap-1.5 ${tab === "standard" ? "cd-fill-primary text-white" : "cd-solid-bg cd-text-muted"}`}
+          data-active={tab === "standard"}
+          aria-pressed={tab === "standard"}
+          className={`cd-choice px-3.5 py-2 flex items-center gap-1.5 ${tab === "standard" ? "cd-fill-primary text-white" : "cd-solid-bg cd-text-muted"}`}
           onClick={() => setTab("standard")}
         >
           <FileSignature className="w-3.5 h-3.5" /> 용역 분류별 표준 셋
         </button>
         <button
           type="button"
-          className={`px-3.5 py-2 flex items-center gap-1.5 border-l cd-border-c ${tab === "custom" ? "cd-fill-primary text-white" : "cd-solid-bg cd-text-muted"}`}
+          data-active={tab === "custom"}
+          aria-pressed={tab === "custom"}
+          className={`cd-choice px-3.5 py-2 flex items-center gap-1.5 border-l cd-border-c ${tab === "custom" ? "cd-fill-primary text-white" : "cd-solid-bg cd-text-muted"}`}
           onClick={() => setTab("custom")}
         >
           <Building2 className="w-3.5 h-3.5" /> 발주처 자체양식
         </button>
         <button
           type="button"
-          className={`px-3.5 py-2 flex items-center gap-1.5 border-l cd-border-c ${tab === "library" ? "cd-fill-primary text-white" : "cd-solid-bg cd-text-muted"}`}
+          data-active={tab === "library"}
+          aria-pressed={tab === "library"}
+          className={`cd-choice px-3.5 py-2 flex items-center gap-1.5 border-l cd-border-c ${tab === "library" ? "cd-fill-primary text-white" : "cd-solid-bg cd-text-muted"}`}
           onClick={() => setTab("library")}
         >
           <BookOpen className="w-3.5 h-3.5" /> 조항 라이브러리
@@ -202,7 +208,9 @@ export function AgreementTemplateBoard() {
                 <button
                   key={g.serviceType}
                   type="button"
-                  className={`px-3.5 py-2 ${gi > 0 ? "border-l cd-border-c" : ""} ${
+                  data-active={typeTab === g.serviceType}
+                  aria-pressed={typeTab === g.serviceType}
+                  className={`cd-choice px-3.5 py-2 ${gi > 0 ? "border-l cd-border-c" : ""} ${
                     typeTab === g.serviceType ? "cd-fill-primary text-white" : "cd-solid-bg cd-text-muted"
                   }`}
                   onClick={() => setTypeTab(g.serviceType)}
@@ -287,7 +295,9 @@ export function AgreementTemplateBoard() {
                         <button
                           key={c.id}
                           type="button"
-                          className={`rounded-lg px-2.5 py-1.5 text-left text-[12px] border flex items-center gap-1.5 ${
+                          data-active={clauseTab === i}
+                          aria-pressed={clauseTab === i}
+                          className={`cd-choice rounded-lg px-2.5 py-1.5 text-left text-[12px] border flex items-center gap-1.5 ${
                             clauseTab === i ? "cd-fill-primary text-white border-transparent font-semibold" : "cd-solid-bg cd-border-c cd-text-muted"
                           }`}
                           onClick={() => setClauseTab(i)}
@@ -483,7 +493,9 @@ function CustomTemplateTab({ custom, onSaved }: { custom: CustomRow[]; onSaved: 
         <div className="flex flex-col gap-1.5">
           <button
             type="button"
-            className={`rounded-xl border px-3 py-2.5 text-left ${mode === "overlay" ? "cd-tint-primary border-transparent" : "cd-solid-bg cd-border-c"}`}
+            data-active={mode === "overlay"}
+            aria-pressed={mode === "overlay"}
+            className={`cd-choice rounded-xl border px-3 py-2.5 text-left ${mode === "overlay" ? "cd-tint-primary border-transparent" : "cd-solid-bg cd-border-c"}`}
             onClick={() => setMode("overlay")}
           >
             <span className="text-[12.5px] font-bold cd-text">원본 서식 보존 (권장)</span>
@@ -494,7 +506,9 @@ function CustomTemplateTab({ custom, onSaved }: { custom: CustomRow[]; onSaved: 
           </button>
           <button
             type="button"
-            className={`rounded-xl border px-3 py-2.5 text-left ${mode === "spec" ? "cd-tint-primary border-transparent" : "cd-solid-bg cd-border-c"}`}
+            data-active={mode === "spec"}
+            aria-pressed={mode === "spec"}
+            className={`cd-choice rounded-xl border px-3 py-2.5 text-left ${mode === "spec" ? "cd-tint-primary border-transparent" : "cd-solid-bg cd-border-c"}`}
             onClick={() => setMode("spec")}
           >
             <span className="text-[12.5px] font-bold cd-text">조문 편집형 (재구축)</span>

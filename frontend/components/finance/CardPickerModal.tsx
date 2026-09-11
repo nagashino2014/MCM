@@ -224,7 +224,9 @@ export function CardPickerModal({
                   <button
                     key={c.cardId}
                     type="button"
-                    className={`cd-btn cd-btn-sm ${cardFilter.has(c.cardId) ? "cd-btn-primary" : "cd-btn-soft"}`}
+                    data-active={cardFilter.has(c.cardId)}
+                    aria-pressed={cardFilter.has(c.cardId)}
+                    className={`cd-choice cd-btn cd-btn-sm ${cardFilter.has(c.cardId) ? "cd-btn-primary" : "cd-btn-soft"}`}
                     onClick={() => toggleCard(c.cardId)}
                   >
                     {c.label}
@@ -245,7 +247,9 @@ export function CardPickerModal({
                 <button
                   key={d.deptId}
                   type="button"
-                  className={`cd-btn cd-btn-sm ${openDept === d.deptId ? "cd-btn-soft font-bold" : "cd-btn-ghost"}`}
+                  data-active={openDept === d.deptId}
+                  aria-pressed={openDept === d.deptId}
+                  className={`cd-choice cd-btn cd-btn-sm ${openDept === d.deptId ? "cd-btn-soft font-bold" : "cd-btn-ghost"}`}
                   onClick={() => setOpenDept((prev) => (prev === d.deptId ? null : d.deptId))}
                 >
                   {d.label}
@@ -258,7 +262,9 @@ export function CardPickerModal({
                   <button
                     key={c.cardId}
                     type="button"
-                    className={`cd-btn cd-btn-sm ${cardFilter.has(c.cardId) ? "cd-btn-primary" : "cd-btn-soft"}`}
+                    data-active={cardFilter.has(c.cardId)}
+                    aria-pressed={cardFilter.has(c.cardId)}
+                    className={`cd-choice cd-btn cd-btn-sm ${cardFilter.has(c.cardId) ? "cd-btn-primary" : "cd-btn-soft"}`}
                     onClick={() => toggleCard(c.cardId)}
                   >
                     {c.label}
@@ -279,7 +285,7 @@ export function CardPickerModal({
 
         <div className="overflow-x-auto max-h-[50vh] overflow-y-auto border cd-border-c rounded-xl">
           <table className="w-full text-sm">
-            <thead className="sticky top-0" style={{ background: "var(--cd-card-solid)" }}>
+            <thead className="cd-table-head sticky top-0">
               <tr className="cd-text-muted text-left">
                 <th className="py-2 px-3 font-normal w-8"></th>
                 <th className="py-2 pr-3 font-normal">사용일</th>

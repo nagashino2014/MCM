@@ -18,7 +18,7 @@ const SLOT_ACCEPT: Record<Slot, string> = { pdf: ".pdf", hwp: ".hwp", hwpx: ".hw
 
 function FileSlot({ slot, file, onPick }: { slot: Slot; file: File | null; onPick: (f: File | null) => void }) {
   return (
-    <label className="flex items-center gap-2 rounded-xl border border-dashed cd-border-c px-3 py-2 cursor-pointer min-w-0">
+    <label className="cd-action flex items-center gap-2 rounded-xl border border-dashed cd-border-c px-3 py-2 cursor-pointer min-w-0">
       <Upload className="w-3.5 h-3.5 cd-text-faint shrink-0" />
       <span className="text-[11px] cd-text-faint shrink-0">{SLOT_LABEL[slot]}</span>
       <span className="text-[11.5px] cd-text truncate">{file ? file.name : "선택"}</span>
@@ -199,7 +199,7 @@ export function LetterImportModal({
               <FileSlot key={slot} slot={slot} file={files[slot]} onPick={(f) => setFiles((prev) => ({ ...prev, [slot]: f }))} />
             ))}
           </div>
-          <label className="flex items-center gap-2 rounded-xl border border-dashed cd-border-c px-3 py-2 cursor-pointer">
+          <label className="cd-action flex items-center gap-2 rounded-xl border border-dashed cd-border-c px-3 py-2 cursor-pointer">
             <Paperclip className="w-3.5 h-3.5 cd-text-faint shrink-0" />
             <span className="text-[11px] cd-text-faint shrink-0">동봉 첨부(복수)</span>
             <span className="text-[11.5px] cd-text truncate">{attaches.length ? attaches.map((f) => f.name).join(", ") : "선택"}</span>

@@ -586,7 +586,9 @@ export function QuoteBoard() {
                     <button
                       key={s.siteSeq}
                       type="button"
-                      className={`cd-btn rounded-lg border px-2.5 py-1 text-[11.5px] ${i === activeSite ? "cd-tint-primary font-semibold" : "cd-border-c cd-text-faint"}`}
+                      data-active={i === activeSite}
+                      aria-pressed={i === activeSite}
+                      className={`cd-choice cd-btn rounded-lg border px-2.5 py-1 text-[11.5px] ${i === activeSite ? "cd-tint-primary font-semibold" : "cd-border-c cd-text-faint"}`}
                       onClick={() => setActiveSite(i)}
                     >
                       {s.siteLabel}
@@ -720,7 +722,7 @@ export function QuoteBoard() {
                                 <col key={g} style={{ width: `${40 / siteGrades(site).length}%` }} />
                               ))}
                             </colgroup>
-                            <thead>
+                            <thead className="cd-table-head">
                               <tr>
                                 <th className="border cd-border-c px-2 py-1.5 text-left cd-text-faint font-semibold">항목 (별첨1)</th>
                                 {siteGrades(site).map((g) => (
@@ -857,7 +859,7 @@ export function QuoteBoard() {
                 <div className="flex flex-wrap items-center gap-1">
                   <span className="text-[10.5px] cd-text-faint mr-0.5">불러오기</span>
                   {presets.map((p) => (
-                    <span key={p.presetId} className="inline-flex items-center rounded-full border cd-border-c overflow-hidden">
+                    <span key={p.presetId} className="cd-action inline-flex items-center rounded-full border cd-border-c overflow-hidden">
                       <button type="button" className="text-[11px] px-2 py-0.5 hover:cd-tint-primary" onClick={() => applyPreset(p)} title="이 결재선 불러오기">{p.name}</button>
                       <button type="button" className="text-[10px] px-1 cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" onClick={() => deletePreset(p.presetId)} title="프리셋 삭제">×</button>
                     </span>

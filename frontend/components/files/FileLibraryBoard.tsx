@@ -274,7 +274,8 @@ export function FileLibraryBoard() {
     <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
       <CdPageHeader
         title="파일함"
-        meta={`전자결재 · 메신저 · 사업장 자료 · 게시판 · 업무 이슈 첨부 ${total.toLocaleString()}건`}
+        meta={`첨부 ${total.toLocaleString()}건`}
+        help="전자결재·메신저·사업장·게시판·업무 이슈의 첨부파일을 한곳에서 조회합니다."
         actions={
           <button type="button" className="cd-btn rounded-lg border cd-border-c px-2.5 py-2" title="새로고침" onClick={load}>
             <RefreshCw className="w-3.5 h-3.5" />
@@ -388,7 +389,7 @@ export function FileLibraryBoard() {
         {/* 목록 */}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead>
+            <thead className="cd-table-head">
               <tr className="cd-text-faint text-xs border-b cd-border-c">
                 <th className="py-2 px-2 w-8 text-left">
                   <input type="checkbox" checked={allChecked} onChange={toggleAll} aria-label="전체 선택" />

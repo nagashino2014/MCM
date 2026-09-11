@@ -239,7 +239,7 @@ export default function ServiceWorkspace() {
         icon={<ClipboardList className="w-5 h-5" />}
         eyebrow="Work · Reporting"
         title="업무추진계획"
-        subtitle="수행 중인 용역·Task를 선택해 공정·진행단계·수행인력·추진내역을 한 화면에서 보고합니다."
+        help="수행 중인 용역·Task를 선택해 공정·진행단계·수행인력·추진내역을 한 화면에서 보고합니다."
         actions={
           <div className="flex items-center gap-2">
             {newEntry ? (

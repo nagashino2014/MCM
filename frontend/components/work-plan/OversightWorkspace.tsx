@@ -292,7 +292,7 @@ export default function OversightWorkspace() {
         icon={<ClipboardCheck className="w-5 h-5" />}
         eyebrow="Work · Oversight"
         title="부서장 감독"
-        subtitle="부서원이 보고한 용역·Task를 검토·첨삭하고 부서장 의견·이슈를 기재합니다."
+        help="부서원이 보고한 용역·Task를 검토·첨삭하고 부서장 의견·이슈를 기재합니다."
         actions={
           <div className="flex items-start gap-2">
             <div className="flex flex-col items-end gap-1.5">
@@ -306,8 +306,10 @@ export default function OversightWorkspace() {
               <button
                 type="button"
                 onClick={() => setMerging((m) => !m)}
+                data-active={merging}
+                aria-pressed={merging}
                 className={cn(
-                  "rounded-xl px-3 py-2 text-sm inline-flex items-center gap-1.5 border",
+                  "cd-choice rounded-xl px-3 py-2 text-sm inline-flex items-center gap-1.5 border",
                   merging ? "cd-fill-primary text-white border-transparent" : "cd-border-c cd-text-muted"
                 )}
               >

@@ -453,7 +453,7 @@ function StatementUploadCard({ onImported }: { onImported: () => void }) {
       {done && <div className="text-xs mt-2" style={{ color: "var(--cd-success)" }}>{done}</div>}
 
       {summary && (
-        <div className="mt-3 rounded-xl border cd-border-c p-3 text-xs space-y-2">
+        <div className="mt-3 rounded-xl border cd-border-c p-3 text-xs space-y-3">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="cd-pill cd-pill-info">{summary.profileLabel}</span>
             <span className="cd-text-muted">{period}</span>
@@ -501,7 +501,7 @@ function StatementUploadCard({ onImported }: { onImported: () => void }) {
           {summary.sample.length > 0 && (
             <div className="overflow-x-auto">
               <table className="w-full text-[11px]">
-                <thead>
+                <thead className="cd-table-head">
                   <tr className="cd-text-muted text-left">
                     {Object.keys(summary.sample[0]).map((k) => (
                       <th key={k} className="py-1 pr-2 font-normal">{k}</th>
@@ -890,7 +890,7 @@ function ConnectionsPanel() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead>
+                <thead className="cd-table-head">
                   <tr className="cd-text-muted text-left">
                     <th className="py-1.5 pr-3 font-normal">시작</th>
                     <th className="py-1.5 pr-3 font-normal">종류</th>
@@ -1105,7 +1105,7 @@ function ConnectionTable({
               <col className="w-[16%]" />
               <col className="w-[19%]" />
             </colgroup>
-            <thead>
+            <thead className="cd-table-head">
               <tr className="cd-text-muted text-left">
                 <th className="py-1.5 pr-3 font-normal">{title === "계좌" ? "은행" : "카드사"}</th>
                 <th className="py-1.5 pr-3 font-normal">번호</th>
@@ -1300,7 +1300,9 @@ function BankLedgerPanel() {
                   key={acc.id}
                   type="button"
                   onClick={() => toggleAccount(acc.id)}
-                  className="flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-sm text-left transition-colors"
+                  data-active={selectedAccount === acc.id}
+                  aria-pressed={selectedAccount === acc.id}
+                  className="cd-choice flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-sm text-left transition-colors"
                   style={
                     selectedAccount === acc.id
                       ? { borderColor: "var(--cd-primary)", background: "var(--cd-primary-soft)", color: "var(--cd-primary)" }
@@ -1350,7 +1352,7 @@ function BankLedgerPanel() {
       {error && <div className="cd-error-text text-sm mb-2">{error}</div>}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead>
+          <thead className="cd-table-head">
             <tr className="cd-text-muted text-left">
               <th className="py-1.5 pr-3 font-normal">일시</th>
               <th className="py-1.5 pr-3 font-normal">계좌</th>
@@ -1553,7 +1555,9 @@ function CardLedgerPanel() {
                     key={company.code}
                     type="button"
                     onClick={() => toggleCompany(company.code)}
-                    className="flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-sm text-left transition-colors"
+                    data-active={selectedCompany === company.code}
+                    aria-pressed={selectedCompany === company.code}
+                    className="cd-choice flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-sm text-left transition-colors"
                     style={
                       selectedCompany === company.code
                         ? { borderColor: "var(--cd-primary)", background: "var(--cd-primary-soft)", color: "var(--cd-primary)" }
@@ -1573,7 +1577,9 @@ function CardLedgerPanel() {
                     key={card.id}
                     type="button"
                     onClick={() => toggleCard(card.id)}
-                    className="rounded-full border px-2 py-1.5 text-xs text-center truncate transition-colors"
+                    data-active={selectedCards.has(card.id)}
+                    aria-pressed={selectedCards.has(card.id)}
+                    className="cd-choice rounded-full border px-2 py-1.5 text-xs text-center truncate transition-colors"
                     title={`${card.label} ${card.numberMasked}`}
                     style={
                       selectedCards.has(card.id)
@@ -1636,7 +1642,9 @@ function CardLedgerPanel() {
         </button>
         <button
           type="button"
-          className={`cd-btn cd-btn-sm flex-none ml-auto ${ecommerceOnly ? "cd-btn-primary" : "cd-btn-soft"}`}
+          data-active={ecommerceOnly}
+          aria-pressed={ecommerceOnly}
+          className={`cd-choice cd-btn cd-btn-sm flex-none ml-auto ${ecommerceOnly ? "cd-btn-primary" : "cd-btn-soft"}`}
           title="쿠팡·네이버페이 등 전자상거래·결제대행 매입건 — 같은 매입처라도 건마다 계정과목이 달라 자동 분류에서 빼 둔 건들입니다."
           onClick={() => {
             setEcommerceOnly((v) => !v);
@@ -1649,7 +1657,7 @@ function CardLedgerPanel() {
       {error && <div className="cd-error-text text-sm mb-2">{error}</div>}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead>
+          <thead className="cd-table-head">
             <tr className="cd-text-muted text-left">
               <th className="py-1.5 pr-2 font-normal w-8">
                 <input
@@ -2676,7 +2684,7 @@ function VatPanel() {
       {error && <div className="cd-error-text text-sm mb-2">{error}</div>}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead>
+          <thead className="cd-table-head">
             <tr className="cd-text-muted text-left">
               <th className="py-1.5 pr-3 font-normal">계정과목</th>
               <th className="py-1.5 pr-3 font-normal text-right">건수</th>
@@ -2775,7 +2783,7 @@ function StoreRuleListCard() {
       {error && <div className="cd-error-text text-sm mb-2">{error}</div>}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead>
+          <thead className="cd-table-head">
             <tr className="cd-text-muted text-left">
               <th className="py-1.5 pr-3 font-normal">가맹점</th>
               <th className="py-1.5 pr-3 font-normal">업태</th>
@@ -2935,7 +2943,7 @@ function TaxInvoicePanel() {
           <RefreshCw className="w-3.5 h-3.5" /> 상태 갱신
         </button>
       </div>
-      <p className="text-xs cd-text-muted mb-2">
+      <p className="text-xs cd-text-muted mb-3">
         발행은 계약 상세의 청구·수금 단계에서 <b>전자발행</b> 버튼으로 합니다. 국세청 전송은 발행 다음 날 일괄 처리되므로, 전송 상태는 상태 갱신 후에 반영됩니다.
         <br />
         발급된 계산서는 취소할 수 없습니다 — 금액·내용을 정정하려면 수정세금계산서를 발행해야 합니다(현재는 바로빌 홈페이지에서 처리).
@@ -2944,7 +2952,7 @@ function TaxInvoicePanel() {
       {error && <div className="cd-error-text text-sm mb-2">{error}</div>}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead>
+          <thead className="cd-table-head">
             <tr className="cd-text-muted text-left">
               <th className="py-1.5 pr-3 font-normal">작성일자</th>
               <th className="py-1.5 pr-3 font-normal">공급받는자</th>

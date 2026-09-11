@@ -77,7 +77,7 @@ export function FacilityQualityPanel() {
   const finished=data?.counts.filter(x=>x.status!=="pending").reduce((a,b)=>a+b.count,0)||0;
   const changeFilter=(setter:(s:string)=>void,value:string)=>{setter(value);setOffset(0);};
   return <div className="cdash cd-fields-white p-4 md:p-5 flex flex-col gap-4 min-h-full rounded-3xl" data-theme={theme}>
-    <CdPageHeader icon={<ClipboardList className="w-5 h-5"/>} eyebrow="Facility Data Quality" title="사업장 정보 전수 점검" subtitle="원본을 진단하고, 출처와 변경 전후를 확인한 후보만 선택 반영합니다." actions={<Link href="/facilities" className="cd-btn cd-btn-ghost cd-btn-sm">사업장 마스터</Link>}/>
+    <CdPageHeader icon={<ClipboardList className="w-5 h-5"/>} eyebrow="Facility Data Quality" title="사업장 정보 전수 점검" help="원본을 진단하고, 출처와 변경 전후를 확인한 후보만 선택 반영합니다." actions={<Link href="/facilities" className="cd-btn cd-btn-ghost cd-btn-sm">사업장 마스터</Link>}/>
     {error&&<div role="alert" className="cd-card p-3 cd-error-text">{error}</div>}
     {message&&<div role="status" className="cd-card p-3 cd-text">{message}</div>}
     <div className="cd-card p-4 rounded-2xl flex flex-col gap-3">
@@ -97,7 +97,7 @@ export function FacilityQualityPanel() {
       {data&&<span className="text-sm cd-text">{labels[data.run.status]||data.run.status} · {finished.toLocaleString()} / {total.toLocaleString()}개 사업장</span>}
     </div>
     {data?.run.error&&<p className="cd-error-text text-sm">{data.run.error}</p>}
-    {data&&<div className="cd-card rounded-2xl overflow-x-auto"><table className="w-full min-w-[620px] text-sm"><thead><tr className="text-left cd-text-faint"><th className="p-3">항목별 원본 진단</th>{["valid","missing","format","review","conflict"].map(s=><th key={s} className="p-3">{labels[s]}</th>)}</tr></thead><tbody>{FIELDS.map(f=><tr key={f} className="border-t border-[var(--cd-line)]"><td className="p-3 cd-text">{LABELS[f]}</td>{["valid","missing","format","review","conflict"].map(s=><td key={s} className="p-3"><button className="cd-text" onClick={()=>{setView("items");setField(f);setStatus(s);setOffset(0);}}>{data.fields.find(x=>x.field===f&&x.status===s)?.count||0}</button></td>)}</tr>)}</tbody></table><p className="px-3 pb-3 text-xs cd-text-faint">실행 시작 시 원본 기준입니다. 반영 결과는 새 전수 점검으로 확인하세요. 한 사업장이 여러 항목에 포함됩니다.</p></div>}
+    {data&&<div className="cd-card rounded-2xl overflow-x-auto"><table className="w-full min-w-[620px] text-sm"><thead className="cd-table-head"><tr className="text-left cd-text-faint"><th className="p-3">항목별 원본 진단</th>{["valid","missing","format","review","conflict"].map(s=><th key={s} className="p-3">{labels[s]}</th>)}</tr></thead><tbody>{FIELDS.map(f=><tr key={f} className="border-t border-[var(--cd-line)]"><td className="p-3 cd-text">{LABELS[f]}</td>{["valid","missing","format","review","conflict"].map(s=><td key={s} className="p-3"><button className="cd-text" onClick={()=>{setView("items");setField(f);setStatus(s);setOffset(0);}}>{data.fields.find(x=>x.field===f&&x.status===s)?.count||0}</button></td>)}</tr>)}</tbody></table><p className="px-3 pb-3 text-xs cd-text-faint">실행 시작 시 원본 기준입니다. 반영 결과는 새 전수 점검으로 확인하세요. 한 사업장이 여러 항목에 포함됩니다.</p></div>}
     {runId&&<>
       <div className="flex flex-wrap gap-2 items-center">
         <button className={`cd-btn ${view==="items"?"cd-btn-primary":"cd-btn-ghost"}`} onClick={()=>{setView("items");setStatus("");setOffset(0);}}>원본 진단</button>

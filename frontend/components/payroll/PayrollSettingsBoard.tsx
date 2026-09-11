@@ -119,7 +119,7 @@ export default function PayrollSettingsBoard() {
       />
 
       <section className="cd-card rounded-3xl flex-1 min-h-0 flex flex-col cd-reveal">
-        <div className="flex items-center justify-between px-5 pt-4 pb-2">
+        <div className="flex items-center justify-between px-5 pt-4 pb-3">
           <div className="flex items-center gap-3">
             <div className="flex rounded-xl border cd-border-c overflow-hidden text-sm font-semibold">
               {(
@@ -133,7 +133,9 @@ export default function PayrollSettingsBoard() {
                   key={k}
                   type="button"
                   onClick={() => setTopTab(k)}
-                  className={`px-3.5 py-1.5 transition ${topTab === k ? "cd-fill-primary text-white" : "cd-text"}`}
+                  data-active={topTab === k}
+                  aria-pressed={topTab === k}
+                  className={`cd-choice px-3.5 py-1.5 transition ${topTab === k ? "cd-fill-primary text-white" : "cd-text"}`}
                 >
                   {label}
                 </button>
@@ -146,7 +148,9 @@ export default function PayrollSettingsBoard() {
                     key={k}
                     type="button"
                     onClick={() => setKindTab(k)}
-                    className={`px-3.5 py-1.5 transition ${kindTab === k ? "cd-fill-primary text-white" : "cd-text"}`}
+                    data-active={kindTab === k}
+                    aria-pressed={kindTab === k}
+                    className={`cd-choice px-3.5 py-1.5 transition ${kindTab === k ? "cd-fill-primary text-white" : "cd-text"}`}
                   >
                     {k === "pay" ? "지급 항목" : "공제 항목"}
                   </button>
@@ -180,7 +184,7 @@ export default function PayrollSettingsBoard() {
               .filter((half) => half.length)
               .map((half, hi) => (
                 <table key={hi} className="w-full text-sm">
-                  <thead>
+                  <thead className="cd-table-head">
                     <tr className="cd-text-faint text-[11px] border-b cd-border-c">
                       <th className="text-left font-semibold p-2">항목명</th>
                       <th className="text-left font-semibold p-2">별칭(콤마 구분)</th>

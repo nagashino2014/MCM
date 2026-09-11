@@ -6,7 +6,7 @@ IEPS(통합환경허가) 데이터 수집·파싱 + 계약/사업장 관리 모�
 ## 브랜치·배포 운영 규칙 (모든 세션 공통) ★
 여러 Claude 세션이 각자 브랜치에서 작업하다 **다른 브랜치 기능이 빠진 이미지가 배포되는 사고가 2회**(2026-08-26·08-31) 있었다. 어느 세션이든 다음을 지킨다.
 - **작업 시작 전**: `git fetch origin` 후 원격 브랜치 상황을 확인하고, **최신 main(또는 진행 중인 통합 브랜치)에서 분기**한다. 오래된 분기점 위에 새 작업을 쌓지 않는다.
-- **배포는 반드시 `infra/aws/ops/staging-deploy-next.ps1` 로**: 원격 `claude/*`·`main` 커밋 누락을 검사하는 **갈라진 배포 가드**가 들어 있다. 경고가 뜨면 배포를 멈추고 해당 브랜치를 먼저 머지한 뒤 배포한다(`-Force` 남용 금지).
+- **배포는 반드시 `infra/aws/ops/staging-deploy-next.ps1` 로**: 원격 `claude/*`·`codex/*`·`main` 커밋 누락을 검사한다. 미커밋 변경 또는 `HEAD != origin/main`이면 배포를 차단한다(`-Force`로도 우회 불가). 사용자 승인 후 커밋·main 통합·푸시를 완료하고 배포한다. 2026-09-11에는 미커밋 UI를 운영에만 배포한 뒤 다음 main 배포에서 UI가 사라졌다. **운영 반영과 저장소 통합은 함께 완료해야 한다.**
 - **마이그레이션 번호**: 갈래별 중복 사고로 **200~210 이 소진**됐다 — 신규는 **211부터**, 번호 확정 전 `git fetch` 후 원격 전 브랜치의 `infra/aws/` 를 확인한다. DB 적용은 `infra/aws/ops/staging-apply-migrations.ps1 -Files <파일들>`.
 - **main 수렴**: 통합 PR([#1](https://github.com/nagashino2014/MCM/pull/1))이 머지된 뒤에는 세션 브랜치를 main 에서 재분기한다. 통합 브랜치에 기능이 있는데 자기 브랜치에 없다면, 삭제하지 말고 머지로 가져온다.
 
@@ -39,20 +39,16 @@ IEPS(통합환경허가) 데이터 수집·파싱 + 계약/사업장 관리 모�
 - **DB 변경**은 `infra/aws/NNN_*.sql` 멱등 마이그레이션으로 추가(기존 파일 수정 금지, 다음 번호로 신규 작성).
 - **수정 범위 최소화**: 요청과 무관한 리팩터링·포맷팅을 끼워 넣지 않는다.
 
-## UI 규칙 — Modernize(cdash)가 메인 컨셉 ★
-이 앱의 모든 UI는 **Modernize 어드민 UI 키트를 재현한 `cdash` 디자인 시스템**을 따른다. **신규/수정 UI는 반드시 이 컨셉으로 작성**한다.
-- **권위 있는 전체 규칙**: [`.cursor/rules/ui-modernize.mdc`](.cursor/rules/ui-modernize.mdc) — Cursor 전용 파일이지만 **Claude Code도 UI 작업 시 이 파일을 읽고 따른다**(이 CLAUDE.md가 그 적용을 명시함).
-- **라이브 레퍼런스 구현**: `frontend/components/cdash/`(토큰 `cdash.css`, `useCdashTheme`, `CdThemeToggle`, `CdPageHeader`) + `frontend/app/(app)/contracts/{dashboard,billing}`, 그리고 마이그레이션 완료된 `facilities`·`data`·`contracts` 화면.
-- **핵심 원칙(요약)**:
-  - 토큰은 `cdash.css`의 `--cd-*` CSS 변수(라이트/다크 듀얼). primary = 블루 `#5D87FF`. 폰트 Plus Jakarta Sans + Pretendard.
-  - 페이지 루트: `<div className="cdash cd-fields-white ..." data-theme={theme}>` + `CdPageHeader`. 테마는 `useCdashTheme`(localStorage `cdash-theme` 공유).
-  - **포털(`createPortal`) 모달**은 `.cdash` 밖이라 토큰이 안 풀린다 → 루트에 `cdash-vars`(+`cd-fields-white`) + `data-theme` 부여.
-  - **박스/항목은 배경 채움 대신 윤곽선(`border cd-border-c`) 기본**, 선택·강조 요소만 `cd-tint-primary`/`cd-fill-primary`로 채운다. 입력류는 `cd-fields-white` 스코프에서 흰색.
-  - **날짜 입력은 네이티브 `<input type="date">` 금지**. `CdDateInput`(`components/cdash`)을 쓴다 —
-    `YYYYMMDD` 8자리를 이어 치면 `2026-07-01` 로 자동 완성된다(값은 `YYYY-MM-DD` 문자열 그대로).
-    새로 날짜 입력을 놓을 때도, 기존 화면을 손볼 때도 이 컴포넌트로 통일한다.
-  - 구식 잔재 금지: `glass-*`, 녹색 `bg-primary`(#16A34A), `text-stone-*`, gradient 히어로 등 → cd 토큰으로.
-  - `dashboard.css`/`billing.css`와 `cdash.css`가 공유하는 클래스는 값이 동일해야 한다(분기 금지). 공유 컴포넌트(예: `FacilityOrdersModal`, `PaginationControls`)는 비-cdash 화면에서도 깨지지 않게 hex 폴백 사용.
+## UI 규칙 — Precision (2026-09-10 사용자 요청)
+
+이 앱의 UI는 [docs/ui-precision-standard.md](docs/ui-precision-standard.md)를 따른다. 이전 Modernize/Soft Glass Ink의 충돌하는 시각 규칙을 대체한다.
+- 기존 cdash 컴포넌트/API를 유지한다. KESI-IEPS는 별도 플랫폼이며 이번 요청을 프레임워크 교체로 해석하지 않는다.
+- 무광 불투명 면, 중립 경계 1px, 카드 8px/입력·버튼 8px, 카드 그림자·blur·배경 그라데이션 금지. 주요 버튼의 기존 블루·보라 색은 사용자 요청으로 유지.
+- 공통 `--cd-*` 토큰을 사용하고 페이지 CSS에서 같은 토큰을 재정의하지 않는다. Light/Dark·포털 루트의 `cdash-vars`와 `data-theme`를 유지한다.
+- 메뉴 그룹·부모·자식과 현재 경로/query를 명확히 표시한다. 기존 248px/76px 레일/드로어 구조를 보존한다.
+- 긴 사용법·배경은 `CdHelp`의 `?`로 연결하고, 오류·필수 입력·저장 상태·실행 영향은 화면에 남긴다. 제목 반복·개발 단계 설명은 축약하되 기존 카드·요소는 임의로 삭제하지 않는다.
+- 날짜 입력은 기존 `CdDateInput`의 YYYYMMDD 정규화와 유효성 검사를 유지한다.
+- 시각 변경은 실제 컴포넌트의 라이트/다크·좁은 화면·키보드 검증과 함께 보고한다.
 
 ## 컨텍스트 위생 (읽지 말 것 / 도구 사용)
 - **절대 통째로 읽지 말 것**: `data/`(~14GB), `security-api-scan.txt`(~21MB)·`security-command-only.txt`, 가상환경(`venv311`, `.venv-aws`, `backend/venv*`), `**/node_modules`, `**/.next`, `table_cache`/`*test_cache*`, `*.tfstate`.
@@ -91,3 +87,7 @@ IEPS(통합환경허가) 데이터 수집·파싱 + 계약/사업장 관리 모�
 ## 일반 작업 원칙
 - 되돌리기 어렵거나 외부 반영(배포·푸시·삭제) 작업은 **먼저 확인**받고 실행한다. 결과는 사실대로 보고(실패는 실패로).
 - 커밋/푸시는 사용자가 요청할 때만. 커밋 메시지 끝에 `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
+
+**최우선: 사용자의 명시적 지시 없이 기존 UI 구조를 변경하지 않는다.** 트리뷰·상세 양식·카드 배치·표 열·탭·분할 비율·스크롤 부모를 보존하고 컴포넌트의 글자·색·경계·간격만 정리한다. 허용된 구조 변경은 대시보드와 영업 상세의 FHD 하단 재배치 두 건이며 세부사항은 UI 기준 §7을 따른다.
+
+**버튼 반경 후속 지시:** 일반·태그형·필터·아이콘·탭 버튼은 네 모서리 8px(`--mcm-action-radius`)로 통일한다. 링크·label로 구현한 버튼은 `cd-action`을 쓴다. 버튼의 기존 색·크기·배치를 보존하며 개별 rounded 값으로 반경 규칙을 우회하지 않는다.

@@ -7,11 +7,12 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BrandMark } from "@/components/cdash/BrandMark";
 import { MENU_ITEMS, isMenuVisibleForRole, type MenuItem, type Role } from "@/config/menu";
+import { resolveMenuRoute, type MenuRouteMatch } from "./menu-route";
 import type { NavBadges } from "@/components/layout/useNavBadges";
 
 interface SidebarProps {
@@ -34,16 +35,16 @@ const SECTION_LABEL: Record<string, string> = {
 const OPEN_SECTIONS_KEY = "nav-open-sections-v2";
 
 /** 현재 경로가 속한 항목만 펼친다(기본 접힘 — 분석 §1 사이드바 '벽' 문제). */
-function sectionsForPath(pathname: string | null): string[] {
-  if (!pathname) return [];
-  return MENU_ITEMS.filter(
-    (m) => m.submenu?.some((s) => pathname === s.href || pathname.startsWith(s.href + "/"))
-  ).map((m) => m.title);
+function sectionsForPath(pathname: string | null, query: string): string[] {
+  const active = resolveMenuRoute(MENU_ITEMS, pathname, query);
+  return active ? [active.parentTitle] : [];
 }
 
 export function Sidebar({ role, badges, mode = "auto", onNavigate }: SidebarProps) {
   const pathname = usePathname();
-  const [openSections, setOpenSections] = useState<string[]>(() => sectionsForPath(pathname));
+  const query = useSearchParams().toString();
+  const active = resolveMenuRoute(MENU_ITEMS.filter((item) => isMenuVisibleForRole(item, role)), pathname, query);
+  const [openSections, setOpenSections] = useState<string[]>(() => sectionsForPath(pathname, query));
 
   // 접힘 상태 기억(클라이언트 전용) — 저장값 ∪ 현재 경로 섹션(경로 이동 시 자동 펼침).
   useEffect(() => {
@@ -54,8 +55,8 @@ export function Sidebar({ role, badges, mode = "auto", onNavigate }: SidebarProp
     } catch {
       /* noop */
     }
-    setOpenSections(Array.from(new Set([...saved, ...sectionsForPath(pathname)])));
-  }, [pathname]);
+    setOpenSections(Array.from(new Set([...saved, ...sectionsForPath(pathname, query)])));
+  }, [pathname, query]);
   const toggleSection = (title: string) => {
     setOpenSections((prev) => {
       const next = prev.includes(title) ? prev.filter((t) => t !== title) : [...prev, title];
@@ -81,13 +82,13 @@ export function Sidebar({ role, badges, mode = "auto", onNavigate }: SidebarProp
   return (
     <aside
       className={cn(
-        "cd-nav-flat h-full rounded-[20px] flex-col overflow-y-auto overflow-x-hidden scrollbar-hide shrink-0 border flex",
+        "cd-nav-flat h-full rounded-lg flex-col overflow-y-auto overflow-x-hidden scrollbar-hide shrink-0 border flex",
         isDrawer ? "w-72 p-5 px-3.5" : "w-[76px] 2xl:w-[248px] p-3 2xl:px-3.5 2xl:py-5 hidden lg:flex"
       )}
       style={{
         background: "var(--cd-card)",
-        backdropFilter: "blur(20px)",
-        WebkitBackdropFilter: "blur(20px)",
+        backdropFilter: "none",
+        WebkitBackdropFilter: "none",
         borderColor: "var(--cd-border)",
         boxShadow: "var(--cd-shadow)",
       }}
@@ -96,8 +97,8 @@ export function Sidebar({ role, badges, mode = "auto", onNavigate }: SidebarProp
       <Link href="/home" onClick={onNavigate} className={cn("mb-[18px] flex items-center gap-2.5", isDrawer ? "px-2.5" : "px-1 2xl:px-2.5 justify-center 2xl:justify-start")}>
         <BrandMark className="w-[30px] h-[30px] shrink-0" />
         <span className={cn("flex-col leading-none", labelCls, isDrawer ? "flex" : "hidden 2xl:flex")}>
-          <span className="text-[15px] font-extrabold tracking-[-0.02em] cd-text">MCM</span>
-          <span className="mt-[3px] text-[7.5px] font-semibold tracking-[0.25em] cd-text-faint">GROUPWARE</span>
+          <span className="text-[15px] font-semibold tracking-[-0.02em] cd-text">MCM</span>
+          <span className="mt-[3px] text-[9px] font-semibold tracking-[0.25em] cd-text-faint">GROUPWARE</span>
         </span>
       </Link>
 
@@ -107,7 +108,7 @@ export function Sidebar({ role, badges, mode = "auto", onNavigate }: SidebarProp
             {SECTION_LABEL[g.key] && (
               <>
                 {/* 확장: 텍스트 라벨 / 레일: 구분선 */}
-                <div className={cn("px-2.5 pt-3 pb-1 text-[9.5px] font-bold uppercase tracking-[0.12em] cd-text-faint", labelCls)}>
+                <div className={cn("px-2.5 pt-3 pb-1 text-[11px] font-medium cd-text-faint", labelCls)}>
                   {SECTION_LABEL[g.key]}
                 </div>
                 {!isDrawer && <div className="2xl:hidden mx-3 my-1 border-t cd-hairline-c" />}
@@ -117,7 +118,7 @@ export function Sidebar({ role, badges, mode = "auto", onNavigate }: SidebarProp
               <NavItem
                 key={item.title}
                 item={item}
-                pathname={pathname}
+                active={active}
                 badges={badges}
                 isDrawer={isDrawer}
                 labelCls={labelCls}
@@ -136,7 +137,7 @@ export function Sidebar({ role, badges, mode = "auto", onNavigate }: SidebarProp
 
 function NavItem({
   item,
-  pathname,
+  active,
   badges,
   isDrawer,
   labelCls,
@@ -146,7 +147,7 @@ function NavItem({
   onNavigate,
 }: {
   item: MenuItem;
-  pathname: string | null;
+  active: MenuRouteMatch | null;
   badges: NavBadges;
   isDrawer: boolean;
   labelCls: string;
@@ -157,9 +158,7 @@ function NavItem({
 }) {
   const Icon = item.icon;
   const hasSubmenu = !!item.submenu && item.submenu.length > 0;
-  const isActive = hasSubmenu
-    ? item.submenu!.some((s) => pathname === s.href || pathname?.startsWith(s.href + "/"))
-    : pathname === item.href || pathname?.startsWith(item.href + "/");
+  const isActive = active?.parentTitle === item.title;
   const count = item.badgeKey ? badges[item.badgeKey] : 0;
 
   // 아이콘 — 틴트 사각 배지 폐기, 무채 라인 아이콘(stroke 1.8·opacity 0.9). 레일 뱃지는 점(dot).
@@ -167,28 +166,28 @@ function NavItem({
     <div className="relative flex items-center justify-center shrink-0">
       <Icon className="w-[15px] h-[15px] opacity-90" strokeWidth={1.8} />
       {!isDrawer && count > 0 && (
-        <span className="2xl:hidden absolute -top-1 -right-1.5 w-2 h-2 rounded-full cd-grad-fill" />
+        <span className="2xl:hidden absolute -top-1 -right-1.5 w-2 h-2 rounded-full cd-surface-bg cd-text-muted border cd-border-c" />
       )}
     </div>
   );
 
   // 항목 = 글라스 칩(비활성) / 흰 글라스 필(선택) — 확정안 4a.
   const rowCls = cn(
-    "flex items-center w-full rounded-[11px] text-[13px] transition-all",
+    "flex items-center w-full rounded-md text-[13px] transition-all",
     isDrawer ? "px-2.5 py-[7px] justify-between" : "px-2 2xl:px-2.5 py-[7px] justify-center 2xl:justify-between",
     isActive ? "cd-glass-active font-bold" : "cd-glass-chip font-medium text-[color:var(--cd-nav-muted)]"
   );
 
   // 뱃지 = 그라데이션 원형.
   const countBadge = count > 0 && (
-    <span className="min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-extrabold inline-flex items-center justify-center cd-grad-fill">
+    <span className="min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-semibold inline-flex items-center justify-center cd-surface-bg cd-text-muted border cd-border-c">
       {count > 99 ? "99+" : count}
     </span>
   );
 
   if (!hasSubmenu) {
     return (
-      <Link href={item.href} onClick={onNavigate} title={item.title} className={rowCls} aria-disabled={item.comingSoon}>
+      <Link href={item.href} aria-current={isActive ? "page" : undefined} onClick={onNavigate} title={item.title} className={rowCls} aria-disabled={item.comingSoon}>
         <div className="flex items-center gap-2.5 min-w-0">
           {iconBlock}
           <span className={cn("truncate", labelCls)}>{item.title}</span>
@@ -204,7 +203,7 @@ function NavItem({
   return (
     <div className="flex flex-col">
       {/* 레일 모드: 클릭=대표 경로 이동 / 확장: 클릭=접기토글 */}
-      <button type="button" onClick={onToggle} title={item.title} className={cn(rowCls, !isDrawer && "max-2xl:hidden")}>
+      <button type="button" onClick={onToggle} aria-expanded={open} title={item.title} className={cn(rowCls, !isDrawer && "max-2xl:hidden")}>
         <div className="flex items-center gap-2.5 min-w-0">
           {iconBlock}
           <span className={cn("truncate", labelCls)}>{item.title}</span>
@@ -224,14 +223,15 @@ function NavItem({
         <div className={cn("flex-col gap-0.5 pl-4 mt-1 relative", isDrawer ? "flex" : "hidden 2xl:flex")}>
           <div className="absolute left-6 top-0 bottom-0 w-px" style={{ background: "var(--cd-hairline)" }} />
           {item.submenu!.map((sub) => {
-            const subActive = pathname === sub.href;
+            const subActive = isActive && active?.href === sub.href;
             return (
               <Link
                 key={sub.title}
                 href={sub.href}
+                aria-current={subActive ? "page" : undefined}
                 onClick={onNavigate}
                 className={cn(
-                  "relative block px-2.5 py-[7px] text-[12.5px] rounded-[10px] ml-4 transition-colors",
+                  "relative block px-2.5 py-[7px] text-[12.5px] rounded-md ml-4 transition-colors",
                   subActive
                     ? "cd-glass-active font-bold"
                     : "font-medium text-[color:var(--cd-nav-muted)] cd-row-hover hover:text-[color:var(--cd-text)]"

@@ -110,7 +110,8 @@ export function AccessLogBoard() {
     <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
       <CdPageHeader
         title="접속기록 조회"
-        meta={`${total.toLocaleString()}건 — 로그인·열람·다운로드·민감 설정 변경 이력 (변조 방지 보관)`}
+        meta={`${total.toLocaleString()}건`}
+        help="로그인·열람·다운로드·민감 설정 변경 이력을 조회합니다. 이력은 변조 방지를 위해 보관됩니다."
         actions={
           <button type="button" className="cd-btn rounded-lg border cd-border-c px-2.5 py-2" title="새로고침" onClick={load}>
             <RefreshCw className="w-3.5 h-3.5" />
@@ -170,7 +171,7 @@ export function AccessLogBoard() {
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead>
+            <thead className="cd-table-head">
               <tr className="cd-text-faint text-xs border-b cd-border-c">
                 <th className="py-2 px-2 text-left w-40">일시</th>
                 <th className="py-2 px-2 text-left w-36">사용자</th>

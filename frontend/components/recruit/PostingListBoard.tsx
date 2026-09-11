@@ -116,7 +116,7 @@ export function PostingListBoard() {
       ) : (
         <div className="rounded-2xl border cd-border-c cd-card-bg overflow-hidden" style={{ boxShadow: "var(--cd-shadow)" }}>
           <table className="w-full text-sm">
-            <thead>
+            <thead className="cd-table-head">
               <tr className="text-left text-xs cd-text-muted">
                 <th className="px-5 py-3 font-semibold">공고 제목</th>
                 <th className="px-5 py-3 font-semibold">템플릿</th>

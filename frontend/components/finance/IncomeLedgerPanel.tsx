@@ -86,7 +86,7 @@ export function IncomeLedgerPanel() {
       {error && <div className="cd-error-text text-sm mb-2">{error}</div>}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead>
+          <thead className="cd-table-head">
             <tr className="cd-text-muted text-left">
               <th className="py-1.5 pr-3 font-normal">번호</th>
               <th className="py-1.5 pr-3 font-normal">지급일</th>

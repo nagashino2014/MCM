@@ -297,11 +297,10 @@ function StatusPageInner() {
         icon={<Database className="w-5 h-5" />}
         eyebrow="Data · Status"
         title="데이터 · 수집 현황"
-        subtitle={
+        help={
           <>
-            IEPS 통합환경허가 게시판에서 통합/변경허가 검토결과서와 연간보고서 PDF 를 수집합니다.{" "}
-            <b className="cd-text-primary">수집 시작</b>은 게시물 목록과 PDF 다운로드까지, 우측 옵션 카드의{" "}
-            <b className="cd-text-primary">통합·변경·연간보고서 파싱</b> 버튼이 카테고리별 OCR 추출과 사업장 적재를 담당합니다.
+            <p>IEPS의 통합·변경허가 검토결과서와 연간보고서 PDF를 수집합니다.</p>
+            <p className="mt-2">수집 시작으로 파일을 받은 뒤, 옵션 카드의 유형별 파싱 버튼으로 내용을 추출해 사업장에 반영합니다.</p>
           </>
         }
       />

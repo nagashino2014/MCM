@@ -156,7 +156,9 @@ export function ApprovalLeaveTypesBoard() {
                     key={g}
                     type="button"
                     onClick={() => setActiveGroup(g)}
-                    className={`rounded-2xl px-3.5 py-[18px] text-left border transition-all ${
+                    data-active={on}
+                    aria-pressed={on}
+                    className={`cd-choice rounded-2xl px-3.5 py-[18px] text-left border transition-all ${
                       on ? "cd-glass-active" : "cd-border-c cd-row-hover"
                     }`}
                     style={{
@@ -210,7 +212,7 @@ export function ApprovalLeaveTypesBoard() {
 
                 <div className="overflow-x-auto">
                   <table className="w-full text-[12.5px]">
-                    <thead>
+                    <thead className="cd-table-head">
                       <tr className="text-left cd-text-faint text-[11px]">
                         <th className="py-1.5 pr-2 font-semibold">라벨</th>
                         <th className="py-1.5 pr-2 font-semibold">키</th>

@@ -188,7 +188,9 @@ export default function ContractRoundPanel({
               key={k}
               type="button"
               onClick={() => setTab(k)}
-              className={`px-3 py-1.5 transition ${tab === k ? "cd-fill-primary text-white" : "cd-text"}`}
+              data-active={tab === k}
+              aria-pressed={tab === k}
+              className={`cd-choice px-3 py-1.5 transition ${tab === k ? "cd-fill-primary text-white" : "cd-text"}`}
             >
               {label}
             </button>
@@ -285,8 +287,8 @@ export default function ContractRoundPanel({
           {preview && (
             <div className="max-h-56 overflow-auto border cd-border-c rounded-2xl">
               <table className="w-full text-xs">
-                <thead>
-                  <tr className="cd-text-faint border-b cd-border-c sticky top-0" style={{ background: "var(--cd-card-solid)" }}>
+                <thead className="cd-table-head">
+                  <tr className="cd-text-faint border-b cd-border-c sticky top-0" style={{ background: "var(--cd-surface)" }}>
                     <th className="text-left font-semibold p-2">성명</th>
                     <th className="text-left font-semibold p-2">부서</th>
                     <th className="text-left font-semibold p-2">직급</th>

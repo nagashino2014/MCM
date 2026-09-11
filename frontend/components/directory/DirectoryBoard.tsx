@@ -184,6 +184,7 @@ export function DirectoryBoard() {
     <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
       <CdPageHeader
         title="주소록 · 조직도"
+        help="임직원과 외부 담당자의 연락처를 조회합니다. 외부 담당자 등록·명함 촬영은 사업장 상세에서 합니다."
         meta={`임직원 ${people.length}명 · 외부 연락처 ${activeContacts.length}명`}
       />
 
@@ -418,7 +419,7 @@ export function DirectoryBoard() {
                 {filteredContacts.length === 0 && <p className="text-sm cd-text-faint p-6 text-center">표시할 담당자가 없습니다.</p>}
               </div>
               <p className="text-[10.5px] cd-text-faint">
-                연락처 구분은 소속 기관·업체(사업장) 단위 속성이라, 지정하면 같은 곳의 담당자 전원에게 함께 적용됩니다. 담당자 신규 등록·명함 촬영은 사업장 상세에서 합니다.
+                연락처 구분을 변경하면 같은 기관·업체의 담당자 전원에게 적용됩니다.
               </p>
             </div>
           </div>

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { ChevronDown, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { CdDropdown } from "@/components/cdash/CdDropdown";
+import { CdDropdown, type CdDropdownProps } from "@/components/cdash/CdDropdown";
 import type {
   FacilityFilterOptions,
   FacilityListFilter,
@@ -11,7 +11,7 @@ import type {
 } from "@/lib/ieps/types-facility";
 import { PaginationControls } from "@/components/ui/PaginationControls";
 import { formatCompanyName } from "@/lib/ieps/formatters";
-import { FACILITY_SERVICE_COLORS, FACILITY_SERVICE_LABELS, type FacilityServiceCategory } from "@/lib/ieps/facility-service";
+import { FACILITY_SERVICE_LABELS, type FacilityServiceCategory } from "@/lib/ieps/facility-service";
 import {
   INTEGRATED_PERMIT_INDUSTRIES,
   industryCodeMatchesCategory,
@@ -25,7 +25,7 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 
 /**
- * 필터 칩 — 비활성은 글라스 칩, 선택되면 그라데이션 채움 + × (해제).
+ * 필터 칩 — 중립 면과 선택 경계. 해제는 별도 키보드 버튼.
  * 드롭다운 트리거로 쓸 때는 onClick 없이(부모 CdDropdown 이 클릭을 받음) 라벨만 바꾼다.
  */
 function FilterChip({
@@ -39,21 +39,42 @@ function FilterChip({
   onClick?: () => void;
   onClear?: () => void;
 }) {
+  if (onClick) {
+    return (
+      <button type="button" className="cd-chip cd-chip-sm shrink-0" data-active={active || undefined} aria-pressed={!!active} onClick={onClick}>
+        {label}
+      </button>
+    );
+  }
   return (
-    <span className="cd-chip cd-chip-sm shrink-0" data-active={active || undefined} onClick={onClick} role="button">
-      <span className="truncate max-w-[150px]">{label}</span>
+    <span className="cd-chip cd-chip-sm shrink-0" data-active={active || undefined}>
+      <span className="max-w-[200px] whitespace-normal">{label}</span>
       {onClear ? (
-        <X
-          className="w-3 h-3 opacity-80 hover:opacity-100"
+        <button
+          type="button"
+          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded"
           onClick={(e) => {
             e.stopPropagation();
             onClear();
           }}
           aria-label={`${label} 필터 해제`}
-        />
+          onKeyDown={(e) => e.stopPropagation()}
+        >
+          <X className="w-3 h-3" aria-hidden="true" />
+        </button>
       ) : (
         !onClick && <ChevronDown className="w-3 h-3 opacity-50" />
       )}
+    </span>
+  );
+}
+
+/** 드롭다운 열기와 필터 해제는 서로 중첩하지 않는 두 버튼이다. */
+function FilterDropdown({ label, active, onClear, ...props }: Omit<CdDropdownProps, "trigger"> & { label: string; active?: boolean; onClear?: () => void }) {
+  return (
+    <span className="inline-flex items-center gap-0.5">
+      <CdDropdown {...props} trigger={() => <button type="button" className="cd-chip cd-chip-sm" data-active={active || undefined}>{label}<ChevronDown className="h-3 w-3" aria-hidden="true" /></button>} />
+      {onClear && <button type="button" className="inline-flex h-6 w-6 items-center justify-center rounded cd-text-muted" onClick={onClear} aria-label={`${label} 필터 해제`}><X className="h-3 w-3" aria-hidden="true" /></button>}
     </span>
   );
 }
@@ -184,8 +205,7 @@ export function FacilityListPanel({
         </span>
       </div>
 
-      {/* 필터 = 검색 + 필터 칩(선택 시 그라데이션 채움 + ×).
-          select 나열 + 체크박스 조합은 앱에서 가장 노후한 표면이었다(분석 §2 /facilities). */}
+      {/* 필터 범위와 선택 해제를 같은 영역에서 제공한다. */}
       <div className="flex flex-col gap-2.5 mb-4">
         <div className="flex items-center gap-2 rounded-xl border cd-line-c cd-surface-bg px-3 py-1.5">
           <Search className="w-4 h-4 cd-text-faint shrink-0" />
@@ -193,6 +213,7 @@ export function FacilityListPanel({
             type="text"
             className="flex-1 min-w-0 bg-transparent outline-none text-[13px] cd-text placeholder:text-[color:var(--cd-faint)]"
             placeholder="상호 / 사업자등록번호 / 주소 검색"
+            aria-label="사업장 검색"
             value={filter.q ?? ""}
             onChange={(e) => onFilterChange({ ...filter, q: e.target.value, offset: 0 })}
           />
@@ -219,20 +240,12 @@ export function FacilityListPanel({
           )}
 
           {/* 업종 — 통합허가 기준 토글에 따라 20개 카테고리 / 원본 코드. */}
-          <CdDropdown
+          <FilterDropdown
             align="left"
             menuWidthClass="w-64"
-            trigger={() => (
-              <FilterChip
-                active={!!industryLabel}
-                label={industryLabel ?? "업종"}
-                onClear={
-                  industryLabel
-                    ? () => onFilterChange({ ...filter, industryCode: "", industryCategory: "", offset: 0 })
-                    : undefined
-                }
-              />
-            )}
+            active={!!industryLabel}
+            label={industryLabel ?? "업종"}
+            onClear={industryLabel ? () => onFilterChange({ ...filter, industryCode: "", industryCategory: "", offset: 0 }) : undefined}
             items={
               integratedMode
                 ? INTEGRATED_PERMIT_INDUSTRIES.map((c) => ({
@@ -251,50 +264,36 @@ export function FacilityListPanel({
           <FilterChip active={integratedMode} label="통합허가 기준" onClick={toggleIntegratedMode} />
 
           {/* 종 규모 · 출처 */}
-          <CdDropdown
+          <FilterDropdown
             align="left"
             menuWidthClass="w-40"
-            trigger={() => (
-              <FilterChip
-                active={filter.airClass != null}
-                label={filter.airClass != null ? `대기 ${filter.airClass}종` : "대기 종"}
-                onClear={filter.airClass != null ? () => onFilterChange({ ...filter, airClass: undefined, offset: 0 }) : undefined}
-              />
-            )}
+            active={filter.airClass != null}
+            label={filter.airClass != null ? `대기 ${filter.airClass}종` : "대기 종"}
+            onClear={filter.airClass != null ? () => onFilterChange({ ...filter, airClass: undefined, offset: 0 }) : undefined}
             items={[1, 2, 3, 4, 5].map((c) => ({
               key: String(c),
               label: `대기 ${c}종`,
               onSelect: () => onFilterChange({ ...filter, airClass: c, offset: 0 }),
             }))}
           />
-          <CdDropdown
+          <FilterDropdown
             align="left"
             menuWidthClass="w-40"
-            trigger={() => (
-              <FilterChip
-                active={filter.waterClass != null}
-                label={filter.waterClass != null ? `수질 ${filter.waterClass}종` : "수질 종"}
-                onClear={
-                  filter.waterClass != null ? () => onFilterChange({ ...filter, waterClass: undefined, offset: 0 }) : undefined
-                }
-              />
-            )}
+            active={filter.waterClass != null}
+            label={filter.waterClass != null ? `수질 ${filter.waterClass}종` : "수질 종"}
+            onClear={filter.waterClass != null ? () => onFilterChange({ ...filter, waterClass: undefined, offset: 0 }) : undefined}
             items={[1, 2, 3, 4, 5].map((c) => ({
               key: String(c),
               label: `수질 ${c}종`,
               onSelect: () => onFilterChange({ ...filter, waterClass: c, offset: 0 }),
             }))}
           />
-          <CdDropdown
+          <FilterDropdown
             align="left"
             menuWidthClass="w-48"
-            trigger={() => (
-              <FilterChip
-                active={!!filter.source}
-                label={filter.source ? SOURCE_LABELS[filter.source] ?? filter.source : "출처"}
-                onClear={filter.source ? () => onFilterChange({ ...filter, source: "", offset: 0 }) : undefined}
-              />
-            )}
+            active={!!filter.source}
+            label={filter.source ? SOURCE_LABELS[filter.source] ?? filter.source : "출처"}
+            onClear={filter.source ? () => onFilterChange({ ...filter, source: "", offset: 0 }) : undefined}
             items={(filterOptions?.sources ?? []).map((s) => ({
               key: s.value,
               label: `${SOURCE_LABELS[s.value] ?? s.value} (${s.count})`,
@@ -378,29 +377,25 @@ export function FacilityListPanel({
                   {(f.serviceCategories.length ? f.serviceCategories : ["integrated" as FacilityServiceCategory]).map((category) => (
                     <span
                       key={category}
-                      className="rounded-full px-2 py-0.5 text-[9px] font-bold"
-                      style={{
-                        background: `color-mix(in srgb, ${FACILITY_SERVICE_COLORS[category]} 55%, transparent)`,
-                        color: "var(--cd-body)",
-                      }}
+                      className="rounded border cd-border-c px-2 py-0.5 text-[11px] font-medium cd-text-muted"
                     >
                       {FACILITY_SERVICE_LABELS[category]}
                     </span>
                   ))}
                 </div>
                 <div
-                  className="flex min-w-0 items-center gap-1.5 text-[14.5px] font-extrabold tracking-[-0.01em]"
+                  className="flex min-w-0 items-center gap-1.5 text-[14px] font-semibold"
                   style={{ color: "var(--cd-text)" }}
                   title={f.siteAddress ?? undefined}
                 >
                   <span className="min-w-0 truncate">{formatCompanyName(f.companyName)}</span>
                   {f.isClosed && (
-                    <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold leading-3 cd-error-bg cd-error-text">
+                    <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-medium cd-error-bg cd-error-text">
                       폐업
                     </span>
                   )}
                 </div>
-                <div className="text-[11.5px] truncate mt-0.5" style={{ color: "var(--cd-faint)" }}>
+                <div className="text-[12px] mt-0.5 break-words" style={{ color: "var(--cd-muted)" }}>
                   {f.regionSido || "—"} {f.regionSigungu ?? ""}{" · "}
                   {f.industryCode || "—"} {f.industryName ?? ""}
                 </div>
@@ -408,13 +403,13 @@ export function FacilityListPanel({
               <div className="flex flex-col items-end gap-1 shrink-0">
                 <span className="flex items-center gap-1">
                   {f.airClass != null && (
-                    <span className="cd-pill cd-pill-secondary text-[10px]">대기 {f.airClass}종</span>
+                    <span className="cd-pill cd-pill-outline text-[11px]">대기 {f.airClass}종</span>
                   )}
                   {f.waterClass != null && (
-                    <span className="cd-pill cd-pill-info text-[10px]">수질 {f.waterClass}종</span>
+                    <span className="cd-pill cd-pill-outline text-[11px]">수질 {f.waterClass}종</span>
                   )}
                 </span>
-                {f.decisionNo && <span className="text-[10px] cd-text-faint tabular-nums">{f.decisionNo}</span>}
+                {f.decisionNo && <span className="text-[11px] cd-text-muted tabular-nums">{f.decisionNo}</span>}
               </div>
             </div>
           </button>

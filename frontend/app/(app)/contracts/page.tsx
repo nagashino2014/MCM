@@ -454,7 +454,7 @@ function ContractsInner() {
         icon={<FileSignature className="w-5 h-5" />}
         eyebrow="Contract · Ledger"
         title="계약 관리"
-        subtitle="신규/변경 계약 입력, 계산서 및 수금 정보 등록"
+        help="용역 분류를 펼쳐 계약을 선택하면 오른쪽에 계약 정보와 청구·수금 단계가 표시됩니다. 검색과 연도 필터로 계약 범위를 좁힐 수 있습니다."
         actions={
           <>
             <button
@@ -933,8 +933,8 @@ function ContractDetailPanel({
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex items-start justify-between gap-4">
-        <div>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0 max-w-full">
           <div className="flex items-center gap-2 flex-wrap">
             <h2 className="text-2xl font-bold cd-text">{String(contract.contract_title ?? "")}</h2>
             {overdueTag && (
@@ -962,10 +962,10 @@ function ContractDetailPanel({
             {String(contract.counterparty_name ?? "")} · 업체ID {String(contract.legacy_company_id ?? "-")}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex max-w-full flex-wrap items-center gap-2">
           <button
             type="button"
-            className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs cd-text-muted flex items-center gap-1"
+            className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs cd-text-muted flex shrink-0 items-center gap-1 whitespace-nowrap"
             onClick={() => {
               // Prefer the most recent contract/amendment PDF stored in
               // contract_documents; the legacy fallback to invoice[0] is kept
@@ -996,7 +996,7 @@ function ContractDetailPanel({
           <button
             type="button"
             onClick={() => setStaffingModalOpen(true)}
-            className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs cd-text-muted flex items-center gap-1"
+            className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs cd-text-muted flex shrink-0 items-center gap-1 whitespace-nowrap"
           >
             <GitCommitHorizontal className="w-3.5 h-3.5" />
             공정표/수행인력
@@ -1004,7 +1004,7 @@ function ContractDetailPanel({
           <button
             type="button"
             onClick={onOpenChange}
-            className="rounded-xl px-3 py-2 text-xs text-white cd-fill-primary shadow-sm flex items-center gap-1"
+            className="rounded-xl px-3 py-2 text-xs text-white cd-fill-primary shadow-sm flex shrink-0 items-center gap-1 whitespace-nowrap"
           >
             <Pencil className="w-3.5 h-3.5" />
             변경계약 입력
@@ -1012,7 +1012,7 @@ function ContractDetailPanel({
           <button
             type="button"
             onClick={onDeleteContract}
-            className="rounded-xl px-3 py-2 text-xs text-white bg-rose-500 hover:bg-rose-600 shadow-sm flex items-center gap-1"
+            className="rounded-xl px-3 py-2 text-xs text-white bg-rose-500 hover:bg-rose-600 shadow-sm flex shrink-0 items-center gap-1 whitespace-nowrap"
           >
             <Trash2 className="w-3.5 h-3.5" />
             계약 삭제
@@ -1177,8 +1177,8 @@ function ContractDetailPanel({
             단계 추가
           </button>
         </div>
-        <div className="overflow-hidden rounded-2xl border cd-border-c">
-          <table className="w-full text-xs">
+        <div className="overflow-x-auto rounded-2xl border cd-border-c">
+          <table className="w-full min-w-[1200px] whitespace-nowrap text-xs">
             <thead className="cd-surface-bg cd-text-muted text-[11px]">
               <tr>
                 <th className="text-left p-2.5">차수</th>
@@ -2473,7 +2473,7 @@ function NewContractModal({
               {state.selectedFacilities.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-1">
                   {state.selectedFacilities.map((facility) => (
-                    <span key={facility.facilityId} className="inline-flex items-center gap-1 rounded-full cd-tint-primary px-2.5 py-1 text-xs cd-text-primary">
+                    <span key={facility.facilityId} className="cd-action inline-flex items-center gap-1 rounded-full cd-tint-primary px-2.5 py-1 text-xs cd-text-primary">
                       {facility.companyName}
                       <button
                         type="button"

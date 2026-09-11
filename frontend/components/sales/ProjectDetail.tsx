@@ -16,6 +16,7 @@ import OrganizationTree from "@/components/admin/users/OrganizationTree";
 import type { OrganizationEmployeeRow, OrganizationSnapshot } from "@/components/admin/users/types";
 import { filterAssigneeTree, filterNonAssigneeTree } from "@/lib/sales/org-tree";
 import "@/components/cdash/cdash.css";
+import "./project-detail.css";
 import {
   ACTIVITY_TYPE_META,
   SALES_ACTIVITY_TYPE_LABELS,
@@ -191,7 +192,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   }
 
   return (
-    <div className="cdash cd-fields-white px-2 pt-2 pb-0 h-full flex flex-col min-h-0" data-theme={theme}>
+    <div className="cdash cd-fields-white mcm-sales-detail px-2 pt-2 pb-0 flex flex-col min-h-0" data-theme={theme}>
       <div className="flex items-center justify-between gap-3 flex-wrap shrink-0" style={{ marginBottom: 15 }}>
         <div className="flex items-center gap-3 min-w-0">
           <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => router.push("/sales")}>
@@ -204,9 +205,9 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
         </div>
       </div>
 
-      {/* 본문 2열 — 좌: 영업 스케쥴/사업장정보/진행상황, 우: 영업활동 이력/담당자 */}
-      <div className="flex flex-col lg:flex-row gap-3 lg:items-stretch flex-1 min-h-0">
-        <div className="flex-1 min-w-0 flex flex-col gap-3 min-h-0">
+      {/* FHD: 주요 정보 다음에 이력·담당자. 충분히 넓은 화면에서만 우측 패널을 쓴다. */}
+      <div className="mcm-sales-detail-layout">
+        <div className="mcm-sales-detail-primary">
           <div className="shrink-0">
             <SalesCalendar
               activities={activities}
@@ -216,7 +217,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
               onEditActivity={(a) => { setAddDate(null); setEditing(a); }}
             />
           </div>
-          <div className="flex flex-col lg:flex-row gap-3 lg:items-stretch flex-1 min-h-0">
+          <div className="mcm-sales-detail-overview flex flex-col lg:flex-row gap-3 lg:items-stretch">
             <div className="flex-[6] min-w-0 flex min-h-0">
               <SalesFacilityInfoCard facilityId={project.facilityId} theme={theme} canEdit={canEdit} />
             </div>
@@ -226,13 +227,13 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
           </div>
         </div>
 
-        <div className="lg:w-[640px] shrink-0 flex flex-col gap-3 min-h-0">
+        <div className="mcm-sales-detail-secondary">
           {/* 영업활동 이력 — 남는 높이 채움 + 세로 스크롤(스크롤바 숨김) */}
-          <div className="cd-card-bg rounded-2xl border cd-border-c py-3 flex flex-col flex-[7] min-h-0" style={{ paddingLeft: 20, paddingRight: 20 }}>
+          <div className="mcm-sales-detail-timeline cd-card-bg rounded-2xl border cd-border-c py-3 flex flex-col" style={{ paddingLeft: 20, paddingRight: 20 }}>
             <div className="flex items-center justify-between gap-2 flex-wrap shrink-0" style={{ marginBottom: 15 }}>
               <h2 className="cd-text font-extrabold text-sm">영업활동 이력</h2>
               <div className="flex items-center gap-1.5">
-                <select className="cd-select cd-btn-sm" style={{ width: "auto" }} value={fMonth} onChange={(e) => setFMonth(e.target.value)}>
+                <select aria-label="활동 이력 월" className="cd-select cd-btn-sm" style={{ width: "auto" }} value={fMonth} onChange={(e) => setFMonth(e.target.value)}>
                   <option value="">전체 월</option>
                   {months.map((m) => (
                     <option key={m} value={m}>
@@ -240,7 +241,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
                     </option>
                   ))}
                 </select>
-                <select className="cd-select cd-btn-sm" style={{ width: "auto" }} value={fType} onChange={(e) => setFType(e.target.value as SalesActivityType | "")}>
+                <select aria-label="활동 이력 유형" className="cd-select cd-btn-sm" style={{ width: "auto" }} value={fType} onChange={(e) => setFType(e.target.value as SalesActivityType | "")}>
                   <option value="">전체 유형</option>
                   {(Object.keys(SALES_ACTIVITY_TYPE_LABELS) as SalesActivityType[]).map((t) => (
                     <option key={t} value={t}>{SALES_ACTIVITY_TYPE_LABELS[t]}</option>
@@ -259,7 +260,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
           </div>
 
           {/* 담당자 — 좌: 프로젝트 / 우: 사업장 */}
-          <div className="cd-card-bg rounded-2xl border cd-border-c flex-[3] min-h-0 flex flex-col lg:flex-row gap-3" style={{ paddingTop: 12, paddingBottom: 12, paddingLeft: 15, paddingRight: 15 }}>
+          <div className="mcm-sales-detail-contacts cd-card-bg rounded-2xl border cd-border-c flex flex-col lg:flex-row gap-3" style={{ paddingTop: 12, paddingBottom: 12, paddingLeft: 15, paddingRight: 15 }}>
             {/* 프로젝트 담당자 */}
             <div className="flex-[4] min-w-0 flex flex-col">
               <h2 className="cd-text font-extrabold text-sm" style={{ marginBottom: 12 }}>프로젝트 담당자</h2>
@@ -584,7 +585,7 @@ function MemberModal({ theme, projectId, snapshot, current, onClose, onSaved }: 
             />
             <div className="flex flex-wrap gap-1 mt-2">
               {newPicks.map((p) => (
-                <span key={p.employeeId} className="cd-pill cd-pill-success inline-flex items-center gap-1">
+                <span key={p.employeeId} className="cd-action cd-pill cd-pill-success inline-flex items-center gap-1">
                   {p.name}
                   <button onClick={() => setNewPicks((prev) => prev.filter((x) => x.employeeId !== p.employeeId))}><X className="w-3 h-3" /></button>
                 </span>
@@ -608,7 +609,7 @@ function MemberModal({ theme, projectId, snapshot, current, onClose, onSaved }: 
             </div>
             <div className="flex flex-wrap gap-1 mb-2">
               {picks.map((p) => (
-                <span key={`${p.employeeId}-${p.role}`} className="cd-pill cd-pill-info inline-flex items-center gap-1">
+                <span key={`${p.employeeId}-${p.role}`} className="cd-action cd-pill cd-pill-info inline-flex items-center gap-1">
                   {p.role}·{p.name}
                   <button onClick={() => setPicks((prev) => prev.filter((x) => !(x.employeeId === p.employeeId && x.role === p.role)))}><X className="w-3 h-3" /></button>
                 </span>

@@ -323,7 +323,17 @@ export default function ApprovalFormsBoard() {
         icon={<ClipboardCheck className="w-5 h-5" />}
         eyebrow="Approval · Forms"
         title="전자결재 양식 관리"
-        subtitle="좌측 팔레트의 항목을 캔버스로 끌어 배치합니다. 모든 항목은 필드 키를 가진 스키마로 저장되어, 제출 문서의 값이 분류·정렬·집계 가능한 데이터로 쌓입니다."
+        help={
+          <>
+            <p>좌측 항목을 캔버스로 끌어 배치합니다. 제출된 값은 문서 기록에서 조회·집계할 수 있습니다.</p>
+            <ul className="mt-2 list-disc space-y-1 pl-4">
+              <li>항목을 클릭하면 속성을 편집합니다.</li>
+              <li>항목을 끌면 위치를 옮깁니다.</li>
+              <li>행 사이 파란 띠에 놓으면 새 행을 만듭니다.</li>
+              <li>다른 항목 위에 놓으면 같은 행의 오른쪽에 배치합니다.</li>
+            </ul>
+          </>
+        }
       />
 
       {error && <p className="text-sm text-[color:var(--cd-danger,#FA896B)]">{error}</p>}
@@ -418,7 +428,9 @@ export default function ApprovalFormsBoard() {
                   {savedAt && <span className="text-[11px] cd-text-faint">저장됨 {savedAt}</span>}
                   <button
                     type="button"
-                    className={`cd-btn rounded-lg px-3 py-1.5 text-xs border cd-border-c flex items-center gap-1.5 ${
+                    data-active={preview}
+                    aria-pressed={preview}
+                    className={`cd-choice cd-btn rounded-lg px-3 py-1.5 text-xs border cd-border-c flex items-center gap-1.5 ${
                       preview ? "cd-tint-primary border-transparent" : ""
                     }`}
                     onClick={() => setPreview((p) => !p)}
@@ -568,9 +580,6 @@ export default function ApprovalFormsBoard() {
                         <p className="p-6 text-sm cd-text-faint text-center">팔레트에서 항목을 끌어오거나 클릭해 추가하세요.</p>
                       )}
                     </div>
-                    <p className="text-[10.5px] cd-text-faint mt-1.5">
-                      항목 클릭 = 선택·속성 편집 · 끌기 = 위치 이동 · 행 경계선의 파란 띠 = 새 행으로 삽입 · 항목 위에 놓으면 그 항목 오른쪽(같은 행)에 배치
-                    </p>
                   </div>
 
                   {/* 속성 패널 */}

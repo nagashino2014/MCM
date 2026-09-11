@@ -537,7 +537,7 @@ export function UnbilledSection({ theme }: { theme: CdTheme }) {
           </div>
 
           {/* 총 건수 / 미발행 총액 */}
-          <div className="flex items-center justify-end gap-2 mb-2 flex-wrap">
+          <div className="flex items-center justify-end gap-2 mb-3 flex-wrap">
             <span className="text-[11px] font-bold" style={{ color: "var(--cd-muted)" }}>
               총 건수{" "}
               <span className="tabular-nums font-extrabold" style={{ color: "var(--cd-text)" }}>
@@ -554,8 +554,8 @@ export function UnbilledSection({ theme }: { theme: CdTheme }) {
 
           {/* 열 레이블 */}
           <div
-            className="cdb-unbilled-row !cursor-default text-[11px] font-extrabold"
-            style={{ color: "var(--cd-faint)", background: "transparent" }}
+            className="cdb-unbilled-row cd-table-head !cursor-default text-[11px] font-extrabold"
+            style={{ color: "var(--cd-faint)" }}
           >
             <span>용역명</span>
             <span className="text-center">계약일</span>
@@ -713,7 +713,7 @@ export function UnbilledSection({ theme }: { theme: CdTheme }) {
           </p>
           <div className="text-[11px] mt-1">
             <div
-              className="grid grid-cols-[56px_1fr_1fr] gap-x-2 items-center px-2 py-1.5 font-bold"
+              className="cd-table-head grid grid-cols-[56px_1fr_1fr] gap-x-2 items-center px-2 py-1.5 font-bold"
               style={{ color: "var(--cd-faint)" }}
             >
               <span>연도</span>

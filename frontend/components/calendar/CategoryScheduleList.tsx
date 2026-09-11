@@ -106,7 +106,7 @@ export const CategoryScheduleList = forwardRef<
                         {ev.kind === "sales" && ev.salesProjectId && (
                           <Link
                             href={`/sales/${ev.salesProjectId}`}
-                            className="shrink-0 p-1 rounded-md cd-text-faint hover:text-[color:var(--cd-primary)]"
+                            className="cd-action shrink-0 p-1 rounded-md cd-text-faint hover:text-[color:var(--cd-primary)]"
                             title="영업 스케줄 상세 관리로 이동"
                           >
                             <ExternalLink className="w-3.5 h-3.5" />

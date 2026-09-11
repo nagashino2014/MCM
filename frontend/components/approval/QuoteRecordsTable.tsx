@@ -349,7 +349,7 @@ export function QuoteRecordsTable({
     <>
       <div className="overflow-x-auto min-h-0">
         <table className="w-full text-[12px] whitespace-nowrap">
-          <thead>
+          <thead className="cd-table-head">
             <tr className="text-left cd-text-faint text-[11px]">
               <th className="py-1.5 pr-3 font-semibold">견적번호</th>
               <th className="py-1.5 pr-3 font-semibold">건명</th>

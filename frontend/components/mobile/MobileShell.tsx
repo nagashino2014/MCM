@@ -48,14 +48,14 @@ export function MobileShell({ userName, children }: { userName: string | null; c
   return (
     <div className="cdash cd-canvas cd-fields-white min-h-dvh" data-theme={theme}>
       <div className="mx-auto flex flex-col min-h-dvh" style={{ maxWidth: 480 }}>
-        {/* 상단 미니 헤더 — 글라스 + 제목/날짜 메타 */}
+        {/* 상단 미니 헤더 — 무광 표면 + 제목/날짜 */}
         <header
           className="border-b cd-hairline-c sticky top-0 z-20 flex items-center justify-between px-4"
           style={{
             height: 52,
             background: "var(--cd-card)",
-            backdropFilter: "blur(20px)",
-            WebkitBackdropFilter: "blur(20px)",
+            backdropFilter: "none",
+            WebkitBackdropFilter: "none",
           }}
         >
           <div className="flex items-baseline gap-2 min-w-0">
@@ -82,13 +82,13 @@ export function MobileShell({ userName, children }: { userName: string | null; c
 
         {/* 하단 고정 탭바 */}
         {/* 하단 탭바 — 탭이 5개인데 grid-cols-4 라 다섯 번째(담당자)가 다음 줄로 꺾이던 실버그 수정.
-            글라스(blur 20px) + safe-area. */}
+            불투명 표면 + safe-area. */}
         <nav
           className="border-t cd-hairline-c fixed bottom-0 inset-x-0 z-20"
           style={{
             background: "var(--cd-card)",
-            backdropFilter: "blur(20px)",
-            WebkitBackdropFilter: "blur(20px)",
+            backdropFilter: "none",
+            WebkitBackdropFilter: "none",
             paddingBottom: "env(safe-area-inset-bottom)",
           }}
         >

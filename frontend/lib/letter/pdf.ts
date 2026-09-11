@@ -13,6 +13,7 @@ import {
   BODY_INDENT,
   CONTENT_W,
   DEFAULT_FIT,
+  DEFAULT_TABLE_WIDTH_PCT,
   MARGIN_L,
   MARGIN_R,
   PAGE_H,
@@ -176,6 +177,12 @@ function topGap(fit: FitParams): number {
  * 행 높이는 1행 스팬 셀로 먼저 정하고, 세로 병합 셀의 내용이 스팬 행 합계보다
  * 크면 마지막 스팬 행에 부족분을 가산한다.
  */
+/** 표 렌더 폭(pt) — widthPct(본문 폭 대비 %)를 적용한다. */
+function tableWidthOf(t: Extract<LetterBlock, { kind: "table" }>): number {
+  const pct = Number.isFinite(t.widthPct as number) && (t.widthPct as number) > 0 ? (t.widthPct as number) : DEFAULT_TABLE_WIDTH_PCT;
+  return (CONTENT_W - 2) * (Math.min(100, Math.max(20, pct)) / 100);
+}
+
 function layoutTable(
   t: Extract<LetterBlock, { kind: "table" }>,
   fonts: Fonts,
@@ -184,7 +191,10 @@ function layoutTable(
   const cellSize = size; // 표 글자 크기 = 본문과 동일(사용자 확정)
   const cellLineH = cellSize * 1.4;
   const pad = 3;
-  const widths = t.colRatios.map((r) => r * (CONTENT_W - 2));
+  // 표 전체 폭 = 본문 폭 × widthPct(기본 92%) — 열이 적은 표까지 본문 폭에 꽉 채우던
+  // 동작을 없앴다(2026-09-11 사용자 확정, 좌우에 약간 여백이 있는 편이 보기 좋다).
+  const tableW = tableWidthOf(t);
+  const widths = t.colRatios.map((r) => r * tableW);
   const spanWidth = (ci: number, colSpan: number) =>
     widths.slice(ci, ci + colSpan).reduce((a, b) => a + b, 0);
 
@@ -530,7 +540,9 @@ export async function measureSignTextWidths(companyKo: string, ceoName: string, 
 function drawTable(page: PDFPage, t: Extract<LetterBlock, { kind: "table" }>, fonts: Fonts, size: number, yTop: number): number {
   const cellSize = size; // 표 글자 크기 = 본문과 동일(사용자 확정)
   const { widths, rowHs, wrapped, cellLineH, pad } = layoutTable(t, fonts, size);
-  const x0 = MARGIN_L + 1;
+  // 본문 폭보다 좁은 표는 가운데로 — 왼쪽에만 붙으면 오른쪽 여백만 크게 남아 어색하다.
+  const tableW = widths.reduce((a, b) => a + b, 0);
+  const x0 = MARGIN_L + 1 + Math.max(0, (CONTENT_W - 2 - tableW) / 2);
   let y = yTop;
   t.rows.forEach((row, ri) => {
     let cx = x0;

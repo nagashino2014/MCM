@@ -10,6 +10,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import JSZip from "jszip";
+import { DEFAULT_TABLE_WIDTH_PCT } from "./types";
 import type { FitParams, LetterBlock, LetterLayout, TableCell, TextRun } from "./types";
 
 const TOKEN_RE = /\{\{\s*([^}]+?)\s*\}\}/g;
@@ -695,10 +696,15 @@ function buildTableXml(
   boldCharPr: string | null,
   alignParaPrOf: (align: "CENTER" | "RIGHT") => string | null
 ): string {
+  const centerParaPr = alignParaPrOf("CENTER");
   const cols = t.colRatios.length;
   const rows = t.rows.length;
-  // 참조 표의 전체 폭(hp:sz width) — 없으면 본문 폭 근사(A4 여백 제외 487pt)
-  const totalW = Number(attrOf(tpl.preamble, "hp:sz", "width") ?? Math.round(487 * 100));
+  // 참조 표의 전체 폭(hp:sz width) — 없으면 본문 폭 근사(A4 여백 제외 487pt).
+  // 여기에 표 폭 비율(widthPct, 기본 92%)을 곱한다 — PDF(pdf.ts tableWidthOf)와 같은 규칙으로
+  // 열이 적은 표가 본문 폭에 꽉 차지 않게 한다(2026-09-11 사용자 확정).
+  const baseW = Number(attrOf(tpl.preamble, "hp:sz", "width") ?? Math.round(487 * 100));
+  const pctRaw = Number.isFinite(t.widthPct as number) && (t.widthPct as number) > 0 ? (t.widthPct as number) : DEFAULT_TABLE_WIDTH_PCT;
+  const totalW = Math.round(baseW * (Math.min(100, Math.max(20, pctRaw)) / 100));
   const widths = t.colRatios.map((r) => Math.round(r * totalW));
   // 행 높이 = 행 내 최대 줄 수 기준(줄간 180% + 셀 여백) — 참조 셀 높이는 과대해 치환한다.
   // 세로 병합 셀은 1행 스팬 셀로 높이를 정한 뒤, 내용이 스팬 합계를 넘으면 마지막 행에 가산(2026-08-25).
@@ -721,6 +727,9 @@ function buildTableXml(
   const preamble = tpl.preamble
     .replace(/(\browCnt=")\d+(")/, `$1${rows}$2`)
     .replace(/(\bcolCnt=")\d+(")/, `$1${cols}$2`)
+    // 표 전체 폭도 함께 바꾼다 — 셀 폭만 줄이고 hp:sz 를 두면 한글에서 표가 원래 폭으로
+    // 남아 마지막 열이 늘어난다(2026-09-11 실측).
+    .replace(/(<hp:sz\b[^>]*\bwidth=")\d+(")/, `$1${totalW}$2`)
     .replace(/(<hp:sz\b[^>]*height=")\d+(")/, `$1${totalH}$2`);
   const colW = (ci: number, colSpan: number) => {
     let w = 0;
@@ -740,7 +749,9 @@ function buildTableXml(
     })
     .join("");
   const tbl = `${preamble}${trs}</hp:tbl>`;
-  return tpl.wrapP.replace("__TBL__", tbl);
+  // 본문 폭보다 좁은 표는 감싸는 문단을 가운데 정렬로 — PDF(drawTable)와 같은 자리에 놓는다.
+  const wrap = totalW < baseW - 100 && centerParaPr ? tpl.wrapP.replace(/paraPrIDRef="\d+"/, `paraPrIDRef="${centerParaPr}"`) : tpl.wrapP;
+  return wrap.replace("__TBL__", tbl);
 }
 
 /** 서명줄 인감 그림 개체 제거 — 문서 내 hp:pic 중 인감(정사각 비율 근사)만 제거. */

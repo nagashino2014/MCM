@@ -10,8 +10,9 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from "react";
 import {
   AlignCenter, AlignJustify, AlignLeft, AlignRight, ArrowDown, ArrowLeft, ArrowRight, ArrowUp,
-  Baseline, Bold, Image as ImageIcon, Indent, Italic, Link2, List, ListOrdered, Minus as MinusIcon,
-  Omega, Outdent, Paintbrush, Plus, SeparatorHorizontal, Strikethrough, Subscript, Superscript, Table2,
+  Baseline, Bold, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Expand,
+  Image as ImageIcon, Indent, Italic, Link2, List, ListOrdered, Minus as MinusIcon,
+  Omega, Outdent, Paintbrush, Plus, SeparatorHorizontal, Shrink, Strikethrough, Subscript, Superscript, Table2,
   TableCellsMerge, TableCellsSplit, Trash2,
   Underline as UnderlineIcon, UnfoldHorizontal, UnfoldVertical,
 } from "lucide-react";
@@ -367,30 +368,149 @@ function freezeTableWidths(table: HTMLTableElement): void {
   table.style.width = "auto";
 }
 
-/** 열 너비 같게 — 현재 표 폭을 유지한 채 모든 열을 균등 분배(그리드 기준, 병합 셀은 span 배분). */
-function equalizeCols(cell: HTMLTableCellElement): void {
+/**
+ * 열 너비 같게 — 선택한 셀이 걸친 열만 균등 분배하고, 그 열들의 폭 합계는 유지한다.
+ * 선택이 없으면(단일 셀) 종전대로 표 전체를 균등 분배.
+ * ⚠ 2026-09-11: 선택 셀을 무시하고 늘 표 전체를 건드려 "고르지 않은 열까지 바뀐다"는
+ *   지적이 있었다(tableAct 가 실행 전에 선택을 해제한 것이 직접 원인 — 그쪽도 함께 고쳤다).
+ */
+function equalizeCols(cell: HTMLTableCellElement, sel: HTMLTableCellElement[] = []): void {
   const table = cell.closest("table") as HTMLTableElement | null;
   if (!table || !table.rows[0]) return;
-  const cols = gridColCount(buildGrid(table));
+  const grid = buildGrid(table);
+  const cols = gridColCount(grid);
   if (!cols) return;
-  const total = table.offsetWidth;
-  const w = Math.max(36, Math.floor(total / cols));
-  for (const row of Array.from(table.rows)) {
-    for (const td of Array.from(row.cells)) {
-      if (td.colSpan > 1) td.style.removeProperty("width");
-      else td.style.width = `${w}px`;
-    }
+
+  // 대상 열 — 선택 셀이 걸친 열(2개 이상일 때만). 없으면 전체 열.
+  const picked = new Set<number>();
+  for (const c of sel) {
+    const p = cellPos(grid, c);
+    if (p) for (let i = p.c; i < p.c + c.colSpan; i++) picked.add(i);
   }
+  const targetCols = picked.size > 1 ? [...picked].sort((a, b) => a - b) : Array.from({ length: cols }, (_, i) => i);
+
+  // 열별 "시작 단일 폭 셀" — 폭은 여기에만 건다(병합 셀은 span 이 배분한다).
+  const startsOf = (c: number): HTMLTableCellElement[] => {
+    const out: HTMLTableCellElement[] = [];
+    for (let r = 0; r < grid.length; r++) {
+      const td = grid[r]?.[c];
+      if (!td || td.colSpan > 1 || out.includes(td)) continue;
+      if (cellPos(grid, td)?.c === c) out.push(td);
+    }
+    return out;
+  };
+
+  freezeTableWidths(table);
+  // 대상 열들의 현재 폭 합을 유지한 채 나눠 준다 — 선택하지 않은 열은 그대로 둔다.
+  const starts = targetCols.map(startsOf);
+  const widths = starts.map((cells) => cells[0]?.offsetWidth ?? 0);
+  const sum = widths.reduce((a, b) => a + b, 0) || table.offsetWidth;
+  const w = Math.max(36, Math.floor(sum / targetCols.length));
+  targetCols.forEach((_, i) => {
+    for (const td of starts[i]) td.style.width = `${w}px`;
+  });
   table.style.tableLayout = "fixed";
   table.style.width = "auto";
 }
 
-/** 행 높이 같게 — 가장 큰 행 높이로 전체 통일. */
-function equalizeRows(cell: HTMLTableCellElement): void {
+/** 행 높이 같게 — 선택한 셀이 걸친 행만(없으면 전체) 가장 큰 높이로 통일. */
+function equalizeRows(cell: HTMLTableCellElement, sel: HTMLTableCellElement[] = []): void {
   const table = cell.closest("table") as HTMLTableElement | null;
   if (!table) return;
-  const max = Math.max(...Array.from(table.rows).map((r) => r.offsetHeight));
-  for (const row of Array.from(table.rows)) for (const td of Array.from(row.cells)) td.style.height = `${max}px`;
+  const picked = new Set<HTMLTableRowElement>();
+  for (const c of sel) {
+    const tr = c.closest("tr") as HTMLTableRowElement | null;
+    if (tr) picked.add(tr);
+  }
+  const rows = picked.size > 1 ? [...picked] : (Array.from(table.rows) as HTMLTableRowElement[]);
+  const max = Math.max(...rows.map((r) => r.offsetHeight));
+  for (const row of rows) for (const td of Array.from(row.cells)) td.style.height = `${max}px`;
+}
+
+/**
+ * 표 전체 너비 조절(2026-09-11) — 본문 폭 대비 %(30~100)로 잡는다.
+ * 종전에는 표가 늘 본문 폭에 꽉 차 열이 적은 표도 억지로 늘어났다(사용자 지적).
+ * 값은 data-w 에 남겨 파서(html-parse)가 읽고, PDF·HWPX 가 같은 비율로 그린다.
+ */
+function setTableWidthPct(table: HTMLTableElement, pct: number): void {
+  const next = Math.min(100, Math.max(30, Math.round(pct)));
+  table.dataset.w = String(next);
+  table.style.width = `${next}%`;
+  // 열 px 는 fixed 레이아웃에서 비율처럼 동작하므로 그대로 둔다(열 간 비율 유지).
+  table.style.tableLayout = "fixed";
+  // 100% 미만이면 가운데로 — 좌측에 붙어 있으면 여백이 한쪽에만 생겨 어색하다.
+  table.style.marginLeft = next >= 100 ? "" : "auto";
+  table.style.marginRight = next >= 100 ? "" : "auto";
+}
+
+/** 표의 현재 너비 %(미지정이면 100). */
+function tableWidthPct(table: HTMLTableElement): number {
+  const raw = Number(table.dataset.w);
+  if (Number.isFinite(raw) && raw > 0) return raw;
+  const m = /^(\d+(?:\.\d+)?)%$/.exec(table.style.width || "");
+  return m ? Number(m[1]) : 100;
+}
+
+/**
+ * 셀 크기 한 단계 조절 — 대상 셀이 걸친 열 너비(col)·행 높이(row)를 delta 만큼 옮긴다.
+ * 키보드(방향키)와 표 툴바 버튼이 공유한다. 맨 오른쪽 열도 대상이 되므로,
+ * 경계 드래그가 어려운 마지막 열을 이 경로로 조절할 수 있다(2026-09-11 지적).
+ */
+function resizeCells(targets: HTMLTableCellElement[], axis: "col" | "row", delta: number): void {
+  const table = targets[0]?.closest("table") as HTMLTableElement | null;
+  if (!table) return;
+  if (axis === "col") {
+    freezeTableWidths(table);
+    const grid = buildGrid(table);
+    const cols = gridColCount(grid);
+    const picked = new Set<number>();
+    for (const cell of targets) {
+      const p = cellPos(grid, cell);
+      if (p) for (let c = p.c; c < p.c + cell.colSpan; c++) picked.add(c);
+    }
+    if (!picked.size) return;
+
+    // 열의 "시작 단일 폭 셀" — 폭은 여기에만 건다(병합 셀은 span 이 배분한다).
+    const startsOf = (c: number): HTMLTableCellElement[] => {
+      const out: HTMLTableCellElement[] = [];
+      for (let r = 0; r < grid.length; r++) {
+        const td = grid[r]?.[c];
+        if (!td || td.colSpan > 1 || out.includes(td)) continue;
+        if (cellPos(grid, td)?.c === c) out.push(td);
+      }
+      return out;
+    };
+
+    // ⚠ 표 폭은 유지하고 **인접 열과 폭을 주고받는다**(2026-09-11, 아래아한글 동작).
+    // 종전에는 대상 열만 넓혀 표 전체가 함께 커졌다 — 그래서 표가 본문 폭에 꽉 찬 상태의
+    // 맨 오른쪽 열은 더 넓어질 자리가 없어 "조절이 안 된다"고 보였다.
+    const sorted = [...picked].sort((a, b) => a - b);
+    const first = sorted[0];
+    const last = sorted[sorted.length - 1];
+    // 오른쪽 이웃이 있으면 그쪽에서, 없으면(맨 오른쪽 열) 왼쪽 이웃에서 가져온다.
+    const donor = last + 1 < cols ? last + 1 : first - 1;
+    if (donor < 0 || donor >= cols) return; // 열이 하나뿐인 표
+
+    const growStarts = startsOf(last + 1 < cols ? last : first);
+    const donorStarts = startsOf(donor);
+    if (!growStarts.length || !donorStarts.length) return;
+    const growW = growStarts[0].offsetWidth;
+    const donorW = donorStarts[0].offsetWidth;
+    // 양쪽 모두 최소 폭(36px)을 지키는 범위로 이동량을 자른다.
+    const step = Math.max(-(growW - 36), Math.min(delta, donorW - 36));
+    if (!step) return;
+    for (const td of growStarts) td.style.width = `${growW + step}px`;
+    for (const td of donorStarts) td.style.width = `${donorW - step}px`;
+    return;
+  }
+  const rows = new Set<HTMLTableRowElement>();
+  for (const cell of targets) {
+    const tr = cell.closest("tr") as HTMLTableRowElement | null;
+    if (tr) rows.add(tr);
+  }
+  for (const tr of rows) {
+    for (const td of Array.from(tr.cells)) td.style.height = `${Math.max(24, td.offsetHeight + delta)}px`;
+  }
 }
 
 // ── 셀 다중 선택·병합(2026-08-24) ────────────────────────────────
@@ -1048,48 +1168,19 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
     // Alt+방향키 = 셀 크기 조절(2026-08-24, 한글 워드프로세서 관례) — 커서 셀 또는
     // 드래그로 선택한 복수 셀이 걸친 열 너비(←→)·행 높이(↑↓)를 한 단계씩 조절한다.
     // 방향키 단독은 커서 이동이라 Alt 조합만 가로챈다. 선택 해제 로직보다 먼저 처리.
-    if (e.altKey && (e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "ArrowUp" || e.key === "ArrowDown")) {
+    // 셀 블록을 지정한 상태면 **방향키 단독**으로도 조절한다(2026-09-11, 아래아한글 동작).
+    //   · Alt 조합은 크롬에서 Alt+←/→ 가 뒤로/앞으로 가기라 눌러도 반응이 없어 보였다.
+    //   · 블록 선택 중에는 캐럿 이동이 의미 없으므로 방향키를 크기 조절로 쓴다.
+    const arrowKey = e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "ArrowUp" || e.key === "ArrowDown";
+    const blockSelected = (cellSelRef.current?.cells.length ?? 0) > 0;
+    if (arrowKey && (e.altKey || blockSelected)) {
       const targets = cellSelRef.current?.cells.length ? cellSelRef.current.cells : activeCell ? [activeCell] : [];
       const table = targets[0]?.closest("table") as HTMLTableElement | null;
       if (targets.length && table && innerRef.current?.contains(table)) {
         e.preventDefault();
-        if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-          freezeTableWidths(table);
-          const delta = e.key === "ArrowRight" ? 8 : -8;
-          const grid = buildGrid(table);
-          const cols = new Set<number>();
-          for (const cell of targets) {
-            const p = cellPos(grid, cell);
-            if (p) for (let c = p.c; c < p.c + cell.colSpan; c++) cols.add(c);
-          }
-          for (const c of cols) {
-            // 열의 대표 폭을 먼저 읽고 일괄 설정 — 순차 설정 중 리플로우로 기준이 흔들리지 않게.
-            const targetsInCol: HTMLTableCellElement[] = [];
-            for (let r = 0; r < grid.length; r++) {
-              const cell = grid[r]?.[c];
-              if (!cell || targetsInCol.includes(cell)) continue;
-              const p = cellPos(grid, cell)!;
-              // 열 폭은 그 열에서 시작하는 단일 폭 셀에만 건다(병합 셀은 span 이 배분).
-              if (p.c !== c || cell.colSpan > 1) continue;
-              targetsInCol.push(cell);
-            }
-            if (!targetsInCol.length) continue;
-            const w = Math.max(36, targetsInCol[0].offsetWidth + delta);
-            for (const cell of targetsInCol) cell.style.width = `${w}px`;
-          }
-        } else {
-          const delta = e.key === "ArrowDown" ? 4 : -4;
-          const rows = new Set<HTMLTableRowElement>();
-          for (const cell of targets) {
-            const tr = cell.closest("tr");
-            if (tr) rows.add(tr);
-          }
-          for (const tr of rows) {
-            for (const td of Array.from(tr.cells)) {
-              td.style.height = `${Math.max(24, td.offsetHeight + delta)}px`;
-            }
-          }
-        }
+        const horiz = e.key === "ArrowLeft" || e.key === "ArrowRight";
+        const delta = horiz ? (e.key === "ArrowRight" ? 8 : -8) : e.key === "ArrowDown" ? 4 : -4;
+        resizeCells(targets, horiz ? "col" : "row", delta);
         onInput();
         return;
       }
@@ -1159,11 +1250,14 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
     onInput();
   };
 
-  const tableAct = (fn: (cell: HTMLTableCellElement) => void) => {
+  const tableAct = (fn: (cell: HTMLTableCellElement, sel: HTMLTableCellElement[]) => void) => {
     if (!activeCell) return;
+    // ⚠ 선택 셀 목록을 **해제 전에** 캡처한다 — 종전에는 clearCellSelection() 이 먼저라
+    // "너비 같게"가 선택 범위를 못 보고 표 전체를 균등 분배했다(2026-09-11 지적).
+    const sel = cellSelRef.current?.cells.slice() ?? [];
     // 행/열/표 삭제로 선택 셀이 문서에서 떨어질 수 있다 — 다중 선택은 먼저 해제.
     if (cellSelRef.current) clearCellSelection();
-    fn(activeCell);
+    fn(activeCell, sel);
     innerRef.current?.focus();
     onInput();
     // 표/행/열 삭제로 셀이 문서에서 떨어져 나갔으면 표 툴바를 닫는다(잔존 버그 수정, G2-14).
@@ -1389,6 +1483,51 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
           {divider}
           <TableBtn label="너비 같게" icon={<UnfoldHorizontal className="w-3 h-3" />} onClick={() => tableAct(equalizeCols)} />
           <TableBtn label="높이 같게" icon={<UnfoldVertical className="w-3 h-3" />} onClick={() => tableAct(equalizeRows)} />
+          {divider}
+          {/* 셀 크기 — 경계 드래그가 어려운 맨 오른쪽 열도 여기서 조절한다(2026-09-11).
+              셀을 블록으로 지정하면 방향키만으로도 같은 조절이 된다(아래아한글 동작). */}
+          <TableBtn
+            label="셀 좁게"
+            icon={<ChevronLeft className="w-3 h-3" />}
+            onClick={() => tableAct((c, sel) => resizeCells(sel.length ? sel : [c], "col", -8))}
+          />
+          <TableBtn
+            label="셀 넓게"
+            icon={<ChevronRight className="w-3 h-3" />}
+            onClick={() => tableAct((c, sel) => resizeCells(sel.length ? sel : [c], "col", 8))}
+          />
+          <TableBtn
+            label="셀 낮게"
+            icon={<ChevronUp className="w-3 h-3" />}
+            onClick={() => tableAct((c, sel) => resizeCells(sel.length ? sel : [c], "row", -4))}
+          />
+          <TableBtn
+            label="셀 높게"
+            icon={<ChevronDown className="w-3 h-3" />}
+            onClick={() => tableAct((c, sel) => resizeCells(sel.length ? sel : [c], "row", 4))}
+          />
+          {divider}
+          {/* 표 전체 너비 — 열이 적은 표가 본문 폭에 억지로 늘어나던 문제(2026-09-11) */}
+          <TableBtn
+            label="표 좁게"
+            icon={<Shrink className="w-3 h-3" />}
+            onClick={() =>
+              tableAct((c) => {
+                const t = c.closest("table") as HTMLTableElement | null;
+                if (t) setTableWidthPct(t, tableWidthPct(t) - 5);
+              })
+            }
+          />
+          <TableBtn
+            label="표 넓게"
+            icon={<Expand className="w-3 h-3" />}
+            onClick={() =>
+              tableAct((c) => {
+                const t = c.closest("table") as HTMLTableElement | null;
+                if (t) setTableWidthPct(t, tableWidthPct(t) + 5);
+              })
+            }
+          />
           {divider}
           {/* 셀 병합(2026-08-24) — 셀에서 드래그해 여러 셀을 선택한 뒤 누른다. */}
           <TableBtn

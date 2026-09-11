@@ -135,6 +135,7 @@ export function parseLetterHtml(html: string): LetterBlock[] {
   let table: {
     rows: TableCell[][];
     widths: number[];
+    widthPct?: number;
     curRow: TableCell[] | null;
     curCell: TableCell | null;
     cellRuns: TextRun[];
@@ -224,7 +225,12 @@ export function parseLetterHtml(html: string): LetterBlock[] {
               // 행별 셀 수 보정(부족분 빈 셀)
               for (const r of table.rows) while (r.length < cols) r.push({ lines: [[{ text: "" }]] });
               const ratios = computeColRatios(table.widths, cols);
-              blocks.push({ kind: "table", rows: table.rows, colRatios: ratios } satisfies TableBlock);
+              blocks.push({
+                kind: "table",
+                rows: table.rows,
+                colRatios: ratios,
+                widthPct: table.widthPct,
+              } satisfies TableBlock);
             }
             table = null;
           }
@@ -235,6 +241,14 @@ export function parseLetterHtml(html: string): LetterBlock[] {
         } else {
           flushPara(); // 표 앞 문단 확정
           table = { rows: [], widths: [], curRow: null, curCell: null, cellRuns: [], depth: 1, pending: [] };
+          // 표 전체 폭 — data-w(에디터가 남기는 %) 우선, 없으면 style width:%(2026-09-11).
+          {
+            const attrs = t.attrs ?? "";
+            const dw = /data-w\s*=\s*["']?(\d+(?:\.\d+)?)/.exec(attrs);
+            const sw = /width\s*:\s*(\d+(?:\.\d+)?)\s*%/.exec(styleOf(attrs));
+            const pct = dw ? Number(dw[1]) : sw ? Number(sw[1]) : NaN;
+            if (Number.isFinite(pct) && pct > 0) table.widthPct = Math.min(100, Math.max(20, pct));
+          }
         }
       }
       continue;

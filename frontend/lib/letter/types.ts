@@ -67,7 +67,16 @@ export interface TableBlock {
   kind: "table";
   rows: TableCell[][];
   colRatios: number[]; // 열 폭 비율(합 1)
+  /**
+   * 표 전체 폭 — 본문 폭 대비 %(30~100). 미지정이면 DEFAULT_TABLE_WIDTH_PCT.
+   * 열이 적은 표까지 본문 폭에 꽉 채워 늘리던 문제(2026-09-11 사용자 지적)를 없애기 위해
+   * 에디터에서 조절한 값(table style width·data-w)을 파서가 읽어 렌더러로 넘긴다.
+   */
+  widthPct?: number;
 }
+
+/** 표 기본 폭(%) — 좌우에 약간 여백을 두는 편이 보기 좋다는 사용자 확정(2026-09-11). */
+export const DEFAULT_TABLE_WIDTH_PCT = 92;
 
 export type LetterBlock = ParagraphBlock | TableBlock;
 

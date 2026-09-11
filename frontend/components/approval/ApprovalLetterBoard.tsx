@@ -4,6 +4,7 @@
 // 수신처(주소록 담당자 검색·메일 포함)·유형(일반/내용증명)·본문(MailEditor)·붙임 목록·
 // 인감 날인/HWPX 동봉 옵션 + 결재선/참조자(전자결재 코어 위임). 승인 완료 시 자동 채번·
 // PDF/HWPX 생성·기안자 계정 메일 발송(lib/letter/send.ts). 설계: docs/official-letter-blueprint.md.
+// 사전 검수(221): 상신 전에 공문(안)·첨부서류를 사내 검수자 메일로 보내 확인받는다(lib/letter/review.ts).
 // 결재선 패널은 ApprovalDraftBoard(:704-810)의 마크업·프리셋 로직을 이식했다(회귀 방지 위해
 // 원본은 수정하지 않음 — work-plan 탭 복제와 같은 관행).
 
@@ -11,13 +12,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  ArrowLeft, BookmarkPlus, Eye, FileText, Plus, Save, Search, Send, Stamp, Trash2, Users, X,
+  ArrowLeft, BookmarkPlus, Eye, FileText, Plus, Save, Search, Send, ShieldCheck, Stamp, Trash2, Users, X,
 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
 import { DeleteDraftButton, RejectedBanner, toEditDocMeta, type EditDocMeta } from "@/components/approval/DraftEditNotice";
 import PaymentRequestModal, { type PaymentRequestCreated } from "@/components/approval/PaymentRequestModal";
+import { LetterReviewModal } from "@/components/approval/LetterReviewModal";
 import AttachmentPreviewModal from "@/components/approval/AttachmentPreviewModal";
 import { ATTACHMENT_ACCEPT, ATTACHMENT_ALLOWED_TEXT, isAllowedAttachment, type DocAttachment } from "@/lib/approval/attachments";
 import { MailEditor } from "@/components/mail/MailEditor";
@@ -427,6 +429,8 @@ export function ApprovalLetterBoard() {
   const [watchers, setWatchers] = useState<Watcher[]>([]);
   const [presets, setPresets] = useState<LinePreset[]>([]);
   const [orgModal, setOrgModal] = useState<OrgTarget | null>(null);
+  // 사전 검수(221) — 상신 전 공문(안)·첨부서류를 사내 검수자에게 보내 확인받는다.
+  const [reviewOpen, setReviewOpen] = useState(false);
   const [busy, setBusy] = useState<"save" | "submit" | "preview" | null>(null);
   const [loading, setLoading] = useState(!!editDocId);
   // 레이아웃 미세조정(사용자 확정) — 미리보기 모달에서 조정, field_values 로 저장돼 발송본에 반영
@@ -984,6 +988,24 @@ export function ApprovalLetterBoard() {
         subtitle="결재 승인이 완료되면 자동 채번되어 수신처 메일로 PDF 공문이 발송됩니다."
         actions={
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
+              disabled={busy != null}
+              onClick={() => send("save")}
+              title="작성 중인 공문과 첨부파일을 임시저장합니다(상신 전, 나중에 이어서 작성)"
+            >
+              <Save className="w-3.5 h-3.5" /> {busy === "save" ? "저장 중..." : "저장"}
+            </button>
+            <button
+              type="button"
+              className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
+              disabled={busy != null}
+              onClick={() => setReviewOpen(true)}
+              title="상신 전에 공문(안)과 첨부서류를 사내 검수자에게 보내 확인받습니다"
+            >
+              <ShieldCheck className="w-3.5 h-3.5" /> 사전 검수
+            </button>
             <DeleteDraftButton docId={docId} meta={editMeta} label="공문 삭제" />
             <Link href="/approval" className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs flex items-center gap-1.5">
               <ArrowLeft className="w-3.5 h-3.5" /> 전자결재 홈
@@ -1583,6 +1605,18 @@ export function ApprovalLetterBoard() {
           }}
         />
       )}
+
+      {/* 사전 검수 요청(221) — 검수자 선택은 같은 조직도 트리 모달을 쓴다 */}
+      <LetterReviewModal
+        open={reviewOpen}
+        onClose={() => setReviewOpen(false)}
+        defaultTarget={internalCcTarget}
+        onSaveDoc={async () => {
+          if (!subject.trim()) throw new Error("제목을 입력한 뒤 검수 요청하세요.");
+          const saved = await persist("save");
+          return saved.docId;
+        }}
+      />
 
       {/* 조직도 선택 모달(공용) */}
       <OrgPickerModal

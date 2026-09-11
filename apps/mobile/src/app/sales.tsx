@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Dimensions, Linking, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Linking, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -248,12 +248,13 @@ export default function SalesScreen() {
         )}
       </ScrollView>
 
-      {/* 일정 상세 — 본문 높이는 일정 화면 상세 시트와 같은 규칙으로 화면의 55% 고정
-          (내용이 넘치면 내부 스크롤)해 버튼이 잘리지 않게 한다. 버튼은 footer 슬롯(사용자 피드백 09-11). */}
+      {/* 일정 상세 — 시트 높이를 화면의 70% 로 고정하고(fillHeight) 본문이 남은 공간을 채운다.
+          본문에 높이를 직접 주면 시트가 그만큼 커져 footer 가 화면 밖으로 밀린다(09-11 재제보). */}
       <Sheet
         visible={!!detail && !progressFor}
         onClose={() => setDetail(null)}
         title={detail?.projectTitle ?? '영업 일정'}
+        fillHeight={0.7}
         footer={
           detail && canEdit && detailEnded ? (
             <View className="flex-1">
@@ -273,7 +274,7 @@ export default function SalesScreen() {
         }>
         {detail ? (
           <ScrollView
-            style={{ height: Math.round(Dimensions.get('window').height * 0.55) }}
+            className="flex-1"
             contentContainerStyle={{ gap: 12, paddingBottom: 8 }}
             showsVerticalScrollIndicator={false}>
             <View className="flex-row items-center gap-2">

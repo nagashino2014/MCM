@@ -121,3 +121,9 @@
 @keyframes cdBoard { 0%, 50%, 100% { transform: rotate(0deg); } 25% { transform: rotate(6deg); } 75% { transform: rotate(-6deg); } }
 @keyframes cdJumpA { 0%, 50%, 100% { transform: translateY(0); } 25% { transform: translateY(-22px); } 75% { transform: translateY(3px); } }
 @keyframes cdJumpB { 0%, 50%, 100% { transform: translateY(0); } 25% { transform: translateY(3px); } 75% { transform: translateY(-22px); } }
+
+/* 시간대별 예보 가로 스크롤 — 위젯 안이라 기본 스크롤바는 너무 두껍다. */
+.wx-hours { scrollbar-width: thin; scrollbar-color: rgba(120, 135, 180, 0.4) transparent; }
+.wx-hours::-webkit-scrollbar { height: 6px; }
+.wx-hours::-webkit-scrollbar-track { background: transparent; }
+.wx-hours::-webkit-scrollbar-thumb { background: rgba(120, 135, 180, 0.4); border-radius: 3px; }

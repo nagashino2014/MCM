@@ -18,9 +18,10 @@ interface AttendanceMe {
   limits: { weeklyOvertimeLimitMinutes: number };
 }
 
-// 시안(r34·92px)에서 20% 확대 — 카드 높이가 결재 카드와 같아지며 여백이 늘어난 만큼 게이지를 키운다.
-const RING_BOX = 110;
-const RING_R = 41;
+// 시안(r34·92px)에서 확대 — 카드 여백이 넉넉하고, 링이 작으면 중앙 텍스트가 호에 붙어 답답하다.
+// 2026-09-11 사용자 요청으로 지름을 다시 30% 키웠다(굵기는 그대로 두어 안쪽 여백이 넓어진다).
+const RING_BOX = 134;
+const RING_R = 53;
 const RING_STROKE = 11;
 const RING_C = 2 * Math.PI * RING_R;
 

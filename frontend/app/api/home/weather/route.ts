@@ -8,7 +8,8 @@ export const dynamic = "force-dynamic";
 /**
  * 홈 날씨 위젯 — ?lat=&lon= 위치의 현재 기상.
  * 기상청 API 키를 서버에만 두기 위한 프록시이기도 하다(브라우저 직접 호출 시 키 노출·CORS 문제).
- * 응답: { temp, hi, lo, base(맑음|흐림|비|눈), source }
+ * 응답: { temp, hi, lo, base(맑음|흐림|비|눈), source,
+ *        hours: [{ t:"YYYY-MM-DDTHH:00", temp, base, pop(%), pcp(mm) }] — 위젯 하단의 시간대별 패널용 }
  */
 export async function GET(req: NextRequest) {
   try {

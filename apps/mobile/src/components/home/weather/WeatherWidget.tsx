@@ -8,7 +8,7 @@
  * 딥 네이비 캔버스 + 달·별·야간 광원, 텍스트/스크림 반전, 배지는 기상특보성(호우·한파·열대야)만.
  */
 import { useMemo, useState } from "react";
-import { Text, View, type LayoutChangeEvent } from "react-native";
+import { Pressable, ScrollView, Text, View, type LayoutChangeEvent } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 
@@ -27,8 +27,18 @@ import {
   NightSunnyScene,
   NightXmasScene,
 } from "./scenes-night";
-import { type SceneProps } from "./parts";
-import { SCENE_H, SCENE_META, SCENE_W, isNightAt, nightBadge, pickScene, type BaseKind, type SceneKind } from "./rules";
+import { HourIcon, type SceneProps } from "./parts";
+import {
+  SCENE_H,
+  SCENE_META,
+  SCENE_W,
+  isNightAt,
+  nightBadge,
+  pickScene,
+  type BaseKind,
+  type SceneKind,
+  type WeatherHour,
+} from "./rules";
 import { useClock, useWeather } from "./use-weather";
 
 /**
@@ -69,13 +79,127 @@ const NIGHT_SCENES: Record<SceneKind, (p: SceneProps) => React.ReactElement> = {
 
 const p2 = (n: number) => String(n).padStart(2, "0");
 
+/**
+ * 시간대별 예보 패널 — 위젯 전체를 덮되 배경은 반투명이라 **씬이 옅게 비친다**(웹과 같은 규칙).
+ * 시계열은 글라스 카드 하나에 담아 아래쪽에 두고, 가로 스크롤로 약 2일 반까지 훑는다.
+ * 칸의 주/야 아이콘은 그 시각의 일출·일몰로 판정한다.
+ */
+function HoursPanel({
+  hours,
+  night,
+  coords,
+  locLabel,
+  onClose,
+}: {
+  hours: WeatherHour[];
+  night: boolean;
+  coords: { lat: number; lon: number };
+  locLabel: string | null;
+  onClose: () => void;
+}) {
+  const ink = night ? "#F2F5FF" : "#22333C";
+  const sub = night ? "#A9B3D2" : "#557080";
+  const faint = night ? "#7E89AC" : "#8496A0";
+  const rainInk = night ? "#8CAAF0" : "#3D7AD0";
+  const line = night ? "rgba(130,148,205,0.3)" : "rgba(120,135,180,0.22)";
+  const dayInk = night ? "#A9B8FF" : "#4A63D8";
+  const cardBg = night ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.55)";
+  const cardBd = night ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.85)";
+
+  return (
+    <View
+      style={{
+        position: "absolute",
+        left: 0,
+        right: 0,
+        top: 0,
+        bottom: 0,
+        backgroundColor: night ? "rgba(13,18,38,0.8)" : "rgba(255,255,255,0.82)",
+      }}>
+      <View className="flex-row items-center gap-1.5 px-[14px] pb-1 pt-3">
+        <Ionicons name="location-outline" size={13} color={night ? "#93A0C8" : "#274252"} />
+        <Text className="text-[12px] font-semibold" style={{ color: night ? "#C7D0EC" : "#274252" }}>
+          {locLabel ?? "시간대별 예보"}
+        </Text>
+        <Text className="text-[10.5px]" style={{ color: faint }}>
+          시간대별
+        </Text>
+        <Pressable
+          onPress={onClose}
+          className="ml-auto flex-row items-center gap-1 rounded-lg px-2.5 py-1 active:opacity-70"
+          style={{
+            backgroundColor: night ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.9)",
+            borderWidth: 1,
+            borderColor: cardBd,
+          }}>
+          <Ionicons name="chevron-back" size={11} color={ink} />
+          <Text className="text-[11px] font-bold" style={{ color: ink }}>
+            돌아가기
+          </Text>
+        </Pressable>
+      </View>
+
+      {hours.length === 0 ? (
+        <View className="flex-1 items-center justify-center">
+          <Text className="text-[11.5px] font-semibold" style={{ color: sub }}>
+            시간대별 예보를 불러오는 중입니다
+          </Text>
+        </View>
+      ) : (
+        <View className="flex-1 justify-end px-[12px] pb-[12px]">
+          <View
+            className="overflow-hidden"
+            style={{ borderRadius: 12, backgroundColor: cardBg, borderWidth: 1, borderColor: cardBd }}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 2, paddingVertical: 9 }}>
+              {hours.map((h, i) => {
+                const at = new Date(`${h.t}:00+09:00`);
+                const newDay = i === 0 || h.t.slice(0, 10) !== hours[i - 1].t.slice(0, 10);
+                const label = newDay ? `${at.getMonth() + 1}/${at.getDate()}` : `${at.getHours()}시`;
+                return (
+                  <View
+                    key={h.t}
+                    className="items-center gap-1"
+                    style={{
+                      width: 50,
+                      // 날짜가 바뀌는 칸 앞 얇은 구분선 — 카드 하나 안에서 '내일/모레'를 나눈다.
+                      borderLeftWidth: newDay && i > 0 ? 1 : 0,
+                      borderLeftColor: line,
+                    }}>
+                    <Text
+                      style={{ fontSize: 11, fontWeight: newDay ? "800" : "600", color: newDay ? dayInk : sub }}>
+                      {label}
+                    </Text>
+                    <HourIcon kind={h.base} night={isNightAt(at, coords.lat, coords.lon)} size={24} />
+                    <Text style={{ fontSize: 13.5, fontWeight: "800", color: ink }}>{h.temp}°</Text>
+                    <Text style={{ fontSize: 10.5, fontWeight: "700", color: rainInk, minHeight: 13 }}>
+                      {h.pop > 0 ? `${h.pop}%` : ""}
+                    </Text>
+                    <Text style={{ fontSize: 10, color: faint, minHeight: 12 }}>
+                      {h.pcp > 0 ? `${h.pcp}mm` : ""}
+                    </Text>
+                  </View>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      )}
+    </View>
+  );
+}
+
 /** 기본 날씨 4종 — 씬 강제 미리보기에서 상태 문구를 씬에 맞추는 데 쓴다. */
 const BASE_OF: SceneKind[] = ["맑음", "흐림", "비", "눈"];
 
 export function WeatherWidget({ sceneOverride, nightOverride }: { sceneOverride?: SceneKind; nightOverride?: boolean }) {
   const now = useClock();
-  const { coords, locLabel, weather, seasons } = useWeather();
+  const { coords, locLabel, weather, seasons, relocate, locating } = useWeather();
   const [size, setSize] = useState({ w: 0, h: 0 });
+  /** 시간대별 예보 패널 — 하단 절반을 누르면 열리고 우상단 '돌아가기'로 닫는다. */
+  const [panel, setPanel] = useState(false);
   const { w, h } = size;
 
   const picked = useMemo(() => pickScene(weather?.base ?? "맑음", now, seasons), [weather?.base, now, seasons]);
@@ -140,14 +264,22 @@ export function WeatherWidget({ sceneOverride, nightOverride }: { sceneOverride?
         <Rect x={0} y={0} width={w} height={h} fill="url(#wxVeil)" />
       </Svg>
 
-      {/* 좌상 — 위치 + 배지 */}
-      <View className="absolute left-[14px] top-3 flex-row items-center gap-2">
-        <View className="flex-row items-center gap-1">
+      {/* 좌상 — 위치 + 배지. 패널이 열리면 숨긴다(패널 헤더에 위치명이 다시 나온다). */}
+      <View
+        className="absolute left-[14px] top-3 flex-row items-center gap-2"
+        style={{ opacity: panel ? 0 : 1 }}
+        pointerEvents={panel ? "none" : "auto"}>
+        {/* 위치 칩 — 누르면 현재 위치를 다시 측정한다(마지막 좌표 캐시 무시). */}
+        <Pressable
+          onPress={relocate}
+          disabled={locating}
+          hitSlop={8}
+          className="flex-row items-center gap-1 active:opacity-60">
           <Ionicons name="location-outline" size={13} color={C.icon} />
           <Text className="text-[12px] font-semibold" style={{ color: C.loc }}>
-            {locLabel ?? "위치 확인 중"}
+            {locating ? "위치 확인 중…" : (locLabel ?? "위치 확인 중")}
           </Text>
-        </View>
+        </Pressable>
         {!night && dayBadge ? (
           <View className="rounded-full px-2 py-[3px]" style={{ backgroundColor: meta.badgeBg || "rgba(255,255,255,0.75)" }}>
             <Text className="text-[10.5px] font-semibold" style={{ color: meta.badgeFg || "#2A7A5E" }}>
@@ -164,8 +296,8 @@ export function WeatherWidget({ sceneOverride, nightOverride }: { sceneOverride?
         ) : null}
       </View>
 
-      {/* 좌하 — 시계 + 기온 */}
-      <View className="absolute bottom-[10px] left-[14px]">
+      {/* 좌하 — 시계 + 기온. 패널이 열리면 숨긴다(반투명 배경 너머로 겹쳐 비치면 읽기 어렵다). */}
+      <View className="absolute bottom-[10px] left-[14px]" style={{ opacity: panel ? 0 : 1 }}>
         <Text className="text-[30px] font-extrabold" style={{ color: C.clock, lineHeight: 30, letterSpacing: -0.6 }}>
           {p2(now.getHours())}:{p2(now.getMinutes())}
         </Text>
@@ -181,6 +313,24 @@ export function WeatherWidget({ sceneOverride, nightOverride }: { sceneOverride?
           </Text>
         </View>
       </View>
+
+      {/* 하단 절반 — 터치하면 시간대별 예보가 펼쳐진다(사용자 지정 조작). */}
+      {!panel ? (
+        <Pressable
+          onPress={() => setPanel(true)}
+          accessibilityLabel="시간대별 예보 보기"
+          style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: "50%" }}
+        />
+      ) : null}
+      {panel ? (
+        <HoursPanel
+          hours={weather?.hours ?? []}
+          night={night}
+          coords={coords}
+          locLabel={locLabel}
+          onClose={() => setPanel(false)}
+        />
+      ) : null}
     </View>
   );
 }

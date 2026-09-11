@@ -15,11 +15,25 @@ export interface HolidaySeason {
   end: string;
 }
 
+/** 시간대별 예보 1칸 — 서버 `lib/home/weather.ts` 의 WeatherHour 와 같은 계약. */
+export interface WeatherHour {
+  /** KST 기준 "YYYY-MM-DDTHH:00". */
+  t: string;
+  temp: number;
+  base: BaseKind;
+  /** 강수확률 %. */
+  pop: number;
+  /** 1시간 강수량 mm. */
+  pcp: number;
+}
+
 export interface WeatherData {
   temp: number;
   hi: number;
   lo: number;
   base: BaseKind;
+  /** 다음 시각부터의 시계열(위젯 하단을 누르면 펼쳐진다). */
+  hours: WeatherHour[];
 }
 
 /** 씬 캔버스 원본 크기 — 모든 씬 좌표가 이 좌표계 기준이다(웹과 동일). */

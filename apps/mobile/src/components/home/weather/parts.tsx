@@ -11,10 +11,10 @@
 import { type ReactNode } from "react";
 import { View, type StyleProp, type ViewStyle } from "react-native";
 import Animated, { useAnimatedProps, useAnimatedStyle } from "react-native-reanimated";
-import Svg, { Circle, Defs, G, Line, LinearGradient, Path, RadialGradient, Rect, Stop } from "react-native-svg";
+import Svg, { Circle, Defs, Ellipse, G, Line, LinearGradient, Path, RadialGradient, Rect, Stop } from "react-native-svg";
 
 import { phase, useLinearLoop, usePingPong } from "./anim";
-import { SCENE_H, SCENE_W } from "./rules";
+import { SCENE_H, SCENE_W, type BaseKind } from "./rules";
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 const AnimatedRect = Animated.createAnimatedComponent(Rect);
@@ -966,5 +966,56 @@ export function SeesawJumper({
     <Animated.View pointerEvents="none" style={[{ position: "absolute" }, style, st]}>
       {children}
     </Animated.View>
+  );
+}
+
+// ── 시간대별 예보 패널용 소형 아이콘 ────────────────────────────────────────────
+// 씬(400×286 일러스트)은 한 칸이 26px 인 시계열에 쓸 수 없어 별도로 그린다(웹 HourIcon 과 같은 도형).
+
+/** 시간별 칸 아이콘 — 4종 × 주/야. 야간 맑음만 해 대신 달이고 나머지는 색만 밝기 보정한다. */
+export function HourIcon({ kind, night, size = 26 }: { kind: BaseKind; night?: boolean; size?: number }) {
+  const cloud = night ? "#8E99BE" : "#C3CDE1";
+  const cloudTop = night ? "#A3ADCE" : "#DCE3F0";
+  const drop = night ? "#8CAAF0" : "#5A8CE0";
+  const snow = night ? "#D8E2FA" : "#9FC0EA";
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      {kind === "맑음" && night ? (
+        <Path d="M16.5 3.2a8.2 8.2 0 1 0 4.3 12.6A9 9 0 0 1 16.5 3.2Z" fill="#EFE7C6" />
+      ) : null}
+      {kind === "맑음" && !night ? (
+        <G>
+          <Circle cx={12} cy={12} r={5} fill="#F7B94E" />
+          <Path
+            d="M12 2.4V4.6M12 19.4v2.2M2.4 12h2.2M19.4 12h2.2M5.2 5.2l1.6 1.6M17.2 17.2l1.6 1.6M18.8 5.2l-1.6 1.6M6.8 17.2l-1.6 1.6"
+            stroke="#F0AC3F"
+            strokeWidth={1.8}
+            strokeLinecap="round"
+          />
+        </G>
+      ) : null}
+      {kind !== "맑음" ? (
+        <G>
+          <Ellipse cx={13} cy={13} rx={7.5} ry={5} fill={cloud} />
+          <Circle cx={9.5} cy={10.5} r={4.2} fill={cloudTop} />
+          <Circle cx={14.5} cy={10} r={3.4} fill={cloud} />
+        </G>
+      ) : null}
+      {kind === "비" ? (
+        <Path
+          d="M8.5 18.5l-1 2.6M12.5 18.5l-1 2.6M16.5 18.5l-1 2.6"
+          stroke={drop}
+          strokeWidth={1.9}
+          strokeLinecap="round"
+        />
+      ) : null}
+      {kind === "눈" ? (
+        <G>
+          <Circle cx={8.5} cy={19.6} r={1.5} fill={snow} />
+          <Circle cx={13} cy={20.6} r={1.5} fill={snow} />
+          <Circle cx={17} cy={19.6} r={1.5} fill={snow} />
+        </G>
+      ) : null}
+    </Svg>
   );
 }

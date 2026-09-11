@@ -18,15 +18,16 @@
 //  ② 오브젝트 캔버스(400×286): 통째 scale — 인물·나무·건물이 왜곡되지 않는다
 //  ③ 낙하 파티클(꽃잎·낙엽·눈): 카드 전폭에 뿌린다
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { MapPin } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronLeft, MapPin } from "lucide-react";
 import { HOME_HALF_H } from "@/lib/home/widgets";
 import {
   SCENE_W, SCENE_H, type SceneProps,
   SceneCanvas, SceneBand, SnowLayer, RainLayer, Sun, Cloud, SceneTree, SkyBirds,
-  PETALS, MAPLES, W_WHITE, W_WHITE2,
+  HourIcon, PETALS, MAPLES, W_WHITE, W_WHITE2,
 } from "./weather-parts";
 import { NIGHT_SCENES } from "./weather-night";
+import type { WeatherHour } from "@/lib/home/weather";
 import "./weather-widget.css";
 
 type BaseKind = "맑음" | "흐림" | "비" | "눈";
@@ -47,6 +48,8 @@ interface WeatherData {
   hi: number;
   lo: number;
   base: BaseKind;
+  /** 시간대별 예보(다음 시각부터 최대 60시간) — 하단을 누르면 펼쳐진다. */
+  hours: WeatherHour[];
 }
 
 // 위치 미허용/실패 시 기본 위치 — 본사(서울 금천구). 권한을 허용하면 실제 좌표로 대체된다.
@@ -790,6 +793,120 @@ const SCENES: Record<SceneKind, (p: SceneProps) => React.ReactElement> = {
   크리스마스: XmasScene,
 };
 
+/**
+ * 시간대별 예보 패널 — 위젯 전체를 덮되 배경을 반투명으로 두어 **씬이 옅게 비친다**(사용자 지정).
+ * 가로 스크롤로 현재 시각 다음부터 약 2일 반까지 훑을 수 있고, 우상단 '돌아가기'로 닫는다.
+ * 칸의 주/야 아이콘은 그 시각의 일출·일몰로 판정한다(위젯 씬과 같은 규칙).
+ */
+function HoursPanel({
+  hours,
+  night,
+  loc,
+  locLabel,
+  onClose,
+}: {
+  hours: WeatherHour[];
+  night: boolean;
+  loc: { lat: number; lon: number };
+  locLabel: string | null;
+  onClose: () => void;
+}) {
+  const ink = night ? "#F2F5FF" : "#2A3040";
+  const sub = night ? "#A9B3D2" : "#6E7690";
+  const faint = night ? "#7E89AC" : "#9AA1B8";
+  const rainInk = night ? "#8CAAF0" : "#3D7AD0";
+  const line = night ? "rgba(130,148,205,0.3)" : "rgba(120,135,180,0.22)";
+  const dayInk = night ? "#A9B8FF" : "#4A63D8";
+  // 칸은 글라스 카드로 띄운다(사용자 지정) — 뒤의 씬이 비치도록 반투명 + 하이라이트 보더.
+  const cardBg = night ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.55)";
+  const cardBd = night ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.85)";
+
+  return (
+    <div
+      className="absolute inset-0 z-[3] flex flex-col"
+      style={{ background: night ? "rgba(13,18,38,0.8)" : "rgba(255,255,255,0.82)" }}
+    >
+      <div className="flex items-center gap-1.5 px-[18px] pt-[14px] pb-1.5">
+        <MapPin className="w-[13px] h-[13px]" style={{ color: night ? "#93A0C8" : "#6E7690" }} strokeWidth={2} />
+        <span className="text-xs font-bold" style={{ color: night ? "#C7D0EC" : "#5B6479" }}>
+          {locLabel ?? "시간대별 예보"}
+        </span>
+        <span className="text-[11px] font-semibold" style={{ color: faint }}>
+          시간대별
+        </span>
+        <button
+          type="button"
+          onClick={onClose}
+          className="ml-auto inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold"
+          style={{
+            borderRadius: 8,
+            border: `1px solid ${line}`,
+            background: night ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.9)",
+            color: ink,
+          }}
+        >
+          <ChevronLeft className="w-3 h-3" />
+          돌아가기
+        </button>
+      </div>
+
+      {hours.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center text-xs font-semibold" style={{ color: sub }}>
+          시간대별 예보를 불러오는 중입니다
+        </div>
+      ) : (
+        /* 시계열 전체를 글라스 카드 하나에 담아 아래쪽에 배치한다(사용자 지정).
+           강수량 줄은 값이 없어도 자리를 지키므로, 비가 오는 시각에 mm 가 들어와도 카드 높이가 변하지 않는다. */
+        <div className="flex-1 min-h-0 flex items-end px-[14px] pb-[14px]">
+          <div
+            className="w-full overflow-hidden"
+            style={{ borderRadius: 12, background: cardBg, border: `1px solid ${cardBd}` }}
+          >
+            <div className="wx-hours overflow-x-auto overflow-y-hidden">
+              <div className="flex px-[2px] py-[11px]">
+                {hours.map((h, i) => {
+                  const at = new Date(`${h.t}:00+09:00`);
+                  const hh = at.getHours();
+                  const newDay = i === 0 || h.t.slice(0, 10) !== hours[i - 1].t.slice(0, 10);
+                  const label = newDay ? `${at.getMonth() + 1}/${at.getDate()}` : `${hh}시`;
+                  return (
+                    <div
+                      key={h.t}
+                      className="shrink-0 flex flex-col items-center gap-1.5"
+                      style={{
+                        width: 54,
+                        // 날짜가 바뀌는 칸 앞 얇은 구분선 — 카드 하나 안에서 '내일/모레'를 나눈다.
+                        borderLeft: newDay && i > 0 ? `1px solid ${line}` : undefined,
+                      }}
+                    >
+                      <span
+                        className="text-[11.5px]"
+                        style={{ color: newDay ? dayInk : sub, fontWeight: newDay ? 800 : 600 }}
+                      >
+                        {label}
+                      </span>
+                      <HourIcon kind={h.base} night={isNightAt(at, loc.lat, loc.lon)} size={28} />
+                      <span className="text-[15px] font-extrabold tabular-nums" style={{ color: ink }}>
+                        {h.temp}°
+                      </span>
+                      <span className="text-[11px] font-bold tabular-nums" style={{ color: rainInk, minHeight: 14 }}>
+                        {h.pop > 0 ? `${h.pop}%` : ""}
+                      </span>
+                      <span className="text-[10.5px] tabular-nums" style={{ color: faint, minHeight: 13 }}>
+                        {h.pcp > 0 ? `${h.pcp}mm` : ""}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** forceScene/forceNight — 미리보기 강제 표시(홈 헤더 옵션 박스). URL 쿼리(?wx·?wxScene)보다 우선한다. */
 export function WeatherWidget({ forceScene, forceNight }: { forceScene?: SceneKind; forceNight?: boolean } = {}) {
   const [now, setNow] = useState(() => new Date());
@@ -802,6 +919,12 @@ export function WeatherWidget({ forceScene, forceNight }: { forceScene?: SceneKi
   const [seasons, setSeasons] = useState<HolidaySeason[]>([]);
   // 확인용 강제 표시 — /home?wx=night|day&wxScene=설날 처럼 씬·주야를 고정해 볼 수 있다.
   const [force, setForce] = useState<{ night?: boolean; scene?: SceneKind }>({});
+  /** 시간대별 예보 패널(하단 절반 클릭으로 열고 우상단 '돌아가기'로 닫는다). */
+  const [panel, setPanel] = useState(false);
+  /** 위치 재측정 중 — 위치 칩을 누르면 시작한다. */
+  const [locating, setLocating] = useState(false);
+  /** 재측정 실패 안내(권한 꺼짐 등) — 몇 초 뒤 사라진다. 없으면 눌러도 무반응처럼 보인다. */
+  const [locMsg, setLocMsg] = useState<string | null>(null);
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
@@ -832,14 +955,31 @@ export function WeatherWidget({ forceScene, forceNight }: { forceScene?: SceneKi
   }, []);
 
   // 위치 — 허용되면 실제 좌표, 거부/실패면 기본 위치 유지.
-  useEffect(() => {
+  // fresh(사용자가 위치 칩을 눌러 재검색)면 브라우저 캐시를 무시하고 다시 측정한다.
+  // 좌표가 같아도 setLoc 은 새 객체라 아래 역지오코딩·날씨 effect 가 다시 돈다(=수동 새로고침).
+  const locate = useCallback((fresh = false) => {
     if (!("geolocation" in navigator)) return;
+    setLocating(true);
     navigator.geolocation.getCurrentPosition(
-      (pos) => setLoc({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
-      () => setLocLabel(DEFAULT_LOC.label),
-      { timeout: 8000, maximumAge: 30 * 60 * 1000 }
+      (pos) => {
+        setLocating(false);
+        setLoc({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+      },
+      () => {
+        setLocating(false);
+        setLocLabel((v) => v ?? DEFAULT_LOC.label);
+        if (fresh) {
+          setLocMsg("위치를 가져올 수 없습니다");
+          setTimeout(() => setLocMsg(null), 2500);
+        }
+      },
+      { timeout: 8000, maximumAge: fresh ? 0 : 30 * 60 * 1000 }
     );
   }, []);
+
+  useEffect(() => {
+    locate();
+  }, [locate]);
 
   // 역지오코딩(무키, BigDataCloud) — 지역명 라벨.
   useEffect(() => {
@@ -884,6 +1024,7 @@ export function WeatherWidget({ forceScene, forceNight }: { forceScene?: SceneKi
             hi: Math.round(Number(d.hi)),
             lo: Math.round(Number(d.lo)),
             base: (["맑음", "흐림", "비", "눈"] as BaseKind[]).includes(d.base) ? (d.base as BaseKind) : "맑음",
+            hours: Array.isArray(d.hours) ? (d.hours as WeatherHour[]) : [],
           });
         })
         .catch(() => {
@@ -989,11 +1130,23 @@ export function WeatherWidget({ forceScene, forceNight }: { forceScene?: SceneKi
       <Scene scale={sceneScale} />
       {/* 좌측 텍스트 가독용 가로 그라데이션 스크림(주간 화이트 / 야간 딥네이비) */}
       <span className="absolute inset-0 pointer-events-none" style={{ background: scrim }} />
-      <div className="flex items-center gap-1.5 relative">
-        <MapPin className="w-[13px] h-[13px]" style={{ color: C.icon }} strokeWidth={2} />
-        <span className="text-xs font-bold" style={{ color: C.loc }}>
-          {locLabel ?? "위치 확인 중"}
-        </span>
+      {/* 패널이 열리면 기본 표시(위치·시계·기온)는 감춘다 — 반투명 배경 너머로 겹쳐 비치면
+          시간대별 숫자와 섞여 읽기 어렵다. 레이아웃은 그대로 두려고 invisible 을 쓴다. */}
+      <div className={`flex items-center gap-1.5 relative ${panel ? "invisible" : ""}`}>
+        {/* 위치 칩 — 누르면 현재 위치를 다시 측정한다(브라우저 캐시 무시). */}
+        <button
+          type="button"
+          onClick={() => locate(true)}
+          disabled={locating}
+          title="현재 위치를 다시 확인합니다"
+          className="inline-flex items-center gap-1.5 -ml-1 px-1 py-0.5 hover:opacity-70 transition-opacity"
+          style={{ borderRadius: 8 }}
+        >
+          <MapPin className="w-[13px] h-[13px]" style={{ color: C.icon }} strokeWidth={2} />
+          <span className="text-xs font-bold" style={{ color: C.loc }}>
+            {locating ? "위치 확인 중…" : (locMsg ?? locLabel ?? "위치 확인 중")}
+          </span>
+        </button>
         {/* 배지 — 주간: 시즌 문구 / 야간: 기상특보성(호우·한파·열대야)만(핸드오프 정책) */}
         {!night && shownBadge && (
           <span
@@ -1012,7 +1165,7 @@ export function WeatherWidget({ forceScene, forceNight }: { forceScene?: SceneKi
           </span>
         )}
       </div>
-      <div className="mt-auto relative">
+      <div className={`mt-auto relative ${panel ? "invisible" : ""}`}>
         <div className="flex items-baseline gap-1">
           <span className="text-[34px] font-extrabold tabular-nums leading-none tracking-[-0.03em]" style={{ color: C.clock }}>
             {p2(now.getHours())}:{p2(now.getMinutes())}
@@ -1025,7 +1178,7 @@ export function WeatherWidget({ forceScene, forceNight }: { forceScene?: SceneKi
           {dateStr}
         </p>
       </div>
-      <div className="mt-2.5 flex items-end gap-2 relative">
+      <div className={`mt-2.5 flex items-end gap-2 relative ${panel ? "invisible" : ""}`}>
         <span className="text-2xl font-extrabold tracking-[-0.02em]" style={{ color: C.temp }}>
           {weather ? `${weather.temp.toFixed(1)}°` : "--°"}
         </span>
@@ -1038,6 +1191,27 @@ export function WeatherWidget({ forceScene, forceNight }: { forceScene?: SceneKi
           </span>
         </span>
       </div>
+
+      {/* 하단 절반 — 누르면 시간대별 예보가 펼쳐진다(사용자 지정 조작). 시계·기온 위를 덮지만
+          그 영역에 다른 클릭 대상이 없어 간섭하지 않는다. */}
+      {!panel && (
+        <button
+          type="button"
+          onClick={() => setPanel(true)}
+          aria-label="시간대별 예보 보기"
+          title="시간대별 예보 보기"
+          className="absolute left-0 right-0 bottom-0 h-1/2 z-[2]"
+        />
+      )}
+      {panel && (
+        <HoursPanel
+          hours={weather?.hours ?? []}
+          night={night}
+          loc={loc}
+          locLabel={locLabel}
+          onClose={() => setPanel(false)}
+        />
+      )}
     </section>
   );
 }

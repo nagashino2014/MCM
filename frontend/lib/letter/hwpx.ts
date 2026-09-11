@@ -723,6 +723,14 @@ function buildTableXml(
       if (need > got) rowHeights[Math.min(ri + rs, rowHeights.length) - 1] += need - got;
     });
   });
+  // 편집 화면에서 지정한 행 높이 비율 반영(2026-09-11) — PDF 와 같은 규칙(내용 높이는 보장).
+  if (t.rowRatios && t.rowRatios.length === rowHeights.length) {
+    const autoTotal = rowHeights.reduce((a, b) => a + b, 0);
+    for (let i = 0; i < rowHeights.length; i++) {
+      const want = Math.round(autoTotal * t.rowRatios[i]);
+      if (want > rowHeights[i]) rowHeights[i] = want;
+    }
+  }
   const totalH = rowHeights.reduce((a, b) => a + b, 0);
   const preamble = tpl.preamble
     .replace(/(\browCnt=")\d+(")/, `$1${rows}$2`)

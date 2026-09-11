@@ -623,7 +623,7 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
   const [imgBox, setImgBox] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
   const imgDragRef = useRef<{ startX: number; startW: number; ratio: number } | null>(null);
 
-  /** 정렬 명령 ↔ text-align 값 — 셀 다중 선택 상태의 일괄 정렬에 쓴다(2026-08-24). */
+  /** 정렬 명령 ↔ text-align 값 — 표 셀 정렬에 쓴다(2026-08-24). */
   const JUSTIFY_ALIGN: Record<string, string> = {
     justifyLeft: "left",
     justifyCenter: "center",
@@ -635,8 +635,18 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
     // 셀 다중 선택 중 정렬 — 브라우저 selection 이 없어 execCommand 가 무시되므로
     // 선택된 셀들에 text-align 을 직접 건다(셀 내부 블록의 개별 정렬은 초기화해 상속시킨다).
     const align = JUSTIFY_ALIGN[cmd];
-    if (align && cellSelRef.current && cellSelRef.current.cells.length > 0) {
-      for (const cell of cellSelRef.current.cells) {
+    // 대상 셀 = 다중 선택된 셀들, 없으면 커서가 놓인 셀 하나.
+    // ⚠ 단일 셀을 execCommand 에 맡기면 셀 텍스트가 td 직속일 때 정렬이 아무 데도 남지 않아
+    //   공문 PDF/HWPX 에 반영되지 않는다(2026-09-11 실사례: 금액 열 오른쪽 정렬 소실).
+    //   파서는 td 의 text-align 을 읽으므로 td 에 직접 건다.
+    const targets =
+      cellSelRef.current && cellSelRef.current.cells.length > 0
+        ? cellSelRef.current.cells
+        : activeCell
+          ? [activeCell]
+          : [];
+    if (align && targets.length > 0) {
+      for (const cell of targets) {
         cell.style.textAlign = align;
         for (const b of Array.from(cell.querySelectorAll<HTMLElement>("div,p"))) b.style.textAlign = "";
       }

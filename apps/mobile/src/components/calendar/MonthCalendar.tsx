@@ -3,6 +3,7 @@ import { Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Sheet } from '@/components/ui';
+import { useHolidays } from '@/lib/calendar/use-holidays';
 import { useTheme } from '@/theme/useTheme';
 
 /**
@@ -90,6 +91,8 @@ export function MonthCalendar({
   const dayInk = dark ? c.text : DAY_INK;
   const outside = dark ? c.faint : OUTSIDE;
   const outsideSun = dark ? `${SUN}66` : OUTSIDE_SUN;
+  // 휴무일(법정공휴일·사내 지정) — 웹 캘린더와 같은 규칙: 일요일과 같은 붉은 숫자 + 휴무일명.
+  const holidays = useHolidays(year);
   const [pick, setPick] = useState<null | 'year' | 'month'>(null);
   const now = useMemo(() => new Date(), []);
   const todayIso = ymdOf(now);
@@ -227,11 +230,16 @@ export function MonthCalendar({
               const inRange = selStart != null && selEnd != null && dn >= selStart && dn <= selEnd;
               const isEdge = dn === selStart || dn === selEnd;
               const dayPills = variant === 'pills' ? spans.filter((it) => dn >= it.s && dn <= it.e) : [];
+              const holiday = holidays.get(iso) ?? null;
+              // 휴무일명은 pills 모드의 당월 셀에만(웹과 동일 표기) — 셀 높이를 지키려 필 상한을 1 줄인다.
+              const showHolidayName = !!holiday && inMonth && variant === 'pills';
+              const maxPills = showHolidayName ? MAX_PILLS - 1 : MAX_PILLS;
+              const red = dow === 0 || !!holiday;
               const numColor = !inMonth
-                ? dow === 0
+                ? red
                   ? outsideSun
                   : outside
-                : dow === 0
+                : red
                   ? SUN
                   : dow === 6
                     ? SAT
@@ -269,22 +277,29 @@ export function MonthCalendar({
                     </Text>
                   )}
 
+                  {/* 휴무일명(pills 모드, 당월) — 웹 캘린더의 붉은 명칭 표기와 동일 */}
+                  {showHolidayName ? (
+                    <Text numberOfLines={1} className="mt-[2px] w-full text-center text-[8.5px] font-bold" style={{ color: SUN }}>
+                      {holiday}
+                    </Text>
+                  ) : null}
+
                   {/* 이벤트 필(pills 모드) */}
-                  {dayPills.slice(0, MAX_PILLS).map((it, pi) => (
+                  {dayPills.slice(0, maxPills).map((it, pi) => (
                     <Pressable
                       key={it.bar.id}
                       onPress={onEventPress ? () => onEventPress(it.bar) : undefined}
                       disabled={!onEventPress}
                       className="w-full rounded-[5px] px-[3px] py-[2px] active:opacity-70"
-                      style={{ backgroundColor: it.bar.color, marginTop: pi === 0 ? 4 : 2 }}>
+                      style={{ backgroundColor: it.bar.color, marginTop: pi === 0 && !showHolidayName ? 4 : 2 }}>
                       <Text numberOfLines={1} className="text-[8.5px] font-bold" style={{ color: it.bar.ink ?? '#1f2937' }}>
                         {it.bar.title}
                       </Text>
                     </Pressable>
                   ))}
-                  {dayPills.length > MAX_PILLS ? (
+                  {dayPills.length > maxPills ? (
                     <Text className="mt-[2px] text-[8.5px]" style={{ color: LABEL }}>
-                      +{dayPills.length - MAX_PILLS}
+                      +{dayPills.length - maxPills}
                     </Text>
                   ) : null}
 

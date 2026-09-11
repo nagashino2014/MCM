@@ -12,12 +12,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  ArrowLeft, BookmarkPlus, Eye, FileText, Plus, Save, Search, Send, ShieldCheck, Stamp, Trash2, Users, X,
+  ArrowLeft, BookmarkPlus, Eye, FileText, GripVertical, Plus, Save, Search, Send, ShieldCheck, Stamp, Trash2, Users, X,
 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdDateInput } from "@/components/cdash/CdField";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
+import { useDragOrder } from "@/components/approval/useDragOrder";
 import { DeleteDraftButton, RejectedBanner, toEditDocMeta, type EditDocMeta } from "@/components/approval/DraftEditNotice";
 import PaymentRequestModal, { type PaymentRequestCreated } from "@/components/approval/PaymentRequestModal";
 import { LetterReviewModal } from "@/components/approval/LetterReviewModal";
@@ -458,6 +459,8 @@ export function ApprovalLetterBoard() {
   const [dragOver, setDragOver] = useState(false);
   // 첨부 미리보기(2026-08-25) — 항목을 누르면 상신 전에도 내용을 확인한다(대금청구서 등).
   const [previewItem, setPreviewItem] = useState<DocAttachment | null>(null);
+  // 첨부 순서 = 메일 동봉 순서 — 끌어서 바꾼다(2026-09-11 사용자 요청).
+  const attachDrag = useDragOrder(fileAttachments, setFileAttachments);
   // 재편집 문서의 상태·반려 사유·삭제 권한(서버 판정) — 반려 배너와 기안 삭제 버튼 노출용.
   const [editMeta, setEditMeta] = useState<EditDocMeta | null>(null);
   // 대금청구서 작성 모달(2026-08-24) — 첨부서류 섹션에서 바로 생성해 첨부한다.
@@ -1338,7 +1341,13 @@ export function ApprovalLetterBoard() {
                     <p className="text-[11.5px] cd-text-faint m-auto">첨부된 파일이 없습니다.</p>
                   ) : (
                     fileAttachments.map((f, i) => (
-                      <div key={f.key} className="flex items-center gap-2 rounded-lg border cd-border-c px-2.5 py-1.5">
+                      <div
+                        key={f.key}
+                        {...attachDrag.rowProps(i)}
+                        className={`flex items-center gap-2 rounded-lg border cd-border-c px-2.5 py-1.5 transition-colors ${attachDrag.rowClass(i)}`}
+                        title="끌어서 첨부 순서를 바꿉니다"
+                      >
+                        <GripVertical className="w-3.5 h-3.5 cd-text-faint shrink-0 cursor-grab" aria-hidden />
                         <span className="text-[10px] font-mono cd-text-faint w-4">{i + 1}</span>
                         <button
                           type="button"
@@ -1415,7 +1424,7 @@ export function ApprovalLetterBoard() {
               <button type="button" className="cd-btn rounded-lg border border-dashed cd-border-c px-3 py-2 text-xs cd-text-faint flex-1" onClick={() => setOrgModal("approve")}>
                 ＋ 결재자 추가
               </button>
-              <button type="button" className="cd-btn rounded-lg border cd-border-c px-2.5 py-2 text-[11px] cd-text-faint flex items-center gap-1" onClick={saveAsPreset} title="현재 결재선·참조자를 프리셋으로 저장">
+              <button type="button" className="cd-btn rounded-lg border cd-border-c px-2.5 py-2 text-[11px] cd-text-faint flex-1 flex items-center justify-center gap-1" onClick={saveAsPreset} title="현재 결재선·참조자를 프리셋으로 저장">
                 <BookmarkPlus className="w-3.5 h-3.5" /> 프리셋 저장
               </button>
             </div>
@@ -1470,7 +1479,7 @@ export function ApprovalLetterBoard() {
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               <button
                 type="button"
-                className="cd-btn rounded-lg border cd-border-c px-3.5 py-2 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
+                className="cd-btn rounded-lg border cd-border-c px-3.5 py-2 text-xs font-semibold flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50"
                 disabled={busy != null}
                 onClick={() => send("save")}
               >
@@ -1478,7 +1487,7 @@ export function ApprovalLetterBoard() {
               </button>
               <button
                 type="button"
-                className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
+                className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs font-semibold flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50"
                 disabled={busy != null}
                 onClick={openPreview}
                 title="현재 내용을 A4 공문 PDF 로 미리보기 — 인감 위치·폰트·줄 간격 미세조정 가능"
@@ -1487,7 +1496,7 @@ export function ApprovalLetterBoard() {
               </button>
               <button
                 type="button"
-                className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
+                className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50"
                 disabled={busy != null}
                 onClick={() => send("submit")}
               >

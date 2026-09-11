@@ -274,7 +274,11 @@ html[data-theme="dark"] .cdash, html[data-theme="dark"] .cdash-vars,
 .cd-fields-white .cd-textarea {
   background: var(--cd-card-solid);
 }
-.cd-input, .cd-select { min-height: var(--precision-ui-control-height); line-height: 18px; }
+/* 컨트롤 높이(36px) 고정은 한 줄 입력에만 적용한다. textarea 까지 묶으면 사용처의
+ * min-h-[...] 유틸리티가 이 규칙에 밀려 무효가 된다 — 조문 본문(min-h-[260px])이
+ * 실제로는 54px 로 렌더되고 있었다(2026-09-11 실측). */
+.cd-input:not(textarea), .cd-select { min-height: var(--precision-ui-control-height); line-height: 18px; }
+textarea.cd-input { min-height: 64px; resize: vertical; line-height: 1.5; }
 .cd-input::placeholder,
 .cd-textarea::placeholder { color: var(--cd-faint); }
 .cd-input:focus,
@@ -320,7 +324,11 @@ html[data-theme="dark"] .cdash, html[data-theme="dark"] .cdash-vars,
   line-height: 18px;
   min-height: var(--precision-ui-control-height);
   border-radius: var(--cd-radius-control);
-  border: 1px solid transparent;
+  /* Precision P02 = 1px 중립 경계. 종전 transparent 는 .cd-border-c(195행)보다 뒤에 와서
+   * `cd-btn border cd-border-c` 조합의 테두리를 투명으로 덮어썼다 — 결재선·임시저장·
+   * 미리보기 등 공용 버튼이 전부 테두리 없이 보였다(2026-09-11 사용자 지적).
+   * 배경을 갖는 변형(primary/ghost/danger 등)은 각자 border-color 를 명시해 영향받지 않는다. */
+  border: 1px solid var(--cd-ring);
   background: var(--cd-card-solid);
   color: var(--cd-text);
   cursor: pointer;
@@ -388,10 +396,21 @@ html[data-theme="dark"] .cdash, html[data-theme="dark"] .cdash-vars,
   box-shadow: none !important;
 }
 
-/* 기존 테두리가 없는 개별 선택 버튼도 크기 변화 없이 같은 한 줄 경계를 갖는다. */
+/* 기존 테두리가 없는 개별 선택 버튼도 크기 변화 없이 같은 한 줄 경계를 갖는다.
+   ⚠ outline 대신 inset box-shadow 를 쓴다(2026-09-11) — outline 은 요소 바깥 레이어라
+   부모가 overflow:hidden 인 세그먼트 컨트롤 안에서 첫/끝 버튼의 한쪽이 잘려 보였다. */
 .cd-choice[data-active="true"] {
-  outline: 1px solid var(--cd-choice-color, var(--cd-primary));
-  outline-offset: -1px;
+  box-shadow: inset 0 0 0 1px var(--cd-choice-color, var(--cd-primary)) !important;
+}
+
+/* 세그먼트(연결형) 컨트롤 — 컨테이너가 반경·경계를 담당한다.
+   내부 버튼까지 8px 반경을 가지면 컨테이너 모서리와 어긋나 초승달 틈이 생긴다
+   (착수금/중도금/잔금 탭 실사례). 컨테이너 반경은 버튼과 같은 값으로 맞춘다. */
+:is(.cdash, .cdash-vars) .overflow-hidden:has(> .cd-choice) {
+  border-radius: var(--mcm-action-radius, 8px) !important;
+}
+:is(.cdash, .cdash-vars) .overflow-hidden:has(> .cd-choice) > .cd-choice {
+  border-radius: 0 !important;
 }
 
 /* 클릭 선택에는 추가 링이 없고, 키보드 포커스는 테두리와 겹쳐 한 줄로 보인다. */

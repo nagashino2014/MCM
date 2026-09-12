@@ -279,11 +279,37 @@ export default function OversightWorkspace() {
           {categories.map((c) => <option key={c.categoryId} value={c.categoryId}>{c.categoryName}</option>)}
         </select>
       )}
-      <select className="cd-select text-xs !w-[88px] shrink-0" value={member} onChange={(e) => setMember(e.target.value)}>
+      <select className="cd-select text-xs !w-[104px] shrink-0" value={member} onChange={(e) => setMember(e.target.value)}>
         <option value="">수행인력</option>
         {members.map((m) => <option key={m.employeeId} value={m.name}>{m.name}</option>)}
       </select>
     </div>
+  );
+
+  // 부서 선택·Merging 토글 — 헤더 우상단에서 용역/Task 탭과 같은 행으로 내렸다(2026-09-12 요청).
+  // Merging 화면에서는 좌측 패널이 사라지므로 그쪽 헤더에도 같은 슬롯을 둔다(토글 해제 경로 유지).
+  const panelTools = (
+    <>
+      {ctx?.isAdmin && (
+        <select className="cd-select text-sm max-w-[160px]" value={deptId} onChange={(e) => setDeptId(e.target.value)}>
+          {(ctx.departments ?? []).map((d) => (
+            <option key={d.deptId} value={d.deptId}>{d.deptName}</option>
+          ))}
+        </select>
+      )}
+      <button
+        type="button"
+        onClick={() => setMerging((m) => !m)}
+        data-active={merging}
+        aria-pressed={merging}
+        className={cn(
+          "cd-choice rounded-xl px-3 py-2 text-sm inline-flex items-center gap-1.5 border shrink-0",
+          merging ? "cd-fill-primary text-white border-transparent" : "cd-border-c cd-text-muted"
+        )}
+      >
+        <Layers className="w-4 h-4" /> Merging 대상
+      </button>
+    </>
   );
 
   return (
@@ -293,31 +319,6 @@ export default function OversightWorkspace() {
         eyebrow="Work · Oversight"
         title="부서장 감독"
         help="부서원이 보고한 용역·Task를 검토·첨삭하고 부서장 의견·이슈를 기재합니다."
-        actions={
-          <div className="flex items-start gap-2">
-            <div className="flex flex-col items-end gap-1.5">
-              {ctx?.isAdmin && (
-                <select className="cd-select text-sm" value={deptId} onChange={(e) => setDeptId(e.target.value)}>
-                  {(ctx.departments ?? []).map((d) => (
-                    <option key={d.deptId} value={d.deptId}>{d.deptName}</option>
-                  ))}
-                </select>
-              )}
-              <button
-                type="button"
-                onClick={() => setMerging((m) => !m)}
-                data-active={merging}
-                aria-pressed={merging}
-                className={cn(
-                  "cd-choice rounded-xl px-3 py-2 text-sm inline-flex items-center gap-1.5 border",
-                  merging ? "cd-fill-primary text-white border-transparent" : "cd-border-c cd-text-muted"
-                )}
-              >
-                <Layers className="w-4 h-4" /> Merging 대상
-              </button>
-            </div>
-          </div>
-        }
       />
 
       {merging ? (
@@ -327,14 +328,17 @@ export default function OversightWorkspace() {
               <Layers className="w-4 h-4 cd-text-primary" /> Merging 대상 (확인 완료)
               <span className="text-xs cd-text-faint font-normal">{confirmed.length}건</span>
             </h2>
-            <button
-              type="button"
-              disabled={mergeBusy || mergeChecked.size === 0}
-              onClick={createConsolidated}
-              className="rounded-xl px-4 py-2 text-sm text-white cd-fill-primary inline-flex items-center gap-1.5 disabled:opacity-50"
-            >
-              <GitMerge className="w-4 h-4" /> {mergeBusy ? "생성 중…" : `통합 보고 생성 (${mergeChecked.size})`}
-            </button>
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              <button
+                type="button"
+                disabled={mergeBusy || mergeChecked.size === 0}
+                onClick={createConsolidated}
+                className="rounded-xl px-4 py-2 text-sm text-white cd-fill-primary inline-flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <GitMerge className="w-4 h-4" /> {mergeBusy ? "생성 중…" : `통합 보고 생성 (${mergeChecked.size})`}
+              </button>
+              {panelTools}
+            </div>
           </div>
           <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide px-1 pb-1">
             {confirmed.length === 0 ? (
@@ -393,6 +397,7 @@ export default function OversightWorkspace() {
           onDeleteTask={deleteTask}
           filtersTop={filtersTop}
           filtersBottom={filtersBottom}
+          headerRight={panelTools}
           showExecTab
           execDirectedItems={execDirected}
           execDirectedReportId={execResponseReportId}

@@ -50,6 +50,7 @@ export default function ServiceListPanel({
   onDeleteTask,
   filtersTop,
   filtersBottom,
+  headerRight,
   reboundActive,
   onToggleRebound,
   reboundItems,
@@ -82,6 +83,8 @@ export default function ServiceListPanel({
   filtersTop?: React.ReactNode;
   /** 감독 필터 — 셀렉트 묶음(탭과 같은 행 우측). */
   filtersBottom?: React.ReactNode;
+  /** 용역·Task 탭과 같은 행 우측 슬롯(감독 부서 선택·Merging 토글). */
+  headerRight?: React.ReactNode;
   /** 재보고 대상(보고작성) — 버튼/목록. 미지정 시 미표시. */
   reboundActive?: boolean;
   onToggleRebound?: () => void;
@@ -125,7 +128,8 @@ export default function ServiceListPanel({
 
   return (
     <section className="cd-card rounded-3xl p-3 cd-reveal delay-1 flex flex-col min-h-0">
-      <div className="flex items-end gap-1 px-1 mb-3">
+      <div className="flex items-end justify-between gap-2 flex-wrap px-1 mb-4">
+        <div className="flex items-end gap-1">
         {(["service", "task"] as LeftTab[]).map((t) => (
           <button
             key={t}
@@ -141,6 +145,8 @@ export default function ServiceListPanel({
             {t === "service" ? "용역" : "Task"}
           </button>
         ))}
+        </div>
+        {headerRight && <div className="flex items-center gap-2 pb-0.5">{headerRight}</div>}
       </div>
 
       {/* (감독) 체크박스 필터 — 탭 위 별도 행 */}

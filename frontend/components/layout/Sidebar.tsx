@@ -128,7 +128,8 @@ export function Sidebar({ role, badges, mode = "auto", onNavigate }: SidebarProp
           ? "h-full w-72 p-5 px-3.5"
           : autoCollapse
             ? cn(
-                "absolute inset-y-0 left-0 z-40 transition-[width] duration-200 ease-out",
+                // z: 탑바(z-50)보다 위 — 펼침이 검색창에 가려 토글을 다시 누를 수 없었다(2026-09-12).
+                "absolute inset-y-0 left-0 z-[60] transition-[width] duration-200 ease-out",
                 width === "expand" ? "w-[248px] px-3.5 py-5" : "w-[76px] p-3"
               )
             : "h-full w-full p-3 2xl:px-3.5 2xl:py-5"
@@ -253,12 +254,22 @@ function NavItem({
   const isActive = active?.parentTitle === item.title;
   const count = item.badgeKey ? badges[item.badgeKey] : 0;
 
-  // 아이콘 — 틴트 사각 배지 폐기, 무채 라인 아이콘(stroke 1.8·opacity 0.9). 레일 뱃지는 점(dot).
+  // 아이콘 — 틴트 사각 배지 폐기, 무채 라인 아이콘(stroke 1.8·opacity 0.9).
+  // 레일 뱃지: 무채 점은 안 읽은 메일·미결재가 있는지조차 알아보기 어려웠다(2026-09-12) →
+  // 확장 상태와 같은 건수를 채움 뱃지로 표시한다.
   const iconBlock = (
     <div className="relative flex items-center justify-center shrink-0">
       <Icon className="w-[15px] h-[15px] opacity-90" strokeWidth={1.8} />
       {showRail && count > 0 && (
-        <span className={cn("absolute -top-1 -right-1.5 w-2 h-2 rounded-full cd-surface-bg cd-text-muted border cd-border-c", cls.railOnly)} />
+        <span
+          className={cn(
+            "absolute -top-1.5 -right-2 min-w-[16px] h-[16px] px-1 rounded-full text-[10px] font-bold leading-none",
+            "inline-flex items-center justify-center cd-fill-primary text-white",
+            cls.railOnly
+          )}
+        >
+          {count > 99 ? "99+" : count}
+        </span>
       )}
     </div>
   );
@@ -274,9 +285,9 @@ function NavItem({
     isActive ? "cd-glass-active font-bold" : "cd-glass-chip font-medium text-[color:var(--cd-nav-muted)]"
   );
 
-  // 뱃지 = 그라데이션 원형.
+  // 뱃지 = 채움 원형. 무채 표면은 안 읽은 메일·미결재가 있다는 신호로 약했다(2026-09-12).
   const countBadge = count > 0 && (
-    <span className="min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-semibold inline-flex items-center justify-center cd-surface-bg cd-text-muted border cd-border-c">
+    <span className="min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-bold inline-flex items-center justify-center cd-fill-primary text-white">
       {count > 99 ? "99+" : count}
     </span>
   );

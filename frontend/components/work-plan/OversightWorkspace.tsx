@@ -297,17 +297,18 @@ export default function OversightWorkspace() {
           ))}
         </select>
       )}
+      {/* 탑바 '새로 작성'과 같은 액션 배경(cd-btn-primary). 켜짐은 안쪽 흰 링으로 구분한다.
+          글자 크기는 같은 행의 탭·부서 셀렉트(text-sm)에 맞춘다. */}
       <button
         type="button"
         onClick={() => setMerging((m) => !m)}
-        data-active={merging}
         aria-pressed={merging}
         className={cn(
-          "cd-choice rounded-xl px-3 py-2 text-sm inline-flex items-center gap-1.5 border shrink-0",
-          merging ? "cd-fill-primary text-white border-transparent" : "cd-border-c cd-text-muted"
+          "cd-btn cd-btn-primary text-sm shrink-0",
+          merging && "shadow-[inset_0_0_0_2px_rgba(255,255,255,0.6)]"
         )}
       >
-        <Layers className="w-4 h-4" /> Merging 대상
+        Merging 대상
       </button>
     </>
   );

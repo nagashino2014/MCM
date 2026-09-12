@@ -117,6 +117,13 @@ html[data-theme="dark"] .cdash, html[data-theme="dark"] .cdash-vars,
   outline: 2px solid var(--cd-primary);
   outline-offset: 2px;
 }
+/* 본문 래퍼는 스킵 링크(#main-content)의 프로그램적 포커스 대상일 뿐 조작 대상이 아니다.
+   위 공통 규칙이 걸리면 화면 전체가 파란 테두리로 둘러싸여 모든 메뉴에서 보였다
+   (2026-09-12 사용자 지적). 포커스 이동·스크린리더 동작은 그대로 유지된다. */
+.cdash #main-content:focus,
+.cdash #main-content:focus-visible {
+  outline: none;
+}
 .cd-nav-link {
   border: 1px solid transparent;
   color: var(--cd-sidebar-muted);
@@ -411,6 +418,17 @@ textarea.cd-input { min-height: 64px; resize: vertical; line-height: 1.5; }
 }
 :is(.cdash, .cdash-vars) .overflow-hidden:has(> .cd-choice) > .cd-choice {
   border-radius: 0 !important;
+}
+/* 단, 첫·끝 버튼은 컨테이너 '안쪽' 곡률(반경 − 테두리 1px)을 그대로 따라야 한다.
+   반경 0 이면 채움 배경의 바깥 모서리가 컨테이너 곡선에 깎여 끝이 잘린 것처럼 보였다
+   (부서장 감독 진행용역 탭 실사례, 2026-09-12). */
+:is(.cdash, .cdash-vars) .overflow-hidden:has(> .cd-choice) > .cd-choice:first-child {
+  border-start-start-radius: calc(var(--mcm-action-radius, 8px) - 1px) !important;
+  border-end-start-radius: calc(var(--mcm-action-radius, 8px) - 1px) !important;
+}
+:is(.cdash, .cdash-vars) .overflow-hidden:has(> .cd-choice) > .cd-choice:last-child {
+  border-start-end-radius: calc(var(--mcm-action-radius, 8px) - 1px) !important;
+  border-end-end-radius: calc(var(--mcm-action-radius, 8px) - 1px) !important;
 }
 
 /* 클릭 선택에는 추가 링이 없고, 키보드 포커스는 테두리와 겹쳐 한 줄로 보인다. */

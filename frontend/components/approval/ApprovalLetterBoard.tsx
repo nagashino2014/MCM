@@ -417,6 +417,8 @@ export function ApprovalLetterBoard() {
   const [letterKind, setLetterKind] = useState<"general" | "proof">("general");
   const [recipients, setRecipients] = useState<LetterRecipient[]>([]);
   const [ccRefs, setCcRefs] = useState<LetterRecipient[]>([]);
+  // 외부 참조(2026-09-14) — 수신 주체가 아닌 외부 업체·기관 담당자(메일 Cc 전용, 공문 표기 없음).
+  const [extCcRefs, setExtCcRefs] = useState<LetterRecipient[]>([]);
   const [proofSender, setProofSender] = useState<ProofParty>(SENDER_PROOF);
   const [proofReceiver, setProofReceiver] = useState<ProofParty>(EMPTY_PROOF);
   const [attachItems, setAttachItems] = useState<string[]>([]);
@@ -601,6 +603,7 @@ export function ApprovalLetterBoard() {
         setLetterKind(v.letter_kind === "proof" ? "proof" : "general");
         setRecipients(Array.isArray(v.recipients) ? v.recipients : []);
         setCcRefs(Array.isArray(v.cc_refs) ? v.cc_refs : []);
+        setExtCcRefs(Array.isArray(v.ext_cc_refs) ? v.ext_cc_refs : []);
         if (v.proof_sender) setProofSender(v.proof_sender);
         if (v.proof_receiver) setProofReceiver(v.proof_receiver);
         setAttachItems(Array.isArray(v.attachments_list) ? v.attachments_list.map((a) => a.text) : []);
@@ -753,6 +756,7 @@ export function ApprovalLetterBoard() {
       letter_kind: letterKind,
       recipients,
       cc_refs: ccRefs,
+      ...(extCcRefs.length ? { ext_cc_refs: extCcRefs } : {}),
       subject,
       body_html: editorRef.current?.innerHTML ?? "",
       attachments_list: attachItems.map((t, i) => ({ no: i + 1, text: t })).filter((a) => a.text.trim()),
@@ -778,7 +782,7 @@ export function ApprovalLetterBoard() {
     values.recipients_display = recipientsDisplay(values);
     values.letter_kind_display = letterKind === "proof" ? "내용증명" : "일반";
     return values;
-  }, [letterKind, recipients, ccRefs, subject, attachItems, stampOn, includeHwpx, includeAddress, issueDate, contactPhone, contactEmail, proofSender, proofReceiver, overrides, fileAttachments, deliverableId, extraDeliverableIds, internalCcTarget]);
+  }, [letterKind, recipients, ccRefs, extCcRefs, subject, attachItems, stampOn, includeHwpx, includeAddress, issueDate, contactPhone, contactEmail, proofSender, proofReceiver, overrides, fileAttachments, deliverableId, extraDeliverableIds, internalCcTarget]);
 
   // 직접 지정 번호 — 연도는 채번 예정 번호(없으면 확정 번호/올해) 기준.
   const letterYear = (nextNo ?? docNo ?? "").slice(0, 4) || String(new Date().getFullYear());
@@ -847,6 +851,9 @@ export function ApprovalLetterBoard() {
     if (!subject.trim()) return "제목을 입력하세요.";
     if (recipients.length === 0) return "수신처(업체/기관)를 1건 이상 지정하세요.";
     if (!ccRefs.some((r) => (r.email ?? "").includes("@"))) return "참조 담당자에 메일주소가 1건 이상 필요합니다(승인 시 참조자 메일로 자동 발송).";
+    // 외부 참조는 메일 Cc 로만 받으므로 주소가 없으면 의미가 없다 — 조용히 누락되지 않게 막는다.
+    const noMailExt = extCcRefs.find((r) => !(r.email ?? "").includes("@"));
+    if (noMailExt) return `외부 참조 ${noMailExt.name} 님의 메일주소가 없습니다. 주소를 입력하거나 목록에서 빼세요.`;
     const html = editorRef.current?.innerHTML ?? "";
     if (!html.replace(/<[^>]+>|&nbsp;/g, "").trim()) return "본문을 작성하세요.";
     if (letterKind === "proof" && (!proofReceiver.company.trim() || !proofReceiver.address.trim())) return "내용증명형은 수신 주소·회사명을 입력하세요.";
@@ -856,7 +863,7 @@ export function ApprovalLetterBoard() {
       if (manualCheck && !manualCheck.available) return `이미 사용 중인 공문번호입니다 — ${manualCheck.usedBy}`;
     }
     return null;
-  }, [subject, recipients, ccRefs, letterKind, proofReceiver, line, manualOn, noLocked, manualNo, manualCheck]);
+  }, [subject, recipients, ccRefs, extCcRefs, letterKind, proofReceiver, line, manualOn, noLocked, manualNo, manualCheck]);
 
   /** 대금청구서 생성 완료 — 첨부에 추가하고, 비어 있는 제목·본문·붙임·수신처를 채운다. */
   const onPaymentCreated = useCallback(
@@ -1031,7 +1038,7 @@ export function ApprovalLetterBoard() {
           <RejectedBanner meta={editMeta} />
           {/* 임시저장 공문 목록(2026-08-24) — 전자결재 홈의 작성중/반려까지 가지 않고 바로 이어서 작성 */}
           {letterDrafts.length > 0 && (
-            <div className="rounded-xl border cd-border-c px-3.5 py-2.5 mb-3 text-[12px]">
+            <div className="rounded-xl border cd-border-c cd-solid-bg px-3.5 py-2.5 mb-3 text-[12px]">
               <button
                 type="button"
                 className="flex items-center gap-1.5 font-semibold cd-text w-full text-left"
@@ -1052,9 +1059,11 @@ export function ApprovalLetterBoard() {
                         disabled={current}
                         onClick={() => openDraftDoc(d.docId)}
                         className={
-                          "flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left " +
-                          (current ? "cd-tint-primary border-[color:var(--cd-primary)]" : "cd-border-c hover:cd-soft-primary")
+                          "flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left hover:brightness-[0.98] " +
+                          (current ? "border-[color:var(--cd-primary)]" : "cd-border-c")
                         }
+                        // 상신 버튼 그라데이션을 아주 연하게 깐 태그 면(2026-09-14 사용자 요청)
+                        style={{ background: "var(--cd-action-background-soft)" }}
                       >
                         <FileText className="w-3.5 h-3.5 cd-text-faint shrink-0" />
                         <span className="cd-text truncate flex-1">{d.title || "(제목 없음)"}</span>
@@ -1196,6 +1205,13 @@ export function ApprovalLetterBoard() {
               onNewFacility={() => setFacilityModal(true)}
             />
             <RecipientPicker label="참조" hint="담당자 표기 + 승인 완료 시 이 메일주소로 공문 발송(To)" list={ccRefs} onChange={setCcRefs} />
+            {/* 외부 참조(2026-09-14) — EPC 공동 수행사 등 수신 주체가 아닌 외부 담당자. 공문 본문에는 찍히지 않는다. */}
+            <RecipientPicker
+              label="외부 참조"
+              hint="수신처가 아닌 외부 업체·기관 담당자 — 공문에는 표기하지 않고 발송 메일만 참조(Cc)로 받습니다(선택)"
+              list={extCcRefs}
+              onChange={setExtCcRefs}
+            />
 
             {letterKind === "proof" && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">

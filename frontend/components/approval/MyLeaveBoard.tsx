@@ -188,7 +188,7 @@ export function MyLeaveSection() {
   const todayKey = new Date().toISOString().slice(0, 10);
 
   return (
-    <div className="flex flex-col gap-4 min-w-0">
+    <div className="flex flex-col gap-4 min-w-0 2xl:h-full 2xl:min-h-0">
       {/* 섹션 타이틀 + 연도 탐색 */}
       <div className="flex items-center justify-between gap-2">
         <div className="text-[15px] font-extrabold cd-text">내 휴가</div>
@@ -266,7 +266,7 @@ export function MyLeaveSection() {
         <div className="grid grid-cols-7">
           {calCells.map((c, i) =>
             c === null ? (
-              <div key={`x${i}`} className="h-[58px]" />
+              <div key={`x${i}`} className="h-[70px]" />
             ) : (
               (() => {
                 const uses = usesByDate.get(c.date) ?? [];
@@ -283,7 +283,7 @@ export function MyLeaveSection() {
                 return (
                   <div
                     key={c.date}
-                    className="h-[58px] overflow-hidden flex flex-col items-center gap-0.5 pt-0.5 px-[1px]"
+                    className="h-[70px] overflow-hidden flex flex-col items-center gap-0.5 pt-1 px-[1px]"
                     title={[holiday, ...uses.map((u) => u.leaveLabel ?? "연차")].filter(Boolean).join(", ") || undefined}
                   >
                     <span
@@ -323,11 +323,11 @@ export function MyLeaveSection() {
         </div>
       </div>
 
-      {/* 사용 내역 — 행이 짧아 한 열이면 여백이 많이 남는다 → 월 그룹을 2열로 흘린다. */}
-      <div className="cd-card p-4 rounded-2xl">
-        <div className="cd-card-title mb-2">사용 내역</div>
+      {/* 사용 내역 — 월 그룹 2열. 카드가 좌측 컬럼의 남은 높이를 채우고(메뉴 바 하단 정렬) 내용이 많으면 카드 안에서 스크롤(스크롤바 숨김). */}
+      <div className="cd-card p-4 rounded-2xl 2xl:flex-1 min-h-[180px] flex flex-col">
+        <div className="cd-card-title mb-2 shrink-0">사용 내역</div>
         {usesByMonth.length === 0 && <div className="text-sm cd-text-muted py-5 text-center">{year}년 휴가 사용 내역이 없습니다.</div>}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 content-start 2xl:flex-1 2xl:min-h-0 2xl:overflow-y-auto scrollbar-hide">
           {usesByMonth.map((g) => (
             <div key={g.month} className="mb-3 last:mb-0 min-w-0">
               <div className="flex items-center gap-2 text-xs font-bold cd-text-muted mb-1">

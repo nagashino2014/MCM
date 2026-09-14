@@ -130,6 +130,28 @@ export function MyPayrollBoard() {
     [summary]
   );
 
+  // ── 연도별 수령액 추이(현재 연도 기준 9년 전까지 10개년, 확정 대장 실지급 합계) ──
+  const thisYear = new Date().getFullYear();
+  const yearlyCats = useMemo(() => Array.from({ length: 10 }, (_, i) => thisYear - 9 + i), [thisYear]);
+  const yearlyOptions = useMemo<ApexOptions>(
+    () => ({
+      chart: { type: "bar", toolbar: { show: false }, fontFamily: "inherit", animations: { enabled: false }, parentHeightOffset: 0 },
+      plotOptions: { bar: { columnWidth: "48%", borderRadius: 4, borderRadiusApplication: "end" } },
+      colors: [pal.primary],
+      dataLabels: { enabled: false },
+      grid: { borderColor: pal.grid, strokeDashArray: 3 },
+      xaxis: { categories: yearlyCats.map(String), labels: { style: { colors: pal.muted } }, axisBorder: { show: false }, axisTicks: { show: false } },
+      yaxis: { labels: { style: { colors: pal.muted }, formatter: (v: number) => `${Math.round(v / 10000).toLocaleString("ko-KR")}만` } },
+      legend: { show: false },
+      tooltip: { y: { formatter: (v: number) => `${won(v)}원` } },
+    }),
+    [pal, yearlyCats]
+  );
+  const yearlySeries = useMemo(() => {
+    const by = new Map((summary?.yearly ?? []).map((y) => [y.year, y.netPay]));
+    return [{ name: "실지급 합계", data: yearlyCats.map((y) => by.get(y) ?? 0) }];
+  }, [summary, yearlyCats]);
+
   const t = summary?.totals;
   const avg = t && t.months ? t.netPay / t.months : 0;
   const payItems = (summary?.items ?? []).filter((i) => i.kind === "pay");
@@ -164,8 +186,9 @@ export function MyPayrollBoard() {
           </div>
 
           <div className="grid grid-cols-1 2xl:grid-cols-5 gap-4">
-            {/* 좌 — 명세서 목록 */}
-            <div className="2xl:col-span-2 cd-card p-4 rounded-2xl min-w-0">
+            {/* 좌 — 명세서 목록 + (아래 여백) 연도별 수령액 추이 */}
+            <div className="2xl:col-span-2 min-w-0 flex flex-col gap-4">
+            <div className="cd-card p-4 rounded-2xl min-w-0">
               <div className="flex items-center gap-2 mb-2">
                 <span className="cd-title-icon"><ReceiptText className="w-4 h-4" /></span>
                 <div className="cd-card-title">월별 명세서</div>
@@ -222,6 +245,14 @@ export function MyPayrollBoard() {
                   <p className="p-6 text-center text-sm cd-text-faint">{year ? `${year}년 확정된 급여명세서가 없습니다.` : "확정된 급여명세서가 없습니다."}</p>
                 )}
               </div>
+            </div>
+            <div className="cd-card p-4 rounded-2xl min-w-0 flex-1 flex flex-col">
+              <div className="cd-card-title mb-1">연도별 수령액 추이</div>
+              <div className="text-[11px] cd-text-faint mb-1">{yearlyCats[0]}년 ~ {thisYear}년 실지급 합계(확정 대장 기준)</div>
+              <div className="flex-1 min-h-[220px]">
+                <ApexChart key={`yearly-${theme}`} options={yearlyOptions} series={yearlySeries} type="bar" height={230} />
+              </div>
+            </div>
             </div>
 
             {/* 우 — 미리보기 + 출력 */}

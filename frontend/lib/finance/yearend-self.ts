@@ -79,7 +79,10 @@ function mapUpload(r: Record<string, unknown>): YearendUploadRow {
     employeeId: String(r.employee_id),
     employeeName: r.employee_name != null ? String(r.employee_name) : undefined,
     kind,
-    kindLabel: UPLOAD_KIND_LABEL[kind],
+    kindLabel:
+      kind === "other" && (parseJson<Record<string, unknown>>(r.parsed)?.label)
+        ? `기타 증빙 · ${String(parseJson<Record<string, unknown>>(r.parsed)?.label)}`
+        : UPLOAD_KIND_LABEL[kind],
     fileName: String(r.file_name),
     contentType: r.content_type != null ? String(r.content_type) : null,
     sizeBytes: toNum(r.size_bytes),
@@ -181,7 +184,7 @@ function inputsFromDeductionForm(parsed: Awaited<ReturnType<typeof parseTaxForm>
  */
 export async function uploadMyYearendFile(
   userId: string,
-  params: { year: number; kind: YearendUploadKind; fileName: string; contentType: string; buffer: Buffer }
+  params: { year: number; kind: YearendUploadKind; fileName: string; contentType: string; buffer: Buffer; label?: string | null }
 ): Promise<{ upload: YearendUploadRow; applied: boolean; parsedKeys: string[]; message: string }> {
   const employeeId = await resolveEmployeeId(userId);
   if (!employeeId) throw Object.assign(new Error("직원 연결이 없는 계정입니다."), { status: 403 });
@@ -215,7 +218,8 @@ export async function uploadMyYearendFile(
       message = `파일은 보관했지만 신고서 해석에 실패했습니다(${err instanceof Error ? err.message : String(err)}).`;
     }
   } else {
-    message = "증빙 파일을 보관했습니다.";
+    parsed = params.label ? { label: params.label } : null;
+    message = `${params.label ? `${params.label} ` : ""}증빙 파일을 보관했습니다.`;
   }
 
   const key = `hr/yearend/${params.year}/${employeeId}/${Date.now()}-${safeName}`;

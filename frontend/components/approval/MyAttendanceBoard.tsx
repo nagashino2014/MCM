@@ -232,7 +232,7 @@ export function MyAttendanceSection({ theme }: { theme: CdTheme }) {
   }, [data, pay]);
 
   return (
-    <div className="flex flex-col gap-4 min-w-0">
+    <div className="flex flex-col gap-4 min-w-0 2xl:h-full 2xl:min-h-0">
       {/* 섹션 타이틀 + 연·월 탐색 */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="text-[15px] font-extrabold cd-text">내 근태·초과근무</div>
@@ -346,10 +346,10 @@ export function MyAttendanceSection({ theme }: { theme: CdTheme }) {
         </div>
       )}
 
-      {/* 2:3 분할 — 좌: 추이 차트 2단 / 우: 주별 테이블 + 주별 수당 */}
-      <div className="grid grid-cols-1 2xl:grid-cols-5 gap-4">
-        <div className="2xl:col-span-2 flex flex-col gap-4 min-w-0">
-          <div className="cd-card p-4 rounded-2xl">
+      {/* 1행: 추이 차트 2개(같은 너비) / 2행: 주별 근무·초과근무 + 주별 초과근무수당(같은 너비, 남은 높이 채움 — 메뉴 바 하단 정렬) */}
+      <div className="flex flex-col gap-4 2xl:flex-1 2xl:min-h-0">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0 shrink-0">
+          <div className="cd-card p-4 rounded-2xl min-w-0">
             <div className="cd-card-title mb-1">초과근무 추이 (최근 12개월)</div>
             {(data?.trend ?? []).length === 0 ? (
               <div className="text-sm cd-text-muted py-6 text-center">근태 기록이 없습니다.</div>
@@ -357,7 +357,7 @@ export function MyAttendanceSection({ theme }: { theme: CdTheme }) {
               <ApexChart key={`t-${theme}`} options={trendOptions} series={trendSeries} type="bar" height={190} />
             )}
           </div>
-          <div className="cd-card p-4 rounded-2xl">
+          <div className="cd-card p-4 rounded-2xl min-w-0">
             <div className="cd-card-title mb-1">초과근무수당 추이 (최근 12개월)</div>
             {hidePay ? (
               <div className="text-sm cd-text-muted py-6 text-center">초과근무수당 산정 제외 대상입니다.</div>
@@ -371,11 +371,11 @@ export function MyAttendanceSection({ theme }: { theme: CdTheme }) {
           </div>
         </div>
 
-        <div className="2xl:col-span-3 flex flex-col gap-4 min-w-0">
-          {/* 주별 근무·초과근무 */}
-          <div className="cd-card p-4 rounded-2xl">
-            <div className="cd-card-title mb-2">주별 근무 · 초과근무{month ? ` — ${year}년 ${Number(month.slice(5, 7))}월` : ""}</div>
-            <div className="grid grid-cols-[1fr_0.9fr_0.9fr_0.9fr_1.2fr_0.9fr] gap-2 text-[11px] cd-text-faint px-1 pb-1">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0 2xl:flex-1 2xl:min-h-0">
+          {/* 주별 근무·초과근무 — 카드는 남은 높이를 채우고 행 목록만 스크롤(스크롤바 숨김) */}
+          <div className="cd-card p-4 rounded-2xl min-w-0 flex flex-col min-h-[220px]">
+            <div className="cd-card-title mb-2 shrink-0">주별 근무 · 초과근무{month ? ` — ${year}년 ${Number(month.slice(5, 7))}월` : ""}</div>
+            <div className="grid grid-cols-[1fr_0.9fr_0.9fr_0.9fr_1.2fr_0.9fr] gap-2 text-[11px] cd-text-faint px-1 pb-1 shrink-0">
               <span>주 시작일</span>
               <span className="text-right">실근무</span>
               <span className="text-right">연장(1.5배)</span>
@@ -383,6 +383,7 @@ export function MyAttendanceSection({ theme }: { theme: CdTheme }) {
               <span>주 52h 게이지</span>
               <span className="text-right">12h 초과</span>
             </div>
+            <div className="2xl:flex-1 2xl:min-h-0 2xl:overflow-y-auto scrollbar-hide">
             {(data?.weeks ?? []).map((w) => {
               const limit = limits?.weeklyLimitMinutes ?? 3120;
               const pct = Math.min(100, (w.workedMinutes / limit) * 100);
@@ -447,11 +448,12 @@ export function MyAttendanceSection({ theme }: { theme: CdTheme }) {
             {!loading && (data?.weeks ?? []).length === 0 && (
               <div className="text-sm cd-text-muted py-6 text-center">이 달의 근태 기록이 없습니다.</div>
             )}
+            </div>
           </div>
 
           {/* 주별 초과근무수당 — 우상단에 시급·1.5배·2.0배 기준액 */}
-          <div className="cd-card p-4 rounded-2xl">
-            <div className="flex items-start justify-between gap-3 mb-2 flex-wrap">
+          <div className="cd-card p-4 rounded-2xl min-w-0 flex flex-col min-h-[220px]">
+            <div className="flex items-start justify-between gap-3 mb-2 flex-wrap shrink-0">
               <div className="cd-card-title flex items-center gap-1.5">
                 주별 초과근무수당
                 {pay?.excluded && pay.canTest && (
@@ -488,12 +490,13 @@ export function MyAttendanceSection({ theme }: { theme: CdTheme }) {
                 )}
               </div>
             </div>
-            <div className="grid grid-cols-[1fr_0.9fr_0.9fr_1.1fr] gap-2 text-[11px] cd-text-faint px-1 pb-1">
+            <div className="grid grid-cols-[1fr_0.9fr_0.9fr_1.1fr] gap-2 text-[11px] cd-text-faint px-1 pb-1 shrink-0">
               <span>주 시작일</span>
               <span className="text-right">연장(1.5배)</span>
               <span className="text-right">야간(2.0배)</span>
               <span className="text-right">발생 수당</span>
             </div>
+            <div className="2xl:flex-1 2xl:min-h-0 2xl:overflow-y-auto scrollbar-hide">
             {(data?.weeks ?? []).map((w) => (
               <div key={w.weekStart} className="grid grid-cols-[1fr_0.9fr_0.9fr_1.1fr] gap-2 items-center px-1 py-1.5 text-[12.5px] border-t cd-hairline-row-c">
                 <span className="tabular-nums cd-text">{w.weekStart} 주</span>
@@ -507,6 +510,7 @@ export function MyAttendanceSection({ theme }: { theme: CdTheme }) {
             {!loading && (data?.weeks ?? []).length === 0 && (
               <div className="text-sm cd-text-muted py-5 text-center">이 달의 근태 기록이 없습니다.</div>
             )}
+            </div>
           </div>
         </div>
       </div>

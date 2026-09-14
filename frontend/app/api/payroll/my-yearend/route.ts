@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
       fileName: file.name,
       contentType: file.type,
       buffer: Buffer.from(await file.arrayBuffer()),
+      label: String(form.get("label") ?? "").trim().slice(0, 40) || null,
     });
     return NextResponse.json(out);
   } catch (err) {

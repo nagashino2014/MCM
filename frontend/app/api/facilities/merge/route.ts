@@ -19,8 +19,13 @@
  *      - permits.facility_id = target
  *      - permit_scales / product_outputs 는 permits를 통해 자동 follow
  *      - parsed_fields 는 attachment 단위라 별도 재할당 불필요(원본 그대로 유지)
- *   3. source facility 행 삭제.
- *   4. audit_log 에 facility_merge 기록 (before: source 데이터, after: target 데이터).
+ *   3. ★ source 를 가리키는 나머지 모든 참조(계약·사업장 부속정보·연락처·재무 등)를 target 으로 재할당
+ *      (FACILITY_REF_COLUMNS / FACILITY_REF_UNIQUE_GUARDED). 종전에는 permits 만 옮겨서
+ *      ① contracts.counterparty_facility_id 같은 ON DELETE RESTRICT 참조가 있으면 병합이 실패하고
+ *      ② ON DELETE CASCADE 참조(대상사업장·사업자등록증·연차보고서 등)는 조용히 삭제됐다
+ *      (2026-09-14 효성화학 4중복 병합 실패 리포트로 발견).
+ *   4. source facility 행 삭제.
+ *   5. audit_log 에 facility_merge 기록 (before: source 데이터, after: target 데이터).
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -61,6 +66,53 @@ const MERGEABLE_FIELDS = [
   "industry_name",
   "memo",
 ] as const;
+
+/**
+ * source facility 를 가리키는 참조 중 **중복 걱정 없이 그대로 옮길 수 있는** 것들.
+ * (대리키 PK 라 같은 facility 행이 둘 있어도 무방한 테이블)
+ * permits 는 승계 이력을 따로 남기므로 아래 본문에서 별도 처리한다.
+ */
+const FACILITY_REF_COLUMNS: Array<{ table: string; column: string }> = [
+  // 계약 — counterparty_facility_id 는 ON DELETE RESTRICT 라 재할당하지 않으면 병합이 아예 실패한다.
+  { table: "contracts", column: "counterparty_facility_id" },
+  { table: "contracts", column: "facility_id" },
+  { table: "contract_outsourcing", column: "counterparty_facility_id" },
+  { table: "contract_agreements", column: "counterparty_facility_id" },
+  { table: "agreement_templates", column: "origin_facility_id" },
+  { table: "deliverable_templates", column: "owner_facility_id" },
+  { table: "work_plan_items", column: "facility_id" },
+  // 사업장 부속 정보 — ON DELETE CASCADE 라 재할당하지 않으면 source 삭제와 함께 사라진다.
+  { table: "facility_business_certificates", column: "facility_id" },
+  { table: "facility_aliases", column: "facility_id" },
+  { table: "facility_manual_products", column: "facility_id" },
+  { table: "facility_contact_people", column: "facility_id" },
+  { table: "facility_contact_departments", column: "facility_id" },
+  { table: "facility_contact_logs", column: "facility_id" },
+  // 영업·견적·정보
+  { table: "sales_projects", column: "facility_id" },
+  { table: "intel_signals", column: "facility_id" },
+  { table: "quotation_sites", column: "facility_id" },
+  // 재무 — 수금 자동대조 학습/판정과 세금계산서 귀속(FK 는 없지만 논리 참조)
+  { table: "bank_remitter_links", column: "facility_id" },
+  { table: "recon_matches", column: "matched_facility_id" },
+  { table: "tax_invoices", column: "invoicee_facility_id" },
+];
+
+/**
+ * facility 컬럼이 PK/UNIQUE 의 일부라 그대로 옮기면 중복 충돌이 나는 참조.
+ * target 에 같은 키의 행이 이미 있으면 source 행을 버리고(=target 값 우선), 없으면 옮긴다.
+ * keys = facility 컬럼과 함께 유일성을 이루는 나머지 컬럼.
+ */
+const FACILITY_REF_UNIQUE_GUARDED: Array<{ table: string; column: string; keys: string[] }> = [
+  { table: "contract_facilities", column: "facility_id", keys: ["contract_id", "relation_type"] },
+  { table: "facility_facility_info", column: "facility_id", keys: [] },
+  { table: "facility_order_info", column: "facility_id", keys: [] },
+  { table: "facility_annual_reports", column: "facility_id", keys: [] },
+  { table: "facility_facility_documents", column: "facility_id", keys: ["doc_type"] },
+  { table: "facility_contact_main_numbers", column: "facility_id", keys: [] },
+  { table: "facility_group_memberships", column: "facility_id", keys: [] },
+  { table: "facility_service_categories", column: "facility_id", keys: ["category"] },
+];
 
 function historyTypeFromMergeReason(reason: FacilityMergeReason): FacilityHistoryEventType {
   if (reason === "company_change") return "company_name_change";
@@ -327,6 +379,66 @@ export async function POST(req: NextRequest) {
         [body.targetId, updatedTarget.updated_at, ...body.sourceIds] as any[]
       );
 
+      // ── source 를 가리키는 나머지 참조를 target 으로 재할당 ──────────────────────
+      // 이걸 빠뜨리면 RESTRICT 참조(계약 발주처)는 삭제가 막혀 병합이 실패하고,
+      // CASCADE 참조(대상사업장·사업자등록증·연차보고서·수주정보 등)는 source 와 함께 지워진다.
+      const reassigned: Record<string, number> = {};
+      const countRows = (result: Awaited<ReturnType<typeof db.exec>>) =>
+        result.length ? result[0].values.length : 0;
+
+      // (1) facility 컬럼이 유일성 키의 일부인 테이블 — target 에 같은 키가 이미 있으면 source 행을 버린다.
+      //     (예: 같은 계약에 target·source 가 둘 다 대상사업장으로 걸린 경우)
+      for (const { table, column, keys } of FACILITY_REF_UNIQUE_GUARDED) {
+        const keyMatch = keys.map((k) => `x.${k} = s.${k}`).join(" AND ");
+        const dropped = await db.exec(
+          `DELETE FROM ${table} s
+            WHERE s.${column} = ANY($2::text[])
+              AND EXISTS (
+                SELECT 1 FROM ${table} x
+                 WHERE x.${column} = $1${keyMatch ? ` AND ${keyMatch}` : ""}
+              )
+            RETURNING 1`,
+          [body.targetId, body.sourceIds]
+        );
+        const n = countRows(dropped);
+        if (n > 0) reassigned[`${table}.${column}(중복 정리)`] = n;
+      }
+
+      // (2) 운영주체 — 부분 유일 인덱스(활성 대표 운영주체는 relation_type 당 1건)가 걸려 있어
+      //     target 에 이미 대표가 있으면 source 쪽 대표 플래그를 내린 뒤 옮긴다(행 자체는 보존).
+      await db.run(
+        `UPDATE facility_operating_entities s
+            SET is_primary = 0
+          WHERE s.facility_id = ANY($2::text[]) AND s.ended_at IS NULL AND s.is_primary = 1
+            AND EXISTS (
+              SELECT 1 FROM facility_operating_entities x
+               WHERE x.facility_id = $1 AND x.relation_type = s.relation_type
+                 AND x.ended_at IS NULL AND x.is_primary = 1
+            )`,
+        [body.targetId, body.sourceIds]
+      );
+
+      // (3) 전체 재할당
+      for (const { table, column } of [
+        ...FACILITY_REF_COLUMNS,
+        ...FACILITY_REF_UNIQUE_GUARDED.map(({ table: t, column: c }) => ({ table: t, column: c })),
+        { table: "facility_operating_entities", column: "facility_id" },
+        { table: "facility_operating_entities", column: "related_facility_id" },
+      ]) {
+        const moved = await db.exec(
+          `UPDATE ${table} SET ${column} = $1 WHERE ${column} = ANY($2::text[]) RETURNING 1`,
+          [body.targetId, body.sourceIds]
+        );
+        const n = countRows(moved);
+        if (n > 0) reassigned[`${table}.${column}`] = n;
+      }
+
+      // (4) 병합으로 자기 자신을 운영주체로 가리키게 된 행은 의미가 없으므로 제거한다.
+      await db.run(
+        `DELETE FROM facility_operating_entities WHERE facility_id = $1 AND related_facility_id = $1`,
+        [body.targetId]
+      );
+
       // source facility 삭제 (FK CASCADE 가 permits 를 따라가지 않도록 위에서 미리 재할당했음)
       // SQLite ON DELETE CASCADE 는 permits → facility_id 인 경우 source 가 삭제되면 permits 가 삭제될 수 있음.
       // 위에서 facility_id 를 target 으로 변경했으므로 안전.
@@ -344,6 +456,7 @@ export async function POST(req: NextRequest) {
           merged: updatedTarget,
           fieldOverrides,
           mergeReason,
+          reassigned,
           permitSuccessions: permitSuccessions.map((succession) => ({
             sourceFacilityId: succession.sourceFacilityId,
             permitId: succession.permitId,
@@ -356,6 +469,7 @@ export async function POST(req: NextRequest) {
         mergedTo: body.targetId,
         removedSources: body.sourceIds,
         succeededPermits: permitSuccessions.length,
+        reassigned,
       };
     });
 

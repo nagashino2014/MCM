@@ -1,6 +1,6 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import path from "node:path";
-import { GetObjectCommand, PutObjectCommand, type GetObjectCommandOutput } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, type GetObjectCommandOutput } from "@aws-sdk/client-s3";
 import { getS3Client } from "@/lib/storage/logo-storage";
 import { sanitizeFilename, sanitizePathSegment } from "@/lib/storage/contract-document-storage";
 
@@ -9,6 +9,34 @@ export interface StoredFacilityBusinessCertificate {
   storageBucket: string | null;
   storageKey: string;
   publicPath: string;
+}
+
+type CertificateStorageLocation = Pick<StoredFacilityBusinessCertificate, "storageProvider" | "storageBucket" | "storageKey">;
+
+function localCertificatePath(storageKey: string): string {
+  const localRoot = process.env.FACILITY_DOCUMENT_STORAGE_ROOT?.trim();
+  if (!localRoot) throw new Error("문서 저장 경로가 설정되지 않았습니다.");
+  const root = path.resolve(localRoot);
+  const target = path.resolve(root, storageKey);
+  if (!target.startsWith(root + path.sep)) throw new Error("문서 저장 경로가 올바르지 않습니다.");
+  return target;
+}
+
+export async function readFacilityBusinessCertificate(location: CertificateStorageLocation): Promise<Buffer> {
+  if (location.storageProvider === "local") return readFile(localCertificatePath(location.storageKey));
+  if (!location.storageBucket) throw new Error("문서 저장 버킷이 없습니다.");
+  const out = await getS3Client().send(new GetObjectCommand({ Bucket: location.storageBucket, Key: location.storageKey }));
+  if (!out.Body) throw new Error("문서 원본을 읽을 수 없습니다.");
+  return Buffer.from(await out.Body.transformToByteArray());
+}
+
+export async function deleteFacilityBusinessCertificate(location: CertificateStorageLocation): Promise<void> {
+  if (location.storageProvider === "local") {
+    await rm(localCertificatePath(location.storageKey), { force: true });
+    return;
+  }
+  if (!location.storageBucket) throw new Error("문서 저장 버킷이 없습니다.");
+  await getS3Client().send(new DeleteObjectCommand({ Bucket: location.storageBucket, Key: location.storageKey }));
 }
 
 export function buildFacilityBusinessCertificateStorageKey(params: {

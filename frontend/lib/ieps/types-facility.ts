@@ -144,6 +144,7 @@ export interface FacilityDetail {
 }
 
 export interface FacilityBusinessCertificate {
+  analysisWarning: string | null;
   certificateId: string;
   versionNo: number;
   isCurrent: boolean;

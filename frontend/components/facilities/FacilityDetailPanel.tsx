@@ -168,12 +168,12 @@ export function FacilityDetailPanel({ facilityId, canEdit, onUpdated, onDeleted 
   const [contactsOpen, setContactsOpen] = useState(false);
   const [ordersOpen, setOrdersOpen] = useState(false);
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(async (quiet = false) => {
     if (!facilityId) {
       setDetail(null);
       return;
     }
-    setLoading(true);
+    if (!quiet) setLoading(true);
     setError(null);
     try {
       const res = await fetch("/api/facilities/" + facilityId, { cache: "no-store" });
@@ -186,7 +186,7 @@ export function FacilityDetailPanel({ facilityId, canEdit, onUpdated, onDeleted 
     } catch (err) {
       setError((err as Error).message);
     } finally {
-      setLoading(false);
+      if (!quiet) setLoading(false);
     }
   }, [facilityId]);
 
@@ -373,10 +373,11 @@ export function FacilityDetailPanel({ facilityId, canEdit, onUpdated, onDeleted 
         />
       )}
       <BusinessCertificatesSection
+        key={detail.facilityId}
         detail={detail}
         canEdit={canEdit}
-        onChanged={() => {
-          reload();
+        onChanged={async () => {
+          await reload(true);
           onUpdated();
         }}
       />
@@ -2307,14 +2308,18 @@ function BusinessCertificatesSection({
 }: {
   detail: FacilityDetail;
   canEdit: boolean;
-  onChanged: () => void;
+  onChanged: () => void | Promise<void>;
 }) {
   const [uploading, setUploading] = useState(false);
+  const [pending, setPending] = useState<{ id: string; action: "reanalyze" | "delete" } | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const busy = uploading || pending !== null;
   const certificates = detail.businessCertificates ?? [];
   const current = certificates.find((item) => item.isCurrent);
 
   const upload = async (file: File) => {
     setUploading(true);
+    setMessage(null);
     try {
       const form = new FormData();
       form.set("file", file);
@@ -2322,15 +2327,35 @@ function BusinessCertificatesSection({
         method: "POST",
         body: form,
       });
+      const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
         throw new Error(body?.error ?? "HTTP " + res.status);
       }
-      onChanged();
+      setMessage(body.warning ? "파일은 저장되었습니다. " + body.warning : "업로드 및 분석이 완료되었습니다.");
+      await onChanged();
     } catch (err) {
       alert("사업자등록증 업로드 실패: " + (err as Error).message);
     } finally {
       setUploading(false);
+    }
+  };
+
+  const runAction = async (certificateId: string, action: "reanalyze" | "delete", displayName: string) => {
+    if (action === "delete" && !confirm(`“${displayName}” 과거 업로드본을 삭제하시겠습니까?`)) return;
+    setPending({ id: certificateId, action });
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/facilities/${encodeURIComponent(detail.facilityId)}/business-certificates/${encodeURIComponent(certificateId)}`, {
+        method: action === "delete" ? "DELETE" : "POST",
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error ?? "HTTP " + res.status);
+      setMessage(body.warning || (action === "delete" ? "과거 업로드본을 삭제했습니다." : body.isCurrent ? "재분석 결과를 사업장 정보에 반영했습니다." : "과거 파일의 재분석 결과를 갱신했습니다. 현재 사업장 정보는 유지됩니다."));
+      await onChanged();
+    } catch (err) {
+      setMessage((action === "delete" ? "삭제 실패: " : "재분석 실패: ") + (err as Error).message);
+    } finally {
+      setPending(null);
     }
   };
 
@@ -2343,17 +2368,17 @@ function BusinessCertificatesSection({
             사업자등록증
           </h3>
           <p className="text-xs cd-text-faint mt-1">
-            PDF 원본은 S3에 보관되며, 갱신 업로드 시 OCR 파싱 결과로 업태·종목·법인등록번호를 업데이트합니다.
+            현재본의 업로드·재분석 결과를 사업장 정보에 반영합니다. 과거 업로드본은 개별 삭제할 수 있습니다.
           </p>
         </div>
         {canEdit && (
           <label className="rounded-xl px-3 py-2 text-xs font-bold text-white cd-fill-primary cursor-pointer inline-flex items-center gap-1">
             <Upload className="w-3.5 h-3.5" />
-            {uploading ? "업로드 중..." : current ? "갱신본 업로드" : "등록증 업로드"}
+            {uploading ? "업로드·분석 중..." : current ? "갱신본 업로드" : "등록증 업로드"}
             <input
               type="file"
               accept="application/pdf,.pdf"
-              disabled={uploading}
+              disabled={busy}
               className="hidden"
               onChange={(event) => {
                 const file = event.target.files?.[0];
@@ -2365,12 +2390,14 @@ function BusinessCertificatesSection({
         )}
       </div>
 
+      {message && <p role="status" className="text-xs cd-text-primary mb-3">{message}</p>}
+
       {certificates.length === 0 ? (
         <p className="text-sm cd-text-faint">등록된 사업자등록증이 없습니다.</p>
       ) : (
         <div className="grid gap-2">
           {certificates.map((item) => (
-            <div key={item.certificateId} className="rounded-xl border cd-border-c cd-surface-bg p-3 flex items-start justify-between gap-3">
+            <div key={item.certificateId} className="rounded-xl border cd-border-c cd-surface-bg p-3 flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="text-sm font-bold cd-text truncate">{item.displayName}</p>
@@ -2385,7 +2412,23 @@ function BusinessCertificatesSection({
                 <p className="text-[11px] cd-text-faint mt-1">
                   등록자: {item.createdByName ?? item.createdByEmail ?? "-"}
                 </p>
+                {item.analysisWarning && <p className="text-xs cd-warn-text mt-2">{item.analysisWarning}</p>}
               </div>
+              <div className="flex shrink-0 items-center gap-1 flex-wrap">
+              {canEdit && (
+                <>
+                  <button type="button" disabled={busy} onClick={() => runAction(item.certificateId, "reanalyze", item.displayName)}
+                    className="rounded-lg px-3 py-1.5 text-xs font-bold cd-text-primary border cd-border-c disabled:opacity-50">
+                    {pending?.id === item.certificateId && pending.action === "reanalyze" ? "분석 중..." : "재분석"}
+                  </button>
+                  {!item.isCurrent && (
+                    <button type="button" disabled={busy} onClick={() => runAction(item.certificateId, "delete", item.displayName)}
+                      className="rounded-lg px-3 py-1.5 text-xs font-bold cd-error-text border cd-border-c disabled:opacity-50">
+                      {pending?.id === item.certificateId && pending.action === "delete" ? "삭제 중..." : "삭제"}
+                    </button>
+                  )}
+                </>
+              )}
               {item.publicPath && (
                 <a
                   href={item.publicPath}
@@ -2396,6 +2439,7 @@ function BusinessCertificatesSection({
                   PDF 보기
                 </a>
               )}
+              </div>
             </div>
           ))}
         </div>
@@ -2464,6 +2508,16 @@ function EditView({
   const [certificateCorporateNo, setCertificateCorporateNo] = useState(
     detail.businessCertificateCorporateRegistrationNo ?? ""
   );
+  useEffect(() => {
+    const types = (detail.businessCertificateBusinessType ?? "").split(/\n+/);
+    const items = (detail.businessCertificateBusinessItem ?? "").split(/\n+/);
+    setCertificateKinds(Array.from({ length: Math.max(types.length, items.length) }, (_, i) => ({
+      businessType: types[i] ?? "", businessItem: items[i] ?? "",
+    })));
+    setCertificateCorporateNo(detail.businessCertificateCorporateRegistrationNo ?? "");
+  }, [detail.businessCertificateBusinessType, detail.businessCertificateBusinessItem, detail.businessCertificateCorporateRegistrationNo]);
+  useEffect(() => { setRepresentativeName(detail.representativeName ?? ""); }, [detail.representativeName]);
+  useEffect(() => { setCorporateRegistrationNo(detail.corporateRegistrationNo ?? ""); }, [detail.corporateRegistrationNo]);
   const [logoPath, setLogoPath] = useState(detail.logoPath ?? "");
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);

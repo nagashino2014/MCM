@@ -5,7 +5,7 @@
 // 직원 대면 플로우(셀프 업로드·명세 발송)와 지급명세서 전자파일은 후속(P8 잔여).
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, RefreshCw, Undo2, Upload } from "lucide-react";
+import { Check, Download, FileText, RefreshCw, Stamp, Undo2, Upload } from "lucide-react";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 
 const won = (n: number) => n.toLocaleString("ko-KR");
@@ -77,6 +77,18 @@ const INPUT_FIELDS: Array<{ key: string; label: string; hint?: string }> = [
 
 const COUNT_KEYS = new Set(["dependents", "children", "elderly", "disabled"]);
 
+/** 직원 셀프 업로드 자료(223 yearend_employee_uploads) — 내 연말정산 화면에서 올린 파일 */
+interface UploadRow {
+  uploadId: string;
+  employeeId: string;
+  employeeName?: string;
+  kindLabel: string;
+  fileName: string;
+  sizeBytes: number;
+  applied: boolean;
+  createdAt: string;
+}
+
 export default function YearendBoard() {
   const defaultYear = new Date().getFullYear() - 1; // 귀속연도(직전년) 기본
   const [year, setYear] = useState(defaultYear);
@@ -87,7 +99,9 @@ export default function YearendBoard() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [uploads, setUploads] = useState<UploadRow[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
+  const originalRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -99,8 +113,35 @@ export default function YearendBoard() {
       })
       .catch((err) => setError(err instanceof Error ? err.message : String(err)))
       .finally(() => setLoading(false));
+    fetch(`/api/payroll/yearend/uploads?year=${year}`, { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => setUploads(Array.isArray(data.uploads) ? data.uploads : []))
+      .catch(() => setUploads([]));
   }, [year]);
   useEffect(load, [load]);
+
+  /** 세무법인 원본 원천징수영수증 등록 — 개인 열람·증명서 발급 원본이 된다. */
+  const uploadOriginal = async (employeeId: string, file: File) => {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("year", String(year));
+      form.append("employeeId", employeeId);
+      const res = await fetch("/api/payroll/yearend/uploads", { method: "POST", body: form });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      setNotice("원천징수영수증 원본을 등록했습니다 — 직원 화면과 증명서 발급에 이 파일이 쓰입니다.");
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+      if (originalRef.current) originalRef.current.value = "";
+    }
+  };
 
   const openRow = (r: SettlementRow) => {
     setOpenId(openId === r.employeeId ? null : r.employeeId);
@@ -199,6 +240,9 @@ export default function YearendBoard() {
           <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={loading} onClick={load}>
             <RefreshCw className="w-3.5 h-3.5" /> 새로고침
           </button>
+          <a className="cd-btn cd-action cd-btn-ghost cd-btn-sm" href={`/api/payroll/yearend/bundle?year=${year}`} title="직원 업로드 자료 + 원본 영수증 + 정산 요약 CSV 를 zip 으로 묶습니다(세무대리인 제출용).">
+            <Download className="w-3.5 h-3.5" /> 제출 자료 묶음
+          </a>
         </div>
         <div className="text-xs cd-text-muted mb-3">
           총급여(과세)·기납부 소득세·국민연금·건강/고용보험료는 확정 급여대장에서 자동 집계됩니다. 직원을 클릭해 간소화 PDF를
@@ -217,6 +261,7 @@ export default function YearendBoard() {
                 <th className="py-1.5 pr-3 font-normal text-right">기납부 소득세</th>
                 <th className="py-1.5 pr-3 font-normal text-right">결정세액</th>
                 <th className="py-1.5 pr-3 font-normal text-right">환급/추납</th>
+                <th className="py-1.5 pr-3 font-normal text-right" title="직원이 내 연말정산에서 올린 자료 수">자료</th>
                 <th className="py-1.5 font-normal">상태</th>
               </tr>
             </thead>
@@ -235,6 +280,9 @@ export default function YearendBoard() {
                     <td className="py-2 pr-3 text-right whitespace-nowrap font-medium" style={r.result ? { color: r.result.balance < 0 ? "var(--cd-info,#539BFF)" : "var(--cd-danger,#FA896B)" } : undefined}>
                       {r.result ? `${r.result.balance < 0 ? "환급 " : "추납 "}${won(Math.abs(r.result.balance))}` : "-"}
                     </td>
+                    <td className="py-2 pr-3 text-right whitespace-nowrap cd-text-muted">
+                      {uploads.filter((u) => u.employeeId === r.employeeId).length || "-"}
+                    </td>
                     <td className="py-2 whitespace-nowrap">
                       <span className={`cd-pill ${r.status === "confirmed" ? "cd-pill-success" : r.result ? "cd-pill-info" : "cd-pill-idle"}`}>
                         {r.status === "confirmed" ? "확정" : r.result ? "계산됨" : "미계산"}
@@ -243,7 +291,7 @@ export default function YearendBoard() {
                   </tr>
                   {openId === r.employeeId && (
                     <tr key={`${r.employeeId}-detail`} className="border-t cd-hairline-row-c">
-                      <td colSpan={7} className="py-3 pl-4">
+                      <td colSpan={8} className="py-3 pl-4">
                         <div className="flex items-center gap-2 flex-wrap mb-2">
                           <span className="text-sm font-medium mr-auto">
                             공제 입력 — {r.name} · 비과세 {won(r.nonTaxablePay)} · 국민연금 {won(r.nationalPension)} · 건강/요양 {won(r.healthInsurance)} · 고용 {won(r.employmentInsurance)} (급여대장 자동 — 간소화 납부액을 입력하면 대체)
@@ -252,6 +300,15 @@ export default function YearendBoard() {
                           <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy} onClick={() => fileRef.current?.click()}>
                             <Upload className="w-3.5 h-3.5" /> 간소화 PDF로 채우기
                           </button>
+                          <input ref={originalRef} type="file" accept="application/pdf" className="hidden" onChange={(e) => e.target.files?.[0] && void uploadOriginal(r.employeeId, e.target.files[0])} />
+                          <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy} title="세무법인 원본 원천징수영수증(PDF) 등록 — 직원 열람·증명서 발급 원본" onClick={() => originalRef.current?.click()}>
+                            <Stamp className="w-3.5 h-3.5" /> 원천징수영수증 원본 등록
+                          </button>
+                          {r.result && (
+                            <a className="cd-btn cd-action cd-btn-ghost cd-btn-sm" href={`/api/payroll/yearend/withholding?year=${year}&employeeId=${encodeURIComponent(r.employeeId)}`} target="_blank" rel="noreferrer" title="원본이 있으면 원본, 없으면 앱 산출 요약본">
+                              <FileText className="w-3.5 h-3.5" /> 영수증 미리보기
+                            </a>
+                          )}
                           <button type="button" className="cd-btn cd-btn-primary cd-btn-sm" disabled={busy} onClick={() => void save(r.employeeId)}>
                             계산
                           </button>
@@ -273,6 +330,19 @@ export default function YearendBoard() {
                             </button>
                           )}
                         </div>
+                        {uploads.some((u) => u.employeeId === r.employeeId) && (
+                          <div className="mb-3 text-xs border cd-hairline-row-c rounded-lg px-3 py-2">
+                            <div className="font-medium mb-1">직원 업로드 자료(내 연말정산)</div>
+                            {uploads.filter((u) => u.employeeId === r.employeeId).map((u) => (
+                              <div key={u.uploadId} className="flex items-center gap-2 py-0.5">
+                                <span className="cd-text-muted whitespace-nowrap">{u.kindLabel}</span>
+                                <a className="font-medium truncate" style={{ color: "var(--cd-primary)" }} href={`/api/payroll/yearend/uploads/${u.uploadId}`} target="_blank" rel="noreferrer">{u.fileName}</a>
+                                <span className="cd-text-muted whitespace-nowrap">{u.createdAt.slice(0, 10)}</span>
+                                <span className="whitespace-nowrap" style={{ color: u.applied ? "var(--cd-success,#13DEB9)" : undefined }}>{u.applied ? "계산 반영" : "보관"}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                         <div className="grid gap-x-4 gap-y-1.5 mb-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))" }}>
                           {INPUT_FIELDS.map((f) => (
                             <label key={f.key} className="flex items-center gap-2 text-xs">
@@ -328,7 +398,7 @@ export default function YearendBoard() {
               ))}
               {!loading && rows.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="py-6 text-center cd-text-muted text-sm">귀속 {year}년 확정 급여대장이 없습니다.</td>
+                  <td colSpan={8} className="py-6 text-center cd-text-muted text-sm">귀속 {year}년 확정 급여대장이 없습니다.</td>
                 </tr>
               )}
             </tbody>

@@ -42,6 +42,7 @@ import type { LucideIcon } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { ApprovalFormRenderer } from "@/components/approval/ApprovalFormRenderer";
+import { FormActionsEditor } from "@/components/approval/FormActionsEditor";
 import {
   AUTO_CONCEPT_BY_TYPE,
   FILL_SOURCES,
@@ -600,6 +601,14 @@ export default function ApprovalFormsBoard() {
                   </div>
                 </div>
               )}
+
+              {/* 연계(액션 배선, P7) — 저장된 양식만(신규 양식은 먼저 저장 후 배선) */}
+              {!preview &&
+                (draft.formId ? (
+                  <FormActionsEditor formId={draft.formId} fields={draft.fields} />
+                ) : (
+                  <p className="text-[11px] cd-text-faint">※ 양식을 먼저 저장하면 승인/상신 시 자동 처리(연계)를 배선할 수 있습니다.</p>
+                ))}
             </>
           )}
         </div>

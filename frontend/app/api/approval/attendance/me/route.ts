@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
-import { getAttendanceSettings, listDailyForWeek, listMyAttendanceMonths, listMyWeekly } from "@/lib/adt/queries";
+import {
+  getAttendanceSettings,
+  listDailyForWeek,
+  listMyAttendanceMonths,
+  listMyWeekly,
+  listMyMonthlyTrend,
+  listMyMonthlyLateDays,
+  listMyMealWarnings,
+  listMyAbsenceRequests,
+} from "@/lib/adt/queries";
+import { myPayBasis, overtimePay } from "@/lib/payroll/overtime";
 import { DEFAULT_ATTENDANCE_SETTINGS } from "@/lib/adt/settings";
 
 export const runtime = "nodejs";
@@ -14,14 +24,23 @@ export const dynamic = "force-dynamic";
  * ?week=YYYY-MM-DD 를 주면 그 주의 일별 출퇴근까지 함께 준다.
  * ?month=YYYY-MM 을 주면 그 달에 시작하는 주만 돌려준다(모바일 연/월 탐색 — 2026-08-20).
  *   응답의 months 는 기록이 있는 전체 월 목록(최신순)이다.
+ * ?full=1 (웹 "내 근태·초과근무" 화면) 이면 월별 추이·지각·식대 경고·결근사유서 요청까지 함께 준다
+ *   — 모바일 M5 는 기존 필드만 쓰므로 응답은 추가만 하고 기존 형태는 바꾸지 않는다.
  */
 export async function GET(req: NextRequest) {
   try {
     const ctx = await requirePermission("approval.view");
     const month = req.nextUrl.searchParams.get("month");
-    const [{ adtEmpNo, weeks }, months] = await Promise.all([
+    const full = req.nextUrl.searchParams.get("full") === "1";
+    const year = String(month ?? "").slice(0, 4) || String(new Date(Date.now() + 9 * 3600 * 1000).getUTCFullYear());
+    const [{ adtEmpNo, weeks }, months, trend, lateMonthly, mealWarnings, absenceRequests, pay] = await Promise.all([
       listMyWeekly(ctx.userId, 8, month),
       listMyAttendanceMonths(ctx.userId),
+      full ? listMyMonthlyTrend(ctx.userId, 12) : Promise.resolve([]),
+      full ? listMyMonthlyLateDays(ctx.userId, 12) : Promise.resolve([]),
+      full ? listMyMealWarnings(ctx.userId, year) : Promise.resolve([]),
+      full ? listMyAbsenceRequests(ctx.userId) : Promise.resolve([]),
+      full ? myPayBasis(ctx.userId) : Promise.resolve(null),
     ]);
 
     const week = req.nextUrl.searchParams.get("week") ?? weeks[0]?.weekStart ?? null;
@@ -41,7 +60,27 @@ export async function GET(req: NextRequest) {
       weeklyOvertimeLimitMinutes: s.weeklyOvertimeLimitMinutes,
     };
 
-    return NextResponse.json({ weeks, week, daily, limits, months });
+    if (!full) return NextResponse.json({ weeks, week, daily, limits, months });
+    // 수당 환산 — 급여 엔진과 같은 규칙(통상시급 100원 반올림·overtimePay 10원 절사)을 서버에서 적용한다.
+    const wage = pay?.hourlyWage ?? null;
+    const rates = pay ? { rateDay: pay.rateDay, rateNight: pay.rateNight, divisorHours: pay.divisorHours } : null;
+    const estPay = (dayMin: number, nightMin: number) =>
+      wage != null && rates ? overtimePay(wage, dayMin, nightMin, rates) : null;
+    const trendWithPay = trend.map((t) => ({ ...t, estimatedPay: estPay(t.overtimeDayMinutes, t.overtimeNightMinutes) }));
+    const weeksWithPay = weeks.map((w) => ({ ...w, estimatedPay: estPay(w.overtimeDayMinutes, w.overtimeNightMinutes) }));
+    return NextResponse.json({
+      weeks: weeksWithPay,
+      week,
+      daily,
+      limits,
+      months,
+      trend: trendWithPay,
+      lateMonthly,
+      mealWarnings,
+      absenceRequests,
+      // canTest: 산정 제외자 수당 표시 test 버튼(관리자 한정 — 기능 동작 확인용, 2026-08-31).
+      pay: pay ? { ...pay, canTest: ctx.role === "admin" } : null,
+    });
   } catch (err) {
     return authErrorToResponse(err);
   }

@@ -3,7 +3,7 @@
 // 조직도 인원 선택 모달(공용, G3) — 결재선/참조·열람(기안 작성)과 양식 user_select 필드가 공유한다.
 // 스냅샷(/api/sales/org)은 모듈 캐시로 세션 중 1회만 로드한다(모달을 여러 곳에서 열어도 재요청 없음).
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { CdModal } from "@/components/cdash/CdModal";
 import OrganizationTree from "@/components/admin/users/OrganizationTree";
 import type { OrganizationEmployeeRow, OrganizationSnapshot } from "@/components/admin/users/types";
@@ -16,6 +16,9 @@ export function OrgPickerModal({
   hint,
   onClose,
   onSelect,
+  checkedEmployeeIds,
+  footer,
+  size = "md",
 }: {
   open: boolean;
   title: string;
@@ -24,6 +27,11 @@ export function OrgPickerModal({
   onClose: () => void;
   /** 인원 클릭 시 호출 — 닫기 여부는 호출측이 결정(복수 선택은 유지) */
   onSelect: (emp: OrganizationEmployeeRow) => void;
+  /** 지정하면 인원 노드에 체크박스가 붙는 다중 선택 모드(체크 상태는 호출측 state) */
+  checkedEmployeeIds?: Iterable<string>;
+  /** 모달 하단 버튼 영역(저장·닫기 등) */
+  footer?: ReactNode;
+  size?: "sm" | "md" | "lg" | "xl";
 }) {
   const [snapshot, setSnapshot] = useState<OrganizationSnapshot | null>(snapshotCache);
 
@@ -47,10 +55,17 @@ export function OrgPickerModal({
   }, [open]);
 
   return (
-    <CdModal open={open} onClose={onClose} title={title} size="md">
+    <CdModal open={open} onClose={onClose} title={title} size={size} footer={footer}>
       <div className="flex flex-col gap-2">
         {snapshot ? (
-          <OrganizationTree snapshot={snapshot} embedded hideHeader onSelectEmployee={onSelect} />
+          <OrganizationTree
+            snapshot={snapshot}
+            embedded
+            hideHeader
+            onSelectEmployee={onSelect}
+            employeeCheckbox={checkedEmployeeIds !== undefined}
+            checkedEmployeeIds={checkedEmployeeIds}
+          />
         ) : (
           <p className="text-[12px] cd-text-faint py-6 text-center">조직도를 불러오는 중입니다.</p>
         )}

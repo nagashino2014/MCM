@@ -87,6 +87,15 @@ export const recordLeavePayConnector: ActionConnector = {
     { key: "days", label: "잔여 연차일수" },
     { key: "amount", label: "지급 대상액", required: true },
   ],
+  async preview(ctx) {
+    const personRaw = ctx.slot("person");
+    const person = Array.isArray(personRaw) ? (personRaw[0] as { employeeId?: string; name?: string } | undefined) : undefined;
+    if (!person?.employeeId) return "대상자를 해석하지 못해 실행이 실패합니다 — 슬롯 매핑을 확인하세요.";
+    const amount = Math.round(Number(String(ctx.slot("amount") ?? "").replace(/[^\d.-]/g, "")) || 0);
+    if (amount <= 0) return "지급 대상액을 해석하지 못해 실행이 실패합니다 — 슬롯 매핑을 확인하세요.";
+    const days = Number(String(ctx.slot("days") ?? "").replace(/[^\d.]/g, "")) || null;
+    return `퇴직 정산(재무)의 ${person.name ?? person.employeeId} 카드에 연차수당 ${amount.toLocaleString("ko-KR")}원${days ? `(${days}일)` : ""}이 기입됩니다.`;
+  },
   async run(ctx) {
     const personRaw = ctx.slot("person");
     const person = Array.isArray(personRaw) ? (personRaw[0] as { employeeId?: string; name?: string } | undefined) : undefined;

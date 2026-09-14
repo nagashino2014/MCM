@@ -103,6 +103,70 @@ export async function deleteRule(ruleId: string): Promise<void> {
   });
 }
 
+/** 규칙 일괄 삭제(항목별 설정의 묶음 삭제) */
+export async function deleteRules(ruleIds: string[]): Promise<number> {
+  if (!ruleIds.length) return 0;
+  await withDbWrite(async (db) => {
+    await db.exec(`DELETE FROM payroll_pay_rules WHERE rule_id = ANY($1::text[])`, [ruleIds]);
+  });
+  return ruleIds.length;
+}
+
+/**
+ * 항목별 설정(§ 항목 → 대상자 N명) — 같은 항목·금액·기간·지급월·비고로 직원별 규칙을 한 번에 만든다.
+ * 같은 직원·항목에 활성 규칙이 이미 있으면 그 규칙을 갱신(중복 생성 방지)하고, 없으면 새로 만든다.
+ * 반환: 생성/갱신된 rule_id 목록.
+ */
+export async function saveRulesBulk(
+  rule: {
+    employeeIds: string[];
+    itemId: string;
+    amount: number;
+    validFrom: string | null;
+    validTo: string | null;
+    payMonths: number[] | null;
+    note: string | null;
+  },
+  actorUserId: string
+): Promise<{ ruleIds: string[]; created: number; updated: number }> {
+  const employeeIds = [...new Set(rule.employeeIds.map(String).filter(Boolean))];
+  if (!employeeIds.length) return { ruleIds: [], created: 0, updated: 0 };
+  const db = await getDb();
+  const existing = rowsToObjects(
+    await db.exec(
+      `SELECT rule_id, employee_id FROM payroll_pay_rules
+        WHERE item_id = $1 AND is_active = 1 AND employee_id = ANY($2::text[])
+          AND COALESCE(valid_from, '') = COALESCE($3, '') AND COALESCE(valid_to, '') = COALESCE($4, '')`,
+      [rule.itemId, employeeIds, rule.validFrom, rule.validTo]
+    )
+  );
+  const byEmp = new Map(existing.map((r) => [String(r.employee_id), String(r.rule_id)]));
+  const ruleIds: string[] = [];
+  let created = 0;
+  let updated = 0;
+  for (const employeeId of employeeIds) {
+    const prior = byEmp.get(employeeId) ?? null;
+    const ruleId = await saveRule(
+      {
+        ruleId: prior,
+        employeeId,
+        itemId: rule.itemId,
+        amount: rule.amount,
+        validFrom: rule.validFrom,
+        validTo: rule.validTo,
+        payMonths: rule.payMonths,
+        note: rule.note,
+        isActive: true,
+      },
+      actorUserId
+    );
+    ruleIds.push(ruleId);
+    if (prior) updated += 1;
+    else created += 1;
+  }
+  return { ruleIds, created, updated };
+}
+
 /** 귀속월에 유효한 규칙 맵(employee_id → [{itemId, amount}]) — 대장 생성 엔진용 */
 export async function activeRulesFor(payYear: number, payMonth: number): Promise<Map<string, Array<{ itemId: string; amount: number }>>> {
   const ym = `${payYear}-${String(payMonth).padStart(2, "0")}`;

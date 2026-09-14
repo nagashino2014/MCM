@@ -36,6 +36,13 @@ export const recordResignationConnector: ActionConnector = {
     { key: "date", label: "퇴직(예정)일", required: true },
     { key: "reason", label: "퇴직 사유" },
   ],
+  async preview(ctx) {
+    if (!ctx.drafterEmployeeId) return "기안자 직원 정보가 없어 실행이 실패합니다.";
+    const resignDate = String(ctx.slot("date") ?? "").slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(resignDate)) return "퇴직(예정)일을 해석하지 못해 실행이 실패합니다 — 슬롯 매핑을 확인하세요.";
+    const today = new Date().toISOString().slice(0, 10);
+    return `${ctx.drafterName ?? "기안자"}의 퇴사 이력(${resignDate})이 인사관리에 기록됩니다 — ${resignDate <= today ? "퇴사일이 지나 계정이 즉시 비활성화됩니다." : "퇴사일 도래 시 계정이 비활성화됩니다."}`;
+  },
   async run(ctx) {
     const employeeId = ctx.drafterEmployeeId;
     if (!employeeId) throw new Error("기안자 직원 정보가 없습니다.");
@@ -79,6 +86,14 @@ export const recordLeaveAbsenceConnector: ActionConnector = {
     { key: "kind", label: "휴직 구분" },
     { key: "reason", label: "휴직 사유" },
   ],
+  async preview(ctx) {
+    if (!ctx.drafterEmployeeId) return "기안자 직원 정보가 없어 실행이 실패합니다.";
+    const period = (ctx.slot("period") ?? {}) as { from?: string; to?: string };
+    const from = String(period.from ?? "").slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(from)) return "휴직 시작일을 해석하지 못해 실행이 실패합니다 — 슬롯 매핑을 확인하세요.";
+    const to = String(period.to ?? "").slice(0, 10);
+    return `${ctx.drafterName ?? "기안자"}의 휴직 시작(${from}${to ? ` ~ ${to} 예정` : ""})이 인사관리에 기록됩니다. 복직은 인사관리 탭에서 처리합니다.`;
+  },
   async run(ctx) {
     const employeeId = ctx.drafterEmployeeId;
     if (!employeeId) throw new Error("기안자 직원 정보가 없습니다.");
@@ -116,6 +131,24 @@ export const recordAppointmentsConnector: ActionConnector = {
   label: "인사 발령 이력 기록",
   description: "승인된 인사 발령의 각 행을 대상자별 승진/부서이동 이력으로 기록합니다.",
   slots: [{ key: "rows", label: "발령 내역(표)", required: true }],
+  async preview(ctx) {
+    const rows = ctx.slot("rows");
+    if (!Array.isArray(rows) || !rows.length) return "발령 내역 표를 해석하지 못해 실행이 실패합니다 — 슬롯 매핑을 확인하세요.";
+    const parts: string[] = [];
+    for (const raw of rows as AppointmentRow[]) {
+      if (!raw || typeof raw !== "object") continue;
+      const people = Array.isArray(raw.person) ? raw.person.filter((p) => p && p.employeeId) : [];
+      const kindLabel = String(raw.appoint_kind ?? "").trim();
+      if (!people.length || !kindLabel) continue;
+      for (const person of people) {
+        parts.push(
+          `${person.name ?? "?"} ${kindLabel}${kindLabel === "승진" ? `(${String(raw.new_position ?? "").trim() || "직급 미기재"})` : `(→${String(raw.to_dept ?? "").trim() || "부서 미기재"})`}`
+        );
+      }
+    }
+    if (!parts.length) return "기록 가능한 발령 행이 없습니다(대상자·발령 구분·발령일 확인) — 실행이 실패합니다.";
+    return `발령 ${parts.length}건이 인사 이력에 기록되고 현재 직급·부서가 갱신됩니다: ${parts.join(", ")}`;
+  },
   async run(ctx) {
     const rows = ctx.slot("rows");
     if (!Array.isArray(rows) || !rows.length) throw new Error("발령 내역 표가 비어 있습니다.");

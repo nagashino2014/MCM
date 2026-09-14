@@ -15,6 +15,8 @@ export interface PayrollItemDef {
   inOrdinaryWage: boolean;
   displayOrder: number;
   isActive: boolean;
+  /** 수당 규칙(직원×항목 정액)에서 고를 수 있는 항목인지(223) — 자동 산정·공제 항목은 0 */
+  ruleEligible: boolean;
   usageCount?: number;
 }
 
@@ -62,6 +64,7 @@ function toItemDef(row: Record<string, unknown>): PayrollItemDef {
     inOrdinaryWage: toNum(row.in_ordinary_wage) === 1,
     displayOrder: toNum(row.display_order),
     isActive: toNum(row.is_active) === 1,
+    ruleEligible: row.rule_eligible == null ? true : toNum(row.rule_eligible) === 1,
     usageCount: row.usage_count === undefined ? undefined : toNum(row.usage_count),
   };
 }
@@ -233,6 +236,7 @@ export async function getEmployeeAnnual(year: number, name: string): Promise<{
         inOrdinaryWage: false,
         displayOrder: toNum(r.display_order),
         isActive: true,
+        ruleEligible: true,
         amounts: {},
         total: 0,
       } as PayrollItemDef & { amounts: Record<number, number>; total: number });
@@ -253,7 +257,7 @@ export async function listPayrollItems(): Promise<PayrollItemDef[]> {
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT d.item_id, d.name, d.kind, d.aliases, d.in_ordinary_wage, d.display_order, d.is_active,
+      `SELECT d.item_id, d.name, d.kind, d.aliases, d.in_ordinary_wage, d.display_order, d.is_active, d.rule_eligible,
               count(li.line_id) AS usage_count
          FROM payroll_item_defs d
          LEFT JOIN payroll_entry_lines li ON li.item_id = d.item_id
@@ -273,15 +277,17 @@ export async function savePayrollItem(input: {
   inOrdinaryWage: boolean;
   displayOrder: number;
   isActive: boolean;
+  ruleEligible?: boolean;
 }): Promise<void> {
   await withDbWrite(async (db) => {
     await db.exec(
-      `INSERT INTO payroll_item_defs (item_id, name, kind, aliases, in_ordinary_wage, display_order, is_active, created_at)
-       VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, now()::text)
+      `INSERT INTO payroll_item_defs (item_id, name, kind, aliases, in_ordinary_wage, display_order, is_active, rule_eligible, created_at)
+       VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, COALESCE($8, 1), now()::text)
        ON CONFLICT (item_id) DO UPDATE SET
          name = EXCLUDED.name, kind = EXCLUDED.kind, aliases = EXCLUDED.aliases,
          in_ordinary_wage = EXCLUDED.in_ordinary_wage,
-         display_order = EXCLUDED.display_order, is_active = EXCLUDED.is_active`,
+         display_order = EXCLUDED.display_order, is_active = EXCLUDED.is_active,
+         rule_eligible = COALESCE($8, payroll_item_defs.rule_eligible)`,
       [
         input.itemId,
         input.name,
@@ -290,6 +296,7 @@ export async function savePayrollItem(input: {
         input.inOrdinaryWage ? 1 : 0,
         input.displayOrder,
         input.isActive ? 1 : 0,
+        input.ruleEligible == null ? null : input.ruleEligible ? 1 : 0,
       ]
     );
   });

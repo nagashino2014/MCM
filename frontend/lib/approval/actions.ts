@@ -10,6 +10,7 @@ import {
   recordResignationConnector,
 } from "@/lib/approval/hr-actions";
 import { recordLeavePayConnector } from "@/lib/approval/severance";
+import { bonusLedgerConnector } from "@/lib/payroll/bonus-ledger";
 
 /*
  * 승인 액션 커넥터 레지스트리(FRM-P0, 201) — 양식 승인/상신 시 실행할 연계의 실행기.
@@ -66,6 +67,8 @@ export interface ActionConnector {
   slots: ActionSlotDef[];
   /** 커넥터 내부에서 withDbWrite 로 자체 트랜잭션을 연다(결재 트랜잭션과 분리). */
   run: (ctx: ActionRunContext) => Promise<ActionRunResult>;
+  /** 드라이런(P7) — 아무것도 쓰지 않고 "실행되면 무슨 일이 일어나는지" 한 문장으로 설명한다. */
+  preview?: (ctx: ActionRunContext) => Promise<string>;
 }
 
 function id(): string {
@@ -267,6 +270,212 @@ export async function listActionRuns(docId: string): Promise<ActionRunLog[]> {
   });
 }
 
+/* ---------- 연계 설정 CRUD + 드라이런(P7 — 빌더 "연계" 탭) ---------- */
+
+export interface FormActionConfig {
+  actionId: string | null; // 신규는 null
+  actionKind: string;
+  triggerOn: ActionTrigger;
+  fieldMap: Record<string, string>;
+  active: boolean;
+  sortOrder: number;
+}
+
+/** 커넥터 카탈로그(빌더 편집 UI 용) — 코드 화이트리스트를 직렬화. */
+export function listConnectorCatalog(): Array<{ kind: string; label: string; description: string; slots: ActionSlotDef[]; hasPreview: boolean }> {
+  return ACTION_CONNECTORS.map((c) => ({
+    kind: c.kind,
+    label: c.label,
+    description: c.description,
+    slots: c.slots,
+    hasPreview: !!c.preview,
+  }));
+}
+
+export async function listFormActions(formId: string): Promise<FormActionConfig[]> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT action_id, action_kind, trigger_on, field_map, active, sort_order
+         FROM approval_form_actions WHERE form_id = $1 ORDER BY sort_order, created_at`,
+      [formId]
+    )
+  );
+  return rows.map((r) => ({
+    actionId: String(r.action_id),
+    actionKind: String(r.action_kind),
+    triggerOn: (["approved", "submitted", "rejected"].includes(String(r.trigger_on)) ? String(r.trigger_on) : "approved") as ActionTrigger,
+    fieldMap: Object.fromEntries(
+      Object.entries(parseJsonObject(r.field_map)).map(([k, v]) => [k, String(v ?? "")])
+    ),
+    active: Number(r.active ?? 0) === 1,
+    sortOrder: Number(r.sort_order ?? 0),
+  }));
+}
+
+/** 양식의 연계 설정 전체 동기화 — 목록에 없는 기존 액션은 삭제(실행 이력도 CASCADE 삭제, UI 에서 confirm). */
+export async function saveFormActions(formId: string, items: FormActionConfig[]): Promise<FormActionConfig[]> {
+  const validKinds = new Set(ACTION_CONNECTORS.map((c) => c.kind));
+  for (const item of items) {
+    if (!validKinds.has(item.actionKind)) throw new Error(`등록되지 않은 커넥터입니다: ${item.actionKind}`);
+    if (!["approved", "submitted", "rejected"].includes(item.triggerOn)) throw new Error("트리거가 올바르지 않습니다.");
+  }
+  const now = new Date().toISOString();
+  await withDbWrite(async (txn) => {
+    const keepIds = items.map((i) => i.actionId).filter((v): v is string => !!v);
+    await txn.run(
+      keepIds.length
+        ? `DELETE FROM approval_form_actions WHERE form_id = $1 AND NOT (action_id = ANY($2::text[]))`
+        : `DELETE FROM approval_form_actions WHERE form_id = $1`,
+      keepIds.length ? [formId, keepIds] : [formId]
+    );
+    for (const [idx, item] of items.entries()) {
+      const fieldMapJson = JSON.stringify(
+        Object.fromEntries(Object.entries(item.fieldMap).filter(([, v]) => String(v ?? "").trim()))
+      );
+      if (item.actionId) {
+        await txn.run(
+          `UPDATE approval_form_actions
+              SET action_kind = $2, trigger_on = $3, field_map = $4::jsonb, active = $5, sort_order = $6, updated_at = $7
+            WHERE action_id = $1 AND form_id = $8`,
+          [item.actionId, item.actionKind, item.triggerOn, fieldMapJson, item.active ? 1 : 0, idx, now, formId]
+        );
+      } else {
+        await txn.run(
+          `INSERT INTO approval_form_actions
+             (action_id, form_id, action_kind, trigger_on, field_map, config, active, sort_order, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5::jsonb, '{}'::jsonb, $6, $7, $8, $8)`,
+          [id(), formId, item.actionKind, item.triggerOn, fieldMapJson, item.active ? 1 : 0, idx, now]
+        );
+      }
+    }
+  });
+  return listFormActions(formId);
+}
+
+/** 드라이런 후보 — 이 양식의 최근 문서(승인/진행/반려, 최신순). */
+export async function listRecentDocsForForm(formId: string, limit = 8): Promise<
+  Array<{ docId: string; docNo: string | null; title: string; status: string; drafterName: string | null }>
+> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT doc_id, doc_no, title, status, drafter_name FROM approval_docs
+        WHERE form_id = $1 AND status <> 'draft' ORDER BY updated_at DESC LIMIT $2`,
+      [formId, limit]
+    )
+  );
+  return rows.map((r) => ({
+    docId: String(r.doc_id),
+    docNo: r.doc_no != null ? String(r.doc_no) : null,
+    title: String(r.title ?? ""),
+    status: String(r.status),
+    drafterName: r.drafter_name != null ? String(r.drafter_name) : null,
+  }));
+}
+
+export interface DryRunSlotResult {
+  key: string;
+  label: string;
+  required: boolean;
+  mappedTo: string | null; // field_map 값(필드 key 또는 semantic:)
+  fieldLabel: string | null; // 해석된 필드 라벨(미해석 시 null)
+  value: string | null; // 문서에서 뽑힌 값(표시용 축약)
+  ok: boolean; // required 인데 값이 없으면 false
+}
+
+export interface DryRunResult {
+  connectorLabel: string;
+  slots: DryRunSlotResult[];
+  preview: string | null; // 커넥터별 실행 예고("연차 대장에 -1일 적재됩니다" 등)
+  error: string | null;
+}
+
+const shortValue = (v: unknown): string => {
+  if (v == null) return "";
+  const s = typeof v === "string" ? v : JSON.stringify(v);
+  return s.length > 80 ? `${s.slice(0, 79)}…` : s;
+};
+
+/**
+ * 드라이런(P7) — 실제 실행 없이, 기존 문서 하나를 골라 이 설정이라면 슬롯이 어떻게 해석되고
+ * 무슨 일이 일어나는지 미리 본다. 설정 실수를 배선 확정 전에 잡는 장치.
+ */
+export async function dryRunFormAction(params: {
+  formId: string;
+  actionKind: string;
+  fieldMap: Record<string, string>;
+  docId: string;
+}): Promise<DryRunResult> {
+  const connector = ACTION_CONNECTORS.find((c) => c.kind === params.actionKind);
+  if (!connector) throw new Error(`등록되지 않은 커넥터입니다: ${params.actionKind}`);
+  const db = await getDb();
+  const docs = rowsToObjects(
+    await db.exec(
+      `SELECT d.doc_id, d.form_id, d.doc_no, d.title, d.drafter_user_id, d.drafter_employee_id, d.drafter_name,
+              d.field_values, f.fields
+         FROM approval_docs d JOIN approval_forms f ON f.form_id = d.form_id
+        WHERE d.doc_id = $1 AND d.form_id = $2`,
+      [params.docId, params.formId]
+    )
+  );
+  if (!docs.length) throw new Error("드라이런 대상 문서를 찾을 수 없습니다.");
+  const doc = docs[0];
+  // 설정 검증이 목적이므로 문서 스냅샷 버전이 아니라 **현행 양식 스키마** 기준으로 해석한다.
+  const fields = parseFields(doc.fields);
+  const fieldValues = parseJsonObject(doc.field_values);
+  const slotField = (key: string): ApprovalFieldDef | undefined => {
+    const mapped = params.fieldMap[key];
+    return typeof mapped === "string" && mapped ? resolveSlotField(mapped, fields) : undefined;
+  };
+  const ctx: ActionRunContext = {
+    docId: params.docId,
+    formId: params.formId,
+    docNo: doc.doc_no != null ? String(doc.doc_no) : null,
+    title: String(doc.title ?? ""),
+    drafterUserId: doc.drafter_user_id != null ? String(doc.drafter_user_id) : null,
+    drafterEmployeeId: doc.drafter_employee_id != null ? String(doc.drafter_employee_id) : null,
+    drafterName: doc.drafter_name != null ? String(doc.drafter_name) : null,
+    fieldValues,
+    fields,
+    config: {},
+    slot: (key) => {
+      const f = slotField(key);
+      if (!f) return undefined;
+      const v = fieldValues[f.key];
+      return v === "" || v == null ? undefined : v;
+    },
+    slotField,
+  };
+  const slots: DryRunSlotResult[] = connector.slots.map((s) => {
+    const mapped = params.fieldMap[s.key] ?? null;
+    const field = slotField(s.key);
+    const value = ctx.slot(s.key);
+    return {
+      key: s.key,
+      label: s.label,
+      required: !!s.required,
+      mappedTo: mapped && mapped.trim() ? mapped : null,
+      fieldLabel: field?.label ?? null,
+      value: value === undefined ? null : shortValue(value),
+      ok: !s.required || value !== undefined,
+    };
+  });
+  let preview: string | null = null;
+  let error: string | null = null;
+  const missing = slots.filter((s) => !s.ok).map((s) => s.label);
+  if (missing.length) {
+    error = `필수 슬롯 값 없음: ${missing.join(", ")} — 이 문서로는 실행이 실패합니다.`;
+  } else if (connector.preview) {
+    try {
+      preview = await connector.preview(ctx);
+    } catch (err) {
+      error = err instanceof Error ? err.message : String(err);
+    }
+  }
+  return { connectorLabel: connector.label, slots, preview, error };
+}
+
 /* ---------- 커넥터 등록 ----------
  * 각 단계(FRM-P1~P6) 모듈이 커넥터를 구현하면 여기에 추가한다.
  * ⚠ 커넥터 구현 모듈은 docs.ts 를 import 하지 말 것(순환 참조) — 필요한 문서 정보는 ctx 로 받는다.
@@ -279,4 +488,5 @@ export const ACTION_CONNECTORS: ActionConnector[] = [
   recordLeaveAbsenceConnector,
   recordAppointmentsConnector,
   recordLeavePayConnector,
+  bonusLedgerConnector,
 ];

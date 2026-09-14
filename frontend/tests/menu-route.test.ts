@@ -5,7 +5,7 @@ import { resolveMenuRoute } from "../components/layout/menu-route";
 
 test("기존 메뉴의 모든 진입 URL은 정확히 자기 메뉴를 선택한다", () => {
   assert.equal(MENU_ITEMS.length, 23);
-  assert.equal(MENU_ITEMS.reduce((count, item) => count + (item.submenu?.length ?? 0), 0), 65);
+  assert.equal(MENU_ITEMS.reduce((count, item) => count + (item.submenu?.length ?? 0), 0), 68);
   for (const item of MENU_ITEMS) {
     for (const route of item.submenu?.length ? item.submenu : [item]) {
       const url = new URL(route.href, "https://mcm.local");

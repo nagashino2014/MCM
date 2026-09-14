@@ -104,7 +104,7 @@ export function LeaveGaugeCard() {
       <div className="flex items-center gap-2">
         <h2 className="text-sm font-extrabold cd-text">내 연차 · 초과근무</h2>
         <Link
-          href="/approval/leave"
+          href="/approval/my-hr"
           className="ml-auto inline-flex items-center gap-1 text-[11.5px] font-semibold cd-text-faint hover:text-[color:var(--cd-text)] transition-colors"
         >
           근태·휴가

@@ -1,3 +1,4 @@
+import { certificateAnalysisWarning } from "./business-certificate-status";
 /**
  * /data/status, /data/review용 PostgreSQL 조회 헬퍼.
  * - 모두 Aurora PostgreSQL 을 읽기 전용으로 접근하며, write는 withDbWrite 트랜잭션을 별도로 사용한다.
@@ -1257,6 +1258,7 @@ export interface FacilityDetail {
 }
 
 export interface FacilityBusinessCertificate {
+  analysisWarning: string | null;
   certificateId: string;
   versionNo: number;
   isCurrent: boolean;
@@ -1443,11 +1445,12 @@ export async function getFacilityDetail(facilityId: string): Promise<FacilityDet
       `SELECT c.*, u.name AS created_by_name, u.email AS created_by_email
          FROM facility_business_certificates c
          LEFT JOIN users u ON u.user_id = c.created_by
-        WHERE c.facility_id = $1
+        WHERE c.facility_id = $1 AND c.parsed_json->>'deletedAt' IS NULL
         ORDER BY c.version_no DESC, c.created_at DESC`,
       [facilityId]
     ).catch(() => [])
   ).map((row) => ({
+    analysisWarning: certificateAnalysisWarning(row),
     certificateId: String(row.certificate_id ?? ""),
     versionNo: Number(row.version_no ?? 0),
     isCurrent: Number(row.is_current ?? 0) === 1,

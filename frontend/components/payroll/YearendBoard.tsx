@@ -18,6 +18,7 @@ interface BreakdownLine {
 
 interface YearendResult {
   grossPay: number;
+  deemedBonus?: number;
   earnedIncomeDeduction: number;
   earnedIncome: number;
   incomeDeductions: BreakdownLine[];
@@ -40,6 +41,8 @@ interface SettlementRow {
   nonTaxablePay: number;
   prepaidTax: number;
   nationalPension: number;
+  healthInsurance: number;
+  employmentInsurance: number;
   healthEmployment: number;
   monthCount: number;
   status: string;
@@ -49,6 +52,11 @@ interface SettlementRow {
 
 /** 공제 입력 필드 정의 — 순서대로 2열 그리드 렌더. */
 const INPUT_FIELDS: Array<{ key: string; label: string; hint?: string }> = [
+  { key: "deemedBonus", label: "인정상여(소득처분·대장 외)", hint: "법인세 소득처분 인정상여 — 총급여에 가산, 원천징수 없음" },
+  { key: "deemedBonusWithheld", label: "인정상여 기원천징수 소득세", hint: "소득금액변동통지로 이미 낸 소득세(기납부 가산)" },
+  { key: "nationalPensionPaid", label: "국민연금 납부액(간소화)", hint: "간소화·납부확인서 값 — 입력 시 급여대장 공제액 대신 사용" },
+  { key: "healthInsurancePaid", label: "건강+장기요양 납부액(간소화)", hint: "공단 고지액(정산분 포함) — 입력 시 급여대장 공제액 대신 사용" },
+  { key: "employmentInsurancePaid", label: "고용보험 납부액", hint: "입력 시 급여대장 공제액 대신 사용(세무법인은 대장값 사용)" },
   { key: "dependents", label: "부양가족 수(본인 제외)" },
   { key: "children", label: "자녀세액공제 대상 수" },
   { key: "elderly", label: "경로우대(70세↑) 수" },
@@ -218,7 +226,10 @@ export default function YearendBoard() {
                   <tr key={r.employeeId} className="border-t cd-hairline-row-c cursor-pointer cd-row-hover" onClick={() => openRow(r)}>
                     <td className="py-2 pr-3 whitespace-nowrap font-medium">{r.name}</td>
                     <td className="py-2 pr-3 whitespace-nowrap text-xs">{r.deptName ?? "-"}</td>
-                    <td className="py-2 pr-3 text-right whitespace-nowrap">{won(r.grossPay)}</td>
+                    <td className="py-2 pr-3 text-right whitespace-nowrap" title={r.result?.deemedBonus ? `급여대장 ${won(r.grossPay)} + 인정상여 ${won(r.result.deemedBonus)}` : undefined}>
+                      {won(r.result?.deemedBonus ? r.result.grossPay : r.grossPay)}
+                      {r.result?.deemedBonus ? <span className="cd-text-muted text-xs"> (인정상여 포함)</span> : null}
+                    </td>
                     <td className="py-2 pr-3 text-right whitespace-nowrap">{won(r.prepaidTax)}</td>
                     <td className="py-2 pr-3 text-right whitespace-nowrap">{r.result ? won(r.result.determinedTax) : "-"}</td>
                     <td className="py-2 pr-3 text-right whitespace-nowrap font-medium" style={r.result ? { color: r.result.balance < 0 ? "var(--cd-info,#539BFF)" : "var(--cd-danger,#FA896B)" } : undefined}>
@@ -235,7 +246,7 @@ export default function YearendBoard() {
                       <td colSpan={7} className="py-3 pl-4">
                         <div className="flex items-center gap-2 flex-wrap mb-2">
                           <span className="text-sm font-medium mr-auto">
-                            공제 입력 — {r.name} · 비과세 {won(r.nonTaxablePay)} · 국민연금 {won(r.nationalPension)} · 건강/고용 {won(r.healthEmployment)} (자동)
+                            공제 입력 — {r.name} · 비과세 {won(r.nonTaxablePay)} · 국민연금 {won(r.nationalPension)} · 건강/요양 {won(r.healthInsurance)} · 고용 {won(r.employmentInsurance)} (급여대장 자동 — 간소화 납부액을 입력하면 대체)
                           </span>
                           <input ref={fileRef} type="file" accept="application/pdf" className="hidden" onChange={(e) => e.target.files?.[0] && void uploadPdf(e.target.files[0])} />
                           <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy} onClick={() => fileRef.current?.click()}>
@@ -265,7 +276,7 @@ export default function YearendBoard() {
                         <div className="grid gap-x-4 gap-y-1.5 mb-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))" }}>
                           {INPUT_FIELDS.map((f) => (
                             <label key={f.key} className="flex items-center gap-2 text-xs">
-                              <span className="cd-text-muted flex-1 truncate" title={f.label}>{f.label}</span>
+                              <span className="cd-text-muted flex-1 truncate" title={f.hint ?? f.label}>{f.label}</span>
                               <input
                                 className="cd-input text-right"
                                 style={{ width: COUNT_KEYS.has(f.key) ? 56 : 110 }}
@@ -283,7 +294,9 @@ export default function YearendBoard() {
                               <div className="font-medium mb-1 text-sm">
                                 과세표준 {won(r.result.taxBase)} · 산출세액 {won(r.result.calculatedTax)}
                               </div>
-                              <div className="cd-text-muted mb-1">근로소득공제 {won(r.result.earnedIncomeDeduction)} → 근로소득금액 {won(r.result.earnedIncome)}</div>
+                              <div className="cd-text-muted mb-1">
+                                총급여 {won(r.result.grossPay)}{r.result.deemedBonus ? ` (급여대장 ${won(r.grossPay)} + 인정상여 ${won(r.result.deemedBonus)})` : ""} · 근로소득공제 {won(r.result.earnedIncomeDeduction)} → 근로소득금액 {won(r.result.earnedIncome)}
+                              </div>
                               {r.result.incomeDeductions.map((l, i) => (
                                 <div key={i} className="flex justify-between gap-2">
                                   <span className="cd-text-muted truncate">{l.label}{l.note ? ` (${l.note})` : ""}</span>

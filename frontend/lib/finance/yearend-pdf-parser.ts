@@ -20,8 +20,12 @@ const PROMPT = `국세청 연말정산간소화 서비스 PDF입니다. 다음 �
   "cardTraditionalTransit": 전통시장+대중교통 사용금액 합계,
   "housingLoanDeduction": 주택임차차입금 원리금상환액+장기주택저당차입금 이자상환액 합계,
   "monthlyRent": 월세액,
+  "nationalPensionPaid": [국민연금보험료] 페이지의 납입금액 합계,
+  "healthInsurancePaid": [건강보험료] 페이지의 건강보험료+장기요양보험료 총합계(연말정산 행 포함),
+  "employmentInsurancePaid": [고용보험료] 페이지의 합계,
   "personName": 자료 대상자 성명
-}`;
+}
+주의: 의료비 총액에서 실손의료보험금 수령액은 빼지 마세요(별도 항목이 없으므로 그대로).`;
 
 export interface YearendPdfParseResult {
   inputs: Partial<YearendInputs>;
@@ -73,6 +77,9 @@ export async function parseSimplifiedPdf(pdf: Buffer): Promise<YearendPdfParseRe
       cardTraditionalTransit: money(raw.cardTraditionalTransit),
       housingLoanDeduction: money(raw.housingLoanDeduction),
       monthlyRent: money(raw.monthlyRent),
+      nationalPensionPaid: money(raw.nationalPensionPaid),
+      healthInsurancePaid: money(raw.healthInsurancePaid),
+      employmentInsurancePaid: money(raw.employmentInsurancePaid),
     };
     // undefined 정리
     for (const k of Object.keys(inputs) as Array<keyof YearendInputs>) {

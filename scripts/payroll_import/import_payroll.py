@@ -76,6 +76,17 @@ NAME_OVERRIDES: dict[tuple[str, str, str], str] = {
     (r"2026년\26년03월 급상여대장.xlsx", "자격증수당", "이태하"): "longevity",
     (r"2026년\26년04월 급상여대장.xlsx", "자격증수당", "이태하"): "longevity",
 }
+# 2025 귀속 연말정산 대사(2026-09-14, docs/yearend-2025-reconciliation.md)로 확인된 기입 관행 2건:
+# ① 25년02월 대장의 2단 '정산-건강보험'/'정산-국민연금' 열에는 2024 귀속 연말정산 소득세/지방소득세 환급(추납)이
+#    기입돼 있다(전원 1:0.1 쌍). 연말정산 항목으로 적재해야 4대보험 공제 집계가 오염되지 않는다.
+# ② 25년 4~8월 이도희·이윤재의 '성과급' 라벨 열 200,000 은 육아수당(비과세, 세무법인 출산보육수당 처리).
+#    이도희 1~3월 3단 무라벨 100,000 도 육아수당이나 라벨이 없어 여기서는 못 잡는다(마이그 222 로 DB 교정).
+ROW2_OVERRIDES: dict[str, dict[str, str]] = {
+    r"2025년\25년02월 급상여대장.xlsx": {"정산-건강보험": "yearend-income", "정산-국민연금": "yearend-local"},
+}
+for _m in ("04", "05", "06", "08"):
+    for _who in ("이도희", "이윤재"):
+        NAME_OVERRIDES[(r"2025년\25년" + _m + r"월 급상여대장.xlsx", "성과급", _who)] = "childcare"
 
 
 def squash(s) -> str:
@@ -312,6 +323,8 @@ def parse_file(t: dict, item_dict: "ItemDict") -> dict:
                     item = NAME_OVERRIDES[(t["rel"], label, name)]
                 elif k == 0 and label in COLUMN_OVERRIDES.get(t["rel"], {}):
                     item = COLUMN_OVERRIDES[t["rel"]][label]
+                elif k == 1 and label in ROW2_OVERRIDES.get(t["rel"], {}):
+                    item = ROW2_OVERRIDES[t["rel"]][label]
                 else:
                     item = item_dict.resolve(label, is_deduction=is_ded)
                     if item is None:

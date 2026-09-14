@@ -2,6 +2,7 @@
 // → 세액공제 → 결정세액 → 기납부 차감(환급/추납). 세율·공제 기준은 yearend_tax_params 시드(§7 T4).
 // 모든 단계를 브레이크다운으로 반환해 산출 근거를 보존한다(§7 T5).
 // 총급여·기납부·국민연금·건강/고용보험료는 확정 급여대장에서 자동 집계, 나머지 공제는 입력(간소화 파싱 포함).
+// 인정상여(소득처분)는 대장에 없으므로 입력(deemedBonus)으로 총급여에 가산한다 — 2025 귀속 세무법인 대사: docs/yearend-2025-reconciliation.md
 
 import { createHash } from "node:crypto";
 import { getDb, withDbWrite, rowsToObjects } from "@/lib/db";
@@ -53,6 +54,11 @@ export async function loadYearendParams(targetYear: number): Promise<YearendPara
 // ── 공제 입력 (관리자 입력 + 간소화 PDF 파싱) ──
 
 export interface YearendInputs {
+  deemedBonus?: number; // 인정상여(법인세 소득처분 — 급여대장에 없어 총급여에 가산, 원천징수 없음 → 결정세액 전액 정산)
+  deemedBonusWithheld?: number; // 인정상여에 대해 소득금액변동통지로 이미 원천징수한 소득세(있으면 기납부에 가산)
+  nationalPensionPaid?: number; // 국민연금 납부액(간소화·납부확인서) — 입력 시 급여대장 공제액 대신 사용
+  healthInsurancePaid?: number; // 건강+장기요양 납부액(간소화 공단 고지, 정산분 포함) — 입력 시 대장값 대신
+  employmentInsurancePaid?: number; // 고용보험 납부액 — 입력 시 대장값 대신(세무법인 실무는 대장 공제액)
   dependents?: number; // 기본공제 대상 부양가족 수(본인 제외)
   elderly?: number; // 경로우대(70세 이상) 수
   disabled?: number; // 장애인 수
@@ -78,7 +84,8 @@ export interface BreakdownLine {
 }
 
 export interface YearendResult {
-  grossPay: number;
+  grossPay: number; // 총급여 = 급여대장 과세 지급 합 + 인정상여
+  deemedBonus: number;
   earnedIncomeDeduction: number;
   earnedIncome: number; // 근로소득금액
   incomeDeductions: BreakdownLine[];
@@ -114,16 +121,18 @@ function capFor(caps: Array<[number | null, number]>, gross: number): number {
 
 /**
  * 연말정산 계산 — 자동 집계값(gross/prepaid/공적보험)과 공제 입력으로 결정세액·환급액 산출.
- * @param auto 급여대장 자동 집계: nationalPension(국민연금 본인), healthEmployment(건강+장기요양+고용 본인)
+ * @param auto 급여대장 자동 집계: nationalPension(국민연금 본인), healthInsurance(건강+장기요양), employmentInsurance(고용).
+ *   입력에 *Paid 값이 있으면(간소화·납부확인서) 그 값이 대장값을 대체한다 — 세무법인 실무는 건강·요양·연금 = 간소화, 고용 = 대장.
  */
 export function computeYearend(
   grossPay: number,
   prepaidTax: number,
-  auto: { nationalPension: number; healthEmployment: number },
+  auto: { nationalPension: number; healthInsurance: number; employmentInsurance: number },
   inputs: YearendInputs,
   p: YearendParams,
 ): YearendResult {
-  const gross = floorWon(grossPay);
+  const deemedBonus = floorWon(inputs.deemedBonus ?? 0);
+  const gross = floorWon(grossPay) + deemedBonus; // ⑮ 인정상여는 급여대장 밖 소득처분 — 총급여에 가산(2025 귀속 실증: 이재영)
 
   // 1) 근로소득공제 → 근로소득금액
   const eid = Math.min(floorWon(bracketAmount(p.earnedIncomeDeduction, gross).result), p.earnedIncomeDeductionCap);
@@ -138,8 +147,14 @@ export function computeYearend(
   push("인적공제 — 부양가족", (inputs.dependents ?? 0) * p.personalDeductionPer, `${inputs.dependents ?? 0}명`);
   push("추가공제 — 경로우대", (inputs.elderly ?? 0) * p.elderlyExtra);
   push("추가공제 — 장애인", (inputs.disabled ?? 0) * p.disabledExtra);
-  push("연금보험료 — 국민연금", auto.nationalPension, "급여대장 자동");
-  push("특별소득공제 — 건강·고용보험료", auto.healthEmployment, "급여대장 자동");
+  const paidOr = (paid: number | undefined, fallback: number): [number, string] =>
+    paid != null && paid > 0 ? [floorWon(paid), "납부액 입력"] : [fallback, "급여대장 자동"];
+  const [npsAmt, npsNote] = paidOr(inputs.nationalPensionPaid, auto.nationalPension);
+  const [healthAmt, healthNote] = paidOr(inputs.healthInsurancePaid, auto.healthInsurance);
+  const [eiAmt, eiNote] = paidOr(inputs.employmentInsurancePaid, auto.employmentInsurance);
+  push("연금보험료 — 국민연금", npsAmt, npsNote);
+  push("특별소득공제 — 건강·장기요양보험료", healthAmt, healthNote);
+  push("특별소득공제 — 고용보험료", eiAmt, eiNote);
   push("주택자금", inputs.housingLoanDeduction ?? 0);
   // 신용카드 등 — 총급여 25% 초과 사용분
   {
@@ -225,12 +240,13 @@ export function computeYearend(
 
   // 5) 결정세액 → 차감징수(음수 = 환급)
   const determinedTax = floorWon(calculatedTax - taxCreditTotal);
-  const prepaid = floorWon(prepaidTax);
+  const prepaid = floorWon(prepaidTax) + floorWon(inputs.deemedBonusWithheld ?? 0);
   const balance = determinedTax - prepaid;
   const localTax = Math.trunc(balance * p.localRate); // 지방소득세는 동일 부호로 10%
 
   return {
     grossPay: gross,
+    deemedBonus,
     earnedIncomeDeduction: eid,
     earnedIncome,
     incomeDeductions,
@@ -255,13 +271,19 @@ export interface YearendEmployeeBase {
   deptName: string | null;
   grossPay: number; // 과세 지급 합
   nonTaxablePay: number;
-  prepaidTax: number; // income-tax + settle-income (연말정산분 제외)
-  nationalPension: number;
-  healthEmployment: number; // nhis + ltc + ei
+  prepaidTax: number; // income-tax 만 — 'settle-income'(정산-근로소득세)은 전년도 정산·소득처분 원천징수분이라 제외(2025 귀속 대사 실증)
+  nationalPension: number; // 'nps' 만 — 정산열(settle-nps)은 제외
+  healthInsurance: number; // nhis + ltc (정산열 제외)
+  employmentInsurance: number; // ei (정산열 제외)
+  healthEmployment: number; // healthInsurance + employmentInsurance (화면 호환)
   monthCount: number;
 }
 
-/** 귀속연도 확정 급여대장에서 직원별 총급여·기납부·공적보험 자동 집계. */
+/**
+ * 귀속연도 확정 급여대장에서 직원별 총급여·기납부·공적보험 자동 집계.
+ * 정산열(settle-*)은 전년도 정산·환급이 섞여 있어 제외한다 — 2025 귀속 대사에서 2월 대장의 '정산-건강보험/국민연금' 열에
+ * 전년도 연말정산 환급이 기입돼 있던 사례(마이그 222로 교정) 참고. 공단 고지액과의 차이는 *Paid 입력으로 대체.
+ */
 export async function buildYearendBase(targetYear: number): Promise<YearendEmployeeBase[]> {
   const db = await getDb();
   const rows = rowsToObjects(
@@ -270,9 +292,10 @@ export async function buildYearendBase(targetYear: number): Promise<YearendEmplo
               count(DISTINCT pl.ledger_id) AS month_count,
               COALESCE(SUM(CASE WHEN pid.kind = 'pay' AND COALESCE(pid.taxable, 1) = 1 THEN pel.amount END), 0) AS taxable_pay,
               COALESCE(SUM(CASE WHEN pid.kind = 'pay' AND pid.taxable = 0 THEN pel.amount END), 0) AS nontax_pay,
-              COALESCE(SUM(CASE WHEN pel.item_id IN ('income-tax', 'settle-income') THEN pel.amount END), 0) AS prepaid_tax,
-              COALESCE(SUM(CASE WHEN pel.item_id IN ('nps', 'settle-nps') THEN pel.amount END), 0) AS nps,
-              COALESCE(SUM(CASE WHEN pel.item_id IN ('nhis', 'ltc', 'ei', 'settle-nhis', 'settle-ltc', 'settle-ei') THEN pel.amount END), 0) AS health_emp
+              COALESCE(SUM(CASE WHEN pel.item_id = 'income-tax' THEN pel.amount END), 0) AS prepaid_tax,
+              COALESCE(SUM(CASE WHEN pel.item_id = 'nps' THEN pel.amount END), 0) AS nps,
+              COALESCE(SUM(CASE WHEN pel.item_id IN ('nhis', 'ltc') THEN pel.amount END), 0) AS health,
+              COALESCE(SUM(CASE WHEN pel.item_id = 'ei' THEN pel.amount END), 0) AS employment
          FROM payroll_ledgers pl
          JOIN payroll_entries pe ON pe.ledger_id = pl.ledger_id
          JOIN payroll_entry_lines pel ON pel.entry_id = pe.entry_id
@@ -291,7 +314,9 @@ export async function buildYearendBase(targetYear: number): Promise<YearendEmplo
     nonTaxablePay: Math.round(Number(r.nontax_pay || 0)),
     prepaidTax: Math.round(Number(r.prepaid_tax || 0)),
     nationalPension: Math.round(Number(r.nps || 0)),
-    healthEmployment: Math.round(Number(r.health_emp || 0)),
+    healthInsurance: Math.round(Number(r.health || 0)),
+    employmentInsurance: Math.round(Number(r.employment || 0)),
+    healthEmployment: Math.round(Number(r.health || 0)) + Math.round(Number(r.employment || 0)),
     monthCount: Number(r.month_count || 0),
   }));
 }
@@ -345,7 +370,7 @@ export async function saveSettlement(targetYear: number, employeeId: string, inp
   const result = computeYearend(
     base.grossPay,
     base.prepaidTax,
-    { nationalPension: base.nationalPension, healthEmployment: base.healthEmployment },
+    { nationalPension: base.nationalPension, healthInsurance: base.healthInsurance, employmentInsurance: base.employmentInsurance },
     inputs,
     params,
   );

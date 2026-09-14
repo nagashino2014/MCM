@@ -145,6 +145,11 @@ export interface LetterFieldValues {
   letter_kind: "general" | "proof";
   recipients: LetterRecipient[]; // 수신(대표 1건 이상)
   cc_refs: LetterRecipient[]; // 참조(표기 + 메일 cc)
+  /**
+   * 외부 참조(2026-09-14) — 수신 주체가 아닌 외부 업체·기관 담당자에게 발송 메일만 참조(Cc)로 보낸다.
+   * 공문 본문의 '참조' 줄에는 표기하지 않는다(EPC 공동 수행사가 대금 청구 공문을 함께 받아 보는 사례).
+   */
+  ext_cc_refs?: LetterRecipient[];
   proof_sender?: ProofParty; // proof(내용증명형) 전용
   proof_receiver?: ProofParty;
   subject: string; // = approval_docs.title

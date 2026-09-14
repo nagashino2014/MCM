@@ -29,6 +29,10 @@
   --cd-primary: #4a63d8;
   --cd-primary-foreground: #fff;
   --cd-action-background: linear-gradient(135deg, #6a83ef, #8e86ee);
+  /* 주 버튼 그라데이션을 아주 연하게 — 목록 항목 등 선택 가능한 태그 면(2026-09-14). 다크에서도 카드색에 섞는다. */
+  --cd-action-background-soft: linear-gradient(135deg,
+    color-mix(in srgb, #6a83ef 9%, var(--cd-card-solid)),
+    color-mix(in srgb, #8e86ee 9%, var(--cd-card-solid)));
   --cd-action-foreground: #fff;
   --primary: var(--cd-primary);
   --cd-primary-soft: color-mix(in srgb, var(--cd-primary) 6.5%, var(--cd-card));

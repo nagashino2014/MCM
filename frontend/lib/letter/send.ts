@@ -164,7 +164,11 @@ export async function processLetterSend(docId: string): Promise<{ ok: boolean; s
     // 내부 참조자(Cc) — 전자결재 참조/열람자로 지정한 자사 직원. 별도 메뉴 없이 결재선 패널의
     // 참조자 기능을 그대로 쓴다(사용자 확정). To 와 겹치면 제외한다.
     const watcherIds = doc.watchers.map((w) => w.userId).filter(Boolean);
-    const ccAll = await internalCcAddresses(watcherIds, values.internal_cc_target === "company" ? "company" : "personal");
+    const ccAll = [
+      // 외부 참조(2026-09-14) — 수신 주체가 아닌 외부 업체·기관 담당자. 공문 표기 없이 메일 Cc 로만 받는다.
+      ...toAddresses(values.ext_cc_refs ?? []),
+      ...(await internalCcAddresses(watcherIds, values.internal_cc_target === "company" ? "company" : "personal")),
+    ];
     const cc = ccAll.filter((a) => (seen.has(a.address.toLowerCase()) ? false : (seen.add(a.address.toLowerCase()), true)));
 
     const attachments: { filename: string; contentType: string; content: Buffer }[] = [

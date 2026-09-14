@@ -15,6 +15,7 @@ interface MyPayslipRow {
   payTotal: number;
   deductionTotal: number;
   netPay: number;
+  ledgerKind?: string;
   sentAt: string | null;
 }
 
@@ -35,9 +36,9 @@ export function PayslipInboxCard() {
       <header className="flex items-center gap-2">
         <span className="cd-title-icon"><ReceiptText className="w-4 h-4" /></span>
         <h3 className="text-sm font-extrabold cd-text">내 급여명세서</h3>
-        {w.status === "ok" && w.data.rows.length > 0 && (
-          <span className="ml-auto text-[10px] cd-text-faint">최근 {w.data.rows.length}개월</span>
-        )}
+        <a href="/payroll/my" className="ml-auto text-[11px] font-bold" style={{ color: "var(--cd-primary)" }}>
+          전체 보기
+        </a>
       </header>
       {w.status === "loading" ? (
         <div className="flex-1 rounded-2xl border cd-border-c animate-pulse" />
@@ -59,7 +60,7 @@ export function PayslipInboxCard() {
               </span>
               <div className="min-w-0">
                 <p className="text-xs font-semibold cd-text truncate">
-                  {row.payYear}년 {row.payMonth}월분 · 실지급 {won(row.netPay)}원
+                  {row.payYear}년 {row.payMonth}월분{row.ledgerKind === "bonus" ? " 상여" : ""} · 실지급 {won(row.netPay)}원
                 </p>
                 <p className="text-[10px] cd-text-faint">
                   지급 {won(row.payTotal)} · 공제 {won(row.deductionTotal)}

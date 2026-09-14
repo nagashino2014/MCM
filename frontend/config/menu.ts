@@ -153,19 +153,21 @@ export const MENU_ITEMS: MenuItem[] = [
     ],
     group: "work",
   },
-  // 급여·근로계약 — 급여대장·근로계약 관리(docs/payroll-labor-contract-blueprint.md). 민감 데이터 admin 전용.
+  // 급여·근로계약 — 급여대장·근로계약 관리(docs/payroll-labor-contract-blueprint.md).
+  // 본인용(내 급여명세서·내 연말정산)은 전 직원, 전 직원 데이터를 다루는 관리 화면은 admin 전용(2026-09-14 신설).
   {
     title: "급여·근로계약",
-    href: "/payroll",
+    href: "/payroll/my",
     icon: Wallet,
     submenu: [
-      { title: "급여대장", href: "/payroll" },
-      { title: "직원별 연봉·근로계약", href: "/payroll/contracts" },
+      { title: "내 급여명세서", href: "/payroll/my" },
+      { title: "내 연말정산", href: "/payroll/my-yearend" },
+      { title: "급여대장", href: "/payroll", minRole: "admin" },
+      { title: "직원별 연봉·근로계약", href: "/payroll/contracts", minRole: "admin" },
       // 연말정산(P8) — 총급여·기납부 자동 + 간소화 PDF 파싱 + 결정세액 계산.
-      { title: "연말정산", href: "/payroll/yearend" },
-      { title: "급여 항목·설정", href: "/payroll/settings" },
+      { title: "연말정산", href: "/payroll/yearend", minRole: "admin" },
+      { title: "급여 항목·설정", href: "/payroll/settings", minRole: "admin" },
     ],
-    minRole: "admin",
     group: "work",
   },
   // 근태·휴가 — 전자결재 하위에서 HR 모듈로 승격(§2.3). 라우트 경로는 무변경(/approval/*).

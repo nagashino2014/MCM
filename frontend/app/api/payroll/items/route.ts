@@ -34,6 +34,7 @@ export async function PUT(req: NextRequest) {
       inOrdinaryWage: Boolean(body.inOrdinaryWage),
       displayOrder: Number(body.displayOrder ?? 0),
       isActive: body.isActive === undefined ? true : Boolean(body.isActive),
+      ruleEligible: body.ruleEligible === undefined ? undefined : Boolean(body.ruleEligible),
     });
     return NextResponse.json({ ok: true });
   } catch (err) {

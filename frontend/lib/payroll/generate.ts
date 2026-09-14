@@ -3,6 +3,7 @@ import { mealClawbackAmounts } from "@/lib/approval/overtime-meal";
 import { getEdiAmounts } from "@/lib/payroll/edi";
 import { overtimeAmounts } from "@/lib/payroll/overtime";
 import { activeRulesFor } from "@/lib/payroll/rules";
+import { grantLongevityLeaveForLedger, longevityDueFor } from "@/lib/payroll/longevity";
 import { NON_TAXABLE_ITEMS, calcEmploymentIns, getInsuranceRate, lookupIncomeTax } from "@/lib/payroll/tax";
 
 /** 귀속월 말일 기준 만 나이 — 생일 월이 지나야 도달(같은 달이면 도달로 간주) */
@@ -109,6 +110,7 @@ export async function buildLedger(payYear: number, payMonth: number): Promise<Ge
     ])
   );
   const rules = await activeRulesFor(payYear, payMonth);
+  const longevity = await longevityDueFor(payYear, payMonth);
   const edi = await getEdiAmounts(payYear, payMonth);
   const overtime = await overtimeAmounts(payYear, payMonth);
   const mealClawback = await mealClawbackAmounts(payYear, payMonth);
@@ -179,6 +181,13 @@ export async function buildLedger(payYear: number, payMonth: number): Promise<Ge
     // 2) 수당 규칙 반영(같은 항목이면 규칙이 우선)
     for (const rule of rules.get(empId) ?? []) {
       put(rule.itemId, rule.amount, "rule");
+    }
+
+    // 2-1) 장기근속 포상 휴가비(별표 9) — 귀속월에 근속 만 N년 도달 시 자동. 휴가는 대장 확정 때 부여(longevity.ts).
+    const lv = longevity.get(empId);
+    if (lv && lv.amount > 0) {
+      put("longevity", lv.amount, "rule");
+      warnings.push(`장기근속 ${lv.years}년(${lv.anniversary}) 포상 휴가비 ${lv.amount.toLocaleString()}원 — 확정 시 휴가 ${lv.leaveDays}일 자동 부여`);
     }
 
     // 3) 초과근무수당 자동 — 승인된 신청서 기준(근태 있으면 대조 캡, §6)
@@ -474,6 +483,8 @@ export async function confirmLedger(ledgerId: string): Promise<void> {
     if (String(r.status) !== "draft") throw Object.assign(new Error("작성 중 대장이 아닙니다."), { status: 400 });
     await db.exec(`UPDATE payroll_ledgers SET status = 'confirmed' WHERE ledger_id = $1`, [ledgerId]);
   });
+  // 장기근속 포상휴가 자동 부여(별표 9) — 확정된 대장의 휴가비 라인 기준, 멱등.
+  await grantLongevityLeaveForLedger(ledgerId).catch(() => undefined);
 }
 
 /** 삭제 — 앱 생성 draft 대장만 */

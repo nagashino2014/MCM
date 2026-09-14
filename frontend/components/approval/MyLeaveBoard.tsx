@@ -71,6 +71,13 @@ const DOT_COLOR: Record<DotKind, string> = {
 };
 const DOT_LABEL: Record<DotKind, string> = { annual: "연차", half: "반차", family: "비연차(경조)", official: "비연차(공가 등)" };
 
+/** 승인 기록 note("라벨 YYYY-MM-DD~YYYY-MM-DD (문서번호)")에서 종료일만 — 시작일과 같으면 null */
+function periodEnd(e: EntryRow): string | null {
+  const m = e.note?.match(/(\d{4}-\d{2}-\d{2})~(\d{4}-\d{2}-\d{2})/);
+  if (!m || m[2] === (e.usedOn ?? "")) return null;
+  return m[2];
+}
+
 function dotKind(e: EntryRow): DotKind {
   if (e.deduct === "half") return "half";
   if (e.deduct === "full" || e.leaveTypeKey === null) return "annual";
@@ -338,6 +345,8 @@ export function MyLeaveSection() {
                     <span className="flex items-center gap-1.5 min-w-0">
                       <span className="w-2 h-2 rounded-full shrink-0" style={{ background: DOT_COLOR[kind] }} />
                       <span className="cd-text truncate">{e.leaveLabel ?? "연차"}</span>
+                      {/* 기간 휴가는 승인 시 시작일 1행으로 남는다 — note 의 종료일을 붙여 '어느 날짜까지'가 보이게 */}
+                      {periodEnd(e) && <span className="cd-text-faint whitespace-nowrap">~ {periodEnd(e)!.slice(5)}</span>}
                     </span>
                     <span className="tabular-nums cd-text-muted ml-auto shrink-0">
                       {kind === "annual" || kind === "half" ? `${fmtDays(e.days)}일 차감` : "차감 없음"}

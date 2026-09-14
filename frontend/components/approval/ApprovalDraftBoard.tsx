@@ -117,6 +117,9 @@ export function ApprovalDraftBoard() {
   const formId = sp.get("formId") ?? "";
   const editDocId = sp.get("docId");
   const prefillDate = sp.get("date");
+  // 필드 초기값 주입(prefill=URL 인코딩 JSON, 예: 내 연말정산 → 증명신청서 원천징수영수증 체크·귀속연도).
+  // 양식에 존재하는 키만 받아들이고 값은 그대로 넣는다(checkbox 는 라벨 배열).
+  const prefillRaw = sp.get("prefill");
 
   const [form, setForm] = useState<FormInfo | null>(null);
   const [docId, setDocId] = useState<string | null>(editDocId);
@@ -572,6 +575,16 @@ export function ApprovalDraftBoard() {
             const d = fields.find((f) => f.type === "date" || f.type === "period");
             if (d) setValues((prev) => ({ ...prev, [d.key]: d.type === "period" ? { from: prefillDate, to: prefillDate } : prefillDate }));
           }
+          if (prefillRaw) {
+            try {
+              const parsed = JSON.parse(prefillRaw) as Record<string, unknown>;
+              const keys = new Set(((data.form.fields ?? []) as { key: string }[]).map((f) => f.key));
+              const picked = Object.fromEntries(Object.entries(parsed).filter(([k]) => keys.has(k)));
+              if (Object.keys(picked).length) setValues((prev) => ({ ...prev, ...picked }));
+            } catch {
+              // 잘못된 prefill 은 무시 — 빈 양식으로 진행
+            }
+          }
         }
       } catch (err) {
         if (!cancelled) setError((err as Error).message);
@@ -582,7 +595,7 @@ export function ApprovalDraftBoard() {
     return () => {
       cancelled = true;
     };
-  }, [formId, editDocId, prefillDate]);
+  }, [formId, editDocId, prefillDate, prefillRaw]);
 
   // 선행 문서 후보 + 선행 양식 스키마(자동 완성 라벨 매칭용) 로드
   useEffect(() => {

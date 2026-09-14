@@ -34,7 +34,7 @@ export interface MenuItem {
   title: string;
   href: string;
   icon: LucideIcon;
-  submenu?: { title: string; href: string }[];
+  submenu?: { title: string; href: string; minRole?: Role }[];
   comingSoon?: boolean;
   /** 이 메뉴를 보려면 필요한 최소 role. 미지정 시 viewer 이상 모두 노출. */
   minRole?: Role;
@@ -169,18 +169,20 @@ export const MENU_ITEMS: MenuItem[] = [
     group: "work",
   },
   // 근태·휴가 — 전자결재 하위에서 HR 모듈로 승격(§2.3). 라우트 경로는 무변경(/approval/*).
+  // 본인용(내 휴가·내 근태)은 전 직원, 전 직원 데이터를 다루는 관리 화면은 admin 전용(2026-08-31 확정).
   {
     title: "근태·휴가",
-    href: "/approval/leave",
+    href: "/approval/my-hr",
     icon: CalendarClock,
     submenu: [
-      { title: "직원별 휴가 관리", href: "/approval/leave" },
-      { title: "근태·초과근무 관리", href: "/approval/attendance" },
+      { title: "내 휴가·근태", href: "/approval/my-hr" },
+      { title: "직원별 휴가 관리", href: "/approval/leave", minRole: "admin" },
+      { title: "근태·초과근무 관리", href: "/approval/attendance", minRole: "admin" },
       // 증명서 발급 관리(FRM-P2, 204) — 증명신청서 승인 건의 발급 파이프라인.
-      { title: "증명서 발급 관리", href: "/approval/certificates" },
-      { title: "연차촉진제도 관리", href: "/approval/leave-promotion" },
-      { title: "휴무일 지정", href: "/approval/holidays" },
-      { title: "휴가 종류 규정", href: "/approval/leave-types" },
+      { title: "증명서 발급 관리", href: "/approval/certificates", minRole: "admin" },
+      { title: "연차촉진제도 관리", href: "/approval/leave-promotion", minRole: "admin" },
+      { title: "휴무일 지정", href: "/approval/holidays", minRole: "admin" },
+      { title: "휴가 종류 규정", href: "/approval/leave-types", minRole: "admin" },
     ],
     group: "work",
   },
@@ -320,4 +322,9 @@ const ROLE_RANK: Record<Role, number> = { admin: 3, editor: 2, viewer: 1 };
 export function isMenuVisibleForRole(item: MenuItem, role: Role): boolean {
   if (!item.minRole) return true;
   return ROLE_RANK[role] >= ROLE_RANK[item.minRole];
+}
+
+/** 서브메뉴 항목별 minRole 필터 — 근태·휴가처럼 본인용/관리용이 한 메뉴에 섞인 경우. */
+export function visibleSubmenu(item: MenuItem, role: Role): { title: string; href: string }[] {
+  return (item.submenu ?? []).filter((s) => !s.minRole || ROLE_RANK[role] >= ROLE_RANK[s.minRole]);
 }

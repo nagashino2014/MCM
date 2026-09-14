@@ -3,10 +3,9 @@
 // industry 특수 키: 'industrial-complex'(산단·농공단지 = 입주 기반), 'other'(대상이나 업종 미상).
 
 import { rowsToObjects, type PgDatabase } from "@/lib/db";
-import {
-  INTEGRATED_PERMIT_INDUSTRIES,
-  industryCodeMatchesCategory,
-} from "@/lib/ieps/integrated-permit-industries";
+import { industryIdFromKsic } from "@/lib/ieps/integrated-permit-industries";
+
+export { industryIdFromKsic };
 
 export type IndustryRelevance = "direct" | "supply_chain" | "low" | "none";
 
@@ -18,17 +17,8 @@ export interface IndustryTag {
 
 export const EMPTY_INDUSTRY_TAG: IndustryTag = { industry: null, relevance: null, note: null };
 
-/** facilities.industry_code(줄바꿈/쉼표/슬래시 연결 복수 KSIC) → 대상 업종 id 첫 매치. */
-export function industryIdFromKsic(industryCode: string | null | undefined): string | null {
-  if (!industryCode) return null;
-  const codes = String(industryCode).split(/[\n,/]+/).map((s) => s.trim()).filter(Boolean);
-  for (const cat of INTEGRATED_PERMIT_INDUSTRIES) {
-    for (const code of codes) {
-      if (industryCodeMatchesCategory(code, cat)) return cat.id;
-    }
-  }
-  return null;
-}
+// industryIdFromKsic 는 클라이언트 안전 모듈(ieps/integrated-permit-industries.ts)로 이동(2026-08-26 —
+// 계약 모달의 업종 프리필이 공유). 여기서는 위 re-export 로 기존 import 경로를 유지한다.
 
 /**
  * facilities 매칭 신호의 태그 — 마스터(통합허가 대상 사업장)가 정답이므로 relevance=direct.

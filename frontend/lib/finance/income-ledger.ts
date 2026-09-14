@@ -73,6 +73,15 @@ export const incomeLedgerAppendConnector: ActionConnector = {
     { key: "gross", label: "지급총액", required: true },
     { key: "reason", label: "지급 내역(비고)" },
   ],
+  async preview(ctx) {
+    const kindLabel = String(ctx.slot("kind") ?? "");
+    const kind: IncomeKind = kindLabel.includes("사업") ? "business" : "other";
+    const gross = Math.round(Number(String(ctx.slot("gross") ?? "").replace(/[^\d.-]/g, "")) || 0);
+    if (gross <= 0) return "지급총액을 해석하지 못해 실행이 실패합니다 — 슬롯 매핑을 확인하세요.";
+    const calc = calcIncomeTax(kind, gross);
+    const won = (n: number) => n.toLocaleString("ko-KR");
+    return `${kind === "business" ? "사업소득" : "기타소득"} 대장에 적재됩니다 — 지급총액 ${won(gross)}원, 징수세액 ${won(calc.withheldTotal)}원(소득세 ${won(calc.incomeTax)}+지방세 ${won(calc.localTax)}), 차감지급액 ${won(calc.netAmount)}원. 결산 분개(income_doc)와 원천세 집계에 반영됩니다.`;
+  },
   async run(ctx) {
     const kindLabel = String(ctx.slot("kind") ?? "");
     const kind: IncomeKind = kindLabel.includes("사업") ? "business" : "other";

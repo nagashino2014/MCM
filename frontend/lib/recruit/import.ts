@@ -102,7 +102,10 @@ export function applyMapping(tree: DocNode, spec: SlotSpec, mapping: ImportMappi
   for (const group of spec.groups) {
     const desired = mapping.groups?.[group.id];
     if (!Array.isArray(desired) || desired.length === 0) continue;
-    const wanted = desired.slice(0, MAX_GROUP_ITEMS).filter(Array.isArray);
+    // 모든 행이 문자열 배열일 때만 그룹을 손댄다 — 일부만 걸러낸 길이로 항목 수를 맞추면
+    // 잘못된 응답 하나에 기존 항목이 통째로 삭제될 수 있다(양식 안전 우선).
+    const wanted = desired.slice(0, MAX_GROUP_ITEMS);
+    if (!wanted.every((row) => Array.isArray(row) && row.every((v) => typeof v === "string"))) continue;
     const seedId = firstItemId(cur, group.id);
     if (!seedId) continue;
 

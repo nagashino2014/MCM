@@ -53,8 +53,8 @@ export interface ChatJsonOpts {
   /** 기본 Haiku. 구조 추론이 무거우면 "claude-sonnet-5" / "claude-opus-5" 등 지정. */
   model?: string;
   /**
-   * 서버측 폴백(Opus 5 이상) — 안전 분류기가 요청을 거절(stop_reason: refusal)하면 서버가
-   * 다른 모델로 재실행한다. beta 헤더 server-side-fallback-2026-07-01 + fallbacks:"default".
+   * 서버측 폴백 — 안전 분류기가 요청을 거절(stop_reason: refusal)하면 서버가 다른 모델로 재실행한다.
+   * 최종 모델이 Opus 5 이상일 때만 게이트웨이가 적용한다(강등된 모델에는 붙이지 않음).
    */
   serverFallback?: boolean;
   userId?: string | null;
@@ -86,9 +86,8 @@ export async function anthropicChatJson<T = unknown>(opts: ChatJsonOpts): Promis
       timeoutMs: opts.timeoutMs ?? 30000,
       userId: opts.userId,
       subject: opts.subject,
-      ...(opts.serverFallback
-        ? { betas: ["server-side-fallback-2026-07-01"], extra: { fallbacks: "default" } }
-        : {}),
+      // 게이트웨이가 최종 모델(오버라이드·강등 반영)을 보고 Opus 5 이상일 때만 폴백 파라미터를 붙인다.
+      serverFallback: opts.serverFallback,
     });
     if (!r.ok) throw new LlmError(`llm_http_${r.status}: ${(r.errorText ?? "").slice(0, 200)}`);
     // 안전 분류기 거절 — content 가 비어 있을 수 있으므로 텍스트 파싱 전에 판정한다.

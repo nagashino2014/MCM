@@ -75,6 +75,12 @@ export interface RecruitPostingRow {
   theme: DocTheme;
   docWidth?: number;
   status: "draft" | "final";
+  /** 구분 메타(마이그 225) — 공고부문·구분·플랫폼·기간. 목록 검색·만료 표시용. */
+  division: string | null;
+  hireType: string | null;
+  platform: string | null;
+  periodStart: string | null;
+  periodEnd: string | null;
   createdAt: string;
   updatedAt: string;
   updatedBy?: string | null;

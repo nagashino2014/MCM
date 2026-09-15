@@ -1,14 +1,23 @@
 "use client";
 
 // 채용공고 목록 — 작성된 공고 관리 + "새 공고"(템플릿 선택 → 에디터 진입).
+// 공고는 제목 외에 부문·구분·플랫폼·기간으로 구별한다: 상단 검색 옵션, 열 표시, 만료 표시, 행 복제(재활용).
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FilePlus2, FileUp, Loader2, Megaphone, Trash2 } from "lucide-react";
+import { Copy, FilePlus2, FileUp, Loader2, Megaphone, Search, Trash2 } from "lucide-react";
 import { CdBadge, CdButton, CdEmptyState, CdModal, CdPageHeader, useCdashTheme, useCdToast } from "@/components/cdash";
 import type { RecruitPostingRow, RecruitTemplateRow } from "@/lib/recruit/types";
+import { DIVISION_PRESETS, HIRE_TYPE_PRESETS, PLATFORM_PRESETS, formatPeriod, periodState } from "@/lib/recruit/meta";
 import { DocMiniPreview } from "./DocCanvas";
 import { ImportPostingModal } from "./ImportPostingModal";
+
+/** 프리셋 ∪ 목록에 실제로 쓰인 값 — 자유 입력한 값도 검색 옵션에 나타나게. */
+function optionsOf(presets: readonly string[], values: (string | null | undefined)[]): string[] {
+  const set = new Set<string>(presets);
+  values.forEach((v) => { if (v) set.add(v); });
+  return Array.from(set);
+}
 
 export function PostingListBoard() {
   const { theme } = useCdashTheme();
@@ -20,6 +29,26 @@ export function PostingListBoard() {
   const [creating, setCreating] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<RecruitPostingRow | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [duplicating, setDuplicating] = useState<string | null>(null);
+  // 검색 옵션 — 목록이 작아 클라이언트에서 거른다(서버 GET 도 같은 파라미터를 받는다).
+  const [fDivision, setFDivision] = useState("");
+  const [fHire, setFHire] = useState("");
+  const [fPlatform, setFPlatform] = useState("");
+  const [q, setQ] = useState("");
+
+  const divisionOptions = useMemo(() => optionsOf(DIVISION_PRESETS, (postings ?? []).map((p) => p.division)), [postings]);
+  const hireOptions = useMemo(() => optionsOf(HIRE_TYPE_PRESETS, (postings ?? []).map((p) => p.hireType)), [postings]);
+  const platformOptions = useMemo(() => optionsOf(PLATFORM_PRESETS, (postings ?? []).map((p) => p.platform)), [postings]);
+  const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return (postings ?? []).filter(
+      (p) =>
+        (!fDivision || p.division === fDivision) &&
+        (!fHire || p.hireType === fHire) &&
+        (!fPlatform || p.platform === fPlatform) &&
+        (!needle || p.title.toLowerCase().includes(needle))
+    );
+  }, [postings, fDivision, fHire, fPlatform, q]);
 
   const load = useCallback(async () => {
     try {
@@ -69,6 +98,27 @@ export function PostingListBoard() {
     [router, toast]
   );
 
+  // 재활용 — 지난 공고를 복제해 새 작성중 공고로(내용·부문·구분·플랫폼 유지, 기간은 새로).
+  const duplicate = useCallback(
+    async (p: RecruitPostingRow) => {
+      setDuplicating(p.postingId);
+      try {
+        const res = await fetch("/api/recruit/postings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ copyFrom: p.postingId }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || "공고 복제 실패");
+        router.push(`/admin/recruit/${(data.posting as RecruitPostingRow).postingId}`);
+      } catch (e) {
+        toast((e as Error).message, "error");
+        setDuplicating(null);
+      }
+    },
+    [router, toast]
+  );
+
   const doDelete = useCallback(async () => {
     if (!confirmDelete) return;
     try {
@@ -87,7 +137,7 @@ export function PostingListBoard() {
       <CdPageHeader
         breadcrumbs={[{ label: "홍보·채용공고" }, { label: "채용 공고 관리" }]}
         title="채용 공고 관리"
-        meta={postings ? `${postings.length}건` : ""}
+        meta={postings ? (filtered.length === postings.length ? `${postings.length}건` : `${filtered.length}건 / 전체 ${postings.length}건`) : ""}
         actions={
           <div className="flex gap-2">
             <CdButton variant="soft" onClick={() => router.push("/admin/recruit/templates")}>
@@ -102,6 +152,40 @@ export function PostingListBoard() {
           </div>
         }
       />
+
+      {/* 검색 옵션 — 부문·구분·플랫폼 + 제목 검색 */}
+      {postings !== null && postings.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <select className="cd-select" value={fDivision} onChange={(e) => setFDivision(e.target.value)} aria-label="공고부문">
+            <option value="">부문: 전체</option>
+            {divisionOptions.map((v) => <option key={v} value={v}>{v}</option>)}
+          </select>
+          <select className="cd-select" value={fHire} onChange={(e) => setFHire(e.target.value)} aria-label="공고 구분">
+            <option value="">구분: 전체</option>
+            {hireOptions.map((v) => <option key={v} value={v}>{v}</option>)}
+          </select>
+          <select className="cd-select" value={fPlatform} onChange={(e) => setFPlatform(e.target.value)} aria-label="플랫폼">
+            <option value="">플랫폼: 전체</option>
+            {platformOptions.map((v) => <option key={v} value={v}>{v}</option>)}
+          </select>
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 cd-text-faint pointer-events-none" />
+            <input
+              className="cd-input pl-8"
+              style={{ width: 240 }}
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="제목 검색"
+              aria-label="제목 검색"
+            />
+          </div>
+          {(fDivision || fHire || fPlatform || q) && (
+            <CdButton size="sm" onClick={() => { setFDivision(""); setFHire(""); setFPlatform(""); setQ(""); }}>
+              초기화
+            </CdButton>
+          )}
+        </div>
+      )}
 
       {postings === null ? (
         <div className="flex items-center gap-2 py-20 justify-center text-sm cd-text-muted">
@@ -118,46 +202,79 @@ export function PostingListBoard() {
             </CdButton>
           }
         />
+      ) : filtered.length === 0 ? (
+        <CdEmptyState
+          icon={<Search className="w-6 h-6" />}
+          title="검색 조건에 맞는 공고가 없습니다"
+          description="부문·구분·플랫폼·제목 조건을 바꾸거나 초기화하세요."
+        />
       ) : (
         <div className="rounded-2xl border cd-border-c cd-card-bg overflow-hidden" style={{ boxShadow: "var(--cd-shadow)" }}>
           <table className="w-full text-sm">
             <thead className="cd-table-head">
               <tr className="text-left text-xs cd-text-muted">
                 <th className="px-5 py-3 font-semibold">공고 제목</th>
-                <th className="px-5 py-3 font-semibold">템플릿</th>
-                <th className="px-5 py-3 font-semibold">상태</th>
-                <th className="px-5 py-3 font-semibold">최근 수정</th>
-                <th className="px-5 py-3 font-semibold w-16"></th>
+                <th className="px-4 py-3 font-semibold">부문</th>
+                <th className="px-4 py-3 font-semibold">구분</th>
+                <th className="px-4 py-3 font-semibold">플랫폼</th>
+                <th className="px-4 py-3 font-semibold">공고기간</th>
+                <th className="px-4 py-3 font-semibold">템플릿</th>
+                <th className="px-4 py-3 font-semibold">상태</th>
+                <th className="px-4 py-3 font-semibold">최근 수정</th>
+                <th className="px-4 py-3 font-semibold w-24"></th>
               </tr>
             </thead>
             <tbody>
-              {postings.map((p, i) => (
-                <tr
-                  key={p.postingId}
-                  className="cursor-pointer transition-colors hover:cd-soft-primary"
-                  style={{ borderTop: i > 0 ? "1px solid var(--cd-border)" : undefined }}
-                  onClick={() => router.push(`/admin/recruit/${p.postingId}`)}
-                >
-                  <td className="px-5 py-3.5 font-semibold cd-text">{p.title}</td>
-                  <td className="px-5 py-3.5 cd-text-muted">{p.templateName ?? "-"}</td>
-                  <td className="px-5 py-3.5">
-                    <CdBadge tone={p.status === "final" ? "success" : "info"}>
-                      {p.status === "final" ? "확정" : "작성중"}
-                    </CdBadge>
-                  </td>
-                  <td className="px-5 py-3.5 cd-text-muted">{p.updatedAt.slice(0, 16).replace("T", " ")}</td>
-                  <td className="px-5 py-3.5">
-                    <button
-                      type="button"
-                      title="삭제"
-                      className="p-1.5 rounded-lg cd-text-faint hover:text-[color:var(--cd-error)]"
-                      onClick={(e) => { e.stopPropagation(); setConfirmDelete(p); }}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {filtered.map((p, i) => {
+                const ps = periodState(p);
+                return (
+                  <tr
+                    key={p.postingId}
+                    className="cursor-pointer transition-colors hover:cd-soft-primary"
+                    style={{ borderTop: i > 0 ? "1px solid var(--cd-border)" : undefined, opacity: ps === "expired" ? 0.75 : undefined }}
+                    onClick={() => router.push(`/admin/recruit/${p.postingId}`)}
+                  >
+                    <td className="px-5 py-3.5 font-semibold cd-text">{p.title}</td>
+                    <td className="px-4 py-3.5 cd-text-muted whitespace-nowrap">{p.division ?? "-"}</td>
+                    <td className="px-4 py-3.5 cd-text-muted whitespace-nowrap">{p.hireType ?? "-"}</td>
+                    <td className="px-4 py-3.5 cd-text-muted whitespace-nowrap">{p.platform ?? "-"}</td>
+                    <td className="px-4 py-3.5 cd-text-muted whitespace-nowrap">
+                      <span className="inline-flex items-center gap-1.5">
+                        {formatPeriod(p) || "-"}
+                        {ps === "expired" && <CdBadge tone="error">만료</CdBadge>}
+                        {ps === "open" && <CdBadge tone="success">진행중</CdBadge>}
+                        {ps === "upcoming" && <CdBadge tone="info">예정</CdBadge>}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5 cd-text-muted">{p.templateName ?? "-"}</td>
+                    <td className="px-4 py-3.5">
+                      <CdBadge tone={p.status === "final" ? "success" : "info"}>
+                        {p.status === "final" ? "확정" : "작성중"}
+                      </CdBadge>
+                    </td>
+                    <td className="px-4 py-3.5 cd-text-muted whitespace-nowrap">{p.updatedAt.slice(0, 16).replace("T", " ")}</td>
+                    <td className="px-4 py-3.5 whitespace-nowrap">
+                      <button
+                        type="button"
+                        title="복제해서 새 공고 작성 (내용·부문·구분·플랫폼 유지, 기간은 새로 입력)"
+                        className="p-1.5 rounded-lg cd-text-faint hover:text-[color:var(--cd-primary)]"
+                        disabled={duplicating !== null}
+                        onClick={(e) => { e.stopPropagation(); void duplicate(p); }}
+                      >
+                        {duplicating === p.postingId ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4" />}
+                      </button>
+                      <button
+                        type="button"
+                        title="삭제"
+                        className="p-1.5 rounded-lg cd-text-faint hover:text-[color:var(--cd-error)]"
+                        onClick={(e) => { e.stopPropagation(); setConfirmDelete(p); }}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

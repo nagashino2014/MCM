@@ -4,6 +4,7 @@
 import { getDb, rowsToObjects } from "@/lib/db";
 import { sanitizeTree, sanitizeTheme } from "./sanitize";
 import type { DocNode, DocTheme, RecruitPostingRow, RecruitTemplateRow } from "./types";
+import { normalizeMeta, type PostingMeta } from "./meta";
 
 const nowIso = () => new Date().toISOString();
 
@@ -41,6 +42,11 @@ function toPostingRow(r: Record<string, unknown>): RecruitPostingRow {
     theme: parseJson<DocTheme>(r.theme, {}),
     docWidth: r.doc_width != null ? Number(r.doc_width) : undefined,
     status: r.status === "final" ? "final" : "draft",
+    division: r.division != null ? String(r.division) : null,
+    hireType: r.hire_type != null ? String(r.hire_type) : null,
+    platform: r.platform != null ? String(r.platform) : null,
+    periodStart: r.period_start != null ? String(r.period_start) : null,
+    periodEnd: r.period_end != null ? String(r.period_end) : null,
     createdAt: String(r.created_at ?? ""),
     updatedAt: String(r.updated_at ?? ""),
     updatedBy: r.updated_by != null ? String(r.updated_by) : null,
@@ -147,17 +153,44 @@ export async function setTemplateActive(templateId: string, isActive: boolean): 
 
 // ── 공고 ────────────────────────────────────────────
 
-export async function listPostings(): Promise<RecruitPostingRow[]> {
+const POSTING_META_COLS = "p.division, p.hire_type, p.platform, p.period_start, p.period_end";
+
+export interface PostingFilter {
+  division?: string | null;
+  hireType?: string | null;
+  platform?: string | null;
+  /** 제목 부분 일치(대소문자 무시) */
+  q?: string | null;
+}
+
+/** 공고 목록 — 부문·구분·플랫폼은 정확히 일치, q 는 제목 부분 일치. 콘텐츠 트리는 제외. */
+export async function listPostings(filter: PostingFilter = {}): Promise<RecruitPostingRow[]> {
   const db = await getDb();
+  const where: string[] = ["p.deleted_at IS NULL"];
+  const params: unknown[] = [];
+  const eq = (col: string, v: string | null | undefined) => {
+    const s = v?.trim();
+    if (!s) return;
+    params.push(s);
+    where.push(`${col} = $${params.length}`);
+  };
+  eq("p.division", filter.division);
+  eq("p.hire_type", filter.hireType);
+  eq("p.platform", filter.platform);
+  if (filter.q?.trim()) {
+    params.push(`%${filter.q.trim()}%`);
+    where.push(`p.title ILIKE $${params.length}`);
+  }
   const rows = rowsToObjects(
     await db.exec(
       `SELECT p.posting_id, p.template_id, t.name AS template_name, t.doc_width,
-              p.title, p.status, p.created_at, p.updated_at, p.updated_by,
+              p.title, p.status, ${POSTING_META_COLS}, p.created_at, p.updated_at, p.updated_by,
               '{}'::jsonb AS content_tree, p.theme
          FROM recruit_postings p
          JOIN recruit_templates t ON t.template_id = p.template_id
-        WHERE p.deleted_at IS NULL
-        ORDER BY p.updated_at DESC`
+        WHERE ${where.join(" AND ")}
+        ORDER BY p.updated_at DESC`,
+      params
     )
   );
   return rows.map(toPostingRow);
@@ -168,7 +201,8 @@ export async function getPosting(postingId: string): Promise<RecruitPostingRow |
   const rows = rowsToObjects(
     await db.exec(
       `SELECT p.posting_id, p.template_id, t.name AS template_name, t.doc_width,
-              p.title, p.content_tree, p.theme, p.status, p.created_at, p.updated_at, p.updated_by
+              p.title, p.content_tree, p.theme, p.status, ${POSTING_META_COLS},
+              p.created_at, p.updated_at, p.updated_by
          FROM recruit_postings p
          JOIN recruit_templates t ON t.template_id = p.template_id
         WHERE p.posting_id = $1 AND p.deleted_at IS NULL LIMIT 1`,
@@ -178,25 +212,68 @@ export async function getPosting(postingId: string): Promise<RecruitPostingRow |
   return rows[0] ? toPostingRow(rows[0]) : null;
 }
 
-/** 템플릿에서 새 공고 생성 — design_tree 사본이 content_tree 의 출발점. */
+/** 템플릿에서 새 공고 생성 — design_tree 사본이 content_tree 의 출발점. 구분 메타는 선택. */
 export async function createPosting(input: {
   templateId: string;
   title?: string;
+  meta?: Partial<PostingMeta> | null;
   createdBy: string;
 }): Promise<RecruitPostingRow> {
   const template = await getTemplate(input.templateId);
   if (!template || !template.isActive) {
     throw Object.assign(new Error("템플릿을 찾을 수 없습니다."), { status: 404 });
   }
+  const title = input.title?.trim() || `${template.name} — 새 공고`;
+  return insertPosting({
+    templateId: template.templateId,
+    title,
+    contentTree: template.designTree,
+    theme: template.theme,
+    meta: normalizeMeta(input.meta),
+    createdBy: input.createdBy,
+  });
+}
+
+/**
+ * 기존 공고 복제(재활용) — 콘텐츠·테마·구분 메타를 그대로 복사한 새 작성중 공고.
+ * 같은 유형(부문·구분·플랫폼)의 다음 공고를 지난 공고에서 시작할 때 쓴다. 기간은 새로 잡아야 하므로 비운다.
+ */
+export async function duplicatePosting(postingId: string, createdBy: string): Promise<RecruitPostingRow> {
+  const src = await getPosting(postingId);
+  if (!src) throw Object.assign(new Error("공고를 찾을 수 없습니다."), { status: 404 });
+  return insertPosting({
+    templateId: src.templateId,
+    title: `${src.title} (복사)`,
+    contentTree: src.contentTree,
+    theme: src.theme,
+    meta: { division: src.division, hireType: src.hireType, platform: src.platform, periodStart: null, periodEnd: null },
+    createdBy,
+  });
+}
+
+async function insertPosting(input: {
+  templateId: string;
+  title: string;
+  contentTree: DocNode;
+  theme: DocTheme;
+  meta: PostingMeta;
+  createdBy: string;
+}): Promise<RecruitPostingRow> {
   const db = await getDb();
   const id = crypto.randomUUID();
   const now = nowIso();
-  const title = input.title?.trim() || `${template.name} — 새 공고`;
+  const m = input.meta;
   await db.exec(
     `INSERT INTO recruit_postings
-       (posting_id, template_id, title, content_tree, theme, status, created_at, created_by, updated_at, updated_by)
-     VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, 'draft', $6, $7, $6, $7)`,
-    [id, template.templateId, title, JSON.stringify(template.designTree), JSON.stringify(template.theme), now, input.createdBy]
+       (posting_id, template_id, title, content_tree, theme, status,
+        division, hire_type, platform, period_start, period_end,
+        created_at, created_by, updated_at, updated_by)
+     VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, 'draft', $6, $7, $8, $9, $10, $11, $12, $11, $12)`,
+    [
+      id, input.templateId, input.title, JSON.stringify(input.contentTree), JSON.stringify(input.theme),
+      m.division, m.hireType, m.platform, m.periodStart, m.periodEnd,
+      now, input.createdBy,
+    ]
   );
   return (await getPosting(id))!;
 }
@@ -208,6 +285,8 @@ export async function savePosting(input: {
   contentTree?: unknown;
   theme?: unknown;
   status?: "draft" | "final";
+  /** 구분 메타 — 주면 통째로 교체(빈 값은 null 로 저장), 안 주면 유지. */
+  meta?: Partial<PostingMeta> | null;
   snapshot?: boolean;
   updatedBy: string;
 }): Promise<RecruitPostingRow> {
@@ -218,14 +297,21 @@ export async function savePosting(input: {
   const theme = input.theme != null ? sanitizeTheme(input.theme) : existing.theme;
   const title = input.title?.trim() || existing.title;
   const status = input.status === "final" ? "final" : input.status === "draft" ? "draft" : existing.status;
+  const m: PostingMeta = input.meta != null ? normalizeMeta(input.meta) : existing;
 
   const db = await getDb();
   const now = nowIso();
   await db.exec(
     `UPDATE recruit_postings
-        SET title = $2, content_tree = $3::jsonb, theme = $4::jsonb, status = $5, updated_at = $6, updated_by = $7
+        SET title = $2, content_tree = $3::jsonb, theme = $4::jsonb, status = $5,
+            division = $6, hire_type = $7, platform = $8, period_start = $9, period_end = $10,
+            updated_at = $11, updated_by = $12
       WHERE posting_id = $1 AND deleted_at IS NULL`,
-    [input.postingId, title, JSON.stringify(tree), JSON.stringify(theme), status, now, input.updatedBy]
+    [
+      input.postingId, title, JSON.stringify(tree), JSON.stringify(theme), status,
+      m.division, m.hireType, m.platform, m.periodStart, m.periodEnd,
+      now, input.updatedBy,
+    ]
   );
 
   if (input.snapshot) {

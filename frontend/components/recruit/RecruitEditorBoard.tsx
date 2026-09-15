@@ -19,7 +19,15 @@ import {
   Redo2,
   Undo2,
 } from "lucide-react";
-import { CdButton, CdModal, CdPageHeader, useCdashTheme, useCdToast } from "@/components/cdash";
+import { CdBadge, CdButton, CdDateInput, CdModal, CdPageHeader, useCdashTheme, useCdToast } from "@/components/cdash";
+import {
+  DIVISION_PRESETS,
+  EMPTY_META,
+  HIRE_TYPE_PRESETS,
+  PLATFORM_PRESETS,
+  periodState,
+  type PostingMeta,
+} from "@/lib/recruit/meta";
 import type { DocNode, DocTheme, RecruitPostingRow } from "@/lib/recruit/types";
 import {
   addRepeatItem,
@@ -57,6 +65,8 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
   const [docTheme, setDocTheme] = useState<DocTheme>({});
   const [title, setTitle] = useState("");
   const [status, setStatus] = useState<"draft" | "final">("draft");
+  // 구분 메타(부문·구분·플랫폼·기간) — 제목과 함께 자동저장. 목록 검색·만료 표시의 근거.
+  const [meta, setMeta] = useState<PostingMeta>(EMPTY_META);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [editable, setEditable] = useState(true);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -89,6 +99,13 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
         setDocTheme(p.theme ?? {});
         setTitle(p.title);
         setStatus(p.status);
+        setMeta({
+          division: p.division ?? null,
+          hireType: p.hireType ?? null,
+          platform: p.platform ?? null,
+          periodStart: p.periodStart ?? null,
+          periodEnd: p.periodEnd ?? null,
+        });
         // 첫 세팅이 자동저장을 트리거하지 않도록 다음 틱에 로드 완료 마킹
         setTimeout(() => { loadedRef.current = true; }, 0);
       } catch (e) {
@@ -106,7 +123,7 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
         const res = await fetch(`/api/recruit/postings/${postingId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title, contentTree: tree, theme: docTheme, status, snapshot: opts?.snapshot === true }),
+          body: JSON.stringify({ title, contentTree: tree, theme: docTheme, status, meta, snapshot: opts?.snapshot === true }),
         });
         if (!res.ok) throw new Error((await res.json())?.error || "저장 실패");
         setSaveState("saved");
@@ -116,7 +133,7 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
         toast((e as Error).message, "error");
       }
     },
-    [postingId, tree, docTheme, title, status, toast]
+    [postingId, tree, docTheme, title, status, meta, toast]
   );
 
   // 자동저장 — 편집 후 잠잠해지면 저장(스냅샷 없음)
@@ -125,7 +142,7 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => void save(), AUTOSAVE_DELAY);
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
-  }, [tree, docTheme, title, status, save]);
+  }, [tree, docTheme, title, status, meta, save]);
 
   // 편집 조작 적용 — 항상 "최신" 트리에 함수형으로 적용한다.
   // (문단 블록 blur 커밋 직후 같은 클릭으로 다른 조작이 이어져도 커밋이 유실되지 않게)
@@ -431,6 +448,74 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
               onChange={(e) => setTitle(e.target.value)}
               placeholder="예: 울산지사 통합환경허가 경력직"
             />
+          </div>
+
+          {/* 구분 메타 — 같은 유형의 공고를 목록에서 찾아 재활용하기 위한 태그. 프리셋 + 자유 입력 */}
+          <div className="flex flex-col gap-3">
+            <div>
+              <label className="block text-xs font-bold mb-1.5 cd-text-muted">공고부문</label>
+              <input
+                className="cd-input w-full"
+                list="rc-division-presets"
+                value={meta.division ?? ""}
+                onChange={(e) => setMeta((m) => ({ ...m, division: e.target.value || null }))}
+                placeholder="예: 통합허가(울산)"
+              />
+              <datalist id="rc-division-presets">
+                {DIVISION_PRESETS.map((v) => <option key={v} value={v} />)}
+              </datalist>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs font-bold mb-1.5 cd-text-muted">공고 구분</label>
+                <select
+                  className="cd-select w-full"
+                  value={meta.hireType ?? ""}
+                  onChange={(e) => setMeta((m) => ({ ...m, hireType: e.target.value || null }))}
+                >
+                  <option value="">선택</option>
+                  {HIRE_TYPE_PRESETS.map((v) => <option key={v} value={v}>{v}</option>)}
+                  {meta.hireType && !(HIRE_TYPE_PRESETS as readonly string[]).includes(meta.hireType) && (
+                    <option value={meta.hireType}>{meta.hireType}</option>
+                  )}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold mb-1.5 cd-text-muted">플랫폼</label>
+                <input
+                  className="cd-input w-full"
+                  list="rc-platform-presets"
+                  value={meta.platform ?? ""}
+                  onChange={(e) => setMeta((m) => ({ ...m, platform: e.target.value || null }))}
+                  placeholder="예: 사람인"
+                />
+                <datalist id="rc-platform-presets">
+                  {PLATFORM_PRESETS.map((v) => <option key={v} value={v} />)}
+                </datalist>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-bold mb-1.5 cd-text-muted">
+                공고기간
+                {periodState(meta) === "expired" && <CdBadge tone="error" className="ml-2">만료</CdBadge>}
+                {periodState(meta) === "open" && <CdBadge tone="success" className="ml-2">진행중</CdBadge>}
+                {periodState(meta) === "upcoming" && <CdBadge tone="info" className="ml-2">예정</CdBadge>}
+              </label>
+              <div className="flex items-center gap-1.5">
+                <CdDateInput
+                  value={meta.periodStart ?? ""}
+                  onChange={(v) => setMeta((m) => ({ ...m, periodStart: v || null }))}
+                  className="flex-1"
+                />
+                <span className="text-xs cd-text-faint">~</span>
+                <CdDateInput
+                  value={meta.periodEnd ?? ""}
+                  onChange={(v) => setMeta((m) => ({ ...m, periodEnd: v || null }))}
+                  className="flex-1"
+                />
+              </div>
+              <p className="text-[11px] cd-text-faint mt-1">종료일을 비우면 상시 채용으로 봅니다. 종료일이 지나면 목록에 만료로 표시됩니다.</p>
+            </div>
           </div>
 
           <div>

@@ -279,11 +279,13 @@ html[data-theme="dark"] .cdash, html[data-theme="dark"] .cdash-vars,
   transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
 }
 
-/* 기존 cd-fields-white 클래스도 테마별 불투명 입력을 유지한다. */
+/* 기존 cd-fields-white 클래스도 테마별 불투명 입력을 유지한다.
+ * ⚠ background 축약을 쓰면 .cd-select 의 화살표(background-image)가 지워져 우측 여백만 남는다
+ * (2026-09-15 사용자 지적 — 전 메뉴 목록박스 공통). background-color 만 덮는다. */
 .cd-fields-white .cd-input,
 .cd-fields-white .cd-select,
 .cd-fields-white .cd-textarea {
-  background: var(--cd-card-solid);
+  background-color: var(--cd-card-solid);
 }
 /* 컨트롤 높이(36px) 고정은 한 줄 입력에만 적용한다. textarea 까지 묶으면 사용처의
  * min-h-[...] 유틸리티가 이 규칙에 밀려 무효가 된다 — 조문 본문(min-h-[260px])이
@@ -310,12 +312,15 @@ textarea.cd-input { min-height: 64px; resize: vertical; line-height: 1.5; }
   min-height: 64px;
   line-height: 1.5;
 }
-.cd-select {
+/* 목록박스 화살표 — 디자인 시안의 채움 역삼각형(▼). select.cd-input 도 같은 모양(구 화면 잔재). */
+.cd-select,
+select.cd-input {
   appearance: none;
   -webkit-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%239aa1b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath d='M1 3h8L5 8z' fill='%239aa1b8'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 0.65rem center;
+  background-position: right 0.75rem center;
+  background-size: 10px 10px;
   padding-right: 2rem;
 }
 

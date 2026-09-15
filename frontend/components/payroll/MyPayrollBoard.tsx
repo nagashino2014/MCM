@@ -10,7 +10,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ApexOptions } from "apexcharts";
-import { Banknote, ChevronLeft, ExternalLink, MinusCircle, PiggyBank, Printer, ReceiptText, TrendingUp } from "lucide-react";
+import { Banknote, ChevronLeft, ChevronRight, MinusCircle, PiggyBank, Printer, ReceiptText, TrendingUp } from "lucide-react";
 import ApexChart from "@/components/contracts/dashboard/ApexChart";
 import { chartPalette } from "@/components/contracts/dashboard/types";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
@@ -170,12 +170,15 @@ export function MyPayrollBoard() {
     }
   };
 
-  /** 목록은 최신순 — "이전 월"은 목록에서 한 칸 아래(더 과거) */
-  const prevRow = useMemo(() => {
-    if (!selected) return null;
+  /** 목록은 최신순 — 이전 월은 한 칸 아래(더 과거), 다음 월은 한 칸 위. 버튼 라벨은 그 행의 월(연도가 다르면 연도 포함). */
+  const [prevRow, nextRow] = useMemo(() => {
+    if (!selected) return [null, null] as const;
     const i = rows.findIndex((r) => r.entryId === selected.entryId);
-    return i >= 0 && i + 1 < rows.length ? rows[i + 1] : null;
+    if (i < 0) return [null, null] as const;
+    return [i + 1 < rows.length ? rows[i + 1] : null, i > 0 ? rows[i - 1] : null] as const;
   }, [rows, selected]);
+  const monthLabel = (r: PayslipRow) =>
+    `${selected && r.payYear !== selected.payYear ? `${r.payYear}년 ` : ""}${r.payMonth}월${r.ledgerKind !== "salary" ? ` ${KIND_LABEL[r.ledgerKind] ?? ""}` : ""}`;
 
   // ── 차트: 월별(실지급+공제 누적) / 연도별(최근 10년, 선택 연도 강조) ──
   const thisYear = new Date().getFullYear();
@@ -380,20 +383,20 @@ export function MyPayrollBoard() {
                   )}
                 </div>
                 <div className="ml-auto flex items-center gap-1.5">
-                  <button type="button" className="cd-btn rounded-lg px-3 py-1.5 text-xs font-semibold inline-flex items-center gap-1 disabled:opacity-40" disabled={!prevRow} onClick={() => prevRow && void open(prevRow)}>
-                    <ChevronLeft className="w-3.5 h-3.5" /> 이전 월
-                  </button>
+                  {/* 이전/다음 월 — 라벨은 이동할 행의 월(예: 6월 선택 시 "5월" / "7월"). 없으면 버튼을 숨긴다. */}
+                  {prevRow && (
+                    <button type="button" className="cd-btn rounded-lg px-3 py-1.5 text-xs font-semibold inline-flex items-center gap-1" title="이전 월 명세서" onClick={() => void open(prevRow)}>
+                      <ChevronLeft className="w-3.5 h-3.5" /> {monthLabel(prevRow)}
+                    </button>
+                  )}
+                  {nextRow && (
+                    <button type="button" className="cd-btn rounded-lg px-3 py-1.5 text-xs font-semibold inline-flex items-center gap-1" title="다음 월 명세서" onClick={() => void open(nextRow)}>
+                      {monthLabel(nextRow)} <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                   <button type="button" className="cd-btn rounded-lg px-3 py-1.5 text-xs font-semibold inline-flex items-center gap-1 disabled:opacity-40" disabled={!selected} onClick={print}>
                     <Printer className="w-3.5 h-3.5" /> 출력
                   </button>
-                  <a
-                    className={`cd-btn cd-action rounded-lg px-3 py-1.5 text-xs font-semibold inline-flex items-center gap-1 ${selected ? "" : "pointer-events-none opacity-40"}`}
-                    href={selected ? `/api/payroll/my-statements/${selected.entryId}/file` : "#"}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" /> 새 창 · PDF 저장
-                  </a>
                 </div>
               </div>
               <div className={css.viewerBody}>

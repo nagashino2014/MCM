@@ -18,6 +18,9 @@ import { buildThinkingParams } from "./model-caps";
 const ENDPOINT = "https://api.anthropic.com/v1/messages";
 const API_VERSION = "2023-06-01";
 const DEFAULT_TIMEOUT_MS = 120_000;
+// fallbacks 파라미터를 받는 모델 패밀리(Opus 5 이상). 그 외 모델에 붙이면 400.
+const SERVER_FALLBACK_FAMILIES = new Set(["claude-opus-5", "claude-fable-5", "claude-fable-5-1"]);
+const SERVER_FALLBACK_BETA = "server-side-fallback-2026-07-01";
 
 export class ClaudeClientError extends Error {}
 
@@ -50,6 +53,13 @@ export interface ClaudeMessagesRequest {
   meta?: Record<string, unknown>;
   /** body 에 추가로 얹을 파라미터(호출부가 직접 지정, 설정보다 우선). */
   extra?: Record<string, unknown>;
+  /** anthropic-beta 헤더 값들. */
+  betas?: string[];
+  /**
+   * 서버측 폴백 — 안전 분류기 거절(stop_reason: refusal) 시 서버가 다른 모델로 재실행(fallbacks:"default").
+   * Opus 5 이상에서만 유효하므로, 관리 오버라이드·자동 강등으로 더 작은 모델이 최종 선택되면 붙이지 않는다.
+   */
+  serverFallback?: boolean;
   /** system 프롬프트에 cache_control(ephemeral) 부착 — 고정 system 이 길 때만 효과(모델별 최소 512~4096 토큰). */
   cacheSystem?: boolean;
 }
@@ -171,18 +181,23 @@ export async function claudeMessages(req: ClaudeMessagesRequest): Promise<Claude
       ? [{ type: "text", text: req.system, cache_control: { type: "ephemeral" } }]
       : req.system
     : undefined;
+  // 최종 해석된 모델을 보고 서버측 폴백을 붙인다(강등된 Haiku/Sonnet 요청에 붙으면 400).
+  const useServerFallback = Boolean(req.serverFallback) && SERVER_FALLBACK_FAMILIES.has(modelFamily);
+  const betas = [...(req.betas ?? []), ...(useServerFallback ? [SERVER_FALLBACK_BETA] : [])];
   const body: Record<string, unknown> = {
     model,
     max_tokens: req.max_tokens,
     ...(system ? { system } : {}),
     messages: req.messages,
     ...thinking.body,
+    ...(useServerFallback ? { fallbacks: "default" } : {}),
     ...(req.extra ?? {}),
   };
   const extraMeta: Record<string, unknown> = {
     ...(downgradedFrom ? { downgraded_from: downgradedFrom } : {}),
     ...(Object.keys(thinking.applied).length ? { thinking: thinking.applied } : {}),
     ...(req.cacheSystem && req.system ? { cache_system: true } : {}),
+    ...(useServerFallback ? { server_fallback: true } : {}),
   };
 
   const base = {
@@ -239,7 +254,12 @@ export async function claudeMessages(req: ClaudeMessagesRequest): Promise<Claude
   try {
     const res = await fetch(ENDPOINT, {
       method: "POST",
-      headers: { "x-api-key": apiKey, "anthropic-version": API_VERSION, "content-type": "application/json" },
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": API_VERSION,
+        "content-type": "application/json",
+        ...(betas.length ? { "anthropic-beta": betas.join(",") } : {}),
+      },
       body: JSON.stringify(body),
       signal,
     });
@@ -272,14 +292,18 @@ export async function claudeMessages(req: ClaudeMessagesRequest): Promise<Claude
       cache_creation_input_tokens: data.usage?.cache_creation_input_tokens ?? 0,
       cache_read_input_tokens: data.usage?.cache_read_input_tokens ?? 0,
     };
+    // 서버측 폴백이 다른 모델로 응답했을 수 있으므로 과금·집계는 실제 응답 모델 기준으로 계산한다.
+    const servedModel = data.model ?? model;
+    const servedFamily = normalizeModelFamily(servedModel);
     const prices = await getModelPrices();
-    const costUsd = computeCostUsd(usage, prices[modelFamily]);
+    const costUsd = computeCostUsd(usage, prices[servedFamily]);
     const stopReason = data.stop_reason ?? null;
     const status: AiCallStatus = stopReason === "refusal" ? "refusal" : stopReason === "max_tokens" ? "truncated" : "ok";
 
     void logAiUsage({
       ...base,
-      model: data.model ?? model,
+      model: servedModel,
+      modelFamily: servedFamily,
       inputTokens: usage.input_tokens,
       cacheCreationInputTokens: usage.cache_creation_input_tokens ?? 0,
       cacheReadInputTokens: usage.cache_read_input_tokens ?? 0,
@@ -290,8 +314,12 @@ export async function claudeMessages(req: ClaudeMessagesRequest): Promise<Claude
       httpStatus: res.status,
       stopReason,
       requestId,
-      meta: { ...shapeMeta(req), ...extraMeta },
-    }).then((logId) => afterCallBudgetCheck({ logId, feature: req.feature, modelFamily, costUsd }));
+      meta: {
+        ...shapeMeta(req),
+        ...extraMeta,
+        ...(servedFamily !== modelFamily ? { fallback_from: modelFamily } : {}),
+      },
+    }).then((logId) => afterCallBudgetCheck({ logId, feature: req.feature, modelFamily: servedFamily, costUsd }));
 
     return { ok: true, status: res.status, data, errorText: null, requestId, usage, costUsd, model, latencyMs, text: joinTextBlocks(data) };
   } catch (e) {

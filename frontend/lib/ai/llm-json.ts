@@ -36,15 +36,27 @@ export function extractJson<T = unknown>(text: string): T | null {
   }
 }
 
+/** 사용자 메시지에 텍스트 앞에 붙일 첨부 — PDF 문서 또는 이미지(base64, 개행 없는 문자열). */
+export type ChatAttachment =
+  | { kind: "pdf"; base64: string }
+  | { kind: "image"; mediaType: "image/png" | "image/jpeg" | "image/gif" | "image/webp"; base64: string };
+
 export interface ChatJsonOpts {
   /** 기능 키(집계 단위, 필수). */
   feature: AiFeatureKey;
   system?: string;
   user: string;
+  /** 문서/이미지 입력(비전). 텍스트 블록보다 앞에 배치된다. */
+  attachments?: ChatAttachment[];
   maxTokens?: number;
   timeoutMs?: number;
-  /** 기본 Haiku. 구조 추론이 무거우면 "claude-sonnet-5" 등 지정. */
+  /** 기본 Haiku. 구조 추론이 무거우면 "claude-sonnet-5" / "claude-opus-5" 등 지정. */
   model?: string;
+  /**
+   * 서버측 폴백 — 안전 분류기가 요청을 거절(stop_reason: refusal)하면 서버가 다른 모델로 재실행한다.
+   * 최종 모델이 Opus 5 이상일 때만 게이트웨이가 적용한다(강등된 모델에는 붙이지 않음).
+   */
+  serverFallback?: boolean;
   userId?: string | null;
   subject?: { type: string; id: string } | null;
 }
@@ -52,21 +64,34 @@ export interface ChatJsonOpts {
 /**
  * 프롬프트를 보내 JSON 응답을 파싱해 반환한다.
  * - 키 미설정: throw LlmError("llm_not_configured")
- * - HTTP 실패/타임아웃/파싱 실패: throw LlmError(사유)
+ * - HTTP 실패/타임아웃/파싱 실패/거절: throw LlmError(사유)
  */
 export async function anthropicChatJson<T = unknown>(opts: ChatJsonOpts): Promise<T> {
   try {
+    // 첨부(문서/이미지)가 있으면 content 블록 배열, 없으면 기존처럼 문자열 그대로.
+    const attachmentBlocks = (opts.attachments ?? []).map((a) =>
+      a.kind === "pdf"
+        ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: a.base64 } }
+        : { type: "image", source: { type: "base64", media_type: a.mediaType, data: a.base64 } }
+    );
+    const content =
+      attachmentBlocks.length > 0 ? [...attachmentBlocks, { type: "text", text: opts.user }] : opts.user;
+
     const r = await claudeMessages({
       feature: opts.feature,
       model: opts.model ?? DEFAULT_MODEL,
       max_tokens: opts.maxTokens ?? 4000,
       system: opts.system,
-      messages: [{ role: "user", content: opts.user }],
+      messages: [{ role: "user", content }],
       timeoutMs: opts.timeoutMs ?? 30000,
       userId: opts.userId,
       subject: opts.subject,
+      // 게이트웨이가 최종 모델(오버라이드·강등 반영)을 보고 Opus 5 이상일 때만 폴백 파라미터를 붙인다.
+      serverFallback: opts.serverFallback,
     });
     if (!r.ok) throw new LlmError(`llm_http_${r.status}: ${(r.errorText ?? "").slice(0, 200)}`);
+    // 안전 분류기 거절 — content 가 비어 있을 수 있으므로 텍스트 파싱 전에 판정한다.
+    if (r.data?.stop_reason === "refusal") throw new LlmError("llm_refusal: 모델이 요청을 거절했습니다");
     const parsed = extractJson<T>(r.text);
     if (parsed == null) {
       throw new LlmError(

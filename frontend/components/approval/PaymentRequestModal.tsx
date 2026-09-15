@@ -275,6 +275,7 @@ export default function PaymentRequestModal({
                   <span className="text-[11px] cd-text-faint font-semibold">VAT 표기</span>
                   <select className="cd-select" value={vatNote} onChange={(e) => setVatNote(e.target.value)}>
                     <option value="VAT 별도">VAT 별도 (금액에 가산)</option>
+                    <option value={SUPPLY_ONLY_VAT_NOTE}>VAT 별도 (금액에 미포함)</option>
                     <option value="VAT 포함">VAT 포함 (금액에서 역산)</option>
                   </select>
                 </label>
@@ -309,7 +310,9 @@ export default function PaymentRequestModal({
                     {/* 단계 나열은 위 체크박스 목록과 중복이라 표기하지 않는다(2026-08-25 사용자 요청) */}
                     <span className="text-xs cd-text-muted">금회 청구금액</span>
                     <b className="ml-auto tabular-nums cd-text-primary">{fmt(curTotal)}원</b>
-                    <span className="text-[11px] cd-text-faint">{vatNote} 합계</span>
+                    <span className="text-[11px] cd-text-faint">
+                      {vatNote === SUPPLY_ONLY_VAT_NOTE ? "공급가액 (VAT 미포함)" : `${vatNote} 합계`}
+                    </span>
                   </>
                 )}
               </div>

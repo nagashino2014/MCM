@@ -157,7 +157,11 @@ export interface ImportSource {
 }
 
 /** 원본 문서 + 템플릿 슬롯을 LLM 에 보내 매핑을 받는다. */
-export async function requestMapping(spec: SlotSpec, source: ImportSource): Promise<ImportMapping> {
+export async function requestMapping(
+  spec: SlotSpec,
+  source: ImportSource,
+  ctx?: { userId?: string | null; templateId?: string }
+): Promise<ImportMapping> {
   const user = [
     "## 템플릿 슬롯",
     JSON.stringify(spec),
@@ -166,8 +170,11 @@ export async function requestMapping(spec: SlotSpec, source: ImportSource): Prom
   ].join("\n");
 
   const mapping = await anthropicChatJson<ImportMapping>({
+    feature: "recruit.import",
     model: "claude-opus-5",
     serverFallback: true,
+    userId: ctx?.userId ?? null,
+    subject: ctx?.templateId ? { type: "recruit_template", id: ctx.templateId } : null,
     system: SYSTEM_PROMPT,
     user,
     attachments: source.attachments,

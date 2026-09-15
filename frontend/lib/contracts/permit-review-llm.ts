@@ -7,10 +7,10 @@
  */
 
 import { PDFDocument } from "pdf-lib";
+import { claudeMessages } from "@/lib/ai/claude-client";
 
 // 표(종규모·생산량) 정확도가 중요 — 상위 모델 기본.
 const MODEL = process.env.PERMIT_REVIEW_MODEL || "claude-sonnet-5";
-const ENDPOINT = "https://api.anthropic.com/v1/messages";
 const MAX_PAGES = 20;
 
 export interface PermitReviewProduct {
@@ -102,29 +102,18 @@ export async function parsePermitReviewWithLlm(buf: Buffer): Promise<PermitRevie
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 120_000);
   try {
-    const res = await fetch(ENDPOINT, {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 4000,
-        messages: [{ role: "user", content: [block, { type: "text", text: PROMPT }] }],
-      }),
+    const r = await claudeMessages({
+      feature: "contract.permit_review_parse",
+      model: MODEL,
+      max_tokens: 4000,
+      messages: [{ role: "user", content: [block, { type: "text", text: PROMPT }] }],
       signal: controller.signal,
     });
-    if (!res.ok) {
-      console.warn("[permit-review-llm] HTTP", res.status, await res.text().catch(() => ""));
+    if (!r.ok) {
+      console.warn("[permit-review-llm] HTTP", r.status, r.errorText ?? "");
       return null;
     }
-    const data = (await res.json()) as { content?: Array<{ type: string; text?: string }> };
-    const text = (data.content ?? [])
-      .filter((c) => c.type === "text")
-      .map((c) => c.text ?? "")
-      .join("\n");
+    const text = r.text;
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return null;
     const raw = JSON.parse(jsonMatch[0]) as Record<string, unknown>;

@@ -7,8 +7,8 @@
 // 멀티모달 호출은 lib/ieps/business-certificate-llm.ts 패턴(type:"document" base64)을 따른다.
 
 import { DELIVERABLE_BINDINGS, type DeliverableKind, type DeliverableSpec, type DocBlock } from "./types";
+import { claudeMessages } from "@/lib/ai/claude-client";
 
-const ENDPOINT = "https://api.anthropic.com/v1/messages";
 const MODEL = process.env.SCRAPER_ANALYZE_MODEL || "claude-sonnet-5";
 const HIGH_MODEL = "claude-opus-5";
 
@@ -214,30 +214,26 @@ export async function analyzeTemplateScan(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 240_000);
   try {
-    const res = await fetch(ENDPOINT, {
-      method: "POST",
-      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({
-        model,
-        max_tokens: 12000,
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "document", source: { type: "base64", media_type: "application/pdf", data: Buffer.from(bytes).toString("base64") } },
-              { type: "text", text: buildPrompt(kind) },
-            ],
-          },
-        ],
-      }),
+    const r = await claudeMessages({
+      feature: opts.highQuality ? "deliverable.template_scan:high" : "deliverable.template_scan",
+      model,
+      max_tokens: 12000,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "document", source: { type: "base64", media_type: "application/pdf", data: Buffer.from(bytes).toString("base64") } },
+            { type: "text", text: buildPrompt(kind) },
+          ],
+        },
+      ],
       signal: controller.signal,
+      meta: { pdf_bytes: bytes.byteLength },
     });
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      throw new Error(`양식 분석 API 오류 (HTTP ${res.status}) ${body.slice(0, 200)}`);
+    if (!r.ok) {
+      throw new Error(`양식 분석 API 오류 (HTTP ${r.status}) ${(r.errorText ?? "").slice(0, 200)}`);
     }
-    const json = (await res.json()) as { content?: { type: string; text?: string }[] };
-    const text = (json.content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join("").trim();
+    const text = r.text;
     const match = text.match(/\{[\s\S]*\}/);
     if (!match) throw new Error("양식 분석 결과를 해석하지 못했습니다.");
     const raw = JSON.parse(match[0]) as Record<string, unknown>;

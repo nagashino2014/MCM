@@ -99,7 +99,6 @@ export default function TaxInvoiceIssueModal({
   const [taxType, setTaxType] = useState(1);
   const [purposeType, setPurposeType] = useState(2);
   const [itemName, setItemName] = useState("");
-  const [remark1, setRemark1] = useState("");
   const [email, setEmail] = useState("");
   const [contactName, setContactName] = useState("");
   const [contactTel, setContactTel] = useState("");
@@ -298,12 +297,12 @@ export default function TaxInvoiceIssueModal({
             .map(({ li, row }) => ({
               name: li.name.trim(),
               spec: li.spec.trim() || undefined,
+              remark: li.remark.trim() || undefined,
               qty: Number(digits(li.qty) || 1),
               unitPrice: Number(digits(li.unitPrice) || 0) || undefined,
               amount: row?.supply ?? 0,
               tax: row?.tax ?? 0,
             })),
-          remark1: lineItems.map((li) => li.remark.trim()).filter(Boolean).join(" / ").slice(0, 100) || remark1,
           invoicee: {
             facilityId: prefill.invoicee.facilityId,
             corpNum: digits(invoiceeCorpNum),

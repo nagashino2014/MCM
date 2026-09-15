@@ -3,9 +3,9 @@
 // 간소화 PDF 첫머리의 "소득·세액공제 자료 총괄(요약)" 표를 우선 읽고, 없으면 항목별 페이지에서 합산한다.
 
 import type { YearendInputs } from "@/lib/finance/yearend";
+import { claudeMessages } from "@/lib/ai/claude-client";
 
 const MODEL = process.env.YEAREND_PARSE_MODEL || "claude-haiku-4-5-20251001";
-const ENDPOINT = "https://api.anthropic.com/v1/messages";
 
 const PROMPT = `국세청 연말정산간소화 서비스 PDF입니다. 다음 공제 항목의 연간 합계 금액(원)을 추출해 JSON으로만 답하세요.
 값이 없는 항목은 null. 요약(총괄) 표가 있으면 그 값을 우선 사용하세요.
@@ -41,31 +41,24 @@ export async function parseSimplifiedPdf(pdf: Buffer): Promise<YearendPdfParseRe
   if (!apiKey) return null;
   if (pdf.length > 30 * 1024 * 1024) return null; // Anthropic document 제한(32MB) 보호
   try {
-    const res = await fetch(ENDPOINT, {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 1024,
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "document", source: { type: "base64", media_type: "application/pdf", data: pdf.toString("base64") } },
-              { type: "text", text: PROMPT },
-            ],
-          },
-        ],
-      }),
+    const r = await claudeMessages({
+      feature: "yearend.pdf_parse",
+      model: MODEL,
+      max_tokens: 1024,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "document", source: { type: "base64", media_type: "application/pdf", data: pdf.toString("base64") } },
+            { type: "text", text: PROMPT },
+          ],
+        },
+      ],
       signal: AbortSignal.timeout(120000),
+      meta: { pdf_bytes: pdf.length },
     });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { content?: Array<{ type: string; text?: string }> };
-    const text = data.content?.find((c) => c.type === "text")?.text ?? "";
+    if (!r.ok) return null;
+    const text = r.text;
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return null;
     const raw = JSON.parse(jsonMatch[0]) as Record<string, unknown>;

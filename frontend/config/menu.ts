@@ -202,6 +202,7 @@ export const MENU_ITEMS: MenuItem[] = [
       { title: "계약서 작성", href: "/contracts/agreements" },
       { title: "착수계·준공계 작성", href: "/contracts/deliverables" },
       { title: "다운로드/증명서 생성", href: "/contracts/downloads" },
+      { title: "대외 신고 대기열", href: "/contracts/filings" },
     ],
     group: "main",
   },
@@ -264,6 +265,8 @@ export const MENU_ITEMS: MenuItem[] = [
       { title: "사용자 등록·삭제", href: "/admin/users/registry" },
       // 접속기록(PR-P1) — 로그인·열람·다운로드 이력. security.access_log RBAC 가드.
       { title: "접속기록 조회", href: "/admin/access-log" },
+      // AI API 사용량·과금(docs/ai-api-usage-management-blueprint.md P1) — ai.usage.view RBAC 가드.
+      { title: "AI API 사용량", href: "/admin/ai-usage" },
     ],
     minRole: "admin",
     group: "system",

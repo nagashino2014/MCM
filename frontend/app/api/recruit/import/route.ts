@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
     }
 
     const spec = collectSlots(template.designTree);
-    const mapping = await requestMapping(spec, { attachments, text });
+    const mapping = await requestMapping(spec, { attachments, text }, { userId: ctx.userId, templateId });
     const { tree, applied } = applyMapping(template.designTree, spec, mapping);
 
     const titleFromMapping = Object.values(mapping.texts ?? {}).find((v) => typeof v === "string" && v.length > 4);

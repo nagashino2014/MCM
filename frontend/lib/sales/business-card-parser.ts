@@ -5,9 +5,9 @@
 import sharp from "sharp";
 import { formatCompanyName } from "@/lib/ieps/formatters";
 import { reconcileDeptTitle } from "@/lib/ai/rank-title";
+import { claudeMessages } from "@/lib/ai/claude-client";
 
 const MODEL = process.env.BUSINESS_CARD_MODEL || "claude-haiku-4-5-20251001";
-const ENDPOINT = "https://api.anthropic.com/v1/messages";
 
 export interface BusinessCardFields {
   personName: string | null;
@@ -92,33 +92,25 @@ export async function parseBusinessCard(image: Buffer): Promise<BusinessCardPars
     '"mobilePhone": 휴대폰(M/Mobile/HP), "officePhone": 유선전화(T/Tel), "faxNumber": 팩스(F/Fax), ' +
     '"email": 이메일, "address": 주소, "etc": 그 외 정보(홈페이지 등) 한 줄 또는 null}';
 
-  const res = await fetch(ENDPOINT, {
-    method: "POST",
-    headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: 500,
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "image", source: { type: "base64", media_type: mediaType, data } },
-            { type: "text", text: prompt },
-          ],
-        },
-      ],
-    }),
+  const r = await claudeMessages({
+    feature: "business_card.parse",
+    model: MODEL,
+    max_tokens: 500,
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "image", source: { type: "base64", media_type: mediaType, data } },
+          { type: "text", text: prompt },
+        ],
+      },
+    ],
+    meta: { media_type: mediaType },
   });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`명함 분석 API 오류 (HTTP ${res.status}) ${body.slice(0, 200)}`);
+  if (!r.ok) {
+    throw new Error(`명함 분석 API 오류 (HTTP ${r.status}) ${(r.errorText ?? "").slice(0, 200)}`);
   }
-  const json = (await res.json()) as { content?: { type: string; text?: string }[] };
-  const text = (json.content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join("").trim();
+  const text = r.text;
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) throw new Error("명함 분석 결과를 해석하지 못했습니다.");
   const raw = JSON.parse(match[0]) as Record<string, unknown>;

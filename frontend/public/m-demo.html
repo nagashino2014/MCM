@@ -68,7 +68,8 @@
   <div class="stage"><div class="phone" id="phone">
     <div class="screen">
       <div class="pane" id="pane-app">
-        <iframe src="/m-app" title="MCM 모바일 앱" allow="clipboard-write"></iframe>
+        <!-- name="mcm-phone-demo": 앱이 window.name 으로 폰 목업임을 감지해 하단 탭(네이티브 동일 UI)으로 렌더한다 -->
+        <iframe src="/m-app" name="mcm-phone-demo" title="MCM 모바일 앱" allow="clipboard-write"></iframe>
       </div>
       <div class="pane" id="pane-namecard" hidden>
         <video id="v-namecard" src="/m-demo-video/namecard.mp4?v=2" poster="/m-demo-video/namecard.jpg?v=2"

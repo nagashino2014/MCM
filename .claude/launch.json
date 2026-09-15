@@ -4,13 +4,22 @@
     {
       "name": "proto-static",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "8791", "--directory", "C:/Users/nagas/AppData/Local/Temp/claude/C--CodingProject-MCM/df83abb9-1de1-483c-be8e-ca8aa95731c8/scratchpad"],
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8791",
+        "--directory",
+        "C:/Users/nagas/AppData/Local/Temp/claude/C--CodingProject-MCM/df83abb9-1de1-483c-be8e-ca8aa95731c8/scratchpad"
+      ],
       "port": 8791
     },
     {
       "name": "frontend-dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "cwd": "frontend",
       "port": 3000,
       "autoPort": true,
@@ -21,17 +30,30 @@
     {
       "name": "frontend-dev-aws",
       "runtimeExecutable": "powershell",
-      "runtimeArgs": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "scripts/dev-frontend-aws.ps1"],
+      "runtimeArgs": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "scripts/dev-frontend-aws.ps1"
+      ],
       "port": 3000,
       "env": {
         "NODE_EXTRA_CA_CERTS": "C:\\ProgramData\\Avast Software\\Avast\\wscert.pem",
         "AWS_PROFILE": "mcm-kesi-staging"
-      }
+      },
+      "autoPort": true
     },
     {
       "name": "mobile-web",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["expo", "start", "--web", "--port", "8081"],
+      "runtimeArgs": [
+        "expo",
+        "start",
+        "--web",
+        "--port",
+        "8081"
+      ],
       "cwd": "apps/mobile",
       "port": 8081,
       "env": {
@@ -41,7 +63,13 @@
     {
       "name": "mobile-web-alt",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["expo", "start", "--web", "--port", "8091"],
+      "runtimeArgs": [
+        "expo",
+        "start",
+        "--web",
+        "--port",
+        "8091"
+      ],
       "cwd": "apps/mobile",
       "port": 8091,
       "env": {
@@ -51,7 +79,9 @@
     {
       "name": "mobile-api-proxy",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["scripts/dev-api-proxy.mjs"],
+      "runtimeArgs": [
+        "scripts/dev-api-proxy.mjs"
+      ],
       "cwd": "apps/mobile",
       "port": 8082,
       "env": {
@@ -61,7 +91,10 @@
     {
       "name": "frontend-dev-ui",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "cwd": "frontend",
       "port": 3000,
       "autoPort": true,

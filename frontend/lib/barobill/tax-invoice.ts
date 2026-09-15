@@ -6,6 +6,10 @@
 //                  AmountTotal, TaxTotal, TotalAmount, Remark1~3, TaxInvoiceTradeLineItems
 //   InvoiceParty = ContactID, CorpNum, MgtNum, CorpName, TaxRegID, CEOName, Addr,
 //                  BizClass, BizType, ContactName, TEL, HP, Email
+//   TaxInvoiceTradeLineItem = PurchaseExpiry, Name, Information(규격), ChargeableUnit(수량),
+//                  UnitPrice, Amount, Tax, Description(비고)
+//     ⚠ Information 은 계산서 "규격" 열, Description 은 품목행 "비고" 열이다(문서 상단 Remark1 과 별개).
+//       2026-08-31 이전에는 Information 을 안 쓰고 규격을 Description 에 넣어 비고 열로 찍혔다.
 // ⚠ s:sequence 라 요소 순서를 지켜야 하고, 금액은 문자열(콤마·소수점 불가)이다.
 
 import { soapCall, escXml, rawXml, expectOk, expectString, methodResult, isErrCode, getErrString, BarobillError, getBarobillConfig, pick, pickText } from "@/lib/barobill/client";
@@ -38,10 +42,13 @@ export interface InvoiceParty {
 export interface InvoiceLineItem {
   purchaseExpiry: string; // 공급일자 YYYYMMDD
   name: string;
+  /** 규격 — 계산서 품목행의 "규격" 열. WSDL 실사: Name 과 ChargeableUnit 사이의 Information. */
+  information?: string;
   chargeableUnit?: string; // 수량
   unitPrice?: string;
   amount: string; // 공급가액
   tax: string; // 세액
+  /** 비고 — 계산서 품목행의 "비고" 열(문서 상단 Remark1 과 다른 자리다). */
   description?: string;
 }
 
@@ -91,6 +98,7 @@ function invoiceXml(input: TaxInvoiceInput): string {
         "<TaxInvoiceTradeLineItem>" +
         el("PurchaseExpiry", it.purchaseExpiry) +
         el("Name", it.name) +
+        el("Information", it.information) +
         el("ChargeableUnit", it.chargeableUnit ?? "1") +
         el("UnitPrice", it.unitPrice ?? it.amount) +
         el("Amount", it.amount) +

@@ -147,6 +147,7 @@ export async function analyzeFormBytes(bytes: Uint8Array): Promise<FormProfile> 
   }
   const serialized = serializeFormForLlm(doc);
   const raw = await anthropicChatJson<unknown>({
+    feature: "bid.form_analyze",
     user: buildPrompt(serialized),
     model: MODEL,
     maxTokens: 8000,

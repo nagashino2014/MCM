@@ -130,6 +130,7 @@ export async function analyzeAgreementOverlay(bytes: Uint8Array): Promise<Agreem
     throw new Error("양식에서 본문을 찾지 못했습니다. HWPX 파일인지 확인하세요.");
   }
   const raw = await anthropicChatJson<unknown>({
+    feature: "agreement.analyze:overlay",
     user: buildOverlayPrompt(serializeOutline(outline)),
     model: MODEL,
     maxTokens: 8000,
@@ -200,6 +201,7 @@ export async function analyzeAgreementHwpx(bytes: Uint8Array): Promise<Agreement
     throw new Error("양식에서 본문을 찾지 못했습니다. HWPX 파일인지 확인하세요.");
   }
   const raw = await anthropicChatJson<unknown>({
+    feature: "agreement.analyze:hwpx",
     user: buildPrompt(serializeOutline(outline)),
     model: MODEL,
     maxTokens: 16000,

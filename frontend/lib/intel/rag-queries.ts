@@ -6,9 +6,10 @@ import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { embedTexts, isEmbeddingConfigured, toVectorLiteral } from "./embeddings";
 import { sourceCondition } from "./intel-queries";
+import { claudeMessages } from "@/lib/ai/claude-client";
+import type { AiFeatureKey } from "@/lib/ai/features";
 
 const BRIEFING_MODEL = process.env.INTEL_RAG_MODEL || "claude-sonnet-5";
-const ANTHROPIC_ENDPOINT = "https://api.anthropic.com/v1/messages";
 
 const str = (v: unknown): string | null => {
   if (v == null) return null;
@@ -310,40 +311,34 @@ function parseBriefingReport(text: string): BriefingReport | null {
  * ⚠ claude-sonnet-5 는 기본으로 thinking 블록을 생성하며 max_tokens 가 thinking+본문 합산에
  * 적용된다 — 부족하면 본문이 중간에 잘리므로(stop_reason=max_tokens) 넉넉히 잡고 잘림을 검사한다.
  */
-async function callClaude(system: string, prompt: string): Promise<string> {
+async function callClaude(
+  system: string,
+  prompt: string,
+  opts: { feature: AiFeatureKey; userId?: string | null; subject?: { type: string; id: string } | null }
+): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY가 설정되지 않아 브리핑을 생성할 수 없습니다.");
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 180000);
-  try {
-    const res = await fetch(ANTHROPIC_ENDPOINT, {
-      method: "POST",
-      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({
-        model: BRIEFING_MODEL,
-        max_tokens: 10000,
-        system,
-        messages: [{ role: "user", content: prompt }],
-      }),
-      signal: controller.signal,
-    });
-    if (!res.ok) {
-      const detail = await res.text().catch(() => "");
-      throw new Error(`브리핑 생성 API 오류 (HTTP ${res.status})${detail ? `: ${detail.slice(0, 200)}` : ""}`);
-    }
-    const data = (await res.json()) as {
-      content?: { type: string; text?: string }[];
-      stop_reason?: string;
-    };
-    let text = (data.content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join("").trim();
-    if (!text) throw new Error("브리핑 생성 응답이 비어 있습니다.");
-    if (data.stop_reason === "max_tokens") {
-      text += "\n\n*(분량 제한으로 뒷부분이 생략되었습니다 — 기간·소스 필터로 범위를 좁혀 다시 생성해 보세요.)*";
-    }
-    return text;
-  } finally {
-    clearTimeout(timer);
+  const r = await claudeMessages({
+    feature: opts.feature,
+    model: BRIEFING_MODEL,
+    max_tokens: 10000,
+    system,
+    messages: [{ role: "user", content: prompt }],
+    timeoutMs: 180000,
+    userId: opts.userId,
+    subject: opts.subject,
+    cacheSystem: true,
+  });
+  if (!r.ok) {
+    const detail = r.errorText ?? "";
+    throw new Error(`브리핑 생성 API 오류 (HTTP ${r.status})${detail ? `: ${detail.slice(0, 200)}` : ""}`);
   }
+  let text = r.text;
+  if (!text) throw new Error("브리핑 생성 응답이 비어 있습니다.");
+  if (r.data?.stop_reason === "max_tokens") {
+    text += "\n\n*(분량 제한으로 뒷부분이 생략되었습니다 — 기간·소스 필터로 범위를 좁혀 다시 생성해 보세요.)*";
+  }
+  return text;
 }
 
 /**
@@ -359,7 +354,7 @@ export async function generateBriefing(
   const { hits } = await searchSimilarSignals(q, filter, 24);
   if (!hits.length) throw new Error("검색 범위에 해당하는 신호가 없습니다. 범위를 넓히거나 벡터 적재를 먼저 실행하세요.");
 
-  const answerMd = await callClaude(BRIEFING_SYSTEM, buildBriefingPrompt(q, hits));
+  const answerMd = await callClaude(BRIEFING_SYSTEM, buildBriefingPrompt(q, hits), { feature: "intel.rag_briefing", userId });
   const report = parseBriefingReport(answerMd); // 실패 시 null → 응답 텍스트를 마크다운으로 표시
   // JSON 형태인데 파싱 불가(잘림·형식 오류)면 원문 JSON 조각이 노출되므로 저장하지 않는다.
   if (!report && answerMd.trimStart().startsWith("{")) {
@@ -453,7 +448,11 @@ export async function refineBriefing(
     "신규 추가 신호가 근거를 보태면 해당 번호로 인용하고, 근거 없는 내용은 추가하지 않습니다. " +
     "인용 번호 [n]은 위 신호 번호 기준을 그대로 사용합니다.";
 
-  const answerMd = await callClaude(BRIEFING_SYSTEM, prompt);
+  const answerMd = await callClaude(BRIEFING_SYSTEM, prompt, {
+    feature: "intel.rag_briefing:refine",
+    userId: _userId,
+    subject: { type: "briefing", id: briefingId },
+  });
   const report = parseBriefingReport(answerMd);
   if (!report) throw new Error("추가 분석 응답 파싱에 실패했습니다. 다시 시도해 주세요.");
 

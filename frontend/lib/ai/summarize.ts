@@ -1,8 +1,9 @@
 // 추진내역 AI 요약 — Claude Haiku 4.5 (Anthropic Messages API 직접 호출).
 // ANTHROPIC_API_KEY 미설정/실패 시 원문 truncate 폴백.
 
+import { claudeMessages } from "@/lib/ai/claude-client";
+
 const MODEL = "claude-haiku-4-5-20251001";
-const ENDPOINT = "https://api.anthropic.com/v1/messages";
 
 /** 구조화 노트 마커([], <>, 글머리 기호)를 제거해 평문화. */
 function flatten(text: string): string {
@@ -49,26 +50,18 @@ export async function summarizeProgress(progressText: string | null, planText: s
     `[이번 기간]\n${flatten(progress) || "(없음)"}\n\n[다음 기간]\n${flatten(plan) || "(없음)"}`;
 
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 15000);
-    const res = await fetch(ENDPOINT, {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ model: MODEL, max_tokens: 200, messages: [{ role: "user", content: prompt }] }),
-      signal: controller.signal,
+    const r = await claudeMessages({
+      feature: "workplan.progress_summary",
+      model: MODEL,
+      max_tokens: 200,
+      messages: [{ role: "user", content: prompt }],
+      timeoutMs: 15000,
     });
-    clearTimeout(timer);
-    if (!res.ok) {
-      console.warn(`[work-plan] 추진내역 AI 요약 실패(status ${res.status}) — truncate 폴백`);
+    if (!r.ok) {
+      console.warn(`[work-plan] 추진내역 AI 요약 실패(status ${r.status}) — truncate 폴백`);
       return fallback(progress, plan);
     }
-    const data = (await res.json()) as { content?: { type: string; text?: string }[] };
-    const text = (data.content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join("").trim();
-    return text || fallback(progress, plan);
+    return r.text || fallback(progress, plan);
   } catch (err) {
     console.warn(`[work-plan] 추진내역 AI 요약 실패(${(err as Error).message}) — truncate 폴백`);
     return fallback(progress, plan);

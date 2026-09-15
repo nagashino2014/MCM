@@ -142,9 +142,10 @@ export function MailViewerPane({
           </div>
           <span className="text-xs cd-text-faint shrink-0">{fmtFull(detail.receivedAt ?? detail.sentAt ?? detail.createdAt)}</span>
         </div>
-        {detail.attachments.length > 0 && (
+        {/* 첨부 칩 — 인라인 이미지(cid, 서명 명함 등)는 본문에 이미 그려지므로 목록에서 뺀다 */}
+        {detail.attachments.some((a) => !a.contentId) && (
           <div className="flex flex-wrap gap-1.5">
-            {detail.attachments.map((a) => (
+            {detail.attachments.filter((a) => !a.contentId).map((a) => (
               <a
                 key={a.attachmentId}
                 href={`/api/mail/attachments?id=${encodeURIComponent(a.attachmentId)}`}

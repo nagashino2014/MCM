@@ -497,3 +497,20 @@ ack 액션은 `audit_log.action='alert.ack'` 으로 기록되어 추적 가능.
 - 자동 재시도 / 백오프 / 쿨다운 — 본 라운드 외 (사용자 결정: Observe-only).
 - 임계값 편집 UI — 후속 “설정 페이지” 단계. 현재는 [scraper/lib/ieps/alert-rules.ts](scraper/lib/ieps/alert-rules.ts) 의 `DEFAULT_RULE_CONFIG` 만 적용.
 - 화관법 / HAPs / ESG 등 외부 데이터 소스 통합 — 별도 라운드.
+
+## 11. 대외 신고 대기열 (IEPS·ETIS 신고 관리, 마이그 213)
+
+통합환경허가시스템(IEPS)의 **기술인력 변경신고**(선임·해임·등급 변경)·**대행 실적 보고**(체결·변경·이행)와
+엔지니어링종합정보시스템(ETIS)의 **기술자 변경신고**(입/퇴사·경력 추가·종료)를 잊지 않도록, MCM 데이터에서 신고 사유를
+자동 파생해 대기열로 보여 준다. 제출은 각 사이트에서 사람이 한다(문자인증·공동인증서) — 자동 입력 도구는 2단계.
+
+- 화면: `/contracts/filings`(계약 메뉴 › 대외 신고 대기열) + 홈 카드 "대외 신고 대기". 권한 `filing.view` / `filing.manage`.
+- 파생 규칙(`frontend/lib/filings/store.ts` `syncFilings`, 목록·요약 API 호출 시 재계산, 멱등):
+  - IEPS 기술인력: `env_grade` 보유 직원. 선임 = 활성 + 대행인력등록일 미기입 + 기준일 이후 입사, 해임 = 인사이벤트 resignation,
+    등급 변경 = 직원 저장 시 `env_grade`/`specialty_field` 변경 감지(이력이 없어 저장 시점 기록).
+  - IEPS 대행 실적: 용역분류 통합허가 계열 계약. 체결 = 계약일, 변경 = `contract_change_events`, 이행 = **완료일(허가일)** `permit_issued_at`.
+  - ETIS 기술자: `eng_grade` 보유 직원. 입사/퇴사, 경력 추가 = 참여인력 시작(참여 시작일 → 계약 착수일 폴백), 경력 종료 = 참여 종료일(전원 기입) → 허가일 폴백.
+- 설정(화면 우상단): 기준일(이전 발생분 제외, 마이그레이션 적용일이 초기값)·종류별 기한 일수(기본 30)·기한 임박 알림 일수·앱 푸시 수신자.
+  푸시(`filing.due`)는 결재 리마인드 틱에서 하루 1회.
+- 데이터 보강: 계약 상세 "대행 실적 보고 정보"(낙찰률·사전협의 통보일자, `award_rate`/`preconsult_notified_at`),
+  직원 등록 "엔지니어링협회 회원번호"(`etis_member_no`). 선임 신고를 제출 완료로 표시하면 대행인력등록일이 비어 있을 때 채워진다.

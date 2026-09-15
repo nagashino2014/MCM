@@ -74,6 +74,9 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       if (body.permitIssuedAt !== undefined) pushSet("permit_issued_at", body.permitIssuedAt || null);
       if (body.permitNo !== undefined) pushSet("permit_no", body.permitNo || null);
       if (body.permitNote !== undefined) pushSet("permit_note", body.permitNote || null);
+      // 대행 실적 보고 항목 (213) — 낙찰률·사전협의 통보일자
+      if (body.awardRate !== undefined) pushSet("award_rate", toNullableNumber(body.awardRate));
+      if (body.preconsultNotifiedAt !== undefined) pushSet("preconsult_notified_at", body.preconsultNotifiedAt || null);
       if (setClauses.length === 0) return;
 
       pushSet("updated_at", new Date().toISOString());

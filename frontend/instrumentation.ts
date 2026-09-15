@@ -14,6 +14,7 @@ export async function register() {
     __mailInboundTimer?: ReturnType<typeof setInterval>;
     __fileRetentionTimer?: ReturnType<typeof setInterval>;
     __cardSlipTimer?: ReturnType<typeof setInterval>;
+    __aiBudgetTimer?: ReturnType<typeof setInterval>;
   };
   const port = process.env.PORT ?? "3000";
   const callTick = async (path: string, tag: string) => {
@@ -62,6 +63,14 @@ export async function register() {
     const slipTick = () => callTick("/api/internal/card-slip-tick", "card-slip");
     g.__cardSlipTimer = setInterval(slipTick, 60 * 60 * 1000);
     setTimeout(slipTick, 120 * 1000); // 기동 직후 1회
+  }
+
+  // AI API 예산 평가 — 1시간마다 체크, KST 09시 이후 일 1회(라우트가 메모리 플래그로 판정 → DB 미접근).
+  // 임계 도달은 게이트웨이가 호출 직후에도 평가하므로 여기서는 예측 초과 전망만 추가로 본다.
+  if (!g.__aiBudgetTimer) {
+    const budgetTick = () => callTick("/api/internal/ai-budget-tick", "ai-budget");
+    g.__aiBudgetTimer = setInterval(budgetTick, 60 * 60 * 1000);
+    setTimeout(budgetTick, 150 * 1000); // 기동 직후 1회
   }
 
   // 코넨사인 메일 수신(P2) — 1분마다 SQS 폴링(큐 미생성 시 no-op). 처리 멱등.

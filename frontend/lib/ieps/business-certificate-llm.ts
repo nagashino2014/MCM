@@ -7,12 +7,12 @@
  */
 
 import sharp from "sharp";
+import { claudeMessages } from "@/lib/ai/claude-client";
 
 // 기본은 저비용 Haiku(대다수 일반 품질 등록증). 저화질로 판독이 안 되면 사용자가
 // '고정밀 재분석'을 눌러 Opus 로 재시도(highQuality=true). 각각 env 로 조정 가능.
 const DEFAULT_MODEL = process.env.BUSINESS_CERT_MODEL || "claude-haiku-4-5-20251001";
 const HIGH_MODEL = process.env.BUSINESS_CERT_MODEL_HIGH || "claude-opus-4-8";
-const ENDPOINT = "https://api.anthropic.com/v1/messages";
 
 export interface BusinessCertKind {
   businessType: string; // 업태
@@ -111,27 +111,19 @@ export async function parseBusinessCertificateWithLlm(
   const model = opts?.highQuality ? HIGH_MODEL : DEFAULT_MODEL;
   const block = await toContentBlock(file);
 
-  const res = await fetch(ENDPOINT, {
-    method: "POST",
-    headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 3000,
-      messages: [{ role: "user", content: [block, { type: "text", text: PROMPT }] }],
-    }),
+  const r = await claudeMessages({
+    feature: opts?.highQuality ? "business_certificate.parse:high" : "business_certificate.parse",
+    model,
+    max_tokens: 3000,
+    messages: [{ role: "user", content: [block, { type: "text", text: PROMPT }] }],
+    meta: { block_type: String((block as { type?: unknown }).type ?? "") },
   });
 
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`사업자등록증 분석 API 오류 (HTTP ${res.status}) ${body.slice(0, 200)}`);
+  if (!r.ok) {
+    throw new Error(`사업자등록증 분석 API 오류 (HTTP ${r.status}) ${(r.errorText ?? "").slice(0, 200)}`);
   }
 
-  const json = (await res.json()) as { content?: { type: string; text?: string }[] };
-  const text = (json.content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join("").trim();
+  const text = r.text;
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) throw new Error("사업자등록증 분석 결과를 해석하지 못했습니다.");
   const raw = JSON.parse(match[0]) as Record<string, unknown>;

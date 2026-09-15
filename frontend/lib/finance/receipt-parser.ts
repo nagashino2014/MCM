@@ -6,9 +6,9 @@
 import sharp from "sharp";
 
 import { isValidCorpNum, normalizeCorpNum } from "@/lib/finance/store-directory";
+import { claudeMessages } from "@/lib/ai/claude-client";
 
 const MODEL = process.env.RECEIPT_PARSE_MODEL || "claude-haiku-4-5-20251001";
-const ENDPOINT = "https://api.anthropic.com/v1/messages";
 
 export interface ReceiptFields {
   storeName: string | null;
@@ -140,33 +140,25 @@ export async function parseReceipt(image: Buffer): Promise<ReceiptParseResult | 
     "- items: 품목명 배열(금액 큰 순 최대 3개, 없으면 빈 배열)\n" +
     '{"storeName":..., "storeCorpNum":..., "paidAt":..., "totalAmount":..., "supplyAmount":..., "taxAmount":..., "cardLast4":..., "approvalNum":..., "items":[...]}';
 
-  const res = await fetch(ENDPOINT, {
-    method: "POST",
-    headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: 500,
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "image", source: { type: "base64", media_type: "image/jpeg", data } },
-            { type: "text", text: prompt },
-          ],
-        },
-      ],
-    }),
+  const r = await claudeMessages({
+    feature: "receipt.parse",
+    model: MODEL,
+    max_tokens: 500,
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "image", source: { type: "base64", media_type: "image/jpeg", data } },
+          { type: "text", text: prompt },
+        ],
+      },
+    ],
+    meta: { image_bytes: normalizedImage.length },
   });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`영수증 분석 API 오류 (HTTP ${res.status}) ${body.slice(0, 200)}`);
+  if (!r.ok) {
+    throw new Error(`영수증 분석 API 오류 (HTTP ${r.status}) ${(r.errorText ?? "").slice(0, 200)}`);
   }
-  const json = (await res.json()) as { content?: { type: string; text?: string }[] };
-  const text = (json.content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join("").trim();
+  const text = r.text;
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) throw new Error("영수증 분석 결과를 해석하지 못했습니다.");
   const raw = JSON.parse(match[0]) as Record<string, unknown>;

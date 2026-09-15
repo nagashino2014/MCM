@@ -2,10 +2,11 @@
  * 공용 Anthropic JSON 헬퍼 — 구조화 JSON 출력을 요구하는 LLM 호출을 한 곳으로.
  * summarize.ts / news-classifier.ts 의 (Anthropic Messages 직접 fetch + extractJson) 패턴을 승격했다.
  * MCM 은 Anthropic 단일. ANTHROPIC_API_KEY 없으면 throw("llm_not_configured").
- * (기존 summarize/news-classifier 는 그대로 두고, 신규 코드만 이 헬퍼를 소비한다.)
+ * P0(2026-09-03): 실제 전송은 게이트웨이(claude-client.ts)가 맡는다 — usage 계측을 위해 feature 키가 필수.
  */
+import { claudeMessages, ClaudeClientError } from "./claude-client";
+import type { AiFeatureKey } from "./features";
 
-const ENDPOINT = "https://api.anthropic.com/v1/messages";
 const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
 
 export class LlmError extends Error {}
@@ -41,6 +42,8 @@ export type ChatAttachment =
   | { kind: "image"; mediaType: "image/png" | "image/jpeg" | "image/gif" | "image/webp"; base64: string };
 
 export interface ChatJsonOpts {
+  /** 기능 키(집계 단위, 필수). */
+  feature: AiFeatureKey;
   system?: string;
   user: string;
   /** 문서/이미지 입력(비전). 텍스트 블록보다 앞에 배치된다. */
@@ -54,19 +57,16 @@ export interface ChatJsonOpts {
    * 다른 모델로 재실행한다. beta 헤더 server-side-fallback-2026-07-01 + fallbacks:"default".
    */
   serverFallback?: boolean;
+  userId?: string | null;
+  subject?: { type: string; id: string } | null;
 }
 
 /**
  * 프롬프트를 보내 JSON 응답을 파싱해 반환한다.
  * - 키 미설정: throw LlmError("llm_not_configured")
- * - HTTP 실패/타임아웃/파싱 실패: throw LlmError(사유)
+ * - HTTP 실패/타임아웃/파싱 실패/거절: throw LlmError(사유)
  */
 export async function anthropicChatJson<T = unknown>(opts: ChatJsonOpts): Promise<T> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new LlmError("llm_not_configured");
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 30000);
   try {
     // 첨부(문서/이미지)가 있으면 content 블록 배열, 없으면 기존처럼 문자열 그대로.
     const attachmentBlocks = (opts.attachments ?? []).map((a) =>
@@ -76,53 +76,34 @@ export async function anthropicChatJson<T = unknown>(opts: ChatJsonOpts): Promis
     );
     const content =
       attachmentBlocks.length > 0 ? [...attachmentBlocks, { type: "text", text: opts.user }] : opts.user;
-    const headers: Record<string, string> = {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "content-type": "application/json",
-    };
-    if (opts.serverFallback) headers["anthropic-beta"] = "server-side-fallback-2026-07-01";
-    const res = await fetch(ENDPOINT, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        model: opts.model ?? DEFAULT_MODEL,
-        max_tokens: opts.maxTokens ?? 4000,
-        ...(opts.system ? { system: opts.system } : {}),
-        ...(opts.serverFallback ? { fallbacks: "default" } : {}),
-        messages: [{ role: "user", content }],
-      }),
-      signal: controller.signal,
+
+    const r = await claudeMessages({
+      feature: opts.feature,
+      model: opts.model ?? DEFAULT_MODEL,
+      max_tokens: opts.maxTokens ?? 4000,
+      system: opts.system,
+      messages: [{ role: "user", content }],
+      timeoutMs: opts.timeoutMs ?? 30000,
+      userId: opts.userId,
+      subject: opts.subject,
+      ...(opts.serverFallback
+        ? { betas: ["server-side-fallback-2026-07-01"], extra: { fallbacks: "default" } }
+        : {}),
     });
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      throw new LlmError(`llm_http_${res.status}: ${body.slice(0, 200)}`);
-    }
-    const data = (await res.json()) as {
-      content?: { type: string; text?: string }[];
-      stop_reason?: string;
-    };
-    // 안전 분류기 거절 — content 가 비어 있을 수 있으므로 먼저 판정한다.
-    if (data.stop_reason === "refusal") throw new LlmError("llm_refusal: 모델이 요청을 거절했습니다");
-    const text = (data.content ?? [])
-      .filter((c) => c.type === "text")
-      .map((c) => c.text ?? "")
-      .join("")
-      .trim();
-    const parsed = extractJson<T>(text);
+    if (!r.ok) throw new LlmError(`llm_http_${r.status}: ${(r.errorText ?? "").slice(0, 200)}`);
+    // 안전 분류기 거절 — content 가 비어 있을 수 있으므로 텍스트 파싱 전에 판정한다.
+    if (r.data?.stop_reason === "refusal") throw new LlmError("llm_refusal: 모델이 요청을 거절했습니다");
+    const parsed = extractJson<T>(r.text);
     if (parsed == null) {
       throw new LlmError(
-        data.stop_reason === "max_tokens"
-          ? "llm_truncated: max_tokens 초과로 JSON 미완성"
-          : "llm_parse_failed: JSON 을 찾지 못함"
+        r.data?.stop_reason === "max_tokens" ? "llm_truncated: max_tokens 초과로 JSON 미완성" : "llm_parse_failed: JSON 을 찾지 못함"
       );
     }
     return parsed;
   } catch (e) {
     if (e instanceof LlmError) throw e;
+    if (e instanceof ClaudeClientError) throw new LlmError(e.message);
     if (e instanceof Error && e.name === "AbortError") throw new LlmError("llm_timeout");
     throw new LlmError(e instanceof Error ? e.message : String(e));
-  } finally {
-    clearTimeout(timer);
   }
 }

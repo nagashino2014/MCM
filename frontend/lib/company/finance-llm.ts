@@ -7,11 +7,12 @@
 
 import { PDFDocument } from "pdf-lib";
 import { toContentBlock } from "@/lib/company/credential-llm";
+import { claudeMessages } from "@/lib/ai/claude-client";
+import type { AiFeatureKey } from "@/lib/ai/features";
 
 const DEFAULT_MODEL = process.env.BUSINESS_CERT_MODEL || "claude-haiku-4-5-20251001";
 // 재무제표는 숫자 정밀도가 중요(항목·열 혼동 시 실제값과 다른 금액이 들어감) — 상위 모델 기본.
 const FINANCE_MODEL = process.env.FINANCE_PARSE_MODEL || "claude-sonnet-5";
-const ENDPOINT = "https://api.anthropic.com/v1/messages";
 
 const str = (v: unknown): string => {
   if (v == null) return "";
@@ -50,29 +51,22 @@ async function callLlm(
   block: Record<string, unknown>,
   prompt: string,
   maxTokens: number,
+  feature: AiFeatureKey,
   model: string = DEFAULT_MODEL
 ): Promise<Record<string, unknown> | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return null;
-  const res = await fetch(ENDPOINT, {
-    method: "POST",
-    headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: maxTokens,
-      messages: [{ role: "user", content: [block, { type: "text", text: prompt }] }],
-    }),
+  const r = await claudeMessages({
+    feature,
+    model,
+    max_tokens: maxTokens,
+    messages: [{ role: "user", content: [block, { type: "text", text: prompt }] }],
+    meta: { block_type: String((block as { type?: unknown }).type ?? "") },
   });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`문서 분석 API 오류 (HTTP ${res.status}) ${body.slice(0, 200)}`);
+  if (!r.ok) {
+    throw new Error(`문서 분석 API 오류 (HTTP ${r.status}) ${(r.errorText ?? "").slice(0, 200)}`);
   }
-  const json = (await res.json()) as { content?: { type: string; text?: string }[] };
-  const text = (json.content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join("").trim();
+  const text = r.text;
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) throw new Error("문서 분석 결과를 해석하지 못했습니다.");
   return JSON.parse(match[0]) as Record<string, unknown>;
@@ -112,7 +106,7 @@ const FINANCE_PROMPT =
 export async function parseFinancialStatementWithLlm(
   file: File
 ): Promise<{ isStandard: boolean; rows: FinanceParsedRow[] } | null> {
-  const raw = await callLlm(await toContentBlock(file), FINANCE_PROMPT, 3000, FINANCE_MODEL);
+  const raw = await callLlm(await toContentBlock(file), FINANCE_PROMPT, 3000, "company.finance_parse:statement", FINANCE_MODEL);
   if (!raw) return null;
   const isStandard = raw.isStandard === true;
   const rowsRaw = Array.isArray(raw.rows) ? raw.rows : [];
@@ -153,7 +147,7 @@ const creditPrompt = (fileName: string): string =>
 
 /** 신용평가 등급서 파싱 — 필요한 항목은 1~3페이지에만 있어 PDF 앞 3페이지만 전송. 키 미설정이면 null. */
 export async function parseCreditRatingWithLlm(file: File): Promise<CreditParsedFields | null> {
-  const raw = await callLlm(await toTrimmedPdfBlock(file, 3), creditPrompt(file.name), 800);
+  const raw = await callLlm(await toTrimmedPdfBlock(file, 3), creditPrompt(file.name), 800, "company.finance_parse:credit");
   if (!raw) return null;
   return {
     agency: str(raw.agency),

@@ -4,10 +4,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FilePlus2, Loader2, Megaphone, Trash2 } from "lucide-react";
+import { FilePlus2, FileUp, Loader2, Megaphone, Trash2 } from "lucide-react";
 import { CdBadge, CdButton, CdEmptyState, CdModal, CdPageHeader, useCdashTheme, useCdToast } from "@/components/cdash";
 import type { RecruitPostingRow, RecruitTemplateRow } from "@/lib/recruit/types";
 import { DocMiniPreview } from "./DocCanvas";
+import { ImportPostingModal } from "./ImportPostingModal";
 
 export function PostingListBoard() {
   const { theme } = useCdashTheme();
@@ -18,6 +19,7 @@ export function PostingListBoard() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [creating, setCreating] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<RecruitPostingRow | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -90,6 +92,9 @@ export function PostingListBoard() {
           <div className="flex gap-2">
             <CdButton variant="soft" onClick={() => router.push("/admin/recruit/templates")}>
               템플릿 관리
+            </CdButton>
+            <CdButton variant="soft" icon={<FileUp className="w-4 h-4" />} onClick={() => setImportOpen(true)}>
+              파일에서 가져오기
             </CdButton>
             <CdButton variant="primary" icon={<FilePlus2 className="w-4 h-4" />} onClick={() => void openPicker()}>
               새 공고 작성
@@ -212,6 +217,9 @@ export function PostingListBoard() {
           「{confirmDelete?.title}」 공고를 삭제할까요? 삭제된 공고는 목록에서 사라집니다.
         </p>
       </CdModal>
+
+      {/* 원본 공고 파일에서 가져오기 */}
+      <ImportPostingModal open={importOpen} onClose={() => setImportOpen(false)} />
     </div>
   );
 }

@@ -8,6 +8,7 @@
 import { useEffect, useState } from "react";
 import { FileText, Loader2, Search, X } from "lucide-react";
 import { BANK_ACCOUNT_OPTIONS, PAYMENT_BANK_KEY } from "@/lib/deliverable/types";
+import { SUPPLY_ONLY_VAT_NOTE } from "@/lib/deliverable/format";
 import { CdDateInput } from "@/components/cdash/CdField";
 
 interface ContractRow {

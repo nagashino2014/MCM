@@ -10,7 +10,7 @@ import { PDFDocument, PDFFont, PDFImage, PDFPage, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import { toHangulAmount } from "@/lib/quote/hangul-amount";
 import { splitVat } from "./data";
-import { formatMoney } from "./format";
+import { formatMoney, vatModeOf } from "./format";
 import { PAGE_H, PAGE_W, type DeliverableValues } from "./types";
 
 const INK = rgb(0.12, 0.13, 0.16);

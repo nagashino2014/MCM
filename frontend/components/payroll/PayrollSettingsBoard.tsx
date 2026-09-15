@@ -6,6 +6,7 @@ import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import PayrollRulesPanel from "@/components/payroll/PayrollRulesPanel";
 import PayrollTaxPanel from "@/components/payroll/PayrollTaxPanel";
 import LongevityPanel from "@/components/payroll/LongevityPanel";
+import TripAllowancePanel from "@/components/payroll/TripAllowancePanel";
 import type { PayrollItemDef } from "@/lib/payroll/queries";
 
 /**
@@ -22,7 +23,7 @@ function toDraft(i: PayrollItemDef): Draft {
 }
 
 export default function PayrollSettingsBoard() {
-  const [topTab, setTopTab] = useState<"items" | "rules" | "tax" | "longevity">("items");
+  const [topTab, setTopTab] = useState<"items" | "rules" | "tax" | "longevity" | "trip">("items");
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [kindTab, setKindTab] = useState<"pay" | "deduction">("pay");
   const [saving, setSaving] = useState(false);
@@ -131,6 +132,7 @@ export default function PayrollSettingsBoard() {
                   ["rules", "수당 규칙"],
                   ["tax", "세액 설정"],
                   ["longevity", "장기근속 포상"],
+                  ["trip", "출장 여비"],
                 ] as const
               ).map(([k, label]) => (
                 <button
@@ -182,9 +184,15 @@ export default function PayrollSettingsBoard() {
               사규 별표 9 — 근속 도달 월 대장에 휴가비 자동 산정, 확정 시 특별휴가 자동 부여(직원별 휴가 관리 특별휴가에서 확인).
             </p>
           )}
+          {topTab === "trip" && (
+            <p className="text-[11px] cd-text-faint">
+              국내여비기준표 — 승인된 숙박 출장보고서(선행 출장신청서 기준)의 일수 × 직급 단가를 대장 생성 시 출장숙박수당으로 자동 산정.
+            </p>
+          )}
         </div>
         {topTab === "rules" && <PayrollRulesPanel />}
         {topTab === "tax" && <PayrollTaxPanel />}
+        {topTab === "trip" && <TripAllowancePanel />}
         {topTab === "longevity" && <LongevityPanel />}
         {topTab === "items" && (
         <div className="flex-1 min-h-0 overflow-auto px-4 pb-4">

@@ -49,7 +49,8 @@ interface RuleGroup {
 }
 
 /** 규칙 등록 빈도가 높은 추천 항목(§6-2 A) — 셀렉트 상단 고정 */
-const FEATURED_ITEMS = ["cert", "housing", "trip-lodging", "childcare", "student-loan"];
+// 출장숙박수당은 224부터 출장신청 기반 자동 산정(급여 항목·설정 → 출장 여비) — 규칙 항목에서 제외.
+const FEATURED_ITEMS = ["cert", "housing", "childcare", "student-loan"];
 
 const fmt = (v: number) => Math.round(v).toLocaleString();
 const parsePayMonths = (s: string): number[] =>

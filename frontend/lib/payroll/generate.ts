@@ -4,6 +4,7 @@ import { getEdiAmounts } from "@/lib/payroll/edi";
 import { overtimeAmounts } from "@/lib/payroll/overtime";
 import { activeRulesFor } from "@/lib/payroll/rules";
 import { grantLongevityLeaveForLedger, longevityDueFor } from "@/lib/payroll/longevity";
+import { tripLodgingAmounts } from "@/lib/payroll/trip-allowance";
 import { NON_TAXABLE_ITEMS, calcEmploymentIns, getInsuranceRate, lookupIncomeTax } from "@/lib/payroll/tax";
 
 /** 귀속월 말일 기준 만 나이 — 생일 월이 지나야 도달(같은 달이면 도달로 간주) */
@@ -23,7 +24,7 @@ function fullAge(birthDate: string, payYear: number, payMonth: number): number |
 /** 전월에서 복사하지 않는 변동 지급 항목 — 자동 산출(overtime)·수기 입력 대상 */
 const VOLATILE_PAY_ITEMS = new Set([
   "overtime", "overtime-meal", "annual-leave", "incentive", "prev-unpaid", "bonus",
-  "misc-pay", "trip", "expense-settle", "key-talent", "unlabeled-pay",
+  "misc-pay", "trip", "trip-lodging", "expense-settle", "key-talent", "unlabeled-pay",
 ]);
 
 export interface GeneratedLine {
@@ -114,6 +115,7 @@ export async function buildLedger(payYear: number, payMonth: number): Promise<Ge
   const edi = await getEdiAmounts(payYear, payMonth);
   const overtime = await overtimeAmounts(payYear, payMonth);
   const mealClawback = await mealClawbackAmounts(payYear, payMonth);
+  const tripLodging = await tripLodgingAmounts(payYear, payMonth);
   const taxProfiles = new Map(
     rowsToObjects(
       await db.exec(
@@ -201,6 +203,19 @@ export async function buildLedger(payYear: number, payMonth: number): Promise<Ge
       }
     } else if (ot && ot.basis === "attendance") {
       warnings.push("초과근무: 근태 기록은 있으나 승인된 신청서가 없어 미산정");
+    }
+
+    // 3-0) 숙박출장수당 자동 — 승인된 출장보고서 × 선행 출장신청서(숙박 출장) 일수 × 직급 단가(마이그 224)
+    const lodging = tripLodging.get(empId);
+    if (lodging && lodging.amount > 0) {
+      put("trip-lodging", lodging.amount, "calc");
+      warnings.push(
+        `숙박출장수당 ${lodging.days}일(${lodging.rankLabel}) ${lodging.amount.toLocaleString()}원 — ` +
+          lodging.trips.map((t) => `${t.reportDocNo ?? t.title} ${t.from}~${t.to}`).join(", ")
+      );
+    }
+    if (lodging && lodging.pendingReports > 0) {
+      warnings.push(`숙박 출장보고서 ${lodging.pendingReports}건 결재 진행 중 — 승인 후 대장을 다시 생성하면 수당이 반영됩니다`);
     }
 
     // 3-1) 식대 환수 — 부당 사용(초과근무 신청 미달)에 관리자가 '급여 차감' 처분한 건의 합(마이그 204)

@@ -450,6 +450,48 @@ export function ApprovalDocViewer({
               </p>
             )}
 
+            {/* 선행 문서 연계 정합성(224) — 상신 시점 판정(field_values._ref_check). 불일치가 있을 때만 */}
+            {(() => {
+              const rc = (detail.fieldValues as Record<string, unknown> | undefined)?._ref_check as
+                | { refDocNo: string | null; refFormName: string; mismatches: Array<{ label: string; refText: string; curText: string }> }
+                | undefined;
+              if (!rc || typeof rc !== "object" || !Array.isArray(rc.mismatches) || !rc.mismatches.length) return null;
+              return (
+                <div
+                  className="rounded-xl border px-3.5 py-2.5 flex flex-col gap-0.5"
+                  style={{ borderColor: "var(--cd-warning,#FFAE1F)", background: "var(--cd-warning-soft, rgba(255,174,31,0.1))" }}
+                >
+                  <span className="text-[11.5px] font-bold" style={{ color: "var(--cd-warning,#FFAE1F)" }}>
+                    ⚠ 선행 문서({rc.refFormName}{rc.refDocNo ? ` ${rc.refDocNo}` : ""})와 일치하지 않는 항목 {rc.mismatches.length}건 — 기안자가 확인 후 상신한 문서입니다
+                  </span>
+                  {rc.mismatches.map((m, i) => (
+                    <span key={i} className="text-[10.5px] cd-text-faint">
+                      · {m.label} — 선행: {m.refText} / 이 문서: {m.curText}
+                    </span>
+                  ))}
+                </div>
+              );
+            })()}
+
+            {/* 숙박출장수당 산정 내역(224) — 출장보고서 상신 시 스냅샷(field_values._lodging_allowance) */}
+            {(() => {
+              const la = (detail.fieldValues as Record<string, unknown> | undefined)?._lodging_allowance as
+                | { from: string; to: string; days: number; dailyAmount: number; rankLabel: string; amount: number; months: Array<{ payYear: number; payMonth: number; days: number; amount: number }> }
+                | undefined;
+              if (!la || typeof la !== "object" || !la.days) return null;
+              return (
+                <div className="rounded-xl border cd-border-c px-3.5 py-2.5 flex flex-col gap-0.5">
+                  <span className="text-[11.5px] font-bold cd-text">
+                    숙박출장수당 {la.days}일 × {Number(la.dailyAmount).toLocaleString()}원({la.rankLabel}) = {Number(la.amount).toLocaleString()}원
+                  </span>
+                  <span className="text-[10.5px] cd-text-faint">
+                    출장기간 {la.from} ~ {la.to} · 승인되면{" "}
+                    {(la.months ?? []).map((m) => `${m.payYear}년 ${m.payMonth}월 급여 ${m.days}일(${Number(m.amount).toLocaleString()}원)`).join(" · ")} 대장에 자동 산정
+                  </span>
+                </div>
+              );
+            })()}
+
             {/* 초과근무 주 12h 초과 경고 — 상신 시점에 고정된 판정(field_values._over_limit) */}
             {(() => {
               const ol = (detail.fieldValues as Record<string, unknown> | undefined)?._over_limit as

@@ -18,7 +18,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ rece
     if (receipt.ownerUserId !== ctx.userId && !(await hasPermission(ctx.userId, "finance.view"))) {
       return NextResponse.json({ error: "본인 영수증만 열람할 수 있습니다." }, { status: 403 });
     }
-    const isPdf = req.nextUrl.searchParams.get("kind") === "pdf";
+    // 직접 첨부한 PDF 원본(224)은 이미지가 없다 — 썸네일 요청도 PDF 로 응답한다.
+    const isPdf = req.nextUrl.searchParams.get("kind") === "pdf" || !receipt.imageKey;
     const buffer = await readContractDocument(isPdf ? receipt.pdfKey : receipt.imageKey);
     if (!buffer) return NextResponse.json({ error: "파일을 찾을 수 없습니다." }, { status: 404 });
     return new NextResponse(new Uint8Array(buffer), {

@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, ClipboardCheck, GripVertical, Paperclip, Send, Save, Trash2, Users, Eye, BookmarkPlus, ShieldCheck, AlertTriangle, Info, Ban, Link2, CreditCard } from "lucide-react";
+import { ArrowLeft, ClipboardCheck, GripVertical, Paperclip, Send, Save, Trash2, Users, Eye, BookmarkPlus, ShieldCheck, AlertTriangle, Info, Ban, Link2, CreditCard, ShoppingBag, BedDouble } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdModal } from "@/components/cdash/CdModal";
@@ -26,17 +26,30 @@ import {
 import type { OvertimeConsent } from "@/lib/approval/overtime-consent";
 import { CardPickerModal, type CardPickerItem } from "@/components/finance/CardPickerModal";
 import { ReceiptPickerModal, type ReceiptPickerItem } from "@/components/finance/ReceiptPickerModal";
+import { ShopReceiptPickerModal, type ShopReceiptPickerItem } from "@/components/finance/ShopReceiptPickerModal";
 import "@/components/cdash/cdash.css";
 
 // 카드 내역 자동 기입 대상 양식(P1) — 지출 내역 표(마이그 116)의 key/사용일시 열 key.
 // corporate=법인카드(card_transactions)·personal=개인카드 영수증 스톡(personal_receipts) 버튼 노출.
+// shop=쇼핑몰 전표(shop_receipts, 2026-09-15) — 구매품의 물품의 품목 표기 전표는 법인카드 결의서에서만.
 // 지출결의서는 법인/개인 양식이 분리(202)되어 각자 해당 소스만 불러온다(FRM-P1 확정).
 // 설계: docs/barobill-finance-blueprint.md §4 F1/F2.
-const CARD_EXPENSE_FORMS: Record<string, { tableKey: string; dateKey: string; corporate: boolean; personal: boolean }> = {
-  "frm-expense-report": { tableKey: "expenses", dateKey: "used_on", corporate: true, personal: false },
+const CARD_EXPENSE_FORMS: Record<string, { tableKey: string; dateKey: string; corporate: boolean; personal: boolean; shop?: boolean }> = {
+  "frm-expense-report": { tableKey: "expenses", dateKey: "used_on", corporate: true, personal: false, shop: true },
   "frm-expense-personal": { tableKey: "expenses", dateKey: "used_on", corporate: false, personal: true },
   "frm-biz-trip-report": { tableKey: "trip_expenses", dateKey: "spent_on", corporate: true, personal: true },
 };
+
+/** 숙박출장수당 미리보기(224) — 출장보고서 기안 배너. */
+interface LodgingPreview {
+  from: string;
+  to: string;
+  days: number;
+  dailyAmount: number;
+  rankLabel: string;
+  amount: number;
+  months: Array<{ payYear: number; payMonth: number; days: number; amount: number }>;
+}
 
 interface FormInfo {
   formId: string;
@@ -306,7 +319,7 @@ export function ApprovalDraftBoard() {
           category: item.formOption ?? "",
           vendor: item.storeName ?? "",
           amount: String(item.totalAmount),
-          detail: "", // 지출 목적 — 사용자 입력 몫
+          detail: item.purpose ?? "", // 지출 목적 — 직접 첨부(224)는 입력값 프리필, 촬영 건은 사용자 입력 몫
           _receiptId: item.receiptId, // 상신 시 서버가 doc_id 귀속·분류 학습에 사용
         }));
         return { ...prev, [tableKey]: [...nonEmpty, ...added] };
@@ -319,6 +332,57 @@ export function ApprovalDraftBoard() {
       });
     },
     [cardExpenseTarget, filterByTripPeriod],
+  );
+
+  // 쇼핑몰 전표 불러오기(2026-09-15) — 지출결의서(법인카드) 한정. 표에 이미 담긴 카드 승인건과 매칭된 전표는
+  // 행을 만들지 않고 PDF 첨부만 추가한다(같은 결제의 이중 기입 방지). 나머지는 행 + 첨부.
+  const [shopPicker, setShopPicker] = useState(false);
+  const shopExistingIds = useMemo(() => {
+    if (!cardExpenseTarget) return [] as string[];
+    const rows = values[cardExpenseTarget.tableKey];
+    if (!Array.isArray(rows)) return [] as string[];
+    return rows
+      .map((row) => (row && typeof row === "object" ? (row as Record<string, unknown>)._shopReceiptId : null))
+      .filter((v): v is string => typeof v === "string" && v.length > 0);
+  }, [cardExpenseTarget, values]);
+
+  const appendShopRows = useCallback(
+    (picked: ShopReceiptPickerItem[]) => {
+      if (!cardExpenseTarget || !picked.length) return;
+      const { tableKey, dateKey } = cardExpenseTarget;
+      const cardIds = new Set(cardExistingIds);
+      const attachOnly = picked.filter((i) => i.matchedTxnId && cardIds.has(i.matchedTxnId));
+      const asRows = picked.filter((i) => !(i.matchedTxnId && cardIds.has(i.matchedTxnId)));
+      if (asRows.length) {
+        setValues((prev) => {
+          const current = Array.isArray(prev[tableKey]) ? ([...(prev[tableKey] as unknown[])] as Record<string, unknown>[]) : [];
+          const nonEmpty = current.filter((row) =>
+            row && typeof row === "object" ? Object.values(row).some((v) => String(v ?? "").trim() !== "") : false,
+          );
+          const added = asRows.map((item) => ({
+            [dateKey]: item.orderDate || (item.matchedTxn?.approvedAt ?? "").slice(0, 10),
+            category: "", // 자동 분류 없음 — 재무 원장에서 분류
+            vendor: item.siteName,
+            amount: String(item.amount),
+            detail: item.title, // 품목이 곧 지출 목적 — 기안자가 다듬는다
+            _shopReceiptId: item.receiptId,
+            ...(item.matchedTxnId ? { _cardTxnId: item.matchedTxnId } : {}),
+          }));
+          return { ...prev, [tableKey]: [...nonEmpty, ...added] };
+        });
+      }
+      setFileAttachments((prev) => {
+        const known = new Set(prev.map((a) => a.key));
+        const adds = [...asRows, ...attachOnly]
+          .filter((i) => i.storageKey && !known.has(i.storageKey))
+          .map((i) => ({ name: i.fileName ?? `쇼핑몰전표_${i.siteName}_${i.orderNo}.pdf`, key: i.storageKey as string, size: 0 }));
+        return adds.length ? [...prev, ...adds] : prev;
+      });
+      if (attachOnly.length) {
+        alert(`표에 이미 담긴 카드 승인건과 매칭된 전표 ${attachOnly.length}건은 행을 추가하지 않고 전표 PDF 만 첨부했습니다.`);
+      }
+    },
+    [cardExpenseTarget, cardExistingIds],
   );
 
   // 시간 범위(time_range) → 신청시간 자동 계산. 범위가 실제로 바뀔 때만 채우므로
@@ -623,11 +687,36 @@ export function ApprovalDraftBoard() {
     };
   }, [form?.refFormId]);
 
-  // 선행 문서 불일치 검사 — 선택 시점 + 이후 입력 시점 모두 재계산되는 상시 배너(업체명·방문일시·계약명)
+  // 선행 문서 불일치 검사 — 선택 시점 + 이후 입력 시점 모두 재계산되는 상시 배너
+  // (업체명·방문일시·계약명 + 양식별 규칙: 출장 용역분류 / 교육명·기관 느슨 매칭 / 구매품의 합계 초과, 2026-09-15)
   const refMismatches = useMemo(() => {
     if (!form || !refDoc) return [];
-    return compareWithRefDoc(form.fields, values, refDoc.fieldValues);
+    return compareWithRefDoc(form.fields, values, refDoc.fieldValues, form.formId);
   }, [form, refDoc, values]);
+
+  // 숙박출장수당 미리보기(224) — 출장보고서에 연결한 출장신청서가 '숙박 출장'이면 본인 직급 단가로 산정 내역을 보여 준다.
+  const [lodgingPreview, setLodgingPreview] = useState<LodgingPreview | null>(null);
+  const lodgingRef = form?.formId === "frm-biz-trip-report" && refDoc && String(refDoc.fieldValues.trip_class ?? "") === "숙박 출장"
+    ? ((refDoc.fieldValues.trip_period ?? null) as { from?: string; to?: string } | null)
+    : null;
+  const lodgingFrom = lodgingRef?.from ?? "";
+  const lodgingTo = lodgingRef?.to ?? lodgingFrom;
+  useEffect(() => {
+    if (!lodgingFrom) {
+      setLodgingPreview(null);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/payroll/trip-allowance/preview?from=${encodeURIComponent(lodgingFrom)}&to=${encodeURIComponent(lodgingTo)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled) setLodgingPreview((d?.preview as LodgingPreview | null) ?? null);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [lodgingFrom, lodgingTo]);
 
   const pickRefDoc = (c: RefDocInfo) => {
     setRefDoc(c);
@@ -638,7 +727,7 @@ export function ApprovalDraftBoard() {
     const { next, filledLabels } = autofillFromRefDoc(form.fields, values, c.fieldValues, refFormFields);
     if (filledLabels.length) setValues(next);
     // 선택 시점 즉시 경고 — 자동 완성 후에도 남는 불일치(기존 입력 값)를 바로 알린다.
-    const miss = compareWithRefDoc(form.fields, next, c.fieldValues);
+    const miss = compareWithRefDoc(form.fields, next, c.fieldValues, form.formId);
     const parts: string[] = [];
     if (filledLabels.length) parts.push(`선행 문서에서 자동 입력된 항목: ${filledLabels.join(", ")}`);
     if (miss.length) {
@@ -1063,6 +1152,27 @@ export function ApprovalDraftBoard() {
                     ))}
                   </div>
                 )}
+                {refDoc && refMismatches.length === 0 && (
+                  <p className="text-[11px] cd-text-faint">선행 문서와 입력 값이 일치합니다.</p>
+                )}
+                {/* 숙박출장수당 안내(224) — 숙박 출장신청서를 연결한 출장보고서 */}
+                {lodgingRef && (
+                  <p className="text-[11.5px] flex items-center gap-1.5 cd-text">
+                    <BedDouble className="w-3.5 h-3.5 shrink-0 cd-text-primary" />
+                    {lodgingPreview ? (
+                      <>
+                        숙박출장수당 {lodgingPreview.days}일 × {lodgingPreview.dailyAmount.toLocaleString()}원({lodgingPreview.rankLabel}) ={" "}
+                        <b>{lodgingPreview.amount.toLocaleString()}원</b>
+                        <span className="cd-text-faint">
+                          — 이 보고서가 승인되면{" "}
+                          {lodgingPreview.months.map((m) => `${m.payYear}년 ${m.payMonth}월 급여 ${m.days}일`).join(" · ")} 대장에 자동 반영
+                        </span>
+                      </>
+                    ) : (
+                      <span className="cd-text-faint">숙박 출장 — 승인 후 급여대장에 숙박출장수당이 자동 산정됩니다(기준표 확인 중)</span>
+                    )}
+                  </p>
+                )}
               </div>
             )}
             {/* 결근사유서 제출 요청 배너(FRM-P1) — 요청 기간·메모 안내, 클릭으로 기간 채움 */}
@@ -1103,6 +1213,16 @@ export function ApprovalDraftBoard() {
                     onClick={() => setReceiptPicker(true)}
                   >
                     <CreditCard className="w-3.5 h-3.5" /> 개인카드 영수증 불러오기
+                  </button>
+                )}
+                {cardExpenseTarget.shop && (
+                  <button
+                    type="button"
+                    className="cd-btn cd-btn-soft cd-btn-sm"
+                    title="구매품의로 산 물품 등 — 품목이 나오는 쇼핑몰 전표(재무 > 쇼핑몰 전표 수집)를 표·첨부에 담습니다"
+                    onClick={() => setShopPicker(true)}
+                  >
+                    <ShoppingBag className="w-3.5 h-3.5" /> 쇼핑몰 전표 불러오기
                   </button>
                 )}
                 <span className="text-[11px] cd-text-faint">
@@ -1491,6 +1611,17 @@ export function ApprovalDraftBoard() {
           formId={form.formId}
           existingIds={receiptExistingIds}
           onPick={appendReceiptRows}
+        />
+      )}
+
+      {/* 쇼핑몰 전표 불러오기 모달(2026-09-15) — 지출결의서(법인카드) 한정 */}
+      {cardExpenseTarget?.shop && form && (
+        <ShopReceiptPickerModal
+          open={shopPicker}
+          onClose={() => setShopPicker(false)}
+          existingIds={shopExistingIds}
+          existingCardTxnIds={cardExistingIds}
+          onPick={appendShopRows}
         />
       )}
 

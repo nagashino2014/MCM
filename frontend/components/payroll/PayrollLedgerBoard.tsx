@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CheckCircle2, FileSpreadsheet, Plus, ReceiptText, Trash2, X } from "lucide-react";
+import { CheckCircle2, FileSpreadsheet, Gift, Plus, ReceiptText, Trash2, X } from "lucide-react";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import LedgerCreateModal from "@/components/payroll/LedgerCreateModal";
 import StatementSendModal from "@/components/payroll/StatementSendModal";
+import BonusPlanModal from "@/components/payroll/BonusPlanModal";
 import type { PayrollEntryRow, PayrollItemDef, PayrollLedgerMonth } from "@/lib/payroll/queries";
 
 /**
@@ -47,6 +48,7 @@ export default function PayrollLedgerBoard() {
   // 새 대장 생성(P4)
   const [createOpen, setCreateOpen] = useState(false);
   const [statementOpen, setStatementOpen] = useState(false);
+  const [bonusOpen, setBonusOpen] = useState(false);
   const [editDraft, setEditDraft] = useState<Record<string, string>>({});
   const [reloadNonce, setReloadNonce] = useState(0);
 
@@ -255,6 +257,16 @@ export default function PayrollLedgerBoard() {
               </button>
             )}
             {view === "month" && (
+              <button
+                type="button"
+                className="cd-btn rounded-xl px-3 py-2 text-sm font-semibold flex items-center gap-1.5"
+                onClick={() => setBonusOpen(true)}
+                title="명절 상여 등 상여금 지급 계획을 전자결재로 기안합니다(승인 시 상여대장 자동 생성)."
+              >
+                <Gift className="w-4 h-4" /> 상여금 지급 계획
+              </button>
+            )}
+            {view === "month" && (
               <button type="button" className="cd-btn rounded-xl px-3 py-2 text-sm font-semibold flex items-center gap-1.5" onClick={() => setCreateOpen(true)}>
                 <Plus className="w-4 h-4" /> 새 대장
               </button>
@@ -265,7 +277,9 @@ export default function PayrollLedgerBoard() {
                   key={v}
                   type="button"
                   onClick={() => setView(v)}
-                  className={`px-3 py-1.5 transition ${view === v ? "cd-fill-primary text-white" : "cd-text"}`}
+                  data-active={view === v}
+                  aria-pressed={view === v}
+                  className={`cd-choice px-3 py-1.5 transition ${view === v ? "cd-fill-primary text-white" : "cd-text"}`}
                 >
                   {v === "month" ? "월별 대장" : "직원별 연간"}
                 </button>
@@ -343,7 +357,7 @@ export default function PayrollLedgerBoard() {
 
           {/* 그리드 */}
           <section className="cd-card rounded-3xl flex-1 min-h-0 flex flex-col cd-reveal delay-1">
-            <div className="flex items-center justify-between px-5 pt-4 pb-2">
+            <div className="flex items-center justify-between px-5 pt-4 pb-3">
               <h2 className="text-[15px] font-extrabold tracking-tight cd-text">월별 대장</h2>
               {current?.sourceFile && (
                 <span className="flex items-center gap-1.5 text-[11px] cd-text-faint" title={current.sourceFile}>
@@ -357,9 +371,9 @@ export default function PayrollLedgerBoard() {
                 <p className="p-4 text-sm cd-text-faint">불러오는 중…</p>
               ) : (
                 <table className="w-full text-sm" style={{ minWidth: 640 + (payItems.length + dedItems.length) * 96 }}>
-                  <thead>
+                  <thead className="cd-table-head">
                     <tr className="cd-text-faint text-[11px] border-b cd-border-c">
-                      <th className="text-left font-semibold p-2.5 sticky left-0 z-10" style={{ background: "var(--cd-card-solid)", boxShadow: "-14px 0 0 var(--cd-card-solid)" }}>성명</th>
+                      <th className="text-left font-semibold p-2.5 sticky left-0 z-10" style={{ background: "var(--cd-surface)", boxShadow: "-14px 0 0 var(--cd-surface)" }}>성명</th>
                       <th className="text-left font-semibold p-2.5">직급</th>
                       <th className="text-left font-semibold p-2.5">부서</th>
                       {payItems.map((i) => (
@@ -426,7 +440,7 @@ export default function PayrollLedgerBoard() {
 
       {view === "annual" && (
         <section className="cd-card rounded-3xl flex-1 min-h-0 flex flex-col cd-reveal">
-          <div className="flex items-center justify-between px-5 pt-4 pb-2">
+          <div className="flex items-center justify-between px-5 pt-4 pb-3">
             <h2 className="text-[15px] font-extrabold tracking-tight cd-text">
               {annualName || "-"} · {year}년 연간 추이
             </h2>
@@ -436,9 +450,9 @@ export default function PayrollLedgerBoard() {
               <p className="p-4 text-sm cd-text-faint">불러오는 중…</p>
             ) : (
               <table className="w-full text-sm" style={{ minWidth: 320 + annualMonths.length * 92 }}>
-                <thead>
+                <thead className="cd-table-head">
                   <tr className="cd-text-faint text-[11px] border-b cd-border-c">
-                    <th className="text-left font-semibold p-2.5 sticky left-0 z-10" style={{ background: "var(--cd-card-solid)", boxShadow: "-14px 0 0 var(--cd-card-solid)" }}>항목</th>
+                    <th className="text-left font-semibold p-2.5 sticky left-0 z-10" style={{ background: "var(--cd-surface)", boxShadow: "-14px 0 0 var(--cd-surface)" }}>항목</th>
                     {annualMonths.map((m) => (
                       <th key={m} className="text-right font-semibold p-2.5">{m}월</th>
                     ))}
@@ -587,6 +601,7 @@ export default function PayrollLedgerBoard() {
       )}
 
       {/* 급여명세서 발송 모달 */}
+      <BonusPlanModal open={bonusOpen} onClose={() => setBonusOpen(false)} />
       {statementOpen && current && (
         <StatementSendModal ledgerId={current.ledgerId} onClose={() => setStatementOpen(false)} />
       )}

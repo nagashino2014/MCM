@@ -65,17 +65,18 @@ export function CdToastProvider({ children }: { children: ReactNode }) {
       {children}
       {mounted &&
         createPortal(
-          <div className="cdash cdash-vars fixed bottom-4 right-4 z-[200] flex flex-col gap-2 items-end" data-theme={theme}>
+          <div className="cdash-vars fixed bottom-4 right-4 z-[200] flex flex-col gap-2 items-end max-w-[calc(100vw-32px)]" data-theme={theme}>
             {items.map((t) => (
               <div
                 key={t.id}
-                className="cd-card-bg rounded-xl border cd-border-c px-3.5 py-2.5 flex items-center gap-2 text-sm cd-text min-w-[220px] max-w-sm"
-                style={{ boxShadow: "var(--cd-shadow)" }}
-                role="status"
+                className="cd-card-bg rounded-lg border cd-border-c px-3.5 py-2.5 flex items-center gap-2 text-sm cd-text min-w-0 w-full max-w-sm"
+                style={{ boxShadow: "var(--cd-shadow-toast)" }}
+                role={t.tone === "error" ? "alert" : "status"}
+                aria-atomic="true"
               >
                 {TONE_ICON[t.tone]}
                 <span className="flex-1">{t.message}</span>
-                <button onClick={() => dismiss(t.id)} aria-label="닫기" className="cd-text-faint hover:opacity-70 shrink-0">
+                <button type="button" onClick={() => dismiss(t.id)} aria-label="닫기" className="cd-text-faint hover:opacity-70 shrink-0">
                   <X className="w-3.5 h-3.5" />
                 </button>
               </div>

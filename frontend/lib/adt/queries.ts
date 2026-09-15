@@ -450,3 +450,136 @@ export async function saveAttendanceSettings(patch: Partial<AttendanceSettings>)
     );
   });
 }
+
+/* ---------- 내 근태(본인 스코프 — /approval/my-attendance) ---------- */
+
+export interface MyMonthlyTrendRow {
+  month: string; // YYYY-MM (week_start 기준 월)
+  workedMinutes: number;
+  overtimeDayMinutes: number; // 연장(1.5배)
+  overtimeNightMinutes: number; // 야간(2.0배)
+  excessMinutes: number; // 주 12h 한도 초과분 합
+  overLimitWeeks: number; // 12h 초과 주 수
+}
+
+/** 최근 N개월 초과근무 추이(주별 집계를 week_start 월로 묶은 값) — 추이 차트·KPI용. */
+export async function listMyMonthlyTrend(userId: string, months = 12): Promise<MyMonthlyTrendRow[]> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT to_char(w.week_start, 'YYYY-MM') AS month,
+              SUM(w.worked_minutes) AS worked, SUM(w.overtime_day_minutes) AS ot_day,
+              SUM(w.overtime_night_minutes) AS ot_night, SUM(w.excess_minutes) AS excess,
+              SUM(CASE WHEN w.over_limit THEN 1 ELSE 0 END) AS over_weeks
+         FROM users u
+         JOIN attendance_weekly w ON w.employee_id = u.employee_id
+        WHERE u.user_id = $1
+        GROUP BY 1 ORDER BY 1 DESC LIMIT $2`,
+      [userId, months]
+    )
+  );
+  return rows
+    .map((r) => ({
+      month: String(r.month),
+      workedMinutes: Number(r.worked ?? 0),
+      overtimeDayMinutes: Number(r.ot_day ?? 0),
+      overtimeNightMinutes: Number(r.ot_night ?? 0),
+      excessMinutes: Number(r.excess ?? 0),
+      overLimitWeeks: Number(r.over_weeks ?? 0),
+    }))
+    .reverse(); // 차트는 과거 → 현재 순
+}
+
+/** 월별 지각 일수(late_minutes > 0 인 날) — KPI·추이 겸용. */
+export async function listMyMonthlyLateDays(userId: string, months = 12): Promise<Array<{ month: string; lateDays: number; lateMinutes: number }>> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT to_char(d.work_date, 'YYYY-MM') AS month,
+              COUNT(*) FILTER (WHERE d.late_minutes > 0) AS late_days,
+              COALESCE(SUM(d.late_minutes) FILTER (WHERE d.late_minutes > 0), 0) AS late_minutes
+         FROM users u
+         JOIN attendance_daily d ON d.employee_id = u.employee_id
+        WHERE u.user_id = $1
+        GROUP BY 1 ORDER BY 1 DESC LIMIT $2`,
+      [userId, months]
+    )
+  );
+  return rows
+    .map((r) => ({ month: String(r.month), lateDays: Number(r.late_days ?? 0), lateMinutes: Number(r.late_minutes ?? 0) }))
+    .reverse();
+}
+
+export interface MyMealWarningRow {
+  warningId: string;
+  usedOn: string;
+  vendor: string | null;
+  amount: number | null;
+  requiredMinutes: number;
+  appliedMinutes: number;
+  action: string; // warning | no_pay | clawback ...
+  actionNote: string | null;
+  docId: string;
+}
+
+/** 본인 식대 경고(초과근무 식대 대조 위반) — 연도 스코프. */
+export async function listMyMealWarnings(userId: string, year: string): Promise<MyMealWarningRow[]> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT m.warning_id, to_char(m.used_on, 'YYYY-MM-DD') AS used_on, m.vendor, m.amount,
+              m.required_minutes, m.applied_minutes, m.action, m.action_note, m.doc_id
+         FROM users u
+         JOIN overtime_meal_warnings m ON m.employee_id = u.employee_id
+        WHERE u.user_id = $1 AND to_char(m.used_on, 'YYYY') = $2
+        ORDER BY m.used_on DESC`,
+      [userId, year]
+    )
+  );
+  return rows.map((r) => ({
+    warningId: String(r.warning_id),
+    usedOn: String(r.used_on),
+    vendor: r.vendor != null ? String(r.vendor) : null,
+    amount: r.amount != null ? Number(r.amount) : null,
+    requiredMinutes: Number(r.required_minutes ?? 0),
+    appliedMinutes: Number(r.applied_minutes ?? 0),
+    action: String(r.action ?? "warning"),
+    actionNote: r.action_note != null ? String(r.action_note) : null,
+    docId: String(r.doc_id ?? ""),
+  }));
+}
+
+export interface MyAbsenceRequestRow {
+  requestId: string;
+  dateFrom: string;
+  dateTo: string;
+  note: string | null;
+  status: string; // pending | submitted | canceled
+  docId: string | null;
+  createdAt: string;
+}
+
+/** 본인 결근사유서 제출 요구·응답 현황. */
+export async function listMyAbsenceRequests(userId: string): Promise<MyAbsenceRequestRow[]> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT a.request_id, a.date_from, a.date_to, a.note, a.status, a.doc_id, a.created_at
+         FROM users u
+         JOIN absence_statement_requests a ON a.employee_id = u.employee_id
+        WHERE u.user_id = $1
+        ORDER BY a.created_at DESC LIMIT 30`,
+      [userId]
+    )
+  );
+  return rows.map((r) => ({
+    requestId: String(r.request_id),
+    dateFrom: String(r.date_from),
+    dateTo: String(r.date_to),
+    note: r.note != null ? String(r.note) : null,
+    status: String(r.status ?? "pending"),
+    docId: r.doc_id != null ? String(r.doc_id) : null,
+    createdAt: String(r.created_at ?? ""),
+  }));
+}
+

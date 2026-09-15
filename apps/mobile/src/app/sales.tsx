@@ -248,10 +248,35 @@ export default function SalesScreen() {
         )}
       </ScrollView>
 
-      {/* 일정 상세 */}
-      <Sheet visible={!!detail && !progressFor} onClose={() => setDetail(null)} title={detail?.projectTitle ?? '영업 일정'}>
+      {/* 일정 상세 — 시트 높이를 화면의 70% 로 고정하고(fillHeight) 본문이 남은 공간을 채운다.
+          본문에 높이를 직접 주면 시트가 그만큼 커져 footer 가 화면 밖으로 밀린다(09-11 재제보). */}
+      <Sheet
+        visible={!!detail && !progressFor}
+        onClose={() => setDetail(null)}
+        title={detail?.projectTitle ?? '영업 일정'}
+        fillHeight={0.7}
+        footer={
+          detail && canEdit && detailEnded ? (
+            <View className="flex-1">
+              <GradientButton
+                label="경과 입력"
+                icon="create-outline"
+                onPress={() => {
+                  const a = detail;
+                  setProgressFor({
+                    activityId: a.activityId,
+                    title: `${a.facilityName ?? a.projectTitle} · ${ACTIVITY_TYPE_META[a.activityType].label}`,
+                  });
+                }}
+              />
+            </View>
+          ) : undefined
+        }>
         {detail ? (
-          <View className="gap-3">
+          <ScrollView
+            className="flex-1"
+            contentContainerStyle={{ gap: 12, paddingBottom: 8 }}
+            showsVerticalScrollIndicator={false}>
             <View className="flex-row items-center gap-2">
               <TypeTag
                 short={ACTIVITY_TYPE_META[detail.activityType].label}
@@ -300,20 +325,7 @@ export default function SalesScreen() {
                 })}
               </View>
             ) : null}
-            {canEdit && detailEnded ? (
-              <GradientButton
-                label="경과 입력"
-                icon="create-outline"
-                onPress={() => {
-                  const a = detail;
-                  setProgressFor({
-                    activityId: a.activityId,
-                    title: `${a.facilityName ?? a.projectTitle} · ${ACTIVITY_TYPE_META[a.activityType].label}`,
-                  });
-                }}
-              />
-            ) : null}
-          </View>
+          </ScrollView>
         ) : null}
       </Sheet>
 

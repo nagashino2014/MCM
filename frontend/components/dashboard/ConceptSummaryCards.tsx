@@ -128,10 +128,10 @@ function ConceptCard({
   return (
     <div
       className={
-        "relative rounded-2xl p-4 border transition-shadow " +
+        "relative rounded-lg p-4 border transition-colors " +
         (isReal
-          ? "cd-tint-primary cd-border-c shadow-sm"
-          : "cd-card-bg cd-border-c concept-hatched")
+          ? "cd-card-bg cd-border-c"
+          : "cd-card-bg cd-border-c")
       }
       style={{ animationDelay: 0.05 + index * 0.04 + "s" }}
     >
@@ -140,7 +140,7 @@ function ConceptCard({
           <Icon
             className={"w-4 h-4 flex-shrink-0 " + (isReal ? "cd-text-primary" : "cd-text-faint")}
           />
-          <div className="text-[10px] font-bold uppercase tracking-wider cd-text-faint truncate">
+          <div className="text-xs font-bold uppercase tracking-wider cd-text-faint truncate">
             {card.label}
           </div>
         </div>
@@ -156,16 +156,16 @@ function ConceptCard({
         )}
       </div>
 
-      <div className={"mt-2 text-3xl font-extrabold leading-tight " + (isReal ? "cd-text" : "cd-text-faint")}>
+      <div className={"mt-2 text-3xl font-semibold leading-tight " + (isReal ? "cd-text" : "cd-text-faint")}>
         {value}
       </div>
       {hint && (
-        <div className="text-[10px] cd-text-faint font-medium mt-1 truncate" title={hint}>
+        <div className="text-xs cd-text-faint font-medium mt-1 truncate" title={hint}>
           {hint}
         </div>
       )}
       {trend && (
-        <div className="text-[10px] mt-2 inline-flex items-center gap-1 cd-text-faint font-medium">
+        <div className="text-xs mt-2 inline-flex items-center gap-1 cd-text-faint font-medium">
           <TrendingUp className="w-3 h-3" />
           {trend}
         </div>

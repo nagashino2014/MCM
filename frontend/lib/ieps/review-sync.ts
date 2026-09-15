@@ -9,6 +9,7 @@
 
 import type { PgDatabase } from "../db";
 import { extractRegion } from "@scraper/lib/ieps/region";
+import { normalizeInput } from "@scraper/lib/facility-quality/rules";
 
 const BUILTIN_RULE_IDS = new Set([
   "decision_no",
@@ -60,7 +61,9 @@ export async function syncReviewedFieldInline(db: PgDatabase, ctx: SyncContext):
   }
 
   const now = new Date().toISOString();
-  const value = ctx.reviewedValue.trim();
+  const value = ["business_registration_no","phone_number","site_address"].includes(ctx.ruleId)
+    ? normalizeInput(ctx.ruleId as "business_registration_no" | "phone_number" | "site_address", ctx.reviewedValue) ?? ""
+    : ctx.reviewedValue.trim();
 
   switch (ctx.ruleId) {
     case "decision_no":
@@ -180,5 +183,12 @@ export async function syncReviewedFieldInline(db: PgDatabase, ctx: SyncContext):
       return { applied: false, reason: "지원되지 않는 룰", facilityId, permitId };
   }
 
+  if (["business_registration_no", "phone_number", "site_address"].includes(ctx.ruleId)) {
+    // 정비된 마스터는 재유입 보호 트리거가 보존할 수 있다. 실제 저장 결과를 보고한다.
+    const saved = await db.exec(`SELECT ${ctx.ruleId} FROM facilities WHERE facility_id=$1`, [facilityId]);
+    if (String(saved[0]?.values[0]?.[0] ?? "") !== value) {
+      return { applied: false, reason: "기존 확정값을 보존했습니다. 사업장 정보 전수 점검의 재수집 충돌 후보에서 확인하세요.", facilityId, permitId };
+    }
+  }
   return { applied: true, reason: "OK", facilityId, permitId };
 }

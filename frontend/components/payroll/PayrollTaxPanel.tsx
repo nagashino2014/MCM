@@ -252,8 +252,8 @@ export default function PayrollTaxPanel() {
             .filter((half) => half.length)
             .map((half, hi) => (
               <table key={hi} className="w-full text-sm">
-                <thead>
-                  <tr className="cd-text-faint text-[11px] border-b cd-border-c sticky top-0" style={{ background: "var(--cd-card-solid)" }}>
+                <thead className="cd-table-head">
+                  <tr className="cd-text-faint text-[11px] border-b cd-border-c sticky top-0" style={{ background: "var(--cd-surface)" }}>
                     <th className="text-left font-semibold p-2" style={{ width: "15%" }}>직원</th>
                     <th className="text-left font-semibold p-2" style={{ width: "20%" }}>원천징수 비율</th>
                     <th className="text-right font-semibold p-2" style={{ width: "17%" }} title="본인 포함 기본공제 대상 인원 — 간이세액표 축">가족수</th>

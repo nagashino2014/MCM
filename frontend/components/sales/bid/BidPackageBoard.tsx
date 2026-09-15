@@ -244,8 +244,10 @@ function TagFilterRow({
               key={t}
               type="button"
               onClick={() => onToggle(t)}
+              data-active={on}
+              aria-pressed={on}
               className={
-                "text-[11px] rounded-full px-2.5 py-1 border transition " +
+                "cd-choice text-[11px] rounded-full px-2.5 py-1 border transition " +
                 (on ? "border-[color:var(--cd-primary)] cd-tint-primary cd-text" : "cd-border-c cd-text-faint")
               }
             >
@@ -293,7 +295,7 @@ function PartTagEditor({
       </div>
       <div className="flex flex-wrap items-center gap-1.5 flex-1 min-w-0">
         {parts.map((pt) => (
-          <span key={pt} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 cd-tint-primary text-[11px] cd-text">
+          <span key={pt} className="cd-action inline-flex items-center gap-1 rounded-full px-2.5 py-1 cd-tint-primary text-[11px] cd-text">
             {pt}
             <button type="button" onClick={() => onRemove(pt)}>
               <X className="w-3 h-3 cd-text-faint" />
@@ -411,7 +413,7 @@ function StaffRoleRow({
       {conf.assignments.length > 0 && (
         <div className="flex flex-wrap gap-1.5 pl-1">
           {conf.assignments.map((a, i) => (
-            <span key={`${a.sitePart}|${a.workPart}`} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 border cd-border-c text-[10px] cd-text">
+            <span key={`${a.sitePart}|${a.workPart}`} className="cd-action inline-flex items-center gap-1 rounded-full px-2 py-0.5 border cd-border-c text-[10px] cd-text">
               {labelOf(a)}
               <button
                 type="button"
@@ -940,7 +942,7 @@ export function BidPackageBoard() {
         icon={<FileStack className="w-5 h-5" />}
         eyebrow={`Bid · Package · ${TYPE_LABEL[bidType] ?? bidType}`}
         title="입찰 서류 생성"
-        subtitle="입찰 공고의 제출 서류 양식과 실적 계약·수행인력을 확정해 증빙서류 패키지를 생성합니다."
+        help="입찰 공고의 제출 서류 양식과 실적 계약·수행인력을 확정해 증빙서류 패키지를 생성합니다."
         actions={
           <div className="flex items-center gap-2">
             {savedAt && <span className="text-[11px] cd-text-faint">저장됨 {savedAt}</span>}

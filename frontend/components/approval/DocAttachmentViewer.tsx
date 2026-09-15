@@ -53,7 +53,9 @@ export function DocAttachmentViewer({ docId, items }: { docId: string; items: Do
             <button
               key={`${f.key}-${i}`}
               type="button"
-              className={`rounded-lg border px-2.5 py-1.5 text-[11.5px] flex items-center gap-1.5 ${
+              data-active={i === active}
+              aria-pressed={i === active}
+              className={`cd-choice rounded-lg border px-2.5 py-1.5 text-[11.5px] flex items-center gap-1.5 ${
                 i === active ? "cd-tint-primary font-bold" : "cd-border-c cd-text-muted cd-row-hover"
               }`}
               onClick={() => setActive(i)}

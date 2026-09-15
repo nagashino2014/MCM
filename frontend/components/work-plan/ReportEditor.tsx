@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { AlertTriangle, Check, GitCommitHorizontal, History, MessageSquareText, Pencil, Save, Send, Settings2, ShieldCheck, Undo2, UserCog } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
@@ -481,13 +481,16 @@ export default function ReportEditor({
                     key={st.stageId}
                     type="button"
                     onClick={() => setSelectedOrder(st.stageOrder)}
-                    className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold"
+                    data-active={active}
+                    aria-pressed={active}
+                    className="cd-choice inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold"
                     style={{
+                      "--cd-choice-color": v.line,
+                      "--cd-choice-text": "var(--cd-text)",
                       background: v.bg,
                       border: `1.5px solid ${v.line}`,
                       color: "var(--cd-text)",
-                      ...(active ? { boxShadow: "0 0 0 2px var(--cd-primary)" } : {}),
-                    }}
+                    } as CSSProperties}
                   >
                     <span className="w-2.5 h-2.5 rounded-full" style={{ background: v.line }} />
                     {st.stageName}
@@ -637,7 +640,9 @@ export default function ReportEditor({
                     key={k.value}
                     type="button"
                     onClick={() => setReviewKind(k.value)}
-                    className={cn("px-2.5 py-1 border-l first:border-l-0 cd-border-c", reviewKind === k.value ? "cd-fill-primary text-white" : "cd-text-muted cd-row-hover")}
+                    data-active={reviewKind === k.value}
+                    aria-pressed={reviewKind === k.value}
+                    className={cn("cd-choice px-2.5 py-1 border-l first:border-l-0 cd-border-c", reviewKind === k.value ? "cd-fill-primary text-white" : "cd-text-muted cd-row-hover")}
                   >
                     {k.label}
                   </button>
@@ -681,7 +686,9 @@ export default function ReportEditor({
                     key={k.value}
                     type="button"
                     onClick={() => setExecKind(k.value)}
-                    className={cn("px-2.5 py-1 border-l first:border-l-0 cd-border-c", execKind === k.value ? "cd-fill-primary text-white" : "cd-text-muted cd-row-hover")}
+                    data-active={execKind === k.value}
+                    aria-pressed={execKind === k.value}
+                    className={cn("cd-choice px-2.5 py-1 border-l first:border-l-0 cd-border-c", execKind === k.value ? "cd-fill-primary text-white" : "cd-text-muted cd-row-hover")}
                   >
                     {k.label}
                   </button>

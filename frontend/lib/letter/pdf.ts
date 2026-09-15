@@ -13,6 +13,7 @@ import {
   BODY_INDENT,
   CONTENT_W,
   DEFAULT_FIT,
+  DEFAULT_TABLE_WIDTH_PCT,
   MARGIN_L,
   MARGIN_R,
   PAGE_H,
@@ -37,6 +38,10 @@ const FOOT_THIN_Y = 112; // 하단부 상단 얇은선
 /** 하단 고정부 줄 간격(pt) — 주소 표기를 켜면 '시행' 위쪽이 이만큼 올라간다 */
 const FOOT_ROW_STEP = 18;
 const SIGNATURE_CLEARANCE = 40; // 본문 하한 = 서명줄 y + 이 값
+/** 본문(붙임 포함) 끝 ~ 서명줄 최소 간격. 서명줄은 이만큼 띄우고 본문을 따라 내려온다. */
+const SIGNATURE_BODY_GAP = 40;
+/** 서명줄 ~ 하단 고정부 상단선 최소 여유 — 인감이 구분선에 닿지 않는 하한. */
+const SIGNATURE_FOOT_CLEARANCE = 52;
 
 interface Fonts {
   regular: PDFFont;
@@ -176,6 +181,17 @@ function topGap(fit: FitParams): number {
  * 행 높이는 1행 스팬 셀로 먼저 정하고, 세로 병합 셀의 내용이 스팬 행 합계보다
  * 크면 마지막 스팬 행에 부족분을 가산한다.
  */
+/** 표 렌더 폭(pt) — widthPct(본문 폭 대비 %)를 적용한다. */
+function tableWidthOf(t: Extract<LetterBlock, { kind: "table" }>): number {
+  const pct = Number.isFinite(t.widthPct as number) && (t.widthPct as number) > 0 ? (t.widthPct as number) : DEFAULT_TABLE_WIDTH_PCT;
+  return (CONTENT_W - 2) * (Math.min(100, Math.max(20, pct)) / 100);
+}
+
+/** 서명줄이 내려갈 수 있는 최저 y — 하단 고정부(주소 줄 유무에 따라 한 줄 차이) 위. */
+function signatureFloor(layout: LetterLayout): number {
+  return FOOT_THIN_Y + (layout.includeAddress ? FOOT_ROW_STEP : 0) + SIGNATURE_FOOT_CLEARANCE;
+}
+
 function layoutTable(
   t: Extract<LetterBlock, { kind: "table" }>,
   fonts: Fonts,
@@ -184,7 +200,10 @@ function layoutTable(
   const cellSize = size; // 표 글자 크기 = 본문과 동일(사용자 확정)
   const cellLineH = cellSize * 1.4;
   const pad = 3;
-  const widths = t.colRatios.map((r) => r * (CONTENT_W - 2));
+  // 표 전체 폭 = 본문 폭 × widthPct(기본 92%) — 열이 적은 표까지 본문 폭에 꽉 채우던
+  // 동작을 없앴다(2026-09-11 사용자 확정, 좌우에 약간 여백이 있는 편이 보기 좋다).
+  const tableW = tableWidthOf(t);
+  const widths = t.colRatios.map((r) => r * tableW);
   const spanWidth = (ci: number, colSpan: number) =>
     widths.slice(ci, ci + colSpan).reduce((a, b) => a + b, 0);
 
@@ -218,6 +237,16 @@ function layoutTable(
       if (need > got) rowHs[Math.min(ri + rs, rowHs.length) - 1] += need - got;
     });
   });
+  // 편집 화면에서 지정한 행 높이 비율 반영(2026-09-11) — 내용에 필요한 높이는 그대로 두고,
+  // 비율상 더 커야 하는 행만 늘린다. 표 전체 높이 기준은 "자동 높이 합"이라 A4 fit 을 깨지 않는다.
+  const rr = t.rowRatios;
+  if (rr && rr.length === rowHs.length) {
+    const autoTotal = rowHs.reduce((a, b) => a + b, 0);
+    for (let i = 0; i < rowHs.length; i++) {
+      const want = autoTotal * rr[i];
+      if (want > rowHs[i]) rowHs[i] = want;
+    }
+  }
   return { widths, rowHs, wrapped, cellLineH, pad };
 }
 
@@ -366,6 +395,8 @@ export async function renderLetterPdf(layout: LetterLayout, opts: { fit?: FitPar
       for (const g of gridGaps) {
         const cand: FitParams = { bodyFontPt: f, gapLevel: g };
         const h = measureBlocks(layout.bodyBlocks, layout.attachItems, fonts, cand, lineFactor);
+        // 본문 하한은 종전 기준을 유지한다 — 여기를 서명줄 최저 위치까지 낮추면 큰 폰트로도
+        // 늘 통과해 본문이 하단 고정부 직전까지 내려온다(폰트 축소 정책 자체가 바뀜).
         const bottomLimit = SIGNATURE_Y_BY_GAP[g] + SIGNATURE_CLEARANCE;
         if (titleLineY - topGap(cand) - h >= bottomLimit) {
           fit = cand;
@@ -398,14 +429,22 @@ export async function renderLetterPdf(layout: LetterLayout, opts: { fit?: FitPar
     }
   };
 
-  for (const b of layout.bodyBlocks) {
+  layout.bodyBlocks.forEach((b, bi) => {
     if (b.kind === "p") {
       const extraIndent = b.indentPt ?? 0;
       if (b.align === "center" || b.align === "right") {
+        // 오른쪽 정렬 문단 바로 다음이 표면 표의 오른쪽 끝에 맞춘다(2026-09-11 사용자 요청) —
+        // 표는 본문 폭의 일부(기본 92%)를 가운데 정렬로 쓰므로, 본문 우측 끝에 맞추면
+        // "단위 : 원" 표기가 표 밖으로 삐져나와 보인다.
+        const nextTable = layout.bodyBlocks[bi + 1];
+        const rightEdge =
+          b.align === "right" && nextTable?.kind === "table"
+            ? MARGIN_L + 1 + Math.max(0, (CONTENT_W - 2 - tableWidthOf(nextTable)) / 2) + tableWidthOf(nextTable)
+            : PAGE_W - MARGIN_R;
         const lines = wrapRuns(b.runs, fonts, size, CONTENT_W, CONTENT_W);
         for (const segs of lines) {
           const w = segsWidth(segs, fonts, size);
-          const x = b.align === "center" ? MARGIN_L + (CONTENT_W - w) / 2 : PAGE_W - MARGIN_R - w;
+          const x = b.align === "center" ? MARGIN_L + (CONTENT_W - w) / 2 : rightEdge - w;
           drawSegsLine(segs, x);
           y -= lineH;
         }
@@ -424,7 +463,7 @@ export async function renderLetterPdf(layout: LetterLayout, opts: { fit?: FitPar
       y = drawTable(page, b, fonts, size, y);
       y -= 6;
     }
-  }
+  });
 
   // ── 5) 붙임 ──
   if (layout.attachItems.length) {
@@ -448,7 +487,13 @@ export async function renderLetterPdf(layout: LetterLayout, opts: { fit?: FitPar
   // 짧은 공문 컴팩트 배치(사용자 확정) — 본문·붙임이 페이지 상반부에서 끝나면 서명줄과
   // 하단 고정부를 2.5줄(33pt) 위로 올려 중간이 휑하지 않게 한다.
   const footLift = bodyEndY > 450 ? 33 : 0;
-  const signatureY = SIGNATURE_Y_BY_GAP[fit.gapLevel] + footLift;
+  // 서명줄 위치(2026-09-11) — 종전에는 gap 단계별 고정값이라 본문이 길어져도 서명줄은
+  // 그대로였고, 대신 본문 폰트·줄간격만 줄었다. 이제 본문 끝을 따라 연속으로 내려온다.
+  //   상한 = 종전 위치(짧은 공문은 지금과 동일한 자리) / 하한 = 하단 고정부 위 최소 여유.
+  const signatureY = Math.max(
+    signatureFloor(layout),
+    Math.min(SIGNATURE_Y_BY_GAP[fit.gapLevel] + footLift, bodyEndY - SIGNATURE_BODY_GAP)
+  );
 
   // ── 6) 서명줄 + 인감 ──
   {
@@ -530,7 +575,9 @@ export async function measureSignTextWidths(companyKo: string, ceoName: string, 
 function drawTable(page: PDFPage, t: Extract<LetterBlock, { kind: "table" }>, fonts: Fonts, size: number, yTop: number): number {
   const cellSize = size; // 표 글자 크기 = 본문과 동일(사용자 확정)
   const { widths, rowHs, wrapped, cellLineH, pad } = layoutTable(t, fonts, size);
-  const x0 = MARGIN_L + 1;
+  // 본문 폭보다 좁은 표는 가운데로 — 왼쪽에만 붙으면 오른쪽 여백만 크게 남아 어색하다.
+  const tableW = widths.reduce((a, b) => a + b, 0);
+  const x0 = MARGIN_L + 1 + Math.max(0, (CONTENT_W - 2 - tableW) / 2);
   let y = yTop;
   t.rows.forEach((row, ri) => {
     let cx = x0;
@@ -545,9 +592,13 @@ function drawTable(page: PDFPage, t: Extract<LetterBlock, { kind: "table" }>, fo
       const cellH = rowHs.slice(ri, ri + rs).reduce((a, b) => a + b, 0);
       page.drawRectangle({ x: cx, y: y - cellH, width: cellW, height: cellH, borderColor: INK, borderWidth: 0.6 });
       const lines = wrapped[ri][ci] ?? [[{ text: "", bold: false, underline: false }]];
-      // 세로 병합 셀은 세로 중앙, 일반 셀은 종전대로 상단 정렬
+      // 세로 정렬(2026-09-11) — 셀 지정값(valign)이 우선. 미지정이면 종전 동작:
+      // 세로 병합 셀은 중앙, 일반 셀은 위쪽.
       const contentH = lines.length * cellLineH;
-      let ty = y - pad - (rs > 1 ? Math.max(0, (cellH - pad * 2 - contentH) / 2) : 0);
+      const slack = Math.max(0, cellH - pad * 2 - contentH);
+      const va = cell.valign ?? (rs > 1 ? "middle" : "top");
+      const vShift = va === "middle" ? slack / 2 : va === "bottom" ? slack : 0;
+      let ty = y - pad - vShift;
       for (const segs of lines) {
         const lineW = segs.reduce((w, s) => w + (s.bold ? fonts.bold : fonts.regular).widthOfTextAtSize(s.text, cellSize), 0);
         let sx = cx + pad;

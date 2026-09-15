@@ -4,7 +4,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Plus, GitMerge, ClipboardList, RefreshCw } from "lucide-react";
-import { useSession } from "next-auth/react";
+import { useFacilityEditPermission } from "@/components/facilities/useFacilityEditPermission";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
 import { FacilityListPanel } from "@/components/facilities/FacilityListPanel";
 import { FacilityDetailPanel } from "@/components/facilities/FacilityDetailPanel";
@@ -28,9 +28,7 @@ export default function FacilitiesPage() {
 }
 
 function Inner() {
-  const { data: session } = useSession();
-  const role = (session?.user as { role?: "admin" | "editor" | "viewer" } | undefined)?.role ?? "viewer";
-  const canEdit = role === "admin" || role === "editor";
+  const canEdit = useFacilityEditPermission();
 
   const searchParams = useSearchParams();
   const focusId = searchParams.get("focus");
@@ -55,6 +53,7 @@ function Inner() {
     airClass: undefined,
     waterClass: undefined,
     source: "",
+    hasContractHistory: false,
     sort: "recent",
     limit: 10,
     offset: 0,
@@ -81,6 +80,7 @@ function Inner() {
       if (filter.airClass != null) params.set("airClass", String(filter.airClass));
       if (filter.waterClass != null) params.set("waterClass", String(filter.waterClass));
       if (filter.source) params.set("source", filter.source);
+      if (filter.hasContractHistory) params.set("hasContractHistory", "1");
       if (filter.sort) params.set("sort", filter.sort);
       params.set("limit", String(filter.limit ?? 10));
       params.set("offset", String(filter.offset ?? 0));
@@ -129,6 +129,7 @@ function Inner() {
     >
       <CdPageHeader
         title="사업장"
+        help="왼쪽에서 사업장을 검색·선택하면 오른쪽에서 기본정보와 허가 이력을 확인할 수 있습니다. 지역·업종·종 규모·출처 필터를 함께 사용할 수 있습니다."
         meta={total > 0 ? `${total.toLocaleString("ko-KR")}개 · ${items.length}건 표시` : undefined}
         actions={
           <>
@@ -143,7 +144,7 @@ function Inner() {
             {canEdit && (
               <>
                 <Link href="/facilities/missing" className="cd-btn cd-btn-ghost cd-btn-sm">
-                  <ClipboardList className="w-3.5 h-3.5" /> 누락 점검
+                  <ClipboardList className="w-3.5 h-3.5" /> 정보 전수 점검
                 </Link>
                 <Link href="/facilities/merge" className="cd-btn cd-btn-ghost cd-btn-sm">
                   <GitMerge className="w-3.5 h-3.5" /> 중복 병합

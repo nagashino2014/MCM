@@ -84,7 +84,7 @@ export default function TrashPage() {
         icon={<Trash2 className="w-5 h-5" />}
         eyebrow="시스템"
         title="휴지통"
-        subtitle="삭제된 사업장 및 계약 데이터를 확인합니다. 영구 삭제는 관리자만 가능합니다."
+        subtitle="영구 삭제는 관리자만 가능합니다."
         actions={
           <>
             <button type="button" onClick={load} className="cd-btn cd-btn-ghost cd-btn-sm">

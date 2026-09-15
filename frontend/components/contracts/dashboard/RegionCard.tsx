@@ -165,7 +165,7 @@ export function RegionCard({
           <div className="shrink-0">
             <p
               className="text-[11px] font-bold px-2 py-1.5 rounded-lg mb-1 inline-block"
-              style={{ background: "var(--cd-accent-soft)", color: "var(--cd-accent)" }}
+              style={{ background: "var(--cd-region-accent-soft)", color: "var(--cd-region-accent)" }}
             >
               시도별 수주현황
             </p>

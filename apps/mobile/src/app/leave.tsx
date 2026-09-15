@@ -24,6 +24,16 @@ interface LeaveSummary {
   used: number;
   remaining: number;
 }
+/** 내 휴가 사용 내역(/api/approval/leave/me) — 웹 my-hr 과 같은 원장(연차·비연차 사용 1행씩). */
+interface LeaveEntry {
+  entryId: string;
+  entryType: string;
+  days: number;
+  usedOn: string | null;
+  leaveLabel: string | null;
+  deduct: 'full' | 'half' | null;
+  note: string | null;
+}
 interface LeaveNotice {
   noticeId: string;
   round: number;
@@ -96,6 +106,7 @@ export default function LeaveScreen() {
 
   const balance = useApi<{ summary: LeaveSummary | null }>(`/api/approval/leave?me=1&year=${year}`, { cache: true });
   const notices = useApi<{ notices: LeaveNotice[] }>('/api/home/leave-notices', { cache: true });
+  const usage = useApi<{ entries: LeaveEntry[] }>(`/api/approval/leave/me?year=${year}`, { cache: true });
   const att = useApi<AttendanceRes>('/api/approval/attendance/me', { cache: true });
   const mine = useApi<{ docs: DocSummary[] }>('/api/approval/docs?box=in_progress');
   const done = useApi<{ docs: DocSummary[] }>('/api/approval/docs?box=completed');
@@ -103,7 +114,7 @@ export default function LeaveScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const reloadAll = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([balance.reload(), notices.reload(), att.reload(), mine.reload(), done.reload()]);
+    await Promise.all([balance.reload(), notices.reload(), usage.reload(), att.reload(), mine.reload(), done.reload()]);
     setRefreshing(false);
     // 훅 반환 객체는 매 렌더 새로 만들어진다 — 의존성에서 제외.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -116,6 +127,16 @@ export default function LeaveScreen() {
   );
 
   const s = balance.data?.summary;
+  /** 사용 내역 — 최근 날짜순, 사용(use) 행만. 기간 휴가는 승인 시 시작일 1행(note 에 기간)으로 남는다. */
+  const usedEntries = useMemo(
+    () =>
+      (usage.data?.entries ?? [])
+        .filter((e) => e.entryType === 'use' && e.usedOn)
+        .sort((a, b) => (b.usedOn ?? '').localeCompare(a.usedOn ?? ''))
+        .slice(0, 20),
+    [usage.data]
+  );
+  const [showAllUsed, setShowAllUsed] = useState(false);
   const pendingNotices = (notices.data?.notices ?? []).filter((n) => !n.submittedAt);
 
   const docsOf = (kw: string[]) => {
@@ -190,6 +211,43 @@ export default function LeaveScreen() {
             </View>
           </Card>
         )}
+
+        {/* 휴가 사용 내역 — 날짜·유형·차감(2026-09-14 신설: 모바일에는 없던 상세) */}
+        <Card
+          title="휴가 사용 내역"
+          badge={usedEntries.length ? <TintBadge label={`${year}년 ${usedEntries.length}건`} fg="#4353e4" bg="#e3e6fb" /> : undefined}
+          action={usedEntries.length > 6 ? { label: showAllUsed ? '접기' : '전체보기', onPress: () => setShowAllUsed((v) => !v) } : undefined}>
+          {usage.loading && !usage.data ? (
+            <SkeletonList count={1} />
+          ) : usedEntries.length === 0 ? (
+            <Text className="py-2 text-[13px] text-cd-faint">{year}년 휴가 사용 내역이 없습니다.</Text>
+          ) : (
+            <View className="mt-2">
+              {(showAllUsed ? usedEntries : usedEntries.slice(0, 6)).map((e) => {
+                const d = new Date(`${e.usedOn}T12:00:00`);
+                const isAnnual = e.deduct === 'full' || e.deduct === 'half' || e.leaveLabel == null;
+                const period = e.note?.match(/\d{4}-\d{2}-\d{2}~(\d{4}-\d{2}-\d{2})/)?.[1];
+                return (
+                  <View key={e.entryId} className="flex-row items-center gap-3 border-t py-2" style={{ borderColor: dark ? '#2a2d3a' : '#eef0f7' }}>
+                    <Text className="w-[92px] text-[12.5px] font-semibold" style={{ color: ink }}>
+                      {e.usedOn!.slice(5).replace('-', '.')} ({DOW[d.getDay()]})
+                    </Text>
+                    <View className="flex-1 flex-row items-center gap-1.5">
+                      <View className="h-2 w-2 rounded-full" style={{ backgroundColor: isAnnual ? '#4353e4' : '#1f9d76' }} />
+                      <Text numberOfLines={1} className="flex-1 text-[12.5px]" style={{ color: ink }}>
+                        {e.leaveLabel ?? '연차'}
+                        {period ? ` ~${period.slice(5).replace('-', '.')}` : ''}
+                      </Text>
+                    </View>
+                    <Text className="text-[12px]" style={{ color: CHART.weekday }}>
+                      {isAnnual ? `${d1(e.days)}일 차감` : '차감 없음'}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+        </Card>
 
         {/* 연차 촉진 고지 */}
         {pendingNotices.length > 0 ? (

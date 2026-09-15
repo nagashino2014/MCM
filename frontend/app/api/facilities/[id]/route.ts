@@ -7,6 +7,8 @@ import { recordAuditLogInline } from "@/lib/auth/audit";
 import { extractRegion } from "@scraper/lib/ieps/region";
 import { normalizeBusinessRegistrationNo, normalizeCompanyName } from "@/lib/ieps/formatters";
 import { normalizeFacilityCompanySize, type FacilityCompanySize } from "@/lib/ieps/facility-service";
+import { normalizeInput } from "@scraper/lib/facility-quality/rules";
+import { markReviewedWrite } from "@/lib/ieps/facility-update";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,6 +31,7 @@ export async function GET(_: NextRequest, ctx: RouteContext) {
 }
 
 interface PatchBody {
+  corporateRegistrationNo?: string | null;
   companyName?: string;
   businessRegistrationNo?: string | null;
   representativeName?: string | null;
@@ -55,6 +58,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     if (!before) return NextResponse.json({ error: "not found" }, { status: 404 });
 
     await withDbWrite(async (db) => {
+      await markReviewedWrite(db);
       const setClauses: string[] = [];
       const values: unknown[] = [];
       const pushSet = (column: string, value: unknown) => {
@@ -73,15 +77,15 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
         pushSet("normalized_company_name", norm);
       }
       if (body.businessRegistrationNo !== undefined) {
-        pushSet("business_registration_no", normalizeBusinessRegistrationNo(body.businessRegistrationNo));
+        if (body.businessRegistrationNo !== before.businessRegistrationNo) pushSet("business_registration_no", normalizeInput("business_registration_no", body.businessRegistrationNo));
       }
       if (body.representativeName !== undefined) {
-        pushSet("representative_name", body.representativeName?.trim() || null);
+        if (body.representativeName !== before.representativeName) pushSet("representative_name", normalizeInput("representative_name", body.representativeName));
       }
       if (body.siteAddress !== undefined) {
         // 사용자가 편집 화면에서 직접 입력한 소재지는 시군구동 구분(자동 띄어쓰기) 로직을
         // 적용하지 않고 입력값을 그대로 저장한다. (앞뒤/중복 공백만 정리)
-        const verbatimAddress = (body.siteAddress ?? "").replace(/\s+/g, " ").trim() || null;
+        const verbatimAddress = body.siteAddress === before.siteAddress ? before.siteAddress : normalizeInput("site_address", body.siteAddress);
         pushSet("site_address", verbatimAddress);
         pushSet("site_address_verbatim", true);
         pushSet("normalized_address", verbatimAddress);
@@ -104,7 +108,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
         pushSet("additional_site_addresses", list.length ? JSON.stringify(list) : null);
       }
       if (body.phoneNumber !== undefined) {
-        pushSet("phone_number", body.phoneNumber);
+        if (body.phoneNumber !== before.phoneNumber) pushSet("phone_number", normalizeInput("phone_number", body.phoneNumber));
       }
       if (body.industryCode !== undefined) {
         pushSet("industry_code", body.industryCode);
@@ -121,7 +125,9 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       if (body.businessCertificateCorporateRegistrationNo !== undefined) {
         const corporateNo = normalizeCorporateRegistrationNo(body.businessCertificateCorporateRegistrationNo);
         pushSet("business_certificate_corporate_registration_no", corporateNo);
-        pushSet("corporate_registration_no", corporateNo);
+      }
+      if (body.corporateRegistrationNo !== undefined && body.corporateRegistrationNo !== before.corporateRegistrationNo) {
+        pushSet("corporate_registration_no", normalizeInput("corporate_registration_no", body.corporateRegistrationNo));
       }
       if (body.memo !== undefined) {
         pushSet("memo", body.memo);

@@ -6,6 +6,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   BadgeCheck,
   FileClock,
+  FileSignature,
   Handshake,
   Hourglass,
   ReceiptText,
@@ -17,18 +18,20 @@ import { ReceivablesSection } from "./ReceivablesSection";
 import { UnbilledSection } from "./UnbilledSection";
 import { CollectionsSection } from "./CollectionsSection";
 import { CompletionsSection } from "./CompletionsSection";
+import { NotesSection } from "./NotesSection";
 
-type BillingTab = "orders" | "uncollected" | "unissued" | "collections" | "completed";
+type BillingTab = "orders" | "uncollected" | "unissued" | "collections" | "notes" | "completed";
 
 const TABS: Array<{ id: BillingTab; label: string; icon: LucideIcon }> = [
   { id: "orders", label: "수주 현황", icon: Handshake },
   { id: "uncollected", label: "미수금 현황", icon: Hourglass },
   { id: "unissued", label: "미발행 현황", icon: FileClock },
   { id: "collections", label: "수금 현황", icon: Wallet },
+  { id: "notes", label: "어음 현황", icon: FileSignature },
   { id: "completed", label: "완료 현황", icon: BadgeCheck },
 ];
 
-const TAB_IDS: BillingTab[] = ["orders", "uncollected", "unissued", "collections", "completed"];
+const TAB_IDS: BillingTab[] = ["orders", "uncollected", "unissued", "collections", "notes", "completed"];
 
 export function BillingShell() {
   const searchParams = useSearchParams();
@@ -101,6 +104,8 @@ export function BillingShell() {
           <UnbilledSection theme={theme} />
         ) : tab === "collections" ? (
           <CollectionsSection theme={theme} />
+        ) : tab === "notes" ? (
+          <NotesSection theme={theme} />
         ) : (
           <CompletionsSection theme={theme} />
         )}

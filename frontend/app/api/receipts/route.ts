@@ -20,12 +20,14 @@ export async function GET(req: NextRequest) {
     const scopeRaw = sp.get("scope") as ReceiptScope | null;
     const scope: ReceiptScope =
       scopeRaw && SCOPES.includes(scopeRaw) ? scopeRaw : sp.get("unusedOnly") === "1" ? "unused" : "all";
+    const sourceRaw = sp.get("source");
     const receipts = await listMyReceipts({
       ownerUserId: ctx.userId,
       scope,
       from: sp.get("from") || undefined,
       to: sp.get("to") || undefined,
       limit: Number(sp.get("limit") ?? 100) || 100,
+      source: sourceRaw === "mobile" || sourceRaw === "manual" ? sourceRaw : undefined,
     });
 
     // 피커용 — 저장 시점 분류가 비어 있으면 재분류하고, 양식 select 옵션 문자열로 매핑(card-picker 규약).
@@ -58,7 +60,11 @@ export async function GET(req: NextRequest) {
         excluded: r.excluded,
         createdAt: r.createdAt,
         pdfKey: r.pdfKey,
-        pdfName: `영수증_${(r.storeName ?? "미상").slice(0, 30)}_${r.paidAt?.slice(0, 10) ?? ""}.pdf`,
+        pdfName: `${r.source === "manual" ? "증빙" : "영수증"}_${(r.storeName ?? "미상").slice(0, 30)}_${r.paidAt?.slice(0, 10) ?? ""}.pdf`,
+        source: r.source,
+        payMethod: r.payMethod,
+        purpose: r.purpose,
+        hasImage: !!r.imageKey,
         categoryKey,
         categoryLabel: cat?.label ?? null,
         categorySource: r.categorySource ?? reclassed[i]?.source ?? null,

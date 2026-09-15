@@ -586,7 +586,9 @@ export function QuoteBoard() {
                     <button
                       key={s.siteSeq}
                       type="button"
-                      className={`cd-btn rounded-lg border px-2.5 py-1 text-[11.5px] ${i === activeSite ? "cd-tint-primary font-semibold" : "cd-border-c cd-text-faint"}`}
+                      data-active={i === activeSite}
+                      aria-pressed={i === activeSite}
+                      className={`cd-choice cd-btn rounded-lg border px-2.5 py-1 text-[11.5px] ${i === activeSite ? "cd-tint-primary font-semibold" : "cd-border-c cd-text-faint"}`}
                       onClick={() => setActiveSite(i)}
                     >
                       {s.siteLabel}
@@ -720,7 +722,7 @@ export function QuoteBoard() {
                                 <col key={g} style={{ width: `${40 / siteGrades(site).length}%` }} />
                               ))}
                             </colgroup>
-                            <thead>
+                            <thead className="cd-table-head">
                               <tr>
                                 <th className="border cd-border-c px-2 py-1.5 text-left cd-text-faint font-semibold">항목 (별첨1)</th>
                                 {siteGrades(site).map((g) => (
@@ -857,7 +859,7 @@ export function QuoteBoard() {
                 <div className="flex flex-wrap items-center gap-1">
                   <span className="text-[10.5px] cd-text-faint mr-0.5">불러오기</span>
                   {presets.map((p) => (
-                    <span key={p.presetId} className="inline-flex items-center rounded-full border cd-border-c overflow-hidden">
+                    <span key={p.presetId} className="cd-action inline-flex items-center rounded-full border cd-border-c overflow-hidden">
                       <button type="button" className="text-[11px] px-2 py-0.5 hover:cd-tint-primary" onClick={() => applyPreset(p)} title="이 결재선 불러오기">{p.name}</button>
                       <button type="button" className="text-[10px] px-1 cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" onClick={() => deletePreset(p.presetId)} title="프리셋 삭제">×</button>
                     </span>
@@ -887,7 +889,7 @@ export function QuoteBoard() {
                 <button type="button" className="cd-btn rounded-lg border border-dashed cd-border-c px-3 py-2 text-xs cd-text-faint flex-1" onClick={() => setOrgModal("approve")}>
                   ＋ 결재자 추가
                 </button>
-                <button type="button" className="cd-btn rounded-lg border cd-border-c px-2.5 py-2 text-[11px] cd-text-faint flex items-center gap-1" onClick={saveAsPreset} title="현재 결재선·참조자를 프리셋으로 저장">
+                <button type="button" className="cd-btn rounded-lg border cd-border-c px-2.5 py-2 text-[11px] cd-text-faint flex-1 flex items-center justify-center gap-1" onClick={saveAsPreset} title="현재 결재선·참조자를 프리셋으로 저장">
                   <BookmarkPlus className="w-3.5 h-3.5" /> 프리셋 저장
                 </button>
               </div>
@@ -917,13 +919,13 @@ export function QuoteBoard() {
                 </button>
               </div>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
-                <button type="button" className="cd-btn rounded-lg border cd-border-c px-3.5 py-2 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50" disabled={busy != null} onClick={() => send("save")}>
+                <button type="button" className="cd-btn rounded-lg border cd-border-c px-3.5 py-2 text-xs font-semibold flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50" disabled={busy != null} onClick={() => send("save")}>
                   <Save className="w-3.5 h-3.5" /> {busy === "save" ? "저장 중..." : "임시저장"}
                 </button>
-                <button type="button" className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50" disabled={busy != null} onClick={openPreview} title="현재 내용을 견적서 PDF 로 미리보기">
+                <button type="button" className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs font-semibold flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50" disabled={busy != null} onClick={openPreview} title="현재 내용을 견적서 PDF 로 미리보기">
                   <FileText className="w-3.5 h-3.5" /> {busy === "preview" ? "생성 중..." : "미리보기"}
                 </button>
-                <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50" disabled={busy != null} onClick={() => send("submit")}>
+                <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50" disabled={busy != null} onClick={() => send("submit")}>
                   <Send className="w-3.5 h-3.5" /> {busy === "submit" ? "상신 중..." : "상신"}
                 </button>
               </div>

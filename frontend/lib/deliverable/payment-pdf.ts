@@ -10,7 +10,7 @@ import { PDFDocument, PDFFont, PDFImage, PDFPage, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import { toHangulAmount } from "@/lib/quote/hangul-amount";
 import { splitVat } from "./data";
-import { formatMoney } from "./format";
+import { formatMoney, vatModeOf } from "./format";
 import { PAGE_H, PAGE_W, type DeliverableValues } from "./types";
 
 const INK = rgb(0.12, 0.13, 0.16);
@@ -129,8 +129,10 @@ export async function renderPaymentRequestPdf(values: DeliverableValues): Promis
 
   // ── 값 준비 ──
   const vatNote = s(values, "meta.vatNote") || "VAT 별도";
-  const vatIncluded = !vatNote.includes("별도");
-  const contractAmount = splitVat(n(values, "contract.amount"), vatIncluded);
+  const vatMode = vatModeOf(vatNote);
+  // VAT 별도(금액에 미포함, 2026-09-15) — 부가세 열 없이 공급가액만 표기한다.
+  const supplyOnly = vatMode === "supplyOnly";
+  const contractAmount = splitVat(n(values, "contract.amount"), vatMode);
   const prev = {
     supply: n(values, "completion.prevSupply"),
     vat: n(values, "completion.prevVat"),
@@ -195,7 +197,8 @@ export async function renderPaymentRequestPdf(values: DeliverableValues): Promis
   page.drawText(bigAmount, { x: MARGIN + CONTENT_W - boxPad - bigW, y: y - 12, size: 19, font: fonts.bold, color: NAVY });
   // 표기 일관화(2026-08-24 사용자 지적) — 표시 금액은 전부 부가세 포함 합계다.
   // vatNote("VAT 별도")는 단계 금액의 계산 기준(공급가에 10% 가산)일 뿐이라 여기 쓰면 모순처럼 보인다.
-  const hangul = `일금 ${toHangulAmount(cur.total, { leadingOne: true })} 원정 (부가세 포함)`;
+  // 단, VAT 미포함(공급가액만 청구)은 합계 = 공급가액이므로 "부가세 별도"로 표기한다.
+  const hangul = `일금 ${toHangulAmount(cur.total, { leadingOne: true })} 원정 (${supplyOnly ? "부가세 별도" : "부가세 포함"})`;
   const hangulW = fonts.regular.widthOfTextAtSize(hangul, 9.5);
   page.drawText(hangul, {
     x: MARGIN + CONTENT_W - boxPad - hangulW,
@@ -209,7 +212,7 @@ export async function renderPaymentRequestPdf(values: DeliverableValues): Promis
   // ── 계약 정보 ──
   const infoRows: Array<[string, string]> = [
     ["계약건명", contractTitle],
-    ["계약금액", `일금 ${toHangulAmount(contractAmount.total, { leadingOne: true })} 원정 (￦ ${formatMoney(contractAmount.total)}, VAT 포함)`],
+    ["계약금액", `일금 ${toHangulAmount(contractAmount.total, { leadingOne: true })} 원정 (￦ ${formatMoney(contractAmount.total)}, ${supplyOnly ? "VAT 별도" : "VAT 포함"})`],
   ];
   const period = s(values, "contract.period");
   if (period) infoRows.push(["계약기간", period.replace("~", " ~ ")]);
@@ -226,11 +229,14 @@ export async function renderPaymentRequestPdf(values: DeliverableValues): Promis
   y -= 8;
 
   // ── 청구 내역 표 — 금회 행은 라벨 아래에 청구 단위를 줄바꿈 표기(행 높이 가변) ──
+  // VAT 미포함이면 부가세·합계 열을 빼고 공급가액 한 열만 그린다.
   const col0 = 128;
-  const colW = (CONTENT_W - col0) / 3;
+  const amountCols = supplyOnly ? 1 : 3;
+  const colW = (CONTENT_W - col0) / amountCols;
   const rowH = 25;
   const subLineH = 12;
-  const headers = ["구  분", "공급가액", `부가세`, "합  계"];
+  const headers = supplyOnly ? ["구  분", "공급가액"] : ["구  분", "공급가액", `부가세`, "합  계"];
+  const amountsOf = (v: { supply: number; vat: number; total: number }) => (supplyOnly ? [v.supply] : [v.supply, v.vat, v.total]);
   // 금회 하위 줄 — 복수 회차 청구면 단위별 금액(payment.stageBreakdown), 아니면 단계명 전개만.
   interface SubLine {
     label: string;
@@ -295,14 +301,14 @@ export async function renderPaymentRequestPdf(values: DeliverableValues): Promis
       page.drawText(`· ${line.label}`, { x: MARGIN + 18, y: subY, size: 8.8, font: fonts.regular, color: GRAY });
       // 단위별 금액(복수 회차 청구) — 공급가액/부가세/합계를 작은 글씨로 우측 정렬.
       if (line.v) {
-        [line.v.supply, line.v.vat, line.v.total].forEach((num, j) => {
+        amountsOf(line.v).forEach((num, j) => {
           const text = formatMoney(num);
           const w = fonts.regular.widthOfTextAtSize(text, 8.8);
           page.drawText(text, { x: MARGIN + col0 + colW * (j + 1) - 10 - w, y: subY, size: 8.8, font: fonts.regular, color: GRAY });
         });
       }
     });
-    [r.v.supply, r.v.vat, r.v.total].forEach((num, j) => {
+    amountsOf(r.v).forEach((num, j) => {
       const text = formatMoney(num);
       const w = font.widthOfTextAtSize(text, 10.2);
       page.drawText(text, { x: MARGIN + col0 + colW * (j + 1) - 10 - w, y: firstY, size: 10.2, font, color });
@@ -320,11 +326,13 @@ export async function renderPaymentRequestPdf(values: DeliverableValues): Promis
       color: i === 0 ? INK : LINE_C,
     });
   }
-  for (let j = 0; j <= 2; j++) {
+  for (let j = 0; j < amountCols; j++) {
     const x = MARGIN + col0 + colW * j;
     page.drawLine({ start: { x, y: tableTop }, end: { x, y: tableTop - tableH }, thickness: 0.45, color: LINE_C });
   }
-  const vatCaption = "※ 합계는 부가세(10%)를 포함한 금액입니다.";
+  const vatCaption = supplyOnly
+    ? "※ 금액은 부가세(10%)가 포함되지 않은 공급가액입니다."
+    : "※ 합계는 부가세(10%)를 포함한 금액입니다.";
   y = tableTop - tableH - 14;
   page.drawText(vatCaption, { x: MARGIN, y, size: 8.8, font: fonts.regular, color: GRAY });
   y -= 24;

@@ -137,7 +137,7 @@ export function FeaturesTab({ data, canManage, onChanged }: Props) {
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead>
+          <thead className="cd-table-head">
             <tr className="cd-text-faint text-xs border-b cd-border-c">
               <th className="py-2 px-2 text-left min-w-[200px]">기능</th>
               <th className="py-2 px-2 text-left min-w-[190px]">적용 모델 · thinking / effort</th>
@@ -447,7 +447,7 @@ function LogsDrawer({ feature, range, prices, onClose }: { feature: FeatureStat 
     >
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
-          <thead>
+          <thead className="cd-table-head">
             <tr className="cd-text-faint border-b cd-border-c">
               <th className="py-1.5 px-2 text-left">일시(KST)</th>
               <th className="py-1.5 px-2 text-left">모델</th>

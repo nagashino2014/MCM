@@ -55,6 +55,8 @@ export interface ParagraphBlock {
 export interface TableCell {
   lines: TextRun[][]; // 셀 내 줄 단위 런
   align?: "left" | "center" | "right";
+  /** 셀 높이 기준 세로 정렬(2026-09-11 사용자 요청). 미지정이면 위쪽(종전 동작). */
+  valign?: "top" | "middle" | "bottom";
   // 셀 병합(2026-08-25) — rows 는 항상 rowCnt×colCnt 균일 격자를 유지하고,
   // 병합 시작 셀에 rowSpan/colSpan(>1)을, 병합에 덮인 자리에는 covered 플레이스홀더를 둔다.
   // 렌더러(pdf/hwpx)는 covered 를 건너뛰고 시작 셀을 span 크기로 그린다.
@@ -67,7 +69,25 @@ export interface TableBlock {
   kind: "table";
   rows: TableCell[][];
   colRatios: number[]; // 열 폭 비율(합 1)
+  /**
+   * 행 높이 비율(합 1) — 에디터에서 셀 높이를 조절하면 td 에 height 가 남는다.
+   * 미지정이면 내용 기준 자동 높이. 지정돼 있어도 내용이 넘치는 행은 자동 높이가 우선한다
+   * (A4 1장 fit 을 깨지 않기 위해 "최소 보장" 으로만 쓴다 — 2026-09-11 사용자 요청).
+   */
+  rowRatios?: number[];
+  /**
+   * 표 전체 폭 — 본문 폭 대비 %(30~100). 미지정이면 DEFAULT_TABLE_WIDTH_PCT.
+   * 열이 적은 표까지 본문 폭에 꽉 채워 늘리던 문제(2026-09-11 사용자 지적)를 없애기 위해
+   * 에디터에서 조절한 값(table style width·data-w)을 파서가 읽어 렌더러로 넘긴다.
+   */
+  widthPct?: number;
 }
+
+/** 시행일 수동 지정값 검증 — YYYY-MM-DD 만 허용(빈 값·형식 불일치는 자동 산정으로 되돌린다). */
+export const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** 표 기본 폭(%) — 좌우에 약간 여백을 두는 편이 보기 좋다는 사용자 확정(2026-09-11). */
+export const DEFAULT_TABLE_WIDTH_PCT = 92;
 
 export type LetterBlock = ParagraphBlock | TableBlock;
 
@@ -125,6 +145,11 @@ export interface LetterFieldValues {
   letter_kind: "general" | "proof";
   recipients: LetterRecipient[]; // 수신(대표 1건 이상)
   cc_refs: LetterRecipient[]; // 참조(표기 + 메일 cc)
+  /**
+   * 외부 참조(2026-09-14) — 수신 주체가 아닌 외부 업체·기관 담당자에게 발송 메일만 참조(Cc)로 보낸다.
+   * 공문 본문의 '참조' 줄에는 표기하지 않는다(EPC 공동 수행사가 대금 청구 공문을 함께 받아 보는 사례).
+   */
+  ext_cc_refs?: LetterRecipient[];
   proof_sender?: ProofParty; // proof(내용증명형) 전용
   proof_receiver?: ProofParty;
   subject: string; // = approval_docs.title
@@ -137,6 +162,11 @@ export interface LetterFieldValues {
   /** 하단 고정부에 회사 주소 한 줄 표기(2026-08-20 내부 의견) — 1=표기, 0/미지정=미표기.
    *  신규 작성은 표기가 기본이고, 값이 없는 과거 문서는 재생성해도 종전대로 나온다. */
   include_address?: 0 | 1;
+  /**
+   * 시행일 직접 지정(YYYY-MM-DD) — 비우면 종전대로 결재 완료일(임시저장·미승인은 오늘).
+   * 발주처가 특정 일자로 맞춰 달라고 요구하는 사례가 있어 수동 지정을 허용한다(2026-09-11).
+   */
+  issue_date?: string;
   file_attachments?: LetterFileAttachment[]; // 동봉 첨부(발송 메일에 공문 뒤 순서대로)
   /** 이 공문에 첨부된 착수계·준공계 문서 id(142) — 발송 완료 시 상태·시행번호를 역기록한다 */
   deliverable_ids?: string[];

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { Tags } from "lucide-react";
 import { CardFrame, CardSkeleton } from "./CardFrame";
@@ -80,11 +80,10 @@ export function UncollectedCard({
         <div className="flex items-center gap-2">
           <button
             type="button"
-            className="cd-legend px-2 py-1 rounded-lg border transition-colors"
-            style={{
-              borderColor: aging === null ? "var(--cd-primary)" : "transparent",
-              background: aging === null ? "var(--cd-primary-soft)" : "transparent",
-            }}
+            className="cd-legend cd-choice px-2 py-1 rounded-lg border transition-colors"
+            data-active={aging === null}
+            aria-pressed={aging === null}
+            style={{ "--cd-choice-color": "var(--cd-primary)" } as CSSProperties}
             onClick={() => setAging(null)}
           >
             <span className="swatch" style={{ background: "var(--cd-primary)" }} />
@@ -92,26 +91,24 @@ export function UncollectedCard({
           </button>
           <button
             type="button"
-            className="cd-legend px-2 py-1 rounded-lg border transition-colors"
-            style={{
-              borderColor: aging === "1to2" ? "var(--cd-warning)" : "transparent",
-              background: aging === "1to2" ? "var(--cd-warning-soft)" : "transparent",
-            }}
+            className="cd-legend cd-choice px-2 py-1 rounded-lg border transition-colors"
+            data-active={aging === "1to2"}
+            aria-pressed={aging === "1to2"}
+            style={{ "--cd-choice-color": "var(--cd-aging-warning)" } as CSSProperties}
             onClick={() => toggle("1to2")}
           >
-            <span className="swatch" style={{ background: "var(--cd-warning)" }} />
+            <span className="swatch" style={{ background: "var(--cd-aging-warning)" }} />
             1개월 이상 2개월 미만
           </button>
           <button
             type="button"
-            className="cd-legend px-2 py-1 rounded-lg border transition-colors"
-            style={{
-              borderColor: aging === "over2" ? "var(--cd-error)" : "transparent",
-              background: aging === "over2" ? "var(--cd-error-soft)" : "transparent",
-            }}
+            className="cd-legend cd-choice px-2 py-1 rounded-lg border transition-colors"
+            data-active={aging === "over2"}
+            aria-pressed={aging === "over2"}
+            style={{ "--cd-choice-color": "var(--cd-aging-error)" } as CSSProperties}
             onClick={() => toggle("over2")}
           >
-            <span className="swatch" style={{ background: "var(--cd-error)" }} />
+            <span className="swatch" style={{ background: "var(--cd-aging-error)" }} />
             2개월 이상
           </button>
         </div>
@@ -134,9 +131,9 @@ export function UncollectedCard({
             {filtered.map((item) => {
               const color =
                 item.agingMonths >= 2
-                  ? "var(--cd-error)"
+                  ? "var(--cd-aging-error)"
                   : item.agingMonths >= 1
-                    ? "var(--cd-warning)"
+                    ? "var(--cd-aging-warning)"
                     : "var(--cd-text)";
               return (
                 <div

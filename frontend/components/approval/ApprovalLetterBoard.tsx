@@ -4,6 +4,7 @@
 // 수신처(주소록 담당자 검색·메일 포함)·유형(일반/내용증명)·본문(MailEditor)·붙임 목록·
 // 인감 날인/HWPX 동봉 옵션 + 결재선/참조자(전자결재 코어 위임). 승인 완료 시 자동 채번·
 // PDF/HWPX 생성·기안자 계정 메일 발송(lib/letter/send.ts). 설계: docs/official-letter-blueprint.md.
+// 사전 검수(221): 상신 전에 공문(안)·첨부서류를 사내 검수자 메일로 보내 확인받는다(lib/letter/review.ts).
 // 결재선 패널은 ApprovalDraftBoard(:704-810)의 마크업·프리셋 로직을 이식했다(회귀 방지 위해
 // 원본은 수정하지 않음 — work-plan 탭 복제와 같은 관행).
 
@@ -11,20 +12,23 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  ArrowLeft, BookmarkPlus, Eye, FileText, Plus, Save, Search, Send, Stamp, Trash2, Users, X,
+  ArrowLeft, BookmarkPlus, Eye, FileText, GripVertical, Plus, Save, Search, Send, ShieldCheck, Stamp, Trash2, Users, X,
 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { CdDateInput } from "@/components/cdash/CdField";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
+import { useDragOrder } from "@/components/approval/useDragOrder";
 import { DeleteDraftButton, RejectedBanner, toEditDocMeta, type EditDocMeta } from "@/components/approval/DraftEditNotice";
 import PaymentRequestModal, { type PaymentRequestCreated } from "@/components/approval/PaymentRequestModal";
+import { LetterReviewModal } from "@/components/approval/LetterReviewModal";
 import AttachmentPreviewModal from "@/components/approval/AttachmentPreviewModal";
 import { ATTACHMENT_ACCEPT, ATTACHMENT_ALLOWED_TEXT, isAllowedAttachment, type DocAttachment } from "@/lib/approval/attachments";
 import { MailEditor } from "@/components/mail/MailEditor";
 import { recipientsDisplay } from "@/lib/letter/compose";
 import {
   COMPANY_ADDRESS, COMPANY_BIZ_NO, COMPANY_CEO, COMPANY_CONTACT_EMAIL, COMPANY_KO, COMPANY_PHONE,
-  LETTER_FORM_ID, LETTER_RULE_KEY, formatLetterNo, parseLetterNo,
+  ISO_DATE_RE, LETTER_FORM_ID, LETTER_RULE_KEY, formatLetterNo, parseLetterNo,
   type LetterFieldValues, type LetterLayoutOverrides, type LetterRecipient, type ProofParty,
 } from "@/lib/letter/types";
 import "@/components/cdash/cdash.css";
@@ -127,7 +131,7 @@ export function FacilityRecipientPicker({
       {list.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {list.map((r, i) => (
-            <span key={i} className="inline-flex items-center gap-1.5 rounded-full border cd-border-c pl-2.5 pr-1.5 py-1 text-[11.5px] cd-text">
+            <span key={i} className="cd-action inline-flex items-center gap-1.5 rounded-full border cd-border-c pl-2.5 pr-1.5 py-1 text-[11.5px] cd-text">
               <span className="font-semibold">{r.name || r.facilityName}</span>
               {r.bizNo && <span className="cd-text-faint">{r.bizNo}</span>}
               <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" onClick={() => onChange(list.filter((_, xi) => xi !== i))}>
@@ -299,7 +303,7 @@ export function RecipientPicker({
       {list.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {list.map((r, i) => (
-            <span key={i} className="inline-flex items-center gap-1.5 rounded-full border cd-border-c pl-2.5 pr-1.5 py-1 text-[11.5px] cd-text">
+            <span key={i} className="cd-action inline-flex items-center gap-1.5 rounded-full border cd-border-c pl-2.5 pr-1.5 py-1 text-[11.5px] cd-text">
               <span className="font-semibold">{r.facilityName ? `${r.facilityName} · ` : ""}{r.name}{r.title ? ` ${r.title}` : ""}</span>
               <span className={r.email ? "cd-text-faint" : "text-[color:var(--cd-danger,#FA896B)]"}>{r.email || "메일 없음"}</span>
               <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" onClick={() => onChange(list.filter((_, xi) => xi !== i))}>
@@ -413,6 +417,8 @@ export function ApprovalLetterBoard() {
   const [letterKind, setLetterKind] = useState<"general" | "proof">("general");
   const [recipients, setRecipients] = useState<LetterRecipient[]>([]);
   const [ccRefs, setCcRefs] = useState<LetterRecipient[]>([]);
+  // 외부 참조(2026-09-14) — 수신 주체가 아닌 외부 업체·기관 담당자(메일 Cc 전용, 공문 표기 없음).
+  const [extCcRefs, setExtCcRefs] = useState<LetterRecipient[]>([]);
   const [proofSender, setProofSender] = useState<ProofParty>(SENDER_PROOF);
   const [proofReceiver, setProofReceiver] = useState<ProofParty>(EMPTY_PROOF);
   const [attachItems, setAttachItems] = useState<string[]>([]);
@@ -421,12 +427,17 @@ export function ApprovalLetterBoard() {
   // 하단 고정부 회사 주소 표기(2026-08-20 내부 의견) — 신규 작성은 표기가 기본,
   // 재편집 문서는 저장값을 따른다(값이 없던 과거 공문은 종전대로 미표기).
   const [includeAddress, setIncludeAddress] = useState(true);
+  // 시행일 직접 지정(2026-09-11) — 발주처가 특정 일자를 요구하는 사례가 있다.
+  // 빈 값이면 종전대로 결재 완료일(미승인 상태의 미리보기는 오늘).
+  const [issueDate, setIssueDate] = useState("");
   const [contactPhone, setContactPhone] = useState(COMPANY_PHONE);
   const [contactEmail, setContactEmail] = useState(COMPANY_CONTACT_EMAIL);
   const [line, setLine] = useState<LineStep[]>([]);
   const [watchers, setWatchers] = useState<Watcher[]>([]);
   const [presets, setPresets] = useState<LinePreset[]>([]);
   const [orgModal, setOrgModal] = useState<OrgTarget | null>(null);
+  // 사전 검수(221) — 상신 전 공문(안)·첨부서류를 사내 검수자에게 보내 확인받는다.
+  const [reviewOpen, setReviewOpen] = useState(false);
   const [busy, setBusy] = useState<"save" | "submit" | "preview" | null>(null);
   const [loading, setLoading] = useState(!!editDocId);
   // 레이아웃 미세조정(사용자 확정) — 미리보기 모달에서 조정, field_values 로 저장돼 발송본에 반영
@@ -450,6 +461,8 @@ export function ApprovalLetterBoard() {
   const [dragOver, setDragOver] = useState(false);
   // 첨부 미리보기(2026-08-25) — 항목을 누르면 상신 전에도 내용을 확인한다(대금청구서 등).
   const [previewItem, setPreviewItem] = useState<DocAttachment | null>(null);
+  // 첨부 순서 = 메일 동봉 순서 — 끌어서 바꾼다(2026-09-11 사용자 요청).
+  const attachDrag = useDragOrder(fileAttachments, setFileAttachments);
   // 재편집 문서의 상태·반려 사유·삭제 권한(서버 판정) — 반려 배너와 기안 삭제 버튼 노출용.
   const [editMeta, setEditMeta] = useState<EditDocMeta | null>(null);
   // 대금청구서 작성 모달(2026-08-24) — 첨부서류 섹션에서 바로 생성해 첨부한다.
@@ -590,6 +603,7 @@ export function ApprovalLetterBoard() {
         setLetterKind(v.letter_kind === "proof" ? "proof" : "general");
         setRecipients(Array.isArray(v.recipients) ? v.recipients : []);
         setCcRefs(Array.isArray(v.cc_refs) ? v.cc_refs : []);
+        setExtCcRefs(Array.isArray(v.ext_cc_refs) ? v.ext_cc_refs : []);
         if (v.proof_sender) setProofSender(v.proof_sender);
         if (v.proof_receiver) setProofReceiver(v.proof_receiver);
         setAttachItems(Array.isArray(v.attachments_list) ? v.attachments_list.map((a) => a.text) : []);
@@ -597,6 +611,7 @@ export function ApprovalLetterBoard() {
         setInternalCcTarget(v.internal_cc_target === "company" ? "company" : "personal");
         setIncludeHwpx(v.include_hwpx === 1);
         setIncludeAddress(v.include_address === 1);
+        setIssueDate(ISO_DATE_RE.test(v.issue_date ?? "") ? (v.issue_date as string) : "");
         setOverrides(v.layout_overrides ?? {});
         setContactPhone(v.contact_phone || COMPANY_PHONE);
         setContactEmail(v.contact_email || COMPANY_CONTACT_EMAIL);
@@ -741,12 +756,14 @@ export function ApprovalLetterBoard() {
       letter_kind: letterKind,
       recipients,
       cc_refs: ccRefs,
+      ...(extCcRefs.length ? { ext_cc_refs: extCcRefs } : {}),
       subject,
       body_html: editorRef.current?.innerHTML ?? "",
       attachments_list: attachItems.map((t, i) => ({ no: i + 1, text: t })).filter((a) => a.text.trim()),
       stamp: stampOn ? 1 : 0,
       include_hwpx: includeHwpx ? 1 : 0,
       include_address: includeAddress ? 1 : 0,
+      ...(ISO_DATE_RE.test(issueDate) ? { issue_date: issueDate } : {}),
       contact_phone: contactPhone,
       contact_email: contactEmail,
       internal_cc_target: internalCcTarget,
@@ -765,7 +782,7 @@ export function ApprovalLetterBoard() {
     values.recipients_display = recipientsDisplay(values);
     values.letter_kind_display = letterKind === "proof" ? "내용증명" : "일반";
     return values;
-  }, [letterKind, recipients, ccRefs, subject, attachItems, stampOn, includeHwpx, includeAddress, contactPhone, contactEmail, proofSender, proofReceiver, overrides, fileAttachments, deliverableId, extraDeliverableIds, internalCcTarget]);
+  }, [letterKind, recipients, ccRefs, extCcRefs, subject, attachItems, stampOn, includeHwpx, includeAddress, issueDate, contactPhone, contactEmail, proofSender, proofReceiver, overrides, fileAttachments, deliverableId, extraDeliverableIds, internalCcTarget]);
 
   // 직접 지정 번호 — 연도는 채번 예정 번호(없으면 확정 번호/올해) 기준.
   const letterYear = (nextNo ?? docNo ?? "").slice(0, 4) || String(new Date().getFullYear());
@@ -834,6 +851,9 @@ export function ApprovalLetterBoard() {
     if (!subject.trim()) return "제목을 입력하세요.";
     if (recipients.length === 0) return "수신처(업체/기관)를 1건 이상 지정하세요.";
     if (!ccRefs.some((r) => (r.email ?? "").includes("@"))) return "참조 담당자에 메일주소가 1건 이상 필요합니다(승인 시 참조자 메일로 자동 발송).";
+    // 외부 참조는 메일 Cc 로만 받으므로 주소가 없으면 의미가 없다 — 조용히 누락되지 않게 막는다.
+    const noMailExt = extCcRefs.find((r) => !(r.email ?? "").includes("@"));
+    if (noMailExt) return `외부 참조 ${noMailExt.name} 님의 메일주소가 없습니다. 주소를 입력하거나 목록에서 빼세요.`;
     const html = editorRef.current?.innerHTML ?? "";
     if (!html.replace(/<[^>]+>|&nbsp;/g, "").trim()) return "본문을 작성하세요.";
     if (letterKind === "proof" && (!proofReceiver.company.trim() || !proofReceiver.address.trim())) return "내용증명형은 수신 주소·회사명을 입력하세요.";
@@ -843,7 +863,7 @@ export function ApprovalLetterBoard() {
       if (manualCheck && !manualCheck.available) return `이미 사용 중인 공문번호입니다 — ${manualCheck.usedBy}`;
     }
     return null;
-  }, [subject, recipients, ccRefs, letterKind, proofReceiver, line, manualOn, noLocked, manualNo, manualCheck]);
+  }, [subject, recipients, ccRefs, extCcRefs, letterKind, proofReceiver, line, manualOn, noLocked, manualNo, manualCheck]);
 
   /** 대금청구서 생성 완료 — 첨부에 추가하고, 비어 있는 제목·본문·붙임·수신처를 채운다. */
   const onPaymentCreated = useCallback(
@@ -984,6 +1004,24 @@ export function ApprovalLetterBoard() {
         subtitle="결재 승인이 완료되면 자동 채번되어 수신처 메일로 PDF 공문이 발송됩니다."
         actions={
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
+              disabled={busy != null}
+              onClick={() => send("save")}
+              title="작성 중인 공문과 첨부파일을 임시저장합니다(상신 전, 나중에 이어서 작성)"
+            >
+              <Save className="w-3.5 h-3.5" /> {busy === "save" ? "저장 중..." : "저장"}
+            </button>
+            <button
+              type="button"
+              className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
+              disabled={busy != null}
+              onClick={() => setReviewOpen(true)}
+              title="상신 전에 공문(안)과 첨부서류를 사내 검수자에게 보내 확인받습니다"
+            >
+              <ShieldCheck className="w-3.5 h-3.5" /> 사전 검수
+            </button>
             <DeleteDraftButton docId={docId} meta={editMeta} label="공문 삭제" />
             <Link href="/approval" className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs flex items-center gap-1.5">
               <ArrowLeft className="w-3.5 h-3.5" /> 전자결재 홈
@@ -1000,7 +1038,7 @@ export function ApprovalLetterBoard() {
           <RejectedBanner meta={editMeta} />
           {/* 임시저장 공문 목록(2026-08-24) — 전자결재 홈의 작성중/반려까지 가지 않고 바로 이어서 작성 */}
           {letterDrafts.length > 0 && (
-            <div className="rounded-xl border cd-border-c px-3.5 py-2.5 mb-3 text-[12px]">
+            <div className="rounded-xl border cd-border-c cd-solid-bg px-3.5 py-2.5 mb-3 text-[12px]">
               <button
                 type="button"
                 className="flex items-center gap-1.5 font-semibold cd-text w-full text-left"
@@ -1021,9 +1059,11 @@ export function ApprovalLetterBoard() {
                         disabled={current}
                         onClick={() => openDraftDoc(d.docId)}
                         className={
-                          "flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left " +
-                          (current ? "cd-tint-primary border-[color:var(--cd-primary)]" : "cd-border-c hover:cd-soft-primary")
+                          "flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left hover:brightness-[0.98] " +
+                          (current ? "border-[color:var(--cd-primary)]" : "cd-border-c")
                         }
+                        // 상신 버튼 그라데이션을 아주 연하게 깐 태그 면(2026-09-14 사용자 요청)
+                        style={{ background: "var(--cd-action-background-soft)" }}
                       >
                         <FileText className="w-3.5 h-3.5 cd-text-faint shrink-0" />
                         <span className="cd-text truncate flex-1">{d.title || "(제목 없음)"}</span>
@@ -1137,6 +1177,19 @@ export function ApprovalLetterBoard() {
               <label className="flex items-center gap-1.5 text-[12px] cd-text cursor-pointer" title="공문 하단 고정부(담당·시행·전화)에 회사 주소 한 줄을 넣습니다.">
                 <input type="checkbox" checked={includeAddress} onChange={(e) => setIncludeAddress(e.target.checked)} /> 주소 표기
               </label>
+              {/* 시행일 직접 지정(2026-09-11) — 비우면 결재 완료일이 들어간다. */}
+              <label
+                className="flex items-center gap-1.5 text-[12px] cd-text"
+                title="공문 하단 '시행' 줄의 날짜입니다. 비워 두면 결재 완료일이 들어갑니다. 발주처가 특정 일자를 요구할 때만 지정하세요."
+              >
+                시행일
+                <CdDateInput value={issueDate} onChange={setIssueDate} placeholder="자동(결재일)" style={{ width: 128 }} />
+                {issueDate && (
+                  <button type="button" className="cd-btn cd-text-faint text-[11px] underline" onClick={() => setIssueDate("")}>
+                    자동으로
+                  </button>
+                )}
+              </label>
             </div>
 
             <FacilityRecipientPicker
@@ -1152,6 +1205,13 @@ export function ApprovalLetterBoard() {
               onNewFacility={() => setFacilityModal(true)}
             />
             <RecipientPicker label="참조" hint="담당자 표기 + 승인 완료 시 이 메일주소로 공문 발송(To)" list={ccRefs} onChange={setCcRefs} />
+            {/* 외부 참조(2026-09-14) — EPC 공동 수행사 등 수신 주체가 아닌 외부 담당자. 공문 본문에는 찍히지 않는다. */}
+            <RecipientPicker
+              label="외부 참조"
+              hint="수신처가 아닌 외부 업체·기관 담당자 — 공문에는 표기하지 않고 발송 메일만 참조(Cc)로 받습니다(선택)"
+              list={extCcRefs}
+              onChange={setExtCcRefs}
+            />
 
             {letterKind === "proof" && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
@@ -1297,7 +1357,13 @@ export function ApprovalLetterBoard() {
                     <p className="text-[11.5px] cd-text-faint m-auto">첨부된 파일이 없습니다.</p>
                   ) : (
                     fileAttachments.map((f, i) => (
-                      <div key={f.key} className="flex items-center gap-2 rounded-lg border cd-border-c px-2.5 py-1.5">
+                      <div
+                        key={f.key}
+                        {...attachDrag.rowProps(i)}
+                        className={`flex items-center gap-2 rounded-lg border cd-border-c px-2.5 py-1.5 transition-colors ${attachDrag.rowClass(i)}`}
+                        title="끌어서 첨부 순서를 바꿉니다"
+                      >
+                        <GripVertical className="w-3.5 h-3.5 cd-text-faint shrink-0 cursor-grab" aria-hidden />
                         <span className="text-[10px] font-mono cd-text-faint w-4">{i + 1}</span>
                         <button
                           type="button"
@@ -1334,7 +1400,7 @@ export function ApprovalLetterBoard() {
               <div className="flex flex-wrap items-center gap-1">
                 <span className="text-[10.5px] cd-text-faint mr-0.5">불러오기</span>
                 {presets.map((p) => (
-                  <span key={p.presetId} className="inline-flex items-center rounded-full border cd-border-c overflow-hidden">
+                  <span key={p.presetId} className="cd-action inline-flex items-center rounded-full border cd-border-c overflow-hidden">
                     <button type="button" className="text-[11px] px-2 py-0.5 hover:cd-tint-primary" onClick={() => applyPreset(p)} title="이 결재선 불러오기">
                       {p.name}
                     </button>
@@ -1374,7 +1440,7 @@ export function ApprovalLetterBoard() {
               <button type="button" className="cd-btn rounded-lg border border-dashed cd-border-c px-3 py-2 text-xs cd-text-faint flex-1" onClick={() => setOrgModal("approve")}>
                 ＋ 결재자 추가
               </button>
-              <button type="button" className="cd-btn rounded-lg border cd-border-c px-2.5 py-2 text-[11px] cd-text-faint flex items-center gap-1" onClick={saveAsPreset} title="현재 결재선·참조자를 프리셋으로 저장">
+              <button type="button" className="cd-btn rounded-lg border cd-border-c px-2.5 py-2 text-[11px] cd-text-faint flex-1 flex items-center justify-center gap-1" onClick={saveAsPreset} title="현재 결재선·참조자를 프리셋으로 저장">
                 <BookmarkPlus className="w-3.5 h-3.5" /> 프리셋 저장
               </button>
             </div>
@@ -1429,7 +1495,7 @@ export function ApprovalLetterBoard() {
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               <button
                 type="button"
-                className="cd-btn rounded-lg border cd-border-c px-3.5 py-2 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
+                className="cd-btn rounded-lg border cd-border-c px-3.5 py-2 text-xs font-semibold flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50"
                 disabled={busy != null}
                 onClick={() => send("save")}
               >
@@ -1437,7 +1503,7 @@ export function ApprovalLetterBoard() {
               </button>
               <button
                 type="button"
-                className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
+                className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs font-semibold flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50"
                 disabled={busy != null}
                 onClick={openPreview}
                 title="현재 내용을 A4 공문 PDF 로 미리보기 — 인감 위치·폰트·줄 간격 미세조정 가능"
@@ -1446,7 +1512,7 @@ export function ApprovalLetterBoard() {
               </button>
               <button
                 type="button"
-                className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
+                className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50"
                 disabled={busy != null}
                 onClick={() => send("submit")}
               >
@@ -1583,6 +1649,18 @@ export function ApprovalLetterBoard() {
           }}
         />
       )}
+
+      {/* 사전 검수 요청(221) — 검수자 선택은 같은 조직도 트리 모달을 쓴다 */}
+      <LetterReviewModal
+        open={reviewOpen}
+        onClose={() => setReviewOpen(false)}
+        defaultTarget={internalCcTarget}
+        onSaveDoc={async () => {
+          if (!subject.trim()) throw new Error("제목을 입력한 뒤 검수 요청하세요.");
+          const saved = await persist("save");
+          return saved.docId;
+        }}
+      />
 
       {/* 조직도 선택 모달(공용) */}
       <OrgPickerModal

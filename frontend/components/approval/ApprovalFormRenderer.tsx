@@ -852,7 +852,7 @@ function ContactSelectInput({
           onChange={(e) => setQ(e.target.value)}
         />
         {people.map((p) => (
-          <span key={p.id} className="inline-flex items-center gap-1 rounded-full cd-tint-primary px-2.5 py-1 text-[11.5px] shrink-0">
+          <span key={p.id} className="cd-action inline-flex items-center gap-1 rounded-full cd-tint-primary px-2.5 py-1 text-[11.5px] shrink-0">
             {tagLabel(p)}
             <button type="button" title="제거" onClick={() => onSet(people.filter((x) => x.id !== p.id))}>
               <X className="w-3 h-3" />
@@ -1074,7 +1074,7 @@ function UserSelectInput({
   return (
     <div className="w-full flex items-center gap-1.5 flex-wrap">
       {people.map((p) => (
-        <span key={p.employeeId} className="inline-flex items-center gap-1 rounded-full cd-tint-primary px-2.5 py-1 text-[11.5px]">
+        <span key={p.employeeId} className="cd-action inline-flex items-center gap-1 rounded-full cd-tint-primary px-2.5 py-1 text-[11.5px]">
           {p.name}
           {!readOnly && (
             <button type="button" title="제거" onClick={() => commit(people.filter((x) => x.employeeId !== p.employeeId))}>
@@ -1243,7 +1243,7 @@ function TableInput({
                   ) : c.type === "people" ? (
                     <div className="px-1.5 py-1 flex items-center gap-1 flex-wrap">
                       {peopleAt(ri, c.key).map((p) => (
-                        <span key={p.employeeId} className="inline-flex items-center gap-1 rounded-full cd-tint-primary px-2 py-0.5 text-[11px] shrink-0">
+                        <span key={p.employeeId} className="cd-action inline-flex items-center gap-1 rounded-full cd-tint-primary px-2 py-0.5 text-[11px] shrink-0">
                           {p.name}
                           {p.position ? `/${p.position}` : ""}
                           {!readOnly && (

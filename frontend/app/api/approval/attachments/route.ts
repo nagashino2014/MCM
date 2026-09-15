@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
  * 임의 파일 열람을 막기 위해 **경로 접두어 화이트리스트**로 제한한다 — 결재 첨부, 개인카드
  * 영수증 증빙, 법인카드 전자 전표. 이 셋은 모두 approval.view 권한자가 기안에 담을 수 있는 것들이다.
  */
-const READABLE_PREFIXES = ["approval/attachments/", "receipts/", "card-slips/"];
+const READABLE_PREFIXES = ["approval/attachments/", "receipts/", "card-slips/", "shop-receipts/"];
 
 export async function GET(req: NextRequest) {
   try {

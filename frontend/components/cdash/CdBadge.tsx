@@ -39,19 +39,17 @@ export interface CdCountProps extends HTMLAttributes<HTMLSpanElement> {
   tone?: "primary" | "error";
 }
 
-/** 숫자 카운트 뱃지 — 0 이면 렌더하지 않는다(사이드바·탭 안읽음 표시용).
- *  primary 톤은 그라데이션 원형(Soft Glass Ink 뱃지 규정). */
+/** 일반 개수는 중립 배지, 오류 개수만 의미색으로 표시한다. */
 export function CdCount({ count, max = 99, tone = "primary", className, ...rest }: CdCountProps) {
   if (!count || count <= 0) return null;
   const text = count > max ? `${max}+` : String(count);
   return (
     <span
       className={cn(
-        "inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-extrabold leading-none",
-        tone === "primary" && "cd-grad-fill",
+        "inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded border text-xs font-medium leading-none tabular-nums",
+        tone === "primary" ? "cd-surface-bg cd-text-muted cd-border-c" : "cd-error-bg cd-error-text border-transparent",
         className
       )}
-      style={tone === "error" ? { background: "var(--cd-error)", color: "#fff" } : undefined}
       {...rest}
     >
       {text}

@@ -154,7 +154,7 @@ export function LeavePromotionBoard() {
         icon={<BellRing className="w-5 h-5" />}
         eyebrow="Approval · Leave Promotion"
         title="연차촉진제도 관리"
-        subtitle="근로기준법 연차사용촉진 — 잔여 연차가 있는 직원에게 1·2차 사용 촉구 고지를 발송하고 회신을 관리합니다."
+        help="근로기준법 연차사용촉진 — 잔여 연차가 있는 직원에게 1·2차 사용 촉구 고지를 발송하고 회신을 관리합니다."
         actions={
           <div className="flex items-center gap-2">
             <button
@@ -227,7 +227,7 @@ export function LeavePromotionBoard() {
           <p className="text-sm cd-text-faint">불러오는 중입니다.</p>
         ) : (
           <div className="flex flex-col gap-1.5">
-            <div className="hidden md:grid grid-cols-[1.6fr_0.7fr_1fr_repeat(3,0.7fr)_1.2fr_1.2fr] gap-2 px-3 text-[10.5px] font-bold uppercase tracking-wider cd-text-faint">
+            <div className="cd-table-head hidden md:grid grid-cols-[1.6fr_0.7fr_1fr_repeat(3,0.7fr)_1.2fr_1.2fr] gap-2 px-3 py-2 text-[10.5px] font-bold uppercase tracking-wider cd-text-faint">
               <span>직원</span>
               <span className="text-right">소진율</span>
               <span className="pl-10">부서</span>
@@ -375,7 +375,7 @@ function SecondNoticeModal({
           <div className="flex-1 min-h-0 grid lg:grid-cols-[6fr_6fr]">
             {/* 좌: 미제출자 명단 */}
             <div className="overflow-y-auto p-4 border-b lg:border-b-0 lg:border-r cd-border-c">
-              <div className="hidden md:grid grid-cols-[1.7fr_1fr_repeat(4,0.7fr)] gap-2 px-2 pb-1.5 text-[10px] font-bold uppercase tracking-wider cd-text-faint">
+              <div className="cd-table-head hidden md:grid grid-cols-[1.7fr_1fr_repeat(4,0.7fr)] gap-2 px-2 py-2 text-[10px] font-bold uppercase tracking-wider cd-text-faint">
                 <span>성명/직함</span>
                 <span>부서</span>
                 <span className="text-right">소진율</span>
@@ -673,7 +673,7 @@ function BackfillModal({
                   return (
                     <span
                       key={id}
-                      className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11.5px] cursor-pointer ${active ? "cd-tint-primary border-[color:var(--cd-primary)]" : "cd-border-c"}`}
+                      className={`cd-action inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11.5px] cursor-pointer ${active ? "cd-tint-primary border-[color:var(--cd-primary)]" : "cd-border-c"}`}
                       onClick={() => setSelectedId(id)}
                     >
                       <span className="cd-text font-semibold">{r?.name ?? id}</span>
@@ -844,7 +844,9 @@ function TemplateEditor({ onClose }: { onClose: () => void }) {
               <button
                 key={r}
                 type="button"
-                className={`px-3 py-1 text-xs font-semibold rounded-md ${round === r ? "cd-fill-primary text-white" : "cd-text-faint"}`}
+                data-active={round === r}
+                aria-pressed={round === r}
+                className={`cd-choice px-3 py-1 text-xs font-semibold rounded-md ${round === r ? "cd-fill-primary text-white" : "cd-text-faint"}`}
                 onClick={() => setRound(r)}
               >
                 {r}차

@@ -135,6 +135,11 @@ resource "aws_ecs_task_definition" "next" {
         { name = "MCM_STORAGE_BUCKET", value = aws_s3_bucket.app_data.bucket },
         { name = "MCM_JOB_QUEUE_URL", value = aws_sqs_queue.jobs.url },
         { name = "MCM_JOB_QUEUE_MODE", value = "sqs" },
+        { name = "MCM_FACILITY_QUALITY_WORKER_READY", value = "false" },
+        { name = "MCM_FACILITY_QUALITY_TASK_DEFINITION", value = aws_ecs_task_definition.worker.arn },
+        { name = "MCM_FACILITY_QUALITY_CLUSTER", value = aws_ecs_cluster.main.name },
+        { name = "MCM_FACILITY_QUALITY_SUBNETS", value = join(",", aws_subnet.public[*].id) },
+        { name = "MCM_FACILITY_QUALITY_SECURITY_GROUPS", value = aws_security_group.ecs.id },
         { name = "MCM_EXTRACTION_BACKEND_URL", value = "http://backend.local:8001" },
         # 전자결재 첨부 미리보기 — 오피스·hwpx 를 PDF 로 변환하는 경량 서비스(converter-service.tf)
         { name = "MCM_CONVERTER_URL", value = "http://converter.local:8080" },
@@ -241,7 +246,16 @@ resource "aws_ecs_task_definition" "worker" {
         { name = "AWS_REGION", value = var.aws_region },
         { name = "MCM_STORAGE_BUCKET", value = aws_s3_bucket.app_data.bucket },
         { name = "MCM_JOB_QUEUE_URL", value = aws_sqs_queue.jobs.url },
-        { name = "IEPS_BACKEND_URL", value = "http://backend.local:8001" }
+        { name = "IEPS_BACKEND_URL", value = "http://backend.local:8001" },
+        { name = "PGHOST", value = aws_rds_cluster.main.endpoint },
+        { name = "PGPORT", value = "5432" },
+        { name = "PGDATABASE", value = var.db_name }
+      ]
+      secrets = [
+        { name = "PGUSER", valueFrom = "${aws_rds_cluster.main.master_user_secret[0].secret_arn}:username::" },
+        { name = "PGPASSWORD", valueFrom = "${aws_rds_cluster.main.master_user_secret[0].secret_arn}:password::" },
+        { name = "DART_API_KEY", valueFrom = "${aws_secretsmanager_secret.app.arn}:DART_API_KEY::" },
+        { name = "DATA_GO_KR_API_KEY", valueFrom = "${aws_secretsmanager_secret.app.arn}:DATA_GO_KR_API_KEY::" }
       ]
       logConfiguration = {
         logDriver = "awslogs"

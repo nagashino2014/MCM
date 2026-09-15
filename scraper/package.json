@@ -9,9 +9,12 @@
     "recon": "ts-node --project tsconfig.json scripts/cli-recon.ts",
     "scrape": "ts-node --project tsconfig.json scripts/cli-scraper.ts",
     "daou": "ts-node --project tsconfig.json scripts/cli-daou.ts",
-    "receipts": "ts-node --project tsconfig.json scripts/cli-receipts.ts"
+    "receipts": "ts-node --project tsconfig.json scripts/cli-receipts.ts",
+    "filings": "ts-node --project tsconfig.json scripts/cli-filings.ts"
   },
   "dependencies": {
+    "pg": "^8.20.0",
+    "undici": "^7.28.0",
     "@aws-sdk/client-sqs": "^3.1048.0",
     "@types/adm-zip": "^0.5.5",
     "adm-zip": "^0.5.16",
@@ -27,6 +30,7 @@
     "xml2js": "^0.6.2"
   },
   "devDependencies": {
+    "@types/pg": "^8.20.0",
     "@types/node": "^20.11.0",
     "@types/node-cron": "^3.0.11",
     "@types/uuid": "^10.0.0",

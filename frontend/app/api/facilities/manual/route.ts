@@ -9,6 +9,8 @@ import {
   normalizeCompanyName,
 } from "@/lib/ieps/formatters";
 import { extractRegion } from "@scraper/lib/ieps/region";
+import { normalizeInput } from "@scraper/lib/facility-quality/rules";
+import { markReviewedWrite } from "@/lib/ieps/facility-update";
 import {
   normalizeFacilityCompanySize,
   normalizeServiceCategories,
@@ -20,6 +22,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 interface CreateBody {
+  corporateRegistrationNo?: string | null;
   companyName: string;
   businessRegistrationNo?: string | null;
   representativeName?: string | null;
@@ -88,11 +91,11 @@ export async function POST(req: NextRequest) {
     }
     const companyName = normalizeCompanyName(body.companyName) ?? body.companyName.trim();
     const normCompany = normalizeCompanyKey(companyName);
-    const siteAddress = normalizeAddress(body.siteAddress);
+    const siteAddress = normalizeInput("site_address", body.siteAddress);
     // 사용자가 직접 입력한 소재지는 시군구동 구분 로직을 적용하지 않고 입력값을 그대로 저장한다.
     // (중복 검증/지역 추출용 normalized_address는 기존대로 포맷된 값을 사용)
     const siteAddressVerbatim = (body.siteAddress ?? "").replace(/\s+/g, " ").trim() || null;
-    const businessRegistrationNo = normalizeBusinessRegistrationNo(body.businessRegistrationNo);
+    const businessRegistrationNo = normalizeInput("business_registration_no", body.businessRegistrationNo);
     const normAddress = siteAddress?.replace(/\s+/g, " ").trim() ?? null;
     const additionalSiteAddresses = Array.isArray(body.additionalSiteAddresses)
       ? body.additionalSiteAddresses
@@ -116,6 +119,7 @@ export async function POST(req: NextRequest) {
     const now = new Date().toISOString();
 
     const created = await withDbWrite(async (db) => {
+      await markReviewedWrite(db);
       if (businessRegistrationNo && !body.allowDuplicateBusinessRegistrationNo) {
         const r = await db.exec(
           `SELECT facility_id, company_name, business_registration_no, site_address
@@ -150,16 +154,16 @@ export async function POST(req: NextRequest) {
           region_sido, region_sigungu, source, memo, company_size,
           business_certificate_business_type, business_certificate_business_item,
           business_certificate_corporate_registration_no, business_certificate_ocr_text,
-          created_at, updated_at, additional_site_addresses, site_address_verbatim)
+          created_at, updated_at, additional_site_addresses, site_address_verbatim, corporate_registration_no)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $22, $13, $14,
-          $15, $16, $17, $18, $19, $20, $21, true)`,
+          $15, $16, $17, $18, $19, $20, $21, true, $23)`,
         [
           facilityId,
           companyName,
           businessRegistrationNo,
-          normalizeText(body.representativeName),
+          normalizeInput("representative_name", body.representativeName),
           siteAddressVerbatim,
-          body.phoneNumber ?? null,
+          normalizeInput("phone_number", body.phoneNumber),
           body.industryCode ?? null,
           body.industryName ?? null,
           normCompany,
@@ -176,6 +180,7 @@ export async function POST(req: NextRequest) {
           now,
           additionalSiteAddressesJson,
           source,
+          normalizeInput("corporate_registration_no", body.corporateRegistrationNo),
         ]
       );
       const services = normalizeServiceCategories(body.serviceCategories);

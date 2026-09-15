@@ -64,7 +64,7 @@ export function QuickFacilitiesCard({ role }: { role?: string }) {
             </span>
             <a
               href={`/facilities?focus=${f.facilityId}`}
-              className="inline-flex items-center gap-1 text-[11px] font-semibold shrink-0 rounded px-2 py-1 cd-text-muted hover:bg-[color:var(--cd-surface)]"
+              className="cd-action inline-flex items-center gap-1 text-[11px] font-semibold shrink-0 rounded px-2 py-1 cd-text-muted hover:bg-[color:var(--cd-surface)]"
               title="사업장 상세로 이동해 정보 완성"
             >
               <ExternalLink className="w-3 h-3" />

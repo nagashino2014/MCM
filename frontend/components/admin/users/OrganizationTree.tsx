@@ -317,7 +317,9 @@ export default function OrganizationTree({
           <button
             type="button"
             onClick={() => setViewMode((m) => (m === "resigned" ? "active" : "resigned"))}
-            className={cn("cd-btn cd-btn-sm", resignedView ? "cd-btn-primary" : "cd-btn-ghost")}
+            data-active={resignedView}
+            aria-pressed={resignedView}
+            className={cn("cd-choice cd-btn cd-btn-sm", resignedView ? "cd-btn-primary" : "cd-btn-ghost")}
             title={resignedView ? "재직자 보기로 전환" : "퇴사자 보기로 전환"}
           >
             {resignedView ? <Users className="w-3.5 h-3.5" /> : <UserRoundX className="w-3.5 h-3.5" />}

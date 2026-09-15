@@ -4,7 +4,7 @@
 // <lg 에서는 좌측 햄버거로 사이드바 드로어를 연다(네비 소실 방지 — §3.0).
 // 설계: docs/groupware-ux-overhaul-blueprint.md §2.2.
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { ClipboardCheck, LogOut, Mail, Menu, Moon, Plus, Search, Sun } from "lucide-react";
@@ -23,6 +23,7 @@ interface TopBarProps {
   theme: CdTheme;
   onToggleTheme: () => void;
   onOpenNav: () => void; // <lg 햄버거 → 사이드바 드로어
+  navOpen?: boolean;
 }
 
 const ROLE_LABEL: Record<Role, string> = {
@@ -31,10 +32,33 @@ const ROLE_LABEL: Record<Role, string> = {
   viewer: "조회자",
 };
 
-export function TopBar({ userName, userEmail, role, theme, onToggleTheme, onOpenNav }: TopBarProps) {
+export function TopBar({ userName, userEmail, role, theme, onToggleTheme, onOpenNav, navOpen = false }: TopBarProps) {
   const router = useRouter();
   const [searchOpen, setSearchOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const accountId = useId();
+  const accountButtonRef = useRef<HTMLButtonElement>(null);
+  const accountPanelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    accountPanelRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setUserMenuOpen(false);
+        accountButtonRef.current?.focus();
+      }
+    };
+    const onFocus = (event: FocusEvent) => {
+      if (!accountPanelRef.current?.contains(event.target as Node) && !accountButtonRef.current?.contains(event.target as Node)) setUserMenuOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("focusin", onFocus);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("focusin", onFocus);
+    };
+  }, [userMenuOpen]);
 
   // 전역 ⌘K/Ctrl+K 단축키.
   useEffect(() => {
@@ -50,16 +74,11 @@ export function TopBar({ userName, userEmail, role, theme, onToggleTheme, onOpen
 
   return (
     <header
-      className="h-14 rounded-2xl flex items-center gap-2 px-3 sm:px-4 sticky top-0 z-50 shrink-0 border cd-border-c"
-      style={{
-        background: "var(--cd-card)",
-        backdropFilter: "var(--cd-blur)",
-        WebkitBackdropFilter: "var(--cd-blur)",
-        boxShadow: "var(--cd-shadow)",
-      }}
+      className="h-14 flex items-center gap-1.5 px-3 sm:gap-2 sm:px-7 sticky top-0 z-50 shrink-0 border-b cd-border-c"
+      style={{ background: "var(--cd-card-solid)" }}
     >
       {/* <lg: 사이드바 드로어 열기 */}
-      <CdIconButton label="메뉴 열기" className="lg:hidden" onClick={onOpenNav}>
+      <CdIconButton label="메뉴 열기" className="lg:hidden" onClick={onOpenNav} aria-expanded={navOpen} aria-controls={navOpen ? "mobile-navigation" : undefined} aria-haspopup="dialog">
         <Menu className="w-5 h-5" />
       </CdIconButton>
 
@@ -67,10 +86,12 @@ export function TopBar({ userName, userEmail, role, theme, onToggleTheme, onOpen
       <button
         type="button"
         onClick={() => setSearchOpen(true)}
-        className="flex items-center gap-2 flex-1 max-w-md rounded-xl border cd-border-c cd-surface-bg px-3.5 py-2 text-[13px] cd-text-faint hover:bg-[color:var(--cd-hover)] transition-colors"
+        aria-label="통합검색 열기"
+        aria-haspopup="dialog"
+        className="flex h-9 min-w-9 items-center gap-2 flex-1 max-w-md rounded-md border cd-border-c cd-surface-bg px-2.5 sm:px-3 py-2 text-[13px] cd-text-muted hover:bg-[color:var(--cd-hover)] transition-colors"
       >
         <Search className="w-4 h-4 shrink-0" />
-        <span className="flex-1 text-left truncate">검색…</span>
+        <span className="flex-1 text-left">검색</span>
         <kbd className="hidden sm:inline text-[10px] border cd-line-c rounded px-1.5 py-0.5">Ctrl K</kbd>
       </button>
 
@@ -79,14 +100,17 @@ export function TopBar({ userName, userEmail, role, theme, onToggleTheme, onOpen
       {/* +새로 작성 */}
       <CdDropdown
         align="right"
-        trigger={() => (
-          <span
-            className="cd-btn cd-btn-primary inline-flex items-center gap-1.5 cursor-pointer"
-            role="button"
+        trigger={(open) => (
+          <button
+            type="button"
+            className="cd-btn cd-btn-primary inline-flex shrink-0 items-center gap-1.5"
+            aria-label="새로 작성"
+            aria-haspopup="menu"
+            aria-expanded={open}
           >
             <Plus className="w-4 h-4" />
             <span className="hidden sm:inline">새로 작성</span>
-          </span>
+          </button>
         )}
         items={[
           { key: "mail", label: "새 메일", icon: <Mail className="w-4 h-4" />, onSelect: () => router.push("/mail/compose") },
@@ -105,21 +129,28 @@ export function TopBar({ userName, userEmail, role, theme, onToggleTheme, onOpen
       {/* 계정 */}
       <div className="relative">
         <button
+          ref={accountButtonRef}
           type="button"
           onClick={() => setUserMenuOpen((v) => !v)}
-          className="flex items-center gap-2 pl-1 pr-1 sm:pr-3 py-1 rounded-full cd-row-hover border border-transparent transition-all"
+          className="flex shrink-0 items-center gap-2 pl-1 pr-1 sm:pr-2 py-1 rounded-md cd-row-hover border border-transparent transition-colors"
+          aria-label={`${userName || "사용자"} 계정 메뉴`}
+          aria-expanded={userMenuOpen}
+          aria-controls={userMenuOpen ? accountId : undefined}
         >
           <CdAvatar name={userName || "사용자"} size="sm" />
           <div className="flex-col items-start hidden md:flex">
-            <span className="text-sm font-bold cd-text leading-none">{userName || "사용자"}</span>
-            <span className="text-[10px] cd-text-faint font-medium">{ROLE_LABEL[role]}</span>
+            <span className="text-[13px] font-medium cd-text leading-4">{userName || "사용자"}</span>
+            <span className="text-[11px] cd-text-muted">{ROLE_LABEL[role]}</span>
           </div>
         </button>
         {userMenuOpen && (
           <>
-            <div className="fixed inset-0 z-40" onClick={() => setUserMenuOpen(false)} />
+            <div className="fixed inset-0 z-40" onClick={() => { setUserMenuOpen(false); accountButtonRef.current?.focus(); }} />
             <div
-              className="absolute top-[calc(100%+8px)] right-0 w-64 z-50 rounded-2xl overflow-hidden border cd-border-c"
+              ref={accountPanelRef}
+              id={accountId}
+              aria-label="계정"
+              className="absolute top-[calc(100%+8px)] right-0 w-64 max-w-[calc(100vw-24px)] z-50 rounded-lg overflow-hidden border cd-border-c"
               style={{ background: "var(--cd-card-solid)", boxShadow: "var(--cd-shadow)" }}
             >
               <div className="px-4 py-3 border-b cd-hairline-c">

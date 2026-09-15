@@ -1,5 +1,5 @@
 import { type ReactNode } from "react";
-import { KeyboardAvoidingView, Modal, Platform, Pressable, Text, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, Text, View, useWindowDimensions } from "react-native";
 
 import { ThemeVarsScope } from "@/theme/ThemeProvider";
 import { useTheme } from "@/theme/useTheme";
@@ -16,14 +16,26 @@ export function Sheet({
   title,
   children,
   footer,
+  fillHeight,
 }: {
   visible: boolean;
   onClose: () => void;
   title?: string;
   children: ReactNode;
   footer?: ReactNode;
+  /**
+   * 시트 높이를 화면 대비 비율로 **고정**한다(예: 0.7). 내용이 짧아도 같은 높이가 되고,
+   * 본문이 남은 공간을 채우므로(내부 스크롤) footer 버튼이 절대 잘리지 않는다.
+   * ⚠ 생략하면 기존처럼 내용 크기 + 최대 85% 다.
+   */
+  fillHeight?: number;
 }) {
   const { c } = useTheme();
+  // 상한을 % 가 아니라 px 로 잡는다 — 부모(KeyboardAvoidingView)가 높이 auto 라
+  // 퍼센트 maxHeight 는 기기·상황에 따라 해석되지 않아 내용이 시트 밖으로 새어나갔다(09-11 실측 제보).
+  const { height: winH } = useWindowDimensions();
+  const maxH = Math.round(winH * 0.85);
+  const fixedH = fillHeight ? Math.round(winH * fillHeight) : undefined;
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       {/* Modal 은 별도 뷰 계층이라 루트의 토큰 주입이 닿지 않을 수 있다 → 여기서 다시 주입. */}
@@ -34,8 +46,8 @@ export function Sheet({
           <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
             {/* 본체 배경은 hex 로 명시 — 토큰 변수 미해석 상황에서도 반투명해지지 않게 방어. */}
             <View
-              className="max-h-[85%] rounded-t-3xl border-t border-cd-border pb-6"
-              style={{ backgroundColor: c.card }}>
+              className="rounded-t-3xl border-t border-cd-border pb-6"
+              style={{ backgroundColor: c.card, maxHeight: maxH, height: fixedH }}>
               <View className="flex-row items-center gap-2 border-b border-cd-border px-4 py-2.5">
                 <Text className="flex-1 text-[16px] font-extrabold text-cd-text">
                   {title ?? ""}
@@ -47,7 +59,9 @@ export function Sheet({
                   내부 ScrollView 가 남은 높이 안에서 스크롤한다. */}
               {/* overflow-hidden — 내용이 max-h 를 넘어도 footer 와 겹치지 않게 잘라낸다(넘치는 시트는
                   자체 ScrollView 로 감싼다 — 영업 일정 등록 겹침 실측 2026-08-20). */}
-              <View className="shrink overflow-hidden px-4 py-4">{children}</View>
+              {/* fillHeight 를 쓰면 본문이 남은 공간을 그대로 채운다(flex-1) — 내용이 길어도
+                  footer 를 밀어내지 못하므로 버튼이 잘리지 않는다. */}
+              <View className={`overflow-hidden px-4 py-4 ${fixedH ? "flex-1" : "shrink"}`}>{children}</View>
               {footer ? (
                 <View className="flex-row gap-2 border-t border-cd-border px-4 pt-3">{footer}</View>
               ) : null}

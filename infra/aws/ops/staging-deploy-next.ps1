@@ -27,6 +27,7 @@ param(
   [string]$Tag        = "",   # 비우면 deploy-yyyyMMdd-HHmmss
   [switch]$SkipBuild,         # 이미 푸시한 태그로 태스크 정의만 갱신
   [switch]$Wait,              # services-stable 까지 대기
+  [string]$FacilityQualityEnvironmentFile = "", # 정비 워커 연결 설정 JSON, 비밀 값 금지
   [switch]$Force              # 갈라진 배포 가드(다른 브랜치 커밋 누락 경고) 생략
 )
 # aws cli 는 정상 흐름에서도 stderr 를 내므로 Stop 을 쓰지 않고 $LASTEXITCODE 로 판정한다
@@ -51,14 +52,19 @@ $image = "${registry}/${repo}:${Tag}"
 Log "repo root : $repoRoot"
 Log "image     : $image"
 
+# -Force로도 미커밋/미통합 소스 배포를 허용하지 않는다.
+git -C $repoRoot fetch origin --quiet
+if ($LASTEXITCODE -ne 0) { Fail "원격 갱신 실패 — 최신 통합 상태를 확인할 수 없습니다" }
+try { & (Join-Path $PSScriptRoot 'assert-deploy-source.ps1') -RepoRoot $repoRoot }
+catch { Fail $_.Exception.Message }
+
 # ── 갈라진 배포 가드 ────────────────────────────────────────────────
 # 세션 브랜치가 여럿이라, 다른 브랜치의 기능이 빠진 체크아웃에서 배포하면 그 기능이
 # 통째로 사라진 이미지로 덮인다(2026-08-26·08-31 두 차례 실측 사고). 배포 전에 원격
 # 브랜치 중 현재 HEAD 에 없는 커밋이 있으면 나열하고 확인을 받는다. -Force 로 생략.
 if (-not $Force) {
-  git -C $repoRoot fetch origin --quiet 2>$null
   $behind = @()
-  foreach ($b in (git -C $repoRoot branch -r --format "%(refname:short)" | Where-Object { $_ -match "^origin/(claude/|main$)" })) {
+  foreach ($b in (git -C $repoRoot branch -r --format "%(refname:short)" | Where-Object { $_ -match "^origin/(claude/|codex/|main$)" })) {
     $n = git -C $repoRoot rev-list --count "HEAD..$b" 2>$null
     if ($LASTEXITCODE -eq 0 -and [int]$n -gt 0) { $behind += "{0}  (+{1} 커밋)" -f $b, $n }
   }
@@ -117,6 +123,17 @@ if (-not $target) { Fail "컨테이너 '$container' 를 태스크 정의에서 �
 Log "image 교체: $($target.image)"
 Log "        -> $image"
 $target.image = $image
+
+if ($FacilityQualityEnvironmentFile) {
+  $qualityEnv = Get-Content -LiteralPath $FacilityQualityEnvironmentFile -Raw | ConvertFrom-Json
+  if (-not $qualityEnv) { Fail "정비 워커 환경 설정을 읽지 못함" }
+  $allowedQualityKeys = @("MCM_FACILITY_QUALITY_WORKER_READY", "MCM_FACILITY_QUALITY_TASK_DEFINITION", "MCM_FACILITY_QUALITY_CLUSTER", "MCM_FACILITY_QUALITY_SUBNETS", "MCM_FACILITY_QUALITY_SECURITY_GROUPS")
+  foreach ($entry in $qualityEnv.PSObject.Properties) {
+    if ($entry.Name -notin $allowedQualityKeys -or $entry.Value -isnot [string]) { Fail "허용되지 않은 정비 환경 설정: $($entry.Name)" }
+    $target.environment = @($target.environment | Where-Object { $_.name -ne $entry.Name }) + @(@{ name = $entry.Name; value = $entry.Value })
+    Log "정비 워커 연결 설정: $($entry.Name)"
+  }
+}
 
 # AWS CLI 는 BOM 붙은 JSON 을 파싱하지 못하므로 BOM 없는 UTF-8 로 쓴다.
 $tdPath = Join-Path $env:TEMP "mcm_next_taskdef.json"

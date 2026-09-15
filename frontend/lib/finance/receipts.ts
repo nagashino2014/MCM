@@ -51,6 +51,12 @@ export interface PersonalReceipt {
   excluded: boolean;
   memo: string | null;
   createdAt: string;
+  /** 출처(224) — mobile: 앱 촬영 / manual: 웹 기안 화면 직접 첨부(스캔본) */
+  source: "mobile" | "manual";
+  /** 직접 첨부의 지불수단(현금·계좌이체 등) */
+  payMethod: string | null;
+  /** 직접 첨부의 지출 목적 — 표 행 detail 프리필 */
+  purpose: string | null;
 }
 
 function toReceipt(r: Record<string, unknown>): PersonalReceipt {
@@ -68,7 +74,7 @@ function toReceipt(r: Record<string, unknown>): PersonalReceipt {
     items: (r.items_json as string[] | null) ?? [],
     categoryKey: r.category_key ? String(r.category_key) : null,
     categorySource: r.category_source ? String(r.category_source) : null,
-    imageKey: String(r.image_key),
+    imageKey: r.image_key ? String(r.image_key) : "",
     pdfKey: String(r.pdf_key),
     docId: r.doc_id ? String(r.doc_id) : null,
     docFormId: r.doc_form_id ? String(r.doc_form_id) : null,
@@ -78,7 +84,67 @@ function toReceipt(r: Record<string, unknown>): PersonalReceipt {
     excluded: Boolean(Number(r.excluded ?? 0)),
     memo: r.memo ? String(r.memo) : null,
     createdAt: String(r.created_at),
+    source: String(r.source ?? "mobile") === "manual" ? "manual" : "mobile",
+    payMethod: r.pay_method ? String(r.pay_method) : null,
+    purpose: r.purpose ? String(r.purpose) : null,
   };
+}
+
+/**
+ * 직접 첨부 저장(2026-09-15 사용자 요청) — 웹 기안 화면 '직접 첨부' 탭에서 계좌이체 확인증·수기 전표 등의
+ * 스캔본(이미지 또는 PDF)을 올리고 내역(상호·사용일·금액·지불수단·지출 목적)을 직접 입력한 건.
+ * 이미지는 촬영 건과 같이 정규화 JPEG + 스탬프 PDF 를 만들고, PDF 원본은 그대로 증빙 PDF 로 둔다(image_key 없음).
+ * 파싱·중복 감지·자동분류는 하지 않는다(사용자가 내용을 직접 적었으므로).
+ */
+export async function saveManualReceipt(params: {
+  ownerUserId: string;
+  ownerLabel: string;
+  storeName: string;
+  paidAt: string | null; // YYYY-MM-DD
+  totalAmount: number;
+  payMethod: string | null;
+  purpose: string | null;
+  file: { buffer: Buffer; isPdf: boolean; originalName: string };
+}): Promise<PersonalReceipt> {
+  const now = KST_NOW();
+  const receiptId = hashId("rcp", `${params.ownerUserId}:${now}:${Math.random()}`);
+  const ym = now.slice(0, 7).replace("-", "");
+  const nameSeg = sanitizePathSegment(params.storeName || "증빙").slice(0, 40) || "증빙";
+  const base = `receipts/${ym}/${receiptId.slice(4)}_증빙_${nameSeg}`;
+  const pdfKey = `${base}.pdf`;
+  let imageKey: string | null = null;
+
+  if (params.file.isPdf) {
+    await putContractDocument(pdfKey, params.file.buffer, "application/pdf");
+  } else {
+    imageKey = `${base}.jpg`;
+    const pdf = await buildReceiptPdf(params.file.buffer, {
+      storeName: params.storeName,
+      paidAt: params.paidAt,
+      totalAmount: params.totalAmount,
+      capturedBy: params.ownerLabel,
+      capturedAt: now,
+    });
+    await putContractDocument(imageKey, params.file.buffer, "image/jpeg");
+    await putContractDocument(pdfKey, pdf, "application/pdf");
+  }
+
+  await withDbWrite(async (db) => {
+    await db.run(
+      `INSERT INTO personal_receipts
+         (receipt_id, owner_user_id, paid_at, store_name, total_amount, items_json,
+          image_key, pdf_key, excluded, memo, created_at, source, pay_method, purpose)
+       VALUES ($1, $2, NULLIF($3,''), NULLIF($4,''), $5, '[]'::jsonb,
+               $6, $7, 0, NULLIF($8,''), $9, 'manual', NULLIF($10,''), NULLIF($11,''))`,
+      [
+        receiptId, params.ownerUserId, params.paidAt ?? "", params.storeName, params.totalAmount,
+        imageKey, pdfKey, `원본 파일: ${params.file.originalName}`, now, params.payMethod ?? "", params.purpose ?? "",
+      ],
+    );
+  });
+  const db = await getDb();
+  const rows = rowsToObjects(await db.exec(`SELECT * FROM personal_receipts WHERE receipt_id = $1`, [receiptId]));
+  return toReceipt(rows[0]);
 }
 
 /** 기준일과 그 전후 하루 — 중복 감지의 "±1일" 비교용(문자열 목록). */
@@ -205,6 +271,8 @@ export async function listMyReceipts(params: {
   from?: string;
   to?: string;
   limit?: number;
+  /** 출처 필터(224) — 기안 피커의 '모바일앱 첨부'/'직접 첨부' 탭 */
+  source?: "mobile" | "manual";
 }): Promise<PersonalReceipt[]> {
   const db = await getDb();
   const scope = params.scope ?? "all";
@@ -213,6 +281,10 @@ export async function listMyReceipts(params: {
   conds.push(scope === "excluded" ? "r.excluded = 1" : "r.excluded = 0");
   if (scope === "unused") conds.push("r.doc_id IS NULL");
   if (scope === "used") conds.push("r.doc_id IS NOT NULL");
+  if (params.source) {
+    sqlParams.push(params.source);
+    conds.push(`COALESCE(r.source, 'mobile') = $${sqlParams.length}`);
+  }
   if (params.from) {
     sqlParams.push(params.from);
     conds.push(`${BASIS_DATE} >= $${sqlParams.length}`);
@@ -308,7 +380,7 @@ export async function deleteReceipt(receiptId: string, ownerUserId: string): Pro
   await withDbWrite(async (db) => {
     await db.run(`DELETE FROM personal_receipts WHERE receipt_id = $1`, [receiptId]);
   });
-  await deleteContractDocument(existing.imageKey);
+  if (existing.imageKey) await deleteContractDocument(existing.imageKey);
   await deleteContractDocument(existing.pdfKey);
 }
 

@@ -38,6 +38,8 @@ export interface ShopReceipt extends ShopReceiptInput {
   matchBasis: string | null;
   /** 매칭된 원장 건 요약(조인) */
   matchedTxn: { approvedAt: string; amountTotal: number; storeName: string; cardAlias: string; cardLast4: string } | null;
+  /** 귀속 결재문서(224) — 지출결의서(법인카드)에 첨부된 전표. null = 미사용 */
+  docId: string | null;
 }
 
 const KST_NOW = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 19).replace("T", " ");
@@ -118,6 +120,10 @@ export interface ShopReceiptQuery {
   to?: string;
   site?: string;
   limit?: number;
+  /** 품목·주문번호 부분일치(기안 피커 검색) */
+  keyword?: string;
+  /** 매칭 제외 건을 뺀다(기안 피커 — 개인 결제 전표는 결의서에 안 실린다) */
+  excludeExcluded?: boolean;
 }
 
 export async function listShopReceipts(q: ShopReceiptQuery): Promise<ShopReceipt[]> {
@@ -137,6 +143,11 @@ export async function listShopReceipts(q: ShopReceiptQuery): Promise<ShopReceipt
     params.push(q.site);
     where.push(`site = $${params.length}`);
   }
+  if (q.keyword?.trim()) {
+    params.push(`%${q.keyword.trim()}%`);
+    where.push(`(sr.title ILIKE $${params.length} OR sr.order_no ILIKE $${params.length})`);
+  }
+  if (q.excludeExcluded) where.push(`COALESCE(sr.excluded, 0) = 0`);
 
   params.push(Math.min(Math.max(q.limit ?? 500, 1), 2000));
 
@@ -184,5 +195,40 @@ export async function listShopReceipts(q: ShopReceiptQuery): Promise<ShopReceipt
           cardLast4: String(r.m_card_num ?? "").slice(-4),
         }
       : null,
+    docId: r.doc_id ? String(r.doc_id) : null,
   }));
+}
+
+/** field_values 안의 모든 표(행 배열)에서 _shopReceiptId 를 수집한다(card/receipt 규약과 동일). */
+export function collectShopReceiptRefs(fieldValues: Record<string, unknown>): string[] {
+  const out: string[] = [];
+  for (const value of Object.values(fieldValues)) {
+    if (!Array.isArray(value)) continue;
+    for (const row of value) {
+      if (!row || typeof row !== "object") continue;
+      const id = (row as Record<string, unknown>)._shopReceiptId;
+      if (typeof id === "string" && id) out.push(id);
+    }
+  }
+  return out;
+}
+
+/**
+ * 문서 저장/상신 시 — 이 문서의 쇼핑몰 전표 귀속(doc_id, 224)을 표 행 기준으로 동기화한다.
+ * 표에서 빠진 건은 해제. 첨부만 되고 행이 없는 건(카드 행에 전표 PDF 만 붙인 경우)은 귀속하지 않는다
+ * — 그 건의 귀속은 card_transactions.doc_id 가 이미 담당한다.
+ */
+export async function syncDocShopReceiptLinks(docId: string, fieldValues: Record<string, unknown>): Promise<void> {
+  const keepIds = collectShopReceiptRefs(fieldValues);
+  await withDbWrite(async (db) => {
+    await db.run(
+      keepIds.length
+        ? `UPDATE shop_receipts SET doc_id = NULL WHERE doc_id = $1 AND NOT (receipt_id = ANY($2::text[]))`
+        : `UPDATE shop_receipts SET doc_id = NULL WHERE doc_id = $1`,
+      keepIds.length ? [docId, keepIds] : [docId]
+    );
+    if (keepIds.length) {
+      await db.run(`UPDATE shop_receipts SET doc_id = $1 WHERE receipt_id = ANY($2::text[])`, [docId, keepIds]);
+    }
+  });
 }

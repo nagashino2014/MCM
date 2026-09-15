@@ -5,6 +5,7 @@ import { getForm } from "@/lib/approval/forms";
 import { recordLeaveUsageOnApproval } from "@/lib/approval/leave";
 import { assessOverLimitOnSubmit } from "@/lib/approval/overtime";
 import { assessMealChecksOnSubmit } from "@/lib/approval/overtime-meal";
+import { assessRefLinkOnSubmit } from "@/lib/approval/ref-check";
 import { resolveOpenCancelRequests } from "@/lib/approval/cancel";
 import { notifyPendingSteps, notifyDrafterResult } from "@/lib/approval/notify";
 import { generateDocSummary } from "@/lib/approval/summarize";
@@ -562,6 +563,8 @@ export async function submitDoc(docId: string, actorUserId: string): Promise<{ d
     // 지출결의서 — 식대(복리후생비) 사용을 그 날 초과근무 신청(평일 2h·휴일 4h)과 대조해
     // 미달분을 경고 스냅샷·이력으로 남긴다(상신 차단 없음, 결재 화면 배너의 근거).
     await assessMealChecksOnSubmit(txn, docId);
+    // 선행 문서 연계 정합성 — 불일치 판정·숙박출장수당 산정 내역을 상신 시점에 고정 저장(결재 화면 배너).
+    await assessRefLinkOnSubmit(txn, docId);
   });
   // 커밋 후 — 등록 액션 실행(201 레지스트리, submitted 트리거. 내부에서 실패 격리)
   await runFormActionsForDoc(docId, "submitted");

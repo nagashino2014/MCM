@@ -115,18 +115,16 @@ export function BoardListBoard() {
                       key={p.postId}
                       type="button"
                       onClick={() => router.push(`/board/${p.postId}`)}
-                      className="text-left rounded-2xl p-4 px-[18px] flex flex-col gap-2.5 transition-colors"
+                      className="text-left rounded-lg p-4 flex flex-col gap-2.5 transition-colors"
                       style={{
-                        background: "linear-gradient(135deg, rgba(106,131,239,0.12), rgba(142,134,238,0.08))",
-                        border: "1px solid rgba(106,131,239,0.22)",
-                        backdropFilter: "blur(16px)",
-                        WebkitBackdropFilter: "blur(16px)",
+                        background: "var(--cd-card-solid)",
+                        border: "1px solid var(--cd-border)",
                       }}
                     >
                       <span className="flex items-center gap-1.5">
                         <span
                           className="inline-flex items-center gap-1 rounded-full px-2.5 py-[3px] text-[10px] font-extrabold cd-text-primary"
-                          style={{ background: "rgba(255,255,255,0.75)" }}
+                          style={{ background: "var(--cd-surface)" }}
                         >
                           <Pin className="w-2.5 h-2.5" /> 고정 공지
                         </span>

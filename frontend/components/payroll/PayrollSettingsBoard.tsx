@@ -5,6 +5,8 @@ import { Plus, Save } from "lucide-react";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import PayrollRulesPanel from "@/components/payroll/PayrollRulesPanel";
 import PayrollTaxPanel from "@/components/payroll/PayrollTaxPanel";
+import LongevityPanel from "@/components/payroll/LongevityPanel";
+import TripAllowancePanel from "@/components/payroll/TripAllowancePanel";
 import type { PayrollItemDef } from "@/lib/payroll/queries";
 
 /**
@@ -21,7 +23,7 @@ function toDraft(i: PayrollItemDef): Draft {
 }
 
 export default function PayrollSettingsBoard() {
-  const [topTab, setTopTab] = useState<"items" | "rules" | "tax">("items");
+  const [topTab, setTopTab] = useState<"items" | "rules" | "tax" | "longevity" | "trip">("items");
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [kindTab, setKindTab] = useState<"pay" | "deduction">("pay");
   const [saving, setSaving] = useState(false);
@@ -56,6 +58,7 @@ export default function PayrollSettingsBoard() {
         inOrdinaryWage: false,
         displayOrder: Math.max(0, ...prev.filter((d) => d.kind === kindTab).map((d) => d.displayOrder)) + 10,
         isActive: true,
+        ruleEligible: kindTab === "pay",
         usageCount: 0,
         dirty: true,
       },
@@ -80,6 +83,7 @@ export default function PayrollSettingsBoard() {
             inOrdinaryWage: d.inOrdinaryWage,
             displayOrder: d.displayOrder,
             isActive: d.isActive,
+            ruleEligible: d.ruleEligible,
           }),
         });
         if (!res.ok) throw new Error((await res.json()).error ?? `${d.name} 저장 실패`);
@@ -119,7 +123,7 @@ export default function PayrollSettingsBoard() {
       />
 
       <section className="cd-card rounded-3xl flex-1 min-h-0 flex flex-col cd-reveal">
-        <div className="flex items-center justify-between px-5 pt-4 pb-2">
+        <div className="flex items-center justify-between px-5 pt-4 pb-3">
           <div className="flex items-center gap-3">
             <div className="flex rounded-xl border cd-border-c overflow-hidden text-sm font-semibold">
               {(
@@ -127,13 +131,17 @@ export default function PayrollSettingsBoard() {
                   ["items", "항목 사전"],
                   ["rules", "수당 규칙"],
                   ["tax", "세액 설정"],
+                  ["longevity", "장기근속 포상"],
+                  ["trip", "출장 여비"],
                 ] as const
               ).map(([k, label]) => (
                 <button
                   key={k}
                   type="button"
                   onClick={() => setTopTab(k)}
-                  className={`px-3.5 py-1.5 transition ${topTab === k ? "cd-fill-primary text-white" : "cd-text"}`}
+                  data-active={topTab === k}
+                  aria-pressed={topTab === k}
+                  className={`cd-choice px-3.5 py-1.5 transition ${topTab === k ? "cd-fill-primary text-white" : "cd-text"}`}
                 >
                   {label}
                 </button>
@@ -146,7 +154,9 @@ export default function PayrollSettingsBoard() {
                     key={k}
                     type="button"
                     onClick={() => setKindTab(k)}
-                    className={`px-3.5 py-1.5 transition ${kindTab === k ? "cd-fill-primary text-white" : "cd-text"}`}
+                    data-active={kindTab === k}
+                    aria-pressed={kindTab === k}
+                    className={`cd-choice px-3.5 py-1.5 transition ${kindTab === k ? "cd-fill-primary text-white" : "cd-text"}`}
                   >
                     {k === "pay" ? "지급 항목" : "공제 항목"}
                   </button>
@@ -156,7 +166,7 @@ export default function PayrollSettingsBoard() {
           </div>
           {topTab === "items" && (
             <p className="text-[11px] cd-text-faint">
-              통상임금 산입 항목은 초과근무수당 시급(월 통상임금 ÷ 209) 산정에 사용됩니다.
+              통상임금 산입 항목은 초과근무수당 시급(월 통상임금 ÷ 209) 산정에 사용됩니다. 「규칙」 체크 항목만 수당 규칙에서 고를 수 있습니다(자동 산정·공제 항목은 제외).
             </p>
           )}
           {topTab === "rules" && (
@@ -169,9 +179,21 @@ export default function PayrollSettingsBoard() {
               소득세 = 간이세액표(월 과세급여 × 가족수) − 자녀 차감 × 개인 비율 · 지방소득세 10% 자동.
             </p>
           )}
+          {topTab === "longevity" && (
+            <p className="text-[11px] cd-text-faint">
+              사규 별표 9 — 근속 도달 월 대장에 휴가비 자동 산정, 확정 시 특별휴가 자동 부여(직원별 휴가 관리 특별휴가에서 확인).
+            </p>
+          )}
+          {topTab === "trip" && (
+            <p className="text-[11px] cd-text-faint">
+              국내여비기준표 — 승인된 숙박 출장보고서(선행 출장신청서 기준)의 일수 × 직급 단가를 대장 생성 시 출장숙박수당으로 자동 산정.
+            </p>
+          )}
         </div>
         {topTab === "rules" && <PayrollRulesPanel />}
         {topTab === "tax" && <PayrollTaxPanel />}
+        {topTab === "trip" && <TripAllowancePanel />}
+        {topTab === "longevity" && <LongevityPanel />}
         {topTab === "items" && (
         <div className="flex-1 min-h-0 overflow-auto px-4 pb-4">
           {/* 항목 수가 많아 반폭 테이블 2열로 흘린다(좌: 앞 절반, 우: 뒤 절반) */}
@@ -180,13 +202,14 @@ export default function PayrollSettingsBoard() {
               .filter((half) => half.length)
               .map((half, hi) => (
                 <table key={hi} className="w-full text-sm">
-                  <thead>
+                  <thead className="cd-table-head">
                     <tr className="cd-text-faint text-[11px] border-b cd-border-c">
                       <th className="text-left font-semibold p-2">항목명</th>
                       <th className="text-left font-semibold p-2">별칭(콤마 구분)</th>
                       <th className="text-center font-semibold p-2 whitespace-nowrap">통상임금</th>
                       <th className="text-right font-semibold p-2">정렬</th>
                       <th className="text-center font-semibold p-2">활성</th>
+                      <th className="text-center font-semibold p-2 whitespace-nowrap" title="수당 규칙(직원별·항목별 설정)의 항목 목록에 표시">규칙</th>
                       <th className="text-right font-semibold p-2 whitespace-nowrap">사용 건수</th>
                     </tr>
                   </thead>
@@ -231,6 +254,14 @@ export default function PayrollSettingsBoard() {
                             type="checkbox"
                             checked={d.isActive}
                             onChange={(e) => patch(d.itemId, { isActive: e.target.checked })}
+                          />
+                        </td>
+                        <td className="p-1.5 text-center">
+                          <input
+                            type="checkbox"
+                            checked={d.ruleEligible}
+                            title="수당 규칙에서 선택 가능"
+                            onChange={(e) => patch(d.itemId, { ruleEligible: e.target.checked })}
                           />
                         </td>
                         <td className="p-2 text-right cd-text-faint tabular-nums">{(d.usageCount ?? 0).toLocaleString()}</td>

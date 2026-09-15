@@ -1,16 +1,18 @@
 "use client";
 
 // 홈 우측 상단 — 월 캘린더 카드(HC-A).
-// 좌상단 톱니 '참조 지정' + 연·월 + 오늘 pill + 월 이동, 그 아래 태그 5종(본인·영업·부서·선택·차량).
-// 태그를 켠 만큼만 도트/오늘 일정에 반영되며, 켠 태그와 참조 인원은 서버(home_layouts)에 저장된다.
+// 좌상단 톱니 '참조 지정' + 연·월 + 오늘 pill + 월 이동, 그 아래 태그 7종(본인·영업·부서·선택·차량·회의·면접).
+// 선택한 한 종류만 격자/오늘 일정에 반영되며, 선택 태그와 참조 인원은 서버(home_layouts)에 저장된다.
 // 데이터원: 영업=/api/sales/schedule, 인적(휴가)·차량=/api/home/calendar (차량은 G6-C에서 연결).
+// 회의·면접=/api/calendar — 일정 메뉴와 같은 조회·열람 권한을 사용한다.
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Settings2, X } from "lucide-react";
 import { ACTIVITY_TYPE_META, type SalesActivityType } from "@/lib/sales/types";
 import { CALENDAR_TAGS, HOME_CALENDAR_H, HOME_TODAY_LIMIT, type CalendarTagKey } from "@/lib/home/widgets";
-import { TAG_COLOR, TAG_COLOR_STRONG, TAG_INK } from "@/lib/calendar/types";
+import { homeCalendarEntryDays } from "@/lib/home/calendar-events";
+import { TAG_COLOR, TAG_COLOR_STRONG, TAG_INK, type CalendarEvent } from "@/lib/calendar/types";
 import { CalendarRefPickerModal } from "@/components/home/CalendarRefPickerModal";
 
 interface Activity {
@@ -81,6 +83,7 @@ export function ScheduleCalendarCard() {
   const [cur, setCur] = useState(() => ({ y: today.getFullYear(), m: today.getMonth() }));
   const [activities, setActivities] = useState<Activity[]>([]);
   const [leaves, setLeaves] = useState<LeaveEntry[]>([]);
+  const [calendarEntries, setCalendarEntries] = useState<CalendarEvent[]>([]);
   // 태그는 단일 선택 — 여러 종류를 겹쳐 켜면 격자에 일정이 넘쳐 읽히지 않는다.
   const [tag, setTag] = useState<CalendarTagKey>("self");
   const [refs, setRefs] = useState<string[]>([]);
@@ -94,6 +97,7 @@ export function ScheduleCalendarCard() {
   const salesOn = tag === "sales";
   // 차량도 같은 인적 일정 API 를 쓴다(scope=vehicle — 출장신청서 법인차량·직접 예약, G6-C).
   const leaveScope = tag === "self" || tag === "dept" || tag === "refs" || tag === "vehicle" ? tag : "";
+  const entryTag = tag === "meeting" || tag === "interview" ? tag : "";
 
   // 저장된 태그·참조 인원 로드.
   useEffect(() => {
@@ -210,7 +214,25 @@ export function ScheduleCalendarCard() {
     };
   }, [month, leaveScope]);
 
-  // 두 소스를 캘린더 항목으로 합친다.
+  // 회의·면접 — 서버가 참석자·관리자 열람 범위를 판정한 통합 일정만 표시한다.
+  useEffect(() => {
+    setCalendarEntries([]);
+    if (!entryTag) return;
+    let alive = true;
+    fetch(`/api/calendar?month=${month}&tags=${entryTag}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d && alive) setCalendarEntries(Array.isArray(d.events) ? d.events : []);
+      })
+      .catch(() => {
+        /* 위젯은 실패해도 기존 캘린더 동작을 유지한다. */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [month, entryTag]);
+
+  // 기존 영업·인적 일정과 새 회의·면접을 같은 격자/오늘 일정 항목으로 합친다.
   const items = useMemo<CalItem[]>(() => {
     const out: CalItem[] = [];
     for (const a of activities) {
@@ -249,8 +271,23 @@ export function ScheduleCalendarCard() {
         color: TAG_COLOR[l.scope],
       });
     }
+    for (const { event, date } of homeCalendarEntryDays(calendarEntries, entryTag, cur.y, cur.m)) {
+      const people = event.people.map((person) => [person.name, person.positionName].filter(Boolean).join(" ")).join(", ");
+      out.push({
+        id: `calendar:${event.id}:${date}`,
+        tag: event.tag,
+        date,
+        time: event.startTime,
+        chip: event.title,
+        short: event.title.slice(0, 4),
+        detail: [event.title, event.location, people].filter(Boolean).join(" · "),
+        title: event.title,
+        sub: event.location || event.summary,
+        color: TAG_COLOR[event.tag],
+      });
+    }
     return out;
-  }, [activities, leaves]);
+  }, [activities, leaves, calendarEntries, entryTag, cur.y, cur.m]);
 
   // 날짜별 항목(격자 태그·팝업 공용).
   const byDay = useMemo(() => {

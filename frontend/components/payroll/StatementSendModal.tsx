@@ -17,6 +17,7 @@ interface Target {
   email: string | null;
   netPay: number;
   sentAt: string | null;
+  viewedAt: string | null;
 }
 
 interface Data {
@@ -112,13 +113,14 @@ export default function StatementSendModal({
 
         <div className="flex-1 min-h-0 overflow-auto border cd-border-c rounded-2xl">
           <table className="w-full text-xs">
-            <thead>
-              <tr className="cd-text-faint border-b cd-border-c sticky top-0" style={{ background: "var(--cd-card-solid)" }}>
+            <thead className="cd-table-head">
+              <tr className="cd-text-faint border-b cd-border-c sticky top-0" style={{ background: "var(--cd-surface)" }}>
                 <th className="text-left font-semibold p-2">성명</th>
                 <th className="text-left font-semibold p-2">부서</th>
                 <th className="text-right font-semibold p-2">실지급액</th>
                 <th className="text-left font-semibold p-2">메일</th>
                 <th className="text-left font-semibold p-2">발행</th>
+                <th className="text-left font-semibold p-2" title="직원이 내 급여명세서 화면에서 처음 연 시각">열람</th>
                 <th className="p-2" />
               </tr>
             </thead>
@@ -138,6 +140,15 @@ export default function StatementSendModal({
                       <span style={{ color: "var(--cd-success)" }}>{t.sentAt.slice(0, 10)}</span>
                     ) : (
                       <span className="cd-text-faint">대기</span>
+                    )}
+                  </td>
+                  <td className="p-2">
+                    {t.viewedAt ? (
+                      <span style={{ color: "var(--cd-success)" }}>{t.viewedAt.slice(0, 10)}</span>
+                    ) : t.sentAt ? (
+                      <span style={{ color: "var(--cd-warning)" }}>미열람</span>
+                    ) : (
+                      <span className="cd-text-faint">-</span>
                     )}
                   </td>
                   <td className="p-2 text-right">

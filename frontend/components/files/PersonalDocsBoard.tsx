@@ -201,7 +201,7 @@ export function PersonalDocsBoard() {
         {/* 목록 */}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead>
+            <thead className="cd-table-head">
               <tr className="cd-text-faint text-xs border-b cd-border-c">
                 <th className="py-2 px-2 w-8 text-left">
                   <input

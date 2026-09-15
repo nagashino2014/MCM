@@ -239,7 +239,7 @@ export function MetricWizard({
   return (
     <div
       className="fixed inset-0 z-[70] flex items-center justify-center p-4"
-      style={{ background: "rgba(23, 28, 44, 0.42)", backdropFilter: "blur(3px)", WebkitBackdropFilter: "blur(3px)" }}
+      style={{ background: "hsl(224 24% 10% / 24%)" }}
       onClick={onClose}
     >
       <div
@@ -568,7 +568,7 @@ export function MetricWizard({
                 </div>
                 <div className="overflow-x-auto max-h-[240px] overflow-y-auto rounded-xl border cd-border-c">
                   <table className="w-full text-[12px]">
-                    <thead>
+                    <thead className="cd-table-head">
                       <tr className="text-left cd-text-faint text-[11px]">
                         <th className="py-1.5 px-2 font-semibold">구분</th>
                         {preview.hasTime && <th className="py-1.5 px-2 font-semibold">기간</th>}

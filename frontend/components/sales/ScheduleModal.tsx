@@ -343,7 +343,7 @@ export function ScheduleModal({
             <label className="cd-label">실행 · 참석 인원</label>
             <div className="flex flex-wrap gap-1 mb-2">
               {attendees.map((a) => (
-                <span key={a.employeeId} className="cd-pill cd-pill-info inline-flex items-center gap-1">
+                <span key={a.employeeId} className="cd-action cd-pill cd-pill-info inline-flex items-center gap-1">
                   {a.name}
                   <button onClick={() => removeAssignee(a)}><X className="w-3 h-3" /></button>
                 </span>

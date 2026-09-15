@@ -131,7 +131,7 @@ export function WithholdingPanel() {
       {error && <div className="cd-error-text text-sm mb-2">{error}</div>}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead>
+          <thead className="cd-table-head">
             <tr className="cd-text-muted text-left">
               <th className="py-1.5 pr-3 font-normal">지급월</th>
               <th className="py-1.5 pr-3 font-normal">신고기한</th>
@@ -491,7 +491,7 @@ export function HometaxPanel() {
         {notice && <div className="text-sm mb-2" style={{ color: "var(--cd-success,#13DEB9)" }}>{notice}</div>}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead>
+            <thead className="cd-table-head">
               <tr className="cd-text-muted text-left">
                 <th className="py-1.5 pr-3 font-normal">작성일</th>
                 <th className="py-1.5 pr-3 font-normal">유형</th>
@@ -804,7 +804,7 @@ export function VatReturnPanel() {
             </button>
           )}
         </div>
-        <div className="text-xs cd-text-muted mb-2">
+        <div className="text-xs cd-text-muted mb-3">
           {current ? `과세기간 ${current.from} ~ ${current.to} · 신고·납부 기한 ${current.dueDate}` : ""}
           {savedForCurrent && (
             <span className={`cd-pill ml-2 ${savedForCurrent.status === "confirmed" ? "cd-pill-success" : "cd-pill-info"}`}>
@@ -830,7 +830,7 @@ export function VatReturnPanel() {
         {form && (
           <div className="overflow-x-auto">
             <table className="w-full text-sm max-w-[720px]">
-              <thead>
+              <thead className="cd-table-head">
                 <tr className="cd-text-muted text-left">
                   <th className="py-1.5 pr-3 font-normal">구분</th>
                   <th className="py-1.5 pr-3 font-normal text-right">건수</th>
@@ -923,7 +923,7 @@ export function VatReturnPanel() {
             ))}
           </div>
           <div className="cd-card p-4">
-            <div className="cd-card-title mb-2">전표 대사 (T3)</div>
+            <div className="cd-card-title mb-3">전표 대사 (T3)</div>
             <table className="w-full text-sm">
               <tbody>
                 <tr className="border-t cd-hairline-row-c">
@@ -973,7 +973,7 @@ export function VatReturnPanel() {
         </div>
         <div className="overflow-x-auto mb-3">
           <table className="w-full text-sm">
-            <thead>
+            <thead className="cd-table-head">
               <tr className="cd-text-muted text-left">
                 <th className="py-1.5 pr-3 font-normal">물건지</th>
                 <th className="py-1.5 pr-3 font-normal">임차인</th>
@@ -1042,7 +1042,7 @@ export function VatReturnPanel() {
       {alerts && (
         <div className="cd-card p-4">
           <div className="cd-card-title mb-2">경비 점검 — 법인카드</div>
-          <div className="flex items-center gap-2 flex-wrap mb-2">
+          <div className="flex items-center gap-2 flex-wrap mb-3">
             {(
               [
                 ["duplicates", "동일 가맹점·금액 중복", alerts.duplicates],
@@ -1064,7 +1064,7 @@ export function VatReturnPanel() {
           {alertOpen && (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead>
+                <thead className="cd-table-head">
                   <tr className="cd-text-muted text-left">
                     <th className="py-1.5 pr-3 font-normal">사용일시</th>
                     <th className="py-1.5 pr-3 font-normal">카드</th>

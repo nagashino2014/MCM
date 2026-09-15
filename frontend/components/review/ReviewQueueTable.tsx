@@ -42,7 +42,7 @@ export function ReviewQueueTable({ rows, selectedId, onSelect, loading }: Props)
 
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="hidden md:grid grid-cols-[1.4fr_1fr_1.2fr_0.6fr_0.6fr] gap-3 px-3 py-2 text-[10px] font-bold uppercase cd-text-faint tracking-wide">
+      <div className="cd-table-head hidden md:grid grid-cols-[1.4fr_1fr_1.2fr_0.6fr_0.6fr] gap-3 px-3 py-2 text-[10px] font-bold uppercase cd-text-faint tracking-wide">
         <div>사업장 / 첨부</div>
         <div>항목</div>
         <div>원본 값</div>

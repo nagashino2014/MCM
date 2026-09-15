@@ -50,8 +50,10 @@ export default function NewEntryPanel({
             key={t}
             type="button"
             onClick={() => onTabChange(t)}
+            data-active={tab === t}
+            aria-pressed={tab === t}
             className={cn(
-              "rounded-t-xl px-4 py-2 text-sm font-semibold border-b-2",
+              "cd-choice rounded-t-xl px-4 py-2 text-sm font-semibold border-b-2",
               tab === t ? "cd-text-primary border-current cd-tint-primary" : "cd-text-faint border-transparent cd-row-hover"
             )}
           >

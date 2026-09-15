@@ -208,8 +208,8 @@ export default function LedgerCreateModal({
             </p>
             <div className="flex-1 min-h-0 overflow-auto border cd-border-c rounded-2xl">
               <table className="w-full text-xs">
-                <thead>
-                  <tr className="cd-text-faint border-b cd-border-c sticky top-0" style={{ background: "var(--cd-card-solid)" }}>
+                <thead className="cd-table-head">
+                  <tr className="cd-text-faint border-b cd-border-c sticky top-0" style={{ background: "var(--cd-surface)" }}>
                     <th className="text-left font-semibold p-2">성명</th>
                     <th className="text-left font-semibold p-2">부서</th>
                     <th className="text-right font-semibold p-2">지급합계</th>
@@ -234,7 +234,8 @@ export default function LedgerCreateModal({
             </div>
             <p className="text-[11px] cd-text-faint">
               생성 후 월별 대장 화면에서 셀 단위 수정이 가능하며(작성 중 상태), [확정]하면 편집이 잠깁니다.
-              초과근무수당은 전월 26일~금월 25일 근태 기준 자동 산정, 연차수당·성과급 등 변동 항목은 수기 입력입니다.
+              초과근무수당은 전월 26일~금월 25일 근태 기준 자동 산정, 숙박출장수당은 같은 구간의 승인된 숙박 출장보고서 일수 기준 자동 산정,
+              연차수당·성과급 등 변동 항목은 수기 입력입니다.
             </p>
           </>
         )}

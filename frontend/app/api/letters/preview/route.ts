@@ -3,7 +3,7 @@ import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { loadDrafterSnapshot } from "@/lib/approval/docs";
 import { composeLetter } from "@/lib/letter/compose";
 import { renderLetterPdf } from "@/lib/letter/pdf";
-import type { LetterFieldValues } from "@/lib/letter/types";
+import { ISO_DATE_RE, type LetterFieldValues } from "@/lib/letter/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,6 +24,8 @@ export async function POST(req: NextRequest) {
       letterNo: body.letterNo ?? null,
       drafterName: snap.name,
       drafterPosition: snap.position,
+      // 시행일 수동 지정 — 미리보기도 발송본과 같은 날짜를 보여준다(2026-09-11).
+      issueDate: ISO_DATE_RE.test(values.issue_date ?? "") ? values.issue_date : null,
     });
     const result = await renderLetterPdf(layout);
     return new NextResponse(Buffer.from(result.bytes), {

@@ -178,7 +178,8 @@ export function ApprovalAnalyticsBoard() {
     <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
       <CdPageHeader
         title="데이터 분석"
-        meta={`${metrics.length}개 지표 · 모든 결과에 산출 근거(대상·제외 사유)가 표시됩니다`}
+        meta={`${metrics.length}개 지표`}
+        help="지표별 결과와 산출 근거를 조회합니다. 대상과 제외 사유를 함께 확인할 수 있습니다."
         actions={
           manager ? (
             <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold flex items-center gap-1.5" onClick={() => setWizardOpen(true)}>
@@ -264,7 +265,7 @@ export function ApprovalAnalyticsBoard() {
                 {chart && <ApexChart type={result.hasTime ? "line" : "bar"} options={chart.options} series={chart.series} height={chart.height} />}
                 <div className="overflow-x-auto max-h-[320px] overflow-y-auto">
                   <table className="w-full text-[12px]">
-                    <thead>
+                    <thead className="cd-table-head">
                       <tr className="text-left cd-text-faint text-[11px]">
                         <th className="py-1.5 pr-2 font-semibold">구분</th>
                         {result.hasTime && <th className="py-1.5 pr-2 font-semibold">기간</th>}

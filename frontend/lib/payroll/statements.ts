@@ -19,16 +19,21 @@ export interface StatementTarget {
   email: string | null;
   netPay: number;
   sentAt: string | null;
+  /** 본인이 처음 연 시각(수신 확인, 223) */
+  viewedAt: string | null;
 }
 
 export interface MyPayslip {
   entryId: string;
   payYear: number;
   payMonth: number;
+  /** salary | bonus(별도 상여대장) | intern */
+  ledgerKind: string;
   payTotal: number;
   deductionTotal: number;
   netPay: number;
   sentAt: string | null;
+  viewedAt: string | null;
 }
 
 function toNum(v: unknown): number {
@@ -57,7 +62,7 @@ export async function listStatementTargets(ledgerId: string): Promise<{
   if (!lg) return { ledger: null, targets: [] };
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT e.entry_id, e.employee_id, e.name, e.dept_name, e.net_pay, e.statement_sent_at, p.email
+      `SELECT e.entry_id, e.employee_id, e.name, e.dept_name, e.net_pay, e.statement_sent_at, e.statement_viewed_at, p.email
          FROM payroll_entries e
          LEFT JOIN employee_profiles p ON p.employee_id = e.employee_id
         WHERE e.ledger_id = $1
@@ -80,6 +85,7 @@ export async function listStatementTargets(ledgerId: string): Promise<{
       email: r.email ? String(r.email) : null,
       netPay: toNum(r.net_pay),
       sentAt: r.statement_sent_at ? String(r.statement_sent_at) : null,
+      viewedAt: r.statement_viewed_at ? String(r.statement_viewed_at) : null,
     })),
   };
 }
@@ -263,47 +269,186 @@ export async function sendStatements(
   return { sent, skipped };
 }
 
-/** 본인 명세서 목록(발송분만) — 홈 수신함 카드 */
-export async function listMyPayslips(userId: string): Promise<{ rows: MyPayslip[]; linked: boolean }> {
+/**
+ * 본인 명세서 목록 — 확정 대장의 본인 행(2026-09-14 정책: 발행 여부와 무관하게 확정분은 조회·열람 가능.
+ * 과거 엑셀 적재분은 발행 개념이 없어 '발행 대기'로만 표시된다). year 미지정 시 최근 24개월(홈 카드).
+ */
+export async function listMyPayslips(
+  userId: string,
+  opts?: { year?: number; limit?: number }
+): Promise<{ rows: MyPayslip[]; linked: boolean; years: number[] }> {
   const employeeId = await resolveEmployeeId(userId);
-  if (!employeeId) return { rows: [], linked: false };
+  if (!employeeId) return { rows: [], linked: false, years: [] };
   const db = await getDb();
+  const years = rowsToObjects(
+    await db.exec(
+      `SELECT DISTINCT lg.pay_year FROM payroll_entries e
+         JOIN payroll_ledgers lg ON lg.ledger_id = e.ledger_id
+        WHERE e.employee_id = $1 AND lg.status = 'confirmed'
+        ORDER BY lg.pay_year DESC`,
+      [employeeId]
+    )
+  ).map((r) => Number(r.pay_year));
+  const params: unknown[] = [employeeId];
+  let where = `e.employee_id = $1 AND lg.status = 'confirmed'`;
+  if (opts?.year) {
+    params.push(opts.year);
+    where += ` AND lg.pay_year = $${params.length}`;
+  }
+  const limit = opts?.year ? 60 : (opts?.limit ?? 24);
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT e.entry_id, lg.pay_year, lg.pay_month, e.pay_total, e.deduction_total, e.net_pay, e.statement_sent_at
+      `SELECT e.entry_id, lg.pay_year, lg.pay_month, lg.ledger_kind, e.pay_total, e.deduction_total, e.net_pay,
+              e.statement_sent_at, e.statement_viewed_at
          FROM payroll_entries e
          JOIN payroll_ledgers lg ON lg.ledger_id = e.ledger_id
-        WHERE e.employee_id = $1 AND e.statement_sent_at IS NOT NULL
-        ORDER BY lg.pay_year DESC, lg.pay_month DESC
-        LIMIT 24`,
-      [employeeId]
+        WHERE ${where}
+        ORDER BY lg.pay_year DESC, lg.pay_month DESC, lg.ledger_kind
+        LIMIT ${limit}`,
+      params
     )
   );
   return {
     linked: true,
+    years,
     rows: rows.map((r) => ({
       entryId: String(r.entry_id),
       payYear: Number(r.pay_year),
       payMonth: Number(r.pay_month),
+      ledgerKind: String(r.ledger_kind ?? "salary"),
       payTotal: toNum(r.pay_total),
       deductionTotal: toNum(r.deduction_total),
       netPay: toNum(r.net_pay),
       sentAt: r.statement_sent_at ? String(r.statement_sent_at) : null,
+      viewedAt: r.statement_viewed_at ? String(r.statement_viewed_at) : null,
     })),
   };
 }
 
-/** 본인 명세서 열람 권한 확인 — 발송된 본인 행만 */
+export interface MyPayrollSummary {
+  linked: boolean;
+  years: number[];
+  year: number | null;
+  /** 월별(1~12) 지급·공제·실지급 — 같은 달 급여대장+상여대장 합산 */
+  months: Array<{ month: number; payTotal: number; deductionTotal: number; netPay: number; ledgers: number }>;
+  totals: { payTotal: number; deductionTotal: number; netPay: number; months: number };
+  /** 연간 항목별 합계(지급·공제) — 항목 사전 정렬 */
+  items: Array<{ itemId: string; name: string; kind: "pay" | "deduction"; amount: number }>;
+  /** 연도별 실지급 합계(연도 비교 표) */
+  yearly: Array<{ year: number; payTotal: number; deductionTotal: number; netPay: number; months: number }>;
+}
+
+/** 본인 급여 수령액 집계 — 월별·연도별·항목별(확정 대장 기준). */
+export async function myPayrollSummary(userId: string, year?: number): Promise<MyPayrollSummary> {
+  const employeeId = await resolveEmployeeId(userId);
+  const empty: MyPayrollSummary = { linked: false, years: [], year: null, months: [], totals: { payTotal: 0, deductionTotal: 0, netPay: 0, months: 0 }, items: [], yearly: [] };
+  if (!employeeId) return empty;
+  const db = await getDb();
+  const yearly = rowsToObjects(
+    await db.exec(
+      `SELECT lg.pay_year, SUM(e.pay_total) AS pay_total, SUM(e.deduction_total) AS deduction_total, SUM(e.net_pay) AS net_pay,
+              count(DISTINCT lg.pay_month) AS months
+         FROM payroll_entries e
+         JOIN payroll_ledgers lg ON lg.ledger_id = e.ledger_id
+        WHERE e.employee_id = $1 AND lg.status = 'confirmed'
+        GROUP BY lg.pay_year ORDER BY lg.pay_year DESC`,
+      [employeeId]
+    )
+  ).map((r) => ({
+    year: Number(r.pay_year),
+    payTotal: toNum(r.pay_total),
+    deductionTotal: toNum(r.deduction_total),
+    netPay: toNum(r.net_pay),
+    months: Number(r.months ?? 0),
+  }));
+  const years = yearly.map((y) => y.year);
+  const target = year && years.includes(year) ? year : years[0] ?? null;
+  if (!target) return { ...empty, linked: true };
+  const monthRows = rowsToObjects(
+    await db.exec(
+      `SELECT lg.pay_month, SUM(e.pay_total) AS pay_total, SUM(e.deduction_total) AS deduction_total, SUM(e.net_pay) AS net_pay,
+              count(*) AS ledgers
+         FROM payroll_entries e
+         JOIN payroll_ledgers lg ON lg.ledger_id = e.ledger_id
+        WHERE e.employee_id = $1 AND lg.status = 'confirmed' AND lg.pay_year = $2
+        GROUP BY lg.pay_month ORDER BY lg.pay_month`,
+      [employeeId, target]
+    )
+  );
+  const byMonth = new Map(monthRows.map((r) => [Number(r.pay_month), r]));
+  const months = Array.from({ length: 12 }, (_, i) => {
+    const r = byMonth.get(i + 1);
+    return {
+      month: i + 1,
+      payTotal: toNum(r?.pay_total),
+      deductionTotal: toNum(r?.deduction_total),
+      netPay: toNum(r?.net_pay),
+      ledgers: Number(r?.ledgers ?? 0),
+    };
+  });
+  const items = rowsToObjects(
+    await db.exec(
+      `SELECT d.item_id, d.name, d.kind, SUM(l.amount) AS amount
+         FROM payroll_entry_lines l
+         JOIN payroll_entries e ON e.entry_id = l.entry_id
+         JOIN payroll_ledgers lg ON lg.ledger_id = e.ledger_id
+         JOIN payroll_item_defs d ON d.item_id = l.item_id
+        WHERE e.employee_id = $1 AND lg.status = 'confirmed' AND lg.pay_year = $2
+        GROUP BY d.item_id, d.name, d.kind, d.display_order
+       HAVING SUM(l.amount) <> 0
+        ORDER BY d.kind, d.display_order`,
+      [employeeId, target]
+    )
+  ).map((r) => ({
+    itemId: String(r.item_id),
+    name: String(r.name),
+    kind: (String(r.kind) === "deduction" ? "deduction" : "pay") as "pay" | "deduction",
+    amount: toNum(r.amount),
+  }));
+  const cur = yearly.find((y) => y.year === target)!;
+  return {
+    linked: true,
+    years,
+    year: target,
+    months,
+    totals: { payTotal: cur.payTotal, deductionTotal: cur.deductionTotal, netPay: cur.netPay, months: cur.months },
+    items,
+    yearly,
+  };
+}
+
+/** 본인 명세서 열람 기록(수신 확인) — 최초 열람 시각만 남긴다. 발행된 행에만 기록(미발행분은 열람만). */
+export async function markPayslipViewed(userId: string, entryId: string): Promise<{ viewedAt: string | null }> {
+  await assertOwnPayslip(userId, entryId);
+  const now = new Date().toISOString();
+  let viewedAt: string | null = null;
+  await withDbWrite(async (db) => {
+    const rows = rowsToObjects(
+      await db.exec(
+        `UPDATE payroll_entries
+            SET statement_viewed_at = COALESCE(statement_viewed_at, $2)
+          WHERE entry_id = $1 AND statement_sent_at IS NOT NULL
+          RETURNING statement_viewed_at`,
+        [entryId, now]
+      )
+    );
+    viewedAt = rows[0]?.statement_viewed_at ? String(rows[0].statement_viewed_at) : null;
+  });
+  return { viewedAt };
+}
+
+/** 본인 명세서 열람 권한 확인 — 확정 대장의 본인 행만(작성 중 대장은 불가). */
 export async function assertOwnPayslip(userId: string, entryId: string): Promise<void> {
   const employeeId = await resolveEmployeeId(userId);
   if (!employeeId) throw Object.assign(new Error("직원 연결이 없는 계정입니다."), { status: 403 });
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT 1 FROM payroll_entries
-        WHERE entry_id = $1 AND employee_id = $2 AND statement_sent_at IS NOT NULL`,
+      `SELECT 1 FROM payroll_entries e
+         JOIN payroll_ledgers lg ON lg.ledger_id = e.ledger_id
+        WHERE e.entry_id = $1 AND e.employee_id = $2 AND lg.status = 'confirmed'`,
       [entryId, employeeId]
     )
   );
-  if (!rows.length) throw Object.assign(new Error("본인에게 발행된 명세서만 열람할 수 있습니다."), { status: 403 });
+  if (!rows.length) throw Object.assign(new Error("본인의 확정된 명세서만 열람할 수 있습니다."), { status: 403 });
 }

@@ -13,6 +13,18 @@
 
 export type WeatherBaseKind = "맑음" | "흐림" | "비" | "눈";
 
+/** 시간대별 예보 1칸 — 위젯 하단을 누르면 가로로 펼쳐지는 시계열. */
+export interface WeatherHour {
+  /** KST 기준 "YYYY-MM-DDTHH:00". */
+  t: string;
+  temp: number;
+  base: WeatherBaseKind;
+  /** 강수확률 %(초단기예보 구간은 값이 없어 0). */
+  pop: number;
+  /** 1시간 강수량 mm. */
+  pcp: number;
+}
+
 export interface WeatherResult {
   temp: number;
   hi: number;
@@ -20,7 +32,12 @@ export interface WeatherResult {
   base: WeatherBaseKind;
   /** 어느 소스에서 나온 값인지 — 위젯 디버깅·폴백 확인용. */
   source: "kma" | "open-meteo";
+  /** 다음 시각부터의 시간대별 예보(최대 60시간 ≒ 2일 반). */
+  hours: WeatherHour[];
 }
+
+/** 시계열 상한 — 요구사항은 "2일 후까지"(48h)이고, 단기예보가 주는 만큼 여유를 둔다. */
+const MAX_HOURS = 60;
 
 const KMA_BASE = "http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0";
 
@@ -132,6 +149,77 @@ const num = (v: string | undefined): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
+/** PCP(1시간 강수량)·RN1 문자열 → mm.
+ *  기상청은 숫자가 아니라 "강수없음" / "1.0mm" / "1mm 미만" / "30.0~50.0mm" 같은 표기로 준다. */
+export function parseAmountMm(v: string | undefined): number {
+  const s = (v ?? "").trim();
+  if (!s || s === "-" || s.startsWith("강수없음") || s.startsWith("적설없음")) return 0;
+  if (s.includes("미만")) return 0.5; // "1mm 미만" — 0 은 아니지만 표시상 미미
+  const first = s.match(/\d+(\.\d+)?/); // "30.0~50.0mm" 는 하한을 취한다
+  return first ? Number(first[0]) : 0;
+}
+
+/** 시계열 누적 버킷 — 예보 항목이 (시각 × 카테고리) 로 흩어져 오므로 시각 키로 모은다. */
+interface HourAcc {
+  temp?: number;
+  sky?: number;
+  pty?: number;
+  pop?: number;
+  pcp?: number;
+}
+
+/**
+ * 예보 응답을 시각별 버킷에 쌓는다.
+ * `ultra`(초단기예보, +6h)는 T1H·RN1, `vilage`(단기예보, +3일)는 TMP·POP·PCP 를 쓴다.
+ * 같은 시각이 겹치면 더 정확한 초단기 값이 이기도록 **단기 → 초단기 순서로** 호출할 것.
+ */
+function accumulateHours(items: KmaItem[], kind: "ultra" | "vilage", into: Map<string, HourAcc>): void {
+  for (const it of items) {
+    if (!it.fcstDate || !it.fcstTime) continue;
+    const key = `${it.fcstDate}${it.fcstTime.slice(0, 2)}`;
+    const acc = into.get(key) ?? {};
+    switch (it.category) {
+      case "T1H":
+        if (kind === "ultra") acc.temp = num(it.fcstValue) ?? acc.temp;
+        break;
+      case "TMP":
+        if (kind === "vilage") acc.temp = num(it.fcstValue) ?? acc.temp;
+        break;
+      case "SKY":
+        acc.sky = num(it.fcstValue) ?? acc.sky;
+        break;
+      case "PTY":
+        acc.pty = num(it.fcstValue) ?? acc.pty;
+        break;
+      case "POP":
+        acc.pop = num(it.fcstValue) ?? acc.pop;
+        break;
+      case "RN1":
+      case "PCP":
+        acc.pcp = parseAmountMm(it.fcstValue);
+        break;
+      default:
+        continue;
+    }
+    into.set(key, acc);
+  }
+}
+
+/** 버킷 → 정렬된 시계열. `afterKey`("YYYYMMDDHH") 보다 뒤인 시각만, 최대 MAX_HOURS 개. */
+function buildHours(acc: Map<string, HourAcc>, afterKey: string): WeatherHour[] {
+  return [...acc.entries()]
+    .filter(([key, v]) => key > afterKey && v.temp != null)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(0, MAX_HOURS)
+    .map(([key, v]) => ({
+      t: `${key.slice(0, 4)}-${key.slice(4, 6)}-${key.slice(6, 8)}T${key.slice(8, 10)}:00`,
+      temp: Math.round(v.temp as number),
+      base: kmaToBaseKind(v.pty ?? 0, v.sky ?? 1),
+      pop: Math.round(v.pop ?? 0),
+      pcp: v.pcp ?? 0,
+    }));
+}
+
 async function fetchKma(lat: number, lon: number): Promise<WeatherResult> {
   const { nx, ny } = latLonToGrid(lat, lon);
   const grid = { nx: String(nx), ny: String(ny) };
@@ -150,24 +238,28 @@ async function fetchKma(lat: number, lon: number): Promise<WeatherResult> {
   const pty = num(ncst.find((i) => i.category === "PTY")?.obsrValue) ?? 0;
 
   // ② 초단기예보 — SKY 는 실황에 없어 예보에서 가장 가까운 시각 값을 쓴다(매시 30분 발표, 45분 제공).
+  //    같은 응답의 시계열(T1H·RN1)은 앞 6시간을 단기예보보다 정확하게 채우는 데도 쓴다.
   let sky = 1;
+  let ultraItems: KmaItem[] = [];
   try {
     const fcstAt = shiftHour(ymd, hh, mm < 45 ? 1 : 0);
-    const fcst = await callKma("getUltraSrtFcst", {
-      numOfRows: "60",
+    ultraItems = await callKma("getUltraSrtFcst", {
+      numOfRows: "120", // 6시간 × 카테고리 10종 — 60 이면 뒤쪽 시간이 잘린다
       base_date: fcstAt.ymd,
       base_time: `${String(fcstAt.hour).padStart(2, "0")}30`,
       ...grid,
     });
-    const skyItems = fcst.filter((i) => i.category === "SKY");
+    const skyItems = ultraItems.filter((i) => i.category === "SKY");
     sky = num(skyItems[0]?.fcstValue) ?? 1;
   } catch {
     // SKY 실패 시 강수 없으면 맑음으로 둔다(기온·강수형태는 이미 확보).
   }
 
-  // ③ 단기예보 — 일 최고/최저. TMX/TMN 이 없는 발표 회차면 오늘 TMP 시계열로 대체한다.
+  // ③ 단기예보 — 일 최고/최저 + 3일치 시간대별 시계열.
+  //    TMX/TMN 이 없는 발표 회차면 오늘 TMP 시계열로 대체한다.
   let hi = Math.round(temp);
   let lo = Math.round(temp);
+  const hourAcc = new Map<string, HourAcc>();
   try {
     const slots = [23, 20, 17, 14, 11, 8, 5, 2];
     const nowMin = hh * 60 + mm;
@@ -175,11 +267,12 @@ async function fetchKma(lat: number, lon: number): Promise<WeatherResult> {
     // 02:10 이전이면 오늘 발표분이 없다 → 전날 23시 발표(shiftHour 가 날짜까지 넘겨준다).
     const at = slot != null ? { ymd, hour: slot } : shiftHour(ymd, 0, 1);
     const vilage = await callKma("getVilageFcst", {
-      numOfRows: "300",
+      numOfRows: "1000", // 3일치 전량(최대 809건) — 페이지가 갈리면 뒷날이 통째로 빈다
       base_date: at.ymd,
       base_time: `${String(at.hour).padStart(2, "0")}00`,
       ...grid,
     });
+    accumulateHours(vilage, "vilage", hourAcc);
     const today = vilage.filter((i) => i.fcstDate === ymd);
     const tmx = num(today.find((i) => i.category === "TMX")?.fcstValue);
     const tmn = num(today.find((i) => i.category === "TMN")?.fcstValue);
@@ -189,6 +282,8 @@ async function fetchKma(lat: number, lon: number): Promise<WeatherResult> {
   } catch {
     // 최고/최저 실패는 치명적이지 않다 — 현재 기온으로 둔다.
   }
+  // 초단기를 **나중에** 쌓아 겹치는 앞 6시간을 관측에 가까운 값으로 덮는다.
+  accumulateHours(ultraItems, "ultra", hourAcc);
 
   // 실황이 예보를 앞지르는 경우가 있다(2026-08-07 대관령: 현재 29.7 / 예보 최고 27)
   // — "현재 기온이 오늘 최고기온보다 높은" 표시를 막기 위해 현재값을 범위에 포함시킨다.
@@ -198,25 +293,44 @@ async function fetchKma(lat: number, lon: number): Promise<WeatherResult> {
     lo: Math.min(lo, Math.round(temp)),
     base: kmaToBaseKind(pty, sky),
     source: "kma",
+    hours: buildHours(hourAcc, `${ymd}${String(hh).padStart(2, "0")}`),
   };
 }
 
 async function fetchOpenMeteo(lat: number, lon: number): Promise<WeatherResult> {
   const res = await fetch(
     `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
-      `&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&timezone=Asia%2FSeoul&forecast_days=1`,
+      `&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min` +
+      `&hourly=temperature_2m,weather_code,precipitation_probability,precipitation` +
+      `&timezone=Asia%2FSeoul&forecast_days=3`,
     { cache: "no-store", signal: AbortSignal.timeout(8000) }
   );
   if (!res.ok) throw new Error(`open-meteo HTTP ${res.status}`);
   const d = await res.json();
   const temp = Number(d?.current?.temperature_2m);
   if (!Number.isFinite(temp)) throw new Error("open-meteo 응답 이상");
+
+  // hourly.time 은 현지시(Asia/Seoul) "YYYY-MM-DDTHH:00" — 지난 시각을 잘라내고 그대로 쓴다.
+  const times: string[] = Array.isArray(d.hourly?.time) ? d.hourly.time : [];
+  const nowKey = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 13); // "YYYY-MM-DDTHH"
+  const hours: WeatherHour[] = times
+    .map((t, i) => ({
+      t,
+      temp: Math.round(Number(d.hourly.temperature_2m?.[i])),
+      base: openMeteoToBaseKind(Number(d.hourly.weather_code?.[i])),
+      pop: Math.round(Number(d.hourly.precipitation_probability?.[i]) || 0),
+      pcp: Number(d.hourly.precipitation?.[i]) || 0,
+    }))
+    .filter((h) => h.t.slice(0, 13) > nowKey && Number.isFinite(h.temp))
+    .slice(0, MAX_HOURS);
+
   return {
     temp,
     hi: Math.round(Number(d.daily?.temperature_2m_max?.[0] ?? temp)),
     lo: Math.round(Number(d.daily?.temperature_2m_min?.[0] ?? temp)),
     base: openMeteoToBaseKind(Number(d.current.weather_code)),
     source: "open-meteo",
+    hours,
   };
 }
 

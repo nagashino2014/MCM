@@ -359,7 +359,7 @@ export function CompanyProfilePanel() {
         icon={<Building2 className="w-5 h-5" />}
         eyebrow="System · Company"
         title="회사 프로필 관리"
-        subtitle="자사 일반현황·연혁·면허/인증 보유현황을 관리합니다. 입찰 증빙서류 패키지 생성 시 이 데이터가 사용됩니다."
+        help="자사 일반현황·연혁·면허/인증 보유현황을 관리합니다. 입찰 증빙서류 패키지 생성 시 이 데이터가 사용됩니다."
         actions={
           <div className="flex items-center gap-2">
             {savedAt && <span className="text-[11px] cd-text-faint">저장됨 {savedAt}</span>}
@@ -454,7 +454,7 @@ export function CompanyProfilePanel() {
                 </div>
               )}
 
-              <div className="flex items-center gap-2 mt-4 mb-2">
+              <div className="flex items-center gap-2 mt-4 mb-3">
                 <h4 className="text-[12px] font-bold cd-text">재정상황</h4>
                 <span className="text-[10px] cd-text-faint">홈택스 표준재무제표만 가능 · 금액은 원 단위</span>
                 <div className="ml-auto">
@@ -474,7 +474,7 @@ export function CompanyProfilePanel() {
               ) : (
                 <div className="overflow-x-auto rounded-xl border cd-border-c">
                   <table className="w-full text-[11px]">
-                    <thead>
+                    <thead className="cd-table-head">
                       <tr className="border-b cd-border-c">
                         {FINANCE_COLS.map((c) => (
                           <th key={c.key} className="px-2 py-1.5 text-left cd-text-faint font-semibold whitespace-nowrap">{c.label}</th>

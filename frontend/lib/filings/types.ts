@@ -51,6 +51,18 @@ export interface FilingPayload {
   fields: FilingField[];
 }
 
+/** 계약 첨부파일(contract_documents) — 로컬 도구가 사이트 첨부에 쓴다 */
+export interface FilingAttachment {
+  documentId: string;
+  /** contract | amendment | invoice */
+  type: string;
+  typeLabel: string;
+  name: string;
+  /** GET 으로 내려받는 경로(contract.view 권한, Bearer 가능) */
+  downloadPath: string;
+  createdAt: string;
+}
+
 export interface FilingRow {
   filingId: string;
   filingKind: FilingKind;
@@ -73,6 +85,8 @@ export interface FilingRow {
   updatedAt: string;
   /** 기한 대비 남은 일수(음수 = 초과). due_on 없으면 null. 오늘(KST) 기준. */
   daysLeft: number | null;
+  /** 계약 건이면 계약서·변경계약서·세금계산서 첨부 목록(최신순) */
+  attachments: FilingAttachment[];
 }
 
 export interface FilingSettings {

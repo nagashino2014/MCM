@@ -35,7 +35,9 @@ import ContractStaffingModal from "@/components/contracts/ContractStaffingModal"
 import TaxInvoiceIssueModal from "@/components/contracts/TaxInvoiceIssueModal";
 import FacilityInfoModal from "@/components/contracts/FacilityInfoModal";
 import { BAROBILL_BANKS } from "@/components/finance/FinLogo";
-import { IndustryOptionsEditorButton, useContractIndustryOptions } from "@/components/contracts/IndustryOptionsEditor";
+import { INTEGRATED_PERMIT_OPTION_SUFFIX, IndustryOptionsEditorButton, useContractIndustryOptions } from "@/components/contracts/IndustryOptionsEditor";
+import { IndustryPermitLookupButton } from "@/components/contracts/IndustryPermitLookupButton";
+import { findIntegratedPermitIndustry, industryIdFromKsic } from "@/lib/ieps/integrated-permit-industries";
 import { CONTRACT_SERVICE_OPTIONS } from "@/lib/contracts/service-options";
 import { RateCardEditor, type RateCardData } from "@/components/contracts/RateCardEditor";
 import { createRateCard, rateCardHasContent, rateCardStageOptions, upgradeRateCard } from "@/lib/contracts/rate-card";
@@ -189,6 +191,15 @@ interface FacilitySearchItem {
   businessRegistrationNo: string | null;
   siteAddress: string | null;
   integratedPermitTarget?: string | null;
+  /** 사업장 마스터의 KSIC(복수는 줄바꿈/쉼표 연결) — 계약 업종 프리필용(2026-08-26) */
+  industryCode?: string | null;
+}
+
+/** 사업장 KSIC → 계약 업종 옵션명("반도체(통합허가)" 형식). 대상 업종이 아니면 null. */
+function industryOptionFromKsic(industryCode?: string | null): string | null {
+  const id = industryIdFromKsic(industryCode);
+  const label = id ? findIntegratedPermitIndustry(id)?.label : null;
+  return label ? `${label}${INTEGRATED_PERMIT_OPTION_SUFFIX}` : null;
 }
 
 interface PdfViewerState {
@@ -454,7 +465,7 @@ function ContractsInner() {
         icon={<FileSignature className="w-5 h-5" />}
         eyebrow="Contract · Ledger"
         title="계약 관리"
-        subtitle="신규/변경 계약 입력, 계산서 및 수금 정보 등록"
+        help="용역 분류를 펼쳐 계약을 선택하면 오른쪽에 계약 정보와 청구·수금 단계가 표시됩니다. 검색과 연도 필터로 계약 범위를 좁힐 수 있습니다."
         actions={
           <>
             <button
@@ -666,6 +677,7 @@ function ContractsInner() {
       {invoiceModal && selectedId && (
         <InvoiceUploadModal
           contractId={selectedId}
+          milestones={detail?.milestones ?? []}
           state={invoiceModal}
           onChange={setInvoiceModal}
           onClose={() => setInvoiceModal(null)}
@@ -732,6 +744,7 @@ function ContractsInner() {
           contractDate={selected.contractDate}
           contractKind={String(detail.contract.contract_kind ?? "standard")}
           initialMilestones={detail.milestones.map((m) => ({
+            milestoneId: String(m.milestone_id ?? ""),
             stageLabel: String(m.stage_label ?? ""),
             amount: Number(m.amount ?? 0),
             paymentTerms: String(m.payment_terms ?? ""),
@@ -932,8 +945,8 @@ function ContractDetailPanel({
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex items-start justify-between gap-4">
-        <div>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0 max-w-full">
           <div className="flex items-center gap-2 flex-wrap">
             <h2 className="text-2xl font-bold cd-text">{String(contract.contract_title ?? "")}</h2>
             {overdueTag && (
@@ -961,10 +974,10 @@ function ContractDetailPanel({
             {String(contract.counterparty_name ?? "")} · 업체ID {String(contract.legacy_company_id ?? "-")}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex max-w-full flex-wrap items-center gap-2">
           <button
             type="button"
-            className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs cd-text-muted flex items-center gap-1"
+            className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs cd-text-muted flex shrink-0 items-center gap-1 whitespace-nowrap"
             onClick={() => {
               // Prefer the most recent contract/amendment PDF stored in
               // contract_documents; the legacy fallback to invoice[0] is kept
@@ -995,7 +1008,7 @@ function ContractDetailPanel({
           <button
             type="button"
             onClick={() => setStaffingModalOpen(true)}
-            className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs cd-text-muted flex items-center gap-1"
+            className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs cd-text-muted flex shrink-0 items-center gap-1 whitespace-nowrap"
           >
             <GitCommitHorizontal className="w-3.5 h-3.5" />
             공정표/수행인력
@@ -1003,7 +1016,7 @@ function ContractDetailPanel({
           <button
             type="button"
             onClick={onOpenChange}
-            className="rounded-xl px-3 py-2 text-xs text-white cd-fill-primary shadow-sm flex items-center gap-1"
+            className="rounded-xl px-3 py-2 text-xs text-white cd-fill-primary shadow-sm flex shrink-0 items-center gap-1 whitespace-nowrap"
           >
             <Pencil className="w-3.5 h-3.5" />
             변경계약 입력
@@ -1011,7 +1024,7 @@ function ContractDetailPanel({
           <button
             type="button"
             onClick={onDeleteContract}
-            className="rounded-xl px-3 py-2 text-xs text-white bg-rose-500 hover:bg-rose-600 shadow-sm flex items-center gap-1"
+            className="rounded-xl px-3 py-2 text-xs text-white bg-rose-500 hover:bg-rose-600 shadow-sm flex shrink-0 items-center gap-1 whitespace-nowrap"
           >
             <Trash2 className="w-3.5 h-3.5" />
             계약 삭제
@@ -1176,8 +1189,8 @@ function ContractDetailPanel({
             단계 추가
           </button>
         </div>
-        <div className="overflow-hidden rounded-2xl border cd-border-c">
-          <table className="w-full text-xs">
+        <div className="overflow-x-auto rounded-2xl border cd-border-c">
+          <table className="w-full min-w-[1200px] whitespace-nowrap text-xs">
             <thead className="cd-surface-bg cd-text-muted text-[11px]">
               <tr>
                 <th className="text-left p-2.5">차수</th>
@@ -1701,12 +1714,14 @@ function PermitInfoSection({
 
 function InvoiceUploadModal({
   contractId,
+  milestones,
   state,
   onChange,
   onClose,
   onSaved,
 }: {
   contractId: string;
+  milestones: Record<string, unknown>[];
   state: InvoiceModalState;
   onChange: (state: InvoiceModalState) => void;
   onClose: () => void;
@@ -1717,11 +1732,27 @@ function InvoiceUploadModal({
   const fileRef = useRef<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [fileName, setFileName] = useState("");
+  // 복수 등록 — 하나의 세금계산서를 여러 대금 지급 단계에 함께 등록한다(발행일·PDF·지급조건 공통).
+  const [bulkMode, setBulkMode] = useState(false);
+  const [bulkIds, setBulkIds] = useState<string[]>([]);
+  const otherMilestones = milestones
+    .filter((m) => String(m.milestone_id ?? "") && String(m.milestone_id ?? "") !== state.milestoneId)
+    .map((m) => ({
+      id: String(m.milestone_id ?? ""),
+      label: String(m.stage_label ?? ""),
+      amount: Number(m.invoice_amount ?? m.amount ?? 0),
+      issued: Number(m.invoice_issued ?? 0) === 1,
+      issuedAt: String(m.invoice_issued_at ?? ""),
+    }));
 
   const submit = async () => {
     const selectedFile = fileRef.current;
     if (!selectedFile && !state.paymentCollected) {
       toast.show("계산서를 첨부해 주세요.", "error");
+      return;
+    }
+    if (bulkMode && bulkIds.length > 0 && !selectedFile) {
+      toast.show("복수 등록은 계산서 PDF를 첨부해야 합니다.", "error");
       return;
     }
     setSaving(true);
@@ -1772,12 +1803,19 @@ function InvoiceUploadModal({
       form.set("memo", state.memo);
       if (state.settlementEligible) form.set("settlementAmount", state.settlementAmount);
       form.set("file", selectedFile);
+      if (bulkMode && bulkIds.length > 0) form.set("milestoneIds", bulkIds.join(","));
       const res = await fetch(`/api/contracts/${encodeURIComponent(contractId)}/invoices`, { method: "POST", body: form });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body?.error ?? "HTTP " + res.status);
       }
-      toast.show("세금계산서 정보를 등록했습니다.", "success");
+      const saved = await res.json().catch(() => ({}));
+      toast.show(
+        Number(saved?.count ?? 1) > 1
+          ? `세금계산서 정보를 ${saved.count}개 단계에 등록했습니다.`
+          : "세금계산서 정보를 등록했습니다.",
+        "success",
+      );
       onSaved();
     } catch (err) {
       toast.show("등록 실패: " + (err as Error).message, "error");
@@ -1789,10 +1827,28 @@ function InvoiceUploadModal({
   return (
     <ModalShell title={`${state.stageLabel} 발행/수금 정보 입력`} onClose={onClose}>
       <div className="p-5 grid gap-3 grid-cols-2">
-        <label className="grid gap-1 text-sm col-span-2">
-          <span className="font-bold cd-text-muted">계산서 발행일</span>
-          <DateInput value={state.issueDate} onChange={(issueDate) => onChange({ ...state, issueDate })} />
-        </label>
+        <div className="col-span-2 flex items-end gap-3 flex-wrap">
+          <label className="grid gap-1 text-sm" style={{ width: 220 }}>
+            <span className="font-bold cd-text-muted">계산서 발행일</span>
+            <DateInput value={state.issueDate} onChange={(issueDate) => onChange({ ...state, issueDate })} />
+          </label>
+          <label className="flex items-center gap-2 text-sm font-bold cd-text-muted pb-2">
+            <input
+              type="checkbox"
+              checked={bulkMode}
+              onChange={(e) => {
+                setBulkMode(e.target.checked);
+                if (!e.target.checked) setBulkIds([]);
+              }}
+            />
+            복수 등록
+          </label>
+          {bulkMode && (
+            <span className="text-[11px] cd-text-faint pb-2">
+              선택한 단계에 같은 발행일·계산서 PDF가 함께 등록됩니다(발행금액은 각 단계 금액).
+            </span>
+          )}
+        </div>
         <label className="grid gap-1 text-sm">
           <span className="font-bold cd-text-muted">발행금액</span>
           <input
@@ -1808,6 +1864,43 @@ function InvoiceUploadModal({
           <input type="text" className="cd-input" placeholder="예: 세금계산서 발행 후 30일 이내 지급"
             value={state.paymentTerms} onChange={(e) => onChange({ ...state, paymentTerms: e.target.value })} />
         </label>
+        {bulkMode && (
+          <div className="col-span-2 grid gap-1 text-sm">
+            <span className="font-bold cd-text-muted">복수 등록 대상 대금 지급 단계</span>
+            <div className="rounded-xl border cd-border-c divide-y max-h-44 overflow-y-auto">
+              <div className="flex items-center gap-2 px-3 py-2 text-xs cd-text-muted">
+                <input type="checkbox" checked readOnly />
+                <span className="font-bold cd-text">{state.stageLabel}</span>
+                <span className="tabular-nums ml-auto">{formatExactAmount(state.baseAmount)}</span>
+                <span className="rounded-full border cd-border-c px-2 py-0.5">대표</span>
+              </div>
+              {otherMilestones.map((m) => (
+                <label key={m.id} className="flex items-center gap-2 px-3 py-2 text-xs cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={bulkIds.includes(m.id)}
+                    onChange={(e) =>
+                      setBulkIds((prev) => (e.target.checked ? [...prev, m.id] : prev.filter((v) => v !== m.id)))
+                    }
+                  />
+                  <span className="cd-text">{m.label}</span>
+                  <span className="tabular-nums ml-auto cd-text-muted">{formatExactAmount(m.amount)}</span>
+                  {m.issued && (
+                    <span className="rounded-full px-2 py-0.5 cd-tint-primary" title={`기존 발행일 ${m.issuedAt}`}>
+                      발행됨 · 교체
+                    </span>
+                  )}
+                </label>
+              ))}
+              {otherMilestones.length === 0 && (
+                <div className="px-3 py-2 text-xs cd-text-faint">함께 등록할 다른 대금 지급 단계가 없습니다.</div>
+              )}
+            </div>
+            <span className="text-[11px] cd-text-faint">
+              이미 계산서가 등록된 단계를 고르면 기존 파일이 새 파일로 교체됩니다. 수금 정보는 대표 단계에만 반영됩니다.
+            </span>
+          </div>
+        )}
         {state.settlementEligible && (
           <>
             <label className="grid gap-1 text-sm">
@@ -2446,6 +2539,8 @@ function NewContractModal({
                           counterpartyName: entity.companyName,
                           counterpartyQuery: entity.companyName,
                           counterpartyBusinessRegistrationNo: entity.businessRegistrationNo ?? null,
+                          // 사업장 마스터의 KSIC 로 업종 프리필(비어 있을 때만 — 공장별로 다를 수 있어 수정 가능)
+                          industryCategory: state.industryCategory || industryOptionFromKsic(entity.industryCode) || state.industryCategory,
                         })
                       }
                     >
@@ -2472,7 +2567,7 @@ function NewContractModal({
               {state.selectedFacilities.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-1">
                   {state.selectedFacilities.map((facility) => (
-                    <span key={facility.facilityId} className="inline-flex items-center gap-1 rounded-full cd-tint-primary px-2.5 py-1 text-xs cd-text-primary">
+                    <span key={facility.facilityId} className="cd-action inline-flex items-center gap-1 rounded-full cd-tint-primary px-2.5 py-1 text-xs cd-text-primary">
                       {facility.companyName}
                       <button
                         type="button"
@@ -2596,10 +2691,16 @@ function NewContractModal({
               <div className="flex items-center gap-2">
                 <select className="cd-select min-w-0 flex-1" value={state.industryCategory} onChange={(e) => onChange({ ...state, industryCategory: e.target.value })}>
                   <option value="">업종 선택</option>
+                  {/* 프리필/조회 적용 값이 편집된 옵션 목록에 없어도 표시되도록 가드 */}
+                  {state.industryCategory && !industryOptions.includes(state.industryCategory) && (
+                    <option value={state.industryCategory}>{state.industryCategory}</option>
+                  )}
                   {industryOptions.map((option) => (
                     <option key={option} value={option}>{option}</option>
                   ))}
                 </select>
+                {/* KSIC 코드·업종명 → 통합허가 20개 업종 판정(2026-08-26 — 반도체/전자부품 등 유사 업종 구분) */}
+                <IndustryPermitLookupButton onApply={(optionName) => onChange({ ...state, industryCategory: optionName })} />
                 <IndustryOptionsEditorButton options={industryOptions} onOptionsChange={setIndustryOptions} />
               </div>
             </div>

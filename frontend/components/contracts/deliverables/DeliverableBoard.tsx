@@ -267,7 +267,7 @@ export function DeliverableBoard() {
 
   /**
    * VAT 표기 변경 — 표기만 바꾸는 게 아니라 공급가액·부가세를 다시 산출한다.
-   * 별도 = 계약금액이 공급가액(부가세 가산) / 포함 = 총액에서 역산.
+   * 별도 = 계약금액이 공급가액(부가세 가산) / 포함 = 총액에서 역산 / 미포함 = 부가세 없이 공급가액만.
    */
   const changeVatNote = async (note: string) => {
     setValues((prev) => ({ ...prev, "meta.vatNote": note }));
@@ -468,6 +468,7 @@ export function DeliverableBoard() {
       return (
         <select className="cd-input w-full" value={value || "VAT 별도"} onChange={(e) => void changeVatNote(e.target.value)}>
           <option value="VAT 별도">VAT 별도 (계약금액 = 공급가액)</option>
+          <option value="VAT 미포함">VAT 별도 (금액에 미포함 — 공급가액만)</option>
           <option value="VAT 포함">VAT 포함 (계약금액에서 역산)</option>
         </select>
       );

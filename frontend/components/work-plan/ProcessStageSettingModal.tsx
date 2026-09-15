@@ -212,8 +212,10 @@ export default function ProcessStageSettingModal({
                   key={s.key}
                   type="button"
                   onClick={() => setActiveKey(s.key)}
+                  data-active={s.key === activeKey}
+                  aria-pressed={s.key === activeKey}
                   className={cn(
-                    "group relative inline-flex items-center gap-2 rounded-xl px-3 py-2.5 text-xs border text-left",
+                    "cd-choice group relative inline-flex items-center gap-2 rounded-xl px-3 py-2.5 text-xs border text-left",
                     s.key === activeKey ? "cd-tint-primary border-current cd-text-primary" : "cd-border-c cd-row-hover"
                   )}
                 >

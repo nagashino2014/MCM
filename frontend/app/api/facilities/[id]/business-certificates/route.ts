@@ -3,16 +3,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
-import {
-  normalizeBusinessCertificateOcrText,
-  parseBusinessCertificateText,
-  type BusinessCertificateKind,
-  type BusinessCertificateParseResult,
-} from "@/lib/ieps/business-certificate-parser";
-import {
-  voteBusinessCertificateCandidates,
-  type OcrCandidate,
-} from "@/lib/ieps/business-certificate-voting";
+import { type BusinessCertificateKind } from "@/lib/ieps/business-certificate-parser";
+import { analyzeBusinessCertificate, type CertificateAnalysis } from "@/lib/ieps/business-certificate-analysis";
+import { certificateAnalysisWarning } from "@/lib/ieps/business-certificate-status";
 import {
   buildFacilityBusinessCertificateStorageKey,
   putFacilityBusinessCertificate,
@@ -38,7 +31,7 @@ export async function GET(_: NextRequest, ctx: RouteContext) {
         `SELECT c.*, u.name AS created_by_name, u.email AS created_by_email
            FROM facility_business_certificates c
            LEFT JOIN users u ON u.user_id = c.created_by
-          WHERE c.facility_id = $1
+          WHERE c.facility_id = $1 AND c.parsed_json->>'deletedAt' IS NULL
           ORDER BY c.version_no DESC, c.created_at DESC`,
         [id]
       )
@@ -73,37 +66,31 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     )[0];
     if (!facility) return NextResponse.json({ error: "사업장을 찾을 수 없습니다." }, { status: 404 });
 
-    const versionRows = rowsToObjects(
-      await db.exec("SELECT COALESCE(MAX(version_no), 0) + 1 AS next_version FROM facility_business_certificates WHERE facility_id = $1", [id])
-    );
-    const versionNo = Number(versionRows[0]?.next_version ?? 1);
     const buffer = Buffer.from(await file.arrayBuffer());
     const sha256 = crypto.createHash("sha256").update(buffer).digest("hex");
-    const originalName = sanitizeFilename(file.name || "business-certificate.pdf");
-    const { storageKey, fileName } = buildFacilityBusinessCertificateStorageKey({
-      facilityId: id,
-      companyName: String(facility.company_name ?? ""),
-      versionNo,
-      originalFilename: originalName,
-    });
-    const stored = await putFacilityBusinessCertificate(storageKey, buffer, file.type || "application/pdf");
-
-    const extraction = preParsed
-      ? { text: preParsed.ocrText, candidates: [] as OcrCandidate[], warning: null }
-      : await extractBusinessCertificateText(file.name || originalName, buffer, file.type || "application/pdf");
-    const voted = preParsed
-      ? null
-      : voteBusinessCertificateCandidates(extraction.candidates, extraction.text, file.name || originalName);
-    const ocrText = preParsed?.ocrText || voted?.ocrText || normalizeBusinessCertificateOcrText(extraction.text);
-    const parsed = preParsed ?? (
-      extraction.candidates.length && voted
-        ? voted
-        : parseBusinessCertificateText(ocrText, { filename: file.name || originalName })
-    );
+    const parsed = preParsed ?? await analyzeBusinessCertificate(file);
+    const ocrText = parsed.ocrText;
     const certificateId = "fbc_" + crypto.randomUUID().replace(/-/g, "").slice(0, 16);
     const now = new Date().toISOString();
 
-    await withDbWrite(async (txn) => {
+    const { versionNo, stored } = await withDbWrite(async (txn) => {
+      const lockedFacility = rowsToObjects(await txn.exec(
+        "SELECT facility_id FROM facilities WHERE facility_id = $1 AND deleted_at IS NULL FOR UPDATE", [id]
+      ))[0];
+      if (!lockedFacility) throw Object.assign(new Error("사업장을 찾을 수 없습니다."), { status: 404 });
+      const versionRows = rowsToObjects(
+        await txn.exec("SELECT COALESCE(MAX(version_no), 0) + 1 AS next_version FROM facility_business_certificates WHERE facility_id = $1", [id])
+      );
+      const versionNo = Number(versionRows[0]?.next_version ?? 1);
+      const originalName = sanitizeFilename(file.name || "business-certificate.pdf");
+      const { storageKey, fileName } = buildFacilityBusinessCertificateStorageKey({
+        facilityId: id,
+        companyName: String(facility.company_name ?? ""),
+        versionNo,
+        originalFilename: originalName,
+      });
+      const stored = await putFacilityBusinessCertificate(storageKey, buffer, file.type || "application/pdf");
+
       await txn.run("UPDATE facility_business_certificates SET is_current = 0, updated_at = $1 WHERE facility_id = $2", [now, id]);
       await txn.run(
         `INSERT INTO facility_business_certificates
@@ -135,8 +122,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
           ocrText || null,
           JSON.stringify({
             ...parsed,
-            extractionWarning: extraction.warning,
-            candidateCount: extraction.candidates.length,
+            extractionWarning: parsed.warning,
             votedFields: "votedFields" in parsed ? parsed.votedFields : [],
             needsReviewFields: "needsReviewFields" in parsed ? parsed.needsReviewFields : [],
           }),
@@ -148,10 +134,10 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       );
       await txn.run(
         `UPDATE facilities
-            SET business_certificate_business_type = $1,
-                business_certificate_business_item = $2,
-                business_certificate_corporate_registration_no = $3,
-                business_certificate_ocr_text = $4,
+            SET business_certificate_business_type = COALESCE($1, business_certificate_business_type),
+                business_certificate_business_item = COALESCE($2, business_certificate_business_item),
+                business_certificate_corporate_registration_no = COALESCE($3, business_certificate_corporate_registration_no),
+                business_certificate_ocr_text = COALESCE($4, business_certificate_ocr_text),
                 representative_name = COALESCE($5, representative_name),
                 corporate_registration_no = COALESCE($3, corporate_registration_no),
                 updated_at = $6
@@ -168,11 +154,12 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       );
       await recordAuditLogInline(txn, {
         actorUserId: actor.userId,
-        action: "facility_business_certificate_upload",
+        action: "facility_update",
         targetTable: "facility_business_certificates",
         targetId: certificateId,
-        after: { facilityId: id, versionNo, storageKey, ...parsed, warning: extraction.warning },
+        after: { operation: "upload_certificate", facilityId: id, versionNo, storageKey, ...parsed, warning: parsed.warning },
       });
+      return { versionNo, stored };
     });
 
     return NextResponse.json({
@@ -181,14 +168,14 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       publicPath: stored.publicPath,
       ...parsed,
       ocrText,
-      warning: extraction.warning || null,
+      warning: parsed.warning || null,
     });
   } catch (err) {
     return authErrorToResponse(err);
   }
 }
 
-function buildPreParsedBusinessCertificate(form: FormData): BusinessCertificateParseResult | null {
+function buildPreParsedBusinessCertificate(form: FormData): CertificateAnalysis | null {
   if (form.get("useParsedResult") !== "1") return null;
   const businessType = formText(form, "businessType");
   const businessItem = formText(form, "businessItem");
@@ -205,6 +192,10 @@ function buildPreParsedBusinessCertificate(form: FormData): BusinessCertificateP
     businessItem,
     businessKinds,
     corporateRegistrationNo,
+    ocrText,
+    extractionMethod: "preparsed",
+    needsReviewFields: [],
+    warning: businessType || businessItem || corporateRegistrationNo || representativeName ? null : "분석 결과가 없습니다. 재분석해 주세요.",
   };
 }
 
@@ -226,33 +217,9 @@ function buildBusinessKinds(businessType: string, businessItem: string): Busines
   return out;
 }
 
-async function extractBusinessCertificateText(filename: string, buffer: Buffer, contentType: string) {
-  const backendUrl = process.env.MCM_EXTRACTION_BACKEND_URL || process.env.MCM_BACKEND_URL || process.env.MCM_JOB_BACKEND_URL;
-  if (!backendUrl) return { text: "", candidates: [] as OcrCandidate[], warning: "OCR 백엔드 URL이 설정되지 않았습니다." };
-  try {
-    const form = new FormData();
-    form.set("file", new Blob([buffer], { type: contentType }), filename);
-    const baseUrl = backendUrl.replace(/\/$/, "");
-    let res = await fetch(`${baseUrl}/extract/business-certificate-v2`, { method: "POST", body: form });
-    if (!res.ok) {
-      const fallbackForm = new FormData();
-      fallbackForm.set("file", new Blob([buffer], { type: contentType }), filename);
-      res = await fetch(`${baseUrl}/extract/business-certificate`, { method: "POST", body: fallbackForm });
-    }
-    if (!res.ok) return { text: "", candidates: [] as OcrCandidate[], warning: `OCR HTTP ${res.status}` };
-    const json = await res.json();
-    return {
-      text: String(json?.text ?? ""),
-      candidates: Array.isArray(json?.candidates) ? json.candidates as OcrCandidate[] : [],
-      warning: json?.success === false ? String(json?.error_message ?? json?.warning ?? "OCR 품질을 확인하세요.") : null,
-    };
-  } catch (err) {
-    return { text: "", candidates: [] as OcrCandidate[], warning: (err as Error).message };
-  }
-}
-
 function mapCertificate(row: Record<string, unknown>) {
   return {
+    analysisWarning: certificateAnalysisWarning(row),
     certificateId: String(row.certificate_id ?? ""),
     facilityId: String(row.facility_id ?? ""),
     versionNo: Number(row.version_no ?? 0),

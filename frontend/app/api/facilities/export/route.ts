@@ -23,6 +23,7 @@ const HEADERS = [
   "사업장명",
   "시도 분류",
   "소재지",
+  "전화번호",
   "대기 종",
   "수질 종",
 ];
@@ -35,6 +36,7 @@ const ALIGNS: ("center" | "left" | "right")[] = [
   "left",
   "center",
   "left",
+  "center",
   "center",
   "center",
 ];
@@ -66,6 +68,7 @@ export async function GET(req: NextRequest) {
       ? INTEGRATED_PERMIT_INDUSTRIES.find((c) => c.id === industryCategoryId)?.label ?? ""
       : "";
     const isIntegrated = Boolean(industryCategoryId);
+    const hasContractHistory = searchParams.get("hasContractHistory") === "1";
 
     const filter: FacilityListFilter = {
       q: searchParams.get("q") || undefined,
@@ -78,6 +81,7 @@ export async function GET(req: NextRequest) {
         ? Number(searchParams.get("waterClass"))
         : undefined,
       source: searchParams.get("source") || undefined,
+      hasContractHistory,
       sort: (searchParams.get("sort") as "recent" | "name") || "recent",
       limit: 100000,
       offset: 0,
@@ -105,6 +109,7 @@ export async function GET(req: NextRequest) {
         formatCompanyName(f.companyName) ?? f.companyName,
         f.regionSido ?? "",
         f.siteAddress ?? "",
+        f.phoneNumber ?? "",
         f.airClass != null ? `${f.airClass}종` : "",
         f.waterClass != null ? `${f.waterClass}종` : "",
       ];
@@ -113,9 +118,11 @@ export async function GET(req: NextRequest) {
     // 파일명·표 제목 조합
     // 통합허가 업종인 경우: [업종] [지역1]·[지역2]... 사업장 리스트(YY.MM.DD.)
     // 아닌 경우:            [지역1]·[지역2]... 사업장 리스트(YY.MM.DD.)
+    // 거래 이력 업체 체크 시:  ... 거래 이력 업체 리스트(YY.MM.DD.)
     const regionPart = sidoList.length > 0 ? ` ${sidoList.join("·")}` : "";
     const industryPart = isIntegrated && industryLabel ? `${industryLabel} ` : "";
-    const titleBase = `${industryPart}${regionPart.trimStart()} 사업장 리스트`.trim();
+    const listLabel = hasContractHistory ? "거래 이력 업체 리스트" : "사업장 리스트";
+    const titleBase = `${industryPart}${regionPart.trimStart()} ${listLabel}`.trim();
 
     const now = new Date();
     const fileStamp = stampDisplay(now);
@@ -124,8 +131,9 @@ export async function GET(req: NextRequest) {
     const spec: TableDocumentSpec = {
       headers: HEADERS,
       aligns: ALIGNS,
-      pdfColWidths: [30, 64, 62, 130, 125, 56, 228, 33, 33],
-      xlsxColChars: [6, 14, 12, 30, 30, 12, 44, 8, 8],
+      // 전화번호 열(소재지·대기 종 사이) 추가 — 최소 폭 합계는 가로 A4 가용 폭(≈760) 안에 맞춘다.
+      pdfColWidths: [30, 64, 62, 118, 118, 56, 176, 70, 33, 33],
+      xlsxColChars: [6, 14, 12, 30, 30, 12, 44, 14, 8, 8],
       sheetName: "사업장목록",
       orientation: "landscape",
       rows,

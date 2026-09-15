@@ -267,3 +267,53 @@ export function ShootingStar({ top, right, w = 64 }: { top: number; right: numbe
     </span>
   );
 }
+
+// ── 시간대별 예보 패널용 소형 아이콘 ────────────────────────────────────────────
+// 씬(400×286 일러스트)은 한 칸이 24px 인 시계열에 쓸 수 없어 별도로 그린다.
+// 4종(맑음·흐림·비·눈) × 주/야 — 야간 맑음만 해 대신 달이고 나머지는 색만 밝기 보정한다.
+
+export type HourIconKind = "맑음" | "흐림" | "비" | "눈";
+
+/** 시간별 칸 아이콘 — 주간/야간 톤을 함께 받는다. */
+export function HourIcon({ kind, night, size = 22 }: { kind: HourIconKind; night?: boolean; size?: number }) {
+  const cloud = night ? "#8E99BE" : "#C3CDE1";
+  const cloudTop = night ? "#A3ADCE" : "#DCE3F0";
+  const drop = night ? "#8CAAF0" : "#5A8CE0";
+  const snow = night ? "#D8E2FA" : "#9FC0EA";
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden>
+      {kind === "맑음" ? (
+        night ? (
+          // 초승달 — 원에서 원을 빼는 대신 path 하나로(겹침 아티팩트 방지)
+          <path d="M16.5 3.2a8.2 8.2 0 1 0 4.3 12.6A9 9 0 0 1 16.5 3.2Z" fill="#EFE7C6" />
+        ) : (
+          <>
+            <circle cx={12} cy={12} r={5} fill="#F7B94E" />
+            <g stroke="#F0AC3F" strokeWidth={1.8} strokeLinecap="round">
+              <path d="M12 2.4V4.6M12 19.4v2.2M2.4 12h2.2M19.4 12h2.2M5.2 5.2l1.6 1.6M17.2 17.2l1.6 1.6M18.8 5.2l-1.6 1.6M6.8 17.2l-1.6 1.6" />
+            </g>
+          </>
+        )
+      ) : null}
+      {kind !== "맑음" ? (
+        <>
+          <ellipse cx={13} cy={13} rx={7.5} ry={5} fill={cloud} />
+          <circle cx={9.5} cy={10.5} r={4.2} fill={cloudTop} />
+          <circle cx={14.5} cy={10} r={3.4} fill={cloud} />
+        </>
+      ) : null}
+      {kind === "비" ? (
+        <g stroke={drop} strokeWidth={1.9} strokeLinecap="round">
+          <path d="M8.5 18.5l-1 2.6M12.5 18.5l-1 2.6M16.5 18.5l-1 2.6" />
+        </g>
+      ) : null}
+      {kind === "눈" ? (
+        <g fill={snow}>
+          <circle cx={8.5} cy={19.6} r={1.5} />
+          <circle cx={13} cy={20.6} r={1.5} />
+          <circle cx={17} cy={19.6} r={1.5} />
+        </g>
+      ) : null}
+    </svg>
+  );
+}

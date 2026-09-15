@@ -691,7 +691,7 @@ function BriefingShareModal({
           {error && <div className="cd-error-bg cd-error-text rounded-xl px-3 py-2 text-xs">{error}</div>}
           <div className="flex flex-wrap gap-1">
             {picks.map((p) => (
-              <span key={p.userId} className="cd-pill cd-pill-info inline-flex items-center gap-1">
+              <span key={p.userId} className="cd-action cd-pill cd-pill-info inline-flex items-center gap-1">
                 {p.name}
                 <button onClick={() => setPicks((prev) => prev.filter((x) => x.userId !== p.userId))}>
                   <X className="w-3 h-3" />

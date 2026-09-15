@@ -309,7 +309,7 @@ export function LetterRecordsTable({
   return (
     <>
       {canImport && (
-        <div className="flex items-center gap-2 flex-wrap pb-2.5">
+        <div className="flex items-center gap-2 flex-wrap pb-3">
           <button
             type="button"
             className="cd-btn rounded-lg border cd-border-c px-3 py-1.5 text-[11.5px] flex items-center gap-1"
@@ -339,7 +339,7 @@ export function LetterRecordsTable({
       )}
       <div className="overflow-x-auto min-h-0">
         <table className="w-full text-[12px] whitespace-nowrap">
-          <thead>
+          <thead className="cd-table-head">
             <tr className="text-left cd-text-faint text-[11px]">
               <th className="py-1.5 pr-3 font-semibold">공문번호</th>
               <th className="py-1.5 pr-3 font-semibold">제목</th>

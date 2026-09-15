@@ -6,7 +6,7 @@
 import { getDb, rowsToObjects } from "@/lib/db";
 import { getCompanyProfile } from "@/lib/company/profile";
 import { COMPANY_ADDRESS, COMPANY_BIZ_NO, COMPANY_CEO, COMPANY_KO } from "@/lib/letter/types";
-import { DEFAULT_VAT_NOTE } from "./format";
+import { DEFAULT_VAT_NOTE, vatModeOf, type VatMode } from "./format";
 import type { DeliverableKind, DeliverableValues } from "./types";
 
 export interface MilestoneInfo {
@@ -47,9 +47,16 @@ const num = (v: unknown): number | null => {
  * 공급가액·부가세 산출.
  * 계약금액이 VAT 별도(기본, 계약관리 입력 관행)면 그 값이 곧 공급가액이고 부가세를 가산한다.
  * VAT 포함으로 입력된 계약만 총액에서 역산한다(예: 91,154,823 → 82,868,021 / 8,286,802).
+ * VAT 별도(금액에 미포함, 2026-09-15)는 부가세를 가산하지 않고 공급가액만 남긴다(부가세 0).
+ * boolean 인자는 종전 호출 호환(true = 역산, false = 가산).
  */
-export function splitVat(total: number, vatIncluded: boolean): { supply: number; vat: number; total: number } {
-  if (!vatIncluded) {
+export function splitVat(total: number, mode: boolean | VatMode): { supply: number; vat: number; total: number } {
+  const m: VatMode = typeof mode === "string" ? mode : mode ? "included" : "added";
+  if (m === "supplyOnly") {
+    const supply = Math.round(total);
+    return { supply, vat: 0, total: supply };
+  }
+  if (m === "added") {
     const supply = Math.round(total);
     return { supply, vat: Math.round(supply * 0.1), total: supply + Math.round(supply * 0.1) };
   }
@@ -161,7 +168,7 @@ export function priorColumnLabel(stageCount: number): string {
 export function computeCompletionAmounts(
   milestones: MilestoneInfo[],
   currentMilestoneId: string | null,
-  vatIncluded: boolean
+  vatMode: boolean | VatMode
 ): {
   current: number;
   cumulative: number;
@@ -186,9 +193,9 @@ export function computeCompletionAmounts(
   return {
     current: currentTotal,
     cumulative: cumTotal,
-    prev: splitVat(prevTotal, vatIncluded),
-    cur: splitVat(currentTotal, vatIncluded),
-    cum: splitVat(cumTotal, vatIncluded),
+    prev: splitVat(prevTotal, vatMode),
+    cur: splitVat(currentTotal, vatMode),
+    cum: splitVat(cumTotal, vatMode),
     currentMilestoneId: target?.milestoneId ?? null,
     priorLabel: priorColumnLabel(sorted.length),
     stageLabel: target?.stageLabel?.trim() || "준공 기성금",
@@ -206,7 +213,7 @@ export async function buildAutoValues(
 ): Promise<DeliverableValues> {
   const profile = await getCompanyProfile().catch(() => null);
   const vatNote = (opts.vatNote ?? DEFAULT_VAT_NOTE).trim() || DEFAULT_VAT_NOTE;
-  const vatIncluded = !vatNote.includes("별도");
+  const vatMode = vatModeOf(vatNote);
   const today = new Date().toISOString().slice(0, 10);
 
   const values: DeliverableValues = {
@@ -259,21 +266,21 @@ export async function buildAutoValues(
           return {
             current: currentTotal,
             cumulative: prevTotal + currentTotal,
-            prev: splitVat(prevTotal, vatIncluded),
-            cur: splitVat(currentTotal, vatIncluded),
-            cum: splitVat(prevTotal + currentTotal, vatIncluded),
+            prev: splitVat(prevTotal, vatMode),
+            cur: splitVat(currentTotal, vatMode),
+            cum: splitVat(prevTotal + currentTotal, vatMode),
             currentMilestoneId: targets[0].milestoneId,
             priorLabel: priorColumnLabel(sortedAll.length),
             stageLabel: targets.map((m) => m.stageLabel?.trim() || `${m.stageOrder}차`).join(", "),
           };
         })()
-      : computeCompletionAmounts(milestones, opts.milestoneId ?? null, vatIncluded);
+      : computeCompletionAmounts(milestones, opts.milestoneId ?? null, vatMode);
     if (targets.length) {
       // 값 타입 제약(string|number|null)으로 JSON 문자열 보관 — 렌더러(payment-pdf)가 파싱한다.
       values["payment.stageBreakdown"] = JSON.stringify(
         targets.map((m) => ({
           label: m.stageLabel?.trim() || `${m.stageOrder}차`,
-          ...splitVat(m.amount ?? 0, vatIncluded),
+          ...splitVat(m.amount ?? 0, vatMode),
         }))
       );
       values["meta.milestoneIds"] = targets.map((m) => m.milestoneId).join(",");

@@ -59,10 +59,14 @@ export function CdTable<Row>({
   const selectable = selectedKeys != null && onSelectChange != null;
   const allKeys = rows.map((r, i) => rowKey(r, i));
   const allSelected = selectable && allKeys.length > 0 && allKeys.every((k) => selectedKeys!.has(k));
+  const someSelected = selectable && allKeys.some((k) => selectedKeys!.has(k));
+  const columnCount = columns.length + (selectable ? 1 : 0);
 
   const toggleAll = () => {
     if (!selectable) return;
-    onSelectChange!(allSelected ? new Set() : new Set(allKeys));
+    const next = new Set(selectedKeys);
+    allKeys.forEach((key) => allSelected ? next.delete(key) : next.add(key));
+    onSelectChange!(next);
   };
   const toggleOne = (key: string) => {
     if (!selectable) return;
@@ -72,16 +76,16 @@ export function CdTable<Row>({
     onSelectChange!(next);
   };
 
-  const cellPad = dense ? "px-3 py-2" : "px-4 py-3";
+  const cellPad = "px-3 py-2";
 
   return (
-    <div className={cn("overflow-x-auto", className)}>
-      <table className="w-full text-sm border-collapse">
+    <div className={cn("relative min-w-0 overflow-x-auto", className)} aria-busy={loading || undefined}>
+      <table className="cd-table" data-dense={dense || undefined}>
         <thead>
           <tr className="border-b cd-border-c">
             {selectable && (
               <th className={cn(cellPad, "w-10")}>
-                <input type="checkbox" checked={allSelected} onChange={toggleAll} className="w-4 h-4 accent-[var(--cd-primary)] cursor-pointer" aria-label="전체 선택" />
+                <input type="checkbox" checked={allSelected} ref={(input) => { if (input) input.indeterminate = !!someSelected && !allSelected; }} onChange={toggleAll} className="w-4 h-4 accent-[var(--cd-primary)] cursor-pointer" aria-label="현재 페이지 전체 선택" />
               </th>
             )}
             {columns.map((c) => {
@@ -89,23 +93,20 @@ export function CdTable<Row>({
               return (
                 <th
                   key={c.key}
+                  scope="col"
+                  aria-sort={isSorted ? sort!.dir === "asc" ? "ascending" : "descending" : c.sortable ? "none" : undefined}
                   className={cn(
                     cellPad,
-                    "text-xs font-bold cd-text-faint uppercase tracking-wide whitespace-nowrap",
+                    "text-xs font-medium cd-text-muted whitespace-nowrap",
                     c.widthClass,
                     c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : "text-left",
-                    c.sortable && "cursor-pointer select-none hover:text-[color:var(--cd-text)]"
+                    c.sortable && "select-none"
                   )}
-                  onClick={
-                    c.sortable && onSortChange
-                      ? () => onSortChange({ key: c.key, dir: isSorted && sort!.dir === "asc" ? "desc" : "asc" })
-                      : undefined
-                  }
                 >
-                  <span className="inline-flex items-center gap-0.5">
+                  {c.sortable && onSortChange ? <button type="button" className="inline-flex items-center gap-1 hover:text-[color:var(--cd-text)]" onClick={() => onSortChange({ key: c.key, dir: isSorted && sort!.dir === "asc" ? "desc" : "asc" })}>
                     {c.header}
                     {isSorted && (sort!.dir === "asc" ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
-                  </span>
+                  </button> : c.header}
                 </th>
               );
             })}
@@ -114,13 +115,13 @@ export function CdTable<Row>({
         <tbody>
           {loading ? (
             <tr>
-              <td colSpan={columns.length + (selectable ? 1 : 0)} className="px-4 py-8 text-center text-sm cd-text-faint">
+              <td colSpan={columnCount} className="px-4 py-8 text-center text-sm cd-text-faint">
                 불러오는 중입니다.
               </td>
             </tr>
           ) : rows.length === 0 ? (
             <tr>
-              <td colSpan={columns.length + (selectable ? 1 : 0)}>
+              <td colSpan={columnCount}>
                 {empty ?? <CdEmptyState title="데이터가 없습니다." />}
               </td>
             </tr>
@@ -131,7 +132,13 @@ export function CdTable<Row>({
                 <tr
                   key={key}
                   className={cn("border-b cd-border-c last:border-b-0 transition-colors", onRowClick && "cursor-pointer cd-row-hover")}
-                  onClick={onRowClick ? () => onRowClick(row) : undefined}
+                  tabIndex={onRowClick ? 0 : undefined}
+                  onKeyDown={onRowClick ? (event) => { if (event.target === event.currentTarget && ["Enter", " "].includes(event.key)) { event.preventDefault(); onRowClick(row); } } : undefined}
+                  aria-selected={selectable ? selectedKeys!.has(key) : undefined}
+                  onClick={onRowClick ? (event) => {
+                    if ((event.target as HTMLElement).closest('button, a, input, select, textarea, [role="button"]')) return;
+                    onRowClick(row);
+                  } : undefined}
                 >
                   {selectable && (
                     <td className={cn(cellPad, "w-10")} onClick={(e) => e.stopPropagation()}>
@@ -150,7 +157,7 @@ export function CdTable<Row>({
                       className={cn(
                         cellPad,
                         "cd-text align-middle",
-                        c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : "text-left"
+                        c.align === "right" ? "text-right tabular-nums" : c.align === "center" ? "text-center" : "text-left"
                       )}
                     >
                       {c.render(row, i)}

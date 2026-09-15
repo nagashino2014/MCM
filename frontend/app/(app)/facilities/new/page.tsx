@@ -77,6 +77,7 @@ function Inner() {
     { businessType: "", businessItem: "" },
   ]);
   const [certificateCorporateNo, setCertificateCorporateNo] = useState("");
+  const [corporateRegistrationNo, setCorporateRegistrationNo] = useState("");
   const [certificateOcrText, setCertificateOcrText] = useState("");
   const [certificateFileName, setCertificateFileName] = useState("");
   const [certificateFile, setCertificateFile] = useState<File | null>(null);
@@ -133,6 +134,7 @@ function Inner() {
           businessCertificateBusinessType: normalizedCertificateKinds.map((row) => row.businessType).join("\n") || null,
           businessCertificateBusinessItem: normalizedCertificateKinds.map((row) => row.businessItem).join("\n") || null,
           businessCertificateCorporateRegistrationNo: certificateCorporateNo || null,
+          corporateRegistrationNo: corporateRegistrationNo || null,
           businessCertificateOcrText: certificateOcrText || null,
           aliases: alias.trim() ? [{ alias: alias.trim(), aliasType: "site", isPrimary: true }] : [],
           serviceCategories,
@@ -254,7 +256,8 @@ function Inner() {
         icon={<FileText className="w-5 h-5" />}
         eyebrow="Facility · New"
         title="사업장 수동 등록"
-        subtitle="IEPS 게시판에서 자동 수집되지 않은 사업장을 직접 등록합니다. source=manual 로 표시되며 향후 IEPS 데이터와 자동 병합되지 않습니다 (필요 시 “중복 병합”에서 수동 병합)."
+        subtitle="수동 등록한 사업장은 IEPS 수집 데이터와 자동 병합되지 않습니다."
+        help="IEPS에서 수집되지 않은 사업장을 등록합니다. 나중에 같은 사업장이 수집되면 ‘중복 병합’에서 직접 합칠 수 있습니다."
         actions={
           <>
             <Link href="/facilities" className="cd-btn cd-btn-ghost cd-btn-sm">
@@ -437,7 +440,7 @@ function Inner() {
                 사업자등록증 PDF의 사업의 종류 항목에서 업태·종목을, 등록증의 법인등록번호를 자동 추출합니다.
               </p>
             </div>
-            <label className="rounded-xl px-3 py-2 text-xs font-bold text-white cd-fill-primary cursor-pointer inline-flex items-center gap-1">
+            <label className="cd-action rounded-xl px-3 py-2 text-xs font-bold text-white cd-fill-primary cursor-pointer inline-flex items-center gap-1">
               <Upload className="w-3.5 h-3.5" />
               {certificateParsing ? "추출 중..." : "PDF 첨부·추출"}
               <input
@@ -517,7 +520,7 @@ function Inner() {
               </div>
             ))}
           </div>
-          <Field label="법인등록번호">
+          <Field label="등록증 법인등록번호">
             <input
               className="cd-input"
               value={certificateCorporateNo}
@@ -525,6 +528,7 @@ function Inner() {
               placeholder="000000-0000000"
             />
           </Field>
+          <Field label="법인등록번호 (마스터)"><input className="cd-input" value={corporateRegistrationNo} onChange={e=>setCorporateRegistrationNo(e.target.value)} placeholder="000000-0000000" /></Field>
           <div className="md:col-span-2">
             <Field label="OCR 원문 확인·보정 참고">
               <textarea

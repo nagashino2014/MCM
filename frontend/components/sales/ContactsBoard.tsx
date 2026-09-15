@@ -97,7 +97,7 @@ export function ContactsBoard() {
         eyebrow="SALES & MARKETING"
         title="담당자 정보 관리"
         titleSuffix={`${filtered.length}명${hasFilter ? ` / ${contacts.length}` : ""}`}
-        subtitle="전 사업장 담당자를 한 곳에서 조회합니다. 명함 촬영·통합 타임라인은 준비 중입니다."
+        subtitle="명함 촬영·통합 타임라인은 준비 중입니다."
       />
 
       {/* 툴바 */}

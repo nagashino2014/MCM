@@ -8,6 +8,7 @@
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
 import type {
+  FilingAttachment,
   FilingField,
   FilingKind,
   FilingPayload,
@@ -150,6 +151,8 @@ interface ContractRec {
   currentAmount: number | null;
   permitNo: string;
   permitIssuedAt: string | null;
+  /** 완료일(발행일) — 마지막 지급 단계 세금계산서 발행일(이행 보고 트리거) */
+  lastInvoiceIssuedAt: string | null;
   awardRate: number | null;
   preconsultNotifiedAt: string | null;
   counterpartyName: string;
@@ -200,9 +203,18 @@ function etisBusinessKind(specialty: string): string {
   return "";
 }
 
+/** IEPS 대행업 변경등록 신청서 공통 머리 — 신청 구분 라디오 + 변경등록 내용 textarea(#CHANGE_REQST_CN) */
+function staffHead(detail: string): FilingField[] {
+  return [
+    { label: "신청 구분", value: "변경등록" },
+    { label: "변경등록 내용", value: `기술인력사항 변경\n- ${detail}` },
+  ];
+}
+const GRID_HINT = "기술인력 그리드 — 셀을 편집 상태로 만든 뒤 [채우기]";
+
 function staffFields(e: EmployeeRec): FilingField[] {
   return [
-    { label: "성명", value: e.name },
+    { label: "성명", value: e.name, hint: GRID_HINT },
     { label: "연락처", value: e.mobilePhone, hint: "010-0000-0000 형식" },
     { label: "생년월일", value: e.birthDate ?? "" },
     { label: "인력등급", value: envGradeLabel(e.envGrade, e.specialty) },
@@ -212,27 +224,84 @@ function staffFields(e: EmployeeRec): FilingField[] {
   ];
 }
 
+/** 전화번호 "02-6672-0035" → [지역번호, 국번, 끝자리]. 하이픈이 없으면 앞자리(02/0xx)로 나눈다. */
+function splitTel(raw: string): [string, string, string] {
+  const parts = raw.replace(/[^\d-]/g, "").split("-").filter(Boolean);
+  if (parts.length === 3) return [parts[0], parts[1], parts[2]];
+  const d = raw.replace(/\D/g, "");
+  if (!d) return ["", "", ""];
+  const area = d.startsWith("02") ? 2 : 3;
+  const last = 4;
+  return [d.slice(0, area), d.slice(area, Math.max(area, d.length - last)), d.slice(-last)];
+}
+
+/** 월 단위 가산 — 말일 넘침은 그 달 말일로(1/31 + 1개월 = 2/28). */
+function addMonths(ymdStr: string, months: number): string {
+  const [y, m, d] = ymdStr.split("-").map(Number);
+  const first = new Date(Date.UTC(y, m - 1 + months, 1));
+  const lastDay = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate();
+  first.setUTCDate(Math.min(d, lastDay));
+  return first.toISOString().slice(0, 10);
+}
+
+/**
+ * 대행업무 기간 산정(2026-09-08 운영 규칙).
+ * - 시작일 = 용역 계약일(없으면 착수일).
+ * - 종료일 = 계약의 용역 종료일이 있으면 그대로. 없으면
+ *   · 최초허가: 시작일 + 2년
+ *   · 그 외(변경허가·변경신고·재검토 등): 시작일이 1/1~6/30 이면 그해 12/31, 7/1 이후면 시작일 + 8개월
+ * 계약서에 용역 종료일이 빠진 건이 많아 규칙으로 보완한다(derived=true 면 패널에 산정 근거를 표시).
+ */
+export function agencyPeriod(c: { contractDate: string | null; startedAt: string | null; endedAt: string | null; serviceSubtype: string }): {
+  start: string;
+  end: string;
+  derived: boolean;
+} {
+  const start = c.contractDate ?? c.startedAt ?? "";
+  if (c.endedAt) return { start, end: c.endedAt, derived: false };
+  if (!start) return { start: "", end: "", derived: false };
+  if (c.serviceSubtype.trim() === "최초허가") return { start, end: addMonths(start, 24), derived: true };
+  const month = Number(start.slice(5, 7));
+  return { start, end: month <= 6 ? `${start.slice(0, 4)}-12-31` : addMonths(start, 8), derived: true };
+}
+
 function agencyFields(c: ContractRec, co: Company, opts: { changedOn?: string; amendDetail?: string; complete?: boolean }): FilingField[] {
   const amount = opts.changedOn ? (c.currentAmount ?? c.amount) : (c.amount ?? c.currentAmount);
+  const tel = splitTel(c.counterpartyPhone);
+  const period = agencyPeriod(c);
+  const periodHint = period.derived
+    ? c.serviceSubtype.trim() === "최초허가"
+      ? "용역 종료일 미기입 — 시작일 + 2년으로 산정"
+      : "용역 종료일 미기입 — 상반기 시작은 12/31, 하반기 시작은 + 8개월로 산정"
+    : undefined;
+  // 준공일자 = 완료일(허가일). 허가일이 없는 용역(사후관리 등)은 완료일(발행일)로 대신한다.
+  const completionOn = c.permitIssuedAt ?? c.lastInvoiceIssuedAt ?? "";
+  const completionHint = c.permitIssuedAt ? "완료일(허가일) 기준" : "허가일 없음 — 완료일(발행일)로 대체";
+  // 라벨은 IEPS 대행 실적보고 화면(contractReportForm) 입력칸 단위 — 로컬 도구의 자동 채우기 매핑 키.
   return [
-    { label: "대행사업장 명칭", value: c.facilityName || c.counterpartyName, hint: "사업장 검색으로 선택" },
-    { label: "사업장 소재지", value: c.facilityAddress },
+    { label: "보고 구분", value: opts.changedOn ? "변경" : opts.complete ? "이행" : "체결" },
+    { label: "대행사업장 명칭", value: c.facilityName || c.counterpartyName, hint: "사업장 검색 팝업으로 선택(직접 입력 불가)" },
+    { label: "사업장 소재지", value: c.facilityAddress, hint: "사업장 선택 시 자동" },
     { label: "통합허가구분", value: permitCategory(c.serviceSubtype) },
-    { label: "허가번호", value: c.permitNo },
-    { label: "대행업무 기간", value: period(c.startedAt, c.endedAt) },
+    { label: "허가번호", value: c.permitNo, hint: "이행 보고 시 목록에서 선택" },
+    { label: "대행업무 시작일", value: period.start, hint: period.start ? "용역 계약일" : undefined },
+    { label: "대행업무 종료일", value: period.end, hint: periodHint },
     { label: "대행업무의 개요", value: c.title },
     { label: "발주자(기관)", value: c.counterpartyName },
-    { label: "전화번호", value: c.counterpartyPhone },
+    { label: "전화번호(지역번호)", value: tel[0] },
+    { label: "전화번호(국번)", value: tel[1] },
+    { label: "전화번호(끝자리)", value: tel[2] },
     { label: "주 계약자", value: co.name },
     { label: "통합허가대행업 등록번호", value: co.agencyRegNo },
-    { label: "지분금액(백만원)", value: toMillion(amount) },
-    { label: "지분율(%)", value: "100", hint: "단독계약 기준" },
+    { label: "주계약 지분금액(백만원)", value: toMillion(amount) },
+    { label: "주계약 지분율(%)", value: "100", hint: "단독계약 기준" },
     { label: "(변경)계약일자", value: opts.changedOn ?? c.contractDate ?? "" },
-    { label: "(변경)계약기간", value: period(c.startedAt, c.endedAt) },
+    { label: "(변경)계약 시작일", value: period.start, hint: "대행업무 기간과 동일" },
+    { label: "(변경)계약 종료일", value: period.end, hint: "대행업무 기간과 동일" },
     { label: "(변경)계약금액(백만원)", value: toMillion(amount) },
     { label: "(변경)낙찰률(%)", value: c.awardRate != null ? String(c.awardRate) : "" },
     { label: "사전협의 통보일자", value: c.preconsultNotifiedAt ?? "" },
-    { label: "준공일자", value: opts.complete ? (c.permitIssuedAt ?? "") : "", hint: "완료일(허가일) 기준" },
+    { label: "준공일자", value: opts.complete ? completionOn : "", hint: opts.complete ? completionHint : "이행 보고 시 입력" },
     ...(opts.amendDetail ? [{ label: "변경 내용", value: opts.amendDetail }] : []),
   ];
 }
@@ -315,6 +384,7 @@ async function loadContracts(db: PgDatabase): Promise<Map<string, ContractRec>> 
       `SELECT c.contract_id, c.contract_title, c.service_subtype, c.contract_status,
               c.contract_date, c.started_at, c.ended_at, c.contract_amount, c.current_amount,
               c.permit_no, c.permit_issued_at, c.award_rate, c.preconsult_notified_at,
+              lm.invoice_done_date AS last_invoice_issued_at,
               cp.company_name AS counterparty_name, cp.phone_number AS counterparty_phone,
               COALESCE(f.company_name, tf.company_name) AS facility_name,
               COALESCE(f.site_address, tf.site_address) AS facility_address
@@ -327,6 +397,13 @@ async function loadContracts(db: PgDatabase): Promise<Map<string, ContractRec>> 
             WHERE cf.contract_id = c.contract_id AND cf.relation_type = 'integrated_permit_target'
             ORDER BY cf.created_at ASC LIMIT 1
          ) tf ON true
+         -- 완료일(발행일): 마지막 지급 단계(stage_order 최대)의 세금계산서가 발행됐을 때 그 발행일(lib/ieps/completions-status 와 동일)
+         LEFT JOIN LATERAL (
+           SELECT CASE WHEN COALESCE(m.invoice_issued, 0) = 1 THEN SUBSTRING(m.invoice_issued_at, 1, 10) END AS invoice_done_date
+             FROM contract_payment_milestones m
+            WHERE m.contract_id = c.contract_id
+            ORDER BY m.stage_order DESC LIMIT 1
+         ) lm ON true
         WHERE c.deleted_at IS NULL
           AND COALESCE(c.contract_direction, 'sales') = 'sales'
           AND COALESCE(c.service_type, '') LIKE '%통합%'
@@ -348,6 +425,7 @@ async function loadContracts(db: PgDatabase): Promise<Map<string, ContractRec>> 
       currentAmount: num(r.current_amount),
       permitNo: str(r.permit_no),
       permitIssuedAt: ymd(r.permit_issued_at),
+      lastInvoiceIssuedAt: ymd(r.last_invoice_issued_at),
       awardRate: num(r.award_rate),
       preconsultNotifiedAt: ymd(r.preconsult_notified_at),
       counterpartyName: str(r.counterparty_name),
@@ -415,7 +493,7 @@ async function buildCandidates(db: PgDatabase, settings: FilingSettings): Promis
         payload: {
           site: "ieps",
           screen: "대행업 변경신고 › 기술인력보유현황 (+행추가)",
-          fields: [...staffFields(e), { label: "선임일자", value: e.hiredAt, hint: "입사일 기준 — 다르면 수정" }],
+          fields: [...staffHead(`선임 1명(${e.name})`), ...staffFields(e), { label: "선임일자", value: e.hiredAt, hint: "입사일 기준 — 다르면 수정" }],
         },
       });
     }
@@ -464,7 +542,8 @@ async function buildCandidates(db: PgDatabase, settings: FilingSettings): Promis
           site: "ieps",
           screen: "대행업 변경신고 › 기술인력보유현황",
           fields: [
-            { label: "성명", value: e.name },
+            ...staffHead(`해임 1명(${e.name})`),
+            { label: "성명", value: e.name, hint: GRID_HINT },
             { label: "해임일자", value: on, hint: "행삭제 하지 말고 해임일자만 입력" },
           ],
         },
@@ -494,7 +573,10 @@ async function buildCandidates(db: PgDatabase, settings: FilingSettings): Promis
     }
   }
 
-  // 계약 — 체결·변경·이행
+  // 계약 — 체결·변경·이행 (2026-09-08 운영 규칙)
+  //  · 체결: 신규 계약. 체결 보고가 아직 제출되지 않은 계약은 변경계약이 있어도 **체결**로 신고한다(최신 계약 정보로).
+  //  · 변경: 체결 보고를 제출(또는 제외 처리)한 뒤에 생긴 변경계약(기간·금액 변동) — 변경계약서와 함께 신고.
+  //  · 이행: 용역 준공 = 마지막 지급 단계의 세금계산서 발행(완료일(발행일)). 준공일자 값은 허가일(없으면 발행일).
   const changes = rowsToObjects(
     await db.exec(
       `SELECT change_id, contract_id, changed_at, created_at, previous_amount, delta_amount, detail
@@ -503,6 +585,19 @@ async function buildCandidates(db: PgDatabase, settings: FilingSettings): Promis
       [cutoff]
     )
   );
+  // 체결 보고 처리 상태 — 변경 보고의 선행 조건
+  const concluded = new Map<string, { status: string; on: string }>();
+  for (const r of rowsToObjects(
+    await db.exec(
+      `SELECT contract_id, status, submitted_at, updated_at FROM regulatory_filings
+        WHERE filing_kind = 'ieps_agency' AND trigger_kind = 'conclude' AND status <> 'pending'`
+    )
+  )) {
+    concluded.set(String(r.contract_id), {
+      status: String(r.status),
+      on: ymd(r.submitted_at) ?? ymd(r.updated_at) ?? "",
+    });
+  }
   for (const c of contracts.values()) {
     const subtitle = c.facilityName || c.counterpartyName || null;
     if (c.contractDate && c.contractDate >= cutoff) {
@@ -518,7 +613,7 @@ async function buildCandidates(db: PgDatabase, settings: FilingSettings): Promis
         payload: { site: "ieps", screen: "대행 실적 보고 (체결)", fields: agencyFields(c, company, {}) },
       });
     }
-    if (c.permitIssuedAt && c.permitIssuedAt >= cutoff) {
+    if (c.lastInvoiceIssuedAt && c.lastInvoiceIssuedAt >= cutoff) {
       out.push({
         dedupKey: `ieps_agency:complete:${c.contractId}`,
         kind: "ieps_agency",
@@ -527,7 +622,7 @@ async function buildCandidates(db: PgDatabase, settings: FilingSettings): Promis
         contractId: c.contractId,
         title: `${c.title} — 이행 보고`,
         subtitle,
-        occurredOn: c.permitIssuedAt,
+        occurredOn: c.lastInvoiceIssuedAt,
         payload: { site: "ieps", screen: "대행 실적 보고 (이행)", fields: agencyFields(c, company, { complete: true }) },
       });
     }
@@ -536,6 +631,9 @@ async function buildCandidates(db: PgDatabase, settings: FilingSettings): Promis
     const c = contracts.get(String(ch.contract_id));
     const on = ymd(ch.changed_at) ?? ymd(ch.created_at);
     if (!c || !on) continue;
+    // 체결 보고가 처리된 뒤의 변경계약만 '변경' — 그 전이면 체결 후보가 최신 정보를 담는다
+    const done = concluded.get(c.contractId);
+    if (!done || on < done.on) continue;
     const prev = ch.previous_amount != null ? Number(ch.previous_amount) : null;
     const delta = ch.delta_amount != null ? Number(ch.delta_amount) : null;
     const detailParts = [
@@ -720,6 +818,8 @@ export async function recordGradeChangeFiling(
         site: "ieps",
         screen: "대행업 변경신고 › 기술인력보유현황 (해당 행 수정)",
         fields: [
+          { label: "신청 구분", value: "변경등록" },
+          { label: "변경등록 내용", value: `기술인력사항 변경\n- 등급 변경 1명(${input.name}: ${before} → ${after})` },
           { label: "성명", value: input.name },
           { label: "변경 전 인력등급", value: before },
           { label: "변경 후 인력등급", value: after },
@@ -757,13 +857,38 @@ function rowToFiling(r: Record<string, unknown>, today: string): FilingRow {
     createdAt: str(r.created_at),
     updatedAt: str(r.updated_at),
     daysLeft: dueOn ? diffDays(today, dueOn) : null,
+    attachments: parseAttachments(r.attachments_json),
   };
 }
 
 const SELECT_FILING = `
-  SELECT f.*, u.name AS submitted_by_name
+  SELECT f.*, u.name AS submitted_by_name, att.attachments_json
     FROM regulatory_filings f
-    LEFT JOIN users u ON u.user_id = f.submitted_by`;
+    LEFT JOIN users u ON u.user_id = f.submitted_by
+    -- 계약 첨부(계약서·변경계약서·세금계산서) — 로컬 도구가 IEPS 첨부서류 칸에 올린다
+    LEFT JOIN LATERAL (
+      SELECT json_agg(json_build_object(
+               'documentId', d.document_id, 'type', d.document_type, 'name', d.display_name,
+               'storageKey', d.storage_key, 'createdAt', d.created_at)
+             ORDER BY d.created_at DESC) AS attachments_json
+        FROM contract_documents d
+       WHERE d.contract_id = f.contract_id AND d.document_type IN ('contract', 'amendment', 'invoice')
+    ) att ON f.contract_id IS NOT NULL`;
+
+const ATTACHMENT_TYPE_LABEL: Record<string, string> = { contract: "계약서", amendment: "변경계약서", invoice: "세금계산서" };
+
+function parseAttachments(raw: unknown): FilingAttachment[] {
+  const list = parseJson<Array<Record<string, unknown>>>(raw, []);
+  if (!Array.isArray(list)) return [];
+  return list.map((d) => ({
+    documentId: str(d.documentId),
+    type: str(d.type),
+    typeLabel: ATTACHMENT_TYPE_LABEL[str(d.type)] ?? str(d.type),
+    name: str(d.name) || str(d.storageKey).split("/").pop() || "문서",
+    downloadPath: `/api/contracts/documents?key=${encodeURIComponent(str(d.storageKey))}`,
+    createdAt: str(d.createdAt),
+  }));
+}
 
 export interface FilingListFilter {
   status?: FilingStatus | "all";

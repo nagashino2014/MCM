@@ -109,7 +109,7 @@ export function ApprovalPolicyBoard() {
         icon={<ShieldCheck className="w-5 h-5" />}
         eyebrow="Approval · Precheck"
         title="사전검토 정책"
-        subtitle="양식별로 상신 전 검사 규칙을 설정합니다. 기본은 경고이며, 항목별로 차단으로 승격할 수 있습니다."
+        help="양식별로 상신 전 검사 규칙을 설정합니다. 기본은 경고이며, 항목별로 차단으로 승격할 수 있습니다."
         actions={
           <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold disabled:opacity-50" disabled={saving || !formId} onClick={save}>
             {saving ? "저장 중..." : "저장"}

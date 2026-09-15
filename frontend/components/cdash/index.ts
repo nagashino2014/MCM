@@ -24,5 +24,6 @@ export { CdDropdown, type CdMenuItem } from "./CdDropdown";
 export { CdTable, type CdColumn, type CdSortState } from "./CdTable";
 export { CdSplitPane } from "./CdSplitPane";
 export { CdPageHeader, type CdBreadcrumbItem } from "./CdPageHeader";
+export { CdHelp, type CdHelpProps } from "./CdHelp";
 export { CdThemeToggle } from "./CdThemeToggle";
 export { useCdashTheme, type CdTheme } from "./useCdashTheme";

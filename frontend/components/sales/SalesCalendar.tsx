@@ -153,7 +153,8 @@ export function SalesCalendar({
                   const sel = y === cur.y;
                   return (
                     <button key={y} type="button" onClick={() => { setCur((c) => ({ ...c, y })); setOpenMenu(null); }}
-                      className="block w-full text-left px-4 py-2.5 text-sm cd-row-hover"
+                      className="cd-choice block w-full text-left px-4 py-2.5 text-sm cd-row-hover"
+                      data-active={sel} aria-pressed={sel}
                       style={sel ? { background: "var(--cd-primary-soft)", color: "var(--cd-primary)", fontWeight: 800 } : { color: "var(--cd-text)" }}>{y}년</button>
                   );
                 })}
@@ -167,7 +168,8 @@ export function SalesCalendar({
                     const sel = m === cur.m + 1;
                     return (
                       <button key={m} type="button" onClick={() => { setCur((c) => ({ ...c, m: m - 1 })); setOpenMenu(null); }}
-                        className="py-2.5 rounded-lg text-sm font-semibold transition"
+                        className="cd-choice py-2.5 rounded-lg text-sm font-semibold transition"
+                        data-active={sel} aria-pressed={sel}
                         style={sel ? { background: "var(--cd-primary)", color: "#fff", fontWeight: 800 } : { background: "var(--cd-surface)", color: "var(--cd-muted)" }}>{m}월</button>
                     );
                   })}

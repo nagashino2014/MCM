@@ -422,12 +422,12 @@ export function RegionMap({ refreshKey }: Props) {
         </svg>
 
         {!isReady && !error && (
-          <div className="absolute inset-0 flex items-center justify-center text-xs cd-text-faint cd-surface-bg backdrop-blur-sm rounded-2xl">
+          <div className="absolute inset-0 flex items-center justify-center text-xs cd-text-faint cd-surface-bg rounded-2xl">
             지도 로딩중…
           </div>
         )}
         {error && (
-          <div className="absolute inset-0 flex items-center justify-center text-xs cd-error-text cd-surface-bg backdrop-blur-sm rounded-2xl">
+          <div className="absolute inset-0 flex items-center justify-center text-xs cd-error-text cd-surface-bg rounded-2xl">
             지도 로드 실패: {error}
           </div>
         )}

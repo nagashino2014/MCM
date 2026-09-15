@@ -1,3 +1,4 @@
+import { certificateAnalysisWarning } from "./business-certificate-status";
 /**
  * /data/status, /data/review용 PostgreSQL 조회 헬퍼.
  * - 모두 Aurora PostgreSQL 을 읽기 전용으로 접근하며, write는 withDbWrite 트랜잭션을 별도로 사용한다.
@@ -818,16 +819,19 @@ export interface FacilityListFilter {
   source?: string;
   /** 누락 항목 필터. 지정된 항목 중 하나라도 비어 있는 사업장만 포함(OR). */
   missing?: FacilityMissingField[];
+  /** 거래 이력 업체만: 계약상대(counterparty)로 잡힌 계약 건이 1건 이상 존재하는 사업장(해지·완료 포함). */
+  hasContractHistory?: boolean;
   limit?: number;
   offset?: number;
   sort?: "recent" | "name";
 }
 
-export type FacilityMissingField = "brn" | "representative" | "phone" | "address" | "industry";
+export type FacilityMissingField = "brn" | "representative" | "phone" | "address" | "industry" | "crn";
 
 // 누락 판정 SQL. 사업자번호는 리스트 표시와 동일하게 site_business_registration_no 폴백까지
 // 모두 비어 있을 때만 누락으로 본다. 값은 코드 내 상수에서만 오므로 리터럴 삽입이 안전하다.
 const FACILITY_MISSING_CONDS: Record<FacilityMissingField, string> = {
+  crn: "NULLIF(TRIM(COALESCE(f.corporate_registration_no, '')), '') IS NULL",
   brn: "(NULLIF(TRIM(COALESCE(f.business_registration_no, '')), '') IS NULL AND NULLIF(TRIM(COALESCE(f.site_business_registration_no, '')), '') IS NULL)",
   representative: "NULLIF(TRIM(COALESCE(f.representative_name, '')), '') IS NULL",
   phone: "NULLIF(TRIM(COALESCE(f.phone_number, '')), '') IS NULL",
@@ -846,7 +850,7 @@ export async function getFacilityMissingStats(): Promise<FacilityMissingStats> {
   const selects = fields
     .map((k) => `COUNT(*) FILTER (WHERE ${FACILITY_MISSING_CONDS[k]}) AS ${k}`)
     .join(", ");
-  const stats: FacilityMissingStats = { brn: 0, representative: 0, phone: 0, address: 0, industry: 0 };
+  const stats: FacilityMissingStats = { brn: 0, representative: 0, phone: 0, address: 0, industry: 0, crn: 0 };
   try {
     const r = await db.exec(`SELECT ${selects} FROM facilities f WHERE f.deleted_at IS NULL`);
     if (r.length && r[0].values.length) {
@@ -856,6 +860,7 @@ export async function getFacilityMissingStats(): Promise<FacilityMissingStats> {
     }
   } catch (err) {
     console.error("[getFacilityMissingStats] " + (err as Error).message);
+    throw new Error("사업장 누락 집계를 불러오지 못했습니다. 잠시 후 다시 시도하세요.");
   }
   return stats;
 }
@@ -938,6 +943,14 @@ export async function listFacilities(
           AND sp.status = 'open' AND sp.stage NOT IN ('won','lost','hold'))`);
     }
     if (engConds.length) where.push(`(${engConds.join(" OR ")})`);
+  }
+  // 거래 이력 업체 — engagement=contract(진행 중)와 달리 해지·완료된 계약도 이력으로 본다.
+  // 휴지통(soft delete)에 들어간 계약만 제외.
+  if (filter.hasContractHistory) {
+    where.push(`EXISTS (
+      SELECT 1 FROM contracts c
+      WHERE c.counterparty_facility_id = f.facility_id
+        AND c.deleted_at IS NULL)`);
   }
   if (filter.integratedPermitTarget) {
     where.push(
@@ -1049,7 +1062,7 @@ export async function listFacilities(
     companyName: formatCompanyName(String(row.company_name ?? "")) ?? "",
     businessRegistrationNo:
       row.business_registration_no != null || row.site_business_registration_no != null
-        ? formatBusinessRegistrationNo(String(row.business_registration_no ?? row.site_business_registration_no))
+        ? formatBusinessRegistrationNo(String(String(row.business_registration_no ?? "").trim() || row.site_business_registration_no || ""))
         : null,
     siteAddress: row.site_address != null ? formatAddress(String(row.site_address)) : null,
     representativeName: row.representative_name != null ? String(row.representative_name) : null,
@@ -1206,6 +1219,9 @@ function mergeSourceOptions(rows: unknown[][]): { value: string; count: number }
 }
 
 export interface FacilityDetail {
+  corporateRegistrationNo?: string | null;
+  representativeName: string | null;
+  orgCategory?: string | null;
   facilityId: string;
   companyName: string;
   businessRegistrationNo: string | null;
@@ -1242,6 +1258,7 @@ export interface FacilityDetail {
 }
 
 export interface FacilityBusinessCertificate {
+  analysisWarning: string | null;
   certificateId: string;
   versionNo: number;
   isCurrent: boolean;
@@ -1330,7 +1347,7 @@ export async function getFacilityDetail(facilityId: string): Promise<FacilityDet
   let facRow;
   try {
     facRow = await db.exec(
-      `SELECT facility_id, company_name, business_registration_no, representative_name, site_address, site_address_verbatim, additional_site_addresses, phone_number,
+      `SELECT facility_id, company_name, business_registration_no, site_business_registration_no, corporate_registration_no, representative_name, site_address, site_address_verbatim, additional_site_addresses, phone_number,
               industry_code, industry_name,
               business_certificate_business_type, business_certificate_business_item,
               business_certificate_corporate_registration_no,
@@ -1428,11 +1445,12 @@ export async function getFacilityDetail(facilityId: string): Promise<FacilityDet
       `SELECT c.*, u.name AS created_by_name, u.email AS created_by_email
          FROM facility_business_certificates c
          LEFT JOIN users u ON u.user_id = c.created_by
-        WHERE c.facility_id = $1
+        WHERE c.facility_id = $1 AND c.parsed_json->>'deletedAt' IS NULL
         ORDER BY c.version_no DESC, c.created_at DESC`,
       [facilityId]
     ).catch(() => [])
   ).map((row) => ({
+    analysisWarning: certificateAnalysisWarning(row),
     certificateId: String(row.certificate_id ?? ""),
     versionNo: Number(row.version_no ?? 0),
     isCurrent: Number(row.is_current ?? 0) === 1,
@@ -1499,10 +1517,11 @@ export async function getFacilityDetail(facilityId: string): Promise<FacilityDet
     facilityId: String(f.facility_id ?? ""),
     companyName: formatCompanyName(String(f.company_name ?? "")) ?? "",
     businessRegistrationNo:
-      f.business_registration_no != null
-        ? formatBusinessRegistrationNo(String(f.business_registration_no))
+      f.business_registration_no != null || f.site_business_registration_no != null
+        ? formatBusinessRegistrationNo(String(String(f.business_registration_no ?? "").trim() || f.site_business_registration_no || ""))
         : null,
     representativeName: f.representative_name != null ? String(f.representative_name) : null,
+    corporateRegistrationNo: f.corporate_registration_no != null ? String(f.corporate_registration_no) : null,
     orgCategory: f.org_category != null ? String(f.org_category) : null,
     siteAddress:
       f.site_address != null

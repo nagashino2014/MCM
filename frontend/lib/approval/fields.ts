@@ -239,7 +239,7 @@ export function parseFields(value: unknown): ApprovalFieldDef[] {
 }
 
 /** 표 행에 붙는 내부 메타 키(귀속 참조) — 행이 비었는지 판정할 때는 값으로 세지 않는다. */
-const TABLE_META_KEYS = new Set(["_cardTxnId", "_receiptId"]);
+const TABLE_META_KEYS = new Set(["_cardTxnId", "_receiptId", "_shopReceiptId"]);
 
 function cellFilled(v: unknown): boolean {
   if (Array.isArray(v)) return v.length > 0;

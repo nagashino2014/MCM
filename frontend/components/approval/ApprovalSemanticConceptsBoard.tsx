@@ -150,6 +150,7 @@ export function ApprovalSemanticConceptsBoard() {
     <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
       <CdPageHeader
         title="데이터 의미 사전"
+        help="양식의 금액·날짜·선택 항목에 붙일 데이터 의미를 관리합니다. 같은 의미를 지정하면 양식이 달라도 같은 분석 지표에 집계됩니다. 직원·용역 등 대상 연결은 항목 종류에 따라 자동 지정됩니다."
         meta={`${groups.length}개 그룹 · ${items.length}개 개념`}
         actions={
           <div className="flex items-center gap-2">
@@ -200,7 +201,9 @@ export function ApprovalSemanticConceptsBoard() {
                     key={g}
                     type="button"
                     onClick={() => setActiveGroup(g)}
-                    className={`rounded-2xl px-3.5 py-[18px] text-left border transition-all ${
+                    data-active={on}
+                    aria-pressed={on}
+                    className={`cd-choice rounded-2xl px-3.5 py-[18px] text-left border transition-all ${
                       on ? "cd-glass-active" : "cd-border-c cd-row-hover"
                     }`}
                     style={{
@@ -230,10 +233,6 @@ export function ApprovalSemanticConceptsBoard() {
                 <span className="text-[11px] font-bold">그룹 추가</span>
               </button>
             </div>
-            <p className="text-[10.5px] cd-text-faint leading-relaxed px-0.5 mt-1">
-              양식 빌더에서 금액·날짜·선택 항목에 붙이는 &quot;데이터 의미&quot; 태그의 표준 사전입니다. 분석 지표는 필드가 아니라 이 개념을
-              참조하므로, 양식이 바뀌어도 같은 개념만 붙이면 지표가 그대로 동작합니다. 엔티티 참조(자동) 개념은 필드 종류에서 자동 부여됩니다.
-            </p>
           </div>
 
           {/* 선택 그룹 상세 */}
@@ -255,7 +254,7 @@ export function ApprovalSemanticConceptsBoard() {
 
                 <div className="overflow-x-auto">
                   <table className="w-full text-[12.5px]">
-                    <thead>
+                    <thead className="cd-table-head">
                       <tr className="text-left cd-text-faint text-[11px]">
                         <th className="py-1.5 pr-2 font-semibold">라벨</th>
                         <th className="py-1.5 pr-2 font-semibold">키</th>
@@ -290,7 +289,9 @@ export function ApprovalSemanticConceptsBoard() {
                                     <button
                                       key={t}
                                       type="button"
-                                      className={`rounded-md border px-1.5 py-0.5 text-[10.5px] font-mono transition-colors ${
+                                      data-active={on}
+                                      aria-pressed={on}
+                                      className={`cd-choice rounded-md border px-1.5 py-0.5 text-[10.5px] font-mono transition-colors ${
                                         on ? "cd-glass-active" : "cd-border-c cd-text-faint cd-row-hover"
                                       }`}
                                       onClick={() =>

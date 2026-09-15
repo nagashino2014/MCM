@@ -867,7 +867,7 @@ export function BidBoard() {
         eyebrow="SALES & MARKETING"
         title="공공입찰"
         titleSuffix={`${total.toLocaleString()}건`}
-        subtitle="나라장터(조달청) 발주계획·사전규격·입찰공고를 수집해 종류별로 조회합니다."
+        help="나라장터(조달청) 발주계획·사전규격·입찰공고를 수집해 종류별로 조회합니다."
         actions={
           canEdit ? (
             <div className="flex items-center gap-2">

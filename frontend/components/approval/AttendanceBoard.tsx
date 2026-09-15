@@ -230,7 +230,7 @@ function WeeklyPanel() {
       ) : (
         <div className="cd-card overflow-hidden">
           {/* 헤더 */}
-          <div className="hidden md:grid px-3 py-2 text-[11px] font-bold cd-text-faint border-b cd-border-c" style={gridCols}>
+          <div className="cd-table-head hidden md:grid px-3 py-2 text-[11px] font-bold cd-text-faint border-b cd-border-c" style={gridCols}>
             <span>직원</span>
             <span className="text-center">근무일</span>
             <span className="text-right">실근무</span>
@@ -294,7 +294,7 @@ function DailyDetail({ rows }: { rows?: DailyRow[] }) {
   if (rows.length === 0) return <p className="text-[11.5px] cd-text-faint py-2">일별 기록이 없습니다.</p>;
   return (
     <div className="rounded-xl border cd-border-c cd-surface-bg overflow-hidden">
-      <div className="grid px-3 py-1.5 text-[10.5px] font-bold cd-text-faint border-b cd-border-c" style={dailyGrid}>
+      <div className="cd-table-head grid px-3 py-1.5 text-[10.5px] font-bold cd-text-faint border-b cd-border-c" style={dailyGrid}>
         <span>일자</span>
         <span className="text-center">출근</span>
         <span className="text-center">퇴근</span>
@@ -459,7 +459,7 @@ function MatchPanel() {
 
           {/* 건별 대조 */}
           <div className="cd-card overflow-hidden">
-            <div className="hidden md:grid px-3 py-2 text-[11px] font-bold cd-text-faint border-b cd-border-c" style={matchGrid}>
+            <div className="cd-table-head hidden md:grid px-3 py-2 text-[11px] font-bold cd-text-faint border-b cd-border-c" style={matchGrid}>
               <span>직원</span>
               <span className="text-center">근무일</span>
               <span className="text-center">신청 시간</span>
@@ -632,7 +632,7 @@ function MealPanel() {
         <p className="text-[13px] cd-text-faint py-4">해당 월에 검출된 식대 위반 건이 없습니다.</p>
       ) : (
         <div className="rounded-2xl border cd-border-c overflow-x-auto">
-          <div className="hidden md:grid px-3 py-2 text-[11px] font-bold cd-text-faint border-b cd-border-c" style={mealGrid}>
+          <div className="cd-table-head hidden md:grid px-3 py-2 text-[11px] font-bold cd-text-faint border-b cd-border-c" style={mealGrid}>
             <span>직원</span>
             <span>사용일</span>
             <span>사용처</span>
@@ -782,7 +782,7 @@ function MappingPanel({ onCount }: { onCount: (n: number) => void }) {
         </div>
       ) : (
         <div className="cd-card overflow-hidden">
-          <div className="hidden md:grid px-3 py-2 text-[11px] font-bold cd-text-faint border-b cd-border-c" style={mapGrid}>
+          <div className="cd-table-head hidden md:grid px-3 py-2 text-[11px] font-bold cd-text-faint border-b cd-border-c" style={mapGrid}>
             <span>ADT 사번 / 성명(스냅샷)</span>
             <span className="text-center">기록</span>
             <span>매핑할 직원</span>
@@ -858,7 +858,9 @@ function MappingPanel({ onCount }: { onCount: (n: number) => void }) {
                   type="button"
                   disabled={busy === e.employeeId}
                   onClick={() => toggleExclude(e)}
-                  className={`ml-1 rounded px-1.5 py-0.5 text-[10px] font-bold border disabled:opacity-50 ${e.overtimeExcluded ? "cd-fill-primary border-transparent text-white" : "cd-border-c cd-text-faint hover:cd-tint-primary"}`}
+                  data-active={e.overtimeExcluded}
+                  aria-pressed={e.overtimeExcluded}
+                  className={`cd-choice ml-1 rounded px-1.5 py-0.5 text-[10px] font-bold border disabled:opacity-50 ${e.overtimeExcluded ? "cd-fill-primary border-transparent text-white" : "cd-border-c cd-text-faint hover:cd-tint-primary"}`}
                   title={e.overtimeExcluded ? "산정 제외 해제" : "초과근무 산정에서 제외"}
                 >
                   {e.overtimeExcluded ? "산정 제외됨" : "제외"}
@@ -1044,7 +1046,7 @@ function SchedulePanel() {
       ) : (
         <>
           <div className="cd-card overflow-hidden max-h-[68vh] overflow-y-auto">
-            <div className="hidden md:grid px-3 py-2 text-[11px] font-bold cd-text-faint border-b cd-border-c sticky top-0 z-10 cd-solid-bg" style={schedGrid}>
+            <div className="cd-table-head hidden md:grid px-3 py-2 text-[11px] font-bold cd-text-faint border-b cd-border-c sticky top-0 z-10" style={schedGrid}>
               <span>성명</span>
               <span>부서</span>
               <span>직함</span>

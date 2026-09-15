@@ -48,13 +48,15 @@ export const HOME_WIDGETS: HomeWidgetDef[] = [
 
 export const HOME_WIDGET_KEYS = HOME_WIDGETS.map((w) => w.key);
 
-/** 캘린더 태그 — 'vehicle' 은 출장신청서 상신 건·직접 예약(자산 이용 현황, G6-C)에서 온다. */
+/** 캘린더 태그 — 차량은 출장·예약, 회의·면접은 일정 메뉴와 같은 통합 일정 조회에서 온다. */
 export const CALENDAR_TAGS = [
   { key: "self", label: "본인" },
   { key: "sales", label: "영업" },
   { key: "dept", label: "부서" },
   { key: "refs", label: "선택" },
   { key: "vehicle", label: "차량" },
+  { key: "meeting", label: "회의" },
+  { key: "interview", label: "면접" },
 ] as const;
 
 export type CalendarTagKey = (typeof CALENDAR_TAGS)[number]["key"];

@@ -1,0 +1,105 @@
+/* 내 급여명세서 3열 레이아웃(2026-09-15 디자인 리뷰 3a안)
+ * ≥1600: [좌 1fr][중앙 뷰어 clamp(800px,33%,880px)][우 1fr] — 중앙만 고정, 남는 폭은 좌우가 흡수.
+ * <1600: 2열 — 좌[KPI·월별·차트] 우[뷰어], 아래 [항목별 | 연도별].
+ * <1100: 1열 — KPI → 뷰어 → 월별 → 차트 → 합계 → 연도별.
+ */
+.page {
+  padding: 16px 24px 24px;
+}
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(800px, 33%, 880px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: stretch;
+}
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  min-height: 0;
+}
+.grow {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.viewerCard {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.viewerBody {
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+  border-radius: 8px;
+  background: #eef0f3;
+}
+.viewerInner {
+  position: absolute;
+  inset: 16px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.page4 {
+  height: 100%;
+  aspect-ratio: 210 / 297;
+  width: auto;
+  max-width: 100%;
+  background: #fff;
+  border: 1px solid #e6e8eb;
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+.page4 iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+.rightInner {
+  display: contents;
+}
+
+@media (max-width: 1599px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .colRight {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 16px;
+  }
+  .colRight .itemsCard {
+    order: -1;
+  }
+  .viewerBody {
+    min-height: 720px;
+  }
+}
+
+@media (max-width: 1099px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .colLeft,
+  .colRight {
+    display: contents;
+  }
+  .kpiCard { order: 1; }
+  .viewerCard { order: 2; }
+  .monthlyCard { order: 3; }
+  .chartCard { order: 4; }
+  .itemsCard { order: 5; }
+  .yearlyCard { order: 6; }
+  .viewerBody {
+    min-height: 70vh;
+  }
+  .chartCard {
+    min-height: 320px;
+  }
+}

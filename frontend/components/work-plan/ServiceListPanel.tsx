@@ -50,6 +50,7 @@ export default function ServiceListPanel({
   onDeleteTask,
   filtersTop,
   filtersBottom,
+  headerRight,
   reboundActive,
   onToggleRebound,
   reboundItems,
@@ -82,6 +83,8 @@ export default function ServiceListPanel({
   filtersTop?: React.ReactNode;
   /** 감독 필터 — 셀렉트 묶음(탭과 같은 행 우측). */
   filtersBottom?: React.ReactNode;
+  /** 용역·Task 탭과 같은 행 우측 슬롯(감독 부서 선택·Merging 토글). */
+  headerRight?: React.ReactNode;
   /** 재보고 대상(보고작성) — 버튼/목록. 미지정 시 미표시. */
   reboundActive?: boolean;
   onToggleRebound?: () => void;
@@ -125,20 +128,25 @@ export default function ServiceListPanel({
 
   return (
     <section className="cd-card rounded-3xl p-3 cd-reveal delay-1 flex flex-col min-h-0">
-      <div className="flex items-end gap-1 px-1 mb-3">
+      <div className="flex items-end justify-between gap-2 flex-wrap px-1 mb-4">
+        <div className="flex items-end gap-1">
         {(["service", "task"] as LeftTab[]).map((t) => (
           <button
             key={t}
             type="button"
             onClick={() => onTabChange(t)}
+            data-active={tab === t}
+            aria-pressed={tab === t}
             className={cn(
-              "rounded-t-xl px-4 py-2 text-sm font-semibold border-b-2",
+              "cd-choice rounded-t-xl px-4 py-2 text-sm font-semibold border-b-2",
               tab === t ? "cd-text-primary border-current cd-tint-primary" : "cd-text-faint border-transparent cd-row-hover"
             )}
           >
             {t === "service" ? "용역" : "Task"}
           </button>
         ))}
+        </div>
+        {headerRight && <div className="flex items-center gap-2 pb-0.5">{headerRight}</div>}
       </div>
 
       {/* (감독) 체크박스 필터 — 탭 위 별도 행 */}
@@ -150,21 +158,27 @@ export default function ServiceListPanel({
           <button
             type="button"
             onClick={() => setMode("progress")}
-            className={cn("px-3 py-1.5", mode === "progress" ? "cd-fill-primary text-white" : "cd-text-muted")}
+            data-active={mode === "progress"}
+            aria-pressed={mode === "progress"}
+            className={cn("cd-choice px-3 py-1.5", mode === "progress" ? "cd-fill-primary text-white" : "cd-text-muted")}
           >
             {isService ? "진행용역" : "진행 Task"}
           </button>
           <button
             type="button"
             onClick={() => setMode("done")}
-            className={cn("px-3 py-1.5 border-l cd-border-c", mode === "done" ? "cd-fill-primary text-white" : "cd-text-muted")}
+            data-active={mode === "done"}
+            aria-pressed={mode === "done"}
+            className={cn("cd-choice px-3 py-1.5 border-l cd-border-c", mode === "done" ? "cd-fill-primary text-white" : "cd-text-muted")}
           >
             완료
           </button>
           <button
             type="button"
             onClick={() => setMode("log")}
-            className={cn("px-3 py-1.5 border-l cd-border-c", mode === "log" ? "cd-fill-primary text-white" : "cd-text-muted")}
+            data-active={mode === "log"}
+            aria-pressed={mode === "log"}
+            className={cn("cd-choice px-3 py-1.5 border-l cd-border-c", mode === "log" ? "cd-fill-primary text-white" : "cd-text-muted")}
           >
             보고 Log
           </button>
@@ -172,7 +186,9 @@ export default function ServiceListPanel({
             <button
               type="button"
               onClick={() => setMode("exec")}
-              className={cn("px-3 py-1.5 border-l cd-border-c inline-flex items-center gap-1", mode === "exec" ? "cd-fill-primary text-white" : "cd-text-muted")}
+              data-active={mode === "exec"}
+              aria-pressed={mode === "exec"}
+              className={cn("cd-choice px-3 py-1.5 border-l cd-border-c inline-flex items-center gap-1", mode === "exec" ? "cd-fill-primary text-white" : "cd-text-muted")}
             >
               임원지시
               {execDirectedItems && execDirectedItems.length > 0 && (
@@ -186,8 +202,10 @@ export default function ServiceListPanel({
             <button
               type="button"
               onClick={onToggleRebound}
+              data-active={reboundActive}
+              aria-pressed={reboundActive}
               className={cn(
-                "rounded-xl px-3 py-1.5 text-xs font-semibold inline-flex items-center gap-1.5 border",
+                "cd-choice rounded-xl px-3 py-1.5 text-xs font-semibold inline-flex items-center gap-1.5 border",
                 reboundActive ? "cd-fill-primary text-white border-transparent" : "cd-border-c cd-text-muted"
               )}
             >

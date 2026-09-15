@@ -8,6 +8,8 @@
 import { useEffect, useState } from "react";
 import { FileText, Loader2, Search, X } from "lucide-react";
 import { BANK_ACCOUNT_OPTIONS, PAYMENT_BANK_KEY } from "@/lib/deliverable/types";
+import { SUPPLY_ONLY_VAT_NOTE } from "@/lib/deliverable/format";
+import { CdDateInput } from "@/components/cdash/CdField";
 
 interface ContractRow {
   contractId: string;
@@ -51,6 +53,8 @@ export default function PaymentRequestModal({
   const [milestoneIds, setMilestoneIds] = useState<string[]>([]);
   const [vatNote, setVatNote] = useState("VAT 별도");
   const [bankKey, setBankKey] = useState("");
+  // 작성일 직접 지정(2026-09-11) — 비우면 서버가 오늘 날짜를 넣는다.
+  const [issueDate, setIssueDate] = useState("");
   const [attachNote, setAttachNote] = useState("법인 통장 사본 1부");
   const [serverValues, setServerValues] = useState<Record<string, unknown> | null>(null);
   const [loadingCtx, setLoadingCtx] = useState(false);
@@ -132,6 +136,7 @@ export default function PaymentRequestModal({
           templateId: null,
           docTypes: ["payment_request"],
           milestoneId: milestoneIds[0] ?? null,
+          issueDate: /^\d{4}-\d{2}-\d{2}$/.test(issueDate) ? issueDate : null,
         }),
       });
       const created = await createRes.json();
@@ -142,6 +147,7 @@ export default function PaymentRequestModal({
         ...serverValues,
         [PAYMENT_BANK_KEY]: bankKey,
         "payment.attachNote": attachNote.trim(),
+        ...(/^\d{4}-\d{2}-\d{2}$/.test(issueDate) ? { "issue.date": issueDate } : {}),
       };
       const patchRes = await fetch(`/api/contracts/deliverables/${encodeURIComponent(id)}`, {
         method: "PATCH",
@@ -269,6 +275,7 @@ export default function PaymentRequestModal({
                   <span className="text-[11px] cd-text-faint font-semibold">VAT 표기</span>
                   <select className="cd-select" value={vatNote} onChange={(e) => setVatNote(e.target.value)}>
                     <option value="VAT 별도">VAT 별도 (금액에 가산)</option>
+                    <option value={SUPPLY_ONLY_VAT_NOTE}>VAT 별도 (금액에 미포함)</option>
                     <option value="VAT 포함">VAT 포함 (금액에서 역산)</option>
                   </select>
                 </label>
@@ -285,6 +292,11 @@ export default function PaymentRequestModal({
                   <span className="text-[11px] cd-text-faint font-semibold">별첨 문구</span>
                   <input className="cd-input" value={attachNote} onChange={(e) => setAttachNote(e.target.value)} />
                 </label>
+                {/* 작성일 직접 지정(2026-09-11) — 발주처가 특정 일자를 요구하는 사례 */}
+                <label className="grid gap-1">
+                  <span className="text-[11px] cd-text-faint font-semibold">작성일</span>
+                  <CdDateInput value={issueDate} onChange={setIssueDate} placeholder="자동(오늘)" hint="비우면 생성 당일 날짜가 들어갑니다" />
+                </label>
               </div>
 
               {/* 청구 요약 */}
@@ -298,7 +310,9 @@ export default function PaymentRequestModal({
                     {/* 단계 나열은 위 체크박스 목록과 중복이라 표기하지 않는다(2026-08-25 사용자 요청) */}
                     <span className="text-xs cd-text-muted">금회 청구금액</span>
                     <b className="ml-auto tabular-nums cd-text-primary">{fmt(curTotal)}원</b>
-                    <span className="text-[11px] cd-text-faint">{vatNote} 합계</span>
+                    <span className="text-[11px] cd-text-faint">
+                      {vatNote === SUPPLY_ONLY_VAT_NOTE ? "공급가액 (VAT 미포함)" : `${vatNote} 합계`}
+                    </span>
                   </>
                 )}
               </div>

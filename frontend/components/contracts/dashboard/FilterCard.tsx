@@ -37,6 +37,7 @@ export function FilterCard({
                 type="button"
                 className="cd-chip cd-chip-sm"
                 data-active={cat === category}
+                aria-pressed={cat === category}
                 onClick={() => onCategoryChange(cat)}
               >
                 {cat}
@@ -55,6 +56,7 @@ export function FilterCard({
                 type="button"
                 className="cd-chip cd-chip-sm text-center"
                 data-active={y === year}
+                aria-pressed={y === year}
                 onClick={() => onYearChange(y)}
               >
                 {y}년

@@ -99,7 +99,10 @@ export function CertificateIssueBoard() {
   return (
     <div className="cdash cd-fields-white min-h-full p-4 rounded-3xl" data-theme={theme}>
       <div>
-        <CdPageHeader title="증명서 발급 관리" />
+        <CdPageHeader
+          title="증명서 발급 관리"
+          help="재직·경력증명서는 회사 서식에 인사 정보와 직인을 반영해 발급합니다. 세무 증명서는 스캔본에 직인을 반영하며, 보유한 연말정산 PDF가 있으면 원천징수영수증도 자동 발급됩니다. 실패 건은 이 화면에서 다시 생성할 수 있습니다."
+        />
         <div className="flex items-center gap-1.5 mb-4 flex-wrap">
           {([
             ["pending", `발급 대기${pendingCount ? ` (${pendingCount})` : ""}`],
@@ -201,9 +204,7 @@ export function CertificateIssueBoard() {
         </div>
 
         <p className="mt-3 text-[11px] cd-text-faint">
-          재직·경력증명서는 신청서 승인 시 회사 한글 서식에 인사 정보(부서·직급·재직기간)가 자동 기입되고 직인이 날인된 PDF가 만들어져
-          기안자 개인문서함으로 바로 전송됩니다(이 화면은 실패 건 재생성용). 갑종근로소득세 납세증명·원천징수영수증은 스캔본 PDF에 직인을 얹어
-          직인본을 만듭니다(원천징수영수증은 앱이 보유한 연말정산 PDF가 있으면 승인 시 자동 발급). 발급 내역은 모두 이 화면에 기록됩니다.
+          신청서 승인 시 발급된 증명서는 기안자 개인문서함으로 자동 전송됩니다.
         </p>
       </div>
     </div>

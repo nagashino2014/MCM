@@ -1,12 +1,14 @@
-// 일정 메뉴(G6-C) 통합 조회 — ?month=YYYY-MM&tags=self,dept,sales,refs,vehicle
-// 휴가/출장/교육(전자결재 상신 문서) + 영업 활동 + 법인차량을 한 번에 내려준다.
+// 일정 메뉴(G6-C) 통합 조회 — ?month=YYYY-MM&tags=self,dept,sales,refs,vehicle,meeting,interview
+// 휴가/출장/교육(전자결재 상신 문서) + 영업 활동 + 법인차량 + 직접 등록 일정(회의·면접·미팅, 219)을 한 번에 내려준다.
 // sales 태그는 sales.view 부분 판정 — 권한이 없으면 403 대신 sales 만 제외하고
 // salesDenied:true 를 내려 화면이 태그를 비활성 표시한다(홈 위젯 salesDenied 패턴의 서버판).
+// access — 현재 사용자의 회의/면접 등록 권한(날짜 셀 등록 메뉴·편집 버튼 노출용).
 
 import { NextResponse } from "next/server";
 import { authErrorToResponse, requireSession } from "@/lib/auth/guards";
 import { hasPermission } from "@/lib/auth/rbac";
 import { listCalendarEvents } from "@/lib/calendar/queries";
+import { loadEntryAccess } from "@/lib/calendar/entries";
 import { CALENDAR_TAG_KEYS, type CalendarTagKey } from "@/lib/calendar/types";
 
 export const runtime = "nodejs";
@@ -26,10 +28,17 @@ export async function GET(req: Request) {
       .filter((t): t is CalendarTagKey => (CALENDAR_TAG_KEYS as readonly string[]).includes(t));
 
     const wantsSales = tags.includes("sales");
-    const includeSales = wantsSales ? await hasPermission(ctx.userId, "sales.view") : false;
+    const [includeSales, access] = await Promise.all([
+      wantsSales ? hasPermission(ctx.userId, "sales.view") : Promise.resolve(false),
+      loadEntryAccess(ctx.userId),
+    ]);
 
-    const events = await listCalendarEvents({ userId: ctx.userId, month, tags, includeSales });
-    return NextResponse.json({ events, salesDenied: wantsSales && !includeSales });
+    const events = await listCalendarEvents({ userId: ctx.userId, month, tags, includeSales, access });
+    return NextResponse.json({
+      events,
+      salesDenied: wantsSales && !includeSales,
+      access: { meeting: access.meeting, interview: access.interview },
+    });
   } catch (err) {
     return authErrorToResponse(err);
   }

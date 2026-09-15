@@ -9,7 +9,7 @@ import { composeLetter } from "./compose";
 import { measureSignTextWidths, renderLetterPdf } from "./pdf";
 import { renderLetterHwpx } from "./hwpx";
 import { setLetterArtifacts } from "./store";
-import type { LetterFieldValues } from "./types";
+import { ISO_DATE_RE, type LetterFieldValues } from "./types";
 
 export interface LetterArtifacts {
   pdfKey: string;
@@ -31,7 +31,10 @@ export async function generateLetterArtifacts(docId: string, opts: { persist?: b
   const doc = await getDoc(docId);
   if (!doc) throw new Error("문서를 찾을 수 없습니다.");
   const values = doc.fieldValues as unknown as LetterFieldValues;
-  const issueDate = (doc.completedAt ?? doc.submittedAt ?? new Date().toISOString()).slice(0, 10);
+  // 시행일 — 수동 지정(field_values.issue_date)이 있으면 그 값이 우선한다(2026-09-11 사용자 요청).
+  const issueDate = ISO_DATE_RE.test(values.issue_date ?? "")
+    ? (values.issue_date as string)
+    : (doc.completedAt ?? doc.submittedAt ?? new Date().toISOString()).slice(0, 10);
   const layout = composeLetter(values, {
     letterNo: doc.docNo,
     drafterName: doc.drafterName,

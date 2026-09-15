@@ -11,14 +11,17 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 import fs from "node:fs";
 import os from "node:os";
+import { connectQualityDb } from "../lib/facility-quality/postgres";
+import { processQualityRun } from "../lib/facility-enrichment/runner";
 
-type JobType = "collect" | "parse";
+type JobType = "collect" | "parse" | "facility-enrich";
 type ParseCategory = "integratedFirst" | "integratedChange" | "annualReport";
 
 interface QueueMessage {
   jobId: string;
   type: JobType;
   config: unknown;
+  runId?: string;
   maxPages?: number;
   backendUrl?: string;
   dryRun?: boolean;
@@ -100,7 +103,20 @@ async function pollOnce(): Promise<boolean> {
 
   const body = JSON.parse(message.Body) as QueueMessage;
   console.log(`[worker] received ${body.type} job ${body.jobId}`);
-  await runCliCollect(body);
+  let visibilityLost = false;
+  const heartbeat = setInterval(() => {
+    client.send(new aws.ChangeMessageVisibilityCommand({ QueueUrl: QUEUE_URL, ReceiptHandle: message.ReceiptHandle!, VisibilityTimeout: 900 }))
+      .catch(() => { visibilityLost = true; });
+  }, 60000);
+  try {
+    if (body.type === "facility-enrich") {
+      if (!body.runId || !/^[a-f0-9-]{36}$/.test(body.runId)) throw new Error("Invalid facility quality run ID");
+      const connection = connectQualityDb();
+      try { await processQualityRun(connection.db, connection.tx, body.runId); } finally { await connection.close(); }
+    } else if (body.type === "collect" || body.type === "parse") await runCliCollect(body);
+    else throw new Error("Unsupported worker job type");
+    if (visibilityLost) throw new Error("SQS visibility heartbeat failed; durable progress retained");
+  } finally { clearInterval(heartbeat); }
 
   await client.send(
     new aws.DeleteMessageCommand({
@@ -114,8 +130,10 @@ async function pollOnce(): Promise<boolean> {
 
 async function main() {
   const once = process.argv.includes("--once");
+  const drain = process.argv.includes("--drain");
   do {
-    await pollOnce();
+    const processed = await pollOnce();
+    if (drain && !processed) break;
   } while (!once);
 }
 

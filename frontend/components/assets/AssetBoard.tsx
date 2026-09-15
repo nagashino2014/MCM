@@ -151,6 +151,7 @@ export function AssetBoard() {
     <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
       <CdPageHeader
         title="자산 관리"
+        help="법인차량은 출장신청서에서 선택합니다. 회의실·기타 자산은 이용 현황에서 예약합니다. 차량 서류는 상세 정보에서 등록하고 목록에서 열람할 수 있습니다."
         meta={`${assets.length}개 자산 · 사용 ${assets.filter((a) => a.active).length}`}
       />
       {error && <p className="text-sm cd-error-text">{error}</p>}
@@ -171,7 +172,9 @@ export function AssetBoard() {
                     key={k}
                     type="button"
                     onClick={() => setActiveKind(k)}
-                    className={`rounded-2xl px-3.5 py-[18px] text-left border transition-all ${
+                    data-active={on}
+                    aria-pressed={on}
+                    className={`cd-choice rounded-2xl px-3.5 py-[18px] text-left border transition-all ${
                       on ? "cd-glass-active" : "cd-border-c cd-row-hover"
                     }`}
                     style={{
@@ -189,8 +192,7 @@ export function AssetBoard() {
               })}
             </div>
             <p className="text-[10.5px] cd-text-faint leading-relaxed px-0.5 mt-1">
-              법인차량은 출장신청서의 이용차량 선택지로 나타나고, 회의실·기타 자산은 이용 현황 화면에서 직접
-              예약합니다. 비활성 자산은 선택지·예약에서 숨겨지며, 예약 이력이 있는 자산은 삭제 대신 비활성화됩니다.
+              비활성 자산은 예약에서 숨겨집니다. 예약 이력이 있으면 삭제 대신 비활성화됩니다.
             </p>
           </div>
 
@@ -200,7 +202,7 @@ export function AssetBoard() {
               <>
                 <div className="overflow-x-auto">
                   <table className="w-full text-[12.5px]">
-                    <thead>
+                    <thead className="cd-table-head">
                       <tr className="text-left cd-text-faint text-[11px]">
                         <th className="py-1.5 pr-2 font-semibold">차종</th>
                         <th className="py-1.5 pr-2 font-semibold">차량번호</th>
@@ -295,16 +297,12 @@ export function AssetBoard() {
                 >
                   <Plus className="w-3.5 h-3.5" /> 차량 추가
                 </button>
-                <p className="text-[10.5px] cd-text-faint">
-                  차량의 상세 항목(소유 유형·계약기간·금액·서류)은 [상세 정보]에서 편집합니다. 계약서·등록증 PDF는
-                  상세 정보 창에서 업로드하면 이 목록의 [보기]로 바로 열람됩니다.
-                </p>
               </>
             ) : (
               <>
                 <div className="overflow-x-auto">
                   <table className="w-full text-[12.5px]">
-                    <thead>
+                    <thead className="cd-table-head">
                       <tr className="text-left cd-text-faint text-[11px]">
                         <th className="py-1.5 pr-2 font-semibold">이름</th>
                         <th className="py-1.5 pr-2 font-semibold">설명</th>

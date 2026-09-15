@@ -211,7 +211,7 @@ export function ApprovalArchiveBoard() {
         icon={<Archive className="w-5 h-5" />}
         eyebrow="Approval · Archive"
         title="문서함"
-        subtitle="완료된 결재 문서를 개인·부서·전사 범위로 조회합니다. 보존연한이 지난 문서는 만료로 표시됩니다."
+        help="완료된 결재 문서를 개인·부서·전사 범위로 조회합니다. 보존연한이 지난 문서는 만료로 표시됩니다."
       />
 
       <div className="cd-card rounded-3xl p-5 flex flex-col gap-4">
@@ -222,7 +222,9 @@ export function ApprovalArchiveBoard() {
               key={t}
               type="button"
               onClick={() => setTopTab(t)}
-              className={`rounded-t-xl px-4 py-2 text-sm font-semibold border-b-2 ${
+              data-active={topTab === t}
+              aria-pressed={topTab === t}
+              className={`cd-choice rounded-t-xl px-4 py-2 text-sm font-semibold border-b-2 ${
                 topTab === t ? "cd-text-primary border-current cd-tint-primary" : "cd-text-faint border-transparent cd-row-hover"
               }`}
             >
@@ -318,7 +320,7 @@ export function ApprovalArchiveBoard() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-[12.5px]">
-                <thead>
+                <thead className="cd-table-head">
                   <tr className="text-left cd-text-faint text-[11px]">
                     <th className="py-1.5 pr-3 font-semibold">계약</th>
                     <th className="py-1.5 pr-3 font-semibold">문서 유형</th>
@@ -355,7 +357,7 @@ export function ApprovalArchiveBoard() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-[12.5px]">
-              <thead>
+              <thead className="cd-table-head">
                 <tr className="text-left cd-text-faint text-[11px]">
                   <th className="py-1.5 pr-3 font-semibold">문서번호</th>
                   <th className="py-1.5 pr-3 font-semibold">양식</th>

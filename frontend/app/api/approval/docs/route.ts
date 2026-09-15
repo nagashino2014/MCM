@@ -5,6 +5,7 @@ import { recordAuditLog } from "@/lib/auth/audit";
 import { listMyDocs, listInbox, listActedDocs, listRefCandidates, saveDoc, submitDoc, type ApprovalLineStepInput, type ApprovalWatcherInput } from "@/lib/approval/docs";
 import { syncDocCardLinks } from "@/lib/barobill/classify";
 import { syncDocReceiptLinks } from "@/lib/finance/receipts";
+import { syncDocShopReceiptLinks } from "@/lib/receipts/shop-receipt-store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -84,6 +85,12 @@ export async function POST(req: NextRequest) {
       await syncDocReceiptLinks(docId, body.formId, body.fieldValues ?? {}, ctx.userId);
     } catch (err) {
       console.error("[approval/docs] 영수증 연동 실패:", err);
+    }
+    // 쇼핑몰 전표 연동(224) — _shopReceiptId 귀속/해제.
+    try {
+      await syncDocShopReceiptLinks(docId, body.fieldValues ?? {});
+    } catch (err) {
+      console.error("[approval/docs] 쇼핑몰 전표 연동 실패:", err);
     }
     let docNo: string | null = null;
     if (body.action === "submit") {

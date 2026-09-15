@@ -57,3 +57,26 @@ export function industryCodeMatchesCategory(
   if (category.exactCodes.includes(trimmed)) return true;
   return category.prefixCodes.some((prefix) => trimmed.startsWith(prefix));
 }
+
+/** 단일 KSIC 코드 → 대상 업종 카테고리(첫 매치). 대상 아니면 null. */
+export function industryCategoryForCode(code: string): IntegratedPermitIndustry | null {
+  for (const category of INTEGRATED_PERMIT_INDUSTRIES) {
+    if (industryCodeMatchesCategory(code, category)) return category;
+  }
+  return null;
+}
+
+/**
+ * facilities.industry_code(줄바꿈/쉼표/슬래시 연결 복수 KSIC) → 대상 업종 id 첫 매치.
+ * intel 규칙층(industry-rules.ts)에서 이동 — 계약 모달의 업종 프리필도 쓰는 클라이언트 안전 모듈.
+ */
+export function industryIdFromKsic(industryCode: string | null | undefined): string | null {
+  if (!industryCode) return null;
+  const codes = String(industryCode).split(/[\n,/]+/).map((s) => s.trim()).filter(Boolean);
+  for (const cat of INTEGRATED_PERMIT_INDUSTRIES) {
+    for (const code of codes) {
+      if (industryCodeMatchesCategory(code, cat)) return cat.id;
+    }
+  }
+  return null;
+}

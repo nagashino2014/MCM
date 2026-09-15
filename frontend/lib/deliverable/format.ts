@@ -17,6 +17,21 @@ const DEFAULT_FORMAT: Record<string, FieldFormat> = Object.fromEntries(
  */
 export const DEFAULT_VAT_NOTE = "VAT 별도";
 
+/**
+ * VAT 별도(금액에 미포함) 표기(2026-09-15 사용자 요청) — 부가세를 가산하지 않고 공급가액만 청구·표시한다.
+ */
+export const SUPPLY_ONLY_VAT_NOTE = "VAT 미포함";
+
+/** added = 공급가액에 부가세 가산, included = 총액에서 역산, supplyOnly = 부가세 없이 공급가액만 */
+export type VatMode = "added" | "included" | "supplyOnly";
+
+/** VAT 표기 → 계산 방식. '미포함'이 '포함'을 품고 있으므로 먼저 판정한다. */
+export function vatModeOf(vatNote: string | null | undefined): VatMode {
+  const t = String(vatNote ?? "").trim() || DEFAULT_VAT_NOTE;
+  if (t.includes("미포함")) return "supplyOnly";
+  return t.includes("별도") ? "added" : "included";
+}
+
 interface Ymd {
   y: string;
   m: string;

@@ -261,7 +261,7 @@ export function IntelBoard() {
         eyebrow="SALES & MARKETING"
         title="API & 스크래핑"
         titleSuffix={`${total.toLocaleString()}건`}
-        subtitle="공시·환경영향평가·보도자료·뉴스·고시에서 통합허가 대상 사업장의 투자·증설·신설 신호를 수집해 선별합니다."
+        help="공시·환경영향평가·보도자료·뉴스·고시에서 통합허가 대상 사업장의 투자·증설·신설 신호를 수집해 선별합니다."
         actions={
           canEdit ? (
             <Link href="/sales/intel/sources" className="cd-chip">

@@ -7,6 +7,7 @@
 //   부분 볼드/색 강조/이미지 삽입이 가능하고, 블러 시 DOM 을 역파싱해 트리에 커밋한다.
 // - 반복 항목·문단 블록·리프 장식 블록에는 data-rcid 를 달아, 캔버스 오버레이(EditorOverlays)가
 //   호버 컨트롤(추가/복제/이동/삭제)을 그 위에 띄운다.
+// - 편집 모드의 모든 요소에는 data-rcnode 를 달아, 드래그 드롭 지점의 DOM 요소를 트리 노드로 되찾는다.
 
 import { createContext, createElement, useContext, type CSSProperties, type ReactNode } from "react";
 import type { DocNode } from "@/lib/recruit/types";
@@ -92,6 +93,7 @@ function InlineBlockView({ node }: { node: DocNode }) {
     style: pillSafeStyle(node),
     className: "rc-inline-block",
     "data-rcid": node.id,
+    "data-rcnode": node.id,
     contentEditable: true,
     suppressContentEditableWarning: true,
     spellCheck: false,
@@ -124,13 +126,16 @@ function ElementNodeView({ node }: { node: DocNode }) {
       src: node.src,
       style: node.style as CSSProperties | undefined,
       alt: "",
-      ...(editable ? { "data-rcid": node.id } : {}),
+      ...(editable ? { "data-rcid": node.id, "data-rcnode": node.id } : {}),
     });
   }
   if (editable && isInlineBlock(node)) return <InlineBlockView node={node} />;
 
   const props: Record<string, unknown> = { style: pillSafeStyle(node) };
   if (editable && controlKind(node)) props["data-rcid"] = node.id;
+  // 편집 모드에선 모든 요소에 노드 id 를 달아 두어(선택 대상이 아니어도) 드래그 드롭 지점의 DOM 요소를
+  // 트리 노드로 되찾을 수 있게 한다. 선택 대상 판정은 여전히 data-rcid 로만 한다.
+  if (editable) props["data-rcnode"] = node.id;
   if (node.tag === "a") {
     props.href = node.href ?? "#";
     props.target = "_blank";

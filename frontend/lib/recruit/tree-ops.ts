@@ -3,6 +3,7 @@
  * 모든 함수는 원본을 건드리지 않고 새 트리를 돌려준다(undo/redo 스냅샷 스택과 호환).
  */
 import type { DocNode } from "./types";
+import { isInlineBlock } from "./inline";
 
 function clone(tree: DocNode): DocNode {
   return JSON.parse(JSON.stringify(tree)) as DocNode;
@@ -61,9 +62,35 @@ export function removeNode(root: DocNode, id: string): DocNode {
   const next = clone(root);
   const hit = findWithParent(next, id);
   if (!hit || !hit.parent) return root;
+  // 루트의 마지막 블록까지 지우면 문서가 비어 복구가 어려우므로 그것만 막는다.
+  if (hit.parent === next && (next.children?.length ?? 0) <= 1) return root;
   const children = hit.parent.children!;
   children.splice(children.indexOf(hit.node), 1);
+  collapseEmptyWrapper(next, hit.parent);
   return next;
+}
+
+/** 시각적으로 공간을 차지하는 스타일(여백·배경·경계·높이)이 하나라도 있는가. */
+function hasVisualBox(node: DocNode): boolean {
+  const st = node.style ?? {};
+  return Object.keys(st).some((k) =>
+    /^(padding|background|border|boxShadow|minHeight|height)/.test(k)
+  );
+}
+
+/**
+ * 유일한 자식을 지워 빈 래퍼만 남았을 때 — 높이 0 래퍼는 클릭할 수 없어 다시 지울 방법이 없으므로
+ * 위로 접어 올린다(루트·반복 항목·시각 스타일이 있는 카드는 남긴다: 후자는 리프 블록으로 선택·삭제 가능).
+ */
+function collapseEmptyWrapper(root: DocNode, wrapper: DocNode): void {
+  let cur: DocNode | null = wrapper;
+  while (cur && cur !== root && !cur.repeatGroup && (cur.children?.length ?? 0) === 0 && !hasVisualBox(cur)) {
+    const hit = findWithParent(root, cur.id);
+    if (!hit?.parent) break;
+    const siblings = hit.parent.children!;
+    siblings.splice(siblings.indexOf(cur), 1);
+    cur = hit.parent;
+  }
 }
 
 /** 장식 불릿 span 판정 — 원형(border-radius 50%) + 배경색 + 자식 없음. */
@@ -227,15 +254,85 @@ export function nudgeNode(root: DocNode, id: string, dx: number, dy: number): Do
 }
 
 /** 범용 블록 이동 — 같은 부모 안에서 이웃 형제와 자리 교환. */
+/** 자식 블록을 담을 수 있는 컨테이너인가(문단 블록·이미지·구분자·텍스트 런은 아님). */
+export function isContainerNode(node: DocNode): boolean {
+  if (node.tag === "#text" || node.separator) return false;
+  if (["img", "br", "hr"].includes(node.tag)) return false;
+  if ((node.children?.length ?? 0) === 0) return false;
+  return !isInlineBlock(node);
+}
+
+/** 흐름 이동으로 옮긴 블록의 드래그 오프셋(relative left/top)을 제거 — 새 자리에서 원래 흐름대로 놓이게. */
+function clearFlowOffset(node: DocNode): void {
+  const st = node.style;
+  if (!st || (st.position && st.position !== "relative")) return;
+  delete st.left;
+  delete st.top;
+  if (st.position === "relative") delete st.position;
+}
+
+/**
+ * 블록 순서 이동(문서 순서 기준) — 같은 부모 안에서는 이웃과 자리 바꾸기, 이웃이 컨테이너면 그 안으로
+ * 들어가고, 부모의 처음/끝에 닿으면 부모 밖(조부모 레벨)으로 나간다. 그래서 복제한 블록을 이웃 행·셀로
+ * 옮길 수 있다. 반복 그룹 항목 사이를 지날 때 구분자는 건너뛴다.
+ */
 export function moveNode(root: DocNode, id: string, dir: -1 | 1): DocNode {
   const next = clone(root);
   const hit = findWithParent(next, id);
   if (!hit || !hit.parent) return root;
-  const children = hit.parent.children!;
+  const parent = hit.parent;
+  const children = parent.children!;
   const idx = children.indexOf(hit.node);
-  const target = idx + dir;
-  if (target < 0 || target >= children.length) return root;
+  let target = idx + dir;
+  while (target >= 0 && target < children.length && children[target].separator) target += dir;
+
+  if (target < 0 || target >= children.length) {
+    // 부모 경계 — 조부모 레벨로 나간다(루트 직계면 더 나갈 곳이 없음)
+    const up = findWithParent(next, parent.id);
+    if (!up?.parent) return root;
+    children.splice(idx, 1);
+    const upChildren = up.parent.children!;
+    const pIdx = upChildren.indexOf(parent);
+    upChildren.splice(dir < 0 ? pIdx : pIdx + 1, 0, hit.node);
+    clearFlowOffset(hit.node);
+    collapseEmptyWrapper(next, parent);
+    return next;
+  }
+
+  const neighbor = children[target];
+  if (isContainerNode(neighbor)) {
+    // 이웃 컨테이너 안으로 진입 — 아래로 가면 첫 자식, 위로 가면 마지막 자식 자리
+    children.splice(idx, 1);
+    const inner = neighbor.children!;
+    inner.splice(dir < 0 ? inner.length : 0, 0, hit.node);
+    clearFlowOffset(hit.node);
+    return next;
+  }
   [children[idx], children[target]] = [children[target], children[idx]];
+  return next;
+}
+
+/**
+ * 블록을 다른 부모의 지정 위치로 옮긴다(드래그 드롭 재배치). 대상이 자기 자신·자손이면 무시.
+ * 옮긴 뒤 드래그 오프셋은 제거하고, 비게 된 원래 래퍼는 접어 올린다.
+ */
+export function moveNodeTo(root: DocNode, id: string, targetParentId: string, index: number): DocNode {
+  if (id === targetParentId) return root;
+  const next = clone(root);
+  const hit = findWithParent(next, id);
+  if (!hit || !hit.parent) return root;
+  if (findWithParent(hit.node, targetParentId)) return root; // 자손 안으로는 못 넣음
+  const target = findWithParent(next, targetParentId)?.node;
+  if (!target || target.tag === "#text") return root;
+  const from = hit.parent.children!;
+  const fromIdx = from.indexOf(hit.node);
+  from.splice(fromIdx, 1);
+  const into = (target.children ??= []);
+  let at = Math.max(0, Math.min(index, into.length));
+  if (target === hit.parent && fromIdx < index) at = Math.max(0, at - 1);
+  into.splice(at, 0, hit.node);
+  clearFlowOffset(hit.node);
+  if (target !== hit.parent) collapseEmptyWrapper(next, hit.parent);
   return next;
 }
 

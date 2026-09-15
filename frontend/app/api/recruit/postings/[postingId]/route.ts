@@ -33,6 +33,7 @@ export async function PUT(req: NextRequest, context: RouteContext) {
       contentTree: body?.contentTree,
       theme: body?.theme,
       status: body?.status === "final" ? "final" : body?.status === "draft" ? "draft" : undefined,
+      meta: body?.meta && typeof body.meta === "object" ? body.meta : undefined,
       snapshot: body?.snapshot === true,
       updatedBy: ctx.userId,
     });

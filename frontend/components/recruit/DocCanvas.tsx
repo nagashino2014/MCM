@@ -77,6 +77,7 @@ export function DocEditorStyles(): ReactNode {
       .rc-inline-block:focus { box-shadow: 0 0 0 2px rgba(93,135,255,0.85); background: rgba(93,135,255,0.05); }
       .rc-inline-block img { cursor: pointer; }
       .rc-img-selected { outline: 2px solid #5d87ff; outline-offset: 1px; }
+      .rc-drop-target { box-shadow: inset 0 0 0 2px rgba(93,135,255,0.75) !important; background: rgba(93,135,255,0.06); }
       [data-rcid]:not(.rc-inline-block):hover { box-shadow: 0 0 0 1px rgba(93,135,255,0.4); border-radius: 6px; }
     `}</style>
   );

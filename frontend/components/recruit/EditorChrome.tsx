@@ -32,7 +32,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { DocNode } from "@/lib/recruit/types";
-import { findNode, findParent, hasBullet } from "@/lib/recruit/tree-ops";
+import { findNode, findParent, hasBullet, isContainerNode } from "@/lib/recruit/tree-ops";
 import { commitEditableElement, type DocEditorCallbacks } from "./DocNodeView";
 
 const MAX_IMAGE_BYTES = 500 * 1024;
@@ -44,6 +44,7 @@ export interface ChromeOps {
   duplicateNode: (id: string) => void;
   removeNode: (id: string) => void;
   moveNode: (id: string, dir: -1 | 1) => void;
+  moveNodeTo: (id: string, parentId: string, index: number) => void;
   nudgeNode: (id: string, dx: number, dy: number) => void;
   resizeNode: (id: string, size: { width?: number; height?: number }) => void;
   insertImageBlock: (refId: string, dataUri: string) => void;
@@ -278,15 +279,39 @@ export function EditorChrome({
   const node = selectedId ? findNode(tree, selectedId) : null;
   const parent = selectedId ? findParent(tree, selectedId) : null;
   const isRepeat = Boolean(node?.repeatGroup && !node.separator);
+  // 반복 그룹은 마지막 항목만 보호(그룹이 사라지면 되살릴 수 없음). 일반 블록은 부모의 유일한 자식이어도
+  // 지울 수 있다 — 빈 래퍼는 tree-ops 가 접어 올린다. 루트의 마지막 블록만 예외.
   const canRemove = node && parent
     ? isRepeat
       ? (parent.children ?? []).filter((c) => c.repeatGroup === node.repeatGroup && !c.separator).length > 1
-      : (parent.children ?? []).length > 1
+      : parent !== tree || (tree.children?.length ?? 0) > 1
     : false;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (editingActive || !selectedId) return;
+      if (editingActive) {
+        // 내용을 전부 지운 문단 블록에서 한 번 더 Backspace/Delete = 블록 자체 삭제(워드프로세서 관례).
+        if ((e.key === "Backspace" || e.key === "Delete") && activeBlockId) {
+          const active = document.activeElement as HTMLElement | null;
+          if (active && active.getAttribute("data-rcid") === activeBlockId && !active.querySelector("img") && active.innerText.trim() === "") {
+            const n = findNode(tree, activeBlockId);
+            const p = findParent(tree, activeBlockId);
+            if (!n || !p) return;
+            const repeat = Boolean(n.repeatGroup && !n.separator);
+            const removable = repeat
+              ? (p.children ?? []).filter((c) => c.repeatGroup === n.repeatGroup && !c.separator).length > 1
+              : p !== tree || (tree.children?.length ?? 0) > 1;
+            if (!removable) return;
+            e.preventDefault();
+            active.blur();
+            if (repeat) ops.removeRepeatItem(activeBlockId);
+            else ops.removeNode(activeBlockId);
+            setSelectedId(null);
+          }
+        }
+        return;
+      }
+      if (!selectedId) return;
       const step = e.shiftKey ? 8 : 1;
       const delta: Record<string, [number, number]> = {
         ArrowLeft: [-step, 0],
@@ -308,7 +333,7 @@ export function EditorChrome({
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [editingActive, selectedId, ops, isRepeat, canRemove]);
+  }, [editingActive, activeBlockId, tree, selectedId, ops, isRepeat, canRemove]);
 
   // ── 도구 동작 ────────────────────────────────────────
   const exec = useCallback((command: string, value?: string) => {
@@ -529,7 +554,67 @@ export function EditorChrome({
   }, [selectedId, canRemove, isRepeat, ops, flushEditing]);
 
   // ── 리사이즈 핸들 드래그 ─────────────────────────────
-  /** 선택 테두리 드래그 = 블록 이동 — 총 이동량을 nudgeNode 로 커밋(0,0 복귀 시 오프셋 제거). */
+  /**
+   * 드래그 드롭 위치 판정 — 커서 아래 문서 요소(드래그 중인 블록 자신·자손, 오버레이 제외)에서
+   * 가장 가까운 컨테이너 노드와 삽입 인덱스를 구한다. 현재 부모와 같은 컨테이너면 null(= 미세 이동).
+   */
+  const resolveDrop = useCallback(
+    (x: number, y: number, dragEl: HTMLElement, dragId: string): { parentId: string; index: number; el: HTMLElement } | null => {
+      const container = containerRef.current;
+      const doc = container?.querySelector<HTMLElement>("[data-rc-doc]");
+      if (!container || !doc) return null;
+      const hitEl = document
+        .elementsFromPoint(x, y)
+        .find((cand) => doc.contains(cand) && !dragEl.contains(cand)) as HTMLElement | undefined;
+      if (!hitEl) return null;
+      // 커서 아래 요소 → 그 노드 또는 가장 가까운 컨테이너 조상
+      let nodeEl: HTMLElement | null = hitEl.closest<HTMLElement>("[data-rcnode]");
+      let targetId: string | null = null;
+      let anchorId: string | null = null; // 컨테이너가 아닌 요소 위에 놓았을 때 그 형제 기준으로 앞/뒤 결정
+      while (nodeEl) {
+        const id = nodeEl.getAttribute("data-rcnode")!;
+        const n = findNode(tree, id);
+        if (n && isContainerNode(n) && !(n.repeatGroup && n.separator)) {
+          targetId = id;
+          break;
+        }
+        anchorId = id;
+        nodeEl = nodeEl.parentElement?.closest<HTMLElement>("[data-rcnode]") ?? null;
+      }
+      if (!targetId) targetId = tree.id; // 문서 루트 여백
+      const currentParent = findParent(tree, dragId);
+      if (!currentParent || currentParent.id === targetId) return null;
+      const target = findNode(tree, targetId);
+      if (!target) return null;
+      const targetEl = targetId === tree.id ? doc : container.querySelector<HTMLElement>(`[data-rcnode="${CSS.escape(targetId)}"]`);
+      if (!targetEl) return null;
+      const kids = target.children ?? [];
+      let index = kids.length;
+      if (anchorId) {
+        const k = kids.findIndex((c) => c.id === anchorId);
+        if (k >= 0) {
+          const r = container.querySelector<HTMLElement>(`[data-rcnode="${CSS.escape(anchorId)}"]`)?.getBoundingClientRect();
+          // 형제가 가로로 늘어선 셀(그리드/플렉스)이면 좌우, 아니면 상하로 앞/뒤를 가른다
+          const after = r ? (r.width < r.height * 6 && r.width < targetEl.getBoundingClientRect().width * 0.8 ? x > r.left + r.width / 2 : y > r.top + r.height / 2) : true;
+          index = after ? k + 1 : k;
+        }
+      } else {
+        // 컨테이너 여백에 놓음 — 커서보다 뒤에 있는 첫 자식 앞
+        for (let k = 0; k < kids.length; k++) {
+          const r = container.querySelector<HTMLElement>(`[data-rcnode="${CSS.escape(kids[k].id)}"]`)?.getBoundingClientRect();
+          if (r && (y < r.top || (y < r.bottom && x < r.left))) { index = k; break; }
+        }
+      }
+      return { parentId: targetId, index, el: targetEl };
+    },
+    [containerRef, tree]
+  );
+
+  /**
+   * 선택 테두리 드래그 = 블록 이동.
+   * - 같은 컨테이너 안에 놓으면 총 이동량을 nudgeNode 로 커밋(시각 오프셋, 0,0 복귀 시 제거)
+   * - 다른 컨테이너(이웃 행·셀·섹션) 위에 놓으면 그 컨테이너의 해당 위치로 블록을 옮긴다(재배치)
+   */
   const startDragMove = useCallback(
     (e: React.MouseEvent) => {
       const el = selEl();
@@ -541,8 +626,11 @@ export function EditorChrome({
       const startY = e.clientY;
       const startLeft = parseFloat(el.style.left) || 0;
       const startTop = parseFloat(el.style.top) || 0;
+      const startPosition = el.style.position;
       let dx = 0;
       let dy = 0;
+      let dropEl: HTMLElement | null = null;
+      let drop: { parentId: string; index: number } | null = null;
       const onMove = (ev: MouseEvent) => {
         dx = ev.clientX - startX;
         dy = ev.clientY - startY;
@@ -550,17 +638,31 @@ export function EditorChrome({
         el.style.left = `${Math.round(startLeft + dx)}px`;
         el.style.top = `${Math.round(startTop + dy)}px`;
         updateRect();
+        const r = resolveDrop(ev.clientX, ev.clientY, el, selectedId);
+        if (dropEl && dropEl !== r?.el) dropEl.classList.remove("rc-drop-target");
+        dropEl = r?.el ?? null;
+        dropEl?.classList.add("rc-drop-target");
+        drop = r ? { parentId: r.parentId, index: r.index } : null;
       };
       const onUp = () => {
         document.removeEventListener("mousemove", onMove);
         document.removeEventListener("mouseup", onUp);
         setTimeout(() => { resizingRef.current = false; }, 0);
-        if (dx !== 0 || dy !== 0) ops.nudgeNode(selectedId, Math.round(dx), Math.round(dy));
+        dropEl?.classList.remove("rc-drop-target");
+        if (drop) {
+          // 재배치 — 드래그 중 준 임시 오프셋은 되돌리고 트리에서 옮긴다(옮긴 노드는 오프셋 없이 흐름 배치)
+          el.style.left = startLeft ? `${startLeft}px` : "";
+          el.style.top = startTop ? `${startTop}px` : "";
+          el.style.position = startPosition;
+          ops.moveNodeTo(selectedId, drop.parentId, drop.index);
+        } else if (dx !== 0 || dy !== 0) {
+          ops.nudgeNode(selectedId, Math.round(dx), Math.round(dy));
+        }
       };
       document.addEventListener("mousemove", onMove);
       document.addEventListener("mouseup", onUp);
     },
-    [selEl, selectedId, ops, updateRect]
+    [selEl, selectedId, ops, updateRect, resolveDrop]
   );
 
   const startResize = useCallback(
@@ -693,11 +795,11 @@ export function EditorChrome({
         />
         <Divider />
         <ToolBtn icon={<Copy className="w-4 h-4" />} title="블록 복제 (반복 항목이면 항목 추가)" disabled={!blockToolsOn} onClick={duplicate} />
-        <ToolBtn icon={<ArrowUp className="w-4 h-4" />} title="위로 이동" disabled={!blockToolsOn} onClick={() => move(-1)} />
-        <ToolBtn icon={<ArrowDown className="w-4 h-4" />} title="아래로 이동" disabled={!blockToolsOn} onClick={() => move(1)} />
+        <ToolBtn icon={<ArrowUp className="w-4 h-4" />} title="위로 이동 (이웃 행·셀 안으로도 들어감)" disabled={!blockToolsOn} onClick={() => move(-1)} />
+        <ToolBtn icon={<ArrowDown className="w-4 h-4" />} title="아래로 이동 (이웃 행·셀 안으로도 들어감)" disabled={!blockToolsOn} onClick={() => move(1)} />
         <ToolBtn
           icon={<Trash2 className="w-4 h-4" />}
-          title={canRemove ? "블록 삭제 (Delete)" : "블록을 선택하세요 (마지막 항목은 삭제 불가)"}
+          title={canRemove ? "블록 삭제 (Delete)" : "블록을 선택하세요 (반복 그룹의 마지막 항목은 삭제 불가)"}
           disabled={!blockToolsOn || !canRemove}
           danger
           onClick={removeSelected}
@@ -776,7 +878,7 @@ export function EditorChrome({
             ).map((edge, i) => (
               <div
                 key={i}
-                title="드래그로 위치 이동"
+                title="드래그로 위치 이동 — 다른 행·셀 위에 놓으면 그곳으로 옮겨짐"
                 style={{ position: "absolute", ...edge, cursor: "move", pointerEvents: "auto" }}
                 onMouseDown={startDragMove}
               />

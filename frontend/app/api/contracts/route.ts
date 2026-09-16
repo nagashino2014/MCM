@@ -5,6 +5,7 @@ import { withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 import { resolveVisibleContractIds } from "@/lib/auth/contract-scope";
 import { listContracts, type ContractListFilter } from "@/lib/ieps/contracts";
+import { checkDateFields, dateFieldValue } from "@/lib/contracts/date-field";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -44,6 +45,13 @@ export async function POST(req: NextRequest) {
     const facilityIds = normalizeStringArray(body.facilityIds);
     if (!contractTitle) return NextResponse.json({ error: "계약명은 필수입니다." }, { status: 400 });
     if (!counterpartyFacilityId) return NextResponse.json({ error: "계약상대 업체는 필수입니다." }, { status: 400 });
+    // 채우다 만 날짜가 그대로 저장되던 문제 방어(date-field)
+    const dateError = checkDateFields({
+      계약일자: body.contractDate,
+      착수일: body.startedAt,
+      종료일: body.endedAt,
+    });
+    if (dateError) return NextResponse.json({ error: dateError }, { status: 400 });
 
     const contractId = id();
     const now = new Date().toISOString();
@@ -81,9 +89,9 @@ export async function POST(req: NextRequest) {
           body.legacyCompanyId || null,
           body.contractDirection || "sales",
           body.industryCategory || null,
-          body.contractDate || null,
-          body.startedAt || null,
-          body.endedAt || null,
+          dateFieldValue(body.contractDate),
+          dateFieldValue(body.startedAt),
+          dateFieldValue(body.endedAt),
           toNullableNumber(body.originalAmount ?? body.contractAmount),
           toNullableNumber(body.currentAmount ?? body.contractAmount),
           body.paymentMethod || null,

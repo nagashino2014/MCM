@@ -100,6 +100,37 @@ export interface FilingSettings {
   remindBeforeDays: number;
 }
 
+/** 대행 실적 보고 이력(contract_agency_reports, 마이그 252) — 신고를 마친 건의 기록. */
+export type AgencyReportKind = "conclude" | "amend" | "complete";
+
+export const AGENCY_REPORT_KINDS: AgencyReportKind[] = ["conclude", "amend", "complete"];
+
+export const AGENCY_REPORT_KIND_LABEL: Record<AgencyReportKind, string> = {
+  conclude: "체결",
+  amend: "변경",
+  complete: "완료",
+};
+
+export interface AgencyReportRow {
+  reportId: string;
+  contractId: string;
+  reportKind: AgencyReportKind;
+  reportedOn: string;
+  receiptNo: string | null;
+  note: string | null;
+  /** 대기열에서 자동 기록된 건이면 그 항목 id */
+  filingId: string | null;
+  /** 신고서 PDF — 없으면 첨부 전 */
+  documentId: string | null;
+  documentName: string | null;
+  /** GET 으로 내려받는 경로(contract.view 권한) */
+  documentPath: string | null;
+  createdBy: string | null;
+  createdByName: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface FilingSummary {
   pending: number;
   overdue: number;

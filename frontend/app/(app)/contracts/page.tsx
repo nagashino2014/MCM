@@ -34,6 +34,7 @@ import ContractChangeModal from "@/components/contracts/ContractChangeModal";
 import ContractStaffingModal from "@/components/contracts/ContractStaffingModal";
 import TaxInvoiceIssueModal from "@/components/contracts/TaxInvoiceIssueModal";
 import FacilityInfoModal from "@/components/contracts/FacilityInfoModal";
+import { AgencyReportList } from "@/components/contracts/AgencyReportList";
 import { BAROBILL_BANKS } from "@/components/finance/FinLogo";
 import { INTEGRATED_PERMIT_OPTION_SUFFIX, IndustryOptionsEditorButton, useContractIndustryOptions } from "@/components/contracts/IndustryOptionsEditor";
 import { IndustryPermitLookupButton } from "@/components/contracts/IndustryPermitLookupButton";
@@ -1526,6 +1527,7 @@ function AgencyReportInfoSection({
           {saving ? "저장 중…" : "저장"}
         </button>
       </div>
+      <AgencyReportList contractId={contractId} />
     </div>
   );
 }

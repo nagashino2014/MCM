@@ -179,6 +179,60 @@ export async function runAssist(opts: { cfg: FilingsConfig; kind?: FilingKind; f
    * 늘 함께 일어나야 하므로 알림을 신호로 잇는다. 대행 실적 보고는 이어서 보고회차를 접수번호로 남기고,
    * 실적 보고서 PDF 를 받아 이력에 붙인다(→ 실무자 발송).
    */
+  /**
+   * 중복 신고 경고 — IEPS 에 같은 사업장·계약일·보고형식의 보고가 이미 있는지 신고 전에 확인한다.
+   * 대기열을 거치지 않고 사이트에서 직접 신고한 건은 MCM 이 모르므로(2026-09-16 국도화학 부산·경인 9/10 수동 신고 →
+   * 9/16 재제출), IEPS 목록 조회 API 로 직접 확인한다. 제출 뒤에는 방금 낸 보고가 걸리므로 제출 전에만 돌린다.
+   */
+  let dupCheckedFor = "";
+  const checkDuplicates = async () => {
+    const cur = items[index];
+    if (!cur || cur.filingKind !== "ieps_agency" || cur.status !== "pending") return;
+    const key = `${cur.filingId}`;
+    if (dupCheckedFor === key) return;
+    dupCheckedFor = key;
+    try {
+      const field = (label: string) => cur.payload.fields.find((f) => f.label === label)?.value?.trim() ?? "";
+      const name = field("대행사업장 명칭");
+      const contractDate = field("(변경)계약일자");
+      const amount = field("(변경)계약금액(백만원)");
+      const kindName = cur.triggerKind === "amend" ? "변경" : cur.triggerKind === "complete" ? "이행" : "체결";
+      const cnclCd = siteCfg.agencyCode;
+      if (!name || !contractDate || !cnclCd) return;
+      const rows = await listIepsAgencyReports(context, cnclCd, searchKeyword(name), contractDate);
+      const dups = rows.filter((r) => {
+        if (r.REPORT_FOM_CD_NM !== kindName || r.CONTRACT_DE !== contractDate) return false;
+        const tokens = nameTokens(name);
+        const flat = normalizeName(r.BPLC_NM ?? "");
+        if (tokens.length && !flat.includes(tokens[0])) return false; // 회사명은 반드시 같아야 한다
+        const want = normalizeName(name);
+        const sameName = flat.includes(want) || want.includes(flat) || tokens.filter((t) => flat.includes(t)).length / tokens.length >= 0.6;
+        const sameAmount = amount !== "" && String(r.CONTRACT_AMT ?? "") === amount;
+        return sameName || sameAmount;
+      });
+      if (!dups.length) {
+        console.log(`[filings] 중복 신고 확인: IEPS 에 같은 ${kindName} 보고 없음`);
+        return;
+      }
+      for (const d of dups) {
+        notices.push({
+          at: Date.now(),
+          sticky: true,
+          text:
+            `⚠ 이미 IEPS 에 같은 ${kindName} 보고가 있습니다 — 보고회차 ${d.REQST_SN} · ${d.BPLC_NM} · ${d.STTUS_CD_NM ?? ""} ${d.PRESENTN_DE ?? ""}` +
+            ` · 대행기간 ~${d.AGENCY_END_DE ?? "?"}. 정정 목적이 아니면 신고를 멈추세요.`,
+          url: `https://ieps.nier.go.kr/web/issPrc/agencyPerMgt/contractReportForm/?pMENUMST_ID=583&CNCL_CD=${encodeURIComponent(cnclCd)}&REQST_SN=${d.REQST_SN}`,
+          label: "기존 보고 열기",
+        });
+      }
+      console.log(`[filings] ⚠ 중복 신고 의심 ${dups.length}건: ${dups.map((d) => d.REQST_SN).join(", ")}`);
+      await rerender();
+    } catch (e) {
+      dupCheckedFor = ""; // 다음 기회에 다시
+      console.log(`[filings] 중복 신고 확인 실패: ${(e as Error).message}`);
+    }
+  };
+
   let recording = false;
   const autoRecordSubmit = async (text: string) => {
     if (!/제출\s*되었습니다|제출이\s*완료/.test(text)) return;
@@ -304,6 +358,8 @@ export async function runAssist(opts: { cfg: FilingsConfig; kind?: FilingKind; f
         const target = mainPage();
         if (q && target && siteSearch) {
           const result = await runSiteSearch(context, target, siteSearch, q);
+          // 사업장을 고른 뒤 한 번 더 — 이미 제출된 같은 보고가 있는지
+          void checkDuplicates();
           console.log(`[filings] ${result}`);
           notices.push({ at: Date.now(), text: result });
         }
@@ -347,8 +403,11 @@ export async function runAssist(opts: { cfg: FilingsConfig; kind?: FilingKind; f
           const file = await dumpPage(site, target);
           notices.push({ at: Date.now(), text: `폼 덤프 저장: ${file}` });
         }
-      } else if (a.type === "next") index = items.length ? (index + 1) % items.length : 0;
-      else if (a.type === "prev") index = items.length ? (index - 1 + items.length) % items.length : 0;
+      } else if (a.type === "next" || a.type === "prev") {
+        index = items.length ? (index + (a.type === "next" ? 1 : -1) + items.length) % items.length : 0;
+        deliveryMode = null;
+        void checkDuplicates();
+      }
       else if (cur && (a.type === "submitted" || a.type === "skipped")) {
         await markFiling(cur.filingId, {
           status: a.type,
@@ -375,6 +434,7 @@ export async function runAssist(opts: { cfg: FilingsConfig; kind?: FilingKind; f
   const page: Page = context.pages()[0] || (await context.newPage());
   const startUrl = siteCfg.screens[kind] || siteCfg.loginUrl;
   await page.goto(startUrl, { waitUntil: "domcontentloaded" }).catch((e) => console.log(`[filings] ⚠ 이동 실패: ${e.message}`));
+  void checkDuplicates();
   watchLogout(context, siteCfg.loggedOutPattern, site);
 
   console.log(`[filings] 패널에서 값을 복사·채우고, 사이트에서 저장·제출한 뒤 패널의 [제출 완료] 를 누르세요.`);
@@ -505,6 +565,51 @@ export async function runSiteSearch(context: BrowserContext, page: Page, cfg: No
  * 팝업에서 한 번 검색하고 결과에서 가장 잘 맞는 행을 누른다. minScore 미만이면 아무것도 누르지 않는다.
  * 점수: 이름이 그대로 들어 있으면 1, 아니면 회사명(첫 낱말)을 포함하는 행에 한해 낱말 겹침 비율.
  */
+/** IEPS 대행 실적보고 목록 한 행(contractReportList_ajax 응답 — 필요한 열만) */
+export interface IepsAgencyReportRow {
+  REQST_SN: number;
+  BPLC_CD: string | null;
+  BPLC_NM: string | null;
+  REPORT_FOM_CD_NM: string | null; // 체결 | 변경 | 이행
+  STTUS_CD_NM: string | null; // 제출 등
+  CONTRACT_DE: string | null;
+  CONTRACT_AMT: number | null; // 백만원
+  AGENCY_START_DE: string | null;
+  AGENCY_END_DE: string | null;
+  PRESENTN_DE: string | null; // 제출일
+}
+
+/**
+ * IEPS 대행 실적보고 목록 조회 — 화면 목록(RealGrid, 캔버스라 글자를 읽을 수 없다)이 쓰는 조회 API 를 같은 세션으로 부른다.
+ * fromDate/toDate 는 제출일 기준이라 계약일 1년 전부터 오늘 이후까지 넓게 잡는다(2026-09-16 실측).
+ */
+export async function listIepsAgencyReports(
+  context: BrowserContext,
+  cnclCd: string,
+  bplcKeyword: string,
+  contractDate: string
+): Promise<IepsAgencyReportRow[]> {
+  const from = new Date(`${contractDate}T00:00:00Z`);
+  from.setUTCFullYear(from.getUTCFullYear() - 1);
+  const to = new Date();
+  to.setUTCDate(to.getUTCDate() + 1);
+  const res = await context.request.post("https://ieps.nier.go.kr/web/issPrc/agencyPerMgt/contractReportList_ajax", {
+    form: {
+      CNCL_CD: cnclCd,
+      fromDate: from.toISOString().slice(0, 10),
+      toDate: to.toISOString().slice(0, 10),
+      REPORT_FOM_CD: "",
+      STTUS_CD: "",
+      BPLC_NM: bplcKeyword,
+    },
+    timeout: 30_000,
+  });
+  if (!res.ok()) throw new Error(`IEPS 목록 조회 실패 (HTTP ${res.status()})`);
+  const data = (await res.json().catch(() => null)) as unknown;
+  const rows = Array.isArray(data) ? data : [];
+  return rows as IepsAgencyReportRow[];
+}
+
 /**
  * 제출된 대행 실적 보고서의 식별자 — 주소의 CNCL_CD(대행업 등록 코드)·REQST_SN(보고회차).
  * 보고회차는 IEPS 대행 실적보고 목록의 "보고회차" 열과 같다. 주소에 없으면 화면의 숨은 입력값을 본다.

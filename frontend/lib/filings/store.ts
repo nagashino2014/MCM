@@ -18,6 +18,7 @@ import type {
   FilingSummary,
 } from "./types";
 import { FILING_TRIGGER_LABEL } from "./types";
+import { recordAgencyReportFromFiling } from "./agency-reports";
 
 const SETTINGS_KEY = "config";
 
@@ -153,6 +154,8 @@ interface ContractRec {
   permitIssuedAt: string | null;
   /** 완료일(발행일) — 마지막 지급 단계 세금계산서 발행일(이행 보고 트리거) */
   lastInvoiceIssuedAt: string | null;
+  /** MCM 등록일(YYYY-MM-DD) — 계약일이 기준일 직전이어도 등록이 기준일 이후면 후보로 올린다 */
+  createdOn: string | null;
   awardRate: number | null;
   preconsultNotifiedAt: string | null;
   counterpartyName: string;
@@ -201,6 +204,18 @@ function etisBusinessKind(specialty: string): string {
   if (specialty === "대기관리") return "대기오염물질 배출시설";
   if (specialty === "수질관리") return "수질오염물질 배출시설";
   return "";
+}
+
+/**
+ * ETIS 기술자 선택 키. 회원번호가 비어 있으면 사이트에서 기술자를 못 고르므로 채워 넣을 곳을 안내한다
+ * (직원 관리 › 인사기록 › 엔지니어링협회 회원번호).
+ */
+function memberNoField(e: EmployeeRec): FilingField {
+  return {
+    label: "회원번호",
+    value: e.etisMemberNo,
+    hint: e.etisMemberNo ? "기술자 선택 키" : "미등록 — 직원 관리에서 엔지니어링협회 회원번호를 먼저 입력",
+  };
 }
 
 /** IEPS 대행업 변경등록 신청서 공통 머리 — 신청 구분 라디오 + 변경등록 내용 textarea(#CHANGE_REQST_CN) */
@@ -308,7 +323,7 @@ function agencyFields(c: ContractRec, co: Company, opts: { changedOn?: string; a
 
 function careerFields(e: EmployeeRec, c: ContractRec, from: string | null, to: string | null): FilingField[] {
   return [
-    { label: "회원번호", value: e.etisMemberNo, hint: "기술자 선택 키" },
+    memberNoField(e),
     { label: "이름", value: e.name },
     { label: "기간", value: period(from, to) },
     { label: "참여사업명", value: c.title },
@@ -384,6 +399,7 @@ async function loadContracts(db: PgDatabase): Promise<Map<string, ContractRec>> 
       `SELECT c.contract_id, c.contract_title, c.service_subtype, c.contract_status,
               c.contract_date, c.started_at, c.ended_at, c.contract_amount, c.current_amount,
               c.permit_no, c.permit_issued_at, c.award_rate, c.preconsult_notified_at,
+              SUBSTRING(c.created_at, 1, 10) AS created_on,
               lm.invoice_done_date AS last_invoice_issued_at,
               cp.company_name AS counterparty_name, cp.phone_number AS counterparty_phone,
               COALESCE(f.company_name, tf.company_name) AS facility_name,
@@ -426,6 +442,7 @@ async function loadContracts(db: PgDatabase): Promise<Map<string, ContractRec>> 
       permitNo: str(r.permit_no),
       permitIssuedAt: ymd(r.permit_issued_at),
       lastInvoiceIssuedAt: ymd(r.last_invoice_issued_at),
+      createdOn: ymd(r.created_on),
       awardRate: num(r.award_rate),
       preconsultNotifiedAt: ymd(r.preconsult_notified_at),
       counterpartyName: str(r.counterparty_name),
@@ -459,6 +476,17 @@ async function loadCompany(db: PgDatabase): Promise<Company> {
     // 회사 프로필 미설정이면 빈값 — 사용자가 사이트에서 직접 입력
   }
   return co;
+}
+
+/**
+ * 기준일 판정 — 계약일이 기준일 이후면 당연히 후보다. 계약일이 기준일 직전이어도
+ * **MCM 등록일이 기준일 이후면** 후보로 올린다(도입 직전에 체결한 계약이 영구 누락되던 문제, 2026-09-16).
+ * 다만 과거 계약을 뒤늦게 백필한 건까지 끌어오지 않도록, 등록일로 구제하는 범위는 계약일 기준 1년 이내로 제한한다.
+ */
+function isAfterCutoff(contractDate: string, createdOn: string | null, cutoff: string): boolean {
+  if (contractDate >= cutoff) return true;
+  if (!createdOn || createdOn < cutoff) return false;
+  return contractDate >= addDays(cutoff, -365);
 }
 
 /** 후보 계산 — 순수 파생. */
@@ -512,7 +540,7 @@ async function buildCandidates(db: PgDatabase, settings: FilingSettings): Promis
           site: "etis",
           screen: "변경신고 › 입/퇴사, 경력추가 › 근무처정보",
           fields: [
-            { label: "회원번호", value: e.etisMemberNo, hint: "기술자 선택 키" },
+            memberNoField(e),
             { label: "이름", value: e.name },
             { label: "입사일", value: e.hiredAt },
             { label: "휴대폰번호", value: e.mobilePhone },
@@ -563,7 +591,7 @@ async function buildCandidates(db: PgDatabase, settings: FilingSettings): Promis
           site: "etis",
           screen: "변경신고 › 입/퇴사, 경력추가 › 협회에 신고한 근무이력",
           fields: [
-            { label: "회원번호", value: e.etisMemberNo },
+            memberNoField(e),
             { label: "이름", value: e.name },
             { label: "퇴사일", value: on },
             { label: "진행중인 경력 종료일", value: on, hint: "진행 중 경력이 있으면 같은 날짜로 종료" },
@@ -600,7 +628,7 @@ async function buildCandidates(db: PgDatabase, settings: FilingSettings): Promis
   }
   for (const c of contracts.values()) {
     const subtitle = c.facilityName || c.counterpartyName || null;
-    if (c.contractDate && c.contractDate >= cutoff) {
+    if (c.contractDate && isAfterCutoff(c.contractDate, c.createdOn, cutoff)) {
       out.push({
         dedupKey: `ieps_agency:conclude:${c.contractId}`,
         kind: "ieps_agency",
@@ -708,7 +736,7 @@ async function buildCandidates(db: PgDatabase, settings: FilingSettings): Promis
           site: "etis",
           screen: "변경신고 › 입/퇴사, 경력추가 › 진행중인경력 (종료일 입력)",
           fields: [
-            { label: "회원번호", value: e.etisMemberNo },
+            memberNoField(e),
             { label: "이름", value: e.name },
             { label: "참여사업명", value: c.title },
             { label: "종료일", value: endOn, hint: p.all_ended === true ? "참여 종료일" : "완료일(허가일) 기준" },
@@ -965,6 +993,20 @@ export async function updateFilingStatus(
         now,
       ]
     );
+    // 대행 실적 보고 제출 완료 → 계약의 신고 이력(252)에 자동 기록. 신고서 PDF 는 계약 상세에서 붙인다.
+    if (submitted && String(cur.filing_kind) === "ieps_agency") {
+      await recordAgencyReportFromFiling(
+        db,
+        {
+          filingId,
+          contractId: cur.contract_id != null ? String(cur.contract_id) : null,
+          triggerKind: String(cur.trigger_kind),
+          reportedOn: ymd(input.submittedAt) ?? todayKst(),
+          receiptNo: input.receiptNo?.trim() || null,
+        },
+        actorUserId
+      );
+    }
     // 선임 신고 완료 → 대행인력등록일 확정(비어 있던 값만). 이후 동기화에서 선임 후보에서 빠진다.
     if (
       submitted &&

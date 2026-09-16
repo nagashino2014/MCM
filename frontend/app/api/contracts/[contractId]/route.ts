@@ -4,6 +4,7 @@ import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 import { getContractDetail } from "@/lib/ieps/contracts";
+import { checkDateFields, dateFieldValue } from "@/lib/contracts/date-field";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,6 +32,17 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     const body = await req.json();
     const before = await getContractDetail(contractId);
     if (!before) return NextResponse.json({ error: "not found" }, { status: 404 });
+    // 채우다 만 날짜가 그대로 저장되던 문제 방어(date-field)
+    const dateError = checkDateFields({
+      계약일자: body.contractDate,
+      착수일: body.startedAt,
+      종료일: body.endedAt,
+      해지일: body.contractTerminatedAt,
+      중지일: body.contractSuspendedAt,
+      허가일: body.permitIssuedAt,
+      "사전협의 통보일자": body.preconsultNotifiedAt,
+    });
+    if (dateError) return NextResponse.json({ error: dateError }, { status: 400 });
 
     await withDbWrite(async (db) => {
       const setClauses: string[] = [];
@@ -60,23 +72,23 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       if (body.paymentMethod !== undefined) pushSet("payment_method", body.paymentMethod || null);
       if (body.owningDeptId !== undefined) pushSet("owning_dept_id", body.owningDeptId || null);
       if (body.orderingSubjectType !== undefined) pushSet("ordering_subject_type", normalizeOrderingSubjectType(body.orderingSubjectType));
-      if (body.contractDate !== undefined) pushSet("contract_date", body.contractDate || null);
-      if (body.startedAt !== undefined) pushSet("started_at", body.startedAt || null);
-      if (body.endedAt !== undefined) pushSet("ended_at", body.endedAt || null);
-      if (body.contractTerminatedAt !== undefined) pushSet("contract_terminated_at", body.contractTerminatedAt || null);
+      if (body.contractDate !== undefined) pushSet("contract_date", dateFieldValue(body.contractDate));
+      if (body.startedAt !== undefined) pushSet("started_at", dateFieldValue(body.startedAt));
+      if (body.endedAt !== undefined) pushSet("ended_at", dateFieldValue(body.endedAt));
+      if (body.contractTerminatedAt !== undefined) pushSet("contract_terminated_at", dateFieldValue(body.contractTerminatedAt));
       if (body.contractTerminationReason !== undefined) pushSet("contract_termination_reason", body.contractTerminationReason || null);
-      if (body.contractSuspendedAt !== undefined) pushSet("contract_suspended_at", body.contractSuspendedAt || null);
+      if (body.contractSuspendedAt !== undefined) pushSet("contract_suspended_at", dateFieldValue(body.contractSuspendedAt));
       if (body.contractSuspensionReason !== undefined) pushSet("contract_suspension_reason", body.contractSuspensionReason || null);
       if (body.originalAmount !== undefined) pushSet("original_amount", toNullableNumber(body.originalAmount));
       if (body.currentAmount !== undefined) pushSet("current_amount", toNullableNumber(body.currentAmount));
       if (body.memo !== undefined) pushSet("memo", body.memo || null);
       // 허가 정보 (통합허가 분류 전용 — 025 마이그레이션)
-      if (body.permitIssuedAt !== undefined) pushSet("permit_issued_at", body.permitIssuedAt || null);
+      if (body.permitIssuedAt !== undefined) pushSet("permit_issued_at", dateFieldValue(body.permitIssuedAt));
       if (body.permitNo !== undefined) pushSet("permit_no", body.permitNo || null);
       if (body.permitNote !== undefined) pushSet("permit_note", body.permitNote || null);
       // 대행 실적 보고 항목 (213) — 낙찰률·사전협의 통보일자
       if (body.awardRate !== undefined) pushSet("award_rate", toNullableNumber(body.awardRate));
-      if (body.preconsultNotifiedAt !== undefined) pushSet("preconsult_notified_at", body.preconsultNotifiedAt || null);
+      if (body.preconsultNotifiedAt !== undefined) pushSet("preconsult_notified_at", dateFieldValue(body.preconsultNotifiedAt));
       if (setClauses.length === 0) return;
 
       pushSet("updated_at", new Date().toISOString());

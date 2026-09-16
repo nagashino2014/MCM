@@ -401,6 +401,11 @@ function FilingDetailModal({
       {mode === "submit" && (
         <div className="grid gap-3">
           <p className="text-sm cd-text">사이트에서 제출을 마쳤으면 제출일과 접수번호를 남겨 두세요.</p>
+          {filing.filingKind === "ieps_agency" && (
+            <p className="text-xs cd-text-faint">
+              제출 완료로 표시하면 계약 상세의 “대행 실적 보고” 카드에 신고 이력이 기록됩니다. IEPS 실적보고 출력(PDF)은 거기서 첨부하세요.
+            </p>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <CdDateInput label="제출일" value={submittedAt} onChange={setSubmittedAt} placeholder="비우면 오늘" />
             <label className="grid gap-1 text-sm">

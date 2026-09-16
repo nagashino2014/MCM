@@ -95,6 +95,17 @@ export function buildOutsourcingDocumentFileName(
   return sanitizeFilename(`(${date})${title} 외주계약서.pdf`);
 }
 
+/** 대행 실적 보고서(IEPS 실적보고 출력 PDF) 파일명 — 계약서와 같은 폴더에 둔다(252). */
+export function buildAgencyReportFileName(
+  date: string,
+  contractTitle: string,
+  reportKind: "conclude" | "amend" | "complete"
+): string {
+  const title = sanitizePathSegment(contractTitle);
+  const kind = reportKind === "amend" ? "변경" : reportKind === "complete" ? "완료" : "체결";
+  return sanitizeFilename(`(${date})${title} 대행실적보고(${kind}).pdf`);
+}
+
 /**
  * S3 key for a contract document. The folder name is derived from the
  * *contract* date so amendments live alongside the original contract pdf.
@@ -140,6 +151,21 @@ export function getOutsourcingDocumentStorageKey(params: {
   const year = String(contractDate.getFullYear());
   const folderName = sanitizePathSegment(`(${params.contractDate}) ${params.contractTitle}`);
   const fileName = buildOutsourcingDocumentFileName(params.documentDate, params.outsourcingTitle);
+  const storageKey = ["contracts", "documents", year, folderName, fileName].join("/");
+  return { storageKey, fileName, folderName };
+}
+
+/** 대행 실적 보고서 S3 키 — 계약서와 같은 (계약일) 계약명 폴더. */
+export function getAgencyReportStorageKey(params: {
+  contractDate: string;
+  reportedOn: string;
+  contractTitle: string;
+  reportKind: "conclude" | "amend" | "complete";
+}): { storageKey: string; fileName: string; folderName: string } {
+  const contractDate = parseIsoDate(params.contractDate, "계약일자");
+  const year = String(contractDate.getFullYear());
+  const folderName = sanitizePathSegment(`(${params.contractDate}) ${params.contractTitle}`);
+  const fileName = buildAgencyReportFileName(params.reportedOn, params.contractTitle, params.reportKind);
   const storageKey = ["contracts", "documents", year, folderName, fileName].join("/");
   return { storageKey, fileName, folderName };
 }

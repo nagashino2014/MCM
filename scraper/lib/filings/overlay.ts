@@ -327,7 +327,7 @@ export function renderOverlay(data: OverlayData): void {
       `<div style="margin-top:4px;color:#9aa8bf">값 클릭=복사 · [채우기]=마지막에 클릭한 입력칸에 넣기</div>` +
       // 직인·서류 첨부 칸은 신청서를 저장해야 화면에 생긴다(2026-09-16 실측) — 순서를 눈에 띄게 남긴다.
       (data.attach
-        ? `<div style="margin-top:4px;color:#7a5a00">순서: 사업장 검색 → 자동 채우기 → <b>저장</b> → 직인·서류 첨부 → 제출</div>`
+        ? `<div style="margin-top:4px;color:#7a5a00">순서: 사업장 검색 → 자동 채우기 → <b>저장</b> → 직인·서류 첨부 → 제출 <span style="color:#9aa8bf">(제출하면 MCM 에 자동 기록)</span></div>`
         : "");
     root.appendChild(meta);
 

@@ -92,10 +92,40 @@ export async function runAssist(opts: { cfg: FilingsConfig; kind?: FilingKind; f
   console.log(`[filings] ${KIND_LABEL[kind]} 대기 ${items.length}건 — ${siteCfg.label} 창을 엽니다.`);
   // 사이트 alert 메시지 — 패널 상단 배너로도 보여 준다(페이지가 바뀌어도 20초 안이면 다시 표시).
   const notices: { at: number; text: string }[] = [];
+  /**
+   * 사이트가 제출 성공을 알리면("제출 되었습니다") 현재 건을 MCM 에 제출 완료로 바로 기록한다(2026-09-16 사용자 결정).
+   * 패널의 [제출 완료] → [제출 완료로 기록] 두 단계를 부산·익산 두 번 모두 빠뜨렸다 — 사이트 제출과 MCM 기록은
+   * 늘 함께 일어나야 하므로 알림을 신호로 잇는다. 접수번호는 계약 상세의 신고 이력에서 나중에 채운다.
+   */
+  let recording = false;
+  const autoRecordSubmit = async (text: string) => {
+    if (!/제출\s*되었습니다|제출이\s*완료/.test(text)) return;
+    const cur = items[index];
+    if (!cur || cur.status !== "pending" || recording) return;
+    recording = true;
+    try {
+      await markFiling(cur.filingId, { status: "submitted" });
+      console.log(`[filings] ${cur.title} → 제출 완료 자동 기록(사이트 제출 알림)`);
+      notices.push({
+        at: Date.now(),
+        text: "사이트 제출을 확인해 MCM 에 제출 완료로 기록했습니다 — 계약 상세 신고 이력에 추가됨(접수번호는 나중에 채우세요).",
+      });
+      items.splice(index, 1);
+      if (index >= items.length) index = 0;
+    } catch (err) {
+      console.log(`[filings] ⚠ 제출 자동 기록 실패: ${(err as Error).message}`);
+      notices.push({ at: Date.now(), text: `제출 자동 기록 실패 — 패널의 [제출 완료] 로 직접 기록하세요: ${(err as Error).message}` });
+    } finally {
+      recording = false;
+      await rerender();
+    }
+  };
+
   const { context } = await openContext(site, {
     onNotice: (text) => {
       notices.push({ at: Date.now(), text });
       void rerender();
+      void autoRecordSubmit(text);
     },
   });
 

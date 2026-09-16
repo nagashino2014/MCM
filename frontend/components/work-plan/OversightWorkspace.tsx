@@ -376,7 +376,7 @@ export default function OversightWorkspace() {
           </div>
         </section>
       ) : (
-      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[900px_1fr] gap-5">
+      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[clamp(420px,48%,760px)_minmax(0,1fr)] gap-5">
         <ServiceListPanel
           tab={leftTab}
           onTabChange={setLeftTab}

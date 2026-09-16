@@ -62,7 +62,9 @@ export function installDialogHandler(
         // 확인 창이 떠 있는 동안 페이지 스크립트는 멈춘다. 터미널을 볼 수 없는 실행(백그라운드·도구 실행)에서
         // 사람 답을 기다리면 "저장하시겠습니까?" 에서 영영 멈춰 저장이 끝나지 않는다(2026-09-16 실측).
         // 확인 창은 사람이 방금 누른 버튼 때문에 뜬 것이므로, 물어볼 수 없을 때는 확인으로 잇는다.
-        if (!process.stdin.isTTY) {
+        // 앱의 [신고 보조 열기] 링크로 실행되면 콘솔 창이 떠서 TTY 로 보이지만, 사람은 브라우저를 보고 있어
+        // 콘솔의 y/n 에 답하지 못한다 — FILINGS_AUTO_CONFIRM 이면 같은 이유로 확인으로 잇는다.
+        if (!process.stdin.isTTY || process.env.FILINGS_AUTO_CONFIRM === "1") {
           console.log(`[${site}]   → 터미널 입력을 받을 수 없어 [확인]으로 진행합니다.`);
           onNotice?.(`확인 창 "${msg}" — 확인으로 진행했습니다.`);
           await dialog.accept();
@@ -74,7 +76,7 @@ export function installDialogHandler(
         return;
       }
       console.log(`[${site}] ✏ 사이트 입력 창: ${msg}`);
-      if (!process.stdin.isTTY) {
+      if (!process.stdin.isTTY || process.env.FILINGS_AUTO_CONFIRM === "1") {
         console.log(`[${site}]   → 터미널 입력을 받을 수 없어 취소로 닫습니다.`);
         onNotice?.(`입력 창 "${msg}" — 값을 넣지 못해 취소했습니다. 화면에서 직접 입력하세요.`);
         await dialog.dismiss();

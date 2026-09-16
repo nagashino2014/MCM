@@ -304,6 +304,16 @@ export function AgencyReportList({
                   <span className="inline-flex items-center gap-1 text-xs cd-text-faint">
                     <Paperclip className="w-3.5 h-3.5" />
                     신고서 미첨부
+                    {row.filingId && (
+                      // 대기열로 신고한 건은 신고 보조(설치형 도구)가 IEPS 실적 보고서를 받아 여기 붙이고 실무자에게 보낸다
+                      <a
+                        href={`mcm-filings://open?id=${encodeURIComponent(row.filingId)}`}
+                        className="cd-action ml-1 cd-text-primary underline"
+                        title="이 PC 의 MCM 신고 보조로 IEPS 실적 보고서를 받아 붙입니다(패널의 [실적보고서 받기])"
+                      >
+                        IEPS 에서 받기
+                      </a>
+                    )}
                   </span>
                 )}
                 {row.documentId && <DeliveryBadge row={row} />}

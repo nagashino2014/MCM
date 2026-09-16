@@ -16,6 +16,7 @@ import {
   ReportDeliveryMode,
   ReportDeliveryResult,
   downloadAttachment,
+  ensureSealImage,
   getFiling,
   getFilingSettings,
   listContractAgencyReports,
@@ -174,12 +175,6 @@ export async function runAssist(opts: { cfg: FilingsConfig; kind?: FilingKind; f
   };
 
   /**
-   * 사이트가 제출 성공을 알리면("제출 되었습니다") 현재 건을 MCM 에 제출 완료로 바로 기록한다(2026-09-16 사용자 결정).
-   * 패널의 [제출 완료] → [제출 완료로 기록] 두 단계를 부산·익산 두 번 모두 빠뜨렸다 — 사이트 제출과 MCM 기록은
-   * 늘 함께 일어나야 하므로 알림을 신호로 잇는다. 대행 실적 보고는 이어서 보고회차를 접수번호로 남기고,
-   * 실적 보고서 PDF 를 받아 이력에 붙인다(→ 실무자 발송).
-   */
-  /**
    * 중복 신고 경고 — IEPS 에 같은 사업장·계약일·보고형식의 보고가 이미 있는지 신고 전에 확인한다.
    * 대기열을 거치지 않고 사이트에서 직접 신고한 건은 MCM 이 모르므로(2026-09-16 국도화학 부산·경인 9/10 수동 신고 →
    * 9/16 재제출), IEPS 목록 조회 API 로 직접 확인한다. 제출 뒤에는 방금 낸 보고가 걸리므로 제출 전에만 돌린다.
@@ -233,6 +228,12 @@ export async function runAssist(opts: { cfg: FilingsConfig; kind?: FilingKind; f
     }
   };
 
+  /**
+   * 사이트가 제출 성공을 알리면("제출 되었습니다") 현재 건을 MCM 에 제출 완료로 바로 기록한다(2026-09-16 사용자 결정).
+   * 패널의 [제출 완료] → [제출 완료로 기록] 두 단계를 부산·익산 두 번 모두 빠뜨렸다 — 사이트 제출과 MCM 기록은
+   * 늘 함께 일어나야 하므로 알림을 신호로 잇는다. 대행 실적 보고는 이어서 보고회차를 접수번호로 남기고,
+   * 실적 보고서 PDF 를 받아 이력에 붙인다(→ 실무자 발송).
+   */
   let recording = false;
   const autoRecordSubmit = async (text: string) => {
     if (!/제출\s*되었습니다|제출이\s*완료/.test(text)) return;
@@ -294,6 +295,8 @@ export async function runAssist(opts: { cfg: FilingsConfig; kind?: FilingKind; f
     return v || undefined;
   };
   const attCfg = cfg.attachments;
+  // 설치 모드는 직인을 MCM 에서 받아 둔다(저장소 모드는 저장소 파일이 이미 있다)
+  if (kind === "ieps_agency" && attCfg?.sealPath) await ensureSealImage(attCfg.sealPath);
   const sealAvailable = Boolean(attCfg?.sealPath && fs.existsSync(attCfg.sealPath));
   const current = (): OverlayData => {
     const cur = items[index];

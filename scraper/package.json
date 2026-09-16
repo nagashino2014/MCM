@@ -10,7 +10,8 @@
     "scrape": "ts-node --project tsconfig.json scripts/cli-scraper.ts",
     "daou": "ts-node --project tsconfig.json scripts/cli-daou.ts",
     "receipts": "ts-node --project tsconfig.json scripts/cli-receipts.ts",
-    "filings": "ts-node --project tsconfig.json scripts/cli-filings.ts"
+    "filings": "ts-node --project tsconfig.json scripts/cli-filings.ts",
+    "filings:package": "node scripts/build-filings-package.mjs"
   },
   "dependencies": {
     "pg": "^8.20.0",

@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { CheckCircle2, ClipboardCheck, Copy, Loader2, RefreshCw, RotateCcw, Settings2, XCircle } from "lucide-react";
+import { CheckCircle2, ClipboardCheck, Copy, ExternalLink, Loader2, RefreshCw, RotateCcw, Settings2, XCircle } from "lucide-react";
 import "@/components/cdash/cdash.css";
 import {
   CdBadge,
   CdButton,
   CdDateInput,
   CdEmptyState,
+  CdHelp,
   CdModal,
   CdPageHeader,
   CdTabs,
@@ -131,6 +132,9 @@ export function FilingQueueBoard() {
         meta={rows ? `${rows.length}건` : ""}
         actions={
           <div className="flex gap-2">
+            {(kind === "ieps_agency" || kind === "ieps_staff") && (
+              <AssistLauncher href={`mcm-filings://open?kind=${kind}`} label={`${KIND_SHORT[kind]} 신고 보조 열기`} />
+            )}
             <CdButton variant="soft" icon={<Settings2 className="w-4 h-4" />} onClick={() => setSettingsOpen(true)}>
               설정
             </CdButton>
@@ -220,6 +224,33 @@ export function FilingQueueBoard() {
 }
 
 // ───────────────────────── 상세 모달 ─────────────────────────
+
+/**
+ * 신고 보조(이 PC 에 설치된 로컬 도구)를 여는 버튼 — mcm-filings:// 링크를 설치 패키지가 등록한다.
+ * 웹 페이지는 PC 프로그램을 직접 실행할 수 없어 링크로 넘긴다. 설치가 안 된 PC 에서는 눌러도 반응이 없으므로 안내를 곁에 둔다.
+ */
+function AssistLauncher({ href, label }: { href: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      <a href={href} className="cd-action cd-btn cd-btn-primary inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold">
+        <ExternalLink className="w-4 h-4" />
+        {label}
+      </a>
+      <CdHelp label="신고 보조 설치 안내">
+        <div className="grid gap-2 text-sm">
+          <p>
+            <b>MCM 신고 보조</b>는 이 PC 의 Chrome 으로 통합환경허가시스템(IEPS)에 값을 채워 주는 설치형 도구입니다. 제출 버튼은 직접 누릅니다.
+          </p>
+          <p>
+            처음 쓰는 PC 는 설치 파일(<code>MCM-Filings-….zip</code>)을 풀고 <code>install.cmd</code> 를 실행하세요(관리자 권한 불필요, Chrome 필요).
+          </p>
+          <p>버튼을 누르면 브라우저가 “MCM 신고 보조 열기”를 물어봅니다 — [열기]. 아무 반응이 없으면 이 PC 에 설치되지 않은 것입니다.</p>
+          <p>처음 한 번은 MCM 계정 로그인과 IEPS 로그인(문자인증)을 묻습니다. IEPS 로그인은 약 1시간 유지됩니다.</p>
+        </div>
+      </CdHelp>
+    </span>
+  );
+}
 
 function FilingDetailModal({
   filing,
@@ -349,6 +380,15 @@ function FilingDetailModal({
         <span className="text-xs cd-text-muted">
           발생 {filing.occurredOn} · 기한 {filing.dueOn ?? "-"}
         </span>
+        {filing.payload.site === "ieps" &&
+          (filing.status === "pending" || (filing.status === "submitted" && filing.filingKind === "ieps_agency")) && (
+            <span className="ml-auto">
+              <AssistLauncher
+                href={`mcm-filings://open?id=${encodeURIComponent(filing.filingId)}`}
+                label={filing.status === "pending" ? "신고 보조 열기" : "신고 보조로 실적보고서 받기"}
+              />
+            </span>
+          )}
       </div>
       <div className="rounded-xl border cd-border-c px-4 py-3 mb-4 text-xs cd-text-muted">
         <div>

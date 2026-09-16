@@ -26,6 +26,25 @@ export interface FilingAttachment {
   downloadPath: string;
   createdAt: string;
 }
+/** 대행 실적 보고서 발송 — frontend/lib/filings/types.ts 와 같은 모양(도구는 frontend 를 import 하지 않는다) */
+export type ReportDeliveryMode = "mail" | "messenger" | "both" | "hold";
+export interface ReportDeliveryResult {
+  status: "sent" | "held" | "no_recipient" | "failed";
+  mode: ReportDeliveryMode;
+  channels: ("mail" | "messenger")[];
+  recipients: { name: string; email: string | null; userId: string | null; role: string }[];
+  error: string | null;
+  staffingPath: string | null;
+}
+export interface AgencyReport {
+  reportId: string;
+  reportKind: "conclude" | "amend" | "complete";
+  reportedOn: string;
+  receiptNo: string | null;
+  filingId: string | null;
+  documentId: string | null;
+}
+
 export interface FilingRow {
   filingId: string;
   filingKind: "ieps_staff" | "ieps_agency" | "etis_career";
@@ -307,7 +326,14 @@ export async function getFiling(filingId: string): Promise<FilingRow> {
 
 export async function markFiling(
   filingId: string,
-  input: { status: "submitted" | "skipped" | "pending"; receiptNo?: string | null; submittedAt?: string | null; note?: string | null }
+  input: {
+    status: "submitted" | "skipped" | "pending";
+    receiptNo?: string | null;
+    submittedAt?: string | null;
+    note?: string | null;
+    /** 대행 실적 보고서 발송 방식(이 건만) */
+    deliveryMode?: ReportDeliveryMode | null;
+  }
 ): Promise<FilingRow> {
   const body = await api<{ filing: FilingRow }>(`/api/filings/${encodeURIComponent(filingId)}`, {
     method: "PATCH",
@@ -315,4 +341,49 @@ export async function markFiling(
     body: JSON.stringify(input),
   });
   return body.filing;
+}
+
+/** 신고 대기열 설정 — 실적 보고서 발송 기본값을 패널에 보여 주려고 읽는다. */
+export async function getFilingSettings(): Promise<{ reportDelivery: ReportDeliveryMode }> {
+  const body = await api<{ settings: { reportDelivery?: ReportDeliveryMode } }>(`/api/filings/settings`);
+  return { reportDelivery: body.settings?.reportDelivery ?? "mail" };
+}
+
+/** 계약의 대행 실적 보고 이력(252) — 대기열 건과 이어진 이력을 찾는다. */
+export async function listContractAgencyReports(contractId: string): Promise<AgencyReport[]> {
+  const body = await api<{ reports: AgencyReport[] }>(`/api/contracts/${encodeURIComponent(contractId)}/agency-reports`);
+  return body.reports ?? [];
+}
+
+/**
+ * 실적 보고서 PDF 를 이력에 붙인다. 서버는 붙는 즉시 발송 설정대로 실무자에게 보내고 결과를 돌려준다(254).
+ * multipart 라 api() 대신 직접 보낸다(토큰 만료 시 한 번 갱신).
+ */
+export async function uploadAgencyReportPdf(
+  contractId: string,
+  reportId: string,
+  input: { pdf: Buffer; fileName: string; receiptNo?: string | null; deliveryMode?: ReportDeliveryMode | null }
+): Promise<{ delivery: ReportDeliveryResult | null }> {
+  const build = () => {
+    const fd = new FormData();
+    fd.set("file", new Blob([new Uint8Array(input.pdf)], { type: "application/pdf" }), input.fileName);
+    if (input.receiptNo) fd.set("receiptNo", input.receiptNo);
+    if (input.deliveryMode) fd.set("deliveryMode", input.deliveryMode);
+    return fd;
+  };
+  let auth = await withAuth();
+  const url = (a: AuthFile) => `${a.baseUrl}/api/contracts/${encodeURIComponent(contractId)}/agency-reports/${encodeURIComponent(reportId)}`;
+  const run = (a: AuthFile) =>
+    fetchJson<{ delivery?: ReportDeliveryResult | null; error?: string }>(url(a), {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${a.accessToken}` },
+      body: build(),
+    });
+  let r = await run(auth);
+  if (r.status === 401) {
+    auth = await refreshAccess(auth);
+    r = await run(auth);
+  }
+  if (r.status < 200 || r.status >= 300) throw new Error(r.body?.error ?? `신고서 첨부 실패 (HTTP ${r.status})`);
+  return { delivery: r.body?.delivery ?? null };
 }

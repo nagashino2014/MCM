@@ -28,8 +28,10 @@ export interface OverlayData {
   total: number;
   /** 라벨 → CSS 셀렉터, 또는 radio 처럼 값별 셀렉터 { 값: 셀렉터 } (자동 채우기) */
   fill: Record<string, string | Record<string, string>>;
-  /** 사이트 alert 메시지(최근) — 패널 상단 배너 */
-  notices?: string[];
+  /** 사이트 alert 메시지(최근) — 패널 상단 배너. url 이 있으면 배너에 링크 버튼(예: 수행인력 설정) */
+  notices?: (string | { text: string; url?: string; label?: string })[];
+  /** 대행 실적 보고서 실무자 발송 — mode 는 이 건만 바꾼 값(null = 기본값) */
+  delivery?: { mode: "mail" | "messenger" | "both" | "hold" | null; defaultMode: "mail" | "messenger" | "both" | "hold" };
   /** 사업장 검색 팝업 자동화를 지원하면 검색어(대행사업장 명칭) */
   siteSearchQuery?: string;
   /** 첨부 지원 — 직인 파일 유무, 이 건에 붙일 계약 첨부 요약(예: "계약서 1") */
@@ -46,7 +48,11 @@ export type OverlayAction =
   /** 대행업무 기간 수정 — MCM 계약의 용역 기간에 저장하고 양식 값을 다시 만든다 */
   | { type: "editPeriod"; start: string; end: string }
   | { type: "attachSeal" }
-  | { type: "attachDocs" };
+  | { type: "attachDocs" }
+  /** 실적 보고서 발송 방식(이 건만) — "" 는 기본값으로 되돌림 */
+  | { type: "setDelivery"; mode: "mail" | "messenger" | "both" | "hold" | "" }
+  /** 보고회차로 실적 보고서 PDF 를 받아 MCM 이력에 붙인다(→ 실무자 발송) */
+  | { type: "fetchReport"; reqstSn: string };
 
 export const ACTION_FN = "__mcmFilingsAction";
 export const RENDER_FN = "__mcmFilingsRender";
@@ -284,9 +290,12 @@ export function renderOverlay(data: OverlayData): void {
     if (collapsed) root.classList.add("collapsed");
 
     // 알림은 최근 것 위주로 — 저장·첨부를 연달아 하면 배너가 쌓여 정작 볼 양식 값이 밀려난다(2026-09-16).
-    const allNotices = data.notices ?? [];
-    const recent = allNotices.slice(-2);
-    const older = allNotices.slice(0, Math.max(0, allNotices.length - 2));
+    const allNotices = (data.notices ?? []).map((n) => (typeof n === "string" ? { text: n } : n));
+    // 링크가 달린 알림(할 일이 있는 알림)은 접지 않고 늘 펼쳐 둔다
+    const linked = allNotices.filter((n) => n.url);
+    const plain = allNotices.filter((n) => !n.url);
+    const recent = [...plain.slice(-2), ...linked];
+    const older = plain.slice(0, Math.max(0, plain.length - 2));
     if (older.length) {
       const nt = document.createElement("div");
       nt.className = "nt";
@@ -294,7 +303,7 @@ export function renderOverlay(data: OverlayData): void {
       span.textContent = `🔔 이전 알림 ${older.length}건 — 펼치기`;
       span.style.cursor = "pointer";
       span.onclick = () => {
-        span.textContent = older.map((t) => `🔔 ${t}`).join("\n");
+        span.textContent = older.map((t) => `🔔 ${t.text}`).join("\n");
         span.onclick = null;
         span.style.cursor = "default";
       };
@@ -305,16 +314,25 @@ export function renderOverlay(data: OverlayData): void {
       nt.append(span, close);
       root.appendChild(nt);
     }
-    for (const text of recent) {
+    for (const n of recent) {
       const nt = document.createElement("div");
       nt.className = "nt";
       const span = document.createElement("span");
-      span.textContent = `🔔 사이트 알림: ${text}`;
+      span.textContent = `🔔 ${n.url ? "" : "사이트 알림: "}${n.text}`;
+      nt.append(span);
+      if (n.url) {
+        const go = document.createElement("button");
+        go.className = "pri";
+        go.textContent = n.label || "열기";
+        go.style.whiteSpace = "nowrap";
+        go.onclick = () => window.open(n.url, "_blank", "noopener");
+        nt.append(go);
+      }
       const close = document.createElement("button");
       close.textContent = "×";
       close.title = "닫기";
       close.onclick = () => nt.remove();
-      nt.append(span, close);
+      nt.append(close);
       root.appendChild(nt);
     }
 
@@ -374,6 +392,40 @@ export function renderOverlay(data: OverlayData): void {
       note.textContent = endField.hint?.includes("미기입") ? "종료일 산정값 — 실제 신고값으로 고치세요" : "";
       note.style.color = "#9aa8bf";
       bar.append(label, s, tilde, e, save, note);
+      root.appendChild(bar);
+    }
+
+    /**
+     * 실적 보고서 실무자 발송 방식(254) — 설정 기본값을 보여 주고 이 건만 바꿀 수 있다.
+     * 제출하면 도구가 실적 보고서 PDF 를 받아 이력에 붙이고, 서버가 이 방식대로 실무자에게 보낸다.
+     */
+    if (data.delivery && !popup) {
+      const labels: Record<string, string> = { mail: "메일", messenger: "메신저", both: "메일 + 메신저", hold: "발송 보류" };
+      const bar = document.createElement("div");
+      bar.className = "rec";
+      const label = document.createElement("span");
+      label.textContent = "실적 보고서 발송";
+      const sel = document.createElement("select");
+      sel.setAttribute("style", "border:1px solid #d9e0ea;border-radius:8px;padding:3px 8px;font-size:12px;background:#fff;");
+      const opts: [string, string][] = [
+        ["", `기본값 (${labels[data.delivery.defaultMode]})`],
+        ["mail", labels.mail],
+        ["messenger", labels.messenger],
+        ["both", labels.both],
+        ["hold", labels.hold],
+      ];
+      for (const [value, text] of opts) {
+        const o = document.createElement("option");
+        o.value = value;
+        o.textContent = text;
+        sel.appendChild(o);
+      }
+      sel.value = data.delivery.mode ?? "";
+      sel.onchange = () => act({ type: "setDelivery", mode: sel.value as "mail" | "messenger" | "both" | "hold" | "" });
+      const note = document.createElement("span");
+      note.textContent = "제출하면 PDF 를 받아 실무(정)에게 보냅니다";
+      note.style.color = "#9aa8bf";
+      bar.append(label, sel, note);
       root.appendChild(bar);
     }
 
@@ -515,18 +567,22 @@ export function renderOverlay(data: OverlayData): void {
      * 접수번호·제외 사유는 패널 안에서 받는다. 브라우저 prompt() 를 쓰면 도구의 대화상자 처리기가 먼저
      * 가로채 닫아 버려 기록이 되지 않는다(2026-09-16 실측 — [제출 완료] 를 눌러도 아무 일이 없던 원인).
      */
-    const askThen = (kind: "submitted" | "skipped") => {
-      root.querySelector(".rec")?.remove();
+    const askThen = (kind: "submitted" | "skipped" | "report") => {
+      // 입력 띠만 교체한다 — 기간·발송 방식 띠(.rec)는 그대로 둔다
+      root.querySelector(".rec.ask")?.remove();
       const bar = document.createElement("div");
-      bar.className = "rec";
+      bar.className = "rec ask";
       const label = document.createElement("span");
-      label.textContent = kind === "submitted" ? "접수번호" : "제외 사유";
+      label.textContent = kind === "submitted" ? "접수번호" : kind === "report" ? "보고회차" : "제외 사유";
       const input = document.createElement("input");
       input.type = "text";
-      input.placeholder = kind === "submitted" ? "없으면 비워 두고 [기록]" : "선택";
-      const done = mk(kind === "submitted" ? "제출 완료로 기록" : "제외로 기록", "pri", () => {
+      input.placeholder =
+        kind === "submitted" ? "없으면 비워 두고 [기록]" : kind === "report" ? "IEPS 대행 실적보고 목록의 보고회차(예: 523)" : "선택";
+      if (kind === "report") input.inputMode = "numeric";
+      const done = mk(kind === "submitted" ? "제출 완료로 기록" : kind === "report" ? "받아서 붙이기" : "제외로 기록", "pri", () => {
         const v = input.value.trim();
-        act(kind === "submitted" ? { type: "submitted", receiptNo: v } : { type: "skipped", note: v });
+        if (kind === "report") act({ type: "fetchReport", reqstSn: v });
+        else act(kind === "submitted" ? { type: "submitted", receiptNo: v } : { type: "skipped", note: v });
         bar.remove();
       });
       input.onkeydown = (ev) => {
@@ -537,6 +593,11 @@ export function renderOverlay(data: OverlayData): void {
       root.insertBefore(bar, ft);
       input.focus();
     };
+    if (data.delivery) {
+      const rb = mk("실적보고서 받기", "", () => askThen("report"));
+      rb.title = "이미 제출한 건의 실적 보고서 PDF 를 보고회차로 받아 계약 상세 이력에 붙이고 실무자에게 보냅니다";
+      ft.appendChild(rb);
+    }
     ft.appendChild(mk("제외", "warn", () => askThen("skipped")));
     ft.appendChild(mk("제출 완료", "pri", () => askThen("submitted")));
     root.appendChild(ft);

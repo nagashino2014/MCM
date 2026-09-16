@@ -10,7 +10,21 @@ import { FillTarget, FilingKind, FilingsConfig, KIND_LABEL, KIND_SITE } from "./
 import fs from "node:fs";
 import path from "node:path";
 import { tmpDir } from "./config";
-import { FilingAttachment, FilingRow, downloadAttachment, getFiling, listPendingFilings, markFiling, patchContractPeriod } from "./mcm-api";
+import {
+  FilingAttachment,
+  FilingRow,
+  ReportDeliveryMode,
+  ReportDeliveryResult,
+  downloadAttachment,
+  getFiling,
+  getFilingSettings,
+  listContractAgencyReports,
+  listPendingFilings,
+  markFiling,
+  mcmBaseUrl,
+  patchContractPeriod,
+  uploadAgencyReportPdf,
+} from "./mcm-api";
 import { ACTION_FN, OverlayAction, OverlayData, RENDER_FN, renderOverlay } from "./overlay";
 import { dumpPage } from "./probe";
 import { openContext, snapshotCookies, waitForContextClose } from "./session";
@@ -91,11 +105,79 @@ export async function runAssist(opts: { cfg: FilingsConfig; kind?: FilingKind; f
 
   console.log(`[filings] ${KIND_LABEL[kind]} 대기 ${items.length}건 — ${siteCfg.label} 창을 엽니다.`);
   // 사이트 alert 메시지 — 패널 상단 배너로도 보여 준다(페이지가 바뀌어도 20초 안이면 다시 표시).
-  const notices: { at: number; text: string }[] = [];
+  // url 이 있으면 배너에 링크 버튼을 단다(예: 실무자 미설정 → 수행인력 설정). sticky 는 10분 남긴다.
+  const notices: { at: number; text: string; url?: string; label?: string; sticky?: boolean }[] = [];
+
+  /** 실적 보고서 발송 방식 — 패널에서 이 건만 바꾼 값(null = 설정 기본값). 건을 처리하면 되돌린다. */
+  let deliveryMode: ReportDeliveryMode | null = null;
+  let deliveryDefault: ReportDeliveryMode = "mail";
+  if (kind === "ieps_agency") {
+    deliveryDefault = (await getFilingSettings().catch(() => ({ reportDelivery: "mail" as ReportDeliveryMode }))).reportDelivery;
+  }
+
+  /** 발송 결과를 패널 알림으로 — 실무자 미설정이면 수행인력 설정 링크를 단다. */
+  const noticeDelivery = (d: ReportDeliveryResult | null) => {
+    if (!d) return;
+    const names = d.recipients.map((r) => r.name).join(", ");
+    const via = d.channels.map((c) => (c === "mail" ? "메일" : "메신저")).join("·");
+    if (d.status === "sent") {
+      notices.push({ at: Date.now(), text: `실적 보고서를 실무자 ${names} 님에게 ${via}로 보냈습니다.${d.error ? ` (일부 실패: ${d.error})` : ""}` });
+    } else if (d.status === "held") {
+      notices.push({ at: Date.now(), text: "실적 보고서 발송을 보류했습니다 — 계약 상세의 신고 이력에서 [발송] 할 수 있습니다." });
+    } else if (d.status === "no_recipient") {
+      const base = mcmBaseUrl();
+      notices.push({
+        at: Date.now(),
+        sticky: true,
+        text: "실무자가 설정되지 않아 실적 보고서를 보내지 못했습니다 — 수행인력에서 실무(정)을 지정한 뒤 계약 상세에서 [발송] 하세요.",
+        url: base && d.staffingPath ? `${base}${d.staffingPath}` : undefined,
+        label: "수행인력 설정",
+      });
+    } else {
+      notices.push({ at: Date.now(), sticky: true, text: `실적 보고서 발송 실패: ${d.error ?? "알 수 없는 오류"}` });
+    }
+    console.log(`[filings] 실적 보고서 발송: ${d.status}${names ? ` (${names})` : ""}${d.error ? ` — ${d.error}` : ""}`);
+  };
+
+  /**
+   * 실적 보고서 PDF 를 IEPS 에서 받아 MCM 신고 이력에 붙인다 — 붙으면 서버가 실무자에게 발송한다(254).
+   * 이력은 대기열 건(filing_id)으로 찾고, 없으면 같은 구분의 PDF 없는 최근 이력에 붙인다.
+   */
+  const attachReport = async (filing: FilingRow, ids: { cnclCd: string; reqstSn: string }) => {
+    if (!filing.contractId) {
+      notices.push({ at: Date.now(), text: "계약이 연결되지 않은 건이라 실적 보고서를 붙일 곳이 없습니다." });
+      return;
+    }
+    notices.push({ at: Date.now(), text: `실적 보고서(보고회차 ${ids.reqstSn}) PDF 를 받는 중…` });
+    await rerender();
+    const { pdf, fileName } = await fetchReportPdf(context, ids.cnclCd, ids.reqstSn);
+    const reports = await listContractAgencyReports(filing.contractId);
+    const target =
+      reports.find((r) => r.filingId === filing.filingId) ??
+      reports.filter((r) => r.reportKind === filing.triggerKind && !r.documentId).pop();
+    if (!target) {
+      notices.push({
+        at: Date.now(),
+        sticky: true,
+        text: "PDF 는 받았지만 붙일 신고 이력이 없습니다 — 계약 상세에서 이력을 추가한 뒤 다시 받으세요.",
+      });
+      return;
+    }
+    const { delivery } = await uploadAgencyReportPdf(filing.contractId, target.reportId, {
+      pdf,
+      fileName,
+      receiptNo: ids.reqstSn,
+      deliveryMode,
+    });
+    notices.push({ at: Date.now(), text: `실적 보고서 PDF 를 계약 상세 신고 이력에 붙였습니다(보고회차 ${ids.reqstSn}).` });
+    noticeDelivery(delivery);
+  };
+
   /**
    * 사이트가 제출 성공을 알리면("제출 되었습니다") 현재 건을 MCM 에 제출 완료로 바로 기록한다(2026-09-16 사용자 결정).
    * 패널의 [제출 완료] → [제출 완료로 기록] 두 단계를 부산·익산 두 번 모두 빠뜨렸다 — 사이트 제출과 MCM 기록은
-   * 늘 함께 일어나야 하므로 알림을 신호로 잇는다. 접수번호는 계약 상세의 신고 이력에서 나중에 채운다.
+   * 늘 함께 일어나야 하므로 알림을 신호로 잇는다. 대행 실적 보고는 이어서 보고회차를 접수번호로 남기고,
+   * 실적 보고서 PDF 를 받아 이력에 붙인다(→ 실무자 발송).
    */
   let recording = false;
   const autoRecordSubmit = async (text: string) => {
@@ -104,17 +186,39 @@ export async function runAssist(opts: { cfg: FilingsConfig; kind?: FilingKind; f
     if (!cur || cur.status !== "pending" || recording) return;
     recording = true;
     try {
-      await markFiling(cur.filingId, { status: "submitted" });
-      console.log(`[filings] ${cur.title} → 제출 완료 자동 기록(사이트 제출 알림)`);
+      // 알림을 닫으면 제출된 보고서 화면으로 넘어간다 — 그 주소에서 보고회차를 읽는다
+      await new Promise((r) => setTimeout(r, 2000));
+      const page = mainPage();
+      const ids = page ? await readReportIds(page, siteCfg.agencyCode) : null;
+      await markFiling(cur.filingId, { status: "submitted", receiptNo: ids?.reqstSn ?? null, deliveryMode });
+      console.log(`[filings] ${cur.title} → 제출 완료 자동 기록(사이트 제출 알림${ids?.reqstSn ? `, 보고회차 ${ids.reqstSn}` : ""})`);
       notices.push({
         at: Date.now(),
-        text: "사이트 제출을 확인해 MCM 에 제출 완료로 기록했습니다 — 계약 상세 신고 이력에 추가됨(접수번호는 나중에 채우세요).",
+        text: `사이트 제출을 확인해 MCM 에 제출 완료로 기록했습니다${ids?.reqstSn ? `(보고회차 ${ids.reqstSn})` : ""}.`,
       });
+      if (cur.filingKind === "ieps_agency") {
+        if (ids?.reqstSn && ids.cnclCd) {
+          await attachReport(cur, { cnclCd: ids.cnclCd, reqstSn: ids.reqstSn }).catch((e) => {
+            notices.push({
+              at: Date.now(),
+              sticky: true,
+              text: `실적 보고서 자동 첨부 실패 — [실적보고서 받기] 로 다시 시도하세요: ${(e as Error).message}`,
+            });
+          });
+        } else {
+          notices.push({
+            at: Date.now(),
+            sticky: true,
+            text: "보고회차를 읽지 못해 실적 보고서를 받지 못했습니다 — IEPS 목록의 보고회차로 [실적보고서 받기] 를 누르세요.",
+          });
+        }
+      }
       items.splice(index, 1);
       if (index >= items.length) index = 0;
+      deliveryMode = null;
     } catch (err) {
       console.log(`[filings] ⚠ 제출 자동 기록 실패: ${(err as Error).message}`);
-      notices.push({ at: Date.now(), text: `제출 자동 기록 실패 — 패널의 [제출 완료] 로 직접 기록하세요: ${(err as Error).message}` });
+      notices.push({ at: Date.now(), sticky: true, text: `제출 자동 기록 실패 — 패널의 [제출 완료] 로 직접 기록하세요: ${(err as Error).message}` });
     } finally {
       recording = false;
       await rerender();
@@ -142,9 +246,12 @@ export async function runAssist(opts: { cfg: FilingsConfig; kind?: FilingKind; f
     const docs = cur ? pickAttachments(cur) : [];
     return {
       ...toOverlay(cur ?? null, index, items.length, fill, defaults),
-      notices: notices.filter((n) => Date.now() - n.at < 20_000).map((n) => n.text),
+      notices: notices
+        .filter((n) => Date.now() - n.at < (n.sticky ? 10 * 60_000 : 20_000))
+        .map((n) => (n.url ? { text: n.text, url: n.url, label: n.label } : n.text)),
       siteSearchQuery: searchQueryOf(cur),
       attach: kind === "ieps_agency" ? { seal: sealAvailable, docs: docs.map((d) => `${d.typeLabel} ${d.name}`) } : undefined,
+      delivery: kind === "ieps_agency" ? { mode: deliveryMode, defaultMode: deliveryDefault } : undefined,
     };
   };
   const rerender = async () => {
@@ -212,6 +319,27 @@ export async function runAssist(opts: { cfg: FilingsConfig; kind?: FilingKind; f
           if (fresh) items[index] = fresh;
           notices.push({ at: Date.now(), text: `대행업무 기간을 ${a.start} ~ ${a.end} 로 저장했습니다 — [자동 채우기] 로 화면에 반영하세요.` });
         }
+      } else if (a.type === "setDelivery") {
+        deliveryMode = a.mode || null;
+      } else if (a.type === "fetchReport") {
+        // 수동 — 이미 제출한 건(자동 첨부를 놓친 건 포함)도 IEPS 목록의 보고회차로 받아 붙인다
+        const sn = a.reqstSn.replace(/\D/g, "");
+        if (!cur) {
+          notices.push({ at: Date.now(), text: "대기 건이 없어 실적 보고서를 붙일 곳이 없습니다." });
+        } else if (!sn) {
+          notices.push({ at: Date.now(), text: "보고회차(숫자)를 입력하세요." });
+        } else {
+          const page = mainPage();
+          const fromPage = page ? await readReportIds(page, siteCfg.agencyCode) : null;
+          const cnclCd = fromPage?.cnclCd ?? siteCfg.agencyCode;
+          if (!cnclCd) {
+            notices.push({ at: Date.now(), text: "대행업 등록 코드(CNCL_CD)를 알 수 없습니다 — IEPS 대행 실적보고 화면에서 다시 시도하세요." });
+          } else {
+            await attachReport(cur, { cnclCd, reqstSn: sn }).catch((e) => {
+              notices.push({ at: Date.now(), sticky: true, text: `실적 보고서 받기 실패: ${(e as Error).message}` });
+            });
+          }
+        }
       } else if (a.type === "probe") {
         // 패널이 떠 있는 바로 그 창의 현재 페이지를 덤프한다(별도 창은 같은 프로필을 못 연다)
         const target = context.pages().filter((p) => !p.isClosed()).pop();
@@ -226,6 +354,7 @@ export async function runAssist(opts: { cfg: FilingsConfig; kind?: FilingKind; f
           status: a.type,
           receiptNo: a.type === "submitted" ? a.receiptNo || null : null,
           note: a.type === "skipped" ? a.note || null : null,
+          deliveryMode: a.type === "submitted" ? deliveryMode : null,
         });
         console.log(`[filings] ${cur.title} → ${a.type === "submitted" ? "제출 완료" : "제외"} 기록`);
         items.splice(index, 1);
@@ -376,6 +505,67 @@ export async function runSiteSearch(context: BrowserContext, page: Page, cfg: No
  * 팝업에서 한 번 검색하고 결과에서 가장 잘 맞는 행을 누른다. minScore 미만이면 아무것도 누르지 않는다.
  * 점수: 이름이 그대로 들어 있으면 1, 아니면 회사명(첫 낱말)을 포함하는 행에 한해 낱말 겹침 비율.
  */
+/**
+ * 제출된 대행 실적 보고서의 식별자 — 주소의 CNCL_CD(대행업 등록 코드)·REQST_SN(보고회차).
+ * 보고회차는 IEPS 대행 실적보고 목록의 "보고회차" 열과 같다. 주소에 없으면 화면의 숨은 입력값을 본다.
+ */
+export async function readReportIds(page: Page, fallbackCncl?: string): Promise<{ cnclCd: string | null; reqstSn: string | null }> {
+  let cnclCd: string | null = null;
+  let reqstSn: string | null = null;
+  try {
+    const u = new URL(page.url());
+    cnclCd = u.searchParams.get("CNCL_CD");
+    reqstSn = u.searchParams.get("REQST_SN");
+  } catch {
+    // 주소를 못 읽으면 화면 값으로
+  }
+  if (!reqstSn || !cnclCd) {
+    const fromDom = await page
+      .evaluate(() => {
+        const v = (name: string) =>
+          (document.querySelector(`input[name="${name}"], #${name}`) as HTMLInputElement | null)?.value?.trim() || null;
+        return { cnclCd: v("CNCL_CD"), reqstSn: v("REQST_SN") };
+      })
+      .catch(() => ({ cnclCd: null as string | null, reqstSn: null as string | null }));
+    cnclCd = cnclCd ?? fromDom.cnclCd;
+    reqstSn = reqstSn ?? fromDom.reqstSn;
+  }
+  return { cnclCd: cnclCd ?? fallbackCncl ?? null, reqstSn: reqstSn && /^\d+$/.test(reqstSn) ? reqstSn : null };
+}
+
+/**
+ * 실적 보고서 원본 PDF 받기 — IEPS "실적보고 출력"과 같은 AIReport 뷰어를 새 탭으로 열고 [PDF저장](#pdfConvert)을 누른다.
+ * 서버에 PDF 를 직접 요청(reportMode=PDF)하면 응답이 오지 않고, 화면 인쇄는 툴바가 찍히고 쪽이 나뉘어서
+ * 뷰어의 저장 버튼만이 원본과 같은 A4 1장을 준다(2026-09-16 실측, 약 7초).
+ */
+export async function fetchReportPdf(
+  context: BrowserContext,
+  cnclCd: string,
+  reqstSn: string
+): Promise<{ pdf: Buffer; fileName: string }> {
+  const url =
+    `https://ieps.nier.go.kr/web/report/agcyContract.jsp?reportMode=HTML&CNCL_CD=${encodeURIComponent(cnclCd)}` +
+    `&REQST_SN=${encodeURIComponent(reqstSn)}` +
+    "&reportParams=useReportFile:true,pdf_convert:true,excel_convert:true,hwp_convert:true,skip_decimal_point:true,decimal_round:true&CPY_VIEW=N";
+  const view = await context.newPage();
+  try {
+    await view.goto(url, { waitUntil: "domcontentloaded", timeout: 60_000 });
+    const btn = view.locator("#pdfConvert").first();
+    await btn.waitFor({ state: "attached", timeout: 30_000 });
+    const download = view.waitForEvent("download", { timeout: 90_000 });
+    await btn.click();
+    const d = await download;
+    const file = path.join(tmpDir(), `agcyContract-${reqstSn}-${Date.now()}.pdf`);
+    await d.saveAs(file);
+    const pdf = fs.readFileSync(file);
+    fs.rmSync(file, { force: true });
+    if (pdf.subarray(0, 4).toString("latin1") !== "%PDF") throw new Error("받은 파일이 PDF 가 아닙니다.");
+    return { pdf, fileName: `대행실적보고서-${reqstSn}.pdf` };
+  } finally {
+    await view.close().catch(() => {});
+  }
+}
+
 /** 결과 영역의 현재 글자 — 검색 전후 비교용. 페이지가 바뀌는 중이면 빈 문자열. */
 async function resultText(popup: Page): Promise<string> {
   return popup

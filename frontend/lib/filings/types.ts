@@ -98,6 +98,8 @@ export interface FilingSettings {
   notifyUserIds: string[];
   /** 기한 며칠 전부터 임박 알림을 보낼지. */
   remindBeforeDays: number;
+  /** 대행 실적 보고서 발송 기본값(254) — 건별로 바꿀 수 있다. */
+  reportDelivery: ReportDeliveryMode;
 }
 
 /** 대행 실적 보고 이력(contract_agency_reports, 마이그 252) — 신고를 마친 건의 기록. */
@@ -111,6 +113,47 @@ export const AGENCY_REPORT_KIND_LABEL: Record<AgencyReportKind, string> = {
   complete: "완료",
 };
 
+/**
+ * 대행 실적 보고서 발송(254) — 허가 서류를 제출할 때 함께 내야 해서 실무자에게 보낸다.
+ * mail=메일, messenger=앱 메신저, both=둘 다, hold=보내지 않고 보류.
+ */
+export type ReportDeliveryMode = "mail" | "messenger" | "both" | "hold";
+export type ReportDeliveryStatus = "sent" | "held" | "no_recipient" | "failed";
+
+export const REPORT_DELIVERY_MODES: ReportDeliveryMode[] = ["mail", "messenger", "both", "hold"];
+
+export const REPORT_DELIVERY_MODE_LABEL: Record<ReportDeliveryMode, string> = {
+  mail: "메일",
+  messenger: "메신저",
+  both: "메일 + 메신저",
+  hold: "발송 보류",
+};
+
+export const REPORT_DELIVERY_STATUS_LABEL: Record<ReportDeliveryStatus, string> = {
+  sent: "발송 완료",
+  held: "발송 보류",
+  no_recipient: "실무자 미설정",
+  failed: "발송 실패",
+};
+
+export interface ReportDeliveryRecipient {
+  name: string;
+  email: string | null;
+  userId: string | null;
+  role: string;
+}
+
+/** 발송 한 번의 결과 — API 응답과 이력의 delivery_detail 에 같은 모양으로 쓴다. */
+export interface ReportDeliveryResult {
+  status: ReportDeliveryStatus;
+  mode: ReportDeliveryMode;
+  channels: ("mail" | "messenger")[];
+  recipients: ReportDeliveryRecipient[];
+  error: string | null;
+  /** 실무자 미설정이면 수행인력 설정 화면으로 가는 경로 */
+  staffingPath: string | null;
+}
+
 export interface AgencyReportRow {
   reportId: string;
   contractId: string;
@@ -118,6 +161,12 @@ export interface AgencyReportRow {
   reportedOn: string;
   receiptNo: string | null;
   note: string | null;
+  /** 이 건의 발송 방식(null = 설정 기본값) */
+  deliveryMode: ReportDeliveryMode | null;
+  deliveryStatus: ReportDeliveryStatus | null;
+  deliveredAt: string | null;
+  deliveryRecipients: ReportDeliveryRecipient[];
+  deliveryError: string | null;
   /** 대기열에서 자동 기록된 건이면 그 항목 id */
   filingId: string | null;
   /** 신고서 PDF — 없으면 첨부 전 */

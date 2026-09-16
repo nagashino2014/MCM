@@ -7,7 +7,8 @@ import {
   removeAgencyReportPdf,
   storeAgencyReportPdf,
 } from "@/lib/filings/agency-report-document";
-import { getAgencyReport, isAgencyReportKind, listAgencyReports } from "@/lib/filings/agency-reports";
+import { deliverAgencyReport } from "@/lib/filings/agency-report-delivery";
+import { getAgencyReport, isAgencyReportKind, isReportDeliveryMode, listAgencyReports } from "@/lib/filings/agency-reports";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,7 +19,9 @@ interface RouteContext {
 
 /**
  * 이력 수정 — multipart/form-data.
- * 필드: reportKind?, reportedOn?, receiptNo?, note?, file?(신고서 PDF 새로 첨부·교체), removeFile=1(첨부 해제)
+ * 필드: reportKind?, reportedOn?, receiptNo?, note?, file?(신고서 PDF 새로 첨부·교체), removeFile=1(첨부 해제),
+ *       deliveryMode?(mail|messenger|both|hold, 빈 값 = 기본값으로 되돌림)
+ * 새 PDF 가 붙으면 실무자에게 발송한다(254) — 결과는 응답의 delivery.
  */
 export async function PATCH(req: NextRequest, ctx: RouteContext) {
   try {
@@ -36,6 +39,9 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     const receiptNo = has("receiptNo") ? String(form.get("receiptNo")).trim() || null : current.receiptNo;
     const note = has("note") ? String(form.get("note")).trim() || null : current.note;
     const removeFile = String(form.get("removeFile") ?? "") === "1";
+    const hasDeliveryMode = form.get("deliveryMode") !== null;
+    const deliveryModeRaw = String(form.get("deliveryMode") ?? "").trim();
+    const deliveryMode = isReportDeliveryMode(deliveryModeRaw) ? deliveryModeRaw : null;
     const file = form.get("file");
 
     if (!isAgencyReportKind(reportKind)) {
@@ -88,6 +94,9 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
           WHERE report_id = $1`,
         [reportId, reportKind, reportedOn, receiptNo, note, documentId, new Date().toISOString()]
       );
+      if (hasDeliveryMode) {
+        await txn.run(`UPDATE contract_agency_reports SET delivery_mode = $2 WHERE report_id = $1`, [reportId, deliveryMode]);
+      }
       // 교체·해제로 떨어져 나온 옛 신고서 PDF 정리(다른 이력이 쓰고 있으면 남긴다)
       if (current.documentId && current.documentId !== documentId) {
         await removeAgencyReportPdf(txn, current.documentId);
@@ -107,7 +116,10 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       });
     });
 
-    return NextResponse.json({ reports: await listAgencyReports(contractId) });
+    const delivery = file instanceof File ? await deliverAgencyReport(reportId, actor.userId).catch((e) => ({
+      status: "failed" as const, mode: deliveryMode ?? "mail", channels: [], recipients: [], error: (e as Error).message, staffingPath: null,
+    })) : null;
+    return NextResponse.json({ reports: await listAgencyReports(contractId), delivery });
   } catch (err) {
     return authErrorToResponse(err);
   }

@@ -16,8 +16,9 @@ import type {
   FilingSettings,
   FilingStatus,
   FilingSummary,
+  ReportDeliveryMode,
 } from "./types";
-import { FILING_TRIGGER_LABEL } from "./types";
+import { FILING_TRIGGER_LABEL, REPORT_DELIVERY_MODES } from "./types";
 import { recordAgencyReportFromFiling } from "./agency-reports";
 
 const SETTINGS_KEY = "config";
@@ -71,6 +72,7 @@ export const FILING_SETTINGS_DEFAULTS: FilingSettings = {
   dueDays: { ieps_staff: 30, ieps_agency: 30, etis_career: 30 },
   notifyUserIds: [],
   remindBeforeDays: 7,
+  reportDelivery: "mail",
 };
 
 function normalizeSettings(patch: unknown): FilingSettings {
@@ -89,6 +91,9 @@ function normalizeSettings(patch: unknown): FilingSettings {
     },
     notifyUserIds: Array.isArray(p.notifyUserIds) ? p.notifyUserIds.map(String).filter(Boolean) : [],
     remindBeforeDays: num(p.remindBeforeDays, 7),
+    reportDelivery: REPORT_DELIVERY_MODES.includes(p.reportDelivery as ReportDeliveryMode)
+      ? (p.reportDelivery as ReportDeliveryMode)
+      : FILING_SETTINGS_DEFAULTS.reportDelivery,
   };
 }
 
@@ -967,6 +972,8 @@ export interface FilingStatusInput {
   submittedAt?: string | null;
   /** 선임 신고 제출 시 대행인력등록일(agent_registered_at) 확정값 — 비우면 갱신 안 함 */
   agentRegisteredAt?: string | null;
+  /** 대행 실적 보고서 발송 방식(이 건만) — 이력에 남는다(254) */
+  deliveryMode?: ReportDeliveryMode | null;
 }
 
 export async function updateFilingStatus(
@@ -1009,6 +1016,7 @@ export async function updateFilingStatus(
           triggerKind: String(cur.trigger_kind),
           reportedOn: ymd(input.submittedAt) ?? todayKst(),
           receiptNo: input.receiptNo?.trim() || null,
+          deliveryMode: input.deliveryMode ?? null,
         },
         actorUserId
       );

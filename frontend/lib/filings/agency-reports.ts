@@ -7,8 +7,14 @@
  */
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
-import type { AgencyReportKind, AgencyReportRow } from "./types";
-import { AGENCY_REPORT_KINDS } from "./types";
+import type {
+  AgencyReportKind,
+  AgencyReportRow,
+  ReportDeliveryMode,
+  ReportDeliveryRecipient,
+  ReportDeliveryStatus,
+} from "./types";
+import { AGENCY_REPORT_KINDS, REPORT_DELIVERY_MODES } from "./types";
 
 const str = (v: unknown): string => (v == null ? "" : String(v));
 const nullable = (v: unknown): string | null => {
@@ -26,9 +32,14 @@ export function isAgencyReportKind(v: unknown): v is AgencyReportKind {
   return AGENCY_REPORT_KINDS.includes(v as AgencyReportKind);
 }
 
+export function isReportDeliveryMode(v: unknown): v is ReportDeliveryMode {
+  return REPORT_DELIVERY_MODES.includes(v as ReportDeliveryMode);
+}
+
 const SELECT_REPORT = `
   SELECT r.report_id, r.contract_id, r.report_kind, r.reported_on, r.receipt_no, r.note,
          r.filing_id, r.document_id, r.created_by, r.created_at, r.updated_at,
+         r.delivery_mode, r.delivery_status, r.delivered_at, r.delivery_detail,
          d.display_name AS document_name, d.storage_key AS document_key,
          u.name AS created_by_name
     FROM contract_agency_reports r
@@ -37,6 +48,11 @@ const SELECT_REPORT = `
 
 function rowToReport(r: Record<string, unknown>): AgencyReportRow {
   const key = str(r.document_key);
+  const detail = (r.delivery_detail && typeof r.delivery_detail === "object" ? r.delivery_detail : {}) as {
+    recipients?: ReportDeliveryRecipient[];
+    error?: string | null;
+  };
+  const mode = str(r.delivery_mode);
   return {
     reportId: String(r.report_id),
     contractId: String(r.contract_id),
@@ -44,6 +60,11 @@ function rowToReport(r: Record<string, unknown>): AgencyReportRow {
     reportedOn: str(r.reported_on),
     receiptNo: nullable(r.receipt_no),
     note: nullable(r.note),
+    deliveryMode: isReportDeliveryMode(mode) ? mode : null,
+    deliveryStatus: (nullable(r.delivery_status) as ReportDeliveryStatus | null) ?? null,
+    deliveredAt: nullable(r.delivered_at),
+    deliveryRecipients: Array.isArray(detail.recipients) ? detail.recipients : [],
+    deliveryError: detail.error ?? null,
     filingId: nullable(r.filing_id),
     documentId: nullable(r.document_id),
     documentName: nullable(r.document_name),
@@ -159,7 +180,14 @@ export async function deleteAgencyReport(reportId: string): Promise<void> {
  */
 export async function recordAgencyReportFromFiling(
   db: PgDatabase,
-  filing: { filingId: string; contractId: string | null; triggerKind: string; reportedOn: string; receiptNo: string | null },
+  filing: {
+    filingId: string;
+    contractId: string | null;
+    triggerKind: string;
+    reportedOn: string;
+    receiptNo: string | null;
+    deliveryMode?: ReportDeliveryMode | null;
+  },
   actorUserId: string | null
 ): Promise<boolean> {
   if (!filing.contractId || !isAgencyReportKind(filing.triggerKind)) return false;
@@ -171,9 +199,15 @@ export async function recordAgencyReportFromFiling(
      VALUES ($1, $2, $3, $4, $5, NULL, NULL, $6, $7, $8, $8)
      ON CONFLICT (filing_id) WHERE filing_id IS NOT NULL
      DO UPDATE SET reported_on = EXCLUDED.reported_on,
-                   receipt_no = EXCLUDED.receipt_no,
+                   receipt_no = COALESCE(EXCLUDED.receipt_no, contract_agency_reports.receipt_no),
                    updated_at = EXCLUDED.updated_at`,
     [newReportId(), filing.contractId, filing.triggerKind, filing.reportedOn, nullable(filing.receiptNo), filing.filingId, actorUserId, now]
   );
+  if (filing.deliveryMode && isReportDeliveryMode(filing.deliveryMode)) {
+    await db.run(`UPDATE contract_agency_reports SET delivery_mode = $2 WHERE filing_id = $1`, [
+      filing.filingId,
+      filing.deliveryMode,
+    ]);
+  }
   return true;
 }

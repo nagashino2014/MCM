@@ -387,7 +387,9 @@ async function searchAndPick(
 
   const want = normalizeName(name);
   const tokens = nameTokens(name);
-  const rows = popup.locator("table tr, li, .row");
+  // 결과 표의 행만 본다. 예전엔 "li, .row" 도 후보에 넣었는데, 팝업에 주입된 신고 보조 패널의 양식 행(.row)이
+  // 섞여 1차 검색 결과가 비었을 때 패널의 "대행사업장 명칭" 행을 정답으로 골랐다(2026-09-16 익산지점). 패널엔 table 이 없다.
+  const rows = popup.locator("table tr");
   const n = await rows.count().catch(() => 0);
   let best: { index: number; score: number; text: string } | null = null;
   for (let i = 0; i < Math.min(n, 200); i++) {

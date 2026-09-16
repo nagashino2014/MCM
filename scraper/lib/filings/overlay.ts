@@ -219,13 +219,14 @@ export function renderOverlay(data: OverlayData): void {
       #${ID} .meta b { color:#2a3547; }
       #${ID} .list { overflow-y:auto; overflow-x:hidden; flex:1; }
       /* 라벨·값 칸은 minmax(0, …) 로 두어 긴 내용이 패널 밖으로 밀려나지(가로 스크롤) 않게 한다 */
-      /* .row 는 사이트(Bootstrap)의 .row { margin: 0 -15px } 와 이름이 겹쳐 행이 양옆으로 끌려나갔다 — 여백을 명시로 되돌린다 */
-      #${ID} .row { display:grid; grid-template-columns: minmax(0, 170px) minmax(0, 1fr) auto auto; gap:8px; align-items:center; margin:0 !important; padding:6px 30px; border-bottom:1px solid #f1f4f8; }
-      #${ID} .row .lb { color:#5a6a85; font-size:12px; word-break:keep-all; overflow-wrap:anywhere; }
-      #${ID} .row .vl { min-width:0; overflow-wrap:anywhere; word-break:break-all; cursor:pointer; }
-      #${ID} .row button { white-space:nowrap; }
-      #${ID} .row .vl.empty { color:#9aa8bf; font-style:italic; }
-      #${ID} .row .ht { grid-column: 2 / span 3; color:#9aa8bf; font-size:11px; margin-top:-2px; }
+      /* 행 클래스를 .row 로 두었더니 사이트(Bootstrap)의 .row { margin: 0 -15px } 에 끌려나가고, 사업장 검색이
+         결과 행 후보에 패널 행까지 섞어 오선택했다(2026-09-16) — 사이트와 겹치지 않는 mcm- 접두 이름을 쓴다 */
+      #${ID} .mcm-row { display:grid; grid-template-columns: minmax(0, 170px) minmax(0, 1fr) auto auto; gap:8px; align-items:center; margin:0 !important; padding:6px 30px; border-bottom:1px solid #f1f4f8; }
+      #${ID} .mcm-row .lb { color:#5a6a85; font-size:12px; word-break:keep-all; overflow-wrap:anywhere; }
+      #${ID} .mcm-row .vl { min-width:0; overflow-wrap:anywhere; word-break:break-all; cursor:pointer; }
+      #${ID} .mcm-row button { white-space:nowrap; }
+      #${ID} .mcm-row .vl.empty { color:#9aa8bf; font-style:italic; }
+      #${ID} .mcm-row .ht { grid-column: 2 / span 3; color:#9aa8bf; font-size:11px; margin-top:-2px; }
       #${ID} button { border:1px solid #d9e0ea; background:#f2f6fa; color:#2a3547; border-radius:8px; padding:3px 8px; font-size:12px; cursor:pointer; }
       #${ID} button:hover { background:#ecf2ff; border-color:#5D87FF; color:#4570ea; }
       #${ID} button.pri { background:#5D87FF; border-color:#5D87FF; color:#fff; }
@@ -380,7 +381,7 @@ export function renderOverlay(data: OverlayData): void {
     list.className = "list";
     for (const f of data.fields) {
       const row = document.createElement("div");
-      row.className = "row";
+      row.className = "mcm-row";
       const lb = document.createElement("div");
       lb.className = "lb";
       lb.textContent = f.label;

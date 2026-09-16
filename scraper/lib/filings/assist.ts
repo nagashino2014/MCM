@@ -55,11 +55,22 @@ function toOverlay(
   };
 }
 
+/**
+ * 신고 항목 최신본 — 단건 조회(GET /api/filings/{id})는 대기열을 재계산하지 않아, 계약을 막 고친 직후엔
+ * 옛 양식이 온다(2026-09-16 대행업무 기간을 [계약에 반영]했는데 패널이 그대로였던 원인). 재계산을 거치는
+ * 목록 조회로 받고, 대기가 아닌 건(이미 제출 등)이면 단건 조회로 대신한다.
+ */
+async function refetchFiling(filingId: string): Promise<FilingRow | null> {
+  const pending = await listPendingFilings().catch(() => [] as FilingRow[]);
+  return pending.find((f) => f.filingId === filingId) ?? (await getFiling(filingId).catch(() => null));
+}
+
 export async function runAssist(opts: { cfg: FilingsConfig; kind?: FilingKind; filingId?: string }): Promise<void> {
   const { cfg } = opts;
   let items: FilingRow[];
   if (opts.filingId) {
-    const one = await getFiling(opts.filingId);
+    const one = await refetchFiling(opts.filingId);
+    if (!one) throw new Error(`신고 항목을 찾을 수 없습니다: ${opts.filingId}`);
     if (one.status !== "pending") console.log(`[filings] ⚠ 이 항목은 이미 '${one.status}' 상태입니다. 그래도 엽니다.`);
     items = [one];
   } else if (opts.kind) {
@@ -167,7 +178,7 @@ export async function runAssist(opts: { cfg: FilingsConfig; kind?: FilingKind; f
           notices.push({ at: Date.now(), text: "종료일이 시작일보다 빠릅니다." });
         } else {
           await patchContractPeriod(cur.contractId, a.start, a.end);
-          const fresh = await getFiling(cur.filingId).catch(() => null);
+          const fresh = await refetchFiling(cur.filingId);
           if (fresh) items[index] = fresh;
           notices.push({ at: Date.now(), text: `대행업무 기간을 ${a.start} ~ ${a.end} 로 저장했습니다 — [자동 채우기] 로 화면에 반영하세요.` });
         }

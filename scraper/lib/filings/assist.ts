@@ -537,6 +537,10 @@ export async function readReportIds(page: Page, fallbackCncl?: string): Promise<
  * 실적 보고서 원본 PDF 받기 — IEPS "실적보고 출력"과 같은 AIReport 뷰어를 새 탭으로 열고 [PDF저장](#pdfConvert)을 누른다.
  * 서버에 PDF 를 직접 요청(reportMode=PDF)하면 응답이 오지 않고, 화면 인쇄는 툴바가 찍히고 쪽이 나뉘어서
  * 뷰어의 저장 버튼만이 원본과 같은 A4 1장을 준다(2026-09-16 실측, 약 7초).
+ *
+ * 저장 버튼이 내려받게 하는 응답(AIprint.jsp?reportMode=PDF&key=…)을 **네트워크에서 가로채** 바이트를 직접 받는다.
+ * 브라우저 다운로드로 받으면 실제 Chrome 채널에서 뷰어 창이 스스로 닫히고 브라우저 컨텍스트까지 내려가
+ * "Target page, context or browser has been closed" 로 실패했다 — 가로챈 뒤 빈 응답을 돌려줘 다운로드 자체를 없앤다.
  */
 export async function fetchReportPdf(
   context: BrowserContext,
@@ -548,17 +552,33 @@ export async function fetchReportPdf(
     `&REQST_SN=${encodeURIComponent(reqstSn)}` +
     "&reportParams=useReportFile:true,pdf_convert:true,excel_convert:true,hwp_convert:true,skip_decimal_point:true,decimal_round:true&CPY_VIEW=N";
   const view = await context.newPage();
+  let captured: Buffer | null = null;
+  let captureError: string | null = null;
   try {
-    await view.goto(url, { waitUntil: "domcontentloaded", timeout: 60_000 });
+    await view.route(/\/AIprint\.jsp\?.*reportMode=PDF/i, async (route) => {
+      try {
+        const resp = await route.fetch();
+        captured = await resp.body();
+      } catch (e) {
+        captureError = (e as Error).message;
+      }
+      await route.fulfill({ status: 204, body: "" }).catch(() => {});
+    });
+    // 뷰어 스크립트가 다 뜬 뒤에 눌러야 저장이 안정적이다
+    await view.goto(url, { waitUntil: "networkidle", timeout: 60_000 });
     const btn = view.locator("#pdfConvert").first();
     await btn.waitFor({ state: "attached", timeout: 30_000 });
-    const download = view.waitForEvent("download", { timeout: 90_000 });
+    await view.waitForTimeout(1000);
+    await view.evaluate(() => {
+      window.close = () => undefined; // 저장 뒤 스스로 창을 닫지 않게
+    });
     await btn.click();
-    const d = await download;
-    const file = path.join(tmpDir(), `agcyContract-${reqstSn}-${Date.now()}.pdf`);
-    await d.saveAs(file);
-    const pdf = fs.readFileSync(file);
-    fs.rmSync(file, { force: true });
+    const deadline = Date.now() + 60_000;
+    while (!captured && !captureError && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    const pdf = captured as Buffer | null;
+    if (!pdf) throw new Error(captureError ?? "실적 보고서 PDF 응답을 받지 못했습니다(60초).");
     if (pdf.subarray(0, 4).toString("latin1") !== "%PDF") throw new Error("받은 파일이 PDF 가 아닙니다.");
     return { pdf, fileName: `대행실적보고서-${reqstSn}.pdf` };
   } finally {

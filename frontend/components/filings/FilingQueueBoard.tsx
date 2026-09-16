@@ -27,6 +27,7 @@ import {
   REPORT_DELIVERY_MODE_LABEL,
   REPORT_DELIVERY_MODES,
 } from "@/lib/filings/types";
+import { FILINGS_ASSIST_MISSING_MESSAGE, launchFilingsAssist } from "@/lib/filings/assist-launch";
 
 type StatusTab = FilingStatus | "all";
 type KindTab = FilingKind | "all";
@@ -230,9 +231,17 @@ export function FilingQueueBoard() {
  * 웹 페이지는 PC 프로그램을 직접 실행할 수 없어 링크로 넘긴다. 설치가 안 된 PC 에서는 눌러도 반응이 없으므로 안내를 곁에 둔다.
  */
 function AssistLauncher({ href, label }: { href: string; label: string }) {
+  const { toast } = useCdToast();
   return (
     <span className="inline-flex items-center gap-1">
-      <a href={href} className="cd-action cd-btn cd-btn-primary inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold">
+      <a
+        href={href}
+        onClick={(e) => {
+          e.preventDefault();
+          launchFilingsAssist(href, () => toast(FILINGS_ASSIST_MISSING_MESSAGE, "error"));
+        }}
+        className="cd-action cd-btn cd-btn-primary inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold"
+      >
         <ExternalLink className="w-4 h-4" />
         {label}
       </a>

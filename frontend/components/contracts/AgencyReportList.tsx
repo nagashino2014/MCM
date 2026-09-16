@@ -9,10 +9,11 @@
  * 메일·메신저로 보낸다. 실무자가 없으면 수행인력 설정으로 바로 갈 수 있게 경고를 남긴다.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, FileText, Paperclip, Pencil, Plus, Send, Trash2, UserCog, X } from "lucide-react";
+import { AlertTriangle, Download, FileText, Paperclip, Pencil, Plus, Send, Trash2, UserCog, X } from "lucide-react";
 import { CdBadge, type CdBadgeTone } from "@/components/cdash/CdBadge";
 import { CdDateInput } from "@/components/cdash/CdField";
 import { useToast } from "@/components/ui/Toast";
+import { FILINGS_ASSIST_MISSING_MESSAGE, launchFilingsAssist } from "@/lib/filings/assist-launch";
 import {
   AGENCY_REPORT_KIND_LABEL,
   AGENCY_REPORT_KINDS,
@@ -305,12 +306,18 @@ export function AgencyReportList({
                     <Paperclip className="w-3.5 h-3.5" />
                     신고서 미첨부
                     {row.filingId && (
-                      // 대기열로 신고한 건은 신고 보조(설치형 도구)가 IEPS 실적 보고서를 받아 여기 붙이고 실무자에게 보낸다
+                      // 대기열로 신고한 건은 신고 보조(설치형 도구)가 IEPS 실적 보고서를 받아 여기 붙이고 실무자에게 보낸다.
+                      // 밑줄 글자 링크는 클릭 뒤 포커스 테두리가 안쪽으로 그려져 첫 글자를 가렸다 — 여백 있는 작은 버튼으로 둔다.
                       <a
                         href={`mcm-filings://open?id=${encodeURIComponent(row.filingId)}`}
-                        className="cd-action ml-1 cd-text-primary underline"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          launchFilingsAssist(e.currentTarget.href, () => toast.show(FILINGS_ASSIST_MISSING_MESSAGE, "error"));
+                        }}
+                        className="cd-action cd-btn ml-2 inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold cd-text-primary"
                         title="이 PC 의 MCM 신고 보조로 IEPS 실적 보고서를 받아 붙입니다(패널의 [실적보고서 받기])"
                       >
+                        <Download className="w-3.5 h-3.5" />
                         IEPS 에서 받기
                       </a>
                     )}

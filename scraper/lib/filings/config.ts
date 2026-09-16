@@ -35,6 +35,13 @@ export interface SiteConfig {
   loggedOutPattern: string;
   /** 세션 확인용 로그인 필요 페이지 */
   checkUrl: string;
+  /** checkUrl 에서 로그인 상태여야만 보이는 요소 — URL 판정만으로는 만료를 놓친다(IEPS 는 /web/main 으로 보낸다) */
+  checkSelector?: string;
+  /**
+   * 대행업 등록 코드(IEPS CNCL_CD) — 실적 보고서 출력 주소에 들어간다. 보통 화면 주소에서 읽고, 못 읽을 때 이 값을 쓴다.
+   * 자사 등록 건 고유값이라 회사가 바뀌지 않는 한 그대로다.
+   */
+  agencyCode?: string;
   /** 신고 종류별 시작 화면(모르면 루트 — 사람이 메뉴로 이동, 패널은 어느 화면에서든 뜬다) */
   screens: Partial<Record<FilingKind, string>>;
   /**
@@ -129,8 +136,13 @@ export const DEFAULT_CONFIG: FilingsConfig = {
     ieps: {
       label: "통합환경허가시스템",
       loginUrl: "https://ieps.nier.go.kr/",
-      loggedOutPattern: "login|member|auth",
+      // member 는 사업장 검색 팝업 경로(memberjoin)에도 들어가 오탐한다 — 로그인 화면 표식만 남긴다(2026-09-16)
+      loggedOutPattern: "login|logout|auth",
       checkUrl: IEPS_AGENCY_URL,
+      // 대행 실적보고 폼의 보고 구분(체결) 라디오 — 로그인 상태에서만 이 폼이 그려진다
+      checkSelector: "#REPORT_FOM_CD001",
+      // 자사 대행업 등록 코드(2026-09-16 실측 — 대행 실적보고 메뉴 주소의 CNCL_CD)
+      agencyCode: "9HttNb21",
       screens: {
         // 대행업 등록/변경등록 신청서(REQST_SN=12 = 자사 등록 건) — 기술인력보유현황 그리드가 이 화면에 있다
         ieps_staff: IEPS_STAFF_URL,
@@ -141,7 +153,8 @@ export const DEFAULT_CONFIG: FilingsConfig = {
         queryLabel: "대행사업장 명칭",
         openButton: 'input[value="사업장 검색"], button:has-text("사업장 검색"), a:has-text("사업장 검색")',
         input: "#file",
-        submit: 'input[value="검색"], button:has-text("검색"), a:has-text("검색"), img[alt="검색"]',
+        // 실제 버튼 글자는 "조회"(2026-09-16 실측) — "검색"은 다른 화면 대비로 남긴다
+        submit: 'input[value="조회"], button:has-text("조회"), a:has-text("조회"), input[value="검색"], button:has-text("검색"), a:has-text("검색"), img[alt="검색"]',
       },
     },
     etis: {

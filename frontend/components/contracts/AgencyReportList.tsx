@@ -4,13 +4,27 @@
  * 대행 실적 보고 이력(252) — 계약 상세의 "대행 실적 보고 정보" 카드 안에 들어간다.
  * IEPS 에서 체결·변경·완료 신고를 마치고 실적보고 출력(PDF)을 받아 여기에 쌓는다.
  * 대기열(/contracts/filings)에서 제출 완료로 처리한 건은 자동으로 줄이 생기고, PDF 는 여기서 붙인다.
+ *
+ * 발송(254): 대행 실적 보고서는 실무자가 허가 서류를 낼 때 함께 제출하는 서류라, PDF 가 붙으면 실무자에게
+ * 메일·메신저로 보낸다. 실무자가 없으면 수행인력 설정으로 바로 갈 수 있게 경고를 남긴다.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FileText, Paperclip, Pencil, Plus, Trash2, X } from "lucide-react";
+import { AlertTriangle, FileText, Paperclip, Pencil, Plus, Send, Trash2, UserCog, X } from "lucide-react";
 import { CdBadge, type CdBadgeTone } from "@/components/cdash/CdBadge";
 import { CdDateInput } from "@/components/cdash/CdField";
 import { useToast } from "@/components/ui/Toast";
-import { AGENCY_REPORT_KIND_LABEL, AGENCY_REPORT_KINDS, type AgencyReportKind, type AgencyReportRow } from "@/lib/filings/types";
+import {
+  AGENCY_REPORT_KIND_LABEL,
+  AGENCY_REPORT_KINDS,
+  REPORT_DELIVERY_MODE_LABEL,
+  REPORT_DELIVERY_MODES,
+  REPORT_DELIVERY_STATUS_LABEL,
+  type AgencyReportKind,
+  type AgencyReportRow,
+  type ReportDeliveryMode,
+  type ReportDeliveryResult,
+  type ReportDeliveryStatus,
+} from "@/lib/filings/types";
 
 interface FormState {
   reportKind: AgencyReportKind;
@@ -19,6 +33,8 @@ interface FormState {
   note: string;
   file: File | null;
   removeFile: boolean;
+  /** "" = 설정 기본값을 따른다 */
+  deliveryMode: ReportDeliveryMode | "";
 }
 
 const emptyForm = (): FormState => ({
@@ -28,6 +44,7 @@ const emptyForm = (): FormState => ({
   note: "",
   file: null,
   removeFile: false,
+  deliveryMode: "",
 });
 
 const KIND_TONE: Record<AgencyReportKind, CdBadgeTone> = {
@@ -36,11 +53,40 @@ const KIND_TONE: Record<AgencyReportKind, CdBadgeTone> = {
   complete: "success",
 };
 
-export function AgencyReportList({ contractId }: { contractId: string }) {
+const DELIVERY_TONE: Record<ReportDeliveryStatus, CdBadgeTone> = {
+  sent: "success",
+  held: "idle",
+  no_recipient: "warn",
+  failed: "error",
+};
+
+/** 발송 결과를 한 줄로 — 저장·발송 직후 토스트. */
+function deliveryMessage(d: ReportDeliveryResult): { text: string; tone: "success" | "error" | "info" } {
+  const names = d.recipients.map((r) => r.name).join(", ");
+  const via = d.channels.map((c) => (c === "mail" ? "메일" : "메신저")).join("·");
+  if (d.status === "sent") return { text: `실무자 ${names} 님에게 ${via}로 보냈습니다.${d.error ? ` (일부 실패: ${d.error})` : ""}`, tone: "success" };
+  if (d.status === "held") return { text: "발송을 보류했습니다 — 보낼 때 [발송] 을 누르세요.", tone: "info" };
+  if (d.status === "no_recipient") return { text: "실무자가 지정되지 않아 보내지 못했습니다 — 수행인력을 설정하세요.", tone: "error" };
+  return { text: `발송 실패: ${d.error ?? "알 수 없는 오류"}`, tone: "error" };
+}
+
+export function AgencyReportList({
+  contractId,
+  onOpenStaffing,
+  staffingOpen = false,
+}: {
+  contractId: string;
+  /** 수행인력 설정 모달을 수행인력 탭으로 연다 */
+  onOpenStaffing?: () => void;
+  staffingOpen?: boolean;
+}) {
   const toast = useToast();
   const [reports, setReports] = useState<AgencyReportRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [sendingId, setSendingId] = useState<string | null>(null);
+  /** 신고 대기열 설정의 발송 기본값 — 읽을 권한이 없으면 null */
+  const [defaultMode, setDefaultMode] = useState<ReportDeliveryMode | null>(null);
   /** null=폼 닫힘, ""=신규 추가, 그 외=수정 중인 reportId */
   const [editing, setEditing] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm());
@@ -65,6 +111,26 @@ export function AgencyReportList({ contractId }: { contractId: string }) {
     setEditing(null);
   }, [load]);
 
+  useEffect(() => {
+    fetch("/api/filings/settings", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b: { settings?: { reportDelivery?: ReportDeliveryMode } } | null) => setDefaultMode(b?.settings?.reportDelivery ?? null))
+      .catch(() => setDefaultMode(null));
+  }, []);
+
+  // 수행인력 모달을 닫고 돌아오면 목록을 다시 읽는다(실무자를 지정했는지 경고를 갱신)
+  const prevStaffingOpen = useRef(staffingOpen);
+  useEffect(() => {
+    if (prevStaffingOpen.current && !staffingOpen) void load();
+    prevStaffingOpen.current = staffingOpen;
+  }, [staffingOpen, load]);
+
+  const showDelivery = (d: ReportDeliveryResult | null | undefined) => {
+    if (!d) return;
+    const m = deliveryMessage(d);
+    toast.show(m.text, m.tone);
+  };
+
   const openNew = () => {
     setForm(emptyForm());
     setEditing("");
@@ -78,6 +144,7 @@ export function AgencyReportList({ contractId }: { contractId: string }) {
       note: row.note ?? "",
       file: null,
       removeFile: false,
+      deliveryMode: row.deliveryMode ?? "",
     });
     setEditing(row.reportId);
   };
@@ -101,6 +168,7 @@ export function AgencyReportList({ contractId }: { contractId: string }) {
       fd.set("reportedOn", form.reportedOn);
       fd.set("receiptNo", form.receiptNo.trim());
       fd.set("note", form.note.trim());
+      fd.set("deliveryMode", form.deliveryMode);
       if (form.file) fd.set("file", form.file);
       if (form.removeFile && !form.file) fd.set("removeFile", "1");
       const isNew = editing === "";
@@ -108,15 +176,43 @@ export function AgencyReportList({ contractId }: { contractId: string }) {
         ? `/api/contracts/${encodeURIComponent(contractId)}/agency-reports`
         : `/api/contracts/${encodeURIComponent(contractId)}/agency-reports/${encodeURIComponent(String(editing))}`;
       const res = await fetch(url, { method: isNew ? "POST" : "PATCH", body: fd });
-      const body = (await res.json().catch(() => ({}))) as { reports?: AgencyReportRow[]; error?: string };
+      const body = (await res.json().catch(() => ({}))) as {
+        reports?: AgencyReportRow[];
+        delivery?: ReportDeliveryResult | null;
+        error?: string;
+      };
       if (!res.ok) throw new Error(body?.error ?? "HTTP " + res.status);
       setReports(body.reports ?? []);
-      toast.show(isNew ? "신고 이력을 추가했습니다." : "신고 이력을 수정했습니다.", "success");
+      if (body.delivery) showDelivery(body.delivery);
+      else toast.show(isNew ? "신고 이력을 추가했습니다." : "신고 이력을 수정했습니다.", "success");
       close();
     } catch (err) {
       toast.show("저장 실패: " + (err as Error).message, "error");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const send = async (row: AgencyReportRow) => {
+    if (sendingId) return;
+    setSendingId(row.reportId);
+    try {
+      const res = await fetch(
+        `/api/contracts/${encodeURIComponent(contractId)}/agency-reports/${encodeURIComponent(row.reportId)}/deliver`,
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }
+      );
+      const body = (await res.json().catch(() => ({}))) as {
+        reports?: AgencyReportRow[];
+        delivery?: ReportDeliveryResult | null;
+        error?: string;
+      };
+      if (!res.ok) throw new Error(body?.error ?? "HTTP " + res.status);
+      setReports(body.reports ?? []);
+      showDelivery(body.delivery);
+    } catch (err) {
+      toast.show("발송 실패: " + (err as Error).message, "error");
+    } finally {
+      setSendingId(null);
     }
   };
 
@@ -147,7 +243,9 @@ export function AgencyReportList({ contractId }: { contractId: string }) {
       <div className="flex items-center justify-between gap-2 mb-3">
         <div className="flex items-baseline gap-2">
           <h4 className="font-bold cd-text text-sm">신고 이력</h4>
-          <span className="text-[11px] cd-text-faint">IEPS 실적보고 출력(PDF)을 체결 → 변경 → 완료 순으로 보관</span>
+          <span className="text-[11px] cd-text-faint">
+            IEPS 실적보고 출력(PDF)을 체결 → 변경 → 완료 순으로 보관 · PDF 를 붙이면 실무자에게 발송
+          </span>
         </div>
         <button
           type="button"
@@ -159,7 +257,9 @@ export function AgencyReportList({ contractId }: { contractId: string }) {
         </button>
       </div>
 
-      {editing === "" && <ReportForm form={form} setForm={setForm} onSave={save} onCancel={close} saving={saving} fileRef={fileRef} />}
+      {editing === "" && (
+        <ReportForm form={form} setForm={setForm} onSave={save} onCancel={close} saving={saving} fileRef={fileRef} defaultMode={defaultMode} />
+      )}
 
       <div className="grid gap-2">
         {loading && <p className="text-sm cd-text-faint">불러오는 중…</p>}
@@ -179,55 +279,113 @@ export function AgencyReportList({ contractId }: { contractId: string }) {
               saving={saving}
               fileRef={fileRef}
               currentFileName={row.documentName}
+              defaultMode={defaultMode}
             />
           ) : (
-            <div key={row.reportId} className="flex items-center gap-2 rounded-xl border cd-border-c px-3 py-2">
-              <CdBadge tone={KIND_TONE[row.reportKind]} className="shrink-0">
-                {AGENCY_REPORT_KIND_LABEL[row.reportKind]}
-              </CdBadge>
-              <span className="text-sm cd-text tabular-nums shrink-0">{row.reportedOn}</span>
-              {row.receiptNo && <span className="text-xs cd-text-muted shrink-0">접수 {row.receiptNo}</span>}
-              {row.documentPath ? (
-                <a
-                  href={row.documentPath}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="cd-action inline-flex items-center gap-1 text-xs cd-text-primary truncate"
-                  title={row.documentName ?? "신고서"}
-                >
-                  <FileText className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">{row.documentName ?? "신고서 PDF"}</span>
-                </a>
-              ) : (
-                <span className="inline-flex items-center gap-1 text-xs cd-text-faint">
-                  <Paperclip className="w-3.5 h-3.5" />
-                  신고서 미첨부
-                </span>
-              )}
-              {row.note && <span className="text-xs cd-text-faint truncate">{row.note}</span>}
-              <div className="ml-auto flex items-center gap-1 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => openEdit(row)}
-                  className="cd-icon-button p-1.5 cd-text-faint hover:cd-text"
-                  title="수정 · 신고서 첨부"
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => remove(row)}
-                  className="cd-icon-button p-1.5 cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]"
-                  title="이력 삭제"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+            <div key={row.reportId} className="rounded-xl border cd-border-c px-3 py-2">
+              <div className="flex items-center gap-2">
+                <CdBadge tone={KIND_TONE[row.reportKind]} className="shrink-0">
+                  {AGENCY_REPORT_KIND_LABEL[row.reportKind]}
+                </CdBadge>
+                <span className="text-sm cd-text tabular-nums shrink-0">{row.reportedOn}</span>
+                {row.receiptNo && <span className="text-xs cd-text-muted shrink-0">접수 {row.receiptNo}</span>}
+                {row.documentPath ? (
+                  <a
+                    href={row.documentPath}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="cd-action inline-flex items-center gap-1 text-xs cd-text-primary truncate"
+                    title={row.documentName ?? "신고서"}
+                  >
+                    <FileText className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">{row.documentName ?? "신고서 PDF"}</span>
+                  </a>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-xs cd-text-faint">
+                    <Paperclip className="w-3.5 h-3.5" />
+                    신고서 미첨부
+                  </span>
+                )}
+                {row.documentId && <DeliveryBadge row={row} />}
+                {row.note && <span className="text-xs cd-text-faint truncate">{row.note}</span>}
+                <div className="ml-auto flex items-center gap-1 shrink-0">
+                  {row.documentId && (
+                    <button
+                      type="button"
+                      onClick={() => send(row)}
+                      disabled={sendingId === row.reportId}
+                      className="cd-btn px-2.5 py-1 text-xs font-bold inline-flex items-center gap-1 disabled:opacity-50"
+                      title="실무자에게 실적 보고서를 보냅니다"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      {sendingId === row.reportId ? "보내는 중…" : row.deliveryStatus === "sent" ? "재발송" : "발송"}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => openEdit(row)}
+                    className="cd-icon-button p-1.5 cd-text-faint hover:cd-text"
+                    title="수정 · 신고서 첨부 · 발송 방식"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => remove(row)}
+                    className="cd-icon-button p-1.5 cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]"
+                    title="이력 삭제"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
+              {row.deliveryStatus === "no_recipient" && (
+                <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg cd-warn-bg px-3 py-2 text-xs">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 cd-warn-text" />
+                  <span className="cd-text">
+                    실무자(실무(정))가 지정되지 않아 보고서를 보내지 못했습니다. 수행인력에서 실무자를 지정한 뒤 [발송] 을 누르세요.
+                  </span>
+                  {onOpenStaffing && (
+                    <button
+                      type="button"
+                      onClick={onOpenStaffing}
+                      className="cd-btn cd-btn-primary ml-auto px-3 py-1 text-xs font-bold inline-flex items-center gap-1"
+                    >
+                      <UserCog className="w-3.5 h-3.5" />
+                      수행인력 설정
+                    </button>
+                  )}
+                </div>
+              )}
+              {row.deliveryStatus === "failed" && row.deliveryError && (
+                <p className="mt-2 text-xs text-[color:var(--cd-danger,#FA896B)]">발송 실패: {row.deliveryError}</p>
+              )}
             </div>
           )
         )}
       </div>
     </div>
+  );
+}
+
+/** 발송 상태 배지 — 받는 사람·채널·시각은 툴팁으로. */
+function DeliveryBadge({ row }: { row: AgencyReportRow }) {
+  if (!row.deliveryStatus) {
+    return (
+      <CdBadge tone="outline" className="shrink-0">
+        미발송
+      </CdBadge>
+    );
+  }
+  const who = row.deliveryRecipients.map((r) => `${r.name}(${r.role})`).join(", ");
+  const title =
+    row.deliveryStatus === "sent"
+      ? `${who} · ${row.deliveredAt ? row.deliveredAt.slice(0, 16).replace("T", " ") : ""}`
+      : row.deliveryError ?? REPORT_DELIVERY_STATUS_LABEL[row.deliveryStatus];
+  return (
+    <CdBadge tone={DELIVERY_TONE[row.deliveryStatus]} className="shrink-0" title={title}>
+      {REPORT_DELIVERY_STATUS_LABEL[row.deliveryStatus]}
+    </CdBadge>
   );
 }
 
@@ -239,6 +397,7 @@ function ReportForm({
   saving,
   fileRef,
   currentFileName,
+  defaultMode,
 }: {
   form: FormState;
   setForm: (next: FormState) => void;
@@ -247,6 +406,7 @@ function ReportForm({
   saving: boolean;
   fileRef: React.RefObject<HTMLInputElement | null>;
   currentFileName?: string | null;
+  defaultMode: ReportDeliveryMode | null;
 }) {
   const attachedLabel = form.file
     ? form.file.name
@@ -279,13 +439,13 @@ function ReportForm({
           <input
             type="text"
             className="cd-input"
-            placeholder="IEPS 접수번호"
+            placeholder="IEPS 보고회차"
             value={form.receiptNo}
             onChange={(e) => setForm({ ...form, receiptNo: e.target.value })}
           />
         </label>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto] gap-3 items-end">
+      <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_200px_auto] gap-3 items-end">
         <label className="grid gap-1 text-sm">
           <span className="font-bold cd-text-muted">비고 (선택)</span>
           <input
@@ -294,6 +454,21 @@ function ReportForm({
             value={form.note}
             onChange={(e) => setForm({ ...form, note: e.target.value })}
           />
+        </label>
+        <label className="grid gap-1 text-sm">
+          <span className="font-bold cd-text-muted">실무자 발송</span>
+          <select
+            className="cd-input"
+            value={form.deliveryMode}
+            onChange={(e) => setForm({ ...form, deliveryMode: e.target.value as ReportDeliveryMode | "" })}
+          >
+            <option value="">기본값{defaultMode ? ` (${REPORT_DELIVERY_MODE_LABEL[defaultMode]})` : ""}</option>
+            {REPORT_DELIVERY_MODES.map((m) => (
+              <option key={m} value={m}>
+                {REPORT_DELIVERY_MODE_LABEL[m]}
+              </option>
+            ))}
+          </select>
         </label>
         <div className="flex items-center gap-2">
           <label className="cd-action cd-btn px-3 py-2 text-xs font-bold cursor-pointer inline-flex items-center gap-1">
@@ -320,7 +495,10 @@ function ReportForm({
         </div>
       </div>
       <div className="flex items-center gap-3">
-        <span className="text-xs cd-text-faint truncate">{attachedLabel}</span>
+        <span className="text-xs cd-text-faint truncate">
+          {attachedLabel}
+          {form.file ? " — 저장하면 실무자 발송 설정에 따라 바로 보냅니다" : ""}
+        </span>
         <div className="ml-auto flex items-center gap-2">
           <button type="button" onClick={onCancel} className="cd-btn px-3 py-1.5 text-xs font-bold">
             취소

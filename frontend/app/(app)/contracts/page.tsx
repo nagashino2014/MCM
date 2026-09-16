@@ -876,6 +876,21 @@ function ContractDetailPanel({
 
   // 공정표/수행인력 모달 + 수행 부서·인력 요약(KPI 표시용).
   const [staffingModalOpen, setStaffingModalOpen] = useState(false);
+  const [staffingInitialTab, setStaffingInitialTab] = useState<"process" | "staffing">("process");
+  // 실적보고서 발송에 실무자가 필요할 때 — 수행인력 탭으로 바로 연다(254). ?open=staffing 링크도 같은 동작.
+  const openStaffing = useCallback(() => {
+    setStaffingInitialTab("staffing");
+    setStaffingModalOpen(true);
+  }, []);
+  const staffingSearchParams = useSearchParams();
+  const staffingLinkHandledRef = useRef(false);
+  useEffect(() => {
+    if (staffingLinkHandledRef.current) return;
+    if (staffingSearchParams.get("open") !== "staffing") return;
+    if (staffingSearchParams.get("contract") !== String(contract.contract_id)) return;
+    staffingLinkHandledRef.current = true;
+    openStaffing();
+  }, [staffingSearchParams, contract.contract_id, openStaffing]);
   const [participants, setParticipants] = useState<{ employeeName: string }[]>([]);
   const reloadParticipants = useCallback(() => {
     fetch(`/api/contracts/${String(contract.contract_id)}/participants`, { cache: "no-store" })
@@ -1008,7 +1023,10 @@ function ContractDetailPanel({
           </button>
           <button
             type="button"
-            onClick={() => setStaffingModalOpen(true)}
+            onClick={() => {
+              setStaffingInitialTab("process");
+              setStaffingModalOpen(true);
+            }}
             className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs cd-text-muted flex shrink-0 items-center gap-1 whitespace-nowrap"
           >
             <GitCommitHorizontal className="w-3.5 h-3.5" />
@@ -1141,6 +1159,7 @@ function ContractDetailPanel({
           contractId={String(contract.contract_id)}
           serviceType={String(contract.service_type ?? "")}
           currentDeptId={String(contract.owning_dept_id ?? "")}
+          initialTab={staffingInitialTab}
           onClose={() => {
             setStaffingModalOpen(false);
             onReloadDetail();
@@ -1392,6 +1411,8 @@ function ContractDetailPanel({
             contract.preconsult_notified_at ? String(contract.preconsult_notified_at).slice(0, 10) : ""
           }
           onSaved={onReloadDetail}
+          onOpenStaffing={openStaffing}
+          staffingOpen={staffingModalOpen}
         />
       )}
 
@@ -1444,11 +1465,16 @@ function AgencyReportInfoSection({
   awardRate,
   preconsultNotifiedAt,
   onSaved,
+  onOpenStaffing,
+  staffingOpen,
 }: {
   contractId: string;
   awardRate: string;
   preconsultNotifiedAt: string;
   onSaved: () => void;
+  onOpenStaffing: () => void;
+  /** 수행인력 모달이 닫히면 실무자 지정 여부를 다시 확인하도록 목록에 알린다 */
+  staffingOpen: boolean;
 }) {
   const toast = useToast();
   const [rate, setRate] = useState(awardRate);
@@ -1527,7 +1553,7 @@ function AgencyReportInfoSection({
           {saving ? "저장 중…" : "저장"}
         </button>
       </div>
-      <AgencyReportList contractId={contractId} />
+      <AgencyReportList contractId={contractId} onOpenStaffing={onOpenStaffing} staffingOpen={staffingOpen} />
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { isReportDeliveryMode } from "@/lib/filings/agency-reports";
 import { getFiling, updateFilingStatus } from "@/lib/filings/store";
 import type { FilingStatus } from "@/lib/filings/types";
 
@@ -35,6 +36,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ filingId:
       note: body?.note != null ? String(body.note) : null,
       submittedAt: body?.submittedAt != null ? String(body.submittedAt) : null,
       agentRegisteredAt: body?.agentRegisteredAt != null ? String(body.agentRegisteredAt) : null,
+      deliveryMode: isReportDeliveryMode(body?.deliveryMode) ? body.deliveryMode : null,
     });
     return NextResponse.json({ filing });
   } catch (err) {

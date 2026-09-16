@@ -16,8 +16,9 @@ import type {
   FilingSettings,
   FilingStatus,
   FilingSummary,
+  ReportDeliveryMode,
 } from "./types";
-import { FILING_TRIGGER_LABEL } from "./types";
+import { FILING_TRIGGER_LABEL, REPORT_DELIVERY_MODES } from "./types";
 import { recordAgencyReportFromFiling } from "./agency-reports";
 
 const SETTINGS_KEY = "config";
@@ -71,6 +72,7 @@ export const FILING_SETTINGS_DEFAULTS: FilingSettings = {
   dueDays: { ieps_staff: 30, ieps_agency: 30, etis_career: 30 },
   notifyUserIds: [],
   remindBeforeDays: 7,
+  reportDelivery: "mail",
 };
 
 function normalizeSettings(patch: unknown): FilingSettings {
@@ -89,6 +91,9 @@ function normalizeSettings(patch: unknown): FilingSettings {
     },
     notifyUserIds: Array.isArray(p.notifyUserIds) ? p.notifyUserIds.map(String).filter(Boolean) : [],
     remindBeforeDays: num(p.remindBeforeDays, 7),
+    reportDelivery: REPORT_DELIVERY_MODES.includes(p.reportDelivery as ReportDeliveryMode)
+      ? (p.reportDelivery as ReportDeliveryMode)
+      : FILING_SETTINGS_DEFAULTS.reportDelivery,
   };
 }
 
@@ -298,7 +303,13 @@ function agencyFields(c: ContractRec, co: Company, opts: { changedOn?: string; a
     { label: "대행사업장 명칭", value: c.facilityName || c.counterpartyName, hint: "사업장 검색 팝업으로 선택(직접 입력 불가)" },
     { label: "사업장 소재지", value: c.facilityAddress, hint: "사업장 선택 시 자동" },
     { label: "통합허가구분", value: permitCategory(c.serviceSubtype) },
-    { label: "허가번호", value: c.permitNo, hint: "이행 보고 시 목록에서 선택" },
+    {
+      label: "허가번호",
+      value: c.permitNo,
+      hint: c.permitNo
+        ? "사이트 목록에서 이 번호를 선택"
+        : "비어 있으면 [자동 채우기]가 사이트 목록에서 최신 번호(차수가 가장 큰 것)를 고릅니다",
+    },
     { label: "대행업무 시작일", value: period.start, hint: period.start ? "용역 계약일" : undefined },
     { label: "대행업무 종료일", value: period.end, hint: periodHint },
     { label: "대행업무의 개요", value: c.title },
@@ -961,6 +972,8 @@ export interface FilingStatusInput {
   submittedAt?: string | null;
   /** 선임 신고 제출 시 대행인력등록일(agent_registered_at) 확정값 — 비우면 갱신 안 함 */
   agentRegisteredAt?: string | null;
+  /** 대행 실적 보고서 발송 방식(이 건만) — 이력에 남는다(254) */
+  deliveryMode?: ReportDeliveryMode | null;
 }
 
 export async function updateFilingStatus(
@@ -1003,6 +1016,7 @@ export async function updateFilingStatus(
           triggerKind: String(cur.trigger_kind),
           reportedOn: ymd(input.submittedAt) ?? todayKst(),
           receiptNo: input.receiptNo?.trim() || null,
+          deliveryMode: input.deliveryMode ?? null,
         },
         actorUserId
       );

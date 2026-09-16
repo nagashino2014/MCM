@@ -16,8 +16,16 @@ import {
   useCdToast,
   useCdashTheme,
 } from "@/components/cdash";
-import type { FilingKind, FilingRow, FilingSettings, FilingStatus } from "@/lib/filings/types";
-import { FILING_KINDS, FILING_KIND_LABEL, FILING_SITE_LABEL, FILING_STATUS_LABEL, FILING_TRIGGER_LABEL } from "@/lib/filings/types";
+import type { FilingKind, FilingRow, FilingSettings, FilingStatus, ReportDeliveryMode } from "@/lib/filings/types";
+import {
+  FILING_KINDS,
+  FILING_KIND_LABEL,
+  FILING_SITE_LABEL,
+  FILING_STATUS_LABEL,
+  FILING_TRIGGER_LABEL,
+  REPORT_DELIVERY_MODE_LABEL,
+  REPORT_DELIVERY_MODES,
+} from "@/lib/filings/types";
 
 type StatusTab = FilingStatus | "all";
 type KindTab = FilingKind | "all";
@@ -545,6 +553,23 @@ function FilingSettingsModal({
               </label>
             ))}
           </div>
+          <label className="grid gap-1 text-sm md:w-1/2">
+            <span className="text-xs font-semibold cd-text-muted">대행 실적 보고서 실무자 발송 기본값</span>
+            <select
+              className="cd-input"
+              value={form.reportDelivery}
+              onChange={(e) => setForm({ ...form, reportDelivery: e.target.value as ReportDeliveryMode })}
+            >
+              {REPORT_DELIVERY_MODES.map((m) => (
+                <option key={m} value={m}>
+                  {REPORT_DELIVERY_MODE_LABEL[m]}
+                </option>
+              ))}
+            </select>
+            <span className="text-[11px] cd-text-faint">
+              실적 보고서 PDF 가 이력에 붙으면 수행인력의 실무(정)에게 보냅니다. 건마다 신고 보조 패널·계약 상세에서 바꿀 수 있습니다.
+            </span>
+          </label>
           <label className="grid gap-1 text-sm md:w-1/3">
             <span className="text-xs font-semibold cd-text-muted">기한 임박 알림(일 전)</span>
             <input

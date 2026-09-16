@@ -3,7 +3,8 @@ import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { AGENCY_REPORT_MAX_BYTES, storeAgencyReportPdf } from "@/lib/filings/agency-report-document";
-import { createAgencyReport, isAgencyReportKind, listAgencyReports } from "@/lib/filings/agency-reports";
+import { deliverAgencyReport } from "@/lib/filings/agency-report-delivery";
+import { createAgencyReport, isAgencyReportKind, isReportDeliveryMode, listAgencyReports } from "@/lib/filings/agency-reports";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,7 +26,9 @@ export async function GET(_req: NextRequest, ctx: RouteContext) {
 
 /**
  * 이력 추가 — multipart/form-data. IEPS 에서 신고를 마치고 받은 실적보고 출력 PDF 를 함께 올린다.
- * 필드: reportKind(conclude|amend|complete), reportedOn(YYYY-MM-DD), receiptNo?, note?, file?(PDF)
+ * 필드: reportKind(conclude|amend|complete), reportedOn(YYYY-MM-DD), receiptNo?, note?, file?(PDF),
+ *       deliveryMode?(mail|messenger|both|hold — 비우면 설정 기본값)
+ * PDF 를 함께 올리면 실무자에게 바로 발송한다(254) — 결과는 응답의 delivery.
  */
 export async function POST(req: NextRequest, ctx: RouteContext) {
   try {
@@ -37,6 +40,8 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     const receiptNo = String(form.get("receiptNo") ?? "").trim() || null;
     const note = String(form.get("note") ?? "").trim() || null;
     const file = form.get("file");
+    const deliveryModeRaw = String(form.get("deliveryMode") ?? "").trim();
+    const deliveryMode = isReportDeliveryMode(deliveryModeRaw) ? deliveryModeRaw : null;
 
     if (!isAgencyReportKind(reportKind)) {
       return NextResponse.json({ error: "신고 구분은 체결·변경·완료 중 하나여야 합니다." }, { status: 400 });
@@ -89,6 +94,9 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
         actor.userId,
         txn
       );
+      if (deliveryMode) {
+        await txn.run(`UPDATE contract_agency_reports SET delivery_mode = $2 WHERE report_id = $1`, [id, deliveryMode]);
+      }
       await recordAuditLogInline(txn, {
         actorUserId: actor.userId,
         action: "agency_report_create",
@@ -99,8 +107,12 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       return id;
     });
 
+    // 신고서 PDF 가 붙었으면 실무자에게 발송(설정·건별 방식에 따라 보류일 수도 있다)
+    const delivery = file instanceof File ? await deliverAgencyReport(reportId, actor.userId).catch((e) => ({
+      status: "failed" as const, mode: deliveryMode ?? "mail", channels: [], recipients: [], error: (e as Error).message, staffingPath: null,
+    })) : null;
     const reports = await listAgencyReports(contractId);
-    return NextResponse.json({ reportId, reports });
+    return NextResponse.json({ reportId, reports, delivery });
   } catch (err) {
     return authErrorToResponse(err);
   }

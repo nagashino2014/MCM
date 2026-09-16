@@ -386,18 +386,18 @@ export default function ReportEditor({
         {metaRow}
 
         {/* 헤더 */}
-        <div className="rounded-2xl border cd-border-c p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-          <Field label="보고자 / 부서">
+        <div className="rounded-2xl border cd-border-c p-4 flex flex-wrap gap-3">
+          <Field label="보고자 / 부서" className="flex-[1_1_9rem]">
             <div className="cd-input text-sm w-full flex items-center cd-text-muted">{reporterText}</div>
           </Field>
-          <Field label="보고 기간">
-            <div className="flex items-center gap-1.5">
-              <AutoDateInput className="cd-input text-sm flex-1" value={periodStart} onChange={setPeriodStart} disabled={locked} />
+          <Field label="보고 기간" className="flex-[2_1_14rem]">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <AutoDateInput className="cd-input text-sm flex-1 min-w-[6.25rem]" value={periodStart} onChange={setPeriodStart} disabled={locked} />
               <span className="cd-text-faint text-xs">~</span>
-              <AutoDateInput className="cd-input text-sm flex-1" value={periodEnd} onChange={setPeriodEnd} disabled={locked} />
+              <AutoDateInput className="cd-input text-sm flex-1 min-w-[6.25rem]" value={periodEnd} onChange={setPeriodEnd} disabled={locked} />
             </div>
           </Field>
-          <Field label="회의 종류">
+          <Field label="회의 종류" className="flex-[1_1_7rem]">
             <select className="cd-select text-sm w-full" value={meetingLabel} onChange={(e) => setMeetingLabel(e.target.value)} disabled={locked}>
               {MEETING_LABELS.map((m) => (
                 <option key={m} value={m}>{m}</option>
@@ -407,9 +407,9 @@ export default function ReportEditor({
               )}
             </select>
           </Field>
-          <Field label="회의일자">
-            <div className="flex items-center gap-1.5">
-              <AutoDateInput className="cd-input text-sm flex-1 min-w-0" value={reportDate} onChange={setReportDate} disabled={locked} />
+          <Field label="회의일자" className="flex-[1.5_1_13rem]">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <AutoDateInput className="cd-input text-sm flex-1 min-w-[6.25rem]" value={reportDate} onChange={setReportDate} disabled={locked} />
               {meetingSeq != null && (
                 <span className="shrink-0 text-[11px] font-semibold cd-text-primary cd-tint-primary rounded-lg px-2 py-1.5 whitespace-nowrap">
                   {meetingLabel} {meetingSeq}회차
@@ -831,9 +831,9 @@ export default function ReportEditor({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return (
-    <label className="flex flex-col gap-1.5">
+    <label className={cn("flex flex-col gap-1.5", className)}>
       <span className="text-[11px] font-semibold cd-text-faint">{label}</span>
       {children}
     </label>

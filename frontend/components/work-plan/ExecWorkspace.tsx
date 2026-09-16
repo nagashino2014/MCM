@@ -98,7 +98,7 @@ export default function ExecWorkspace() {
         help="부서 통합 보고를 용역·Task별로 검토하고, 보완 요구·진행 촉구·추가보고 지시를 하달합니다."
       />
 
-      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[900px_1fr] gap-5">
+      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[clamp(420px,48%,760px)_minmax(0,1fr)] gap-5">
         <section className="cd-card rounded-3xl p-3 cd-reveal delay-1 flex flex-col min-h-0">
           {/* 부서 태그 */}
           <div className="flex flex-wrap gap-1.5 px-1 mb-3">

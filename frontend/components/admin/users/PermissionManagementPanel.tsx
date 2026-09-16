@@ -105,10 +105,10 @@ function PermIcon({ className, color }: { className?: string; color?: string }) 
 }
 
 /** 세부 권한 태그 — 흰색 카드 위에서 구분되도록 회색(cd-surface-bg) 배경 + 테두리. */
-function TagPill({ children }: { children: React.ReactNode }) {
+function TagPill({ children, fit }: { children: React.ReactNode; fit?: boolean }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full cd-surface-bg border cd-border-c px-2.5 py-0.5 text-[11px] font-semibold cd-text-muted whitespace-nowrap shrink-0">
-      {children}
+    <span className={cn("inline-flex items-center gap-1 rounded-full cd-surface-bg border cd-border-c px-2.5 py-0.5 text-[11px] font-semibold cd-text-muted whitespace-nowrap", fit ? "min-w-0 shrink" : "shrink-0")}>
+      {fit ? <span className="truncate">{children}</span> : children}
     </span>
   );
 }
@@ -326,7 +326,7 @@ function TemplateCard({
 
       <div className="flex flex-nowrap items-center gap-1.5 mt-3 overflow-hidden min-h-[1.75rem]">
         {shown.map((grant) => (
-          <TagPill key={grant.grantId}>{permissionLabel(grant.permissionKey)}</TagPill>
+          <TagPill key={grant.grantId} fit>{permissionLabel(grant.permissionKey)}</TagPill>
         ))}
         {extra > 0 && <TagPill>+{extra}</TagPill>}
       </div>

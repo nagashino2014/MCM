@@ -387,3 +387,24 @@ export async function uploadAgencyReportPdf(
   if (r.status < 200 || r.status >= 300) throw new Error(r.body?.error ?? `신고서 첨부 실패 (HTTP ${r.status})`);
   return { delivery: r.body?.delivery ?? null };
 }
+
+/**
+ * 직인 이미지 준비 — 설치 모드는 저장소가 없어 MCM 에서 받아 데이터 폴더에 캐시한다(7일마다 새로 받음).
+ * 회사 직인은 설치 패키지에 넣지 않는다(패키지가 밖으로 돌면 직인도 함께 돈다).
+ */
+export async function ensureSealImage(target: string): Promise<boolean> {
+  try {
+    const fresh = fs.existsSync(target) && Date.now() - fs.statSync(target).mtimeMs < 7 * 24 * 3600 * 1000;
+    if (fresh) return true;
+    const auth = await withAuth();
+    const res = await fetch(`${auth.baseUrl}/letter/stamp.png`, { headers: { Authorization: `Bearer ${auth.accessToken}` } });
+    if (!res.ok) return fs.existsSync(target);
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.subarray(1, 4).toString("latin1") !== "PNG") return fs.existsSync(target);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, buf);
+    return true;
+  } catch {
+    return fs.existsSync(target);
+  }
+}

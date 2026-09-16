@@ -1,16 +1,34 @@
 /**
  * 대외 신고 보조 도구 — 설정·경로.
  *
- * 산출물(브라우저 프로필·쿠키·MCM 토큰·설정)은 전부 `data/filings/` 아래(git 제외).
- * 사이트 URL·자동 채우기 셀렉터는 `data/filings/config.json` 으로 덮어쓸 수 있다 — 기본값은 아래 DEFAULT_CONFIG.
+ * 두 가지 모드로 돈다.
+ * - 저장소 모드(개발 PC): 산출물(브라우저 프로필·쿠키·MCM 토큰·설정)은 `data/filings/` 아래(git 제외).
+ * - 설치 모드(담당자 PC, 설치 패키지): 저장소가 없으므로 `%LOCALAPPDATA%\MCM\filings\` 에 둔다 — 재설치해도 로그인이 남는다.
+ * 사이트 URL·자동 채우기 셀렉터는 `<데이터 폴더>/config.json` 으로 덮어쓸 수 있다 — 기본값은 아래 DEFAULT_CONFIG.
  * IEPS 두 화면은 실측(2026-09-08)으로 `fill` 매핑·URL 이 들어 있다. ETIS 는 실측 전 — `open` 패널의 [폼 덤프] 로 채운다.
  */
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 const SCRAPER_ROOT = path.resolve(__dirname, "..", "..");
 export const MCM_ROOT = path.resolve(SCRAPER_ROOT, "..");
-export const FILINGS_DIR = path.join(MCM_ROOT, "data", "filings");
+
+/** 저장소 안에서 도는지 — 설치 패키지는 번들 한 파일이라 위 경로에 저장소가 없다 */
+export const IS_REPO_MODE =
+  process.env.MCM_FILINGS_PACKAGED !== "1" && fs.existsSync(path.join(MCM_ROOT, "scraper", "lib", "filings", "config.ts"));
+
+export const FILINGS_DIR =
+  process.env.MCM_FILINGS_HOME ||
+  (IS_REPO_MODE
+    ? path.join(MCM_ROOT, "data", "filings")
+    : path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local"), "MCM", "filings"));
+
+/** 설치 모드의 MCM 주소 기본값 — 저장소 모드는 로컬 개발 서버 */
+export const DEFAULT_MCM_BASE_URL = process.env.MCM_BASE_URL || (IS_REPO_MODE ? "http://localhost:3000" : "https://koensain.app");
+
+/** 직인 이미지 — 저장소 모드는 저장소 파일, 설치 모드는 MCM 에서 받아 데이터 폴더에 둔 캐시(ensureSealImage) */
+export const SEAL_CACHE_PATH = path.join(FILINGS_DIR, "stamp.png");
 
 export type FilingSite = "ieps" | "etis";
 export type FilingKind = "ieps_staff" | "ieps_agency" | "etis_career";
@@ -131,7 +149,7 @@ const IEPS_AGENCY_URL = "https://ieps.nier.go.kr/web/issPrc/agencyPerMgt/contrac
 const IEPS_STAFF_URL = "https://ieps.nier.go.kr/web/issPrc/agencyPerMgt/appForm/?pMENUMST_ID=580&CNCL_CD=9HttNb21&REQST_SN=12";
 
 export const DEFAULT_CONFIG: FilingsConfig = {
-  mcmBaseUrl: process.env.MCM_BASE_URL || "http://localhost:3000",
+  mcmBaseUrl: DEFAULT_MCM_BASE_URL,
   sites: {
     ieps: {
       label: "통합환경허가시스템",
@@ -174,7 +192,9 @@ export const DEFAULT_CONFIG: FilingsConfig = {
     ieps_agency: { "주 계약자": "주식회사 한국환경안전연구원", "통합허가대행업 등록번호": "제044호" },
   },
   attachments: {
-    sealPath: process.env.FILINGS_SEAL_PATH || path.join(MCM_ROOT, "frontend", "public", "letter", "stamp.png"),
+    sealPath:
+      process.env.FILINGS_SEAL_PATH ||
+      (IS_REPO_MODE ? path.join(MCM_ROOT, "frontend", "public", "letter", "stamp.png") : SEAL_CACHE_PATH),
     sealField: "#SEAL_FILE_NM",
     docField: "#fileNm",
     browseButton: 'input[value="찾아보기"], button:has-text("찾아보기"), a:has-text("찾아보기"), label:has-text("찾아보기")',

@@ -13,6 +13,8 @@
  *   npm run filings -- probe --site ieps [--url <화면 URL>]       신고 화면의 입력 요소 덤프(자동 채우기 셀렉터 확보)
  *   npm run filings -- done <filingId> [--receipt <접수번호>] [--date YYYY-MM-DD]   제출 완료 표시(패널 없이)
  *   npm run filings -- config                                    설정 파일 경로·현재 값
+ *   npm run filings -- handle-url "mcm-filings://open?id=<filingId>"   앱의 [신고 보조 열기] 링크 처리(설치 패키지가 등록)
+ *   npm run filings -- version                                   도구 버전
  *
  * 권장 순서: mcm-login → login --site ieps → check → open --kind ieps_staff → (제출 후 패널의 [제출 완료])
  *
@@ -22,8 +24,8 @@
  * - IEPS 세션은 약 1시간 — 만료되면 `login --site ieps` 를 다시 실행한다.
  */
 import { runAssist } from "../lib/filings/assist";
-import { DEFAULT_CONFIG, FilingKind, FilingSite, KIND_LABEL, configFile, ensureConfigFile, loadConfig } from "../lib/filings/config";
-import { authFile, hasMcmAuth, listPendingFilings, markFiling, mcmBaseUrl, mcmLogin, promptLine, promptSecret } from "../lib/filings/mcm-api";
+import { DEFAULT_CONFIG, FILINGS_DIR, FilingKind, FilingSite, IS_REPO_MODE, KIND_LABEL, KIND_SITE, configFile, ensureConfigFile, loadConfig } from "../lib/filings/config";
+import { authFile, getFiling, hasMcmAuth, listPendingFilings, markFiling, mcmBaseUrl, mcmLogin, promptLine, promptSecret } from "../lib/filings/mcm-api";
 import { runProbe } from "../lib/filings/probe";
 import { checkSession, hasSession, interactiveLogin } from "../lib/filings/session";
 
@@ -69,7 +71,34 @@ function usage(): void {
   npm run filings -- open --kind <종류> | --id <filingId>
   npm run filings -- probe --site <사이트> [--url <URL>]
   npm run filings -- done <filingId> [--receipt <접수번호>] [--date YYYY-MM-DD]
-  npm run filings -- config`);
+  npm run filings -- config
+  npm run filings -- handle-url "mcm-filings://open?id=<filingId>"
+  npm run filings -- version`);
+}
+
+/** 빌드 스크립트가 버전을 넣는다(저장소 실행은 dev) */
+declare const __FILINGS_VERSION__: string | undefined;
+const FILINGS_VERSION = typeof __FILINGS_VERSION__ === "string" ? __FILINGS_VERSION__ : "dev";
+
+/**
+ * mcm-filings:// 링크 해석 — 웹 페이지가 넘긴 문자열이므로 모양을 엄격히 검사한다.
+ * 허용: mcm-filings://open?id=rf-… | mcm-filings://open?kind=ieps_agency
+ */
+function parseFilingsLink(raw: string): { id: string | null; kind: FilingKind | null } {
+  let u: URL;
+  try {
+    u = new URL(raw.trim());
+  } catch {
+    throw new Error(`신고 보조 링크를 읽지 못했습니다: ${raw.slice(0, 80)}`);
+  }
+  const action = (u.hostname || u.pathname.replace(/^\/+/, "")).replace(/\/+$/, "");
+  if (u.protocol !== "mcm-filings:" || action !== "open") throw new Error("지원하지 않는 신고 보조 링크입니다.");
+  const id = u.searchParams.get("id");
+  const kind = u.searchParams.get("kind");
+  if (id && !/^rf-[a-z0-9]{6,40}$/i.test(id)) throw new Error("신고 항목 번호가 올바르지 않습니다.");
+  if (kind && !KINDS.includes(kind as FilingKind)) throw new Error("신고 종류가 올바르지 않습니다.");
+  if (!id && !kind) throw new Error("열 신고 항목이 없습니다.");
+  return { id: id ?? null, kind: (kind as FilingKind | null) ?? null };
 }
 
 async function main(): Promise<void> {
@@ -130,6 +159,43 @@ async function main(): Promise<void> {
       if (!id) throw new Error("filingId 가 필요합니다.");
       const row = await markFiling(id, { status: "submitted", receiptNo: args.receipt || null, submittedAt: args.date || null });
       console.log(`[filings] ${row.title} → 제출 완료 기록`);
+      return;
+    }
+    case "version": {
+      console.log(`MCM 신고 보조 ${FILINGS_VERSION} (${IS_REPO_MODE ? "저장소" : "설치"} 모드 · 데이터 ${FILINGS_DIR})`);
+      return;
+    }
+    case "handle-url": {
+      // 앱의 [신고 보조 열기] → mcm-filings:// 링크 → 설치 패키지가 등록한 이 명령. 콘솔 창에서 돈다.
+      process.title = "MCM 신고 보조";
+      // 사람은 브라우저를 보고 있어 콘솔의 y/n 에 답하지 못한다 — 사이트 확인창은 확인으로 잇는다(session.ts)
+      process.env.FILINGS_AUTO_CONFIRM = "1";
+      try {
+        const link = parseFilingsLink(args.positional[0] ?? "");
+        console.log(`[filings] MCM 신고 보조 ${FILINGS_VERSION} — ${link.id ? `신고 항목 ${link.id}` : `${KIND_LABEL[link.kind as FilingKind]} 전체`}`);
+        if (!hasMcmAuth()) {
+          const base = mcmBaseUrl() || cfg.mcmBaseUrl;
+          console.log(`[filings] 처음 사용합니다 — MCM(${base}) 계정으로 로그인하세요(비밀번호는 저장하지 않습니다).`);
+          const identifier = await promptLine("사번 또는 이메일: ");
+          const password = await promptSecret("비밀번호: ");
+          const auth = await mcmLogin(base, identifier, password);
+          console.log(`[filings] MCM 로그인: ${auth.user?.name ?? identifier}`);
+        }
+        const kind: FilingKind = link.kind ?? (await getFiling(link.id as string)).filingKind;
+        const site = KIND_SITE[kind];
+        const siteCfg = cfg.sites[site];
+        const alive = hasSession(site) && (await checkSession(site, siteCfg));
+        if (!alive) {
+          console.log(`[filings] ${siteCfg.label} 로그인이 필요합니다 — 뜨는 창에서 로그인(문자인증)한 뒤 창을 닫으면 신고 화면이 열립니다.`);
+          const ok = await interactiveLogin(site, siteCfg);
+          if (!ok) throw new Error("로그인이 끝나지 않았습니다 — 앱에서 [신고 보조 열기] 를 다시 누르세요.");
+        }
+        await runAssist({ cfg, kind: link.id ? undefined : kind, filingId: link.id ?? undefined });
+      } catch (err) {
+        console.error(`[filings] 오류: ${err instanceof Error ? err.message : String(err)}`);
+        await promptLine("Enter 를 누르면 이 창이 닫힙니다.").catch(() => {});
+        process.exit(1);
+      }
       return;
     }
     case "config": {

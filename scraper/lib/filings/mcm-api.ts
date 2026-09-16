@@ -30,6 +30,8 @@ export interface FilingRow {
   filingId: string;
   filingKind: "ieps_staff" | "ieps_agency" | "etis_career";
   triggerKind: string;
+  /** 계약 건이면 계약 id — 대행업무 기간 수정에 쓴다 */
+  contractId?: string | null;
   title: string;
   subtitle: string | null;
   occurredOn: string;
@@ -284,6 +286,18 @@ export async function listPendingFilings(kind?: string): Promise<FilingRow[]> {
   const qs = new URLSearchParams({ status: "pending", kind: kind || "all" });
   const body = await api<{ filings: FilingRow[] }>(`/api/filings?${qs.toString()}`);
   return body.filings;
+}
+
+/**
+ * 계약의 용역 기간 저장 — 대행업무 기간을 패널에서 고쳤을 때. 계약서에 종료일이 없어 규칙으로 산정한 값을
+ * 실제 신고값으로 확정하는 용도라, 계약의 착수일·종료일을 그대로 갱신한다(대기열 양식도 이 값으로 다시 만들어진다).
+ */
+export async function patchContractPeriod(contractId: string, startedAt: string, endedAt: string): Promise<void> {
+  await api(`/api/contracts/${encodeURIComponent(contractId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ startedAt, endedAt }),
+  });
 }
 
 export async function getFiling(filingId: string): Promise<FilingRow> {

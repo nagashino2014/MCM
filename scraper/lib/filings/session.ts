@@ -46,6 +46,7 @@ export function installDialogHandler(
       // headless 세션 확인(check) 처럼 사람이 없는 실행 — 알림은 기록만, 확인 창은 취소로 닫는다
       if (!interactive) {
         console.log(`[${site}] 사이트 팝업(${type}): ${msg}`);
+        onNotice?.(msg);
         if (type === "alert") await dialog.accept();
         else await dialog.dismiss();
         return;
@@ -58,12 +59,27 @@ export function installDialogHandler(
       }
       if (type === "confirm") {
         console.log(`[${site}] ❓ 사이트 확인 창: ${msg}`);
+        // 확인 창이 떠 있는 동안 페이지 스크립트는 멈춘다. 터미널을 볼 수 없는 실행(백그라운드·도구 실행)에서
+        // 사람 답을 기다리면 "저장하시겠습니까?" 에서 영영 멈춰 저장이 끝나지 않는다(2026-09-16 실측).
+        // 확인 창은 사람이 방금 누른 버튼 때문에 뜬 것이므로, 물어볼 수 없을 때는 확인으로 잇는다.
+        if (!process.stdin.isTTY) {
+          console.log(`[${site}]   → 터미널 입력을 받을 수 없어 [확인]으로 진행합니다.`);
+          onNotice?.(`확인 창 "${msg}" — 확인으로 진행했습니다.`);
+          await dialog.accept();
+          return;
+        }
         const answer = await promptLine(`[${site}]   → 확인은 y, 취소는 n 입력 후 Enter: `);
         if (/^y/i.test(answer)) await dialog.accept();
         else await dialog.dismiss();
         return;
       }
       console.log(`[${site}] ✏ 사이트 입력 창: ${msg}`);
+      if (!process.stdin.isTTY) {
+        console.log(`[${site}]   → 터미널 입력을 받을 수 없어 취소로 닫습니다.`);
+        onNotice?.(`입력 창 "${msg}" — 값을 넣지 못해 취소했습니다. 화면에서 직접 입력하세요.`);
+        await dialog.dismiss();
+        return;
+      }
       const value = await promptLine(`[${site}]   → 입력값(비우고 Enter 면 취소): `);
       if (value) await dialog.accept(value);
       else await dialog.dismiss();
@@ -175,17 +191,40 @@ export async function interactiveLogin(site: FilingSite, cfg: SiteConfig): Promi
   }
 }
 
-/** 저장된 세션이 살아 있는지 — 로그인 필요 페이지가 로그인 화면으로 튕기는지 본다(headless). */
+/**
+ * 저장된 세션이 살아 있는지(headless).
+ *
+ * URL 만 보면 안 된다 — IEPS 는 세션이 끊기면 "60분 동안 반응이 없어 자동 로그아웃 되었습니다" 알림을 띄우고
+ * 로그인 화면이 아니라 메인(/web/main)으로 보낸다(2026-09-16 실측). 그래서 세 가지를 함께 본다.
+ *  ① 만료 알림 팝업 ② 로그인 화면으로 튕겼는지(URL 패턴) ③ 신고 화면의 특징 요소(checkSelector)가 실제로 있는지.
+ */
 export async function checkSession(site: FilingSite, cfg: SiteConfig): Promise<boolean> {
-  const { context, close } = await openContext(site, { headless: true });
+  let loggedOutNotice = "";
+  const { context, close } = await openContext(site, {
+    headless: true,
+    onNotice: (text) => {
+      if (/로그아웃|로그인\s*(후|하|해)|세션/.test(text)) loggedOutNotice = text.replace(/\s+/g, " ").trim();
+    },
+  });
   try {
     const page = context.pages()[0] || (await context.newPage());
     const res = await page.goto(cfg.checkUrl, { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(1500);
     const url = page.url();
-    const out = new RegExp(cfg.loggedOutPattern, "i").test(url);
     console.log(`[${site}] 최종 URL: ${url} (HTTP ${res?.status()})`);
-    return !out;
+    if (loggedOutNotice) {
+      console.log(`[${site}] 세션 만료 알림: ${loggedOutNotice}`);
+      return false;
+    }
+    if (new RegExp(cfg.loggedOutPattern, "i").test(url)) return false;
+    if (cfg.checkSelector) {
+      const found = await page.locator(cfg.checkSelector).first().count().catch(() => 0);
+      if (!found) {
+        console.log(`[${site}] 신고 화면 요소(${cfg.checkSelector})를 찾지 못했습니다 — 로그인이 풀렸거나 화면이 바뀌었습니다.`);
+        return false;
+      }
+    }
+    return true;
   } finally {
     await close();
   }

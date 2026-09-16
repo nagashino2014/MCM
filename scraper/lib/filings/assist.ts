@@ -10,7 +10,7 @@ import { FillTarget, FilingKind, FilingsConfig, KIND_LABEL, KIND_SITE } from "./
 import fs from "node:fs";
 import path from "node:path";
 import { tmpDir } from "./config";
-import { FilingAttachment, FilingRow, downloadAttachment, getFiling, listPendingFilings, markFiling } from "./mcm-api";
+import { FilingAttachment, FilingRow, downloadAttachment, getFiling, listPendingFilings, markFiling, patchContractPeriod } from "./mcm-api";
 import { ACTION_FN, OverlayAction, OverlayData, RENDER_FN, renderOverlay } from "./overlay";
 import { dumpPage } from "./probe";
 import { openContext, snapshotCookies, waitForContextClose } from "./session";
@@ -149,6 +149,18 @@ export async function runAssist(opts: { cfg: FilingsConfig; kind?: FilingKind; f
           const result = await runSiteSearch(context, target, siteSearch, q);
           notices.push({ at: Date.now(), text: result });
         }
+      } else if (a.type === "editPeriod") {
+        // 패널에서 고친 대행업무 기간을 MCM 계약에 저장하고, 그 값으로 양식을 다시 만든다.
+        if (!cur?.contractId) {
+          notices.push({ at: Date.now(), text: "계약이 연결된 건에서만 기간을 고칠 수 있습니다." });
+        } else if (a.start > a.end) {
+          notices.push({ at: Date.now(), text: "종료일이 시작일보다 빠릅니다." });
+        } else {
+          await patchContractPeriod(cur.contractId, a.start, a.end);
+          const fresh = await getFiling(cur.filingId).catch(() => null);
+          if (fresh) items[index] = fresh;
+          notices.push({ at: Date.now(), text: `대행업무 기간을 ${a.start} ~ ${a.end} 로 저장했습니다 — [자동 채우기] 로 화면에 반영하세요.` });
+        }
       } else if (a.type === "probe") {
         // 패널이 떠 있는 바로 그 창의 현재 페이지를 덤프한다(별도 창은 같은 프로필을 못 연다)
         const target = context.pages().filter((p) => !p.isClosed()).pop();
@@ -255,56 +267,150 @@ function normalizeName(name: string): string {
 }
 
 /**
+ * 사업장명을 비교용 낱말로 쪼갠다 — "국도화학㈜ 경인사업소 제1공장" → ["국도화학", "경인사업소", "제1공장"].
+ * 첫 낱말은 회사명이라 반드시 맞아야 하고, 나머지는 겹치는 비율로 점수를 낸다.
+ */
+function nameTokens(name: string): string[] {
+  return name
+    .replace(/\(주\)|㈜|주식회사|\(유\)|유한회사|\(합\)/g, " ")
+    .split(/[\s(),·\-_/]+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 2);
+}
+
+/**
  * 사업장 검색 팝업 자동화 — 본문의 [사업장 검색] 을 눌러 팝업을 띄우고, 검색어를 넣어 검색한 뒤
  * 결과에서 사업장명이 일치하는 행을 클릭한다. 어느 단계든 못 찾으면 팝업을 열어 둔 채 사람이 잇는다.
  */
 export async function runSiteSearch(context: BrowserContext, page: Page, cfg: NonNullable<SiteConfig["siteSearch"]>, name: string): Promise<string> {
-  const keyword = searchKeyword(name);
   // 1) 팝업 열기 — 이미 열린 팝업이 있으면 그것을 쓴다
   let popup = context.pages().find((p) => !p.isClosed() && /bplcCodeNmPopup|Popup/i.test(p.url()) && p !== page) ?? null;
   if (!popup) {
-    const opener = page.locator(cfg.openButton).first();
-    if ((await opener.count()) === 0) return `사업장 검색 버튼을 찾지 못했습니다 — 직접 눌러 "${keyword}" 로 검색하세요.`;
     const waitPopup = context.waitForEvent("page", { timeout: 10_000 }).catch(() => null);
-    await opener.click().catch(() => {});
+    const opener = page.locator(cfg.openButton).first();
+    if ((await opener.count()) > 0) {
+      await opener.click().catch(() => {});
+    } else if (!(await clickByText(page, "사업장 검색"))) {
+      // IEPS 의 [사업장 검색] 은 input/button 이 아니라 onclick 을 단 요소라 셀렉터로 안 잡히는 경우가 있다(2026-09-16).
+      return `사업장 검색 버튼을 찾지 못했습니다 — 직접 눌러 "${searchKeyword(name)}" 로 검색하세요.`;
+    }
     popup = await waitPopup;
-    if (!popup) return `팝업이 열리지 않았습니다 — 직접 [사업장 검색] 을 눌러 "${keyword}" 로 검색하세요.`;
+    if (!popup) return `팝업이 열리지 않았습니다 — 직접 [사업장 검색] 을 눌러 "${searchKeyword(name)}" 로 검색하세요.`;
     await popup.waitForLoadState("domcontentloaded").catch(() => {});
   }
-  // 2) 검색어 입력 + 검색
+  if ((await popup.locator(cfg.input).first().count()) === 0) {
+    return `팝업의 검색어 칸(${cfg.input})을 찾지 못했습니다 — 직접 "${searchKeyword(name)}" 로 검색하세요.`;
+  }
+
+  // 2) 두 단계로 찾는다(2026-09-16 사용자 요청).
+  //    ① 사업장명 그대로 검색해 **이름이 그대로 일치**하는 행을 고른다.
+  //    ② 못 찾으면 회사명만으로 다시 검색해 **낱말 겹침**으로 가장 비슷한 행을 고른다
+  //       (MCM 마스터 명칭과 IEPS 등록명이 ㈜ 표기·지점 표기·띄어쓰기에서 어긋나는 경우가 있다).
+  const full = normalizeName(name) === normalizeName(searchKeyword(name)) ? "" : name.replace(/\(주\)|㈜|주식회사|\(유\)|유한회사/g, " ").replace(/\s+/g, " ").trim();
+  const passes: { keyword: string; minScore: number }[] = [];
+  if (full) passes.push({ keyword: full, minScore: 1 });
+  passes.push({ keyword: searchKeyword(name), minScore: 0.6 });
+
+  for (const pass of passes) {
+    const picked = await searchAndPick(popup, page, cfg, name, pass.keyword, pass.minScore);
+    if (picked) {
+      const how = picked.score === 1 ? "" : ` (이름이 정확히 같지는 않아 가장 비슷한 행을 골랐습니다: ${picked.text})`;
+      return `사업장 검색: "${pass.keyword}" 결과에서 "${name}" 행을 선택했습니다${how} — 본문의 사업장 명칭·소재지가 맞는지 확인하세요.`;
+    }
+  }
+  return `사업장 검색: "${passes.map((p) => p.keyword).join('" → "')}" 로 검색했지만 "${name}" 와 맞는 행을 찾지 못했습니다 — 팝업에서 직접 고르세요.`;
+}
+
+/**
+ * 팝업에서 한 번 검색하고 결과에서 가장 잘 맞는 행을 누른다. minScore 미만이면 아무것도 누르지 않는다.
+ * 점수: 이름이 그대로 들어 있으면 1, 아니면 회사명(첫 낱말)을 포함하는 행에 한해 낱말 겹침 비율.
+ */
+async function searchAndPick(
+  popup: Page,
+  page: Page,
+  cfg: NonNullable<SiteConfig["siteSearch"]>,
+  name: string,
+  keyword: string,
+  minScore: number
+): Promise<{ score: number; text: string } | null> {
   const input = popup.locator(cfg.input).first();
-  if ((await input.count()) === 0) return `팝업의 검색어 칸(${cfg.input})을 찾지 못했습니다 — 직접 "${keyword}" 로 검색하세요.`;
   await input.fill(keyword).catch(() => {});
   const submit = popup.locator(cfg.submit).first();
   if ((await submit.count()) > 0) await submit.click().catch(() => {});
   else await input.press("Enter").catch(() => {});
   await popup.waitForLoadState("networkidle", { timeout: 8_000 }).catch(() => {});
   await popup.waitForTimeout(800);
-  // 3) 결과에서 이름 일치 행 클릭 — 정확 일치 → 정규화 일치 → 없으면 사람에게
+
   const want = normalizeName(name);
+  const tokens = nameTokens(name);
   const rows = popup.locator("table tr, li, .row");
   const n = await rows.count().catch(() => 0);
+  let best: { index: number; score: number; text: string } | null = null;
   for (let i = 0; i < Math.min(n, 200); i++) {
-    const r = rows.nth(i);
-    const text = ((await r.textContent().catch(() => "")) ?? "").trim();
+    const text = ((await rows.nth(i).textContent().catch(() => "")) ?? "").trim();
     if (!text) continue;
-    if (normalizeName(text).includes(want)) {
-      const link = r.locator("a, [onclick], button").first();
-      if ((await link.count()) > 0) await link.click().catch(() => {});
-      else await r.click().catch(() => {});
-      await page.waitForTimeout(500);
-      return `사업장 검색: "${keyword}" 결과에서 "${name}" 행을 선택했습니다 — 본문의 사업장 명칭·소재지가 채워졌는지 확인하세요.`;
+    const flat = normalizeName(text);
+    if (!flat) continue;
+    // 양방향 포함 — IEPS 등록명이 MCM 명칭보다 짧을 수도, 길 수도 있다
+    let score = flat.includes(want) || (want.length >= 4 && want.includes(flat)) ? 1 : 0;
+    if (score === 0 && tokens.length) {
+      if (!flat.includes(tokens[0])) continue; // 회사명은 반드시 맞아야 한다
+      score = tokens.filter((t) => flat.includes(t)).length / tokens.length;
+    }
+    if (score > 0 && (!best || score > best.score)) {
+      best = { index: i, score, text: text.replace(/\s+/g, " ").trim().slice(0, 60) };
     }
   }
-  return `사업장 검색: "${keyword}" 로 검색했지만 "${name}" 와 일치하는 행을 찾지 못했습니다 — 팝업에서 직접 고르세요.`;
+  if (!best || best.score < minScore) return null;
+  const row = rows.nth(best.index);
+  const link = row.locator("a, [onclick], button").first();
+  if ((await link.count()) > 0) await link.click().catch(() => {});
+  else await row.click().catch(() => {});
+  await page.waitForTimeout(500);
+  return { score: best.score, text: best.text };
+}
+
+/**
+ * 라벨 텍스트로 버튼을 찾아 누른다 — 셀렉터로 안 잡히는 요소(onclick 을 단 span·td·img)까지 훑는 폴백.
+ * 화면에 보이고 텍스트가 정확히 일치하는 것 중 가장 안쪽 요소를 누른다(조상까지 함께 잡히는 것을 피한다).
+ */
+async function clickByText(page: Page, label: string): Promise<boolean> {
+  return page
+    .evaluate((want) => {
+      const flat = (s: string) => s.replace(/\s+/g, "");
+      const target = flat(want);
+      const nodes = Array.from(
+        document.querySelectorAll<HTMLElement>("a, button, input, span, td, th, label, img, div, li")
+      ).filter((el) => {
+        if (!el.getClientRects().length) return false;
+        const text =
+          el.tagName === "INPUT"
+            ? (el as HTMLInputElement).value
+            : el.getAttribute("alt") || el.getAttribute("title") || el.textContent || "";
+        return flat(text) === target;
+      });
+      if (!nodes.length) return false;
+      // 가장 안쪽(자식 수가 적은) 요소 — 조상 div 가 아니라 실제 버튼을 누르기 위해
+      nodes.sort((a, b) => a.getElementsByTagName("*").length - b.getElementsByTagName("*").length);
+      nodes[0].click();
+      return true;
+    }, label)
+    .catch(() => false);
 }
 
 function watchLogout(context: BrowserContext, pattern: string, site: string): void {
   const re = new RegExp(pattern, "i");
   const hook = (p: Page) =>
     p.on("framenavigated", (fr) => {
-      if (fr === p.mainFrame() && re.test(fr.url()))
-        console.log(`[${site}] ⚠ 로그인 페이지로 이동했습니다 — 세션이 끝났으면 창에서 다시 로그인하세요(쿠키는 계속 저장됩니다).`);
+      if (fr !== p.mainFrame() || !re.test(fr.url())) return;
+      // 사업장 검색 팝업(/web/mypage/memberjoin/bplcCodeNmPopup)처럼 경로에 member 가 든 창은 로그아웃이 아니다.
+      void p
+        .opener()
+        .then((opener) => {
+          if (opener) return;
+          console.log(`[${site}] ⚠ 로그인 페이지로 이동했습니다 — 세션이 끝났으면 창에서 다시 로그인하세요(쿠키는 계속 저장됩니다).`);
+        })
+        .catch(() => {});
     });
   context.pages().forEach(hook);
   context.on("page", hook);

@@ -215,11 +215,12 @@ export function renderOverlay(data: OverlayData): void {
       #${ID} .hd { display:flex; align-items:center; gap:8px; padding:10px 12px; background:#5D87FF; color:#fff; cursor:pointer; }
       #${ID} .hd b { font-size:13px; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
       #${ID} .hd small { opacity:.85; }
-      #${ID} .meta { padding:8px 12px; border-bottom:1px solid #e5eaef; color:#5a6a85; font-size:12px; overflow-wrap:anywhere; }
+      #${ID} .meta { padding:8px 30px; border-bottom:1px solid #e5eaef; color:#5a6a85; font-size:12px; overflow-wrap:anywhere; }
       #${ID} .meta b { color:#2a3547; }
       #${ID} .list { overflow-y:auto; overflow-x:hidden; flex:1; }
       /* 라벨·값 칸은 minmax(0, …) 로 두어 긴 내용이 패널 밖으로 밀려나지(가로 스크롤) 않게 한다 */
-      #${ID} .row { display:grid; grid-template-columns: minmax(0, 170px) minmax(0, 1fr) auto auto; gap:8px; align-items:center; padding:6px 14px; border-bottom:1px solid #f1f4f8; }
+      /* .row 는 사이트(Bootstrap)의 .row { margin: 0 -15px } 와 이름이 겹쳐 행이 양옆으로 끌려나갔다 — 여백을 명시로 되돌린다 */
+      #${ID} .row { display:grid; grid-template-columns: minmax(0, 170px) minmax(0, 1fr) auto auto; gap:8px; align-items:center; margin:0 !important; padding:6px 30px; border-bottom:1px solid #f1f4f8; }
       #${ID} .row .lb { color:#5a6a85; font-size:12px; word-break:keep-all; overflow-wrap:anywhere; }
       #${ID} .row .vl { min-width:0; overflow-wrap:anywhere; word-break:break-all; cursor:pointer; }
       #${ID} .row button { white-space:nowrap; }
@@ -230,13 +231,13 @@ export function renderOverlay(data: OverlayData): void {
       #${ID} button.pri { background:#5D87FF; border-color:#5D87FF; color:#fff; }
       #${ID} button.pri:hover { background:#4570ea; }
       #${ID} button.warn { border-color:#fa896b; color:#fa896b; background:#fff; }
-      #${ID} .ft { display:flex; gap:6px; padding:10px 12px; border-top:1px solid #e5eaef; background:#f8fafc; flex-wrap:wrap; }
-      #${ID} .rec { display:flex; align-items:center; gap:8px; padding:8px 14px; border-top:1px solid #e5eaef; background:#eef4ff; }
+      #${ID} .ft { display:flex; gap:6px; padding:10px 30px; border-top:1px solid #e5eaef; background:#f8fafc; flex-wrap:wrap; }
+      #${ID} .rec { display:flex; align-items:center; gap:8px; padding:8px 30px; border-top:1px solid #e5eaef; background:#eef4ff; }
       #${ID} .rec span { color:#5a6a85; font-size:12px; white-space:nowrap; }
       #${ID} .rec input { flex:1; min-width:0; border:1px solid #d9e0ea; border-radius:8px; padding:4px 8px; font-size:12px; }
       #${ID} .ft .sp { flex:1; }
       #${ID}.collapsed .meta, #${ID}.collapsed .list, #${ID}.collapsed .ft { display:none; }
-      #${ID} .nt { display:flex; align-items:flex-start; gap:8px; padding:8px 12px; background:#fff8e1; color:#7a5a00; border-bottom:1px solid #f5e6b8; font-size:12px; }
+      #${ID} .nt { display:flex; align-items:flex-start; gap:8px; padding:8px 30px; background:#fff8e1; color:#7a5a00; border-bottom:1px solid #f5e6b8; font-size:12px; }
       #${ID} .nt span { flex:1; white-space:pre-wrap; word-break:break-all; }
       #${ID} .nt button { padding:0 6px; }
     `;

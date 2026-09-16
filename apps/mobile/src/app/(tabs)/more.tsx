@@ -48,6 +48,14 @@ export default function MoreScreen() {
           subtitle: '결재함·기안',
           onPress: () => router.push('/(tabs)/approval'),
         },
+        // 사내 설문(참여) — 외부 설문·배포 이미지는 웹 전용이라 넣지 않는다.
+        {
+          icon: 'clipboard-outline',
+          tone: c.warning,
+          title: '설문',
+          subtitle: '사내 설문 참여',
+          onPress: () => router.push('/surveys'),
+        },
       ],
     },
     {

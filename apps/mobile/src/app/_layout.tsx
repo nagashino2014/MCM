@@ -110,6 +110,9 @@ function RootNavigator() {
         <Stack.Screen name="leave" />
         <Stack.Screen name="attendance" options={{ ...header, title: '내 근태' }} />
         <Stack.Screen name="bids" options={{ ...header, title: '공공입찰' }} />
+        {/* 사내 설문(참여) — 목록·응답 모두 자체 헤더를 그린다 */}
+        <Stack.Screen name="surveys" />
+        <Stack.Screen name="survey/[surveyId]" />
       </Stack>
     </>
   );

@@ -129,6 +129,18 @@ export const MENU_ITEMS: MenuItem[] = [
     ],
     group: "collab",
   },
+  // 설문 — 사내 설문(앱 내부 응답 수집) · 외부 설문(구글 폼 링크 + QR 배포 이미지). 마이그 246, survey.*.
+  // 사내 설문은 전 직원이 참여하므로 minRole 을 두지 않고, 작성·집계는 화면에서 survey.manage 로 가른다.
+  {
+    title: "설문",
+    href: "/survey/internal",
+    icon: ClipboardCheck,
+    submenu: [
+      { title: "사내 설문", href: "/survey/internal" },
+      { title: "외부 설문", href: "/survey/external", minRole: "editor" },
+    ],
+    group: "collab",
+  },
   // ── 업무 ──────────────────────────────────────────
   {
     title: "업무추진계획",

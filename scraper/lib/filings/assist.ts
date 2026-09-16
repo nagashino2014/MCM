@@ -119,12 +119,21 @@ export async function runAssist(opts: { cfg: FilingsConfig; kind?: FilingKind; f
     }
   };
 
+  /**
+   * 신고서 본 화면 — 첨부·사업장 검색의 대상. "마지막에 열린 창"을 쓰면 사업장 검색 팝업이 떠 있을 때
+   * 팝업 자신을 본 화면으로 착각한다(2026-09-16). 팝업이 아닌 창 중 마지막 것을 고른다.
+   */
+  const mainPage = (): Page | undefined => {
+    const open = context.pages().filter((p) => !p.isClosed());
+    return open.filter((p) => !/popup/i.test(p.url())).pop() ?? open.pop();
+  };
+
   await context.exposeFunction(DATA_FN, () => current());
   await context.exposeFunction(ACTION_FN, async (a: OverlayAction) => {
     try {
       const cur = items[index];
       if (a.type === "attachSeal" || a.type === "attachDocs") {
-        const target = context.pages().filter((p) => !p.isClosed()).pop();
+        const target = mainPage();
         if (target && attCfg) {
           if (a.type === "attachSeal") {
             notices.push({ at: Date.now(), text: await attachFile(target, attCfg.sealField, attCfg.sealPath, attCfg.browseButton, attCfg.saveButton) });
@@ -144,9 +153,10 @@ export async function runAssist(opts: { cfg: FilingsConfig; kind?: FilingKind; f
         }
       } else if (a.type === "siteSearch") {
         const q = searchQueryOf(cur);
-        const target = context.pages().filter((p) => !p.isClosed()).pop();
+        const target = mainPage();
         if (q && target && siteSearch) {
           const result = await runSiteSearch(context, target, siteSearch, q);
+          console.log(`[filings] ${result}`);
           notices.push({ at: Date.now(), text: result });
         }
       } else if (a.type === "editPeriod") {
@@ -325,6 +335,46 @@ export async function runSiteSearch(context: BrowserContext, page: Page, cfg: No
  * 팝업에서 한 번 검색하고 결과에서 가장 잘 맞는 행을 누른다. minScore 미만이면 아무것도 누르지 않는다.
  * 점수: 이름이 그대로 들어 있으면 1, 아니면 회사명(첫 낱말)을 포함하는 행에 한해 낱말 겹침 비율.
  */
+/** 결과 영역의 현재 글자 — 검색 전후 비교용. 페이지가 바뀌는 중이면 빈 문자열. */
+async function resultText(popup: Page): Promise<string> {
+  return popup
+    .evaluate(() => Array.from(document.querySelectorAll("table tbody tr, table tr")).map((r) => r.textContent ?? "").join("|"))
+    .catch(() => "");
+}
+
+/**
+ * 팝업에 검색어를 넣고 조회한 뒤 **결과가 실제로 바뀔 때까지** 기다린다.
+ *
+ * IEPS 사업장 검색의 [조회] 는 페이지를 새로 불러온다. 로드 시작 직후를 "끝났다"고 보면, 아직 이전 화면에서
+ * 결과를 읽고 다음 검색어를 곧 사라질 입력칸에 넣게 된다 — 두 번째 검색이 증발하고 첫 검색의
+ * "자료가 없습니다" 화면만 남던 원인(2026-09-16 익산지점). 새 문서 로드와 같은 문서 안의 결과 갱신 중
+ * 먼저 오는 쪽을 기다린다(최대 8초).
+ */
+async function submitSearch(popup: Page, cfg: NonNullable<SiteConfig["siteSearch"]>, keyword: string): Promise<void> {
+  const input = popup.locator(cfg.input).first();
+  await input.waitFor({ state: "visible", timeout: 8_000 }).catch(() => {});
+  await input.fill(keyword).catch(() => {});
+  const before = await resultText(popup);
+  const navigated = popup
+    .waitForNavigation({ waitUntil: "domcontentloaded", timeout: 8_000 })
+    .then(() => true)
+    .catch(() => false);
+  const submit = popup.locator(cfg.submit).first();
+  if ((await submit.count()) > 0) await submit.click().catch(() => {});
+  else await input.press("Enter").catch(() => {});
+  const changed = (async () => {
+    for (let i = 0; i < 40; i++) {
+      await popup.waitForTimeout(200);
+      const now = await resultText(popup);
+      if (now && now !== before) return true;
+    }
+    return false;
+  })();
+  await Promise.race([navigated, changed]);
+  await popup.waitForLoadState("domcontentloaded").catch(() => {});
+  await popup.waitForTimeout(400);
+}
+
 async function searchAndPick(
   popup: Page,
   page: Page,
@@ -333,13 +383,7 @@ async function searchAndPick(
   keyword: string,
   minScore: number
 ): Promise<{ score: number; text: string } | null> {
-  const input = popup.locator(cfg.input).first();
-  await input.fill(keyword).catch(() => {});
-  const submit = popup.locator(cfg.submit).first();
-  if ((await submit.count()) > 0) await submit.click().catch(() => {});
-  else await input.press("Enter").catch(() => {});
-  await popup.waitForLoadState("networkidle", { timeout: 8_000 }).catch(() => {});
-  await popup.waitForTimeout(800);
+  await submitSearch(popup, cfg, keyword);
 
   const want = normalizeName(name);
   const tokens = nameTokens(name);

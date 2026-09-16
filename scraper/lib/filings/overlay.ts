@@ -236,7 +236,7 @@ export function renderOverlay(data: OverlayData): void {
       #${ID} .rec span { color:#5a6a85; font-size:12px; white-space:nowrap; }
       #${ID} .rec input { flex:1; min-width:0; border:1px solid #d9e0ea; border-radius:8px; padding:4px 8px; font-size:12px; }
       #${ID} .ft .sp { flex:1; }
-      #${ID}.collapsed .meta, #${ID}.collapsed .list, #${ID}.collapsed .ft { display:none; }
+      #${ID}.collapsed .meta, #${ID}.collapsed .list, #${ID}.collapsed .ft, #${ID}.collapsed .rec { display:none; }
       #${ID} .nt { display:flex; align-items:flex-start; gap:8px; padding:8px 30px; background:#fff8e1; color:#7a5a00; border-bottom:1px solid #f5e6b8; font-size:12px; }
       #${ID} .nt span { flex:1; white-space:pre-wrap; word-break:break-all; }
       #${ID} .nt button { padding:0 6px; }
@@ -337,7 +337,8 @@ export function renderOverlay(data: OverlayData): void {
      */
     const startField = data.fields.find((f) => f.label === "대행업무 시작일");
     const endField = data.fields.find((f) => f.label === "대행업무 종료일");
-    if (startField && endField) {
+    // 사업장 검색 같은 팝업에서는 기간을 고칠 일이 없다 — 좁은 폭에 찌그러지므로 그리지 않는다
+    if (startField && endField && !popup) {
       const bar = document.createElement("div");
       bar.className = "rec";
       const label = document.createElement("span");

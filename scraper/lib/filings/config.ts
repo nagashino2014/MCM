@@ -146,7 +146,8 @@ export const DEFAULT_CONFIG: FilingsConfig = {
         queryLabel: "대행사업장 명칭",
         openButton: 'input[value="사업장 검색"], button:has-text("사업장 검색"), a:has-text("사업장 검색")',
         input: "#file",
-        submit: 'input[value="검색"], button:has-text("검색"), a:has-text("검색"), img[alt="검색"]',
+        // 실제 버튼 글자는 "조회"(2026-09-16 실측) — "검색"은 다른 화면 대비로 남긴다
+        submit: 'input[value="조회"], button:has-text("조회"), a:has-text("조회"), input[value="검색"], button:has-text("검색"), a:has-text("검색"), img[alt="검색"]',
       },
     },
     etis: {

@@ -13,14 +13,17 @@ export default function ContractStaffingModal({
   currentDeptId,
   onClose,
   onSaved,
+  initialTab = "process",
 }: {
   contractId: string;
   serviceType: string;
   currentDeptId: string;
   onClose: () => void;
   onSaved?: () => void;
+  /** 처음 열 탭 — 실적보고서 발송을 위해 실무자를 지정하러 올 때는 수행인력 탭으로 연다 */
+  initialTab?: "process" | "staffing" | "changes";
 }) {
-  const [tab, setTab] = useState<"process" | "staffing" | "changes">("process");
+  const [tab, setTab] = useState<"process" | "staffing" | "changes">(initialTab);
   const [departments, setDepartments] = useState<{ deptId: string; deptName: string }[]>([]);
   const [deptId, setDeptId] = useState(currentDeptId ?? "");
 

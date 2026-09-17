@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Calculator, ExternalLink, FileText, Save, Send } from "lucide-react";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { CdTabs } from "@/components/cdash/CdTabs";
 import OrganizationTree from "@/components/admin/users/OrganizationTree";
 import type { OrganizationEmployeeRow, OrganizationSnapshot } from "@/components/admin/users/types";
 import {
@@ -489,28 +490,15 @@ export default function BonusStatementsBoard() {
         {/* 우측 탭 카드 */}
         <section className="cd-card rounded-3xl p-4 cd-reveal delay-1 flex-1 min-h-0 flex flex-col gap-3">
           <div className="flex items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              onClick={() => setTab("statements")}
-              data-active={tab === "statements"}
-              aria-pressed={tab === "statements"}
-              className={`cd-choice rounded-xl px-4 py-2 text-sm font-semibold border ${
-                tab === "statements" ? "cd-fill-primary text-white border-transparent" : "cd-border-c cd-text"
-              }`}
-            >
-              참여인력 성과 명세
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab("related")}
-              data-active={tab === "related"}
-              aria-pressed={tab === "related"}
-              className={`cd-choice rounded-xl px-4 py-2 text-sm font-semibold border ${
-                tab === "related" ? "cd-fill-primary text-white border-transparent" : "cd-border-c cd-text"
-              }`}
-            >
-              유관부서/인력 명세
-            </button>
+            {/* 페이지 탭은 공통 밑줄형(UI 기준 §4) */}
+            <CdTabs<"statements" | "related">
+              active={tab}
+              onChange={setTab}
+              items={[
+                { key: "statements", label: "참여인력 성과 명세" },
+                { key: "related", label: "유관부서/인력 명세" },
+              ]}
+            />
             {tab === "statements" && (
               <span className="inline-flex rounded-xl border cd-border-c overflow-hidden ml-2">
                 <button

@@ -752,34 +752,29 @@ export function DeliverableBoard() {
             </div>
           </div>
 
-          {/* 기재 사항 탭 */}
-          <div className="flex items-end gap-1 px-3 pt-2 border-b cd-border-c">
-            {activeTabs.map((g) => (
+          {/* 기재 사항 탭 — 페이지 탭은 공통 밑줄형(UI 기준 §4). 미리보기 탭은 오른쪽 끝 유지라 CdTabs 대신 같은 클래스를 직접 쓴다 */}
+          <div className="px-3 pt-2">
+            <div className="cd-tabs" data-variant="underline" role="tablist">
+              {activeTabs.map((g) => (
+                <button key={g} type="button" role="tab" aria-selected={tab === g} onClick={() => setTab(g)} className="cd-tab">
+                  {g}
+                </button>
+              ))}
+              {/* 탭을 누르면 저장 후 렌더까지 수행한다(별도 버튼 없이 여기서 완결) */}
               <button
-                key={g}
                 type="button"
-                onClick={() => setTab(g)}
-                className={`rounded-t-xl px-4 py-2 text-[12.5px] font-semibold border-b-2 ${
-                  tab === g ? "cd-text-primary border-current cd-tint-primary" : "cd-text-faint border-transparent"
-                }`}
+                role="tab"
+                aria-selected={tab === "미리보기"}
+                disabled={busy}
+                onClick={() => {
+                  setTab("미리보기");
+                  if (contract && !previewUrl) void preview();
+                }}
+                className="cd-tab ml-auto"
               >
-                {g}
+                <Eye className="w-3.5 h-3.5" /> 미리보기
               </button>
-            ))}
-            {/* 탭을 누르면 저장 후 렌더까지 수행한다(별도 버튼 없이 여기서 완결) */}
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                setTab("미리보기");
-                if (contract && !previewUrl) void preview();
-              }}
-              className={`ml-auto rounded-t-xl px-4 py-2 text-[12.5px] font-semibold border-b-2 flex items-center gap-1.5 disabled:opacity-50 ${
-                tab === "미리보기" ? "cd-text-primary border-current cd-tint-primary" : "cd-text-faint border-transparent"
-              }`}
-            >
-              <Eye className="w-3.5 h-3.5" /> 미리보기
-            </button>
+            </div>
           </div>
 
           <div className="flex-1 min-h-0 overflow-y-auto p-4">

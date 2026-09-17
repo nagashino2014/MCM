@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Download, Search, Table2 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { CdTabs } from "@/components/cdash/CdTabs";
 import { ApprovalDocModal, DOC_STATUS_LABEL } from "@/components/approval/ApprovalDocModal";
 import { LetterRecordsTable } from "@/components/approval/LetterRecordsTable";
 import { QuoteRecordsTable } from "@/components/approval/QuoteRecordsTable";
@@ -298,23 +299,16 @@ export function ApprovalRecordsBoard() {
       />
 
       <div className="cd-card rounded-3xl p-5 flex flex-col gap-4 min-h-0">
-        {/* 전자결재 / 발송공문 / 발송견적 탭 — work-plan 용역/Task 탭 양식(ServiceListPanel.tsx:126) */}
-        <div className="flex items-end gap-1 px-1 -mb-1">
-          {(["approval", "letters", "quotes"] as RecordsTab[]).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTab(t)}
-              data-active={tab === t}
-              aria-pressed={tab === t}
-              className={`cd-choice rounded-t-xl px-4 py-2 text-sm font-semibold border-b-2 ${
-                tab === t ? "cd-text-primary border-current cd-tint-primary" : "cd-text-faint border-transparent cd-row-hover"
-              }`}
-            >
-              {t === "approval" ? "전자결재" : t === "letters" ? "발송공문" : "발송견적"}
-            </button>
-          ))}
-        </div>
+        {/* 전자결재 / 발송공문 / 발송견적 탭 — 페이지 탭은 공통 밑줄형(UI 기준 §4) */}
+        <CdTabs<RecordsTab>
+          active={tab}
+          onChange={setTab}
+          items={[
+            { key: "approval", label: "전자결재" },
+            { key: "letters", label: "발송공문" },
+            { key: "quotes", label: "발송견적" },
+          ]}
+        />
         <div className="flex items-center gap-2 flex-wrap">
           {tab === "approval" && (
             <>

@@ -26,6 +26,7 @@ import {
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdModal } from "@/components/cdash/CdModal";
+import { CdTabs } from "@/components/cdash/CdTabs";
 import { DigitDateInput } from "@/components/finance/DigitDateInput";
 import { BAROBILL_BANKS, FinLogo, logoFileCode } from "@/components/finance/FinLogo";
 import { PaginationControls } from "@/components/ui/PaginationControls";
@@ -299,19 +300,13 @@ export function FinanceBoard() {
         <CdPageHeader title={`재무 · ${group.title}`} />
 
         {group.tabs.length > 1 && (
-          <div className="flex items-center gap-1.5 mb-4 flex-wrap">
-            {group.tabs.map(([k, label]) => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => setTab(k)}
-                className={`cd-chip ${tab === k ? "" : "cd-text-muted"}`}
-                data-active={tab === k || undefined}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          // 페이지 탭은 공통 밑줄형(UI 기준 §4)
+          <CdTabs<Tab>
+            className="mb-4"
+            active={tab}
+            onChange={setTab}
+            items={group.tabs.map(([k, label]) => ({ key: k, label }))}
+          />
         )}
 
         {tab === "connections" && <ConnectionsPanel />}

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ShieldCheck } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { CdTabs } from "@/components/cdash/CdTabs";
 import { cn } from "@/lib/utils";
 import ReportEditor, { type ReportSubject } from "@/components/work-plan/ReportEditor";
 import type { ExecReportCard } from "@/lib/work-plan/workspace";
@@ -119,21 +120,13 @@ export default function ExecWorkspace() {
             ))}
           </div>
 
-          {/* 탭 */}
-          <div className="inline-flex self-start rounded-xl border cd-border-c overflow-hidden text-xs font-semibold mb-3 ml-1">
-            {TABS.map((t) => (
-              <button
-                key={t.value}
-                type="button"
-                onClick={() => setTab(t.value)}
-                data-active={tab === t.value}
-                aria-pressed={tab === t.value}
-                className={cn("cd-choice px-3 py-1.5 border-l first:border-l-0 cd-border-c", tab === t.value ? "cd-fill-primary text-white" : "cd-text-muted")}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
+          {/* 탭 — 페이지 탭은 공통 밑줄형(UI 기준 §4) */}
+          <CdTabs<ExecTab>
+            className="mb-3 mx-1"
+            active={tab}
+            onChange={setTab}
+            items={TABS.map((t) => ({ key: t.value, label: t.label }))}
+          />
 
           <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide flex flex-col gap-2 px-1 pb-1">
             {loading ? (

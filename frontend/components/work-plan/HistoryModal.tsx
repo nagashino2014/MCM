@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { AlertTriangle, Download, History, Paperclip, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ProgressHistoryRow } from "@/lib/work-plan/workspace";
+import { CdTabs } from "@/components/cdash/CdTabs";
 
 const ISSUE_KIND_LABELS: Record<string, string> = {
   permit_condition: "허가조건 강화",
@@ -81,23 +82,15 @@ export default function HistoryModal({
           <h2 className="text-lg font-bold cd-text flex items-center gap-2">
             <History className="w-4 h-4 cd-text-primary" /> 지난 내역
           </h2>
-          <div className="inline-flex rounded-xl border cd-border-c overflow-hidden text-xs font-semibold">
-            {([
-              { value: "progress", label: "추진 내역" },
-              { value: "issues", label: "이슈 상황" },
-            ] as { value: HistoryTab; label: string }[]).map((t) => (
-              <button
-                key={t.value}
-                type="button"
-                onClick={() => setTab(t.value)}
-                data-active={tab === t.value}
-                aria-pressed={tab === t.value}
-                className={cn("cd-choice px-3 py-1.5 border-l first:border-l-0 cd-border-c", tab === t.value ? "cd-fill-primary text-white" : "cd-text-muted")}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
+          {/* 내역 전환 탭은 공통 밑줄형(UI 기준 §4) */}
+          <CdTabs<HistoryTab>
+            active={tab}
+            onChange={setTab}
+            items={[
+              { key: "progress", label: "추진 내역" },
+              { key: "issues", label: "이슈 상황" },
+            ]}
+          />
           <button type="button" onClick={onClose} className="p-1.5 rounded-lg cd-text-faint hover:cd-text" aria-label="닫기">
             <X className="w-4 h-4" />
           </button>

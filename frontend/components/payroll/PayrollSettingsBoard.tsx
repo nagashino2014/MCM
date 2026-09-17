@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Save } from "lucide-react";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { CdTabs } from "@/components/cdash/CdTabs";
 import PayrollRulesPanel from "@/components/payroll/PayrollRulesPanel";
 import PayrollTaxPanel from "@/components/payroll/PayrollTaxPanel";
 import LongevityPanel from "@/components/payroll/LongevityPanel";
@@ -125,28 +126,18 @@ export default function PayrollSettingsBoard() {
       <section className="cd-card rounded-3xl flex-1 min-h-0 flex flex-col cd-reveal">
         <div className="flex items-center justify-between px-5 pt-4 pb-3">
           <div className="flex items-center gap-3">
-            <div className="flex rounded-xl border cd-border-c overflow-hidden text-sm font-semibold">
-              {(
-                [
-                  ["items", "항목 사전"],
-                  ["rules", "수당 규칙"],
-                  ["tax", "세액 설정"],
-                  ["longevity", "장기근속 포상"],
-                  ["trip", "출장 여비"],
-                ] as const
-              ).map(([k, label]) => (
-                <button
-                  key={k}
-                  type="button"
-                  onClick={() => setTopTab(k)}
-                  data-active={topTab === k}
-                  aria-pressed={topTab === k}
-                  className={`cd-choice px-3.5 py-1.5 transition ${topTab === k ? "cd-fill-primary text-white" : "cd-text"}`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+            {/* 페이지 탭은 공통 밑줄형(UI 기준 §4) */}
+            <CdTabs<"items" | "rules" | "tax" | "longevity" | "trip">
+              active={topTab}
+              onChange={setTopTab}
+              items={[
+                { key: "items", label: "항목 사전" },
+                { key: "rules", label: "수당 규칙" },
+                { key: "tax", label: "세액 설정" },
+                { key: "longevity", label: "장기근속 포상" },
+                { key: "trip", label: "출장 여비" },
+              ]}
+            />
             {topTab === "items" && (
               <div className="flex rounded-xl border cd-border-c overflow-hidden text-sm font-semibold">
                 {(["pay", "deduction"] as const).map((k) => (

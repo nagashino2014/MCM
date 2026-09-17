@@ -189,7 +189,6 @@ export function DirectoryBoard() {
       />
 
       <CdTabs
-        variant="pill"
         items={[
           { key: "staff", label: "임직원", count: people.length || undefined },
           { key: "external", label: "외부 연락처", count: activeContacts.length || undefined },

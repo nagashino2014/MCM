@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { RefreshCw, AlertTriangle, FileText, Plus, Trash2, Upload, Loader2 } from "lucide-react";
 import { CdModal } from "@/components/cdash/CdModal";
+import { CdTabs } from "@/components/cdash/CdTabs";
 import { DigitDateInput } from "@/components/finance/DigitDateInput";
 
 export interface ReceiptPickerItem {
@@ -229,30 +230,19 @@ export function ReceiptPickerModal({
       }
     >
       <div className="space-y-3">
-        {/* 탭 — 모바일앱 첨부 / 직접 첨부 */}
-        <div className="flex rounded-xl border cd-border-c overflow-hidden text-sm font-semibold w-fit">
-          {(
-            [
-              ["mobile", "모바일앱 첨부"],
-              ["manual", "직접 첨부"],
-            ] as const
-          ).map(([k, label]) => (
-            <button
-              key={k}
-              type="button"
-              onClick={() => {
-                setTab(k);
-                setSelected(new Set());
-                setPreview(null);
-              }}
-              data-active={tab === k}
-              aria-pressed={tab === k}
-              className={`cd-choice px-3.5 py-1.5 transition ${tab === k ? "cd-fill-primary text-white" : "cd-text"}`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        {/* 탭 — 모바일앱 첨부 / 직접 첨부. 페이지 탭은 공통 밑줄형(UI 기준 §4) */}
+        <CdTabs<"mobile" | "manual">
+          active={tab}
+          onChange={(k) => {
+            setTab(k);
+            setSelected(new Set());
+            setPreview(null);
+          }}
+          items={[
+            { key: "mobile", label: "모바일앱 첨부" },
+            { key: "manual", label: "직접 첨부" },
+          ]}
+        />
 
         {tab === "manual" && (
           <div className="rounded-xl border cd-border-c px-3.5 py-3 space-y-2">

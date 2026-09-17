@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Plus, Save, Wand2, X } from "lucide-react";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdModal } from "@/components/cdash/CdModal";
+import { CdTabs } from "@/components/cdash/CdTabs";
 import OrganizationTree from "@/components/admin/users/OrganizationTree";
 import type { OrganizationEmployeeRow, OrganizationSnapshot } from "@/components/admin/users/types";
 import {
@@ -386,28 +387,15 @@ export default function BonusEvaluationsBoard() {
         {/* 우측 탭 카드 */}
         <section className="cd-card rounded-3xl p-4 cd-reveal delay-1 flex-1 min-h-0 flex flex-col gap-3">
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setTab("participation")}
-              data-active={tab === "participation"}
-              aria-pressed={tab === "participation"}
-              className={`cd-choice rounded-xl px-4 py-2 text-sm font-semibold border ${
-                tab === "participation" ? "cd-fill-primary text-white border-transparent" : "cd-border-c cd-text"
-              }`}
-            >
-              참여도
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab("grade")}
-              data-active={tab === "grade"}
-              aria-pressed={tab === "grade"}
-              className={`cd-choice rounded-xl px-4 py-2 text-sm font-semibold border ${
-                tab === "grade" ? "cd-fill-primary text-white border-transparent" : "cd-border-c cd-text"
-              }`}
-            >
-              평점
-            </button>
+            {/* 페이지 탭은 공통 밑줄형(UI 기준 §4) */}
+            <CdTabs<"participation" | "grade">
+              active={tab}
+              onChange={setTab}
+              items={[
+                { key: "participation", label: "참여도" },
+                { key: "grade", label: "평점" },
+              ]}
+            />
             <span className="ml-2 text-xs cd-text-faint">
               {periodLabel} · {BONUS_CATEGORIES.find((c) => c.key === category)?.label} {filtered.length}건
             </span>

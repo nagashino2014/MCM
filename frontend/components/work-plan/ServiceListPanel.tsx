@@ -5,6 +5,7 @@ import { RotateCcw, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { MyServiceRow, ServiceReportListRow, ReviewReportRow, ExecReportCard } from "@/lib/work-plan/workspace";
 import type { MyTaskRow } from "@/lib/work-plan/tasks";
+import { CdTabs } from "@/components/cdash/CdTabs";
 
 export type LeftTab = "service" | "task";
 type LeftMode = "progress" | "done" | "log" | "exec";
@@ -129,23 +130,15 @@ export default function ServiceListPanel({
   return (
     <section className="cd-card rounded-3xl p-3 cd-reveal delay-1 flex flex-col min-h-0">
       <div className="flex items-end justify-between gap-2 flex-wrap px-1 mb-4">
-        <div className="flex items-end gap-1">
-        {(["service", "task"] as LeftTab[]).map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => onTabChange(t)}
-            data-active={tab === t}
-            aria-pressed={tab === t}
-            className={cn(
-              "cd-choice rounded-t-xl px-4 py-2 text-sm font-semibold border-b-2",
-              tab === t ? "cd-text-primary border-current cd-tint-primary" : "cd-text-faint border-transparent cd-row-hover"
-            )}
-          >
-            {t === "service" ? "용역" : "Task"}
-          </button>
-        ))}
-        </div>
+        {/* 용역 / Task 탭 — 페이지 탭은 공통 밑줄형(UI 기준 §4) */}
+        <CdTabs<LeftTab>
+          active={tab}
+          onChange={onTabChange}
+          items={[
+            { key: "service", label: "용역" },
+            { key: "task", label: "Task" },
+          ]}
+        />
         {headerRight && <div className="flex items-center gap-2 pb-0.5">{headerRight}</div>}
       </div>
 

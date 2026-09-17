@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Play, RefreshCw, RotateCcw, Save, X } from "lucide-react";
 import type { IntelCollectSettings, IntelIndustryItem } from "@/lib/intel/intel-settings";
 import { INTEGRATED_PERMIT_INDUSTRIES } from "@/lib/ieps/integrated-permit-industries";
+import { CdTabs } from "@/components/cdash/CdTabs";
 
 // press-client.ts 의 PRESS_SOURCE_LABELS 와 동일 — 해당 모듈은 undici(node 전용) 의존이라
 // 클라이언트 번들에서 import 할 수 없어 라벨만 복제한다.
@@ -325,13 +326,13 @@ export function IntelCollectSettingsPanel({
 
       {error && <div className="cd-error-bg cd-error-text rounded-lg px-3 py-2 text-xs mb-3">{error}</div>}
 
-      <div className="flex items-center gap-1 flex-wrap mb-3">
-        {SETTING_TABS.map((t) => (
-          <button key={t.key} className="cd-chip cd-chip-sm" data-active={tab === t.key} onClick={() => setTab(t.key)}>
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {/* 페이지 탭은 공통 밑줄형(UI 기준 §4) */}
+      <CdTabs<SettingTab>
+        className="mb-3"
+        active={tab}
+        onChange={setTab}
+        items={SETTING_TABS.map((t) => ({ key: t.key, label: t.label }))}
+      />
 
       {!settings ? (
         <div className="cd-text-faint text-sm py-4">설정을 불러오는 중…</div>

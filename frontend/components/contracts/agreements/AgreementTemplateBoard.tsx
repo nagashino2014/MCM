@@ -10,6 +10,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ArrowDown, ArrowUp, BookOpen, Building2, Copy, Download, FileSignature, Plus, Save, Trash2, X } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { CdTabs } from "@/components/cdash/CdTabs";
 import { QUOTE_SERVICE_OPTIONS } from "@/lib/quote/types";
 import type { TemplateProfile } from "@/lib/deliverable/types";
 import type { AgreementClause, AgreementRenderMode, AgreementSpec, AgreementTemplateRow } from "@/lib/agreement/types";
@@ -166,36 +167,17 @@ export function AgreementTemplateBoard() {
           </a>
         }
       />
-      {/* 탭 — 업무추진계획(ExecWorkspace) 세그먼트 패턴. 활성=그라데이션, 비활성=불투명 흰색 */}
-      <div className="inline-flex self-start shrink-0 rounded-xl border cd-border-c overflow-hidden text-[12px] font-semibold">
-        <button
-          type="button"
-          data-active={tab === "standard"}
-          aria-pressed={tab === "standard"}
-          className={`cd-choice px-3.5 py-2 flex items-center gap-1.5 ${tab === "standard" ? "cd-fill-primary text-white" : "cd-solid-bg cd-text-muted"}`}
-          onClick={() => setTab("standard")}
-        >
-          <FileSignature className="w-3.5 h-3.5" /> 용역 분류별 표준 셋
-        </button>
-        <button
-          type="button"
-          data-active={tab === "custom"}
-          aria-pressed={tab === "custom"}
-          className={`cd-choice px-3.5 py-2 flex items-center gap-1.5 border-l cd-border-c ${tab === "custom" ? "cd-fill-primary text-white" : "cd-solid-bg cd-text-muted"}`}
-          onClick={() => setTab("custom")}
-        >
-          <Building2 className="w-3.5 h-3.5" /> 발주처 자체양식
-        </button>
-        <button
-          type="button"
-          data-active={tab === "library"}
-          aria-pressed={tab === "library"}
-          className={`cd-choice px-3.5 py-2 flex items-center gap-1.5 border-l cd-border-c ${tab === "library" ? "cd-fill-primary text-white" : "cd-solid-bg cd-text-muted"}`}
-          onClick={() => setTab("library")}
-        >
-          <BookOpen className="w-3.5 h-3.5" /> 조항 라이브러리
-        </button>
-      </div>
+      {/* 페이지 탭은 공통 밑줄형(UI 기준 §4) */}
+      <CdTabs<"standard" | "custom" | "library">
+        className="self-stretch shrink-0"
+        active={tab}
+        onChange={setTab}
+        items={[
+          { key: "standard", label: "용역 분류별 표준 셋", icon: <FileSignature className="w-3.5 h-3.5" /> },
+          { key: "custom", label: "발주처 자체양식", icon: <Building2 className="w-3.5 h-3.5" /> },
+          { key: "library", label: "조항 라이브러리", icon: <BookOpen className="w-3.5 h-3.5" /> },
+        ]}
+      />
 
       {loading ? (
         <div className="cd-card rounded-3xl p-10 text-center text-sm cd-text-faint">불러오는 중...</div>

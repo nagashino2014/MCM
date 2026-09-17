@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { CheckCircle2, ExternalLink, RefreshCw, Send, Trash2, X } from "lucide-react";
+import { CdTabs } from "@/components/cdash/CdTabs";
 
 /**
  * 근로계약서 작성/갱신 패널 (PL-P3, UI 컨셉 PDF §1-3)
@@ -176,26 +177,16 @@ export default function ContractRoundPanel({
     <section className="cd-card rounded-3xl p-4 cd-reveal delay-2 flex flex-col gap-3" style={{ minHeight: 240 }}>
       <div className="flex items-center gap-3 flex-wrap">
         <h2 className="text-[15px] font-extrabold tracking-tight cd-text">근로계약서 작성/갱신</h2>
-        <div className="flex rounded-xl border cd-border-c overflow-hidden text-xs font-semibold">
-          {(
-            [
-              ["annual", "일괄"],
-              ["promotion", "개별(승진)"],
-              ["rounds", `진행 현황${rounds.length ? ` (${rounds.length})` : ""}`],
-            ] as const
-          ).map(([k, label]) => (
-            <button
-              key={k}
-              type="button"
-              onClick={() => setTab(k)}
-              data-active={tab === k}
-              aria-pressed={tab === k}
-              className={`cd-choice px-3 py-1.5 transition ${tab === k ? "cd-fill-primary text-white" : "cd-text"}`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        {/* 페이지 탭은 공통 밑줄형(UI 기준 §4) */}
+        <CdTabs<"annual" | "promotion" | "rounds">
+          active={tab}
+          onChange={setTab}
+          items={[
+            { key: "annual", label: "일괄" },
+            { key: "promotion", label: "개별(승진)" },
+            { key: "rounds", label: "진행 현황", count: rounds.length || undefined },
+          ]}
+        />
         {msg && <span className="text-xs" style={{ color: "var(--cd-error)" }}>{msg}</span>}
       </div>
 

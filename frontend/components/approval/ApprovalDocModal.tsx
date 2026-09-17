@@ -15,6 +15,7 @@ import type { ApprovalFieldDef } from "@/lib/approval/fields";
 import { LETTER_FORM_ID, LETTER_SEND_STATUS_LABEL, type OfficialLetterRow } from "@/lib/letter/types";
 import { QUOTE_FORM_ID } from "@/lib/quote/types";
 import { AGREEMENT_FORM_ID } from "@/lib/agreement/types";
+import { CdTabs } from "@/components/cdash/CdTabs";
 
 export interface DocStepRow {
   stepId: string;
@@ -597,26 +598,15 @@ export function ApprovalDocViewer({
             {/* 본문 / 첨부서류 탭 — 첨부가 있으면 결재자가 같은 화면에서 스위칭해 확인한다.
                 첨부 없는 문서는 탭 자체를 감춰 기존 화면과 동일하게 보인다. */}
             {attachments.length > 0 && (
-              <div className="flex items-center gap-1.5">
-                {([
-                  { key: "doc" as const, label: "문서" },
-                  { key: "attach" as const, label: `첨부서류 ${attachments.length}` },
-                ]).map((t) => (
-                  <button
-                    key={t.key}
-                    type="button"
-                    data-active={tab === t.key}
-                    aria-pressed={tab === t.key}
-                    className={`cd-choice rounded-lg px-3 py-1.5 text-[12px] border flex items-center gap-1.5 ${
-                      tab === t.key ? "cd-tint-primary font-bold" : "cd-border-c cd-text-muted cd-row-hover"
-                    }`}
-                    onClick={() => setTab(t.key)}
-                  >
-                    {t.key === "attach" && <Paperclip className="w-3.5 h-3.5" />}
-                    {t.label}
-                  </button>
-                ))}
-              </div>
+              // 문서/첨부 전환 탭은 공통 밑줄형(UI 기준 §4)
+              <CdTabs<"doc" | "attach">
+                active={tab}
+                onChange={setTab}
+                items={[
+                  { key: "doc", label: "문서" },
+                  { key: "attach", label: "첨부서류", icon: <Paperclip className="w-3.5 h-3.5" />, count: attachments.length },
+                ]}
+              />
             )}
 
             {tab === "attach" && attachments.length > 0 ? (

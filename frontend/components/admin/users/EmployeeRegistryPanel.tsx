@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import type React from "react";
 import { BriefcaseBusiness, FileUp, GraduationCap, History, Home, Plus, Save, Trash2, UserRoundCog, X } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
+import { CdTabs } from "@/components/cdash/CdTabs";
 import type {
   DepartmentRow,
   OrganizationEmployeeRow,
@@ -418,12 +419,18 @@ export default function EmployeeRegistryPanel({
             신규 등록
           </button>
         </div>
-        <div className="flex gap-1 border-b cd-border-c mb-5">
-          <TabButton active={activeTab === "basic"} onClick={() => setActiveTab("basic")} icon={<UserRoundCog className="w-4 h-4" />} label="기본 정보" />
-          <TabButton active={activeTab === "education"} onClick={() => setActiveTab("education")} icon={<GraduationCap className="w-4 h-4" />} label="학력/자격" />
-          <TabButton active={activeTab === "evidence"} onClick={() => setActiveTab("evidence")} icon={<Home className="w-4 h-4" />} label="기타 증빙" />
-          <TabButton active={activeTab === "hr"} onClick={() => setActiveTab("hr")} icon={<History className="w-4 h-4" />} label="인사관리" />
-        </div>
+        {/* 페이지 탭은 공통 밑줄형(UI 기준 §4) */}
+        <CdTabs<TabKey>
+          className="mb-5"
+          active={activeTab}
+          onChange={setActiveTab}
+          items={[
+            { key: "basic", label: "기본 정보", icon: <UserRoundCog className="w-4 h-4" /> },
+            { key: "education", label: "학력/자격", icon: <GraduationCap className="w-4 h-4" /> },
+            { key: "evidence", label: "기타 증빙", icon: <Home className="w-4 h-4" /> },
+            { key: "hr", label: "인사관리", icon: <History className="w-4 h-4" /> },
+          ]}
+        />
 
         {activeTab === "basic" && (
           <BasicTab employee={employee} setEmployee={setEmployee} departments={departments} positions={allowedPositions} />
@@ -1456,25 +1463,6 @@ function updateArray<K extends "educations" | "certifications" | "careers" | "ho
     ...prev,
     [key]: prev[key].map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)),
   }));
-}
-
-function TabButton({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      data-active={active}
-      aria-pressed={active}
-      className={
-        active
-          ? "cd-choice rounded-t-xl cd-soft-primary px-4 py-2 text-xs font-bold flex items-center gap-2 border-b-2 border-[color:var(--cd-primary)]"
-          : "cd-choice rounded-t-xl px-4 py-2 text-xs font-bold cd-text-muted hover:text-[color:var(--cd-text)] flex items-center gap-2 border-b-2 border-transparent"
-      }
-    >
-      {icon}
-      {label}
-    </button>
-  );
 }
 
 function onlyDigits(value: string, maxLength?: number): string {

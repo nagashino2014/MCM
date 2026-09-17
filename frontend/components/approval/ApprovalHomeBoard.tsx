@@ -326,7 +326,6 @@ export function ApprovalHomeBoard() {
               <>
                 <div className="px-2 pt-2 flex items-center gap-2 flex-wrap">
                   <CdTabs
-                    variant="pill"
                     items={BOXES.map((b) => ({
                       key: b.key,
                       label: b.label,

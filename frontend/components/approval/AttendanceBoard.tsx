@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { CdTabs } from "@/components/cdash/CdTabs";
 import { AbsenceRequestPanel } from "@/components/approval/AbsenceRequestPanel";
 import { EmployeeAvatar } from "@/components/ui/EmployeeAvatar";
 import { WORK_SCHEDULE_KINDS } from "@/lib/adt/types";
@@ -72,32 +73,32 @@ export function AttendanceBoard() {
           title="근태 · 초과근무 관리"
         />
 
-        {/* 탭 */}
-        <div className="flex items-center gap-1.5 mb-4 flex-wrap">
-          {([
+        {/* 탭 — 페이지 탭은 공통 밑줄형(UI 기준 §4). 미매칭 건수는 경고색 배지 유지 */}
+        <CdTabs<Tab>
+          className="mb-4"
+          active={tab}
+          onChange={setTab}
+          items={([
             ["weekly", "주별 초과근무"],
             ["match", "신청 대조"],
             ["meal", "식대 경고"],
             ["mapping", "미매칭 매핑"],
             ["settings", "산정 정책"],
             ["absence", "결근사유서"],
-          ] as [Tab, string][]).map(([k, label]) => (
-            <button
-              key={k}
-              type="button"
-              onClick={() => setTab(k)}
-              className={`cd-chip ${tab === k ? "" : "cd-text-muted"}`}
-              data-active={tab === k || undefined}
-            >
-              {label}
-              {k === "mapping" && unmatchedCount != null && unmatchedCount > 0 && (
-                <span className="ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold" style={{ background: "var(--cd-error)", color: "#fff" }}>
-                  {unmatchedCount}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
+          ] as [Tab, string][]).map(([k, label]) => ({
+            key: k,
+            label: (
+              <>
+                {label}
+                {k === "mapping" && unmatchedCount != null && unmatchedCount > 0 && (
+                  <span className="ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold" style={{ background: "var(--cd-error)", color: "#fff" }}>
+                    {unmatchedCount}
+                  </span>
+                )}
+              </>
+            ),
+          }))}
+        />
 
         {tab === "weekly" && <WeeklyPanel />}
         {tab === "match" && <MatchPanel />}

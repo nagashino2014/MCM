@@ -11,6 +11,7 @@ import Link from "next/link";
 import { ArrowLeft, BarChart3, Calculator, ChevronDown, ChevronRight, Coins, Plus, Save, Settings2, Tag, Trash2, X } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { CdTabs } from "@/components/cdash/CdTabs";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
 import { AmountInput } from "@/components/ui/AmountInput";
 import {
@@ -483,30 +484,17 @@ export function QuoteSettingsBoard() {
           }
         />
         <div className="cd-card rounded-3xl p-5 flex flex-col gap-4 min-h-0">
-          {/* 탭 */}
-          <div className="flex items-end gap-1 px-1 -mb-1">
-            {(
-              [
-                ["sets", "기준 세트", Settings2],
-                ["labor", "노임단가", Coins],
-                ["codes", "상황 변수", Tag],
-                ["report", "수주 분석", BarChart3],
-              ] as const
-            ).map(([t, label, Icon]) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setTab(t)}
-                data-active={tab === t}
-                aria-pressed={tab === t}
-                className={`cd-choice rounded-t-xl px-4 py-2 text-sm font-semibold border-b-2 flex items-center gap-1.5 ${
-                  tab === t ? "cd-text-primary border-current cd-tint-primary" : "cd-text-faint border-transparent cd-row-hover"
-                }`}
-              >
-                <Icon className="w-3.5 h-3.5" /> {label}
-              </button>
-            ))}
-          </div>
+          {/* 탭 — 페이지 탭은 공통 밑줄형(UI 기준 §4) */}
+          <CdTabs<Tab>
+            active={tab}
+            onChange={setTab}
+            items={[
+              { key: "sets", label: "기준 세트", icon: <Settings2 className="w-3.5 h-3.5" /> },
+              { key: "labor", label: "노임단가", icon: <Coins className="w-3.5 h-3.5" /> },
+              { key: "codes", label: "상황 변수", icon: <Tag className="w-3.5 h-3.5" /> },
+              { key: "report", label: "수주 분석", icon: <BarChart3 className="w-3.5 h-3.5" /> },
+            ]}
+          />
 
           {tab === "sets" && (
             <div className="flex flex-col lg:flex-row gap-4 items-start">

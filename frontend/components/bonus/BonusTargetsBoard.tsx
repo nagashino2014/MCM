@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { RotateCcw, Save } from "lucide-react";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { CdTabs } from "@/components/cdash/CdTabs";
 import {
   BONUS_CATEGORIES,
   BONUS_TARGET_DEPT_IDS,
@@ -329,28 +330,15 @@ export default function BonusTargetsBoard() {
         {/* 우측 탭 카드 */}
         <section className="cd-card rounded-3xl p-4 cd-reveal delay-1 flex-1 min-h-0 flex flex-col gap-3">
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setTab("list")}
-              data-active={tab === "list"}
-              aria-pressed={tab === "list"}
-              className={`cd-choice rounded-xl px-4 py-2 text-sm font-semibold border ${
-                tab === "list" ? "cd-fill-primary text-white border-transparent" : "cd-border-c cd-text"
-              }`}
-            >
-              대상 LIST
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab("costs")}
-              data-active={tab === "costs"}
-              aria-pressed={tab === "costs"}
-              className={`cd-choice rounded-xl px-4 py-2 text-sm font-semibold border ${
-                tab === "costs" ? "cd-fill-primary text-white border-transparent" : "cd-border-c cd-text"
-              }`}
-            >
-              제비용 설정
-            </button>
+            {/* 페이지 탭은 공통 밑줄형(UI 기준 §4) */}
+            <CdTabs<"list" | "costs">
+              active={tab}
+              onChange={setTab}
+              items={[
+                { key: "list", label: "대상 LIST" },
+                { key: "costs", label: "제비용 설정" },
+              ]}
+            />
             <span className="ml-2 text-xs cd-text-faint">
               {periodLabel} · {BONUS_CATEGORIES.find((c) => c.key === category)?.label} {filtered.length}건
             </span>

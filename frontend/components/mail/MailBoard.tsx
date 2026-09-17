@@ -375,7 +375,6 @@ export function MailBoard() {
               <>
                 <div className="px-2 pt-2">
                   <CdTabs
-                    variant="pill"
                     items={[
                       ...folders.map((f) => ({
                         key: f.systemKind ?? f.folderId,

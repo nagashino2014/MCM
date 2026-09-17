@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, FileSpreadsheet, Gift, Plus, ReceiptText, Trash2, X } from "lucide-react";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { CdTabs } from "@/components/cdash/CdTabs";
 import LedgerCreateModal from "@/components/payroll/LedgerCreateModal";
 import StatementSendModal from "@/components/payroll/StatementSendModal";
 import BonusPlanModal from "@/components/payroll/BonusPlanModal";
@@ -271,20 +272,15 @@ export default function PayrollLedgerBoard() {
                 <Plus className="w-4 h-4" /> 새 대장
               </button>
             )}
-            <div className="flex rounded-xl border cd-border-c overflow-hidden text-sm font-semibold">
-              {(["month", "annual"] as const).map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => setView(v)}
-                  data-active={view === v}
-                  aria-pressed={view === v}
-                  className={`cd-choice px-3 py-1.5 transition ${view === v ? "cd-fill-primary text-white" : "cd-text"}`}
-                >
-                  {v === "month" ? "월별 대장" : "직원별 연간"}
-                </button>
-              ))}
-            </div>
+            {/* 월별 대장 / 직원별 연간 — 페이지 탭은 공통 밑줄형(UI 기준 §4) */}
+            <CdTabs<"month" | "annual">
+              active={view}
+              onChange={setView}
+              items={[
+                { key: "month", label: "월별 대장" },
+                { key: "annual", label: "직원별 연간" },
+              ]}
+            />
             <select
               className="cd-select text-sm"
               style={{ width: 92 }}

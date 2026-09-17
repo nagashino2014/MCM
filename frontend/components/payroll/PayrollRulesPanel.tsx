@@ -122,7 +122,6 @@ export default function PayrollRulesPanel() {
     <div className="flex-1 min-h-0 flex flex-col gap-3 px-5 pb-4">
       <div className="flex items-center gap-3 flex-wrap">
         <CdTabs
-          variant="pill"
           items={[
             { key: "employee", label: "직원별 설정" },
             { key: "item", label: "항목별 설정" },

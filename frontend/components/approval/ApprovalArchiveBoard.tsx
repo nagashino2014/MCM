@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Archive, FolderOpen, Search } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { CdTabs } from "@/components/cdash/CdTabs";
 import { ApprovalDocModal, DOC_STATUS_LABEL } from "@/components/approval/ApprovalDocModal";
 import { LetterRecordsTable } from "@/components/approval/LetterRecordsTable";
 import { QuoteRecordsTable } from "@/components/approval/QuoteRecordsTable";
@@ -215,23 +216,17 @@ export function ApprovalArchiveBoard() {
       />
 
       <div className="cd-card rounded-3xl p-5 flex flex-col gap-4">
-        {/* 전자결재 / 발송공문 탭 — 양식별 문서 조회와 동일한 work-plan 탭 양식 */}
-        <div className="flex items-end gap-1 px-1 -mb-1">
-          {(["approval", "letters", "quotes", "contracts"] as TopTab[]).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTopTab(t)}
-              data-active={topTab === t}
-              aria-pressed={topTab === t}
-              className={`cd-choice rounded-t-xl px-4 py-2 text-sm font-semibold border-b-2 ${
-                topTab === t ? "cd-text-primary border-current cd-tint-primary" : "cd-text-faint border-transparent cd-row-hover"
-              }`}
-            >
-              {t === "approval" ? "전자결재" : t === "letters" ? "발송공문" : t === "quotes" ? "발송견적" : "계약 문서"}
-            </button>
-          ))}
-        </div>
+        {/* 전자결재 / 발송공문 / 발송견적 / 계약 문서 탭 — 페이지 탭은 공통 밑줄형(UI 기준 §4) */}
+        <CdTabs<TopTab>
+          active={topTab}
+          onChange={setTopTab}
+          items={[
+            { key: "approval", label: "전자결재" },
+            { key: "letters", label: "발송공문" },
+            { key: "quotes", label: "발송견적" },
+            { key: "contracts", label: "계약 문서" },
+          ]}
+        />
 
         {/* 검색 옵션(공용) — 연도 선택 + YYYYMM 2개 + 제목·기안자 검색 */}
         <div className="flex items-center gap-2 flex-wrap">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlarmClock, Briefcase, CalendarClock, ClipboardList, Plus, Search, Siren, X,
@@ -337,18 +337,18 @@ function SalesTabPanel({
       className="cd-card-bg rounded-2xl border cd-border-c flex flex-col min-w-0"
       style={{ flex: `0 0 ${TAB_PANEL_WIDTH}px`, height: PANEL_HEIGHT }}
     >
-      {/* 탭 헤더 */}
-      <div className="flex border-b cd-border-c shrink-0">
+      {/* 탭 헤더 — 페이지 탭은 공통 밑줄형(UI 기준 §4). 균등 폭·탭별 아이콘 색·건수 배지는 유지 */}
+      <div className="cd-tabs shrink-0 px-2" data-variant="underline" role="tablist" style={{ gap: 4 }}>
         {tabs.map((t) => {
           const active = activeTab === t.key;
           return (
             <button
               key={t.key}
+              type="button"
+              role="tab"
+              aria-selected={active}
               onClick={() => onTab(t.key)}
-              className={`cd-choice flex-1 flex items-center justify-center gap-1 px-1.5 py-2.5 border-b-2 min-w-0 ${active ? "cd-text" : "cd-text-muted"}`}
-              data-active={active}
-              aria-pressed={active}
-              style={{ borderColor: active ? t.color : "transparent", "--cd-choice-color": t.color } as CSSProperties}
+              className="cd-tab flex-1 justify-center gap-1 min-w-0"
             >
               <t.Icon className="w-4 h-4 shrink-0" style={{ color: t.color }} />
               <span className="text-xs font-bold truncate">{t.label}</span>

@@ -36,3 +36,12 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .local-storage
+
+# design-sync (claude.ai/design 동기화) — 스크립트·빌드 산출물·기기 상태
+.ds-sync/
+ds-bundle/
+.design-sync/.cache/
+.design-sync/learnings/
+.design-sync/node_modules
+.design-sync/pkg/types/
+.design-sync/pkg/ds.css

@@ -39,6 +39,8 @@ export interface CdTableProps<Row> {
   onSelectChange?: (keys: Set<string>) => void;
   /** compact 밀도(그룹웨어 목록용). */
   dense?: boolean;
+  /** 기본은 흰 카드(1px 경계·카드 반경)로 감싼다. 이미 cd-card 안에 넣을 때만 true 로 테두리를 뺀다. */
+  bare?: boolean;
   className?: string;
 }
 
@@ -54,6 +56,7 @@ export function CdTable<Row>({
   selectedKeys,
   onSelectChange,
   dense,
+  bare,
   className,
 }: CdTableProps<Row>) {
   const selectable = selectedKeys != null && onSelectChange != null;
@@ -79,7 +82,7 @@ export function CdTable<Row>({
   const cellPad = "px-3 py-2";
 
   return (
-    <div className={cn("relative min-w-0 overflow-x-auto", className)} aria-busy={loading || undefined}>
+    <div className={cn("relative min-w-0 overflow-x-auto", !bare && "cd-card", className)} aria-busy={loading || undefined}>
       <table className="cd-table" data-dense={dense || undefined}>
         <thead>
           <tr className="border-b cd-border-c">

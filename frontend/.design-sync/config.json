@@ -1,0 +1,74 @@
+{
+  "shape": "package",
+  "pkg": "mcm-cdash",
+  "globalName": "MCMCdash",
+  "srcDir": "../../components/cdash",
+  "tsconfig": "../tsconfig.bundle.json",
+  "buildCmd": "node .design-sync/build.mjs",
+  "cssEntry": "ds.css",
+  "extraEntries": [
+    "../cdash-root.tsx"
+  ],
+  "provider": {
+    "component": "CdashRoot"
+  },
+  "componentSrcMap": {
+    "CdButton": "../../components/cdash/CdButton.tsx",
+    "CdIconButton": "../../components/cdash/CdButton.tsx",
+    "CdBadge": "../../components/cdash/CdBadge.tsx",
+    "CdCount": "../../components/cdash/CdBadge.tsx",
+    "CdAvatar": "../../components/cdash/CdAvatar.tsx",
+    "CdEmptyState": "../../components/cdash/CdEmptyState.tsx",
+    "CdInput": "../../components/cdash/CdField.tsx",
+    "CdSelect": "../../components/cdash/CdField.tsx",
+    "CdTextarea": "../../components/cdash/CdField.tsx",
+    "CdCheckbox": "../../components/cdash/CdField.tsx",
+    "CdDateInput": "../../components/cdash/CdField.tsx",
+    "CdTabs": "../../components/cdash/CdTabs.tsx",
+    "CdModal": "../../components/cdash/CdModal.tsx",
+    "CdDrawer": "../../components/cdash/CdModal.tsx",
+    "CdToastProvider": "../../components/cdash/CdToast.tsx",
+    "CdDropdown": "../../components/cdash/CdDropdown.tsx",
+    "CdTable": "../../components/cdash/CdTable.tsx",
+    "CdSplitPane": "../../components/cdash/CdSplitPane.tsx",
+    "CdPageHeader": "../../components/cdash/CdPageHeader.tsx",
+    "CdHelp": "../../components/cdash/CdHelp.tsx",
+    "CdThemeToggle": "../../components/cdash/CdThemeToggle.tsx"
+  },
+  "overrides": {
+    "CdModal": {
+      "cardMode": "single",
+      "viewport": "1000x640"
+    },
+    "CdDrawer": {
+      "cardMode": "single",
+      "viewport": "1000x560"
+    },
+    "CdToastProvider": {
+      "cardMode": "single",
+      "viewport": "720x360"
+    },
+    "CdHelp": {
+      "cardMode": "single",
+      "primaryStory": "Open",
+      "viewport": "720x360"
+    },
+    "CdDropdown": {
+      "cardMode": "column"
+    },
+    "CdTable": {
+      "cardMode": "column"
+    },
+    "CdSplitPane": {
+      "cardMode": "column"
+    },
+    "CdPageHeader": {
+      "cardMode": "column"
+    },
+    "CdButton": {
+      "cardMode": "column"
+    }
+  },
+  "readmeHeader": ".design-sync/conventions.md",
+  "projectId": "e8a1a0a1-9597-4f05-931b-7bc32ac81f34"
+}

@@ -1,0 +1,7 @@
+{
+  "name": "mcm-cdash",
+  "version": "0.1.0",
+  "private": true,
+  "description": "design-sync 스테이징 패키지 — frontend/components/cdash 를 claude.ai/design 로 보내기 위한 진입점. 실제 소스는 components/cdash.",
+  "types": "types/index.d.ts"
+}

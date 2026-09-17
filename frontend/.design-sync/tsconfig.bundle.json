@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "baseUrl": "..",
+    "paths": {
+      "@/*": ["./*"],
+      "next/link": [".design-sync/shims/next-link"]
+    }
+  }
+}

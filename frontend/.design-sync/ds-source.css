@@ -1,0 +1,4 @@
+/* design-sync 전용 CSS 진입점 — 앱 전역 CSS(Tailwind 포함)와 cdash 토큰·클래스를 한 파일로 컴파일한다.
+   빌드: npx tailwindcss -c tailwind.config.ts -i .design-sync/ds-source.css -o .design-sync/pkg/ds.css */
+@import "../app/globals.css";
+@import "../components/cdash/cdash.css";

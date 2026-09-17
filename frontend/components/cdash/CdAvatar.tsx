@@ -29,7 +29,9 @@ function hashName(name: string): number {
 function initials(name: string): string {
   const t = name.trim();
   if (!t) return "?";
-  if (/[가-힣]/.test(t[0])) return t[0];
+  const code = t.charCodeAt(0);
+  // 한글 음절(U+AC00~U+D7A3). 정규식 문자 범위 대신 코드 비교 — 번들이 UTF-8 선언 없이 로드돼도 깨지지 않는다.
+  if (code >= 0xac00 && code <= 0xd7a3) return t[0];
   const words = t.split(/\s+/).filter(Boolean);
   return words
     .slice(0, 2)
@@ -46,7 +48,8 @@ export interface CdAvatarProps extends HTMLAttributes<HTMLSpanElement> {
 export function CdAvatar({ name, src, size = "md", className, ...rest }: CdAvatarProps) {
   const token = PALETTE[hashName(name || "?") % PALETTE.length];
   const color = {
-    bg: `color-mix(in srgb, var(${token}) 18%, transparent)`,
+    // 투명 혼합은 베이지 바탕이 비쳐 탁해 보인다 → 카드면(흰색)과 섞어 밝은 파스텔로.
+    bg: `color-mix(in srgb, var(${token}) 14%, var(--cd-card))`,
     fg: `var(${token})`,
   };
   return (

@@ -41,3 +41,7 @@
 5. 판정 대기분만 캡처 시트를 보고 채점 → 업로드는 원자적 경로(finalize_plan 쓰기 전체, deletes 는 `.sync-diff.json` upload.deletePaths 그대로).
 - 업로드 localDir 은 절대경로(`.../frontend/ds-bundle`)로 넘겼다(세션 cwd 가 다른 체크아웃이었음).
 - 인증: 데스크톱 앱 세션은 `/design-login` 불가 → 터미널 `claude`(설치 경로 `%USERPROFILE%/.local/bin/claude.exe`, PATH 미등록 주의)에서 `/design-login` 1회.
+
+## 재동기화 기록
+- 2026-09-17 1차 재동기화(탭 규칙): conventions 에 Tab rule 추가, CdTabs 미리보기를 PageTabsWithFilter/Underline/FilterPill 로 교체. 검증 대상 2개(CdTabs·CdPageHeader), 19개는 업로드 검증분으로 통과. 원자적 업로드 113파일, 삭제 0.
+- ⚠ 저장소 `core.autocrlf=true` 라 체크아웃하면 `.design-sync` 파일이 CRLF 로 바뀌고 미리보기 해시가 달라져 전 컴포넌트가 재검증 대상이 됐다. `.design-sync/.gitattributes`(`* text eol=lf`)로 고정했다. 이미 CRLF 인 작업본은 LF 로 변환한 뒤 드라이버를 돌린다.

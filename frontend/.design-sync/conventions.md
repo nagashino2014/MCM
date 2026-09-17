@@ -26,10 +26,12 @@ const { CdashRoot, CdPageHeader, CdButton } = window.MCMCdash;
 | Fields (raw) | `cd-input`, `cd-select`, `cd-textarea`, `cd-label` |
 | Tables | `cd-table` (white surface; header row uses `--cd-table-header-bg`), `cd-table-section` (12px gap above a table). Never place a table directly on the beige app background — put it in a white card |
 | Tags & choices | `cd-pill` + `cd-pill-info` / `cd-pill-success` …, `cd-chip`, `cd-choice` with `data-active="true"` (light gradient selected state) |
-| Tabs | `cd-tabs` / `cd-tab` (prefer the `CdTabs` component) |
+| Tabs | `cd-tabs` / `cd-tab` — always through the `CdTabs` component (see the tab rule below) |
 | Misc | `cd-border-c` (neutral border color), `cd-row-hover`, `cd-tint-primary` |
 
 Tokens for inline styles: `var(--cd-bg)`, `--cd-card`, `--cd-surface`, `--cd-border`, `--cd-text`, `--cd-muted`, `--cd-faint`, `--cd-primary`, `--cd-primary-soft`, `--cd-success`, `--cd-warning`, `--cd-error`, `--cd-radius-card`, `--cd-radius-control`, `--cd-action-background`. Type sizes: `--precision-ui-font-title` (22px), `-section` (16px), `-body` (14px), `-table` (12px), `-meta` (11px); control height `--precision-ui-control-height` (36px).
+
+**Tab rule — page tabs are underline, filters are pills.** Any control that swaps the whole content of a page, card, panel or modal (e.g. 전자결재 / 발송공문 / 발송견적, 용역 / Task, 기본 정보 / 학력 / 인사관리) is a page tab: render it with `<CdTabs>` using the default `variant="underline"` (selected = primary text + 2px bar, no box). Never build page tabs from folder-style buttons, filled segmented buttons or chips. `variant="pill"` is only for filters that narrow the same list inside a card (period, status, kind); a pill filter row sits below the page tabs, never in their place.
 
 **Placement rule — beige is spacing, not a surface.** The light-theme app background is beige. Never place content directly on it: badges/tags, avatars, counts, checkboxes, icon buttons, tabs, form fields, tables and text blocks always sit inside a white card (`<div className="cd-card p-4">…</div>`). Only the page header (`CdPageHeader`) and the gaps between cards show the beige background.
 
@@ -37,7 +39,7 @@ Rules: opaque surfaces, 1px neutral borders, no card shadows/blur/background gra
 
 ## 3. Prefer components over raw classes
 
-`CdPageHeader` (title, `help` → `?` popover, `meta`, `actions`, `tabs`), `CdButton` / `CdIconButton`, `CdInput` / `CdSelect` / `CdTextarea` / `CdCheckbox` (built-in `label`, `required`, `hint`, `error`), `CdDateInput` (text entry, `YYYYMMDD` → `YYYY-MM-DD`; never use native `type="date"`), `CdTable` (column defs, sort, selection, loading, empty; renders inside its own white card by default — pass `bare` only when it already sits inside a `cd-card`), `CdTabs` (`underline` for page sections — selected = primary text + thin bar, no box; `pill` for in-card filters on a white group), `CdBadge` / `CdCount`, `CdModal` / `CdDrawer`, `CdDropdown`, `CdToastProvider` + `useCdToast`, `CdEmptyState`, `CdHelp`, `CdAvatar`, `CdSplitPane`. Read each component's `.d.ts` and `.prompt.md` before use.
+`CdPageHeader` (title, `help` → `?` popover, `meta`, `actions`, `tabs`), `CdButton` / `CdIconButton`, `CdInput` / `CdSelect` / `CdTextarea` / `CdCheckbox` (built-in `label`, `required`, `hint`, `error`), `CdDateInput` (text entry, `YYYYMMDD` → `YYYY-MM-DD`; never use native `type="date"`), `CdTable` (column defs, sort, selection, loading, empty; renders inside its own white card by default — pass `bare` only when it already sits inside a `cd-card`), `CdTabs` (default `underline` for every page/section/modal tab; `pill` only for in-card list filters), `CdBadge` / `CdCount`, `CdModal` / `CdDrawer`, `CdDropdown`, `CdToastProvider` + `useCdToast`, `CdEmptyState`, `CdHelp`, `CdAvatar`, `CdSplitPane`. Read each component's `.d.ts` and `.prompt.md` before use.
 
 ## 4. Where the truth lives
 

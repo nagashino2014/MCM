@@ -1,0 +1,14 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "noEmitOnError": false,
+    "incremental": false,
+    "rootDir": "..",
+    "outDir": "./pkg/types"
+  },
+  "include": ["../components/cdash/**/*.ts", "../components/cdash/**/*.tsx", "../next-env.d.ts"],
+  "exclude": []
+}

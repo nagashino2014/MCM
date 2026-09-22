@@ -45,7 +45,8 @@
     "258_supply_vat_registry_identity.sql",
     "260_card_identity_currentness.sql",
     "263_journal_use.sql",
-    "264_document_builtin_binding.sql"
+    "264_document_builtin_binding.sql",
+    "265_runtime_database_roles.sql"
   ],
   "contracts": [
     "frontend/lib/finance/vat-use-definition-contract.json",

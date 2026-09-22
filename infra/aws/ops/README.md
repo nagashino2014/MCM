@@ -141,6 +141,17 @@ NAT Gateway 는 비용 절감을 위해 **제거**했다(2026-07-02). 대신:
 
 ## 재무 정의 SQL 적용 경계
 
-재무 SQL 226~264의 정의 변경은 `accounting-definition-migrations.json`에 등록되어 있다. 해당 SQL은 `staging-apply-migrations.ps1 -AccountingMaintenance -Files <검토한 파일>` 경로에서만 적용한다. 이 절차가 스케줄 정지, 앱 연결 배출, 단일 세션 적용과 복구 표식을 함께 관리한다. 중단 표식이 남았으면 새 SQL을 적용하지 말고 `-RecoverAccountingMaintenance` 절차로 먼저 복구한다.
+재무 SQL 226~264와 R0B1 역할 SQL 265는 `accounting-definition-migrations.json`에 등록되어 있다. 해당 SQL은 `staging-apply-migrations.ps1 -AccountingMaintenance -Files <검토한 파일>` 경로에서만 적용한다. 이 절차가 스케줄 정지, 앱 연결 배출, 단일 세션 적용과 복구 표식을 함께 관리한다. 중단 표식이 남았으면 새 SQL을 적용하지 말고 `-RecoverAccountingMaintenance` 절차로 먼저 복구한다.
 
-이 통합 후보는 코드와 설치 계약을 main에 맞춘 것이며 스테이징 DB에 SQL을 적용한 상태가 아니다. 265번 DB 역할·GRANT SQL과 R0B 런타임 역할 전환은 별도 작업으로 보류한다. 이후 다른 설치 주체가 새 표를 만들면 역할 권한은 R0B의 265 재적용과 증명 검사를 거쳐야 한다.
+2026-09-22 기준 재무 SQL 226~264는 스테이징에 적용됐지만 265는 적용되지 않았다. R0B1 설치는 별도 검토와 스테이징 사전검사 뒤 수행한다. Next 추가 배포 금지와 스테이징 전체 Terraform apply 금지는 그대로 유지한다.
+
+### R0B1 DB 역할·권한 경계
+
+`265_runtime_database_roles.sql`은 `runtime-database-privileges.json` 계약의 역할과 권한을 설치한다. 비밀번호나 Secrets Manager 값을 만들지 않으며, 재적용해도 기존 비밀번호 해시를 바꾸지 않는다.
+
+- `mcm_owner`: 비로그인 소유자 후보. 실제 객체 소유권 이전은 후속 운영 전환 범위다.
+- `mcm_app`: 현재 Next 단일 앱의 데이터·시퀀스·승인된 루틴 권한만 받는다. DDL·TRUNCATE·TEMP·역할 전환 권한은 주지 않는다.
+- `mcm_worker`: `facility-enrich`에 필요한 일곱 표와 `facility_quality_snapshot` 함수만 받는다.
+- `mcm_collector`: 수집이 Next 안에 있는 동안 만들지 않는다.
+
+265는 맨 앞에서 `(607003, 265)` 트랜잭션 advisory lock을 잡는다. 런타임 역할의 `search_path`는 `public`만 명시해 `pg_catalog`가 암묵적으로 앞서게 하고, 설치 주체의 전역 기본 함수 권한에서 PUBLIC 실행 권한을 회수한다. 설치 마지막의 `mcm_assert_runtime_privileges()`가 두 설정을 포함한 권한을 확인한다. 이후 다른 설치 주체가 새 표를 만들면 권한이 자동 부여되지 않으므로 같은 승인 설치 주체에서 265를 재적용하고 증명을 확인해야 한다. 역할별 비밀 발급, 실제 Aurora 연결, ECS 전환과 소유권 이전은 이 SQL의 완료 범위가 아니다.

@@ -1,0 +1,72 @@
+{
+  "version": "r0b-runtime-roles-v2",
+  "schema": "public",
+  "roles": {
+    "owner": {
+      "name": "mcm_owner",
+      "login": false,
+      "ownershipTransfer": "deferred"
+    },
+    "app": {
+      "name": "mcm_app",
+      "login": true,
+      "searchPath": "public",
+      "connectionLimit": 50,
+      "tables": ["SELECT", "INSERT", "UPDATE", "DELETE"],
+      "sequences": ["USAGE", "SELECT"],
+      "routines": ["EXECUTE"]
+    },
+    "worker": {
+      "name": "mcm_worker",
+      "login": true,
+      "searchPath": "public",
+      "connectionLimit": 8,
+      "tables": {
+        "facilities": ["SELECT"],
+        "facility_history_events": ["SELECT"],
+        "facility_quality_runs": ["SELECT", "UPDATE"],
+        "facility_quality_items": ["SELECT", "UPDATE"],
+        "facility_enrichment_candidates": ["SELECT", "INSERT"],
+        "facility_quality_source_requests": ["SELECT", "INSERT", "UPDATE"],
+        "facility_quality_profile_cache": ["SELECT", "INSERT", "UPDATE"]
+      },
+      "sequences": [],
+      "routines": ["facility_quality_snapshot(facilities)"]
+    },
+    "collector": {
+      "name": "mcm_collector",
+      "created": false,
+      "reason": "collection still runs inside the Next application boundary"
+    },
+    "deployer": {
+      "mode": "existing Aurora master/operator",
+      "runtimeCredential": false
+    }
+  },
+  "database": {
+    "publicConnect": false,
+    "runtimeConnect": true,
+    "runtimeTemporary": false
+  },
+  "schemaPrivileges": {
+    "publicCreate": false,
+    "runtimeUsage": true,
+    "runtimeCreate": false
+  },
+  "installation": {
+    "migration": "265_runtime_database_roles.sql",
+    "advisoryLockKey": [607003, 265],
+    "singleApprovedPrincipal": true,
+    "globalDefaultPublicFunctionExecute": false,
+    "reapplyAfterNewPublicObjects": true,
+    "passwordsPreservedOnReapply": true
+  },
+  "commonRuntimeAttributes": [
+    "NOSUPERUSER",
+    "NOCREATEDB",
+    "NOCREATEROLE",
+    "NOINHERIT",
+    "NOREPLICATION",
+    "NOBYPASSRLS"
+  ]
+}

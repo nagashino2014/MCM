@@ -43,9 +43,34 @@ bastion SSM 포트포워딩(localhost:15432)을 통해 psql 로 `infra/aws/NNN_*
 
 ## next(웹) 재배포
 
+**R0B IR-1 임시 중지:** 이 P0 후보가 main에 통합되고, 스테이징 plan에서 ADT·intel 두
+`aws_cloudwatch_event_target`의 변경이 각각 0건임을 확인하기 전에는 main 기준 전체·대상 지정
+`terraform apply`와 Next 배포를 실행하지 않는다. 2026-09-21에 승인된 두 스케줄의 숫자
+revision 618 고정을 보호하기 위한 중지다.
+
+두 target은 숫자 revision ARN을 필수 변수 `scheduled_next_task_definition_arn`으로 받는다.
+스테이징 확인에는 당시 승인된 ARN `arn:aws:ecs:ap-northeast-2:195748745315:task-definition/mcm-ieps-staging-next:618`을
+`-var`로 명시한다. 기본값이나 저장소 tfvars에 숨겨 두지 않는다. 다른 Terraform 변경이 plan에
+섞여 있어도 수용 기준은 **이 두 target의 변경 0건**이다. 적용 전에 현재 target을 다시 읽고
+plan의 계정·revision을 확인한다. 기존에 저장한 Terraform plan 파일은 재사용하지 않는다.
+
+이 패치가 통합된 뒤에도 일반 Next 배포는 기본 차단이다. 프론트만 긴급 배포하면서 배치가 기존
+revision에 남는 것을 의도적으로 수용할 때에만 `-AcknowledgePinnedScheduleLag -Wait`를 함께
+지정한다. `-Force`와 `-SkipBuild`는 스케줄 고정 검사를 우회하지 않는다. 배치까지 새 revision으로
+옮기는 절차는 R0B 전체 전환 작업의 별도 범위다.
+
+2026-09-21에 승인받아 실행한 revision 618 고정의 원복 기록은 그때의 계약 해시에 묶여 있다.
+`staging-pin-next-schedules.mjs`와 배포 고정 검사기는 바이트가 보존된
+`runtime-db-schedule-pin-contract-20260921.json`을 읽는다. 이 파일은 원복 기록을 유지하는
+동결 입력이며 갱신하지 않는다. 반면 R0B 읽기 수집·계획·전송용
+`runtime-db-transition-contract.json`은 실제 SSO 권한 세트 역할
+`AWSReservedSSO_AdministratorAccess_b2a94913dfd435bd`를 허용한다. SSO 권한 세트의 역할 이름이
+바뀌면 전환 계획은 안전하게 거절되므로 실제 STS ARN을 다시 확인한 뒤 계약을 갱신한다.
+이 허용 목록은 R0B 전체 실행기나 수동 복구의 운영자 인증을 대신하지 않는다.
+
 ```powershell
-.\infra\aws\ops\staging-deploy-next.ps1              # 빌드 → ECR 푸시 → 새 리비전 → 서비스 갱신
-.\infra\aws\ops\staging-deploy-next.ps1 -Wait        # 배포 안정화까지 대기
+# 임시 중지 해제 후에도 기본 배포는 차단된다. 배치 지연을 승인한 긴급 배포만 아래 명령을 쓴다.
+.\infra\aws\ops\staging-deploy-next.ps1 -AcknowledgePinnedScheduleLag -Wait
 ```
 
 태스크 정의가 `:latest` 가 아니라 **고정 태그**를 가리켜서 `force-new-deployment` 만으로는 반영되지

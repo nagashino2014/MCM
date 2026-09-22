@@ -13,6 +13,13 @@ variable "aws_region" {
   default = "ap-northeast-2"
 }
 
+# 스테이징 ADT·intel 배치가 검증 전 Next 최신판을 따라가지 않도록 숫자 revision을 명시한다.
+# plan/apply 시 현재 승인된 ARN을 -var 또는 TF_VAR_scheduled_next_task_definition_arn으로 전달한다.
+# 기본값을 두지 않아 값 누락 시 적용이 멈춘다.
+variable "scheduled_next_task_definition_arn" {
+  type = string
+}
+
 variable "vpc_cidr" {
   type    = string
   default = "10.40.0.0/16"

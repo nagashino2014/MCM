@@ -27,6 +27,7 @@ param(
   [string]$Tag        = "",   # 비우면 deploy-yyyyMMdd-HHmmss
   [switch]$SkipBuild,         # 이미 푸시한 태그로 태스크 정의만 갱신
   [switch]$Wait,              # services-stable 까지 대기
+  [switch]$AcknowledgePinnedScheduleLag, # 두 배치가 기존 숫자 revision에 남는 것을 명시적으로 수용
   [string]$FacilityQualityEnvironmentFile = "", # 정비 워커 연결 설정 JSON, 비밀 값 금지
   [switch]$Force              # 갈라진 배포 가드(다른 브랜치 커밋 누락 경고) 생략
 )
@@ -45,12 +46,25 @@ $repoRoot  = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
 
 function Log($m)  { Write-Host "[deploy] $m" }
 function Fail($m) { Write-Host "[deploy] 실패: $m" -ForegroundColor Red; exit 1 }
+function Assert-PinnedSchedules {
+  try { & (Join-Path $PSScriptRoot 'staging-assert-next-schedules-pinned.ps1') -AwsProfile $AwsProfile -Region $Region | Out-Null }
+  catch { Fail $_.Exception.Message }
+}
 
 if (-not $Tag) { $Tag = "deploy-" + (Get-Date -Format "yyyyMMdd-HHmmss") }
 $image = "${registry}/${repo}:${Tag}"
 
 Log "repo root : $repoRoot"
 Log "image     : $image"
+
+# family-only target이면 새 revision 등록만으로도 배치가 검증 전 코드를 실행한다.
+# -Force·-SkipBuild로 우회하지 않고, git·빌드·푸시·등록 전에 확인한다.
+Assert-PinnedSchedules
+if (-not $AcknowledgePinnedScheduleLag) {
+  Fail '[schedule_revision_lag] 배포 뒤 ADT·야간 배치는 기존 revision에 남습니다. 스케줄 동시 전환이 준비되기 전에는 일반 배포를 중단합니다'
+}
+if (-not $Wait) { Fail '구 배치 판 유지 배포에는 -Wait가 필요합니다' }
+Log '구 배치 판 유지 승인: Next 서비스만 새 revision으로 전환하고 두 배치는 이전 revision에 남깁니다'
 
 # -Force로도 미커밋/미통합 소스 배포를 허용하지 않는다.
 git -C $repoRoot fetch origin --quiet
@@ -135,12 +149,20 @@ if ($FacilityQualityEnvironmentFile) {
   }
 }
 
+# 빌드 중 스케줄이 family-only로 돌아갔을 수 있으므로 등록 직전에 다시 확인한다.
+Assert-PinnedSchedules
 # AWS CLI 는 BOM 붙은 JSON 을 파싱하지 못하므로 BOM 없는 UTF-8 로 쓴다.
-$tdPath = Join-Path $env:TEMP "mcm_next_taskdef.json"
-[IO.File]::WriteAllText($tdPath, ($td | ConvertTo-Json -Depth 30), (New-Object Text.UTF8Encoding($false)))
-
-$newArn = (aws ecs register-task-definition --cli-input-json "file://$tdPath" --region $Region --query "taskDefinition.taskDefinitionArn" --output text)
-if ($LASTEXITCODE -ne 0 -or -not $newArn) { Fail "태스크 정의 등록" }
+# 실행별 임시 이름을 사용하고 성공·실패 모두 제거한다.
+$tdPath = Join-Path $env:TEMP ("mcm_next_taskdef_{0}.json" -f [guid]::NewGuid().ToString('N'))
+$registerFailed = $false
+try {
+  [IO.File]::WriteAllText($tdPath, ($td | ConvertTo-Json -Depth 30), (New-Object Text.UTF8Encoding($false)))
+  $newArn = (aws ecs register-task-definition --cli-input-json "file://$tdPath" --region $Region --query "taskDefinition.taskDefinitionArn" --output text)
+  if ($LASTEXITCODE -ne 0 -or -not $newArn) { $registerFailed = $true }
+} finally {
+  Remove-Item -LiteralPath $tdPath -Force -ErrorAction SilentlyContinue
+}
+if ($registerFailed) { Fail "태스크 정의 등록" }
 Log "새 리비전: $newArn"
 
 # 3) 서비스에 새 리비전 적용

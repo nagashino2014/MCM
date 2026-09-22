@@ -53,8 +53,8 @@ resource "aws_cloudwatch_event_target" "adt_ingest" {
   role_arn = aws_iam_role.adt_ingest_events.arn
 
   ecs_target {
-    # revision 생략한 family ARN → 최신 ACTIVE 리비전(앱 배포로 갱신되는 next 리비전) 사용
-    task_definition_arn = "arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:task-definition/${local.name}-next"
+    # 검증된 숫자 revision만 사용한다. 스케줄 포인터 변경은 별도 승인된 전환 절차가 소유한다.
+    task_definition_arn = var.scheduled_next_task_definition_arn
     task_count          = 1
     launch_type         = "FARGATE"
 
@@ -73,4 +73,14 @@ resource "aws_cloudwatch_event_target" "adt_ingest" {
       environment = [{ name = "ADT_INGEST_MODE", value = "db" }]
     }]
   })
+
+  lifecycle {
+    # 전환 절차가 갱신한 숫자 revision을 일반 terraform apply가 되돌리지 않는다.
+    ignore_changes = [ecs_target[0].task_definition_arn]
+
+    precondition {
+      condition     = can(regex("^arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:task-definition/${local.name}-next:[1-9][0-9]*$", var.scheduled_next_task_definition_arn))
+      error_message = "scheduled_next_task_definition_arn must identify this account, region, and Next family with an explicit revision."
+    }
+  }
 }

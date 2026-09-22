@@ -1,0 +1,218 @@
+{
+  "version": "r0b2b-runtime-transition-snapshot-contract-v8",
+  "snapshotVersion": "r0b2b-runtime-transition-snapshot-v4",
+  "planVersion": "r0b2b-runtime-transition-plan-v4",
+  "partition": "aws",
+  "region": "ap-northeast-2",
+  "accountId": "195748745315",
+  "cluster": "mcm-ieps-staging",
+  "database": "mcm",
+  "databaseProofVersion": "r0b-runtime-roles-v2",
+  "components": {
+    "next": {
+      "container": "next",
+      "family": "mcm-ieps-staging-next",
+      "role": "mcm_app",
+      "secret": "mcm-ieps-staging/db-app",
+      "taskRole": "mcm-ieps-staging-ecs-task",
+      "executionRole": "mcm-ieps-staging-ecs-execution-next",
+      "applicationSecret": "mcm-ieps-staging/app",
+      "applicationKeys": ["AUTH_SECRET", "ADMIN_USERNAME", "ADMIN_PASSWORD", "SOLAPI_API_KEY", "SOLAPI_API_SECRET", "ANTHROPIC_API_KEY"]
+    },
+    "worker": {
+      "container": "worker",
+      "family": "mcm-ieps-staging-worker",
+      "role": "mcm_worker",
+      "secret": "mcm-ieps-staging/db-worker",
+      "taskRole": "mcm-ieps-staging-ecs-task-worker",
+      "executionRole": "mcm-ieps-staging-ecs-execution-worker",
+      "applicationSecret": "mcm-ieps-staging/app",
+      "applicationKeys": ["DART_API_KEY", "DATA_GO_KR_API_KEY"]
+    }
+  },
+  "nextService": "mcm-ieps-staging-next",
+  "scheduleRules": ["mcm-ieps-staging-adt-ingest", "mcm-ieps-staging-intel-batch"],
+  "scheduleApprovedDefaults": {
+    "taskCount": 1,
+    "launchType": "FARGATE",
+    "assignPublicIp": "ENABLED",
+    "expressions": {
+      "mcm-ieps-staging-adt-ingest": "rate(1 hour)",
+      "mcm-ieps-staging-intel-batch": "cron(0 18 * * ? *)"
+    }
+  },
+  "scheduleApprovedInputSha256": {
+    "mcm-ieps-staging-adt-ingest": "9db07ae79d745fe4994152576c29f7aaf32b46553b87d01a1f48992a2f627380",
+    "mcm-ieps-staging-intel-batch": "be50d0ba385e514a2cb9cef9cb976493df8af1bdafa845ff09f0aa34851b12b4"
+  },
+  "queue": {
+    "name": "mcm-ieps-staging-jobs",
+    "dlqName": "mcm-ieps-staging-jobs-dlq",
+    "minimumRetentionSeconds": 1209600,
+    "maximumVisibleMessages": 0,
+    "maximumNotVisibleMessages": 0,
+    "maximumDlqMessages": 0,
+    "maximumRunningWorkerTasks": 0,
+    "maximumPublishedLast5Minutes": 0
+  },
+  "snapshot": {
+    "maximumAgeSeconds": 300,
+    "maximumFutureSkewSeconds": 30,
+    "maximumCollectionWindowSeconds": 60,
+    "maximumPlanDelaySeconds": 30,
+    "closedSchema": true
+  },
+  "collector": {
+    "name": "staging-collect-runtime-db-transition",
+    "version": "r0b2b-runtime-transition-collector-v5",
+    "allowedIamRoleArns": [],
+    "allowedStsRoleNames": ["AWSReservedSSO_AdministratorAccess_b2a94913dfd435bd"],
+    "databaseFactsVersion": "r0b-runtime-database-facts-v1",
+    "databaseReadOnly": "remove PGSERVICE and PGSERVICEFILE, force PGOPTIONS=-c default_transaction_read_only=on, and require the query transaction_read_only guard to return one row",
+    "testAdapterArguments": "forbidden unless MCM_RUNTIME_TRANSITION_TEST_ADAPTERS=1 and trimmed case-folded NODE_ENV is not production",
+    "emptyCloudWatchDatapoints": "reject; the first real staging collection must establish that quiet queues still publish both required metrics",
+    "passRoleEvaluation": "an exact Allow resource counts only when no explicit Deny statement can cover iam:PassRole for that role ARN"
+  },
+  "iamTransitionPolicies": [
+    {
+      "roleName": "mcm-ieps-staging-ecs-task",
+      "policyName": "mcm-ieps-staging-facility-quality-worker-start",
+      "requiredLegacyRoleNames": ["mcm-ieps-staging-ecs-task", "mcm-ieps-staging-ecs-execution"],
+      "requiredCandidateRoleNames": ["mcm-ieps-staging-ecs-task-worker", "mcm-ieps-staging-ecs-execution-worker"]
+    },
+    {
+      "roleName": "mcm-ieps-staging-adt-ingest-events",
+      "policyName": "mcm-ieps-staging-adt-ingest-events",
+      "requiredLegacyRoleNames": ["mcm-ieps-staging-ecs-execution"],
+      "requiredCandidateRoleNames": ["mcm-ieps-staging-ecs-task", "mcm-ieps-staging-ecs-execution-next"]
+    },
+    {
+      "roleName": "mcm-ieps-staging-intel-batch-events",
+      "policyName": "mcm-ieps-staging-intel-batch-events",
+      "requiredLegacyRoleNames": ["mcm-ieps-staging-ecs-execution"],
+      "requiredCandidateRoleNames": ["mcm-ieps-staging-ecs-task", "mcm-ieps-staging-ecs-execution-next"]
+    }
+  ],
+  "iamInlinePolicyCanonicalization": {
+    "version": "r0b-iam-inline-policy-c14n-v2",
+    "source": "AWS CLI get-role-policy JSON PolicyDocument object after AWS CLI decoding",
+    "urlDecode": "none-after-aws-cli-json",
+    "rejectDuplicateObjectKeys": true,
+    "numberHandling": "reject-all-json-numbers",
+    "objectKeyOrder": "ordinal",
+    "arrayOrder": "preserve",
+    "jsonWhitespace": "none",
+    "stringEscaping": "json-once",
+    "nonAscii": "raw-unicode-encoded-as-utf8",
+    "encoding": "utf8-no-bom",
+    "digest": "sha256-lowercase-hex",
+    "fixtureCanonicalJson": "{\"Statement\":[{\"Action\":[\"iam:PassRole\"],\"Effect\":\"Allow\",\"Resource\":[\"arn:aws:iam::195748745315:role/example\"]}],\"Version\":\"2012-10-17\"}",
+    "fixtureSha256": "77b20e0bbe7ca924f83f70463d66179b2bde9b11f208f03ec6fe988c12c50c39",
+    "percentUnicodeFixtureCanonicalJson": "{\"Statement\":[{\"Action\":[\"s3:GetObject\"],\"Effect\":\"Allow\",\"Resource\":[\"arn:aws:s3:::bucket/100%25-done/서울/*\"]}],\"Version\":\"2012-10-17\"}",
+    "percentUnicodeFixtureSha256": "c59a67d1dba4805a45522ba39ebb3b092c5c09b13dd59c5126d4f7f6ee97256e"
+  },
+  "eventBridge": {
+    "eventBusValue": "name",
+    "defaultEventBusName": "default"
+  },
+  "durableExecution": {
+    "version": "r0b-runtime-transition-execution-v8",
+    "stateKey": "transitionId",
+    "singleActiveExecution": true,
+    "singleActiveExecutionEnforcement": "exclusive state-directory lock plus one durable active-transition record; stale-lock reclaimers serialize through a versioned recovery lease carrying a host fingerprint and re-read the lock before atomically quarantining a dead same-host PID lock, while live, foreign-host, and fresh unreadable locks fail closed",
+    "lockHostPrivacy": "lock records contain an unsalted SHA-256 host fingerprint and never the raw hostname; this is a pseudonym, not protection against a hostname dictionary attack, and historical sealed v2 lock evidence remains unchanged",
+    "lockOwnership": "the releasing process removes a lock only when its random lockId still matches",
+    "eventDurability": "write and fsync an immutable event containing the complete next-state image before atomically replacing active-transition; load replays a valid contiguous event journal when active state lags",
+    "persistPendingPreCasBeforeExternalCall": true,
+    "phaseStates": ["pending", "complete", "rollback_pending", "rollback_complete", "intervention_required"],
+    "recoveryDecision": {
+      "preCasStillCurrent": "external call did not take effect; retry with the same request token",
+      "plannedEffectCurrent": "external call took effect; record complete without repeating it",
+      "convergencePending": "a phase-specific predicate recognizes an asynchronous intermediate state; retain pending and poll without repeating the external call until planned effect or deadline",
+      "neither": "external interference; record intervention_required and stop"
+    },
+    "readCurrentProjection": "each external adapter must return exactly the phaseStableProjection fields; volatile rollout metadata must be classified by the phase-specific convergence predicate",
+    "phaseStableProjection": {
+      "preflight_complete": ["planSha256", "sourceSnapshotSha256", "validationResult"],
+      "secrets_ready": ["appSecretArn", "appCurrentVersionId", "appPendingVersionCount", "workerSecretArn", "workerCurrentVersionId", "workerPendingVersionCount"],
+      "worker_registered": ["family", "candidateSha256", "taskDefinitionArn", "revision", "status"],
+      "next_registered_disabled": ["family", "candidateSha256", "taskDefinitionArn", "revision", "status", "workerEnabled"],
+      "next_service_stable": ["serviceName", "taskDefinitionArn", "desiredCount", "runningCount", "pendingCount", "primaryTaskDefinitionArn", "primaryStatus", "primaryRolloutState"],
+      "schedules_switched": ["rules.name", "rules.eventBusName", "rules.state", "rules.targetId", "rules.taskDefinitionArn", "rules.roleArn", "rules.scheduleExpression", "rules.taskCount", "rules.launchType", "rules.networkConfigurationSha256", "rules.inputSha256", "rules.platformVersion", "rules.enableExecuteCommand", "rules.propagateTags", "rules.ruleRoleArn", "rules.retryPolicySha256", "rules.deadLetterConfigSha256"],
+      "runtime_verified": ["appCurrentUser", "workerCurrentUser", "requiredRoles", "privilegeProofVersion", "workerEnabled", "healthVerdicts"],
+      "legacy_passrole_removed": ["policies.roleName", "policies.policyName", "policies.canonicalSha256", "policies.legacyPassRoleAllowed", "policies.candidatePassRoleAllowed"],
+      "worker_enabled": ["taskDefinitionArn", "desiredCount", "runningCount", "pendingCount", "workerEnabled", "runtimeRoleVerified"]
+    },
+    "projectionArrayRules": {
+      "schedules_switched.rules": "one object per (eventBusName,name,targetId), with exact schedule fields from runtime-db-transition-schedule.mjs; reject duplicate identities and sort by ordinal canonical JSON before comparison",
+      "legacy_passrole_removed.policies": "one object per (roleName,policyName), with exact roleName,policyName,canonicalSha256,legacyPassRoleAllowed,candidatePassRoleAllowed keys; reject duplicate identities and sort by ordinal canonical JSON before comparison"
+    },
+    "scheduleTargetRequirement": "each switched rule must have exactly the approved targetId on the approved event bus and an ECS target with a numeric taskDefinitionArn; bind the exact execution role, schedule expression, task count, launch type, platform version, execute-command flag, tag propagation, normalized awsvpc network digest, and canonical direct JSON Input digest in snapshot, plan, pre-CAS, and planned effect; rule-level role, target retry policy, and dead-letter config are unsupported and represented as null; EnableECSManagedTags must be false if returned, and PlacementConstraints, PlacementStrategy, and CapacityProviderStrategy must be empty if returned; only taskDefinitionArn may change; zero targets, extra targets, or non-ECS targets fail closed",
+    "scheduleDigestCanonicalization": "SHA-256 of UTF-8 stable JSON with ordinal object keys and preserved array order; awsvpc Subnets and SecurityGroups are sets sorted ordinal before hashing; direct target Input must be a JSON object without duplicate keys or numeric values, never stored in snapshot or plan; InputPath and InputTransformer are unsupported and fail closed",
+    "scheduleInputPolicy": "Schedule Input must not contain secrets: approved Input SHA-256 values are fixed from the two Terraform jsonencode declarations; secrets belong in task-definition Secrets Manager references. The unsalted digest is a consistency check, not confidentiality for low-entropy input. Network digest is bound to the captured plan but cannot be statically fixed before live subnet/security-group identities are independently observed.",
+    "scheduleEffectRequirement": "buildScheduleSwitchEffect requires the read pre-CAS projection to equal every approved plan schedule row and constructs an effect by replacing only taskDefinitionArn with a numeric Next family revision; assertScheduleSwitchEffect rejects every other field change. This pure helper does not authorize or perform PutTargets.",
+    "projectionAdapterRequirement": "AWS adapters must map DescribeServices.taskDefinition and the PRIMARY deployment, DescribeSecret.VersionIdsToStages, DescribeRule plus ListTargetsByRule, and normalized GetRolePolicy to these logical fields; validate exact keys and array identity/order before passing values to the state core",
+    "stateMetadataBoundary": "the offline plan omits secret ARNs and all secret values; the durable execution state and immutable events may contain approved secret ARNs in phase pre-CAS, planned effect, and observations, but must never contain secret values; protect state and evidence access accordingly",
+    "phaseDeadlineEnforcement": "the initially persisted deadline is never reset; forward execution checks it before invoke and recovery reads, while rollback may perform a read-only exact-state observation after expiry but must not invoke a forward effect or wait for convergence; unresolved states require intervention",
+    "planFreshness": "snapshot and plan age are checked only when the transition is initialized; later phase entry relies on the stored plan binding, fresh phase pre-CAS, and the persisted phase deadline",
+    "requestTokens": {
+      "secrets_ready": "derive stable ClientRequestToken values from transitionId and component",
+      "worker_registered": "no AWS token; scan recent family revisions and match the candidate hash before registering",
+      "next_registered_disabled": "no AWS token; scan recent family revisions and match the candidate hash before registering"
+    },
+    "iamChangeOwner": "terraform variable transition followed by reviewed terraform apply",
+    "defaultPhaseTimeoutSeconds": 900,
+    "phaseTimeoutSeconds": {
+      "preflight_complete": 300,
+      "secrets_ready": 900,
+      "worker_registered": 900,
+      "next_registered_disabled": 900,
+      "next_service_stable": 1800,
+      "schedules_switched": 900,
+      "runtime_verified": 900,
+      "legacy_passrole_removed": 1800,
+      "worker_enabled": 900
+    },
+    "rollbackProgress": "the first beginRollback freezes the reverse order of complete and pending forward phases; a pending phase is read before rollback and is either recovered as applied, closed as a no-op when pre-CAS remains current, or stopped for intervention; retries reuse the frozen targets and never recalculate or reset completed rollback work",
+    "rollbackFailureState": "intervention_required is durable and cannot be restarted or overwritten by beginRollback; forward phase status and result remain historical facts while repeated rollback failures append to failureHistory under the rollback record and immutable events",
+    "manualInterventionRecovery": "after an authenticated operator preserves an incident snapshot and nonzero evidence SHA-256, recoverInterventionForRollback rejects control characters in operatorId, accepts only an exact pre-CAS or planned-effect observation, writes an immutable manual recovery event, preserves prior failure details, and resumes the original frozen rollback targets; pre-CAS observation is preCasCurrent and may mean externallyRestored, not never applied; any other observation remains blocked",
+    "recoveryLeaseProcedure": "stop all transition executors, preserve and hash the state directory, verify the recovery-lease PID is dead and no executor can start, quarantine that exact lease file into incident evidence, then load and reconcile the immutable journal; never edit active state or events by hand",
+    "transitionIdReuse": "a transitionId is single-use across active state, immutable events, and history using case-insensitive comparison on every platform; reuse is rejected before archiving or mutating the current terminal transition",
+    "stateVersionCompatibility": "load accepts v2 through v5 state images and rejects unknown versions before repairing a lagging active file; the next durable event upgrades a supported old image to v5; event journal format remains v2",
+    "phaseOrder": [
+      "preflight_complete",
+      "secrets_ready",
+      "worker_registered",
+      "next_registered_disabled",
+      "next_service_stable",
+      "schedules_switched",
+      "runtime_verified",
+      "legacy_passrole_removed",
+      "worker_enabled"
+    ]
+  },
+  "readOnlyAwsAdapterSlice": {
+    "version": "r0b-runtime-transition-read-adapter-v2",
+    "implementedPhases": ["secrets_ready", "next_service_stable", "schedules_switched"],
+    "transport": "dependency-injected read-only AWS operation allowlist; no real AWS credential, CLI transport, or mutation is supplied by this slice",
+    "projection": "exact phase keys and contracted schedule/policy array identities; active non-deleted secret metadata and version stages only, exactly one approved ECS schedule target, and one ACTIVE Next service with no DescribeServices failures and exactly one PRIMARY deployment",
+    "manualRecovery": "an injected operator authorizer must return true and an existing nonempty evidence file of at most 64 MiB must hash to the supplied SHA-256 before the state core recovery call",
+    "remaining": "schedule immutable fields participate in snapshot, plan, read projection, and a pure task-definition-only effect check, but schedule writes remain disabled until the live ListTargetsByRule key set is checked; six other phase-specific AWS projections, real authenticated identity provider, AWS read/write transport, mutation CAS, rollback effects, and multi-host behavior require later implementation and validation"
+  },
+  "approvedMutableEnvironment": {
+    "next": ["PGSSL", "PGSSL_REJECT_UNAUTHORIZED", "MCM_DB_ROLE_REQUIRED", "MCM_DB_EXPECTED_ROLE", "MCM_FACILITY_QUALITY_WORKER_READY"],
+    "worker": ["PGSSL", "PGSSL_REJECT_UNAUTHORIZED", "MCM_DB_ROLE_REQUIRED", "MCM_DB_EXPECTED_ROLE"]
+  },
+  "approvedMutableSecrets": ["PGUSER", "PGPASSWORD"],
+  "phases": [
+    "preflight_complete",
+    "secrets_ready",
+    "worker_registered",
+    "next_registered_disabled",
+    "next_service_stable",
+    "schedules_switched",
+    "runtime_verified",
+    "legacy_passrole_removed",
+    "worker_enabled"
+  ]
+}

@@ -43,11 +43,13 @@ bastion SSM 포트포워딩(localhost:15432)을 통해 psql 로 `infra/aws/NNN_*
 
 ## next(웹) 재배포
 
-**R0B IR-1 임시 중지:** P0는 main에 통합됐고, 스테이징 plan에서 ADT·intel 두
-`aws_cloudwatch_event_target`의 변경이 각각 0건(618→618)임을 확인했다. 다만 같은 plan에
-다른 변경 9건이 있으므로, 사용자가 중지 해제를 명시적으로 결정하기 전에는 main 기준 전체·
-대상 지정 `terraform apply`와 Next 배포를 실행하지 않는다. 2026-09-21에 승인된 두 스케줄의
-숫자 revision 618 고정을 보호하기 위한 중지다.
+**R0B IR-1 후속 배포 경계(2026-09-22, 임시 중지 해제):** P0가 main에 통합됐고 스테이징 plan에서
+ADT·intel 두 `aws_cloudwatch_event_target`의 변경이 각각 0건(618→618)임을 확인해 Next 배포를 재개한다.
+배포는 아래 `-AcknowledgePinnedScheduleLag -Wait` 경로로만 하며, ADT·intel이 쓰는 표의 스키마 변경이
+포함되면 이 경로를 쓰지 않고 스케줄 동반 전환을 준비한다. 같은 plan에는 메일 수신 MX 삭제
+(`enable_mail_inbound_mx` 기본값 false)·SES/Route53 교체·bastion 교체가 섞여 있으므로 **스테이징 전체
+`terraform apply`는 금지**한다. `-target` apply는 검토한 리소스에 한하고, 적용 직전 plan에서 그 주소 외
+변경이 없는지 확인한다.
 
 두 target은 숫자 revision ARN을 필수 변수 `scheduled_next_task_definition_arn`으로 받는다.
 스테이징 확인에는 당시 승인된 ARN `arn:aws:ecs:ap-northeast-2:195748745315:task-definition/mcm-ieps-staging-next:618`을

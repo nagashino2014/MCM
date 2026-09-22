@@ -1,6 +1,7 @@
+import { withContractTransactionWrite } from "@/lib/finance/contract-link-lock";
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
-import { rowsToObjects, withDbWrite } from "@/lib/db";
+import { rowsToObjects } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 import { deleteContractDocument } from "@/lib/storage/contract-document-storage";
 
@@ -24,7 +25,7 @@ export async function DELETE(_req: NextRequest, ctx: RouteContext) {
     const actor = await requirePermission("contract.edit", { fallbackRoles: ["editor"], target: { contractId } });
     let storageKey = "";
     let displayName = "";
-    await withDbWrite(async (db) => {
+    await withContractTransactionWrite(contractId, null, async (db) => {
       const rows = rowsToObjects(
         await db.exec(
           `SELECT i.invoice_id, i.document_id, i.milestone_id, d.storage_key, d.display_name

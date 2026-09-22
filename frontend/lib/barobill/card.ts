@@ -5,6 +5,7 @@
 //  · 온라인 결제는 가맹점이 PG사로 잡힘 → PG 사업자번호는 분류 학습 사전에서 제외
 //  · 중복키 = CardNum + HistoryKey (공식 가이드)
 
+import { canonicalCardNumber } from "@/lib/barobill/card-number";
 import {
   getBarobillConfig,
   soapCall,
@@ -73,7 +74,7 @@ export async function getCards(availOnly: 0 | 1 | 2 = 0): Promise<BarobillCard[]
   return rows.map((row) => ({
     cardCompanyCode: pickText(row, "CardCompanyCode"),
     cardCompanyName: pickText(row, "CardCompanyName"),
-    cardNum: pickText(row, "CardNum"),
+    cardNum: canonicalCardNumber(pickText(row, "CardNum")),
     cardType: pickText(row, "CardType"),
     collectTarget: pickText(row, "CollectTarget"),
     collectCycle: pickText(row, "CollectCycle"),
@@ -95,47 +96,51 @@ export async function getCardManagementUrl(): Promise<string> {
 }
 
 export async function stopCard(cardNum: string): Promise<void> {
+  const number = canonicalCardNumber(cardNum);
   const { certKey, corpNum } = getBarobillConfig();
   const xml = await soapCall("CARD", "Stop", {
     CERTKEY: certKey,
     CorpNum: corpNum,
     CollectTarget: "PURCHASE",
-    CardNum: cardNum,
+    CardNum: number,
   });
   await expectOk(xml, "Stop");
 }
 
 export async function cancelStopCard(cardNum: string): Promise<void> {
+  const number = canonicalCardNumber(cardNum);
   const { certKey, corpNum } = getBarobillConfig();
   const xml = await soapCall("CARD", "CancelStop", {
     CERTKEY: certKey,
     CorpNum: corpNum,
     CollectTarget: "PURCHASE",
-    CardNum: cardNum,
+    CardNum: number,
   });
   await expectOk(xml, "CancelStop");
 }
 
 export async function reRegisterCard(cardNum: string): Promise<void> {
+  const number = canonicalCardNumber(cardNum);
   const { certKey, corpNum } = getBarobillConfig();
   const xml = await soapCall("CARD", "ReRegister", {
     CERTKEY: certKey,
     CorpNum: corpNum,
     CollectTarget: "PURCHASE",
-    CardNum: cardNum,
+    CardNum: number,
   });
   await expectOk(xml, "ReRegister");
 }
 
 // 즉시 수집 요청 — 수집 중이면 -51008("이미 수집중") → 정상으로 간주
 export async function refreshCardNow(cardNum: string): Promise<{ alreadyRunning: boolean; code?: string; note?: string }> {
+  const number = canonicalCardNumber(cardNum);
   const { certKey, corpNum, id } = getBarobillConfig();
   const xml = await soapCall("CARD", "RefreshNow", {
     CERTKEY: certKey,
     CorpNum: corpNum,
     ID: id,
     CollectTarget: "PURCHASE",
-    CardNum: cardNum,
+    CardNum: number,
   });
   const code = methodResult(xml, "RefreshNow");
   if (code === "1") return { alreadyRunning: false };
@@ -192,10 +197,11 @@ export async function fetchCardPurchases(
   startDate: string, // YYYYMMDD
   endDate: string, // YYYYMMDD
 ): Promise<BarobillCardPurchase[]> {
+  const number = canonicalCardNumber(cardNum);
   const chunks = splitDateRange(startDate, endDate);
   if (chunks.length > 1) {
     const out: BarobillCardPurchase[] = [];
-    for (const chunk of chunks) out.push(...(await fetchCardPurchases(cardNum, chunk.start, chunk.end)));
+    for (const chunk of chunks) out.push(...(await fetchCardPurchases(number, chunk.start, chunk.end)));
     return out;
   }
   const { certKey, corpNum, id } = getBarobillConfig();
@@ -207,7 +213,7 @@ export async function fetchCardPurchases(
       CERTKEY: certKey,
       CorpNum: corpNum,
       ID: id,
-      CardNum: cardNum,
+      CardNum: number,
       StartDate: startDate,
       EndDate: endDate,
       CountPerPage: 100,

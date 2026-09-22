@@ -1,7 +1,9 @@
 import crypto from "node:crypto";
 import ExcelJS from "exceljs";
-import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
+import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
 import { putContractDocument } from "@/lib/storage/contract-document-storage";
+import { expenseMealAction, loadExpenseMealActions } from "./expense-meal-actions";
+import { lockExpenseSettlement } from "./expense-settlement-lock";
 
 /*
  * 개인카드 경비 정산(FRM-P6, 203) — 승인된 지출결의서(개인카드) 전 행 + 출장보고서의
@@ -67,6 +69,7 @@ function extractRows(doc: Record<string, unknown>): UnsettledItem[] {
   const out: UnsettledItem[] = [];
   rows.forEach((row, idx) => {
     if (!row || typeof row !== "object") return;
+    if (typeof row._cardTxnId === "string" && row._cardTxnId) return;
     const receiptId = typeof row._receiptId === "string" && row._receiptId ? row._receiptId : null;
     // 출장보고서는 영수증 경유(개인카드 확정) 행만, 개인카드 양식은 금액 있는 전 행
     if (formId === TRIP_FORM && !receiptId) return;
@@ -91,26 +94,66 @@ function extractRows(doc: Record<string, unknown>): UnsettledItem[] {
   return out;
 }
 
+/** Receipt IDs are global settlement references. Validate identity across source
+ * forms without importing those forms' rows into the settlement population. */
+function receiptReferenceCounts(docs: Record<string, unknown>[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const doc of docs) {
+    const values = parseJson(doc.field_values);
+    const table = values[String(doc.form_id) === TRIP_FORM ? "trip_expenses" : "expenses"];
+    if (!Array.isArray(table)) continue;
+    for (const row of table) {
+      if (typeof row?._receiptId === "string" && row._receiptId) counts.set(row._receiptId, (counts.get(row._receiptId) ?? 0) + 1);
+    }
+  }
+  return counts;
+}
+
 /** 미정산 개인카드 지출 행 — 승인 문서 전수 스캔 후 정산된 row_ref 제외. */
-export async function listUnsettledItems(): Promise<UnsettledItem[]> {
-  const db = await getDb();
+export async function listUnsettledItems(transaction?: PgDatabase): Promise<UnsettledItem[]> {
+  const db = transaction ?? await getDb();
   const docs = rowsToObjects(
     await db.exec(
       `SELECT doc_id, doc_no, form_id, drafter_user_id, drafter_employee_id, drafter_name, field_values
          FROM approval_docs WHERE status = 'approved' AND form_id IN ($1, $2)
-        ORDER BY completed_at`,
+        ORDER BY completed_at${transaction ? " FOR SHARE" : ""}`,
       [PERSONAL_FORM, TRIP_FORM]
     )
   );
   const settled = new Set(
     rowsToObjects(await db.exec(`SELECT row_ref FROM expense_settlement_items`)).map((r) => String(r.row_ref))
   );
-  return docs.flatMap(extractRows).filter((item) => !settled.has(item.rowRef));
+  await assertSettledExpenseSourcesUnchanged(docs.map(doc => String(doc.doc_id)), db);
+  const mealActions = await loadExpenseMealActions(db, docs.map(d => ({ docId: String(d.doc_id), formId: String(d.form_id) })));
+  // Validate source identity before withholding/settled filters: neither may hide
+  // a second use of the same receipt under another row or document.
+  const sourceItems = docs.flatMap(doc => extractRows(doc));
+  if (sourceItems.some(item => item.receiptId)) {
+    const receiptDocs = rowsToObjects(await db.exec(`SELECT doc_id, form_id, field_values FROM approval_docs
+      WHERE status='approved' AND form_id IN ('frm-expense-personal','frm-expense-report','frm-biz-trip-report')${transaction ? " FOR SHARE" : ""}`));
+    const counts = receiptReferenceCounts(receiptDocs);
+    if (sourceItems.some(item => item.receiptId && counts.get(item.receiptId) !== 1)) {
+      throw Object.assign(new Error("동일 영수증이 여러 지출 행에 연결되어 있습니다. 원본 연결을 정리한 뒤 정산하세요."), { status: 409 });
+    }
+  }
+  const refs = new Set<string>();
+  for (const item of sourceItems) {
+    if (refs.has(item.rowRef)) throw Object.assign(new Error("동일 영수증이 여러 지출 행에 연결되어 있습니다. 원본 연결을 정리한 뒤 정산하세요."), { status: 409 });
+    refs.add(item.rowRef);
+  }
+  return sourceItems.filter(item => {
+    if (settled.has(item.rowRef)) return false;
+    const doc = docs.find(doc => String(doc.doc_id) === item.docId)!;
+    const values = parseJson(doc.field_values);
+    const sourceRows = values[item.formId === PERSONAL_FORM ? "expenses" : "trip_expenses"] as Record<string, unknown>[];
+    const idx = item.receiptId ? sourceRows.findIndex(row => row?._receiptId === item.receiptId) : Number(item.rowRef.slice(`row:${item.docId}:`.length));
+    return expenseMealAction(mealActions, item.formId, item.docId, idx + 1) !== "withhold";
+  });
 }
 
 /** 인별 합계(계좌 정보 포함) — 미정산 목록/정산 상세 공용. */
-export async function groupByPerson(items: UnsettledItem[] | SettlementItemRow[]): Promise<PersonTotal[]> {
-  const db = await getDb();
+export async function groupByPerson(items: UnsettledItem[] | SettlementItemRow[], transaction?: PgDatabase): Promise<PersonTotal[]> {
+  const db = transaction ?? await getDb();
   const profiles = rowsToObjects(
     await db.exec(
       `SELECT e.employee_id, e.name, e.bank_code, e.bank_account, e.bank_account_holder, p.position_name
@@ -185,12 +228,16 @@ export async function listSettlements(): Promise<SettlementRow[]> {
   return rows.map(mapSettlement);
 }
 
-export async function listSettlementItems(settlementId: string): Promise<SettlementItemRow[]> {
-  const db = await getDb();
+export async function listSettlementItems(settlementId: string, transaction?: PgDatabase): Promise<SettlementItemRow[]> {
+  const db = transaction ?? await getDb();
   const rows = rowsToObjects(
     await db.exec(`SELECT * FROM expense_settlement_items WHERE settlement_id = $1 ORDER BY employee_name, used_on`, [settlementId])
   );
-  return rows.map((r) => ({
+  return rows.map(mapSettlementItem);
+}
+
+function mapSettlementItem(r: Record<string, unknown>): SettlementItemRow {
+  return {
     itemId: String(r.item_id),
     settlementId: String(r.settlement_id),
     rowRef: String(r.row_ref),
@@ -206,20 +253,21 @@ export async function listSettlementItems(settlementId: string): Promise<Settlem
     category: r.category != null ? String(r.category) : null,
     amount: Number(r.amount ?? 0),
     detail: r.detail != null ? String(r.detail) : null,
-  }));
+  };
 }
 
 /** 일괄 정산 실행 — 미정산 전건을 스냅샷으로 확정한다. row_ref 유니크가 동시 실행을 막는다. */
 export async function runSettlement(params: { actorUserId: string; note?: string | null }): Promise<SettlementRow> {
-  const items = await listUnsettledItems();
-  if (!items.length) throw new Error("정산 대상 지출 건이 없습니다.");
+  return withDbWrite(async (txn) => {
+  await lockExpenseSettlement(txn);
+  const items = await listUnsettledItems(txn);
+  if (!items.length) throw Object.assign(new Error("정산 대상 지출 건이 없습니다."), { status: 409 });
   const now = new Date().toISOString();
   const settledOn = now.slice(0, 10);
   const settlementId = id("est");
   const dates = items.map((i) => i.usedOn).filter((d): d is string => !!d).sort();
   const persons = new Set(items.map((i) => i.employeeId ?? i.employeeName ?? "unknown"));
 
-  await withDbWrite(async (txn) => {
     await txn.run(
       `INSERT INTO expense_settlements
          (settlement_id, settled_on, period_from, period_to, total_amount, item_count, person_count, note, created_by, created_at)
@@ -263,9 +311,65 @@ export async function runSettlement(params: { actorUserId: string; note?: string
         ]
       );
     }
+  const rows = rowsToObjects(await txn.exec("SELECT * FROM expense_settlements WHERE settlement_id=$1", [settlementId]));
+  return mapSettlement(rows[0]);
   });
-  const rows = await listSettlements();
-  return rows.find((r) => r.settlementId === settlementId)!;
+}
+
+/** Historical settlement snapshots are never silently rewritten. A withheld item
+ * in a legacy snapshot must not be exported again as a payable bank instruction. */
+export async function assertSettlementPayable(settlementId: string, transaction?: PgDatabase): Promise<SettlementItemRow[]> {
+  const db = transaction ?? await getDb();
+  const items = await listSettlementItems(settlementId, db);
+  if (!items.length) throw Object.assign(new Error("정산 내역이 없습니다."), { status: 404 });
+  await assertExpenseSources(items, db, true);
+  return items;
+}
+
+/** Prevent a changed row identity from reappearing as a fresh payment. This
+ * validates source identity/content only: an unchanged legacy withheld snapshot
+ * must not prevent unrelated ordinary expenses from being settled. */
+export async function assertSettledExpenseSourcesUnchanged(docIds: string[], transaction?: PgDatabase): Promise<void> {
+  if (!docIds.length) return;
+  const db = transaction ?? await getDb();
+  const items = rowsToObjects(await db.exec("SELECT * FROM expense_settlement_items WHERE doc_id=ANY($1::text[])", [[...new Set(docIds)]])).map(mapSettlementItem);
+  await assertExpenseSources(items, db, false);
+}
+
+async function assertExpenseSources(items: SettlementItemRow[], db: PgDatabase, rejectWithheld: boolean): Promise<void> {
+  if (!items.length) return;
+  const docs = rowsToObjects(await db.exec(`SELECT doc_id, form_id, field_values FROM approval_docs
+    WHERE (status='approved' AND form_id IN ('frm-expense-personal','frm-expense-report','frm-biz-trip-report'))
+       OR doc_id=ANY($1::text[])`, [[...new Set(items.map(item => item.docId))]]));
+  const byDoc = new Map(docs.map(doc => [String(doc.doc_id), doc]));
+  const receiptCounts = receiptReferenceCounts(docs);
+  const actions = rejectWithheld ? await loadExpenseMealActions(db, docs.map(doc => ({ docId: String(doc.doc_id), formId: String(doc.form_id) }))) : new Map();
+  for (const item of items) {
+    const doc = byDoc.get(item.docId);
+    const values = parseJson(doc?.field_values);
+    const sourceTable = values[item.formId === TRIP_FORM ? "trip_expenses" : "expenses"];
+    const rows = Array.isArray(sourceTable) ? sourceTable as Record<string, unknown>[] : [];
+    if (item.receiptId) {
+      if (receiptCounts.get(item.receiptId) !== 1) throw Object.assign(new Error("정산 영수증이 없거나 여러 지출 행에 연결되어 있습니다. 원본 연결을 확인한 뒤 CMS를 다시 생성하세요."), { status: 409 });
+    }
+    const rowIndex = item.receiptId ? rows.findIndex(row => row?._receiptId === item.receiptId)
+      : item.rowRef.startsWith(`row:${item.docId}:`) ? Number(item.rowRef.slice(`row:${item.docId}:`.length)) : -1;
+    if (!doc || String(doc.form_id) !== item.formId || !Number.isInteger(rowIndex) || rowIndex < 0 || !rows[rowIndex]) {
+      throw Object.assign(new Error("정산 원본 행을 확인할 수 없습니다. 정산 이력을 확인한 뒤 CMS를 다시 생성하세요."), { status: 409 });
+    }
+    const current = rows[rowIndex];
+    const sameText = (value: unknown, snapshot: string | null) => (value == null ? null : String(value)) === snapshot;
+    const currentReceipt = typeof current._receiptId === "string" && current._receiptId ? current._receiptId : null;
+    if (currentReceipt !== item.receiptId || (item.receiptId && item.rowRef !== `receipt:${item.receiptId}`)
+      || amountOf(current.amount) !== item.amount || !sameText(current[item.formId === TRIP_FORM ? "spent_on" : "used_on"], item.usedOn)
+      || !sameText(current.vendor, item.vendor) || !sameText(current.category, item.category)
+      || !sameText(current.detail, item.detail) || (typeof current._cardTxnId === "string" && current._cardTxnId)) {
+      throw Object.assign(new Error("정산 당시의 지출 내용과 현재 원본이 다릅니다. 정산 이력을 확인한 뒤 CMS를 다시 생성하세요."), { status: 409 });
+    }
+    if (rejectWithheld && expenseMealAction(actions, item.formId, item.docId, rowIndex + 1) === "withhold") {
+      throw Object.assign(new Error("기존 정산에 불지급 식대가 포함되어 CMS 생성·다운로드를 차단했습니다. 과거 정산 원본을 확인하세요."), { status: 409 });
+    }
+  }
 }
 
 /**
@@ -274,9 +378,10 @@ export async function runSettlement(params: { actorUserId: string; note?: string
  * 계좌 정보가 없는 인원은 행을 만들되 빈 값으로 두고 warnings 로 알린다(은행 업로드 전 보완).
  */
 export async function buildCmsFile(settlementId: string): Promise<{ fileName: string; storageKey: string; warnings: string[] }> {
-  const items = await listSettlementItems(settlementId);
-  if (!items.length) throw new Error("정산 내역이 없습니다.");
-  const persons = await groupByPerson(items);
+  return withDbWrite(async (txn) => {
+  await lockExpenseSettlement(txn);
+  const items = await assertSettlementPayable(settlementId, txn);
+  const persons = await groupByPerson(items, txn);
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("Star급여이체");
   const warnings: string[] = [];
@@ -293,14 +398,14 @@ export async function buildCmsFile(settlementId: string): Promise<{ fileName: st
     row.getCell(11).value = label; // K열 — 입금통장 표기
   }
   const buffer = Buffer.from(await wb.xlsx.writeBuffer());
-  const settlement = (await listSettlements()).find((r) => r.settlementId === settlementId);
+  const settlementRow = rowsToObjects(await txn.exec("SELECT * FROM expense_settlements WHERE settlement_id=$1", [settlementId]))[0];
+  const settlement = settlementRow ? mapSettlement(settlementRow) : null;
   const fileName = `출장 및 기타 경비 정산 ${(settlement?.settledOn ?? "").replace(/-/g, "").slice(2)}.xlsx`;
   const storageKey = `finance/expense-settlements/${settlementId}/${fileName}`;
   await putContractDocument(storageKey, buffer, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-  await withDbWrite(async (txn) => {
-    await txn.run(`UPDATE expense_settlements SET cms_file_key = $2 WHERE settlement_id = $1`, [settlementId, storageKey]);
-  });
+  await txn.run(`UPDATE expense_settlements SET cms_file_key = $2 WHERE settlement_id = $1`, [settlementId, storageKey]);
   return { fileName, storageKey, warnings };
+  });
 }
 
 export interface MonthlyTrendRow {

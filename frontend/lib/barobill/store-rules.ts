@@ -1,10 +1,13 @@
+import { lockAccountingWrite } from "@/lib/finance/write-lock";
 // 가맹점 계정과목 고정 규칙 (마이그 173) — 목록·미리보기·저장(소급 적용)·삭제
 // 취지: 코레일처럼 용도가 하나로 고정된 매입처만 사용자가 판단해 못박는다. 자동 일원화는 하지 않는다.
 // 소급 적용 제외: 이미 결의서에 실린 건(doc_id NOT NULL — 문서상 계정과목이 확정됨)과 excluded 건.
 
 import { createHash } from "node:crypto";
-import { getDb, withDbWrite, rowsToObjects } from "@/lib/db";
+import { getDb, withDbWrite, rowsToObjects, type PgDatabase } from "@/lib/db";
 import { loadCategories, isPgMerchant, normalizeCorpNum, normalizeStoreName } from "@/lib/barobill/classify";
+import { applyCardMerchantCorrections, merchantIdentity } from "@/lib/finance/card-merchant-source";
+import { assertNewVatFilingCardMutationsAllowed } from "@/lib/finance/vat-filing-protection";
 
 const KST_NOW = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 19).replace("T", " ");
 const ruleId = (matchType: string, matchValue: string) =>
@@ -25,11 +28,19 @@ export interface StoreRuleRow {
   createdAt: string;
 }
 
-/** 매칭 WHERE 절 — 사업자번호는 숫자만 비교, 상호는 공백 제거·대문자 비교(마이그 173 인덱스와 동일). */
-function matchClause(matchType: StoreMatchType, paramIndex: number): string {
-  return matchType === "store_name"
-    ? `upper(replace(COALESCE(store_name, ''), ' ', '')) = $${paramIndex}`
-    : `regexp_replace(COALESCE(store_corp_num, ''), '[^0-9]', '', 'g') = $${paramIndex}`;
+/** 원본은 보존하고, 규칙의 조회·미리보기·적용 모두 같은 유효번호로 매칭한다. */
+async function loadRuleSources(db: PgDatabase): Promise<Record<string, unknown>[]> {
+  return applyCardMerchantCorrections(db, rowsToObjects(await db.exec(
+    `SELECT card_txn_id, store_corp_num, store_name, store_biz_type,
+            upper(replace(COALESCE(store_name, ''), ' ', '')) AS store_name_match
+       FROM card_transactions`,
+  )));
+}
+
+function matchingIds(rows: Record<string, unknown>[], matchType: StoreMatchType, matchValue: string, applicableOnly = false): string[] {
+  return rows.filter(row => (!applicableOnly || !merchantIdentity(row)?.issues.length)
+    && (matchType === "store_name" ? String(row.store_name_match) : normalizeCorpNum(row.store_corp_num == null ? null : String(row.store_corp_num))) === matchValue)
+    .map(row => String(row.card_txn_id));
 }
 
 export async function listStoreRules(): Promise<StoreRuleRow[]> {
@@ -44,13 +55,11 @@ export async function listStoreRules(): Promise<StoreRuleRow[]> {
     loadCategories(),
   ]);
   const labels = new Map(categories.map((c) => [c.categoryKey, c.label]));
+  const sources = await loadRuleSources(db);
 
   const out: StoreRuleRow[] = [];
   for (const r of rules) {
     const matchType = String(r.match_type) as StoreMatchType;
-    const counted = rowsToObjects(
-      await db.exec(`SELECT count(*) AS n FROM card_transactions WHERE ${matchClause(matchType, 1)}`, [String(r.match_value)]),
-    );
     out.push({
       ruleId: String(r.rule_id),
       matchType,
@@ -60,7 +69,7 @@ export async function listStoreRules(): Promise<StoreRuleRow[]> {
       storeName: r.store_name_snapshot ? String(r.store_name_snapshot) : null,
       storeBizType: r.store_biz_type ? String(r.store_biz_type) : null,
       appliedCount: Number(r.applied_count || 0),
-      txnCount: Number(counted[0]?.n || 0),
+      txnCount: matchingIds(sources, matchType, String(r.match_value)).length,
       createdAt: String(r.created_at ?? ""),
     });
   }
@@ -74,7 +83,7 @@ export interface StoreRulePreview {
   storeBizType: string | null;
   storeCorpNum: string | null;
   total: number; // 매칭 총 건수
-  applicable: number; // 소급 적용 대상(결의서 미귀속·미제외)
+  applicable: number; // 소급 적용 대상(정정 유효·결의서 미귀속·미제외·공제검토 없음)
   lockedByDoc: number; // 결의서 귀속이라 건드리지 않는 건
   isPg: boolean; // PG 업태 — 일괄 지정 비권장 경고
   distinctStores: number; // 이 사업자번호 아래 서로 다른 상호 수(PG면 다수)
@@ -85,11 +94,10 @@ export interface StoreRulePreview {
 /** 규칙 저장 전 영향 범위 미리보기 — 기준 매입건(cardTxnId)에서 매칭 값을 뽑는다. */
 export async function previewStoreRule(cardTxnId: string, matchType: StoreMatchType): Promise<StoreRulePreview> {
   const db = await getDb();
-  const rows = rowsToObjects(
-    await db.exec(`SELECT store_corp_num, store_name, store_biz_type FROM card_transactions WHERE card_txn_id = $1`, [cardTxnId]),
-  );
-  if (!rows.length) throw Object.assign(new Error("매입 건을 찾을 수 없습니다."), { status: 404 });
-  const row = rows[0];
+  const sources = await loadRuleSources(db);
+  const row = sources.find(source => String(source.card_txn_id) === cardTxnId);
+  if (!row) throw Object.assign(new Error("매입 건을 찾을 수 없습니다."), { status: 404 });
+  if (merchantIdentity(row)?.issues.length) throw Object.assign(new Error("사업자번호 정정 증빙을 다시 검토한 뒤 가맹점 규칙을 확인하세요."), { status: 409 });
   const storeName = row.store_name ? String(row.store_name) : null;
   const storeCorpNum = row.store_corp_num ? String(row.store_corp_num) : null;
   const storeBizType = row.store_biz_type ? String(row.store_biz_type) : null;
@@ -102,22 +110,24 @@ export async function previewStoreRule(cardTxnId: string, matchType: StoreMatchT
     );
   }
 
-  const clause = matchClause(matchType, 1);
+  const ids = matchingIds(sources, matchType, matchValue);
+  const applicableIds = matchingIds(sources, matchType, matchValue, true);
   const [stat, byCategory, existing] = await Promise.all([
     rowsToObjects(
       await db.exec(
         `SELECT count(*) AS total,
-                COUNT(*) FILTER (WHERE doc_id IS NULL AND excluded = 0) AS applicable,
+                COUNT(*) FILTER (WHERE doc_id IS NULL AND excluded = 0 AND card_txn_id = ANY($2::text[])
+                  AND NOT EXISTS (SELECT 1 FROM card_tax_reviews r WHERE r.card_txn_id = card_transactions.card_txn_id)) AS applicable,
                 COUNT(*) FILTER (WHERE doc_id IS NOT NULL) AS locked,
                 COUNT(DISTINCT upper(replace(COALESCE(store_name, ''), ' ', ''))) AS stores
-           FROM card_transactions WHERE ${clause}`,
-        [matchValue],
+           FROM card_transactions WHERE card_txn_id = ANY($1::text[])`,
+        [ids, applicableIds],
       ),
     ),
     rowsToObjects(
       await db.exec(
-        `SELECT category_key, count(*) AS n FROM card_transactions WHERE ${clause} GROUP BY category_key ORDER BY count(*) DESC`,
-        [matchValue],
+        `SELECT category_key, count(*) AS n FROM card_transactions WHERE card_txn_id = ANY($1::text[]) GROUP BY category_key ORDER BY count(*) DESC`,
+        [ids],
       ),
     ),
     rowsToObjects(await db.exec(`SELECT category_key FROM card_store_rules WHERE rule_id = $1`, [ruleId(matchType, matchValue)])),
@@ -162,17 +172,25 @@ export async function saveStoreRule(params: {
   let applied = 0;
 
   await withDbWrite(async (db) => {
-    // 소급 적용 — 결의서 귀속/제외 건은 건드리지 않는다. 공제 여부는 과세유형·계정과목 기본값으로 재판정.
+    await lockAccountingWrite(db);
+    const ids = matchingIds(await loadRuleSources(db), params.matchType, params.matchValue, true);
+    const targets = rowsToObjects(await db.exec(`SELECT card_txn_id FROM card_transactions
+      WHERE card_txn_id=ANY($1::text[]) AND doc_id IS NULL AND excluded=0
+        AND NOT EXISTS(SELECT 1 FROM card_tax_reviews r WHERE r.card_txn_id=card_transactions.card_txn_id)
+      ORDER BY card_txn_id FOR UPDATE`, [ids])).map(row=>String(row.card_txn_id));
+    await assertNewVatFilingCardMutationsAllowed(db,{cardTxnIds:targets});
+    // 결의서 귀속·제외·공제검토 건은 보존한다. 분류만 바꾸고 공제 여부는 재검토한다.
     const res = rowsToObjects(
       await db.exec(
         `UPDATE card_transactions
             SET category_key = $2,
                 category_source = 'store_rule',
-                vat_deductible = CASE WHEN store_tax_type IN (2, 4, 6, 8) THEN 0 WHEN $3 THEN 0 ELSE 1 END,
+                vat_deductible = NULL,
                 updated_at = $4
-          WHERE ${matchClause(params.matchType, 1)} AND doc_id IS NULL AND excluded = 0
+          WHERE card_txn_id = ANY($1::text[]) AND doc_id IS NULL AND excluded = 0 AND $3::boolean IS NOT NULL
+            AND NOT EXISTS (SELECT 1 FROM card_tax_reviews r WHERE r.card_txn_id = card_transactions.card_txn_id)
           RETURNING card_txn_id`,
-        [params.matchValue, params.categoryKey, cat.vatDeductibleDefault === 0, now],
+        [targets, params.categoryKey, cat.vatDeductibleDefault === 0, now],
       ),
     );
     applied = res.length;
@@ -189,7 +207,7 @@ export async function saveStoreRule(params: {
          updated_at = EXCLUDED.updated_at`,
       [id, params.matchType, params.matchValue, params.categoryKey, params.storeName ?? null, params.storeBizType ?? null, applied, params.actorUserId ?? null, now],
     );
-  });
+  }, {accountingSnapshot:true});
 
   return { ruleId: id, applied };
 }
@@ -197,6 +215,7 @@ export async function saveStoreRule(params: {
 /** 규칙 삭제 — 이미 적용된 분류는 되돌리지 않는다(수동 확정과 동일 취급, 이후 자동분류에서만 빠진다). */
 export async function deleteStoreRule(id: string): Promise<void> {
   await withDbWrite(async (db) => {
+    await lockAccountingWrite(db);
     await db.run(`DELETE FROM card_store_rules WHERE rule_id = $1`, [id]);
   });
 }

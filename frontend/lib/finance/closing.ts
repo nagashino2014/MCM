@@ -5,7 +5,10 @@
 
 import { createHash } from "node:crypto";
 import ExcelJS from "exceljs";
-import { getDb, withDbWrite, rowsToObjects } from "@/lib/db";
+import { getDb, withDbWrite, rowsToObjects, type PgDatabase } from "@/lib/db";
+import { recordAuditLogInline } from "@/lib/auth/audit";
+import { assertAccountingRangeOpen, assertAccountingYearsOpen, lockAccountingWrite, validateFiscalYear } from "./write-lock";
+import { inspectClosingCompleteness, summarizeClosingCompleteness, type ClosingCompleteness, type ClosingInspectionOptions } from "./closing-integrity";
 
 const KST_NOW = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 19).replace("T", " ");
 const hashId = (prefix: string, source: string) =>
@@ -37,8 +40,8 @@ export interface BalanceSheet {
 }
 
 /** 연도 재무상태표 — 기초 잔액(opening_balances) + 당기 발생(auto+confirmed). asOf 미지정 = 연말. */
-export async function buildBalanceSheet(year: number, asOf?: string): Promise<BalanceSheet> {
-  const db = await getDb();
+export async function buildBalanceSheet(year: number, asOf?: string, transaction?: PgDatabase): Promise<BalanceSheet> {
+  const db = transaction ?? await getDb();
   const to = asOf ?? `${year}-12-31`;
   const from = `${year}-01-01`;
   const moveRows = rowsToObjects(
@@ -124,7 +127,10 @@ export async function buildBalanceSheet(year: number, asOf?: string): Promise<Ba
 }
 
 export async function saveOpeningBalance(year: number, accountCode: string, amount: number, memo?: string | null): Promise<void> {
+  validateFiscalYear(year);
   await withDbWrite(async (db) => {
+    await lockAccountingWrite(db);
+    await assertAccountingYearsOpen(db, [year]);
     if (amount === 0) {
       await db.run(`DELETE FROM opening_balances WHERE fiscal_year = $1 AND account_code = $2`, [year, accountCode]);
       return;
@@ -146,18 +152,10 @@ export async function isYearClosed(year: number): Promise<boolean> {
   return rows.length > 0;
 }
 
-/** 기간이 마감 연도와 겹치면 오류 — regenerateJournal 가드가 호출. */
+/** Read-only preflight. Writers must use write-lock guards inside their transaction. */
 export async function assertRangeNotClosed(from: string, to: string): Promise<void> {
   const db = await getDb();
-  const rows = rowsToObjects(
-    await db.exec(
-      `SELECT fiscal_year FROM fiscal_closings WHERE status = 'closed' AND fiscal_year BETWEEN $1 AND $2 ORDER BY fiscal_year LIMIT 1`,
-      [Number(from.slice(0, 4)), Number(to.slice(0, 4))],
-    ),
-  );
-  if (rows.length) {
-    throw Object.assign(new Error(`${rows[0].fiscal_year}년은 결산 마감되어 재생성할 수 없습니다 — 결산 탭에서 마감을 해제하세요.`), { status: 409 });
-  }
+  await assertAccountingRangeOpen(db, from, to);
 }
 
 export interface ClosingStatus {
@@ -168,59 +166,93 @@ export interface ClosingStatus {
   suspenseOut: number; // 134 가지급금 잔액
   suspenseIn: number; // 257 가수금 잔액
   balanceSheet: BalanceSheet;
+  completeness: ClosingCompleteness;
+  snapshotBalanceSheet: BalanceSheet | null;
 }
 
-export async function closingStatus(year: number): Promise<ClosingStatus> {
-  const db = await getDb();
-  const [closing, pending, suspense, bs] = await Promise.all([
-    db.exec(`SELECT status, closed_at FROM fiscal_closings WHERE fiscal_year = $1`, [year]),
-    db.exec(
+export async function closingStatus(year: number, transaction?: PgDatabase, options: ClosingInspectionOptions = {}): Promise<ClosingStatus> {
+  validateFiscalYear(year);
+  if (!transaction) return withDbWrite(db => closingStatus(year, db, options), {accountingSnapshot: true});
+  const db = transaction;
+  const closing = await db.exec(`SELECT status, closed_at, snapshot FROM fiscal_closings WHERE fiscal_year = $1`, [year]);
+  const pending = await db.exec(
       `SELECT count(*) AS n FROM journal_entries WHERE status = 'pending' AND substr(entry_date, 1, 4) = $1`,
       [String(year)],
-    ),
-    db.exec(
+    );
+  const suspense = await db.exec(
       `SELECT l.account_code, COALESCE(SUM(l.debit - l.credit), 0) AS bal
          FROM journal_lines l JOIN journal_entries e ON e.entry_id = l.entry_id
         WHERE e.status IN ('auto', 'confirmed') AND substr(e.entry_date, 1, 4) = $1 AND l.account_code IN ('134', '257')
         GROUP BY l.account_code`,
       [String(year)],
-    ),
-    buildBalanceSheet(year),
-  ]);
+    );
+  const bs = await buildBalanceSheet(year, undefined, db);
   const cRows = rowsToObjects(closing);
   const sRows = rowsToObjects(suspense);
+  const pendingCount = Number(rowsToObjects(pending)[0]?.n || 0);
+  const currentStatus = cRows.length ? String(cRows[0].status) : "draft";
+  const completeness = await inspectClosingCompleteness(db, year, pendingCount, currentStatus === "closed", options);
+  const snapshot = cRows[0]?.snapshot;
+  const saved = (typeof snapshot === "string" ? JSON.parse(snapshot) : snapshot) as {balanceSheet?: BalanceSheet} | null;
   const bal = (code: string) => Math.round(Number(sRows.find((r) => String(r.account_code) === code)?.bal || 0));
   return {
     year,
-    status: cRows.length ? String(cRows[0].status) : "draft",
+    status: currentStatus,
     closedAt: cRows[0]?.closed_at ? String(cRows[0].closed_at) : null,
-    pendingCount: Number(rowsToObjects(pending)[0]?.n || 0),
+    pendingCount,
     suspenseOut: bal("134"),
     suspenseIn: -bal("257"),
     balanceSheet: bs,
+    completeness,
+    snapshotBalanceSheet: currentStatus === "closed" && saved?.balanceSheet ? saved.balanceSheet : null,
   };
 }
 
 /** 연차 마감 — pending 잔존 시 거부(T3), 재무제표 스냅 보존. */
 export async function closeFiscalYear(year: number, userId: string): Promise<void> {
-  const status = await closingStatus(year);
-  if (status.pendingCount > 0) {
-    throw Object.assign(new Error(`확정 대기 전표 ${status.pendingCount}건이 남아 있어 마감할 수 없습니다.`), { status: 400 });
-  }
+  validateFiscalYear(year);
   await withDbWrite(async (db) => {
+    await lockAccountingWrite(db);
+    await assertAccountingYearsOpen(db, [year]);
+    // 마감 당시 상세 근거는 기존과 같이 저장하되 실패 응답은 요약한다.
+    const status = await closingStatus(year, db, {impactDetails: true});
+    const responseCompleteness = summarizeClosingCompleteness(status.completeness);
+    if (status.completeness.verificationUnavailable) {
+      throw Object.assign(new Error("마감 완결성을 검증할 수 없어 마감을 보류했습니다. 자료 구조와 원천 근거를 먼저 점검하세요."), {status: 503, completeness: responseCompleteness});
+    }
+    if (status.pendingCount > 0) {
+      throw Object.assign(new Error(`확정 대기 전표 ${status.pendingCount}건이 남아 있어 마감할 수 없습니다.`), { status: 400, completeness: responseCompleteness });
+    }
+    if (!status.completeness.canClose) throw Object.assign(new Error("원천·거래 연결·발생 인식의 대사가 끝나지 않아 마감할 수 없습니다."), {status: 409, completeness: responseCompleteness});
     await db.run(
       `INSERT INTO fiscal_closings (closing_id, fiscal_year, status, snapshot, closed_by, closed_at, created_at, updated_at)
        VALUES ($1, $2, 'closed', $3::jsonb, $4, $5, $5, $5)
        ON CONFLICT (fiscal_year) DO UPDATE SET
          status = 'closed', snapshot = EXCLUDED.snapshot, closed_by = EXCLUDED.closed_by, closed_at = EXCLUDED.closed_at, updated_at = $5`,
-      [hashId("fc", String(year)), year, JSON.stringify({ balanceSheet: status.balanceSheet }), userId, KST_NOW()],
+      [hashId("fc", String(year)), year, JSON.stringify({ balanceSheet: status.balanceSheet, completeness: status.completeness }), userId, KST_NOW()],
     );
-  });
+    await recordAuditLogInline(db, { actorUserId: userId, action: "fiscal_close", targetTable: "fiscal_closings", targetId: String(year), before: { status: status.status }, after: { status: "closed" } });
+  }, {accountingSnapshot: true});
 }
 
-export async function reopenFiscalYear(year: number): Promise<void> {
+export async function reopenFiscalYear(year: number, userId: string, reason: string): Promise<void> {
+  validateFiscalYear(year);
+  const cleanReason = String(reason ?? "").trim();
+  if (!cleanReason || cleanReason.length > 1000) {
+    throw Object.assign(new Error("마감 해제 사유를 1~1,000자로 입력하세요."), { status: 400 });
+  }
+  if (!userId) throw Object.assign(new Error("마감 해제 담당자가 필요합니다."), { status: 400 });
   await withDbWrite(async (db) => {
+    await lockAccountingWrite(db);
+    const rows = rowsToObjects(await db.exec("SELECT status, snapshot, closed_at, closed_by FROM fiscal_closings WHERE fiscal_year = $1 FOR UPDATE", [year]));
+    if (!rows.length) throw Object.assign(new Error("마감 기록을 찾을 수 없습니다."), { status: 404 });
+    if (rows[0].status !== "closed") throw Object.assign(new Error("이미 마감이 해제된 연도입니다."), { status: 409 });
     await db.run(`UPDATE fiscal_closings SET status = 'draft', updated_at = $2 WHERE fiscal_year = $1`, [year, KST_NOW()]);
+    await recordAuditLogInline(db, {
+      actorUserId: userId, action: "fiscal_close", targetTable: "fiscal_closings", targetId: `${year}:reopen`,
+      before: { status: rows[0].status, closedAt: rows[0].closed_at, closedBy: rows[0].closed_by, snapshotHash: createHash("sha256").update(JSON.stringify(rows[0].snapshot)).digest("hex") },
+      after: { status: "draft", reason: cleanReason },
+    });
   });
 }
 
@@ -242,8 +274,8 @@ export interface TaxAdjustments {
   entertainmentOver: number;
 }
 
-export async function detectTaxAdjustments(year: number): Promise<TaxAdjustments> {
-  const db = await getDb();
+export async function detectTaxAdjustments(year: number, transaction?: PgDatabase): Promise<TaxAdjustments> {
+  const db = transaction ?? await getDb();
   const pRows = rowsToObjects(
     await db.exec(`SELECT params FROM corp_tax_params WHERE fiscal_year <= $1 ORDER BY fiscal_year DESC LIMIT 1`, [year]),
   );
@@ -335,14 +367,28 @@ export async function detectTaxAdjustments(year: number): Promise<TaxAdjustments
 // ── 부속서식 xlsx (재무상태표 + 손익 + 접대비명세 + 영수증수취 기초) ──
 
 export async function buildClosingWorkbook(year: number): Promise<Buffer> {
-  const db = await getDb();
-  const bs = await buildBalanceSheet(year);
-  const adj = await detectTaxAdjustments(year);
+  validateFiscalYear(year);
+  const {status, adj, entDetail} = await withDbWrite(async db => {
+    const status = await closingStatus(year, db);
+    const adj = await detectTaxAdjustments(year, db);
+    const entDetail = rowsToObjects(await db.exec(
+      `SELECT e.entry_date, e.description, e.party_name, l.debit, e.source_kind
+         FROM journal_lines l JOIN journal_entries e ON e.entry_id = l.entry_id
+        WHERE l.account_code = '813' AND l.debit > 0 AND e.status IN ('auto', 'confirmed') AND substr(e.entry_date, 1, 4) = $1
+        ORDER BY e.entry_date`, [String(year)]));
+    return {status, adj, entDetail};
+  }, {accountingSnapshot: true});
+  // The closed balance sheet is historical. Live completeness is separate and
+  // must not rewrite its amounts or imply that current sources remain unchanged.
+  const bs = status.snapshotBalanceSheet ?? status.balanceSheet;
   const money = "#,##0";
   const wb = new ExcelJS.Workbook();
 
   const ws = wb.addWorksheet("재무상태표");
   ws.addRow([`재무상태표 (${year}-12-31 기준${bs.hasOpening ? "" : " — ⚠기초 잔액 미인수, 당기 발생분만"})`]).font = { bold: true, size: 13 };
+  const completenessLabel = status.completeness.status === "verificationUnavailable" ? "검증 불가" : status.completeness.status === "incomplete" ? "미완료" : "점검 완료";
+  ws.addRow([`${status.snapshotBalanceSheet ? "마감 시점 보존 금액" : "현재 전표 기준·미마감 자료"} / 현재 원천 점검: ${completenessLabel}`]);
+  ws.addRow([`확정 대기 ${status.pendingCount}건 · 점검 사항 ${status.completeness.issues.length}건 — 대차 일치는 원천 대사 완료를 뜻하지 않습니다.`]);
   ws.addRow(["계정", "기초", "당기 증감", "기말"]).font = { bold: true };
   const addSection = (title: string, lines: BalanceLine[], sign: 1 | -1) => {
     ws.addRow([title]).font = { bold: true };
@@ -361,15 +407,7 @@ export async function buildClosingWorkbook(year: number): Promise<Buffer> {
   const ent = wb.addWorksheet("접대비 명세");
   ent.addRow([`기업업무추진비(813) 건별 명세 (${year}) — 연간 ${adj.entertainmentTotal.toLocaleString("ko-KR")} / 한도 ${adj.entertainmentLimit.toLocaleString("ko-KR")}`]).font = { bold: true };
   ent.addRow(["일자", "적요", "거래상대", "금액", "소스"]).font = { bold: true };
-  const entDetail = rowsToObjects(
-    await db.exec(
-      `SELECT e.entry_date, e.description, e.party_name, l.debit, e.source_kind
-         FROM journal_lines l JOIN journal_entries e ON e.entry_id = l.entry_id
-        WHERE l.account_code = '813' AND l.debit > 0 AND e.status IN ('auto', 'confirmed') AND substr(e.entry_date, 1, 4) = $1
-        ORDER BY e.entry_date`,
-      [String(year)],
-    ),
-  );
+  ent.addRow(["현재 전표 기준 보조자료 — 마감 시점 스냅샷과 구분"]);
   for (const r of entDetail) {
     ent.addRow([String(r.entry_date), String(r.description ?? ""), String(r.party_name ?? ""), Math.round(Number(r.debit || 0)), String(r.source_kind ?? "")]);
   }
@@ -382,6 +420,15 @@ export async function buildClosingWorkbook(year: number): Promise<Buffer> {
   for (const it of adj.items) tax.addRow([it.rule, it.entryDate, it.description, it.amount, it.note]);
   tax.columns.forEach((col, i) => (col.width = [18, 12, 40, 14, 44][i] ?? 14));
   tax.getColumn(4).numFmt = money;
+
+  const check = wb.addWorksheet("마감 점검");
+  check.addRow(["현재 원천 완결성", completenessLabel]);
+  check.addRow(["마감 상태", status.status === "closed" ? "마감됨" : "미마감"]);
+  check.addRow(["검사 시각", status.completeness.checkedAt]);
+  check.addRow(["검사 범위", "거래 연결·발생 인식·기존 전표 원천 / 미연결 미기표 원천 전수 검증은 포함하지 않음"]);
+  check.addRow(["코드", "대상", "확인 사항"]).font = {bold: true};
+  for (const issue of status.completeness.issues) check.addRow([issue.code, issue.sourceId, issue.message]);
+  check.columns = [{width: 34}, {width: 32}, {width: 100}];
 
   return Buffer.from(await wb.xlsx.writeBuffer());
 }

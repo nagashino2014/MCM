@@ -225,7 +225,8 @@ export default function LaborContractBoard() {
                       검수 필요
                     </span>
                   )}
-                  <button type="button" className="cd-btn rounded-xl p-2" title="추출값 검토" onClick={() => openReview(c)}>
+                  {c.needsOriginalVerification && <span className="text-xs cd-text-faint">서명 원본 확인 필요</span>}
+                  <button type="button" className="cd-btn rounded-xl p-2" title={c.readOnly ? "서명 계약 열람" : "추출값 검토"} onClick={() => openReview(c)}>
                     <FileSearch className="w-4 h-4" />
                   </button>
                   {c.hasFile && (
@@ -233,7 +234,7 @@ export default function LaborContractBoard() {
                       <Download className="w-4 h-4" />
                     </a>
                   )}
-                  {c.source === "generated" && c.status !== "signed" && (
+                  {c.source === "generated" && !c.readOnly && (
                     <button
                       type="button"
                       className="cd-btn rounded-xl p-2"
@@ -278,11 +279,13 @@ export default function LaborContractBoard() {
             </div>
             <div className="w-80 shrink-0 flex flex-col gap-2 overflow-y-auto">
               <div className="flex items-start justify-between">
-                <h3 className="text-base font-extrabold cd-text">추출값 검토</h3>
+                <h3 className="text-base font-extrabold cd-text">{review.readOnly ? "서명 계약 열람" : "추출값 검토"}</h3>
                 <button type="button" className="cd-btn rounded-xl p-1.5" onClick={() => setReview(null)} aria-label="닫기">
                   <X className="w-4 h-4" />
                 </button>
               </div>
+              {review.readOnly && <p className="text-xs cd-text-faint">서명 완료된 계약은 수정하거나 삭제할 수 없습니다.</p>}
+              {review.needsOriginalVerification && <p className="text-xs cd-text-faint">서명 당시 보존본이 없어 원본 확인이 필요합니다.</p>}
               {review.note && (
                 <p className="text-[11px] rounded-xl p-2.5" style={{ color: "var(--cd-warning)", background: "var(--cd-warning-soft)" }}>
                   {review.note}
@@ -305,6 +308,7 @@ export default function LaborContractBoard() {
                   <input
                     className="cd-input text-sm w-full mt-0.5"
                     value={draft[key] ?? ""}
+                    readOnly={review.readOnly}
                     onChange={(e) => setDraft((p) => ({ ...p, [key]: e.target.value }))}
                   />
                 </label>
@@ -315,6 +319,7 @@ export default function LaborContractBoard() {
                   className="cd-input text-xs w-full mt-0.5 font-mono"
                   rows={4}
                   value={draft.wageComponents ?? ""}
+                  readOnly={review.readOnly}
                   onChange={(e) => setDraft((p) => ({ ...p, wageComponents: e.target.value }))}
                 />
               </label>
@@ -323,6 +328,7 @@ export default function LaborContractBoard() {
                 <select
                   className="cd-select text-sm w-full mt-0.5"
                   value={draft.tag ?? "일반"}
+                  disabled={review.readOnly}
                   onChange={(e) => setDraft((p) => ({ ...p, tag: e.target.value }))}
                 >
                   <option value="일반">일반</option>
@@ -332,7 +338,7 @@ export default function LaborContractBoard() {
               {msg && <p className="text-xs" style={{ color: "var(--cd-error)" }}>{msg}</p>}
               <button
                 type="button"
-                disabled={saving}
+                disabled={saving || review.readOnly}
                 onClick={saveReview}
                 className="cd-fill-primary text-white rounded-xl px-3.5 py-2 text-sm font-semibold disabled:opacity-50 mt-1"
               >

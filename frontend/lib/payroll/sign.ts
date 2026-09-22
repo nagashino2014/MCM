@@ -1,10 +1,12 @@
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
+import { isContractSigned, lockContractForWrite } from "@/lib/payroll/contract-lock";
+import { captureContractRenderSnapshot } from "@/lib/payroll/contract-snapshot";
 
 /**
  * 근로계약 전자서명 (PL-P3, 블루프린트 §5-4)
  * - 서명 문자열은 서버에서 생성: `성명(사번) · ISO시각` (leave-promotion 관례 — 클라이언트 입력 불신).
  * - 동의 문구 판은 CONSENT_VERSION 으로 고정(overtime-consent 관례) — 개정 시 버전 증가.
- * - 서명 5종(본서명 + 부속 4종) 전부 동의해야 체결. 확정본 PDF 는 signatures 기반 온디맨드 렌더.
+ * - 서명 5종 동의와 서명 당시 PDF 입력을 같은 트랜잭션에 보존한다.
  */
 
 export const CONTRACT_CONSENT_VERSION = "lc-v1";
@@ -109,24 +111,35 @@ export async function signContract(
   contractId: string,
   consents: Record<string, boolean>
 ): Promise<{ signedAt: string }> {
-  const own = await assertOwnContract(userId, contractId);
-  if (own.status === "signed") throw Object.assign(new Error("이미 서명이 완료된 계약입니다."), { status: 400 });
-  if (own.status !== "sent") throw Object.assign(new Error("발송된 계약만 서명할 수 있습니다."), { status: 400 });
   for (const s of CONTRACT_CONSENT_SECTIONS) {
     if (!consents[s.key]) {
       throw Object.assign(new Error(`'${s.label}' 항목에 동의해야 서명할 수 있습니다.`), { status: 400 });
     }
   }
-  const now = new Date().toISOString();
-  const sig = `${own.name}(${own.employeeNo ?? own.employeeId}) · ${now}`;
-  const signatures = Object.fromEntries(CONTRACT_CONSENT_SECTIONS.map((s) => [s.key, sig]));
-  await withDbWrite(async (txn) => {
-    await txn.exec(
+  return withDbWrite(async (txn) => {
+    const contract = await lockContractForWrite(txn, contractId);
+    const own = rowsToObjects(await txn.exec(
+      `SELECT p.name, p.employee_no FROM users u
+         JOIN employee_profiles p ON p.employee_id = $2
+        WHERE u.user_id = $1 AND p.employee_id = COALESCE(u.employee_id,
+          (SELECT e.employee_id FROM employee_profiles e WHERE e.user_id = u.user_id LIMIT 1))
+        FOR SHARE OF u, p`, [userId, contract.employee_id]
+    ))[0];
+    if (!own) throw Object.assign(new Error("본인 계약만 서명할 수 있습니다."), { status: 403 });
+    if (isContractSigned(contract)) throw Object.assign(new Error("이미 서명이 완료된 계약입니다."), { status: 409 });
+    if (contract.status !== "sent") throw Object.assign(new Error("발송된 계약만 서명할 수 있습니다."), { status: 400 });
+    const now = new Date().toISOString();
+    const sig = `${own.name}(${own.employee_no ?? contract.employee_id}) · ${now}`;
+    const signatures = Object.fromEntries(CONTRACT_CONSENT_SECTIONS.map((s) => [s.key, sig]));
+    const snapshot = await captureContractRenderSnapshot(txn, contract, signatures, true);
+    const updated = rowsToObjects(await txn.exec(
       `UPDATE labor_contracts
-          SET status = 'signed', signed_at = $2, signatures = $3::jsonb, consent_version = $4, updated_at = $2
-        WHERE contract_id = $1 AND status = 'sent'`,
-      [contractId, now, JSON.stringify(signatures), CONTRACT_CONSENT_VERSION]
-    );
+          SET status = 'signed', signed_at = $2, signatures = $3::jsonb, consent_version = $4,
+              signed_render_snapshot = $5::jsonb, updated_at = $2
+        WHERE contract_id = $1 AND status = 'sent' RETURNING contract_id`,
+      [contractId, now, JSON.stringify(signatures), CONTRACT_CONSENT_VERSION, JSON.stringify(snapshot)]
+    ));
+    if (!updated.length) throw Object.assign(new Error("계약 상태가 변경되었습니다. 새로고침 후 확인하세요."), { status: 409 });
+    return { signedAt: now };
   });
-  return { signedAt: now };
 }

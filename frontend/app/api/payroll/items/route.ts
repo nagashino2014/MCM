@@ -22,6 +22,9 @@ export async function PUT(req: NextRequest) {
     const body = await req.json();
     const itemId = String(body.itemId ?? "").trim();
     const name = String(body.name ?? "").trim();
+    if (body.kind !== "pay" && body.kind !== "deduction") {
+      return NextResponse.json({ error: "지급/공제 종류가 올바르지 않습니다." }, { status: 400 });
+    }
     const kind = body.kind === "deduction" ? "deduction" : "pay";
     if (!itemId || !name) {
       return NextResponse.json({ error: "itemId·name 이 필요합니다." }, { status: 400 });

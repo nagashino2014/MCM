@@ -1,5 +1,5 @@
 import ExcelJS from "exceljs";
-import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
+import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
 import { maskRrnPrefix } from "@/lib/security/pii-crypto";
 
 /**
@@ -75,6 +75,9 @@ export async function saveRule(
   rule: Omit<PayRule, "ruleId" | "employeeName" | "itemName"> & { ruleId?: string | null },
   actorUserId: string
 ): Promise<string> {
+  if (!Number.isSafeInteger(rule.amount)) {
+    throw Object.assign(new Error("수당 규칙 금액은 유한한 정수 원 단위로 입력하세요. 지급 중단은 0원으로 명시하세요."), { status: 400 });
+  }
   const now = new Date().toISOString();
   const ruleId = rule.ruleId || newId("prule");
   await withDbWrite(async (db) => {
@@ -167,26 +170,42 @@ export async function saveRulesBulk(
   return { ruleIds, created, updated };
 }
 
-/** 귀속월에 유효한 규칙 맵(employee_id → [{itemId, amount}]) — 대장 생성 엔진용 */
-export async function activeRulesFor(payYear: number, payMonth: number): Promise<Map<string, Array<{ itemId: string; amount: number }>>> {
+/** 귀속월 유효 규칙. 0원도 명시 규칙으로 보존하고, 같은 직원·항목의 상충 금액은 생성 전에 차단한다. */
+export async function activeRulesFor(payYear: number, payMonth: number, database?: PgDatabase, employeeIds?: readonly string[]): Promise<Map<string, Array<{ itemId: string; amount: number }>>> {
   const ym = `${payYear}-${String(payMonth).padStart(2, "0")}`;
-  const db = await getDb();
+  const db = database ?? await getDb();
   const rows = rowsToObjects(
     await db.exec(
       `SELECT employee_id, item_id, amount, pay_months FROM payroll_pay_rules
         WHERE is_active = 1
           AND (valid_from IS NULL OR valid_from <= $1)
-          AND (valid_to IS NULL OR valid_to >= $1)`,
+          AND (valid_to IS NULL OR valid_to >= $1)
+        ORDER BY employee_id, item_id, rule_id`,
       [ym]
     )
   );
   const map = new Map<string, Array<{ itemId: string; amount: number }>>();
+  const targets = employeeIds ? new Set(employeeIds) : null;
   for (const r of rows) {
+    const key = String(r.employee_id);
+    if (targets && !targets.has(key)) continue;
     const months = Array.isArray(r.pay_months) ? (r.pay_months as number[]) : null;
     if (months && !months.includes(payMonth)) continue;
-    const key = String(r.employee_id);
+    const itemId = String(r.item_id);
+    // Do not let the generic number fallback turn corrupt/non-finite stored amounts into stop rules.
+    const amount = Number(r.amount);
+    if (!Number.isSafeInteger(amount)) {
+      throw Object.assign(new Error(`${ym} 수당 규칙의 금액이 올바르지 않습니다. 직원 ${key}·항목 ${itemId}의 규칙을 확인하세요.`), { status: 409 });
+    }
     const list = map.get(key) ?? [];
-    list.push({ itemId: String(r.item_id), amount: toNum(r.amount) });
+    const previous = list.find((rule) => rule.itemId === itemId);
+    if (previous) {
+      if (previous.amount !== amount) {
+        throw Object.assign(new Error(`${ym}에 서로 다른 금액의 수당 규칙이 겹칩니다. 직원 ${key}·항목 ${itemId}의 기간·지급월을 정리한 뒤 다시 생성하세요.`), { status: 409 });
+      }
+      continue; // Identical overlapping rules have one effect, including an explicit zero.
+    }
+    list.push({ itemId, amount });
     map.set(key, list);
   }
   return map;

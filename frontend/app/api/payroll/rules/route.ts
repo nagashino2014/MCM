@@ -20,14 +20,14 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     // 항목별 설정 — 대상자 여러 명에게 같은 규칙을 한 번에(직원 열 = 조직도 선택 태그).
     if (Array.isArray(body.employeeIds)) {
-      if (!body.employeeIds.length || !body.itemId || body.amount == null) {
-        return NextResponse.json({ error: "대상자·항목·금액이 필요합니다." }, { status: 400 });
+      if (!body.employeeIds.length || !body.itemId || typeof body.amount !== "number") {
+        return NextResponse.json({ error: "대상자·항목·숫자 금액이 필요합니다. 적용 중단은 숫자 0원으로 입력하세요." }, { status: 400 });
       }
       const out = await saveRulesBulk(
         {
           employeeIds: body.employeeIds.map(String),
           itemId: String(body.itemId),
-          amount: Number(body.amount),
+          amount: body.amount,
           validFrom: body.validFrom || null,
           validTo: body.validTo || null,
           payMonths: Array.isArray(body.payMonths) && body.payMonths.length ? body.payMonths.map(Number) : null,
@@ -37,15 +37,15 @@ export async function POST(req: NextRequest) {
       );
       return NextResponse.json(out);
     }
-    if (!body.employeeId || !body.itemId || body.amount == null) {
-      return NextResponse.json({ error: "직원·항목·금액이 필요합니다." }, { status: 400 });
+    if (!body.employeeId || !body.itemId || typeof body.amount !== "number") {
+      return NextResponse.json({ error: "직원·항목·숫자 금액이 필요합니다. 적용 중단은 숫자 0원으로 입력하세요." }, { status: 400 });
     }
     const ruleId = await saveRule(
       {
         ruleId: body.ruleId ?? null,
         employeeId: String(body.employeeId),
         itemId: String(body.itemId),
-        amount: Number(body.amount),
+        amount: body.amount,
         validFrom: body.validFrom || null,
         validTo: body.validTo || null,
         payMonths: Array.isArray(body.payMonths) && body.payMonths.length ? body.payMonths.map(Number) : null,

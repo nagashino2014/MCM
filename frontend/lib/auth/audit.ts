@@ -9,6 +9,14 @@
 import { PgDatabase, withDbWrite } from "../db";
 
 export type AuditAction =
+  | "finance_journal_use"
+  | "finance_supply_same_review"
+  | "finance_supply_group_review"
+  | "finance_document_register"
+  | "finance_supply_review"
+  | "finance_recognition_review"
+  | "finance_vat_filing_basis"
+  | "finance_card_merchant_correction"
   | "ai_settings_change" // AI API 관리 — 기능별 모델·단가·설정 변경(docs/ai-api-usage-management-blueprint.md §3.6)
   | "review_apply"
   | "facility_merge"
@@ -133,6 +141,8 @@ export type AuditAction =
   | "hometax_sync"
   | "vat_return_save"
   | "vat_return_confirm"
+  | "yearend_save"
+  | "yearend_status"
   | "fixed_asset_save"
   | "trip_log_sync"
   | "fiscal_close"

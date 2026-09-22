@@ -2,11 +2,12 @@
 
 // 연말정산 보드 (블루프린트 P8) — 직원별 총급여·기납부(급여대장 자동) + 공제 입력(간소화 PDF 파싱 포함)
 // → 결정세액·환급/추납 계산·확정. admin 전용(급여 §8-4). PayrollLedgerBoard 스타일 관례(cdash).
-// 직원 대면 플로우(셀프 업로드·명세 발송)와 지급명세서 전자파일은 후속(P8 잔여).
+// 직원 업로드·원본 영수증·자료 묶음은 연계하며, 명세 발송·지급명세서 전자파일의 지원 범위는 별도이다.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, Download, FileText, RefreshCw, Stamp, Undo2, Upload } from "lucide-react";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import type { YearendInputs, YearendResult as StoredYearendResult } from "@/lib/finance/yearend";
 
 const won = (n: number) => n.toLocaleString("ko-KR");
 
@@ -31,6 +32,8 @@ interface YearendResult {
   prepaidTax: number;
   balance: number;
   localTax: number;
+  ruleEvidence?: StoredYearendResult["ruleEvidence"];
+  choice?: StoredYearendResult["choice"];
 }
 
 interface SettlementRow {
@@ -46,7 +49,7 @@ interface SettlementRow {
   healthEmployment: number;
   monthCount: number;
   status: string;
-  inputs: Record<string, number | undefined>;
+  inputs: YearendInputs;
   result: YearendResult | null;
 }
 
@@ -64,7 +67,7 @@ const INPUT_FIELDS: Array<{ key: string; label: string; hint?: string }> = [
   { key: "insurancePremium", label: "보장성 보험료" },
   { key: "medicalExpense", label: "의료비 총액" },
   { key: "educationExpense", label: "교육비" },
-  { key: "donation", label: "기부금" },
+  { key: "donation", label: "일반 기부금 지출액" },
   { key: "pensionAccount", label: "연금저축+IRP 납입" },
   { key: "monthlyRent", label: "월세 지급액" },
   { key: "cardCredit", label: "신용카드 사용액" },
@@ -72,7 +75,7 @@ const INPUT_FIELDS: Array<{ key: string; label: string; hint?: string }> = [
   { key: "cardTraditionalTransit", label: "전통시장+대중교통" },
   { key: "housingLoanDeduction", label: "주택자금 공제액" },
   { key: "otherIncomeDeduction", label: "기타 소득공제(보정)" },
-  { key: "otherTaxCredit", label: "기타 세액공제(보정)" },
+  { key: "otherTaxCredit", label: "기타 공제세액(지출액 아님)" },
 ];
 
 const COUNT_KEYS = new Set(["dependents", "children", "elderly", "disabled"]);
@@ -95,6 +98,10 @@ export default function YearendBoard() {
   const [rows, setRows] = useState<SettlementRow[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Record<string, string>>({});
+  const [otherIncomeType, setOtherIncomeType] = useState("");
+  const [otherIncomeReason, setOtherIncomeReason] = useState("");
+  const [otherTaxType, setOtherTaxType] = useState("");
+  const [otherTaxReason, setOtherTaxReason] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -147,21 +154,33 @@ export default function YearendBoard() {
     setOpenId(openId === r.employeeId ? null : r.employeeId);
     const d: Record<string, string> = {};
     for (const f of INPUT_FIELDS) {
-      const v = r.inputs?.[f.key];
+      const v = r.inputs?.[f.key as keyof YearendInputs];
       if (v != null) d[f.key] = String(v);
     }
     setDraft(d);
+    setOtherIncomeType(r.inputs.otherIncomeDeductionType ?? "");
+    setOtherIncomeReason(r.inputs.otherIncomeDeductionReason ?? "");
+    setOtherTaxType(r.inputs.otherTaxCreditType ?? "");
+    setOtherTaxReason(r.inputs.otherTaxCreditReason ?? "");
   };
 
-  const inputsFromDraft = (): Record<string, number> => {
-    const out: Record<string, number> = {};
+  const inputsFromDraft = (): YearendInputs => {
+    const out: Record<string, number | string> = {};
     for (const f of INPUT_FIELDS) {
       const raw = draft[f.key];
       if (raw == null || raw === "") continue;
       const n = Number(raw.replace(/[^0-9]/g, ""));
       if (Number.isFinite(n) && n > 0) out[f.key] = n;
     }
-    return out;
+    if (Number(out.otherIncomeDeduction) > 0) {
+      out.otherIncomeDeductionType = otherIncomeType;
+      out.otherIncomeDeductionReason = otherIncomeReason.trim();
+    }
+    if (Number(out.otherTaxCredit) > 0) {
+      out.otherTaxCreditType = otherTaxType;
+      out.otherTaxCreditReason = otherTaxReason.trim();
+    }
+    return out as YearendInputs;
   };
 
   const save = async (employeeId: string, confirmAfter = false) => {
@@ -177,13 +196,37 @@ export default function YearendBoard() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
       if (confirmAfter) {
-        await fetch("/api/payroll/yearend", {
+        const confirmed = await fetch("/api/payroll/yearend", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "confirm", year, employeeId }),
         });
+        if (!confirmed.ok) {
+          const failure = await confirmed.json().catch(() => ({}));
+          throw new Error(failure.error ?? "계산은 저장했지만 확정하지 못했습니다. 새로고침 후 확인해 주세요.");
+        }
       }
       setNotice(confirmAfter ? "계산·확정했습니다." : "계산했습니다 — 아래 브레이크다운을 확인하세요.");
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const unconfirm = async (employeeId: string) => {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch("/api/payroll/yearend", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "unconfirm", year, employeeId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "확정을 취소하지 못했습니다.");
+      setNotice("확정을 취소했습니다. 변경 내용을 검토한 뒤 다시 확정해 주세요.");
       load();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -294,10 +337,12 @@ export default function YearendBoard() {
                       <td colSpan={8} className="py-3 pl-4">
                         <div className="flex items-center gap-2 flex-wrap mb-2">
                           <span className="text-sm font-medium mr-auto">
-                            공제 입력 — {r.name} · 비과세 {won(r.nonTaxablePay)} · 국민연금 {won(r.nationalPension)} · 건강/요양 {won(r.healthInsurance)} · 고용 {won(r.employmentInsurance)} (급여대장 자동 — 간소화 납부액을 입력하면 대체)
+                            {r.status === "confirmed"
+                              ? `확정된 계산 결과 — ${r.name}. 변경하려면 확정 취소 후 검토해 주세요.`
+                              : `공제 입력 — ${r.name} · 비과세 ${won(r.nonTaxablePay)} · 국민연금 ${won(r.nationalPension)} · 건강/요양 ${won(r.healthInsurance)} · 고용 ${won(r.employmentInsurance)} (급여대장 자동 — 간소화 납부액을 입력하면 대체)`}
                           </span>
                           <input ref={fileRef} type="file" accept="application/pdf" className="hidden" onChange={(e) => e.target.files?.[0] && void uploadPdf(e.target.files[0])} />
-                          <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy} onClick={() => fileRef.current?.click()}>
+                          <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy || r.status === "confirmed"} onClick={() => fileRef.current?.click()}>
                             <Upload className="w-3.5 h-3.5" /> 간소화 PDF로 채우기
                           </button>
                           <input ref={originalRef} type="file" accept="application/pdf" className="hidden" onChange={(e) => e.target.files?.[0] && void uploadOriginal(r.employeeId, e.target.files[0])} />
@@ -309,7 +354,7 @@ export default function YearendBoard() {
                               <FileText className="w-3.5 h-3.5" /> 영수증 미리보기
                             </a>
                           )}
-                          <button type="button" className="cd-btn cd-btn-primary cd-btn-sm" disabled={busy} onClick={() => void save(r.employeeId)}>
+                          <button type="button" className="cd-btn cd-btn-primary cd-btn-sm" disabled={busy || r.status === "confirmed"} onClick={() => void save(r.employeeId)}>
                             계산
                           </button>
                           {r.status !== "confirmed" ? (
@@ -321,10 +366,7 @@ export default function YearendBoard() {
                               type="button"
                               className="cd-btn cd-btn-ghost cd-btn-sm"
                               disabled={busy}
-                              onClick={async () => {
-                                await fetch("/api/payroll/yearend", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "unconfirm", year, employeeId: r.employeeId }) });
-                                load();
-                              }}
+                              onClick={() => void unconfirm(r.employeeId)}
                             >
                               <Undo2 className="w-3.5 h-3.5" /> 확정 취소
                             </button>
@@ -351,6 +393,7 @@ export default function YearendBoard() {
                                 className="cd-input text-right"
                                 style={{ width: COUNT_KEYS.has(f.key) ? 56 : 110 }}
                                 inputMode="numeric"
+                                disabled={busy || r.status === "confirmed"}
                                 value={draft[f.key] ?? ""}
                                 placeholder="0"
                                 onChange={(e) => setDraft((p) => ({ ...p, [f.key]: e.target.value.replace(/[^0-9]/g, "") }))}
@@ -358,6 +401,57 @@ export default function YearendBoard() {
                             </label>
                           ))}
                         </div>
+                        {Number(draft.otherIncomeDeduction ?? 0) > 0 && (
+                          <fieldset disabled={busy || r.status === "confirmed"} className="border cd-border-c rounded p-3 mb-3 text-xs">
+                            <legend>기타 소득공제 근거</legend>
+                            <label className="block mb-2">공제 종류
+                              <select aria-label="기타 소득공제 종류" className="cd-select ml-2" value={otherIncomeType} onChange={(e) => setOtherIncomeType(e.target.value)}>
+                                <option value="">종류를 선택하세요</option>
+                                <option value="independent">표준세액공제와 병용 가능(그 밖의 소득공제)</option>
+                                <option value="special">표준세액공제와 병용 불가(특별소득공제)</option>
+                              </select>
+                            </label>
+                            <textarea aria-label="기타 소득공제 근거" className="cd-input w-full" value={otherIncomeReason} maxLength={2000}
+                              onChange={(e) => setOtherIncomeReason(e.target.value)} placeholder="법정 공제 항목·적격 요건·금액 근거를 5자 이상 입력하세요." />
+                            <p className="cd-text-muted mt-1">주택자금 대출 공제는 특별소득공제입니다. 주택마련저축 등 다른 항목과 구분하고 이미 입력한 공제를 중복 포함하지 마세요.</p>
+                          </fieldset>
+                        )}
+                        {Number(draft.otherTaxCredit ?? 0) > 0 && (
+                          <fieldset disabled={busy || r.status === "confirmed"} className="border cd-border-c rounded p-3 mb-3 text-xs">
+                            <legend>기타 공제세액 근거</legend>
+                            <label className="block mb-2">공제 종류
+                              <select aria-label="기타 세액공제 종류" className="cd-select ml-2" value={otherTaxType} onChange={(e) => setOtherTaxType(e.target.value)}>
+                                <option value="">종류를 선택하세요</option>
+                                <option value="politicalDonation">정치자금 기부금 공제세액</option>
+                                <option value="hometownDonation">고향사랑 기부금 공제세액</option>
+                                <option value="employeeStockDonation">우리사주조합 기부금 공제세액</option>
+                                <option value="independent">그 밖의 병용 가능한 공제세액(근거 확인)</option>
+                                <option value="special">표준세액공제와 병용 불가한 특별세액공제</option>
+                              </select>
+                            </label>
+                            <textarea aria-label="기타 세액공제 근거" className="cd-input w-full" value={otherTaxReason} maxLength={2000}
+                              onChange={(e) => setOtherTaxReason(e.target.value)} placeholder="적용 연도·법정 항목·계산식·한도 확인 근거를 5자 이상 입력하세요." />
+                            <p className="cd-text-muted mt-1">지출액이 아닌 계산된 공제세액입니다. 정치자금·고향사랑·우리사주조합 기부금을 일반 기부금에도 중복 입력하지 마세요. 종류별 자격·한도 계산은 별도 확인이 필요합니다.</p>
+                          </fieldset>
+                        )}
+                        {r.result?.choice && (
+                          <div className="border cd-border-c rounded p-3 mb-3 text-xs">
+                            <p className="font-medium mb-2">공제 적용 비교 — {r.result.choice.selected === "standard" ? "표준세액공제" : "특별공제"} 선택</p>
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-right">
+                                <thead className="cd-table-head"><tr><th className="text-left">적용 방식</th><th>과세표준</th><th>산출세액</th><th>근로소득세액공제</th><th>결정세액</th></tr></thead>
+                                <tbody>{(["standard", "special"] as const).map((kind) => {
+                                  const c = r.result!.choice!.candidates[kind];
+                                  return <tr key={kind}><td className="text-left">{kind === "standard" ? "표준세액공제" : "특별공제"}</td>
+                                    <td>{won(c.taxBase)}</td><td>{won(c.calculatedTax)}</td><td>{won(c.earnedTaxCredit)}</td><td>{won(c.determinedTax)}</td></tr>;
+                                })}</tbody>
+                              </table>
+                            </div>
+                            <p className="mt-2 cd-text-muted">{r.result.choice.reason} 표준 경로에서는 건강·고용보험료, 주택자금, 특별세액공제와 월세를 적용하지 않습니다. 입력한 자료는 보존됩니다.</p>
+                            <p className="mt-1 cd-text-muted">{r.result.ruleEvidence?.targetYear}년 근로소득세액공제·표준공제 선택 규칙 적용. 다른 공제의 연도별 자격·한도와 지방세는 별도 검토 대상입니다.</p>
+                          </div>
+                        )}
+                        {r.result && !r.result.choice && <p className="mb-3 text-xs cd-text-muted">이전 규칙으로 저장된 계산 결과입니다. 확정본은 보존되며, 초안은 현재 규칙으로 다시 계산한 뒤 확정하세요.</p>}
                         {r.result && (
                           <div className="grid gap-4 lg:grid-cols-2 text-xs">
                             <div>

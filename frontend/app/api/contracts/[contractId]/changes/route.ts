@@ -1,7 +1,8 @@
+import { withContractTransactionWrite } from "@/lib/finance/contract-link-lock";
 import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
-import { rowsToObjects, withDbWrite } from "@/lib/db";
+import { rowsToObjects } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 
 export const runtime = "nodejs";
@@ -39,7 +40,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     const changeId = newChangeId();
     const now = new Date().toISOString();
 
-    await withDbWrite(async (db) => {
+    await withContractTransactionWrite(contractId, null, async (db) => {
       const exists = rowsToObjects(
         await db.exec("SELECT contract_id FROM contracts WHERE contract_id = $1", [contractId])
       );

@@ -51,6 +51,10 @@ export default function PayrollLedgerBoard() {
   const [statementOpen, setStatementOpen] = useState(false);
   const [bonusOpen, setBonusOpen] = useState(false);
   const [editDraft, setEditDraft] = useState<Record<string, string>>({});
+  const [taxReviewReason, setTaxReviewReason] = useState("");
+  const [manualIncome, setManualIncome] = useState("0");
+  const [manualLocal, setManualLocal] = useState("0");
+  const [entrySaving, setEntrySaving] = useState(false);
   const [reloadNonce, setReloadNonce] = useState(0);
 
   // 대장 목록 로드 → 최신(또는 지정) 연·월 선택
@@ -169,14 +173,33 @@ export default function PayrollLedgerBoard() {
     const payChanged = changes.some(([itemId]) => payItems.some((i) => i.itemId === itemId));
     const taxTouched = changes.some(([itemId]) => ["ei", "income-tax", "local-tax"].includes(itemId));
     if (payChanged && !taxTouched) {
-      await fetch("/api/payroll/generate", {
+      const recalc = await fetch("/api/payroll/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "recalc-taxes", entryId: selected.entryId }),
       });
+      if (!recalc.ok) window.alert((await recalc.json()).error ?? "세액 재계산 실패 — 확정 전에 다시 확인하세요.");
     }
     setSelected(null);
     setReloadNonce((n) => n + 1);
+  };
+
+  const resolveTaxes = async (manual: boolean) => {
+    if (!selected || entrySaving) return;
+    const unsaved = Object.entries(editDraft).some(([id, v]) => Number(v || 0) !== (selected.lines[id] ?? 0));
+    if (unsaved) { window.alert("항목 수정 내용을 먼저 저장한 뒤 세액을 확인하세요."); return; }
+    setEntrySaving(true);
+    try {
+      const res = await fetch("/api/payroll/generate", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(manual
+          ? { action: "review-taxes", entryId: selected.entryId, incomeTax: Number(manualIncome), localTax: Number(manualLocal), reason: taxReviewReason, expectedBasisHash: selected.taxBasisHash }
+          : { action: "recalc-taxes", entryId: selected.entryId }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? "세액 확인 실패");
+      setSelected(null); setReloadNonce((n) => n + 1);
+    } catch (e) { window.alert(e instanceof Error ? e.message : "세액 확인 실패"); }
+    finally { setEntrySaving(false); }
   };
 
   // 연간 뷰: 성명 목록
@@ -389,6 +412,9 @@ export default function PayrollLedgerBoard() {
                         key={e.entryId}
                         onClick={() => {
                           setSelected(e);
+                          setTaxReviewReason("");
+                          setManualIncome(String(e.lines["income-tax"] ?? 0));
+                          setManualLocal(String(e.lines["local-tax"] ?? 0));
                           if (isDraft) {
                             const d: Record<string, string> = {};
                             for (const i of items) d[i.itemId] = String(e.lines[i.itemId] ?? 0);
@@ -399,6 +425,9 @@ export default function PayrollLedgerBoard() {
                       >
                         <td className="p-2.5 font-semibold cd-text sticky left-0 z-10 whitespace-nowrap" style={{ background: "var(--cd-card-solid)", boxShadow: "-14px 0 0 var(--cd-card-solid)" }}>
                           {e.name}
+                          {isDraft && (e.taxReview?.status === "pending" || !e.taxReview || e.taxReview.basisHash !== e.taxBasisHash) && (
+                            <span className="ml-1 text-[10px] font-bold" style={{ color: "var(--cd-warning)" }}>세액 확인 필요</span>
+                          )}
                           {!e.employeeId && (
                             <span
                               className="ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold"
@@ -571,6 +600,21 @@ export default function PayrollLedgerBoard() {
                 </div>
               );
             })}
+            {isDraft && (
+              <section className="border cd-border-c rounded-2xl p-3.5 flex flex-col gap-2">
+                <h4 className="text-sm font-bold cd-text">소득세·지방세 확인</h4>
+                <p className="text-xs cd-text-faint">
+                  {selected.taxReview?.status === "manual" && selected.taxReview.basisHash === selected.taxBasisHash ? "수기 근거 확인 완료" : selected.taxReview?.status === "automatic" && selected.taxReview.basisHash === selected.taxBasisHash ? "세액 계산 완료" : "미산정 또는 입력 변경 — 확인 전에는 확정할 수 없습니다."}
+                </p>
+                <p className="text-xs cd-text-faint">표 범위 밖에서는 기존 세액을 보존합니다. 현재 지급액을 기준으로 두 세액과 근거를 확인하세요. 0원 적용도 근거가 필요합니다.</p>
+                <button type="button" disabled={entrySaving} className="cd-btn rounded-xl px-3 py-2 text-sm" onClick={() => resolveTaxes(false)}>현재 지급액으로 세액 재계산</button>
+                <label className="text-xs cd-text">소득세(원)<input aria-label="검토 소득세" className="cd-input text-sm w-full" type="number" step="1" value={manualIncome} onChange={(e) => setManualIncome(e.target.value)} /></label>
+                <label className="text-xs cd-text">지방소득세(원)<input aria-label="검토 지방소득세" className="cd-input text-sm w-full" type="number" step="1" value={manualLocal} onChange={(e) => setManualLocal(e.target.value)} /></label>
+                <label className="text-xs cd-text">계산·0원 적용 근거<textarea aria-label="세액 검토 근거" className="cd-input text-sm w-full" maxLength={2000} value={taxReviewReason} onChange={(e) => setTaxReviewReason(e.target.value)} placeholder="계산식, 원본 자료·귀속기간 또는 0원 적용 사유" /></label>
+                {selected.taxReview?.status === "manual" && <p className="text-xs cd-text-faint">최근 확인: {selected.taxReview.reviewedAt?.slice(0, 10)} · {selected.taxReview.reason}</p>}
+                <button type="button" disabled={entrySaving || taxReviewReason.trim().length < 5 || manualIncome === "" || manualLocal === ""} className="cd-fill-primary text-white rounded-xl px-3 py-2 text-sm font-bold disabled:opacity-50" onClick={() => resolveTaxes(true)}>두 세액 저장 및 근거 확인 완료</button>
+              </section>
+            )}
             {isDraft && (
               <button
                 type="button"

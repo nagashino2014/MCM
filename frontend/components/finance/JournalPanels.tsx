@@ -48,6 +48,7 @@ const SOURCE_LABEL: Record<string, string> = {
   bank_out: "출금",
   tax_invoice: "세금계산서",
   invoice_manual: "계산서(수기)",
+  hometax_invoice: "계산서(수집·연결)",
   expense_doc: "지출결의",
   depreciation: "감가상각",
   payroll: "급여",
@@ -59,6 +60,12 @@ const STATUS_META: Record<string, { label: string; pill: string }> = {
   auto: { label: "자동", pill: "cd-pill-info" },
   confirmed: { label: "확정됨", pill: "cd-pill-success" },
   excluded: { label: "제외", pill: "cd-pill-idle" },
+};
+const SOURCE_WARNING: Record<string, string> = {
+  legacy_source_evidence_unavailable: "과거 전표의 생성 당시 원천 근거가 없어 날짜·총액만 대조했습니다.",
+  manual_or_unmanaged_preserved: "수동 또는 별도 관리 전표를 보존했습니다.",
+  source_cancelled_or_no_longer_postable: "원천 취소·상태 변경에 따라 자동 전표를 제거했습니다.",
+  source_deleted: "삭제된 원천의 자동 전표를 제거했습니다.",
 };
 
 const won = (n: number) => n.toLocaleString("ko-KR");
@@ -180,6 +187,7 @@ const KIND_TAGS: Array<[string, string]> = [
   ["bank_in", "계좌(입금)"],
   ["tax_invoice_manual", "세금계산서(수기)"],
   ["tax_invoice_auto", "세금계산서(자동)"],
+  ["hometax_invoice", "계산서(수집·연결)"],
   ["trip_corp", "출장경비(법인)"],
   ["trip_personal", "출장경비(개인)"],
   ["expense_corp", "지출결의(법인)"],
@@ -244,6 +252,7 @@ export function JournalPanel() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [sourceWarnings, setSourceWarnings] = useState<Array<{sourceKind:string;sourceId:string;reason:string}>>([]);
   // pending 전표의 계정 지정(전표 → 선택 계정 코드)
   const [assign, setAssign] = useState<Record<string, string>>({});
   // 동일 거래처 일괄 확정 확인 모달(체크를 풀면 그 건은 대상에서 빠진다)
@@ -316,6 +325,7 @@ export function JournalPanel() {
     setBusy(true);
     setError(null);
     setNotice(null);
+    setSourceWarnings([]);
     try {
       const res = await fetch("/api/finance/journal", {
         method: "POST",
@@ -324,9 +334,10 @@ export function JournalPanel() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "처리하지 못했습니다.");
+      setSourceWarnings(Array.isArray(data.warnings) ? data.warnings : []);
       if (successNote) setNotice(successNote);
       else if (body.action === "regenerate") {
-        setNotice(`재생성 완료 — 생성 ${data.created}건 · 보존 ${data.kept}건 (스캔 ${data.scanned}건)`);
+        setNotice(`재생성 완료 — 생성 ${data.created}건 · 보존 ${data.kept}건 · 이동 ${data.moved ?? 0}건 · 제거 ${data.removed ?? 0}건`);
       }
       await load();
     } catch (err) {
@@ -624,6 +635,7 @@ export function JournalPanel() {
       )}
       {error && <div className="cd-error-text text-sm mb-2">{error}</div>}
       {notice && <div className="text-sm mb-2" style={{ color: "var(--cd-success,#13DEB9)" }}>{notice}</div>}
+      {sourceWarnings.length > 0 && <details className="text-sm mb-3" open><summary>원천 대조 확인사항 {sourceWarnings.length}건</summary><ul className="list-disc pl-5">{sourceWarnings.map((w,i)=><li key={`${w.sourceKind}:${w.sourceId}:${i}`}>{SOURCE_LABEL[w.sourceKind] ?? w.sourceKind} · {w.sourceId}: {SOURCE_WARNING[w.reason] ?? w.reason}</li>)}</ul></details>}
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm">

@@ -1,4 +1,5 @@
-import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
+import { getDb, rowsToObjects, type PgDatabase } from "@/lib/db";
+import { entryTaxBasis, markEntryTaxReview, withPayrollWrite, type PayrollTaxReview } from "@/lib/payroll/integrity";
 import { mealClawbackAmounts } from "@/lib/approval/overtime-meal";
 import { getEdiAmounts } from "@/lib/payroll/edi";
 import { overtimeAmounts } from "@/lib/payroll/overtime";
@@ -24,7 +25,7 @@ function fullAge(birthDate: string, payYear: number, payMonth: number): number |
 /** 전월에서 복사하지 않는 변동 지급 항목 — 자동 산출(overtime)·수기 입력 대상 */
 const VOLATILE_PAY_ITEMS = new Set([
   "overtime", "overtime-meal", "annual-leave", "incentive", "prev-unpaid", "bonus",
-  "misc-pay", "trip", "trip-lodging", "expense-settle", "key-talent", "unlabeled-pay",
+  "misc-pay", "trip", "trip-lodging", "expense-settle", "key-talent", "unlabeled-pay", "longevity",
 ]);
 
 export interface GeneratedLine {
@@ -63,8 +64,8 @@ function toNum(v: unknown): number {
 }
 
 /** 생성 계산(공통) — preview/create 양쪽에서 사용 */
-export async function buildLedger(payYear: number, payMonth: number): Promise<GeneratePreview> {
-  const db = await getDb();
+export async function buildLedger(payYear: number, payMonth: number, database?: PgDatabase): Promise<GeneratePreview> {
+  const db = database ?? await getDb();
   // 기준(전월) 대장 — 직전 salary 대장(최대 3개월 소급)
   const base = rowsToObjects(
     await db.exec(
@@ -110,12 +111,12 @@ export async function buildLedger(payYear: number, payMonth: number): Promise<Ge
       String(r.item_id), String(r.kind),
     ])
   );
-  const rules = await activeRulesFor(payYear, payMonth);
-  const longevity = await longevityDueFor(payYear, payMonth);
-  const edi = await getEdiAmounts(payYear, payMonth);
-  const overtime = await overtimeAmounts(payYear, payMonth);
-  const mealClawback = await mealClawbackAmounts(payYear, payMonth);
-  const tripLodging = await tripLodgingAmounts(payYear, payMonth);
+  const rules = await activeRulesFor(payYear, payMonth, db, employees.map((employee) => String(employee.employee_id)));
+  const longevity = await longevityDueFor(payYear, payMonth, db);
+  const edi = await getEdiAmounts(payYear, payMonth, db);
+  const overtime = await overtimeAmounts(payYear, payMonth, db);
+  const mealClawback = await mealClawbackAmounts(payYear, payMonth, db);
+  const tripLodging = await tripLodgingAmounts(payYear, payMonth, db);
   const taxProfiles = new Map(
     rowsToObjects(
       await db.exec(
@@ -131,7 +132,7 @@ export async function buildLedger(payYear: number, payMonth: number): Promise<Ge
       },
     ])
   );
-  const eiExemptAge = await getInsuranceRate("ei-exempt-age", payYear, payMonth).catch(() => 65);
+  const eiExemptAge = await getInsuranceRate("ei-exempt-age", payYear, payMonth, db).catch(() => 65);
   // 신규 입사자(전월 대장에 없음) 폴백 — 최신 계약 임금 구성
   const latestWage = new Map<string, Record<string, number>>(
     rowsToObjects(
@@ -182,7 +183,10 @@ export async function buildLedger(payYear: number, payMonth: number): Promise<Ge
 
     // 2) 수당 규칙 반영(같은 항목이면 규칙이 우선)
     for (const rule of rules.get(empId) ?? []) {
-      put(rule.itemId, rule.amount, "rule");
+      // A present zero rule stops the copied/contract allowance; an absent rule leaves it alone.
+      // Keep the common put() behavior for calculated/EDI zero values unchanged.
+      if (rule.amount === 0) lineMap.delete(rule.itemId);
+      else put(rule.itemId, rule.amount, "rule");
     }
 
     // 2-1) 장기근속 포상 휴가비(별표 9) — 귀속월에 근속 만 N년 도달 시 자동. 휴가는 대장 확정 때 부여(longevity.ts).
@@ -251,9 +255,9 @@ export async function buildLedger(payYear: number, payMonth: number): Promise<Ge
     if (taxable > 0) {
       if (tpMeta?.special) warnings.push("특수관계인 — 고용보험 산출 제외");
       else if (eiExempt) warnings.push(`만 ${eiExemptAge}세 이상 — 고용보험(실업급여분) 면제 적용`);
-      if (!eiExempt) put("ei", await calcEmploymentIns(taxable, payYear, payMonth), "calc");
+      if (!eiExempt) put("ei", await calcEmploymentIns(taxable, payYear, payMonth, db), "calc");
       const tp = taxProfiles.get(empId) ?? { rate: 100, dep: 1, child: 0 };
-      const tax = await lookupIncomeTax(taxable, tp.dep, tp.child, tp.rate);
+      const tax = await lookupIncomeTax(taxable, tp.dep, tp.child, tp.rate, db);
       if (tax.outOfTable) {
         warnings.push("월급여가 간이세액표 범위(1,000만원) 초과 — 소득세 수기 입력 필요");
       } else {
@@ -309,7 +313,7 @@ export async function createDraftLedger(
   payMonth: number,
   actorUserId: string
 ): Promise<{ ledgerId: string; headcount: number }> {
-  const db = await getDb();
+  return withPayrollWrite(async (db) => {
   const exists = rowsToObjects(
     await db.exec(
       `SELECT ledger_id, status FROM payroll_ledgers
@@ -327,10 +331,10 @@ export async function createDraftLedger(
       { status: 400 }
     );
   }
-  const built = await buildLedger(payYear, payMonth);
+  const built = await buildLedger(payYear, payMonth, db);
   const ledgerId = newId("pled");
   const now = new Date().toISOString();
-  await withDbWrite(async (txn) => {
+  const txn = db;
     await txn.exec(
       `INSERT INTO payroll_ledgers
          (ledger_id, pay_year, pay_month, ledger_kind, title, source, status, created_by, created_at)
@@ -358,14 +362,16 @@ export async function createDraftLedger(
           [newId("plin"), entryId, l.itemId, l.amount]
         );
       }
+      await recalcEntryTaxesInTransaction(txn, entryId);
     }
-  });
   return { ledgerId, headcount: built.entries.length };
+  });
 }
 
 /** draft 대장 셀 수정 — 라인 upsert(0=삭제) 후 합계 재계산 */
 export async function updateEntryLine(entryId: string, itemId: string, amount: number): Promise<void> {
-  await withDbWrite(async (db) => {
+  assertWon(amount);
+  await withPayrollWrite(async (db) => {
     const kindRows = rowsToObjects(
       await db.exec(`SELECT kind FROM payroll_item_defs WHERE item_id = $1`, [itemId])
     );
@@ -373,13 +379,13 @@ export async function updateEntryLine(entryId: string, itemId: string, amount: n
     const guard = rowsToObjects(
       await db.exec(
         `SELECT lg.status, lg.source FROM payroll_entries e
-          JOIN payroll_ledgers lg ON lg.ledger_id = e.ledger_id WHERE e.entry_id = $1`,
+          JOIN payroll_ledgers lg ON lg.ledger_id = e.ledger_id WHERE e.entry_id = $1 FOR UPDATE OF lg, e`,
         [entryId]
       )
     )[0];
     if (!guard) throw Object.assign(new Error("행을 찾을 수 없습니다."), { status: 404 });
     if (String(guard.status) !== "draft") {
-      throw Object.assign(new Error("확정된 대장은 수정할 수 없습니다."), { status: 400 });
+      throw Object.assign(new Error("확정된 대장은 수정할 수 없습니다."), { status: 409 });
     }
     await db.exec(`DELETE FROM payroll_entry_lines WHERE entry_id = $1 AND item_id = $2`, [entryId, itemId]);
     if (amount !== 0) {
@@ -408,20 +414,24 @@ export async function updateEntryLine(entryId: string, itemId: string, amount: n
 
 /** 지급 항목 수정 후 산식 공제(고용보험·소득세·지방세) 재산출 — EDI 고지·수기 공제는 유지 */
 export async function recalcEntryTaxes(entryId: string): Promise<void> {
-  const db = await getDb();
+  await withPayrollWrite((db) => recalcEntryTaxesInTransaction(db, entryId));
+}
+
+async function recalcEntryTaxesInTransaction(db: PgDatabase, entryId: string): Promise<void> {
+  await requireTaxItemKinds(db);
   const meta = rowsToObjects(
     await db.exec(
       `SELECT e.employee_id, lg.pay_year, lg.pay_month, lg.status, p.birth_date
          FROM payroll_entries e
          JOIN payroll_ledgers lg ON lg.ledger_id = e.ledger_id
          LEFT JOIN employee_profiles p ON p.employee_id = e.employee_id
-        WHERE e.entry_id = $1`,
+        WHERE e.entry_id = $1 FOR UPDATE OF lg, e`,
       [entryId]
     )
   )[0];
   if (!meta) throw Object.assign(new Error("행을 찾을 수 없습니다."), { status: 404 });
   if (String(meta.status) !== "draft") {
-    throw Object.assign(new Error("확정된 대장은 재계산할 수 없습니다."), { status: 400 });
+    throw Object.assign(new Error("확정된 대장은 재계산할 수 없습니다."), { status: 409 });
   }
   const payYear = Number(meta.pay_year);
   const payMonth = Number(meta.pay_month);
@@ -445,26 +455,26 @@ export async function recalcEntryTaxes(entryId: string): Promise<void> {
       [meta.employee_id ? String(meta.employee_id) : ""]
     )
   )[0];
-  const eiExemptAge = await getInsuranceRate("ei-exempt-age", payYear, payMonth).catch(() => 65);
+  const eiExemptAge = await getInsuranceRate("ei-exempt-age", payYear, payMonth, db).catch(() => 65);
   const age = meta.birth_date ? fullAge(String(meta.birth_date), payYear, payMonth) : null;
   const eiExempt = (age != null && age >= eiExemptAge) || Number(tp?.special_relation ?? 0) === 1;
-  const ei = taxable > 0 && !eiExempt ? await calcEmploymentIns(taxable, payYear, payMonth) : 0;
+  const ei = taxable > 0 && !eiExempt ? await calcEmploymentIns(taxable, payYear, payMonth, db) : 0;
   const tax =
     taxable > 0
       ? await lookupIncomeTax(
           taxable,
           Number(tp?.dependents ?? 1),
           Number(tp?.child_deduction ?? 0),
-          Number(tp?.withholding_rate ?? 100)
+          Number(tp?.withholding_rate ?? 100), db
         )
       : null;
 
-  await withDbWrite(async (txn) => {
-    for (const [itemId, amount] of [
-      ["ei", ei],
-      ["income-tax", tax && !tax.outOfTable ? tax.incomeTax : 0],
-      ["local-tax", tax && !tax.outOfTable ? tax.localTax : 0],
-    ] as Array<[string, number]>) {
+  const txn = db;
+    // Missing lookup is not a calculated zero. Preserve both existing manual tax lines.
+    const calculated: Array<[string, number]> = [["ei", ei]];
+    if (!tax?.outOfTable) calculated.push(["income-tax", tax?.incomeTax ?? 0], ["local-tax", tax?.localTax ?? 0]);
+    for (const [itemId, amount] of calculated) {
+      assertWon(amount);
       await txn.exec(`DELETE FROM payroll_entry_lines WHERE entry_id = $1 AND item_id = $2`, [entryId, itemId]);
       if (amount > 0) {
         await txn.exec(
@@ -485,17 +495,84 @@ export async function recalcEntryTaxes(entryId: string): Promise<void> {
       [entryId]
     );
     await txn.exec(`UPDATE payroll_entries SET net_pay = pay_total - deduction_total WHERE entry_id = $1`, [entryId]);
+    await markEntryTaxReview(txn, entryId, tax?.outOfTable
+      ? { status: "pending", reason: "간이세액표에서 세액을 산정하지 못했습니다. 기존 소득세·지방세는 보존했으며 현재 지급액 기준의 수기 근거 확인이 필요합니다." }
+      : { status: "automatic", reason: "현재 입력으로 소득세·지방세 계산 완료", reviewedAt: new Date().toISOString() });
+}
+
+async function requireTaxItemKinds(db: PgDatabase) {
+  const rows = rowsToObjects(await db.exec("SELECT item_id,kind FROM payroll_item_defs WHERE item_id IN ('ei','income-tax','local-tax')"));
+  if (rows.length !== 3 || rows.some((r) => r.kind !== "deduction")) {
+    throw Object.assign(new Error("고용보험·소득세·지방세 항목은 공제 종류여야 합니다. 항목 설정을 확인하세요."), { status: 409 });
+  }
+}
+
+function assertWon(amount: number) {
+  if (!Number.isSafeInteger(amount)) throw Object.assign(new Error("금액은 유한한 정수 원 단위로 입력하세요."), { status: 400 });
+}
+
+/** Explicit manual resolution: both taxes (including zero), rationale and the viewed input hash. */
+export async function reviewEntryTaxes(input: {
+  entryId: string; incomeTax: number; localTax: number; reason: string; expectedBasisHash: string;
+}, actorUserId: string): Promise<void> {
+  assertWon(input.incomeTax); assertWon(input.localTax);
+  const reason = input.reason.trim();
+  if (!actorUserId || reason.length < 5 || reason.length > 2000 || !input.expectedBasisHash) {
+    throw Object.assign(new Error("소득세·지방세의 계산 또는 0원 적용 근거를 5~2,000자로 입력하세요."), { status: 400 });
+  }
+  await withPayrollWrite(async (db) => {
+    await requireTaxItemKinds(db);
+    const entry = rowsToObjects(await db.exec(
+      `SELECT lg.status FROM payroll_entries e JOIN payroll_ledgers lg USING(ledger_id)
+        WHERE e.entry_id=$1 FOR UPDATE OF lg,e`, [input.entryId]
+    ))[0];
+    if (!entry) throw Object.assign(new Error("행을 찾을 수 없습니다."), { status: 404 });
+    if (entry.status !== "draft") throw Object.assign(new Error("확정된 대장의 세액은 변경할 수 없습니다."), { status: 409 });
+    if ((await entryTaxBasis(db, input.entryId)).basisHash !== input.expectedBasisHash) {
+      throw Object.assign(new Error("지급액·세액 또는 세액 설정이 변경되었습니다. 대장을 새로 열어 확인하세요."), { status: 409 });
+    }
+    for (const [itemId, amount] of [["income-tax", input.incomeTax], ["local-tax", input.localTax]] as const) {
+      await db.exec("DELETE FROM payroll_entry_lines WHERE entry_id=$1 AND item_id=$2", [input.entryId, itemId]);
+      if (amount !== 0) await db.exec("INSERT INTO payroll_entry_lines(line_id,entry_id,item_id,amount) VALUES($1,$2,$3,$4)", [newId("plin"), input.entryId, itemId, amount]);
+    }
+    await db.exec(`UPDATE payroll_entries e SET deduction_total=COALESCE((SELECT sum(l.amount)
+      FROM payroll_entry_lines l JOIN payroll_item_defs d USING(item_id)
+      WHERE l.entry_id=e.entry_id AND d.kind='deduction'),0) WHERE e.entry_id=$1`, [input.entryId]);
+    await db.exec("UPDATE payroll_entries SET net_pay=pay_total-deduction_total WHERE entry_id=$1", [input.entryId]);
+    const review = await markEntryTaxReview(db, input.entryId, { status: "manual", reason, reviewedBy: actorUserId, reviewedAt: new Date().toISOString() });
+    await db.exec("INSERT INTO payroll_tax_review_events(entry_id,reviewed_by,review) VALUES($1,$2,$3::jsonb)", [input.entryId, actorUserId, JSON.stringify(review)]);
   });
 }
 
 /** 확정 — draft → confirmed */
 export async function confirmLedger(ledgerId: string): Promise<void> {
-  await withDbWrite(async (db) => {
+  await withPayrollWrite(async (db) => {
     const r = rowsToObjects(
-      await db.exec(`SELECT status, source FROM payroll_ledgers WHERE ledger_id = $1`, [ledgerId])
+      await db.exec(`SELECT status, source FROM payroll_ledgers WHERE ledger_id = $1 FOR UPDATE`, [ledgerId])
     )[0];
     if (!r) throw Object.assign(new Error("대장을 찾을 수 없습니다."), { status: 404 });
     if (String(r.status) !== "draft") throw Object.assign(new Error("작성 중 대장이 아닙니다."), { status: 400 });
+    const entries = rowsToObjects(await db.exec(`SELECT e.entry_id,e.name,e.pay_total,e.deduction_total,e.net_pay,e.tax_review,
+      COALESCE(sum(l.amount) FILTER(WHERE d.kind='pay'),0) AS line_pay,
+      COALESCE(sum(l.amount) FILTER(WHERE d.kind='deduction'),0) AS line_ded,
+      count(l.line_id) FILTER(WHERE d.kind NOT IN ('pay','deduction') OR d.item_id IS NULL) AS unknown_items,
+      count(l.line_id)-count(DISTINCT l.item_id) AS duplicate_items
+      FROM payroll_entries e LEFT JOIN payroll_entry_lines l USING(entry_id)
+      LEFT JOIN payroll_item_defs d USING(item_id) WHERE e.ledger_id=$1 GROUP BY e.entry_id`, [ledgerId]));
+    if (!entries.length) throw Object.assign(new Error("직원 행이 없는 대장은 확정할 수 없습니다."), { status: 400 });
+    for (const e of entries) {
+      const values = [e.pay_total,e.deduction_total,e.net_pay,e.line_pay,e.line_ded].map(Number);
+      if (values.some((n) => !Number.isFinite(n)) || Number(e.unknown_items) || Number(e.duplicate_items)
+        || Math.abs(values[0]-values[3]) > 0.000001 || Math.abs(values[1]-values[4]) > 0.000001
+        || Math.abs(values[0]-values[1]-values[2]) > 0.000001) {
+        throw Object.assign(new Error(`${e.name}: 지급·공제 라인 합계 또는 차인지급액이 맞지 않습니다. 원본과 항목을 확인하세요.`), { status: 409 });
+      }
+      const review = e.tax_review as PayrollTaxReview | null;
+      if (!review || !["automatic","manual"].includes(review.status)
+        || !review.basisHash || review.basisHash !== (await entryTaxBasis(db,String(e.entry_id))).basisHash) {
+        throw Object.assign(new Error(`${e.name}: 세액이 미산정 상태이거나 검토 후 입력이 변경되었습니다. 세액 재계산 또는 수기 근거 확인 후 확정하세요.`), { status: 409 });
+      }
+    }
     await db.exec(`UPDATE payroll_ledgers SET status = 'confirmed' WHERE ledger_id = $1`, [ledgerId]);
   });
   // 장기근속 포상휴가 자동 부여(별표 9) — 확정된 대장의 휴가비 라인 기준, 멱등.
@@ -504,7 +581,7 @@ export async function confirmLedger(ledgerId: string): Promise<void> {
 
 /** 삭제 — 앱 생성 draft 대장만 */
 export async function deleteDraftLedger(ledgerId: string): Promise<void> {
-  await withDbWrite(async (db) => {
+  await withPayrollWrite(async (db) => {
     const r = rowsToObjects(
       await db.exec(`SELECT status, source FROM payroll_ledgers WHERE ledger_id = $1`, [ledgerId])
     )[0];

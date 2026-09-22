@@ -1,11 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { MENU_ITEMS, isMenuVisibleForRole } from "../config/menu";
+import { MENU_ITEMS, isMenuVisibleForRole, visibleSubmenu } from "../config/menu";
 import { resolveMenuRoute } from "../components/layout/menu-route";
 
 test("기존 메뉴의 모든 진입 URL은 정확히 자기 메뉴를 선택한다", () => {
-  assert.equal(MENU_ITEMS.length, 23);
-  assert.equal(MENU_ITEMS.reduce((count, item) => count + (item.submenu?.length ?? 0), 0), 68);
+  assert.equal(MENU_ITEMS.length, 24);
+  assert.equal(MENU_ITEMS.reduce((count, item) => count + (item.submenu?.length ?? 0), 0), 73);
+  const survey = MENU_ITEMS.find((item) => item.title === "설문");
+  assert.equal(survey?.href, "/survey/internal");
+  assert.deepEqual(survey?.submenu?.map(({ title, href }) => ({ title, href })), [
+    { title: "사내 설문", href: "/survey/internal" },
+    { title: "외부 설문", href: "/survey/external" },
+  ]);
+  assert.equal(isMenuVisibleForRole(survey!, "viewer"), true);
+  assert.deepEqual(visibleSubmenu(survey!, "viewer").map((item) => item.href), ["/survey/internal"]);
+  assert.deepEqual(visibleSubmenu(survey!, "editor").map((item) => item.href), ["/survey/internal", "/survey/external"]);
   for (const item of MENU_ITEMS) {
     for (const route of item.submenu?.length ? item.submenu : [item]) {
       const url = new URL(route.href, "https://mcm.local");

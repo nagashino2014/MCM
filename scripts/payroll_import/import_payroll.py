@@ -23,6 +23,7 @@ import argparse
 import hashlib
 import io
 import json
+import math
 import os
 import re
 import sys
@@ -457,6 +458,8 @@ def load_db(dsn: str, parsed: list[dict], item_dict: ItemDict, report: list[str]
 
     now = datetime.now().astimezone().isoformat()
     with psycopg.connect(dsn) as conn, conn.cursor() as cur:
+        # Same lock/order as app writers and migration 222, before any row writes.
+        cur.execute("SELECT pg_advisory_xact_lock(724301, 1)")
         # 미지 항목을 사전에 추가 (item_id = 'auto-' + sha 앞 8)
         for label, kind in item_dict.unknown.items():
             item_id = "auto-" + hashlib.sha256(label.encode()).hexdigest()[:8]
@@ -468,6 +471,27 @@ def load_db(dsn: str, parsed: list[dict], item_dict: ItemDict, report: list[str]
             item_dict.by_name[squash(label)] = (item_id, kind)
             item_dict.kinds[item_id] = kind
             report.append(f"- 항목 사전 자동 추가: `{label}` ({kind})")
+
+        cur.execute("SELECT item_id, kind FROM payroll_item_defs")
+        stored_kinds = dict(cur.fetchall())
+        for f in parsed:
+            for e in f["entries"]:
+                pay = ded = 0
+                for item_id, amount in e["lines"].items():
+                    actual_kind = stored_kinds.get(item_id)
+                    if actual_kind not in ("pay", "deduction") or actual_kind != item_dict.kinds.get(item_id):
+                        raise ValueError(f"급여 항목 종류 불일치: {item_id} — 사전과 원본을 확인하세요.")
+                    if not math.isfinite(amount):
+                        raise ValueError("급여 라인에 유한하지 않은 금액이 있습니다.")
+                    if actual_kind == "pay":
+                        pay += amount
+                    else:
+                        ded += amount
+                if (not all(math.isfinite(e[k]) for k in ("pay_total", "deduction_total", "net_pay"))
+                        or abs(pay - e["pay_total"]) > 0.000001
+                        or abs(ded - e["deduction_total"]) > 0.000001
+                        or abs(pay - ded - e["net_pay"]) > 0.000001):
+                    raise ValueError("급여 원본 합계와 지급·공제 라인이 일치하지 않아 적재를 중단했습니다.")
 
         # 성명 → employee_id (동명이인은 매칭 보류)
         cur.execute("SELECT employee_id, name FROM employee_profiles")

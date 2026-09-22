@@ -1,4 +1,4 @@
-import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
+import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
 import { maskRrnPrefix } from "@/lib/security/pii-crypto";
 
 /**
@@ -180,9 +180,10 @@ export async function getEdiStatus(payYear: number, payMonth: number): Promise<E
 /** 대장 생성용 — 직원별 고지액 맵(name 폴백 포함) */
 export async function getEdiAmounts(
   payYear: number,
-  payMonth: number
+  payMonth: number,
+  database?: PgDatabase
 ): Promise<Map<string, { nps?: number; nhis?: number; nhisSettle?: number; ltc?: number; ltcSettle?: number }>> {
-  const db = await getDb();
+  const db = database ?? await getDb();
   const rows = rowsToObjects(
     await db.exec(
       `SELECT insurer, employee_id, name, amounts FROM payroll_edi_notices

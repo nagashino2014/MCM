@@ -11,6 +11,7 @@ import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { normalizeRemitter, bankDedupKey, cardDedupKey } from "@/lib/barobill/sync";
+import { canonicalCardNumber } from "@/lib/barobill/card-number";
 import { parseStatementWorkbook, maskedCardParts, SUPPORTED_PROFILES, type ParsedStatement } from "@/lib/finance/statement-import";
 import { createHash } from "node:crypto";
 
@@ -199,6 +200,10 @@ export async function POST(req: NextRequest) {
       if (!target) {
         return NextResponse.json({ ...summary, needTarget: true, targets: targets.filter((t) => t.kind === "card") });
       }
+      const cardNumber = canonicalCardNumber(target.no);
+      if (cardNumber !== target.no) {
+        throw Object.assign(new Error("저장된 카드번호 형식을 먼저 확인하세요."), { status: 409, code: "finance_card_number_invalid" });
+      }
       for (const r of rows) {
         const found = rowsToObjects(
           await db.exec(
@@ -213,8 +218,12 @@ export async function POST(req: NextRequest) {
       if (mode !== "commit") return NextResponse.json({ ...summary, targets: targets.filter((t) => t.kind === "card") });
 
       await withDbWrite(async (tx) => {
+        const current = rowsToObjects(await tx.exec(`SELECT card_num FROM card_registry WHERE card_id = $1`, [target.id]))[0];
+        if (!current || current.card_num !== cardNumber) {
+          throw Object.assign(new Error("카드 등록 정보가 바뀌었습니다. 대상을 다시 확인하세요."), { status: 409 });
+        }
         for (const r of rows) {
-          const dedupKey = cardDedupKey(target.no || target.id, r.approvalNum, r.approvedAt, r.amountTotal);
+          const dedupKey = cardDedupKey(cardNumber, r.approvalNum, r.approvedAt, r.amountTotal);
           const dup = rowsToObjects(
             await tx.exec(
               `SELECT 1 AS x FROM card_transactions

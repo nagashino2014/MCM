@@ -72,15 +72,42 @@ export async function listBudgets(year: number): Promise<BudgetLine[]> {
 }
 
 export async function saveBudgetLine(input: { year: number; categoryKey: string; amount: number; memo?: string | null }): Promise<string> {
+  if (!Number.isInteger(input.year) || input.year < 1000 || input.year > 9999
+    || typeof input.categoryKey !== "string" || !input.categoryKey.trim()
+    || !Number.isSafeInteger(input.amount) || input.amount < 0) {
+    throw Object.assign(new Error("올바른 연도·분류와 0원 이상의 정수 금액을 입력해 주세요."), { status: 400 });
+  }
   const budgetId = hashId("bg", `${input.year}::${input.categoryKey}`);
   await withDbWrite(async (db) => {
-    await db.run(
+    const category = rowsToObjects(await db.exec(
+      `SELECT category_key FROM expense_categories WHERE category_key = $1 FOR KEY SHARE`, [input.categoryKey],
+    ));
+    if (!category.length) throw Object.assign(new Error("등록된 경비 분류를 선택해 주세요."), { status: 400 });
+    // 전사는 org_unit_id=NULL이다. 기존 UNIQUE(year, org_unit_id, category_key)는
+    // NULL을 중복으로 취급하지 않으므로 앱의 결정적 PK로 경합을 처리한다.
+    // 과거 다른 ID/중복 행은 자동 병합하지 않고 자료 확인 대상으로 남긴다.
+    const existing = rowsToObjects(await db.exec(
+      `SELECT budget_id FROM budget_lines
+        WHERE year = $1 AND org_unit_id IS NULL AND category_key = $2 FOR UPDATE`,
+      [input.year, input.categoryKey],
+    ));
+    if (existing.length > 1 || existing.some((row) => row.budget_id !== budgetId)) {
+      throw Object.assign(new Error("동일 연도·분류의 기존 예산 식별 정보가 일치하지 않습니다. 기존 자료를 확인해 주세요."), { status: 409 });
+    }
+    const changed = rowsToObjects(await db.exec(
       `INSERT INTO budget_lines (budget_id, year, org_unit_id, category_key, amount, memo, created_at)
        VALUES ($1, $2, NULL, $3, $4, NULLIF($5, ''), $6)
-       ON CONFLICT (year, org_unit_id, category_key) DO UPDATE SET
-         amount = EXCLUDED.amount, memo = EXCLUDED.memo, updated_at = $6`,
+       ON CONFLICT (budget_id) DO UPDATE SET
+         amount = EXCLUDED.amount, memo = EXCLUDED.memo, updated_at = $6
+       WHERE budget_lines.year = EXCLUDED.year
+         AND budget_lines.org_unit_id IS NULL
+         AND budget_lines.category_key = EXCLUDED.category_key
+       RETURNING budget_id`,
       [budgetId, input.year, input.categoryKey, input.amount, input.memo ?? "", KST_NOW()],
-    );
+    ));
+    if (!changed.length) {
+      throw Object.assign(new Error("예산 ID가 다른 연도·조직·분류의 자료와 충돌합니다. 기존 자료를 확인해 주세요."), { status: 409 });
+    }
   });
   return budgetId;
 }

@@ -8,6 +8,8 @@
 import { createHash } from "node:crypto";
 import { getDb, withDbWrite, rowsToObjects, type PgDatabase } from "@/lib/db";
 import { normalizeCompanyName } from "@/lib/ieps/formatters";
+import { lockAccountingWrite } from "@/lib/finance/write-lock";
+import { assertNoActiveBankTransactionLinks } from "@/lib/finance/transaction-links";
 
 const KST_NOW = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 19).replace("T", " ");
 const hashId = (prefix: string, source: string) => `${prefix}-${createHash("sha256").update(source).digest("hex").slice(0, 12)}`;
@@ -757,6 +759,7 @@ export async function runRecon(options?: { from?: string; to?: string; includeAl
          FROM bank_transactions t
         WHERE ${where.join(" AND ")}
           AND NOT EXISTS (SELECT 1 FROM recon_matches m WHERE m.txn_id = t.txn_id AND m.status = 'confirmed')
+          AND NOT EXISTS (SELECT 1 FROM transaction_links l WHERE l.left_kind='bank' AND l.left_id=t.txn_id AND l.state='active')
         ORDER BY t.txn_at DESC`,
       args,
     ),
@@ -775,6 +778,8 @@ export async function runRecon(options?: { from?: string; to?: string; includeAl
   );
 
   await withDbWrite(async (tx) => {
+    await lockAccountingWrite(tx);
+    await assertNoActiveBankTransactionLinks(tx,txns.map(row=>String(row.txn_id)));
     for (const row of txns) {
       const txnId = String(row.txn_id);
       const remitter = String(row.remitter_name_norm || row.remitter_name_raw || "");
@@ -1051,6 +1056,7 @@ async function applyToMilestone(
 export async function confirmMatch(matchId: string, actorUserId: string | null): Promise<void> {
   const now = KST_NOW();
   await withDbWrite(async (db) => {
+    await lockAccountingWrite(db);
     const matches = rowsToObjects(
       await db.exec(
         `SELECT m.match_id, m.txn_id, m.status, m.match_type, m.matched_facility_id, m.confidence, t.txn_at, t.amount, t.remitter_name_norm, t.remitter_name_raw
@@ -1061,6 +1067,7 @@ export async function confirmMatch(matchId: string, actorUserId: string | null):
     );
     if (!matches.length) throw Object.assign(new Error("대조 건을 찾을 수 없습니다."), { status: 404 });
     const match = matches[0];
+    await assertNoActiveBankTransactionLinks(db,[String(match.txn_id)]);
     if (String(match.status) === "confirmed") return;
 
     const lines = rowsToObjects(
@@ -1133,13 +1140,22 @@ export async function confirmMatch(matchId: string, actorUserId: string | null):
 /** 확정 되돌리기 — 이 match 로 들어간 부분입금 항목만 제거하고 재계산한다. */
 export async function unconfirmMatch(matchId: string): Promise<void> {
   await withDbWrite(async (db) => {
+    await lockAccountingWrite(db);
+    const match=rowsToObjects(await db.exec("SELECT txn_id,status FROM recon_matches WHERE match_id=$1 FOR UPDATE",[matchId]))[0];
+    if(!match)return;
+    await assertNoActiveBankTransactionLinks(db,[String(match.txn_id)]);
+    if(match.status!=='confirmed')return;
     const lines = rowsToObjects(await db.exec(`SELECT milestone_id FROM recon_match_lines WHERE match_id = $1`, [matchId]));
     for (const line of lines) {
       const milestoneId = String(line.milestone_id);
       const rows = rowsToObjects(
         await db.exec(`SELECT partial_payments_json FROM contract_payment_milestones WHERE milestone_id = $1`, [milestoneId]),
       );
-      const entries = parseEntries(rows[0]?.partial_payments_json).filter((e) => e.reconMatchId !== matchId);
+      const previous=parseEntries(rows[0]?.partial_payments_json);
+      // Confirmation-only (zero allocation) did not create a payment. Never re-sum
+      // empty JSON over a legacy/manual collected_amount that this match did not own.
+      if(!previous.some(e=>e.reconMatchId===matchId))continue;
+      const entries = previous.filter((e) => e.reconMatchId !== matchId);
       await applyToMilestone(db, milestoneId, entries);
     }
     await db.run(`UPDATE recon_matches SET status = 'rejected', confirmed_at = NULL WHERE match_id = $1`, [matchId]);
@@ -1168,6 +1184,11 @@ export const REJECT_REASONS: Array<{ key: string; label: string }> = [
 export async function rejectMatch(matchId: string, reason?: string | null, note?: string | null, actorUserId?: string | null): Promise<void> {
   const now = KST_NOW();
   await withDbWrite(async (db) => {
+    await lockAccountingWrite(db);
+    const match=rowsToObjects(await db.exec("SELECT txn_id,status FROM recon_matches WHERE match_id=$1 FOR UPDATE",[matchId]))[0];
+    if(!match)throw Object.assign(new Error("대조 건을 찾을 수 없습니다."),{status:404});
+    await assertNoActiveBankTransactionLinks(db,[String(match.txn_id)]);
+    if(match.status==='confirmed')throw Object.assign(new Error("확정 수금은 확정 취소 경로로 먼저 되돌리세요."),{status:409});
     await db.run(
       `UPDATE recon_matches
           SET status = 'rejected', reject_reason = $2, reject_note = $3, rejected_by = $4, rejected_at = $5
@@ -1184,6 +1205,11 @@ export async function rejectMatch(matchId: string, reason?: string | null, note?
 /** 제외 되돌리기 — 다음 대조 실행에서 다시 후보로 잡히게 한다. */
 export async function unrejectMatch(matchId: string): Promise<void> {
   await withDbWrite(async (db) => {
+    await lockAccountingWrite(db);
+    const match=rowsToObjects(await db.exec("SELECT txn_id,status FROM recon_matches WHERE match_id=$1 FOR UPDATE",[matchId]))[0];
+    if(!match)return;
+    await assertNoActiveBankTransactionLinks(db,[String(match.txn_id)]);
+    if(match.status!=='rejected')throw Object.assign(new Error("제외 상태의 대조만 복원할 수 있습니다."),{status:409});
     await db.run(
       `UPDATE bank_transactions SET recon_status = 'unprocessed' WHERE txn_id = (SELECT txn_id FROM recon_matches WHERE match_id = $1)`,
       [matchId],
@@ -1201,6 +1227,8 @@ export async function manualMatch(
   const now = KST_NOW();
   const matchId = hashId("rm", `${params.txnId}:manual:${now}`);
   await withDbWrite(async (db) => {
+    await lockAccountingWrite(db);
+    await assertNoActiveBankTransactionLinks(db,[params.txnId]);
     await db.run(`DELETE FROM recon_matches WHERE txn_id = $1 AND status <> 'confirmed'`, [params.txnId]);
     const total = params.lines.reduce((acc, l) => acc + Number(l.allocatedAmount || 0), 0);
     await db.run(

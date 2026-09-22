@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
+import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
 
 /**
  * 장기근속 포상(사규 별표 9, 2026.04.08 개정 — 마이그 223 longevity_reward_rules 시드)
@@ -43,8 +43,8 @@ function mapRule(r: Record<string, unknown>): LongevityRule {
   };
 }
 
-export async function listLongevityRules(): Promise<LongevityRule[]> {
-  const db = await getDb();
+export async function listLongevityRules(database?: PgDatabase): Promise<LongevityRule[]> {
+  const db = database ?? await getDb();
   return rowsToObjects(await db.exec(`SELECT * FROM longevity_reward_rules ORDER BY years`)).map(mapRule);
 }
 
@@ -80,11 +80,11 @@ function anniversaryOf(hiredAt: string, years: number): string | null {
 }
 
 /** 귀속월에 근속 만 N년(활성 규칙)에 도달하는 재직자 — employeeId → 도달 정보(같은 달 복수 규칙이면 큰 연수 우선). */
-export async function longevityDueFor(payYear: number, payMonth: number): Promise<Map<string, LongevityDue>> {
-  const rules = (await listLongevityRules()).filter((r) => r.isActive);
+export async function longevityDueFor(payYear: number, payMonth: number, database?: PgDatabase): Promise<Map<string, LongevityDue>> {
+  const db = database ?? await getDb();
+  const rules = (await listLongevityRules(db)).filter((r) => r.isActive);
   const map = new Map<string, LongevityDue>();
   if (!rules.length) return map;
-  const db = await getDb();
   const employees = rowsToObjects(
     await db.exec(`SELECT employee_id, name, hired_at FROM employee_profiles WHERE status = 'active' AND hired_at IS NOT NULL`)
   );

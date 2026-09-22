@@ -1,6 +1,7 @@
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { saveDoc } from "@/lib/approval/docs";
 import { sendMail } from "@/lib/mail/send";
+import { assertContractUnsigned } from "@/lib/payroll/contract-lock";
 
 /**
  * 근로계약 작성/갱신 라운드 (PL-P3, 블루프린트 §4-2·§5-2·§5-3)
@@ -346,6 +347,9 @@ export async function createRoundDraft(roundId: string, actorUserId: string): Pr
   );
   const round = roundRows[0];
   if (!round) throw Object.assign(new Error("라운드를 찾을 수 없습니다."), { status: 404 });
+  if (round.status !== "draft") {
+    throw Object.assign(new Error("작성 중인 라운드만 기안할 수 있습니다."), { status: 409 });
+  }
   const contracts = rowsToObjects(
     await db.exec(
       `SELECT c.employee_id, c.annual_salary, c.position_name, p.name, d.dept_name,
@@ -408,11 +412,16 @@ export async function createRoundDraft(roundId: string, actorUserId: string): Pr
   });
 
   await withDbWrite(async (txn) => {
-    await txn.exec(
+    const updated = rowsToObjects(await txn.exec(
       `UPDATE labor_contract_rounds SET approval_doc_id = $2, status = 'pending_approval', updated_at = $3
-        WHERE round_id = $1`,
+        WHERE round_id = $1 AND status = 'draft' RETURNING round_id`,
       [roundId, docId, new Date().toISOString()]
-    );
+    ));
+    if (!updated.length) throw Object.assign(new Error("라운드 상태가 변경되었습니다. 새로고침 후 확인하세요."), { status: 409 });
+    const locked = rowsToObjects(await txn.exec(
+      `SELECT * FROM labor_contracts WHERE round_id = $1 ORDER BY contract_id FOR UPDATE`, [roundId]
+    ));
+    for (const contract of locked) assertContractUnsigned(contract);
     await txn.exec(
       `UPDATE labor_contracts SET approval_doc_id = $2, status = 'pending_approval', updated_at = $3
         WHERE round_id = $1 AND status = 'draft'`,
@@ -424,49 +433,36 @@ export async function createRoundDraft(roundId: string, actorUserId: string): Pr
 
 /** 결재 상태 동기화 — approval_docs.status='approved' 면 라운드 approved 전환 */
 export async function syncRoundApproval(roundId: string): Promise<string> {
-  const db = await getDb();
-  const rows = rowsToObjects(
-    await db.exec(
+  return withDbWrite(async (txn) => {
+    const r = rowsToObjects(await txn.exec(
       `SELECT r.status AS round_status, d.status AS doc_status
          FROM labor_contract_rounds r
          LEFT JOIN approval_docs d ON d.doc_id = r.approval_doc_id
-        WHERE r.round_id = $1`,
-      [roundId]
-    )
-  );
-  const r = rows[0];
-  if (!r) throw Object.assign(new Error("라운드를 찾을 수 없습니다."), { status: 404 });
-  const roundStatus = String(r.round_status);
-  const docStatus = r.doc_status ? String(r.doc_status) : null;
-  if (roundStatus === "pending_approval" && docStatus === "approved") {
-    await withDbWrite(async (txn) => {
-      await txn.exec(
-        `UPDATE labor_contract_rounds SET status = 'approved', updated_at = $2 WHERE round_id = $1`,
-        [roundId, new Date().toISOString()]
-      );
-      await txn.exec(
-        `UPDATE labor_contracts SET status = 'approved', updated_at = $2
-          WHERE round_id = $1 AND status = 'pending_approval'`,
-        [roundId, new Date().toISOString()]
-      );
-    });
-    return "approved";
-  }
-  if (roundStatus === "pending_approval" && docStatus === "rejected") {
-    await withDbWrite(async (txn) => {
-      await txn.exec(
-        `UPDATE labor_contract_rounds SET status = 'draft', approval_doc_id = NULL, updated_at = $2 WHERE round_id = $1`,
-        [roundId, new Date().toISOString()]
-      );
-      await txn.exec(
-        `UPDATE labor_contracts SET status = 'draft', approval_doc_id = NULL, updated_at = $2
-          WHERE round_id = $1 AND status = 'pending_approval'`,
-        [roundId, new Date().toISOString()]
-      );
-    });
-    return "draft";
-  }
-  return roundStatus;
+        WHERE r.round_id = $1 FOR UPDATE OF r`, [roundId]
+    ))[0];
+    if (!r) throw Object.assign(new Error("라운드를 찾을 수 없습니다."), { status: 404 });
+    const roundStatus = String(r.round_status);
+    const docStatus = r.doc_status ? String(r.doc_status) : null;
+    if (roundStatus !== "pending_approval" || !["approved", "rejected"].includes(docStatus ?? "")) return roundStatus;
+    const nextStatus = docStatus === "approved" ? "approved" : "draft";
+    const now = new Date().toISOString();
+    // 라운드 잠금 다음 계약 잠금. 서명 흔적이 있는 행을 과거 결재 콜백으로 되돌리지 않는다.
+    const contracts = rowsToObjects(await txn.exec(
+      `SELECT * FROM labor_contracts WHERE round_id = $1 ORDER BY contract_id FOR UPDATE`, [roundId]
+    ));
+    for (const contract of contracts) assertContractUnsigned(contract);
+    await txn.exec(
+      `UPDATE labor_contract_rounds SET status = $2,
+          approval_doc_id = CASE WHEN $2 = 'draft' THEN NULL ELSE approval_doc_id END,
+          updated_at = $3 WHERE round_id = $1`, [roundId, nextStatus, now]
+    );
+    await txn.exec(
+      `UPDATE labor_contracts SET status = $2,
+          approval_doc_id = CASE WHEN $2 = 'draft' THEN NULL ELSE approval_doc_id END,
+          updated_at = $3 WHERE round_id = $1 AND status = 'pending_approval'`, [roundId, nextStatus, now]
+    );
+    return nextStatus;
+  });
 }
 
 /** 발송 — 결재 게이트(approved) 강제. 계약 sent 전환 + 직원 메일 통지(열람 링크만, §8-7). */
@@ -498,12 +494,21 @@ export async function sendRound(
 
   for (const c of contracts) {
     if (String(c.status) === "sent") continue; // 재발송 시 기존 sent 는 유지
-    await withDbWrite(async (txn) => {
-      await txn.exec(
-        `UPDATE labor_contracts SET status = 'sent', sent_at = $2, updated_at = $2 WHERE contract_id = $1`,
+    const transitioned = await withDbWrite(async (txn) => {
+      const round = rowsToObjects(await txn.exec(
+        `SELECT status FROM labor_contract_rounds WHERE round_id = $1 FOR UPDATE`, [roundId]
+      ))[0];
+      if (!round || !["approved", "sent"].includes(String(round.status))) return false;
+      const rows = rowsToObjects(await txn.exec(
+        `UPDATE labor_contracts SET status = 'sent', sent_at = $2, updated_at = $2
+          WHERE contract_id = $1 AND status = 'approved' AND signed_at IS NULL
+            AND signatures = '{}'::jsonb AND signed_file_storage_key IS NULL
+            AND signed_render_snapshot IS NULL RETURNING contract_id`,
         [String(c.contract_id), now]
-      );
+      ));
+      return rows.length > 0;
     });
+    if (!transitioned) continue; // 다른 발송/서명/삭제가 먼저 끝난 행에는 메일도 보내지 않는다.
     sent += 1;
     const email = c.email ? String(c.email) : null;
     if (!email) {
@@ -526,7 +531,7 @@ export async function sendRound(
 
   await withDbWrite(async (txn) => {
     await txn.exec(
-      `UPDATE labor_contract_rounds SET status = 'sent', updated_at = $2 WHERE round_id = $1`,
+      `UPDATE labor_contract_rounds SET status = 'sent', updated_at = $2 WHERE round_id = $1 AND status IN ('approved', 'sent')`,
       [roundId, now]
     );
   });
@@ -535,24 +540,19 @@ export async function sendRound(
 
 /** 라운드 삭제(테스트·오기 제거) — 서명 완료 계약이 있으면 불가. 연결 기안 문서는 남기고 링크만 해제. */
 export async function deleteRound(roundId: string): Promise<{ deleted: number }> {
-  const db = await getDb();
-  const rows = rowsToObjects(
-    await db.exec(
-      `SELECT count(*) FILTER (WHERE status = 'signed') AS signed_count, count(*) AS total
-         FROM labor_contracts WHERE round_id = $1`,
-      [roundId]
-    )
-  );
-  if (!rows.length) throw Object.assign(new Error("라운드를 찾을 수 없습니다."), { status: 404 });
-  if (Number(rows[0].signed_count ?? 0) > 0) {
-    throw Object.assign(new Error("서명 완료된 계약이 있어 삭제할 수 없습니다."), { status: 400 });
-  }
-  const total = Number(rows[0].total ?? 0);
-  await withDbWrite(async (txn) => {
+  return withDbWrite(async (txn) => {
+    const round = rowsToObjects(await txn.exec(
+      `SELECT round_id FROM labor_contract_rounds WHERE round_id = $1 FOR UPDATE`, [roundId]
+    ))[0];
+    if (!round) throw Object.assign(new Error("라운드를 찾을 수 없습니다."), { status: 404 });
+    const contracts = rowsToObjects(await txn.exec(
+      `SELECT * FROM labor_contracts WHERE round_id = $1 ORDER BY contract_id FOR UPDATE`, [roundId]
+    ));
+    for (const contract of contracts) assertContractUnsigned(contract);
     await txn.exec(`DELETE FROM labor_contracts WHERE round_id = $1`, [roundId]);
     await txn.exec(`DELETE FROM labor_contract_rounds WHERE round_id = $1`, [roundId]);
+    return { deleted: contracts.length };
   });
-  return { deleted: total };
 }
 
 /** 개별(승진) 패널 컨텍스트 — 현 직급 위 2단계 목록 + 승진 이력 + 현행 급여 */

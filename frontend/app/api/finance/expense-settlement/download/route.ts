@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { readContractDocument } from "@/lib/storage/contract-document-storage";
-import { listSettlements } from "@/lib/finance/expense-settlement";
+import { assertSettlementPayable, listSettlements } from "@/lib/finance/expense-settlement";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,6 +13,7 @@ export async function GET(req: NextRequest) {
     const settlementId = req.nextUrl.searchParams.get("settlementId") ?? "";
     const settlement = (await listSettlements()).find((s) => s.settlementId === settlementId);
     if (!settlement?.cmsFileKey) return NextResponse.json({ error: "생성된 CMS 파일이 없습니다." }, { status: 404 });
+    await assertSettlementPayable(settlementId);
     const buf = await readContractDocument(settlement.cmsFileKey);
     if (!buf) return NextResponse.json({ error: "파일을 읽지 못했습니다." }, { status: 404 });
     const fileName = settlement.cmsFileKey.split("/").pop() ?? "cms.xlsx";

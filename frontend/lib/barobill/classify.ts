@@ -1,3 +1,4 @@
+import { lockAccountingWrite } from "@/lib/finance/write-lock";
 // 법인카드 매입건 계정과목 자동 분류 + 결재문서 연동 (블루프린트 P1 §F1~F3)
 // 분류 4단(실측 기반 우선순위):
 //   ⓪ store_rule — card_store_rules(사용자가 "이 가맹점은 항상 이 계정과목"이라 못박은 고정 규칙, 마이그 173)
@@ -7,7 +8,9 @@
 //   ③ rule    — expense_categories.biz_type_rules(업태 부분일치. 실측: BC 업태 공백 혼입 → 공백 제거 후 매칭)
 // 학습 제외: PG 가맹점 사업자번호(이니시스 등)는 실사용처가 아니므로 learned 사전에 넣지 않는다.
 
-import { getDb, withDbWrite, rowsToObjects } from "@/lib/db";
+import { getDb, withDbWrite, rowsToObjects, type PgDatabase } from "@/lib/db";
+import { applyCardMerchantCorrections, merchantIdentity } from "@/lib/finance/card-merchant-source";
+import { assertNewVatFilingCardMutationsAllowed } from "@/lib/finance/vat-filing-protection";
 
 export interface ExpenseCategory {
   categoryKey: string;
@@ -55,8 +58,8 @@ export async function loadStoreRules(): Promise<StoreRuleSet> {
   return set;
 }
 
-export async function loadCategories(): Promise<ExpenseCategory[]> {
-  const db = await getDb();
+export async function loadCategories(transaction?: PgDatabase): Promise<ExpenseCategory[]> {
+  const db = transaction ?? await getDb();
   const rows = rowsToObjects(
     await db.exec(
       `SELECT category_key, label, form_option_map, biz_type_rules, store_keyword_rules, vat_deductible_default
@@ -218,6 +221,16 @@ export async function syncDocCardLinks(docId: string, formId: string, fieldValue
 
   const now = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 19).replace("T", " ");
   await withDbWrite(async (db) => {
+    await lockAccountingWrite(db);
+    const current = rowsToObjects(await db.exec("SELECT card_txn_id,category_key FROM card_transactions WHERE card_txn_id=ANY($1::text[]) ORDER BY card_txn_id FOR UPDATE",[refs.map(ref=>ref.cardTxnId)]));
+    const byId = new Map(current.map(row=>[String(row.card_txn_id),row]));
+    const categoryChanges = refs.filter(ref=>{
+      const categoryKey=ref.categoryOption?optionToKey.get(ref.categoryOption)??null:null;
+      return categoryKey!==null&&byId.has(ref.cardTxnId)&&byId.get(ref.cardTxnId)!.category_key!==categoryKey;
+    }).map(ref=>ref.cardTxnId);
+    // doc_id/doc_form_id alone are not VAT or card journal evidence fields.
+    // Check real category changes before either the unlink or link writes occur.
+    await assertNewVatFilingCardMutationsAllowed(db,{cardTxnIds:categoryChanges});
     // 1) 이 문서에 연결돼 있던 기존 건 중 이번 목록에 없는 것 → 해제
     const keepIds = refs.map((r) => r.cardTxnId);
     await db.run(
@@ -242,9 +255,10 @@ export async function syncDocCardLinks(docId: string, formId: string, fieldValue
       );
       if (categoryKey) {
         // PG 가맹점은 학습 제외(실사용처가 아님 — 오학습 방지)
-        const rows = rowsToObjects(
-          await db.exec(`SELECT store_corp_num, store_name, store_biz_type FROM card_transactions WHERE card_txn_id = $1`, [ref.cardTxnId]),
-        );
+        const rows = await applyCardMerchantCorrections(db, rowsToObjects(
+          await db.exec(`SELECT card_txn_id, store_corp_num, store_name, store_biz_type FROM card_transactions WHERE card_txn_id = $1`, [ref.cardTxnId]),
+        ));
+        if (rows[0] && merchantIdentity(rows[0])?.issues.length) continue;
         const corpNum = rows[0]?.store_corp_num ? String(rows[0].store_corp_num) : null;
         const bizType = rows[0]?.store_biz_type ? String(rows[0].store_biz_type) : null;
         if (corpNum && !isPgMerchant(bizType)) {
@@ -261,13 +275,14 @@ export async function syncDocCardLinks(docId: string, formId: string, fieldValue
         }
       }
     }
-  });
+  }, {accountingSnapshot:true});
 }
 
 /** 문서 삭제 시 — 연결된 카드 사용건 전부 해제. */
 export async function unlinkDocCards(docId: string): Promise<void> {
   const now = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 19).replace("T", " ");
   await withDbWrite(async (db) => {
+    await lockAccountingWrite(db);
     await db.run(`UPDATE card_transactions SET doc_id = NULL, doc_form_id = NULL, updated_at = $2 WHERE doc_id = $1`, [docId, now]);
   });
 }

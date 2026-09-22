@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
 // POST: JSON(action=save/confirm/unconfirm) 또는 multipart(action=parse_pdf — 간소화 PDF 파싱)
 export async function POST(req: NextRequest) {
   try {
-    await requireAdmin();
+    const ctx = await requireAdmin();
 
     const contentType = req.headers.get("content-type") ?? "";
     if (contentType.includes("multipart/form-data")) {
@@ -48,11 +48,11 @@ export async function POST(req: NextRequest) {
     if (!year || !body.employeeId) return NextResponse.json({ error: "year/employeeId 가 필요합니다." }, { status: 400 });
 
     if (body.action === "save") {
-      const result = await saveSettlement(year, body.employeeId, body.inputs ?? {}, body.memo);
+      const result = await saveSettlement(year, body.employeeId, body.inputs ?? {}, body.memo, ctx.userId);
       return NextResponse.json({ result });
     }
     if (body.action === "confirm" || body.action === "unconfirm") {
-      await setSettlementStatus(year, body.employeeId, body.action === "confirm" ? "confirmed" : "draft");
+      await setSettlementStatus(year, body.employeeId, body.action === "confirm" ? "confirmed" : "draft", ctx.userId);
       return NextResponse.json({ ok: true });
     }
     return NextResponse.json({ error: "action 이 올바르지 않습니다." }, { status: 400 });

@@ -6,7 +6,7 @@
  *        ③/api/approval/holidays(휴무일 지정 화면).
  */
 
-import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
+import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
 import { getHolidays, type Holiday } from "@/lib/home/holidays";
 
 /** 사내 휴무일 지정 사유 — 화면 목록박스와 동일 순서. */
@@ -38,8 +38,8 @@ export interface AnnualHoliday {
 const pad2 = (n: number) => String(n).padStart(2, "0");
 
 /** 매년 반복 규칙 목록. */
-export async function listAnnualHolidays(): Promise<AnnualHoliday[]> {
-  const db = await getDb();
+export async function listAnnualHolidays(database?: PgDatabase): Promise<AnnualHoliday[]> {
+  const db = database ?? await getDb();
   const rows = rowsToObjects(
     await db.exec(`SELECT month, day, name, reason FROM company_annual_holidays ORDER BY month, day`)
   );
@@ -123,8 +123,8 @@ function labelSubstitutes(year: number, map: Map<string, OffDay>): void {
 }
 
 /** 사내 지정 휴무일(연도 단위). */
-export async function listCompanyHolidays(year?: number): Promise<OffDay[]> {
-  const db = await getDb();
+export async function listCompanyHolidays(year?: number, database?: PgDatabase): Promise<OffDay[]> {
+  const db = database ?? await getDb();
   const rows = rowsToObjects(
     year == null
       ? await db.exec(
@@ -150,7 +150,7 @@ export async function listCompanyHolidays(year?: number): Promise<OffDay[]> {
  * 그 해의 전체 휴무일 — 법정공휴일 + 근로자의 날 + 매년 반복 규칙 + 사내 지정(특정일).
  * 같은 날짜가 겹치면 **더 구체적인 쪽이 이긴다**: 법정 < 반복 규칙 < 특정일 지정.
  */
-export async function listOffDays(year: number): Promise<OffDay[]> {
+export async function listOffDays(year: number, database?: PgDatabase): Promise<OffDay[]> {
   const pub: OffDay[] = [];
   try {
     for (const h of [...(await getHolidays(year)), laborDay(year)]) {
@@ -159,8 +159,13 @@ export async function listOffDays(year: number): Promise<OffDay[]> {
   } catch {
     pub.push({ ...laborDay(year), source: "public" });
   }
-  const annual = await listAnnualHolidays().catch(() => [] as AnnualHoliday[]);
-  const company = await listCompanyHolidays(year).catch(() => [] as OffDay[]);
+  // 같은 트랜잭션의 조회 실패를 숨기면 COMMIT이 ROLLBACK으로 끝나도 성공을 반환할 수 있다.
+  const annual = database
+    ? await listAnnualHolidays(database)
+    : await listAnnualHolidays().catch(() => [] as AnnualHoliday[]);
+  const company = database
+    ? await listCompanyHolidays(year, database)
+    : await listCompanyHolidays(year).catch(() => [] as OffDay[]);
 
   const map = new Map<string, OffDay>();
   for (const d of pub) if (!map.has(d.date)) map.set(d.date, d);
@@ -177,10 +182,10 @@ export async function listOffDays(year: number): Promise<OffDay[]> {
 }
 
 /** 초과근무 산정용 — 여러 해의 휴무일 날짜 집합. */
-export async function offDaySet(years: number[]): Promise<Set<string>> {
+export async function offDaySet(years: number[], database?: PgDatabase): Promise<Set<string>> {
   const set = new Set<string>();
   for (const y of new Set(years)) {
-    for (const d of await listOffDays(y)) set.add(d.date);
+    for (const d of await listOffDays(y, database)) set.add(d.date);
   }
   return set;
 }

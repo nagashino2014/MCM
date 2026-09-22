@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
+import { lockExpenseSettlement } from "@/lib/finance/expense-settlement-lock";
 import { timeRangeMinutes } from "@/lib/approval/fields";
 import { OVERTIME_FORM_ID } from "@/lib/approval/overtime";
 import { offDaySet } from "@/lib/hr/holidays";
@@ -331,7 +332,21 @@ export async function setMealWarningAction(
   note: string | null,
   actorUserId: string
 ): Promise<void> {
+  if (!MEAL_WARNING_ACTIONS.includes(action)) throw Object.assign(new Error("올바른 식대 처분을 지정하세요."), { status: 400 });
   await withDbWrite(async (db) => {
+    await lockExpenseSettlement(db);
+    const warning = rowsToObjects(await db.exec("SELECT doc_id, row_no, action FROM overtime_meal_warnings WHERE warning_id=$1 FOR UPDATE", [warningId]))[0];
+    if (!warning) throw Object.assign(new Error("식대 처분 이력을 찾을 수 없습니다."), { status: 404 });
+    if (action === "withhold" && warning.action !== "withhold") {
+      const docId = String(warning.doc_id), rowIndex = Number(warning.row_no) - 1;
+      const doc = rowsToObjects(await db.exec("SELECT field_values FROM approval_docs WHERE doc_id=$1", [docId]))[0];
+      const values = typeof doc?.field_values === "string" ? JSON.parse(doc.field_values) : doc?.field_values;
+      const row = values && Array.isArray(values.expenses) ? values.expenses[rowIndex] : null;
+      const receiptId = typeof row?._receiptId === "string" && row._receiptId ? row._receiptId : null;
+      const references = [`row:${docId}:${rowIndex}`, ...(receiptId ? [`receipt:${receiptId}`] : [])];
+      const settled = rowsToObjects(await db.exec("SELECT 1 FROM expense_settlement_items WHERE row_ref=ANY($1::text[]) LIMIT 1", [references]));
+      if (settled.length) throw Object.assign(new Error("이미 정산에 포함된 지출은 불지급으로 바꿀 수 없습니다. 정산·이체 상태를 확인하고 필요한 경우 급여 차감 등 환수 절차를 검토하세요."), { status: 409 });
+    }
     await db.run(
       `UPDATE overtime_meal_warnings
           SET action = $2,
@@ -350,9 +365,10 @@ export async function setMealWarningAction(
  */
 export async function mealClawbackAmounts(
   payYear: number,
-  payMonth: number
+  payMonth: number,
+  database?: PgDatabase
 ): Promise<Map<string, { amount: number; count: number }>> {
-  const db = await getDb();
+  const db = database ?? await getDb();
   const from = new Date(Date.UTC(payYear, payMonth - 2, 26)).toISOString().slice(0, 10);
   const to = `${payYear}-${String(payMonth).padStart(2, "0")}-25`;
   const rows = rowsToObjects(

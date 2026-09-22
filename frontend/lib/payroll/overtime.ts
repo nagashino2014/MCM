@@ -1,4 +1,4 @@
-import { getDb, rowsToObjects } from "@/lib/db";
+import { getDb, rowsToObjects, type PgDatabase } from "@/lib/db";
 import { offDaySet } from "@/lib/hr/holidays";
 
 /**
@@ -19,8 +19,8 @@ export interface OvertimeRates {
   divisorHours: number;
 }
 
-export async function getOvertimeRates(): Promise<OvertimeRates> {
-  const db = await getDb();
+export async function getOvertimeRates(database?: PgDatabase): Promise<OvertimeRates> {
+  const db = database ?? await getDb();
   const s = rowsToObjects(
     await db.exec(
       `SELECT overtime_rate_day, overtime_rate_night, wage_divisor_hours FROM attendance_settings LIMIT 1`
@@ -39,12 +39,12 @@ export async function getOvertimeRates(): Promise<OvertimeRates> {
  *   (이근형 19,200 · 이윤재 15,200 · 최태헌 18,000 · 한도경 24,900 …).
  *   이 반올림을 적용하면 14명 중 13명의 수당이 실측과 원 단위까지 일치한다.
  */
-export async function ordinaryHourlyWages(divisorHours?: number): Promise<Map<string, number>> {
-  const db = await getDb();
+export async function ordinaryHourlyWages(divisorHours?: number, database?: PgDatabase): Promise<Map<string, number>> {
+  const db = database ?? await getDb();
   const items = rowsToObjects(
     await db.exec(`SELECT name FROM payroll_item_defs WHERE in_ordinary_wage = 1`)
   ).map((r) => String(r.name));
-  const divisor = divisorHours ?? (await getOvertimeRates()).divisorHours;
+  const divisor = divisorHours ?? (await getOvertimeRates(db)).divisorHours;
   const contracts = rowsToObjects(
     await db.exec(
       `SELECT DISTINCT ON (employee_id) employee_id, wage_components
@@ -96,10 +96,11 @@ export interface OvertimeAmount {
  */
 export async function overtimeAmounts(
   payYear: number,
-  payMonth: number
+  payMonth: number,
+  database?: PgDatabase
 ): Promise<Map<string, OvertimeAmount>> {
-  const db = await getDb();
-  const rates = await getOvertimeRates();
+  const db = database ?? await getDb();
+  const rates = await getOvertimeRates(db);
   const from = new Date(Date.UTC(payYear, payMonth - 2, 26)).toISOString().slice(0, 10);
   const to = `${payYear}-${String(payMonth).padStart(2, "0")}-25`;
   const attRows = rowsToObjects(
@@ -114,8 +115,8 @@ export async function overtimeAmounts(
     )
   );
   const attendanceEmps = new Set(attRows.map((r) => String(r.employee_id)));
-  const matches = await matchOvertimeRequests(payYear, payMonth);
-  const hourly = await ordinaryHourlyWages(rates.divisorHours);
+  const matches = await matchOvertimeRequests(payYear, payMonth, db);
+  const hourly = await ordinaryHourlyWages(rates.divisorHours, db);
 
   // 인원별 집계 — 일자별 대조 결과를 그대로 합산한다(주 합계 min 은 일자 간 상쇄가 생겨 쓰지 않는다).
   const agg = new Map<string, { dayMin: number; nightMin: number; reqMin: number; actualMin: number; noRecord: boolean }>();
@@ -218,8 +219,8 @@ const hhmmToMin = (v: string): number => {
 };
 
 /** attendance_work_schedules 로드(마이그 167). 초과근무 인정 시작 시각의 근거. */
-export async function loadWorkSchedules(): Promise<Map<string, WorkScheduleMin>> {
-  const db = await getDb();
+export async function loadWorkSchedules(database?: PgDatabase): Promise<Map<string, WorkScheduleMin>> {
+  const db = database ?? await getDb();
   const rows = rowsToObjects(
     await db.exec(`SELECT employee_id, schedule_kind, start_hhmm, end_hhmm FROM attendance_work_schedules`)
   );
@@ -302,9 +303,10 @@ export interface OvertimeMatchRow {
  */
 export async function matchOvertimeRequests(
   payYear: number,
-  payMonth: number
+  payMonth: number,
+  database?: PgDatabase
 ): Promise<OvertimeMatchRow[]> {
-  const db = await getDb();
+  const db = database ?? await getDb();
   const from = new Date(Date.UTC(payYear, payMonth - 2, 26)).toISOString().slice(0, 10);
   const to = `${payYear}-${String(payMonth).padStart(2, "0")}-25`;
   const reqs = rowsToObjects(
@@ -342,9 +344,9 @@ export async function matchOvertimeRequests(
     att.set(key, rec);
   }
   const hasAttendanceInRange = attRows.length > 0;
-  const schedules = await loadWorkSchedules();
+  const schedules = await loadWorkSchedules(db);
   // 휴무일(법정공휴일·근로자의 날·사내 지정) — 소정근로가 없어 재실 전체가 초과근무 대상이다.
-  const offDays = await offDaySet([payYear, payMonth === 1 ? payYear - 1 : payYear]);
+  const offDays = await offDaySet([payYear, payMonth === 1 ? payYear - 1 : payYear], db);
   const overrides = new Map<string, { mode: string; reason: string | null }>();
   for (const o of rowsToObjects(
     await db.exec(`SELECT doc_id, mode, reason FROM overtime_match_overrides`)

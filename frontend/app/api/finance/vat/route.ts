@@ -7,6 +7,9 @@ import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { getVatSummary, buildVatWorkbook, updateCardClassification, bulkAssignCategory, runAutoClassify } from "@/lib/barobill/vat";
 import { loadCategories } from "@/lib/barobill/classify";
+import { withDbWrite } from "@/lib/db";
+import { loadCardTaxRows } from "@/lib/finance/card-tax";
+import { lockAccountingWrite } from "@/lib/finance/write-lock";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,14 +34,19 @@ export async function GET(req: NextRequest) {
         },
       });
     }
-    const [summary, categories] = await Promise.all([
-      getVatSummary({ from, to, cardId: sp.get("cardId") || undefined }),
-      loadCategories(),
-    ]);
-    return NextResponse.json({
+    const data = await withDbWrite(async db => {
+      await lockAccountingWrite(db);
+      const params = {from,to,cardId:sp.get("cardId") || undefined};
+      const cardRows = await loadCardTaxRows(db, params);
+      const summary = await getVatSummary(params,db,cardRows);
+      const categories = await loadCategories(db);
+      return {
       summary,
+      reviewRows: cardRows.map(r => ({cardTxnId:String(r.card_txn_id),approvedAt:String(r.approved_at),approvalType:String(r.approval_type),storeName:r.store_name ?? null,amountTotal:r.normalized.valid?r.normalized.amountTotal:null,taxAmount:r.normalized.valid?r.normalized.taxAmount:null,vatState:r.vatState,issues:r.issues,vatReason:r.review_reason??"",vatEvidence:r.review_evidence??"",vatDate:r.taxDate,originalCardTxnId:r.original_card_txn_id??"",reversalReason:r.reversal_reason??""})),
       categories: categories.map((c) => ({ key: c.categoryKey, label: c.label, vatDeductibleDefault: c.vatDeductibleDefault })),
-    });
+      };
+    }, {accountingSnapshot:true});
+    return NextResponse.json(data);
   } catch (err) {
     return authErrorToResponse(err);
   }
@@ -52,6 +60,11 @@ interface PostBody {
   vatDeductible?: number | null;
   excluded?: boolean;
   memo?: string | null;
+  vatReason?: string | null;
+  vatEvidence?: string | null;
+  vatDate?: string | null;
+  originalCardTxnId?: string | null;
+  reversalReason?: string | null;
   from?: string;
   to?: string;
   all?: boolean;
@@ -69,7 +82,9 @@ export async function POST(req: NextRequest) {
         vatDeductible: body.vatDeductible,
         excluded: body.excluded,
         memo: body.memo,
-      });
+        vatReason: body.vatReason, vatEvidence: body.vatEvidence, vatDate: body.vatDate,
+        originalCardTxnId: body.originalCardTxnId, reversalReason: body.reversalReason,
+      }, actor.userId);
       return NextResponse.json({ ok: true });
     }
 

@@ -1,6 +1,7 @@
+import { withContractTransactionWrite } from "@/lib/finance/contract-link-lock";
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
-import { rowsToObjects, withDbWrite } from "@/lib/db";
+import { rowsToObjects } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 import { buildInvoiceFileName, deleteContractDocument } from "@/lib/storage/contract-document-storage";
 
@@ -75,7 +76,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     values.push(milestoneId, contractId);
     const sql = `UPDATE contract_payment_milestones SET ${setClauses.join(", ")} WHERE milestone_id = $${values.length - 1} AND contract_id = $${values.length}`;
 
-    await withDbWrite(async (db) => {
+    await withContractTransactionWrite(contractId, milestoneId, async (db) => {
       const exists = rowsToObjects(
         await db.exec(
           "SELECT milestone_id, invoice_issued_at, invoice_requested_at, invoice_requested_by FROM contract_payment_milestones WHERE milestone_id = $1 AND contract_id = $2",
@@ -182,7 +183,7 @@ export async function DELETE(_: NextRequest, ctx: RouteContext) {
     const { contractId, milestoneId } = await ctx.params;
     const actor = await requirePermission("contract.edit", { fallbackRoles: ["editor"], target: { contractId } });
     let removedKeys: string[] = [];
-    await withDbWrite(async (db) => {
+    await withContractTransactionWrite(contractId, milestoneId, async (db) => {
       const exists = rowsToObjects(
         await db.exec(
           "SELECT milestone_id FROM contract_payment_milestones WHERE milestone_id = $1 AND contract_id = $2",

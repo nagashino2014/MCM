@@ -14,6 +14,7 @@ import { COMPANY_KO, COMPANY_CEO } from "@/lib/letter/types";
 
 export interface ContractPdfInput {
   title: string; // 예: "연 봉 근 로 계 약 서"
+  employer?: { name: string; ceo: string; address: string };
   employee: {
     name: string;
     birthDate: string | null;
@@ -35,6 +36,12 @@ export interface ContractPdfInput {
     privacy?: string;
   } | null;
 }
+
+export const CONTRACT_EMPLOYER = {
+  name: COMPANY_KO,
+  ceo: COMPANY_CEO,
+  address: "서울 금천구 가산디지털1로 100, 에이스골드타워 12층",
+};
 
 const PAGE_W = 595.28;
 const PAGE_H = 841.89;
@@ -90,6 +97,7 @@ function fmt(v: number): string {
 }
 
 export async function renderContractPdf(input: ContractPdfInput): Promise<Uint8Array> {
+  const employer = input.employer ?? CONTRACT_EMPLOYER;
   const doc = await PDFDocument.create();
   doc.registerFontkit(fontkit);
   const fonts = await loadFonts();
@@ -126,9 +134,9 @@ export async function renderContractPdf(input: ContractPdfInput): Promise<Uint8A
   // ── 갑/을 인적사항 표 ──
   {
     const rows: Array<[string, string, string]> = [
-      ["사업주(甲)", "사 업 체 명", COMPANY_KO],
-      ["", "대   표   자", COMPANY_CEO],
-      ["", "소   재   지", "서울 금천구 가산디지털1로 100, 에이스골드타워 12층"],
+      ["사업주(甲)", "사 업 체 명", employer.name],
+      ["", "대   표   자", employer.ceo],
+      ["", "소   재   지", employer.address],
       ["근로자(乙)", "성        명", input.employee.name],
       ["", "생 년 월 일", input.employee.birthDate ?? ""],
       ["", "주        소", input.employee.address ?? ""],
@@ -265,7 +273,7 @@ export async function renderContractPdf(input: ContractPdfInput): Promise<Uint8A
   page.drawText("(甲)", { x: MARGIN_X, y: y - 10, size: 10.5, font: bold, color: INK });
   page.drawText("(乙)", { x: PAGE_W / 2 + 10, y: y - 10, size: 10.5, font: bold, color: INK });
   y -= 22;
-  drawSigLine(MARGIN_X, "대표자 :", COMPANY_CEO, null, true);
+  drawSigLine(MARGIN_X, "대표자 :", employer.ceo, null, true);
   drawSigLine(PAGE_W / 2 + 10, "근로자 :", input.employee.name, sigText(input.signatures?.main) === "(서명 또는 인)" ? null : input.signatures?.main, false);
   y -= 34;
 

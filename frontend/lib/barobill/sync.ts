@@ -1,3 +1,6 @@
+import { lockAccountingWrite } from "@/lib/finance/write-lock";
+import { normalizeCardTransaction } from "@/lib/finance/card-tax";
+import { canonicalCardNumber, normalizeCardRegistryLists } from "@/lib/barobill/card-number";
 // 바로빌 수집 배치 — 등록 목록 동기화 + 계좌/카드 원장 증분 적재 (블루프린트 P0 §2)
 // 실행 경로: ① 재무 화면 로드 시 stale 체크 후 자동(catch-up — next가 야간 정지라 새벽 스케줄 불가)
 //           ② /api/finance/sync POST 수동 ③ (선택) EventBridge Scheduler
@@ -7,7 +10,7 @@ import { createHash } from "node:crypto";
 import { getDb, withDbWrite, rowsToObjects, type PgDatabase } from "@/lib/db";
 import { normalizeCompanyName } from "@/lib/ieps/formatters";
 import { getBankAccounts, fetchBankTransLogs } from "@/lib/barobill/bank";
-import { getCards, fetchCardPurchases } from "@/lib/barobill/card";
+import { getCards, fetchCardPurchases, type BarobillCardPurchase } from "@/lib/barobill/card";
 
 const KST_NOW = () => {
   const now = new Date(Date.now() + 9 * 3600 * 1000);
@@ -38,7 +41,7 @@ export function bankDedupKey(
 }
 
 export function cardDedupKey(cardNum: string, approvalNum: string | null, approvedAt: string, amountTotal: number): string {
-  return `nk:${cardNum}:${approvalNum ?? ""}:${approvedAt}:${Math.round(amountTotal)}`;
+  return `nk:${canonicalCardNumber(cardNum)}:${approvalNum ?? ""}:${approvedAt}:${Math.round(amountTotal)}`;
 }
 
 export function normalizeRemitter(raw: string): string {
@@ -48,9 +51,9 @@ export function normalizeRemitter(raw: string): string {
 
 // ── 등록 목록 동기화 (바로빌 = 진실원본, 앱 테이블 = 캐시 + 메타) ──
 export async function syncRegistry(): Promise<{ accounts: number; cards: number }> {
-  const [accounts, cards] = await Promise.all([getBankAccounts(0), getCards(0)]);
+  const [accounts, providerCards] = await Promise.all([getBankAccounts(0), getCards(0)]);
   const activeAccounts = new Set((await getBankAccounts(1)).map((a) => a.accountNum));
-  const activeCards = new Set((await getCards(1)).map((c) => c.cardNum));
+  const { all: cards, activeNumbers: activeCards } = normalizeCardRegistryLists(providerCards, await getCards(1));
 
   await withDbWrite(async (db) => {
     for (const a of accounts) {
@@ -149,6 +152,7 @@ export async function syncBankAccount(
   const logs = await fetchBankTransLogs(accountNo, start, end);
   let inserted = 0;
   await withDbWrite(async (tx) => {
+    await lockAccountingWrite(tx);
     for (const log of logs) {
       const amount = log.direction === "in" ? log.deposit : log.direction === "out" ? log.withdraw : log.deposit || log.withdraw;
       const dedupKey = bankDedupKey(accountNo, log.transDT, log.direction, amount, log.balance);
@@ -193,27 +197,41 @@ export async function syncCard(
   cardNum: string,
   range?: { start: string; end: string },
 ): Promise<{ fetched: number; inserted: number }> {
+  const number = canonicalCardNumber(cardNum);
   const db = await getDb();
   const { start, end } = range ?? (await resolveRange(db, "card", cardId));
-  const purchases = await fetchCardPurchases(cardNum, start, end);
+  const purchases = await fetchCardPurchases(number, start, end);
+  return persistCardPurchases(cardId, number, purchases);
+}
+
+/** Persist a complete fetched batch atomically. Ambiguous changes preserve the prior source and fail visibly. */
+export async function persistCardPurchases(cardId: string, cardNum: string, purchases: BarobillCardPurchase[]): Promise<{fetched:number;inserted:number}> {
+  const number = canonicalCardNumber(cardNum);
   let inserted = 0;
   await withDbWrite(async (tx) => {
+    await lockAccountingWrite(tx);
+    const registry = rowsToObjects(await tx.exec("SELECT card_num FROM card_registry WHERE card_id=$1",[cardId]))[0];
+    if (!registry || registry.card_num !== number) throw Object.assign(new Error("카드 등록 정보가 일치하지 않습니다."),{status:409});
+    const batchKeys = new Map<string,string>();
     for (const p of purchases) {
-      const dedupKey = cardDedupKey(cardNum, p.approvalNum, p.approvedAt, p.amountTotal);
-      // 실측: BC·롯데 모두 Amount(공급가액)=0 → 총액-세액 역산. 면세·해외는 tax=0 → 전액 공급가액.
-      const supply = p.amountTotal - p.taxAmount - p.serviceCharge;
-      const result = rowsToObjects(
-        await tx.exec(`SELECT card_txn_id, approval_type, is_purchased FROM card_transactions WHERE dedup_key = $1`, [dedupKey]),
-      );
-      if (result.length) {
-        const existing = result[0];
-        // 원장 불변 — 단 매입확정/승인형태(취소 반영)만 갱신 허용
-        if (existing.approval_type !== p.approvalType || Boolean(existing.is_purchased) !== p.isPurchased) {
-          await tx.run(
-            `UPDATE card_transactions SET approval_type = $2, is_purchased = $3, updated_at = $4 WHERE card_txn_id = $1`,
-            [existing.card_txn_id, p.approvalType, p.isPurchased ? 1 : 0, KST_NOW()],
-          );
-        }
+      const normalized = normalizeCardTransaction({approval_type:p.approvalType,amount_total:p.amountTotal,supply_amount:Math.sign(p.amountTotal || 1)*(Math.abs(p.amountTotal)-Math.abs(p.taxAmount)-Math.abs(p.serviceCharge)),tax_amount:p.taxAmount,service_charge:p.serviceCharge});
+      if (!Number.isSafeInteger(p.amountTotal) || !Number.isSafeInteger(p.taxAmount) || !Number.isSafeInteger(p.serviceCharge) || Math.abs(p.taxAmount)+Math.abs(p.serviceCharge)>Math.abs(p.amountTotal)) throw Object.assign(new Error("카드 수집 금액이 올바르지 않습니다."),{status:409});
+      if (!p.historyKey || !p.approvedAt || !/^\d{4}-\d{2}-\d{2}/.test(p.approvedAt)) throw Object.assign(new Error("카드 수집 식별정보가 부족합니다."),{status:409});
+      const kind = normalized.kind === "unknown" ? `unknown:${p.approvalType}` : normalized.kind;
+      const dedupKey = `nk2:${number}:${p.approvalNum || ""}:${p.approvedAt}:${kind}:${Math.abs(p.amountTotal)}`;
+      const seenHistory = batchKeys.get(dedupKey);
+      if (seenHistory && seenHistory !== p.historyKey) throw Object.assign(new Error("같은 승인번호·일시·금액의 복수 원천이 있어 수집 확인이 필요합니다."),{status:409});
+      batchKeys.set(dedupKey,p.historyKey);
+      const supply = Math.sign(p.amountTotal || 1)*(Math.abs(p.amountTotal)-Math.abs(p.taxAmount)-Math.abs(p.serviceCharge));
+      const candidates = rowsToObjects(await tx.exec(`SELECT * FROM card_transactions WHERE card_id=$1 AND (history_key=$2 OR (COALESCE(approval_num,'')=$3 AND approved_at=$4 AND abs(amount_total)=$5))`,[cardId,p.historyKey,p.approvalNum||"",p.approvedAt,Math.abs(p.amountTotal)]));
+      const semanticKind=(r:Record<string,unknown>)=>{const n=normalizeCardTransaction(r);return n.kind==="unknown"?`unknown:${r.approval_type}`:n.kind;};
+      const matches=candidates.filter(r=>semanticKind(r)===kind && String(r.approval_num||"")===String(p.approvalNum||"") && r.approved_at===p.approvedAt && Math.abs(Number(r.amount_total))===Math.abs(p.amountTotal));
+      if (candidates.some(r=>r.history_key===p.historyKey && !matches.includes(r))) throw Object.assign(new Error("기존 카드 원천의 유형·일자·금액이 바뀌었습니다. 정정 검토가 필요합니다."),{status:409});
+      if (matches.length>1) throw Object.assign(new Error("기존 카드 중복 후보를 먼저 확인하세요."),{status:409});
+      if (matches.length) {
+        const existing=matches[0];
+        if ((!p.approvalNum && existing.history_key!==p.historyKey) || Math.abs(Number(existing.tax_amount))!==Math.abs(p.taxAmount) || Math.abs(Number(existing.service_charge||0))!==Math.abs(p.serviceCharge) || String(existing.store_corp_num||"")!==String(p.storeCorpNum||"") || (existing.store_tax_type==null?null:Number(existing.store_tax_type))!==p.storeTaxType) throw Object.assign(new Error("기존 카드 증빙 정보가 달라 자동으로 덮어쓸 수 없습니다."),{status:409});
+        if (Boolean(existing.is_purchased)!==p.isPurchased) await tx.run("UPDATE card_transactions SET is_purchased=$2,updated_at=$3 WHERE card_txn_id=$1",[existing.card_txn_id,p.isPurchased?1:0,KST_NOW()]);
         continue;
       }
       await tx.run(

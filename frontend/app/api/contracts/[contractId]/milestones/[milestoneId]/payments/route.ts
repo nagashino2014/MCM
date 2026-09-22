@@ -1,7 +1,8 @@
+import { withContractTransactionWrite } from "@/lib/finance/contract-link-lock";
 import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
-import { rowsToObjects, withDbWrite } from "@/lib/db";
+import { rowsToObjects } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 
 export const runtime = "nodejs";
@@ -41,7 +42,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     let updatedTotalAmount = 0;
     let baseAmount = 0;
 
-    await withDbWrite(async (db) => {
+    await withContractTransactionWrite(contractId, milestoneId, async (db) => {
       const rows = rowsToObjects(
         await db.exec(
           "SELECT amount, partial_payments_json, collection_ratio, collected_amount FROM contract_payment_milestones WHERE milestone_id = $1 AND contract_id = $2",

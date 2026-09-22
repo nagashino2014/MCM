@@ -1,0 +1,1834 @@
+{
+  "contract": {
+    "version": "de0-supply-installation-v1-e257",
+    "postgresMajor": 17,
+    "functions": [
+      {
+        "cost": "100",
+        "kind": "f",
+        "name": "finance_supply_amount",
+        "rows": "0",
+        "binary": null,
+        "config": null,
+        "result": "boolean",
+        "source": "\n SELECT finance_supply_money(v->'supply') AND finance_supply_money(v->'tax') AND finance_supply_money(v->'total')\n   AND (v->>'supply')::numeric+(v->>'tax')::numeric=(v->>'total')::numeric\n",
+        "strict": false,
+        "support": "0",
+        "language": "sql",
+        "parallel": "u",
+        "variadic": "0",
+        "arguments": "v jsonb",
+        "leakProof": false,
+        "parsedBody": null,
+        "returnsSet": false,
+        "transforms": null,
+        "volatility": "i",
+        "argumentTypes": "jsonb",
+        "securityDefiner": false
+      },
+      {
+        "cost": "100",
+        "kind": "f",
+        "name": "finance_supply_assert_agreement",
+        "rows": "0",
+        "binary": null,
+        "config": null,
+        "result": "void",
+        "source": "\nDECLARE root finance_supply_review_cases%ROWTYPE; r finance_supply_review_revisions%ROWTYPE; q finance_supply_review_requests%ROWTYPE;\nBEGIN\n SELECT * INTO root FROM finance_supply_review_cases WHERE case_id=p_case;\n IF root.case_id IS NULL OR NOT EXISTS(SELECT 1 FROM finance_supply_review_revisions WHERE case_id=p_case AND version=1) THEN\n  RAISE EXCEPTION 'DE-0 orphan case' USING ERRCODE='23514'; END IF;\n FOR r IN SELECT * FROM finance_supply_review_revisions WHERE case_id=p_case LOOP\n  SELECT * INTO q FROM finance_supply_review_requests WHERE request_id=r.request_id;\n  IF q.request_id IS NULL OR q.actor_user_id<>r.actor_user_id OR q.action<>(CASE r.state WHEN 'recorded' THEN 'save' ELSE 'withdraw' END)\n   OR q.result_json->>'caseId' IS DISTINCT FROM r.case_id OR q.result_json->>'revisionId' IS DISTINCT FROM r.revision_id\n   OR q.result_json->'version' IS DISTINCT FROM to_jsonb(r.version) OR q.result_json->>'state' IS DISTINCT FROM r.state THEN\n   RAISE EXCEPTION 'DE-0 revision/request agreement failure' USING ERRCODE='23514'; END IF;\n END LOOP;\nEND ",
+        "strict": false,
+        "support": "0",
+        "language": "plpgsql",
+        "parallel": "u",
+        "variadic": "0",
+        "arguments": "p_case text",
+        "leakProof": false,
+        "parsedBody": null,
+        "returnsSet": false,
+        "transforms": null,
+        "volatility": "v",
+        "argumentTypes": "text",
+        "securityDefiner": false
+      },
+      {
+        "cost": "100",
+        "kind": "f",
+        "name": "finance_supply_assessment_valid",
+        "rows": "0",
+        "binary": null,
+        "config": null,
+        "result": "boolean",
+        "source": "\nDECLARE totals jsonb; claims jsonb;\nBEGIN\n IF finance_supply_keys(a,ARRAY['schemaVersion','status','canApply','consumptionSupported','issues','lineTotals','claimedTotals','memberTotals','additionalVatDeduction']) IS DISTINCT FROM true\n  OR a->>'schemaVersion' IS DISTINCT FROM 'de0-supply-assessment-v1' OR a->>'status' IS NULL OR a->>'status' NOT IN('reviewable','needs_information')\n  OR a->'canApply' IS DISTINCT FROM 'false'::jsonb OR a->'consumptionSupported' IS DISTINCT FROM 'false'::jsonb OR a->'additionalVatDeduction' IS DISTINCT FROM 'null'::jsonb\n  OR jsonb_typeof(a->'issues') IS DISTINCT FROM 'array' OR jsonb_typeof(a->'memberTotals') IS DISTINCT FROM 'array'\n  OR finance_supply_keys(a->'lineTotals',ARRAY['supply','tax','total']) IS DISTINCT FROM true OR finance_supply_amount(a->'lineTotals') IS DISTINCT FROM true\n  OR finance_supply_keys(a->'claimedTotals',ARRAY['supply','tax']) IS DISTINCT FROM true OR finance_supply_money(a->'claimedTotals'->'supply',false) IS DISTINCT FROM true OR finance_supply_money(a->'claimedTotals'->'tax',false) IS DISTINCT FROM true THEN RETURN false; END IF;\n SELECT jsonb_build_object('supply',COALESCE(sum((x->>'supply')::numeric),0),'tax',COALESCE(sum((x->>'tax')::numeric),0),'total',COALESCE(sum((x->>'total')::numeric),0)) INTO totals FROM jsonb_array_elements(draft->'lines') x;\n SELECT jsonb_build_object('supply',COALESCE(sum((x->>'claimedSupply')::numeric),0),'tax',COALESCE(sum((x->>'claimedTax')::numeric),0)) INTO claims FROM jsonb_array_elements(draft->'claims') x;\n RETURN a->'lineTotals'=totals AND a->'claimedTotals'=claims;\nEXCEPTION WHEN OTHERS THEN RETURN false;\nEND ",
+        "strict": false,
+        "support": "0",
+        "language": "plpgsql",
+        "parallel": "u",
+        "variadic": "0",
+        "arguments": "draft jsonb, a jsonb",
+        "leakProof": false,
+        "parsedBody": null,
+        "returnsSet": false,
+        "transforms": null,
+        "volatility": "i",
+        "argumentTypes": "jsonb, jsonb",
+        "securityDefiner": false
+      },
+      {
+        "cost": "100",
+        "kind": "f",
+        "name": "finance_supply_draft_valid",
+        "rows": "0",
+        "binary": null,
+        "config": null,
+        "result": "boolean",
+        "source": "\nDECLARE x jsonb; c jsonb;\nBEGIN\n IF finance_supply_keys(v,ARRAY['schemaVersion','subjectId','title','reason','lines','members','allocations','claims']) IS DISTINCT FROM true\n  OR v->>'schemaVersion' IS DISTINCT FROM 'de0-supply-review-v1' OR finance_supply_id(v->'subjectId') IS DISTINCT FROM true\n  OR finance_supply_text(v->'title',1,200) IS DISTINCT FROM true OR finance_supply_text(v->'reason',1,2000) IS DISTINCT FROM true OR length(btrim(v->>'title'))=0 OR length(btrim(v->>'reason'))=0\n  OR jsonb_typeof(v->'lines') IS DISTINCT FROM 'array' OR jsonb_array_length(v->'lines') NOT BETWEEN 1 AND 100\n  OR jsonb_typeof(v->'members') IS DISTINCT FROM 'array' OR jsonb_array_length(v->'members') NOT BETWEEN 1 AND 100\n  OR jsonb_typeof(v->'allocations') IS DISTINCT FROM 'array' OR jsonb_array_length(v->'allocations')>400\n  OR jsonb_typeof(v->'claims') IS DISTINCT FROM 'array' OR jsonb_array_length(v->'claims')>200 THEN RETURN false; END IF;\n FOR x IN SELECT value FROM jsonb_array_elements(v->'lines') LOOP\n  IF finance_supply_keys(x,ARRAY['lineId','description','dateFrom','dateTo','fulfillment','documentId','evidenceLocation','supply','tax','total']) IS DISTINCT FROM true\n   OR finance_supply_id(x->'lineId') IS DISTINCT FROM true OR finance_supply_text(x->'description',1,1000) IS DISTINCT FROM true OR length(btrim(x->>'description'))=0\n   OR vat_followup_date(x->>'dateFrom') IS DISTINCT FROM true OR vat_followup_date(x->>'dateTo') IS DISTINCT FROM true OR x->>'dateFrom'>x->>'dateTo'\n   OR (x->>'fulfillment') NOT IN('completed','partial','advance','unknown') OR x->>'fulfillment' IS NULL\n   OR (x->'documentId'<>'null'::jsonb AND finance_supply_id(x->'documentId') IS DISTINCT FROM true)\n   OR finance_supply_text(x->'evidenceLocation',0,500) IS DISTINCT FROM true OR finance_supply_amount(x) IS DISTINCT FROM true THEN RETURN false; END IF;\n END LOOP;\n FOR x IN SELECT value FROM jsonb_array_elements(v->'members') LOOP\n  c:=x->'correction';\n  IF finance_supply_keys(x,ARRAY['memberId','kind','sourceId','correction']) IS DISTINCT FROM true\n   OR finance_supply_id(x->'memberId') IS DISTINCT FROM true OR finance_supply_id(x->'sourceId') IS DISTINCT FROM true\n   OR x->>'kind' NOT IN('card','hometax','tax_invoice') OR x->>'kind' IS NULL\n   OR finance_supply_keys(c,ARRAY['isCorrection','reason','originalApprovalNumber','originalMemberId','referenceStatus','role','documentId','evidenceLocation']) IS DISTINCT FROM true\n   OR jsonb_typeof(c->'isCorrection') IS DISTINCT FROM 'boolean' OR finance_supply_text(c->'reason',0,2000) IS DISTINCT FROM true\n   OR (c->'originalApprovalNumber'<>'null'::jsonb AND finance_supply_id(c->'originalApprovalNumber') IS DISTINCT FROM true)\n   OR (c->'originalMemberId'<>'null'::jsonb AND finance_supply_id(c->'originalMemberId') IS DISTINCT FROM true)\n   OR c->>'referenceStatus' NOT IN('not_collected','not_provided','unresolved','declared') OR c->>'referenceStatus' IS NULL\n   OR c->>'role' NOT IN('unknown','reversal','replacement','delta') OR c->>'role' IS NULL\n   OR (c->'documentId'<>'null'::jsonb AND finance_supply_id(c->'documentId') IS DISTINCT FROM true)\n   OR finance_supply_text(c->'evidenceLocation',0,500) IS DISTINCT FROM true\n   OR (c->'originalMemberId'<>'null'::jsonb AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v->'members') m WHERE m->>'memberId'=c->>'originalMemberId')) THEN RETURN false; END IF;\n END LOOP;\n FOR x IN SELECT value FROM jsonb_array_elements(v->'allocations') LOOP\n  IF finance_supply_keys(x,ARRAY['allocationId','memberId','lineId','supply','tax','total']) IS DISTINCT FROM true\n   OR finance_supply_id(x->'allocationId') IS DISTINCT FROM true OR finance_supply_id(x->'memberId') IS DISTINCT FROM true OR finance_supply_id(x->'lineId') IS DISTINCT FROM true\n   OR finance_supply_amount(x) IS DISTINCT FROM true\n   OR NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v->'members') m WHERE m->>'memberId'=x->>'memberId')\n   OR NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v->'lines') l WHERE l->>'lineId'=x->>'lineId') THEN RETURN false; END IF;\n END LOOP;\n FOR x IN SELECT value FROM jsonb_array_elements(v->'claims') LOOP\n  c:=x->'cReference';\n  IF finance_supply_keys(x,ARRAY['claimId','lineId','memberId','origin','reference','claimedSupply','claimedTax','coverage','documentId','evidenceLocation','cReference']) IS DISTINCT FROM true\n   OR finance_supply_id(x->'claimId') IS DISTINCT FROM true OR finance_supply_id(x->'lineId') IS DISTINCT FROM true OR finance_supply_id(x->'memberId') IS DISTINCT FROM true\n   OR x->>'origin' NOT IN('external','c_consumption') OR x->>'origin' IS NULL\n   OR finance_supply_text(x->'reference',0,1000) IS DISTINCT FROM true OR finance_supply_money(x->'claimedSupply',false) IS DISTINCT FROM true OR finance_supply_money(x->'claimedTax',false) IS DISTINCT FROM true\n   OR x->>'coverage' NOT IN('exact','partial','unknown') OR x->>'coverage' IS NULL\n   OR (x->'documentId'<>'null'::jsonb AND finance_supply_id(x->'documentId') IS DISTINCT FROM true)\n   OR finance_supply_text(x->'evidenceLocation',0,500) IS DISTINCT FROM true\n   OR (x->>'origin'='external' AND c<>'null'::jsonb)\n   OR (c<>'null'::jsonb AND (finance_supply_keys(c,ARRAY['revisionId','pairLineNo']) IS DISTINCT FROM true OR finance_supply_id(c->'revisionId') IS DISTINCT FROM true OR finance_supply_money(c->'pairLineNo',false) IS DISTINCT FROM true OR (c->>'pairLineNo')::numeric>99))\n   OR NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v->'members') m WHERE m->>'memberId'=x->>'memberId')\n   OR NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v->'lines') l WHERE l->>'lineId'=x->>'lineId') THEN RETURN false; END IF;\n END LOOP;\n IF EXISTS(SELECT 1 FROM jsonb_array_elements(v->'lines') item GROUP BY item->>'lineId' HAVING count(*)>1)\n  OR EXISTS(SELECT 1 FROM jsonb_array_elements(v->'members') item GROUP BY item->>'memberId' HAVING count(*)>1)\n  OR EXISTS(SELECT 1 FROM jsonb_array_elements(v->'allocations') item GROUP BY item->>'allocationId' HAVING count(*)>1)\n  OR EXISTS(SELECT 1 FROM jsonb_array_elements(v->'claims') item GROUP BY item->>'claimId' HAVING count(*)>1) THEN RETURN false; END IF;\n RETURN true;\nEXCEPTION WHEN OTHERS THEN RETURN false;\nEND ",
+        "strict": false,
+        "support": "0",
+        "language": "plpgsql",
+        "parallel": "u",
+        "variadic": "0",
+        "arguments": "v jsonb",
+        "leakProof": false,
+        "parsedBody": null,
+        "returnsSet": false,
+        "transforms": null,
+        "volatility": "i",
+        "argumentTypes": "jsonb",
+        "securityDefiner": false
+      },
+      {
+        "cost": "100",
+        "kind": "f",
+        "name": "finance_supply_id",
+        "rows": "0",
+        "binary": null,
+        "config": null,
+        "result": "boolean",
+        "source": "\n SELECT finance_supply_text(v,1,200) AND btrim(v#>>'{}')=v#>>'{}' AND (v#>>'{}') !~ '[[:cntrl:] ]'\n",
+        "strict": false,
+        "support": "0",
+        "language": "sql",
+        "parallel": "u",
+        "variadic": "0",
+        "arguments": "v jsonb",
+        "leakProof": false,
+        "parsedBody": null,
+        "returnsSet": false,
+        "transforms": null,
+        "volatility": "i",
+        "argumentTypes": "jsonb",
+        "securityDefiner": false
+      },
+      {
+        "cost": "100",
+        "kind": "f",
+        "name": "finance_supply_immutable",
+        "rows": "0",
+        "binary": null,
+        "config": null,
+        "result": "trigger",
+        "source": "\nBEGIN RAISE EXCEPTION 'DE-0 review history is immutable: %',TG_TABLE_NAME USING ERRCODE='23514'; END ",
+        "strict": false,
+        "support": "0",
+        "language": "plpgsql",
+        "parallel": "u",
+        "variadic": "0",
+        "arguments": "",
+        "leakProof": false,
+        "parsedBody": null,
+        "returnsSet": false,
+        "transforms": null,
+        "volatility": "v",
+        "argumentTypes": "",
+        "securityDefiner": false
+      },
+      {
+        "cost": "100",
+        "kind": "f",
+        "name": "finance_supply_keys",
+        "rows": "0",
+        "binary": null,
+        "config": null,
+        "result": "boolean",
+        "source": "\n SELECT jsonb_typeof(v)='object' AND\n   (SELECT array_agg(k ORDER BY k COLLATE \"C\") FROM jsonb_object_keys(CASE WHEN jsonb_typeof(v)='object' THEN v ELSE '{}'::jsonb END) k)\n   IS NOT DISTINCT FROM (SELECT array_agg(k ORDER BY k COLLATE \"C\") FROM unnest(expected) k)\n",
+        "strict": false,
+        "support": "0",
+        "language": "sql",
+        "parallel": "u",
+        "variadic": "0",
+        "arguments": "v jsonb, expected text[]",
+        "leakProof": false,
+        "parsedBody": null,
+        "returnsSet": false,
+        "transforms": null,
+        "volatility": "i",
+        "argumentTypes": "jsonb, text[]",
+        "securityDefiner": false
+      },
+      {
+        "cost": "100",
+        "kind": "f",
+        "name": "finance_supply_money",
+        "rows": "0",
+        "binary": null,
+        "config": null,
+        "result": "boolean",
+        "source": "\nDECLARE n numeric;\nBEGIN\n IF jsonb_typeof(v) IS DISTINCT FROM 'number' THEN RETURN false; END IF;\n n:=(v#>>'{}')::numeric;\n RETURN n=trunc(n) AND abs(n)<=9007199254740991 AND (signed OR n>=0);\nEXCEPTION WHEN OTHERS THEN RETURN false;\nEND ",
+        "strict": false,
+        "support": "0",
+        "language": "plpgsql",
+        "parallel": "u",
+        "variadic": "0",
+        "arguments": "v jsonb, signed boolean DEFAULT true",
+        "leakProof": false,
+        "parsedBody": null,
+        "returnsSet": false,
+        "transforms": null,
+        "volatility": "i",
+        "argumentTypes": "jsonb, boolean",
+        "securityDefiner": false
+      },
+      {
+        "cost": "100",
+        "kind": "f",
+        "name": "finance_supply_revision_guard",
+        "rows": "0",
+        "binary": null,
+        "config": null,
+        "result": "trigger",
+        "source": "\nDECLARE root finance_supply_review_cases%ROWTYPE; previous finance_supply_review_revisions%ROWTYPE;\nBEGIN\n PERFORM pg_advisory_xact_lock(1296256326,1);\n SELECT * INTO STRICT root FROM finance_supply_review_cases WHERE case_id=NEW.case_id FOR UPDATE;\n SELECT * INTO previous FROM finance_supply_review_revisions WHERE case_id=NEW.case_id ORDER BY version DESC LIMIT 1;\n IF NEW.version<>COALESCE(previous.version,0)+1 OR NEW.previous_revision_id IS DISTINCT FROM previous.revision_id\n  OR NEW.payload_json->>'subjectId' IS DISTINCT FROM root.subject_id OR NEW.basis_json->>'subjectId' IS DISTINCT FROM root.subject_id\n  OR (previous.revision_id IS NULL AND (NEW.state<>'recorded' OR NEW.actor_user_id<>root.created_by)) THEN\n  RAISE EXCEPTION 'DE-0 review chain/subject/creator conflict' USING ERRCODE='23514'; END IF;\n IF NEW.state='withdrawn' AND (previous.state IS DISTINCT FROM 'recorded' OR NEW.payload_json IS DISTINCT FROM previous.payload_json\n  OR NEW.basis_json IS DISTINCT FROM previous.basis_json OR NEW.assessment_json IS DISTINCT FROM previous.assessment_json\n  OR NEW.preview_hash IS DISTINCT FROM previous.preview_hash) THEN\n  RAISE EXCEPTION 'DE-0 withdrawal must preserve the preceding recorded basis' USING ERRCODE='23514'; END IF;\n RETURN NEW;\nEXCEPTION WHEN NO_DATA_FOUND THEN RAISE EXCEPTION 'DE-0 case not found' USING ERRCODE='23514';\nEND ",
+        "strict": false,
+        "support": "0",
+        "language": "plpgsql",
+        "parallel": "u",
+        "variadic": "0",
+        "arguments": "",
+        "leakProof": false,
+        "parsedBody": null,
+        "returnsSet": false,
+        "transforms": null,
+        "volatility": "v",
+        "argumentTypes": "",
+        "securityDefiner": false
+      },
+      {
+        "cost": "100",
+        "kind": "f",
+        "name": "finance_supply_row_agreement",
+        "rows": "0",
+        "binary": null,
+        "config": null,
+        "result": "trigger",
+        "source": "\nDECLARE key text;\nBEGIN\n IF TG_TABLE_NAME='finance_supply_review_requests' THEN\n  SELECT case_id INTO key FROM finance_supply_review_revisions WHERE request_id=NEW.request_id;\n  IF key IS NULL THEN RAISE EXCEPTION 'DE-0 orphan request' USING ERRCODE='23514'; END IF;\n ELSE key:=NEW.case_id; END IF;\n PERFORM finance_supply_assert_agreement(key);\n RETURN NULL;\nEND ",
+        "strict": false,
+        "support": "0",
+        "language": "plpgsql",
+        "parallel": "u",
+        "variadic": "0",
+        "arguments": "",
+        "leakProof": false,
+        "parsedBody": null,
+        "returnsSet": false,
+        "transforms": null,
+        "volatility": "v",
+        "argumentTypes": "",
+        "securityDefiner": false
+      },
+      {
+        "cost": "100",
+        "kind": "f",
+        "name": "finance_supply_text",
+        "rows": "0",
+        "binary": null,
+        "config": null,
+        "result": "boolean",
+        "source": "\n SELECT jsonb_typeof(v)='string' AND length(v#>>'{}') BETWEEN minimum AND maximum\n",
+        "strict": false,
+        "support": "0",
+        "language": "sql",
+        "parallel": "u",
+        "variadic": "0",
+        "arguments": "v jsonb, minimum integer, maximum integer",
+        "leakProof": false,
+        "parsedBody": null,
+        "returnsSet": false,
+        "transforms": null,
+        "volatility": "i",
+        "argumentTypes": "jsonb, integer, integer",
+        "securityDefiner": false
+      }
+    ],
+    "tables": [
+      "finance_supply_review_cases",
+      "finance_supply_review_requests",
+      "finance_supply_review_revisions"
+    ],
+    "strictRelations": [
+      "finance_supply_review_cases",
+      "finance_supply_review_requests",
+      "finance_supply_review_revisions"
+    ],
+    "installation": {
+      "relations": [
+        {
+          "kind": "r",
+          "name": "finance_supply_review_cases",
+          "policies": [],
+          "rowSecurity": false,
+          "forceRowSecurity": false
+        },
+        {
+          "kind": "r",
+          "name": "finance_supply_review_requests",
+          "policies": [],
+          "rowSecurity": false,
+          "forceRowSecurity": false
+        },
+        {
+          "kind": "r",
+          "name": "finance_supply_review_revisions",
+          "policies": [],
+          "rowSecurity": false,
+          "forceRowSecurity": false
+        }
+      ],
+      "structures": [
+        {
+          "name": "finance_supply_review_cases",
+          "rules": [],
+          "columns": [
+            {
+              "name": "case_id",
+              "type": "text",
+              "default": null,
+              "notNull": true,
+              "identity": "",
+              "position": 1,
+              "collation": "pg_catalog.default",
+              "generated": ""
+            },
+            {
+              "name": "subject_id",
+              "type": "text",
+              "default": null,
+              "notNull": true,
+              "identity": "",
+              "position": 2,
+              "collation": "pg_catalog.default",
+              "generated": ""
+            },
+            {
+              "name": "created_by",
+              "type": "text",
+              "default": null,
+              "notNull": true,
+              "identity": "",
+              "position": 3,
+              "collation": "pg_catalog.default",
+              "generated": ""
+            },
+            {
+              "name": "created_at",
+              "type": "timestamp with time zone",
+              "default": "now()",
+              "notNull": true,
+              "identity": "",
+              "position": 4,
+              "collation": null,
+              "generated": ""
+            }
+          ],
+          "indexes": [
+            {
+              "live": true,
+              "name": "finance_supply_review_cases_pkey",
+              "ready": true,
+              "valid": true,
+              "unique": true,
+              "columns": [
+                "case_id"
+              ],
+              "options": "0",
+              "primary": true,
+              "keyCount": 1,
+              "exclusion": false,
+              "immediate": true,
+              "predicate": null,
+              "accessMethod": "btree",
+              "attributeCount": 1,
+              "operatorClasses": [
+                "pg_catalog.text_ops"
+              ],
+              "nullsNotDistinct": false
+            },
+            {
+              "live": true,
+              "name": "finance_supply_review_subject_idx",
+              "ready": true,
+              "valid": true,
+              "unique": false,
+              "columns": [
+                "subject_id",
+                "created_at",
+                "case_id"
+              ],
+              "options": "0 0 0",
+              "primary": false,
+              "keyCount": 3,
+              "exclusion": false,
+              "immediate": true,
+              "predicate": null,
+              "accessMethod": "btree",
+              "attributeCount": 3,
+              "operatorClasses": [
+                "pg_catalog.text_ops",
+                "pg_catalog.timestamptz_ops",
+                "pg_catalog.text_ops"
+              ],
+              "nullsNotDistinct": false
+            }
+          ],
+          "triggers": [
+            {
+              "name": "finance_supply_agreement",
+              "type": 5,
+              "when": null,
+              "enabled": "O",
+              "function": "<self>.finance_supply_row_agreement()",
+              "internal": false,
+              "arguments": "",
+              "constraint": {
+                "name": "finance_supply_agreement",
+                "schema": "<self>",
+                "relation": "finance_supply_review_cases"
+              },
+              "deferrable": true,
+              "newTransition": null,
+              "oldTransition": null,
+              "updateColumns": "",
+              "initiallyDeferred": true
+            },
+            {
+              "name": "finance_supply_immutable",
+              "type": 27,
+              "when": null,
+              "enabled": "O",
+              "function": "<self>.finance_supply_immutable()",
+              "internal": false,
+              "arguments": "",
+              "constraint": null,
+              "deferrable": false,
+              "newTransition": null,
+              "oldTransition": null,
+              "updateColumns": "",
+              "initiallyDeferred": false
+            },
+            {
+              "name": "finance_supply_no_truncate",
+              "type": 34,
+              "when": null,
+              "enabled": "O",
+              "function": "<self>.finance_supply_immutable()",
+              "internal": false,
+              "arguments": "",
+              "constraint": null,
+              "deferrable": false,
+              "newTransition": null,
+              "oldTransition": null,
+              "updateColumns": "",
+              "initiallyDeferred": false
+            },
+            {
+              "name": null,
+              "type": 17,
+              "when": null,
+              "enabled": "O",
+              "function": "pg_catalog.RI_FKey_check_upd()",
+              "internal": true,
+              "arguments": "",
+              "constraint": {
+                "name": "finance_supply_review_cases_subject_id_fkey",
+                "schema": "<self>",
+                "relation": "finance_supply_review_cases"
+              },
+              "deferrable": false,
+              "newTransition": null,
+              "oldTransition": null,
+              "updateColumns": "",
+              "initiallyDeferred": false
+            },
+            {
+              "name": null,
+              "type": 17,
+              "when": null,
+              "enabled": "O",
+              "function": "pg_catalog.RI_FKey_noaction_upd()",
+              "internal": true,
+              "arguments": "",
+              "constraint": {
+                "name": "finance_supply_review_revisions_case_id_fkey",
+                "schema": "<self>",
+                "relation": "finance_supply_review_revisions"
+              },
+              "deferrable": false,
+              "newTransition": null,
+              "oldTransition": null,
+              "updateColumns": "",
+              "initiallyDeferred": false
+            },
+            {
+              "name": null,
+              "type": 5,
+              "when": null,
+              "enabled": "O",
+              "function": "pg_catalog.RI_FKey_check_ins()",
+              "internal": true,
+              "arguments": "",
+              "constraint": {
+                "name": "finance_supply_review_cases_subject_id_fkey",
+                "schema": "<self>",
+                "relation": "finance_supply_review_cases"
+              },
+              "deferrable": false,
+              "newTransition": null,
+              "oldTransition": null,
+              "updateColumns": "",
+              "initiallyDeferred": false
+            },
+            {
+              "name": null,
+              "type": 9,
+              "when": null,
+              "enabled": "O",
+              "function": "pg_catalog.RI_FKey_noaction_del()",
+              "internal": true,
+              "arguments": "",
+              "constraint": {
+                "name": "finance_supply_review_revisions_case_id_fkey",
+                "schema": "<self>",
+                "relation": "finance_supply_review_revisions"
+              },
+              "deferrable": false,
+              "newTransition": null,
+              "oldTransition": null,
+              "updateColumns": "",
+              "initiallyDeferred": false
+            }
+          ],
+          "constraints": [
+            {
+              "keys": null,
+              "name": "finance_supply_agreement",
+              "type": "t",
+              "match": " ",
+              "target": null,
+              "validated": true,
+              "deferrable": true,
+              "definition": "TRIGGER DEFERRABLE INITIALLY DEFERRED",
+              "targetKeys": null,
+              "deleteAction": " ",
+              "updateAction": " ",
+              "initiallyDeferred": true
+            },
+            {
+              "keys": [
+                1
+              ],
+              "name": "finance_supply_review_cases_case_id_check",
+              "type": "c",
+              "match": " ",
+              "target": null,
+              "validated": true,
+              "deferrable": false,
+              "definition": "CHECK (finance_supply_id(to_jsonb(case_id)))",
+              "targetKeys": null,
+              "deleteAction": " ",
+              "updateAction": " ",
+              "initiallyDeferred": false
+            },
+            {
+              "keys": [
+                3
+              ],
+              "name": "finance_supply_review_cases_created_by_check",
+              "type": "c",
+              "match": " ",
+              "target": null,
+              "validated": true,
+              "deferrable": false,
+              "definition": "CHECK (finance_supply_id(to_jsonb(created_by)))",
+              "targetKeys": null,
+              "deleteAction": " ",
+              "updateAction": " ",
+              "initiallyDeferred": false
+            },
+            {
+              "keys": [
+                1
+              ],
+              "name": "finance_supply_review_cases_pkey",
+              "type": "p",
+              "match": " ",
+              "target": null,
+              "validated": true,
+              "deferrable": false,
+              "definition": "PRIMARY KEY (case_id)",
+              "targetKeys": null,
+              "deleteAction": " ",
+              "updateAction": " ",
+              "initiallyDeferred": false
+            },
+            {
+              "keys": [
+                2
+              ],
+              "name": "finance_supply_review_cases_subject_id_fkey",
+              "type": "f",
+              "match": "s",
+              "target": "<self>.vat_filing_subjects",
+              "validated": true,
+              "deferrable": false,
+              "definition": "FOREIGN KEY (subject_id) REFERENCES vat_filing_subjects(subject_id)",
+              "targetKeys": [
+                1
+              ],
+              "deleteAction": "a",
+              "updateAction": "a",
+              "initiallyDeferred": false
+            }
+          ]
+        },
+        {
+          "name": "finance_supply_review_requests",
+          "rules": [],
+          "columns": [
+            {
+              "name": "request_id",
+              "type": "text",
+              "default": null,
+              "notNull": true,
+              "identity": "",
+              "position": 1,
+              "collation": "pg_catalog.default",
+              "generated": ""
+            },
+            {
+              "name": "action",
+              "type": "text",
+              "default": null,
+              "notNull": true,
+              "identity": "",
+              "position": 2,
+              "collation": "pg_catalog.default",
+              "generated": ""
+            },
+            {
+              "name": "actor_user_id",
+              "type": "text",
+              "default": null,
+              "notNull": true,
+              "identity": "",
+              "position": 3,
+              "collation": "pg_catalog.default",
+              "generated": ""
+            },
+            {
+              "name": "payload_hash",
+              "type": "text",
+              "default": null,
+              "notNull": true,
+              "identity": "",
+              "position": 4,
+              "collation": "pg_catalog.default",
+              "generated": ""
+            },
+            {
+              "name": "result_json",
+              "type": "jsonb",
+              "default": null,
+              "notNull": true,
+              "identity": "",
+              "position": 5,
+              "collation": null,
+              "generated": ""
+            },
+            {
+              "name": "created_at",
+              "type": "timestamp with time zone",
+              "default": "now()",
+              "notNull": true,
+              "identity": "",
+              "position": 6,
+              "collation": null,
+              "generated": ""
+            }
+          ],
+          "indexes": [
+            {
+              "live": true,
+              "name": "finance_supply_review_requests_pkey",
+              "ready": true,
+              "valid": true,
+              "unique": true,
+              "columns": [
+                "request_id"
+              ],
+              "options": "0",
+              "primary": true,
+              "keyCount": 1,
+              "exclusion": false,
+              "immediate": true,
+              "predicate": null,
+              "accessMethod": "btree",
+              "attributeCount": 1,
+              "operatorClasses": [
+                "pg_catalog.text_ops"
+              ],
+              "nullsNotDistinct": false
+            }
+          ],
+          "triggers": [
+            {
+              "name": "finance_supply_agreement",
+              "type": 5,
+              "when": null,
+              "enabled": "O",
+              "function": "<self>.finance_supply_row_agreement()",
+              "internal": false,
+              "arguments": "",
+              "constraint": {
+                "name": "finance_supply_agreement",
+                "schema": "<self>",
+                "relation": "finance_supply_review_requests"
+              },
+              "deferrable": true,
+              "newTransition": null,
+              "oldTransition": null,
+              "updateColumns": "",
+              "initiallyDeferred": true
+            },
+            {
+              "name": "finance_supply_immutable",
+              "type": 27,
+              "when": null,
+              "enabled": "O",
+              "function": "<self>.finance_supply_immutable()",
+              "internal": false,
+              "arguments": "",
+              "constraint": null,
+              "deferrable": false,
+              "newTransition": null,
+              "oldTransition": null,
+              "updateColumns": "",
+              "initiallyDeferred": false
+            },
+            {
+              "name": "finance_supply_no_truncate",
+              "type": 34,
+              "when": null,
+              "enabled": "O",
+              "function": "<self>.finance_supply_immutable()",
+              "internal": false,
+              "arguments": "",
+              "constraint": null,
+              "deferrable": false,
+              "newTransition": null,
+              "oldTransition": null,
+              "updateColumns": "",
+              "initiallyDeferred": false
+            },
+            {
+              "name": null,
+              "type": 17,
+              "when": null,
+              "enabled": "O",
+              "function": "pg_catalog.RI_FKey_noaction_upd()",
+              "internal": true,
+              "arguments": "",
+              "constraint": {
+                "name": "finance_supply_review_revisions_request_id_fkey",
+                "schema": "<self>",
+                "relation": "finance_supply_review_revisions"
+              },
+              "deferrable": true,
+              "newTransition": null,
+              "oldTransition": null,
+              "updateColumns": "",
+              "initiallyDeferred": true
+            },
+            {
+              "name": null,
+              "type": 9,
+              "when": null,
+              "enabled": "O",
+              "function": "pg_catalog.RI_FKey_noaction_del()",
+              "internal": true,
+              "arguments": "",
+              "constraint": {
+                "name": "finance_supply_review_revisions_request_id_fkey",
+                "schema": "<self>",
+                "relation": "finance_supply_review_revisions"
+              },
+              "deferrable": true,
+              "newTransition": null,
+              "oldTransition": null,
+              "updateColumns": "",
+              "initiallyDeferred": true
+            }
+          ],
+          "constraints": [
+            {
+              "keys": null,
+              "name": "finance_supply_agreement",
+              "type": "t",
+              "match": " ",
+              "target": null,
+              "validated": true,
+              "deferrable": true,
+              "definition": "TRIGGER DEFERRABLE INITIALLY DEFERRED",
+              "targetKeys": null,
+              "deleteAction": " ",
+              "updateAction": " ",
+              "initiallyDeferred": true
+            },
+            {
+              "keys": [
+                2
+              ],
+              "name": "finance_supply_review_requests_action_check",
+              "type": "c",
+              "match": " ",
+              "target": null,
+              "validated": true,
+              "deferrable": false,
+              "definition": "CHECK (action = ANY (ARRAY['save'::text, 'withdraw'::text]))",
+              "targetKeys": null,
+              "deleteAction": " ",
+              "updateAction": " ",
+              "initiallyDeferred": false
+            },
+            {
+              "keys": [
+                3
+              ],
+              "name": "finance_supply_review_requests_actor_user_id_check",
+              "type": "c",
+              "match": " ",
+              "target": null,
+              "validated": true,
+              "deferrable": false,
+              "definition": "CHECK (finance_supply_id(to_jsonb(actor_user_id)))",
+              "targetKeys": null,
+              "deleteAction": " ",
+              "updateAction": " ",
+              "initiallyDeferred": false
+            },
+            {
+              "keys": [
+                4
+              ],
+              "name": "finance_supply_review_requests_payload_hash_check",
+              "type": "c",
+              "match": " ",
+              "target": null,
+              "validated": true,
+              "deferrable": false,
+              "definition": "CHECK (payload_hash ~ '^[a-f0-9]{64}$'::text)",
+              "targetKeys": null,
+              "deleteAction": " ",
+              "updateAction": " ",
+              "initiallyDeferred": false
+            },
+            {
+              "keys": [
+                1
+              ],
+              "name": "finance_supply_review_requests_pkey",
+              "type": "p",
+              "match": " ",
+              "target": null,
+              "validated": true,
+              "deferrable": false,
+              "definition": "PRIMARY KEY (request_id)",
+              "targetKeys": null,
+              "deleteAction": " ",
+              "updateAction": " ",
+              "initiallyDeferred": false
+            },
+            {
+              "keys": [
+                1
+              ],
+              "name": "finance_supply_review_requests_request_id_check",
+              "type": "c",
+              "match": " ",
+              "target": null,
+              "validated": true,
+              "deferrable": false,
+              "definition": "CHECK (finance_supply_id(to_jsonb(request_id)))",
+              "targetKeys": null,
+              "deleteAction": " ",
+              "updateAction": " ",
+              "initiallyDeferred": false
+            },
+            {
+              "keys": [
+                5
+              ],
+              "name": "finance_supply_review_requests_result_json_check",
+              "type": "c",
+              "match": " ",
+              "target": null,
+              "validated": true,
+              "deferrable": false,
+              "definition": "CHECK (jsonb_typeof(result_json) = 'object'::text)",
+              "targetKeys": null,
+              "deleteAction": " ",
+              "updateAction": " ",
+              "initiallyDeferred": false
+            }
+          ]
+        },
+        {
+          "name": "finance_supply_review_revisions",
+          "rules": [],
+          "columns": [
+            {
+              "name": "revision_id",
+              "type": "text",
+              "default": null,
+              "notNull": true,
+              "identity": "",
+              "position": 1,
+              "collation": "pg_catalog.default",
+              "generated": ""
+            },
+            {
+              "name": "case_id",
+              "type": "text",
+              "default": null,
+              "notNull": true,
+              "identity": "",
+              "position": 2,
+              "collation": "pg_catalog.default",
+              "generated": ""
+            },
+            {
+              "name": "version",
+              "type": "integer",
+              "default": null,
+              "notNull": true,
+              "identity": "",
+              "position": 3,
+              "collation": null,
+              "generated": ""
+            },
+            {
+              "name": "previous_revision_id",
+              "type": "text",
+              "default": null,
+              "notNull": false,
+              "identity": "",
+              "position": 4,
+              "collation": "pg_catalog.default",
+              "generated": ""
+            },
+            {
+              "name": "schema_version",
+              "type": "text",
+              "default": null,
+              "notNull": true,
+              "identity": "",
+              "position": 5,
+              "collation": "pg_catalog.default",
+              "generated": ""
+            },
+            {
+              "name": "state",
+              "type": "text",
+              "default": null,
+              "notNull": true,
+              "identity": "",
+              "position": 6,
+              "collation": "pg_catalog.default",
+              "generated": ""
+            },
+            {
+              "name": "payload_json",
+              "type": "jsonb",
+              "default": null,
+              "notNull": true,
+              "identity": "",
+              "position": 7,
+              "collation": null,
+              "generated": ""
+            },
+            {
+              "name": "payload_hash",
+              "type": "text",
+              "default": null,
+              "notNull": true,
+              "identity": "",
+              "position": 8,
+              "collation": "pg_catalog.default",
+              "generated": ""
+            },
+            {
+              "name": "basis_json",
+              "type": "jsonb",
+              "default": null,
+              "notNull": true,
+              "identity": "",
+              "position": 9,
+              "collation": null,
+              "generated": ""
+            },
+            {
+              "name": "basis_hash",
+              "type": "text",
+              "default": null,
+              "notNull": true,
+              "identity": "",
+              "position": 10,
+              "collation": "pg_catalog.default",
+              "generated": ""
+            },
+            {
+              "name": "assessment_json",
+              "type": "jsonb",
+              "default": null,
+              "notNull": true,
+              "identity": "",
+              "position": 11,
+              "collation": null,
+              "generated": ""
+            },
+            {
+              "name": "preview_hash",
+              "type": "text",
+              "default": null,
+              "notNull": true,
+              "identity": "",
+              "position": 12,
+              "collation": "pg_catalog.default",
+              "generated": ""
+            },
+            {
+              "name": "withdrawal_reason",
+              "type": "text",
+              "default": null,
+              "notNull": false,
+              "identity": "",
+              "position": 13,
+              "collation": "pg_catalog.default",
+              "generated": ""
+            },
+            {
+              "name": "actor_user_id",
+              "type": "text",
+              "default": null,
+              "notNull": true,
+              "identity": "",
+              "position": 14,
+              "collation": "pg_catalog.default",
+              "generated": ""
+            },
+            {
+              "name": "request_id",
+              "type": "text",
+              "default": null,
+              "notNull": true,
+              "identity": "",
+              "position": 15,
+              "collation": "pg_catalog.default",
+              "generated": ""
+            },
+            {
+              "name": "created_at",
+              "type": "timestamp with time zone",
+              "default": "now()",
+              "notNull": true,
+              "identity": "",
+              "position": 16,
+              "collation": null,
+              "generated": ""
+            }
+          ],
+          "indexes": [
+            {
+              "live": true,
+              "name": "finance_supply_review_revisions_case_id_version_key",
+              "ready": true,
+              "valid": true,
+              "unique": true,
+              "columns": [
+                "case_id",
+                "version"
+              ],
+              "options": "0 0",
+              "primary": false,
+              "keyCount": 2,
+              "exclusion": false,
+              "immediate": true,
+              "predicate": null,
+              "accessMethod": "btree",
+              "attributeCount": 2,
+              "operatorClasses": [
+                "pg_catalog.text_ops",
+                "pg_catalog.int4_ops"
+              ],
+              "nullsNotDistinct": false
+            },
+            {
+              "live": true,
+              "name": "finance_supply_review_revisions_pkey",
+              "ready": true,
+              "valid": true,
+              "unique": true,
+              "columns": [
+                "revision_id"
+              ],
+              "options": "0",
+              "primary": true,
+              "keyCount": 1,
+              "exclusion": false,
+              "immediate": true,
+              "predicate": null,
+              "accessMethod": "btree",
+              "attributeCount": 1,
+              "operatorClasses": [
+                "pg_catalog.text_ops"
+              ],
+              "nullsNotDistinct": false
+            },
+            {
+              "live": true,
+              "name": "finance_supply_review_revisions_previous_revision_id_key",
+              "ready": true,
+              "valid": true,
+              "unique": true,
+              "columns": [
+                "previous_revision_id"
+              ],
+              "options": "0",
+              "primary": false,
+              "keyCount": 1,
+              "exclusion": false,
+              "immediate": true,
+              "predicate": null,
+              "accessMethod": "btree",
+              "attributeCount": 1,
+              "operatorClasses": [
+                "pg_catalog.text_ops"
+              ],
+              "nullsNotDistinct": false
+            },
+            {
+              "live": true,
+              "name": "finance_supply_review_revisions_request_id_key",
+              "ready": true,
+              "valid": true,
+              "unique": true,
+              "columns": [
+                "request_id"
+              ],
+              "options": "0",
+              "primary": false,
+              "keyCount": 1,
+              "exclusion": false,
+              "immediate": true,
+              "predicate": null,
+              "accessMethod": "btree",
+              "attributeCount": 1,
+              "operatorClasses": [
+                "pg_catalog.text_ops"
+              ],
+              "nullsNotDistinct": false
+            },
+            {
+              "live": true,
+              "name": "finance_supply_review_revisions_revision_id_case_id_key",
+              "ready": true,
+              "valid": true,
+              "unique": true,
+              "columns": [
+                "revision_id",
+                "case_id"
+              ],
+              "options": "0 0",
+              "primary": false,
+              "keyCount": 2,
+              "exclusion": false,
+              "immediate": true,
+              "predicate": null,
+              "accessMethod": "btree",
+              "attributeCount": 2,
+              "operatorClasses": [
+                "pg_catalog.text_ops",
+                "pg_catalog.text_ops"
+              ],
+              "nullsNotDistinct": false
+            }
+          ],
+          "triggers": [
+            {
+              "name": "finance_supply_agreement",
+              "type": 5,
+              "when": null,
+              "enabled": "O",
+              "function": "<self>.finance_supply_row_agreement()",
+              "internal": false,
+              "arguments": "",
+              "constraint": {
+                "name": "finance_supply_agreement",
+                "schema": "<self>",
+                "relation": "finance_supply_review_revisions"
+              },
+              "deferrable": true,
+              "newTransition": null,
+              "oldTransition": null,
+              "updateColumns": "",
+              "initiallyDeferred": true
+            },
+            {
+              "name": "finance_supply_immutable",
+              "type": 27,
+              "when": null,
+              "enabled": "O",
+              "function": "<self>.finance_supply_immutable()",
+              "internal": false,
+              "arguments": "",
+              "constraint": null,
+              "deferrable": false,
+              "newTransition": null,
+              "oldTransition": null,
+              "updateColumns": "",
+              "initiallyDeferred": false
+            },
+            {
+              "name": "finance_supply_no_truncate",
+              "type": 34,
+              "when": null,
+              "enabled": "O",
+              "function": "<self>.finance_supply_immutable()",
+              "internal": false,
+              "arguments": "",
+              "constraint": null,
+              "deferrable": false,
+              "newTransition": null,
+              "oldTransition": null,
+              "updateColumns": "",
+              "initiallyDeferred": false
+            },
+            {
+              "name": "finance_supply_revision_insert",
+              "type": 7,
+              "when": null,
+              "enabled": "O",
+              "function": "<self>.finance_supply_revision_guard()",
+              "internal": false,
+              "arguments": "",
+              "constraint": null,
+              "deferrable": false,
+              "newTransition": null,
+              "oldTransition": null,
+              "updateColumns": "",
+              "initiallyDeferred": false
+            },
+            {
+              "name": "finance_vat_use_reverse_before",
+              "type": 31,
+              "when": null,
+              "enabled": "O",
+              "function": "<self>.finance_vat_use_reverse_before()",
+              "internal": false,
+              "arguments": "",
+              "constraint": null,
+              "deferrable": false,
+              "newTransition": null,
+              "oldTransition": null,
+              "updateColumns": "",
+              "initiallyDeferred": false
+            },
+            {
+              "name": "finance_vat_use_reverse_complete",
+              "type": 29,
+              "when": null,
+              "enabled": "O",
+              "function": "<self>.finance_vat_use_reverse_complete()",
+              "internal": false,
+              "arguments": "",
+              "constraint": {
+                "name": "finance_vat_use_reverse_complete",
+                "schema": "<self>",
+                "relation": "finance_supply_review_revisions"
+              },
+              "deferrable": true,
+              "newTransition": null,
+              "oldTransition": null,
+              "updateColumns": "",
+              "initiallyDeferred": true
+            },
+            {
+              "name": null,
+              "type": 17,
+              "when": null,
+              "enabled": "O",
+              "function": "pg_catalog.RI_FKey_check_upd()",
+              "internal": true,
+              "arguments": "",
+              "constraint": {
+                "name": "finance_supply_review_revisions_case_id_fkey",
+                "schema": "<self>",
+                "relation": "finance_supply_review_revisions"
+              },
+              "deferrable": false,
+              "newTransition": null,
+              "oldTransition": null,
+              "updateColumns": "",
+              "initiallyDeferred": false
+            },
+            {
+              "name": null,
+              "type": 17,
+              "when": null,
+              "enabled": "O",
+              "function": "pg_catalog.RI_FKey_check_upd()",
+              "internal": true,
+              "arguments": "",
+              "constraint": {
+                "name": "finance_supply_review_revisions_previous_revision_id_fkey",
+                "schema": "<self>",
+                "relation": "finance_supply_review_revisions"
+              },
+              "deferrable": false,
+              "newTransition": null,
+              "oldTransition": null,
+              "updateColumns": "",
+              "initiallyDeferred": false
+            },
+            {
+              "name": null,
+              "type": 17,
+              "when": null,
+              "enabled": "O",
+              "function": "pg_catalog.RI_FKey_check_upd()",
+              "internal": true,
+              "arguments": "",
+              "constraint": {
+                "name": "finance_supply_review_revisions_request_id_fkey",
+                "schema": "<self>",
+                "relation": "finance_supply_review_revisions"
+              },
+              "deferrable": true,
+              "newTransition": null,
+              "oldTransition": null,
+              "updateColumns": "",
+              "initiallyDeferred": true
+            },
+            {
+              "name": null,
+              "type": 17,
+              "when": null,
+              "enabled": "O",
+              "function": "pg_catalog.RI_FKey_noaction_upd()",
+              "internal": true,
+              "arguments": "",
+              "constraint": {
+                "name": "finance_supply_review_revisions_previous_revision_id_fkey",
+                "schema": "<self>",
+                "relation": "finance_supply_review_revisions"
+              },
+              "deferrable": false,
+              "newTransition": null,
+              "oldTransition": null,
+              "updateColumns": "",
+              "initiallyDeferred": false
+            },
+            {
+              "name": null,
+              "type": 5,
+              "when": null,
+              "enabled": "O",
+              "function": "pg_catalog.RI_FKey_check_ins()",
+              "internal": true,
+              "arguments": "",
+              "constraint": {
+                "name": "finance_supply_review_revisions_case_id_fkey",
+                "schema": "<self>",
+                "relation": "finance_supply_review_revisions"
+              },
+              "deferrable": false,
+              "newTransition": null,
+              "oldTransition": null,
+              "updateColumns": "",
+              "initiallyDeferred": false
+            },
+            {
+              "name": null,
+              "type": 5,
+              "when": null,
+              "enabled": "O",
+              "function": "pg_catalog.RI_FKey_check_ins()",
+              "internal": true,
+              "arguments": "",
+              "constraint": {
+                "name": "finance_supply_review_revisions_previous_revision_id_fkey",
+                "schema": "<self>",
+                "relation": "finance_supply_review_revisions"
+              },
+              "deferrable": false,
+              "newTransition": null,
+              "oldTransition": null,
+              "updateColumns": "",
+              "initiallyDeferred": false
+            },
+            {
+              "name": null,
+              "type": 5,
+              "when": null,
+              "enabled": "O",
+              "function": "pg_catalog.RI_FKey_check_ins()",
+              "internal": true,
+              "arguments": "",
+              "constraint": {
+                "name": "finance_supply_review_revisions_request_id_fkey",
+                "schema": "<self>",
+                "relation": "finance_supply_review_revisions"
+              },
+              "deferrable": true,
+              "newTransition": null,
+              "oldTransition": null,
+              "updateColumns": "",
+              "initiallyDeferred": true
+            },
+            {
+              "name": null,
+              "type": 9,
+              "when": null,
+              "enabled": "O",
+              "function": "pg_catalog.RI_FKey_noaction_del()",
+              "internal": true,
+              "arguments": "",
+              "constraint": {
+                "name": "finance_supply_review_revisions_previous_revision_id_fkey",
+                "schema": "<self>",
+                "relation": "finance_supply_review_revisions"
+              },
+              "deferrable": false,
+              "newTransition": null,
+              "oldTransition": null,
+              "updateColumns": "",
+              "initiallyDeferred": false
+            }
+          ],
+          "constraints": [
+            {
+              "keys": null,
+              "name": "finance_supply_agreement",
+              "type": "t",
+              "match": " ",
+              "target": null,
+              "validated": true,
+              "deferrable": true,
+              "definition": "TRIGGER DEFERRABLE INITIALLY DEFERRED",
+              "targetKeys": null,
+              "deleteAction": " ",
+              "updateAction": " ",
+              "initiallyDeferred": true
+            },
+            {
+              "keys": [
+                14
+              ],
+              "name": "finance_supply_review_revisions_actor_user_id_check",
+              "type": "c",
+              "match": " ",
+              "target": null,
+              "validated": true,
+              "deferrable": false,
+              "definition": "CHECK (finance_supply_id(to_jsonb(actor_user_id)))",
+              "targetKeys": null,
+              "deleteAction": " ",
+              "updateAction": " ",
+              "initiallyDeferred": false
+            },
+            {
+              "keys": [
+                9
+              ],
+              "name": "finance_supply_review_revisions_basis_json_check",
+              "type": "c",
+              "match": " ",
+              "target": null,
+              "validated": true,
+              "deferrable": false,
+              "definition": "CHECK ((finance_supply_keys(basis_json, ARRAY['schemaVersion'::text, 'subjectId'::text, 'subjectSnapshotText'::text, 'subjectSnapshotHash'::text, 'subjectIssues'::text, 'sources'::text, 'documents'::text, 'cReferences'::text]) AND (basis_json ->> 'schemaVersion'::text) = 'de0-supply-basis-v1'::text AND finance_supply_id(basis_json -> 'subjectId'::text) AND jsonb_typeof(basis_json -> 'subjectSnapshotText'::text) = 'string'::text AND (basis_json ->> 'subjectSnapshotHash'::text) ~ '^[a-f0-9]{64}$'::text AND jsonb_typeof(basis_json -> 'subjectIssues'::text) = 'array'::text AND jsonb_typeof(basis_json -> 'sources'::text) = 'array'::text AND jsonb_typeof(basis_json -> 'documents'::text) = 'array'::text AND jsonb_typeof(basis_json -> 'cReferences'::text) = 'array'::text) IS TRUE)",
+              "targetKeys": null,
+              "deleteAction": " ",
+              "updateAction": " ",
+              "initiallyDeferred": false
+            },
+            {
+              "keys": [
+                2
+              ],
+              "name": "finance_supply_review_revisions_case_id_fkey",
+              "type": "f",
+              "match": "s",
+              "target": "<self>.finance_supply_review_cases",
+              "validated": true,
+              "deferrable": false,
+              "definition": "FOREIGN KEY (case_id) REFERENCES finance_supply_review_cases(case_id)",
+              "targetKeys": [
+                1
+              ],
+              "deleteAction": "a",
+              "updateAction": "a",
+              "initiallyDeferred": false
+            },
+            {
+              "keys": [
+                2,
+                3
+              ],
+              "name": "finance_supply_review_revisions_case_id_version_key",
+              "type": "u",
+              "match": " ",
+              "target": null,
+              "validated": true,
+              "deferrable": false,
+              "definition": "UNIQUE (case_id, version)",
+              "targetKeys": null,
+              "deleteAction": " ",
+              "updateAction": " ",
+              "initiallyDeferred": false
+            },
+            {
+              "keys": [
+                8,
+                7
+              ],
+              "name": "finance_supply_review_revisions_check",
+              "type": "c",
+              "match": " ",
+              "target": null,
+              "validated": true,
+              "deferrable": false,
+              "definition": "CHECK (payload_hash ~ '^[a-f0-9]{64}$'::text AND payload_hash = vat_followup_hash_v2(payload_json))",
+              "targetKeys": null,
+              "deleteAction": " ",
+              "updateAction": " ",
+              "initiallyDeferred": false
+            },
+            {
+              "keys": [
+                10,
+                9
+              ],
+              "name": "finance_supply_review_revisions_check1",
+              "type": "c",
+              "match": " ",
+              "target": null,
+              "validated": true,
+              "deferrable": false,
+              "definition": "CHECK (basis_hash ~ '^[a-f0-9]{64}$'::text AND basis_hash = vat_followup_hash_v2(basis_json))",
+              "targetKeys": null,
+              "deleteAction": " ",
+              "updateAction": " ",
+              "initiallyDeferred": false
+            },
+            {
+              "keys": [
+                7,
+                11
+              ],
+              "name": "finance_supply_review_revisions_check2",
+              "type": "c",
+              "match": " ",
+              "target": null,
+              "validated": true,
+              "deferrable": false,
+              "definition": "CHECK (finance_supply_assessment_valid(payload_json, assessment_json))",
+              "targetKeys": null,
+              "deleteAction": " ",
+              "updateAction": " ",
+              "initiallyDeferred": false
+            },
+            {
+              "keys": [
+                12,
+                7,
+                9,
+                11
+              ],
+              "name": "finance_supply_review_revisions_check3",
+              "type": "c",
+              "match": " ",
+              "target": null,
+              "validated": true,
+              "deferrable": false,
+              "definition": "CHECK (preview_hash ~ '^[a-f0-9]{64}$'::text AND preview_hash = vat_followup_hash_v2(jsonb_build_object('draft', payload_json, 'basis', basis_json, 'assessment', assessment_json)))",
+              "targetKeys": null,
+              "deleteAction": " ",
+              "updateAction": " ",
+              "initiallyDeferred": false
+            },
+            {
+              "keys": [
+                3,
+                4
+              ],
+              "name": "finance_supply_review_revisions_check4",
+              "type": "c",
+              "match": " ",
+              "target": null,
+              "validated": true,
+              "deferrable": false,
+              "definition": "CHECK ((version = 1) = (previous_revision_id IS NULL))",
+              "targetKeys": null,
+              "deleteAction": " ",
+              "updateAction": " ",
+              "initiallyDeferred": false
+            },
+            {
+              "keys": [
+                6,
+                13
+              ],
+              "name": "finance_supply_review_revisions_check5",
+              "type": "c",
+              "match": " ",
+              "target": null,
+              "validated": true,
+              "deferrable": false,
+              "definition": "CHECK (state = 'recorded'::text AND withdrawal_reason IS NULL OR state = 'withdrawn'::text AND withdrawal_reason IS NOT NULL AND length(btrim(withdrawal_reason)) >= 1 AND length(btrim(withdrawal_reason)) <= 2000)",
+              "targetKeys": null,
+              "deleteAction": " ",
+              "updateAction": " ",
+              "initiallyDeferred": false
+            },
+            {
+              "keys": [
+                7
+              ],
+              "name": "finance_supply_review_revisions_payload_json_check",
+              "type": "c",
+              "match": " ",
+              "target": null,
+              "validated": true,
+              "deferrable": false,
+              "definition": "CHECK (finance_supply_draft_valid(payload_json))",
+              "targetKeys": null,
+              "deleteAction": " ",
+              "updateAction": " ",
+              "initiallyDeferred": false
+            },
+            {
+              "keys": [
+                1
+              ],
+              "name": "finance_supply_review_revisions_pkey",
+              "type": "p",
+              "match": " ",
+              "target": null,
+              "validated": true,
+              "deferrable": false,
+              "definition": "PRIMARY KEY (revision_id)",
+              "targetKeys": null,
+              "deleteAction": " ",
+              "updateAction": " ",
+              "initiallyDeferred": false
+            },
+            {
+              "keys": [
+                4
+              ],
+              "name": "finance_supply_review_revisions_previous_revision_id_fkey",
+              "type": "f",
+              "match": "s",
+              "target": "<self>.finance_supply_review_revisions",
+              "validated": true,
+              "deferrable": false,
+              "definition": "FOREIGN KEY (previous_revision_id) REFERENCES finance_supply_review_revisions(revision_id)",
+              "targetKeys": [
+                1
+              ],
+              "deleteAction": "a",
+              "updateAction": "a",
+              "initiallyDeferred": false
+            },
+            {
+              "keys": [
+                4
+              ],
+              "name": "finance_supply_review_revisions_previous_revision_id_key",
+              "type": "u",
+              "match": " ",
+              "target": null,
+              "validated": true,
+              "deferrable": false,
+              "definition": "UNIQUE (previous_revision_id)",
+              "targetKeys": null,
+              "deleteAction": " ",
+              "updateAction": " ",
+              "initiallyDeferred": false
+            },
+            {
+              "keys": [
+                15
+              ],
+              "name": "finance_supply_review_revisions_request_id_fkey",
+              "type": "f",
+              "match": "s",
+              "target": "<self>.finance_supply_review_requests",
+              "validated": true,
+              "deferrable": true,
+              "definition": "FOREIGN KEY (request_id) REFERENCES finance_supply_review_requests(request_id) DEFERRABLE INITIALLY DEFERRED",
+              "targetKeys": [
+                1
+              ],
+              "deleteAction": "a",
+              "updateAction": "a",
+              "initiallyDeferred": true
+            },
+            {
+              "keys": [
+                15
+              ],
+              "name": "finance_supply_review_revisions_request_id_key",
+              "type": "u",
+              "match": " ",
+              "target": null,
+              "validated": true,
+              "deferrable": false,
+              "definition": "UNIQUE (request_id)",
+              "targetKeys": null,
+              "deleteAction": " ",
+              "updateAction": " ",
+              "initiallyDeferred": false
+            },
+            {
+              "keys": [
+                1,
+                2
+              ],
+              "name": "finance_supply_review_revisions_revision_id_case_id_key",
+              "type": "u",
+              "match": " ",
+              "target": null,
+              "validated": true,
+              "deferrable": false,
+              "definition": "UNIQUE (revision_id, case_id)",
+              "targetKeys": null,
+              "deleteAction": " ",
+              "updateAction": " ",
+              "initiallyDeferred": false
+            },
+            {
+              "keys": [
+                1
+              ],
+              "name": "finance_supply_review_revisions_revision_id_check",
+              "type": "c",
+              "match": " ",
+              "target": null,
+              "validated": true,
+              "deferrable": false,
+              "definition": "CHECK (finance_supply_id(to_jsonb(revision_id)))",
+              "targetKeys": null,
+              "deleteAction": " ",
+              "updateAction": " ",
+              "initiallyDeferred": false
+            },
+            {
+              "keys": [
+                5
+              ],
+              "name": "finance_supply_review_revisions_schema_version_check",
+              "type": "c",
+              "match": " ",
+              "target": null,
+              "validated": true,
+              "deferrable": false,
+              "definition": "CHECK (schema_version = 'de0-supply-review-v1'::text)",
+              "targetKeys": null,
+              "deleteAction": " ",
+              "updateAction": " ",
+              "initiallyDeferred": false
+            },
+            {
+              "keys": [
+                6
+              ],
+              "name": "finance_supply_review_revisions_state_check",
+              "type": "c",
+              "match": " ",
+              "target": null,
+              "validated": true,
+              "deferrable": false,
+              "definition": "CHECK (state = ANY (ARRAY['recorded'::text, 'withdrawn'::text]))",
+              "targetKeys": null,
+              "deleteAction": " ",
+              "updateAction": " ",
+              "initiallyDeferred": false
+            },
+            {
+              "keys": [
+                3
+              ],
+              "name": "finance_supply_review_revisions_version_check",
+              "type": "c",
+              "match": " ",
+              "target": null,
+              "validated": true,
+              "deferrable": false,
+              "definition": "CHECK (version > 0)",
+              "targetKeys": null,
+              "deleteAction": " ",
+              "updateAction": " ",
+              "initiallyDeferred": false
+            },
+            {
+              "keys": null,
+              "name": "finance_vat_use_reverse_complete",
+              "type": "t",
+              "match": " ",
+              "target": null,
+              "validated": true,
+              "deferrable": true,
+              "definition": "TRIGGER DEFERRABLE INITIALLY DEFERRED",
+              "targetKeys": null,
+              "deleteAction": " ",
+              "updateAction": " ",
+              "initiallyDeferred": true
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "contractHash": "00ebd7aa382aca95f4c66cacf9ad3aaabd76a2933770fccae720119c111b6243",
+  "guard": {
+    "cost": "100",
+    "kind": "f",
+    "name": "finance_assert_supply_definitions",
+    "rows": "0",
+    "binary": null,
+    "config": null,
+    "result": "jsonb",
+    "source": "\nDECLARE expected jsonb := '{\"version\":\"de0-supply-installation-v1-e257-e257\",\"postgresMajor\":17,\"functions\":[{\"cost\":\"100\",\"kind\":\"f\",\"name\":\"finance_supply_amount\",\"rows\":\"0\",\"binary\":null,\"config\":null,\"result\":\"boolean\",\"source\":\"\\n SELECT finance_supply_money(v->''supply'') AND finance_supply_money(v->''tax'') AND finance_supply_money(v->''total'')\\n   AND (v->>''supply'')::numeric+(v->>''tax'')::numeric=(v->>''total'')::numeric\\n\",\"strict\":false,\"support\":\"0\",\"language\":\"sql\",\"parallel\":\"u\",\"variadic\":\"0\",\"arguments\":\"v jsonb\",\"leakProof\":false,\"parsedBody\":null,\"returnsSet\":false,\"transforms\":null,\"volatility\":\"i\",\"argumentTypes\":\"jsonb\",\"securityDefiner\":false},{\"cost\":\"100\",\"kind\":\"f\",\"name\":\"finance_supply_assert_agreement\",\"rows\":\"0\",\"binary\":null,\"config\":null,\"result\":\"void\",\"source\":\"\\nDECLARE root finance_supply_review_cases%ROWTYPE; r finance_supply_review_revisions%ROWTYPE; q finance_supply_review_requests%ROWTYPE;\\nBEGIN\\n SELECT * INTO root FROM finance_supply_review_cases WHERE case_id=p_case;\\n IF root.case_id IS NULL OR NOT EXISTS(SELECT 1 FROM finance_supply_review_revisions WHERE case_id=p_case AND version=1) THEN\\n  RAISE EXCEPTION ''DE-0 orphan case'' USING ERRCODE=''23514''; END IF;\\n FOR r IN SELECT * FROM finance_supply_review_revisions WHERE case_id=p_case LOOP\\n  SELECT * INTO q FROM finance_supply_review_requests WHERE request_id=r.request_id;\\n  IF q.request_id IS NULL OR q.actor_user_id<>r.actor_user_id OR q.action<>(CASE r.state WHEN ''recorded'' THEN ''save'' ELSE ''withdraw'' END)\\n   OR q.result_json->>''caseId'' IS DISTINCT FROM r.case_id OR q.result_json->>''revisionId'' IS DISTINCT FROM r.revision_id\\n   OR q.result_json->''version'' IS DISTINCT FROM to_jsonb(r.version) OR q.result_json->>''state'' IS DISTINCT FROM r.state THEN\\n   RAISE EXCEPTION ''DE-0 revision/request agreement failure'' USING ERRCODE=''23514''; END IF;\\n END LOOP;\\nEND \",\"strict\":false,\"support\":\"0\",\"language\":\"plpgsql\",\"parallel\":\"u\",\"variadic\":\"0\",\"arguments\":\"p_case text\",\"leakProof\":false,\"parsedBody\":null,\"returnsSet\":false,\"transforms\":null,\"volatility\":\"v\",\"argumentTypes\":\"text\",\"securityDefiner\":false},{\"cost\":\"100\",\"kind\":\"f\",\"name\":\"finance_supply_assessment_valid\",\"rows\":\"0\",\"binary\":null,\"config\":null,\"result\":\"boolean\",\"source\":\"\\nDECLARE totals jsonb; claims jsonb;\\nBEGIN\\n IF finance_supply_keys(a,ARRAY[''schemaVersion'',''status'',''canApply'',''consumptionSupported'',''issues'',''lineTotals'',''claimedTotals'',''memberTotals'',''additionalVatDeduction'']) IS DISTINCT FROM true\\n  OR a->>''schemaVersion'' IS DISTINCT FROM ''de0-supply-assessment-v1'' OR a->>''status'' IS NULL OR a->>''status'' NOT IN(''reviewable'',''needs_information'')\\n  OR a->''canApply'' IS DISTINCT FROM ''false''::jsonb OR a->''consumptionSupported'' IS DISTINCT FROM ''false''::jsonb OR a->''additionalVatDeduction'' IS DISTINCT FROM ''null''::jsonb\\n  OR jsonb_typeof(a->''issues'') IS DISTINCT FROM ''array'' OR jsonb_typeof(a->''memberTotals'') IS DISTINCT FROM ''array''\\n  OR finance_supply_keys(a->''lineTotals'',ARRAY[''supply'',''tax'',''total'']) IS DISTINCT FROM true OR finance_supply_amount(a->''lineTotals'') IS DISTINCT FROM true\\n  OR finance_supply_keys(a->''claimedTotals'',ARRAY[''supply'',''tax'']) IS DISTINCT FROM true OR finance_supply_money(a->''claimedTotals''->''supply'',false) IS DISTINCT FROM true OR finance_supply_money(a->''claimedTotals''->''tax'',false) IS DISTINCT FROM true THEN RETURN false; END IF;\\n SELECT jsonb_build_object(''supply'',COALESCE(sum((x->>''supply'')::numeric),0),''tax'',COALESCE(sum((x->>''tax'')::numeric),0),''total'',COALESCE(sum((x->>''total'')::numeric),0)) INTO totals FROM jsonb_array_elements(draft->''lines'') x;\\n SELECT jsonb_build_object(''supply'',COALESCE(sum((x->>''claimedSupply'')::numeric),0),''tax'',COALESCE(sum((x->>''claimedTax'')::numeric),0)) INTO claims FROM jsonb_array_elements(draft->''claims'') x;\\n RETURN a->''lineTotals''=totals AND a->''claimedTotals''=claims;\\nEXCEPTION WHEN OTHERS THEN RETURN false;\\nEND \",\"strict\":false,\"support\":\"0\",\"language\":\"plpgsql\",\"parallel\":\"u\",\"variadic\":\"0\",\"arguments\":\"draft jsonb, a jsonb\",\"leakProof\":false,\"parsedBody\":null,\"returnsSet\":false,\"transforms\":null,\"volatility\":\"i\",\"argumentTypes\":\"jsonb, jsonb\",\"securityDefiner\":false},{\"cost\":\"100\",\"kind\":\"f\",\"name\":\"finance_supply_draft_valid\",\"rows\":\"0\",\"binary\":null,\"config\":null,\"result\":\"boolean\",\"source\":\"\\nDECLARE x jsonb; c jsonb;\\nBEGIN\\n IF finance_supply_keys(v,ARRAY[''schemaVersion'',''subjectId'',''title'',''reason'',''lines'',''members'',''allocations'',''claims'']) IS DISTINCT FROM true\\n  OR v->>''schemaVersion'' IS DISTINCT FROM ''de0-supply-review-v1'' OR finance_supply_id(v->''subjectId'') IS DISTINCT FROM true\\n  OR finance_supply_text(v->''title'',1,200) IS DISTINCT FROM true OR finance_supply_text(v->''reason'',1,2000) IS DISTINCT FROM true OR length(btrim(v->>''title''))=0 OR length(btrim(v->>''reason''))=0\\n  OR jsonb_typeof(v->''lines'') IS DISTINCT FROM ''array'' OR jsonb_array_length(v->''lines'') NOT BETWEEN 1 AND 100\\n  OR jsonb_typeof(v->''members'') IS DISTINCT FROM ''array'' OR jsonb_array_length(v->''members'') NOT BETWEEN 1 AND 100\\n  OR jsonb_typeof(v->''allocations'') IS DISTINCT FROM ''array'' OR jsonb_array_length(v->''allocations'')>400\\n  OR jsonb_typeof(v->''claims'') IS DISTINCT FROM ''array'' OR jsonb_array_length(v->''claims'')>200 THEN RETURN false; END IF;\\n FOR x IN SELECT value FROM jsonb_array_elements(v->''lines'') LOOP\\n  IF finance_supply_keys(x,ARRAY[''lineId'',''description'',''dateFrom'',''dateTo'',''fulfillment'',''documentId'',''evidenceLocation'',''supply'',''tax'',''total'']) IS DISTINCT FROM true\\n   OR finance_supply_id(x->''lineId'') IS DISTINCT FROM true OR finance_supply_text(x->''description'',1,1000) IS DISTINCT FROM true OR length(btrim(x->>''description''))=0\\n   OR vat_followup_date(x->>''dateFrom'') IS DISTINCT FROM true OR vat_followup_date(x->>''dateTo'') IS DISTINCT FROM true OR x->>''dateFrom''>x->>''dateTo''\\n   OR (x->>''fulfillment'') NOT IN(''completed'',''partial'',''advance'',''unknown'') OR x->>''fulfillment'' IS NULL\\n   OR (x->''documentId''<>''null''::jsonb AND finance_supply_id(x->''documentId'') IS DISTINCT FROM true)\\n   OR finance_supply_text(x->''evidenceLocation'',0,500) IS DISTINCT FROM true OR finance_supply_amount(x) IS DISTINCT FROM true THEN RETURN false; END IF;\\n END LOOP;\\n FOR x IN SELECT value FROM jsonb_array_elements(v->''members'') LOOP\\n  c:=x->''correction'';\\n  IF finance_supply_keys(x,ARRAY[''memberId'',''kind'',''sourceId'',''correction'']) IS DISTINCT FROM true\\n   OR finance_supply_id(x->''memberId'') IS DISTINCT FROM true OR finance_supply_id(x->''sourceId'') IS DISTINCT FROM true\\n   OR x->>''kind'' NOT IN(''card'',''hometax'',''tax_invoice'') OR x->>''kind'' IS NULL\\n   OR finance_supply_keys(c,ARRAY[''isCorrection'',''reason'',''originalApprovalNumber'',''originalMemberId'',''referenceStatus'',''role'',''documentId'',''evidenceLocation'']) IS DISTINCT FROM true\\n   OR jsonb_typeof(c->''isCorrection'') IS DISTINCT FROM ''boolean'' OR finance_supply_text(c->''reason'',0,2000) IS DISTINCT FROM true\\n   OR (c->''originalApprovalNumber''<>''null''::jsonb AND finance_supply_id(c->''originalApprovalNumber'') IS DISTINCT FROM true)\\n   OR (c->''originalMemberId''<>''null''::jsonb AND finance_supply_id(c->''originalMemberId'') IS DISTINCT FROM true)\\n   OR c->>''referenceStatus'' NOT IN(''not_collected'',''not_provided'',''unresolved'',''declared'') OR c->>''referenceStatus'' IS NULL\\n   OR c->>''role'' NOT IN(''unknown'',''reversal'',''replacement'',''delta'') OR c->>''role'' IS NULL\\n   OR (c->''documentId''<>''null''::jsonb AND finance_supply_id(c->''documentId'') IS DISTINCT FROM true)\\n   OR finance_supply_text(c->''evidenceLocation'',0,500) IS DISTINCT FROM true\\n   OR (c->''originalMemberId''<>''null''::jsonb AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v->''members'') m WHERE m->>''memberId''=c->>''originalMemberId'')) THEN RETURN false; END IF;\\n END LOOP;\\n FOR x IN SELECT value FROM jsonb_array_elements(v->''allocations'') LOOP\\n  IF finance_supply_keys(x,ARRAY[''allocationId'',''memberId'',''lineId'',''supply'',''tax'',''total'']) IS DISTINCT FROM true\\n   OR finance_supply_id(x->''allocationId'') IS DISTINCT FROM true OR finance_supply_id(x->''memberId'') IS DISTINCT FROM true OR finance_supply_id(x->''lineId'') IS DISTINCT FROM true\\n   OR finance_supply_amount(x) IS DISTINCT FROM true\\n   OR NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v->''members'') m WHERE m->>''memberId''=x->>''memberId'')\\n   OR NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v->''lines'') l WHERE l->>''lineId''=x->>''lineId'') THEN RETURN false; END IF;\\n END LOOP;\\n FOR x IN SELECT value FROM jsonb_array_elements(v->''claims'') LOOP\\n  c:=x->''cReference'';\\n  IF finance_supply_keys(x,ARRAY[''claimId'',''lineId'',''memberId'',''origin'',''reference'',''claimedSupply'',''claimedTax'',''coverage'',''documentId'',''evidenceLocation'',''cReference'']) IS DISTINCT FROM true\\n   OR finance_supply_id(x->''claimId'') IS DISTINCT FROM true OR finance_supply_id(x->''lineId'') IS DISTINCT FROM true OR finance_supply_id(x->''memberId'') IS DISTINCT FROM true\\n   OR x->>''origin'' NOT IN(''external'',''c_consumption'') OR x->>''origin'' IS NULL\\n   OR finance_supply_text(x->''reference'',0,1000) IS DISTINCT FROM true OR finance_supply_money(x->''claimedSupply'',false) IS DISTINCT FROM true OR finance_supply_money(x->''claimedTax'',false) IS DISTINCT FROM true\\n   OR x->>''coverage'' NOT IN(''exact'',''partial'',''unknown'') OR x->>''coverage'' IS NULL\\n   OR (x->''documentId''<>''null''::jsonb AND finance_supply_id(x->''documentId'') IS DISTINCT FROM true)\\n   OR finance_supply_text(x->''evidenceLocation'',0,500) IS DISTINCT FROM true\\n   OR (x->>''origin''=''external'' AND c<>''null''::jsonb)\\n   OR (c<>''null''::jsonb AND (finance_supply_keys(c,ARRAY[''revisionId'',''pairLineNo'']) IS DISTINCT FROM true OR finance_supply_id(c->''revisionId'') IS DISTINCT FROM true OR finance_supply_money(c->''pairLineNo'',false) IS DISTINCT FROM true OR (c->>''pairLineNo'')::numeric>99))\\n   OR NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v->''members'') m WHERE m->>''memberId''=x->>''memberId'')\\n   OR NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v->''lines'') l WHERE l->>''lineId''=x->>''lineId'') THEN RETURN false; END IF;\\n END LOOP;\\n IF EXISTS(SELECT 1 FROM jsonb_array_elements(v->''lines'') item GROUP BY item->>''lineId'' HAVING count(*)>1)\\n  OR EXISTS(SELECT 1 FROM jsonb_array_elements(v->''members'') item GROUP BY item->>''memberId'' HAVING count(*)>1)\\n  OR EXISTS(SELECT 1 FROM jsonb_array_elements(v->''allocations'') item GROUP BY item->>''allocationId'' HAVING count(*)>1)\\n  OR EXISTS(SELECT 1 FROM jsonb_array_elements(v->''claims'') item GROUP BY item->>''claimId'' HAVING count(*)>1) THEN RETURN false; END IF;\\n RETURN true;\\nEXCEPTION WHEN OTHERS THEN RETURN false;\\nEND \",\"strict\":false,\"support\":\"0\",\"language\":\"plpgsql\",\"parallel\":\"u\",\"variadic\":\"0\",\"arguments\":\"v jsonb\",\"leakProof\":false,\"parsedBody\":null,\"returnsSet\":false,\"transforms\":null,\"volatility\":\"i\",\"argumentTypes\":\"jsonb\",\"securityDefiner\":false},{\"cost\":\"100\",\"kind\":\"f\",\"name\":\"finance_supply_id\",\"rows\":\"0\",\"binary\":null,\"config\":null,\"result\":\"boolean\",\"source\":\"\\n SELECT finance_supply_text(v,1,200) AND btrim(v#>>''{}'')=v#>>''{}'' AND (v#>>''{}'') !~ ''[[:cntrl:] ]''\\n\",\"strict\":false,\"support\":\"0\",\"language\":\"sql\",\"parallel\":\"u\",\"variadic\":\"0\",\"arguments\":\"v jsonb\",\"leakProof\":false,\"parsedBody\":null,\"returnsSet\":false,\"transforms\":null,\"volatility\":\"i\",\"argumentTypes\":\"jsonb\",\"securityDefiner\":false},{\"cost\":\"100\",\"kind\":\"f\",\"name\":\"finance_supply_immutable\",\"rows\":\"0\",\"binary\":null,\"config\":null,\"result\":\"trigger\",\"source\":\"\\nBEGIN RAISE EXCEPTION ''DE-0 review history is immutable: %'',TG_TABLE_NAME USING ERRCODE=''23514''; END \",\"strict\":false,\"support\":\"0\",\"language\":\"plpgsql\",\"parallel\":\"u\",\"variadic\":\"0\",\"arguments\":\"\",\"leakProof\":false,\"parsedBody\":null,\"returnsSet\":false,\"transforms\":null,\"volatility\":\"v\",\"argumentTypes\":\"\",\"securityDefiner\":false},{\"cost\":\"100\",\"kind\":\"f\",\"name\":\"finance_supply_keys\",\"rows\":\"0\",\"binary\":null,\"config\":null,\"result\":\"boolean\",\"source\":\"\\n SELECT jsonb_typeof(v)=''object'' AND\\n   (SELECT array_agg(k ORDER BY k COLLATE \\\"C\\\") FROM jsonb_object_keys(CASE WHEN jsonb_typeof(v)=''object'' THEN v ELSE ''{}''::jsonb END) k)\\n   IS NOT DISTINCT FROM (SELECT array_agg(k ORDER BY k COLLATE \\\"C\\\") FROM unnest(expected) k)\\n\",\"strict\":false,\"support\":\"0\",\"language\":\"sql\",\"parallel\":\"u\",\"variadic\":\"0\",\"arguments\":\"v jsonb, expected text[]\",\"leakProof\":false,\"parsedBody\":null,\"returnsSet\":false,\"transforms\":null,\"volatility\":\"i\",\"argumentTypes\":\"jsonb, text[]\",\"securityDefiner\":false},{\"cost\":\"100\",\"kind\":\"f\",\"name\":\"finance_supply_money\",\"rows\":\"0\",\"binary\":null,\"config\":null,\"result\":\"boolean\",\"source\":\"\\nDECLARE n numeric;\\nBEGIN\\n IF jsonb_typeof(v) IS DISTINCT FROM ''number'' THEN RETURN false; END IF;\\n n:=(v#>>''{}'')::numeric;\\n RETURN n=trunc(n) AND abs(n)<=9007199254740991 AND (signed OR n>=0);\\nEXCEPTION WHEN OTHERS THEN RETURN false;\\nEND \",\"strict\":false,\"support\":\"0\",\"language\":\"plpgsql\",\"parallel\":\"u\",\"variadic\":\"0\",\"arguments\":\"v jsonb, signed boolean DEFAULT true\",\"leakProof\":false,\"parsedBody\":null,\"returnsSet\":false,\"transforms\":null,\"volatility\":\"i\",\"argumentTypes\":\"jsonb, boolean\",\"securityDefiner\":false},{\"cost\":\"100\",\"kind\":\"f\",\"name\":\"finance_supply_revision_guard\",\"rows\":\"0\",\"binary\":null,\"config\":null,\"result\":\"trigger\",\"source\":\"\\nDECLARE root finance_supply_review_cases%ROWTYPE; previous finance_supply_review_revisions%ROWTYPE;\\nBEGIN\\n PERFORM pg_advisory_xact_lock(1296256326,1);\\n SELECT * INTO STRICT root FROM finance_supply_review_cases WHERE case_id=NEW.case_id FOR UPDATE;\\n SELECT * INTO previous FROM finance_supply_review_revisions WHERE case_id=NEW.case_id ORDER BY version DESC LIMIT 1;\\n IF NEW.version<>COALESCE(previous.version,0)+1 OR NEW.previous_revision_id IS DISTINCT FROM previous.revision_id\\n  OR NEW.payload_json->>''subjectId'' IS DISTINCT FROM root.subject_id OR NEW.basis_json->>''subjectId'' IS DISTINCT FROM root.subject_id\\n  OR (previous.revision_id IS NULL AND (NEW.state<>''recorded'' OR NEW.actor_user_id<>root.created_by)) THEN\\n  RAISE EXCEPTION ''DE-0 review chain/subject/creator conflict'' USING ERRCODE=''23514''; END IF;\\n IF NEW.state=''withdrawn'' AND (previous.state IS DISTINCT FROM ''recorded'' OR NEW.payload_json IS DISTINCT FROM previous.payload_json\\n  OR NEW.basis_json IS DISTINCT FROM previous.basis_json OR NEW.assessment_json IS DISTINCT FROM previous.assessment_json\\n  OR NEW.preview_hash IS DISTINCT FROM previous.preview_hash) THEN\\n  RAISE EXCEPTION ''DE-0 withdrawal must preserve the preceding recorded basis'' USING ERRCODE=''23514''; END IF;\\n RETURN NEW;\\nEXCEPTION WHEN NO_DATA_FOUND THEN RAISE EXCEPTION ''DE-0 case not found'' USING ERRCODE=''23514'';\\nEND \",\"strict\":false,\"support\":\"0\",\"language\":\"plpgsql\",\"parallel\":\"u\",\"variadic\":\"0\",\"arguments\":\"\",\"leakProof\":false,\"parsedBody\":null,\"returnsSet\":false,\"transforms\":null,\"volatility\":\"v\",\"argumentTypes\":\"\",\"securityDefiner\":false},{\"cost\":\"100\",\"kind\":\"f\",\"name\":\"finance_supply_row_agreement\",\"rows\":\"0\",\"binary\":null,\"config\":null,\"result\":\"trigger\",\"source\":\"\\nDECLARE key text;\\nBEGIN\\n IF TG_TABLE_NAME=''finance_supply_review_requests'' THEN\\n  SELECT case_id INTO key FROM finance_supply_review_revisions WHERE request_id=NEW.request_id;\\n  IF key IS NULL THEN RAISE EXCEPTION ''DE-0 orphan request'' USING ERRCODE=''23514''; END IF;\\n ELSE key:=NEW.case_id; END IF;\\n PERFORM finance_supply_assert_agreement(key);\\n RETURN NULL;\\nEND \",\"strict\":false,\"support\":\"0\",\"language\":\"plpgsql\",\"parallel\":\"u\",\"variadic\":\"0\",\"arguments\":\"\",\"leakProof\":false,\"parsedBody\":null,\"returnsSet\":false,\"transforms\":null,\"volatility\":\"v\",\"argumentTypes\":\"\",\"securityDefiner\":false},{\"cost\":\"100\",\"kind\":\"f\",\"name\":\"finance_supply_text\",\"rows\":\"0\",\"binary\":null,\"config\":null,\"result\":\"boolean\",\"source\":\"\\n SELECT jsonb_typeof(v)=''string'' AND length(v#>>''{}'') BETWEEN minimum AND maximum\\n\",\"strict\":false,\"support\":\"0\",\"language\":\"sql\",\"parallel\":\"u\",\"variadic\":\"0\",\"arguments\":\"v jsonb, minimum integer, maximum integer\",\"leakProof\":false,\"parsedBody\":null,\"returnsSet\":false,\"transforms\":null,\"volatility\":\"i\",\"argumentTypes\":\"jsonb, integer, integer\",\"securityDefiner\":false}],\"tables\":[\"finance_supply_review_cases\",\"finance_supply_review_requests\",\"finance_supply_review_revisions\"],\"strictRelations\":[\"finance_supply_review_cases\",\"finance_supply_review_requests\",\"finance_supply_review_revisions\"],\"installation\":{\"relations\":[{\"kind\":\"r\",\"name\":\"finance_supply_review_cases\",\"policies\":[],\"rowSecurity\":false,\"forceRowSecurity\":false},{\"kind\":\"r\",\"name\":\"finance_supply_review_requests\",\"policies\":[],\"rowSecurity\":false,\"forceRowSecurity\":false},{\"kind\":\"r\",\"name\":\"finance_supply_review_revisions\",\"policies\":[],\"rowSecurity\":false,\"forceRowSecurity\":false}],\"structures\":[{\"name\":\"finance_supply_review_cases\",\"rules\":[],\"columns\":[{\"name\":\"case_id\",\"type\":\"text\",\"default\":null,\"notNull\":true,\"identity\":\"\",\"position\":1,\"collation\":\"pg_catalog.default\",\"generated\":\"\"},{\"name\":\"subject_id\",\"type\":\"text\",\"default\":null,\"notNull\":true,\"identity\":\"\",\"position\":2,\"collation\":\"pg_catalog.default\",\"generated\":\"\"},{\"name\":\"created_by\",\"type\":\"text\",\"default\":null,\"notNull\":true,\"identity\":\"\",\"position\":3,\"collation\":\"pg_catalog.default\",\"generated\":\"\"},{\"name\":\"created_at\",\"type\":\"timestamp with time zone\",\"default\":\"now()\",\"notNull\":true,\"identity\":\"\",\"position\":4,\"collation\":null,\"generated\":\"\"}],\"indexes\":[{\"live\":true,\"name\":\"finance_supply_review_cases_pkey\",\"ready\":true,\"valid\":true,\"unique\":true,\"columns\":[\"case_id\"],\"options\":\"0\",\"primary\":true,\"keyCount\":1,\"exclusion\":false,\"immediate\":true,\"predicate\":null,\"accessMethod\":\"btree\",\"attributeCount\":1,\"operatorClasses\":[\"pg_catalog.text_ops\"],\"nullsNotDistinct\":false},{\"live\":true,\"name\":\"finance_supply_review_subject_idx\",\"ready\":true,\"valid\":true,\"unique\":false,\"columns\":[\"subject_id\",\"created_at\",\"case_id\"],\"options\":\"0 0 0\",\"primary\":false,\"keyCount\":3,\"exclusion\":false,\"immediate\":true,\"predicate\":null,\"accessMethod\":\"btree\",\"attributeCount\":3,\"operatorClasses\":[\"pg_catalog.text_ops\",\"pg_catalog.timestamptz_ops\",\"pg_catalog.text_ops\"],\"nullsNotDistinct\":false}],\"triggers\":[{\"name\":\"finance_supply_agreement\",\"type\":5,\"when\":null,\"enabled\":\"O\",\"function\":\"<self>.finance_supply_row_agreement()\",\"internal\":false,\"arguments\":\"\",\"constraint\":{\"name\":\"finance_supply_agreement\",\"schema\":\"<self>\",\"relation\":\"finance_supply_review_cases\"},\"deferrable\":true,\"newTransition\":null,\"oldTransition\":null,\"updateColumns\":\"\",\"initiallyDeferred\":true},{\"name\":\"finance_supply_immutable\",\"type\":27,\"when\":null,\"enabled\":\"O\",\"function\":\"<self>.finance_supply_immutable()\",\"internal\":false,\"arguments\":\"\",\"constraint\":null,\"deferrable\":false,\"newTransition\":null,\"oldTransition\":null,\"updateColumns\":\"\",\"initiallyDeferred\":false},{\"name\":\"finance_supply_no_truncate\",\"type\":34,\"when\":null,\"enabled\":\"O\",\"function\":\"<self>.finance_supply_immutable()\",\"internal\":false,\"arguments\":\"\",\"constraint\":null,\"deferrable\":false,\"newTransition\":null,\"oldTransition\":null,\"updateColumns\":\"\",\"initiallyDeferred\":false},{\"name\":null,\"type\":17,\"when\":null,\"enabled\":\"O\",\"function\":\"pg_catalog.RI_FKey_check_upd()\",\"internal\":true,\"arguments\":\"\",\"constraint\":{\"name\":\"finance_supply_review_cases_subject_id_fkey\",\"schema\":\"<self>\",\"relation\":\"finance_supply_review_cases\"},\"deferrable\":false,\"newTransition\":null,\"oldTransition\":null,\"updateColumns\":\"\",\"initiallyDeferred\":false},{\"name\":null,\"type\":17,\"when\":null,\"enabled\":\"O\",\"function\":\"pg_catalog.RI_FKey_noaction_upd()\",\"internal\":true,\"arguments\":\"\",\"constraint\":{\"name\":\"finance_supply_review_revisions_case_id_fkey\",\"schema\":\"<self>\",\"relation\":\"finance_supply_review_revisions\"},\"deferrable\":false,\"newTransition\":null,\"oldTransition\":null,\"updateColumns\":\"\",\"initiallyDeferred\":false},{\"name\":null,\"type\":5,\"when\":null,\"enabled\":\"O\",\"function\":\"pg_catalog.RI_FKey_check_ins()\",\"internal\":true,\"arguments\":\"\",\"constraint\":{\"name\":\"finance_supply_review_cases_subject_id_fkey\",\"schema\":\"<self>\",\"relation\":\"finance_supply_review_cases\"},\"deferrable\":false,\"newTransition\":null,\"oldTransition\":null,\"updateColumns\":\"\",\"initiallyDeferred\":false},{\"name\":null,\"type\":9,\"when\":null,\"enabled\":\"O\",\"function\":\"pg_catalog.RI_FKey_noaction_del()\",\"internal\":true,\"arguments\":\"\",\"constraint\":{\"name\":\"finance_supply_review_revisions_case_id_fkey\",\"schema\":\"<self>\",\"relation\":\"finance_supply_review_revisions\"},\"deferrable\":false,\"newTransition\":null,\"oldTransition\":null,\"updateColumns\":\"\",\"initiallyDeferred\":false}],\"constraints\":[{\"keys\":null,\"name\":\"finance_supply_agreement\",\"type\":\"t\",\"match\":\" \",\"target\":null,\"validated\":true,\"deferrable\":true,\"definition\":\"TRIGGER DEFERRABLE INITIALLY DEFERRED\",\"targetKeys\":null,\"deleteAction\":\" \",\"updateAction\":\" \",\"initiallyDeferred\":true},{\"keys\":[1],\"name\":\"finance_supply_review_cases_case_id_check\",\"type\":\"c\",\"match\":\" \",\"target\":null,\"validated\":true,\"deferrable\":false,\"definition\":\"CHECK (finance_supply_id(to_jsonb(case_id)))\",\"targetKeys\":null,\"deleteAction\":\" \",\"updateAction\":\" \",\"initiallyDeferred\":false},{\"keys\":[3],\"name\":\"finance_supply_review_cases_created_by_check\",\"type\":\"c\",\"match\":\" \",\"target\":null,\"validated\":true,\"deferrable\":false,\"definition\":\"CHECK (finance_supply_id(to_jsonb(created_by)))\",\"targetKeys\":null,\"deleteAction\":\" \",\"updateAction\":\" \",\"initiallyDeferred\":false},{\"keys\":[1],\"name\":\"finance_supply_review_cases_pkey\",\"type\":\"p\",\"match\":\" \",\"target\":null,\"validated\":true,\"deferrable\":false,\"definition\":\"PRIMARY KEY (case_id)\",\"targetKeys\":null,\"deleteAction\":\" \",\"updateAction\":\" \",\"initiallyDeferred\":false},{\"keys\":[2],\"name\":\"finance_supply_review_cases_subject_id_fkey\",\"type\":\"f\",\"match\":\"s\",\"target\":\"<self>.vat_filing_subjects\",\"validated\":true,\"deferrable\":false,\"definition\":\"FOREIGN KEY (subject_id) REFERENCES vat_filing_subjects(subject_id)\",\"targetKeys\":[1],\"deleteAction\":\"a\",\"updateAction\":\"a\",\"initiallyDeferred\":false}]},{\"name\":\"finance_supply_review_requests\",\"rules\":[],\"columns\":[{\"name\":\"request_id\",\"type\":\"text\",\"default\":null,\"notNull\":true,\"identity\":\"\",\"position\":1,\"collation\":\"pg_catalog.default\",\"generated\":\"\"},{\"name\":\"action\",\"type\":\"text\",\"default\":null,\"notNull\":true,\"identity\":\"\",\"position\":2,\"collation\":\"pg_catalog.default\",\"generated\":\"\"},{\"name\":\"actor_user_id\",\"type\":\"text\",\"default\":null,\"notNull\":true,\"identity\":\"\",\"position\":3,\"collation\":\"pg_catalog.default\",\"generated\":\"\"},{\"name\":\"payload_hash\",\"type\":\"text\",\"default\":null,\"notNull\":true,\"identity\":\"\",\"position\":4,\"collation\":\"pg_catalog.default\",\"generated\":\"\"},{\"name\":\"result_json\",\"type\":\"jsonb\",\"default\":null,\"notNull\":true,\"identity\":\"\",\"position\":5,\"collation\":null,\"generated\":\"\"},{\"name\":\"created_at\",\"type\":\"timestamp with time zone\",\"default\":\"now()\",\"notNull\":true,\"identity\":\"\",\"position\":6,\"collation\":null,\"generated\":\"\"}],\"indexes\":[{\"live\":true,\"name\":\"finance_supply_review_requests_pkey\",\"ready\":true,\"valid\":true,\"unique\":true,\"columns\":[\"request_id\"],\"options\":\"0\",\"primary\":true,\"keyCount\":1,\"exclusion\":false,\"immediate\":true,\"predicate\":null,\"accessMethod\":\"btree\",\"attributeCount\":1,\"operatorClasses\":[\"pg_catalog.text_ops\"],\"nullsNotDistinct\":false}],\"triggers\":[{\"name\":\"finance_supply_agreement\",\"type\":5,\"when\":null,\"enabled\":\"O\",\"function\":\"<self>.finance_supply_row_agreement()\",\"internal\":false,\"arguments\":\"\",\"constraint\":{\"name\":\"finance_supply_agreement\",\"schema\":\"<self>\",\"relation\":\"finance_supply_review_requests\"},\"deferrable\":true,\"newTransition\":null,\"oldTransition\":null,\"updateColumns\":\"\",\"initiallyDeferred\":true},{\"name\":\"finance_supply_immutable\",\"type\":27,\"when\":null,\"enabled\":\"O\",\"function\":\"<self>.finance_supply_immutable()\",\"internal\":false,\"arguments\":\"\",\"constraint\":null,\"deferrable\":false,\"newTransition\":null,\"oldTransition\":null,\"updateColumns\":\"\",\"initiallyDeferred\":false},{\"name\":\"finance_supply_no_truncate\",\"type\":34,\"when\":null,\"enabled\":\"O\",\"function\":\"<self>.finance_supply_immutable()\",\"internal\":false,\"arguments\":\"\",\"constraint\":null,\"deferrable\":false,\"newTransition\":null,\"oldTransition\":null,\"updateColumns\":\"\",\"initiallyDeferred\":false},{\"name\":null,\"type\":17,\"when\":null,\"enabled\":\"O\",\"function\":\"pg_catalog.RI_FKey_noaction_upd()\",\"internal\":true,\"arguments\":\"\",\"constraint\":{\"name\":\"finance_supply_review_revisions_request_id_fkey\",\"schema\":\"<self>\",\"relation\":\"finance_supply_review_revisions\"},\"deferrable\":true,\"newTransition\":null,\"oldTransition\":null,\"updateColumns\":\"\",\"initiallyDeferred\":true},{\"name\":null,\"type\":9,\"when\":null,\"enabled\":\"O\",\"function\":\"pg_catalog.RI_FKey_noaction_del()\",\"internal\":true,\"arguments\":\"\",\"constraint\":{\"name\":\"finance_supply_review_revisions_request_id_fkey\",\"schema\":\"<self>\",\"relation\":\"finance_supply_review_revisions\"},\"deferrable\":true,\"newTransition\":null,\"oldTransition\":null,\"updateColumns\":\"\",\"initiallyDeferred\":true}],\"constraints\":[{\"keys\":null,\"name\":\"finance_supply_agreement\",\"type\":\"t\",\"match\":\" \",\"target\":null,\"validated\":true,\"deferrable\":true,\"definition\":\"TRIGGER DEFERRABLE INITIALLY DEFERRED\",\"targetKeys\":null,\"deleteAction\":\" \",\"updateAction\":\" \",\"initiallyDeferred\":true},{\"keys\":[2],\"name\":\"finance_supply_review_requests_action_check\",\"type\":\"c\",\"match\":\" \",\"target\":null,\"validated\":true,\"deferrable\":false,\"definition\":\"CHECK (action = ANY (ARRAY[''save''::text, ''withdraw''::text]))\",\"targetKeys\":null,\"deleteAction\":\" \",\"updateAction\":\" \",\"initiallyDeferred\":false},{\"keys\":[3],\"name\":\"finance_supply_review_requests_actor_user_id_check\",\"type\":\"c\",\"match\":\" \",\"target\":null,\"validated\":true,\"deferrable\":false,\"definition\":\"CHECK (finance_supply_id(to_jsonb(actor_user_id)))\",\"targetKeys\":null,\"deleteAction\":\" \",\"updateAction\":\" \",\"initiallyDeferred\":false},{\"keys\":[4],\"name\":\"finance_supply_review_requests_payload_hash_check\",\"type\":\"c\",\"match\":\" \",\"target\":null,\"validated\":true,\"deferrable\":false,\"definition\":\"CHECK (payload_hash ~ ''^[a-f0-9]{64}$''::text)\",\"targetKeys\":null,\"deleteAction\":\" \",\"updateAction\":\" \",\"initiallyDeferred\":false},{\"keys\":[1],\"name\":\"finance_supply_review_requests_pkey\",\"type\":\"p\",\"match\":\" \",\"target\":null,\"validated\":true,\"deferrable\":false,\"definition\":\"PRIMARY KEY (request_id)\",\"targetKeys\":null,\"deleteAction\":\" \",\"updateAction\":\" \",\"initiallyDeferred\":false},{\"keys\":[1],\"name\":\"finance_supply_review_requests_request_id_check\",\"type\":\"c\",\"match\":\" \",\"target\":null,\"validated\":true,\"deferrable\":false,\"definition\":\"CHECK (finance_supply_id(to_jsonb(request_id)))\",\"targetKeys\":null,\"deleteAction\":\" \",\"updateAction\":\" \",\"initiallyDeferred\":false},{\"keys\":[5],\"name\":\"finance_supply_review_requests_result_json_check\",\"type\":\"c\",\"match\":\" \",\"target\":null,\"validated\":true,\"deferrable\":false,\"definition\":\"CHECK (jsonb_typeof(result_json) = ''object''::text)\",\"targetKeys\":null,\"deleteAction\":\" \",\"updateAction\":\" \",\"initiallyDeferred\":false}]},{\"name\":\"finance_supply_review_revisions\",\"rules\":[],\"columns\":[{\"name\":\"revision_id\",\"type\":\"text\",\"default\":null,\"notNull\":true,\"identity\":\"\",\"position\":1,\"collation\":\"pg_catalog.default\",\"generated\":\"\"},{\"name\":\"case_id\",\"type\":\"text\",\"default\":null,\"notNull\":true,\"identity\":\"\",\"position\":2,\"collation\":\"pg_catalog.default\",\"generated\":\"\"},{\"name\":\"version\",\"type\":\"integer\",\"default\":null,\"notNull\":true,\"identity\":\"\",\"position\":3,\"collation\":null,\"generated\":\"\"},{\"name\":\"previous_revision_id\",\"type\":\"text\",\"default\":null,\"notNull\":false,\"identity\":\"\",\"position\":4,\"collation\":\"pg_catalog.default\",\"generated\":\"\"},{\"name\":\"schema_version\",\"type\":\"text\",\"default\":null,\"notNull\":true,\"identity\":\"\",\"position\":5,\"collation\":\"pg_catalog.default\",\"generated\":\"\"},{\"name\":\"state\",\"type\":\"text\",\"default\":null,\"notNull\":true,\"identity\":\"\",\"position\":6,\"collation\":\"pg_catalog.default\",\"generated\":\"\"},{\"name\":\"payload_json\",\"type\":\"jsonb\",\"default\":null,\"notNull\":true,\"identity\":\"\",\"position\":7,\"collation\":null,\"generated\":\"\"},{\"name\":\"payload_hash\",\"type\":\"text\",\"default\":null,\"notNull\":true,\"identity\":\"\",\"position\":8,\"collation\":\"pg_catalog.default\",\"generated\":\"\"},{\"name\":\"basis_json\",\"type\":\"jsonb\",\"default\":null,\"notNull\":true,\"identity\":\"\",\"position\":9,\"collation\":null,\"generated\":\"\"},{\"name\":\"basis_hash\",\"type\":\"text\",\"default\":null,\"notNull\":true,\"identity\":\"\",\"position\":10,\"collation\":\"pg_catalog.default\",\"generated\":\"\"},{\"name\":\"assessment_json\",\"type\":\"jsonb\",\"default\":null,\"notNull\":true,\"identity\":\"\",\"position\":11,\"collation\":null,\"generated\":\"\"},{\"name\":\"preview_hash\",\"type\":\"text\",\"default\":null,\"notNull\":true,\"identity\":\"\",\"position\":12,\"collation\":\"pg_catalog.default\",\"generated\":\"\"},{\"name\":\"withdrawal_reason\",\"type\":\"text\",\"default\":null,\"notNull\":false,\"identity\":\"\",\"position\":13,\"collation\":\"pg_catalog.default\",\"generated\":\"\"},{\"name\":\"actor_user_id\",\"type\":\"text\",\"default\":null,\"notNull\":true,\"identity\":\"\",\"position\":14,\"collation\":\"pg_catalog.default\",\"generated\":\"\"},{\"name\":\"request_id\",\"type\":\"text\",\"default\":null,\"notNull\":true,\"identity\":\"\",\"position\":15,\"collation\":\"pg_catalog.default\",\"generated\":\"\"},{\"name\":\"created_at\",\"type\":\"timestamp with time zone\",\"default\":\"now()\",\"notNull\":true,\"identity\":\"\",\"position\":16,\"collation\":null,\"generated\":\"\"}],\"indexes\":[{\"live\":true,\"name\":\"finance_supply_review_revisions_case_id_version_key\",\"ready\":true,\"valid\":true,\"unique\":true,\"columns\":[\"case_id\",\"version\"],\"options\":\"0 0\",\"primary\":false,\"keyCount\":2,\"exclusion\":false,\"immediate\":true,\"predicate\":null,\"accessMethod\":\"btree\",\"attributeCount\":2,\"operatorClasses\":[\"pg_catalog.text_ops\",\"pg_catalog.int4_ops\"],\"nullsNotDistinct\":false},{\"live\":true,\"name\":\"finance_supply_review_revisions_pkey\",\"ready\":true,\"valid\":true,\"unique\":true,\"columns\":[\"revision_id\"],\"options\":\"0\",\"primary\":true,\"keyCount\":1,\"exclusion\":false,\"immediate\":true,\"predicate\":null,\"accessMethod\":\"btree\",\"attributeCount\":1,\"operatorClasses\":[\"pg_catalog.text_ops\"],\"nullsNotDistinct\":false},{\"live\":true,\"name\":\"finance_supply_review_revisions_previous_revision_id_key\",\"ready\":true,\"valid\":true,\"unique\":true,\"columns\":[\"previous_revision_id\"],\"options\":\"0\",\"primary\":false,\"keyCount\":1,\"exclusion\":false,\"immediate\":true,\"predicate\":null,\"accessMethod\":\"btree\",\"attributeCount\":1,\"operatorClasses\":[\"pg_catalog.text_ops\"],\"nullsNotDistinct\":false},{\"live\":true,\"name\":\"finance_supply_review_revisions_request_id_key\",\"ready\":true,\"valid\":true,\"unique\":true,\"columns\":[\"request_id\"],\"options\":\"0\",\"primary\":false,\"keyCount\":1,\"exclusion\":false,\"immediate\":true,\"predicate\":null,\"accessMethod\":\"btree\",\"attributeCount\":1,\"operatorClasses\":[\"pg_catalog.text_ops\"],\"nullsNotDistinct\":false},{\"live\":true,\"name\":\"finance_supply_review_revisions_revision_id_case_id_key\",\"ready\":true,\"valid\":true,\"unique\":true,\"columns\":[\"revision_id\",\"case_id\"],\"options\":\"0 0\",\"primary\":false,\"keyCount\":2,\"exclusion\":false,\"immediate\":true,\"predicate\":null,\"accessMethod\":\"btree\",\"attributeCount\":2,\"operatorClasses\":[\"pg_catalog.text_ops\",\"pg_catalog.text_ops\"],\"nullsNotDistinct\":false}],\"triggers\":[{\"name\":\"finance_supply_agreement\",\"type\":5,\"when\":null,\"enabled\":\"O\",\"function\":\"<self>.finance_supply_row_agreement()\",\"internal\":false,\"arguments\":\"\",\"constraint\":{\"name\":\"finance_supply_agreement\",\"schema\":\"<self>\",\"relation\":\"finance_supply_review_revisions\"},\"deferrable\":true,\"newTransition\":null,\"oldTransition\":null,\"updateColumns\":\"\",\"initiallyDeferred\":true},{\"name\":\"finance_supply_immutable\",\"type\":27,\"when\":null,\"enabled\":\"O\",\"function\":\"<self>.finance_supply_immutable()\",\"internal\":false,\"arguments\":\"\",\"constraint\":null,\"deferrable\":false,\"newTransition\":null,\"oldTransition\":null,\"updateColumns\":\"\",\"initiallyDeferred\":false},{\"name\":\"finance_supply_no_truncate\",\"type\":34,\"when\":null,\"enabled\":\"O\",\"function\":\"<self>.finance_supply_immutable()\",\"internal\":false,\"arguments\":\"\",\"constraint\":null,\"deferrable\":false,\"newTransition\":null,\"oldTransition\":null,\"updateColumns\":\"\",\"initiallyDeferred\":false},{\"name\":\"finance_supply_revision_insert\",\"type\":7,\"when\":null,\"enabled\":\"O\",\"function\":\"<self>.finance_supply_revision_guard()\",\"internal\":false,\"arguments\":\"\",\"constraint\":null,\"deferrable\":false,\"newTransition\":null,\"oldTransition\":null,\"updateColumns\":\"\",\"initiallyDeferred\":false},{\"name\":\"finance_vat_use_reverse_before\",\"type\":31,\"when\":null,\"enabled\":\"O\",\"function\":\"<self>.finance_vat_use_reverse_before()\",\"internal\":false,\"arguments\":\"\",\"constraint\":null,\"deferrable\":false,\"newTransition\":null,\"oldTransition\":null,\"updateColumns\":\"\",\"initiallyDeferred\":false},{\"name\":\"finance_vat_use_reverse_complete\",\"type\":29,\"when\":null,\"enabled\":\"O\",\"function\":\"<self>.finance_vat_use_reverse_complete()\",\"internal\":false,\"arguments\":\"\",\"constraint\":{\"name\":\"finance_vat_use_reverse_complete\",\"schema\":\"<self>\",\"relation\":\"finance_supply_review_revisions\"},\"deferrable\":true,\"newTransition\":null,\"oldTransition\":null,\"updateColumns\":\"\",\"initiallyDeferred\":true},{\"name\":null,\"type\":17,\"when\":null,\"enabled\":\"O\",\"function\":\"pg_catalog.RI_FKey_check_upd()\",\"internal\":true,\"arguments\":\"\",\"constraint\":{\"name\":\"finance_supply_review_revisions_case_id_fkey\",\"schema\":\"<self>\",\"relation\":\"finance_supply_review_revisions\"},\"deferrable\":false,\"newTransition\":null,\"oldTransition\":null,\"updateColumns\":\"\",\"initiallyDeferred\":false},{\"name\":null,\"type\":17,\"when\":null,\"enabled\":\"O\",\"function\":\"pg_catalog.RI_FKey_check_upd()\",\"internal\":true,\"arguments\":\"\",\"constraint\":{\"name\":\"finance_supply_review_revisions_previous_revision_id_fkey\",\"schema\":\"<self>\",\"relation\":\"finance_supply_review_revisions\"},\"deferrable\":false,\"newTransition\":null,\"oldTransition\":null,\"updateColumns\":\"\",\"initiallyDeferred\":false},{\"name\":null,\"type\":17,\"when\":null,\"enabled\":\"O\",\"function\":\"pg_catalog.RI_FKey_check_upd()\",\"internal\":true,\"arguments\":\"\",\"constraint\":{\"name\":\"finance_supply_review_revisions_request_id_fkey\",\"schema\":\"<self>\",\"relation\":\"finance_supply_review_revisions\"},\"deferrable\":true,\"newTransition\":null,\"oldTransition\":null,\"updateColumns\":\"\",\"initiallyDeferred\":true},{\"name\":null,\"type\":17,\"when\":null,\"enabled\":\"O\",\"function\":\"pg_catalog.RI_FKey_noaction_upd()\",\"internal\":true,\"arguments\":\"\",\"constraint\":{\"name\":\"finance_supply_review_revisions_previous_revision_id_fkey\",\"schema\":\"<self>\",\"relation\":\"finance_supply_review_revisions\"},\"deferrable\":false,\"newTransition\":null,\"oldTransition\":null,\"updateColumns\":\"\",\"initiallyDeferred\":false},{\"name\":null,\"type\":5,\"when\":null,\"enabled\":\"O\",\"function\":\"pg_catalog.RI_FKey_check_ins()\",\"internal\":true,\"arguments\":\"\",\"constraint\":{\"name\":\"finance_supply_review_revisions_case_id_fkey\",\"schema\":\"<self>\",\"relation\":\"finance_supply_review_revisions\"},\"deferrable\":false,\"newTransition\":null,\"oldTransition\":null,\"updateColumns\":\"\",\"initiallyDeferred\":false},{\"name\":null,\"type\":5,\"when\":null,\"enabled\":\"O\",\"function\":\"pg_catalog.RI_FKey_check_ins()\",\"internal\":true,\"arguments\":\"\",\"constraint\":{\"name\":\"finance_supply_review_revisions_previous_revision_id_fkey\",\"schema\":\"<self>\",\"relation\":\"finance_supply_review_revisions\"},\"deferrable\":false,\"newTransition\":null,\"oldTransition\":null,\"updateColumns\":\"\",\"initiallyDeferred\":false},{\"name\":null,\"type\":5,\"when\":null,\"enabled\":\"O\",\"function\":\"pg_catalog.RI_FKey_check_ins()\",\"internal\":true,\"arguments\":\"\",\"constraint\":{\"name\":\"finance_supply_review_revisions_request_id_fkey\",\"schema\":\"<self>\",\"relation\":\"finance_supply_review_revisions\"},\"deferrable\":true,\"newTransition\":null,\"oldTransition\":null,\"updateColumns\":\"\",\"initiallyDeferred\":true},{\"name\":null,\"type\":9,\"when\":null,\"enabled\":\"O\",\"function\":\"pg_catalog.RI_FKey_noaction_del()\",\"internal\":true,\"arguments\":\"\",\"constraint\":{\"name\":\"finance_supply_review_revisions_previous_revision_id_fkey\",\"schema\":\"<self>\",\"relation\":\"finance_supply_review_revisions\"},\"deferrable\":false,\"newTransition\":null,\"oldTransition\":null,\"updateColumns\":\"\",\"initiallyDeferred\":false}],\"constraints\":[{\"keys\":null,\"name\":\"finance_supply_agreement\",\"type\":\"t\",\"match\":\" \",\"target\":null,\"validated\":true,\"deferrable\":true,\"definition\":\"TRIGGER DEFERRABLE INITIALLY DEFERRED\",\"targetKeys\":null,\"deleteAction\":\" \",\"updateAction\":\" \",\"initiallyDeferred\":true},{\"keys\":[14],\"name\":\"finance_supply_review_revisions_actor_user_id_check\",\"type\":\"c\",\"match\":\" \",\"target\":null,\"validated\":true,\"deferrable\":false,\"definition\":\"CHECK (finance_supply_id(to_jsonb(actor_user_id)))\",\"targetKeys\":null,\"deleteAction\":\" \",\"updateAction\":\" \",\"initiallyDeferred\":false},{\"keys\":[9],\"name\":\"finance_supply_review_revisions_basis_json_check\",\"type\":\"c\",\"match\":\" \",\"target\":null,\"validated\":true,\"deferrable\":false,\"definition\":\"CHECK ((finance_supply_keys(basis_json, ARRAY[''schemaVersion''::text, ''subjectId''::text, ''subjectSnapshotText''::text, ''subjectSnapshotHash''::text, ''subjectIssues''::text, ''sources''::text, ''documents''::text, ''cReferences''::text]) AND (basis_json ->> ''schemaVersion''::text) = ''de0-supply-basis-v1''::text AND finance_supply_id(basis_json -> ''subjectId''::text) AND jsonb_typeof(basis_json -> ''subjectSnapshotText''::text) = ''string''::text AND (basis_json ->> ''subjectSnapshotHash''::text) ~ ''^[a-f0-9]{64}$''::text AND jsonb_typeof(basis_json -> ''subjectIssues''::text) = ''array''::text AND jsonb_typeof(basis_json -> ''sources''::text) = ''array''::text AND jsonb_typeof(basis_json -> ''documents''::text) = ''array''::text AND jsonb_typeof(basis_json -> ''cReferences''::text) = ''array''::text) IS TRUE)\",\"targetKeys\":null,\"deleteAction\":\" \",\"updateAction\":\" \",\"initiallyDeferred\":false},{\"keys\":[2],\"name\":\"finance_supply_review_revisions_case_id_fkey\",\"type\":\"f\",\"match\":\"s\",\"target\":\"<self>.finance_supply_review_cases\",\"validated\":true,\"deferrable\":false,\"definition\":\"FOREIGN KEY (case_id) REFERENCES finance_supply_review_cases(case_id)\",\"targetKeys\":[1],\"deleteAction\":\"a\",\"updateAction\":\"a\",\"initiallyDeferred\":false},{\"keys\":[2,3],\"name\":\"finance_supply_review_revisions_case_id_version_key\",\"type\":\"u\",\"match\":\" \",\"target\":null,\"validated\":true,\"deferrable\":false,\"definition\":\"UNIQUE (case_id, version)\",\"targetKeys\":null,\"deleteAction\":\" \",\"updateAction\":\" \",\"initiallyDeferred\":false},{\"keys\":[8,7],\"name\":\"finance_supply_review_revisions_check\",\"type\":\"c\",\"match\":\" \",\"target\":null,\"validated\":true,\"deferrable\":false,\"definition\":\"CHECK (payload_hash ~ ''^[a-f0-9]{64}$''::text AND payload_hash = vat_followup_hash_v2(payload_json))\",\"targetKeys\":null,\"deleteAction\":\" \",\"updateAction\":\" \",\"initiallyDeferred\":false},{\"keys\":[10,9],\"name\":\"finance_supply_review_revisions_check1\",\"type\":\"c\",\"match\":\" \",\"target\":null,\"validated\":true,\"deferrable\":false,\"definition\":\"CHECK (basis_hash ~ ''^[a-f0-9]{64}$''::text AND basis_hash = vat_followup_hash_v2(basis_json))\",\"targetKeys\":null,\"deleteAction\":\" \",\"updateAction\":\" \",\"initiallyDeferred\":false},{\"keys\":[7,11],\"name\":\"finance_supply_review_revisions_check2\",\"type\":\"c\",\"match\":\" \",\"target\":null,\"validated\":true,\"deferrable\":false,\"definition\":\"CHECK (finance_supply_assessment_valid(payload_json, assessment_json))\",\"targetKeys\":null,\"deleteAction\":\" \",\"updateAction\":\" \",\"initiallyDeferred\":false},{\"keys\":[12,7,9,11],\"name\":\"finance_supply_review_revisions_check3\",\"type\":\"c\",\"match\":\" \",\"target\":null,\"validated\":true,\"deferrable\":false,\"definition\":\"CHECK (preview_hash ~ ''^[a-f0-9]{64}$''::text AND preview_hash = vat_followup_hash_v2(jsonb_build_object(''draft'', payload_json, ''basis'', basis_json, ''assessment'', assessment_json)))\",\"targetKeys\":null,\"deleteAction\":\" \",\"updateAction\":\" \",\"initiallyDeferred\":false},{\"keys\":[3,4],\"name\":\"finance_supply_review_revisions_check4\",\"type\":\"c\",\"match\":\" \",\"target\":null,\"validated\":true,\"deferrable\":false,\"definition\":\"CHECK ((version = 1) = (previous_revision_id IS NULL))\",\"targetKeys\":null,\"deleteAction\":\" \",\"updateAction\":\" \",\"initiallyDeferred\":false},{\"keys\":[6,13],\"name\":\"finance_supply_review_revisions_check5\",\"type\":\"c\",\"match\":\" \",\"target\":null,\"validated\":true,\"deferrable\":false,\"definition\":\"CHECK (state = ''recorded''::text AND withdrawal_reason IS NULL OR state = ''withdrawn''::text AND withdrawal_reason IS NOT NULL AND length(btrim(withdrawal_reason)) >= 1 AND length(btrim(withdrawal_reason)) <= 2000)\",\"targetKeys\":null,\"deleteAction\":\" \",\"updateAction\":\" \",\"initiallyDeferred\":false},{\"keys\":[7],\"name\":\"finance_supply_review_revisions_payload_json_check\",\"type\":\"c\",\"match\":\" \",\"target\":null,\"validated\":true,\"deferrable\":false,\"definition\":\"CHECK (finance_supply_draft_valid(payload_json))\",\"targetKeys\":null,\"deleteAction\":\" \",\"updateAction\":\" \",\"initiallyDeferred\":false},{\"keys\":[1],\"name\":\"finance_supply_review_revisions_pkey\",\"type\":\"p\",\"match\":\" \",\"target\":null,\"validated\":true,\"deferrable\":false,\"definition\":\"PRIMARY KEY (revision_id)\",\"targetKeys\":null,\"deleteAction\":\" \",\"updateAction\":\" \",\"initiallyDeferred\":false},{\"keys\":[4],\"name\":\"finance_supply_review_revisions_previous_revision_id_fkey\",\"type\":\"f\",\"match\":\"s\",\"target\":\"<self>.finance_supply_review_revisions\",\"validated\":true,\"deferrable\":false,\"definition\":\"FOREIGN KEY (previous_revision_id) REFERENCES finance_supply_review_revisions(revision_id)\",\"targetKeys\":[1],\"deleteAction\":\"a\",\"updateAction\":\"a\",\"initiallyDeferred\":false},{\"keys\":[4],\"name\":\"finance_supply_review_revisions_previous_revision_id_key\",\"type\":\"u\",\"match\":\" \",\"target\":null,\"validated\":true,\"deferrable\":false,\"definition\":\"UNIQUE (previous_revision_id)\",\"targetKeys\":null,\"deleteAction\":\" \",\"updateAction\":\" \",\"initiallyDeferred\":false},{\"keys\":[15],\"name\":\"finance_supply_review_revisions_request_id_fkey\",\"type\":\"f\",\"match\":\"s\",\"target\":\"<self>.finance_supply_review_requests\",\"validated\":true,\"deferrable\":true,\"definition\":\"FOREIGN KEY (request_id) REFERENCES finance_supply_review_requests(request_id) DEFERRABLE INITIALLY DEFERRED\",\"targetKeys\":[1],\"deleteAction\":\"a\",\"updateAction\":\"a\",\"initiallyDeferred\":true},{\"keys\":[15],\"name\":\"finance_supply_review_revisions_request_id_key\",\"type\":\"u\",\"match\":\" \",\"target\":null,\"validated\":true,\"deferrable\":false,\"definition\":\"UNIQUE (request_id)\",\"targetKeys\":null,\"deleteAction\":\" \",\"updateAction\":\" \",\"initiallyDeferred\":false},{\"keys\":[1,2],\"name\":\"finance_supply_review_revisions_revision_id_case_id_key\",\"type\":\"u\",\"match\":\" \",\"target\":null,\"validated\":true,\"deferrable\":false,\"definition\":\"UNIQUE (revision_id, case_id)\",\"targetKeys\":null,\"deleteAction\":\" \",\"updateAction\":\" \",\"initiallyDeferred\":false},{\"keys\":[1],\"name\":\"finance_supply_review_revisions_revision_id_check\",\"type\":\"c\",\"match\":\" \",\"target\":null,\"validated\":true,\"deferrable\":false,\"definition\":\"CHECK (finance_supply_id(to_jsonb(revision_id)))\",\"targetKeys\":null,\"deleteAction\":\" \",\"updateAction\":\" \",\"initiallyDeferred\":false},{\"keys\":[5],\"name\":\"finance_supply_review_revisions_schema_version_check\",\"type\":\"c\",\"match\":\" \",\"target\":null,\"validated\":true,\"deferrable\":false,\"definition\":\"CHECK (schema_version = ''de0-supply-review-v1''::text)\",\"targetKeys\":null,\"deleteAction\":\" \",\"updateAction\":\" \",\"initiallyDeferred\":false},{\"keys\":[6],\"name\":\"finance_supply_review_revisions_state_check\",\"type\":\"c\",\"match\":\" \",\"target\":null,\"validated\":true,\"deferrable\":false,\"definition\":\"CHECK (state = ANY (ARRAY[''recorded''::text, ''withdrawn''::text]))\",\"targetKeys\":null,\"deleteAction\":\" \",\"updateAction\":\" \",\"initiallyDeferred\":false},{\"keys\":[3],\"name\":\"finance_supply_review_revisions_version_check\",\"type\":\"c\",\"match\":\" \",\"target\":null,\"validated\":true,\"deferrable\":false,\"definition\":\"CHECK (version > 0)\",\"targetKeys\":null,\"deleteAction\":\" \",\"updateAction\":\" \",\"initiallyDeferred\":false},{\"keys\":null,\"name\":\"finance_vat_use_reverse_complete\",\"type\":\"t\",\"match\":\" \",\"target\":null,\"validated\":true,\"deferrable\":true,\"definition\":\"TRIGGER DEFERRABLE INITIALLY DEFERRED\",\"targetKeys\":null,\"deleteAction\":\" \",\"updateAction\":\" \",\"initiallyDeferred\":true}]}]}}'::jsonb; e jsonb; actual jsonb; row_oid oid; resolved oid; table_name text; actual_count integer; expected_count integer;\nBEGIN\n IF p_schema IS NULL OR p_schema !~ '^[a-z][a-z0-9_]*$' OR p_schema LIKE 'pg_%' OR pg_catalog.current_setting('server_version_num')::integer/10000<>17\n  OR pg_catalog.current_setting('session_replication_role')<>'origin' OR (pg_catalog.current_schemas(false))[1] IS DISTINCT FROM p_schema\n  OR pg_catalog.array_position(pg_catalog.current_schemas(true),'pg_catalog')>pg_catalog.array_position(pg_catalog.current_schemas(true),p_schema) THEN\n  RAISE EXCEPTION 'DE-0 trusted schema/environment unavailable' USING ERRCODE='55000'; END IF;\n PERFORM finance_assert_r1_definitions(p_schema);\n FOR e IN SELECT value FROM pg_catalog.jsonb_array_elements(expected->'functions') LOOP\n  SELECT pg_catalog.jsonb_build_object(\n 'name',p.proname,'argumentTypes',pg_catalog.oidvectortypes(p.proargtypes),\n 'arguments',pg_catalog.pg_get_function_arguments(p.oid),'result',pg_catalog.pg_get_function_result(p.oid),\n 'language',(SELECT l.lanname FROM pg_catalog.pg_language l WHERE l.oid=p.prolang),\n 'source',p.prosrc,'binary',p.probin,'parsedBody',p.prosqlbody::text,\n 'kind',p.prokind::text,'securityDefiner',p.prosecdef,'leakProof',p.proleakproof,\n 'strict',p.proisstrict,'returnsSet',p.proretset,'volatility',p.provolatile::text,\n 'parallel',p.proparallel::text,'config',p.proconfig,'cost',p.procost::text,'rows',p.prorows::text,\n 'support',p.prosupport::oid::text,'variadic',p.provariadic::text,'transforms',p.protrftypes::text),p.oid INTO actual,row_oid FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace\n   WHERE n.nspname=p_schema AND p.proname=e->>'name' AND pg_catalog.oidvectortypes(p.proargtypes)=e->>'argumentTypes';\n  IF actual IS DISTINCT FROM e THEN RAISE EXCEPTION 'DE-0 dependency definition mismatch: %',e->>'name' USING ERRCODE='55000'; END IF;\n  resolved:=pg_catalog.to_regprocedure(pg_catalog.format('%I(%s)',e->>'name',e->>'argumentTypes'));\n  IF resolved IS DISTINCT FROM row_oid THEN RAISE EXCEPTION 'DE-0 dependency binding mismatch: %',e->>'name' USING ERRCODE='55000'; END IF;\n END LOOP;\n SELECT pg_catalog.count(*) INTO actual_count FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace\n  WHERE n.nspname=p_schema AND p.proname IN(SELECT value->>'name' FROM pg_catalog.jsonb_array_elements(expected->'functions'));\n expected_count:=pg_catalog.jsonb_array_length(expected->'functions');\n IF actual_count<>expected_count OR EXISTS(SELECT 1 FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname<>p_schema AND n.nspname=ANY(pg_catalog.current_schemas(true)) AND p.proname IN(SELECT value->>'name' FROM pg_catalog.jsonb_array_elements(expected->'functions'))) THEN RAISE EXCEPTION 'DE-0 dependency overload mismatch' USING ERRCODE='55000'; END IF;\n FOR table_name IN SELECT value FROM pg_catalog.jsonb_array_elements_text(expected->'tables') LOOP\n  row_oid:=pg_catalog.to_regclass(pg_catalog.format('%I.%I',p_schema,table_name)); resolved:=pg_catalog.to_regclass(pg_catalog.format('%I',table_name));\n  IF row_oid IS NULL OR row_oid IS DISTINCT FROM resolved THEN RAISE EXCEPTION 'DE-0 relation binding mismatch: %',table_name USING ERRCODE='55000'; END IF;\n END LOOP;\n EXECUTE pg_catalog.format('SELECT %I.r1_installation_catalog($1,$2,$2)',p_schema) INTO actual USING p_schema,ARRAY(SELECT value FROM pg_catalog.jsonb_array_elements_text(expected->'tables'));\n IF actual IS DISTINCT FROM expected->'installation' THEN RAISE EXCEPTION 'DE-0 column/constraint/index/trigger/rule/RLS installation mismatch' USING ERRCODE='55000'; END IF;\n RETURN pg_catalog.jsonb_build_object('version','de0-supply-installation-v1-e257','contractHash','00ebd7aa382aca95f4c66cacf9ad3aaabd76a2933770fccae720119c111b6243','schema',p_schema,'functionCount',expected_count,'relationCount',3,'structureCount',3);\nEXCEPTION WHEN serialization_failure OR deadlock_detected THEN RAISE; WHEN OTHERS THEN RAISE EXCEPTION 'DE-0 installation unavailable: %',SQLERRM USING ERRCODE='55000';\nEND ",
+    "strict": false,
+    "support": "0",
+    "language": "plpgsql",
+    "parallel": "u",
+    "variadic": "0",
+    "arguments": "p_schema text",
+    "leakProof": false,
+    "parsedBody": null,
+    "returnsSet": false,
+    "transforms": null,
+    "volatility": "v",
+    "argumentTypes": "text",
+    "securityDefiner": false
+  }
+}

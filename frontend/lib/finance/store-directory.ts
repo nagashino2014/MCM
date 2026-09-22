@@ -10,6 +10,7 @@
 // 업태(bizType)까지 같이 돌려주는 이유: 자동분류(classify)의 업태 규칙 단계를 태울 수 있다.
 
 import { getDb, rowsToObjects } from "@/lib/db";
+import { applyCardMerchantCorrections, merchantIdentity } from "@/lib/finance/card-merchant-source";
 
 export interface StoreInfo {
   storeName: string | null;
@@ -59,15 +60,20 @@ export async function lookupStoresByCorpNum(corpNums: Array<string | null | unde
   // 사업자번호는 소스마다 하이픈 유무가 다를 수 있어, 비교 시 숫자만 남겨 맞춘다.
   const digitsOf = (col: string) => `regexp_replace(${col}, '[^0-9]', '', 'g')`;
 
+  // 카드 원본 번호로 범위를 먼저 좁히면 정정된 번호를 찾지 못하거나 옛 번호에 잘못 적용한다.
+  const cards = await applyCardMerchantCorrections(db, rowsToObjects(await db.exec(
+    `SELECT card_txn_id, store_corp_num, store_name, store_biz_type FROM card_transactions
+      WHERE store_name IS NOT NULL ORDER BY approved_at DESC`,
+  )));
+  for (const card of cards) {
+    if (merchantIdentity(card)?.issues.length) continue;
+    const corpNum = normalizeCorpNum(card.store_corp_num == null ? null : String(card.store_corp_num));
+    const name = String(card.store_name ?? "").trim();
+    if (!corpNum || !name || !targets.includes(corpNum) || out.has(corpNum)) continue;
+    out.set(corpNum, {storeName:name,bizType:card.store_biz_type ? String(card.store_biz_type).trim() || null : null,source:"card_txn"});
+  }
+
   const queries: Array<{ source: StoreInfo["source"]; sql: string }> = [
-    {
-      source: "card_txn",
-      sql: `SELECT DISTINCT ON (${digitsOf("store_corp_num")}) ${digitsOf("store_corp_num")} AS corp_num,
-                   store_name AS name, store_biz_type AS biz_type
-              FROM card_transactions
-             WHERE store_name IS NOT NULL AND ${digitsOf("store_corp_num")} = ANY($1::text[])
-             ORDER BY ${digitsOf("store_corp_num")}, approved_at DESC`,
-    },
     {
       source: "tax_invoice",
       sql: `SELECT DISTINCT ON (${digitsOf("invoicer_corp_num")}) ${digitsOf("invoicer_corp_num")} AS corp_num,

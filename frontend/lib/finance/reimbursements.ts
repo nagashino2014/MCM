@@ -1,10 +1,13 @@
 import { getDb, rowsToObjects } from "@/lib/db";
+import { expenseMealAction, loadExpenseMealActions } from "./expense-meal-actions";
+import { assertSettledExpenseSourcesUnchanged } from "./expense-settlement";
 
 /*
  * 개인 경비 환급 이체 목록 (accounting-expansion §2 — 환급은 급여 합산 금지·별도 이체).
- * 결재 종결(approved)된 지출결의·출장보고의 **개인 지출 행**(영수증·수기 — 법인카드 행 제외)을
+ * 결재 종결(approved)된 일반/개인 지출결의·출장보고의 **개인 지출 행**(영수증·수기 — 법인카드 행 제외)을
  * 기안자별로 집계해 이체 실행(수동)의 근거 목록을 만든다. journal.ts expense_doc 분개와
- * 같은 행 필터를 쓰며, **식대 불지급(withhold) 처분 행(마이그 203·204)은 자동 제외**한다
+ * 같은 식대 처분을 적용하며, 정산 배치에 이미 포함된 행은 다시 제안하지 않는다.
+ * **식대 불지급(withhold) 처분 행(마이그 203·204)은 환급 합계에서 제외**한다
  * (분개에서도 동일하게 제외 — 회사가 환급하지 않는 지출). 급여 차감(deduct) 처분 행은
  * 환급에는 포함하되 표시한다 — 회수는 급여대장 '식대환수' 공제로 이뤄지므로 여기서도 빼면
  * 이중 불이익이 된다.
@@ -44,6 +47,7 @@ export interface ReimburseList {
 
 const DOC_TABLES: Record<string, { tableKey: string; dateKey: string }> = {
   "frm-expense-report": { tableKey: "expenses", dateKey: "used_on" },
+  "frm-expense-personal": { tableKey: "expenses", dateKey: "used_on" },
   "frm-biz-trip-report": { tableKey: "trip_expenses", dateKey: "spent_on" },
 };
 
@@ -54,7 +58,7 @@ export async function listReimbursements(from: string, to: string): Promise<Reim
     await db.exec(
       `SELECT doc_id, form_id, doc_no, drafter_employee_id, drafter_name, field_values
          FROM approval_docs
-        WHERE status = 'approved' AND form_id IN ('frm-expense-report', 'frm-biz-trip-report')
+        WHERE status = 'approved' AND form_id IN ('frm-expense-report', 'frm-expense-personal', 'frm-biz-trip-report')
           AND drafter_employee_id IS NOT NULL
           AND substr(completed_at, 1, 10) BETWEEN $1 AND $2
         ORDER BY completed_at`,
@@ -62,23 +66,12 @@ export async function listReimbursements(from: string, to: string): Promise<Reim
     )
   );
 
-  // 식대 처분(withhold/deduct) — 키 doc_id|row_no. 마이그 203·204 미적용 환경은 빈 맵.
-  const mealActions = new Map<string, "withhold" | "deduct">();
-  if (docs.length) {
-    try {
-      for (const r of rowsToObjects(
-        await db.exec(
-          `SELECT doc_id, row_no, action FROM overtime_meal_warnings
-            WHERE action IN ('withhold','deduct') AND doc_id = ANY($1::text[])`,
-          [docs.map((d) => String(d.doc_id))]
-        )
-      )) {
-        mealActions.set(`${String(r.doc_id)}|${Number(r.row_no)}`, String(r.action) as "withhold" | "deduct");
-      }
-    } catch {
-      /* 마이그 미적용 — 처분 없음 */
-    }
-  }
+  await assertSettledExpenseSourcesUnchanged(docs.map(doc => String(doc.doc_id)), db);
+  const mealActions = await loadExpenseMealActions(db, docs.map(d => ({ docId: String(d.doc_id), formId: String(d.form_id) })));
+  // Settlement means a payment batch has been prepared, not bank execution.
+  // Do not offer its exact rows again through this separate reimbursement list.
+  const settledRefs = new Set(rowsToObjects(await db.exec("SELECT row_ref FROM expense_settlement_items")).map(r => String(r.row_ref)));
+  const offeredRefs = new Set<string>();
 
   const byEmp = new Map<string, ReimburseEmployee>();
   for (const doc of docs) {
@@ -96,7 +89,12 @@ export async function listReimbursements(from: string, to: string): Promise<Reim
       const amount = Math.round(Number(String(row.amount ?? "").replace(/[^0-9.-]/g, "")));
       if (!amount || amount <= 0) continue;
       const rowNo = rowIdx + 1;
-      const mealAction = mealActions.get(`${docId}|${rowNo}`) ?? null;
+      const receiptId = typeof row._receiptId === "string" && row._receiptId ? row._receiptId : null;
+      const rowRef = receiptId ? `receipt:${receiptId}` : `row:${docId}:${rowIdx}`;
+      const mealAction = expenseMealAction(mealActions, formId, docId, rowNo);
+      if (offeredRefs.has(rowRef)) throw Object.assign(new Error("동일 영수증이 여러 환급 행에 연결되어 있습니다. 원본 연결을 확인하세요."), { status: 409 });
+      offeredRefs.add(rowRef);
+      if (settledRefs.has(rowRef)) continue;
       const usedOn = /^\d{4}-\d{2}-\d{2}/.exec(String(row[spec.dateKey] ?? ""))?.[0] ?? null;
 
       const emp =

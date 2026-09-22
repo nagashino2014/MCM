@@ -1,3 +1,4 @@
+import { lockAccountingWrite } from "@/lib/finance/write-lock";
 // 전자세금계산서 발행 도메인 (P4 F5) — 프리필 · 발행 · 상태 갱신 · 취소
 // 발행 성공 시 기존 수금 모델을 그대로 갱신한다(milestone.invoice_issued/at/amount) → 미수금·발행요청 화면 무수정 호환.
 
@@ -189,6 +190,7 @@ export async function saveIssuerEmail(email: string, label: string | null, actor
   const address = email.trim();
   if (!/.+@.+\..+/.test(address)) throw Object.assign(new Error("이메일 형식이 아닙니다."), { status: 400 });
   await withDbWrite(async (db) => {
+    await lockAccountingWrite(db);
     await db.run(
       `INSERT INTO tax_invoice_issuer_emails (email, label, created_by)
        VALUES ($1, $2, $3)
@@ -200,6 +202,7 @@ export async function saveIssuerEmail(email: string, label: string | null, actor
 
 export async function deleteIssuerEmail(email: string): Promise<void> {
   await withDbWrite(async (db) => {
+    await lockAccountingWrite(db);
     await db.run(`DELETE FROM tax_invoice_issuer_emails WHERE email = $1`, [email.trim()]);
   });
 }
@@ -481,6 +484,7 @@ export async function issueTaxInvoice(params: IssueParams, actorUserId: string |
   const invoiceId = `ti-${createHash("sha256").update(mgtKey).digest("hex").slice(0, 12)}`;
   const now = KST_NOW();
   await withDbWrite(async (db) => {
+    await lockAccountingWrite(db);
     await db.run(
       `INSERT INTO tax_invoices
          (invoice_id, mgt_key, contract_id, milestone_id, direction, write_date,
@@ -539,6 +543,7 @@ export async function issueTaxInvoice(params: IssueParams, actorUserId: string |
 
   // 발행에 쓴 담당자 이메일을 최근 사용으로 올린다(목록 정렬용) — 저장된 주소가 아니면 아무 일도 하지 않는다.
   await withDbWrite(async (db) => {
+    await lockAccountingWrite(db);
     await db.run(`UPDATE tax_invoice_issuer_emails SET used_at = $2 WHERE email = $1`, [params.invoicer.email.trim(), now]);
   }).catch(() => {});
 
@@ -597,6 +602,7 @@ export async function refreshInvoiceStates(invoiceIds?: string[]): Promise<{ che
     try {
       const state = await getTaxInvoiceState(String(row.mgt_key));
       await withDbWrite(async (tx) => {
+    await lockAccountingWrite(tx);
         await tx.run(
           `UPDATE tax_invoices
               SET barobill_state = $2, nts_send_state = $3, nts_send_key = $4, nts_result = $5,
@@ -755,6 +761,7 @@ export async function issueModifiedTaxInvoice(params: ModifyParams, actorUserId:
   const invoiceId = `ti-${createHash("sha256").update(mgtKey).digest("hex").slice(0, 12)}`;
   const now = KST_NOW();
   await withDbWrite(async (tx) => {
+    await lockAccountingWrite(tx);
     await tx.run(
       `INSERT INTO tax_invoices
          (invoice_id, mgt_key, contract_id, milestone_id, direction, write_date,
@@ -810,6 +817,7 @@ export async function cancelTaxInvoice(invoiceId: string): Promise<void> {
   await deleteTaxInvoice(String(rows[0].mgt_key));
   const now = KST_NOW();
   await withDbWrite(async (tx) => {
+    await lockAccountingWrite(tx);
     await tx.run(`UPDATE tax_invoices SET canceled_at = $2, barobill_state = 5031, updated_at = $2 WHERE invoice_id = $1`, [invoiceId, now]);
     if (rows[0].milestone_id) {
       await tx.run(

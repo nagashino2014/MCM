@@ -6,6 +6,7 @@ import {
   createDraftLedger,
   deleteDraftLedger,
   recalcEntryTaxes,
+  reviewEntryTaxes,
   updateEntryLine,
 } from "@/lib/payroll/generate";
 
@@ -37,6 +38,14 @@ export async function POST(req: NextRequest) {
     if (action === "recalc-taxes") {
       if (!body.entryId) return NextResponse.json({ error: "entryId가 필요합니다." }, { status: 400 });
       await recalcEntryTaxes(String(body.entryId));
+      return NextResponse.json({ ok: true });
+    }
+    if (action === "review-taxes") {
+      if (!body.entryId || typeof body.incomeTax !== "number" || typeof body.localTax !== "number") {
+        return NextResponse.json({ error: "직원 행과 소득세·지방세 금액(0원 포함)을 모두 명시하세요." }, { status: 400 });
+      }
+      await reviewEntryTaxes({ entryId: String(body.entryId), incomeTax: body.incomeTax, localTax: body.localTax,
+        reason: String(body.reason ?? ""), expectedBasisHash: String(body.expectedBasisHash ?? "") }, ctx.userId);
       return NextResponse.json({ ok: true });
     }
     if (action === "confirm") {

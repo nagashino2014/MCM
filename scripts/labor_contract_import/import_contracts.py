@@ -347,7 +347,13 @@ def main() -> None:
             rank = ranks.get(pos or "", None)
             prev_rank = prev.get(eid)
             tag = "승진" if (kind == "promotion" or (prev_rank is not None and rank is not None and rank > prev_rank)) else "일반"
-            cur.execute("UPDATE labor_contracts SET tag=%s WHERE contract_id=%s", (tag, cid))
+            cur.execute(
+                """UPDATE labor_contracts SET tag=%s WHERE contract_id=%s
+                     AND status <> 'signed' AND signed_at IS NULL
+                     AND signatures = '{}'::jsonb AND signed_file_storage_key IS NULL
+                     AND signed_render_snapshot IS NULL""",
+                (tag, cid),
+            )
             if rank is not None:
                 prev[eid] = rank
         conn.commit()

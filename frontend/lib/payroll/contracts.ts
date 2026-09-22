@@ -1,4 +1,5 @@
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
+import { assertContractUnsigned, isContractSigned, lockContractForWrite } from "@/lib/payroll/contract-lock";
 
 /**
  * 근로계약 서버 쿼리 (PL-P2, docs/payroll-labor-contract-blueprint.md §4-2)
@@ -40,6 +41,8 @@ export interface LaborContractCard {
   note: string | null;
   confidence: string | null;
   hasFile: boolean;
+  readOnly: boolean;
+  needsOriginalVerification: boolean;
 }
 
 function toNum(v: unknown): number | null {
@@ -97,9 +100,10 @@ export async function listContracts(employeeId: string): Promise<LaborContractCa
     await db.exec(
       `SELECT contract_id, employee_id, kind, tag, contract_date, effective_from, effective_to,
               position_name, duty, first_hired_at, annual_salary, monthly_salary,
-              wage_components, probation, source, status, note,
+              wage_components, probation, source, status, note, signed_at, signatures,
+              signed_file_storage_key, signed_render_snapshot, file_storage_key,
               extraction_meta->>'confidence' AS confidence,
-              (file_storage_key IS NOT NULL)::int AS has_file
+              (file_storage_key IS NOT NULL OR signed_file_storage_key IS NOT NULL OR source = 'generated')::int AS has_file
          FROM labor_contracts
         WHERE employee_id = $1 AND status <> 'void'
         ORDER BY contract_date DESC NULLS LAST, created_at DESC`,
@@ -126,6 +130,9 @@ export async function listContracts(employeeId: string): Promise<LaborContractCa
     note: r.note ? String(r.note) : null,
     confidence: r.confidence ? String(r.confidence) : null,
     hasFile: Number(r.has_file ?? 0) === 1,
+    readOnly: isContractSigned(r),
+    needsOriginalVerification: isContractSigned(r) && !r.signed_render_snapshot && !r.signed_file_storage_key &&
+      !(r.source === "imported" && r.file_storage_key),
   }));
 }
 
@@ -147,6 +154,7 @@ export async function updateContract(
   }
 ): Promise<void> {
   await withDbWrite(async (db) => {
+    assertContractUnsigned(await lockContractForWrite(db, contractId));
     await db.exec(
       `UPDATE labor_contracts SET
          contract_date = COALESCE($2, contract_date),
@@ -182,20 +190,19 @@ export async function updateContract(
 
 /** 앱 생성 계약 개별 삭제(테스트·오기 제거) — generated & 미서명만. 라운드에 계약이 안 남으면 라운드도 정리. */
 export async function deleteContract(contractId: string): Promise<void> {
-  const db = await getDb();
-  const rows = rowsToObjects(
-    await db.exec(`SELECT source, status, round_id FROM labor_contracts WHERE contract_id = $1`, [contractId])
-  );
-  const r = rows[0];
-  if (!r) throw Object.assign(new Error("계약을 찾을 수 없습니다."), { status: 404 });
-  if (String(r.source) !== "generated") {
-    throw Object.assign(new Error("가져온(스캔) 계약은 삭제할 수 없습니다."), { status: 400 });
-  }
-  if (String(r.status) === "signed") {
-    throw Object.assign(new Error("서명 완료된 계약은 삭제할 수 없습니다."), { status: 400 });
-  }
-  const roundId = r.round_id ? String(r.round_id) : null;
   await withDbWrite(async (txn) => {
+    // 라운드 삭제/동기화와 같은 잠금 순서: 라운드 → 계약.
+    await txn.exec(
+      `SELECT round_id FROM labor_contract_rounds
+        WHERE round_id = (SELECT round_id FROM labor_contracts WHERE contract_id = $1) FOR UPDATE`,
+      [contractId]
+    );
+    const r = await lockContractForWrite(txn, contractId);
+    assertContractUnsigned(r);
+    if (String(r.source) !== "generated") {
+      throw Object.assign(new Error("가져온(스캔) 계약은 삭제할 수 없습니다."), { status: 400 });
+    }
+    const roundId = r.round_id ? String(r.round_id) : null;
     await txn.exec(`DELETE FROM labor_contracts WHERE contract_id = $1`, [contractId]);
     if (roundId) {
       await txn.exec(
@@ -216,7 +223,8 @@ export async function getContractFile(contractId: string): Promise<{
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT c.file_storage_bucket, c.file_storage_key, c.contract_date, p.name
+      `SELECT c.file_storage_bucket, c.file_storage_key, c.signed_file_storage_key,
+              c.status, c.signed_at, c.signatures, c.signed_render_snapshot, c.source, c.contract_date, p.name
          FROM labor_contracts c
          JOIN employee_profiles p ON p.employee_id = c.employee_id
         WHERE c.contract_id = $1`,
@@ -224,10 +232,17 @@ export async function getContractFile(contractId: string): Promise<{
     )
   );
   const r = rows[0];
-  if (!r || !r.file_storage_key) return null;
+  if (!r) return null;
+  // 서명 저장본을 최우선 사용한다. generated의 미서명 원본을 서명본으로 제공하지 않는다.
+  const key = r.signed_file_storage_key ??
+    (!isContractSigned(r) || r.source === "imported" ? r.file_storage_key : null);
+  if (!key) return null;
+  if (!r.file_storage_bucket) {
+    throw Object.assign(new Error("보존된 계약 원본의 저장 위치를 확인해야 합니다."), { status: 409 });
+  }
   return {
     bucket: String(r.file_storage_bucket),
-    key: String(r.file_storage_key),
-    fileName: `${r.name} 근로계약서(${r.contract_date ?? ""}).pdf`,
+    key: String(key),
+    fileName: `${r.name} 근로계약서(${r.contract_date ?? ""})${r.signed_file_storage_key ? "_서명본" : ""}.pdf`,
   };
 }

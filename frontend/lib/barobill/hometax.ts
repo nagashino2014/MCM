@@ -1,3 +1,4 @@
+import { lockAccountingWrite } from "@/lib/finance/write-lock";
 // 홈택스 매입매출조회 (TI.asmx 스크래핑 계열) — 블루프린트 P5 ①
 // API 실사(2026-08-17, dev.barobill.co.kr 레퍼런스 + testws TI.asmx WSDL):
 //   · 신청 = RegistTaxInvoiceScrapEx(CERTKEY, CorpNum, HometaxLoginMethod ID|CERT, HometaxID, HometaxPWD, ShortJuminNum)
@@ -249,6 +250,7 @@ export async function syncHometaxInvoices(range?: { fromMonth: string; toMonth: 
   if (requestedFrom !== fromMonth) result.clampedFrom = requestedFrom;
   const syncId = hashId("fs", `hometax:${Date.now()}`);
   await withDbWrite(async (db2) => {
+    await lockAccountingWrite(db2);
     await db2.run(
       `INSERT INTO finance_sync_logs (sync_id, kind, target_id, range_from, range_to, status, started_at)
        VALUES ($1, 'hometax', NULL, $2, $3, 'running', $4) ON CONFLICT (sync_id) DO NOTHING`,
@@ -266,6 +268,7 @@ export async function syncHometaxInvoices(range?: { fromMonth: string; toMonth: 
           result.fetched += rows.length;
           if (!rows.length) continue;
           await withDbWrite(async (tx) => {
+    await lockAccountingWrite(tx);
             for (const r of rows) {
               if (!r.ntsSendKey) continue;
               const res = await tx.exec(
@@ -324,6 +327,7 @@ export async function syncHometaxInvoices(range?: { fromMonth: string; toMonth: 
   }
 
   await withDbWrite(async (db2) => {
+    await lockAccountingWrite(db2);
     await db2.run(
       `UPDATE finance_sync_logs SET status = $2, fetched = $3, inserted = $4, error = NULLIF($5, ''), finished_at = $6 WHERE sync_id = $1`,
       [

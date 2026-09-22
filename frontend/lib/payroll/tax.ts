@@ -1,4 +1,4 @@
-import { getDb, rowsToObjects } from "@/lib/db";
+import { getDb, rowsToObjects, type PgDatabase } from "@/lib/db";
 
 /**
  * 급여 공제 산출 규칙 (PL-P4, scripts/payroll_import/EDI_ANALYSIS.md 실측 확정)
@@ -19,10 +19,11 @@ export const NON_TAXABLE_ITEMS = ["meal", "vehicle", "childcare", "overtime-meal
 export async function getInsuranceRate(
   kind: "ei" | "ltc" | "nps-max-age" | "ei-exempt-age",
   payYear: number,
-  payMonth: number
+  payMonth: number,
+  database?: PgDatabase
 ): Promise<number> {
   const ym = `${payYear}-${String(payMonth).padStart(2, "0")}`;
-  const db = await getDb();
+  const db = database ?? await getDb();
   const rows = rowsToObjects(
     await db.exec(
       `SELECT rate FROM payroll_insurance_rates
@@ -35,8 +36,8 @@ export async function getInsuranceRate(
 }
 
 /** 고용보험 = 과세급여 × 요율, 10원 미만 절사(실측 관례) */
-export async function calcEmploymentIns(taxableWage: number, payYear: number, payMonth: number): Promise<number> {
-  const rate = await getInsuranceRate("ei", payYear, payMonth);
+export async function calcEmploymentIns(taxableWage: number, payYear: number, payMonth: number, database?: PgDatabase): Promise<number> {
+  const rate = await getInsuranceRate("ei", payYear, payMonth, database);
   return Math.floor((taxableWage * rate) / 100 / 10) * 10;
 }
 
@@ -68,9 +69,10 @@ export async function lookupIncomeTax(
   monthlyTaxableWage: number,
   dependents: number,
   children: number,
-  ratePct: number
+  ratePct: number,
+  database?: PgDatabase
 ): Promise<IncomeTaxResult> {
-  const db = await getDb();
+  const db = database ?? await getDb();
   const dep = Math.min(11, Math.max(1, dependents));
   const rows = rowsToObjects(
     await db.exec(

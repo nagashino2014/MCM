@@ -40,6 +40,11 @@ import { ReimbursePanel } from "@/components/finance/ReimbursePanels";
 import { ExpenseSettlementPanel } from "@/components/finance/ExpenseSettlementPanel";
 import { IncomeLedgerPanel } from "@/components/finance/IncomeLedgerPanel";
 import { SeverancePanel } from "@/components/finance/SeverancePanel";
+import { TransactionLinkPanel } from "@/components/finance/TransactionLinkPanel";
+import { SupplyReviewPanel } from "@/components/finance/SupplyReviewPanel";
+import { CardMerchantCorrectionPanel, type MerchantCorrectionSummary } from "@/components/finance/CardMerchantCorrectionPanel";
+import { VatFilingBasisPanel } from "@/components/finance/VatFilingBasisPanel";
+import { VatFilingPostPanel } from "@/components/finance/VatFilingPostPanel";
 import "@/components/cdash/cdash.css";
 
 /** 최근 수집 로그 카드에 한 번에 보여줄 줄 수. */
@@ -47,13 +52,13 @@ const LOG_PAGE_SIZE = 10;
 
 type Tab =
   | "connections" | "bank" | "card" | "recon" | "vat" | "invoice" | "journal" | "ledger" | "trial" | "pnl" | "cash"
-  | "hometax" | "vatreturn" | "fixedassets" | "triplog" | "budget" | "withholding" | "balance" | "closing"
-  | "reimburse" | "shopreceipt" | "expsettle" | "incomeledger" | "severance";
+  | "hometax" | "vatreturn" | "vatbasis" | "vatpost" | "fixedassets" | "triplog" | "budget" | "withholding" | "balance" | "closing"
+  | "reimburse" | "shopreceipt" | "expsettle" | "incomeledger" | "severance" | "transactionlinks" | "supplyreviews";
 
 const TAB_KEYS: Tab[] = [
   "connections", "bank", "card", "recon", "vat", "invoice", "journal", "ledger", "trial", "pnl", "cash",
-  "hometax", "vatreturn", "fixedassets", "triplog", "budget", "withholding", "balance", "closing",
-  "reimburse", "shopreceipt", "expsettle", "incomeledger", "severance",
+  "hometax", "vatreturn", "vatbasis", "vatpost", "fixedassets", "triplog", "budget", "withholding", "balance", "closing",
+  "reimburse", "shopreceipt", "expsettle", "incomeledger", "severance", "transactionlinks", "supplyreviews",
 ];
 
 /** 사이드바 소메뉴 = 탭 그룹. 소메뉴 진입 시 첫 탭이 열린다(menu.ts 의 href 와 짝). */
@@ -61,9 +66,9 @@ const TAB_GROUPS: Array<{ title: string; tabs: [Tab, string][] }> = [
   { title: "연결 관리", tabs: [["connections", "연결 관리"]] },
   // 경비 환급(§2) — 개인 지출 환급 이체 목록(불지급 처분 자동 제외). 이체 실행은 수동.
   { title: "계좌·카드 원장", tabs: [["bank", "계좌 원장"], ["card", "법인카드 원장"], ["reimburse", "경비 환급"]] },
-  { title: "계산서·수금", tabs: [["invoice", "세금계산서"], ["recon", "수금 대조"]] },
+  { title: "계산서·수금", tabs: [["invoice", "세금계산서"], ["recon", "수금 대조"], ["transactionlinks", "거래 연결"], ["supplyreviews", "공급 근거 기록"]] },
   // 부가세 신고(P5) — 카드 매입 집계 + 홈택스 매입·매출 계산서 + 신고서 자동 작성(accounting-expansion §5 P5).
-  { title: "부가세 신고", tabs: [["vat", "카드 매입 집계"], ["shopreceipt", "쇼핑몰 전표 수집"], ["hometax", "매입·매출 계산서"], ["vatreturn", "신고서"], ["withholding", "원천세"], ["incomeledger", "소득대장"]] },
+  { title: "부가세 신고", tabs: [["vat", "카드 매입 집계"], ["shopreceipt", "쇼핑몰 전표 수집"], ["hometax", "매입·매출 계산서"], ["vatbasis", "신고 근거"], ["vatreturn", "신고서"], ["vatpost", "접수·납부"], ["withholding", "원천세"], ["incomeledger", "소득대장"]] },
   // 전표·장부(P3) — 자동분개 파생 계층. 회계 관리자 전용(설계: accounting-expansion-blueprint §5 P3).
   { title: "전표·장부", tabs: [["journal", "분개장"], ["ledger", "계정별원장"], ["trial", "시산표·백테스트"]] },
   // 손익·자금(P4) + 결산(P9) — 전표 파생 관리 손익·자금수지·재무상태표·연차 마감.
@@ -284,11 +289,13 @@ export function FinanceBoard() {
   const { theme } = useCdashTheme();
   const searchParams = useSearchParams();
   const [tab, setTab] = useState<Tab>(() => toTab(searchParams.get("tab")));
+  const [requestedBasisSnapshotId, setRequestedBasisSnapshotId] = useState("");
 
   // 사이드바 서브메뉴(/finance?tab=...)로 진입 시 페이지가 리마운트되지 않고 쿼리만 바뀐다
   // → 쿼리 변경을 탭 상태에 동기화(누락 시 서브메뉴 클릭이 무반응으로 보이는 버그).
   useEffect(() => {
     setTab(toTab(searchParams.get("tab")));
+    setRequestedBasisSnapshotId("");
   }, [searchParams]);
 
   // 사이드바 소메뉴 단위로 화면을 나눈다 — 탭은 소메뉴 안에 2개 이상일 때만 쓴다.
@@ -304,9 +311,10 @@ export function FinanceBoard() {
           <CdTabs<Tab>
             className="mb-4"
             active={tab}
-            onChange={setTab}
+            onChange={key => { setRequestedBasisSnapshotId(""); setTab(key); }}
             items={group.tabs.map(([k, label]) => ({ key: k, label }))}
           />
+
         )}
 
         {tab === "connections" && <ConnectionsPanel />}
@@ -314,10 +322,14 @@ export function FinanceBoard() {
         {tab === "card" && <CardLedgerPanel />}
         {tab === "reimburse" && <ReimbursePanel />}
         {tab === "recon" && <ReconPanel />}
+        {tab === "transactionlinks" && <TransactionLinkPanel />}
+        {tab === "supplyreviews" && <SupplyReviewPanel />}
         {tab === "vat" && <VatPanel />}
         {tab === "shopreceipt" && <ReceiptCollectPanel />}
         {tab === "hometax" && <HometaxPanel />}
-        {tab === "vatreturn" && <VatReturnPanel />}
+        {tab === "vatbasis" && <VatFilingBasisPanel onOpenBasis={basisSnapshotId => { setRequestedBasisSnapshotId(basisSnapshotId); setTab("vatreturn"); }} />}
+        {tab === "vatpost" && <VatFilingPostPanel />}
+        {tab === "vatreturn" && <VatReturnPanel requestedBasisSnapshotId={requestedBasisSnapshotId} />}
         {tab === "withholding" && <WithholdingPanel />}
         {tab === "balance" && <BalanceSheetPanel />}
         {tab === "closing" && <ClosingPanel />}
@@ -1401,6 +1413,7 @@ interface CardTxn {
   storeName: string | null;
   storeBizType: string | null;
   storeCorpNum: string | null;
+  merchantCorrection?: MerchantCorrectionSummary;
   isPurchased: boolean;
   categoryKey: string | null;
   categorySource: string | null;
@@ -1439,6 +1452,7 @@ function CardLedgerPanel() {
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [bulkKey, setBulkKey] = useState("");
   const [ruleTarget, setRuleTarget] = useState<CardTxn | null>(null); // 가맹점 고정 규칙 모달 대상
+  const [merchantTarget, setMerchantTarget] = useState<CardTxn | null>(null);
   const [busy, setBusy] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const limit = 50;
@@ -1695,9 +1709,10 @@ function CardLedgerPanel() {
                 <td className="py-1.5 pr-3 whitespace-nowrap">{r.cardLabel}</td>
                 <td className="py-1.5 pr-3 text-right font-medium whitespace-nowrap">{fmtAmount(r.amountTotal)}</td>
                 <td className="py-1.5 pr-3 text-right whitespace-nowrap cd-text-muted">{r.taxAmount != null ? fmtAmount(r.taxAmount) : ""}</td>
-                <td className="py-1.5 pr-3 max-w-[200px] truncate" title={r.storeName ?? ""}>
-                  {r.storeName ?? ""}
-                  {r.docId && <span className="ml-1 text-[10px] cd-text-faint">결의서</span>}
+                <td className="py-1.5 pr-3 max-w-[240px]" title={r.storeName ?? ""}>
+                  <div className="truncate">{r.storeName ?? ""}{r.docId && <span className="ml-1 text-[10px] cd-text-faint">결의서</span>}</div>
+                  {r.merchantCorrection ? <div className="text-xs cd-text-muted mt-1 space-y-1"><div>원본 {r.merchantCorrection.originalCorpNum ? fmtCorpNum(r.merchantCorrection.originalCorpNum) : "번호 없음"}</div><div>적용 {r.merchantCorrection.effectiveCorpNum ? fmtCorpNum(r.merchantCorrection.effectiveCorpNum) : "번호 없음"}<span className={`ml-1 cd-pill ${r.merchantCorrection.status === "review_required" ? "cd-pill-warn" : "cd-pill-info"}`}>{r.merchantCorrection.status === "corrected" ? "정정" : r.merchantCorrection.status === "original" ? "원본" : "재검토"}</span></div></div> : <div className="text-xs cd-text-muted mt-1">수집 원본 {r.storeCorpNum ? fmtCorpNum(r.storeCorpNum) : "번호 없음"}</div>}
+                  <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm mt-1" onClick={() => setMerchantTarget(r)}>사업자번호 정정</button>
                 </td>
                 <td className="py-1.5 pr-3 text-xs cd-text-muted">{r.storeBizType ?? ""}</td>
                 <td className="py-1.5 pr-3">
@@ -1727,8 +1742,8 @@ function CardLedgerPanel() {
                   </div>
                 </td>
                 <td className="py-1.5">
-                  <span className={`cd-pill ${(r.vatDeductible ?? 1) === 1 ? "cd-pill-success" : "cd-pill-warn"}`}>
-                    {(r.vatDeductible ?? 1) === 1 ? "공제" : "불공제"}
+                  <span className={`cd-pill ${r.vatDeductible === 1 ? "cd-pill-success" : "cd-pill-warn"}`}>
+                    {r.vatDeductible === 1 ? "공제" : r.vatDeductible === 0 ? "불공제" : "미판정"}
                   </span>
                 </td>
               </tr>
@@ -1753,6 +1768,7 @@ function CardLedgerPanel() {
           setReloadKey((k) => k + 1);
         }}
       />
+      {merchantTarget && <CardMerchantCorrectionPanel key={merchantTarget.cardTxnId} cardTxnId={merchantTarget.cardTxnId} storeName={merchantTarget.storeName} onClose={() => setMerchantTarget(null)} onSaved={() => setReloadKey(k => k + 1)} />}
     </div>
   );
 }
@@ -2591,6 +2607,9 @@ interface VatRow {
   taxAmount: number;
   deductibleTax: number;
   nonDeductibleTax: number;
+  undecidedTax: number;
+  undecidedCount: number;
+  linkedTax?: number;
 }
 
 // 분기 프리셋 — 부가세 신고 단위(1~4분기). 확정 신고는 반기지만 실무 집계는 분기 단위가 편하다.
@@ -2610,6 +2629,7 @@ function VatPanel() {
   const [rows, setRows] = useState<VatRow[]>([]);
   const [totals, setTotals] = useState<Omit<VatRow, "categoryKey" | "categoryLabel"> | null>(null);
   const [unclassified, setUnclassified] = useState(0);
+  const [blockingIssues, setBlockingIssues] = useState<Array<{ cardTxnId: string; reason: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -2626,6 +2646,7 @@ function VatPanel() {
         setRows(data.summary?.rows ?? []);
         setTotals(data.summary?.totals ?? null);
         setUnclassified(data.summary?.unclassified ?? 0);
+        setBlockingIssues(data.summary?.blockingIssues ?? []);
       } catch (err) {
         if (alive) setError((err as Error).message);
       } finally {
@@ -2671,11 +2692,17 @@ function VatPanel() {
         </a>
       </div>
       <div className="text-xs cd-text-muted mb-3">
-        {range.from} ~ {range.to} · 승인 건 기준(취소·제외 건 제외)
+        {range.from} ~ {range.to} · 승인·취소를 부호와 신고 귀속일 기준으로 집계 · 제외 건 제외
         {unclassified > 0 && (
           <span className="ml-2 cd-pill cd-pill-warn">미분류 {unclassified}건 — 법인카드 원장에서 분류하세요</span>
         )}
       </div>
+      {(totals?.undecidedCount ?? 0) > 0 && <div className="cd-pill cd-pill-warn mb-2">검토 필요 {totals!.undecidedCount}건 — 부가세 신고서의 카드 검토에서 사유와 증빙을 확인하세요.</div>}
+      {blockingIssues.length > 0 && <div role="alert" className="cd-warn-text text-sm mb-3">
+        <p>신고 전 확인할 사유 {blockingIssues.length}건</p>
+        <ul className="list-disc pl-5 mt-1">{blockingIssues.map((issue, index) => <li key={`${issue.cardTxnId}:${index}`}>{issue.reason}</li>)}</ul>
+      </div>}
+      <p className="text-xs cd-text-muted mb-3">계산서로 반영한 세액은 카드 공제에서 제외하며 계산서의 공제 판정에 따릅니다.</p>
       {error && <div className="cd-error-text text-sm mb-2">{error}</div>}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -2687,7 +2714,8 @@ function VatPanel() {
               <th className="py-1.5 pr-3 font-normal text-right">공급가액</th>
               <th className="py-1.5 pr-3 font-normal text-right">부가세</th>
               <th className="py-1.5 pr-3 font-normal text-right">공제 대상</th>
-              <th className="py-1.5 font-normal text-right">불공제</th>
+              <th className="py-1.5 font-normal text-right">불공제</th><th className="py-1.5 font-normal text-right">미판정</th>
+              <th className="py-1.5 font-normal text-right">계산서로 반영</th>
             </tr>
           </thead>
           <tbody>
@@ -2699,7 +2727,8 @@ function VatPanel() {
                 <td className="py-1.5 pr-3 text-right cd-text-muted">{fmtAmount(r.supplyAmount)}</td>
                 <td className="py-1.5 pr-3 text-right">{fmtAmount(r.taxAmount)}</td>
                 <td className="py-1.5 pr-3 text-right" style={{ color: "var(--cd-success)" }}>{fmtAmount(r.deductibleTax)}</td>
-                <td className="py-1.5 text-right" style={{ color: "var(--cd-warning)" }}>{fmtAmount(r.nonDeductibleTax)}</td>
+                <td className="py-1.5 text-right" style={{ color: "var(--cd-warning)" }}>{fmtAmount(r.nonDeductibleTax)}</td><td className="py-1.5 text-right">{fmtAmount(r.undecidedTax)}</td>
+                <td className="py-1.5 text-right">{fmtAmount(r.linkedTax ?? 0)}</td>
               </tr>
             ))}
             {totals && rows.length > 0 && (
@@ -2710,12 +2739,13 @@ function VatPanel() {
                 <td className="py-2 pr-3 text-right">{fmtAmount(totals.supplyAmount)}</td>
                 <td className="py-2 pr-3 text-right">{fmtAmount(totals.taxAmount)}</td>
                 <td className="py-2 pr-3 text-right" style={{ color: "var(--cd-success)" }}>{fmtAmount(totals.deductibleTax)}</td>
-                <td className="py-2 text-right" style={{ color: "var(--cd-warning)" }}>{fmtAmount(totals.nonDeductibleTax)}</td>
+                <td className="py-2 text-right" style={{ color: "var(--cd-warning)" }}>{fmtAmount(totals.nonDeductibleTax)}</td><td className="py-2 text-right">{fmtAmount(totals.undecidedTax)}</td>
+                <td className="py-2 text-right">{fmtAmount(totals.linkedTax ?? 0)}</td>
               </tr>
             )}
             {!loading && rows.length === 0 && (
               <tr>
-                <td colSpan={7} className="py-6 text-center cd-text-muted text-sm">해당 기간 매입 내역이 없습니다.</td>
+                <td colSpan={9} className="py-6 text-center cd-text-muted text-sm">해당 기간 매입 내역이 없습니다.</td>
               </tr>
             )}
           </tbody>

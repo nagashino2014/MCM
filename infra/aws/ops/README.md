@@ -138,3 +138,9 @@ NAT Gateway 는 비용 절감을 위해 **제거**했다(2026-07-02). 대신:
 ## 참고: 이미 정리한 것
 - 도쿄(ap-northeast-1) `futureops-proxy-aws` t3.micro(방치된 코인거래앱 마이그레이션 잔재) **종료 + EIP 해제 완료**
   (2026-07-02). 월 ~$14 절감. futureops 재마이그레이션은 차후 서울 리전으로 진행 예정.
+
+## 재무 정의 SQL 적용 경계
+
+재무 SQL 226~264의 정의 변경은 `accounting-definition-migrations.json`에 등록되어 있다. 해당 SQL은 `staging-apply-migrations.ps1 -AccountingMaintenance -Files <검토한 파일>` 경로에서만 적용한다. 이 절차가 스케줄 정지, 앱 연결 배출, 단일 세션 적용과 복구 표식을 함께 관리한다. 중단 표식이 남았으면 새 SQL을 적용하지 말고 `-RecoverAccountingMaintenance` 절차로 먼저 복구한다.
+
+이 통합 후보는 코드와 설치 계약을 main에 맞춘 것이며 스테이징 DB에 SQL을 적용한 상태가 아니다. 265번 DB 역할·GRANT SQL과 R0B 런타임 역할 전환은 별도 작업으로 보류한다. 이후 다른 설치 주체가 새 표를 만들면 역할 권한은 R0B의 265 재적용과 증명 검사를 거쳐야 한다.

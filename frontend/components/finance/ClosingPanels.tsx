@@ -5,7 +5,7 @@
 // - ClosingPanel: 결산 점검(확정 대기·가지급/가수 잔액) + 세무조정 후보 + 연차 마감/재개 + 결산 자료 xlsx.
 // FinanceBoard 의 소메뉴 "손익·자금" 그룹에서 렌더된다(JournalPanels 스타일 관례 동일).
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Check, Download, Lock, RefreshCw, Undo2 } from "lucide-react";
 
 const won = (n: number) => n.toLocaleString("ko-KR");
@@ -41,25 +41,60 @@ interface ClosingStatusData {
   suspenseOut: number;
   suspenseIn: number;
   balanceSheet: BalanceSheetData;
+  snapshotBalanceSheet?: BalanceSheetData | null;
+  completeness?: {
+    status: "verified" | "incomplete" | "verificationUnavailable";
+    canClose: boolean;
+    verificationUnavailable: boolean;
+    issues: { code: string; sourceId: string; message: string }[];
+    checkedAt: string;
+    scope: "g03b-r0";
+  };
 }
 
 function useClosingStatus(year: number) {
   const [data, setData] = useState<ClosingStatusData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const request = useRef<AbortController | null>(null);
   const load = useCallback(() => {
+    request.current?.abort();
+    const controller = new AbortController();
+    request.current = controller;
     setLoading(true);
-    fetch(`/api/finance/closing?year=${year}`, { cache: "no-store" })
-      .then((res) => res.json())
-      .then((d) => {
-        if (d.error) setError(String(d.error));
-        else setData(d);
+    setData(null);
+    setError(null);
+    fetch(`/api/finance/closing?year=${year}`, { cache: "no-store", signal: controller.signal })
+      .then(async (res) => {
+        const result = await res.json();
+        if (!res.ok || result.error) throw new Error(result.error ?? "결산 점검 결과를 불러오지 못했습니다.");
+        if (result.year !== year) throw new Error("조회한 연도의 점검 결과가 일치하지 않습니다. 다시 조회하세요.");
+        return result;
       })
-      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
-      .finally(() => setLoading(false));
+      .then((d) => {
+        if (!controller.signal.aborted) setData(d);
+      })
+      .catch((err) => { if (!controller.signal.aborted) setError(err instanceof Error ? err.message : String(err)); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
   }, [year]);
-  useEffect(load, [load]);
-  return { data, loading, error, load };
+  useEffect(() => { load(); return () => request.current?.abort(); }, [load]);
+  return { data: data?.year === year ? data : null, loading, error, load };
+}
+
+function CompletenessNotice({ data }: { data: ClosingStatusData }) {
+  const check = data.completeness;
+  const unavailable = !check || check.verificationUnavailable;
+  const incomplete = unavailable || check.status !== "verified";
+  return <section aria-label="결산 원천자료 점검" role="status" className="mb-3 p-3 rounded border cd-border-c space-y-2">
+    <p className="text-sm font-semibold">{unavailable ? "원천자료 검증 불가" : incomplete ? "원천자료 검토 미완료" : "원천자료 점검 완료"}</p>
+    <p className="text-sm">{incomplete
+      ? "대차가 일치하거나 확정 대기 전표가 없어도, 아래 검토를 마치기 전에는 새로 마감할 수 없습니다."
+      : "연결·인식 근거와 관리 대상 전표의 원천을 점검했습니다. 이 결과만으로 결산·세무 검토 전체가 완료된 것은 아닙니다."}</p>
+    {unavailable && <p className="text-sm">점검에 필요한 자료 또는 검증 기능을 사용할 수 없습니다. 담당자가 원인을 해결한 뒤 다시 조회하세요.</p>}
+    {!!check?.issues.length && <ul className="text-sm space-y-1">{check.issues.slice(0, 25).map((issue, index) => <li key={`${issue.code}:${issue.sourceId}:${index}`}>{issue.message}{issue.sourceId && <span className="text-xs cd-text-muted"> · 자료 {issue.sourceId}</span>}</li>)}</ul>}
+    {(check?.issues.length ?? 0) > 25 && <p className="text-sm">나머지 {check!.issues.length - 25}건은 결산 자료 엑셀에서 확인하세요.</p>}
+    {data.status === "closed" && <p className="text-xs cd-text-muted">이미 저장된 마감 자료는 보존됩니다. 위 점검은 현재 원천자료의 상태입니다.</p>}
+  </section>;
 }
 
 // ─────────────────────────────────────────────
@@ -73,7 +108,7 @@ export function BalanceSheetPanel() {
   const [editCode, setEditCode] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
 
-  const bs = data?.balanceSheet ?? null;
+  const bs = data?.status === "closed" ? data.snapshotBalanceSheet ?? data.balanceSheet : data?.balanceSheet ?? null;
 
   const saveOpening = async (accountCode: string, amountText: string) => {
     setBusy(true);
@@ -133,7 +168,7 @@ export function BalanceSheetPanel() {
     <div className="cd-card p-4">
       <div className="flex items-center gap-2 flex-wrap mb-2">
         <div className="cd-card-title mr-auto">재무상태표 — {year}년 말 기준</div>
-        <select className="cd-select" value={year} onChange={(e) => setYear(Number(e.target.value))}>
+        <select aria-label="재무상태표 연도" className="cd-select" value={year} onChange={(e) => setYear(Number(e.target.value))}>
           {[thisYear() - 1, thisYear()].map((y) => (
             <option key={y} value={y}>{y}년</option>
           ))}
@@ -148,10 +183,12 @@ export function BalanceSheetPanel() {
       {bs && !bs.hasOpening && (
         <div className="text-sm mb-2 flex items-center gap-1.5">
           <AlertTriangle className="w-4 h-4" style={{ color: "var(--cd-warning,#FFAE1F)" }} />
-          기초 잔액이 없습니다 — 당기 발생분만 표시 중. 세무법인 전기(전년도) 재무상태표의 계정별 잔액을 "기초" 클릭으로 입력하면 완전한 재무상태표가 됩니다.
+          기초 잔액이 없어 당기 발생분만 표시합니다. 전기 재무상태표의 계정별 잔액을 인수하고 원천자료 검토를 마쳐야 합니다.
         </div>
       )}
-      {error && <div className="cd-error-text text-sm mb-2">{error}</div>}
+      {error && <div role="alert" className="cd-error-text text-sm mb-2">{error}</div>}
+      {data && <CompletenessNotice data={data} />}
+      {data?.status === "closed" && <p className="text-sm mb-2">{data.snapshotBalanceSheet ? "재무상태표는 마감 당시 저장본입니다." : "마감 당시 재무상태표 저장본을 확인할 수 없어 현재 장부를 표시합니다."}</p>}
       {bs && (
         <>
           {section("자산", bs.assets, 1, bs.assetTotal)}
@@ -190,6 +227,8 @@ export function ClosingPanel() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [reopenReason, setReopenReason] = useState("");
+  useEffect(() => setReopenReason(""), [year]);
 
   useEffect(() => {
     fetch(`/api/finance/closing?year=${year}&view=adjustments`, { cache: "no-store" })
@@ -206,14 +245,16 @@ export function ClosingPanel() {
       const res = await fetch("/api/finance/closing", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, year }),
+        body: JSON.stringify({ action, year, ...(action === "reopen" ? { reason: reopenReason } : {}) }),
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.error ?? `HTTP ${res.status}`);
       setNotice(ok);
+      setReopenReason("");
       load();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err));
+      load();
     } finally {
       setBusy(false);
     }
@@ -225,7 +266,7 @@ export function ClosingPanel() {
     <div className="cd-card p-4">
       <div className="flex items-center gap-2 flex-wrap mb-2">
         <div className="cd-card-title mr-auto">결산 — 연차 마감·세무조정 후보</div>
-        <select className="cd-select" value={year} onChange={(e) => setYear(Number(e.target.value))}>
+        <select aria-label="결산 연도" className="cd-select" disabled={busy} value={year} onChange={(e) => { setYear(Number(e.target.value)); setNotice(null); setActionError(null); }}>
           {[thisYear() - 1, thisYear()].map((y) => (
             <option key={y} value={y}>{y}년</option>
           ))}
@@ -233,7 +274,7 @@ export function ClosingPanel() {
         {closed ? (
           <>
             <span className="cd-pill cd-pill-success"><Lock className="w-3 h-3 inline mr-0.5" /> 마감됨 {data?.closedAt?.slice(0, 10)}</span>
-            <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy} onClick={() => void act("reopen", "마감을 해제했습니다 — 전표 재생성이 다시 가능합니다.")}>
+            <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy || !reopenReason.trim()} onClick={() => void act("reopen", "마감을 해제했습니다 — 전표와 기초 잔액을 수정할 수 있습니다.")}>
               <Undo2 className="w-3.5 h-3.5" /> 마감 해제
             </button>
           </>
@@ -241,20 +282,28 @@ export function ClosingPanel() {
           <button
             type="button"
             className="cd-btn cd-btn-primary cd-btn-sm"
-            disabled={busy || loading}
-            title="마감하면 해당 연도 전표 재생성이 잠기고 재무제표 스냅이 보존됩니다"
-            onClick={() => void act("close", "연차 마감했습니다 — 재무제표 스냅이 보존되고 전표 재생성이 잠깁니다.")}
+            disabled={busy || loading || !!error || !data?.completeness?.canClose}
+            title="마감하면 해당 연도 전표와 기초 잔액의 변경이 잠기고 재무제표 스냅이 보존됩니다"
+            onClick={() => void act("close", "연차 마감했습니다 — 재무제표 스냅이 보존되고 전표와 기초 잔액의 변경이 잠깁니다.")}
           >
             <Check className="w-3.5 h-3.5" /> {year}년 마감
           </button>
         )}
+        <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy || loading} onClick={load}><RefreshCw className="w-3.5 h-3.5" /> 다시 점검</button>
       </div>
+      {closed && (
+        <label className="block text-sm mb-3">
+          마감 해제 사유
+          <input className="cd-input mt-1 w-full" value={reopenReason} maxLength={1000} onChange={(event) => setReopenReason(event.target.value)} placeholder="어떤 자료를 수정해야 하는지 입력하세요." disabled={busy} />
+        </label>
+      )}
       <div className="text-xs cd-text-muted mb-3">
-        마감 전 점검: 확정 대기 전표와 가지급·가수 잔액을 정리하세요(확정 대기가 남아 있으면 마감이 거부됩니다 — T3).
-        세무조정 후보는 자동 감지이며 최종 판단은 신고 시 검토합니다. 법인세 조정·신고는 첫 사이클 세무사 검토 병행(§5 P9-⑤).
+        마감 전 확정 대기 전표, 원천자료 검토 항목과 가지급·가수 잔액을 정리하세요.
+        세무조정 후보는 자동 감지 결과이므로 신고 전에 근거와 적용 여부를 검토해야 합니다.
       </div>
-      {(error || actionError) && <div className="cd-error-text text-sm mb-2">{actionError ?? error}</div>}
+      {(error || actionError) && <div role="alert" className="cd-error-text text-sm mb-2">{actionError ?? error}</div>}
       {notice && <div className="text-sm mb-2" style={{ color: "var(--cd-success,#13DEB9)" }}>{notice}</div>}
+      {data && <CompletenessNotice data={data} />}
 
       {data && (
         <div className="flex gap-2 flex-wrap mb-3">

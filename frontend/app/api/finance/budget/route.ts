@@ -36,7 +36,8 @@ export async function POST(req: NextRequest) {
     await requirePermission("finance.manage");
     const body = (await req.json().catch(() => ({}))) as PostBody;
     if (body.action === "save") {
-      if (!body.year || !body.categoryKey || !(Number(body.amount) >= 0)) {
+      if (typeof body.year !== "number" || typeof body.categoryKey !== "string"
+        || typeof body.amount !== "number") {
         return NextResponse.json({ error: "연도·계정과목·금액이 필요합니다." }, { status: 400 });
       }
       const budgetId = await saveBudgetLine({

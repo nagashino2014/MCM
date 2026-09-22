@@ -1,0 +1,177 @@
+{
+  "version": "accounting-definition-maintenance-v9",
+  "files": [
+    "001_initial_schema.sql",
+    "155_payroll_core.sql",
+    "161_payroll_p4_core.sql",
+    "162_payroll_insurance_rates.sql",
+    "163_payroll_special_relation.sql",
+    "164_payroll_statement_send.sql",
+    "170_barobill_finance.sql",
+    "171_finance_logos.sql",
+    "173_card_store_rules.sql",
+    "178_journal_core.sql",
+    "179_hometax_vat.sql",
+    "180_rental_deposits.sql",
+    "185_fiscal_closing.sql",
+    "186_card_expense_kind.sql",
+    "187_contact_dept_types.sql",
+    "197_card_slip_pdf.sql",
+    "223_employee_self_service.sql",
+    "226_journal_source_snapshots.sql",
+    "227_transaction_links.sql",
+    "228_card_merchant_corrections.sql",
+    "229_vat_filing_basis.sql",
+    "230_vat_return_basis.sql",
+    "231_vat_filing_documents.sql",
+    "232_vat_filing_post_events.sql",
+    "233_vat_followup_reviews.sql",
+    "234_vat_finalization_boundary.sql",
+    "235_vat_taxpayer_boundary.sql",
+    "236_vat_followup_consumption.sql",
+    "237_vat_post_return_v2.sql",
+    "238_payroll_tax_review.sql",
+    "239_labor_signed_snapshot.sql",
+    "240_r1_definition_prerequisites.sql",
+    "241_recognition_reviews.sql",
+    "242_yearend_rule_policies.sql",
+    "243_card_tax_reviews.sql",
+    "244_supply_review_records.sql",
+    "245_supply_document_registry.sql",
+    "247_supply_same_reviews.sql",
+    "255_supply_group_reviews.sql",
+    "256_supply_group_access.sql",
+    "257_supply_vat_consumption.sql",
+    "258_supply_vat_registry_identity.sql",
+    "260_card_identity_currentness.sql",
+    "263_journal_use.sql",
+    "264_document_builtin_binding.sql"
+  ],
+  "contracts": [
+    "frontend/lib/finance/vat-use-definition-contract.json",
+    "frontend/lib/finance/recognition-definition-contract.json",
+    "frontend/lib/finance/journal-use-definition-contract.json",
+    "frontend/lib/finance/supply-document-definition-contract.json",
+    "frontend/lib/finance/supply-review-definition-contract.json",
+    "frontend/lib/finance/supply-same-definition-contract.json",
+    "frontend/lib/finance/supply-group-definition-contract.json"
+  ],
+  "protectedIndexes": [
+    "finance_group_members_portion_revision_idx",
+    "finance_journal_use_entry_representative_idx",
+    "finance_supply_review_subject_idx",
+    "finance_vat_use_dependency_reverse_idx",
+    "finance_vat_use_effect_document_idx",
+    "finance_vat_use_effect_source_idx",
+    "idx_audit_log_action",
+    "idx_audit_log_actor",
+    "idx_audit_log_target",
+    "idx_card_txn_card_at",
+    "idx_card_txn_category",
+    "idx_card_txn_doc",
+    "idx_card_txn_expense_kind",
+    "idx_card_txn_slip_pending",
+    "idx_card_txn_store",
+    "idx_card_txn_store_name_norm",
+    "idx_card_txn_type",
+    "idx_finance_sync_logs_kind",
+    "idx_hometax_ti_dir_date",
+    "idx_hometax_ti_invoicer",
+    "idx_journal_entries_date",
+    "idx_journal_entries_status",
+    "idx_journal_lines_account",
+    "idx_journal_lines_entry",
+    "idx_payroll_edi_notices_ym",
+    "idx_payroll_entries_employee",
+    "idx_payroll_entries_ledger",
+    "idx_payroll_entries_name",
+    "idx_payroll_entries_stmt_sent",
+    "idx_payroll_entry_lines_entry",
+    "idx_payroll_entry_lines_item",
+    "idx_payroll_ledgers_ym",
+    "idx_payroll_pay_rules_emp",
+    "idx_tax_invoices_contract",
+    "idx_tax_invoices_milestone",
+    "idx_transaction_links_invoice",
+    "idx_transaction_links_left",
+    "uq_transaction_links_active_pair",
+    "vat_filing_documents_subject_idx",
+    "vat_filing_fact_protection_idx",
+    "vat_filing_snapshot_protection_idx",
+    "vat_followup_review_pair_source_idx",
+    "vat_followup_review_period_idx",
+    "vat_post_alloc_notice",
+    "vat_post_alloc_return",
+    "vat_post_events_subject"
+  ],
+  "baselineDefinitions": [
+    {
+      "file": "001_initial_schema.sql",
+      "canonicalSha256": "56b09f87ba45778943f9eb79c6734b2f516193cd98aab9f6d7c3b181b459e4d8"
+    },
+    {
+      "file": "155_payroll_core.sql",
+      "canonicalSha256": "76c5261292920875ab839b648d3ae073caea397a6b56f988ac1ffab32468c24c"
+    },
+    {
+      "file": "161_payroll_p4_core.sql",
+      "canonicalSha256": "5e865f7efea8b9f0d809458249872ed0e44c3cd0c73a480c2cecba0d610f3639"
+    },
+    {
+      "file": "162_payroll_insurance_rates.sql",
+      "canonicalSha256": "6dd38aa0fbbb62ec3d19af6d52b4caa8dfc4e5a3f3ec5cf789350535017e58be"
+    },
+    {
+      "file": "163_payroll_special_relation.sql",
+      "canonicalSha256": "8a3f9691cdc8b08c6ca5c20ca7c58fed71b738b060216dcc48641a61a08c67a9"
+    },
+    {
+      "file": "164_payroll_statement_send.sql",
+      "canonicalSha256": "d97406b853b83e3b9a82c96e4cef13a8dce01d414715dd045aa6f10709c32365"
+    },
+    {
+      "file": "170_barobill_finance.sql",
+      "canonicalSha256": "e5539558c3d3e2f33524761b2c90fe524b28ed04f7f1be567fb538ea130d1cac"
+    },
+    {
+      "file": "171_finance_logos.sql",
+      "canonicalSha256": "8ad92c606d682dfeb2105578c717a788edbe4c186df6ed42d84a489cef7b4ff6"
+    },
+    {
+      "file": "173_card_store_rules.sql",
+      "canonicalSha256": "8e64f262abe27080d718df665d7724895327eeeb8db93fb3e0d1c66bfb8e5035"
+    },
+    {
+      "file": "178_journal_core.sql",
+      "canonicalSha256": "1a1c0c7b32741b78ad1941596fe33012e715e09575d23c2c7ec5cc9d9338da5d"
+    },
+    {
+      "file": "179_hometax_vat.sql",
+      "canonicalSha256": "535cab4446ae47e17e07c058a1d42045504e6ea9897be79527c9cffa2ca73b7d"
+    },
+    {
+      "file": "180_rental_deposits.sql",
+      "canonicalSha256": "f4957064b5e464e455aba267259f33816726e2d1294722ac3a97108786494968"
+    },
+    {
+      "file": "185_fiscal_closing.sql",
+      "canonicalSha256": "801ef72348ff73e328e5bdf5bfd1c417ecc2a103fdcef7112ab118b62be8d7c5"
+    },
+    {
+      "file": "186_card_expense_kind.sql",
+      "canonicalSha256": "84ba5f7730be4227d5c38caf6f60d5e633776f8d90989f8fc9ea7f9dcaa1ac0c"
+    },
+    {
+      "file": "187_contact_dept_types.sql",
+      "canonicalSha256": "bb069f4b42ed60886d08e2343b06b73c041fc38322f163e475c715cedbd445da"
+    },
+    {
+      "file": "197_card_slip_pdf.sql",
+      "canonicalSha256": "93f9a02024d597b350617aaed63d98accd1f2190fed714f7536cf23fe5877d83"
+    },
+    {
+      "file": "223_employee_self_service.sql",
+      "canonicalSha256": "7163af1f97a6e568d1225cff62c934f7b88269bd32d585bc21f00794c76093a0"
+    }
+  ]
+}

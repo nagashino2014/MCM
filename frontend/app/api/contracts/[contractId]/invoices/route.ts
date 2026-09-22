@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
-import { withDbWrite } from "@/lib/db";
+import { assertContractTransactionLinksMutable, withContractTransactionWrite } from "@/lib/finance/contract-link-lock";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 import {
   deleteContractDocument,
@@ -67,87 +67,95 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     // Look up the contract title (and optional stage label) so the stored
     // filename mirrors the V:\계약\매출계산서 naming convention:
     //   (YYYY-MM-DD){contractTitle} {stageLabel} 세금계산서.pdf
-    const db = await getDb();
-    const contractRows = rowsToObjects(
-      await db.exec("SELECT contract_title FROM contracts WHERE contract_id = $1", [contractId])
-    );
-    if (contractRows.length === 0) {
-      return NextResponse.json({ error: "계약을 찾을 수 없습니다." }, { status: 404 });
-    }
-    const contractTitle = String(contractRows[0]?.contract_title ?? "").trim();
-
-    // 대표 단계(모달을 연 단계) + 추가 선택 단계. 단계 미지정 업로드(계약 단위)도 그대로 지원한다.
-    const targets: Array<{ id: string | null; isPrimary: boolean }> = [
-      { id: milestoneId, isPrimary: true },
-      ...extraMilestoneIds.map((id) => ({ id, isPrimary: false })),
-    ];
-    const results: Array<{ milestoneId: string | null; invoiceId: string; documentId: string; publicPath: string }> = [];
-
-    for (const target of targets) {
-      const targetMilestoneId = target.id;
-      let targetStageLabel: string | null = null;
-      // 발행금액 — 대표 단계는 화면 입력값, 함께 등록하는 단계는 각자의 단계 금액을 쓴다.
-      let targetInvoiceAmount = invoiceAmount;
-      if (targetMilestoneId) {
-        const milestoneRows = rowsToObjects(
-          await db.exec(
-            "SELECT stage_label, amount, invoice_amount FROM contract_payment_milestones WHERE milestone_id = $1 AND contract_id = $2",
-            [targetMilestoneId, contractId]
-          )
-        );
-        if (milestoneRows.length === 0) continue; // 다른 계약의 단계가 섞여 들어온 경우
-        targetStageLabel = String(milestoneRows[0]?.stage_label ?? "").trim() || null;
-        if (!target.isPrimary) {
-          const amt = milestoneRows[0]?.invoice_amount ?? milestoneRows[0]?.amount;
-          targetInvoiceAmount = amt == null ? null : Number(amt);
-        }
+    const cleanup: Array<{ oldKeys: string[]; newKey: string }> = [];
+    const results = await withContractTransactionWrite(contractId, null, async (db) => {
+      const contractRows = rowsToObjects(
+        await db.exec("SELECT contract_title FROM contracts WHERE contract_id = $1", [contractId])
+      );
+      if (contractRows.length === 0) {
+        throw Object.assign(new Error("계약을 찾을 수 없습니다."), { status: 404 });
       }
-      // 수금·실적 정산은 대표 단계에만 반영한다(단계마다 수금일·금액이 달라 일괄 적용하면 원장이 틀어진다).
-      const applyCollection = target.isPrimary && paymentCollected;
+      const contractTitle = String(contractRows[0]?.contract_title ?? "").trim();
 
-      // 같은 대금지급단위(milestone)의 기존 계산서는 교체 대상 — 기존 파일의 storage_key 수집(S3 정리용)
-      const priorStorageKeys: string[] = [];
-      if (targetMilestoneId) {
-        const priorDocs = rowsToObjects(
-          await db.exec(
-            `SELECT storage_key FROM contract_documents
-              WHERE contract_id = $1 AND milestone_id = $2 AND document_type = 'tax_invoice'`,
-            [contractId, targetMilestoneId]
-          )
-        );
-        for (const r of priorDocs) {
-          const k = r.storage_key != null ? String(r.storage_key) : "";
-          if (k) priorStorageKeys.push(k);
-        }
+      // 대표 단계(모달을 연 단계) + 추가 선택 단계. 단계 미지정 업로드(계약 단위)도 그대로 지원한다.
+      const targets: Array<{ id: string | null; isPrimary: boolean }> = [
+        { id: milestoneId, isPrimary: true },
+        ...[...new Set(extraMilestoneIds)].map((id) => ({ id, isPrimary: false })),
+      ];
+      const results: Array<{ milestoneId: string | null; invoiceId: string; documentId: string; publicPath: string }> = [];
+
+      // 모든 선택 단계의 보호를 먼저 확인해 일부 단계만 저장되는 일을 막는다.
+      for (const target of targets) {
+        await assertContractTransactionLinksMutable(db, contractId, target.id);
       }
 
-      const { storageKey, fileName: storedName } = getInvoiceStorageKey({
-        issueDate,
-        contractTitle,
-        stageLabel: targetStageLabel,
-      });
-      const stored = await putContractDocument(storageKey, buffer, file.type || "application/pdf");
-      const documentId = "doc_" + crypto.randomUUID().replace(/-/g, "").slice(0, 16);
-      const invoiceId = "inv_" + crypto.randomUUID().replace(/-/g, "").slice(0, 16);
-      const now = new Date().toISOString();
-      const date = new Date(issueDate + "T00:00:00");
-      const fiscalYear = date.getFullYear();
-      const fiscalQuarter = Math.floor(date.getMonth() / 3) + 1;
-      const partialPaymentJson = applyCollection
-        ? JSON.stringify([
-            {
-              id: "invoice_" + invoiceId.slice(-12),
-              collectedAt: paymentCollectedAt,
-              amount: collectedAmount ?? targetInvoiceAmount ?? 0,
-              ratio: collectionRatio ?? null,
-              memo: partialPaymentMemo,
-              recordedBy: actor.userId,
-              recordedAt: now,
-            },
-          ])
-        : null;
+      for (const target of targets) {
+        const targetMilestoneId = target.id;
+        let targetStageLabel: string | null = null;
+        // 발행금액 — 대표 단계는 화면 입력값, 함께 등록하는 단계는 각자의 단계 금액을 쓴다.
+        let targetInvoiceAmount = invoiceAmount;
+        if (targetMilestoneId) {
+          const milestoneRows = rowsToObjects(
+            await db.exec(
+              "SELECT stage_label, amount, invoice_amount FROM contract_payment_milestones WHERE milestone_id = $1 AND contract_id = $2",
+              [targetMilestoneId, contractId]
+            )
+          );
+          if (milestoneRows.length === 0) continue; // 다른 계약의 단계가 섞여 들어온 경우
+          targetStageLabel = String(milestoneRows[0]?.stage_label ?? "").trim() || null;
+          if (!target.isPrimary) {
+            const amt = milestoneRows[0]?.invoice_amount ?? milestoneRows[0]?.amount;
+            targetInvoiceAmount = amt == null ? null : Number(amt);
+          }
+        }
+        // 수금·실적 정산은 대표 단계에만 반영한다(단계마다 수금일·금액이 달라 일괄 적용하면 원장이 틀어진다).
+        const applyCollection = target.isPrimary && paymentCollected;
 
-      await withDbWrite(async (db2) => {
+        // 같은 대금지급단위(milestone)의 기존 계산서는 교체 대상 — 기존 파일의 storage_key 수집(S3 정리용)
+        const priorStorageKeys: string[] = [];
+        if (targetMilestoneId) {
+          const priorDocs = rowsToObjects(
+            await db.exec(
+              `SELECT storage_key FROM contract_documents
+                WHERE contract_id = $1 AND milestone_id = $2 AND document_type = 'tax_invoice'`,
+              [contractId, targetMilestoneId]
+            )
+          );
+          for (const r of priorDocs) {
+            const k = r.storage_key != null ? String(r.storage_key) : "";
+            if (k) priorStorageKeys.push(k);
+          }
+        }
+
+        const { storageKey: baseStorageKey, fileName: storedName } = getInvoiceStorageKey({
+          issueDate,
+          contractTitle,
+          stageLabel: targetStageLabel,
+        });
+        const documentId = "doc_" + crypto.randomUUID().replace(/-/g, "").slice(0, 16);
+        // 거절되거나 중간에 실패해도 기존 파일의 바이트를 덮어쓰지 않는다.
+        const storageKey = baseStorageKey.replace(/([^/]+)$/, `${documentId}/$1`);
+        const stored = await putContractDocument(storageKey, buffer, file.type || "application/pdf");
+        const invoiceId = "inv_" + crypto.randomUUID().replace(/-/g, "").slice(0, 16);
+        const now = new Date().toISOString();
+        const date = new Date(issueDate + "T00:00:00");
+        const fiscalYear = date.getFullYear();
+        const fiscalQuarter = Math.floor(date.getMonth() / 3) + 1;
+        const partialPaymentJson = applyCollection
+          ? JSON.stringify([
+              {
+                id: "invoice_" + invoiceId.slice(-12),
+                collectedAt: paymentCollectedAt,
+                amount: collectedAmount ?? targetInvoiceAmount ?? 0,
+                ratio: collectionRatio ?? null,
+                memo: partialPaymentMemo,
+                recordedBy: actor.userId,
+                recordedAt: now,
+              },
+            ])
+          : null;
+
+        const db2 = db;
         // 같은 대금지급단위의 기존 계산서(인보이스+문서)는 삭제 후 새 파일로 교체
         if (targetMilestoneId) {
           await db2.run(
@@ -260,6 +268,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
           action: "contract_invoice_upload",
           targetTable: "contract_invoices",
           targetId: invoiceId,
+          before: { replacedStorageKeys: priorStorageKeys },
           after: {
             contractId,
             milestoneId: targetMilestoneId,
@@ -271,14 +280,22 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
             bulk: targets.length > 1,
           },
         });
-      });
 
-      // 교체된 기존 파일의 S3/로컬 객체 정리 (새 파일과 키가 같으면 건너뜀 — 방금 올린 파일 보호)
-      for (const oldKey of priorStorageKeys) {
-        if (oldKey !== stored.storageKey) await deleteContractDocument(oldKey);
+        cleanup.push({ oldKeys: priorStorageKeys, newKey: stored.storageKey });
+
+        results.push({ milestoneId: targetMilestoneId, invoiceId, documentId, publicPath: stored.publicPath });
       }
 
-      results.push({ milestoneId: targetMilestoneId, invoiceId, documentId, publicPath: stored.publicPath });
+      return results;
+    }, { protect: false });
+
+    // 전체 저장이 커밋된 뒤, 다른 문서가 참조하지 않는 옛 객체만 정리한다.
+    const lookup = await getDb();
+    for (const item of cleanup) {
+      for (const oldKey of item.oldKeys) {
+        const referenced = rowsToObjects(await lookup.exec("SELECT document_id FROM contract_documents WHERE storage_key=$1 LIMIT 1", [oldKey]));
+        if (oldKey !== item.newKey && !referenced.length) await deleteContractDocument(oldKey);
+      }
     }
 
     if (results.length === 0) {

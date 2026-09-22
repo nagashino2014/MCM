@@ -253,7 +253,10 @@ function EmployeeRulesTab({
                   {r.itemName}
                   {!r.isActive && <span className="cd-pill cd-pill-idle ml-1.5">비활성</span>}
                 </td>
-                <td className="p-2 text-right cd-text tabular-nums">{fmt(r.amount)}</td>
+                <td className="p-2 text-right cd-text tabular-nums">
+                  {fmt(r.amount)}
+                  {r.amount === 0 && <span className="block text-[11px] cd-text-faint">해당 항목 적용 중단</span>}
+                </td>
                 <td className="p-2 cd-text-faint">{r.validFrom ?? "…"} ~ {r.validTo ?? "계속"}</td>
                 <td className="p-2 cd-text-faint">{r.payMonths?.length ? `${r.payMonths.join(",")}월` : "매월"}</td>
                 <td className="p-2 cd-text-faint">{r.note ?? ""}</td>
@@ -441,7 +444,10 @@ function ItemRulesTab({
                     </button>
                   </div>
                 </td>
-                <td className="p-2 text-right cd-text tabular-nums whitespace-nowrap">{fmt(g.amount)}</td>
+                <td className="p-2 text-right cd-text tabular-nums whitespace-nowrap">
+                  {fmt(g.amount)}
+                  {g.amount === 0 && <span className="block text-[11px] cd-text-faint">해당 항목 적용 중단</span>}
+                </td>
                 <td className="p-2 cd-text-faint whitespace-nowrap">{g.validFrom ?? "…"} ~ {g.validTo ?? "계속"}</td>
                 <td className="p-2 cd-text-faint whitespace-nowrap">{g.payMonths?.length ? `${g.payMonths.join(",")}월` : "매월"}</td>
                 <td className="p-2 cd-text-faint">{g.note ?? ""}</td>

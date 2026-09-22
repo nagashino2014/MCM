@@ -5,7 +5,10 @@ const nextConfig = {
   // 세션마다 NEXT_DIST_DIR=.next-<이름> 을 주면 산출물이 분리돼 충돌하지 않는다.
   // (미설정 시 기존과 동일 — Dockerfile·배포 경로는 영향 없음)
   distDir: process.env.NEXT_DIST_DIR ?? ".next",
-  serverExternalPackages: ["sql.js"],
+  serverExternalPackages: ["sql.js", "@napi-rs/canvas", "unpdf", "pdfjs-dist"],
+  outputFileTracingIncludes: {
+    "/api/finance/supply-group-evidence": ["./node_modules/pdfjs-dist/standard_fonts/**/*", "./node_modules/pdfjs-dist/cmaps/**/*"],
+  },
   experimental: {
     // 미들웨어(middleware.ts)를 거치는 요청 본문은 기본 10MB 까지만 라우트로 넘어간다 — 초과분이 잘려
     // 10MB 넘는 첨부 업로드가 "Failed to parse body as FormData." 로 실패했다(2026-09-22 실측).

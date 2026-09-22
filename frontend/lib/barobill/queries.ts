@@ -1,3 +1,5 @@
+import { applyCardMerchantCorrections, merchantDisplay } from "@/lib/finance/card-merchant-source";
+import { loadCardTaxRows } from "@/lib/finance/card-tax";
 // 재무(바로빌) 화면용 조회 계층 — 연결 목록 / 원장 / 수집 로그 (P0 최소)
 
 import { getDb, withDbWrite, rowsToObjects } from "@/lib/db";
@@ -273,6 +275,7 @@ export interface CardTxnRow {
   storeName: string | null;
   storeBizType: string | null;
   storeCorpNum: string | null;
+  merchantCorrection?: {originalCorpNum:string|null;effectiveCorpNum:string|null;status:"original"|"corrected"|"review_required"};
   isPurchased: boolean;
   categoryKey: string | null;
   categorySource: string | null;
@@ -396,6 +399,8 @@ export async function listCardTransactions(params: {
       args,
     ),
   );
+  const effectiveRows = await applyCardMerchantCorrections(db,rows);
+  const taxById = new Map((await loadCardTaxRows(db,{from:"1000-01-01",to:"9999-12-31",dateBasis:"accounting"})).map(r=>[String(r.card_txn_id),r]));
   return {
     total: Number(totalRows[0]?.n || 0),
     totals: {
@@ -404,7 +409,7 @@ export async function listCardTransactions(params: {
       supplyAmount: Number(sumRows[0]?.supply_amount || 0),
       taxAmount: Number(sumRows[0]?.tax_amount || 0),
     },
-    rows: rows.map((r) => ({
+    rows: effectiveRows.map((r) => ({
       cardTxnId: String(r.card_txn_id),
       cardLabel: String(r.card_alias || r.card_company_name || ""),
       approvedAt: String(r.approved_at),
@@ -415,10 +420,11 @@ export async function listCardTransactions(params: {
       storeName: (r.store_name as string | null) ?? null,
       storeBizType: (r.store_biz_type as string | null) ?? null,
       storeCorpNum: (r.store_corp_num as string | null) ?? null,
+      merchantCorrection: merchantDisplay(r),
       isPurchased: Boolean(r.is_purchased),
       categoryKey: (r.category_key as string | null) ?? null,
       categorySource: (r.category_source as string | null) ?? null,
-      vatDeductible: r.vat_deductible == null ? null : Number(r.vat_deductible),
+      vatDeductible: !taxById.get(String(r.card_txn_id)) || taxById.get(String(r.card_txn_id))!.issues.length ? null : taxById.get(String(r.card_txn_id))!.vatState === "deductible" ? 1 : taxById.get(String(r.card_txn_id))!.vatState === "non_deductible" ? 0 : null,
       excluded: Boolean(r.excluded),
       docId: (r.doc_id as string | null) ?? null,
       slipKey: (r.slip_key as string | null) ?? null,

@@ -17,6 +17,14 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+function journalErrorToResponse(error: unknown) {
+  const e = error as { code?: string; constraint?: string; message?: string };
+  if (e.code === "23514" && ["finance_journal_use_source", "finance_vat_use"].includes(e.constraint ?? "")) {
+    return NextResponse.json({ error: "확정 신고 또는 전표 사용 근거에 포함된 전표입니다. 관련 사용을 먼저 해제한 뒤 다시 시도하세요.", code: "journal_use_protected" }, { status: 409 });
+  }
+  return authErrorToResponse(error);
+}
+
 // GET: 전표·장부 조회 — view=list(분개장)/ledger(계정별원장)/trial(시산표)/accounts(계정 목록)
 export async function GET(req: NextRequest) {
   try {
@@ -54,7 +62,7 @@ export async function GET(req: NextRequest) {
       }),
     });
   } catch (err) {
-    return authErrorToResponse(err);
+    return journalErrorToResponse(err);
   }
 }
 
@@ -115,8 +123,8 @@ export async function POST(req: NextRequest) {
     }
     if (!body.entryId) return NextResponse.json({ error: "entryId 가 필요합니다." }, { status: 400 });
     if (body.action === "confirm") {
-      await confirmEntry(body.entryId, Array.isArray(body.lines) ? body.lines : [], ctx.userId);
-      return NextResponse.json({ ok: true });
+      const result = await confirmEntry(body.entryId, Array.isArray(body.lines) ? body.lines : [], ctx.userId);
+      return NextResponse.json({ ok: true, ...result });
     }
     if (body.action === "exclude") {
       await setEntryStatus(body.entryId, "excluded", ctx.userId);
@@ -128,6 +136,6 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ error: "action 이 올바르지 않습니다." }, { status: 400 });
   } catch (err) {
-    return authErrorToResponse(err);
+    return journalErrorToResponse(err);
   }
 }

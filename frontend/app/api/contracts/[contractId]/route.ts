@@ -1,7 +1,7 @@
+import { withContractTransactionWrite } from "@/lib/finance/contract-link-lock";
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
-import { withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 import { getContractDetail } from "@/lib/ieps/contracts";
 import { checkDateFields, dateFieldValue } from "@/lib/contracts/date-field";
@@ -44,7 +44,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     });
     if (dateError) return NextResponse.json({ error: dateError }, { status: 400 });
 
-    await withDbWrite(async (db) => {
+    await withContractTransactionWrite(contractId, null, async (db) => {
       const setClauses: string[] = [];
       const values: unknown[] = [];
       const pushSet = (column: string, value: unknown) => {
@@ -102,7 +102,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
         before,
         after: body,
       });
-    });
+    }, { protect: body.contractTitle !== undefined || body.counterpartyFacilityId !== undefined });
 
     return NextResponse.json(await getContractDetail(contractId));
   } catch (err) {
@@ -126,7 +126,7 @@ export async function DELETE(req: NextRequest, ctx: RouteContext) {
     const before = await getContractDetail(contractId);
     if (!before) return NextResponse.json({ error: "not found" }, { status: 404 });
     const now = new Date().toISOString();
-    await withDbWrite(async (db) => {
+    await withContractTransactionWrite(contractId, null, async (db) => {
       await db.run(
         `INSERT INTO contract_delete_logs
           (delete_log_id, contract_id, contract_title, delete_reason, before_json, created_by, created_at)

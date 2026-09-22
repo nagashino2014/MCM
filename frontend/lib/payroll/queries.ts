@@ -1,4 +1,5 @@
-import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
+import { getDb, rowsToObjects } from "@/lib/db";
+import { entryTaxBasis, withPayrollWrite, type PayrollTaxReview } from "@/lib/payroll/integrity";
 
 /**
  * 급여대장 서버 쿼리 (PL-P1, docs/payroll-labor-contract-blueprint.md §4-1·§4-3)
@@ -47,6 +48,8 @@ export interface PayrollEntryRow {
   deductionTotal: number;
   netPay: number;
   note: string | null;
+  taxReview: PayrollTaxReview | null;
+  taxBasisHash: string;
   lines: Record<string, number>;
 }
 
@@ -104,9 +107,9 @@ export async function getLedgerDetail(ledgerId: string): Promise<{
   items: PayrollItemDef[];
   entries: PayrollEntryRow[];
 } | null> {
-  const db = await getDb();
+  return withPayrollWrite(async (db) => {
   const ledger = rowsToObjects(
-    await db.exec(`SELECT ledger_id FROM payroll_ledgers WHERE ledger_id = $1`, [ledgerId])
+    await db.exec(`SELECT ledger_id, status FROM payroll_ledgers WHERE ledger_id = $1`, [ledgerId])
   );
   if (!ledger.length) return null;
 
@@ -118,7 +121,7 @@ export async function getLedgerDetail(ledgerId: string): Promise<{
               COALESCE(d.dept_name, e.dept_name) AS dept_name,
               COALESCE(pos.position_name, e.position_name) AS position_name,
               COALESCE(p.hired_at, e.hired_at) AS hired_at,
-              e.resigned_at, e.pay_total, e.deduction_total, e.net_pay, e.row_order, e.note
+              e.resigned_at, e.pay_total, e.deduction_total, e.net_pay, e.row_order, e.note, e.tax_review
          FROM payroll_entries e
          LEFT JOIN employee_profiles p ON p.employee_id = e.employee_id
          LEFT JOIN positions pos ON pos.position_id = p.position_id
@@ -138,13 +141,12 @@ export async function getLedgerDetail(ledgerId: string): Promise<{
   );
   const itemRows = rowsToObjects(
     await db.exec(
-      `SELECT DISTINCT d.item_id, d.name, d.kind, d.aliases, d.in_ordinary_wage, d.display_order, d.is_active
-         FROM payroll_entry_lines li
-         JOIN payroll_entries e ON e.entry_id = li.entry_id
-         JOIN payroll_item_defs d ON d.item_id = li.item_id
-        WHERE e.ledger_id = $1
+      `SELECT d.item_id, d.name, d.kind, d.aliases, d.in_ordinary_wage, d.display_order, d.is_active
+         FROM payroll_item_defs d
+        WHERE d.item_id IN (SELECT li.item_id FROM payroll_entry_lines li JOIN payroll_entries e USING(entry_id) WHERE e.ledger_id=$1)
+           OR ($2='draft' AND d.is_active=1)
         ORDER BY d.display_order`,
-      [ledgerId]
+      [ledgerId, String(ledger[0].status)]
     )
   );
 
@@ -156,9 +158,9 @@ export async function getLedgerDetail(ledgerId: string): Promise<{
     linesByEntry.set(eid, map);
   }
 
-  return {
-    items: itemRows.map(toItemDef),
-    entries: entryRows.map((r) => ({
+  const entries: PayrollEntryRow[] = [];
+  for (const r of entryRows) {
+    entries.push({
       entryId: String(r.entry_id),
       employeeId: r.employee_id ? String(r.employee_id) : null,
       empNo: r.emp_no ? String(r.emp_no) : null,
@@ -171,9 +173,13 @@ export async function getLedgerDetail(ledgerId: string): Promise<{
       deductionTotal: toNum(r.deduction_total),
       netPay: toNum(r.net_pay),
       note: r.note ? String(r.note) : null,
+      taxReview: (r.tax_review ?? null) as PayrollTaxReview | null,
+      taxBasisHash: (await entryTaxBasis(db, String(r.entry_id))).basisHash,
       lines: linesByEntry.get(String(r.entry_id)) ?? {},
-    })),
-  };
+    });
+  }
+  return { items: itemRows.map(toItemDef), entries };
+  });
 }
 
 /** 해당 연도에 등장하는 성명 목록(연간 뷰 셀렉터) */
@@ -279,7 +285,13 @@ export async function savePayrollItem(input: {
   isActive: boolean;
   ruleEligible?: boolean;
 }): Promise<void> {
-  await withDbWrite(async (db) => {
+  if (!["pay", "deduction"].includes(input.kind)) throw Object.assign(new Error("지급/공제 종류가 올바르지 않습니다."), { status: 400 });
+  await withPayrollWrite(async (db) => {
+    const existing = rowsToObjects(await db.exec(`SELECT kind FROM payroll_item_defs WHERE item_id=$1 FOR UPDATE`, [input.itemId]))[0];
+    if (existing && String(existing.kind) !== input.kind) {
+      const used = rowsToObjects(await db.exec(`SELECT 1 FROM payroll_entry_lines WHERE item_id=$1 LIMIT 1`, [input.itemId]));
+      if (used.length) throw Object.assign(new Error("사용 중인 급여 항목은 지급/공제 종류를 변경할 수 없습니다. 새 항목을 만들어 사용하세요."), { status: 409 });
+    }
     await db.exec(
       `INSERT INTO payroll_item_defs (item_id, name, kind, aliases, in_ordinary_wage, display_order, is_active, rule_eligible, created_at)
        VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, COALESCE($8, 1), now()::text)

@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
 
     const byKey = new Map(categories.map((c) => [c.categoryKey, c]));
     const items = rows.map((r, i) => {
-      const cls = results[i];
+      const cls = r.merchantCorrection?.status === "review_required" ? null : results[i];
       const cat = cls ? byKey.get(cls.categoryKey) : undefined;
       return {
         cardTxnId: r.cardTxnId,
@@ -70,6 +70,8 @@ export async function GET(req: NextRequest) {
         amountTotal: r.amountTotal,
         storeName: r.storeName,
         storeBizType: r.storeBizType,
+        storeCorpNum: r.storeCorpNum,
+        merchantCorrection: r.merchantCorrection,
         isPurchased: r.isPurchased,
         categoryKey: cls?.categoryKey ?? null,
         categoryLabel: cat?.label ?? null,

@@ -21,6 +21,7 @@ type SqlExecResult = { columns: string[]; values: unknown[][] };
 // `moduleResolution: "bundler"`. Runtime is provided by the `pg` package.
 type PgFieldDef = { name: string };
 type PgQueryResult = {
+  command?: string;
   rows: Array<Record<string, unknown>>;
   rowCount: number | null;
   fields: PgFieldDef[];
@@ -28,6 +29,8 @@ type PgQueryResult = {
 type PgClient = {
   query: (text: string, values?: unknown[]) => Promise<PgQueryResult>;
   release: (err?: Error | boolean) => void;
+  on: (event: "error", listener: (error: Error) => void) => unknown;
+  removeListener: (event: "error", listener: (error: Error) => void) => unknown;
 };
 type PgPool = {
   query: (text: string, values?: unknown[]) => Promise<PgQueryResult>;
@@ -37,6 +40,7 @@ type PgPool = {
 type PgPoolConfig = {
   connectionString?: string;
   max?: number;
+  application_name?: string;
   ssl?: boolean | { rejectUnauthorized?: boolean };
 };
 type PgPoolCtor = new (config: PgPoolConfig) => PgPool;
@@ -186,25 +190,100 @@ export async function getDb(): Promise<PgDatabase> {
  * the original sql.js helper to minimise churn at call sites.
  */
 export async function withDbWrite<T>(
-  fn: (db: PgDatabase) => Promise<T> | T
+  fn: (db: PgDatabase) => Promise<T> | T,
+  options?: { accountingSnapshot?: boolean },
 ): Promise<T> {
   const p = await getPool();
   const client = await p.connect();
+  let transactionStarted = false;
+  const accountingSessionLocks: number[] = [];
+  let discardClient: Error | undefined;
+  // 대여 중에는 pool의 유휴 오류 처리가 제거되므로 연결 오류를 직접 받아 폐기한다.
+  const onClientError = (error: Error) => { discardClient ??= error; };
+  client.on("error", onClientError);
   try {
-    await client.query("BEGIN");
+    if (options?.accountingSnapshot) {
+      // Acquire BEFORE BEGIN: a repeatable-read snapshot taken while waiting for
+      // the previous accounting writer could miss its newly inserted closing.
+      try {
+        // Match journal -> expense ordering, and start the snapshot only after
+        // both the previous closing/source writer and meal disposition finish.
+        for (const domain of [1296256326, 724303]) {
+          await client.query("SELECT pg_advisory_lock($1, 1)", [domain]);
+          accountingSessionLocks.push(domain);
+        }
+      } catch (error) {
+        discardClient = error instanceof Error ? error : new Error("Accounting session lock failed");
+        throw error;
+      }
+    }
+    await client.query(options?.accountingSnapshot ? "BEGIN ISOLATION LEVEL REPEATABLE READ" : "BEGIN");
+    transactionStarted = true;
     const db = new PgDatabase(client);
     const result = await fn(db);
+    if (discardClient) throw discardClient;
     await client.query("COMMIT");
     return result;
   } catch (err) {
     try {
-      await client.query("ROLLBACK");
+      if (transactionStarted) await client.query("ROLLBACK");
     } catch {
-      // intentional: surface the original error, not a rollback failure
+      discardClient = new Error("Rollback failed; connection must not return to pool");
     }
     throw err;
   } finally {
-    client.release();
+    for (const domain of accountingSessionLocks.reverse()) {
+      if (discardClient) break;
+      try {
+        const unlocked = await client.query("SELECT pg_advisory_unlock($1, 1) AS unlocked", [domain]);
+        if (unlocked.rows[0]?.unlocked !== true) discardClient = new Error("Accounting session unlock failed");
+      } catch {
+        discardClient = new Error("Accounting session unlock failed; connection must not return to pool");
+      }
+    }
+    // Discarding also releases any session lock on a broken/uncertain connection.
+    try {
+      client.release(discardClient);
+    } finally {
+      // 정상 반납 시 pool의 유휴 listener가 먼저 복원된 뒤 이 대여의 listener만 제거한다.
+      client.removeListener("error", onClientError);
+    }
+  }
+}
+
+/**
+ * 같은 연결의 고정 스냅샷으로 조회한다. 회계 쓰기용 세션 잠금은 얻지 않는다.
+ * callback은 이 db만 사용하며, 조회 결과를 쓰기 허가로 재사용하지 않는다.
+ */
+export async function withDbRead<T>(fn: (db: PgDatabase) => Promise<T> | T): Promise<T> {
+  const client = await (await getPool()).connect();
+  let transactionStarted = false;
+  let discardClient: Error | undefined;
+  const onClientError = (error: Error) => { discardClient ??= error; };
+  client.on("error", onClientError);
+  try {
+    // BEGIN 응답이 불명확해도 ROLLBACK을 시도하고, 실패한 연결은 폐기한다.
+    transactionStarted = true;
+    await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
+    const result = await fn(new PgDatabase(client));
+    if (discardClient) throw discardClient;
+    const committed = await client.query("COMMIT");
+    if (committed.command !== "COMMIT") throw new Error("Read transaction did not commit");
+    if (discardClient) throw discardClient;
+    return result;
+  } catch (error) {
+    try {
+      if (transactionStarted) await client.query("ROLLBACK");
+    } catch {
+      discardClient = new Error("Read transaction rollback failed; connection must not return to pool");
+    }
+    throw error;
+  } finally {
+    try {
+      client.release(discardClient);
+    } finally {
+      client.removeListener("error", onClientError);
+    }
   }
 }
 

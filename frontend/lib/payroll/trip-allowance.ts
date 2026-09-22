@@ -1,4 +1,4 @@
-import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
+import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
 import { parsePeriod, TRIP_FORM_ID } from "@/lib/approval/trip";
 
 /**
@@ -38,8 +38,8 @@ function mapRule(r: Record<string, unknown>): TripLodgingRule {
   };
 }
 
-export async function listTripLodgingRules(): Promise<TripLodgingRule[]> {
-  const db = await getDb();
+export async function listTripLodgingRules(database?: PgDatabase): Promise<TripLodgingRule[]> {
+  const db = database ?? await getDb();
   return rowsToObjects(await db.exec(`SELECT * FROM trip_lodging_allowance_rules ORDER BY rank_from`)).map(mapRule);
 }
 
@@ -132,12 +132,12 @@ export interface TripLodgingAmount {
  * 급여대장 생성용 — 귀속 구간의 인원별 숙박출장수당.
  * 승인된 출장보고서 × 선행 출장신청서(trip_class='숙박 출장')만 대상. 결재 진행 중 보고서는 pending 으로 센다.
  */
-export async function tripLodgingAmounts(payYear: number, payMonth: number): Promise<Map<string, TripLodgingAmount>> {
-  const rules = await listTripLodgingRules();
+export async function tripLodgingAmounts(payYear: number, payMonth: number, database?: PgDatabase): Promise<Map<string, TripLodgingAmount>> {
+  const db = database ?? await getDb();
+  const rules = await listTripLodgingRules(db);
   const map = new Map<string, TripLodgingAmount>();
   if (!rules.some((r) => r.isActive)) return map;
   const win = payrollWindow(payYear, payMonth);
-  const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
       `SELECT r.doc_id, r.doc_no, r.title, r.status, r.drafter_employee_id,

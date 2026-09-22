@@ -4,7 +4,8 @@
 // 앱 기표 구간 = opening_as_of(기왕 누계 기준일)가 속한 달의 다음 달부터 — 그 이전은 opening_accum 으로 인수.
 
 import { createHash } from "node:crypto";
-import { getDb, withDbWrite, rowsToObjects } from "@/lib/db";
+import { getDb, withDbWrite, rowsToObjects, type PgDatabase } from "@/lib/db";
+import { validateAccountingRange } from "./write-lock";
 
 const KST_NOW = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 19).replace("T", " ");
 
@@ -199,8 +200,8 @@ export function buildSchedule(
   return out;
 }
 
-export async function loadDecliningRates(): Promise<Map<number, number>> {
-  const db = await getDb();
+export async function loadDecliningRates(transaction?: PgDatabase): Promise<Map<number, number>> {
+  const db = transaction ?? await getDb();
   const rows = rowsToObjects(await db.exec(`SELECT years, declining_rate FROM depreciation_rates`));
   return new Map(rows.map((r) => [Number(r.years), Number(r.declining_rate)]));
 }
@@ -221,11 +222,12 @@ const lastDayOf = (ym: string) => {
   return `${ym}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`;
 };
 
-export async function depreciationForRange(from: string, to: string): Promise<DepreciationEntryRow[]> {
-  const db = await getDb();
+export async function depreciationForRange(from: string, to: string, transaction?: PgDatabase): Promise<DepreciationEntryRow[]> {
+  validateAccountingRange(from, to);
+  const db = transaction ?? await getDb();
   const assets = rowsToObjects(await db.exec(`SELECT * FROM fixed_assets WHERE is_active = 1`)).map(mapAsset);
   if (!assets.length) return [];
-  const rates = await loadDecliningRates();
+  const rates = await loadDecliningRates(db);
   // 미완료 월은 기표하지 않는다(월말 마감 성격) — to 와 이번 달 중 이른 쪽까지.
   const nowKst = new Date(Date.now() + 9 * 3600 * 1000);
   const currentYm = `${nowKst.getUTCFullYear()}-${String(nowKst.getUTCMonth() + 1).padStart(2, "0")}`;
@@ -236,17 +238,19 @@ export async function depreciationForRange(from: string, to: string): Promise<De
     const prevYm = `${prev.getUTCFullYear()}-${String(prev.getUTCMonth() + 1).padStart(2, "0")}`;
     toYm = prevYm < toYm ? prevYm : toYm;
   }
-  const fromYm = ymOf(from);
   const out: DepreciationEntryRow[] = [];
   for (const asset of assets) {
     for (const row of buildSchedule(asset, toYm, rates)) {
-      if (row.month < fromYm) continue;
+      const entryDate = lastDayOf(row.month);
+      // Match the journal's date-range deletion: a partial month must not create
+      // its later month-end entry, or include an entry before the requested start.
+      if (entryDate < from || entryDate > to) continue;
       out.push({
         faId: asset.faId,
         name: asset.name,
         category: asset.category,
         month: row.month,
-        entryDate: lastDayOf(row.month),
+        entryDate,
         amount: row.amount,
       });
     }

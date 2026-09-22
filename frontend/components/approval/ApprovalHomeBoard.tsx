@@ -21,7 +21,7 @@ import { CdModal } from "@/components/cdash/CdModal";
 import { CdSplitPane } from "@/components/cdash/CdSplitPane";
 import { CdTabs } from "@/components/cdash/CdTabs";
 import { ApprovalDocViewer, DOC_STATUS_LABEL } from "@/components/approval/ApprovalDocModal";
-import { approvalEditHref } from "@/lib/approval/edit-route";
+import { approvalEditHref, approvalNewHref } from "@/lib/approval/edit-route";
 import "@/components/cdash/cdash.css";
 
 interface DocSummary {
@@ -371,7 +371,7 @@ export function ApprovalHomeBoard() {
                       key={f.formId}
                       type="button"
                       className="text-left rounded-xl border cd-border-c px-3 py-2 hover:bg-[color:var(--cd-surface)]"
-                      onClick={() => router.push(`/approval/draft?formId=${encodeURIComponent(f.formId)}`)}
+                      onClick={() => router.push(approvalNewHref(f.formId))}
                     >
                       <span className="text-[12.5px] cd-text font-semibold">{f.name}</span>
                       {f.description && <p className="text-[10.5px] cd-text-faint truncate">{f.description}</p>}

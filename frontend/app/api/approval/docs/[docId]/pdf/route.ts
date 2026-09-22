@@ -7,6 +7,8 @@ import { listLeaveTypes } from "@/lib/approval/leave-types-store";
 import { sanitizeDownloadName } from "@/lib/contracts/document-bundle";
 import { generateLetterArtifacts } from "@/lib/letter/generate";
 import { LETTER_FORM_ID } from "@/lib/letter/types";
+import { generateNoticePdf } from "@/lib/notice/generate";
+import { NOTICE_FORM_ID } from "@/lib/notice/types";
 import { generateQuoteArtifacts } from "@/lib/quote/generate";
 import { QUOTE_FORM_ID } from "@/lib/quote/types";
 import { generateAgreementArtifacts } from "@/lib/agreement/generate";
@@ -39,6 +41,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ docI
       const artifacts = await generateLetterArtifacts(docId, { persist: false });
       bytes = artifacts.pdfBytes;
       fileName = `${artifacts.fileBase}.pdf`;
+    } else if (doc.formId === NOTICE_FORM_ID) {
+      // 내부고시(266) — 결재 심사·열람 모두 최종 고시 지면 그대로(on-demand, 저장 안 함)
+      const out = await generateNoticePdf(docId);
+      bytes = out.pdfBytes;
+      fileName = `${out.fileBase}.pdf`;
     } else if (doc.formId === QUOTE_FORM_ID) {
       // 견적(136)도 결재 심사를 최종 제출 지면으로 — on-demand 렌더(저장 안 함)
       const artifacts = await generateQuoteArtifacts(docId, { persist: false });

@@ -206,6 +206,8 @@ export async function loadDrafterSnapshot(userId: string): Promise<{
  */
 const LETTER_RULE_KEY = "대외"; // = lib/letter/types.ts LETTER_RULE_KEY (fields.ts 처럼 DB 계층은 클라이언트 모듈을 참조하지 않는다)
 const LETTER_FORM_ID = "frm-official-letter"; // = lib/letter/types.ts LETTER_FORM_ID (동일 사유)
+// 내부고시(266) — `{연도}-내부고시-{NNNNN}호` · 신규 연도 01001 시작. = lib/notice/types.ts NOTICE_RULE_KEY (동일 사유)
+const NOTICE_RULE_KEY = "내부고시";
 
 // 견적(136) — rule_key `견적:{종류}` 5종(통합허가/화관법/HAPs/ESG/기타), 포맷 `{연도}-{종류}-{NNNN}`.
 // = lib/quote/types.ts QUOTE_RULE_PREFIX/QUOTE_NO_LABEL_BY_SERVICE_TYPE (DB 계층은 클라이언트 모듈 미참조)
@@ -220,6 +222,7 @@ const QUOTE_NO_LABELS: Record<string, string> = {
 
 async function allocateDocNo(txn: PgDatabase, ruleKey: string, year: string): Promise<string> {
   const isLetter = ruleKey === LETTER_RULE_KEY;
+  const isNotice = ruleKey === NOTICE_RULE_KEY;
   const isQuote = ruleKey.startsWith(QUOTE_RULE_PREFIX);
   const reused = rowsToObjects(
     await txn.exec(
@@ -238,11 +241,12 @@ async function allocateDocNo(txn: PgDatabase, ruleKey: string, year: string): Pr
             `INSERT INTO doc_no_sequences (rule_key, year, last_seq) VALUES ($1, $2, $3)
              ON CONFLICT (rule_key, year) DO UPDATE SET last_seq = doc_no_sequences.last_seq + 1
              RETURNING last_seq`,
-            [ruleKey, year, isLetter ? 1001 : 1]
+            [ruleKey, year, isLetter || isNotice ? 1001 : 1]
           )
         )[0]?.last_seq ?? 1
       );
   if (isLetter) return `${year}-${ruleKey}-${String(seq).padStart(5, "0")}`;
+  if (isNotice) return `${year}-${ruleKey}-${String(seq).padStart(5, "0")}호`;
   if (isQuote) return `${year}-${ruleKey.slice(QUOTE_RULE_PREFIX.length)}-${String(seq).padStart(4, "0")}`;
   return `${ruleKey}-${year}-${String(seq).padStart(4, "0")}`;
 }
@@ -470,7 +474,8 @@ export async function deleteDoc(docId: string): Promise<{ docNo: string | null; 
     await txn.run(`DELETE FROM approval_docs WHERE doc_id = $1`, [docId]);
     // 문서번호 반납(130) — 다음 상신이 이 번호를 이어받는다.
     // 형식: 일반 `{약칭}-{연도}-{일련}` / 공문(135) `{연도}-대외-{일련}` / 견적(136) `{연도}-{종류}-{일련}`.
-    const letterM = docNo ? new RegExp(`^(\\d{4})-(${LETTER_RULE_KEY})-(\\d+)$`).exec(docNo) : null;
+    // 내부고시(266) `{연도}-내부고시-{일련}호` 는 공문과 같은 틀로 반납한다.
+    const letterM = docNo ? new RegExp(`^(\\d{4})-(${LETTER_RULE_KEY}|${NOTICE_RULE_KEY})-(\\d+)호?$`).exec(docNo) : null;
     const quoteLabels = Object.values(QUOTE_NO_LABELS).join("|");
     const quoteM = !letterM && docNo ? new RegExp(`^(\\d{4})-(${quoteLabels})-(\\d+)$`).exec(docNo) : null;
     const m = !letterM && !quoteM && docNo ? /^(.+)-(\d{4})-(\d+)$/.exec(docNo) : null;

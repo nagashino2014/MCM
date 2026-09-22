@@ -4,6 +4,7 @@
 // 확정 fit 은 HWPX 생성(hwpx.ts)에도 동일 적용된다.
 // 폰트: 맑은 고딕(사용자 확정 — 08-05 실전 생성본 검토 후 명조에서 변경).
 // 본문·붙임이 짧은 공문은 서명줄·하단 고정부를 2~3줄 위로 올려 여백을 줄인다(사용자 확정).
+// 줄바꿈·표 배치 헬퍼는 내부고시 렌더러(lib/notice/pdf.ts)가 함께 쓴다(export).
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -43,13 +44,13 @@ const SIGNATURE_BODY_GAP = 40;
 /** 서명줄 ~ 하단 고정부 상단선 최소 여유 — 인감이 구분선에 닿지 않는 하한. */
 const SIGNATURE_FOOT_CLEARANCE = 52;
 
-interface Fonts {
+export interface Fonts {
   regular: PDFFont;
   bold: PDFFont;
 }
 
 /** 폭에 맞춰 단어 단위 줄바꿈(한글은 글자 단위 폴백) — briefing-pdf.ts 이식. */
-function wrapPlain(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
+export function wrapPlain(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
   const lines: string[] = [];
   for (const para of text.split(/\r?\n/)) {
     let cur = "";
@@ -78,14 +79,14 @@ function wrapPlain(text: string, font: PDFFont, size: number, maxWidth: number):
   return lines.length ? lines : [""];
 }
 
-interface StyledSeg {
+export interface StyledSeg {
   text: string;
   bold: boolean;
   underline: boolean;
 }
 
 /** 런 배열을 폭에 맞춰 줄 단위 세그먼트로 분할(서식 보존). */
-function wrapRuns(runs: TextRun[], fonts: Fonts, size: number, firstWidth: number, restWidth: number): StyledSeg[][] {
+export function wrapRuns(runs: TextRun[], fonts: Fonts, size: number, firstWidth: number, restWidth: number): StyledSeg[][] {
   const lines: StyledSeg[][] = [];
   let cur: StyledSeg[] = [];
   let curW = 0;
@@ -140,7 +141,7 @@ function wrapRuns(runs: TextRun[], fonts: Fonts, size: number, firstWidth: numbe
   return lines;
 }
 
-function segsWidth(segs: StyledSeg[], fonts: Fonts, size: number): number {
+export function segsWidth(segs: StyledSeg[], fonts: Fonts, size: number): number {
   return segs.reduce((w, s) => w + (s.bold ? fonts.bold : fonts.regular).widthOfTextAtSize(s.text, size), 0);
 }
 
@@ -182,7 +183,7 @@ function topGap(fit: FitParams): number {
  * 크면 마지막 스팬 행에 부족분을 가산한다.
  */
 /** 표 렌더 폭(pt) — widthPct(본문 폭 대비 %)를 적용한다. */
-function tableWidthOf(t: Extract<LetterBlock, { kind: "table" }>): number {
+export function tableWidthOf(t: Extract<LetterBlock, { kind: "table" }>): number {
   const pct = Number.isFinite(t.widthPct as number) && (t.widthPct as number) > 0 ? (t.widthPct as number) : DEFAULT_TABLE_WIDTH_PCT;
   return (CONTENT_W - 2) * (Math.min(100, Math.max(20, pct)) / 100);
 }
@@ -192,7 +193,7 @@ function signatureFloor(layout: LetterLayout): number {
   return FOOT_THIN_Y + (layout.includeAddress ? FOOT_ROW_STEP : 0) + SIGNATURE_FOOT_CLEARANCE;
 }
 
-function layoutTable(
+export function layoutTable(
   t: Extract<LetterBlock, { kind: "table" }>,
   fonts: Fonts,
   size: number
@@ -254,7 +255,7 @@ function measureTable(t: Extract<LetterBlock, { kind: "table" }>, fonts: Fonts, 
   return layoutTable(t, fonts, size).rowHs.reduce((a, b) => a + b, 0);
 }
 
-async function loadImage(doc: PDFDocument, rel: string): Promise<PDFImage | null> {
+export async function loadImage(doc: PDFDocument, rel: string): Promise<PDFImage | null> {
   try {
     const bytes = await readFile(path.join(process.cwd(), "public", rel));
     return await doc.embedPng(bytes);
@@ -554,7 +555,7 @@ export async function renderLetterPdf(layout: LetterLayout, opts: { fit?: FitPar
 }
 
 /** 이름 글자 벌리기 — "이재영" → "이 재 영" (실측 표기 재현). */
-function spread(name: string): string {
+export function spread(name: string): string {
   const t = (name ?? "").trim();
   return /^[가-힣]{2,4}$/.test(t) ? t.split("").join(" ") : t;
 }
@@ -572,7 +573,7 @@ export async function measureSignTextWidths(companyKo: string, ceoName: string, 
   return { textW: bold.widthOfTextAtSize(text, sigPt), nameW: bold.widthOfTextAtSize(name, sigPt) };
 }
 
-function drawTable(page: PDFPage, t: Extract<LetterBlock, { kind: "table" }>, fonts: Fonts, size: number, yTop: number): number {
+export function drawTable(page: PDFPage, t: Extract<LetterBlock, { kind: "table" }>, fonts: Fonts, size: number, yTop: number): number {
   const cellSize = size; // 표 글자 크기 = 본문과 동일(사용자 확정)
   const { widths, rowHs, wrapped, cellLineH, pad } = layoutTable(t, fonts, size);
   // 본문 폭보다 좁은 표는 가운데로 — 왼쪽에만 붙으면 오른쪽 여백만 크게 남아 어색하다.

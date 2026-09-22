@@ -1213,7 +1213,21 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
           probe.collapse(true);
           if (sel.getRangeAt(0).compareBoundaryPoints(Range.START_TO_START, probe) === 0) {
             e.preventDefault();
+            // 목록 중간 항목을 빼면 목록이 둘로 갈라져 뒤쪽이 1부터 다시 매겨진다(2026-09-22 사용자 지적 —
+            // 항목 사이 빈 줄을 두려고 빈 '2.'를 지우면 아래 '3.'이 '1.'이 됨). 갈라진 뒤쪽 목록에
+            // start 를 달아 앞 번호를 이어받게 한다(공문 PDF 파서도 start 를 읽는다).
+            // (크롬은 쪼갤 때 원래 <ol> 을 뒤쪽에 남기기도 하므로 앞·뒤 항목이 속한 목록을 직접 비교한다)
+            const inOl = li.parentElement?.tagName === "OL";
+            const prevLi = li.previousElementSibling;
+            const nextLi = li.nextElementSibling;
             document.execCommand("outdent");
+            const before = prevLi?.parentElement as HTMLOListElement | null | undefined;
+            const after = nextLi?.parentElement as HTMLOListElement | null | undefined;
+            if (inOl && before && after && before !== after && before.tagName === "OL" && after.tagName === "OL") {
+              const cont = (before.start || 1) + before.children.length;
+              if (cont > 1) after.start = cont;
+              else after.removeAttribute("start");
+            }
             onInput();
             return;
           }

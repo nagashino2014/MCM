@@ -86,6 +86,8 @@ export function ApprovalNoticeBoard() {
   const [previewItem, setPreviewItem] = useState<DocAttachment | null>(null);
   const attachDrag = useDragOrder(fileAttachments, setFileAttachments);
   const [editMeta, setEditMeta] = useState<EditDocMeta | null>(null);
+  // 승인 후 회수된 문서(상신 이력 있는 draft) — 번호 확정 상태로 다시 고친다
+  const [recalled, setRecalled] = useState(false);
   const [noticeDrafts, setNoticeDrafts] = useState<
     Array<{ docId: string; title: string; status: string; docNo: string | null; updatedAt: string }>
   >([]);
@@ -152,8 +154,9 @@ export function ApprovalNoticeBoard() {
         setEditMeta(toEditDocMeta(d));
         setDocNo(d.docNo ?? null);
         if (d.drafterName) setDrafterName(String(d.drafterName));
+        setRecalled(d.status === "draft" && !!d.docNo && !!d.submittedAt);
         // 상신 전 임시저장인데 번호가 있으면 = 직접 지정해 둔 문서(자동 채번은 상신 시 부여)
-        if (d.docNo && d.status === "draft") {
+        if (d.docNo && d.status === "draft" && !d.submittedAt) {
           const seq = parseNoticeNo(String(d.docNo));
           if (seq != null) {
             setManualOn(true);
@@ -484,6 +487,13 @@ export function ApprovalNoticeBoard() {
         <>
         <div className="max-w-[1032px]">
           <RejectedBanner meta={editMeta} />
+          {/* 회수 문서(2026-09-22) — 승인 후 회수하면 draft 인데 확정 번호가 있다 */}
+          {editMeta?.status === "draft" && docNo && recalled && (
+            <div className="rounded-xl border cd-border-c px-3.5 py-2.5 mb-3 text-[12px] cd-text flex items-center gap-2">
+              <FileText className="w-4 h-4 cd-text-primary shrink-0" />
+              회수된 내부고시입니다 — 내용을 고쳐 재상신하면 <b className="font-mono mx-1">{docNo}</b> 번호 그대로 다시 결재를 받습니다.
+            </div>
+          )}
           {noticeDrafts.length > 0 && (
             <div className="rounded-xl border cd-border-c cd-solid-bg px-3.5 py-2.5 mb-3 text-[12px]">
               <button
@@ -535,7 +545,7 @@ export function ApprovalNoticeBoard() {
             <div className="flex items-center gap-x-4 gap-y-2 flex-wrap md:flex-nowrap">
             <div className="flex items-center gap-2 rounded-xl border cd-border-c px-3.5 py-2 flex-wrap min-w-0 flex-1">
               <FileText className="w-4 h-4 cd-text-primary shrink-0" />
-              {manualOn && !noLocked ? (
+              {manualOn && !noLocked && canAssign ? (
                 <span className="text-[12.5px] cd-text flex items-center gap-1.5 whitespace-nowrap">
                   문서번호
                   <span className="font-mono cd-text-faint">내부고시-</span>
@@ -561,6 +571,7 @@ export function ApprovalNoticeBoard() {
               )}
               {manualOn &&
                 !noLocked &&
+                canAssign &&
                 (!manualNo ? (
                   <span className="text-[10.5px] cd-text-faint">번호 입력(자동 예정 {nextNo ?? "-"})</span>
                 ) : manualCheck == null ? (

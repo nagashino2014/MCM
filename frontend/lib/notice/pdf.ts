@@ -34,7 +34,7 @@ import {
   PAGE_W,
   type LetterBlock,
 } from "@/lib/letter/types";
-import { formatNoticeDate, type NoticeFieldValues } from "./types";
+import { NOTICE_BODY_INDENT, formatNoticeDate, type NoticeFieldValues } from "./types";
 
 const INK = rgb(0.1, 0.1, 0.12);
 const LINE_THICK = 2.2;
@@ -209,8 +209,8 @@ export async function renderNoticePdf(values: NoticeFieldValues, snap: NoticeDoc
           y -= lineH;
         }
       } else {
-        // 첫 줄 들여쓰기(BODY_INDENT + 에디터 들여쓰기), 이후 줄은 좌여백부터 — 공문과 동일
-        const firstX = MARGIN_L + BODY_INDENT + extraIndent;
+        // 첫 줄 들여쓰기(NOTICE_BODY_INDENT + 에디터 들여쓰기), 이후 줄은 좌여백부터 — 공문(65pt)보다 얕다
+        const firstX = MARGIN_L + NOTICE_BODY_INDENT + extraIndent;
         const restX = MARGIN_L + extraIndent;
         wrapRuns(b.runs, fonts, size, PAGE_W - MARGIN_R - firstX, PAGE_W - MARGIN_R - restX).forEach((segs, i) => {
           ensure(lineH);
@@ -244,16 +244,17 @@ export async function renderNoticePdf(values: NoticeFieldValues, snap: NoticeDoc
   // ── 5) 서명 블록 — 시행일자 / 사명 / 대표이사 (직인). 한 덩어리로 같은 쪽에 둔다 ──
   {
     const sigSize = 15;
-    const blockH = 34 + size + 30 + sigSize * 2 + 16;
+    // 날짜·사명·대표이사 줄 사이 여백 — 종전(34/30/12)보다 30% 넓게(2026-09-22 사용자 요청)
+    const blockH = 44 + size + 39 + sigSize * 2 + 20;
     ensure(blockH);
-    y -= 34;
+    y -= 44;
     const dw = fonts.regular.widthOfTextAtSize(dateText, size);
     page.drawText(dateText, { x: (PAGE_W - dw) / 2, y: y - size, size, font: fonts.regular, color: INK });
-    y -= size + 30;
+    y -= size + 39;
 
     const cw = fonts.bold.widthOfTextAtSize(COMPANY_KO, sigSize);
     page.drawText(COMPANY_KO, { x: (PAGE_W - cw) / 2, y: y - sigSize, size: sigSize, font: fonts.bold, color: INK });
-    y -= sigSize + 12;
+    y -= sigSize + 16;
 
     const head = `대표이사   ${spread(COMPANY_CEO)}`;
     const seal = "(직인)";

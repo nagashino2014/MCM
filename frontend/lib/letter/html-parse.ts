@@ -393,7 +393,11 @@ export function parseLetterHtml(html: string): LetterBlock[] {
     }
     if (tag === "ul" || tag === "ol") {
       if (t.close) listStack.pop();
-      else listStack.push({ ordered: tag === "ol", count: 0 });
+      else {
+        // <ol start="N"> — 갈라진 목록이 앞 번호를 이어받는 경우(에디터가 start 를 단다)
+        const startM = tag === "ol" ? /\bstart\s*=\s*["']?(\d+)/i.exec(String(t.attrs ?? "")) : null;
+        listStack.push({ ordered: tag === "ol", count: startM ? Math.max(0, Number(startM[1]) - 1) : 0 });
+      }
       flushPara();
       continue;
     }

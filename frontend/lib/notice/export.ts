@@ -5,8 +5,8 @@
 import { renderFlowHwpx } from "@/lib/flowdoc/hwpx";
 import type { FlowBlock } from "@/lib/flowdoc/types";
 import { parseLetterHtml } from "@/lib/letter/html-parse";
-import { BODY_INDENT, COMPANY_CEO, COMPANY_KO, type LetterBlock } from "@/lib/letter/types";
-import { formatNoticeDate, type NoticeFieldValues } from "./types";
+import { COMPANY_CEO, COMPANY_KO, type LetterBlock } from "@/lib/letter/types";
+import { NOTICE_BODY_INDENT, formatNoticeDate, type NoticeFieldValues } from "./types";
 
 const BODY_PT = 11;
 
@@ -54,7 +54,7 @@ export function buildNoticeFlow(values: NoticeFieldValues, snap: { docNo: string
       sizePt: BODY_PT,
       align: b.align,
       leftPt: aligned ? 0 : b.indentPt ?? 0,
-      indentPt: aligned ? 0 : BODY_INDENT,
+      indentPt: aligned ? 0 : NOTICE_BODY_INDENT,
     });
   }
 
@@ -72,9 +72,10 @@ export function buildNoticeFlow(values: NoticeFieldValues, snap: { docNo: string
     });
   });
 
-  blocks.push({ kind: "p", runs: [{ text: date }], align: "center", sizePt: BODY_PT, spaceBeforePt: 28 });
-  blocks.push({ kind: "p", runs: [{ text: COMPANY_KO }], align: "center", sizePt: 15, bold: true, spaceBeforePt: 22 });
-  blocks.push({ kind: "seal", text: `대표이사   ${spread(COMPANY_CEO)}`, sealText: "(직인)", sizePt: 15, stamp: values.stamp === 1 });
+  // 말미 여백 — PDF 와 같이 종전보다 30% 넓게(2026-09-22)
+  blocks.push({ kind: "p", runs: [{ text: date }], align: "center", sizePt: BODY_PT, spaceBeforePt: 36 });
+  blocks.push({ kind: "p", runs: [{ text: COMPANY_KO }], align: "center", sizePt: 15, bold: true, spaceBeforePt: 29 });
+  blocks.push({ kind: "seal", text: `대표이사   ${spread(COMPANY_CEO)}`, sealText: "(직인)", sizePt: 15, stamp: values.stamp === 1, spaceBeforePt: 4 });
   return blocks;
 }
 

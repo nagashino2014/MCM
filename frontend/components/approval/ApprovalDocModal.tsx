@@ -138,6 +138,22 @@ export function ApprovalDocViewer({
 
   // 발송 완료 건 — 수정 후 재발송(2026-08-19 사용자 확정): 회수 → 작성 화면 수정 → 재상신 →
   // 재결재 승인 시 자동 2차 발송(문서번호 유지, 이력 N차 누적). 내용 그대로 재송부는 지원하지 않는다.
+  // 승인된 내부고시 — 회수 후 수정(2026-09-22): draft 로 되돌려 작성 화면에서 고치고 재상신한다(번호 유지).
+  const recallNotice = async () => {
+    if (!detail) return;
+    if (!window.confirm("이 내부고시를 회수해 수정합니다.\n회수하면 결재를 다시 받아야 하며, 문서번호는 그대로 유지됩니다. 진행할까요?")) return;
+    setResending(true);
+    try {
+      const res = await fetch(`/api/approval/docs/${encodeURIComponent(detail.docId)}/recall`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "회수 실패");
+      window.location.href = approvalEditHref(NOTICE_FORM_ID, detail.docId);
+    } catch (err) {
+      alert((err as Error).message);
+      setResending(false);
+    }
+  };
+
   const recallForResend = async () => {
     if (!detail) return;
     const nth = (letter?.sendHistory.length ?? 0) + 1;
@@ -316,6 +332,17 @@ export function ApprovalDocViewer({
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/icons/pdfico.png" alt="PDF" style={{ width: 30, height: 30 }} />
               </button>
+              {detail.formId === NOTICE_FORM_ID && detail.status === "approved" && (
+                <button
+                  type="button"
+                  className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] flex items-center gap-1 shrink-0 disabled:opacity-50"
+                  title="회수해 내용을 고친 뒤 다시 결재받습니다(문서번호 유지) — 기안자 본인 또는 결재 관리자"
+                  disabled={resending}
+                  onClick={recallNotice}
+                >
+                  <Pencil className="w-3.5 h-3.5" /> {resending ? "처리 중..." : "회수 후 수정"}
+                </button>
+              )}
               {/* 이어 작성·재기안 — 본인 기안의 작성중·반려 문서. 양식 전용 화면(공문·견적서)으로 분기한다. */}
               {detail.canEdit && (
                 <Link

@@ -438,7 +438,10 @@ export async function recallLetterDoc(docId: string, actorUserId: string, isMana
     );
     if (!rows.length) throw new Error("문서를 찾을 수 없습니다.");
     const doc = rows[0];
-    if (String(doc.form_id) !== LETTER_FORM_ID) throw new Error("공문 문서만 회수할 수 있습니다.");
+    // 내부고시(266)도 같은 흐름 — 승인 후 오탈자·서식 수정은 회수 → 수정 → 재결재(번호 유지)로 한다(2026-09-22).
+    if (String(doc.form_id) !== LETTER_FORM_ID && String(doc.form_id) !== NOTICE_FORM_ID) {
+      throw new Error("공문·내부고시 문서만 회수할 수 있습니다.");
+    }
     if (String(doc.status) !== "approved") throw new Error("승인 완료 문서만 회수할 수 있습니다.");
     if (String(doc.drafter_user_id) !== actorUserId && !isManager) throw new Error("기안자 본인 또는 관리자만 회수할 수 있습니다.");
     // 발송 파이프라인이 도는 중이면 회수 금지(생성 중 문서가 바뀌면 산출물이 어긋난다)

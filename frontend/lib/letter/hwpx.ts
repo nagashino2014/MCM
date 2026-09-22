@@ -6,6 +6,7 @@
 // fit(A4 1장 맞춤)은 PDF 렌더(pdf.ts)에서 확정된 값을 그대로 적용한다 — 폰트 높이 치환 +
 // 본문 끝~서명줄 사이 빈 문단(gapLines) 삽입. 한글이 linesegarray 를 재계산하므로 픽셀
 // 동일은 보장되지 않으며 공식 산출물은 PDF, HWPX 는 편집용 사본이다.
+// 템플릿·서식 등록·표 헬퍼는 흐름형 문서 작성기(lib/hwpx/flow-doc.ts — 내부고시·내부 규정)가 함께 쓴다(export).
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -14,12 +15,12 @@ import { DEFAULT_TABLE_WIDTH_PCT } from "./types";
 import type { FitParams, LetterBlock, LetterLayout, TableCell, TextRun } from "./types";
 
 const TOKEN_RE = /\{\{\s*([^}]+?)\s*\}\}/g;
-const LINESEG_RE = /<hp:linesegarray>[\s\S]*?<\/hp:linesegarray>/g; // hwpx-fill.ts 이식
+export const LINESEG_RE = /<hp:linesegarray>[\s\S]*?<\/hp:linesegarray>/g; // hwpx-fill.ts 이식
 const P_G_RE = /<hp:p\b[\s\S]*?<\/hp:p>/g;
 const T_RE = /<hp:t>([\s\S]*?)<\/hp:t>/;
 const T_ALL_RE = /<hp:t>[\s\S]*?<\/hp:t>/g;
 
-function escapeXml(value: string): string {
+export function escapeXml(value: string): string {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -50,14 +51,14 @@ function setParagraphText(pXml: string, value: string): string {
 }
 
 /** 토큰을 포함한 문단(<hp:p>…</hp:p>) 전체를 찾는다. */
-function findParagraphWith(xml: string, needle: string): string | null {
+export function findParagraphWith(xml: string, needle: string): string | null {
   for (const m of xml.matchAll(P_G_RE)) {
     if (m[0].includes(needle)) return m[0];
   }
   return null;
 }
 
-function attrOf(xml: string, tag: string, attr: string): string | null {
+export function attrOf(xml: string, tag: string, attr: string): string | null {
   const re = new RegExp(`<${tag}\\b[^>]*\\b${attr}="([^"]*)"`);
   return re.exec(xml)?.[1] ?? null;
 }
@@ -69,7 +70,7 @@ interface TemplateStyles {
   tableTpl: TableTemplate | null;
 }
 
-interface TableTemplate {
+export interface TableTemplate {
   preamble: string; // <hp:tbl …> ~ 첫 <hp:tr> 직전 (rowCnt/colCnt/사이즈는 치환)
   tcTpl: string; // 첫 <hp:tc>…</hp:tc>
   wrapP: string; // 표를 감싸던 문단 골격(표 자리 마커 __TBL__)
@@ -80,14 +81,14 @@ interface TableTemplate {
  * (실측: 신규 항목을 목록 중간에 끼우면 이후 항목들의 참조가 한 칸씩 밀려 정렬이 뒤바뀜).
  * 따라서 모든 신규 등록은 반드시 컨테이너 닫는 태그 직전(목록 끝)에 append 한다.
  */
-function appendToList(headerXml: string, closing: string, cntTag: string, clone: string): string | null {
+export function appendToList(headerXml: string, closing: string, cntTag: string, clone: string): string | null {
   if (!headerXml.includes(closing)) return null;
   const withClone = headerXml.replace(closing, clone + closing);
   return withClone.replace(new RegExp(`(<${cntTag}\\b[^>]*\\bitemCnt=")(\\d+)(")`), (_, a, n, b) => `${a}${Number(n) + 1}${b}`);
 }
 
 /** header.xml 에 paraPr 사본을 등록(정렬·여백 치환)하고 새 id 반환. 실패 시 null. */
-function registerParaPr(
+export function registerParaPr(
   headerXml: string,
   baseId: string,
   patch: { align?: "CENTER" | "RIGHT"; leftHwp?: number; intentHwp?: number; lineSpacingPct?: number }
@@ -117,7 +118,7 @@ function registerParaPr(
 }
 
 /** header.xml 에 charPr 사본을 등록(높이·굵게·자간 치환)하고 새 id 반환 — 목록 끝 append. */
-function registerCharPr(
+export function registerCharPr(
   headerXml: string,
   baseId: string,
   patch: { heightPt?: number; bold?: boolean; spacingPct?: number }
@@ -164,7 +165,7 @@ function isLineParagraph(headerXml: string, pXml: string): boolean {
 }
 
 /** 텍스트 폭 근사(pt) — 한글·전각 1em, 그 외 0.5em. */
-function approxTextWidthPt(text: string, fontPt: number): number {
+export function approxTextWidthPt(text: string, fontPt: number): number {
   let w = 0;
   for (const ch of text) {
     w += /[ᄀ-ᇿ　-鿿가-힯豈-﫿！-｠]/.test(ch) ? fontPt : fontPt * 0.5;
@@ -173,7 +174,7 @@ function approxTextWidthPt(text: string, fontPt: number): number {
 }
 
 /** header.xml 에 borderFill 을 등록(4변 실선 또는 무테두리) — org-chart.ts orgBorderFillXml 이식. */
-function registerBorderFill(headerXml: string, solid: boolean): { xml: string; id: string } | null {
+export function registerBorderFill(headerXml: string, solid: boolean): { xml: string; id: string } | null {
   let maxId = 0;
   for (const idm of headerXml.matchAll(/<hh:borderFill\b[^>]*\bid="(\d+)"/g)) maxId = Math.max(maxId, Number(idm[1]));
   if (maxId === 0) return null;
@@ -246,7 +247,7 @@ function fillTcTemplate(
 }
 
 /** {{S_TABLE}} 참조 표에서 표 골격을 추출하고 문서에서 제거. */
-function extractTableTemplate(xml: string): { xml: string; tpl: TableTemplate | null } {
+export function extractTableTemplate(xml: string): { xml: string; tpl: TableTemplate | null } {
   const idx = xml.indexOf("{{S_TABLE}}");
   if (idx < 0) return { xml, tpl: null };
   // 토큰을 포함하는 hp:tbl 블록 탐색
@@ -282,7 +283,7 @@ function extractTableTemplate(xml: string): { xml: string; tpl: TableTemplate | 
 }
 
 const templateCache = new Map<string, Buffer>();
-async function loadTemplate(file: string): Promise<Buffer> {
+export async function loadTemplate(file: string): Promise<Buffer> {
   const cached = templateCache.get(file);
   if (cached) return cached;
   const bytes = await readFile(path.join(process.cwd(), "public", "hwpx", file));
@@ -691,7 +692,7 @@ function spread(name: string): string {
 }
 
 /** 표 블록 → hp:tbl XML(참조 표 골격 재사용). 표 전체 폭은 참조 표의 hp:sz 를 따른다. */
-function buildTableXml(
+export function buildTableXml(
   t: Extract<LetterBlock, { kind: "table" }>,
   tpl: TableTemplate,
   fontPt: number,

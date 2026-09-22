@@ -6,10 +6,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FilePlus2, Loader2, PencilLine, Search } from "lucide-react";
+import { FileDown, FilePlus2, Loader2, PencilLine, Search } from "lucide-react";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { InternalRuleView } from "@/components/rules/InternalRuleView";
+import { downloadExport } from "@/lib/flowdoc/download";
 import { formatRegNo, type RuleBody, type RuleDocumentRow, type RuleVersionRow } from "@/lib/rules/types";
 import "@/components/cdash/cdash.css";
 
@@ -104,6 +105,27 @@ export function InternalRuleListBoard() {
   }, [docs, q]);
 
   const version = doc?.versions.find((v) => v.versionId === versionId) ?? null;
+
+  const [exporting, setExporting] = useState<"pdf" | "hwpx" | null>(null);
+  const exportFile = async (format: "pdf" | "hwpx") => {
+    if (!doc || !body) return;
+    setExporting(format);
+    try {
+      await downloadExport(
+        "/api/rules/internal/export",
+        {
+          header: { title: doc.title, regNo: doc.regNo, ownerDept: doc.ownerDept, approver: doc.approver, enactedDate: doc.enactedDate },
+          body,
+          format,
+        },
+        `${doc.title}.${format}`
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "파일을 만들지 못했습니다.");
+    } finally {
+      setExporting(null);
+    }
+  };
   const publishedCount = docs.filter((d) => d.versions.some((v) => v.status === "published")).length;
 
   return (
@@ -217,10 +239,24 @@ export function InternalRuleListBoard() {
                 )}
                 {version?.effectiveDate && <span className="text-[12px] cd-text-faint">{version.effectiveDate} 시행</span>}
                 {version?.revisionNote && <span className="text-[12px] cd-text-faint truncate">· {version.revisionNote}</span>}
+                <span className="ml-auto flex items-center gap-2">
+                  <button type="button" className="cd-btn cd-action" disabled={!body || exporting != null} onClick={() => void exportFile("pdf")}>
+                    <FileDown className="w-4 h-4" /> {exporting === "pdf" ? "만드는 중…" : "PDF"}
+                  </button>
+                  <button
+                    type="button"
+                    className="cd-btn cd-action"
+                    disabled={!body || exporting != null}
+                    onClick={() => void exportFile("hwpx")}
+                    title="한글에서 고칠 수 있는 편집용 사본"
+                  >
+                    <FileDown className="w-4 h-4" /> {exporting === "hwpx" ? "만드는 중…" : "HWPX"}
+                  </button>
+                </span>
                 {canManage && (
                   <button
                     type="button"
-                    className="cd-btn cd-action ml-auto"
+                    className="cd-btn cd-action"
                     onClick={() => router.push(`/rules/internal/edit?docId=${encodeURIComponent(doc.docId)}`)}
                   >
                     <PencilLine className="w-4 h-4" /> 편집

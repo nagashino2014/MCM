@@ -252,14 +252,14 @@ export async function renderFlowHwpx(blocks: FlowBlock[], opts: FlowHwpxOptions 
       const inner = runsXml([{ text: `${b.text}${gap}${b.sealText}` }], b.sizePt, true);
       // 한글은 문단 기준(PARA) 그림의 음수 세로 오프셋을 0으로 붙인다(09-22 실측) → 직인은 윗 문단(사명 줄)에
       // 기준을 두고 '윗 줄 높이 + 서명 글자 중심 - 직인 높이/2' 만큼 내려 찍는다.
-      if (b.stamp && stampPic && out.length && lastLineHPt > 0 && !b.spaceBeforePt) {
+      if (b.stamp && stampPic && out.length && lastLineHPt > 0) {
         const stampW = Number(attrOf(stampPic, "hp:sz", "width") ?? 4903);
         const stampH = Number(attrOf(stampPic, "hp:sz", "height") ?? 4784);
         const full = approxTextWidthPt(`${b.text}${gap}${b.sealText}`, b.sizePt) * HWP_PER_PT;
         const before = approxTextWidthPt(`${b.text}${gap}`, b.sizePt) * HWP_PER_PT;
         const sealW = approxTextWidthPt(b.sealText, b.sizePt) * HWP_PER_PT;
         const horz = Math.max(0, Math.round((COLUMN_W_HWP - full) / 2 + before + sealW / 2 - stampW / 2));
-        const vert = Math.max(0, Math.round((lastLineHPt + b.sizePt * 1.25) * HWP_PER_PT - stampH / 2)); // 1.25 = 한글 실측 보정(09-22)
+        const vert = Math.max(0, Math.round((lastLineHPt + (b.spaceBeforePt ?? 0) + b.sizePt * 1.25) * HWP_PER_PT - stampH / 2)); // 1.25 = 한글 실측 보정(09-22)
         const pic = stampPic.replace(
           /<hp:pos\b[^>]*\/>/,
           `<hp:pos treatAsChar="0" affectLSpacing="0" flowWithText="0" allowOverlap="1" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="COLUMN" vertAlign="TOP" horzAlign="LEFT" vertOffset="${vert}" horzOffset="${horz}"/>`

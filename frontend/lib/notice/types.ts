@@ -20,6 +20,9 @@ export function parseNoticeNo(no: string): number | null {
   return m ? Number(m[1]) : null;
 }
 
+/** 본문 첫 줄 들여쓰기(pt) — 공문(65pt)보다 얕게(2026-09-22 사용자 요청, 약 15px) */
+export const NOTICE_BODY_INDENT = 15;
+
 export const DEFAULT_NOTICE_RECIPIENT = "전 임직원";
 export const DEFAULT_NOTICE_SENDER = "대표이사";
 

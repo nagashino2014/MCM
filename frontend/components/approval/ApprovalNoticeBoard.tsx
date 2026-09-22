@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, BookmarkPlus, Eye, FileText, GripVertical, Megaphone, Plus, Save, Send, Stamp, Trash2, Users, X } from "lucide-react";
+import { ArrowLeft, BookmarkPlus, Eye, FileDown, FileText, GripVertical, Megaphone, Plus, Save, Send, Stamp, Trash2, Users, X } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdDateInput } from "@/components/cdash/CdField";
@@ -21,6 +21,7 @@ import { DeleteDraftButton, RejectedBanner, toEditDocMeta, type EditDocMeta } fr
 import AttachmentPreviewModal from "@/components/approval/AttachmentPreviewModal";
 import { ATTACHMENT_ACCEPT, ATTACHMENT_ALLOWED_TEXT, isAllowedAttachment, type DocAttachment } from "@/lib/approval/attachments";
 import { MailEditor } from "@/components/mail/MailEditor";
+import { downloadExport } from "@/lib/flowdoc/download";
 import { ISO_DATE_RE } from "@/lib/letter/types";
 import {
   DEFAULT_NOTICE_RECIPIENT, DEFAULT_NOTICE_SENDER, NOTICE_FORM_ID, formatNoticeNo, parseNoticeNo, type NoticeFieldValues,
@@ -404,6 +405,23 @@ export function ApprovalNoticeBoard() {
       setBusy(null);
     }
   }, [buildFieldValues, docNo, manualOn, manualNo]);
+
+  /** PDF·HWPX 내려받기 — 저장 전 화면 내용 그대로(번호는 확정 번호 > 직접 지정 번호 > 채번 예정) */
+  const [exporting, setExporting] = useState<"pdf" | "hwpx" | null>(null);
+  const exportFile = async (format: "pdf" | "hwpx") => {
+    setExporting(format);
+    try {
+      await downloadExport(
+        "/api/notices/export",
+        { fieldValues: buildFieldValues(), docNo: docNo ?? (manualOn && manualNo ? manualNo : null), format },
+        `내부고시.${format}`
+      );
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setExporting(null);
+    }
+  };
 
   const send = useCallback(
     async (action: "save" | "submit") => {
@@ -850,7 +868,26 @@ export function ApprovalNoticeBoard() {
           <div className="rounded-2xl bg-[color:var(--cd-card)] shadow-2xl w-full max-w-[1100px] h-[94vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center px-4 py-2.5 border-b cd-border-c">
               <h4 className="font-bold cd-text text-[13px]">내부고시 미리보기</h4>
-              <button type="button" className="ml-auto cd-btn rounded-lg border cd-border-c p-1.5" onClick={() => setPreviewOpen(false)} aria-label="닫기">
+              <span className="ml-auto flex items-center gap-1.5">
+                <button
+                  type="button"
+                  className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11.5px] flex items-center gap-1 disabled:opacity-50"
+                  disabled={exporting != null}
+                  onClick={() => void exportFile("pdf")}
+                >
+                  <FileDown className="w-3.5 h-3.5" /> {exporting === "pdf" ? "만드는 중..." : "PDF 저장"}
+                </button>
+                <button
+                  type="button"
+                  className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11.5px] flex items-center gap-1 disabled:opacity-50"
+                  disabled={exporting != null}
+                  onClick={() => void exportFile("hwpx")}
+                  title="한글에서 고칠 수 있는 편집용 사본입니다(공식 지면은 PDF)"
+                >
+                  <FileDown className="w-3.5 h-3.5" /> {exporting === "hwpx" ? "만드는 중..." : "HWPX 저장"}
+                </button>
+              </span>
+              <button type="button" className="ml-2 cd-btn rounded-lg border cd-border-c p-1.5" onClick={() => setPreviewOpen(false)} aria-label="닫기">
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>

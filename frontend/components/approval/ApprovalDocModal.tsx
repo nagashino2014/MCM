@@ -283,14 +283,21 @@ export function ApprovalDocViewer({
                   {detail.docNo ?? "미채번"} · {DOC_STATUS_LABEL[detail.status] ?? detail.status}
                 </span>
               </h3>
-              {/* 계약서(147) — HWPX 다운로드(한글 원본 확인용, 2026-08-11 사용자 요청). 결재 중에도 on-demand 렌더. */}
-              {detail.formId === AGREEMENT_FORM_ID && (
+              {/* 계약서(147)·내부고시(266) — HWPX 다운로드(한글 원본 확인용). 결재 중에도 on-demand 렌더. */}
+              {(detail.formId === AGREEMENT_FORM_ID || detail.formId === NOTICE_FORM_ID) && (
                 <button
                   type="button"
                   className="flex items-center justify-center shrink-0"
                   style={{ width: 37, height: 37 }}
                   title="HWPX 다운로드(한글 원본)"
-                  onClick={() => window.open(`/api/contracts/agreements/${encodeURIComponent(docId)}/hwpx`, "_blank")}
+                  onClick={() =>
+                    window.open(
+                      detail.formId === NOTICE_FORM_ID
+                        ? `/api/notices/${encodeURIComponent(docId)}/hwpx`
+                        : `/api/contracts/agreements/${encodeURIComponent(docId)}/hwpx`,
+                      "_blank"
+                    )
+                  }
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   {/* 세로로 긴 아이콘(내용 종횡비 0.65)이라 30px 박스에서는 폭이 좁아 작아 보인다 →

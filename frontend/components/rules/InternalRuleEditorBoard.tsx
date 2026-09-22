@@ -9,7 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, ChevronRight, FilePlus2, FileUp, ListChecks, Loader2, Plus,
+  AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, ChevronRight, FileDown, FilePlus2, FileUp, ListChecks, Loader2, Plus,
   Save, Send, Trash2, Wand2,
 } from "lucide-react";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
@@ -17,6 +17,7 @@ import { CdDateInput, CdInput, CdSelect } from "@/components/cdash/CdField";
 import { CdTabs } from "@/components/cdash/CdTabs";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { InternalRuleView } from "@/components/rules/InternalRuleView";
+import { downloadExport } from "@/lib/flowdoc/download";
 import { circled, emptyInternalRuleBody, itemHead, normalizeRuleBody } from "@/lib/rules/normalize";
 import {
   formatRegNo, type RuleArticle, type RuleBody, type RuleClause, type RuleDocumentRow, type RuleVersionRow,
@@ -548,6 +549,34 @@ export function InternalRuleEditorBoard() {
     }
   }
 
+  // ── 출력(PDF·HWPX) — 저장 전 화면 내용 그대로 ──
+  const [exporting, setExporting] = useState<"pdf" | "hwpx" | null>(null);
+  async function handleExport(format: "pdf" | "hwpx") {
+    setExporting(format);
+    setError("");
+    try {
+      await downloadExport(
+        "/api/rules/internal/export",
+        {
+          header: {
+            title: meta.title,
+            regNo: meta.regNo.trim() ? Number(meta.regNo) : null,
+            ownerDept: meta.ownerDept || null,
+            approver: meta.approver || null,
+            enactedDate: meta.enactedDate || null,
+          },
+          body,
+          format,
+        },
+        `${meta.title || "내부규정"}.${format}`
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "파일을 만들지 못했습니다.");
+    } finally {
+      setExporting(null);
+    }
+  }
+
   // ── 렌더 ──
 
   const articleCount = body.chapters.reduce((n, c) => n + c.articles.length, 0);
@@ -630,6 +659,12 @@ export function InternalRuleEditorBoard() {
             </select>
             <button type="button" className="cd-btn cd-action" onClick={() => fileRef.current?.click()} disabled={!!busy} title="HWPX · DOCX · TXT · MD">
               {busy === "가져오는 중" ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileUp className="w-4 h-4" />} 가져오기
+            </button>
+            <button type="button" className="cd-btn cd-action" onClick={() => void handleExport("pdf")} disabled={exporting != null} title="현재 화면 내용을 PDF 로 저장">
+              {exporting === "pdf" ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />} PDF
+            </button>
+            <button type="button" className="cd-btn cd-action" onClick={() => void handleExport("hwpx")} disabled={exporting != null} title="한글에서 고칠 수 있는 HWPX 편집용 사본">
+              {exporting === "hwpx" ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />} HWPX
             </button>
             <Link href={docId ? `/rules/internal?docId=${encodeURIComponent(docId)}` : "/rules/internal"} className="cd-btn cd-action">
               <ListChecks className="w-4 h-4" /> 일람

@@ -2,6 +2,13 @@
 -- 기존 229~234 원문/업무 행/해시를 재작성하거나 주체를 합치지 않는다.
 BEGIN;
 
+-- Earlier VAT definitions must not replace the sealed R1 installation.
+DO $$ BEGIN
+  IF pg_catalog.to_regprocedure(pg_catalog.format('%I.finance_assert_r1_definitions(text)', pg_catalog.current_schema())) IS NOT NULL THEN
+    RAISE EXCEPTION 'VAT migration 235 cannot be reapplied after R1 installation' USING ERRCODE='55000';
+  END IF;
+END $$;
+
 CREATE OR REPLACE FUNCTION vat_finalization_identity_version()
 RETURNS text LANGUAGE sql IMMUTABLE AS $$ SELECT 'vat-finalization-taxpayer-v1'::text $$;
 

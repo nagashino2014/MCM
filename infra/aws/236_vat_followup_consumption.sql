@@ -1,6 +1,13 @@
 -- C-b2: 정확한 C 검토 쌍을 v2 내부 확정에 소비한다. 기존 v1 원문/함수는 유지한다.
 BEGIN;
 
+-- Earlier VAT definitions must not replace the sealed R1 installation.
+DO $$ BEGIN
+  IF pg_catalog.to_regprocedure(pg_catalog.format('%I.finance_assert_r1_definitions(text)', pg_catalog.current_schema())) IS NOT NULL THEN
+    RAISE EXCEPTION 'VAT migration 236 cannot be reapplied after R1 installation' USING ERRCODE='55000';
+  END IF;
+END $$;
+
 DO $$ DECLARE installed_version text;
 BEGIN
   IF EXISTS(SELECT 1 FROM vat_followup_review_consumptions) THEN

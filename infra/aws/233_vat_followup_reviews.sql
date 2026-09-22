@@ -2,6 +2,13 @@
 -- 실제 신고 소비는 C-b 계약이 준비될 때 새 migration으로 활성화한다.
 BEGIN;
 
+-- Earlier VAT definitions must not replace the sealed R1 installation.
+DO $$ BEGIN
+  IF pg_catalog.to_regprocedure(pg_catalog.format('%I.finance_assert_r1_definitions(text)', pg_catalog.current_schema())) IS NOT NULL THEN
+    RAISE EXCEPTION 'VAT migration 233 cannot be reapplied after R1 installation' USING ERRCODE='55000';
+  END IF;
+END $$;
+
 CREATE OR REPLACE FUNCTION vat_followup_hash(v jsonb) RETURNS text LANGUAGE sql IMMUTABLE STRICT AS $$
  SELECT encode(sha256(convert_to(vat_post_canonical(v),'UTF8')),'hex')
 $$;

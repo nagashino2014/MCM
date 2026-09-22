@@ -2,6 +2,13 @@
 -- 기존 229~233, 과거 확정본/검토판, canonical/hash 의미는 변경하지 않는다.
 BEGIN;
 
+-- Earlier VAT definitions must not replace the sealed R1 installation.
+DO $$ BEGIN
+  IF pg_catalog.to_regprocedure(pg_catalog.format('%I.finance_assert_r1_definitions(text)', pg_catalog.current_schema())) IS NOT NULL THEN
+    RAISE EXCEPTION 'VAT migration 234 cannot be reapplied after R1 installation' USING ERRCODE='55000';
+  END IF;
+END $$;
+
 -- 주체 없는 legacy와 주체 있는 basis가 같은 잠금 범위를 사용한다.
 -- 과거 점유를 추정하여 백필하지 않는 기술용 직렬화 표다.
 CREATE TABLE IF NOT EXISTS vat_finalization_fences (

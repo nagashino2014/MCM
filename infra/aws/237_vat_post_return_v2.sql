@@ -2,6 +2,13 @@
 -- 232/236 파일과 기존 v1 계산·대사 해시/업무 원문을 재작성하지 않는다.
 BEGIN;
 
+-- Earlier VAT definitions must not replace the sealed R1 installation.
+DO $$ BEGIN
+  IF pg_catalog.to_regprocedure(pg_catalog.format('%I.finance_assert_r1_definitions(text)', pg_catalog.current_schema())) IS NOT NULL THEN
+    RAISE EXCEPTION 'VAT migration 237 cannot be reapplied after R1 installation' USING ERRCODE='55000';
+  END IF;
+END $$;
+
 CREATE OR REPLACE FUNCTION vat_post_target_version() RETURNS text
 LANGUAGE sql IMMUTABLE AS $$ SELECT 'vat-post-target-v2'::text $$;
 

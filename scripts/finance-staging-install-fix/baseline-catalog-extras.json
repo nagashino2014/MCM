@@ -1,0 +1,78 @@
+{
+  "card_transactions": {
+    "columns": [
+      {
+        "name": "slip_key",
+        "type": "text",
+        "default": null,
+        "notNull": false,
+        "identity": "",
+        "position": 38,
+        "collation": "pg_catalog.default",
+        "generated": ""
+      },
+      {
+        "name": "slip_at",
+        "type": "text",
+        "default": null,
+        "notNull": false,
+        "identity": "",
+        "position": 39,
+        "collation": "pg_catalog.default",
+        "generated": ""
+      }
+    ],
+    "indexes": [
+      {
+        "live": true,
+        "name": "idx_card_txn_slip_pending",
+        "ready": true,
+        "valid": true,
+        "unique": false,
+        "columns": [
+          "approved_at"
+        ],
+        "options": "3",
+        "primary": false,
+        "keyCount": 1,
+        "exclusion": false,
+        "immediate": true,
+        "predicate": "((slip_key IS NULL) AND (approval_type = '승인'::text))",
+        "accessMethod": "btree",
+        "attributeCount": 1,
+        "operatorClasses": [
+          "pg_catalog.text_ops"
+        ],
+        "nullsNotDistinct": false
+      }
+    ]
+  },
+  "tax_invoices": {
+    "columns": [
+      {
+        "name": "invoicee_cc_emails",
+        "type": "text",
+        "default": null,
+        "notNull": false,
+        "identity": "",
+        "position": 31,
+        "collation": "pg_catalog.default",
+        "generated": ""
+      }
+    ]
+  },
+  "journal_accounts": {
+    "columns": [
+      {
+        "name": "created_at",
+        "type": "text",
+        "default": "to_char((now() AT TIME ZONE 'Asia/Seoul'::text), 'YYYY-MM-DD HH24:MI:SS'::text)",
+        "notNull": true,
+        "identity": "",
+        "position": 6,
+        "collation": "pg_catalog.default",
+        "generated": ""
+      }
+    ]
+  }
+}

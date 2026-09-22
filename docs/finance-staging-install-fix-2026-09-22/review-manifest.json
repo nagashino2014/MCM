@@ -1,0 +1,130 @@
+{
+  "baseCommit": "f98b08b5dea2095802da93464c8992f8c2a4bf88",
+  "sourceSchema": {
+    "kind": "staging schema-only after SQL 226-232; local pgvector omission",
+    "size": 536201,
+    "sha256": "1a271675138c0411be83208985d6087a074fe05b1fb0bad4802a84753694feb6"
+  },
+  "localRehearsal": {
+    "remainingInstallation": "21/21",
+    "partialReapplyThenFullInstallation": "28/28",
+    "finalDefinitionAssertions": "7/7",
+    "contractGuardMatches": "7/7",
+    "guardMutationCounterexamples": "3/3",
+    "builderFixedPoint": true,
+    "fullReapplyAfterCompletion": "unsupported; SQL 232-237 now reject before definition changes once SQL 240 is installed",
+    "rs1ReapplyGuard": "232-237: six of six rejected with 55000; seven of seven proofs remained valid after each"
+  },
+  "files": [
+    {
+      "path": "CLAUDE.md",
+      "size": 13052,
+      "sha256": "674aeacdd6d4d58e4125430a72be859463f06098186d61b34417350832fb77d0"
+    },
+    {
+      "path": "docs/finance-staging-install-fix-2026-09-22/CLAUDE-REVIEW-REQUEST.md",
+      "size": 5509,
+      "sha256": "fe23e512cfeb46d5a3be436df8d375a101f4ac4ff3506fed73c55f7a7f392fcd"
+    },
+    {
+      "path": "docs/finance-staging-install-fix-2026-09-22/CLAUDE-RS1-REVIEW-REQUEST.md",
+      "size": 3154,
+      "sha256": "50eade96693f9c3e3cb4f86f624fb719f02f75371137774dd2effec8c4050ff3"
+    },
+    {
+      "path": "docs/finance-staging-install-fix-2026-09-22/INSTALL-ORDER.md",
+      "size": 3599,
+      "sha256": "bcedf660c24cab685cefbf4aea8bb9ed19d1aba7d44849337570f5d8a834cea5"
+    },
+    {
+      "path": "docs/finance-staging-install-fix-2026-09-22/RS1-LOCAL-RESULTS.json",
+      "size": 725,
+      "sha256": "f9f98207002443e746484d7843855db2995ab40eaf881d27effdd9b3355a39c7"
+    },
+    {
+      "path": "frontend/lib/finance/journal-use-definition-contract.json",
+      "size": 269069,
+      "sha256": "dccbcb0d995b4e72c1f8f143301999d57d46e63e61f9ff20bbddad9ca41e1e99"
+    },
+    {
+      "path": "frontend/lib/finance/recognition-definition-contract.json",
+      "size": 1444281,
+      "sha256": "f92a6795af1d6e5eed56ab7763d16de227ec676b7b16982b4142cf676e59dd44"
+    },
+    {
+      "path": "frontend/lib/finance/vat-use-definition-contract.json",
+      "size": 871245,
+      "sha256": "d896249b47e14e9d776e1ee08af015dd9c6fdc43d0f884e9795e01e8ea627a2b"
+    },
+    {
+      "path": "infra/aws/232_vat_filing_post_events.sql",
+      "size": 28909,
+      "sha256": "306c7cdf24673a2fede0436202ba50834d5004cc2d6428cd58f8a0a9b2838dc8"
+    },
+    {
+      "path": "infra/aws/233_vat_followup_reviews.sql",
+      "size": 36159,
+      "sha256": "413882d8671cef2e13b04bed83c114a025c1ebf3a962d1db1e33ea0e9e9ab358"
+    },
+    {
+      "path": "infra/aws/234_vat_finalization_boundary.sql",
+      "size": 14345,
+      "sha256": "e7c14a63a618ae17c5033d494caa4844d34973678905447bc9fb1d382c631b69"
+    },
+    {
+      "path": "infra/aws/235_vat_taxpayer_boundary.sql",
+      "size": 9678,
+      "sha256": "b7d8cde6ea4aaf6dfe44686cc6706a8a36183794ab07e24850137352485c2876"
+    },
+    {
+      "path": "infra/aws/236_vat_followup_consumption.sql",
+      "size": 33742,
+      "sha256": "8510432ea595ea1428f13faf512c084dcd7b32589b10fb3c4160ee06cab02436"
+    },
+    {
+      "path": "infra/aws/237_vat_post_return_v2.sql",
+      "size": 10003,
+      "sha256": "2c46aa26e12cac6704d09e87e23faaa1227f295dc7af8ddad19863f286723bde"
+    },
+    {
+      "path": "infra/aws/257_supply_vat_consumption.sql",
+      "size": 1361518,
+      "sha256": "390dd4fd25c498342b1c6269835e76c7763b97d2aba06559d0699b119e7089f3"
+    },
+    {
+      "path": "infra/aws/258_supply_vat_registry_identity.sql",
+      "size": 907068,
+      "sha256": "a161c803f1c2bc17f29fabfe7922675ec14bcc5f54f9563cf70d93be11d52b6c"
+    },
+    {
+      "path": "infra/aws/260_card_identity_currentness.sql",
+      "size": 1248264,
+      "sha256": "272615cdc7501dabe01f1c2138611659160f48feaf556d49bb0c63fb6564ed5e"
+    },
+    {
+      "path": "infra/aws/263_journal_use.sql",
+      "size": 1088176,
+      "sha256": "792e16911e590839285eb9b0a25a8892a996fb37b79635f9067984b36804a356"
+    },
+    {
+      "path": "infra/aws/264_document_builtin_binding.sql",
+      "size": 185232,
+      "sha256": "b54cde4f022cd761152655903ee250deed1507bafa6c2800b6d4cba7b21d2f2d"
+    },
+    {
+      "path": "infra/aws/ops/staging-apply-migrations.ps1",
+      "size": 53148,
+      "sha256": "d0bc3f9989604ee87aab5ffe22aa2126a1e9e461a75865e101de6f8fdf66eb44"
+    },
+    {
+      "path": "scripts/finance-staging-install-fix/baseline-catalog-extras.json",
+      "size": 1791,
+      "sha256": "5d0f2624400ac07b290711d5d76d8e38dd20012b4944162febe8e392701ae91a"
+    },
+    {
+      "path": "scripts/finance-staging-install-fix/rebuild-guard-contracts.mjs",
+      "size": 7096,
+      "sha256": "69c5ebb8178b56ab0a1586f839ac54d24fec33ed388dc8e4653d9f473d7b91dc"
+    }
+  ]
+}

@@ -1,6 +1,13 @@
 -- B3B: 신고 후 접수·납부 이력. 229/230의 봉인·계산·소비는 변경하지 않는다.
 BEGIN;
 
+-- Earlier VAT definitions must not replace the sealed R1 installation.
+DO $$ BEGIN
+  IF pg_catalog.to_regprocedure(pg_catalog.format('%I.finance_assert_r1_definitions(text)', pg_catalog.current_schema())) IS NOT NULL THEN
+    RAISE EXCEPTION 'VAT migration 232 cannot be reapplied after R1 installation' USING ERRCODE='55000';
+  END IF;
+END $$;
+
 CREATE OR REPLACE FUNCTION vat_post_canonical(v jsonb) RETURNS text LANGUAGE sql IMMUTABLE STRICT AS $$
  SELECT CASE jsonb_typeof(v)
  WHEN 'object' THEN '{'||COALESCE((SELECT string_agg(to_json(k)::text||':'||vat_post_canonical(x),',' ORDER BY k COLLATE "C") FROM jsonb_each(v) e(k,x)),'')||'}'

@@ -398,6 +398,14 @@ foreach ($f in $(if ($RecoverAccountingMaintenance) { @() } else { $Files })) {
   if (Test-LoneCarriageReturn $sqlBytes) { Fail "단독 CR 줄바꿈이 있는 SQL: $f — CRLF 또는 LF를 사용하세요." }
   $resolvedSqlFiles += [pscustomobject]@{ Name = [System.IO.Path]::GetFileName($sqlPath); Path = $sqlPath; HasCr = ($sqlBytes -contains 13) }
 }
+# 233의 저장 함수는 card_tax_reviews%ROWTYPE을 정의 시점에 해석한다.
+# 243을 함께 넘긴 경우 순서가 뒤면 DB에 닿기 전에 거절한다.
+$selectedNames = @($resolvedSqlFiles | ForEach-Object { $_.Name })
+$followupIndex = [array]::IndexOf($selectedNames, '233_vat_followup_reviews.sql')
+$cardReviewIndex = [array]::IndexOf($selectedNames, '243_card_tax_reviews.sql')
+if ($followupIndex -ge 0 -and $cardReviewIndex -ge 0 -and $cardReviewIndex -gt $followupIndex) {
+  Fail "[migration_dependency_order] 243_card_tax_reviews.sql을 233_vat_followup_reviews.sql보다 먼저 적용해야 합니다."
+}
 $accountingDefinitionFiles = @()
 $requiresAccountingMaintenance = $false
 if (-not $RecoverAccountingMaintenance) {
@@ -668,6 +676,10 @@ END `$drain`$;
     $batch.Add(@"
 DO `$proof`$
 BEGIN
+  IF to_regprocedure('finance_assert_supply_definitions(text)') IS NOT NULL THEN PERFORM finance_assert_supply_definitions(current_schema()); END IF;
+  IF to_regprocedure('finance_assert_document_definitions(text)') IS NOT NULL THEN PERFORM finance_assert_document_definitions(current_schema()); END IF;
+  IF to_regprocedure('finance_assert_same_definitions(text)') IS NOT NULL THEN PERFORM finance_assert_same_definitions(current_schema()); END IF;
+  IF to_regprocedure('finance_assert_group_definitions(text)') IS NOT NULL THEN PERFORM finance_assert_group_definitions(current_schema()); END IF;
   IF to_regprocedure('finance_assert_vat_use_definitions(text)') IS NOT NULL THEN PERFORM finance_assert_vat_use_definitions(current_schema()); END IF;
   IF to_regprocedure('finance_assert_r1_definitions(text)') IS NOT NULL THEN PERFORM finance_assert_r1_definitions(current_schema()); END IF;
   IF to_regprocedure('finance_assert_journal_use_definitions(text)') IS NOT NULL THEN PERFORM finance_assert_journal_use_definitions(current_schema()); END IF;

@@ -1,0 +1,18 @@
+{
+  "date": "2026-09-22",
+  "environment": "isolated local PostgreSQL 17 on port 15452; staging schema-only snapshot after SQL 232; no staging or AWS writes",
+  "completedDatabaseReapply": {
+    "files": [232, 233, 234, 235, 236, 237],
+    "eachFile": "rejected before definition change with SQLSTATE 55000",
+    "definitionAssertionsAfterEachAttempt": "7/7"
+  },
+  "freshResume": {
+    "reappliedAlreadyInstalled": "226-232: 7/7",
+    "remainingInRunbookOrder": "21/21",
+    "finalDefinitionAssertions": "7/7"
+  },
+  "limitations": [
+    "Actual staging business rows were not copied into the local rehearsal database.",
+    "Staging maintenance, AWS deployment and Next deployment were not run in this verification."
+  ]
+}

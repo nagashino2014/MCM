@@ -10,6 +10,7 @@ import { resolveOpenCancelRequests } from "@/lib/approval/cancel";
 import { notifyPendingSteps, notifyDrafterResult } from "@/lib/approval/notify";
 import { generateDocSummary } from "@/lib/approval/summarize";
 import { assignManualDocNo, markLetterPendingOnApproval } from "@/lib/letter/store";
+import { assignManualNoticeNo } from "@/lib/notice/store";
 import { markQuotePendingOnApproval } from "@/lib/quote/store";
 import { markAgreementApproved } from "@/lib/agreement/store";
 import { runFormActionsForDoc } from "@/lib/approval/actions";
@@ -206,8 +207,11 @@ export async function loadDrafterSnapshot(userId: string): Promise<{
  */
 const LETTER_RULE_KEY = "대외"; // = lib/letter/types.ts LETTER_RULE_KEY (fields.ts 처럼 DB 계층은 클라이언트 모듈을 참조하지 않는다)
 const LETTER_FORM_ID = "frm-official-letter"; // = lib/letter/types.ts LETTER_FORM_ID (동일 사유)
-// 내부고시(266) — `{연도}-내부고시-{NNNNN}호` · 신규 연도 01001 시작. = lib/notice/types.ts NOTICE_RULE_KEY (동일 사유)
+// 내부고시(266·267) — 연도 없는 통산 번호 `내부고시-{NNNN}호`, 시퀀스 year 키 'ALL'.
+// = lib/notice/types.ts NOTICE_RULE_KEY / NOTICE_SEQ_YEAR / NOTICE_FORM_ID (동일 사유)
 const NOTICE_RULE_KEY = "내부고시";
+const NOTICE_SEQ_YEAR = "ALL";
+const NOTICE_FORM_ID = "frm-internal-notice";
 
 // 견적(136) — rule_key `견적:{종류}` 5종(통합허가/화관법/HAPs/ESG/기타), 포맷 `{연도}-{종류}-{NNNN}`.
 // = lib/quote/types.ts QUOTE_RULE_PREFIX/QUOTE_NO_LABEL_BY_SERVICE_TYPE (DB 계층은 클라이언트 모듈 미참조)
@@ -223,6 +227,7 @@ const QUOTE_NO_LABELS: Record<string, string> = {
 async function allocateDocNo(txn: PgDatabase, ruleKey: string, year: string): Promise<string> {
   const isLetter = ruleKey === LETTER_RULE_KEY;
   const isNotice = ruleKey === NOTICE_RULE_KEY;
+  if (isNotice) year = NOTICE_SEQ_YEAR;
   const isQuote = ruleKey.startsWith(QUOTE_RULE_PREFIX);
   const reused = rowsToObjects(
     await txn.exec(
@@ -246,7 +251,7 @@ async function allocateDocNo(txn: PgDatabase, ruleKey: string, year: string): Pr
         )[0]?.last_seq ?? 1
       );
   if (isLetter) return `${year}-${ruleKey}-${String(seq).padStart(5, "0")}`;
-  if (isNotice) return `${year}-${ruleKey}-${String(seq).padStart(5, "0")}호`;
+  if (isNotice) return `${ruleKey}-${String(seq).padStart(4, "0")}호`;
   if (isQuote) return `${year}-${ruleKey.slice(QUOTE_RULE_PREFIX.length)}-${String(seq).padStart(4, "0")}`;
   return `${ruleKey}-${year}-${String(seq).padStart(4, "0")}`;
 }
@@ -402,10 +407,13 @@ export async function saveDoc(params: {
     // 공문 번호 수동 지정(관리자) — draft 단계에서 doc_no 를 선점한다. 상신은 doc_no 가
     // 이미 있으면 그대로 쓰므로(submitDoc) 이 번호가 확정 번호가 된다.
     if (params.manualDocNo !== undefined) {
-      if (params.formId !== LETTER_FORM_ID) throw new Error("문서번호 직접 지정은 공문 양식에서만 가능합니다.");
+      if (params.formId !== LETTER_FORM_ID && params.formId !== NOTICE_FORM_ID) {
+        throw new Error("문서번호 직접 지정은 공문·내부고시 양식에서만 가능합니다.");
+      }
       const wanted = (params.manualDocNo ?? "").trim();
       if (wanted) {
-        await assignManualDocNo(txn, docId, wanted);
+        if (params.formId === NOTICE_FORM_ID) await assignManualNoticeNo(txn, docId, wanted);
+        else await assignManualDocNo(txn, docId, wanted);
       } else {
         // 지정 해제 — 자동 채번으로 되돌린다. 상신 이력이 있는 문서(반려 후 재편집)는
         // 이미 확정된 번호를 유지해야 하므로 건드리지 않는다.
@@ -474,13 +482,16 @@ export async function deleteDoc(docId: string): Promise<{ docNo: string | null; 
     await txn.run(`DELETE FROM approval_docs WHERE doc_id = $1`, [docId]);
     // 문서번호 반납(130) — 다음 상신이 이 번호를 이어받는다.
     // 형식: 일반 `{약칭}-{연도}-{일련}` / 공문(135) `{연도}-대외-{일련}` / 견적(136) `{연도}-{종류}-{일련}`.
-    // 내부고시(266) `{연도}-내부고시-{일련}호` 는 공문과 같은 틀로 반납한다.
-    const letterM = docNo ? new RegExp(`^(\\d{4})-(${LETTER_RULE_KEY}|${NOTICE_RULE_KEY})-(\\d+)호?$`).exec(docNo) : null;
+    const letterM = docNo ? new RegExp(`^(\\d{4})-(${LETTER_RULE_KEY})-(\\d+)$`).exec(docNo) : null;
+    // 내부고시(267) `내부고시-{일련}호` — 통산 번호라 연도 키는 'ALL'
+    const noticeM = !letterM && docNo ? new RegExp(`^${NOTICE_RULE_KEY}-(\\d+)호$`).exec(docNo) : null;
     const quoteLabels = Object.values(QUOTE_NO_LABELS).join("|");
-    const quoteM = !letterM && docNo ? new RegExp(`^(\\d{4})-(${quoteLabels})-(\\d+)$`).exec(docNo) : null;
-    const m = !letterM && !quoteM && docNo ? /^(.+)-(\d{4})-(\d+)$/.exec(docNo) : null;
+    const quoteM = !letterM && !noticeM && docNo ? new RegExp(`^(\\d{4})-(${quoteLabels})-(\\d+)$`).exec(docNo) : null;
+    const m = !letterM && !noticeM && !quoteM && docNo ? /^(.+)-(\d{4})-(\d+)$/.exec(docNo) : null;
     const pool = letterM
       ? { rule: letterM[2], year: letterM[1], seq: Number(letterM[3]) }
+      : noticeM
+        ? { rule: NOTICE_RULE_KEY, year: NOTICE_SEQ_YEAR, seq: Number(noticeM[1]) }
       : quoteM
         ? { rule: QUOTE_RULE_PREFIX + quoteM[2], year: quoteM[1], seq: Number(quoteM[3]) }
         : m

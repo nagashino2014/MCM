@@ -4,7 +4,8 @@
 // 공문 작성(ApprovalLetterBoard)과 같은 틀이되 대외 발송 요소를 뺐다:
 //   공문 유형·HWPX 동봉·주소 표기·수신처/참조/외부 참조·하단 전화/메일 표기·대금청구서 작성·사전 검수 없음.
 //   머리 줄은 문서번호/시행일자/수신/발신/제목, 문서 끝은 시행일자·사명·대표이사 (직인) — lib/notice/pdf.ts.
-// 상신 시 {연도}-내부고시-{NNNNN}호 자동 채번(lib/approval/docs.ts). 결재선 패널은 공문 작성 화면 이식
+// 상신 시 '내부고시-NNNN호' 자동 채번(연도 없는 통산 번호, lib/approval/docs.ts) — 관리자는 공문처럼 번호 직접 지정 가능.
+// 발신(문서 명의, 보통 대표이사)과 기안자(로그인 사용자 = 결재 문서의 기안자)는 별개다. 결재선 패널은 공문 작성 화면 이식
 // (회귀 방지 위해 원본은 수정하지 않음 — 공문 화면이 ApprovalDraftBoard 를 이식한 것과 같은 관행).
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -22,7 +23,7 @@ import { ATTACHMENT_ACCEPT, ATTACHMENT_ALLOWED_TEXT, isAllowedAttachment, type D
 import { MailEditor } from "@/components/mail/MailEditor";
 import { ISO_DATE_RE } from "@/lib/letter/types";
 import {
-  DEFAULT_NOTICE_RECIPIENT, DEFAULT_NOTICE_SENDER, NOTICE_FORM_ID, type NoticeFieldValues,
+  DEFAULT_NOTICE_RECIPIENT, DEFAULT_NOTICE_SENDER, NOTICE_FORM_ID, formatNoticeNo, parseNoticeNo, type NoticeFieldValues,
 } from "@/lib/notice/types";
 import "@/components/cdash/cdash.css";
 
@@ -72,6 +73,12 @@ export function ApprovalNoticeBoard() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [docNo, setDocNo] = useState<string | null>(null); // 재편집 문서의 확정 번호
   const [nextNo, setNextNo] = useState<string | null>(null); // 신규 작성 시 채번 예정 번호
+  // 번호 직접 지정(관리자) — 공문과 같은 예외 수단(수기로 먼저 발번한 번호를 맞출 때)
+  const [canAssign, setCanAssign] = useState(false);
+  const [manualOn, setManualOn] = useState(false);
+  const [manualSeq, setManualSeq] = useState("");
+  const [manualCheck, setManualCheck] = useState<{ available: boolean; usedBy: string | null } | null>(null);
+  const [drafterName, setDrafterName] = useState<string | null>(null);
   const [fileAttachments, setFileAttachments] = useState<{ name: string; key: string; size: number }[]>([]);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -91,6 +98,13 @@ export function ApprovalNoticeBoard() {
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (d?.nextNo) setNextNo(d.nextNo);
+        setCanAssign(d?.canAssign === true);
+      })
+      .catch(() => {});
+    fetch("/api/auth/session", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.user?.name) setDrafterName(String(d.user.name));
       })
       .catch(() => {});
     fetch("/api/approval/docs?box=draft", { cache: "no-store" })
@@ -136,6 +150,15 @@ export function ApprovalNoticeBoard() {
         const v = (d.fieldValues ?? {}) as Partial<NoticeFieldValues>;
         setEditMeta(toEditDocMeta(d));
         setDocNo(d.docNo ?? null);
+        if (d.drafterName) setDrafterName(String(d.drafterName));
+        // 상신 전 임시저장인데 번호가 있으면 = 직접 지정해 둔 문서(자동 채번은 상신 시 부여)
+        if (d.docNo && d.status === "draft") {
+          const seq = parseNoticeNo(String(d.docNo));
+          if (seq != null) {
+            setManualOn(true);
+            setManualSeq(String(seq).padStart(4, "0"));
+          }
+        }
         setSubject(d.title ?? "");
         setRecipientText(v.recipient_text ?? DEFAULT_NOTICE_RECIPIENT);
         setSenderText(v.sender_text ?? DEFAULT_NOTICE_SENDER);
@@ -270,6 +293,27 @@ export function ApprovalNoticeBoard() {
     return values;
   }, [recipientText, senderText, subject, attachItems, stampOn, issueDate, fileAttachments]);
 
+  const manualNo = manualSeq.trim() ? formatNoticeNo(Number(manualSeq)) : "";
+  // 상신 이력이 있는 문서(반려 후 재편집)는 번호가 이미 확정돼 바꿀 수 없다.
+  const noLocked = !!docNo && editMeta?.status !== "draft";
+
+  // 중복 확인 — 입력이 멎으면 서버에 조회
+  useEffect(() => {
+    if (!manualOn || !manualNo) {
+      setManualCheck(null);
+      return;
+    }
+    const timer = setTimeout(() => {
+      const qs = new URLSearchParams({ check: manualNo });
+      if (docId) qs.set("docId", docId);
+      fetch(`/api/notices/next-no?${qs.toString()}`, { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => setManualCheck(d?.check ?? null))
+        .catch(() => {});
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [manualOn, manualNo, docId]);
+
   const persist = useCallback(
     // docIdOverride: save 직후 같은 턴의 submit — setDocId 는 비동기라 새 문서가 하나 더 생기는 것을 막는다.
     async (action: "save" | "submit", docIdOverride?: string): Promise<{ docId: string; docNo?: string | null }> => {
@@ -286,6 +330,8 @@ export function ApprovalNoticeBoard() {
           line,
           watchers: watchers.map((w) => ({ userId: w.userId, kind: w.kind })),
           refDocId: null,
+          // 관리자만 전달 — 지정 해제(빈 문자열)는 자동 채번으로 되돌린다는 뜻이다.
+          manualDocNo: canAssign && !noLocked ? (manualOn ? manualNo : "") : undefined,
         }),
       });
       const data = await res.json();
@@ -293,7 +339,7 @@ export function ApprovalNoticeBoard() {
       setDocId(data.docId);
       return { docId: data.docId, docNo: data.docNo };
     },
-    [docId, subject, buildFieldValues, line, watchers]
+    [docId, subject, buildFieldValues, line, watchers, canAssign, noLocked, manualOn, manualNo]
   );
 
   const validate = useCallback((): string | null => {
@@ -302,8 +348,12 @@ export function ApprovalNoticeBoard() {
     const html = editorRef.current?.innerHTML ?? "";
     if (!html.replace(/<[^>]+>|&nbsp;/g, "").trim()) return "본문을 작성하세요.";
     if (line.length === 0) return "결재선에 결재자를 1명 이상 추가하세요.";
+    if (manualOn && !noLocked) {
+      if (!manualNo || parseNoticeNo(manualNo) == null) return "내부고시 번호를 숫자로 입력하세요(예: 1010).";
+      if (manualCheck && !manualCheck.available) return `이미 사용 중인 번호입니다 — ${manualCheck.usedBy}`;
+    }
     return null;
-  }, [subject, recipientText, line]);
+  }, [subject, recipientText, line, manualOn, noLocked, manualNo, manualCheck]);
 
   /** 첨부 업로드 — DnD/파일 선택 공용. 전자결재 첨부 공통 규약(field_values.file_attachments). */
   const uploadFiles = useCallback(async (files: FileList | File[]) => {
@@ -336,7 +386,7 @@ export function ApprovalNoticeBoard() {
       const res = await fetch("/api/notices/preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fieldValues: buildFieldValues(), docNo }),
+        body: JSON.stringify({ fieldValues: buildFieldValues(), docNo: docNo ?? (manualOn && manualNo ? manualNo : null) }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -353,7 +403,7 @@ export function ApprovalNoticeBoard() {
     } finally {
       setBusy(null);
     }
-  }, [buildFieldValues, docNo]);
+  }, [buildFieldValues, docNo, manualOn, manualNo]);
 
   const send = useCallback(
     async (action: "save" | "submit") => {
@@ -462,22 +512,71 @@ export function ApprovalNoticeBoard() {
         <div className="flex flex-col xl:flex-row gap-4 items-start">
           {/* 좌: 고시 내용 — 폭은 공문 작성과 동일 */}
           <div className="cd-card rounded-3xl p-5 flex-1 min-w-0 max-w-[1032px] flex flex-col gap-4">
-            <div className="flex items-center gap-2 rounded-xl border cd-border-c px-3.5 py-2 flex-wrap">
+            {/* 문서번호 + 직인 날인 + 시행일을 한 줄에 — 문서번호 칸이 남는 폭을 채워 시행일 오른쪽 끝이
+                아래 발신 칸 오른쪽 끝과 맞는다(2026-09-22 사용자 요청) */}
+            <div className="flex items-center gap-x-4 gap-y-2 flex-wrap md:flex-nowrap">
+            <div className="flex items-center gap-2 rounded-xl border cd-border-c px-3.5 py-2 flex-wrap min-w-0 flex-1">
               <FileText className="w-4 h-4 cd-text-primary shrink-0" />
-              <span className="text-[12.5px] cd-text">
-                문서번호 <b className="font-mono">{docNo ?? nextNo ?? "조회 중..."}</b>
-              </span>
-              {!docNo && (
-                <span className="text-[10.5px] cd-text-faint">채번 예정 — 상신 시 확정됩니다(먼저 상신되는 문서가 이 번호를 가져갈 수 있음)</span>
+              {manualOn && !noLocked ? (
+                <span className="text-[12.5px] cd-text flex items-center gap-1.5 whitespace-nowrap">
+                  문서번호
+                  <span className="font-mono cd-text-faint">내부고시-</span>
+                  <input
+                    className="cd-input font-mono text-center"
+                    style={{ width: 72 }}
+                    inputMode="numeric"
+                    maxLength={4}
+                    placeholder="1010"
+                    value={manualSeq}
+                    onChange={(e) => setManualSeq(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                    aria-label="내부고시 번호 일련번호"
+                  />
+                  <span className="font-mono cd-text-faint">호</span>
+                </span>
+              ) : (
+                <span className="text-[12.5px] cd-text">
+                  문서번호 <b className="font-mono">{docNo ?? nextNo ?? "조회 중..."}</b>
+                </span>
+              )}
+              {!docNo && !manualOn && (
+                <span className="text-[10.5px] cd-text-faint" title="먼저 상신되는 문서가 이 번호를 가져갈 수 있습니다">채번 예정 · 상신 시 확정</span>
+              )}
+              {manualOn &&
+                !noLocked &&
+                (!manualNo ? (
+                  <span className="text-[10.5px] cd-text-faint">번호 입력(자동 예정 {nextNo ?? "-"})</span>
+                ) : manualCheck == null ? (
+                  <span className="text-[10.5px] cd-text-faint">중복 확인 중...</span>
+                ) : manualCheck.available ? (
+                  <span className="text-[10.5px]" style={{ color: "var(--cd-success, #13DEB9)" }}>사용 가능한 번호입니다</span>
+                ) : (
+                  <span className="text-[10.5px]" style={{ color: "var(--cd-danger, #FA896B)" }}>
+                    이미 사용 중 — {manualCheck.usedBy}
+                  </span>
+                ))}
+              {canAssign && !noLocked && (
+                <label
+                  className="ml-2 flex items-center gap-1.5 text-[11.5px] cd-text cursor-pointer whitespace-nowrap"
+                  title="수기로 먼저 발번한 내부고시 번호를 건너뛰고 번호를 직접 지정합니다(관리자)."
+                >
+                  <input
+                    type="checkbox"
+                    checked={manualOn}
+                    onChange={(e) => {
+                      setManualOn(e.target.checked);
+                      if (e.target.checked && !manualSeq) setManualSeq(String(parseNoticeNo(nextNo ?? "") ?? "").padStart(4, "0"));
+                    }}
+                  />
+                  번호 직접 지정
+                </label>
               )}
             </div>
-            <div className="flex items-center gap-4 flex-wrap">
-              <label className="flex items-center gap-1.5 text-[12px] cd-text cursor-pointer" title="문서 끝 '대표이사 (직인)' 자리에 법인 인감 이미지를 찍습니다. 실물 날인 시 해제.">
+              <label className="flex items-center gap-1.5 text-[12px] cd-text cursor-pointer whitespace-nowrap" title="문서 끝 '대표이사 (직인)' 자리에 법인 인감 이미지를 찍습니다. 실물 날인 시 해제.">
                 <input type="checkbox" checked={stampOn} onChange={(e) => setStampOn(e.target.checked)} />
                 <Stamp className="w-3.5 h-3.5 cd-text-primary" /> 직인 날인
               </label>
               <label
-                className="flex items-center gap-1.5 text-[12px] cd-text"
+                className="flex items-center gap-1.5 text-[12px] cd-text whitespace-nowrap"
                 title="머리의 '시행일자'와 문서 끝 날짜입니다. 비워 두면 결재 완료일이 들어갑니다."
               >
                 시행일
@@ -501,9 +600,13 @@ export function ApprovalNoticeBoard() {
                 />
               </label>
               <label className="text-[11px] cd-text-faint flex flex-col gap-1">
-                발신
+                발신(문서 명의)
                 <input className="cd-input" value={senderText} onChange={(e) => setSenderText(e.target.value)} placeholder="예: 대표이사" />
               </label>
+              <p className="md:col-span-2 text-[10.5px] cd-text-faint -mt-1">
+                발신은 고시 지면에 찍히는 명의이고, 기안자는 결재 문서에 기록되는 작성자입니다
+                {drafterName ? ` — 이 문서의 기안자: ${drafterName}` : ""}.
+              </p>
             </div>
 
             <label className="text-[11px] cd-text-faint flex flex-col gap-1">
@@ -736,7 +839,7 @@ export function ApprovalNoticeBoard() {
                 <Send className="w-3.5 h-3.5" /> {busy === "submit" ? "상신 중..." : "상신"}
               </button>
             </div>
-            <p className="text-[10.5px] cd-text-faint">상신 시 문서번호({"{연도}"}-내부고시-NNNNN호)가 확정되고, 결재 완료 문서는 문서함에서 PDF 로 열람·출력합니다.</p>
+            <p className="text-[10.5px] cd-text-faint">상신 시 문서번호(내부고시-NNNN호)가 확정되고, 결재 완료 문서는 문서함에서 PDF 로 열람·출력합니다.</p>
           </div>
         </div>
         </>

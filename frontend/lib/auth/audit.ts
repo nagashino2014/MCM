@@ -139,7 +139,11 @@ export type AuditAction =
   | "rule_version_import"
   | "rule_version_update"
   | "rule_version_publish"
-  | "rule_version_delete";
+  | "rule_version_delete"
+  | "internal_rule_create"
+  | "internal_rule_update"
+  | "internal_rule_delete"
+  | "internal_rule_revise";
 
 export interface AuditEntry {
   actorUserId: string | null;

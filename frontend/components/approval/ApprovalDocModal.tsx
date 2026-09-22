@@ -13,6 +13,7 @@ import { approvalEditHref } from "@/lib/approval/edit-route";
 import type { DocAttachment } from "@/lib/approval/attachments";
 import type { ApprovalFieldDef } from "@/lib/approval/fields";
 import { LETTER_FORM_ID, LETTER_SEND_STATUS_LABEL, type OfficialLetterRow } from "@/lib/letter/types";
+import { NOTICE_FORM_ID } from "@/lib/notice/types";
 import { QUOTE_FORM_ID } from "@/lib/quote/types";
 import { AGREEMENT_FORM_ID } from "@/lib/agreement/types";
 import { CdTabs } from "@/components/cdash/CdTabs";
@@ -656,11 +657,11 @@ export function ApprovalDocViewer({
               </div>
             )}
             {/* 문서 본체 — 다우식 양식(중앙 제목 + 기안 표 + 신청/승인란)을 흰 카드 위에 올린다. */}
-            {detail.formId === LETTER_FORM_ID || detail.formId === QUOTE_FORM_ID || detail.formId === AGREEMENT_FORM_ID ? (
-              // 공문(135)·견적서(136)·계약서(147) — 결재자도 최종 발송/제출 지면(PDF) 그대로 심사한다.
+            {detail.formId === LETTER_FORM_ID || detail.formId === NOTICE_FORM_ID || detail.formId === QUOTE_FORM_ID || detail.formId === AGREEMENT_FORM_ID ? (
+              // 공문(135)·내부고시(266)·견적서(136)·계약서(147) — 결재자도 최종 발송/제출 지면(PDF) 그대로 심사한다.
               <div className="rounded-[14px] overflow-hidden" style={{ border: "1px solid var(--cd-active-border)" }}>
                 <iframe
-                  title={detail.formId === QUOTE_FORM_ID ? "견적서 미리보기" : detail.formId === AGREEMENT_FORM_ID ? "계약서 미리보기" : "공문 미리보기"}
+                  title={detail.formId === QUOTE_FORM_ID ? "견적서 미리보기" : detail.formId === AGREEMENT_FORM_ID ? "계약서 미리보기" : detail.formId === NOTICE_FORM_ID ? "내부고시 미리보기" : "공문 미리보기"}
                   src={`/api/approval/docs/${encodeURIComponent(docId)}/pdf?disposition=inline`}
                   className="w-full"
                   style={{ height: "80vh", background: "#fff" }}

@@ -81,12 +81,29 @@ export interface RuleImportResult {
 
 export type RuleVersionStatus = "draft" | "in_consent" | "published" | "superseded";
 
+/** 규정 종류(266) — company = 사규(취업규칙 등, /rules), internal = 내부 규정(/rules/internal) */
+export type RuleDocKind = "company" | "internal";
+
 export interface RuleDocumentRow {
   docId: string;
   title: string;
   category: string | null;
   sortOrder: number;
   isActive: boolean;
+  kind: RuleDocKind;
+  /** 내부 규정 번호(정수) — 표기는 formatRegNo */
+  regNo: number | null;
+  /** 주관부서 */
+  ownerDept: string | null;
+  /** 승인(예: 대표이사) */
+  approver: string | null;
+  /** 제정일 YYYY-MM-DD */
+  enactedDate: string | null;
+}
+
+/** 내부 규정 번호 표기 — 'KESI 규정 제 0001호' */
+export function formatRegNo(regNo: number | null | undefined): string {
+  return regNo ? `KESI 규정 제 ${String(regNo).padStart(4, "0")}호` : "KESI 규정 제 ____호";
 }
 
 export interface RuleVersionRow {

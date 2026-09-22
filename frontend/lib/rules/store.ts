@@ -3,9 +3,11 @@
 // ⚠ 발행된 판의 body 는 수정 경로를 두지 않는다(동의·신고 산출물의 근거라 사후 변조가 있어선 안 된다).
 
 import crypto from "node:crypto";
-import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
+import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
+import { formatRegNo } from "./types";
 import type {
   RuleBody,
+  RuleDocKind,
   RuleDocumentRow,
   RuleVersionDetail,
   RuleVersionRow,
@@ -40,20 +42,137 @@ function mapDoc(r: Record<string, unknown>): RuleDocumentRow {
     category: sn(r.category),
     sortOrder: Number(r.sort_order ?? 100),
     isActive: Number(r.is_active ?? 1) === 1,
+    kind: String(r.kind ?? "company") === "internal" ? "internal" : "company",
+    regNo: r.reg_no == null ? null : Number(r.reg_no),
+    ownerDept: sn(r.owner_dept),
+    approver: sn(r.approver),
+    enactedDate: sn(r.enacted_date),
   };
 }
 
-export async function listRuleDocuments(includeInactive = false): Promise<RuleDocumentRow[]> {
+const DOC_COLS = `doc_id, title, category, sort_order, is_active, kind, reg_no, owner_dept, approver, enacted_date`;
+
+/** 규정 목록 — kind 로 사규(company)·내부 규정(internal)을 나눈다(266). 내부 규정은 규정번호 순. */
+export async function listRuleDocuments(includeInactive = false, kind: RuleDocKind = "company"): Promise<RuleDocumentRow[]> {
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT doc_id, title, category, sort_order, is_active
+      `SELECT ${DOC_COLS}
          FROM rule_documents
-        ${includeInactive ? "" : "WHERE is_active = 1"}
-        ORDER BY sort_order, title`,
+        WHERE kind = $1 ${includeInactive ? "" : "AND is_active = 1"}
+        ORDER BY ${kind === "internal" ? "reg_no NULLS LAST, title" : "sort_order, title"}`,
+      [kind],
     ),
   );
   return rows.map(mapDoc);
+}
+
+export async function getRuleDocument(docId: string): Promise<RuleDocumentRow | null> {
+  const db = await getDb();
+  const rows = rowsToObjects(await db.exec(`SELECT ${DOC_COLS} FROM rule_documents WHERE doc_id = $1`, [docId]));
+  return rows.length ? mapDoc(rows[0]) : null;
+}
+
+// ── 내부 규정(266) ──
+
+export interface InternalRuleMeta {
+  title: string;
+  regNo: number | null;
+  ownerDept: string | null;
+  approver: string | null;
+  enactedDate: string | null;
+}
+
+/** 다음 규정번호 — 사용 중 최대 + 1 */
+export async function nextInternalRegNo(): Promise<number> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(`SELECT COALESCE(MAX(reg_no), 0) AS n FROM rule_documents WHERE kind = 'internal'`),
+  );
+  return Number(rows[0]?.n ?? 0) + 1;
+}
+
+async function assertRegNoFree(db: PgDatabase, regNo: number | null, exceptDocId: string | null): Promise<void> {
+  if (regNo == null) return;
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT title FROM rule_documents WHERE kind = 'internal' AND reg_no = $1 AND ($2::text IS NULL OR doc_id <> $2)`,
+      [regNo, exceptDocId],
+    ),
+  );
+  if (rows.length) throw new Error(`규정번호 ${formatRegNo(regNo)}는 이미 「${String(rows[0].title)}」에 쓰이고 있습니다.`);
+}
+
+/** 내부 규정 신규 — 규정 행 + 첫 draft 판을 한 트랜잭션으로 만든다. */
+export async function createInternalRule(params: {
+  meta: InternalRuleMeta;
+  body: RuleBody;
+  warnings?: string[];
+  effectiveDate?: string | null;
+  revisionNote?: string | null;
+  actorUserId: string | null;
+}): Promise<{ docId: string; versionId: string }> {
+  return withDbWrite(async (db) => {
+    await assertRegNoFree(db, params.meta.regNo, null);
+    const docId = newId("int-");
+    const versionId = newId("rv-");
+    const now = nowIso();
+    await db.run(
+      `INSERT INTO rule_documents
+         (doc_id, title, category, sort_order, is_active, kind, reg_no, owner_dept, approver, enacted_date, created_at, updated_at)
+       VALUES ($1, $2, '내부규정', 100, 1, 'internal', $3, $4, $5, $6, $7, $7)`,
+      [docId, params.meta.title, params.meta.regNo, params.meta.ownerDept, params.meta.approver, params.meta.enactedDate, now],
+    );
+    await db.run(
+      `INSERT INTO rule_versions
+         (version_id, doc_id, version, status, effective_date, body, revision_note, import_warnings, created_at, created_by)
+       VALUES ($1, $2, 1, 'draft', $3, $4::jsonb, $5, $6::jsonb, $7, $8)`,
+      [
+        versionId,
+        docId,
+        params.effectiveDate ?? null,
+        JSON.stringify(params.body),
+        params.revisionNote ?? null,
+        JSON.stringify(params.warnings ?? []),
+        now,
+        params.actorUserId,
+      ],
+    );
+    return { docId, versionId };
+  });
+}
+
+/** 내부 규정 머리 정보(제목·번호·주관부서·승인·제정일) 수정 — 판과 별개로 언제든 고칠 수 있다. */
+export async function updateInternalRuleMeta(docId: string, meta: InternalRuleMeta): Promise<void> {
+  await withDbWrite(async (db) => {
+    const rows = rowsToObjects(await db.exec(`SELECT kind FROM rule_documents WHERE doc_id = $1`, [docId]));
+    if (!rows.length) throw new Error("규정을 찾을 수 없습니다.");
+    if (String(rows[0].kind) !== "internal") throw new Error("내부 규정만 이 경로로 수정할 수 있습니다.");
+    await assertRegNoFree(db, meta.regNo, docId);
+    await db.run(
+      `UPDATE rule_documents
+          SET title = $2, reg_no = $3, owner_dept = $4, approver = $5, enacted_date = $6, updated_at = $7
+        WHERE doc_id = $1`,
+      [docId, meta.title, meta.regNo, meta.ownerDept, meta.approver, meta.enactedDate, nowIso()],
+    );
+  });
+}
+
+/** 한 번도 시행하지 않은 내부 규정 삭제 — 시행 이력이 있으면 지우지 않는다(판 불변 원칙). */
+export async function deleteInternalRule(docId: string): Promise<void> {
+  await withDbWrite(async (db) => {
+    const rows = rowsToObjects(
+      await db.exec(
+        `SELECT d.kind, (SELECT count(*) FROM rule_versions v WHERE v.doc_id = d.doc_id AND v.status <> 'draft') AS used
+           FROM rule_documents d WHERE d.doc_id = $1`,
+        [docId],
+      ),
+    );
+    if (!rows.length) return;
+    if (String(rows[0].kind) !== "internal") throw new Error("내부 규정만 삭제할 수 있습니다.");
+    if (Number(rows[0].used ?? 0) > 0) throw new Error("시행된 판이 있는 규정은 삭제할 수 없습니다. 개정으로 진행해 주세요.");
+    await db.run(`DELETE FROM rule_documents WHERE doc_id = $1`, [docId]);
+  });
 }
 
 // ── 판 ──

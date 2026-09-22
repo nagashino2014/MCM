@@ -70,6 +70,7 @@ export const MENU_ITEMS: MenuItem[] = [
     submenu: [
       { title: "전자결재 홈", href: "/approval" },
       { title: "공문 작성", href: "/approval/letter" },
+      { title: "내부고시 작성", href: "/approval/notice" },
       { title: "견적서 작성", href: "/approval/quote" },
       { title: "양식별 문서 조회", href: "/approval/records" },
       { title: "데이터 분석", href: "/approval/analytics" },
@@ -102,14 +103,17 @@ export const MENU_ITEMS: MenuItem[] = [
     icon: Megaphone,
     group: "collab",
   },
-  // 사규 — 규정집 상시 열람(rules.view) + 원문 임포트·개정·동의 수집(rules.manage, 193).
+  // 사규·내규 — 사규 규정집 상시 열람(rules.view) + 원문 임포트·개정·동의 수집(rules.manage, 193)
+  //   + 내부 규정(사규와 별도 규정집, 266) 작성·일람.
   {
-    title: "사규",
+    title: "사규·내규",
     href: "/rules",
     icon: ScrollText,
     submenu: [
-      { title: "규정집", href: "/rules" },
-      { title: "원문 임포트·검수", href: "/rules/admin" },
+      { title: "사규 열람", href: "/rules" },
+      { title: "사규 원문 임포트·검수", href: "/rules/admin" },
+      { title: "내부 규정 작성", href: "/rules/internal/edit" },
+      { title: "내부 규정 일람", href: "/rules/internal" },
     ],
     group: "collab",
   },

@@ -3,6 +3,7 @@
 // `제N조 【제목】` · 항(①…) · 호(1. …) 표기가 규칙적이라 결정론적 파싱으로 전량 복원된다
 // (2026.04.08. 개정판 실측: 조문 헤더 91 = 본문 86 + 부칙 5 로 정확히 일치).
 // 결정론이라 재현·검증이 되고 비용도 없다. 애매한 지점은 warnings 로 올려 검수 화면에서 사람이 고친다.
+// 텍스트 정규화·항 분할 헬퍼는 내부 규정 임포트(lib/rules/internal-import.ts)가 함께 쓴다(export).
 
 import { parseHwpx, type HwpxDoc, type Para, type Table } from "@/lib/deliverable/hwpx-doc";
 import type {
@@ -23,7 +24,7 @@ import type {
  * PostgreSQL jsonb 는 U+0000 을 저장하지 못하고(22P05) 화면에도 의미가 없으므로 털어낸다.
  * 실측: 2026.04.08. 개정판 제27조 본문에 NUL 이 들어 있어 적재가 실패했다.
  */
-function stripControl(raw: string): string {
+export function stripControl(raw: string): string {
   let out = "";
   for (const ch of raw) {
     const c = ch.codePointAt(0) ?? 0;
@@ -41,7 +42,7 @@ function stripControl(raw: string): string {
  * 한글 자간 벌리기 복원 — 공백으로 끊은 토큰이 모두 1글자면 붙인다.
  * '목      적' → '목적', '총   칙' → '총칙'. 반면 '휴일 및 휴가'는 그대로 둔다.
  */
-function normalizeTitle(raw: string): string {
+export function normalizeTitle(raw: string): string {
   const t = stripControl(raw).replace(/\s+/g, " ").trim();
   if (!t) return "";
   const tokens = t.split(" ");
@@ -50,7 +51,7 @@ function normalizeTitle(raw: string): string {
 }
 
 /** 본문 줄 — 연속 공백만 압축한다(문장 내 어절은 보존). */
-function normalizeText(raw: string): string {
+export function normalizeText(raw: string): string {
   return stripControl(raw).replace(/\s+/g, " ").trim();
 }
 
@@ -99,7 +100,7 @@ interface ClauseSeg {
  * 오탐(본문 중 인용)을 막기 위해 **직전 항 번호 + 1** 로 이어지고 기호 앞이 문단 머리이거나
  * 공백일 때만 분할점으로 본다. 원문 제33조 "① … ② …" / "⑤ … ➅ …" 가 이 경로로 복원된다.
  */
-function splitClauses(text: string, prevNo: number): ClauseSeg[] {
+export function splitClauses(text: string, prevNo: number): ClauseSeg[] {
   const cuts: { at: number; label: string }[] = [];
   let expect = prevNo + 1;
   for (const m of text.matchAll(RE_CLAUSE_MARK)) {

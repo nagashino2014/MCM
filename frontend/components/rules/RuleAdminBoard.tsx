@@ -266,7 +266,7 @@ export function RuleAdminBoard() {
   return (
     <div className="cdash cd-fields-white min-h-screen p-6" data-theme={theme}>
       <CdPageHeader
-        breadcrumbs={[{ label: "사규", href: "/rules" }, { label: "원문 임포트·검수" }]}
+        breadcrumbs={[{ label: "사규·내규", href: "/rules" }, { label: "사규 원문 임포트·검수" }]}
         title="사규 원문 임포트·검수"
         meta={stats ? `${stats.chapters}개 장 · ${stats.articles}개 조 · 별표 ${stats.appendices}종` : undefined}
         actions={

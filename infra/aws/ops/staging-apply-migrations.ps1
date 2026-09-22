@@ -9,7 +9,7 @@
     터널 백그라운드 기동까지 자동으로 수행한 뒤, 끝나면 자동 기동분만 정리한다.
   - 접속 정보는 RDS 매니지드 마스터 시크릿(Secrets Manager)에서 받는다
     (dev-frontend-aws.ps1 과 동일 경로 — 파일에 저장하지 않는다).
-  - 마이그레이션은 전부 멱등이라 재실행에 안전하다. 실패 시 해당 파일에서 중단(ON_ERROR_STOP).
+  - 실패 시 해당 파일에서 중단(ON_ERROR_STOP). 재실행 가능 여부는 각 SQL의 설치 계약을 따른다.
   - Aurora 는 min 0 ACU auto-pause — 첫 쿼리가 수십 초 걸릴 수 있다(오류 아님).
 
 .EXAMPLE
@@ -398,6 +398,39 @@ foreach ($f in $(if ($RecoverAccountingMaintenance) { @() } else { $Files })) {
   if (Test-LoneCarriageReturn $sqlBytes) { Fail "단독 CR 줄바꿈이 있는 SQL: $f — CRLF 또는 LF를 사용하세요." }
   $resolvedSqlFiles += [pscustomobject]@{ Name = [System.IO.Path]::GetFileName($sqlPath); Path = $sqlPath; HasCr = ($sqlBytes -contains 13) }
 }
+
+function Stop-ManagedTunnel($process, [int]$port, [string]$endpoint, [datetime]$startedAt) {
+  if (-not $process) { return $true }
+  # aws.exe launches session-manager-plugin.exe. Stop-Process on aws.exe alone leaves
+  # the plugin listening on the local DB port after the migration has finished.
+  if (-not $process.HasExited) {
+    & taskkill.exe /PID $process.Id /T /F 2>&1 | Out-Null
+  }
+  for ($attempt = 0; $attempt -lt 10; $attempt++) {
+    # A child can remain alive before it binds the port. Scan the children of
+    # this exact aws.exe even when Get-NetTCPConnection reports no listener.
+    $scanOk = $true
+    try { $children = @(Get-CimInstance Win32_Process -Filter "Name = 'session-manager-plugin.exe'" -ErrorAction Stop) }
+    catch { $children = @(); $scanOk = $false }
+    $unverifiedChild = $false
+    $ownedChildren = @()
+    foreach ($child in $children) {
+      if ($child.ParentProcessId -ne $process.Id -or [datetime]$child.CreationDate -lt $startedAt.AddSeconds(-2)) { continue }
+      if (-not $child.CommandLine -or
+          $child.CommandLine.IndexOf($endpoint, [StringComparison]::OrdinalIgnoreCase) -lt 0 -or
+          $child.CommandLine -notmatch ("localPortNumber.{0,40}" + [regex]::Escape([string]$port))) {
+        $unverifiedChild = $true
+        continue
+      }
+      $ownedChildren += $child
+    }
+    foreach ($child in $ownedChildren) { Stop-Process -Id $child.ProcessId -Force -ErrorAction SilentlyContinue }
+    $portOpen = Test-NetConnection -ComputerName localhost -Port $port -InformationLevel Quiet -WarningAction SilentlyContinue
+    if ($scanOk -and -not $unverifiedChild -and $ownedChildren.Count -eq 0 -and -not $portOpen) { return $true }
+    Start-Sleep -Milliseconds 300
+  }
+  return $false
+}
 # 233의 저장 함수는 card_tax_reviews%ROWTYPE을 정의 시점에 해석한다.
 # 243을 함께 넘긴 경우 순서가 뒤면 DB에 닿기 전에 거절한다.
 $selectedNames = @($resolvedSqlFiles | ForEach-Object { $_.Name })
@@ -522,6 +555,7 @@ $secret = $secretString | ConvertFrom-Json
 
 # 2) 터널 — 이미 열려 있으면 그대로, 없으면 bastion 기동 + SSM 포트포워딩 백그라운드
 $tunnelProc = $null
+$tunnelStartedAt = [datetime]::MinValue
 $portOpen = Test-NetConnection -ComputerName localhost -Port $LocalPort -InformationLevel Quiet -WarningAction SilentlyContinue
 if ($portOpen) {
   Log "기존 터널 사용: localhost:$LocalPort"
@@ -555,6 +589,7 @@ if ($portOpen) {
   $ssmArgs = @("ssm", "start-session", "--target", $bastionId, "--region", $Region,
     "--document-name", "AWS-StartPortForwardingSessionToRemoteHost",
     "--parameters", "host=$($cluster.Endpoint),portNumber=5432,localPortNumber=$LocalPort")
+  $tunnelStartedAt = Get-Date
   $tunnelProc = Start-Process aws -ArgumentList $ssmArgs -PassThru -WindowStyle Hidden
   $up = $false
   for ($i = 0; $i -lt 30; $i++) {
@@ -562,7 +597,9 @@ if ($portOpen) {
     if (Test-NetConnection -ComputerName localhost -Port $LocalPort -InformationLevel Quiet -WarningAction SilentlyContinue) { $up = $true; break }
   }
   if (-not $up) {
-    if ($tunnelProc) { Stop-Process -Id $tunnelProc.Id -Force -ErrorAction SilentlyContinue }
+    if (-not (Stop-ManagedTunnel $tunnelProc $LocalPort $cluster.Endpoint $tunnelStartedAt)) {
+      Log "자동 기동한 터널을 종료하지 못함 — localhost:$LocalPort 수동 확인 필요"
+    }
     Fail "터널이 열리지 않음(60초) — Session Manager plugin 설치 여부 확인"
   }
 }
@@ -744,11 +781,21 @@ END `$proof`$;
   $env:PGAPPNAME = $null
   if ($tunnelProc -and -not $KeepTunnel) {
     Log "자동 기동한 터널 종료"
-    Stop-Process -Id $tunnelProc.Id -Force -ErrorAction SilentlyContinue
+    if (-not (Stop-ManagedTunnel $tunnelProc $LocalPort $cluster.Endpoint $tunnelStartedAt)) {
+      $migrationAndRecoveryCompleted = -not $failed -and $restorationSucceeded
+      $failed = $true
+      if ($migrationAndRecoveryCompleted -and $RecoverAccountingMaintenance) {
+        Write-Host "[migrate] 실패: SQL은 실행하지 않았고 상태 복구는 완료됨. 자동 터널 정리만 미완료(localhost:$LocalPort) — 수동 확인 필요" -ForegroundColor Red
+      } elseif ($migrationAndRecoveryCompleted) {
+        Write-Host "[migrate] 실패: SQL 적용·상태 복구는 완료됨. 자동 터널 정리만 미완료(localhost:$LocalPort) — SQL을 재적용하지 말고 수동 확인 필요" -ForegroundColor Red
+      } else {
+        Write-Host "[migrate] 실패: 자동 기동한 터널이 localhost:$LocalPort 에 남음 — 수동 확인 필요" -ForegroundColor Red
+      }
+    }
   } elseif ($tunnelProc) {
     Log "터널 유지(-KeepTunnel): localhost:$LocalPort (PID $($tunnelProc.Id))"
   }
 }
 if ($failed) { exit 1 }
 if ($RecoverAccountingMaintenance) { Log "원상복구 완료. SQL은 적용하지 않았습니다."; exit 0 }
-Log "완료. 적용 $($Files.Count)건 — 전부 멱등이라 재실행에 안전하다."
+Log "완료. 적용 $($Files.Count)건 — 재실행 전 각 SQL의 설치 계약을 확인하세요."

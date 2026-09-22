@@ -5,6 +5,7 @@ IEPS(통합환경허가) 데이터 수집·파싱 + 계약/사업장 관리 모�
 
 ## 브랜치·배포 운영 규칙 (모든 세션 공통) ★
 여러 Claude 세션이 각자 브랜치에서 작업하다 **다른 브랜치 기능이 빠진 이미지가 배포되는 사고가 2회**(2026-08-26·08-31) 있었다. 어느 세션이든 다음을 지킨다.
+- **임시 중지(2026-09-22, R0B IR-1):** main 기준 스테이징 `terraform apply`(전체·ADT/intel 스케줄 `-target` 모두)와 main의 `staging-deploy-next.ps1` 배포를 중지한다. 이 기간에는 아래 배포 명령 자동 출력 규칙보다 이 중지 규칙이 우선하며, 실행할 배포·apply 명령 블록을 제시하지 않는다. 두 EventBridge target의 숫자 revision 618 고정을 보호하는 Terraform 선언·배포 가드가 main에 통합되고, 두 target의 plan 변경 0건이 확인될 때까지 재개하지 않는다.
 - **작업 시작 전**: `git fetch origin` 후 원격 브랜치 상황을 확인하고, **최신 main(또는 진행 중인 통합 브랜치)에서 분기**한다. 오래된 분기점 위에 새 작업을 쌓지 않는다.
 - **배포는 반드시 `infra/aws/ops/staging-deploy-next.ps1` 로**: 원격 `claude/*`·`codex/*`·`main` 커밋 누락을 검사한다. 미커밋 변경 또는 `HEAD != origin/main`이면 배포를 차단한다(`-Force`로도 우회 불가). 사용자 승인 후 커밋·main 통합·푸시를 완료하고 배포한다. 2026-09-11에는 미커밋 UI를 운영에만 배포한 뒤 다음 main 배포에서 UI가 사라졌다. **운영 반영과 저장소 통합은 함께 완료해야 한다.**
 - **마이그레이션 번호**: 갈래별 중복 사고로 **200~210 이 소진**됐다 — 신규는 **211부터**, 번호 확정 전 `git fetch` 후 원격 전 브랜치의 `infra/aws/` 를 확인한다. DB 적용은 `infra/aws/ops/staging-apply-migrations.ps1 -Files <파일들>`.

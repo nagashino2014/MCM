@@ -13,7 +13,7 @@ import {
   Save, Send, Trash2, Wand2,
 } from "lucide-react";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
-import { CdDateInput } from "@/components/cdash/CdField";
+import { CdDateInput, CdInput, CdSelect } from "@/components/cdash/CdField";
 import { CdTabs } from "@/components/cdash/CdTabs";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { InternalRuleView } from "@/components/rules/InternalRuleView";
@@ -101,6 +101,8 @@ export function InternalRuleEditorBoard() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [canManage, setCanManage] = useState<boolean | null>(null);
+  // 주관부서 목록 — 회사 부서(departments, 활성)에서 고른다(2026-09-22 사용자 요청)
+  const [departments, setDepartments] = useState<{ deptId: string; deptName: string }[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const isNew = !docId;
@@ -184,6 +186,13 @@ export function InternalRuleEditorBoard() {
       else setDocId(null); // 없는 규정 id 로 들어오면 새 규정 작성으로
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/departments", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setDepartments(Array.isArray(d?.departments) ? d.departments : []))
+      .catch(() => {});
   }, []);
 
   // 신규 작성 — 다음 규정번호를 기본값으로
@@ -735,25 +744,24 @@ export function InternalRuleEditorBoard() {
         {/* 우: 머리 정보 + 편집/미리보기 */}
         <div className="flex flex-col gap-4 min-w-0">
           <div className="cd-card p-4 flex flex-col gap-3">
-            <div className="grid gap-3 grid-cols-1 md:grid-cols-[minmax(0,1fr)_240px]">
-              <label className="text-[11px] font-bold cd-text-faint flex flex-col gap-1">
-                <span>
-                  규정 제목 <span style={{ color: "var(--cd-error)" }}>*</span>
-                </span>
-                <input
-                  className="cd-input"
-                  value={meta.title}
-                  onChange={(e) => patchMeta({ title: e.target.value })}
-                  placeholder="예: 녹색채권 외부검토 직업적·윤리적 원칙 및 독립성 규정"
-                />
-              </label>
-              <label className="text-[11px] font-bold cd-text-faint flex flex-col gap-1">
-                규정번호
-                <span className="flex items-center gap-1.5 text-[12.5px] font-normal cd-text">
+            {/* 4열 격자 — 규정 제목(3칸)의 오른쪽 끝이 제정일 칸 오른쪽 끝과 맞는다(2026-09-22 사용자 요청) */}
+            <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 items-start">
+              <CdInput
+                className="sm:col-span-2 xl:col-span-3"
+                label="규정 제목"
+                required
+                value={meta.title}
+                onChange={(e) => patchMeta({ title: e.target.value })}
+                placeholder="예: 녹색채권 외부검토 직업적·윤리적 원칙 및 독립성 규정"
+              />
+              <div className="flex flex-col gap-1">
+                <label htmlFor="internal-rule-regno" className="cd-label">규정번호</label>
+                <span className="flex items-center gap-1.5 text-[13px] cd-text">
                   <span className="shrink-0">KESI 규정 제</span>
                   <input
+                    id="internal-rule-regno"
                     className="cd-input font-mono text-center"
-                    style={{ width: 76 }}
+                    style={{ width: 84 }}
                     inputMode="numeric"
                     maxLength={4}
                     value={meta.regNo}
@@ -764,18 +772,21 @@ export function InternalRuleEditorBoard() {
                   />
                   <span className="shrink-0">호</span>
                 </span>
-                {regNoTaken && <span className="font-normal" style={{ color: "var(--cd-error)" }}>이미 쓰이는 번호입니다.</span>}
-              </label>
-            </div>
-            <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
-              <label className="text-[11px] font-bold cd-text-faint flex flex-col gap-1">
-                주관부서
-                <input className="cd-input" value={meta.ownerDept} onChange={(e) => patchMeta({ ownerDept: e.target.value })} placeholder="예: 외부검토 담당 조직" />
-              </label>
-              <label className="text-[11px] font-bold cd-text-faint flex flex-col gap-1">
-                승인
-                <input className="cd-input" value={meta.approver} onChange={(e) => patchMeta({ approver: e.target.value })} placeholder="예: 대표이사" />
-              </label>
+                {regNoTaken && <span className="text-xs cd-error-text">이미 쓰이는 번호입니다.</span>}
+              </div>
+              <CdSelect label="주관부서" value={meta.ownerDept} onChange={(e) => patchMeta({ ownerDept: e.target.value })}>
+                <option value="">부서 선택</option>
+                {departments.map((d) => (
+                  <option key={d.deptId} value={d.deptName}>
+                    {d.deptName}
+                  </option>
+                ))}
+                {meta.ownerDept && !departments.some((d) => d.deptName === meta.ownerDept) && (
+                  // 가져온 파일·과거 입력값이 부서 목록에 없을 때도 값이 사라지지 않게 남긴다
+                  <option value={meta.ownerDept}>{meta.ownerDept} (부서 목록 외)</option>
+                )}
+              </CdSelect>
+              <CdInput label="승인" value={meta.approver} onChange={(e) => patchMeta({ approver: e.target.value })} placeholder="예: 대표이사" />
               <CdDateInput label="제정일" value={meta.enactedDate} onChange={(v) => patchMeta({ enactedDate: v })} placeholder="YYYY-MM-DD" />
               <CdDateInput
                 label="시행일"
@@ -789,19 +800,17 @@ export function InternalRuleEditorBoard() {
               />
             </div>
             <div className="flex items-end gap-2 flex-wrap">
-              <label className="text-[11px] font-bold cd-text-faint flex flex-col gap-1 flex-1 min-w-[220px]">
-                제정·개정 사유
-                <input
-                  className="cd-input"
-                  value={revisionNote}
-                  disabled={!editable}
-                  onChange={(e) => {
-                    setRevisionNote(e.target.value);
-                    setDirty(true);
-                  }}
-                  placeholder="예: 녹색채권 외부검토기관 등록요건 대응 제정"
-                />
-              </label>
+              <CdInput
+                className="flex-1 min-w-[220px]"
+                label="제정·개정 사유"
+                value={revisionNote}
+                disabled={!editable}
+                onChange={(e) => {
+                  setRevisionNote(e.target.value);
+                  setDirty(true);
+                }}
+                placeholder="예: 녹색채권 외부검토기관 등록요건 대응 제정"
+              />
               <button type="button" className="cd-btn cd-action" onClick={runNormalize} disabled={!!busy || !editable} title="장·조·항·호 번호 서열을 검사하고 순서대로 바로잡습니다">
                 <Wand2 className="w-4 h-4" /> 번호 검증·교정
               </button>

@@ -4,7 +4,21 @@
 // 문서 원본 = approval_docs.field_values(아래 규약). 양식 시드 = infra/aws/266.
 
 export const NOTICE_FORM_ID = "frm-internal-notice";
-export const NOTICE_RULE_KEY = "내부고시"; // 채번 rule_key — {연도}-내부고시-{NNNNN}호, 신규 연도 01001 시작
+export const NOTICE_RULE_KEY = "내부고시"; // 채번 rule_key — '내부고시-NNNN호'(연도 없는 통산 번호, 2026-09-22 사용자 확정)
+/** 통산 번호라 연도별로 나누지 않는다 — doc_no_sequences.year 자리에 고정 키를 쓴다(267) */
+export const NOTICE_SEQ_YEAR = "ALL";
+export const NOTICE_SEQ_START = 1001;
+export const NOTICE_NO_RE = /^내부고시-(\d{1,5})호$/;
+
+/** 1010 → '내부고시-1010호' */
+export function formatNoticeNo(seq: number): string {
+  return `${NOTICE_RULE_KEY}-${String(seq).padStart(4, "0")}호`;
+}
+
+export function parseNoticeNo(no: string): number | null {
+  const m = NOTICE_NO_RE.exec((no ?? "").trim());
+  return m ? Number(m[1]) : null;
+}
 
 export const DEFAULT_NOTICE_RECIPIENT = "전 임직원";
 export const DEFAULT_NOTICE_SENDER = "대표이사";

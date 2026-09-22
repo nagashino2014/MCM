@@ -43,10 +43,11 @@ bastion SSM 포트포워딩(localhost:15432)을 통해 psql 로 `infra/aws/NNN_*
 
 ## next(웹) 재배포
 
-**R0B IR-1 임시 중지:** 이 P0 후보가 main에 통합되고, 스테이징 plan에서 ADT·intel 두
-`aws_cloudwatch_event_target`의 변경이 각각 0건임을 확인하기 전에는 main 기준 전체·대상 지정
-`terraform apply`와 Next 배포를 실행하지 않는다. 2026-09-21에 승인된 두 스케줄의 숫자
-revision 618 고정을 보호하기 위한 중지다.
+**R0B IR-1 임시 중지:** P0는 main에 통합됐고, 스테이징 plan에서 ADT·intel 두
+`aws_cloudwatch_event_target`의 변경이 각각 0건(618→618)임을 확인했다. 다만 같은 plan에
+다른 변경 9건이 있으므로, 사용자가 중지 해제를 명시적으로 결정하기 전에는 main 기준 전체·
+대상 지정 `terraform apply`와 Next 배포를 실행하지 않는다. 2026-09-21에 승인된 두 스케줄의
+숫자 revision 618 고정을 보호하기 위한 중지다.
 
 두 target은 숫자 revision ARN을 필수 변수 `scheduled_next_task_definition_arn`으로 받는다.
 스테이징 확인에는 당시 승인된 ARN `arn:aws:ecs:ap-northeast-2:195748745315:task-definition/mcm-ieps-staging-next:618`을
@@ -58,6 +59,9 @@ plan의 계정·revision을 확인한다. 기존에 저장한 Terraform plan 파
 revision에 남는 것을 의도적으로 수용할 때에만 `-AcknowledgePinnedScheduleLag -Wait`를 함께
 지정한다. `-Force`와 `-SkipBuild`는 스케줄 고정 검사를 우회하지 않는다. 배치까지 새 revision으로
 옮기는 절차는 R0B 전체 전환 작업의 별도 범위다.
+이 고정 검사는 `staging-deploy-next.ps1` 경로의 새 revision 등록을 막는다. 콘솔 수동 등록,
+다른 등록 도구, Terraform의 Next task definition 변경은 이 스크립트 밖이므로 같은 검사로
+보호된 것으로 간주하지 않는다.
 
 2026-09-21에 승인받아 실행한 revision 618 고정의 원복 기록은 그때의 계약 해시에 묶여 있다.
 `staging-pin-next-schedules.mjs`와 배포 고정 검사기는 바이트가 보존된

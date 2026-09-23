@@ -28,9 +28,14 @@ BEGIN
 END
 $roles$;
 
-ALTER ROLE mcm_owner NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
-ALTER ROLE mcm_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 50;
-ALTER ROLE mcm_worker LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 8;
+-- PostgreSQL 16+ permits only a real superuser to change SUPERUSER,
+-- REPLICATION, or BYPASSRLS even when setting them false. The approved Aurora
+-- migration role is not a real superuser. Fresh roles start with all three
+-- attributes disabled, and the installation assertion below continues to
+-- fail closed if a pre-existing role has any of them enabled.
+ALTER ROLE mcm_owner NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
+ALTER ROLE mcm_app LOGIN NOCREATEDB NOCREATEROLE NOINHERIT CONNECTION LIMIT 50;
+ALTER ROLE mcm_worker LOGIN NOCREATEDB NOCREATEROLE NOINHERIT CONNECTION LIMIT 8;
 
 -- Leave pg_catalog implicit so it precedes public in current_schemas(true),
 -- as required by the installed finance definition assertions. Runtime roles
@@ -70,14 +75,32 @@ GRANT USAGE ON SCHEMA public TO mcm_app, mcm_worker;
 
 REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM mcm_app, mcm_worker;
 REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM mcm_app, mcm_worker;
-REVOKE EXECUTE ON ALL ROUTINES IN SCHEMA public FROM PUBLIC, mcm_app, mcm_worker;
+-- Aurora installs vector extension routines in public as rdsadmin. The
+-- migration principal cannot revoke their PUBLIC privileges or grant them
+-- directly to mcm_app. Normalize only routines owned by this installer;
+-- the assertion below admits the narrowly identified extension exception.
+DO $routine_privileges$
+DECLARE
+  routine pg_catalog.regprocedure;
+BEGIN
+  FOR routine IN
+    SELECT p.oid::pg_catalog.regprocedure
+    FROM pg_catalog.pg_proc p
+    JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public'
+      AND p.proowner = current_user::pg_catalog.regrole::oid
+  LOOP
+    EXECUTE pg_catalog.format('REVOKE EXECUTE ON ROUTINE %s FROM PUBLIC, mcm_app, mcm_worker', routine);
+    EXECUTE pg_catalog.format('GRANT EXECUTE ON ROUTINE %s TO mcm_app', routine);
+  END LOOP;
+END
+$routine_privileges$;
 
 -- Next is the monolithic application runtime in R0B1. It may use existing
 -- application data and approved routines, but it receives no schema, trigger,
 -- truncate, role, replication, or database TEMP capability.
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO mcm_app;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO mcm_app;
-GRANT EXECUTE ON ALL ROUTINES IN SCHEMA public TO mcm_app;
 
 -- The managed worker's only direct PostgreSQL job is facility-enrich. collect
 -- and parse use a local sql.js file plus backend HTTP and receive no DB grant.
@@ -304,6 +327,24 @@ BEGIN
   WHERE n.nspname = 'public'
     AND pg_catalog.has_function_privilege('mcm_worker', p.oid, 'EXECUTE')
     AND p.oid <> pg_catalog.to_regprocedure('public.facility_quality_snapshot(public.facilities)')
+    AND NOT (
+      pg_catalog.pg_get_userbyid(p.proowner) = 'rdsadmin'
+      AND EXISTS (
+        SELECT 1
+        FROM pg_catalog.pg_depend dependency
+        JOIN pg_catalog.pg_extension extension ON extension.oid = dependency.refobjid
+        WHERE dependency.classid = 'pg_catalog.pg_proc'::pg_catalog.regclass
+          AND dependency.objid = p.oid
+          AND dependency.refclassid = 'pg_catalog.pg_extension'::pg_catalog.regclass
+          AND dependency.deptype = 'e'
+          AND extension.extname = 'vector'
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM pg_catalog.aclexplode(p.proacl) privilege
+        WHERE privilege.grantee = (SELECT oid FROM pg_catalog.pg_roles WHERE rolname = 'mcm_worker')
+          AND privilege.privilege_type = 'EXECUTE'
+      )
+    )
   LIMIT 1;
   IF failure IS NOT NULL
      OR NOT pg_catalog.has_function_privilege(

@@ -31,7 +31,13 @@
         "facility_quality_profile_cache": ["SELECT", "INSERT", "UPDATE"]
       },
       "sequences": [],
-      "routines": ["facility_quality_snapshot(facilities)"]
+      "routines": ["facility_quality_snapshot(facilities)"],
+      "inheritedPublicExtensionRoutines": {
+        "extension": "vector",
+        "schema": "public",
+        "owner": "rdsadmin",
+        "directWorkerGrant": false
+      }
     },
     "collector": {
       "name": "mcm_collector",

@@ -151,7 +151,7 @@ NAT Gateway 는 비용 절감을 위해 **제거**했다(2026-07-02). 대신:
 
 - `mcm_owner`: 비로그인 소유자 후보. 실제 객체 소유권 이전은 후속 운영 전환 범위다.
 - `mcm_app`: 현재 Next 단일 앱의 데이터·시퀀스·승인된 루틴 권한만 받는다. DDL·TRUNCATE·TEMP·역할 전환 권한은 주지 않는다.
-- `mcm_worker`: `facility-enrich`에 필요한 일곱 표와 `facility_quality_snapshot` 함수만 받는다.
+- `mcm_worker`: `facility-enrich`에 필요한 일곱 표와 `facility_quality_snapshot` 함수의 명시 권한만 받는다. Aurora가 `public`에 설치한 `rdsadmin` 소유 `vector` 확장 함수는 설치 주체가 PUBLIC 실행 권한을 회수할 수 없어, 해당 확장 소속에 한정해 상속된 실행 권한을 증명에서 허용한다. 그 밖의 업무 함수 실행은 거절한다.
 - `mcm_collector`: 수집이 Next 안에 있는 동안 만들지 않는다.
 
 265는 맨 앞에서 `(607003, 265)` 트랜잭션 advisory lock을 잡는다. 런타임 역할의 `search_path`는 `public`만 명시해 `pg_catalog`가 암묵적으로 앞서게 하고, 설치 주체의 전역 기본 함수 권한에서 PUBLIC 실행 권한을 회수한다. 설치 마지막의 `mcm_assert_runtime_privileges()`가 두 설정을 포함한 권한을 확인한다. 이후 다른 설치 주체가 새 표를 만들면 권한이 자동 부여되지 않으므로 같은 승인 설치 주체에서 265를 재적용하고 증명을 확인해야 한다. 역할별 비밀 발급, 실제 Aurora 연결, ECS 전환과 소유권 이전은 이 SQL의 완료 범위가 아니다.

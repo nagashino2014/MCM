@@ -207,6 +207,19 @@ function Read-MsgPackValue([byte[]]$bytes, [ref]$offset, [int]$depth) {
   throw 'Unsupported saved plan backend MessagePack value.'
 }
 
+function ConvertTo-LfBytes([byte[]]$bytes) {
+  $normalized = [System.Collections.Generic.List[byte]]::new($bytes.Length)
+  for ($i = 0; $i -lt $bytes.Length; $i++) {
+    if ($bytes[$i] -eq 13 -and $i + 1 -lt $bytes.Length -and $bytes[$i + 1] -eq 10) {
+      $normalized.Add([byte]10)
+      $i++
+    } else {
+      $normalized.Add($bytes[$i])
+    }
+  }
+  return ,$normalized.ToArray()
+}
+
 $archive = [System.IO.Compression.ZipFile]::OpenRead($resolvedPlan)
 try {
   $archivedOverrides = @($archive.Entries | Where-Object {
@@ -322,16 +335,17 @@ try {
     $lockPath = Join-Path $directory '.terraform.lock.hcl'
     $lockEntry = $archive.GetEntry('.terraform.lock.hcl')
     if (-not (Test-Path -LiteralPath $lockPath -PathType Leaf) -or
-        $null -eq $lockEntry -or
-        $lockEntry.Length -ne (Get-Item -LiteralPath $lockPath).Length) {
+        $null -eq $lockEntry -or $lockEntry.Length -gt 1000000 -or
+        (Get-Item -LiteralPath $lockPath).Length -gt 1000000) {
       throw 'Saved plan provider lockfile differs from the clean main checkout.'
     }
     $entryStream = $lockEntry.Open()
-    $fileStream = [System.IO.File]::OpenRead($lockPath)
+    $entryMemory = [System.IO.MemoryStream]::new()
     try {
-      $entryHash = [BitConverter]::ToString($sha.ComputeHash($entryStream))
-      $fileHash = [BitConverter]::ToString($sha.ComputeHash($fileStream))
-    } finally { $entryStream.Dispose(); $fileStream.Dispose() }
+      $entryStream.CopyTo($entryMemory)
+      $entryHash = [BitConverter]::ToString($sha.ComputeHash((ConvertTo-LfBytes $entryMemory.ToArray())))
+      $fileHash = [BitConverter]::ToString($sha.ComputeHash((ConvertTo-LfBytes ([IO.File]::ReadAllBytes($lockPath)))))
+    } finally { $entryStream.Dispose(); $entryMemory.Dispose() }
     if ($entryHash -cne $fileHash) {
       throw 'Saved plan provider lockfile differs from the clean main checkout.'
     }
@@ -342,7 +356,11 @@ $planText = & terraform "-chdir=$directory" show -json $resolvedPlan
 if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect the saved Terraform plan.' }
 $plan = ($planText -join "`n") | ConvertFrom-Json
 if ($null -eq $plan.resource_changes) { throw 'Saved plan has no resource changes.' }
-if ($plan.variables.r0b_transition_allow_legacy_roles.value -cne $true) {
+$transitionValue = $plan.variables.r0b_transition_allow_legacy_roles.value
+# Terraform 1.9.8 keeps -var=true as the literal string "true" in the plan
+# variable input, while fixture plans may contain a JSON boolean.
+if (-not (($transitionValue -is [bool] -and $transitionValue) -or
+          ($transitionValue -is [string] -and $transitionValue -ceq 'true'))) {
   throw 'Saved plan must explicitly retain legacy roles during R0B transition.'
 }
 $scheduled = [string]$plan.variables.scheduled_next_task_definition_arn.value

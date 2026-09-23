@@ -143,7 +143,7 @@ NAT Gateway 는 비용 절감을 위해 **제거**했다(2026-07-02). 대신:
 
 재무 SQL 226~264와 R0B1 역할 SQL 265는 `accounting-definition-migrations.json`에 등록되어 있다. 해당 SQL은 `staging-apply-migrations.ps1 -AccountingMaintenance -Files <검토한 파일>` 경로에서만 적용한다. 이 절차가 스케줄 정지, 앱 연결 배출, 단일 세션 적용과 복구 표식을 함께 관리한다. 중단 표식이 남았으면 새 SQL을 적용하지 말고 `-RecoverAccountingMaintenance` 절차로 먼저 복구한다.
 
-2026-09-22 기준 재무 SQL 226~264는 스테이징에 적용됐지만 265는 적용되지 않았다. R0B1 설치는 별도 검토와 스테이징 사전검사 뒤 수행한다. Next 추가 배포 금지와 스테이징 전체 Terraform apply 금지는 그대로 유지한다.
+2026-09-23 기준 재무 SQL 226~265는 스테이징에 적용됐다. 265 적용 뒤 master 세션에서 런타임 권한 증명과 재무 정의 검사 7개가 모두 통과했다. 역할별 비밀 발급과 앱·worker의 `mcm_*` 전환은 아직 수행하지 않았다. Next 추가 배포 금지와 스테이징 전체 Terraform apply 금지는 그대로 유지한다.
 
 ### R0B1 DB 역할·권한 경계
 

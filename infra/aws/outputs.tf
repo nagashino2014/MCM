@@ -22,6 +22,30 @@ output "secret_name" {
   value = aws_secretsmanager_secret.app.name
 }
 
+output "db_app_secret_name" {
+  value = aws_secretsmanager_secret.db_app.name
+}
+
+output "db_worker_secret_name" {
+  value = aws_secretsmanager_secret.db_worker.name
+}
+
+output "next_task_role_arn" {
+  value = aws_iam_role.ecs_task.arn
+}
+
+output "worker_task_role_arn" {
+  value = aws_iam_role.ecs_task_worker.arn
+}
+
+output "backend_task_role_arn" {
+  value = aws_iam_role.ecs_task_backend.arn
+}
+
+output "converter_task_role_arn" {
+  value = aws_iam_role.ecs_task_converter.arn
+}
+
 output "bastion_instance_id" {
   value = aws_instance.bastion.id
 }

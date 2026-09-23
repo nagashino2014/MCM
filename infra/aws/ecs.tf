@@ -19,9 +19,20 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-resource "aws_iam_role_policy" "ecs_task_execution_secrets" {
-  name = "${local.name}-ecs-execution-secrets"
-  role = aws_iam_role.ecs_task_execution.id
+resource "aws_iam_role" "ecs_task_execution_next" {
+  name               = "${local.name}-ecs-execution-next"
+  assume_role_policy = data.aws_iam_policy_document.ecs_assume_role.json
+  tags               = local.tags
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_task_execution_next" {
+  role       = aws_iam_role.ecs_task_execution_next.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+resource "aws_iam_role_policy" "ecs_task_execution_next_secrets" {
+  name = "${local.name}-ecs-execution-next-secrets"
+  role = aws_iam_role.ecs_task_execution_next.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -30,7 +41,35 @@ resource "aws_iam_role_policy" "ecs_task_execution_secrets" {
       Action = ["secretsmanager:GetSecretValue"]
       Resource = [
         aws_secretsmanager_secret.app.arn,
-        aws_rds_cluster.main.master_user_secret[0].secret_arn
+        aws_secretsmanager_secret.db_app.arn
+      ]
+    }]
+  })
+}
+
+resource "aws_iam_role" "ecs_task_execution_worker" {
+  name               = "${local.name}-ecs-execution-worker"
+  assume_role_policy = data.aws_iam_policy_document.ecs_assume_role.json
+  tags               = local.tags
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_task_execution_worker" {
+  role       = aws_iam_role.ecs_task_execution_worker.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+resource "aws_iam_role_policy" "ecs_task_execution_worker_secrets" {
+  name = "${local.name}-ecs-execution-worker-secrets"
+  role = aws_iam_role.ecs_task_execution_worker.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = ["secretsmanager:GetSecretValue"]
+      Resource = [
+        aws_secretsmanager_secret.app.arn,
+        aws_secretsmanager_secret.db_worker.arn
       ]
     }]
   })
@@ -38,6 +77,26 @@ resource "aws_iam_role_policy" "ecs_task_execution_secrets" {
 
 resource "aws_iam_role" "ecs_task" {
   name               = "${local.name}-ecs-task"
+  assume_role_policy = data.aws_iam_policy_document.ecs_assume_role.json
+  tags               = local.tags
+}
+
+# R0B: 런타임별 AWS 권한을 분리한다. 기존 ecs_task는 Next 전용으로 유지해
+# Terraform state 주소와 운영 역할 이름을 불필요하게 바꾸지 않는다.
+resource "aws_iam_role" "ecs_task_worker" {
+  name               = "${local.name}-ecs-task-worker"
+  assume_role_policy = data.aws_iam_policy_document.ecs_assume_role.json
+  tags               = local.tags
+}
+
+resource "aws_iam_role" "ecs_task_backend" {
+  name               = "${local.name}-ecs-task-backend"
+  assume_role_policy = data.aws_iam_policy_document.ecs_assume_role.json
+  tags               = local.tags
+}
+
+resource "aws_iam_role" "ecs_task_converter" {
+  name               = "${local.name}-ecs-task-converter"
   assume_role_policy = data.aws_iam_policy_document.ecs_assume_role.json
   tags               = local.tags
 }
@@ -82,14 +141,6 @@ data "aws_iam_policy_document" "app_access" {
     resources = ["${aws_s3_bucket.mail_inbound.arn}/*"]
   }
 
-  statement {
-    actions = ["secretsmanager:GetSecretValue"]
-    resources = [
-      aws_secretsmanager_secret.app.arn,
-      aws_rds_cluster.main.master_user_secret[0].secret_arn
-    ]
-  }
-
   # OCR 백엔드 on-demand 기동: 파싱 요청 시 next 가 backend 서비스를 desired=1 로 올린다.
   statement {
     actions   = ["ecs:DescribeServices", "ecs:UpdateService"]
@@ -114,13 +165,52 @@ resource "aws_iam_role_policy" "app_access" {
   policy = data.aws_iam_policy_document.app_access.json
 }
 
+data "aws_iam_policy_document" "worker_access" {
+  statement {
+    actions = [
+      "sqs:ReceiveMessage",
+      "sqs:DeleteMessage",
+      "sqs:ChangeMessageVisibility",
+      "sqs:GetQueueAttributes"
+    ]
+    resources = [aws_sqs_queue.jobs.arn]
+  }
+}
+
+resource "aws_iam_role_policy" "worker_access" {
+  name   = "${local.name}-worker-access"
+  role   = aws_iam_role.ecs_task_worker.id
+  policy = data.aws_iam_policy_document.worker_access.json
+}
+
+data "aws_iam_policy_document" "backend_access" {
+  statement {
+    actions = [
+      "s3:GetObject",
+      "s3:PutObject",
+      "s3:DeleteObject",
+      "s3:ListBucket"
+    ]
+    resources = [
+      aws_s3_bucket.app_data.arn,
+      "${aws_s3_bucket.app_data.arn}/*"
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "backend_access" {
+  name   = "${local.name}-backend-access"
+  role   = aws_iam_role.ecs_task_backend.id
+  policy = data.aws_iam_policy_document.backend_access.json
+}
+
 resource "aws_ecs_task_definition" "next" {
   family                   = "${local.name}-next"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = 512
   memory                   = 1024
-  execution_role_arn       = aws_iam_role.ecs_task_execution.arn
+  execution_role_arn       = aws_iam_role.ecs_task_execution_next.arn
   task_role_arn            = aws_iam_role.ecs_task.arn
 
   container_definitions = jsonencode([
@@ -146,6 +236,10 @@ resource "aws_ecs_task_definition" "next" {
         { name = "PGHOST", value = aws_rds_cluster.main.endpoint },
         { name = "PGPORT", value = "5432" },
         { name = "PGDATABASE", value = var.db_name },
+        { name = "PGSSL", value = "require" },
+        { name = "PGSSL_REJECT_UNAUTHORIZED", value = "true" },
+        { name = "MCM_DB_ROLE_REQUIRED", value = "true" },
+        { name = "MCM_DB_EXPECTED_ROLE", value = var.db_app_role_name },
         { name = "ADMIN_PASSWORD_SYNC_ON_BOOT", value = "true" },
         # 알림(전자결재·공공입찰) — 발신 이메일(SES 검증 identity) + 결재함 링크 베이스 URL
         { name = "BID_NOTIFY_EMAIL_FROM", value = var.notify_email_from },
@@ -159,8 +253,8 @@ resource "aws_ecs_task_definition" "next" {
         { name = "AUTH_SECRET", valueFrom = "${aws_secretsmanager_secret.app.arn}:AUTH_SECRET::" },
         { name = "ADMIN_USERNAME", valueFrom = "${aws_secretsmanager_secret.app.arn}:ADMIN_USERNAME::" },
         { name = "ADMIN_PASSWORD", valueFrom = "${aws_secretsmanager_secret.app.arn}:ADMIN_PASSWORD::" },
-        { name = "PGUSER", valueFrom = "${aws_rds_cluster.main.master_user_secret[0].secret_arn}:username::" },
-        { name = "PGPASSWORD", valueFrom = "${aws_rds_cluster.main.master_user_secret[0].secret_arn}:password::" },
+        { name = "PGUSER", valueFrom = "${aws_secretsmanager_secret.db_app.arn}:username::" },
+        { name = "PGPASSWORD", valueFrom = "${aws_secretsmanager_secret.db_app.arn}:password::" },
         # ⚠ 아래 3개 JSON 키는 Secrets Manager 시크릿(mcm-ieps-staging/app)에 먼저 넣은 뒤 apply 할 것.
         #    키가 없으면 ECS 태스크가 시크릿 주입 실패로 기동하지 못한다.
         #    - SOLAPI_API_KEY / SOLAPI_API_SECRET : 솔라피 알림톡 API 자격증명
@@ -185,7 +279,7 @@ resource "aws_ecs_task_definition" "next" {
   # 앱 이미지/태스크 정의는 terraform 밖(register-task-definition)에서 배포한다.
   # terraform 이 container_definitions(이미지·정규화 필드)를 되돌리지 않도록 무시.
   lifecycle {
-    ignore_changes = [container_definitions]
+    ignore_changes = [container_definitions, execution_role_arn, task_role_arn]
   }
 }
 
@@ -196,7 +290,7 @@ resource "aws_ecs_task_definition" "backend" {
   cpu                      = 2048
   memory                   = 8192
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
-  task_role_arn            = aws_iam_role.ecs_task.arn
+  task_role_arn            = aws_iam_role.ecs_task_backend.arn
 
   container_definitions = jsonencode([
     {
@@ -224,7 +318,7 @@ resource "aws_ecs_task_definition" "backend" {
   tags = local.tags
 
   lifecycle {
-    ignore_changes = [container_definitions]
+    ignore_changes = [container_definitions, execution_role_arn, task_role_arn]
   }
 }
 
@@ -234,8 +328,8 @@ resource "aws_ecs_task_definition" "worker" {
   network_mode             = "awsvpc"
   cpu                      = 1024
   memory                   = 3072
-  execution_role_arn       = aws_iam_role.ecs_task_execution.arn
-  task_role_arn            = aws_iam_role.ecs_task.arn
+  execution_role_arn       = aws_iam_role.ecs_task_execution_worker.arn
+  task_role_arn            = aws_iam_role.ecs_task_worker.arn
 
   container_definitions = jsonencode([
     {
@@ -244,16 +338,19 @@ resource "aws_ecs_task_definition" "worker" {
       essential = true
       environment = [
         { name = "AWS_REGION", value = var.aws_region },
-        { name = "MCM_STORAGE_BUCKET", value = aws_s3_bucket.app_data.bucket },
         { name = "MCM_JOB_QUEUE_URL", value = aws_sqs_queue.jobs.url },
         { name = "IEPS_BACKEND_URL", value = "http://backend.local:8001" },
         { name = "PGHOST", value = aws_rds_cluster.main.endpoint },
         { name = "PGPORT", value = "5432" },
-        { name = "PGDATABASE", value = var.db_name }
+        { name = "PGDATABASE", value = var.db_name },
+        { name = "PGSSL", value = "require" },
+        { name = "PGSSL_REJECT_UNAUTHORIZED", value = "true" },
+        { name = "MCM_DB_ROLE_REQUIRED", value = "true" },
+        { name = "MCM_DB_EXPECTED_ROLE", value = var.db_worker_role_name }
       ]
       secrets = [
-        { name = "PGUSER", valueFrom = "${aws_rds_cluster.main.master_user_secret[0].secret_arn}:username::" },
-        { name = "PGPASSWORD", valueFrom = "${aws_rds_cluster.main.master_user_secret[0].secret_arn}:password::" },
+        { name = "PGUSER", valueFrom = "${aws_secretsmanager_secret.db_worker.arn}:username::" },
+        { name = "PGPASSWORD", valueFrom = "${aws_secretsmanager_secret.db_worker.arn}:password::" },
         { name = "DART_API_KEY", valueFrom = "${aws_secretsmanager_secret.app.arn}:DART_API_KEY::" },
         { name = "DATA_GO_KR_API_KEY", valueFrom = "${aws_secretsmanager_secret.app.arn}:DATA_GO_KR_API_KEY::" }
       ]
@@ -271,7 +368,7 @@ resource "aws_ecs_task_definition" "worker" {
   tags = local.tags
 
   lifecycle {
-    ignore_changes = [container_definitions]
+    ignore_changes = [container_definitions, execution_role_arn, task_role_arn]
   }
 }
 

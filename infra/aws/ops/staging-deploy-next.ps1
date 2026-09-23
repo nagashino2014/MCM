@@ -46,6 +46,7 @@ $repoRoot  = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
 
 function Log($m)  { Write-Host "[deploy] $m" }
 function Fail($m) { Write-Host "[deploy] 실패: $m" -ForegroundColor Red; exit 1 }
+. (Join-Path $PSScriptRoot "runtime-db-boundary.ps1")
 function Assert-PinnedSchedules {
   try { & (Join-Path $PSScriptRoot 'staging-assert-next-schedules-pinned.ps1') -AwsProfile $AwsProfile -Region $Region | Out-Null }
   catch { Fail $_.Exception.Message }
@@ -92,6 +93,24 @@ if (-not $Force) {
   }
 }
 
+# 이미지 빌드·푸시보다 먼저 현재 태스크의 DB 역할 경계를 확인한다. 이 스크립트는
+# 기존 태스크 정의를 복제하므로 검사가 없으면 master 자격증명이 새 리비전에 승계된다.
+Log "현재 태스크 정의와 DB 역할 경계 사전 확인"
+$preflightCurrent = (aws ecs describe-services --cluster $cluster --services $service --region $Region --query "services[0].taskDefinition" --output text)
+if ($LASTEXITCODE -ne 0 -or -not $preflightCurrent -or $preflightCurrent -eq "None") { Fail "서비스의 태스크 정의를 찾지 못함" }
+$preflightJson = (aws ecs describe-task-definition --task-definition $preflightCurrent --region $Region --query "taskDefinition" --output json)
+if ($LASTEXITCODE -ne 0 -or -not $preflightJson) { Fail "태스크 정의 조회" }
+$preflightDefinition = $preflightJson | ConvertFrom-Json
+try {
+  Assert-RuntimeDatabaseBoundary -TaskDefinition $preflightDefinition -ContainerName $container `
+    -ExpectedRole "mcm_app" -ExpectedPartition "aws" -ExpectedRegion $Region `
+    -ExpectedAccountId $account -ExpectedSecretName "mcm-ieps-staging/db-app" `
+    -ExpectedApplicationSecretName "mcm-ieps-staging/app" `
+    -AllowedApplicationSecretKeys @("AUTH_SECRET", "ADMIN_USERNAME", "ADMIN_PASSWORD", "SOLAPI_API_KEY", "SOLAPI_API_SECRET", "ANTHROPIC_API_KEY") `
+    -ExpectedTaskRoleName "mcm-ieps-staging-ecs-task" `
+    -ExpectedExecutionRoleName "mcm-ieps-staging-ecs-execution-next"
+} catch { Fail $_.Exception.Message }
+
 if (-not $SkipBuild) {
   # 1) ECR 로그인 → 빌드 → 푸시(설명 태그 + latest)
   Log "ECR 로그인"
@@ -117,14 +136,11 @@ if (-not $SkipBuild) {
 }
 
 # 2) 현재 태스크 정의를 받아 image 만 교체해 새 리비전 등록
-Log "현재 태스크 정의 조회"
-$current = (aws ecs describe-services --cluster $cluster --services $service --region $Region --query "services[0].taskDefinition" --output text)
-if ($LASTEXITCODE -ne 0 -or -not $current -or $current -eq "None") { Fail "서비스의 태스크 정의를 찾지 못함" }
+Log "사전 확인한 태스크 정의 사용"
+$current = $preflightCurrent
 Log "현재 리비전: $current"
 
-$tdJson = (aws ecs describe-task-definition --task-definition $current --region $Region --query "taskDefinition" --output json)
-if ($LASTEXITCODE -ne 0) { Fail "태스크 정의 조회" }
-$td = $tdJson | ConvertFrom-Json
+$td = $preflightDefinition
 
 # register-task-definition 이 받지 않는 읽기 전용 필드를 떼어낸다(없으면 무시된다).
 foreach ($p in @("taskDefinitionArn", "revision", "status", "requiresAttributes",
@@ -148,6 +164,18 @@ if ($FacilityQualityEnvironmentFile) {
     Log "정비 워커 연결 설정: $($entry.Name)"
   }
 }
+
+# 등록 본문도 같은 경계를 만족해야 한다. 이미지와 승인된 정비 환경 외의 변조가 있으면
+# 두 번째 스케줄 확인이나 register-task-definition 전에 중단한다.
+try {
+  Assert-RuntimeDatabaseBoundary -TaskDefinition $td -ContainerName $container `
+    -ExpectedRole "mcm_app" -ExpectedPartition "aws" -ExpectedRegion $Region `
+    -ExpectedAccountId $account -ExpectedSecretName "mcm-ieps-staging/db-app" `
+    -ExpectedApplicationSecretName "mcm-ieps-staging/app" `
+    -AllowedApplicationSecretKeys @("AUTH_SECRET", "ADMIN_USERNAME", "ADMIN_PASSWORD", "SOLAPI_API_KEY", "SOLAPI_API_SECRET", "ANTHROPIC_API_KEY") `
+    -ExpectedTaskRoleName "mcm-ieps-staging-ecs-task" `
+    -ExpectedExecutionRoleName "mcm-ieps-staging-ecs-execution-next"
+} catch { Fail $_.Exception.Message }
 
 # 빌드 중 스케줄이 family-only로 돌아갔을 수 있으므로 등록 직전에 다시 확인한다.
 Assert-PinnedSchedules

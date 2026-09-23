@@ -1,6 +1,6 @@
 #Requires -Version 5.1
 param(
-  [Parameter(Mandatory=$true)][ValidateSet('family','pinned-no-ack','pinned-no-wait','drift-before-register','pinned-ack-wait')][string]$Scenario,
+  [Parameter(Mandatory=$true)][ValidateSet('family','pinned-no-ack','pinned-no-wait','drift-before-register','master-boundary','pinned-ack-wait')][string]$Scenario,
   [Parameter(Mandatory=$true)][string]$CallLog
 )
 
@@ -42,7 +42,30 @@ function global:aws {
     }
     'ecs:describe-services' { return $global:R0BRevision }
     'ecs:describe-task-definition' {
-      return (ConvertTo-Json -InputObject @{ family = 'mcm-ieps-staging-next'; containerDefinitions = @(@{ name = 'next'; image = 'old-image' }) } -Depth 5 -Compress)
+      $task = @{
+        family = 'mcm-ieps-staging-next'
+        taskRoleArn = "arn:aws:iam::${account}:role/mcm-ieps-staging-ecs-task"
+        executionRoleArn = "arn:aws:iam::${account}:role/mcm-ieps-staging-ecs-execution-next"
+        containerDefinitions = @(@{
+          name = 'next'
+          image = 'old-image'
+          environment = @(
+            @{ name = 'PGSSL'; value = 'require' },
+            @{ name = 'PGSSL_REJECT_UNAUTHORIZED'; value = 'true' },
+            @{ name = 'MCM_DB_ROLE_REQUIRED'; value = 'true' },
+            @{ name = 'MCM_DB_EXPECTED_ROLE'; value = 'mcm_app' }
+          )
+          secrets = @(
+            @{ name = 'PGUSER'; valueFrom = "arn:aws:secretsmanager:ap-northeast-2:${account}:secret:mcm-ieps-staging/db-app-Q7x2Lm:username::" },
+            @{ name = 'PGPASSWORD'; valueFrom = "arn:aws:secretsmanager:ap-northeast-2:${account}:secret:mcm-ieps-staging/db-app-Q7x2Lm:password::" }
+          )
+        })
+      }
+      if ($global:R0BTestScenario -eq 'master-boundary') {
+        $task.containerDefinitions[0].secrets[0].valueFrom = "arn:aws:secretsmanager:ap-northeast-2:${account}:secret:rds!cluster-master-Q7x2Lm:username::"
+        $task.containerDefinitions[0].secrets[1].valueFrom = "arn:aws:secretsmanager:ap-northeast-2:${account}:secret:rds!cluster-master-Q7x2Lm:password::"
+      }
+      return (ConvertTo-Json -InputObject $task -Depth 8 -Compress)
     }
     'ecs:register-task-definition' { return "arn:aws:ecs:ap-northeast-2:195748745315:task-definition/mcm-ieps-staging-next:619" }
     'ecs:update-service' { return '{}' }
@@ -65,6 +88,7 @@ switch ($Scenario) {
   'pinned-no-ack' { & $deploy -Force -SkipBuild -Wait }
   'pinned-no-wait' { & $deploy -Force -SkipBuild -AcknowledgePinnedScheduleLag }
   'drift-before-register' { & $deploy -Force -SkipBuild -AcknowledgePinnedScheduleLag -Wait }
+  'master-boundary' { & $deploy -Force -SkipBuild -AcknowledgePinnedScheduleLag -Wait }
   'pinned-ack-wait' { & $deploy -Force -SkipBuild -AcknowledgePinnedScheduleLag -Wait }
 }
 exit $LASTEXITCODE

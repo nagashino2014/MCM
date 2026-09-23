@@ -6,15 +6,18 @@ resource "aws_iam_role_policy" "facility_quality_worker_start" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect = "Allow"
-        Action = ["ecs:RunTask"]
-        Resource = ["arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:task-definition/${local.name}-worker:*"]
+        Effect    = "Allow"
+        Action    = ["ecs:RunTask"]
+        Resource  = ["arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:task-definition/${local.name}-worker:*"]
         Condition = { ArnEquals = { "ecs:cluster" = aws_ecs_cluster.main.arn } }
       },
       {
         Effect = "Allow"
         Action = ["iam:PassRole"]
-        Resource = [aws_iam_role.ecs_task.arn, aws_iam_role.ecs_task_execution.arn]
+        Resource = concat(
+          [aws_iam_role.ecs_task_worker.arn, aws_iam_role.ecs_task_execution_worker.arn],
+          var.r0b_transition_allow_legacy_roles ? [aws_iam_role.ecs_task.arn, aws_iam_role.ecs_task_execution.arn] : []
+        )
         Condition = { StringEquals = { "iam:PassedToService" = "ecs-tasks.amazonaws.com" } }
       }
     ]

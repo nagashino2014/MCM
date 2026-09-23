@@ -46,6 +46,33 @@ type PgPoolConfig = {
 type PgPoolCtor = new (config: PgPoolConfig) => PgPool;
 
 let pool: PgPool | null = null;
+let poolInit: Promise<PgPool> | null = null;
+
+function requiredDatabaseRole(): string | null {
+  const expected = process.env.MCM_DB_EXPECTED_ROLE?.trim() ?? "";
+  const required = process.env.NODE_ENV === "production" || process.env.MCM_DB_ROLE_REQUIRED === "true";
+  if (!expected) {
+    if (required) throw new Error("MCM_DB_EXPECTED_ROLE is required for this database client.");
+    return null;
+  }
+  if (!/^[a-z_][a-z0-9_]{0,62}$/.test(expected)) {
+    throw new Error("MCM_DB_EXPECTED_ROLE is invalid.");
+  }
+  return expected;
+}
+
+async function assertDatabaseRole(candidate: PgPool): Promise<void> {
+  const expected = requiredDatabaseRole();
+  if (!expected) return;
+  const result = await candidate.query(
+    "SELECT current_user::text AS current_user, session_user::text AS session_user",
+  );
+  const current = result.rows[0]?.current_user;
+  const session = result.rows[0]?.session_user;
+  if (current !== expected || session !== expected) {
+    throw new Error(`Database role mismatch: expected ${expected}.`);
+  }
+}
 
 function buildConnectionStringFromParts(): string | null {
   const host = process.env.PGHOST;
@@ -61,21 +88,43 @@ function buildConnectionStringFromParts(): string | null {
 
 async function getPool(): Promise<PgPool> {
   if (pool) return pool;
-  const connectionString = process.env.DATABASE_URL || buildConnectionStringFromParts();
-  if (!connectionString) {
-    throw new Error("DATABASE_URL or PGHOST/PGUSER/PGPASSWORD/PGDATABASE is required to access the application database.");
+  if (!poolInit) {
+    poolInit = (async () => {
+      const connectionString = process.env.DATABASE_URL || buildConnectionStringFromParts();
+      if (!connectionString) {
+        throw new Error("DATABASE_URL or PGHOST/PGUSER/PGPASSWORD/PGDATABASE is required to access the application database.");
+      }
+      const mod = (await import("pg")) as unknown as { Pool?: PgPoolCtor; default?: { Pool: PgPoolCtor } };
+      const PoolCtor: PgPoolCtor = mod.Pool ?? mod.default!.Pool;
+      const candidate = new PoolCtor({
+        connectionString,
+        max: Number(process.env.PG_POOL_MAX || 10),
+        application_name: process.env.PGAPPNAME || "mcm-frontend",
+        ssl:
+          process.env.PGSSL === "disable"
+            ? false
+            : { rejectUnauthorized: process.env.PGSSL_REJECT_UNAUTHORIZED === "true" },
+      });
+      try {
+        await assertDatabaseRole(candidate);
+      } catch (error) {
+        await candidate.end();
+        throw error;
+      }
+      pool = candidate;
+      return candidate;
+    })();
   }
-  const mod = (await import("pg")) as unknown as { Pool?: PgPoolCtor; default?: { Pool: PgPoolCtor } };
-  const PoolCtor: PgPoolCtor = mod.Pool ?? mod.default!.Pool;
-  pool = new PoolCtor({
-    connectionString,
-    max: Number(process.env.PG_POOL_MAX || 10),
-    ssl:
-      process.env.PGSSL === "disable"
-        ? false
-        : { rejectUnauthorized: process.env.PGSSL_REJECT_UNAUTHORIZED === "true" },
-  });
-  return pool;
+  try {
+    return await poolInit;
+  } finally {
+    if (!pool) poolInit = null;
+  }
+}
+
+/** Fail the Node runtime startup before serving requests when its DB identity is wrong. */
+export async function assertRuntimeDatabaseRole(): Promise<void> {
+  await getPool();
 }
 
 function toExecResult(qr: PgQueryResult): SqlExecResult[] {

@@ -13,13 +13,6 @@ variable "aws_region" {
   default = "ap-northeast-2"
 }
 
-# 스테이징 ADT·intel 배치가 검증 전 Next 최신판을 따라가지 않도록 숫자 revision을 명시한다.
-# plan/apply 시 현재 승인된 ARN을 -var 또는 TF_VAR_scheduled_next_task_definition_arn으로 전달한다.
-# 기본값을 두지 않아 값 누락 시 적용이 멈춘다.
-variable "scheduled_next_task_definition_arn" {
-  type = string
-}
-
 variable "vpc_cidr" {
   type    = string
   default = "10.40.0.0/16"
@@ -43,6 +36,44 @@ variable "db_username" {
 variable "db_name" {
   type    = string
   default = "mcm"
+}
+
+variable "db_app_role_name" {
+  type    = string
+  default = "mcm_app"
+  validation {
+    condition     = can(regex("^[a-z_][a-z0-9_]{0,62}$", var.db_app_role_name))
+    error_message = "db_app_role_name must be an unquoted PostgreSQL role name."
+  }
+}
+
+variable "db_worker_role_name" {
+  type    = string
+  default = "mcm_worker"
+  validation {
+    condition     = can(regex("^[a-z_][a-z0-9_]{0,62}$", var.db_worker_role_name))
+    error_message = "db_worker_role_name must be an unquoted PostgreSQL role name."
+  }
+}
+
+# R0B 전환 중에만 true를 명시한다. 기본값을 두지 않아 일반 apply가 legacy
+# PassRole과 실행 역할의 secret 읽기를 조용히 계속 열거나, 전환 전에 닫는 일을 막는다.
+# Next·worker 계열의 legacy secret 주입 및 618 원복 참조가 끝난 뒤에만 false로 바꾼다.
+# backend·converter는 역할을 계속 쓰므로 실제 task definition에 secret이 없는지도 확인한다.
+variable "r0b_transition_allow_legacy_roles" {
+  type        = bool
+  description = "Explicit R0B transition state. true retains legacy PassRole and execution secret access; false only after legacy secret-injecting Next/worker and rollback references retire and live backend/converter tasks are confirmed secret-free."
+}
+
+# EventBridge target을 새로 만들 때 Terraform state의 오래된/기본 Next definition을
+# 선택하지 않도록 운영자가 검증한 revision 포함 ARN을 반드시 명시한다.
+variable "scheduled_next_task_definition_arn" {
+  type        = string
+  description = "Validated Next task definition ARN including an explicit numeric revision for ADT and nightly schedules."
+  validation {
+    condition     = can(regex("^arn:(aws|aws-us-gov|aws-cn):ecs:[a-z0-9-]+:[0-9]{12}:task-definition/[A-Za-z0-9_-]+:[1-9][0-9]*$", var.scheduled_next_task_definition_arn))
+    error_message = "scheduled_next_task_definition_arn must be a revision-qualified ECS task definition ARN."
+  }
 }
 
 variable "container_image_next" {

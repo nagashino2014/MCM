@@ -53,7 +53,7 @@ resource "aws_ecs_task_definition" "converter" {
   cpu                = 512
   memory             = 1024
   execution_role_arn = aws_iam_role.ecs_task_execution.arn
-  task_role_arn      = aws_iam_role.ecs_task.arn
+  task_role_arn      = aws_iam_role.ecs_task_converter.arn
 
   container_definitions = jsonencode([
     {
@@ -79,7 +79,7 @@ resource "aws_ecs_task_definition" "converter" {
 
   # 배포는 terraform 밖(태스크 정의 새 리비전 등록 + update-service)에서 처리.
   lifecycle {
-    ignore_changes = [container_definitions]
+    ignore_changes = [container_definitions, execution_role_arn, task_role_arn]
   }
 }
 

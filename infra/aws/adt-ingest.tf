@@ -2,7 +2,8 @@
 # 근태 데이터의 주 수집 경로는 관리자 웹 업로드(/approval/attendance → /api/approval/attendance/upload)로,
 # 엑셀 업로드 시 즉시 파싱·산정된다. 이 스케줄은 "직원 매핑 후 미처리 스테이징(processed=false) 재정규화"만 담당한다.
 # (사내→클라우드 S3 sync 경로는 웹 업로드 채택으로 폐기 — 관련 버킷/업로드 IAM 은 이 파일에서 제거됨.)
-# next task def env(PG*)를 상속. mode=db(스테이징 재처리).
+# next task def의 mcm_app DB 역할과 실제 역할 검사를 그대로 상속한다.
+# 별도 worker/collector 역할이 아니며 mode=db(스테이징 재처리)만 오버라이드한다.
 
 resource "aws_cloudwatch_event_rule" "adt_ingest" {
   name                = "${local.name}-adt-ingest"
@@ -39,9 +40,15 @@ resource "aws_iam_role_policy" "adt_ingest_events" {
         }
       },
       {
-        Effect   = "Allow"
-        Action   = ["iam:PassRole"]
-        Resource = [aws_iam_role.ecs_task.arn, aws_iam_role.ecs_task_execution.arn]
+        Effect = "Allow"
+        Action = ["iam:PassRole"]
+        Resource = concat(
+          [aws_iam_role.ecs_task.arn, aws_iam_role.ecs_task_execution_next.arn],
+          var.r0b_transition_allow_legacy_roles ? [aws_iam_role.ecs_task_execution.arn] : []
+        )
+        Condition = {
+          StringEquals = { "iam:PassedToService" = "ecs-tasks.amazonaws.com" }
+        }
       }
     ]
   })
@@ -53,7 +60,8 @@ resource "aws_cloudwatch_event_target" "adt_ingest" {
   role_arn = aws_iam_role.adt_ingest_events.arn
 
   ecs_target {
-    # 검증된 숫자 revision만 사용한다. 스케줄 포인터 변경은 별도 승인된 전환 절차가 소유한다.
+    # 검증·안정화 전 신규 family revision을 실행하지 않도록 revision을 고정한다.
+    # R0B 전환 도구가 Next 서비스 안정화 뒤 이 target을 같은 revision으로 갱신한다.
     task_definition_arn = var.scheduled_next_task_definition_arn
     task_count          = 1
     launch_type         = "FARGATE"
@@ -74,8 +82,9 @@ resource "aws_cloudwatch_event_target" "adt_ingest" {
     }]
   })
 
+  # Next/worker revision 전환 도구가 검증과 서비스 안정화 뒤 정확한 revision ARN을
+  # 기록한다. 일반 terraform apply가 그 포인터를 과거 state revision으로 되돌리지 않는다.
   lifecycle {
-    # 전환 절차가 갱신한 숫자 revision을 일반 terraform apply가 되돌리지 않는다.
     ignore_changes = [ecs_target[0].task_definition_arn]
 
     precondition {

@@ -155,3 +155,17 @@ NAT Gateway 는 비용 절감을 위해 **제거**했다(2026-07-02). 대신:
 - `mcm_collector`: 수집이 Next 안에 있는 동안 만들지 않는다.
 
 265는 맨 앞에서 `(607003, 265)` 트랜잭션 advisory lock을 잡는다. 런타임 역할의 `search_path`는 `public`만 명시해 `pg_catalog`가 암묵적으로 앞서게 하고, 설치 주체의 전역 기본 함수 권한에서 PUBLIC 실행 권한을 회수한다. 설치 마지막의 `mcm_assert_runtime_privileges()`가 두 설정을 포함한 권한을 확인한다. 이후 다른 설치 주체가 새 표를 만들면 권한이 자동 부여되지 않으므로 같은 승인 설치 주체에서 265를 재적용하고 증명을 확인해야 한다. 역할별 비밀 발급, 실제 Aurora 연결, ECS 전환과 소유권 이전은 이 SQL의 완료 범위가 아니다.
+
+### R0A 런타임 역할 경계
+
+Next와 facility quality worker는 운영 기동 시 `MCM_DB_EXPECTED_ROLE`을 필수로 읽고, 최초 DB 연결에서 `current_user`와 `session_user`가 각각 `mcm_app`·`mcm_worker`인지 확인한다. 불일치한 pool은 닫고 재사용하지 않으며, worker는 SQS polling보다 먼저 검사를 끝낸다. collect·parse job은 로컬 sql.js와 backend HTTP 경로를 사용하므로 이 직접 PostgreSQL 역할 경계의 대상이 아니다.
+
+Terraform에는 앱·worker DB secret 컨테이너와 Next·worker의 분리된 실행 역할/태스크 역할을 선언하지만 secret **값**은 저장하지 않는다. 2026-09-23 현재 이 선언은 소스 통합 후보일 뿐 실제 스테이징에는 적용하지 않았고, `mcm_app`·`mcm_worker` 비밀번호도 발급하지 않았다. 실제 전환은 다음 항목을 갖춘 별도 R0B 절차가 소유한다.
+
+- `r0b_transition_allow_legacy_roles=true`인 전환 plan에서 기존 `ecs_task_execution_secrets` 정책을 state 이동으로 보존하고, legacy 실행 역할의 app·Aurora master secret 읽기 권한이 유지되는지 확인한다. 정책 삭제나 권한 공백이 보이면 적용하지 않는다.
+- `r0b_transition_allow_legacy_roles=false`는 legacy 실행 역할로 secret을 주입받는 Next 서비스·ADT·intel 스케줄·기존 worker RunTask·618 원복 경로가 모두 퇴역한 뒤에만 적용한다. backend·converter는 이 실행 역할을 계속 쓰므로, `ignore_changes`로 HCL과 다를 수 있는 실제 task definition의 모든 컨테이너에 `secrets`와 secret 기반 `repositoryCredentials`가 없는지도 먼저 확인한다. 이 단계에서 기존 secret 정책과 legacy PassRole을 함께 제거한다. R0B 실행기는 정책 삭제 plan을 이 퇴역·실제 정의 확인 증거와 결박해야 한다.
+- secret 값 생성·기록과 직후 실제 역할 로그인 검증
+- 승인된 숫자 task revision 등록, 서비스 안정화와 ADT·intel target의 동반 전환
+- 전환 단계별 재조회·원복·감사 기록
+
+따라서 전체 Terraform apply와 일반 Next 배포 금지는 계속 유지한다. 현재 master 자격증명을 쓰는 태스크 정의는 새 배포 사전검사에서 이미지 빌드 전에 거절되는 것이 정상이다.

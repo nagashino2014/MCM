@@ -6,6 +6,7 @@ import { connectQualityDb } from "../lib/facility-quality/postgres";
 import { createRun, rows, runSummary } from "../lib/facility-quality/store";
 import { processQualityRun } from "../lib/facility-enrichment/runner";
 async function main() {
+  if(process.env.NODE_ENV==="production"||process.env.MCM_DB_ROLE_REQUIRED==="true")throw new Error("운영 런타임에서는 로컬 파일럿을 실행할 수 없음");
   if(!["localhost","127.0.0.1"].includes(process.env.PGHOST||"")||process.env.PGDATABASE!=="mcm_quality_pilot"||process.env.DATABASE_URL)throw new Error("로컬 mcm_quality_pilot DB만 허용");
   const input=process.argv.find(a=>a.startsWith("--input="))?.slice(8);if(!input)throw new Error("--input 필요");
   const admin=new Pool({host:process.env.PGHOST,port:Number(process.env.PGPORT),user:process.env.PGUSER,database:"postgres",ssl:false});

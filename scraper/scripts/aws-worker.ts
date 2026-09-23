@@ -13,6 +13,7 @@ import fs from "node:fs";
 import os from "node:os";
 import { connectQualityDb } from "../lib/facility-quality/postgres";
 import { processQualityRun } from "../lib/facility-enrichment/runner";
+import { resolveWorkerBackendUrl } from "../lib/worker-backend";
 
 type JobType = "collect" | "parse" | "facility-enrich";
 type ParseCategory = "integratedFirst" | "integratedChange" | "annualReport";
@@ -35,58 +36,56 @@ if (!QUEUE_URL) {
   throw new Error("MCM_JOB_QUEUE_URL is required");
 }
 
-function resolveWorkerBackendUrl(input?: string): string | undefined {
-  if (process.env.NODE_ENV === "production" || process.env.MCM_JOB_QUEUE_URL) {
-    return undefined;
-  }
-  return input;
-}
-
 async function loadAwsSqs() {
   return import("@aws-sdk/client-sqs");
 }
 
 function runCliCollect(message: QueueMessage): Promise<void> {
+  const backendUrl = resolveWorkerBackendUrl(message.backendUrl);
   return new Promise((resolve, reject) => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "mcm-worker-"));
     const configPath = path.join(tmpDir, "collection-config.json");
-    fs.writeFileSync(configPath, JSON.stringify(message.config, null, 2), "utf8");
-
-    const args = [
-      "ts-node",
-      "--project",
-      "tsconfig.json",
-      "scripts/cli-collect.ts",
-      "--json-progress",
-      "--config=" + configPath,
-    ];
-    if (message.maxPages != null) args.push("--max-pages=" + message.maxPages);
-    const backendUrl = resolveWorkerBackendUrl(message.backendUrl);
-    if (backendUrl) args.push("--backend=" + backendUrl);
-    if (message.dryRun) args.push("--dry-run");
-    if (message.type === "collect") args.push("--download-only");
-    if (message.type === "parse" && message.parseOnly) args.push("--parse-only=" + message.parseOnly);
-
-    const child = spawn("npx", args, {
-      cwd: path.resolve(__dirname, ".."),
-      env: { ...process.env, MCM_JOB_ID: message.jobId },
-      stdio: "inherit",
-      shell: process.platform === "win32",
-    });
-
-    child.on("exit", (code) => {
+    let settled = false;
+    const finish = (error?: Error) => {
+      if (settled) return;
+      settled = true;
       fs.rmSync(tmpDir, { recursive: true, force: true });
-      if (code === 0) resolve();
-      else reject(new Error(`cli-collect exited with code ${code}`));
-    });
-    child.on("error", (err) => {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-      reject(err);
-    });
+      if (error) reject(error);
+      else resolve();
+    };
+
+    try {
+      fs.writeFileSync(configPath, JSON.stringify(message.config, null, 2), "utf8");
+      const args = [
+        "ts-node",
+        "--project",
+        "tsconfig.json",
+        "scripts/cli-collect.ts",
+        "--json-progress",
+        "--config=" + configPath,
+      ];
+      if (message.maxPages != null) args.push("--max-pages=" + message.maxPages);
+      if (backendUrl) args.push("--backend=" + backendUrl);
+      if (message.dryRun) args.push("--dry-run");
+      if (message.type === "collect") args.push("--download-only");
+      if (message.type === "parse" && message.parseOnly) args.push("--parse-only=" + message.parseOnly);
+
+      const child = spawn("npx", args, {
+        cwd: path.resolve(__dirname, ".."),
+        env: { ...process.env, MCM_JOB_ID: message.jobId },
+        stdio: "inherit",
+        shell: process.platform === "win32",
+      });
+
+      child.on("exit", (code) => finish(code === 0 ? undefined : new Error(`cli-collect exited with code ${code}`)));
+      child.on("error", (err) => finish(err));
+    } catch (error) {
+      finish(error instanceof Error ? error : new Error(String(error)));
+    }
   });
 }
 
-async function pollOnce(): Promise<boolean> {
+async function pollOnce(runtimeDb: ReturnType<typeof connectQualityDb>): Promise<boolean> {
   const aws = await loadAwsSqs();
   const client = new aws.SQSClient({ region: REGION });
   const received = await client.send(
@@ -111,8 +110,7 @@ async function pollOnce(): Promise<boolean> {
   try {
     if (body.type === "facility-enrich") {
       if (!body.runId || !/^[a-f0-9-]{36}$/.test(body.runId)) throw new Error("Invalid facility quality run ID");
-      const connection = connectQualityDb();
-      try { await processQualityRun(connection.db, connection.tx, body.runId); } finally { await connection.close(); }
+      await processQualityRun(runtimeDb.db, runtimeDb.tx, body.runId);
     } else if (body.type === "collect" || body.type === "parse") await runCliCollect(body);
     else throw new Error("Unsupported worker job type");
     if (visibilityLost) throw new Error("SQS visibility heartbeat failed; durable progress retained");
@@ -129,12 +127,18 @@ async function pollOnce(): Promise<boolean> {
 }
 
 async function main() {
-  const once = process.argv.includes("--once");
-  const drain = process.argv.includes("--drain");
-  do {
-    const processed = await pollOnce();
-    if (drain && !processed) break;
-  } while (!once);
+  const runtimeDb = connectQualityDb();
+  try {
+    await runtimeDb.ready;
+    const once = process.argv.includes("--once");
+    const drain = process.argv.includes("--drain");
+    do {
+      const processed = await pollOnce(runtimeDb);
+      if (drain && !processed) break;
+    } while (!once);
+  } finally {
+    await runtimeDb.close();
+  }
 }
 
 main().catch((err) => {

@@ -110,6 +110,20 @@ resource "aws_secretsmanager_secret" "app" {
   tags = local.tags
 }
 
+# Runtime database credentials are provisioned separately from the Aurora
+# master secret. Terraform creates the containers only; an approved operator
+# writes username/password JSON after the database roles exist. This keeps
+# passwords out of Terraform state.
+resource "aws_secretsmanager_secret" "db_app" {
+  name = "${local.name}/db-app"
+  tags = local.tags
+}
+
+resource "aws_secretsmanager_secret" "db_worker" {
+  name = "${local.name}/db-worker"
+  tags = local.tags
+}
+
 resource "aws_db_subnet_group" "main" {
   name       = local.name
   subnet_ids = aws_subnet.private[*].id

@@ -40,9 +40,15 @@ resource "aws_iam_role_policy" "intel_batch_events" {
         }
       },
       {
-        Effect   = "Allow"
-        Action   = ["iam:PassRole"]
-        Resource = [aws_iam_role.ecs_task.arn, aws_iam_role.ecs_task_execution.arn]
+        Effect = "Allow"
+        Action = ["iam:PassRole"]
+        Resource = concat(
+          [aws_iam_role.ecs_task.arn, aws_iam_role.ecs_task_execution_next.arn],
+          var.r0b_transition_allow_legacy_roles ? [aws_iam_role.ecs_task_execution.arn] : []
+        )
+        Condition = {
+          StringEquals = { "iam:PassedToService" = "ecs-tasks.amazonaws.com" }
+        }
       }
     ]
   })
@@ -54,7 +60,8 @@ resource "aws_cloudwatch_event_target" "intel_batch" {
   role_arn = aws_iam_role.intel_batch_events.arn
 
   ecs_target {
-    # 검증된 숫자 revision만 사용한다. 스케줄 포인터 변경은 별도 승인된 전환 절차가 소유한다.
+    # 검증·안정화 전 신규 family revision을 실행하지 않도록 revision을 고정한다.
+    # R0B 전환 도구가 Next 서비스 안정화 뒤 이 target을 같은 revision으로 갱신한다.
     task_definition_arn = var.scheduled_next_task_definition_arn
     task_count          = 1
     launch_type         = "FARGATE"
@@ -74,8 +81,9 @@ resource "aws_cloudwatch_event_target" "intel_batch" {
     }]
   })
 
+  # Next/worker revision 전환 도구가 검증과 서비스 안정화 뒤 정확한 revision ARN을
+  # 기록한다. 일반 terraform apply가 그 포인터를 과거 state revision으로 되돌리지 않는다.
   lifecycle {
-    # 전환 절차가 갱신한 숫자 revision을 일반 terraform apply가 되돌리지 않는다.
     ignore_changes = [ecs_target[0].task_definition_arn]
 
     precondition {

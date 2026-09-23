@@ -6,7 +6,14 @@
  * 깨지므로(instrumentation 은 edge 로도 컴파일됨) fetch 위임만 한다.
  */
 export async function register() {
-  if (process.env.NEXT_RUNTIME !== "nodejs") return;
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    // 운영 DB 역할 불일치는 첫 API 요청까지 미루지 않고 Node 런타임 기동을 실패시킨다.
+    // Next가 런타임별 번들을 만들 때 이 분기 밖의 edge 번들에는 pg를 싣지 않는다.
+    const { assertRuntimeDatabaseRole } = await import("./lib/db");
+    await assertRuntimeDatabaseRole();
+  } else {
+    return;
+  }
   const g = globalThis as {
     __bidNotifyTimer?: ReturnType<typeof setInterval>;
     __bidCollectTimer?: ReturnType<typeof setInterval>;

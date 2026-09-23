@@ -3,12 +3,15 @@ import { Pool } from "pg";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { audit, FIELDS, formatProposals, RULE_VERSION, type Snapshot } from "../lib/facility-quality/rules";
+import { assertQualityDatabaseRole } from "../lib/facility-quality/postgres";
 async function main() {
   const output=process.argv.find(a=>a.startsWith("--output="))?.slice(9);
   if(!output)throw new Error("--output=<결과 폴더> 필요");
   const pool=new Pool({connectionString:process.env.DATABASE_URL,ssl:process.env.PGSSL==="disable"?false:{rejectUnauthorized:false},connectionTimeoutMillis:10000});
-  const client=await pool.connect();
+  let client;
   try {
+    await assertQualityDatabaseRole(pool);
+    client=await pool.connect();
     await client.query("BEGIN READ ONLY");await client.query("SET LOCAL statement_timeout='60s'");
     const r=await client.query(`SELECT facility_id,company_name,business_registration_no,site_business_registration_no,representative_name,phone_number,
       corporate_registration_no,business_certificate_corporate_registration_no,site_address,normalized_address,region_sido,region_sigungu,
@@ -24,6 +27,6 @@ async function main() {
       historical:items.filter(it=>it.snapshot.is_closed).length,formatCandidates:items.reduce((n,it)=>n+it.formatCandidates.length,0),summary};
     mkdirSync(output,{recursive:true});writeFileSync(path.join(output,"audit-summary.json"),JSON.stringify(report,null,2));writeFileSync(path.join(output,"audit-items.json"),JSON.stringify(items,null,2));
     console.log(JSON.stringify(report,null,2));
-  } finally {client.release();await pool.end();}
+  } finally {client?.release();await pool.end();}
 }
 main().catch(()=>{console.error("읽기 전용 진단 실패. 연결·컬럼 구성을 확인하세요 (접속 비밀정보는 출력하지 않음).");process.exitCode=1;});

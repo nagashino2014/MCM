@@ -261,7 +261,18 @@ resource "aws_ecs_task_definition" "next" {
         #    - ANTHROPIC_API_KEY : AI 요약(AX-P2)·AI 검토(AX-P3)용
         { name = "SOLAPI_API_KEY", valueFrom = "${aws_secretsmanager_secret.app.arn}:SOLAPI_API_KEY::" },
         { name = "SOLAPI_API_SECRET", valueFrom = "${aws_secretsmanager_secret.app.arn}:SOLAPI_API_SECRET::" },
-        { name = "ANTHROPIC_API_KEY", valueFrom = "${aws_secretsmanager_secret.app.arn}:ANTHROPIC_API_KEY::" }
+        { name = "ANTHROPIC_API_KEY", valueFrom = "${aws_secretsmanager_secret.app.arn}:ANTHROPIC_API_KEY::" },
+        { name = "DART_API_KEY", valueFrom = "${aws_secretsmanager_secret.app.arn}:DART_API_KEY::" },
+        { name = "NAVER_CLIENT_ID", valueFrom = "${aws_secretsmanager_secret.app.arn}:NAVER_CLIENT_ID::" },
+        { name = "NAVER_CLIENT_SECRET", valueFrom = "${aws_secretsmanager_secret.app.arn}:NAVER_CLIENT_SECRET::" },
+        { name = "DATA_GO_KR_API_KEY", valueFrom = "${aws_secretsmanager_secret.app.arn}:DATA_GO_KR_API_KEY::" },
+        { name = "VOYAGE_API_KEY", valueFrom = "${aws_secretsmanager_secret.app.arn}:VOYAGE_API_KEY::" },
+        { name = "CLOVA_OCR_URL", valueFrom = "${aws_secretsmanager_secret.app.arn}:CLOVA_OCR_URL::" },
+        { name = "CLOVA_OCR_SECRET", valueFrom = "${aws_secretsmanager_secret.app.arn}:CLOVA_OCR_SECRET::" },
+        { name = "KMA_SERVICE_KEY", valueFrom = "${aws_secretsmanager_secret.app.arn}:DATA_GO_KR_API_KEY::" },
+        { name = "BAROBILL_CERTKEY", valueFrom = "${aws_secretsmanager_secret.app.arn}:BAROBILL_CERTKEY::" },
+        { name = "KAKAO_REST_API_KEY", valueFrom = "${aws_secretsmanager_secret.app.arn}:KAKAO_REST_API_KEY::" },
+        { name = "EMPLOYEE_PII_ENCRYPTION_KEY", valueFrom = "${aws_secretsmanager_secret.app.arn}:EMPLOYEE_PII_ENCRYPTION_KEY::" }
       ]
       logConfiguration = {
         logDriver = "awslogs"

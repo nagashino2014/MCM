@@ -106,7 +106,8 @@ try {
     -ExpectedRole "mcm_app" -ExpectedPartition "aws" -ExpectedRegion $Region `
     -ExpectedAccountId $account -ExpectedSecretName "mcm-ieps-staging/db-app" `
     -ExpectedApplicationSecretName "mcm-ieps-staging/app" `
-    -AllowedApplicationSecretKeys @("AUTH_SECRET", "ADMIN_USERNAME", "ADMIN_PASSWORD", "SOLAPI_API_KEY", "SOLAPI_API_SECRET", "ANTHROPIC_API_KEY") `
+    -AllowedApplicationSecretKeys @("AUTH_SECRET", "ADMIN_USERNAME", "ADMIN_PASSWORD", "SOLAPI_API_KEY", "SOLAPI_API_SECRET", "ANTHROPIC_API_KEY", "DART_API_KEY", "NAVER_CLIENT_ID", "NAVER_CLIENT_SECRET", "DATA_GO_KR_API_KEY", "VOYAGE_API_KEY", "CLOVA_OCR_URL", "CLOVA_OCR_SECRET", "KMA_SERVICE_KEY", "BAROBILL_CERTKEY", "KAKAO_REST_API_KEY", "EMPLOYEE_PII_ENCRYPTION_KEY") `
+    -ApplicationSecretKeyOverrides @{ KMA_SERVICE_KEY = "DATA_GO_KR_API_KEY" } `
     -ExpectedTaskRoleName "mcm-ieps-staging-ecs-task" `
     -ExpectedExecutionRoleName "mcm-ieps-staging-ecs-execution-next"
 } catch { Fail $_.Exception.Message }
@@ -172,7 +173,8 @@ try {
     -ExpectedRole "mcm_app" -ExpectedPartition "aws" -ExpectedRegion $Region `
     -ExpectedAccountId $account -ExpectedSecretName "mcm-ieps-staging/db-app" `
     -ExpectedApplicationSecretName "mcm-ieps-staging/app" `
-    -AllowedApplicationSecretKeys @("AUTH_SECRET", "ADMIN_USERNAME", "ADMIN_PASSWORD", "SOLAPI_API_KEY", "SOLAPI_API_SECRET", "ANTHROPIC_API_KEY") `
+    -AllowedApplicationSecretKeys @("AUTH_SECRET", "ADMIN_USERNAME", "ADMIN_PASSWORD", "SOLAPI_API_KEY", "SOLAPI_API_SECRET", "ANTHROPIC_API_KEY", "DART_API_KEY", "NAVER_CLIENT_ID", "NAVER_CLIENT_SECRET", "DATA_GO_KR_API_KEY", "VOYAGE_API_KEY", "CLOVA_OCR_URL", "CLOVA_OCR_SECRET", "KMA_SERVICE_KEY", "BAROBILL_CERTKEY", "KAKAO_REST_API_KEY", "EMPLOYEE_PII_ENCRYPTION_KEY") `
+    -ApplicationSecretKeyOverrides @{ KMA_SERVICE_KEY = "DATA_GO_KR_API_KEY" } `
     -ExpectedTaskRoleName "mcm-ieps-staging-ecs-task" `
     -ExpectedExecutionRoleName "mcm-ieps-staging-ecs-execution-next"
 } catch { Fail $_.Exception.Message }

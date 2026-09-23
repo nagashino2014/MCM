@@ -17,7 +17,8 @@
       "taskRole": "mcm-ieps-staging-ecs-task",
       "executionRole": "mcm-ieps-staging-ecs-execution-next",
       "applicationSecret": "mcm-ieps-staging/app",
-      "applicationKeys": ["AUTH_SECRET", "ADMIN_USERNAME", "ADMIN_PASSWORD", "SOLAPI_API_KEY", "SOLAPI_API_SECRET", "ANTHROPIC_API_KEY"]
+      "applicationKeys": ["AUTH_SECRET", "ADMIN_USERNAME", "ADMIN_PASSWORD", "SOLAPI_API_KEY", "SOLAPI_API_SECRET", "ANTHROPIC_API_KEY", "DART_API_KEY", "NAVER_CLIENT_ID", "NAVER_CLIENT_SECRET", "DATA_GO_KR_API_KEY", "VOYAGE_API_KEY", "CLOVA_OCR_URL", "CLOVA_OCR_SECRET", "KMA_SERVICE_KEY", "BAROBILL_CERTKEY", "KAKAO_REST_API_KEY", "EMPLOYEE_PII_ENCRYPTION_KEY"],
+      "applicationKeyAliases": {"KMA_SERVICE_KEY": "DATA_GO_KR_API_KEY"}
     },
     "worker": {
       "container": "worker",
@@ -27,7 +28,8 @@
       "taskRole": "mcm-ieps-staging-ecs-task-worker",
       "executionRole": "mcm-ieps-staging-ecs-execution-worker",
       "applicationSecret": "mcm-ieps-staging/app",
-      "applicationKeys": ["DART_API_KEY", "DATA_GO_KR_API_KEY"]
+      "applicationKeys": ["DART_API_KEY", "DATA_GO_KR_API_KEY"],
+      "applicationKeyAliases": {}
     }
   },
   "nextService": "mcm-ieps-staging-next",
@@ -204,6 +206,7 @@
     "worker": ["PGSSL", "PGSSL_REJECT_UNAUTHORIZED", "MCM_DB_ROLE_REQUIRED", "MCM_DB_EXPECTED_ROLE"]
   },
   "approvedMutableSecrets": ["PGUSER", "PGPASSWORD"],
+  "candidateImagePolicy": "Next and worker may change only the primary container image to their own staging ECR repository pinned by sha256 digest; registration must verify the digest exists and was built from the reviewed main commit.",
   "phases": [
     "preflight_complete",
     "secrets_ready",

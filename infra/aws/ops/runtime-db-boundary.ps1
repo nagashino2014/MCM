@@ -9,6 +9,7 @@ function Assert-RuntimeDatabaseBoundary {
     [Parameter(Mandatory = $true)][string]$ExpectedSecretName,
     [Parameter(Mandatory = $true)][string]$ExpectedApplicationSecretName,
     [Parameter(Mandatory = $true)][string[]]$AllowedApplicationSecretKeys,
+    [hashtable]$ApplicationSecretKeyOverrides = @{},
     [Parameter(Mandatory = $true)][string]$ExpectedTaskRoleName,
     [Parameter(Mandatory = $true)][string]$ExpectedExecutionRoleName,
     [string[]]$AllowedSidecarNames = @()
@@ -128,7 +129,13 @@ function Assert-RuntimeDatabaseBoundary {
     if (@($primarySecrets | Where-Object { [string]$_.name -ceq $secretName }).Count -ne 1) {
       throw "runtime secret '$secretName' must exist at most once"
     }
-    $applicationPattern = '\A' + [regex]::Escape($applicationSecretArnPrefix) + '[A-Za-z0-9]{6}:' + [regex]::Escape($secretName) + '::\z'
+    $sourceKey = if ($ApplicationSecretKeyOverrides.ContainsKey($secretName)) {
+      [string]$ApplicationSecretKeyOverrides[$secretName]
+    } else { $secretName }
+    if ($AllowedApplicationSecretKeys -cnotcontains $sourceKey) {
+      throw "unapproved application secret source '$sourceKey'"
+    }
+    $applicationPattern = '\A' + [regex]::Escape($applicationSecretArnPrefix) + '[A-Za-z0-9]{6}:' + [regex]::Escape($sourceKey) + '::\z'
     if ([string]$secret.valueFrom -cnotmatch $applicationPattern) {
       throw "runtime secret '$secretName' does not use the approved application secret"
     }

@@ -1,10 +1,16 @@
+FROM mcr.microsoft.com/playwright:v1.59.1-jammy AS dependencies
+
+WORKDIR /app/scraper
+
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential
+COPY scraper/package*.json ./
+RUN npm config set strict-ssl false && npm_config_nodedir=/usr npm ci --no-audit --no-fund
+
 FROM mcr.microsoft.com/playwright:v1.59.1-jammy
 
 WORKDIR /app/scraper
 
-COPY scraper/package*.json ./
-RUN npm ci --no-audit --no-fund
-
+COPY --from=dependencies /app/scraper/node_modules ./node_modules
 COPY scraper ./
 COPY data/ksic /app/data/ksic
 

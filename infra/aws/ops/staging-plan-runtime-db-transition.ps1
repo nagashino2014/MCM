@@ -213,6 +213,7 @@ function Normalize-TaskDefinition([object]$Definition, [string]$ContainerName, [
   $containers = @($copy.containerDefinitions)
   $primary = @($containers | Where-Object { [string]$_.name -ceq $ContainerName })
   if ($primary.Count -ne 1) { throw "candidate/current primary container mismatch: $ContainerName" }
+  $primary[0].image = "__approved_runtime_image__"
   $mutableSecrets = @($contract.approvedMutableSecrets)
   foreach ($container in $containers) {
     $environment = @($container.environment | Where-Object { $null -ne $_ -and $MutableEnvironment -cnotcontains [string]$_.name })
@@ -244,10 +245,19 @@ function Assert-SecretMetadata([object]$Secret, [object]$Component, [string]$Lab
 
 function Assert-TaskCandidate([string]$Label, [object]$Current, [object]$Candidate, [object]$Component) {
   Assert-Equal $Candidate.family $Component.family "$Label candidate family mismatch"
+  $primary = @($Candidate.containerDefinitions | Where-Object { [string]$_.name -ceq $Component.container })
+  Assert-Equal $primary.Count 1 "$Label candidate primary container mismatch"
+  $imagePattern = '\A' + [regex]::Escape("$($contract.accountId).dkr.ecr.$($contract.region).amazonaws.com/$($Component.family)@sha256:") + '[0-9a-f]{64}\z'
+  Assert-True ([string]$primary[0].image -cmatch $imagePattern) "$Label candidate image must pin the approved ECR repository by digest"
+  $applicationKeyAliases = @{}
+  foreach ($entry in $Component.applicationKeyAliases.PSObject.Properties) {
+    $applicationKeyAliases[$entry.Name] = [string]$entry.Value
+  }
   Assert-RuntimeDatabaseBoundary -TaskDefinition $Candidate -ContainerName $Component.container `
     -ExpectedRole $Component.role -ExpectedPartition $contract.partition -ExpectedRegion $contract.region `
     -ExpectedAccountId $contract.accountId -ExpectedSecretName $Component.secret `
     -ExpectedApplicationSecretName $Component.applicationSecret -AllowedApplicationSecretKeys @($Component.applicationKeys) `
+    -ApplicationSecretKeyOverrides $applicationKeyAliases `
     -ExpectedTaskRoleName $Component.taskRole -ExpectedExecutionRoleName $Component.executionRole
   $mutableEnvironment = if ($Label -ceq 'next') { @($contract.approvedMutableEnvironment.next) } else { @($contract.approvedMutableEnvironment.worker) }
   $currentNormalized = Normalize-TaskDefinition $Current $Component.container $mutableEnvironment

@@ -1,2 +1,4 @@
 # SQL function bodies use the reviewed LF definition contract.
 infra/aws/*.sql text eol=lf
+# RDS CA 번들 — 체크아웃마다 바이트가 같아야 이미지 레이어 해시가 안정된다
+infra/aws/rds-ca/*.pem text eol=lf

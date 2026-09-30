@@ -22,5 +22,10 @@ COPY --from=builder /app/frontend/package*.json ./
 # middlewareClientMaxBodySize 등)은 이 파일이 없으면 기본값으로 돈다(2026-09-22: 10MB 초과 업로드 실패 실측).
 COPY --from=builder /app/frontend/next.config.mjs ./
 COPY --from=builder /app/frontend/node_modules ./node_modules
+# RDS 서버 인증서 검증(PGSSL_REJECT_UNAUTHORIZED=true, R0B 09-23 전환) — Aurora 는 AWS RDS 리전 CA 로 서명하므로
+# 공개 번들을 Node 신뢰 저장소에 추가한다. 없으면 instrumentation 훅의 첫 DB 접속에서
+# "unable to get local issuer certificate" 로 서버가 못 뜬다(2026-09-30 next:628 실측). 번들 = truststore.pki.rds.amazonaws.com
+COPY infra/aws/rds-ca/ap-northeast-2-bundle.pem /opt/mcm/rds-ca/ap-northeast-2-bundle.pem
+ENV NODE_EXTRA_CA_CERTS=/opt/mcm/rds-ca/ap-northeast-2-bundle.pem
 EXPOSE 3000
 CMD ["npm", "run", "start"]

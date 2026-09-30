@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { CdDateInput, isValidDateString } from "@/components/cdash/CdField";
 import { AmountInput } from "@/components/ui/AmountInput";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
 import { FacilityRecipientPicker, QuickFacilityModal, RecipientPicker } from "@/components/approval/ApprovalLetterBoard";
@@ -25,8 +26,12 @@ import {
   SUMMARY_SHEET_MIN_SITES,
   STANDARD_OVERHEAD_RATE,
   STANDARD_TECH_FEE_RATE,
+  fixedDirectExpense,
   mdSnapUnit,
+  printCostOf,
   sumOverCap,
+  travelCostOf,
+  type DirectCosts,
   type MdMatrixRow,
   type QuoteFieldValues,
   type QuoteSite,
@@ -136,7 +141,8 @@ export function QuoteBoard() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   // 재편집 문서의 상태·반려 사유·삭제 권한(서버 판정) — 반려 배너와 기안 삭제 버튼 노출용.
   const [editMeta, setEditMeta] = useState<EditDocMeta | null>(null);
-  // 공급자 블록 담당자 연락처 — E-mail 은 내 메일함 주소 자동(공문 패턴), Mobile 은 선택 입력
+  // 공급자 블록 담당자 연락처 — E-mail 은 내 메일함 주소, Mobile 은 기안자 직원 정보(employee_profiles) 자동.
+  // Mobile 입력란은 2026-09-30 삭제(사용자 요청) — 재편집 문서에 저장된 값이 있으면 그 값을 우선한다.
   const [contactEmail, setContactEmail] = useState("");
   const [contactMobile, setContactMobile] = useState("");
 
@@ -145,6 +151,12 @@ export function QuoteBoard() {
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (d?.address) setContactEmail((cur) => cur || String(d.address));
+      })
+      .catch(() => {});
+    fetch("/api/quotes/drafter-contact", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.mobile) setContactMobile((cur) => cur || String(d.mobile));
       })
       .catch(() => {});
   }, []);
@@ -182,7 +194,7 @@ export function QuoteBoard() {
                     setVersion: d.set?.version,
                     overheadRate: d.set?.overheadRate ?? STANDARD_OVERHEAD_RATE,
                     techFeeRate: d.set?.techFeeRate ?? STANDARD_TECH_FEE_RATE,
-                    directExpenseRate: d.set?.directExpenseRate ?? 0,
+                    directExpenseRate: 0, // 직접경비는 출장비·인쇄비 산식으로만 계산(2026-09-30) — 세트 요율 미적용
                     grades: d.set?.grades?.length ? d.set.grades : [...DEFAULT_MD_GRADES],
                     laborRates: d.laborRates,
                     laborYear: d.laborYear,
@@ -309,7 +321,9 @@ export function QuoteBoard() {
       const items = rateData?.set?.items ?? [];
       if (!items.length) return alert("이 세분류는 산정 기준 세트가 없어 자유 입력(품목 직접 입력)으로 작성합니다.");
       const rates = { ...site.rates, laborRates: rateData!.laborRates, laborYear: rateData!.laborYear };
-      const res = reverseAllocate({ price, items, rates });
+      const fixedDirect = fixedDirectExpense(site.directCosts);
+      if (fixedDirect >= price) return alert("직접경비(출장비+인쇄비)가 제출 견적가 이상입니다. 견적가 또는 산식 입력값을 확인하세요.");
+      const res = reverseAllocate({ price, items, rates, fixedDirect });
       updateSite(idx, {
         mdMatrix: res.mdMatrix,
         rates,
@@ -339,20 +353,40 @@ export function QuoteBoard() {
         }
       }
       const laborCost = matrixLaborCost(rows, site.rates.laborRates);
-      const base = computeAmounts(laborCost, site.rates);
+      const base = computeAmounts(laborCost, site.rates, fixedDirectExpense(site.directCosts));
       updateSite(idx, { mdMatrix: rows, amounts: { ...base, final: site.amounts.final, standard: site.amounts.standard } });
     },
     [sites, updateSite]
   );
 
-  /** 요율 변경 → 금액 재계산 */
+  /** 요율 변경 → 금액 재계산 (직접경비 요율은 입력 폐지 — 비중 표시 전용) */
   const editRate = useCallback(
-    (idx: number, key: "overheadRate" | "techFeeRate" | "directExpenseRate", value: number) => {
+    (idx: number, key: "overheadRate" | "techFeeRate", value: number) => {
       const site = sites[idx];
       const rates = { ...site.rates, [key]: value };
       const laborCost = matrixLaborCost(site.mdMatrix, rates.laborRates);
-      const base = computeAmounts(laborCost, rates);
+      const base = computeAmounts(laborCost, rates, fixedDirectExpense(site.directCosts));
       updateSite(idx, { rates, amounts: { ...base, final: site.amounts.final, standard: site.amounts.standard } });
+    },
+    [sites, updateSite]
+  );
+
+  /** 직접경비 산식(출장비·인쇄비) 변경 → 금액 재계산. 역산 전이면 산식만 저장하고 역산 때 반영 */
+  const editDirectCost = useCallback(
+    (idx: number, key: keyof DirectCosts, value: number) => {
+      const site = sites[idx];
+      const directCosts: DirectCosts = {
+        travelDayRate: 0,
+        travelPersonDays: 0,
+        printUnitPrice: 0,
+        printCopies: 0,
+        ...site.directCosts,
+        [key]: value,
+      };
+      if (!site.mdMatrix.length) return updateSite(idx, { directCosts });
+      const laborCost = matrixLaborCost(site.mdMatrix, site.rates.laborRates);
+      const base = computeAmounts(laborCost, site.rates, fixedDirectExpense(directCosts));
+      updateSite(idx, { directCosts, amounts: { ...base, final: site.amounts.final, standard: site.amounts.standard } });
     },
     [sites, updateSite]
   );
@@ -407,6 +441,7 @@ export function QuoteBoard() {
 
   const validate = useCallback((): string | null => {
     if (!subject.trim()) return "건명을 입력하세요.";
+    if (!isValidDateString(issueDate)) return "견적일을 YYYYMMDD 형식의 올바른 날짜로 입력하세요.";
     if (recipients.length === 0) return "수신처(사업장/기관)를 1건 이상 지정하세요.";
     if (sendMode === "mail" && !ccRefs.some((r) => (r.email ?? "").includes("@")))
       return "메일 발송 모드는 참조 담당자에 메일주소가 1건 이상 필요합니다(발송 안 함 모드로 바꾸거나 참조자를 추가하세요).";
@@ -425,7 +460,7 @@ export function QuoteBoard() {
     }
     if (line.length === 0) return "결재선에 결재자를 1명 이상 추가하세요.";
     return null;
-  }, [subject, recipients, ccRefs, sendMode, sites, line]);
+  }, [subject, issueDate, recipients, ccRefs, sendMode, sites, line]);
 
   const openPreview = useCallback(async () => {
     setBusy("preview");
@@ -513,12 +548,13 @@ export function QuoteBoard() {
                     <Settings2 className="w-3.5 h-3.5" /> 기준 관리
                   </a>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-2.5">
-                  <div className="md:col-span-2 flex flex-col gap-1">
+                {/* 건명·용역 분류·세분류·견적일 한 줄 — 분류 두 칸은 종전(1/4 열) 대비 75%, 견적일은 60% 고정폭 */}
+                <div className="flex flex-col md:flex-row gap-2.5">
+                  <div className="flex-1 min-w-0 flex flex-col gap-1">
                     <span className="text-[11px] cd-text-faint">건명(전체)</span>
                     <input className="cd-input text-sm" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="예: OOO㈜ OO공장 통합환경허가 취득 용역" />
                   </div>
-                  <div className="flex flex-col gap-1">
+                  <div className="md:w-[180px] md:shrink-0 flex flex-col gap-1">
                     <span className="text-[11px] cd-text-faint">용역 분류</span>
                     <select
                       className="cd-select"
@@ -535,7 +571,7 @@ export function QuoteBoard() {
                       ))}
                     </select>
                   </div>
-                  <div className="flex flex-col gap-1">
+                  <div className="md:w-[180px] md:shrink-0 flex flex-col gap-1">
                     <span className="text-[11px] cd-text-faint">용역 세분류</span>
                     <select className="cd-select" value={serviceSubtype} onChange={(e) => setServiceSubtype(e.target.value)}>
                       {subtypeOptions.map((s) => (
@@ -543,26 +579,22 @@ export function QuoteBoard() {
                       ))}
                     </select>
                   </div>
-                  <div className="flex flex-col gap-1">
+                  <div className="md:w-[144px] md:shrink-0 flex flex-col gap-1">
                     <span className="text-[11px] cd-text-faint">견적일</span>
-                    <input type="date" className="cd-input text-sm" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} />
+                    <CdDateInput className="text-sm" value={issueDate} onChange={setIssueDate} aria-label="견적일" />
                   </div>
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[11px] cd-text-faint">담당자 Mobile (견적서 공급자란 표기, 선택)</span>
-                    <input className="cd-input text-sm" value={contactMobile} onChange={(e) => setContactMobile(e.target.value)} placeholder="010-0000-0000" />
-                  </div>
-                  <div className="md:col-span-3 flex flex-col gap-1">
-                    <span className="text-[11px] cd-text-faint">발송 방식 — 승인 완료 후 처리</span>
-                    <div className="flex items-center gap-4 h-9">
-                      <label className="flex items-center gap-1.5 text-[12.5px] cd-text cursor-pointer">
-                        <input type="radio" checked={sendMode === "mail"} onChange={() => setSendMode("mail")} />
-                        메일 발송 <span className="cd-text-faint text-[11px]">(참조자 메일로 PDF 자동 발송)</span>
-                      </label>
-                      <label className="flex items-center gap-1.5 text-[12.5px] cd-text cursor-pointer">
-                        <input type="radio" checked={sendMode === "direct"} onChange={() => setSendMode("direct")} />
-                        발송 안 함 · 직접 제출 <span className="cd-text-faint text-[11px]">(PDF 다운로드 → 전자조달시스템 등)</span>
-                      </label>
-                    </div>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-[11px] cd-text-faint">발송 방식 — 승인 완료 후 처리</span>
+                  <div className="flex items-center gap-4 h-9">
+                    <label className="flex items-center gap-1.5 text-[12.5px] cd-text cursor-pointer">
+                      <input type="radio" checked={sendMode === "mail"} onChange={() => setSendMode("mail")} />
+                      메일 발송 <span className="cd-text-faint text-[11px]">(참조자 메일로 PDF 자동 발송)</span>
+                    </label>
+                    <label className="flex items-center gap-1.5 text-[12.5px] cd-text cursor-pointer">
+                      <input type="radio" checked={sendMode === "direct"} onChange={() => setSendMode("direct")} />
+                      발송 안 함 · 직접 제출 <span className="cd-text-faint text-[11px]">(PDF 다운로드 → 전자조달시스템 등)</span>
+                    </label>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 pt-1 border-t cd-border-c">
@@ -606,7 +638,7 @@ export function QuoteBoard() {
                           setVersion: rateData.set?.version,
                           overheadRate: rateData.set?.overheadRate ?? STANDARD_OVERHEAD_RATE,
                           techFeeRate: rateData.set?.techFeeRate ?? STANDARD_TECH_FEE_RATE,
-                          directExpenseRate: rateData.set?.directExpenseRate ?? 0,
+                          directExpenseRate: 0,
                           laborRates: rateData.laborRates,
                           laborYear: rateData.laborYear,
                         };
@@ -650,66 +682,160 @@ export function QuoteBoard() {
                     </div>
 
                     {/* 견적가 입력 → 역산 (T1/T2) 또는 자유 품목 (T3) */}
-                    <div className="rounded-2xl border cd-border-c p-3.5 flex flex-col gap-2.5">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[12px] font-semibold cd-text">제출 견적가(VAT 별도)</span>
-                        <AmountInput
-                          className="cd-input text-sm w-44 text-right"
-                          value={priceInputs[site.siteSeq] ?? (site.amounts.final ? String(site.amounts.final) : "")}
-                          onChange={(next) => setPriceInputs((prev) => ({ ...prev, [site.siteSeq]: next }))}
-                          placeholder="예: 38,000,000"
-                        />
-                        <span className="text-[11px] cd-text-faint">
-                          {(() => {
-                            const p = Number(priceInputs[site.siteSeq] ?? 0);
-                            return p > 0 ? `${won(p)}원 · 스냅 ${mdSnapUnit(p)}MD · 초과폭 상한 ${won(sumOverCap(p))}원` : "";
-                          })()}
-                        </span>
-                        {tier === "calc" ? (
-                          <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3 py-1.5 text-xs font-semibold" onClick={() => runReverse(activeSite)}>
-                            MD 역산 실행
-                          </button>
-                        ) : (
-                          <span className="text-[11px] cd-text-faint">이 세분류는 기준 세트 미등록 — 품목 직접 입력(자유형)</span>
-                        )}
-                        <div className="ml-auto flex flex-col items-end gap-1.5">
-                          <div className="flex items-center gap-3 text-[11.5px]">
-                            <label className="flex items-center gap-1 whitespace-nowrap">제경비 요율
-                              <input className="cd-input w-12 text-right text-[12px] px-1.5" value={String(Math.round(site.rates.overheadRate * 100))} onChange={(e) => editRate(activeSite, "overheadRate", Number(e.target.value) / 100 || 0)} />%
-                            </label>
-                            <label className="flex items-center gap-1 whitespace-nowrap">기술료 요율
-                              <input className="cd-input w-12 text-right text-[12px] px-1.5" value={String(Math.round(site.rates.techFeeRate * 100))} onChange={(e) => editRate(activeSite, "techFeeRate", Number(e.target.value) / 100 || 0)} />%
-                            </label>
-                            <label className="flex items-center gap-1 whitespace-nowrap">직접경비 요율
-                              <input className="cd-input w-12 text-right text-[12px] px-1.5" value={String(Math.round(site.rates.directExpenseRate * 100))} onChange={(e) => editRate(activeSite, "directExpenseRate", Number(e.target.value) / 100 || 0)} />%
-                            </label>
+                    <div className="rounded-2xl border cd-border-c p-3.5 flex flex-col gap-3">
+                      {/* 좌 40%: 제출 견적가 → 역산 → 금액 요약 / 우 60%: 요율 + 직접경비 산식 */}
+                      <div className="grid grid-cols-1 md:grid-cols-[2fr_3fr] gap-4 items-start">
+                        <div className="min-w-0 flex flex-col gap-2">
+                          <span className="text-[12px] font-semibold cd-text">제출 견적가(VAT 별도)</span>
+                          <AmountInput
+                            className="cd-input text-sm text-right"
+                            value={priceInputs[site.siteSeq] ?? (site.amounts.final ? String(site.amounts.final) : "")}
+                            onChange={(next) => setPriceInputs((prev) => ({ ...prev, [site.siteSeq]: next }))}
+                            placeholder="예: 38,000,000"
+                          />
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[11px] cd-text-faint">
+                              {(() => {
+                                const p = Number(priceInputs[site.siteSeq] ?? 0);
+                                return p > 0 ? `${won(p)}원 · 스냅 ${mdSnapUnit(p)}MD · 초과폭 상한 ${won(sumOverCap(p))}원` : "";
+                              })()}
+                            </span>
+                            {tier === "calc" ? (
+                              <button type="button" className="ml-auto cd-btn cd-btn-primary rounded-lg px-3 py-1.5 text-xs font-semibold" onClick={() => runReverse(activeSite)}>
+                                MD 역산 실행
+                              </button>
+                            ) : (
+                              <span className="text-[11px] cd-text-faint">이 세분류는 기준 세트 미등록 — 품목 직접 입력(자유형)</span>
+                            )}
                           </div>
-                          <span className="text-[10.5px] cd-text-faint whitespace-nowrap">V.A.T 별도 · 유효기간 견적일로부터 1개월</span>
-                        </div>
-                      </div>
 
-                      {/* 금액 요약 + 제약 상태 */}
-                      {site.amounts.final > 0 && (
-                        <div className="flex items-center gap-4 flex-wrap text-[12px] cd-text">
-                          <span>직접인건비 <b>{won(site.amounts.laborCost)}</b></span>
-                          <span>제경비 <b>{won(site.amounts.overhead)}</b></span>
-                          <span>기술료 <b>{won(site.amounts.techFee)}</b></span>
-                          {site.amounts.directExpense > 0 && <span>직접경비 <b>{won(site.amounts.directExpense)}</b></span>}
-                          <span>합계 <b>{won(site.amounts.sum)}</b></span>
-                          <span className="font-bold cd-text-primary">최종 견적 {won(site.amounts.final)}원</span>
-                          {site.mdMatrix.length > 0 &&
-                            (() => {
-                              const c = validateSumConstraint(site.amounts.final, site.amounts.sum);
-                              return c.ok ? (
-                                <span className="text-[11px] rounded-full px-2 py-0.5 cd-tint-primary">제약 OK (초과 {won(c.over)}원 &lt; {won(c.cap)}원)</span>
-                              ) : (
-                                <span className="text-[11px] rounded-full px-2 py-0.5 border border-[color:var(--cd-danger,#FA896B)] text-[color:var(--cd-danger,#FA896B)]">
-                                  ⚠ 제약 위반 — 합계-견적가 {won(c.over)}원 (0 초과 {won(c.cap)}원 미만이어야 상신 가능)
+                          {/* 금액 요약 + 제약 상태 */}
+                          {site.amounts.final > 0 && (
+                            <div className="flex flex-col gap-1.5 border-t cd-border-c pt-2 text-[12px] cd-text">
+                              <div className="grid grid-cols-2 gap-x-4 gap-y-1 tabular-nums">
+                                {(
+                                  [
+                                    ["직접인건비", site.amounts.laborCost],
+                                    ["제경비", site.amounts.overhead],
+                                    ["기술료", site.amounts.techFee],
+                                    ...(site.amounts.directExpense > 0 ? [["직접경비", site.amounts.directExpense] as const] : []),
+                                    ["합계", site.amounts.sum],
+                                  ] as const
+                                ).map(([label, amount]) => (
+                                  <span key={label} className="flex items-center justify-between gap-2">
+                                    <span className="cd-text-faint">{label}</span>
+                                    <b>{won(amount)}</b>
+                                  </span>
+                                ))}
+                              </div>
+                              <span className="font-bold cd-text-primary tabular-nums">최종 견적 {won(site.amounts.final)}원</span>
+                              {site.mdMatrix.length > 0 &&
+                                (() => {
+                                  const c = validateSumConstraint(site.amounts.final, site.amounts.sum);
+                                  return c.ok ? (
+                                    <span className="self-start text-[11px] rounded-full px-2 py-0.5 cd-tint-primary">제약 OK (초과 {won(c.over)}원 &lt; {won(c.cap)}원)</span>
+                                  ) : (
+                                    <span className="self-start text-[11px] rounded-full px-2 py-0.5 border border-[color:var(--cd-danger,#FA896B)] text-[color:var(--cd-danger,#FA896B)]">
+                                      ⚠ 제약 위반 — 합계-견적가 {won(c.over)}원 (0 초과 {won(c.cap)}원 미만이어야 상신 가능)
+                                    </span>
+                                  );
+                                })()}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="min-w-0 flex flex-col gap-2.5">
+                          <div className="grid grid-cols-3 gap-2 items-end">
+                            {(
+                              [
+                                ["제경비 요율", "overheadRate"],
+                                ["기술료 요율", "techFeeRate"],
+                              ] as const
+                            ).map(([label, key]) => (
+                              <label key={key} className="flex flex-col gap-1">
+                                <span className="text-[11px] cd-text-faint">{label}</span>
+                                <span className="flex items-center gap-1 text-[12px] cd-text">
+                                  <input className="cd-input text-right text-[12px]" value={String(Math.round(site.rates[key] * 100))} onChange={(e) => editRate(activeSite, key, Number(e.target.value) / 100 || 0)} />%
                                 </span>
+                              </label>
+                            ))}
+                            {(() => {
+                              // 직접경비 요율 = 직접경비(출장비+인쇄비) ÷ 제출 견적가 — 입력 불가, 비중 표시 전용
+                              const price = Number(priceInputs[site.siteSeq] ?? 0) || site.amounts.final;
+                              const direct = site.mdMatrix.length ? site.amounts.directExpense : fixedDirectExpense(site.directCosts);
+                              const share = price > 0 && direct > 0 ? ((direct / price) * 100).toFixed(1) : "0";
+                              return (
+                                <label className="flex flex-col gap-1" title="출장비+인쇄비 ÷ 제출 견적가 (자동 계산)">
+                                  <span className="text-[11px] cd-text-faint">직접경비 요율(견적가 대비)</span>
+                                  <span className="flex items-center gap-1 text-[12px] cd-text">
+                                    <input className="cd-input text-right text-[12px]" value={share} disabled readOnly />%
+                                  </span>
+                                </label>
                               );
                             })()}
+                          </div>
+
+                          {/* 직접경비 산식 — 금액 직접 입력 없이 산식 입력값으로만 계산 */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {(
+                              [
+                                {
+                                  title: "출장비",
+                                  amount: travelCostOf(site.directCosts),
+                                  fields: [
+                                    { key: "travelDayRate", label: "일단가(원)", money: true },
+                                    { key: "travelPersonDays", label: "연인원수(인)", money: false },
+                                  ],
+                                },
+                                {
+                                  title: "인쇄비",
+                                  amount: printCostOf(site.directCosts),
+                                  fields: [
+                                    { key: "printUnitPrice", label: "부당 단가(원)", money: true },
+                                    { key: "printCopies", label: "총 부수(부)", money: false },
+                                  ],
+                                },
+                              ] as const
+                            ).map((g) => (
+                              <div key={g.title} className="rounded-lg border cd-border-c p-2.5 flex flex-col gap-2">
+                                <div className="flex items-center justify-between text-[12px]">
+                                  <span className="font-semibold cd-text">{g.title}</span>
+                                  <span className="cd-text tabular-nums">{won(g.amount)}원</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  {g.fields.map((f) => {
+                                    const cur = site.directCosts?.[f.key] ?? 0;
+                                    return (
+                                      <label key={f.key} className="flex flex-col gap-1 min-w-0">
+                                        <span className="text-[11px] cd-text-faint">{f.label}</span>
+                                        {f.money ? (
+                                          <AmountInput
+                                            className="cd-input text-right text-[12px]"
+                                            value={cur || ""}
+                                            disabled={tier === "free"}
+                                            onChange={(v) => editDirectCost(activeSite, f.key, Number(v) || 0)}
+                                          />
+                                        ) : (
+                                          <input
+                                            className="cd-input text-right text-[12px]"
+                                            inputMode="numeric"
+                                            value={cur ? String(cur) : ""}
+                                            disabled={tier === "free"}
+                                            onChange={(e) => editDirectCost(activeSite, f.key, Number(e.target.value.replace(/[^\d]/g, "")) || 0)}
+                                          />
+                                        )}
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          <span className="text-[10.5px] cd-text-faint text-right">
+                            {tier === "free" ? "자유 입력 견적은 직접경비를 품목으로 입력하세요 · " : ""}V.A.T 별도 · 유효기간 견적일로부터 1개월
+                          </span>
                         </div>
-                      )}
+                      </div>
 
                       {/* MD 그리드 (T1/T2) */}
                       {tier === "calc" && site.mdMatrix.length > 0 && (
@@ -828,17 +954,22 @@ export function QuoteBoard() {
                   <span className="text-[10.5px] font-normal cd-text-faint">가격 결정 배경 기록(내부용) — 수주율 분석의 원료가 됩니다</span>
                 </h3>
                 {situation.map((s, i) => (
-                  <div key={i} className="flex items-center gap-2 flex-wrap">
-                    <select className="cd-select w-52" value={s.code} onChange={(e) => setSituation((prev) => prev.map((x, xi) => (xi === i ? { ...x, code: e.target.value } : x)))}>
-                      {(rateData?.situationCodes ?? []).map((c) => (
-                        <option key={c.code} value={c.code}>{c.label}</option>
-                      ))}
-                    </select>
-                    <label className="flex items-center gap-1 text-[11.5px] cd-text-faint">조정률
-                      <input className="cd-input w-16 text-right text-[12px]" value={s.rate != null ? String(Math.round(s.rate * 100)) : ""} placeholder="-5" onChange={(e) => setSituation((prev) => prev.map((x, xi) => (xi === i ? { ...x, rate: e.target.value === "" ? undefined : Number(e.target.value) / 100 } : x)))} />%
+                  // 목록·조정률·사유 한 줄 — cd-select/cd-input 이 width:100% 라 고정폭은 감싸는 요소에 준다
+                  <div key={i} className="flex items-center gap-2 flex-wrap md:flex-nowrap">
+                    <div className="w-[240px] shrink-0">
+                      <select className="cd-select" value={s.code} onChange={(e) => setSituation((prev) => prev.map((x, xi) => (xi === i ? { ...x, code: e.target.value } : x)))}>
+                        {(rateData?.situationCodes ?? []).map((c) => (
+                          <option key={c.code} value={c.code}>{c.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <label className="flex items-center gap-1 shrink-0 text-[11.5px] cd-text-faint whitespace-nowrap">조정률
+                      <span className="w-16">
+                        <input className="cd-input text-right text-[12px]" value={s.rate != null ? String(Math.round(s.rate * 100)) : ""} placeholder="-5" onChange={(e) => setSituation((prev) => prev.map((x, xi) => (xi === i ? { ...x, rate: e.target.value === "" ? undefined : Number(e.target.value) / 100 } : x)))} />
+                      </span>%
                     </label>
-                    <input className="cd-input text-sm flex-1 min-w-[160px]" value={s.memo ?? ""} placeholder="메모 (예: 경쟁사 OO 저가 투찰 예상)" onChange={(e) => setSituation((prev) => prev.map((x, xi) => (xi === i ? { ...x, memo: e.target.value } : x)))} />
-                    <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" onClick={() => setSituation((prev) => prev.filter((_, xi) => xi !== i))}>
+                    <input className="cd-input text-sm flex-1 min-w-[160px] md:min-w-0" value={s.memo ?? ""} placeholder="사유 (예: 경쟁사 OO 저가 투찰 예상)" onChange={(e) => setSituation((prev) => prev.map((x, xi) => (xi === i ? { ...x, memo: e.target.value } : x)))} />
+                    <button type="button" className="shrink-0 cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" onClick={() => setSituation((prev) => prev.filter((_, xi) => xi !== i))}>
                       <X className="w-3.5 h-3.5" />
                     </button>
                   </div>

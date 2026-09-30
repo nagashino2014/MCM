@@ -15,6 +15,8 @@ import {
   DEFAULT_MD_GRADES,
   SUMMARY_SHEET_MIN_SITES,
   QUOTE_VALIDITY_TEXT,
+  directCostBasisRows,
+  directExpenseNote,
   type QuoteFieldValues,
   type QuoteSite,
 } from "./types";
@@ -566,7 +568,7 @@ function drawSiteQuote(w: Writer, input: QuotePdfInput, site: QuoteSite, stamp: 
         { no: "2", label: "제   경   비", amount: won(a.overhead), note: `(직접인건비) × ${pct(site.rates.overheadRate)}` },
         { no: "3", label: "기   술   료", amount: won(a.techFee), note: `[직접인건비+제경비] × ${pct(site.rates.techFeeRate)}` },
         ...(a.directExpense > 0
-          ? [{ no: "4", label: "직 접 경 비", amount: won(a.directExpense), note: `(직접인건비) × ${pct(site.rates.directExpenseRate)}` }]
+          ? [{ no: "4", label: "직 접 경 비", amount: won(a.directExpense), note: directExpenseNote(site) }]
           : []),
       ];
   drawItemTable(w, [
@@ -717,10 +719,13 @@ function drawAnnex(w: Writer, site: QuoteSite): void {
       .filter(({ grade }) => rates.laborRates[grade] != null)
       .map(({ grade, label }) => ({ c1: label, c2: "원/일", c3: won(rates.laborRates[grade]) }))
   );
+  // 직접경비: 산식(출장비·인쇄비) 행 + 옛 문서 요율분
+  const directRows = directCostBasisRows(site.directCosts);
   drawGroup(
-    rates.directExpenseRate > 0 ? "직접경비,\n제경비\n및 기술료" : "제경비\n및 기술료",
+    rates.directExpenseRate > 0 || directRows.length ? "직접경비,\n제경비\n및 기술료" : "제경비\n및 기술료",
     "엔지니어링 사업대가의 기준\n[산업통상자원부 고시]",
     [
+      ...directRows.map((r) => ({ c1: r.c1, c2: r.c2, c3: won(r.amount) })),
       ...(rates.directExpenseRate > 0
         ? [{ c1: "직접경비", c2: "상주 인원 인건비 대비", c3: `${Math.round(rates.directExpenseRate * 100)}% 적용`, c3Align: "center" as const }]
         : []),

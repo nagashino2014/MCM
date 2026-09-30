@@ -87,9 +87,49 @@ export interface SiteRates {
   grades?: string[];
   overheadRate: number; // 제경비율 (직접인건비 대비, 표준 1.10)
   techFeeRate: number; // 기술료율 ((직접인건비+제경비) 대비, 표준 0.20)
-  directExpenseRate: number; // 직접경비율 (직접인건비 대비, 상주 시 0.30 등. 기본 0)
+  directExpenseRate: number; // 직접경비율 (직접인건비 대비). 2026-09-30 입력 폐지 — 새 견적은 0, 옛 문서 재현용으로만 남는다
   laborRates: LaborRates; // 산정 당시 노임단가 스냅샷
   laborYear: string; // 노임단가 적용 연도
+}
+
+/**
+ * 직접경비 산식 입력(2026-09-30 사용자 확정) — 직접경비 = 출장비(일단가×연인원수) + 인쇄비(부당 단가×총 부수).
+ * 금액을 직접 입력하지 않고 산식 항목으로만 계산하며, 화면의 직접경비 요율 칸은 견적가 대비 비중 표시 전용이다.
+ */
+export interface DirectCosts {
+  travelDayRate: number; // 출장비 일단가(원)
+  travelPersonDays: number; // 출장비 연인원수
+  printUnitPrice: number; // 인쇄비 부당 단가(원)
+  printCopies: number; // 인쇄비 총 부수
+}
+
+export function travelCostOf(d?: DirectCosts): number {
+  return Math.round((d?.travelDayRate ?? 0) * (d?.travelPersonDays ?? 0));
+}
+
+export function printCostOf(d?: DirectCosts): number {
+  return Math.round((d?.printUnitPrice ?? 0) * (d?.printCopies ?? 0));
+}
+
+/** 산식 직접경비 합계(원) — 인건비와 무관한 고정액이라 역산에서 먼저 빼고 MD 를 분배한다 */
+export function fixedDirectExpense(d?: DirectCosts): number {
+  return travelCostOf(d) + printCostOf(d);
+}
+
+/** 견적서 직접경비 행 비고 — 산식 항목 이름, 옛 문서(요율분)는 종전 표기 */
+export function directExpenseNote(site: { directCosts?: DirectCosts; rates: SiteRates }): string {
+  const parts = [travelCostOf(site.directCosts) > 0 && "출장비", printCostOf(site.directCosts) > 0 && "인쇄비"].filter(Boolean);
+  const legacy = site.rates.directExpenseRate > 0 ? `(직접인건비) × ${Math.round(site.rates.directExpenseRate * 100)}%` : "";
+  return [...parts, legacy].filter(Boolean).join(" + ");
+}
+
+/** 별첨2 산정 기준표의 직접경비 산식 행 — 출장비·인쇄비 중 금액이 있는 것만 */
+export function directCostBasisRows(d?: DirectCosts): { c1: string; c2: string; amount: number }[] {
+  const won = (n: number) => Math.round(n).toLocaleString("ko-KR");
+  const rows: { c1: string; c2: string; amount: number }[] = [];
+  if (travelCostOf(d) > 0) rows.push({ c1: "출장비", c2: `${won(d!.travelDayRate)}원/일 × ${d!.travelPersonDays}인`, amount: travelCostOf(d) });
+  if (printCostOf(d) > 0) rows.push({ c1: "인쇄비", c2: `${won(d!.printUnitPrice)}원/부 × ${d!.printCopies}부`, amount: printCostOf(d) });
+  return rows;
 }
 
 export const STANDARD_OVERHEAD_RATE = 1.1;
@@ -158,6 +198,7 @@ export interface QuoteSite {
   factors?: Record<string, number>; // 정방향 인자값 (T1)
   mdMatrix: MdMatrixRow[]; // 최종 MD (T3 자유입력이면 빈 배열 가능)
   freeItems?: { label: string; amount: number; note?: string }[]; // T3 품목 직접 입력
+  directCosts?: DirectCosts; // 직접경비 산식(출장비·인쇄비). 없으면 0
   rates: SiteRates;
   amounts: SiteAmounts;
   remarks: string; // 특이사항

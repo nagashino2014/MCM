@@ -54,11 +54,14 @@ export function gradeTotals(rows: MdMatrixRow[]): MdVector {
   return out;
 }
 
-/** 직접인건비 → 항목별 금액. 제경비=인건비×o, 기술료=(인건비+제경비)×t, 직접경비=인건비×d */
-export function computeAmounts(laborCost: number, rates: SiteRates): Omit<SiteAmounts, "final" | "standard"> {
+/**
+ * 직접인건비 → 항목별 금액. 제경비=인건비×o, 기술료=(인건비+제경비)×t,
+ * 직접경비=산식 고정액(출장비+인쇄비, fixedDirect) + 인건비×d(옛 문서 요율분 — 새 견적은 d=0)
+ */
+export function computeAmounts(laborCost: number, rates: SiteRates, fixedDirect = 0): Omit<SiteAmounts, "final" | "standard"> {
   const overhead = laborCost * rates.overheadRate;
   const techFee = (laborCost + overhead) * rates.techFeeRate;
-  const directExpense = laborCost * rates.directExpenseRate;
+  const directExpense = laborCost * rates.directExpenseRate + fixedDirect;
   return {
     laborCost,
     overhead,
@@ -68,7 +71,7 @@ export function computeAmounts(laborCost: number, rates: SiteRates): Omit<SiteAm
   };
 }
 
-/** 합계 배율 — sum = laborCost × multiplier. 역산의 핵심 상수 */
+/** 합계 배율 — sum = laborCost × multiplier (+ 산식 직접경비 고정액). 역산의 핵심 상수 */
 export function sumMultiplier(rates: SiteRates): number {
   return (1 + rates.overheadRate) * (1 + rates.techFeeRate) + rates.directExpenseRate;
 }
@@ -145,6 +148,7 @@ export interface ReverseInput {
   price: number; // 제출 견적가 P (VAT 별도)
   items: QuoteWorkItem[]; // base_md 가중치의 원천
   rates: SiteRates;
+  fixedDirect?: number; // 산식 직접경비(출장비+인쇄비) — 인건비와 무관한 고정액
 }
 
 export interface ReverseResult {
@@ -166,7 +170,7 @@ interface Cell {
 /**
  * 견적가 역산 — 알고리즘(블루프린트 §5-1-c):
  *  ① 목표 합계 S* = P + cap(P)×0.5 (구간 중앙 조준)
- *  ② 필요 직접인건비 L = S* / multiplier → 스케일 k = L / baseLaborCost 로 base_md 전체 확대/축소
+ *  ② 필요 직접인건비 L = (S* - 산식 직접경비) / multiplier → 스케일 k = L / baseLaborCost 로 base_md 전체 확대/축소
  *  ③ 스냅: P≥1천만 → 0.5 단위, 미만 → 0.1 단위 반올림
  *  ④ 그리디 잔차 조정: S ≤ P 이면 최저단가 셀 +unit, S ≥ P+cap 이면 -unit (교대 진동 시 중단)
  *  ⑤ 그래도 미진입이면 조정 셀 1개만 세밀 단위(0.01)로 잔차 보정 (fineAdjusted=true)
@@ -176,25 +180,26 @@ export function reverseAllocate(input: ReverseInput): ReverseResult {
   const cap = sumOverCap(price);
   const unit = mdSnapUnit(price);
   const mult = sumMultiplier(rates);
+  const fixed = input.fixedDirect ?? 0;
   const laborRates = rates.laborRates;
 
   // 리프 항목만 분배 대상(대항목은 소계 표시 전용)
   const parentIds = new Set(input.items.map((i) => i.parentId).filter(Boolean));
   const leaves = input.items.filter((i) => !parentIds.has(i.itemId));
   const baseLabor = leaves.reduce((acc, it) => acc + laborCostOf(it.baseMd, laborRates), 0);
-  if (baseLabor <= 0 || price <= 0) {
+  // ①② 스케일링 — 산식 직접경비가 목표 합계를 다 차지하면 분배할 인건비가 없다
+  const targetSum = price + cap * 0.5;
+  if (baseLabor <= 0 || price <= 0 || targetSum - fixed <= 0) {
     return {
       mdMatrix: input.items.map((it) => ({ itemId: it.itemId, parentId: it.parentId, label: it.label, md: {} })),
-      amounts: { ...computeAmounts(0, rates), final: price },
+      amounts: { ...computeAmounts(0, rates, fixed), final: price },
       snapUnit: unit,
       fineAdjusted: false,
       ok: false,
     };
   }
 
-  // ①② 스케일링
-  const targetSum = price + cap * 0.5;
-  const k = targetSum / mult / baseLabor;
+  const k = (targetSum - fixed) / mult / baseLabor;
 
   // 셀 목록 구성(스냅 적용). base_md에 없는 등급은 만들지 않는다(실물: 소규모는 특·초급 0열).
   const rows: MdMatrixRow[] = input.items.map((it) => ({
@@ -217,7 +222,7 @@ export function reverseAllocate(input: ReverseInput): ReverseResult {
     }
   }
 
-  const currentSum = () => matrixLaborCost(rows, laborRates) * mult;
+  const currentSum = () => matrixLaborCost(rows, laborRates) * mult + fixed;
 
   // ④ 그리디 2단계: 최저단가 셀부터 unit 단위로 ①상한 위면 하향 ②견적가 이하면 상향.
   //    상향 스텝이 구간을 건너뛰면(스텝 > cap) 되돌린 뒤 ⑤ 세밀 +보정으로 마무리 —
@@ -279,7 +284,7 @@ export function reverseAllocate(input: ReverseInput): ReverseResult {
   }
 
   const laborCost = matrixLaborCost(rows, laborRates);
-  const base = computeAmounts(laborCost, rates);
+  const base = computeAmounts(laborCost, rates, fixed);
   const check = validateSumConstraint(price, base.sum);
   return {
     mdMatrix: rows,

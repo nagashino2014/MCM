@@ -7,6 +7,9 @@ import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
 import {
   QUOTE_FORM_ID,
+  QUOTE_RULE_PREFIX,
+  parseQuoteNo,
+  quoteNoLabel,
   type QuoteFieldValues,
   type QuoteRecipient,
   type QuoteResult,
@@ -14,6 +17,52 @@ import {
   type QuotationRow,
   type SituationEntry,
 } from "./types";
+
+/** 견적번호 사용 가능 여부 — 발송 대장(quotations.quote_no)과 결재 문서(approval_docs.doc_no) 합집합(공문 패턴). */
+export async function checkQuoteNoAvailable(quoteNo: string, excludeDocId?: string | null): Promise<{ available: boolean; usedBy: string | null }> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT title FROM quotations WHERE quote_no = $1 AND ($2::text IS NULL OR doc_id <> $2)
+        UNION ALL
+       SELECT title FROM approval_docs WHERE doc_no = $1 AND ($2::text IS NULL OR doc_id <> $2)`,
+      [quoteNo, excludeDocId ?? null]
+    )
+  );
+  if (!rows.length) return { available: true, usedBy: null };
+  return { available: false, usedBy: rows[0].title != null ? String(rows[0].title) : "(제목 없음)" };
+}
+
+/**
+ * 견적번호 직접 지정(관리자, 2026-09-30 공문 assignManualDocNo 이식) — draft 의 doc_no 를 선점하고
+ * 해당 종류 시퀀스를 GREATEST 로 동기화한다. 종류 라벨은 문서의 용역 대분류와 일치해야 한다
+ * (상신 채번이 service_type 으로 시퀀스를 고르므로 어긋나면 번호 체계가 섞인다).
+ */
+export async function assignManualQuoteNo(txn: PgDatabase, docId: string, quoteNo: string, serviceType: string): Promise<void> {
+  const parsed = parseQuoteNo(quoteNo);
+  if (!parsed) throw Object.assign(new Error("견적번호 형식이 올바르지 않습니다(예: 2026-통합허가-0012)."), { status: 400 });
+  const label = quoteNoLabel(serviceType);
+  if (parsed.label !== label) {
+    throw Object.assign(new Error(`견적번호 종류(${parsed.label})가 용역 분류(${label})와 다릅니다.`), { status: 400 });
+  }
+  const dup = rowsToObjects(
+    await txn.exec(
+      `SELECT 1 FROM quotations WHERE quote_no = $1 AND doc_id <> $2
+        UNION ALL
+       SELECT 1 FROM approval_docs WHERE doc_no = $1 AND doc_id <> $2`,
+      [quoteNo, docId]
+    )
+  );
+  if (dup.length) throw Object.assign(new Error(`이미 사용 중인 견적번호입니다(${quoteNo}).`), { status: 400 });
+  await txn.run(`UPDATE approval_docs SET doc_no = $2 WHERE doc_id = $1`, [docId, quoteNo]);
+  const ruleKey = QUOTE_RULE_PREFIX + label;
+  await txn.run(
+    `INSERT INTO doc_no_sequences (rule_key, year, last_seq) VALUES ($1, $2, $3)
+     ON CONFLICT (rule_key, year) DO UPDATE SET last_seq = GREATEST(doc_no_sequences.last_seq, EXCLUDED.last_seq)`,
+    [ruleKey, parsed.year, parsed.seq]
+  );
+  await txn.run(`DELETE FROM doc_no_pool WHERE rule_key = $1 AND year = $2 AND seq = $3`, [ruleKey, parsed.year, parsed.seq]);
+}
 
 function newQuoteId(): string {
   return "qt-" + crypto.randomUUID().replace(/-/g, "").slice(0, 14);

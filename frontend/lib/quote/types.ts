@@ -20,6 +20,23 @@ export function quoteRuleKey(serviceType: string): string {
   return QUOTE_RULE_PREFIX + (QUOTE_NO_LABEL_BY_SERVICE_TYPE[serviceType] ?? "기타");
 }
 
+export function quoteNoLabel(serviceType: string): string {
+  return QUOTE_NO_LABEL_BY_SERVICE_TYPE[serviceType] ?? "기타";
+}
+
+/** 견적번호 `{연도}-{종류}-{NNNN}` — 직접 지정(관리자, 2026-09-30 공문 패턴 이식)·삭제 반납 파싱 공용 */
+export function formatQuoteNo(year: string, label: string, seq: number): string {
+  return `${year}-${label}-${String(seq).padStart(4, "0")}`;
+}
+
+export function parseQuoteNo(no: string): { year: string; label: string; seq: number } | null {
+  const labels = Object.values(QUOTE_NO_LABEL_BY_SERVICE_TYPE).join("|");
+  const m = new RegExp(`^(\\d{4})-(${labels})-(\\d{1,4})$`).exec((no ?? "").trim());
+  if (!m) return null;
+  const seq = Number(m[3]);
+  return seq > 0 ? { year: m[1], label: m[2], seq } : null;
+}
+
 /** 용역 대분류→세분류 — 계약관리 CONTRACT_SERVICE_OPTIONS 와 동일(전 세분류 대응, 사용자 확정).
  *  작성 화면(QuoteBoard)과 기준 관리 화면(QuoteSettingsBoard)이 공유한다.
  *  2026-08-06 정정(사용자 지시): 영업허가는 장외&화관법 소속, 대분류와 중복인 '장외&화관법'
@@ -98,13 +115,19 @@ export interface SiteRates {
  */
 export interface DirectCosts {
   travelDayRate: number; // 출장비 일단가(원)
-  travelPersonDays: number; // 출장비 연인원수
+  travelPersonDays: number; // 출장비 인원(회당 인원). 옛 이름 '연인원수'
+  travelTrips?: number; // 출장 횟수(회). 2026-09-30 추가 — 없으면(구 문서) 1회로 본다
   printUnitPrice: number; // 인쇄비 부당 단가(원)
   printCopies: number; // 인쇄비 총 부수
 }
 
+export function travelTripsOf(d?: DirectCosts): number {
+  return d?.travelTrips ?? 1;
+}
+
+/** 출장비 = 일단가 × 인원 × 출장 횟수 */
 export function travelCostOf(d?: DirectCosts): number {
-  return Math.round((d?.travelDayRate ?? 0) * (d?.travelPersonDays ?? 0));
+  return Math.round((d?.travelDayRate ?? 0) * (d?.travelPersonDays ?? 0) * travelTripsOf(d));
 }
 
 export function printCostOf(d?: DirectCosts): number {
@@ -116,19 +139,29 @@ export function fixedDirectExpense(d?: DirectCosts): number {
   return travelCostOf(d) + printCostOf(d);
 }
 
-/** 견적서 직접경비 행 비고 — 산식 항목 이름, 옛 문서(요율분)는 종전 표기 */
+/** 견적서 직접경비 행 비고 — 산식 항목은 [별첨 3]으로 안내, 옛 문서(요율분)는 종전 표기 */
 export function directExpenseNote(site: { directCosts?: DirectCosts; rates: SiteRates }): string {
   const parts = [travelCostOf(site.directCosts) > 0 && "출장비", printCostOf(site.directCosts) > 0 && "인쇄비"].filter(Boolean);
   const legacy = site.rates.directExpenseRate > 0 ? `(직접인건비) × ${Math.round(site.rates.directExpenseRate * 100)}%` : "";
-  return [...parts, legacy].filter(Boolean).join(" + ");
+  const formula = parts.length ? `${parts.join(" + ")} [별첨 3]` : "";
+  return [formula, legacy].filter(Boolean).join(" + ");
 }
 
-/** 별첨2 산정 기준표의 직접경비 산식 행 — 출장비·인쇄비 중 금액이 있는 것만 */
+/** 별첨2 산정 기준표의 직접경비 행 — 출장비·인쇄비 중 금액이 있는 것만(내역은 별첨 3) */
 export function directCostBasisRows(d?: DirectCosts): { c1: string; c2: string; amount: number }[] {
-  const won = (n: number) => Math.round(n).toLocaleString("ko-KR");
   const rows: { c1: string; c2: string; amount: number }[] = [];
-  if (travelCostOf(d) > 0) rows.push({ c1: "출장비", c2: `${won(d!.travelDayRate)}원/일 × ${d!.travelPersonDays}인`, amount: travelCostOf(d) });
-  if (printCostOf(d) > 0) rows.push({ c1: "인쇄비", c2: `${won(d!.printUnitPrice)}원/부 × ${d!.printCopies}부`, amount: printCostOf(d) });
+  if (travelCostOf(d) > 0) rows.push({ c1: "출장비", c2: "실비 산정 [별첨 3]", amount: travelCostOf(d) });
+  if (printCostOf(d) > 0) rows.push({ c1: "인쇄비", c2: "실비 산정 [별첨 3]", amount: printCostOf(d) });
+  return rows;
+}
+
+/** [별첨 3] 직접경비 산출내역 행 — 산식(일단가 × 인원 × 횟수, 부당 단가 × 부수)과 금액 */
+export function directCostDetailRows(d?: DirectCosts): { label: string; formula: string; amount: number }[] {
+  const won = (n: number) => Math.round(n).toLocaleString("ko-KR");
+  const rows: { label: string; formula: string; amount: number }[] = [];
+  if (travelCostOf(d) > 0)
+    rows.push({ label: "출장비", formula: `일단가 ${won(d!.travelDayRate)}원 × ${d!.travelPersonDays}인 × ${travelTripsOf(d)}회`, amount: travelCostOf(d) });
+  if (printCostOf(d) > 0) rows.push({ label: "인쇄비", formula: `부당 단가 ${won(d!.printUnitPrice)}원 × ${d!.printCopies}부`, amount: printCostOf(d) });
   return rows;
 }
 

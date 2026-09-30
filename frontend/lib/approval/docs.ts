@@ -11,7 +11,7 @@ import { notifyPendingSteps, notifyDrafterResult } from "@/lib/approval/notify";
 import { generateDocSummary } from "@/lib/approval/summarize";
 import { assignManualDocNo, markLetterPendingOnApproval } from "@/lib/letter/store";
 import { assignManualNoticeNo } from "@/lib/notice/store";
-import { markQuotePendingOnApproval } from "@/lib/quote/store";
+import { assignManualQuoteNo, markQuotePendingOnApproval } from "@/lib/quote/store";
 import { markAgreementApproved } from "@/lib/agreement/store";
 import { runFormActionsForDoc } from "@/lib/approval/actions";
 
@@ -216,6 +216,7 @@ const NOTICE_FORM_ID = "frm-internal-notice";
 // 견적(136) — rule_key `견적:{종류}` 5종(통합허가/화관법/HAPs/ESG/기타), 포맷 `{연도}-{종류}-{NNNN}`.
 // = lib/quote/types.ts QUOTE_RULE_PREFIX/QUOTE_NO_LABEL_BY_SERVICE_TYPE (DB 계층은 클라이언트 모듈 미참조)
 const QUOTE_RULE_PREFIX = "견적:";
+const QUOTE_FORM_ID = "frm-quotation"; // = lib/quote/types.ts QUOTE_FORM_ID (동일 사유)
 const QUOTE_NO_LABELS: Record<string, string> = {
   통합허가: "통합허가",
   "장외&화관법": "화관법",
@@ -316,7 +317,7 @@ export async function saveDoc(params: {
   watchers?: ApprovalWatcherInput[];
   /** 선행 문서 연결(127) — 신청서→보고서 연관(예: 출장신청 → 출장보고). */
   refDocId?: string | null;
-  /** 공문 번호 수동 지정(관리자) — 지정 시 상신 채번을 건너뛰고 이 번호로 확정한다. 공문 양식 전용. */
+  /** 문서번호 수동 지정(관리자) — 지정 시 상신 채번을 건너뛰고 이 번호로 확정한다. 공문·내부고시·견적 양식 전용. */
   manualDocNo?: string | null;
   actorUserId: string;
 }): Promise<string> {
@@ -407,12 +408,13 @@ export async function saveDoc(params: {
     // 공문 번호 수동 지정(관리자) — draft 단계에서 doc_no 를 선점한다. 상신은 doc_no 가
     // 이미 있으면 그대로 쓰므로(submitDoc) 이 번호가 확정 번호가 된다.
     if (params.manualDocNo !== undefined) {
-      if (params.formId !== LETTER_FORM_ID && params.formId !== NOTICE_FORM_ID) {
-        throw new Error("문서번호 직접 지정은 공문·내부고시 양식에서만 가능합니다.");
+      if (params.formId !== LETTER_FORM_ID && params.formId !== NOTICE_FORM_ID && params.formId !== QUOTE_FORM_ID) {
+        throw new Error("문서번호 직접 지정은 공문·내부고시·견적 양식에서만 가능합니다.");
       }
       const wanted = (params.manualDocNo ?? "").trim();
       if (wanted) {
         if (params.formId === NOTICE_FORM_ID) await assignManualNoticeNo(txn, docId, wanted);
+        else if (params.formId === QUOTE_FORM_ID) await assignManualQuoteNo(txn, docId, wanted, String(params.fieldValues.service_type ?? ""));
         else await assignManualDocNo(txn, docId, wanted);
       } else {
         // 지정 해제 — 자동 채번으로 되돌린다. 상신 이력이 있는 문서(반려 후 재편집)는

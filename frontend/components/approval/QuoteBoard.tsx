@@ -27,10 +27,14 @@ import {
   STANDARD_OVERHEAD_RATE,
   STANDARD_TECH_FEE_RATE,
   fixedDirectExpense,
+  formatQuoteNo,
   mdSnapUnit,
+  parseQuoteNo,
   printCostOf,
+  quoteNoLabel,
   sumOverCap,
   travelCostOf,
+  travelTripsOf,
   type DirectCosts,
   type MdMatrixRow,
   type QuoteFieldValues,
@@ -137,6 +141,12 @@ export function QuoteBoard() {
   const [loading, setLoading] = useState(!!editDocId);
   const [docNo, setDocNo] = useState<string | null>(null);
   const [nextNo, setNextNo] = useState<string | null>(null);
+  // 견적번호 직접 지정(관리자, 2026-09-30) — 공문의 '번호 직접 지정' 패턴 이식. 임시저장 시 번호를 선점하고
+  // 상신은 선점 번호를 그대로 쓴다. 종류 라벨은 용역 분류를 따르므로 일련번호만 입력한다.
+  const [canAssign, setCanAssign] = useState(false);
+  const [manualOn, setManualOn] = useState(false);
+  const [manualSeq, setManualSeq] = useState("");
+  const [manualCheck, setManualCheck] = useState<{ available: boolean; usedBy: string | null } | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   // 재편집 문서의 상태·반려 사유·삭제 권한(서버 판정) — 반려 배너와 기안 삭제 버튼 노출용.
@@ -170,7 +180,10 @@ export function QuoteBoard() {
   useEffect(() => {
     fetch(`/api/quotes/next-no?serviceType=${encodeURIComponent(serviceType)}`, { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => d?.nextNo && setNextNo(d.nextNo))
+      .then((d) => {
+        if (d?.nextNo) setNextNo(d.nextNo);
+        setCanAssign(d?.canAssign === true);
+      })
       .catch(() => {});
   }, [serviceType]);
 
@@ -232,6 +245,14 @@ export function QuoteBoard() {
         const v = (d.fieldValues ?? {}) as Partial<QuoteFieldValues>;
         setEditMeta(toEditDocMeta(d));
         setDocNo(d.docNo ?? null);
+        // 상신 전 임시저장인데 번호가 있으면 = 직접 지정해 둔 문서(자동 채번은 상신 시 부여)
+        if (d.docNo && d.status === "draft") {
+          const parsed = parseQuoteNo(String(d.docNo));
+          if (parsed) {
+            setManualOn(true);
+            setManualSeq(String(parsed.seq).padStart(4, "0"));
+          }
+        }
         setSubject(d.title ?? "");
         if (v.service_type) setServiceType(v.service_type);
         if (v.service_subtype) setServiceSubtype(v.service_subtype);
@@ -378,6 +399,7 @@ export function QuoteBoard() {
       const directCosts: DirectCosts = {
         travelDayRate: 0,
         travelPersonDays: 0,
+        travelTrips: travelTripsOf(site.directCosts),
         printUnitPrice: 0,
         printCopies: 0,
         ...site.directCosts,
@@ -390,6 +412,29 @@ export function QuoteBoard() {
     },
     [sites, updateSite]
   );
+
+  // 직접 지정 번호 — 연도는 채번 예정 번호(없으면 확정 번호/올해), 종류는 용역 분류 기준.
+  const quoteYear = (nextNo ?? docNo ?? "").slice(0, 4) || String(new Date().getFullYear());
+  const manualNo = manualSeq.trim() ? formatQuoteNo(quoteYear, quoteNoLabel(serviceType), Number(manualSeq)) : "";
+  // 상신 이력이 있는 문서(반려 후 재편집)는 번호가 이미 확정돼 바꿀 수 없다.
+  const noLocked = !!docNo && editMeta?.status !== "draft";
+
+  // 중복 확인 — 입력이 멎으면 서버에 조회(발송 대장 + 결재 문서 doc_no 합집합).
+  useEffect(() => {
+    if (!manualOn || !manualNo) {
+      setManualCheck(null);
+      return;
+    }
+    const timer = setTimeout(() => {
+      const qs = new URLSearchParams({ serviceType, check: manualNo });
+      if (docId) qs.set("docId", docId);
+      fetch(`/api/quotes/next-no?${qs.toString()}`, { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => setManualCheck(d?.check ?? null))
+        .catch(() => {});
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [manualOn, manualNo, serviceType, docId]);
 
   const buildFieldValues = useCallback((): QuoteFieldValues => {
     const totalFinal = sites.reduce((a, s) => a + (s.amounts.final || 0), 0);
@@ -429,6 +474,8 @@ export function QuoteBoard() {
           line,
           watchers: watchers.map((w) => ({ userId: w.userId, kind: w.kind })),
           refDocId: null,
+          // 견적번호 직접 지정(관리자) — 켜져 있으면 선점, 껐으면 빈 문자열로 자동 채번 복귀. 권한 없으면 미전송.
+          manualDocNo: canAssign && !noLocked ? (manualOn ? manualNo : "") : undefined,
         }),
       });
       const data = await res.json();
@@ -436,12 +483,16 @@ export function QuoteBoard() {
       setDocId(data.docId);
       return { docId: data.docId, docNo: data.docNo };
     },
-    [docId, subject, buildFieldValues, line, watchers]
+    [docId, subject, buildFieldValues, line, watchers, canAssign, noLocked, manualOn, manualNo]
   );
 
   const validate = useCallback((): string | null => {
     if (!subject.trim()) return "건명을 입력하세요.";
     if (!isValidDateString(issueDate)) return "견적일을 YYYYMMDD 형식의 올바른 날짜로 입력하세요.";
+    if (manualOn && !noLocked) {
+      if (!parseQuoteNo(manualNo)) return "견적번호 일련번호를 1~4자리 숫자로 입력하세요(예: 0012).";
+      if (manualCheck && !manualCheck.available) return `이미 사용 중인 견적번호입니다 — ${manualCheck.usedBy}`;
+    }
     if (recipients.length === 0) return "수신처(사업장/기관)를 1건 이상 지정하세요.";
     if (sendMode === "mail" && !ccRefs.some((r) => (r.email ?? "").includes("@")))
       return "메일 발송 모드는 참조 담당자에 메일주소가 1건 이상 필요합니다(발송 안 함 모드로 바꾸거나 참조자를 추가하세요).";
@@ -460,7 +511,7 @@ export function QuoteBoard() {
     }
     if (line.length === 0) return "결재선에 결재자를 1명 이상 추가하세요.";
     return null;
-  }, [subject, issueDate, recipients, ccRefs, sendMode, sites, line]);
+  }, [subject, issueDate, manualOn, noLocked, manualNo, manualCheck, recipients, ccRefs, sendMode, sites, line]);
 
   const openPreview = useCallback(async () => {
     setBusy("preview");
@@ -537,8 +588,49 @@ export function QuoteBoard() {
                   <h3 className="font-bold cd-text text-sm flex items-center gap-2">
                     <FileText className="w-4 h-4 cd-text-primary" /> 기본 정보
                   </h3>
-                  <span className="ml-auto text-[11px] cd-text-faint">
-                    견적번호 {docNo ? <b className="cd-text">{docNo}</b> : <>예정 <b className="cd-text">{nextNo ?? "..."}</b></>}
+                  {/* cd-input 은 width:100% 라 고정폭은 감싸는 span 에 준다(상황 변수 행과 같은 패턴) — 한 줄 유지 */}
+                  <span className="ml-auto shrink-0 text-[11px] cd-text-faint flex items-center gap-1.5 whitespace-nowrap">
+                    {manualOn && !noLocked ? (
+                      <>
+                        견적번호
+                        <span className="font-mono">{quoteYear}-{quoteNoLabel(serviceType)}-</span>
+                        <span className="w-[68px] shrink-0">
+                          <input
+                            className="cd-input font-mono text-center text-[12px] px-1"
+                            inputMode="numeric"
+                            maxLength={4}
+                            placeholder="0012"
+                            value={manualSeq}
+                            onChange={(e) => setManualSeq(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                            aria-label="견적번호 일련번호"
+                          />
+                        </span>
+                        {!manualNo ? (
+                          <span>자동 채번 예정 {nextNo ?? "-"}</span>
+                        ) : manualCheck == null ? (
+                          <span>중복 확인 중...</span>
+                        ) : manualCheck.available ? (
+                          <span style={{ color: "var(--cd-success, #13DEB9)" }}>사용 가능</span>
+                        ) : (
+                          <span style={{ color: "var(--cd-danger, #FA896B)" }}>이미 사용 중 — {manualCheck.usedBy}</span>
+                        )}
+                      </>
+                    ) : (
+                      <>견적번호 {docNo ? <b className="cd-text">{docNo}</b> : <>예정 <b className="cd-text">{nextNo ?? "..."}</b></>}</>
+                    )}
+                    {canAssign && !noLocked && (
+                      <button
+                        type="button"
+                        className="cd-btn rounded-lg border cd-border-c px-2 py-0.5 text-[10.5px] cd-text-faint"
+                        title="관리자 — 자동 채번 대신 번호를 직접 지정합니다(공문과 동일)"
+                        onClick={() => {
+                          setManualOn((v) => !v);
+                          setManualSeq("");
+                        }}
+                      >
+                        {manualOn ? "자동 채번" : "번호 직접 지정"}
+                      </button>
+                    )}
                   </span>
                   <a
                     href="/approval/quote/settings"
@@ -775,62 +867,51 @@ export function QuoteBoard() {
                             })()}
                           </div>
 
-                          {/* 직접경비 산식 — 금액 직접 입력 없이 산식 입력값으로만 계산 */}
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            {(
-                              [
-                                {
-                                  title: "출장비",
-                                  amount: travelCostOf(site.directCosts),
-                                  fields: [
-                                    { key: "travelDayRate", label: "일단가(원)", money: true },
-                                    { key: "travelPersonDays", label: "연인원수(인)", money: false },
-                                  ],
-                                },
-                                {
-                                  title: "인쇄비",
-                                  amount: printCostOf(site.directCosts),
-                                  fields: [
-                                    { key: "printUnitPrice", label: "부당 단가(원)", money: true },
-                                    { key: "printCopies", label: "총 부수(부)", money: false },
-                                  ],
-                                },
-                              ] as const
-                            ).map((g) => (
-                              <div key={g.title} className="rounded-lg border cd-border-c p-2.5 flex flex-col gap-2">
-                                <div className="flex items-center justify-between text-[12px]">
-                                  <span className="font-semibold cd-text">{g.title}</span>
-                                  <span className="cd-text tabular-nums">{won(g.amount)}원</span>
+                          {/* 직접경비 산식 — 금액 직접 입력 없이 산식 입력값으로만 계산. 입력칸 5개는 한 격자에 두어 너비를 같게 맞춘다 */}
+                          {(() => {
+                            const fields: { key: keyof DirectCosts; label: string; money: boolean; value: number }[] = [
+                              { key: "travelDayRate", label: "일단가(원)", money: true, value: site.directCosts?.travelDayRate ?? 0 },
+                              { key: "travelPersonDays", label: "인원(회)", money: false, value: site.directCosts?.travelPersonDays ?? 0 },
+                              { key: "travelTrips", label: "출장 횟수", money: false, value: travelTripsOf(site.directCosts) },
+                              { key: "printUnitPrice", label: "부당 단가(원)", money: true, value: site.directCosts?.printUnitPrice ?? 0 },
+                              { key: "printCopies", label: "총 부수(부)", money: false, value: site.directCosts?.printCopies ?? 0 },
+                            ];
+                            return (
+                              // 구분선은 별도 좁은 열(row-span-2)로 두어 5개 입력칸 트랙이 전부 같은 폭(1fr)을 갖게 한다
+                              <div className="rounded-lg border cd-border-c p-2.5 grid grid-cols-[1fr_1fr_1fr_1px_1fr_1fr] gap-x-2 gap-y-1.5">
+                                <div className="col-span-3 flex items-center justify-between text-[12px]">
+                                  <span className="font-semibold cd-text">출장비</span>
+                                  <span className="cd-text tabular-nums">{won(travelCostOf(site.directCosts))}원</span>
                                 </div>
-                                <div className="grid grid-cols-2 gap-2">
-                                  {g.fields.map((f) => {
-                                    const cur = site.directCosts?.[f.key] ?? 0;
-                                    return (
-                                      <label key={f.key} className="flex flex-col gap-1 min-w-0">
-                                        <span className="text-[11px] cd-text-faint">{f.label}</span>
-                                        {f.money ? (
-                                          <AmountInput
-                                            className="cd-input text-right text-[12px]"
-                                            value={cur || ""}
-                                            disabled={tier === "free"}
-                                            onChange={(v) => editDirectCost(activeSite, f.key, Number(v) || 0)}
-                                          />
-                                        ) : (
-                                          <input
-                                            className="cd-input text-right text-[12px]"
-                                            inputMode="numeric"
-                                            value={cur ? String(cur) : ""}
-                                            disabled={tier === "free"}
-                                            onChange={(e) => editDirectCost(activeSite, f.key, Number(e.target.value.replace(/[^\d]/g, "")) || 0)}
-                                          />
-                                        )}
-                                      </label>
-                                    );
-                                  })}
+                                <div className="row-span-2 border-l cd-border-c" aria-hidden="true" />
+                                <div className="col-span-2 flex items-center justify-between text-[12px]">
+                                  <span className="font-semibold cd-text">인쇄비</span>
+                                  <span className="cd-text tabular-nums">{won(printCostOf(site.directCosts))}원</span>
                                 </div>
+                                {fields.map((f) => (
+                                  <label key={f.key} className="flex flex-col gap-1 min-w-0">
+                                    <span className="text-[11px] cd-text-faint whitespace-nowrap">{f.label}</span>
+                                    {f.money ? (
+                                      <AmountInput
+                                        className="cd-input text-right text-[12px]"
+                                        value={f.value || ""}
+                                        disabled={tier === "free"}
+                                        onChange={(v) => editDirectCost(activeSite, f.key, Number(v) || 0)}
+                                      />
+                                    ) : (
+                                      <input
+                                        className="cd-input text-right text-[12px]"
+                                        inputMode="numeric"
+                                        value={f.value ? String(f.value) : ""}
+                                        disabled={tier === "free"}
+                                        onChange={(e) => editDirectCost(activeSite, f.key, Number(e.target.value.replace(/[^\d]/g, "")) || 0)}
+                                      />
+                                    )}
+                                  </label>
+                                ))}
                               </div>
-                            ))}
-                          </div>
+                            );
+                          })()}
                           <span className="text-[10.5px] cd-text-faint text-right">
                             {tier === "free" ? "자유 입력 견적은 직접경비를 품목으로 입력하세요 · " : ""}V.A.T 별도 · 유효기간 견적일로부터 1개월
                           </span>
@@ -941,7 +1022,8 @@ export function QuoteBoard() {
                     {/* 특이사항 */}
                     <div className="flex flex-col gap-1">
                       <span className="text-[11px] cd-text-faint">특이사항 (견적서 시트 하단)</span>
-                      <textarea className="cd-input text-[12.5px] min-h-[84px]" value={site.remarks} onChange={(e) => updateSite(activeSite, { remarks: e.target.value })} />
+                      {/* 높이는 cdash.css 의 textarea.cd-input{min-height:64px} 보다 우선하도록 inline(2026-09-30 사용자 요청: 종전의 2.5배) */}
+                      <textarea className="cd-input text-[12.5px]" style={{ minHeight: 210 }} value={site.remarks} onChange={(e) => updateSite(activeSite, { remarks: e.target.value })} />
                     </div>
                   </div>
                 )}

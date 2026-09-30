@@ -14,6 +14,7 @@ import {
   SUMMARY_SHEET_MIN_SITES,
   QUOTE_VALIDITY_TEXT,
   directCostBasisRows,
+  directCostDetailRows,
   directExpenseNote,
   type QuoteFieldValues,
   type QuoteSite,
@@ -107,7 +108,7 @@ export async function renderQuoteXlsx(input: QuoteXlsxInput): Promise<Uint8Array
   if (sites.length >= SUMMARY_SHEET_MIN_SITES) addSummarySheet(wb, input, stampId);
   for (const site of sites) {
     const quoteName = multi ? sheetName(site.siteLabel) : "견적서";
-    const annexName = multi ? sheetName(`${site.siteLabel} 별첨 1`) : "별첨 1,2";
+    const annexName = multi ? sheetName(`${site.siteLabel} 별첨 1`) : directCostDetailRows(site.directCosts).length ? "별첨 1,2,3" : "별첨 1,2";
     addQuoteSheet(wb, quoteName, input, site, stampId);
     addAnnexSheet(wb, annexName, site);
   }
@@ -131,6 +132,10 @@ function addCoverSheet(wb: ExcelJS.Workbook, input: QuoteXlsxInput, quoteLogoId:
   const v = input.values;
   const sites = v.sites ?? [];
   const recipient = v.recipients[0];
+  // 별도첨부 목록 — 직접경비(출장비·인쇄비)가 있는 사업장이 하나라도 있으면 [별첨 3] 산출내역을 포함
+  const annexList = sites.some((s) => directCostDetailRows(s.directCosts).length)
+    ? "직접인건비 산출기준, 인건비 및 제경비 등 단가, 직접경비 산출내역"
+    : "직접인건비 산출기준, 인건비 및 제경비 등 단가";
 
   // 로고(중앙 상단) — 한글 표기 원본 로고(quote/logo.png)를 구 로고+회사명 영역 합 크기로
   const logoId = quoteLogoId ?? letterLogoId;
@@ -181,10 +186,10 @@ function addCoverSheet(wb: ExcelJS.Workbook, input: QuoteXlsxInput, quoteLogoId:
       setCell(ws, `C${row}`, `  ${i + 1}. ${label} ${"-".repeat(Math.max(4, 56 - label.length * 2))} 1부`, { size: 11 });
       row++;
     });
-    setCell(ws, `C${row}`, `별도첨부 : 직접인건비 산출기준, 인건비 및 제경비 등 단가 ${"-".repeat(14)} 1부 .  끝 .`, { size: 11 });
+    setCell(ws, `C${row}`, `별도첨부 : ${annexList} ${"-".repeat(14)} 1부 .  끝 .`, { size: 11 });
   } else {
     setCell(ws, `C${row}`, `첨부 : ${v.subject} 견적서 ${"-".repeat(Math.max(4, 48 - v.subject.length * 2))} 1부`, { size: 11 });
-    setCell(ws, `C${row + 1}`, `별도첨부 : 직접인건비 산출기준, 인건비 및 제경비 등 단가 ${"-".repeat(14)} 1부 .  끝 .`, { size: 11 });
+    setCell(ws, `C${row + 1}`, `별도첨부 : ${annexList} ${"-".repeat(14)} 1부 .  끝 .`, { size: 11 });
   }
 
   // 하단 서명 + 인감 — 회사명 붙여쓰기·-2pt, 대표이사 줄과 시작·끝 정렬(사용자 확정).
@@ -530,4 +535,36 @@ function addAnnexSheet(wb: ExcelJS.Workbook, name: string, site: QuoteSite): voi
       { c1: "기술료", c2: "인건비+제경비의 20~40%", c3: `${Math.round(rates.techFeeRate * 100)}% 적용`, align: "center" as const },
     ]
   );
+
+  // [별첨 3] 직접경비 산출내역 — 출장비·인쇄비 산식(2026-09-30). 직접경비가 있을 때만 별첨 2 아래에 이어 쓴다.
+  const detail = directCostDetailRows(site.directCosts);
+  if (detail.length) {
+    row += 3;
+    setCell(ws, `A${row}`, "[별첨 3] 직접경비 산출내역", { size: 12, bold: true });
+    ws.getRow(row).getCell(1).border = { bottom: { style: "medium", color: { argb: BRAND } } };
+    row += 2;
+    head(`A${row}`, "구분");
+    ws.mergeCells(row, 2, row, 4);
+    head(`B${row}`, "산출 근거");
+    head(`E${row}`, "금액(원)");
+    head(`F${row}`, "비고");
+    borderRange(ws, row, 1, row, 6);
+    row++;
+    for (const d of detail) {
+      setCell(ws, `A${row}`, d.label, { size: 9.5, border: true, align: "center" });
+      ws.mergeCells(row, 2, row, 4);
+      setCell(ws, `B${row}`, d.formula, { size: 9.5, border: true });
+      setCell(ws, `E${row}`, d.amount, { size: 9.5, border: true, align: "right", numFmt: "#,##0" });
+      setCell(ws, `F${row}`, "-", { size: 9, border: true, align: "center" });
+      borderRange(ws, row, 1, row, 6);
+      row++;
+    }
+    setCell(ws, `A${row}`, "합   계(직접경비)", { size: 10.5, bold: true, border: true, fill: BRAND, color: WHITE, align: "center" });
+    ws.mergeCells(row, 2, row, 4);
+    setCell(ws, `B${row}`, "", { border: true, fill: BRAND });
+    setCell(ws, `E${row}`, detail.reduce((acc, d) => acc + d.amount, 0), { size: 10.5, bold: true, border: true, fill: BRAND, color: WHITE, align: "right", numFmt: '#,##0 "원"' });
+    setCell(ws, `F${row}`, "-", { size: 9, border: true, fill: BRAND, color: WHITE, align: "center" });
+    borderRange(ws, row, 1, row, 6);
+    ws.getRow(row).height = 24;
+  }
 }

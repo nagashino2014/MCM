@@ -16,6 +16,7 @@ import {
   SUMMARY_SHEET_MIN_SITES,
   QUOTE_VALIDITY_TEXT,
   directCostBasisRows,
+  directCostDetailRows,
   directExpenseNote,
   type QuoteFieldValues,
   type QuoteSite,
@@ -289,6 +290,10 @@ function drawCover(w: Writer, input: QuotePdfInput, quoteLogo: PDFImage | null, 
     const n = Math.max(4, target - Math.round(w.fonts.regular.widthOfTextAtSize(label, 11) / 5.4));
     return "-".repeat(n);
   };
+  // 별도첨부 목록 — 직접경비(출장비·인쇄비)가 있는 사업장이 하나라도 있으면 [별첨 3] 산출내역을 포함
+  const annexList = sites.some((s) => directCostDetailRows(s.directCosts).length)
+    ? "직접인건비 산출기준, 인건비 및 제경비 등 단가, 직접경비 산출내역"
+    : "직접인건비 산출기준, 인건비 및 제경비 등 단가";
   if (sites.length > 1) {
     w.line("첨부", 11.5, { bold: true, gap: 9 });
     const items: string[] = [];
@@ -297,10 +302,10 @@ function drawCover(w: Writer, input: QuotePdfInput, quoteLogo: PDFImage | null, 
     items.forEach((label, i) => {
       w.line(`  ${i + 1}. ${label} ${dashPad(`  ${i + 1}. ${label}`)} 1부`, 11, { gap: 8 });
     });
-    w.line(`별도첨부 : 직접인건비 산출기준, 인건비 및 제경비 등 단가 ${dashPad("별도첨부 : 직접인건비 산출기준, 인건비 및 제경비 등 단가")} 1부 .  끝 .`, 11, { gap: 8 });
+    w.line(`별도첨부 : ${annexList} ${dashPad(`별도첨부 : ${annexList}`)} 1부 .  끝 .`, 11, { gap: 8 });
   } else {
     w.line(`첨부 : ${v.subject} 견적서 ${dashPad(`첨부 : ${v.subject} 견적서`)} 1부`, 11, { gap: 9 });
-    w.line(`별도첨부 : 직접인건비 산출기준, 인건비 및 제경비 등 단가 ${dashPad("별도첨부 : 직접인건비 산출기준, 인건비 및 제경비 등 단가")} 1부 .  끝 .`, 11, { gap: 8 });
+    w.line(`별도첨부 : ${annexList} ${dashPad(`별도첨부 : ${annexList}`)} 1부 .  끝 .`, 11, { gap: 8 });
   }
 
   // 하단 서명 + 인감 — 회사명(붙여쓰기, 자간 분배)과 대표이사 줄의 시작·끝 위치를 일치(사용자 확정)
@@ -733,4 +738,33 @@ function drawAnnex(w: Writer, site: QuoteSite): void {
       { c1: "기술료", c2: "인건비+제경비의 20~40%", c3: `${Math.round(rates.techFeeRate * 100)}% 적용`, c3Align: "center" as const },
     ]
   );
+
+  // [별첨 3] 직접경비 산출내역 — 출장비(일단가 × 인원 × 횟수)·인쇄비(부당 단가 × 부수) 산식(2026-09-30 사용자 요청). 직접경비가 있을 때만.
+  const detail = directCostDetailRows(site.directCosts);
+  if (detail.length) {
+    w.gap(22);
+    const annex3Title = "[별첨 3] 직접경비 산출내역";
+    w.line(annex3Title, 12, { bold: true, gap: 5 });
+    titleUnderline(annex3Title);
+    w.gap(12);
+    const r3 = [0.16, 0.5, 0.18, 0.16];
+    w.tableRow([headCell("구분"), headCell("산출 근거"), headCell("금액(원)"), headCell("비고")], r3, { size: 8.5 });
+    for (const d of detail) {
+      w.tableRow(
+        [{ text: d.label, align: "center" }, { text: d.formula }, { text: won(d.amount), align: "right" }, { text: "-", align: "center" }],
+        r3,
+        { size: 8.5 }
+      );
+    }
+    w.tableRow(
+      [
+        { text: "합   계(직접경비)", bold: true, align: "center", bg: BRAND, color: WHITE },
+        { text: "", bg: BRAND },
+        { text: `${won(detail.reduce((acc, d) => acc + d.amount, 0))} 원`, bold: true, align: "right", bg: BRAND, color: WHITE },
+        { text: "-", align: "center", bg: BRAND, color: WHITE },
+      ],
+      r3,
+      { size: 9.5, minH: 22 }
+    );
+  }
 }

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { hasPermission } from "@/lib/auth/rbac";
 import { getDb, rowsToObjects } from "@/lib/db";
+import { checkQuoteNoAvailable } from "@/lib/quote/store";
 import { quoteRuleKey, QUOTE_RULE_PREFIX } from "@/lib/quote/types";
 
 export const runtime = "nodejs";
@@ -8,9 +10,11 @@ export const dynamic = "force-dynamic";
 
 // GET: 다음 채번 예정 견적번호 — 작성 화면 표시용(확정은 상신 시 allocateDocNo).
 // ?serviceType=통합허가 등 대분류에 따라 5종 시퀀스로 분기(136).
+//   canAssign  직접 지정 권한(approval.manage) — 공문과 같은 관리자 예외(2026-09-30)
+//   check=<번호>[&docId=]  해당 번호 사용 가능 여부(available/usedBy)
 export async function GET(req: NextRequest) {
   try {
-    await requirePermission("approval.view");
+    const ctx = await requirePermission("approval.view");
     const serviceType = req.nextUrl.searchParams.get("serviceType") ?? "기타";
     const ruleKey = quoteRuleKey(serviceType);
     const db = await getDb();
@@ -25,7 +29,14 @@ export async function GET(req: NextRequest) {
       );
       seq = rows.length ? Number(rows[0].last_seq) + 1 : 1;
     }
-    return NextResponse.json({ nextNo: `${year}-${ruleKey.slice(QUOTE_RULE_PREFIX.length)}-${String(seq).padStart(4, "0")}` });
+    const check = req.nextUrl.searchParams.get("check");
+    const excludeDocId = req.nextUrl.searchParams.get("docId");
+    return NextResponse.json({
+      nextNo: `${year}-${ruleKey.slice(QUOTE_RULE_PREFIX.length)}-${String(seq).padStart(4, "0")}`,
+      year,
+      canAssign: await hasPermission(ctx.userId, "approval.manage"),
+      check: check ? { no: check, ...(await checkQuoteNoAvailable(check.trim(), excludeDocId)) } : null,
+    });
   } catch (err) {
     return authErrorToResponse(err);
   }

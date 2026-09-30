@@ -777,16 +777,20 @@ export function QuoteBoard() {
                     <div className="rounded-2xl border cd-border-c p-3.5 flex flex-col gap-3">
                       {/* 좌 40%: 제출 견적가 → 역산 → 금액 요약 / 우 60%: 요율 + 직접경비 산식 */}
                       <div className="grid grid-cols-1 md:grid-cols-[2fr_3fr] gap-4 items-start">
-                        <div className="min-w-0 flex flex-col gap-2">
-                          <span className="text-[12px] font-semibold cd-text">제출 견적가(VAT 별도)</span>
-                          <AmountInput
-                            className="cd-input text-sm text-right"
-                            value={priceInputs[site.siteSeq] ?? (site.amounts.final ? String(site.amounts.final) : "")}
-                            onChange={(next) => setPriceInputs((prev) => ({ ...prev, [site.siteSeq]: next }))}
-                            placeholder="예: 38,000,000"
-                          />
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-[11px] cd-text-faint">
+                        <div className="min-w-0 flex flex-col gap-2.5">
+                          {/* 라벨 줄높이(leading-4)·라벨-입력 간격(gap-1)·행 간격(gap-2.5)을 우측 요율 칸과 같게 두어
+                              견적가 입력박스 하단 = 요율 입력박스 하단, MD 역산 버튼 상단 = 출장비·인쇄비 상자 상단이 된다(2026-09-30 사용자 요청) */}
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[12px] leading-4 font-semibold cd-text">제출 견적가(VAT 별도)</span>
+                            <AmountInput
+                              className="cd-input text-sm text-right"
+                              value={priceInputs[site.siteSeq] ?? (site.amounts.final ? String(site.amounts.final) : "")}
+                              onChange={(next) => setPriceInputs((prev) => ({ ...prev, [site.siteSeq]: next }))}
+                              placeholder="예: 38,000,000"
+                            />
+                          </div>
+                          <div className="flex items-start gap-2 flex-wrap">
+                            <span className="text-[11px] cd-text-faint self-center">
                               {(() => {
                                 const p = Number(priceInputs[site.siteSeq] ?? 0);
                                 return p > 0 ? `${won(p)}원 · 스냅 ${mdSnapUnit(p)}MD · 초과폭 상한 ${won(sumOverCap(p))}원` : "";
@@ -845,7 +849,7 @@ export function QuoteBoard() {
                               ] as const
                             ).map(([label, key]) => (
                               <label key={key} className="flex flex-col gap-1">
-                                <span className="text-[11px] cd-text-faint">{label}</span>
+                                <span className="text-[11px] leading-4 cd-text-faint">{label}</span>
                                 <span className="flex items-center gap-1 text-[12px] cd-text">
                                   <input className="cd-input text-right text-[12px]" value={String(Math.round(site.rates[key] * 100))} onChange={(e) => editRate(activeSite, key, Number(e.target.value) / 100 || 0)} />%
                                 </span>
@@ -858,7 +862,7 @@ export function QuoteBoard() {
                               const share = price > 0 && direct > 0 ? ((direct / price) * 100).toFixed(1) : "0";
                               return (
                                 <label className="flex flex-col gap-1" title="출장비+인쇄비 ÷ 제출 견적가 (자동 계산)">
-                                  <span className="text-[11px] cd-text-faint">직접경비 요율(견적가 대비)</span>
+                                  <span className="text-[11px] leading-4 cd-text-faint">직접경비 요율(견적가 대비)</span>
                                   <span className="flex items-center gap-1 text-[12px] cd-text">
                                     <input className="cd-input text-right text-[12px]" value={share} disabled readOnly />%
                                   </span>

@@ -71,7 +71,6 @@ export const MENU_ITEMS: MenuItem[] = [
       { title: "전자결재 홈", href: "/approval" },
       { title: "공문 작성", href: "/approval/letter" },
       { title: "내부고시 작성", href: "/approval/notice" },
-      { title: "견적서 작성", href: "/approval/quote" },
       { title: "양식별 문서 조회", href: "/approval/records" },
       { title: "데이터 분석", href: "/approval/analytics" },
       { title: "결재 인사이트", href: "/approval/insights" },
@@ -261,6 +260,8 @@ export const MENU_ITEMS: MenuItem[] = [
       { title: "API & 스크래핑", href: "/sales/intel" },
       { title: "RAG & 영업 발굴", href: "/sales/rag" },
       { title: "공공입찰", href: "/sales/bids" },
+      // 견적서 작성 — 전자결재 하위에서 영업으로 이동(2026-10-01 사용자 요청). 라우트 경로는 무변경(/approval/quote).
+      { title: "견적서 작성", href: "/approval/quote" },
     ],
     group: "main",
   },

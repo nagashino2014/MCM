@@ -61,6 +61,7 @@ interface ContactItem {
   personName: string;
   title: string | null;
   email: string | null;
+  phone?: string | null; // 휴대폰 → 회사 전화 순
   facilityName: string | null;
   departmentName: string | null;
 }
@@ -348,6 +349,7 @@ export function RecipientPicker({
                     deptName: it.departmentName ?? "",
                     title: it.title ?? "",
                     email: it.email ?? "",
+                    phone: it.phone ?? "",
                     facilityName: it.facilityName ?? "",
                   })
                 }

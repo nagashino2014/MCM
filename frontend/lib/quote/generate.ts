@@ -7,6 +7,7 @@ import { putContractDocument, sanitizeFilename } from "@/lib/storage/contract-do
 import { renderQuotePdf } from "./pdf";
 import { renderQuoteXlsx } from "./xlsx";
 import { setQuoteArtifacts } from "./store";
+import { fillRecipientPhones } from "./recipient-phone";
 import type { QuoteFieldValues } from "./types";
 
 export interface QuoteArtifacts {
@@ -27,7 +28,7 @@ export async function generateQuoteArtifacts(docId: string, opts: { persist?: bo
   const persist = opts.persist !== false;
   const doc = await getDoc(docId);
   if (!doc) throw new Error("문서를 찾을 수 없습니다.");
-  const values = doc.fieldValues as unknown as QuoteFieldValues;
+  const values = await fillRecipientPhones(doc.fieldValues as unknown as QuoteFieldValues);
   const issueDate = String(values.issue_date ?? (doc.completedAt ?? doc.submittedAt ?? new Date().toISOString()).slice(0, 10));
   const quoteNo = doc.docNo ?? "미채번";
   const input = { values, quoteNo, drafterName: doc.drafterName ?? "", issueDate };

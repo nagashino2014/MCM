@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     const db = await getDb();
     const rows = rowsToObjects(
       await db.exec(
-        `SELECT p.id, p.person_name, p.title, p.email, p.facility_id,
+        `SELECT p.id, p.person_name, p.title, p.email, p.facility_id, p.office_phone, p.mobile_phone,
                 f.company_name AS facility_name, d.department_name
            FROM facility_contact_people p
            LEFT JOIN facilities f ON f.facility_id = p.facility_id
@@ -34,6 +34,8 @@ export async function GET(req: NextRequest) {
         personName: String(r.person_name ?? ""),
         title: r.title != null ? String(r.title) : null,
         email: r.email != null ? String(r.email) : null,
+        // 연락처 — 휴대폰이 없으면 회사 전화(견적서 수신 블록 TEL 등)
+        phone: String(r.mobile_phone ?? "").trim() || String(r.office_phone ?? "").trim() || null,
         facilityId: String(r.facility_id ?? ""),
         facilityName: r.facility_name != null ? String(r.facility_name) : null,
         departmentName: r.department_name != null ? String(r.department_name) : null,

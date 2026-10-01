@@ -655,7 +655,11 @@ function drawAnnex(w: Writer, site: QuoteSite): void {
     { size: 9.5, minH: 22 }
   );
 
-  w.gap(22);
+  // 별첨 2 표가 페이지 끝에서 잘릴 것 같으면 새 페이지에서 시작한다(별첨 3 과 같은 원칙, 2026-10-01).
+  // 필요 높이 = 제목부 + 머리행 + 20pt 행 × (노임 등급 최대 5 + 직접경비 행 + 제경비·기술료 등 3)
+  const need2 = 22 + 17 + 12 + 22 + 20 * (5 + directCostBasisRows(site.directCosts).length + 3);
+  if (w.y - need2 < MARGIN_BOTTOM) w.newPage();
+  else w.gap(22);
   const annex2Title = "[별첨 2] 인건비 및 제경비 등 단가";
   w.line(annex2Title, 12, { bold: true, gap: 5 });
   titleUnderline(annex2Title);
@@ -742,7 +746,11 @@ function drawAnnex(w: Writer, site: QuoteSite): void {
   // [별첨 3] 직접경비 산출내역 — 출장비(일단가 × 인원 × 횟수)·인쇄비(부당 단가 × 부수) 산식(2026-09-30 사용자 요청). 직접경비가 있을 때만.
   const detail = directCostDetailRows(site.directCosts);
   if (detail.length) {
-    w.gap(22);
+    // 표가 페이지 끝에서 잘릴 것 같으면 별첨 2 아래에 이어 붙이지 않고 새 페이지에서 시작한다(2026-10-01 사용자 요청).
+    // 필요 높이 = 간격 + 제목부 + 머리행 + 항목행(산식 약 50자마다 한 줄, 줄당 11.5pt + 안쪽 여백 9pt) + 합계행 + 여유
+    const need = 22 + 17 + 12 + 21 + detail.reduce((acc, d) => acc + Math.ceil(d.formula.length / 50) * 11.5 + 9, 0) + 21 + 6;
+    if (w.y - need < MARGIN_BOTTOM) w.newPage();
+    else w.gap(22);
     const annex3Title = "[별첨 3] 직접경비 산출내역";
     w.line(annex3Title, 12, { bold: true, gap: 5 });
     titleUnderline(annex3Title);

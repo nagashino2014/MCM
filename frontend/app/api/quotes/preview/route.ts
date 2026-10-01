@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { renderQuotePdf } from "@/lib/quote/pdf";
+import { fillRecipientPhones } from "@/lib/quote/recipient-phone";
 import type { QuoteFieldValues } from "@/lib/quote/types";
 
 export const runtime = "nodejs";
@@ -19,7 +20,7 @@ export async function POST(req: NextRequest) {
     };
     if (!body?.values) return NextResponse.json({ error: "values가 필요합니다." }, { status: 400 });
     const bytes = await renderQuotePdf({
-      values: body.values,
+      values: await fillRecipientPhones(body.values),
       quoteNo: body.quoteNo || "미채번",
       drafterName: body.drafterName || "",
       issueDate: body.issueDate || new Date().toISOString().slice(0, 10),

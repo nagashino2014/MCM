@@ -360,6 +360,7 @@ export function QuoteRecordsTable({
               <th className="py-1.5 pr-3 font-semibold">견적일</th>
               <th className="py-1.5 pr-3 font-semibold">상태</th>
               <th className="py-1.5 pr-3 font-semibold">결과</th>
+              <th className="py-1.5 pr-3 font-semibold">재견적</th>
             </tr>
           </thead>
           <tbody>
@@ -379,11 +380,24 @@ export function QuoteRecordsTable({
                   {q.sendStatus === "failed" && <span className="ml-1.5 text-[10.5px] text-[color:var(--cd-danger,#FA896B)]">클릭 후 재발송</span>}
                 </td>
                 <td className="py-2 pr-3">{resultBadge(q.result)}</td>
+                {/* 재견적(269) — 이 건의 최신 버전을 복사해 새 버전으로 작성한다. 행 클릭(뷰어)과 분리 */}
+                <td className="py-2 pr-3" onClick={(e) => e.stopPropagation()}>
+                  <span className="inline-flex items-center gap-1.5">
+                    {(q.version ?? 1) > 1 && <span className="text-[10.5px] font-mono cd-text-faint">v{q.version}</span>}
+                    <a
+                      href={`/approval/quote?revise=${encodeURIComponent(q.docId)}`}
+                      className="cd-action inline-flex items-center rounded-lg border cd-border-c px-2 py-0.5 text-[10.5px] cd-text-primary hover:cd-tint-primary"
+                      title="이 용역 건의 최신 견적을 복사해 새 버전(재견적)을 작성합니다"
+                    >
+                      재견적
+                    </a>
+                  </span>
+                </td>
               </tr>
             ))}
             {quotes.length === 0 && (
               <tr>
-                <td colSpan={9} className="py-6 text-center cd-text-faint text-sm">
+                <td colSpan={10} className="py-6 text-center cd-text-faint text-sm">
                   발송된 견적서가 없습니다.
                 </td>
               </tr>

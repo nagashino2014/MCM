@@ -11,7 +11,7 @@ import { notifyPendingSteps, notifyDrafterResult } from "@/lib/approval/notify";
 import { generateDocSummary } from "@/lib/approval/summarize";
 import { assignManualDocNo, markLetterPendingOnApproval } from "@/lib/letter/store";
 import { assignManualNoticeNo } from "@/lib/notice/store";
-import { assignManualQuoteNo, markQuotePendingOnApproval } from "@/lib/quote/store";
+import { assignManualQuoteNo, markQuotePendingOnApproval, resolveQuoteVersion } from "@/lib/quote/store";
 import { markAgreementApproved } from "@/lib/agreement/store";
 import { runFormActionsForDoc } from "@/lib/approval/actions";
 
@@ -329,6 +329,7 @@ export async function saveDoc(params: {
   const snaps = await loadAssigneeSnapshots(params.line.map((s) => s.assigneeUserId));
   const watchers = (params.watchers ?? []).filter((w) => w.userId && (w.kind === "ref" || w.kind === "view"));
 
+  const fieldValues: Record<string, unknown> = { ...(params.fieldValues ?? {}) };
   await withDbWrite(async (txn) => {
     if (params.docId) {
       const owned = rowsToObjects(
@@ -337,6 +338,10 @@ export async function saveDoc(params: {
       if (!owned.length) throw new Error("문서를 찾을 수 없습니다.");
       if (String(owned[0].drafter_user_id) !== params.actorUserId) throw new Error("본인 기안만 수정할 수 있습니다.");
       if (!["draft", "rejected"].includes(String(owned[0].status))) throw new Error("작성중/반려 문서만 수정할 수 있습니다.");
+    }
+    // 견적 재견적(269) — 같은 용역 건의 상신된 버전 max+1 을 저장마다 재계산해 기안 시 자동 버전업
+    if (params.formId === QUOTE_FORM_ID && typeof fieldValues.quote_root_doc_id === "string" && fieldValues.quote_root_doc_id) {
+      fieldValues.quote_version = await resolveQuoteVersion(txn, fieldValues.quote_root_doc_id, docId);
     }
     await txn.run(
       `INSERT INTO approval_docs
@@ -363,7 +368,7 @@ export async function saveDoc(params: {
         drafter.position,
         drafter.deptId,
         drafter.deptName,
-        JSON.stringify(params.fieldValues ?? {}),
+        JSON.stringify(fieldValues),
         params.refDocId ?? null,
         now,
       ]

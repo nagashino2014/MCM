@@ -251,6 +251,36 @@ export interface QuoteFieldValues {
   situation?: SituationEntry[];
   attachments_list?: { name: string; key: string; size: number }[];
   sales_project_id?: string;
+  // ── 버전 관리(재견적, 269 · 2026-10-01) — 원본 견적에는 없고 재견적 문서에만 채워진다 ──
+  quote_root_doc_id?: string; // 같은 용역 건의 원본 견적 doc_id
+  revision_of_doc_id?: string; // 복사해 온 직전 버전 doc_id
+  quote_version?: number; // 저장 시 서버가 확정(상신된 버전 max+1)
+  revision_reason?: QuoteRevisionReason; // 재견적 사유(필수)
+  prev_total_amount?: number; // 직전 버전 제출 견적가 합계
+}
+
+/** 재견적 사유 — 금액변동 태그 옆의 부연 태그(사용자 확정 3종) */
+export const QUOTE_REVISION_REASONS = [
+  { code: "scope_up", label: "용역 범위 증가" },
+  { code: "scope_down", label: "용역 범위 축소" },
+  { code: "nego", label: "네고 요청" },
+] as const;
+export type QuoteRevisionReason = (typeof QUOTE_REVISION_REASONS)[number]["code"];
+export const QUOTE_REVISION_REASON_LABEL: Record<string, string> = Object.fromEntries(QUOTE_REVISION_REASONS.map((r) => [r.code, r.label]));
+
+/** 견적 이력 행(/api/quotes/revisions) — 상신된 버전(draft 제외) */
+export interface QuoteRevisionItem {
+  docId: string;
+  version: number;
+  quoteNo: string | null;
+  status: string; // approval_docs.status
+  submittedAt: string | null;
+  sentAt: string | null; // 발송 완료 시각(quotations.sent_at)
+  issueDate: string | null;
+  drafterName: string | null;
+  totalAmount: number;
+  prevTotalAmount: number | null;
+  revisionReason: string | null;
 }
 
 /** 총괄 견적서 시트 생성 기준 — 허가 대상 사업장 4개 이상 (사용자 확정) */
@@ -390,5 +420,10 @@ export interface QuotationRow {
   resultAmount?: number | null;
   resultReason?: string | null;
   contractId?: string | null;
+  // 버전 관리(269)
+  rootDocId?: string | null;
+  version?: number;
+  revisionReason?: string | null;
+  prevTotalAmount?: number | null;
   createdAt: string;
 }

@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  BookmarkPlus, Calculator, Copy, Eye, FileText, Plus, Save, Send, Settings2, Trash2, Users, X,
+  BookmarkPlus, Calculator, Copy, Eye, FileText, History, Plus, Save, Send, Settings2, Trash2, Users, X,
 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
@@ -22,6 +22,8 @@ import type { LetterRecipient } from "@/lib/letter/types";
 import {
   DEFAULT_MD_GRADES,
   QUOTE_FORM_ID,
+  QUOTE_REVISION_REASONS,
+  QUOTE_REVISION_REASON_LABEL,
   QUOTE_SERVICE_OPTIONS,
   SUMMARY_SHEET_MIN_SITES,
   STANDARD_OVERHEAD_RATE,
@@ -38,6 +40,8 @@ import {
   type DirectCosts,
   type MdMatrixRow,
   type QuoteFieldValues,
+  type QuoteRevisionItem,
+  type QuoteRevisionReason,
   type QuoteSite,
   type QuoteWorkItem,
   type SituationEntry,
@@ -107,6 +111,8 @@ function emptySite(seq: number, subject: string): QuoteSite {
 }
 
 const won = (n: number) => Math.round(n).toLocaleString("ko-KR");
+const shortDate = (s: string | null | undefined) => (s ? s.slice(0, 10) : "-");
+const DOC_STATUS_LABEL: Record<string, string> = { approved: "승인", rejected: "반려", draft: "작성 중", withdrawn: "회수" };
 
 /** 이 사업장 라인의 등급 축 — 산정 당시 세트 스냅샷(가변, 143). 없으면 종전 4종 */
 function siteGrades(site: QuoteSite): string[] {
@@ -118,6 +124,7 @@ export function QuoteBoard() {
   const router = useRouter();
   const sp = useSearchParams();
   const editDocId = sp.get("docId");
+  const reviseDocId = sp.get("revise"); // 재견적 진입(269) — 이 용역 건의 최신 버전을 복사해 새 문서로 작성
 
   const [docId, setDocId] = useState<string | null>(editDocId);
   const [subject, setSubject] = useState("");
@@ -138,7 +145,7 @@ export function QuoteBoard() {
   const [orgModal, setOrgModal] = useState<OrgTarget | null>(null);
   const [facilityModal, setFacilityModal] = useState(false);
   const [busy, setBusy] = useState<"save" | "submit" | "preview" | null>(null);
-  const [loading, setLoading] = useState(!!editDocId);
+  const [loading, setLoading] = useState(!!editDocId || !!reviseDocId);
   const [docNo, setDocNo] = useState<string | null>(null);
   const [nextNo, setNextNo] = useState<string | null>(null);
   // 견적번호 직접 지정(관리자, 2026-09-30) — 공문의 '번호 직접 지정' 패턴 이식. 임시저장 시 번호를 선점하고
@@ -147,6 +154,11 @@ export function QuoteBoard() {
   const [manualOn, setManualOn] = useState(false);
   const [manualSeq, setManualSeq] = useState("");
   const [manualCheck, setManualCheck] = useState<{ available: boolean; usedBy: string | null } | null>(null);
+  // 재견적(버전 관리, 269) — rootDocId=원본, fromDocId=복사해 온 직전 버전, items=상신된 전 버전 이력.
+  // 원본 견적(새로 작성)은 null. 기안하면 서버가 상신된 버전 max+1 로 quote_version 을 확정한다.
+  const [revision, setRevision] = useState<{ rootDocId: string; fromDocId: string; items: QuoteRevisionItem[] } | null>(null);
+  const [revisionReason, setRevisionReason] = useState<QuoteRevisionReason | "">("");
+  const [prevTotalAmount, setPrevTotalAmount] = useState<number | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   // 재편집 문서의 상태·반려 사유·삭제 권한(서버 판정) — 반려 배너와 기안 삭제 버튼 노출용.
@@ -267,6 +279,21 @@ export function QuoteBoard() {
           setPriceInputs(Object.fromEntries(v.sites.map((s) => [s.siteSeq, s.amounts.final ? String(s.amounts.final) : ""])));
         }
         setSituation(Array.isArray(v.situation) ? v.situation : []);
+        // 재편집 중인 문서가 재견적이면 이력·사유·직전 금액을 복원한다
+        if (v.quote_root_doc_id) {
+          setRevisionReason(v.revision_reason ?? "");
+          setPrevTotalAmount(v.prev_total_amount ?? null);
+          const rootId = v.quote_root_doc_id;
+          const fromId = v.revision_of_doc_id ?? rootId;
+          fetch(`/api/quotes/revisions?docId=${encodeURIComponent(rootId)}`, { cache: "no-store" })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((rv) => {
+              if (cancelled) return;
+              const items: QuoteRevisionItem[] = Array.isArray(rv?.items) ? rv.items.filter((it: QuoteRevisionItem) => it.docId !== editDocId) : [];
+              setRevision({ rootDocId: rootId, fromDocId: fromId, items });
+            })
+            .catch(() => {});
+        }
         setLine(
           (d.steps ?? []).map((s: { stepType: string; assigneeUserId: string; assigneeName: string | null; assigneePosition: string | null }) => ({
             stepType: s.stepType === "agree" ? "agree" : "approve",
@@ -292,6 +319,64 @@ export function QuoteBoard() {
       cancelled = true;
     };
   }, [editDocId]);
+
+  // 재견적 진입 — 이력에서 최신 버전을 골라 그 문서의 내용·결재선을 새 문서(docId 없음)로 복사한다.
+  // 견적일은 오늘, 견적번호는 새로 채번. 직전 버전 금액은 '금액변동' 태그의 기준이 된다.
+  useEffect(() => {
+    if (!reviseDocId || editDocId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const rv = await fetch(`/api/quotes/revisions?docId=${encodeURIComponent(reviseDocId)}`, { cache: "no-store" });
+        const rvData = await rv.json();
+        if (!rv.ok) throw new Error(rvData?.error ?? "견적 이력을 불러오지 못했습니다.");
+        const items: QuoteRevisionItem[] = Array.isArray(rvData.items) ? rvData.items : [];
+        const latest = items.length ? items[items.length - 1].docId : reviseDocId;
+        const res = await fetch(`/api/approval/docs/${encodeURIComponent(latest)}`, { cache: "no-store" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error ?? "견적서를 불러오지 못했습니다.");
+        if (cancelled) return;
+        const d = data.doc;
+        const v = (d.fieldValues ?? {}) as Partial<QuoteFieldValues>;
+        setSubject(d.title ?? "");
+        if (v.service_type) setServiceType(v.service_type);
+        if (v.service_subtype) setServiceSubtype(v.service_subtype);
+        if (v.send_mode) setSendMode(v.send_mode);
+        setRecipients(Array.isArray(v.recipients) ? (v.recipients as LetterRecipient[]) : []);
+        setCcRefs(Array.isArray(v.cc_refs) ? (v.cc_refs as LetterRecipient[]) : []);
+        const copiedSites = Array.isArray(v.sites) ? v.sites : [];
+        if (copiedSites.length) {
+          setSites(copiedSites);
+          setPriceInputs(Object.fromEntries(copiedSites.map((s) => [s.siteSeq, s.amounts.final ? String(s.amounts.final) : ""])));
+        }
+        setSituation(Array.isArray(v.situation) ? v.situation : []);
+        setLine(
+          (d.steps ?? []).map((s: { stepType: string; assigneeUserId: string; assigneeName: string | null; assigneePosition: string | null }) => ({
+            stepType: s.stepType === "agree" ? "agree" : "approve",
+            assigneeUserId: s.assigneeUserId,
+            assigneeName: s.assigneeName ?? "",
+            assigneePosition: s.assigneePosition,
+          }))
+        );
+        setWatchers(
+          (d.watchers ?? []).map((w: { userId: string; name: string | null; kind: string }) => ({
+            userId: w.userId,
+            name: w.name ?? "",
+            kind: w.kind === "view" ? "view" : "ref",
+          }))
+        );
+        setPrevTotalAmount(copiedSites.reduce((acc, s) => acc + (Number(s?.amounts?.final) || 0), 0));
+        setRevision({ rootDocId: String(rvData.rootDocId ?? reviseDocId), fromDocId: latest, items });
+      } catch (err) {
+        alert((err as Error).message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [reviseDocId, editDocId]);
 
   const applyPreset = (p: LinePreset) => {
     setLine(p.steps.map((s) => ({ stepType: s.stepType === "agree" ? "agree" : "approve", assigneeUserId: s.assigneeUserId, assigneeName: s.assigneeName ?? "", assigneePosition: s.assigneePosition })));
@@ -436,6 +521,10 @@ export function QuoteBoard() {
     return () => clearTimeout(timer);
   }, [manualOn, manualNo, serviceType, docId]);
 
+  // 재견적 표시값 — 다음 버전(이력 max+1, 확정은 서버)·현재 합계(금액변동 태그의 우변)
+  const nextVersion = revision ? Math.max(1, ...revision.items.map((it) => it.version)) + 1 : 1;
+  const currentTotal = sites.reduce((a, s) => a + (s.amounts.final || 0), 0);
+
   const buildFieldValues = useCallback((): QuoteFieldValues => {
     const totalFinal = sites.reduce((a, s) => a + (s.amounts.final || 0), 0);
     return {
@@ -450,13 +539,23 @@ export function QuoteBoard() {
       contact_mobile: contactMobile || undefined,
       sites,
       situation: situation.length ? situation : undefined,
+      // 재견적(269) — 원본 견적에는 넣지 않는다
+      ...(revision
+        ? {
+            quote_root_doc_id: revision.rootDocId,
+            revision_of_doc_id: revision.fromDocId,
+            quote_version: nextVersion,
+            revision_reason: revisionReason || undefined,
+            prev_total_amount: prevTotalAmount ?? undefined,
+          }
+        : {}),
       // 양식별 조회 표시용
       ...( {
         recipients_display: recipients.map((r) => r.name).join(", "),
         quote_summary_display: `${serviceSubtype} · ${sites.length}개 사업장 · ${won(totalFinal)}원`,
       } as Partial<QuoteFieldValues>),
     };
-  }, [subject, serviceType, serviceSubtype, sendMode, recipients, ccRefs, issueDate, contactEmail, contactMobile, sites, situation]);
+  }, [subject, serviceType, serviceSubtype, sendMode, recipients, ccRefs, issueDate, contactEmail, contactMobile, sites, situation, revision, nextVersion, revisionReason, prevTotalAmount]);
 
   const persist = useCallback(
     // docIdOverride: save 직후 submit — setDocId 비동기로 인한 이중 문서·채번 이중 소모 방지(공문 실사고 교훈)
@@ -493,6 +592,7 @@ export function QuoteBoard() {
       if (!parseQuoteNo(manualNo)) return "견적번호 일련번호를 1~4자리 숫자로 입력하세요(예: 0012).";
       if (manualCheck && !manualCheck.available) return `이미 사용 중인 견적번호입니다 — ${manualCheck.usedBy}`;
     }
+    if (revision && !revisionReason) return "재견적 사유를 선택하세요(화면 하단 '재견적 사유' 카드).";
     if (recipients.length === 0) return "수신처(사업장/기관)를 1건 이상 지정하세요.";
     if (sendMode === "mail" && !ccRefs.some((r) => (r.email ?? "").includes("@")))
       return "메일 발송 모드는 참조 담당자에 메일주소가 1건 이상 필요합니다(발송 안 함 모드로 바꾸거나 참조자를 추가하세요).";
@@ -511,7 +611,7 @@ export function QuoteBoard() {
     }
     if (line.length === 0) return "결재선에 결재자를 1명 이상 추가하세요.";
     return null;
-  }, [subject, issueDate, manualOn, noLocked, manualNo, manualCheck, recipients, ccRefs, sendMode, sites, line]);
+  }, [subject, issueDate, manualOn, noLocked, manualNo, manualCheck, revision, revisionReason, recipients, ccRefs, sendMode, sites, line]);
 
   const openPreview = useCallback(async () => {
     setBusy("preview");
@@ -583,6 +683,48 @@ export function QuoteBoard() {
           <div className="flex flex-col xl:flex-row gap-5 items-start">
             {/* 좌: 기본정보 + 사업장 탭 — 폭은 공문 작성(1032px, 전자결재 작성 양식 273mm)과 동일 */}
             <div className="flex-1 min-w-0 max-w-[1032px] flex flex-col gap-4 w-full">
+              {/* 견적 이력(재견적, 269) — 같은 용역 건의 상신된 버전 + 지금 작성 중인 버전. 금액변동·사유 태그 */}
+              {revision && (
+                <div className="cd-card rounded-3xl p-5 flex flex-col gap-2.5">
+                  <h3 className="font-bold cd-text text-sm flex items-center gap-2">
+                    <History className="w-4 h-4 cd-text-primary" /> 견적 이력
+                    <span className="text-[10.5px] font-normal cd-text-faint">같은 용역 건의 견적 버전 — 기안하면 v{nextVersion}으로 등록됩니다</span>
+                  </h3>
+                  <ul className="rounded-xl border cd-border-c overflow-hidden">
+                    {revision.items.map((it) => (
+                      <li key={it.docId} className="flex items-center gap-3 px-3 py-2 text-[12px] border-b cd-border-c flex-wrap">
+                        <span className="font-mono font-semibold cd-text w-7">v{it.version}</span>
+                        <span className="font-mono text-[11px] cd-text-faint">{it.quoteNo ?? "-"}</span>
+                        <span className="cd-text-faint">발송일 {shortDate(it.sentAt ?? it.issueDate ?? it.submittedAt)}</span>
+                        <span className="cd-text">{it.drafterName ?? "-"}</span>
+                        <span className="text-[10.5px] rounded-full px-2 py-0.5 border cd-border-c cd-text-faint">{DOC_STATUS_LABEL[it.status] ?? "결재 중"}</span>
+                        <span className="ml-auto flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10.5px] rounded-full px-2 py-0.5 border cd-border-c cd-text tabular-nums">
+                            {it.prevTotalAmount != null ? `금액변동 : ${won(it.prevTotalAmount)}원 → ${won(it.totalAmount)}원` : `최초 견적 ${won(it.totalAmount)}원`}
+                          </span>
+                          {it.revisionReason && (
+                            <span className="text-[10.5px] rounded-full px-2 py-0.5 cd-tint-primary">{QUOTE_REVISION_REASON_LABEL[it.revisionReason] ?? it.revisionReason}</span>
+                          )}
+                        </span>
+                      </li>
+                    ))}
+                    <li className="flex items-center gap-3 px-3 py-2 text-[12px] flex-wrap cd-tint-primary/40">
+                      <span className="font-mono font-semibold cd-text-primary w-7">v{nextVersion}</span>
+                      <span className="cd-text-faint">작성 중 · 견적일 {issueDate}</span>
+                      <span className="ml-auto flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[10.5px] rounded-full px-2 py-0.5 border cd-border-c cd-text tabular-nums">
+                          금액변동 : {won(prevTotalAmount ?? 0)}원 → {won(currentTotal)}원
+                        </span>
+                        {revisionReason ? (
+                          <span className="text-[10.5px] rounded-full px-2 py-0.5 cd-tint-primary">{QUOTE_REVISION_REASON_LABEL[revisionReason]}</span>
+                        ) : (
+                          <span className="text-[10.5px] rounded-full px-2 py-0.5 border border-[color:var(--cd-danger,#FA896B)] text-[color:var(--cd-danger,#FA896B)]">사유 미선택</span>
+                        )}
+                      </span>
+                    </li>
+                  </ul>
+                </div>
+              )}
               {/* 기본정보 */}
               <div className="cd-card rounded-3xl p-5 flex flex-col gap-3.5">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -1034,8 +1176,10 @@ export function QuoteBoard() {
                 )}
               </div>
 
+              {/* 하단: 상황 변수(절반) + 재견적 사유(절반, 2026-10-01) */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* 상황 변수 (건별 상황 조정 레이어 — 내부 기록용, 문서에 표기되지 않음) */}
-              <div className="cd-card rounded-3xl p-5 flex flex-col gap-2.5">
+              <div className="cd-card rounded-3xl p-5 flex flex-col gap-2.5 min-w-0">
                 <h3 className="font-bold cd-text text-sm flex items-center gap-2">
                   <Copy className="w-4 h-4 cd-text-primary" /> 상황 변수
                   <span className="text-[10.5px] font-normal cd-text-faint">가격 결정 배경 기록(내부용) — 수주율 분석의 원료가 됩니다</span>
@@ -1064,6 +1208,34 @@ export function QuoteBoard() {
                 <button type="button" className="cd-btn rounded-lg border border-dashed cd-border-c px-3 py-1.5 text-[11.5px] cd-text-faint self-start" onClick={() => setSituation((prev) => [...prev, { code: rateData?.situationCodes?.[0]?.code ?? "nego", scope: "doc" }])}>
                   ＋ 상황 변수 추가
                 </button>
+              </div>
+
+              {/* 재견적 사유 — 재견적 작성 시에만 활성화. 견적 이력의 부연 태그(용역 범위 증가/축소·네고 요청) */}
+              <div className="cd-card rounded-3xl p-5 flex flex-col gap-2.5 min-w-0">
+                <h3 className="font-bold cd-text text-sm flex items-center gap-2">
+                  <History className="w-4 h-4 cd-text-primary" /> 재견적 사유
+                  <span className="text-[10.5px] font-normal cd-text-faint">재견적 작성 시에만 활성화 — 견적 이력의 부연 태그로 표시</span>
+                </h3>
+                <select
+                  className="cd-select"
+                  value={revisionReason}
+                  disabled={!revision}
+                  onChange={(e) => setRevisionReason(e.target.value as QuoteRevisionReason | "")}
+                  aria-label="재견적 사유"
+                >
+                  <option value="">{revision ? "사유 선택(필수)" : "원본 견적 — 해당 없음"}</option>
+                  {QUOTE_REVISION_REASONS.map((r) => (
+                    <option key={r.code} value={r.code}>{r.label}</option>
+                  ))}
+                </select>
+                {revision ? (
+                  <span className="text-[11px] cd-text-faint tabular-nums">
+                    금액변동 : {won(prevTotalAmount ?? 0)}원 → {won(currentTotal)}원 (v{Math.max(1, ...revision.items.map((it) => it.version))} 대비)
+                  </span>
+                ) : (
+                  <span className="text-[11px] cd-text-faint">문서함 › 발송견적 탭의 [재견적] 버튼으로 진입한 문서에서만 선택합니다.</span>
+                )}
+              </div>
               </div>
             </div>
 

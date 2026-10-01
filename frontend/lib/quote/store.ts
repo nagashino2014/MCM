@@ -13,6 +13,7 @@ import {
   type QuoteFieldValues,
   type QuoteRecipient,
   type QuoteResult,
+  type QuoteRevisionItem,
   type QuoteSendStatus,
   type QuotationRow,
   type SituationEntry,
@@ -107,8 +108,80 @@ function mapRow(r: Record<string, unknown>): QuotationRow {
     resultAmount: r.result_amount != null ? Number(r.result_amount) : null,
     resultReason: r.result_reason != null ? String(r.result_reason) : null,
     contractId: r.contract_id != null ? String(r.contract_id) : null,
+    rootDocId: r.root_doc_id != null ? String(r.root_doc_id) : null,
+    version: r.version != null ? Number(r.version) : 1,
+    revisionReason: r.revision_reason != null ? String(r.revision_reason) : null,
+    prevTotalAmount: r.prev_total_amount != null ? Number(r.prev_total_amount) : null,
     createdAt: String(r.created_at ?? ""),
   };
+}
+
+// ── 버전 관리(재견적, 269) ──
+
+const QUOTE_GROUP_WHERE = `d.form_id = $1 AND (d.doc_id = $2 OR d.field_values->>'quote_root_doc_id' = $2)`;
+
+/** 아무 버전의 doc_id → 그 용역 건의 원본 doc_id. 견적 문서가 아니면 null */
+export async function resolveQuoteRootDocId(docId: string): Promise<string | null> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(`SELECT doc_id, field_values->>'quote_root_doc_id' AS root FROM approval_docs WHERE doc_id = $1 AND form_id = $2`, [docId, QUOTE_FORM_ID])
+  );
+  if (!rows.length) return null;
+  return rows[0].root != null && String(rows[0].root) ? String(rows[0].root) : String(rows[0].doc_id);
+}
+
+/**
+ * 저장 시 버전 확정 — 같은 용역 건에서 이미 상신된 버전(draft 제외)의 최대값 + 1.
+ * 원본은 암묵적으로 1. 임시저장마다 재계산하므로 상신 시점의 값이 곧 확정 버전이 된다(기안 = 자동 버전업).
+ */
+export async function resolveQuoteVersion(txn: PgDatabase, rootDocId: string, excludeDocId: string): Promise<number> {
+  const rows = rowsToObjects(
+    await txn.exec(
+      `SELECT COALESCE(MAX(COALESCE((d.field_values->>'quote_version')::int, 1)), 1) AS v
+         FROM approval_docs d
+        WHERE ${QUOTE_GROUP_WHERE} AND d.doc_id <> $3 AND d.status <> 'draft'`,
+      [QUOTE_FORM_ID, rootDocId, excludeDocId]
+    )
+  );
+  return Number(rows[0]?.v ?? 1) + 1;
+}
+
+/** 용역 건의 상신된 전 버전 목록(버전 오름차순). 발송 시각·견적번호는 대장(quotations)에서 보강 */
+export async function listQuoteRevisions(rootDocId: string): Promise<QuoteRevisionItem[]> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT d.doc_id, d.doc_no, d.status, d.submitted_at, d.drafter_name, d.field_values,
+              q.sent_at, q.issue_date, q.total_amount
+         FROM approval_docs d LEFT JOIN quotations q ON q.doc_id = d.doc_id
+        WHERE ${QUOTE_GROUP_WHERE} AND d.status <> 'draft'`,
+      [QUOTE_FORM_ID, rootDocId]
+    )
+  );
+  const items = rows.map((r) => {
+    let v: Partial<QuoteFieldValues> = {};
+    try {
+      v = typeof r.field_values === "string" ? JSON.parse(String(r.field_values)) : ((r.field_values ?? {}) as Partial<QuoteFieldValues>);
+    } catch {
+      v = {};
+    }
+    const sites = Array.isArray(v.sites) ? v.sites : [];
+    const total = r.total_amount != null ? Number(r.total_amount) : sites.reduce((acc, s) => acc + (Number(s?.amounts?.final) || 0), 0);
+    return {
+      docId: String(r.doc_id),
+      version: Number(v.quote_version ?? 1) || 1,
+      quoteNo: r.doc_no != null ? String(r.doc_no) : null,
+      status: String(r.status ?? ""),
+      submittedAt: r.submitted_at != null ? String(r.submitted_at) : null,
+      sentAt: r.sent_at != null ? String(r.sent_at) : null,
+      issueDate: r.issue_date != null ? String(r.issue_date) : (v.issue_date ?? null),
+      drafterName: r.drafter_name != null ? String(r.drafter_name) : null,
+      totalAmount: Math.round(total),
+      prevTotalAmount: v.prev_total_amount != null ? Number(v.prev_total_amount) : null,
+      revisionReason: v.revision_reason ?? null,
+    } satisfies QuoteRevisionItem;
+  });
+  return items.sort((a, b) => a.version - b.version || (a.submittedAt ?? "").localeCompare(b.submittedAt ?? ""));
 }
 
 /** 견적일 + 1개월 (유효기간 고정 정책의 계산값) */
@@ -149,9 +222,15 @@ export async function markQuotePendingOnApproval(txn: PgDatabase, docId: string)
     await txn.exec(
       `INSERT INTO quotations
          (quote_id, doc_id, quote_no, year, title, service_type, service_subtype, recipients, cc_refs,
-          drafter_name, issue_date, valid_until, total_amount, send_mode, situation, send_status, sales_project_id, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10, $11, $12, $13, $14, $15::jsonb, 'pending', $16, $17, $17)
+          drafter_name, issue_date, valid_until, total_amount, send_mode, situation, send_status, sales_project_id, created_at, updated_at,
+          root_doc_id, version, revision_reason, prev_total_amount)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10, $11, $12, $13, $14, $15::jsonb, 'pending', $16, $17, $17,
+               $18, $19, $20, $21)
        ON CONFLICT (doc_id) DO UPDATE SET
+         root_doc_id = EXCLUDED.root_doc_id,
+         version = EXCLUDED.version,
+         revision_reason = EXCLUDED.revision_reason,
+         prev_total_amount = EXCLUDED.prev_total_amount,
          quote_no = EXCLUDED.quote_no,
          title = EXCLUDED.title,
          service_type = EXCLUDED.service_type,
@@ -184,6 +263,11 @@ export async function markQuotePendingOnApproval(txn: PgDatabase, docId: string)
         JSON.stringify(values.situation ?? []),
         values.sales_project_id != null ? String(values.sales_project_id) : null,
         now,
+        // 버전 관리(269) — 원본은 root = 자기 자신, version 1
+        values.quote_root_doc_id ? String(values.quote_root_doc_id) : docId,
+        Number(values.quote_version ?? 1) || 1,
+        values.revision_reason ?? null,
+        values.prev_total_amount != null ? Math.round(Number(values.prev_total_amount)) : null,
       ]
     )
   );

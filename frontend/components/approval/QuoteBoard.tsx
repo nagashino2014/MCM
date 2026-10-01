@@ -61,6 +61,7 @@ interface LineStep {
 interface Watcher {
   userId: string;
   name: string;
+  position?: string | null; // 직함 — 결재선 태그와 같은 표기(2026-10-01)
   kind: "ref" | "view";
 }
 interface LinePreset {
@@ -303,9 +304,10 @@ export function QuoteBoard() {
           }))
         );
         setWatchers(
-          (d.watchers ?? []).map((w: { userId: string; name: string | null; kind: string }) => ({
+          (d.watchers ?? []).map((w: { userId: string; name: string | null; position?: string | null; kind: string }) => ({
             userId: w.userId,
             name: w.name ?? "",
+            position: w.position ?? null,
             kind: w.kind === "view" ? "view" : "ref",
           }))
         );
@@ -359,9 +361,10 @@ export function QuoteBoard() {
           }))
         );
         setWatchers(
-          (d.watchers ?? []).map((w: { userId: string; name: string | null; kind: string }) => ({
+          (d.watchers ?? []).map((w: { userId: string; name: string | null; position?: string | null; kind: string }) => ({
             userId: w.userId,
             name: w.name ?? "",
+            position: w.position ?? null,
             kind: w.kind === "view" ? "view" : "ref",
           }))
         );
@@ -912,7 +915,20 @@ export function QuoteBoard() {
                       </div>
                       <div className="md:col-span-2 flex flex-col gap-1">
                         <span className="text-[11px] cd-text-faint">사업장별 건명(견적서 시트 표기)</span>
-                        <input className="cd-input text-sm" value={site.subjectLine} onChange={(e) => updateSite(activeSite, { subjectLine: e.target.value })} placeholder={subject || "예: OO공장 통합환경허가 취득 용역"} />
+                        <input
+                          className="cd-input text-sm"
+                          value={site.subjectLine}
+                          onChange={(e) => updateSite(activeSite, { subjectLine: e.target.value })}
+                          placeholder={subject || "예: OO공장 통합환경허가 취득 용역"}
+                          title={subject && !site.subjectLine ? "→ 키를 누르면 기본 정보 건명이 입력됩니다" : undefined}
+                          onKeyDown={(e) => {
+                            // 자동완성처럼 보이던 placeholder(기본 정보 건명)를 → 키로 실제 값으로 채운다(2026-10-01 사용자 요청)
+                            if (e.key === "ArrowRight" && !site.subjectLine && subject) {
+                              e.preventDefault();
+                              updateSite(activeSite, { subjectLine: subject });
+                            }
+                          }}
+                        />
                       </div>
                     </div>
 
@@ -1292,12 +1308,16 @@ export function QuoteBoard() {
                   <p className="text-[11px] cd-text-faint">필요 시 사내 참조/열람자를 지정하세요(선택).</p>
                 ) : (
                   watchers.map((w, i) => (
-                    <div key={`${w.userId}-${i}`} className="rounded-xl border cd-border-c px-3 py-1.5 flex items-center gap-2">
-                      <select className="cd-select" style={{ width: 66 }} value={w.kind} onChange={(e) => setWatchers((prev) => prev.map((x, xi) => (xi === i ? { ...x, kind: e.target.value as "ref" | "view" } : x)))}>
+                    <div key={`${w.userId}-${i}`} className="rounded-xl border cd-border-c px-3 py-2 flex items-center gap-2">
+                      <span className="text-[10px] font-mono cd-text-faint w-4">{i + 1}</span>
+                      <select className="cd-select" style={{ width: 70 }} value={w.kind} onChange={(e) => setWatchers((prev) => prev.map((x, xi) => (xi === i ? { ...x, kind: e.target.value as "ref" | "view" } : x)))}>
                         <option value="ref">참조</option>
                         <option value="view">열람</option>
                       </select>
-                      <span className="text-[12px] cd-text truncate flex-1">{w.name}</span>
+                      <span className="text-[12.5px] cd-text truncate flex-1">
+                        {w.name}
+                        {w.position ? <span className="cd-text-faint text-[11px]"> {w.position}</span> : null}
+                      </span>
                       <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" title="제거" onClick={() => setWatchers((prev) => prev.filter((_, xi) => xi !== i))}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -1373,7 +1393,7 @@ export function QuoteBoard() {
           }
           const userId = emp.userId;
           if (orgModal === "ref") {
-            setWatchers((prev) => (prev.some((w) => w.userId === userId) ? prev : [...prev, { userId, name: emp.name, kind: "ref" }]));
+            setWatchers((prev) => (prev.some((w) => w.userId === userId) ? prev : [...prev, { userId, name: emp.name, position: emp.positionName, kind: "ref" }]));
           } else {
             setLine((prev) =>
               prev.some((s) => s.assigneeUserId === userId)

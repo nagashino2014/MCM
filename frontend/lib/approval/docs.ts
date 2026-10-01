@@ -130,6 +130,8 @@ export interface RefDocLite {
 export interface ApprovalWatcher {
   userId: string;
   name: string | null;
+  /** 현재 직급명(조회 시 positions 조인 — 저장 스냅샷 아님). 작성 화면의 결재선과 같은 표기용 */
+  position: string | null;
   kind: string; // ref | view
 }
 
@@ -969,10 +971,11 @@ export async function getDoc(docId: string): Promise<ApprovalDocDetail | null> {
   );
   const watcherRows = rowsToObjects(
     await db.exec(
-      `SELECT w.user_id, w.kind, COALESCE(ep.name, u.email) AS name
+      `SELECT w.user_id, w.kind, COALESCE(ep.name, u.email) AS name, p.position_name
          FROM approval_watchers w
          LEFT JOIN users u ON u.user_id = w.user_id
          LEFT JOIN employee_profiles ep ON ep.employee_id = u.employee_id
+         LEFT JOIN positions p ON p.position_id = ep.position_id
         WHERE w.doc_id = $1`,
       [docId]
     )
@@ -1004,6 +1007,7 @@ export async function getDoc(docId: string): Promise<ApprovalDocDetail | null> {
     watchers: watcherRows.map((w) => ({
       userId: String(w.user_id ?? ""),
       name: w.name != null ? String(w.name) : null,
+      position: w.position_name != null ? String(w.position_name) : null,
       kind: String(w.kind ?? "ref"),
     })),
     refDoc,

@@ -4,12 +4,15 @@
 // 흐름: 기본정보(용역 분류→기준 세트 로드·발송 모드)·수신처(사업장)/참조(메일 To) →
 // 사업장 탭별 [제출 견적가 입력 → MD 역산(0.5 스냅·합계-견적가 제약)] + 요율·상황 변수 조정 →
 // PDF 미리보기 → 전자결재 상신(persist docIdOverride — 이중 채번 방지 패턴 유지, 공문 실사고 교훈).
+// 복수 업무(2026-10-01): 세분류 '복수 업무'는 기준 세트 대신 사업장별 구성 업무(세분류×횟수) 태그와
+// 업무 항목 트리(수동 입력 또는 산출내역서 엑셀 자동 분석)를 역산 기준으로 쓴다.
+// 사업장 전용 기준 세트(270): 수신처 사업장에 전용 세트가 있으면 표준 세트 대신 적용(전환 가능).
 // 결재선 패널·수신처 픽커는 ApprovalLetterBoard 의 것을 재사용/이식했다.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  BookmarkPlus, Calculator, Copy, Eye, FileText, History, Plus, Save, Send, Settings2, Trash2, Users, X,
+  BookmarkPlus, Building2, Calculator, Copy, Eye, FileSpreadsheet, FileText, History, ListPlus, Plus, Save, Send, Settings2, Trash2, Users, X,
 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
@@ -17,12 +20,15 @@ import { AutosaveStatus, useAutosave } from "@/components/approval/useAutosave";
 import { CdDateInput, isValidDateString } from "@/components/cdash/CdField";
 import { AmountInput } from "@/components/ui/AmountInput";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
+import { QuoteItemTreeEditor } from "@/components/approval/QuoteItemTreeEditor";
 import { FacilityRecipientPicker, QuickFacilityModal, RecipientPicker } from "@/components/approval/ApprovalLetterBoard";
 import { DeleteDraftButton, RejectedBanner, toEditDocMeta, type EditDocMeta } from "@/components/approval/DraftEditNotice";
 import type { LetterRecipient } from "@/lib/letter/types";
 import {
   DEFAULT_MD_GRADES,
   QUOTE_FORM_ID,
+  QUOTE_MULTI_SUBTYPE,
+  QUOTE_MULTI_WORK_MAX,
   QUOTE_REVISION_REASONS,
   QUOTE_REVISION_REASON_LABEL,
   QUOTE_SERVICE_OPTIONS,
@@ -33,18 +39,22 @@ import {
   formatQuoteNo,
   mdSnapUnit,
   parseQuoteNo,
+  sortGrades,
   printCostOf,
   quoteNoLabel,
   sumOverCap,
   travelCostOf,
   travelTripsOf,
+  treeRowsToWorkItems,
   type DirectCosts,
   type MdMatrixRow,
   type QuoteFieldValues,
   type QuoteRevisionItem,
   type QuoteRevisionReason,
   type QuoteSite,
+  type QuoteTreeRow,
   type QuoteWorkItem,
+  type QuoteWorkTag,
   type SituationEntry,
 } from "@/lib/quote/types";
 import { computeAmounts, gradeTotals, matrixLaborCost, mdVectorTotal, reverseAllocate, validateSumConstraint } from "@/lib/quote/rates";
@@ -73,21 +83,24 @@ interface LinePreset {
 }
 type OrgTarget = "approve" | "ref";
 
+interface RateSet {
+  setId: string;
+  version: number;
+  overheadRate: number;
+  techFeeRate: number;
+  directExpenseRate: number;
+  marketAdjust: number;
+  /** 세트별 기술등급 축(가변, 143) */
+  grades?: string[];
+  remarksTemplate: string;
+  items: QuoteWorkItem[];
+  factors: { factorKey: string; label: string; unit: string }[];
+  bands: { factorKey: string; minVal: number; maxVal: number | null; coef: number }[];
+}
 interface RateSetData {
-  set: {
-    setId: string;
-    version: number;
-    overheadRate: number;
-    techFeeRate: number;
-    directExpenseRate: number;
-    marketAdjust: number;
-    /** 세트별 기술등급 축(가변, 143) */
-    grades?: string[];
-    remarksTemplate: string;
-    items: QuoteWorkItem[];
-    factors: { factorKey: string; label: string; unit: string }[];
-    bands: { factorKey: string; minVal: number; maxVal: number | null; coef: number }[];
-  } | null;
+  set: RateSet | null; // 표준 세트
+  /** 수신처 사업장 전용 세트(270) — 있으면 표준 대신 적용할 수 있다 */
+  facilitySet?: (RateSet & { facilityId: string; facilityName: string }) | null;
   laborRates: Record<string, number>;
   laborYear: string;
   situationCodes: { code: string; label: string }[];
@@ -115,6 +128,16 @@ function emptySite(seq: number, subject: string): QuoteSite {
 const won = (n: number) => Math.round(n).toLocaleString("ko-KR");
 const shortDate = (s: string | null | undefined) => (s ? s.slice(0, 10) : "-");
 const DOC_STATUS_LABEL: Record<string, string> = { approved: "승인", rejected: "반려", draft: "작성 중", withdrawn: "회수" };
+
+/** 업무 항목 트리(편집 행)의 등급별 기준 MD 합계 — 세부항목만 */
+function treeGradeTotals(rows: QuoteTreeRow[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const r of rows) {
+    if (r.isParent) continue;
+    for (const [g, v] of Object.entries(r.baseMd)) out[g] = Math.round(((out[g] ?? 0) + (v || 0)) * 1000) / 1000;
+  }
+  return out;
+}
 
 /** 이 사업장 라인의 등급 축 — 산정 당시 세트 스냅샷(가변, 143). 없으면 종전 4종 */
 function siteGrades(site: QuoteSite): string[] {
@@ -169,6 +192,13 @@ export function QuoteBoard() {
   // Mobile 입력란은 2026-09-30 삭제(사용자 요청) — 재편집 문서에 저장된 값이 있으면 그 값을 우선한다.
   const [contactEmail, setContactEmail] = useState("");
   const [contactMobile, setContactMobile] = useState("");
+  // 사업장 전용 기준 세트(270) 사용 여부 — 전용 세트가 있을 때만 의미가 있다(기본: 전용 우선)
+  const [useFacilitySet, setUseFacilitySet] = useState(true);
+  // 복수 업무 — 사업장별 항목 트리 편집기 펼침·자동 분석 진행·분석 메모
+  const [treeOpen, setTreeOpen] = useState<Record<number, boolean>>({});
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analysisNote, setAnalysisNote] = useState<Record<number, string>>({});
+  const breakdownFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetch("/api/mail/mailbox", { cache: "no-store" })
@@ -189,6 +219,14 @@ export function QuoteBoard() {
     () => SERVICE_OPTIONS.find((o) => o.type === serviceType)?.subtypes ?? [],
     [serviceType]
   );
+  const isMulti = serviceSubtype === QUOTE_MULTI_SUBTYPE;
+  // 수신처 사업장 — 전용 기준 세트 조회 키
+  const facilityIdsKey = useMemo(
+    () => [...new Set(recipients.map((r) => r.facilityId).filter((v): v is string => !!v))].join(","),
+    [recipients]
+  );
+  // 적용 세트 — 전용 세트가 있고 사용 중이면 전용, 아니면 표준
+  const activeSet: RateSet | null = (useFacilitySet && rateData?.facilitySet) || rateData?.set || null;
 
   // 채번 예정 번호 — 용역 대분류에 따라 5종 시퀀스 분기(확정은 상신 시)
   useEffect(() => {
@@ -204,29 +242,37 @@ export function QuoteBoard() {
   // 기준 세트 로드 — 세분류 변경 시. 세트 없으면 T3(자유 입력)로 동작(§5-2).
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/quotes/rate-set?serviceType=${encodeURIComponent(serviceType)}&serviceSubtype=${encodeURIComponent(serviceSubtype)}`, { cache: "no-store" })
+    const qs = new URLSearchParams({ serviceType, serviceSubtype });
+    if (facilityIdsKey) qs.set("facilityIds", facilityIdsKey);
+    fetch(`/api/quotes/rate-set?${qs.toString()}`, { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((d: RateSetData | null) => {
         if (cancelled || !d) return;
         setRateData(d);
+        const set = (useFacilitySet && d.facilitySet) || d.set;
+        const multi = serviceSubtype === QUOTE_MULTI_SUBTYPE;
         // 신규 작성 중 미산정 사이트에 세트 기본 요율·단가 반영
         setSites((prev) =>
           prev.map((s) =>
             s.amounts.final > 0
               ? s
+              : s.rates.setId === set?.setId && Object.keys(s.rates.laborRates).length > 0
+              ? // 수신처만 바뀐 재조회 등 적용 세트가 그대로면 조정해 둔 요율·등급은 두고 단가만 갱신한다
+                { ...s, rates: { ...s.rates, laborRates: d.laborRates, laborYear: d.laborYear }, remarks: s.remarks || (set?.remarksTemplate ?? "") }
               : {
                   ...s,
                   rates: {
-                    setId: d.set?.setId,
-                    setVersion: d.set?.version,
-                    overheadRate: d.set?.overheadRate ?? STANDARD_OVERHEAD_RATE,
-                    techFeeRate: d.set?.techFeeRate ?? STANDARD_TECH_FEE_RATE,
+                    setId: set?.setId,
+                    setVersion: set?.version,
+                    overheadRate: set?.overheadRate ?? STANDARD_OVERHEAD_RATE,
+                    techFeeRate: set?.techFeeRate ?? STANDARD_TECH_FEE_RATE,
                     directExpenseRate: 0, // 직접경비는 출장비·인쇄비 산식으로만 계산(2026-09-30) — 세트 요율 미적용
-                    grades: d.set?.grades?.length ? d.set.grades : [...DEFAULT_MD_GRADES],
+                    // 복수 업무는 세트가 없다 — 사업장별 항목 트리에서 정한 등급 축을 유지한다
+                    grades: multi && s.rates.grades?.length ? s.rates.grades : set?.grades?.length ? set.grades : [...DEFAULT_MD_GRADES],
                     laborRates: d.laborRates,
                     laborYear: d.laborYear,
                   },
-                  remarks: s.remarks || (d.set?.remarksTemplate ?? ""),
+                  remarks: s.remarks || (set?.remarksTemplate ?? ""),
                 }
           )
         );
@@ -235,7 +281,7 @@ export function QuoteBoard() {
     return () => {
       cancelled = true;
     };
-  }, [serviceType, serviceSubtype]);
+  }, [serviceType, serviceSubtype, facilityIdsKey, useFacilitySet]);
 
   // 결재선 프리셋
   useEffect(() => {
@@ -428,9 +474,22 @@ export function QuoteBoard() {
       const site = sites[idx];
       const price = Number(String(priceInputs[site.siteSeq] ?? "").replace(/[^\d]/g, ""));
       if (!price) return alert("제출 견적가를 입력하세요.");
-      const items = rateData?.set?.items ?? [];
-      if (!items.length) return alert("이 세분류는 산정 기준 세트가 없어 자유 입력(품목 직접 입력)으로 작성합니다.");
-      const rates = { ...site.rates, laborRates: rateData!.laborRates, laborYear: rateData!.laborYear };
+      // 복수 업무는 사업장별 항목 트리, 그 외는 적용 세트(전용 우선)의 항목이 역산 가중치의 원천
+      const items: QuoteWorkItem[] = isMulti ? treeRowsToWorkItems(site.customItems ?? [], `w${site.siteSeq}`) : activeSet?.items ?? [];
+      if (isMulti) {
+        if (!items.some((it) => Object.values(it.baseMd).some((v) => (v ?? 0) > 0)))
+          return alert("업무 항목이 없습니다. [항목 입력(수동)] 또는 [항목 입력(자동)]으로 항목과 등급별 MD를 먼저 입력하세요.");
+      } else if (!items.length) return alert("이 세분류는 산정 기준 세트가 없어 자유 입력(품목 직접 입력)으로 작성합니다.");
+      if (!rateData) return alert("노임단가를 불러오는 중입니다. 잠시 후 다시 시도하세요.");
+      const rates = {
+        ...site.rates,
+        // 산정에 쓴 기준의 스냅샷 — 복수 업무는 세트 없음(등급 축은 항목 트리 편집기에서 정한 값)
+        setId: isMulti ? undefined : activeSet?.setId,
+        setVersion: isMulti ? undefined : activeSet?.version,
+        grades: isMulti ? siteGrades(site) : activeSet?.grades?.length ? activeSet.grades : siteGrades(site),
+        laborRates: rateData.laborRates,
+        laborYear: rateData.laborYear,
+      };
       const fixedDirect = fixedDirectExpense(site.directCosts);
       if (fixedDirect >= price) return alert("직접경비(출장비+인쇄비)가 제출 견적가 이상입니다. 견적가 또는 산식 입력값을 확인하세요.");
       const res = reverseAllocate({ price, items, rates, fixedDirect });
@@ -442,7 +501,99 @@ export function QuoteBoard() {
       });
       if (!res.ok) alert("⚠ 역산 결과가 합계-견적가 제약(초과폭 상한)을 벗어났습니다. MD 를 수동 조정하거나 요율을 확인하세요.");
     },
-    [sites, priceInputs, rateData, updateSite]
+    [sites, priceInputs, rateData, updateSite, isMulti, activeSet]
+  );
+
+  /** 복수 업무 — 구성 업무 태그 추가(같은 세분류를 다시 고르면 횟수 +1). 최대 4개 */
+  const addWork = useCallback(
+    (idx: number, subtype: string) => {
+      const works = sites[idx].works ?? [];
+      if (works.some((w) => w.subtype === subtype)) {
+        return updateSite(idx, { works: works.map((w) => (w.subtype === subtype ? { ...w, count: w.count + 1 } : w)) });
+      }
+      if (works.length >= QUOTE_MULTI_WORK_MAX) return alert(`구성 업무는 최대 ${QUOTE_MULTI_WORK_MAX}개까지 추가할 수 있습니다.`);
+      updateSite(idx, { works: [...works, { subtype, count: 1 }] });
+    },
+    [sites, updateSite]
+  );
+
+  /**
+   * 복수 업무 — 구성 업무 태그로 항목 트리 초안을 만든다. 세분류마다 대항목 1개, 그 세분류에 기준 세트
+   * (전용 우선)가 있으면 세부항목을 표준 MD × 횟수로 채우고, 없으면 빈 세부항목 1행을 둔다.
+   */
+  const buildTreeFromWorks = useCallback(
+    async (works: QuoteWorkTag[]): Promise<{ rows: QuoteTreeRow[]; grades: string[] }> => {
+      const rows: QuoteTreeRow[] = [];
+      const grades = new Set<string>();
+      for (let n = 0; n < works.length; n++) {
+        const w = works[n];
+        const qs = new URLSearchParams({ serviceType, serviceSubtype: w.subtype });
+        if (facilityIdsKey) qs.set("facilityIds", facilityIdsKey);
+        const d: RateSetData | null = await fetch(`/api/quotes/rate-set?${qs.toString()}`, { cache: "no-store" })
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null);
+        const set = (useFacilitySet && d?.facilitySet) || d?.set || null;
+        rows.push({ label: `${n + 1}. ${w.subtype}${w.count > 1 ? ` (${w.count}회)` : ""}`, isParent: true, baseMd: {} });
+        const parentIds = new Set((set?.items ?? []).map((i) => i.parentId).filter(Boolean));
+        const leaves = (set?.items ?? []).filter((i) => !parentIds.has(i.itemId));
+        if (!leaves.length) {
+          rows.push({ label: "", isParent: false, baseMd: {} });
+          continue;
+        }
+        for (const g of set?.grades ?? []) grades.add(g);
+        for (const it of leaves) {
+          const baseMd: Record<string, number> = {};
+          for (const [g, v] of Object.entries(it.baseMd)) if (v) baseMd[g] = Math.round(v * w.count * 100) / 100;
+          rows.push({ label: it.label, isParent: false, baseMd });
+        }
+      }
+      if (!rows.length) rows.push({ label: "", isParent: false, baseMd: {} });
+      return { rows, grades: sortGrades([...grades]) };
+    },
+    [serviceType, facilityIdsKey, useFacilitySet]
+  );
+
+  /** 항목 입력(수동) — 편집기를 펼친다. 항목이 비어 있으면 구성 업무 태그로 초안을 채운다(force=다시 채우기) */
+  const openManualTree = useCallback(
+    async (idx: number, force = false) => {
+      const site = sites[idx];
+      setTreeOpen((prev) => ({ ...prev, [site.siteSeq]: true }));
+      if ((site.customItems ?? []).length > 0 && !force) return;
+      const built = await buildTreeFromWorks(site.works ?? []);
+      updateSite(idx, {
+        customItems: built.rows,
+        rates: { ...site.rates, grades: built.grades.length ? built.grades : siteGrades(site) },
+      });
+    },
+    [sites, buildTreeFromWorks, updateSite]
+  );
+
+  /** 항목 입력(자동) — 산출내역서 엑셀을 LLM 으로 분석해 항목 트리·기술등급을 채운다 */
+  const runBreakdownAnalyze = useCallback(
+    async (idx: number, file: File) => {
+      const site = sites[idx];
+      if ((site.customItems ?? []).some((r) => r.label.trim()) && !confirm("입력해 둔 업무 항목을 엑셀 분석 결과로 바꿀까요?")) return;
+      setAnalyzing(true);
+      try {
+        const form = new FormData();
+        form.append("file", file);
+        form.append("works", JSON.stringify(site.works ?? []));
+        const res = await fetch("/api/quotes/analyze-breakdown", { method: "POST", body: form });
+        const data = (await res.json().catch(() => ({}))) as { error?: string; rows?: QuoteTreeRow[]; grades?: string[]; note?: string };
+        if (!res.ok) throw new Error(data.error ?? "자동 분석에 실패했습니다.");
+        updateSite(idx, {
+          customItems: data.rows ?? [],
+          rates: { ...site.rates, grades: data.grades?.length ? data.grades : siteGrades(site) },
+        });
+        setTreeOpen((prev) => ({ ...prev, [site.siteSeq]: true }));
+        setAnalysisNote((prev) => ({ ...prev, [site.siteSeq]: `${file.name} 분석 결과${data.note ? ` — ${data.note}` : ""}` }));
+      } catch (err) {
+        alert((err as Error).message);
+      } finally {
+        setAnalyzing(false);
+      }
+    },
+    [sites, updateSite]
   );
 
   /** MD 셀 수동 편집 → 금액 재계산(제약 실시간 검증은 요약 카드에서) */
@@ -556,10 +707,15 @@ export function QuoteBoard() {
       // 양식별 조회 표시용
       ...( {
         recipients_display: recipients.map((r) => r.name).join(", "),
-        quote_summary_display: `${serviceSubtype} · ${sites.length}개 사업장 · ${won(totalFinal)}원`,
+        // 복수 업무는 구성 업무(첫 사업장 기준)를 함께 적는다 — 예: 복수 업무(사후관리·변경허가 6회·재검토)
+        quote_summary_display: `${
+          isMulti && sites[0]?.works?.length
+            ? `${serviceSubtype}(${sites[0].works.map((w) => (w.count > 1 ? `${w.subtype} ${w.count}회` : w.subtype)).join("·")})`
+            : serviceSubtype
+        } · ${sites.length}개 사업장 · ${won(totalFinal)}원`,
       } as Partial<QuoteFieldValues>),
     };
-  }, [subject, serviceType, serviceSubtype, sendMode, recipients, ccRefs, issueDate, contactEmail, contactMobile, sites, situation, revision, nextVersion, revisionReason, prevTotalAmount]);
+  }, [subject, serviceType, serviceSubtype, sendMode, recipients, ccRefs, issueDate, contactEmail, contactMobile, sites, situation, revision, nextVersion, revisionReason, prevTotalAmount, isMulti]);
 
   const persist = useCallback(
     // docIdOverride: save 직후 submit — setDocId 비동기로 인한 이중 문서·채번 이중 소모 방지(공문 실사고 교훈)
@@ -615,6 +771,7 @@ export function QuoteBoard() {
     for (const s of sites) {
       if (!s.siteLabel.trim()) return "사업장 라벨을 입력하세요.";
       if (!s.subjectLine.trim()) return `[${s.siteLabel}] 사업장별 건명을 입력하세요.`;
+      if (isMulti && !(s.works ?? []).length) return `[${s.siteLabel}] 복수 업무의 구성 업무(용역 세분류)를 1개 이상 선택하세요.`;
       if (!(s.amounts.final > 0)) return `[${s.siteLabel}] 제출 견적가를 입력하고 산정을 실행하세요.`;
       const hasMd = s.mdMatrix.length > 0;
       const hasFree = (s.freeItems ?? []).length > 0;
@@ -627,7 +784,7 @@ export function QuoteBoard() {
     }
     if (line.length === 0) return "결재선에 결재자를 1명 이상 추가하세요.";
     return null;
-  }, [subject, issueDate, manualOn, noLocked, manualNo, manualCheck, revision, revisionReason, recipients, ccRefs, sendMode, sites, line]);
+  }, [subject, issueDate, manualOn, noLocked, manualNo, manualCheck, revision, revisionReason, recipients, ccRefs, sendMode, sites, line, isMulti]);
 
   const openPreview = useCallback(async () => {
     setBusy("preview");
@@ -681,7 +838,8 @@ export function QuoteBoard() {
   );
 
   const site = sites[activeSite];
-  const tier: "calc" | "free" = (rateData?.set?.items?.length ?? 0) > 0 ? "calc" : "free";
+  // 복수 업무는 항목 트리를 직접 구성해 역산하므로 항상 산정형
+  const tier: "calc" | "free" = isMulti || (activeSet?.items?.length ?? 0) > 0 ? "calc" : "free";
 
   return (
     <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
@@ -830,7 +988,7 @@ export function QuoteBoard() {
                         const t = e.target.value;
                         const subs = SERVICE_OPTIONS.find((o) => o.type === t)?.subtypes ?? [];
                         setServiceType(t);
-                        if (!subs.includes(serviceSubtype)) setServiceSubtype(subs[0] ?? "");
+                        if (!subs.includes(serviceSubtype) && serviceSubtype !== QUOTE_MULTI_SUBTYPE) setServiceSubtype(subs[0] ?? "");
                       }}
                     >
                       {SERVICE_OPTIONS.map((o) => (
@@ -844,6 +1002,8 @@ export function QuoteBoard() {
                       {subtypeOptions.map((s) => (
                         <option key={s} value={s}>{s}</option>
                       ))}
+                      {/* 여러 세분류 업무가 섞인 용역 — 사업장별 견적 카드에서 구성 업무·항목을 직접 구성 */}
+                      <option value={QUOTE_MULTI_SUBTYPE}>{QUOTE_MULTI_SUBTYPE}</option>
                     </select>
                   </div>
                   <div className="md:w-[144px] md:shrink-0 flex flex-col gap-1">
@@ -901,15 +1061,15 @@ export function QuoteBoard() {
                       const base = emptySite(seq, subject);
                       if (rateData) {
                         base.rates = {
-                          setId: rateData.set?.setId,
-                          setVersion: rateData.set?.version,
-                          overheadRate: rateData.set?.overheadRate ?? STANDARD_OVERHEAD_RATE,
-                          techFeeRate: rateData.set?.techFeeRate ?? STANDARD_TECH_FEE_RATE,
+                          setId: activeSet?.setId,
+                          setVersion: activeSet?.version,
+                          overheadRate: activeSet?.overheadRate ?? STANDARD_OVERHEAD_RATE,
+                          techFeeRate: activeSet?.techFeeRate ?? STANDARD_TECH_FEE_RATE,
                           directExpenseRate: 0,
                           laborRates: rateData.laborRates,
                           laborYear: rateData.laborYear,
                         };
-                        base.remarks = rateData.set?.remarksTemplate ?? "";
+                        base.remarks = activeSet?.remarksTemplate ?? "";
                       }
                       setSites((prev) => [...prev, base]);
                       setActiveSite(sites.length);
@@ -960,6 +1120,159 @@ export function QuoteBoard() {
                         />
                       </div>
                     </div>
+
+                    {/* 복수 업무 — 구성 업무(세분류×횟수) 태그 + 업무 항목 입력(수동/자동). 세분류가 '복수 업무'일 때만 보인다 */}
+                    {isMulti && (
+                      <div className="rounded-2xl border cd-border-c p-3.5 flex flex-col gap-3">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {/* cd-select 는 width:100% 라 고정폭은 감싸는 요소에 준다 */}
+                          <div className="w-[180px] shrink-0">
+                            <select
+                              className="cd-select"
+                              value=""
+                              aria-label="구성 업무(용역 세분류) 추가"
+                              onChange={(e) => e.target.value && addWork(activeSite, e.target.value)}
+                            >
+                              <option value="">구성 업무 선택</option>
+                              {subtypeOptions.map((s) => (
+                                <option key={s} value={s}>{s}</option>
+                              ))}
+                            </select>
+                          </div>
+                          {(site.works ?? []).map((w, wi) => (
+                            <span key={w.subtype} className="cd-action inline-flex items-center gap-1.5 rounded-lg border cd-border-c pl-2.5 pr-1.5 py-1 text-[11.5px] cd-text">
+                              <span className="font-semibold">{w.subtype}</span>
+                              <span className="w-10 shrink-0">
+                                <input
+                                  className="cd-input text-center text-[11.5px] px-1 py-0.5"
+                                  inputMode="numeric"
+                                  aria-label={`${w.subtype} 횟수`}
+                                  value={w.count ? String(w.count) : ""}
+                                  onChange={(e) => {
+                                    const count = Number(e.target.value.replace(/[^\d]/g, "").slice(0, 3)) || 0;
+                                    updateSite(activeSite, { works: (site.works ?? []).map((x, xi) => (xi === wi ? { ...x, count } : x)) });
+                                  }}
+                                  onBlur={() => {
+                                    if (!w.count) updateSite(activeSite, { works: (site.works ?? []).map((x, xi) => (xi === wi ? { ...x, count: 1 } : x)) });
+                                  }}
+                                />
+                              </span>
+                              <span className="cd-text-faint">회</span>
+                              <button
+                                type="button"
+                                className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]"
+                                aria-label={`${w.subtype} 제거`}
+                                onClick={() => updateSite(activeSite, { works: (site.works ?? []).filter((_, xi) => xi !== wi) })}
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </span>
+                          ))}
+                          <span className="text-[10.5px] cd-text-faint">
+                            {(site.works ?? []).length === 0 ? `이 용역을 구성하는 업무를 선택하세요(최대 ${QUOTE_MULTI_WORK_MAX}개)` : `${(site.works ?? []).length}/${QUOTE_MULTI_WORK_MAX}`}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <button
+                            type="button"
+                            className="cd-btn rounded-lg border cd-border-c px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5"
+                            aria-expanded={!!treeOpen[site.siteSeq]}
+                            title="항목명과 등급별 MD를 직접 입력합니다. 항목이 비어 있으면 구성 업무의 기준 세트(표준 MD × 횟수)로 초안을 채웁니다"
+                            onClick={() => {
+                              if (treeOpen[site.siteSeq]) setTreeOpen((prev) => ({ ...prev, [site.siteSeq]: false }));
+                              else void openManualTree(activeSite);
+                            }}
+                          >
+                            <ListPlus className="w-3.5 h-3.5" /> 항목 입력(수동)
+                          </button>
+                          <button
+                            type="button"
+                            className="cd-btn rounded-lg border cd-border-c px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
+                            disabled={analyzing}
+                            title="산출내역서 엑셀을 올리면 세부 업무단위·등급별 MD를 자동으로 항목화합니다(AI 분석, 1~2분)"
+                            onClick={() => breakdownFileRef.current?.click()}
+                          >
+                            <FileSpreadsheet className="w-3.5 h-3.5" /> {analyzing ? "분석 중..." : "항목 입력(자동)"}
+                          </button>
+                          <input
+                            ref={breakdownFileRef}
+                            type="file"
+                            accept=".xlsx,.xlsm,.xls"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              e.target.value = ""; // 같은 파일을 다시 골라도 동작하도록
+                              if (file) void runBreakdownAnalyze(activeSite, file);
+                            }}
+                          />
+                          {(() => {
+                            const rows = site.customItems ?? [];
+                            const totals = treeGradeTotals(rows);
+                            const total = Object.values(totals).reduce((a, b) => a + b, 0);
+                            if (analyzing) return <span className="text-[11px] cd-text-faint">산출내역서를 분석하고 있습니다. 1~2분 걸릴 수 있습니다.</span>;
+                            if (!total) return <span className="text-[11px] cd-text-faint">업무 항목 미입력 — 항목을 입력해야 MD 역산을 실행할 수 있습니다.</span>;
+                            // 기준 MD 그대로일 때의 합계(직접경비 제외) — 제출 견적가를 정할 때의 참고값
+                            const labor = Object.entries(totals).reduce((a, [g, v]) => a + v * (rateData?.laborRates[g] ?? 0), 0);
+                            const std = labor * (1 + site.rates.overheadRate) * (1 + site.rates.techFeeRate);
+                            return (
+                              <span className="text-[11px] cd-text-faint tabular-nums">
+                                기준 {Math.round(total * 100) / 100}MD ({siteGrades(site).filter((g) => totals[g]).map((g) => `${g} ${totals[g]}`).join(" · ")})
+                                {std > 0 ? ` · 기준 MD 합계 ${won(std)}원(직접경비 제외)` : ""}
+                              </span>
+                            );
+                          })()}
+                        </div>
+                        {analysisNote[site.siteSeq] && <p className="text-[11px] cd-text-faint">{analysisNote[site.siteSeq]}</p>}
+                        {treeOpen[site.siteSeq] && (
+                          <div className="border-t cd-border-c pt-3 flex flex-col gap-3">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="text-[12px] font-semibold cd-text">업무 항목 트리 (별첨1) — 기준 MD = 역산 분배 가중치</p>
+                              <button
+                                type="button"
+                                className="ml-auto cd-btn rounded-lg border cd-border-c px-2.5 py-1 text-[11px] cd-text-faint"
+                                title="구성 업무 태그의 기준 세트(표준 MD × 횟수)로 항목을 다시 채웁니다"
+                                onClick={() => {
+                                  if (confirm("입력해 둔 업무 항목을 구성 업무의 기준 세트로 다시 채울까요?")) void openManualTree(activeSite, true);
+                                }}
+                              >
+                                구성 업무로 다시 채우기
+                              </button>
+                            </div>
+                            <QuoteItemTreeEditor
+                              grades={siteGrades(site)}
+                              rows={site.customItems ?? []}
+                              onGradesChange={(next) => updateSite(activeSite, { rates: { ...site.rates, grades: next } })}
+                              onRowsChange={(next) => updateSite(activeSite, { customItems: next })}
+                            />
+                            {site.mdMatrix.length > 0 && (
+                              <span className="text-[10.5px] cd-text-faint">항목을 바꾼 뒤에는 [MD 역산 실행]을 다시 눌러야 아래 MD 표와 금액에 반영됩니다.</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* 사업장 전용 기준 세트(270) — 수신처 사업장에 전용 세트가 있을 때만. 표준 세트로 전환 가능 */}
+                    {!isMulti && rateData?.facilitySet && (
+                      <div className="rounded-lg border cd-border-c px-3 py-2 flex items-center gap-2 flex-wrap text-[11.5px]">
+                        <Building2 className="w-3.5 h-3.5 cd-text-primary" />
+                        <span className="cd-text">
+                          {useFacilitySet ? (
+                            <><b>{rateData.facilitySet.facilityName}</b> 전용 기준 세트 적용 중</>
+                          ) : (
+                            <>표준 기준 세트 적용 중 — <b>{rateData.facilitySet.facilityName}</b> 전용 세트가 있습니다</>
+                          )}
+                        </span>
+                        <button
+                          type="button"
+                          className="ml-auto cd-btn rounded-lg border cd-border-c px-2.5 py-1 text-[11px]"
+                          onClick={() => setUseFacilitySet((v) => !v)}
+                        >
+                          {useFacilitySet ? "표준 기준으로 전환" : "전용 기준으로 전환"}
+                        </button>
+                        {site.mdMatrix.length > 0 && <span className="w-full text-[10.5px] cd-text-faint">전환 후 [MD 역산 실행]을 다시 눌러야 산정에 반영됩니다.</span>}
+                      </div>
+                    )}
 
                     {/* 견적가 입력 → 역산 (T1/T2) 또는 자유 품목 (T3) */}
                     <div className="rounded-2xl border cd-border-c p-3.5 flex flex-col gap-3">

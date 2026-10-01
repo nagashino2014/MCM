@@ -44,6 +44,7 @@ export const AI_FEATURES = {
   "deliverable.template_scan:high": { label: "착수·준공계 양식 재구축(고품질)", group: "양식 분석", critical: false, defaultModel: "claude-opus-5", vision: true },
   "agreement.analyze:overlay": { label: "계약서 양식 분석(overlay)", group: "양식 분석", critical: false, defaultModel: "claude-sonnet-5", vision: false },
   "agreement.analyze:hwpx": { label: "계약서 양식 분석(조문 추출)", group: "양식 분석", critical: false, defaultModel: "claude-sonnet-5", vision: false },
+  "quote.breakdown_analyze": { label: "견적 산출내역서 업무 항목 분석(엑셀)", group: "양식 분석", critical: true, defaultModel: "claude-sonnet-5", vision: false },
   "recruit.import": { label: "채용공고 원본 → 템플릿 자동 채움", group: "양식 분석", critical: false, defaultModel: "claude-opus-5", vision: true },
   // 영업 인텔·RAG
   "intel.news_classify": { label: "뉴스·보도 발주신호 분류", group: "영업 인텔", critical: false, defaultModel: "claude-haiku-4-5", vision: false },

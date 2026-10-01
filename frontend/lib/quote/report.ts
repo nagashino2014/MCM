@@ -185,7 +185,7 @@ export async function buildQuoteReport(params: { from?: string | null; to?: stri
   const sets = rowsToObjects(
     await db.exec(
       `SELECT set_id, service_type, service_subtype, market_adjust
-         FROM quote_rate_sets WHERE status = 'active'`,
+         FROM quote_rate_sets WHERE status = 'active' AND facility_id IS NULL`,
       []
     )
   );

@@ -50,6 +50,52 @@ export const QUOTE_SERVICE_OPTIONS: { type: string; subtypes: string[] }[] = [
 ];
 
 /**
+ * 복수 업무(2026-10-01) — 한 용역에 여러 세분류 업무가 섞인 견적(예: 사후관리 + 변경허가·신고 + 재검토).
+ * 작성 화면의 용역 세분류 목록에만 추가되는 선택지이며 기준 세트는 없다 — 사업장별로 구성 업무(세분류×횟수)와
+ * 업무 항목 트리를 직접(수동 입력 또는 산출내역서 엑셀 자동 분석) 구성해 역산한다.
+ */
+export const QUOTE_MULTI_SUBTYPE = "복수 업무";
+/** 복수 업무 구성 업무 태그 최대 수 */
+export const QUOTE_MULTI_WORK_MAX = 4;
+
+/** 복수 업무의 구성 업무 태그 — 세분류 + 횟수 */
+export interface QuoteWorkTag {
+  subtype: string;
+  count: number;
+}
+
+/**
+ * 업무 항목 트리 편집 행(기준 관리 화면·작성 화면 공용, components/approval/QuoteItemTreeEditor).
+ * 세부항목은 위쪽의 가장 가까운 대항목에 소속된다(대항목 MD 는 자동 소계).
+ */
+export interface QuoteTreeRow {
+  label: string;
+  isParent: boolean;
+  baseMd: Record<string, number>;
+}
+
+/** 편집 행 → 역산 입력 항목(QuoteWorkItem). idPrefix 로 itemId 를 만든다 */
+export function treeRowsToWorkItems(rows: QuoteTreeRow[], idPrefix: string): QuoteWorkItem[] {
+  let lastParent = -1;
+  return rows.map((r, i) => {
+    if (r.isParent) lastParent = i;
+    return {
+      itemId: `${idPrefix}-${i}`,
+      parentId: r.isParent ? null : lastParent >= 0 ? `${idPrefix}-${lastParent}` : null,
+      label: r.label,
+      sort: i,
+      baseMd: r.isParent ? {} : r.baseMd,
+    };
+  });
+}
+
+/** 세트 항목(트리) → 편집 행 */
+export function workItemsToTreeRows(items: { itemId: string; parentId: string | null; label: string; baseMd: Record<string, number> | MdVector }[]): QuoteTreeRow[] {
+  const parentIds = new Set(items.map((i) => i.parentId).filter(Boolean));
+  return items.map((i) => ({ label: i.label, isParent: parentIds.has(i.itemId), baseMd: { ...(i.baseMd as Record<string, number>) } }));
+}
+
+/**
  * MD 매트릭스 기본 등급 축 — 세트에 등급이 지정되지 않았을 때의 폴백이자 열 표시 순서.
  * 2026-08-07: 등급은 기준 세트별로 가변(마이그 143 quote_rate_sets.grades) — 기술사가 추가되거나
  * 특급·고급이 빠질 수 있다. 산정 엔진(rates.ts)은 이 상수가 아니라 base_md 의 키를 순회한다.
@@ -232,6 +278,8 @@ export interface QuoteSite {
   mdMatrix: MdMatrixRow[]; // 최종 MD (T3 자유입력이면 빈 배열 가능)
   freeItems?: { label: string; amount: number; note?: string }[]; // T3 품목 직접 입력
   directCosts?: DirectCosts; // 직접경비 산식(출장비·인쇄비). 없으면 0
+  works?: QuoteWorkTag[]; // 복수 업무 — 구성 업무(세분류×횟수) 태그, 최대 4개
+  customItems?: QuoteTreeRow[]; // 복수 업무 — 이 사업장 전용 업무 항목 트리(역산 가중치의 원천)
   rates: SiteRates;
   amounts: SiteAmounts;
   remarks: string; // 특이사항

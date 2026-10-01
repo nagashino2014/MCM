@@ -1,34 +1,38 @@
 "use client";
 
 // 견적 기준 관리(/approval/quote/settings, Q4·Q5) — 권한 approval.manage.
-// 탭: ①기준 세트(세분류별 항목 트리·base_md·요율·특이사항·인자·규모구간 편집 + 역산 시뮬레이터)
+// 탭: ①기준 세트(표준)(세분류별 항목 트리·base_md·요율·특이사항·인자·규모구간 편집 + 역산 시뮬레이터)
+//     ①-2 기준 세트(개별)(270 — 같은 편집기를 특정 사업장 전용 세트에. 상단에 전용 세트 보유 사업장 태그 목록)
 //     ②노임단가(연도별×등급별, 자동 수집 로그) ③상황 변수 코드
 //     ④수주 분석(Q5 — 수주율·상황변수·금액구간 집계 + 시장 보정계수 제안·1클릭 반영).
 // 세트 수정은 기존 견적을 훼손하지 않는다(견적서에 산정 당시 스냅샷 박제).
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, BarChart3, Calculator, ChevronDown, ChevronRight, Coins, Plus, Save, Settings2, Tag, Trash2, X } from "lucide-react";
+import { ArrowLeft, BarChart3, Building2, Calculator, ChevronDown, ChevronRight, Coins, Plus, Save, Search, Settings2, Tag, Trash2, X } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdTabs } from "@/components/cdash/CdTabs";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
 import { AmountInput } from "@/components/ui/AmountInput";
+import { QuoteItemTreeEditor } from "@/components/approval/QuoteItemTreeEditor";
 import {
   DEFAULT_MD_GRADES,
   LABOR_GRADES,
   QUOTE_SERVICE_OPTIONS,
+  treeRowsToWorkItems,
+  workItemsToTreeRows,
   mdSnapUnit,
   sortGrades,
   sumOverCap,
   type QuoteReport,
   type QuoteReportBucket,
-  type QuoteWorkItem,
+  type QuoteTreeRow,
 } from "@/lib/quote/types";
 import { gradeTotals, mdVectorTotal, reverseAllocate, validateSumConstraint } from "@/lib/quote/rates";
 import "@/components/cdash/cdash.css";
 
-type Tab = "sets" | "labor" | "codes" | "report";
+type Tab = "sets" | "fsets" | "labor" | "codes" | "report";
 
 interface SetSummary {
   setId: string;
@@ -36,12 +40,17 @@ interface SetSummary {
   serviceSubtype: string;
   version: number;
   itemCount: number;
+  /** 사업장 전용 세트(270)면 그 사업장. 표준 세트는 null */
+  facilityId?: string | null;
+  facilityName?: string | null;
 }
 
-interface ItemRow {
-  label: string;
-  isParent: boolean; // 대항목 여부 — 저장 시 parentIdx 재구성(직전 대항목)
-  baseMd: Record<string, number>;
+// 대항목 여부(isParent) — 저장 시 parentIdx 재구성(직전 대항목)
+type ItemRow = QuoteTreeRow;
+
+interface FacilityRef {
+  facilityId: string;
+  name: string;
 }
 
 interface SetDetail {
@@ -128,6 +137,12 @@ export function QuoteSettingsBoard() {
   const { theme } = useCdashTheme();
   const [tab, setTab] = useState<Tab>("sets");
   const [sets, setSets] = useState<SetSummary[]>([]);
+  // 기준 세트(개별) — 사업장 전용 세트 전체, 선택한 사업장, 세트를 아직 만들지 않은 추가 사업장
+  const [fsets, setFsets] = useState<SetSummary[]>([]);
+  const [facility, setFacility] = useState<FacilityRef | null>(null);
+  const [extraFacilities, setExtraFacilities] = useState<FacilityRef[]>([]);
+  const [facQ, setFacQ] = useState("");
+  const [facItems, setFacItems] = useState<{ facilityId: string; companyName: string; siteAddress?: string | null }[]>([]);
   const [selected, setSelected] = useState<{ serviceType: string; serviceSubtype: string } | null>(null);
   const [detail, setDetail] = useState<SetDetail | null>(null);
   const [rows, setRows] = useState<ItemRow[]>([]);
@@ -145,8 +160,12 @@ export function QuoteSettingsBoard() {
   const [reportLoading, setReportLoading] = useState(false);
 
   const loadSets = useCallback(async () => {
-    const res = await fetch("/api/quotes/admin/rate-sets", { cache: "no-store" });
+    const [res, fres] = await Promise.all([
+      fetch("/api/quotes/admin/rate-sets", { cache: "no-store" }),
+      fetch("/api/quotes/admin/rate-sets?scope=facility", { cache: "no-store" }),
+    ]);
     if (res.ok) setSets((await res.json()).sets ?? []);
+    if (fres.ok) setFsets((await fres.json()).sets ?? []);
   }, []);
 
   const loadLabor = useCallback(async () => {
@@ -169,10 +188,55 @@ export function QuoteSettingsBoard() {
       .catch(() => {});
   }, [loadSets, loadLabor]);
 
+  // 개별 탭은 선택한 사업장의 전용 세트만 본다(사업장 미선택이면 없음)
+  const isFacilityTab = tab === "fsets";
   const setOf = useCallback(
-    (t: string, s: string) => sets.find((x) => x.serviceType === t && x.serviceSubtype === s) ?? null,
-    [sets]
+    (t: string, s: string) =>
+      (isFacilityTab ? fsets.filter((x) => facility != null && x.facilityId === facility.facilityId) : sets).find(
+        (x) => x.serviceType === t && x.serviceSubtype === s
+      ) ?? null,
+    [sets, fsets, isFacilityTab, facility]
   );
+
+  // 전용 세트 보유 사업장(+ 방금 추가해 아직 세트가 없는 사업장) — 개별 탭 상단 태그 목록
+  const facilityTags: (FacilityRef & { sets: SetSummary[] })[] = (() => {
+    const map = new Map<string, FacilityRef & { sets: SetSummary[] }>();
+    for (const s of fsets) {
+      if (!s.facilityId) continue;
+      const cur = map.get(s.facilityId) ?? { facilityId: s.facilityId, name: s.facilityName ?? s.facilityId, sets: [] };
+      cur.sets.push(s);
+      map.set(s.facilityId, cur);
+    }
+    for (const f of extraFacilities) if (!map.has(f.facilityId)) map.set(f.facilityId, { ...f, sets: [] });
+    return [...map.values()];
+  })();
+
+  const resetEditor = useCallback(() => {
+    setSelected(null);
+    setDetail(null);
+    setRows([]);
+    setSimResult(null);
+  }, []);
+
+  // 사업장 검색(개별 탭 — 전용 세트를 만들 사업장 추가)
+  useEffect(() => {
+    if (facQ.trim().length < 2) {
+      setFacItems([]);
+      return;
+    }
+    const controller = new AbortController();
+    const t = setTimeout(() => {
+      const params = new URLSearchParams({ q: facQ.trim(), limit: "15", sort: "name" });
+      fetch(`/api/facilities?${params.toString()}`, { cache: "no-store", signal: controller.signal })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => setFacItems(Array.isArray(d?.items) ? d.items : []))
+        .catch(() => {});
+    }, 160);
+    return () => {
+      controller.abort();
+      clearTimeout(t);
+    };
+  }, [facQ]);
 
   /** 세트 상세 로드 → 편집 행으로 평탄화(대항목 플래그) */
   const openSet = useCallback(async (serviceType: string, serviceSubtype: string) => {
@@ -186,8 +250,7 @@ export function QuoteSettingsBoard() {
     if (!res.ok) return alert("세트를 불러오지 못했습니다.");
     const d = (await res.json()).set as SetDetail;
     setDetail({ ...d, grades: d.grades?.length ? sortGrades(d.grades) : [...DEFAULT_MD_GRADES] });
-    const parentIds = new Set(d.items.map((i) => i.parentId).filter(Boolean));
-    setRows(d.items.map((i) => ({ label: i.label, isParent: parentIds.has(i.itemId), baseMd: i.baseMd })));
+    setRows(workItemsToTreeRows(d.items));
   }, [setOf]);
 
   const createSet = useCallback(
@@ -198,7 +261,7 @@ export function QuoteSettingsBoard() {
         const res = await fetch("/api/quotes/admin/rate-sets", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...selected, copyFromSetId }),
+          body: JSON.stringify({ ...selected, copyFromSetId, facilityId: isFacilityTab ? facility?.facilityId : undefined }),
         });
         if (!res.ok) throw new Error((await res.json())?.error ?? "생성 실패");
         await loadSets();
@@ -209,7 +272,7 @@ export function QuoteSettingsBoard() {
         setBusy(false);
       }
     },
-    [selected, loadSets, openSet]
+    [selected, loadSets, openSet, isFacilityTab, facility]
   );
 
   // sets 갱신 후 재선택 시 setOf가 새 목록을 보도록 — openSet은 sets 의존
@@ -219,55 +282,7 @@ export function QuoteSettingsBoard() {
       if (s) void openSet(selected.serviceType, selected.serviceSubtype);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sets]);
-
-  /**
-   * 기술등급 추가/제외 — 제외 시 그 등급의 MD를 남은 등급에 현재 비율대로 재분배해
-   * 행별 MD 합계를 보존한다(남은 값이 모두 0이면 균등 분배). 추가 시에는 빈 열로 시작한다.
-   */
-  const toggleGrade = useCallback(
-    (grade: string) => {
-      if (!detail) return;
-      const on = detail.grades.includes(grade);
-      const next = on ? detail.grades.filter((g) => g !== grade) : sortGrades([...detail.grades, grade]);
-      if (!next.length) {
-        alert("기술등급은 최소 1개 이상이어야 합니다.");
-        return;
-      }
-      setDetail({ ...detail, grades: next });
-      if (!on) return; // 추가는 값 이동 없음
-      setRows((prev) =>
-        prev.map((r) => {
-          const moving = r.baseMd[grade] ?? 0;
-          const md: Record<string, number> = {};
-          for (const g of next) if (r.baseMd[g]) md[g] = r.baseMd[g];
-          if (moving > 0) {
-            // 분배 눈금: 기존 값이 모두 정수인 세트는 정수, 0.5 가 섞인 소액 세트는 0.5 단위
-            // (사용자 확정 2026-08-07 — 가중치에 소수점이 길게 남지 않게 한다)
-            const values = [...Object.values(md), moving];
-            const unit = values.every((v) => Number.isInteger(v)) ? 1 : 0.5;
-            const target = Object.values(md).reduce((a: number, b: number) => a + b, 0) + moving;
-            const base = next.reduce((acc: number, g: string) => acc + (md[g] ?? 0), 0);
-            if (base > 0) {
-              for (const g of next) if (md[g]) md[g] = Math.round((md[g] + (moving * md[g]) / base) / unit) * unit;
-            } else {
-              const each = Math.round(moving / next.length / unit) * unit;
-              for (const g of next) md[g] = each;
-            }
-            // 스냅 잔차는 가장 큰 셀이 흡수해 행 합계를 보존한다
-            const snapped = next.reduce((acc: number, g: string) => acc + (md[g] ?? 0), 0);
-            const diff = Math.round((target - snapped) / unit) * unit;
-            if (diff !== 0) {
-              const top = next.filter((g) => md[g] != null).sort((a, b) => (md[b] ?? 0) - (md[a] ?? 0))[0];
-              if (top) md[top] = Math.max(unit, Math.round((md[top] + diff) / unit) * unit);
-            }
-          }
-          return { ...r, baseMd: md };
-        })
-      );
-    },
-    [detail]
-  );
+  }, [sets, fsets, facility]);
 
   const saveSet = useCallback(async () => {
     if (!detail) return;
@@ -306,7 +321,10 @@ export function QuoteSettingsBoard() {
 
   const deleteSet = useCallback(async () => {
     if (!detail) return;
-    if (!confirm(`[${detail.serviceType} > ${detail.serviceSubtype}] 기준 세트를 삭제할까요?\n이 세분류는 자유 입력형으로 동작하게 됩니다.`)) return;
+    const msg = isFacilityTab
+      ? `[${facility?.name ?? ""} · ${detail.serviceType} > ${detail.serviceSubtype}] 사업장 전용 기준 세트를 삭제할까요?\n이 사업장은 표준 기준 세트로 동작하게 됩니다.`
+      : `[${detail.serviceType} > ${detail.serviceSubtype}] 기준 세트를 삭제할까요?\n이 세분류는 자유 입력형으로 동작하게 됩니다.`;
+    if (!confirm(msg)) return;
     setBusy(true);
     try {
       await fetch(`/api/quotes/admin/rate-sets/${encodeURIComponent(detail.setId)}`, { method: "DELETE" });
@@ -316,24 +334,14 @@ export function QuoteSettingsBoard() {
     } finally {
       setBusy(false);
     }
-  }, [detail, loadSets]);
+  }, [detail, loadSets, isFacilityTab, facility]);
 
   /** 역산 시뮬레이터 — 현재 편집 중인 트리·요율·최신 노임단가로 즉석 계산 */
   const runSim = useCallback(() => {
     if (!detail) return;
     const price = Number(simPrice.replace(/[^\d]/g, ""));
     if (!price) return alert("견적가를 입력하세요.");
-    let lastParent = -1;
-    const items: QuoteWorkItem[] = rows.map((r, i) => {
-      if (r.isParent) lastParent = i;
-      return {
-        itemId: `sim-${i}`,
-        parentId: r.isParent ? null : lastParent >= 0 ? `sim-${lastParent}` : null,
-        label: r.label,
-        sort: i,
-        baseMd: r.baseMd,
-      };
-    });
+    const items = treeRowsToWorkItems(rows, "sim");
     const res = reverseAllocate({
       price,
       items,
@@ -442,6 +450,7 @@ export function QuoteSettingsBoard() {
             techFeeRate: d.techFeeRate,
             directExpenseRate: d.directExpenseRate,
             marketAdjust: value,
+            grades: d.grades, // 빠지면 서버가 기본 4종으로 되돌린다(143)
             remarksTemplate: d.remarksTemplate,
             items,
             factors: d.factors,
@@ -487,16 +496,116 @@ export function QuoteSettingsBoard() {
           {/* 탭 — 페이지 탭은 공통 밑줄형(UI 기준 §4) */}
           <CdTabs<Tab>
             active={tab}
-            onChange={setTab}
+            onChange={(next) => {
+              // 표준·개별 탭은 같은 편집기를 쓰므로 탭을 옮기면 편집 중이던 선택을 비운다
+              if (next !== tab && (next === "sets" || next === "fsets" || tab === "sets" || tab === "fsets")) resetEditor();
+              setTab(next);
+            }}
             items={[
-              { key: "sets", label: "기준 세트", icon: <Settings2 className="w-3.5 h-3.5" /> },
+              { key: "sets", label: "기준 세트(표준)", icon: <Settings2 className="w-3.5 h-3.5" /> },
+              { key: "fsets", label: "기준 세트(개별)", icon: <Building2 className="w-3.5 h-3.5" /> },
               { key: "labor", label: "노임단가", icon: <Coins className="w-3.5 h-3.5" /> },
               { key: "codes", label: "상황 변수", icon: <Tag className="w-3.5 h-3.5" /> },
               { key: "report", label: "수주 분석", icon: <BarChart3 className="w-3.5 h-3.5" /> },
             ]}
           />
 
-          {tab === "sets" && (
+          {/* 기준 세트(개별) 상단 — 전용 세트가 있는 사업장 태그 목록(탭 전체 너비). 사업장 태그 안에 세분류별 세트 태그 */}
+          {tab === "fsets" && (
+            <div className="rounded-2xl border cd-border-c p-3.5 flex flex-col gap-2.5">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-[12px] font-semibold cd-text">사업장 전용 기준 세트</p>
+                <span className="text-[10.5px] cd-text-faint">
+                  전용 세트가 있는 사업장은 견적서 작성 시 표준 세트 대신 적용할 수 있습니다(수신처 사업장 기준).
+                </span>
+              </div>
+              {facilityTags.length === 0 ? (
+                <p className="text-[11.5px] cd-text-faint">전용 기준 세트가 설정된 사업장이 없습니다. 아래에서 사업장을 검색해 추가하세요.</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {facilityTags.map((f) => {
+                    const active = facility?.facilityId === f.facilityId;
+                    return (
+                      <div
+                        key={f.facilityId}
+                        className={`rounded-lg border px-2.5 py-1.5 flex items-center gap-1.5 flex-wrap ${active ? "cd-tint-primary border-[color:var(--cd-primary)]" : "cd-border-c"}`}
+                      >
+                        <button
+                          type="button"
+                          aria-pressed={active}
+                          className="cd-action text-[12px] font-semibold cd-text flex items-center gap-1"
+                          onClick={() => {
+                            if (!active) resetEditor();
+                            setFacility({ facilityId: f.facilityId, name: f.name });
+                          }}
+                        >
+                          <Building2 className="w-3.5 h-3.5 cd-text-primary" /> {f.name}
+                        </button>
+                        {f.sets.length === 0 ? (
+                          <span className="text-[10px] rounded-lg px-1.5 py-0.5 border border-dashed cd-border-c cd-text-faint">세트 없음</span>
+                        ) : (
+                          f.sets.map((s) => (
+                            <button
+                              key={s.setId}
+                              type="button"
+                              className="cd-action text-[10px] rounded-lg px-1.5 py-0.5 border cd-border-c cd-text"
+                              title={`${s.serviceType} > ${s.serviceSubtype} — 기준 ${s.itemCount}행`}
+                              onClick={() => {
+                                // 사업장을 바꾸면 setOf 가 다음 렌더에 갱신되므로 선택만 걸어 두고 세트 로드는 effect 가 한다
+                                setFacility({ facilityId: f.facilityId, name: f.name });
+                                setDetail(null);
+                                setRows([]);
+                                setSimResult(null);
+                                setSelected({ serviceType: s.serviceType, serviceSubtype: s.serviceSubtype });
+                              }}
+                            >
+                              {s.serviceSubtype}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <div className="relative max-w-[420px]">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 cd-text-faint pointer-events-none" />
+                <input
+                  className="cd-input w-full text-[12px]"
+                  style={{ paddingLeft: 36 }}
+                  placeholder="사업장 추가 — 업체명 2자 이상 검색"
+                  aria-label="전용 기준 세트를 만들 사업장 검색"
+                  value={facQ}
+                  onChange={(e) => setFacQ(e.target.value)}
+                />
+                {facItems.length > 0 && (
+                  <ul className="absolute z-20 left-0 right-0 mt-1 rounded-lg border cd-border-c bg-[color:var(--cd-card)] max-h-[240px] overflow-y-auto">
+                    {facItems.map((o) => (
+                      <li key={o.facilityId}>
+                        <button
+                          type="button"
+                          className="w-full text-left px-3 py-1.5 text-[12px] cd-row-hover flex items-center gap-2"
+                          onClick={() => {
+                            const ref = { facilityId: o.facilityId, name: o.companyName };
+                            setExtraFacilities((prev) => (prev.some((x) => x.facilityId === ref.facilityId) ? prev : [...prev, ref]));
+                            resetEditor();
+                            setFacility(ref);
+                            setFacQ("");
+                            setFacItems([]);
+                          }}
+                        >
+                          <span className="cd-text font-semibold whitespace-nowrap">{o.companyName}</span>
+                          {o.siteAddress && <span className="cd-text-faint truncate">{o.siteAddress}</span>}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          )}
+
+          {(tab === "sets" || tab === "fsets") && (
             <div className="flex flex-col lg:flex-row gap-4 items-start">
               {/* 좌: 세분류 리스트 */}
               <div className="w-full lg:w-[260px] shrink-0 flex flex-col gap-2.5">
@@ -511,7 +620,8 @@ export function QuoteSettingsBoard() {
                           <button
                             key={s}
                             type="button"
-                            className={`flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[12px] text-left ${active ? "cd-tint-primary font-semibold" : "cd-row-hover"}`}
+                            className={`flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[12px] text-left disabled:opacity-50 ${active ? "cd-tint-primary font-semibold" : "cd-row-hover"}`}
+                            disabled={isFacilityTab && !facility}
                             onClick={() => void openSet(g.type, s)}
                           >
                             {active ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3 cd-text-faint" />}
@@ -519,7 +629,7 @@ export function QuoteSettingsBoard() {
                             {has ? (
                               <span className="text-[9.5px] rounded-full px-1.5 py-0.5 cd-tint-primary">기준 {has.itemCount}행</span>
                             ) : (
-                              <span className="text-[9.5px] rounded-full px-1.5 py-0.5 border cd-border-c cd-text-faint">자유입력</span>
+                              <span className="text-[9.5px] rounded-full px-1.5 py-0.5 border cd-border-c cd-text-faint">{isFacilityTab ? "표준 적용" : "자유입력"}</span>
                             )}
                           </button>
                         );
@@ -531,18 +641,25 @@ export function QuoteSettingsBoard() {
 
               {/* 우: 편집기 */}
               <div className="flex-1 min-w-0 w-full">
-                {!selected ? (
-                  <p className="text-sm cd-text-faint p-6">좌측에서 세분류를 선택하세요. 기준 세트가 없는 세분류는 자유 입력형(품목 직접 입력)으로 동작합니다.</p>
+                {isFacilityTab && !facility ? (
+                  <p className="text-sm cd-text-faint p-6">위에서 사업장을 선택하거나 검색해 추가하세요. 선택한 사업장의 세분류별 전용 기준 세트를 설정합니다.</p>
+                ) : !selected ? (
+                  <p className="text-sm cd-text-faint p-6">
+                    {isFacilityTab
+                      ? `좌측에서 세분류를 선택하세요. [${facility?.name}] 전용 세트가 없는 세분류는 표준 기준 세트로 동작합니다.`
+                      : "좌측에서 세분류를 선택하세요. 기준 세트가 없는 세분류는 자유 입력형(품목 직접 입력)으로 동작합니다."}
+                  </p>
                 ) : !detail ? (
                   <div className="rounded-2xl border border-dashed cd-border-c p-8 flex flex-col items-center gap-3">
                     <p className="text-sm cd-text">
-                      <b>{selected.serviceType} &gt; {selected.serviceSubtype}</b> — 기준 세트가 없습니다(자유 입력형).
+                      {isFacilityTab && <b>{facility?.name} · </b>}
+                      <b>{selected.serviceType} &gt; {selected.serviceSubtype}</b> — {isFacilityTab ? "전용 기준 세트가 없습니다(표준 세트 적용)." : "기준 세트가 없습니다(자유 입력형)."}
                     </p>
                     <div className="flex items-center gap-2">
                       <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold disabled:opacity-50" disabled={busy} onClick={() => void createSet()}>
                         <Plus className="w-3.5 h-3.5 inline" /> 빈 세트 생성
                       </button>
-                      {sets.length > 0 && (
+                      {sets.length + (isFacilityTab ? fsets.length : 0) > 0 && (
                         <select
                           className="cd-select text-xs"
                           defaultValue=""
@@ -552,8 +669,12 @@ export function QuoteSettingsBoard() {
                         >
                           <option value="">기존 세트 복제...</option>
                           {sets.map((s) => (
-                            <option key={s.setId} value={s.setId}>{s.serviceType} &gt; {s.serviceSubtype}</option>
+                            <option key={s.setId} value={s.setId}>{isFacilityTab ? "표준 · " : ""}{s.serviceType} &gt; {s.serviceSubtype}</option>
                           ))}
+                          {isFacilityTab &&
+                            fsets.map((s) => (
+                              <option key={s.setId} value={s.setId}>{s.facilityName} · {s.serviceType} &gt; {s.serviceSubtype}</option>
+                            ))}
                         </select>
                       )}
                     </div>
@@ -561,7 +682,7 @@ export function QuoteSettingsBoard() {
                 ) : (
                   <div className="flex flex-col gap-4">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-bold cd-text text-sm">{detail.serviceType} &gt; {detail.serviceSubtype}</h3>
+                      <h3 className="font-bold cd-text text-sm">{isFacilityTab && facility ? `${facility.name} · ` : ""}{detail.serviceType} &gt; {detail.serviceSubtype}</h3>
                       <span className="text-[10.5px] cd-text-faint">수정해도 기존 견적서의 산정 스냅샷은 유지됩니다</span>
                       <div className="ml-auto flex items-center gap-2">
                         <button type="button" className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" disabled={busy} onClick={() => void deleteSet()}>
@@ -601,103 +722,12 @@ export function QuoteSettingsBoard() {
                     {/* 항목 트리(base_md) */}
                     <div className="rounded-2xl border cd-border-c p-3.5 flex flex-col gap-3">
                       <p className="text-[12px] font-semibold cd-text">업무 항목 트리 (별첨1) — 표준 MD = 역산 분배 가중치</p>
-                      {/* 기술등급 축(가변) — 등급을 빼면 그 MD를 남은 등급에 비율대로 재분배한다 */}
-                      <div className="flex items-center gap-2 flex-wrap text-[11.5px]">
-                        <span className="cd-text-faint">기술등급</span>
-                        {(LABOR_GRADES as readonly string[]).map((g) => {
-                          const on = detail.grades.includes(g);
-                          return (
-                            <button
-                              key={g}
-                              type="button"
-                              data-active={on}
-                              aria-pressed={on}
-                              className={`cd-choice rounded-lg px-2.5 py-1 border ${on ? "cd-tint-primary border-[color:var(--cd-primary)] cd-text" : "cd-border-c cd-text-faint"}`}
-                              onClick={() => toggleGrade(g)}
-                            >
-                              {g}
-                            </button>
-                          );
-                        })}
-                        <span className="text-[10.5px] cd-text-faint">
-                          등급 제외 시 해당 MD는 남은 등급에 비율대로 재분배됩니다(합계 보존).
-                        </span>
-                      </div>
-                      <div className="overflow-x-auto">
-                        {/* 등급 열은 개수와 무관하게 총폭 고정(40%)을 균등 분할 — 3열이든 5열이든 표 폭이 같다 */}
-                        <table className="w-full text-[11.5px] border-collapse min-w-[640px] table-fixed">
-                          <colgroup>
-                            <col style={{ width: "56px" }} />
-                            <col />
-                            {detail.grades.map((g) => (
-                              <col key={g} style={{ width: `${40 / detail.grades.length}%` }} />
-                            ))}
-                            <col style={{ width: "36px" }} />
-                          </colgroup>
-                          <thead className="cd-table-head">
-                            <tr>
-                              <th className="border cd-border-c px-2 py-1.5 text-left cd-text-faint font-semibold">대항목</th>
-                              <th className="border cd-border-c px-2 py-1.5 text-left cd-text-faint font-semibold">항목명</th>
-                              {detail.grades.map((g) => (
-                                <th key={g} className="border cd-border-c px-2 py-1.5 cd-text-faint font-semibold">{g}</th>
-                              ))}
-                              <th className="border cd-border-c" />
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {rows.map((r, i) => (
-                              <tr key={i} className={r.isParent ? "cd-tint-primary/40" : ""}>
-                                <td className="border cd-border-c px-2 py-0.5 text-center">
-                                  <input type="checkbox" checked={r.isParent} onChange={(e) => setRows((prev) => prev.map((x, xi) => (xi === i ? { ...x, isParent: e.target.checked } : x)))} />
-                                </td>
-                                <td className="border cd-border-c px-1 py-0.5">
-                                  <input
-                                    className={`w-full bg-transparent outline-none px-1 ${r.isParent ? "font-semibold" : "pl-4"}`}
-                                    value={r.label}
-                                    onChange={(e) => setRows((prev) => prev.map((x, xi) => (xi === i ? { ...x, label: e.target.value } : x)))}
-                                  />
-                                </td>
-                                {detail.grades.map((g) => (
-                                  <td key={g} className="border cd-border-c px-1 py-0.5 text-center">
-                                    {r.isParent ? (
-                                      <span className="cd-text-faint text-[10px]">소계</span>
-                                    ) : (
-                                      <input
-                                        className="w-full bg-transparent text-center outline-none"
-                                        value={String(r.baseMd[g] ?? "")}
-                                        placeholder="0"
-                                        onChange={(e) => {
-                                          const v = e.target.value;
-                                          setRows((prev) =>
-                                            prev.map((x, xi) => {
-                                              if (xi !== i) return x;
-                                              const md = { ...x.baseMd };
-                                              if (v === "" || Number(v) === 0) delete md[g];
-                                              else md[g] = Number(v) || 0;
-                                              return { ...x, baseMd: md };
-                                            })
-                                          );
-                                        }}
-                                      />
-                                    )}
-                                  </td>
-                                ))}
-                                <td className="border cd-border-c text-center">
-                                  <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" onClick={() => setRows((prev) => prev.filter((_, xi) => xi !== i))}>
-                                    <X className="w-3 h-3" />
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button type="button" className="cd-btn rounded-lg border border-dashed cd-border-c px-3 py-1.5 text-[11.5px] cd-text-faint" onClick={() => setRows((prev) => [...prev, { label: "", isParent: false, baseMd: {} }])}>
-                          ＋ 행 추가
-                        </button>
-                        <span className="text-[10.5px] cd-text-faint">세부항목은 위쪽의 가장 가까운 대항목에 소속됩니다. 대항목 MD는 자동 소계.</span>
-                      </div>
+                      <QuoteItemTreeEditor
+                        grades={detail.grades}
+                        rows={rows}
+                        onGradesChange={(next) => setDetail((d) => (d ? { ...d, grades: next } : d))}
+                        onRowsChange={setRows}
+                      />
                     </div>
 
                     {/* 특이사항 템플릿 */}

@@ -1,5 +1,6 @@
 "use client";
 
+import { CdDateInput } from "@/components/cdash/CdField";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -779,15 +780,15 @@ function SiteContactModal({ theme, facilityId, onClose, onSaved }: {
                 <label className="flex items-center gap-1 cd-text-muted text-xs">
                   <input type="checkbox" checked={!!r.appointedAt} onChange={(e) => upd(i, { appointedAt: e.target.checked ? new Date().toISOString().slice(0, 10) : "" })} /> 신규 선임
                 </label>
-                {r.appointedAt && <input type="date" className="cd-input" style={{ width: "auto" }} value={r.appointedAt} onChange={(e) => upd(i, { appointedAt: e.target.value })} />}
+                {r.appointedAt && <CdDateInput style={{ width: 124 }} value={r.appointedAt} onChange={(v) => upd(i, { appointedAt: v })} aria-label="선임일" />}
                 <label className="flex items-center gap-1 cd-text-muted text-xs">
                   <input type="checkbox" checked={!!r.transferredAt} onChange={(e) => upd(i, { transferredAt: e.target.checked ? new Date().toISOString().slice(0, 10) : "" })} /> 부서 변경
                 </label>
-                {r.transferredAt && <input type="date" className="cd-input" style={{ width: "auto" }} value={r.transferredAt} onChange={(e) => upd(i, { transferredAt: e.target.value })} />}
+                {r.transferredAt && <CdDateInput style={{ width: 124 }} value={r.transferredAt} onChange={(v) => upd(i, { transferredAt: v })} aria-label="부서 변경일" />}
                 <label className="flex items-center gap-1 cd-text-muted text-xs">
                   <input type="checkbox" checked={!!r.resignedAt} onChange={(e) => upd(i, { resignedAt: e.target.checked ? new Date().toISOString().slice(0, 10) : "" })} /> 퇴사
                 </label>
-                {r.resignedAt && <input type="date" className="cd-input" style={{ width: "auto" }} value={r.resignedAt} onChange={(e) => upd(i, { resignedAt: e.target.value })} />}
+                {r.resignedAt && <CdDateInput style={{ width: 124 }} value={r.resignedAt} onChange={(v) => upd(i, { resignedAt: v })} aria-label="퇴사일" />}
                 {r.resignedAt && <span className="cd-pill cd-pill-error">퇴직</span>}
               </div>
             </div>

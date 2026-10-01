@@ -5,6 +5,7 @@
 // - 공급자 = 회사 프로필, 공급받는자 = 계약 발주처(facilities) + 담당자 연락처에서 수신 이메일 선택.
 // - 금액은 단계 금액이 공급가액인지 합계인지 사용자가 고른다(계약 데이터 관례가 섞여 있어 자동 판정하지 않음).
 
+import { CdDateInput } from "@/components/cdash/CdField";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, ExternalLink, FileText, ListPlus, Loader2, Plus, Trash2, X } from "lucide-react";
 
@@ -604,7 +605,7 @@ export default function TaxInvoiceIssueModal({
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                   <label>
                     <span className="text-[11px] cd-text-faint">작성일자</span>
-                    <input type="date" className="cd-input mt-0.5" value={writeDate} onChange={(e) => setWriteDate(e.target.value)} />
+                    <CdDateInput className="mt-0.5" value={writeDate} onChange={setWriteDate} aria-label="작성일자" />
                   </label>
                   <label>
                     <span className="text-[11px] cd-text-faint">과세 구분</span>

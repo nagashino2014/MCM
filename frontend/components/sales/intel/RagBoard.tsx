@@ -4,6 +4,7 @@
 // 좌: AI 질의형 브리핑(질문 + 검색범위 → pgvector 검색 → Claude 보고서, 출처 [n] 클릭 시 신호 모달) + 브리핑 이력
 // 우: 벡터 DB 적재 현황(미적재분 적재 버튼) + 영업 발굴 후보(매칭·확정/후보·미전환 → 영업건 전환)
 
+import { DigitDateInput } from "@/components/finance/DigitDateInput";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -258,9 +259,9 @@ export function RagBoard() {
                 <option value="monitoring">관찰</option>
                 <option value="excluded">제외</option>
               </select>
-              <input type="date" className="cd-input" style={{ width: 132 }} value={fFrom} onChange={(e) => setFFrom(e.target.value)} title="일자(부터)" />
+              <DigitDateInput className="cd-input" style={{ width: 112 }} value={fFrom} onChange={setFFrom} />
               <span className="cd-text-faint text-xs">~</span>
-              <input type="date" className="cd-input" style={{ width: 132 }} value={fTo} onChange={(e) => setFTo(e.target.value)} title="일자(까지)" />
+              <DigitDateInput className="cd-input" style={{ width: 112 }} value={fTo} onChange={setFTo} />
               <button
                 className="cd-btn cd-btn-primary cd-btn-sm"
                 disabled={genBusy || !question.trim() || !canEdit}

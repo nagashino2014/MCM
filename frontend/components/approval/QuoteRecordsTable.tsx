@@ -7,7 +7,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { FileSpreadsheet, Pencil, RefreshCw, Trash2, Trophy, X } from "lucide-react";
+import { Pencil, RefreshCw, Trash2, Trophy, X } from "lucide-react";
+import { CdDateInput } from "@/components/cdash/CdField";
 import {
   QUOTE_RESULT_LABEL,
   QUOTE_RESULT_REASONS,
@@ -215,11 +216,14 @@ export function QuoteViewModal({ quoteId, theme, onClose, onChanged }: { quoteId
             </button>
             <button
               type="button"
-              className="cd-btn rounded-lg border cd-border-c p-1.5"
+              className="flex items-center justify-center"
+              style={{ width: 30, height: 30 }}
               title="xlsx 다운로드(내부 보관용 원본)"
               onClick={() => window.open(`/api/quotes/${encodeURIComponent(quoteId)}/xlsx`, "_blank")}
             >
-              <FileSpreadsheet className="w-4 h-4 cd-text-primary" />
+              {/* 사업장 마스터(FacilityListPanel)의 엑셀 다운로드 아이콘과 동일 — PDF 버튼과 같은 30px 이미지 버튼 */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/icons/excelico.png" alt="엑셀 다운로드" className="w-full h-full object-contain" />
             </button>
             <button
               type="button"
@@ -250,7 +254,7 @@ export function QuoteViewModal({ quoteId, theme, onClose, onChanged }: { quoteId
         {resultEditing && (
           <div className="px-5 py-3.5 border-b cd-border-c flex flex-col gap-2.5">
             <span className="text-[11px] font-bold cd-text">수주 결과 — 수주율·시장 보정계수 분석의 원료(견적 기준 관리 › 수주 분석)</span>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+            <div className="grid grid-cols-2 md:grid-cols-[0.8fr_0.9fr_1fr_1fr_1.3fr_auto] gap-2 items-end">
               <div className="flex flex-col gap-1">
                 <span className="text-[10.5px] cd-text-faint">결과</span>
                 <select className="cd-select text-[12px]" value={resultForm.result} onChange={(e) => setResultForm((f) => ({ ...f, result: e.target.value as QuoteResult }))}>
@@ -261,7 +265,7 @@ export function QuoteViewModal({ quoteId, theme, onClose, onChanged }: { quoteId
               </div>
               <div className="flex flex-col gap-1">
                 <span className="text-[10.5px] cd-text-faint">결과 확정일</span>
-                <input type="date" className="cd-input text-[12px]" value={resultForm.resultAt} onChange={(e) => setResultForm((f) => ({ ...f, resultAt: e.target.value }))} />
+                <CdDateInput value={resultForm.resultAt} onChange={(v) => setResultForm((f) => ({ ...f, resultAt: v }))} aria-label="결과 확정일" />
               </div>
               <div className="flex flex-col gap-1">
                 <span className="text-[10.5px] cd-text-faint">{resultForm.result === "won" ? "계약금액(원)" : "경쟁 낙찰가(원)"}</span>
@@ -286,16 +290,16 @@ export function QuoteViewModal({ quoteId, theme, onClose, onChanged }: { quoteId
                 <span className="text-[10.5px] cd-text-faint">메모</span>
                 <input className="cd-input text-[12px]" value={resultForm.resultNote} onChange={(e) => setResultForm((f) => ({ ...f, resultNote: e.target.value }))} placeholder="경쟁사·발주처 코멘트 등" />
               </div>
+              <div className="col-span-2 md:col-span-1 flex items-center gap-2 whitespace-nowrap">
+                <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold disabled:opacity-50" disabled={busy != null} onClick={saveResult}>
+                  {busy === "result" ? "저장 중..." : "결과 저장"}
+                </button>
+                <button type="button" className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs" onClick={() => setResultEditing(false)}>
+                  취소
+                </button>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold disabled:opacity-50" disabled={busy != null} onClick={saveResult}>
-                {busy === "result" ? "저장 중..." : "결과 저장"}
-              </button>
-              <button type="button" className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs" onClick={() => setResultEditing(false)}>
-                취소
-              </button>
-              <span className="text-[10.5px] cd-text-faint">실주 시 경쟁 낙찰가를 함께 기입하면 세분류별 표준가 하향 여지가 자동 제안됩니다.</span>
-            </div>
+            <span className="text-[10.5px] cd-text-faint">실주 시 경쟁 낙찰가를 함께 기입하면 세분류별 표준가 하향 여지가 자동 제안됩니다.</span>
           </div>
         )}
 

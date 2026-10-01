@@ -331,23 +331,9 @@ export function ReceiptPickerModal({
         {/* 날짜 입력은 .cd-input 이 width:100% 라 폭을 고정해 [기간 ~ 전체 기간 조회]를 한 줄로 둔다(2026-09-15 사용자 지적) */}
         <div className="flex items-center gap-2 flex-wrap">
           <label className="cd-label text-xs">기간</label>
-          <input
-            type="date"
-            className="cd-input shrink-0"
-            style={{ width: 150 }}
-            value={from}
-            disabled={allTime}
-            onChange={(e) => setFrom(e.target.value)}
-          />
+          <DigitDateInput className={`cd-input shrink-0${allTime ? " opacity-60 pointer-events-none" : ""}`} style={{ width: 120 }} value={from} onChange={setFrom} />
           <span className="cd-text-muted">~</span>
-          <input
-            type="date"
-            className="cd-input shrink-0"
-            style={{ width: 150 }}
-            value={to}
-            disabled={allTime}
-            onChange={(e) => setTo(e.target.value)}
-          />
+          <DigitDateInput className={`cd-input shrink-0${allTime ? " opacity-60 pointer-events-none" : ""}`} style={{ width: 120 }} value={to} onChange={setTo} />
           <label className="flex items-center gap-1.5 text-xs cursor-pointer">
             <input type="checkbox" checked={allTime} onChange={(e) => setAllTime(e.target.checked)} />
             전체 기간

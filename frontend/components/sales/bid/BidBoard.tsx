@@ -4,6 +4,7 @@
 // 종류 탭 + 필터(키워드·업무구분·게시일 기간·예산 금액대·지역권·계약방법·용역 분류) +
 // 서버 페이지네이션 테이블 + 상세 모달(발주계획↔사전규격↔입찰공고 연계 링크) + 분류 설정.
 
+import { DigitDateInput } from "@/components/finance/DigitDateInput";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
@@ -978,9 +979,9 @@ export function BidBoard() {
           <div className="flex items-center gap-3 flex-wrap mb-3 rounded-lg border cd-border-c px-3 py-2 text-[12px] cd-text-muted">
             <label className="flex items-center gap-1.5 whitespace-nowrap">
               게시일
-              <input type="date" className="cd-input text-[12px]" style={{ width: 140 }} value={postedFrom} onChange={(e) => setPostedFrom(e.target.value)} />
+              <DigitDateInput className="cd-input text-[12px]" style={{ width: 112 }} value={postedFrom} onChange={setPostedFrom} />
               ~
-              <input type="date" className="cd-input text-[12px]" style={{ width: 140 }} value={postedTo} onChange={(e) => setPostedTo(e.target.value)} />
+              <DigitDateInput className="cd-input text-[12px]" style={{ width: 112 }} value={postedTo} onChange={setPostedTo} />
             </label>
             <label className="flex items-center gap-1.5 whitespace-nowrap">
               예산

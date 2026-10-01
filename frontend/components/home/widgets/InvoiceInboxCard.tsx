@@ -1,5 +1,6 @@
 "use client";
 
+import { CdDateInput } from "@/components/cdash/CdField";
 import { useState } from "react";
 import { Inbox, Check } from "lucide-react";
 import { HomeCard } from "../HomeCard";
@@ -103,12 +104,7 @@ export function InvoiceInboxCard() {
 
             {formFor === item.milestoneId ? (
               <div className="flex items-center gap-2 flex-wrap">
-                <input
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className="cd-input text-[12px] px-2 py-1 h-8"
-                />
+                <CdDateInput value={date} onChange={setDate} style={{ width: 120 }} aria-label="발행일" />
                 <input
                   type="number"
                   value={amount}

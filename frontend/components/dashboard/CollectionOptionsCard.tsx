@@ -1,5 +1,6 @@
 "use client";
 
+import { DigitDateInput } from "@/components/finance/DigitDateInput";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   SlidersHorizontal,
@@ -336,19 +337,9 @@ export function CollectionOptionsCard({
           ))}
         </div>
         <div className="flex items-center gap-2">
-          <input
-            type="date"
-            className="cd-input flex-1"
-            value={config.collectionRange?.startDate ?? ""}
-            onChange={(e) => setCustomDate("startDate", e.target.value)}
-          />
+          <DigitDateInput className="cd-input flex-1" value={config.collectionRange?.startDate ?? ""} onChange={(v) => setCustomDate("startDate", v)} />
           <span className="cd-text-faint text-xs">~</span>
-          <input
-            type="date"
-            className="cd-input flex-1"
-            value={config.collectionRange?.endDate ?? ""}
-            onChange={(e) => setCustomDate("endDate", e.target.value)}
-          />
+          <DigitDateInput className="cd-input flex-1" value={config.collectionRange?.endDate ?? ""} onChange={(v) => setCustomDate("endDate", v)} />
         </div>
       </div>
 

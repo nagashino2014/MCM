@@ -1,5 +1,6 @@
 "use client";
 
+import { CdDateInput } from "@/components/cdash/CdField";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type React from "react";
@@ -644,8 +645,8 @@ function EducationTab({
                 </option>
               ))}
             </select>
-            <input className="cd-input" type="date" value={item.passedAt ?? ""} onChange={(e) => updateArray(setEmployee, "certifications", index, { passedAt: e.target.value })} />
-            <input className="cd-input" type="date" value={item.issuedAt ?? ""} onChange={(e) => updateArray(setEmployee, "certifications", index, { issuedAt: e.target.value })} />
+            <CdDateInput value={item.passedAt ?? ""} onChange={(v) => updateArray(setEmployee, "certifications", index, { passedAt: v })} aria-label="합격일" />
+            <CdDateInput value={item.issuedAt ?? ""} onChange={(v) => updateArray(setEmployee, "certifications", index, { issuedAt: v })} aria-label="발급일" />
             <input className="cd-input" placeholder="자격번호" value={item.certificationNo ?? ""} onChange={(e) => updateArray(setEmployee, "certifications", index, { certificationNo: e.target.value })} />
             <RowAttach
               targetTable="employee_certifications"
@@ -746,8 +747,8 @@ function EvidenceTab({
       >
         {employee.housingSupports.map((item, index) => (
           <div key={index} className="grid md:grid-cols-5 gap-2 rounded-2xl cd-surface-bg border cd-border-c p-3">
-            <input className="cd-input" type="date" value={item.leaseStartedAt ?? ""} onChange={(e) => updateArray(setEmployee, "housingSupports", index, { leaseStartedAt: e.target.value })} />
-            <input className="cd-input" type="date" value={item.leaseEndedAt ?? ""} onChange={(e) => updateArray(setEmployee, "housingSupports", index, { leaseEndedAt: e.target.value })} />
+            <CdDateInput value={item.leaseStartedAt ?? ""} onChange={(v) => updateArray(setEmployee, "housingSupports", index, { leaseStartedAt: v })} aria-label="임차 시작일" />
+            <CdDateInput value={item.leaseEndedAt ?? ""} onChange={(v) => updateArray(setEmployee, "housingSupports", index, { leaseEndedAt: v })} aria-label="임차 종료일" />
             <input className="cd-input" type="number" placeholder="월세액" value={item.monthlyRent ?? ""} onChange={(e) => updateArray(setEmployee, "housingSupports", index, { monthlyRent: Number(e.target.value || 0) })} />
             <input className="cd-input" type="number" placeholder="보증금" value={item.depositAmount ?? ""} onChange={(e) => updateArray(setEmployee, "housingSupports", index, { depositAmount: Number(e.target.value || 0) })} />
             <input className="cd-input" placeholder="임대차 주소" value={item.address ?? ""} onChange={(e) => updateArray(setEmployee, "housingSupports", index, { address: e.target.value })} />
@@ -988,7 +989,7 @@ function HrTab({
             </select>
           </Field>
           <Field label="승진일자">
-            <input type="date" className="cd-input" value={promo.eventDate} onChange={(e) => setPromo((p) => ({ ...p, eventDate: e.target.value }))} />
+            <CdDateInput value={promo.eventDate} onChange={(v) => setPromo((p) => ({ ...p, eventDate: v }))} aria-label="승진일자" />
           </Field>
           <Field label="비고">
             <input className="cd-input" value={promo.note} onChange={(e) => setPromo((p) => ({ ...p, note: e.target.value }))} placeholder="비고(선택)" />
@@ -1043,7 +1044,7 @@ function HrTab({
             </select>
           </Field>
           <Field label="이동일자">
-            <input type="date" className="cd-input" value={transfer.eventDate} onChange={(e) => setTransfer((t) => ({ ...t, eventDate: e.target.value }))} />
+            <CdDateInput value={transfer.eventDate} onChange={(v) => setTransfer((t) => ({ ...t, eventDate: v }))} aria-label="이동일자" />
           </Field>
           <Field label="비고">
             <input className="cd-input" value={transfer.note} onChange={(e) => setTransfer((t) => ({ ...t, note: e.target.value }))} placeholder="비고(선택)" />
@@ -1085,7 +1086,7 @@ function HrTab({
         <p className="text-xs cd-text-muted mb-3">휴직원 승인 시 휴직 시작이 자동 기록됩니다. 복직하면 [복직 기록]으로 종료 처리하세요(계정 상태는 바뀌지 않습니다).</p>
         <div className="grid md:grid-cols-[160px_1fr_auto_auto] gap-2 items-end mb-3">
           <Field label="일자">
-            <input type="date" className="cd-input" value={leave.eventDate} onChange={(e) => setLeave((l) => ({ ...l, eventDate: e.target.value }))} />
+            <CdDateInput value={leave.eventDate} onChange={(v) => setLeave((l) => ({ ...l, eventDate: v }))} aria-label="일자" />
           </Field>
           <Field label="비고">
             <input className="cd-input" value={leave.note} onChange={(e) => setLeave((l) => ({ ...l, note: e.target.value }))} placeholder="예: 육아 휴직 / 복직" />
@@ -1136,7 +1137,7 @@ function HrTab({
         <p className="text-xs cd-text-muted mb-3">퇴사 기록 시 퇴사일이 지났으면 즉시, 미래(퇴사 예정)면 퇴사일 도래 시 인원·계정이 비활성화됩니다. 이력 삭제 시 복구됩니다.</p>
         <div className="grid md:grid-cols-[160px_1fr_auto] gap-2 items-end mb-3">
           <Field label="퇴사일자">
-            <input type="date" className="cd-input" value={resign.eventDate} onChange={(e) => setResign((r) => ({ ...r, eventDate: e.target.value }))} />
+            <CdDateInput value={resign.eventDate} onChange={(v) => setResign((r) => ({ ...r, eventDate: v }))} aria-label="퇴사일자" />
           </Field>
           <Field label="비고">
             <input className="cd-input" value={resign.note} onChange={(e) => setResign((r) => ({ ...r, note: e.target.value }))} placeholder="비고(선택)" />

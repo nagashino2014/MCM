@@ -6,6 +6,7 @@
 //   해지/해지취소/재등록(Stop 계열 API), 카드 즉시 수집(RefreshNow), 수집 로그.
 // - 수집(catch-up)은 /api/finance/connections GET 이 stale 판정 시 서버가 백그라운드 실행.
 
+import { CdDateInput } from "@/components/cdash/CdField";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
@@ -982,9 +983,9 @@ function ConnectionsPanel() {
           </label>
           {syncMode === "range" && (
             <div className="flex items-center gap-2 pl-6">
-              <input type="date" className="cd-input" value={syncFrom} onChange={(e) => setSyncFrom(e.target.value)} />
+              <DigitDateInput className="cd-input" style={{ width: 130 }} value={syncFrom} onChange={setSyncFrom} />
               <span className="cd-text-muted">~</span>
-              <input type="date" className="cd-input" value={syncTo} onChange={(e) => setSyncTo(e.target.value)} />
+              <DigitDateInput className="cd-input" style={{ width: 130 }} value={syncTo} onChange={setSyncTo} />
             </div>
           )}
           <p className="text-[11px] cd-text-faint">
@@ -3162,7 +3163,7 @@ function ModifyInvoiceModal({ origin, onClose, onIssued }: { origin: TaxInvoiceR
         <div className="grid grid-cols-2 gap-2">
           <label>
             <span className="text-[11px] cd-text-faint">작성일자</span>
-            <input type="date" className="cd-input mt-0.5" value={writeDate} onChange={(e) => setWriteDate(e.target.value)} />
+            <CdDateInput className="mt-0.5" value={writeDate} onChange={setWriteDate} aria-label="작성일자" />
           </label>
           <label>
             <span className="text-[11px] cd-text-faint">공급가액{meta.negative ? " (음수로 발행됩니다)" : ""}</span>

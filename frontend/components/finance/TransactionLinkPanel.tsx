@@ -1,5 +1,6 @@
 "use client";
 
+import { CdDateInput } from "@/components/cdash/CdField";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PaginationControls } from "@/components/ui/PaginationControls";
 import { RecognitionReviewPanel } from "./RecognitionReviewPanel";
@@ -200,8 +201,8 @@ export function TransactionLinkPanel() {
       <h2 className="cd-card-title">거래 연결</h2>
       <p className="text-sm cd-text-muted mt-1 mb-3">증빙이 겹치는 공급과 실제 지급·수금을 연결하고, 아직 연결하지 않은 금액을 확인합니다.</p>
       <div className="flex flex-wrap gap-2 items-end">
-        <label className="text-xs">조회 시작일<input aria-label="조회 시작일" type="date" className="cd-input block mt-1" value={from} onChange={e => setFrom(e.target.value)} disabled={busy}/></label>
-        <label className="text-xs">조회 종료일<input aria-label="조회 종료일" type="date" className="cd-input block mt-1" value={to} onChange={e => setTo(e.target.value)} disabled={busy}/></label>
+        <CdDateInput label="조회 시작일" className="text-xs" style={{ width: 130 }} value={from} onChange={setFrom} disabled={busy} />
+        <CdDateInput label="조회 종료일" className="text-xs" style={{ width: 130 }} value={to} onChange={setTo} disabled={busy} />
         <button type="button" className="cd-btn cd-btn-ghost" onClick={() => void refresh()} disabled={busy || loading}>{loading ? "불러오는 중…" : "조회"}</button>
       </div>
       <p className="text-xs cd-text-muted mt-2">기존 확정 수금은 보존하며 해당 수금에 새 계좌 배부를 추가할 수 없습니다. 마감·확정 자료에 영향을 주거나 취소·환불 등 지원하지 않는 거래는 검토 사유와 함께 저장이 제한됩니다. 연결이 있는 거래는 기간 밖의 자료도 함께 표시합니다.</p>

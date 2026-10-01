@@ -19,6 +19,7 @@ import { QuoteItemTreeEditor } from "@/components/approval/QuoteItemTreeEditor";
 import {
   DEFAULT_MD_GRADES,
   LABOR_GRADES,
+  QUOTE_MULTI_SUBTYPE,
   QUOTE_SERVICE_OPTIONS,
   treeRowsToWorkItems,
   workItemsToTreeRows,
@@ -613,7 +614,8 @@ export function QuoteSettingsBoard() {
                   <div key={g.type} className="rounded-2xl border cd-border-c p-2.5">
                     <p className="text-[11px] font-bold cd-text-faint px-1 mb-1">{g.type}</p>
                     <div className="flex flex-col">
-                      {g.subtypes.map((s) => {
+                      {/* 개별 탭에는 '복수 업무'도 둔다 — 견적서 작성에서 저장한 사업장 전용 복수 업무 세트 */}
+                      {(isFacilityTab ? [...g.subtypes, QUOTE_MULTI_SUBTYPE] : g.subtypes).map((s) => {
                         const has = setOf(g.type, s);
                         const active = selected?.serviceType === g.type && selected?.serviceSubtype === s;
                         return (

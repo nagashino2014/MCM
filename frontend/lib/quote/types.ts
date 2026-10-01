@@ -60,6 +60,8 @@ export const QUOTE_MULTI_WORK_MAX = 4;
 
 /** 복수 업무의 구성 업무 태그 — 세분류 + 횟수 */
 export interface QuoteWorkTag {
+  /** 이 업무의 용역 대분류 — 없으면 기본 정보의 용역 분류(다른 대분류 업무도 섞을 수 있다) */
+  serviceType?: string;
   subtype: string;
   count: number;
 }

@@ -46,6 +46,7 @@ import {
   travelCostOf,
   travelTripsOf,
   treeRowsToWorkItems,
+  workItemsToTreeRows,
   type DirectCosts,
   type MdMatrixRow,
   type QuoteFieldValues,
@@ -197,7 +198,10 @@ export function QuoteBoard() {
   // 복수 업무 — 사업장별 항목 트리 편집기 펼침·자동 분석 진행·분석 메모
   const [treeOpen, setTreeOpen] = useState<Record<number, boolean>>({});
   const [analyzing, setAnalyzing] = useState(false);
+  const [savingSet, setSavingSet] = useState(false);
   const [analysisNote, setAnalysisNote] = useState<Record<number, string>>({});
+  // 복수 업무 — 구성 업무를 고를 용역 대분류(기본: 기본 정보의 용역 분류). 다른 대분류의 업무(예: 기타 > 총량제신고)도 섞을 수 있다
+  const [workType, setWorkType] = useState<string | null>(null);
   const breakdownFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -251,6 +255,12 @@ export function QuoteBoard() {
         setRateData(d);
         const set = (useFacilitySet && d.facilitySet) || d.set;
         const multi = serviceSubtype === QUOTE_MULTI_SUBTYPE;
+        // 복수 업무 — 수신처 사업장에 전용 '복수 업무' 세트가 있으면 항목이 빈 사업장에 그 항목 트리를 채운다
+        const fset = multi && useFacilitySet ? d.facilitySet : null;
+        const fillTree = (s: QuoteSite): QuoteSite =>
+          fset?.items.length && !(s.customItems ?? []).length
+            ? { ...s, customItems: workItemsToTreeRows(fset.items), rates: { ...s.rates, grades: fset.grades?.length ? fset.grades : s.rates.grades } }
+            : s;
         // 신규 작성 중 미산정 사이트에 세트 기본 요율·단가 반영
         setSites((prev) =>
           prev.map((s) =>
@@ -274,7 +284,7 @@ export function QuoteBoard() {
                   },
                   remarks: s.remarks || (set?.remarksTemplate ?? ""),
                 }
-          )
+          ).map(fillTree)
         );
       })
       .catch(() => {});
@@ -506,15 +516,17 @@ export function QuoteBoard() {
 
   /** 복수 업무 — 구성 업무 태그 추가(같은 세분류를 다시 고르면 횟수 +1). 최대 4개 */
   const addWork = useCallback(
-    (idx: number, subtype: string) => {
+    (idx: number, type: string, subtype: string) => {
       const works = sites[idx].works ?? [];
-      if (works.some((w) => w.subtype === subtype)) {
-        return updateSite(idx, { works: works.map((w) => (w.subtype === subtype ? { ...w, count: w.count + 1 } : w)) });
+      // 대분류가 없는 태그(종전 저장분)는 기본 정보의 용역 분류로 본다
+      const same = (w: QuoteWorkTag) => (w.serviceType ?? serviceType) === type && w.subtype === subtype;
+      if (works.some(same)) {
+        return updateSite(idx, { works: works.map((w) => (same(w) ? { ...w, count: w.count + 1 } : w)) });
       }
       if (works.length >= QUOTE_MULTI_WORK_MAX) return alert(`구성 업무는 최대 ${QUOTE_MULTI_WORK_MAX}개까지 추가할 수 있습니다.`);
-      updateSite(idx, { works: [...works, { subtype, count: 1 }] });
+      updateSite(idx, { works: [...works, { serviceType: type, subtype, count: 1 }] });
     },
-    [sites, updateSite]
+    [sites, updateSite, serviceType]
   );
 
   /**
@@ -527,7 +539,7 @@ export function QuoteBoard() {
       const grades = new Set<string>();
       for (let n = 0; n < works.length; n++) {
         const w = works[n];
-        const qs = new URLSearchParams({ serviceType, serviceSubtype: w.subtype });
+        const qs = new URLSearchParams({ serviceType: w.serviceType ?? serviceType, serviceSubtype: w.subtype });
         if (facilityIdsKey) qs.set("facilityIds", facilityIdsKey);
         const d: RateSetData | null = await fetch(`/api/quotes/rate-set?${qs.toString()}`, { cache: "no-store" })
           .then((r) => (r.ok ? r.json() : null))
@@ -594,6 +606,90 @@ export function QuoteBoard() {
       }
     },
     [sites, updateSite]
+  );
+
+  /** 복수 업무 — 수신처 사업장의 전용 '복수 업무' 세트 항목으로 다시 채운다 */
+  const loadFacilityTree = useCallback(
+    (idx: number) => {
+      const fset = rateData?.facilitySet;
+      if (!fset) return;
+      const site = sites[idx];
+      if ((site.customItems ?? []).some((r) => r.label.trim()) && !confirm(`입력해 둔 업무 항목을 [${fset.facilityName}] 전용 기준 세트로 바꿀까요?`)) return;
+      updateSite(idx, {
+        customItems: workItemsToTreeRows(fset.items),
+        rates: { ...site.rates, grades: fset.grades?.length ? fset.grades : siteGrades(site) },
+      });
+      setTreeOpen((prev) => ({ ...prev, [site.siteSeq]: true }));
+    },
+    [rateData, sites, updateSite]
+  );
+
+  /**
+   * 복수 업무 — 이 사업장 카드의 항목 트리를 수신처 사업장의 전용 기준 세트(개별, 세분류 '복수 업무')로 저장한다.
+   * 다음 견적에서 같은 수신처·복수 업무를 고르면 자동으로 채워진다. 기준 관리 권한(approval.manage) 필요.
+   */
+  const saveAsFacilitySet = useCallback(
+    async (idx: number) => {
+      const site = sites[idx];
+      const target = recipients.find((r) => r.facilityId);
+      if (!target?.facilityId) return alert("전용 기준 세트는 수신처 사업장 기준으로 저장합니다. 수신처에 사업장을 먼저 지정하세요.");
+      const rows = (site.customItems ?? []).filter((r) => r.label.trim());
+      if (!rows.some((r) => !r.isParent && Object.values(r.baseMd).some((v) => v > 0))) return alert("저장할 업무 항목이 없습니다. 항목과 등급별 MD를 먼저 입력하세요.");
+      const facilityName = target.name || target.facilityName || "수신처 사업장";
+      setSavingSet(true);
+      try {
+        const fail = async (res: Response, fallback: string) =>
+          new Error(res.status === 403 ? "기준 세트를 저장할 권한이 없습니다(견적 기준 관리 권한 필요)." : ((await res.json().catch(() => ({}))) as { error?: string }).error ?? fallback);
+        const listRes = await fetch("/api/quotes/admin/rate-sets?scope=facility", { cache: "no-store" });
+        if (!listRes.ok) throw await fail(listRes, "전용 기준 세트 목록을 불러오지 못했습니다.");
+        const list = ((await listRes.json()).sets ?? []) as { setId: string; serviceType: string; serviceSubtype: string; facilityId: string | null }[];
+        let setId = list.find((x) => x.facilityId === target.facilityId && x.serviceType === serviceType && x.serviceSubtype === QUOTE_MULTI_SUBTYPE)?.setId;
+        // 기존 세트를 덮어쓸 때는 시장 보정계수 등 이 화면에 없는 값을 보존한다
+        let keep = { marketAdjust: 1, directExpenseRate: 0 };
+        if (setId) {
+          if (!confirm(`[${facilityName}] 전용 '${QUOTE_MULTI_SUBTYPE}' 기준 세트가 이미 있습니다. 지금 항목으로 덮어쓸까요?`)) return;
+          const cur = await fetch(`/api/quotes/admin/rate-sets/${encodeURIComponent(setId)}`, { cache: "no-store" });
+          if (cur.ok) {
+            const d = (await cur.json()).set as { marketAdjust: number; directExpenseRate: number };
+            keep = { marketAdjust: d.marketAdjust, directExpenseRate: d.directExpenseRate };
+          }
+        } else {
+          if (!confirm(`지금 항목을 [${facilityName}] 전용 '${QUOTE_MULTI_SUBTYPE}' 기준 세트로 저장할까요?\n다음 견적부터 이 수신처의 복수 업무 견적에 자동으로 채워집니다.`)) return;
+          const created = await fetch("/api/quotes/admin/rate-sets", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ serviceType, serviceSubtype: QUOTE_MULTI_SUBTYPE, facilityId: target.facilityId }),
+          });
+          if (!created.ok) throw await fail(created, "전용 기준 세트 생성에 실패했습니다.");
+          setId = (await created.json()).setId as string;
+        }
+        let lastParent = -1;
+        const items = rows.map((r, i) => {
+          if (r.isParent) lastParent = i;
+          return { label: r.label, baseMd: r.isParent ? {} : r.baseMd, parentIdx: r.isParent ? null : lastParent >= 0 ? lastParent : null };
+        });
+        const saved = await fetch(`/api/quotes/admin/rate-sets/${encodeURIComponent(setId)}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            overheadRate: site.rates.overheadRate,
+            techFeeRate: site.rates.techFeeRate,
+            directExpenseRate: keep.directExpenseRate,
+            marketAdjust: keep.marketAdjust,
+            grades: siteGrades(site),
+            remarksTemplate: site.remarks,
+            items,
+          }),
+        });
+        if (!saved.ok) throw await fail(saved, "전용 기준 세트 저장에 실패했습니다.");
+        alert(`[${facilityName}] 전용 '${QUOTE_MULTI_SUBTYPE}' 기준 세트로 저장했습니다.\n견적 기준 관리 › 기준 세트(개별)에서 수정할 수 있습니다.`);
+      } catch (err) {
+        alert((err as Error).message);
+      } finally {
+        setSavingSet(false);
+      }
+    },
+    [sites, recipients, serviceType]
   );
 
   /** MD 셀 수동 편집 → 금액 재계산(제약 실시간 검증은 요약 카드에서) */
@@ -771,7 +867,6 @@ export function QuoteBoard() {
     for (const s of sites) {
       if (!s.siteLabel.trim()) return "사업장 라벨을 입력하세요.";
       if (!s.subjectLine.trim()) return `[${s.siteLabel}] 사업장별 건명을 입력하세요.`;
-      if (isMulti && !(s.works ?? []).length) return `[${s.siteLabel}] 복수 업무의 구성 업무(용역 세분류)를 1개 이상 선택하세요.`;
       if (!(s.amounts.final > 0)) return `[${s.siteLabel}] 제출 견적가를 입력하고 산정을 실행하세요.`;
       const hasMd = s.mdMatrix.length > 0;
       const hasFree = (s.freeItems ?? []).length > 0;
@@ -784,7 +879,7 @@ export function QuoteBoard() {
     }
     if (line.length === 0) return "결재선에 결재자를 1명 이상 추가하세요.";
     return null;
-  }, [subject, issueDate, manualOn, noLocked, manualNo, manualCheck, revision, revisionReason, recipients, ccRefs, sendMode, sites, line, isMulti]);
+  }, [subject, issueDate, manualOn, noLocked, manualNo, manualCheck, revision, revisionReason, recipients, ccRefs, sendMode, sites, line]);
 
   const openPreview = useCallback(async () => {
     setBusy("preview");
@@ -1126,21 +1221,40 @@ export function QuoteBoard() {
                       <div className="rounded-2xl border cd-border-c p-3.5 flex flex-col gap-3">
                         <div className="flex items-center gap-2 flex-wrap">
                           {/* cd-select 는 width:100% 라 고정폭은 감싸는 요소에 준다 */}
+                          {/* 용역 대분류 — 오른쪽 구성 업무 목록은 여기서 고른 대분류의 세분류(2026-10-01: 다른 대분류 업무 혼합) */}
+                          <div className="w-[140px] shrink-0">
+                            <select
+                              className="cd-select"
+                              value={workType ?? serviceType}
+                              aria-label="구성 업무의 용역 대분류"
+                              onChange={(e) => setWorkType(e.target.value)}
+                            >
+                              {SERVICE_OPTIONS.map((o) => (
+                                <option key={o.type} value={o.type}>{o.type}</option>
+                              ))}
+                            </select>
+                          </div>
                           <div className="w-[180px] shrink-0">
                             <select
                               className="cd-select"
                               value=""
                               aria-label="구성 업무(용역 세분류) 추가"
-                              onChange={(e) => e.target.value && addWork(activeSite, e.target.value)}
+                              onChange={(e) => e.target.value && addWork(activeSite, workType ?? serviceType, e.target.value)}
                             >
                               <option value="">구성 업무 선택</option>
-                              {subtypeOptions.map((s) => (
+                              {(SERVICE_OPTIONS.find((o) => o.type === (workType ?? serviceType))?.subtypes ?? []).map((s) => (
                                 <option key={s} value={s}>{s}</option>
                               ))}
                             </select>
                           </div>
                           {(site.works ?? []).map((w, wi) => (
-                            <span key={w.subtype} className="cd-action inline-flex items-center gap-1.5 rounded-lg border cd-border-c pl-2.5 pr-1.5 py-1 text-[11.5px] cd-text">
+                            <span
+                              key={`${w.serviceType ?? serviceType}/${w.subtype}`}
+                              className="cd-action inline-flex items-center gap-1.5 rounded-lg border cd-border-c pl-2.5 pr-1.5 py-1 text-[11.5px] cd-text"
+                              title={`${w.serviceType ?? serviceType} > ${w.subtype}`}
+                            >
+                              {/* 기본 정보의 용역 분류와 다른 대분류의 업무는 대분류를 함께 적는다 */}
+                              {(w.serviceType ?? serviceType) !== serviceType && <span className="cd-text-faint">{w.serviceType}</span>}
                               <span className="font-semibold">{w.subtype}</span>
                               <span className="w-10 shrink-0">
                                 <input
@@ -1194,6 +1308,26 @@ export function QuoteBoard() {
                           >
                             <FileSpreadsheet className="w-3.5 h-3.5" /> {analyzing ? "분석 중..." : "항목 입력(자동)"}
                           </button>
+                          {/* 전용 기준 세트(개별, 세분류 '복수 업무') — 수신처 사업장 기준으로 저장·불러오기 */}
+                          <button
+                            type="button"
+                            className="cd-btn rounded-lg border cd-border-c px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
+                            disabled={savingSet || analyzing}
+                            title="지금 항목을 수신처 사업장의 전용 기준 세트(개별)로 저장합니다 — 다음 견적부터 자동으로 채워집니다(기준 관리 권한 필요)"
+                            onClick={() => void saveAsFacilitySet(activeSite)}
+                          >
+                            <Save className="w-3.5 h-3.5" /> {savingSet ? "저장 중..." : "전용 기준 세트로 저장"}
+                          </button>
+                          {rateData?.facilitySet && (
+                            <button
+                              type="button"
+                              className="cd-btn rounded-lg border cd-border-c px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5"
+                              title={`[${rateData.facilitySet.facilityName}] 전용 기준 세트의 항목으로 다시 채웁니다`}
+                              onClick={() => loadFacilityTree(activeSite)}
+                            >
+                              <Building2 className="w-3.5 h-3.5" /> 전용 세트 불러오기
+                            </button>
+                          )}
                           <input
                             ref={breakdownFileRef}
                             type="file"

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { AutosaveStatus, useAutosave } from "@/components/approval/useAutosave";
 import { CdDateInput, isValidDateString } from "@/components/cdash/CdField";
 import { AmountInput } from "@/components/ui/AmountInput";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
@@ -588,6 +589,18 @@ export function QuoteBoard() {
     [docId, subject, buildFieldValues, line, watchers, canAssign, noLocked, manualOn, manualNo]
   );
 
+  // 자동 저장(5분, 변화 있을 때만) — 저장 대상 = 필드값 + 결재선 + 참조자 + 직접 지정 번호
+  const getSnapshot = useCallback(
+    () => JSON.stringify({ v: buildFieldValues(), line, watchers, manualNo: manualOn ? manualNo : "" }),
+    [buildFieldValues, line, watchers, manualOn, manualNo]
+  );
+  const hasContent = useCallback(
+    () => subject.trim().length > 0 || recipients.length > 0 || sites.some((s) => s.subjectLine.trim().length > 0 || s.amounts.final > 0),
+    [subject, recipients, sites]
+  );
+  const autosaveSave = useCallback(() => persist("save"), [persist]);
+  const { lastSavedAt, lastError, markSaved } = useAutosave({ ready: !loading && busy == null, hasContent, getSnapshot, save: autosaveSave });
+
   const validate = useCallback((): string | null => {
     if (!subject.trim()) return "건명을 입력하세요.";
     if (!isValidDateString(issueDate)) return "견적일을 YYYYMMDD 형식의 올바른 날짜로 입력하세요.";
@@ -648,6 +661,7 @@ export function QuoteBoard() {
       setBusy(action);
       try {
         const saved = await persist("save");
+        markSaved();
         if (action === "save") {
           alert("임시저장되었습니다.");
           return;
@@ -663,7 +677,7 @@ export function QuoteBoard() {
         setBusy(null);
       }
     },
-    [validate, persist, sendMode, router]
+    [validate, persist, markSaved, sendMode, router]
   );
 
   const site = sites[activeSite];
@@ -674,7 +688,22 @@ export function QuoteBoard() {
       <div className="flex flex-col gap-5 min-h-0">
         <CdPageHeader
           title="견적서 작성"
-          actions={<DeleteDraftButton docId={docId} meta={editMeta} label="견적 삭제" />}
+          actions={
+            <div className="flex items-center gap-2">
+              {/* 중간 저장(2026-10-01) — 결재선 카드 하단의 임시저장과 같은 동작. 화면 상단에서도 바로 저장 */}
+              <AutosaveStatus lastSavedAt={lastSavedAt} lastError={lastError} />
+              <button
+                type="button"
+                className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
+                disabled={busy != null || loading}
+                onClick={() => send("save")}
+                title="작성 중인 견적서를 임시저장합니다(상신 전, 나중에 이어서 작성). 5분마다 자동 저장됩니다"
+              >
+                <Save className="w-3.5 h-3.5" /> {busy === "save" ? "저장 중..." : "저장"}
+              </button>
+              <DeleteDraftButton docId={docId} meta={editMeta} label="견적 삭제" />
+            </div>
+          }
         />
         {loading ? (
           <div className="cd-card rounded-3xl p-10 text-center text-sm cd-text-faint">불러오는 중...</div>

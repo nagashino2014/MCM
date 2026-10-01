@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { AutosaveStatus, useAutosave } from "@/components/approval/useAutosave";
 import { CdDateInput } from "@/components/cdash/CdField";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
 import { useDragOrder } from "@/components/approval/useDragOrder";
@@ -847,6 +848,15 @@ export function ApprovalLetterBoard() {
     [docId, subject, buildFieldValues, line, watchers, deliverableId, extraDeliverableIds, canAssign, noLocked, manualOn, manualNo]
   );
 
+  // 자동 저장(5분, 변화 있을 때만) — 본문은 contentEditable 이라 호출 시점에 buildFieldValues 로 읽는다
+  const getSnapshot = useCallback(() => JSON.stringify({ v: buildFieldValues(), line, watchers }), [buildFieldValues, line, watchers]);
+  const hasContent = useCallback(
+    () => subject.trim().length > 0 || (editorRef.current?.textContent ?? "").trim().length > 0 || recipients.length > 0,
+    [subject, recipients]
+  );
+  const autosaveSave = useCallback(() => persist("save"), [persist]);
+  const { lastSavedAt, lastError, markSaved } = useAutosave({ ready: !loading && busy == null, hasContent, getSnapshot, save: autosaveSave });
+
   const validate = useCallback((): string | null => {
     if (!subject.trim()) return "제목을 입력하세요.";
     if (recipients.length === 0) return "수신처(업체/기관)를 1건 이상 지정하세요.";
@@ -979,6 +989,7 @@ export function ApprovalLetterBoard() {
         }
         // 항상 save 먼저 — 반환된 docId 를 이어지는 submit 에 명시 전달(이중 문서 생성 방지)
         const saved = await persist("save");
+        markSaved();
         if (action === "save") {
           alert("임시저장되었습니다.");
           return;
@@ -1004,12 +1015,13 @@ export function ApprovalLetterBoard() {
         subtitle="결재 승인이 완료되면 자동 채번되어 수신처 메일로 PDF 공문이 발송됩니다."
         actions={
           <div className="flex items-center gap-2">
+            <AutosaveStatus lastSavedAt={lastSavedAt} lastError={lastError} />
             <button
               type="button"
               className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
               disabled={busy != null}
               onClick={() => send("save")}
-              title="작성 중인 공문과 첨부파일을 임시저장합니다(상신 전, 나중에 이어서 작성)"
+              title="작성 중인 공문과 첨부파일을 임시저장합니다(상신 전, 나중에 이어서 작성). 5분마다 자동 저장됩니다"
             >
               <Save className="w-3.5 h-3.5" /> {busy === "save" ? "저장 중..." : "저장"}
             </button>

@@ -13,6 +13,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { CheckSquare, ChevronDown, ChevronRight, Download, Eye, FileCog, Lock, Save, Search, Send, Unlock } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { AutosaveStatus, useAutosave } from "@/components/approval/useAutosave";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
 import { AmountInput } from "@/components/ui/AmountInput";
 import { resolveServiceTypeStyle } from "@/lib/ieps/contract-tree-style";
@@ -426,10 +427,26 @@ export function DeliverableBoard() {
   const saveOnly = async () => {
     const id = await save();
     if (id) {
+      markSaved();
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     }
   };
+
+  // 자동 저장(5분, 변화 있을 때만) — 계약을 고르고 기재 사항이 있을 때. save() 는 실패를 msg 로 삼키므로 null 을 실패로 본다
+  const getSnapshot = useCallback(
+    () => JSON.stringify({ contractId: contract?.contractId ?? null, kind, templateId, milestoneId, docTypes, values, unlocked }),
+    [contract, kind, templateId, milestoneId, docTypes, values, unlocked]
+  );
+  const hasContent = useCallback(() => !!contract && Object.keys(values).length > 0, [contract, values]);
+  const autosaveSave = useCallback(async () => {
+    const id = await save();
+    if (!id) throw new Error("자동 저장 실패");
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [save]);
+  const { lastSavedAt, lastError, markSaved } = useAutosave({ ready: !!contract && !busy, hasContent, getSnapshot, save: autosaveSave });
 
   const preview = async () => {
     const id = await save();
@@ -527,11 +544,13 @@ export function DeliverableBoard() {
               <FileCog className="w-4 h-4" /> 발주처 양식
             </button>
             {/* 기재 사항 저장 — 값을 고친 뒤 문서로 확정해 둔다(공문 첨부·재출력이 같은 값을 쓴다) */}
+            <AutosaveStatus lastSavedAt={lastSavedAt} lastError={lastError} />
             <button
               type="button"
               className="cd-btn rounded-xl border cd-border-c px-3 py-2 text-[13px] flex items-center gap-1.5"
               onClick={saveOnly}
               disabled={busy || !contract}
+              title="기재 사항을 저장합니다. 5분마다 자동 저장됩니다"
             >
               <Save className="w-4 h-4" /> {saved ? "저장됨" : "저장"}
             </button>

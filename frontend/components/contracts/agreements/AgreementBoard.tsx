@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { AutosaveStatus, useAutosave } from "@/components/approval/useAutosave";
 import { AmountInput } from "@/components/ui/AmountInput";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
@@ -552,6 +553,20 @@ export function AgreementBoard() {
     [docId, subject, buildFieldValues, line, watchers]
   );
 
+  // 자동 저장(5분, 변화 있을 때만) — 작성 모드에서만
+  const getSnapshot = useCallback(() => JSON.stringify({ v: buildFieldValues(), line, watchers }), [buildFieldValues, line, watchers]);
+  const hasContent = useCallback(
+    () => subject.trim().length > 0 || orderer.name.trim().length > 0 || amounts.supply > 0 || clauses.length > 0,
+    [subject, orderer.name, amounts.supply, clauses.length]
+  );
+  const autosaveSave = useCallback(() => persist("save"), [persist]);
+  const { lastSavedAt, lastError, markSaved } = useAutosave({
+    ready: mode === "edit" && !loading && busy == null,
+    hasContent,
+    getSnapshot,
+    save: autosaveSave,
+  });
+
   const validate = useCallback((): string | null => {
     if (!subject.trim()) return "계약명을 입력하세요.";
     if (!template) return "계약서 양식이 없습니다 — 이 세분류의 표준 셋이 미지정입니다(기준 관리에서 등록).";
@@ -598,6 +613,7 @@ export function AgreementBoard() {
       setBusy(action);
       try {
         const saved = await persist("save");
+        markSaved();
         if (action === "save") {
           alert("임시저장되었습니다.");
           return;
@@ -612,7 +628,7 @@ export function AgreementBoard() {
         setBusy(null);
       }
     },
-    [validate, persist, router]
+    [validate, persist, markSaved, router]
   );
 
   // ── 조문 편집 ──
@@ -966,6 +982,17 @@ export function AgreementBoard() {
             <div className="flex items-center gap-2">
               <button type="button" className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs font-semibold" onClick={() => { setMode("list"); router.replace("/contracts/agreements"); }}>
                 목록으로
+              </button>
+              {/* 중간 저장(2026-10-01) — 결재선 카드 하단의 임시저장과 같은 동작 */}
+              <AutosaveStatus lastSavedAt={lastSavedAt} lastError={lastError} />
+              <button
+                type="button"
+                className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
+                disabled={busy != null || loading}
+                onClick={() => send("save")}
+                title="작성 중인 계약서를 임시저장합니다(상신 전, 나중에 이어서 작성). 5분마다 자동 저장됩니다"
+              >
+                <Save className="w-3.5 h-3.5" /> {busy === "save" ? "저장 중..." : "저장"}
               </button>
               <DeleteDraftButton docId={docId} meta={editMeta} label="기안 삭제" />
             </div>

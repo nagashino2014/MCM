@@ -520,7 +520,8 @@ export function QuoteBoard() {
       const res = await fetch("/api/quotes/preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ values: buildFieldValues(), quoteNo: docNo ?? nextNo ?? "미채번", issueDate }),
+        // 직접 지정 중이면 그 번호로 미리보기(2026-10-01: 수동 번호가 docNo/nextNo 에만 의존해 미반영되던 문제)
+        body: JSON.stringify({ values: buildFieldValues(), quoteNo: (manualOn && !noLocked && manualNo) || docNo || nextNo || "미채번", issueDate }),
       });
       if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string })?.error ?? "미리보기 생성 실패");
       const blob = await res.blob();
@@ -533,7 +534,7 @@ export function QuoteBoard() {
     } finally {
       setBusy(null);
     }
-  }, [buildFieldValues, docNo, nextNo, issueDate]);
+  }, [buildFieldValues, manualOn, noLocked, manualNo, docNo, nextNo, issueDate]);
 
   const send = useCallback(
     async (action: "save" | "submit") => {

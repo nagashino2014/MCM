@@ -555,7 +555,7 @@ function addAnnexSheet(wb: ExcelJS.Workbook, name: string, site: QuoteSite): voi
       ws.mergeCells(row, 2, row, 4);
       setCell(ws, `B${row}`, d.formula, { size: 9.5, border: true });
       setCell(ws, `E${row}`, d.amount, { size: 9.5, border: true, align: "right", numFmt: "#,##0" });
-      setCell(ws, `F${row}`, "-", { size: 9, border: true, align: "center" });
+      setCell(ws, `F${row}`, d.note ?? "-", { size: 9, border: true, align: "center", wrap: true });
       borderRange(ws, row, 1, row, 6);
       row++;
     }

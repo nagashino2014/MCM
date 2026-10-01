@@ -83,6 +83,19 @@ export function validateSumConstraint(price: number, sum: number): { ok: boolean
   return { ok: over > 0 && over < cap, over, cap };
 }
 
+/**
+ * 합계 → 제출 견적가(2026-10-01, 복수 업무의 '견적가 역산'): 입력된 MD 로 계산한 합계 S 에서
+ * 합계-견적가 제약(0 < S - P < cap(P))을 지키는 깔끔한 금액 P 를 고른다.
+ * 절사 단위는 초과폭 상한 이하의 큰 자릿수(백만 → 십만 → 만 …) 순으로 시도한다. 못 찾으면 0.
+ */
+export function priceFromSum(sum: number): number {
+  for (const unit of [1_000_000, 100_000, 10_000, 1_000]) {
+    const price = Math.floor((sum - 1) / unit) * unit; // 합계가 단위의 배수여도 견적가는 그보다 작아야 한다
+    if (price > 0 && validateSumConstraint(price, sum).ok) return price;
+  }
+  return 0;
+}
+
 // ── (a) 정방향 표준가 (가이드) ──
 
 export interface ForwardInput {

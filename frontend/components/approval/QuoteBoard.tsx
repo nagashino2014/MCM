@@ -26,6 +26,9 @@ import { DeleteDraftButton, RejectedBanner, toEditDocMeta, type EditDocMeta } fr
 import type { LetterRecipient } from "@/lib/letter/types";
 import {
   DEFAULT_MD_GRADES,
+  ENG_DEDUCTION_BANDS,
+  ENG_DEDUCTION_STAGE2_RATE,
+  ENG_DEDUCTION_STD_YEARS,
   QUOTE_FORM_ID,
   QUOTE_MULTI_SUBTYPE,
   QUOTE_MULTI_WORK_MAX,
@@ -33,6 +36,8 @@ import {
   QUOTE_REVISION_REASON_LABEL,
   QUOTE_SERVICE_OPTIONS,
   SUMMARY_SHEET_MIN_SITES,
+  deductionCostOf,
+  engineeringDeduction,
   STANDARD_OVERHEAD_RATE,
   STANDARD_TECH_FEE_RATE,
   fixedDirectExpense,
@@ -58,7 +63,7 @@ import {
   type QuoteWorkTag,
   type SituationEntry,
 } from "@/lib/quote/types";
-import { computeAmounts, gradeTotals, matrixLaborCost, mdVectorTotal, reverseAllocate, validateSumConstraint } from "@/lib/quote/rates";
+import { computeAmounts, gradeTotals, matrixLaborCost, mdVectorTotal, priceFromSum, reverseAllocate, validateSumConstraint } from "@/lib/quote/rates";
 import "@/components/cdash/cdash.css";
 
 // 계약관리 CONTRACT_SERVICE_OPTIONS 와 동일(전 세분류 대응 — 사용자 확정). 기준 관리 화면과 공유.
@@ -138,6 +143,58 @@ function treeGradeTotals(rows: QuoteTreeRow[]): Record<string, number> {
     for (const [g, v] of Object.entries(r.baseMd)) out[g] = Math.round(((out[g] ?? 0) + (v || 0)) * 1000) / 1000;
   }
   return out;
+}
+
+/**
+ * 복수 업무 항목 트리의 공백 검증 — 역산·전용 세트 저장 전에 쓴다.
+ * 완전히 빈 행(항목명·MD 모두 없음)은 버리고, 남은 행에서 항목명 없는 행·MD 가 하나도 없는 세부항목·
+ * 세부항목이 없는 대항목을 찾는다. MD 가 빈 세부항목은 역산 가중치가 0 이라 MD 가 배분되지 않는다.
+ */
+function checkTreeRows(all: QuoteTreeRow[]): { rows: QuoteTreeRow[]; error: string | null } {
+  const hasMd = (r: QuoteTreeRow) => !r.isParent && Object.values(r.baseMd).some((v) => v > 0);
+  const rows = all.filter((r) => r.label.trim() || hasMd(r));
+  if (!rows.some(hasMd)) return { rows, error: "업무 항목이 없습니다. [항목 입력(수동)] 또는 [항목 입력(자동)]으로 항목과 등급별 MD를 먼저 입력하세요." };
+  const problems: string[] = [];
+  rows.forEach((r, i) => {
+    if (!r.label.trim()) problems.push(`${i + 1}번째 행 — 항목명이 비어 있습니다`);
+    else if (r.isParent) {
+      if (!(rows[i + 1] && !rows[i + 1].isParent)) problems.push(`[${r.label}] 대항목 아래에 세부항목이 없습니다`);
+    } else if (!hasMd(r)) problems.push(`[${r.label}] 등급별 MD가 비어 있습니다`);
+  });
+  if (!problems.length) return { rows, error: null };
+  return {
+    rows,
+    error:
+      "업무 항목 입력이 끝나지 않았습니다. 세부항목마다 한 등급 이상 MD를 입력해야 합니다(필요 없는 행은 삭제).\n\n" +
+      problems.slice(0, 6).map((p) => `· ${p}`).join("\n") +
+      (problems.length > 6 ? `\n· 외 ${problems.length - 6}건` : ""),
+  };
+}
+
+/** 공제료를 주어진 견적가 기준으로 다시 계산해 넣은 직접경비(적용하지 않으면 그대로) */
+function withDeduction(d: DirectCosts | undefined, price: number): DirectCosts | undefined {
+  if (!d?.deductionOn) return d;
+  return { ...d, deductionBase: price, deductionAmount: engineeringDeduction(price, d).total };
+}
+
+/** 소수 입력칸 — 입력 중에는 원문을 유지해 '0.' 처럼 소수점을 찍는 도중의 값이 지워지지 않게 한다 */
+function DecimalInput({ value, disabled, label, onChange }: { value: number; disabled?: boolean; label: string; onChange: (n: number) => void }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  return (
+    <input
+      className="cd-input text-right text-[12px]"
+      inputMode="decimal"
+      aria-label={label}
+      disabled={disabled}
+      value={draft ?? String(value)}
+      onChange={(e) => {
+        const v = e.target.value.replace(/[^\d.]/g, "");
+        setDraft(v);
+        onChange(Number(v) || 0);
+      }}
+      onBlur={() => setDraft(null)}
+    />
+  );
 }
 
 /** 이 사업장 라인의 등급 축 — 산정 당시 세트 스냅샷(가변, 143). 없으면 종전 4종 */
@@ -485,11 +542,10 @@ export function QuoteBoard() {
       const price = Number(String(priceInputs[site.siteSeq] ?? "").replace(/[^\d]/g, ""));
       if (!price) return alert("제출 견적가를 입력하세요.");
       // 복수 업무는 사업장별 항목 트리, 그 외는 적용 세트(전용 우선)의 항목이 역산 가중치의 원천
-      const items: QuoteWorkItem[] = isMulti ? treeRowsToWorkItems(site.customItems ?? [], `w${site.siteSeq}`) : activeSet?.items ?? [];
-      if (isMulti) {
-        if (!items.some((it) => Object.values(it.baseMd).some((v) => (v ?? 0) > 0)))
-          return alert("업무 항목이 없습니다. [항목 입력(수동)] 또는 [항목 입력(자동)]으로 항목과 등급별 MD를 먼저 입력하세요.");
-      } else if (!items.length) return alert("이 세분류는 산정 기준 세트가 없어 자유 입력(품목 직접 입력)으로 작성합니다.");
+      const tree = isMulti ? checkTreeRows(site.customItems ?? []) : null;
+      if (tree?.error) return alert(tree.error);
+      const items: QuoteWorkItem[] = tree ? treeRowsToWorkItems(tree.rows, `w${site.siteSeq}`) : activeSet?.items ?? [];
+      if (!items.length) return alert("이 세분류는 산정 기준 세트가 없어 자유 입력(품목 직접 입력)으로 작성합니다.");
       if (!rateData) return alert("노임단가를 불러오는 중입니다. 잠시 후 다시 시도하세요.");
       const rates = {
         ...site.rates,
@@ -500,10 +556,13 @@ export function QuoteBoard() {
         laborRates: rateData.laborRates,
         laborYear: rateData.laborYear,
       };
-      const fixedDirect = fixedDirectExpense(site.directCosts);
-      if (fixedDirect >= price) return alert("직접경비(출장비+인쇄비)가 제출 견적가 이상입니다. 견적가 또는 산식 입력값을 확인하세요.");
+      // 공제료는 제출 견적가(순계약금액) 기준 — 이번 견적가로 다시 계산해 직접경비에 넣는다
+      const directCosts = withDeduction(site.directCosts, price);
+      const fixedDirect = fixedDirectExpense(directCosts);
+      if (fixedDirect >= price) return alert("직접경비(출장비+인쇄비+공제료)가 제출 견적가 이상입니다. 견적가 또는 산식 입력값을 확인하세요.");
       const res = reverseAllocate({ price, items, rates, fixedDirect });
       updateSite(idx, {
+        directCosts,
         mdMatrix: res.mdMatrix,
         rates,
         amounts: res.amounts,
@@ -512,6 +571,48 @@ export function QuoteBoard() {
       if (!res.ok) alert("⚠ 역산 결과가 합계-견적가 제약(초과폭 상한)을 벗어났습니다. MD 를 수동 조정하거나 요율을 확인하세요.");
     },
     [sites, priceInputs, rateData, updateSite, isMulti, activeSet]
+  );
+
+  /**
+   * 견적가 역산(복수 업무) — 항목 트리에 입력된 MD 를 그대로 산정 MD 로 쓰고, 그 합계에서 제출 견적가를 정한다
+   * (MD 역산의 반대 방향). 산출내역서 엑셀로 MD 가 이미 정해진 경우에 쓴다.
+   */
+  const runForward = useCallback(
+    (idx: number) => {
+      const site = sites[idx];
+      const tree = checkTreeRows(site.customItems ?? []);
+      if (tree.error) return alert(tree.error);
+      if (!rateData) return alert("노임단가를 불러오는 중입니다. 잠시 후 다시 시도하세요.");
+      const rates = { ...site.rates, setId: undefined, setVersion: undefined, grades: siteGrades(site), laborRates: rateData.laborRates, laborYear: rateData.laborYear };
+      const rows: MdMatrixRow[] = treeRowsToWorkItems(tree.rows, `w${site.siteSeq}`).map((it) => ({ itemId: it.itemId, parentId: it.parentId, label: it.label, md: { ...it.baseMd } }));
+      // 대항목 소계(표시용) — 자식 합
+      for (const r of rows) {
+        const children = rows.filter((c) => c.parentId === r.itemId);
+        if (!children.length) continue;
+        const md: MdMatrixRow["md"] = {};
+        for (const g of new Set(children.flatMap((c) => Object.keys(c.md)))) {
+          const v = children.reduce((acc, c) => acc + (c.md[g] ?? 0), 0);
+          if (v) md[g] = Math.round(v * 1000) / 1000;
+        }
+        r.md = md;
+      }
+      const labor = matrixLaborCost(rows, rates.laborRates);
+      // 공제료는 견적가 기준이고 견적가는 공제료를 포함한 합계에서 정해진다 — 몇 번 되풀이하면 값이 멎는다
+      let directCosts = withDeduction(site.directCosts, 0);
+      let base = computeAmounts(labor, rates, fixedDirectExpense(directCosts));
+      let price = priceFromSum(base.sum);
+      for (let i = 0; i < 4 && price > 0 && site.directCosts?.deductionOn; i++) {
+        directCosts = withDeduction(site.directCosts, price);
+        base = computeAmounts(labor, rates, fixedDirectExpense(directCosts));
+        const next = priceFromSum(base.sum);
+        if (next === price) break;
+        price = next;
+      }
+      if (!price) return alert("입력된 MD의 합계 금액이 너무 작아 제출 견적가를 정할 수 없습니다. MD와 노임단가를 확인하세요.");
+      updateSite(idx, { directCosts, mdMatrix: rows, rates, amounts: { ...base, final: price }, freeItems: [] });
+      setPriceInputs((prev) => ({ ...prev, [site.siteSeq]: String(price) }));
+    },
+    [sites, rateData, updateSite]
   );
 
   /** 복수 업무 — 구성 업무 태그 추가(같은 세분류를 다시 고르면 횟수 +1). 최대 4개 */
@@ -633,8 +734,10 @@ export function QuoteBoard() {
       const site = sites[idx];
       const target = recipients.find((r) => r.facilityId);
       if (!target?.facilityId) return alert("전용 기준 세트는 수신처 사업장 기준으로 저장합니다. 수신처에 사업장을 먼저 지정하세요.");
-      const rows = (site.customItems ?? []).filter((r) => r.label.trim());
-      if (!rows.some((r) => !r.isParent && Object.values(r.baseMd).some((v) => v > 0))) return alert("저장할 업무 항목이 없습니다. 항목과 등급별 MD를 먼저 입력하세요.");
+      // 기준 세트의 MD 는 역산 분배 가중치로 쓰인다 — MD 가 빈 세부항목은 가중치 0 이 되므로 저장 전에 막는다
+      const tree = checkTreeRows(site.customItems ?? []);
+      if (tree.error) return alert(tree.error);
+      const rows = tree.rows;
       const facilityName = target.name || target.facilityName || "수신처 사업장";
       setSavingSet(true);
       try {
@@ -730,23 +833,28 @@ export function QuoteBoard() {
 
   /** 직접경비 산식(출장비·인쇄비) 변경 → 금액 재계산. 역산 전이면 산식만 저장하고 역산 때 반영 */
   const editDirectCost = useCallback(
-    (idx: number, key: keyof DirectCosts, value: number) => {
+    (idx: number, patch: Partial<DirectCosts>) => {
       const site = sites[idx];
-      const directCosts: DirectCosts = {
-        travelDayRate: 0,
-        travelPersonDays: 0,
-        travelTrips: travelTripsOf(site.directCosts),
-        printUnitPrice: 0,
-        printCopies: 0,
-        ...site.directCosts,
-        [key]: value,
-      };
+      // 공제료는 견적가 기준 — 입력 중인 견적가(없으면 확정 견적가)로 다시 계산한다
+      const price = Number(String(priceInputs[site.siteSeq] ?? "").replace(/[^\d]/g, "")) || site.amounts.final;
+      const directCosts = withDeduction(
+        {
+          travelDayRate: 0,
+          travelPersonDays: 0,
+          travelTrips: travelTripsOf(site.directCosts),
+          printUnitPrice: 0,
+          printCopies: 0,
+          ...site.directCosts,
+          ...patch,
+        },
+        price
+      ) as DirectCosts;
       if (!site.mdMatrix.length) return updateSite(idx, { directCosts });
       const laborCost = matrixLaborCost(site.mdMatrix, site.rates.laborRates);
       const base = computeAmounts(laborCost, site.rates, fixedDirectExpense(directCosts));
       updateSite(idx, { directCosts, amounts: { ...base, final: site.amounts.final, standard: site.amounts.standard } });
     },
-    [sites, updateSite]
+    [sites, priceInputs, updateSite]
   );
 
   // 직접 지정 번호 — 연도는 채번 예정 번호(없으면 확정 번호/올해), 종류는 용역 분류 기준.
@@ -1379,7 +1487,7 @@ export function QuoteBoard() {
                               onRowsChange={(next) => updateSite(activeSite, { customItems: next })}
                             />
                             {site.mdMatrix.length > 0 && (
-                              <span className="text-[10.5px] cd-text-faint">항목을 바꾼 뒤에는 [MD 역산 실행]을 다시 눌러야 아래 MD 표와 금액에 반영됩니다.</span>
+                              <span className="text-[10.5px] cd-text-faint">항목을 바꾼 뒤에는 [견적가 역산 실행] 또는 [MD 역산 실행]을 다시 눌러야 아래 MD 표와 금액에 반영됩니다.</span>
                             )}
                           </div>
                         )}
@@ -1432,9 +1540,22 @@ export function QuoteBoard() {
                               })()}
                             </span>
                             {tier === "calc" ? (
-                              <button type="button" className="ml-auto cd-btn cd-btn-primary rounded-lg px-3 py-1.5 text-xs font-semibold" onClick={() => runReverse(activeSite)}>
-                                MD 역산 실행
-                              </button>
+                              <span className="ml-auto flex items-center gap-2 flex-wrap justify-end">
+                                {/* 복수 업무 — 항목 트리에 MD 가 이미 정해져 있으면(엑셀 자동 입력 등) 그 MD 로 견적가를 정한다 */}
+                                {isMulti && (
+                                  <button
+                                    type="button"
+                                    className="cd-btn rounded-lg border cd-border-c px-3 py-1.5 text-xs font-semibold"
+                                    title="업무 항목에 입력된 MD를 그대로 쓰고, 그 합계 금액에서 제출 견적가를 계산해 채웁니다"
+                                    onClick={() => runForward(activeSite)}
+                                  >
+                                    견적가 역산 실행
+                                  </button>
+                                )}
+                                <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3 py-1.5 text-xs font-semibold" onClick={() => runReverse(activeSite)}>
+                                  MD 역산 실행
+                                </button>
+                              </span>
                             ) : (
                               <span className="text-[11px] cd-text-faint">이 세분류는 기준 세트 미등록 — 품목 직접 입력(자유형)</span>
                             )}
@@ -1442,7 +1563,7 @@ export function QuoteBoard() {
 
                           {/* 금액 요약 + 제약 상태 */}
                           {site.amounts.final > 0 && (
-                            <div className="flex flex-col gap-1.5 border-t cd-border-c pt-2 text-[12px] cd-text">
+                            <div className="flex flex-col border-t cd-border-c pt-3.5 text-[12px] cd-text">
                               <div className="grid grid-cols-2 gap-x-4 gap-y-1 tabular-nums">
                                 {(
                                   [
@@ -1459,18 +1580,21 @@ export function QuoteBoard() {
                                   </span>
                                 ))}
                               </div>
-                              <span className="font-bold cd-text-primary tabular-nums">최종 견적 {won(site.amounts.final)}원</span>
-                              {site.mdMatrix.length > 0 &&
-                                (() => {
-                                  const c = validateSumConstraint(site.amounts.final, site.amounts.sum);
-                                  return c.ok ? (
-                                    <span className="self-start text-[11px] rounded-full px-2 py-0.5 cd-tint-primary">제약 OK (초과 {won(c.over)}원 &lt; {won(c.cap)}원)</span>
-                                  ) : (
-                                    <span className="self-start text-[11px] rounded-full px-2 py-0.5 border border-[color:var(--cd-danger,#FA896B)] text-[color:var(--cd-danger,#FA896B)]">
-                                      ⚠ 제약 위반 — 합계-견적가 {won(c.over)}원 (0 초과 {won(c.cap)}원 미만이어야 상신 가능)
-                                    </span>
-                                  );
-                                })()}
+                              {/* 최종 견적 — 위 내역과 띄우고 강조선 아래 오른쪽 정렬, 제약 상태 태그는 그 왼쪽(2026-10-01 사용자 요청) */}
+                              <div className="mt-4 pt-2.5 border-t-2 border-[color:var(--cd-primary)] flex items-center justify-between gap-2 flex-wrap">
+                                {site.mdMatrix.length > 0 &&
+                                  (() => {
+                                    const c = validateSumConstraint(site.amounts.final, site.amounts.sum);
+                                    return c.ok ? (
+                                      <span className="shrink-0 text-[11px] rounded-full px-2 py-0.5 cd-tint-primary" title={`합계-견적가 초과 ${won(c.over)}원 < 상한 ${won(c.cap)}원`}>제약 OK</span>
+                                    ) : (
+                                      <span className="text-[11px] rounded-full px-2 py-0.5 border border-[color:var(--cd-danger,#FA896B)] text-[color:var(--cd-danger,#FA896B)]">
+                                        ⚠ 제약 위반 — 합계-견적가 {won(c.over)}원 (0 초과 {won(c.cap)}원 미만이어야 상신 가능)
+                                      </span>
+                                    );
+                                  })()}
+                                <span className="ml-auto text-[16px] leading-6 font-bold cd-text-primary tabular-nums text-right">최종 견적 {won(site.amounts.final)}원</span>
+                              </div>
                             </div>
                           )}
                         </div>
@@ -1496,7 +1620,7 @@ export function QuoteBoard() {
                               const direct = site.mdMatrix.length ? site.amounts.directExpense : fixedDirectExpense(site.directCosts);
                               const share = price > 0 && direct > 0 ? ((direct / price) * 100).toFixed(1) : "0";
                               return (
-                                <label className="flex flex-col gap-1" title="출장비+인쇄비 ÷ 제출 견적가 (자동 계산)">
+                                <label className="flex flex-col gap-1" title="(출장비+인쇄비+공제료) ÷ 제출 견적가 (자동 계산)">
                                   <span className="text-[11px] leading-4 cd-text-faint">직접경비 요율(견적가 대비)</span>
                                   <span className="flex items-center gap-1 text-[12px] cd-text">
                                     <input className="cd-input text-right text-[12px]" value={share} disabled readOnly />%
@@ -1535,7 +1659,7 @@ export function QuoteBoard() {
                                         className="cd-input text-right text-[12px]"
                                         value={f.value || ""}
                                         disabled={tier === "free"}
-                                        onChange={(v) => editDirectCost(activeSite, f.key, Number(v) || 0)}
+                                        onChange={(v) => editDirectCost(activeSite, { [f.key]: Number(v) || 0 })}
                                       />
                                     ) : (
                                       <input
@@ -1543,11 +1667,68 @@ export function QuoteBoard() {
                                         inputMode="numeric"
                                         value={f.value ? String(f.value) : ""}
                                         disabled={tier === "free"}
-                                        onChange={(e) => editDirectCost(activeSite, f.key, Number(e.target.value.replace(/[^\d]/g, "")) || 0)}
+                                        onChange={(e) => editDirectCost(activeSite, { [f.key]: Number(e.target.value.replace(/[^\d]/g, "")) || 0 })}
                                       />
                                     )}
                                   </label>
                                 ))}
+                              </div>
+                            );
+                          })()}
+                          {/* 엔지니어링공제료(손해배상 공제료) — 1단계 + 2단계, 순계약금액 = 제출 견적가. 적용하면 직접경비에 포함 */}
+                          {(() => {
+                            const d = site.directCosts;
+                            const on = !!d?.deductionOn;
+                            const price = Number(String(priceInputs[site.siteSeq] ?? "").replace(/[^\d]/g, "")) || site.amounts.final;
+                            // 입력 중인 견적가 기준 미리보기(역산을 실행하면 이 값이 직접경비에 들어간다)
+                            const calc = engineeringDeduction(price, d);
+                            const baseRate = d?.deductionBaseRate ?? ENG_DEDUCTION_BANDS[0].base;
+                            const addRate = d?.deductionAddRate ?? ENG_DEDUCTION_BANDS[0].add;
+                            const stale = on && site.mdMatrix.length > 0 && deductionCostOf(d) !== calc.total;
+                            return (
+                              <div className="rounded-lg border cd-border-c p-2.5 flex flex-col gap-1.5">
+                                <div className="flex items-center justify-between gap-2 text-[12px]">
+                                  <label className="flex items-center gap-1.5 font-semibold cd-text cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={on}
+                                      disabled={tier === "free"}
+                                      onChange={(e) => editDirectCost(activeSite, { deductionOn: e.target.checked })}
+                                    />
+                                    엔지니어링공제료
+                                  </label>
+                                  <span className="cd-text tabular-nums">{won(on ? calc.total : 0)}원</span>
+                                </div>
+                                <div className="grid grid-cols-3 gap-2">
+                                  <label className="flex flex-col gap-1 min-w-0" title={`1단계 기본요율 — 기본값은 환경부문(대기관리) 요율표의 5억원 이하 구간. 고치지 않으면 5억원 초과분은 구간별 요율이 자동 적용됩니다`}>
+                                    <span className="text-[11px] cd-text-faint whitespace-nowrap">기본요율(%)</span>
+                                    <DecimalInput label="공제료 기본요율(%)" value={baseRate} disabled={!on} onChange={(n) => editDirectCost(activeSite, { deductionBaseRate: n })} />
+                                  </label>
+                                  <label className="flex flex-col gap-1 min-w-0" title="1단계 가산요율 — 표준담보기간 초과일수에 곱해집니다">
+                                    <span className="text-[11px] cd-text-faint whitespace-nowrap">가산요율(%)</span>
+                                    <DecimalInput label="공제료 가산요율(%)" value={addRate} disabled={!on} onChange={(n) => editDirectCost(activeSite, { deductionAddRate: n })} />
+                                  </label>
+                                  <label className="flex flex-col gap-1 min-w-0" title={`표준담보기간(${ENG_DEDUCTION_STD_YEARS}년)을 넘는 담보일수 — 넘지 않으면 0`}>
+                                    <span className="text-[11px] cd-text-faint whitespace-nowrap">담보기간 초과일수</span>
+                                    <input
+                                      className="cd-input text-right text-[12px]"
+                                      inputMode="numeric"
+                                      aria-label="표준담보기간 초과일수"
+                                      disabled={!on}
+                                      value={d?.deductionExcessDays ? String(d.deductionExcessDays) : ""}
+                                      placeholder="0"
+                                      onChange={(e) => editDirectCost(activeSite, { deductionExcessDays: Number(e.target.value.replace(/[^\d]/g, "")) || 0 })}
+                                    />
+                                  </label>
+                                </div>
+                                {on && (
+                                  <span className="text-[10.5px] cd-text-faint tabular-nums">
+                                    {price > 0
+                                      ? `1단계 ${won(calc.stage1)}원 + 2단계(견적가 × ${ENG_DEDUCTION_STAGE2_RATE}%) ${won(calc.stage2)}원 · 천원 미만 절사 · 순계약금액 = 제출 견적가`
+                                      : "제출 견적가를 입력하면 계산됩니다 · 순계약금액 = 제출 견적가"}
+                                    {stale ? " · 견적가가 바뀌었습니다 — 역산을 다시 실행하세요" : ""}
+                                  </span>
+                                )}
                               </div>
                             );
                           })()}

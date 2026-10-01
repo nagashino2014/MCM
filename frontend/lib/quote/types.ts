@@ -167,6 +167,64 @@ export interface DirectCosts {
   travelTrips?: number; // 출장 횟수(회). 2026-09-30 추가 — 없으면(구 문서) 1회로 본다
   printUnitPrice: number; // 인쇄비 부당 단가(원)
   printCopies: number; // 인쇄비 총 부수
+  // ── 엔지니어링 손해배상 공제료(2026-10-01) — 적용 시 직접경비에 포함 ──
+  deductionOn?: boolean; // 공제료 적용 여부
+  deductionExcessDays?: number; // 표준담보기간(3년) 초과일수
+  deductionBaseRate?: number; // 1단계 기본요율(%) 직접 지정 — 없으면 요율표(가입금액 구간별)
+  deductionAddRate?: number; // 1단계 가산요율(%) 직접 지정 — 없으면 요율표
+  deductionBase?: number; // 산정 기준 금액(순계약금액 = 제출 견적가) 스냅샷
+  deductionAmount?: number; // 공제료(원, 천원 미만 절사) — 견적가에 따라 달라지므로 산정 시점 값을 저장한다
+}
+
+/**
+ * 엔지니어링 손해배상 공제료(엔지니어링공제조합, 엔지니어링산업진흥법 제31조·시행령 제42조).
+ *   공제료 = 1단계 + 2단계 (천원 미만 절사)
+ *   1단계 = 공제가입금액 × [기본요율 + {가산요율 × (표준담보기간 초과일수 / 365)}]  (가입금액 구간별 요율 적용)
+ *   2단계 = 공제가입금액 × 0.16%
+ * 산식은 2026-10-01 공제조합 홈페이지(업무안내 > 공제료 > 산출방법)로 재확인. 요율표는 조합이 공시하지 않아
+ * 발주처 산출내역서(2026년, 환경부문 대기관리, 표준담보기간 3년)의 값을 기본으로 쓰고 견적마다 고칠 수 있다.
+ * 공제가입금액(순계약금액)은 제출 견적가로 본다(사용자 확정).
+ */
+export const ENG_DEDUCTION_BANDS: { max: number | null; base: number; add: number }[] = [
+  { max: 500_000_000, base: 0.599, add: 0.096 },
+  { max: 1_000_000_000, base: 0.579, add: 0.093 },
+  { max: 2_000_000_000, base: 0.561, add: 0.09 },
+  { max: 3_000_000_000, base: 0.543, add: 0.088 },
+  { max: null, base: 0.525, add: 0.084 },
+];
+export const ENG_DEDUCTION_STAGE2_RATE = 0.16; // 2단계 요율(%)
+export const ENG_DEDUCTION_STD_YEARS = 3; // 표준담보기간(년)
+
+/** 요율을 직접 지정했는지 — 지정하면 구간 누진 없이 단일 요율로 계산한다 */
+export function hasCustomDeductionRate(d?: DirectCosts): boolean {
+  return d?.deductionBaseRate != null || d?.deductionAddRate != null;
+}
+
+/** 공제료 계산 — amount = 공제가입금액(제출 견적가). 적용하지 않으면 전부 0 */
+export function engineeringDeduction(amount: number, d?: DirectCosts): { stage1: number; stage2: number; total: number } {
+  if (!d?.deductionOn || !(amount > 0)) return { stage1: 0, stage2: 0, total: 0 };
+  const excess = Math.max(0, d.deductionExcessDays ?? 0) / 365;
+  let stage1 = 0;
+  if (hasCustomDeductionRate(d)) {
+    const base = d.deductionBaseRate ?? ENG_DEDUCTION_BANDS[0].base;
+    const add = d.deductionAddRate ?? ENG_DEDUCTION_BANDS[0].add;
+    stage1 = (amount * (base + add * excess)) / 100;
+  } else {
+    let floor = 0;
+    for (const b of ENG_DEDUCTION_BANDS) {
+      const part = Math.min(amount, b.max ?? Infinity) - floor;
+      if (part <= 0) break;
+      stage1 += (part * (b.base + b.add * excess)) / 100;
+      floor = b.max ?? Infinity;
+    }
+  }
+  const stage2 = (amount * ENG_DEDUCTION_STAGE2_RATE) / 100;
+  return { stage1, stage2, total: Math.floor((stage1 + stage2) / 1000) * 1000 };
+}
+
+/** 저장된 공제료(원) — 적용 중일 때만 */
+export function deductionCostOf(d?: DirectCosts): number {
+  return d?.deductionOn ? Math.round(d.deductionAmount ?? 0) : 0;
 }
 
 export function travelTripsOf(d?: DirectCosts): number {
@@ -184,12 +242,16 @@ export function printCostOf(d?: DirectCosts): number {
 
 /** 산식 직접경비 합계(원) — 인건비와 무관한 고정액이라 역산에서 먼저 빼고 MD 를 분배한다 */
 export function fixedDirectExpense(d?: DirectCosts): number {
-  return travelCostOf(d) + printCostOf(d);
+  return travelCostOf(d) + printCostOf(d) + deductionCostOf(d);
 }
 
 /** 견적서 직접경비 행 비고 — 산식 항목은 [별첨 3]으로 안내, 옛 문서(요율분)는 종전 표기 */
 export function directExpenseNote(site: { directCosts?: DirectCosts; rates: SiteRates }): string {
-  const parts = [travelCostOf(site.directCosts) > 0 && "출장비", printCostOf(site.directCosts) > 0 && "인쇄비"].filter(Boolean);
+  const parts = [
+    travelCostOf(site.directCosts) > 0 && "출장비",
+    printCostOf(site.directCosts) > 0 && "인쇄비",
+    deductionCostOf(site.directCosts) > 0 && "손해배상 공제료",
+  ].filter(Boolean);
   const legacy = site.rates.directExpenseRate > 0 ? `(직접인건비) × ${Math.round(site.rates.directExpenseRate * 100)}%` : "";
   const formula = parts.length ? `${parts.join(" + ")} [별첨 3]` : "";
   return [formula, legacy].filter(Boolean).join(" + ");
@@ -200,16 +262,34 @@ export function directCostBasisRows(d?: DirectCosts): { c1: string; c2: string; 
   const rows: { c1: string; c2: string; amount: number }[] = [];
   if (travelCostOf(d) > 0) rows.push({ c1: "출장비", c2: "실비 산정 [별첨 3]", amount: travelCostOf(d) });
   if (printCostOf(d) > 0) rows.push({ c1: "인쇄비", c2: "실비 산정 [별첨 3]", amount: printCostOf(d) });
+  if (deductionCostOf(d) > 0) rows.push({ c1: "손해배상 공제료", c2: ENG_DEDUCTION_NOTE, amount: deductionCostOf(d) });
   return rows;
 }
 
-/** [별첨 3] 직접경비 산출내역 행 — 산식(일단가 × 인원 × 횟수, 부당 단가 × 부수)과 금액 */
-export function directCostDetailRows(d?: DirectCosts): { label: string; formula: string; amount: number }[] {
+/** 견적서의 공제료 항목 비고(산정기준) 문구 — 순계약금액 대신 제출 견적가로 계산했음을 밝힌다(2026-10-01 사용자 요청) */
+export const ENG_DEDUCTION_NOTE = "견적가 기준으로 산정";
+
+/** [별첨 3] 직접경비 산출내역 행 — 산식(일단가 × 인원 × 횟수, 부당 단가 × 부수)과 금액. note = 비고 열(없으면 '-') */
+export function directCostDetailRows(d?: DirectCosts): { label: string; formula: string; amount: number; note?: string }[] {
   const won = (n: number) => Math.round(n).toLocaleString("ko-KR");
-  const rows: { label: string; formula: string; amount: number }[] = [];
+  const rows: { label: string; formula: string; amount: number; note?: string }[] = [];
   if (travelCostOf(d) > 0)
     rows.push({ label: "출장비", formula: `일단가 ${won(d!.travelDayRate)}원 × ${d!.travelPersonDays}인 × ${travelTripsOf(d)}회`, amount: travelCostOf(d) });
   if (printCostOf(d) > 0) rows.push({ label: "인쇄비", formula: `부당 단가 ${won(d!.printUnitPrice)}원 × ${d!.printCopies}부`, amount: printCostOf(d) });
+  if (deductionCostOf(d) > 0) {
+    const custom = hasCustomDeductionRate(d);
+    const base = d!.deductionBaseRate ?? ENG_DEDUCTION_BANDS[0].base;
+    const add = d!.deductionAddRate ?? ENG_DEDUCTION_BANDS[0].add;
+    const banded = !custom && (d!.deductionBase ?? 0) > (ENG_DEDUCTION_BANDS[0].max ?? 0);
+    rows.push({
+      label: "엔지니어링 손해배상 공제료",
+      formula:
+        `${won(d!.deductionBase ?? 0)}원 × [기본요율 ${base}% + 가산요율 ${add}% × (초과 ${d!.deductionExcessDays ?? 0}일/365)]` +
+        `${banded ? "(가입금액 구간별 요율)" : ""} + ${won(d!.deductionBase ?? 0)}원 × ${ENG_DEDUCTION_STAGE2_RATE}% (천원 미만 절사)`,
+      amount: deductionCostOf(d),
+      note: ENG_DEDUCTION_NOTE,
+    });
+  }
   return rows;
 }
 

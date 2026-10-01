@@ -751,7 +751,7 @@ function drawAnnex(w: Writer, site: QuoteSite): void {
     w.tableRow([headCell("구분"), headCell("산출 근거"), headCell("금액(원)"), headCell("비고")], r3, { size: 8.5 });
     for (const d of detail) {
       w.tableRow(
-        [{ text: d.label, align: "center" }, { text: d.formula }, { text: won(d.amount), align: "right" }, { text: "-", align: "center" }],
+        [{ text: d.label, align: "center" }, { text: d.formula }, { text: won(d.amount), align: "right" }, { text: d.note ?? "-", align: "center" }],
         r3,
         { size: 8.5 }
       );

@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { authErrorToResponse, requireSession } from "@/lib/auth/guards";
+import { checkPermission, loadUserAccess } from "@/lib/auth/rbac";
+import { MENU_PERMISSION_KEYS } from "@/config/menu";
 import { getDb, rowsToObjects } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -60,7 +62,15 @@ export async function GET() {
     } catch {
       /* chat 테이블 미존재 등 — 0 유지 */
     }
-    return NextResponse.json({ mailUnread, approvalPending, chatUnread });
+    // 권한키로 노출을 가르는 메뉴(수행인력 실적 등) — 보유한 키만 내려 사이드바가 숨김 판정에 쓴다.
+    let menuPermissions: string[] = [];
+    try {
+      const access = await loadUserAccess(ctx.userId);
+      menuPermissions = MENU_PERMISSION_KEYS.filter((key) => checkPermission(access, key));
+    } catch {
+      /* 빈 목록 유지 — 해당 메뉴는 숨김 */
+    }
+    return NextResponse.json({ mailUnread, approvalPending, chatUnread, menuPermissions });
   } catch (err) {
     return authErrorToResponse(err);
   }

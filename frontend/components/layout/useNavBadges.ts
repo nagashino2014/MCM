@@ -5,9 +5,10 @@
 import { useEffect, useState } from "react";
 import type { MenuBadgeKey } from "@/config/menu";
 
-export type NavBadges = Record<MenuBadgeKey, number>;
+/** menuPermissions = 권한키로 노출을 가르는 메뉴(MenuItem.permissionKey) 중 내가 가진 키. */
+export type NavBadges = Record<MenuBadgeKey, number> & { menuPermissions: string[] };
 
-const EMPTY: NavBadges = { mailUnread: 0, approvalPending: 0 };
+const EMPTY: NavBadges = { mailUnread: 0, approvalPending: 0, menuPermissions: [] };
 
 export function useNavBadges(): NavBadges {
   const [badges, setBadges] = useState<NavBadges>(EMPTY);
@@ -23,6 +24,7 @@ export function useNavBadges(): NavBadges {
           setBadges({
             mailUnread: Number(d.mailUnread) || 0,
             approvalPending: Number(d.approvalPending) || 0,
+            menuPermissions: Array.isArray(d.menuPermissions) ? d.menuPermissions.map(String) : [],
           });
         }
       } catch {

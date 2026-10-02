@@ -27,7 +27,8 @@ export function GlobalSearch({ role, open, onClose }: { role: Role; open: boolea
   // 메뉴 → 평탄화된 검색 엔트리(권한 필터 적용).
   const entries = useMemo<Entry[]>(() => {
     const out: Entry[] = [];
-    for (const m of MENU_ITEMS.filter((m) => isMenuVisibleForRole(m, role))) {
+    // 권한키로 노출을 가르는 메뉴는 role 만으로 판정할 수 없어 검색 대상에서 뺀다(사이드바로 진입).
+    for (const m of MENU_ITEMS.filter((m) => isMenuVisibleForRole(m, role) && !m.permissionKey)) {
       out.push({ title: m.title, section: m.title, href: m.href, comingSoon: m.comingSoon });
       for (const s of m.submenu ?? []) out.push({ title: s.title, section: m.title, href: s.href });
     }

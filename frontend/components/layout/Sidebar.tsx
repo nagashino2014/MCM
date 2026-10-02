@@ -15,7 +15,7 @@ import { ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen } from "lucide
 import { cn } from "@/lib/utils";
 import { BrandMark } from "@/components/cdash/BrandMark";
 import { CdIconButton } from "@/components/cdash/CdButton";
-import { MENU_ITEMS, isMenuVisibleForRole, visibleSubmenu, type MenuItem, type Role } from "@/config/menu";
+import { MENU_ITEMS, isMenuVisible, visibleSubmenu, type MenuItem, type Role } from "@/config/menu";
 import { resolveMenuRoute, type MenuRouteMatch } from "./menu-route";
 import type { NavBadges } from "@/components/layout/useNavBadges";
 
@@ -59,7 +59,7 @@ function sectionsForPath(pathname: string | null, query: string): string[] {
 export function Sidebar({ role, badges, mode = "auto", onNavigate }: SidebarProps) {
   const pathname = usePathname();
   const query = useSearchParams().toString();
-  const active = resolveMenuRoute(MENU_ITEMS.filter((item) => isMenuVisibleForRole(item, role)), pathname, query);
+  const active = resolveMenuRoute(MENU_ITEMS.filter((item) => isMenuVisible(item, role, badges?.menuPermissions ?? [])), pathname, query);
   const [openSections, setOpenSections] = useState<string[]>(() => sectionsForPath(pathname, query));
   const isDrawer = mode === "drawer";
   const [autoCollapse, setAutoCollapse] = useState(false);
@@ -111,7 +111,7 @@ export function Sidebar({ role, badges, mode = "auto", onNavigate }: SidebarProp
     });
   };
 
-  const visible = MENU_ITEMS.filter((m) => isMenuVisibleForRole(m, role)).map((m) =>
+  const visible = MENU_ITEMS.filter((m) => isMenuVisible(m, role, badges?.menuPermissions ?? [])).map((m) =>
     m.submenu ? { ...m, submenu: visibleSubmenu(m, role) } : m
   );
   const groups: Array<{ key: string; items: MenuItem[] }> = ["home", "collab", "work", "main", "system"]

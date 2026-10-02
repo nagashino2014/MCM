@@ -22,6 +22,7 @@ import {
   Landmark,
   FolderOpen,
   ScrollText,
+  Award,
   type LucideIcon,
 } from "lucide-react";
 
@@ -45,6 +46,11 @@ export interface MenuItem {
   group?: "home" | "collab" | "work" | "main" | "system";
   /** 카운트 뱃지(안읽은 메일·미결재) 데이터 키. */
   badgeKey?: MenuBadgeKey;
+  /**
+   * 이 권한키를 가진 사용자에게만 노출(role 과 별개 — 임원·부서장처럼 role 로 가를 수 없는 메뉴).
+   * 보유 여부는 /api/nav/badges 의 menuPermissions 로 받는다.
+   */
+  permissionKey?: string;
 }
 
 export const MENU_ITEMS: MenuItem[] = [
@@ -167,6 +173,15 @@ export const MENU_ITEMS: MenuItem[] = [
       { title: "지급 명세서 생성", href: "/staffing/statements" },
     ],
     group: "work",
+  },
+  // 수행인력 실적 — 인력별 수행 용역 이력·KPI·증빙 일괄 출력(2026-10-02 신설).
+  // 관리자·임원(전사)·부서장(소속 부서)만 노출 — 일반 직원은 본인 것도 조회 불가.
+  {
+    title: "수행인력 실적",
+    href: "/staffing/records",
+    icon: Award,
+    group: "work",
+    permissionKey: "staffing.record.view",
   },
   // 급여·근로계약 — 급여대장·근로계약 관리(docs/payroll-labor-contract-blueprint.md).
   // 본인용(내 급여명세서·내 연말정산)은 전 직원, 전 직원 데이터를 다루는 관리 화면은 admin 전용(2026-09-14 신설).
@@ -341,6 +356,17 @@ const ROLE_RANK: Record<Role, number> = { admin: 3, editor: 2, viewer: 1 };
 export function isMenuVisibleForRole(item: MenuItem, role: Role): boolean {
   if (!item.minRole) return true;
   return ROLE_RANK[role] >= ROLE_RANK[item.minRole];
+}
+
+/** 권한키로 노출을 가르는 메뉴가 요구하는 키 목록(/api/nav/badges 가 보유 여부를 계산). */
+export const MENU_PERMISSION_KEYS: string[] = [
+  ...new Set(MENU_ITEMS.map((m) => m.permissionKey).filter((k): k is string => Boolean(k))),
+];
+
+/** role + 권한키 노출 판정 — permissionKey 가 있는 메뉴는 보유 키 목록에 있어야 보인다. */
+export function isMenuVisible(item: MenuItem, role: Role, menuPermissions: readonly string[]): boolean {
+  if (!isMenuVisibleForRole(item, role)) return false;
+  return !item.permissionKey || menuPermissions.includes(item.permissionKey);
 }
 
 /** 서브메뉴 항목별 minRole 필터 — 근태·휴가처럼 본인용/관리용이 한 메뉴에 섞인 경우. */

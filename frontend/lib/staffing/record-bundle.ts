@@ -1,17 +1,20 @@
 import JSZip from "jszip";
 import { PDFDocument } from "pdf-lib";
 import { getEmployeeDetail } from "@/lib/admin/employee-records";
+import { convertHwpxToPdf } from "@/lib/agreement/convert";
 import { getCompanyProfile } from "@/lib/company/profile";
 import { listSignedCertificates } from "@/lib/contracts/certificate-storage";
 import { loadBundles, readStorageObject, sanitizeDownloadName } from "@/lib/contracts/document-bundle";
 import { getContractRoster } from "@/lib/staffing/roster";
 import { renderRosterPdf } from "@/lib/staffing/roster-pdf";
+import { fillRecordHistoryHwpx, type RecordHwpxData } from "@/lib/staffing/record-hwpx";
 import { renderRecordHistoryPdf, type RecordHistoryData } from "@/lib/staffing/record-pdf";
 import type { StaffRecordDetail, StaffRecordRow } from "@/lib/staffing/records";
 
 /*
  * 수행인력 실적 증빙 묶음 — 선택한 용역만 대상으로
- *   ① 수행인력 개별 이력사항(인력 1부)
+ *   ① 수행인력 개별 이력사항(인력 1부) — 회사 표준 HWPX 양식을 채운 뒤 converter 로 PDF 변환.
+ *      변환기를 쓸 수 없으면 pdf-lib 자체 양식으로 대체하고 그 사실을 집계에 남긴다.
  *   ② 계약별 [계약서(+변경계약서) + 세금계산서]
  *   ③ 계약별 [용역수행 실적증명서(직인 날인본) + 수행인력 명단]
  * 을 옵션대로 만들고, 일괄 병합 / 계약 건별 1파일 / 항목별 분리(계약 건별 폴더)로 내보낸다.
@@ -36,6 +39,8 @@ export interface RecordBundleSummary {
   missingCertificate: number;
   missingRoster: number;
   unreadable: number;
+  /** 이력사항을 표준 HWPX 양식으로 변환하지 못해 자체 PDF 양식으로 대체했는가 */
+  historyFallback: boolean;
 }
 
 export interface RecordBundleResult {
@@ -58,7 +63,62 @@ function tenureText(months: number | null): string {
   return `${Math.floor(months / 12)}년 ${months % 12}개월`;
 }
 
-/** 이력사항 PDF 데이터 — 인적사항은 인사카드, 참여당시 소속·직위는 자사·현 직위(입찰 서류와 동일 규칙). */
+/** 'YYYY-MM-DD' → ‘YY.MM. (양식의 학력 연도 표기) */
+function shortYm(ymd: string | null | undefined): string {
+  const m = /(\d{4})\D?(\d{1,2})/.exec(String(ymd ?? ""));
+  return m ? `‘${m[1].slice(2)}.${m[2].padStart(2, "0")}.` : "";
+}
+
+function monthsBetween(from: string | null | undefined, to: string | null | undefined): number {
+  const f = /(\d{4})\D?(\d{1,2})/.exec(String(from ?? ""));
+  const t = /(\d{4})\D?(\d{1,2})/.exec(String(to ?? ""));
+  if (!f || !t) return 0;
+  return Math.max(0, (Number(t[1]) - Number(f[1])) * 12 + (Number(t[2]) - Number(f[2])));
+}
+
+/** 회사명 표기를 양식과 맞춘다: '(주)' → '㈜'. */
+const companyMark = (name: string): string => name.replace(/\(\s*주\s*\)/g, "㈜").replace(/주식회사\s*/g, "㈜");
+
+/**
+ * 표준 HWPX 양식 데이터. 해당분야 근무경력 = 타사 경력 + 자사 재직(입찰 서류의 관련분야 경력과 같은 산식).
+ * 경력 표 제목은 양식 문구(통합환경허가 취득용역)를 쓰되, 다른 종류 용역이 섞이면 '용역 수행실적'으로 바꾼다.
+ */
+export async function buildRecordHwpxData(detail: StaffRecordDetail, rows: StaffRecordRow[]): Promise<RecordHwpxData> {
+  const [employee, company] = await Promise.all([getEmployeeDetail(detail.profile.employeeId), getCompanyProfile()]);
+  const p = detail.profile;
+  const today = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
+  let careerMonths = p.tenureMonths ?? 0;
+  for (const c of employee?.careers ?? []) careerMonths += monthsBetween(c.workedFrom, c.workedTo || today);
+  const years = Math.floor(careerMonths / 12);
+  const rest = careerMonths % 12;
+  return {
+    name: p.name,
+    position: p.positionName,
+    affiliation: [companyMark(company.companyName), p.deptName].filter(Boolean).join("  "),
+    address: company.address,
+    educations: (employee?.educations ?? []).map((e) => ({
+      years: [shortYm(e.admissionDate), shortYm(e.graduationDate)].some(Boolean)
+        ? `${shortYm(e.admissionDate)}∼${shortYm(e.graduationDate)}`
+        : "",
+      school: e.schoolName ?? "",
+      major: e.major ?? "",
+      degree: e.degreeName || DEGREE_LABELS[String(e.degreeLevel)] || "",
+    })),
+    career: careerMonths > 0 ? (rest ? `${years}년 ${rest}개월` : `${years}년`) : "",
+    licenses: (employee?.certifications ?? []).map((c) => c.certificationName).filter(Boolean),
+    projectScope: rows.every((r) => r.category === "통합허가") ? "통합환경허가 취득용역" : "용역 수행실적",
+    projects: rows.map((r) => ({
+      name: r.contractTitle,
+      from: r.periodFrom ? `${dot(r.periodFrom)}.` : "",
+      to: r.periodFrom ? (r.ongoing ? "용역수행중" : `${dot(r.periodTo)}.`) : "",
+      task: r.taskLabel || r.roleLabel,
+      client: companyMark(r.clientName),
+      note: "",
+    })),
+  };
+}
+
+/** 자체 PDF 양식(변환기 폴백) 데이터 — 인적사항은 인사카드, 참여당시 소속·직위는 자사·현 직위(입찰 서류와 동일 규칙). */
 export async function buildRecordHistoryData(detail: StaffRecordDetail, rows: StaffRecordRow[]): Promise<RecordHistoryData> {
   const [employee, company] = await Promise.all([getEmployeeDetail(detail.profile.employeeId), getCompanyProfile()]);
   const p = detail.profile;
@@ -126,6 +186,7 @@ export async function buildRecordBundle(params: {
     missingCertificate: 0,
     missingRoster: 0,
     unreadable: 0,
+    historyFallback: false,
   };
   const onUnreadable = () => {
     summary.unreadable += 1;
@@ -137,9 +198,15 @@ export async function buildRecordBundle(params: {
     include.certificate ? listSignedCertificates(ids) : Promise.resolve({} as Awaited<ReturnType<typeof listSignedCertificates>>),
   ]);
 
-  const history = include.history
-    ? await renderRecordHistoryPdf(await buildRecordHistoryData(detail, rows))
-    : null;
+  let history: Uint8Array | null = null;
+  if (include.history) {
+    const hwpx = await fillRecordHistoryHwpx(await buildRecordHwpxData(detail, rows));
+    history = await convertHwpxToPdf(hwpx, `수행인력 개별 이력사항(${detail.profile.name}).hwpx`);
+    if (!history) {
+      summary.historyFallback = true;
+      history = await renderRecordHistoryPdf(await buildRecordHistoryData(detail, rows));
+    }
+  }
 
   const perContract: { title: string; docs: Uint8Array | null; proof: Uint8Array | null }[] = [];
   for (const row of rows) {

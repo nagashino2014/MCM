@@ -81,7 +81,8 @@ function summaryMessage(s: RecordBundleSummary, include: RecordBundleInclude): s
   if (include.certificate && s.missingCertificate) notes.push(`실적증명서 날인본 미첨부 ${s.missingCertificate}건`);
   if (include.roster && s.missingRoster) notes.push(`수행인력 명단 없음 ${s.missingRoster}건`);
   if (s.unreadable) notes.push(`읽지 못한 파일 ${s.unreadable}개`);
-  return notes.length ? `${s.contracts}건 생성 완료 — 제외: ${notes.join(", ")}` : `${s.contracts}건 생성 완료`;
+  const fallback = include.history && s.historyFallback ? " · 이력사항은 표준 양식 변환에 실패해 간이 양식으로 대체했습니다" : "";
+  return (notes.length ? `${s.contracts}건 생성 완료 — 제외: ${notes.join(", ")}` : `${s.contracts}건 생성 완료`) + fallback;
 }
 
 /** 'YYYY-MM' 구간 [from, to] 가 그 달과 겹치는지 — 수행 중이던 용역 수 집계용. */

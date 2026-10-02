@@ -132,6 +132,8 @@ export default function StaffingRecordsBoard() {
   const [sideTab, setSideTab] = useState<SideTab>("category");
   // 종류별 비중에서 고른 대분류 — 그 종류의 세분류 비중 파이를 오른쪽에 편다
   const [drill, setDrill] = useState<RecordCategory | null>(null);
+  // 세분류 평균 수행기간에서 고른 대분류 — 그 종류의 세분류만 그린다(null = 전체 상위 7개)
+  const [durationCat, setDurationCat] = useState<RecordCategory | null>(null);
   const [include, setInclude] = useState<RecordBundleInclude>({
     history: true, contract: true, invoice: true, certificate: true, roster: true,
   });
@@ -156,6 +158,7 @@ export default function StaffingRecordsBoard() {
     setError(null);
     setDownloadMsg(null);
     setDrill(null);
+    setDurationCat(null);
     fetch(`/api/staffing/records?employeeId=${encodeURIComponent(emp.employeeId)}`, { cache: "no-store" })
       .then(async (r) => {
         const d = await r.json();
@@ -299,7 +302,13 @@ export default function StaffingRecordsBoard() {
   );
 
   // ── 세분류별 평균 수행기간: 개인 vs 전사 ──
-  const durations = useMemo(() => (detail?.subtypeDurations ?? []).slice(0, 7), [detail]);
+  const durations = useMemo(() => {
+    const all = detail?.subtypeDurations ?? [];
+    if (!durationCat) return all.slice(0, 7);
+    // 라벨은 '종류-세분류' — 고른 종류만 남기고 축에는 세분류명만 쓴다
+    const prefix = `${durationCat}-`;
+    return all.filter((d) => d.label.startsWith(prefix)).map((d) => ({ ...d, label: d.label.slice(prefix.length) }));
+  }, [detail, durationCat]);
   const durationOptions: ApexOptions = useMemo(
     () => ({
       chart: { type: "bar", toolbar: { show: false }, fontFamily: "inherit", animations: { enabled: false }, parentHeightOffset: 0 },
@@ -522,9 +531,27 @@ export default function StaffingRecordsBoard() {
                       active={sideTab}
                       onChange={setSideTab}
                     />
+                    {/* 수행 이력이 있는 종류만 — 누르면 그 종류의 세분류만, 다시 누르면 전체 */}
+                    {sideTab === "duration" && pie.labels.length > 0 && (
+                      <div className="ml-auto flex flex-wrap justify-end gap-0.5" role="group" aria-label="용역 종류로 좁히기">
+                        {pie.labels.map((label, i) => (
+                          <button
+                            key={label}
+                            type="button"
+                            className={`flex items-center gap-1.5 px-2 py-1 text-[11px] leading-tight cd-text-muted ${durationCat === label ? "cd-tint-primary" : ""}`}
+                            aria-pressed={durationCat === label}
+                            aria-label={`${label} 세분류만 보기`}
+                            onClick={() => setDurationCat((prev) => (prev === label ? null : label))}
+                          >
+                            <span aria-hidden="true" className="inline-block w-1.5 h-1.5 rounded-full shrink-0" style={{ background: pie.colors[i] }} />
+                            {CATEGORY_SHORT[label]}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <p className="text-xs cd-text-faint mb-1">
-                    {sideTab === "category" ? "수행 용역 종류별 건수 비중 · 종류를 누르면 세분류 비중을 펼칩니다" : "세분류별 평균 수행기간(개월) — 개인 / 전사"}
+                    {sideTab === "category" ? "수행 용역 종류별 건수 비중 · 종류를 누르면 세분류 비중을 펼칩니다" : durationCat ? `${durationCat} 세분류별 평균 수행기간(개월) — 개인 / 전사` : "세분류별 평균 수행기간(개월) — 개인 / 전사 · 건수 상위 7개"}
                   </p>
                   <div className="min-h-[250px]">
                     {rows.length === 0 ? (
@@ -582,7 +609,7 @@ export default function StaffingRecordsBoard() {
                       )}
                       </>
                     ) : durations.length > 0 ? (
-                      <ApexChart key={`dur-${theme}-${selectedId}`} options={durationOptions} series={durationSeries} type="bar" height={250} />
+                      <ApexChart key={`dur-${theme}-${selectedId}-${durationCat ?? "all"}`} options={durationOptions} series={durationSeries} type="bar" height={250} />
                     ) : (
                       <ChartEmpty text="수행기간을 산정할 수 있는 용역이 없습니다." />
                     )}

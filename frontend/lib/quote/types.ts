@@ -389,11 +389,15 @@ export interface QuoteFieldValues {
   prev_total_amount?: number; // 직전 버전 제출 견적가 합계
 }
 
-/** 재견적 사유 — 금액변동 태그 옆의 부연 태그(사용자 확정 3종) */
+/** 재견적 사유 — 금액변동 태그 옆의 부연 태그(사용자 확정 3종 + 2026-10-02 3종 추가) */
 export const QUOTE_REVISION_REASONS = [
   { code: "scope_up", label: "용역 범위 증가" },
   { code: "scope_down", label: "용역 범위 축소" },
   { code: "nego", label: "네고 요청" },
+  // 2026-10-02 추가(사용자 요청)
+  { code: "typo_fix", label: "오기 수정" },
+  { code: "amount_up", label: "금액 증가" },
+  { code: "amount_down", label: "금액 감소" },
 ] as const;
 export type QuoteRevisionReason = (typeof QUOTE_REVISION_REASONS)[number]["code"];
 export const QUOTE_REVISION_REASON_LABEL: Record<string, string> = Object.fromEntries(QUOTE_REVISION_REASONS.map((r) => [r.code, r.label]));

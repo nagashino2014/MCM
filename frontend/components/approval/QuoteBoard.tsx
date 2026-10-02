@@ -1398,10 +1398,10 @@ export function QuoteBoard() {
                           <button
                             type="button"
                             className="cd-btn rounded-lg border cd-border-c px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5"
-                            aria-expanded={!!treeOpen[site.siteSeq]}
+                            aria-expanded={(treeOpen[site.siteSeq] ?? (site.customItems ?? []).length > 0)}
                             title="항목명과 등급별 MD를 직접 입력합니다. 항목이 비어 있으면 구성 업무의 기준 세트(표준 MD × 횟수)로 초안을 채웁니다"
                             onClick={() => {
-                              if (treeOpen[site.siteSeq]) setTreeOpen((prev) => ({ ...prev, [site.siteSeq]: false }));
+                              if ((treeOpen[site.siteSeq] ?? (site.customItems ?? []).length > 0)) setTreeOpen((prev) => ({ ...prev, [site.siteSeq]: false }));
                               else void openManualTree(activeSite);
                             }}
                           >
@@ -1465,7 +1465,8 @@ export function QuoteBoard() {
                           })()}
                         </div>
                         {analysisNote[site.siteSeq] && <p className="text-[11px] cd-text-faint">{analysisNote[site.siteSeq]}</p>}
-                        {treeOpen[site.siteSeq] && (
+                        {/* 항목이 이미 있으면(재편집·재견적·전용 세트 자동 채움) 처음부터 펼쳐 보여 준다 — 접혀 있어 데이터가 사라진 것처럼 보이던 문제(2026-10-02) */}
+                        {(treeOpen[site.siteSeq] ?? (site.customItems ?? []).length > 0) && (
                           <div className="border-t cd-border-c pt-3 flex flex-col gap-3">
                             <div className="flex items-center gap-2 flex-wrap">
                               <p className="text-[12px] font-semibold cd-text">업무 항목 트리 (별첨1) — 기준 MD = 역산 분배 가중치</p>

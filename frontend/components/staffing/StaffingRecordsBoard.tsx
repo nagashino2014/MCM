@@ -11,7 +11,7 @@ import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import OrganizationTree from "@/components/admin/users/OrganizationTree";
 import type { OrganizationEmployeeRow, OrganizationSnapshot } from "@/components/admin/users/types";
 import ApexChart from "@/components/contracts/dashboard/ApexChart";
-import { chartPalette } from "@/components/contracts/dashboard/types";
+import { chartPalette, softCategoryColor } from "@/components/contracts/dashboard/types";
 import type { RecordBundleInclude, RecordBundlePackaging, RecordBundleSummary } from "@/lib/staffing/record-bundle";
 import type { RecordCategory, StaffRecordDetail, StaffRecordRow } from "@/lib/staffing/records";
 
@@ -30,6 +30,33 @@ const CATEGORY_COLOR: Record<RecordCategory, string> = {
   HAPs: "#70AD47",
   "ESG 탄소중립": "#5B9BD5",
   기타: "#7F7F7F",
+};
+
+// 범례에 쓰는 종류 축약명
+const CATEGORY_SHORT: Record<RecordCategory, string> = {
+  통합허가: "통합",
+  화관법: "화관법",
+  HAPs: "HAPs",
+  "ESG 탄소중립": "ESG",
+  기타: "기타",
+};
+
+// 세분류 파이 색 — 수주/수금/발행 현황(OrdersStatusSection)의 세분류 도넛과 같은 팔레트·같은 순서
+const SUBTYPE_PIE_COLORS = ["#FF6B6B", "#F3C16F", "#FFF176", "#B7F59A", "#8FD476", "#B9D8FF", "#D5A9FF", "#E4B4FF"];
+
+// 세분류 범례 축약(기본 4자) — 사용자가 지정한 항목만 줄이고 나머지는 원문 그대로 둔다
+const SUBTYPE_SHORT: Record<string, string> = {
+  화학사고예방관리계획: "화방계",
+  배출저감계획: "배출저감",
+  위해관리계획: "위해관리",
+  화관법기준: "화관기준",
+  판매업허가: "판매업",
+  정기점검대응: "정기점검",
+  공급망실사: "공급망",
+  배출량산정: "배출량",
+  배출권관련: "배출권",
+  총량제신고: "총량제",
+  매체별인허가: "매체별",
 };
 
 type BarMode = "month" | "year";
@@ -103,6 +130,8 @@ export default function StaffingRecordsBoard() {
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [barMode, setBarMode] = useState<BarMode>("month");
   const [sideTab, setSideTab] = useState<SideTab>("category");
+  // 종류별 비중에서 고른 대분류 — 그 종류의 세분류 비중 파이를 오른쪽에 편다
+  const [drill, setDrill] = useState<RecordCategory | null>(null);
   const [include, setInclude] = useState<RecordBundleInclude>({
     history: true, contract: true, invoice: true, certificate: true, roster: true,
   });
@@ -126,6 +155,7 @@ export default function StaffingRecordsBoard() {
     setLoading(true);
     setError(null);
     setDownloadMsg(null);
+    setDrill(null);
     fetch(`/api/staffing/records?employeeId=${encodeURIComponent(emp.employeeId)}`, { cache: "no-store" })
       .then(async (r) => {
         const d = await r.json();
@@ -209,16 +239,63 @@ export default function StaffingRecordsBoard() {
   }, [rows]);
   const pieOptions: ApexOptions = useMemo(
     () => ({
-      chart: { type: "pie", fontFamily: "inherit", animations: { enabled: false } },
+      chart: {
+        type: "pie",
+        fontFamily: "inherit",
+        animations: { enabled: false },
+        events: {
+          // 조각 클릭 = 그 종류의 세분류 비중 펼침(같은 조각을 다시 누르면 접음). 아래 종류 버튼과 같은 동작.
+          dataPointSelection: (_e, _ctx, cfg) => {
+            const picked = pie.labels[cfg?.dataPointIndex ?? -1];
+            if (picked) setDrill((prev) => (prev === picked ? null : picked));
+          },
+        },
+      },
       labels: pie.labels,
       colors: pie.colors,
       stroke: { width: 1, colors: [pal.surface] },
+      // 누른 조각이 진하게 변하는 선택 효과를 끈다 — 선택 표시는 옆 범례의 배경으로만
+      states: { active: { filter: { type: "none" } } },
+      plotOptions: { pie: { expandOnClick: false } },
       dataLabels: { enabled: true, formatter: (v: number) => `${Math.round(v)}%`, dropShadow: { enabled: false } },
-      legend: { position: "bottom", labels: { colors: pal.muted }, fontSize: "12px", markers: { size: 5 } },
+      legend: { show: false },
       tooltip: { theme, y: { formatter: (v: number) => `${v}건` } },
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [pie.labels, theme]
+  );
+
+  // ── 세분류 파이: 고른 종류 안에서 세분류별 건수 비중 ──
+  const subPie = useMemo(() => {
+    if (!drill) return { labels: [] as string[], series: [] as number[], colors: [] as string[], total: 0 };
+    const bySubtype = new Map<string, number>();
+    for (const r of rows) {
+      if (r.category !== drill) continue;
+      const key = r.serviceSubtype || "미분류";
+      bySubtype.set(key, (bySubtype.get(key) ?? 0) + 1);
+    }
+    const items = [...bySubtype.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ko"));
+    return {
+      labels: items.map(([label]) => label),
+      series: items.map(([, count]) => count),
+      colors: items.map((_, i) => softCategoryColor(SUBTYPE_PIE_COLORS[i % SUBTYPE_PIE_COLORS.length], 0.08)),
+      total: items.reduce((acc, [, count]) => acc + count, 0),
+    };
+  }, [rows, drill]);
+  const subPieOptions: ApexOptions = useMemo(
+    () => ({
+      chart: { type: "pie", fontFamily: "inherit", animations: { enabled: false } },
+      labels: subPie.labels,
+      colors: subPie.colors,
+      stroke: { width: 1, colors: [pal.surface] },
+      states: { active: { filter: { type: "none" } } },
+      plotOptions: { pie: { expandOnClick: false } },
+      dataLabels: { enabled: false },
+      legend: { show: false },
+      tooltip: { theme, y: { formatter: (v: number) => `${v}건` } },
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [subPie.labels, theme]
   );
 
   // ── 세분류별 평균 수행기간: 개인 vs 전사 ──
@@ -227,7 +304,7 @@ export default function StaffingRecordsBoard() {
     () => ({
       chart: { type: "bar", toolbar: { show: false }, fontFamily: "inherit", animations: { enabled: false }, parentHeightOffset: 0 },
       plotOptions: { bar: { horizontal: true, barHeight: "62%", borderRadius: 3, borderRadiusApplication: "end" } },
-      colors: [pal.primary, pal.faint],
+      colors: [pal.primary, pal.accent], // 개인 = 파랑, 전사 평균 = 주황(한눈에 갈리게)
       dataLabels: { enabled: false },
       grid: { borderColor: pal.grid, strokeDashArray: 3 },
       xaxis: { categories: durations.map((d) => d.label), labels: { ...axisLabel, formatter: (v: string) => `${v}` }, axisBorder: { show: false }, axisTicks: { show: false } },
@@ -351,7 +428,7 @@ export default function StaffingRecordsBoard() {
             <Kpi icon={<Trophy className="w-4 h-4" />} label="성과지수" value="—" sub="산식 확정 후 제공" />
           </section>
 
-          <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,13fr)_minmax(0,7fr)] gap-4">
+          <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,117fr)_minmax(0,83fr)] gap-4">
             {/* 담당 계약 리스트 — 우측 열 높이에 맞추고 내부만 스크롤 */}
             <section className="cd-card rounded-lg flex flex-col min-h-[440px] min-w-0">
               <div className="flex items-center gap-2 px-4 pt-4 pb-3">
@@ -446,12 +523,64 @@ export default function StaffingRecordsBoard() {
                       onChange={setSideTab}
                     />
                   </div>
-                  <p className="text-xs cd-text-faint mb-1">{sideTab === "category" ? "수행 용역 종류별 건수 비중" : "세분류별 평균 수행기간(개월) — 개인 / 전사"}</p>
-                  <div className="h-[250px]">
+                  <p className="text-xs cd-text-faint mb-1">
+                    {sideTab === "category" ? "수행 용역 종류별 건수 비중 · 종류를 누르면 세분류 비중을 펼칩니다" : "세분류별 평균 수행기간(개월) — 개인 / 전사"}
+                  </p>
+                  <div className="min-h-[250px]">
                     {rows.length === 0 ? (
                       <ChartEmpty />
                     ) : sideTab === "category" ? (
-                      <ApexChart key={`pie-${theme}-${selectedId}`} options={pieOptions} series={pie.series} type="pie" height={250} />
+                      <>
+                      <div className="flex items-center">
+                        {/* 종류 파이 — 세분류를 펴면 왼쪽 절반으로 물러난다 */}
+                        <div
+                          className="min-w-0 flex items-center gap-2 transition-[width] duration-300 ease-out [&_.apexcharts-canvas]:outline-none [&_svg]:outline-none"
+                          style={{ width: drill ? "50%" : "100%" }}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <ApexChart key={`pie-${theme}-${selectedId}`} options={pieOptions} series={pie.series} type="pie" height={220} />
+                          </div>
+                          {/* 종류 범례 = 세분류 펼침 버튼(조각 클릭과 같은 동작, 키보드 조작용) */}
+                          <div className="shrink-0 flex flex-col gap-0.5">
+                            {pie.labels.map((label, i) => (
+                              <button
+                                key={label}
+                                type="button"
+                                className={`flex items-center gap-1.5 px-2 py-1 text-[11px] leading-tight cd-text-muted ${drill === label ? "cd-tint-primary" : ""}`}
+                                aria-pressed={drill === label}
+                                aria-label={`${label} ${pie.series[i]}건 — 세분류 비중 ${drill === label ? "접기" : "펼치기"}`}
+                                onClick={() => setDrill((prev) => (prev === label ? null : label))}
+                              >
+                                <span aria-hidden="true" className="inline-block w-1.5 h-1.5 rounded-full shrink-0" style={{ background: pie.colors[i] }} />
+                                {CATEGORY_SHORT[label]}
+                                <span className="ml-auto pl-1.5 tabular-nums cd-text-faint">{pie.series[i]}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        {drill && (
+                          <div className="w-1/2 min-w-0 pl-3 border-l cd-border-c [&_.apexcharts-canvas]:outline-none [&_svg]:outline-none">
+                            <div className="flex items-center gap-2 min-h-[32px]">
+                              <h3 className="text-sm font-semibold cd-text truncate">{drill} 세분류</h3>
+                              <CdButton size="sm" className="ml-auto" onClick={() => setDrill(null)}>접기</CdButton>
+                            </div>
+                            <ApexChart key={`sub-${theme}-${selectedId}-${drill}`} options={subPieOptions} series={subPie.series} type="pie" height={188} />
+                          </div>
+                        )}
+                      </div>
+                      {/* 세분류 범례 — 차트 하단 전체 폭 4열(좁은 칸에서 글자가 잘리지 않게) */}
+                      {drill && (
+                        <ul className="mt-2 pt-2 border-t cd-border-c grid grid-cols-4 gap-x-3 gap-y-1 text-[11px] leading-tight" aria-label={`${drill} 세분류 비중`}>
+                          {subPie.labels.map((label, i) => (
+                            <li key={label} className="flex items-center gap-1 min-w-0" title={`${label} ${subPie.series[i]}건`}>
+                              <span aria-hidden="true" className="inline-block w-1.5 h-1.5 rounded-full shrink-0" style={{ background: subPie.colors[i] }} />
+                              <span className="truncate cd-text-muted">{SUBTYPE_SHORT[label] ?? label}</span>
+                              <span className="ml-auto tabular-nums cd-text-faint">{Math.round((subPie.series[i] / subPie.total) * 100)}%</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      </>
                     ) : durations.length > 0 ? (
                       <ApexChart key={`dur-${theme}-${selectedId}`} options={durationOptions} series={durationSeries} type="bar" height={250} />
                     ) : (
@@ -552,5 +681,5 @@ function Kpi({ icon, label, value, sub }: { icon: React.ReactNode; label: string
 }
 
 function ChartEmpty({ text = "표시할 수행 용역이 없습니다." }: { text?: string }) {
-  return <div className="h-full flex items-center justify-center text-sm cd-text-faint">{text}</div>;
+  return <div className="h-full min-h-[250px] flex items-center justify-center text-sm cd-text-faint">{text}</div>;
 }

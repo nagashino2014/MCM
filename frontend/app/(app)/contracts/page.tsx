@@ -36,6 +36,7 @@ import TaxInvoiceIssueModal from "@/components/contracts/TaxInvoiceIssueModal";
 import FacilityInfoModal from "@/components/contracts/FacilityInfoModal";
 import { AgencyReportList } from "@/components/contracts/AgencyReportList";
 import { BAROBILL_BANKS } from "@/components/finance/FinLogo";
+import { checkDateFields } from "@/lib/contracts/date-field";
 import { INTEGRATED_PERMIT_OPTION_SUFFIX, IndustryOptionsEditorButton, useContractIndustryOptions } from "@/components/contracts/IndustryOptionsEditor";
 import { IndustryPermitLookupButton } from "@/components/contracts/IndustryPermitLookupButton";
 import { findIntegratedPermitIndustry, industryIdFromKsic } from "@/lib/ieps/integrated-permit-industries";
@@ -1783,6 +1784,11 @@ function InvoiceUploadModal({
       toast.show("복수 등록은 계산서 PDF를 첨부해야 합니다.", "error");
       return;
     }
+    const dateError = checkDateFields({ "계산서 발행일": state.issueDate, 수금일: state.paymentCollectedAt });
+    if (dateError) {
+      toast.show(dateError, "error");
+      return;
+    }
     setSaving(true);
     try {
       if (!selectedFile && state.paymentCollected) {
@@ -2377,6 +2383,16 @@ function NewContractModal({
       setTab("basic");
       return;
     }
+    // 채우다 만 날짜는 서버와 같은 규칙으로 먼저 거른다(어느 칸인지 바로 알 수 있게)
+    const dateError =
+      checkDateFields({ 계약일: state.contractDate, 준공일: state.endedAt }) ??
+      (state.outsourcing.outsourcingTitle.trim()
+        ? checkDateFields({ "외주 계약일": state.outsourcing.contractDate, "외주 준공일": state.outsourcing.endedAt })
+        : null);
+    if (dateError) {
+      toast.show(dateError, "error");
+      return;
+    }
     let selectedFacilities = state.selectedFacilities;
     if (state.orderingSubjectType === ORDERING_SUBJECT_SITE_DIRECT && selectedFacilities.length === 0) {
       const match = await findFacilityByBusinessRegistrationNo(state.counterpartyBusinessRegistrationNo, undefined, {
@@ -2747,7 +2763,8 @@ function NewContractModal({
             </label>
             <label className="grid gap-1 text-sm">
               <span className="font-bold cd-text-muted">계약일</span>
-              <DateInput value={state.contractDate} onChange={(contractDate) => onChange({ ...state, contractDate, startedAt: state.startedAt || contractDate })} />
+              {/* 착수일은 화면에 칸이 없어 저장 시 계약일로 채운다 — 입력 중 부분 값("2")이 착수일에 굳어 등록이 거절되던 문제(2026-10-12) */}
+              <DateInput value={state.contractDate} onChange={(contractDate) => onChange({ ...state, contractDate })} />
             </label>
             <label className="grid gap-1 text-sm">
               <span className="font-bold cd-text-muted">준공일</span>
@@ -3035,6 +3052,17 @@ function EditMilestoneModal({
   const isNotePayment = state.paymentMethod.startsWith("어음") || /어음|전자어음/.test(state.paymentTerms);
 
   const submit = async () => {
+    const dateError = checkDateFields({
+      "계산서 발행일": state.issueDate,
+      "어음 발행일": state.noteIssuedDate,
+      "어음 만기일": state.noteMaturityDate,
+      "대출 실행일": state.noteLoanExecutedDate,
+      수금일: state.paymentCollectedAt,
+    });
+    if (dateError) {
+      toast.show(dateError, "error");
+      return;
+    }
     setSaving(true);
     const invoiceFile = invoiceFileRef.current;
     try {

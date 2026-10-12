@@ -4,6 +4,7 @@ import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { rowsToObjects } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 import { buildInvoiceFileName, deleteContractDocument } from "@/lib/storage/contract-document-storage";
+import { checkDateFields } from "@/lib/contracts/date-field";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,6 +18,15 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     const { contractId, milestoneId } = await ctx.params;
     const actor = await requirePermission("contract.edit", { fallbackRoles: ["editor"], target: { contractId } });
     const body = await req.json();
+    // 채우다 만 날짜가 검증 없이 저장되던 문제 방어(date-field, 계약 등록·수정 라우트와 같은 규칙)
+    const dateError = checkDateFields({
+      "계산서 발행일": body.invoiceIssuedAt,
+      수금일: body.paymentCollectedAt,
+      "어음 발행일": body.noteIssuedDate,
+      "어음 만기일": body.noteMaturityDate,
+      "대출 실행일": body.noteLoanExecutedDate,
+    });
+    if (dateError) return NextResponse.json({ error: dateError }, { status: 400 });
     const setClauses: string[] = [];
     const values: unknown[] = [];
     const pushSet = (column: string, value: unknown) => {

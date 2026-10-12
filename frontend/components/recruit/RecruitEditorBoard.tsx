@@ -19,7 +19,7 @@ import {
   Redo2,
   Undo2,
 } from "lucide-react";
-import { CdBadge, CdButton, CdDateInput, CdModal, CdPageHeader, useCdashTheme, useCdToast } from "@/components/cdash";
+import { CdBadge, CdButton, CdDateInput, CdModal, CdPageHeader, isValidDateString, useCdashTheme, useCdToast } from "@/components/cdash";
 import {
   DIVISION_PRESETS,
   EMPTY_META,
@@ -118,6 +118,12 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
   const save = useCallback(
     async (opts?: { snapshot?: boolean }) => {
       if (!tree) return;
+      // 입력 중인 모집 기간("2026-1")은 서버가 null(상시)로 바꿔 저장하므로, 완성될 때까지 저장하지 않는다(2026-10-12)
+      if ([meta.periodStart, meta.periodEnd].some((v) => v && !isValidDateString(v))) {
+        setSaveState("idle");
+        if (opts?.snapshot) toast("모집 기간을 8자리(YYYYMMDD)로 정확히 입력하세요.", "error");
+        return;
+      }
       setSaveState("saving");
       try {
         const res = await fetch(`/api/recruit/postings/${postingId}`, {

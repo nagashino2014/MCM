@@ -6,7 +6,7 @@
 //   해지/해지취소/재등록(Stop 계열 API), 카드 즉시 수집(RefreshNow), 수집 로그.
 // - 수집(catch-up)은 /api/finance/connections GET 이 stale 판정 시 서버가 백그라운드 실행.
 
-import { CdDateInput } from "@/components/cdash/CdField";
+import { CdDateInput, isValidDateString } from "@/components/cdash/CdField";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
@@ -3101,6 +3101,10 @@ function ModifyInvoiceModal({ origin, onClose, onIssued }: { origin: TaxInvoiceR
 
   const submit = async () => {
     if (!origin) return;
+    if (!isValidDateString(writeDate)) {
+      setError("작성일자를 8자리(YYYYMMDD)로 정확히 입력하세요.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {

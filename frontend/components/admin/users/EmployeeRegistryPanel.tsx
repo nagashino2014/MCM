@@ -1,6 +1,7 @@
 "use client";
 
-import { CdDateInput } from "@/components/cdash/CdField";
+import { CdDateInput, isValidDateString } from "@/components/cdash/CdField";
+import { checkDateFields } from "@/lib/contracts/date-field";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type React from "react";
@@ -298,6 +299,33 @@ export default function EmployeeRegistryPanel({
   };
 
   const saveEmployee = async () => {
+    // 채우다 만 날짜가 그대로 저장되던 문제 방어 — 서버에 검증이 없어 text 칸에 잘린 값이 남는다(2026-10-12)
+    const dateError = checkDateFields({
+      입사일: employee.hiredAt,
+      대행인력등록일: employee.agentRegisteredAt,
+      ...Object.fromEntries(
+        employee.educations.flatMap((item, i) => [
+          [`학력 ${i + 1} 입학일`, item.admissionDate],
+          [`학력 ${i + 1} 졸업일`, item.graduationDate],
+        ])
+      ),
+      ...Object.fromEntries(
+        employee.certifications.flatMap((item, i) => [
+          [`자격 ${i + 1} 합격일`, item.passedAt],
+          [`자격 ${i + 1} 발급일`, item.issuedAt],
+        ])
+      ),
+      ...Object.fromEntries(
+        employee.housingSupports.flatMap((item, i) => [
+          [`주거지원 ${i + 1} 임차 시작일`, item.leaseStartedAt],
+          [`주거지원 ${i + 1} 임차 종료일`, item.leaseEndedAt],
+        ])
+      ),
+    });
+    if (dateError) {
+      toast(dateError, "error");
+      return;
+    }
     setSaving(true);
     try {
       const endpoint = employee.employeeId
@@ -884,6 +912,11 @@ function HrTab({
     }
     if (!payload.eventDate) {
       toast("일자를 입력하세요.", "error");
+      return null;
+    }
+    // 부분 값("2026-1")은 문자열 비교로 '오늘 이전'이 되어 퇴사 즉시 계정 비활성화까지 일으킨다
+    if (!isValidDateString(String(payload.eventDate))) {
+      toast("일자를 8자리(YYYYMMDD)로 정확히 입력하세요.", "error");
       return null;
     }
     setBusy(true);

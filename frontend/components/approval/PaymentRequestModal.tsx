@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 import { FileText, Loader2, Search, X } from "lucide-react";
 import { BANK_ACCOUNT_OPTIONS, PAYMENT_BANK_KEY } from "@/lib/deliverable/types";
 import { SUPPLY_ONLY_VAT_NOTE } from "@/lib/deliverable/format";
-import { CdDateInput } from "@/components/cdash/CdField";
+import { CdDateInput, isValidDateString } from "@/components/cdash/CdField";
 
 interface ContractRow {
   contractId: string;
@@ -124,6 +124,11 @@ export default function PaymentRequestModal({
 
   const create = async () => {
     if (!contract || !serverValues) return;
+    // 채우다 만 작성일이 안내 없이 오늘 날짜로 바뀌던 문제 방어 — 비우면 오늘, 아니면 완성된 날짜만(2026-10-12)
+    if (issueDate && !isValidDateString(issueDate)) {
+      setError("작성일을 8자리(YYYYMMDD)로 정확히 입력하거나 비워 주세요.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {

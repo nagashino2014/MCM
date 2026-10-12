@@ -7,6 +7,7 @@ import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { buildIssuePrefill, listContractInvoices, listRecentInvoices, issueTaxInvoice, issueModifiedTaxInvoice, refreshInvoiceStates, invoicePopUpUrl, cancelTaxInvoice, listIssuerEmails, saveIssuerEmail, deleteIssuerEmail, type IssueParams, type ModifyParams } from "@/lib/barobill/invoicing";
 import { backfillInvoicePdfs } from "@/lib/barobill/invoice-archive";
+import { normalizeDateField } from "@/lib/contracts/date-field";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -71,6 +72,8 @@ export async function POST(req: NextRequest) {
       for (const key of required) {
         if (!body[key]) return NextResponse.json({ error: `${key} 가 필요합니다.` }, { status: 400 });
       }
+      const writeDateError = invalidWriteDate(body.writeDate);
+      if (writeDateError) return NextResponse.json({ error: writeDateError }, { status: 400 });
       const result = await issueTaxInvoice(body as IssueParams, actor.userId);
       await recordAuditLog({
         actorUserId: actor.userId,
@@ -93,6 +96,8 @@ export async function POST(req: NextRequest) {
       for (const key of required) {
         if (!body[key]) return NextResponse.json({ error: `${key} 가 필요합니다.` }, { status: 400 });
       }
+      const writeDateError = invalidWriteDate(body.writeDate);
+      if (writeDateError) return NextResponse.json({ error: writeDateError }, { status: 400 });
       const result = await issueModifiedTaxInvoice(
         {
           originalInvoiceId: body.originalInvoiceId!,
@@ -134,4 +139,11 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     return authErrorToResponse(err);
   }
+}
+
+/** 작성일자는 국세청으로 그대로 나간다 — 채우다 만 값("2026-10")이 숫자만 남아 "202610"으로 전송되던 문제 방어(2026-10-12) */
+function invalidWriteDate(raw: unknown): string | null {
+  const d = normalizeDateField(raw);
+  if (!d.invalid && /^\d{4}-\d{2}-\d{2}$/.test(d.value ?? "")) return null;
+  return "작성일자 날짜가 올바르지 않습니다. 8자리(YYYYMMDD)로 입력해 주세요.";
 }

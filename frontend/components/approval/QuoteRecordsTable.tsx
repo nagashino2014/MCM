@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Pencil, RefreshCw, Trash2, Trophy, X } from "lucide-react";
 import { CdDateInput } from "@/components/cdash/CdField";
+import { checkDateFields } from "@/lib/contracts/date-field";
 import {
   QUOTE_RESULT_LABEL,
   QUOTE_RESULT_REASONS,
@@ -135,6 +136,12 @@ export function QuoteViewModal({ quoteId, theme, onClose, onChanged }: { quoteId
 
   /** 수주 결과 기입 — 결과·확정일·금액(수주=계약금액/실주=경쟁 낙찰가)·사유·메모 (Q5 분석 원료) */
   const saveResult = async () => {
+    // 채우다 만 확정일이 검증 없이 저장돼 수주 분석 기간 계산을 오염시키던 문제 방어(2026-10-12)
+    const dateError = checkDateFields({ "결과 확정일": resultForm.resultAt });
+    if (dateError) {
+      alert(dateError);
+      return;
+    }
     setBusy("result");
     try {
       const res = await fetch(`/api/quotes/${encodeURIComponent(quoteId)}`, {

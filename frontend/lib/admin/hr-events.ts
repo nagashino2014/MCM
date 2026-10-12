@@ -11,6 +11,7 @@
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
+import { normalizeDateField } from "@/lib/contracts/date-field";
 
 export type HrEventType = "promotion" | "transfer" | "resignation" | "leave_start" | "leave_end";
 
@@ -77,6 +78,12 @@ export async function createHrEvent(
 ): Promise<HrEventRow> {
   if (!input.employeeId) throw new Error("employeeId가 필요합니다.");
   if (!input.eventDate) throw new Error("일자를 입력하세요.");
+  // 아래 퇴사 판정이 문자열 비교라 부분 값("2026-1")이 '오늘 이전'으로 읽혀 계정이 즉시 비활성화된다 — 완성된 날짜만 받는다.
+  const eventDate = normalizeDateField(input.eventDate);
+  if (eventDate.invalid || !/^\d{4}-\d{2}-\d{2}$/.test(eventDate.value ?? "")) {
+    throw Object.assign(new Error("일자를 8자리(YYYYMMDD)로 정확히 입력하세요."), { status: 400 });
+  }
+  input = { ...input, eventDate: eventDate.value as string };
   const eventId = "hrev_" + crypto.randomBytes(8).toString("hex");
   const now = new Date().toISOString();
 

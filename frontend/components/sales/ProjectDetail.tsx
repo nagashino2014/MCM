@@ -1,6 +1,7 @@
 "use client";
 
 import { CdDateInput } from "@/components/cdash/CdField";
+import { checkDateFields } from "@/lib/contracts/date-field";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -701,6 +702,20 @@ function SiteContactModal({ theme, facilityId, onClose, onSaved }: {
   const addRow = () => setRows((rs) => [...rs, { id: null, deptTypes: ["contract"], personName: "", departmentId: null, title: "", officePhone: "", mobilePhone: "", email: "", duties: "", appointedAt: "", transferredAt: "", resignedAt: "" }]);
 
   const save = async () => {
+    // 채우다 만 선임·변경·퇴사일이 검증 없이 저장되던 문제 방어(2026-10-12)
+    const dateError = checkDateFields(
+      Object.fromEntries(
+        rows.filter((r) => r.personName.trim()).flatMap((r) => [
+          [`${r.personName.trim()} 선임일`, r.appointedAt],
+          [`${r.personName.trim()} 부서 변경일`, r.transferredAt],
+          [`${r.personName.trim()} 퇴사일`, r.resignedAt],
+        ])
+      )
+    );
+    if (dateError) {
+      alert(dateError);
+      return;
+    }
     setSaving(true);
     try {
       const others = (loaded?.people ?? []).filter((p) => !((p.deptTypes?.length ?? 0) > 0 || p.deptType)).map((p) => ({ ...p }));

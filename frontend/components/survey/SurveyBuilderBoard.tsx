@@ -29,6 +29,7 @@ import {
   CdPageHeader,
   CdTabs,
   CdTextarea,
+  isValidDateString,
   useCdashTheme,
   useCdToast,
 } from "@/components/cdash";
@@ -212,7 +213,10 @@ export function SurveyBuilderBoard({ surveyId, kind }: { surveyId: string; kind:
       isAnonymous !== survey.isAnonymous ||
       audienceScope !== survey.audience.scope ||
       audienceDepts.join(",") !== (survey.audience.departments ?? []).join(",");
-    if (changed) scheduleSave();
+    // 입력 중인 접수 기간("2026-1")은 서버가 null(상시 접수)로 바꿔 저장하고, 그 응답이 다시 변경으로 잡혀
+    // 저장이 반복되므로 날짜가 완성(또는 비움)될 때까지 미룬다(2026-10-12)
+    const partialPeriod = [periodStart, periodEnd].some((v) => v && !isValidDateString(v));
+    if (changed && !partialPeriod) scheduleSave();
     // scheduleSave 는 값이 바뀔 때마다 새로 만들어지므로 의존성에서 뺀다(타이머 중복 방지).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [title, description, periodStart, periodEnd, isAnonymous, audienceScope, audienceDepts, survey]);

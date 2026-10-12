@@ -8,6 +8,7 @@ import {
   putContractDocument,
   sanitizeFilename,
 } from "@/lib/storage/contract-document-storage";
+import { checkDateFields } from "@/lib/contracts/date-field";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,6 +42,9 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     if (!counterpartyFacilityId && !counterpartyName) {
       return NextResponse.json({ error: "외주 계약상대 업체를 입력하세요." }, { status: 400 });
     }
+    // 채우다 만 날짜가 검증 없이 저장되던 문제 방어(date-field)
+    const dateError = checkDateFields({ "외주 계약일": contractDate, "외주 준공일": endedAt });
+    if (dateError) return NextResponse.json({ error: dateError }, { status: 400 });
 
     const db = await getDb();
     const contractRows = rowsToObjects(

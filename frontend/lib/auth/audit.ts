@@ -119,6 +119,7 @@ export type AuditAction =
   | "approval_metric_update"
   | "approval_precheck_llm"
   | "mail_send"
+  | "attachment_policy_change" // 첨부 확장자 정책(262) — 전사 기본·인원별 예외 변경
   | "auth_find_id"
   | "auth_password_reset"
   | "admin_password_sync"

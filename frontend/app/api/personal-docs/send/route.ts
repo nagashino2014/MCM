@@ -4,6 +4,7 @@ import { readContractDocument } from "@/lib/storage/contract-document-storage";
 import { attachmentContentType } from "@/lib/approval/attachments";
 import { createRoom, postFileMessage } from "@/lib/chat/queries";
 import { getPersonalDoc } from "@/lib/files/personal";
+import { assertAttachmentsAllowed } from "@/lib/security/attachment-policy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -44,6 +45,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    await assertAttachmentsAllowed(ctx.userId, docs.map((d) => d.fileName)); // 첨부 확장자 정책(262) — 메신저 전송
     const caption = String(body.caption ?? "").trim();
     let sent = 0;
     for (const targetUserId of targetUserIds) {

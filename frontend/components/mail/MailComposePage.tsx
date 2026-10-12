@@ -3,6 +3,8 @@
 // 메일 쓰기 — 별도 페이지(G2-8, 모달 폐지: 편집 도구가 많아 전용 페이지가 적합 · 네이버 메일 방식).
 // 진입: /mail/compose (새 메일) · ?mode=reply|replyall|forward&id=<messageId> (인용) · ?draft=<draftId> (이어쓰기).
 // 첨부: [내 PC](탐색기) + [문서함](추후 개인/부서/전사 문서함 모달 — 현재 자리만) + 상시 드래그 앤 드롭 존.
+//   드래그 앤 드롭은 파일당 30MB, 탐색기 선택은 파일당 2GB(2026-09-17 사용자 요청).
+//   일반 첨부(메일 원문)는 총 25MB 까지 — 넘치는 파일은 대용량 첨부(S3 업로드 + 본문 다운로드 링크, 30일)로 보낸다.
 // 인라인 이미지: blob 미리보기 → 발송 시 cid: 첨부(MIME inline)로 치환 — 외부 수신측에서도 표시.
 // 서명 자동삽입·드래프트 3초 자동저장. 발송 성공 시 /mail 복귀.
 
@@ -21,7 +23,34 @@ import type { MailMessageDetail } from "@/lib/mail/messages";
 import type { MailSignature } from "@/lib/mail/signatures";
 import "@/components/cdash/cdash.css";
 
-const MAX_TOTAL_ATTACH_BYTES = 20 * 1024 * 1024;
+/** 일반 첨부(메일 원문) 총량 — SES·수신 측 한도(api/mail/send 와 동일). */
+const MAX_TOTAL_ATTACH_BYTES = 25 * 1024 * 1024;
+/** 드래그 앤 드롭 파일당 상한. */
+const MAX_DROP_FILE_BYTES = 30 * 1024 * 1024;
+/** 탐색기 선택 파일당 상한(대용량 첨부 — lib/mail/large-attachments 와 동일). */
+const MAX_PICK_FILE_BYTES = 2 * 1024 * 1024 * 1024;
+
+const sizeText = (bytes: number) =>
+  bytes >= 1024 * 1024 * 1024
+    ? `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`
+    : bytes >= 1024 * 1024
+      ? `${(bytes / 1024 / 1024).toFixed(1)} MB`
+      : `${Math.ceil(bytes / 1024)} KB`;
+
+/**
+ * 발송 방식 계획 — 목록 순서대로 일반 첨부 예산(25MB − 인라인 이미지)에 담고, 넘치는 파일은 대용량 첨부.
+ * 한 번 넘친 뒤에도 뒤의 작은 파일은 남은 예산에 들어갈 수 있다.
+ */
+function planAttachments(files: File[], inlineBytes: number): Array<"mime" | "large"> {
+  let budget = MAX_TOTAL_ATTACH_BYTES - inlineBytes;
+  return files.map((f) => {
+    if (f.size <= budget) {
+      budget -= f.size;
+      return "mime";
+    }
+    return "large";
+  });
+}
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -81,6 +110,9 @@ export function MailComposePage() {
   const [showBcc, setShowBcc] = useState(false);
   const [subject, setSubject] = useState("");
   const [files, setFiles] = useState<File[]>([]);
+  // 대용량 첨부 업로드 캐시(File → uploadId) — 발송 실패 후 재시도 시 같은 파일을 다시 올리지 않는다.
+  const largeUploads = useRef(new WeakMap<File, string>());
+  const [uploadNote, setUploadNote] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [draftId, setDraftId] = useState<string | null>(null);
   const [draftState, setDraftState] = useState<"idle" | "saving" | "saved">("idle");
@@ -284,33 +316,53 @@ export function MailComposePage() {
   const totalAttachedBytes = () =>
     files.reduce((s, f) => s + f.size, 0) + inlineImages.current.reduce((s, i) => s + i.file.size, 0);
 
+  /** 첨부 추가 — source 별 파일당 상한: drop 30MB · pick(탐색기·문서함) 2GB. 총량 제한은 없다(초과분은 대용량 첨부).
+   *  확장자 정책(262)으로 차단된 형식은 추가 시점에 제외한다(최종 판정은 발송 API). */
   const addFiles = useCallback(
-    (incoming: File[]) => {
+    (incoming: File[], source: "drop" | "pick" = "pick") => {
       if (!incoming.length) return;
-      setFiles((prev) => {
-        let total = prev.reduce((s, f) => s + f.size, 0) + inlineImages.current.reduce((s, i) => s + i.file.size, 0);
-        const accepted: File[] = [];
-        for (const f of incoming) {
-          if (total + f.size > MAX_TOTAL_ATTACH_BYTES) {
-            toast(`'${f.name}' 은 첨부 총량(20MB)을 초과해 제외했습니다.`, "warn");
-            continue;
-          }
-          total += f.size;
-          accepted.push(f);
+      const limit = source === "drop" ? MAX_DROP_FILE_BYTES : MAX_PICK_FILE_BYTES;
+      const accepted: File[] = [];
+      for (const f of incoming) {
+        const ext = f.name.trim().replace(/[.\s]+$/, "").split(".").pop()?.toLowerCase() ?? "";
+        if (f.name.includes(".") && blockedExts.current.has(ext)) {
+          toast(`'${f.name}' — 보안 정책상 .${ext} 파일은 보낼 수 없습니다. 필요하면 관리자에게 허용을 요청하세요.`, "warn");
+          continue;
         }
-        return [...prev, ...accepted];
-      });
+        if (f.size > limit) {
+          toast(
+            source === "drop"
+              ? `'${f.name}'(${sizeText(f.size)}) — 끌어다 놓기는 파일당 30MB 까지입니다. 큰 파일은 [내 PC]로 첨부해 주세요.`
+              : `'${f.name}'(${sizeText(f.size)}) — 파일당 2GB 까지 첨부할 수 있습니다.`,
+            "warn"
+          );
+          continue;
+        }
+        accepted.push(f);
+      }
+      if (accepted.length) setFiles((prev) => [...prev, ...accepted]);
     },
     [toast]
   );
 
+  // 첨부 확장자 정책 — 본인 차단 목록(사전 안내용)
+  const blockedExts = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    fetch("/api/attachment-policy/me", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d && Array.isArray(d.blocked)) blockedExts.current = new Set(d.blocked.map(String));
+      })
+      .catch(() => undefined);
+  }, []);
+
   const onPickFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) addFiles(Array.from(e.target.files));
+    if (e.target.files) addFiles(Array.from(e.target.files), "pick");
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   // 개인문서함 전송(첨부 프리필) — /mail/compose?attach={documentId,...} 로 진입하면
-  // 본인 개인문서함 파일을 받아 첨부 목록에 미리 삽입한다(20MB 총량 검사는 addFiles 가 수행).
+  // 본인 개인문서함 파일을 받아 첨부 목록에 미리 삽입한다(탐색기 선택과 같은 기준 — 초과분은 대용량 첨부).
   const attachSeeded = useRef(false);
   useEffect(() => {
     const attachParam = searchParams.get("attach");
@@ -352,8 +404,9 @@ export function MailComposePage() {
     if (imageInputRef.current) imageInputRef.current.value = "";
     for (const f of picked) {
       if (!f.type.startsWith("image/")) continue;
-      if (totalAttachedBytes() + f.size > MAX_TOTAL_ATTACH_BYTES) {
-        toast(`'${f.name}' 은 첨부 총량(20MB)을 초과해 제외했습니다.`, "warn");
+      // 인라인 이미지는 본문에 박혀 대용량 링크로 바꿀 수 없다 — 인라인 이미지끼리 25MB 까지만.
+      if (inlineImages.current.reduce((s, i) => s + i.file.size, 0) + f.size > MAX_TOTAL_ATTACH_BYTES) {
+        toast(`'${f.name}' — 본문 삽입 이미지는 합계 25MB 까지입니다. 파일로 첨부해 주세요.`, "warn");
         continue;
       }
       const cid = `${globalThis.crypto?.randomUUID?.() ?? Date.now()}@koensain.app`;
@@ -387,7 +440,7 @@ export function MailComposePage() {
     e.preventDefault();
     dragDepth.current = 0;
     setDragging(false);
-    addFiles(Array.from(e.dataTransfer.files));
+    addFiles(Array.from(e.dataTransfer.files), "drop");
   };
 
   // ── 발송 ─────────────────────────────────────────
@@ -425,6 +478,42 @@ export function MailComposePage() {
         }
       }
       fd.append("inlineCids", JSON.stringify(usedCids));
+
+      // 첨부 분배 — 일반 첨부 25MB 예산을 넘는 파일은 대용량 첨부로 S3 에 직접 올린다(재시도 시 같은 파일은 재업로드하지 않음).
+      const inlineBytes = (fd.getAll("inlineFiles") as File[]).reduce((s, f) => s + f.size, 0);
+      if (inlineBytes > MAX_TOTAL_ATTACH_BYTES) {
+        toast("본문에 넣은 이미지가 25MB 를 넘습니다. 일부 이미지를 파일로 첨부해 주세요.", "warn");
+        return;
+      }
+      const plan = planAttachments(files, inlineBytes);
+      const largeFiles = files.filter((_, i) => plan[i] === "large");
+      const largeIds: string[] = [];
+      for (let i = 0; i < largeFiles.length; i++) {
+        const f = largeFiles[i];
+        const cached = largeUploads.current.get(f);
+        if (cached) {
+          largeIds.push(cached);
+          continue;
+        }
+        setUploadNote(`대용량 첨부 올리는 중 ${i + 1}/${largeFiles.length} — ${f.name} (${sizeText(f.size)})`);
+        const pr = await fetch("/api/mail/large-attachments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fileName: f.name, contentType: f.type || "application/octet-stream", byteSize: f.size }),
+        });
+        const pd = await pr.json().catch(() => ({}));
+        if (!pr.ok) throw new Error(String(pd.error ?? "대용량 첨부 준비에 실패했습니다."));
+        const put = await fetch(String(pd.url), {
+          method: "PUT",
+          headers: { "Content-Type": f.type || "application/octet-stream" },
+          body: f,
+        });
+        if (!put.ok) throw new Error(`'${f.name}' 업로드에 실패했습니다. (HTTP ${put.status})`);
+        largeUploads.current.set(f, String(pd.uploadId));
+        largeIds.push(String(pd.uploadId));
+      }
+      setUploadNote(null);
+      if (largeIds.length) fd.append("largeUploadIds", JSON.stringify(largeIds));
       fd.append("to", to);
       if (showCc && cc.trim()) fd.append("cc", cc);
       if (showBcc && bcc.trim()) fd.append("bcc", bcc);
@@ -434,7 +523,9 @@ export function MailComposePage() {
       if (draftId) fd.append("draftId", draftId);
       if (threadRef.current.inReplyTo) fd.append("inReplyTo", threadRef.current.inReplyTo);
       if (threadRef.current.references.length) fd.append("references", threadRef.current.references.join(" "));
-      for (const f of files) fd.append("files", f);
+      files.forEach((f, i) => {
+        if (plan[i] === "mime") fd.append("files", f);
+      });
       const r = await fetch("/api/mail/send", { method: "POST", body: fd });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) {
@@ -447,10 +538,13 @@ export function MailComposePage() {
       toast(err instanceof Error ? err.message : "발송 중 오류가 발생했습니다.", "error");
     } finally {
       setSending(false);
+      setUploadNote(null);
     }
   };
 
-  const totalKB = Math.ceil(files.reduce((s, f) => s + f.size, 0) / 1024);
+  const totalBytes = files.reduce((s, f) => s + f.size, 0);
+  const attachPlan = planAttachments(files, inlineImages.current.reduce((s, i) => s + i.file.size, 0));
+  const largeCount = attachPlan.filter((p) => p === "large").length;
 
   return (
     <div
@@ -630,7 +724,12 @@ export function MailComposePage() {
               >
                 문서함
               </CdButton>
-              {totalKB > 0 && <span className="text-[11px] cd-text-faint">합계 {totalKB} KB / 최대 20MB</span>}
+              {totalBytes > 0 && (
+                <span className="text-[11px] cd-text-faint">
+                  합계 {sizeText(totalBytes)}
+                  {largeCount > 0 ? ` · 대용량 ${largeCount}개는 다운로드 링크로 발송` : ""}
+                </span>
+              )}
             </span>
             {/* 상시 드롭존 — 첨부 순서대로 위→아래 목록 표시. 드래그 중에는 테두리만 실선 강조. */}
             <div
@@ -648,7 +747,7 @@ export function MailComposePage() {
             >
               {files.length === 0 ? (
                 <span className="text-xs cd-text-faint flex items-center gap-1.5 m-auto">
-                  <UploadCloud className="w-4 h-4" /> 파일을 마우스로 끌어 오세요 (클릭해도 선택 가능)
+                  <UploadCloud className="w-4 h-4" /> 파일을 마우스로 끌어 오세요(파일당 30MB) · 클릭하면 대용량 파일도 선택 가능
                 </span>
               ) : (
                 <>
@@ -656,7 +755,16 @@ export function MailComposePage() {
                     <div key={i} className="flex items-center gap-2 rounded-lg border cd-border-c px-2.5 py-1.5 text-xs text-black">
                       <Paperclip className="w-3.5 h-3.5 shrink-0 cd-text-faint" />
                       <span className="flex-1 truncate">{f.name}</span>
-                      <span className="cd-text-faint shrink-0">{Math.ceil(f.size / 1024)} KB</span>
+                      {attachPlan[i] === "large" && (
+                        <span
+                          className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold"
+                          style={{ color: "var(--cd-primary)", background: "var(--cd-primary-soft)" }}
+                          title="일반 첨부 한도(25MB)를 넘어 S3 에 올린 뒤 본문에 다운로드 링크(30일)로 넣습니다."
+                        >
+                          대용량 · 링크
+                        </span>
+                      )}
+                      <span className="cd-text-faint shrink-0">{sizeText(f.size)}</span>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -669,7 +777,9 @@ export function MailComposePage() {
                       </button>
                     </div>
                   ))}
-                  <span className="text-[11px] cd-text-faint pt-0.5">여기에 파일을 더 끌어다 놓을 수 있습니다.</span>
+                  <span className="text-[11px] cd-text-faint pt-0.5">
+                    여기에 파일을 더 끌어다 놓을 수 있습니다(파일당 30MB). 더 큰 파일은 [내 PC]로 첨부하세요.
+                  </span>
                 </>
               )}
             </div>
@@ -695,6 +805,7 @@ export function MailComposePage() {
               보내기
             </CdButton>
             <CdButton onClick={() => router.push("/mail")}>취소</CdButton>
+            {uploadNote && <span className="text-xs cd-text-faint">{uploadNote}</span>}
           </div>
         </div>
       )}

@@ -303,6 +303,8 @@ export const MENU_ITEMS: MenuItem[] = [
       { title: "접속기록 조회", href: "/admin/access-log" },
       // AI API 사용량·과금(docs/ai-api-usage-management-blueprint.md P1) — ai.usage.view RBAC 가드.
       { title: "AI API 사용량", href: "/admin/ai-usage" },
+      // 메일·메신저 첨부 확장자 정책(262) — 전사 기본 + 인원별 예외. security.attachment_policy RBAC 가드.
+      { title: "첨부 확장자 정책", href: "/admin/attachment-policy" },
     ],
     minRole: "admin",
     group: "system",

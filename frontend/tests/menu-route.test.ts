@@ -5,7 +5,7 @@ import { resolveMenuRoute } from "../components/layout/menu-route";
 
 test("기존 메뉴의 모든 진입 URL은 정확히 자기 메뉴를 선택한다", () => {
   assert.equal(MENU_ITEMS.length, 25);
-  assert.equal(MENU_ITEMS.reduce((count, item) => count + (item.submenu?.length ?? 0), 0), 73);
+  assert.equal(MENU_ITEMS.reduce((count, item) => count + (item.submenu?.length ?? 0), 0), 74);
   const survey = MENU_ITEMS.find((item) => item.title === "설문");
   assert.equal(survey?.href, "/survey/internal");
   assert.deepEqual(survey?.submenu?.map(({ title, href }) => ({ title, href })), [

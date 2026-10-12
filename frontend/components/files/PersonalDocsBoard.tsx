@@ -347,7 +347,7 @@ function SendModal({ open, onClose, docs }: { open: boolean; onClose: () => void
   };
 
   const totalBytes = docs.reduce((s, d) => s + d.byteSize, 0);
-  const mailOverLimit = method === "mail" && totalBytes > 20 * 1024 * 1024;
+  const mailOverLimit = method === "mail" && totalBytes > 25 * 1024 * 1024;
   const targetCount = targetKind === "employee" ? employees.length : contacts.length;
 
   const mailToken = (name: string, title: string | null, address: string) =>
@@ -532,7 +532,7 @@ function SendModal({ open, onClose, docs }: { open: boolean; onClose: () => void
             {targetKind === "contact" && <p className="text-[10.5px] cd-text-faint">거래처 담당자는 메일로만 전송할 수 있습니다.</p>}
             {mailOverLimit && (
               <p className="text-[10.5px] text-[color:var(--cd-danger,#FA896B)]">
-                메일 첨부 총량(20MB)을 초과합니다 — 메일 작성창에서 일부 파일이 제외될 수 있습니다.
+                메일 첨부 총량(25MB)을 초과합니다 — 메일 작성창에서 일부 파일이 제외될 수 있습니다.
               </p>
             )}
           </div>

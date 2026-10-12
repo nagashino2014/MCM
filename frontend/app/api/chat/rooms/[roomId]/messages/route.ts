@@ -12,6 +12,7 @@ import {
 } from "@/lib/chat/queries";
 import { sendPush } from "@/lib/notify/push-expo";
 import { getS3Client } from "@/lib/storage/logo-storage";
+import { assertAttachmentsAllowed } from "@/lib/security/attachment-policy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -87,10 +88,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ roomId: st
       }
       if (file.size > MAX_ATTACHMENT_BYTES) {
         return NextResponse.json(
-          { error: "첨부는 25MB 이하만 보낼 수 있습니다. (대용량 전송은 준비 중)" },
+          { error: "25MB 를 넘는 첨부는 대용량 업로드 경로로 보내야 합니다. 앱을 최신으로 업데이트해 주세요." },
           { status: 413 }
         );
       }
+      await assertAttachmentsAllowed(userId, [file.name || "file"]); // 첨부 확장자 정책(262)
       const caption = typeof form.get("caption") === "string" ? String(form.get("caption")) : "";
       const buffer = Buffer.from(await file.arrayBuffer());
       const messageId = await postFileMessage(
@@ -123,6 +125,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ roomId: st
       const fileName = typeof up.fileName === "string" && up.fileName ? up.fileName : "file";
       const contentType =
         typeof up.contentType === "string" && up.contentType ? up.contentType : "application/octet-stream";
+      await assertAttachmentsAllowed(userId, [fileName]); // 첨부 확장자 정책(262)
       const bucket = process.env.MCM_STORAGE_BUCKET?.trim();
       if (!bucket) return NextResponse.json({ error: "스토리지 미설정" }, { status: 500 });
       let byteSize = typeof up.byteSize === "number" ? up.byteSize : 0;

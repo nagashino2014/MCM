@@ -231,7 +231,7 @@ export async function sendLetterReview(input: {
       }
     }
     if (total > ATTACH_LIMIT_BYTES) {
-      throw new Error(`첨부 총량이 메일 한도(20MB)를 초과합니다(${(total / 1024 / 1024).toFixed(1)}MB).`);
+      throw new Error(`첨부 총량이 메일 한도(25MB)를 초과합니다(${(total / 1024 / 1024).toFixed(1)}MB).`);
     }
     attachNames = [...attachments.map((a) => a.filename), ...links.map((l) => l.name)];
 

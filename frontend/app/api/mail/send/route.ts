@@ -5,13 +5,16 @@ import { sendMail, type SendAttachmentInput } from "@/lib/mail/send";
 import { deleteDraft } from "@/lib/mail/drafts";
 import { assembleBody } from "@/lib/mail/compose-assemble";
 import type { MailAddress } from "@/lib/mail/mime";
+import { buildLargeAttachmentBlock, markLargeAttachmentsSent, prepareLargeAttachments } from "@/lib/mail/large-attachments";
+import { assertAttachmentsAllowed } from "@/lib/security/attachment-policy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // 첨부 총량 상한(요청 전체). SES v2 원문 메시지 상한 40MB(base64 오버헤드 감안 실효 ~28MB)에서
-// 수신 측 한도(네이버·Gmail 25MB 안팎)를 고려해 20MB 로 둔다(lib/letter/send.ts 와 동일 기준).
-const MAX_TOTAL_ATTACH_BYTES = 20 * 1024 * 1024;
+// 수신 측 한도(네이버·Gmail 25MB 안팎)를 고려해 25MB 로 둔다(2026-10-12 사용자 요청, 종전 20MB)(lib/letter/send.ts 와 동일 기준).
+// 이 한도를 넘는 파일은 작성 화면이 대용량 첨부(S3 + 다운로드 링크, 261)로 보낸다 — largeUploadIds.
+const MAX_TOTAL_ATTACH_BYTES = 25 * 1024 * 1024;
 
 /** "이름 <addr>" 또는 "addr" 형태의 문자열들을 MailAddress 로 파싱. 콤마/세미콜론 구분. */
 function parseRecipients(raw: string | null): MailAddress[] {
@@ -71,7 +74,7 @@ export async function POST(req: NextRequest) {
       const buf = Buffer.from(await f.arrayBuffer());
       totalBytes += buf.length;
       if (totalBytes > MAX_TOTAL_ATTACH_BYTES) {
-        return NextResponse.json({ error: "첨부 파일 총량이 20MB 를 초과했습니다." }, { status: 400 });
+        return NextResponse.json({ error: "일반 첨부 총량이 25MB 를 초과했습니다. 큰 파일은 대용량 첨부로 보내 주세요." }, { status: 400 });
       }
       attachments.push({ filename: f.name || "attachment", contentType: f.type || "application/octet-stream", content: buf });
     }
@@ -92,7 +95,7 @@ export async function POST(req: NextRequest) {
       const buf = Buffer.from(await f.arrayBuffer());
       totalBytes += buf.length;
       if (totalBytes > MAX_TOTAL_ATTACH_BYTES) {
-        return NextResponse.json({ error: "첨부(이미지 포함) 총량이 20MB 를 초과했습니다." }, { status: 400 });
+        return NextResponse.json({ error: "첨부(이미지 포함) 총량이 25MB 를 초과했습니다." }, { status: 400 });
       }
       attachments.push({
         filename: f.name || `image-${i + 1}.png`,
@@ -102,9 +105,31 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const result = await sendMail({ userId: ctx.userId, to, cc, bcc, subject, bodyHtml, attachments, idempotencyKey, inReplyTo, references });
+    // 대용량 첨부(261) — 본인 업로드 확인 후 본문 상단에 다운로드 링크 블록을 넣는다.
+    const largeUploadIds: string[] = (() => {
+      try {
+        const p = JSON.parse(String(form.get("largeUploadIds") ?? "[]"));
+        return Array.isArray(p) ? p.map(String) : [];
+      } catch {
+        return [];
+      }
+    })();
+    const largeRows = await prepareLargeAttachments(ctx.userId, largeUploadIds);
+    // 첨부 확장자 정책(262) — 본문 삽입 이미지는 제외하고 파일 첨부만 판정.
+    await assertAttachmentsAllowed(ctx.userId, [
+      ...attachments.filter((a) => !a.contentId).map((a) => a.filename),
+      ...largeRows.map((r) => r.fileName),
+    ]);
+    const finalBodyHtml = largeRows.length ? buildLargeAttachmentBlock(largeRows) + bodyHtml : bodyHtml;
+
+    const result = await sendMail({ userId: ctx.userId, to, cc, bcc, subject, bodyHtml: finalBodyHtml, attachments, idempotencyKey, inReplyTo, references });
     if (!result.ok) {
       return NextResponse.json({ error: result.error ?? "발송에 실패했습니다." }, { status: 502 });
+    }
+    if (largeRows.length) {
+      await markLargeAttachmentsSent(largeRows.map((r) => r.uploadId), result.messageId ?? null).catch((e) =>
+        console.error("[mail-send] 대용량 첨부 확정 실패", e)
+      );
     }
     if (result.duplicate) {
       return NextResponse.json({ ok: true, duplicate: true });
@@ -123,7 +148,7 @@ export async function POST(req: NextRequest) {
       action: "mail_send",
       targetTable: "mail_messages",
       targetId: result.messageId ?? "",
-      after: { to: to.map((a) => a.address), subject, sesMessageId: result.sesMessageId, attachments: attachments.length },
+      after: { to: to.map((a) => a.address), subject, sesMessageId: result.sesMessageId, attachments: attachments.length, largeAttachments: largeRows.length },
     });
 
     return NextResponse.json({ ok: true, messageId: result.messageId, sesMessageId: result.sesMessageId });

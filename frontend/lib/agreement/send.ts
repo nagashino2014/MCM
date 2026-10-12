@@ -14,7 +14,7 @@ import { claimAgreementSend, finishAgreementSend } from "./store";
 import type { AgreementFieldValues, AgreementRecipient } from "./types";
 
 /** 공문과 동일 상한 — SES 실효 한도·수신 측(네이버·Gmail 25MB 안팎) 고려 */
-const ATTACH_LIMIT_BYTES = 20 * 1024 * 1024;
+const ATTACH_LIMIT_BYTES = 25 * 1024 * 1024;
 
 const COMPANY_SHORT = COMPANY_KO.replace(/^주식회사\s*/, "");
 
@@ -129,7 +129,7 @@ export async function processAgreementSend(
     }
     const total = attachments.reduce((a, f) => a + f.content.length, 0);
     if (total > ATTACH_LIMIT_BYTES) {
-      throw new Error(`첨부 총량이 메일 한도(20MB)를 초과합니다(${(total / 1024 / 1024).toFixed(1)}MB).`);
+      throw new Error(`첨부 총량이 메일 한도(25MB)를 초과합니다(${(total / 1024 / 1024).toFixed(1)}MB).`);
     }
 
     const seen = new Set(to.map((a) => a.address.toLowerCase()));

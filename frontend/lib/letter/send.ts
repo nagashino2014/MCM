@@ -18,9 +18,9 @@ import { claimLetterSend, finishLetterSend } from "./store";
 import { COMPANY_KO, type LetterFieldValues, type LetterRecipient } from "./types";
 
 /** SES v2 raw 40MB(base64 오버헤드 감안 실효 ~28MB). 수신 측 한도(네이버·Gmail 25MB 안팎)를
- *  고려해 20MB 를 상한으로 둔다 — 웬만한 동봉 서류는 그대로 첨부되어 메일함에 남는다(사용자 확정).
+ *  고려해 25MB 를 상한으로 둔다(2026-10-12 사용자 요청, 종전 20MB) — 웬만한 동봉 서류는 그대로 첨부되어 메일함에 남는다(사용자 확정).
  *  동봉 서류 총량은 200MB 까지 허용하되, 이 한도를 넘는 발송만 다운로드 링크(presigned, 7일)로 전환. */
-export const ATTACH_LIMIT_BYTES = 20 * 1024 * 1024;
+export const ATTACH_LIMIT_BYTES = 25 * 1024 * 1024;
 const LINK_EXPIRES_SEC = 7 * 24 * 3600; // presigned GET 최대 유효기간(7일)
 
 export interface DownloadLink {
@@ -182,7 +182,7 @@ export async function processLetterSend(docId: string): Promise<{ ok: boolean; s
       });
     }
 
-    // 동봉 서류 — 공문 포함 총량이 메일 한도(7MB) 이내면 순서대로 직접 첨부하고,
+    // 동봉 서류 — 공문 포함 총량이 메일 한도(25MB) 이내면 순서대로 직접 첨부하고,
     // 초과하면 동봉 서류 전체를 다운로드 링크(presigned 7일)로 전환한다(총 200MB 허용 — 사용자 확정).
     const docsTotal = attachments.reduce((a, f) => a + f.content.length, 0);
     const files = values.file_attachments ?? [];
@@ -215,7 +215,7 @@ export async function processLetterSend(docId: string): Promise<{ ok: boolean; s
       }
     }
     if (total > ATTACH_LIMIT_BYTES) {
-      throw new Error(`첨부 총량이 메일 한도(20MB)를 초과합니다(${(total / 1024 / 1024).toFixed(1)}MB).`);
+      throw new Error(`첨부 총량이 메일 한도(25MB)를 초과합니다(${(total / 1024 / 1024).toFixed(1)}MB).`);
     }
 
     // 발송자 표기 = "성명 직함"(기안 시점 스냅샷). 서명은 기안자의 기본 서명이 있을 때만.

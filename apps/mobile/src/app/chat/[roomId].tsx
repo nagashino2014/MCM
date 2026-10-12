@@ -27,6 +27,7 @@ import { fmtTime } from '@/lib/format';
 import { openAttachment } from '@/lib/open-attachment';
 import { getAccessToken } from '@/lib/tokens';
 import { uploadLargeFile } from '@/lib/upload-large';
+import { useApi } from '@/lib/use-api';
 import { useDirectorySnapshot } from '@/lib/use-directory-snapshot';
 import { useTheme } from '@/theme/useTheme';
 
@@ -73,9 +74,14 @@ interface RoomDetail {
   }[];
 }
 
-/** API 경유 한도 — 초과분은 presigned PUT 직행(200MB 상한, MSG-P2). */
+/** API 경유 한도 — 초과분은 presigned PUT 직행(MSG-P2). */
 const MULTIPART_MAX = 25 * 1024 * 1024;
-const PRESIGNED_MAX = 200 * 1024 * 1024;
+/** 파일 선택(📎 대화상자) 파일당 상한 — 서버 presign 과 동일(2026-09-17, 종전 200MB). */
+const PRESIGNED_MAX = 2 * 1024 * 1024 * 1024;
+/** 끌어다 놓기·클립보드 붙여넣기 파일당 상한(웹·데스크탑 위젯) — 큰 파일은 📎 로. */
+const DROP_MAX = 30 * 1024 * 1024;
+const sizeText = (b: number) =>
+  b >= 1024 * 1024 * 1024 ? `${(b / 1024 / 1024 / 1024).toFixed(2)}GB` : `${(b / 1024 / 1024).toFixed(1)}MB`;
 
 /** 첨부 후보(전송 전) — 웹은 DOM File, 네이티브는 uri. */
 interface PendingFile {
@@ -241,12 +247,29 @@ export default function ChatRoomScreen() {
     }
   }, [loadingOlder, msgs, roomId]);
 
+  // 첨부 확장자 정책(262) — 본인 차단 목록. 최종 판정은 서버, 여기서는 선택 즉시 안내.
+  const policy = useApi<{ blocked: string[] }>('/api/attachment-policy/me', { cache: true });
+  const blockedExtOf = useCallback(
+    (name: string): string | null => {
+      const base = name.trim().replace(/[.\s]+$/, '');
+      if (!base.includes('.')) return null;
+      const ext = base.split('.').pop()?.toLowerCase() ?? '';
+      return (policy.data?.blocked ?? []).includes(ext) ? ext : null;
+    },
+    [policy.data]
+  );
+
   const pickFile = useCallback(async () => {
     const res = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true, multiple: false });
     if (res.canceled || !res.assets?.length) return;
     const a = res.assets[0];
+    const bad = blockedExtOf(a.name ?? '');
+    if (bad) {
+      toast.show(`보안 정책상 .${bad} 파일은 보낼 수 없습니다. 필요하면 관리자에게 허용을 요청하세요.`, 'error');
+      return;
+    }
     if (a.size != null && a.size > PRESIGNED_MAX) {
-      toast.show('첨부는 200MB 이하만 보낼 수 있습니다.', 'error');
+      toast.show(`첨부는 파일당 2GB 까지 보낼 수 있습니다. (${sizeText(a.size)})`, 'error');
       return;
     }
     setPendingFile({
@@ -256,13 +279,18 @@ export default function ChatRoomScreen() {
       mimeType: a.mimeType ?? null,
       webFile: (a as { file?: Blob }).file,
     });
-  }, [toast]);
+  }, [toast, blockedExtOf]);
 
-  /** 웹에서 받은 DOM File → 전송 대기 첨부(드래그앤드롭·붙여넣기 공통). */
+  /** 웹에서 받은 DOM File → 전송 대기 첨부(드래그앤드롭·붙여넣기 공통). 파일당 30MB — 큰 파일은 📎 파일 선택으로. */
   const acceptWebFile = useCallback(
     (file: File, nameOverride?: string) => {
-      if (file.size > PRESIGNED_MAX) {
-        toast.show('첨부는 200MB 이하만 보낼 수 있습니다.', 'error');
+      const bad = blockedExtOf(nameOverride ?? file.name ?? '');
+      if (bad) {
+        toast.show(`보안 정책상 .${bad} 파일은 보낼 수 없습니다. 필요하면 관리자에게 허용을 요청하세요.`, 'error');
+        return;
+      }
+      if (file.size > DROP_MAX) {
+        toast.show(`끌어다 놓기는 파일당 30MB 까지입니다(${sizeText(file.size)}). 큰 파일은 📎 로 첨부해 주세요.`, 'error');
         return;
       }
       setPendingFile({
@@ -273,7 +301,7 @@ export default function ChatRoomScreen() {
         webFile: file,
       });
     },
-    [toast]
+    [toast, blockedExtOf]
   );
 
   /**
@@ -641,7 +669,7 @@ export default function ChatRoomScreen() {
           <View className="items-center gap-2 rounded-3xl border-2 border-dashed border-cd-primary bg-cd-card px-8 py-7">
             <Ionicons name="cloud-upload-outline" size={34} color={c.primary} />
             <Text className="text-[15px] font-extrabold text-cd-text">여기에 놓아 첨부</Text>
-            <Text className="text-[12px] text-cd-faint">파일 1개 · 최대 200MB</Text>
+            <Text className="text-[12px] text-cd-faint">파일 1개 · 📎 선택 최대 2GB · 끌어다 놓기 30MB</Text>
           </View>
         </View>
       ) : null}

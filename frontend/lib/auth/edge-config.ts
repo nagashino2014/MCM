@@ -52,6 +52,7 @@ export const edgeAuthConfig: NextAuthConfig = {
         path.startsWith("/api/auth/") ||
         path.startsWith("/api/mobile/auth/") || // 모바일 로그인/refresh — 세션 없이 접근
         path === "/api/mail/track" || // 수신 확인 픽셀(G2-10) — 외부 수신자가 호출
+        path.startsWith("/api/mail/large/") || // 메일 대용량 첨부 다운로드(261) — 외부 수신자, 무작위 토큰
         path === "/api/health" ||
         path === "/manifest.webmanifest" || // PWA manifest 는 설치 시 비인증 fetch
         path === "/m-app" ||

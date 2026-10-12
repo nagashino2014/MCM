@@ -1322,7 +1322,7 @@ export function ApprovalLetterBoard() {
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[11px] cd-text-faint">
-                  첨부서류 — 공문 PDF 뒤에 첨부 순서대로 메일에 동봉됩니다. 총 20MB 까지 파일로 직접 첨부되고, 초과분은 다운로드 링크(7일 유효)로 전환됩니다 (총 200MB 까지)
+                  첨부서류 — 공문 PDF 뒤에 첨부 순서대로 메일에 동봉됩니다. 총 25MB 까지 파일로 직접 첨부되고, 초과분은 다운로드 링크(7일 유효)로 전환됩니다 (총 200MB 까지)
                 </span>
                 <button
                   type="button"

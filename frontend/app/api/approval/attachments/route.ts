@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
-/** 파일 1건 상한 200MB(사용자 확정) — 공문 발송 시 메일 직접 첨부 한도(7MB) 초과분은
+/** 파일 1건 상한 200MB(사용자 확정) — 공문 발송 시 메일 직접 첨부 한도(25MB) 초과분은
  *  다운로드 링크(presigned, 7일)로 자동 전환된다(lib/letter/send.ts). */
 const MAX_FILE_BYTES = 200 * 1024 * 1024;
 

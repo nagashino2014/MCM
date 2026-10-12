@@ -13,8 +13,8 @@ import { generateQuoteArtifacts } from "./generate";
 import { claimQuoteSend, finishQuoteSend } from "./store";
 import type { QuoteFieldValues, QuoteRecipient } from "./types";
 
-/** SES raw 10MB(base64 오버헤드 감안 실효 ~7MB) — 공문 발송과 동일 기준 */
-const ATTACH_LIMIT_BYTES = 7 * 1024 * 1024;
+/** SES v2 raw 40MB(base64 실효 ~28MB) 안에서 공문 발송과 동일 기준 25MB(2026-10-12, 종전 v1 기준 7MB) */
+const ATTACH_LIMIT_BYTES = 25 * 1024 * 1024;
 
 function toAddresses(list: QuoteRecipient[]): { name?: string; address: string }[] {
   return (list ?? [])
@@ -75,7 +75,7 @@ export async function processQuoteSend(docId: string): Promise<{ ok: boolean; sk
     ];
     const total = attachments.reduce((a, f) => a + f.content.length, 0);
     if (total > ATTACH_LIMIT_BYTES) {
-      throw new Error(`견적서 PDF 가 메일 한도(7MB)를 초과합니다(${(total / 1024 / 1024).toFixed(1)}MB).`);
+      throw new Error(`견적서 PDF 가 메일 한도(25MB)를 초과합니다(${(total / 1024 / 1024).toFixed(1)}MB).`);
     }
 
     const totalAmount = (values.sites ?? []).reduce((acc, s) => acc + (Number(s?.amounts?.final) || 0), 0);

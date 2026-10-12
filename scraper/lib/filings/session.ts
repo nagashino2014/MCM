@@ -33,7 +33,8 @@ export function installDialogHandler(
   context: BrowserContext,
   site: string,
   onNotice?: (text: string) => void,
-  interactive = true
+  interactive = true,
+  onConfirm?: (message: string) => Promise<boolean>
 ): void {
   context.on("dialog", async (dialog) => {
     const type = dialog.type();
@@ -59,6 +60,12 @@ export function installDialogHandler(
       }
       if (type === "confirm") {
         console.log(`[${site}] ❓ 사이트 확인 창: ${msg}`);
+        // 호출 측 관문(예: 제출 직전 중복 보고 확인) — false 면 사이트 확인 창을 취소로 닫는다
+        if (onConfirm && !(await onConfirm(msg).catch(() => true))) {
+          console.log(`[${site}]   → 신고 보조가 진행을 막아 [취소]로 닫습니다.`);
+          await dialog.dismiss();
+          return;
+        }
         // 확인 창이 떠 있는 동안 페이지 스크립트는 멈춘다. 터미널을 볼 수 없는 실행(백그라운드·도구 실행)에서
         // 사람 답을 기다리면 "저장하시겠습니까?" 에서 영영 멈춰 저장이 끝나지 않는다(2026-09-16 실측).
         // 확인 창은 사람이 방금 누른 버튼 때문에 뜬 것이므로, 물어볼 수 없을 때는 확인으로 잇는다.
@@ -112,9 +119,15 @@ export async function snapshotCookies(site: FilingSite, context: BrowserContext)
  */
 export async function openContext(
   site: FilingSite,
-  opts: { useSession?: boolean; headless?: boolean; onNotice?: (text: string) => void } = {}
+  opts: {
+    useSession?: boolean;
+    headless?: boolean;
+    onNotice?: (text: string) => void;
+    /** 사이트 확인(confirm) 창이 뜰 때 진행 여부 — false 면 취소로 닫는다 */
+    onConfirm?: (message: string) => Promise<boolean>;
+  } = {}
 ) {
-  const { useSession = true, headless = false, onNotice } = opts;
+  const { useSession = true, headless = false, onNotice, onConfirm } = opts;
   if (useSession && !hasSession(site)) {
     throw new Error(`로그인 프로필이 없습니다: ${profileDir(site)}\n먼저 'npm run filings -- login --site ${site}' 를 실행하세요.`);
   }
@@ -149,7 +162,7 @@ export async function openContext(
     context = await chromium.launchPersistentContext(profileDir(site), launch as never);
   }
   context.setDefaultTimeout(60_000);
-  installDialogHandler(context, site, onNotice, !headless);
+  installDialogHandler(context, site, onNotice, !headless, onConfirm);
   if (useSession && fs.existsSync(cookiesFile(site))) {
     try {
       const cookies = JSON.parse(fs.readFileSync(cookiesFile(site), "utf-8"));

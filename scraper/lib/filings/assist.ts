@@ -26,7 +26,7 @@ import {
   patchContractPeriod,
   uploadAgencyReportPdf,
 } from "./mcm-api";
-import { ACTION_FN, OverlayAction, OverlayData, RENDER_FN, renderOverlay } from "./overlay";
+import { ACTION_FN, OverlayAction, OverlayData, OverlayDuplicate, RENDER_FN, renderOverlay } from "./overlay";
 import { dumpPage } from "./probe";
 import { openContext, snapshotCookies, waitForContextClose } from "./session";
 
@@ -175,56 +175,153 @@ export async function runAssist(opts: { cfg: FilingsConfig; kind?: FilingKind; f
   };
 
   /**
-   * 중복 신고 경고 — IEPS 에 같은 사업장·계약일·보고형식의 보고가 이미 있는지 신고 전에 확인한다.
-   * 대기열을 거치지 않고 사이트에서 직접 신고한 건은 MCM 이 모르므로(2026-09-16 국도화학 부산·경인 9/10 수동 신고 →
-   * 9/16 재제출), IEPS 목록 조회 API 로 직접 확인한다. 제출 뒤에는 방금 낸 보고가 걸리므로 제출 전에만 돌린다.
+   * 중복 신고 차단 — IEPS 에 같은 보고가 이미 제출돼 있는지 신고 전에 확인한다.
+   * 대기열을 거치지 않고 사이트에서 직접 신고한 건·예전 미신고 건은 MCM 이 모르므로(2026-09-16 국도화학 부산·경인 9/10 수동 신고 →
+   * 9/16 재제출), IEPS 목록 조회 API 로 직접 확인한다.
+   * 2026-10-12 보강(사용자 요청 — 패널 안내만으로는 중복 제출이 계속 났다):
+   *  - 찾으면 화면 전체를 가리는 경고창을 띄우고, 기한(DUP_CLOSE_SEC)이 지나면 창을 닫는다(대기 건이 더 있으면 이 건만 건너뜀).
+   *  - 로그인 전·세션 만료로 조회가 실패하면 '중복 없음'으로 끝내지 않고, 페이지가 바뀔 때마다 다시 확인한다.
+   *  - 사이트의 제출 확인 창이 뜨면 한 번 더 확인하고, 중복이면 확인 창을 취소로 닫는다.
+   *  - 임시저장(작성 중)·반려 보고는 중복으로 보지 않는다 — 저장해 둔 신청서를 이어서 제출하는 흐름을 막지 않게.
    */
+  const DUP_CLOSE_SEC = 20;
   let dupCheckedFor = "";
-  const checkDuplicates = async () => {
+  let dupChecking: Promise<void> | null = null;
+  let duplicate: (OverlayDuplicate & { filingId: string; cnclCd: string; raw: IepsAgencyReportRow[] }) | null = null;
+  let dupTimer: NodeJS.Timeout | null = null;
+  const dupOverridden = new Set<string>();
+
+  /** 현재 건의 중복 후보 — 해당 없음(대행 실적 아님·값 부족)이면 null, 조회 실패는 예외 */
+  const findDuplicates = async (
+    cur: FilingRow
+  ): Promise<{ blocking: IepsAgencyReportRow[]; drafts: IepsAgencyReportRow[]; kindName: string; cnclCd: string } | null> => {
+    const field = (label: string) => cur.payload.fields.find((f) => f.label === label)?.value?.trim() ?? "";
+    const name = field("대행사업장 명칭");
+    const contractDate = field("(변경)계약일자");
+    const amount = field("(변경)계약금액(백만원)");
+    const agencyStart = field("대행업무 시작일");
+    const kindName = cur.triggerKind === "amend" ? "변경" : cur.triggerKind === "complete" ? "이행" : "체결";
+    const cnclCd = siteCfg.agencyCode;
+    if (!name || !contractDate || !cnclCd) return null;
+    const rows = await listIepsAgencyReports(context, cnclCd, searchKeyword(name), contractDate);
+    const hits = rows.filter((r) => isSameReport(r, { name, contractDate, amount, agencyStart, kindName }));
+    return {
+      blocking: hits.filter((r) => reportState(r.STTUS_CD_NM) === "filed"),
+      drafts: hits.filter((r) => reportState(r.STTUS_CD_NM) === "draft"),
+      kindName,
+      cnclCd,
+    };
+  };
+
+  /** 다음 건으로 넘기거나(대기 건이 더 있을 때) 창을 닫는다 — 이번 실행 목록에서만 뺀다(MCM 대기열은 그대로). */
+  const leaveCurrent = async (reason: string) => {
+    if (dupTimer) clearTimeout(dupTimer);
+    dupTimer = null;
+    duplicate = null;
+    if (items.length <= 1) {
+      console.log(`[filings] ${reason} — 창을 닫습니다.`);
+      await context.close().catch(() => {});
+      return;
+    }
+    const cur = items[index];
+    console.log(`[filings] ${reason} — ${cur?.title ?? "이 건"} 을 건너뜁니다.`);
+    items.splice(index, 1);
+    if (index >= items.length) index = 0;
+    deliveryMode = null;
+    if (cur?.status === "pending") {
+      notices.push({ at: Date.now(), sticky: true, text: `중복 보고가 있어 "${cur.title}" 건을 건너뛰었습니다(MCM 대기열에는 남아 있습니다).` });
+    }
+    await rerender();
+    void checkDuplicates();
+  };
+
+  const raiseDuplicate = async (cur: FilingRow, found: { blocking: IepsAgencyReportRow[]; kindName: string; cnclCd: string }) => {
+    if (dupOverridden.has(cur.filingId)) return;
+    if (duplicate?.filingId === cur.filingId) return;
+    if (items[index]?.filingId !== cur.filingId) return; // 확인하는 사이 다른 건으로 넘어갔다
+    const sorted = [...found.blocking].sort((a, b) => Number(b.REQST_SN) - Number(a.REQST_SN));
+    duplicate = {
+      filingId: cur.filingId,
+      cnclCd: found.cnclCd,
+      kindName: found.kindName,
+      deadline: Date.now() + DUP_CLOSE_SEC * 1000,
+      skipsToNext: items.length > 1,
+      raw: sorted,
+      rows: sorted.map((d) => ({
+        reqstSn: String(d.REQST_SN),
+        bplcNm: d.BPLC_NM ?? "",
+        status: d.STTUS_CD_NM ?? "",
+        presentnDe: d.PRESENTN_DE ? `제출 ${d.PRESENTN_DE}` : "",
+        contractDe: d.CONTRACT_DE ?? "",
+        amount: d.CONTRACT_AMT != null ? `${d.CONTRACT_AMT}백만원` : "",
+        agencyPeriod: `${d.AGENCY_START_DE ?? "?"} ~ ${d.AGENCY_END_DE ?? "?"}`,
+        url: `https://ieps.nier.go.kr/web/issPrc/agencyPerMgt/contractReportForm/?pMENUMST_ID=583&CNCL_CD=${encodeURIComponent(found.cnclCd)}&REQST_SN=${d.REQST_SN}`,
+      })),
+    };
+    console.log(
+      `[filings] ⚠ 중복 신고 차단: ${cur.title} — IEPS 보고회차 ${sorted.map((d) => d.REQST_SN).join(", ")}. ` +
+        `${DUP_CLOSE_SEC}초 뒤 ${items.length > 1 ? "다음 건으로 넘어갑니다" : "창을 닫습니다"}.`
+    );
+    if (dupTimer) clearTimeout(dupTimer);
+    const filingId = cur.filingId;
+    dupTimer = setTimeout(() => {
+      if (duplicate?.filingId === filingId && items[index]?.filingId === filingId) void leaveCurrent("중복 보고 경고 시간 초과");
+    }, DUP_CLOSE_SEC * 1000);
+    await rerender();
+  };
+
+  const checkDuplicates = async (): Promise<void> => {
     const cur = items[index];
     if (!cur || cur.filingKind !== "ieps_agency" || cur.status !== "pending") return;
-    const key = `${cur.filingId}`;
-    if (dupCheckedFor === key) return;
-    dupCheckedFor = key;
+    if (dupCheckedFor === cur.filingId) return;
+    if (dupChecking) return dupChecking;
+    dupChecking = (async () => {
+      try {
+        const found = await findDuplicates(cur);
+        dupCheckedFor = cur.filingId;
+        if (!found) return;
+        for (const d of found.drafts) {
+          notices.push({
+            at: Date.now(),
+            sticky: true,
+            text: `IEPS 에 같은 ${found.kindName} 보고가 '${d.STTUS_CD_NM ?? "작성 중"}' 상태로 있습니다(보고회차 ${d.REQST_SN}) — 새로 작성하지 말고 그 신청서를 이어서 제출하세요.`,
+          });
+        }
+        if (found.blocking.length) await raiseDuplicate(cur, found);
+        else {
+          console.log(`[filings] 중복 신고 확인: IEPS 에 제출된 같은 ${found.kindName} 보고 없음`);
+          if (found.drafts.length) await rerender();
+        }
+      } catch (e) {
+        // 로그인 전·세션 만료 — 다음 페이지 이동 때 다시 확인한다(실패를 '중복 없음'으로 끝내지 않는다)
+        console.log(`[filings] 중복 신고 확인 보류(다음 화면 이동 때 다시): ${(e as Error).message}`);
+      } finally {
+        dupChecking = null;
+        // 확인하는 사이 다른 건으로 넘어갔으면 그 건도 확인한다
+        if (items[index] && items[index].filingId !== cur.filingId) void checkDuplicates();
+      }
+    })();
+    return dupChecking;
+  };
+
+  /** 사이트 제출 확인 창 관문 — 제출 직전 목록을 다시 조회해 중복이면 확인 창을 취소로 닫는다. */
+  const confirmGate = async (message: string): Promise<boolean> => {
+    if (!/제출/.test(message)) return true;
+    const cur = items[index];
+    if (!cur || cur.filingKind !== "ieps_agency" || cur.status !== "pending" || dupOverridden.has(cur.filingId)) return true;
     try {
-      const field = (label: string) => cur.payload.fields.find((f) => f.label === label)?.value?.trim() ?? "";
-      const name = field("대행사업장 명칭");
-      const contractDate = field("(변경)계약일자");
-      const amount = field("(변경)계약금액(백만원)");
-      const kindName = cur.triggerKind === "amend" ? "변경" : cur.triggerKind === "complete" ? "이행" : "체결";
-      const cnclCd = siteCfg.agencyCode;
-      if (!name || !contractDate || !cnclCd) return;
-      const rows = await listIepsAgencyReports(context, cnclCd, searchKeyword(name), contractDate);
-      const dups = rows.filter((r) => {
-        if (r.REPORT_FOM_CD_NM !== kindName || r.CONTRACT_DE !== contractDate) return false;
-        const tokens = nameTokens(name);
-        const flat = normalizeName(r.BPLC_NM ?? "");
-        if (tokens.length && !flat.includes(tokens[0])) return false; // 회사명은 반드시 같아야 한다
-        const want = normalizeName(name);
-        const sameName = flat.includes(want) || want.includes(flat) || tokens.filter((t) => flat.includes(t)).length / tokens.length >= 0.6;
-        const sameAmount = amount !== "" && String(r.CONTRACT_AMT ?? "") === amount;
-        return sameName || sameAmount;
-      });
-      if (!dups.length) {
-        console.log(`[filings] 중복 신고 확인: IEPS 에 같은 ${kindName} 보고 없음`);
-        return;
-      }
-      for (const d of dups) {
-        notices.push({
-          at: Date.now(),
-          sticky: true,
-          text:
-            `⚠ 이미 IEPS 에 같은 ${kindName} 보고가 있습니다 — 보고회차 ${d.REQST_SN} · ${d.BPLC_NM} · ${d.STTUS_CD_NM ?? ""} ${d.PRESENTN_DE ?? ""}` +
-            ` · 대행기간 ~${d.AGENCY_END_DE ?? "?"}. 정정 목적이 아니면 신고를 멈추세요.`,
-          url: `https://ieps.nier.go.kr/web/issPrc/agencyPerMgt/contractReportForm/?pMENUMST_ID=583&CNCL_CD=${encodeURIComponent(cnclCd)}&REQST_SN=${d.REQST_SN}`,
-          label: "기존 보고 열기",
-        });
-      }
-      console.log(`[filings] ⚠ 중복 신고 의심 ${dups.length}건: ${dups.map((d) => d.REQST_SN).join(", ")}`);
-      await rerender();
+      const found = await findDuplicates(cur);
+      if (!found?.blocking.length) return true;
+      // 확인 창이 떠 있는 동안 페이지 스크립트가 멈춘다 — 경고창은 확인 창을 취소로 닫은 뒤 그린다
+      setTimeout(() => void raiseDuplicate(cur, found), 300);
+      return false;
     } catch (e) {
-      dupCheckedFor = ""; // 다음 기회에 다시
-      console.log(`[filings] 중복 신고 확인 실패: ${(e as Error).message}`);
+      notices.push({
+        at: Date.now(),
+        sticky: true,
+        text: `제출 직전 중복 확인을 하지 못했습니다(${(e as Error).message}) — IEPS 목록에서 같은 보고가 없는지 직접 확인하세요.`,
+      });
+      return true;
     }
   };
 
@@ -240,6 +337,11 @@ export async function runAssist(opts: { cfg: FilingsConfig; kind?: FilingKind; f
     const cur = items[index];
     if (!cur || cur.status !== "pending" || recording) return;
     recording = true;
+    // 방금 낸 보고가 목록에 잡혀 중복으로 오인되지 않게 — 제출 알림을 받은 건은 중복 확인에서 뺀다
+    dupOverridden.add(cur.filingId);
+    if (dupTimer) clearTimeout(dupTimer);
+    dupTimer = null;
+    duplicate = null;
     try {
       // 알림을 닫으면 제출된 보고서 화면으로 넘어간다 — 그 주소에서 보고회차를 읽는다
       await new Promise((r) => setTimeout(r, 2000));
@@ -281,6 +383,7 @@ export async function runAssist(opts: { cfg: FilingsConfig; kind?: FilingKind; f
   };
 
   const { context } = await openContext(site, {
+    onConfirm: (message) => confirmGate(message),
     onNotice: (text) => {
       notices.push({ at: Date.now(), text });
       void rerender();
@@ -309,6 +412,10 @@ export async function runAssist(opts: { cfg: FilingsConfig; kind?: FilingKind; f
       siteSearchQuery: searchQueryOf(cur),
       attach: kind === "ieps_agency" ? { seal: sealAvailable, docs: docs.map((d) => `${d.typeLabel} ${d.name}`) } : undefined,
       delivery: kind === "ieps_agency" ? { mode: deliveryMode, defaultMode: deliveryDefault } : undefined,
+      duplicate:
+        duplicate && cur && duplicate.filingId === cur.filingId
+          ? { kindName: duplicate.kindName, deadline: duplicate.deadline, skipsToNext: duplicate.skipsToNext, rows: duplicate.rows }
+          : undefined,
     };
   };
   const rerender = async () => {
@@ -406,9 +513,52 @@ export async function runAssist(opts: { cfg: FilingsConfig; kind?: FilingKind; f
           const file = await dumpPage(site, target);
           notices.push({ at: Date.now(), text: `폼 덤프 저장: ${file}` });
         }
+      } else if (a.type === "dupClose") {
+        await leaveCurrent("중복 보고 경고에서 닫기");
+        return;
+      } else if (a.type === "dupOverride") {
+        if (cur) {
+          dupOverridden.add(cur.filingId);
+          console.log(`[filings] ${cur.title} — 중복 경고를 무시하고 계속(사용자 선택)`);
+          notices.push({ at: Date.now(), sticky: true, text: "중복 경고를 무시하고 계속합니다 — 정정 목적의 재신고가 맞는지 확인한 뒤 제출하세요." });
+        }
+        if (dupTimer) clearTimeout(dupTimer);
+        dupTimer = null;
+        duplicate = null;
+      } else if (a.type === "dupRecord") {
+        // 이미 제출된 IEPS 보고가 이 건의 신고 — MCM 에 제출 완료(보고회차·제출일)로 기록하고 실적 보고서를 붙인다.
+        // 예전에 낸 보고라 실무자 발송은 보류로 둔다(계약 상세 신고 이력에서 [발송] 가능).
+        const hit = duplicate?.raw.find((d) => String(d.REQST_SN) === a.reqstSn);
+        if (cur && duplicate && hit) {
+          if (dupTimer) clearTimeout(dupTimer);
+          dupTimer = null;
+          const cnclCd = duplicate.cnclCd;
+          await markFiling(cur.filingId, {
+            status: "submitted",
+            receiptNo: String(hit.REQST_SN),
+            submittedAt: hit.PRESENTN_DE || null,
+            note: `IEPS 기존 보고(보고회차 ${hit.REQST_SN})로 기록 — 신고 보조 중복 확인`,
+            deliveryMode: "hold",
+          });
+          console.log(`[filings] ${cur.title} → IEPS 기존 보고 ${hit.REQST_SN} 로 제출 완료 기록`);
+          notices.push({ at: Date.now(), sticky: true, text: `기존 IEPS 보고(보고회차 ${hit.REQST_SN})로 MCM 에 제출 완료를 기록했습니다.` });
+          await attachReport(cur, { cnclCd, reqstSn: String(hit.REQST_SN) }).catch((e) => {
+            notices.push({
+              at: Date.now(),
+              sticky: true,
+              text: `실적 보고서 PDF 는 받지 못했습니다 — 계약 상세 신고 이력에서 [IEPS 에서 받기] 로 다시 시도하세요: ${(e as Error).message}`,
+            });
+          });
+          cur.status = "submitted";
+          await leaveCurrent("기존 보고로 기록 완료");
+          return;
+        }
       } else if (a.type === "next" || a.type === "prev") {
         index = items.length ? (index + (a.type === "next" ? 1 : -1) + items.length) % items.length : 0;
         deliveryMode = null;
+        if (dupTimer) clearTimeout(dupTimer);
+        dupTimer = null;
+        duplicate = null;
         void checkDuplicates();
       }
       else if (cur && (a.type === "submitted" || a.type === "skipped")) {
@@ -438,6 +588,13 @@ export async function runAssist(opts: { cfg: FilingsConfig; kind?: FilingKind; f
   const startUrl = siteCfg.screens[kind] || siteCfg.loginUrl;
   await page.goto(startUrl, { waitUntil: "domcontentloaded" }).catch((e) => console.log(`[filings] ⚠ 이동 실패: ${e.message}`));
   void checkDuplicates();
+  // 로그인 직후·화면 이동 때마다 아직 확인하지 못한 건을 다시 확인한다(확인이 끝난 건은 바로 돌아온다)
+  const hookNav = (p: Page) =>
+    p.on("framenavigated", (frame) => {
+      if (frame === p.mainFrame()) setTimeout(() => void checkDuplicates(), 1500);
+    });
+  context.pages().forEach(hookNav);
+  context.on("page", hookNav);
   watchLogout(context, siteCfg.loggedOutPattern, site);
 
   console.log(`[filings] 패널에서 값을 복사·채우고, 사이트에서 저장·제출한 뒤 패널의 [제출 완료] 를 누르세요.`);
@@ -519,6 +676,39 @@ function nameTokens(name: string): string[] {
     .split(/[\s(),·\-_/]+/)
     .map((t) => t.trim())
     .filter((t) => t.length >= 2);
+}
+
+/**
+ * IEPS 보고 상태 분류 — 제출된 보고(filed)만 중복으로 막는다. 상태명 목록은 공개 자료가 없어 낱말로 나눈다:
+ * 임시저장·작성 중 = draft(이어서 제출할 신청서), 반려·취소·삭제·철회·보완요청 = void(다시 신고해야 함),
+ * 나머지(제출·접수·승인 등) = filed.
+ */
+export function reportState(status: string | null | undefined): "filed" | "draft" | "void" {
+  const s = String(status ?? "").replace(/\s+/g, "");
+  if (/반려|취소|삭제|철회|보완요청/.test(s)) return "void";
+  if (/임시|작성|저장/.test(s) && !/제출/.test(s)) return "draft";
+  return "filed";
+}
+
+/**
+ * 같은 보고인지 — 보고 형식(체결·변경·이행)과 회사명(첫 낱말)은 반드시 같아야 하고,
+ *  ① 계약일이 같으면서 사업장명 또는 계약금액이 같거나,
+ *  ② 계약일이 달라도(직접 신고 때 오기) 사업장명·계약금액·대행업무 시작일이 모두 같으면 같은 보고로 본다.
+ */
+export function isSameReport(
+  r: IepsAgencyReportRow,
+  want: { name: string; contractDate: string; amount: string; agencyStart: string; kindName: string }
+): boolean {
+  if (r.REPORT_FOM_CD_NM !== want.kindName) return false;
+  const tokens = nameTokens(want.name);
+  const flat = normalizeName(r.BPLC_NM ?? "");
+  if (tokens.length && !flat.includes(tokens[0])) return false; // 회사명은 반드시 같아야 한다
+  const wantFlat = normalizeName(want.name);
+  const sameName =
+    flat.includes(wantFlat) || wantFlat.includes(flat) || (tokens.length > 0 && tokens.filter((t) => flat.includes(t)).length / tokens.length >= 0.6);
+  const sameAmount = want.amount !== "" && r.CONTRACT_AMT != null && Number(r.CONTRACT_AMT) === Number(want.amount);
+  if (r.CONTRACT_DE === want.contractDate) return sameName || sameAmount;
+  return sameName && sameAmount && want.agencyStart !== "" && r.AGENCY_START_DE === want.agencyStart;
 }
 
 /**
@@ -609,8 +799,9 @@ export async function listIepsAgencyReports(
   });
   if (!res.ok()) throw new Error(`IEPS 목록 조회 실패 (HTTP ${res.status()})`);
   const data = (await res.json().catch(() => null)) as unknown;
-  const rows = Array.isArray(data) ? data : [];
-  return rows as IepsAgencyReportRow[];
+  // 로그인 전·세션 만료면 JSON 배열 대신 로그인 화면(HTML)이 온다 — 빈 목록('중복 없음')으로 보지 않는다
+  if (!Array.isArray(data)) throw new Error("IEPS 목록 응답이 목록 형식이 아닙니다(로그인 전이거나 세션이 끝났습니다)");
+  return data as IepsAgencyReportRow[];
 }
 
 /**

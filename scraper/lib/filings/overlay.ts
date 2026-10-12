@@ -36,6 +36,17 @@ export interface OverlayData {
   siteSearchQuery?: string;
   /** 첨부 지원 — 직인 파일 유무, 이 건에 붙일 계약 첨부 요약(예: "계약서 1") */
   attach?: { seal: boolean; docs: string[] };
+  /** 중복 신고 차단 — IEPS 에 같은 보고가 이미 제출돼 있으면 화면 전체를 가리는 경고창을 띄운다 */
+  duplicate?: OverlayDuplicate;
+}
+
+export interface OverlayDuplicate {
+  kindName: string; // 체결 | 변경 | 이행
+  /** 자동 처리 시각(ms) — 이때까지 버튼을 누르지 않으면 창을 닫는다(대기 건이 더 있으면 다음 건으로) */
+  deadline: number;
+  /** 대기 건이 더 있어 창 대신 이 건만 건너뛰는지 */
+  skipsToNext: boolean;
+  rows: { reqstSn: string; bplcNm: string; status: string; presentnDe: string; contractDe: string; amount: string; agencyPeriod: string; url: string }[];
 }
 
 export type OverlayAction =
@@ -52,7 +63,13 @@ export type OverlayAction =
   /** 실적 보고서 발송 방식(이 건만) — "" 는 기본값으로 되돌림 */
   | { type: "setDelivery"; mode: "mail" | "messenger" | "both" | "hold" | "" }
   /** 보고회차로 실적 보고서 PDF 를 받아 MCM 이력에 붙인다(→ 실무자 발송) */
-  | { type: "fetchReport"; reqstSn: string };
+  | { type: "fetchReport"; reqstSn: string }
+  /** 중복 경고창 — 지금 닫기(대기 건이 더 있으면 이 건 건너뛰기) */
+  | { type: "dupClose" }
+  /** 중복 경고창 — 기존 IEPS 보고를 이 건의 신고로 MCM 에 기록하고 닫기 */
+  | { type: "dupRecord"; reqstSn: string }
+  /** 중복 경고창 — 정정 등 의도한 재신고라 경고를 무시하고 계속 */
+  | { type: "dupOverride" };
 
 export const ACTION_FN = "__mcmFilingsAction";
 export const RENDER_FN = "__mcmFilingsRender";
@@ -604,10 +621,101 @@ export function renderOverlay(data: OverlayData): void {
     document.documentElement.appendChild(root);
   }
 
+  /**
+   * 중복 신고 경고창(2026-10-12 사용자 요청) — 패널 안내는 놓치기 쉬워 실제로 중복 제출이 났다.
+   * 화면 전체를 가려 사이트를 조작할 수 없게 하고, 기한이 지나면 노드 측이 창을 닫는다(대기 건이 더 있으면 다음 건).
+   * 버튼은 확인 창(confirm) 없이 두 번 누르기로 확정한다 — 브라우저 대화상자는 도구가 가로채 닫는다.
+   */
+  function buildDuplicate(): void {
+    const BID = "mcm-filings-dup";
+    const prevTimer = W.__mcmDupTimer as number | undefined;
+    if (prevTimer) clearInterval(prevTimer);
+    document.getElementById(BID)?.remove();
+    const dup = data.duplicate;
+    if (!dup || !dup.rows.length) return;
+    const wrap = document.createElement("div");
+    wrap.id = BID;
+    wrap.setAttribute(
+      "style",
+      "position:fixed;inset:0;z-index:2147483647;background:rgba(17,24,39,.55);display:flex;align-items:center;justify-content:center;padding:16px;" +
+        "font:13px/1.5 'Pretendard','Malgun Gothic',sans-serif;color:#2a3547"
+    );
+    const box = document.createElement("div");
+    box.setAttribute("style", "width:min(640px,100%);max-height:90vh;overflow:auto;background:#fff;border:1px solid #e5eaef;border-radius:8px;padding:20px 22px");
+    const rows = dup.rows
+      .map(
+        (r) =>
+          `<tr><td style="padding:6px 8px;border-top:1px solid #eef1f5;white-space:nowrap"><b>${esc(r.reqstSn)}</b></td>` +
+          `<td style="padding:6px 8px;border-top:1px solid #eef1f5;min-width:8em;word-break:keep-all">${esc(r.bplcNm)}</td>` +
+          `<td style="padding:6px 8px;border-top:1px solid #eef1f5;white-space:nowrap">${esc(r.status)}<br><span style="color:#5a6a85">${esc(r.presentnDe)}</span></td>` +
+          `<td style="padding:6px 8px;border-top:1px solid #eef1f5;white-space:nowrap">${esc(r.contractDe)}<br><span style="color:#5a6a85">${esc(r.amount)}</span></td>` +
+          `<td style="padding:6px 8px;border-top:1px solid #eef1f5;color:#5a6a85">${esc(r.agencyPeriod)}</td></tr>`
+      )
+      .join("");
+    box.innerHTML =
+      `<div style="font-size:17px;font-weight:700;color:#c2410c;margin-bottom:6px">⚠ 이미 신고된 ${esc(dup.kindName)} 보고가 있습니다</div>` +
+      `<div style="color:#5a6a85;margin-bottom:12px">통합허가시스템 대행 실적보고 목록에 <b>${esc(data.title)}</b> 와 같은 보고가 제출돼 있습니다. ` +
+      `중복 신고를 막기 위해 <b class="mcm-dup-left"></b> 뒤 ${dup.skipsToNext ? "이 건을 건너뜁니다" : "창을 닫습니다"}.</div>` +
+      `<table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:14px"><thead><tr style="color:#5a6a85;text-align:left">` +
+      `<th style="padding:4px 8px">보고회차</th><th style="padding:4px 8px">사업장</th><th style="padding:4px 8px">상태·제출일</th><th style="padding:4px 8px">계약일·금액</th><th style="padding:4px 8px">대행기간</th>` +
+      `</tr></thead><tbody>${rows}</tbody></table>` +
+      `<div style="color:#5a6a85;font-size:12px;margin-bottom:12px">MCM 대기열에 남은 이 건이 위 보고와 같은 신고라면 [MCM 에 기록]으로 대기열을 정리하세요. 정정 등 일부러 다시 신고하는 경우에만 [그래도 계속]을 두 번 누르세요.</div>`;
+    const actions = document.createElement("div");
+    actions.setAttribute("style", "display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end");
+    const btn = (label: string, primary: boolean, onClick: (b: HTMLButtonElement) => void) => {
+      const b = document.createElement("button");
+      b.textContent = label;
+      b.setAttribute(
+        "style",
+        `border:1px solid ${primary ? "#5D87FF" : "#d9e0ea"};background:${primary ? "#5D87FF" : "#f2f6fa"};color:${primary ? "#fff" : "#2a3547"};` +
+          "border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer"
+      );
+      b.onclick = () => onClick(b);
+      return b;
+    };
+    const send = (a: unknown) => {
+      const fn = W.__mcmFilingsAction as ((a: unknown) => Promise<void>) | undefined;
+      if (fn) void fn(a);
+    };
+    for (const r of dup.rows) {
+      actions.appendChild(btn(`보고회차 ${r.reqstSn} 로 MCM 에 기록`, false, () => send({ type: "dupRecord", reqstSn: r.reqstSn })));
+    }
+    const first = dup.rows[0];
+    if (first?.url) actions.appendChild(btn("기존 보고 보기", false, () => window.open(first.url, "_blank", "noopener")));
+    let armed = false;
+    actions.appendChild(
+      btn("그래도 계속", false, (b) => {
+        if (!armed) {
+          armed = true;
+          b.textContent = "한 번 더 누르면 계속";
+          b.style.borderColor = "#fa896b";
+          b.style.color = "#c2410c";
+          return;
+        }
+        send({ type: "dupOverride" });
+      })
+    );
+    actions.appendChild(btn(dup.skipsToNext ? "이 건 건너뛰기" : "지금 닫기", true, () => send({ type: "dupClose" })));
+    box.appendChild(actions);
+    wrap.appendChild(box);
+    document.documentElement.appendChild(wrap);
+    const left = box.querySelector(".mcm-dup-left") as HTMLElement | null;
+    const tick = () => {
+      if (left) left.textContent = `${Math.max(0, Math.ceil((dup.deadline - Date.now()) / 1000))}초`;
+    };
+    tick();
+    W.__mcmDupTimer = window.setInterval(tick, 500);
+  }
+
   W.__mcmFilingsRender = (next: OverlayData) => {
     data = next;
     build();
+    buildDuplicate();
   };
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", build, { once: true });
-  else build();
+  const boot = () => {
+    build();
+    buildDuplicate();
+  };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot, { once: true });
+  else boot();
 }

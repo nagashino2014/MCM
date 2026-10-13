@@ -21,8 +21,10 @@ import {
   splitDivision,
   workLocationOf,
 } from "@/lib/recruit/meta";
+import type { ApplicantCountRow } from "@/lib/recruit/tracking";
 import { DocFitPreview, DocMiniPreview } from "./DocCanvas";
 import { ImportPostingModal } from "./ImportPostingModal";
+import { PostingTrackingCard } from "./PostingTrackingCard";
 
 /** 태그 열 — 값이 비어 있는 공고도 고를 수 있게 빈 값은 대체 이름으로 묶는다 */
 const NO_PLATFORM = "미지정";
@@ -70,6 +72,8 @@ export function PostingListBoard() {
   // 고른 공고의 본문 — 목록 조회는 본문을 비워 보내므로 단건으로 받는다
   const [detail, setDetail] = useState<RecruitPostingRow | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  // 최신 누적 지원자 수(273) — 지원 현황 카드가 알려 주면 요약에 보인다
+  const [latestCount, setLatestCount] = useState<ApplicantCountRow | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -400,6 +404,10 @@ export function PostingListBoard() {
                           : "-"
                       }
                     />
+                    <SummaryItem
+                      label="지원자 수"
+                      value={latestCount ? `${latestCount.count}명 (${latestCount.countedOn} 기준)` : "미기록"}
+                    />
                     <SummaryItem label="템플릿" value={selected.templateName ?? "-"} />
                     <SummaryItem label="최근 수정" value={selected.updatedAt.slice(0, 16).replace("T", " ")} />
                     <SummaryItem
@@ -421,6 +429,7 @@ export function PostingListBoard() {
                     </p>
                   )}
                 </div>
+                <PostingTrackingCard key={selected.postingId} postingId={selected.postingId} canManage onCountsChange={setLatestCount} />
                 <div className="rounded-lg border cd-border-c overflow-hidden">
                   {detailLoading || !detail ? (
                     <div className="flex items-center gap-2 py-16 justify-center text-sm cd-text-muted">

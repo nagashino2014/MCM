@@ -3,7 +3,7 @@
 // 문서 캔버스 — 노드트리에 테마 CSS 변수·폰트를 씌워 실제 공고 문서로 렌더한다.
 // 에디터 본편(원본 크기)과 카드 축소 미리보기가 공용으로 쓴다.
 
-import { forwardRef, type CSSProperties, type ReactNode } from "react";
+import { forwardRef, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { DocNode, DocTheme } from "@/lib/recruit/types";
 import { buildDocCssVars } from "@/lib/recruit/theme";
 import { DocNodeView } from "./DocNodeView";
@@ -60,6 +60,42 @@ export function DocMiniPreview({
     >
       <div style={{ transform: `scale(${scale})`, transformOrigin: "top left" }}>
         <DocCanvas tree={tree} theme={theme} width={docWidth} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 폭 맞춤 미리보기 — 문서를 컨테이너 폭에 맞춰 줄이고(확대는 하지 않는다) 전체 높이를 그대로 보인다.
+ * 목록 화면의 우측 미리보기용(2026-10-13): 고정 높이로 자르는 DocMiniPreview 와 달리 문서 끝까지 스크롤해 볼 수 있다.
+ * 줄인 뒤의 실제 높이는 문서를 한 번 그린 다음 측정해 바깥 상자에 준다(transform 은 레이아웃 높이를 바꾸지 않으므로).
+ */
+export function DocFitPreview({ tree, theme, docWidth, className }: { tree: DocNode; theme: DocTheme; docWidth: number; className?: string }) {
+  const outerRef = useRef<HTMLDivElement | null>(null);
+  const docRef = useRef<HTMLDivElement | null>(null);
+  const [box, setBox] = useState({ width: 0, docHeight: 0 });
+  useEffect(() => {
+    const outer = outerRef.current;
+    const doc = docRef.current;
+    if (!outer || !doc) return;
+    const measure = () => setBox({ width: outer.clientWidth, docHeight: doc.offsetHeight });
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(outer);
+    ro.observe(doc);
+    return () => ro.disconnect();
+  }, [tree, theme, docWidth]);
+  const scale = box.width > 0 ? Math.min(1, box.width / docWidth) : 1;
+  return (
+    <div
+      ref={outerRef}
+      className={className}
+      style={{ width: "100%", height: box.docHeight ? box.docHeight * scale : undefined, overflow: "hidden", background: theme.deskColor ?? "#E9ECEA", userSelect: "none" }}
+      aria-label="공고 미리보기"
+    >
+      {/* 문서가 컨테이너보다 좁으면(큰 화면) 데스크 가운데에 둔다 */}
+      <div style={{ transform: `scale(${scale})`, transformOrigin: "top left", width: docWidth, marginLeft: Math.max(0, (box.width - docWidth * scale) / 2) }}>
+        <DocCanvas ref={docRef} tree={tree} theme={theme} width={docWidth} />
       </div>
     </div>
   );

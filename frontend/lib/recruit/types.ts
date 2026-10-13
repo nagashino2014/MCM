@@ -81,6 +81,9 @@ export interface RecruitPostingRow {
   platform: string | null;
   periodStart: string | null;
   periodEnd: string | null;
+  /** 근무지역·공고 주소(마이그 272) — 요약 카드의 근무지역, [채용사이트 열기] */
+  workLocation: string | null;
+  postingUrl: string | null;
   createdAt: string;
   updatedAt: string;
   updatedBy?: string | null;

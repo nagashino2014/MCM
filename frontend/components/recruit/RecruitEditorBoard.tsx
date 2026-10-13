@@ -25,6 +25,7 @@ import {
   EMPTY_META,
   HIRE_TYPE_PRESETS,
   PLATFORM_PRESETS,
+  WORK_LOCATION_PRESETS,
   periodState,
   type PostingMeta,
 } from "@/lib/recruit/meta";
@@ -105,6 +106,8 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
           platform: p.platform ?? null,
           periodStart: p.periodStart ?? null,
           periodEnd: p.periodEnd ?? null,
+          workLocation: p.workLocation ?? null,
+          postingUrl: p.postingUrl ?? null,
         });
         // 첫 세팅이 자동저장을 트리거하지 않도록 다음 틱에 로드 완료 마킹
         setTimeout(() => { loadedRef.current = true; }, 0);
@@ -522,6 +525,36 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
               </div>
               <p className="text-[11px] cd-text-faint mt-1">종료일을 비우면 상시 채용으로 봅니다. 종료일이 지나면 목록에 만료로 표시됩니다.</p>
             </div>
+            {/* 근무지역·공고 주소(272) — 목록 요약 카드의 근무지역, [채용사이트 열기] 대상 */}
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs font-bold mb-1.5 cd-text-muted">근무지역</label>
+                <input
+                  className="cd-input w-full"
+                  list="rc-location-presets"
+                  value={meta.workLocation ?? ""}
+                  onChange={(e) => setMeta((m) => ({ ...m, workLocation: e.target.value || null }))}
+                  placeholder="예: 울산"
+                />
+                <datalist id="rc-location-presets">
+                  {WORK_LOCATION_PRESETS.map((v) => <option key={v} value={v} />)}
+                </datalist>
+              </div>
+              <div>
+                <label className="block text-xs font-bold mb-1.5 cd-text-muted">공고 주소</label>
+                <input
+                  className="cd-input w-full"
+                  type="url"
+                  inputMode="url"
+                  value={meta.postingUrl ?? ""}
+                  onChange={(e) => setMeta((m) => ({ ...m, postingUrl: e.target.value || null }))}
+                  placeholder="https://… (사이트에 올린 뒤)"
+                />
+              </div>
+            </div>
+            {meta.postingUrl && !/^https?:\/\/\S+$/i.test(meta.postingUrl.trim()) && (
+              <p className="text-[11px] cd-error-text">공고 주소는 http:// 또는 https:// 로 시작해야 저장됩니다.</p>
+            )}
           </div>
 
           <div>

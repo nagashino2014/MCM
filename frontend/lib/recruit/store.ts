@@ -47,6 +47,8 @@ function toPostingRow(r: Record<string, unknown>): RecruitPostingRow {
     platform: r.platform != null ? String(r.platform) : null,
     periodStart: r.period_start != null ? String(r.period_start) : null,
     periodEnd: r.period_end != null ? String(r.period_end) : null,
+    workLocation: r.work_location != null ? String(r.work_location) : null,
+    postingUrl: r.posting_url != null ? String(r.posting_url) : null,
     createdAt: String(r.created_at ?? ""),
     updatedAt: String(r.updated_at ?? ""),
     updatedBy: r.updated_by != null ? String(r.updated_by) : null,
@@ -153,7 +155,7 @@ export async function setTemplateActive(templateId: string, isActive: boolean): 
 
 // ── 공고 ────────────────────────────────────────────
 
-const POSTING_META_COLS = "p.division, p.hire_type, p.platform, p.period_start, p.period_end";
+const POSTING_META_COLS = "p.division, p.hire_type, p.platform, p.period_start, p.period_end, p.work_location, p.posting_url";
 
 export interface PostingFilter {
   division?: string | null;
@@ -246,7 +248,8 @@ export async function duplicatePosting(postingId: string, createdBy: string): Pr
     title: `${src.title} (복사)`,
     contentTree: src.contentTree,
     theme: src.theme,
-    meta: { division: src.division, hireType: src.hireType, platform: src.platform, periodStart: null, periodEnd: null },
+    // 기간·공고 주소는 새 공고의 것이라 비운다(근무지역은 유지)
+    meta: { division: src.division, hireType: src.hireType, platform: src.platform, periodStart: null, periodEnd: null, workLocation: src.workLocation, postingUrl: null },
     createdBy,
   });
 }
@@ -266,12 +269,12 @@ async function insertPosting(input: {
   await db.exec(
     `INSERT INTO recruit_postings
        (posting_id, template_id, title, content_tree, theme, status,
-        division, hire_type, platform, period_start, period_end,
+        division, hire_type, platform, period_start, period_end, work_location, posting_url,
         created_at, created_by, updated_at, updated_by)
-     VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, 'draft', $6, $7, $8, $9, $10, $11, $12, $11, $12)`,
+     VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, 'draft', $6, $7, $8, $9, $10, $11, $12, $13, $14, $13, $14)`,
     [
       id, input.templateId, input.title, JSON.stringify(input.contentTree), JSON.stringify(input.theme),
-      m.division, m.hireType, m.platform, m.periodStart, m.periodEnd,
+      m.division, m.hireType, m.platform, m.periodStart, m.periodEnd, m.workLocation, m.postingUrl,
       now, input.createdBy,
     ]
   );
@@ -305,11 +308,12 @@ export async function savePosting(input: {
     `UPDATE recruit_postings
         SET title = $2, content_tree = $3::jsonb, theme = $4::jsonb, status = $5,
             division = $6, hire_type = $7, platform = $8, period_start = $9, period_end = $10,
-            updated_at = $11, updated_by = $12
+            work_location = $11, posting_url = $12,
+            updated_at = $13, updated_by = $14
       WHERE posting_id = $1 AND deleted_at IS NULL`,
     [
       input.postingId, title, JSON.stringify(tree), JSON.stringify(theme), status,
-      m.division, m.hireType, m.platform, m.periodStart, m.periodEnd,
+      m.division, m.hireType, m.platform, m.periodStart, m.periodEnd, m.workLocation, m.postingUrl,
       now, input.updatedBy,
     ]
   );

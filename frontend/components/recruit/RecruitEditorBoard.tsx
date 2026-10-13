@@ -463,16 +463,7 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
           <div className="flex flex-col gap-3">
             <div>
               <label className="block text-xs font-bold mb-1.5 cd-text-muted">공고부문</label>
-              <input
-                className="cd-input w-full"
-                list="rc-division-presets"
-                value={meta.division ?? ""}
-                onChange={(e) => setMeta((m) => ({ ...m, division: e.target.value || null }))}
-                placeholder="예: 통합허가(울산)"
-              />
-              <datalist id="rc-division-presets">
-                {DIVISION_PRESETS.map((v) => <option key={v} value={v} />)}
-              </datalist>
+              <PresetSelect presets={DIVISION_PRESETS} value={meta.division} onChange={(v) => setMeta((m) => ({ ...m, division: v }))} placeholder="예: 통합허가(울산)" />
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
@@ -491,16 +482,7 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
               </div>
               <div>
                 <label className="block text-xs font-bold mb-1.5 cd-text-muted">플랫폼</label>
-                <input
-                  className="cd-input w-full"
-                  list="rc-platform-presets"
-                  value={meta.platform ?? ""}
-                  onChange={(e) => setMeta((m) => ({ ...m, platform: e.target.value || null }))}
-                  placeholder="예: 사람인"
-                />
-                <datalist id="rc-platform-presets">
-                  {PLATFORM_PRESETS.map((v) => <option key={v} value={v} />)}
-                </datalist>
+                <PresetSelect presets={PLATFORM_PRESETS} value={meta.platform} onChange={(v) => setMeta((m) => ({ ...m, platform: v }))} placeholder="예: 사람인" />
               </div>
             </div>
             <div>
@@ -529,16 +511,7 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="block text-xs font-bold mb-1.5 cd-text-muted">근무지역</label>
-                <input
-                  className="cd-input w-full"
-                  list="rc-location-presets"
-                  value={meta.workLocation ?? ""}
-                  onChange={(e) => setMeta((m) => ({ ...m, workLocation: e.target.value || null }))}
-                  placeholder="예: 울산"
-                />
-                <datalist id="rc-location-presets">
-                  {WORK_LOCATION_PRESETS.map((v) => <option key={v} value={v} />)}
-                </datalist>
+                <PresetSelect presets={WORK_LOCATION_PRESETS} value={meta.workLocation} onChange={(v) => setMeta((m) => ({ ...m, workLocation: v }))} placeholder="예: 울산" />
               </div>
               <div>
                 <label className="block text-xs font-bold mb-1.5 cd-text-muted">공고 주소</label>
@@ -859,6 +832,47 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
           )}
         </div>
       </CdModal>
+    </div>
+  );
+}
+
+const CUSTOM = "__custom__";
+
+/**
+ * 프리셋 목록 + 직접 입력(2026-10-13) — 종전 <input list=datalist> 는 칸에 값이 있으면 브라우저가 그 글자와 맞는
+ * 항목만 보여 줘, 복제한 공고의 플랫폼(잡코리아)을 다른 사이트로 바꾸려 해도 목록에 하나만 보였다(사용자 보고).
+ * 목록박스로 전체 프리셋을 늘 보여 주고, 목록에 없는 값은 [직접 입력…]을 고르면 글자 칸이 열린다.
+ */
+function PresetSelect({ presets, value, onChange, placeholder }: { presets: readonly string[]; value: string | null; onChange: (v: string | null) => void; placeholder?: string }) {
+  const isPreset = value != null && presets.includes(value);
+  // 값이 비었거나 프리셋이면 목록박스만, 프리셋 밖의 값(과거 자유 입력 포함)이거나 [직접 입력…]을 골랐으면 글자 칸도
+  const [custom, setCustom] = useState<boolean>(value != null && value !== "" && !isPreset);
+  useEffect(() => { if (value && !presets.includes(value)) setCustom(true); }, [value, presets]);
+  return (
+    <div className="flex flex-col gap-1.5">
+      <select
+        className="cd-select w-full"
+        value={custom ? CUSTOM : value ?? ""}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v === CUSTOM) { setCustom(true); return; }
+          setCustom(false);
+          onChange(v || null);
+        }}
+      >
+        <option value="">선택</option>
+        {presets.map((v) => <option key={v} value={v}>{v}</option>)}
+        <option value={CUSTOM}>직접 입력…</option>
+      </select>
+      {custom && (
+        <input
+          className="cd-input w-full"
+          value={value ?? ""}
+          onChange={(e) => onChange(e.target.value || null)}
+          placeholder={placeholder}
+          autoFocus={!value}
+        />
+      )}
     </div>
   );
 }

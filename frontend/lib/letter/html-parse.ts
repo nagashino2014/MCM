@@ -117,6 +117,7 @@ export function parseLetterHtml(html: string): LetterBlock[] {
   let curIndent = 0; // blockquote/margin-left 누적(pt)
   const indentStack: number[] = [];
   let started = false; // 현재 문단에 내용 유입 여부(연속 flush 로 빈 문단 남발 방지)
+  let curListDepth = 0; // 지금 문단이 li 이면 목록 중첩 깊이(1부터)
 
   const pushText = (text: string) => {
     if (!text) return;
@@ -139,9 +140,11 @@ export function parseLetterHtml(html: string): LetterBlock[] {
     const p: ParagraphBlock = { kind: "p", runs: runs.length ? runs : [{ text: "" }] };
     if (curAlign) p.align = curAlign;
     if (curIndent > 0) p.indentPt = curIndent;
+    if (curListDepth > 0) p.listDepth = curListDepth;
     blocks.push(p);
     runs = [];
     started = false;
+    curListDepth = 0;
   };
 
   // ── 목록 상태 ──
@@ -412,6 +415,7 @@ export function parseLetterHtml(html: string): LetterBlock[] {
           curAlign = undefined;
           pushText(list.ordered ? `${list.count}. ` : "• ");
           started = false; // 접두만으로는 빈 항목 취급
+          curListDepth = listStack.length;
         }
       }
       continue;

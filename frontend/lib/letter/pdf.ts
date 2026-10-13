@@ -145,6 +145,26 @@ export function segsWidth(segs: StyledSeg[], fonts: Fonts, size: number): number
   return segs.reduce((w, s) => w + (s.bold ? fonts.bold : fonts.regular).widthOfTextAtSize(s.text, size), 0);
 }
 
+/**
+ * 왼쪽 정렬 문단의 가로 배치(2026-10-13).
+ * - 본문(번호 항목): 첫 줄 BODY_INDENT 들여쓰기, 이어지는 줄은 좌여백부터(실측 재현), 문단 뒤 2pt.
+ * - "- 아 래 -" 아래(below): 좌여백을 본문 들여쓰기의 절반으로 잡고 이어지는 줄도 그 안에서 시작(여백으로
+ *   삐져나오지 않게), 목록 항목(가. 밑의 1. 2. 3.)은 깊이마다 두 글자 폭만큼 더 들여쓰며 번호 뒤에 맞춰 이어 쓴다,
+ *   문단 뒤 추가 간격 없음(줄바꿈·번호가 있어도 본문 행간 그대로).
+ */
+const BELOW_MARGIN_RATIO = 0.5;
+function paraGeometry(b: Extract<LetterBlock, { kind: "p" }>, fonts: Fonts, size: number): { firstX: number; restX: number; gapAfter: number } {
+  const extraIndent = b.indentPt ?? 0;
+  if (!b.below) {
+    return { firstX: MARGIN_L + BODY_INDENT + extraIndent, restX: MARGIN_L + extraIndent, gapAfter: 2 };
+  }
+  const depth = b.listDepth ?? 0;
+  const base = MARGIN_L + BODY_INDENT * BELOW_MARGIN_RATIO + extraIndent + depth * size * 2;
+  const prefix = depth > 0 ? /^(\d+\.\s+|•\s+)/.exec(b.runs[0]?.text ?? "")?.[0] ?? "" : "";
+  const hang = prefix ? fonts.regular.widthOfTextAtSize(prefix, size) : 0;
+  return { firstX: base, restX: base + hang, gapAfter: 0 };
+}
+
 /** 본문 블록 총높이 측정(그리지 않음). 표 포함. lineFactor = 줄 간격 배율(기본 1.6). */
 function measureBlocks(blocks: LetterBlock[], attachItems: string[], fonts: Fonts, fit: FitParams, lineFactor = 1.6): number {
   const size = fit.bodyFontPt;
@@ -152,11 +172,11 @@ function measureBlocks(blocks: LetterBlock[], attachItems: string[], fonts: Font
   let h = 0;
   for (const b of blocks) {
     if (b.kind === "p") {
-      const extraIndent = b.indentPt ?? 0;
-      const firstW = CONTENT_W - BODY_INDENT - extraIndent;
-      const restW = CONTENT_W - extraIndent;
+      const g = paraGeometry(b, fonts, size);
+      const firstW = PAGE_W - MARGIN_R - g.firstX;
+      const restW = PAGE_W - MARGIN_R - g.restX;
       const lines = wrapRuns(b.runs, fonts, size, b.align ? CONTENT_W : firstW, b.align ? CONTENT_W : restW);
-      h += lines.length * lineH + 2;
+      h += lines.length * lineH + (b.align ? 2 : g.gapAfter);
     } else {
       h += measureTable(b, fonts, size) + 6;
     }
@@ -432,7 +452,7 @@ export async function renderLetterPdf(layout: LetterLayout, opts: { fit?: FitPar
 
   layout.bodyBlocks.forEach((b, bi) => {
     if (b.kind === "p") {
-      const extraIndent = b.indentPt ?? 0;
+      const g = paraGeometry(b, fonts, size);
       if (b.align === "center" || b.align === "right") {
         // 오른쪽 정렬 문단 바로 다음이 표면 표의 오른쪽 끝에 맞춘다(2026-09-11 사용자 요청) —
         // 표는 본문 폭의 일부(기본 92%)를 가운데 정렬로 쓰므로, 본문 우측 끝에 맞추면
@@ -449,17 +469,17 @@ export async function renderLetterPdf(layout: LetterLayout, opts: { fit?: FitPar
           drawSegsLine(segs, x);
           y -= lineH;
         }
+        y -= 2;
       } else {
-        // 기본: 첫 줄 들여쓰기(BODY_INDENT + 에디터 들여쓰기), 이후 줄은 좌여백부터(실측 재현)
-        const firstX = MARGIN_L + BODY_INDENT + extraIndent;
-        const restX = MARGIN_L + extraIndent;
-        const lines = wrapRuns(b.runs, fonts, size, PAGE_W - MARGIN_R - firstX, PAGE_W - MARGIN_R - restX);
+        // 기본: 첫 줄 들여쓰기(BODY_INDENT + 에디터 들여쓰기), 이후 줄은 좌여백부터(실측 재현).
+        // "- 아 래 -" 아래는 paraGeometry 의 좁은 여백·하위 항목 들여쓰기 규칙.
+        const lines = wrapRuns(b.runs, fonts, size, PAGE_W - MARGIN_R - g.firstX, PAGE_W - MARGIN_R - g.restX);
         lines.forEach((segs, i) => {
-          drawSegsLine(segs, i === 0 ? firstX : restX);
+          drawSegsLine(segs, i === 0 ? g.firstX : g.restX);
           y -= lineH;
         });
+        y -= g.gapAfter;
       }
-      y -= 2;
     } else {
       y = drawTable(page, b, fonts, size, y);
       y -= 6;

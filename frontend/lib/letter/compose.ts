@@ -13,6 +13,7 @@ import {
   COMPANY_PHONE,
   type LetterFieldValues,
   type LetterLayout,
+  isBelowSeparator,
   type LetterRecipient,
 } from "./types";
 
@@ -72,13 +73,28 @@ function stripTrailingBlanks(blocks: LetterBlock[]): LetterBlock[] {
 }
 
 /**
+ * "- 아 래 -" 표기 아래 문단 표시(2026-10-13 사용자 요청) — 그 아래는 본문 번호 항목과 다른 조판
+ * (좁은 좌여백·하위 항목 들여쓰기·강제 빈 줄 없음)을 쓴다. 표기 자신은 포함하지 않는다.
+ */
+function markBelowSeparator(blocks: LetterBlock[]): LetterBlock[] {
+  const at = blocks.findIndex((b) => isBelowSeparator(b));
+  if (at < 0) return blocks;
+  blocks.forEach((b, i) => {
+    if (i > at && b.kind === "p") b.below = true;
+  });
+  return blocks;
+}
+
+/**
  * 본문 번호 항목(1. 2. 3. …) 사이 1줄 간격 강제(사용자 확정) — 에디터에서 빈 줄을 넣지
  * 않아도 번호 문단 앞에 빈 문단을 삽입한다(직전 블록이 이미 빈 문단이면 그대로).
+ * "- 아 래 -" 아래(below)에는 적용하지 않는다 — 하위 항목(가. 밑의 1. 2. 3.)마다 한 줄씩 벌어져
+ * A4 를 넘기던 원인(2026-10-13).
  */
 function ensureNumberedItemGaps(blocks: LetterBlock[]): LetterBlock[] {
   const out: LetterBlock[] = [];
   for (const b of blocks) {
-    const isNumbered = b.kind === "p" && /^\s*\d+\.\s/.test(b.runs.map((r) => r.text).join(""));
+    const isNumbered = b.kind === "p" && !b.below && /^\s*\d+\.\s/.test(b.runs.map((r) => r.text).join(""));
     const prev = out[out.length - 1];
     const prevIsBlank = prev?.kind === "p" && !prev.runs.map((r) => r.text).join("").trim();
     if (isNumbered && out.length > 0 && !prevIsBlank) {
@@ -118,7 +134,7 @@ export function composeLetter(values: LetterFieldValues, doc: LetterDocSnapshot)
     letterNo: doc.letterNo,
     issueDate: fmtIssueDate(isoDate),
     subject: values.subject ?? "",
-    bodyBlocks: applyTableCellDefaults(ensureNumberedItemGaps(stripTrailingBlanks(parseLetterHtml(values.body_html ?? "")))),
+    bodyBlocks: applyTableCellDefaults(ensureNumberedItemGaps(markBelowSeparator(stripTrailingBlanks(parseLetterHtml(values.body_html ?? ""))))),
     attachItems: (values.attachments_list ?? [])
       .map((a) => (a.text ?? "").trim())
       .filter(Boolean),

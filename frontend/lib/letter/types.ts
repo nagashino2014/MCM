@@ -50,6 +50,17 @@ export interface ParagraphBlock {
   runs: TextRun[];
   align?: "left" | "center" | "right";
   indentPt?: number; // 에디터 들여쓰기(margin-left px→pt 환산). BODY_INDENT 에 가산
+  /** 목록 항목(li) 문단의 중첩 깊이(1부터). "- 아 래 -" 아래에서 하위 항목 들여쓰기에 쓴다(2026-10-13) */
+  listDepth?: number;
+  /** "- 아 래 -" 표기 아래 문단 — 좁은 좌여백·강제 빈 줄 없음·이어지는 줄도 여백 안(2026-10-13 사용자 요청) */
+  below?: boolean;
+}
+
+/** "- 아 래 -" 관용구 문단인지(가운데 정렬 + 글자만 "아래") — 에디터·조판이 같은 판정을 쓴다 */
+export function isBelowSeparator(b: { kind: string; align?: string; runs?: TextRun[] }): boolean {
+  if (b.kind !== "p" || b.align !== "center" || !b.runs) return false;
+  const compact = b.runs.map((r) => r.text).join("").replace(/[\s\u00a0]/g, "");
+  return /^[-–—―]?아래[-–—―]?$/.test(compact);
 }
 
 export interface TableCell {

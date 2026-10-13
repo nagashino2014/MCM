@@ -489,7 +489,10 @@ export async function renderLetterHwpx(layout: LetterLayout, opts: HwpxRenderOpt
         const aligned = alignParaPrOf(b.align === "center" ? "CENTER" : "RIGHT");
         if (aligned) paraPr = aligned;
       }
-      bodyXmlParts.push(paragraphXml(b.runs, paraPr, bodyCharPr, boldCharPr));
+      // "- 아 래 -" 아래 하위 항목(가. 밑의 1. 2. 3.) 들여쓰기 — 한글은 새로 등록한 paraPr 의 좌여백을
+      // 무시하므로(실측) 깊이마다 전각 공백 2자로 맞춘다(PDF 의 두 글자 폭 들여쓰기와 같은 정도).
+      const runs = b.below && b.listDepth ? [{ ...b.runs[0], text: "\u3000".repeat(b.listDepth * 2) + (b.runs[0]?.text ?? "") }, ...b.runs.slice(1)] : b.runs;
+      bodyXmlParts.push(paragraphXml(runs, paraPr, bodyCharPr, boldCharPr));
     } else if (tableTpl) {
       bodyXmlParts.push(buildTableXml(b, tableTpl, opts.fit.bodyFontPt, bodyCharPr, boldCharPr, alignParaPrOf));
     } else {

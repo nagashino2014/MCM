@@ -1265,13 +1265,28 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
     const text = (block.textContent ?? "").trim();
     if (text !== "-" && text !== "*" && text !== "1.") return;
     e.preventDefault();
-    block.textContent = "";
+    // 줄을 완전히 비우면(<br> 조차 없는 빈 div) 커서를 둘 자리가 없어 크롬이 목록을 **윗줄**에 건다
+    // (2026-10-13 공문 "가. …" 다음 줄에 "1." 을 치면 "가." 줄이 1번이 되던 원인). <br> 을 남겨 자리를 지킨다.
+    block.innerHTML = "<br>";
     const range = document.createRange();
     range.selectNodeContents(block);
     range.collapse(true);
     sel!.removeAllRanges();
     sel!.addRange(range);
     document.execCommand(text === "1." ? "insertOrderedList" : "insertUnorderedList");
+    // 크롬은 목록을 그 div 안에 넣는다(<div><ol>…</ol></div>) — 불필요한 겹을 벗겨 다른 목록과 같은 모양으로 둔다.
+    const only = block.childNodes.length === 1 ? (block.firstChild as HTMLElement) : null;
+    if (block.tagName === "DIV" && only && (only.tagName === "OL" || only.tagName === "UL") && !block.getAttribute("style")) {
+      block.replaceWith(only);
+      const li = only.querySelector("li");
+      if (li) {
+        const r2 = document.createRange();
+        r2.selectNodeContents(li);
+        r2.collapse(true);
+        sel!.removeAllRanges();
+        sel!.addRange(r2);
+      }
+    }
     onInput();
   };
 

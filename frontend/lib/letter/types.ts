@@ -92,6 +92,8 @@ export interface TableBlock {
    * 에디터에서 조절한 값(table style width·data-w)을 파서가 읽어 렌더러로 넘긴다.
    */
   widthPct?: number;
+  /** "- 아 래 -" 아래 표 — 가운데 정렬 대신 항목 글자보다 한 글자 안쪽 왼쪽 정렬(2026-10-13 사용자 요청) */
+  below?: boolean;
 }
 
 /** 시행일 수동 지정값 검증 — YYYY-MM-DD 만 허용(빈 값·형식 불일치는 자동 산정으로 되돌린다). */
@@ -196,6 +198,8 @@ export interface LetterFieldValues {
 export interface FitParams {
   bodyFontPt: number; // 기본 11 → 10.5 → 10 → 9.5 → 9 (내용증명 등 장문에서 축소)
   gapLevel: 0 | 1 | 2; // 0=기본 여백, 1=여백 축소, 2=최소 여백(서명줄 최하단)
+  /** 표 글자·행 높이 배율(2026-10-13) — 1(본문과 동일) → 0.9. 본문 폰트를 줄이기 전에 표를 먼저 줄인다 */
+  tableScale?: number;
 }
 
 export const DEFAULT_FIT: FitParams = { bodyFontPt: 11, gapLevel: 0 };

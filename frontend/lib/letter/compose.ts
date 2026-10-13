@@ -80,7 +80,7 @@ function markBelowSeparator(blocks: LetterBlock[]): LetterBlock[] {
   const at = blocks.findIndex((b) => isBelowSeparator(b));
   if (at < 0) return blocks;
   blocks.forEach((b, i) => {
-    if (i > at && b.kind === "p") b.below = true;
+    if (i > at) b.below = true;
   });
   return blocks;
 }

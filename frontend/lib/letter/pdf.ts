@@ -166,7 +166,7 @@ function paraGeometry(b: Extract<LetterBlock, { kind: "p" }>, fonts: Fonts, size
 }
 
 /** 본문 블록 총높이 측정(그리지 않음). 표 포함. lineFactor = 줄 간격 배율(기본 1.6). */
-function measureBlocks(blocks: LetterBlock[], attachItems: string[], fonts: Fonts, fit: FitParams, lineFactor = 1.6): number {
+export function measureBlocks(blocks: LetterBlock[], attachItems: string[], fonts: Fonts, fit: FitParams, lineFactor = 1.6): number {
   const size = fit.bodyFontPt;
   const lineH = size * lineFactor;
   let h = 0;
@@ -178,7 +178,7 @@ function measureBlocks(blocks: LetterBlock[], attachItems: string[], fonts: Font
       const lines = wrapRuns(b.runs, fonts, size, b.align ? CONTENT_W : firstW, b.align ? CONTENT_W : restW);
       h += lines.length * lineH + (b.align ? 2 : g.gapAfter);
     } else {
-      h += measureTable(b, fonts, size) + 6;
+      h += measureTable(b, fonts, size, fit.tableScale ?? 1) + 6;
     }
   }
   if (attachItems.length) {
@@ -202,10 +202,22 @@ function topGap(fit: FitParams): number {
  * 행 높이는 1행 스팬 셀로 먼저 정하고, 세로 병합 셀의 내용이 스팬 행 합계보다
  * 크면 마지막 스팬 행에 부족분을 가산한다.
  */
-/** 표 렌더 폭(pt) — widthPct(본문 폭 대비 %)를 적용한다. */
+/**
+ * "- 아 래 -" 아래 표의 왼쪽 시작 x(2026-10-13) — 항목 글자(좌여백 = BODY_INDENT×0.5)보다 한 글자(11pt) 안쪽.
+ * 고정 가운데 정렬이면 "나. 조직 구성원 현황" 글자보다 표가 왼쪽으로 튀어나와 보였다.
+ */
+const BELOW_TABLE_X = MARGIN_L + BODY_INDENT * 0.5 + 11;
+
+/** 표 렌더 폭(pt) — widthPct 를 쓸 수 있는 폭(본문 폭, below 표는 BELOW_TABLE_X 부터 우측 여백까지)에 적용한다. */
 export function tableWidthOf(t: Extract<LetterBlock, { kind: "table" }>): number {
   const pct = Number.isFinite(t.widthPct as number) && (t.widthPct as number) > 0 ? (t.widthPct as number) : DEFAULT_TABLE_WIDTH_PCT;
-  return (CONTENT_W - 2) * (Math.min(100, Math.max(20, pct)) / 100);
+  const avail = t.below ? PAGE_W - MARGIN_R - 1 - BELOW_TABLE_X : CONTENT_W - 2;
+  return avail * (Math.min(100, Math.max(20, pct)) / 100);
+}
+
+/** 표 왼쪽 x — 본문 표는 가운데(좁은 표가 왼쪽에만 붙으면 어색), below 표는 항목 글자보다 한 글자 안쪽. */
+export function tableOriginX(t: Extract<LetterBlock, { kind: "table" }>, tableW: number): number {
+  return t.below ? BELOW_TABLE_X : MARGIN_L + 1 + Math.max(0, (CONTENT_W - 2 - tableW) / 2);
 }
 
 /** 서명줄이 내려갈 수 있는 최저 y — 하단 고정부(주소 줄 유무에 따라 한 줄 차이) 위. */
@@ -216,11 +228,13 @@ function signatureFloor(layout: LetterLayout): number {
 export function layoutTable(
   t: Extract<LetterBlock, { kind: "table" }>,
   fonts: Fonts,
-  size: number
-): { widths: number[]; rowHs: number[]; wrapped: (StyledSeg[][] | null)[][]; cellLineH: number; pad: number } {
-  const cellSize = size; // 표 글자 크기 = 본문과 동일(사용자 확정)
+  size: number,
+  tableScale = 1
+): { widths: number[]; rowHs: number[]; wrapped: (StyledSeg[][] | null)[][]; cellLineH: number; pad: number; cellSize: number } {
+  // 표 글자 크기 = 본문과 동일(사용자 확정). 1장에 안 들어갈 때만 fit 탐색이 tableScale(0.9)로 표를 먼저 줄인다(2026-10-13).
+  const cellSize = size * tableScale;
   const cellLineH = cellSize * 1.4;
-  const pad = 3;
+  const pad = tableScale < 1 ? 2 : 3;
   // 표 전체 폭 = 본문 폭 × widthPct(기본 92%) — 열이 적은 표까지 본문 폭에 꽉 채우던
   // 동작을 없앴다(2026-09-11 사용자 확정, 좌우에 약간 여백이 있는 편이 보기 좋다).
   const tableW = tableWidthOf(t);
@@ -268,11 +282,11 @@ export function layoutTable(
       if (want > rowHs[i]) rowHs[i] = want;
     }
   }
-  return { widths, rowHs, wrapped, cellLineH, pad };
+  return { widths, rowHs, wrapped, cellLineH, pad, cellSize };
 }
 
-function measureTable(t: Extract<LetterBlock, { kind: "table" }>, fonts: Fonts, size: number): number {
-  return layoutTable(t, fonts, size).rowHs.reduce((a, b) => a + b, 0);
+function measureTable(t: Extract<LetterBlock, { kind: "table" }>, fonts: Fonts, size: number, tableScale = 1): number {
+  return layoutTable(t, fonts, size, tableScale).rowHs.reduce((a, b) => a + b, 0);
 }
 
 export async function loadImage(doc: PDFDocument, rel: string): Promise<PDFImage | null> {
@@ -412,21 +426,29 @@ export async function renderLetterPdf(layout: LetterLayout, opts: { fit?: FitPar
   if (fit && ov.bodyFontPt != null) fit = { ...fit, bodyFontPt: ov.bodyFontPt };
   if (fit && ov.gapLevel != null) fit = { ...fit, gapLevel: ov.gapLevel };
   if (!fit) {
-    outer: for (const f of gridFonts) {
-      for (const g of gridGaps) {
-        const cand: FitParams = { bodyFontPt: f, gapLevel: g };
-        const h = measureBlocks(layout.bodyBlocks, layout.attachItems, fonts, cand, lineFactor);
-        // 본문 하한은 종전 기준을 유지한다 — 여기를 서명줄 최저 위치까지 낮추면 큰 폰트로도
-        // 늘 통과해 본문이 하단 고정부 직전까지 내려온다(폰트 축소 정책 자체가 바뀜).
-        const bottomLimit = SIGNATURE_Y_BY_GAP[g] + SIGNATURE_CLEARANCE;
-        if (titleLineY - topGap(cand) - h >= bottomLimit) {
-          fit = cand;
-          break outer;
+    // 표가 있으면 본문 폰트를 줄이기 전에 표 글자·행 높이를 먼저 줄인다(2026-10-13 사용자 요청) — 폰트 → 표 배율 → 여백 순.
+    const hasTable = layout.bodyBlocks.some((b) => b.kind === "table");
+    const gridTable = hasTable ? [1, 0.9] : [1];
+    const search = (bottomLimitOf: (g: 0 | 1 | 2) => number): FitParams | null => {
+      for (const f of gridFonts) {
+        for (const ts of gridTable) {
+          for (const g of gridGaps) {
+            const cand: FitParams = { bodyFontPt: f, gapLevel: g, tableScale: ts };
+            const h = measureBlocks(layout.bodyBlocks, layout.attachItems, fonts, cand, lineFactor);
+            if (titleLineY - topGap(cand) - h >= bottomLimitOf(g)) return cand;
+          }
         }
       }
-    }
+      return null;
+    };
+    // 1차: 본문 하한은 종전 기준(서명줄 종전 위치) — 여기를 처음부터 서명줄 최저 위치까지 낮추면 큰 폰트로도
+    //      늘 통과해 본문이 하단 고정부 직전까지 내려온다(폰트 축소 정책 자체가 바뀜).
+    fit = search((g) => SIGNATURE_Y_BY_GAP[g] + SIGNATURE_CLEARANCE);
+    // 2차: 그래도 안 맞으면 서명줄이 실제로 내려갈 수 있는 최저 위치 기준으로 다시 찾는다 — 종전에는 이 단계가 없어
+    //      화면에는 1장에 다 들어가는데도 "초과"로 판정돼 상신이 막혔다(2026-10-13 사용자 보고).
+    if (!fit) fit = search(() => signatureFloor(layout) + SIGNATURE_BODY_GAP);
     if (!fit) {
-      fit = { bodyFontPt: gridFonts[gridFonts.length - 1], gapLevel: gridGaps[gridGaps.length - 1] };
+      fit = { bodyFontPt: gridFonts[gridFonts.length - 1], gapLevel: gridGaps[gridGaps.length - 1], tableScale: gridTable[gridTable.length - 1] };
       // 강제 조정값으로 넘치는 건 사용자 선택 — 자동 탐색 실패일 때만 미맞춤으로 보고
       fitted = ov.bodyFontPt != null || ov.gapLevel != null ? true : false;
     }
@@ -460,7 +482,7 @@ export async function renderLetterPdf(layout: LetterLayout, opts: { fit?: FitPar
         const nextTable = layout.bodyBlocks[bi + 1];
         const rightEdge =
           b.align === "right" && nextTable?.kind === "table"
-            ? MARGIN_L + 1 + Math.max(0, (CONTENT_W - 2 - tableWidthOf(nextTable)) / 2) + tableWidthOf(nextTable)
+            ? tableOriginX(nextTable, tableWidthOf(nextTable)) + tableWidthOf(nextTable)
             : PAGE_W - MARGIN_R;
         const lines = wrapRuns(b.runs, fonts, size, CONTENT_W, CONTENT_W);
         for (const segs of lines) {
@@ -481,7 +503,7 @@ export async function renderLetterPdf(layout: LetterLayout, opts: { fit?: FitPar
         y -= g.gapAfter;
       }
     } else {
-      y = drawTable(page, b, fonts, size, y);
+      y = drawTable(page, b, fonts, size, y, fit.tableScale ?? 1);
       y -= 6;
     }
   });
@@ -593,12 +615,10 @@ export async function measureSignTextWidths(companyKo: string, ceoName: string, 
   return { textW: bold.widthOfTextAtSize(text, sigPt), nameW: bold.widthOfTextAtSize(name, sigPt) };
 }
 
-export function drawTable(page: PDFPage, t: Extract<LetterBlock, { kind: "table" }>, fonts: Fonts, size: number, yTop: number): number {
-  const cellSize = size; // 표 글자 크기 = 본문과 동일(사용자 확정)
-  const { widths, rowHs, wrapped, cellLineH, pad } = layoutTable(t, fonts, size);
-  // 본문 폭보다 좁은 표는 가운데로 — 왼쪽에만 붙으면 오른쪽 여백만 크게 남아 어색하다.
+export function drawTable(page: PDFPage, t: Extract<LetterBlock, { kind: "table" }>, fonts: Fonts, size: number, yTop: number, tableScale = 1): number {
+  const { widths, rowHs, wrapped, cellLineH, pad, cellSize } = layoutTable(t, fonts, size, tableScale);
   const tableW = widths.reduce((a, b) => a + b, 0);
-  const x0 = MARGIN_L + 1 + Math.max(0, (CONTENT_W - 2 - tableW) / 2);
+  const x0 = tableOriginX(t, tableW);
   let y = yTop;
   t.rows.forEach((row, ri) => {
     let cx = x0;

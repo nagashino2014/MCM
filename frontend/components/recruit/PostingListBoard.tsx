@@ -5,9 +5,9 @@
 // 오른쪽: 고른 공고의 요약(채용사이트·대상 분야·근무지역·게재일·기간·상태 …)과 공고 전체 미리보기.
 // "새 공고"(템플릿 선택 → 에디터 진입)·파일 가져오기·복제·삭제는 그대로.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Copy, ExternalLink, FilePlus2, FileUp, Loader2, Megaphone, Pencil, Search, Trash2 } from "lucide-react";
+import { Copy, Download, ExternalLink, FilePlus2, FileText, FileUp, Loader2, Megaphone, Pencil, Search, Trash2 } from "lucide-react";
 import { CdBadge, CdButton, CdEmptyState, CdHelp, CdModal, CdPageHeader, useCdashTheme, useCdToast } from "@/components/cdash";
 import type { RecruitPostingRow, RecruitTemplateRow } from "@/lib/recruit/types";
 import {
@@ -22,7 +22,9 @@ import {
   workLocationOf,
 } from "@/lib/recruit/meta";
 import type { ApplicantCountRow } from "@/lib/recruit/tracking";
-import { DocFitPreview, DocMiniPreview } from "./DocCanvas";
+import { DocCanvas, DocFitPreview, DocMiniPreview } from "./DocCanvas";
+import { PngExportModal } from "./PngExportModal";
+import { exportElementPdf, exportElementPng } from "@/lib/recruit/export";
 import { ImportPostingModal } from "./ImportPostingModal";
 import { PostingTrackingCard } from "./PostingTrackingCard";
 
@@ -74,6 +76,35 @@ export function PostingListBoard() {
   const [detailLoading, setDetailLoading] = useState(false);
   // 최신 누적 지원자 수(273) — 지원 현황 카드가 알려 주면 요약에 보인다
   const [latestCount, setLatestCount] = useState<ApplicantCountRow | null>(null);
+  // PNG·PDF 내보내기(2026-10-13) — 편집 화면에 들어가지 않고 목록에서 바로. 캡처는 화면 밖에 원본 크기로 그린 문서를 쓴다
+  // (미리보기는 축소돼 있어 그대로 캡처하면 해상도가 떨어진다).
+  const exportRef = useRef<HTMLDivElement | null>(null);
+  const [exporting, setExporting] = useState<"png" | "pdf" | null>(null);
+  const [pngOpen, setPngOpen] = useState(false);
+  const [docRatio, setDocRatio] = useState(0);
+  const doExport = useCallback(
+    async (kind: "png" | "pdf", pngWidthPx?: number, pngFormat: "png" | "jpeg" = "png") => {
+      const el = exportRef.current;
+      if (!el || !detail) return;
+      setExporting(kind);
+      try {
+        const base = (detail.title || "채용공고").replace(/[\\/:*?"<>|]/g, "_");
+        if (kind === "png") await exportElementPng(el, base, pngWidthPx, pngFormat);
+        else await exportElementPdf(el, base);
+        toast(`${kind.toUpperCase()} 로 내보냈습니다.`, "success");
+      } catch (e) {
+        toast(`내보내기 실패: ${(e as Error).message}`, "error");
+      } finally {
+        setExporting(null);
+      }
+    },
+    [detail, toast]
+  );
+  const openPngModal = () => {
+    const el = exportRef.current;
+    if (el && el.offsetWidth > 0) setDocRatio(el.offsetHeight / el.offsetWidth);
+    setPngOpen(true);
+  };
 
   const load = useCallback(async () => {
     try {
@@ -375,6 +406,24 @@ export function PostingListBoard() {
                       </CdButton>
                       <CdButton
                         variant="soft"
+                        icon={exporting === "png" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                        disabled={exporting !== null || !detail}
+                        title="채용 플랫폼 게시용 PNG(가로 px 선택)"
+                        onClick={openPngModal}
+                      >
+                        PNG
+                      </CdButton>
+                      <CdButton
+                        variant="soft"
+                        icon={exporting === "pdf" ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                        disabled={exporting !== null || !detail}
+                        title="인쇄·공유용 PDF"
+                        onClick={() => void doExport("pdf")}
+                      >
+                        PDF
+                      </CdButton>
+                      <CdButton
+                        variant="soft"
                         icon={duplicating === selected.postingId ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4" />}
                         disabled={duplicating !== null}
                         title="복제해서 새 공고 작성 (내용·부문·구분·플랫폼·근무지역 유지, 기간·공고 주소는 새로 입력)"
@@ -439,6 +488,12 @@ export function PostingListBoard() {
                     <DocFitPreview tree={detail.contentTree} theme={detail.theme} docWidth={detail.docWidth ?? 900} />
                   )}
                 </div>
+                {/* 내보내기용 원본 크기 문서 — 화면 밖(스크롤 영향 없음) */}
+                {detail && (
+                  <div aria-hidden style={{ position: "absolute", left: -20000, top: 0, pointerEvents: "none" }}>
+                    <DocCanvas ref={exportRef} tree={detail.contentTree} theme={detail.theme} width={detail.docWidth ?? 900} />
+                  </div>
+                )}
               </>
             )}
           </section>
@@ -502,6 +557,7 @@ export function PostingListBoard() {
 
       {/* 원본 공고 파일에서 가져오기 */}
       <ImportPostingModal open={importOpen} onClose={() => setImportOpen(false)} />
+      <PngExportModal open={pngOpen} onClose={() => setPngOpen(false)} docRatio={docRatio} onExport={(w, f) => void doExport("png", w, f)} />
     </div>
   );
 }

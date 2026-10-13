@@ -5,7 +5,7 @@
 // 면접일시·이력서 보관처). 둘 다 입력자·입력 시각이 남는다. 면접 예정자는 개인정보라 채용이 끝나면 지우도록 안내한다.
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, Trash2 } from "lucide-react";
 import { CdBadge, CdButton, CdDateInput, CdHelp, CdInput, isValidDateString, useCdToast } from "@/components/cdash";
 import { formatTimeDigits } from "@/components/calendar/CalendarEntryModal";
 import { todayYmd } from "@/lib/recruit/meta";
@@ -40,7 +40,6 @@ export function PostingTrackingCard({
   // 지원자 수 입력
   const [countedOn, setCountedOn] = useState(todayYmd());
   const [count, setCount] = useState("");
-  const [countMemo, setCountMemo] = useState("");
   // 면접 예정자 입력
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -97,9 +96,9 @@ export function PostingTrackingCard({
     if (count === "" || !/^\d+$/.test(count)) { toast("누적 지원자 수를 숫자로 입력하세요.", "error"); return; }
     const data = await call(`/api/recruit/postings/${postingId}/applicants`, {
       method: "POST",
-      body: JSON.stringify({ countedOn, count: Number(count), memo: countMemo || null }),
+      body: JSON.stringify({ countedOn, count: Number(count) }),
     }, "count");
-    if (data) { applyCounts(data.counts); setCount(""); setCountMemo(""); toast(`${countedOn} 기준 ${count}명으로 기록했습니다.`, "success"); }
+    if (data) { applyCounts(data.counts); setCount(""); toast(`${countedOn} 기준 ${count}명으로 기록했습니다.`, "success"); }
   };
 
   const removeCount = async (day: string) => {
@@ -136,11 +135,34 @@ export function PostingTrackingCard({
   };
 
   const loading = counts === null || interviews === null;
+  // 접기/펼치기(2026-10-13 사용자 요청) — 선택은 이 브라우저에 기억한다(공고가 바뀌어도 유지)
+  const COLLAPSE_KEY = "recruit-tracking-collapsed";
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try { return localStorage.getItem(COLLAPSE_KEY) === "1"; } catch { return false; }
+  });
+  const toggle = () => {
+    setCollapsed((v) => {
+      try { localStorage.setItem(COLLAPSE_KEY, v ? "0" : "1"); } catch { /* 저장 못 해도 동작엔 지장 없음 */ }
+      return !v;
+    });
+  };
+  const summary = `지원자 ${counts?.length ? `${counts[counts.length - 1].count}명` : "미기록"} · 면접 예정자 ${interviews?.length ?? 0}명`;
 
   return (
     <div className="rounded-lg border cd-border-c cd-card-bg p-4 mb-4" aria-label="지원 현황">
-      <div className="flex items-center gap-2 mb-3">
-        <h3 className="text-sm font-bold cd-text">지원 현황</h3>
+      <div className={`flex items-center gap-2 ${collapsed ? "" : "mb-3"}`}>
+        <button
+          type="button"
+          className="flex items-center gap-1.5 text-sm font-bold cd-text"
+          aria-expanded={!collapsed}
+          aria-controls="recruit-tracking-body"
+          onClick={toggle}
+          title={collapsed ? "펼치기" : "접기"}
+        >
+          {collapsed ? <ChevronDown className="w-4 h-4 cd-text-faint" /> : <ChevronUp className="w-4 h-4 cd-text-faint" />}
+          지원 현황
+        </button>
+        {collapsed && <span className="text-xs cd-text-muted">{summary}</span>}
         <CdHelp label="지원 현황 기록 방법">
           <p>채용사이트의 지원자 수와 면접 예정자는 자동으로 가져오지 않습니다(사이트가 지원자 API를 제공하지 않고 자동 수집은 약관·개인정보 위험이 있어 2026-10-13 수동 입력으로 정함).</p>
           <p className="mt-1">지원자 수는 그날까지의 <b>누적 인원</b>을 적습니다. 같은 날 다시 적으면 그날 값만 바뀌고 지난 날짜는 남아 일자별 추이를 볼 수 있습니다.</p>
@@ -149,15 +171,16 @@ export function PostingTrackingCard({
         {loading && <Loader2 className="w-4 h-4 animate-spin cd-text-muted" />}
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-2">
+      {/* 지원자 수는 좁게(320px), 면접 예정자가 남는 폭을 써서 입력란이 한 줄에 들어간다(2026-10-13 사용자 요청). 좁은 화면은 위아래 */}
+      {!collapsed && (
+      <div id="recruit-tracking-body" className="grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
         {/* ── 지원자 수 ── */}
         <section aria-label="지원자 수">
           <div className="text-xs font-bold cd-text-muted mb-2">지원자 수 (날짜별 누적)</div>
           {canManage && (
             <div className="flex flex-wrap items-end gap-2 mb-3">
-              <CdDateInput label="기준일" value={countedOn} onChange={setCountedOn} style={{ width: 130 }} />
-              <CdInput label="누적 인원" inputMode="numeric" value={count} onChange={(e) => setCount(e.target.value.replace(/\D/g, ""))} placeholder="명" style={{ width: 90 }} />
-              <CdInput label="메모" value={countMemo} onChange={(e) => setCountMemo(e.target.value)} placeholder="선택" className="flex-1 min-w-[140px]" />
+              <CdDateInput label="기준일" value={countedOn} onChange={setCountedOn} style={{ width: 118 }} />
+              <CdInput label="누적 인원" inputMode="numeric" value={count} onChange={(e) => setCount(e.target.value.replace(/\D/g, ""))} placeholder="명" style={{ width: 72 }} />
               <CdButton variant="primary" size="sm" disabled={busy !== null} onClick={() => void saveCount()}>
                 {busy === "count" ? "기록 중…" : "기록"}
               </CdButton>
@@ -172,7 +195,6 @@ export function PostingTrackingCard({
                   <th className="px-2 py-1.5 font-semibold">기준일</th>
                   <th className="px-2 py-1.5 font-semibold text-right">누적</th>
                   <th className="px-2 py-1.5 font-semibold text-right">증감</th>
-                  <th className="px-2 py-1.5 font-semibold">메모</th>
                   <th className="px-2 py-1.5 font-semibold">입력</th>
                   {canManage && <th className="w-8"></th>}
                 </tr>
@@ -185,7 +207,6 @@ export function PostingTrackingCard({
                     <td className="px-2 py-1.5 text-right tabular-nums" style={{ color: c.delta == null ? "var(--cd-faint)" : c.delta > 0 ? "var(--cd-success)" : c.delta < 0 ? "var(--cd-error)" : "var(--cd-muted)" }}>
                       {c.delta == null ? "-" : c.delta > 0 ? `+${c.delta}` : String(c.delta)}
                     </td>
-                    <td className="px-2 py-1.5 cd-text-muted break-words">{c.memo ?? ""}</td>
                     <td className="px-2 py-1.5 cd-text-faint whitespace-nowrap">{fmtAt(c.updatedAt)}{c.updatedByName ? ` ${c.updatedByName}` : ""}</td>
                     {canManage && (
                       <td className="px-1 py-1">
@@ -204,19 +225,18 @@ export function PostingTrackingCard({
         {/* ── 면접 예정자 ── */}
         <section aria-label="면접 예정자">
           <div className="text-xs font-bold cd-text-muted mb-2">면접 예정자</div>
+          {/* 한 줄 배치(2026-10-13 사용자 요청) — 성명·면접일·시각은 좁게, 이메일은 두 배, 이력서 칸은 남는 폭. 좁은 화면에서는 줄바꿈 */}
           {canManage && (
-            <div className="grid gap-2 mb-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))" }}>
-              <CdInput label="성명" required value={name} onChange={(e) => setName(e.target.value)} />
-              <CdInput label="연락처" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="010-" />
-              <CdInput label="이메일" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-              <CdDateInput label="면접일" value={ivDate} onChange={setIvDate} />
-              <CdInput label="시각" inputMode="numeric" value={ivTime} onChange={(e) => setIvTime(formatTimeDigits(e.target.value))} placeholder="HH:MM" />
-              <CdInput label="이력서 보관처·메모" value={resumeNote} onChange={(e) => setResumeNote(e.target.value)} placeholder="예: 사람인 지원자함" className="col-span-2" />
-              <div className="flex items-end">
-                <CdButton variant="primary" size="sm" disabled={busy !== null} onClick={() => void addInterview()}>
-                  {busy === "interview" ? "추가 중…" : "추가"}
-                </CdButton>
-              </div>
+            <div className="flex flex-wrap items-end gap-2 mb-3">
+              <CdInput label="성명" required value={name} onChange={(e) => setName(e.target.value)} style={{ width: 92 }} />
+              <CdInput label="연락처" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="010-" style={{ width: 130 }} />
+              <CdInput label="이메일" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} className="min-w-[150px] basis-[150px] grow shrink max-w-[260px]" style={{ width: "100%" }} />
+              <CdDateInput label="면접일" value={ivDate} onChange={setIvDate} style={{ width: 104 }} />
+              <CdInput label="시각" inputMode="numeric" value={ivTime} onChange={(e) => setIvTime(formatTimeDigits(e.target.value))} placeholder="HH:MM" style={{ width: 74 }} />
+              <CdInput label="이력서 보관처·메모" value={resumeNote} onChange={(e) => setResumeNote(e.target.value)} placeholder="예: 사람인 지원자함" className="min-w-[120px] basis-[120px] grow-[3] shrink" style={{ width: "100%" }} />
+              <CdButton variant="primary" size="sm" disabled={busy !== null} onClick={() => void addInterview()}>
+                {busy === "interview" ? "추가 중…" : "추가"}
+              </CdButton>
             </div>
           )}
           {interviews && interviews.length === 0 ? (
@@ -258,6 +278,7 @@ export function PostingTrackingCard({
           )}
         </section>
       </div>
+      )}
     </div>
   );
 }

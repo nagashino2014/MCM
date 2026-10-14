@@ -18,6 +18,7 @@ import { LeaveGaugeCard } from "./widgets/LeaveGaugeCard";
 import { PendingProgressCard } from "./widgets/PendingProgressCard";
 import { UpcomingBidsCard } from "./widgets/UpcomingBidsCard";
 import { WorkPlanTodoCard } from "./widgets/WorkPlanTodoCard";
+import { TodoTodayCard } from "./widgets/TodoTodayCard";
 import { InvoiceRequestCard } from "./widgets/InvoiceRequestCard";
 import { FinanceAlertsCard } from "./widgets/FinanceAlertsCard";
 import { InvoiceInboxCard } from "./widgets/InvoiceInboxCard";
@@ -137,6 +138,7 @@ export function HomeBoard({ role }: { role?: string }) {
       pendingProgress: <PendingProgressCard theme={theme} />,
       upcomingBids: <UpcomingBidsCard />,
       workPlan: <WorkPlanTodoCard />,
+      todoToday: <TodoTodayCard />,
       invoiceRequest: <InvoiceRequestCard />,
       invoiceInbox: <InvoiceInboxCard />,
       billingSummary: <BillingSummaryCard />,

@@ -26,6 +26,8 @@ export const HOME_WIDGETS: HomeWidgetDef[] = [
   { key: "pendingProgress", label: "경과 미입력", permission: "sales.view", defaultW: 14, defaultH: 1 },
   { key: "upcomingBids", label: "투찰 마감 임박", permission: "sales.view", defaultW: 10, defaultH: 1 },
   { key: "workPlan", label: "업무보고 할 일", permission: null, defaultW: 8, defaultH: 1 },
+  // 오늘 할 일(274, H12) — 지연·오늘·이번 주 상위 5건 + 체크 + 퀵애드. 전 직원(API 가 본인 것만 반환).
+  { key: "todoToday", label: "오늘 할 일", permission: null, defaultW: 8, defaultH: 1 },
   { key: "invoiceRequest", label: "세금계산서 발행 요청", permission: null, defaultW: 8, defaultH: 1 },
   { key: "invoiceInbox", label: "발행 요청 수신함", permission: "billing.receivable.manage", defaultW: 8, defaultH: 1 },
   { key: "billingSummary", label: "수금/발행 요약", permission: "billing.view", defaultW: 8, defaultH: 1 },
@@ -48,7 +50,7 @@ export const HOME_WIDGETS: HomeWidgetDef[] = [
 
 export const HOME_WIDGET_KEYS = HOME_WIDGETS.map((w) => w.key);
 
-/** 캘린더 태그 — 차량은 출장·예약, 회의·면접은 일정 메뉴와 같은 통합 일정 조회에서 온다. */
+/** 캘린더 태그 — 차량은 출장·예약, 회의·면접·할 일은 일정 메뉴와 같은 통합 일정 조회에서 온다. */
 export const CALENDAR_TAGS = [
   { key: "self", label: "본인" },
   { key: "sales", label: "영업" },
@@ -57,6 +59,7 @@ export const CALENDAR_TAGS = [
   { key: "vehicle", label: "차량" },
   { key: "meeting", label: "회의" },
   { key: "interview", label: "면접" },
+  { key: "todo", label: "할 일" },
 ] as const;
 
 export type CalendarTagKey = (typeof CALENDAR_TAGS)[number]["key"];

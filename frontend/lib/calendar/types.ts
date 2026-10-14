@@ -4,11 +4,12 @@
  */
 
 /**
- * 캘린더 태그(카테고리) 7종 — 홈 위젯(lib/home/widgets.ts CALENDAR_TAGS)도 같은 7종을 쓴다.
+ * 캘린더 태그(카테고리) 8종 — 홈 위젯(lib/home/widgets.ts CALENDAR_TAGS)도 같은 8종을 쓴다.
  * meeting(회의)·interview(면접)는 직접 등록 일정(219, lib/calendar/entries.ts).
  * 미팅(visit)은 별도 태그가 없고 참석자가 본인/부서/선택 집합에 있으면 그 태그로 표시된다.
+ * todo(할 일)는 내 할 일(274, lib/todo/calendar.ts) — do_date(없으면 due_date) 기준.
  */
-export const CALENDAR_TAG_KEYS = ["self", "dept", "sales", "refs", "vehicle", "meeting", "interview"] as const;
+export const CALENDAR_TAG_KEYS = ["self", "dept", "sales", "refs", "vehicle", "meeting", "interview", "todo"] as const;
 export type CalendarTagKey = (typeof CALENDAR_TAG_KEYS)[number];
 
 export const CALENDAR_TAG_LABELS: Record<CalendarTagKey, string> = {
@@ -19,6 +20,7 @@ export const CALENDAR_TAG_LABELS: Record<CalendarTagKey, string> = {
   vehicle: "차량",
   meeting: "회의",
   interview: "면접",
+  todo: "할 일",
 };
 
 /**
@@ -35,6 +37,7 @@ export const TAG_COLOR: Record<CalendarTagKey, string> = {
   vehicle: "#FFE699", // 노랑
   meeting: "#B9E4DC", // 민트
   interview: "#F9C9D9", // 핑크
+  todo: "#D9D4F0", // 연보라(선택 라일락보다 옅게)
 };
 
 /** 파스텔 태그 배경 위 글자색(영업 캘린더와 동일한 진한 잉크). */
@@ -52,10 +55,11 @@ export const TAG_COLOR_STRONG: Record<CalendarTagKey, string> = {
   vehicle: "#D4A017",
   meeting: "#2E9E8C",
   interview: "#D6548A",
+  todo: "#7B6FD0",
 };
 
 /** 일정 종류 — 스케줄명 조립 규칙의 단위. */
-export type CalendarKind = "leave" | "trip" | "education" | "sales" | "vehicle" | "meeting" | "interview" | "visit";
+export type CalendarKind = "leave" | "trip" | "education" | "sales" | "vehicle" | "meeting" | "interview" | "visit" | "todo";
 
 export const CALENDAR_KIND_LABELS: Record<CalendarKind, string> = {
   leave: "휴가",
@@ -66,6 +70,7 @@ export const CALENDAR_KIND_LABELS: Record<CalendarKind, string> = {
   meeting: "회의",
   interview: "면접",
   visit: "미팅",
+  todo: "할 일",
 };
 
 export interface CalendarPerson {
@@ -82,7 +87,7 @@ export interface CalendarPerson {
  *   회의 "[회의명]" / 면접 "면접 : [면접자]" / 미팅 "미팅 : [방문자]"
  */
 export interface CalendarEvent {
-  /** "doc:{docId}:trip" | "doc:{docId}:vehicle" | "act:{activityId}" | "ledg:{entryId}" | "ent:{entryId}" */
+  /** "doc:{docId}:trip" | "doc:{docId}:vehicle" | "act:{activityId}" | "ledg:{entryId}" | "ent:{entryId}" | "todo:{itemId}" */
   id: string;
   tag: CalendarTagKey;
   kind: CalendarKind;
@@ -101,7 +106,7 @@ export interface CalendarEvent {
   docId: string | null;
   /** 영업 활동의 프로젝트 — 영업 카드에서 스케줄 상세 관리 화면(/sales/[projectId]) 링크에 쓴다. */
   salesProjectId?: string | null;
-  /** 직접 등록 일정(회의·면접·미팅)의 id — 카드에서 상세/편집 모달을 연다. */
+  /** 직접 등록 일정(회의·면접·미팅)의 id — 카드에서 상세/편집 모달을 연다. 할 일(kind todo)은 itemId(/todo?item=). */
   entryId?: string | null;
   /** 직접 등록 일정을 현재 사용자가 편집·삭제할 수 있는지(서버 판정). */
   canEdit?: boolean;

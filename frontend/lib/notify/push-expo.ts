@@ -29,7 +29,12 @@ export type PushEventKey =
   | "bid.deadline"
   | "filing.due"
   | "ai.budget"
-  | "calendar.schedule";
+  | "calendar.schedule"
+  | "todo.remind"
+  | "todo.digest"
+  | "todo.assigned"
+  | "todo.comment"
+  | "todo.status";
 
 /**
  * 이벤트 기본 수신 여부(사용자 설정 행이 없을 때).
@@ -54,6 +59,11 @@ const EVENT_DEFAULT: Record<PushEventKey, boolean> = {
   "filing.due": true,
   "ai.budget": true,
   "calendar.schedule": true,
+  "todo.remind": true,
+  "todo.digest": true,
+  "todo.assigned": true,
+  "todo.comment": true,
+  "todo.status": true,
 };
 
 export const PUSH_EVENTS: { key: PushEventKey; label: string; description: string }[] = [
@@ -72,6 +82,11 @@ export const PUSH_EVENTS: { key: PushEventKey; label: string; description: strin
   { key: "filing.due", label: "대외 신고 기한", description: "IEPS·ETIS 신고 기한이 임박하거나 지났을 때(수신자 지정)" },
   { key: "ai.budget", label: "AI API 예산 경고", description: "Claude API 월 예산 임계 도달·초과 전망·단건 고비용(관리자)" },
   { key: "calendar.schedule", label: "회의·면접·미팅 일정", description: "참석자로 지정된 회의·면접·미팅 일정이 등록·변경됐을 때" },
+  { key: "todo.remind", label: "할 일 예정·마감 알림", description: "할 일의 예정 시각(종일은 09:00, 시간 지정은 30분 전)·마감이 다가올 때" },
+  { key: "todo.digest", label: "할 일 아침 요약", description: "아침(기본 08:30)에 오늘 할 일·지연 건수 요약(0건이면 보내지 않음)" },
+  { key: "todo.assigned", label: "할 일 배정", description: "동료가 나를 할 일 담당자로 지정했을 때" },
+  { key: "todo.comment", label: "할 일 댓글·멘션", description: "내 할 일(담당·공유)에 댓글이 달리거나 @멘션됐을 때" },
+  { key: "todo.status", label: "할 일 완료·검토 요청", description: "내가 만들었거나 공유받은 할 일이 완료되거나 검토 요청됐을 때" },
 ];
 
 let expo: Expo | null = null;

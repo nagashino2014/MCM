@@ -10,14 +10,14 @@ function dayNumber(value: string): number | null {
   return date.getTime() / DAY_MS;
 }
 
-/** 홈의 기존 6주 격자에 표시되는 회의·면접 날짜. 기간과 미시행 처리는 일정 메뉴와 같다. */
+/** 홈의 기존 6주 격자에 표시되는 회의·면접·할 일 날짜. 기간과 미시행 처리는 일정 메뉴와 같다. */
 export function homeCalendarEntryDays(
   events: CalendarEvent[],
   tag: CalendarTagKey | "",
   year: number,
   month0: number
 ): Array<{ event: CalendarEvent; date: string }> {
-  if (tag !== "meeting" && tag !== "interview") return [];
+  if (tag !== "meeting" && tag !== "interview" && tag !== "todo") return [];
   const first = new Date(Date.UTC(year, month0, 1));
   const gridStart = first.getTime() / DAY_MS - first.getUTCDay();
   const gridEnd = gridStart + 41;

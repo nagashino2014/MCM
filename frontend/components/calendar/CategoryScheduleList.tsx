@@ -80,7 +80,16 @@ export const CategoryScheduleList = forwardRef<
                         {ev.canceled && (
                           <span className="shrink-0 text-[10px] rounded-full px-1.5 py-0.5 border cd-border-c cd-text-faint">미시행</span>
                         )}
-                        {ev.entryId && onOpenEntry && (
+                        {ev.kind === "todo" && ev.entryId && (
+                          <Link
+                            href={`/todo?item=${encodeURIComponent(ev.entryId)}`}
+                            className="cd-action shrink-0 p-1 rounded-md cd-text-faint hover:text-[color:var(--cd-primary)]"
+                            title="할 일 상세로 이동"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </Link>
+                        )}
+                        {ev.kind !== "todo" && ev.entryId && onOpenEntry && (
                           <button
                             type="button"
                             className="shrink-0 p-1 rounded-md cd-text-faint hover:text-[color:var(--cd-primary)]"

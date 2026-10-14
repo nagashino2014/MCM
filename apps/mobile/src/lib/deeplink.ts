@@ -32,5 +32,11 @@ export function routeForLink(link: string | null | undefined): Href | null {
     return filter === "deadline" ? { pathname: "/bids", params: { filter } } : "/bids";
   }
 
+  // 할 일(274) — 알림·멘션 푸시는 /todo?item=<id>, 아침 요약은 /todo 로 온다.
+  if (path === "/todo") {
+    const item = new URLSearchParams(link.split("?")[1] ?? "").get("item");
+    return item ? { pathname: "/todo/[itemId]", params: { itemId: item } } : "/todo";
+  }
+
   return null;
 }

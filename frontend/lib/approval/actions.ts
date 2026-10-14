@@ -11,6 +11,7 @@ import {
 } from "@/lib/approval/hr-actions";
 import { recordLeavePayConnector } from "@/lib/approval/severance";
 import { bonusLedgerConnector } from "@/lib/payroll/bonus-ledger";
+import { todoFollowupConnector } from "@/lib/todo/approval-connector";
 
 /*
  * 승인 액션 커넥터 레지스트리(FRM-P0, 201) — 양식 승인/상신 시 실행할 연계의 실행기.
@@ -489,4 +490,5 @@ export const ACTION_CONNECTORS: ActionConnector[] = [
   recordAppointmentsConnector,
   recordLeavePayConnector,
   bonusLedgerConnector,
+  todoFollowupConnector,
 ];

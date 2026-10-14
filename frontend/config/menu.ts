@@ -17,6 +17,7 @@ import {
   Megaphone,
   CalendarDays,
   CalendarClock,
+  ListChecks,
   CarFront,
   SlidersHorizontal,
   Landmark,
@@ -29,7 +30,7 @@ import {
 export type Role = "admin" | "editor" | "viewer";
 
 /** 사이드바 카운트 뱃지 데이터 키(/api/nav/badges 응답 필드와 매핑). */
-export type MenuBadgeKey = "mailUnread" | "approvalPending";
+export type MenuBadgeKey = "mailUnread" | "approvalPending" | "todoDue";
 
 export interface MenuItem {
   title: string;
@@ -127,6 +128,14 @@ export const MENU_ITEMS: MenuItem[] = [
     href: "/calendar",
     icon: CalendarDays,
     group: "collab",
+  },
+  // 할 일(274, docs/todo-kanban-blueprint.md §7.1) — 전 직원, 뱃지 = 오늘+지연 건수. 탭·상세는 query(?tab=&item=)로 같은 메뉴.
+  {
+    title: "할 일",
+    href: "/todo",
+    icon: ListChecks,
+    group: "collab",
+    badgeKey: "todoDue",
   },
   {
     title: "자산 예약",

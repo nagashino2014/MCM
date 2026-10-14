@@ -40,7 +40,11 @@ function buildSource(photoPath: string, token: string | null) {
   };
 }
 
-function useAuthedSource(photoPath?: string | null) {
+/**
+ * 인증 사진 소스 훅 — 다른 소형 아바타(할 일 MiniAvatar 등)도 같은 규칙으로 사진을 받도록 공개한다.
+ * 절대 URL 은 그대로, 앱 API 상대경로는 Bearer 헤더를 붙인다. 사진이 없으면 null.
+ */
+export function useAuthedSource(photoPath?: string | null) {
   // 상대경로(앱 API) 사진만 상태를 쓴다 — 절대 URL 은 파생값. 토큰이 이미 알려져 있으면 동기 초기값으로
   // 만들어 목록 항목이 재마운트돼도 이니셜을 거치지 않는다. path 를 같이 들고 있어 경로가 바뀐 직후
   // 옛 사진이 잠깐 보이는 일도 없다.

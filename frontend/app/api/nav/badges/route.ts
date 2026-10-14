@@ -3,6 +3,7 @@ import { authErrorToResponse, requireSession } from "@/lib/auth/guards";
 import { checkPermission, loadUserAccess } from "@/lib/auth/rbac";
 import { MENU_PERMISSION_KEYS } from "@/config/menu";
 import { getDb, rowsToObjects } from "@/lib/db";
+import { countDueBadge } from "@/lib/todo/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -62,6 +63,13 @@ export async function GET() {
     } catch {
       /* chat 테이블 미존재 등 — 0 유지 */
     }
+    // 할 일(274) — 오늘+지연, 내 담당, 미완료. 표 미생성이면 0 유지.
+    let todoDue = 0;
+    try {
+      todoDue = await countDueBadge(ctx.userId);
+    } catch {
+      /* todo 테이블 미존재 등 — 0 유지 */
+    }
     // 권한키로 노출을 가르는 메뉴(수행인력 실적 등) — 보유한 키만 내려 사이드바가 숨김 판정에 쓴다.
     let menuPermissions: string[] = [];
     try {
@@ -70,7 +78,7 @@ export async function GET() {
     } catch {
       /* 빈 목록 유지 — 해당 메뉴는 숨김 */
     }
-    return NextResponse.json({ mailUnread, approvalPending, chatUnread, menuPermissions });
+    return NextResponse.json({ mailUnread, approvalPending, chatUnread, todoDue, menuPermissions });
   } catch (err) {
     return authErrorToResponse(err);
   }

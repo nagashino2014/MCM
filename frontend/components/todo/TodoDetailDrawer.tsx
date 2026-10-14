@@ -1,0 +1,1301 @@
+"use client";
+
+// 상세 드로어(§7.3 · 시안 v4 §19-6, 580px) — 바탕 --cd-surface, 헤더(흰 바탕 · 좌측 5px 보드 색 띠 · 체크 · 제목 18px · 프로젝트 칩 · ⋯ 메뉴 · 닫기).
+// 본문은 프레임 섹션(cd-card 12/16, 12px 간격): ① 핵심 2×2(상태 칩+▾ · 담당 아바타+▾ · 수행 예정 · 마감) ② 관련(용역·사업장·연결) ③ 메모 ④ 하위 작업(분절 진행바)
+// ⑤ 댓글(사진 아바타 28px) ⑥ 부가 설정(접힘 한 줄 요약 — 우선순위·알림·반복·보드›열·공유) ⑦ 활동(접힘). 하단 바는 "저장됨 · 방금"만.
+// 자동 저장: 필드 변경 → 600ms 디바운스 PATCH /api/todo/items/[id]. 키보드: Esc 닫기(CdDrawer), Ctrl+Enter 댓글, Alt+1~5 상태. 시각 규칙은 todo.css 의 todo-* 에만 둔다.
+
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { Building2, ChevronDown, ChevronRight, Copy, ExternalLink, FileSignature, Link2, MessageCircle, MoreHorizontal, Trash2, X } from "lucide-react";
+import { CdAvatar, CdButton, CdDateInput, CdDrawer, CdDropdown, CdIconButton, CdModal, isValidDateString, useCdToast, type CdMenuItem } from "@/components/cdash";
+import {
+  TODO_BOARD_KIND_LABELS,
+  TODO_LINK_KIND_LABELS,
+  TODO_PRIORITY_LABELS,
+  TODO_RECURRENCE_PRESETS,
+  TODO_SHARE_ROLE_LABELS,
+  TODO_SNOOZE_PRESETS,
+  TODO_STATUSES,
+  TODO_STATUS_LABELS,
+  TODO_WEEKDAY_CODES,
+  TODO_WEEKDAY_LABELS,
+  type TodoActivity,
+  type TodoBoard,
+  type TodoItem,
+  type TodoItemDetail,
+  type TodoPrefs,
+  type TodoPriority,
+  type TodoShareRole,
+  type TodoStatus,
+} from "@/lib/todo/types";
+import { describeRecurrence, parseRecurrence } from "@/lib/todo/recurrence";
+import { TodoCheck, linkHref, tintStyle } from "./TodoRow";
+import { PeoplePickerModal } from "./PeoplePickerModal";
+import { LinkPickerModal } from "./LinkPickerModal";
+import { apiCall } from "./useTodoData";
+import { contractShort, defaultRemindAt, diffDays, fmtIsoShort, isoToLocalInput, md, normalizeTime, relativeTime, weekdayKo } from "./todo-utils";
+
+export interface TodoDetailDrawerProps {
+  itemId: string | null;
+  boards: TodoBoard[];
+  prefs: TodoPrefs | null;
+  myUserId: string | null;
+  today: string;
+  onClose: () => void;
+  onItemChanged: (item: TodoItemDetail) => void;
+  onItemCreated: (item: TodoItem) => void;
+  onItemDeleted: (itemId: string) => void;
+  onOpenItem: (itemId: string) => void;
+}
+
+type SaveState = "idle" | "saving" | "saved" | "error";
+type PropKey = "do" | "due" | "remind" | "recurrence" | "board";
+
+const longDate = (ymd: string) => `${Number(ymd.slice(5, 7))}월 ${Number(ymd.slice(8, 10))}일 (${weekdayKo(ymd)})`;
+
+function describeActivity(a: TodoActivity): string {
+  const d = a.detail ?? {};
+  const st = (v: unknown) => (typeof v === "string" && v in TODO_STATUS_LABELS ? TODO_STATUS_LABELS[v as TodoStatus] : String(v ?? ""));
+  switch (a.action) {
+    case "create":
+      return "생성";
+    case "status": {
+      const [from, to] = Array.isArray(d.from) ? (d.from as unknown[]) : [d.from, d.to];
+      return `${st(from)} → ${st(to)}`;
+    }
+    case "complete":
+      return "완료";
+    case "reopen":
+      return "되돌림";
+    case "assign":
+      return d.to ? "담당 지정" : "담당 해제";
+    case "due":
+      return "날짜 변경";
+    case "move":
+      return d.boardId ? "보드 이동" : d.columnId ? "열 이동" : "순서 변경";
+    case "share":
+      return d.chatRoomId ? "메신저로 공유" : d.removed ? "공유 해제" : `공유 (${TODO_SHARE_ROLE_LABELS[(d.role as TodoShareRole) ?? "watcher"] ?? ""})`;
+    case "comment":
+      return "댓글";
+    case "snooze":
+      return "스누즈";
+    case "archive":
+      return "보관";
+    case "update":
+      return `수정 (${Object.keys((d.changes as Record<string, unknown>) ?? {}).join(", ") || "내용"})`;
+    default:
+      return a.action;
+  }
+}
+
+function renderMentions(body: string): ReactNode {
+  const parts = body.split(/(@[^\s@,.]+)/g);
+  return parts.map((p, i) => (p.startsWith("@") ? <span key={i} className="todo-mention">{p}</span> : <span key={i}>{p}</span>));
+}
+
+/** 편집 영역 — Esc 또는 바깥으로 포커스가 나가면 닫는다. */
+function PropEditor({ onDone, children }: { onDone: () => void; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const first = ref.current?.querySelector<HTMLElement>("input, select, textarea, button");
+    first?.focus();
+  }, []);
+  return (
+    <div
+      ref={ref}
+      className="todo-pr-edit"
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          e.stopPropagation();
+          onDone();
+        }
+      }}
+      onBlur={(e) => {
+        if (!ref.current?.contains(e.relatedTarget as Node | null)) onDone();
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** 접힘 프레임 섹션 — 헤더 클릭으로 펼침. 접힘이면 한 줄 요약. */
+function FoldSection({ label, count, summary, open, onToggle, children }: { label: string; count?: number; summary: ReactNode; open: boolean; onToggle: () => void; children: ReactNode }) {
+  return (
+    <section className="cd-card todo-fr" data-fold="true" aria-label={label}>
+      <h3>
+        <button type="button" className="todo-fold-btn" onClick={onToggle} aria-expanded={open}>
+          {open ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}
+          {label}
+          {count != null && <span className="todo-sec-n">{count}</span>}
+        </button>
+      </h3>
+      {open ? <div className="todo-fold-body">{children}</div> : <div className="todo-fold-ln">{summary}</div>}
+    </section>
+  );
+}
+
+export function TodoDetailDrawer({ itemId, boards, prefs, myUserId, today, onClose, onItemChanged, onItemCreated, onItemDeleted, onOpenItem }: TodoDetailDrawerProps) {
+  const { toast } = useCdToast();
+  const [detail, setDetail] = useState<TodoItemDetail | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<SaveState>("idle");
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [editing, setEditing] = useState<PropKey | null>(null);
+  const [title, setTitle] = useState("");
+  const [note, setNote] = useState("");
+  const [timeDraft, setTimeDraft] = useState("");
+  const [pickerRole, setPickerRole] = useState<TodoShareRole | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [rooms, setRooms] = useState<{ roomId: number; name: string; roomType: string; memberCount: number }[] | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [comment, setComment] = useState("");
+  const [subTitle, setSubTitle] = useState("");
+  const [activityOpen, setActivityOpen] = useState(false);
+  const [extraOpen, setExtraOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  // 연결 추가·변경은 LinkPickerModal(종류별 검색·목록)로 — 사용자는 개별 ID를 모른다.
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [recDraft, setRecDraft] = useState<{ preset: string; days: string[]; day: string; after: string }>({ preset: "", days: ["MO"], day: "1", after: "7" });
+  const queue = useRef<Record<string, unknown>>({});
+  const timer = useRef<number | null>(null);
+  const detailRef = useRef(detail);
+  detailRef.current = detail;
+  const composing = useRef(false);
+
+  const open = !!itemId;
+
+  // ── 로드 ──
+  const load = useCallback(async () => {
+    if (!itemId) return;
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const d = await apiCall<{ item: TodoItemDetail }>(`/api/todo/items/${encodeURIComponent(itemId)}`);
+      setDetail(d.item);
+      setTitle(d.item.title);
+      setNote(d.item.note ?? "");
+      setTimeDraft(d.item.doTime ?? "");
+    } catch (e) {
+      setLoadError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }, [itemId]);
+
+  useEffect(() => {
+    setDetail(null);
+    setEditing(null);
+    setSaveState("idle");
+    setComment("");
+    setSubTitle("");
+    setActivityOpen(false);
+    setExtraOpen(false);
+    queue.current = {};
+    if (timer.current) window.clearTimeout(timer.current);
+    void load();
+  }, [load]);
+
+  // ── 자동 저장 큐(600ms) ──
+  const flush = useCallback(async () => {
+    const id = detailRef.current?.itemId;
+    const body = queue.current;
+    queue.current = {};
+    if (timer.current) {
+      window.clearTimeout(timer.current);
+      timer.current = null;
+    }
+    if (!id || !Object.keys(body).length) return;
+    setSaveState("saving");
+    try {
+      const d = await apiCall<{ item: TodoItemDetail }>(`/api/todo/items/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) });
+      if (detailRef.current?.itemId === id) {
+        setDetail(d.item);
+        setTitle((t) => (t.trim() === d.item.title ? t : d.item.title));
+      }
+      onItemChanged(d.item);
+      setSaveState("saved");
+      setSavedAt(Date.now());
+    } catch (e) {
+      queue.current = { ...body, ...queue.current };
+      setSaveState("error");
+      toast(`저장하지 못했습니다. 입력은 유지됩니다 — ${(e as Error).message}`, "error");
+    }
+  }, [onItemChanged, toast]);
+
+  const schedule = useCallback(
+    (patch: Record<string, unknown>, immediate = false) => {
+      Object.assign(queue.current, patch);
+      setDetail((d) => (d ? ({ ...d, ...patch } as TodoItemDetail) : d));
+      if (timer.current) window.clearTimeout(timer.current);
+      timer.current = window.setTimeout(() => void flush(), immediate ? 0 : 600);
+    },
+    [flush]
+  );
+
+  const close = () => {
+    if (Object.keys(queue.current).length) void flush();
+    onClose();
+  };
+
+  useEffect(() => () => {
+    if (timer.current) window.clearTimeout(timer.current);
+  }, []);
+
+  // ── 파생 ──
+  const board = useMemo(() => boards.find((b) => b.boardId === detail?.boardId) ?? null, [boards, detail?.boardId]);
+  const column = board?.columns.find((c) => c.columnId === detail?.columnId) ?? null;
+  const canEdit = !!detail?.canEdit;
+  const remindDefault = detail && prefs ? defaultRemindAt(detail, prefs) : null;
+  const remindMode: "default" | "custom" | "off" = !detail?.remindAt ? "off" : detail.remindAt === remindDefault ? "default" : "custom";
+
+  // ── 동작 ──
+  const complete = async (done: boolean) => {
+    if (!detail) return;
+    setBusy(true);
+    try {
+      const d = await apiCall<{ item: TodoItemDetail; next: TodoItem | null }>(`/api/todo/items/${encodeURIComponent(detail.itemId)}/complete`, { method: "POST", body: JSON.stringify({ done }) });
+      setDetail(d.item);
+      onItemChanged(d.item);
+      if (d.next) onItemCreated(d.next);
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const refresh = async () => {
+    if (!detail) return;
+    try {
+      const d = await apiCall<{ item: TodoItemDetail }>(`/api/todo/items/${encodeURIComponent(detail.itemId)}`);
+      setDetail(d.item);
+      onItemChanged(d.item);
+    } catch {
+      /* 조용히 유지 */
+    }
+  };
+
+  const share = async (userId: string, role: TodoShareRole) => {
+    if (!detail) return;
+    const d = await apiCall<{ item: TodoItemDetail }>(`/api/todo/items/${encodeURIComponent(detail.itemId)}/share`, { method: "POST", body: JSON.stringify({ userId, role }) });
+    setDetail(d.item);
+    onItemChanged(d.item);
+  };
+
+  const unshare = async (userId: string) => {
+    if (!detail) return;
+    try {
+      const d = await apiCall<{ item: TodoItemDetail | null }>(`/api/todo/items/${encodeURIComponent(detail.itemId)}/share?userId=${encodeURIComponent(userId)}`, { method: "DELETE" });
+      if (d.item) {
+        setDetail(d.item);
+        onItemChanged(d.item);
+      } else {
+        // 내 공유를 내가 해제 → 더는 볼 수 없다
+        onItemDeleted(detail.itemId);
+        onClose();
+      }
+    } catch (e) {
+      toast((e as Error).message, "error");
+    }
+  };
+
+  const snooze = async (preset: string) => {
+    if (!detail) return;
+    try {
+      const d = await apiCall<{ item: TodoItemDetail }>(`/api/todo/items/${encodeURIComponent(detail.itemId)}/snooze`, { method: "POST", body: JSON.stringify({ preset }) });
+      setDetail(d.item);
+      onItemChanged(d.item);
+      toast(`알림을 ${fmtIsoShort(d.item.remindAt)} 으로 미뤘습니다`, "success");
+    } catch (e) {
+      toast((e as Error).message, "error");
+    }
+  };
+
+  const addComment = async () => {
+    const body = comment.trim();
+    if (!detail || !body) return;
+    setBusy(true);
+    try {
+      const d = await apiCall<{ comments: TodoItemDetail["comments"] }>(`/api/todo/items/${encodeURIComponent(detail.itemId)}/comments`, { method: "POST", body: JSON.stringify({ body }) });
+      setComment("");
+      const next = { ...detail, comments: d.comments, commentCount: d.comments.length };
+      setDetail(next);
+      onItemChanged(next);
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const addSubtask = async () => {
+    const t = subTitle.trim();
+    if (!detail || !t) return;
+    setBusy(true);
+    try {
+      await apiCall(`/api/todo/items`, { method: "POST", body: JSON.stringify({ title: t, parentItemId: detail.itemId }) });
+      setSubTitle("");
+      await refresh();
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggleSubtask = async (sub: TodoItem) => {
+    try {
+      await apiCall(`/api/todo/items/${encodeURIComponent(sub.itemId)}/complete`, { method: "POST", body: JSON.stringify({ done: sub.status !== "done" }) });
+      await refresh();
+    } catch (e) {
+      toast((e as Error).message, "error");
+    }
+  };
+
+  const removeSubtask = async (sub: TodoItem) => {
+    try {
+      await apiCall(`/api/todo/items/${encodeURIComponent(sub.itemId)}`, { method: "DELETE" });
+      await refresh();
+    } catch (e) {
+      toast((e as Error).message, "error");
+    }
+  };
+
+  const duplicate = async () => {
+    if (!detail) return;
+    setBusy(true);
+    try {
+      const d = await apiCall<{ item: TodoItemDetail }>(`/api/todo/items`, {
+        method: "POST",
+        body: JSON.stringify({
+          title: `${detail.title} (복사)`,
+          note: detail.note,
+          priority: detail.priority,
+          doDate: detail.doDate,
+          doTime: detail.doTime,
+          durationMin: detail.durationMin,
+          dueDate: detail.dueDate,
+          recurrence: detail.recurrence,
+          linkKind: detail.linkKind,
+          linkId: detail.linkId,
+          linkLabel: detail.linkLabel,
+          color: detail.color,
+          boardId: detail.boardId,
+          columnId: detail.columnId,
+        }),
+      });
+      onItemCreated(d.item);
+      toast("복제했습니다", "success");
+      onOpenItem(d.item.itemId);
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async () => {
+    if (!detail) return;
+    setBusy(true);
+    try {
+      await apiCall(`/api/todo/items/${encodeURIComponent(detail.itemId)}`, { method: "DELETE" });
+      onItemDeleted(detail.itemId);
+      setDeleteOpen(false);
+      onClose();
+      toast("삭제했습니다", "success");
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openChat = async () => {
+    setChatOpen(true);
+    if (rooms) return;
+    try {
+      const d = await apiCall<{ rooms: { roomId: number; name: string; roomType: string; memberCount: number }[] }>("/api/chat/rooms");
+      setRooms(d.rooms ?? []);
+    } catch (e) {
+      toast((e as Error).message, "error");
+      setRooms([]);
+    }
+  };
+
+  const sendChat = async (roomId: number) => {
+    if (!detail) return;
+    setBusy(true);
+    try {
+      await apiCall(`/api/todo/items/${encodeURIComponent(detail.itemId)}/send-chat`, { method: "POST", body: JSON.stringify({ roomId }) });
+      setChatOpen(false);
+      toast("메신저로 보냈습니다", "success");
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const commitTitle = () => {
+    const t = title.trim();
+    if (!detail || !t) {
+      setTitle(detail?.title ?? "");
+      return;
+    }
+    if (t !== detail.title) schedule({ title: t }, true);
+  };
+
+  const commitTime = () => {
+    if (!detail) return;
+    const raw = timeDraft.trim();
+    if (!raw) {
+      if (detail.doTime) schedule({ doTime: null, durationMin: null });
+      return;
+    }
+    const t = normalizeTime(raw);
+    if (!t) {
+      toast("시각은 HH:mm 으로 입력하세요.", "warn");
+      setTimeDraft(detail.doTime ?? "");
+      return;
+    }
+    setTimeDraft(t);
+    if (t !== detail.doTime) schedule({ doTime: t, doDate: detail.doDate && isValidDateString(detail.doDate) ? detail.doDate : today, durationMin: detail.durationMin ?? 30 });
+  };
+
+  const openEditor = (key: PropKey) => {
+    if (!canEdit || !detail) return;
+    if (key === "recurrence") {
+      const spec = parseRecurrence(detail.recurrence);
+      setRecDraft({
+        preset: !spec ? "" : spec.type === "monthly" && spec.day === "last" ? "monthly_last" : spec.type,
+        days: spec?.type === "weekly" ? spec.days.map((d) => TODO_WEEKDAY_CODES[d] ?? "MO") : ["MO"],
+        day: spec?.type === "monthly" && spec.day !== "last" ? String(spec.day) : "1",
+        after: spec?.type === "after" ? String(spec.days) : "7",
+      });
+    }
+    setEditing(key);
+  };
+
+  const applyRecurrence = (next: typeof recDraft) => {
+    setRecDraft(next);
+    let rule: string | null = null;
+    switch (next.preset) {
+      case "":
+        rule = null;
+        break;
+      case "daily":
+      case "weekdays":
+        rule = next.preset;
+        break;
+      case "weekly":
+        rule = next.days.length ? `weekly:${[...next.days].sort((a, b) => TODO_WEEKDAY_CODES.indexOf(a as (typeof TODO_WEEKDAY_CODES)[number]) - TODO_WEEKDAY_CODES.indexOf(b as (typeof TODO_WEEKDAY_CODES)[number])).join(",")}` : null;
+        break;
+      case "monthly": {
+        const d = Number(next.day);
+        rule = d >= 1 && d <= 31 ? `monthly:${d}` : null;
+        break;
+      }
+      case "monthly_last":
+        rule = "monthly:last";
+        break;
+      case "after": {
+        const n = Number(next.after);
+        rule = n >= 1 ? `after:${n}` : null;
+        break;
+      }
+    }
+    if (next.preset === "" || rule) schedule({ recurrence: rule });
+  };
+
+  const onRootKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.altKey && /^[1-5]$/.test(e.key) && canEdit) {
+      e.preventDefault();
+      schedule({ status: TODO_STATUSES[Number(e.key) - 1] }, true);
+    }
+  };
+
+  const dueHint = detail?.dueDate && detail.status !== "done" ? diffDays(today, detail.dueDate) : null;
+  const subDone = detail?.subtasks.filter((s) => s.status === "done").length ?? 0;
+  const subTotal = detail?.subtasks.length ?? 0;
+  const subPct = subTotal ? Math.round((subDone / subTotal) * 100) : 0;
+  const targetBoard = board;
+  const moveHint = targetBoard && targetBoard.kind !== "personal" ? `${TODO_BOARD_KIND_LABELS[targetBoard.kind]} 보드의 멤버 ${targetBoard.memberCount}명에게 보입니다` : null;
+  const otherSharedBoard = boards.find((b) => b.kind !== "personal" && b.myRole !== "viewer");
+  const shares = detail?.shares.filter((s) => s.role !== "assignee") ?? [];
+  const projectLabel = detail ? (detail.projectName ?? (detail.boardKind === "personal" ? "개인" : detail.boardName)) : "";
+
+  const saveLabel = saveState === "saving" ? "저장 중…" : saveState === "error" ? "저장하지 못했습니다" : saveState === "saved" ? `저장됨 · ${savedAt ? relativeTime(new Date(savedAt).toISOString()) : "방금"}` : "변경 시 자동 저장";
+
+  const footer = (
+    <div className="todo-df">
+      <span className="todo-save-state" data-state={saveState} aria-live="polite">
+        <i aria-hidden="true" />
+        {saveLabel}
+        {saveState === "error" && (
+          <button type="button" onClick={() => void flush()}>
+            재시도
+          </button>
+        )}
+      </span>
+    </div>
+  );
+
+  const moreMenu: CdMenuItem[] = [
+    { key: "chat", label: "메신저로 공유", icon: <MessageCircle className="w-3.5 h-3.5" />, onSelect: () => void openChat() },
+    { key: "dup", label: "복제", icon: <Copy className="w-3.5 h-3.5" />, disabled: busy, onSelect: () => void duplicate() },
+    // 보관: PATCH 에 archived 가 없어 메뉴에서 뺀다(완료 30일 뒤 자동 보관).
+    { key: "del", label: "삭제", icon: <Trash2 className="w-3.5 h-3.5" />, danger: true, disabled: !detail?.isOwner, onSelect: () => setDeleteOpen(true) },
+  ];
+
+  const kv = (label: string, key: PropKey | null, content: ReactNode, editor?: ReactNode) => (
+    <div className="todo-kv">
+      <span className="todo-kv-lb">{label}</span>
+      {key && editing === key && editor ? (
+        <PropEditor onDone={() => setEditing(null)}>{editor}</PropEditor>
+      ) : key && canEdit ? (
+        <button type="button" className="todo-kv-v" onClick={() => openEditor(key)} aria-label={`${label} 편집`}>
+          {content}
+        </button>
+      ) : (
+        <div className="todo-kv-v" data-static="true">
+          {content}
+        </div>
+      )}
+    </div>
+  );
+
+  const extraSummary = detail && (
+    <>
+      <b>우선순위</b> {TODO_PRIORITY_LABELS[detail.priority]} · <b>알림</b>{" "}
+      {detail.remindAt ? `${fmtIsoShort(detail.remindAt)}${remindMode === "default" && detail.doTime ? `(${prefs?.defaultRemindBeforeMin ?? 30}분 전)` : ""}` : "끔"} · <b>반복</b> {describeRecurrence(detail.recurrence) ?? "없음"} ·{" "}
+      <b>보드</b> {board ? (board.kind === "personal" ? "개인" : (board.projectName ?? board.name)) : "보드"} › {column ? column.name : "열 미배정"} · <b>공유</b>{" "}
+      {shares.length ? shares.map((s) => `${s.name || s.userId}(${s.role === "collaborator" ? "협업" : "참조"})`).join(", ") : "없음"}
+    </>
+  );
+
+  return (
+    <CdDrawer open={open} onClose={close} side="right" widthClass="max-w-[580px]" footer={detail ? footer : undefined} closeOnBackdrop>
+      <div className="todo-vars todo-drawer" onKeyDown={onRootKey}>
+        {loading && !detail && <div className="todo-loading">불러오는 중…</div>}
+        {loadError && !detail && (
+          <div className="flex flex-col gap-2 items-start p-4">
+            <p className="text-sm cd-error-text">{loadError}</p>
+            <CdButton variant="soft" size="sm" onClick={() => void load()}>
+              다시 시도
+            </CdButton>
+          </div>
+        )}
+        {detail && (
+          <>
+            {/* 헤더 — 좌측 5px 보드 색 띠 */}
+            <div className="todo-dh" style={tintStyle(detail.boardColor)}>
+              <TodoCheck done={detail.status === "done"} size="lg" onClick={() => void complete(detail.status !== "done")} />
+              <div className="todo-dh-main">
+                <input
+                  className="todo-detail-title"
+                  value={title}
+                  readOnly={!canEdit}
+                  aria-label="제목"
+                  maxLength={200}
+                  onChange={(e) => setTitle(e.target.value)}
+                  onBlur={commitTitle}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                      e.preventDefault();
+                      (e.target as HTMLInputElement).blur();
+                    }
+                  }}
+                />
+                <span className="todo-dh-pj" title={projectLabel}>
+                  <span>{projectLabel}</span>
+                </span>
+              </div>
+              <CdDropdown
+                trigger={() => (
+                  <button type="button" className="cd-icon-button cd-icon-button-sm inline-flex items-center justify-center" aria-label="더 보기">
+                    <MoreHorizontal className="w-4 h-4" aria-hidden="true" />
+                  </button>
+                )}
+                items={moreMenu}
+              />
+              <CdIconButton label="닫기" size="sm" onClick={close}>
+                <X className="w-4 h-4" aria-hidden="true" />
+              </CdIconButton>
+            </div>
+
+            <div className="todo-db">
+              {/* ① 핵심 2×2 */}
+              <section className="cd-card todo-fr" aria-label="핵심 정보">
+                <div className="todo-key">
+                  <div className="todo-kv">
+                    <span className="todo-kv-lb">상태</span>
+                    {canEdit ? (
+                      <CdDropdown
+                        align="left"
+                        menuWidthClass="w-40"
+                        trigger={() => (
+                          <button type="button" className="todo-kv-v" aria-label="상태 변경">
+                            <span className="todo-st" data-tone={detail.status}>
+                              {TODO_STATUS_LABELS[detail.status]}
+                            </span>
+                            <ChevronDown className="todo-car" aria-hidden="true" />
+                          </button>
+                        )}
+                        items={TODO_STATUSES.map((s, i) => ({
+                          key: s,
+                          label: `${TODO_STATUS_LABELS[s]} (Alt+${i + 1})`,
+                          icon: <span className="todo-st" data-tone={s} style={{ width: 10, height: 10, padding: 0, borderRadius: 3 }} aria-hidden="true" />,
+                          disabled: detail.status === s,
+                          onSelect: () => schedule({ status: s }, true),
+                        }))}
+                      />
+                    ) : (
+                      <div className="todo-kv-v" data-static="true">
+                        <span className="todo-st" data-tone={detail.status}>
+                          {TODO_STATUS_LABELS[detail.status]}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="todo-kv">
+                    <span className="todo-kv-lb">담당</span>
+                    {canEdit ? (
+                      <CdDropdown
+                        align="left"
+                        menuWidthClass="w-44"
+                        trigger={() => (
+                          <button type="button" className="todo-kv-v" aria-label="담당 변경">
+                            {detail.assigneeUserId ? (
+                              <>
+                                <CdAvatar name={detail.assigneeName ?? "?"} src={detail.assigneePhotoUrl} size="xs" className="todo-av" />
+                                {detail.assigneeName ?? detail.assigneeUserId}
+                              </>
+                            ) : (
+                              <span className="todo-mu">담당 없음</span>
+                            )}
+                            <ChevronDown className="todo-car" aria-hidden="true" />
+                          </button>
+                        )}
+                        items={[
+                          { key: "pick", label: detail.assigneeUserId ? "담당 변경" : "담당 지정", onSelect: () => setPickerRole("assignee") },
+                          { key: "clear", label: "담당 해제", disabled: !detail.assigneeUserId, onSelect: () => schedule({ assigneeUserId: null }, true) },
+                        ]}
+                      />
+                    ) : (
+                      <div className="todo-kv-v" data-static="true">
+                        {detail.assigneeUserId ? (
+                          <>
+                            <CdAvatar name={detail.assigneeName ?? "?"} src={detail.assigneePhotoUrl} size="xs" className="todo-av" />
+                            {detail.assigneeName ?? detail.assigneeUserId}
+                          </>
+                        ) : (
+                          <span className="todo-mu">담당 없음</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {kv(
+                    "수행 예정",
+                    "do",
+                    detail.doDate && detail.doDate.length === 10 ? (
+                      <>
+                        {longDate(detail.doDate)}
+                        {detail.doTime ? ` ${detail.doTime}` : ""}
+                        {detail.doTime && detail.durationMin ? <span className="todo-mu">· {detail.durationMin}분</span> : null}
+                      </>
+                    ) : (
+                      <span className="todo-mu">없음</span>
+                    ),
+                    <>
+                      <CdDateInput
+                        className="todo-w-date"
+                        aria-label="할 날짜"
+                        value={detail.doDate ?? ""}
+                        onChange={(v) => {
+                          if (v === "") schedule({ doDate: null, doTime: null, durationMin: null });
+                          else if (v.length === 10 && isValidDateString(v)) schedule({ doDate: v });
+                          else setDetail((d) => (d ? { ...d, doDate: v } : d));
+                        }}
+                      />
+                      <input className="cd-input todo-w-time" aria-label="시각 HH:mm" placeholder="HH:mm" value={timeDraft} onChange={(e) => setTimeDraft(e.target.value)} onBlur={commitTime} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} />
+                      {detail.doTime && (
+                        <select className="cd-select todo-w-sel" aria-label="소요 시간" value={detail.durationMin ?? 30} onChange={(e) => schedule({ durationMin: Number(e.target.value) })}>
+                          {[30, 60, 90, 120].map((m) => (
+                            <option key={m} value={m}>
+                              {m}분
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      <button
+                        type="button"
+                        className="todo-tbtn"
+                        onClick={() => {
+                          setTimeDraft("");
+                          schedule({ doDate: null, doTime: null, durationMin: null });
+                        }}
+                      >
+                        지우기
+                      </button>
+                    </>
+                  )}
+
+                  {kv(
+                    "마감",
+                    "due",
+                    detail.dueDate && detail.dueDate.length === 10 ? (
+                      <>
+                        {longDate(detail.dueDate)}
+                        {dueHint != null && dueHint > 0 && <span className="todo-due" data-tone="over">D+{dueHint}</span>}
+                        {dueHint === 0 && <span className="todo-due" data-tone="today">D-Day</span>}
+                      </>
+                    ) : (
+                      <span className="todo-mu">없음</span>
+                    ),
+                    <>
+                      <CdDateInput
+                        className="todo-w-date"
+                        aria-label="마감일"
+                        value={detail.dueDate ?? ""}
+                        onChange={(v) => {
+                          if (v === "") schedule({ dueDate: null });
+                          else if (v.length === 10 && isValidDateString(v)) schedule({ dueDate: v });
+                          else setDetail((d) => (d ? { ...d, dueDate: v } : d));
+                        }}
+                      />
+                      <button type="button" className="todo-tbtn" onClick={() => schedule({ dueDate: null })}>
+                        지우기
+                      </button>
+                    </>
+                  )}
+                </div>
+              </section>
+
+              {/* ② 관련 */}
+              <section className="cd-card todo-fr" aria-label="관련">
+                <h3>관련</h3>
+                <div className="todo-rel">
+                  {(detail.contractId || detail.projectName) && (
+                    <div className="todo-rel-it">
+                      <span className="todo-rel-ic" aria-hidden="true">
+                        <FileSignature />
+                      </span>
+                      <div className="todo-rel-tx">
+                        <div className="todo-rel-k">용역{detail.contractId ? ` · 계약 ${contractShort(detail.contractId)}` : ""}</div>
+                        <div className="todo-rel-n">
+                          {detail.projectName ?? detail.linkLabel ?? "계약"}
+                          {detail.clientName ? ` · 발주처 ${detail.clientName}` : ""}
+                        </div>
+                      </div>
+                      {detail.contractId && <a href={`/contracts?focus=${encodeURIComponent(detail.contractId)}`}>계약 열기</a>}
+                    </div>
+                  )}
+                  {detail.linkKind === "facility" && (
+                    <div className="todo-rel-it">
+                      <span className="todo-rel-ic" aria-hidden="true">
+                        <Building2 />
+                      </span>
+                      <div className="todo-rel-tx">
+                        <div className="todo-rel-k">사업장</div>
+                        <div className="todo-rel-n">{detail.linkLabel ?? detail.linkId ?? "사업장"}</div>
+                      </div>
+                      {linkHref("facility", detail.linkId) && <a href={linkHref("facility", detail.linkId) ?? "#"}>사업장 열기</a>}
+                    </div>
+                  )}
+                  {detail.linkKind !== "facility" && board?.facilityId && (
+                    <div className="todo-rel-it">
+                      <span className="todo-rel-ic" aria-hidden="true">
+                        <Building2 />
+                      </span>
+                      <div className="todo-rel-tx">
+                        <div className="todo-rel-k">사업장</div>
+                        <div className="todo-rel-n">보드에 연결된 사업장</div>
+                      </div>
+                      <a href={`/facilities?focus=${encodeURIComponent(board.facilityId)}`}>사업장 열기</a>
+                    </div>
+                  )}
+                  {detail.linkKind && detail.linkKind !== "facility" && detail.linkKind !== "contract" && (
+                    <div className="todo-rel-it">
+                      <span className="todo-rel-ic" aria-hidden="true">
+                        <Link2 />
+                      </span>
+                      <div className="todo-rel-tx">
+                        <div className="todo-rel-k">{TODO_LINK_KIND_LABELS[detail.linkKind]}</div>
+                        <div className="todo-rel-n">{detail.linkLabel ?? detail.linkId ?? ""}</div>
+                      </div>
+                      {linkHref(detail.linkKind, detail.linkId) && (
+                        <a href={linkHref(detail.linkKind, detail.linkId) ?? "#"} target={detail.linkKind === "url" ? "_blank" : undefined} rel="noreferrer">
+                          열기 <ExternalLink className="inline w-3 h-3" aria-hidden="true" />
+                        </a>
+                      )}
+                    </div>
+                  )}
+                  {canEdit && (
+                    <div className="flex items-center gap-3">
+                      <button type="button" className="todo-rel-add" onClick={() => setLinkOpen(true)}>
+                        {detail.linkKind ? "연결 변경" : "+ 계약·사업장·결재 문서·영업·업무추진계획·링크 연결"}
+                      </button>
+                      {detail.linkKind && (
+                        <button type="button" className="todo-rel-add" onClick={() => schedule({ linkKind: null, linkId: null, linkLabel: null }, true)}>
+                          연결 해제
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  {!canEdit && !detail.linkKind && !detail.contractId && !detail.projectName && <span className="todo-mu text-[12.5px]">연결 없음</span>}
+                </div>
+              </section>
+
+              {/* ③ 메모 */}
+              <section className="cd-card todo-fr" aria-label="메모">
+                <h3>메모</h3>
+                <textarea
+                  className="todo-note"
+                  aria-label="메모"
+                  placeholder={canEdit ? "메모를 적으면 자동 저장됩니다" : "메모 없음"}
+                  value={note}
+                  readOnly={!canEdit}
+                  rows={Math.max(2, Math.min(12, note.split("\n").length + 1))}
+                  onChange={(e) => {
+                    setNote(e.target.value);
+                    schedule({ note: e.target.value.trim() ? e.target.value : null });
+                  }}
+                />
+              </section>
+
+              {/* ④ 하위 작업 */}
+              <section className="cd-card todo-fr" aria-label="하위 작업">
+                <h3>
+                  하위 작업
+                  {subTotal > 0 && (
+                    <>
+                      <span className="todo-sec-n">
+                        {subDone}/{subTotal} · {subPct}%
+                      </span>
+                      <span className="todo-segbar" aria-hidden="true">
+                        {(subTotal <= 10
+                          ? detail.subtasks.map((s) => (s.status === "done" ? "done" : s.status === "doing" || s.status === "review" ? "doing" : undefined))
+                          : Array.from({ length: 10 }, (_, i) => (i < Math.round((subDone / subTotal) * 10) ? "done" : undefined))
+                        ).map((s, i) => (
+                          <i key={i} data-s={s} />
+                        ))}
+                      </span>
+                    </>
+                  )}
+                </h3>
+                {detail.subtasks.map((s) => {
+                  const st = s.status === "done" ? "done" : s.status === "doing" || s.status === "review" ? "doing" : undefined;
+                  const aux = s.dueDate ? (s.dueDate === today ? "오늘" : md(s.dueDate)) : s.assigneeName;
+                  return (
+                    <div key={s.itemId} className="todo-sr" data-done={s.status === "done" ? "true" : undefined}>
+                      <TodoCheck done={s.status === "done"} size="sm" state={st} onClick={() => void toggleSubtask(s)} />
+                      <span className="todo-sr-t">{s.title}</span>
+                      {st && (
+                        <span className="todo-sc" data-s={st}>
+                          {st === "done" ? "완료" : "진행 중"}
+                        </span>
+                      )}
+                      {aux && <span className="todo-sd">{aux}</span>}
+                      {canEdit && (
+                        <button type="button" className="todo-sr-del" aria-label={`${s.title} 삭제`} onClick={() => void removeSubtask(s)}>
+                          <X aria-hidden="true" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+                {canEdit && (
+                  <div className="todo-sr" data-add="true">
+                    <TodoCheck done={false} size="sm" dashed />
+                    <input
+                      value={subTitle}
+                      placeholder="하위 작업 추가 — Enter"
+                      aria-label="하위 작업 추가"
+                      disabled={busy}
+                      onChange={(e) => setSubTitle(e.target.value)}
+                      onCompositionStart={() => {
+                        composing.current = true;
+                      }}
+                      onCompositionEnd={() => {
+                        composing.current = false;
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !composing.current && !e.nativeEvent.isComposing) {
+                          e.preventDefault();
+                          void addSubtask();
+                        }
+                      }}
+                    />
+                  </div>
+                )}
+              </section>
+
+              {/* ⑤ 댓글 */}
+              <section className="cd-card todo-fr" aria-label="댓글">
+                <h3>
+                  댓글 {detail.comments.length > 0 && <span className="todo-sec-n">{detail.comments.length}</span>}
+                </h3>
+                {detail.comments.map((c) => (
+                  <div key={c.commentId} className="todo-cm">
+                    <CdAvatar name={c.userName ?? "?"} src={c.userPhotoUrl} size="sm" className="todo-av" />
+                    <div className="todo-cm-body">
+                      <div className="todo-cm-who">
+                        <b>{c.userName ?? c.userId}</b>
+                        {relativeTime(c.createdAt)}
+                      </div>
+                      <p>{renderMentions(c.body)}</p>
+                    </div>
+                  </div>
+                ))}
+                <div className="todo-cin">
+                  <textarea
+                    rows={1}
+                    value={comment}
+                    placeholder="댓글 쓰기 · @이름으로 멘션"
+                    aria-label="댓글"
+                    disabled={busy}
+                    onChange={(e) => setComment(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                        e.preventDefault();
+                        void addComment();
+                      }
+                    }}
+                  />
+                  <span className="todo-kbd" aria-hidden="true">
+                    Ctrl ⏎
+                  </span>
+                </div>
+              </section>
+
+              {/* ⑥ 부가 설정(접힘) */}
+              <FoldSection label="부가 설정" summary={extraSummary} open={extraOpen} onToggle={() => setExtraOpen((v) => !v)}>
+                {/* 우선순위 */}
+                <div className="todo-pr">
+                  <span className="todo-pr-label">우선순위</span>
+                  <div className="todo-seg" role="radiogroup" aria-label="우선순위">
+                    {([0, 1, 2, 3] as TodoPriority[]).map((p) => (
+                      <button key={p} type="button" role="radio" aria-checked={detail.priority === p} className="cd-choice" data-active={detail.priority === p ? "true" : undefined} disabled={!canEdit} onClick={() => schedule({ priority: p }, true)}>
+                        {TODO_PRIORITY_LABELS[p]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 알림 */}
+                <div className="todo-pr" data-top={editing === "remind" ? "true" : undefined}>
+                  <span className="todo-pr-label">알림</span>
+                  {editing === "remind" ? (
+                    <PropEditor onDone={() => setEditing(null)}>
+                      <select
+                        className="cd-select todo-w-sel"
+                        aria-label="알림 방식"
+                        value={remindMode}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (v === "off") schedule({ remindAt: null });
+                          else if (v === "default") schedule({ remindAt: remindDefault });
+                          else schedule({ remindAt: detail.remindAt ?? remindDefault ?? new Date(Date.now() + 3600_000).toISOString() });
+                        }}
+                      >
+                        <option value="default" disabled={!remindDefault}>
+                          기본{remindDefault ? ` (${fmtIsoShort(remindDefault)})` : " — 날짜 필요"}
+                        </option>
+                        <option value="custom">사용자 지정</option>
+                        <option value="off">끔</option>
+                      </select>
+                      {remindMode === "custom" && (
+                        <input
+                          type="datetime-local"
+                          className="cd-input todo-w-grow"
+                          aria-label="알림 시각"
+                          value={isoToLocalInput(detail.remindAt)}
+                          onChange={(e) => {
+                            const d = new Date(e.target.value);
+                            if (!Number.isNaN(d.getTime())) schedule({ remindAt: d.toISOString() });
+                          }}
+                        />
+                      )}
+                      {detail.remindAt && (
+                        <span className="todo-snooze" aria-label="스누즈">
+                          {TODO_SNOOZE_PRESETS.map((p) => (
+                            <button key={p.key} type="button" className="todo-tbtn" onClick={() => void snooze(p.key)}>
+                              {p.label}
+                            </button>
+                          ))}
+                        </span>
+                      )}
+                    </PropEditor>
+                  ) : canEdit ? (
+                    <button type="button" className="todo-pr-val" onClick={() => openEditor("remind")} aria-label="알림 편집">
+                      {detail.remindAt ? (
+                        <>
+                          {fmtIsoShort(detail.remindAt)}
+                          <span className="todo-mu">
+                            · {remindMode === "default" ? (detail.doTime ? `${prefs?.defaultRemindBeforeMin ?? 30}분 전` : "기본") : "사용자 지정"}
+                            {detail.snoozedUntil ? " · 스누즈" : ""}
+                            {detail.remindSentAt ? " · 발송됨" : ""}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="todo-mu">끔</span>
+                      )}
+                    </button>
+                  ) : (
+                    <div className="todo-pr-val" data-static="true">
+                      {detail.remindAt ? fmtIsoShort(detail.remindAt) : <span className="todo-mu">끔</span>}
+                    </div>
+                  )}
+                </div>
+
+                {/* 반복 */}
+                <div className="todo-pr" data-top={editing === "recurrence" ? "true" : undefined}>
+                  <span className="todo-pr-label">반복</span>
+                  {editing === "recurrence" ? (
+                    <PropEditor onDone={() => setEditing(null)}>
+                      <select className="cd-select todo-w-sel" aria-label="반복" value={recDraft.preset} onChange={(e) => applyRecurrence({ ...recDraft, preset: e.target.value })}>
+                        <option value="">없음</option>
+                        {TODO_RECURRENCE_PRESETS.map((p) => (
+                          <option key={p.key} value={p.key}>
+                            {p.label}
+                          </option>
+                        ))}
+                      </select>
+                      {recDraft.preset === "weekly" && (
+                        <span className="todo-weekday-grid" role="group" aria-label="요일">
+                          {TODO_WEEKDAY_CODES.map((c, i) => (
+                            <button
+                              key={c}
+                              type="button"
+                              className="cd-choice"
+                              data-active={recDraft.days.includes(c) ? "true" : undefined}
+                              aria-pressed={recDraft.days.includes(c)}
+                              onClick={() => applyRecurrence({ ...recDraft, days: recDraft.days.includes(c) ? recDraft.days.filter((d) => d !== c) : [...recDraft.days, c] })}
+                            >
+                              {TODO_WEEKDAY_LABELS[i]}
+                            </button>
+                          ))}
+                        </span>
+                      )}
+                      {recDraft.preset === "monthly" && (
+                        <>
+                          <span className="todo-mu">매월</span>
+                          <input className="cd-input todo-w-num" inputMode="numeric" aria-label="일" value={recDraft.day} onChange={(e) => applyRecurrence({ ...recDraft, day: e.target.value })} />
+                          <span className="todo-mu">일</span>
+                        </>
+                      )}
+                      {recDraft.preset === "after" && (
+                        <>
+                          <span className="todo-mu">완료 후</span>
+                          <input className="cd-input todo-w-num" inputMode="numeric" aria-label="일수" value={recDraft.after} onChange={(e) => applyRecurrence({ ...recDraft, after: e.target.value })} />
+                          <span className="todo-mu">일</span>
+                        </>
+                      )}
+                    </PropEditor>
+                  ) : canEdit ? (
+                    <button type="button" className="todo-pr-val" onClick={() => openEditor("recurrence")} aria-label="반복 편집">
+                      {describeRecurrence(detail.recurrence) ?? <span className="todo-mu">없음</span>}
+                    </button>
+                  ) : (
+                    <div className="todo-pr-val" data-static="true">
+                      {describeRecurrence(detail.recurrence) ?? <span className="todo-mu">없음</span>}
+                    </div>
+                  )}
+                </div>
+
+                {/* 보드 · 열 */}
+                <div className="todo-pr" data-top={editing === "board" ? "true" : undefined}>
+                  <span className="todo-pr-label">보드</span>
+                  {editing === "board" ? (
+                    <PropEditor onDone={() => setEditing(null)}>
+                      <select
+                        className="cd-select todo-w-sel"
+                        aria-label="보드"
+                        value={detail.boardId}
+                        disabled={!detail.isOwner}
+                        onChange={(e) => {
+                          const b = boards.find((x) => x.boardId === e.target.value);
+                          if (!b) return;
+                          schedule({ boardId: b.boardId, columnId: null }, true);
+                        }}
+                      >
+                        {boards
+                          .filter((b) => b.myRole !== "viewer" || b.boardId === detail.boardId)
+                          .map((b) => (
+                            <option key={b.boardId} value={b.boardId}>
+                              {b.kind === "personal" ? "개인 보드" : `${TODO_BOARD_KIND_LABELS[b.kind]} · ${b.projectName ?? b.name}`}
+                            </option>
+                          ))}
+                      </select>
+                      <select className="cd-select todo-w-sel" aria-label="열" value={detail.columnId ?? ""} onChange={(e) => schedule({ columnId: e.target.value || null }, true)}>
+                        <option value="">열 미배정</option>
+                        {(board?.columns ?? []).map((c) => (
+                          <option key={c.columnId} value={c.columnId}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                      {!detail.isOwner && <span className="todo-mu">다른 보드로 옮기는 것은 만든 사람만 할 수 있습니다</span>}
+                    </PropEditor>
+                  ) : canEdit ? (
+                    <button type="button" className="todo-pr-val" onClick={() => openEditor("board")} aria-label="보드 편집">
+                      {board ? (board.kind === "personal" ? "개인" : (board.projectName ?? board.name)) : "보드"}
+                      <span className="todo-mu">›</span>
+                      {column ? column.name : <span className="todo-mu">열 미배정</span>}
+                    </button>
+                  ) : (
+                    <div className="todo-pr-val" data-static="true">
+                      {board ? (board.kind === "personal" ? "개인" : (board.projectName ?? board.name)) : "보드"}
+                      <span className="todo-mu">›</span>
+                      {column ? column.name : <span className="todo-mu">열 미배정</span>}
+                    </div>
+                  )}
+                </div>
+                {(moveHint || otherSharedBoard) && (
+                  <div className="todo-pr">
+                    <span className="todo-pr-label" />
+                    <div className="todo-pr-val" data-static="true">
+                      <span className="todo-mu">{moveHint ?? `${TODO_BOARD_KIND_LABELS[otherSharedBoard!.kind]} 보드로 이동하면 멤버 ${otherSharedBoard!.memberCount}명에게 보입니다`}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* 공유 */}
+                <div className="todo-pr">
+                  <span className="todo-pr-label">공유</span>
+                  <div className="todo-pr-val" data-static="true">
+                    {shares.map((s) => (
+                      <span key={s.userId} className="todo-chip">
+                        <CdAvatar name={s.name || "?"} src={s.photoUrl} size="xs" className="todo-av" />
+                        {s.name || s.userId}
+                        {canEdit ? (
+                          <select aria-label={`${s.name} 역할`} value={s.role} onChange={(e) => void share(s.userId, e.target.value as TodoShareRole).catch((err: Error) => toast(err.message, "error"))}>
+                            <option value="collaborator">협업</option>
+                            <option value="watcher">참조</option>
+                          </select>
+                        ) : (
+                          <span className="todo-chip-role">{s.role === "collaborator" ? "협업" : "참조"}</span>
+                        )}
+                        {(detail.isOwner || s.userId === myUserId) && (
+                          <button type="button" aria-label={`${s.name} 공유 해제`} onClick={() => void unshare(s.userId)}>
+                            <X aria-hidden="true" />
+                          </button>
+                        )}
+                      </span>
+                    ))}
+                    {canEdit && (
+                      <button type="button" className="todo-chip" data-add="true" onClick={() => setPickerRole("watcher")}>
+                        + 추가
+                      </button>
+                    )}
+                    {!canEdit && shares.length === 0 && <span className="todo-mu">없음</span>}
+                  </div>
+                </div>
+              </FoldSection>
+
+              {/* ⑦ 활동(접힘) */}
+              <FoldSection
+                label="활동"
+                count={detail.activity.length}
+                summary={detail.activity.slice(0, 2).map((a) => `${relativeTime(a.createdAt)} ${a.userName ?? "시스템"} · ${describeActivity(a)}`).join(" · ") || "기록 없음"}
+                open={activityOpen}
+                onToggle={() => setActivityOpen((v) => !v)}
+              >
+                {detail.activity.map((a) => (
+                  <div key={a.activityId} className="todo-activity">
+                    <span className="todo-activity-when">{relativeTime(a.createdAt)}</span>
+                    <span>
+                      {a.userName ?? "시스템"} · {describeActivity(a)}
+                    </span>
+                  </div>
+                ))}
+              </FoldSection>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* 사람 추가 */}
+      <PeoplePickerModal
+        open={!!pickerRole}
+        title={pickerRole === "assignee" ? "담당 지정" : "공유 추가"}
+        withRole={pickerRole !== "assignee"}
+        defaultRole={pickerRole ?? "watcher"}
+        excludeUserIds={[detail?.ownerUserId ?? "", ...(detail?.shares.map((s) => s.userId) ?? [])].filter(Boolean)}
+        busy={busy}
+        onClose={() => setPickerRole(null)}
+        onPick={async (people, role) => {
+          setBusy(true);
+          try {
+            if (pickerRole === "assignee") {
+              await share(people[0].userId, "assignee");
+              for (const p of people.slice(1)) await share(p.userId, "collaborator");
+            } else {
+              for (const p of people) await share(p.userId, role);
+            }
+            setPickerRole(null);
+          } catch (e) {
+            toast((e as Error).message, "error");
+          } finally {
+            setBusy(false);
+          }
+        }}
+      />
+
+      {/* 연결 선택 */}
+      <LinkPickerModal
+        open={linkOpen}
+        initialKind={detail?.linkKind ?? null}
+        onClose={() => setLinkOpen(false)}
+        onPick={(pick) => {
+          schedule({ linkKind: pick.linkKind, linkId: pick.linkId, linkLabel: pick.linkLabel }, true);
+          setLinkOpen(false);
+        }}
+      />
+
+      {/* 메신저 방 선택 */}
+      <CdModal open={chatOpen} onClose={() => setChatOpen(false)} title="메신저로 공유" size="sm">
+        {rooms == null ? (
+          <div className="todo-loading">대화방을 불러오는 중…</div>
+        ) : rooms.length === 0 ? (
+          <p className="text-sm cd-text-muted">참여 중인 대화방이 없습니다.</p>
+        ) : (
+          <div className="todo-room-list">
+            {rooms.map((r) => (
+              <button key={r.roomId} type="button" className="todo-room" disabled={busy} onClick={() => void sendChat(r.roomId)}>
+                <CdAvatar name={r.name} size="xs" />
+                <span className="todo-room-name">{r.name}</span>
+                <small>{r.roomType === "dm" ? "1:1" : `${r.memberCount}명`}</small>
+              </button>
+            ))}
+          </div>
+        )}
+      </CdModal>
+
+      {/* 삭제 확인 */}
+      <CdModal
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        title="할 일 삭제"
+        size="sm"
+        footer={
+          <>
+            <CdButton variant="ghost" onClick={() => setDeleteOpen(false)}>
+              취소
+            </CdButton>
+            <CdButton variant="danger" loading={busy} onClick={() => void remove()}>
+              삭제
+            </CdButton>
+          </>
+        }
+      >
+        <p className="text-sm cd-text">'{detail?.title}' 을(를) 삭제합니다. 하위 작업·댓글·활동 기록이 함께 삭제되며 되돌릴 수 없습니다.</p>
+      </CdModal>
+    </CdDrawer>
+  );
+}

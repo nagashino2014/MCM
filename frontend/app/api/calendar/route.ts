@@ -1,5 +1,5 @@
-// 일정 메뉴(G6-C) 통합 조회 — ?month=YYYY-MM&tags=self,dept,sales,refs,vehicle,meeting,interview
-// 휴가/출장/교육(전자결재 상신 문서) + 영업 활동 + 법인차량 + 직접 등록 일정(회의·면접·미팅, 219)을 한 번에 내려준다.
+// 일정 메뉴(G6-C) 통합 조회 — ?month=YYYY-MM&tags=self,dept,sales,refs,vehicle,meeting,interview,todo
+// 휴가/출장/교육(전자결재 상신 문서) + 영업 활동 + 법인차량 + 직접 등록 일정(회의·면접·미팅, 219) + 내 할 일(274)을 한 번에 내려준다.
 // sales 태그는 sales.view 부분 판정 — 권한이 없으면 403 대신 sales 만 제외하고
 // salesDenied:true 를 내려 화면이 태그를 비활성 표시한다(홈 위젯 salesDenied 패턴의 서버판).
 // access — 현재 사용자의 회의/면접 등록 권한(날짜 셀 등록 메뉴·편집 버튼 노출용).
@@ -9,6 +9,7 @@ import { authErrorToResponse, requireSession } from "@/lib/auth/guards";
 import { hasPermission } from "@/lib/auth/rbac";
 import { listCalendarEvents } from "@/lib/calendar/queries";
 import { loadEntryAccess } from "@/lib/calendar/entries";
+import { listTodoCalendarEvents } from "@/lib/todo/calendar";
 import { CALENDAR_TAG_KEYS, type CalendarTagKey } from "@/lib/calendar/types";
 
 export const runtime = "nodejs";
@@ -34,6 +35,14 @@ export async function GET(req: Request) {
     ]);
 
     const events = await listCalendarEvents({ userId: ctx.userId, month, tags, includeSales, access });
+    // 할 일(todo) 태그 — 내 할 일을 같은 이벤트 목록에 병합. 표 미생성 등 실패해도 다른 태그는 살린다.
+    if (tags.includes("todo")) {
+      try {
+        events.push(...(await listTodoCalendarEvents(ctx.userId, month)));
+      } catch (e) {
+        console.error("[calendar] 할 일 조회 실패", e);
+      }
+    }
     return NextResponse.json({
       events,
       salesDenied: wantsSales && !includeSales,

@@ -15,7 +15,7 @@ import {
   StatTile,
   TileGrid,
 } from '@/components/ui';
-import { HOME_WIDGET_NODES, MOBILE_WIDGET_ORDER } from '@/components/home/widgets';
+import { HOME_WIDGET_NODES, MOBILE_WIDGET_ORDER, TodoTodayWidget } from '@/components/home/widgets';
 import { WeatherWidget } from '@/components/home/weather/WeatherWidget';
 import { useApi } from '@/lib/use-api';
 import { useAuth } from '@/lib/auth-context';
@@ -429,6 +429,9 @@ export default function HomeScreen() {
               </View>
             )}
           </Card>
+
+          {/* 오늘 할 일(H12) — 기존 카드 순서 뒤에 둔다. 웹 available 목록에 todoToday 가 없어 레지스트리 대신 직접 렌더. */}
+          <TodoTodayWidget />
         </View>
       </ScrollView>
     </SafeAreaView>

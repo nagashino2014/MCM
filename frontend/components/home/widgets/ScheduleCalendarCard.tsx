@@ -97,7 +97,8 @@ export function ScheduleCalendarCard() {
   const salesOn = tag === "sales";
   // 차량도 같은 인적 일정 API 를 쓴다(scope=vehicle — 출장신청서 법인차량·직접 예약, G6-C).
   const leaveScope = tag === "self" || tag === "dept" || tag === "refs" || tag === "vehicle" ? tag : "";
-  const entryTag = tag === "meeting" || tag === "interview" ? tag : "";
+  // 할 일(todo)도 회의·면접처럼 /api/calendar 통합 조회에서 온다(274).
+  const entryTag = tag === "meeting" || tag === "interview" || tag === "todo" ? tag : "";
 
   // 저장된 태그·참조 인원 로드.
   useEffect(() => {
@@ -214,7 +215,7 @@ export function ScheduleCalendarCard() {
     };
   }, [month, leaveScope]);
 
-  // 회의·면접 — 서버가 참석자·관리자 열람 범위를 판정한 통합 일정만 표시한다.
+  // 회의·면접·할 일 — 서버가 참석자·관리자·담당 열람 범위를 판정한 통합 일정만 표시한다.
   useEffect(() => {
     setCalendarEntries([]);
     if (!entryTag) return;

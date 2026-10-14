@@ -113,6 +113,9 @@ function RootNavigator() {
         {/* 사내 설문(참여) — 목록·응답 모두 자체 헤더를 그린다 */}
         <Stack.Screen name="surveys" />
         <Stack.Screen name="survey/[surveyId]" />
+        {/* 할 일(To-do) — 목록("할 일")·상세("할 일 상세") 모두 Screen 자체 헤더(건수 부제·저장 상태). */}
+        <Stack.Screen name="todo/index" />
+        <Stack.Screen name="todo/[itemId]" />
       </Stack>
     </>
   );

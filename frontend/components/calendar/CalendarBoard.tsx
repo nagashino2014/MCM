@@ -7,6 +7,7 @@
 // 데이터: GET /api/calendar?month&tags (스케줄명은 서버 조립, access 동봉) / 설정: /api/calendar/prefs.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { CalendarCog, Users } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
@@ -49,6 +50,7 @@ export function CalendarBoard() {
 function CalendarBoardInner() {
   const { theme } = useCdashTheme();
   const { toast } = useCdToast();
+  const router = useRouter();
   const now = new Date();
   const [cur, setCur] = useState({ y: now.getFullYear(), m: now.getMonth() });
   const [tags, setTags] = useState<CalendarTagKey[]>([...DEFAULT_CALENDAR_PREFS.tags]);
@@ -74,7 +76,13 @@ function CalendarBoardInner() {
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (d && !cancelled) {
-          if (Array.isArray(d.tags) && d.tags.length) setTags(d.tags);
+          // ?tags=todo 처럼 링크로 넘어온 태그는 이번 화면에만 합친다(설정에는 저장하지 않음 — /todo 캘린더 탭 진입).
+          const linked = (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("tags") ?? "" : "")
+            .split(",")
+            .map((t) => t.trim())
+            .filter((t): t is CalendarTagKey => (CALENDAR_TAG_KEYS as readonly string[]).includes(t));
+          const base: CalendarTagKey[] = Array.isArray(d.tags) && d.tags.length ? d.tags : [...DEFAULT_CALENDAR_PREFS.tags];
+          if (linked.length || (Array.isArray(d.tags) && d.tags.length)) setTags(Array.from(new Set([...base, ...linked])));
           if (d.refs) setRefs(d.refs);
         }
       })
@@ -159,11 +167,16 @@ function CalendarBoardInner() {
   );
 
   const onEventClick = (ev: CalendarEvent) => {
+    // 할 일(274)은 entryId 가 itemId — 직접 등록 일정 모달이 아니라 /todo 상세로 간다.
+    if (ev.kind === "todo") {
+      if (ev.entryId) router.push(`/todo?item=${encodeURIComponent(ev.entryId)}`);
+      return;
+    }
     if (ev.entryId) void openEntry(ev.entryId);
     else focusEvent(ev);
   };
 
-  /** 표시 순서는 카탈로그 순서(본인→부서→영업→선택→차량→회의→면접)로 고정한다. */
+  /** 표시 순서는 카탈로그 순서(본인→부서→영업→선택→차량→회의→면접→할 일)로 고정한다. */
   const orderedTags = useMemo(() => CALENDAR_TAG_KEYS.filter((k) => tags.includes(k)), [tags]);
 
   const refsSummary = refs.all

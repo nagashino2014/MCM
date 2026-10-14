@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { Avatar, Screen } from '@/components/ui';
 import { useAuth } from '@/lib/auth-context';
+import { useApi } from '@/lib/use-api';
 import { useTheme } from '@/theme/useTheme';
 
 const ROLE_LABEL: Record<string, string> = {
@@ -19,6 +20,9 @@ export default function MoreScreen() {
   const { user } = useAuth();
   const { c, dark } = useTheme();
   const purple = dark ? '#a78bfa' : '#7a5fd0';
+  // 할 일 부제 "오늘 N건 · 지연 N" — 홈 위젯과 같은 /api/home/todo-today(캐시).
+  const todo = useApi<{ counts: { overdue: number; today: number } }>('/api/home/todo-today', { cache: true });
+  const todoSub = todo.data ? `오늘 ${todo.data.counts.today}건 · 지연 ${todo.data.counts.overdue}` : '오늘 · 예정 · 보드';
 
   const sections: {
     label: string;
@@ -90,6 +94,13 @@ export default function MoreScreen() {
     {
       label: '업무',
       items: [
+        {
+          icon: 'checkmark-done-outline',
+          tone: c.primary,
+          title: '할 일',
+          subtitle: todoSub,
+          onPress: () => router.push('/todo'),
+        },
         {
           icon: 'paper-plane-outline',
           tone: c.accent,

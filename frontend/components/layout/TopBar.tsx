@@ -7,7 +7,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { ClipboardCheck, LogOut, Mail, Menu, Moon, Plus, Search, Sun } from "lucide-react";
+import { ClipboardCheck, ListChecks, LogOut, Mail, Menu, Moon, Plus, Search, Sun } from "lucide-react";
 import type { Role } from "@/config/menu";
 import type { CdTheme } from "@/components/cdash/useCdashTheme";
 import { CdAvatar } from "@/components/cdash/CdAvatar";
@@ -31,6 +31,47 @@ const ROLE_LABEL: Record<Role, string> = {
   editor: "편집자",
   viewer: "조회자",
 };
+
+/** 영업 하위 경로 중 프로젝트 상세가 아닌 것(/sales/<projectId> 만 연결 대상). */
+const SALES_NON_PROJECT = new Set(["bids", "contacts", "intel", "rag"]);
+
+/**
+ * "새 할 일" 진입 URL(docs/todo-kanban-blueprint.md §7.1 Autofill) — 계약·사업장·영업·결재 상세를 보고 있으면
+ * 그 링크(linkKind/linkId/linkLabel)를 덧붙여 /todo 퀵애드 모달이 연결을 자동 첨부하게 한다.
+ * 클릭 시점에 window.location 을 읽는다(useSearchParams 는 Suspense 경계를 요구해 전역 탑바에 두지 않는다).
+ */
+function todoNewHref(): string {
+  const params = new URLSearchParams({ new: "1" });
+  if (typeof window === "undefined") return `/todo?${params.toString()}`;
+  const { pathname } = window.location;
+  const query = new URLSearchParams(window.location.search);
+  let linkKind: string | null = null;
+  let linkId: string | null = null;
+  if (pathname.startsWith("/contracts")) {
+    linkKind = "contract";
+    linkId = query.get("contract");
+  } else if (pathname.startsWith("/facilities")) {
+    linkKind = "facility";
+    linkId = query.get("focus");
+  } else if (pathname.startsWith("/sales/")) {
+    const seg = pathname.split("/")[2] ?? "";
+    if (seg && !SALES_NON_PROJECT.has(seg)) {
+      linkKind = "sales_project";
+      linkId = seg;
+    }
+  } else if (pathname.startsWith("/approval")) {
+    linkKind = "approval_doc";
+    linkId = query.get("docId");
+  }
+  if (linkKind && linkId) {
+    params.set("linkKind", linkKind);
+    params.set("linkId", linkId);
+    const heading = document.querySelector("main h1")?.textContent?.trim();
+    const label = (heading || document.title).trim().slice(0, 80);
+    if (label) params.set("linkLabel", label);
+  }
+  return `/todo?${params.toString()}`;
+}
 
 export function TopBar({ userName, userEmail, role, theme, onToggleTheme, onOpenNav, navOpen = false }: TopBarProps) {
   const router = useRouter();
@@ -115,6 +156,7 @@ export function TopBar({ userName, userEmail, role, theme, onToggleTheme, onOpen
         items={[
           { key: "mail", label: "새 메일", icon: <Mail className="w-4 h-4" />, onSelect: () => router.push("/mail/compose") },
           { key: "draft", label: "새 기안", icon: <ClipboardCheck className="w-4 h-4" />, onSelect: () => router.push("/approval/draft") },
+          { key: "todo", label: "새 할 일", icon: <ListChecks className="w-4 h-4" />, onSelect: () => router.push(todoNewHref()) },
         ]}
       />
 

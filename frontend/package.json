@@ -6,6 +6,7 @@
   "scripts": {
     "test:menu-route": "node scripts/test-menu-route.mjs",
     "test:facility-quality": "node scripts/test-facility-quality.mjs",
+    "test:todo": "node scripts/test-todo.mjs",
     "dev": "next dev",
     "dev:aws": "powershell -ExecutionPolicy Bypass -File ../scripts/dev-frontend-aws.ps1",
     "build": "next build",
@@ -19,6 +20,7 @@
     "@aws-sdk/client-sesv2": "^3.1106.0",
     "@aws-sdk/client-sqs": "^3.1048.0",
     "@aws-sdk/s3-request-presigner": "^3.1103.0",
+    "@hello-pangea/dnd": "^18.0.1",
     "@napi-rs/canvas": "0.1.97",
     "@pdf-lib/fontkit": "^1.1.1",
     "@types/qrcode": "^1.5.5",

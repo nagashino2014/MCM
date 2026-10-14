@@ -22,6 +22,7 @@ export async function register() {
     __fileRetentionTimer?: ReturnType<typeof setInterval>;
     __cardSlipTimer?: ReturnType<typeof setInterval>;
     __aiBudgetTimer?: ReturnType<typeof setInterval>;
+    __todoRemindTimer?: ReturnType<typeof setInterval>;
   };
   const port = process.env.PORT ?? "3000";
   const callTick = async (path: string, tag: string) => {
@@ -78,6 +79,13 @@ export async function register() {
     const budgetTick = () => callTick("/api/internal/ai-budget-tick", "ai-budget");
     g.__aiBudgetTimer = setInterval(budgetTick, 60 * 60 * 1000);
     setTimeout(budgetTick, 150 * 1000); // 기동 직후 1회
+  }
+
+  // 할 일 알림(마이그 274) — 5분마다 예정/마감 리마인드·아침 요약·완료 30일 보관(라우트가 dedup·KST 일 1회 판정).
+  if (!g.__todoRemindTimer) {
+    const todoTick = () => callTick("/api/internal/todo-remind-tick", "todo-remind");
+    g.__todoRemindTimer = setInterval(todoTick, 5 * 60 * 1000);
+    setTimeout(todoTick, 75 * 1000); // 기동 직후 1회
   }
 
   // 코넨사인 메일 수신(P2) — 1분마다 SQS 폴링(큐 미생성 시 no-op). 처리 멱등.

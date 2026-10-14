@@ -7,7 +7,13 @@ import { AutoDateInput } from "@/components/ui/AutoDateInput";
 import { IndustryOptionsEditorButton, useContractIndustryOptions } from "@/components/contracts/IndustryOptionsEditor";
 import { CONTRACT_SERVICE_OPTIONS } from "@/lib/contracts/service-options";
 import { RateCardEditor, type RateCardData, type RateCardRound } from "@/components/contracts/RateCardEditor";
-import { createRateCard, upgradeRateCard, type RateCardStageOption } from "@/lib/contracts/rate-card";
+import {
+  createRateCard,
+  roundStageOptions,
+  upgradeRateCard,
+  validPayments,
+  type RateCardStageOption,
+} from "@/lib/contracts/rate-card";
 import {
   ORDERING_SUBJECT_OPTIONS,
   ORDERING_SUBJECT_SITE_DIRECT,
@@ -458,10 +464,45 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
         setServiceCategory(nextServiceCategory);
       }
 
+      // 단가 차수표에는 있지만 아직 청구·수금 단계로 옮겨지지 않은 차수(2026-10-14 사용자 리포트 —
+      // 에이에스이코리아 '변경허가1호(재검토)' 차수를 넣고 저장만 눌러 단계·계약금액이 그대로였다).
+      // 차수 단계는 '청구·수금 단계로 추가' 버튼으로만 만들어졌으므로, 저장 시 남은 차수를 확인받아
+      // 금액 행으로 함께 보낸다 — changes route 가 milestoneId 없는 새 행을 단계로 INSERT 한다.
+      let effAmounts = amounts;
+      let effPaymentTerms = paymentTerms;
+      let addedStageCount = 0;
+      if (isUnitPrice) {
+        const pending = pendingRoundStages(rateCard, amounts.map((a) => a.stageLabel));
+        if (pending.length) {
+          const list = pending
+            .map(({ round, stages }) =>
+              `· ${round.label.trim() || "차수"}: ` + stages.map((st) => `${st.label} ${st.amount.toLocaleString()}원`).join(", ")
+            )
+            .join("\n");
+          const ok = window.confirm(
+            `단가 차수표에 아직 청구·수금 단계로 추가되지 않은 차수가 있습니다.\n${list}\n\n` +
+              "[확인] 이 단계를 함께 추가하고 계약금액에 반영합니다.\n[취소] 단계 없이 나머지 변경 내용만 저장합니다."
+          );
+          if (ok) {
+            const fresh = pending.flatMap((p) => p.stages);
+            addedStageCount = fresh.length;
+            effAmounts = [
+              ...amounts,
+              ...fresh.map((st) => ({ milestoneId: "", stageLabel: st.label, previousAmount: "", nextAmount: String(st.amount) })),
+            ];
+            effPaymentTerms = [...paymentTerms, ...fresh.map((st) => ({ stageLabel: st.label, previous: "", next: "" }))];
+          }
+        }
+      }
+      // 계약금액 = 단계 합(newCurrentAmount 와 같은 규칙) — 위에서 추가한 차수 단계까지 포함해 다시 계산한다.
+      const prevTotal = effAmounts.reduce((acc, item) => acc + (Number(item.previousAmount) || 0), 0);
+      const nextTotalRaw = effAmounts.reduce((acc, item) => acc + (Number(item.nextAmount || item.previousAmount) || 0), 0);
+      const nextTotal = nextTotalRaw > 0 ? nextTotalRaw : null;
+
       const payload: ContractChangePayload = {
-        amounts,
+        amounts: effAmounts,
         servicePeriod,
-        paymentTerms,
+        paymentTerms: effPaymentTerms,
         serviceCategory: nextServiceCategory,
         closing,
         termination: lifecycle,
@@ -471,9 +512,9 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
       const changedFields: string[] = [];
       const initialFacilityKey = props.initialTargetFacilities.map((item) => item.facilityId).sort().join("|");
       const nextFacilityKey = nextServiceCategory.targetFacilities.map((item) => item.facilityId).sort().join("|");
-      if (amounts.some((a) => a.nextAmount !== "")) changedFields.push("amounts");
+      if (effAmounts.some((a) => a.nextAmount !== "")) changedFields.push("amounts");
       if (servicePeriod.next) changedFields.push("servicePeriod");
-      if (paymentTerms.some((t) => t.next !== "")) changedFields.push("paymentTerms");
+      if (effPaymentTerms.some((t) => t.next !== "")) changedFields.push("paymentTerms");
       if (nextServiceCategory.changed || nextServiceCategory.nextType || nextServiceCategory.nextSubtype || nextServiceCategory.nextIndustry) changedFields.push("serviceCategory");
       if (nextServiceCategory.nextPaymentMethod) changedFields.push("paymentMethod");
       if (initialFacilityKey !== nextFacilityKey) changedFields.push("targetFacilities");
@@ -494,10 +535,10 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
       // 기존 값을 null 로 덮어써 데이터가 유실되므로, 미입력 항목은 키 자체를 생략한다.
       const requestBody: Record<string, unknown> = {
         changedAt: meta.changedAt,
-        previousAmount: previousAmountTotal || null,
-        deltaAmount: newCurrentAmount != null && previousAmountTotal ? newCurrentAmount - previousAmountTotal : null,
+        previousAmount: prevTotal || null,
+        deltaAmount: nextTotal != null && prevTotal ? nextTotal - prevTotal : null,
         changedServicePeriod: servicePeriod.next || null,
-        changedPaymentTerms: paymentTerms
+        changedPaymentTerms: effPaymentTerms
           .filter((t) => t.next)
           .map((t) => `${t.stageLabel}: ${t.next}`)
           .join("\n") || null,
@@ -505,7 +546,7 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
         payload,
         changedFields,
       };
-      if (newCurrentAmount != null) requestBody.newCurrentAmount = newCurrentAmount;
+      if (nextTotal != null) requestBody.newCurrentAmount = nextTotal;
       if (contractDateChanged) requestBody.newContractDate = contractDate || null;
       if (contractTitleChanged) requestBody.newContractTitle = contractTitle.trim();
       // 계약 종류는 달라진 경우에만 전송(선례: 계약일·계약명 정정과 동일 원칙).
@@ -597,7 +638,12 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
         }
       }
 
-      toast.show("변경계약이 저장되었습니다.", "success");
+      toast.show(
+        addedStageCount
+          ? `변경계약이 저장되었습니다. 차수 단계 ${addedStageCount}건이 추가되고 계약금액이 ${(nextTotal ?? 0).toLocaleString()}원으로 갱신되었습니다.`
+          : "변경계약이 저장되었습니다.",
+        "success"
+      );
       props.onSaved();
     } catch (err) {
       toast.show("저장 실패: " + (err as Error).message, "error");
@@ -1140,6 +1186,22 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
       </div>
     </div>
   );
+}
+
+/**
+ * 아직 청구·수금 단계가 하나도 없는 차수와 그 파생 단계. 일부 단계만 있는 차수는 단계명을 손본
+ * 경우일 수 있어 건드리지 않는다(차수 탭의 '청구·수금 단계로 추가'가 빠진 단계만 채운다).
+ * 차수 1개·지급 단위 없음은 구분명으로 청구하는 v1 방식이라 차수명 단계와 비교하지 않는다.
+ */
+function pendingRoundStages(
+  card: RateCardData,
+  existingLabels: string[]
+): Array<{ round: RateCardRound; stages: RateCardStageOption[] }> {
+  if (card.rounds.length === 1 && validPayments(card.rounds[0]).length === 0) return [];
+  const existing = new Set(existingLabels.map((label) => label.trim()));
+  return card.rounds
+    .map((round) => ({ round, stages: roundStageOptions(card, round) }))
+    .filter(({ stages }) => stages.length > 0 && stages.every((st) => !existing.has(st.label.trim())));
 }
 
 function updateAt<T>(list: T[], setter: (next: T[]) => void, idx: number, patch: Partial<T>) {

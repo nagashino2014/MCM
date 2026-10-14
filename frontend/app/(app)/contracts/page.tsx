@@ -8,6 +8,7 @@ import {
   Calendar,
   ChevronDown,
   ChevronRight,
+  Download,
   FileSignature,
   FileText,
   Folder,
@@ -28,6 +29,7 @@ import {
 import { ToastProvider, useToast } from "@/components/ui/Toast";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { CdTabs } from "@/components/cdash/CdTabs";
 import "@/components/cdash/cdash.css";
 import { resolveServiceTypeStyle } from "@/lib/ieps/contract-tree-style";
 import ContractChangeModal from "@/components/contracts/ContractChangeModal";
@@ -204,9 +206,18 @@ function industryOptionFromKsic(industryCode?: string | null): string | null {
   return label ? `${label}${INTEGRATED_PERMIT_OPTION_SUFFIX}` : null;
 }
 
+interface PdfViewerDoc {
+  label: string;
+  url: string;
+  fileName: string;
+}
+
 interface PdfViewerState {
   title: string;
   url: string;
+  /** 계약서 보기 — 원 계약서·변경계약서가 여럿이면 뷰어 상단 탭으로 전환한다(2026-10-14). */
+  docs?: PdfViewerDoc[];
+  initialIndex?: number;
 }
 
 const DEFAULT_OUTSOURCING_TYPES = ["도면 작성", "산업안전 관련", "측정/분석", "디자인", "번역"];
@@ -811,6 +822,8 @@ function ContractsInner() {
         <DraggablePdfViewer
           title={pdfViewer.title}
           url={pdfViewer.url}
+          docs={pdfViewer.docs}
+          initialIndex={pdfViewer.initialIndex}
           onClose={() => setPdfViewer(null)}
         />
       )}
@@ -1000,12 +1013,36 @@ function ContractDetailPanel({
               // contract_documents; the legacy fallback to invoice[0] is kept
               // only for the very small number of imports that pre-date the
               // documents table.
-              const docs = (detail.documents ?? []) as Array<{ document_type?: unknown; public_path?: unknown }>;
-              const contractDoc =
-                docs.find((d) => String(d.document_type ?? "") === "contract") ??
-                docs.find((d) => String(d.document_type ?? "") === "amendment");
+              // 변경계약서도 볼 수 있게(2026-10-14) 계약서 → 변경계약서 순(각각 오래된 것부터)으로
+              // 탭을 만들고, 처음에는 종전처럼 가장 최근 원 계약서를 연다.
+              const docs = (detail.documents ?? []) as Array<{
+                document_type?: unknown;
+                public_path?: unknown;
+                display_name?: unknown;
+                created_at?: unknown;
+              }>;
+              const docDate = (d: (typeof docs)[number]) =>
+                /^\((\d{4}-\d{2}-\d{2})\)/.exec(String(d.display_name ?? ""))?.[1] ?? String(d.created_at ?? "").slice(0, 10);
+              const ofType = (type: string) =>
+                docs
+                  .filter((d) => String(d.document_type ?? "") === type && String(d.public_path ?? ""))
+                  .sort((a, b) => String(a.created_at ?? "").localeCompare(String(b.created_at ?? "")));
+              const contractDocs = ofType("contract");
+              const amendmentDocs = ofType("amendment");
+              const viewerDocs: PdfViewerDoc[] = [
+                ...contractDocs.map((d) => ({
+                  label: contractDocs.length > 1 ? `계약서(${docDate(d)})` : "계약서",
+                  url: String(d.public_path),
+                  fileName: String(d.display_name ?? "") || "계약서.pdf",
+                })),
+                ...amendmentDocs.map((d) => ({
+                  label: `변경계약서(${docDate(d)})`,
+                  url: String(d.public_path),
+                  fileName: String(d.display_name ?? "") || "변경계약서.pdf",
+                })),
+              ];
               const path =
-                String(contractDoc?.public_path ?? "") ||
+                viewerDocs[Math.max(0, contractDocs.length - 1)]?.url ||
                 String((detail.invoices?.[0] as { public_path?: unknown } | undefined)?.public_path ?? "");
               if (!path) {
                 alert("등록된 계약서 PDF가 없습니다. 먼저 계약서 PDF를 업로드해 주세요.");
@@ -1014,6 +1051,8 @@ function ContractDetailPanel({
               onOpenPdf({
                 title: String(contract.contract_title ?? "계약서 PDF"),
                 url: path,
+                docs: viewerDocs.length ? viewerDocs : undefined,
+                initialIndex: Math.max(0, contractDocs.length - 1),
               });
             }}
           >
@@ -3415,13 +3454,20 @@ function NewStageModal({
 
 function DraggablePdfViewer({
   title,
-  url,
+  url: singleUrl,
+  docs,
+  initialIndex = 0,
   onClose,
 }: {
   title: string;
   url: string;
+  docs?: PdfViewerDoc[];
+  initialIndex?: number;
   onClose: () => void;
 }) {
+  const [docIndex, setDocIndex] = useState(() => Math.min(Math.max(0, initialIndex), Math.max(0, (docs?.length ?? 1) - 1)));
+  const activeDoc = docs?.[docIndex];
+  const url = activeDoc?.url ?? singleUrl;
   const [position, setPosition] = useState(() => ({
     x: typeof window === "undefined"
       ? 96
@@ -3455,7 +3501,7 @@ function DraggablePdfViewer({
 
   return (
     <div
-      className="fixed z-[60] rounded-3xl border cd-border-c cd-card-bg shadow-2xl overflow-hidden"
+      className="fixed z-[60] rounded-3xl border cd-border-c cd-card-bg shadow-2xl overflow-hidden flex flex-col"
       style={{
         left: position.x,
         top: position.y,
@@ -3464,7 +3510,7 @@ function DraggablePdfViewer({
       }}
     >
       <div
-        className="h-12 px-4 border-b cd-border-c cd-surface-bg flex items-center justify-between gap-3 cursor-move select-none"
+        className="h-12 shrink-0 px-4 border-b cd-border-c cd-surface-bg flex items-center justify-between gap-3 cursor-move select-none"
         onPointerDown={startDrag}
         onPointerMove={moveDrag}
         onPointerUp={stopDrag}
@@ -3474,23 +3520,46 @@ function DraggablePdfViewer({
           <FileText className="w-4 h-4 cd-text-primary shrink-0" />
           <span className="text-sm cd-text truncate">{title}</span>
         </div>
-        <button
-          type="button"
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => {
-            event.stopPropagation();
-            onClose();
-          }}
-          className="rounded-lg p-1 cd-text-faint hover:bg-[color:var(--cd-surface)] hover:text-[color:var(--cd-text)]"
-          title="닫기"
-        >
-          <X className="w-4 h-4" />
-        </button>
+        <div className="flex shrink-0 items-center gap-1">
+          {/* 지금 보고 있는 문서 내려받기 — 같은 출처 프록시라 download 속성으로 저장된다 */}
+          <a
+            href={url}
+            download={activeDoc?.fileName ?? true}
+            onPointerDown={(event) => event.stopPropagation()}
+            className="cd-action cd-btn cd-btn-ghost px-2 py-1 text-xs cd-text-muted flex items-center gap-1 whitespace-nowrap"
+            title="현재 문서 다운로드"
+          >
+            <Download className="w-3.5 h-3.5" />
+            다운로드
+          </a>
+          <button
+            type="button"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              onClose();
+            }}
+            className="rounded-lg p-1 cd-text-faint hover:bg-[color:var(--cd-surface)] hover:text-[color:var(--cd-text)]"
+            title="닫기"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       </div>
+      {docs && docs.length > 1 && (
+        <div className="shrink-0 px-4 pt-1 border-b cd-border-c cd-card-bg">
+          <CdTabs
+            items={docs.map((d, i) => ({ key: String(i), label: d.label }))}
+            active={String(docIndex)}
+            onChange={(key) => setDocIndex(Number(key))}
+          />
+        </div>
+      )}
       <iframe
-        title={title}
+        key={url}
+        title={activeDoc?.label ?? title}
         src={withPdfViewerDefaults(url)}
-        className="w-full h-[calc(100%-48px)] cd-surface-bg"
+        className="w-full flex-1 min-h-0 cd-surface-bg"
       />
     </div>
   );

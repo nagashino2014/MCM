@@ -3,7 +3,7 @@
 // 변경 이력 카드(278, 2026-10-14 사용자 요청) — 변경계약은 여러 번 생길 수 있어 차수별로 변경 내용과
 // 변경계약서를 보관·열람한다. 차수 = 변경계약서 단위, 차수에 묶이지 않은 이벤트는 '정보 정정'.
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight, Download, FileText, Upload } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
 import { CdHelp } from "@/components/cdash/CdHelp";
@@ -14,6 +14,14 @@ type Row = Record<string, unknown>;
 const text = (v: unknown) => String(v ?? "").trim();
 const day = (v: unknown) => text(v).slice(0, 10);
 const eventDay = (e: Row) => day(e.changed_at) || day(e.created_at);
+/** 같은 날 여러 번 저장한 기록을 구분하는 저장 시각(KST HH:MM). 형식이 다른 옛 값은 생략. */
+const eventTime = (e: Row) => {
+  const d = new Date(text(e.created_at));
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Seoul" });
+};
+// .cd-input 의 width:100% 가 Tailwind 폭 유틸리티보다 우선해 목록박스가 행 전체로 늘어났다 — 폭은 인라인으로 고정.
+const ROUND_SELECT_STYLE = { width: 112 } as const;
 
 export function AmendmentHistorySection({
   contractId,
@@ -115,7 +123,8 @@ export function AmendmentHistorySection({
     const changeId = text(event.change_id);
     return (
       <select
-        className="cd-input py-1 text-xs w-auto"
+        className="cd-input py-1 text-xs"
+        style={ROUND_SELECT_STYLE}
         value={text(event.amendment_id)}
         disabled={busy === changeId}
         onChange={(e) => assignRound(changeId, e.target.value || null)}
@@ -131,9 +140,29 @@ export function AmendmentHistorySection({
     );
   };
 
-  const eventLines = (event: Row) => {
+  /** 변경 기록 한 줄 — 날짜·저장 시각 | 번호 매긴 변경 내용 | 차수 지정(·추가 동작) */
+  const eventRow = (event: Row, actions: ReactNode, className = "") => {
     const lines = summarizeChangeEvent(event);
-    return lines.length ? lines : ["변경 내용 없음(저장 기록만 있음)"];
+    const time = eventTime(event);
+    return (
+      <div key={text(event.change_id)} className={"flex flex-wrap items-start gap-x-3 gap-y-2 text-xs sm:flex-nowrap " + className}>
+        <div className="shrink-0 w-[84px] tabular-nums leading-5">
+          <div className="cd-text-muted">{eventDay(event)}</div>
+          {time && <div className="cd-text-faint">{time} 저장</div>}
+        </div>
+        {lines.length ? (
+          <ol className="flex-1 min-w-[160px] list-decimal pl-4 grid gap-0.5 leading-5 cd-text">
+            {lines.map((line, i) => (
+              <li key={i} className="break-words pl-0.5">{line}</li>
+            ))}
+          </ol>
+        ) : (
+          <p className="flex-1 min-w-[160px] leading-5 cd-text-faint">변경 내용 없음(저장 기록만 있음)</p>
+        )}
+        {/* 좁은 화면에서는 차수 지정·업로드 버튼이 다음 줄로 내려가 카드 밖으로 넘치지 않는다 */}
+        <div className="flex w-full shrink-0 flex-wrap items-center justify-end gap-1 sm:w-auto">{actions}</div>
+      </div>
+    );
   };
 
   return (
@@ -229,17 +258,7 @@ export function AmendmentHistorySection({
                   {r.events.length === 0 && (
                     <p className="text-xs cd-text-faint">이 차수에 묶인 변경 내용이 없습니다. 아래 정보 정정에서 차수를 지정할 수 있습니다.</p>
                   )}
-                  {r.events.map((e) => (
-                    <div key={text(e.change_id)} className="flex items-start gap-3 text-xs">
-                      <span className="cd-text-faint tabular-nums shrink-0 w-[76px]">{eventDay(e)}</span>
-                      <ul className="flex-1 min-w-0 grid gap-0.5 cd-text">
-                        {eventLines(e).map((line, i) => (
-                          <li key={i} className="break-words">{line}</li>
-                        ))}
-                      </ul>
-                      {roundSelect(e)}
-                    </div>
-                  ))}
+                  {r.events.map((e, i) => eventRow(e, roundSelect(e), i > 0 ? "border-t cd-border-c pt-2" : ""))}
                 </div>
               )}
             </div>
@@ -262,15 +281,9 @@ export function AmendmentHistorySection({
             <div className="mt-2 grid gap-2">
               {corrections.map((e) => {
                 const changeId = text(e.change_id);
-                return (
-                  <div key={changeId} className="flex items-start gap-3 rounded-xl border cd-border-c px-3 py-2 text-xs">
-                    <span className="cd-text-faint tabular-nums shrink-0 w-[76px]">{eventDay(e)}</span>
-                    <ul className="flex-1 min-w-0 grid gap-0.5 cd-text">
-                      {eventLines(e).map((line, i) => (
-                        <li key={i} className="break-words">{line}</li>
-                      ))}
-                    </ul>
-                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+                return eventRow(
+                  e,
+                  <>
                       {rounds.length > 0 && roundSelect(e)}
                       <label
                         className="cd-action cd-btn cd-btn-ghost px-2 py-1 text-xs cd-text-muted flex items-center gap-1 cursor-pointer whitespace-nowrap"
@@ -296,8 +309,8 @@ export function AmendmentHistorySection({
                           }}
                         />
                       </label>
-                    </div>
-                  </div>
+                  </>,
+                  "rounded-xl border cd-border-c px-3 py-2"
                 );
               })}
             </div>

@@ -60,7 +60,10 @@ export function summarizeChangeEvent(event: Obj): string[] {
   }
 
   const closing = asObj(payload.closing);
-  if (text(closing.completionDate)) lines.push(`준공일: ${text(closing.completionDate)}`);
+  // 준공 탭의 준공일은 기간 변경(servicePeriod)과 같은 값으로 함께 저장되는 경우가 많아 다를 때만 따로 적는다.
+  if (text(closing.completionDate) && text(closing.completionDate) !== text(period.next)) {
+    lines.push(`준공일: ${text(closing.completionDate)}`);
+  }
   if (text(closing.permitAcquiredAt)) lines.push(`허가 취득일: ${text(closing.permitAcquiredAt)}`);
 
   const termination = asObj(payload.termination);

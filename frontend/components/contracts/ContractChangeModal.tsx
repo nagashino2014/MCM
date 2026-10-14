@@ -767,7 +767,8 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
               <span className="font-bold">기존 차수 보완</span>
               {rounds.length > 0 && (
                 <select
-                  className="cd-input py-1 text-xs w-auto"
+                  className="cd-input py-1 text-xs"
+                  style={{ width: 132 }}
                   value={targetAmendmentId}
                   onChange={(e) => {
                     setTargetAmendmentId(e.target.value);

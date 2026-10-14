@@ -423,3 +423,4 @@ CdPageHeader  제목 "할 일"  · meta "오늘 3 · 지연 1 · 이번 주 8"  
 - 남은 테스트 데이터: 관리자 계정의 할 일 4건(검증용, 사용자 판단으로 삭제).
 - **후속(사용자 지적 2건, 10-13)**: ① 상세 "관련" 연결을 ID 입력 → **선택기**(`LinkPickerModal`/모바일 `LinkPickerSheet`, 공용 `ContractPicker`): 계약(트리 or 후보 검색)·사업장(`/api/facilities?q=`)·결재 문서(box 4종 병합 후 클라이언트 필터)·영업(`/api/sales/projects?q=`)·업무추진계획(my/dept 합집합)·URL. 지시(directive)는 부서 필수 API라 제외. ② **결재 대기(내가 결재할 차례) 자동 표시**: `listMyPendingApprovals` → `TodoApprovalEvent.kind="pending"`(formName·docNo·submittedAt·drafterPhotoUrl), `view=my`·홈 위젯에만, 오늘 그룹 맨 위·토글 무관·"결재 대기 N" 라벨·D+N(상신 2일↑)·"결재하기". 보드·공유받음엔 미포함. 기존 결함 수정: BoardCreateModal 사업장 자동완성 응답 필드(`{items}` camelCase).
 - 실측: 연결 선택기(사업장 검색→선택→저장→관련 프레임 표시), 결재 대기 행(휴가신청서 D+84) 확인. 웹·모바일 tsc 0, 테스트 37 통과.
+- **배포(2026-10-14)**: main f2c4ca8(기능)·c972491(m-app 재export) → next:652(사용자)·653(위젯 번들). 모바일 OTA group d4881914(runtime 1.2.0, production). 잔여: 실기기 확인, 위젯 알림 브릿지(P3), OS 위젯(P4), 캘린더 드래그 재일정, 인앱 알림함, 출장 양식 contract_select 전환.

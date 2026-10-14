@@ -32,7 +32,6 @@ $repo = Split-Path -Parent $PSScriptRoot
 $frontend = Join-Path $repo "frontend"
 $scraper = Join-Path $repo "scraper"
 $tunnelScript = Join-Path $PSScriptRoot "db-tunnel.ps1"
-$url = "http://localhost:3000/finance?tab=shopreceipt"
 
 Write-Host "MCM 전표 수집" -ForegroundColor Cyan
 Write-Host "  저장소: $repo"
@@ -43,46 +42,28 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
   exit 1
 }
 
-# 3000 이 이미 쓰이고 있으면 이 앱은 3001 로 밀리는데, 브라우저는 먼저 떠 있던 쪽에 붙는다.
-# 그 서버에는 RECEIPTS_LOCAL_TOOLS 가 없어 "로컬에서만 쓸 수 있습니다" 만 보이므로 미리 정리한다.
-if (Test-PortInUse 3000) {
+# 3000 이 이미 쓰이고 있으면(Docker 등) 비어 있는 다음 포트로 앱을 띄우고 브라우저도 그 포트로 연다.
+# 포트를 PORT 로 못박아 두지 않으면 next 가 알아서 밀려나 브라우저가 수집 기능이 꺼진 3000 쪽에 붙는다.
+$appPort = 3000
+while ((Test-PortInUse $appPort) -and $appPort -lt 3020) {
   $owner = $null
   try {
-    $conn = Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction Stop | Select-Object -First 1
+    $conn = Get-NetTCPConnection -LocalPort $appPort -State Listen -ErrorAction Stop | Select-Object -First 1
     if ($conn) { $owner = Get-Process -Id $conn.OwningProcess -ErrorAction SilentlyContinue }
   } catch {
     # Get-NetTCPConnection 이 없는 환경 — 누가 쓰는지는 못 알아낸다.
   }
-
-  Write-Host "3000 포트를 이미 다른 프로그램이 쓰고 있습니다." -ForegroundColor Yellow
-  if ($owner) { Write-Host ("  쓰는 중: {0} (PID {1})" -f $owner.ProcessName, $owner.Id) }
-  Write-Host "  그대로 두면 이 앱은 3001 로 밀리고, 브라우저는 수집 기능이 꺼진 3000 쪽에 붙습니다."
-
-  if (-not $owner) {
-    Write-Host "3000 을 쓰는 창(다른 npm run dev 등)을 닫은 뒤 다시 실행해 주세요." -ForegroundColor Red
-    Read-Host "엔터를 누르면 닫힙니다"
-    exit 1
-  }
-
-  $answer = Read-Host "  이 프로세스를 종료하고 계속할까요? (Y/N)"
-  if ($answer -notmatch '^[Yy]') {
-    Write-Host "취소했습니다. 3000 을 쓰는 창을 닫은 뒤 다시 실행해 주세요." -ForegroundColor Red
-    Read-Host "엔터를 누르면 닫힙니다"
-    exit 1
-  }
-
-  Stop-Process -Id $owner.Id -Force
-  for ($i = 0; $i -lt 20; $i++) {
-    if (-not (Test-PortInUse 3000)) { break }
-    Start-Sleep -Milliseconds 300
-  }
-  if (Test-PortInUse 3000) {
-    Write-Host "3000 이 여전히 열려 있습니다. 해당 창을 직접 닫은 뒤 다시 실행해 주세요." -ForegroundColor Red
-    Read-Host "엔터를 누르면 닫힙니다"
-    exit 1
-  }
-  Write-Host "  3000 을 비웠습니다." -ForegroundColor Green
+  $who = if ($owner) { " ({0}, PID {1})" -f $owner.ProcessName, $owner.Id } else { "" }
+  Write-Host ("  {0} 포트는 다른 프로그램이 쓰고 있어 건너뜁니다{1}." -f $appPort, $who) -ForegroundColor Yellow
+  $appPort++
 }
+if (Test-PortInUse $appPort) {
+  Write-Host "3000~3020 포트가 모두 쓰이고 있습니다. 쓰지 않는 창(다른 npm run dev 등)을 닫은 뒤 다시 실행해 주세요." -ForegroundColor Red
+  Read-Host "엔터를 누르면 닫힙니다"
+  exit 1
+}
+$env:PORT = "$appPort"
+$url = "http://localhost:$appPort/finance?tab=shopreceipt"
 
 # 처음 실행이거나 의존성 목록이 바뀌었으면 받는다(시간이 좀 걸린다).
 foreach ($dir in @($frontend, $scraper)) {
@@ -130,12 +111,12 @@ if (Test-Path $chrome) { $env:RECEIPTS_CHROME_PATH = $chrome }
 # 이 플래그가 있어야 앱에서 수집 기능이 열린다(서버 배포판에서는 꺼져 있다).
 $env:RECEIPTS_LOCAL_TOOLS = "1"
 
-# .env.local 이 없는 PC(예: 처음 세팅한 동료 PC)에서는 DB 접속 정보를 AWS 시크릿에서 받아 쓴다.
-$npmScript = "dev"
+# DB 접속 정보는 늘 AWS 시크릿(AWSCURRENT)에서 받는다. RDS 마스터 비밀번호는 7일마다 자동 교체돼
+# .env.local 의 PGPASSWORD 는 곧 낡고, 그러면 로그인이 "password authentication failed" 로 막힌다.
+# dev:aws 가 넣는 DATABASE_URL 이 PG* 보다 우선하므로 .env.local 은 그대로 둬도 된다.
+$npmScript = "dev:aws"
 if (-not (Test-Path (Join-Path $frontend ".env.local"))) {
-  Write-Host "  frontend\.env.local 이 없어 AWS 시크릿에서 DB 접속 정보를 받습니다(dev:aws)." -ForegroundColor Yellow
-  Write-Host "  로그인이 계속 안 되면 .env.local 에 AUTH_SECRET 을 넣어야 합니다(frontend\.env.example 참고)." -ForegroundColor Yellow
-  $npmScript = "dev:aws"
+  Write-Host "  frontend\.env.local 이 없습니다. 로그인이 계속 안 되면 AUTH_SECRET 을 넣어야 합니다(frontend\.env.example 참고)." -ForegroundColor Yellow
 }
 
 Write-Host "  앱을 띄웁니다. 창을 닫으면 앱도 함께 종료됩니다." -ForegroundColor Green

@@ -525,7 +525,7 @@ export async function getContractDetail(contractId: string) {
     await db.exec(
       `SELECT document_id, contract_id, document_type, display_name, original_filename,
               public_path, storage_provider, storage_key, byte_size, sha256, source,
-              created_at, updated_at
+              created_at, updated_at, amendment_id
        FROM contract_documents
        WHERE contract_id = $1
          AND document_type IN ('contract', 'amendment')
@@ -539,6 +539,16 @@ export async function getContractDetail(contractId: string) {
        FROM contract_change_events
        WHERE contract_id = $1
        ORDER BY COALESCE(changed_at, created_at) DESC`,
+      [contractId]
+    )
+  );
+  // 변경계약 차수(278) — 차수 = 변경계약서 단위. 문서·이벤트는 amendment_id 로 묶인다.
+  const amendments = rowsToObjects(
+    await db.exec(
+      `SELECT amendment_id, round_no, amended_at, summary, created_at
+       FROM contract_amendments
+       WHERE contract_id = $1
+       ORDER BY round_no`,
       [contractId]
     )
   );
@@ -580,7 +590,7 @@ export async function getContractDetail(contractId: string) {
     });
   }
 
-  return { contract, milestones, invoices, documents, changes, outsourcing, targetFacilities };
+  return { contract, milestones, invoices, documents, changes, amendments, outsourcing, targetFacilities };
 }
 
 // ---------------------------------------------------------------------------

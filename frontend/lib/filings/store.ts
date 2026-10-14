@@ -615,12 +615,18 @@ async function buildCandidates(db: PgDatabase, settings: FilingSettings): Promis
   // 계약 — 체결·변경·이행 (2026-09-08 운영 규칙)
   //  · 체결: 신규 계약. 체결 보고가 아직 제출되지 않은 계약은 변경계약이 있어도 **체결**로 신고한다(최신 계약 정보로).
   //  · 변경: 체결 보고를 제출(또는 제외 처리)한 뒤에 생긴 변경계약(기간·금액 변동) — 변경계약서와 함께 신고.
+  //    변경계약 차수(278)당 1건 — 종전에는 변경 이벤트마다 후보가 생겨 정보 정정·나눠 저장한 건까지 보고 대상이 됐다.
   //  · 이행: 용역 준공 = 마지막 지급 단계의 세금계산서 발행(완료일(발행일)). 준공일자 값은 허가일(없으면 발행일).
   const changes = rowsToObjects(
     await db.exec(
-      `SELECT change_id, contract_id, changed_at, created_at, previous_amount, delta_amount, detail
-         FROM contract_change_events
-        WHERE COALESCE(NULLIF(changed_at, ''), created_at) >= $1`,
+      `SELECT a.amendment_id, a.contract_id, a.round_no, a.amended_at, a.created_at, a.summary,
+              (SELECT e.previous_amount FROM contract_change_events e
+                WHERE e.amendment_id = a.amendment_id AND e.previous_amount IS NOT NULL
+                ORDER BY e.created_at LIMIT 1) AS previous_amount,
+              (SELECT SUM(e.delta_amount) FROM contract_change_events e
+                WHERE e.amendment_id = a.amendment_id) AS delta_amount
+         FROM contract_amendments a
+        WHERE COALESCE(NULLIF(a.amended_at, ''), a.created_at) >= $1`,
       [cutoff]
     )
   );
@@ -668,7 +674,7 @@ async function buildCandidates(db: PgDatabase, settings: FilingSettings): Promis
   }
   for (const ch of changes) {
     const c = contracts.get(String(ch.contract_id));
-    const on = ymd(ch.changed_at) ?? ymd(ch.created_at);
+    const on = ymd(ch.amended_at) ?? ymd(ch.created_at);
     if (!c || !on) continue;
     // 체결 보고가 처리된 뒤의 변경계약만 '변경' — 그 전이면 체결 후보가 최신 정보를 담는다
     const done = concluded.get(c.contractId);
@@ -676,16 +682,16 @@ async function buildCandidates(db: PgDatabase, settings: FilingSettings): Promis
     const prev = ch.previous_amount != null ? Number(ch.previous_amount) : null;
     const delta = ch.delta_amount != null ? Number(ch.delta_amount) : null;
     const detailParts = [
-      str(ch.detail),
+      str(ch.summary),
       prev != null && delta != null ? `금액 ${prev.toLocaleString("ko-KR")} → ${(prev + delta).toLocaleString("ko-KR")}원` : "",
     ].filter(Boolean);
     out.push({
-      dedupKey: `ieps_agency:amend:${c.contractId}:${String(ch.change_id)}`,
+      dedupKey: `ieps_agency:amend:${c.contractId}:${String(ch.amendment_id)}`,
       kind: "ieps_agency",
       trigger: "amend",
       employeeId: null,
       contractId: c.contractId,
-      title: `${c.title} — 변경 보고`,
+      title: `${c.title} — ${Number(ch.round_no)}차 변경 보고`,
       subtitle: c.facilityName || c.counterpartyName || null,
       occurredOn: on,
       payload: {

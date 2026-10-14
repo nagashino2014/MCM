@@ -37,6 +37,7 @@ import ContractStaffingModal from "@/components/contracts/ContractStaffingModal"
 import TaxInvoiceIssueModal from "@/components/contracts/TaxInvoiceIssueModal";
 import FacilityInfoModal from "@/components/contracts/FacilityInfoModal";
 import { AgencyReportList } from "@/components/contracts/AgencyReportList";
+import { AmendmentHistorySection } from "@/components/contracts/AmendmentHistorySection";
 import { BAROBILL_BANKS } from "@/components/finance/FinLogo";
 import { checkDateFields } from "@/lib/contracts/date-field";
 import { INTEGRATED_PERMIT_OPTION_SUFFIX, IndustryOptionsEditorButton, useContractIndustryOptions } from "@/components/contracts/IndustryOptionsEditor";
@@ -89,6 +90,8 @@ interface ContractDetail {
   milestones: Array<Record<string, unknown>>;
   invoices: Array<Record<string, unknown>>;
   documents: Array<Record<string, unknown>>;
+  /** 변경계약 차수(278) */
+  amendments?: Array<Record<string, unknown>>;
   changes: Array<Record<string, unknown>>;
   outsourcing: Array<Record<string, unknown>>;
   targetFacilities: Array<Record<string, unknown>>;
@@ -210,6 +213,44 @@ interface PdfViewerDoc {
   label: string;
   url: string;
   fileName: string;
+  documentId?: string;
+}
+
+/**
+ * 계약서 뷰어 탭 — 계약서 → 변경계약서(차수 순, 같은 차수는 올린 순) 순서.
+ * 기본으로 여는 문서는 종전처럼 가장 최근 원 계약서(없으면 첫 문서).
+ */
+function buildContractViewerDocs(detail: ContractDetail): { docs: PdfViewerDoc[]; defaultIndex: number } {
+  type Doc = { document_id?: unknown; document_type?: unknown; public_path?: unknown; display_name?: unknown; created_at?: unknown; amendment_id?: unknown };
+  const docs = (detail.documents ?? []) as Doc[];
+  const roundNo = new Map(
+    (detail.amendments ?? []).map((a) => [String(a.amendment_id ?? ""), Number(a.round_no ?? 0)] as const)
+  );
+  const docDate = (d: Doc) =>
+    /^\((\d{4}-\d{2}-\d{2})\)/.exec(String(d.display_name ?? ""))?.[1] ?? String(d.created_at ?? "").slice(0, 10);
+  const byCreated = (a: Doc, b: Doc) => String(a.created_at ?? "").localeCompare(String(b.created_at ?? ""));
+  const contractDocs = docs.filter((d) => String(d.document_type ?? "") === "contract" && String(d.public_path ?? "")).sort(byCreated);
+  const amendmentDocs = docs
+    .filter((d) => String(d.document_type ?? "") === "amendment" && String(d.public_path ?? ""))
+    .sort((a, b) => (roundNo.get(String(a.amendment_id ?? "")) ?? 1e9) - (roundNo.get(String(b.amendment_id ?? "")) ?? 1e9) || byCreated(a, b));
+  const result: PdfViewerDoc[] = [
+    ...contractDocs.map((d) => ({
+      label: contractDocs.length > 1 ? `계약서(${docDate(d)})` : "계약서",
+      url: String(d.public_path),
+      fileName: String(d.display_name ?? "") || "계약서.pdf",
+      documentId: String(d.document_id ?? ""),
+    })),
+    ...amendmentDocs.map((d) => {
+      const n = roundNo.get(String(d.amendment_id ?? ""));
+      return {
+        label: `${n ? `${n}차 ` : ""}변경계약서(${docDate(d)})`,
+        url: String(d.public_path),
+        fileName: String(d.display_name ?? "") || "변경계약서.pdf",
+        documentId: String(d.document_id ?? ""),
+      };
+    }),
+  ];
+  return { docs: result, defaultIndex: Math.max(0, contractDocs.length - 1) };
 }
 
 interface PdfViewerState {
@@ -776,6 +817,11 @@ function ContractsInner() {
           initialOrderingSubjectType={detail.contract.ordering_subject_type != null ? String(detail.contract.ordering_subject_type) : null}
           initialEndedAt={String(detail.contract.ended_at ?? "") || null}
           initialCurrentAmount={selected.currentAmount}
+          amendments={(detail.amendments ?? []).map((a) => ({
+            amendmentId: String(a.amendment_id ?? ""),
+            roundNo: Number(a.round_no ?? 0),
+            amendedAt: a.amended_at != null ? String(a.amended_at) : null,
+          }))}
           onClose={() => {
             setChangeModalOpen(false);
             // 차수 단계 추가는 모달 안에서 즉시 커밋된다(2026-08-25) — 저장 없이 닫아도
@@ -820,6 +866,7 @@ function ContractsInner() {
 
       {pdfViewer && (
         <DraggablePdfViewer
+          key={`${pdfViewer.url}#${pdfViewer.initialIndex ?? 0}`}
           title={pdfViewer.title}
           url={pdfViewer.url}
           docs={pdfViewer.docs}
@@ -1015,34 +1062,9 @@ function ContractDetailPanel({
               // documents table.
               // 변경계약서도 볼 수 있게(2026-10-14) 계약서 → 변경계약서 순(각각 오래된 것부터)으로
               // 탭을 만들고, 처음에는 종전처럼 가장 최근 원 계약서를 연다.
-              const docs = (detail.documents ?? []) as Array<{
-                document_type?: unknown;
-                public_path?: unknown;
-                display_name?: unknown;
-                created_at?: unknown;
-              }>;
-              const docDate = (d: (typeof docs)[number]) =>
-                /^\((\d{4}-\d{2}-\d{2})\)/.exec(String(d.display_name ?? ""))?.[1] ?? String(d.created_at ?? "").slice(0, 10);
-              const ofType = (type: string) =>
-                docs
-                  .filter((d) => String(d.document_type ?? "") === type && String(d.public_path ?? ""))
-                  .sort((a, b) => String(a.created_at ?? "").localeCompare(String(b.created_at ?? "")));
-              const contractDocs = ofType("contract");
-              const amendmentDocs = ofType("amendment");
-              const viewerDocs: PdfViewerDoc[] = [
-                ...contractDocs.map((d) => ({
-                  label: contractDocs.length > 1 ? `계약서(${docDate(d)})` : "계약서",
-                  url: String(d.public_path),
-                  fileName: String(d.display_name ?? "") || "계약서.pdf",
-                })),
-                ...amendmentDocs.map((d) => ({
-                  label: `변경계약서(${docDate(d)})`,
-                  url: String(d.public_path),
-                  fileName: String(d.display_name ?? "") || "변경계약서.pdf",
-                })),
-              ];
+              const { docs: viewerDocs, defaultIndex } = buildContractViewerDocs(detail);
               const path =
-                viewerDocs[Math.max(0, contractDocs.length - 1)]?.url ||
+                viewerDocs[defaultIndex]?.url ||
                 String((detail.invoices?.[0] as { public_path?: unknown } | undefined)?.public_path ?? "");
               if (!path) {
                 alert("등록된 계약서 PDF가 없습니다. 먼저 계약서 PDF를 업로드해 주세요.");
@@ -1052,7 +1074,7 @@ function ContractDetailPanel({
                 title: String(contract.contract_title ?? "계약서 PDF"),
                 url: path,
                 docs: viewerDocs.length ? viewerDocs : undefined,
-                initialIndex: Math.max(0, contractDocs.length - 1),
+                initialIndex: defaultIndex,
               });
             }}
           >
@@ -1432,6 +1454,26 @@ function ContractDetailPanel({
           </table>
         </div>
       </div>
+
+      {/* 변경 이력(278) — 차수별 변경 내용·변경계약서. 차수 = 변경계약서 단위 */}
+      <AmendmentHistorySection
+        contractId={String(contract.contract_id ?? "")}
+        amendments={detail.amendments ?? []}
+        changes={detail.changes ?? []}
+        documents={detail.documents ?? []}
+        onOpenDocument={(documentId) => {
+          const { docs: viewerDocs } = buildContractViewerDocs(detail);
+          const index = viewerDocs.findIndex((d) => d.documentId === documentId);
+          if (index < 0) return;
+          onOpenPdf({
+            title: String(contract.contract_title ?? "계약서 PDF"),
+            url: viewerDocs[index].url,
+            docs: viewerDocs,
+            initialIndex: index,
+          });
+        }}
+        onChanged={onReloadDetail}
+      />
 
       {isIntegratedPermit && (
         <PermitInfoSection

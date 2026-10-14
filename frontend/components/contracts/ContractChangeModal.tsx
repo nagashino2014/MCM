@@ -62,6 +62,8 @@ interface ContractChangeModalProps {
   initialOrderingSubjectType?: string | null;
   initialEndedAt: string | null;
   initialCurrentAmount: number | null;
+  /** 변경계약 차수(278) — 차수 = 변경계약서 단위. '기존 차수 보완' 선택지로 쓴다. */
+  amendments?: Array<{ amendmentId: string; roundNo: number; amendedAt: string | null }>;
   /** 계약 종류 — 'unit_price'(단가 계약)면 단가 계약 탭이 추가된다(2026-08-24). */
   contractKind?: string;
   onClose: () => void;
@@ -151,6 +153,21 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
   // 올리는 경우가 있어 '누락'(원 계약서=contract)과 '변경'(변경계약서=amendment)을 고른다.
   // 기본값은 종전 동작인 변경계약서. 둘은 배타 선택이라 라디오로 둔다.
   const [amendmentDocType, setAmendmentDocType] = useState<"amendment" | "contract">("amendment");
+  // 변경 구분(278) — 새 차수는 변경계약서를 올릴 때만 생긴다. 마지막 차수가 오늘 변경일이면
+  // 같은 변경계약을 나눠 입력하는 중으로 보고 '기존 차수 보완'을 기본으로 둔다.
+  const rounds = props.amendments ?? [];
+  const lastRound = rounds.length ? rounds[rounds.length - 1] : null;
+  const [changeMode, setChangeMode] = useState<"new" | "existing" | "correction">(() =>
+    lastRound && lastRound.amendedAt === new Date().toISOString().slice(0, 10) ? "existing" : "correction"
+  );
+  const [targetAmendmentId, setTargetAmendmentId] = useState(lastRound?.amendmentId ?? "");
+  const nextRoundNo = (lastRound?.roundNo ?? 0) + 1;
+  const targetRoundNo = rounds.find((r) => r.amendmentId === targetAmendmentId)?.roundNo ?? null;
+  const hasAmendmentUpload = !!amendmentFile && amendmentDocType === "amendment";
+  // 변경계약서를 고르면 정정일 수 없다 — 새 차수로 옮긴다(기존 차수 보완은 그대로).
+  useEffect(() => {
+    if (hasAmendmentUpload && changeMode === "correction") setChangeMode("new");
+  }, [hasAmendmentUpload, changeMode]);
   const [outsourcing, setOutsourcing] = useState({
     outsourcingTitle: "",
     counterpartyName: "",
@@ -300,6 +317,8 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
             deltaAmount: prevTotal ? nextTotal - prevTotal : null,
             newCurrentAmount: nextTotal,
             detail: `${round.label || "차수"} 청구·수금 단계 추가(단가 차수표 자동 반영)`,
+            // 기존 변경 차수를 보완하는 중이면 그 차수에 묶는다(새 차수는 변경계약서 업로드로만 생긴다).
+            ...(changeMode === "existing" && targetAmendmentId ? { amendmentId: targetAmendmentId } : {}),
             payload: {
               amounts: nextAmounts,
               servicePeriod,
@@ -445,6 +464,15 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
   };
 
   const submit = async () => {
+    if (changeMode === "new" && !hasAmendmentUpload) {
+      toast.show(`새 차수(${nextRoundNo}차)는 변경계약서 PDF가 있어야 합니다. '준공일 및 기타' 탭에서 첨부해 주세요.`, "error");
+      setActiveTab("closing");
+      return;
+    }
+    if (changeMode === "existing" && !targetAmendmentId) {
+      toast.show("보완할 변경 차수를 골라 주세요.", "error");
+      return;
+    }
     setSaving(true);
     try {
       let nextServiceCategory = serviceCategory;
@@ -581,6 +609,34 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
       // 단가 기준표 변경분 저장 — 변경 이벤트와 별개로 계약당 1건을 통째 교체한다.
       if (isUnitPrice) await saveRateCardIfDirty();
 
+      // 변경계약서는 변경 이벤트보다 먼저 올린다(278) — 업로드가 차수를 만들거나(새 차수) 기존 차수에
+      // 붙고, 실패하면 이벤트를 남기지 않아 '서류 없는 차수'나 차수 없는 변경계약서가 생기지 않는다.
+      let roundId: string | null = changeMode === "existing" ? targetAmendmentId : null;
+      if (hasAmendmentUpload && amendmentFile) {
+        const docForm = new FormData();
+        docForm.set("documentType", "amendment");
+        docForm.set("documentDate", meta.changedAt);
+        docForm.set("amendmentId", changeMode === "existing" ? targetAmendmentId : "new");
+        docForm.set("file", amendmentFile);
+        const docRes = await fetch(`/api/contracts/${encodeURIComponent(props.contractId)}/documents`, {
+          method: "POST",
+          body: docForm,
+        });
+        const docBody = (await docRes.json().catch(() => ({}))) as {
+          error?: string;
+          documentId?: string;
+          amendmentId?: string | null;
+          deduplicated?: boolean;
+        };
+        if (!docRes.ok) throw new Error("변경계약서 업로드 실패: " + (docBody.error ?? "HTTP " + docRes.status));
+        if (!docBody.amendmentId) {
+          throw new Error("이미 올린 파일과 같은 PDF입니다. 변경계약서 파일을 확인해 주세요.");
+        }
+        roundId = docBody.amendmentId;
+        if (docBody.documentId) requestBody.documentId = docBody.documentId;
+      }
+      if (roundId) requestBody.amendmentId = roundId;
+
       const res = await fetch(`/api/contracts/${encodeURIComponent(props.contractId)}/changes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -595,14 +651,12 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
       // PDF. Failure here is a soft error — the change event itself is
       // already saved, so we only surface a warning and let the user retry
       // the upload from the detail panel.
-      if (amendmentFile) {
+      // 변경계약서는 위에서 먼저 올렸다 — 여기서는 누락된 원 계약서만 올린다.
+      if (amendmentFile && !hasAmendmentUpload) {
         try {
-          const created = (await res.json().catch(() => ({}))) as { changeId?: string };
           const docForm = new FormData();
           docForm.set("documentType", amendmentDocType);
           docForm.set("documentDate", meta.changedAt);
-          // 변경 이벤트 연결은 변경계약서일 때만 — 누락 보완분은 원 계약서라 특정 변경 건에 매이지 않는다.
-          if (created.changeId && amendmentDocType === "amendment") docForm.set("changeEventId", created.changeId);
           docForm.set("file", amendmentFile);
           const docRes = await fetch(
             `/api/contracts/${encodeURIComponent(props.contractId)}/documents`,
@@ -613,7 +667,7 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
             throw new Error(body?.error ?? "HTTP " + docRes.status);
           }
         } catch (uploadErr) {
-          toast.show(`${amendmentDocType === "amendment" ? "변경계약서" : "계약서"} PDF 업로드 실패: ` + (uploadErr as Error).message, "error");
+          toast.show("계약서 PDF 업로드 실패: " + (uploadErr as Error).message, "error");
         }
       }
 
@@ -641,7 +695,11 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
       toast.show(
         addedStageCount
           ? `변경계약이 저장되었습니다. 차수 단계 ${addedStageCount}건이 추가되고 계약금액이 ${(nextTotal ?? 0).toLocaleString()}원으로 갱신되었습니다.`
-          : "변경계약이 저장되었습니다.",
+          : changeMode === "new"
+            ? `${nextRoundNo}차 변경계약으로 저장되었습니다.`
+            : changeMode === "existing" && targetRoundNo
+              ? `${targetRoundNo}차 변경계약에 반영되었습니다.`
+              : "정보 정정으로 저장되었습니다.",
         "success"
       );
       props.onSaved();
@@ -685,6 +743,64 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
             <span className="font-bold cd-text-faint">변경일</span>
             <AutoDateInput value={meta.changedAt} onChange={(v) => setMeta({ ...meta, changedAt: v })} className="cd-input tabular-nums" />
           </label>
+        </div>
+
+        {/* 변경 구분(278) — 차수 = 변경계약서 단위. 정보 정정은 차수·대행 실적 변경 보고에 들어가지 않는다 */}
+        <div className="px-5 pt-3 grid gap-1 text-xs">
+          <span className="font-bold cd-text-faint">변경 구분</span>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <label className="inline-flex items-center gap-1.5 cd-text cursor-pointer">
+              <input type="radio" name="change-mode" checked={changeMode === "new"} onChange={() => setChangeMode("new")} />
+              <span className="font-bold">새 변경계약({nextRoundNo}차)</span>
+              <span className="cd-text-faint">변경계약서 PDF 필요</span>
+            </label>
+            <label
+              className={"inline-flex items-center gap-1.5 cd-text " + (rounds.length ? "cursor-pointer" : "opacity-50")}
+            >
+              <input
+                type="radio"
+                name="change-mode"
+                disabled={!rounds.length}
+                checked={changeMode === "existing"}
+                onChange={() => setChangeMode("existing")}
+              />
+              <span className="font-bold">기존 차수 보완</span>
+              {rounds.length > 0 && (
+                <select
+                  className="cd-input py-1 text-xs w-auto"
+                  value={targetAmendmentId}
+                  onChange={(e) => {
+                    setTargetAmendmentId(e.target.value);
+                    setChangeMode("existing");
+                  }}
+                >
+                  {rounds.map((r) => (
+                    <option key={r.amendmentId} value={r.amendmentId}>
+                      {r.roundNo}차{r.amendedAt ? ` (${r.amendedAt})` : ""}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </label>
+            <label
+              className={"inline-flex items-center gap-1.5 cd-text " + (hasAmendmentUpload ? "opacity-50" : "cursor-pointer")}
+            >
+              <input
+                type="radio"
+                name="change-mode"
+                disabled={hasAmendmentUpload}
+                checked={changeMode === "correction"}
+                onChange={() => setChangeMode("correction")}
+              />
+              <span className="font-bold">정보 정정</span>
+              <span className="cd-text-faint">변경계약서 없음 · 차수 없음</span>
+            </label>
+          </div>
+          {changeMode === "new" && !hasAmendmentUpload && (
+            <span className="text-[11px] text-rose-600">
+              &lsquo;준공일 및 기타&rsquo; 탭에서 변경계약서 PDF를 첨부해야 {nextRoundNo}차로 저장할 수 있습니다.
+            </span>
+          )}
         </div>
 
         <div className="px-5 mt-4 flex gap-1 border-b cd-border-c">
@@ -1164,8 +1280,13 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
                 />
                 <span className="text-[11px] cd-text-faint">
                   업로드 시 원 계약 폴더에 동일 형식(
-                  <code>{amendmentDocType === "amendment" ? "(YYYY-MM-DD)계약명 변경계약서.pdf" : "(YYYY-MM-DD)계약명 계약서.pdf"}</code>
-                  )으로 저장됩니다. 계약 입력 때 못 받은 원 계약서를 뒤늦게 올리는 경우 <b>누락</b>을 고르세요.
+                  <code>
+                    {amendmentDocType === "amendment"
+                      ? `(YYYY-MM-DD)계약명 ${changeMode === "existing" && targetRoundNo ? targetRoundNo : nextRoundNo}차 변경계약서.pdf`
+                      : "(YYYY-MM-DD)계약명 계약서.pdf"}
+                  </code>
+                  )으로 저장됩니다. 변경계약서는 상단 &lsquo;변경 구분&rsquo;의 차수로 묶입니다. 계약 입력 때 못 받은 원
+                  계약서를 뒤늦게 올리는 경우 <b>누락</b>을 고르세요.
                 </span>
               </label>
             </div>

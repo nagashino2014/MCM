@@ -19,6 +19,7 @@ const newChangeId = () => "chg_" + crypto.randomUUID().replace(/-/g, "").slice(0
  * The payload object is stored as-is in change_payload_json so the change-contract modal
  * can rehydrate per-tab fields. Optionally callers can pass changedFields (string[]) and
  * a documentId pointing to a previously uploaded contract_documents row.
+ * amendmentId(278)를 주면 그 변경계약 차수에 묶고, 없으면 '정보 정정' 이벤트로 남는다.
  */
 export async function POST(req: NextRequest, ctx: RouteContext) {
   try {
@@ -33,6 +34,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     const changedPaymentTerms = body.changedPaymentTerms ? String(body.changedPaymentTerms) : null;
     const detail = body.detail ? String(body.detail) : null;
     const documentId = body.documentId ? String(body.documentId) : null;
+    const amendmentId = body.amendmentId ? String(body.amendmentId) : null;
     const payload = body.payload && typeof body.payload === "object" ? body.payload : {};
     const changedFields = Array.isArray(body.changedFields) ? body.changedFields : [];
     const newFacilityIds = body.newFacilityIds !== undefined ? normalizeStringArray(body.newFacilityIds) : null;
@@ -45,18 +47,35 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
         await db.exec("SELECT contract_id FROM contracts WHERE contract_id = $1", [contractId])
       );
       if (exists.length === 0) throw new Error("계약을 찾을 수 없습니다.");
+      if (amendmentId) {
+        const round = rowsToObjects(
+          await db.exec("SELECT summary FROM contract_amendments WHERE amendment_id = $1 AND contract_id = $2", [
+            amendmentId,
+            contractId,
+          ])
+        );
+        if (round.length === 0) throw new Error("선택한 변경 차수를 찾을 수 없습니다.");
+        // 차수 요약이 비어 있으면 이번 변경의 비고를 요약으로 쓴다(이력 카드 한 줄 설명).
+        if (detail && !String(round[0].summary ?? "").trim()) {
+          await db.run("UPDATE contract_amendments SET summary = $1, updated_at = $2 WHERE amendment_id = $3", [
+            detail,
+            now,
+            amendmentId,
+          ]);
+        }
+      }
 
       await db.run(
         `INSERT INTO contract_change_events
           (change_id, contract_id, changed_at, previous_amount, delta_amount,
            changed_service_period, changed_payment_terms, detail, document_id,
            change_payload_json, changed_fields_json,
-           created_at, updated_at)
+           created_at, updated_at, amendment_id)
          VALUES
           ($1, $2, $3, $4, $5,
            $6, $7, $8, $9,
            $10::jsonb, $11::jsonb,
-           $12, $13)`,
+           $12, $13, $14)`,
         [
           changeId,
           contractId,
@@ -71,6 +90,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
           JSON.stringify(changedFields),
           now,
           now,
+          amendmentId,
         ]
       );
 

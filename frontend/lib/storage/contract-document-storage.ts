@@ -61,15 +61,20 @@ function parseIsoDate(value: string, fieldLabel: string): Date {
 /**
  * Build the canonical filename (without folder) for a contract document
  * (계약서/변경계약서). Always returns the form `(YYYY-MM-DD){title} {kind}.pdf`.
+ * 변경계약 차수(278)가 있으면 `{N}차 변경계약서`, 같은 차수의 두 번째 문서부터 `(2)`를 붙여
+ * 같은 날 올린 변경계약서끼리 S3 키가 겹쳐 덮어써지지 않게 한다.
  */
 export function buildContractDocumentFileName(
   date: string,
   contractTitle: string,
-  docType: "contract" | "amendment"
+  docType: "contract" | "amendment",
+  amendment?: { roundNo: number; seq?: number }
 ): string {
   const title = sanitizePathSegment(contractTitle);
+  const round = docType === "amendment" && amendment ? `${amendment.roundNo}차 ` : "";
+  const seq = docType === "amendment" && amendment?.seq && amendment.seq > 1 ? `(${amendment.seq})` : "";
   const kind = docType === "amendment" ? "변경계약서" : "계약서";
-  return sanitizeFilename(`(${date})${title} ${kind}.pdf`);
+  return sanitizeFilename(`(${date})${title} ${round}${kind}${seq}.pdf`);
 }
 
 /**
@@ -115,6 +120,7 @@ export function getContractDocumentStorageKey(params: {
   documentDate: string;
   contractTitle: string;
   docType: "contract" | "amendment";
+  amendment?: { roundNo: number; seq?: number };
 }): { storageKey: string; fileName: string; folderName: string } {
   const contractDate = parseIsoDate(params.contractDate, "계약일자");
   const year = String(contractDate.getFullYear());
@@ -122,7 +128,8 @@ export function getContractDocumentStorageKey(params: {
   const fileName = buildContractDocumentFileName(
     params.documentDate,
     params.contractTitle,
-    params.docType
+    params.docType,
+    params.amendment
   );
   const storageKey = ["contracts", "documents", year, folderName, fileName].join("/");
   return { storageKey, fileName, folderName };

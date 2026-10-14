@@ -8,6 +8,7 @@ import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
 import { postTextMessage } from "@/lib/chat/queries";
 import { FIRST_POSITION, between, isValidPosition } from "./position";
 import { isValidRecurrence, nextOccurrence } from "./recurrence";
+import { checkCompletion, completionErrorMessage, normalizeCompleteRules, sameCompleteRules } from "./completion";
 import {
   DEFAULT_TODO_PREFS,
   TODO_ARCHIVE_AFTER_DAYS,
@@ -32,6 +33,7 @@ import {
   type TodoBoardMode,
   type TodoColumn,
   type TodoComment,
+  type TodoCompleteRules,
   type TodoContractCandidate,
   type TodoItem,
   type TodoItemDetail,
@@ -225,6 +227,8 @@ interface InsertBoardInput {
   contractId?: string | null;
   facilityId?: string | null;
   color?: TodoBoardColorKey | null;
+  /** 보드 기본 완료 조건(276). */
+  defaultCompleteRules?: TodoCompleteRules;
   columns?: DefaultColumnSpec[];
 }
 
@@ -234,9 +238,9 @@ async function insertBoard(db: PgDatabase, userId: string, input: InsertBoardInp
   await db.run(
     `INSERT INTO todo_boards
        (board_id, name, kind, owner_user_id, scope_ref, is_default, layout, column_status_map,
-        project_name, client_name, contract_id, facility_id, color,
+        project_name, client_name, contract_id, facility_id, color, default_complete_rules,
         created_at, created_by, updated_at, updated_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$4,$14,$4)`,
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$15::jsonb,$14,$4,$14,$4)`,
     [
       boardId,
       input.name,
@@ -252,6 +256,7 @@ async function insertBoard(db: PgDatabase, userId: string, input: InsertBoardInp
       input.facilityId ?? null,
       input.color ?? null,
       now,
+      JSON.stringify(input.defaultCompleteRules ?? {}),
     ]
   );
   let pos: string | null = null;
@@ -385,6 +390,7 @@ function mapBoard(r: Record<string, unknown>, columns: TodoColumn[], myRole: Tod
     facilityId: r.facility_id != null ? String(r.facility_id) : null,
     color,
     colorHex: todoBoardColorHex(color, kind),
+    defaultCompleteRules: normalizeCompleteRules(r.default_complete_rules),
     archivedAt: r.archived_at != null ? String(r.archived_at) : null,
     createdAt: String(r.created_at ?? ""),
     updatedAt: String(r.updated_at ?? ""),
@@ -476,6 +482,7 @@ export async function createBoard(userId: string, input: Record<string, unknown>
   let contractId = str(input.contractId, 40);
   let facilityId = str(input.facilityId, 40);
   const explicitColor = parseBoardColor(input.color);
+  const defaultCompleteRules = normalizeCompleteRules(input.defaultCompleteRules);
 
   if (kind !== "project") {
     // 부서·공유 보드 — 이름 필수, 계약 연결 없음(용역명·발주처 메모는 선택).
@@ -530,6 +537,7 @@ export async function createBoard(userId: string, input: Record<string, unknown>
       contractId,
       facilityId,
       color,
+      defaultCompleteRules,
       columns: TEAM_COLUMNS,
     });
     // 부서 보드 — 부서원 자동 member(§10). 만든 사람의 부서 기준.
@@ -613,6 +621,11 @@ export async function updateBoard(userId: string, boardId: string, patch: Record
       push("facility_id", v);
     }
     if (patch.color !== undefined) push("color", parseBoardColor(patch.color));
+    // ── 기본 완료 조건(276) — 객체 전체 교체. 기존 할 일에는 소급하지 않는다. ──
+    if (patch.defaultCompleteRules !== undefined) {
+      vals.push(JSON.stringify(normalizeCompleteRules(patch.defaultCompleteRules)));
+      sets.push(`default_complete_rules = $${vals.length}::jsonb`);
+    }
     if (!sets.length) return;
     push("updated_at", nowIso());
     push("updated_by", userId);
@@ -933,6 +946,9 @@ function mapItem(r: Record<string, unknown>, userId: string, canEdit: boolean, p
     contractId: text(r.board_contract_id) ?? linkedContract,
     completedAt: r.completed_at != null ? String(r.completed_at) : null,
     completedBy: r.completed_by != null ? String(r.completed_by) : null,
+    completeRules: normalizeCompleteRules(r.complete_rules),
+    completionNote: text(r.completion_note),
+    reviewedAt: r.reviewed_at != null ? String(r.reviewed_at) : null,
     archivedAt: r.archived_at != null ? String(r.archived_at) : null,
     createdAt: String(r.created_at ?? ""),
     createdBy: r.created_by != null ? String(r.created_by) : null,
@@ -993,19 +1009,31 @@ export interface ListItemsQuery {
   boardId?: string | null;
   from?: string | null;
   to?: string | null;
-  /** 완료 포함 여부(기본 false → prefs.show_done_days 이내 완료만 포함하려면 true). */
+  /**
+   * 완료 포함 여부(기본 false = 미완만). true 면 보관되지 않은 완료 항목을 모두 포함하고 completed_at 내림차순으로 뒤에 붙인다
+   * (2026-10-14: 완료 목록 섹션이 "완료 숨김/표시(N일)" 필터를 대체 — prefs.show_done_days 창은 더 쓰지 않는다).
+   */
   done?: boolean;
   includeArchived?: boolean;
+  /** 보관함 — 보관(archived_at)된 항목만(완료 30일 경과 자동 보관분). done 과 무관하게 전부 완료 항목이다. */
+  archivedOnly?: boolean;
+}
+
+export interface ListItemsResult {
+  items: TodoItem[];
+  boards: TodoBoard[];
+  /** 같은 범위의 완료 건수(보관 제외, 상위 작업만). done 을 켜지 않아도 돌려준다. */
+  doneCount: number;
 }
 
 /** 가시성 적용 목록. 상위 작업만(하위는 집계·상세). */
-export async function listItems(userId: string, q: ListItemsQuery): Promise<{ items: TodoItem[]; boards: TodoBoard[] }> {
+export async function listItems(userId: string, q: ListItemsQuery): Promise<ListItemsResult> {
   const boards = await listBoards(userId);
   const db = await getDb();
-  const prefs = await getPrefs(userId, db);
   const vals: unknown[] = [userId];
   const where: string[] = [visibleItemsWhere("$1"), "i.parent_item_id IS NULL"];
-  if (!q.includeArchived) where.push("i.archived_at IS NULL");
+  if (q.archivedOnly) where.push("i.archived_at IS NOT NULL");
+  else if (!q.includeArchived) where.push("i.archived_at IS NULL");
   if (q.view === "my") {
     where.push("(i.assignee_user_id = $1 OR (i.assignee_user_id IS NULL AND i.owner_user_id = $1))");
   } else if (q.view === "board") {
@@ -1018,14 +1046,12 @@ export async function listItems(userId: string, q: ListItemsQuery): Promise<{ it
     // 공유받음 — 남이 만든 작업 중 나에게 배정·공유됐거나 멤버 보드의 것
     where.push("i.owner_user_id <> $1");
   }
-  if (q.done) {
-    if (prefs.showDoneDays > 0) {
-      vals.push(addDaysYmd(kstToday(), -prefs.showDoneDays));
-      where.push(`(i.status <> 'done' OR i.completed_at IS NULL OR substr(i.completed_at, 1, 10) >= $${vals.length})`);
-    }
-  } else {
-    where.push("i.status <> 'done'");
-  }
+  // 완료 건수 — 날짜 구간·done 필터를 적용하기 전의 범위 조건으로 센다(보관 제외, 보관함 모드면 보관분 기준).
+  const countRows = rowsToObjects(
+    await db.exec(`SELECT COUNT(*)::int AS n FROM todo_items i WHERE ${[...where, "i.status = 'done'"].join(" AND ")}`, vals)
+  );
+  const doneCount = countRows.length ? Number(countRows[0].n ?? 0) : 0;
+  if (!q.done && !q.archivedOnly) where.push("i.status <> 'done'");
   if (q.from && DATE_RE.test(q.from)) {
     vals.push(q.from);
     where.push(`(COALESCE(i.do_date, i.due_date) >= $${vals.length})`);
@@ -1034,14 +1060,16 @@ export async function listItems(userId: string, q: ListItemsQuery): Promise<{ it
     vals.push(q.to);
     where.push(`(COALESCE(i.do_date, i.due_date) <= $${vals.length})`);
   }
+  // 미완은 보드·열·순서, 완료는 뒤에 completed_at 내림차순(최근 완료 먼저).
   const rows = rowsToObjects(
     await db.exec(
       `${ITEM_SELECT} WHERE ${where.join(" AND ")}
-        ORDER BY i.board_id, i.column_id NULLS LAST, i.position COLLATE "C", i.created_at`,
+        ORDER BY (i.status = 'done'), CASE WHEN i.status = 'done' THEN i.completed_at END DESC NULLS LAST,
+                 i.board_id, i.column_id NULLS LAST, i.position COLLATE "C", i.created_at`,
       vals
     )
   );
-  return { items: await mapItemsWithEdit(db, userId, rows), boards };
+  return { items: await mapItemsWithEdit(db, userId, rows), boards, doneCount };
 }
 
 async function loadItemRow(db: PgDatabase, itemId: string): Promise<Record<string, unknown>> {
@@ -1151,6 +1179,33 @@ async function logActivity(db: PgDatabase, itemId: string, userId: string | null
     `INSERT INTO todo_activity (activity_id, item_id, user_id, action, detail, created_at) VALUES ($1,$2,$3,$4,$5::jsonb,$6)`,
     [newId("ta_"), itemId, userId, action, JSON.stringify(detail), nowIso()]
   );
+}
+
+/** 미완(status<>done, 보관 제외) 하위 작업 수 — 완료 조건 subtasks 검사용. */
+async function openSubtaskCount(db: PgDatabase, itemId: string): Promise<number> {
+  const rows = rowsToObjects(
+    await db.exec(`SELECT COUNT(*)::int AS n FROM todo_items WHERE parent_item_id = $1 AND archived_at IS NULL AND status <> 'done'`, [itemId])
+  );
+  return rows.length ? Number(rows[0].n ?? 0) : 0;
+}
+
+/**
+ * 완료 조건(276) 검사 — 미충족이면 409 를 던진다. 라우트는 err.code/err.detail 을 그대로 응답에 싣는다:
+ *   { error, code: "complete_rules", missing: ["subtasks"|"note"|"review"], openSubtasks: n }
+ */
+async function assertCompletable(
+  db: PgDatabase,
+  itemId: string,
+  rules: TodoCompleteRules,
+  facts: { status: string; completionNote: string | null; reviewedAt: string | null }
+): Promise<void> {
+  const openSubtasks = rules.subtasks ? await openSubtaskCount(db, itemId) : 0;
+  const check = checkCompletion(rules, { ...facts, openSubtasks });
+  if (check.ok) return;
+  throw Object.assign(fail(completionErrorMessage(check), 409), {
+    code: "complete_rules",
+    detail: { missing: check.missing, openSubtasks: check.openSubtasks },
+  });
 }
 
 async function userName(db: PgDatabase, userId: string): Promise<string | null> {
@@ -1289,12 +1344,15 @@ export async function createItem(userId: string, input: Record<string, unknown>)
     let boardId = str(input.boardId, 40);
     let columnId = str(input.columnId, 40);
     let status = v.status;
+    // 완료 조건(276) — 입력이 있으면 그대로, 없으면 보드 기본값 복사(하위 작업은 조건 없음).
+    let completeRules: TodoCompleteRules = input.completeRules !== undefined ? normalizeCompleteRules(input.completeRules) : {};
     if (parentItemId) {
       // 하위 작업은 부모의 보드를 따르고 1단계만 허용.
       const parent = await requireEdit(db, userId, parentItemId);
       if (parent.parent_item_id != null) throw fail("하위 작업 아래에 또 하위 작업을 만들 수 없습니다.");
       boardId = String(parent.board_id);
       columnId = null;
+      completeRules = {};
     } else {
       if (!boardId) {
         const rows = rowsToObjects(await db.exec(`SELECT board_id FROM todo_boards WHERE owner_user_id = $1 AND is_default = 1`, [userId]));
@@ -1304,6 +1362,7 @@ export async function createItem(userId: string, input: Record<string, unknown>)
       const b = await loadBoardAccess(db, boardId);
       const role = await boardRole(db, b, userId);
       if (!role || role === "viewer") throw fail("이 보드에 할 일을 만들 수 없습니다.", 403);
+      if (input.completeRules === undefined) completeRules = normalizeCompleteRules(b.row.default_complete_rules);
       if (columnId) {
         const ci = await columnInfo(db, boardId, columnId);
         if (ci.mapped && ci.statusMap && input.status === undefined) status = ci.statusMap;
@@ -1333,8 +1392,8 @@ export async function createItem(userId: string, input: Record<string, unknown>)
       `INSERT INTO todo_items
          (item_id, board_id, column_id, parent_item_id, title, note, status, priority, do_date, do_time, duration_min, due_date, all_day,
           remind_at, recurrence, position, link_kind, link_id, link_label, color, owner_user_id, assignee_user_id,
-          completed_at, completed_by, created_at, created_by, updated_at, updated_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$21,$25,$21)`,
+          completed_at, completed_by, created_at, created_by, updated_at, updated_by, complete_rules, reviewed_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$21,$25,$21,$26::jsonb,$27)`,
       [
         itemId,
         boardId,
@@ -1361,6 +1420,8 @@ export async function createItem(userId: string, input: Record<string, unknown>)
         completed ? now : null,
         completed ? userId : null,
         now,
+        JSON.stringify(completeRules),
+        status === "review" ? now : null,
       ]
     );
     await logActivity(db, itemId, userId, "create", { title: v.title, boardId, parentItemId });
@@ -1476,12 +1537,32 @@ export async function updateItem(userId: string, itemId: string, patch: Record<s
       }
     }
 
+    // ── 완료 조건·완료 메모(276) ──
+    const curRules = normalizeCompleteRules(cur.complete_rules);
+    let completeRules = curRules;
+    if (patch.completeRules !== undefined) {
+      if (patch.completeRules !== null && typeof patch.completeRules !== "object") throw fail("완료 조건 값이 올바르지 않습니다.");
+      if (parentItemId) throw fail("하위 작업에는 완료 조건을 둘 수 없습니다.");
+      completeRules = normalizeCompleteRules(patch.completeRules);
+      if (!sameCompleteRules(curRules, completeRules)) changes.completeRules = [curRules, completeRules];
+    }
+    let completionNote = cur.completion_note != null ? String(cur.completion_note) : null;
+    if (patch.completionNote !== undefined) {
+      const next = str(patch.completionNote, 2000);
+      note("completionNote", completionNote, next);
+      completionNote = next;
+    }
+
     // ── 상태·완료 ──
     note("status", String(cur.status), status);
     const now = nowIso();
     let completedAt = cur.completed_at != null ? String(cur.completed_at) : null;
     let completedBy = cur.completed_by != null ? String(cur.completed_by) : null;
+    let reviewedAt = cur.reviewed_at != null ? String(cur.reviewed_at) : null;
+    if (status === "review" && String(cur.status) !== "review") reviewedAt = now;
     if (status === "done" && String(cur.status) !== "done") {
+      // 완료 조건 검사 — 미충족이면 409(code complete_rules). 체크 경로(completeItem)와 같은 규칙.
+      await assertCompletable(db, itemId, completeRules, { status: String(cur.status), completionNote, reviewedAt });
       completedAt = now;
       completedBy = userId;
     } else if (status !== "done" && String(cur.status) === "done") {
@@ -1535,7 +1616,8 @@ export async function updateItem(userId: string, itemId: string, patch: Record<s
          do_date = $9, do_time = $10, duration_min = $11, due_date = $12, all_day = $13,
          remind_at = $14, remind_sent_at = $15, snoozed_until = $16, recurrence = $17,
          link_kind = $18, link_id = $19, link_label = $20, color = $21, assignee_user_id = $22,
-         completed_at = $23, completed_by = $24, updated_at = $25, updated_by = $26
+         completed_at = $23, completed_by = $24, updated_at = $25, updated_by = $26,
+         complete_rules = $27::jsonb, completion_note = $28, reviewed_at = $29
        WHERE item_id = $1`,
       [
         itemId,
@@ -1564,6 +1646,9 @@ export async function updateItem(userId: string, itemId: string, patch: Record<s
         completedBy,
         now,
         userId,
+        JSON.stringify(completeRules),
+        completionNote,
+        reviewedAt,
       ]
     );
 
@@ -1571,7 +1656,7 @@ export async function updateItem(userId: string, itemId: string, patch: Record<s
     const byName = await userName(db, userId);
     if (changes.status) {
       const action: TodoActivityAction = status === "done" ? "complete" : String(cur.status) === "done" ? "reopen" : "status";
-      await logActivity(db, itemId, userId, action, { from: changes.status[0], to: changes.status[1] });
+      await logActivity(db, itemId, userId, action, { from: changes.status[0], to: changes.status[1], ...(action === "complete" && completionNote ? { note: completionNote } : {}) });
       const recipients = await subscribersOf(db, itemId);
       pushes.push(() => notifyTodoStatus({ itemId, title: v.title, status, byUserId: userId, byName, recipients }));
     }
@@ -1626,28 +1711,54 @@ export async function deleteItem(userId: string, itemId: string): Promise<void> 
   });
 }
 
+export interface CompleteItemOptions {
+  /** 완료 메모 — 규칙 note 가 켜져 있으면 필수(기존 completion_note 가 있으면 생략 가능). 있으면 저장·활동 로그에 남긴다. */
+  completionNote?: unknown;
+}
+
 /**
- * 완료/되돌리기. 완료 시 반복 규칙이 있으면 다음 발생 1건을 새로 만든다(지난 반복은 오늘 이후 첫 발생).
- * 되돌리기(done=false)는 status 를 todo 로.
+ * 완료/되돌리기. 완료 시 완료 조건(276)을 검사하고(미충족 409 code complete_rules), 반복 규칙이 있으면 다음 발생 1건을 새로 만든다
+ * (지난 반복은 오늘 이후 첫 발생). 되돌리기(done=false)는 제한 없이 status 를 todo 로 — 보관(archived_at)도 풀어 목록으로 되돌린다.
  */
-export async function completeItem(userId: string, itemId: string, done: boolean): Promise<{ item: TodoItemDetail; next: TodoItem | null }> {
+export async function completeItem(userId: string, itemId: string, done: boolean, opts: CompleteItemOptions = {}): Promise<{ item: TodoItemDetail; next: TodoItem | null }> {
   let nextId: string | null = null;
   let statusPush: (() => void) | null = null;
   await withDbWrite(async (db) => {
     const cur = await requireEdit(db, userId, itemId);
     const wasDone = String(cur.status) === "done";
-    if (done === wasDone) return;
+    const noteInput = opts.completionNote === undefined ? undefined : str(opts.completionNote, 2000);
+    const completionNote = noteInput !== undefined ? noteInput : cur.completion_note != null ? String(cur.completion_note) : null;
+    if (done === wasDone) {
+      // 이미 완료된 항목에 메모만 덧붙이는 경우
+      if (done && noteInput !== undefined && noteInput !== (cur.completion_note ?? null)) {
+        await db.run(`UPDATE todo_items SET completion_note = $2, updated_at = $3, updated_by = $4 WHERE item_id = $1`, [itemId, completionNote, nowIso(), userId]);
+      }
+      return;
+    }
+    if (done) {
+      await assertCompletable(db, itemId, normalizeCompleteRules(cur.complete_rules), {
+        status: String(cur.status),
+        completionNote,
+        reviewedAt: cur.reviewed_at != null ? String(cur.reviewed_at) : null,
+      });
+    }
     const now = nowIso();
     const status: TodoStatus = done ? "done" : "todo";
     const boardId = String(cur.board_id);
     const mapped = await columnForStatus(db, boardId, status);
     const columnId = mapped ?? (cur.column_id != null ? String(cur.column_id) : null);
     await db.run(
-      `UPDATE todo_items SET status = $2, column_id = $3, completed_at = $4, completed_by = $5, updated_at = $6, updated_by = $7
+      `UPDATE todo_items SET status = $2, column_id = $3, completed_at = $4, completed_by = $5, updated_at = $6, updated_by = $7,
+              completion_note = $8, archived_at = CASE WHEN $2 = 'done' THEN archived_at ELSE NULL END
         WHERE item_id = $1`,
-      [itemId, status, columnId, done ? now : null, done ? userId : null, now, userId]
+      [itemId, status, columnId, done ? now : null, done ? userId : null, now, userId, done ? completionNote : cur.completion_note ?? null]
     );
-    await logActivity(db, itemId, userId, done ? "complete" : "reopen", { from: String(cur.status), to: status });
+    await logActivity(db, itemId, userId, done ? "complete" : "reopen", {
+      from: String(cur.status),
+      to: status,
+      ...(done && completionNote ? { note: completionNote } : {}),
+      ...(!done && cur.archived_at != null ? { unarchived: true } : {}),
+    });
     const byName = await userName(db, userId);
     const recipients = await subscribersOf(db, itemId);
     const title = String(cur.title);

@@ -286,39 +286,42 @@ export function LinkPickerModal({ open, onClose, onPick, initialKind }: { open: 
           })}
         </div>
 
-        {kind === "contract" && (
-          <ContractPicker active={open && kind === "contract"} selectedId={sel?.id ?? null} onSelect={(c) => setSel({ id: c.contractId, title: c.contractTitle, sub: c.counterpartyName })} />
-        )}
+        {/* 본문 고정 높이(todo-lp-body 370px, 측정값은 todo.css 주석) — 종류를 바꿔도 모달 높이가 변하지 않는다. 짧은 탭(링크)은 위 정렬. */}
+        <div className="todo-lp-body">
+          {kind === "contract" && (
+            <ContractPicker active={open && kind === "contract"} selectedId={sel?.id ?? null} onSelect={(c) => setSel({ id: c.contractId, title: c.contractTitle, sub: c.counterpartyName })} />
+          )}
 
-        {kind === "url" && (
-          <>
-            <CdInput
-              label="주소"
-              required
-              placeholder="https://…"
-              value={url}
-              error={urlError ?? undefined}
-              onChange={(e) => {
-                setUrl(e.target.value);
-                setUrlError(null);
-              }}
-              onKeyDown={(e) => e.key === "Enter" && submit()}
-            />
-            <CdInput label="표시 이름(선택)" placeholder="비우면 주소가 그대로 보입니다" value={urlLabel} maxLength={120} onChange={(e) => setUrlLabel(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
-          </>
-        )}
+          {kind === "url" && (
+            <>
+              <CdInput
+                label="주소"
+                required
+                placeholder="https://…"
+                value={url}
+                error={urlError ?? undefined}
+                onChange={(e) => {
+                  setUrl(e.target.value);
+                  setUrlError(null);
+                }}
+                onKeyDown={(e) => e.key === "Enter" && submit()}
+              />
+              <CdInput label="표시 이름(선택)" placeholder="비우면 주소가 그대로 보입니다" value={urlLabel} maxLength={120} onChange={(e) => setUrlLabel(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
+            </>
+          )}
 
-        {kind !== "contract" && kind !== "url" && (
-          <>
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 cd-text-faint pointer-events-none" aria-hidden="true" />
-              <input className="cd-input !pl-8" value={q} placeholder={PLACEHOLDER[kind]} aria-label={`${TODO_LINK_KIND_LABELS[kind]} 검색`} onChange={(e) => setQ(e.target.value)} autoFocus />
-            </div>
-            <div className="todo-lp-list" role="listbox" aria-label={`${TODO_LINK_KIND_LABELS[kind]} 목록`}>
-              {list()}
-            </div>
-          </>
-        )}
+          {kind !== "contract" && kind !== "url" && (
+            <>
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 cd-text-faint pointer-events-none" aria-hidden="true" />
+                <input className="cd-input !pl-8" value={q} placeholder={PLACEHOLDER[kind]} aria-label={`${TODO_LINK_KIND_LABELS[kind]} 검색`} onChange={(e) => setQ(e.target.value)} autoFocus />
+              </div>
+              <div className="todo-lp-list" role="listbox" aria-label={`${TODO_LINK_KIND_LABELS[kind]} 목록`}>
+                {list()}
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </CdModal>
   );

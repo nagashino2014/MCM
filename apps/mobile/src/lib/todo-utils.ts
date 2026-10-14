@@ -291,6 +291,8 @@ export const TODO_UI = {
     over: { bg: '#FDF1F1', border: '#EFBFBF', fg: '#9b2222' },
     week: { bg: '#F1F8EC', border: '#BFDDAE', fg: null as string | null },
     shared: { bg: '#F4F0FB', border: '#CFC2EE', fg: null as string | null },
+    /** 완료 N(276) — 회색 */
+    done: { bg: '#F3F4F6', border: '#D7DAE0', fg: null as string | null },
   },
 } as const;
 

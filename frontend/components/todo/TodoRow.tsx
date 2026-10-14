@@ -1,9 +1,10 @@
 "use client";
 
 // 할 일 행(내 할 일·공유받음·보드 목록 공용, 시안 v4) + 결재 일정 읽기 전용 행 + 열 머리글 + 체크 원·라벨 조각.
-// 행 58px: 좌측 4px 파스텔 띠(--todo-tint = item.boardColor) · 체크 원 18px 중립색 · 제목 15px(앞에 높음/낮음 라벨) · 둘째 줄 맥락(색 점 + 용역명 · 발주처 ·
+// 행 70px(2026-10-14 58→70 확대, compact 54): 좌측 4px 파스텔 띠(--todo-tint = item.boardColor) · 체크 원 18px 중립색 · 제목 15px(앞에 높음/낮음 라벨) · 둘째 줄 맥락(색 점 + 용역명 · 발주처 ·
 // 하위 미니 분절 바 · 댓글) · 예정 열 · 마감 열(지연/오늘 파스텔 라벨) · 담당(사진 아바타 20px) · 액션. 결재 행은 체크 대신 24px 파스텔 원 아이콘 + 종류 칩 + "문서 열기".
-// 완료 애니메이션(§7.5): 체크 원 채움(120ms) → 행 opacity/height 0(240ms) → 제거. prefers-reduced-motion 이면 즉시. 시각 규칙은 todo.css 의 todo-* 에만 둔다.
+// 완료(§7.5 · 2026-10-14 보완): 체크 원 채움 → 상위가 완료 조건 모달·서버 호출 → 성공이면 2초 동안 "완료됨 · 되돌리기"로 제자리 유지(justDone) →
+//   행 opacity/height 0(240ms) → 완료 섹션으로 이동. 되돌리기는 즉시 원위치. prefers-reduced-motion 이면 접힘 애니메이션 생략. 시각 규칙은 todo.css 의 todo-* 에만 둔다.
 
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import Link from "next/link";
@@ -12,7 +13,8 @@ import { CdAvatar } from "@/components/cdash";
 import type { TodoApprovalEvent, TodoItem, TodoLinkKind, TodoPriority } from "@/lib/todo/types";
 import { TODO_APPROVAL_EVENT_LABELS, TODO_LINK_KIND_LABELS } from "@/lib/todo/types";
 import { describeRecurrence } from "@/lib/todo/recurrence";
-import { approvalKindIcon, contextParts, dueBadge, md, pendingAgeDays, pendingContextParts, prefersReducedMotion, weekdayKo, type DueBadge } from "./todo-utils";
+import { completeRulesSummary } from "@/lib/todo/completion";
+import { approvalKindIcon, contextParts, dueBadge, fmtIsoShort, md, pendingAgeDays, pendingContextParts, prefersReducedMotion, weekdayKo, type DueBadge } from "./todo-utils";
 
 export type Density = "comfortable" | "compact";
 export type TimeCell = "time" | "date" | "none";
@@ -179,6 +181,9 @@ function doCellText(item: TodoItem, timeCell: TimeCell): ReactNode {
 }
 
 // ── 할 일 행 ──
+/** 완료 체크 뒤 행이 접히기까지의 유예(2026-10-14) — 그동안 "완료됨 · 되돌리기"가 행 자리에 남는다. */
+export const TODO_DONE_GRACE_MS = 2000;
+
 export interface TodoRowProps {
   item: TodoItem;
   today: string;
@@ -186,49 +191,81 @@ export interface TodoRowProps {
   selected?: boolean;
   /** 예정 열 — 같은 날 묶음이면 시각(종일은 '종일'), 아니면 M/D */
   timeCell?: TimeCell;
-  /** 완료 체크 뒤 행을 목록에서 제거할지(완료 숨김 켜짐) */
+  /** 완료 유예가 끝난 뒤 접힘 애니메이션(240ms)으로 행을 치울지(완료 섹션으로 이동). false 면 제자리 유지. */
   removeOnComplete?: boolean;
   /** 맥락 줄 보조 문구(예: "김민수와 공유") */
   trailing?: ReactNode;
+  /**
+   * 방금 완료된 행(상위가 2초 유예 동안 원래 섹션에 유지) — 체크 채움 + "완료됨 · 되돌리기". 유예가 끝나면 onSettled 를 부른다.
+   */
+  justDone?: boolean;
   onOpen: (item: TodoItem) => void;
-  onComplete: (item: TodoItem, done: boolean) => void;
+  /**
+   * 완료(true)/되돌리기(false). 완료 요청은 상위가 완료 조건 모달·서버 호출을 끝낸 뒤 성공 여부를 돌려준다 —
+   * false(취소·실패)면 체크를 비운다. 동기 void 로 돌려도 된다(성공으로 본다).
+   */
+  onComplete: (item: TodoItem, done: boolean) => void | Promise<boolean | void>;
+  /** 유예 중 "되돌리기" — 상위가 유예를 취소하고 done=false 를 보낸다. */
+  onUndo?: (item: TodoItem) => void;
+  /** 유예(+접힘 애니메이션)가 끝남 — 상위가 유예 집합에서 빼 완료 섹션으로 보낸다. */
+  onSettled?: (item: TodoItem) => void;
 }
 
-export function TodoRow({ item, today, density = "comfortable", selected, timeCell = "time", removeOnComplete = true, trailing, onOpen, onComplete }: TodoRowProps) {
+export function TodoRow({ item, today, density = "comfortable", selected, timeCell = "time", removeOnComplete = true, trailing, justDone = false, onOpen, onComplete, onUndo, onSettled }: TodoRowProps) {
   const [phase, setPhase] = useState<"idle" | "checked" | "leaving">("idle");
   const timers = useRef<number[]>([]);
   useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
   const done = item.status === "done";
+  const latest = useRef({ item, onSettled, removeOnComplete });
+  latest.current = { item, onSettled, removeOnComplete };
+
+  // 유예: justDone 이 켜지면 2초 뒤 접힘(240ms) → onSettled. 꺼지면(되돌리기) 타이머를 버리고 원위치.
+  useEffect(() => {
+    if (!justDone) {
+      timers.current.forEach((t) => window.clearTimeout(t));
+      timers.current = [];
+      setPhase("idle");
+      return;
+    }
+    setPhase("checked");
+    const settle = () => {
+      setPhase("idle");
+      latest.current.onSettled?.(latest.current.item);
+    };
+    timers.current.push(
+      window.setTimeout(() => {
+        if (!latest.current.removeOnComplete || prefersReducedMotion()) {
+          settle();
+          return;
+        }
+        setPhase("leaving");
+        timers.current.push(window.setTimeout(settle, 240));
+      }, TODO_DONE_GRACE_MS)
+    );
+    return () => {
+      timers.current.forEach((t) => window.clearTimeout(t));
+      timers.current = [];
+    };
+  }, [justDone]);
 
   const toggle = (e?: MouseEvent | KeyboardEvent) => {
     e?.stopPropagation();
     e?.preventDefault();
-    if (phase !== "idle") return;
+    if (justDone) {
+      onUndo?.(item);
+      return;
+    }
     if (done) {
-      onComplete(item, false);
+      // 완료 행의 체크 해제 = 되돌리기(유예 없이 즉시). 애니메이션 상태와 무관하게 허용한다.
+      void onComplete(item, false);
       return;
     }
-    if (prefersReducedMotion()) {
-      onComplete(item, true);
-      return;
-    }
+    if (phase !== "idle") return;
+    // 체크를 먼저 채우고 상위(모달·서버)의 결과를 기다린다. 취소·실패면 비운다.
     setPhase("checked");
-    timers.current.push(
-      window.setTimeout(() => {
-        if (!removeOnComplete) {
-          setPhase("idle");
-          onComplete(item, true);
-          return;
-        }
-        setPhase("leaving");
-        timers.current.push(
-          window.setTimeout(() => {
-            setPhase("idle");
-            onComplete(item, true);
-          }, 240)
-        );
-      }, 120)
-    );
+    void Promise.resolve(onComplete(item, true)).then((ok) => {
+      if (ok === false) setPhase("idle");
+    });
   };
 
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -243,6 +280,7 @@ export function TodoRow({ item, today, density = "comfortable", selected, timeCe
   const badge = dueBadge(item, today, true);
   const ctx = contextParts(item);
   const rec = describeRecurrence(item.recurrence);
+  const rulesSummary = completeRulesSummary(item.completeRules);
 
   return (
     <div
@@ -253,20 +291,40 @@ export function TodoRow({ item, today, density = "comfortable", selected, timeCe
       data-density={density === "compact" ? "compact" : undefined}
       data-selected={selected ? "true" : undefined}
       data-leaving={phase === "leaving" ? "true" : undefined}
+      data-justdone={justDone ? "true" : undefined}
       aria-label={item.title}
       style={tintStyle(item.boardColor)}
       onClick={() => onOpen(item)}
       onKeyDown={onKey}
     >
       <span className="todo-c-ck">
-        <TodoCheck done={done} filled={phase !== "idle"} onClick={toggle} />
+        <TodoCheck done={done} filled={phase !== "idle" || justDone} onClick={toggle} />
       </span>
       <div className="todo-c-t">
-        <div className="todo-ttl" data-done={done ? "true" : undefined}>
+        <div className="todo-ttl" data-done={done || justDone ? "true" : undefined}>
           <PriorityLabel priority={item.priority} />
           <span>{item.title}</span>
         </div>
-        {!done && (
+        {done && !justDone && (
+          <div className="todo-ctx" data-done="true">
+            <span className="todo-ctx-txt">완료{item.completedAt ? ` · ${fmtIsoShort(item.completedAt)}` : ""}</span>
+            {item.completionNote && (
+              <>
+                <span className="todo-sep">·</span>
+                <span className="todo-ctx-txt" title={item.completionNote}>
+                  {item.completionNote}
+                </span>
+              </>
+            )}
+            {rulesSummary && (
+              <>
+                <span className="todo-sep">·</span>
+                <span className="todo-ctx-txt">조건 {rulesSummary}</span>
+              </>
+            )}
+          </div>
+        )}
+        {!done && !justDone && (
           <div className="todo-ctx">
             <span className="todo-dot" aria-hidden="true" />
             <span className="todo-ctx-txt">{ctx.primary}</span>
@@ -312,9 +370,9 @@ export function TodoRow({ item, today, density = "comfortable", selected, timeCe
         <Assignee name={item.assigneeName} photoUrl={item.assigneePhotoUrl} />
       </div>
       <div className="todo-c-act">
-        {done && (
+        {(done || justDone) && (
           <>
-            <span className="todo-mu">완료 · </span>
+            <span className="todo-mu">{justDone ? "완료됨 · " : "완료 · "}</span>
             <button type="button" onClick={toggle}>
               되돌리기
             </button>

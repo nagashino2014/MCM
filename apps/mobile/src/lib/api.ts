@@ -79,12 +79,24 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
   return res;
 }
 
-/** JSON 응답 헬퍼. 실패 시 throw. */
+/** apiJson 이 던지는 오류 — 상태 코드·응답 본문을 함께 든다(예: 할 일 완료 조건 409 { code: "complete_rules" }). */
+export class ApiJsonError extends Error {
+  status: number;
+  data: Record<string, unknown>;
+  constructor(message: string, status: number, data: Record<string, unknown>) {
+    super(message);
+    this.name = 'ApiJsonError';
+    this.status = status;
+    this.data = data;
+  }
+}
+
+/** JSON 응답 헬퍼. 실패 시 ApiJsonError throw(메시지는 본문 error). */
 export async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await apiFetch(path, init);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}) as Record<string, unknown>);
-    throw new Error((body as { error?: string }).error ?? `요청 실패 (HTTP ${res.status})`);
+    throw new ApiJsonError((body as { error?: string }).error ?? `요청 실패 (HTTP ${res.status})`, res.status, body as Record<string, unknown>);
   }
   return res.json() as Promise<T>;
 }

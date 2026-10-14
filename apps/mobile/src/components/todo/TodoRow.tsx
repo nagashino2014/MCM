@@ -5,12 +5,12 @@ import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-na
 
 import { useTheme } from '@/theme/useTheme';
 import { TODO_APPROVAL_EVENT_LABELS, type TodoApprovalEvent, type TodoItem } from '@/lib/todo-types';
-import { approvalEventColor, dueBadge, fmtMd, fmtRange, itemContext, pendingAgeDays, pendingContextParts, withAlpha } from '@/lib/todo-utils';
+import { approvalEventColor, dueBadge, fmtIsoShort, fmtMd, fmtRange, itemContext, pendingAgeDays, pendingContextParts, withAlpha } from '@/lib/todo-utils';
 
 import { BoardStripe, CheckCircle, ContextDot, DueBadge, KindCircle, MiniAvatar, PastelLabel, SegBar, PriorityLabel } from './parts';
 
 /**
- * 목록 행(v4 §19-9, 66px 이상) — 좌측 4px 보드 색 띠 · 중립 체크 원 · 제목 15px(높음/낮음 라벨) ·
+ * 목록 행(v4 §19-9, 76px 이상 — 2026-10-14 66→76 비례 확대, 내부 간격 +2px) — 좌측 4px 보드 색 띠 · 중립 체크 원 · 제목 15px(높음/낮음 라벨) ·
  * 둘째 줄 맥락(색 점 + 용역 · 발주처) · 셋째 줄 메타(예정 · 마감 라벨 · 담당 · 미니 분절 바 n/m · 댓글) · 우측 ⋮.
  * 완료 직후(`justDone`)는 행을 240ms 페이드해 흐리게 두고 "완료 · 되돌리기"를 5초 보여 준다(§7.5).
  * 체크·되돌리기 자체는 상위가 낙관적으로 처리하고 여기서는 그리기만 한다.
@@ -106,7 +106,7 @@ export function TodoRow({
     <Animated.View style={faded}>
       <Pressable
         onPress={onPress}
-        style={{ minHeight: 66, paddingVertical: 11, paddingLeft: 16, paddingRight: 8 }}
+        style={{ minHeight: 76, paddingVertical: 14, paddingLeft: 16, paddingRight: 8 }}
         className={`flex-row items-start gap-3 active:bg-cd-surface ${last ? '' : 'border-b border-cd-grid-line'}`}>
         <BoardStripe color={item.boardColor} />
         <View style={{ marginTop: 1 }}>
@@ -122,16 +122,22 @@ export function TodoRow({
             </Text>
           </View>
           {justDone ? (
-            <View className="mt-[3px] flex-row items-center gap-1.5">
-              <Text className="text-[12.5px] text-cd-muted">완료 ·</Text>
+            <View className="mt-[5px] flex-row items-center gap-1.5">
+              <Text className="text-[12.5px] text-cd-muted">완료됨 ·</Text>
               <Pressable onPress={onUndo} hitSlop={8} className="active:opacity-60">
                 <Text className="text-[12.5px] font-semibold text-cd-primary">되돌리기</Text>
               </Pressable>
             </View>
+          ) : item.status === 'done' ? (
+            // 완료 섹션 행 — 완료 시각 · 완료 메모 1줄(체크를 다시 누르면 되돌리기)
+            <Text numberOfLines={1} className="mt-[5px] text-[12.5px] text-cd-faint">
+              완료{item.completedAt ? ` · ${fmtIsoShort(item.completedAt)}` : ''}
+              {item.completionNote ? ` · ${item.completionNote}` : ''}
+            </Text>
           ) : (
             <>
               {context ? (
-                <View className="mt-[3px] flex-row items-center gap-1.5">
+                <View className="mt-[5px] flex-row items-center gap-1.5">
                   <ContextDot color={item.boardColor} />
                   <Text numberOfLines={1} className="flex-1 text-[12.5px] text-cd-muted">
                     {context}
@@ -139,7 +145,7 @@ export function TodoRow({
                 </View>
               ) : null}
               {meta.length ? (
-                <View className="mt-[5px] flex-row flex-wrap items-center gap-x-2 gap-y-1">
+                <View className="mt-[7px] flex-row flex-wrap items-center gap-x-2 gap-y-1">
                   {meta.map((m, i) => (
                     <Fragment key={i}>
                       {i > 0 ? <Text className="text-[12px] text-cd-faint">·</Text> : null}
@@ -205,7 +211,7 @@ export function ApprovalEventRow({
     <Pressable
       onPress={onPress}
       disabled={!onPress}
-      style={{ minHeight: 66, paddingVertical: 11, paddingLeft: 16, paddingRight: 12, backgroundColor: withAlpha(color, 0.12) }}
+      style={{ minHeight: 76, paddingVertical: 14, paddingLeft: 16, paddingRight: 12, backgroundColor: withAlpha(color, 0.12) }}
       className={`flex-row items-start gap-3 active:opacity-70 ${last ? '' : 'border-b border-cd-grid-line'}`}>
       <BoardStripe color={color} />
       <View style={{ marginTop: -1 }}>
@@ -219,14 +225,14 @@ export function ApprovalEventRow({
           </Text>
         </View>
         {context ? (
-          <View className="mt-[3px] flex-row items-center gap-1.5">
+          <View className="mt-[5px] flex-row items-center gap-1.5">
             <ContextDot color={color} />
             <Text numberOfLines={1} className="flex-1 text-[12.5px] text-cd-muted">
               {context}
             </Text>
           </View>
         ) : null}
-        <Text className="mt-[5px] text-[12.5px] text-cd-muted">
+        <Text className="mt-[7px] text-[12.5px] text-cd-muted">
           {meta}
           {event.drafterName ? <Text className="text-cd-faint"> · {event.drafterName}</Text> : null}
         </Text>
@@ -266,7 +272,7 @@ export function PendingApprovalRow({
     <Pressable
       onPress={onPress}
       disabled={!onPress}
-      style={{ minHeight: 66, paddingVertical: 11, paddingLeft: 16, paddingRight: 12, backgroundColor: withAlpha(color, 0.12) }}
+      style={{ minHeight: 76, paddingVertical: 14, paddingLeft: 16, paddingRight: 12, backgroundColor: withAlpha(color, 0.12) }}
       className={`flex-row items-start gap-3 active:opacity-70 ${last ? '' : 'border-b border-cd-grid-line'}`}>
       <BoardStripe color={color} />
       <View style={{ marginTop: -1 }}>
@@ -280,14 +286,14 @@ export function PendingApprovalRow({
           </Text>
         </View>
         {context ? (
-          <View className="mt-[3px] flex-row items-center gap-1.5">
+          <View className="mt-[5px] flex-row items-center gap-1.5">
             <ContextDot color={color} />
             <Text numberOfLines={1} className="flex-1 text-[12.5px] text-cd-muted">
               {context}
             </Text>
           </View>
         ) : null}
-        <View className="mt-[5px] flex-row items-center gap-2">
+        <View className="mt-[7px] flex-row items-center gap-2">
           {event.drafterName ? (
             <View className="flex-row items-center gap-1">
               <MiniAvatar name={event.drafterName} photoUrl={event.drafterPhotoUrl} size={18} />

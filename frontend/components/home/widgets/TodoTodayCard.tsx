@@ -85,10 +85,14 @@ export function TodoTodayCard() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ done: true }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        // 완료 조건(276) 미충족 409 등 — 서버 문구를 그대로 보여 /todo 상세에서 처리하도록 안내한다.
+        const body = (await res.json().catch(() => ({}))) as { error?: string; code?: string };
+        throw new Error(body.code === "complete_rules" ? `${body.error ?? "완료 조건을 충족하지 않았습니다."} 할 일 화면에서 완료하세요.` : body.error || `HTTP ${res.status}`);
+      }
       w.reload();
-    } catch {
-      setError("완료 처리에 실패했습니다.");
+    } catch (e) {
+      setError((e as Error).message || "완료 처리에 실패했습니다.");
     } finally {
       setCompleting((prev) => {
         const next = new Set(prev);

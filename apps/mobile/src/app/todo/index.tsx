@@ -8,9 +8,11 @@ import { BoardChips, BoardSections, MoveSheet } from '@/components/todo/BoardSec
 import { DateGroupHeader } from '@/components/todo/parts';
 import { QuickAddBar } from '@/components/todo/QuickAddBar';
 import { ApprovalEventRow, TodoRow } from '@/components/todo/TodoRow';
+import { CompleteConfirmSheet, asCompleteRulesFailure, type CompleteRulesFailure } from '@/components/todo/CompleteConfirmSheet';
 import { apiJson } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
-import { TODO_STATUSES, TODO_STATUS_LABELS, type TodoApprovalEvent, type TodoBoard, type TodoColumn, type TodoItem, type TodoStatus } from '@/lib/todo-types';
+import { hasAnyCompleteRule } from '@/lib/todo-completion';
+import { TODO_STATUSES, TODO_STATUS_LABELS, type TodoApprovalEvent, type TodoBoard, type TodoColumn, type TodoItem, type TodoItemDetail, type TodoStatus } from '@/lib/todo-types';
 import { TODO_UI, addDays, eventCovers, fmtLongDate, fmtMd, isOverdue, keyDate, statusTone, todayLocal, weekEnd, withAlpha } from '@/lib/todo-utils';
 import { useApi } from '@/lib/use-api';
 import { useDirectorySnapshot } from '@/lib/use-directory-snapshot';
@@ -19,8 +21,10 @@ import { useTheme } from '@/theme/useTheme';
 /**
  * 할 일(§12 · v4 §19-9) — 상단 태그 버튼(오늘·지연·이번 주·공유받음 = 필터) → 범위 탭(내 할 일 | 공유받음 | 프로젝트,
  * 밑줄형) + 보기 토글(목록/보드) → 날짜 그룹(sticky 42px) 목록 또는 보드 섹션 → 하단 퀵애드.
- * 데이터는 웹과 같은 /api/todo/items(가시성은 서버 단일 함수). 완료는 낙관적으로 반영하고
- * 5초 동안 "되돌리기"를 행 자리에 둔다(useToast 에 액션이 없어 §7.5 의 토스트 대신).
+ * 데이터는 웹과 같은 /api/todo/items(가시성은 서버 단일 함수, done=1 로 완료도 함께). 완료는 낙관적으로 반영하고
+ * 2초 동안 "완료됨 · 되돌리기"를 행 자리에 둔 뒤(useToast 에 액션이 없어 §7.5 의 토스트 대신) 맨 아래 완료 섹션("완료 N건 · 펼치기")으로 보낸다.
+ * 완료 조건(276)이 있으면 CompleteConfirmSheet 를 먼저 띄운다(체크·⋮ 상태 변경·열 이동 시트의 완료 열 공통, 서버 409 도 같은 시트).
+ * 완료 행의 체크를 다시 누르면 되돌리기. 보관함(30일 지난 완료)은 웹 전용.
  * 보드 생성·멤버 관리는 웹 전용 — 프로젝트 보드가 없으면 빈 상태만 보인다.
  *
  * ⚠ 헤더는 Screen 의 자체 헤더("+" 는 right 슬롯) — _layout 에서 옵션을 주지 않는다.
@@ -34,9 +38,34 @@ interface ListRes {
   items: TodoItem[];
   boards: TodoBoard[];
   approvalEvents?: TodoApprovalEvent[];
+  /** 같은 범위의 완료 건수(보관 제외). */
+  doneCount?: number;
 }
 
-const UNDO_MS = 5000;
+/** 완료 체크 뒤 행이 완료 섹션으로 내려가기까지의 유예 — 그동안 "완료됨 · 되돌리기". */
+const UNDO_MS = 2000;
+
+/** 완료 섹션 헤더 — "완료 N건" + 펼치기/접기(날짜 그룹 헤더와 같은 42px, sticky 대상). */
+function DoneHeader({ count, open, onToggle }: { count: number; open: boolean; onToggle: () => void }) {
+  const { c } = useTheme();
+  return (
+    <Pressable
+      onPress={count ? onToggle : undefined}
+      accessibilityRole="button"
+      accessibilityState={{ expanded: open }}
+      style={{ height: 42 }}
+      className="flex-row items-center gap-2 border-b border-t border-cd-grid-line bg-cd-surface px-4 active:opacity-70">
+      <Text className={`text-[12.5px] font-semibold ${count ? 'text-cd-text' : 'text-cd-faint'}`}>완료 {count}건</Text>
+      <View className="flex-1" />
+      {count ? (
+        <View className="flex-row items-center gap-1">
+          <Text className="text-[12px] text-cd-muted">{open ? '접기' : '펼치기'}</Text>
+          <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={14} color={c.muted} />
+        </View>
+      ) : null}
+    </Pressable>
+  );
+}
 
 /** 날짜 그룹 — 헤더 + 행(할 일·결재 일정 섞음). */
 interface Group {
@@ -107,8 +136,8 @@ export default function TodoScreen() {
 
   // 내 할 일은 항상 불러 둔다(보드 목록·태그 건수의 원천). 공유받음은 태그 건수 때문에 캐시로 함께.
   // ⚠ from/to 를 주면 날짜 없는 할 일·이후 할 일이 잘린다 — 구간 없이 받고 결재 일정은 서버 기본(이번 달 ±1개월).
-  const myApi = useApi<ListRes>('/api/todo/items?view=my&withApproval=1', { cache: true });
-  const sharedApi = useApi<ListRes>('/api/todo/items?view=shared', { cache: true });
+  const myApi = useApi<ListRes>('/api/todo/items?view=my&withApproval=1&done=1', { cache: true });
+  const sharedApi = useApi<ListRes>('/api/todo/items?view=shared&done=1', { cache: true });
   const boards = useMemo(() => myApi.data?.boards ?? [], [myApi.data]);
   const defaultBoardId = boards.find((b) => b.isDefault)?.boardId ?? boards.find((b) => b.kind === 'personal')?.boardId ?? null;
   const projectBoards = useMemo(() => boards.filter((b) => b.kind !== 'personal'), [boards]);
@@ -143,59 +172,109 @@ export default function TodoScreen() {
     return () => Object.values(t).forEach(clearTimeout);
   }, []);
 
-  const complete = async (it: TodoItem) => {
-    if (it.status === 'done') return;
+  // 완료 확인 시트(276) — 완료 조건이 있거나 서버가 409 로 거절했을 때
+  const [confirmItem, setConfirmItem] = useState<TodoItem | null>(null);
+  const [confirmFailure, setConfirmFailure] = useState<CompleteRulesFailure | null>(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
+  const [doneOpen, setDoneOpen] = useState(false);
+  const scrollRef = useRef<ScrollView | null>(null);
+
+  const dropJustDone = (itemId: string) =>
+    setJustDone((p) => {
+      const n = { ...p };
+      delete n[itemId];
+      return n;
+    });
+
+  /** 완료 API — 성공이면 2초 유예 뒤 행을 숨기고(서버 상태 반영 전 stale 행) 목록을 다시 받아 완료 섹션으로 보낸다. */
+  const sendComplete = async (it: TodoItem, completionNote?: string | null): Promise<boolean> => {
     setJustDone((p) => ({ ...p, [it.itemId]: true }));
     try {
-      await apiJson(`/api/todo/items/${it.itemId}/complete`, {
+      await apiJson<{ item: TodoItemDetail }>(`/api/todo/items/${it.itemId}/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ done: true }),
+        body: JSON.stringify({ done: true, ...(completionNote !== undefined ? { completionNote } : {}) }),
       });
       toast.show('완료했습니다', 'success');
       timers.current[it.itemId] = setTimeout(() => {
-        setJustDone((p) => {
-          const n = { ...p };
-          delete n[it.itemId];
-          return n;
-        });
+        dropJustDone(it.itemId);
         setHidden((p) => ({ ...p, [it.itemId]: true }));
         delete timers.current[it.itemId];
-        // 반복 할 일은 다음 발생이 새로 생기므로 목록을 다시 받는다.
-        if (it.recurrence) reloadCurrent();
+        reloadCurrent();
       }, UNDO_MS);
+      return true;
     } catch (e) {
-      setJustDone((p) => {
-        const n = { ...p };
-        delete n[it.itemId];
-        return n;
-      });
+      dropJustDone(it.itemId);
+      const failure = asCompleteRulesFailure(e);
+      if (failure) {
+        setConfirmItem(it);
+        setConfirmFailure(failure);
+        return false;
+      }
       toast.show((e as Error).message, 'error');
+      return false;
     }
   };
 
+  /** 체크·상태 변경·완료 열 이동 공통 — 완료 조건이 있으면 시트 먼저, 없으면 바로 완료. */
+  const complete = async (it: TodoItem) => {
+    if (it.status === 'done' || justDone[it.itemId]) return;
+    if (hasAnyCompleteRule(it.completeRules)) {
+      setConfirmFailure(null);
+      setConfirmItem(it);
+      return;
+    }
+    await sendComplete(it);
+  };
+
+  const confirmComplete = async (note: string | null) => {
+    const it = confirmItem;
+    if (!it) return;
+    setConfirmBusy(true);
+    try {
+      const ok = await sendComplete(it, note);
+      if (ok) {
+        setConfirmItem(null);
+        setConfirmFailure(null);
+      }
+    } finally {
+      setConfirmBusy(false);
+    }
+  };
+
+  /** 되돌리기(done=false) — 유예 취소 + 서버. 완료 섹션의 체크 해제도 같은 경로. */
   const undo = async (it: TodoItem) => {
     const t = timers.current[it.itemId];
     if (t) clearTimeout(t);
     delete timers.current[it.itemId];
-    setJustDone((p) => {
-      const n = { ...p };
-      delete n[it.itemId];
-      return n;
-    });
+    dropJustDone(it.itemId);
     try {
       await apiJson(`/api/todo/items/${it.itemId}/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ done: false }),
       });
+      if (it.status === 'done') {
+        toast.show('되돌렸습니다', 'success');
+        reloadCurrent();
+      }
     } catch (e) {
       toast.show((e as Error).message, 'error');
       reloadCurrent();
     }
   };
 
-  const visible = (list: TodoItem[]) => list.filter((it) => !hidden[it.itemId]);
+  // hidden 은 서버 상태가 아직 미완(stale)인 행만 가린다 — 다시 받아 status 가 done 이 되면 완료 섹션에 보인다.
+  const visible = (list: TodoItem[]) => list.filter((it) => !(hidden[it.itemId] && it.status !== 'done'));
+
+  /** 헤더 "완료 N" 태그 — 내 할 일 목록으로 가서 완료 섹션을 펼치고 끝으로 스크롤. */
+  const showDoneList = () => {
+    setScope('my');
+    setView('list');
+    setFilter(null);
+    setDoneOpen(true);
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
+  };
   const openItem = (it: TodoItem) => router.push({ pathname: '/todo/[itemId]', params: { itemId: it.itemId } });
   const openDoc = (ev: TodoApprovalEvent) =>
     ev.docId ? router.push({ pathname: '/approval/[docId]', params: { docId: ev.docId } }) : undefined;
@@ -208,6 +287,12 @@ export default function TodoScreen() {
     if (!it || changing) return;
     if (it.status === status) {
       setMoreItem(null);
+      return;
+    }
+    if (status === 'done') {
+      // 완료는 체크와 같은 경로(완료 조건 시트·2초 유예)
+      setMoreItem(null);
+      void complete(it);
       return;
     }
     setChanging(true);
@@ -229,8 +314,8 @@ export default function TodoScreen() {
 
   // ── 날짜 그룹 분류(내 할 일 · 프로젝트 목록 공용) ──
   const buildGroups = (list: TodoItem[], events: TodoApprovalEvent[], f: Filter): Group[] => {
+    // 완료는 날짜 그룹에 넣지 않고 맨 아래 완료 섹션(renderGroups 의 done)으로.
     const open = list.filter((it) => it.status !== 'done');
-    const done = list.filter((it) => it.status === 'done');
     const overdue = open.filter((it) => isOverdue(it, today));
     const rest = open.filter((it) => !isOverdue(it, today));
     const on = (ymd: string) => rest.filter((it) => keyDate(it) === ymd || (it.dueDate === ymd && (keyDate(it) ?? '') <= ymd));
@@ -266,7 +351,6 @@ export default function TodoScreen() {
     if (f === 'week') return g.filter((x) => x.key !== 'over');
     g.push({ key: 'later', label: '다음 주 이후', items: later, events: evLater, showDate: true, keep: true, emptyText: '예정된 업무가 없습니다.' });
     if (noDate.length) g.push({ key: 'nodate', label: '날짜 없음', items: noDate, events: [] });
-    if (done.length) g.push({ key: 'done', label: '완료', items: done, events: [], showDate: true });
     return g;
   };
 
@@ -285,11 +369,12 @@ export default function TodoScreen() {
   const sharedItems = useMemo(() => visible(sharedApi.data?.items ?? []), [sharedApi.data, hidden]); // eslint-disable-line react-hooks/exhaustive-deps
   const sharedBoards = sharedApi.data?.boards ?? boards;
   const sharedGroups = useMemo((): Group[] => {
-    const assigned = sharedItems.filter((it) => it.assigneeUserId === me);
+    // 완료는 그룹에 넣지 않는다(맨 아래 완료 섹션).
+    const assigned = sharedItems.filter((it) => it.assigneeUserId === me && it.status !== 'done');
     const byBoard = new Map<string, { board: TodoBoard; items: TodoItem[] }>();
     const watched: TodoItem[] = [];
     for (const it of sharedItems) {
-      if (it.assigneeUserId === me) continue;
+      if (it.assigneeUserId === me || it.status === 'done') continue;
       const b = sharedBoards.find((x) => x.boardId === it.boardId);
       if (b && b.kind !== 'personal') {
         const g = byBoard.get(b.boardId) ?? { board: b, items: [] };
@@ -303,13 +388,18 @@ export default function TodoScreen() {
     for (const x of byBoard.values()) g.push({ key: x.board.boardId, label: x.board.name, items: x.items, events: [], showDate: true });
     return g;
   }, [sharedItems, sharedBoards, me]);
-  const sharedCount = sharedItems.filter((it) => it.assigneeUserId === me).length;
+  const sharedCount = sharedItems.filter((it) => it.assigneeUserId === me && it.status !== 'done').length;
 
   // ── 보드(프로젝트 · 내 할 일의 보드 보기) ──
   const board = boards.find((b) => b.boardId === boardTarget) ?? null;
   const boardItems = useMemo(() => visible(boardApi.data?.items ?? []), [boardApi.data, hidden]); // eslint-disable-line react-hooks/exhaustive-deps
   const boardEvents = boardApi.data?.approvalEvents ?? [];
   const moveItem = async (it: TodoItem, col: TodoColumn | null) => {
+    // 완료 열(status_map=done)로 옮기는데 완료 조건이 있으면 완료 경로(시트) — 완료 API 가 열까지 옮긴다.
+    if (col?.statusMap === 'done' && board?.columnStatusMap && it.status !== 'done' && hasAnyCompleteRule(it.completeRules)) {
+      await complete(it);
+      return;
+    }
     try {
       await apiJson(`/api/todo/items/${it.itemId}`, {
         method: 'PATCH',
@@ -319,6 +409,13 @@ export default function TodoScreen() {
       toast.show(col ? `"${col.name}" 열로 옮겼습니다` : '열 배정을 해제했습니다', 'success');
       void boardApi.reload();
     } catch (e) {
+      // 서버가 완료 조건으로 거절(409) — 열 이동 시트는 닫고 완료 확인 시트로 안내.
+      const failure = asCompleteRulesFailure(e);
+      if (failure) {
+        setConfirmItem(it);
+        setConfirmFailure(failure);
+        return;
+      }
       toast.show((e as Error).message, 'error');
       throw e;
     }
@@ -347,8 +444,8 @@ export default function TodoScreen() {
     if (s === 'shared') setView('list');
   };
 
-  /** 날짜 그룹을 평탄한 노드 배열로 — 헤더 인덱스를 stickyHeaderIndices 에 넘긴다. */
-  const renderGroups = (groups: Group[], opts: { showAssignee?: (it: TodoItem) => boolean }) => {
+  /** 날짜 그룹을 평탄한 노드 배열로 — 헤더 인덱스를 stickyHeaderIndices 에 넘긴다. 맨 아래 완료 섹션(done)을 항상 붙인다. */
+  const renderGroups = (groups: Group[], opts: { showAssignee?: (it: TodoItem) => boolean; done: { items: TodoItem[]; count: number } }) => {
     const nodes: React.ReactNode[] = [];
     const sticky: number[] = [];
     for (const g of groups) {
@@ -393,25 +490,65 @@ export default function TodoScreen() {
         </View>
       );
     }
+    // 완료 섹션 — "완료 N건 · 펼치기". 펼치면 최근 완료 순(서버 completed_at 내림차순) 행, 체크 해제 = 되돌리기.
+    const doneItems = opts.done.items.filter((it) => it.status === 'done' && !justDone[it.itemId]);
+    const doneN = Math.max(opts.done.count, doneItems.length);
+    sticky.push(nodes.length);
+    nodes.push(<DoneHeader key="h-done" count={doneN} open={doneOpen} onToggle={() => setDoneOpen((v) => !v)} />);
+    nodes.push(
+      <View key="b-done" className="bg-cd-bg">
+        {doneOpen && doneItems.length ? (
+          doneItems.map((it) => (
+            <TodoRow
+              key={it.itemId}
+              item={it}
+              today={today}
+              onToggle={() => void undo(it)}
+              onPress={() => openItem(it)}
+              showAssignee={opts.showAssignee ? opts.showAssignee(it) : it.assigneeUserId !== me}
+              showDate
+            />
+          ))
+        ) : (
+          <Text className="border-b border-cd-grid-line px-4 pb-4 pt-3.5 text-[12.5px] text-cd-faint">
+            {doneN ? `완료 ${doneN}건이 접혀 있습니다. 체크를 다시 누르면 되돌릴 수 있습니다.` : '완료한 할 일이 없습니다.'}
+          </Text>
+        )}
+      </View>
+    );
     return { nodes, sticky };
   };
 
   const body = (): { nodes: React.ReactNode[]; sticky: number[]; padded: boolean } => {
     const plain = (node: React.ReactNode) => ({ nodes: [node], sticky: [], padded: true });
+    // 빈 상태 위에 두고 그 아래 완료 섹션은 그대로 — 빈 상태가 첫 노드라 sticky 인덱스를 1 밀어 준다.
+    const withLead = (res: { nodes: React.ReactNode[]; sticky: number[] }, lead: React.ReactNode) => ({
+      nodes: [
+        <View key="lead" style={{ padding: 16 }}>
+          {lead}
+        </View>,
+        ...res.nodes,
+      ],
+      sticky: res.sticky.map((i) => i + 1),
+      padded: false,
+    });
     if (scope === 'my' && view === 'list') {
       if (myApi.loading && !myApi.data) return plain(<SkeletonList key="sk" />);
       const groups = buildGroups(myItems, myEvents, filter);
-      if (!myItems.length && !myEvents.length)
-        return plain(<EmptyState key="em" icon="checkmark-done-outline" title="할 일이 없습니다" description="아래 입력줄에 적으면 바로 추가됩니다." />);
-      return { ...renderGroups(groups, {}), padded: false };
+      const myDone = { items: myItems, count: myApi.data?.doneCount ?? 0 };
+      if (!myItems.some((it) => it.status !== 'done') && !myEvents.length)
+        return withLead(renderGroups([], { done: myDone }), <EmptyState icon="checkmark-done-outline" title="할 일이 없습니다" description="아래 입력줄에 적으면 바로 추가됩니다." />);
+      return { ...renderGroups(groups, { done: myDone }), padded: false };
     }
     if (scope === 'shared') {
       if (sharedApi.loading && !sharedApi.data) return plain(<SkeletonList key="sk" />);
-      if (!sharedItems.length)
-        return plain(
-          <EmptyState key="em" icon="people-outline" title="공유받은 할 일이 없습니다" description="담당·참조로 지정되거나 보드 멤버가 되면 여기에 보입니다." />
+      const sharedDone = { items: sharedItems, count: sharedApi.data?.doneCount ?? 0 };
+      if (!sharedItems.some((it) => it.status !== 'done'))
+        return withLead(
+          renderGroups([], { showAssignee: (it) => it.assigneeUserId !== me, done: sharedDone }),
+          <EmptyState icon="people-outline" title="공유받은 할 일이 없습니다" description="담당·참조로 지정되거나 보드 멤버가 되면 여기에 보입니다." />
         );
-      return { ...renderGroups(sharedGroups, { showAssignee: (it) => it.assigneeUserId !== me }), padded: false };
+      return { ...renderGroups(sharedGroups, { showAssignee: (it) => it.assigneeUserId !== me, done: sharedDone }), padded: false };
     }
     // 프로젝트 · 내 할 일의 보드 보기
     if (scope === 'project' && !projectBoards.length)
@@ -425,9 +562,13 @@ export default function TodoScreen() {
     if (!board) return plain(myApi.loading ? <SkeletonList key="sk" /> : <EmptyState key="em" icon="grid-outline" title="보드가 없습니다" />);
     if (boardApi.loading && !boardApi.data) return plain(<SkeletonList key="sk" />);
     if (view === 'list') {
-      if (!boardItems.length && !boardEvents.length)
-        return plain(<EmptyState key="em" icon="checkmark-done-outline" title="이 보드에 할 일이 없습니다" description="아래 입력줄에 적으면 이 보드에 추가됩니다." />);
-      return { ...renderGroups(buildGroups(boardItems, boardEvents, null), { showAssignee: () => true }), padded: false };
+      const boardDone = { items: boardItems, count: boardApi.data?.doneCount ?? 0 };
+      if (!boardItems.some((it) => it.status !== 'done') && !boardEvents.length)
+        return withLead(
+          renderGroups([], { showAssignee: () => true, done: boardDone }),
+          <EmptyState icon="checkmark-done-outline" title="이 보드에 할 일이 없습니다" description="아래 입력줄에 적으면 이 보드에 추가됩니다." />
+        );
+      return { ...renderGroups(buildGroups(boardItems, boardEvents, null), { showAssignee: () => true, done: boardDone }), padded: false };
     }
     return plain(<BoardSections key="bd" board={board} items={boardItems} today={today} onOpen={openItem} onMove={moveItem} />);
   };
@@ -494,6 +635,7 @@ export default function TodoScreen() {
           <TagButton label="지연" count={overdueCount} tone="over" active={scope === 'my' && filter === 'overdue'} onPress={() => pickFilter('overdue')} />
           <TagButton label="이번 주" count={weekCount} tone="week" active={scope === 'my' && filter === 'week'} onPress={() => pickFilter('week')} />
           <TagButton label="공유받음" count={sharedCount} tone="shared" active={scope === 'shared'} onPress={() => pickScope(scope === 'shared' ? 'my' : 'shared')} />
+          <TagButton label="완료" count={myApi.data?.doneCount ?? 0} tone="done" active={false} onPress={showDoneList} />
         </ScrollView>
         {/* 범위 탭 + 보기 토글 */}
         <View style={{ height: 46 }} className="flex-row items-end border-b border-cd-border px-4">
@@ -510,6 +652,7 @@ export default function TodoScreen() {
         </View>
         {scope === 'project' && projectBoards.length ? <BoardChips boards={projectBoards} value={selectedProjectId} onChange={setProjectId} /> : null}
         <ScrollView
+          ref={scrollRef}
           className="flex-1"
           contentContainerStyle={content.padded ? { padding: 16, paddingBottom: 24, gap: 12 } : { paddingBottom: 24 }}
           stickyHeaderIndices={content.sticky}
@@ -528,6 +671,20 @@ export default function TodoScreen() {
           }}
         />
       </KeyboardAvoidingView>
+
+      {/* 완료 확인(276) — 완료 조건이 있거나 서버가 거절했을 때 */}
+      <CompleteConfirmSheet
+        visible={!!confirmItem}
+        target={confirmItem}
+        failure={confirmFailure}
+        busy={confirmBusy}
+        onConfirm={(note) => void confirmComplete(note)}
+        onClose={() => {
+          if (confirmBusy) return;
+          setConfirmItem(null);
+          setConfirmFailure(null);
+        }}
+      />
 
       {/* ⋮ 상태 변경·더 보기 */}
       <MoveSheet

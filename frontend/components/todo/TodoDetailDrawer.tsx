@@ -2,11 +2,12 @@
 
 // 상세 드로어(§7.3 · 시안 v4 §19-6, 580px) — 바탕 --cd-surface, 헤더(흰 바탕 · 좌측 5px 보드 색 띠 · 체크 · 제목 18px · 프로젝트 칩 · ⋯ 메뉴 · 닫기).
 // 본문은 프레임 섹션(cd-card 12/16, 12px 간격): ① 핵심 2×2(상태 칩+▾ · 담당 아바타+▾ · 수행 예정 · 마감) ② 관련(용역·사업장·연결) ③ 메모 ④ 하위 작업(분절 진행바)
-// ⑤ 댓글(사진 아바타 28px) ⑥ 부가 설정(접힘 한 줄 요약 — 우선순위·알림·반복·보드›열·공유) ⑦ 활동(접힘). 하단 바는 "저장됨 · 방금"만.
+// ⑤ 댓글(사진 아바타 28px, 입력란 앞에 내 아바타) ⑥ 부가 설정(접힘 요약 = 라벨+값 3열 2행 — 우선순위·알림·반복 / 보드·공유·스누즈) ⑦ 활동(접힘, 요약은 최근 2건 행마다). 하단 바는 "저장됨 · 방금"만.
+// 2026-10-14: 핵심 2×2 네 셀은 클릭 전에도 36px 입력란 박스(날짜가 비면 "YYYYMMDD"+달력 아이콘), 메모 기본 높이 2배.
 // 자동 저장: 필드 변경 → 600ms 디바운스 PATCH /api/todo/items/[id]. 키보드: Esc 닫기(CdDrawer), Ctrl+Enter 댓글, Alt+1~5 상태. 시각 규칙은 todo.css 의 todo-* 에만 둔다.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { Building2, ChevronDown, ChevronRight, Copy, ExternalLink, FileSignature, Link2, MessageCircle, MoreHorizontal, Trash2, X } from "lucide-react";
+import { Building2, Calendar, CheckCircle2, ChevronDown, ChevronRight, Copy, ExternalLink, FileSignature, Link2, MessageCircle, MoreHorizontal, Trash2, X } from "lucide-react";
 import { CdAvatar, CdButton, CdDateInput, CdDrawer, CdDropdown, CdIconButton, CdModal, isValidDateString, useCdToast, type CdMenuItem } from "@/components/cdash";
 import {
   TODO_BOARD_KIND_LABELS,
@@ -29,10 +30,13 @@ import {
   type TodoStatus,
 } from "@/lib/todo/types";
 import { describeRecurrence, parseRecurrence } from "@/lib/todo/recurrence";
+import { completeRulesSummary, hasAnyCompleteRule } from "@/lib/todo/completion";
 import { TodoCheck, linkHref, tintStyle } from "./TodoRow";
 import { PeoplePickerModal } from "./PeoplePickerModal";
 import { LinkPickerModal } from "./LinkPickerModal";
-import { apiCall } from "./useTodoData";
+import { CompleteConfirmModal } from "./CompleteConfirmModal";
+import { CompleteRulesFields } from "./CompleteRulesFields";
+import { apiCall, asCompleteRulesFailure, type CompleteRulesFailure } from "./useTodoData";
 import { contractShort, defaultRemindAt, diffDays, fmtIsoShort, isoToLocalInput, md, normalizeTime, relativeTime, weekdayKo } from "./todo-utils";
 
 export interface TodoDetailDrawerProps {
@@ -40,6 +44,9 @@ export interface TodoDetailDrawerProps {
   boards: TodoBoard[];
   prefs: TodoPrefs | null;
   myUserId: string | null;
+  /** 댓글 입력란 아바타용 현재 사용자 — 이름은 세션, 사진은 목록 응답(owner/assignee 사진 맵)에서. 없으면 상세 응답(owner·담당·공유·댓글)에서 찾는다. */
+  myName?: string | null;
+  myPhotoUrl?: string | null;
   today: string;
   onClose: () => void;
   onItemChanged: (item: TodoItemDetail) => void;
@@ -131,12 +138,18 @@ function FoldSection({ label, count, summary, open, onToggle, children }: { labe
           {count != null && <span className="todo-sec-n">{count}</span>}
         </button>
       </h3>
-      {open ? <div className="todo-fold-body">{children}</div> : <div className="todo-fold-ln">{summary}</div>}
+      {open ? (
+        <div className="todo-fold-body">{children}</div>
+      ) : (
+        <div className="todo-fold-ln" data-grid={typeof summary === "string" ? undefined : "true"}>
+          {summary}
+        </div>
+      )}
     </section>
   );
 }
 
-export function TodoDetailDrawer({ itemId, boards, prefs, myUserId, today, onClose, onItemChanged, onItemCreated, onItemDeleted, onOpenItem }: TodoDetailDrawerProps) {
+export function TodoDetailDrawer({ itemId, boards, prefs, myUserId, myName, myPhotoUrl, today, onClose, onItemChanged, onItemCreated, onItemDeleted, onOpenItem }: TodoDetailDrawerProps) {
   const { toast } = useCdToast();
   const [detail, setDetail] = useState<TodoItemDetail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -156,6 +169,9 @@ export function TodoDetailDrawer({ itemId, boards, prefs, myUserId, today, onClo
   const [activityOpen, setActivityOpen] = useState(false);
   const [extraOpen, setExtraOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  // 완료 확인 모달(276) — 완료 조건이 있거나 서버가 409 로 거절했을 때
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmFailure, setConfirmFailure] = useState<CompleteRulesFailure | null>(null);
   // 연결 추가·변경은 LinkPickerModal(종류별 검색·목록)로 — 사용자는 개별 ID를 모른다.
   const [linkOpen, setLinkOpen] = useState(false);
   const [recDraft, setRecDraft] = useState<{ preset: string; days: string[]; day: string; after: string }>({ preset: "", days: ["MO"], day: "1", after: "7" });
@@ -252,19 +268,50 @@ export function TodoDetailDrawer({ itemId, boards, prefs, myUserId, today, onClo
   const remindMode: "default" | "custom" | "off" = !detail?.remindAt ? "off" : detail.remindAt === remindDefault ? "default" : "custom";
 
   // ── 동작 ──
-  const complete = async (done: boolean) => {
-    if (!detail) return;
+  /**
+   * 완료/되돌리기(276). 완료는 완료 조건이 있으면 모달 먼저, 없으면 즉시 — 서버 409(code complete_rules)면 모달로 안내.
+   * 되돌리기는 제한 없음. 자동 저장 큐에 남은 변경은 먼저 보낸다(완료 메모·조건이 큐에 있을 수 있다).
+   */
+  const complete = async (done: boolean, completionNote?: string | null) => {
+    if (!detail) return false;
+    if (done && completionNote === undefined && hasAnyCompleteRule(detail.completeRules)) {
+      setConfirmFailure(null);
+      setConfirmOpen(true);
+      return false;
+    }
+    if (Object.keys(queue.current).length) await flush();
     setBusy(true);
     try {
-      const d = await apiCall<{ item: TodoItemDetail; next: TodoItem | null }>(`/api/todo/items/${encodeURIComponent(detail.itemId)}/complete`, { method: "POST", body: JSON.stringify({ done }) });
+      const d = await apiCall<{ item: TodoItemDetail; next: TodoItem | null }>(`/api/todo/items/${encodeURIComponent(detail.itemId)}/complete`, {
+        method: "POST",
+        body: JSON.stringify({ done, ...(completionNote !== undefined ? { completionNote } : {}) }),
+      });
       setDetail(d.item);
       onItemChanged(d.item);
       if (d.next) onItemCreated(d.next);
+      setConfirmOpen(false);
+      setConfirmFailure(null);
+      if (!done) toast("되돌렸습니다", "success");
+      return true;
     } catch (e) {
+      const failure = asCompleteRulesFailure(e);
+      if (failure) {
+        setConfirmFailure(failure);
+        setConfirmOpen(true);
+        return false;
+      }
       toast((e as Error).message, "error");
+      return false;
     } finally {
       setBusy(false);
     }
+  };
+
+  /** 상태 변경 — 완료는 complete() 경로(조건 검사·모달), 그 외는 자동 저장 PATCH. */
+  const changeStatus = (s: TodoStatus) => {
+    if (!detail || detail.status === s) return;
+    if (s === "done") void complete(true);
+    else schedule({ status: s }, true);
   };
 
   const refresh = async () => {
@@ -513,7 +560,7 @@ export function TodoDetailDrawer({ itemId, boards, prefs, myUserId, today, onClo
   const onRootKey = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.altKey && /^[1-5]$/.test(e.key) && canEdit) {
       e.preventDefault();
-      schedule({ status: TODO_STATUSES[Number(e.key) - 1] }, true);
+      changeStatus(TODO_STATUSES[Number(e.key) - 1]);
     }
   };
 
@@ -525,6 +572,21 @@ export function TodoDetailDrawer({ itemId, boards, prefs, myUserId, today, onClo
   const moveHint = targetBoard && targetBoard.kind !== "personal" ? `${TODO_BOARD_KIND_LABELS[targetBoard.kind]} 보드의 멤버 ${targetBoard.memberCount}명에게 보입니다` : null;
   const otherSharedBoard = boards.find((b) => b.kind !== "personal" && b.myRole !== "viewer");
   const shares = detail?.shares.filter((s) => s.role !== "assignee") ?? [];
+  // 댓글 입력란의 "나" 아바타 — 새 API 없이: 목록에서 넘어온 사진(myPhotoUrl) → 상세 응답의 owner·담당·공유·댓글 중 내 userId 와 같은 사진.
+  const me = useMemo(() => {
+    let photo = myPhotoUrl ?? null;
+    let name = myName ?? null;
+    if (detail && myUserId) {
+      if (!photo && detail.ownerUserId === myUserId) photo = detail.ownerPhotoUrl;
+      if (!photo && detail.assigneeUserId === myUserId) photo = detail.assigneePhotoUrl;
+      if (!photo) photo = detail.shares.find((s) => s.userId === myUserId)?.photoUrl ?? null;
+      if (!photo) photo = detail.comments.find((c) => c.userId === myUserId)?.userPhotoUrl ?? null;
+      if (!name && detail.ownerUserId === myUserId) name = detail.ownerName;
+      if (!name && detail.assigneeUserId === myUserId) name = detail.assigneeName;
+      if (!name) name = detail.shares.find((s) => s.userId === myUserId)?.name ?? detail.comments.find((c) => c.userId === myUserId)?.userName ?? null;
+    }
+    return { name: name || "나", photo };
+  }, [detail, myUserId, myName, myPhotoUrl]);
   const projectLabel = detail ? (detail.projectName ?? (detail.boardKind === "personal" ? "개인" : detail.boardName)) : "";
 
   const saveLabel = saveState === "saving" ? "저장 중…" : saveState === "error" ? "저장하지 못했습니다" : saveState === "saved" ? `저장됨 · ${savedAt ? relativeTime(new Date(savedAt).toISOString()) : "방금"}` : "변경 시 자동 저장";
@@ -567,13 +629,29 @@ export function TodoDetailDrawer({ itemId, boards, prefs, myUserId, today, onClo
     </div>
   );
 
+  // 부가 설정 접힘 요약(2026-10-14) — 한 줄 나열 대신 라벨+값 세로 쌍 3열 2행: 우선순위·알림·반복 / 보드·공유·스누즈.
   const extraSummary = detail && (
-    <>
-      <b>우선순위</b> {TODO_PRIORITY_LABELS[detail.priority]} · <b>알림</b>{" "}
-      {detail.remindAt ? `${fmtIsoShort(detail.remindAt)}${remindMode === "default" && detail.doTime ? `(${prefs?.defaultRemindBeforeMin ?? 30}분 전)` : ""}` : "끔"} · <b>반복</b> {describeRecurrence(detail.recurrence) ?? "없음"} ·{" "}
-      <b>보드</b> {board ? (board.kind === "personal" ? "개인" : (board.projectName ?? board.name)) : "보드"} › {column ? column.name : "열 미배정"} · <b>공유</b>{" "}
-      {shares.length ? shares.map((s) => `${s.name || s.userId}(${s.role === "collaborator" ? "협업" : "참조"})`).join(", ") : "없음"}
-    </>
+    <div className="todo-xs" role="list">
+      {(
+        [
+          ["우선순위", TODO_PRIORITY_LABELS[detail.priority], false],
+          ["알림", detail.remindAt ? `${fmtIsoShort(detail.remindAt)}${remindMode === "default" && detail.doTime ? ` (${prefs?.defaultRemindBeforeMin ?? 30}분 전)` : ""}` : "끔", !detail.remindAt],
+          ["반복", describeRecurrence(detail.recurrence) ?? "없음", !detail.recurrence],
+          ["보드", `${board ? (board.kind === "personal" ? "개인" : (board.projectName ?? board.name)) : "보드"} › ${column ? column.name : "열 미배정"}`, false],
+          ["공유", shares.length ? shares.map((s) => `${s.name || s.userId}(${s.role === "collaborator" ? "협업" : "참조"})`).join(", ") : "없음", shares.length === 0],
+          ["스누즈", detail.snoozedUntil ? `${fmtIsoShort(detail.snoozedUntil)}까지` : "없음", !detail.snoozedUntil],
+          // 완료 조건(276)은 설정된 것만 요약에 보인다.
+          ...(completeRulesSummary(detail.completeRules) ? [["완료 조건", completeRulesSummary(detail.completeRules) as string, false]] : []),
+        ] as [string, string, boolean][]
+      ).map(([lb, v, none]) => (
+        <div key={lb} className="todo-xs-it" role="listitem">
+          <span className="todo-xs-lb">{lb}</span>
+          <span className="todo-xs-v" data-none={none ? "true" : undefined} title={v}>
+            {v}
+          </span>
+        </div>
+      ))}
+    </div>
   );
 
   return (
@@ -627,6 +705,25 @@ export function TodoDetailDrawer({ itemId, boards, prefs, myUserId, today, onClo
             </div>
 
             <div className="todo-db">
+              {/* 완료됨 줄(276) — 완료 시각 · 되돌리기 · 완료 메모 */}
+              {detail.status === "done" && (
+                <div className="todo-done-ln" role="status">
+                  <CheckCircle2 aria-hidden="true" />
+                  <b>완료됨</b>
+                  {detail.completedAt && <span>· {fmtIsoShort(detail.completedAt)}</span>}
+                  {detail.archivedAt && <span className="todo-mu">· 보관됨</span>}
+                  {canEdit && (
+                    <>
+                      <span>·</span>
+                      <button type="button" className="todo-link" disabled={busy} onClick={() => void complete(false)}>
+                        되돌리기
+                      </button>
+                    </>
+                  )}
+                  {detail.completionNote && <span className="todo-done-note">{detail.completionNote}</span>}
+                </div>
+              )}
+
               {/* ① 핵심 2×2 */}
               <section className="cd-card todo-fr" aria-label="핵심 정보">
                 <div className="todo-key">
@@ -635,6 +732,7 @@ export function TodoDetailDrawer({ itemId, boards, prefs, myUserId, today, onClo
                     {canEdit ? (
                       <CdDropdown
                         align="left"
+                        className="todo-kv-dd"
                         menuWidthClass="w-40"
                         trigger={() => (
                           <button type="button" className="todo-kv-v" aria-label="상태 변경">
@@ -649,7 +747,7 @@ export function TodoDetailDrawer({ itemId, boards, prefs, myUserId, today, onClo
                           label: `${TODO_STATUS_LABELS[s]} (Alt+${i + 1})`,
                           icon: <span className="todo-st" data-tone={s} style={{ width: 10, height: 10, padding: 0, borderRadius: 3 }} aria-hidden="true" />,
                           disabled: detail.status === s,
-                          onSelect: () => schedule({ status: s }, true),
+                          onSelect: () => changeStatus(s),
                         }))}
                       />
                     ) : (
@@ -666,6 +764,7 @@ export function TodoDetailDrawer({ itemId, boards, prefs, myUserId, today, onClo
                     {canEdit ? (
                       <CdDropdown
                         align="left"
+                        className="todo-kv-dd"
                         menuWidthClass="w-44"
                         trigger={() => (
                           <button type="button" className="todo-kv-v" aria-label="담당 변경">
@@ -709,7 +808,10 @@ export function TodoDetailDrawer({ itemId, boards, prefs, myUserId, today, onClo
                         {detail.doTime && detail.durationMin ? <span className="todo-mu">· {detail.durationMin}분</span> : null}
                       </>
                     ) : (
-                      <span className="todo-mu">없음</span>
+                      <>
+                        <span className="todo-kv-ph">YYYYMMDD</span>
+                        <Calendar className="todo-kv-cal" aria-hidden="true" />
+                      </>
                     ),
                     <>
                       <CdDateInput
@@ -755,7 +857,10 @@ export function TodoDetailDrawer({ itemId, boards, prefs, myUserId, today, onClo
                         {dueHint === 0 && <span className="todo-due" data-tone="today">D-Day</span>}
                       </>
                     ) : (
-                      <span className="todo-mu">없음</span>
+                      <>
+                        <span className="todo-kv-ph">YYYYMMDD</span>
+                        <Calendar className="todo-kv-cal" aria-hidden="true" />
+                      </>
                     ),
                     <>
                       <CdDateInput
@@ -860,7 +965,7 @@ export function TodoDetailDrawer({ itemId, boards, prefs, myUserId, today, onClo
                   placeholder={canEdit ? "메모를 적으면 자동 저장됩니다" : "메모 없음"}
                   value={note}
                   readOnly={!canEdit}
-                  rows={Math.max(2, Math.min(12, note.split("\n").length + 1))}
+                  rows={Math.max(5, Math.min(12, note.split("\n").length + 1))}
                   onChange={(e) => {
                     setNote(e.target.value);
                     schedule({ note: e.target.value.trim() ? e.target.value : null });
@@ -952,24 +1057,29 @@ export function TodoDetailDrawer({ itemId, boards, prefs, myUserId, today, onClo
                     </div>
                   </div>
                 ))}
-                <div className="todo-cin">
-                  <textarea
-                    rows={1}
-                    value={comment}
-                    placeholder="댓글 쓰기 · @이름으로 멘션"
-                    aria-label="댓글"
-                    disabled={busy}
-                    onChange={(e) => setComment(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-                        e.preventDefault();
-                        void addComment();
-                      }
-                    }}
-                  />
-                  <span className="todo-kbd" aria-hidden="true">
-                    Ctrl ⏎
-                  </span>
+                {detail.comments.length === 0 && <div className="todo-cm-empty">아직 댓글이 없습니다. 공유받은 담당·참조자에게 댓글 알림이 갑니다.</div>}
+                {/* 입력란 — 댓글 행과 같은 배치(현재 사용자 아바타 28px + 입력). @이름 멘션 파싱·푸시는 그대로(안내 문구만 제거). */}
+                <div className="todo-cm" data-input="true">
+                  <CdAvatar name={me.name} src={me.photo} size="sm" className="todo-av" />
+                  <div className="todo-cin">
+                    <textarea
+                      rows={1}
+                      value={comment}
+                      placeholder="댓글 쓰기"
+                      aria-label="댓글"
+                      disabled={busy}
+                      onChange={(e) => setComment(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                          e.preventDefault();
+                          void addComment();
+                        }
+                      }}
+                    />
+                    <span className="todo-kbd" aria-hidden="true">
+                      Ctrl ⏎
+                    </span>
+                  </div>
                 </div>
               </section>
 
@@ -1165,6 +1275,16 @@ export function TodoDetailDrawer({ itemId, boards, prefs, myUserId, today, onClo
                   </div>
                 )}
 
+                {/* 완료 조건(276) — 상위 작업만. 체크 즉시 저장. */}
+                {!detail.parentItemId && (
+                  <div className="todo-pr" data-top="true">
+                    <span className="todo-pr-label">완료 조건</span>
+                    <div className="todo-pr-val" data-static="true">
+                      <CompleteRulesFields value={detail.completeRules} disabled={!canEdit} hints onChange={(next) => schedule({ completeRules: next }, true)} />
+                    </div>
+                  </div>
+                )}
+
                 {/* 공유 */}
                 <div className="todo-pr">
                   <span className="todo-pr-label">공유</span>
@@ -1202,7 +1322,23 @@ export function TodoDetailDrawer({ itemId, boards, prefs, myUserId, today, onClo
               <FoldSection
                 label="활동"
                 count={detail.activity.length}
-                summary={detail.activity.slice(0, 2).map((a) => `${relativeTime(a.createdAt)} ${a.userName ?? "시스템"} · ${describeActivity(a)}`).join(" · ") || "기록 없음"}
+                summary={
+                  detail.activity.length === 0 ? (
+                    "기록 없음"
+                  ) : (
+                    // 접힘 요약 — 최근 2건을 행마다 줄바꿈(시각 72px 열 + 내용), 펼치면 전체.
+                    <>
+                      {detail.activity.slice(0, 2).map((a) => (
+                        <div key={a.activityId} className="todo-activity">
+                          <span className="todo-activity-when">{relativeTime(a.createdAt)}</span>
+                          <span>
+                            {a.userName ?? "시스템"} · {describeActivity(a)}
+                          </span>
+                        </div>
+                      ))}
+                    </>
+                  )
+                }
                 open={activityOpen}
                 onToggle={() => setActivityOpen((v) => !v)}
               >
@@ -1244,6 +1380,20 @@ export function TodoDetailDrawer({ itemId, boards, prefs, myUserId, today, onClo
           } finally {
             setBusy(false);
           }
+        }}
+      />
+
+      {/* 완료 확인(276) — 완료 조건이 있거나 서버가 거절했을 때 */}
+      <CompleteConfirmModal
+        open={confirmOpen}
+        target={detail}
+        failure={confirmFailure}
+        busy={busy}
+        onConfirm={(note) => void complete(true, note)}
+        onClose={() => {
+          if (busy) return;
+          setConfirmOpen(false);
+          setConfirmFailure(null);
         }}
       />
 

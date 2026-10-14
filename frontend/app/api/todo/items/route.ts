@@ -6,7 +6,9 @@ import { listBoardApprovalEvents, listMyPendingApprovals, listTodoApprovalEvents
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// 할 일 목록·생성(274). GET ?view=my|board|shared&board=&from=&to=&done=1&withApproval=1 / POST 생성.
+// 할 일 목록·생성(274). GET ?view=my|board|shared&board=&from=&to=&done=1&archived=1&archivedOnly=1&withApproval=1 / POST 생성.
+//   응답 { items, boards, approvalEvents, doneCount } — done=1 이면 보관되지 않은 완료 항목을 completed_at 내림차순으로 뒤에 붙이고,
+//   doneCount 는 같은 범위의 완료 건수(보관 제외). archivedOnly=1 은 보관함(완료 30일 경과 자동 보관분)만(276, 2026-10-14).
 // 가시성은 lib/todo/visibility.ts 단일 진입점. withApproval=1 이면 결재 일정(휴가·출장·교육·초과근무)을 approvalEvents 로 동봉 —
 //   view=board 는 그 보드 멤버 전원의 문서 중 보드 contract_id 와 일치하는 것만(§19-12), 그 외는 내 문서.
 //   view=my 는 여기에 내가 결재할 차례인 문서(kind "pending", 결재 대기)를 앞에 합친다 — 보드 모드는 제외.
@@ -18,13 +20,14 @@ export async function GET(req: NextRequest) {
     const view = viewRaw === "board" || viewRaw === "shared" ? viewRaw : "my";
     const from = sp.get("from");
     const to = sp.get("to");
-    const { items, boards } = await listItems(ctx.userId, {
+    const { items, boards, doneCount } = await listItems(ctx.userId, {
       view,
       boardId: sp.get("board"),
       from,
       to,
       done: sp.get("done") === "1",
       includeArchived: sp.get("archived") === "1",
+      archivedOnly: sp.get("archivedOnly") === "1",
     });
     let approvalEvents: Awaited<ReturnType<typeof listTodoApprovalEvents>> = [];
     if (sp.get("withApproval") === "1") {
@@ -53,7 +56,7 @@ export async function GET(req: NextRequest) {
         }
       }
     }
-    return NextResponse.json({ items, boards, approvalEvents });
+    return NextResponse.json({ items, boards, approvalEvents, doneCount });
   } catch (err) {
     return authErrorToResponse(err);
   }

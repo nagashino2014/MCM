@@ -17,9 +17,11 @@ import {
   type TodoBoardColorKey,
   type TodoBoardCreateInput,
   type TodoBoardMode,
+  type TodoCompleteRules,
   type TodoContractCandidate,
 } from "@/lib/todo/types";
 import { ContractPicker, type TreeContract } from "./ContractPicker";
+import { CompleteRulesFields } from "./CompleteRulesFields";
 import { apiCall } from "./useTodoData";
 
 /** /api/facilities 응답 행({ items: FacilityListItem[] }, camelCase) — LinkPickerModal 의 사업장 탭과 같은 shape. */
@@ -49,6 +51,7 @@ export function BoardCreateModal({ open, boards, onClose, onCreated, onOpenBoard
   const [kind, setKind] = useState<"project" | "dept">("project");
   const [color, setColor] = useState<TodoBoardColorKey | null>(null);
   const [name, setName] = useState("");
+  const [defaultRules, setDefaultRules] = useState<TodoCompleteRules>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -69,6 +72,7 @@ export function BoardCreateModal({ open, boards, onClose, onCreated, onOpenBoard
     setKind("project");
     setColor(null);
     setName("");
+    setDefaultRules({});
     setError(null);
     setSelected(null);
     setCand(null);
@@ -132,7 +136,7 @@ export function BoardCreateModal({ open, boards, onClose, onCreated, onOpenBoard
     if (!canSubmit || busy) return;
     setBusy(true);
     setError(null);
-    const body: TodoBoardCreateInput = { kind, color, name: name.trim() || null };
+    const body: TodoBoardCreateInput = { kind, color, name: name.trim() || null, defaultCompleteRules: defaultRules };
     if (kind === "project") body.mode = mode;
     if (mode === "contract" && selected) {
       body.contractId = selected.contractId;
@@ -320,6 +324,12 @@ export function BoardCreateModal({ open, boards, onClose, onCreated, onOpenBoard
         </div>
 
         <CdInput label="보드 이름(선택)" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} placeholder={mode === "contract" ? "비우면 용역명" : "비우면 프로젝트명"} />
+
+        <div className="todo-field">
+          <span className="todo-field-lb">기본 완료 조건</span>
+          <CompleteRulesFields value={defaultRules} onChange={setDefaultRules} />
+          <span className="todo-field-hint">이 보드에서 만드는 할 일에 자동으로 붙는 완료 조건입니다. 완료 전에 확인 창이 떠 조건을 점검합니다(나중에 보드 ⋯ 메뉴에서 바꿀 수 있습니다).</span>
+        </div>
       </div>
     </CdModal>
   );

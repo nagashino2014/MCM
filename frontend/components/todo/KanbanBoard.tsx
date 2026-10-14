@@ -10,9 +10,11 @@ import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent }
 import { DragDropContext, Draggable, Droppable, type DropResult } from "@hello-pangea/dnd";
 import { ChevronRight, MessageSquare, MoreHorizontal, Plus } from "lucide-react";
 import { CdButton, CdCheckbox, CdDropdown, CdEmptyState, CdIconButton, CdInput, CdModal, CdSelect, useCdToast, type CdMenuItem } from "@/components/cdash";
-import { TODO_STATUSES, TODO_STATUS_LABELS, type TodoBoard, type TodoBoardMember, type TodoColumn, type TodoItem, type TodoItemDetail, type TodoStatus } from "@/lib/todo/types";
+import { TODO_STATUSES, TODO_STATUS_LABELS, type TodoBoard, type TodoBoardMember, type TodoColumn, type TodoCompleteRules, type TodoItem, type TodoItemDetail, type TodoStatus } from "@/lib/todo/types";
 import { comparePosition } from "@/lib/todo/position";
+import { completeRulesSummary, hasAnyCompleteRule } from "@/lib/todo/completion";
 import { DueText, MiniSegments, PriorityLabel, tintStyle, type Density } from "./TodoRow";
+import { CompleteRulesFields } from "./CompleteRulesFields";
 import { apiCall, type MoveArgs } from "./useTodoData";
 import { columnTone, contextParts, contractShort, dueBadge, isFoldedColumn, md, relativeTime } from "./todo-utils";
 
@@ -23,7 +25,6 @@ export interface KanbanBoardProps {
   items: TodoItem[];
   today: string;
   density: Density;
-  showDone: boolean;
   selectedId: string | null;
   loading: boolean;
   loaded: boolean;
@@ -31,6 +32,11 @@ export interface KanbanBoardProps {
   membersVersion?: number;
   onOpen: (item: TodoItem) => void;
   onMove: (itemId: string, move: MoveArgs, optimisticStatus?: TodoStatus) => Promise<TodoItemDetail | null>;
+  /**
+   * 완료 열(status_map=done)로 옮기는 카드에 완료 조건(276)이 있을 때 — 상위가 완료 확인 모달을 띄우고 완료 API 로 처리한다(열은 서버가 옮김).
+   * 취소·미충족이면 false → 카드는 원위치.
+   */
+  onCompleteRequest: (item: TodoItem) => Promise<boolean>;
   onCreate: (input: Record<string, unknown>) => Promise<TodoItemDetail | null>;
   onBoardUpdated: (board: TodoBoard) => void;
   onManageMembers: () => void;
@@ -76,9 +82,10 @@ function CardBody({ item, today, menu, onOpen }: { item: TodoItem; today: string
   );
 }
 
-export function KanbanBoard({ board, items, today, density, showDone, selectedId, loading, loaded, membersVersion = 0, onOpen, onMove, onCreate, onBoardUpdated, onManageMembers }: KanbanBoardProps) {
+export function KanbanBoard({ board, items, today, density, selectedId, loading, loaded, membersVersion = 0, onOpen, onMove, onCompleteRequest, onCreate, onBoardUpdated, onManageMembers }: KanbanBoardProps) {
   const { toast } = useCdToast();
   const [members, setMembers] = useState<TodoBoardMember[]>([]);
+  const [rulesOpen, setRulesOpen] = useState(false);
   const [colOrder, setColOrder] = useState<string[] | null>(null);
   const [addingIn, setAddingIn] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState("");
@@ -168,12 +175,32 @@ export function KanbanBoard({ board, items, today, density, showDone, selectedId
         else move.beforeItemId = list[0].itemId;
       }
       const nextStatus = statusFor(columnId);
+      // 완료 열로 옮기는데 완료 조건(276)이 있으면 모달 먼저 — 완료 API 가 열까지 옮기므로 여기서는 이동을 보내지 않는다. 취소면 원위치.
+      if (nextStatus === "done" && item.status !== "done" && hasAnyCompleteRule(item.completeRules)) {
+        const ok = await onCompleteRequest(item);
+        if (ok) setLive(`'${item.title}' 을(를) 완료했습니다.`);
+        return;
+      }
       setLive(`'${item.title}' 을(를) ${colName(columnId)} 열로 이동했습니다.`);
-      const res = await onMove(item.itemId, move, nextStatus);
-      if (res && res.status === "done" && !showDone) toast("현재 필터(완료 숨김) 때문에 숨겨졌습니다", "info");
+      await onMove(item.itemId, move, nextStatus);
     },
-    [cardsByCol, statusFor, colName, onMove, showDone, toast]
+    [cardsByCol, statusFor, colName, onMove, onCompleteRequest]
   );
+
+  const saveDefaultRules = async (rules: TodoCompleteRules) => {
+    if (!boardId) return;
+    setBusy(true);
+    try {
+      const d = await apiCall<{ board: TodoBoard }>(`/api/todo/boards/${encodeURIComponent(boardId)}`, { method: "PATCH", body: JSON.stringify({ defaultCompleteRules: rules }) });
+      onBoardUpdated(d.board);
+      setRulesOpen(false);
+      toast("기본 완료 조건을 저장했습니다", "success");
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const onDragEnd = async (result: DropResult) => {
     const { source, destination, type, draggableId } = result;
@@ -406,10 +433,25 @@ export function KanbanBoard({ board, items, today, density, showDone, selectedId
           )}
           <span className="todo-spacer" />
           {board.columnStatusMap && <span>열을 옮기면 상태가 함께 바뀝니다</span>}
+          {hasAnyCompleteRule(board.defaultCompleteRules) && <span title="이 보드에서 만드는 할 일에 물려주는 완료 조건">기본 완료 조건 {completeRulesSummary(board.defaultCompleteRules)}</span>}
           {board.kind !== "personal" && (
             <button type="button" className="todo-link" onClick={onManageMembers}>
               멤버 관리
             </button>
+          )}
+          {canManage && (
+            <CdDropdown
+              menuWidthClass="w-52"
+              trigger={() => (
+                <button type="button" className="cd-icon-button cd-icon-button-sm inline-flex items-center justify-center" aria-label="보드 메뉴">
+                  <MoreHorizontal className="w-4 h-4" aria-hidden="true" />
+                </button>
+              )}
+              items={[
+                { key: "rules", label: "기본 완료 조건…", onSelect: () => setRulesOpen(true) },
+                ...(board.kind !== "personal" ? [{ key: "members", label: "멤버 관리", onSelect: onManageMembers }] : []),
+              ]}
+            />
           )}
         </div>
       )}
@@ -578,6 +620,7 @@ export function KanbanBoard({ board, items, today, density, showDone, selectedId
           }}
         />
       )}
+      {board && rulesOpen && <BoardRulesModal board={board} busy={busy} onClose={() => setRulesOpen(false)} onSave={saveDefaultRules} />}
       <CdModal
         open={!!colDelete}
         onClose={() => setColDelete(null)}
@@ -645,6 +688,36 @@ function ColumnEditModal({ column, busy, onClose, onSave }: { column: TodoColumn
         </CdSelect>
         <CdInput label="WIP 권장 건수" hint="초과하면 열 헤더에 '권장 N건 초과' 라벨이 표시됩니다(이동은 막지 않음)." inputMode="numeric" value={wip} onChange={(e) => setWip(e.target.value)} error={invalidWip ? "1 이상의 정수를 입력하세요." : undefined} placeholder="없음" />
         <CdCheckbox label="열 접기" checked={collapsed} onChange={(e) => setCollapsed(e.target.checked)} />
+      </div>
+    </CdModal>
+  );
+}
+
+/** 보드 ⋯ 메뉴 › 기본 완료 조건(276) — 이 보드에서 새로 만드는 할 일에 물려주는 완료 조건. 기존 할 일에는 소급하지 않는다. */
+function BoardRulesModal({ board, busy, onClose, onSave }: { board: TodoBoard; busy: boolean; onClose: () => void; onSave: (rules: TodoCompleteRules) => Promise<void> }) {
+  const [rules, setRules] = useState<TodoCompleteRules>(board.defaultCompleteRules);
+  return (
+    <CdModal
+      open
+      onClose={onClose}
+      title="기본 완료 조건"
+      size="sm"
+      footer={
+        <>
+          <CdButton variant="ghost" onClick={onClose} disabled={busy}>
+            취소
+          </CdButton>
+          <CdButton variant="primary" loading={busy} onClick={() => void onSave(rules)}>
+            저장
+          </CdButton>
+        </>
+      }
+    >
+      <div className="todo-vars todo-modal">
+        <p className="text-sm cd-text-muted">
+          {board.kind === "personal" ? "개인 보드" : (board.projectName ?? board.name)}에서 새로 만드는 할 일에 자동으로 붙는 완료 조건입니다. 이미 있는 할 일은 상세의 '부가 설정 › 완료 조건'에서 따로 바꿉니다.
+        </p>
+        <CompleteRulesFields value={rules} hints onChange={setRules} />
       </div>
     </CdModal>
   );

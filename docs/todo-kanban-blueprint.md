@@ -424,3 +424,10 @@ CdPageHeader  제목 "할 일"  · meta "오늘 3 · 지연 1 · 이번 주 8"  
 - **후속(사용자 지적 2건, 10-13)**: ① 상세 "관련" 연결을 ID 입력 → **선택기**(`LinkPickerModal`/모바일 `LinkPickerSheet`, 공용 `ContractPicker`): 계약(트리 or 후보 검색)·사업장(`/api/facilities?q=`)·결재 문서(box 4종 병합 후 클라이언트 필터)·영업(`/api/sales/projects?q=`)·업무추진계획(my/dept 합집합)·URL. 지시(directive)는 부서 필수 API라 제외. ② **결재 대기(내가 결재할 차례) 자동 표시**: `listMyPendingApprovals` → `TodoApprovalEvent.kind="pending"`(formName·docNo·submittedAt·drafterPhotoUrl), `view=my`·홈 위젯에만, 오늘 그룹 맨 위·토글 무관·"결재 대기 N" 라벨·D+N(상신 2일↑)·"결재하기". 보드·공유받음엔 미포함. 기존 결함 수정: BoardCreateModal 사업장 자동완성 응답 필드(`{items}` camelCase).
 - 실측: 연결 선택기(사업장 검색→선택→저장→관련 프레임 표시), 결재 대기 행(휴가신청서 D+84) 확인. 웹·모바일 tsc 0, 테스트 37 통과.
 - **배포(2026-10-14)**: main f2c4ca8(기능)·c972491(m-app 재export) → next:652(사용자)·653(위젯 번들). 모바일 OTA group d4881914(runtime 1.2.0, production). 잔여: 실기기 확인, 위젯 알림 브릿지(P3), OS 위젯(P4), 캘린더 드래그 재일정, 인앱 알림함, 출장 양식 contract_select 전환.
+
+### 21. 배포 후 1차 피드백 반영(2026-10-14)
+**UI 다듬기(미커밋 → 커밋 예정)**: 목록 행 58→70px(compact 54)·제목↔맥락 7px, 연결 선택 모달 본문 370px 고정(작은 화면 calc(100vh-240px)), 댓글 입력에 내 아바타+"댓글 쓰기"(멘션 안내 제거·기능 유지), 부가 설정 3열 그리드(우선순위·알림·반복 / 보드·공유·스누즈)·활동 요약 행별, 핵심 2×2 셀을 36px 입력 박스(빈 날짜 "YYYYMMDD"+달력 아이콘, 편집 시 primary 2px outline), 메모 min-height 104px(모바일 96). 모바일 동일 비율.
+**완료 처리 보완(마이그 276)**: 사용자 지적 — 완료 목록 메뉴 부재·실수 완료 복구·완료 조건.
+- 완료 목록: 모든 목록 맨 아래 "완료 N건 · 펼치기" 상시 섹션(최근 완료순, 메모 1줄) + 상단 태그 "완료 N" + 보관함(30일↑) 보기(`archived=1`). "완료 숨김" 토글 제거.
+- 되돌리기: 완료 행 체크 해제=reopen, 체크 직후 2초 유예("완료됨 · 되돌리기") 후 접힘 + 토스트, 드로어 "완료됨 · 시각 · 되돌리기" 줄.
+- 완료 조건: `todo_items.complete_rules jsonb {subtasks,note,review}` + `completion_note` + `reviewed_at`, 보드 `default_complete_rules`(생성 시 복사). 체크 시 규칙 있으면 완료 확인 모달(충족 표시·완료 메모·[완료]); 서버 `completeItem` 409 `code:complete_rules {missing, openSubtasks}`. 칸반 완료 열 드롭도 검사. 모바일 동일(CompleteConfirmSheet).

@@ -5,7 +5,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useCdToast } from "@/components/cdash";
-import type { TodoApprovalEvent, TodoBoard, TodoItem, TodoItemDetail } from "@/lib/todo/types";
+import type { TodoApprovalEvent, TodoBoard, TodoCompleteRuleKey, TodoItem, TodoItemDetail } from "@/lib/todo/types";
 import { between } from "@/lib/todo/position";
 import { comparePosition } from "@/lib/todo/position";
 
@@ -14,8 +14,10 @@ export interface TodoQuery {
   boardId?: string | null;
   from?: string | null;
   to?: string | null;
-  /** 완료 포함(prefs.showDoneDays 이내) */
+  /** 완료 포함 — 보관되지 않은 완료 항목을 completed_at 내림차순으로 뒤에 붙인다(완료 목록 섹션용). */
   done?: boolean;
+  /** 보관함(완료 30일 경과 자동 보관분)만. */
+  archivedOnly?: boolean;
   withApproval?: boolean;
 }
 
@@ -29,6 +31,36 @@ async function readJson(res: Response): Promise<Record<string, unknown>> {
   }
 }
 
+/** API 오류 — 상태 코드·응답 본문을 함께 든다(409 complete_rules 분기용). */
+export class TodoApiError extends Error {
+  status: number;
+  data: Record<string, unknown>;
+  constructor(message: string, status: number, data: Record<string, unknown>) {
+    super(message);
+    this.name = "TodoApiError";
+    this.status = status;
+    this.data = data;
+  }
+}
+
+/** 완료 조건 미충족 409 응답(lib/todo/route-errors.ts) — 모달 안내용. */
+export interface CompleteRulesFailure {
+  code: "complete_rules";
+  message: string;
+  missing: TodoCompleteRuleKey[];
+  openSubtasks: number;
+}
+
+export function asCompleteRulesFailure(err: unknown): CompleteRulesFailure | null {
+  if (!(err instanceof TodoApiError) || err.status !== 409 || err.data.code !== "complete_rules") return null;
+  return {
+    code: "complete_rules",
+    message: err.message,
+    missing: (Array.isArray(err.data.missing) ? err.data.missing : []) as TodoCompleteRuleKey[],
+    openSubtasks: Number(err.data.openSubtasks ?? 0),
+  };
+}
+
 export async function apiCall<T = Record<string, unknown>>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     cache: "no-store",
@@ -36,9 +68,12 @@ export async function apiCall<T = Record<string, unknown>>(url: string, init?: R
     headers: { ...(init?.body ? { "Content-Type": "application/json" } : {}), ...(init?.headers ?? {}) },
   });
   const data = await readJson(res);
-  if (!res.ok) throw new Error((data.error as string) || `요청에 실패했습니다 (${res.status})`);
+  if (!res.ok) throw new TodoApiError((data.error as string) || `요청에 실패했습니다 (${res.status})`, res.status, data);
   return data as T;
 }
+
+/** 완료 요청 결과 — 성공({ item, next }) · 완료 조건 미충족(rules) · 그 외 실패(null, 토스트 완료). */
+export type CompleteOutcome = { item: TodoItemDetail; next: TodoItem | null; rules?: undefined } | { rules: CompleteRulesFailure; item?: undefined } | null;
 
 export interface MoveArgs {
   columnId?: string | null;
@@ -52,6 +87,7 @@ export function useTodoData(query: TodoQuery, enabled = true) {
   const [items, setItems] = useState<TodoItem[]>([]);
   const [boards, setBoards] = useState<TodoBoard[]>([]);
   const [approvalEvents, setApprovalEvents] = useState<TodoApprovalEvent[]>([]);
+  const [doneCount, setDoneCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,7 +95,7 @@ export function useTodoData(query: TodoQuery, enabled = true) {
   itemsRef.current = items;
   const seq = useRef(0);
 
-  const { view, boardId, from, to, done, withApproval } = query;
+  const { view, boardId, from, to, done, archivedOnly, withApproval } = query;
   const canLoad = enabled && (view !== "board" || !!boardId);
 
   const reload = useCallback(async () => {
@@ -71,13 +107,15 @@ export function useTodoData(query: TodoQuery, enabled = true) {
     if (from) sp.set("from", from);
     if (to) sp.set("to", to);
     if (done) sp.set("done", "1");
+    if (archivedOnly) sp.set("archivedOnly", "1");
     if (withApproval) sp.set("withApproval", "1");
     try {
-      const data = await apiCall<{ items: TodoItem[]; boards: TodoBoard[]; approvalEvents?: TodoApprovalEvent[] }>(`/api/todo/items?${sp.toString()}`);
+      const data = await apiCall<{ items: TodoItem[]; boards: TodoBoard[]; approvalEvents?: TodoApprovalEvent[]; doneCount?: number }>(`/api/todo/items?${sp.toString()}`);
       if (my !== seq.current) return;
       setItems(data.items ?? []);
       setBoards(data.boards ?? []);
       setApprovalEvents(data.approvalEvents ?? []);
+      setDoneCount(Number(data.doneCount ?? 0));
       setError(null);
       setLoaded(true);
     } catch (e) {
@@ -87,7 +125,7 @@ export function useTodoData(query: TodoQuery, enabled = true) {
     } finally {
       if (my === seq.current) setLoading(false);
     }
-  }, [canLoad, view, boardId, from, to, done, withApproval, toast]);
+  }, [canLoad, view, boardId, from, to, done, archivedOnly, withApproval, toast]);
 
   useEffect(() => {
     void reload();
@@ -118,27 +156,30 @@ export function useTodoData(query: TodoQuery, enabled = true) {
     });
   }, []);
 
-  // ── 완료/되돌리기(낙관적) ──
+  // ── 완료/되돌리기(낙관적) — 완료 조건 미충족 409 는 토스트 없이 rules 로 돌려 호출측이 모달로 안내한다. ──
   const completeItem = useCallback(
-    async (itemId: string, isDone: boolean): Promise<{ item: TodoItemDetail; next: TodoItem | null } | null> => {
+    async (itemId: string, isDone: boolean, opts: { completionNote?: string | null } = {}): Promise<CompleteOutcome> => {
       const snapshot = itemsRef.current;
       setItems((prev) =>
         prev.map((x) =>
           x.itemId === itemId
-            ? { ...x, status: isDone ? "done" : "todo", completedAt: isDone ? new Date().toISOString() : null }
+            ? { ...x, status: isDone ? "done" : "todo", completedAt: isDone ? new Date().toISOString() : null, archivedAt: isDone ? x.archivedAt : null }
             : x
         )
       );
       try {
         const data = await apiCall<{ item: TodoItemDetail; next: TodoItem | null }>(`/api/todo/items/${encodeURIComponent(itemId)}/complete`, {
           method: "POST",
-          body: JSON.stringify({ done: isDone }),
+          body: JSON.stringify({ done: isDone, ...(opts.completionNote !== undefined ? { completionNote: opts.completionNote } : {}) }),
         });
         upsertItem(data.item);
         if (data.next) upsertItem(data.next);
+        setDoneCount((n) => Math.max(0, n + (isDone ? 1 : -1)));
         return data;
       } catch (e) {
         setItems(snapshot);
+        const rules = asCompleteRulesFailure(e);
+        if (rules) return { rules };
         toast(`${SAVE_FAIL_MESSAGE} — ${(e as Error).message}`, "error");
         return null;
       }
@@ -248,6 +289,7 @@ export function useTodoData(query: TodoQuery, enabled = true) {
     items,
     boards,
     approvalEvents,
+    doneCount,
     loading,
     loaded,
     error,

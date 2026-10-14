@@ -2,9 +2,12 @@
 
 // /todo 페이지 컨테이너(시안 v4, §19) — CdPageHeader(제목 아래 태그 버튼 4개: 오늘·지연·이번 주·공유받음 = 필터) + 흰 캔버스 카드 하나.
 // 캔버스 상단 바(54px): 좌측 범위 탭(CdTabs underline: 내 할 일 | 공유받음 | 프로젝트 ▾ — 프로젝트는 CdDropdown 으로 보드 목록 + "+ 새 프로젝트 보드")
-//   / 우측 필터(결재 일정 · 완료 숨김 · 담당자 ▾) + 보기 세그먼트(목록·보드·캘린더). 캘린더 보기는 /calendar?tags=todo 로 이동.
-// URL: ?scope=my|shared|board:<id>&view=list|board&item=&new=1 (구 ?tab=my|board|calendar|shared&board= 호환). 상세 드로어는 ?item= 로 연다.
-// 데이터는 useTodoData 인스턴스 3개(my·shared 상시, board 는 보드 범위/보드 보기일 때).
+//   / 우측 필터(결재 일정 · 담당자 ▾) + 보기 세그먼트(목록·보드·캘린더). 캘린더 보기는 /calendar?tags=todo 로 이동.
+// URL: ?scope=my|shared|board:<id>&view=list|board&item=&new=1&archived=1 (구 ?tab=my|board|calendar|shared&board= 호환). 상세 드로어는 ?item= 로 연다.
+// 데이터는 useTodoData 인스턴스 3개(my·shared 상시, board 는 보드 범위/보드 보기일 때) + 보관함(archived=1 일 때).
+// 완료(2026-10-14 보완): "완료 숨김/표시" 토글을 없애고 목록마다 맨 아래 완료 섹션(완료 N건 · 펼치기)을 둔다. 헤더 태그 "완료 N" 은 그 섹션을 펼친다.
+//   체크 → 완료 조건(completeRules)이 있으면 CompleteConfirmModal 먼저(서버 409 도 같은 모달) → 성공 시 2초 동안 행이 "완료됨 · 되돌리기"로 남고(justDone) 완료 섹션으로 이동.
+//   완료 행 체크 해제·토스트·상세의 "되돌리기" = done=false. 보관함(?archived=1)은 30일 지난 완료만 보이고 거기서도 되돌릴 수 있다.
 
 import "@/components/cdash/cdash.css";
 import "./todo.css";
@@ -12,24 +15,37 @@ import "./todo.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Calendar, Check, ChevronDown, Kanban, List, Plus } from "lucide-react";
-import { CdButton, CdDropdown, CdPageHeader, CdTabs, useCdToast, useCdashTheme, type CdMenuItem } from "@/components/cdash";
-import { DEFAULT_TODO_PREFS, type TodoBoard, type TodoBoardMember, type TodoItem, type TodoItemDetail, type TodoPrefs } from "@/lib/todo/types";
-import { useTodoData, apiCall } from "./useTodoData";
+import { ArrowLeft, Calendar, Check, ChevronDown, Kanban, List, Plus } from "lucide-react";
+import { CdButton, CdDropdown, CdEmptyState, CdPageHeader, CdTabs, useCdToast, useCdashTheme, type CdMenuItem } from "@/components/cdash";
+import { DEFAULT_TODO_PREFS, type TodoBoard, type TodoBoardMember, type TodoItem, type TodoItemDetail, type TodoPrefs, type TodoStatus } from "@/lib/todo/types";
+import { hasAnyCompleteRule } from "@/lib/todo/completion";
+import { useTodoData, apiCall, type CompleteRulesFailure } from "./useTodoData";
 import { QuickAddBar } from "./QuickAddBar";
-import { MyTodoList, type QuickFilter } from "./MyTodoList";
+import { GroupHeader, MyTodoList, rowListKeyNav, type QuickFilter } from "./MyTodoList";
 import { SharedList } from "./SharedList";
 import { KanbanBoard } from "./KanbanBoard";
 import { TodoDetailDrawer } from "./TodoDetailDrawer";
 import { BoardCreateModal } from "./BoardCreateModal";
 import { BoardMembersModal } from "./BoardMembersModal";
-import { tintStyle } from "./TodoRow";
+import { CompleteConfirmModal, type CompleteConfirmTarget } from "./CompleteConfirmModal";
+import { TodoColumnHeader, TodoRow, tintStyle } from "./TodoRow";
 import { effectiveDate, localToday, weekEnd, type SortMode } from "./todo-utils";
 
 type ScopeKind = "my" | "shared" | "board";
 type ScopeTab = "my" | "shared" | "none";
 type View = "list" | "board";
 const SORT_LABELS: Record<SortMode, string> = { manual: "수동", date: "날짜순", priority: "우선순위순" };
+
+type TodoSource = ReturnType<typeof useTodoData>;
+/** 완료 확인 모달 상태 — 모달이 닫힐 때 resolve(성공 여부)로 행·카드에 결과를 돌려준다. */
+interface ConfirmState {
+  target: CompleteConfirmTarget;
+  source: TodoSource;
+  failure: CompleteRulesFailure | null;
+  /** 유예(2초 "완료됨 · 되돌리기") 적용 여부 — 목록 행만 true, 칸반 카드는 열이 바로 바뀌므로 false. */
+  grace: boolean;
+  resolve: (ok: boolean) => void;
+}
 
 const isTypingTarget = (el: EventTarget | null) => {
   const t = el as HTMLElement | null;
@@ -38,11 +54,12 @@ const isTypingTarget = (el: EventTarget | null) => {
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t.isContentEditable;
 };
 
-/** URL → 범위·보기 (구 ?tab= 호환). */
-function parseScope(sp: URLSearchParams): { kind: ScopeKind; boardId: string | null; view: View; calendar: boolean } {
+/** URL → 범위·보기 (구 ?tab= 호환). archived=1 은 보관함(30일 지난 완료) 보기. */
+function parseScope(sp: URLSearchParams): { kind: ScopeKind; boardId: string | null; view: View; calendar: boolean; archived: boolean } {
   const scope = sp.get("scope");
   const viewRaw = sp.get("view");
   const tab = sp.get("tab");
+  const archived = sp.get("archived") === "1";
   let kind: ScopeKind = "my";
   let boardId: string | null = null;
   let view: View = viewRaw === "board" ? "board" : "list";
@@ -63,7 +80,7 @@ function parseScope(sp: URLSearchParams): { kind: ScopeKind; boardId: string | n
     } else if (tab === "calendar") calendar = true;
   }
   if (kind === "shared") view = "list";
-  return { kind, boardId, view, calendar };
+  return { kind, boardId, view, calendar, archived };
 }
 
 export function TodoBoardPage() {
@@ -73,6 +90,7 @@ export function TodoBoardPage() {
   const sp = useSearchParams();
   const { data: session } = useSession();
   const myUserId = ((session?.user as { id?: string } | undefined)?.id as string | undefined) ?? null;
+  const myName = session?.user?.name ?? null;
 
   const parsed = useMemo(() => parseScope(new URLSearchParams(sp.toString())), [sp]);
   const itemParam = sp.get("item");
@@ -82,8 +100,12 @@ export function TodoBoardPage() {
   const newParam = sp.get("new");
 
   const [prefs, setPrefs] = useState<TodoPrefs | null>(null);
-  const [showDone, setShowDone] = useState(false);
   const [sortMode, setSortMode] = useState<SortMode>("date");
+  // 완료 유예(2초) 중인 행 — id → 완료 전 상태(목록에는 그 상태로 되돌려 넘겨 원래 섹션에 남긴다).
+  const [justDone, setJustDone] = useState<Map<string, TodoStatus>>(() => new Map());
+  const [doneOpenRequest, setDoneOpenRequest] = useState(0);
+  const [confirm, setConfirm] = useState<ConfirmState | null>(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
   const [quickFilter, setQuickFilter] = useState<QuickFilter>(null);
   const [assigneeFilter, setAssigneeFilter] = useState<string | null>(null);
   const [quickOpen, setQuickOpen] = useState(0);
@@ -94,7 +116,7 @@ export function TodoBoardPage() {
 
   // ── URL query ──
   const setQuery = useCallback(
-    (patch: Partial<Record<"scope" | "view" | "item" | "new", string | null>>) => {
+    (patch: Partial<Record<"scope" | "view" | "item" | "new" | "archived", string | null>>) => {
       const next = new URLSearchParams(sp.toString());
       // 구 파라미터는 새 형식으로 정리
       next.delete("tab");
@@ -146,31 +168,48 @@ export function TodoBoardPage() {
   const density = prefs?.cardDensity ?? "comfortable";
   const weekStart = prefs?.weekStart ?? 1;
 
-  // ── 데이터 ──
-  const my = useTodoData({ view: "my", done: showDone, withApproval: showApproval }, true);
-  const shared = useTodoData({ view: "shared", done: showDone }, true);
+  // ── 데이터 — 완료 항목은 항상 함께 받는다(완료 섹션·완료 N 태그). 보관함은 archived=1 일 때만. ──
+  const my = useTodoData({ view: "my", done: true, withApproval: showApproval }, true);
+  const shared = useTodoData({ view: "shared", done: true }, true);
   const boards = my.boards.length ? my.boards : shared.boards;
   const personalBoardId = boards.find((b) => b.kind === "personal" && b.isDefault)?.boardId ?? boards.find((b) => b.isDefault)?.boardId ?? boards[0]?.boardId ?? null;
   const scopeBoardId = parsed.kind === "board" && parsed.boardId && boards.some((b) => b.boardId === parsed.boardId) ? parsed.boardId : null;
   const scope: ScopeKind = parsed.kind === "board" ? (scopeBoardId || !boards.length ? "board" : "my") : parsed.kind;
+  const archivedMode = parsed.archived;
   const view: View = scope === "shared" ? "list" : parsed.view;
   // 활성 보드 — 보드 범위면 그 보드, 내 할 일의 보드 보기면 개인 보드
   const activeBoardId = scope === "board" ? scopeBoardId : view === "board" ? personalBoardId : null;
   const board = boards.find((b) => b.boardId === activeBoardId) ?? null;
-  const boardData = useTodoData({ view: "board", boardId: activeBoardId, done: showDone, withApproval: showApproval }, !!activeBoardId);
+  const boardData = useTodoData({ view: "board", boardId: activeBoardId, done: true, withApproval: showApproval }, !!activeBoardId);
+  const archive = useTodoData({ view: scope, boardId: scope === "board" ? activeBoardId : null, archivedOnly: true }, archivedMode);
 
   useEffect(() => {
     setAssigneeFilter(null);
   }, [activeBoardId]);
 
-  const visible = useCallback((items: TodoItem[]) => (showDone ? items : items.filter((i) => i.status !== "done")), [showDone]);
-  const myItems = useMemo(() => visible(my.items), [my.items, visible]);
-  const sharedItems = useMemo(() => visible(shared.items), [shared.items, visible]);
+  // 유예 중인 행은 완료 전 상태로 되돌려 넘긴다(원래 섹션에 "완료됨 · 되돌리기"로 남도록).
+  const withGrace = useCallback(
+    (items: TodoItem[]) => (justDone.size ? items.map((i) => (justDone.has(i.itemId) ? { ...i, status: justDone.get(i.itemId)! } : i)) : items),
+    [justDone]
+  );
+  const justDoneIds = useMemo(() => new Set(justDone.keys()), [justDone]);
+  const myItems = useMemo(() => withGrace(my.items), [my.items, withGrace]);
+  const sharedItems = useMemo(() => withGrace(shared.items), [shared.items, withGrace]);
+  // 상세 드로어 댓글 입력란의 내 아바타 사진 — 새 API 없이 목록 응답의 owner/assignee 사진 맵에서 내 userId 와 같은 것을 찾는다.
+  const myPhotoUrl = useMemo(() => {
+    if (!myUserId) return null;
+    for (const it of [...my.items, ...shared.items, ...boardData.items]) {
+      if (it.ownerUserId === myUserId && it.ownerPhotoUrl) return it.ownerPhotoUrl;
+      if (it.assigneeUserId === myUserId && it.assigneePhotoUrl) return it.assigneePhotoUrl;
+    }
+    return null;
+  }, [my.items, shared.items, boardData.items, myUserId]);
   const boardItems = useMemo(() => {
-    const list = visible(boardData.items);
+    const list = withGrace(boardData.items);
     if (!assigneeFilter) return list;
     return list.filter((i) => (assigneeFilter === "__none__" ? !i.assigneeUserId : i.assigneeUserId === assigneeFilter));
-  }, [boardData.items, visible, assigneeFilter]);
+  }, [boardData.items, withGrace, assigneeFilter]);
+  const doneCount = scope === "my" ? my.doneCount : scope === "shared" ? shared.doneCount : boardData.doneCount;
 
   // ── 통계(태그 버튼 건수) ──
   const stats = useMemo(() => {
@@ -186,8 +225,8 @@ export function TodoBoardPage() {
       else if (d === today) td++;
       if (d >= today && d <= we) week++;
     }
-    return { overdue, today: td, week, shared: shared.items.filter((i) => !i.parentItemId && i.status !== "done").length };
-  }, [my.items, shared.items, today, weekStart]);
+    return { overdue, today: td, week, shared: shared.items.filter((i) => !i.parentItemId && i.status !== "done").length, done: doneCount };
+  }, [my.items, shared.items, today, weekStart, doneCount]);
 
   // ── 퀵애드 열기(?new=1 · N 키 · 새 할 일 버튼) ──
   useEffect(() => {
@@ -267,23 +306,116 @@ export function TodoBoardPage() {
     [my, boardData, activeBoardId, myUserId]
   );
 
-  const completeWithUndo = (source: typeof my) => async (item: TodoItem, done: boolean) => {
-    const res = await source.completeItem(item.itemId, done);
-    if (!res) return;
-    if (done) {
+  // ── 완료 흐름(2026-10-14) ──
+  const graceDrop = useCallback((itemId: string) => {
+    setJustDone((prev) => {
+      if (!prev.has(itemId)) return prev;
+      const next = new Map(prev);
+      next.delete(itemId);
+      return next;
+    });
+  }, []);
+
+  /** 되돌리기(done=false) — 유예 취소 + 서버. 보관함에서 되돌리면 보관도 풀리므로 목록들을 다시 읽는다. */
+  const reopenIn = useCallback(
+    (source: TodoSource) => async (item: TodoItem): Promise<boolean> => {
+      graceDrop(item.itemId);
+      const res = await source.completeItem(item.itemId, false);
+      if (!res || !res.item) return false;
+      upsertAll(res.item);
+      if (source === archive) {
+        void my.reload();
+        void shared.reload();
+        void boardData.reload();
+      }
+      return true;
+    },
+    [graceDrop, upsertAll, archive, my, shared, boardData]
+  );
+
+  /** 완료 성공 뒤 — 목록 갱신 + 유예 등록(grace) + "완료 · 되돌리기" 토스트. */
+  const afterComplete = useCallback(
+    (source: TodoSource, item: TodoItem, res: { item: TodoItemDetail; next: TodoItem | null }, grace: boolean) => {
+      upsertAll(res.item);
+      if (res.next) createdAll(res.next);
+      if (grace) setJustDone((prev) => new Map(prev).set(item.itemId, item.status === "done" ? "todo" : item.status));
       toast(
         <span className="inline-flex items-center gap-2">
           완료
-          <button type="button" className="todo-tbtn" data-active="true" onClick={() => void source.completeItem(item.itemId, false)}>
+          <button type="button" className="todo-tbtn" data-active="true" onClick={() => void reopenIn(source)(item)}>
             되돌리기
           </button>
         </span>,
         "success",
         5000
       );
+    },
+    [upsertAll, createdAll, toast, reopenIn]
+  );
+
+  /** 완료 조건이 있거나 서버가 거절했을 때 — 모달을 띄우고 결과를 Promise 로 돌려준다. */
+  const openConfirm = useCallback(
+    (source: TodoSource, item: TodoItem, failure: CompleteRulesFailure | null, grace: boolean) =>
+      new Promise<boolean>((resolve) => {
+        setConfirm({ target: item, source, failure, grace, resolve });
+      }),
+    []
+  );
+
+  /**
+   * 체크(행·카드) → 완료/되돌리기. 완료는 규칙이 있으면 모달 먼저, 없으면 즉시 — 서버 409(code complete_rules)면 모달로 안내.
+   * grace=true(목록)면 성공 뒤 2초 유예(justDone). 성공 여부를 돌려 행이 체크를 비울지 정한다.
+   */
+  const completeIn = useCallback(
+    (source: TodoSource, grace = true) =>
+      async (item: TodoItem, done: boolean): Promise<boolean> => {
+        if (!done) return reopenIn(source)(item);
+        if (hasAnyCompleteRule(item.completeRules)) return openConfirm(source, item, null, grace);
+        const res = await source.completeItem(item.itemId, true);
+        if (!res) return false;
+        if (res.rules) return openConfirm(source, item, res.rules, grace);
+        afterComplete(source, item, res, grace);
+        return true;
+      },
+    [reopenIn, openConfirm, afterComplete]
+  );
+
+  const confirmComplete = async (note: string | null) => {
+    if (!confirm) return;
+    setConfirmBusy(true);
+    try {
+      const res = await confirm.source.completeItem(confirm.target.itemId, true, { completionNote: note });
+      if (res && res.rules) {
+        setConfirm({ ...confirm, failure: res.rules });
+        return;
+      }
+      const item = confirm.source.items.find((i) => i.itemId === confirm.target.itemId) ?? (confirm.target as unknown as TodoItem);
+      if (res) afterComplete(confirm.source, item, res, confirm.grace);
+      confirm.resolve(!!res);
+      setConfirm(null);
+    } finally {
+      setConfirmBusy(false);
     }
-    upsertAll(res.item);
   };
+  const cancelConfirm = () => {
+    if (!confirm || confirmBusy) return;
+    confirm.resolve(false);
+    setConfirm(null);
+  };
+
+  const showDoneList = () => {
+    if (archivedMode || view === "board") setQuery({ archived: null, view: "list" });
+    setDoneOpenRequest((n) => n + 1);
+  };
+  const showArchive = () => setQuery({ archived: "1", view: "list" });
+  const doneListProps = (source: TodoSource) => ({
+    doneCount: source.doneCount,
+    doneOpenRequest,
+    justDoneIds,
+    onUndo: (item: TodoItem) => void reopenIn(source)(item),
+    onSettled: (item: TodoItem) => graceDrop(item.itemId),
+    onShowArchive: showArchive,
+  });
 
   const createIn = (source: typeof my) => async (input: Record<string, unknown>) => {
     const created = await source.createItem(input);
@@ -366,12 +498,12 @@ export function TodoBoardPage() {
     })),
   ];
 
-  const sharedCount = sharedItems.filter((i) => !i.parentItemId).length;
+  const sharedCount = sharedItems.filter((i) => !i.parentItemId && i.status !== "done").length;
   const scopeTab: ScopeTab = scope === "my" ? "my" : scope === "shared" ? "shared" : "none";
   const boardLabel = board ? (board.kind === "personal" ? "개인 보드" : (board.projectName ?? board.name)) : null;
   const quickAddPlaceholder = scope === "board" && board ? `${boardLabel}에 할 일 추가 — #열이름 으로 열 지정` : undefined;
 
-  const tagButton = (tone: "today" | "over" | "week" | "shared", label: string, count: number, pressed: boolean, onClick: () => void) => (
+  const tagButton = (tone: "today" | "over" | "week" | "shared" | "done", label: string, count: number, pressed: boolean, onClick: () => void) => (
     <button type="button" className="todo-tag" data-tone={tone} aria-pressed={pressed} onClick={onClick}>
       {label} <b>{count}</b>
     </button>
@@ -390,6 +522,10 @@ export function TodoBoardPage() {
               </p>
               <p>범위 탭의 '프로젝트 ▾'에서 계약관리 용역을 골라 프로젝트 보드를 만들면 용역명·발주처·색을 할 일이 물려받고, 수행인력이 멤버로 자동 추가됩니다. 할 일은 만든 사람만 봅니다. 담당·참조로 사람을 붙이거나 프로젝트·부서 보드로 옮길 때만 상대에게 보입니다.</p>
               <p>
+                완료한 할 일은 목록 맨 아래 <b>완료 N건</b> 묶음에 모이고(헤더의 '완료' 태그로 바로 펼침), 체크를 다시 누르거나 상세의 '되돌리기'로 실수 완료를 복구합니다. 완료 30일이 지나면 보관함으로 내려가며 '보관함 보기'에서 되돌릴 수 있습니다.
+                상세 '부가 설정 › 완료 조건'(하위 작업 모두 완료 · 완료 메모 입력 · 검토 단계 경유)을 켜 두면 완료 전에 확인 창이 뜹니다. 프로젝트·부서 보드는 '기본 완료 조건'을 정해 새 할 일에 물려줍니다.
+              </p>
+              <p>
                 키보드: <b>N</b> 새 할 일 · <b>↑/↓</b> 이동 · <b>Space</b> 완료 · <b>Enter</b> 상세 · 상세에서 <b>Alt+1~5</b> 상태 · <b>Ctrl+Enter</b> 댓글 · <b>Esc</b> 닫기.
               </p>
             </div>
@@ -400,6 +536,7 @@ export function TodoBoardPage() {
               {tagButton("over", "지연", stats.overdue, scope === "my" && view === "list" && quickFilter === "overdue", () => toggleQuickFilter("overdue"))}
               {tagButton("week", "이번 주", stats.week, scope === "my" && view === "list" && quickFilter === "week", () => toggleQuickFilter("week"))}
               {tagButton("shared", "공유받음", stats.shared, scope === "shared", () => (scope === "shared" ? goScope("my") : goScope("shared")))}
+              {tagButton("done", "완료", stats.done, archivedMode, showDoneList)}
             </div>
           }
           actions={
@@ -446,10 +583,6 @@ export function TodoBoardPage() {
                     결재 일정
                   </button>
                 )}
-                <button type="button" className="todo-tbtn" data-active={showDone ? "true" : undefined} aria-pressed={showDone} onClick={() => setShowDone((v) => !v)}>
-                  {showDone && <Check strokeWidth={2.6} aria-hidden="true" />}
-                  {showDone ? `완료 표시(${prefs?.showDoneDays ?? 7}일)` : "완료 숨김"}
-                </button>
                 {scope === "board" && (
                   <CdDropdown
                     menuWidthClass="w-48"
@@ -492,7 +625,39 @@ export function TodoBoardPage() {
             </div>
           </div>
 
-          {scope === "my" && view === "list" && (
+          {archivedMode && (
+            <div className="todo-canvas-body" onKeyDown={rowListKeyNav}>
+              <div className="todo-rows" aria-label="보관함">
+                <GroupHeader
+                  label="보관함"
+                  when="완료 30일이 지나 자동 보관된 할 일"
+                  count={archive.items.length}
+                  action={
+                    <button type="button" className="todo-tbtn" onClick={() => setQuery({ archived: null })}>
+                      <ArrowLeft aria-hidden="true" />
+                      돌아가기
+                    </button>
+                  }
+                />
+                {archive.loading && !archive.loaded ? (
+                  <div className="todo-loading">불러오는 중…</div>
+                ) : archive.items.filter((i) => i.archivedAt).length === 0 ? (
+                  <CdEmptyState title="보관된 할 일이 없습니다" description="완료 후 30일이 지난 할 일이 여기에 모입니다. 체크를 다시 누르면 목록으로 되돌아갑니다." />
+                ) : (
+                  <>
+                    <TodoColumnHeader />
+                    {archive.items
+                      .filter((i) => i.archivedAt)
+                      .map((it) => (
+                        <TodoRow key={it.itemId} item={it} today={today} density={density} selected={itemParam === it.itemId} timeCell="date" onOpen={openItem} onComplete={completeIn(archive, false)} />
+                      ))}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {!archivedMode && scope === "my" && view === "list" && (
             <>
               {my.loading && !my.loaded ? (
                 <div className="todo-loading">불러오는 중…</div>
@@ -501,7 +666,6 @@ export function TodoBoardPage() {
                   items={myItems}
                   approvalEvents={my.approvalEvents}
                   showApproval={showApproval}
-                  showDone={showDone}
                   today={today}
                   weekStart={weekStart}
                   density={density}
@@ -510,15 +674,16 @@ export function TodoBoardPage() {
                   loaded={my.loaded}
                   filter={quickFilter}
                   top={<QuickAddBar boards={boards} currentBoardId={personalBoardId} prefs={prefs} onCreate={createIn(my)} openRequest={quickOpen} />}
+                  {...doneListProps(my)}
                   onOpen={openItem}
-                  onComplete={completeWithUndo(my)}
+                  onComplete={completeIn(my)}
                   onNew={openNew}
                 />
               )}
             </>
           )}
 
-          {scope === "board" && view === "list" && (
+          {!archivedMode && scope === "board" && view === "list" && (
             <>
               {boardData.loading && !boardData.loaded ? (
                 <div className="todo-loading">불러오는 중…</div>
@@ -527,7 +692,6 @@ export function TodoBoardPage() {
                   items={boardItems}
                   approvalEvents={boardData.approvalEvents}
                   showApproval={showApproval}
-                  showDone={showDone}
                   today={today}
                   weekStart={weekStart}
                   density={density}
@@ -535,15 +699,16 @@ export function TodoBoardPage() {
                   selectedId={itemParam}
                   loaded={boardData.loaded}
                   top={<QuickAddBar boards={boards} currentBoardId={activeBoardId} prefs={prefs} onCreate={createIn(boardData)} openRequest={quickOpen} placeholder={quickAddPlaceholder} />}
+                  {...doneListProps(boardData)}
                   onOpen={openItem}
-                  onComplete={completeWithUndo(boardData)}
+                  onComplete={completeIn(boardData)}
                   onNew={openNew}
                 />
               )}
             </>
           )}
 
-          {view === "board" && scope !== "shared" && (
+          {!archivedMode && view === "board" && scope !== "shared" && (
             <>
               <QuickAddBar boards={boards} currentBoardId={activeBoardId} prefs={prefs} onCreate={createIn(boardData)} openRequest={quickOpen} placeholder={quickAddPlaceholder ?? (board ? "개인 보드에 할 일 추가 — #열이름 으로 열 지정" : "할 일 추가")} />
               <KanbanBoard
@@ -551,13 +716,13 @@ export function TodoBoardPage() {
                 items={boardItems}
                 today={today}
                 density={density}
-                showDone={showDone}
                 selectedId={itemParam}
                 loading={boardData.loading}
                 loaded={boardData.loaded}
                 membersVersion={membersVersion}
                 onOpen={openItem}
                 onMove={boardData.moveItem}
+                onCompleteRequest={(item) => completeIn(boardData, false)(item, true)}
                 onCreate={createIn(boardData)}
                 onBoardUpdated={onBoardUpdated}
                 onManageMembers={() => setMembersOpen(true)}
@@ -565,19 +730,45 @@ export function TodoBoardPage() {
             </>
           )}
 
-          {scope === "shared" && (
+          {!archivedMode && scope === "shared" && (
             <>
               {shared.loading && !shared.loaded ? (
                 <div className="todo-loading">불러오는 중…</div>
               ) : (
-                <SharedList items={sharedItems} boards={boards} myUserId={myUserId} today={today} density={density} showDone={showDone} selectedId={itemParam} loaded={shared.loaded} onOpen={openItem} onComplete={completeWithUndo(shared)} />
+                <SharedList items={sharedItems} boards={boards} myUserId={myUserId} today={today} density={density} selectedId={itemParam} loaded={shared.loaded} {...doneListProps(shared)} onOpen={openItem} onComplete={completeIn(shared)} />
               )}
             </>
           )}
         </section>
       </div>
 
-      {mounted && <TodoDetailDrawer itemId={itemParam} boards={boards} prefs={prefs} myUserId={myUserId} today={today} onClose={closeItem} onItemChanged={upsertAll} onItemCreated={createdAll} onItemDeleted={removeAll} onOpenItem={(id) => openItem(id)} />}
+      {mounted && (
+        <TodoDetailDrawer
+          itemId={itemParam}
+          boards={boards}
+          prefs={prefs}
+          myUserId={myUserId}
+          myName={myName}
+          myPhotoUrl={myPhotoUrl}
+          today={today}
+          onClose={closeItem}
+          onItemChanged={(item) => {
+            upsertAll(item);
+            if (item.status === "done") graceDrop(item.itemId);
+            else if (archivedMode) {
+              // 보관함 항목을 상세에서 되돌리면 보관이 풀려 목록으로 돌아간다 — 목록들을 다시 읽는다.
+              void my.reload();
+              void shared.reload();
+              void boardData.reload();
+            }
+          }}
+          onItemCreated={createdAll}
+          onItemDeleted={removeAll}
+          onOpenItem={(id) => openItem(id)}
+        />
+      )}
+
+      <CompleteConfirmModal open={!!confirm} target={confirm?.target ?? null} failure={confirm?.failure} busy={confirmBusy} onConfirm={(note) => void confirmComplete(note)} onClose={cancelConfirm} />
 
       <BoardCreateModal
         open={createOpen}

@@ -146,6 +146,29 @@ export const TODO_LINK_KIND_LABELS: Record<TodoLinkKind, string> = {
   url: "링크",
 };
 
+// ── 완료 조건(276, 2026-10-14) — 완료(status→done) 전에 검사. 검사 함수는 lib/todo/completion.ts(순수). ──
+export interface TodoCompleteRules {
+  /** 하위 작업이 모두 완료돼야 한다. */
+  subtasks?: boolean;
+  /** 완료 메모를 입력해야 한다. */
+  note?: boolean;
+  /** 검토(review) 단계를 거쳐야 한다(reviewed_at 또는 현재 상태 review). */
+  review?: boolean;
+}
+export const TODO_COMPLETE_RULE_KEYS = ["subtasks", "note", "review"] as const;
+export type TodoCompleteRuleKey = (typeof TODO_COMPLETE_RULE_KEYS)[number];
+export const TODO_COMPLETE_RULE_LABELS: Record<TodoCompleteRuleKey, string> = {
+  subtasks: "하위 작업 모두 완료",
+  note: "완료 메모 입력",
+  review: "검토 단계 경유",
+};
+/** 접힘 요약·행 보조용 짧은 라벨. */
+export const TODO_COMPLETE_RULE_SHORT_LABELS: Record<TodoCompleteRuleKey, string> = {
+  subtasks: "하위 작업",
+  note: "메모",
+  review: "검토",
+};
+
 export const TODO_ACTIVITY_ACTIONS = [
   "create", "update", "status", "assign", "due", "move", "share", "comment", "complete", "reopen", "snooze", "archive",
 ] as const;
@@ -273,6 +296,12 @@ export interface TodoItem {
   contractId: string | null;
   completedAt: string | null;
   completedBy: string | null;
+  /** 완료 조건(276). 빈 객체 = 조건 없음(즉시 완료). */
+  completeRules: TodoCompleteRules;
+  /** 완료 메모(규칙 note 가 켜져 있으면 완료 시 필수). */
+  completionNote: string | null;
+  /** 상태가 review 로 바뀐 시각(ISO) — 규칙 review 의 근거. */
+  reviewedAt: string | null;
   archivedAt: string | null;
   createdAt: string;
   createdBy: string | null;
@@ -332,6 +361,8 @@ export interface TodoBoard {
   color: TodoBoardColorKey | null;
   /** color 를 hex 로 푼 값(화면 편의). */
   colorHex: string;
+  /** 보드 기본 완료 조건(276) — 이 보드에서 만든 할 일에 생성 시 복사된다. */
+  defaultCompleteRules: TodoCompleteRules;
   archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -359,6 +390,8 @@ export interface TodoBoardCreateInput {
   memberIds?: string[];
   /** dept 전용 — 부서 id(없으면 만든 사람의 부서). */
   scopeRef?: string | null;
+  /** 보드 기본 완료 조건(276). */
+  defaultCompleteRules?: TodoCompleteRules | null;
 }
 
 /** PATCH /api/todo/boards/[id] 입력 — owner·보드 admin(·todo.admin, 개인 보드 제외). */
@@ -372,6 +405,8 @@ export interface TodoBoardPatchInput {
   contractId?: string | null;
   facilityId?: string | null;
   color?: TodoBoardColorKey | null;
+  /** 보드 기본 완료 조건(276) — 객체 전체를 바꾼다. */
+  defaultCompleteRules?: TodoCompleteRules | null;
 }
 
 /** GET /api/todo/boards/contract-candidates?q= 응답 행 — 프로젝트 보드 만들기(계약 선택) 검색용. */

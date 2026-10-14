@@ -1,6 +1,6 @@
 /*
  * 할 일(/todo) 전용 클래스(접두 todo-) — 시각 규칙은 전부 여기에 모은다(JSX 는 클래스명만).
- * 시안 v4(§19): 헤더 태그 버튼 · 범위 탭(54px)/보기 세그먼트 분리 · 목록 = 고정 열(업무·예정·마감·담당) + 행 58px(좌측 4px 파스텔 띠)
+ * 시안 v4(§19): 헤더 태그 버튼 · 범위 탭(54px)/보기 세그먼트 분리 · 목록 = 고정 열(업무·예정·마감·담당) + 행 70px(2026-10-14 58→70, 좌측 4px 파스텔 띠)
  * · 결재 일정 행(파스텔 원 아이콘, 틴트 12%) · 칸반 = 열 상자 없음·파스텔 칩 헤더·카드 1px 경계·삽입선 · 상세 = 프레임 섹션.
  * 파스텔 hex 는 lib/todo/types.ts 상수에서 inline style(--todo-tint)로 넘기고 CSS 는 var(--todo-tint)만 본다.
  * 라벨(지연/오늘/높음/낮음)·열 칩·분절 바 색은 아래 .todo-vars 한 곳에 둔다. 공통 --cd-* 토큰은 참조만 하고 재정의하지 않는다.
@@ -166,15 +166,17 @@
 .todo-pill[data-tone="over"] { background: var(--todo-lbl-over-bg); color: var(--todo-lbl-over-fg); }
 .todo-pill[data-tone="today"] { background: var(--todo-pill-today-bg); color: var(--todo-pill-today-fg); }
 .todo-rows { display: flex; flex-direction: column; }
+/* 2026-10-14 사용자: 행 높이 20% 확대(58→70, 상하 9→14, 제목↔맥락 3→7). compact 46→54 비례. 결재 대기·결재 일정 행도 같은 클래스. */
 .todo-row {
-  display: flex; align-items: center; min-height: 58px; padding: 9px 20px; box-sizing: border-box; border-bottom: 1px solid var(--cd-hairline-row, var(--cd-border)); position: relative;
+  display: flex; align-items: center; min-height: 70px; padding: 14px 20px; box-sizing: border-box; border-bottom: 1px solid var(--cd-hairline-row, var(--cd-border)); position: relative;
   cursor: pointer; outline: none; color: inherit; text-decoration: none; transition: opacity 0.24s ease, min-height 0.24s ease, background 0.12s ease; background: transparent;
 }
 .todo-row::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 4px; border-radius: 0 3px 3px 0; background: var(--todo-tint); }
 .todo-row:hover { background: var(--cd-hover); }
 .todo-row:focus-visible { outline: 2px solid var(--cd-primary); outline-offset: -2px; }
 .todo-row[data-selected="true"] { background: var(--cd-row-selected); }
-.todo-row[data-density="compact"] { min-height: 46px; padding-top: 5px; padding-bottom: 5px; }
+.todo-row[data-density="compact"] { min-height: 54px; padding-top: 7px; padding-bottom: 7px; }
+.todo-row[data-density="compact"] .todo-ctx { margin-top: 4px; }
 .todo-row[data-leaving="true"] { opacity: 0; min-height: 0; height: 0; padding-top: 0; padding-bottom: 0; overflow: hidden; }
 .todo-row[data-ref="true"] { background: color-mix(in srgb, var(--todo-tint) 12%, var(--cd-card)); cursor: default; }
 .todo-row[data-ref="true"]:hover { background: color-mix(in srgb, var(--todo-tint) 18%, var(--cd-card)); }
@@ -185,7 +187,7 @@
 .todo-lv { font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 5px; flex: none; line-height: 1.5; }
 .todo-lv[data-level="hi"] { background: var(--todo-lbl-hi-bg); color: var(--todo-lbl-hi-fg); }
 .todo-lv[data-level="lo"] { background: var(--todo-lbl-lo-bg); color: var(--todo-lbl-lo-fg); }
-.todo-ctx { font-size: 12.5px; color: var(--cd-muted); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; gap: 6px; align-items: center; }
+.todo-ctx { font-size: 12.5px; color: var(--cd-muted); margin-top: 7px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; gap: 6px; align-items: center; }
 .todo-ctx > span { flex: none; }
 .todo-ctx > .todo-ctx-txt { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .todo-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--todo-tint); flex: none; border: 1px solid rgba(0, 0, 0, 0.06); display: inline-block; }
@@ -332,17 +334,25 @@
 .todo-key { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 20px; }
 .todo-kv { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .todo-kv-lb { font-size: 11.5px; color: var(--cd-faint); }
+/* 2026-10-14 사용자: 핵심 2×2 네 셀을 클릭 전에도 옅은 입력란(36px · 1px --cd-border · 8px)으로 — 상태 칩·담당·날짜가 같은 박스 톤.
+   날짜가 비면 placeholder "YYYYMMDD"(muted) + 달력 아이콘(14px muted). 편집 모드(.todo-pr-edit)는 같은 박스에 primary 2px(outline offset -2px). */
 .todo-kv-v {
-  font-size: 14px; color: var(--cd-text); display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 8px; margin-left: -8px; border-radius: 6px; cursor: pointer;
-  background: none; border: 0; font-family: inherit; text-align: left; max-width: calc(100% + 8px); flex-wrap: wrap;
+  font-size: 14px; color: var(--cd-text); display: flex; width: 100%; align-items: center; gap: 6px; min-height: 36px; padding: 4px 10px; box-sizing: border-box; border-radius: var(--cd-radius-control); cursor: pointer;
+  background: var(--cd-card); border: 1px solid var(--cd-border); font-family: inherit; text-align: left; max-width: 100%; flex-wrap: wrap;
 }
-.todo-kv-v:hover { background: var(--cd-hover); }
+.todo-kv-v:hover { border-color: var(--cd-faint); }
 .todo-kv-v:focus-visible { outline: 2px solid var(--cd-primary); outline-offset: -2px; }
 .todo-kv-v[data-static="true"] { cursor: default; }
-.todo-kv-v[data-static="true"]:hover { background: none; }
-.todo-kv-v .todo-car { color: var(--cd-faint); width: 12px; height: 12px; }
+.todo-kv-v[data-static="true"]:hover { border-color: var(--cd-border); }
+.todo-kv-v .todo-car { color: var(--cd-faint); width: 12px; height: 12px; margin-left: auto; }
+.todo-kv-v .todo-kv-ph { color: var(--cd-muted); }
+.todo-kv-v .todo-kv-cal { color: var(--cd-muted); width: 14px; height: 14px; margin-left: auto; flex: none; }
 .todo-kv-v .todo-av { width: 20px; height: 20px; font-size: 10px; }
-.todo-kv .todo-pr-edit { padding: 0; }
+.todo-kv .todo-kv-dd { width: 100%; } /* CdDropdown 루트(inline-flex)가 셀 폭을 채워야 상태·담당 박스가 날짜 박스와 같은 폭 */
+.todo-kv .todo-pr-edit {
+  min-height: 36px; padding: 2px 8px; box-sizing: border-box; border: 1px solid var(--cd-border); border-radius: var(--cd-radius-control); background: var(--cd-card);
+  outline: 2px solid var(--cd-primary); outline-offset: -2px;
+}
 .todo-st { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; background: var(--todo-col, var(--todo-col-todo)); color: var(--cd-text); padding: 2px 9px; border-radius: 6px; font-size: 13px; }
 .todo-pr-edit { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 2px 0; }
 .todo-pr-edit .cd-input, .todo-pr-edit .cd-select { min-height: 32px; font-size: 13px; }
@@ -397,7 +407,7 @@
 .todo-rel-add:focus-visible { outline: 2px solid var(--cd-primary); outline-offset: 2px; }
 .todo-note {
   width: 100%; font-size: 14px; line-height: 1.65; color: var(--cd-text); white-space: pre-wrap; padding: 4px 8px; margin-left: -8px; border-radius: 6px; border: 0; background: transparent;
-  font-family: inherit; resize: vertical; min-height: 48px; outline: none; display: block; box-sizing: content-box;
+  font-family: inherit; resize: vertical; min-height: 104px; outline: none; display: block; box-sizing: content-box; /* 2026-10-14 사용자: 기본 높이 2배(48→104 content, rows 2→5) — 자동 늘어남·세로 resize 유지 */
 }
 .todo-note:hover { background: var(--cd-hover); }
 .todo-note:focus { background: var(--cd-surface); box-shadow: inset 0 0 0 2px var(--cd-primary); }
@@ -426,13 +436,26 @@
 .todo-cm-who b { color: var(--cd-text); font-weight: 600; margin-right: 6px; }
 .todo-cm p { margin: 0; font-size: 13.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; color: var(--cd-text); }
 .todo-mention { color: var(--cd-primary); font-weight: 500; }
+/* 2026-10-14 사용자: 입력란 왼쪽에 현재 사용자 아바타(댓글 행과 같은 28px 배치) — "내가 쓰는 댓글"임이 보이게. 빈 상태 문구는 입력란 위 한 줄. */
+.todo-cm[data-input="true"] { padding-bottom: 0; margin-top: 2px; }
+.todo-cm[data-input="true"] .todo-av { margin-top: 4px; }
+.todo-cm[data-input="true"] .todo-cin { flex: 1; min-width: 0; margin-top: 0; }
+.todo-cm-empty { font-size: 12.5px; color: var(--cd-faint); padding: 2px 0 4px; }
 .todo-cin { display: flex; align-items: center; gap: 10px; min-height: 36px; border: 1px solid var(--cd-border); border-radius: var(--cd-radius-control); padding: 0 12px; font-size: 13px; margin-top: 6px; background: var(--cd-card); }
 .todo-cin:focus-within { border-color: var(--cd-primary); outline: 2px solid var(--cd-primary); outline-offset: -2px; }
 .todo-cin textarea { flex: 1; min-width: 0; border: 0; background: transparent; font: inherit; font-size: 13px; outline: none; color: var(--cd-text); resize: none; padding: 8px 0; line-height: 1.4; }
 .todo-cin textarea::placeholder { color: var(--cd-faint); }
 .todo-cin .todo-kbd { margin-left: auto; }
 .todo-activity { font-size: 12px; color: var(--cd-faint); display: flex; gap: 10px; padding: 3px 0; }
-.todo-activity-when { width: 72px; flex: none; font-variant-numeric: tabular-nums; }
+.todo-activity-when { width: 72px; flex: none; font-variant-numeric: tabular-nums; color: var(--cd-muted); }
+/* 2026-10-14 사용자: 접힘 요약 — 부가 설정은 라벨(11.5px muted)+값(13px) 세로 쌍 3열 2행(행 10px·열 20px), 활동은 최근 2건을 행마다 줄바꿈(시각 72px 열). */
+.todo-fold-ln[data-grid="true"] { margin-top: 8px; line-height: 1.4; }
+.todo-xs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 20px; }
+.todo-xs-it { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.todo-xs-lb { font-size: 11.5px; color: var(--cd-muted); }
+.todo-xs-v { font-size: 13px; color: var(--cd-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.todo-xs-v[data-none="true"] { color: var(--cd-faint); }
+.todo-fold-ln .todo-activity { padding: 2px 0; }
 .todo-df { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--cd-faint); width: 100%; }
 .todo-save-state { display: inline-flex; align-items: center; gap: 5px; color: var(--cd-faint); }
 .todo-save-state i { width: 6px; height: 6px; border-radius: 50%; background: var(--cd-success); display: inline-block; }
@@ -506,6 +529,14 @@
 
 /* ── 연결 선택 모달(LinkPickerModal) — 행: 제목 15px → 보조 12.5px muted. 무광 면, 그림자·그라데이션 없음. ── */
 .todo-lp { gap: 12px; }
+/* 2026-10-14 사용자: 종류를 바꿔도 모달 높이가 변하지 않게 본문(종류 세그먼트 아래 ~ footer 위)을 고정 높이로.
+   측정(CSS 합산, 목록이 꽉 찼을 때): 결재 문서 탭 = 검색 입력 36(--precision-ui-control-height) + gap 12 + 목록 320 + 경계 2 = 370px,
+   계약 탭 = 연도 select 36 + gap 12 + 트리 300 + 경계 2 = 350px → 큰 쪽 370px 로 고정하고 안의 목록·트리는 flex 로 채운다(짧은 탭은 위 정렬·아래 빈 공간).
+   높이 760px 미만 화면은 calc(100vh - 240px)(모달 머리·발·여백) 로 축소. */
+.todo-lp-body { height: 370px; display: flex; flex-direction: column; justify-content: flex-start; gap: 12px; overflow: auto; min-height: 0; }
+.todo-lp-body > .todo-lp-list, .todo-lp-body > .todo-tree, .todo-lp-body > .todo-cand { flex: 1 1 auto; max-height: none; min-height: 0; }
+.todo-lp-body > .todo-loading { flex: none; }
+@media (max-height: 759px) { .todo-lp-body { max-height: calc(100vh - 240px); } }
 .todo-lp-list { display: flex; flex-direction: column; border: 1px solid var(--cd-border); border-radius: var(--cd-radius-card); max-height: 320px; overflow-y: auto; background: var(--cd-card); }
 .todo-lp-row { width: 100%; display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: none; border: 0; border-left: 3px solid transparent; border-bottom: 1px solid var(--cd-hairline-row, var(--cd-border)); font: inherit; color: var(--cd-text); cursor: pointer; text-align: left; }
 .todo-lp-row:last-child { border-bottom: 0; }
@@ -541,6 +572,7 @@
   .todo-c-due { width: 108px; }
   .todo-c-who { width: 96px; }
   .todo-key { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+  .todo-xs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .todo-bar { padding: 8px 12px; }
   .todo-views { padding-bottom: 4px; margin-left: 0; }
 }
@@ -554,3 +586,47 @@
   .todo-c-who { width: auto; flex: 1; min-width: 0; }
   .todo-c-who .todo-who { max-width: 100%; }
 }
+
+/* ── 완료 처리 보완(276, 2026-10-14) — 완료 태그 · 완료 섹션 · 유예 행 · 완료 확인 모달 · 완료 조건 체크 · 상세 완료 줄 ── */
+.todo-vars { --todo-tag-done-bg: #f3f4f6; --todo-tag-done-bd: #d7dae0; }
+[data-theme="dark"] .todo-vars, .todo-vars[data-theme="dark"] { --todo-tag-done-bg: color-mix(in srgb, #f3f4f6 12%, var(--cd-card)); --todo-tag-done-bd: color-mix(in srgb, #d7dae0 35%, var(--cd-card)); }
+.todo-tag[data-tone="done"] { background: var(--todo-tag-done-bg); border-color: var(--todo-tag-done-bd); color: var(--cd-muted); }
+/* 완료 섹션 — 헤더 위 구분선, 비어 있으면 헤더 회색 */
+.todo-done-sec { border-top: 1px solid var(--cd-hairline-row, var(--cd-border)); margin-top: 8px; }
+.todo-done-sec[data-empty="true"] .todo-gh { color: var(--cd-faint); }
+.todo-done-sec .todo-row .todo-c-do, .todo-done-sec .todo-row .todo-c-due { color: var(--cd-faint); }
+.todo-ctx[data-done="true"] { color: var(--cd-faint); }
+.todo-done-foot { padding: 6px 24px 16px; font-size: 12.5px; }
+.todo-done-foot .todo-link, .todo-done-ln .todo-link { color: var(--cd-primary); background: none; border: 0; padding: 0; font: inherit; font-size: 12.5px; cursor: pointer; }
+.todo-done-foot .todo-link:focus-visible, .todo-done-ln .todo-link:focus-visible { outline: 2px solid var(--cd-primary); outline-offset: 2px; border-radius: 4px; }
+/* 유예 행(완료됨 · 되돌리기) — 체크는 채워지고 제목만 취소선, 바탕은 그대로 */
+.todo-row[data-justdone="true"] .todo-c-act .todo-mu { color: var(--cd-muted); }
+/* 상세 — 완료됨 줄(핵심 블록 위) */
+.todo-done-ln { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 14px; border: 1px solid var(--cd-border); border-radius: var(--cd-radius-card); background: var(--todo-sub-done); color: var(--todo-sub-done-fg); font-size: 13px; }
+.todo-done-ln svg { width: 14px; height: 14px; flex: none; }
+.todo-done-ln b { font-weight: 600; }
+.todo-done-ln .todo-done-note { flex-basis: 100%; color: var(--cd-text); font-size: 12.5px; white-space: pre-wrap; }
+/* 완료 조건 체크 묶음 */
+.todo-rules { display: flex; flex-direction: column; gap: 6px; }
+.todo-rule { display: flex; flex-direction: column; gap: 1px; }
+.todo-rule .cd-text { font-size: 13px; }
+.todo-rule-hint { font-size: 11.5px; color: var(--cd-faint); padding-left: 24px; }
+.todo-pr .todo-rules { padding: 4px 0; }
+/* 완료 확인 모달 */
+.todo-cc { display: flex; flex-direction: column; gap: 12px; }
+.todo-cc-title { font-size: 14px; font-weight: 600; color: var(--cd-text); margin: 0; }
+.todo-cc-server { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12.5px; color: var(--cd-warning); }
+.todo-cc-server svg { width: 14px; height: 14px; flex: none; }
+.todo-cc-rules { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border: 1px solid var(--cd-border); border-radius: var(--cd-radius-card); overflow: hidden; }
+.todo-cc-rule { display: grid; grid-template-columns: 20px auto 1fr; align-items: center; gap: 8px; padding: 8px 12px; font-size: 13px; color: var(--cd-text); border-bottom: 1px solid var(--cd-hairline-row, var(--cd-border)); background: var(--cd-card); }
+.todo-cc-rule:last-child { border-bottom: 0; }
+.todo-cc-ic { width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--todo-lbl-over-bg); color: var(--todo-lbl-over-fg); }
+.todo-cc-ic svg { width: 12px; height: 12px; }
+.todo-cc-rule[data-ok="true"] .todo-cc-ic { background: var(--todo-sub-done); color: var(--todo-sub-done-fg); }
+.todo-cc-lb { font-weight: 500; white-space: nowrap; }
+.todo-cc-st { font-size: 12.5px; color: var(--todo-lbl-over-fg); text-align: right; }
+.todo-cc-rule[data-ok="true"] .todo-cc-st { color: var(--cd-faint); }
+.todo-cc-note { display: flex; flex-direction: column; gap: 6px; }
+.todo-cc-note-lb { font-size: 12.5px; color: var(--cd-muted); display: inline-flex; align-items: center; gap: 6px; }
+.todo-cc-req { font-size: 11px; font-weight: 600; color: var(--todo-lbl-over-fg); background: var(--todo-lbl-over-bg); padding: 0 6px; border-radius: 5px; line-height: 17px; }
+.todo-cc-note textarea { resize: vertical; min-height: 72px; font-size: 13px; line-height: 1.5; }

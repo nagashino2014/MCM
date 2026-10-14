@@ -17,10 +17,12 @@ import { Avatar, Button, ConfirmSheet, EmptyState, IconButton, Input, Screen, Sh
 import { DatePickerSheet } from '@/components/calendar/DatePickerSheet';
 import { OrgPickerSheet, type OrgEmployee } from '@/components/pickers/OrgPickerSheet';
 import { MoveSheet } from '@/components/todo/BoardSections';
+import { CompleteConfirmSheet, CompleteRulesChecks, asCompleteRulesFailure, type CompleteRulesFailure } from '@/components/todo/CompleteConfirmSheet';
 import { LinkPickerSheet } from '@/components/todo/LinkPickerSheet';
 import { BoardStripe, CheckCircle, DueBadge, MiniAvatar, PastelLabel, PriorityDot, SegBar } from '@/components/todo/parts';
 import { apiJson } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
+import { completeRulesSummary, hasAnyCompleteRule } from '@/lib/todo-completion';
 import {
   TODO_ACTIVITY_ACTIONS,
   TODO_LINK_KIND_LABELS,
@@ -60,7 +62,8 @@ import { useTheme } from '@/theme/useTheme';
 /**
  * 할 일 상세(§7.3 · v4 §19-6, 모바일판) — 헤더(보드 색 띠 + 제목 18px + 프로젝트 칩) 아래 **프레임 카드** 순서:
  * 핵심 4속성(상태·담당·수행 예정·마감) → 관련(용역·발주처 / 사업장 / 연결) → 메모 → 하위 작업(분절 진행바) →
- * 댓글(사진 아바타) → 부가 설정(접힘 한 줄 요약: 우선순위·알림·반복·보드›열·공유) → 활동(접힘).
+ * 댓글(사진 아바타, 입력란 앞에 내 아바타) → 부가 설정(접힘 요약 = 라벨+값 3열 2행: 우선순위·알림·반복 / 보드·공유·스누즈) → 활동(접힘, 요약은 최근 2건 행마다).
+ * 2026-10-14: 핵심 4속성 셀은 클릭 전에도 36px 테두리 박스(날짜가 비면 "YYYYMMDD" + 달력 아이콘, 시트가 열리면 primary 테두리), 메모 기본 높이 2배.
  * 보조 행동(메신저 공유·복제·삭제)은 헤더 ⋯ 시트. 필드마다 바로 저장(PATCH)하고 상단 부제에 저장 상태를 남긴다.
  *
  * - 제목·메모·시각은 로컬 버퍼(useState)에 두고 blur/유효값일 때만 커밋한다(AGENTS.md 규칙).
@@ -214,24 +217,49 @@ function Frame({
 }
 
 /** 핵심 속성 셀 — 11.5px 라벨 + 값(탭 가능). */
-function KeyCell({ label, onPress, disabled, children }: { label: string; onPress?: () => void; disabled?: boolean; children: React.ReactNode }) {
+/**
+ * 핵심 셀 — 클릭 전에도 옅은 입력란(36px · 1px 경계 · 8px)으로 보인다(웹 .todo-kv-v 와 같은 톤). 시트가 열린 동안(active) 경계가 primary.
+ * chevron=false 면 ▾ 를 붙이지 않는다(날짜 셀은 빈 상태에서 달력 아이콘을 children 으로 넣는다). trailing 은 박스 오른쪽 바깥(시각 입력).
+ */
+function KeyCell({
+  label,
+  onPress,
+  disabled,
+  active,
+  chevron = true,
+  trailing,
+  children,
+}: {
+  label: string;
+  onPress?: () => void;
+  disabled?: boolean;
+  active?: boolean;
+  chevron?: boolean;
+  trailing?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   const { c } = useTheme();
   const inner = (
-    <View className="min-h-[28px] flex-row items-center gap-1.5">
+    <View
+      style={{ minHeight: 36, borderRadius: 8, borderWidth: 1, borderColor: active ? c.primary : c.border, paddingHorizontal: 10, paddingVertical: 4 }}
+      className="flex-1 flex-row items-center gap-1.5 bg-cd-card">
       {children}
-      {onPress && !disabled ? <Ionicons name="chevron-down" size={12} color={c.faint} /> : null}
+      {chevron && onPress && !disabled ? <Ionicons name="chevron-down" size={12} color={c.faint} style={{ marginLeft: 'auto' }} /> : null}
     </View>
   );
   return (
     <View style={{ width: '48%' }} className="gap-[3px]">
       <Text className="text-[11.5px] text-cd-faint">{label}</Text>
-      {onPress ? (
-        <Pressable onPress={onPress} disabled={disabled} className="active:opacity-60">
-          {inner}
-        </Pressable>
-      ) : (
-        inner
-      )}
+      <View className="flex-row items-center gap-1.5">
+        {onPress ? (
+          <Pressable onPress={onPress} disabled={disabled} className="flex-1 active:opacity-60">
+            {inner}
+          </Pressable>
+        ) : (
+          inner
+        )}
+        {trailing}
+      </View>
     </View>
   );
 }
@@ -386,6 +414,10 @@ export default function TodoDetailScreen() {
   const [duplicating, setDuplicating] = useState(false);
   const [extraOpen, setExtraOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
+  // 완료 확인 시트(276) — 완료 조건이 있거나 서버가 409 로 거절했을 때
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmFailure, setConfirmFailure] = useState<CompleteRulesFailure | null>(null);
+  const [completing, setCompleting] = useState(false);
   const [subTitle, setSubTitle] = useState('');
   const [comment, setComment] = useState('');
   const [sendingComment, setSendingComment] = useState(false);
@@ -393,6 +425,15 @@ export default function TodoDetailScreen() {
 
   const org = useDirectorySnapshot(!personOpen && !assignOpen && !item);
   const rooms = useApi<{ rooms: ChatRoom[] }>('/api/chat/rooms', { skip: !chatOpen });
+  // 댓글 입력란의 "나" 아바타 사진 — 새 API 없이: 주소록 스냅샷(/api/directory, userId+photoPath) → 상세 응답의 owner·담당·공유·댓글 중 내 userId.
+  const myPhoto = useMemo(() => {
+    const fromOrg = me ? (org?.employees.find((e) => e.userId === me)?.photoPath ?? null) : null;
+    if (fromOrg) return fromOrg;
+    if (!item || !me) return null;
+    if (item.ownerUserId === me && item.ownerPhotoUrl) return item.ownerPhotoUrl;
+    if (item.assigneeUserId === me && item.assigneePhotoUrl) return item.assigneePhotoUrl;
+    return item.shares.find((s) => s.userId === me)?.photoUrl ?? item.comments.find((cm) => cm.userId === me)?.userPhotoUrl ?? null;
+  }, [org, item, me]);
 
   const canEdit = !!item?.canEdit;
   const isOwner = !!item?.isOwner;
@@ -412,6 +453,43 @@ export default function TodoDetailScreen() {
       return { key: p.key, label: describeRecurrence(rule) ?? p.label, rule };
     });
   }, [item?.doDate]);
+
+  // ── 완료/되돌리기(276) — 완료는 완료 조건이 있으면 시트 먼저, 없으면 즉시. 서버 409(code complete_rules)도 시트로. 되돌리기는 제한 없음. ──
+  const completeFlow = async (done: boolean, completionNote?: string | null): Promise<boolean> => {
+    if (!item || !canEdit || completing) return false;
+    if (done && completionNote === undefined && hasAnyCompleteRule(item.completeRules)) {
+      setConfirmFailure(null);
+      setConfirmOpen(true);
+      return false;
+    }
+    setCompleting(true);
+    mark('saving');
+    try {
+      const r = await apiJson<{ item: TodoItemDetail }>(`/api/todo/items/${item.itemId}/complete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ done, ...(completionNote !== undefined ? { completionNote } : {}) }),
+      });
+      setItem(r.item);
+      mark('saved');
+      setConfirmOpen(false);
+      setConfirmFailure(null);
+      toast.show(done ? '완료했습니다' : '되돌렸습니다', 'success');
+      return true;
+    } catch (e) {
+      mark('error');
+      const failure = asCompleteRulesFailure(e);
+      if (failure) {
+        setConfirmFailure(failure);
+        setConfirmOpen(true);
+        return false;
+      }
+      toast.show((e as Error).message, 'error');
+      return false;
+    } finally {
+      setCompleting(false);
+    }
+  };
 
   // ── 하위 작업 ──
   const toggleSub = async (s: TodoItem) => {
@@ -549,13 +627,17 @@ export default function TodoDetailScreen() {
   const shareSummary = item.shares.length
     ? item.shares.map((s) => `${s.name}(${TODO_SHARE_ROLE_LABELS[s.role].replace(/\(.*\)/, '')})`).join(', ')
     : '없음';
-  const extraSummary = [
-    `우선순위 ${TODO_PRIORITY_LABELS[item.priority]}`,
-    `알림 ${remindLabel}`,
-    `반복 ${describeRecurrence(item.recurrence) ?? '없음'}`,
-    `보드 ${boardLabel}`,
-    `공유 ${shareSummary}`,
-  ].join(' · ');
+  // 부가 설정 접힘 요약(2026-10-14) — 라벨+값 세로 쌍 3열 2행: 우선순위·알림·반복 / 보드·공유·스누즈(값이 없으면 faint).
+  const extraSummary: [string, string, boolean][] = [
+    ['우선순위', TODO_PRIORITY_LABELS[item.priority], false],
+    ['알림', remindLabel, !item.remindAt],
+    ['반복', describeRecurrence(item.recurrence) ?? '없음', !item.recurrence],
+    ['보드', boardLabel, false],
+    ['공유', shareSummary, !item.shares.length],
+    ['스누즈', item.snoozedUntil ? `${fmtIsoShort(item.snoozedUntil)}까지` : '없음', !item.snoozedUntil],
+    // 완료 조건(276)은 설정된 것만 요약에 보인다.
+    ...(completeRulesSummary(item.completeRules) ? ([['완료 조건', completeRulesSummary(item.completeRules) as string, false]] as [string, string, boolean][]) : []),
+  ];
   const hasRelated = !!(item.projectName || item.clientName || item.linkKind);
   const statusCol = labelColors(statusTone(item.status), dark);
   const subChip = (s: TodoStatus) =>
@@ -573,11 +655,7 @@ export default function TodoDetailScreen() {
           <IconButton
             icon={item.status === 'done' ? 'checkmark-circle' : 'checkmark-circle-outline'}
             color={item.status === 'done' ? c.primary : c.muted}
-            onPress={async () => {
-              if (!canEdit) return;
-              const r = await post<{ item: TodoItemDetail }>(`/api/todo/items/${item.itemId}/complete`, { done: item.status !== 'done' });
-              if (r) setItem(r.item);
-            }}
+            onPress={() => void completeFlow(item.status !== 'done')}
           />
           <IconButton icon="ellipsis-horizontal" onPress={() => setActionsOpen(true)} />
         </View>
@@ -612,15 +690,38 @@ export default function TodoDetailScreen() {
             ) : null}
           </View>
 
+          {/* 완료됨 줄(276) — 완료 시각 · 되돌리기 · 완료 메모 */}
+          {item.status === 'done' ? (
+            <View style={{ borderRadius: 8, backgroundColor: labelColors('sage', dark).bg }} className="gap-1 border border-cd-border px-3.5 py-2.5">
+              <View className="flex-row flex-wrap items-center gap-1.5">
+                <Ionicons name="checkmark-circle" size={15} color={labelColors('sage', dark).fg} />
+                <Text style={{ color: labelColors('sage', dark).fg }} className="text-[13px] font-semibold">
+                  완료됨
+                </Text>
+                {item.completedAt ? <Text className="text-[13px] text-cd-muted">· {fmtIsoShort(item.completedAt)}</Text> : null}
+                {item.archivedAt ? <Text className="text-[12px] text-cd-faint">· 보관됨</Text> : null}
+                {canEdit ? (
+                  <>
+                    <Text className="text-[13px] text-cd-muted">·</Text>
+                    <Pressable onPress={() => void completeFlow(false)} disabled={completing} hitSlop={8} className="active:opacity-60">
+                      <Text className="text-[13px] font-semibold text-cd-primary">되돌리기</Text>
+                    </Pressable>
+                  </>
+                ) : null}
+              </View>
+              {item.completionNote ? <Text className="text-[12.5px] leading-[18px] text-cd-text">{item.completionNote}</Text> : null}
+            </View>
+          ) : null}
+
           {/* 핵심 4속성 */}
           <Frame>
             <View className="flex-row flex-wrap justify-between gap-y-2.5">
-              <KeyCell label="상태" onPress={() => setStatusOpen(true)} disabled={!canEdit}>
+              <KeyCell label="상태" onPress={() => setStatusOpen(true)} disabled={!canEdit} active={statusOpen}>
                 <View style={{ backgroundColor: statusCol.bg, borderRadius: 6, paddingHorizontal: 9, paddingVertical: 2 }}>
                   <Text style={{ fontSize: 13, fontWeight: '500', color: statusCol.fg }}>{TODO_STATUS_LABELS[item.status]}</Text>
                 </View>
               </KeyCell>
-              <KeyCell label="담당" onPress={() => setAssignOpen(true)} disabled={!canEdit}>
+              <KeyCell label="담당" onPress={() => setAssignOpen(true)} disabled={!canEdit} active={assignOpen}>
                 {item.assigneeName ? (
                   <>
                     <MiniAvatar name={item.assigneeName} photoUrl={item.assigneePhotoUrl} size={20} />
@@ -632,23 +733,41 @@ export default function TodoDetailScreen() {
                   <Text className="text-[14px] text-cd-faint">담당 없음</Text>
                 )}
               </KeyCell>
-              <KeyCell label="수행 예정">
-                <Pressable onPress={() => setDoDateOpen(true)} disabled={!canEdit} className="flex-row items-center gap-1 active:opacity-60">
-                  <Text className={`text-[14px] ${item.doDate ? 'text-cd-text' : 'text-cd-faint'}`}>{item.doDate ? fmtMdWd(item.doDate) : '날짜'}</Text>
-                  {canEdit ? <Ionicons name="chevron-down" size={12} color={c.faint} /> : null}
-                </Pressable>
-                <View style={{ width: 66 }}>
-                  <TimeField compact value={item.doTime ?? ''} disabled={!canEdit || !item.doDate} onCommit={(v) => void patch({ doTime: v || null })} />
-                </View>
+              <KeyCell
+                label="수행 예정"
+                onPress={() => setDoDateOpen(true)}
+                disabled={!canEdit}
+                active={doDateOpen}
+                chevron={false}
+                trailing={
+                  <View style={{ width: 66 }}>
+                    <TimeField compact value={item.doTime ?? ''} disabled={!canEdit || !item.doDate} onCommit={(v) => void patch({ doTime: v || null })} />
+                  </View>
+                }>
+                {item.doDate ? (
+                  <Text numberOfLines={1} className="shrink text-[14px] text-cd-text">
+                    {fmtMdWd(item.doDate)}
+                  </Text>
+                ) : (
+                  <>
+                    <Text className="text-[14px] text-cd-muted">YYYYMMDD</Text>
+                    <Ionicons name="calendar-outline" size={14} color={c.muted} style={{ marginLeft: 'auto' }} />
+                  </>
+                )}
               </KeyCell>
-              <KeyCell label="마감" onPress={() => setDueOpen(true)} disabled={!canEdit}>
+              <KeyCell label="마감" onPress={() => setDueOpen(true)} disabled={!canEdit} active={dueOpen} chevron={false}>
                 {item.dueDate ? (
                   <>
-                    <Text className="text-[14px] text-cd-text">{fmtKDate(item.dueDate)}</Text>
+                    <Text numberOfLines={1} className="shrink text-[14px] text-cd-text">
+                      {fmtKDate(item.dueDate)}
+                    </Text>
                     {due && due.tone !== 'neutral' ? <DueBadge label={due.label} tone={due.tone} /> : null}
                   </>
                 ) : (
-                  <Text className="text-[14px] text-cd-faint">마감 없음</Text>
+                  <>
+                    <Text className="text-[14px] text-cd-muted">YYYYMMDD</Text>
+                    <Ionicons name="calendar-outline" size={14} color={c.muted} style={{ marginLeft: 'auto' }} />
+                  </>
                 )}
               </KeyCell>
             </View>
@@ -726,7 +845,7 @@ export default function TodoDetailScreen() {
               placeholderTextColor={c.faint}
               multiline
               textAlignVertical="top"
-              style={{ minHeight: 48 }}
+              style={{ minHeight: 96 }} /* 2026-10-14 사용자: 기본 높이 2배(48→96), 자동 늘어남 유지 */
               className="text-[14px] leading-[23px] text-cd-text"
             />
           </Frame>
@@ -802,13 +921,17 @@ export default function TodoDetailScreen() {
                 ))}
               </View>
             ) : (
-              <Text className="text-[13px] text-cd-faint">아직 댓글이 없습니다. @이름 으로 멘션하면 푸시가 갑니다.</Text>
+              <Text className="text-[13px] text-cd-faint">아직 댓글이 없습니다. 공유받은 담당·참조자에게 댓글 알림이 갑니다.</Text>
             )}
-            <View className="flex-row items-end gap-2">
+            {/* 입력 행 — 댓글 행과 같은 배치(내 아바타 28px + 입력). @이름 멘션 파싱·푸시는 그대로(안내 문구만 제거). */}
+            <View className="flex-row items-start gap-2.5">
+              <View style={{ marginTop: 4 }}>
+                <MiniAvatar name={user?.name} photoUrl={myPhoto} size={28} />
+              </View>
               <TextInput
                 value={comment}
                 onChangeText={setComment}
-                placeholder="댓글 쓰기 · @이름으로 멘션"
+                placeholder="댓글 쓰기"
                 placeholderTextColor={c.faint}
                 multiline
                 className="max-h-[120px] min-h-[36px] flex-1 rounded-lg border border-cd-border bg-cd-bg px-3 py-2 text-[13px] text-cd-text"
@@ -817,7 +940,7 @@ export default function TodoDetailScreen() {
                 onPress={() => void sendComment()}
                 disabled={!comment.trim() || sendingComment}
                 className="h-9 w-9 items-center justify-center rounded-lg active:opacity-70"
-                style={{ backgroundColor: comment.trim() ? c.primary : c.border }}>
+                style={{ backgroundColor: comment.trim() ? c.primary : c.border, alignSelf: 'flex-end' }}>
                 {sendingComment ? <ActivityIndicator size="small" color="#fff" /> : <Ionicons name="arrow-up" size={18} color="#fff" />}
               </Pressable>
             </View>
@@ -826,9 +949,17 @@ export default function TodoDetailScreen() {
           {/* 부가 설정(접힘 — 한 줄 요약) */}
           <Frame title="부가 설정" onToggle={() => setExtraOpen((v) => !v)} open={extraOpen}>
             {!extraOpen ? (
-              <Text className="text-[12.5px] leading-5 text-cd-faint" numberOfLines={3}>
-                {extraSummary}
-              </Text>
+              // 3열 2행 — 셀 flexBasis 28% + 열 간격 20 으로 한 행에 3개(행 간격 10). 긴 값(공유)은 한 줄 말줄임.
+              <View className="flex-row flex-wrap" style={{ rowGap: 10, columnGap: 20 }}>
+                {extraSummary.map(([lb, v, none]) => (
+                  <View key={lb} style={{ flexBasis: '28%', flexGrow: 1, minWidth: 0 }} className="gap-0.5">
+                    <Text className="text-[11.5px] text-cd-muted">{lb}</Text>
+                    <Text numberOfLines={1} className={`text-[13px] ${none ? 'text-cd-faint' : 'text-cd-text'}`}>
+                      {v}
+                    </Text>
+                  </View>
+                ))}
+              </View>
             ) : (
               <View className="gap-3">
                 <View className="flex-row flex-wrap items-center gap-1.5">
@@ -880,6 +1011,14 @@ export default function TodoDetailScreen() {
                   }}
                   disabled={!canEdit}
                 />
+                {!item.parentItemId ? (
+                  <View className="flex-row items-start gap-2">
+                    <Text className="w-[64px] pt-0.5 text-[13px] font-bold text-cd-muted">완료 조건</Text>
+                    <View className="flex-1">
+                      <CompleteRulesChecks value={item.completeRules} disabled={!canEdit} onChange={(next) => void patch({ completeRules: next })} />
+                    </View>
+                  </View>
+                ) : null}
                 <View className="flex-row items-start gap-2">
                   <Text className="w-[64px] pt-2 text-[13px] font-bold text-cd-muted">공유</Text>
                   <View className="flex-1 flex-row flex-wrap gap-1.5">
@@ -924,12 +1063,22 @@ export default function TodoDetailScreen() {
                   </View>
                 ))}
               </View>
+            ) : item.activity.length ? (
+              // 접힘 요약 — 최근 2건을 행마다 줄바꿈(시각 72px 고정 열 muted + 내용). 펼치면 전체.
+              <View>
+                {item.activity.slice(0, 2).map((a) => (
+                  <View key={a.activityId} className="flex-row items-center gap-2.5 py-0.5">
+                    <Text className="w-[72px] text-[12px] text-cd-muted" numberOfLines={1}>
+                      {fmtRelative(a.createdAt)}
+                    </Text>
+                    <Text className="flex-1 text-[12px] text-cd-faint" numberOfLines={1}>
+                      {a.userName ?? '시스템'} · {ACTIVITY_LABEL[a.action] ?? a.action}
+                    </Text>
+                  </View>
+                ))}
+              </View>
             ) : (
-              <Text className="text-[12.5px] text-cd-faint" numberOfLines={1}>
-                {item.activity[0]
-                  ? `${fmtRelative(item.activity[0].createdAt)} ${item.activity[0].userName ?? '시스템'} · ${ACTIVITY_LABEL[item.activity[0].action] ?? item.activity[0].action}`
-                  : '기록 없음'}
-              </Text>
+              <Text className="text-[12.5px] text-cd-faint">기록 없음</Text>
             )}
           </Frame>
           <Text className="px-1 text-[11px] text-cd-faint">
@@ -939,13 +1088,30 @@ export default function TodoDetailScreen() {
       </KeyboardAvoidingView>
 
       {/* ── 시트들 ── */}
+      {/* 완료 확인(276) — 완료 조건이 있거나 서버가 거절했을 때 */}
+      <CompleteConfirmSheet
+        visible={confirmOpen}
+        target={item}
+        failure={confirmFailure}
+        busy={completing}
+        onConfirm={(note) => void completeFlow(true, note)}
+        onClose={() => {
+          if (completing) return;
+          setConfirmOpen(false);
+          setConfirmFailure(null);
+        }}
+      />
+
       <MoveSheet
         visible={statusOpen}
         title="상태"
         onClose={() => setStatusOpen(false)}
         onPick={(k) => {
           setStatusOpen(false);
-          if (k !== item.status) void patch({ status: k });
+          if (k === item.status) return;
+          // 완료는 체크와 같은 경로(완료 조건 시트), 그 외는 PATCH
+          if (k === 'done') void completeFlow(true);
+          else void patch({ status: k });
         }}
         options={TODO_STATUSES.map((s) => ({
           key: s,

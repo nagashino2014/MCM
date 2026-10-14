@@ -5,6 +5,8 @@
 // 결재 대기(kind "pending" — 내가 결재할 차례, 2026-10-13)는 결재 일정 토글과 무관하게 "오늘" 그룹 맨 위(일정 결재 행보다 앞)에 두고,
 //   헤더 건수에는 넣지 않되 헤더 우측에 "결재 대기 N" 보조 라벨로 보인다.
 // 헤더 태그 버튼 필터(오늘·지연·이번 주)는 filter prop 으로 받아 섹션을 거른다. 키보드 ↑/↓·Space·Enter.
+// 완료(2026-10-14): 완료 항목은 날짜 섹션에 넣지 않고 맨 아래 DoneSection("완료 N건 · 펼치기")에 모은다. 방금 완료된 행(justDoneIds)은
+//   상위가 status 를 원복해 넘기므로 2초 동안 원래 섹션에 "완료됨 · 되돌리기"로 남는다.
 
 import { useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
 import { ChevronDown, ChevronUp, ListChecks } from "lucide-react";
@@ -12,6 +14,7 @@ import { CdButton, CdEmptyState } from "@/components/cdash";
 import type { TodoApprovalEvent, TodoItem } from "@/lib/todo/types";
 import { comparePosition } from "@/lib/todo/position";
 import { ApprovalRow, TodoColumnHeader, TodoRow, type Density, type TimeCell } from "./TodoRow";
+import { DoneSection } from "./DoneSection";
 import { addDays, approvalSection, compareInSection, effectiveDate, longDateKo, md, sectionOf, weekEnd, type SectionKey, type SortMode } from "./todo-utils";
 
 type Entry = { kind: "item"; item: TodoItem; date: string; time: string } | { kind: "ref"; ev: TodoApprovalEvent; date: string; time: string };
@@ -28,11 +31,24 @@ interface Group {
   entries: Entry[];
 }
 
-export interface MyTodoListProps {
+/** 완료 섹션·유예 행 공용 prop(내 할 일·보드 목록·공유받음). */
+export interface DoneListProps {
+  /** 서버 완료 건수(보관 제외). */
+  doneCount: number;
+  /** 헤더 "완료 N" 태그 클릭 — 값이 바뀌면 완료 섹션을 펼치고 스크롤. */
+  doneOpenRequest?: number;
+  /** 2초 유예 중인 행 id — 상위가 status 를 원복해 items 에 남겨 둔다. */
+  justDoneIds?: ReadonlySet<string>;
+  onUndo?: (item: TodoItem) => void;
+  onSettled?: (item: TodoItem) => void;
+  onShowArchive?: () => void;
+}
+
+export interface MyTodoListProps extends DoneListProps {
+  /** 미완 + 완료(status done) 항목을 함께 받는다 — 완료는 DoneSection 으로 분리한다. */
   items: TodoItem[];
   approvalEvents: TodoApprovalEvent[];
   showApproval: boolean;
-  showDone: boolean;
   today: string;
   weekStart: 0 | 1;
   density: Density;
@@ -43,7 +59,7 @@ export interface MyTodoListProps {
   /** 열 머리글 아래 삽입(퀵애드 고스트 행) */
   top?: ReactNode;
   onOpen: (item: TodoItem) => void;
-  onComplete: (item: TodoItem, done: boolean) => void;
+  onComplete: (item: TodoItem, done: boolean) => void | Promise<boolean | void>;
   onNew: () => void;
 }
 
@@ -81,13 +97,35 @@ export function GroupHeader({ label, pill, when, count, pendingCount = 0, action
   );
 }
 
-export function MyTodoList({ items, approvalEvents, showApproval, showDone, today, weekStart, density, sortMode, selectedId, loaded, filter = null, top, onOpen, onComplete, onNew }: MyTodoListProps) {
+export function MyTodoList({
+  items,
+  approvalEvents,
+  showApproval,
+  today,
+  weekStart,
+  density,
+  sortMode,
+  selectedId,
+  loaded,
+  filter = null,
+  top,
+  doneCount,
+  doneOpenRequest,
+  justDoneIds,
+  onUndo,
+  onSettled,
+  onShowArchive,
+  onOpen,
+  onComplete,
+  onNew,
+}: MyTodoListProps) {
   const [showLater, setShowLater] = useState(false);
 
-  const { groups, later, laterCount, hiddenDone, pendingCount } = useMemo(() => {
+  const doneItems = useMemo(() => items.filter((i) => !i.parentItemId && i.status === "done"), [items]);
+  const { groups, later, laterCount, pendingCount } = useMemo(() => {
     const entries: Entry[] = [];
     for (const it of items) {
-      if (it.parentItemId) continue;
+      if (it.parentItemId || it.status === "done") continue;
       const date = effectiveDate(it);
       entries.push({ kind: "item", item: it, date: date ?? "", time: it.doTime ?? "~" });
     }
@@ -140,14 +178,17 @@ export function MyTodoList({ items, approvalEvents, showApproval, showDone, toda
       if (g.key === "today") return true;
       return g.entries.length > 0;
     });
-    const hiddenDone = showDone ? 0 : items.filter((i) => !i.parentItemId && i.status === "done").length;
-    return { groups: visible, later, laterCount: countOf(laterEntries), hiddenDone, pendingCount: pending.length };
-  }, [items, approvalEvents, showApproval, today, weekStart, sortMode, filter, showDone]);
+    return { groups: visible, later, laterCount: countOf(laterEntries), pendingCount: pending.length };
+  }, [items, approvalEvents, showApproval, today, weekStart, sortMode, filter]);
 
-  const total = items.filter((i) => !i.parentItemId).length;
+  const doneSection = (
+    <DoneSection items={doneItems} count={doneCount} today={today} density={density} selectedId={selectedId} openRequest={doneOpenRequest} onOpen={onOpen} onComplete={onComplete} onShowArchive={onShowArchive} />
+  );
+
+  const total = items.filter((i) => !i.parentItemId && i.status !== "done").length;
   if (loaded && total === 0 && pendingCount === 0 && (!showApproval || approvalEvents.length === 0)) {
     return (
-      <div className="todo-canvas-body">
+      <div className="todo-canvas-body" onKeyDown={rowListKeyNav}>
         <TodoColumnHeader />
         {top}
         <CdEmptyState
@@ -160,6 +201,7 @@ export function MyTodoList({ items, approvalEvents, showApproval, showDone, toda
             </CdButton>
           }
         />
+        {doneSection}
       </div>
     );
   }
@@ -167,7 +209,19 @@ export function MyTodoList({ items, approvalEvents, showApproval, showDone, toda
   const renderEntries = (g: Group) =>
     g.entries.map((e) =>
       e.kind === "item" ? (
-        <TodoRow key={e.item.itemId} item={e.item} today={today} density={density} selected={selectedId === e.item.itemId} timeCell={g.timeCell} removeOnComplete={!showDone} onOpen={onOpen} onComplete={onComplete} />
+        <TodoRow
+          key={e.item.itemId}
+          item={e.item}
+          today={today}
+          density={density}
+          selected={selectedId === e.item.itemId}
+          timeCell={g.timeCell}
+          justDone={justDoneIds?.has(e.item.itemId)}
+          onOpen={onOpen}
+          onComplete={onComplete}
+          onUndo={onUndo}
+          onSettled={onSettled}
+        />
       ) : (
         <ApprovalRow key={`ref-${e.ev.id}`} event={e.ev} today={today} density={density} timeCell={g.timeCell === "none" ? "date" : g.timeCell} />
       )
@@ -197,16 +251,10 @@ export function MyTodoList({ items, approvalEvents, showApproval, showDone, toda
               ) : undefined
             }
           />
-          {showLater && laterCount > 0 ? (
-            renderEntries(later)
-          ) : (
-            <div className="todo-empty">
-              {laterCount > 0 ? `${laterCount}건이 접혀 있습니다.` : "예정된 업무가 없습니다."}
-              {hiddenDone > 0 ? ` 완료 ${hiddenDone}건은 숨겨져 있습니다.` : ""}
-            </div>
-          )}
+          {showLater && laterCount > 0 ? renderEntries(later) : <div className="todo-empty">{laterCount > 0 ? `${laterCount}건이 접혀 있습니다.` : "예정된 업무가 없습니다."}</div>}
         </div>
       )}
+      {doneSection}
     </div>
   );
 }

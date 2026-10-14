@@ -1702,10 +1702,21 @@ export async function updateItem(userId: string, itemId: string, patch: Record<s
   return getItemDetail(userId, itemId);
 }
 
-/** 삭제 — owner 만(하위 작업·댓글·활동 CASCADE). */
+/**
+ * 삭제 — 상위 작업은 owner 만(하위 작업·댓글·활동 CASCADE).
+ * 하위 작업은 부모를 편집할 수 있는 사람이면 삭제할 수 있고, 부모 활동 로그에 update {subtaskRemoved} 를 남긴다.
+ */
 export async function deleteItem(userId: string, itemId: string): Promise<void> {
   await withDbWrite(async (db) => {
     const cur = await loadItemRow(db, itemId);
+    const parentItemId = cur.parent_item_id != null ? String(cur.parent_item_id) : null;
+    if (parentItemId) {
+      const parent = await loadItemRow(db, parentItemId);
+      if (!(await canEditItem(db, userId, accessOf(parent)))) throw fail("하위 작업은 상위 할 일을 수정할 수 있는 사람만 삭제할 수 있습니다.", 403);
+      await db.run(`DELETE FROM todo_items WHERE item_id = $1`, [itemId]);
+      await logActivity(db, parentItemId, userId, "update", { subtaskRemoved: String(cur.title ?? "") });
+      return;
+    }
     if (String(cur.owner_user_id) !== userId) throw fail("삭제는 만든 사람만 할 수 있습니다.", 403);
     await db.run(`DELETE FROM todo_items WHERE item_id = $1`, [itemId]);
   });

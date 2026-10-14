@@ -85,6 +85,9 @@
   --cd-shadow-toast: 0 6px 24px hsl(var(--precision-shadow-color) / 12%);
   --cd-radius-card: var(--precision-ui-radius-card);
   --cd-radius-control: var(--mcm-action-radius, 8px);
+  /* 포커스 강조 A안 '부드러운 링'(2026-10-14 사용자 확정): 주색 테두리 1px + 바깥 3px 반투명 링. 남색 2px outline 을 대체한다. */
+  --cd-focus-ring-color: color-mix(in srgb, var(--cd-primary) 16%, transparent);
+  --cd-focus-ring: 0 0 0 3px var(--cd-focus-ring-color);
   --cd-table-header-bg: var(--cd-surface);
   --cd-table-toolbar-gap: 12px;
   font-family: Inter, "Noto Sans KR", "Pretendard Variable", Pretendard, "Malgun Gothic", system-ui, sans-serif;
@@ -104,6 +107,7 @@ html[data-theme="dark"] .cdash, html[data-theme="dark"] .cdash-vars,
   --cd-av-4: #8fc4b0;
   --cd-av-5: #c0b08c;
   --cd-av-6: #d0989f;
+  --cd-focus-ring-color: color-mix(in srgb, var(--cd-primary) 18%, transparent);
 }
 .cdash, .cd-canvas, .cdash.cd-canvas { background: var(--cd-bg); }
 /* 2026-09-11 사용자 요청: 검토한 베이지 바탕을 운영 셸에도 적용한다.
@@ -119,8 +123,9 @@ html[data-theme="dark"] .cdash, html[data-theme="dark"] .cdash-vars,
   }
 }
 .cdash :focus-visible, .cdash-vars :focus-visible {
-  outline: 2px solid var(--cd-primary);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: var(--cd-focus-ring);
+  transition: box-shadow .12s ease, border-color .12s ease;
 }
 /* 본문 래퍼는 스킵 링크(#main-content)의 프로그램적 포커스 대상일 뿐 조작 대상이 아니다.
    위 공통 규칙이 걸리면 화면 전체가 파란 테두리로 둘러싸여 모든 메뉴에서 보였다
@@ -300,7 +305,8 @@ textarea.cd-input { min-height: 64px; resize: vertical; line-height: 1.5; }
 .cd-textarea:focus {
   outline: none;
   border-color: var(--cd-primary);
-  box-shadow: 0 0 0 3px var(--cd-primary-soft);
+  box-shadow: var(--cd-focus-ring);
+  transition: box-shadow .12s ease, border-color .12s ease;
 }
 .cd-input:disabled,
 .cd-select:disabled,
@@ -441,11 +447,10 @@ select.cd-input {
   border-end-end-radius: calc(var(--mcm-action-radius, 8px) - 1px) !important;
 }
 
-/* 클릭 선택에는 추가 링이 없고, 키보드 포커스는 테두리와 겹쳐 한 줄로 보인다. */
+/* 클릭 선택에는 추가 링이 없고, 키보드 포커스는 바깥 3px 부드러운 링으로 표시한다(A안). */
 :is(.cdash, .cdash-vars) :is(.cd-chip, .ui-chip, .rule-chip, .cd-choice, .cd-tab, .cdb-tab, .range-toggle button):focus-visible {
-  outline: 2px solid var(--cd-choice-color, var(--cd-primary));
-  outline-offset: -2px;
-  box-shadow: none;
+  outline: none;
+  box-shadow: var(--cd-focus-ring);
 }
 
 /* ---------------- 상태 pill (soft-tint) ---------------- */
@@ -661,8 +666,9 @@ select.cd-input {
 .cd-icon-button { width: 36px; height: 36px; padding: 0; border-radius: var(--cd-radius-control); }
 .cd-icon-button-sm { width: 32px; height: 32px; }
 .cd-input:focus-visible, .cd-select:focus-visible, .cd-textarea:focus-visible {
-  outline: 2px solid var(--cd-primary);
-  outline-offset: 2px;
+  outline: none;
+  border-color: var(--cd-primary);
+  box-shadow: var(--cd-focus-ring);
 }
 .cd-table tbody tr[aria-selected="true"] { background: var(--cd-row-selected); }
 @media (min-width: 1600px) { .cd-table tbody td { font-size: var(--precision-ui-font-table-wide); } }

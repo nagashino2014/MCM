@@ -137,7 +137,7 @@ export function TodoBoardPage() {
 
   // 캘린더 보기(구 ?tab=calendar 포함)는 일정 화면으로
   useEffect(() => {
-    if (parsed.calendar) router.replace("/calendar?tags=todo");
+    if (parsed.calendar) router.replace("/calendar?tags=todo&from=todo");
   }, [parsed.calendar, router]);
 
   // ── 설정 ──
@@ -266,7 +266,7 @@ export function TodoBoardPage() {
   };
   const goView = (v: View | "calendar") => {
     if (v === "calendar") {
-      router.push("/calendar?tags=todo");
+      router.push("/calendar?tags=todo&from=todo");
       return;
     }
     if (scope === "shared" && v === "board") return;

@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarCog, Users } from "lucide-react";
+import { ArrowLeft, CalendarCog, Users } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdToastProvider, useCdToast } from "@/components/cdash/CdToast";
@@ -67,11 +67,14 @@ function CalendarBoardInner() {
   const [dayPick, setDayPick] = useState<string | null>(null);
   const [entryModal, setEntryModal] = useState<EntryModalState | null>(null);
   const [rulesModal, setRulesModal] = useState(false);
+  // /todo 캘린더 보기에서 넘어왔으면(?from=todo) 헤더에 "할 일로 돌아가기"를 둔다 — SSR 불일치가 없도록 effect 에서 읽는다.
+  const [fromTodo, setFromTodo] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
 
   // 설정 로드(1회) — 이후 태그 토글·선택 대상 변경 시 서버에 저장한다.
   useEffect(() => {
     let cancelled = false;
+    setFromTodo(typeof window !== "undefined" && new URLSearchParams(window.location.search).get("from") === "todo");
     fetch("/api/calendar/prefs", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
@@ -192,6 +195,16 @@ function CalendarBoardInner() {
         meta={`${month} · ${events.length}건`}
         actions={
           <div className="flex items-center gap-2">
+            {fromTodo && (
+              <button
+                type="button"
+                className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs flex items-center gap-1.5"
+                onClick={() => router.push("/todo?view=list")}
+                title="할 일 목록으로 돌아가기"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" /> 할 일로 돌아가기
+              </button>
+            )}
             {access.meeting && (
               <button
                 type="button"

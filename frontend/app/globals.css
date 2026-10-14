@@ -79,8 +79,8 @@ select:not([multiple]):not([size]) {
 .input-field::placeholder { color: var(--cd-muted, hsl(220 9% 43%)); }
 .input-field:focus {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.2);
-  border-color: var(--primary);
+  box-shadow: var(--cd-focus-ring, 0 0 0 3px rgba(var(--primary-rgb), 0.16));
+  border-color: var(--cd-primary, var(--primary));
 }
 .input-field:disabled {
   background: var(--cd-surface, hsl(220 16% 97%));
@@ -102,8 +102,8 @@ select:not([multiple]):not([size]) {
 }
 .ui-textarea:focus {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.2);
-  border-color: var(--primary);
+  box-shadow: var(--cd-focus-ring, 0 0 0 3px rgba(var(--primary-rgb), 0.16));
+  border-color: var(--cd-primary, var(--primary));
 }
 
 .ui-select {
@@ -118,8 +118,8 @@ select:not([multiple]):not([size]) {
 }
 .ui-select:focus {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.2);
-  border-color: var(--primary);
+  box-shadow: var(--cd-focus-ring, 0 0 0 3px rgba(var(--primary-rgb), 0.16));
+  border-color: var(--cd-primary, var(--primary));
 }
 .ui-select:disabled {
   background: var(--cd-surface, hsl(220 16% 97%));
@@ -260,7 +260,7 @@ select:not([multiple]):not([size]) {
   flex-shrink: 0;
 }
 .switch input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
-.switch input:focus-visible + .switch-slider { outline: 2px solid var(--cd-primary, var(--primary)); outline-offset: 3px; }
+.switch input:focus-visible + .switch-slider { outline: none; box-shadow: var(--cd-focus-ring, 0 0 0 3px rgba(var(--primary-rgb), 0.16)); }
 .switch-slider {
   position: absolute;
   inset: 0;
@@ -516,16 +516,16 @@ select:not([multiple]):not([size]) {
 .input-field, .ui-select { min-height: 36px; font-size: 13px; }
 .ui-textarea { padding: 8px 12px; }
 :where(button, a, input, select, textarea):focus-visible {
-  outline: 2px solid var(--cd-primary, var(--primary));
-  outline-offset: 3px;
+  outline: none;
+  box-shadow: var(--cd-focus-ring, 0 0 0 3px rgba(var(--primary-rgb), 0.16));
 }
 
 /* 버튼 포커스는 기존 경계에 겹쳐 표시해 분리된 이중선을 만들지 않는다.
    입력·문서 편집기의 포커스와 셀 선택 표시는 기존 규칙을 유지한다. */
 :is(button, [role="button"], [role="tab"], a.cd-btn, a.cd-action, .rule-chip):focus-visible {
-  outline: 2px solid var(--cd-choice-color, var(--cd-primary, var(--primary))) !important;
-  outline-offset: -2px !important;
-  box-shadow: none !important;
+  /* A안 부드러운 링(2026-10-14) — 남색 2px outline 대체 */
+  outline: none !important;
+  box-shadow: var(--cd-focus-ring, 0 0 0 3px rgba(var(--primary-rgb), 0.16)) !important;
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-delay: 0ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }

@@ -411,6 +411,8 @@ export default function TodoDetailScreen() {
   const [chatOpen, setChatOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [subDel, setSubDel] = useState<TodoItem | null>(null);
+  const [subDeleting, setSubDeleting] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
   const [extraOpen, setExtraOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
@@ -502,6 +504,16 @@ export default function TodoDetailScreen() {
     const r = await post<{ item: TodoItemDetail }>('/api/todo/items', { title: t, parentItemId: item.itemId });
     if (r) {
       setSubTitle('');
+      void reload();
+    }
+  };
+  const removeSub = async () => {
+    if (!subDel || subDeleting) return;
+    setSubDeleting(true);
+    const r = await post<{ ok: boolean }>(`/api/todo/items/${subDel.itemId}`, undefined, 'DELETE');
+    setSubDeleting(false);
+    if (r) {
+      setSubDel(null);
       void reload();
     }
   };
@@ -875,6 +887,11 @@ export default function TodoDetailScreen() {
                     <Text className="text-[11.5px] text-cd-faint">{s.dueDate === today ? '오늘' : fmtMd(s.dueDate)}</Text>
                   ) : s.assigneeName ? (
                     <Text className="text-[11.5px] text-cd-faint">{s.assigneeName}</Text>
+                  ) : null}
+                  {canEdit ? (
+                    <Pressable onPress={() => setSubDel(s)} hitSlop={8} accessibilityLabel={`${s.title} 삭제`} className="active:opacity-60">
+                      <Ionicons name="close-circle-outline" size={18} color={c.muted} />
+                    </Pressable>
                   ) : null}
                 </View>
               ))}
@@ -1350,6 +1367,16 @@ export default function TodoDetailScreen() {
         loading={deleting}
         onConfirm={() => void remove()}
         onCancel={() => setDeleteOpen(false)}
+      />
+      <ConfirmSheet
+        visible={!!subDel}
+        title="하위 작업 삭제"
+        message={subDel ? `"${subDel.title}" 하위 작업을 삭제할까요? 되돌릴 수 없습니다.` : ''}
+        confirmLabel="삭제"
+        danger
+        loading={subDeleting}
+        onConfirm={() => void removeSub()}
+        onCancel={() => setSubDel(null)}
       />
     </Screen>
   );

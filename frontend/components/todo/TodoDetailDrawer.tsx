@@ -89,6 +89,7 @@ function describeActivity(a: TodoActivity): string {
     case "archive":
       return "보관";
     case "update":
+      if (d.subtaskRemoved !== undefined) return `하위 작업 삭제 (${String(d.subtaskRemoved) || "제목 없음"})`;
       return `수정 (${Object.keys((d.changes as Record<string, unknown>) ?? {}).join(", ") || "내용"})`;
     default:
       return a.action;
@@ -166,6 +167,7 @@ export function TodoDetailDrawer({ itemId, boards, prefs, myUserId, myName, myPh
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [comment, setComment] = useState("");
   const [subTitle, setSubTitle] = useState("");
+  const [subConfirmId, setSubConfirmId] = useState<string | null>(null);
   const [activityOpen, setActivityOpen] = useState(false);
   const [extraOpen, setExtraOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -402,7 +404,26 @@ export function TodoDetailDrawer({ itemId, boards, prefs, myUserId, myName, myPh
     }
   };
 
+  // 하위 작업 삭제 — window.confirm 대신 같은 자리에 "삭제?" + [삭제]/[취소] 를 2초 노출(인라인 확인). 시간이 지나면 자동으로 닫힌다.
+  const subConfirmTimer = useRef<number | null>(null);
+  const askRemoveSubtask = (sub: TodoItem) => {
+    if (subConfirmTimer.current) window.clearTimeout(subConfirmTimer.current);
+    setSubConfirmId(sub.itemId);
+    subConfirmTimer.current = window.setTimeout(() => setSubConfirmId((cur) => (cur === sub.itemId ? null : cur)), 2000);
+  };
+  const cancelRemoveSubtask = () => {
+    if (subConfirmTimer.current) window.clearTimeout(subConfirmTimer.current);
+    subConfirmTimer.current = null;
+    setSubConfirmId(null);
+  };
+  useEffect(
+    () => () => {
+      if (subConfirmTimer.current) window.clearTimeout(subConfirmTimer.current);
+    },
+    []
+  );
   const removeSubtask = async (sub: TodoItem) => {
+    cancelRemoveSubtask();
     try {
       await apiCall(`/api/todo/items/${encodeURIComponent(sub.itemId)}`, { method: "DELETE" });
       await refresh();
@@ -1006,11 +1027,22 @@ export function TodoDetailDrawer({ itemId, boards, prefs, myUserId, myName, myPh
                         </span>
                       )}
                       {aux && <span className="todo-sd">{aux}</span>}
-                      {canEdit && (
-                        <button type="button" className="todo-sr-del" aria-label={`${s.title} 삭제`} onClick={() => void removeSubtask(s)}>
-                          <X aria-hidden="true" />
-                        </button>
-                      )}
+                      {canEdit &&
+                        (subConfirmId === s.itemId ? (
+                          <span className="todo-sr-confirm" role="group" aria-label={`${s.title} 삭제 확인`}>
+                            삭제?
+                            <button type="button" data-tone="error" onClick={() => void removeSubtask(s)}>
+                              삭제
+                            </button>
+                            <button type="button" onClick={cancelRemoveSubtask}>
+                              취소
+                            </button>
+                          </span>
+                        ) : (
+                          <button type="button" className="todo-sr-del" title="하위 작업 삭제" aria-label={`${s.title} 삭제`} onClick={() => askRemoveSubtask(s)}>
+                            <X aria-hidden="true" />
+                          </button>
+                        ))}
                     </div>
                   );
                 })}

@@ -431,3 +431,9 @@ CdPageHeader  제목 "할 일"  · meta "오늘 3 · 지연 1 · 이번 주 8"  
 - 완료 목록: 모든 목록 맨 아래 "완료 N건 · 펼치기" 상시 섹션(최근 완료순, 메모 1줄) + 상단 태그 "완료 N" + 보관함(30일↑) 보기(`archived=1`). "완료 숨김" 토글 제거.
 - 되돌리기: 완료 행 체크 해제=reopen, 체크 직후 2초 유예("완료됨 · 되돌리기") 후 접힘 + 토스트, 드로어 "완료됨 · 시각 · 되돌리기" 줄.
 - 완료 조건: `todo_items.complete_rules jsonb {subtasks,note,review}` + `completion_note` + `reviewed_at`, 보드 `default_complete_rules`(생성 시 복사). 체크 시 규칙 있으면 완료 확인 모달(충족 표시·완료 메모·[완료]); 서버 `completeItem` 409 `code:complete_rules {missing, openSubtasks}`. 칸반 완료 열 드롭도 검사. 모바일 동일(CompleteConfirmSheet).
+- **배포(10-14, 2차)**: main 19be9ae → next:654, OTA 583e25b8. 실측(dev): 완료 확인 모달이 미완 하위 2건을 차단, 되돌리기 2초 유예 복귀, 연결 모달 6탭 574px 고정.
+
+### 22. 2차 피드백·포커스 강조 전역 교체(2026-10-14, main ec43db8)
+- 범위 탭(내 할 일·공유받음·프로젝트) 간격 gap 12/padding 16, 캘린더(`?from=todo`)에 "할 일로 돌아가기" 버튼, 하위 작업 삭제(버튼 상시 .55 + 인라인 2초 확인, 서버는 부모 `canEditItem` 허용, 모바일 삭제 시트).
+- 입력란 포커스 강조: 사용자가 "남색 2px outline이 촌스럽다"고 지적 → 시안 3종(A 부드러운 링·B 톤 전환·C 하단 강조선, 캔버스 Focus.dc.html) 제시 → **A안 확정**. cdash 토큰 `--cd-focus-ring-color`(primary 16%, 다크 18%)·`--cd-focus-ring`(0 0 0 3px) 신설, `:focus-visible`·입력·칩·탭·switch 전부 `outline:none; box-shadow:var(--cd-focus-ring)`(입력은 border-color primary)로 치환(cdash.css·globals.css·todo.css, UI 기준 §4 갱신). 표 셀 선택 표시는 outline 유지.
+- **배포**: next:655(ec43db8) + OTA 81f6295e. 위젯용 m-app 번들 ec43db8 기준 재export → 후속 커밋·next 재배포(아래 기록).

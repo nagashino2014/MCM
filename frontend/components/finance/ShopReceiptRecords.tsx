@@ -7,7 +7,7 @@
  * 원장 기준으로 전표가 빠진 쇼핑몰 결제도 보여 준다(수집 누락 확인).
  */
 
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState, type ReactNode } from "react";
 import { Ban, CheckCircle2, FileText, Link2, Loader2, RefreshCw, RotateCcw, Unlink, Wand2 } from "lucide-react";
 
 interface MatchedTxn {
@@ -81,9 +81,11 @@ interface Props {
   to: string;
   /** 올리기가 끝난 뒤 다시 읽도록 부모가 올려 주는 값 */
   reloadToken?: number;
+  /** 기간 선택 줄 — 수집 카드가 없는 웹(스테이징) 화면에서 부모가 넣는다 */
+  periodControls?: ReactNode;
 }
 
-export function ShopReceiptRecords({ from, to, reloadToken }: Props) {
+export function ShopReceiptRecords({ from, to, reloadToken, periodControls }: Props) {
   const [rows, setRows] = useState<ShopReceiptRow[]>([]);
   const [uncovered, setUncovered] = useState<CandidateTxn[]>([]);
   const [total, setTotal] = useState(0);
@@ -208,7 +210,8 @@ export function ShopReceiptRecords({ from, to, reloadToken }: Props) {
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <div className="cd-card-title mr-auto">올라온 전표 · 카드 원장 매칭</div>
 
-        <select className="cd-select w-auto" value={site} onChange={(e) => setSite(e.target.value)}>
+        {/* .cd-select 의 width:100% 가 w-auto 를 이겨 한 줄을 다 차지했다 — 폭은 인라인으로 고정 */}
+        <select className="cd-select" style={{ width: 160 }} value={site} onChange={(e) => setSite(e.target.value)}>
           <option value="">전체 쇼핑몰</option>
           {Object.entries(SITE_NAMES).map(([key, name]) => (
             <option key={key} value={key}>{name}</option>
@@ -222,6 +225,8 @@ export function ShopReceiptRecords({ from, to, reloadToken }: Props) {
           <RefreshCw size={14} /> 새로고침
         </button>
       </div>
+
+      {periodControls && <div className="mb-3">{periodControls}</div>}
 
       {error && <div className="cd-error-text text-sm mb-2">{error}</div>}
       {notice && <div className="text-sm cd-text-primary mb-2">{notice}</div>}

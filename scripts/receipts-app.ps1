@@ -111,6 +111,15 @@ if (Test-Path $chrome) { $env:RECEIPTS_CHROME_PATH = $chrome }
 # 이 플래그가 있어야 앱에서 수집 기능이 열린다(서버 배포판에서는 꺼져 있다).
 $env:RECEIPTS_LOCAL_TOOLS = "1"
 
+# '스테이징으로 올리기'는 전표 PDF 를 S3 에 넣는다. 앱(Node)의 AWS SDK 는 AWS_PROFILE 이 없으면 [default] 를
+# 찾는데 거기엔 자격증명이 없어 "Could not load credentials" 로 올리기 전체가 실패한다. 터널 스크립트가 같은
+# 프로필을 넣어 주지만 -NoTunnel 로 띄우면 비어 있으므로 여기서도 채운다.
+if (-not $env:AWS_PROFILE) { $env:AWS_PROFILE = "mcm-kesi-staging" }
+
+# 빌드 산출 폴더를 따로 쓴다. 같은 frontend 폴더에서 다른 dev 서버(다른 작업 창·세션)가 돌면 둘이 .next 를
+# 서로 덮어써 라우트 목록이 사라지고 /finance 가 404 가 됐다(2026-10-14 실측 — 3001 의 dev 서버와 충돌).
+$env:NEXT_DIST_DIR = ".next-receipts"
+
 # DB 접속 정보는 늘 AWS 시크릿(AWSCURRENT)에서 받는다. RDS 마스터 비밀번호는 7일마다 자동 교체돼
 # .env.local 의 PGPASSWORD 는 곧 낡고, 그러면 로그인이 "password authentication failed" 로 막힌다.
 # dev:aws 가 넣는 DATABASE_URL 이 PG* 보다 우선하므로 .env.local 은 그대로 둬도 된다.

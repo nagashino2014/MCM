@@ -41,6 +41,13 @@ function quarterRange(year: number, q: number): { from: string; to: string } {
   return { from: `${year}-${p(startMonth)}-01`, to: `${year}-${p(endMonth)}-${p(lastDay)}` };
 }
 
+/** 연간 프리셋 — 연도 단위 조회(전표·원장 매칭 확인) */
+function yearRange(year: number): { from: string; to: string } {
+  return { from: `${year}-01-01`, to: `${year}-12-31` };
+}
+
+const sameRange = (a: { from: string; to: string }, b: { from: string; to: string }) => a.from === b.from && a.to === b.to;
+
 /** 쿠팡 매출전표 일괄 신청을 하는 화면 */
 const COUPANG_REQUEST_URL = "https://mc.coupang.com/ssr/desktop/payment-receipt";
 
@@ -83,6 +90,12 @@ export function ReceiptCollectPanel() {
   const [year, setYear] = useState(now.getFullYear());
   const [quarter, setQuarter] = useState(Math.floor(now.getMonth() / 3) + 1);
   const [range, setRange] = useState(() => quarterRange(now.getFullYear(), Math.floor(now.getMonth() / 3) + 1));
+  // 아래 목록 조회에 쓰는 기간 — 날짜 입력은 타이핑 중 부분 값(2026-0)도 넘기므로 두 날짜가 모두
+  // 올바를 때만 바꾼다(부분 값이 그대로 가면 API 가 기간 조건을 버려 전체 기간이 조회된다).
+  const [appliedRange, setAppliedRange] = useState(range);
+  useEffect(() => {
+    if (isValidDateString(range.from) && isValidDateString(range.to) && range.from <= range.to) setAppliedRange(range);
+  }, [range]);
 
   const [shops, setShops] = useState<ShopStatus[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -223,8 +236,11 @@ export function ReceiptCollectPanel() {
   /** 손으로 받아 inbox 에 넣어 둔 전표 PDF 를 대장에 올린다(쿠팡처럼 자동 수집이 막힌 몰) */
   const importInbox = async (shop: ShopStatus) => {
     appendLog(`— ${shop.name}: ${shop.inboxPath} 의 PDF 를 읽습니다.`);
-    await runCommand({ command: "import", site: shop.key }, `${shop.name} PDF 가져오기`);
+    const ok = await runCommand({ command: "import", site: shop.key }, `${shop.name} PDF 가져오기`);
     await loadStatus();
+    // 가져오기는 이 PC 의 대장에만 넣는다 — 아래 목록(스테이징)에 보이려면 올리기가 따로 필요하다
+    // (2026-10-14 9월 쿠팡 전표가 대장에만 있고 목록에 안 보인 사례).
+    if (ok) appendLog("— 가져온 전표는 이 PC 대장에만 있습니다. '스테이징으로 올리기'를 눌러야 아래 목록에 보입니다.");
   };
 
   const login = async (shop: ShopStatus) => {
@@ -285,6 +301,78 @@ export function ReceiptCollectPanel() {
 
   const isLocalOrigin = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
 
+  // 웹(스테이징) 조회 기간 — 연도·분기·연간 태그와 직접 입력(2026-10-14 사용자 요청: 기간이 현재 분기에 고정돼 있었다)
+  const activeQuarter = [1, 2, 3, 4].find((q) => sameRange(quarterRange(year, q), range)) ?? null;
+  const wholeYear = sameRange(yearRange(year), range);
+  const pickYear = (y: number) => {
+    if (wholeYear) {
+      setYear(y);
+      setRange(yearRange(y));
+    } else {
+      applyQuarter(y, activeQuarter ?? quarter);
+    }
+  };
+  const periodControls = (
+    <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="연도">
+        {years.map((y) => (
+          <button
+            key={y}
+            type="button"
+            className={`cd-chip cd-chip-sm ${year === y ? "" : "cd-text-muted"}`}
+            data-active={year === y || undefined}
+            aria-pressed={year === y}
+            onClick={() => pickYear(y)}
+          >
+            {y}년
+          </button>
+        ))}
+      </div>
+      <span className="hidden sm:inline cd-text-faint" aria-hidden>|</span>
+      <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="분기">
+        {[1, 2, 3, 4].map((q) => (
+          <button
+            key={q}
+            type="button"
+            className={`cd-chip cd-chip-sm ${activeQuarter === q ? "" : "cd-text-muted"}`}
+            data-active={activeQuarter === q || undefined}
+            aria-pressed={activeQuarter === q}
+            onClick={() => applyQuarter(year, q)}
+          >
+            {q}분기
+          </button>
+        ))}
+        <button
+          type="button"
+          className={`cd-chip cd-chip-sm ${wholeYear ? "" : "cd-text-muted"}`}
+          data-active={wholeYear || undefined}
+          aria-pressed={wholeYear}
+          onClick={() => setRange(yearRange(year))}
+        >
+          연간
+        </button>
+      </div>
+      <div className="flex items-center gap-2">
+        <CdDateInput
+          aria-label="조회 시작일"
+          style={{ width: 132 }}
+          value={range.from}
+          onChange={(v) => setRange((r) => ({ ...r, from: v }))}
+        />
+        <span className="cd-text-faint">~</span>
+        <CdDateInput
+          aria-label="조회 종료일"
+          style={{ width: 132 }}
+          value={range.to}
+          onChange={(v) => setRange((r) => ({ ...r, to: v }))}
+        />
+      </div>
+      {isValidDateString(range.from) && isValidDateString(range.to) && range.from > range.to && (
+        <span className="text-xs cd-error-text">시작일이 종료일보다 늦습니다.</span>
+      )}
+    </div>
+  );
+
   if (localOnly) {
     return (
       <div className="space-y-4">
@@ -329,7 +417,12 @@ export function ReceiptCollectPanel() {
         </div>
 
         {/* 수집은 못 해도 올라온 전표는 어디서든 볼 수 있다(신고는 여기서 한다). */}
-        <ShopReceiptRecords from={range.from} to={range.to} reloadToken={uploaded} />
+        <ShopReceiptRecords
+          from={appliedRange.from}
+          to={appliedRange.to}
+          reloadToken={uploaded}
+          periodControls={periodControls}
+        />
       </div>
     );
   }
@@ -534,7 +627,7 @@ export function ReceiptCollectPanel() {
       </div>
 
       {/* 올라온 전표 — 스테이징에서 보는 것과 같은 목록 */}
-      <ShopReceiptRecords from={range.from} to={range.to} reloadToken={uploaded} />
+      <ShopReceiptRecords from={appliedRange.from} to={appliedRange.to} reloadToken={uploaded} />
 
       {/* 진행 로그 */}
       {log.length > 0 && (

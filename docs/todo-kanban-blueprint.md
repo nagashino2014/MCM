@@ -437,3 +437,12 @@ CdPageHeader  제목 "할 일"  · meta "오늘 3 · 지연 1 · 이번 주 8"  
 - 범위 탭(내 할 일·공유받음·프로젝트) 간격 gap 12/padding 16, 캘린더(`?from=todo`)에 "할 일로 돌아가기" 버튼, 하위 작업 삭제(버튼 상시 .55 + 인라인 2초 확인, 서버는 부모 `canEditItem` 허용, 모바일 삭제 시트).
 - 입력란 포커스 강조: 사용자가 "남색 2px outline이 촌스럽다"고 지적 → 시안 3종(A 부드러운 링·B 톤 전환·C 하단 강조선, 캔버스 Focus.dc.html) 제시 → **A안 확정**. cdash 토큰 `--cd-focus-ring-color`(primary 16%, 다크 18%)·`--cd-focus-ring`(0 0 0 3px) 신설, `:focus-visible`·입력·칩·탭·switch 전부 `outline:none; box-shadow:var(--cd-focus-ring)`(입력은 border-color primary)로 치환(cdash.css·globals.css·todo.css, UI 기준 §4 갱신). 표 셀 선택 표시는 outline 유지.
 - **배포**: next:655(ec43db8) + OTA 81f6295e. 위젯용 m-app 번들 ec43db8 기준 재export → 후속 커밋·next 재배포(아래 기록).
+
+### 23. 잔여 과제 진행(2026-10-14, P3 묶음)
+- **캘린더 드래그 재일정**(§7 2차 → 구현): `ScheduleCalendar` 에 HTML5 DnD(`canDrag`·`onEventDrop`) — 할 일 바만 끌 수 있고 셀이 drop 대상(강조=primary 테두리·soft 배경). `CalendarBoard.onEventDrop` 이 낙관 반영 후 `PATCH /api/todo/items/:id {doDate|dueDate}`(바가 마감일만으로 놓인 건이면 `dueDate`, `CalendarEvent.dateField` 로 구분) → 토스트 "할 날을 M/D로 옮겼습니다", 실패 시 복원. dev 실측: 합성 DnD 로 10/20→10/22 서버 반영·토스트 확인(브라우저 패널 스크린샷은 시간 초과라 좌표 드래그는 미실측).
+- **인앱 알림함**(§9 2차 → 구현, 마이그 277 `todo_notifications`): `lib/todo/inbox.ts` record/list/markRead. `notify.ts` 의 5개 푸시(배정·댓글·완료/검토·리마인드·아침 요약)가 sendPush 와 나란히 수신자별 행을 남긴다(푸시는 설정으로 걸러져도 인앱은 항상). API `GET/PATCH /api/todo/notifications`. 웹: 탑바 `TodoNotifyBell`(Inbox 아이콘, 미읽음 배지, 드롭다운 30건, 모두 읽음, 클릭=읽음+이동, 60초 폴링). 모바일: `/todo/inbox` 화면 + 할 일 헤더 벨(미읽음 점). 277 미적용(42P01)이면 빈 결과로 동작(500 없음, dev 실측).
+- **데스크탑 위젯 OS 알림·배지(WID-P3)**: `use-widget-bridge.ts` 가 같은 15초 폴링에 `/api/todo/due-soon?hours=24` 를 얹어 오늘까지인 건수를 `mcm:todo-due` 로 올리고, 셸(`apps/desktop/src/index.html`)은 작업표시줄 숫자 = 미읽음 + 오늘 할 일, 알림은 날짜 키로 하루 1회("오늘 할 일 N건 · 제목…"). 셸 1.3.0 인스톨러 빌드(`cargo` 로컬) → `frontend/public/downloads/MCM-widget-setup.exe` 교체. 설치본에서 알림 실측은 미완(설치 필요).
+- **출장 양식 contract_select 전환**(§19-12 후속): 마이그 278 초안을 스테이징 실제 스키마에 BEGIN…ROLLBACK 리허설한 결과 **UPDATE 0행** — 출장 양식 v10 은 관리자가 빌더에서 이미 `field_13: contract_select(계약 검색)`·`field_12: company_select(출장지 업체 검색)` 으로 개정해 둔 상태라 전환이 불필요하다(approval-events 는 키와 무관하게 shape 로 탐색 → 연계는 이미 동작). 278 은 폐기(번호 비어 있음). 교육신청서(v2)에는 계약 필드가 없어 보드 연계 대상 아님.
+- **리허설(마스터 시크릿·SSM 터널 15432·psql, ROLLBACK)**: 277 은 CREATE TABLE + 인덱스 3(PK 포함) 정상.
+- **P4 OS 홈 위젯·전역 단축키·ICS·알림 액션**: 네이티브 빌드·스토어 재배포와 묶여 미착수 — `app.json version` 인상은 기존 설치본 OTA 를 끊으므로([[store-distribution-progress]]) 스토어 배포 일정 결정 뒤 진행.
+- 미완: 모바일 캘린더 드래그(웹 전용 설계), 실기기 OTA 수신 확인, 스테이징 테스트 데이터 정리(사용자 판단).

@@ -5,6 +5,7 @@
 // 캘린더 바 클릭 = 하단 해당 카드로 스크롤·강조. 본인 카드의 문서 버튼 = 결재 문서 모달.
 // 날짜 셀 클릭 = 일정 추가 메뉴(출장/휴가/교육 기안 + 회의/면접/미팅 직접 등록, 219) — 모바일과 동일 구성.
 // 데이터: GET /api/calendar?month&tags (스케줄명은 서버 조립, access 동봉) / 설정: /api/calendar/prefs.
+// 할 일(todo 태그) 바는 끌어서 다른 날짜에 놓으면 할 날(do_date, 마감일만 있으면 due_date)이 바뀐다 — PATCH /api/todo/items/:id.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -179,6 +180,27 @@ function CalendarBoardInner() {
     else focusEvent(ev);
   };
 
+  // 할 일 바 드래그 재일정 — 낙관적으로 옮겨 그리고, 실패하면 되돌린다.
+  const onEventDrop = async (ev: CalendarEvent, iso: string) => {
+    if (ev.kind !== "todo" || !ev.entryId || iso === ev.startDate) return;
+    const before = events;
+    setEvents((list) => list.map((e) => (e.id === ev.id ? { ...e, startDate: iso, endDate: iso } : e)));
+    const field = ev.dateField === "due" ? "dueDate" : "doDate";
+    try {
+      const res = await fetch(`/api/todo/items/${encodeURIComponent(ev.entryId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [field]: iso }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error ?? "날짜를 옮기지 못했습니다.");
+      toast(`${field === "dueDate" ? "마감일" : "할 날"}을 ${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10))}로 옮겼습니다.`, "success");
+    } catch (err) {
+      setEvents(before);
+      toast((err as Error).message, "error");
+    }
+  };
+
   /** 표시 순서는 카탈로그 순서(본인→부서→영업→선택→차량→회의→면접→할 일)로 고정한다. */
   const orderedTags = useMemo(() => CALENDAR_TAG_KEYS.filter((k) => tags.includes(k)), [tags]);
 
@@ -255,7 +277,9 @@ function CalendarBoardInner() {
           );
         })}
         {loading && <span className="text-[11px] cd-text-faint ml-1">불러오는 중…</span>}
-        <span className="text-[11px] cd-text-faint ml-auto hidden sm:inline">날짜 칸을 누르면 일정을 추가할 수 있습니다.</span>
+        <span className="text-[11px] cd-text-faint ml-auto hidden sm:inline">
+          {tags.includes("todo") ? "날짜 칸을 누르면 일정 추가, 할 일 바는 끌어서 날짜를 옮길 수 있습니다." : "날짜 칸을 누르면 일정을 추가할 수 있습니다."}
+        </span>
       </div>
       {error && <p className="text-sm cd-error-text">{error}</p>}
 
@@ -267,6 +291,8 @@ function CalendarBoardInner() {
         onEventClick={onEventClick}
         onDayClick={(iso) => setDayPick(iso)}
         dayClickHint="클릭해 일정 추가"
+        canDrag={(ev) => ev.kind === "todo" && ev.canEdit !== false}
+        onEventDrop={onEventDrop}
       />
 
       <CategoryScheduleList

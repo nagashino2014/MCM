@@ -116,6 +116,7 @@ function RootNavigator() {
         {/* 할 일(To-do) — 목록("할 일")·상세("할 일 상세") 모두 Screen 자체 헤더(건수 부제·저장 상태). */}
         <Stack.Screen name="todo/index" />
         <Stack.Screen name="todo/[itemId]" />
+        <Stack.Screen name="todo/inbox" />
       </Stack>
     </>
   );

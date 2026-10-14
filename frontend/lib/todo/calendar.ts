@@ -62,6 +62,7 @@ export async function listTodoCalendarEvents(userId: string, month: string): Pro
       canEdit: true,
       canceled: false,
       status: null,
+      dateField: r.do_date != null ? "do" : "due",
     };
     return ev;
   });

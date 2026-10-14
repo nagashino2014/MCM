@@ -1,12 +1,13 @@
 /*
  * To-do 알림 — 예정/마감 리마인드·아침 요약 디스패처(tick) + 배정·댓글·상태 변경 푸시 헬퍼.
- * 설계: docs/todo-kanban-blueprint.md §9. 채널은 모바일 푸시(sendPush)만 — 메일·인앱 알림함은 2차.
+ * 설계: docs/todo-kanban-blueprint.md §9. 채널은 모바일 푸시(sendPush) + 인앱 알림함(277, inbox.ts record) — 메일은 2차.
  * ★ 헬퍼는 트랜잭션 **커밋 이후** fire-and-forget 으로 호출한다(발송 실패가 본 업무를 막지 않게 전부 try/catch).
  * 멱등: dedupKey 로 mobile_push_log 가 사람당 1회 선점 — todo-remind:<item>:<remind_at> / todo-digest:<user>:<date>.
  * 날짜 판정은 전부 KST(서버 UTC + 9h).
  */
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { sendPush } from "@/lib/notify/push-expo";
+import { recordTodoNotifications } from "./inbox";
 import { TODO_DEFAULT_DIGEST_TIME, TODO_STATUS_LABELS, todoItemLink, type TodoStatus } from "./types";
 
 const nowIso = () => new Date().toISOString();
@@ -69,10 +70,13 @@ export async function dispatchTodoReminders(): Promise<{ remindersSent: number; 
     const dueDate = r.due_date != null ? String(r.due_date) : null;
     const when = doDate ? `${shortDate(doDate)}${doTime ? " " + doTime : ""}` : dueDate ? `마감 ${shortDate(dueDate)}` : "";
     try {
+      const title = doTime ? "곧 시작하는 일정" : "오늘 할 일";
+      const body = `${String(r.title)}${when ? ` · ${when}` : ""}`;
+      await recordTodoNotifications(recipients, { event: "todo.remind", title, body, link: todoItemLink(itemId), itemId });
       const res = await sendPush(recipients, {
         event: "todo.remind",
-        title: doTime ? "곧 시작하는 일정" : "오늘 할 일",
-        body: `${String(r.title)}${when ? ` · ${when}` : ""}`,
+        title,
+        body,
         link: todoItemLink(itemId),
         targetRef: itemId,
         dedupKey: `todo-remind:${itemId}:${remindAt}`,
@@ -136,6 +140,7 @@ export async function dispatchTodoDigest(): Promise<{ digestsSent: number; evalu
       if (todayN + overdueN === 0) continue;
       const parts = [`오늘 할 일 ${todayN}건`];
       if (overdueN > 0) parts.push(`지연 ${overdueN}건`);
+      await recordTodoNotifications([userId], { event: "todo.digest", title: "오늘의 할 일", body: parts.join(" · "), link: "/todo" });
       const res = await sendPush([userId], {
         event: "todo.digest",
         title: "오늘의 할 일",
@@ -155,10 +160,19 @@ export async function dispatchTodoDigest(): Promise<{ digestsSent: number; evalu
 // ── 이벤트 푸시 헬퍼(커밋 후 fire-and-forget) ──
 export function notifyTodoAssigned(params: { itemId: string; title: string; assigneeUserId: string; byUserId: string; byName?: string | null }): void {
   if (!params.assigneeUserId || params.assigneeUserId === params.byUserId) return;
+  const body = `${params.byName ? params.byName + " · " : ""}${params.title}`;
+  void recordTodoNotifications([params.assigneeUserId], {
+    event: "todo.assigned",
+    title: "할 일이 배정됐습니다",
+    body,
+    link: todoItemLink(params.itemId),
+    itemId: params.itemId,
+    actorUserId: params.byUserId,
+  });
   void sendPush([params.assigneeUserId], {
     event: "todo.assigned",
     title: "할 일이 배정됐습니다",
-    body: `${params.byName ? params.byName + " · " : ""}${params.title}`,
+    body,
     link: todoItemLink(params.itemId),
     targetRef: params.itemId,
     dedupKey: `todo-assign:${params.itemId}:${params.assigneeUserId}:${Date.now()}`,
@@ -180,9 +194,18 @@ export function notifyTodoComment(params: {
   const recipients = uniq([...params.mentioned, ...params.subscribers]).filter((id) => id !== params.byUserId);
   if (!recipients.length) return;
   const preview = params.body.replace(/\s+/g, " ").slice(0, 80);
+  const title = `${params.byName ?? "동료"}님의 댓글 · ${params.title}`.slice(0, 80);
+  void recordTodoNotifications(recipients, {
+    event: "todo.comment",
+    title,
+    body: preview,
+    link: todoItemLink(params.itemId),
+    itemId: params.itemId,
+    actorUserId: params.byUserId,
+  });
   void sendPush(recipients, {
     event: "todo.comment",
-    title: `${params.byName ?? "동료"}님의 댓글 · ${params.title}`.slice(0, 80),
+    title,
     body: preview,
     link: todoItemLink(params.itemId),
     targetRef: params.itemId,
@@ -202,10 +225,20 @@ export function notifyTodoStatus(params: {
   if (params.status !== "done" && params.status !== "review") return;
   const recipients = uniq(params.recipients).filter((id) => id !== params.byUserId);
   if (!recipients.length) return;
+  const title = params.status === "done" ? "할 일이 완료됐습니다" : "검토 요청";
+  const body = `${params.byName ? params.byName + " · " : ""}${params.title} → ${TODO_STATUS_LABELS[params.status]}`;
+  void recordTodoNotifications(recipients, {
+    event: "todo.status",
+    title,
+    body,
+    link: todoItemLink(params.itemId),
+    itemId: params.itemId,
+    actorUserId: params.byUserId,
+  });
   void sendPush(recipients, {
     event: "todo.status",
-    title: params.status === "done" ? "할 일이 완료됐습니다" : "검토 요청",
-    body: `${params.byName ? params.byName + " · " : ""}${params.title} → ${TODO_STATUS_LABELS[params.status]}`,
+    title,
+    body,
     link: todoItemLink(params.itemId),
     targetRef: params.itemId,
     dedupKey: `todo-status:${params.itemId}:${params.status}:${Date.now()}`,

@@ -113,6 +113,8 @@ export interface CalendarEvent {
   /** 정기 회의 미시행 건(캘린더 바에는 안 그리고 목록에만 흐리게). */
   canceled?: boolean;
   status: "in_progress" | "approved" | null;
+  /** 할 일(kind todo) 전용 — 바가 놓인 날짜가 할 날(do_date)인지 마감일(due_date)인지. 드래그 재일정이 어느 날짜를 바꿀지 정한다. */
+  dateField?: "do" | "due";
 }
 
 /** '선택' 태그 대상 조건 — 저장은 조건, 조회 시 인원으로 확장(인사이동 자동 반영). */

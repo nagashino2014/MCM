@@ -1,4 +1,4 @@
-# MCM 데스크탑 위젯 (WID-P0 · P1)
+# MCM 데스크탑 위젯 (WID-P0 · P1 · P3)
 
 사내 메신저를 상주형으로 쓰기 위한 데스크탑 셸. **화면(콘텐츠)은 이 저장소에 없다** —
 실행할 때마다 `https://koensain.app/m-app`(모바일 앱의 Expo 웹 빌드)을 그대로 로드한다.
@@ -35,13 +35,17 @@ npm run build        # NSIS 인스톨러 생성 → src-tauri/target/release/bun
 - **미읽음 뱃지·OS 알림**(P1) — 웹앱이 15초마다 미읽음을 postMessage 로 올리면 셸이
   트레이 아이콘에 빨간 점, 작업표시줄에 숫자 뱃지를 그리고 새 메시지면 Windows 알림을 띄운다.
   창을 보고 있는 중(표시 + 포커스)에는 알림을 생략한다.
+- **오늘 할 일 뱃지·알림**(P3, 1.3.0) — 같은 폴링에 `/api/todo/due-soon` 을 얹어 오늘까지 해야 하는
+  할 일(예정·마감·지연) 건수를 올린다. 작업표시줄 숫자 = 미읽음 + 오늘 할 일. 알림은 하루 1회
+  ("오늘 할 일 N건 · 제목…"), 건수만 바뀌면 뱃지만 갱신한다.
 - 로그인 상태는 웹뷰 저장소에 남아 재시작해도 유지된다(모바일과 같은 토큰 방식).
   로그인 화면의 "자동 로그인"을 끄면 다음 실행 때 다시 로그인해야 한다.
 
 ### iframe ↔ 셸 브리지
 웹앱은 원격 오리진(`koensain.app`)이라 `window.__TAURI__` 가 주입되지 않는다. 그래서
 `postMessage` 로만 대화한다 — 웹앱이 `mcm:widget-ready` 를 올리면 셸이 `mcm:widget-hello` 로
-자기 오리진을 밝히고, 그때부터 웹앱이 `mcm:unread`(count + 최근 메시지)를 그 오리진으로만 보낸다.
+자기 오리진을 밝히고, 그때부터 웹앱이 `mcm:unread`(count + 최근 메시지)와 `mcm:todo-due`(count + 날짜 키)를
+그 오리진으로만 보낸다.
 셸 쪽 수신부는 `src/index.html`, 웹앱 쪽은 `apps/mobile/src/lib/use-widget-bridge.ts`.
 
 > ⚠ `tauri.conf.json` 의 `dragDropEnabled: false` 는 **웹 드래그앤드롭을 살리기 위한 필수 설정**이다.

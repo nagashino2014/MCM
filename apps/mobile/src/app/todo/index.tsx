@@ -138,6 +138,8 @@ export default function TodoScreen() {
   // ⚠ from/to 를 주면 날짜 없는 할 일·이후 할 일이 잘린다 — 구간 없이 받고 결재 일정은 서버 기본(이번 달 ±1개월).
   const myApi = useApi<ListRes>('/api/todo/items?view=my&withApproval=1&done=1', { cache: true });
   const sharedApi = useApi<ListRes>('/api/todo/items?view=shared&done=1', { cache: true });
+  // 알림함(277) 미읽음 수 — 헤더 벨의 점. 목록과 같이 포커스마다 갱신.
+  const inboxApi = useApi<{ unread: number }>('/api/todo/notifications?limit=1', { cache: true });
   const boards = useMemo(() => myApi.data?.boards ?? [], [myApi.data]);
   const defaultBoardId = boards.find((b) => b.isDefault)?.boardId ?? boards.find((b) => b.kind === 'personal')?.boardId ?? null;
   const projectBoards = useMemo(() => boards.filter((b) => b.kind !== 'personal'), [boards]);
@@ -147,13 +149,14 @@ export default function TodoScreen() {
   const boardApi = useApi<ListRes>(`/api/todo/items?view=board&board=${boardTarget ?? ''}&withApproval=1&done=1`, { skip: !boardTarget });
 
   // 돌아올 때 현재 범위만 재조회. ⚠ reload 를 의존성에 넣으면 매 렌더 재요청(무한 루프 이력).
-  const latest = useRef({ scope, myApi, sharedApi, boardApi, boardTarget });
+  const latest = useRef({ scope, myApi, sharedApi, boardApi, boardTarget, inboxApi });
   useEffect(() => {
-    latest.current = { scope, myApi, sharedApi, boardApi, boardTarget };
+    latest.current = { scope, myApi, sharedApi, boardApi, boardTarget, inboxApi };
   });
   const reloadCurrent = useCallback(() => {
     const l = latest.current;
     void l.myApi.reload();
+    void l.inboxApi.reload();
     if (l.scope === 'shared') void l.sharedApi.reload();
     if (l.boardTarget) void l.boardApi.reload();
   }, []);
@@ -608,6 +611,8 @@ export default function TodoScreen() {
     );
   };
 
+  const inboxUnread = Number(inboxApi.data?.unread ?? 0);
+
   return (
     <Screen
       title="할 일"
@@ -615,14 +620,29 @@ export default function TodoScreen() {
       scroll={false}
       padded={false}
       right={
-        <Pressable
-          onPress={() => quickRef.current?.focus()}
-          accessibilityLabel="새 할 일"
-          hitSlop={8}
-          className="mr-2 h-9 w-9 items-center justify-center overflow-hidden rounded-lg active:opacity-70">
-          <CtaGradientFill />
-          <Ionicons name="add" size={20} color="#fff" />
-        </Pressable>
+        <View className="flex-row items-center gap-1">
+          <Pressable
+            onPress={() => router.push('/todo/inbox')}
+            accessibilityLabel={inboxUnread > 0 ? `할 일 알림 ${inboxUnread}건` : '할 일 알림'}
+            hitSlop={8}
+            className="h-9 w-9 items-center justify-center rounded-lg active:opacity-70">
+            <Ionicons name="notifications-outline" size={20} color={c.body} />
+            {inboxUnread > 0 ? (
+              <View
+                className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full border-2 border-cd-card"
+                style={{ backgroundColor: c.primary }}
+              />
+            ) : null}
+          </Pressable>
+          <Pressable
+            onPress={() => quickRef.current?.focus()}
+            accessibilityLabel="새 할 일"
+            hitSlop={8}
+            className="mr-2 h-9 w-9 items-center justify-center overflow-hidden rounded-lg active:opacity-70">
+            <CtaGradientFill />
+            <Ionicons name="add" size={20} color="#fff" />
+          </Pressable>
+        </View>
       }>
       <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={0}>
         {/* 태그 버튼(필터) */}

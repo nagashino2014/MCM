@@ -4,6 +4,7 @@
 // 바 색은 카테고리(TAG_COLOR)로 구분하며, 바 클릭은 하단 카테고리 목록의 해당 카드로 연결된다(onEventClick).
 // 날짜 셀 클릭(onDayClick)은 일정 메뉴에서는 일정 추가 메뉴, 휴무일 지정 화면에서는 휴무일 지정으로 쓴다.
 // 복수 태그 동시 표시로 밀도가 높아 레인을 3→4로 늘렸다. 초과분은 셀 하단 "+N".
+// 드래그 재일정(onEventDrop): canDrag 가 true 인 바(할 일)는 다른 날짜 셀로 끌어 놓을 수 있다 — HTML5 DnD, 셀은 drop 대상.
 
 import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
@@ -37,6 +38,8 @@ export function ScheduleCalendar({
   onDayClick,
   dayClickHint = "클릭해 휴무일 지정",
   holidayRev = 0,
+  canDrag,
+  onEventDrop,
 }: {
   events: CalendarEvent[];
   /** 표시 연도 — 데이터 로드가 월 단위라 부모가 소유한다. */
@@ -51,9 +54,16 @@ export function ScheduleCalendar({
   dayClickHint?: string;
   /** 값이 바뀌면 휴무일을 다시 불러온다(지정·해제 후 갱신용). */
   holidayRev?: number;
+  /** 바를 끌 수 있는지(할 일 재일정). 없으면 드래그 없음. */
+  canDrag?: (ev: CalendarEvent) => boolean;
+  /** 바를 다른 날짜 셀에 놓았을 때(같은 날짜면 호출하지 않는다). */
+  onEventDrop?: (ev: CalendarEvent, iso: string) => void;
 }) {
   const now = new Date();
   const [openMenu, setOpenMenu] = useState<null | "year" | "month">(null);
+  // 드래그 중인 바 id 와 현재 올라가 있는 셀 — 셀 강조·drop 판정에 쓴다.
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overIso, setOverIso] = useState<string | null>(null);
   // 휴무일(법정공휴일·근로자의 날·사내 지정) — 붉은 날짜 + 휴무일명. 소스는 /api/home/holidays 단일 창구.
   const [offDays, setOffDays] = useState<Map<string, OffDay>>(new Map());
 
@@ -229,16 +239,40 @@ export function ScheduleCalendar({
               const dow = day.getDay();
               const off = offDays.get(iso) ?? null;
               const clickable = !!onDayClick;
+              const dropping = dragId !== null && overIso === iso;
               return (
                 <div
                   key={di}
                   className={`border text-left p-1 flex flex-col ${clickable ? "cursor-pointer hover:bg-[color:var(--cd-surface)] transition-colors" : ""}`}
                   onClick={clickable ? () => onDayClick(iso, off) : undefined}
                   title={clickable ? `${iso} — ${dayClickHint}` : off?.name}
+                  onDragOver={
+                    onEventDrop && dragId
+                      ? (e) => {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = "move";
+                          if (overIso !== iso) setOverIso(iso);
+                        }
+                      : undefined
+                  }
+                  onDragLeave={onEventDrop && dragId ? () => setOverIso((cur) => (cur === iso ? null : cur)) : undefined}
+                  onDrop={
+                    onEventDrop && dragId
+                      ? (e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const id = e.dataTransfer.getData("text/plain") || dragId;
+                          const target = spans.find((it) => it.ev.id === id)?.ev;
+                          setDragId(null);
+                          setOverIso(null);
+                          if (target && iso !== target.startDate) onEventDrop(target, iso);
+                        }
+                      : undefined
+                  }
                   style={{
-                    borderColor: iso === todayIso ? "var(--cd-primary)" : "var(--cd-border)",
-                    background: "var(--cd-card)",
-                    boxShadow: iso === todayIso ? "inset 0 0 0 2px var(--cd-primary)" : undefined,
+                    borderColor: iso === todayIso || dropping ? "var(--cd-primary)" : "var(--cd-border)",
+                    background: dropping ? "var(--cd-primary-soft)" : "var(--cd-card)",
+                    boxShadow: iso === todayIso || dropping ? "inset 0 0 0 2px var(--cd-primary)" : undefined,
                     opacity: inMonth ? 1 : 0.4,
                   }}
                 >
@@ -255,26 +289,50 @@ export function ScheduleCalendar({
                 </div>
               );
             })}
-            {segs.map(({ it, colStart, colEnd, lane }) => (
-              <button
-                key={it.ev.id}
-                type="button"
-                onClick={() => onEventClick(it.ev)}
-                className="absolute rounded-md text-[11px] px-1.5 truncate text-left font-semibold"
-                style={{
-                  left: `calc(${colStart} / 7 * 100% + 2px)`,
-                  width: `calc(${colEnd - colStart + 1} / 7 * 100% - 4px)`,
-                  top: 26 + lane * LANE_H,
-                  height: LANE_H - 3,
-                  // 파스텔 원색 배경 + 진한 잉크 — SalesCalendar 바와 동일 방식(color-mix 는 흐려진다).
-                  background: TAG_COLOR[it.ev.tag],
-                  color: TAG_INK,
-                }}
-                title={it.ev.title}
-              >
-                {it.ev.title}
-              </button>
-            ))}
+            {segs.map(({ it, colStart, colEnd, lane }) => {
+              const draggable = !!onEventDrop && !!canDrag?.(it.ev);
+              return (
+                <button
+                  key={it.ev.id}
+                  type="button"
+                  onClick={() => onEventClick(it.ev)}
+                  draggable={draggable || undefined}
+                  onDragStart={
+                    draggable
+                      ? (e) => {
+                          e.dataTransfer.setData("text/plain", it.ev.id);
+                          e.dataTransfer.effectAllowed = "move";
+                          setDragId(it.ev.id);
+                        }
+                      : undefined
+                  }
+                  onDragEnd={
+                    draggable
+                      ? () => {
+                          setDragId(null);
+                          setOverIso(null);
+                        }
+                      : undefined
+                  }
+                  className={`absolute rounded-md text-[11px] px-1.5 truncate text-left font-semibold ${draggable ? "cursor-grab active:cursor-grabbing" : ""}`}
+                  style={{
+                    left: `calc(${colStart} / 7 * 100% + 2px)`,
+                    width: `calc(${colEnd - colStart + 1} / 7 * 100% - 4px)`,
+                    top: 26 + lane * LANE_H,
+                    height: LANE_H - 3,
+                    // 파스텔 원색 배경 + 진한 잉크 — SalesCalendar 바와 동일 방식(color-mix 는 흐려진다).
+                    background: TAG_COLOR[it.ev.tag],
+                    color: TAG_INK,
+                    opacity: dragId === it.ev.id ? 0.45 : undefined,
+                    // 드래그 중에는 다른 바가 셀의 drop 이벤트를 가로채지 않게 한다.
+                    pointerEvents: dragId && dragId !== it.ev.id ? "none" : undefined,
+                  }}
+                  title={draggable ? `${it.ev.title} — 끌어서 날짜 이동` : it.ev.title}
+                >
+                  {it.ev.title}
+                </button>
+              );
+            })}
           </div>
         );
       })}

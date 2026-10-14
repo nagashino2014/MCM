@@ -14,6 +14,7 @@ import { CdAvatar } from "@/components/cdash/CdAvatar";
 import { CdDropdown } from "@/components/cdash/CdDropdown";
 import { CdIconButton } from "@/components/cdash/CdButton";
 import { AlertBell } from "@/components/dashboard/AlertBell";
+import { TodoNotifyBell } from "@/components/todo/TodoNotifyBell";
 import { GlobalSearch } from "@/components/layout/GlobalSearch";
 
 interface TopBarProps {
@@ -159,6 +160,9 @@ export function TopBar({ userName, userEmail, role, theme, onToggleTheme, onOpen
           { key: "todo", label: "새 할 일", icon: <ListChecks className="w-4 h-4" />, onSelect: () => router.push(todoNewHref()) },
         ]}
       />
+
+      {/* 할 일 알림함(277) — 배정·댓글·완료·리마인드·아침 요약. 운영 알람과 별개 */}
+      <TodoNotifyBell />
 
       {/* 알림(운영 알람 통합 — AlertBell compact) */}
       <AlertBell variant="compact" canAck={role === "admin" || role === "editor"} />

@@ -134,8 +134,37 @@
         [500, 1500, 4000].forEach((ms) => setTimeout(sayHello, ms));
       });
 
-      // 처음 받은 값은 기준선으로만 쓴다 — 켜자마자 쌓여 있던 미읽음으로 알림이 쏟아지면 안 된다.
-      let lastSeenKey = null;
+      // 뱃지 = 메신저 미읽음 + 오늘 할 일(WID-P3). 둘은 따로 들어오므로 마지막 값을 합산한다.
+      let unreadCount = 0;
+      let todoCount = 0;
+      const pushBadge = () => invoke("set_unread", { count: unreadCount + todoCount }).catch(() => {});
+
+      // 창을 보고 있는 중이면 알림은 군더더기다.
+      const notifyIfAway = async (title, body) => {
+        if (!notifyAllowed) return;
+        const [visible, focused] = await Promise.all([
+          win.isVisible().catch(() => false),
+          win.isFocused().catch(() => false),
+        ]);
+        if (visible && focused) return;
+        try {
+          notification.sendNotification({ title, body });
+        } catch (_) {
+          /* 알림 실패는 무시(뱃지는 이미 반영됨) */
+        }
+      };
+
+      // 처음 받은 값은 기준선으로만 쓴다 — 켜자마자 쌓여 있던 미읽음·오늘 할 일로 알림이 쏟아지면 안 된다.
+      // 메신저는 최근 메시지 키, 할 일은 날짜 키(하루 1회)로 각각 변화를 본다.
+      const lastSeen = { unread: null, todo: null };
+      const bump = (kind, latest) => {
+        if (!latest || !latest.key) return false;
+        const first = lastSeen[kind] === null;
+        const changed = latest.key !== lastSeen[kind];
+        lastSeen[kind] = latest.key;
+        return !first && changed;
+      };
+
       window.addEventListener("message", async (e) => {
         if (e.origin !== APP_ORIGIN) return;
         const d = e.data;
@@ -143,27 +172,18 @@
           sayHello();
           return;
         }
-        if (!d || d.type !== "mcm:unread") return;
+        if (!d) return;
 
-        invoke("set_unread", { count: Number(d.count) || 0 }).catch(() => {});
-
-        const latest = d.latest;
-        if (!latest || !latest.key) return;
-        const first = lastSeenKey === null;
-        const changed = latest.key !== lastSeenKey;
-        lastSeenKey = latest.key;
-        if (first || !changed || !notifyAllowed) return;
-
-        // 창을 보고 있는 중이면 알림은 군더더기다.
-        const [visible, focused] = await Promise.all([
-          win.isVisible().catch(() => false),
-          win.isFocused().catch(() => false),
-        ]);
-        if (visible && focused) return;
-        try {
-          notification.sendNotification({ title: latest.title, body: latest.body });
-        } catch (_) {
-          /* 알림 실패는 무시(뱃지는 이미 반영됨) */
+        if (d.type === "mcm:unread") {
+          unreadCount = Number(d.count) || 0;
+          pushBadge();
+          if (bump("unread", d.latest)) await notifyIfAway(d.latest.title, d.latest.body);
+          return;
+        }
+        if (d.type === "mcm:todo-due") {
+          todoCount = Number(d.count) || 0;
+          pushBadge();
+          if (bump("todo", d.latest)) await notifyIfAway(d.latest.title, d.latest.body);
         }
       });
     </script>

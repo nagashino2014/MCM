@@ -282,17 +282,9 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
     }
     try {
       await saveRateCardIfDirty();
-      for (const s of fresh) {
-        const res = await fetch(`/api/contracts/${encodeURIComponent(props.contractId)}/milestones`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ stageLabel: s.label, amount: s.amount > 0 ? s.amount : null }),
-        });
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          throw new Error((body as { error?: string })?.error ?? "단계 추가 실패");
-        }
-      }
+      // 단계 생성은 아래 변경 이벤트 한 번으로 한다(2026-10-15) — 단계 추가 API 를 먼저 부르면 그 API 가 계약금액을
+      // 단계 합으로 올려 버려 이벤트의 증감이 0 이 되고, 변경계약 차수의 수주(변경계약일 귀속)가 비었다.
+      // changes route 가 milestoneId 없는 새 행을 단계로 INSERT 하고 계약금액·증감을 함께 기록한다.
       // 금액 탭 반영 — 변경 합계(newCurrentAmount)는 변경 금액 입력분의 합이므로,
       // 기존 행의 변경 금액이 비어 있으면 기존 금액을 채워 합계가 축소되지 않게 한다.
       const nextAmounts = [
@@ -302,12 +294,20 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
       const nextTerms = [...paymentTerms, ...fresh.map((s) => ({ stageLabel: s.label, previous: "", next: "" }))];
       setAmounts(nextAmounts);
       setPaymentTerms(nextTerms);
+      // 새 변경계약(N+1차)은 변경계약서를 올려야 차수가 생긴다 — 저장 때 차수와 함께 단계를 만든다.
+      if (changeMode === "new") {
+        toast.show(
+          `${round.label || "차수"}의 단계 ${fresh.length}건을 금액 탭에 넣었습니다. 저장하면 ${nextRoundNo}차 변경계약으로 함께 반영됩니다.`,
+          "success"
+        );
+        return;
+      }
       // 계약금액 즉시 갱신(2026-08-25) — 단계는 위에서 이미 생성됐으므로, 모달 저장을 누르지
       // 않고 닫아도 밀레스톤 합과 계약금액이 어긋나지 않게 변경 이벤트를 여기서 바로 커밋한다
       // (삼성전기 1차 재추가 +30만원 미반영 실사례). 이후 모달 저장은 delta 0 이벤트라 무해.
       const prevTotal = amounts.reduce((acc, a) => acc + (Number(a.previousAmount) || 0), 0);
       const nextTotal = nextAmounts.reduce((acc, a) => acc + (Number(a.nextAmount) || 0), 0);
-      if (nextTotal > 0) {
+      {
         const commitRes = await fetch(`/api/contracts/${encodeURIComponent(props.contractId)}/changes`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -335,8 +335,8 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
         if (!commitRes.ok) {
           const body = await commitRes.json().catch(() => ({}));
           throw new Error(
-            ((body as { error?: string })?.error ?? "계약금액 갱신 실패") +
-              " — 단계는 추가되었으니 금액 탭에서 저장해 주세요."
+            ((body as { error?: string })?.error ?? "단계 추가 실패") +
+              " — 금액 탭에 들어간 단계는 저장할 때 다시 반영됩니다."
           );
         }
       }

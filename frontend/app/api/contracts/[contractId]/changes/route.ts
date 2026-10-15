@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { rowsToObjects } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
+import { syncContractAmountToMilestones } from "@/lib/contracts/contract-amount";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -47,6 +48,13 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
         await db.exec("SELECT contract_id FROM contracts WHERE contract_id = $1", [contractId])
       );
       if (exists.length === 0) throw new Error("계약을 찾을 수 없습니다.");
+      // 증감은 서버가 저장 전후 실제 계약금액으로 계산한다(2026-10-15) — 화면이 보낸 이전 금액은 당시 단계 합이라
+      // 계약금액이 어긋나 있던 계약에서 증감이 부풀었다(에이에스이코리아 08-27 하루 +144,500,000 기록).
+      // 변경계약 차수에 묶인 이벤트의 증감 합이 대시보드에서 변경계약일의 수주로 잡힌다.
+      const beforeRow = rowsToObjects(
+        await db.exec("SELECT COALESCE(current_amount, contract_amount) AS amount FROM contracts WHERE contract_id = $1", [contractId])
+      );
+      const beforeAmount = beforeRow[0]?.amount != null ? Number(beforeRow[0].amount) : null;
       if (amendmentId) {
         const round = rowsToObjects(
           await db.exec("SELECT summary FROM contract_amendments WHERE amendment_id = $1 AND contract_id = $2", [
@@ -241,6 +249,16 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
         values.push(now);
         values.push(contractId);
         await db.run(`UPDATE contracts SET ${contractUpdates.join(", ")} WHERE contract_id = $${values.length}`, values);
+      }
+      // 계약금액 = 단계 합으로 맞춘 뒤, 이 이벤트의 이전 금액·증감을 실제 값으로 고쳐 둔다.
+      const synced = await syncContractAmountToMilestones(db, contractId, now);
+      const afterAmount = synced.after;
+      if (beforeAmount != null && afterAmount != null) {
+        const delta = afterAmount - beforeAmount;
+        await db.run(
+          "UPDATE contract_change_events SET previous_amount = $2, delta_amount = $3 WHERE change_id = $1",
+          [changeId, beforeAmount, Math.abs(delta) < 0.5 ? null : delta]
+        );
       }
       if (newFacilityIds !== null) {
         await db.run(

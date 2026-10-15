@@ -1,4 +1,5 @@
 import { withContractTransactionWrite } from "@/lib/finance/contract-link-lock";
+import { syncContractAmountToMilestones } from "@/lib/contracts/contract-amount";
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { rowsToObjects } from "@/lib/db";
@@ -95,6 +96,8 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       );
       if (exists.length === 0) throw new Error("단계를 찾을 수 없습니다.");
       await db.run(sql, values);
+      // 금액을 바꿨으면 계약금액 = 단계 합으로 맞춘다(대시보드 수주 집계가 current_amount 를 본다).
+      if (body.amount !== undefined) await syncContractAmountToMilestones(db, contractId);
 
       // 발행 요청(H10) 상태였던 단계를 발행 완료 처리하면 요청자에게 회신 알림을 남긴다.
       // (요청 상태는 invoice_issued=1 이 되면 조회 조건상 자동 해소되므로 컬럼은 그대로 둔다.)
@@ -227,6 +230,7 @@ export async function DELETE(_: NextRequest, ctx: RouteContext) {
       );
 
       await db.run("DELETE FROM contract_payment_milestones WHERE milestone_id = $1 AND contract_id = $2", [milestoneId, contractId]);
+      await syncContractAmountToMilestones(db, contractId);
       await recordAuditLogInline(db, {
         actorUserId: actor.userId,
         action: "contract_payment_update",

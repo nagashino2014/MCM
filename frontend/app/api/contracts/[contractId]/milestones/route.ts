@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { rowsToObjects, withDbWrite } from "@/lib/db";
+import { syncContractAmountToMilestones } from "@/lib/contracts/contract-amount";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 
 export const runtime = "nodejs";
@@ -74,6 +75,8 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
         targetId: milestoneId,
         after: { contractId, stageKey, stageLabel, stageOrder, amount, paymentTerms },
       });
+      // 계약금액 = 단계 합(대시보드 수주 집계가 current_amount 를 본다)
+      await syncContractAmountToMilestones(db, contractId, now);
     });
 
     return NextResponse.json({ milestoneId });

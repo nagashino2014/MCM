@@ -691,6 +691,41 @@ const CONTRACT_DATE_SQL = "COALESCE(NULLIF(c.contract_date, ''), c.started_at, c
 /** 계약 금액: 변경 후 금액 → 원 계약금액 폴백 */
 const CONTRACT_AMOUNT_SQL = "COALESCE(c.current_amount, c.contract_amount, 0)";
 
+/**
+ * 수주 행(2026-10-15 사용자 결정) — 원 계약분은 계약일에, 변경계약 차수(278)의 증감은 그 변경계약일에 잡는다.
+ * 종전에는 변경 후 금액 전체를 계약일에 넣어, 10월 변경계약 증액(에이에스이코리아 +58,000,000)이 1월에 묶이고
+ * 연도를 넘는 변경은 지난 해 수주를 소급해 바꿨다(국일인토트 2025-10 계약의 2026-08 감액 -60,000,000 등).
+ *   원 계약분 = 현재 계약금액 − 차수에 묶인 증감 합 (round_no NULL)
+ *   차수 증감 = 차수에 묶인 변경 이벤트 delta_amount 합 (round_no = 차수)
+ * 두 줄의 합은 현재 계약금액과 같아 연간 총액은 그대로이고 시점만 옮겨진다. 정보 정정(차수 없음)은 원 계약분에 남는다.
+ * 사용처는 contracts c 를 contract_id 로 다시 조인해 삭제·범위·분류 조건을 그대로 건다.
+ */
+/** 기간 안 수주 행을 계약당 한 줄로 묶을 때의 제목 — 원 계약분 없이 변경 증감만 있으면 '(N차 변경)' 을 붙인다. */
+const ORDER_TITLE_SQL = `c.contract_title || CASE WHEN BOOL_AND(ol.round_no IS NOT NULL)
+    THEN ' (' || STRING_AGG(ol.round_no::text, '·' ORDER BY ol.round_no) || '차 변경)' ELSE '' END`;
+
+const ORDER_LINES_SQL = `(
+  SELECT c.contract_id,
+         ${CONTRACT_DATE_SQL} AS order_date,
+         ${CONTRACT_AMOUNT_SQL} - COALESCE(rd.delta, 0) AS order_amount,
+         NULL::int AS round_no
+    FROM contracts c
+    LEFT JOIN (SELECT a.contract_id, SUM(e.delta_amount) AS delta
+                 FROM contract_amendments a
+                 JOIN contract_change_events e ON e.amendment_id = a.amendment_id
+                GROUP BY a.contract_id) rd ON rd.contract_id = c.contract_id
+  UNION ALL
+  SELECT a.contract_id,
+         COALESCE(NULLIF(a.amended_at, ''), a.created_at) AS order_date,
+         SUM(e.delta_amount) AS order_amount,
+         a.round_no
+    FROM contract_amendments a
+    JOIN contract_change_events e ON e.amendment_id = a.amendment_id
+   WHERE e.delta_amount IS NOT NULL
+   GROUP BY a.amendment_id, a.contract_id, a.amended_at, a.created_at, a.round_no
+  HAVING SUM(e.delta_amount) <> 0
+)`;
+
 /** service_type 원문을 대쉬보드 5대 분류로 정규화하는 SQL CASE 식 (serviceTypePriority 와 동일 규칙) */
 export function categoryCaseSql(col: string): string {
   return `CASE
@@ -742,11 +777,12 @@ export async function getContractDashboardV2(
   // ---------------- 수주 (계약일 기준) — 분류 필터와 무관하게 전체 집계 ----------------
   const ordersMonthlyRows = rowsToObjects(
     await db.exec(
-      `SELECT CAST(SUBSTRING(${CONTRACT_DATE_SQL}, 6, 2) AS int) AS month,
-              SUM(${CONTRACT_AMOUNT_SQL}) AS amount
-       FROM contracts c
+      `SELECT CAST(SUBSTRING(ol.order_date, 6, 2) AS int) AS month,
+              SUM(ol.order_amount) AS amount
+       FROM ${ORDER_LINES_SQL} ol
+       JOIN contracts c ON c.contract_id = ol.contract_id
        WHERE c.deleted_at IS NULL
-         AND SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) = $1${scopeSql(2)}
+         AND SUBSTRING(ol.order_date, 1, 4) = $1${scopeSql(2)}
        GROUP BY 1
        ORDER BY 1`,
       [year, ...scopeArg]
@@ -756,11 +792,12 @@ export async function getContractDashboardV2(
   const ordersByCategoryRows = rowsToObjects(
     await db.exec(
       `SELECT ${catCase} AS category,
-              SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) AS year,
-              SUM(${CONTRACT_AMOUNT_SQL}) AS amount
-       FROM contracts c
+              SUBSTRING(ol.order_date, 1, 4) AS year,
+              SUM(ol.order_amount) AS amount
+       FROM ${ORDER_LINES_SQL} ol
+       JOIN contracts c ON c.contract_id = ol.contract_id
        WHERE c.deleted_at IS NULL
-         AND SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) IN ($1, $2, $3)${scopeSql(4)}
+         AND SUBSTRING(ol.order_date, 1, 4) IN ($1, $2, $3)${scopeSql(4)}
        GROUP BY 1, 2`,
       [year, d1Year, d2Year, ...scopeArg]
     )
@@ -803,11 +840,12 @@ export async function getContractDashboardV2(
   const serviceDetailRows = rowsToObjects(
     await db.exec(
       `SELECT COALESCE(NULLIF(c.service_subtype, ''), COALESCE(c.service_type, '기타')) AS label,
-              COUNT(*) AS count,
-              SUM(${CONTRACT_AMOUNT_SQL}) AS amount
-       FROM contracts c
+              COUNT(*) FILTER (WHERE ol.round_no IS NULL) AS count,
+              SUM(ol.order_amount) AS amount
+       FROM ${ORDER_LINES_SQL} ol
+       JOIN contracts c ON c.contract_id = ol.contract_id
        WHERE c.deleted_at IS NULL
-         AND SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) = $1
+         AND SUBSTRING(ol.order_date, 1, 4) = $1
          AND ${catCase} = $2${scopeSql(3)}
        GROUP BY 1
        ORDER BY amount DESC, count DESC`,
@@ -835,11 +873,12 @@ export async function getContractDashboardV2(
   const regionRows = rowsToObjects(
     await db.exec(
       `SELECT COALESCE(NULLIF(f.region_sido, ''), '미상') AS sido,
-              SUM(${CONTRACT_AMOUNT_SQL}) AS amount
-       FROM contracts c
+              SUM(ol.order_amount) AS amount
+       FROM ${ORDER_LINES_SQL} ol
+       JOIN contracts c ON c.contract_id = ol.contract_id
        JOIN facilities f ON f.facility_id = c.counterparty_facility_id
        WHERE c.deleted_at IS NULL
-         AND SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) = $1
+         AND SUBSTRING(ol.order_date, 1, 4) = $1
          AND ${catCase} = $2${scopeSql(3)}
        GROUP BY 1
        ORDER BY amount DESC`,
@@ -1108,12 +1147,13 @@ export async function getDashboardCounterpartyDetail(
   const fromYear = String(Number(year) - 5);
   const orderYearRows = rowsToObjects(
     await db.exec(
-      `SELECT SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) AS year,
-              SUM(${CONTRACT_AMOUNT_SQL}) AS amount
-       FROM contracts c
+      `SELECT SUBSTRING(ol.order_date, 1, 4) AS year,
+              SUM(ol.order_amount) AS amount
+       FROM ${ORDER_LINES_SQL} ol
+       JOIN contracts c ON c.contract_id = ol.contract_id
        WHERE c.deleted_at IS NULL
          AND c.counterparty_facility_id = $1
-         AND SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) BETWEEN $2 AND $3
+         AND SUBSTRING(ol.order_date, 1, 4) BETWEEN $2 AND $3
        GROUP BY 1`,
       [facilityId, fromYear, year]
     )
@@ -1144,23 +1184,25 @@ export async function getDashboardCounterpartyDetail(
 
   const statRows = rowsToObjects(
     await db.exec(
-      `SELECT COUNT(*) AS order_count,
-              SUM(${CONTRACT_AMOUNT_SQL}) AS order_amount
-       FROM contracts c
+      `SELECT COUNT(*) FILTER (WHERE ol.round_no IS NULL) AS order_count,
+              SUM(ol.order_amount) AS order_amount
+       FROM ${ORDER_LINES_SQL} ol
+       JOIN contracts c ON c.contract_id = ol.contract_id
        WHERE c.deleted_at IS NULL
          AND c.counterparty_facility_id = $1
-         AND SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) = $2`,
+         AND SUBSTRING(ol.order_date, 1, 4) = $2`,
       [facilityId, year]
     )
   );
   const topCategoryRows = rowsToObjects(
     await db.exec(
       `SELECT ${catCase} AS category,
-              SUM(${CONTRACT_AMOUNT_SQL}) AS amount
-       FROM contracts c
+              SUM(ol.order_amount) AS amount
+       FROM ${ORDER_LINES_SQL} ol
+       JOIN contracts c ON c.contract_id = ol.contract_id
        WHERE c.deleted_at IS NULL
          AND c.counterparty_facility_id = $1
-         AND SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) = $2
+         AND SUBSTRING(ol.order_date, 1, 4) = $2
        GROUP BY 1
        ORDER BY amount DESC
        LIMIT 1`,
@@ -1170,13 +1212,15 @@ export async function getDashboardCounterpartyDetail(
   const contractRows = rowsToObjects(
     await db.exec(
       `SELECT c.contract_id,
-              SUBSTRING(${CONTRACT_DATE_SQL}, 1, 10) AS contract_date,
-              c.contract_title,
-              ${CONTRACT_AMOUNT_SQL} AS amount
-       FROM contracts c
+              SUBSTRING(MIN(ol.order_date), 1, 10) AS contract_date,
+              ${ORDER_TITLE_SQL} AS contract_title,
+              SUM(ol.order_amount) AS amount
+       FROM ${ORDER_LINES_SQL} ol
+       JOIN contracts c ON c.contract_id = ol.contract_id
        WHERE c.deleted_at IS NULL
          AND c.counterparty_facility_id = $1
-         AND SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) = $2
+         AND SUBSTRING(ol.order_date, 1, 4) = $2
+       GROUP BY c.contract_id, c.contract_title
        ORDER BY contract_date DESC
        LIMIT 20`,
       [facilityId, year]
@@ -1281,22 +1325,25 @@ export async function getContractOrdersStatus(
   const rows = rowsToObjects(
     await db.exec(
       `SELECT c.contract_id,
-              c.contract_title,
+              ${ORDER_TITLE_SQL} AS contract_title,
               ${catCase} AS category,
-              SUBSTRING(${CONTRACT_DATE_SQL}, 1, 10) AS contract_date,
-              ${CONTRACT_AMOUNT_SQL} AS amount,
+              SUBSTRING(MIN(ol.order_date), 1, 10) AS contract_date,
+              SUM(ol.order_amount) AS amount,
               cp.company_name AS counterparty_name,
               NULLIF(cp.region_sido, '') AS sido,
               c.service_subtype,
               c.industry_category,
               f.industry_name AS facility_industry_name,
               f.industry_code AS facility_industry_code
-       FROM contracts c
+       FROM ${ORDER_LINES_SQL} ol
+       JOIN contracts c ON c.contract_id = ol.contract_id
        LEFT JOIN facilities cp ON cp.facility_id = c.counterparty_facility_id
        LEFT JOIN facilities f ON f.facility_id = c.facility_id
        WHERE c.deleted_at IS NULL
-         ${isAllPeriod ? "" : `AND SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) = $1`}${rowsScope}
-       ORDER BY contract_date DESC NULLS LAST, c.contract_title ASC`,
+         ${isAllPeriod ? "" : "AND SUBSTRING(ol.order_date, 1, 4) = $1"}${rowsScope}
+       GROUP BY c.contract_id, c.contract_title, c.service_type, cp.company_name, cp.region_sido,
+                c.service_subtype, c.industry_category, f.industry_name, f.industry_code
+       ORDER BY contract_date DESC NULLS LAST, contract_title ASC`,
       rowsParams
     )
   );
@@ -1306,12 +1353,13 @@ export async function getContractOrdersStatus(
   const fromYear = String(Number(anchorYear) - 9);
   const yearlyRows = rowsToObjects(
     await db.exec(
-      `SELECT SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) AS year,
+      `SELECT SUBSTRING(ol.order_date, 1, 4) AS year,
               ${catCase} AS category,
-              SUM(${CONTRACT_AMOUNT_SQL}) AS amount
-       FROM contracts c
+              SUM(ol.order_amount) AS amount
+       FROM ${ORDER_LINES_SQL} ol
+       JOIN contracts c ON c.contract_id = ol.contract_id
        WHERE c.deleted_at IS NULL
-         AND SUBSTRING(${CONTRACT_DATE_SQL}, 1, 4) BETWEEN $1 AND $2${contractIds ? " AND c.contract_id = ANY($3)" : ""}
+         AND SUBSTRING(ol.order_date, 1, 4) BETWEEN $1 AND $2${contractIds ? " AND c.contract_id = ANY($3)" : ""}
        GROUP BY 1, 2`,
       contractIds ? [fromYear, anchorYear, contractIds] : [fromYear, anchorYear]
     )

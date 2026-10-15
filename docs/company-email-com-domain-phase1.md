@@ -1,7 +1,7 @@
 # koensain.com 메일 1단계 — SES 발신 전환 + 앱 다중 도메인 지원 설계안
 
 > 작성 2026-10-15 · 상위 설계: [company-email-blueprint.md](company-email-blueprint.md)
-> 상태: **설계안(미구현)**. 아마란스 주소 목록 수령 후 §2 매핑부터 확정한다.
+> 상태: **설계안(미구현)**. 사전 확인 1-0 완료(2026-10-15) — 다음은 1-1(SES identity Terraform).
 
 ## 0. 목표와 범위
 
@@ -23,7 +23,13 @@
 | 기타 | — | `google-site-verification` TXT, `gw.koensain.com` A 211.46.114.36 |
 
 - `210.181.95.209`의 역방향 이름은 `ptr.bizboxa.com`이므로 **아마란스 발신 IP**다.
-- ⚠ **SPF DNS 조회 횟수(한도 10)**: `_spf.daouoffice.com`이 1회 + 하위 include 7회 = 8회, `_spf.google.com`이 1회로 **현재 9회**다. 여기에 `include:amazonses.com`을 더하면 **딱 10회**가 되어 여유가 없다. 다우오피스를 더 이상 쓰지 않는다면 `include:_spf.daouoffice.com`을 빼서 8회를 확보하는 것을 권한다(§4.2).
+- ⚠ **SPF DNS 조회 횟수(한도 10)**: `_spf.daouoffice.com`이 1회 + 하위 include 7회 = 8회, `_spf.google.com`이 1회로 **현재 9회**다. 여기에 `include:amazonses.com`을 더하면 **딱 10회**가 되어 여유가 없다. 다우오피스는 MCM 전면 전환 전까지 계속 쓰므로(2026-10-15 확인) 빼지 않는다 → apex SPF는 건드리지 않는 쪽을 기본으로 한다(§4.2).
+
+**Wix DNS 관리 화면 실사(2026-10-15, 읽기만)** — 공개 조회와 일치하고, 추가로 확인된 것:
+- A: apex 3개(185.230.63.x, Wix 사이트) + `gw` 211.46.114.36 / CNAME: `m`·`www`(Wix) / MX: apex `mail.bizboxa.com` 30 1개
+- TXT: apex SPF·`google-site-verification`, 그리고 `gw.koensain.com`에 `v=spf1 include:_spfblocka.koensain.com ~all` — 이 include 대상 레코드가 없어 **gw 서브도메인 SPF는 깨져 있다**(1단계와 무관, 참고만)
+- **DKIM(`_domainkey`) 레코드가 하나도 없다** → 아마란스 발신은 DKIM 서명 없이 SPF(`210.181.95.209`)만으로 인증된다. DMARC를 켜도 아마란스 메일은 SPF 정렬로 통과해야 하므로, rua에서 아마란스 발신의 Return-Path가 `@koensain.com`인지 확인한다.
+- 각 레코드 유형에 "레코드 추가"가 있어 DKIM CNAME·`_dmarc` TXT 입력은 가능하다. MX에도 "레코드 추가"가 있으나 서브도메인(`bounce`) 호스트명 입력이 되는지는 입력 단계에서 확인한다.
 
 ### 1.2 앱 코드 — 단일 도메인 전제
 
@@ -44,15 +50,16 @@
 
 **부수 결함(이번에 함께 해소)**: 수신자를 헤더에서 읽기 때문에 ① **숨은참조(Bcc)로 받은 메일은 유실**되고("수신자 mailbox 없음"으로 삭제), ② 봉투에 없는 사내 주소를 헤더에 적은 메일도 그 주소의 받은편지함에 들어간다. 1단계의 회신 수신 경로(§5.1)도 봉투 기준 매칭이 있어야 동작한다.
 
-## 2. 주소 매핑 (아마란스 목록 수령 후 확정)
+## 2. 주소 매핑 — 로컬파트 동일(2026-10-15 확인)
 
-- 거래처가 알고 있는 주소는 **아마란스 주소**다. koensain.com 대표 주소의 로컬파트는 **아마란스 계정을 그대로** 쓴다(예: `kaikan00@koensain.com`).
-- 앱의 기존 `.app` 로컬파트(개인 메일 앞자리 승계, `users.email_local`)는 **보조 수신 주소로 유지**한다. 이미 `.app`으로 주고받던 상대가 있으므로 지우지 않는다.
-- 매핑표(직원 → 아마란스 주소) 작성 기준:
-  - 재직자 전원 + 아마란스 공용 계정(있다면 목록에 표시. 1단계에서는 개인 메일함에 붙이지 않는다).
-  - 아마란스 주소가 없는 직원은 1단계 대상에서 빼고 `.app`을 유지한다.
-  - 로컬파트 중복·대소문자는 소문자로 정규화(`normalizeLocalPart`)한 뒤 검사한다.
-- 매핑은 마이그레이션에 넣지 않는다. 관리자 화면(§5.5) 또는 1회성 스크립트로 등록한다(직원 실명·주소를 저장소에 커밋하지 않음).
+- 사용자 확인: **아마란스 주소 = MCM 사용자 관리에 등록된 직원 이메일의 앞자리 + `@koensain.com`**. 즉 `.app` 로컬파트와 `.com` 로컬파트가 같다(예: `geunrang@koensain.app` ↔ `geunrang@koensain.com`).
+- 따라서 별도 매핑표 없이 **`mailboxes.local_part`(없으면 `users.email_local`) + `@koensain.com`으로 자동 생성**한다.
+- 앱의 기존 `.app` 주소는 **보조 수신 주소로 유지**한다. 이미 `.app`으로 주고받던 상대가 있으므로 지우지 않는다.
+- 자동 생성의 예외(관리자 화면 §5.5에서 검수):
+  - `users.email_local`이 NULL인 계정(042에서 로컬파트 충돌로 비워 둔 경우) → 자동 생성 제외, 수동 등록
+  - 정규화(`normalizeLocalPart`) 때문에 원래 이메일 앞자리와 달라진 경우 → 아마란스 실제 주소와 다를 수 있어 표시
+  - 퇴사·비활성 계정 → 제외
+- 자동 생성은 "후보 → 관리자 확인 → 등록" 순서로 하고, 마이그레이션에는 넣지 않는다(직원 주소를 저장소에 남기지 않음).
 
 ## 3. 데이터 모델 — 마이그레이션 `280_mail_multi_domain.sql`(가번호)
 
@@ -123,10 +130,11 @@ CREATE INDEX IF NOT EXISTS idx_mailbox_addresses_mailbox ON mailbox_addresses(ma
 | `_amazonses` | TXT | 검증 토큰 | 보조 검증(SES v1 identity) |
 | `bounce` | MX | `10 feedback-smtp.ap-northeast-2.amazonses.com` | Custom MAIL FROM |
 | `bounce` | TXT | `v=spf1 include:amazonses.com ~all` | |
-| `@` (apex) | TXT | **기존 SPF를 수정**: `v=spf1 ip4:210.181.95.209 include:_spf.google.com include:amazonses.com ~all` | 다우오피스 미사용이 확인되면 이 형태. 계속 쓰면 daouoffice를 유지하고 amazonses를 덧붙인다(조회 10회, 여유 없음) |
+| `@` (apex) | TXT | **기존 SPF를 수정(선택)**: `v=spf1 ip4:210.181.95.209 include:_spf.daouoffice.com include:_spf.google.com include:amazonses.com ~all` | 다우오피스 계속 사용(2026-10-15 확인) → 조회 10회로 한도에 딱 맞음(유효하나 여유 0). 아래 주의 참고 |
 | `_dmarc` | TXT | `v=DMARC1; p=none; rua=mailto:<.app과 같은 수신 주소>; fo=1; adkim=r; aspf=r` | **관측 모드**. koensain.com은 아마란스·구글이 함께 발신하므로 `.app`과 달리 relaxed로 시작 |
 
 주의:
+- **SPF 검사는 봉투 발신자(Return-Path) 도메인 기준**이다. Custom MAIL FROM(`bounce.koensain.com`)을 쓰면 SES 발신의 SPF는 `bounce` 레코드로 통과·정렬(relaxed)되므로 **apex에 amazonses를 넣지 않아도 SPF·DMARC는 통과**한다. apex 추가는 헤더 From 도메인으로 SPF를 보는 일부 국내 필터를 위한 보강이다. 넣는다면 입력 직후 SPF 검사 도구로 조회 횟수 10 이하를 확인하고, 다우오피스·구글이 include를 늘리면 한도를 넘을 수 있으니 DMARC rua에서 `permerror`를 감시한다.
 - **apex TXT에 SPF 레코드를 두 개 만들면 SPF가 무효**가 된다. 기존 레코드를 고쳐야 한다. `google-site-verification` TXT는 그대로 둔다.
 - **MX(`@`)는 건드리지 않는다** — 아마란스 수신 유지.
 - Wix에서 서브도메인 MX(`bounce`)를 입력할 수 없으면 MAIL FROM을 생략한다. 이 경우 Return-Path가 `amazonses.com`이 되어 SPF 정렬은 실패하지만, **DKIM 정렬로 DMARC는 통과**한다.
@@ -139,10 +147,11 @@ MX가 아마란스에 있으므로 **외부에서 `x@koensain.com`으로 보낸 
 
 | 방식 | 내용 | 판단 |
 |---|---|---|
-| **A. 아마란스 자동전달(권장)** | 아마란스에서 사용자마다 `x(.app 로컬)@koensain.app`으로 자동전달을 설정한다 → SES 수신 → 봉투 기준 라우팅(§5.2)으로 해당 메일함에 들어감 | 코드는 §5.2만 있으면 된다. **아마란스가 원본 헤더를 유지해 전달(redirect)하는지, 새 메일로 감싸는지 파일럿에서 확인 필요** |
+| **A. 아마란스 자동전달(권장)** | 아마란스에서 사용자마다 `x@koensain.app`으로 자동전달을 설정한다 → SES 수신 → 봉투 기준 라우팅(§5.2)으로 해당 메일함에 들어감 | 기능 존재 확인(2026-10-15, 메일 → 환경설정 → **메일 자동 전달**). 코드는 §5.2만 있으면 된다. **원본 헤더를 유지해 전달(redirect)하는지, 새 메일로 감싸는지 파일럿에서 확인 필요** |
 | B. 아마란스 IMAP 폴링 | 앱이 아마란스 계정 비밀번호를 저장하고 가져옴 | 비권장 — 직원별 자격증명 저장은 상위 설계 §5에서 피하기로 한 방식 |
 | C. 회신 없음 감수 | 회신은 아마란스에서 확인 | 파일럿 초기에만 허용 |
 
+- 아마란스 자동전달 유의사항(화면 문구): 주소는 최대 10개까지 등록할 수 있고, **급여명세서 등 받는 모든 메일이 함께 전달**된다. 전달 대상은 본인의 앱 메일함뿐이라 노출 범위는 같지만, 파일럿 대상자에게 미리 알린다.
 - 자동전달은 원 발신자의 SPF를 깨뜨리지만, 현재 수신 파이프라인은 SPF 판정으로 거르지 않으므로 받는 데 영향은 없다. 다만 SES 스팸 판정 표시가 늘 수 있으니 파일럿에서 관찰한다.
 - 같은 메일이 두 경로(직접·전달)로 들어와도 `UNIQUE(mailbox_id, rfc_message_id)`로 한 번만 쌓인다.
 
@@ -172,7 +181,7 @@ MX가 아마란스에 있으므로 **외부에서 `x@koensain.com`으로 보낸 
 
 ### 5.5 관리자 화면 — 주소 등록·대표 전환
 - 위치: 기존 메일 관리(별칭 관리 `MailAliasManager`)와 같은 관리자 영역에 "회사 주소" 탭을 둔다. Precision UI 규칙과 기존 cdash 컴포넌트를 쓴다.
-- 기능: 직원별 주소 목록, `.com` 주소 등록(일괄 붙여넣기 지원 — 아마란스 목록 입력용), 대표 주소 전환/되돌리기, 도메인 `send_enabled` 토글.
+- 기능: 직원별 주소 목록, `.com` 주소 자동 후보 생성(§2) → 관리자 확인 → 등록, 예외 계정 수동 등록, 대표 주소 전환/되돌리기, 도메인 `send_enabled` 토글.
 - 권한: 기존 메일 관리 권한을 재사용한다(새 role 만들지 않음).
 
 ## 6. 본문 링크 도메인(`.app`이 본문에 남는 문제)
@@ -190,8 +199,8 @@ MX가 아마란스에 있으므로 **외부에서 `x@koensain.com`으로 보낸 
 
 | 단계 | 작업 | 담당 | 완료 기준 |
 |---|---|---|---|
-| 1-0 | 사전 확인: ① 아마란스 주소 목록 ② 아마란스 사용자별 자동전달 가능 여부·방식 ③ 다우오피스 SPF 사용 여부 ④ Wix DNS 관리 권한 ⑤ 최근 반송 기록의 거절 사유(도메인/IP) | 사용자 | 5개 답 확보 |
-| 1-1 | `ses-mail-com.tf` 작성 → `-target` plan 검토 → apply | Claude 작성·사용자 적용 | SES 콘솔에서 koensain.com DKIM 대기 |
+| 1-0 | 사전 확인 — **완료(2026-10-15)**: ① 주소 = 이메일 앞자리 + @koensain.com(§2) ② 아마란스 자동전달 기능 있음(헤더 유지 여부는 파일럿) ③ 다우오피스 당분간 사용 → apex SPF 유지 ④ Wix DNS 접근 확인(읽기) ⑤ 네이버·지메일 도착 → 도메인 원인으로 추정 | 사용자 | 완료 |
+| 1-1 | `ses-mail-com.tf` 작성 → `-target` plan 검토 → apply. **2026-10-15 plan 확인: 5 add·0 change·0 destroy**(SES identity·DKIM·MAIL FROM·바운스/신고 토픽 2), 기존 identity 없음·SES 프로덕션 액세스 켜짐 | Claude 작성·사용자 적용 | SES 콘솔에서 koensain.com DKIM 대기 |
 | 1-2 | Wix DNS 입력(§4.2) | 사용자 | SES identity `SUCCESS`, DKIM `SUCCESS`, MAIL FROM `SUCCESS`(또는 생략 결정) |
 | 1-3 | 앱 구현: 마이그 280 + §5.2·5.3·5.4·5.5 | Claude | `tsc`(수정 파일 한정)·로컬 단위 확인 |
 | 1-4 | 마이그 적용(`staging-apply-migrations.ps1 -Files`) + Next 배포(`staging-deploy-next.ps1 -AcknowledgePinnedScheduleLag -Wait`) | 사용자 | 기존 `.app` 사용자 동작 변화 없음 |
@@ -217,7 +226,7 @@ MX가 아마란스에 있으므로 **외부에서 `x@koensain.com`으로 보낸 
 
 | 위험 | 대응 |
 |---|---|
-| SPF 조회 10회 초과 → **아마란스 발신까지 SPF permerror** | §4.2 — daouoffice 정리를 먼저 하거나, 입력 직후 SPF 검사 도구로 조회 횟수를 확인 |
+| SPF 조회 10회 초과 → **아마란스 발신까지 SPF permerror** | §4.2 — apex 추가는 선택(MAIL FROM으로 SPF 통과). 추가한다면 입력 직후 조회 횟수 확인 + rua 감시 |
 | SPF 레코드 중복 입력 | 기존 레코드를 수정(새로 추가하지 않음) |
 | 아마란스 자동전달이 원본을 감싸 보냄 | 회신 스레드가 끊길 수 있음 → 파일럿에서 확인, 안 되면 2단계(MX 전환)를 앞당기는 판단 |
 | SES 공유 IP 평판 때문에 도메인을 바꿔도 차단 | 1-0 ⑤ 반송 기록으로 먼저 구분. IP 원인이면 전용 IP(소량 발송은 워밍업이 어려움)나 차단처에 화이트리스트를 요청하는 방식을 별도 검토 |

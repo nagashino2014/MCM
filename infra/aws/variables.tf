@@ -163,3 +163,18 @@ variable "enable_mail_inbound_mx" {
   type    = bool
   default = false
 }
+
+# 추가 발신 도메인(koensain.com 1단계) — SES identity·DKIM·MAIL FROM 만 만든다(ses-mail-com.tf).
+# DNS 는 Route53 밖(Wix)이라 레코드는 output 으로 받아 수동 입력. 빈 값이면 리소스 0개.
+# 설계: docs/company-email-com-domain-phase1.md §4.
+variable "extra_send_domain" {
+  type    = string
+  default = ""
+}
+
+# 추가 발신 도메인의 Custom MAIL FROM 서브도메인(bounce.koensain.com). Wix 에 MX·TXT 를 넣기 전까지는
+# behavior_on_mx_failure=UseDefaultValue 로 amazonses.com MAIL FROM 을 써서 발송이 막히지 않는다.
+variable "extra_mail_from_subdomain" {
+  type    = string
+  default = "bounce"
+}

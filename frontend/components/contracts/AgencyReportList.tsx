@@ -75,11 +75,14 @@ export function AgencyReportList({
   contractId,
   onOpenStaffing,
   staffingOpen = false,
+  onOpenDocument,
 }: {
   contractId: string;
   /** 수행인력 설정 모달을 수행인력 탭으로 연다 */
   onOpenStaffing?: () => void;
   staffingOpen?: boolean;
+  /** 실적보고서를 계약서 보기와 같은 PDF 뷰어로 연다(없으면 새 창 링크) — 2026-10-15 사용자 요청 */
+  onOpenDocument?: (doc: { title: string; url: string; fileName: string }) => void;
 }) {
   const toast = useToast();
   const [reports, setReports] = useState<AgencyReportRow[]>([]);
@@ -290,7 +293,23 @@ export function AgencyReportList({
                 </CdBadge>
                 <span className="text-sm cd-text tabular-nums shrink-0">{row.reportedOn}</span>
                 {row.receiptNo && <span className="text-xs cd-text-muted shrink-0">접수 {row.receiptNo}</span>}
-                {row.documentPath ? (
+                {row.documentPath && onOpenDocument ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onOpenDocument({
+                        title: row.documentName ?? "신고서 PDF",
+                        url: row.documentPath!,
+                        fileName: row.documentName ?? "신고서.pdf",
+                      })
+                    }
+                    className="cd-action inline-flex min-w-0 items-center gap-1 text-xs cd-text-primary truncate"
+                    title={row.documentName ?? "신고서"}
+                  >
+                    <FileText className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">{row.documentName ?? "신고서 PDF"}</span>
+                  </button>
+                ) : row.documentPath ? (
                   <a
                     href={row.documentPath}
                     target="_blank"

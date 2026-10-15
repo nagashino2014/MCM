@@ -1495,6 +1495,7 @@ function ContractDetailPanel({
           onSaved={onReloadDetail}
           onOpenStaffing={openStaffing}
           staffingOpen={staffingModalOpen}
+          onOpenPdf={onOpenPdf}
         />
       )}
 
@@ -1549,6 +1550,7 @@ function AgencyReportInfoSection({
   onSaved,
   onOpenStaffing,
   staffingOpen,
+  onOpenPdf,
 }: {
   contractId: string;
   awardRate: string;
@@ -1557,6 +1559,8 @@ function AgencyReportInfoSection({
   onOpenStaffing: () => void;
   /** 수행인력 모달이 닫히면 실무자 지정 여부를 다시 확인하도록 목록에 알린다 */
   staffingOpen: boolean;
+  /** 실적보고서를 계약서 보기와 같은 PDF 뷰어(상단 다운로드 버튼 포함)로 연다 */
+  onOpenPdf: (state: PdfViewerState) => void;
 }) {
   const toast = useToast();
   const [rate, setRate] = useState(awardRate);
@@ -1635,7 +1639,15 @@ function AgencyReportInfoSection({
           {saving ? "저장 중…" : "저장"}
         </button>
       </div>
-      <AgencyReportList contractId={contractId} onOpenStaffing={onOpenStaffing} staffingOpen={staffingOpen} />
+      <AgencyReportList
+        contractId={contractId}
+        onOpenStaffing={onOpenStaffing}
+        staffingOpen={staffingOpen}
+        // 문서 1건짜리 docs 로 넘겨 뷰어의 다운로드가 보고서 파일명 그대로 저장되게 한다(탭은 2건 이상일 때만 보인다).
+        onOpenDocument={(doc) =>
+          onOpenPdf({ title: doc.title, url: doc.url, docs: [{ label: doc.title, url: doc.url, fileName: doc.fileName }] })
+        }
+      />
     </div>
   );
 }

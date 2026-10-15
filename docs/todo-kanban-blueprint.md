@@ -446,3 +446,9 @@ CdPageHeader  제목 "할 일"  · meta "오늘 3 · 지연 1 · 이번 주 8"  
 - **리허설(마스터 시크릿·SSM 터널 15432·psql, ROLLBACK)**: 277 은 CREATE TABLE + 인덱스 3(PK 포함) 정상.
 - **P4 OS 홈 위젯·전역 단축키·ICS·알림 액션**: 네이티브 빌드·스토어 재배포와 묶여 미착수 — `app.json version` 인상은 기존 설치본 OTA 를 끊으므로([[store-distribution-progress]]) 스토어 배포 일정 결정 뒤 진행.
 - 미완: 모바일 캘린더 드래그(웹 전용 설계), 실기기 OTA 수신 확인, 스테이징 테스트 데이터 정리(사용자 판단).
+
+### 24. 상태 표시 강화(2026-10-14, 사용자 선택 = 띠는 보드 색 유지)
+- 사용자 지적: 상세에서 상태를 바꿔도 좌측 띠 색이 그대로 → 띠는 §19-1 보드(프로젝트) 색이라 의도된 동작. 두 안(띠를 상태 색으로 / 띠 유지 + 상태 별도 표시) 중 **후자 확정**.
+- 웹: `TodoCheck` 에 `status` → 미완료 원의 배경·테두리가 상태 색(진행 `--todo-col-doing`/`--todo-seg-doing`, 검토 `--todo-col-review`/`--todo-seg-review`(#c9b8ec 신설), 보류 `--todo-col-hold`/`--todo-seg-hold`(#b8bec9) 점선). 할 일(todo)은 중립 그대로, 완료는 기존 primary 채움. 목록 행·상세 헤더 적용. 칸반 카드는 체크 원이 없어 제목 앞 8px `StatusDot`(todo 상태는 점 없음, 완료 초록).
+- 모바일: `CheckCircle` 에 `status`(진행 primary/primarySoft, 검토 warning/warningSoft, 보류 muted 점선), 보드 카드 제목 앞 `StatusDot`(statusColor).
+- dev 실측: 진행·검토·보류 3건 생성 → 목록 체크 원 배경/테두리/점선 상태별 확인, 띠(`--todo-tint`)는 보드 색 유지, 칸반 카드 점 색·8px 확인 → 삭제. ⚠dev 서버는 시작 시점의 RDS 마스터 비밀번호를 캐시 — 시크릿 로테이션 뒤 "password authentication failed" 면 preview 재시작.

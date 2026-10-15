@@ -10,8 +10,8 @@ import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, ty
 import Link from "next/link";
 import { Check, MessageSquare } from "lucide-react";
 import { CdAvatar } from "@/components/cdash";
-import type { TodoApprovalEvent, TodoItem, TodoLinkKind, TodoPriority } from "@/lib/todo/types";
-import { TODO_APPROVAL_EVENT_LABELS, TODO_LINK_KIND_LABELS } from "@/lib/todo/types";
+import type { TodoApprovalEvent, TodoItem, TodoLinkKind, TodoPriority, TodoStatus } from "@/lib/todo/types";
+import { TODO_APPROVAL_EVENT_LABELS, TODO_LINK_KIND_LABELS, TODO_STATUS_LABELS } from "@/lib/todo/types";
 import { describeRecurrence } from "@/lib/todo/recurrence";
 import { completeRulesSummary } from "@/lib/todo/completion";
 import { approvalKindIcon, contextParts, dueBadge, fmtIsoShort, md, pendingAgeDays, pendingContextParts, prefersReducedMotion, weekdayKo, type DueBadge } from "./todo-utils";
@@ -30,9 +30,12 @@ export function TodoCheck({
   filled,
   dashed,
   state,
+  status,
 }: {
   /** v4: 체크 원은 중립색 — 우선순위는 제목 앞 라벨로만. (호환용으로 받되 쓰지 않는다) */
   priority?: TodoPriority;
+  /** 작업 상태(2026-10-14) — 미완료 원의 배경·테두리를 상태 색으로(진행 파랑·검토 보라·보류 회색 점선). 띠는 보드 색 그대로. */
+  status?: TodoStatus;
   done: boolean;
   size?: "sm" | "md" | "lg";
   label?: string;
@@ -51,6 +54,7 @@ export function TodoCheck({
       className="todo-check"
       data-done={isDone && !state ? "true" : undefined}
       data-state={state}
+      data-status={!isDone && !state && status && status !== "todo" && status !== "done" ? status : undefined}
       data-size={size === "md" ? undefined : size}
       data-dashed={dashed ? "true" : undefined}
       aria-label={label ?? (done ? "완료 되돌리기" : "완료")}
@@ -62,6 +66,12 @@ export function TodoCheck({
       {(isDone || state === "done") && <Check strokeWidth={3} aria-hidden="true" />}
     </button>
   );
+}
+
+/** 상태 점(칸반 카드 제목 앞) — 체크 원이 없는 카드에서 상태를 낸다. 할 일(todo) 상태는 점 없음. */
+export function StatusDot({ status }: { status: TodoStatus }) {
+  if (status === "todo") return null;
+  return <span className="todo-stdot" data-status={status} title={TODO_STATUS_LABELS[status]} aria-label={TODO_STATUS_LABELS[status]} role="img" />;
 }
 
 /** 우선순위 라벨 — 높음(파스텔 빨강)·낮음(회색)만, 보통·없음은 표시하지 않는다. */
@@ -298,7 +308,7 @@ export function TodoRow({ item, today, density = "comfortable", selected, timeCe
       onKeyDown={onKey}
     >
       <span className="todo-c-ck">
-        <TodoCheck done={done} filled={phase !== "idle" || justDone} onClick={toggle} />
+        <TodoCheck done={done} filled={phase !== "idle" || justDone} status={item.status} onClick={toggle} />
       </span>
       <div className="todo-c-t">
         <div className="todo-ttl" data-done={done || justDone ? "true" : undefined}>

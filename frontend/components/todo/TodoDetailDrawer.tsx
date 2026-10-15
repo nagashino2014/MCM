@@ -691,7 +691,7 @@ export function TodoDetailDrawer({ itemId, boards, prefs, myUserId, myName, myPh
           <>
             {/* 헤더 — 좌측 5px 보드 색 띠 */}
             <div className="todo-dh" style={tintStyle(detail.boardColor)}>
-              <TodoCheck done={detail.status === "done"} size="lg" onClick={() => void complete(detail.status !== "done")} />
+              <TodoCheck done={detail.status === "done"} size="lg" status={detail.status} onClick={() => void complete(detail.status !== "done")} />
               <div className="todo-dh-main">
                 <input
                   className="todo-detail-title"

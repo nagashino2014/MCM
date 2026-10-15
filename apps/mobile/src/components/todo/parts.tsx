@@ -6,8 +6,8 @@ import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-na
 
 import { useAuthedSource } from '@/components/ui/Avatar';
 import { useTheme } from '@/theme/useTheme';
-import type { TodoApprovalEvent, TodoPriority } from '@/lib/todo-types';
-import { TODO_UI, initials, labelColors, type DueTone, type LabelTone } from '@/lib/todo-utils';
+import { TODO_STATUS_LABELS, type TodoApprovalEvent, type TodoPriority, type TodoStatus } from '@/lib/todo-types';
+import { TODO_UI, initials, labelColors, statusColor, type DueTone, type LabelTone } from '@/lib/todo-utils';
 
 /**
  * To-do 화면의 작은 부품(v4 §19) — 파스텔 라벨 · 마감 라벨 · 우선순위 라벨 · 소형 아바타(사진/중립 이니셜) ·
@@ -38,6 +38,18 @@ export function PastelLabel({
     <View style={{ backgroundColor: bg ?? t.bg, borderRadius: 5, paddingHorizontal: 6, paddingVertical: 1 }}>
       <Text style={{ fontSize: size, color: fg ?? t.fg, fontWeight: bold ? '600' : '500' }}>{label}</Text>
     </View>
+  );
+}
+
+/** 상태 점(2026-10-14) — 보드 카드 제목 앞 8px. 체크 원이 없는 카드에서 상태를 낸다. 할 일(todo) 상태는 점 없음. */
+export function StatusDot({ status }: { status: TodoStatus }) {
+  const { c } = useTheme();
+  if (status === 'todo') return null;
+  return (
+    <View
+      accessibilityLabel={TODO_STATUS_LABELS[status]}
+      style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: statusColor(status, c), marginTop: 7 }}
+    />
   );
 }
 
@@ -100,14 +112,26 @@ export function CheckCircle({
   onPress,
   disabled,
   size = 22,
+  status,
 }: {
   done: boolean;
   onPress: () => void;
   disabled?: boolean;
   size?: number;
+  /** 작업 상태(2026-10-14) — 미완료 원의 배경·테두리를 상태 색으로(진행 파랑·검토 주황·보류 회색 점선). 띠는 보드 색 그대로. */
+  status?: TodoStatus;
 }) {
   const { c } = useTheme();
   const fill = useSharedValue(done ? 1 : 0);
+  // 상태 색 — 완료(done)는 채움 애니메이션이 맡고, 할 일(todo)은 중립.
+  const tone =
+    done || !status || status === 'todo' || status === 'done'
+      ? null
+      : status === 'doing'
+        ? { border: c.primary, bg: c.primarySoft, dashed: false }
+        : status === 'review'
+          ? { border: c.warning, bg: c.warningSoft, dashed: false }
+          : { border: c.muted, bg: c.surface, dashed: true };
   useEffect(() => {
     fill.value = withTiming(done ? 1 : 0, { duration: 120 });
   }, [done, fill]);
@@ -123,7 +147,16 @@ export function CheckCircle({
       accessibilityRole="checkbox"
       accessibilityState={{ checked: done }}
       accessibilityLabel={done ? '되돌리기' : '완료'}
-      style={{ width: size, height: size, borderRadius: size / 2, borderWidth: 1.5, borderColor: done ? c.primary : c.faint, opacity: disabled && !done ? 0.5 : 1 }}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        borderWidth: 1.5,
+        borderColor: done ? c.primary : tone ? tone.border : c.faint,
+        borderStyle: tone?.dashed ? 'dashed' : 'solid',
+        backgroundColor: tone ? tone.bg : undefined,
+        opacity: disabled && !done ? 0.5 : 1,
+      }}
       className="items-center justify-center active:opacity-70">
       <Animated.View
         style={[

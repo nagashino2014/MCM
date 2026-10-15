@@ -7,7 +7,7 @@ import { TODO_STATUS_LABELS, type TodoBoard, type TodoColumn, type TodoItem } fr
 import { columnTone, dueBadge, itemContext, labelColors, type LabelTone } from '@/lib/todo-utils';
 import { useTheme } from '@/theme/useTheme';
 
-import { BoardStripe, DueBadge, PastelLabel, PriorityLabel, SectionHeader, SegBar } from './parts';
+import { BoardStripe, DueBadge, PastelLabel, PriorityLabel, SectionHeader, SegBar, StatusDot } from './parts';
 
 /**
  * 보드 보기(v4 §19-3·10) — 가로 칸반 대신 **열 = 세로 접이식 섹션**. 열 이름은 파스텔 칩(할 일 회색 · 진행 중 sky ·
@@ -99,6 +99,7 @@ function BoardCard({
       className={`gap-1 active:bg-cd-surface ${last ? '' : 'border-b border-cd-grid-line'}`}>
       <BoardStripe color={item.boardColor} />
       <View className="flex-row items-start gap-1.5">
+        {!done ? <StatusDot status={item.status} /> : null}
         {!done ? (
           <View style={{ marginTop: 3 }}>
             <PriorityLabel priority={item.priority} />

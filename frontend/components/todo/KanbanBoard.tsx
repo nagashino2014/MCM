@@ -13,7 +13,7 @@ import { CdButton, CdCheckbox, CdDropdown, CdEmptyState, CdIconButton, CdInput, 
 import { TODO_STATUSES, TODO_STATUS_LABELS, type TodoBoard, type TodoBoardMember, type TodoColumn, type TodoCompleteRules, type TodoItem, type TodoItemDetail, type TodoStatus } from "@/lib/todo/types";
 import { comparePosition } from "@/lib/todo/position";
 import { completeRulesSummary, hasAnyCompleteRule } from "@/lib/todo/completion";
-import { DueText, MiniSegments, PriorityLabel, tintStyle, type Density } from "./TodoRow";
+import { DueText, MiniSegments, PriorityLabel, StatusDot, tintStyle, type Density } from "./TodoRow";
 import { CompleteRulesFields } from "./CompleteRulesFields";
 import { apiCall, type MoveArgs } from "./useTodoData";
 import { columnTone, contextParts, contractShort, dueBadge, isFoldedColumn, md, relativeTime } from "./todo-utils";
@@ -49,6 +49,7 @@ function CardBody({ item, today, menu, onOpen }: { item: TodoItem; today: string
   return (
     <>
       <div className="todo-card-tt">
+        <StatusDot status={item.status} />
         <PriorityLabel priority={item.priority} />
         <span>{item.title}</span>
       </div>

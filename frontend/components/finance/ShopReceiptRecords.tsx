@@ -7,8 +7,8 @@
  * 원장 기준으로 전표가 빠진 쇼핑몰 결제도 보여 준다(수집 누락 확인).
  */
 
-import { Fragment, useCallback, useEffect, useState, type ReactNode } from "react";
-import { Ban, CheckCircle2, FileText, Link2, Loader2, RefreshCw, RotateCcw, Unlink, Wand2 } from "lucide-react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Ban, CheckCircle2, Download, FileText, Link2, Loader2, RefreshCw, RotateCcw, Unlink, Wand2 } from "lucide-react";
 
 interface MatchedTxn {
   approvedAt: string;
@@ -68,6 +68,17 @@ function dateSuspicious(row: ShopReceiptRow): boolean {
   return diff > 2 * 86400000;
 }
 
+/** Content-Disposition 의 filename*=UTF-8''… 에서 저장 파일명을 꺼낸다 */
+function fileNameFromDisposition(header: string | null, fallback: string): string {
+  const m = /filename\*=UTF-8''([^;]+)/i.exec(header ?? "");
+  if (!m) return fallback;
+  try {
+    return decodeURIComponent(m[1]);
+  } catch {
+    return fallback;
+  }
+}
+
 const BASIS_LABELS: Record<string, string> = {
   approval: "승인번호 일치",
   card: "카드끝4+금액+날짜",
@@ -100,6 +111,12 @@ export function ShopReceiptRecords({ from, to, reloadToken, periodControls }: Pr
   const [pickerFor, setPickerFor] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<CandidateTxn[]>([]);
   const [pickerLoading, setPickerLoading] = useState(false);
+
+  // 일괄 다운로드(2026-10-14 사용자 요청) — 세무 대리인에게 보낼 전표를 골라 병합 PDF 또는 전표별 PDF(ZIP)로 받는다.
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [bulkMode, setBulkMode] = useState<"merged" | "zip">("merged");
+  const [downloading, setDownloading] = useState(false);
+  const headCheckRef = useRef<HTMLInputElement | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -200,6 +217,80 @@ export function ShopReceiptRecords({ from, to, reloadToken, periodControls }: Pr
     }
   };
 
+  // 목록이 바뀌면(기간·쇼핑몰 변경, 새로고침) 지금 목록에 없는 선택은 버린다.
+  useEffect(() => {
+    setChecked((prev) => {
+      const ids = new Set(rows.map((r) => r.receiptId));
+      const next = new Set([...prev].filter((id) => ids.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [rows]);
+
+  /** PDF 가 있는 전표만 고를 수 있다 */
+  const selectable = useMemo(() => rows.filter((r) => r.storageKey), [rows]);
+  const checkedRows = selectable.filter((r) => checked.has(r.receiptId));
+  const checkedTotal = checkedRows.reduce((sum, r) => sum + (r.amount || 0), 0);
+  const allChecked = selectable.length > 0 && checkedRows.length === selectable.length;
+
+  useEffect(() => {
+    if (headCheckRef.current) headCheckRef.current.indeterminate = checkedRows.length > 0 && !allChecked;
+  }, [checkedRows.length, allChecked]);
+
+  const toggleChecked = (receiptId: string) =>
+    setChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(receiptId)) next.delete(receiptId);
+      else next.add(receiptId);
+      return next;
+    });
+  const selectAll = () => setChecked(new Set(selectable.map((r) => r.receiptId)));
+  /** 신고 대상만 — 매칭 제외(개인 결제 등)를 뺀 전표 */
+  const selectReportable = () => setChecked(new Set(selectable.filter((r) => !r.excluded).map((r) => r.receiptId)));
+  const clearChecked = () => setChecked(new Set());
+
+  const downloadChecked = async () => {
+    if (checkedRows.length === 0) return;
+    setDownloading(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch("/api/receipts/shop/download", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ receiptIds: checkedRows.map((r) => r.receiptId), mode: bulkMode, from, to }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error ?? "전표를 내려받지 못했습니다.");
+      }
+      const blob = await res.blob();
+      const fallback = bulkMode === "merged" ? "쇼핑몰전표.pdf" : "쇼핑몰전표.zip";
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileNameFromDisposition(res.headers.get("content-disposition"), fallback);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+
+      const files = Number(res.headers.get("x-file-count") ?? 0);
+      const skipped = Number(res.headers.get("x-skipped-count") ?? 0);
+      const shared = checkedRows.length - files - skipped;
+      setNotice(
+        (bulkMode === "merged"
+          ? `전표 ${checkedRows.length}건을 PDF 한 개로 병합해 내려받았습니다.`
+          : `전표 ${checkedRows.length}건을 전표별 PDF ${files}개(ZIP)로 내려받았습니다.`) +
+          (shared > 0 ? ` 같은 묶음 파일을 쓰는 ${shared}건은 한 번만 넣었습니다.` : "") +
+          (skipped > 0 ? ` 파일이 없는 ${skipped}건은 빠졌습니다.` : "")
+      );
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   const suspiciousCount = rows.filter(dateSuspicious).length;
   const matchedCount = rows.filter((r) => r.matchStatus).length;
   const excludedCount = rows.filter((r) => r.excluded).length;
@@ -278,10 +369,62 @@ export function ShopReceiptRecords({ from, to, reloadToken, periodControls }: Pr
           이 기간에 올라온 전표가 없습니다. 개인 PC 의 전표 수집 앱에서 <b>스테이징으로 올리기</b> 를 실행하세요.
         </div>
       ) : (
+        <>
+        {/* 일괄 다운로드 — 체크한 전표만 병합 PDF 한 개 또는 전표별 PDF(ZIP)로 */}
+        <div className="flex flex-wrap items-center gap-2 mb-3 text-xs">
+          <button type="button" className="cd-btn cd-btn-sm" onClick={selectAll} disabled={selectable.length === 0}>
+            전체 선택
+          </button>
+          <button
+            type="button"
+            className="cd-btn cd-btn-sm"
+            onClick={selectReportable}
+            disabled={selectable.length === 0}
+            title="매칭 제외(개인 결제 등)를 뺀 전표만 고릅니다"
+          >
+            신고 대상만
+          </button>
+          <button type="button" className="cd-btn cd-btn-sm cd-btn-ghost" onClick={clearChecked} disabled={checked.size === 0}>
+            전체 해제
+          </button>
+          <span className="cd-text-muted tabular-nums">
+            선택 {checkedRows.length}건{checkedRows.length > 0 ? ` · ${checkedTotal.toLocaleString()}원` : ""}
+          </span>
+          <span className="hidden sm:inline cd-text-faint" aria-hidden>|</span>
+          <div className="flex items-center gap-3" role="radiogroup" aria-label="다운로드 형식">
+            <label className="inline-flex items-center gap-1.5 cursor-pointer cd-text">
+              <input type="radio" name="shop-receipt-bulk-mode" checked={bulkMode === "merged"} onChange={() => setBulkMode("merged")} />
+              PDF 하나로 병합
+            </label>
+            <label className="inline-flex items-center gap-1.5 cursor-pointer cd-text">
+              <input type="radio" name="shop-receipt-bulk-mode" checked={bulkMode === "zip"} onChange={() => setBulkMode("zip")} />
+              전표별 PDF(ZIP)
+            </label>
+          </div>
+          <button
+            type="button"
+            className="cd-btn cd-btn-sm cd-btn-primary"
+            onClick={() => void downloadChecked()}
+            disabled={checkedRows.length === 0 || downloading}
+          >
+            {downloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} 선택 다운로드
+          </button>
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="cd-table-head">
               <tr className="cd-text-muted text-xs">
+                <th className="w-8 py-1.5 pr-2 text-left font-normal">
+                  <input
+                    ref={headCheckRef}
+                    type="checkbox"
+                    aria-label="전체 선택"
+                    checked={allChecked}
+                    disabled={selectable.length === 0}
+                    onChange={() => (allChecked ? clearChecked() : selectAll())}
+                  />
+                </th>
                 <th className="text-left font-normal py-1.5 pr-3">쇼핑몰</th>
                 <th className="text-left font-normal py-1.5 pr-3">주문일</th>
                 <th className="text-left font-normal py-1.5 pr-3">주문번호</th>
@@ -295,6 +438,16 @@ export function ShopReceiptRecords({ from, to, reloadToken, periodControls }: Pr
               {rows.map((row) => (
                 <Fragment key={row.receiptId}>
                   <tr className={`border-t cd-border-c ${row.excluded ? "opacity-50" : ""}`}>
+                    <td className="py-1.5 pr-2">
+                      <input
+                        type="checkbox"
+                        aria-label={`${row.orderDate} ${row.orderNo} 선택`}
+                        checked={checked.has(row.receiptId)}
+                        disabled={!row.storageKey}
+                        title={row.storageKey ? undefined : "PDF 파일이 없는 전표입니다"}
+                        onChange={() => toggleChecked(row.receiptId)}
+                      />
+                    </td>
                     <td className="py-1.5 pr-3 whitespace-nowrap">{SITE_NAMES[row.site] ?? row.site}</td>
                     <td className="py-1.5 pr-3 whitespace-nowrap cd-text-muted">{row.orderDate || "-"}</td>
                     <td className="py-1.5 pr-3 whitespace-nowrap cd-text-muted">{row.orderNo}</td>
@@ -370,7 +523,7 @@ export function ShopReceiptRecords({ from, to, reloadToken, periodControls }: Pr
                   {/* 수동 연결 후보 — 행 바로 아래에 펼친다 */}
                   {pickerFor === row.receiptId && (
                     <tr className="border-t cd-border-c">
-                      <td colSpan={7} className="py-2 pl-6">
+                      <td colSpan={8} className="py-2 pl-6">
                         {pickerLoading ? (
                           <div className="text-xs cd-text-muted">후보를 찾는 중…</div>
                         ) : candidates.length === 0 ? (
@@ -402,6 +555,7 @@ export function ShopReceiptRecords({ from, to, reloadToken, periodControls }: Pr
             </tbody>
           </table>
         </div>
+        </>
       )}
     </div>
   );

@@ -115,6 +115,31 @@ export async function loadUploadedKeys(site: string): Promise<Set<string>> {
   return new Set(rows.map((r) => String(r.storage_key)));
 }
 
+/** 일괄 다운로드용 — 고른 전표의 파일 키와 파일명 재료. 주문일·주문번호 순(세무 대리인에게 보내는 순서). */
+export async function loadShopReceiptFiles(
+  receiptIds: string[]
+): Promise<Array<{ receiptId: string; site: string; orderNo: string; orderDate: string; amount: number; storageKey: string | null }>> {
+  if (receiptIds.length === 0) return [];
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT receipt_id, site, order_no, order_date, amount, storage_key
+         FROM shop_receipts
+        WHERE receipt_id = ANY($1::text[])
+        ORDER BY order_date NULLS LAST, order_no`,
+      [receiptIds]
+    )
+  );
+  return rows.map((r) => ({
+    receiptId: String(r.receipt_id),
+    site: String(r.site ?? ""),
+    orderNo: String(r.order_no ?? ""),
+    orderDate: String(r.order_date ?? ""),
+    amount: Number(r.amount ?? 0),
+    storageKey: r.storage_key != null ? String(r.storage_key) : null,
+  }));
+}
+
 export interface ShopReceiptQuery {
   from?: string;
   to?: string;

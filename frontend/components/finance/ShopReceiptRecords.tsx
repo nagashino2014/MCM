@@ -117,6 +117,11 @@ export function ShopReceiptRecords({ from, to, reloadToken, periodControls }: Pr
   const [bulkMode, setBulkMode] = useState<"merged" | "zip">("merged");
   const [downloading, setDownloading] = useState(false);
   const headCheckRef = useRef<HTMLInputElement | null>(null);
+  // 메모(용도기재) — 전표별 PDF 파일명 '쿠팡 카드영수증(건전지 구입 26.05.27.)'의 괄호 안 앞부분(2026-10-15 사용자 요청).
+  // 체크한 전표만 입력할 수 있다. 저장하지 않고 이 화면에서 내려받을 때만 쓴다.
+  const [memos, setMemos] = useState<Record<string, string>>({});
+  const [memoMissing, setMemoMissing] = useState<Set<string>>(new Set());
+  const memoRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -250,6 +255,27 @@ export function ShopReceiptRecords({ from, to, reloadToken, periodControls }: Pr
 
   const downloadChecked = async () => {
     if (checkedRows.length === 0) return;
+    // 전표별 PDF 는 메모가 파일명이 된다 — 빈 칸이 있으면 막고 알린다(병합 PDF 는 파일이 하나라 메모를 쓰지 않는다).
+    if (bulkMode === "zip") {
+      const missing = checkedRows.filter((r) => !(memos[r.receiptId] ?? "").trim());
+      if (missing.length > 0) {
+        setNotice(null);
+        setMemoMissing(new Set(missing.map((r) => r.receiptId)));
+        const list = missing
+          .slice(0, 5)
+          .map((r) => `· ${r.orderDate || "날짜 없음"} ${SITE_NAMES[r.site] ?? r.site} ${r.amount ? r.amount.toLocaleString() + "원" : ""} ${r.title ? "— " + r.title.slice(0, 20) : ""}`.trimEnd())
+          .join("\n");
+        window.alert(
+          `메모(용도기재)를 입력해 주세요 — ${missing.length}건이 비어 있습니다.\n` +
+            `전표별 PDF 파일명이 '쿠팡 카드영수증(건전지 구입 26.05.27.)'처럼 메모로 만들어집니다.\n\n` +
+            list +
+            (missing.length > 5 ? `\n… 외 ${missing.length - 5}건` : "")
+        );
+        memoRefs.current[missing[0].receiptId]?.focus();
+        return;
+      }
+    }
+    setMemoMissing(new Set());
     setDownloading(true);
     setError(null);
     setNotice(null);
@@ -257,7 +283,13 @@ export function ShopReceiptRecords({ from, to, reloadToken, periodControls }: Pr
       const res = await fetch("/api/receipts/shop/download", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ receiptIds: checkedRows.map((r) => r.receiptId), mode: bulkMode, from, to }),
+        body: JSON.stringify({
+          receiptIds: checkedRows.map((r) => r.receiptId),
+          mode: bulkMode,
+          from,
+          to,
+          memos: Object.fromEntries(checkedRows.map((r) => [r.receiptId, (memos[r.receiptId] ?? "").trim()])),
+        }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -396,7 +428,7 @@ export function ShopReceiptRecords({ from, to, reloadToken, periodControls }: Pr
               <input type="radio" name="shop-receipt-bulk-mode" checked={bulkMode === "merged"} onChange={() => setBulkMode("merged")} />
               PDF 하나로 병합
             </label>
-            <label className="inline-flex items-center gap-1.5 cursor-pointer cd-text">
+            <label className="inline-flex items-center gap-1.5 cursor-pointer cd-text" title="체크한 전표의 메모(용도기재)로 파일명을 만듭니다 — 예: 쿠팡 카드영수증(건전지 구입 26.05.27.).pdf">
               <input type="radio" name="shop-receipt-bulk-mode" checked={bulkMode === "zip"} onChange={() => setBulkMode("zip")} />
               전표별 PDF(ZIP)
             </label>
@@ -429,6 +461,9 @@ export function ShopReceiptRecords({ from, to, reloadToken, periodControls }: Pr
                 <th className="text-left font-normal py-1.5 pr-3">주문일</th>
                 <th className="text-left font-normal py-1.5 pr-3">주문번호</th>
                 <th className="text-left font-normal py-1.5 pr-3">품목</th>
+                <th className="text-left font-normal py-1.5 pr-3 whitespace-nowrap" title="체크한 전표에 간단한 용도·품목을 적으면 전표별 PDF 파일명에 들어갑니다">
+                  메모(용도기재)
+                </th>
                 <th className="text-right font-normal py-1.5 pr-3">금액</th>
                 <th className="text-left font-normal py-1.5 pr-3">전표</th>
                 <th className="text-left font-normal py-1.5">카드 원장 매칭</th>
@@ -452,6 +487,36 @@ export function ShopReceiptRecords({ from, to, reloadToken, periodControls }: Pr
                     <td className="py-1.5 pr-3 whitespace-nowrap cd-text-muted">{row.orderDate || "-"}</td>
                     <td className="py-1.5 pr-3 whitespace-nowrap cd-text-muted">{row.orderNo}</td>
                     <td className="py-1.5 pr-3">{row.title || "-"}</td>
+                    <td className="py-1.5 pr-3">
+                      <input
+                        ref={(el) => {
+                          memoRefs.current[row.receiptId] = el;
+                        }}
+                        type="text"
+                        className="cd-input py-1 text-xs"
+                        style={{
+                          width: 180,
+                          ...(memoMissing.has(row.receiptId) ? { borderColor: "var(--cd-error)" } : {}),
+                        }}
+                        aria-label={`${row.orderDate} ${row.orderNo} 메모(용도기재)`}
+                        aria-invalid={memoMissing.has(row.receiptId) || undefined}
+                        placeholder={checked.has(row.receiptId) ? "예: 건전지 구입" : ""}
+                        maxLength={60}
+                        disabled={!checked.has(row.receiptId)}
+                        value={memos[row.receiptId] ?? ""}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setMemos((prev) => ({ ...prev, [row.receiptId]: value }));
+                          if (value.trim() && memoMissing.has(row.receiptId)) {
+                            setMemoMissing((prev) => {
+                              const next = new Set(prev);
+                              next.delete(row.receiptId);
+                              return next;
+                            });
+                          }
+                        }}
+                      />
+                    </td>
                     <td className="py-1.5 pr-3 text-right whitespace-nowrap">
                       {row.amount ? `${row.amount.toLocaleString()}원` : "-"}
                     </td>
@@ -523,7 +588,7 @@ export function ShopReceiptRecords({ from, to, reloadToken, periodControls }: Pr
                   {/* 수동 연결 후보 — 행 바로 아래에 펼친다 */}
                   {pickerFor === row.receiptId && (
                     <tr className="border-t cd-border-c">
-                      <td colSpan={8} className="py-2 pl-6">
+                      <td colSpan={9} className="py-2 pl-6">
                         {pickerLoading ? (
                           <div className="text-xs cd-text-muted">후보를 찾는 중…</div>
                         ) : candidates.length === 0 ? (

@@ -3,6 +3,8 @@
  *
  *   mode=merged : 고른 전표를 주문일 순으로 이어 붙인 PDF 한 개
  *   mode=zip    : 전표별 PDF 를 ZIP 한 개로(브라우저가 여러 파일 동시 다운로드를 막아 ZIP 으로 묶는다)
+ *                 파일명은 '{쇼핑몰} 카드영수증({메모(용도·품목)} {YY.MM.DD.}).pdf'(2026-10-15 사용자 요청 — 기존
+ *                 수작업 보관본과 같은 형식). 메모는 화면의 '메모(용도기재)' 열 값이며, 없으면 주문번호로 대신한다.
  *
  * 쿠팡 묶음처럼 여러 전표가 같은 파일을 가리키면 그 파일은 한 번만 넣는다. 파일이 없는 전표는 건너뛰고
  * 건수를 X-Skipped-Count 헤더로 알려 준다.
@@ -22,6 +24,12 @@ export const dynamic = "force-dynamic";
 
 const MAX_RECEIPTS = 500;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const MEMO_MAX = 60;
+
+/** 2026-05-27 → 26.05.27. (수작업 보관본 표기) */
+function shortDate(ymd: string): string {
+  return DATE_RE.test(ymd) ? `${ymd.slice(2, 4)}.${ymd.slice(5, 7)}.${ymd.slice(8, 10)}.` : "";
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -35,11 +43,19 @@ export async function POST(req: NextRequest) {
     mode?: unknown;
     from?: unknown;
     to?: unknown;
+    memos?: unknown;
   };
   const receiptIds = Array.isArray(body.receiptIds)
     ? [...new Set(body.receiptIds.map((id) => String(id ?? "").trim()).filter(Boolean))]
     : [];
   const mode = body.mode === "zip" ? "zip" : "merged";
+  const memos: Record<string, string> = {};
+  if (body.memos && typeof body.memos === "object" && !Array.isArray(body.memos)) {
+    for (const [id, value] of Object.entries(body.memos as Record<string, unknown>)) {
+      const memo = String(value ?? "").replace(/\s+/g, " ").trim().slice(0, MEMO_MAX);
+      if (memo) memos[id] = memo;
+    }
+  }
   if (receiptIds.length === 0) {
     return NextResponse.json({ error: "내려받을 전표를 골라 주세요." }, { status: 400 });
   }
@@ -65,11 +81,11 @@ export async function POST(req: NextRequest) {
         skipped++;
         continue;
       }
-      // 파일명: 주문일_쇼핑몰_주문번호_금액원.pdf — 받는 쪽에서 원장과 대조하기 쉽게
+      // 파일명: '쿠팡 카드영수증(건전지 구입 26.05.27.).pdf' — 묶음 파일을 여럿이 쓰면 첫 전표(주문일 순)의 메모를 쓴다.
       const shop = shopByKey(r.site)?.name ?? r.site;
-      const amount = r.amount ? `_${r.amount.toLocaleString("ko-KR")}원` : "";
+      const inner = [memos[r.receiptId] || r.orderNo, shortDate(r.orderDate)].filter(Boolean).join(" ");
       files.push({
-        name: sanitizeDownloadName(`${r.orderDate || "날짜없음"}_${shop}_${r.orderNo}${amount}.pdf`),
+        name: sanitizeDownloadName(`${shop} 카드영수증(${inner}).pdf`),
         bytes: new Uint8Array(bytes),
       });
     }

@@ -109,8 +109,9 @@ export function MailAddressManager() {
 
   return (
     <div className="flex flex-col gap-3">
-      {/* 도메인 — 발신 사용 여부 */}
-      <div className="flex flex-col gap-1.5">
+      {/* 상단 — 왼쪽 절반 = 도메인(발신 사용), 오른쪽 끝 = 이름·주소 검색. 좁으면 위아래로 쌓는다. */}
+      <div className="flex flex-col lg:flex-row lg:items-end gap-3">
+      <div className="flex flex-col gap-1.5 w-full lg:w-1/2 min-w-0">
         {domains.map((d) => (
           <div key={d.domain} className="rounded-xl border cd-border-c px-3 py-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
             <AtSign className="w-3.5 h-3.5 cd-text-primary shrink-0" />
@@ -136,14 +137,14 @@ export function MailAddressManager() {
             />
           </div>
         ))}
+        {list.noMailboxCount > 0 && (
+          <p className="text-xs cd-text-faint">메일함이 아직 없는 재직자 {list.noMailboxCount}명 — 주소 일괄 등록 시 메일함을 함께 만듭니다.</p>
+        )}
       </div>
-      {list.noMailboxCount > 0 && (
-        <p className="text-xs cd-text-faint">메일함이 아직 없는 재직자 {list.noMailboxCount}명 — 주소 일괄 등록 시 메일함을 함께 만듭니다.</p>
-      )}
 
-      {/* 직원별 주소 */}
-      <div className="flex items-end gap-2">
-        <div className="flex-1 max-w-xs">
+      {/* 직원별 주소 검색 */}
+      <div className="flex items-end gap-2 lg:ml-auto">
+        <div className="flex-1 lg:w-80">
           <CdInput placeholder="이름·주소 검색" value={filter} onChange={(e) => setFilter(e.target.value)} />
         </div>
         <CdHelp label="회사 주소 도움말">
@@ -152,8 +153,10 @@ export function MailAddressManager() {
           <p className="mt-1">문제가 있으면 대표 주소를 koensain.app 으로 되돌리면 다음 발송부터 원래대로 돌아갑니다.</p>
         </CdHelp>
       </div>
-      {/* 직원 카드 — 주소는 한 줄에 하나씩(.app·.com 2행), 카드는 너비에 맞춰 여러 열 */}
-      <div className="grid gap-1.5 grid-cols-[repeat(auto-fill,minmax(15rem,1fr))]">
+      </div>
+      {/* 직원 카드 — 주소는 한 줄에 하나씩(.app·.com 2행). 열은 최대 4개(사용자 지정, 10-15),
+          폭이 모자라면 카드 최소 15rem 을 지키며 3·2·1열로 줄인다. 3칸 간격 = gap-1.5 × 3 = 1.125rem. */}
+      <div className="grid gap-1.5 grid-cols-[repeat(auto-fill,minmax(max(15rem,calc((100%_-_1.125rem)_/_4)),1fr))]">
         {rows.map((row) => {
           const mismatch = row.emailLocal != null && row.emailLocal !== row.localPart;
           return (
